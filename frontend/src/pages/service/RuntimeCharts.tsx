@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { panelMaxDataPoints } from '@/lib/chartStep';
@@ -8,6 +9,7 @@ import { TimeSeriesPanel, type TSSeries } from '@/components/viz/TimeSeriesPanel
 import type { FilterExpr, SpanMetricSeries } from '@/lib/types';
 import { podLineLabel, podClusterOf, withClusterPrefix } from './runtimePodLabel';
 import { smoothPoints } from './runtimeSmooth';
+import { heapSummary, podPercentLines, parseRtView, rtViewParam, type HeapKeyedLine, type HeapPodLine, type HeapSummary, type RtView } from './runtimeHeapView';
 
 // RuntimeCharts (v0.9.87, operatör talebi) — Service Overview'da dil
 // ailesine göre JVM / .NET / Go heap+GC runtime grafikleri.
@@ -59,6 +61,11 @@ interface LineSpec {
   // Referans çizgisi (ör. heap limit) — kesikli çizilir, pod çizgileri
   // ona yaklaşınca "doldu" gözle okunur.
   ref?: boolean;
+  // v0.10.2148 (S9) — toplama; verilmezse 'avg'. Özet heap görünümünün yüzde
+  // okumaları 'sum' (pod başına havuzların toplamı; runtimeHeapView başlığı).
+  agg?: 'avg' | 'sum';
+  // Özet heap görünümünde okumanın rolü (çizgi değil, hesap girdisi).
+  role?: 'abs' | 'pctUsed' | 'pctLimit';
 }
 
 // v0.9.89 (operatör talebi) — JVM/.NET kartları POD BAZLI: "herhangi
@@ -155,6 +162,31 @@ export function familyOf(language: string | undefined): string | null {
 
 const FAMILY_TITLE: Record<string, string> = { jvm: 'JVM', dotnet: '.NET', go: 'Go' };
 
+// v0.10.2148 (servis sekmeleri S9; plan K12 — operatör kararı 2026-11-14,
+// seçenek B) — JVM heap kartının VARSAYILAN görünümü: her pod ince gri çizgi,
+// en yüksek üç pod renkli ve adıyla, değer heap sınırının yüzdesi, sınır %100'de
+// kesik çizgi (runtimeHeapView.heapSummary). Hiçbir pod çizimden düşmez.
+// `?rtview=lines` eski pod başına renkli çizgileri (40 tavanlı, MB) açar.
+const isHeapSummaryCard = (family: string | null, card: CardSpec, view: RtView) =>
+  family === 'jvm' && card.key === 'heap' && !view.lines;
+// Özet görünümün okumaları: yüzde için pod başına kullanım ve sınır TOPLAMI
+// (sunucudaki heap bandıyla aynı hesap); sınır hiç yoksa mutlak değere düşmek
+// için ortalama kullanım (çizgi kipiyle AYNI sorgu anahtarı — önbellek ortak).
+const HEAP_SUMMARY_LINES: LineSpec[] = [
+  { metric: 'jvm.memory.used', label: 'used', color: 'var(--accent)', filters: HEAP, scale: MB, groupBy: POD_GROUP, fanout: true, labelOf: podLineLabel, role: 'abs' },
+  { metric: 'jvm.memory.used', label: 'used', color: 'var(--accent)', filters: HEAP, groupBy: POD_GROUP, fanout: true, labelOf: podLineLabel, agg: 'sum', role: 'pctUsed' },
+  { metric: 'jvm.memory.limit', label: 'limit', color: 'var(--err)', filters: HEAP, groupBy: POD_GROUP, fanout: true, labelOf: podLineLabel, agg: 'sum', role: 'pctLimit' },
+];
+
+/** `?rtview` bağlantısı: yabancı parametreler korunur, varsayılanda parametre silinir. */
+function rtViewSearch(params: URLSearchParams, next: RtView): string {
+  const p = new URLSearchParams(params);
+  const v = rtViewParam(next);
+  if (v) p.set('rtview', v); else p.delete('rtview');
+  const q = p.toString();
+  return q ? `?${q}` : '';
+}
+
 export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHeader = false }: {
   service: string;
   from: number; // unix ns (parent'ın çözülmüş penceresi — RQ anahtarı hizalı)
@@ -173,9 +205,15 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
     staleTime: 300_000,
   });
   const family = familyOf(runtimeQ.data?.language);
+  const [params] = useSearchParams();
+  const rtRaw = params.get('rtview');
+  const view = useMemo(() => parseRtView(rtRaw), [rtRaw]);
   // Modül sabiti referansı ya da stabil boş dizi — render başına yeni []
   // kimliği aşağıdaki useMemo'ları boşa tetiklerdi (eslint exhaustive-deps).
-  const cards = useMemo(() => (family ? FAMILY_CARDS[family] : []), [family]);
+  const cards = useMemo(() => {
+    if (!family) return [];
+    return FAMILY_CARDS[family].map(c => (isHeapSummaryCard(family, c, view) ? { ...c, lines: HEAP_SUMMARY_LINES } : c));
+  }, [family, view]);
 
   // Madde 4 sweep — deploy ▼ marker'ları runtime panellerine: "heap spike
   // deploy'dan mı?" bir bakışta okunsun. AYNI (service, from, to) anahtarı
@@ -195,12 +233,13 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
   );
   const queries = useQueries({
     queries: specs.map(({ line }) => ({
+      // 'avg' anahtarı eskisiyle aynı (önbellek korunur); 'sum' ayrı anahtar.
       queryKey: ['svc-runtime-metric', service, line.metric, line.groupBy ?? '',
-        line.filters ? JSON.stringify(line.filters) : '', from, to],
+        line.filters ? JSON.stringify(line.filters) : '', from, to, ...(line.agg && line.agg !== 'avg' ? [line.agg] : [])],
       queryFn: () => api.metricQuery({
         name: line.metric,
         service,
-        agg: 'avg',
+        agg: line.agg ?? 'avg',
         filters: line.filters ? JSON.stringify(line.filters) : undefined,
         groupBy: line.groupBy,
         from, to, step: 0,
@@ -228,6 +267,10 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
       // v0.9.532 — karttaki serilerin dokunduğu cluster'lar ("40 / 52
       // pod · 3 cluster" notu için).
       const cardClusters = new Set<string>();
+      const summaryMode = isHeapSummaryCard(family, card, view);
+      const absPods: HeapPodLine[] = [];
+      const pctUsed: HeapKeyedLine[] = [];
+      const pctLimit: HeapKeyedLine[] = [];
       specs.forEach(({ card: c, line }, qi) => {
         if (c.key !== card.key) return;
         const data = (queries[qi]?.data ?? []) as SpanMetricSeries[];
@@ -245,6 +288,22 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
           const clusterSet = new Set(data.map(s => podClusterOf(s.groupKey)).filter(Boolean));
           clusterSet.forEach(c => cardClusters.add(c));
           const multi = clusterSet.size > 1;
+          if (summaryMode) {
+            // Özet görünüm TÜM pod'ları alır (40 tavanı yalnız çizgi kipinde);
+            // ham değer — yüzde ve sıralama yumuşatmadan önce.
+            for (const s of data) {
+              const base = line.labelOf ? line.labelOf(s.groupKey, line.label) : (s.groupKey.filter(Boolean).join('/') || line.label);
+              const keyed: HeapKeyedLine = {
+                key: s.groupKey.join('\u0000'),
+                label: withClusterPrefix(base, podClusterOf(s.groupKey), multi),
+                points: s.points.map(p => ({ time: p.time, value: p.value == null ? null : p.value * scale })),
+              };
+              if (line.role === 'pctUsed') pctUsed.push(keyed);
+              else if (line.role === 'pctLimit') pctLimit.push(keyed);
+              else absPods.push(keyed);
+            }
+            return;
+          }
           data.slice(0, FANOUT_MAX).forEach(s => {
             const base = line.labelOf
               ? line.labelOf(s.groupKey, line.label)
@@ -264,18 +323,28 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
           });
         }
       });
-      if (tsSeries.some(s => s.points.length)) anyData = true;
       const cardQs = specs
         .map(({ card: c }, qi) => ({ c, q: queries[qi] }))
         .filter(x => x.c.key === card.key);
+      let summary: HeapSummary | null = null;
+      // Özet, kartın TÜM okumaları oturunca kurulur: yüzde okuması gecikirse
+      // önce mutlak değeri çizip sonra yüzdeye çevirmek ekseni zıplatırdı.
+      if (summaryMode && !cardQs.some(x => x.q.isPending)) {
+        // Yüzde: her pod kendi sınırına (toplam / toplam). Hiçbir pod'un sınırı
+        // yoksa mutlak değer (MB). Pod çizgileri eskisi gibi SMA; sınır düz 100.
+        const pct = podPercentLines(pctUsed, pctLimit);
+        summary = pct.length > 0 ? heapSummary(pct, true, smoothPoints) : heapSummary(absPods, false, smoothPoints);
+        tsSeries.push(...summary.lines);
+      }
+      if (tsSeries.some(s => s.points.length)) anyData = true;
       const status: 'loading' | 'error' | 'ready' =
         cardQs.some(x => x.q.isError) ? 'error'
         : cardQs.some(x => x.q.isPending) ? 'loading'
         : 'ready';
-      return { card, series: tsSeries, status, podTotal, capped, clusterCount: cardClusters.size };
+      return { card, series: tsSeries, status, podTotal, capped, clusterCount: cardClusters.size, summary };
     });
     return { byCard, anyData };
-  }, [family, cards, specs, queries, service]);
+  }, [family, cards, specs, queries, service, view]);
 
   // Aile bilinmiyor ya da (yüklendi + hiç veri yok) → section hiç yok
   // (ServiceInfraTab:327 emsali — runtime metriği göndermeyen servise
@@ -300,14 +369,33 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
           3-across dar kalıyordu (operatör raporu). Ortak syncKey: bir karta
           hover TÜM kartlarda crosshair çizer (heap spike ↔ GC pause korele). */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {built.byCard.map(({ card, series, status, podTotal, capped, clusterCount }) => (
+        {built.byCard.map(({ card, series, status, podTotal, capped, clusterCount, summary }) => (
           <div key={card.key} className="card">
             <div className="ov-card-h">
-              <h3>{card.title}{card.unit ? ` (${card.unit.trim()})` : ''}</h3>
+              <h3>{summary?.percent ? 'JVM heap — sınırın yüzdesi (pod başına)' : `${card.title}${card.unit ? ` (${card.unit.trim()})` : ''}`}</h3>
+              {/* v0.10.2148 (S9) — özet görünümün notu + eski görünüme geçiş (URL kaynak, replace). */}
+              {summary && (
+                <span className="rt-view-note">
+                  <span title={summary.percent
+                    ? "Yüzde = pod'un heap kullanımı / kendi heap sınırı (jvm.memory.used / jvm.memory.limit, havuzların toplamı)."
+                    : 'jvm.memory.limit serisi yok: değerler mutlak (MB), yüzdeye çevrilmedi.'}>
+                    {summary.total} pod · en yüksek {summary.top.length} renkli
+                    {summary.drawn < summary.total ? ` · ${summary.drawn} / ${summary.total} çizildi` : ''}
+                    {clusterCount > 1 ? ` · ${clusterCount} cluster` : ''}
+                    {summary.percent ? '' : ' · sınır bilinmiyor (MB)'}
+                  </span>
+                  <Link replace to={{ search: rtViewSearch(params, { ...view, lines: true }) }}>Pod başına çizgiler</Link>
+                </span>
+              )}
+              {!summary && family === 'jvm' && card.key === 'heap' && (
+                <span className="rt-view-note">
+                  <Link replace to={{ search: rtViewSearch(params, { ...view, lines: false }) }}>Özet görünüm</Link>
+                </span>
+              )}
               {/* v0.9.532 — cluster sayısı: çok-cluster'lı serviste not,
                   kesme olmasa da görünür (operatör "hangi cluster belli
                   değil" — cevabın yarısı bu sayı, yarısı seri önekleri). */}
-              {(capped || clusterCount > 1) && (
+              {!summary && (capped || clusterCount > 1) && (
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>
                   {capped ? `${FANOUT_MAX} / ${podTotal} pod gösteriliyor` : `${podTotal} pod`}
                   {clusterCount > 1 ? ` · ${clusterCount} cluster` : ''}
@@ -329,7 +417,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
                 <TimeSeriesPanel
                   series={series}
                   height={240}
-                  mode={card.mode ?? 'area'}
+                  mode={summary ? 'line' : card.mode ?? 'area'}
                   syncKey={`runtime:${service}`}
                   deploys={deployNs}
                   onZoom={onZoom}

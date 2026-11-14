@@ -72,6 +72,9 @@ export interface TSSeries {
   unit?: string;           // per-series unit (drives the axis it's bound to)
   axis?: 'left' | 'right'; // which y-axis this series reads against (default 'left')
   dash?: number[];         // canvas dash pattern (explore-v2: the formula series)
+  // v0.10.2148 (servis sekmeleri S9) — çizgi kalınlığı (px); verilmezse 2.
+  // Arka plan çizgileri (pod başına ince gri) 1 verir.
+  width?: number;
   // v0.9.80 (uPlot Aşama 2 madde 1) — adım çizim: scrape gauge/counter
   // örnekler arası sabittir; düz çizgi olmayan geçiş uydurur. line/area
   // modunda uPlot.paths.stepped(align:1) ile değeri sonraki örneğe kadar
@@ -400,7 +403,7 @@ export function TimeSeriesPanel({
             label: s.label,
             stroke: color,
             scale: yScaleKey(s),
-            width: 2,
+            width: s.width ?? 2,
             show: visibleRef.current[i],
             dash: s.dash,
             value: (_u: uPlot, v: number | null) => fmtSmart(v, u),

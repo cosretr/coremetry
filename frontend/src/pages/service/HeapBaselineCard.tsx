@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtClock } from '@/lib/utils'; // v0.10.891 — tek saat biçimleyici (24 sa kilidi)
@@ -6,6 +7,7 @@ import { useServiceDeploys } from '@/lib/queries';
 import { TimeSeriesPanel, type TSSeries, type TSThreshold } from '@/components/viz/TimeSeriesPanel';
 import { rowActivation } from '@/lib/a11y';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
+import { parseRtView, rtViewParam } from './runtimeHeapView';
 import type { HeapBaselinePod, HeapBaselineResponse } from '@/lib/types';
 
 // HeapBaselineCard — v0.10.887 (Dynatrace paritesi #4, dilim 1; spec Onay
@@ -42,6 +44,144 @@ export function heapBandSentence(p: HeapBaselinePod | undefined, d: Pick<HeapBas
 
 const fmtPct = (v: number) => `${v.toFixed(0)} %`;
 
+// ── v0.10.2148 (servis sekmeleri S9; plan K12 — operatör kararı 2026-11-14) ──
+// VARSAYILAN görünüm "sınıra en yakın 5 pod": grafik yok, yalnız GC sonrası
+// heap doluluğu en yüksek beş pod (heap-baseline yanıtının kendi % sınır
+// değeri; yeni sorgu yok). "Hangi pod" sorusunun cevabı burada; pod başına
+// çizgi + bant grafiği ve TÜM pod'ların tablosu `?rtview=lines` ile (eski
+// kart, aşağıda aynen).
+export const NEAR_LIMIT_MAX = 5;
+
+/** Sınıra en yakın pod'lar: son GC-sonrası doluluğa göre azalan; eşitlikte ada göre (kararlı). SAF. */
+export function nearestToLimit(pods: readonly HeapBaselinePod[], max: number = NEAR_LIMIT_MAX): HeapBaselinePod[] {
+  return [...pods].sort((a, b) => b.band.current - a.band.current || a.pod.localeCompare(b.pod)).slice(0, max);
+}
+
+const NEAR_COLS: ColumnDef<HeapBaselinePod>[] = [
+  { id: 'pod',    label: 'Pod',        sortValue: r => r.pod,          naturalDir: 'asc', flex: true, minWidth: 200 },
+  { id: 'last',   label: 'Son (% sınır)', sortValue: r => r.band.current, numeric: true,  width: 120 },
+  { id: 'band',   label: 'Bant (24s)', width: 120 },
+  { id: 'status', label: 'Durum',      sortValue: r => ({ critical: 3, deviating: 2, ok: 1, no_baseline: 0 }[r.band.status] ?? 0), numeric: true, width: 220 },
+];
+
+type HeapCardProps = {
+  service: string;
+  from: number; // unix ns — parent'ın çözülmüş penceresi (RQ anahtarı hizalı)
+  to: number;
+  onZoom?: (fromSec: number, toSec: number) => void;
+  onZoomReset?: () => void;
+};
+
+function useHeapBaseline(service: string, from: number, to: number) {
+  return useQuery({
+    queryKey: ['svc-heap-baseline', service, from, to],
+    queryFn: () => api.serviceHeapBaseline(service, from, to),
+    enabled: !!service,
+    staleTime: 60_000,
+  });
+}
+
+/** Dedektörün gölge hükmü: "açılırdı" (Problem yazılmadı). İki görünümde de görünür. */
+function VerdictBadge({ data }: { data: HeapBaselineResponse }) {
+  if (!(data.mode !== 'off' && data.verdict?.wouldOpen)) return null;
+  return (
+    <span className="badge b-warn" title={`dedektör (${data.verdict.source}, kip ${data.verdict.mode}): pod ${data.verdict.pod} · z ${data.verdict.z.toFixed(1)} · ${fmtPct(data.verdict.current)} vs medyan ${fmtPct(data.verdict.median)} · ${fmtClock(data.verdict.at * 1000)}${data.verdict.wouldP1 ? ' · P1 olurdu' : ' · P2 olurdu'}`}>
+      ◐ gölge: problem AÇILIRDI · {data.verdict.pod}{data.verdict.wouldP1 ? ' · P1' : ''}
+    </span>
+  );
+}
+
+/** Durum hücresi: rozet + kaç kova / neden bant yok / ne zamandır sessiz. */
+function StatusCell({ p, data }: { p: HeapBaselinePod; data: HeapBaselineResponse }) {
+  const st = HEAP_STATUS[p.band.status] ?? HEAP_STATUS.no_baseline;
+  const noBand = p.band.status === 'no_baseline';
+  const silentAfter = 3 * data.bucketSec; // son kova bundan eskiyse "sessiz"
+  const silentFor = p.lastTs > 0 ? Math.max(0, data.to / 1e9 - p.lastTs - data.bucketSec) : 0;
+  return (
+    <td>
+      <span className={`badge ${st.tone}`}>{st.icon} {st.label}</span>
+      {!noBand && p.band.status !== 'ok' && <span className="cell-faint"> · {p.band.dwell} kova</span>}
+      {noBand && <span className="cell-faint"> · {heapBandSentence(p, data)}</span>}
+      {silentFor > silentAfter && <span className="cell-faint"> · sessiz · {Math.round(silentFor / 60)} dk önce</span>}
+    </td>
+  );
+}
+
+function HeapNearLimit({ service, from, to }: HeapCardProps) {
+  const q = useHeapBaseline(service, from, to);
+  const [params] = useSearchParams();
+  const data = q.data ?? undefined;
+  const pods = useMemo(() => data?.pods ?? [], [data]);
+  const rows = useMemo(() => nearestToLimit(pods), [pods]);
+  // Hook koşulsuz, erken dönüşlerin ÜSTÜNDE (useDataTable kuralı).
+  const dt = useDataTable<HeapBaselinePod>({
+    storageKey: 'service-heap-near-limit', columns: NEAR_COLS, rows,
+    initialSort: { id: 'last', dir: 'desc' },
+  });
+  const linesSearch = (() => {
+    const p = new URLSearchParams(params);
+    p.set('rtview', rtViewParam({ ...parseRtView(params.get('rtview')), lines: true }));
+    return `?${p.toString()}`;
+  })();
+  const table = (body: ReactNode) => (
+    <div className="table-wrap">
+      <table {...dt.tableProps}>
+        <DataTableColgroup dt={dt} />
+        <DataTableHead dt={dt} />
+        <tbody>{body}</tbody>
+      </table>
+    </div>
+  );
+  const title = `Sınıra en yakın ${NEAR_LIMIT_MAX} pod — GC sonrası heap`;
+  if (q.isError) { // hata ≠ boş küme: sessizce kaybolmaz
+    return (
+      <div className="card" data-testid="heap-baseline-error">
+        <div className="ov-card-h"><h3>{title}</h3></div>
+        <div className="ov-card-b heap-near-b">
+          {table(<DataTableState dt={dt} kind="error"
+            message={`heap bandı okunamadı: ${q.error instanceof Error ? q.error.message : String(q.error)}`} />)}
+        </div>
+      </div>
+    );
+  }
+  if (!data || pods.length === 0) return null; // metrik akmıyor / JVM pod yok → kart yok
+  const sourceName = data.source === 'vm' ? 'VictoriaMetrics' : 'ClickHouse';
+  return (
+    <div className="card" data-testid="heap-near-limit-card">
+      <div className="ov-card-h">
+        <h3>{title}</h3>
+        <span className="rt-view-note">
+          <span>{rows.length} / {pods.length} pod</span>
+          {data.truncated > 0 && <span>· {data.truncated} pod kesildi</span>}
+          {data.capped && <span className="badge b-warn" title="Kaynak satır tavanına çarpıldı (ClickHouse LIMIT); bazı pod'lar eksik ya da kısmi olabilir.">kaynak satır tavanı</span>}
+          <VerdictBadge data={data} />
+          <Link replace to={{ search: linesSearch }}>Tüm pod&#39;lar ve bant grafiği</Link>
+        </span>
+      </div>
+      <div className="ov-card-b heap-near-b">
+        {table(dt.sortedRows.map(p => (
+          <tr key={p.pod}>
+            <td className="mono">{p.pod}</td>
+            <td className={`num ${p.band.current >= 90 ? 'cell-err' : p.band.current >= 75 ? 'cell-warn' : ''}`}>{fmtPct(p.band.current)}</td>
+            <td className="num">{p.band.status === 'no_baseline' ? '—' : `${fmtPct(p.band.lower)}–${fmtPct(p.band.upper)}`}</td>
+            <StatusCell p={p} data={data} />
+          </tr>
+        )))}
+        <div className="kc-line heap-near-foot">
+          GC sonrası heap doluluğu (jvm.memory.used_after_last_gc / jvm.memory.limit), {Math.round(data.bucketSec / 60)}-dk kova,
+          bant son {data.historyHours} saatten; kaynak: {sourceName}. Bu kart problem açmaz.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Görünüm seçimi URL'den (`?rtview`): varsayılan özet, `lines` eski kart. */
+export function HeapBaselineCard(props: HeapCardProps) {
+  const [params] = useSearchParams();
+  return parseRtView(params.get('rtview')).lines ? <HeapBaselineLines {...props} /> : <HeapNearLimit {...props} />;
+}
+
 const COLS: ColumnDef<HeapBaselinePod>[] = [
   { id: 'pod',    label: 'Pod',        sortValue: r => r.pod,          naturalDir: 'asc', width: 240 },
   { id: 'last',   label: 'Son',        sortValue: r => r.band.current, numeric: true,     width: 80 },
@@ -50,19 +190,8 @@ const COLS: ColumnDef<HeapBaselinePod>[] = [
   { id: 'status', label: 'Durum',      sortValue: r => ({ critical: 3, deviating: 2, ok: 1, no_baseline: 0 }[r.band.status] ?? 0), numeric: true, width: 200 },
 ];
 
-export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
-  service: string;
-  from: number; // unix ns — parent'ın çözülmüş penceresi (RQ anahtarı hizalı)
-  to: number;
-  onZoom?: (fromSec: number, toSec: number) => void;
-  onZoomReset?: () => void;
-}) {
-  const q = useQuery({
-    queryKey: ['svc-heap-baseline', service, from, to],
-    queryFn: () => api.serviceHeapBaseline(service, from, to),
-    enabled: !!service,
-    staleTime: 60_000,
-  });
+function HeapBaselineLines({ service, from, to, onZoom, onZoomReset }: HeapCardProps) {
+  const q = useHeapBaseline(service, from, to);
   const deploysQ = useServiceDeploys(service, from, to);
   const deployNs = useMemo(() => {
     const d = deploysQ.data;
@@ -123,8 +252,6 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
     );
   }
   if (!data || pods.length === 0) return null; // metrik akmıyor / JVM pod yok → kart yok
-  const silentAfter = 3 * data.bucketSec; // son kova bundan eskiyse "sessiz"
-  const silentFor = (p: HeapBaselinePod) => (p.lastTs > 0 ? Math.max(0, data.to / 1e9 - p.lastTs - data.bucketSec) : 0);
 
   const sourceName = data.source === 'vm' ? 'VictoriaMetrics' : 'ClickHouse';
   const bandTxt = heapBandSentence(focused, data);
@@ -139,11 +266,7 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
           {data.truncated > 0 && <span>· {data.truncated} pod kesildi</span>}
           {data.capped && <span className="badge b-warn" title="Kaynak satır tavanına çarpıldı (ClickHouse LIMIT); bazı pod'lar eksik ya da kısmi olabilir.">kaynak satır tavanı</span>}
           {/* v0.10.891 — dedektörün gölge hükmü: "açılırdı" (Problem yazılmadı). Canlı kip 892. */}
-          {data.mode !== 'off' && data.verdict?.wouldOpen && (
-            <span className="badge b-warn" title={`dedektör (${data.verdict.source}, kip ${data.verdict.mode}): pod ${data.verdict.pod} · z ${data.verdict.z.toFixed(1)} · ${fmtPct(data.verdict.current)} vs medyan ${fmtPct(data.verdict.median)} · ${fmtClock(data.verdict.at * 1000)}${data.verdict.wouldP1 ? ' · P1 olurdu' : ' · P2 olurdu'}`}>
-              ◐ gölge: problem AÇILIRDI · {data.verdict.pod}{data.verdict.wouldP1 ? ' · P1' : ''}
-            </span>
-          )}
+          <VerdictBadge data={data} />
         </span>
       </div>
       <div className="ov-card-b" style={{ paddingTop: 10, paddingBottom: 10 }}>
@@ -166,7 +289,6 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
         )}
         {renderTable(
           dt.sortedRows.map(p => {
-            const st = HEAP_STATUS[p.band.status] ?? HEAP_STATUS.no_baseline;
             const noBand = p.band.status === 'no_baseline';
             /* v0.10.933 (tablo standardı T2) — odaklı pod satırı satır içi
                bg3 zemin yerine tek seçili görünüm `.row-selected`.
@@ -180,12 +302,7 @@ export function HeapBaselineCard({ service, from, to, onZoom, onZoomReset }: {
                 <td className="num">{fmtPct(p.band.current)}</td>
                 <td className="num">{noBand ? '—' : `${fmtPct(p.band.lower)}–${fmtPct(p.band.upper)}`}</td>
                 <td className="num">{noBand ? '—' : p.band.z.toFixed(1)}</td>
-                <td>
-                  <span className={`badge ${st.tone}`}>{st.icon} {st.label}</span>
-                  {!noBand && p.band.status !== 'ok' && <span style={{ color: 'var(--text3)' }}> · {p.band.dwell} kova</span>}
-                  {noBand && <span style={{ color: 'var(--text3)' }}> · {heapBandSentence(p, data)}</span>}
-                  {silentFor(p) > silentAfter && <span style={{ color: 'var(--text3)' }}> · sessiz · {Math.round(silentFor(p) / 60)} dk önce</span>}
-                </td>
+                <StatusCell p={p} data={data} />
               </tr>
             );
           }),

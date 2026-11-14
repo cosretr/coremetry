@@ -3835,6 +3835,11 @@ tbody td.infra-where-note { color: var(--text2); }
    (kaç seri, gri alan ne, hangi seri en yüksek). */
 .metric-env-note { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--text3); }
 .metric-env-wait { display: grid; place-items: center; }
+/* v0.10.2148 (servis sekmeleri S9) — Runtime kart başlığının sağ notu
+   (kaç pod, hangi görünüm) + görünüm bağlantısı. */
+.rt-view-note { display: inline-flex; gap: var(--sp-4); align-items: baseline; font-size: var(--fs-xs); color: var(--text3); }
+.heap-near-b { padding-top: var(--sp-5); padding-bottom: var(--sp-5); }
+.heap-near-foot { margin: var(--sp-3) 0 0; }
 .infra-src { margin: 0 0 var(--sp-6); padding-left: var(--sp-7); font-size: var(--fs-sm); color: var(--text2); }
 .infra-src li { padding: var(--sp-1) 0; }
 /* v0.9.408 — Explain kanıt kutusu: kök-neden soruşturulacak span'ler

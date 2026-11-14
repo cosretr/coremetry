@@ -177,6 +177,7 @@ export interface TSPSigSeries {
   axis?: string;
   unit?: string;
   dash?: number[];
+  width?: number;
 }
 export interface TSPBuildSigInput {
   series: TSPSigSeries[];
@@ -199,7 +200,7 @@ export interface TSPBuildSigInput {
 }
 export function timeSeriesPanelBuildSignature(p: TSPBuildSigInput): string {
   return JSON.stringify([
-    p.series.map(s => [s.label, s.color ?? '', s.axis ?? 'left', s.unit ?? '', s.dash ?? []]),
+    p.series.map(s => [s.label, s.color ?? '', s.axis ?? 'left', s.unit ?? '', s.dash ?? [], s.width ?? 2]),
     p.mode,
     !!p.logScale,
     p.syncKey ?? '',

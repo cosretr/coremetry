@@ -128,3 +128,15 @@ describe('TimeSeriesPanel envelope (S7)', () => {
     expect(envelopeFill()).toMatch(/^#[0-9a-f]{6}22$/i);
   });
 });
+
+// v0.10.2148 (S9) — seri başına çizgi kalınlığı (ince gri arka plan çizgileri).
+describe('TimeSeriesPanel seri kalınlığı (S9)', () => {
+  it('verilmezse 2; verilirse o; yapı imzasına girer', () => {
+    mount();
+    expect(opts().series.slice(1).map(s => s.width)).toEqual([2, 2]);
+    const before = cap.spec!.signature;
+    act(() => { root!.render(<TimeSeriesPanel series={[{ ...LINES[0], width: 1 }, LINES[1]]} height={200} />); });
+    expect(opts().series.slice(1).map(s => s.width)).toEqual([1, 2]);
+    expect(cap.spec!.signature).not.toBe(before);
+  });
+});
