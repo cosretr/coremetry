@@ -167,6 +167,24 @@ func TestMembersOpenJoinsOwner(t *testing.T) {
 	})
 }
 
+// v0.10.2164 (D5) — yükseliş bildirimi gövdesi: sahibin YENİ hali (P1)
+// bildirilir; kanal yoksa (send nil) yalnız log, panik yok.
+func TestEscalationAlertSendsRaisedOwner(t *testing.T) {
+	got := make(chan chstore.Problem, 1)
+	before, after := memErrRateOwner(), memErrRateOwner()
+	after.Severity = "critical"
+	EscalationAlert("test", func(_ context.Context, p chstore.Problem) { got <- p })(before, after)
+	select {
+	case p := <-got:
+		if p.ID != "a1" || p.Severity != "critical" {
+			t.Fatalf("bildirilen satır sahibin yükselmiş hali olmalı: %+v", p)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("bildirim gönderilmedi")
+	}
+	EscalationAlert("test", nil)(before, after)
+}
+
 func TestMembersVirtualRowLifecycle(t *testing.T) {
 	ctx := context.Background()
 	st := newFakeMemberStore()

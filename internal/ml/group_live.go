@@ -21,7 +21,8 @@ package ml
 //
 // BİLDİRİM: yalnız AÇILIŞTA, mevcut hattan (notify.SendProblemAlert; tür
 // "anomaly" — chstore.ProblemNotifyKind). Tazeleme ve kapanış bildirim
-// üretmez (evaluator terfi yoluyla aynı). Incident bağlama yok (Incidents
+// üretmez (evaluator terfi yoluyla aynı). Tek istisna (v0.10.2164, D5): ML
+// üyesi yabancı sahibi P1'e çıkarırsa bir kez "yükseldi" (ownerEscalated). Incident bağlama yok (Incidents
 // emekli; kapı v0.10.2070'te silindi).
 
 import (
@@ -432,6 +433,15 @@ func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup,
 		c.Refreshed++
 		if raised[p.ID] {
 			log.Printf("[ml] PROBLEM RAISED BY MEMBER %s · %s · %s (ML üyesi sahibin önceliğini / atananını güncelledi)", p.Service, p.ID, p.Severity)
+			// v0.10.2164 (D5) — P1'e geçişte tek "yükseldi" bildirimi (eski
+			// yazarlarla aynı gövde, anomaly.EscalationAlert).
+			if before := snap.ByID(p.ID); ownerEscalated(before, p, pol) {
+				var send func(context.Context, chstore.Problem)
+				if r.notifier != nil {
+					send = r.notifier.SendProblemAlert
+				}
+				anomaly.EscalationAlert("ml", send)(*before, p)
+			}
 		}
 	}
 	for _, p := range plan.Open {
@@ -554,6 +564,13 @@ func markLiveGroups(groups []decidedGroup, live map[string]string, failed map[st
 			groups[i].D.Live, groups[i].D.ProblemID = true, pid
 		}
 	}
+}
+
+// ownerEscalated — SAF (v0.10.2164, D5): ML üyesinin yükselttiği sahip bu
+// yazımla P1'e Mİ geçti. Önceki hali bilinmiyorsa (görüntüde yok) bildirim
+// yok; zaten P1 ise yok (ek üye asla bildirmez).
+func ownerEscalated(before *chstore.Problem, after chstore.Problem, pol chstore.OwnerPolicy) bool {
+	return before != nil && chstore.EscalatedToP1(*before, after, pol)
 }
 
 func firstNonNil(a, b error) error {

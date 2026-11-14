@@ -93,6 +93,14 @@ Ne üretiyorsun?
 4. **Tam satır değiştirme:** `UpsertProblem` tüm satırı yazar; tazeleme yolu
    Status/Assignee/Pod/AISummary'yi TAŞIMALI (`carryProblemOperatorState`,
    `problem_aisummary_test.go`). Unutulan alan sıfırlanır (invariant #4).
+5. **Servis özneli mi? → servis başına TEK Problem** (v0.10.2155–2164, Davis
+   tarzı; `docs/plans/spec-davis-style-problem-merge.md`). Açık sahip varsa
+   yeni satır açılmaz, üye olayı (`ml_events`, evidence `problem_id`) yazılır:
+   aile sınıfı `chstore/problem_owner.go ProblemMergeClass` (sahip / yalnız
+   üye / AYRI) + `anomaly.LoadMembers` yazım yolu; kapanış = üyeden ayrılma
+   (`HoldResolve`). Bildirim yalnız açılışta + üye sahibi P1'e çıkarınca BİR
+   kez (`OnEscalate` / ML `ownerEscalated`); ek üye asla bildirmez. Alarm
+   kuralı, ext/db, `self-*`, exception fırtınası AYRI kalır.
 
 ## 3. Dedektör tablosu — kural id önekleri
 

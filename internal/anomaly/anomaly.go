@@ -665,6 +665,12 @@ func (d *Detector) scan(ctx context.Context) {
 	// histerezis touch'ı ve çözülme kararı aynen çalışır; yazımlar üye olayına
 	// gider. Tik başına tek ek okuma (üye olayları, ml_events).
 	mem := LoadMembers(ctx, d.store, snap, MemberDetMetricAnomaly, now)
+	// v0.10.2164 (D5) — üye sahibi P1'e çıkarırsa tek "yükseldi" bildirimi.
+	var escSend func(context.Context, chstore.Problem)
+	if d.notifier != nil {
+		escSend = d.notifier.SendProblemAlert
+	}
+	mem.OnEscalate(EscalationAlert("anomaly", escSend))
 
 	// v0.9.1069 (F1.6-R2) — İKİ FAZ: önce TÜM kararlar toplanır, sonra
 	// uygulanır. Davranış birebir (kararlar zaten tek snapshot'tan ve

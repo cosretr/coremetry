@@ -225,6 +225,11 @@ func TestOwnerDedupeAcrossFamilies(t *testing.T) {
 		if !chstore.EscalatedToP1(errRate, r, pol) {
 			t.Error("P1 yükselişi bekleniyor")
 		}
+		// v0.10.2164 (D5) — tek "yükseldi" bildirimi: yalnız P1'e GEÇİŞTE;
+		// önceki hal bilinmiyorsa ya da zaten P1 ise yok.
+		if !ownerEscalated(&errRate, r, pol) || ownerEscalated(nil, r, pol) || ownerEscalated(&r, r, pol) {
+			t.Error("ownerEscalated yalnız P1'e geçişte true")
+		}
 		// ikinci tik: sahip zaten yükseltilmiş → yazım yok
 		if p2 := planMLProblemsWith(nil, []svcProblemIn{in}, []chstore.Problem{r}, true, descStub, pol); len(p2.Refresh) != 0 || len(p2.Raised) != 0 {
 			t.Errorf("yükseltme bir kez: %+v", p2)

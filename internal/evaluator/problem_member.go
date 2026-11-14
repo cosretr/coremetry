@@ -14,6 +14,12 @@ import (
 )
 
 // members — bir pasın üyelik görünümü (tik başına, pas başına bir okuma).
+// v0.10.2164 (D5): üye sahibi P1'e çıkarırsa tek "yükseldi" bildirimi
+// (anomaly.EscalationAlert; yaş eskalasyonuyla aynı hat).
 func (e *Evaluator) members(ctx context.Context, snap *chstore.OpenProblems, detector string, now time.Time) *anomaly.Members {
-	return anomaly.LoadMembers(ctx, e.store, snap, detector, now)
+	var send func(context.Context, chstore.Problem)
+	if e.notifier != nil {
+		send = e.notifier.SendProblemAlert
+	}
+	return anomaly.LoadMembers(ctx, e.store, snap, detector, now).OnEscalate(anomaly.EscalationAlert("evaluator", send))
 }

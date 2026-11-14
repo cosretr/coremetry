@@ -100,6 +100,22 @@ func (m *Members) OnEscalate(fn func(before, after chstore.Problem)) *Members {
 	return m
 }
 
+// EscalationAlert — v0.10.2164 (Davis tarzı tek Problem D5): OnEscalate'in
+// gövdesi. Üye sahibi P1'e çıkardığında TEK "yükseldi" bildirimi; hat yaş
+// eskalasyonununki (evaluator escalateStaleProblems): SendProblemAlert
+// yeniden ateşlenir — yalnız P1'e abone kanal (nöbet çağrısı) da duyar,
+// onaylanmış satır kanal turuna çıkmaz (notify.go). "Bir kez": çağrı yalnız
+// P1'e GEÇİŞ anında (EscalatedToP1); zaten P1 olan sahibe gelen ek üye ve
+// her tazeleme sessizdir. send nil = bildirim kanalı yok (yalnız log).
+func EscalationAlert(tag string, send func(context.Context, chstore.Problem)) func(before, after chstore.Problem) {
+	return func(before, after chstore.Problem) {
+		log.Printf("[%s] PROBLEM ESCALATED BY MEMBER %s · %s (%s → %s) — üye sahibi P1'e çıkardı, tek bildirim", tag, after.Service, after.ID, before.Severity, after.Severity)
+		if send != nil {
+			go send(context.Background(), after)
+		}
+	}
+}
+
 // loadNoise — "problem değil" imzaları, tik başına en çok bir kez.
 func (m *Members) loadNoise(ctx context.Context) {
 	if m.noiseTried {

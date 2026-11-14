@@ -14079,3 +14079,11 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - Okuma hata verirse alan DÜŞER (eski değer taşınmaz) ve satırdaki span parçası atlanır; `spans_today`'e geri düşülmez — iki farklı anlam aynı yerde görünmesin. Bilinen fark: aynı turdaki `clickhouse_uncompressed_bytes` hata turunda son iyi değerini KORUR (mevcut davranış, dokunulmadı).
 - Anlık görüntü sürümü (`SnapshotVersion`) artmadı: alan isteğe bağlı; eski sürümün yayınladığı görüntüde yoktur ve satırda span parçası o görüntü yenilenene kadar çıkmaz.
 - Doğrulanmadı: canlı ClickHouse'ta sorgu (tek düğüm ve küme kipi), Sistem sayfasındaki sayıyla yan yana karşılaştırma, tarayıcıda görünüm, prod.
+
+## 2026-11-14 — v0.10.2155–2157, 2163–2164 — Davis tarzı tek Problem (servis içi birleşme, Faz 1)
+- Operatör: "Eski dedektörleri emekli etmeden, Davis gibi mevcut probleme entegre edebilir miyiz?" Spec `docs/plans/spec-davis-style-problem-merge.md` onaylandı (açık sorular 1–4 "evet"); her dilimin sapma / netleşen kararları spec sonundaki gemi notlarında.
+- Kural: servis başına TEK açık Problem. Sahip olabilen aileler (`svc-slowdown:*`, `anomaly:*:error_rate`, ML `anomaly-auto:svc/group:*`; etkin keep listesine bağlı) ilk açan sahip olur, kimliği değişmez; sonra gelen her servis sinyali (yalnız-üye aileler dahil: p99 / request_rate, eski terfi, özne) yeni satır açmaz, `ml_events` üye olayı olur (evidence `problem_id`). Şema / ayar yok.
+- D1 sahip çözümü (SAF, `chstore/problem_owner.go`) · D2 eski yazarlar katılır (`anomaly/problem_member.go`, "sanal satır": dedektör mantığına dokunulmadı) · D3 kapanış = üyeden ayrılma + prod ikizlerinin "merged into" göçü (`evaluator/problem_merge.go`) · D4 okuyucular (`GET /api/problems/{id}/events`, liste "N olay", detay çizelgesi, MCP `eventCount`) · D5 üye sahibi P1'e çıkarınca tek "yükseldi" bildirimi (yaş eskalasyonu hattı, `SendProblemAlert`).
+- AYRI kalır: alarm kuralları (operatör sözleşmesi), `exception-storm`, ext / Oracle / `db-health:`, `self-*`, `anomaly-cluster:*` (varlıklar arası birleşme Faz 2, ayrı spec).
+- Bildirim: açılışta bir kez + P1'e geçişte bir kez; ek üye, tazeleme ve göç asla bildirmez. Bildirim türü / ekip maili sahibin türünde kalır (açık soru 2).
+- Doğrulanmadı: prod (ilk tik göç sayısı, iki motorun metrik okuma maliyeti), tarayıcıda çizelge görünümü.

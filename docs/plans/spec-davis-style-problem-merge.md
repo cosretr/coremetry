@@ -1,6 +1,6 @@
 # Spec — Davis tarzı Problem birleşmesi: eski dedektörler emekli olmadan tek Problem
 
-Tarih 2026-11-14 · Operatör sorusu: "Eski dedektörleri emekli etmeden, Davis gibi mevcut probleme entegre edebilir miyiz?" · Durum: ONAYLANDI (2026-11-14; açık sorular 1–4 "evet"), D1–D5 uygulanıyor — gemi notları dosya sonunda.
+Tarih 2026-11-14 · Operatör sorusu: "Eski dedektörleri emekli etmeden, Davis gibi mevcut probleme entegre edebilir miyiz?" · Durum: ONAYLANDI (2026-11-14; açık sorular 1–4 "evet"), D1–D5 GEMİDE (v0.10.2155–2157, 2163–2164); Faz 2 ayrı spec — gemi notları dosya sonunda.
 
 ## What
 
@@ -130,3 +130,8 @@ Spec'i onaylıyor musun? Açık soru varsa o ilkönce.
 - **Tam liste** "Teknik kanıt" içinde "Birleşen olaylar" bölümü (ham gözlenen / olağan); kısa çizelge ile aynı sorgu anahtarı, ikinci istek yok. ML olay satırı `/anomalies/ml/<id>`'ye linkli.
 - **MCP cümlesi yalnız ≥ 2 FARKLI dedektörde** ("N dedektör aynı olayı gördü."); aynı dedektörün iki olayı için cümle yok, `eventCount` yine döner.
 - **"merged into" eki** satır cümlesinden kırpılır (BE `inboxResolveSuffixes` + FE `LIFECYCLE_SUFFIXES`); `ML_DETECTOR_TR` `lib/mlDetectorLabels.ts`'e taşındı (ML sekmesi Problems parçasına girmesin).
+
+**GEMİDE v0.10.2164 — D5 yükseliş bildirimi** (Açık soru 1 "evet"). `anomaly.EscalationAlert` (tek gövde), bağlantı: `evaluator.members` (yaygın yavaşlama, terfi, özne terfisi), `anomaly.go` metrik anomalisi taraması (`Members.OnEscalate`), ML kaydedicisi (`ownerEscalated`, yabancı sahip yükseltmesi). Kararlar:
+- **Hat = yaş eskalasyonununki**: `SendProblemAlert` yeniden ateşlenir (yeni bildirim türü / metni / ayarı yok); P1'e abone kanal da duyar, onaylanmış sahip kanal turuna çıkmaz, bakım penceresi susturur.
+- **"Bir kez" = P1'e GEÇİŞ** (`EscalatedToP1`, yazım öncesi / sonrası aynı ayarla): zaten P1 sahibe gelen ek üye, her tazeleme ve atanan taşıma sessiz. Ayrı "bildirildi" durumu saklanmaz: sahip satırı üyeler yüzünden P1'den inmez (D1 kuralı: ölçü yalnız yükselir), dolayısıyla ikinci geçiş yoktur.
+- **İkiz göçü bildirmez** (D3 kararı aynen): kapanan ikiz açılırken kendi bildirimini göndermişti.
