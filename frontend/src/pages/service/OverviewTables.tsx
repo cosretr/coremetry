@@ -164,7 +164,7 @@ export function DbCard({ service, range, from, to }: { service: string; range: T
       <div className="ov-card-h">
         <h3>Top DB statements</h3>
         {/* Kartın kendi sayfa-içi devamı: Details sekmesindeki tam
-            Database bölümü (DetailsToc'un 'dtl-db' çapası). tab=details
+            Database bölümü ('dtl-db' çapası). tab=details
             ŞART — çapa tek başına varsayılan sekmede çözülür ve operatör
             "View all"a bastığı Overview'a geri döner (v0.9.211'in dersi). */}
         {rows.length > 0 && (

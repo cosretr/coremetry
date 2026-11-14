@@ -10,6 +10,7 @@ import { LIVE_META } from '@/lib/autoRefresh';
 import { tsRel, rangeToSince, fmtDateTime } from '@/lib/utils';
 import { serviceHref } from '@/lib/serviceHref';
 import type { TimeRange } from '@/lib/types';
+import { KeyValue, KeyValueRow } from '@/components/coremetry/KeyValue';
 
 // DetailsPropsStrip — v0.8.370 (operator-approved mockup): the
 // Dynatrace "Properties and tags" counterpart on the Details tab.
@@ -21,15 +22,6 @@ import type { TimeRange } from '@/lib/types';
 // the strip never blocks the tab.
 
 const STALE = 60_000;
-
-function Prop({ k, children }: { k: string; children: React.ReactNode }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
-      <span style={{ color: 'var(--text3)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px' }}>{k}</span>
-      <span style={{ fontSize: 12.5, fontWeight: 600 }}>{children}</span>
-    </span>
-  );
-}
 
 export function DetailsPropsStrip({ service, range }: { service: string; range: TimeRange }) {
 
@@ -80,43 +72,44 @@ export function DetailsPropsStrip({ service, range }: { service: string; range: 
 
   if (!tech && !version && !lastRollout && pods === 0) return null;
 
-  const chip: React.CSSProperties = {
-    border: '1px solid var(--border)', borderRadius: 3, background: 'var(--bg2)',
-    padding: '0 6px', fontSize: 11, color: 'var(--text2)',
-  };
-
+  // v0.10.2133 (servis sekmeleri S2, mockup operatör onayı 2026-11-13) —
+  // çerçeveli çip şeridi yerine DÜZ etiket-değer (coremetry/KeyValue);
+  // içerik ve kaynaklar aynı (K5, v0.10.1257), satır içi stil yok.
   return (
-    <div style={{
-      display: 'flex', flexWrap: 'wrap', gap: '8px 22px', alignItems: 'center',
-      border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg2)',
-      padding: '9px 14px', marginBottom: 14,
-    }}>
-      {tech && <Prop k="Technology">{tech}</Prop>}
+    <KeyValue className="ov-mb" aria-label="Servis özellikleri">
+      {tech && <KeyValueRow k="Technology" v={tech} />}
       {version && (
-        <Prop k="Version">
+        <KeyValueRow k="Version" v={<>
           <span className="mono">{version}</span>
           {last && (
-            <a href="#deploys" style={{ ...chip, marginLeft: 6, textDecoration: 'none' }}
-              title="Recent rollouts panel">
-              deployed {tsRel(last.timeUnixNs)}
-            </a>
+            <>
+              {' · '}
+              <a href="#deploys" className="accent" title="Recent rollouts panel" onClick={reopenDeploys}>
+                deployed {tsRel(last.timeUnixNs)}
+              </a>
+            </>
           )}
-        </Prop>
+        </>} />
       )}
       {image && image !== '—' && (
-        <Prop k="Image">
-          <span className="mono" title={image}>{image.length > 60 ? '…' + image.slice(-60) : image}</span>
-        </Prop>
+        <KeyValueRow k="Image" mono title={image} v={image.length > 60 ? '…' + image.slice(-60) : image} />
       )}
       {lastRollout && (
-        <Prop k="Son deploy">
-          <Link to={serviceHref(service, { tab: 'gitops' })} style={{ ...chip, textDecoration: 'none' }}
+        <KeyValueRow k="Son deploy" v={
+          <Link to={serviceHref(service, { tab: 'gitops' })} className="accent"
             title={`${fmtDateTime(new Date(lastRollout.startedAt))} — GitOps sekmesinde rollout'lar`}>
             {tsRel(lastRollout.startedAt * 1e6)}
           </Link>
-        </Prop>
+        } />
       )}
-      {pods > 0 && <Prop k="Pods"><span className="mono">{pods}</span></Prop>}
-    </div>
+      {pods > 0 && <KeyValueRow k="Pods" v={pods} />}
+    </KeyValue>
   );
+}
+
+// reopenDeploys — v0.10.2133: adres zaten #deploys iken tık hashchange
+// üretmez; Dağıtımlar bölümü kapatılmışsa yeniden açılsın diye olay elle
+// yayınlanır (Service.tsx çapa dinleyicisi aynı yoldan açar).
+function reopenDeploys() {
+  if (window.location.hash === '#deploys') window.dispatchEvent(new HashChangeEvent('hashchange'));
 }

@@ -3806,11 +3806,6 @@ button.cosre-cap__row > .row { align-items: flex-start; min-width: 0; }
    --accent == --focus) dili; kanıt ikisine de benzemez. */
 .wf-evidence { outline: 1.5px dashed var(--accent2); outline-offset: -1.5px; }
 
-/* v0.9.380 (redesign D4) — Details ToC rayı yalnız geniş ekranda;
-   dar ekranda içerik tam genişlik kalır, ray sessizce düşer. */
-.dtl-toc { display: none; }
-@media (min-width: 1024px) { .dtl-toc { display: block; } }
-
 /* KPI tile */
 .ov-kpi { padding: 14px 16px 16px; position: relative; overflow: hidden; min-height: 118px; }
 .ov-kpi-accent { position: absolute; top: 0; left: 0; width: 3px; height: 100%; }
@@ -6223,7 +6218,7 @@ tbody td.tpm-more-cell { color: var(--text2); }
    2  Katman kaydırması: modal/çekmece/popover/liste dibine gelince alttaki
       sayfa (#content) kaymaya devam etmesin (scroll chaining).
    3  Çapa ofseti: scrollIntoView({ block: 'start' }) ve #hash hedefleri
-      (DetailsToc bölümleri, ?tab=details#deploys, #db-errors, kök neden
+      (Details bölüm başlıkları #dtl-*, ?tab=details#deploys, #db-errors, kök neden
       çapası) yapışkan filtre barının ALTINA gizlenmesin. Bar yüksekliği
       PageControls'ün #content/.page-body'ye yazdığı --controls-h; bar
       yoksa değişken tanımsız → yalnız --sp-4 nefes payı.

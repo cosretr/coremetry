@@ -38,7 +38,6 @@ import { ENDPOINTS_SUMMARY, perfSummary, latencySummary, metricsSummary, parseOp
 import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
 import { SectionHead } from '@/components/coremetry/SectionHead'; // v0.10.715
 import { ClusterModeToggle } from '@/components/ClusterModeToggle'; // v0.10.717
-import { DetailsToc } from './service/DetailsToc';
 import { DetailsMetricsSection, useDetailsMetricPanels } from './service/DetailsMetricsSection';
 import { panelMaxDataPoints } from '@/lib/chartStep';
 import { ServiceAnnotationLane } from '@/components/charts/ServiceAnnotationLane';
@@ -252,8 +251,8 @@ function ServiceDetailInner() {
   }, { replace: true });
 
   // v0.9.784 — Details'in "Metrikler" bölümü KOŞULLU: servisin metrik
-  // kataloğunda eşleşen aile yoksa hiç kurulmaz. ToC girdisi ve ?op=
-  // kapsam beyanı AYNI sinyali okumak zorunda — olmayan bir bölüme ToC
+  // kataloğunda eşleşen aile yoksa hiç kurulmaz. Bölüm satırı ve ?op=
+  // kapsam beyanı AYNI sinyali okumak zorunda — olmayan bir bölüme
   // satırı ya da kapsam iddiası koymak ölü UI olur. Bölümün kendi
   // sorgusuyla AYNI queryKey + staleTime ⇒ RQ dedupe, ek ağ isteği YOK;
   // yalnız Details sekmesinde etkin.
@@ -648,13 +647,14 @@ function ServiceDetailInner() {
                 loading={opsLoading} />
             )}
             {tab === 'details' && (
-              <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div>
                 {/* v0.9.380 (redesign D4, mockup af7419e5) — dtl-cols (1fr 1fr)
                     grid'i ÖLDÜ: v0.9.141/348 kaldırmalarından beri üç bölümde
                     de sağ sütun boştu (sayfanın yarısı ölü piksel). Heatmap/
-                    DB/Runtime tam genişlikte; sağda scroll-spy ToC rayı
-                    (DetailsToc, ≥1100px). LazyMount disiplini değişmedi.
+                    DB/Runtime tam genişlikte. v0.10.2133 (S2, mockup onaylı
+                    2026-11-13): sağdaki yapışkan ToC rayı KALKTI — beş bölüm
+                    kapalı satır olunca sayfa kısa; dtl-* kimlikleri derin
+                    link / CoSRE hedefi olarak kalır. LazyMount değişmedi.
                     ?op= kapsam şeridi hangi bölümün daraldığını İŞARETLER —
                     v0.9.358-374 dürüstlük çizgisinin düzen hali. */}
                 <div id="dtl-props"><DetailsPropsStrip service={svc} range={range} /></div>
@@ -753,7 +753,7 @@ function ServiceDetailInner() {
                     metric_points türevli TEK panel yoktu; panel seti
                     servisin KENDİ kataloğundan kurulur (ad hardcode YOK),
                     ailesi olmayan panel hiç kurulmaz, hiç panel yoksa
-                    bölüm de ToC girdisi de gizli. */}
+                    bölüm satırı da gizli. */}
                 {hasMetricPanels && (
                   <CollapsedSection id="dtl-metrics" title="Metrikler" summary={metricsSummary(metricPanels)} source="metric_points"
                     badges={<span className="badge b-gray" title="metric_points'te operasyon boyutu yok — bölüm daralmaz">tüm servis</span>}
@@ -789,8 +789,6 @@ function ServiceDetailInner() {
                     </LazyMount>
                   </div>
                 </CollapsedSection>
-              </div>
-              <DetailsToc showMetrics={hasMetricPanels} />
               </div>
             )}
 
