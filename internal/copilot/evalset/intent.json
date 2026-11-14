@@ -408,6 +408,21 @@
           "svc-c"
         ]
       }
+    },
+    {
+      "id": "intent-root-cause-endpoint-week",
+      "surface": "IntentClassify",
+      "why": "v0.10.2137 (router boşlukları D4): servisli endpoint + 'süre artışı neden' kök neden sorusudur (v2'de ön-getirme tek anlatımı)",
+      "user": "svc-a POST /app/x/y son 1 haftadaki süre artışı neden olabilir",
+      "expect": {
+        "intent": "root_cause",
+        "intentService": "svc-a",
+        "knownEntities": [
+          "svc-a",
+          "svc-b",
+          "svc-c"
+        ]
+      }
     }
   ]
 }

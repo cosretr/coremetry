@@ -109,15 +109,8 @@ func v2WeekRange(r guidedRoute, norm string, explicit, v2 bool) (int64, bool) {
 	if !v2 || explicit || (r.Intent != guidedServiceHealth && r.Intent != guidedRootCause) {
 		return 0, false
 	}
-	toks := guidedTokens(norm)
-	if !tokenHasPrefix(toks, "hafta", "week") {
+	if !hasWeekLookback(guidedTokens(norm)) { // v0.10.2137 — tek gövde (chat_operation_why.go)
 		return 0, false
-	}
-	for i := 0; i+1 < len(toks); i++ {
-		if (toks[i] == "geçen" || toks[i] == "önceki" || toks[i] == "last" || toks[i] == "previous") &&
-			tokenHasPrefix(toks[i+1:i+2], "hafta", "week") {
-			return 0, false
-		}
 	}
 	return guidedWeekRangeS, true
 }

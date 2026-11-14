@@ -338,6 +338,11 @@ type guidedRoute struct {
 	// problems (linkler, çipler, özet kartı aynı); demet hipotez çerçevesi ekler,
 	// /ai rota etiketi problems_root_cause (chat_problems_root_cause.go).
 	ProblemsRootCause bool `json:",omitempty"`
+	// opWhy — v0.10.2137 (router boşlukları D4, yalnız v2): operasyon / endpoint
+	// ön-getirme paketi; doluysa root_cause demeti servis demeti yerine paketi
+	// anlatır (chat_operation_why.go). JSON'a girmez (LastRoute klonu servis
+	// kök nedenine döner).
+	opWhy *opPrefetch
 	// ExcSampleLinks — v0.10.1486: service_exceptions demetinin örnek trace
 	// çipleri (/trace?id=…&span=…; copilot_service_exc_samples.go). JSON'a girmez.
 	ExcSampleLinks []guidedAnswerLink `json:"-"`
@@ -2284,6 +2289,10 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	var facts guidedSummaryFacts // v0.10.2101 — özet kartı (chat_summary_card.go); yalnız 3 rota doldurur
 	switch route.Intent {
 	case guidedRootCause:
+		if route.opWhy != nil { // v0.10.2137 — v2 operasyon/endpoint neden sorusu (chat_operation_why.go)
+			evidence, sources, err = s.guidedOpWhyBundle(ctx, emit, route, rangeS, anchorTo)
+			break
+		}
 		qn := normalizeGuidedMsg(question)
 		evidence, sources, err = s.guidedRootCauseBundle(ctx, emit, route.Service, route.Env, from, to, rangeS,
 			hasLatencyAsk(qn) || (cosreV2Marked(ctx) && hasLatencyGrowthSignal(qn))) // v0.10.2136 — v2 gecikme büyümesi sözcükleri

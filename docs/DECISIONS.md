@@ -14002,3 +14002,15 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - F (katalog dışı OP adı → "bulunamadı, en yakın"; iş kodu → guided business_code) UYGULANMADI: guided tarafında rota /
   demet yok, karşılığı olmayan karar. Operatöre seçenek olarak sunuldu.
 - Doğrulanmadı: canlı model, prod; v2'de servisli "nedenini inceler misin" endpoint kartına gidebilir (kart kademesi önce).
+
+## 2026-11-14 — v0.10.2137 — CoSRE router boşlukları D4: ön-getirme + neden → tek anlatım (yalnız v2)
+- Operasyon/endpoint ön-getirmesi tutmuş tur neden / gecikme / gecikme büyümesi soruyorsa (`opWhyNarrationAsk`) serbest döngü
+  tohumlanmaz; `runGuidedRoute` root_cause rotası `opWhy` paketiyle koşar: ön-getirme özeti + en yavaş trace kırılımı + küme
+  kıyası + tek servisse deploy geçmişi (≤24 sa), tek araçsız anlatım (`chat-guided`, klasik anlatıcı). /ai alt rota
+  `operation_root_cause`. Yeni niyet sınıfı yok.
+- Hariç: hata-neden (`errorAsk`, Exceptions açıklaması kendi kademesinde) ve v2 rota incelemesi (`rtPlan`: servis + route →
+  grafikli inceleme döngüsü, onaylı deneyim) — ikisi aynen.
+- Karar 3: v2'de ön-getirme penceresi sorudan (açık pencere guided tavanıyla ≤24 sa; "hafta" geriye bakışı 7 gün); RED tam
+  pencerede MV/rollup'tan, ham span okumaları (trace örnekleri, Oracle eşlemesi, kırılım, endpoint exception) en çok son 24 sa;
+  özet bunu söyler. Çekmece endpoint kanıtı ve v1 bayt bayt aynı.
+- Doğrulanmadı: canlı model anlatımı, prod; istem boyutu ölçülmedi (kanıt döngü tohumuyla aynı metin + deploy).

@@ -591,8 +591,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// katalogdaki bir operasyon adı varsa model çağrılmadan trace/RED/Oracle
 	// getirilir ve serbest döngüye tool kaydı olarak verilir; çok eşleşmede
 	// seçim çipleri. Eşleşme yoksa opPre nil ve akış bayt bayt eski.
-	ctx = armOutboundSlot(ctx, req.Context.Service, req.Context.Env, int64(req.Context.RangeS), anchorTo) // v0.10.1454 — giden çağrı yuvası (copilot_outbound_call.go)
-	opPre, opHandled := s.chatOperationPrefetch(ctx, emit, req.Messages, int64(req.Context.RangeS), anchorTo)
+	ctx = armOutboundSlot(ctx, req.Context.Service, req.Context.Env, int64(req.Context.RangeS), anchorTo)     // v0.10.1454 — giden çağrı yuvası (copilot_outbound_call.go)
+	opRangeS := v2OpPrefetchRangeS(lastUserText(req.Messages), int64(req.Context.RangeS), cosreV2Marked(ctx)) // v0.10.2137 — v2: sorunun penceresi (chat_operation_why.go)
+	opPre, opHandled := s.chatOperationPrefetch(ctx, emit, req.Messages, opRangeS, anchorTo)
 	if opHandled {
 		cspan.tier("operation", true)
 		emit("done", map[string]bool{"ok": true})
@@ -627,6 +628,17 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		// turu sayfanın penceresini taşır (v0.10.1783, chat_endpoint_delta.go)
 		rtRange := routeTurnRangeS(lastUserText(req.Messages), req.Context.RangeS, req.Context.SkipEndpointPick)
 		rtPlan, _ = s.planRouteTurn(ctx, lastUserText(req.Messages), rtSvc, req.Context.Env, rtRange, anchorTo)
+	}
+	// v0.10.2137 (router boşlukları D4) — v2: ön-getirme + neden / gecikme sorusu
+	// döngüyü tohumlamaz; paket + kırılım + deploy TEK anlatım (chat-guided,
+	// chat_operation_why.go). Hata-neden ve rota incelemesi hariç; kademe
+	// cevaplamazsa akış aşağıda aynen.
+	if !ct.On && !apCont.on && evm == nil && opWhyTierWanted(cosreV2Marked(ctx), opPre, rtPlan != nil, lastUserText(req.Messages)) {
+		if handled, wok := s.chatOperationWhyTier(ctx, emit, opPre, req.Messages, req.Context.Explain, req.Context.Service, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin)); handled {
+			cspan.tier("guided", wok)
+			emit("done", map[string]bool{"ok": wok})
+			return
+		}
 	}
 	if rtPlan == nil && opPre == nil && !ct.On && !apCont.on && evm == nil && cosreV2Marked(ctx) {
 		pick := endpointPickCtx{Service: req.Context.Service, Operation: req.Context.Operation, Trace: req.Context.Trace,

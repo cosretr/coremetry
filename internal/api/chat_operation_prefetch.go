@@ -186,6 +186,11 @@ type opTarget struct {
 	// (opErrorWhyAsk). Yalnız sohbet ön-getirmesi doldurur; çekmece endpoint
 	// kanıtı (drawerEndpointEvidence) false bırakır → paket bayt bayt eski.
 	ErrorAsk bool
+	// traceMaxS — v0.10.2137 (router boşlukları D4, karar 3): trace örnekleri,
+	// Oracle eşlemesi ve kırılımın en geniş penceresi (ham span); RED tam
+	// pencerede (MV). 0 = RED penceresi (bayt bayt eski). Yalnız v2 sohbet
+	// ön-getirmesi doldurur.
+	traceMaxS int64
 }
 
 // opTargetFor — SAF.
@@ -269,6 +274,9 @@ type opPrefetch struct {
 	screen   opScreenTrace
 	endpoint bool // endpoint anma aşamasından geldi
 	argsJSON string
+	// traceFrom — v0.10.2137: trace örneklerinin başlangıcı RED penceresinden
+	// dar (v2, >24 sa); sıfır = aynı pencere. JSON'a girmez.
+	traceFrom time.Time
 	// codeKey — v0.10.1297: operasyon span'lerde yok, köprü fonksiyon kodu
 	// (Oracle katalog satırı) → span anahtarının yazımı; "" = span operasyonu
 	// ya da kod yok (döngü linkleri yeniden yazılmaz).
@@ -392,6 +400,9 @@ func (p *opPrefetch) summary() string {
 			c.P99Ms, pr.P99Ms, opPctDelta(c.P99Ms, pr.P99Ms))
 	} else {
 		b.WriteString("RED ölçülemedi (bu kaynak için ön-özet yok).\n")
+	}
+	if !p.traceFrom.IsZero() { // v0.10.2137 — v2: trace örnekleri RED penceresinden dar
+		fmt.Fprintf(&b, "Not: trace örnekleri ve kırılım yalnız son %s (RED penceresi son %s).\n", fmtAgoTR(int64(p.To.Sub(p.traceFrom)/time.Second)), fmtAgoTR(p.RangeS))
 	}
 	errN := 0
 	for _, t := range p.Traces {
@@ -695,6 +706,9 @@ func (s *Server) chatOperationPrefetch(ctx context.Context, emit func(string, an
 		t, kind = opTargetFor(m.Ops[0], cands), m.Kind
 	}
 	t.ErrorAsk = opErrorWhyAsk(raw) // v0.10.1399 — "neden hata veriyor" → Exceptions açıklaması sohbet içinde
+	if cosreV2Marked(ctx) {         // v0.10.2137 — karar 3: ham span okumaları ≤24 sa (chat_operation_why.go)
+		t.traceMaxS = guidedDrillMaxRangeS
+	}
 	if rangeS <= 0 {
 		rangeS = opDefaultRangeS
 	}
@@ -750,10 +764,14 @@ func (s *Server) opPrefetchForTarget(pctx context.Context, emit func(string, any
 		p.Previous, _ = s.store.FunctionCodeRED(pctx, t.Codes, prevFrom, from)
 	}
 	filters := opTraceFilterSets(t, search, sc.SpanKey) // v0.10.1388 — topoloji demeti de aynı süzgeçleri kullanır
+	tFrom := opTraceFrom(from, to, t.traceMaxS)         // v0.10.2137 — v2: ham span ≤24 sa; v1 from
+	if tFrom.After(from) {
+		p.traceFrom = tFrom
+	}
 	var sets [][]chstore.TraceRow
 	for _, errorsOnly := range []bool{true, false} { // önce hatalılar
 		for _, fx := range filters {
-			f := traceSearchFilter(svc, "", search, false, from, to)
+			f := traceSearchFilter(svc, "", search, false, tFrom, to)
 			f.Filters, f.HasError, f.Limit = fx, errorsOnly, opTraceLimit
 			if rows, _, _, terr := s.store.GetTraces(pctx, f); terr == nil {
 				sets = append(sets, rows)
@@ -767,9 +785,9 @@ func (s *Server) opPrefetchForTarget(pctx context.Context, emit func(string, any
 		ids = append(ids, r.TraceID)
 	}
 	if sc.Enabled {
-		p.Oracle, _ = s.store.OracleErrorsForTraces(pctx, ids, from, to)
+		p.Oracle, _ = s.store.OracleErrorsForTraces(pctx, ids, tFrom, to)
 	}
-	p.TracesHref = opTracesHref(t, sc.SpanKey, from, to)
+	p.TracesHref = opTracesHref(t, sc.SpanKey, tFrom, to)
 	if t.HasRoute {
 		p.EndpointHref = endpointPageHref(svc, t.Route, from, to)
 	}
@@ -793,7 +811,7 @@ func (s *Server) opPrefetchForTarget(pctx context.Context, emit func(string, any
 		emitGuidedStepResult(emit, en, opExceptionsTool, renderExceptionGroupsTR(t.Name+" operasyonu", ev), eerr)
 	}
 	cc := s.startClusterCompare(pctx, emit, t, svc, from, to) // v0.10.1374 — ≥2 ortam yoksa nil; kırılımla paralel okur
-	s.endpointDrillPhase(pctx, emit, p, t, svc, merged, from, to)
+	s.endpointDrillPhase(pctx, emit, p, t, svc, merged, tFrom, to)
 	cc.finish(emit, p) // v0.10.1374 — nil → no-op
 	// Faz 3 — sohbet kartı (metrikler, hatalı trace'ler, Oracle kodları,
 	// filtreli Traces linki). seq yüksek: döngünün kendi blokları (b1…) önce.

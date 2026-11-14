@@ -51,6 +51,9 @@ func guidedRouteLabel(r guidedRoute) string {
 	if r.Intent == guidedProblems && r.ProblemsRootCause {
 		return guidedProblemsRootCauseRoute
 	}
+	if r.Intent == guidedRootCause && r.opWhy != nil { // v0.10.2137 (chat_operation_why.go)
+		return guidedOperationRootCauseRoute
+	}
 	return string(r.Intent)
 }
 

@@ -393,7 +393,7 @@ func TestClusterCompareWiring(t *testing.T) {
 		t.Fatalf("resolveEndpointMention ortam kümesini iki dönüşte de yazmalı:\n%s", res)
 	}
 	fp := funcBody(src, "opPrefetchForTarget")
-	i, j, k := strings.Index(fp, "cc := s.startClusterCompare(pctx, emit, t, svc, from, to)"), strings.Index(fp, "s.endpointDrillPhase(pctx, emit, p, t, svc, merged, from, to)"), strings.Index(fp, "cc.finish(emit, p)")
+	i, j, k := strings.Index(fp, "cc := s.startClusterCompare(pctx, emit, t, svc, from, to)"), strings.Index(fp, "s.endpointDrillPhase(pctx, emit, p, t, svc, merged, tFrom, to)"), strings.Index(fp, "cc.finish(emit, p)")
 	if i < 0 || j < 0 || k < 0 || !(i < j && j < k) || k > strings.Index(fp, `emit("block"`) {
 		t.Fatalf("küme kıyası: başlat → kırılım → topla → kart sırası bozuk (%d %d %d)", i, j, k)
 	}

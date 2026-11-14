@@ -176,7 +176,7 @@ func TestResolveEndpointMentionPathOnlyFallback(t *testing.T) {
 		t.Fatal("boş katalog hâlâ sessizce düşüyor")
 	}
 	fp := funcBody(src, "opPrefetchForTarget")
-	if !strings.Contains(fp, "traceSearchFilter(svc, \"\", search, false, from, to)") || strings.Index(fp, "case search != \"\":") > strings.Index(fp, "case t.HasSpan:\n\t\tfilters") {
+	if !strings.Contains(fp, "traceSearchFilter(svc, \"\", search, false, tFrom, to)") || strings.Index(fp, "case search != \"\":") > strings.Index(fp, "case t.HasSpan:\n\t\tfilters") {
 		t.Fatal("yol-yalnız trace araması opPrefetchForTarget'ta yok ya da kod-süzgeci dalından sonra")
 	}
 }
