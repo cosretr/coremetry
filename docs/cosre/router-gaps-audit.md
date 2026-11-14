@@ -9,7 +9,7 @@ Operatör onayı 2026-11-14 ("önerin"): §8 kararları 1–5 öneriler gibi. Di
 | Dilim | Sürüm | Durum |
 |---|---|---|
 | D1 ölçüm | v0.10.2134 | gemide — `chat-prefetch` yüzeyi (ön-getirme + v2 rota planı tohumlu döngü, RouterGap değil, profil sabit); router-gaps satırı `kind` loop/general + gerçek toplamlar (`totalFallbacks`, `totalGeneral`); açıklama turunda şablon-soru reask muafiyeti (farklı metin; aynı metin ve istemci beyanı sayılır) |
-| D2 A1 çipi | — | sırada |
+| D2 A1 çipi | v0.10.2135 | gemide — v2: servissiz problem ∧ neden (`promoteProblemsRootCause`) → `problems` rotası `ProblemsRootCause` bayrağıyla, /ai rota etiketi `problems_root_cause`; aynı okuma (açık problemler + `root_cause_hypotheses`), kanıt başında hipotez sayımı + uydurma yasağı, sunucu soneki sayım cümlesi ("Kök neden hipotezi yok …"); açık problem yoksa modelsiz cevap. Servisli soru (ekran servisi dahil) `root_cause`ta kalır. Not: v1 harness'ında çip zaten `problems`'a gidiyordu; prod'daki 6 boşluğun hangi kademede kaçtığı doğrulanmadı (adaylar: kod-yapışkan tur, demet okuma hatası → döngü) |
 | D3 E/F sözcükler | — | sırada |
 
 ## 0. Özet karar

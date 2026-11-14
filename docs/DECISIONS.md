@@ -13975,3 +13975,15 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
   <id>") yeniden sorma sayılmaz; aynı metin ve istemci beyanı (retry/regenerate/edit) sayılmaya devam eder.
 - Beklenen etki: tablo bir gecede düşer (ön-getirme satırları çıkar); "Açıklama turu" şüpheli sayısı düşer.
   Doğrulanmadı: prod sayıları.
+
+## 2026-11-14 — v0.10.2135 — CoSRE router boşlukları D2: "Açık problemlerin kök nedeni?" çipi (yalnız v2)
+- Operatör kararı 4 (2026-11-14): çip KALIR, rota = açık problemler + varsa kök neden hipotezi özeti.
+- Yeni niyet sınıfı YOK (LLM listesi aynı). Router servissiz problem sorusunu zaten `problems`'a götürüyor ve demet
+  hipotezleri zaten okuyor; v2'de problem ∧ neden sinyali taşıyan servissiz soru `ProblemsRootCause` bayrağı alır
+  (rota, linkler, çipler, özet kartı `problems`inki). /ai etkileşim satırında rota `problems_root_cause`.
+- Demet `guidedProblemsRead` (guidedProblemsBundle'ın gövdesi, bayt bayt aynı; tek gövde). Açık problem yoksa modelsiz
+  "Şu an açık problem yok; dolayısıyla kök neden hipotezi de yok." Varsa tek anlatım: kanıt başında "N problemin K
+  tanesinde hipotez var" + uydurma yasağı; cevap sonuna sunucu sayım cümlesi (hipotez yoksa "Kök neden hipotezi yok:
+  …"), model düşüremez.
+- Servisli soru (ekran servisi dahil) `root_cause`ta kalır. Çip metni drawerChat.ts'ten okunup pinlenir.
+- Doğrulanmadı: prod'daki 6 boşluğun hangi kademede kaçtığı (v1 harness'ında çip `problems`'a gidiyor); canlı model.

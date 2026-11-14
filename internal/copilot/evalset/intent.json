@@ -362,6 +362,22 @@
         ],
         "maxLatencyMs": 20000
       }
+    },
+    {
+      "id": "intent-problems-root-cause-chip",
+      "surface": "IntentClassify",
+      "why": "v0.10.2135 (router boşlukları A1): sohbetin statik çipi, servissiz problem + neden",
+      "note": "Router v2'de problems_root_cause çerçevesine götürür (chat_routing_regression_test.go); sınıflandırıcıda yeni sınıf yok. Kabul: problems | root_cause (servissiz root_cause sunucuda sorulur).",
+      "user": "Açık problemlerin kök nedeni?",
+      "expect": {
+        "intent": "problems",
+        "intentAnyOf": ["root_cause"],
+        "knownEntities": [
+          "svc-a",
+          "svc-b",
+          "svc-c"
+        ]
+      }
     }
   ]
 }

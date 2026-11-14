@@ -83,6 +83,7 @@ type routingRow struct {
 	ansHas       []string // v0.10.1468 — cevapta OLMALI (ör. ortam beyanı)
 	ansSuffix    string   // v0.10.1485 — cevap bu sonekle bitmeli (genel cevap: kapsam notu en altta)
 	generalShape bool     // v0.10.1485 — genel cevap sözleşmesi (assertOffTopicGeneralShape)
+	v2           bool     // v0.10.2135 — istek v2 sohbetinden (cosreV2Marked); false = v1 yolu
 }
 
 // routingRig — satırın sahte dünyası.
@@ -370,6 +371,18 @@ var routingRegressionRows = []routingRow{
 	{release: "komşu v0.10.1576", name: "çıplak takım adı, tabloda yok → team_services",
 		q: "Payments-Core", setup: withRoutingDocTeam(false),
 		wantTier: aisurface.TierGuided, wantRoute: string(guidedTeamServices)},
+
+	// v0.10.2135 — router boşlukları D2 (docs/cosre/router-gaps-audit.md A1):
+	// statik çip "Açık problemlerin kök nedeni?" v2'de hipotez çerçeveli
+	// problems rotası; v1 ve komşular eski rotada.
+	{release: "v0.10.2135", name: "v2 çip 'Açık problemlerin kök nedeni?' → problems_root_cause",
+		q: "Açık problemlerin kök nedeni?", v2: true, wantTier: aisurface.TierGuided, wantRoute: guidedProblemsRootCauseRoute},
+	{release: "v0.10.2135", name: "v2 'açık problemlerin sebebi ne' → problems_root_cause",
+		q: "açık problemlerin sebebi ne", v2: true, wantTier: aisurface.TierGuided, wantRoute: guidedProblemsRootCauseRoute},
+	{release: "komşu v0.10.2135", name: "v1 aynı çip → problems (v1 bayt bayt)",
+		q: "Açık problemlerin kök nedeni?", wantTier: aisurface.TierGuided, wantRoute: string(guidedProblems)},
+	{release: "komşu v0.10.2135", name: "v2 'açık problemler neler?' (neden yok) → problems",
+		q: "açık problemler neler?", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedProblems)},
 }
 
 // withRoutingDocTeam — v0.10.1576: wiki kurulu + takım kataloğunda
@@ -449,7 +462,11 @@ func TestRoutingRegression(t *testing.T) {
 				ctx[k] = v
 			}
 			body["context"] = ctx
-			fr := postLoopChat(t, s, context.Background(), "u-route", body)
+			reqCtx := context.Background()
+			if row.v2 {
+				reqCtx = withCosreV2Loop(reqCtx)
+			}
+			fr := postLoopChat(t, s, reqCtx, "u-route", body)
 
 			got := rows()
 			if len(got) != 1 {

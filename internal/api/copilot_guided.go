@@ -333,6 +333,11 @@ type guidedRoute struct {
 	// Model onu düşüremez/değiştiremez (takım servis listesi + son exception
 	// grupları + "hangi servis?" sorusu, copilot_team_overview.go). JSON'a girmez.
 	AnswerTail string `json:"-"`
+	// ProblemsRootCause — v0.10.2135 (router boşlukları D2, yalnız v2): servissiz
+	// problem + neden sorusu ("Açık problemlerin kök nedeni?" çipi). Rota yine
+	// problems (linkler, çipler, özet kartı aynı); demet hipotez çerçevesi ekler,
+	// /ai rota etiketi problems_root_cause (chat_problems_root_cause.go).
+	ProblemsRootCause bool `json:",omitempty"`
 	// ExcSampleLinks — v0.10.1486: service_exceptions demetinin örnek trace
 	// çipleri (/trace?id=…&span=…; copilot_service_exc_samples.go). JSON'a girmez.
 	ExcSampleLinks []guidedAnswerLink `json:"-"`
@@ -1937,6 +1942,7 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	svcNames, envNames := s.guidedServiceNames(ctx), s.guidedEnvNames(ctx)
 	teamNames := s.guidedTeamNames(ctx)
 	route := routeGuidedIntentExt(question, svcNames, envNames, teamNames, ctxService, s.oracleOpsEnabled(), s.guidedOutboundHosts(ctx, norm))
+	route = promoteProblemsRootCause(route, norm, cosreV2Marked(ctx)) // v0.10.2135 — yalnız v2 (chat_problems_root_cause.go)
 	// v0.10.479 (F4-2, G10) — TAKİP MUTASYONU: "son 1 saate genişlet" / "sadece
 	// hatalı olanlar" / "bunun pod'larını göster" / "aynı filtreyle loglara bak"
 	// → aktif bağlamın son rotası klonlanır, alan değişir, aynı dispatch; router'ın
@@ -2194,7 +2200,7 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	// v0.10.1138 — yapısal kapsam (chat_scope.go): verilen boyutta netleştirme
 	// sorulmaz, env/takım/servis süzgeci rotaya yazılır. Kapsamsız ctx → aynen.
 	route = applyChatScopeRoute(chatScopeFromCtx(ctx), route)
-	chatExchangeFrom(ctx).noteRoute(string(route.Intent)) // v0.10.1153 — /ai etkileşim satırının rotası
+	chatExchangeFrom(ctx).noteRoute(guidedRouteLabel(route)) // v0.10.1153 — /ai etkileşim satırının rotası; v0.10.2135 alt rota
 	// v0.10.1464 — yönlendirme regresyon kümesinin dikişi (prod'da nil).
 	if guidedDispatchSeam != nil && guidedDispatchSeam(route) {
 		return true, true
@@ -2273,7 +2279,11 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	case guidedRootCause:
 		evidence, sources, err = s.guidedRootCauseBundle(ctx, emit, route.Service, route.Env, from, to, rangeS, hasLatencyAsk(normalizeGuidedMsg(question)))
 	case guidedProblems:
-		evidence, sources, facts, err = s.guidedProblemsBundle(ctx, emit, route.Service, route.Env, to)
+		if route.ProblemsRootCause { // v0.10.2135 — v2 "açık problemlerin kök nedeni" (chat_problems_root_cause.go)
+			evidence, sources, facts, err = s.guidedProblemsRootCauseBundle(ctx, emit, &route, to)
+		} else {
+			evidence, sources, facts, err = s.guidedProblemsBundle(ctx, emit, route.Service, route.Env, to)
+		}
 	case guidedServiceHealth:
 		// v0.9.184 — operasyon-scope yükseltmesi: soru belirli bir
 		// operasyonu adlandırıyorsa (ya da operatör bir operasyon
@@ -2888,11 +2898,20 @@ func guidedRootCauseNoProblemsTR(perr error) string {
 // kullanıyordu, yani çıpalı bir pencerede "4 saattir açık" cümlesi
 // saatlerce kayıyordu.
 func (s *Server) guidedProblemsBundle(ctx context.Context, emit func(string, any), service, env string, asOf time.Time) (string, string, guidedSummaryFacts, error) {
+	evidence, src, facts, _, err := s.guidedProblemsRead(ctx, emit, service, env, asOf)
+	return evidence, src, facts, err
+}
+
+// guidedProblemsRead — v0.10.2135: guidedProblemsBundle'ın gövdesi, okunan
+// (hipotezle zenginleşmiş) problem satırlarını da döndürür; v2
+// problems_root_cause çerçevesi (chat_problems_root_cause.go) hipotez sayısını
+// bu satırlardan okur. Okuma ve kanıt metni TEK gövde — bayt bayt eski.
+func (s *Server) guidedProblemsRead(ctx context.Context, emit func(string, any), service, env string, asOf time.Time) (string, string, guidedSummaryFacts, []chstore.Problem, error) {
 	nProb := emitGuidedStep(emit, "list_problems", withEnvArg(`{"status":"open"}`, env))
 	probs, probTotal, err := s.guidedProblemsWithTotal(ctx, guidedProblemFilter(service, env, 50))
 	if err != nil {
 		emitGuidedStepResult(emit, nProb, "list_problems", "", err)
-		return "", "", guidedSummaryFacts{}, err
+		return "", "", guidedSummaryFacts{}, nil, err
 	}
 	if len(probs) == 0 && service == "" {
 		markFleetZeroMatch(ctx) // v0.10.1143 — wiki ipucu (chat_wiki_probe.go)
@@ -2911,7 +2930,7 @@ func (s *Server) guidedProblemsBundle(ctx context.Context, emit func(string, any
 		src += fmt.Sprintf(", ortam: %s (servis kapsamlı)", env)
 	}
 	n, exact := summaryProblemCount(probTotal, len(probs))
-	return evidence, src, guidedSummaryFacts{Scope: service, ProblemsKnown: true, Problems: n, ProblemsExact: exact}, nil // v0.10.2101 — özet kartı (chat_summary_card.go)
+	return evidence, src, guidedSummaryFacts{Scope: service, ProblemsKnown: true, Problems: n, ProblemsExact: exact}, probs, nil // v0.10.2101 — özet kartı (chat_summary_card.go)
 }
 
 // guidedEnvREDLineTR — SAF (v0.10.1274): servis-sağlık demetinin ortam RED
