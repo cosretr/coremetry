@@ -4,10 +4,8 @@ import { api } from '@/lib/api';
 import { timeRangeToNs, fmtClock } from '@/lib/utils';
 import { snapHeavyWindow } from '@/lib/autoRefresh';
 import { heatmapBucketCount } from '@/lib/chartStep';
-import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
 import { Spinner } from '@/components/Spinner';
 import { raceGuard } from '@/lib/raceGuard';
-import { DisclosureButton } from '@/components/ui';
 import { LatencyHeatmap } from '@/components/LatencyHeatmap';
 import { tracesPivotHref, operationTracesHref } from '@/lib/pivotHref';
 import { heatmapFilters } from './heatmapFilters';
@@ -57,11 +55,10 @@ export function ServiceLatencyHeatmap({ service, range, operation = '', rootOnly
   // heatmap'in kendi filtreleri (ekranda çizilenle birebir aynı evren),
   // seçim = sürüklenen gecikme bandı, pencere = sürüklenen zaman aralığı.
   const [showDiff, setShowDiff] = useState(false);
-  // Collapse state — defaults open. Persisted to localStorage so an operator
-  // who'd rather hide the panel doesn't fight it on every reload. Keyed
-  // globally (not per-service) so the preference is a one-time setting.
-  const [collapsed, setCollapsed] = useState<boolean>(
-    () => getRaw(STORAGE_KEYS.svcHeatmapCollapsed) === '1');
+  // v0.10.2132 (servis sekmeleri S1) — kendi aç/kapa durumu (`svc.heatmap.collapsed`)
+  // KALKTI: bölüm Details'te CollapsedSection içinde, ortak `svc.details.open`
+  // anahtarıyla; bileşen yalnız açıkken monte edilir. Eski anahtar okunmaz
+  // (plan §3: dolgu yok).
   // v0.10.1430 — sayfanın en pahalı okuması (≤3 s bütçe, ham spans
   // taraması). Global 60 s tik her göreli pencereyi kaydırır; bu pencere
   // bir runga (≥1h: 5 dk) oturur ki heatmap dakikada bir değil, en çok
@@ -72,7 +69,7 @@ export function ServiceLatencyHeatmap({ service, range, operation = '', rootOnly
   // v0.8.116 — the parent already wraps this panel in <LazyMount> (mounts
   // within 200px of the viewport), so the former in-component
   // IntersectionObserver/hasBeenVisible gate was a redundant second lazy
-  // layer and was removed. Fetches gate on !collapsed alone.
+  // layer and was removed. v0.10.2132: kapalı bölümde hiç monte edilmez.
 
   // Cluster set for the pivot dropdown — a service usually runs across several
   // clusters at once and the operator pivots the heatmap to one (or the union
@@ -81,7 +78,7 @@ export function ServiceLatencyHeatmap({ service, range, operation = '', rootOnly
   const clustersQ = useQuery({
     queryKey: ['service-clusters', service, from, to],
     queryFn: () => api.serviceClusters(service, from, to),
-    enabled: !!service && from > 0 && !collapsed,
+    enabled: !!service && from > 0,
     staleTime: 30_000,
   });
   const clusters = useMemo(
@@ -109,7 +106,6 @@ export function ServiceLatencyHeatmap({ service, range, operation = '', rootOnly
   // ilk yüklemede (veri yok) eski davranış — spinner. raceGuard iki yarımı
   // birden verir: ok() geç yanıtı atar, signal isteği iptal eder.
   useEffect(() => {
-    if (collapsed) return;
     const g = raceGuard();
     setBusy(true);
     api.spanHeatmap({
@@ -122,23 +118,13 @@ export function ServiceLatencyHeatmap({ service, range, operation = '', rootOnly
       // düzenlemesini "sorgu hatası"na çevirirdi.
       .catch(() => { if (!g.ok()) return; setData(null); setBusy(false); });
     return g.cancel;
-  }, [service, from, to, collapsed, picked, operation, rootOnly, env]);
-
-  const toggle = () => {
-    const next = !collapsed;
-    setCollapsed(next);
-    setRaw(STORAGE_KEYS.svcHeatmapCollapsed, next ? '1' : '0');
-  };
+  }, [service, from, to, picked, operation, rootOnly, env]);
 
   return (
     <div style={{ marginTop: 24, marginBottom: 14 }}>
       <div style={{
         display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6,
       }}>
-        <DisclosureButton expanded={!collapsed} onClick={toggle}
-          className="dsc-caps" title={collapsed ? 'Expand' : 'Collapse'}>
-          Latency distribution
-        </DisclosureButton>
         {operation && (
           <span title="Scoped to the operation picked in the RED charts above (?op=)."
             style={{
@@ -152,7 +138,7 @@ export function ServiceLatencyHeatmap({ service, range, operation = '', rootOnly
             {operation}
           </span>
         )}
-        {!collapsed && clusters.length >= 2 && (
+        {clusters.length >= 2 && (
           <select value={picked}
             onChange={e => setPicked(e.target.value)}
             title="Same service runs across multiple clusters — pivot the heatmap to any single cluster, or stay on the union view."
@@ -161,7 +147,7 @@ export function ServiceLatencyHeatmap({ service, range, operation = '', rootOnly
             {clusters.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         )}
-        {!collapsed && data && data.maxCount > 0 && (
+        {data && data.maxCount > 0 && (
           <span style={{ fontSize: 11, color: 'var(--text3)' }}>
             peak {data.maxCount.toLocaleString()} spans/cell · log-scale y-axis
           </span>
@@ -169,110 +155,108 @@ export function ServiceLatencyHeatmap({ service, range, operation = '', rootOnly
         {/* v0.9.939 — yenileme izi. Grafik ekranda kaldığı için operatöre
             "bu hâlâ ESKİ pencere" demenin bir yolu gerekiyor; sessiz
             keep-previous, bayat veriyi taze gibi gösterirdi. */}
-        {!collapsed && busy && data !== undefined && (
+        {busy && data !== undefined && (
           <span style={{ fontSize: 11, color: 'var(--text3)' }}>· yenileniyor…</span>
         )}
       </div>
-      {!collapsed && (
-        <div style={{
-          padding: 10, borderRadius: 6,
-          background: 'var(--bg2)', border: '1px solid var(--border)',
-        }}>
-          {data === undefined && <Spinner />}
-          {data === null && (
-            <div style={{ fontSize: 12, color: 'var(--err)' }}>
-              Failed to load latency distribution.
+      <div style={{
+        padding: 10, borderRadius: 6,
+        background: 'var(--bg2)', border: '1px solid var(--border)',
+      }}>
+        {data === undefined && <Spinner />}
+        {data === null && (
+          <div style={{ fontSize: 12, color: 'var(--err)' }}>
+            Failed to load latency distribution.
+          </div>
+        )}
+        {data && (data.maxCount === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--text3)' }}>
+            No spans in this window.
+          </div>
+        ) : (
+          <>
+            <LatencyHeatmap data={data} height={240}
+              onCellClick={(cell) => setCellExemplar(cell)}
+              onBoxSelect={setBoxSel} />
+            <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 6 }}>
+              tek hücre = örnek trace · sürükle = zaman × gecikme bandı seç
             </div>
-          )}
-          {data && (data.maxCount === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-              No spans in this window.
-            </div>
-          ) : (
-            <>
-              <LatencyHeatmap data={data} height={240}
-                onCellClick={(cell) => setCellExemplar(cell)}
-                onBoxSelect={setBoxSel} />
-              <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 6 }}>
-                tek hücre = örnek trace · sürükle = zaman × gecikme bandı seç
-              </div>
-              {boxSel && (() => {
-                const tFmt = (ns: number) => fmtClock(ns / 1e6);
-                const lo = Math.max(0, Math.floor(boxSel.lowDurMs));
-                const hi = Math.ceil(boxSel.highDurMs);
-                // v0.9.1356 — el-yapımı `custom:` dizesi aile üreticisine
-                // indi (tracesPivotHref → windowRangeParam): floor/ceil VE
-                // kabul kuralı artık tek dosyada. Pencere KUTUDAN geliyor
-                // ve bu doğru — operatörün sürüklediği bant sorunun
-                // kendisi, sayfanın geniş penceresine yaymak seçimi
-                // anlamsızlaştırırdı (heatmapPivot.ts ile aynı gerekçe).
-                //
-                // v0.9.1372 — `search=` BURADA KAPANDI. Yukarıdaki şerh
-                // bu siteyi "o sınıfın hâlâ açık bir örneği" diye
-                // işaretlemiş ve ertelemişti; gerekçe üretici göçüydü
-                // ("regresyon göçe mi semantiğe mi ait bilinemez"). Göç
-                // bitti, bu da o ayrı dilim.
-                //
-                // Kusur: `search=` bir alt-dize aramasıydı ve trace'teki
-                // HERHANGİ bir span'i tutuyordu — operatörün seçtiği
-                // banttan çıkan liste, adı benzeyen başka operasyonlara
-                // dokunan trace'leri de içeriyordu. Doğrusu kesin isim
-                // filtresi (v0.8.488 operatör raporu) ve düzeltilmiş
-                // kardeş `operationTracesHref` zaten onu üretiyordu; bu
-                // site yanında elle kurulmuş hatalı bir ikizdi.
-                //
-                // Operasyon YOKSA (servis geneli ısı haritası) isim
-                // filtresi de olmamalı — kapsam zaten servis + bant.
-                const bandWindow = { fromNs: boxSel.timeFromNs, toNs: boxSel.timeToNs };
-                const tracesHref = operation
-                  ? operationTracesHref({
-                    window: bandWindow, operation, service, minMs: lo, maxMs: hi,
-                  })
-                  : tracesPivotHref({
-                    window: bandWindow, service, minMs: lo, maxMs: hi,
-                    view: 'list', rootOnly: false,
-                  });
-                return (
-                  <div style={{
-                    display: 'flex', gap: 10, alignItems: 'center', marginTop: 8,
-                    border: '1px solid var(--accent)', borderRadius: 6,
-                    padding: '4px 10px', fontSize: 12, width: 'fit-content',
-                    background: 'var(--bg1)',
-                  }}>
-                    <b>{boxSel.count.toLocaleString()} span</b>
-                    <span style={{ color: 'var(--text3)' }}>
-                      {tFmt(boxSel.timeFromNs)}–{tFmt(boxSel.timeToNs)} · {lo}–{hi} ms
-                    </span>
-                    <Link to={tracesHref} style={{ textDecoration: 'none' }}>Traces →</Link>
-                    <span onClick={() => setShowDiff(v => !v)}
-                      title="Bu banttaki span'ları servisin bu penceredeki tamamıyla kıyasla — hangi attribute'lar farklı?"
-                      style={{ cursor: 'pointer', color: 'var(--accent2)' }}>
-                      Ne farklı?
-                    </span>
-                    <span onClick={() => { setBoxSel(null); setShowDiff(false); }}
-                      style={{ cursor: 'pointer', color: 'var(--text3)' }}>✕</span>
-                  </div>
-                );
-              })()}
-              {boxSel && showDiff && (() => {
-                const selection: FilterExpr[] = [
-                  { k: 'duration_ms', op: '>=', v: [String(Math.max(0, boxSel.lowDurMs))] },
-                  { k: 'duration_ms', op: '<=', v: [String(boxSel.highDurMs)] },
-                ];
-                return (
-                  <div style={{ marginTop: 10 }}>
-                    <BubbleUpPanel
-                      baseline={heatmapFilters(service, picked, operation, rootOnly, env)}
-                      selection={selection}
-                      from={boxSel.timeFromNs}
-                      to={boxSel.timeToNs} />
-                  </div>
-                );
-              })()}
-            </>
-          ))}
-        </div>
-      )}
+            {boxSel && (() => {
+              const tFmt = (ns: number) => fmtClock(ns / 1e6);
+              const lo = Math.max(0, Math.floor(boxSel.lowDurMs));
+              const hi = Math.ceil(boxSel.highDurMs);
+              // v0.9.1356 — el-yapımı `custom:` dizesi aile üreticisine
+              // indi (tracesPivotHref → windowRangeParam): floor/ceil VE
+              // kabul kuralı artık tek dosyada. Pencere KUTUDAN geliyor
+              // ve bu doğru — operatörün sürüklediği bant sorunun
+              // kendisi, sayfanın geniş penceresine yaymak seçimi
+              // anlamsızlaştırırdı (heatmapPivot.ts ile aynı gerekçe).
+              //
+              // v0.9.1372 — `search=` BURADA KAPANDI. Yukarıdaki şerh
+              // bu siteyi "o sınıfın hâlâ açık bir örneği" diye
+              // işaretlemiş ve ertelemişti; gerekçe üretici göçüydü
+              // ("regresyon göçe mi semantiğe mi ait bilinemez"). Göç
+              // bitti, bu da o ayrı dilim.
+              //
+              // Kusur: `search=` bir alt-dize aramasıydı ve trace'teki
+              // HERHANGİ bir span'i tutuyordu — operatörün seçtiği
+              // banttan çıkan liste, adı benzeyen başka operasyonlara
+              // dokunan trace'leri de içeriyordu. Doğrusu kesin isim
+              // filtresi (v0.8.488 operatör raporu) ve düzeltilmiş
+              // kardeş `operationTracesHref` zaten onu üretiyordu; bu
+              // site yanında elle kurulmuş hatalı bir ikizdi.
+              //
+              // Operasyon YOKSA (servis geneli ısı haritası) isim
+              // filtresi de olmamalı — kapsam zaten servis + bant.
+              const bandWindow = { fromNs: boxSel.timeFromNs, toNs: boxSel.timeToNs };
+              const tracesHref = operation
+                ? operationTracesHref({
+                  window: bandWindow, operation, service, minMs: lo, maxMs: hi,
+                })
+                : tracesPivotHref({
+                  window: bandWindow, service, minMs: lo, maxMs: hi,
+                  view: 'list', rootOnly: false,
+                });
+              return (
+                <div style={{
+                  display: 'flex', gap: 10, alignItems: 'center', marginTop: 8,
+                  border: '1px solid var(--accent)', borderRadius: 6,
+                  padding: '4px 10px', fontSize: 12, width: 'fit-content',
+                  background: 'var(--bg1)',
+                }}>
+                  <b>{boxSel.count.toLocaleString()} span</b>
+                  <span style={{ color: 'var(--text3)' }}>
+                    {tFmt(boxSel.timeFromNs)}–{tFmt(boxSel.timeToNs)} · {lo}–{hi} ms
+                  </span>
+                  <Link to={tracesHref} style={{ textDecoration: 'none' }}>Traces →</Link>
+                  <span onClick={() => setShowDiff(v => !v)}
+                    title="Bu banttaki span'ları servisin bu penceredeki tamamıyla kıyasla — hangi attribute'lar farklı?"
+                    style={{ cursor: 'pointer', color: 'var(--accent2)' }}>
+                    Ne farklı?
+                  </span>
+                  <span onClick={() => { setBoxSel(null); setShowDiff(false); }}
+                    style={{ cursor: 'pointer', color: 'var(--text3)' }}>✕</span>
+                </div>
+              );
+            })()}
+            {boxSel && showDiff && (() => {
+              const selection: FilterExpr[] = [
+                { k: 'duration_ms', op: '>=', v: [String(Math.max(0, boxSel.lowDurMs))] },
+                { k: 'duration_ms', op: '<=', v: [String(boxSel.highDurMs)] },
+              ];
+              return (
+                <div style={{ marginTop: 10 }}>
+                  <BubbleUpPanel
+                    baseline={heatmapFilters(service, picked, operation, rootOnly, env)}
+                    selection={selection}
+                    from={boxSel.timeFromNs}
+                    to={boxSel.timeToNs} />
+                </div>
+              );
+            })()}
+          </>
+        ))}
+      </div>
       {cellExemplar && data && (
         <HeatmapCellExemplars
           cell={cellExemplar}

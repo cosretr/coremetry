@@ -9,24 +9,36 @@ const toc = readFileSync(resolve(__dirname, 'DetailsToc.tsx'), 'utf8');
 const ep = readFileSync(resolve(__dirname, 'DetailsEndpointsSection.tsx'), 'utf8');
 const metrics = readFileSync(resolve(__dirname, 'DetailsMetricsSection.tsx'), 'utf8');
 
-describe('Details bölüm başlıkları (v0.10.715)', () => {
-  it('Service.tsx Details başlıkları SectionHead; ham dtl-sech kalmadı', () => {
-    for (const id of ['dtl-clusters', 'dtl-db', 'dtl-perf', 'dtl-latency', 'dtl-runtime']) {
-      expect(svc).toContain(`<SectionHead id="${id}"`);
+describe('Details bölüm başlıkları (v0.10.715; v0.10.2132 S1)', () => {
+  // v0.10.2132 (S1, servis sekmeleri planı, mockup operatör onayı 2026-11-13):
+  // Clusters + Database açık başlık (SectionHead, v0.10.151); diğer beş bölüm
+  // CollapsedSection (varsayılan kapalı satır). Endpoints başlığı gövdeden
+  // Service.tsx'e taşındı (kip hook'u useEndpointsMode gövdeyle ortak).
+  it('Service.tsx: açık bölümler SectionHead, kapananlar CollapsedSection; ham dtl-sech kalmadı', () => {
+    for (const id of ['dtl-clusters', 'dtl-db']) expect(svc).toContain(`<SectionHead id="${id}"`);
+    for (const id of ['dtl-endpoints', 'dtl-perf', 'dtl-metrics', 'dtl-latency', 'dtl-runtime']) {
+      expect(svc).toContain(`<CollapsedSection id="${id}"`);
     }
     expect(svc).not.toContain('className="dtl-sech"');
-    expect(metrics).toContain('<SectionHead id="dtl-metrics"');
+    expect(metrics).not.toContain('<SectionHead');
+    expect(ep).not.toContain('<SectionHead');
   });
   it('Endpoints bölümü monte + ToC girdisi + kip URL\'de (replace)', () => {
     expect(svc).toContain('<DetailsEndpointsSection service={svc} range={range} rangeNs={rangeNs} env={env} />');
     expect(toc).toContain("{ id: 'dtl-endpoints', label: 'Endpoints' }");
-    expect(ep).toContain('<SectionHead id="dtl-endpoints"');
     expect(ep).toContain("next.set('epmode', 'cluster')");
     expect(ep).toContain('{ replace: true }');
     expect(ep).toContain("storageKey: 'svc-dtl-endpoints'");
     // multi-cluster: kapsam Topbar'dan; tek cluster kapsamında kip gizli
     expect(ep).toContain("const scopeCluster = sp.get('cluster') ?? ''");
     expect(ep).toContain("scopeCluster ? 'combined' : parseEndpointsMode(");
+  });
+  it('kapalı bölümler kalıcı hafızadan (tek anahtar) + çapa açar; Heatmap eski anahtarı yok', () => {
+    expect(svc).toContain('parseOpenSections(getRaw(STORAGE_KEYS.svcDetailsOpen))');
+    expect(svc).toContain('setRaw(STORAGE_KEYS.svcDetailsOpen, serializeOpenSections(next))');
+    expect(svc).toContain("window.addEventListener('hashchange', go)");
+    const heat = readFileSync(resolve(__dirname, 'ServiceLatencyHeatmap.tsx'), 'utf8');
+    expect(heat).not.toContain('svcHeatmapCollapsed');
   });
 });
 

@@ -6,7 +6,6 @@ import { useEndpoints, useClusters } from '@/lib/queries';
 import { useAuth } from '@/components/AuthProvider';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import { IconButton } from '@/components/ui';
-import { SectionHead } from '@/components/coremetry/SectionHead';
 import { LazyMount } from '@/components/LazyMount';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { TimeRange } from '@/lib/types';
@@ -55,9 +54,9 @@ const COLS_BASE: DataTableColumn<ClusterEndpointRow>[] = [
 ];
 const COL_CLUSTER: DataTableColumn<ClusterEndpointRow> = { id: 'cluster', label: 'Cluster', sortValue: r => r.cluster, naturalDir: 'asc', width: 120 };
 
-export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
-  service: string; range: TimeRange; rangeNs: { from: number; to: number }; env: string;
-}) {
+/** v0.10.2132 (S1) — kip URL'den (?epmode, replace:true); bölüm başlığı
+ *  (Service.tsx, CollapsedSection) ve gövde AYNI hook'u okur. */
+export function useEndpointsMode() {
   const [sp, setSp] = useSearchParams();
   const scopeCluster = sp.get('cluster') ?? '';
   const mode = scopeCluster ? 'combined' : parseEndpointsMode(sp.get('epmode'));
@@ -66,6 +65,35 @@ export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
     if (m === 'cluster') next.set('epmode', 'cluster'); else next.delete('epmode');
     return next;
   }, { replace: true });
+  return { scopeCluster, mode, setMode };
+}
+
+/** v0.10.2132 (S1) — açık bölüm başlığının parçaları (eski SectionHead'in
+ *  rozet / meta / eylem / kaynak yuvaları; içerik aynı). */
+export function useEndpointsHeadParts({ service, range }: { service: string; range: TimeRange }) {
+  const { scopeCluster, mode, setMode } = useEndpointsMode();
+  const rangeParam = encodeRange(range);
+  return {
+    source: mode === 'cluster' || scopeCluster ? 'spans · http.route (cluster kapsamı: ham yol)' : 'spanmetrics_1m · http.route',
+    badges: <>
+      <span className="badge b-gray" title="Yalnız giriş span'leri (server + consumer).">giriş span&#39;leri</span>
+      {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
+      {!scopeCluster && (
+        <ClusterModeToggle value={mode === 'cluster'} onChange={v => setMode(v ? 'cluster' : 'combined')} label="Endpoint kırılımı" />
+      )}
+    </>,
+    meta: <>süre payına göre ilk {TOP_N}</>,
+    actions: <Link to={`/endpoints?service=${encodeURIComponent(service)}&range=${rangeParam}${scopeCluster ? `&cluster=${encodeURIComponent(scopeCluster)}` : ''}`}>Tüm endpoint&#39;ler →</Link>,
+  };
+}
+
+// DetailsEndpointsSection — bölümün GÖVDESİ (v0.10.2132'den beri başlık
+// Service.tsx'te CollapsedSection; gövde yalnız bölüm AÇIKKEN monte edilir,
+// okumaları da o zaman başlar).
+export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
+  service: string; range: TimeRange; rangeNs: { from: number; to: number }; env: string;
+}) {
+  const { scopeCluster, mode } = useEndpointsMode();
   const { user } = useAuth();
   const canEditRules = user?.role === 'admin' || user?.role === 'editor';
   const [alertRow, setAlertRow] = useState<ClusterEndpointRow | null>(null);
@@ -113,17 +141,7 @@ export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
 
   return (
     <>
-      <SectionHead id="dtl-endpoints" title="Endpoints"
-        source={mode === 'cluster' || scopeCluster ? 'spans · http.route (cluster kapsamı: ham yol)' : 'spanmetrics_1m · http.route'}
-        badges={<>
-          <span className="badge b-gray" title="Yalnız giriş span'leri (server + consumer).">giriş span&#39;leri</span>
-          {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
-          {!scopeCluster && (
-            <ClusterModeToggle value={mode === 'cluster'} onChange={v => setMode(v ? 'cluster' : 'combined')} label="Endpoint kırılımı" />
-          )}
-        </>}
-        meta={<>süre payına göre ilk {TOP_N}{mode === 'cluster' ? ` · ${clusters.length} cluster` : ''}</>}
-        actions={<Link to={`/endpoints?service=${encodeURIComponent(service)}&range=${rangeParam}${scopeCluster ? `&cluster=${encodeURIComponent(scopeCluster)}` : ''}`}>Tüm endpoint&#39;ler →</Link>} />
+      {mode === 'cluster' && <p className="field-hint">{clusters.length} cluster</p>}
       <div className="ov-mb">
         <LazyMount minHeight={200}>
           <div className="table-wrap">

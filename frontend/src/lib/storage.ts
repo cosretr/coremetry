@@ -62,12 +62,14 @@ export const STORAGE_KEYS = {
   inboxKind:        'inbox.kind',
   problemsSev:      'problems.sev',
   problemsPrio:     'problems.prio',
-  svcHeatmapCollapsed: 'svc.heatmap.collapsed',
+  // v0.10.2132 — Details'in açık bölümleri (JSON kimlik dizisi; tarayıcı başına,
+  // servisten bağımsız). Eski `svc.heatmap.collapsed` bunun yerine geçti, okunmaz.
+  svcDetailsOpen:      'svc.details.open',
   svcChartsCompare:    'svc.charts.compare',
   // v0.10.577 — Trace Detail Logs sekmesi: gRPC per-message span event'leri
   // (SENT/RECEIVED) varsayılan olarak GİZLİ. Tercih küresel, trace başına
   // değil: operatör bunu bir kez kapatıp her trace'te yeniden kapatmakla
-  // uğraşmasın (svcHeatmapCollapsed emsali).
+  // uğraşmasın (svcDetailsOpen emsali).
   traceShowGrpcMsgs:   'trace.logs.grpcmsgs',
   // v0.10.432 (CoSRE router boşlukları D8) — trace ilk açılış baloncuğu
   // ("Bu trace'i açıklamamı ister misin?"). declined = kalıcı ret

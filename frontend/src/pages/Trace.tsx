@@ -143,7 +143,7 @@ function TraceDetailInner() {
   // satırını görünmez yapıyordu.
   //
   // Tercih localStorage'da ve KÜRESEL (trace başına değil): bunu her trace'te
-  // yeniden kapatmak zorunda kalmasın — svcHeatmapCollapsed emsali.
+  // yeniden kapatmak zorunda kalmasın — svcDetailsOpen emsali.
   const [showGrpcMsgs, setShowGrpcMsgs] = useState(
     () => getRaw(STORAGE_KEYS.traceShowGrpcMsgs) === '1');
   const toggleGrpcMsgs = () => setShowGrpcMsgs(v => {

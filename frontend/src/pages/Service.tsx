@@ -31,7 +31,11 @@ import { ServiceAttentionStrip } from '@/components/ServiceAttentionStrip';
 import { DBQueriesPanel } from '@/components/DBQueriesPanel';
 import { DeployHistoryPanel } from '@/components/DeployHistoryPanel';
 import { DetailsPropsStrip } from './service/DetailsPropsStrip';
-import { DetailsEndpointsSection } from './service/DetailsEndpointsSection'; // v0.10.715
+import { DetailsEndpointsSection, useEndpointsHeadParts } from './service/DetailsEndpointsSection'; // v0.10.715
+import { CollapsedSection } from '@/components/coremetry/CollapsedSection'; // v0.10.2132 (S1)
+import { DetailsDeploysSummary } from './service/DetailsDeploysSummary';
+import { ENDPOINTS_SUMMARY, perfSummary, latencySummary, metricsSummary, parseOpenSections, serializeOpenSections, sectionForHash, type CollapsibleSection } from './service/detailsSummaries';
+import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
 import { SectionHead } from '@/components/coremetry/SectionHead'; // v0.10.715
 import { ClusterModeToggle } from '@/components/ClusterModeToggle'; // v0.10.717
 import { DetailsToc } from './service/DetailsToc';
@@ -199,21 +203,42 @@ function ServiceDetailInner() {
   // doesn't auto-scroll because the target node is rendered
   // AFTER the initial paint (bundle fetch + tab gate). The
   // ?tab=details&#deploys link from /deploys depends on this.
+  // v0.10.2132 (S1) — çapa KAPALI bir bölümü hedefliyorsa (#deploys,
+  // #dtl-perf …) önce bölüm açılır (bu oturumluk; kalıcı tercihe yazılmaz),
+  // iki kare sonra kaydırılır (açılan gövde DOM'a insin). Sayfa içi
+  // `<a href="#deploys">` tıkı hashchange ile aynı yoldan geçer.
+  const [hashSection, setHashSection] = useState<CollapsibleSection | null>(null);
   useEffect(() => {
     if (loading) return;
-    const hash = window.location.hash;
-    if (!hash) return;
-    const id = hash.replace(/^#/, '');
-    if (!id) return;
-    // Wait one frame so the conditional <div id="..."> has
-    // landed in the DOM before we try to scroll.
-    requestAnimationFrame(() => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
+    const go = () => {
+      const hash = window.location.hash;
+      const id = hash.replace(/^#/, '');
+      if (!id) return;
+      const sec = sectionForHash(hash);
+      if (sec) setHashSection(sec);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }));
+    };
+    go();
+    window.addEventListener('hashchange', go);
+    return () => window.removeEventListener('hashchange', go);
   }, [loading, tab]);
+  // v0.10.2132 (S1, plan §7/1 ana oturum kararı) — Details'in beş bölümü
+  // varsayılan KAPALI; açılan bölüm sonraki ziyarette açık kalır (tek
+  // localStorage anahtarı, tarayıcı başına, servisten bağımsız; lib/storage
+  // okuma/yazmayı try/catch'le sarar).
+  const [openSections, setOpenSections] = useState<Set<CollapsibleSection>>(
+    () => parseOpenSections(getRaw(STORAGE_KEYS.svcDetailsOpen)));
+  const sectionOpen = (id: CollapsibleSection) => openSections.has(id) || hashSection === id;
+  const setSectionOpen = (id: CollapsibleSection) => (v: boolean) => {
+    const next = new Set(openSections);
+    if (v) next.add(id); else next.delete(id);
+    setOpenSections(next);
+    setRaw(STORAGE_KEYS.svcDetailsOpen, serializeOpenSections(next));
+    if (!v && hashSection === id) setHashSection(null);
+  };
+  const endpointsHead = useEndpointsHeadParts({ service: svc, range });
   const setTab = (next: ServiceTab) => setSearchParams(prev => {
     const p = new URLSearchParams(prev);
     if (next === 'overview') p.delete('tab'); else p.set('tab', next);
@@ -686,14 +711,24 @@ function ServiceDetailInner() {
                   </LazyMount>
                 </div>
                 {/* v0.10.715 (etüt dilim 1) — Endpoints bölümü: bugüne dek yalnız
-                    Overview'daydı; cluster boyutlu (mockup şerh 4). */}
-                <DetailsEndpointsSection service={svc} range={range} rangeNs={rangeNs} env={env} />
-                <SectionHead id="dtl-perf" title="Performance" source={scopeCluster || perfByCluster ? "giriş span'leri (cluster: ham yol)" : "giriş span'leri"}
+                    Overview'daydı; cluster boyutlu (mockup şerh 4).
+                    v0.10.2132 (S1, mockup onaylı 2026-11-13) — aşağıdaki beş
+                    bölüm varsayılan KAPALI satır: gövde (ve okumaları) yalnız
+                    açılınca; özet yalnız sayfada zaten yüklü veriden;
+                    kaynak rozeti açıkken bölüm altındaki "kaynak" satırında. */}
+                <CollapsedSection id="dtl-endpoints" title="Endpoints" summary={ENDPOINTS_SUMMARY}
+                  source={endpointsHead.source} badges={endpointsHead.badges} meta={endpointsHead.meta} actions={endpointsHead.actions}
+                  open={sectionOpen('dtl-endpoints')} onOpenChange={setSectionOpen('dtl-endpoints')}>
+                  <DetailsEndpointsSection service={svc} range={range} rangeNs={rangeNs} env={env} />
+                </CollapsedSection>
+                <CollapsedSection id="dtl-perf" title="Performance" summary={perfSummary(info, rangeNs.to - rangeNs.from)}
+                  source={scopeCluster || perfByCluster ? "giriş span'leri (cluster: ham yol)" : "giriş span'leri"}
                   badges={<>
                     {opScope && <span className="badge b-info">op kapsamı</span>}
                     {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
                     {!scopeCluster && <ClusterModeToggle value={perfByCluster} onChange={v => setModeParam('perfmode', v)} label="RED serileri kırılımı" />}
-                  </>} />
+                  </>}
+                  open={sectionOpen('dtl-perf')} onOpenChange={setSectionOpen('dtl-perf')}>
                 {/* v0.9.348 — rootOnly: bu paneller servisin KENDİ giriş
                     noktalarını çiziyor artık, dışarı yaptığı çağrıları değil.
                     Filtresiz hâlde api-gateway'in grafiği
@@ -713,34 +748,47 @@ function ServiceDetailInner() {
                     geri aynı yol). Problem x-bölgeleri chart İÇİNDE kalır. */}
                 <ServiceAnnotationLane service={svc} fromNs={rangeNs.from} toNs={rangeNs.to}
                   onZoomTo={handleZoom} />
+                </CollapsedSection>
                 {/* v0.9.784 — OTLP metrik satırı. Details'te bugüne dek
                     metric_points türevli TEK panel yoktu; panel seti
                     servisin KENDİ kataloğundan kurulur (ad hardcode YOK),
                     ailesi olmayan panel hiç kurulmaz, hiç panel yoksa
                     bölüm de ToC girdisi de gizli. */}
-                <DetailsMetricsSection service={svc} rangeNs={rangeNs}
-                  onZoom={handleZoom} onZoomReset={handleZoomReset} />
-                <SectionHead id="dtl-latency" title="Latency" source="spans · heatmap"
-                  badges={opScope && <span className="badge b-info">op kapsamı</span>} />
-                <div className="ov-mb">
-                  <LazyMount minHeight={360}>
-                    <ServiceLatencyHeatmap service={svc} range={range}
-                                           operation={opScope} rootOnly env={env} />
-                  </LazyMount>
-                </div>
-                <SectionHead id="dtl-runtime" title={<>Runtime &amp; rollouts</>} source="spans · service.version × cluster"
+                {hasMetricPanels && (
+                  <CollapsedSection id="dtl-metrics" title="Metrikler" summary={metricsSummary(metricPanels)} source="metric_points"
+                    badges={<span className="badge b-gray" title="metric_points'te operasyon boyutu yok — bölüm daralmaz">tüm servis</span>}
+                    open={sectionOpen('dtl-metrics')} onOpenChange={setSectionOpen('dtl-metrics')}>
+                    <DetailsMetricsSection service={svc} rangeNs={rangeNs}
+                      onZoom={handleZoom} onZoomReset={handleZoomReset} />
+                  </CollapsedSection>
+                )}
+                <CollapsedSection id="dtl-latency" title="Latency" summary={latencySummary(info)} source="spans · heatmap"
+                  badges={opScope && <span className="badge b-info">op kapsamı</span>}
+                  open={sectionOpen('dtl-latency')} onOpenChange={setSectionOpen('dtl-latency')}>
+                  <div className="ov-mb">
+                    <LazyMount minHeight={360}>
+                      <ServiceLatencyHeatmap service={svc} range={range}
+                                             operation={opScope} rootOnly env={env} />
+                    </LazyMount>
+                  </div>
+                </CollapsedSection>
+                <CollapsedSection id="dtl-runtime" title={<>Runtime &amp; rollouts</>} summary={<DetailsDeploysSummary service={svc} />}
+                  source="spans · service.version × cluster"
                   badges={<>
                     {opScope && <span className="badge b-gray">tüm servis</span>}
                     {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
-                  </>} />
-                {/* Recent rollouts — #deploys anchor preserved so the
-                    /deploys "history →" link still scrolls here. */}
-                <div id="deploys">
-                  <LazyMount minHeight={160}>
-                    <DeployHistoryPanel service={svc} cluster={scopeCluster} range={range}
-                      onZoomWindow={(tNs) => handleZoom(tNs / 1e9 - 1800, tNs / 1e9 + 1800)} />
-                  </LazyMount>
-                </div>
+                  </>}
+                  open={sectionOpen('dtl-runtime')} onOpenChange={setSectionOpen('dtl-runtime')}>
+                  {/* Recent rollouts — #deploys anchor preserved so the
+                      /deploys "history →" link still scrolls here (v0.10.2132:
+                      çapa kapalı bölümü önce açar). */}
+                  <div id="deploys">
+                    <LazyMount minHeight={160}>
+                      <DeployHistoryPanel service={svc} cluster={scopeCluster} range={range}
+                        onZoomWindow={(tNs) => handleZoom(tNs / 1e9 - 1800, tNs / 1e9 + 1800)} />
+                    </LazyMount>
+                  </div>
+                </CollapsedSection>
               </div>
               <DetailsToc showMetrics={hasMetricPanels} />
               </div>

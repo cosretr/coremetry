@@ -1,5 +1,4 @@
 import { lazy, Suspense, useMemo } from 'react';
-import { SectionHead } from '@/components/coremetry/SectionHead'; // v0.10.715
 import { msSyncKey } from '@/lib/chart/syncNamespace';
 import { useNavigate } from 'react-router-dom';
 import { useQueries, useQuery } from '@tanstack/react-query';
@@ -135,8 +134,9 @@ export function DetailsMetricsSection({ service, rangeNs, onZoom, onZoomReset }:
 
   return (
     <>
-      <SectionHead id="dtl-metrics" title="Metrikler" source="metric_points"
-        badges={<span className="badge b-gray" title="metric_points'te operasyon boyutu yok — bölüm daralmaz">tüm servis</span>} />
+      {/* v0.10.2132 (S1) — başlık Service.tsx'te CollapsedSection (id
+          dtl-metrics, kaynak metric_points, "tüm servis" rozeti); bu gövde
+          yalnız bölüm AÇIKKEN monte edilir → panel × metrik sorguları o zaman. */}
       <div className="ov-grid ov-cols-2" style={{ marginBottom: 16 }}>
         {cards.map(({ panel, items, loading, errored, empty, rowsCapped }) => (
           <LazyMount key={panel.key} minHeight={240}>
