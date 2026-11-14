@@ -67,7 +67,7 @@ export function AddToDashboardDialog({ open, onOpenChange, buildPanels }: AddToD
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm">
             Pano
-            <NativeSelect value={target} onChange={e => setTarget(e.target.value)} disabled={list === null} aria-label="Hedef pano" className="w-full">
+            <NativeSelect value={target} onChange={e => setTarget(e.target.value)} disabled={list === null} aria-label="Hedef pano" className="w-full bg-field dark:bg-field">
               <NativeSelectOption value="new">+ Yeni pano</NativeSelectOption>
               {(list ?? []).map(d => <NativeSelectOption key={d.id} value={d.id}>{d.name}</NativeSelectOption>)}
             </NativeSelect>
@@ -75,7 +75,7 @@ export function AddToDashboardDialog({ open, onOpenChange, buildPanels }: AddToD
           {target === 'new' && (
             <label className="flex flex-col gap-1 text-sm">
               Yeni panonun adı
-              <Input value={name} onChange={e => setName(e.target.value)} placeholder="Yeni pano" aria-label="Yeni panonun adı" />
+              <Input className="bg-field dark:bg-field" value={name} onChange={e => setName(e.target.value)} placeholder="Yeni pano" aria-label="Yeni panonun adı" />
             </label>
           )}
         </div>

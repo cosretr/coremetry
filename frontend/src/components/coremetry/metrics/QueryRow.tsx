@@ -184,7 +184,7 @@ export function QueryRow({
           <label className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             lejant
             <Input value={q.legend} onChange={e => set({ legend: e.target.value })} placeholder="{{service_name}}"
-              className="h-6 w-44 px-1.5 font-mono text-xs md:text-xs" aria-label={`Sorgu ${q.id} lejant biçimi`} />
+              className="h-6 w-44 px-1.5 font-mono text-xs md:text-xs bg-field dark:bg-field" aria-label={`Sorgu ${q.id} lejant biçimi`} />
           </label>
         </>
       )}

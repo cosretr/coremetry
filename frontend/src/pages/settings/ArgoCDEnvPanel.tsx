@@ -53,7 +53,7 @@ export function ArgoCDEnvPanel({ envList, issues, onChange }: {
           </Badge>
         ))}
         <label htmlFor="acd-env-in" className="sr-only">Ortam ekle</label>
-        <Input id="acd-env-in" ref={inRef} className="h-7 w-[140px] bg-field font-mono text-[length:var(--fs-sm)] md:text-[length:var(--fs-sm)]" value={text}
+        <Input id="acd-env-in" ref={inRef} className="h-7 w-[140px] bg-field dark:bg-field font-mono text-[length:var(--fs-sm)] md:text-[length:var(--fs-sm)]" value={text}
           placeholder="ortam ekle" autoComplete="off" spellCheck={false}
           aria-invalid={shown ? 'true' : undefined} aria-describedby="acd-env-hint"
           onChange={e => { setText(e.target.value); setErr(''); }}

@@ -12,6 +12,8 @@ import { Pager } from '@/components/Pager';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { Input } from '@/components/shadcn/input';
 import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
+import { FIELD_SURFACE } from '@/components/coremetry/Field/fieldSurface'; // v0.10.2143 — alan zemini (--field-bg)
+import { cn } from 'cn';
 import { KeyValue } from '@/components/coremetry/KeyValue';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
@@ -202,12 +204,12 @@ export function ExchangesPanel({ range, onOpenCall }: { range: TimeRange; onOpen
             </Button>
           </>
         }>
-          <Input type="search" className="ai-exch-search" value={qText} onChange={e => onSearch(e.target.value)}
+          <Input type="search" className={cn('ai-exch-search', FIELD_SURFACE)} value={qText} onChange={e => onSearch(e.target.value)}
             placeholder="Soru içinde ara…" aria-label="Soru içinde ara" />
           <ExchangeUserPicker value={userText} onChange={setUserText}
             onCommit={v => setUrl({ user: v })} from={win.from} to={win.to} />
           {/* Kapalı küme (aisurface kademeleri, ~15) — katalog değil, sunucu araması gerekmez. */}
-          <NativeSelect size="sm" className="ai-exch-tier" value={st.tier} onChange={e => setUrl({ tier: e.target.value })}
+          <NativeSelect size="sm" className={cn('ai-exch-tier', FIELD_SURFACE)} value={st.tier} onChange={e => setUrl({ tier: e.target.value })}
             aria-label="Kademe süzgeci">
             {EXCHANGE_TIER_OPTIONS.map(o => <NativeSelectOption key={o.value} value={o.value}>{o.label}</NativeSelectOption>)}
           </NativeSelect>

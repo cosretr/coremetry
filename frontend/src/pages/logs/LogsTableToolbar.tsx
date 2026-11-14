@@ -58,7 +58,7 @@ export function LogsTableToolbar(p: LogsTableToolbarProps) {
       {p.loadedCount > 0 && (
         <Input
           ref={p.narrowRef}
-          className="ld-narrow h-7"
+          className="ld-narrow h-7 bg-field dark:bg-field"
           value={p.narrow}
           aria-label="Yüklenen satırlarda süz"
           onChange={e => p.onNarrow(e.target.value)}

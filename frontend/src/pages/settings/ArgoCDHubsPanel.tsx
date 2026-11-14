@@ -199,7 +199,7 @@ export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, issues, msg, 
       )}
       <div className="flex flex-wrap items-center gap-4">
         <label htmlFor="acd-hub-add" className="sr-only">Hub olarak eklenecek Remote Cluster</label>
-        <NativeSelect id="acd-hub-add" size="sm" className="bg-field text-[length:var(--fs-sm)]" value={pick}
+        <NativeSelect id="acd-hub-add" size="sm" className="bg-field dark:bg-field text-[length:var(--fs-sm)]" value={pick}
           onChange={e => { setPick(e.target.value); setConfirm(null); onMsg(''); }}>
           <NativeSelectOption value="">Remote Cluster seç…</NativeSelectOption>
           {clusters.map(c => (

@@ -214,7 +214,7 @@ export function LogQueryInput({
           aria-activedescendant={open ? activeId : undefined} aria-label={placeholder ?? 'Log sorgusu'}
           placeholder={placeholder} spellCheck={false} autoComplete="off"
           data-shortcut-search="" {...(pcLead ? { 'data-pc-lead': '' } : {})}
-          className="h-8 bg-field pl-7 font-mono text-sm"
+          className="h-8 bg-field pl-7 dark:bg-field font-mono text-sm"
           onChange={e => { onChange(e.target.value); onLint?.(null); setDismissed(false); syncCursor(e.target); }}
           onSelect={e => syncCursor(e.currentTarget)}
           onClick={e => syncCursor(e.currentTarget)}

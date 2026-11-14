@@ -89,7 +89,7 @@ function SampleField({ value, min, max, onChange }: NonNullable<DisplayOptionsPr
         Örnek boyutu ({min.toLocaleString('tr-TR')} – {max.toLocaleString('tr-TR')}; üst sınır Settings › Logs arka ucu)
       </label>
       <Input id={id} type="number" inputMode="numeric" min={min} max={max} value={draft}
-        className="h-7 w-28" data-testid="logs-sample-size"
+        className="h-7 w-28 bg-field dark:bg-field" data-testid="logs-sample-size"
         onChange={e => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }} />

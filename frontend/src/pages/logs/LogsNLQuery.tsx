@@ -61,7 +61,7 @@ export function LogsNLQueryRow({ fields, onUse, onClose }: LogsNLQueryRowProps) 
   return (
     <section aria-label="Doğal dille sorgu" className="grid gap-2 rounded-md border bg-(--bg2) px-3 py-2.5" data-testid="logs-nl-row">
       <div className="flex flex-wrap items-center gap-2">
-        <Input className="h-8 min-w-[18rem] flex-1" value={text} onChange={e => setText(e.target.value)} maxLength={1024}
+        <Input className="h-8 min-w-[18rem] flex-1 bg-field dark:bg-field" value={text} onChange={e => setText(e.target.value)} maxLength={1024}
           aria-label="Ne arıyorsun?" placeholder="Ne arıyorsun? ör. son 1 saatte orders-api zaman aşımı hataları"
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); run(); } }} />
         <Button variant="secondary" size="sm" onClick={run} disabled={!text.trim() || st.status === 'loading'}>Sorgu öner</Button>

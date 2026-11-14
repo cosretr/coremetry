@@ -66,7 +66,7 @@ export function CodePanel({
         <span className="flex-1" />
         <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           Kaynak
-          <NativeSelect size="sm" value={src} onChange={e => onSrc(e.target.value as MxSrc)} aria-label="Sorgu kaynağı">
+          <NativeSelect className="bg-field dark:bg-field" size="sm" value={src} onChange={e => onSrc(e.target.value as MxSrc)} aria-label="Sorgu kaynağı">
             <NativeSelectOption value="">Varsayılan</NativeSelectOption>
             <NativeSelectOption value="vm">VictoriaMetrics</NativeSelectOption>
             <NativeSelectOption value="ch">ClickHouse</NativeSelectOption>

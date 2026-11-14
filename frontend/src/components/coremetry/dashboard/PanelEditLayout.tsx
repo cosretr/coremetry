@@ -34,7 +34,7 @@ export function PanelEditLayout({ title, onTitle, dashboardName, preview, option
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-base font-semibold">Panel düzenle</h2>
         <span className="text-sm text-muted-foreground">{dashboardName}</span>
-        <Input ref={titleRef} value={title} aria-label="Panel başlığı" className="h-8 min-w-48 flex-1 sm:max-w-md"
+        <Input ref={titleRef} value={title} aria-label="Panel başlığı" className="h-8 min-w-48 flex-1 sm:max-w-md bg-field dark:bg-field"
           onChange={e => onTitle(e.target.value)} />
         <span className="flex-1" />
         <Button type="button" variant="ghost-danger" onClick={onDelete}>Paneli sil</Button>

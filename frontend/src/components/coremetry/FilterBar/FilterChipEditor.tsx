@@ -72,14 +72,14 @@ export function FilterChipEditor({ chip, ops = FILTER_OPS, suggestValues, onAppl
   return (
     <form className="grid w-72 gap-2 text-sm" aria-label="Süzgeci düzenle"
       onSubmit={e => { e.preventDefault(); commit(); }}>
-      <Input className="h-8 font-mono" aria-label="Süzgeç alanı" placeholder="alan" value={key}
+      <Input className="h-8 font-mono bg-field dark:bg-field" aria-label="Süzgeç alanı" placeholder="alan" value={key}
         onChange={e => setKey(e.target.value)} />
-      <NativeSelect size="sm" aria-label="İşleç" value={op} className="w-full"
+      <NativeSelect size="sm" aria-label="İşleç" value={op} className="w-full bg-field dark:bg-field"
         onChange={e => setOp(e.target.value as FilterOp)}>
         {ops.map(o => <NativeSelectOption key={o} value={o}>{FILTER_OP_LABELS[o]}</NativeSelectOption>)}
       </NativeSelect>
       {!noValue(op) && (
-        <Input className="h-8 font-mono" aria-label="Süzgeç değeri"
+        <Input className="h-8 font-mono bg-field dark:bg-field" aria-label="Süzgeç değeri"
           placeholder={isList(op) ? 'değerler (virgülle)' : 'değer'} value={val}
           onChange={e => setVal(e.target.value)} />
       )}

@@ -908,7 +908,11 @@ input[type="radio"]:focus-visible,
 input[type="range"]:focus-visible,
 input[type="file"]:focus-visible,
 input[type="color"]:focus-visible,
-select:focus-visible,
+/* v0.10.2143 (operatör) — shadcn NativeSelect dış çizgi almaz: odak göstergesi
+   kendi halkasıdır (focus-visible:ring). Bugün `outline-none` yardımcısı bu
+   kuralı katman sırasıyla zaten yeniyor; dışlama o sırayı AÇIK eder (1782 ile
+   aynı gerekçe: ikinci çerçeve yok). */
+select:where(:not([data-slot="native-select"])):focus-visible,
 summary:focus-visible,
 [role="button"]:focus-visible,
 [role="tab"]:focus-visible,

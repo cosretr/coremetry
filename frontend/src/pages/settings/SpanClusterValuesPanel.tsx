@@ -97,7 +97,7 @@ export function SpanClusterValuesPanel({ clusters, onAssigned }: {
                 <TableCell>
                   {!r.ownerName && (
                     <div className="flex items-center gap-2">
-                      <NativeSelect size="sm" aria-label={`${r.value} için kayıt`} value={pick[r.value] ?? ''}
+                      <NativeSelect className="bg-field dark:bg-field" size="sm" aria-label={`${r.value} için kayıt`} value={pick[r.value] ?? ''}
                         onChange={e => setPick(p => ({ ...p, [r.value]: e.target.value }))}>
                         <NativeSelectOption value="">— cluster —</NativeSelectOption>
                         {clusters.filter(c => c.id).map(c => <NativeSelectOption key={c.id} value={c.id}>{c.name}</NativeSelectOption>)}

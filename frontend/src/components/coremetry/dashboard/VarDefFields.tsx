@@ -11,10 +11,10 @@ export function VarDefFields({ v, onPatch }: { v: DashboardVariable; onPatch(p: 
       {v.type === 'label' && (
         <>
           <Input value={v.labelName ?? ''} placeholder="etiket adı (ör. deployment_environment)"
-            aria-label="Etiket adı" className="h-8 w-56 font-mono text-xs"
+            aria-label="Etiket adı" className="h-8 w-56 font-mono text-xs bg-field dark:bg-field"
             onChange={e => onPatch({ labelName: e.target.value.trim() || undefined })} />
           <Input value={v.metric ?? ''} placeholder="metrik (isteğe bağlı)"
-            aria-label="Önerileri daraltan metrik" className="h-8 w-48 font-mono text-xs"
+            aria-label="Önerileri daraltan metrik" className="h-8 w-48 font-mono text-xs bg-field dark:bg-field"
             onChange={e => onPatch({ metric: e.target.value.trim() || undefined })} />
         </>
       )}

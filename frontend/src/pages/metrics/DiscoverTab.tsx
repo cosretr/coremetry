@@ -142,7 +142,7 @@ export function DiscoverTab({ cluster, caps, canEdit }: DiscoverTabProps) {
       <div className="grid gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Metrik ara (sunucu araması)" aria-label="Metrik ara" className="h-8 w-64" />
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Metrik ara (sunucu araması)" aria-label="Metrik ara" className="h-8 w-64 bg-field dark:bg-field" />
             <SegmentedControl<DiscoverKind> size="sm" aria-label="Tür" value={p.kind} onChange={kind => set({ kind })} options={KIND_OPTS} />
             {p.service && (
               <Badge variant="outline" className="gap-1">servis: {p.service}

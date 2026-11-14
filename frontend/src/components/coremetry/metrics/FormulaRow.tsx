@@ -38,7 +38,7 @@ export function FormulaRow({ query: q, queries, onChange, onRemove, className }:
         <span className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-dashed px-1 font-mono text-xs font-semibold" title={`Formül ${q.id}`}>ƒ</span>
         <Input value={q.expr} onChange={e => set({ expr: e.target.value })} placeholder="B / A * 100"
           aria-label={`Formül ${q.id} ifadesi`} aria-invalid={comp?.ok === false || undefined}
-          className="h-6 w-56 px-1.5 font-mono text-xs md:text-xs" />
+          className="h-6 w-56 px-1.5 font-mono text-xs md:text-xs bg-field dark:bg-field" />
         <span className="text-xs text-muted-foreground">birim</span>
         <DropdownMenu open={unitOpen} onOpenChange={setUnitOpen}>
           <DropdownMenuTrigger asChild>
@@ -53,7 +53,7 @@ export function FormulaRow({ query: q, queries, onChange, onRemove, className }:
         <label className="inline-flex items-center gap-1 text-xs text-muted-foreground">
           lejant
           <Input value={q.legend} onChange={e => set({ legend: e.target.value })} placeholder="hata % {{service_name}}"
-            className="h-6 w-48 px-1.5 font-mono text-xs md:text-xs" aria-label={`Formül ${q.id} lejant biçimi`} />
+            className="h-6 w-48 px-1.5 font-mono text-xs md:text-xs bg-field dark:bg-field" aria-label={`Formül ${q.id} lejant biçimi`} />
         </label>
         <span className="flex-1" />
         <span className="text-xs text-muted-foreground">Sunucuda hesaplanır; seriler etiketleriyle eşleşir.</span>

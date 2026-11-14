@@ -272,7 +272,7 @@ export function FieldSidebar({
   return (
     <aside className="ld-fields" aria-label="Alanlar" data-testid="field-sidebar">
       <div className="mb-1.5 flex items-center gap-1.5">
-        <Input className="h-7 flex-1 text-[length:var(--fs-sm)]" placeholder="Alan ara…" aria-label="Alan ara"
+        <Input className="h-7 flex-1 text-[length:var(--fs-sm)] bg-field dark:bg-field" placeholder="Alan ara…" aria-label="Alan ara"
           value={needle} onChange={e => setNeedle(e.target.value)} />
         <Button variant="outline" size="xs" aria-pressed={lift} onClick={toggleLift}
           className={lift ? 'bg-(--accent-soft) text-(--accent2)' : undefined}

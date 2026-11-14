@@ -114,7 +114,7 @@ export function LogDetailSheet({
               <h3 className="m-0 text-[length:var(--fs-sm)] font-semibold">Alanlar</h3>
               <SegmentedControl size="sm" aria-label="Tablo / JSON" options={TABS} value={tab} onChange={setTab} />
               {tab === 'table' && (
-                <Input className="h-7 w-40 text-[length:var(--fs-sm)]" placeholder="Alan süz…" aria-label="Alan süz"
+                <Input className="h-7 w-40 text-[length:var(--fs-sm)] bg-field dark:bg-field" placeholder="Alan süz…" aria-label="Alan süz"
                   value={needle} onChange={e => setNeedle(e.target.value)} />
               )}
             </div>

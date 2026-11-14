@@ -107,7 +107,7 @@ export function LogsQueryBar(p: LogsQueryBarProps) {
           <NativeSelect size="sm" value={draft.cluster} aria-label="Cluster"
             onChange={e => p.onDraft({ ...draft, cluster: e.target.value })}
             title="Filter logs to a single k8s/openshift cluster"
-            className="ld-cluster">
+            className="ld-cluster bg-field dark:bg-field">
             <NativeSelectOption value="">All clusters</NativeSelectOption>
             {p.clusters.map(c => <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>)}
           </NativeSelect>

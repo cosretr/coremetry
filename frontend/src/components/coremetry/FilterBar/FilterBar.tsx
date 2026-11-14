@@ -38,7 +38,7 @@ export function FilterBar({ chips, onChange, query, saved, sticky, actions, chil
   return (
     <PageControls sticky={sticky} actions={actions} className={className}>
       {query && (
-        <Input className="h-8 w-64 bg-field" value={query.value} placeholder={query.placeholder}
+        <Input className="h-8 w-64 bg-field dark:bg-field" value={query.value} placeholder={query.placeholder}
           aria-label={query.placeholder ?? CM_STRINGS.filter} onChange={(e) => query.onChange(e.target.value)} />
       )}
       {chips.length > 0 && (

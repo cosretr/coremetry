@@ -20,6 +20,8 @@ import { derivedTeamTitle, parseSubjectLane } from '@/lib/problemSubject';
 import { decodeCsvSet, encodeCsvSet, readInboxTeam, INBOX_TEAM_PARAM, INBOX_CAT_PARAM, INBOX_CAT_ALL, INBOX_CAT_LABEL, inboxMoreFiltersActive, inboxStatusHref } from '@/lib/inboxUrl';
 import { MoreFilters } from '@/components/coremetry/MoreFilters';
 import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
+import { FIELD_SURFACE } from '@/components/coremetry/Field/fieldSurface'; // v0.10.2143 — alan zemini (--field-bg)
+import { cn } from 'cn';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, resolveInitialSort, type DataTableStateProps } from '@/components/ui/DataTable';
 import { FacetMultiSelect } from '@/components/ui/FacetMultiSelect';
@@ -914,7 +916,7 @@ export default function InboxPage() {
             onChange={e => setTeamFilter(e.target.value)}
             aria-label="Ekip"
             title="Takım süzgeci (?team=): servisin ownerTeam VEYA sreTeam'i bu takımsa satır kalır."
-            className="ib-team-select">
+            className={cn('ib-team-select', FIELD_SURFACE)}>
             <NativeSelectOption value="">Ekip: hepsi</NativeSelectOption>
             {teamOptions.map(o => <NativeSelectOption key={o} value={o}>{o}</NativeSelectOption>)}
           </NativeSelect>

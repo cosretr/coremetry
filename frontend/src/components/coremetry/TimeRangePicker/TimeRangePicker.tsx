@@ -26,7 +26,7 @@ export function TimeRangePicker({ value, onChange, variant = 'global', presets, 
   if (variant === 'global') return <GlobalTimeRangePicker value={value} onChange={onChange} />;
   const opts = windowOptions(presets);
   return (
-    <NativeSelect size="sm" aria-label={label ?? CM_STRINGS.window} value={value.preset}
+    <NativeSelect className="bg-field dark:bg-field" size="sm" aria-label={label ?? CM_STRINGS.window} value={value.preset}
       onChange={(e) => onChange({ preset: e.target.value })}>
       {opts.map(p => <NativeSelectOption key={p} value={p}>{p}</NativeSelectOption>)}
     </NativeSelect>
