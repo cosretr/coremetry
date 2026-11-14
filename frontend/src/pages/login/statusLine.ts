@@ -2,6 +2,7 @@
 // ClickHouse toplam sıkıştırılmamış terabayt bilgisi ve All operational yazabilir"). SAF: sol alt satır.
 // Parça yoksa atlanır; hiçbiri yoksa null (satır çizilmez).
 import type { LoginSummary } from '@/lib/types';
+import { fmtNum } from '@/lib/utils';
 
 /** Ondalık (SI) birim: 12.4 TB, 980 GB — operatörün "terabayt"ı. */
 export function fmtStorage(bytes: number): string {
@@ -19,6 +20,9 @@ export function loginStatusLine(s: LoginSummary | undefined | null, topoServices
   const parts: string[] = [];
   const n = s?.services_monitored ?? topoServices;
   if (n > 0) parts.push(`${n.toLocaleString('en-US')} services monitored`);
+  // v0.10.2152 (operatör: "sol altta total span sayısı da yazsın servisler ile birlikte") — bugünkü span.
+  const sp = s?.spans_today;
+  if (sp && sp > 0) parts.push(`${fmtNum(sp)} spans today`);
   const b = s?.components?.clickhouse_uncompressed_bytes;
   if (b && b > 0) parts.push(`ClickHouse ${fmtStorage(b)} uncompressed`);
   const st = s?.components?.state;
