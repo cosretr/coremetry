@@ -8,11 +8,14 @@ const detail = readFileSync(resolve(__dirname, 'ProblemDetail.tsx'), 'utf8');
 const strip = readFileSync(resolve(__dirname, 'ProblemInsightStrip.tsx'), 'utf8');
 
 describe('ProblemInsightStrip', () => {
-  it('yerleşim: pd-cols öncesi', () => {
+  // v0.10.2127 (Problems sadeleştirme S7; operatör kararı 2026-11-13: teknik
+  // kanıt altta KAPALI) — şerit ilk ekrandan "Teknik kanıt" bölümüne indi.
+  it('yerleşim: kapalı "Teknik kanıt" içinde', () => {
     const s = detail.indexOf('<ProblemInsightStrip problemId={problem.id} />');
-    const cols = detail.indexOf('<div className="pd-cols pd-cols-15">');
+    const tech = detail.indexOf('<Sect title="Teknik kanıt" collapsible>');
     expect(s).toBeGreaterThan(0);
-    expect(s).toBeLessThan(cols);
+    expect(tech).toBeGreaterThan(0);
+    expect(s).toBeGreaterThan(tech);
   });
   it('hata → null, yükleniyor → soluk satır', () => {
     expect(strip).toContain('if (q.isError || !q.data) return null;');

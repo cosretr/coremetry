@@ -13910,3 +13910,15 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - Sunucu kapısı DEĞİŞMEDİ: iki uç da bugün editor+ ve audit yazıyor (`problem.acknowledge`, `problem.assign`).
   Plan "Assign admin-only" varsaymıştı; `isAdmin` prop'u fiilen editor+. Editör başkasına da atayabiliyor —
   "başkasına atama admin" kısıtı uygulanmadı (yetki daraltma = ayrı operatör kararı).
+
+## 2026-11-14 — v0.10.2127 — Problems sadeleştirme S7: alarm detayı dört kutu + Teknik kanıt kapalı (operatör kararı 2026-11-13)
+- Sol: Ne oluyor · Kimi etkiliyor · Olası neden · Ne yapılabilir. Metin SAF `features/anomalies/alertDetailBoxes.ts`
+  (tablo testli), model yok. Olası neden = `Problem.rootCause` (liste + tekil okumanın toplu hipotez birleştirmesi);
+  şüpheli boş ya da güven < 0.5 (`ROOT_CAUSE_SUMMARY_MIN_CONFIDENCE`, anomali detayıyla aynı) → kutu yok.
+  Kimi etkiliyor öznesiz problemde yok. "CoSRE'ye sor" mevcut `AIExplainButton` (s.copilotExplain), yeni AI yüzeyi yok.
+- Sağ: alarm serisi grafiği / terfi desen sayısı + "Kısa geçmiş" (zaman çizelgesinin ilk 5 satırı, `ProblemTimelineList`).
+- KAPALI "Teknik kanıt" (kapalıyken mount edilmez): standart kartlar, insight şeridi, CoSRE sohbetleri, Kural (ad /
+  kimlik / şiddet), Root cause analysis (+ Runbook AI), araştırma, yeni log şablonları, Metric, offenders, tam zaman
+  çizelgesi, Blast radius, Correlated signals, Log kanıtı, Bildirim, Runbook, Description. Silinen bölüm yok.
+  Yan etki: sayfa açılışı `/rootcause/core` + `/bubbleup` okumasını artık yapmaz (Teknik kanıt açılınca).
+- Örnek trace bağlantısı kutuya girmedi: kimlik yalnız `/rootcause/core`'da; yerine hatalı/yavaş trace listesi.

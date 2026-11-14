@@ -4312,6 +4312,16 @@ thead th:hover .th-remove, .th-remove:focus-visible { opacity: 1; }
 .pd-meta__item > dd { margin: 0; color: var(--text2); min-width: 0; overflow-wrap: anywhere; }
 .pd-meta__none { color: var(--text3); }
 .pd-meta__when { white-space: normal; }
+/* v0.10.2127 (Problems S7) — dört kısa kutu, Teknik kanıt, kısa geçmiş. */
+.pd-col { min-width: 0; }
+.pd-box-text { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+.pd-act-link { display: inline-block; margin: 0 0 var(--sp-4); font-size: 12px; color: var(--accent2); }
+.pd-act-row { display: flex; flex-wrap: wrap; gap: var(--sp-4); margin-top: var(--sp-2); }
+.pd-rule { display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-2) var(--sp-6); margin: 0; font-size: 12px; }
+.pd-rule > dt { color: var(--text3); }
+.pd-rule > dd { margin: 0; color: var(--text2); overflow-wrap: anywhere; }
+.pd-tl-tag { margin-left: var(--sp-3); }
+.pd-tl-ts { margin-left: var(--sp-4); color: var(--text3); }
 /* v0.10.1113 — "Başlangıçta doğan log şablonları": ≤5 satırlık sabit liste
    (tablo değil). Şablon tek satır mono + ellipsis (tam metin title'da); altında
    servis · göreli zaman · örnek sayısı · pivot, dar ekranda sarar. */

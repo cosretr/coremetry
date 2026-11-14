@@ -40,6 +40,13 @@ const ALLOWED: { file: string; needle: string; why: string }[] = [
       'gerçek bir servis adıdır. db özneli satırda pod boş → dal koşmaz.',
   },
   {
+    file: 'features/anomalies/ProblemDetail.tsx',
+    needle: 'serviceHref(problem.service, { range: win })} label="Servis sayfası"',
+    why: 'v0.10.2127 (S7) "Ne yapılabilir" kutusu — bağlantı yalnız ' +
+      "subjectKind(...) === 'service' dalında çizilir; db/dış öznede o dal " +
+      'koşmaz, yerine neden olmadığını söyleyen cümle basılır.',
+  },
+  {
     file: 'pages/Shift.tsx',
     needle: 'serviceHref(c.service, { range: pageWindow }',
     why: 'ChangedService satırı — /api/shift\'in RED kıyasından geliyor, ' +

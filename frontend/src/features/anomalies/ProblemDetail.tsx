@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { SafeHref } from '@/components/ui/SafeHref'; // v0.10.1315 — olay/katalog linki XSS kapısı
 import { useEscLayer } from '@/lib/escLayer';
 import { Link } from 'react-router-dom';
@@ -36,7 +36,7 @@ import { useAlertRuleSeries } from '@/lib/queries'; // v0.10.1091
 import { representativeStack, frameLinksRef } from './stackSource'; // v0.10.1048
 import { ExternalEvidencePanel } from './ExternalEvidencePanel';
 import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
-import type { ExceptionGroup, ExceptionGroupState, Problem, RolloutEvidence } from '@/lib/types';
+import type { ExceptionGroup, ExceptionGroupState, Problem, ProblemStandard, RolloutEvidence } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable'; // v0.10.977 (T12, P-2)
 import { PriorityBadge } from '@/components/ui/PriorityBadge'; // v0.10.922 (sade palet adım 1)
@@ -56,7 +56,8 @@ import { ExceptionSampleRow } from './ExceptionSampleRow'; // v0.10.1104
 import { SubjectLink } from '../../components/SubjectLink';
 import { subjectKind, derivedTeamTitle, isAnomalyProblem, isAnomalyDetectorRule } from '../../lib/problemSubject';
 import { Sect, SignalLink, DeployBox, DetailTitle, DetailMeta, type DetailMetaItem } from './detailSections'; // v0.10.1032; başlık/üst veri v0.10.2126
-import { alertProblemSummary, problemWhenLine } from './detailSummary'; // v0.10.1032; problemWhenLine v0.10.1054
+import { alertProblemSummary, problemWhenLine } from './detailSummary';
+import { alertWhatText, alertWhoText, alertCause } from './alertDetailBoxes'; // v0.10.2127 (S7) // v0.10.1032; problemWhenLine v0.10.1054
 import { AlertMetricChartSection } from './AlertMetricChartSection'; // v0.10.1064
 import { PromotedLogPatternCount, PromotedPatternLogsLink } from './PromotedPatternSection'; // v0.10.1106
 import { ProblemNewLogTemplates } from './ProblemNewLogTemplates'; // v0.10.1113
@@ -905,6 +906,126 @@ function claimIdentity(user: { email?: string; username?: string } | null | unde
   return (user?.email || user?.username || '').trim();
 }
 
+// ProblemTimelineList — v0.10.2127 (S7): "Problem timeline" satırları tek
+// yerde; sağ sütunun "Kısa geçmiş"i ilk `limit` satırı (en çok 5), Teknik
+// kanıttaki tam liste hepsini çizer. Rollout satırları kök neden panelinin
+// okumasından gelir (panel Teknik kanıtta; açılmadan boş — ikinci istek yok).
+function ProblemTimelineList({ problem, rollouts, limit }: {
+  problem: Problem; rollouts: RolloutEvidence[]; limit?: number;
+}) {
+  const items: ReactElement[] = [
+    ...rollouts.map(ev => (
+      <li key={`${ev.clusterId}/${ev.namespace}/${ev.workload}@${ev.revision}`} className={ev.band === 'high' ? 'warn' : ''}>
+        <b>Rollout</b>{' '}
+        <Link to={rolloutEvidenceHref(ev)} className="mono" title={ev.reason}>
+          {ev.namespace}/{ev.workload}{ev.imageTag ? ` → ${ev.imageTag}` : ''}
+        </Link>
+        {/* v0.10.922 (sade palet adım 1) — POD bir eşleşme TÜRÜ (kategori),
+            sapma değil: nötr. Satırın önemi zaten li.warn noktasında. */}
+        {ev.matchedBy === 'pod' && <span className="badge b-gray pd-tl-tag">POD</span>}
+        <span className="mono pd-tl-ts">{fmtStartedTs(ev.startedAtNs)}</span>
+      </li>
+    )),
+  ];
+  if (problem.recentDeploy) {
+    items.push(
+      <li key="deploy" className="warn">
+        <b>Deploy</b> <code className="mono">{problem.recentDeploy.version}</code>
+        <span className="mono pd-tl-ts">{fmtStartedTs(problem.startedAt - problem.recentDeploy.ageSeconds * 1e9)}</span>
+      </li>,
+    );
+  } else if (problem.priorDeploy) {
+    // v0.10.1054 — yinelenen kuralın "olası neden" saymadığı deploy NÖTR kalır.
+    items.push(
+      <li key="prior-deploy" data-prior-deploy title="Yinelenen anomali: deploy'dan önce de görülüyordu — olası neden sayılmadı">
+        <b>Deploy</b> <code className="mono">{problem.priorDeploy.version}</code>
+        <span className="mono pd-tl-ts">{fmtStartedTs(problem.startedAt - problem.priorDeploy.ageSeconds * 1e9)}</span>
+      </li>,
+    );
+  }
+  items.push(
+    <li key="detected" className="err">
+      <b>Detected</b> — {problem.ruleName}
+      <span className="mono pd-tl-ts">{fmtStartedTs(problem.startedAt)}</span>
+    </li>,
+  );
+  if (problem.status === 'resolved' && problem.resolvedAt) {
+    items.push(
+      <li key="resolved" className="ok">
+        <b>Resolved</b>
+        <span className="mono pd-tl-ts">{fmtStartedTs(problem.resolvedAt)}</span>
+      </li>,
+    );
+  }
+  return <ul className="pb-tl">{limit ? items.slice(0, limit) : items}</ul>;
+}
+
+// AlertDetailBoxes — v0.10.2127 (Problems sadeleştirme S7). Dört kısa kutu;
+// metinler ./alertDetailBoxes (SAF, deterministik, tablo testli). "Olası
+// neden" hipotez yoksa / güven %50 altındaysa HİÇ çizilmez; "Kimi etkiliyor"
+// öznesiz problemde çizilmez. "CoSRE'ye sor" mevcut AIExplainButton yolu
+// (s.copilotExplain; model kapalıyken düğme kendini gizler) — yeni AI yüzeyi
+// yok. Bağlantılar bugünkü "Correlated signals" üreticilerinin aynısı.
+function AlertDetailBoxes({ problem, std, window: win, dbHealthLinks, svcSlowLinks }: {
+  problem: Problem;
+  std?: ProblemStandard | null;
+  window: { fromNs: number; toNs: number };
+  dbHealthLinks: ReturnType<typeof dbHealthPivots>;
+  svcSlowLinks: ReturnType<typeof svcSlowdownPivots>;
+}) {
+  const tr = useT();
+  const who = alertWhoText(problem, std);
+  const cause = alertCause(problem);
+  const kind = subjectKind(problem.service, problem.kind);
+  const thr = latencyThresholdMs(problem);
+  return (
+    <>
+      <Sect title="Ne oluyor">
+        <p className="pd-box-text" data-testid="box-what">{alertWhatText(problem, std)}</p>
+      </Sect>
+      {who && (
+        <Sect title="Kimi etkiliyor">
+          <p className="pd-box-text" data-testid="box-who">{who}</p>
+        </Sect>
+      )}
+      {cause && (
+        <Sect title="Olası neden" sub={cause.confidence}>
+          <p className="pd-box-text" data-testid="box-cause">{cause.text}</p>
+        </Sect>
+      )}
+      <Sect title="Ne yapılabilir">
+        {dbHealthLinks ? (<>
+          <SignalLink to={dbHealthLinks.databaseHref} label="Veritabanı sayfası" sub="problem penceresi" />
+          <SignalLink to={dbHealthLinks.errorTracesHref} label="Hatalı trace'ler" sub="bu veritabanı, problem penceresi" />
+        </>) : kind === 'service' ? (<>
+          {svcSlowLinks
+            ? <SignalLink to={svcSlowLinks.slowTracesHref} label="Yavaş trace'ler" sub={`≥ ${Math.round(svcSlowLinks.slowMinMs)} ms, problem penceresi`} />
+            : thr !== null
+              ? <SignalLink to={slowTracesHref(problem.service, thr, win)} label="Yavaş trace'ler" sub={`≥ ${Math.round(thr)} ms (eşik), problem penceresi`} />
+              : <SignalLink to={tracesPivotHref({ window: win, service: problem.service, hasError: true, rootOnly: false })}
+                  label="Hatalı trace'ler" sub="servis, problem penceresi" />}
+          <SignalLink to={logsHref({ window: win, service: problem.service, severity: 17 })}
+            label="Loglar (yalnız hatalar)" sub="servis, problem penceresi" />
+          <SignalLink to={serviceHref(problem.service, { range: win })} label="Servis sayfası" sub="problem penceresiyle" />
+        </>) : (
+          <div className="pd-pivot-note">
+            {kind === 'external'
+              ? 'Bu alarmın öznesi bir dış metrik kaynağı serisi — kanıt zinciri Teknik kanıtta.'
+              : 'Bu alarmın öznesi bir veritabanı örneği — log/trace pivotları bir servis adı gerektiriyor.'}
+          </div>
+        )}
+        {problem.runbookUrl && (
+          <SafeHref href={problem.runbookUrl} className="pd-act-link">Runbook ↗</SafeHref>
+        )}
+        <div className="pd-act-row">
+          <AIExplainButton subject={{ kind: 'problem', id: problem.id }}
+            label={<><IconSparkles /> <span>{tr('ai.askCosre')}</span></>} />
+        </div>
+      </Sect>
+    </>
+  );
+}
+
 // ── Firing alert-problem detail (ex-TriageDrawer, now full page) ────────────
 
 export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
@@ -914,7 +1035,6 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
   onChanged: () => void;
 }) {
   useEscBack(onBack);
-  const tr = useT(); // v0.10.1338 — "Ask CoSRE" etiketi
   // v0.10.1055 (operatör: "Okdir") — terfi ("anomaly-auto:") ve küme
   // ("anomaly-cluster:") Problem'leri de ANOMALY rozeti taşır; tek yüklem.
   const isAnomaly = isAnomalyProblem(problem.ruleId);
@@ -1025,372 +1145,343 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
       </DetailTitle>
       <AlertProblemMeta problem={problem} window={probWindow} endNs={endNs} />
       <ProblemTriage problem={problem} isAdmin={isAdmin} onBack={onBack} onChanged={onChanged} />
-      {/* v0.10.1529 (Problem standardı R2) — standart kartlar (Etki · Ne
-          zamandan beri · Güven · Kaynak + neden/bağlam/sonraki adım). Başlık
-          yukarıda çizildiği için burada başlıksız (showTitle=false). */}
-      <ProblemStandardHeader stdRef={`problem:${problem.id}`} showTitle={false} />
-
-      {/* v0.10.562 — deterministik insight şeridi (şüpheli · ilk anomali ·
-          rollout · daha önce); ilk ekranın üstünde, sormadan dolar. */}
-      <ProblemInsightStrip problemId={problem.id} />
-      <ProblemCoSRESection problemId={problem.id} />
       {/* CoSRE öğrenme Faz 3 — kapanmış problemin vaka kaydı (taslak → tek tık onay). */}
       <IncidentCaseCard source="problem" sourceId={problem.id} />
-      {/* v0.9.983 (D5.1 / A2) — aynı gerekçe: bildirim linkinden gelen
-          operatörün telefonda gördüğü İLK ekran bu (RootCausePanel + AI
-          özeti solda, offender listesi sağda). */}
+
+      {/* v0.10.2127 (Problems sadeleştirme S7; operatör kararı 2026-11-13) —
+          sade detay: solda dört kısa kutu (Ne oluyor · Kimi etkiliyor · Olası
+          neden · Ne yapılabilir; metin ./alertDetailBoxes, deterministik, alan
+          yoksa kutu yok), sağda sıklık çizgisi + kısa geçmiş. Geri kalan HER
+          bölüm (kural tanımı, eşik/ölçüm, kök neden paneli, ROOT CAUSE / insight
+          şeridi, araştırma, blast radius, ilişkili sinyaller, log kanıtı,
+          bildirim, runbook, açıklama, AI özeti) aşağıdaki KAPALI "Teknik
+          kanıt"ta; kapalıyken mount edilmez — sayfa açılışı kök neden
+          demetini (/rootcause/core + bubbleup) artık çekmez. Hiçbir bölüm
+          silinmedi. */}
       <div className="pd-cols pd-cols-15">
-        {/* ── Left column ── */}
-        <div style={{ minWidth: 0 }}>
-          {/* v0.10.1064 (operatör: "grafik olmadığı için de anlamak çok zor
-              artışları") — sol kolonun İLK bölümü: kuralın kendi serisi, eşik
-              ve başlangıç işaretli. Yalnız span-metrik alarm kurallarında;
-              dizisi olmayan türde hiç çizilmez. */}
-          {hasAlertMetricChart(problem) && <AlertMetricChartSection problem={problem} />}
-          {/* v0.10.1106 (operatör kuyruğu; v0.10.1060 ertelemesi kalktı) — terfi
-              Problem'inin (anomaly-auto:) kaynağı log deseniyse olay detayıyla
-              AYNI "Desen sayısı" grafiği, aynı yerde (sol kolonun ilki, açık).
-              Diğer her Problem'de null, istek yok. */}
-          <PromotedLogPatternCount problem={problem} />
-          <Sect title="Root cause analysis" accent>
-            {/* v0.10.1032 (inceleme) — kural adı satırı KALKTI: hemen üstteki
-                özet cümlesi kural adıyla başlıyor (ad boşsa metrikle), yani
-                satır ekranın üstünde saf bir tekrardı. ANOMALY tür etiketi
-                tekrar değil, kalır. */}
-            {isAnomaly && (
-              <div style={{ fontSize: 13, marginBottom: 8 }}>
-                {/* v0.10.922 (sade palet adım 1) — ANOMALY bir tür etiketi
-                    (üst veri), mavi değil nötr. */}
-                <span className="badge b-gray">ANOMALY</span>
-                {/* v0.10.2053 (D4) — ML grubunun açtığı Problem: gruba geri bağlantı. */}
-                {mlGroupHref && (
-                  <Link to={mlGroupHref} style={{ marginLeft: 8 }} data-testid="pd-ml-group">Anomali grubunu aç ↗</Link>
-                )}
-              </div>
-            )}
-            {/* v0.10.230 (Influx D5) — dış kaynak öznesinde topoloji/servis
-                tabanlı analiz yok; kanıt zinciri (metrik şeridi, trace'ler,
-                pod'lar, log imzaları) D4'ün yazdığı hipotezden çizilir. */}
-            {isExtSeries
-              ? <ExternalEvidencePanel problem={problem} window={probWindow} />
-              : (
-                // v0.10.1288 — AI SRE kartlarındaki "Kök neden paneline git" kaydırma hedefi
-                // (panelin kendisi değişmez; ROOT_CAUSE_ANCHOR hypothesisView.ts).
-                <div id="problem-root-cause">
-                  <RootCausePanel problemId={problem.id} service={problem.service} window={probWindow}
-                    onLoaded={rc => setRcRollouts(rc?.hypothesis?.deep?.rollouts ?? [])} />
-                </div>
-              )}
-            {/* Background problemExplainer's persisted first-look blurb —
-                full prose here (the feed card only tooltips it). */}
-            {problem.aiSummary && (
-              <div style={{
-                fontSize: 12, color: 'var(--text2)', marginTop: 10,
-                padding: '8px 10px', borderRadius: 'var(--radius-sm)',
-                background: 'var(--accent-soft)',
-                borderLeft: '2px solid var(--accent)',
-              }}>
-                {/* v0.9.696 — exception ikiziyle aynı: markdown basılıyor. */}
-                <IconSparkles size={11} /> <RenderedMarkdown text={problem.aiSummary} />
-              </div>
-            )}
-            {problem.recentDeploy && (
-              <DeployBox version={problem.recentDeploy.version} ageSeconds={problem.recentDeploy.ageSeconds} />
-            )}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-              {/* v0.9.477 — iki AI affordance'ı da tek sağ çekmeceye açılır;
-                  ikisi aynı anda satır-içi açıldığında kart iki uzun metin
-                  bloğuyla şişiyordu. */}
-              {/* v0.10.1338 (operatör) — görünen ad "Ask CoSRE" / "CoSRE’ye sor". */}
-              <AIExplainButton subject={{ kind: 'problem', id: problem.id }}
-                label={<><IconSparkles /> <span>{tr('ai.askCosre')}</span></>} />
-              <AIExplainButton subject={{ kind: 'runbook', id: problem.id }}
-                label={<><IconSparkles /> <span>Runbook AI</span></>} />
-            </div>
-          </Sect>
-
-          {/* v0.10.1282 — AI SRE araştırması (kuyruk / sonuç / Yeniden araştır). */}
-          <ProblemInvestigationPanel problemId={problem.id} />
-
-          {/* v0.10.1113 — kök neden kanıtı: başlangıç çevresinde (−10 dk … +5 dk)
-              özne / RCA şüphelisi servislerde doğan YENİ log şablonları. Her
-              Problem türünde tek istek; boşsa bölüm hiç çizilmez. */}
-          <ProblemNewLogTemplates problem={problem} window={probWindow} />
-
-          {/* v0.10.1032 (inceleme) — kapalı gelir: özet cümlesi değeri ve
-              eşiği zaten söylüyor; açınca öncelik gerekçesiyle aynı blok. */}
-          <Sect title="Metric" collapsible sub={<span className="mono">{problem.metric}</span>}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span className="pb-headline" style={{ fontSize: 24 }}>{problem.value.toFixed(2)}</span>
-              <span className="mono" style={{ color: 'var(--text3)', fontSize: 13 }}>
-                / threshold {fmtFixed(problem.threshold, 2)}
-              </span>
-            </div>
-            {problem.priorityReason && (
-              <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 6 }}>{problem.priorityReason}</div>
-            )}
-          </Sect>
-
-          {/* Top offenders operation_summary_5m'i SERVİS adıyla sorar; dış
-              öznede boş tablo "suçlu yok" diye okunurdu. */}
-          {!isExternal && <ProblemOffenders problem={problem} />}
-
-          {/* v0.10.1032 — ikincil: kapalı gelir (istek atmaz — rollout
-              işaretleri RootCausePanel'in zaten yaptığı okumadan gelir). */}
-          <Sect title="Problem timeline" collapsible>
-            <ul className="pb-tl">
-              {rcRollouts.map(ev => (
-                <li key={`${ev.clusterId}/${ev.namespace}/${ev.workload}@${ev.revision}`} className={ev.band === 'high' ? 'warn' : ''}>
-                  <b>Rollout</b>{' '}
-                  <Link to={rolloutEvidenceHref(ev)} className="mono" title={ev.reason}>
-                    {ev.namespace}/{ev.workload}{ev.imageTag ? ` → ${ev.imageTag}` : ''}
-                  </Link>
-                  {/* v0.10.922 (sade palet adım 1) — POD bir eşleşme TÜRÜ
-                      (kategori), sapma değil: nötr. Satırın önemi zaten
-                      li.warn noktasında (band=high). */}
-                  {ev.matchedBy === 'pod' && <span className="badge b-gray" style={{ marginLeft: 6 }}>POD</span>}
-                  <span className="mono" style={{ color: 'var(--text3)', marginLeft: 8 }}>
-                    {fmtStartedTs(ev.startedAtNs)}
-                  </span>
-                </li>
-              ))}
-              {problem.recentDeploy && (
-                <li className="warn">
-                  <b>Deploy</b> <code className="mono">{problem.recentDeploy.version}</code>
-                  <span className="mono" style={{ color: 'var(--text3)', marginLeft: 8 }}>
-                    {fmtStartedTs(problem.startedAt - problem.recentDeploy.ageSeconds * 1e9)}
-                  </span>
-                </li>
-              )}
-              {/* v0.10.1054 — "hiçbir şey kaybolmaz": yinelenen kuralı deploy'u
-                  "olası neden" saymadıysa satır KALIR, nötr (warn değil, gri
-                  nokta); neden "olası neden" olmadığı ipucunda. */}
-              {!problem.recentDeploy && problem.priorDeploy && (
-                <li data-prior-deploy title="Yinelenen anomali: deploy'dan önce de görülüyordu — olası neden sayılmadı">
-                  <b>Deploy</b> <code className="mono">{problem.priorDeploy.version}</code>
-                  <span className="mono" style={{ color: 'var(--text3)', marginLeft: 8 }}>
-                    {fmtStartedTs(problem.startedAt - problem.priorDeploy.ageSeconds * 1e9)}
-                  </span>
-                </li>
-              )}
-              <li className="err">
-                <b>Detected</b> — {problem.ruleName}
-                <span className="mono" style={{ color: 'var(--text3)', marginLeft: 8 }}>{fmtStartedTs(problem.startedAt)}</span>
-              </li>
-              {problem.status === 'resolved' && problem.resolvedAt ? (
-                <li className="ok">
-                  <b>Resolved</b>
-                  <span className="mono" style={{ color: 'var(--text3)', marginLeft: 8 }}>{fmtStartedTs(problem.resolvedAt)}</span>
-                </li>
-              ) : null}
-            </ul>
-          </Sect>
+        <div className="pd-col">
+          <AlertDetailBoxes problem={problem} std={std} window={probWindow}
+            dbHealthLinks={dbHealthLinks} svcSlowLinks={svcSlowLinks} />
         </div>
-
-        {/* ── Right column ── */}
-        <div style={{ minWidth: 0 }}>
-          <Sect title="Blast radius">
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {/* v0.9.860 (UX denetimi K1) — triage yolculuğunun BELKEMİĞİ.
-                  Gece 03:14 alarmının "Blast radius" pill'i servis sayfasını
-                  sticky "şimdi" penceresiyle açıyordu: alarm anının izi yok,
-                  "sorun geçmiş" yanılgısı. Pencere AYNI bileşende
-                  (probWindow) zaten hesaplı, yalnız logs/traces
-                  linklerine konuyordu. */}
-              <SubjectLink service={problem.service} subjectKind={problem.kind}
-                href={serviceHref(problem.service, { range: probWindow })}
-                className={`pb-pill${problem.status === 'open' ? ' err' : ''}`}
-                style={{ textDecoration: 'none', color: 'var(--accent2)' }} />
-              {/* v0.9.740 (operatör): ug/sy ekip rozetleri problem
-                  detayında da.
-                  v0.9.1345 — kaynak DEĞİŞTİ. Eskiden tek kaynak katalogdu
-                  ("Problem.ownerTeam boş kalabiliyor" gerekçesiyle), ama
-                  katalog SERVİS ADIYLA anahtarlı: db konularının orada
-                  satırı yok, dolayısıyla db alarmları sahipsiz görünüyordu.
-                  Artık problemin kendi alanı önce (sunucuda türetiliyor),
-                  katalog yalnız yedek. Türetilmiş değer ≈ ile işaretli. */}
-              <ProblemTeamChips problem={problem} />
-              {/* v0.9.401 (operator-reported) — runtime pod problemleri artık
-                  gerçek servis adı taşıyor; pod kimliği deterministik ID'nin
-                  son segmentinde (runtime:<check>:<svc>:<pod> — evaluator
-                  runtimeProblemID). Tek yerde çözülür, yapısal `pod` kolonu
-                  ayrı dilim. Link Pods sekmesine ?jpod= ile gider —
-                  v0.9.533'ten beri ilgili pod SATIRI otomatik açılıp
-                  görünüme kaydırılır (eski JMX-bölümü daraltması
-                  kaldırıldı; satır genişletmesi aynı JMX'i veriyor). */}
-              {(() => {
-                // v0.9.403 — yapısal alan öncelikli; ID-parse yalnız 401
-                // öncesi ESKİ satırlar için köprü (pod kolonu boş gelir).
-                let pod = problem.pod ?? '';
-                if (!pod && problem.id?.startsWith('runtime:')) {
-                  const segs = problem.id.split(':');
-                  pod = segs.length >= 4 ? segs[segs.length - 1] : '';
-                }
-                if (!pod || pod === problem.service) return null;
-                return (
-                  <Link to={serviceHref(problem.service, { range: probWindow, tab: 'infra', params: { jpod: pod } })}
-                    className="pb-pill"
-                    style={{ textDecoration: 'none', color: 'var(--accent2)' }}
-                    title="Bu podun JMX/runtime grafikleri (Pods sekmesi, pod daraltmalı)">
-                    <span className="dot" /> pod <span className="mono">{pod}</span> →
-                  </Link>
-                );
-              })()}
-              {(problem.clusters ?? []).map(c => (
-                <span key={c} className="pb-pill"><span className="dot" /> <span className="mono">{c}</span></span>
-              ))}
-            </div>
-                      {/* v0.10.707 — etkilenen varlıklar: çağıranlar ∪ hipotez pod'ları ∪ cluster'lar. */}
-            <div style={{ marginTop: 10 }}>
-              <AffectedEntitiesList problemId={problem.id} service={problem.service} window={probWindow} />
-            </div>
+        <div className="pd-col">
+          {/* v0.10.1064 — kuralın kendi serisi (eşik + başlangıç işaretli);
+              yalnız span-metrik alarm kurallarında. v0.10.1106 — terfi
+              Problem'inin log deseni sayısı. Diğerlerinde ikisi de null. */}
+          {hasAlertMetricChart(problem) && <AlertMetricChartSection problem={problem} />}
+          <PromotedLogPatternCount problem={problem} />
+          <Sect title="Kısa geçmiş">
+            <ProblemTimelineList problem={problem} rollouts={rcRollouts} limit={5} />
           </Sect>
-
-          <Sect title="Correlated signals">
-            {/* v0.10.1106 — terfi Problem'inin log deseni kaynağı: desene uyan
-                satırlarla /logs (olay detayının "Logları aç"ı; özne dalından
-                bağımsız — servissiz desen olayında da). Diğerlerinde null. */}
-            <PromotedPatternLogsLink problem={problem} />
-            {/* v0.9.1339 (entity-model Faz 4b) — bu bölümün TAMAMI bir
-                SERVİS ADI varsayıyor: /logs `service.name:"…"`, /traces
-                `?service=`, /service-map `?focus=`. Özne bir veritabanı
-                örneğiyse (db-capacity alarmları) üçü de BOŞ açılır ve
-                operatör bunu "olay yok" diye okur — v0.9.1331'in
-                "boş liste yanlış cevaptır" dersinin aynısı.
-                Ölçüldü 2026-08-24: receiver instance'ı hiçbir
-                spans.service_name ile eşleşmiyor (kesişim 0 satır).
-                Çalışmayan dört link yerine NEDEN olmadığını söyleyen tek
-                satır. */}
-            {/* v0.10.1073 — db-health kural id'si veritabanı ÜÇLÜSÜNÜ taşır:
-                Databases detayı ve o veritabanının trace'leri boş açılmaz
-                (dbHealthPivots.ts). Diğer db öznelerinde aşağıdaki cümle sürer. */}
-            {dbHealthLinks ? (<>
-              <SignalLink to={dbHealthLinks.databaseHref} label="◫ Veritabanı sayfası" sub="db detayı, problem penceresi" />
-              <SignalLink to={dbHealthLinks.tracesHref} label="⋮ Trace'ler" sub="bu veritabanı, problem penceresi" />
-              <SignalLink to={dbHealthLinks.errorTracesHref} label="⋮ Hatalı trace'ler" sub="bu veritabanı, problem penceresi, yalnız hatalar" />
-              {/* v0.10.1083 — hata sayısı kolu (ORA patlaması): hangi hata kodu,
-                  hangi çağıran — Databases detayının hata kartı. */}
-              <SignalLink to={dbHealthLinks.errorsHref} label="⚠ Hata kırılımı" sub="hata kodu → exception tipi → mesaj, problem penceresi" />
-            </>) : subjectKind(problem.service, problem.kind) !== 'service' ? (
-              <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                {isExternal
-                  ? 'Bu alarmın öznesi bir dış metrik kaynağı serisi, bir servis değil — ilgili trace/pod/log kanıtı yukarıdaki kanıt zincirinde.'
-                  : 'Bu alarmın öznesi bir veritabanı örneği, bir servis değil — log/trace/servis-haritası pivotları bir servis adı gerektiriyor.'}
-              </div>
-            ) : (<>
-            {/* v0.10.1091 — yaygın yavaşlama (svc-slowdown): önce hangi
-                operasyonların yavaşladığı ve yavaş trace'ler (svcSlowdownPivots.ts). */}
-            {svcSlowLinks && (<>
-              <SignalLink to={svcSlowLinks.serviceHref} label="◫ Servis sayfası" sub="problem penceresi" />
-              <SignalLink to={svcSlowLinks.operationsHref} label="☰ Operasyonlar" sub="Operations sekmesi, problem penceresi" />
-              <SignalLink to={svcSlowLinks.slowTracesHref} label="◷ Yavaş trace'ler"
-                sub={`≥ ${Math.round(svcSlowLinks.slowMinMs)} ms, problem penceresi`} />
-            </>)}
-            <SignalLink to={logsLink} label="≡ Logs" sub="service, problem window" />
-            <SignalLink to={logsErrorLink} label="≡ Logs (yalnız hatalar)" sub="service, problem window, severity ≥ ERROR" />
-            <SignalLink to={logsPatternsLink} label="≡ Loglar (desenler)" sub="service, problem window, Desenler paneli açık" />
-            {/* v0.8.512 (perf raporu #12) — pivot problem penceresini
-                taşır: logs ile aynı custom range, yoksa /traces global
-                range'iyle açılıp problemle ilgisiz trace gösteriyordu. */}
-            {/* v0.8.585 — Operator-reported: rootOnly default'u TRUE
-                olduğundan hata izleri (çoğu non-root span) boş
-                listeleniyordu; hasError linki root filtresini kapatır. */}
-            {/* v0.9.1356 — el-yapımı `custom:` dizesi aile üreticisine indi.
-                Pencere PROBLEMİN penceresi (probWindow), yani bu sayfanın
-                öznesinin penceresi — kardeş üç link (Logs / Slow traces /
-                Service) zaten aynısını taşıyor. Yan etkisi bir kusuru da
-                kapattı: elle kurulan hâl logsFrom/logsTo'yu Math.round ile
-                üretiyordu ve yuvarlama pencereyi İKİ UÇTAN yarım ms
-                daraltabiliyordu; üretici floor/ceil uyguluyor. */}
-            <SignalLink to={tracesPivotHref({
-              window: probWindow, service: problem.service,
-              hasError: true, rootOnly: false,
-            })} label="⋮ Error traces" sub="service, problem window" />
-            {/* v0.9.961 (UX denetimi G4/Ö7) — GECİKME alarmının kendi
-                pivotu. Tek trace linki `hasError=true` sabitliydi ve bir
-                p99-eşik alarmında yavaşlık çoğu zaman HATASIZ span'lerde
-                olur: operatör boş bir "Error traces" listesi görüp yavaş
-                trace'i servis→endpoint→traces turuyla arıyordu.
-                Link yalnız birimi ADINDA beyan eden (`*_ms`) metriklerde
-                çizilir — yanlış birimle kıstırılmış bir liste "yavaş
-                trace yok" diye okunurdu (v0.6.36 sınıfı). */}
-            {(() => {
-              const thr = latencyThresholdMs(problem);
-              // v0.10.1091 — yaygın yavaşlamada yavaş trace linki yukarıda.
-              if (thr === null || svcSlowLinks) return null;
-              return (
-                // v0.9.1331 — probWindow DOĞRUDAN geçiyor (gerçek ns). Önce
-                // logsFrom/logsTo (ms) geçiliyordu ve imza fromNs diyordu:
-                // çalışıyordu ama ad yalan söylüyordu.
-                <SignalLink
-                  to={slowTracesHref(problem.service, thr, probWindow)}
-                  label="◷ Slow traces"
-                  sub={`≥ ${Math.round(thr)} ms (eşik), problem window`} />
-              );
-            })()}
-            <SignalLink to={`/service-map?focus=${encodeURIComponent(problem.service)}`}
-              label="◉ Service map" sub="focused" />
-            </>)}
-          </Sect>
-
-          {/* v0.10.452 (log arama denetimi C1) — log kanıtı: yalnız servis
-              özneli problemde (db/dış öznenin logu yok — yukarıdaki kapı),
-              varsayılan kapalı, açılınca tek istek (ES maliyeti).
-              v0.10.1032 — Sect BİLEREK açılır-kapanır yapılmadı: gövdesi zaten
-              tek satırlık kapalı bir disclosure ve isteği o açılınca atıyor;
-              üstüne ikinci bir kapak, kanıta ulaşmayı iki tıka çıkarırdı. */}
-          {subjectKind(problem.service, problem.kind) === 'service' && (
-            <Sect title="Log kanıtı" sub="ERROR+ desenler, problem penceresi · açılınca yüklenir">
-              <ProblemLogEvidence service={problem.service} startedAt={problem.startedAt} resolvedAt={problem.resolvedAt} linkWindow={probWindow} />
-            </Sect>
-          )}
-
-          {/* v0.9.1344 — "bu problemden kimin haberi var?" Triyaj eden
-              operatörün bu soruyu soracağı yer burası; cevabı bugüne
-              kadar YALNIZ /events'te, elle pencere daraltarak
-              bulunabiliyordu — yani pratikte hiç bulunamıyordu. */}
-          {/* v0.10.1032 — ikincil, KAPALI gelir. Panel kendi sorgusunu mount
-              anında atıyor (yoklama yok); kapalı Sect gövdeyi mount etmediği
-              için bildirim geçmişi artık ancak bölüm açılınca çekilir. */}
-          <Sect title="Bildirim" collapsible>
-            <ProblemNotifyPanel problemId={problem.id} />
-          </Sect>
-
-          {/* v0.10.1032 — ikincil, KAPALI gelir; runbook koşuları
-              (useRunbookExecutions) bölüm açılınca çekilir. */}
-          <Sect title="Runbook" collapsible
-            sub={problem.runbookUrl ? 'runbook bağlantısı var' : undefined}>
-            {problem.runbookUrl && (
-              <SafeHref href={problem.runbookUrl}
-                style={{
-                  display: 'inline-block', marginBottom: 8,
-                  fontSize: 12, padding: '4px 12px', borderRadius: 'var(--radius-sm)',
-                  background: 'var(--accent-soft)', border: '1px solid var(--accent)',
-                  color: 'var(--accent2)', textDecoration: 'none',
-                }}>
-                Runbook ↗
-              </SafeHref>
-            )}
-            {/* Problem→Runbook bridge: run an operational runbook against this
-                fire (tagged with problemId) + the runs already attached. */}
-            <ProblemRunbookPanel problemId={problem.id} />
-          </Sect>
-
-          {/* v0.10.1055 — gizleme rozetle (isAnomaly) DEĞİL, yalnız "anomaly:"
-              dedektör ailesiyle: terfi Problem'inin açıklaması (tür / desen /
-              tepe oranı / sayı) ve kümenin üye listesi sayfadaki tek insan-okur
-              metin — rozet gelince kaybolmamalı. */}
-          {problem.description && !isAnomalyDetectorRule(problem.ruleId) && (
-            <Sect title="Description" collapsible>
-              <pre className="mono" style={{
-                margin: 0, fontSize: 11.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
-                color: 'var(--text2)', background: 'var(--bg2)',
-                borderRadius: 'var(--radius-sm)', padding: '8px 10px',
-              }}>{problem.description}</pre>
-            </Sect>
-          )}
         </div>
       </div>
+
+      <Sect title="Teknik kanıt" collapsible>
+        {/* v0.10.1529 — standart kartlar (Etki · Ne zamandan beri · Güven ·
+            Kaynak + neden/bağlam/sonraki adım); başlık yukarıda. */}
+        <ProblemStandardHeader stdRef={`problem:${problem.id}`} showTitle={false} />
+        {/* v0.10.562 — deterministik insight şeridi (şüpheli · ilk anomali · rollout). */}
+        <ProblemInsightStrip problemId={problem.id} />
+        <ProblemCoSRESection problemId={problem.id} />
+        <Sect title="Kural">
+          <dl className="pd-rule">
+            <dt>Ad</dt><dd>{problem.ruleName || '—'}</dd>
+            <dt>Kimlik</dt><dd className="mono">{problem.ruleId || '—'}</dd>
+            <dt>Şiddet</dt><dd>{problem.severity}</dd>
+          </dl>
+        </Sect>
+        <div className="pd-cols pd-cols-15">
+          <div className="pd-col">
+              <Sect title="Root cause analysis" accent>
+                {/* v0.10.1032 (inceleme) — kural adı satırı KALKTI: hemen üstteki
+                    özet cümlesi kural adıyla başlıyor (ad boşsa metrikle), yani
+                    satır ekranın üstünde saf bir tekrardı. ANOMALY tür etiketi
+                    tekrar değil, kalır. */}
+                {isAnomaly && (
+                  <div style={{ fontSize: 13, marginBottom: 8 }}>
+                    {/* v0.10.922 (sade palet adım 1) — ANOMALY bir tür etiketi
+                        (üst veri), mavi değil nötr. */}
+                    <span className="badge b-gray">ANOMALY</span>
+                    {/* v0.10.2053 (D4) — ML grubunun açtığı Problem: gruba geri bağlantı. */}
+                    {mlGroupHref && (
+                      <Link to={mlGroupHref} style={{ marginLeft: 8 }} data-testid="pd-ml-group">Anomali grubunu aç ↗</Link>
+                    )}
+                  </div>
+                )}
+                {/* v0.10.230 (Influx D5) — dış kaynak öznesinde topoloji/servis
+                    tabanlı analiz yok; kanıt zinciri (metrik şeridi, trace'ler,
+                    pod'lar, log imzaları) D4'ün yazdığı hipotezden çizilir. */}
+                {isExtSeries
+                  ? <ExternalEvidencePanel problem={problem} window={probWindow} />
+                  : (
+                    // v0.10.1288 — AI SRE kartlarındaki "Kök neden paneline git" kaydırma hedefi
+                    // (panelin kendisi değişmez; ROOT_CAUSE_ANCHOR hypothesisView.ts).
+                    <div id="problem-root-cause">
+                      <RootCausePanel problemId={problem.id} service={problem.service} window={probWindow}
+                        onLoaded={rc => setRcRollouts(rc?.hypothesis?.deep?.rollouts ?? [])} />
+                    </div>
+                  )}
+                {/* Background problemExplainer's persisted first-look blurb —
+                    full prose here (the feed card only tooltips it). */}
+                {problem.aiSummary && (
+                  <div style={{
+                    fontSize: 12, color: 'var(--text2)', marginTop: 10,
+                    padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                    background: 'var(--accent-soft)',
+                    borderLeft: '2px solid var(--accent)',
+                  }}>
+                    {/* v0.9.696 — exception ikiziyle aynı: markdown basılıyor. */}
+                    <IconSparkles size={11} /> <RenderedMarkdown text={problem.aiSummary} />
+                  </div>
+                )}
+                {problem.recentDeploy && (
+                  <DeployBox version={problem.recentDeploy.version} ageSeconds={problem.recentDeploy.ageSeconds} />
+                )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                  {/* v0.9.477 — iki AI affordance'ı da tek sağ çekmeceye açılır;
+                      ikisi aynı anda satır-içi açıldığında kart iki uzun metin
+                      bloğuyla şişiyordu. */}
+                  {/* v0.10.2127 (S7) — "CoSRE'ye sor" yukarıdaki "Ne yapılabilir" kutusunda. */}
+                  <AIExplainButton subject={{ kind: 'runbook', id: problem.id }}
+                    label={<><IconSparkles /> <span>Runbook AI</span></>} />
+                </div>
+              </Sect>
+
+              {/* v0.10.1282 — AI SRE araştırması (kuyruk / sonuç / Yeniden araştır). */}
+              <ProblemInvestigationPanel problemId={problem.id} />
+
+              {/* v0.10.1113 — kök neden kanıtı: başlangıç çevresinde (−10 dk … +5 dk)
+                  özne / RCA şüphelisi servislerde doğan YENİ log şablonları. Her
+                  Problem türünde tek istek; boşsa bölüm hiç çizilmez. */}
+              <ProblemNewLogTemplates problem={problem} window={probWindow} />
+
+              {/* v0.10.1032 (inceleme) — kapalı gelir: özet cümlesi değeri ve
+                  eşiği zaten söylüyor; açınca öncelik gerekçesiyle aynı blok. */}
+              <Sect title="Metric" collapsible sub={<span className="mono">{problem.metric}</span>}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                  <span className="pb-headline" style={{ fontSize: 24 }}>{problem.value.toFixed(2)}</span>
+                  <span className="mono" style={{ color: 'var(--text3)', fontSize: 13 }}>
+                    / threshold {fmtFixed(problem.threshold, 2)}
+                  </span>
+                </div>
+                {problem.priorityReason && (
+                  <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 6 }}>{problem.priorityReason}</div>
+                )}
+              </Sect>
+
+              {/* Top offenders operation_summary_5m'i SERVİS adıyla sorar; dış
+                  öznede boş tablo "suçlu yok" diye okunurdu. */}
+              {!isExternal && <ProblemOffenders problem={problem} />}
+
+              {/* v0.10.1032 — ikincil: kapalı gelir (istek atmaz — rollout
+                  işaretleri RootCausePanel'in zaten yaptığı okumadan gelir). */}
+              <Sect title="Problem timeline" collapsible>
+                <ProblemTimelineList problem={problem} rollouts={rcRollouts} />
+              </Sect>
+          </div>
+          <div className="pd-col">
+              <Sect title="Blast radius">
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {/* v0.9.860 (UX denetimi K1) — triage yolculuğunun BELKEMİĞİ.
+                      Gece 03:14 alarmının "Blast radius" pill'i servis sayfasını
+                      sticky "şimdi" penceresiyle açıyordu: alarm anının izi yok,
+                      "sorun geçmiş" yanılgısı. Pencere AYNI bileşende
+                      (probWindow) zaten hesaplı, yalnız logs/traces
+                      linklerine konuyordu. */}
+                  <SubjectLink service={problem.service} subjectKind={problem.kind}
+                    href={serviceHref(problem.service, { range: probWindow })}
+                    className={`pb-pill${problem.status === 'open' ? ' err' : ''}`}
+                    style={{ textDecoration: 'none', color: 'var(--accent2)' }} />
+                  {/* v0.9.740 (operatör): ug/sy ekip rozetleri problem
+                      detayında da.
+                      v0.9.1345 — kaynak DEĞİŞTİ. Eskiden tek kaynak katalogdu
+                      ("Problem.ownerTeam boş kalabiliyor" gerekçesiyle), ama
+                      katalog SERVİS ADIYLA anahtarlı: db konularının orada
+                      satırı yok, dolayısıyla db alarmları sahipsiz görünüyordu.
+                      Artık problemin kendi alanı önce (sunucuda türetiliyor),
+                      katalog yalnız yedek. Türetilmiş değer ≈ ile işaretli. */}
+                  <ProblemTeamChips problem={problem} />
+                  {/* v0.9.401 (operator-reported) — runtime pod problemleri artık
+                      gerçek servis adı taşıyor; pod kimliği deterministik ID'nin
+                      son segmentinde (runtime:<check>:<svc>:<pod> — evaluator
+                      runtimeProblemID). Tek yerde çözülür, yapısal `pod` kolonu
+                      ayrı dilim. Link Pods sekmesine ?jpod= ile gider —
+                      v0.9.533'ten beri ilgili pod SATIRI otomatik açılıp
+                      görünüme kaydırılır (eski JMX-bölümü daraltması
+                      kaldırıldı; satır genişletmesi aynı JMX'i veriyor). */}
+                  {(() => {
+                    // v0.9.403 — yapısal alan öncelikli; ID-parse yalnız 401
+                    // öncesi ESKİ satırlar için köprü (pod kolonu boş gelir).
+                    let pod = problem.pod ?? '';
+                    if (!pod && problem.id?.startsWith('runtime:')) {
+                      const segs = problem.id.split(':');
+                      pod = segs.length >= 4 ? segs[segs.length - 1] : '';
+                    }
+                    if (!pod || pod === problem.service) return null;
+                    return (
+                      <Link to={serviceHref(problem.service, { range: probWindow, tab: 'infra', params: { jpod: pod } })}
+                        className="pb-pill"
+                        style={{ textDecoration: 'none', color: 'var(--accent2)' }}
+                        title="Bu podun JMX/runtime grafikleri (Pods sekmesi, pod daraltmalı)">
+                        <span className="dot" /> pod <span className="mono">{pod}</span> →
+                      </Link>
+                    );
+                  })()}
+                  {(problem.clusters ?? []).map(c => (
+                    <span key={c} className="pb-pill"><span className="dot" /> <span className="mono">{c}</span></span>
+                  ))}
+                </div>
+                          {/* v0.10.707 — etkilenen varlıklar: çağıranlar ∪ hipotez pod'ları ∪ cluster'lar. */}
+                <div style={{ marginTop: 10 }}>
+                  <AffectedEntitiesList problemId={problem.id} service={problem.service} window={probWindow} />
+                </div>
+              </Sect>
+
+              <Sect title="Correlated signals">
+                {/* v0.10.1106 — terfi Problem'inin log deseni kaynağı: desene uyan
+                    satırlarla /logs (olay detayının "Logları aç"ı; özne dalından
+                    bağımsız — servissiz desen olayında da). Diğerlerinde null. */}
+                <PromotedPatternLogsLink problem={problem} />
+                {/* v0.9.1339 (entity-model Faz 4b) — bu bölümün TAMAMI bir
+                    SERVİS ADI varsayıyor: /logs `service.name:"…"`, /traces
+                    `?service=`, /service-map `?focus=`. Özne bir veritabanı
+                    örneğiyse (db-capacity alarmları) üçü de BOŞ açılır ve
+                    operatör bunu "olay yok" diye okur — v0.9.1331'in
+                    "boş liste yanlış cevaptır" dersinin aynısı.
+                    Ölçüldü 2026-08-24: receiver instance'ı hiçbir
+                    spans.service_name ile eşleşmiyor (kesişim 0 satır).
+                    Çalışmayan dört link yerine NEDEN olmadığını söyleyen tek
+                    satır. */}
+                {/* v0.10.1073 — db-health kural id'si veritabanı ÜÇLÜSÜNÜ taşır:
+                    Databases detayı ve o veritabanının trace'leri boş açılmaz
+                    (dbHealthPivots.ts). Diğer db öznelerinde aşağıdaki cümle sürer. */}
+                {dbHealthLinks ? (<>
+                  <SignalLink to={dbHealthLinks.databaseHref} label="◫ Veritabanı sayfası" sub="db detayı, problem penceresi" />
+                  <SignalLink to={dbHealthLinks.tracesHref} label="⋮ Trace'ler" sub="bu veritabanı, problem penceresi" />
+                  <SignalLink to={dbHealthLinks.errorTracesHref} label="⋮ Hatalı trace'ler" sub="bu veritabanı, problem penceresi, yalnız hatalar" />
+                  {/* v0.10.1083 — hata sayısı kolu (ORA patlaması): hangi hata kodu,
+                      hangi çağıran — Databases detayının hata kartı. */}
+                  <SignalLink to={dbHealthLinks.errorsHref} label="⚠ Hata kırılımı" sub="hata kodu → exception tipi → mesaj, problem penceresi" />
+                </>) : subjectKind(problem.service, problem.kind) !== 'service' ? (
+                  <div style={{ fontSize: 12, color: 'var(--text3)' }}>
+                    {isExternal
+                      ? 'Bu alarmın öznesi bir dış metrik kaynağı serisi, bir servis değil — ilgili trace/pod/log kanıtı yukarıdaki kanıt zincirinde.'
+                      : 'Bu alarmın öznesi bir veritabanı örneği, bir servis değil — log/trace/servis-haritası pivotları bir servis adı gerektiriyor.'}
+                  </div>
+                ) : (<>
+                {/* v0.10.1091 — yaygın yavaşlama (svc-slowdown): önce hangi
+                    operasyonların yavaşladığı ve yavaş trace'ler (svcSlowdownPivots.ts). */}
+                {svcSlowLinks && (<>
+                  <SignalLink to={svcSlowLinks.serviceHref} label="◫ Servis sayfası" sub="problem penceresi" />
+                  <SignalLink to={svcSlowLinks.operationsHref} label="☰ Operasyonlar" sub="Operations sekmesi, problem penceresi" />
+                  <SignalLink to={svcSlowLinks.slowTracesHref} label="◷ Yavaş trace'ler"
+                    sub={`≥ ${Math.round(svcSlowLinks.slowMinMs)} ms, problem penceresi`} />
+                </>)}
+                <SignalLink to={logsLink} label="≡ Logs" sub="service, problem window" />
+                <SignalLink to={logsErrorLink} label="≡ Logs (yalnız hatalar)" sub="service, problem window, severity ≥ ERROR" />
+                <SignalLink to={logsPatternsLink} label="≡ Loglar (desenler)" sub="service, problem window, Desenler paneli açık" />
+                {/* v0.8.512 (perf raporu #12) — pivot problem penceresini
+                    taşır: logs ile aynı custom range, yoksa /traces global
+                    range'iyle açılıp problemle ilgisiz trace gösteriyordu. */}
+                {/* v0.8.585 — Operator-reported: rootOnly default'u TRUE
+                    olduğundan hata izleri (çoğu non-root span) boş
+                    listeleniyordu; hasError linki root filtresini kapatır. */}
+                {/* v0.9.1356 — el-yapımı `custom:` dizesi aile üreticisine indi.
+                    Pencere PROBLEMİN penceresi (probWindow), yani bu sayfanın
+                    öznesinin penceresi — kardeş üç link (Logs / Slow traces /
+                    Service) zaten aynısını taşıyor. Yan etkisi bir kusuru da
+                    kapattı: elle kurulan hâl logsFrom/logsTo'yu Math.round ile
+                    üretiyordu ve yuvarlama pencereyi İKİ UÇTAN yarım ms
+                    daraltabiliyordu; üretici floor/ceil uyguluyor. */}
+                <SignalLink to={tracesPivotHref({
+                  window: probWindow, service: problem.service,
+                  hasError: true, rootOnly: false,
+                })} label="⋮ Error traces" sub="service, problem window" />
+                {/* v0.9.961 (UX denetimi G4/Ö7) — GECİKME alarmının kendi
+                    pivotu. Tek trace linki `hasError=true` sabitliydi ve bir
+                    p99-eşik alarmında yavaşlık çoğu zaman HATASIZ span'lerde
+                    olur: operatör boş bir "Error traces" listesi görüp yavaş
+                    trace'i servis→endpoint→traces turuyla arıyordu.
+                    Link yalnız birimi ADINDA beyan eden (`*_ms`) metriklerde
+                    çizilir — yanlış birimle kıstırılmış bir liste "yavaş
+                    trace yok" diye okunurdu (v0.6.36 sınıfı). */}
+                {(() => {
+                  const thr = latencyThresholdMs(problem);
+                  // v0.10.1091 — yaygın yavaşlamada yavaş trace linki yukarıda.
+                  if (thr === null || svcSlowLinks) return null;
+                  return (
+                    // v0.9.1331 — probWindow DOĞRUDAN geçiyor (gerçek ns). Önce
+                    // logsFrom/logsTo (ms) geçiliyordu ve imza fromNs diyordu:
+                    // çalışıyordu ama ad yalan söylüyordu.
+                    <SignalLink
+                      to={slowTracesHref(problem.service, thr, probWindow)}
+                      label="◷ Slow traces"
+                      sub={`≥ ${Math.round(thr)} ms (eşik), problem window`} />
+                  );
+                })()}
+                <SignalLink to={`/service-map?focus=${encodeURIComponent(problem.service)}`}
+                  label="◉ Service map" sub="focused" />
+                </>)}
+              </Sect>
+
+              {/* v0.10.452 (log arama denetimi C1) — log kanıtı: yalnız servis
+                  özneli problemde (db/dış öznenin logu yok — yukarıdaki kapı),
+                  varsayılan kapalı, açılınca tek istek (ES maliyeti).
+                  v0.10.1032 — Sect BİLEREK açılır-kapanır yapılmadı: gövdesi zaten
+                  tek satırlık kapalı bir disclosure ve isteği o açılınca atıyor;
+                  üstüne ikinci bir kapak, kanıta ulaşmayı iki tıka çıkarırdı. */}
+              {subjectKind(problem.service, problem.kind) === 'service' && (
+                <Sect title="Log kanıtı" sub="ERROR+ desenler, problem penceresi · açılınca yüklenir">
+                  <ProblemLogEvidence service={problem.service} startedAt={problem.startedAt} resolvedAt={problem.resolvedAt} linkWindow={probWindow} />
+                </Sect>
+              )}
+
+              {/* v0.9.1344 — "bu problemden kimin haberi var?" Triyaj eden
+                  operatörün bu soruyu soracağı yer burası; cevabı bugüne
+                  kadar YALNIZ /events'te, elle pencere daraltarak
+                  bulunabiliyordu — yani pratikte hiç bulunamıyordu. */}
+              {/* v0.10.1032 — ikincil, KAPALI gelir. Panel kendi sorgusunu mount
+                  anında atıyor (yoklama yok); kapalı Sect gövdeyi mount etmediği
+                  için bildirim geçmişi artık ancak bölüm açılınca çekilir. */}
+              <Sect title="Bildirim" collapsible>
+                <ProblemNotifyPanel problemId={problem.id} />
+              </Sect>
+
+              {/* v0.10.1032 — ikincil, KAPALI gelir; runbook koşuları
+                  (useRunbookExecutions) bölüm açılınca çekilir. */}
+              <Sect title="Runbook" collapsible
+                sub={problem.runbookUrl ? 'runbook bağlantısı var' : undefined}>
+                {problem.runbookUrl && (
+                  <SafeHref href={problem.runbookUrl}
+                    style={{
+                      display: 'inline-block', marginBottom: 8,
+                      fontSize: 12, padding: '4px 12px', borderRadius: 'var(--radius-sm)',
+                      background: 'var(--accent-soft)', border: '1px solid var(--accent)',
+                      color: 'var(--accent2)', textDecoration: 'none',
+                    }}>
+                    Runbook ↗
+                  </SafeHref>
+                )}
+                {/* Problem→Runbook bridge: run an operational runbook against this
+                    fire (tagged with problemId) + the runs already attached. */}
+                <ProblemRunbookPanel problemId={problem.id} />
+              </Sect>
+
+              {/* v0.10.1055 — gizleme rozetle (isAnomaly) DEĞİL, yalnız "anomaly:"
+                  dedektör ailesiyle: terfi Problem'inin açıklaması (tür / desen /
+                  tepe oranı / sayı) ve kümenin üye listesi sayfadaki tek insan-okur
+                  metin — rozet gelince kaybolmamalı. */}
+              {problem.description && !isAnomalyDetectorRule(problem.ruleId) && (
+                <Sect title="Description" collapsible>
+                  <pre className="mono" style={{
+                    margin: 0, fontSize: 11.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
+                    color: 'var(--text2)', background: 'var(--bg2)',
+                    borderRadius: 'var(--radius-sm)', padding: '8px 10px',
+                  }}>{problem.description}</pre>
+                </Sect>
+              )}
+          </div>
+        </div>
+      </Sect>
     </PageShell>
   );
 }

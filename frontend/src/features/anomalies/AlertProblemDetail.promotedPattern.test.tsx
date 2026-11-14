@@ -115,6 +115,11 @@ async function mount(p: Problem): Promise<HTMLElement> {
 const title = (s: Element) => (s.querySelector(':scope > .h')?.textContent ?? '').replace(/^[▸▾]\s*/, '');
 const sect = (el: HTMLElement, t: string) =>
   [...el.querySelectorAll<HTMLElement>('.pb-sect')].find(s => title(s).startsWith(t));
+// v0.10.2127 (S7) — Correlated signals / kök neden KAPALI "Teknik kanıt"ta.
+const openTech = async (el: HTMLElement) => {
+  act(() => { sect(el, 'Teknik kanıt')!.querySelector<HTMLButtonElement>(':scope > .h button[aria-expanded]')!.click(); });
+  await settle();
+};
 
 beforeEach(() => { m.source = {}; m.sourceCalls = []; m.seriesCalls = []; });
 afterEach(() => {
@@ -124,7 +129,8 @@ afterEach(() => {
 });
 
 describe('AlertProblemDetail — terfi Problem\'inde desen sayısı grafiği (v0.10.1106)', () => {
-  it('log deseni kaynaklı terfi Problem\'i: sol kolonun ilk bölümü "Desen sayısı", açık; desen log pivotu', async () => {
+  // v0.10.2127 (S7) — grafik artık SAĞ sütunun ilk bölümü (dört kutunun yanında).
+  it('log deseni kaynaklı terfi Problem\'i: sağ sütunun ilk bölümü "Desen sayısı", açık; desen log pivotu', async () => {
     m.source = { sourceEvent: {
       id: FP, kind: 'log_pattern', pattern: 'Oracle errors (ORA-)', service: 'svc-orders',
       startedAt: T0, lastSeen: T0 + 20 * MIN, status: 'active',
@@ -136,11 +142,12 @@ describe('AlertProblemDetail — terfi Problem\'inde desen sayısı grafiği (v0
     expect(s!.querySelector(':scope > .h button[aria-expanded]'), 'kapanır olmamalı — açık gelir').toBeNull();
     expect(s!.querySelector('[data-panel]')?.getAttribute('data-viz')).toBe('bars');
     expect(s!.querySelector('[data-panel]')?.getAttribute('data-regions')).toContain('başladı');
-    const leftCol = el.querySelector('.pd-cols')!.children[0];
-    expect(leftCol.querySelector('.pb-sect')).toBe(s);
+    const chartCol = el.querySelector('.pd-cols')!.children[1];
+    expect(chartCol.querySelector('.pb-sect')).toBe(s);
     // Grafik ve pivot AYNI anahtarla okur: desen adı olaydan, aktif olayda to yok.
     expect(m.seriesCalls.length).toBeGreaterThan(0);
     expect(m.seriesCalls.every(c => c.pattern === 'Oracle errors (ORA-)' && c.toNs === undefined)).toBe(true);
+    await openTech(el);
     const signals = sect(el, 'Correlated signals')!;
     const link = [...signals.querySelectorAll('a')].find(a => a.textContent?.includes('Logları aç (desen)'));
     expect(link, 'desen log pivotu').toBeTruthy();
@@ -159,6 +166,7 @@ describe('AlertProblemDetail — terfi Problem\'inde desen sayısı grafiği (v0
     expect(m.sourceCalls).toHaveLength(1);
     expect(sect(el, 'Desen sayısı')).toBeUndefined();
     expect(m.seriesCalls).toHaveLength(0);
+    await openTech(el);
     expect(el.textContent).not.toContain('Logları aç (desen)');
   });
 
@@ -178,6 +186,7 @@ describe('AlertProblemDetail — terfi Problem\'inde desen sayısı grafiği (v0
     expect(m.sourceCalls).toHaveLength(0);
     expect(m.seriesCalls).toHaveLength(0);
     expect(sect(el, 'Desen sayısı')).toBeUndefined();
+    await openTech(el);
     expect(sect(el, 'Root cause analysis')).toBeTruthy();
   });
 });
