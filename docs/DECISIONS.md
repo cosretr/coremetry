@@ -14070,3 +14070,12 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - Ölü CSS silindi (sınıf adı `src/` altında hiçbir `.ts` / `.tsx`'te geçmiyor): `.btn-disclose.dsc-caps`, `.stat-sub` (+ `.stat-sub .mono`). Kullanılmayan export çıkmadı. `inlineStyleRatchet` TOTAL'ına dokunulmadı (servis sayfası göç listesinde değil; ölçülen 3715, tavan 3881).
 - Görünüm ve davranış değişikliği amaçlanmadı. Bulundu, DÜZELTİLMEDİ (görünümü değiştirir → operatör kararı): `.heap-near-b` / `.rt-flat` üst-alt dolgusu ve `.heap-near-foot` alt boşluğu dosyada sonra gelen `.ov-card-b { padding: 16px }` ve `.kc-line { margin-bottom }` kurallarına yeniliyor; S9 "sınıra en yakın" ve S10 "Düz" kartları 10px yerine 16px dolguyla çiziliyor.
 - Doğrulanmadı: tarayıcıda görünüm (piksel karşılaştırması yapılmadı), prod.
+
+
+## 2026-11-14 — v0.10.2165 — Login sol alt satır: saklanan toplam span (operatör)
+- Operatör kararı (soru: "Login sol alt: 'bugünkü span' mı kalsın, saklama süresinin toplamı mı" → "toplamı"). Sol alt durum satırı artık "… services monitored · 4.2B spans stored · …" yazar. Kapsam YALNIZ bu satır: sağdaki KPI kartı ve `spans_today` alanı aynen kalır.
+- Sayı Sistem sayfasının gösterdiği `SpansAllTime` ile AYNI (operatör: "zaten sistem sayfalarında vardı"): `system.parts` `sum(rows)`, aktif part'lar, geçerli veritabanı, tablo `spans` / `spans_local` (küme kipinde `cluster('<ad>', system.parts)` — shard başına tek replika, çift sayım yok). Yeni tanım yok; yeni kolon / MV yok; ham `spans` taraması yok. Login turu `GetSystemStats`'ın tamamını koşmaz — tek küçük sorgu (`chstore.TotalSpanRows`), yavaş turda (≈5 dk). Tablo kümesinin `normalizeStorageTableName` ile tutarlılığı testle çivili.
+- Cevap alanı `components.spans_stored` (yalnız sayı; anonim uç beyaz listesine eklendi). Özet paneli kapalıyken alan yok ve sorgu koşmaz.
+- Okuma hata verirse alan DÜŞER (eski değer taşınmaz) ve satırdaki span parçası atlanır; `spans_today`'e geri düşülmez — iki farklı anlam aynı yerde görünmesin. Bilinen fark: aynı turdaki `clickhouse_uncompressed_bytes` hata turunda son iyi değerini KORUR (mevcut davranış, dokunulmadı).
+- Anlık görüntü sürümü (`SnapshotVersion`) artmadı: alan isteğe bağlı; eski sürümün yayınladığı görüntüde yoktur ve satırda span parçası o görüntü yenilenene kadar çıkmaz.
+- Doğrulanmadı: canlı ClickHouse'ta sorgu (tek düğüm ve küme kipi), Sistem sayfasındaki sayıyla yan yana karşılaştırma, tarayıcıda görünüm, prod.

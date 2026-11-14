@@ -165,6 +165,45 @@ func (s *Store) TotalUncompressedBytes(ctx context.Context) (uint64, error) {
 	return n, nil
 }
 
+// spanStorageTables — span satırlarını TAŞIYAN tablo adları: tek düğümde
+// `spans`, dağıtık kurulumda shard başına `spans_local` (Distributed `spans`
+// tablosunun part'ı yoktur, yani ikisini birlikte süzmek çift saymaz).
+// Sistem sayfası aynı kümeyi normalizeStorageTableName ile çözer (her iki ad
+// → "spans"); TestSpanStorageTablesMatchSystemStats bu tutarlılığı çiviler.
+var spanStorageTables = []string{"spans", "spans_local"}
+
+// totalSpanRowsSQL — SAF (v0.10.2165): saklanan toplam span satırı. Sistem
+// sayfasındaki SpansAllTime ile AYNI sayı (sysstats.go: system.parts
+// `sum(rows)`, aktif part'lar, geçerli veritabanı, `spans` / `spans_local`
+// → `spans`); yeni bir tanım değil, o sayının tek sorguluk okuması — login
+// turu GetSystemStats'ın tamamını (çok sorgu) koşmaz. Yalnız metadata: ham
+// `spans` taraması yok. Kaynak totalUncompressedBytesSQL ile aynı kalıp:
+// küme kipinde `cluster('<ad>', system.parts)` (shard başına TEK replika →
+// çift sayım yok), değilse `system.parts`; güvensiz küme adı gömülmez.
+func totalSpanRowsSQL(clusterName string) string {
+	src := "system.parts"
+	if cn := strings.TrimSpace(clusterName); cn != "" && safeClusterIdent(cn) {
+		src = "cluster('" + cn + "', system.parts)"
+	}
+	return fmt.Sprintf(`
+		SELECT sum(rows)
+		FROM %s
+		WHERE database = currentDatabase() AND active = 1
+		  AND table IN ('%s')
+		LIMIT 1
+		SETTINGS max_execution_time = 8`, src, strings.Join(spanStorageTables, "', '"))
+}
+
+// TotalSpanRows — saklama süresindeki toplam span sayısı (yaklaşık anlık:
+// aktif part'ların satır toplamı). Login sol alt durum satırını besler.
+func (s *Store) TotalSpanRows(ctx context.Context) (uint64, error) {
+	var n uint64
+	if err := s.conn.QueryRow(ctx, totalSpanRowsSQL(s.cfg.ClusterName)).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
 // loginDBNamesSQL — v0.10.1931: verilen (db_system, instance) çiftleri için
 // son pencerede en çok çağrılan veritabanı adı (db.name). MV okuması
 // (db_summary_5m); süzgeç ORDER BY önekinde (db_system, instance) → yalnız

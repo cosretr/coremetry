@@ -121,6 +121,14 @@ type fakeStore struct {
 	dbNameKeys                                     []string
 	vols                                           map[string]uint64
 	volsErr                                        error
+	spanRows                                       uint64
+	spanRowsErr                                    error
+	spanRowsCalls                                  int
+}
+
+func (f *fakeStore) TotalSpanRows(ctx context.Context) (uint64, error) {
+	f.spanRowsCalls++
+	return f.spanRows, f.spanRowsErr
 }
 
 func (f *fakeStore) CountLoginEndpoints(ctx context.Context) (uint64, error) {
@@ -200,7 +208,7 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	h := &harness{
-		st:    &fakeStore{edges: fixtureEdges(), bytes: 1 << 40, cosre: 5, act: chstore.SelfActivityTotals{Logins: 12}, endpoints: 420},
+		st:    &fakeStore{edges: fixtureEdges(), bytes: 1 << 40, cosre: 5, act: chstore.SelfActivityTotals{Logins: 12}, endpoints: 420, spanRows: 4_230_000_000},
 		vm:    newFakeVM(),
 		redis: &fakeRedis{},
 		clk:   &clock{t: time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)},
@@ -501,6 +509,32 @@ func TestBuilderActivityNeedsBothSources(t *testing.T) {
 	}
 }
 
+// v0.10.2165 — saklanan toplam span: ilk turda (yavaş tur) okunur; 5 dk'lık
+// ritimde — hızlı turda yeniden sorulmaz, değer taşınır; okuma hata verirse
+// alan DÜŞER (eski sayı taşınmaz, uydurulmaz), düzelince geri gelir.
+func TestBuilderSpansStored(t *testing.T) {
+	h := newHarness(t)
+	s1 := h.step()
+	if s1.SpansStored == nil || *s1.SpansStored != 4_230_000_000 {
+		t.Fatalf("ilk tur saklanan span sayısını yayınlamalı: %v", s1.SpansStored)
+	}
+	calls := h.st.spanRowsCalls
+	h.advance(30 * time.Second)
+	if s := h.step(); h.st.spanRowsCalls != calls || s.SpansStored == nil || *s.SpansStored != 4_230_000_000 {
+		t.Errorf("hızlı tur yeniden sormaz, değeri taşır: calls %d→%d val=%v", calls, h.st.spanRowsCalls, s.SpansStored)
+	}
+	h.st.spanRowsErr = errors.New("parts")
+	h.advance(6 * time.Minute)
+	if s := h.step(); s.SpansStored != nil {
+		t.Errorf("okuma hatasında alan düşmeli, eski değer taşınmamalı: %d", *s.SpansStored)
+	}
+	h.st.spanRowsErr, h.st.spanRows = nil, 4_300_000_000
+	h.advance(6 * time.Minute)
+	if s := h.step(); s.SpansStored == nil || *s.SpansStored != 4_300_000_000 {
+		t.Errorf("düzelince yeni değer: %v", s.SpansStored)
+	}
+}
+
 // Birikimli yapılar (topoloji, boyut) hata turunda son iyi hâlini korur.
 func TestBuilderSlowItemsKeepLastGoodOnFailure(t *testing.T) {
 	h := newHarness(t)
@@ -611,8 +645,12 @@ func TestBuilderPanelOffTopologyOnReadsOnlyTopology(t *testing.T) {
 	}
 	panel = false
 	counts, vmq, eps, topo := h.st.countsCalls, h.vm.calls["q1"], h.st.endpointCalls, h.st.topoCalls
+	spanRowsCalls := h.st.spanRowsCalls
 	h.advance(6 * time.Minute)
 	s := h.step()
+	if h.st.spanRowsCalls != spanRowsCalls {
+		t.Errorf("panel kapalıyken saklanan span sayısı okunmaz: %d→%d", spanRowsCalls, h.st.spanRowsCalls)
+	}
 	if h.st.countsCalls != counts || h.vm.calls["q1"] != vmq || h.st.endpointCalls != eps {
 		t.Errorf("panel kapalıyken sayı/VM/endpoint okunmaz: counts %d→%d vm %d→%d eps %d→%d",
 			counts, h.st.countsCalls, vmq, h.vm.calls["q1"], eps, h.st.endpointCalls)
@@ -620,7 +658,7 @@ func TestBuilderPanelOffTopologyOnReadsOnlyTopology(t *testing.T) {
 	if h.st.topoCalls != topo+1 || s.Topo == nil {
 		t.Errorf("topoloji okunmalı: %d→%d", topo, h.st.topoCalls)
 	}
-	if s.SpansToday != nil || s.Ring != nil || s.Activity != nil || s.Endpoints != nil || s.CHBytes != nil {
+	if s.SpansToday != nil || s.Ring != nil || s.Activity != nil || s.Endpoints != nil || s.CHBytes != nil || s.SpansStored != nil {
 		t.Errorf("panel alanları anlık görüntüde tutulmamalı: %+v", s)
 	}
 	if s.State != StateOK {

@@ -92,6 +92,9 @@ type Components struct {
 	State     string  `json:"state"`      // ok | degraded
 	CheckedAt int64   `json:"checked_at"` // unix ms
 	CHBytes   *uint64 `json:"clickhouse_uncompressed_bytes,omitempty"`
+	// SpansStored — v0.10.2165: saklama süresindeki toplam span (Sistem
+	// sayfasındaki SpansAllTime ile aynı sayı; chstore.TotalSpanRows).
+	SpansStored *uint64 `json:"spans_stored,omitempty"`
 }
 
 // Katman adları ve bileşen durumları (kapalı kümeler).
@@ -136,6 +139,8 @@ type Snapshot struct {
 	State     string  `json:"state"`
 	CheckedAt int64   `json:"checked_at"` // unix ms
 	CHBytes   *uint64 `json:"ch_bytes,omitempty"`
+	// SpansStored — v0.10.2165: yavaş turda okunur; okunamazsa nil (eski değer taşınmaz).
+	SpansStored *uint64 `json:"spans_stored,omitempty"`
 }
 
 type SnapActivity struct {

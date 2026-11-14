@@ -52,7 +52,7 @@ Kaynak pinleri (2. dilimde güncellenir): `styles/publicBackground.test.ts:43-68
 
 ## 4. Uç sözleşmesi ve sızıntı tablosu
 
-Cevap (alan adları operatörün verdiği gibi): `enabled`, `ready`, `generated_at`, `spans_today`, `traces_today`, `services_monitored`, `http_24h{from,to,step_s,status[],avg,p95?,summary{now_rps,peak_rps,peak_at,avg_now_s,p95_now_s?}}`, `activity_24h{rollouts_tracked?,logins,cosre_questions,traces_viewed}`, `topology{window_s,nodes[{id,tier,weight,name?}],edges[{from,to,weight}]}`, `components{state,checked_at,clickhouse_uncompressed_bytes?}`. Özet kapalıysa `{"enabled":false}`; anlık görüntü yok ya da 15 dk'dan eskiyse `{"enabled":true,"ready":false}`. Seriler `SpanMetricSeries` biçimindedir (`lib/types.ts:4584-4593`, zaman unix ns).
+Cevap (alan adları operatörün verdiği gibi): `enabled`, `ready`, `generated_at`, `spans_today`, `traces_today`, `services_monitored`, `http_24h{from,to,step_s,status[],avg,p95?,summary{now_rps,peak_rps,peak_at,avg_now_s,p95_now_s?}}`, `activity_24h{rollouts_tracked?,logins,cosre_questions,traces_viewed}`, `topology{window_s,nodes[{id,tier,weight,name?}],edges[{from,to,weight}]}`, `components{state,checked_at,clickhouse_uncompressed_bytes?,spans_stored?}` (`spans_stored` v0.10.2165). Özet kapalıysa `{"enabled":false}`; anlık görüntü yok ya da 15 dk'dan eskiyse `{"enabled":true,"ready":false}`. Seriler `SpanMetricSeries` biçimindedir (`lib/types.ts:4584-4593`, zaman unix ns).
 
 | Alan | Kaynak | Kimliksiz birine ne söyler | Hüküm |
 |---|---|---|---|
@@ -73,6 +73,7 @@ Cevap (alan adları operatörün verdiği gibi): `enabled`, `ready`, `generated_
 | `nodes[].name` | Servis adı; db/kuyrukta yalnız sistem adı ("redis", "kafka") | Servis adları | Yalnız "isimli" kipte |
 | `components.state`, `.checked_at` | Tazeleyicinin kendi turu (§5.5) | Sistemin ayakta olduğu; ayrıntı yok | Döner |
 | `components.clickhouse_uncompressed_bytes` | `system.parts` toplamı (§5.5) | Saklanan verinin büyüklüğü | Döner (operatör kararı) |
+| `components.spans_stored` (v0.10.2165) | `system.parts` `sum(rows)`, tablo `spans` / `spans_local`, aktif part'lar (§5.5) — Sistem sayfasındaki `SpansAllTime` ile aynı sayı | Saklama süresindeki toplam span sayısı (yaklaşık anlık) | Döner (operatör kararı 2026-11-14: sol alt satır "bugünkü" değil "toplamı") |
 | Shard × replika, rol listesi | `system.clusters` (`api/clickhouse_health.go:249-255`) | Altyapı yerleşimi | **Dönmez** |
 | Cluster sayısı (mockup sol alt) | `topology_edges_5m.cluster` (probe'lu kolon, `store.go:4811`) | Altyapı büyüklüğü | **Dönmez** (istekte yok) |
 | db instance, host, topic, `ext:` düğümleri, namespace, route | `child_node` önekleri (`chstore/identity.go:90-95`) | İç adlandırma | **Dönmez**, "isimli" kipte de |
@@ -129,6 +130,7 @@ Okuma: `ReadServiceTopologyAgg(ctx, şimdi−15 dk, şimdi, 5000)` (`chstore/top
 ### 5.5 `components`
 - `state`: tazeleyicinin son turunda CH sayıları başarılı ve (VM kapalı ya da Q1 başarılı) ise `ok`, değilse `degraded`. `/api/health` pod-yerel kuyruk durumudur (`api/api.go:9302`), filo özeti değildir; bu yüzden kopyalanmaz.
 - `clickhouse_uncompressed_bytes`: hazır toplam yok. `GetSystemStats` tablo başına döner, MV iç tablolarını dışlar ve 8'den fazla sorgu koşar (`chstore/sysstats.go:444, 473-493`). Yeni tek sorgu `TotalUncompressedBytes(ctx)` (Y): `SELECT sum(data_uncompressed_bytes) FROM <kaynak> WHERE database = currentDatabase() AND active = 1 LIMIT 1 SETTINGS max_execution_time = 8`, `s.conn`.
+- `spans_stored` (v0.10.2165): `TotalSpanRows(ctx)` — `SELECT sum(rows) FROM <kaynak> WHERE database = currentDatabase() AND active = 1 AND table IN ('spans', 'spans_local') LIMIT 1 SETTINGS max_execution_time = 8`, `s.conn`. Yalnız metadata, ham `spans` taraması yok; Distributed tablonun part'ı olmadığı için iki ad birlikte çift saymaz (tek düğümde `spans`, dağıtıkta `spans_local`). Sistem sayfasının `SpansAllTime` sayısıyla aynı kaynak ve tablo kümesi (`normalizeStorageTableName`; test çivili) — login turu `GetSystemStats`'ın tamamını koşmaz. Yavaş turda (≈5 dk) okunur; hata → alan düşer (eski değer taşınmaz). Yalnız sol alt durum satırı okur ("N spans stored"); sağdaki KPI `spans_today` olarak kalır.
 - `<kaynak>` mevcut kuralla aynı: küme kipinde `cluster('<ad>', system.parts)`, değilse `system.parts` (`sysstats.go:473-475`). `cluster()` shard başına tek replika okur, çift saymaz; `clusterAllReplicas` çift sayardı (`sysstats.go:521-524`).
 - MV iç tabloları **dahildir** ("toplam veri"); Admin → Stats tablosunun toplamından büyük çıkar.
 - Tazeleyicide 5 dk'da bir koşar. Hata olursa alan dönmez, satır boyut göstermez. İstemci `fmtBytes` ile biçimler (`lib/utils.ts:132`).

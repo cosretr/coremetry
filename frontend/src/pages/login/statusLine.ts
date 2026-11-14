@@ -20,9 +20,12 @@ export function loginStatusLine(s: LoginSummary | undefined | null, topoServices
   const parts: string[] = [];
   const n = s?.services_monitored ?? topoServices;
   if (n > 0) parts.push(`${n.toLocaleString('en-US')} services monitored`);
-  // v0.10.2152 (operatör: "sol altta total span sayısı da yazsın servisler ile birlikte") — bugünkü span.
-  const sp = s?.spans_today;
-  if (sp && sp > 0) parts.push(`${fmtNum(sp)} spans today`);
+  // v0.10.2152 (operatör: "sol altta total span sayısı da yazsın servisler ile birlikte").
+  // v0.10.2165 (operatör, 2026-11-14: "bugünkü span mı kalsın, saklama süresinin toplamı mı" → "toplamı") —
+  // saklanan toplam span (`components.spans_stored`, Sistem sayfasıyla aynı sayı). Alan yoksa parça ATLANIR;
+  // bugünkü sayıya geri düşülmez (iki farklı anlam aynı yerde görünmesin). Sağdaki KPI `spans_today` olarak kalır.
+  const sp = s?.components?.spans_stored;
+  if (sp && sp > 0) parts.push(`${fmtNum(sp)} spans stored`);
   const b = s?.components?.clickhouse_uncompressed_bytes;
   if (b && b > 0) parts.push(`ClickHouse ${fmtStorage(b)} uncompressed`);
   const st = s?.components?.state;

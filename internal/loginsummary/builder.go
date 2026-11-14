@@ -79,6 +79,7 @@ type Store interface {
 	CountCosreQuestions(ctx context.Context, since time.Time) (uint64, error)
 	ReadSelfActivityTotals(ctx context.Context, from, to time.Time) (chstore.SelfActivityTotals, error)
 	TotalUncompressedBytes(ctx context.Context) (uint64, error)
+	TotalSpanRows(ctx context.Context) (uint64, error)
 	CountLoginEndpoints(ctx context.Context) (uint64, error)
 	ReadServiceTopologyAgg(ctx context.Context, from, to time.Time, limit int) ([]chstore.ServiceTopologyEdge, error)
 	LoginDBNames(ctx context.Context, since time.Time, keys []string) (map[string]string, error)
@@ -260,6 +261,7 @@ func (b *Builder) Step(ctx context.Context) {
 	} else {
 		// Panel kapalı: panel alanları anlık görüntüde TUTULMAZ (bayat sayı yayılmasın).
 		s.SpansToday, s.TracesToday, s.Services, s.Endpoints, s.Activity, s.CHBytes, s.Ring = nil, nil, nil, nil, nil, nil, nil
+		s.SpansStored = nil
 	}
 
 	// ── yavaş: VM halkası + topoloji + CH boyutu (≈5 dk) ──
@@ -372,6 +374,16 @@ func (b *Builder) panelSlow(ctx context.Context, s *Snapshot, now time.Time) {
 	if berr == nil {
 		s.CHBytes = &n
 	}
+
+	// v0.10.2165 — saklanan toplam span (operatör: sol alt satır "bugünkü" değil
+	// "toplamı"). Sistem sayfasındaki SpansAllTime ile aynı sayı, tek küçük
+	// metadata sorgusu. Hata → alan düşer (eski değer taşınmaz, uydurulmaz).
+	s.SpansStored = nil
+	ts := time.Now()
+	if rows, err := b.d.Store.TotalSpanRows(ctx); err == nil {
+		s.SpansStored = &rows
+	}
+	b.timed("spans_stored", ts)
 }
 
 // fetch — bir pencere için HTTP hızı (q1) + HTTP süre toplamı (q2) + gRPC +

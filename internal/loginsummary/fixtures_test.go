@@ -56,6 +56,7 @@ func baseSnapshot(now time.Time) *Snapshot {
 		Endpoints: u64(420),
 		Topo:      BuildTopology(sil, salt),
 		State:     StateOK, CheckedAt: now.UnixMilli(), CHBytes: u64(1 << 40),
+		SpansStored: u64(4_230_000_000),
 	}
 }
 

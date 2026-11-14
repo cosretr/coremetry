@@ -12521,7 +12521,9 @@ export interface LoginSummaryEdge { from: string; to: string; weight: number }
 export interface LoginSummaryTopology { window_s: number; named: boolean; nodes: LoginSummaryNode[]; edges: LoginSummaryEdge[]; stars?: [number, number][];
   /** v0.10.1947 — yıldız adları (yalnız isimli kipte); `stars` ile aynı sıra. */
   star_names?: string[] }
-export interface LoginSummaryComponents { state: 'ok' | 'degraded' | string; checked_at: number; clickhouse_uncompressed_bytes?: number }
+export interface LoginSummaryComponents { state: 'ok' | 'degraded' | string; checked_at: number; clickhouse_uncompressed_bytes?: number;
+  /** v0.10.2165 — saklama süresindeki toplam span (Sistem sayfasındaki "all time" span sayısıyla aynı kaynak); okunamadıysa alan yok. */
+  spans_stored?: number }
 export interface LoginSummary {
   enabled: boolean; ready: boolean;
   generated_at?: number; // unix ms

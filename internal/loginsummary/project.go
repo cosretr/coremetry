@@ -59,7 +59,7 @@ func Project(snap *Snapshot, f Flags) Response {
 	if state != StateOK {
 		state = StateDegraded
 	}
-	out.Components = &Components{State: state, CheckedAt: snap.CheckedAt, CHBytes: snap.CHBytes}
+	out.Components = &Components{State: state, CheckedAt: snap.CheckedAt, CHBytes: snap.CHBytes, SpansStored: snap.SpansStored}
 	return out
 }
 

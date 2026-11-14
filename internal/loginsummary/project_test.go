@@ -22,6 +22,7 @@ var allowedKeys = map[string]bool{
 	"stars":      true, // v0.10.1937: [yoğunluk, düğüm dizini] — ad yok
 	"star_names": true, // v0.10.1947: ad yalnız isimli kipte
 	"state":      true, "checked_at": true, "clickhouse_uncompressed_bytes": true,
+	"spans_stored": true, // v0.10.2165: saklanan toplam span (yalnız sayı)
 }
 
 func walkKeys(t *testing.T, v any, path string) {
@@ -118,6 +119,8 @@ func TestProjectDisabledAndNotReady(t *testing.T) {
 		r.HTTP24h != nil || r.Activity != nil || r.Components != nil {
 		t.Errorf("panel kapalıyken panel alanı sızmamalı: %s", mustJSON(t, r))
 	}
+	// v0.10.2165 — saklanan span sayısı da panel alanı (components altında): kapalıyken cevapta yok.
+	assertAbsent(t, mustJSON(t, r), []string{"spans_stored", "clickhouse_uncompressed_bytes"}, "panel kapalı")
 	assertAbsent(t, mustJSON(t, r), serviceNeedles, "panel kapalı + isimsiz topoloji")
 	if got := mustJSON(t, Project(nil, Flags{Enabled: false, Topology: TopologyAnonymous, Now: now})); got != `{"enabled":false,"ready":false}` {
 		t.Errorf("panel kapalı + anlık görüntü yok: got %s", got)
@@ -218,6 +221,17 @@ func TestProjectActivityAndComponents(t *testing.T) {
 	}
 	if resp.Endpoints == nil || *resp.Endpoints != 420 {
 		t.Errorf("endpoint sayısı: %v", resp.Endpoints)
+	}
+	// v0.10.2165 — saklanan toplam span components altında; anlık görüntüde yoksa alan da yok.
+	if resp.Components.SpansStored == nil || *resp.Components.SpansStored != 4_230_000_000 {
+		t.Errorf("saklanan span sayısı: %v", resp.Components.SpansStored)
+	}
+	if !strings.Contains(mustJSON(t, resp), `"spans_stored":4230000000`) {
+		t.Errorf("spans_stored cevapta sayı olarak yer almalı: %s", mustJSON(t, resp))
+	}
+	snap.SpansStored = nil
+	if got := mustJSON(t, Project(snap, flags(now, ""))); strings.Contains(got, "spans_stored") {
+		t.Errorf("okunamadıysa spans_stored alanı yok: %s", got)
 	}
 	// v0.10.1915 — kaldırılan alanlar cevapta geçmez.
 	assertAbsent(t, mustJSON(t, resp), []string{"rollouts_tracked", "traces_viewed"}, "kaldırılan aktivite alanı")
