@@ -103,7 +103,8 @@ async function mount(): Promise<HTMLElement> {
 const table = (el: HTMLElement) => el.querySelector('table') as HTMLTableElement | null;
 const stateRow = (el: HTMLElement) => el.querySelector('tbody tr[data-dt-state]') as HTMLElement | null;
 const dataRows = (el: HTMLElement) => el.querySelectorAll('tbody tr:not([data-dt-state])').length;
-const statGrid = (el: HTMLElement) => el.querySelector('.stat-grid');
+// v0.10.2144 (S5, mockup operatör onayı 2026-11-13) — KPI karoları kalktı; yerinde üst cümle bloğu.
+const statGrid = (el: HTMLElement) => el.querySelector('.infra-sum');
 
 beforeEach(() => {
   m.clusters = ['c1']; m.pods = []; m.failPods = new Set(); m.holdPods = false; m.entity = false;
@@ -212,6 +213,32 @@ describe('ServiceInfraTab — pod envanteri durumları Clusters tablosunun için
     expect(stateRow(el)).toBeNull();
     expect(dataRows(el)).toBe(1);
     expect(statGrid(el)).not.toBeNull();
+  });
+
+  // v0.10.2144 (S5) — dört KPI karosu yerine düz cümle + kaynak cümlesi;
+  // "Dikkat isteyenler" yalnız sapma varken.
+  it('S5: üst cümle + kaynak cümlesi; karo yok; sapma yokken Dikkat kutusu yok', async () => {
+    m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde')];
+    const el = await mount();
+    expect(el.querySelector('.stat-grid')).toBeNull();
+    const sum = statGrid(el)!;
+    expect(sum.textContent).toContain("1 pod, 1 cluster'da çalışıyor.");
+    expect(sum.textContent).toContain('CPU');
+    expect(sum.textContent).toContain('Bellek');
+    expect(el.querySelector('.infra-attn')).toBeNull();
+  });
+
+  it('S5: restart eden pod "Dikkat isteyenler"de; "pod\'ları aç" cluster satırını seçer (?icluster)', async () => {
+    m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde'), { ...pod('c1', 'orders-5d9f7c6b8-zzzzz'), phase: 'Running', restarts: 3 }];
+    const el = await mount();
+    const attn = el.querySelector('.infra-attn')!;
+    expect(attn.textContent).toContain('Dikkat isteyenler');
+    expect(attn.textContent).toContain('orders-5d9f7c6b8-zzzzz');
+    expect(attn.textContent).toContain('3 kez yeniden başladı');
+    expect(attn.querySelectorAll('li').length).toBe(1);
+    const open = [...attn.querySelectorAll('button')].find(b => b.textContent?.includes("pod'ları aç"))!;
+    await act(async () => { open.click(); });
+    expect(el.querySelector('tbody tr[aria-pressed="true"]')).not.toBeNull();
   });
 
   it('bayat satır + yenileme düştü: satırlar durur, hata başlık rozetinde görünür', async () => {

@@ -3815,6 +3815,15 @@ tbody td.dbq-detail { background: var(--bg2); padding: var(--sp-6) var(--sp-7); 
 .dbq-stat__v { font-family: var(--font-mono); color: var(--text); }
 .dbq-share { color: var(--text3); margin-left: var(--sp-3); }
 a.dbq-act { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); padding: 2px 8px; border: 1px solid var(--border); border-radius: var(--radius-xs); color: var(--text); text-decoration: none; }
+/* v0.10.2144 (servis sekmeleri S5) — Infrastructure üst cümlesi + "Dikkat
+   isteyenler" (dört KPI karosunun yerine; ton yalnız sapan metinde). */
+.infra-sum { margin: 0 0 var(--sp-7); }
+.infra-sum__line { margin: 0 0 var(--sp-2); font-size: var(--fs-md); color: var(--text); }
+.infra-sum__usage { font-size: var(--fs-sm); color: var(--text2); }
+.infra-attn { margin-top: var(--sp-4); padding: var(--sp-4) var(--sp-6); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg1); }
+.infra-attn__title { font-size: var(--fs-xs); font-weight: 600; color: var(--text2); margin-bottom: var(--sp-2); }
+.infra-attn__list { margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.infra-attn__list li { padding: var(--sp-1) 0; }
 /* v0.9.408 — Explain kanıt kutusu: kök-neden soruşturulacak span'ler
    waterfall'da çerçeveyle kutulanır (kritik-yol şeridinin ÜSTÜNE
    binebilir; ikisi farklı soruya cevap verir).

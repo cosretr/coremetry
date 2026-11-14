@@ -6,7 +6,6 @@ import { useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { LinkButton, IconButton, Button } from '@/components/ui';
 import { SectionHead } from '@/components/coremetry/SectionHead';
-import { StatTile } from '@/components/ui/StatTile';
 import { PodRing } from '@/pages/clusters/PodRing';
 import { Spinner, Empty } from '@/components/Spinner';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
@@ -18,7 +17,10 @@ import { rowActivation } from '@/lib/a11y';
 import { entityHref } from '@/lib/entityHref';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { useServicePods } from '@/pages/service/useServicePods';
-import { useEntityEnabled, useClusters } from '@/lib/queries';
+import { useEntityEnabled, useClusters, useEntityServicePods } from '@/lib/queries';
+import { mergePods } from './podsMerge';
+import { infraSentence, infraAttention, usagePhrase, ATTENTION_MAX } from './infraSummary';
+import { timeRangeToNs } from '@/lib/utils';
 import { summarizeInfraClusters, podTotals, pctOfLimit, clusterStatus, mergeClusterSeries, limitThreshold, type InfraClusterRow } from './infraClusters';
 import type { TimeRange } from '@/lib/types';
 import { ServiceKafkaClientsPanel } from './ServiceKafkaClientsPanel'; // v0.10.552
@@ -210,11 +212,6 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
     setFlash(key);
     window.setTimeout(() => setFlash(''), 1400);
   };
-  // v0.10.1206 — Pods sekmesi yok: karo tıkı en işlek cluster'ı açar (inline pod'lar).
-  const goToPods = () => {
-    if (!effCluster && clusterRows[0]) setICluster(clusterRows[0].cluster);
-    document.getElementById('infra-clusters')?.scrollIntoView({ block: 'start' });
-  };
   const flashStyle = (key: string): React.CSSProperties => ({
     outline: flash === key ? '2px solid var(--accent)' : '2px solid transparent',
     outlineOffset: 4, borderRadius: 8, transition: 'outline-color .35s',
@@ -224,7 +221,21 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
   // entity tablosu YALNIZ Pods sekmesinde yaşar (v0.10.131 burada, 145
   // her iki sekmede mount etmişti → tekrar). Infra = Thanos metrikleri;
   // ad-regex eşleşmeyince boş durum Pods sekmesine işaret eder (F5).
-  const { enabled: entityEnabled } = useEntityEnabled();
+  const { enabled: entityEnabled, clusters: entityClusters } = useEntityEnabled();
+  // v0.10.2144 (S5) — üst cümle + "Dikkat isteyenler" (infraSummary.ts, saf):
+  // dört KPI karosunun yerine. Entity okuması ServicePodInventory ile AYNI
+  // sorgu anahtarı (ek istek yok); Thanos'ta görünmeyen pod = birleşimde
+  // kaynağı yalnız entity olan satır.
+  const win = useMemo(() => timeRangeToNs(range), [range]); // v0.5.184: memo içinde
+  const entityQ = useEntityServicePods(service, '', win, entityEnabled);
+  const entityOnly = useMemo(() => {
+    if (!entityEnabled) return [];
+    const nameOf = (cid: string) => entityClusters.find(c => c.id === cid)?.name ?? cid;
+    return mergePods(entityQ.data?.pods ?? [], rows, nameOf).filter(p => p.source === 'entity').map(p => ({ pod: p.pod, cluster: p.cluster }));
+    // rows kimliği her render değişir (useServicePods memo'suz); uzunluk + tazelik yeter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityEnabled, entityQ.data, entityClusters, rows.length, podsUpdatedAt]);
+  const [attnAll, setAttnAll] = useState(false);
   const entityHint = entityEnabled
     ? <> Span&#39;lerin gördüğü (entity) pod&#39;lar <a href="#pods-sec" className="sec">tablonun altında</a>.</>
     : null;
@@ -306,12 +317,60 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
     const kpi = podTotals(visRows);
     const cpuPct = pctOfLimit(kpi.cpuCores, kpi.cpuLimitCores);
     const memPct = pctOfLimit(kpi.memBytes, kpi.memLimitBytes);
-    const restartTone = kpi.restarts != null && kpi.restarts > 8 ? 'err' : kpi.restarts != null && kpi.restarts > 2 ? 'warn' : undefined;
     const ago = podsUpdatedAt ? fmtAgoNs(podsUpdatedAt * 1e6) : '';
     const chartsVisible = aggCpu.isError || aggMem.isError || cpuTrend.length > 0 || memTrend.length > 0;
 
+    // v0.10.2144 (S5, mockup operatör onayı 2026-11-13) — dört KPI karosu
+    // (Running pods, CPU, Memory, Restarts) yerine: düz cümle + kaynak cümlesi
+    // (CPU / Bellek adları kendi grafiğine kaydırır — karo tıkının devamı) +
+    // yalnız sapanları sayan "Dikkat isteyenler". Cümle tüm servis içindir;
+    // CPU / Bellek kapsamı izler (grafiklerle aynı).
+    const sumIn = { clusters: clusterRows, pods: rows, unreachable: podErrors, entityOnly };
+    const sentence = infraSentence(sumIn);
+    const attn = infraAttention(sumIn);
+    const attnShown = attnAll ? attn : attn.slice(0, ATTENTION_MAX);
+    const cpuUse = usagePhrase(fmtCores(kpi.cpuCores), cpuPct);
+    const memUse = usagePhrase(fmtBytes(kpi.memBytes), memPct);
+    const thanosClusters = new Set(clusterRows.map(c => c.cluster));
+
     return (
       <>
+        {showRows && sentence && (
+          <div className="infra-sum">
+            <p className="infra-sum__line">{sentence}</p>
+            <p className="infra-sum__line infra-sum__usage">
+              <LinkButton onClick={() => scrollToChart('cpu')} title="CPU grafiğine git">CPU</LinkButton>{' '}
+              <span className={cpuUse.tone ? `cell-${cpuUse.tone}` : undefined}>{cpuUse.text}</span>
+              {' · '}
+              <LinkButton onClick={() => scrollToChart('mem')} title="Bellek grafiğine git">Bellek</LinkButton>{' '}
+              <span className={memUse.tone ? `cell-${memUse.tone}` : undefined}>{memUse.text}</span>
+              {effCluster && <span className="cell-faint"> · kapsam: {effCluster}</span>}
+            </p>
+            {attn.length > 0 && (
+              <div className="infra-attn">
+                <div className="infra-attn__title">Dikkat isteyenler</div>
+                <ul className="infra-attn__list">
+                  {attnShown.map(it => (
+                    <li key={`${it.kind}:${it.cluster}:${it.subject}`}>
+                      <span className="mono">{it.subject}</span>
+                      {it.cluster && <span className="cell-faint"> · {it.cluster}</span>}
+                      {' — '}<span className={`cell-${it.tone}`}>{it.text}</span>
+                      {it.cluster && thanosClusters.has(it.cluster) && effCluster !== it.cluster && (
+                        <>{' '}<LinkButton onClick={() => setICluster(it.cluster)} title="Bu cluster'ın pod'larını tabloda aç">pod'ları aç</LinkButton></>
+                      )}
+                      {it.kind === 'entityOnly' && <>{' '}<a href="#pods-sec">aşağıda</a></>}
+                    </li>
+                  ))}
+                </ul>
+                {attn.length > ATTENTION_MAX && (
+                  <LinkButton onClick={() => setAttnAll(v => !v)}>
+                    {attnAll ? 'daha az göster' : `${attn.length - ATTENTION_MAX} daha · hepsini göster`}
+                  </LinkButton>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {/* ── Clusters: tablo = kapsam seçimi (v0.10.718, çipler kaldırıldı) ── */}
         <SectionHead id="infra-clusters" title="Clusters" source="Thanos · kube-state"
           badges={<>
@@ -413,46 +472,6 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
             </tbody>
           </table>
         </div>
-
-        {/* ── KPI şeridi: StatTile (Kafka şeridiyle aynı atom, v0.10.718) ── */}
-        {/* v0.10.927 — karo kendisi düğme (StatTile onClick); eski
-            div.stat-click + rowActivation sarmalayıcısı kalktı. Alt satır
-            `span.stat-sub` (blok CSS'te): düğme içine `div` konamaz. */}
-        {showRows && (
-        <div className="stat-grid">
-          <StatTile label={kpi.phaseKnown ? 'Running pods' : 'Pods'} onClick={goToPods} title="Cluster pod listesini aç">
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <PodRing total={kpi.pods} running={kpi.running} failing={kpi.failing} phaseKnown={kpi.phaseKnown} size={40} />
-              {kpi.phaseKnown && kpi.running < kpi.pods && <span>{fmtNum(kpi.running)} / {fmtNum(kpi.pods)}</span>}
-            </span>
-            <span className="stat-sub">{kpi.phaseKnown
-              ? (kpi.pods - kpi.running > 0 ? `${fmtNum(kpi.pods - kpi.running)} not running` : 'all pods healthy')
-              : 'status unknown — kube-state-metrics not visible'}</span>
-          </StatTile>
-          <StatTile label="CPU used (cores)" tone={cpuPct != null && cpuPct >= 90 ? 'err' : cpuPct != null && cpuPct >= 75 ? 'warn' : undefined}
-            onClick={() => scrollToChart('cpu')} title="CPU grafiğine git">
-            {visRows.length ? fmtCores(kpi.cpuCores) : '—'}
-            <span className="stat-sub">{kpi.cpuLimitCores != null
-              ? `limit ${fmtCores(kpi.cpuLimitCores)} · %${cpuPct}`
-              : 'limit bilinmiyor'}</span>
-          </StatTile>
-          <StatTile label="Memory used" tone={memPct != null && memPct >= 90 ? 'err' : memPct != null && memPct >= 75 ? 'warn' : undefined}
-            onClick={() => scrollToChart('mem')} title="Memory grafiğine git">
-            {visRows.length ? fmtBytes(kpi.memBytes) : '—'}
-            <span className="stat-sub">{kpi.memLimitBytes != null
-              ? `limit ${fmtBytes(kpi.memLimitBytes)} · %${memPct}`
-              : 'limit bilinmiyor'}</span>
-          </StatTile>
-          <StatTile label="Restarts (toplam)" tone={restartTone} onClick={goToPods} title="Cluster pod listesini aç">
-            {kpi.restarts == null ? '—' : fmtNum(kpi.restarts)}
-            <span className="stat-sub">{kpi.restarts == null
-              ? 'kube-state-metrics görünmüyor'
-              : kpi.topRestart && kpi.topRestart.restarts > 0
-                ? <>en çok: <span className="mono">{kpi.topRestart.pod}</span> · {fmtNum(kpi.topRestart.restarts)}</>
-                : 'restart yok'}</span>
-          </StatTile>
-        </div>
-        )}
 
         {/* ── Kaynak kullanımı (v0.10.719): yalnız TOPLAM; kapsam tümü → cluster
             başına seri; tek cluster → toplam + pod limit toplamı çizgisi
