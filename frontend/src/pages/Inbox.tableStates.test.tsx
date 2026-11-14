@@ -49,10 +49,9 @@ vi.mock('@/lib/api', () => {
 vi.mock('@/components/AuthProvider', () => ({
   useAuth: () => ({ user: { username: 'op', email: 'op@x', role: 'admin' }, loading: false }),
 }));
-// Alert rules bölümü kendi testinde (ProblemsSection.tableStates); burada
-// yalnız kuyruk tablosu ölçülür.
+// v0.10.2170 — Alert rules bölümü (ProblemsSection) silindi; ?problem= host'u
+// burada çizilmez, yalnız kuyruk tablosu ölçülür.
 vi.mock('@/features/anomalies/ProblemsSection', () => ({
-  ProblemsSection: () => null,
   AlertProblemHost: () => null,
 }));
 

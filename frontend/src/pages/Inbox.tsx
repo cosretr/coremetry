@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { SafeHref } from '@/components/ui/SafeHref'; // v0.10.1315 — olay/katalog linki XSS kapısı
 import { stopRowClick } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3); v0.10.1414 satır linki
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import { useQueryClient } from '@tanstack/react-query';
@@ -7,16 +6,15 @@ import { api } from '@/lib/api';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/coremetry/overlay';
 import { Button, Chip, SearchField } from '@/components/ui';
 import { Link, useLocation, useNavigate, useSearchParams, Navigate } from 'react-router-dom';
-import { Users, Shield } from 'lucide-react';
 import { anomalyEventHref } from '@/lib/anomalyHref';
 import { Topbar } from '@/components/Topbar';
 import { useInbox, useServicesMetadata } from '@/lib/queries';
-import { tsCompact, tsLong, fmtFixed, fmtAgoNs, rowClickHandlers } from '@/lib/utils';
+import { tsCompact, tsLong, fmtAgoNs, rowClickHandlers } from '@/lib/utils';
 // v0.10.1084 — Exceptions listesiyle ortak başlık hücresi + satır metni (saf).
 import { TriageTitleCell } from '@/features/anomalies/TriageTitleCell';
-import { inboxRowHeadline, inboxRowLabel, inboxOccurrencesLabel, inboxKindLabel, inboxCountSentence } from '@/lib/inboxRowText';
+import { inboxRowHeadline, inboxRowLabel, inboxKindLabel, inboxCountSentence } from '@/lib/inboxRowText';
 import { teamOptionsCI } from '@/lib/teamOptions';
-import { derivedTeamTitle, parseSubjectLane } from '@/lib/problemSubject';
+import { parseSubjectLane } from '@/lib/problemSubject';
 import { decodeCsvSet, encodeCsvSet, readInboxTeam, INBOX_TEAM_PARAM, INBOX_CAT_PARAM, INBOX_CAT_ALL, INBOX_CAT_LABEL, inboxMoreFiltersActive, inboxStatusHref } from '@/lib/inboxUrl';
 import { MoreFilters } from '@/components/coremetry/MoreFilters';
 import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
@@ -38,15 +36,7 @@ import {
 // değil): barrel AnomaliesPage'i de /inbox chunk'ına sürüklerdi.
 import { AlertProblemHost } from '@/features/anomalies/ProblemsSection';
 import { AssigneeCell } from '@/features/anomalies/AssigneeCell'; // v0.10.2125 (S5) — Take it İlgilenen hücresinde
-// v0.10.922 (sade palet adım 1) — tek durum sözlüğü; ProblemDetail zaten bu
-// parçada (ProblemsSection → ProblemDetail), yeni chunk bağımlılığı yok.
-import { TriageStatusBadge } from '@/features/anomalies/ProblemDetail';
-// v0.10.1032 — anomali olayının tam sayfa detayı (?anomaly=<id>), ProblemsSection
-// gibi modül yolundan (barrel AnomaliesPage'i bu parçaya sürüklerdi).
-import { RecurringMarker } from '@/features/anomalies/RecurringMarker'; // v0.10.1049
-import { promotedRecurrence } from '@/features/anomalies/detailSummary'; // v0.10.1054
 import { useAuth } from '@/components/AuthProvider';
-import type { DataTableColumn } from '@/lib/dataTable';
 import type { InboxItem, InboxKind } from '@/lib/types';
 import { stripMarkdown } from '@/components/Markdown';
 import { serviceHref, inboxItemWindow } from '@/lib/serviceHref';
@@ -54,7 +44,6 @@ import { SubjectLink } from '../components/SubjectLink';
 import { spreadOf, spreadTitle, defaultFloorTitle, spreadOffFloorTitle } from '@/features/anomalies/spread'; // v0.10.949
 import { isOracleGroup, isSyntheticOracleService, oracleInboxDetail } from '@/features/anomalies/oracleGroup'; // v0.10.1109
 import { useBranding } from '@/lib/branding'; // v0.10.1109 — Oracle grubu görünen adı
-import { Badge } from '@/components/ui/Badge';
 import type { SubjectLane } from '@/lib/types';
 import { ProblemVerdictPolicyBar } from '@/components/ProblemVerdictPolicyBar';
 import { ProblemVerdictRow } from '@/components/ProblemVerdictActions';
@@ -66,85 +55,15 @@ import {
 import { verdictOf, countNoise, filterByVerdictView, parseVerdictView, inboxVerdictSubject, type VerdictView } from '@/lib/problemVerdict';
 import { rowPassesKindFacet } from '@/lib/inboxBuckets'; // v0.10.1803 — Oracle P1 problem kovasında
 
-// Facet vocab + defaults (v0.8.291) — both defaults are what the URL codec
-// omits so a fresh link stays clean.
-const PRIO_ALL = ['P1', 'P2', 'P3'] as const;
-// v0.9.487 (operatör kararı, prod) — varsayılan yalnız P1: "defaultta sadece
-// P1'ler gözüksün". P2/P3 chip sayılarıyla görünür, tek tık uzakta.
-//
-// v0.9.659 (operatör kararı, prod) — P2 GERİ EKLENDİ: "Problems sayfasında
-// P1 P2 exceptions default listelensin".
-//
-// Kararın arkasındaki olay kayıtlı: tek servisten 12 dakikada 11.260 olay
-// üreten bir exception P2 görünüyordu ve varsayılan görünümde HİÇ
-// çıkmıyordu (v0.9.627). O vaka artık P1'e terfi ediyor (patlama hızı),
-// ama terfi kurallarının yakalayamadığı ciddi P2'ler için varsayılanın
-// kendisi bir emniyet ağı.
-//
-// P3 hâlâ dışarıda: kronik/düşük-şiddet gürültüsü varsayılan görünümü
-// doldurur ve v0.9.487'nin çözdüğü sorun buydu.
-//
-// v0.10.1014 (operatör kararı, prod) — VARSAYILAN ARTIK HER ŞEY: "Problems
-// sekmesinde bütün hepsi gelsin, hangisi gerçek problem hangisi değil zamanla
-// öğretelim". Üç önceki kararın tersi (487 yalnız P1, 659 P1+P2, 328 yalnız
-// exception, 443 HTTP hataları kapalı): gürültüyü varsayılan süzgeçle
-// GİZLEMEK yerine operatör neyin gerçek olduğunu işaretleyerek öğretecek
-// (öğretme mekanizması ayrı dilim). Çipler ve sayıları aynen duruyor; daraltmak
-// yine tek tık ve ?prio= / ?kind= paylaşılan linke biner.
-//
-// v0.10.1081 (operatör kararı, prod) — VARSAYILAN YENİDEN YALNIZ P1: "Problems
-// sayfasında sadece P1'ler gözüksün ve first seen'e göre sıralı olsun".
-// v0.10.1014'ün öncelik yarısının tersi (tür varsayılanı HER ŞEY kalıyor).
-// Süzgeç sunucuda tavandan ÖNCE uygulanır (inboxSortAndCap), çip sayıları
-// süzgeçten önceki kümeyi sayar; P2/P3 tek tıkla açılır ("tüm öncelikler")
-// ve ?prio= linke biner. Parametresiz eski link artık yalnız P1 gösterir;
-// açık ?prio=P1,P2,P3 bugünkü gibi hepsini.
-const PRIO_DEFAULT = ['P1'] as const;
-// v0.10.1081 — varsayılan sıralama İLK GÖRÜLME, en yeni önce (aynı karar).
-// URL'de `s_inbox` (DataTable sözleşmesi); parametresiz adres bu varsayılanı
-// alır — kişisel localStorage sıralaması OKUNMAZ (persistSort:false), yoksa
-// "parametresiz link = varsayılan" sözü tarayıcıya göre değişirdi.
-// v0.10.2122 (Problems sadeleştirme S2, operatör onaylı mockup) — öncelik önce
-// (P1 üstte), aynı öncelikte EN ESKİ önce (sunucu eşitlik kırıcısı). v0.10.1081'in
-// "first seen'e göre sıralı" varsayılanının yerine; s_inbox=firstSeen linkleri aynen çalışır.
-const SORT_DEFAULT = { id: 'priority', dir: 'desc' as const };
-// Sunucunun tanıdığı sıralama kimlikleri (normalizeInboxSort ile birebir);
-// bayat bir `s_inbox` varsayılana düşer.
-// v0.10.1084 — 'source' kolonu kalktı (kaynak ikinci satırın başında); bayat
-// `s_inbox=source` varsayılana düşer (sunucu kimliği hâlâ tanır).
-// v0.10.1529 — 'confidence' (Güven kolonu); 'service' kolonu kalktı ama kimlik
-// tanınmaya devam eder (bayat `s_inbox=service` linki sunucuda aynen sıralar).
-const INBOX_SORT_IDS = ['priority', 'service', 'detail', 'occurrences', 'firstSeen', 'lastSeen', 'assignee', 'confidence'] as const;
-const KIND_ALL: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly', 'incident'];
-// v0.9.328 — operator: "Problems ilk açtığında exception görsün, kullanıcılar
-// ona göre tasarlar." Exceptions are the signal operators trust: a thrown
-// exception is a fact from the code, not an inference from a threshold.
-//
-// This is a DEFAULT, not a restriction. All four chips stay on screen with
-// their full counts, so what's excluded is visible and one click away, and
-// ?kind= carries the choice into every shared link. The P1 guard below makes
-// sure a landing default can never hide something urgent.
-// v0.10.1014 — tüm türler (yukarıdaki PRIO_DEFAULT notu). Dizi BİLEREK açık
-// yazıldı (KIND_ALL'a atıf değil): inboxDefaults testi sabiti metinden okur.
-// v0.10.1796 — operatör: "Problems'ta sürekli exception görüyorum; gerçek
-// problemler ve anomaliler görünsün." Varsayılan tür = problem + anomaly +
-// incident; exception ve httperror çipleri sayılarıyla ekranda kalır, tek
-// tıkla açılır ve ?kind= ile linke biner (v0.9.417 görünürlük ruhu).
-const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'anomaly', 'incident'];
-// v0.10.1827 — Incidents emekliyken (kabuk bayrağı user.features.incidents
-// kapalı; operatör kararı 2026-11-05) `incident` türü sözlükten, çiplerden ve
-// varsayılandan çıkar; eski ?kind=incident linki codec'te varsayılana düşer.
-// Sunucu ikizi inbox_incidents_retired.go (rozet aynı kümeyi sayar).
-const KIND_ALL_RETIRED: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly'];
-const KIND_DEFAULT_RETIRED: readonly InboxKind[] = ['problem', 'anomaly'];
-// v0.9.443 — 'httperror': error.type fallback'inin ürettiği çıplak
-// durum-kodu grupları ("404"). Varsayılan facet'te KAPALI (KIND_DEFAULT
-// değişmedi) — bankada beklenen istemci hataları triage'ı boğmasın;
-// chip sayısı yine görünür, tek tıkla açılır (v0.9.417 görünürlük ruhu).
-const KIND_LABEL: Record<InboxKind, string> = {
-  problem: 'Problems', exception: 'Exceptions', httperror: 'HTTP errors',
-  anomaly: 'Anomalies', incident: 'Incidents',
-};
+// v0.10.2170 (Problems S10) — süzgeç sözlükleri/varsayılanları ve kolonlar +
+// satır hücreleri kendi dosyalarında (davranış değişmez).
+import {
+  PRIO_ALL, PRIO_DEFAULT, SORT_DEFAULT, INBOX_SORT_IDS, KIND_ALL, KIND_DEFAULT, KIND_ALL_RETIRED, KIND_DEFAULT_RETIRED,
+  KIND_LABEL, SUBJECT_LANES, SUBJECT_LABEL, SUBJECT_TITLE, STATUS_PIVOTS, DEFAULT_MIN_OCC, type InboxStatus,
+} from './inbox/inboxFilters';
+import { INBOX_COLS, capSortLabel, occLine } from './inbox/inboxColumns';
+import { TeamCell, AssigneePill, RowChips, DetailLine } from './inbox/InboxCells';
+
 
 // exception ailesi — httperror satırları da exception payload'u taşır
 // (aynı store, aynı fingerprint yolu); drawer/drill-in/toplu-ack ortak.
@@ -152,46 +71,6 @@ const KIND_LABEL: Record<InboxKind, string> = {
 // lib/inboxHref'te (servis dikkat şeridiyle tek kaynak).
 const isExcFamily = isInboxExcFamily;
 
-// teamChipTitle — ekip rozetinin title'ı (v0.9.1345).
-//
-// Rozet TIKLANABİLİR olduğu için title zaten bir süzgeç ipucu taşıyor;
-// takım TÜRETİLMİŞSE (db konuları) çekince o ipucunun ÖNÜNE geçiyor —
-// operatörün önce okuması gereken şey değerin kesin olmadığıdır.
-// Rozette ayrıca görünür bir '≈' var: yalnız tooltip'e saklamak, üstüne
-// gelmeyen operatör için kesin bir atıftan farksız olurdu.
-function teamChipTitle(it: InboxItem, filterHint: string): string {
-  if (!it.teamsVia) return filterHint;
-  return `${derivedTeamTitle(it.teamsVia, it.service)}\n\n${filterHint}`;
-}
-// v0.9.254 — 'ignored' yalnızca exception gruplarını gösterir (problem'ler
-// MUTE'lanır, anomaliler SILENCE'lanır — farklı fiiller, farklı state).
-// Ayrı bir pivot olması bilinçli: susturmak kasıtlı bir eylem, o satırları
-// günlük 'all' görünümüne geri dökmek operatörün sustuğu gürültüyü geri
-// getirirdi.
-// v0.9.1342 (operatör kararı) — ÖZNE ŞERİDİ. DB problemleri servis
-// problemleriyle AYNI listede yarışmasın: kendi şeritleri olsun.
-//
-// `SubjectLane` ile `InboxKind` KARIŞTIRILMAZ. InboxKind satırın KAYNAĞI
-// (problem/exception/anomaly), SubjectLane satırın NEYİ anlattığı. İkisi
-// de string olsaydı derleyici karışıklığı yakalayamazdı — v0.9.1339 tam
-// olarak o çakışmadan bir bug üretti ve çözümü ayrı ada taşımaktı.
-// v0.10.1017 (operatör: "Oracle'dan gelenler Problems'te gözükmüyor") —
-// üçüncü şerit: dış metrik kaynağı özneleri (Oracle / Influx, kind=external).
-// O satırlar ne servis ne db şeridine giriyordu; hiçbir yerde görünmüyorlardı.
-const SUBJECT_LANES: readonly SubjectLane[] = ['service', 'db', 'external'];
-const SUBJECT_LABEL: Record<SubjectLane, string> = {
-  service: 'Servisler', db: 'Veritabanları', external: 'Dış kaynaklar',
-};
-// v0.10.1026 (operatör kararı 2026-10-01: "14 girsin") — dış kaynak
-// problemleri VARSAYILAN listede de görünür (sunucu: varsayılan şerit =
-// servis + dış kaynak). Yeni şerit yok; çip ipuçları kümeyi söylüyor, yoksa
-// "Servisler" çipi altında bir Oracle satırı yanlış şeritte sanılırdı.
-const SUBJECT_TITLE: Partial<Record<SubjectLane, string>> = {
-  service: 'Servisler ve dış kaynak (ör. Oracle) problemleri',
-  external: 'Yalnız dış kaynak problemleri — varsayılan listede de görünürler',
-};
-type InboxStatus = 'open' | 'all' | 'ignored';
-const STATUS_PIVOTS: readonly InboxStatus[] = ['open', 'all', 'ignored'];
 
 // /inbox — unified triage view (v0.5.211). Merges Problems +
 // Exception groups + Anomaly events server-side with a normalised
@@ -208,52 +87,6 @@ const STATUS_PIVOTS: readonly InboxStatus[] = ['open', 'all', 'ignored'];
 // v0.10.1081 — çekmece TAMAMEN kalktı: incident satırı da tam sayfaya
 // (/incident?id=) gider; eski ?item= linki tam sayfaya yönlendirilir.
 
-const PRIO_RANK: Record<string, number> = { P1: 3, P2: 2, P3: 1 };
-
-// Columns for the shared sortable + resizable DataTable. Default sort is
-// priority desc (P1 first); rows are pre-sorted by lastSeen desc so the
-// stable sort yields "P1 first, newest within priority" — the prior
-// fixed ordering, now re-sortable + resizable per column.
-// v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor") — okunurluk tabanları
-// + öncelik: kap taşıyamazsa önce First seen, sonra Assignee / Last seen /
-// Source düşer ("+N sütun"); Detail en az 240 px. Damgalar yılsız
-// (tsCompact, tam damga title'da) — 168 px'lik tam damga 1366'da kırpılıyordu.
-// v0.10.1084 (operatör: "tekilleştir, Exceptions'taki format güzel") — kolon
-// düzeni Exceptions listesininki: Prio · başlık (kalın cümle / tip + satır içi
-// durum çipi, soluk ayrıntı) · Service · Occurrences · First seen · Last seen ·
-// Assignee. Ayrı Source kolonu kalktı: kaynak ikinci satırın başında. Tabanlar
-// ve öncelikler v0.10.1068'deki gibi.
-// v0.10.1529 (Problem standardı R2; operatör 2026-10-25: "mockup + ikincil
-// kolonlar") — Öncelik · Ne bozuk · Etki · Ne zamandan beri · Güven · Karar,
-// sağda düşük öncelikli Occurrences · Last seen · Assignee (dar ekranda ilk
-// onlar düşer). Service kolonu kalktı: özne "Ne bozuk"un başında (mono),
-// takım çipleri ve yayılım üçüncü satırda. "Ne zamandan beri" first seen'in
-// sıralama kimliğini (`firstSeen`) devralır — v0.10.1081 varsayılan sıralaması
-// ve paylaşılan `s_inbox=firstSeen` linkleri aynen çalışır. Satırın std'si
-// yoksa (eski önbellek) hücreler v0.10.1084 biçimine düşer.
-// v0.10.2121 (Problems sadeleştirme S1, docs/frontend/problems-page-plan.md;
-// mockup operatör onaylı: "güzel, tüm problemler gözüksün") — Öncelik · Ne
-// bozuk · Servis · Ekip · Tür · Ne zamandan beri · İlgilenen. Etki / Güven /
-// Karar / Occurrences / Last seen listeden kalktı (ayrıntı detay sayfasında);
-// oluşum sayısı "Ne bozuk"un alt satırında, satır triyajı (D1) İlgilenen
-// hücresinde hover/focus'ta (tablo standardı: eylemler tek sağ sütunda).
-// "Ne zamandan beri" `firstSeen` sıralama kimliğini korur (s_inbox linkleri).
-const INBOX_COLS: DataTableColumn<InboxItem>[] = [
-  { id: 'priority', label: 'Öncelik', sortValue: it => PRIO_RANK[it.priority] ?? 0, naturalDir: 'desc', width: 84, minWidth: 80, priority: 1 },
-  // v0.9.648 — ESNEK kolon: başlık serbest metin ve en geniş olan.
-  { id: 'detail',   label: 'Ne bozuk',  sortValue: it => it.std?.headline ?? inboxRowHeadline(it), naturalDir: 'asc', flex: true, minWidth: 260, priority: 1 },
-  { id: 'service',  label: 'Servis', sortValue: it => it.service, naturalDir: 'asc', width: 170, minWidth: 120, priority: 2 },
-  { id: 'team',     label: 'Ekip', width: 150, minWidth: 110, priority: 2 },
-  { id: 'kind',     label: 'Tür', width: 110, minWidth: 90, priority: 3 },
-  { id: 'firstSeen', label: 'Ne zamandan beri', sortValue: it => it.startedAt, naturalDir: 'desc', width: 160, minWidth: 140, priority: 2 },
-  { id: 'assignee', label: 'İlgilenen', sortValue: it => it.assignee ?? '', naturalDir: 'asc', width: 236, minWidth: 150, priority: 3 },
-];
-
-// v0.10.740 — varsayılan occurrence tabanı (sunucu inboxDefaultMinOcc ile aynı).
-// v0.10.949 — 2 → 5, çoklu-servis istisnalı (aynı anda ≥2 serviste görülen
-// grup 5'in altında da görünür); istisna sunucuda, istemci varsayılan kipte
-// tabanı GÖNDERMEZ.
-const DEFAULT_MIN_OCC = 5;
 
 export default function InboxPage() {
   const navigate = useNavigate();
@@ -1439,199 +1272,23 @@ export default function InboxPage() {
       {/* v0.10.1081 — yerinde triyaj çekmecesi (v0.8.292) KALDIRILDI; her
           satır tam sayfa açar (openRow), eski ?item= yönlendirilir. */}
       {problemParam && (
-        // v0.10.1032 (inceleme) — kimlikle anahtarlı: A'dan B'ye geçişte
-        // açılır bölümlerin ve triyajın meşgul/hata durumu taşınmaz.
-        <AlertProblemHost
-          key={problemParam}
-          id={problemParam}
-          isAdmin={isAdmin}
-          backLabel="← Problems"
-          onBack={() => openDetail('problem', null)}
-        />
+        <>
+          {/* Singular: this is ONE problem, reached from a notification deep
+              link. Plural "Problems" is the merged queue (v0.9.323). v0.10.2170
+              — Topbar host'tan buraya taşındı (görünüm aynı). */}
+          <Topbar title="Problem" showEnv envApplies />
+          {/* v0.10.1032 (inceleme) — kimlikle anahtarlı: A'dan B'ye geçişte
+              açılır bölümlerin ve triyajın meşgul/hata durumu taşınmaz. */}
+          <AlertProblemHost
+            key={problemParam}
+            id={problemParam}
+            isAdmin={isAdmin}
+            backLabel="← Problems"
+            onBack={() => openDetail('problem', null)}
+          />
+        </>
       )}
       {anomalyParam && <Navigate to={anomalyEventHref(anomalyParam)} replace />}
     </>
   );
-}
-
-// v0.9.255 — durum rozeti. Üç kaynağın state sözlükleri farklı (problem:
-// open/acknowledged/resolved, exception: new/acknowledged/resolved/ignored/
-// regressed, anomaly: active/resolved), o yüzden eşleme tonlara göre yapılıyor,
-// kaynağa göre değil. Bilinmeyen bir durum GİZLENMEZ — ham hâliyle gri basılır,
-// çünkü tanımadığımız bir durumu yok saymak operatöre satırın durumu yokmuş
-// gibi gösterirdi.
-// v0.10.922 (sade palet adım 1) — ton eşlemesi buradan KALKTI, tek sözlük
-// ProblemDetail'de (TriageStatusBadge / STATUS_TONE): open/active/
-// acknowledged/ignored nötr, new/regressed amber, resolved yeşil (geçiş).
-// Eskiden "open" burada amber, Problems satırında kırmızıydı; "acknowledged"
-// burada mavi, detayda amberdi. Kelime (ham durum) aynen basılıyor.
-// v0.10.1037 (operatör: "Exceptions'ta NEW ile REGRESSED renkleri aynı,
-// düzelt.") — sözlükte new nötre indi; amber yalnız regressed. Bu rozet
-// sözlükten okuduğu için burada ayrı eşleme yok.
-// capSortLabel — v0.10.1081: kırpma rozetinin "neye göre" yarısı. Sunucu
-// tavanı seçili sıralamayla keser; eski metin her durumda "öncelik sırasına
-// göre" diyordu ve varsayılan artık ilk görülme.
-const CAP_SORT_LABEL: Record<string, string> = {
-  priority: 'öncelik', firstSeen: 'ilk görülme', lastSeen: 'son görülme', occurrences: 'oluşum sayısı',
-  service: 'servis', source: 'kaynak', detail: 'başlık', assignee: 'atanan',
-  confidence: 'güven', // v0.10.1529
-};
-function capSortLabel(id: string | null, dir: 'asc' | 'desc'): string {
-  const name = CAP_SORT_LABEL[id ?? ''] ?? CAP_SORT_LABEL.priority;
-  const order = id === 'firstSeen' || id === 'lastSeen'
-    ? (dir === 'desc' ? ', en yeni önce' : ', en eski önce')
-    : '';
-  return `${name} sırasına göre${order}`;
-}
-
-function StatusBadge({ s }: { s?: string }) {
-  if (!s) return null;
-  const k = s.toLowerCase();
-  return <TriageStatusBadge s={k} label={k} title={`Durum: ${s}`} />;
-}
-
-// v0.10.922 (sade palet adım 1) — atanan kişi/takım üst veri: mavi değil nötr.
-// occLine — v0.10.2121: "Ne bozuk" alt satırındaki oluşum sayısı (exception →
-// "N oluşum", katlanmış incident → "N problem"); yoksa null.
-function occLine(it: InboxItem): string | null {
-  const l = inboxOccurrencesLabel(it);
-  if (!l) return null;
-  return it.exception ? `${l} oluşum` : l;
-}
-
-// TeamCell — v0.10.2121 "Ekip" kolonu (plan §4): tek ekip → ad (tık: ?team=
-// süzgeci, owner VEYA SRE); çok ekipli exception → "N ekip" (liste title'da);
-// eşleme yok → soluk "sahipsiz". Owner yoksa SRE.
-function TeamCell({ it, active, onPick }: { it: InboxItem; active: string; onPick: (v: string) => void }) {
-  if (it.teams && it.teams.length >= 2) {
-    return <span className="ib-team" title={it.teams.join(', ')}>{it.teams.length} ekip</span>;
-  }
-  const t = it.ownerTeam || it.sreTeam;
-  if (!t) return <span className="cell-faint">sahipsiz</span>;
-  const on = active === t;
-  return (
-    <Chip size="xs" active={on}
-      onClick={e => { e.stopPropagation(); onPick(on ? '' : t); }}
-      title={teamChipTitle(it, on ? 'Ekip süzgecini kaldır' : `Yalnız ${t} ekibinin problemleri`)}>
-      {it.ownerTeam ? <Users size={11} strokeWidth={1.75} /> : <Shield size={11} strokeWidth={1.75} />} {it.teamsVia ? '≈ ' : ''}{t}
-    </Chip>
-  );
-}
-
-function AssigneePill({ v }: { v: string }) {
-  const isTeam = !v.includes('@');
-  return (
-    <span className="badge b-gray">
-      {isTeam && <Users size={11} strokeWidth={1.75} />}{v}
-    </span>
-  );
-}
-
-// RowChips — v0.10.1084: başlık satırının satır içi çipleri (Exceptions
-// satırının "<1h" çipiyle aynı yer). Sıra: durum, ilk görülme < 1 sa, öğretme
-// işareti, yinelenen, runbook, deploy. AI özeti artık TriageTitleCell'de
-// (köken ✨ + yaş damgası korunur; v0.9.530 gerekçesi orada).
-function RowChips({ it, real, oraLabel }: { it: InboxItem; real: boolean; oraLabel?: string }) {
-  return (
-    <>
-      {/* v0.9.255 — durum rozeti. `status` alanı telde vardı ama hiç
-          çizilmiyordu: "all" pivotunda çözülmüş bir satır yenisiyle birebir
-          aynı görünüyordu. */}
-      <StatusBadge s={it.status} />
-      {/* v0.10.1109 — Oracle hata tablosu grubu rozeti (Exceptions satırıyla aynı). */}
-      {oraLabel && (
-        <Badge tone="info" style={{ fontSize: 9, padding: '0 5px' }}
-          title="Oracle hata tablosu satırlarından oluşan grup (kaynak · hata kodu · operasyon)">
-          {oraLabel}
-        </Badge>
-      )}
-      {/* Exceptions satırıyla aynı işaret: son bir saatte ORTAYA ÇIKTI. */}
-      {it.startedAt > 0 && Date.now() - it.startedAt / 1e6 < 60 * 60 * 1000 && (
-        <span className="badge b-warn" style={{ fontSize: 9, padding: '0 5px' }}
-          title="First seen within the last hour — this did not exist before that.">
-          &lt;1h
-        </span>
-      )}
-      {/* v0.10.1015 — öğretme işareti (yalnız "gerçek problem"; "problem
-          değil" satırları kendi görünümünde). */}
-      {real && (
-        <span className="badge b-gray" style={{ fontSize: 9 }} title="Gerçek problem olarak işaretlendi">gerçek</span>
-      )}
-      {/* v0.10.1049 — yinelenen anomali: nötr tek kelime, sayı + ilk görülme
-          ipucunda (yinelenmemişte hiçbir şey). */}
-      {it.anomaly && (
-        <RecurringMarker episodeCount={it.anomaly.episodeCount} firstStartedAt={it.anomaly.firstStartedAt} />
-      )}
-      {/* v0.10.1054 — anomaliden terfi etmiş Problem satırı da aynı işareti
-          taşır (sunucu yalnız terfi Problem'ine kaynak olayın sayacını
-          iliştirir; diğer satırlarda hiçbir şey). */}
-      {it.problem && promotedRecurrence(it.problem) && (
-        <RecurringMarker episodeCount={it.problem.episodeCount} firstStartedAt={it.problem.firstStartedAt} priorDeploy={it.priorDeploy} />
-      )}
-      {/* Backend'in ZATEN hesaplayıp attığı iki bilgi (v0.9.255): "runbook
-          var mı" ve "az önce deploy oldu mu". */}
-      {it.runbookUrl && (
-        // v0.10.922 (sade palet adım 1) — üst veri: nötr.
-        <SafeHref href={it.runbookUrl}
-          onClick={e => e.stopPropagation()}
-          className="badge b-gray" title="Runbook aç">📕 runbook</SafeHref>
-      )}
-      {/* v0.10.1055 (operatör: "Okdir") — ipucu "undefined v…" başlıyordu:
-          deploy nesnesinde `service` yok (chstore.RecentDeploy), servis
-          satırın kendisinde. */}
-      {it.recentDeploy && (
-        <span className="badge b-warn"
-          title={`${it.service} ${it.recentDeploy.version} — ${tsLong(it.recentDeploy.timeUnixNs)}`}>
-          ⟳ deploy {it.recentDeploy.version}
-        </span>
-      )}
-    </>
-  );
-}
-
-// DetailLine — başlığın altındaki SOLUK satırın içeriği (sarmalayıcı
-// TriageTitleCell'in `.triage-sub`u, "…" orada). v0.10.1084: Exceptions
-// biçimi — exception ailesinde yalnız mesaj (oluşum kendi kolonunda, gerekçe
-// P rozetinin ipucunda); diğer türlerde kaynak · (kural / incident adı) ·
-// türe özel ölçü.
-function DetailLine({ it }: { it: InboxItem }) {
-  if (isExcFamily(it)) {
-    return <>{it.exception!.message || '—'}</>;
-  }
-  const label = inboxRowLabel(it);
-  const lead = <>{it.source}{label && <> · {label}</>}</>;
-  if (it.kind === 'problem' && it.problem) {
-    return (
-      <>
-        {lead}{' · '}
-        <span className="mono">{it.problem.metric}</span>
-        {' = '}
-        {/* v0.10.922 (sade palet adım 1) — değer düz metin (--text, 600),
-            Problems satırıyla aynı: aciliyet rengi P rozetinde. */}
-        <span className="mono"><b style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtFixed(it.problem.value, 2)}</b></span>
-        <span className="mono" style={{ color: 'var(--text3)' }}> / {fmtFixed(it.problem.threshold, 2)}</span>
-        {it.priorityReason && <span> · {it.priorityReason}</span>}
-      </>
-    );
-  }
-  if (it.kind === 'incident' && it.incident) {
-    // v0.10.1081 (operatör: "ekteki hata mesela hiç anlaşılmıyor") — incident
-    // satırının metni DÜZ cümle (artık kalın başlıkta; v0.10.1084 sunucu
-    // katlamasında birincil bağlı problemin cümlesi). "Declared incident,
-    // critical" / "kaynak önceliği korundu …" gerekçesi satırda YOK — P
-    // rozetinin ipucunda duruyor. Burada yalnız kaynak + incident adı.
-    return lead;
-  }
-  if (it.kind === 'anomaly' && it.anomaly) {
-    return (
-      <>
-        {lead}{' · '}
-        peak <span className="mono">{fmtFixed(it.anomaly.peakRatio, 1)}x</span>
-        {' · '}now <span className="mono">{fmtFixed(it.anomaly.currentRatio, 1)}x</span>
-        {it.priorityReason && <span> · {it.priorityReason}</span>}
-      </>
-    );
-  }
-  const rest = it.priorityReason || it.description;
-  return <>{lead}{rest && <> · {rest}</>}</>;
 }

@@ -12,7 +12,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const anom = readFileSync(resolve(__dirname, 'AnomaliesPage.tsx'), 'utf8');
-const inbox = readFileSync(resolve(__dirname, '../../pages/Inbox.tsx'), 'utf8');
+// v0.10.2170 (Problems S10) — DEFAULT_MIN_OCC pages/inbox/inboxFilters.ts'te.
+const inbox = ['Inbox.tsx', 'inbox/inboxFilters.ts']
+  .map(f => readFileSync(resolve(__dirname, '../../pages', f), 'utf8')).join('\n');
 const go = readFileSync(resolve(__dirname, '../../../../internal/api/inbox.go'), 'utf8');
 
 describe('varsayılan occurrence tabanı (v0.10.740 → v0.10.949)', () => {

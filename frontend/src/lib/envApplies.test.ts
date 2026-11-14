@@ -59,7 +59,6 @@ const APPLIES = new Set([
   // Sunucu artık env'i üye servislere çözüp `service IN (…)` ile
   // daraltıyor, yani daraltma limit/offset'ten ÖNCE ısırıyor.
   'features/anomalies/AnomaliesPage.tsx',
-  'features/anomalies/ProblemsSection.tsx',
   'pages/Databases.tsx',
   // v0.9.942 (B2/K9) — /explore. Sayfa `env` sözcüğünü hiç tanımıyordu:
   // picker basılıyor, `?env=` adres çubuğunda duruyor, sorgu TÜM

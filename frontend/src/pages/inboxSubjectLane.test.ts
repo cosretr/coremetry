@@ -16,7 +16,8 @@ const ROOT = join(__dirname, '..');
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
 
 describe('inbox özne şeridi — bağlantı kapısı', () => {
-  const page = read('pages/Inbox.tsx');
+  // v0.10.2170 (Problems S10) — şerit sözlüğü inbox/inboxFilters.ts'te.
+  const page = read('pages/Inbox.tsx') + '\n' + read('pages/inbox/inboxFilters.ts');
 
   it('sayfa şeridi SUNUCUYA gönderiyor', () => {
     // Şerit bir SUNUCU filtresi: SQL'de, LIMIT'ten önce daralıyor.

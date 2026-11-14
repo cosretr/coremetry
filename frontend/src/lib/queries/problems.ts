@@ -143,18 +143,6 @@ export function useEvaluatorHealth() {
   });
 }
 
-// v0.10.260 (perf §7 madde 4, F3 ⭐) — inbox'ın açık problem satırları için
-// TEK blast-radius isteği. Anahtar sıralı servis kümesi; staleTime = sunucu
-// TTL (60 s); boş kümede fetch yok; signal ile iptal (cancellation.test.ts).
-export function useBlastRadiusBatch(services: string[], since: GoDuration = '1h') {
-  return useQuery<{ items: Record<string, BlastRadius>; since: string }>({
-    queryKey: keys.problems.blastRadius(services, since),
-    queryFn: ({ signal }) => api.blastRadiusBatch(services, since, signal),
-    staleTime: 60_000,
-    enabled: services.length > 0,
-  });
-}
-
 // v0.10.562 — Problem detayı insight şeridi. staleTime = sunucu TTL (30 s);
 // 'problems' ağacında: problem değişince toplu invalidate bunu da tazeler.
 export function useProblemInsight(id: string) {

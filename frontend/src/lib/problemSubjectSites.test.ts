@@ -20,7 +20,6 @@ const ROOT = join(__dirname, '..');
 // değil, bilinçli: kapının kapsamı gözle genişletilir, ama içindeki
 // dosyalar mekanik olarak taranır.
 const SUBJECT_SURFACES = [
-  'features/anomalies/ProblemsSection.tsx',
   'features/anomalies/ProblemDetail.tsx',
   'features/anomalies/streams.tsx',
   'pages/Inbox.tsx',

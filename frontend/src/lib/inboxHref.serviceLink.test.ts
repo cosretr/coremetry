@@ -11,7 +11,9 @@ import { serviceInboxHref } from './inboxHref';
 import { decodeCsvSet } from './inboxUrl';
 import { resolveEnv } from './useUrlEnv';
 
-const inboxSrc = readFileSync(resolve(__dirname, '../pages/Inbox.tsx'), 'utf8');
+// v0.10.2170 (Problems S10) — sabitler pages/inbox/inboxFilters.ts'te.
+const inboxSrc = ['Inbox.tsx', 'inbox/inboxFilters.ts']
+  .map(f => readFileSync(resolve(__dirname, '../pages', f), 'utf8')).join('\n');
 function arr(name: string): string[] {
   const m = new RegExp(`const ${name}[^=]*=\\s*\\[([^\\]]*)\\]`).exec(inboxSrc);
   if (!m) throw new Error(`${name} bulunamadı`);

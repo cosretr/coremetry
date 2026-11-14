@@ -2,7 +2,8 @@
 
 Üretim: 2026-11-05, `find internal cmd main*.go frontend/src docs migrations charts` + `wc -l`
 (node_modules, dist, `components/shadcn/`, `*.min.*` ve ikili dosyalar hariç). Yenilemek için aynı
-komutu koş; liste değişirse bu dosyayı güncelle. Kaynak: `docs/claude/token-audit.md` §4.
+komutu koş; liste değişirse bu dosyayı güncelle. 2026-11-14 (v0.10.2170, Problems S10):
+`Inbox.tsx`, `globals.css`, `api.ts` yeniden sayıldı, `ProblemsSection.tsx` listeden çıktı (113 satır). Kaynak: `docs/claude/token-audit.md` §4.
 
 ## Grup kuralları
 
@@ -14,18 +15,18 @@ komutu koş; liste değişirse bu dosyayı güncelle. Kaynak: `docs/claude/token
 | **T** — `*_test.go`, `*.test.ts(x)` | Test adını grep'le (`grep -n 'func Test\|it(\|describe('`), ilgili testi ±80 satır oku. |
 | **S** — kaynak (`.go`, `.ts`, `.tsx`, `.css`) | Sembolü grep'le, ±80 satır oku. Bütün dosya okunmaz. |
 
-## Liste (104)
+## Liste (103)
 
 | Yol | Satır | Kural |
 |---|---:|---|
 | `docs/DECISIONS.md` | 12145 | D |
 | `frontend/src/lib/types.ts` | 11721 | S |
 | `internal/api/api.go` | 10681 | A |
-| `frontend/src/styles/globals.css` | 6263 | S |
+| `frontend/src/styles/globals.css` | 6820 | S |
 | `internal/chstore/repo.go` | 6157 | S |
 | `internal/chstore/store.go` | 5677 | S |
 | `internal/api/copilot_guided.go` | 4721 | S |
-| `frontend/src/lib/api.ts` | 4489 | S |
+| `frontend/src/lib/api.ts` | 4630 | S |
 | `frontend/src/pages/AdminClickhouse.tsx` | 4321 | S |
 | `internal/logstore/elasticsearch.go` | 3520 | S |
 | `internal/copilot/prompts.go` | 3032 | S |
@@ -51,7 +52,6 @@ komutu koş; liste değişirse bu dosyayı güncelle. Kaynak: `docs/claude/token
 | `internal/chstore/state_path_rebuild.go` | 1687 | S |
 | `internal/chstore/dependencies.go` | 1675 | S |
 | `frontend/src/pages/Trace.tsx` | 1655 | S |
-| `frontend/src/pages/Inbox.tsx` | 1616 | S |
 | `internal/rollout/v2detect_test.go` | 1611 | T |
 | `internal/api/promql_console_handlers_test.go` | 1605 | T |
 | `internal/chstore/spanmetric.go` | 1604 | S |
@@ -79,6 +79,7 @@ komutu koş; liste değişirse bu dosyayı güncelle. Kaynak: `docs/claude/token
 | `internal/vmetrics/promql_test.go` | 1333 | T |
 | `frontend/src/pages/service/Overview.tsx` | 1325 | S |
 | `internal/mcptools/metrics_tools_test.go` | 1316 | T |
+| `frontend/src/pages/Inbox.tsx` | 1294 | S |
 | `internal/mcptools/log_spike.go` | 1281 | S |
 | `frontend/src/components/dashboard/PanelRenderer.tsx` | 1272 | S |
 | `frontend/src/lib/i18n.ts` | 1270 | S |
@@ -108,7 +109,6 @@ komutu koş; liste değişirse bu dosyayı güncelle. Kaynak: `docs/claude/token
 | `frontend/src/components/viz/TimeSeriesPanel.tsx` | 1075 | S |
 | `internal/api/config_iox.go` | 1070 | S |
 | `frontend/src/pages/settings/ArgoCDTab.contract.test.tsx` | 1069 | T |
-| `frontend/src/features/anomalies/ProblemsSection.tsx` | 1062 | S |
 | `internal/config/config.go` | 1059 | S |
 | `internal/chstore/problem_standard.go` | 1052 | S |
 | `internal/api/rollouts_v2_probe_test.go` | 1048 | T |

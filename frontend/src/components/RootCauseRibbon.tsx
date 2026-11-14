@@ -28,7 +28,7 @@ import { traceHref } from '@/lib/traceHref';
 // an anomaly id → anomalyRootCause. Both return the shared RootCause shape (the
 // anomaly variant just adds anchor fields), so the expanded body renders one way.
 export function RootCauseRibbon({
-  anchor, id, summary, defaultOpen, window: win, suppressed, onExpandRequest, trailing,
+  anchor, id, summary, defaultOpen, window: win, trailing,
 }: {
   anchor: 'problem' | 'anomaly';
   id: string;
@@ -39,20 +39,9 @@ export function RootCauseRibbon({
   // otomatik genişler: fetch drawer-open anıyla eş (ES-cost disiplini
   // aynen — liste hâlâ lazy, prefetch yok), triage bir tık kısalır.
   defaultOpen?: boolean;
-  // v0.9.1133 (AI Faz 2.3) — ŞERİT BİRLEŞMESİ. Aynı satırda "▸ Ne oldu?"
-  // insight kartı açıkken bu şeridin gövdesi de açılmamalı: ikisi de aynı
-  // olayın kanıtını gösteriyor (deploy, aday servisler, exemplar) ve iki
-  // ayrı sıralama üst üste okunduğunda operatör hangisinin doğru olduğunu
-  // TAHMİN etmek zorunda kalır — v0.9.306'nın "iki çelişen liste" sınıfı.
-  //
-  // `suppressed` yalnız GÖVDEYİ gizler, çipi AYNEN bırakır (collapsed çip
-  // sıfır-fetch, satırın kalıcı özeti — onu da gizlemek satırdan bilgi
-  // silerdi). Çipe basmak ÖLÜ TIK olmasın diye `onExpandRequest` var:
-  // host o çağrıyı alınca kartı kapatır, aynı tıkta bu gövde açılır. Yani
-  // kural "kart açıkken şerit kapalı" değil, "aynı anda TEK kanıt yüzeyi".
-  suppressed?: boolean;
-  onExpandRequest?: () => void;
-  // `trailing` — çipin YANINA giren komşu affordance (bugün "▸ Ne oldu?").
+  // v0.10.2170 (Problems S10) — `suppressed` / `onExpandRequest` (v0.9.1133
+  // şerit birleşmesi) kalktı: tek kullanıcısı Problems "Alert rules" tablosuydu.
+  // `trailing` — çipin YANINA giren komşu affordance (bugün "CoSRE'ye sor").
   // Neden prop, neden host'ta kardeş bir öğe DEĞİL: kardeş yazımda şerit
   // ile çip aynı flex satırının iki öğesi olurdu ve şerit GENİŞLEDİĞİNDE
   // gövdesi o öğenin içinde büyüdüğü için satır sığmaz, çip bir alt
@@ -79,20 +68,12 @@ export function RootCauseRibbon({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultOpen, id]);
 
-  // Gövdenin GERÇEK görünürlüğü: kendi açıklığı VE bastırılmamış olması.
-  // `open` state'i korunuyor — kart kapandığında şerit operatörün
-  // bıraktığı hâle döner (kart açmak, şeridi kalıcı olarak kapatmaz).
-  const showBody = open && !suppressed;
+  const showBody = open;
 
   const onToggle = () => {
-    // Karar GÖRÜNEN hâle göre: bastırılmışken `!open` "kapat" derdi ama
-    // ekranda kapalı görünen bir şeridi kapatmak ölü tıktır.
     const next = !showBody;
     setOpen(next);
     if (next) {
-      // Aynı satırdaki insight kartı varsa host onu kapatır — iki kanıt
-      // yüzeyi aynı anda açık kalmaz.
-      onExpandRequest?.();
       // Lazy first fetch — only when expanding, and only once.
       fetchOnce();
     }

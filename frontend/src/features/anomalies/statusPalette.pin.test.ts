@@ -19,9 +19,10 @@ import { resolve } from 'node:path';
 const read = (rel: string) => readFileSync(resolve(__dirname, rel), 'utf8');
 const detail = read('./ProblemDetail.tsx');
 const leaf = read('./statusTone.tsx');
-const section = read('./ProblemsSection.tsx');
 const anomalies = read('./AnomaliesPage.tsx');
-const inbox = read('../../pages/Inbox.tsx');
+// v0.10.2170 (Problems S10) — Alert rules tablosu (ProblemsSection) silindi;
+// Inbox satır hücreleri pages/inbox/InboxCells.tsx'te.
+const inbox = read('../../pages/Inbox.tsx') + '\n' + read('../../pages/inbox/InboxCells.tsx');
 
 // Yorum satırları eski tonları tarihçe olarak anıyor; kod pinleri yorumsuz
 // metin üzerinde koşar.
@@ -64,14 +65,13 @@ describe('v0.10.922 — tek durum → ton sözlüğü', () => {
     expect(leaf).toContain("STATUS_TONE[s.toLowerCase()] ?? 'b-gray'");
   });
 
-  it('dört yüzey de sözlükten okur, kendi tonunu seçmez', () => {
+  it('yüzeyler sözlükten okur, kendi tonunu seçmez', () => {
     expect(inbox).toContain('<TriageStatusBadge s={k} label={k} title={`Durum: ${s}`} />');
     expect(anomalies).toContain('<TriageStatusBadge s={s} label={label}');
-    expect(section).toContain('<ProblemStatusBadge status={p.status} />');
     expect(detail).toContain('<ProblemStatusBadge status={problem.status} />');
     expect(detail).toContain('<TriageStatusBadge s={state} label={STATE_LABEL[state]} />');
     // Eski el-yapımı durum rozetleri geri gelmesin.
-    for (const src of [inbox, anomalies, section, detail].map(code)) {
+    for (const src of [inbox, anomalies, detail].map(code)) {
       expect(src).not.toMatch(/className="badge b-(err|warn|ok)">(OPEN|ACK|RESOLVED)</);
       expect(src).not.toMatch(/=== 'acknowledged'\s*\?\s*'b-/);
     }
@@ -124,16 +124,6 @@ describe('v0.10.929 — durum sözlüğü hafif yaprak modülde', () => {
 });
 
 describe('v0.10.922 — bir olgu = bir sinyal (renk yalnız öncelikte)', () => {
-  it('Problems satırı: zemin tonu yok, kırmızı değer yok, şiddet nötr, P atomu', () => {
-    const s = code(section);
-    expect(s).not.toContain('color-mix(in srgb, var(--err)');
-    expect(s).not.toContain("<b style={{ color: 'var(--err)' }}>");
-    expect(s).toContain("<b style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtFixed(p.value, 2)}</b>");
-    expect(s).toContain('return <span className="badge b-gray">{s.toUpperCase()}</span>;');
-    expect(s).toContain("import { PriorityBadge } from '@/components/ui/PriorityBadge';");
-    expect(s).not.toMatch(/function PriorityBadge\(/);
-  });
-
   it('Problem detay şeridi: şiddet nötr, öncelik paylaşılan atomdan', () => {
     const d = code(detail);
     expect(d).toContain('<span className="badge b-gray">{problem.severity.toUpperCase()}</span>');
@@ -148,7 +138,7 @@ describe('v0.10.922 — bir olgu = bir sinyal (renk yalnız öncelikte)', () => 
   });
 
   it('üst veri (ANOMALY, runbook, atanan, env, AI, blast) mavi değil', () => {
-    for (const src of [inbox, section, detail].map(code)) {
+    for (const src of [inbox, detail].map(code)) {
       expect(src).not.toContain('b-info');
     }
   });

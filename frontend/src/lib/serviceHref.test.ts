@@ -239,7 +239,6 @@ const CONVERTED = [
   // pointEventWindow (tek an), eventLifespanWindow (başladı, belki bitmedi).
   'components/SpanDetail.tsx',
   'features/anomalies/AnomaliesPage.tsx',
-  'features/anomalies/ProblemsSection.tsx',
   'features/anomalies/streams.tsx',
   'pages/Events.tsx',
   // v0.9.967 — pencereyi PROP olarak alan / URL'de tutan siteler. İkisi

@@ -10,7 +10,9 @@ import { resolve } from 'node:path';
 // dakikada 11.260 olay üreten bir exception P2 görünüyordu ve varsayılan
 // görünümde HİÇ çıkmıyordu (v0.9.627).
 
-const src = readFileSync(resolve(__dirname, './Inbox.tsx'), 'utf8');
+// v0.10.2170 (Problems S10) — süzgeç sabitleri inbox/inboxFilters.ts'te.
+const src = ['./Inbox.tsx', './inbox/inboxFilters.ts']
+  .map(f => readFileSync(resolve(__dirname, f), 'utf8')).join('\n');
 
 // arr — `const NAME[: type] = ['a','b']` dizisini okur.
 //

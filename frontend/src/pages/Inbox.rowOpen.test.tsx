@@ -56,7 +56,6 @@ vi.mock('@/components/AuthProvider', () => ({
   useAuth: () => ({ user: { username: 'op', email: 'op@x', role: 'editor', features: { incidents: m.incidents } }, loading: false }),
 }));
 vi.mock('@/features/anomalies/ProblemsSection', () => ({
-  ProblemsSection: () => null,
   AlertProblemHost: ({ id, onBack }: { id: string; onBack: () => void }) => (
     <div data-host="problem" data-id={id}><button onClick={onBack}>back</button></div>
   ),

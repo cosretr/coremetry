@@ -569,15 +569,6 @@ export const api = {
     get<import('./types').ServiceNeighborsResponse>(
       `/api/services/${encodeURIComponent(svc)}/neighbors?since=${since}${refresh ? '&refresh=1' : ''}`),
 
-  // v0.6.29 — Blast radius for an open Problem. Returns upstream
-  // callers + their RPS + cascade-flag (caller has own open
-  // problem). Sorted cascading-first, then by calls desc.
-  // v0.10.260 (perf §7 madde 4, F3) — inbox: açık problem servisleri TEK
-  // istekte (satır başına /blast-radius yerine). Sunucu ≤200 servis, 60 s cache.
-  blastRadiusBatch: (services: string[], since: GoDuration = '1h', signal?: AbortSignal) =>
-    request<{ items: Record<string, import('./types').BlastRadius>; since: string }>(
-      `/api/blast-radius?services=${encodeURIComponent(services.join(','))}&since=${since}`, signal ? { signal } : undefined),
-
   // Curated runtime / process timeseries (cpu / memory / rps /
   // runtime) for the inspected service's pods. Powers the infra
   // correlation panel on /service?name=…. 30s server-side cache.
@@ -987,19 +978,6 @@ export const api = {
   status: ()                         => get<SystemStatus>(`/api/status`),
   // Build-tag — unauthenticated, so the login page can render it
   // before the operator has a session.
-  // v0.9.344 — priority/severity chip counts over the UNFILTERED problem set.
-  //
-  // The endpoint has existed since the priority buckets shipped and was never
-  // called: the page computed its chip counts from `data`, which is the
-  // response to a request that already carried ?priority=. With the default
-  // P1+P2 selection the P3 chip therefore read 0 forever, and an operator
-  // could not discover that P3 problems existed at all.
-  //
-  // It deliberately takes no priority param — that is the whole point — and
-  // is server-cached 5s on a key shared across viewers.
-  problemBuckets: (params: { status?: string; service?: string; env?: string; ownerTeam?: string; sreTeam?: string; cluster?: string } = {}) =>
-    get<{ severity: Record<string, number>; priority: Record<string, number>; total: number } | null>(
-      `/api/problems/buckets?${qs(params)}`),
   version: ()                        => get<{ version: string }>(`/api/version`),
 
   // Log-pattern anomalies (ORA-, OOM, NPE, deadlock, panic, …) —

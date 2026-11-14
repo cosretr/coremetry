@@ -55,7 +55,6 @@ vi.mock('@/lib/queries/dependencies', () => ({
 }));
 vi.mock('@/features/dependencies/DetailDrawer', () => ({ DetailDrawer: () => null }));
 vi.mock('@/features/anomalies/ProblemsSection', () => ({
-  ProblemsSection: () => null,
   AlertProblemHost: ({ id }: { id: string }) => <div data-host="problem" data-id={id} />,
 }));
 vi.mock('@/features/anomalies/AnomalyEventDetail', () => ({

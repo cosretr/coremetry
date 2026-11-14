@@ -13,9 +13,8 @@
 //      aynı görünür, fatura görünmez;
 //   2. çipin `toggle`ı yanlış kimliği taşır (fingerprint yerine servis
 //      adı gibi) → kart açılır ama BAŞKA bir özneyi anlatır;
-//   3. problem satırında şerit `suppressed` almaz → aynı satırda iki
-//      kanıt yüzeyi üst üste açılır (v0.9.306 sınıfı) ve mockup'ın
-//      "tek şerit" kararı sessizce geri alınır;
+//   3. (v0.10.2170, Problems S10) problem satırı yuvası ve şerit
+//      birleşmesi pini kalktı: tek host'u Alert rules tablosuydu, silindi;
 //   4. (v0.9.1137) host kancaya KENDİ TÜRÜNÜ vermez → tsc yakalar, ama
 //      YANLIŞ türü verirse yakalamaz: `useInsightRow('problem')` yazan
 //      bir desen host'u adrese "problem:Disk full" yazar, sunucu 404
@@ -53,8 +52,8 @@ describe('exception satırı — yuva KALDIRILDI (AnomaliesPage)', () => {
   // v0.9.1149 — operatör kararı (2026-08-17): exception satırındaki
   // "▸ Ne oldu?" çipi kötü görünüyordu ve detaya girince Explain zaten
   // var. Bu kapı eskisinin TERSİ: çip/yuva sessizce GERİ GELMESİN.
-  // Problems (ProblemsSection) ve desen (streams) yuvaları bilinçli
-  // olarak DURUYOR — aşağıdaki describe'lar onları pinlemeye devam eder.
+  // Desen (streams) yuvası bilinçli olarak DURUYOR — aşağıdaki describe
+  // onu pinlemeye devam eder (Problems yuvası v0.10.2170'te host'uyla gitti).
   it('insight çipi/yuvası bu listede YOK', () => {
     expect(src).not.toContain('<InsightRowChip');
     expect(src).not.toContain('<InsightRowSlot');
@@ -68,72 +67,6 @@ describe('exception satırı — yuva KALDIRILDI (AnomaliesPage)', () => {
     // v0.10.1084 — satır Problems kuyruğuyla ortak TriageTitleCell'den çizer;
     // özet yoksa prop undefined → hiçbir şey çizilmez.
     expect(src).toContain('ai={g.aiSummary ? stripMarkdown(g.aiSummary) : undefined}');
-  });
-});
-
-describe('problem satırı — şerit BİRLEŞİK (ProblemsSection)', () => {
-  const src = read('features/anomalies/ProblemsSection.tsx');
-
-  it('yuva bağlı ve çip problem kimliğini taşıyor', () => {
-    expect(src).toContain("from '@/components/ai/insightRow'");
-    expect(src).toMatch(/useInsightRow\('problem'\)/);
-    expect(element(src, 'InsightRowChip')).toContain('insight.toggle(p.id)');
-    const el = element(src, 'InsightRowSlot');
-    expect(el).toContain('kind="problem"');
-    expect(el).toContain('id={p.id}');
-    // 1 (seçim) + 8 (PROBLEM_COLS) + 2 (Assignee/Triage).
-    expect(el).toContain('colSpan={11}');
-  });
-
-  it('kart KOŞULLU çizilir', () => {
-    const i = src.indexOf('<InsightRowSlot');
-    expect(src.slice(Math.max(0, i - 200), i)).toMatch(/insight\.openId === p\.id &&/);
-  });
-
-  it('şerit kartı GÖRÜYOR: suppressed + onExpandRequest bağlı', () => {
-    const el = element(src, 'RootCauseRibbon');
-    expect(el, 'ribbon suppressed almıyor — iki kanıt yüzeyi üst üste açılır')
-      .toContain('suppressed={insight.openId === p.id}');
-    expect(el, 'onExpandRequest yok — şerit çipi ölü tık olur')
-      .toContain('onExpandRequest={insight.close}');
-  });
-
-  it('çip şeridin KENDİ satırına giriyor (trailing), kardeş öğe DEĞİL', () => {
-    // Kardeş yazımda şerit genişlediğinde flex satırı sığmaz ve çip
-    // açılan panelin ALTINA kayar — operatörün az önce tıkladığı düğme
-    // yer değiştirir. `trailing` gövdeyi her zaman satırın altında
-    // tutuyor. Kap `<div>` de aralarına girmemeli.
-    const el = element(src, 'RootCauseRibbon');
-    expect(el).toContain('trailing={');
-    expect(el).toContain('<InsightRowChip');
-    expect(el).not.toContain('<div');
-  });
-
-  it('satır map\'i key TAŞIYAN Fragment döndürüyor (MT4)', () => {
-    // Satır artık iki <tr> döndürebiliyor; keyless bir <> reconcile'ı
-    // yanlış eşleştirir ve sıralama değişince açık kart BAŞKA satırın
-    // altında kalır.
-    expect(src).toMatch(/import \{ Fragment,/);
-    expect(src).toContain('<Fragment key={p.id}>');
-  });
-});
-
-describe('şerit motoru — bastırma gerçekten gövdeyi kesiyor', () => {
-  const src = read('components/RootCauseRibbon.tsx');
-
-  it('gövde `showBody` ile çizilir ve showBody suppressed\'ı okur', () => {
-    expect(src).toMatch(/const showBody = open && !suppressed;/);
-    expect(src).toContain('{showBody && (');
-    // Caret dönüşü de görünen hâli izlemeli; `open` kalırsa kapalı bir
-    // gövdenin üstünde açık ok durur.
-    expect(src).toContain('transform: showBody ?');
-  });
-
-  it('gövde istendiğinde host\'a haber verilir', () => {
-    const i = src.indexOf('const onToggle');
-    const body = src.slice(i, i + 700);
-    expect(body).toMatch(/const next = !showBody;/);
-    expect(body).toContain('onExpandRequest?.()');
   });
 });
 

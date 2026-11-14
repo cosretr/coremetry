@@ -37,9 +37,10 @@ func TestIncidentInboxItemCarriesStatus(t *testing.T) {
 }
 
 func TestInboxIncidentDetailHasNoSecondStatusBadge(t *testing.T) {
-	b, err := os.ReadFile("../../frontend/src/pages/Inbox.tsx")
+	// v0.10.2170 (Problems S10) — satır hücreleri pages/inbox/InboxCells.tsx'te.
+	b, err := os.ReadFile("../../frontend/src/pages/inbox/InboxCells.tsx")
 	if err != nil {
-		t.Skipf("Inbox.tsx okunamadı: %v", err)
+		t.Skipf("InboxCells.tsx okunamadı: %v", err)
 	}
 	src := string(b)
 

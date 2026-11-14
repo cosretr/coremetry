@@ -14087,3 +14087,13 @@ eskalasyon merdiveni ve P1 yapışkanlığı değişmez.
 - AYRI kalır: alarm kuralları (operatör sözleşmesi), `exception-storm`, ext / Oracle / `db-health:`, `self-*`, `anomaly-cluster:*` (varlıklar arası birleşme Faz 2, ayrı spec).
 - Bildirim: açılışta bir kez + P1'e geçişte bir kez; ek üye, tazeleme ve göç asla bildirmez. Bildirim türü / ekip maili sahibin türünde kalır (açık soru 2).
 - Doğrulanmadı: prod (ilk tik göç sayısı, iki motorun metrik okuma maliyeti), tarayıcıda çizelge görünümü.
+
+## 2026-11-14 — v0.10.2170 — Problems S10: temizlik (ölü Alert rules tablosu, Inbox bölünmesi)
+- Plan: `docs/frontend/problems-page-plan.md` §6 S10. Görünüm ve davranış değişikliği amaçlanmadı.
+- `ProblemsSection` bileşeni (v0.10.2125'ten beri mount'suz) silindi; `ProblemsSection.tsx` yalnız `AlertProblemHost`'u taşır (dosya adı içe aktaranlar için kaldı). Host'un "Problem" Topbar'ı çağıran sayfalara (Inbox, AnomaliesPage) taşındı: envApplies dürüstlük testi dosya başına ölçer, env'i okuyan o sayfalar; görünen başlık ve seçici aynı.
+- Yalnız ölü bileşeni koruyan testler silindi (`ProblemsSection.tableStates`, `problemsUrlState`, `rootCauseRibbonMerge`), diğerleri (insightHosts, statusPalette, problemsRowLink, site listeleri, Inbox mock'ları) daraltıldı.
+- Ölü kod: RootCauseRibbon `suppressed` / `onExpandRequest` (şerit birleşmesi), `.row-link--inline`, `api.problemBuckets`, `api.blastRadiusBatch`, `useBlastRadiusBatch`, `keys.problems.buckets` / `blastRadius`. `InsightRowSlot` paylaşılan atom olarak kaldı (kendi testi var). `lib/inboxBuckets` canlı.
+- `Inbox.tsx` 1616 → 1294 satır: süzgeç sözlükleri/varsayılanları `pages/inbox/inboxFilters.ts`, kolonlar + saf satır metinleri `pages/inbox/inboxColumns.ts`, satır hücreleri `pages/inbox/InboxCells.tsx`; içerik aynen taşındı. Kaynak tarayan testler (TS + Go) yeni dosyaları okur.
+- Operatör kararı bekler: `GET /api/problems/buckets` ve `GET /api/blast-radius` artık ön yüz çağıransız (sunucuda kaldı).
+- Doğrulanmadı: tarayıcıda görünüm, prod.
+

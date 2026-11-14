@@ -47,7 +47,6 @@ vi.mock('@/components/AuthProvider', () => ({
   useAuth: () => ({ user: { username: 'op', email: 'op@x', role: 'editor' }, loading: false }),
 }));
 vi.mock('@/features/anomalies/ProblemsSection', () => ({
-  ProblemsSection: () => null,
   AlertProblemHost: () => null,
 }));
 vi.mock('@/features/anomalies/AnomalyEventDetail', () => ({ AnomalyEventHost: () => null }));

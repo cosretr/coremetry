@@ -77,7 +77,7 @@ describe('RecurringMarker', () => {
 
   it('iki tüketici işareti bu bileşenden alıyor', () => {
     const read = (rel: string) => readFileSync(resolve(__dirname, rel), 'utf8');
-    expect(read('../../pages/Inbox.tsx')).toContain(
+    expect(read('../../pages/inbox/InboxCells.tsx')).toContain( // v0.10.2170 (S10) — hücreler ayrı dosyada
       '<RecurringMarker episodeCount={it.anomaly.episodeCount} firstStartedAt={it.anomaly.firstStartedAt} />');
     expect(read('./streams.tsx')).toContain(
       '<RecurringMarker episodeCount={e.episodeCount} firstStartedAt={e.firstStartedAt} priorDeploy={e.priorDeploy} line />');

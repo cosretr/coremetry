@@ -6,7 +6,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const page = readFileSync(resolve(__dirname, 'Inbox.tsx'), 'utf8');
+// v0.10.2170 (Problems S10) — kolonlar inbox/inboxColumns.ts'te.
+const page = ['Inbox.tsx', 'inbox/inboxColumns.ts']
+  .map(f => readFileSync(resolve(__dirname, f), 'utf8')).join('\n');
 const css = readFileSync(resolve(__dirname, '../styles/globals.css'), 'utf8');
 
 describe('Inbox tarih hücreleri (v0.10.736)', () => {

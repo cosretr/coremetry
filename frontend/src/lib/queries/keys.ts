@@ -68,12 +68,8 @@ export const keys = {
   },
   problems: {
     all:         ['problems'] as const,
-    // v0.10.260 — inbox blast-radius toplu ucu; servis kümesi sıralı (anahtar kararlı).
-    blastRadius: (services: string[], since: string) => ['problems', 'blast-radius', since, services] as const,
     insight:     (id: string) => ['problems', 'insight', id] as const, // v0.10.562
     standard:    (ref: string) => ['problems', 'standard', ref] as const, // v0.10.1529
-    // v0.10.874 — ProblemsSection kova çipleri ağaca girdi: ack/resolve invalidation'ı ulaşsın.
-    buckets:     (f: { status?: string; service?: string; env?: string; ownerTeam?: string; sreTeam?: string; cluster?: string }) => ['problems', 'buckets', f] as const,
     affected:    (id: string) => ['problems', 'affected', id] as const, // v0.10.707
     events:      (id: string) => ['problems', 'events', id] as const, // v0.10.2163 — birleşen olaylar
     sourceEvent: (id: string) => ['problems', 'source-event', id] as const, // v0.10.1106

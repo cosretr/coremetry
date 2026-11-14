@@ -909,14 +909,20 @@ export default function ProblemsPage() {
         )}
       </div>
       {problemParam && (
-        // v0.10.1032 (inceleme) — kimlikle anahtarlı: A'dan B'ye geçişte
-        // açılır bölümlerin ve triyajın meşgul/hata durumu taşınmaz.
-        <AlertProblemHost
-          key={problemParam}
-          id={problemParam}
-          isAdmin={isAdmin}
-          onBack={() => setSearchParams(prev => withProblemParam(prev, null), { replace: true })}
-        />
+        <>
+          {/* Singular: this is ONE problem, reached from a notification deep
+              link. Plural "Problems" is the merged queue (v0.9.323). v0.10.2170
+              — Topbar host'tan buraya taşındı (görünüm aynı). */}
+          <Topbar title="Problem" showEnv envApplies />
+          {/* v0.10.1032 (inceleme) — kimlikle anahtarlı: A'dan B'ye geçişte
+              açılır bölümlerin ve triyajın meşgul/hata durumu taşınmaz. */}
+          <AlertProblemHost
+            key={problemParam}
+            id={problemParam}
+            isAdmin={isAdmin}
+            onBack={() => setSearchParams(prev => withProblemParam(prev, null), { replace: true })}
+          />
+        </>
       )}
     </>
   );

@@ -1981,8 +1981,7 @@ tbody td.dt-state.dt-state--loading, [data-density] tbody td.dt-state.dt-state--
 .is-err { color: var(--err); }
 /* v0.10.929 (K5) — düz .is-ok silindi: tek tüketicisi OracleTab durum span'leriydi
    (artık .is-quiet). Kopyalandı geri bildirimi button.is-ok'ta yaşıyor. */
-/* Karışık hücre (metin + çipler) içinde yalnız METİN link olur (v0.10.221, Problems kural adı). */
-.row-link--inline { display: inline; padding: 0; white-space: normal; }
+/* v0.10.2170 (Problems S10) — .row-link--inline silindi: tek tüketicisi Alert rules tablosuydu. */
 /* Breadcrumb (v0.10.219, ilk tüketici /trace): "Traces › <kök işlem>". Halka
    gerçek <Link>; geçerli öğe düz metin, kırpılır (title tam adı taşır). */
 .crumbs { display: flex; align-items: center; gap: var(--sp-4); font-size: var(--fs-md); margin-bottom: var(--sp-5); min-width: 0; }

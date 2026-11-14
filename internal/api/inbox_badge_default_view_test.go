@@ -202,7 +202,12 @@ func TestInboxBadgeQueryMatchesPageDefaults(t *testing.T) {
 	if err != nil {
 		t.Skipf("Inbox.tsx okunamadı: %v", err)
 	}
-	src := string(b)
+	// v0.10.2170 (Problems S10) — süzgeç sabitleri pages/inbox/inboxFilters.ts'te.
+	f, err := os.ReadFile("../../frontend/src/pages/inbox/inboxFilters.ts")
+	if err != nil {
+		t.Fatalf("inboxFilters.ts okunamadı: %v", err)
+	}
+	src := string(b) + "\n" + string(f)
 	for _, want := range []string{
 		"const PRIO_DEFAULT = ['P1'] as const;",
 		"const SORT_DEFAULT = { id: 'priority', dir: 'desc' as const };",                 // v0.10.2122 (S2, onaylı mockup)
