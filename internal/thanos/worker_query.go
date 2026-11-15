@@ -104,6 +104,12 @@ type WorkerLimits struct {
 	// farklı dış etiket taşıyorsa enjekte edilen matcher 0 seri döndürür);
 	// argocd-metrics işçisi hub başına geçirir. Sıfır değer = bugünkü davranış.
 	NoClusterLabel bool
+	// RangeStart/RangeEnd/RangeStep — v0.10.2224 (ML olay kaydı H8): sıfır
+	// değilse aralık sorgusu (POST /api/v1/query_range, start/end/step); Time
+	// yok sayılır. Aynı fail-closed token, tavan ve kısmilik kuralları.
+	// Sıfır değer = anlık sorgu (bugünkü davranış).
+	RangeStart, RangeEnd time.Time
+	RangeStep            time.Duration
 }
 
 func (l WorkerLimits) normalized() WorkerLimits {
@@ -188,12 +194,22 @@ func (s *Service) WorkerQuery(ctx context.Context, clusterID, expr string, lim W
 		"query": {eff},
 		"dedup": {strconv.FormatBool(*lim.Dedup)},
 	}
-	if !lim.Time.IsZero() {
+	path := "/api/v1/query"
+	switch {
+	case !lim.RangeStart.IsZero():
+		if lim.RangeEnd.Before(lim.RangeStart) || lim.RangeStep <= 0 {
+			return nil, consoleBadData("range needs end >= start and a positive step")
+		}
+		form.Set("start", formatPromTime(lim.RangeStart))
+		form.Set("end", formatPromTime(lim.RangeEnd))
+		form.Set("step", formatPromStep(lim.RangeStep))
+		path = "/api/v1/query_range"
+	case !lim.Time.IsZero():
 		form.Set("time", strconv.FormatFloat(float64(lim.Time.UnixMilli())/1000, 'f', 3, 64))
 	}
 	// consoleEval partial_response + timeout'u cl'den yazar, akışlı çözer,
 	// konumu geri çevirir; dedup form'da kalır.
-	res, err := s.consoleEval(ctx, c, "/api/v1/query", form, cl, expr, eff)
+	res, err := s.consoleEval(ctx, c, path, form, cl, expr, eff)
 	if err != nil {
 		return nil, workerError(ctx, err, lim)
 	}

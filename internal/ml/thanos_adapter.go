@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/thanos"
 )
 
@@ -68,6 +69,62 @@ func (a thanosAdapter) Instant(ctx context.Context, clusterID, expr string, at t
 		return nil, errThanosPartial
 	}
 	return decodeVector(res.ResultType, res.Result)
+}
+
+// ThanosRanger — v0.10.2224 (H8): olay kaydı snapshot'ı için aralık okuması
+// (isteğe bağlı arayüz; dedektör tiki kullanmaz). Seri başına noktalar.
+type ThanosRanger interface {
+	Range(ctx context.Context, clusterID, expr string, from, to time.Time, step time.Duration) ([]ThanosRangeSeries, error)
+}
+
+// ThanosRangeSeries — matris satırı.
+type ThanosRangeSeries struct {
+	Labels map[string]string
+	Points []chstore.SpanMetricPoint
+}
+
+func (a thanosAdapter) Range(ctx context.Context, clusterID, expr string, from, to time.Time, step time.Duration) ([]ThanosRangeSeries, error) {
+	res, err := a.svc.WorkerQuery(ctx, clusterID, expr, thanos.WorkerLimits{MaxSeries: thanosMaxSeries, TimeoutS: thanosQueryTimeoutS,
+		RangeStart: from, RangeEnd: to, RangeStep: step})
+	if err != nil {
+		return nil, err
+	}
+	if res.Truncated || res.Partial() {
+		return nil, errThanosPartial
+	}
+	return decodeMatrix(res.ResultType, res.Result)
+}
+
+// decodeMatrix — SAF: Prometheus matrisi → seriler (sonlu değerler).
+func decodeMatrix(resultType string, raw json.RawMessage) ([]ThanosRangeSeries, error) {
+	if resultType != "matrix" || len(raw) == 0 {
+		return nil, nil
+	}
+	var rows []struct {
+		Metric map[string]string `json:"metric"`
+		Values [][2]any          `json:"values"`
+	}
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return nil, err
+	}
+	out := make([]ThanosRangeSeries, 0, len(rows))
+	for _, r := range rows {
+		s := ThanosRangeSeries{Labels: r.Metric}
+		for _, p := range r.Values {
+			ts, ok1 := p[0].(float64)
+			vs, ok2 := p[1].(string)
+			if !ok1 || !ok2 {
+				continue
+			}
+			v, err := strconv.ParseFloat(vs, 64)
+			if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+				continue
+			}
+			s.Points = append(s.Points, chstore.SpanMetricPoint{Time: int64(math.Round(ts*1000)) * 1e6, Value: v})
+		}
+		out = append(out, s)
+	}
+	return out, nil
 }
 
 // decodeVector — SAF: Prometheus anlık vektörü → örnekler (sonlu değerler).

@@ -658,3 +658,27 @@ func TestNamespaceMatcher(t *testing.T) {
 		t.Errorf("birleşik seçici %q", q)
 	}
 }
+
+// v0.10.2224 (ML olay kaydı H8): Range* doluysa aralık sorgusu — aynı
+// fail-closed yol, start/end/step, time yok; bozuk aralık istek atmaz.
+func TestWorkerQueryRangeParams(t *testing.T) {
+	f := newFakeConsoleThanos(t, false, respondWith(200, seriesBody("matrix", 0)))
+	cl := consoleTestCluster(f.URL, "")
+	s := workerTestService(nil, cl)
+	from := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	lim := WorkerLimits{Time: from, RangeStart: from, RangeEnd: from.Add(time.Hour), RangeStep: time.Minute}
+	if _, err := s.WorkerQuery(context.Background(), cl.ID, "up", lim); err != nil {
+		t.Fatal(err)
+	}
+	r := f.last(t)
+	if r.Path != "/api/v1/query_range" || len(r.Form["start"]) != 1 || len(r.Form["end"]) != 1 || len(r.Form["step"]) != 1 {
+		t.Fatalf("aralık isteği: %+v", r)
+	}
+	if _, ok := r.Form["time"]; ok {
+		t.Fatal("aralık sorgusunda time gönderilmemeli")
+	}
+	lim.RangeStep = 0
+	if _, err := s.WorkerQuery(context.Background(), cl.ID, "up", lim); err == nil {
+		t.Fatal("adımsız aralık reddedilmeli")
+	}
+}

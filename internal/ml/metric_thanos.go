@@ -215,6 +215,7 @@ func (d *MetricThanos) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 	series := map[string]map[int64]float64{}
 	dirOf := map[string]string{}
 	clusterOf := map[string]string{}
+	recOf := map[string]map[string]any{} // v0.10.2224 (H8): olay kaydı için tik anı (kanıt)
 	forClusters(ctx, clusterRefs(plans, func(p clusterPlan) ThanosCluster { return p.c }), func(cctx context.Context, c ThanosCluster) {
 		var exprs []thanosPlanned
 		for _, p := range plans {
@@ -245,6 +246,7 @@ func (d *MetricThanos) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 			d.backoff.ok(key)
 			vals, un := podValuesByService(rows, ix, nsRe)
 			unmatched += un
+			podsOf := podNamesByService(rows, ix, nsRe)
 			part := thanosMetricPart(pe.family, pe.id, c.Name)
 			mu.Lock()
 			dirOf[part] = pe.direction
@@ -258,13 +260,24 @@ func (d *MetricThanos) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 				}
 				series[k][last.Unix()] = combine(pe.agg, vs)
 				clusterOf[k] = c.Name
+				rk := map[string]any{"clusterId": c.ID, "thanosExpr": pe.expr, "agg": pe.agg}
+				if ps := podsOf[svc]; len(ps) <= thanosRecordMaxPods {
+					rk["pods"] = ps
+				}
+				recOf[k] = rk
 			}
 			mu.Unlock()
 		}
 		meter.add(int64(cut), unmatched, failed)
 	})
 	return evalMetricSeries(ctx, deps, cfg, last, now, series, dirOf, func(fam string) bool { return d.dayCap(fam, cfg, now) },
-		func(k string) map[string]any { return map[string]any{"source": "thanos", "cluster": clusterOf[k]} })
+		func(k string) map[string]any {
+			out := map[string]any{"source": "thanos", "cluster": clusterOf[k]}
+			for rk, rv := range recOf[k] {
+				out[rk] = rv
+			}
+			return out
+		})
 }
 
 func clusterRefs[T any](xs []T, f func(T) ThanosCluster) []ThanosCluster {

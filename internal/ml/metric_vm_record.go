@@ -77,6 +77,10 @@ type MetricRecordInput struct {
 	Points          []chstore.SpanMetricPoint
 	From, To        time.Time
 	Confirmers      []string
+	// v0.10.2224 (H8) Thanos: kaynak ("thanos:<cluster>"), pod → servis
+	// birleşimi ve dondurulmuş pod sayısı; boş = VM (H4).
+	Source, Agg string
+	Pods        int
 }
 
 // metricNum — SAF: başlık sayısı (≥ 100 tam sayı, < 1 üç, arası iki ondalık).
@@ -118,11 +122,17 @@ func BuildMetricRecord(in MetricRecordInput) (EventRecord, bool) {
 	if unit == "" {
 		unit = "value"
 	}
-	agg := exprAggregation(in.Query)
+	agg, src := exprAggregation(in.Query), "vm"
+	if in.Agg != "" {
+		agg = in.Agg
+	}
+	if in.Source != "" {
+		src = in.Source
+	}
 	rec := EventRecord{
 		V:         RecordVersion,
 		Subject:   RecordSubject{EntityID: entity.ServiceID(in.Service), Service: in.Service, Resolved: true},
-		Series:    RecordSeries{Source: "vm", Query: in.Query, Aggregation: agg, Unit: unit, StepSec: uint32(in.BucketSec)},
+		Series:    RecordSeries{Source: src, Query: in.Query, Aggregation: agg, Unit: unit, StepSec: uint32(in.BucketSec)},
 		Baseline:  RecordBaseline{Expected: in.Median, Lo: lo, Hi: hi, Method: lagBandMethod, StepSec: uint32(in.BucketSec)},
 		Direction: dir, OnsetAt: at(onset), DetectedAt: at(det),
 		PeakValue: peak, ValueAtDetection: v[det], ExpectedValue: in.Median,
@@ -133,8 +143,12 @@ func BuildMetricRecord(in MetricRecordInput) (EventRecord, bool) {
 	if in.Closed {
 		rec.EndedAt = at(end)
 	}
-	rec.Evidence = append(rec.Evidence, RecordEvidence{Kind: "series", Source: "vm",
+	rec.Evidence = append(rec.Evidence, RecordEvidence{Kind: "series", Source: src,
 		Summary: "Servis düzeyi metrik serisi, aile " + in.Family + " / " + in.Expr.ID, Independent: false})
+	if in.Pods > 0 {
+		rec.Evidence = append(rec.Evidence, RecordEvidence{Kind: "pods", Source: src,
+			Summary: "Servis değeri tespit anında dondurulan pod kümesinin " + agg + " birleşimi (" + trInt(float64(in.Pods)) + " pod)", Independent: false})
+	}
 	for _, id := range in.Confirmers {
 		rec.Evidence = append(rec.Evidence, RecordEvidence{Kind: "confirm", Source: "ml",
 			Summary: "Aynı serviste başka dedektörün olayı: " + id, Independent: true})

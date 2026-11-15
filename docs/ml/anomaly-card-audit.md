@@ -491,6 +491,11 @@ okuma `chstore.MLTraceErrorMinutes`). Seri = `spanmetrics_1m` giriş span'i hata
 toplamı. Bant: medyan (beklenen) ayrıldı, üst sınır `normalMax`, alt 0. Hacim `null` + neden (çağrı sayısı örneklenmiş). Maliyet: açık olay
 başına tik başına 1 CH MV okuması, tik başına ≤ 20.
 
+**H8 — Thanos `metric_*` göçü.** ✅ **gemilendi v0.10.2224** (`internal/ml/metric_thanos_record.go`, `metric_thanos_record_test.go`;
+aralık okuması `thanos.WorkerQuery` + `WorkerLimits.Range*`). Pod kümesi + cluster tik anında kanıta dondurulur (≤ 50 pod); seri = pod düzeyi
+ifadenin aynı `combine` birleşimi, kaynak `thanos:<cluster>`; pod görünümü kanıt satırına iner. Maliyet: açık olay başına tik başına 1 Thanos
+aralık sorgusu, tik başına ≤ 10.
+
 **H3…Hn — dedektör başına birer sürüm** (§9 tablosu; önerilen sıra: VM metrik → `trace_error_count` → `svc_error_rate` → TraceRED →
 bağımlılık → kırılma noktası → log RED → şablon → pod → `svc_breadth` → oluşum türleri). *Risk:* S/M/L sütunu. *Göç:* yok. *Test:* dedektör başına ölçüt 9 + doğrulayıcı.
 
