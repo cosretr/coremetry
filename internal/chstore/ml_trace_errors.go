@@ -73,3 +73,42 @@ func (s *Store) MLTraceErrors(ctx context.Context, from, to time.Time, bucketSec
 	}
 	return out, rows.Err()
 }
+
+// mlTraceErrorMinutesSQL — v0.10.2223 (H7): tek servis × operasyonun dakika
+// başına hata span sayısı (olay kaydı snapshot'ı). Aynı MV, aynı süzgeç;
+// ORDER BY öneki (service_name, name) → dar okuma.
+const mlTraceErrorMinutesSQL = `
+		SELECT toUnixTimestamp(time_bucket) AS t, countMerge(error_state) AS e
+		FROM %s
+		WHERE service_name = ? AND name = ?
+		  AND time_bucket >= ? AND time_bucket < ?
+		  AND status_code = 'error'
+		  AND ` + EntrySpanKindsWhere + `
+		GROUP BY t
+		ORDER BY t
+		LIMIT ?
+		SETTINGS max_execution_time = 10`
+
+// MLTraceErrorMinutesCap — dakika satırı tavanı (≈ 12 sa).
+const MLTraceErrorMinutesCap = 720
+
+// MLTraceErrorMinutes — [from, to) penceresinde dakika başına hata span
+// sayısı (Time = dakika başı, unix ns). Hatasız dakika satır üretmez (= 0).
+func (s *Store) MLTraceErrorMinutes(ctx context.Context, service, operation string, from, to time.Time) ([]SpanMetricPoint, error) {
+	q := fmt.Sprintf(mlTraceErrorMinutesSQL, s.spanmetricsSourceFor("spanmetrics_1m"))
+	rows, err := s.telemetryReadConn().Query(ctx, q, service, operation, from.UTC(), to.UTC(), MLTraceErrorMinutesCap)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []SpanMetricPoint
+	for rows.Next() {
+		var t uint32
+		var e uint64
+		if err := rows.Scan(&t, &e); err != nil {
+			return nil, err
+		}
+		out = append(out, SpanMetricPoint{Time: int64(t) * 1e9, Value: float64(e)})
+	}
+	return out, rows.Err()
+}

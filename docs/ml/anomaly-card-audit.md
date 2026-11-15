@@ -486,6 +486,11 @@ Hacim aynı ailenin `_count`'u. Maliyet: açık olay başına tik başına 2 VM 
 servis × route istek/sn'si (`count` ölçüsünün VM ifadesi, kova penceresi); yön "down" (dip, alt sınır); hacim aynı seriden (istek/sn × adım).
 Maliyet: açık olay başına tik başına 1 VM aralık sorgusu, tik başına ≤ 20.
 
+**H7 — `trace_error_count` göçü.** ✅ **gemilendi v0.10.2223** (`internal/ml/trace_error_record.go`, `trace_error_record_test.go`;
+okuma `chstore.MLTraceErrorMinutes`). Seri = `spanmetrics_1m` giriş span'i hata sayısı, kova toplamı; snapshot dakika okumasının kayan kova
+toplamı. Bant: medyan (beklenen) ayrıldı, üst sınır `normalMax`, alt 0. Hacim `null` + neden (çağrı sayısı örneklenmiş). Maliyet: açık olay
+başına tik başına 1 CH MV okuması, tik başına ≤ 20.
+
 **H3…Hn — dedektör başına birer sürüm** (§9 tablosu; önerilen sıra: VM metrik → `trace_error_count` → `svc_error_rate` → TraceRED →
 bağımlılık → kırılma noktası → log RED → şablon → pod → `svc_breadth` → oluşum türleri). *Risk:* S/M/L sütunu. *Göç:* yok. *Test:* dedektör başına ölçüt 9 + doğrulayıcı.
 
