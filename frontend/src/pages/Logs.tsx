@@ -77,6 +77,7 @@ import { logRowKeyAction } from './logs/logsKeys';
 import { LogsAddFilterMenu, LogsShareMenu, LogsMoreMenu } from './logs/LogsActionsMenus';
 import { isDraftDirty, bareTraceIdOf } from './logs/logsQuery';
 import { LogsTableToolbar } from './logs/LogsTableToolbar';
+import { useAutoLoadMore } from './logs/useAutoLoadMore'; // v0.10.2238
 import { useLogsExplain, LogsExplainButton, LogsExplainResult } from './logs/LogsExplain'; // Log Search 6.3
 import { LogsNLToggle, LogsNLQueryRow } from './logs/LogsNLQuery'; // Log Search 6.6
 import { applyNLToDraft } from '@/lib/logsNLQuery';
@@ -1210,6 +1211,15 @@ function LogsInner() {
   // listede yalnız geçerli sayfa çizilir (j/k da onu gezer).
   const paged = useMemo(() => pageSlice(data ? logs : NO_LOGS, live ? 0 : page, live ? Number.MAX_SAFE_INTEGER : display.pageSize),
     [data, logs, live, page, display.pageSize]);
+  // v0.10.2238 — "Load more" düğmesi ve kaydırma nöbetçisi AYNI işleyici
+  // (aynı imleç, aynı `sample`). Otomatik yalnız geçmiş (sayfalı) görünümde;
+  // canlı kuyruk kendi tamponunu yürütür, burada hiç tetik yok.
+  const nextCursor = data?.nextCursor ?? '';
+  const loadNext = () => { if (nextCursor) { setPage(Math.floor(logs.length / display.pageSize)); setCursor(nextCursor); } };
+  const autoLoad = useAutoLoadMore({
+    enabled: !live && view === 'logs' && !!nextCursor && paged.page === paged.pages - 1,
+    busy: staticQ.isFetching, failed: staticQ.isError, loaded: logs.length, onLoad: loadNext,
+  });
   const shownLogs = useMemo(
     () => paged.rows.map(r => { const f = fullDocs[r.id]; return f && f !== 'error' ? f : r; }),
     [paged.rows, fullDocs]);
@@ -1774,10 +1784,10 @@ function LogsInner() {
             accumulate in accRows; the button advances the cursor
             to the response's nextCursor and the new page appends.
             Hidden during live tail (the live buffer owns its own
-            moving window). Button-first per spec — an
-            IntersectionObserver auto-load can layer on once the
-            behaviour settles (and it would multiply backend
-            queries, which the ES-usage constraint caps). */}
+            moving window). v0.10.2238 — the sentinel above auto-loads
+            the next page on scroll (useAutoLoadMore: one request in
+            flight, not while hidden / after an error, stops at
+            AUTO_LOAD_MAX_ROWS — then this button is the only way). */}
         {/* v0.9.1016 — paylaşılan sözleşme (v0.9.1014), cursor
             kipi. Kip bir görünüm tercihi DEĞİL veri modeli beyanı:
             bu sayfa keyset imleçle yürüyor, "sayfa 7'ye git"
@@ -1802,15 +1812,20 @@ function LogsInner() {
             lastReachablePage={paged.pages - 1}
             onPage={setPage} />
         )}
+        {data && logs.length > 0 && autoLoad.active && (
+          <div ref={autoLoad.sentinelRef} aria-hidden data-testid="logs-autoload-sentinel" style={{ height: 1 }} />
+        )}
         {data && logs.length > 0 && !live && paged.page === paged.pages - 1 && (
           <Pager mode="cursor"
             {...(windowTotal !== undefined ? { count: 'exact' as const, total: windowTotal } : { count: 'skip' as const })}
             loaded={logs.length}
             hasMore={!!data.nextCursor}
             moreLabel={`Daha fazla yükle (sonraki ${sample.toLocaleString('tr-TR')})`}
-            onMore={() => { if (data.nextCursor) { setPage(Math.floor(logs.length / display.pageSize)); setCursor(data.nextCursor); } }}
+            onMore={loadNext}
             loading={staticQ.isFetching}
-            extras={
+            extras={accDropped === 0 && autoLoad.capped ? (
+              <span title={tr('logs.autoLoad.cappedTitle')}>{tr('logs.autoLoad.capped')}</span>
+            ) :
               /* v0.9.292 — the accumulation window slid forward. Rows
                  leaving the top without a word is the silent-loss
                  class this page keeps producing; say it and say the
