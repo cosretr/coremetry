@@ -1,7 +1,7 @@
 package api
 
 // v0.10.1260 — operatör raporu 2026-10-17 (servis sayfası → Topology,
-// odak bsa-crm-contentmanagement-prod): gRPC ile çağrılan enstrümante
+// odak demo-crm-content-prod): gRPC ile çağrılan enstrümante
 // servisler `ext:<svc>.<ns>.svc.cluster.local` adıyla ayrı "dış
 // bağımlılık" düğümleri olarak çiziliyordu (sağ kolon gerçek servislerin
 // kopyalarıyla doluydu). v0.8.11 ext-merge'i yalnız birebir eşitlikte
@@ -14,8 +14,8 @@ import (
 )
 
 func TestBuildServiceGraphMergesK8sDNSPeers(t *testing.T) {
-	const focus = "bsa-crm-contentmanagement-prod"
-	const sales = "bsa-sales-salesapplication-query-prod"
+	const focus = "demo-crm-content-prod"
+	const sales = "demo-sales-application-query-prod"
 	cases := []struct {
 		name       string
 		edges      []chstore.ServiceTopologyEdge
@@ -38,19 +38,19 @@ func TestBuildServiceGraphMergesK8sDNSPeers(t *testing.T) {
 		{
 			name: ".svc + port merges",
 			edges: []chstore.ServiceTopologyEdge{
-				sgEdge("bsa-config-server", "orders", "service", "http", 1, 0, 1),
-				sgEdge(focus, "ext:bsa-config-server.bsa.svc:8888", "external", "http", 7, 0, 9),
+				sgEdge("demo-config-server", "orders", "service", "http", 1, 0, 1),
+				sgEdge(focus, "ext:demo-config-server.demo.svc:8888", "external", "http", 7, 0, 9),
 			},
-			mergedInto: "bsa-config-server", extID: "ext:bsa-config-server.bsa.svc:8888",
+			mergedInto: "demo-config-server", extID: "ext:demo-config-server.demo.svc:8888",
 			wantCalls: 7, wantP99: 9, wantEdges: 1,
 		},
 		{
 			name: "dns:/// gRPC target merges",
 			edges: []chstore.ServiceTopologyEdge{
-				sgEdge("bsa-bpm-dos-prod", "orders", "service", "grpc", 1, 0, 1),
-				sgEdge(focus, "ext:dns:///bsa-bpm-dos-prod.bpm.svc.cluster.local:50051", "external", "http", 3, 1, 12),
+				sgEdge("demo-flow-engine-prod", "orders", "service", "grpc", 1, 0, 1),
+				sgEdge(focus, "ext:dns:///demo-flow-engine-prod.flow.svc.cluster.local:50051", "external", "http", 3, 1, 12),
 			},
-			mergedInto: "bsa-bpm-dos-prod", extID: "ext:dns:///bsa-bpm-dos-prod.bpm.svc.cluster.local:50051",
+			mergedInto: "demo-flow-engine-prod", extID: "ext:dns:///demo-flow-engine-prod.flow.svc.cluster.local:50051",
 			wantCalls: 3, wantErrs: 1, wantP99: 12, wantEdges: 1,
 		},
 		{
@@ -129,7 +129,7 @@ func TestMergeExtPeerEdgesWeightsAvg(t *testing.T) {
 	a.AvgMs = 10
 	b := sgEdge("gw", "ext:orders.shop.svc.cluster.local", "external", "http", 300, 30, 70)
 	b.AvgMs = 30
-	b.ChildEnv = "prod-ocpma"
+	b.ChildEnv = "prod-kprod"
 	out := mergeExtPeerEdges([]chstore.ServiceTopologyEdge{a, b})
 	if len(out) != 1 {
 		t.Fatalf("tek kenar bekleniyordu: %+v", out)
@@ -138,7 +138,7 @@ func TestMergeExtPeerEdgesWeightsAvg(t *testing.T) {
 	if e.Calls != 400 || e.Errors != 30 || e.P99Ms != 70 || e.AvgMs != 25 || e.ErrorRate != 7.5 {
 		t.Errorf("katlama yanlış: %+v", e)
 	}
-	if e.Protocol != "grpc" || e.ChildEnv != "prod-ocpma" {
+	if e.Protocol != "grpc" || e.ChildEnv != "prod-kprod" {
 		t.Errorf("gerçek kenarın protokolü korunmalı, boş env dolmalı: %+v", e)
 	}
 }

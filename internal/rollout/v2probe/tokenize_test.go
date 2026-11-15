@@ -20,7 +20,7 @@ func testSeeds() Seeds {
 		},
 		APIHosts:   map[string]string{"api.real.example.invalid:6443": "cluster-a", "api.real.example.invalid": "cluster-a"},
 		EnvList:    []string{"dev", "test", "prod"},
-		SuffixList: []string{"ocpa", "ocpb"},
+		SuffixList: []string{"kcla", "kclb"},
 	}
 }
 
@@ -49,11 +49,11 @@ func TestTokenizerClasses(t *testing.T) {
 		{"namespace", "openshift-monitoring", "<ns-1>"},
 		{"job", "team-payments-prod-metrics", "<team-1>-prod-metrics"},
 		{"job", "kube-state-metrics", "<job-1>"},
-		{"name", "checkout-api-prod-ocpa", "app-1"},
+		{"name", "checkout-api-prod-kcla", "app-1"},
 		{"project", "payments", "<project-1>"},
 		{"repo", "https://git.example.invalid/x.git", "<repo-1>"},
-		{"sfx", "ocpb", "<suffix-b>"},
-		{"sfx", "OCPA", "<suffix-a>"},
+		{"sfx", "kclb", "<suffix-b>"},
+		{"sfx", "KCLA", "<suffix-a>"},
 		{"sfx", "zzz", "<sfx-1>"},
 		{"base", "checkout-api-prod", "<base-1>"},
 		{"pod", "argocd-application-controller-0", "<pod-1>"},

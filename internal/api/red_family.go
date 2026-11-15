@@ -250,7 +250,7 @@ type redFamilyLabelReader interface {
 	MetricLabelNamesForServiceIn(ctx context.Context, metric, svcLabel, service string, from, to time.Time) ([]string, bool, error)
 }
 
-// redFamilyLabelSet — v0.10.1574 (prod, bsa-crm-contentmanagement-prod:
+// redFamilyLabelSet — v0.10.1574 (prod, demo-crm-content-prod:
 // /red-family → "http_server_request_duration_seconds_count: okunamadı
 // (timeout)", gRPC aynı okumayla geldi). metricChartLabelSet filonun TAMAMININ
 // histogramını 24 sa tarıyordu ({__name__=~…}, 2 sn bütçe); HTTP'nin seri

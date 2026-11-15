@@ -17,8 +17,8 @@ import (
 
 func fullParams() Params {
 	return Params{
-		EnvList: []string{"dev", "test", "prod"}, SuffixList: []string{"ocpa", "ocp.b"},
-		PairGroups: map[string][]string{"pair-1": {"ocpa", "ocp.b"}},
+		EnvList: []string{"dev", "test", "prod"}, SuffixList: []string{"kcla", "kcl.b"},
+		PairGroups: map[string][]string{"pair-1": {"kcla", "kcl.b"}},
 		NSMatcher:  `,namespace=~"team-.*"`, InstanceNS: []string{"team-a-prod", "team-b-dev"},
 		K5Window: "1h", WithoutMatcher: true,
 	}
@@ -180,7 +180,7 @@ func TestExpandVariants(t *testing.T) {
 	// pair: grup başına bir; suffix'ler QuoteMeta'lı.
 	h35, _ := Find("H3.5")
 	insts, _ = Expand(h35, p)
-	if len(insts) != 1 || insts[0].Variant != "pair:pair-1" || !strings.Contains(insts[0].Expr, "`.+-(ocpa|ocp\\.b)`") {
+	if len(insts) != 1 || insts[0].Variant != "pair:pair-1" || !strings.Contains(insts[0].Expr, "`.+-(kcla|kcl\\.b)`") {
 		t.Fatalf("H3.5 pair: %+v", insts)
 	}
 	p3 := p
@@ -220,7 +220,7 @@ func TestExpandREAndRegexLiterals(t *testing.T) {
 	p := fullParams()
 	n1, _ := Find("N1")
 	insts, _ := Expand(n1, p)
-	want := "name=~`[^-]+-[^-]+-.+-(dev|test|prod)-(ocpa|ocp\\.b)`"
+	want := "name=~`[^-]+-[^-]+-.+-(dev|test|prod)-(kcla|kcl\\.b)`"
 	if !strings.Contains(insts[0].Expr, want) {
 		t.Fatalf("RE: %s", insts[0].Expr)
 	}
@@ -231,7 +231,7 @@ func TestExpandREAndRegexLiterals(t *testing.T) {
 	if !strings.Contains(h25.Expr, "`https?://[^/]+:([0-9]+)/?`") {
 		t.Fatalf("H2.5 regex: %s", h25.Expr)
 	}
-	if _, err := regexp.Compile(`[^-]+-[^-]+-.+-(dev|test|prod)-(ocpa|ocp\.b)`); err != nil {
+	if _, err := regexp.Compile(`[^-]+-[^-]+-.+-(dev|test|prod)-(kcla|kcl\.b)`); err != nil {
 		t.Fatal(err)
 	}
 }

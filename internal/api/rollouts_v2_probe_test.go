@@ -170,7 +170,7 @@ func probeAnswer(q v2probe.Query, variant string) string {
 		return strList("kube_daemonset_metadata_generation", "kube_deployment_metadata_generation", "kube_replicaset_owner")
 	}
 	if q.Shape == v2probe.ShapeNames { // H5.2 fallback: değerler nöbetçi, yalnız adlar kalmalı
-		return vec(vrow("1", "name", "checkout-real-api-prod-ocpa", "namespace", probeNS, "dest_server", probeDest, "project", "payments-real"))
+		return vec(vrow("1", "name", "checkout-real-api-prod-kcla", "namespace", probeNS, "dest_server", probeDest, "project", "payments-real"))
 	}
 	switch q.ID {
 	case "K0.2":
@@ -235,9 +235,9 @@ func probeAnswer(q v2probe.Query, variant string) string {
 	case "H6.2a", "H6.2b":
 		return vec(vrow("120", "phase", "Succeeded"))
 	case "N4":
-		return vec(vrow("300", "sfx", "zzz"), vrow("120", "sfx", "ocpa"))
+		return vec(vrow("300", "sfx", "zzz"), vrow("120", "sfx", "kcla"))
 	case "N5a":
-		return vec(vrow("19000", "dest_server", probeDest, "sfx", "ocpa"))
+		return vec(vrow("19000", "dest_server", probeDest, "sfx", "kcla"))
 	case "N5b":
 		return vec(vrow("0.95", "dest_server", probeDest))
 	case "L2":
@@ -290,9 +290,9 @@ func newProbeEnv(t *testing.T) *probeEnv {
 	t.Helper()
 	f := &probeFake{answers: map[string]string{}}
 	clusters := []thanos.ClusterConfig{
-		{ID: probeIDA, Name: "realcluster-prod-01", URL: f.server(t, "cluster-a"), Enabled: true, NamespaceFilter: "team-.*", ArgoSuffix: "ocpa", PairGroup: "pg-real",
+		{ID: probeIDA, Name: "realcluster-prod-01", URL: f.server(t, "cluster-a"), Enabled: true, NamespaceFilter: "team-.*", ArgoSuffix: "kcla", PairGroup: "pg-real",
 			APIServerURLs: []string{probeDest}, SpanClusterValues: []string{"realcluster-prod-01"}},
-		{ID: probeIDB, Name: "realcluster-prod-02", URL: f.server(t, "cluster-b"), Enabled: true, ArgoSuffix: "ocpb", PairGroup: "pg-real",
+		{ID: probeIDB, Name: "realcluster-prod-02", URL: f.server(t, "cluster-b"), Enabled: true, ArgoSuffix: "kclb", PairGroup: "pg-real",
 			APIServerURLs: []string{"https://api.real2.example.invalid:6443"}},
 		{ID: probeIDHub1, Name: "hub-real-01", URL: f.server(t, "hub-1"), Enabled: true, ThanosLabelName: "cluster", ThanosLabelValue: "hubraw"},
 		{ID: probeIDHub2, Name: "hub-real-02", URL: f.server(t, "hub-2"), Enabled: true},
@@ -327,8 +327,8 @@ func newProbeEnv(t *testing.T) *probeEnv {
 	rolloutsV2ProbeState.mu.Unlock()
 	mux := http.NewServeMux()
 	s.registerRolloutsV2ProbeRoutes(mux)
-	hubParams := v2probe.Params{EnvList: []string{"dev", "test", "prod"}, SuffixList: []string{"ocpa", "ocpb"},
-		PairGroups: map[string][]string{"pair-1": {"ocpa", "ocpb"}}, K5Window: "6h"}
+	hubParams := v2probe.Params{EnvList: []string{"dev", "test", "prod"}, SuffixList: []string{"kcla", "kclb"},
+		PairGroups: map[string][]string{"pair-1": {"kcla", "kclb"}}, K5Window: "6h"}
 	h1 := hubParams
 	h1.InstanceNS, h1.WithoutMatcher = []string{probeNS}, true
 	e := &probeEnv{s: s, mux: mux, fake: f, clusters: clusters, units: []probeUnitFx{

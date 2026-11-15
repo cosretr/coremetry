@@ -10,13 +10,13 @@ import (
 	"testing"
 )
 
-// v0.10.2192 — operator-reported (ocpma/digital): "en az 0/180 pod
+// v0.10.2192 — operator-reported (kprod/portal): "en az 0/180 pod
 // çalışıyor", pod satırlarında Status / Node / CPU "—". OpenShift KSM
 // etiket şekli (openshift-monitoring/k8s kazıması: namespace/pod KSM'nin
 // kendi değerleri, honorLabels) — fazla etiketler (container, endpoint,
 // instance, job, prometheus, service, uid) join'i bozmaz. Kök neden:
 // cluster-geneli faz / node / limit sorguları 1000-seri tavanında
-// kırpılıyor, digital'in serileri kesilen kuyrukta kalıyordu.
+// kırpılıyor, portal'ın serileri kesilen kuyrukta kalıyordu.
 
 func ksmSeries(ns, pod string, extra string, v string) string {
 	return fmt.Sprintf(`{"metric":{"__name__":"x","container":"kube-rbac-proxy-main","endpoint":"https-main",`+
@@ -26,8 +26,8 @@ func ksmSeries(ns, pod string, extra string, v string) string {
 }
 
 // clusterWideQuerier — ns-kapsamsız sorguya 1001 başka-namespace serisi +
-// en sonda digital'inkini döner (tavan digital'i keser); kapsamlı sorguya
-// yalnız digital'i.
+// en sonda portal'ınkini döner (tavan portal'ı keser); kapsamlı sorguya
+// yalnız portal'ı.
 func clusterWideQuerier(t *testing.T, seen *[]string, mu *sync.Mutex) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +35,7 @@ func clusterWideQuerier(t *testing.T, seen *[]string, mu *sync.Mutex) *httptest.
 		mu.Lock()
 		*seen = append(*seen, q)
 		mu.Unlock()
-		scoped := strings.Contains(q, `namespace=~"digital"`)
+		scoped := strings.Contains(q, `namespace=~"portal"`)
 		var series []string
 		add := func(ns, pod string) {
 			switch {
@@ -48,21 +48,21 @@ func clusterWideQuerier(t *testing.T, seen *[]string, mu *sync.Mutex) *httptest.
 			case strings.Contains(q, "kube_pod_status_phase"):
 				series = append(series, ksmSeries(ns, pod, `,"phase":"Running"`, "1"))
 			case strings.Contains(q, "kube_pod_info"):
-				series = append(series, fmt.Sprintf(`{"metric":{"namespace":"%s","pod":"%s","node":"ocpma-worker-3"},"value":[1784271068,"1"]}`, ns, pod))
+				series = append(series, fmt.Sprintf(`{"metric":{"namespace":"%s","pod":"%s","node":"kprod-worker-3"},"value":[1784271068,"1"]}`, ns, pod))
 			case strings.Contains(q, "kube_pod_container_status_restarts_total"):
 				series = append(series, fmt.Sprintf(`{"metric":{"namespace":"%s","pod":"%s"},"value":[1784271068,"0"]}`, ns, pod))
 			}
 		}
 		usage := strings.Contains(q, "container_")
-		if usage || scoped { // cpu/mem: digital topk'un başında (satır var)
-			add("digital", "bsa-digital-dashboard-prod-7d9f8c6b5-abcde")
+		if usage || scoped { // cpu/mem: portal topk'un başında (satır var)
+			add("portal", "demo-portal-dashboard-prod-7d9f8c6b5-abcde")
 		}
 		if !scoped {
 			for i := 0; i < 1001; i++ {
 				add("aaa-other", fmt.Sprintf("p-%d", i))
 			}
-			if !usage { // KSM: digital kuyrukta, tavan keser
-				add("digital", "bsa-digital-dashboard-prod-7d9f8c6b5-abcde")
+			if !usage { // KSM: portal kuyrukta, tavan keser
+				add("portal", "demo-portal-dashboard-prod-7d9f8c6b5-abcde")
 			}
 		}
 		fmt.Fprint(w, vec(series...))
@@ -75,9 +75,9 @@ func TestPodMetricsInNamespaceJoinsPhaseNodeLimit(t *testing.T) {
 	srv := clusterWideQuerier(t, &seen, &mu)
 	defer srv.Close()
 	s := New()
-	c := ClusterConfig{Name: "ocpma", URL: srv.URL, Enabled: true}
+	c := ClusterConfig{Name: "kprod", URL: srv.URL, Enabled: true}
 
-	// Bug'ın yeniden üretimi: cluster-geneli envanterde digital satırı
+	// Bug'ın yeniden üretimi: cluster-geneli envanterde portal satırı
 	// cpu topk'ta var ama faz / node / limit / restart kesilmiş.
 	all, _, err := s.PodMetrics(context.Background(), c, "")
 	if err != nil {
@@ -85,7 +85,7 @@ func TestPodMetricsInNamespaceJoinsPhaseNodeLimit(t *testing.T) {
 	}
 	found := false
 	for _, r := range all {
-		if r.Namespace == "digital" {
+		if r.Namespace == "portal" {
 			found = true
 			if r.Phase != "" || r.Node != "" {
 				t.Fatalf("fixture no longer reproduces the cap: %+v", r)
@@ -93,11 +93,11 @@ func TestPodMetricsInNamespaceJoinsPhaseNodeLimit(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("fixture: digital row missing from cluster-wide inventory")
+		t.Fatal("fixture: portal row missing from cluster-wide inventory")
 	}
 
 	seen = nil
-	rows, trunc, err := s.PodMetricsInNamespace(context.Background(), c, "digital")
+	rows, trunc, err := s.PodMetricsInNamespace(context.Background(), c, "portal")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,11 +105,11 @@ func TestPodMetricsInNamespaceJoinsPhaseNodeLimit(t *testing.T) {
 		t.Fatalf("want 1 untruncated row, got trunc=%v %+v", trunc, rows)
 	}
 	r := rows[0]
-	if r.Phase != "Running" || r.Node != "ocpma-worker-3" || r.CPUPct != 20 || r.RestartsUnknown {
+	if r.Phase != "Running" || r.Node != "kprod-worker-3" || r.CPUPct != 20 || r.RestartsUnknown {
 		t.Fatalf("phase/node/cpu%%/restarts not joined: %+v", r)
 	}
 	for _, q := range seen {
-		if !strings.Contains(q, `namespace=~"digital"`) {
+		if !strings.Contains(q, `namespace=~"portal"`) {
 			t.Errorf("unscoped query in namespace mode: %s", q)
 		}
 	}
@@ -120,12 +120,12 @@ func TestScopedNamespaceFilter(t *testing.T) {
 		filter, ns, want string
 		ok               bool
 	}{
-		{"", "digital", "digital", true},
-		{"digital|bank", "digital", "digital", true},
-		{"dig.*", "digital", "digital", true},
-		{"bank", "digital", "", false}, // kalkan: filtre dışı
-		{"dig", "digital", "", false},  // tam-çapalı
-		{"(", "digital", "", false},    // bozuk filtre gevşemez
+		{"", "portal", "portal", true},
+		{"portal|store", "portal", "portal", true},
+		{"por.*", "portal", "portal", true},
+		{"store", "portal", "", false}, // kalkan: filtre dışı
+		{"por", "portal", "", false},   // tam-çapalı
+		{"(", "portal", "", false},     // bozuk filtre gevşemez
 		{"", "a.b", `a\.b`, true},      // regex meta kaçar
 		{"", "", "", false},
 	}

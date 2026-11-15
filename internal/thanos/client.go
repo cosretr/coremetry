@@ -653,14 +653,14 @@ func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string)
 	return s.podMetrics(ctx, c, podRe, c.NamespaceFilter)
 }
 
-// PodMetricsInNamespace — v0.10.2192 (operator-reported: ocpma/digital
+// PodMetricsInNamespace — v0.10.2192 (operator-reported: kprod/portal
 // namespace detayı "en az 0/180 pod çalışıyor", pod satırlarında Status /
 // Node / CPU "—"; iş yüklerinin hepsi Ready). Namespace detayı cluster-
 // geneli envanteri süzüyordu: faz / node / limit / restart sorguları
 // cluster genelinde koşuyor, binlerce pod'luk OpenShift'te maxSeriesParsed
 // (1000) tavanında kırpılıyor (ya da 8MB gövde tavanında decode düşüyor)
 // ve sorulan namespace'in serileri kesilen kuyrukta kalıyordu — KSM etiket
-// şekli doğru (aynı namespace="digital" seçicisi /deployments'ta çalışıyor).
+// şekli doğru (aynı namespace="portal" seçicisi /deployments'ta çalışıyor).
 // Burada her sorgu namespace="<ns>" ile daralır: seri sayısı namespace'in
 // pod sayısı kadar, topk kesmesi de yalnız o namespace'te.
 // Cluster'ın NamespaceFilter kalkanı korunur: ns filtre dışındaysa boş.

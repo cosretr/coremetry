@@ -13,12 +13,12 @@ func TestRenderThanosPodsTR(t *testing.T) {
 		t.Fatal("Thanos yok/boş → kanıt yok")
 	}
 	res := thanosPodsResult{Rows: []thanos.PodRow{
-		{Cluster: "ocpa", Pod: "s-1", Phase: "Running", Restarts: 0, CPUCores: 0.5, MemBytes: 2 << 30},
-		{Cluster: "ocpa", Pod: "s-2", Phase: "Pending", Restarts: 3, CPUCores: 0.1, MemBytes: 512 << 20},
-		{Cluster: "ocpb", Pod: "s-3", Restarts: 1, MemBytes: 1 << 30},
-	}, Errors: []string{"ocpz"}}
+		{Cluster: "kcla", Pod: "s-1", Phase: "Running", Restarts: 0, CPUCores: 0.5, MemBytes: 2 << 30},
+		{Cluster: "kcla", Pod: "s-2", Phase: "Pending", Restarts: 3, CPUCores: 0.1, MemBytes: 512 << 20},
+		{Cluster: "kclb", Pod: "s-3", Restarts: 1, MemBytes: 1 << 30},
+	}, Errors: []string{"kclz"}}
 	out := renderThanosPodsTR(res, "s")
-	for _, want := range []string{"3 pod, 2 cluster", "- ocpa: 2 pod (1 çalışıyor), restart 3", "- ocpa/s-2: Pending, restart 3", "Okunamayan cluster (Thanos zaman aşımı/hata): ocpz"} {
+	for _, want := range []string{"3 pod, 2 cluster", "- kcla: 2 pod (1 çalışıyor), restart 3", "- kcla/s-2: Pending, restart 3", "Okunamayan cluster (Thanos zaman aşımı/hata): kclz"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("çıktıda %q yok:\n%s", want, out)
 		}

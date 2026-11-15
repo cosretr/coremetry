@@ -562,7 +562,7 @@ func (r labelErrReader) MetricLabelNamesIn(ctx context.Context, metric string, f
 }
 
 // TestResolveREDFamilyOneFamilyFailureDoesNotHideOthers — v0.10.1559
-// (operatör, prod bsa-crm-contentmanagement-prod: rpc_server_duration_
+// (operatör, prod demo-crm-content-prod: rpc_server_duration_
 // milliseconds_* VM'de var, HTTP/RPC sekmesinde gRPC bölümü yok;
 // /red-family → state unknown, reason timeout, tried []). Kök neden: HTTP
 // etiket okumasının zaman aşımı çözücüyü İLK ailede bitiriyordu, gRPC hiç
@@ -577,7 +577,7 @@ func TestResolveREDFamilyOneFamilyFailureDoesNotHideOthers(t *testing.T) {
 			present: map[string]bool{redFamilyGRPCLegacy: true}},
 		errFor: map[string]error{httpF.Probe: context.DeadlineExceeded},
 	}
-	res, err := s.resolveServiceREDFamily(context.Background(), rd, "bsa-crm-contentmanagement-prod", nil, to)
+	res, err := s.resolveServiceREDFamily(context.Background(), rd, "demo-crm-content-prod", nil, to)
 	if err != nil {
 		t.Fatalf("tek ailenin hatası çözümü düşürmemeli: %v", err)
 	}

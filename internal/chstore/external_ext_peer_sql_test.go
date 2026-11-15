@@ -3,7 +3,7 @@ package chstore
 // v0.10.1266 — operatör 2026-10-17: /external k8s DNS ile çağrılan
 // enstrümante servisleri dış sistem diye listeliyor.
 //
-// `ext:bsa-sales-salesapplication-query-prod.sales.svc.cluster.local`
+// `ext:demo-sales-application-query-prod.sales.svc.cluster.local`
 // /external'da üçüncü parti olarak görünüyordu; v0.10.1260 aynı sınıfı
 // topoloji grafiğinde ExtPeerServiceCandidates/ResolveExtPeer ile
 // kapatmıştı ama bu sayfanın dışlaması birebir `GLOBAL NOT IN`'di.
@@ -32,9 +32,9 @@ import (
 // görür). identity_ext_peer_test.go'nun girdileri + port/şema/boşluk
 // köşeleri.
 var extPeerCaseTable = []string{
-	"bsa-sales-salesapplication-query-prod.sales.svc.cluster.local",
-	"bsa-config-server.bsa.svc",
-	"bsa-bpm-dos-prod.bpm.cluster.local",
+	"demo-sales-application-query-prod.sales.svc.cluster.local",
+	"demo-config-server.demo.svc",
+	"demo-flow-engine-prod.flow.cluster.local",
 	"bsa-pricing-benefit-prod.pricing.svc.cluster.local:50051",
 	"dns:///bsa-cashmanagement.cash.svc:8080",
 	"dns:orders.shop.svc.cluster.local:443",
@@ -171,9 +171,9 @@ func TestExternalHostExclusionCandidates(t *testing.T) {
 		want []string
 	}{
 		// v0.10.1344 — + etiket önekleri (ResolveExtPeer 2. aşaması; en çok 2 atım).
-		{"bsa-sales-salesapplication-query-prod.sales.svc.cluster.local",
-			[]string{"bsa-sales-salesapplication-query-prod.sales.svc.cluster.local", "bsa-sales-salesapplication-query-prod",
-				"bsa-sales-salesapplication-query", "bsa-sales-salesapplication"}},
+		{"demo-sales-application-query-prod.sales.svc.cluster.local",
+			[]string{"demo-sales-application-query-prod.sales.svc.cluster.local", "demo-sales-application-query-prod",
+				"demo-sales-application-query", "demo-sales-application"}},
 		{"api.stripe.com", []string{"api.stripe.com"}},
 		{"ext:payments", []string{"ext:payments"}}, // ham ad "ext:" ile başlıyorsa ikinci kez soyulmaz
 		{"", []string{}},
@@ -241,9 +241,9 @@ func TestExternalReadsExcludeInstrumentedServicesLiveEngine(t *testing.T) {
 	in := from.Add(10 * time.Minute)
 	out := to.Add(10 * time.Minute) // pencere DIŞI kova
 
-	services := []string{"bsa-sales-salesapplication-query-prod", "payments", "Billing", "dup", "DUP", "orders.shop.svc.cluster.local"}
+	services := []string{"demo-sales-application-query-prod", "payments", "Billing", "dup", "DUP", "orders.shop.svc.cluster.local"}
 	hosts := []string{
-		"bsa-sales-salesapplication-query-prod.sales.svc.cluster.local", // operatör vakası → dışlanır
+		"demo-sales-application-query-prod.sales.svc.cluster.local", // operatör vakası → dışlanır
 		"payments.pay.svc:9090",                       // → dışlanır
 		"dns:///payments.pay.svc.cluster.local:50051", // → dışlanır
 		"billing.fin.svc.cluster.local",               // harf duyarsız → dışlanır

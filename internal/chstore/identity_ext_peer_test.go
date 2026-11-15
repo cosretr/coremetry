@@ -1,10 +1,10 @@
 package chstore
 
 // v0.10.1260 — operatör raporu 2026-10-17 (servis sayfası → Topology,
-// odak bsa-crm-contentmanagement-prod): gRPC ile çağrılan enstrümante
-// servis `ext:bsa-sales-salesapplication-query-prod.sales.svc.cluster.local`
+// odak demo-crm-content-prod): gRPC ile çağrılan enstrümante
+// servis `ext:demo-sales-application-query-prod.sales.svc.cluster.local`
 // adıyla ayrı bir "dış bağımlılık" düğümü olarak çiziliyordu; gerçek
-// `bsa-sales-salesapplication-query-prod` düğümü aynı graftaydı. v0.8.11
+// `demo-sales-application-query-prod` düğümü aynı graftaydı. v0.8.11
 // ext-merge'i yalnız birebir eşitlikte birleştiriyordu.
 
 import (
@@ -18,12 +18,12 @@ func TestExtPeerServiceCandidates(t *testing.T) {
 		name, in string
 		want     []string
 	}{
-		{"FQDN svc.cluster.local", "ext:bsa-sales-salesapplication-query-prod.sales.svc.cluster.local",
-			[]string{"bsa-sales-salesapplication-query-prod.sales.svc.cluster.local", "bsa-sales-salesapplication-query-prod"}},
-		{".svc short form", "bsa-config-server.bsa.svc",
-			[]string{"bsa-config-server.bsa.svc", "bsa-config-server"}},
-		{".cluster.local form", "bsa-bpm-dos-prod.bpm.cluster.local",
-			[]string{"bsa-bpm-dos-prod.bpm.cluster.local", "bsa-bpm-dos-prod"}},
+		{"FQDN svc.cluster.local", "ext:demo-sales-application-query-prod.sales.svc.cluster.local",
+			[]string{"demo-sales-application-query-prod.sales.svc.cluster.local", "demo-sales-application-query-prod"}},
+		{".svc short form", "demo-config-server.demo.svc",
+			[]string{"demo-config-server.demo.svc", "demo-config-server"}},
+		{".cluster.local form", "demo-flow-engine-prod.flow.cluster.local",
+			[]string{"demo-flow-engine-prod.flow.cluster.local", "demo-flow-engine-prod"}},
 		{"with port", "ext:bsa-pricing-benefit-prod.pricing.svc.cluster.local:50051",
 			[]string{"bsa-pricing-benefit-prod.pricing.svc.cluster.local:50051", "bsa-pricing-benefit-prod.pricing.svc.cluster.local", "bsa-pricing-benefit-prod"}},
 		{"dns:/// gRPC target", "ext:dns:///bsa-cashmanagement.cash.svc:8080",
@@ -52,13 +52,13 @@ func TestExtPeerServiceCandidates(t *testing.T) {
 }
 
 func TestServiceNameSetResolveExtPeer(t *testing.T) {
-	set := NewServiceNameSet("bsa-sales-salesapplication-query-prod", "payments", "api.stripe.com.mock",
+	set := NewServiceNameSet("demo-sales-application-query-prod", "payments", "api.stripe.com.mock",
 		"Billing", "dup", "DUP", "orders.shop.svc.cluster.local")
 	cases := []struct {
 		name, peer, want string
 		ok               bool
 	}{
-		{"operator case FQDN", "ext:bsa-sales-salesapplication-query-prod.sales.svc.cluster.local", "bsa-sales-salesapplication-query-prod", true},
+		{"operator case FQDN", "ext:demo-sales-application-query-prod.sales.svc.cluster.local", "demo-sales-application-query-prod", true},
 		{".svc + port", "ext:payments.pay.svc:9090", "payments", true},
 		{"dns:/// target", "ext:dns:///payments.pay.svc.cluster.local:50051", "payments", true},
 		{"exact still wins", "ext:payments", "payments", true},

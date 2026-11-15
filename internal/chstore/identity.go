@@ -612,10 +612,10 @@ const dbNameExpr = `coalesce(nullIf(attr_values[indexOf(attr_keys, 'db.name')], 
 // ─── ext:<peer> → gerçek servis adı (v0.10.1260) ─────────────────────
 //
 // Operatör raporu (2026-10-17, servis sayfası → Topology, odak
-// bsa-crm-contentmanagement-prod): gRPC ile çağrılan, KENDİSİ de
+// demo-crm-content-prod): gRPC ile çağrılan, KENDİSİ de
 // enstrümante bir servis ayrı bir "dış bağımlılık" düğümü olarak
-// çiziliyordu — `ext:bsa-sales-salesapplication-query-prod.sales.svc.cluster.local`
-// ile gerçek `bsa-sales-salesapplication-query-prod` aynı grafta yan
+// çiziliyordu — `ext:demo-sales-application-query-prod.sales.svc.cluster.local`
+// ile gerçek `demo-sales-application-query-prod` aynı grafta yan
 // yana. v0.8.11 birleştirmesi ext:<ad>'ı yalnız <ad> bir service.name'e
 // BİREBİR eşitse topluyordu; Kubernetes DNS adı (`<svc>.<ns>.svc
 // .cluster.local`, `<svc>.<ns>.svc`, `:port`'lu, gRPC hedefi

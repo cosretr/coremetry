@@ -56,11 +56,11 @@ type fakeClusters struct{}
 
 func (fakeClusters) Values(cid string) []string {
 	if cid == "c-1" {
-		return []string{"ocpma"}
+		return []string{"kprod"}
 	}
 	return nil
 }
-func (fakeClusters) ID(v string) (string, bool) { return "c-1", v == "ocpma" }
+func (fakeClusters) ID(v string) (string, bool) { return "c-1", v == "kprod" }
 
 // v0.10.2193 (Entity S0) — öncelik tablosu (plan §2.4): pod → servis span
 // payı; iş yükü → servis pod runs çoğunluğu > attr bağı > ad eşitliği;
@@ -68,17 +68,17 @@ func (fakeClusters) ID(v string) (string, bool) { return "c-1", v == "ocpma" }
 func TestResolverPathsPriority(t *testing.T) {
 	src := &fakeSrc{
 		seen: []SeenEdge{
-			{Namespace: "digital", Pod: "dash-7d9f-a", Node: "w-1", Service: "bsa-digital-dashboard-prod", Spans: 900},
-			{Namespace: "digital", Pod: "dash-7d9f-a", Node: "w-1", Service: "otel-agent", Spans: 10},
-			{Namespace: "", Pod: "dash-7d9f-b", Node: "w-2", Service: "bsa-digital-dashboard-prod", Spans: 5}, // ns basılmamış
+			{Namespace: "portal", Pod: "dash-7d9f-a", Node: "w-1", Service: "demo-portal-dashboard-prod", Spans: 900},
+			{Namespace: "portal", Pod: "dash-7d9f-a", Node: "w-1", Service: "otel-agent", Spans: 10},
+			{Namespace: "", Pod: "dash-7d9f-b", Node: "w-2", Service: "demo-portal-dashboard-prod", Spans: 5}, // ns basılmamış
 			{Namespace: "other", Pod: "lone-1", Service: "leak", Spans: 99},
 		},
-		links: []DeploymentLink{{Service: "pay-svc", Deployment: "payments", Namespace: "digital"}},
+		links: []DeploymentLink{{Service: "pay-svc", Deployment: "payments", Namespace: "portal"}},
 		known: []string{"Batch-Job", "cart"},
 	}
 	r := NewResolver(src, fakeClusters{})
-	wl := func(n string) string { return WorkloadID("c-1", "digital", "Deployment", n) }
-	pod := func(n string) string { return PodID("c-1", "digital", n) }
+	wl := func(n string) string { return WorkloadID("c-1", "portal", "Deployment", n) }
+	pod := func(n string) string { return PodID("c-1", "portal", n) }
 	owned := map[string][]string{
 		wl("dash"):      {pod("dash-7d9f-a"), pod("dash-7d9f-b")},
 		wl("payments"):  {pod("payments-1")},
@@ -91,10 +91,10 @@ func TestResolverPathsPriority(t *testing.T) {
 		t.Fatal(err)
 	}
 	cases := map[string]string{
-		pod("dash-7d9f-a"): "bsa-digital-dashboard-prod", // span payı
-		pod("dash-7d9f-b"): "bsa-digital-dashboard-prod", // ns'siz satır sayılır
+		pod("dash-7d9f-a"): "demo-portal-dashboard-prod", // span payı
+		pod("dash-7d9f-b"): "demo-portal-dashboard-prod", // ns'siz satır sayılır
 		pod("lone-1"):      "",                           // başka ns'nin kenarı sızmaz
-		wl("dash"):         "bsa-digital-dashboard-prod", // pod runs çoğunluğu
+		wl("dash"):         "demo-portal-dashboard-prod", // pod runs çoğunluğu
 		wl("payments"):     "pay-svc",                    // attr bağı
 		wl("batch-job"):    "Batch-Job",                  // ad eşitliği (son çare)
 		wl("mystery"):      "",
@@ -104,7 +104,7 @@ func TestResolverPathsPriority(t *testing.T) {
 			t.Errorf("%s: servis %q, want %q", id, s, want)
 		}
 	}
-	if p := got[pod("dash-7d9f-a")]; p.Workload != wl("dash") || p.NodeName() != "w-1" || p.Cluster != "cluster:c-1" || p.Namespace != "ns:c-1/digital" {
+	if p := got[pod("dash-7d9f-a")]; p.Workload != wl("dash") || p.NodeName() != "w-1" || p.Cluster != "cluster:c-1" || p.Namespace != "ns:c-1/portal" {
 		t.Errorf("pod path %+v", p)
 	}
 	if len(got) != 7 {
@@ -143,7 +143,7 @@ func TestResolverLookup(t *testing.T) {
 		{Namespace: "ns", Pod: "p", Service: "major", Spans: 50},
 	}}
 	r := NewResolver(src, fakeClusters{})
-	got := r.Lookup(context.Background(), Hint{ClusterValue: "ocpma", Namespace: "ns", Pod: "p", Workload: "w"}, time.Now())
+	got := r.Lookup(context.Background(), Hint{ClusterValue: "kprod", Namespace: "ns", Pod: "p", Workload: "w"}, time.Now())
 	want := []string{"pod:c-1/ns/p", "svc:major", "svc:minor", "wl:c-1/ns/Derived/w"}
 	if len(got) != len(want) {
 		t.Fatalf("%+v", got)
@@ -160,10 +160,10 @@ func TestResolverLookup(t *testing.T) {
 
 // v0.10.2195 — pod yolu kenarın span cluster değerini taşır (trace süzgeci).
 func TestResolverPathsClusterValue(t *testing.T) {
-	src := &fakeSrc{seen: []SeenEdge{{Namespace: "ns", Pod: "p", Service: "s", Spans: 3, Cluster: "OCPA"}}}
+	src := &fakeSrc{seen: []SeenEdge{{Namespace: "ns", Pod: "p", Service: "s", Spans: 3, Cluster: "KCLA"}}}
 	id := PodID("c-1", "ns", "p")
 	got, _ := NewResolver(src, fakeClusters{}).Paths(context.Background(), []string{id}, time.Now(), nil)
-	if got[id].ClusterValue != "OCPA" {
+	if got[id].ClusterValue != "KCLA" {
 		t.Fatalf("%+v", got[id])
 	}
 }

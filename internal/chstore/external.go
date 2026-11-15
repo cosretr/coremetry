@@ -228,8 +228,8 @@ func (s *Store) GetExternalHostDetail(ctx context.Context, host string, from, to
 // ─── v0.10.1266 — enstrümante servis dışlaması, k8s DNS dahil ────────
 //
 // Operatör raporu (2026-10-17): /external,
-// `ext:bsa-sales-salesapplication-query-prod.sales.svc.cluster.local`'ı
-// üçüncü parti diye listeliyordu; `bsa-sales-salesapplication-query-prod`
+// `ext:demo-sales-application-query-prod.sales.svc.cluster.local`'ı
+// üçüncü parti diye listeliyordu; `demo-sales-application-query-prod`
 // ise enstrümante bir servis. v0.10.1260 topoloji grafiğini
 // ExtPeerServiceCandidates/ResolveExtPeer ile düzeltti, ama bu sayfanın
 // dışlaması `substring(child_node, 5) GLOBAL NOT IN (service_summary_5m)`

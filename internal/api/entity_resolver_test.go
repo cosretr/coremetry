@@ -14,17 +14,17 @@ import (
 // zaman resolver'ın (eşleşme yoksa boş), node yalnız Thanos boşsa.
 func TestFillPodsFromPaths(t *testing.T) {
 	rows := []thanos.PodRow{
-		{Namespace: "digital", Pod: "dash-a"},
-		{Namespace: "digital", Pod: "kept", Node: "ksm-node"},
-		{Namespace: "digital", Pod: "none"},
+		{Namespace: "portal", Pod: "dash-a"},
+		{Namespace: "portal", Pod: "kept", Node: "ksm-node"},
+		{Namespace: "portal", Pod: "none"},
 	}
-	ids := []string{"pod:c-1/digital/dash-a", "pod:c-1/digital/kept", "pod:c-1/digital/none"}
+	ids := []string{"pod:c-1/portal/dash-a", "pod:c-1/portal/kept", "pod:c-1/portal/none"}
 	paths := map[string]entity.Path{
-		ids[0]: {Service: "svc:bsa-digital-dashboard-prod", Node: "node:c-1/w-3"},
+		ids[0]: {Service: "svc:demo-portal-dashboard-prod", Node: "node:c-1/w-3"},
 		ids[1]: {Service: "svc:kept-svc", Node: "node:c-1/span-node"},
 	}
 	fillPodsFromPaths(rows, ids, paths)
-	if rows[0].Service != "bsa-digital-dashboard-prod" || rows[0].Node != "w-3" {
+	if rows[0].Service != "demo-portal-dashboard-prod" || rows[0].Node != "w-3" {
 		t.Errorf("row0 %+v", rows[0])
 	}
 	if rows[1].Service != "kept-svc" || rows[1].Node != "ksm-node" {

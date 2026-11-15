@@ -59,14 +59,14 @@ describe('podTraceParams', () => {
 
 describe('traceScopeCtx (v0.10.2195, entity kapsamı)', () => {
   it('pod kenarı: span\'in gerçek cluster değeri, URL servisi daraltıcı', () => {
-    expect(traceScopeCtx({ mode: 'pod', clusterValue: 'OCPA' }, ['ocpa'], '')).toEqual({ cluster: 'OCPA', service: '', podExact: true });
+    expect(traceScopeCtx({ mode: 'pod', clusterValue: 'KCLA' }, ['kcla'], '')).toEqual({ cluster: 'KCLA', service: '', podExact: true });
   });
   it('pod span\'i yok → iş yükünün servisi, servis geneli', () => {
-    expect(traceScopeCtx({ mode: 'service', clusterValue: 'ocpa', service: 'cards' }, ['ocpa'], ''))
-      .toEqual({ cluster: 'ocpa', service: 'cards', podExact: false });
+    expect(traceScopeCtx({ mode: 'service', clusterValue: 'kcla', service: 'cards' }, ['kcla'], ''))
+      .toEqual({ cluster: 'kcla', service: 'cards', podExact: false });
   });
   it('kapsam yok / none → kaydın tek değeri; çok değerde süzgeç yok', () => {
-    expect(traceScopeCtx(undefined, ['ocpa'], 'svc')).toEqual({ cluster: 'ocpa', service: 'svc', podExact: true });
+    expect(traceScopeCtx(undefined, ['kcla'], 'svc')).toEqual({ cluster: 'kcla', service: 'svc', podExact: true });
     expect(traceScopeCtx({ mode: 'none' }, ['a', 'b'], '')).toEqual({ cluster: '', service: '', podExact: true });
   });
 });

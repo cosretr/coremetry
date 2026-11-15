@@ -45,7 +45,7 @@ func fixtureSeeds() Seeds {
 			"api.real.example.invalid:6443": "cluster-a", "api.real.example.invalid": "cluster-a",
 			"api.real2.example.invalid:6443": "cluster-b", "api.real2.example.invalid": "cluster-b",
 		},
-		EnvList: []string{"dev", "test", "prod"}, SuffixList: []string{"ocpa", "ocpb"},
+		EnvList: []string{"dev", "test", "prod"}, SuffixList: []string{"kcla", "kclb"},
 	}
 }
 
@@ -168,9 +168,9 @@ func fixtureRows(id, variant string) ([]Row, bool) {
 	case "N2":
 		return []Row{row("0.98", "namespace", "team-payments-prod"), row("0.9", "namespace", "team-billing-dev"), row("0", "namespace", "openshift-gitops")}, true
 	case "N4":
-		return []Row{row("300", "sfx", "zzz"), row("120", "sfx", "ocpa"), row("40", "sfx", "legacy")}, true
+		return []Row{row("300", "sfx", "zzz"), row("120", "sfx", "kcla"), row("40", "sfx", "legacy")}, true
 	case "N5a":
-		return []Row{row("19000", "dest_server", "https://api.real.example.invalid:6443", "sfx", "ocpa"), row("17500", "dest_server", "https://api.real2.example.invalid:6443", "sfx", "ocpb")}, true
+		return []Row{row("19000", "dest_server", "https://api.real.example.invalid:6443", "sfx", "kcla"), row("17500", "dest_server", "https://api.real2.example.invalid:6443", "sfx", "kclb")}, true
 	case "N5b":
 		return []Row{row("0.95", "dest_server", "https://api.real.example.invalid:6443"), row("0.97", "dest_server", "https://api.real2.example.invalid:6443")}, true
 	case "L2":
@@ -323,7 +323,7 @@ func fixtureRun() RawRun {
 	}
 	// Hub'lar
 	for i, h := range hubs {
-		p := Params{EnvList: []string{"dev", "test", "prod"}, SuffixList: []string{"ocpa", "ocpb"}, PairGroups: map[string][]string{"pair-1": {"ocpa", "ocpb"}},
+		p := Params{EnvList: []string{"dev", "test", "prod"}, SuffixList: []string{"kcla", "kclb"}, PairGroups: map[string][]string{"pair-1": {"kcla", "kclb"}},
 			InstanceNS: []string{"team-payments-prod", "team-billing-dev"}, WithoutMatcher: h.WithoutMatcher}
 		if i == 1 {
 			p.InstanceNS = nil
@@ -414,7 +414,7 @@ func TestRenderGolden(t *testing.T) {
 		t.Error("altbilgi reddedilen etiket")
 	}
 	// Şablon basılır, etkin ifade değil.
-	if strings.Contains(got, `namespace=~"team-.*"`) || strings.Contains(got, "ocpa|ocpb") {
+	if strings.Contains(got, `namespace=~"team-.*"`) || strings.Contains(got, "kcla|kclb") {
 		t.Error("rapor etkin ifadeyi / ham suffix'i basmamalı")
 	}
 	for _, id := range []string{"V1", "V5", "V6", "V13"} {

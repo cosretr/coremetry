@@ -7,8 +7,8 @@ import (
 )
 
 // workload_service.go — v0.10.2191 (operator-reported: Clusters ns detayında
-// her iş yükü "servis eşleşmedi"; Deployment bsa-digital-dashboard-prod ↔
-// servis bsa-digital-dashboard-prod 1.4M span'le Services listesindeydi).
+// her iş yükü "servis eşleşmedi"; Deployment demo-portal-dashboard-prod ↔
+// servis demo-portal-dashboard-prod 1.4M span'le Services listesindeydi).
 // Eski yol tekti: /pods satırlarının metric_points host_name = pod adı
 // eşlemesinin çoğunluğu. Uygulama metrik basmıyorsa, host.name pod adı
 // değilse, cluster attr'ı farklıysa ya da pod listesi cluster-geneli

@@ -62,7 +62,7 @@ Body options (all optional):
 {
   "targets": ["c-1a2b3c4d"],            "hubs": ["c-9f8e7d6c"],
   "packs": ["K","D","R","H","N","T"],
-  "envList": ["dev","test","prod"],     "suffixList": ["ocpa","ocpb"],
+  "envList": ["dev","test","prod"],     "suffixList": ["kcla","kclb"],
   "options": { "withoutMatcher": true, "dedupCheck": true, "secondSample": true,
                "hubInject": {"c-9f8e7d6c": true}, "budgetS": 300 }
 }

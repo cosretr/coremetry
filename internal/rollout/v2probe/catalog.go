@@ -32,7 +32,7 @@
 // ── YER TUTUCULAR (kapalı küme; TestCatalogPlaceholdersClosed) ───────────
 //
 //	{{env}}    envList QuoteMeta'lı `|` alternasyonu          dev|test|prod
-//	{{sfx}}    suffixList aynı                                 ocpa|ocpb
+//	{{sfx}}    suffixList aynı                                 kcla|kclb
 //	{{RE}}     `[^-]+-[^-]+-.+-({{env}})-({{sfx}})` (ters tırnak; §11.0 RE)
 //	{{pair}}   pairGroup başına suffix alternasyonu (≥2)
 //	{{ns}}     `,namespace=~"…"` bağlacı (thanos.NamespaceMatcher) ya da ""
