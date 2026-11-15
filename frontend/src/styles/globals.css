@@ -3245,6 +3245,8 @@ button.accent.copied {
 .fq-chip.is-draft .fq-o { border-right: none; }
 .fq-input { flex: 1; min-width: 220px; background: transparent; border: none; outline: none; color: var(--text); font: inherit; font-size: 13px; padding: 4px 2px; }
 .fq-input::placeholder { color: var(--text3); }
+/* v0.10.2203 — yerinde düzenleyici: çipin içinde, içeriği kadar geniş (sondaki serbest kutunun 220px tabanı yok). */
+.fq-chip .fq-edit { flex: 0 1 auto; min-width: 4ch; max-width: 320px; padding: 0 6px; font-size: 12px; }
 .fq-hint { margin-left: auto; color: var(--text3); font-size: 11px; white-space: nowrap; display: inline-flex; gap: 4px; align-items: center; }
 .fq-hint kbd { display: inline-block; padding: 0 5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: var(--radius-xs); background: var(--bg2); font-size: 10px; line-height: 15px; color: var(--text2); font-family: var(--font-mono); }
 .fq-pop { position: absolute; top: calc(100% + 6px); left: 0; width: min(640px, 100%); background: var(--bg1); border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow-pop); z-index: var(--z-popover); overflow: hidden; }

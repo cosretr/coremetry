@@ -23,6 +23,7 @@ vi.mock('@/lib/useAttributeKeys', () => ({
 }));
 
 import { FilterQueryBox } from './FilterQueryBox';
+import { topEscLayer } from '@/lib/escLayer';
 import type { FilterExpr } from '@/lib/types';
 
 let host: HTMLDivElement | null = null;
@@ -153,6 +154,55 @@ describe('FilterQueryBox', () => {
     pick(1, '=');
     expect(onChange).not.toHaveBeenCalled();
     expect((el.querySelector('.fq-input') as HTMLInputElement).value).toBe('MOBILE, WEB');
+  });
+
+  // v0.10.2203 — Operator-reported: düzenlenen çipin yanında ikinci bir
+  // "name =" çipi açılıyordu. Düzenleme yerinde: sayı ve konum korunur.
+  it('değere tık çipi KENDİ konumunda düzenleyiciye çevirir; ikinci çip yok; Enter yerinde değiştirir (tek onChange)', () => {
+    const onChange = vi.fn();
+    const el = render(<FilterQueryBox value={two} onChange={onChange} />);
+    act(() => { (el.querySelectorAll('.fq-chip .fq-v')[0] as HTMLElement).click(); });
+    const chips = el.querySelectorAll('.fq-bar > .fq-chip');
+    expect(chips.length).toBe(2);
+    expect(el.querySelector('.fq-chip.is-draft')).toBeNull();
+    expect(chips[0].classList.contains('is-editing')).toBe(true);
+    const ed = chips[0].querySelector('input.fq-edit') as HTMLInputElement;
+    expect(ed).not.toBeNull();
+    expect(ed.value).toBe('/api/v1/accounts/{id}/balance');
+    expect(chips[1].querySelector('.fq-k')!.textContent).toBe('channel_code');
+    expect(el.querySelector('.fq-steps .on')!.textContent).toContain('Değer');
+    act(() => { setInput(ed, '/health'); });
+    act(() => { key(ed, 'Enter'); });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith([{ ...two[0], v: ['/health'] }, two[1]]);
+  });
+
+  it('Esc düzenlemeden vazgeçer: çip aynen geri gelir, onChange yok', () => {
+    const onChange = vi.fn();
+    const el = render(<FilterQueryBox value={two} onChange={onChange} />);
+    act(() => { (el.querySelectorAll('.fq-chip .fq-v')[1] as HTMLElement).click(); });
+    const ed = el.querySelector('input.fq-edit') as HTMLInputElement;
+    act(() => { setInput(ed, 'X'); });
+    // Tek document dinleyicisi keyboard.ts'te (testte kurulu değil): en üst Esc katmanı çağrılır.
+    act(() => { topEscLayer()?.(); });
+    expect(el.querySelector('input.fq-edit')).toBeNull();
+    const chips = el.querySelectorAll('.fq-bar > .fq-chip');
+    expect(chips.length).toBe(2);
+    expect(chips[1].querySelector('.fq-v')!.textContent).toContain('MOBILE, WEB');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('anahtara tık anahtar adımını yerinde açar; Enter yeni anahtarı op + değerle aynı konuma yazar', () => {
+    const onChange = vi.fn();
+    const el = render(<FilterQueryBox value={two} onChange={onChange} />);
+    act(() => { (el.querySelectorAll('.fq-chip .fq-k')[1] as HTMLElement).click(); });
+    expect(el.querySelector('.fq-steps .on')!.textContent).toContain('Anahtar');
+    const ed = el.querySelector('.fq-chip.is-editing input.fq-edit') as HTMLInputElement;
+    expect(ed.value).toBe('channel_code');
+    act(() => { setInput(ed, 'http.method'); });
+    act(() => { key(ed, 'Enter'); });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith([two[0], { k: 'http.method', op: 'IN', v: ['MOBILE', 'WEB'] }]);
   });
 
   it('metrik modu (v0.10.270): anahtarlar metricAttrKeys, değerler metricLabels, sayım çubuğu yok', async () => {

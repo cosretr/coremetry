@@ -10,11 +10,17 @@
 // adımda. Çip üç parçalı (anahtar · op · DEĞER), tık = düzenle, × = kaldır,
 // Backspace boş kutuda son çipi düzenler, Esc vazgeçer.
 //
+// v0.10.2203 (operator-reported) — düzenleme YERİNDE: çipin anahtar / op /
+// değerine tık o çipi kendi konumunda düzenleyiciye çevirir (çip iki kez
+// görünmez; tıklanan adım açılır, metin seçili), öneri listesi çipin altına
+// demirlenir. Enter çipi aynı konumda değiştirir (tek onChange), Esc ya da
+// odak kaybı vazgeçer ve çipi aynen bırakır. Yeni filtre sondaki kutuda.
+//
 // Veri kaynakları FilterBuilder ile AYNI (useAttributeKeys + attributeValues,
 // aynı pencere kuralı) — sözleşme (FilterExpr, upsert aynı k+op) değişmedi.
 // Saf çekirdek lib/filterQuery.ts (testli); burada yalnız durum + DOM.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Chip, IconButton } from '@/components/ui';
 import { api } from '@/lib/api';
 import { metricLabelQ } from '@/lib/metricLabelQuery'; // v0.10.875
@@ -97,6 +103,10 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
   const [liveLoading, setLiveLoading] = useState(false);
   const [recent, setRecent] = useState<FilterExpr[]>(() => loadRecent(recentKey));
   const inputRef = useRef<HTMLInputElement>(null);
+  // v0.10.2203 — öneri listesinin demir noktası (düzenlenen çipin sol kenarı).
+  const fqRef = useRef<HTMLDivElement>(null);
+  const editChipRef = useRef<HTMLSpanElement>(null);
+  const [popLeft, setPopLeft] = useState(0);
   const listId = 'fq-list';
 
   const [range] = useUrlRange();
@@ -166,6 +176,25 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
 
   useEffect(() => { setHi(0); }, [draft?.step, draft?.text]);
 
+  // v0.10.2203 — yerinde düzenleyici açılınca odak + metin seçili; liste
+  // düzenlenen çipin altına (kapsayıcıdan taşmadan).
+  const editingIdx = draft?.editing;
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (editingIdx === undefined) {
+      if (refocus.current) inputRef.current?.focus();
+      refocus.current = false;
+      return;
+    }
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, [editingIdx, draft?.step]);
+  useLayoutEffect(() => {
+    const chip = editChipRef.current, box = fqRef.current;
+    if (editingIdx === undefined || !chip || !box) { setPopLeft(0); return; }
+    setPopLeft(Math.max(0, Math.min(chip.offsetLeft, box.clientWidth - 640)));
+  }, [editingIdx, value.length]);
+
   const commit = useCallback((expr: FilterExpr, editing?: number) => {
     let next: FilterExpr[];
     if (editing !== undefined && editing >= 0 && editing < value.length) {
@@ -181,6 +210,7 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
     }
     setDraft(null);
     inputRef.current?.focus();
+    refocus.current = true; // v0.10.2203 — girdi çipten sona taşındıysa yeni düğüm de odak alsın
   }, [value, onChange, recentKey, recent]);
 
   const removeAt = (i: number) => onChange(value.filter((_, j) => j !== i));
@@ -189,7 +219,14 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
     const f = value[i];
     if (!f) return;
     setDraft({ step: OP_NEEDS_VALUE[f.op] ? 'value' : 'op', k: f.k, op: f.op, text: chipValueLabel(f), editing: i });
-    inputRef.current?.focus();
+  };
+
+  // v0.10.2203 — anahtara tık: anahtar adımı (metin seçili); Enter yeni
+  // anahtarı çipin op + değeriyle aynı konuma yazar.
+  const editChipKey = (i: number) => {
+    const f = value[i];
+    if (!f) return;
+    setDraft({ step: 'key', k: f.k, op: f.op, text: f.k, editing: i, keep: f.v });
   };
 
   // v0.10.1160 — Operator-reported: op'u değiştirmek için çipi kaldırıp yeniden
@@ -199,7 +236,6 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
     const f = value[i];
     if (!f) return;
     setDraft({ step: 'op', k: f.k, op: f.op, text: '', editing: i, keep: f.v });
-    inputRef.current?.focus();
   };
 
   const pickOp = (d: Draft, op: FilterOp) => {
@@ -218,6 +254,8 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
       if (inline) { commit(inline, draft.editing); return; }
       const k = keyMatches[hi] ?? draft.text.trim();
       if (!k) return;
+      // v0.10.2203 — çipin anahtarı düzenleniyorsa op + değer korunur, çip yerinde değişir.
+      if (draft.editing !== undefined && draft.keep) { commit({ k, op: draft.op, v: draft.keep }, draft.editing); return; }
       setDraft({ ...draft, step: 'op', k, text: '' });
       return;
     }
@@ -272,21 +310,43 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
     setDraft({ ...draft, text: t });
   };
 
+  const editing = draft?.editing !== undefined;
   const inputPlaceholder = !draft ? (placeholder ?? 'Filtre: anahtar yaz ya da http.route=/x')
     : draft.step === 'key' ? 'anahtar…' : draft.step === 'op' ? 'op (= ≠ ~ IN > < ∃)…'
       : isListOp(draft.op) ? 'değerler, virgülle…' : 'değer…';
 
+  // v0.10.2203 — TEK girdi: düzenleme yokken çip barının sonunda, bir çip
+  // düzenlenirken o çipin içinde (aynı combobox; ikinci girdi yok). Odak
+  // kaybı yalnız yerinde düzenlemeyi iptal eder (çip aynen kalır).
+  const editingAt = draft?.editing;
+  const inputEl = (
+    <input ref={inputRef} className={editing ? 'fq-input fq-edit' : 'fq-input'} value={draft?.text ?? ''} placeholder={inputPlaceholder}
+      aria-label={editing ? `Filtreyi düzenle: ${value[editingAt ?? -1]?.k ?? ''}` : 'Filtre'} aria-autocomplete="list"
+      aria-controls={draft ? listId : undefined} aria-activedescendant={draft ? `${listId}-${hi}` : undefined}
+      size={editing ? Math.max(4, (draft?.text.length ?? 0) + 1) : undefined}
+      onChange={e => onText(e.target.value)} onKeyDown={onKeyDown}
+      onBlur={editing ? () => setDraft(d => (d && d.editing === editingAt ? null : d)) : undefined}
+      autoComplete="off" spellCheck={false} />
+  );
+
   return (
-    <div className="fq">
+    <div className="fq" ref={fqRef}>
       <div className={draft ? 'fq-bar is-open' : 'fq-bar'} role="combobox" aria-expanded={draft !== null} aria-haspopup="listbox"
         aria-owns={draft ? listId : undefined} onClick={() => inputRef.current?.focus()} data-tour={tourBar}>
         <span className="fq-lens" aria-hidden>⌕</span>
-        {value.map((f, i) => { const d = chipDisplay(f); return (
-          <span key={`${filterKey(f)}#${i}`} className={draft?.editing === i ? 'fq-chip is-editing' : 'fq-chip'}
+        {value.map((f, i) => { const d = chipDisplay(f); if (draft && draft.editing === i) return (
+          // v0.10.2203 — düzenlenen çip KENDİ konumunda düzenleyici olur (ikinci çip yok).
+          <span key={`${filterKey(f)}#${i}`} ref={editChipRef} className="fq-chip is-editing" onClick={e => e.stopPropagation()}>
+            {draft.step !== 'key' && <span className="fq-k">{draft.k}</span>}
+            {draft.step === 'value' && <span className="fq-o mono">{OP_SHORT[draft.op]}</span>}
+            {inputEl}
+          </span>
+        ); return (
+          <span key={`${filterKey(f)}#${i}`} className="fq-chip"
             title={`${f.k} ${f.op} ${chipValueLabel(f)} — tık: düzenle`}>
             {/* v0.10.1093 — görünen metin chipDisplay'den (db_stmt_hash →
                 "statement #…"); title ve düzenleme ham değeri taşır. */}
-            <span className="fq-k" onClick={e => { e.stopPropagation(); editChip(i); }}>{d.key}</span>
+            <span className="fq-k" onClick={e => { e.stopPropagation(); editChipKey(i); }}>{d.key}</span>
             {d.op && <span className="fq-o mono" title="Operatörü değiştir" onClick={e => { e.stopPropagation(); editChipOp(i); }}>{d.op}</span>}
             {OP_NEEDS_VALUE[f.op] && (
               <span className="fq-v" onClick={e => { e.stopPropagation(); editChip(i); }}>
@@ -303,22 +363,19 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
               icon="✕" />
           </span>
         ); })}
-        {draft && draft.step !== 'key' && (
+        {draft && draft.editing === undefined && draft.step !== 'key' && (
           <span className="fq-chip is-draft" aria-live="polite">
             <span className="fq-k">{draft.k}</span>
             <span className="fq-o mono">{draft.step === 'value' ? OP_SHORT[draft.op] : '…'}</span>
           </span>
         )}
-        <input ref={inputRef} className="fq-input" value={draft?.text ?? ''} placeholder={inputPlaceholder}
-          aria-label="Filtre" aria-autocomplete="list" aria-controls={draft ? listId : undefined}
-          aria-activedescendant={draft ? `${listId}-${hi}` : undefined}
-          onChange={e => onText(e.target.value)} onKeyDown={onKeyDown} autoComplete="off" spellCheck={false} />
+        {!editing && inputEl}
         <span className="fq-hint" aria-hidden>
           <kbd>↑</kbd><kbd>↓</kbd> seç · <kbd>Tab</kbd> adım · <kbd>Enter</kbd> ekle · <kbd>Esc</kbd> vazgeç
         </span>
       </div>
       {draft && (
-        <div className="fq-pop">
+        <div className="fq-pop" style={editing && popLeft > 0 ? { left: popLeft } : undefined}>
           <div className="fq-steps">
             <div className={draft.step === 'key' ? 'on' : 'done'}>1 · Anahtar{draft.step !== 'key' && <span className="mono">{draft.k}</span>}</div>
             <div className={draft.step === 'op' ? 'on' : draft.step === 'value' ? 'done' : ''}>2 · Op{draft.step === 'value' && <span className="mono">{OP_SHORT[draft.op]}</span>}</div>
@@ -330,7 +387,11 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
                 ? <div className="fq-empty">{draft.text ? 'Eşleşen anahtar yok — Enter ile olduğu gibi kullan' : 'Anahtar yazmaya başla'}</div>
                 : keyMatches.map((k, i) => (
                   <div key={k} id={`${listId}-${i}`} role="option" aria-selected={i === hi} className={i === hi ? 'fq-opt sel' : 'fq-opt'}
-                    onMouseEnter={() => setHi(i)} onMouseDown={e => { e.preventDefault(); setHi(i); setDraft({ ...draft, step: 'op', k, text: '' }); }}>
+                    onMouseEnter={() => setHi(i)} onMouseDown={e => {
+                      e.preventDefault(); setHi(i);
+                      if (draft.editing !== undefined && draft.keep) { commit({ k, op: draft.op, v: draft.keep }, draft.editing); return; } // v0.10.2203
+                      setDraft({ ...draft, step: 'op', k, text: '' });
+                    }}>
                     <span className="name mono">{k}</span>
                     {hints[k] ? <span className="cnt">{fmtNum(hints[k])} span</span> : null}
                   </div>
