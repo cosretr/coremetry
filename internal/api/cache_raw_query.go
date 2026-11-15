@@ -21,15 +21,33 @@ import (
 	"time"
 )
 
-const cacheRawQueryGrid = 30 * time.Second
+const cacheRawQueryGrid = cacheKeyGrid
 
 // cacheRawQueryString — sorgu dizesini anahtar için normalize eder.
-func cacheRawQueryString(raw string) string {
+func cacheRawQueryString(raw string) string { return cacheRawQueryStringAt(raw, time.Now()) }
+
+// cacheRawQueryStringAt — SAF çekirdek. v0.10.2228 (Redis R2, O1): `to`
+// canlıysa (cache_live_key.go) to="live", from=<süre> — 30 sn'de bir yeni
+// anahtar yerine aynı anahtar, SWR devrede. Diğer parametreler aynen.
+func cacheRawQueryStringAt(raw string, now time.Time) string {
 	q, err := url.ParseQuery(raw)
 	if err != nil {
 		return raw
 	}
 	q.Del("refresh")
+	if to, ok := parseNsParam(q.Get("to")); ok {
+		from, fok := parseNsParam(q.Get("from"))
+		if !fok {
+			from = to.Add(-time.Nanosecond) // from yok: süre parçası yalnız "to canlı" der
+		}
+		if dur, live := cacheLiveWindow(from, to, now); live {
+			q.Set("to", "live")
+			if fok {
+				q.Set("from", dur)
+			}
+			return q.Encode()
+		}
+	}
 	for _, k := range []string{"from", "to"} {
 		v := q.Get(k)
 		if v == "" {
@@ -46,3 +64,12 @@ func cacheRawQueryString(raw string) string {
 
 // cacheRawQuery — istek için anahtar parçası.
 func cacheRawQuery(r *http.Request) string { return cacheRawQueryString(r.URL.RawQuery) }
+
+// parseNsParam — pozitif unix-ns parametresi.
+func parseNsParam(v string) (time.Time, bool) {
+	ns, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || ns <= 0 {
+		return time.Time{}, false
+	}
+	return time.Unix(0, ns), true
+}

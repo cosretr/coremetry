@@ -14243,3 +14243,9 @@ Operatör bildirimi (prod /ai, 7 gün): 404 açıklama turunun 78'i "hata"; `err
 - `cache.Cache` `Pipeline([]PipeOp)` (toplu Set/Del, tek tur) ve `Incr(key, delta, ttl)` (INCRBY + EXPIRE NX, MULTI; pencere uzamaz) kazanır; Noop: nil / (0, nil). SRE saatlik sayaçları (`coremetry:sre:enq:hour:*`, `coremetry:sre:llm:hour:*`) Get+Set yerine `Incr` — pod'lar arası ±1 yarışı kapandı; bellek kopyası Redis'in büyüğüne çekilir.
 - Chart (K3): bundled Redis `--maxmemory` = %75 × `redis.resources.limits.memory` (Gi/Mi tam sayıdan türetilir, varsayılan 1Gi → 768mb) + `--maxmemory-policy volatile-lru`. Yeni değer yok.
 - Taban ölçümler (selfobs, VM): `cache.requests{family,tier}`, `cache.l2.duration{op,result}`, `redis.keys`, `redis.evicted_keys`; `/api/admin/cache-stats` yanıtı `families` (aile → katman → sayı) taşır. `cacheStats` katman sayaçları kilitsiz, keyHits tavanında doğrusal tarama yok (G12).
+
+## 2026-11-15 — v0.10.2228 — Redis R2: canlı pencere anahtarları
+
+- Denetim O1 (K2 kabul): `cacheBucket` / `cacheRawQuery` `to` şimdiye ≤ 60 sn yakınsa anahtara mutlak zaman yerine `live:<süre>` (süre = to−from, 30 sn ızgaraya yuvarlı) girer; ham sorguda `to=live&from=<süre>`. Geçmiş pencerenin anahtarı birebir aynı (mutlak, 30 sn ızgara). Yükleyici isteğin gerçek penceresini kullanır; SWR artık canlı görünümlerde kova devrinde de çalışır. Bayatlık sınırı 3 × TTL; `?refresh=1` taze yolu korur.
+- `clusters:` / `namespaces:v2:` 5 dk TTL'li anahtarları canlı anahtarla gerçekten 5 dk yaşar; ısıtıcının `clusters` girdisi 60 sn yerine handler TTL'i (5 dk) ile — `ListClusters` 30 sn yerine 5 dk'da bir.
+- `cacheBucket` api.go'dan `internal/api/cache_live_key.go`'ya taşındı (api.go tabanı 10081 → 10063).

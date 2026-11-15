@@ -1499,7 +1499,7 @@ func (s *Server) warmDependenciesCache() {
 		// Services list — the page operators open first after
 		// login. Use the same key shape as listServices so the
 		// live handler picks up the warm entry on its next call.
-		warm("clusters", "clusters:"+cacheBucket(from.Add(-23*time.Hour), to), 60*time.Second,
+		warm("clusters", "clusters:"+cacheBucket(from.Add(-23*time.Hour), to), 5*time.Minute, // v0.10.2228 (R2): handler TTL'i — ListClusters 5 dk'da bir
 			func(ctx context.Context) (any, error) {
 				names, err := s.store.ListClusters(ctx, from.Add(-23*time.Hour), to)
 				if err != nil {
@@ -3138,24 +3138,6 @@ type endpointsListResponse struct {
 func endpointsListKey(bucket, service, search, cluster, env string, limit int, compare, bySignature bool, sortBy, sortDir, entry string) string {
 	return fmt.Sprintf("endpoints:v2:%s:%s:%s:%s:env=%s:%d:cmp=%v:sig=%v:sort=%s:dir=%s:entry=%s",
 		bucket, service, search, cluster, env, limit, compare, bySignature, sortBy, sortDir, entry)
-}
-
-// cacheBucket returns a key fragment with from/to snapped to a
-// 30-second grid. Stops the dependencies / messaging caches
-// from missing on every page load because the relative-time
-// preset (`?range=1h`) produces a brand-new `to=now` value at
-// nanosecond resolution every request. Two operators hitting
-// the page within the same 30s window now share one upstream
-// query instead of forcing two full CH scans.
-//
-// The cost is up to 30s of staleness on the to boundary — same
-// staleness we already accept via the 30s TTL on the cache
-// itself, so this is purely upside.
-func cacheBucket(from, to time.Time) string {
-	const grid = 30 * time.Second
-	fb := from.Truncate(grid).UnixNano()
-	tb := to.Truncate(grid).UnixNano()
-	return fmt.Sprintf("%d_%d", fb, tb)
 }
 
 // parseFromTo unpacks the standard ?from=&to= unix-ns pair with
