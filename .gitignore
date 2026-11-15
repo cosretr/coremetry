@@ -124,3 +124,7 @@ scratchpad/
 
 # v0.10.666 — evalset koşum artefaktları (COREMETRY_EVAL_OUT); repo dışı skor geçmişi
 evalset-runs/
+
+# v0.10.2252 — ML replay: operatörün dışa aktardığı gerçek olaylar (§7.1;
+# gerçek servis adları taşır, commit edilmez). Sentetik fikstür: testdata/replay.
+internal/ml/testdata/fixtures/

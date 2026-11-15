@@ -308,7 +308,8 @@ export_event() {  # $1 = event id
   D=internal/ml/testdata/fixtures/$1; mkdir -p "$D"
   $CH --param_id="$1" --query "
     SELECT id, detector, signal, stage, service, level, pod, code, started_at, last_seen, window_sec,
-           baseline, observed, score, direction, evidence, dup_of, version
+           baseline, observed, score, direction, evidence, dup_of, version,
+           class, publish_state, onset_at, record   -- v0.10.2252: replay (E) bunları okur
     FROM ml_events FINAL
     WHERE id = {id:String} AND last_seen >= now() - INTERVAL 30 DAY
     LIMIT 10 SETTINGS max_execution_time = 10 FORMAT JSONEachRow" > "$D/ml_events.jsonl"
@@ -360,6 +361,10 @@ $CH --param_svc=acm-risk-score-bureau-inq-prod --param_op=callBagService --param
 
 wc -l internal/ml/testdata/fixtures/*/*.jsonl   # boş dosya = satır TTL ile düşmüş ya da id/ad uyuşmadı
 ```
+
+**Gizlilik (v0.10.2252).** Dışa aktarılan dosyalar gerçek servis / operasyon adları taşır: `internal/ml/testdata/fixtures/`
+`.gitignore`'dadır, **commit edilmez** (depo kuralı: gerçek kurum / servis adı depoda geçmez). Fikstür depoya girecekse önce adlar nötr
+adlarla değiştirilir (ör. `checkout-api`) ve dizin `internal/ml/testdata/replay/` altına taşınır.
 
 Notlar: (1) `FROM` 28 g geriye gider ama tablo TTL'inden eskisi zaten yoktur — fazladan tarama yok. (2) Örnek 1 dedektörü
 `ml_series` yazmaz (evaluator kuralı); oradaki satırlar aynı servisin trace RED parçalarıdır (B dilimi tabanı için yine
@@ -617,10 +622,28 @@ Servis etkisi yok; ingest hacmi k kat." — "değişmedi" yalnız etki kapısı 
 yalnız etiket. Yapılmayanlar: "Sorun değil" neden alanı (şema değişikliği gerektirir), liste satırı özeti, aday neden kanıtları
 (span-kind kayması, scope adı), canlı seri.
 
-**E — replay.** Fixture biçimi `internal/ml/testdata/replay/<id>.json` (seri + taban örnekleri + ayar özeti + beklenen `publish_state`/`class`/`onset_at`);
+**E — replay.** Özgün tasarım (aşağıda) fixture biçimi `internal/ml/testdata/replay/<id>.json` (seri + taban örnekleri + ayar özeti + beklenen `publish_state`/`class`/`onset_at`);
 yükleyici + negatif iddia; `make eval-ml` karnesi. Örnek 1: servis anomalisi **üretmez**, `telemetry_volume` `info` kaydı üretir, başlangıç =
 gerçek değişim anı. Örnek 2: hacim/süreklilik koşulunu sağlamıyorsa yayımlanmaz; sağlıyorsa `onset_at` = yükselişin başladığı an.
 *Risk:* düşük; veri TTL'i (aşağıda). *Göç:* yok. *Test:* kendisi.
+✅ **gemilendi v0.10.2252** (`internal/ml/replay.go`, `replay_test.go`, `cmd/ml-replay`, `make eval-ml`; sentetik fikstür
+`internal/ml/testdata/replay/`). Çevrimdışı ve deterministik: §7.1 biçimindeki dışa aktarımı (olay başına dizin,
+`ml_events.jsonl` ya da `.jsonl.gz`, JSONEachRow) okur; her satırın `record` kolonunu BUGÜNKÜ doğrulayıcıdan (`ValidateRecord`) ve gölge
+kapılardan (`EvaluateGates` + `gateVerdict`) geçirir — yazım yoluyla aynı karar (`contractVerdict`, `applyRecordContract` de onu çağırır).
+ClickHouse'a bağlanmaz, yazmaz; üretim kodu çağırmaz (`TestReplayNotCalledFromProduction` pini); gölge sayacına dokunmaz.
+Rapor dedektör başına gölge raporuyla aynı sayaçlar: `evaluated / would_publish / would_drop / would_info / would_telemetry_volume /
+not_evaluable (kayıt yok + invalid) / invalid / failed_by_gate`, ardından olay satırları (sonuç, kalan kapılar, ilk ihlal) ve beklenti
+özeti. Fikstür dizininde isteğe bağlı `expect.json` (`{"<olay id>": {"outcome": "publish|drop|info|telemetry_volume|invalid|no_record",
+"failedGates": [...], "violations": [...]}}`) varsa karşılaştırılır; tutmayan olay çıkış kodu 2.
+**Operatör için:** (1) §7.1 dışa aktarımını (kayıt kolonları eklenmiş hâliyle) koş; dosyalar `internal/ml/testdata/fixtures/<olay-id>/`
+altına düşer (`.gitignore`'da, commit edilmez). (2) `make eval-ml` (= `go run ./cmd/ml-replay -dir internal/ml/testdata/fixtures`;
+başka dizin `ML_REPLAY_DIR=…`, JSON çıktı `go run ./cmd/ml-replay -json -dir …`). (3) `go test ./internal/ml -run TestReplayExportedFixtures -v`
+aynı dizini test olarak koşar (dizin yoksa atlanır). Sentetik koşum: `make eval-ml ML_REPLAY_DIR=internal/ml/testdata/replay`.
+Sentetik fikstürler (uydurma veri, nötr adlar; `go test ./internal/ml -run TestReplayWriteSynthetic -update-replay` ile kuruculardan
+yeniden üretilir): temiz gecikme olayı → publish; 5 dk kovalık tek sıçrama → drop (`visible_deviation` 1 < 3 kova); tek bağımsız kanıtlı hata
+oranı → info; yalnız hacim (yan seriler bant içinde) → telemetry_volume; tepe seriyle uyuşmayan kayıt → invalid (`peak_from_series`);
+kayıtsız eski olay → no_record. Yapılmayanlar: kaydı olmayan eski olayı ham seriden (`ml_series` / `spanmetrics_1m`) dedektörü yeniden
+koşarak yargılamak (dedektör başına saf karar yolu ister; örnek 1/2'nin §11 beklentileri buna bağlı); `onset_at ± tolerans` beklentisi.
 
 ## 11. Kabul ölçütleri eşlemesi (alınanlar)
 

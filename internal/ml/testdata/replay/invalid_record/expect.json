@@ -1,0 +1,8 @@
+{
+  "a1000000000000005": {
+    "outcome": "invalid",
+    "violations": [
+      "peak_from_series"
+    ]
+  }
+}

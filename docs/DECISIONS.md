@@ -14346,3 +14346,9 @@ Operatör bildirimi (prod /ai, 7 gün): 404 açıklama turunun 78'i "hata"; `err
 - Uç: yeni uç yok, `/api/anomalies/unified?view=platform|held` (önbellek anahtarı `v3` + view); held yalnız admin (403). Platform/held görünümünde eski `anomaly_events` okunmaz.
 - FE: `/anomalies` üstünde shadcn Tabs (Servisler / Platform / Elenenler — sonuncusu yalnız admin), `?view=` URL'de; metinler `i18n.ts` (EN + TR). Elenenler sekmesi gölge kararına dayandığını ve listeyi/bildirimi/Problem'i değiştirmediğini açıkça yazar.
 - Yapılmayanlar: telemetry_volume kart şablonu ve aday neden kanıtları (rollout, span-kind kayması, instrumentation scope) — açık.
+
+## 2026-11-15 — v0.10.2252 — ML olay replay'i (Dilim E): geçmiş olaylar bugünkü sözleşme + gölge kapılardan
+
+- Çevrimdışı, deterministik geliştirici/operatör aracı (`internal/ml/replay.go`, `cmd/ml-replay`, `make eval-ml`): §7.1 dışa aktarımını (olay başına dizin, `ml_events.jsonl[.gz]`) okur, `record` kolonunu bugünkü `ValidateRecord` + `EvaluateGates`/`gateVerdict`'ten geçirir. Yazım yoluyla aynı karar: ortak saf `contractVerdict` (`applyRecordContract` de onu çağırır). CH'ye bağlanmaz, yazmaz; üretim kodu çağırmaz (pin testi); gölge sayacına dokunmaz.
+- Rapor dedektör başına gölge raporuyla aynı sayaçlar (evaluated / would_publish / would_drop / would_info / would_telemetry_volume / not_evaluable / invalid / failed_by_gate) + olay satırları; `expect.json` varsa karşılaştırma (tutmazsa çıkış 2).
+- Gerçek dışa aktarım `internal/ml/testdata/fixtures/` (`.gitignore`: gerçek ad taşır, commit edilmez); sentetik fikstür `internal/ml/testdata/replay/` (nötr adlar, kurucudan üretilir). Kaydı olmayan eski olay `no_record`; ham seriden dedektörü yeniden koşmak kapsam dışı.

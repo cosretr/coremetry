@@ -1,0 +1,9 @@
+{
+  "a1000000000000004": {
+    "outcome": "telemetry_volume",
+    "failedGates": [
+      "independent_evidence",
+      "service_impact"
+    ]
+  }
+}

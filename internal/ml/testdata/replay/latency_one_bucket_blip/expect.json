@@ -1,0 +1,8 @@
+{
+  "a1000000000000002": {
+    "outcome": "drop",
+    "failedGates": [
+      "visible_deviation"
+    ]
+  }
+}

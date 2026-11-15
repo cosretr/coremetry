@@ -420,19 +420,12 @@ func applyRecordContract(ev chstore.MLEvent) chstore.MLEvent {
 		global.observeGate(ev.ID, ev.Detector, gateOutcome{})
 		return ev
 	}
-	var rec EventRecord
-	var vs []RecordViolation
-	if err := json.Unmarshal([]byte(ev.Record), &rec); err != nil {
-		vs = []RecordViolation{{"decode", err.Error()}}
-	} else {
-		vs = ValidateRecord(rec)
-	}
+	rec, vs, o := contractVerdict(ev.Record)
 	if len(vs) == 0 {
-		rec.Gates = EvaluateGates(rec)
 		if b, err := json.Marshal(rec); err == nil {
 			ev.Record = string(b)
 		}
-		global.observeGate(ev.ID, ev.Detector, gateVerdict(rec, rec.Gates))
+		global.observeGate(ev.ID, ev.Detector, o)
 		return ev
 	}
 	ev.PublishState = PublishInvalid
@@ -440,6 +433,26 @@ func applyRecordContract(ev chstore.MLEvent) chstore.MLEvent {
 	global.observeRecordInvalid(ev.Detector)
 	log.Printf("[ml] record invalid %s %s: %s — %s (+%d kural)", ev.Detector, ev.ID, vs[0].Rule, vs[0].Reason, len(vs)-1)
 	return ev
+}
+
+// contractVerdict — SAF (v0.10.2252, Dilim E): kayıt JSON'unun sözleşme +
+// gölge kapı sonucu, yan etkisiz. applyRecordContract (yazım yolu) ve replay
+// (replay.go, geliştirici aracı) AYNI kararı buradan alır. raw == "" → kayıt
+// yok (değerlendirilmedi); çözülemeyen ya da doğrulayıcıdan kalan kayıt
+// Invalid; geçen kaydın Gates'i doldurulur.
+func contractVerdict(raw string) (EventRecord, []RecordViolation, gateOutcome) {
+	var rec EventRecord
+	if raw == "" {
+		return rec, nil, gateOutcome{}
+	}
+	if err := json.Unmarshal([]byte(raw), &rec); err != nil {
+		return rec, []RecordViolation{{"decode", err.Error()}}, gateOutcome{Invalid: true}
+	}
+	if vs := ValidateRecord(rec); len(vs) > 0 {
+		return rec, vs, gateOutcome{Invalid: true}
+	}
+	rec.Gates = EvaluateGates(rec)
+	return rec, nil, gateVerdict(rec, rec.Gates)
 }
 
 // recordTitle — v0.10.2215 (H2): yayımlanabilir kaydın başlığı; kayıt yok,

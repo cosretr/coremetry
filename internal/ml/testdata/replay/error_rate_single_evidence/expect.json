@@ -1,0 +1,8 @@
+{
+  "a1000000000000003": {
+    "outcome": "info",
+    "failedGates": [
+      "independent_evidence"
+    ]
+  }
+}

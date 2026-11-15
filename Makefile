@@ -83,6 +83,15 @@ evalset-check:
 eval-anomaly:
 	@go test -tags evalset ./internal/anomaly/ -run TestAnomalyEvalSet -v -count=1
 
+# v0.10.2252 — anomali kartı Dilim E: geçmiş ML olaylarının çevrimdışı replay'i
+# (bugünkü kayıt sözleşmesi + gölge yayın kapıları; CH'ye bağlanmaz). Dışa
+# aktarım docs/ml/anomaly-card-audit.md §7.1; sentetik fikstür:
+#   make eval-ml ML_REPLAY_DIR=internal/ml/testdata/replay
+ML_REPLAY_DIR ?= internal/ml/testdata/fixtures
+.PHONY: eval-ml
+eval-ml:
+	@go run ./cmd/ml-replay -dir $(ML_REPLAY_DIR)
+
 # Docker build picks up VERSION from the env block above and
 # tags two images: a precise per-version `coremetry:vX.Y.Z`
 # AND `coremetry:latest` so a plain `docker pull coremetry`
