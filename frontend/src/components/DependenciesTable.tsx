@@ -9,13 +9,15 @@ import { Sparkline } from './Sparkline';
 import { TrendDelta } from './TrendDelta';
 import { Button } from './ui/Button';
 import { fmtNum, timeRangeToNs, rowClickHandlers } from '@/lib/utils';
-import { trendsEnabled, latencyPresent, depRowKey, resolveTrends } from '@/lib/depsTable';
+import { trendsEnabled, latencyPresent, depRowKey, resolveTrends, parseStoredOrder } from '@/lib/depsTable';
 import { msgP99Delta } from '@/lib/msgBalance';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import { depRowMatches, normalizeDepSearch } from '@/lib/depRowFilter';
 import { stickyLeftOffsets } from '@/lib/dataTable';
+import { reconcileColumnModel } from '@/lib/columnModel';
+import { getRaw, setRaw, removeRaw } from '@/lib/storage';
 import { DetailDrawer } from '@/features/dependencies/DetailDrawer';
 import { useDepTrends } from '@/lib/queries/dependencies';
 import type { DataTableColumn } from '@/lib/dataTable';
@@ -34,8 +36,9 @@ export function lagTone(lag: number | undefined): string {
   return lag >= 10_000 ? 'cell-err' : lag >= 1_000 ? 'cell-warn' : '';
 }
 
-/** v0.10.1961 — Kafka UI kolon hücreleri (Partitions · Producers · Consumers · Produce/s · Consume/s). */
-function KafkaTopicCells({ k }: { k: KafkaTopicStat | undefined }) {
+/** v0.10.1961 — Kafka UI kolon hücreleri (Partitions · Producers · Consumers · Produce/s · Consume/s);
+ *  v0.10.2205: kolon kimliğiyle tek hücre (kullanıcı kolon sırası). */
+function kafkaCell(id: string, k: KafkaTopicStat | undefined): ReactNode {
   const none = <span className="cell-muted">—</span>;
   const rate = (v: number | undefined) => (v == null ? none : fmtSmart(v, 'reqps'));
   // v0.10.1974 — adlar yalnız görünen sayfa için okunur; gelmeden ya da adsız topic'te servis SAYISI.
@@ -43,17 +46,18 @@ function KafkaTopicCells({ k }: { k: KafkaTopicStat | undefined }) {
     ? <td title={`${what}: ${list.join(', ')}`}><span className="cell-ellipsis mono">{svcListLabel(list)}</span></td>
     : n ? <td title={`${n} ${what} servis (adlar yükleniyor)`}>{n} servis</td>
     : <td title={`Bu topic için VM'de ${what} metriği yok`}>{none}</td>);
-  return (
-    <>
+  switch (id) {
+    case 'partitions': return (
       <td className="num" title="Tüketicilerin okuduğu partition sayısı (kafka_consumer_records_lag, partition etiketi). Kimsenin tüketmediği partition sayılmaz.">
         {k?.partitions != null ? fmtNum(k.partitions) : none}
       </td>
-      {svcs(k?.producers, k?.producerCount, 'producer')}
-      {svcs(k?.consumers, k?.consumerCount, 'consumer')}
-      <td className="num" title="kafka_producer_record_send_rate · topic toplamı, kayıt/sn (VictoriaMetrics, pencere sonu)">{rate(k?.produce)}</td>
-      <td className="num" title="kafka_consumer_records_consumed_rate · topic toplamı, kayıt/sn (VictoriaMetrics, pencere sonu)">{rate(k?.consume)}</td>
-    </>
-  );
+    );
+    case 'producers': return svcs(k?.producers, k?.producerCount, 'producer');
+    case 'consumers': return svcs(k?.consumers, k?.consumerCount, 'consumer');
+    case 'kproduce': return <td className="num" title="kafka_producer_record_send_rate · topic toplamı, kayıt/sn (VictoriaMetrics, pencere sonu)">{rate(k?.produce)}</td>;
+    case 'kconsume': return <td className="num" title="kafka_consumer_records_consumed_rate · topic toplamı, kayıt/sn (VictoriaMetrics, pencere sonu)">{rate(k?.consume)}</td>;
+  }
+  return <td />;
 }
 
 export interface DepRow {
@@ -140,7 +144,7 @@ const NATURAL: Record<SortKey, 'asc' | 'desc'> = {
 // click lands on /explore scoped to that system+instance.
 export function DependenciesTable({
   rows, kind, range, compare, extraControls, openRowKey, onOpenRowChange,
-  rowHref, state, pageSize, onPageRows,
+  rowHref, state, pageSize, onPageRows, reorderable = false, renderHeadLabel,
 }: {
   rows: DepRow[];
   // 'db' → uses instance + filters by db.system; 'queue' → uses
@@ -190,6 +194,12 @@ export function DependenciesTable({
   pageSize?: number;
   /** Görünen sayfanın satırları (ebeveyn yalnız onlar için ek veri okusun — Messaging servis adları). */
   onPageRows?: (rows: DepRow[]) => void;
+  /** v0.10.2205 — başlık sürükle-bırak kolon sırası (/traces deseni; DataTable
+   *  `reorderable` + columnModel). Sıra `deps-<kind>` storageKey'iyle
+   *  localStorage'da; System sabit (stickyLeft). */
+  reorderable?: boolean;
+  /** v0.10.2205 — başlık etiketi (sayfanın huni süzgeçleri; DataTableHead renderLabel). */
+  renderHeadLabel?: (c: { id: string; label: string }) => ReactNode;
 }) {
   // v0.9.813 — System filtresi + arama URL'e taşındı (?msys= / ?q=).
   //
@@ -369,8 +379,27 @@ export function DependenciesTable({
     { id: 'callers', label: 'Top callers', width: 240, minWidth: 160, priority: 3 },
   ], [hasClusterCol, hasLagCol, hasKafkaCols, kind]);
 
+  // v0.10.2205 — kullanıcı kolon sırası (yalnız reorderable; kayıt yoksa tanım sırası).
+  const orderKey = `deps-${kind}:col-order`;
+  const [colOrder, setColOrder] = useState<string[] | null>(() => (reorderable ? parseStoredOrder(getRaw(orderKey)) : null));
+  const colModel = useMemo(() => {
+    if (!reorderable) return undefined;
+    const ids = depCols.map(c => c.id);
+    const order = colOrder ? reconcileColumnModel({ v: 1, order: colOrder, hidden: [], sig: '' }, ids.map(id => ({ id })), '').order : ids;
+    return {
+      value: { v: 1 as const, order, hidden: [], sig: `deps-${kind}` },
+      onChange: (m: { order: string[] }) => {
+        const next = m.order.join(',') === ids.join(',') ? null : [...m.order];
+        setColOrder(next);
+        try { if (next) setRaw(orderKey, JSON.stringify(next)); else removeRaw(orderKey); } catch { /* private mode */ }
+      },
+    };
+  }, [reorderable, depCols, colOrder, kind, orderKey]);
+
   const dt = useDataTable<DepRow>({
     storageKey: `deps-${kind}`,
+    columnModel: colModel,
+    reorderable,
     columns: depCols,
     rows: filtered,
     // v0.9.815 — /messaging varsayılanı "KÖTÜLEŞENLER ÖNCE" (Endpoints
@@ -545,7 +574,7 @@ export function DependenciesTable({
       <div className="table-wrap">
         <table {...dt.tableProps}>
           <DataTableColgroup dt={dt} leading={[24]} />
-          <DataTableHead dt={dt} stickyLeftBase={24} leading={<th className="sticky-left" style={{ width: 24, left: 0 }} aria-label="Expand"></th>} />
+          <DataTableHead dt={dt} stickyLeftBase={24} renderLabel={renderHeadLabel} leading={<th className="sticky-left" style={{ width: 24, left: 0 }} aria-label="Expand"></th>} />
           <tbody>
             {dt.sortedRows.length === 0 ? <DataTableState dt={dt} leading={[24]} {...tableState} /> : pageRows.map((r, i) => {
               // v0.10.929 (K5) — %0 hata sağlıklı: nötr rozet.
@@ -580,6 +609,10 @@ export function DependenciesTable({
                             title="Open the detail page" aria-label={`Open the detail page: ${nameOf(r) || r.system}`}>›</Link>
                         : isOpen ? '▾' : '▸'}
                     </td>
+                    {/* v0.10.2205 — hücreler başlıkla aynı kullanıcı sırasında (dt.visibleColumns; kolon yer değiştirme). */}
+                    {dt.visibleColumns.map(col => <Fragment key={col.id}>{(() => {
+                      switch (col.id) {
+                        case 'system': return (
                     <td className="sticky-left" style={{ left: leftOffs['system'] }}>
                       <SystemBadge system={r.system} kind={kind} />
                       {r.source === 'receiver' && (
@@ -595,7 +628,8 @@ export function DependenciesTable({
                               }}>via receiver</span>
                       )}
                     </td>
-                    {hasClusterCol && (
+                        );
+                        case 'cluster': return (
                       <td className="mono cell-muted">
                         {r.cluster === '(default)' ? (
                           <span style={{ color: 'var(--text3)' }}>—</span>
@@ -603,17 +637,8 @@ export function DependenciesTable({
                           r.cluster
                         )}
                       </td>
-                    )}
-                    {/* v0.5.315 / dedicated Database column — one host
-                        serving N databases (Oracle SID/service,
-                        PostgreSQL / MongoDB / MSSQL DB) → row is keyed
-                        on (host, dbName). Surfaced as its own column
-                        (was an inline ⛁ chip) so the operator can scan
-                        + sort by database. '—' for the 'default'
-                        fallback (OTel instrumentation didn't emit
-                        db.name). v0.8.368: rendered BEFORE Instance to
-                        match the reordered header. */}
-                    {kind === 'db' && (
+                        );
+                        case 'database': return (
                       <td>
                         {r.dbName && r.dbName !== 'default' ? (
                           <span title={`db.name = ${r.dbName}`}
@@ -633,7 +658,8 @@ export function DependenciesTable({
                           <span style={{ color: 'var(--text3)' }}>—</span>
                         )}
                       </td>
-                    )}
+                        );
+                        case 'name': return (
                     <td onClick={e => e.stopPropagation()}>
                       {/* v0.10.1027 — AÇIK PROBLEM İŞARETİ (Databases dilim 4).
                           Yeni kolon DEĞİL: kolon kümesi değişirse useDataTable
@@ -649,9 +675,11 @@ export function DependenciesTable({
                       {kind === 'db' && (r.openProblems ?? 0) > 0 && (
                         <OpenProblemsMark row={r} href={rowHref?.(r)} />
                       )}
-                      <Link to={exploreHref(r)} className="mono"
-                            style={{ fontWeight: 500 }}
-                            title={r.instance === 'unknown'
+                      {/* v0.10.2205 (operatör) — gezinme kipinde (db) ad satır tıkıyla AYNI
+                          detay SAYFASINI açar; Traces pivotu detay sayfasında. */}
+                      <Link to={kind === 'db' && href ? href : exploreHref(r)} className="mono"
+                            style={{ fontWeight: 500 }} onClick={kind === 'db' && href ? stopRowClick : undefined}
+                            title={kind === 'db' && href ? 'Veritabanı detay sayfasını aç' : r.instance === 'unknown'
                               ? `peer.service was empty on these spans — label sourced from ${r.dbName && r.dbName !== 'default' ? 'db.name' : 'fallback'}`
                               : kind === 'queue'
                                 ? 'Topic detay sayfasını aç (aynı pencere)'
@@ -689,13 +717,18 @@ export function DependenciesTable({
                         </span>
                       )}
                     </td>
-                    {hasKafkaCols && <KafkaTopicCells k={r.kafka} />}
-                    {hasLagCol && (
-                      // v0.10.1959 — servis Messaging sekmesiyle aynı eşik: ≥ 1.000 sarı, ≥ 10.000 kırmızı (renk yalnız sapanda).
+                        );
+                        case 'partitions': return kafkaCell('partitions', r.kafka);
+                        case 'producers': return kafkaCell('producers', r.kafka);
+                        case 'consumers': return kafkaCell('consumers', r.kafka);
+                        case 'kproduce': return kafkaCell('kproduce', r.kafka);
+                        case 'kconsume': return kafkaCell('kconsume', r.kafka);
+                        case 'lag': return (
                       <td className={`num ${lagTone(r.lag)}`} title={r.lag != null ? 'kafka_consumer_records_lag_max · topic başına en kötü partition (VictoriaMetrics; topic sayfasındaki Max lag ile aynı)' : 'Bu destination için VM lag metriği yok'}>
                         {r.lag != null ? fmtNum(r.lag) : <span className="cell-muted">—</span>}
                       </td>
-                    )}
+                        );
+                        case 'spanCount': return (
                     <td className="num">
                       {fmtNum(r.spanCount)}
                       {/* v0.10.1025 (R2) — burada zeroPrior gerekmez: eşleşen satırın
@@ -704,28 +737,13 @@ export function DependenciesTable({
                           yok (omitempty). Gecikme hücreleri de omitempty → undefined. */}
                       {compare && <TrendDelta cur={r.spanCount} prior={r.priorSpanCount} kind="neutral" />}
                     </td>
-                    {/* v0.8.364 (Stage-2 M1) — producer/consumer split.
-                        Per-kind error % badge (scale-free, same
-                        semantics as the row's Err % column) instead of
-                        raw error counts; the tooltip carries the raw
-                        numbers for the postmortem screenshot. */}
-                    {kind === 'queue' && (
-                      <>
-                        <KindRateCell perMin={r.producePerMin} count={r.produceCount}
-                          errors={r.produceErrors} priorPerMin={r.priorProducePerMin}
-                          compare={compare} what="produce" />
-                        <KindRateCell perMin={r.consumePerMin} count={r.consumeCount}
-                          errors={r.consumeErrors} priorPerMin={r.priorConsumePerMin}
-                          compare={compare} what="consume" />
-                        <P99DeltaCell cur={r.p99DurationMs} prior={r.priorP99Ms} compare={compare} />
-                        {/* v0.9.816 — ayrışmış p95. '—' iki ayrı yokluğu
-                            kapsar: bu pencerede o kind'da span yok, ya da
-                            payload eski (rolling deploy). İkisi de "0 ms"
-                            DEĞİL. */}
-                        <KindP95Cell v={r.produceP95Ms} what="produce (publish)" />
-                        <KindP95Cell v={r.consumeP95Ms} what="consume (process)" />
-                      </>
-                    )}
+                        );
+                        case 'produce': return <KindRateCell perMin={r.producePerMin} count={r.produceCount} errors={r.produceErrors} priorPerMin={r.priorProducePerMin} compare={compare} what="produce" />;
+                        case 'consume': return <KindRateCell perMin={r.consumePerMin} count={r.consumeCount} errors={r.consumeErrors} priorPerMin={r.priorConsumePerMin} compare={compare} what="consume" />;
+                        case 'p99delta': return <P99DeltaCell cur={r.p99DurationMs} prior={r.priorP99Ms} compare={compare} />;
+                        case 'producep95': return <KindP95Cell v={r.produceP95Ms} what="produce (publish)" />;
+                        case 'consumep95': return <KindP95Cell v={r.consumeP95Ms} what="consume (process)" />;
+                        case 'errorRate': return (
                     <td className="num">
                       <span className={`badge b-${errCls}`}>{r.errorRate.toFixed(2)}%</span>
                       {/* v0.10.1025 (inceleme R2) — zeroPrior="was-zero". Sayfalar
@@ -739,35 +757,24 @@ export function DependenciesTable({
                           hiçbir satır için doğru değil. */}
                       {compare && <TrendDelta cur={r.errorCount} prior={r.priorErrorCount} kind="lowerBetter" zeroPrior="was-zero" />}
                     </td>
-                    {/* v0.9.262 — every latency cell goes through LatencyCell,
-                        which renders '—' for a receiver-discovered row. Those
-                        rows are built from metric_points and carry NO duration
-                        data; the Go fields are plain float64, so they marshal
-                        as 0 and used to print "0.0ms" — a database with no
-                        application traffic reading as instant. The badge next
-                        to the system name said "receiver", but the numbers
-                        contradicted it. Adding P50/P95 would have doubled that
-                        lie, so all four cells are fixed together (SENTEZ #5,
-                        "receiver RED'i —"). */}
+                        );
+                        case 'avg': return (
                     <LatencyCell v={r.avgDurationMs} row={r}
                       delta={compare && <TrendDelta cur={r.avgDurationMs} prior={r.priorAvgMs} kind="lowerBetter" />} />
+                        );
+                        case 'p50': return (
                     <LatencyCell v={r.p50DurationMs} row={r}
                       delta={compare && r.p50DurationMs !== undefined
                         && <TrendDelta cur={r.p50DurationMs} prior={r.priorP50Ms} kind="lowerBetter" />} />
-                    {/* No TrendDelta on P95 on purpose: neither MessagingInstance
-                        nor DBInstance computes a PriorP95Ms (only P50/P99), so
-                        binding one would imply a comparison the data can't make. */}
+                        );
+                        case 'p95': return (
                     <LatencyCell v={r.p95DurationMs} row={r} />
+                        );
+                        case 'p99': return (
                     <LatencyCell v={r.p99DurationMs} row={r}
                       delta={compare && <TrendDelta cur={r.p99DurationMs} prior={r.priorP99Ms} kind="lowerBetter" />} />
-                    {/* #1 Trend + #6 health chips. Sparkline plots
-                        the call-rate (rps) over the window; it flips
-                        red/amber when the trend's CURRENT error rate
-                        is elevated so a row reads "unhealthy" without
-                        a mouse-over. Under it, compact p99 + err
-                        chips surface the latest-bucket gauge. '—'
-                        when no trend joins (or trends failed/loading). */}
-                    {trendsEnabled(kind) && (
+                        );
+                        case 'trend': return (
                       <td onClick={e => e.stopPropagation()}>
                         {/* v0.9.821 — RECEIVER SATIRI TREND ÖDÜNÇ ALMAZ.
                             trendFor'un gevşek anahtarı (system|instance)
@@ -783,7 +790,8 @@ export function DependenciesTable({
                               title="Receiver ile keşfedildi — uygulama span'i yok, dolayısıyla RED trendi de yok. Motor metrikleri için satırı açın.">—</span>
                           : <TrendCell trend={trendFor(r)} loading={trends === undefined} />}
                       </td>
-                    )}
+                        );
+                        case 'callers': return (
                     <td className="cell-muted" onClick={e => e.stopPropagation()}>
                       {r.callers.length === 0
                         ? <span style={{ color: 'var(--text3)' }}>—</span>
@@ -797,6 +805,10 @@ export function DependenciesTable({
                         <span style={{ color: 'var(--text3)' }}> +{r.callers.length - 3}</span>
                       )}
                     </td>
+                        );
+                        default: return <td />;
+                      }
+                    })()}</Fragment>)}
                   </tr>
                   {isOpen && (
                     <tr>

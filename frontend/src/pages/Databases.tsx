@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import { stopRowClick } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3); v0.10.1414 satır linki
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -8,6 +8,7 @@ import { Topbar } from '@/components/Topbar';
 import { TableSkeleton } from '@/components/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { DependenciesTable, type DepRow } from '@/components/DependenciesTable';
+import { DbColumnFilter } from './databases/DbColumnFilter';
 import { depRowMatches, normalizeDepSearch } from '@/lib/depRowFilter';
 import { databaseDetailHref, legacyDatabaseRowTarget } from '@/pages/databases/databaseParam';
 import { useT } from '@/lib/i18n';
@@ -85,6 +86,10 @@ export default function DatabasesPage() {
 
   const dbsys = sp.get('dbsys') ?? '';
   const dbname = sp.get('dbname') ?? '';
+  // v0.10.2205 — başlık hunisi: Instance / Top callers (System / Database
+  // hunileri üstteki ?dbsys / ?dbname seçicileriyle aynı durum).
+  const dbinst = sp.get('dbinst') ?? '';
+  const dbcaller = sp.get('dbcaller') ?? '';
   // v0.9.433 (desen paritesi, kuyruk #3a) — compare URL'de
   // (?compare=prior, Messaging v0.9.399 birebiri): copy-link ve saved
   // view compare durumunu da taşır. Opt-in — backend maliyeti ikiye katlar.
@@ -94,7 +99,7 @@ export default function DatabasesPage() {
     if (v) next.set('compare', 'prior'); else next.delete('compare');
     return next;
   }, { replace: true });
-  const setFilter = (key: 'dbsys' | 'dbname', value: string) => {
+  const setFilter = (key: 'dbsys' | 'dbname' | 'dbinst' | 'dbcaller', value: string) => {
     setSp(prev => {
       const next = new URLSearchParams(prev);
       if (value) next.set(key, value); else next.delete(key);
@@ -131,7 +136,7 @@ export default function DatabasesPage() {
   // içi "Filtreleri temizle" AYNI URL yazımı (replace:true).
   const clearFilters = () => setSp(prev => {
     const next = new URLSearchParams(prev);
-    next.delete('dbsys'); next.delete('dbname');
+    next.delete('dbsys'); next.delete('dbname'); next.delete('dbinst'); next.delete('dbcaller');
     return next;
   }, { replace: true });
   // v0.10.954 — tablo standardı T12: ifade tablosunun yükleniyor / hata /
@@ -191,10 +196,12 @@ export default function DatabasesPage() {
   // panel; receiver-discovered rows go to the bottom. Either
   // panel can be empty — we render the heading + an empty
   // state so the operator sees that we did look.
-  const { spanRows, receiverRows, systems, dbNames } = useMemo(() => {
+  const { spanRows, receiverRows, systems, dbNames, instances, callerNames } = useMemo(() => {
     const all = (ov?.rows ?? []) as DBInstance[];
     const sysSet = new Set<string>();
     const nameSet = new Set<string>();
+    const instSet = new Set<string>();
+    const callerSet = new Set<string>();
     for (const d of all) {
       if (d.system) sysSet.add(d.system);
       // db.name seçenekleri seçili tipe göre daralır (bağımlı liste).
@@ -212,14 +219,20 @@ export default function DatabasesPage() {
       // satırları bu boyutu hiç taşımaz". Panel artık FİLTRELENMEZ,
       // GİZLENİR ve sebebi yazılır (aşağıdaki render).
       if (dbname && d.source !== 'receiver' && d.dbName !== dbname) continue;
-      if (d.source === 'receiver') recv.push(d);
-      else span.push(d);
+      if (d.source === 'receiver') { recv.push(d); continue; }
+      // v0.10.2205 — Instance / Top callers hunileri yalnız span tablosunda.
+      instSet.add(d.instance);
+      for (const c of d.callers ?? []) callerSet.add(c);
+      if (dbinst && d.instance !== dbinst) continue;
+      if (dbcaller && !(d.callers ?? []).includes(dbcaller)) continue;
+      span.push(d);
     }
     return {
       spanRows: span, receiverRows: recv,
       systems: [...sysSet].sort(), dbNames: [...nameSet].sort(),
+      instances: [...instSet].filter(Boolean).sort(), callerNames: [...callerSet].sort(),
     };
-  }, [ov, dbsys, dbname]);
+  }, [ov, dbsys, dbname, dbinst, dbcaller]);
 
   // v0.10.18 (F0.9a) — İKİ PANELİN VERİ UFKU FARKLI ve söylenmiyordu.
   // Ufuk sayıları SUNUCUDAN geliyor: etkin saklama system_settings'ten
@@ -290,6 +303,21 @@ export default function DatabasesPage() {
   }, [problemSubjects]);
   // v0.10.704 — başlık sayacı tablonun q/msys filtresini GÖRÜR: aynı saf
   // predicate (lib/depRowFilter.ts). Filtre yokken "N", varken "X / N".
+  // v0.10.2205 — başlık hunileri (yalnız kimlik kolonları; sayılar yalnız sıralanır).
+  const renderDbHead = (c: { id: string; label: string }): ReactNode => {
+    const f = c.id === 'system' ? { v: dbsys, vals: systems, k: 'dbsys' as const }
+      : c.id === 'database' ? { v: dbname, vals: dbNames, k: 'dbname' as const }
+        : c.id === 'name' ? { v: dbinst, vals: instances, k: 'dbinst' as const }
+          : c.id === 'callers' ? { v: dbcaller, vals: callerNames, k: 'dbcaller' as const }
+            : null;
+    if (!f) return c.label;
+    return (
+      <span className="tcf-th">
+        <span className="tcf-th-l">{c.label}</span>
+        <DbColumnFilter label={c.label} value={f.v} values={f.vals} onPick={v => setFilter(f.k, v)} />
+      </span>
+    );
+  };
   const tableRows = useMemo(() => spanRows.map(toRow), [spanRows, toRow]);
   const callerTerm = normalizeDepSearch(sp.get('q'));
   const callerSystem = sp.get('msys') ?? '';
@@ -316,7 +344,7 @@ export default function DatabasesPage() {
             <option value="">All db names</option>
             {dbNames.map(x => <option key={x} value={x}>{x}</option>)}
           </select>
-          {(dbsys || dbname) && (
+          {(dbsys || dbname || dbinst || dbcaller) && (
             <Button variant="secondary" size="sm" onClick={clearFilters}>Clear</Button>
           )}
           {/* v0.9.433 — Messaging'in compare toggle'ının birebiri.
@@ -438,7 +466,8 @@ export default function DatabasesPage() {
             )}
             <DependenciesTable rows={tableRows} kind="db" range={range} compare={compare}
               rowHref={databasePageHref}
-              state={dbsys || dbname
+              reorderable renderHeadLabel={renderDbHead}
+              state={dbsys || dbname || dbinst || dbcaller
                 ? { kind: 'no-match', onClearFilters: clearFilters }
                 : { kind: 'empty', message: "Bu pencerede servislerin yaydığı veritabanı span'i yok — bu bölümün dolması için uygulama servislerinden birine bir OTel SDK bağla." }} />
 

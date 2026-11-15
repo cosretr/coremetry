@@ -115,3 +115,16 @@ export function resolveTrends(p: {
   }
   return m;
 }
+
+/** SAF (v0.10.2205): kayıtlı kolon sırası → id listesi; bozuk / boş → null. */
+export function parseStoredOrder(raw: string | null): string[] | null {
+  if (!raw) return null;
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (!Array.isArray(v)) return null;
+    const ids = v.filter((c): c is string => typeof c === 'string' && c !== '');
+    return ids.length ? ids : null;
+  } catch {
+    return null;
+  }
+}

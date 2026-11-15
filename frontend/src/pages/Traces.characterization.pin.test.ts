@@ -95,15 +95,17 @@ describe('S0 pin — ColumnFilterShell paylaşımı (Traces + Problems/Exception
     }
     return out;
   }
-  it('kabuğu yalnız pages/traces/ColumnFilter.tsx ve features/anomalies/AnomaliesPage.tsx kullanır', () => {
+  // v0.10.2205 — Databases başlık hunisi de aynı kabuğu kullanır (çatal yok).
+  it('kabuğu yalnız Traces ColumnFilter, AnomaliesPage ve Databases DbColumnFilter kullanır', () => {
     const users = walk(SRC)
       .filter(p => /<ColumnFilterShell\b/.test(readFileSync(p, 'utf8')))
       .map(p => relative(SRC, p).split(sep).join('/'))
       .sort();
-    expect(users).toEqual(['features/anomalies/AnomaliesPage.tsx', 'pages/traces/ColumnFilter.tsx']);
+    expect(users).toEqual(['features/anomalies/AnomaliesPage.tsx', 'pages/databases/DbColumnFilter.tsx', 'pages/traces/ColumnFilter.tsx']);
   });
   it('AnomaliesPage kabuğu Traces modülünden alır (çatallanmış ikinci kabuk yok)', () => {
     const src = readFileSync(resolve(SRC, 'features/anomalies/AnomaliesPage.tsx'), 'utf8');
     expect(src).toContain("import { ColumnFilterShell } from '@/pages/traces/ColumnFilter';");
+    expect(readFileSync(resolve(SRC, 'pages/databases/DbColumnFilter.tsx'), 'utf8')).toContain("import { ColumnFilterShell } from '@/pages/traces/ColumnFilter';");
   });
 });
