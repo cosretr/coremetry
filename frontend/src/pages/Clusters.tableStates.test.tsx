@@ -12,6 +12,7 @@
 //      boş-durum çaresi (runbook / probe) görünür kalır.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
+import { settleUntil } from '@/test/actWait';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -65,7 +66,10 @@ const dep = (name: string): ClusterDeploymentRow => ({
 const ns = (name: string): ClusterNamespaceRow => ({ cluster: 'c1', namespace: name, cpuCores: 1, memBytes: 1 });
 
 const STALE = 'Son başarılı veri gösteriliyor.';
-const wait = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
+// v0.10.2216 — sabit 30 ms uyku yerine koşul: sorgular boşta + tablo yükleniyor
+// satırında değil (yük altında 30 ms yetmiyordu: 17/30).
+const settled = () => qc.isFetching() === 0 && !!host?.querySelector('tbody tr')
+  && !host.querySelector('tr[data-dt-state="loading"]');
 
 let host: HTMLElement | null = null;
 let root: Root | null = null;
@@ -85,14 +89,12 @@ async function mount(url: string): Promise<HTMLElement> {
       </QueryClientProvider>,
     );
   });
-  await wait();
+  await settleUntil(settled, 'Clusters tablosu yerleşti');
   return host!;
 }
 async function refetch(key: string) {
-  await act(async () => {
-    await qc.refetchQueries({ queryKey: [key] });
-    await new Promise(r => setTimeout(r, 30));
-  });
+  await act(async () => { await qc.refetchQueries({ queryKey: [key] }); });
+  await settleUntil(settled, `${key} yeniden okuması bitti`);
 }
 const stateRow = (el: HTMLElement) => el.querySelector('tr[data-dt-state]') as HTMLElement | null;
 const dataRows = (el: HTMLElement) => el.querySelectorAll('tbody tr:not([data-dt-state])').length;

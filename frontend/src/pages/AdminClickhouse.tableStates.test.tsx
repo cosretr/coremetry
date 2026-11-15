@@ -15,6 +15,7 @@
 //      (üstteki dengesizlik rozetleri ise var olan node'lardan hesaplanıyordu).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
+import { settleUntil } from '@/test/actWait';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -63,7 +64,6 @@ const measure = (over: Partial<CHMeasureResponse>): CHMeasureResponse => ({
   parts: [], events: [], async: [], insertSize: [], queryLogAvailable: true, ...over,
 });
 
-const wait = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
 
 let host: HTMLElement | null = null;
 let root: Root | null = null;
@@ -79,7 +79,9 @@ async function mount(node: React.ReactNode): Promise<HTMLElement> {
       </QueryClientProvider>,
     );
   });
-  await wait();
+  // v0.10.2216 — sabit 30 ms uyku yerine koşul (sorgular boşta + yükleniyor satırı yok).
+  await settleUntil(() => qc.isFetching() === 0 && !!host?.querySelector('tbody tr')
+    && !host.querySelector('tr[data-dt-state="loading"]'), 'ClickHouse tabloları yerleşti');
   return host!;
 }
 const stateOf = (t: Element) => t.querySelector('tr[data-dt-state]')?.getAttribute('data-dt-state') ?? null;
