@@ -146,3 +146,32 @@ func TestExecutorCancelledBeforeCall(t *testing.T) {
 		t.Fatalf("iptal edilen çağrı tekrar muhafızına yazılmamalı: %+v ran=%d", oc, ran)
 	}
 }
+
+// v0.10.2201 — sayı-metin argümanı doğrulamadan önce düzelir (enforce'ta
+// bad_args olmaz), handler sayıyı görür ve "3600" ile 3600 aynı çağrıdır.
+func TestExecutorCoercesNumericStrings(t *testing.T) {
+	schema := map[string]any{"type": "object", "properties": map[string]any{"range_s": map[string]any{"type": "integer"}}}
+	var got []string
+	h := func(_ context.Context, raw json.RawMessage) (any, error) {
+		var a struct {
+			RangeS int `json:"range_s"`
+		}
+		if err := json.Unmarshal(raw, &a); err != nil {
+			return nil, err
+		}
+		got = append(got, string(raw))
+		return map[string]int{"range_s": a.RangeS}, nil
+	}
+	x := NewExecutor(map[string]Handler{"get_topology": h}, nil, Hooks{}).
+		WithSchemas(map[string]map[string]any{"get_topology": schema}).
+		WithScope(NewSchemaScope(map[string]map[string]any{"get_topology": schema}, ArgModeEnforce, nil))
+	if oc := x.Call(context.Background(), "get_topology", json.RawMessage(`{"range_s":"3600"}`)); oc.IsError || oc.Kind != KindOK {
+		t.Fatalf("sayı-metin reddedildi: %+v", oc)
+	}
+	if oc := x.Call(context.Background(), "get_topology", json.RawMessage(`{"range_s":3600}`)); oc.Kind != KindRepeated {
+		t.Fatalf("aynı çağrı tekrar sayılmalı: %+v", oc)
+	}
+	if len(got) != 1 || got[0] != `{"range_s":3600}` {
+		t.Fatalf("handler argümanı %v", got)
+	}
+}

@@ -13,6 +13,8 @@ package mcptools
 //	    kanıtı değildir (bu depoda yanan ders).
 
 import (
+	"context"
+	"encoding/json"
 	"math"
 	"os"
 	"strconv"
@@ -793,4 +795,19 @@ func analysisSource(t *testing.T) string {
 		t.Fatalf("analysis.go okunamadı: %v", err)
 	}
 	return stripLineComments(string(b))
+}
+
+// v0.10.2201 — altyapı kimliği hâlâ hata ama modele servis adını nasıl
+// bulacağını söyler; store'a hiç dokunmaz.
+func TestGetTopologyInfraIDHelpfulError(t *testing.T) {
+	tool := getTopologyTool(Deps{})
+	_, err := tool.Handler(context.Background(), json.RawMessage(`{"service":"db:postgresql"}`))
+	if err == nil {
+		t.Fatal("altyapı kimliği hata olmalı")
+	}
+	for _, want := range []string{"servis adı", "BOŞ", `"db:postgresql"`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("hata %q içermeli: %v", want, err)
+		}
+	}
 }

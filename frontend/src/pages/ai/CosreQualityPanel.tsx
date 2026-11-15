@@ -25,6 +25,8 @@ const TOOL_COLS: ColumnDef<CosreWorstTool>[] = [
   { id: 'tool',     label: 'Tool',            sortValue: r => r.tool, naturalDir: 'asc', flex: true, mono: true },
   { id: 'score',    label: 'Puan',            sortValue: r => r.score, numeric: true, width: 80, tone: r => scoreTone(r.score) },
   { id: 'calls',    label: 'Çağrı',           sortValue: r => r.calls, numeric: true, width: 80 },
+  // v0.10.2201 — yürütülmeyen çağrılar (tekrar / kapsam / şema reddi) ayrı; başarı paydasında yok.
+  { id: 'skipped',  label: 'Atlandı',         sortValue: r => r.skipped ?? 0, numeric: true, width: 80, tone: () => 'faint' },
   { id: 'success',  label: 'Başarı',          sortValue: r => r.successRate, numeric: true, width: 80, tone: r => (r.successRate < 0.9 ? 'warn' : undefined) },
   { id: 'rephrase', label: 'Sonra yeniden soruldu', sortValue: r => r.rephraseRate, numeric: true, width: 170, tone: r => (r.rephraseRate > 0.3 ? 'warn' : undefined) },
   { id: 'avg',      label: 'Ort. ms',         sortValue: r => r.avgMs, numeric: true, width: 90 },
@@ -113,6 +115,7 @@ export function CosreQualityPanel() {
                   <DataTableCell dt={tDt} col="tool" row={r} value={r.tool} />
                   <DataTableCell dt={tDt} col="score" row={r} value={pct(r.score)} />
                   <DataTableCell dt={tDt} col="calls" row={r} value={fmtNum(r.calls)} />
+                  <DataTableCell dt={tDt} col="skipped" row={r} value={fmtNum(r.skipped ?? 0)} />
                   <DataTableCell dt={tDt} col="success" row={r} value={pct(r.successRate)} />
                   <DataTableCell dt={tDt} col="rephrase" row={r} value={pct(r.rephraseRate)} />
                   <DataTableCell dt={tDt} col="avg" row={r} value={fmtNum(Math.round(r.avgMs))} />

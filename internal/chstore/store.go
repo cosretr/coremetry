@@ -3066,10 +3066,14 @@ func canonicalTables(sd, ld, md int) []string {
 			p95_ms    UInt32,
 			rephrased UInt32,
 			score     Float32,
+			skipped   UInt32 DEFAULT 0,
 			version   UInt64 DEFAULT toUnixTimestamp64Nano(now64(9))
 		) ENGINE = ReplacingMergeTree(version)
 		ORDER BY (day, tool)
 		TTL day + INTERVAL 180 DAY`,
+		// v0.10.2201 — yürütülmeyen çağrılar ayrı (v0.9.516 boot-ALTER deseni;
+		// taze kurulumda no-op). Küçük state tablosu (gün × tool).
+		`ALTER TABLE cosre_tool_quality ADD COLUMN IF NOT EXISTS skipped UInt32 DEFAULT 0`,
 
 		// cosre_operation_catalog — CoSRE operasyon tespiti Faz 1: sohbette
 		// yazılan operasyon adını eşlemek için HAZIR katalog (sohbet anında

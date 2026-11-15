@@ -109,6 +109,7 @@ describe('exchange 👍/👎 görünümü', () => {
   it('sonuç rozeti: iptal arıza rengi almaz', () => {
     expect(exchangeStatusBadge({ status: 'ok' })).toEqual({ label: 'ok', cls: 'b-gray' });
     expect(exchangeStatusBadge({ status: 'aborted' })).toEqual({ label: 'iptal', cls: 'b-warn' });
+    expect(exchangeStatusBadge({ status: 'not_found' })).toEqual({ label: 'bulunamadı', cls: 'b-gray' });
     expect(exchangeStatusBadge({ status: 'error' })).toEqual({ label: 'hata', cls: 'b-err' });
   });
   it('arşiv bağı yalnız konuşma kimliği varken', () => {

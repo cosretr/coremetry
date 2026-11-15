@@ -295,8 +295,8 @@ func (s *Server) exceptionCodeLoop(ctx context.Context, emit func(string, any), 
 			s.audit(env.r, "mcp.tool.call", "mcp_tool", name, chatToolAuditDetails(name, args, dur, err, bytes))
 		},
 	}
-	argObs, argScope := applyChatToolArgScope(&hooks, schemas) // v0.10.1456 (C1) — sohbet kipi
-	exec := agenttools.NewExecutor(byName, nil, hooks)
+	argObs, argScope := applyChatToolArgScope(&hooks, schemas)              // v0.10.1456 (C1) — sohbet kipi
+	exec := agenttools.NewExecutor(byName, nil, hooks).WithSchemas(schemas) // v0.10.2201
 	if argScope != nil {
 		exec.WithScope(argScope)
 	}

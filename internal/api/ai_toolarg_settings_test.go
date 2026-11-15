@@ -142,7 +142,7 @@ func chatArgRun(t *testing.T, mode, conv string, toMs int64) (toolMsg string, st
 	setChatArgMode(t, mode)
 	llm := newLoopLLM(t, func(n int, _ map[string]any) map[string]any {
 		if n == 0 {
-			return toolCallMsg([2]string{"list_problems", `{"limit":"25"}`})
+			return toolCallMsg([2]string{"list_problems", `{"limit":"yirmi beş"}`}) // v0.10.2201 — "25" artık Executor'da sayıya düzelir (mcp.CoerceNumericArgs); tip hatası sayıya çevrilemeyen metinle
 		}
 		return answerMsg("**Bulgu** — açık problem yok.")
 	})

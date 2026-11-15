@@ -412,8 +412,12 @@ func getTopologyTool(d Deps) mcp.Tool {
 			// düzeltilebilir bir çağıran hatasıdır — MV'de bu id yalnız
 			// child_node olarak var, parent olarak asla.
 			if k := topologyTargetKind(service, ""); service != "" && k != "service" {
-				return nil, fmt.Errorf("service %q bir altyapı düğümü (%s) — get_topology yalnız SERVİSE odaklanır; "+
-					"o düğüme dokunan servisi odakla ya da service'i boş bırakıp filo kenarlarına bak", service, k)
+				// v0.10.2201 — hata kalır ama model ne geçireceğini bilsin:
+				// /ai araç tablosunda get_topology %29 başarı.
+				return nil, fmt.Errorf("service %q bir SERVİS değil, altyapı düğümü (%s); get_topology `service` alanına "+
+					"yalnız servis adı alır (list_services'teki ad). Bu düğümü kimin çağırdığını bulmak için service'i BOŞ "+
+					"bırakıp get_topology çağır ve hedefi %q olan kenarların kaynak servisini oku; sonra o servis adıyla tekrar çağır",
+					service, k, service)
 			}
 			windowS := topologyWindowS(a.RangeS)
 			from, to := rangeWindow(ctx, windowS)

@@ -187,6 +187,17 @@ var traceExplainInputSeam func(ctx context.Context, id string) (traceExplainInpu
 // hata/boşluk durumunda sessizce trace-only'e düşer (v0.9.166 maliyet
 // disiplini: proaktif/poll YOK).
 func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceExplainInput, error) {
+	return s.buildTraceExplainInputNear(ctx, id, time.Time{})
+}
+
+// errExplainTraceAgedOut — v0.10.2201: MV trace'i biliyor ama ham span'ler
+// saklama süresini aşmış (sayfadaki "aged out" kartının aynısı).
+var errExplainTraceAgedOut = fmt.Errorf("%w: raw spans aged out", errExplainTraceNotFound)
+
+// buildTraceExplainInputNear — v0.10.2201: `hint` (sıfır = yok) istemcinin
+// bildiği trace başlangıcı; CH pencere aramasının İLK probe'u
+// (GetTraceNear ±1 sa), ıskada kademeli arama sürer.
+func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint time.Time) (traceExplainInput, error) {
 	if traceExplainInputSeam != nil {
 		return traceExplainInputSeam(ctx, id)
 	}
@@ -195,11 +206,20 @@ func (s *Server) buildTraceExplainInput(ctx context.Context, id string) (traceEx
 	// doğrudan s.store.GetTrace çağırıyordu; /api/traces/{id} ise CH
 	// ıskalayınca Tempo'ya düşüyordu. Tek kural, tek yer:
 	// resolveTraceSpans (trace_resolve.go).
-	spans, _, err := s.resolveTraceSpans(ctx, id)
+	//
+	// v0.10.2201 (operator-reported) — sayfa ile AYNI çözüm
+	// (resolveTraceDetail): Distributed okuma 0 span döndüğünde sayfa tüm
+	// replikalardan okuyup trace'i gösteriyor, açıklama "bulunamadı"
+	// diyordu.
+	res, err := s.resolveTraceDetail(ctx, id, hint)
 	if err != nil {
 		return traceExplainInput{}, err
 	}
+	spans := res.Spans
 	if len(spans) == 0 {
+		if res.StubReason == traceStubAgedOut {
+			return traceExplainInput{}, errExplainTraceAgedOut
+		}
 		return traceExplainInput{}, errExplainTraceNotFound
 	}
 	// Trace penceresi (log sorgusu için) — cap'ten ÖNCE, tüm span'lar üstünden.

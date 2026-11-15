@@ -312,7 +312,8 @@ func (s *Server) chatExplainRegistryTurn(ctx context.Context, emit func(string, 
 		switch {
 		case errors.As(err, &nf):
 			emitGuidedStepResult(emit, n, k.Step, "", errExplainTurnNotFound)
-			emit("answer", map[string]any{"text": explainTurnNotFoundTR(ask), "exchangeId": copilot.MetaFromContext(ctx).ExchangeID})
+			emitExplainNotFound(ctx, emit, explainTurnNotFoundTR(ask))
+			return true, true // v0.10.2201 — dürüst yokluk hata değil
 		case errors.As(err, &ba): // v0.10.1407 — geçersiz argüman: LLM'siz dürüst cevap
 			emitGuidedStepResult(emit, n, k.Step, "", err)
 			emit("answer", map[string]any{"text": "Açıklama kurulamadı — " + ba.msg + ".", "exchangeId": copilot.MetaFromContext(ctx).ExchangeID})

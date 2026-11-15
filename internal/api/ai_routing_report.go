@@ -158,7 +158,9 @@ func routingTurnReasons(t chstore.RoutingTurn, route string) []string {
 	case "error":
 		out = append(out, reasonError)
 	}
-	if t.Status != "error" && t.Status != "aborted" {
+	// v0.10.2201 — "not_found": özne (trace / grup) dürüstçe yok dendi;
+	// hata da kanıtsız cevap da değil.
+	if t.Status != "error" && t.Status != "aborted" && t.Status != chatOutcomeNotFound {
 		switch {
 		case t.EmptyAnswer:
 			out = append(out, reasonEmpty)

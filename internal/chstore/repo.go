@@ -4973,11 +4973,17 @@ func (s *Store) TraceWindow(ctx context.Context, traceID string) (lo, hi time.Ti
 			// bir argüman code 53 ile reddedilir — v0.9.578'de tam bu oldu.
 			traceID, chDateTimeArg(since)).Scan(&winStart, &winEndNanos)
 		if err != nil {
-			// Zaman aşımı/hata: daha GENİŞ pencere daha da yavaş olur,
-			// denemeye devam etmek anlamsız. Sınırsız taramaya düşme —
-			// aşağıdaki son çare TTL sınırını uyguluyor.
+			// v0.10.2201 (operator-reported) — probe hatası kademeyi
+			// DURDURMAZ: dar pencerenin zaman aşımı/replika hatası
+			// geniş pencerede tekrar etmeyebilir; durunca trace 31
+			// günlük spans taramasına düşüp (20 sn) "bulunamadı"/zaman
+			// aşımıyla bitiyordu. Her adım yine 3 sn tavanlı; iptal
+			// edilmiş ctx'te boşuna denenmez.
 			log.Printf("[trace] %s pencere araması başarısız (%s içinde): %v", traceID, step, err)
-			break
+			if ctx.Err() != nil {
+				break
+			}
+			continue
 		}
 		if lo, hi, ok := traceTimeBound(winStart, winEndNanos); ok {
 			return lo, hi, true

@@ -375,7 +375,7 @@ func TestExplainRegistryHandlersUnchanged(t *testing.T) {
 	calls := p.requests()
 	var evs []xtEvent
 	h, ok := s.chatExplainTurn(context.Background(), xtRecorder(&evs), &chatExplainAsk{Kind: "incident", ID: "00000000000000ff"}, time.UTC)
-	if !h || ok || xtKinds(evs) != "step,step-result,answer" || p.requests() != calls {
+	if !h || !ok || xtKinds(evs) != "step,step-result,answer" || p.requests() != calls || xtAnswer(t, evs)["outcome"] != chatOutcomeNotFound { // v0.10.2201
 		t.Fatalf("bulunamadı: h=%v ok=%v %s", h, ok, xtKinds(evs))
 	}
 	if txt, _ := xtAnswer(t, evs)["text"].(string); !strings.Contains(txt, "Olay `00000000000000ff` bulunamadı") {

@@ -52,6 +52,8 @@ type chatExchange struct {
 	route    string
 	answer   string
 	errMsg   string
+	// outcome — v0.10.2201: answer olayının `outcome` alanı (chatOutcomeNotFound).
+	outcome string
 
 	// CoSRE öğrenme Faz 1 (cosre_interactions.go) — turun etkileşim satırı.
 	conversation string
@@ -376,6 +378,7 @@ func (x *chatExchange) tap(emit func(string, any)) func(string, any) {
 		case "answer":
 			x.mu.Lock()
 			x.answer = eventField(v, "text")
+			x.outcome = eventField(v, "outcome") // v0.10.2201 — son cevap kazanır
 			if x.firstOut.IsZero() {
 				x.firstOut = now
 			}
@@ -496,6 +499,16 @@ func chatExchangeOutcome(tierErr error, emittedErr string, answered bool, ctxErr
 	return "ok", ""
 }
 
+// chatExchangeStatusWithOutcome — SAF (v0.10.2201): cevaplanmış ("ok") tur
+// öznenin dürüst yokluğunu söylediyse "not_found" — hata DEĞİL (routing
+// raporu "hata" demez, ai_calls hata oranına girmez), başarı da değil.
+func chatExchangeStatusWithOutcome(status, outcome string) string {
+	if status == "ok" && outcome == chatOutcomeNotFound {
+		return chatOutcomeNotFound
+	}
+	return status
+}
+
 // recordChatExchange — turun etkileşim satırı (copilotChat'in defer'i).
 // ctx alışverişin ctx'i (kullanıcı meta'sı, açık/derin profil); iptal edilmiş
 // olabilir — kayıt kendi sınırlı ctx'iyle yazılır (copilot.emitRecord).
@@ -508,9 +521,10 @@ func (s *Server) recordChatExchange(ctx context.Context, x *chatExchange, cs *ch
 		tier, tierErr = cs.tierV, cs.err
 	}
 	x.mu.Lock()
-	answer, emittedErr, route := x.answer, x.errMsg, x.route
+	answer, emittedErr, route, outcome := x.answer, x.errMsg, x.route, x.outcome
 	x.mu.Unlock()
 	status, msg := chatExchangeOutcome(tierErr, emittedErr, answer != "", ctx.Err())
+	status = chatExchangeStatusWithOutcome(status, outcome)
 	if evm := chatEvalModeFrom(ctx); evm != nil {
 		// v0.10.1316 — ajan kipi evalset vakası: etkileşim satırı (cosre-turn)
 		// ve cosre_interactions YOK; sonuç değerlendirme koşucusuna.

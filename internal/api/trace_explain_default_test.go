@@ -326,7 +326,8 @@ func TestExplainTraceDefaultNotFound(t *testing.T) {
 		t.Errorf("kodsuz dal: klasik hazırlık → writeExplainPrepareErr → deliverExplain sırası yok (%d %d %d %d)", iBranch, iPrep, iErr, iDeliver)
 	}
 	in := flatWS(stripGoComments(readSourceFile(t, "explain_trace_input.go")))
-	if !strings.Contains(in, "if len(spans) == 0 { return traceExplainInput{}, errExplainTraceNotFound }") {
+	// v0.10.2201 — aged_out ayrı (sarılı) hata; ikisi de errors.Is ile not-found.
+	if !strings.Contains(in, "return traceExplainInput{}, errExplainTraceAgedOut } return traceExplainInput{}, errExplainTraceNotFound }") {
 		t.Error("buildTraceExplainInput sıfır span'de errExplainTraceNotFound dönmüyor")
 	}
 	for _, err := range []error{errExplainTraceNotFound, fmt.Errorf("sarılı: %w", errExplainTraceNotFound)} {

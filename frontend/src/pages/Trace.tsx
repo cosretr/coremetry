@@ -1,5 +1,6 @@
 import { absoluteShareHref } from '@/lib/shareUrl';
 import { appLinkKind } from '@/lib/safeAppPath';
+import { rememberTraceStart } from '@/lib/traceStartHint';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.457 (D5 dilim B)
 import { useEscLayer } from '@/lib/escLayer';
@@ -217,6 +218,7 @@ function TraceDetailInner() {
       .then(d => {
         if (!g.ok()) return;
         setSpans(d.spans ?? []);
+        rememberTraceStart(id, d.spans); // v0.10.2201 — açıklama turuna pencere ipucu
         setSource(d.source);
         setStub(d.stub);
         setStubReason(d.stubReason);

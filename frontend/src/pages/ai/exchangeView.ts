@@ -206,10 +206,11 @@ export function exchangeFeedbackCounts(rows: ReadonlyArray<Pick<AIExchange, 'fee
   return { up, down };
 }
 
-/** Sonuç rozeti: ok / hata / iptal (istemci cevap gelmeden gitti). */
+/** Sonuç rozeti: ok / hata / iptal (istemci cevap gelmeden gitti) / bulunamadı. */
 export function exchangeStatusBadge(ex: Pick<AIExchange, 'status'>): { label: string; cls: string } {
   if (ex.status === 'ok') return { label: 'ok', cls: 'b-gray' };
   if (ex.status === 'aborted') return { label: 'iptal', cls: 'b-warn' };
+  if (ex.status === 'not_found') return { label: 'bulunamadı', cls: 'b-gray' }; // v0.10.2201
   return { label: 'hata', cls: 'b-err' };
 }
 

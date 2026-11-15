@@ -1203,7 +1203,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// off → nil, Executor bugünkü yol; warn → çağrı aynen koşar, modelin gördüğü
 	// değişmez (log + metrik + span özniteliği + ai_calls notu).
 	argObs, argScope := applyChatToolArgScope(&execHooks, toolSchemas)
-	exec := agenttools.NewExecutor(byName, extNames, execHooks)
+	exec := agenttools.NewExecutor(byName, extNames, execHooks).WithSchemas(toolSchemas) // v0.10.2201 — sayı-metin düzeltmesi
 	if argScope != nil {
 		exec.WithScope(argScope)
 	}

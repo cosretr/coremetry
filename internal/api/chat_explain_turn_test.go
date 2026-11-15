@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/ai/aisurface"
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 )
 
@@ -203,7 +204,7 @@ func TestChatExplainTurnFallsThroughAndNotFound(t *testing.T) {
 	opExplainFixture(t, errors.New("yok"))
 	var evs []xtEvent
 	h, ok := s.chatExplainTurn(context.Background(), xtRecorder(&evs), &chatExplainAsk{Kind: "exception", ID: "ora:00000000000000ff"}, time.UTC)
-	if !h || ok || xtKinds(evs) != "step,step-result,answer" || prov.calls != 0 {
+	if !h || !ok || xtKinds(evs) != "step,step-result,answer" || prov.calls != 0 || xtAnswer(t, evs)["outcome"] != chatOutcomeNotFound { // v0.10.2201
 		t.Fatalf("bulunamadı: h=%v ok=%v %s calls=%d", h, ok, xtKinds(evs), prov.calls)
 	}
 	if txt, _ := xtAnswer(t, evs)["text"].(string); !strings.Contains(txt, "bulunamadı") {
@@ -339,5 +340,45 @@ func TestExceptionGroupChipCarriesExplainAsk(t *testing.T) {
 	b, _ := json.Marshal(c)
 	if !strings.Contains(string(b), `"explainAsk":{"kind":"exception","id":"ora:00000000000000a1","src":"chip"}`) {
 		t.Fatalf("tel şekli %s", b)
+	}
+}
+
+// v0.10.2201 — operator-reported: ekranda açık trace'in açıklaması "hata"
+// sayılıyordu. Dürüst yokluk "not_found" olarak kaydedilir; routing raporu
+// bunu "hata" ya da kanıtsız cevap saymaz; istemci ipucu sınırlıdır.
+func TestExplainNotFoundOutcomeNotError(t *testing.T) {
+	if got := chatExchangeStatusWithOutcome("ok", chatOutcomeNotFound); got != "not_found" {
+		t.Errorf("ok+not_found = %q", got)
+	}
+	for _, st := range []string{"error", "aborted"} {
+		if got := chatExchangeStatusWithOutcome(st, chatOutcomeNotFound); got != st {
+			t.Errorf("%s ezilmemeli: %q", st, got)
+		}
+	}
+	if got := chatExchangeStatusWithOutcome("ok", ""); got != "ok" {
+		t.Errorf("ok = %q", got)
+	}
+	tr := chstore.RoutingTurn{Status: chatOutcomeNotFound, Tier: aisurface.TierExplain, NoEvidence: true, Question: "Bu trace'i açıkla · 0123456789abcdef0123456789abcdef"}
+	if rs := routingTurnReasons(tr, ""); len(rs) != 0 {
+		t.Errorf("not_found tur şüpheli sayıldı: %v", rs)
+	}
+	now := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	if h := explainTraceHint(now.Add(-time.Hour).UnixMilli(), now); !h.Equal(now.Add(-time.Hour)) {
+		t.Errorf("ipucu = %v", h)
+	}
+	for _, bad := range []int64{0, -5, 1000, now.Add(48 * time.Hour).UnixMilli()} {
+		if h := explainTraceHint(bad, now); !h.IsZero() {
+			t.Errorf("%d ipucu üretmemeli: %v", bad, h)
+		}
+	}
+	got, ok := normalizeExplainAsk(&chatExplainAsk{Kind: "trace", ID: "0123456789ABCDEF0123456789abcdef", StartMs: 42})
+	if !ok || got.StartMs != 42 || got.ID != "0123456789abcdef0123456789abcdef" {
+		t.Errorf("trace startMs korunmalı: %+v", got)
+	}
+	if got, _ := normalizeExplainAsk(&chatExplainAsk{Kind: "exception", ID: "abc", StartMs: 42}); got.StartMs != 0 {
+		t.Error("startMs yalnız trace türünde")
+	}
+	if txt := explainTurnNotFoundTR(chatExplainAsk{Kind: explainAskTrace, ID: "x", agedOut: true}); !strings.Contains(txt, "saklama süresini aşmış") {
+		t.Errorf("aged_out metni %q", txt)
 	}
 }

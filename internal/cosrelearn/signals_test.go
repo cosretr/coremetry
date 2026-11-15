@@ -132,6 +132,28 @@ func TestScoreTools(t *testing.T) {
 	}
 }
 
+// v0.10.2201 (operator-reported, get_topology %29 başarı) — yürütülmeyen
+// (tekrar / kapsam / şema reddi) çağrı başarısızlık sayılmaz, ayrı sayılır.
+func TestScoreToolsSkippedSeparate(t *testing.T) {
+	a := turn("a", "c", 0, "q")
+	a.Tools = []chstore.CosreTool{
+		{Name: "get_topology", OK: true, Ms: 50},
+		{Name: "get_topology", OK: false, Error: "skipped"},
+		{Name: "get_topology", OK: false, Error: "skipped"},
+		{Name: "get_topology", OK: false, Error: "boom", Ms: 70},
+	}
+	got := ScoreTools(t0, []chstore.CosreInteraction{a}, nil)
+	l := got[1]
+	if l.Calls != 2 || l.OKCalls != 1 || l.Skipped != 2 || l.SumMs != 120 {
+		t.Fatalf("get_topology: %+v", l)
+	}
+	only := turn("b", "c", 0, "q")
+	only.Tools = []chstore.CosreTool{{Name: "trace", OK: false, Error: "skipped"}}
+	if g := ScoreTools(t0, []chstore.CosreInteraction{only}, nil)[1]; g.Calls != 0 || g.Skipped != 1 || g.Score != 0 {
+		t.Fatalf("yalnız atlanan: %+v", g)
+	}
+}
+
 func TestDueDays(t *testing.T) {
 	// 15'i 01:00 — 14'ü henüz oturmadı (gün sonu + 2 saat), 12-13 hazır.
 	got := DueDays(time.Date(2026, 10, 15, 1, 0, 0, 0, time.UTC))

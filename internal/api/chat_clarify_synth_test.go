@@ -314,8 +314,11 @@ func TestTraceSynthesisFallbacks(t *testing.T) {
 	opExplainFixture(t, nil)
 	withSynthTraceSeam(t, errExplainTraceNotFound)
 	evs = nil
-	if h, ok := s2.chatTraceSynthesisAnswer(synthCtx(&chatContextState{}), emit, p, time.UTC); !h || ok {
+	if h, ok := s2.chatTraceSynthesisAnswer(synthCtx(&chatContextState{}), emit, p, time.UTC); !h || !ok { // v0.10.2201 — dürüst yokluk hata değil
 		t.Fatalf("bulunamadı: handled=%v ok=%v", h, ok)
+	}
+	if evs[len(evs)-1].data.(map[string]any)["outcome"] != chatOutcomeNotFound {
+		t.Fatal("bulunamadı cevabı not_found sonucunu taşımalı")
 	}
 	if text := evs[len(evs)-1].data.(map[string]any)["text"].(string); !strings.Contains(text, "bulunamadı") || prov2.calls != 0 {
 		t.Fatalf("bulunamadı cevabı LLM'siz olmalı: %q (%d çağrı)", text, prov2.calls)

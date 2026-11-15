@@ -175,6 +175,9 @@ type CosreToolQuality struct {
 	P95Ms     uint32    `json:"p95Ms"`
 	Rephrased uint32    `json:"rephrased"`
 	Score     float32   `json:"score"`
+	// Skipped — v0.10.2201: yürütülmeyen çağrılar (tekrar / kapsam / şema
+	// reddi / iptal); Calls'a ve başarı oranına girmez.
+	Skipped uint32 `json:"skipped"`
 }
 
 func (s *Store) InsertCosreAnswerQuality(ctx context.Context, rows []CosreAnswerQuality) error {
@@ -201,12 +204,12 @@ func (s *Store) InsertCosreToolQuality(ctx context.Context, rows []CosreToolQual
 	if len(rows) == 0 {
 		return nil
 	}
-	batch, err := s.conn.PrepareBatch(ctx, `INSERT INTO cosre_tool_quality (day, tool, calls, ok_calls, sum_ms, p95_ms, rephrased, score)`)
+	batch, err := s.conn.PrepareBatch(ctx, `INSERT INTO cosre_tool_quality (day, tool, calls, ok_calls, sum_ms, p95_ms, rephrased, score, skipped)`)
 	if err != nil {
 		return err
 	}
 	for _, r := range rows {
-		if err := batch.Append(r.Day.UTC(), r.Tool, r.Calls, r.OKCalls, r.SumMs, r.P95Ms, r.Rephrased, r.Score); err != nil {
+		if err := batch.Append(r.Day.UTC(), r.Tool, r.Calls, r.OKCalls, r.SumMs, r.P95Ms, r.Rephrased, r.Score, r.Skipped); err != nil {
 			return err
 		}
 	}
@@ -302,6 +305,8 @@ type CosreWorstTool struct {
 	P95Ms        uint32  `json:"p95Ms"`
 	RephraseRate float64 `json:"rephraseRate"`
 	Score        float64 `json:"score"`
+	// Skipped — v0.10.2201: pencerede yürütülmeyen çağrı sayısı (başarısızlık değil).
+	Skipped uint64 `json:"skipped"`
 }
 
 // WorstCosreTools — günlük puanlar pencere boyunca toplanır; skor =
@@ -309,7 +314,7 @@ type CosreWorstTool struct {
 func (s *Store) WorstCosreTools(ctx context.Context, fromDay time.Time, minCalls, limit int) ([]CosreWorstTool, error) {
 	rows, err := s.conn.Query(ctx, `
 		SELECT tool, sum(calls) AS c, sum(ok_calls) / c AS sr, sum(sum_ms) / c AS avg_ms,
-		       max(p95_ms), sum(rephrased) / c AS rr, sr * (1 - rr) AS score
+		       max(p95_ms), sum(rephrased) / c AS rr, sr * (1 - rr) AS score, sum(skipped) AS sk
 		FROM cosre_tool_quality FINAL
 		WHERE day >= toDate(?) AND tool != ''
 		GROUP BY tool
@@ -324,7 +329,7 @@ func (s *Store) WorstCosreTools(ctx context.Context, fromDay time.Time, minCalls
 	var out []CosreWorstTool
 	for rows.Next() {
 		var t CosreWorstTool
-		if err := rows.Scan(&t.Tool, &t.Calls, &t.SuccessRate, &t.AvgMs, &t.P95Ms, &t.RephraseRate, &t.Score); err != nil {
+		if err := rows.Scan(&t.Tool, &t.Calls, &t.SuccessRate, &t.AvgMs, &t.P95Ms, &t.RephraseRate, &t.Score, &t.Skipped); err != nil {
 			return nil, err
 		}
 		out = append(out, t)

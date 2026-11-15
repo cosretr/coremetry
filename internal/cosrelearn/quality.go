@@ -101,12 +101,16 @@ func ToolScore(okRate, rephraseRate float64) float64 {
 	return okRate * (1 - rephraseRate)
 }
 
+// ToolCallSkipped — SAF (v0.10.2201): araç çağrısı yürütülmedi mi
+// (step-result skipped:true → chat_exchange Error "skipped").
+func ToolCallSkipped(t chstore.CosreTool) bool { return !t.OK && t.Error == "skipped" }
+
 // ScoreTools — SAF: gün × tool özetleri + koşu işareti (Tool "").
 func ScoreTools(day time.Time, rows []chstore.CosreInteraction, derived map[string][]string) []chstore.CosreToolQuality {
 	type acc struct {
-		calls, ok, reph uint32
-		sum             uint64
-		ms              []uint32
+		calls, ok, reph, skipped uint32
+		sum                      uint64
+		ms                       []uint32
 	}
 	by := map[string]*acc{}
 	for _, r := range rows {
@@ -122,6 +126,14 @@ func ScoreTools(day time.Time, rows []chstore.CosreInteraction, derived map[stri
 			if a == nil {
 				a = &acc{}
 				by[t.Name] = a
+			}
+			// v0.10.2201 (operator-reported, get_topology %29) — YÜRÜTÜLMEYEN
+			// çağrı (tekrar muhafızı / kapsam / şema reddi / iptal / tavan;
+			// chat_exchange noteStepResult Error "skipped") başarısızlık
+			// DEĞİL: ayrı sayılır, başarı/süre/yeniden-sorma paydasına girmez.
+			if ToolCallSkipped(t) {
+				a.skipped++
+				continue
 			}
 			a.calls++
 			if t.OK {
@@ -143,11 +155,14 @@ func ScoreTools(day time.Time, rows []chstore.CosreInteraction, derived map[stri
 	sort.Strings(names)
 	for _, n := range names {
 		a := by[n]
-		okRate := float64(a.ok) / float64(a.calls)
-		rr := float64(a.reph) / float64(a.calls)
+		okRate, rr := 0.0, 0.0
+		if a.calls > 0 {
+			okRate = float64(a.ok) / float64(a.calls)
+			rr = float64(a.reph) / float64(a.calls)
+		}
 		out = append(out, chstore.CosreToolQuality{
 			Day: d, Tool: n, Calls: a.calls, OKCalls: a.ok, SumMs: a.sum,
-			P95Ms: p95(a.ms), Rephrased: a.reph, Score: float32(ToolScore(okRate, rr)),
+			P95Ms: p95(a.ms), Rephrased: a.reph, Score: float32(ToolScore(okRate, rr)), Skipped: a.skipped,
 		})
 	}
 	return out

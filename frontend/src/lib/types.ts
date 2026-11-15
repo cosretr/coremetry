@@ -3266,7 +3266,8 @@ export interface AIExchange {
   question: string;
   answer?: string;
   /** v0.10.1280 — `aborted`: istemci cevap gelmeden ayrıldı (arıza değil). */
-  status: 'ok' | 'error' | 'aborted';
+  /** v0.10.2201 — `not_found`: özne (trace / grup) dürüstçe bulunamadı (hata değil). */
+  status: 'ok' | 'error' | 'aborted' | 'not_found';
   errorMsg?: string;
   durationMs: number;
   userId?: string;
@@ -8118,6 +8119,11 @@ export interface ChatExplainAsk {
    * `vars`'a güvenir (kayıtlı paneli kendisi yükler). Arşive girmez.
    */
   panel?: MetricPanelAsk;
+  /**
+   * v0.10.2201 — trace türü: ekranda yüklü trace'in başlangıcı (unix ms).
+   * Sunucu CH pencere aramasının ilk probe'u yapar (lib/traceStartHint).
+   */
+  startMs?: number;
 }
 
 // ── v0.10.1435 — panelden "Bu grafiği açıkla" ──────────────────────────────
@@ -9182,6 +9188,8 @@ export interface CosreWorstTool {
   p95Ms: number;
   rephraseRate: number;
   score: number;
+  /** v0.10.2201 — yürütülmeyen çağrı sayısı (tekrar / kapsam / şema reddi); `calls`'a girmez. */
+  skipped?: number;
 }
 // v0.10.1637 — trace açıklamasının "dış bağımlılık bekleme" satırını sunucu
 // kaç kez ekledi / düzeltti (oran payda = kuralın uygulandığı açıklamalar).

@@ -112,6 +112,15 @@ type Executor struct {
 	budget   time.Duration
 	hooks    Hooks
 	scope    Scope
+	// schemas — v0.10.2201: araç adı → InputSchema; sayı-metin düzeltmesi
+	// (mcp.CoerceNumericArgs) doğrulama kipinden BAĞIMSIZ uygulanır.
+	schemas map[string]map[string]any
+}
+
+// WithSchemas — v0.10.2201: yerli araçların şemaları (dış MCP aracı yok).
+func (x *Executor) WithSchemas(schemas map[string]map[string]any) *Executor {
+	x.schemas = schemas
+	return x
 }
 
 // NewExecutor — byName yürütme haritası, external köken etiketi (ai.tool
@@ -154,6 +163,13 @@ func (x *Executor) Call(ctx context.Context, name string, args json.RawMessage) 
 	if !found {
 		msg := fmt.Sprintf("unknown tool %q", name)
 		return Outcome{Content: msg, IsError: true, Kind: KindUnknown}
+	}
+	// v0.10.2201 — şema integer/number derken metin gelen sayı ("3600")
+	// doğrulamadan ve tekrar muhafızından ÖNCE sayıya çevrilir: yerel
+	// modellerin sık hatası bad_args / decode hatası olmasın, "3600" ile
+	// 3600 aynı çağrı sayılsın.
+	if sc, ok := x.schemas[name]; ok {
+		args, _ = mcp.CoerceNumericArgs(sc, args)
 	}
 	// v0.10.88 — aynı (tool, kanonik argüman) çiftinin ikinci kopyası
 	// YÜRÜTÜLMEZ; model ToolErrorJSON alanlarıyla yönlendirilir.

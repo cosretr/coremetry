@@ -284,9 +284,8 @@ func (s *Server) chatTraceSynthesisAnswer(ctx context.Context, emit func(string,
 	if err != nil {
 		if errors.Is(err, errExplainTraceNotFound) {
 			emitGuidedStepResult(emit, tn, "trace", "", errExplainTurnNotFound)
-			emit("answer", map[string]any{"text": explainTurnNotFoundTR(chatExplainAsk{Kind: explainAskTrace, ID: tid}),
-				"exchangeId": copilot.MetaFromContext(ctx).ExchangeID})
-			return true, false
+			emitExplainNotFound(ctx, emit, explainTurnNotFoundTR(chatExplainAsk{Kind: explainAskTrace, ID: tid})) // v0.10.2201
+			return true, true
 		}
 		emitGuidedStepResult(emit, tn, "trace", "", err)
 		emit("error", map[string]string{"error": err.Error()})

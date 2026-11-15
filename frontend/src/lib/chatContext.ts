@@ -15,6 +15,13 @@
 
 import { aiSubjectQuestion } from '@/components/ai/drawerChat';
 import type { ChatExplainAsk } from './types';
+import { traceStartFor } from './traceStartHint';
+
+// withTraceStart — v0.10.2201: sayfanın yüklediği trace başlangıcı (varsa).
+function withTraceStart(a: ChatExplainAsk): ChatExplainAsk {
+  const startMs = traceStartFor(a.id);
+  return startMs ? { ...a, startMs } : a;
+}
 
 // v0.10.1400 (Tek CoSRE) — trace / exception çipi `explainAsk` taşır: tık
 // açıklamayı SOHBET TURU olarak ister (✨ düğmesinin çekirdeği; çekmece özne
@@ -95,7 +102,7 @@ export function contextStarter(pathname: string, search: string): ChatContextSta
     return {
       chip: "Bu trace'i açıkla",
       question: aiSubjectQuestion('trace', id),
-      explainAsk: { kind: 'trace', id: id.toLowerCase(), src: 'starter' }, // v0.10.1400
+      explainAsk: withTraceStart({ kind: 'trace', id: id.toLowerCase(), src: 'starter' }), // v0.10.1400; v0.10.2201 startMs
     };
   }
   if (TRIAGE_ROUTES.has(pathname)) {

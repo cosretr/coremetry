@@ -70,6 +70,26 @@ type chatExplainAsk struct {
 	// yapısal yükü (≤8 KiB). Kodek konum taşır, sorgu buradadır; dashboard
 	// panelinde sunucu yalnız `vars`'a güvenir. Arşive girmez (künyede yok).
 	Panel *metricPanelAsk `json:"panel,omitempty"`
+	// StartMs — v0.10.2201: trace sayfasının yüklediği trace'in başlangıcı
+	// (unix ms; yalnız trace türünde). Sunucu CH pencere aramasının İLK
+	// probe'u olarak kullanır (explainTraceHint); arşive girmez.
+	StartMs int64 `json:"startMs,omitempty"`
+	// agedOut — sunucu içi: not-found cevabının "saklama aşıldı" varyantı.
+	agedOut bool
+}
+
+// explainTraceHint — SAF (v0.10.2201): istemcinin trace başlangıcı → CH
+// pencere ipucu. ≤0, 2000 öncesi ya da şimdiden 1 günden ileri → sıfır
+// (ipucu yok; kademeli arama aynen).
+func explainTraceHint(startMs int64, now time.Time) time.Time {
+	if startMs <= 946684800000 {
+		return time.Time{}
+	}
+	t := time.UnixMilli(startMs)
+	if t.After(now.Add(24 * time.Hour)) {
+		return time.Time{}
+	}
+	return t
 }
 
 const (
@@ -197,7 +217,11 @@ func normalizeExplainAsk(a *chatExplainAsk) (chatExplainAsk, bool) {
 	}
 	// v0.10.1406 — code yalnız kod-yetenekli öznede kalır (aksi sessizce düşer:
 	// kodsuz açıklama dürüst bir düşüş); fresh her türde.
-	return chatExplainAsk{Kind: kind, ID: id, Src: src, Code: a.Code && explainCodeCapable(kind, id), Fresh: a.Fresh}, true
+	out := chatExplainAsk{Kind: kind, ID: id, Src: src, Code: a.Code && explainCodeCapable(kind, id), Fresh: a.Fresh}
+	if kind == explainAskTrace && a.StartMs > 0 {
+		out.StartMs = a.StartMs // v0.10.2201 — pencere ipucu (sınır kontrolü explainTraceHint'te)
+	}
+	return out, true
 }
 
 // explainCodeCapable — SAF (v0.10.1406): "Kodu da incele"nin anlamlı olduğu
@@ -296,10 +320,25 @@ func clampExplainIDs(in []string) []string {
 // errExplainTurnNotFound — açıklanacak trace / grup bulunamadı (adım çipi).
 var errExplainTurnNotFound = errors.New("bulunamadı")
 
+// chatOutcomeNotFound — v0.10.2201: answer olayının `outcome` alanı; tur
+// "not_found" durumuyla kaydedilir (hata DEĞİL: öznenin yokluğu dürüstçe
+// söylendi). Operator-reported: /ai "Şüpheli yönlendirmeler"de açıklama
+// turlarının çoğu "hata" — hepsi "bulunamadı" cevabıydı.
+const chatOutcomeNotFound = "not_found"
+
+// emitExplainNotFound — bulunamayan öznenin LLM'siz cevabı + not_found sonucu.
+// Çağıran (true, true) döner: cevap verildi, kademe başarısız DEĞİL.
+func emitExplainNotFound(ctx context.Context, emit func(string, any), text string) {
+	emit("answer", map[string]any{"text": text, "exchangeId": copilot.MetaFromContext(ctx).ExchangeID, "outcome": chatOutcomeNotFound})
+}
+
 // explainTurnNotFoundTR — SAF: bulunamayan öznenin dürüst, LLM'siz cevabı.
 func explainTurnNotFoundTR(a chatExplainAsk) string {
 	switch a.Kind {
 	case explainAskTrace:
+		if a.agedOut {
+			return "Trace `" + a.ID + "` artık açıklanamıyor — özet kaydı duruyor ama ham span'ler saklama süresini aşmış."
+		}
 		return "Trace `" + a.ID + "` bulunamadı — ne Tempo'da ne ClickHouse'ta var (saklama süresi dolmuş ya da kimlik yanlış olabilir)."
 	case explainAskException:
 		return "Exception grubu `" + a.ID + "` bulunamadı — silinmiş ya da kimlik yanlış olabilir."
@@ -337,12 +376,14 @@ func (s *Server) chatExplainTurn(ctx context.Context, emit func(string, any), ra
 // chatExplainTraceTurn — ✨ Explain trace'in kodsuz klasik yolu, sohbet içinde.
 func (s *Server) chatExplainTraceTurn(ctx context.Context, emit func(string, any), ask chatExplainAsk) (bool, bool) {
 	n := emitGuidedStep(emit, "trace", `{"id":"`+ask.ID+`"}`)
-	in, err := s.buildTraceExplainInput(ctx, ask.ID)
+	// v0.10.2201 — istemcinin bildiği trace başlangıcı ilk pencere probe'u.
+	in, err := s.buildTraceExplainInputNear(ctx, ask.ID, explainTraceHint(ask.StartMs, time.Now()))
 	if err != nil {
 		if errors.Is(err, errExplainTraceNotFound) {
 			emitGuidedStepResult(emit, n, "trace", "", errExplainTurnNotFound)
-			emit("answer", map[string]any{"text": explainTurnNotFoundTR(ask), "exchangeId": copilot.MetaFromContext(ctx).ExchangeID})
-			return true, false
+			ask.agedOut = errors.Is(err, errExplainTraceAgedOut)
+			emitExplainNotFound(ctx, emit, explainTurnNotFoundTR(ask))
+			return true, true
 		}
 		emitGuidedStepResult(emit, n, "trace", "", err)
 		emit("error", map[string]string{"error": err.Error()})
@@ -408,8 +449,8 @@ func (s *Server) chatExplainExceptionTurn(ctx context.Context, emit func(string,
 	cancel()
 	if !gok {
 		emitGuidedStepResult(emit, n, opExceptionExplainTool, "", errExplainTurnNotFound)
-		emit("answer", map[string]any{"text": explainTurnNotFoundTR(ask), "exchangeId": copilot.MetaFromContext(ctx).ExchangeID})
-		return true, false
+		emitExplainNotFound(ctx, emit, explainTurnNotFoundTR(ask))
+		return true, true
 	}
 	emitGuidedStepResult(emit, n, opExceptionExplainTool, in.User, nil)
 	// copilotExplainException ile AYNI anahtar (kod dalı kapalı).

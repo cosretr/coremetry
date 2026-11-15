@@ -35,3 +35,18 @@ func TestGetTraceUsesTraceWindow(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.2201 (operator-reported) — probe hatası kademeyi durdurmaz; yalnız
+// iptal edilmiş ctx durdurur.
+func TestTraceWindowProbeErrorContinuesCascade(t *testing.T) {
+	b, err := os.ReadFile("repo.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	w := strings.Index(s, "func (s *Store) TraceWindow(")
+	wb := s[w : w+strings.Index(s[w:], "\n}\n")]
+	if !strings.Contains(wb, "if ctx.Err() != nil {\n\t\t\t\tbreak\n\t\t\t}\n\t\t\tcontinue") {
+		t.Error("TraceWindow probe hatasında sonraki pencereye geçmeli (iptalde durur)")
+	}
+}
