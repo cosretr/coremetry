@@ -14104,3 +14104,19 @@ Operatör onayı (v0.10.2170 "Operatör kararı bekler" maddesi). Ön yüz çağ
 - `GET /api/problems/buckets` (`listProblemBuckets`, api.go) ve onu koruyan `TestProblemBucketsAgreeWithTheList` silindi. `ListProblems`, takım/küme çözümlemesi, `intersectServices` paylaşımlı, kaldı. api.go 10183 → 10081 (baseline düştü).
 - `GET /api/blast-radius` (`blast_radius_routes.go` + testi) silindi. `chstore.GetBlastRadiusBatch` CoSRE (`internal/sre`) kullandığı için kaldı; tekil `/api/services/{name}/blast-radius` ve MCP `get_blast_radius` dokunulmadı.
 - Paylaşılan saf özet `blastRadiusSetDigest` Kafka etiket anahtarında da kullanılıyordu → `sortedSetDigest` adıyla `messaging_kafka_tab.go`'ya taşındı (testi `messaging_kafka_tab_test.go`'da); anahtar biçimi aynı.
+
+
+## 2026-11-15 — v0.10.2166–2180 — /clusters shadcn geçişi ve sadeleştirme (Parti A, B, S11)
+
+Plan: `docs/frontend/clusters-shadcn-plan.md` (mockup "Clusters sayfası önerisi" operatör onayı 2026-11-14; S10 soruları operatör yanıtı 2026-11-15). Kararlar ayar değil.
+- **K1 (kayıt):** /clusters liste görünümü kart ızgarası (v0.8.586–588), detay `?cluster=X` + `?section=` sekmeleri. Daha önce burada girdisi yoktu.
+- **D1** Liste kartı kalır (3 KPI + 2 çubuk + durum sözcüğü); filo alarm şeridi yerine tek düz cümle; çubuk yanında "kullanılan / kapasite · %"; yanıt vermeyen kart cümle + "Bağlantı ayarını aç" (S4).
+- **D2** Overview: başlıkta düz cümle (bellek % + ETA + açık kritik; 0 kritik yazılmaz), dört kutu CPU / Memory / Pods / Alerts, By node grafiklerinde en yüksek node altyazısı, node kutucukları + alarmlar (kritik önce, "critical only" yok); Ağ trafiği ve Göstergeler KAPALI (S7).
+- **D3** Nodes: "kullanılan / kapasite · %" + çubuk, Pods "N / kapasite", Status tek sözcük, dikkat isteyenler önce; ayrıntı "Tüm kolonlar"da (oturum içi, kalıcı anahtar yok) (S3 + S6).
+- **D4** Namespace seçici eager liste olarak kalır — CLAUDE.md "Picker = server-side search" kuralına YAZILI İSTİSNA: liste cluster'ın tam namespace kümesi, zaten çekilmiş (`/api/clusters/namespaces`), ≤ birkaç yüz; seçim örneklenmiş alt kümeye karşı doğrulanmaz (S5, `NamespaceCombobox` yorumu).
+- **D5** Etiket İngilizce; ipucu / hata / durum cümlesi Türkçe.
+- **D6** Açılan kapalı bölüm sonraki ziyarette açık kalır (`CollapsedSection`, tarayıcı başına JSON kimlik dizisi): `clusters.overview.open`, `clusters.ns.open`, `pod.sections.open`. Kapalı bölümün verisi açılana kadar çekilmez.
+- **D7** Namespace detayı yeni route DEĞİL: `?cluster=X&namespace=Y` (section yok ya da `section=namespaces`) sayfa görünümü; `section=pods&namespace=` (servis pivotu, K13) sekmede kalır; `?deployment=` detayın pod tablosunu süzer (S8 veri, S9 görünüm). Kullanım grafiklerinde istek / limit çizgisi YOK (operatör 2026-11-15: namespace toplamı pod çizgilerinin ölçeğini bozar; ek karar gerekmez).
+- **D8** Pod: AÇIK CPU/Bellek, Taşıdığı servisler (v0.10.190 "gizlenmez" kararı korundu, operatör 2026-11-15), Konteynerler, durum sözcüğü + deterministik cümle + kardeş kıyası cümlesi (S11); KAPALI İstek metrikleri, Son trace'ler, Ağ ve JVM (`jmxTitle()`), Etiketler ve geçmiş (kardeş tablosu dahil). KPI şeridi kalktı; meta satırı Servis / İş yükü / Node / Yaş (entity ömrü) / Sürüm (service.version ya da app.kubernetes.io/version; yoksa alan çizilmez); "CoSRE'ye sor" çekmeceyi bağlamlı soruyla doldurur, göndermez (S10, S11).
+- **Bekleyen (operatör kararı):** S12 — `coremetry/DataTable` satırlara `cv-row` (content-visibility) basmıyor; 500 satırlık Pods tablosu ya `virtual` kipine (ariaLabel / openRow çizilmez) ya da dondurulmuş API'ye ADDİTİF bir seçeneğe ihtiyaç duyuyor. S13 — node disk doluluğu için mountpoint (`/`, `/sysroot` ya da ikisinin en dolusu) seçilmedi (plan §3, §8).
+- Doğrulanmadı: tarayıcıda görünüm, prod KSM ailelerinin varlığı (plan §8).

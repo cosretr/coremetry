@@ -49,7 +49,15 @@ probe 'count(node_network_receive_bytes_total{device!="lo"})'  # node/cluster ne
 # /clusters Workload tier'ı Namespace→Deployment→Pod) — bu eksen
 # kube_pod_owner + kube_replicaset_owner'a bağlı; boşsa Workload
 # tablosu ad-heuristik fallback'e (stripPodSuffixes) düşer:
-probe 'count(kube_pod_owner{owner_kind="ReplicaSet"})'
+probe 'count(kube_pod_owner{owner_kind=~"ReplicaSet|StatefulSet|DaemonSet|Job"})'
+# v0.10.2167–2176 (Clusters S3/S8) — kapasite, koşul, namespace detayı; hepsi
+# best-effort, seri yoksa hücre / kutu boş kalır ("—"), sayfa çalışır:
+probe 'count(kube_node_status_capacity)'          # Nodes "kullanılan / kapasite"
+probe 'count(kube_node_status_allocatable)'       # Tüm kolonlar: Allocatable
+probe 'count(kube_node_status_condition)'         # Status sözcüğü (Ready / baskı)
+probe 'count(kube_pod_container_resource_requests)'  # istek toplamları (node + namespace)
+probe 'count(kube_pod_container_status_waiting_reason)'  # pod durum sözcüğü
+probe 'count(kube_pod_info{node!=""})'            # Pod'lar tablosunda Node
 ```
 
 Okuma: `"status":"success"` + sıfırdan büyük değer = eksen hazır.
