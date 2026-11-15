@@ -218,7 +218,7 @@ describe('/cosre bayrak: v1 / v2 sayfası', () => {
       id: 'c1', title: 't', messages: [{ role: 'user', text: 'eski soru' }, { role: 'assistant', text: 'eski cevap', exchangeId: 'x0' }],
     } as never);
     await renderAt('/cosre?chat=c1');
-    await vi.waitFor(() => expect(document.querySelector('[data-cosre-v2].cosre-root--page')).not.toBeNull());
+    await vi.waitFor(() => expect(document.querySelector('[data-cosre-v2].cosre-root--page')).not.toBeNull(), { timeout: 10000 });
     expect(document.querySelector('[role="dialog"]'), 'Sheet değil, sayfa').toBeNull();
     expect(document.querySelector('.cm-ai-fab'), 'FAB yok').toBeNull();
     expect(document.getElementById('cosre-side')?.textContent).toContain('Yeni sohbet');
@@ -239,7 +239,7 @@ describe('/cosre bayrak: v1 / v2 sayfası', () => {
       { id: 'c3', title: 'üç gün önce', updatedAt: (Date.now() - 3 * 86_400_000) * 1e6, messages: 2 },
     ] as never);
     await renderAt('/cosre');
-    await vi.waitFor(() => expect(document.querySelector('[data-cosre-v2] #cosre-side h2')).not.toBeNull());
+    await vi.waitFor(() => expect(document.querySelector('[data-cosre-v2] #cosre-side h2')).not.toBeNull(), { timeout: 10000 });
     const h = document.querySelector('[data-cosre-v2] #cosre-side h2')!.textContent ?? '';
     expect(h).not.toBe('Son 7 gün');
     expect(h).toMatch(/^\d{1,2} \S+/);

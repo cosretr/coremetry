@@ -10,3 +10,4 @@ frontend/node_modules
 frontend/.next
 frontend/out
 .DS_Store
+.claude
