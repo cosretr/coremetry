@@ -104,7 +104,7 @@ export function oracleOperationTitle(o: TraceOracleOperation): string {
 }
 
 // functionCodeLabel / functionCodeTitle — endpoint "Break down by function_code"
-// tablosunda kodun yanında Oracle operasyon adı ("CAF0001 · CUSTOMER_…").
+// tablosunda kodun yanında Oracle operasyon adı ("CLM0001 · CUSTOMER_…").
 // Sözlük yoksa (başka boyut, kaynak yok) ya da kod sözlükte değilse değer
 // AYNEN döner — ad uydurulmaz.
 export function functionCodeLabel(value: string, dict: OracleFunctionCodesResponse | null | undefined): string {

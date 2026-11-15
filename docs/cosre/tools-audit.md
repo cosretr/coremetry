@@ -2,10 +2,10 @@
 
 Status: **read-only audit — no code changed, no commit.** Snapshot `main` @ v0.10.1661
 (worktree). Every claim carries `file:line` from this snapshot. Examples are neutral
-(`orders-api`, `KNL123`, `BKRB001`); no customer names.
+(`orders-api`, `KQL123`, `BQRZ001`); no customer names.
 
 Brief (operator, summarised): "is there an error in the mobile loan application since
-14:00?", "what broke in MY services today?", "channel KNL123 is slow, why?" → the assistant
+14:00?", "what broke in MY services today?", "channel KQL123 is slow, why?" → the assistant
 walks metric → trace → log in any order, inside the user's OWN services, Grafana-Assistant
 style (query visible per step, clickable results, one-click `page_url`). Constraints:
 build on `POST /api/cosre/v2/chat` (v1 untouched, `api.go` frozen); self-hosted
@@ -130,7 +130,7 @@ revisit only if `users.team` is empty for most users in prep (measure first).
 
 | Identifier | Resolver (existing) | Rollup / table read | Key order (point read?) | Cache |
 |---|---|---|---|---|
-| `CHANNEL_CODE` / `FUNCTION_CODE` (e.g. `KNL123`, `BKRB001`) | `resolve_business_code` `mcptools/business_code.go:266`; `bizIndex` `:218` → `Store.BusinessCodeIndex` `chstore/business_code.go:52`; `BusinessCodeServices` `:81` | `business_code_summary_5m` (AggregatingMergeTree, 30 d TTL) `business_code.go:29-43` | `ORDER BY (kind, code, service_name, time_bucket)` → **code-first point read, no service scope needed** | 5 min in-process map `bizIndexKey` `:199` (~17 K codes, ≤ 300 K names `:217`) |
+| `CHANNEL_CODE` / `FUNCTION_CODE` (e.g. `KQL123`, `BQRZ001`) | `resolve_business_code` `mcptools/business_code.go:266`; `bizIndex` `:218` → `Store.BusinessCodeIndex` `chstore/business_code.go:52`; `BusinessCodeServices` `:81` | `business_code_summary_5m` (AggregatingMergeTree, 30 d TTL) `business_code.go:29-43` | `ORDER BY (kind, code, service_name, time_bucket)` → **code-first point read, no service scope needed** | 5 min in-process map `bizIndexKey` `:199` (~17 K codes, ≤ 300 K names `:217`) |
 | `FUNCTION_CODE` → services + facts | `Store.FunctionCodeServices` `chstore/function_code_services.go:121` | `rollup_spans_wide_1m` (≤ window) / `_5m` `:63-67`; raw `spans` fallback `:87` | wide rollup `ORDER BY (service_name, span_kind, status_code, channel_code, endpoint, function_code, ts)` `migrations/0002_rollup_wide.sql:45` → code is **not** a prefix: full-key scan, bounded `LIMIT` + `max_execution_time=5` `:81-82` | none |
 | Operation (span name) / endpoint (`http.route`) | `resolve_business_code` kinds `operation` / `endpoint` `business_code.go:12,193` | `cosre_operation_catalog(operation, source, service, function_codes[], call_count, error_count)` `store.go:3047`; refreshed by `StartOperationCatalog` `api/cosre_operation_catalog.go:21` (leader lock) | RMT state, `FINAL` read | catalogue job cadence |
 | Oracle operation name → codes | `resolve_oracle_operation` `oracle_operation.go:143` | `oracle_error_log` `chstore/oracle_error_log.go:93` | — | — |

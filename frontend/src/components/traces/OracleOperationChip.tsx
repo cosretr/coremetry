@@ -83,7 +83,7 @@ export function OracleOperationChip({ spans, pageRange, oracleRows }: {
 // aynı kodun diğer trace'leri (operasyon çipiyle aynı hedef); ikisi de
 // kopyalanabilir. v0.10.1514 — ikisi de kimlik çipi (CHANNEL artık düz metin
 // değil); etiket FUNCTION / CHANNEL, span'deki anahtar yazımı (uydurma ad yok)
-// çipin ipucunda: "FUNCTION_CODE: SPE0112".
+// çipin ipucunda: "FUNCTION_CODE: SXQ0112".
 export function TraceEntryCodes({ spans, pageRange }: { spans: SpanRow[]; pageRange: TimeRange }) {
   const { functionCode: fc, channelCode: cc } = useMemo(() => traceEntryCodes(spans), [spans]);
   if (!fc && !cc) return null;

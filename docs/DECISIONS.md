@@ -1343,7 +1343,7 @@ Teknik ayrıntı'da); kuyruk satırı incident özetini (= onu açan problemin a
 
 ## 2026-10-03 — Traces: Errors + nitelik süzgecinde histogram listeyle aynı kümeyi sayar (v0.10.1082)
 
-**Operatör (prod):** "Error seçildiğinde histogram gelmiyor." `hasError=true` + `function_code = KYC0001` (ya da
+**Operatör (prod):** "Error seçildiğinde histogram gelmiyor." `hasError=true` + `function_code = VRF0001` (ya da
 `k8s.pod.name = …`) → liste dolu, şerit "0 SPANS · 0 ERROR SPANS"; boş durum "hata aynı trace'in başka bir span'inde"
 diyordu. **Neden:** iki yüzey hatayı farklı yerde arıyordu. Liste iki basamaklı (v0.10.1010): çipe uyan hatalı span
 varsa o, yoksa trace düzeyi (çip bir span'de, hata başka span'de). Şerit `/api/spans/metric-batch`'te Errors'u span
@@ -5402,14 +5402,14 @@ değerinden "Operasyon: <ad>" çipi; tıklayınca aynı fonksiyon kodunun diğer
 span'de GÖRÜLEN yazımla). Trace kod taşımıyorsa ya da kod sözlükte yoksa hiçbir şey çizilmez — ad
 uydurulmaz. **(2) Endpoint › Break down by** — beyaz listeye `function_code` boyutu (iki yazımı okuyan
 DİZİ ifadesi: terfi kolonu her kurulumda yok ve harita statik; tarama zaten servis + rota + zamanla
-sınırlı); değer hücresi "CAF0001 · <operasyon adı>". Kod birden çok operasyonda görülüyorsa en çok
+sınırlı); değer hücresi "CLM0001 · <operasyon adı>". Kod birden çok operasyonda görülüyorsa en çok
 satırlı ad + "(+N)" ve ipucunda diğerleri: 1:n ilişki gizlenmez. Sınır 1002 ile aynı: yalnız son 7 günde
 Oracle'da hata satırı olan operasyonların adı bilinir.
 
 ## 2026-10-01 — Oracle: operasyon adıyla trace bulma — komut paleti (v0.10.1002)
 
 **Karar (operatör: "operasyon ismiyle trace bulabilir miyim" → "yap"):** operasyon adı
-(DIGITAL_TRANSFER_EFT_CONFIRM_SERVICE gibi) trace'lerde yok; arama KOMUT PALETİNE (⌘K / üst arama kutusu)
+(EXAMPLE_TRANSFER_XFR_CONFIRM_SERVICE gibi) trace'lerde yok; arama KOMUT PALETİNE (⌘K / üst arama kutusu)
 üçüncü sunucu taraflı kaynak olarak eklendi (`GET /api/oracle/operations?q=`, ≥3 karakter, 200 ms
 debounce, 60 sn önbellek, rol kapısı yok — operasyon adı zaten Problem başlığında ve Trace › Logs'ta her
 role görünür). Her isabet en çok iki sonuç: **(1) operasyon → trace'ler** — operasyonun son 7 gündeki
@@ -5440,7 +5440,7 @@ söyler ("FUNCTIONCODE kolonu olmalı"). Hata kodu hiçbir durumda fonksiyon kod
 
 ## 2026-10-01 — Oracle: fonksiyon kodundan servis — öğrenen eşleme (v0.10.1000)
 
-**Karar (operatör):** "Oracle'dan gelen DIGITAL_PAYMENT_EFT gibi operasyon adı trace'lerde yok, eşleştirebilir
+**Karar (operatör):** "Oracle'dan gelen EXAMPLE_PAYMENT_XFR gibi operasyon adı trace'lerde yok, eşleştirebilir
 miyiz" → evet, FONKSİYON KODU üzerinden; teyit: Oracle satırının kod alanı (özel SQL'de `FUNCTIONCODE` →
 `error.code`) span'lerdeki `FUNCTION_CODE` ile aynı değer; "zaman içinde öğrendikçe güncellersin". Köprü:
 satır (operasyon, fonksiyon kodu) → o kodu taşıyan span'lerin servisi; trace kimliğine gerek yok.
@@ -6442,8 +6442,8 @@ TestCodeEvidenceAttrsSource; copilot TestTraceWithOperationCodePrompt; vitest Co
 
 **Düzeltme (v0.10.1003 kararının üstüne; operatör-bildirimli):** trace 6008dded… (kök POST
 /ACMWEB/application/expressOrderPreValidate, kendi Oracle satırı
-LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST) özet şeridinde "Operasyon:
-LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST (+15)" gösteriyordu. **Kök neden:**
+LEND_PERSONAL_WEB_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST) özet şeridinde "Operasyon:
+LEND_PERSONAL_WEB_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST (+15)" gösteriyordu. **Kök neden:**
 çip YALNIZ fonksiyon kodu sözlüğünü okuyordu — `ops[0]` = kodun bankanın tamamında son 7 günde EN ÇOK
 satırlı operasyonu, 1:n ilişkinin tahmini; trace'in kendi Oracle satırları hiç sorulmuyordu. 1003'teki
 "(+N) ile 1:n gizlenmez" önlemi yetmedi: tahmin yine "bu trace'in operasyonu" gibi okunuyordu.
@@ -14151,7 +14151,7 @@ Operatör bildirimi: Problems sayfası parametresiz açılışta yalnız P1 gös
 
 Operatör onayı (2026-11-15) `docs/cosre/router-gaps-audit.md` D3-F'nin iki açık sorusu. Yalnız v2; v1 bayt bayt aynı; cevaplar modelsiz (LLM niyet listesi değişmez, RAG yok, yeni ayar yok).
 - Katalog dışı operasyon kodu (`BÜYÜK_ALT_ÇİZGİ`, servissiz genel rota) → `operation_not_found`: "Operasyon bulunamadı" + en yakın ≤5 katalog adı (ön-getirmenin `CatalogCandidates` okuması, ≤60 aday, tam katalog asla); her öneri sorunun kendisi, ad değiştirilmiş.
-- İş kodu `[A-Z]{2,5}\d{3,5}` (ör. DEP1080) → `business_code`: `business_code_summary_5m` son 7 gün servis kırılımı, sayılar, ilk/son görülme + `cosre_operation_catalog.function_codes` operasyonları; ham span yok. Kayıt yoksa açıkça "bulunamadı" (log gövdesi / exception mesajı aramaya girmez).
+- İş kodu `[A-Z]{2,5}\d{3,5}` (ör. DQP1080) → `business_code`: `business_code_summary_5m` son 7 gün servis kırılımı, sayılar, ilk/son görülme + `cosre_operation_catalog.function_codes` operasyonları; ham span yok. Kayıt yoksa açıkça "bulunamadı" (log gövdesi / exception mesajı aramaya girmez).
 - Açık bıraktığım ayrıntı (en basit güvenli seçim): pencere sabit 7 gün; HTTP/ISO/UTF/RFC/SHA önekleri iş kodu sayılmaz; servis anılan soru ve özel rotalar (log, root_cause …) ezilmez.
 
 ## 2026-11-15 — v0.10.2199 — ML olay kaydı sözleşmesi H1: tip, doğrulayıcı, ml_events kolonları

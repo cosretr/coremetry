@@ -13,12 +13,12 @@ import (
 
 func TestBusinessCodeToken(t *testing.T) {
 	cases := map[string]string{
-		"kod DEP1080 için tekrar kontrol":    "DEP1080",
-		"DEP1080 hatası nerede":              "DEP1080",
+		"kod DQP1080 için tekrar kontrol":    "DQP1080",
+		"DQP1080 hatası nerede":              "DQP1080",
 		"AB123 ne":                           "AB123",
 		"HTTP500 hataları":                   "",
 		"OP_NAME_REST neden hata veriyor":    "",
-		"dep1080 küçük harf":                 "",
+		"dqp1080 küçük harf":                 "",
 		"P1 problemler":                      "",
 		"ABCDEF1234 altı harf":               "",
 		"orders-api son 1 saatte hata oranı": "",
@@ -38,14 +38,14 @@ func TestPromoteD3F(t *testing.T) {
 	if r := promoteD3F(guidedRoute{Intent: guidedProblems}, q, false); r.OpNotFound != "" || r.Intent != guidedProblems {
 		t.Errorf("v1 değişmemeli: %+v", r)
 	}
-	if r := promoteD3F(guidedRoute{Intent: guidedNone, Env: "prod"}, "kod DEP1080 için tekrar kontrol", true); r.BusinessCode != "DEP1080" || r.Env != "prod" || d3fRouteLabel(r) != guidedBusinessCodeRoute {
+	if r := promoteD3F(guidedRoute{Intent: guidedNone, Env: "prod"}, "kod DQP1080 için tekrar kontrol", true); r.BusinessCode != "DQP1080" || r.Env != "prod" || d3fRouteLabel(r) != guidedBusinessCodeRoute {
 		t.Errorf("v2 iş kodu: %+v", r)
 	}
 	// Servisli soru ya da özel rota ezilmez.
-	if r := promoteD3F(guidedRoute{Intent: guidedProblems, Service: "svc-a"}, "svc-a DEP1080", true); r.BusinessCode != "" {
+	if r := promoteD3F(guidedRoute{Intent: guidedProblems, Service: "svc-a"}, "svc-a DQP1080", true); r.BusinessCode != "" {
 		t.Errorf("servisli soru: %+v", r)
 	}
-	if r := promoteD3F(guidedRoute{Intent: guidedLogErrors}, "DEP1080 logları", true); r.BusinessCode != "" {
+	if r := promoteD3F(guidedRoute{Intent: guidedLogErrors}, "DQP1080 logları", true); r.BusinessCode != "" {
 		t.Errorf("log rotası ezilmemeli: %+v", r)
 	}
 }
@@ -86,8 +86,8 @@ func TestBizCodeAnswer(t *testing.T) {
 		},
 		Ops: []chstore.CatalogOperation{{Operation: "DEPOSIT_CREATE", Service: "svc-a", CallCount: 900, ErrorCount: 20}},
 	}
-	text, sugg := bizCodeAnswerTR("DEP1080", l, time.UTC)
-	for _, want := range []string{"DEP1080 (FUNCTION_CODE)", "1,240", "ilk görülme 10.11 07:00", "son görülme 12.11 08:00", "svc-a", "DEPOSIT_CREATE · svc-a"} {
+	text, sugg := bizCodeAnswerTR("DQP1080", l, time.UTC)
+	for _, want := range []string{"DQP1080 (FUNCTION_CODE)", "1,240", "ilk görülme 10.11 07:00", "son görülme 12.11 08:00", "svc-a", "DEPOSIT_CREATE · svc-a"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("metinde %q yok:\n%s", want, text)
 		}
@@ -95,7 +95,7 @@ func TestBizCodeAnswer(t *testing.T) {
 	if len(sugg) == 0 || sugg[0] != "DEPOSIT_CREATE operasyonuna bak" {
 		t.Errorf("öneriler: %v", sugg)
 	}
-	if text, sugg := bizCodeAnswerTR("DEP1080", bizCodeLookup{}, nil); !strings.HasPrefix(text, "DEP1080 kodu son 7 günde bulunamadı") || sugg != nil {
+	if text, sugg := bizCodeAnswerTR("DQP1080", bizCodeLookup{}, nil); !strings.HasPrefix(text, "DQP1080 kodu son 7 günde bulunamadı") || sugg != nil {
 		t.Errorf("bulunamadı: %q %v", text, sugg)
 	}
 }
@@ -110,7 +110,7 @@ func TestGuidedD3FAnswerSeams(t *testing.T) {
 		return []chstore.CatalogOperation{{Operation: "OP_NAME_RESTV2"}}, nil
 	}
 	bizCodeSeam = func(_ context.Context, code string, from, to time.Time) (bizCodeLookup, error) {
-		if code != "DEP1080" || to.Sub(from) != bizCodeLookbackS*time.Second {
+		if code != "DQP1080" || to.Sub(from) != bizCodeLookbackS*time.Second {
 			t.Errorf("okuma: %s %v", code, to.Sub(from))
 		}
 		return bizCodeLookup{}, nil
@@ -126,7 +126,7 @@ func TestGuidedD3FAnswerSeams(t *testing.T) {
 	if !h || !ok || gotLimit != opCandidateLimit || len(gotToks) == 0 {
 		t.Fatalf("op kolu: h=%v ok=%v limit=%d toks=%v", h, ok, gotLimit, gotToks)
 	}
-	h, ok = s.guidedD3FAnswer(context.Background(), emit, guidedRoute{Intent: guidedAskService, BusinessCode: "DEP1080"}, "DEP1080", time.Now(), time.UTC)
+	h, ok = s.guidedD3FAnswer(context.Background(), emit, guidedRoute{Intent: guidedAskService, BusinessCode: "DQP1080"}, "DQP1080", time.Now(), time.UTC)
 	if !h || !ok || len(answers) != 2 || !strings.Contains(answers[1]["text"].(string), "bulunamadı") {
 		t.Fatalf("iş kodu kolu: %v", answers)
 	}

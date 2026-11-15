@@ -14,16 +14,16 @@ import (
 )
 
 var opCands = []chstore.CatalogOperation{
-	{Operation: "ATM_CORE_PIN_CHANGE", Source: "oracle", Service: "src1", FunctionCodes: []string{"SAMP01", "SAMP02"}, CallCount: 50},
-	{Operation: "ATM_CORE_PIN_CHANGE_V2", Source: "oracle", FunctionCodes: []string{"SAMP03"}, CallCount: 10},
+	{Operation: "KSK_MAIN_PIN_CHANGE", Source: "oracle", Service: "src1", FunctionCodes: []string{"SAMP01", "SAMP02"}, CallCount: 50},
+	{Operation: "KSK_MAIN_PIN_CHANGE_V2", Source: "oracle", FunctionCodes: []string{"SAMP03"}, CallCount: 10},
 	{Operation: "GET /orders", Source: "span", Service: "checkout", CallCount: 900},
-	{Operation: "DIGITAL_PAYMENT_EFT", Source: "span", Service: "pay", CallCount: 40},
-	{Operation: "DIGITAL_PAYMENT_EFT", Source: "oracle", FunctionCodes: []string{"SAMP05"}, CallCount: 5},
+	{Operation: "EXAMPLE_PAYMENT_XFR", Source: "span", Service: "pay", CallCount: 40},
+	{Operation: "EXAMPLE_PAYMENT_XFR", Source: "oracle", FunctionCodes: []string{"SAMP05"}, CallCount: 5},
 }
 
 func TestOpTokens(t *testing.T) {
-	got := opTokens("ATM_CORE_PIN_CHANGE neden hata veriyor? x ab DIGITAL_PAYMENT_EFT, ATM_CORE_PIN_CHANGE")
-	want := []string{"ATM_CORE_PIN_CHANGE", "neden", "hata", "veriyor", "DIGITAL_PAYMENT_EFT"}
+	got := opTokens("KSK_MAIN_PIN_CHANGE neden hata veriyor? x ab EXAMPLE_PAYMENT_XFR, KSK_MAIN_PIN_CHANGE")
+	want := []string{"KSK_MAIN_PIN_CHANGE", "neden", "hata", "veriyor", "EXAMPLE_PAYMENT_XFR"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%v", got)
 	}
@@ -35,10 +35,10 @@ func TestMatchOperations(t *testing.T) {
 		kind string
 		ops  []string
 	}{
-		{"ATM_CORE_PIN_CHANGE neden hata veriyor", "exact", []string{"ATM_CORE_PIN_CHANGE"}},
-		{"atm_core_pin_change durumu", "case_insensitive", []string{"ATM_CORE_PIN_CHANGE"}},
-		{"DIGITAL_PAYMENT ne durumda", "fuzzy", []string{"DIGITAL_PAYMENT_EFT"}},
-		{"ATM_CORE_PIN ne oldu", "fuzzy", []string{"ATM_CORE_PIN_CHANGE", "ATM_CORE_PIN_CHANGE_V2"}}, // çok → çip
+		{"KSK_MAIN_PIN_CHANGE neden hata veriyor", "exact", []string{"KSK_MAIN_PIN_CHANGE"}},
+		{"ksk_main_pin_change durumu", "case_insensitive", []string{"KSK_MAIN_PIN_CHANGE"}},
+		{"EXAMPLE_PAYMENT ne durumda", "fuzzy", []string{"EXAMPLE_PAYMENT_XFR"}},
+		{"KSK_MAIN_PIN ne oldu", "fuzzy", []string{"KSK_MAIN_PIN_CHANGE", "KSK_MAIN_PIN_CHANGE_V2"}}, // çok → çip
 		{"orders servisi yavaş mı", "", nil},                                                         // sıradan kelime bulanık tetiklemez
 		{"bugün durum nasıl", "", nil},
 	}
@@ -51,28 +51,28 @@ func TestMatchOperations(t *testing.T) {
 }
 
 func TestOpTargetFor(t *testing.T) {
-	tg := opTargetFor("DIGITAL_PAYMENT_EFT", opCands)
+	tg := opTargetFor("EXAMPLE_PAYMENT_XFR", opCands)
 	if !tg.HasSpan || !tg.HasOra || !reflect.DeepEqual(tg.Services, []string{"pay"}) || !reflect.DeepEqual(tg.Codes, []string{"SAMP05"}) {
 		t.Fatalf("%+v", tg)
 	}
-	if h := opTracesHref(tg, "FUNCTION_CODE", time.Unix(0, 0), time.Unix(60, 0)); !strings.Contains(h, "op=DIGITAL_PAYMENT_EFT") || !strings.Contains(h, "service=pay") {
+	if h := opTracesHref(tg, "FUNCTION_CODE", time.Unix(0, 0), time.Unix(60, 0)); !strings.Contains(h, "op=EXAMPLE_PAYMENT_XFR") || !strings.Contains(h, "service=pay") {
 		t.Errorf("span kaynağında ad + servis süzgeci: %s", h)
 	}
-	ora := opTargetFor("ATM_CORE_PIN_CHANGE", opCands)
+	ora := opTargetFor("KSK_MAIN_PIN_CHANGE", opCands)
 	if h := opTracesHref(ora, "FUNCTION_CODE", time.Unix(0, 0), time.Unix(60, 0)); !strings.Contains(h, "filters=%5B%7B%22k%22%3A%22FUNCTION_CODE%22") || !strings.Contains(h, "range=custom%3A0-60000") {
 		t.Errorf("Oracle kaynağında fonksiyon kodu süzgeci: %s", h)
 	}
 }
 
 func TestOpPrefetchSummaryAndSeed(t *testing.T) {
-	p := &opPrefetch{Operation: "ATM_CORE_PIN_CHANGE", MatchKind: "exact", Codes: []string{"SAMP01"}, RangeS: 3600,
+	p := &opPrefetch{Operation: "KSK_MAIN_PIN_CHANGE", MatchKind: "exact", Codes: []string{"SAMP01"}, RangeS: 3600,
 		From: time.Date(2026, 10, 15, 9, 0, 0, 0, time.UTC), To: time.Date(2026, 10, 15, 10, 0, 0, 0, time.UTC),
 		Current: chstore.OpRED{Calls: 200, Errors: 20, P99Ms: 900, Measured: true}, Previous: chstore.OpRED{Calls: 100, Errors: 1, P99Ms: 300, Measured: true},
 		Traces:   []opTraceRow{{TraceID: "t1", Service: "atm", DurationMs: 1200, Error: true}, {TraceID: "t2", Service: "atm", DurationMs: 10}},
 		Oracle:   []chstore.OracleErrorCount{{Code: "MCA-00029", Count: 7, Sample: "PIN change rejected"}},
-		argsJSON: `{"operation":"ATM_CORE_PIN_CHANGE"}`}
+		argsJSON: `{"operation":"KSK_MAIN_PIN_CHANGE"}`}
 	sum := p.summary()
-	for _, want := range []string{"Operasyon ATM_CORE_PIN_CHANGE otomatik getirildi", "Çağrı 200 (önceki eşit pencere 100, +100%)",
+	for _, want := range []string{"Operasyon KSK_MAIN_PIN_CHANGE otomatik getirildi", "Çağrı 200 (önceki eşit pencere 100, +100%)",
 		"hata oranı %10.00 (önce %1.00)", "p99 900 ms (önce 300 ms, +200%)", "Trace: 2 (1 hatalı)", "- t1 · atm · 1200 ms", "MCA-00029 ×7: PIN change rejected"} {
 		if !strings.Contains(sum, want) {
 			t.Errorf("özet %q içermiyor:\n%s", want, sum)
@@ -81,7 +81,7 @@ func TestOpPrefetchSummaryAndSeed(t *testing.T) {
 	if strings.Contains(sum, "t2") {
 		t.Error("başarılı trace kimlikleri özete girmez (ham liste değil)")
 	}
-	msgs := []copilot.ChatMessage{{Role: "user", Text: "ATM_CORE_PIN_CHANGE?"}}
+	msgs := []copilot.ChatMessage{{Role: "user", Text: "KSK_MAIN_PIN_CHANGE?"}}
 	seeded := p.seed(msgs)
 	if len(seeded) != 3 || seeded[1].ToolCalls[0].Name != opPrefetchTool || seeded[2].ToolResults[0].CallID != opPrefetchToolID || len(msgs) != 1 {
 		t.Fatalf("tohum: %+v", seeded)

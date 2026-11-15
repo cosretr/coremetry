@@ -16,7 +16,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/devops"
 )
 
-const opTestOp = "LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST"
+const opTestOp = "LEND_PERSONAL_WEB_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST"
 
 const opTestCtrlPath = "/src/main/java/com/bank/loan/service/rest/CreditProductInformationController.java"
 const opTestImplPath = "/src/main/java/com/bank/loan/manager/CreditProductInformationManagerImpl.java"

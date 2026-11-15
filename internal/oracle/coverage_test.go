@@ -114,7 +114,7 @@ func TestBuildCoverageFunctionCode(t *testing.T) {
 	alive := map[string]bool{"acme-payments-prod": true}
 	obs := []chstore.OracleOpObs{
 		{Operation: "OP_OK", Rows: 400, WithTrace: 400},
-		{Operation: "DIGITAL_PAYMENT_EFT", Rows: 300},
+		{Operation: "EXAMPLE_PAYMENT_XFR", Rows: 300},
 		{Operation: "OP_PART", Rows: 100},
 		{Operation: "OP_CHAIN", Rows: 50, WithTrace: 50},
 	}
@@ -123,7 +123,7 @@ func TestBuildCoverageFunctionCode(t *testing.T) {
 		return &CoverageFn{Enabled: enabled, Source: source,
 			Pairs: []chstore.OracleOpCode{
 				{Operation: "OP_OK", Code: "F1", Rows: 400}, // zaten öğrenilmiş: sayılmaz
-				{Operation: "DIGITAL_PAYMENT_EFT", Code: "F100", Rows: 300},
+				{Operation: "EXAMPLE_PAYMENT_XFR", Code: "F100", Rows: 300},
 				{Operation: "OP_PART", Code: "F100", Rows: 60},
 				{Operation: "OP_PART", Code: "F300", Rows: 40}, // span'lerde yok
 				{Operation: "OP_CHAIN", Code: "F200", Rows: 50},
@@ -143,7 +143,7 @@ func TestBuildCoverageFunctionCode(t *testing.T) {
 	if off.RowsResolved != 400 || off.OpsResolved != 1 || off.ByReason[ReasonNoTraceID] != 400 || off.ByReason[ReasonTraceNotFound] != 50 || len(off.Unresolved) != 3 {
 		t.Errorf("kapalıyken rapor değişmemeli: %+v", off)
 	}
-	if u := off.Unresolved[0]; u.Operation != "DIGITAL_PAYMENT_EFT" || u.FnRows != 300 || u.FnService != "eft-svc" {
+	if u := off.Unresolved[0]; u.Operation != "EXAMPLE_PAYMENT_XFR" || u.FnRows != 300 || u.FnService != "eft-svc" {
 		t.Errorf("operasyon satırı: %+v", u)
 	}
 
@@ -156,7 +156,7 @@ func TestBuildCoverageFunctionCode(t *testing.T) {
 		t.Errorf("açık — kalanlar: %+v", on)
 	}
 	for _, u := range on.Unresolved {
-		if u.Operation == "DIGITAL_PAYMENT_EFT" {
+		if u.Operation == "EXAMPLE_PAYMENT_XFR" {
 			t.Errorf("tamamı bağlanan operasyon listelenmemeli: %+v", u)
 		}
 	}

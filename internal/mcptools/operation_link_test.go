@@ -1,8 +1,8 @@
 package mcptools
 
 // v0.10.1297 — operatör 2026-10-17: ACM operasyon adı linki yanlış
-// (coremetry.io + search=). CoSRE "DIGITAL_PAYMENTSYSTEMCAMPAIGN_JUZDAN_
-// LIST_OF_GAINED_CAMPAIGNS"i doğru çözdü (kod GCWCD01) ama build_link
+// (coremetry.io + search=). CoSRE "EXAMPLE_PAYMENTSYSTEMCAMPAIGN_WALLET_
+// LIST_OF_GAINED_CAMPAIGNS"i doğru çözdü (kod GXWQD01) ama build_link
 // search=<ad> ile çağrıldı → /traces serbest metin araması sıfır trace; model
 // de metne https://coremetry.io/… yazdı. Pinler:
 //   - build_link mutlak host'u YALNIZ PUBLIC_URL doluyken yazar; href daima
@@ -20,11 +20,11 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
-const acmOpName = "DIGITAL_PAYMENTSYSTEMCAMPAIGN_JUZDAN_LIST_OF_GAINED_CAMPAIGNS"
+const acmOpName = "EXAMPLE_PAYMENTSYSTEMCAMPAIGN_WALLET_LIST_OF_GAINED_CAMPAIGNS"
 
 func acmOracle() *fakeOracleOps {
 	return &fakeOracleOps{enabled: true, res: OracleOpResolution{Enabled: true, SpanKey: "FUNCTION_CODE",
-		Matches: []OracleOpMatch{{Code: "GCWCD01", SpanKey: "FUNCTION_CODE", Operation: acmOpName, Rows: 12}}}}
+		Matches: []OracleOpMatch{{Code: "GXWQD01", SpanKey: "FUNCTION_CODE", Operation: acmOpName, Rows: 12}}}}
 }
 
 func TestAbsoluteAppLink(t *testing.T) {
@@ -141,12 +141,12 @@ func TestBuildLinkOperationNameUsesFunctionCode(t *testing.T) {
 			}
 			hasCode := false
 			for _, f := range fs {
-				if f.Key == "FUNCTION_CODE" && f.Op == "=" && len(f.Values) == 1 && f.Values[0] == "GCWCD01" {
+				if f.Key == "FUNCTION_CODE" && f.Op == "=" && len(f.Values) == 1 && f.Values[0] == "GXWQD01" {
 					hasCode = true
 				}
 			}
 			if hasCode != c.wantCode {
-				t.Errorf("FUNCTION_CODE=GCWCD01 süzgeci = %v, want %v (%s)", hasCode, c.wantCode, m["href"])
+				t.Errorf("FUNCTION_CODE=GXWQD01 süzgeci = %v, want %v (%s)", hasCode, c.wantCode, m["href"])
 			}
 			if _, tr := m["operation_translated"]; tr != c.wantCode {
 				t.Errorf("operation_translated = %v, want %v", tr, c.wantCode)
@@ -187,7 +187,7 @@ func TestBusinessCodeScopeFilter(t *testing.T) {
 		f    chstore.FilterExpr
 		want bool
 	}{
-		{chstore.FilterExpr{Key: "FUNCTION_CODE", Op: "=", Values: []string{"GCWCD01"}}, true},
+		{chstore.FilterExpr{Key: "FUNCTION_CODE", Op: "=", Values: []string{"GXWQD01"}}, true},
 		{chstore.FilterExpr{Key: "function_code", Op: "IN", Values: []string{"A", "B"}}, true},
 		{chstore.FilterExpr{Key: "CHANNEL_CODE", Op: "=", Values: []string{"060203"}}, true},
 		{chstore.FilterExpr{Key: "FUNCTION_CODE", Op: "=~", Values: []string{"GC.*"}}, false}, // regex kapsam değil
@@ -214,7 +214,7 @@ func TestQueryTracesOperationNameUsesFunctionCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c.got) != 1 || len(c.got[0].Filters) != 1 || c.got[0].Filters[0].Key != "FUNCTION_CODE" || c.got[0].Filters[0].Values[0] != "GCWCD01" {
+	if len(c.got) != 1 || len(c.got[0].Filters) != 1 || c.got[0].Filters[0].Key != "FUNCTION_CODE" || c.got[0].Filters[0].Values[0] != "GXWQD01" {
 		t.Fatalf("okuma kod süzgeciyle yapılmalı: %+v", c.got)
 	}
 	raw, _ := json.Marshal(r)
@@ -223,7 +223,7 @@ func TestQueryTracesOperationNameUsesFunctionCode(t *testing.T) {
 		t.Fatalf("kanıt yok: %s", raw)
 	}
 	q, fs := traceFilters(t, ev.Href)
-	if q.Get("search") != "" || len(fs) != 1 || fs[0].Key != "FUNCTION_CODE" || fs[0].Values[0] != "GCWCD01" {
+	if q.Get("search") != "" || len(fs) != 1 || fs[0].Key != "FUNCTION_CODE" || fs[0].Values[0] != "GXWQD01" {
 		t.Errorf("kanıt href'i kod süzgeci taşımalı: %s", ev.Href)
 	}
 	// Çevrilemeyen ad eski name süzgecinde kalır.

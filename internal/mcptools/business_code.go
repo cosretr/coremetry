@@ -71,8 +71,8 @@ type BizCandidate struct {
 	Link     string           `json:"link,omitempty"`
 }
 
-// bizQueries — SAF: tam metin + ≥4 karakterli belirteçler ("BKRB001 hangi
-// serviste" → "bkrb001 hangi serviste", "bkrb001", "hangi", "serviste").
+// bizQueries — SAF: tam metin + ≥4 karakterli belirteçler ("BQRZ001 hangi
+// serviste" → "bqrz001 hangi serviste", "bqrz001", "hangi", "serviste").
 func bizQueries(text string) []string {
 	text = strings.ToLower(strings.TrimSpace(text))
 	if text == "" {

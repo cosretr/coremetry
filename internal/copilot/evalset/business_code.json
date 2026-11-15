@@ -5,10 +5,10 @@
       "id": "bizcode-function-code-single",
       "surface": "ChatCodeResolve",
       "why": "fonksiyon kodu tek servise çözüldü: servis, sayılar ve link cevapta; başka servis uydurulmaz",
-      "user": "BKRB001 hangi serviste, hata var mı?\n\n[resolve_business_code sonucu] {\"query\":\"BKRB001\",\"ambiguous\":false,\"candidates\":[{\"kind\":\"function_code\",\"value\":\"BKRB001\",\"match\":\"exact\",\"window\":\"son 24 sa\",\"services\":[{\"service\":\"acm-wallet-core\",\"calls\":1138786,\"errors\":2277,\"error_rate_pct\":0.2}],\"link\":\"/traces?service=acm-wallet-core\"}],\"reasons\":[]}",
+      "user": "BQRZ001 hangi serviste, hata var mı?\n\n[resolve_business_code sonucu] {\"query\":\"BQRZ001\",\"ambiguous\":false,\"candidates\":[{\"kind\":\"function_code\",\"value\":\"BQRZ001\",\"match\":\"exact\",\"window\":\"son 24 sa\",\"services\":[{\"service\":\"acm-wallet-core\",\"calls\":1138786,\"errors\":2277,\"error_rate_pct\":0.2}],\"link\":\"/traces?service=acm-wallet-core\"}],\"reasons\":[]}",
       "expect": {
         "mustContain": ["acm-wallet-core"],
-        "keyFacts": ["BKRB001", "0.2"],
+        "keyFacts": ["BQRZ001", "0.2"],
         "expectedTools": ["resolve_business_code"],
         "knownEntities": ["acm-wallet-core"],
         "maxUnknownEntities": 0,
@@ -33,9 +33,9 @@
       "id": "bizcode-typo-operation",
       "surface": "ChatCodeResolve",
       "why": "yazım hatalı operasyon adı bulanık eşleşti: doğru ad cevapta, kullanıcının yazdığı hatalı ad 'bulunamadı' denmez",
-      "user": "ATM_CORE_PIN_CHANGEE ne durumda?\n\n[resolve_business_code sonucu] {\"query\":\"ATM_CORE_PIN_CHANGEE\",\"ambiguous\":false,\"candidates\":[{\"kind\":\"operation\",\"value\":\"ATM_CORE_PIN_CHANGE\",\"match\":\"fuzzy\",\"window\":\"son 24 sa (katalog)\",\"services\":[{\"service\":\"acm-kiosk-core-prod\",\"calls\":8812,\"errors\":441,\"error_rate_pct\":5}],\"link\":\"/traces?service=acm-kiosk-core-prod\"}],\"reasons\":[]}",
+      "user": "KSK_MAIN_PIN_CHANGEE ne durumda?\n\n[resolve_business_code sonucu] {\"query\":\"KSK_MAIN_PIN_CHANGEE\",\"ambiguous\":false,\"candidates\":[{\"kind\":\"operation\",\"value\":\"KSK_MAIN_PIN_CHANGE\",\"match\":\"fuzzy\",\"window\":\"son 24 sa (katalog)\",\"services\":[{\"service\":\"acm-kiosk-core-prod\",\"calls\":8812,\"errors\":441,\"error_rate_pct\":5}],\"link\":\"/traces?service=acm-kiosk-core-prod\"}],\"reasons\":[]}",
       "expect": {
-        "mustContain": ["ATM_CORE_PIN_CHANGE", "acm-kiosk-core-prod"],
+        "mustContain": ["KSK_MAIN_PIN_CHANGE", "acm-kiosk-core-prod"],
         "keyFacts": ["5"],
         "mustNotContain": ["bulunamadı"],
         "expectedTools": ["resolve_business_code"],
@@ -62,7 +62,7 @@
       "id": "bizcode-ambiguous-multi-service",
       "surface": "ChatCodeResolve",
       "why": "kod üç serviste: tahmin yok, seçenekler sayılır ve hangisi diye sorulur",
-      "user": "INV0181 neden yavaş?\n\n[resolve_business_code sonucu] {\"query\":\"INV0181\",\"ambiguous\":true,\"options\":[\"inv-gateway\",\"inv-core\",\"inv-batch\"],\"candidates\":[{\"kind\":\"function_code\",\"value\":\"INV0181\",\"match\":\"exact\",\"window\":\"son 24 sa\",\"services\":[{\"service\":\"inv-gateway\",\"calls\":500000,\"errors\":10,\"error_rate_pct\":0},{\"service\":\"inv-core\",\"calls\":280000,\"errors\":5,\"error_rate_pct\":0},{\"service\":\"inv-batch\",\"calls\":5000,\"errors\":0,\"error_rate_pct\":0}]}],\"reasons\":[\"INV0181 3 serviste görülüyor — tahmin etme, hangi servis olduğunu sor ya da hepsini say\"]}",
+      "user": "IQV0181 neden yavaş?\n\n[resolve_business_code sonucu] {\"query\":\"IQV0181\",\"ambiguous\":true,\"options\":[\"inv-gateway\",\"inv-core\",\"inv-batch\"],\"candidates\":[{\"kind\":\"function_code\",\"value\":\"IQV0181\",\"match\":\"exact\",\"window\":\"son 24 sa\",\"services\":[{\"service\":\"inv-gateway\",\"calls\":500000,\"errors\":10,\"error_rate_pct\":0},{\"service\":\"inv-core\",\"calls\":280000,\"errors\":5,\"error_rate_pct\":0},{\"service\":\"inv-batch\",\"calls\":5000,\"errors\":0,\"error_rate_pct\":0}]}],\"reasons\":[\"IQV0181 3 serviste görülüyor — tahmin etme, hangi servis olduğunu sor ya da hepsini say\"]}",
       "expect": {
         "mustContain": ["inv-gateway", "inv-core", "inv-batch", "?"],
         "expectedTools": ["resolve_business_code"],

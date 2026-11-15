@@ -7,7 +7,7 @@ package api
 //	https://coremetry.io/traces?order=desc&range=custom:…&search=<ad>&sort=duration
 //
 // yazdı ve "Coremetry'de aç" /traces?search=<operasyon adı> açtı (ad span'lerde
-// yok → sıfır trace; doğrusu fonksiyon kodu GCWCD01 süzgeci). Pinler:
+// yok → sıfır trace; doğrusu fonksiyon kodu GXWQD01 süzgeci). Pinler:
 //   - cevap süzgeci yabancı/uydurma host'lu Coremetry linkini sunucunun
 //     doğruladığı kök-göreli linkle değiştirir ya da söker, araç yankı
 //     satırını siler; wiki/dış doküman linkine dokunmaz;
@@ -25,9 +25,9 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
-const acmOp = "DIGITAL_PAYMENTSYSTEMCAMPAIGN_JUZDAN_LIST_OF_GAINED_CAMPAIGNS"
+const acmOp = "EXAMPLE_PAYMENTSYSTEMCAMPAIGN_WALLET_LIST_OF_GAINED_CAMPAIGNS"
 
-const acmValidated = `/traces?filters=%5B%7B%22k%22%3A%22FUNCTION_CODE%22%2C%22op%22%3A%22%3D%22%2C%22v%22%3A%5B%22GCWCD01%22%5D%7D%5D&range=custom%3A1-2`
+const acmValidated = `/traces?filters=%5B%7B%22k%22%3A%22FUNCTION_CODE%22%2C%22op%22%3A%22%3D%22%2C%22v%22%3A%5B%22GXWQD01%22%5D%7D%5D&range=custom%3A1-2`
 
 func TestSanitizeAnswerLinks(t *testing.T) {
 	tools := map[string]bool{"build_link": true, "search_traces": true}
@@ -101,11 +101,11 @@ func TestOpSearchHrefToCodeFilter(t *testing.T) {
 		wantFilter string // "" = süzgeç yok
 		wantOp     string
 	}{
-		{"operatör vakası", base, []string{"GCWCD01"}, "", "GCWCD01", "="},
-		{"harf duyarsız ad", strings.Replace(base, acmOp, strings.ToLower(acmOp), 1), []string{"GCWCD01"}, "", "GCWCD01", "="},
+		{"operatör vakası", base, []string{"GXWQD01"}, "", "GXWQD01", "="},
+		{"harf duyarsız ad", strings.Replace(base, acmOp, strings.ToLower(acmOp), 1), []string{"GXWQD01"}, "", "GXWQD01", "="},
 		{"çok kod IN", base, []string{"A1", "B2"}, "", "A1", "IN"},
-		{"başka search aynen", "/traces?search=checkout", []string{"GCWCD01"}, "checkout", "", ""},
-		{"traces değil aynen", "/logs?q=" + acmOp, []string{"GCWCD01"}, "", "", ""},
+		{"başka search aynen", "/traces?search=checkout", []string{"GXWQD01"}, "checkout", "", ""},
+		{"traces değil aynen", "/logs?q=" + acmOp, []string{"GXWQD01"}, "", "", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -135,13 +135,13 @@ func TestOpSearchHrefToCodeFilter(t *testing.T) {
 		})
 	}
 	// Mevcut süzgeç korunur, aynı anahtar ikinci kez eklenmez.
-	withF := "/traces?search=" + acmOp + "&filters=" + url.QueryEscape(`[{"k":"FUNCTION_CODE","op":"=","v":["GCWCD01"]},{"k":"http.route","op":"=","v":["/x"]}]`)
-	if _, fs := hrefQuery(t, opSearchHrefToCodeFilter(withF, acmOp, "FUNCTION_CODE", []string{"GCWCD01"})); len(fs) != 2 {
+	withF := "/traces?search=" + acmOp + "&filters=" + url.QueryEscape(`[{"k":"FUNCTION_CODE","op":"=","v":["GXWQD01"]},{"k":"http.route","op":"=","v":["/x"]}]`)
+	if _, fs := hrefQuery(t, opSearchHrefToCodeFilter(withF, acmOp, "FUNCTION_CODE", []string{"GXWQD01"})); len(fs) != 2 {
 		t.Errorf("süzgeç tekrarlanmamalı: %+v", fs)
 	}
 	// Bozuk filters → href aynen (yanlış link kurmaktansa eskisi).
 	bad := "/traces?search=" + acmOp + "&filters=%5Bnope"
-	if got := opSearchHrefToCodeFilter(bad, acmOp, "FUNCTION_CODE", []string{"GCWCD01"}); got != bad {
+	if got := opSearchHrefToCodeFilter(bad, acmOp, "FUNCTION_CODE", []string{"GXWQD01"}); got != bad {
 		t.Errorf("bozuk filters aynen kalmalı: %s", got)
 	}
 }
@@ -152,12 +152,12 @@ func TestOpPrefetchRewriteSearchHref(t *testing.T) {
 	if nilP.rewriteSearchHref(href) != href {
 		t.Error("ön-getirme yokken href aynen")
 	}
-	span := &opPrefetch{Operation: acmOp, Codes: []string{"GCWCD01"}} // codeKey boş = span operasyonu
+	span := &opPrefetch{Operation: acmOp, Codes: []string{"GXWQD01"}} // codeKey boş = span operasyonu
 	if span.rewriteSearchHref(href) != href {
 		t.Error("span operasyonunda yeniden yazım olmamalı")
 	}
-	code := &opPrefetch{Operation: acmOp, Codes: []string{"GCWCD01"}, codeKey: "FUNCTION_CODE"}
-	if _, fs := hrefQuery(t, code.rewriteSearchHref(href)); len(fs) != 1 || fs[0].Values[0] != "GCWCD01" {
+	code := &opPrefetch{Operation: acmOp, Codes: []string{"GXWQD01"}, codeKey: "FUNCTION_CODE"}
+	if _, fs := hrefQuery(t, code.rewriteSearchHref(href)); len(fs) != 1 || fs[0].Values[0] != "GXWQD01" {
 		t.Errorf("kodla çözülen operasyon: %+v", fs)
 	}
 	// Kart linki tüm kodları taşır (eskiden yalnız ilki).

@@ -60,7 +60,7 @@ func aggregatedSrc() SourceConfig {
 
 func aggregatedRow(adet any, traceids string) map[string]any {
 	return map[string]any{
-		"TIMESLICE": float64(1790176860), "ZAMAN": "23.09.2026 18:21", "KANALKOD": "050121", "FUNCTIONCODE": "SPEM200",
+		"TIMESLICE": float64(1790176860), "ZAMAN": "23.09.2026 18:21", "KANALKOD": "050121", "FUNCTIONCODE": "SXQM200",
 		"OPERATIONCODE": "CHATBOT_INBOUND", "HOSTNAME": "WEB01", "SONUC": "APP_FAIL",
 		"ADET": adet, "TRACEIDADET": float64(2), "DURATION": float64(99), "TRACEIDS": traceids,
 	}
@@ -72,7 +72,7 @@ func TestMapAggregatedRowWeightAndAttrs(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, ok, bad := m.Map(aggregatedRow(float64(5), ""))
-	if !ok || bad || r.Weight != 5 || r.OperationCode != "CHATBOT_INBOUND" || r.ErrorCode != "SPEM200" ||
+	if !ok || bad || r.Weight != 5 || r.OperationCode != "CHATBOT_INBOUND" || r.ErrorCode != "SXQM200" ||
 		r.ChannelCode != "050121" || r.HostName != "WEB01" || r.ErrorType != "APP_FAIL" || r.TraceID != "" {
 		t.Fatalf("eşleme: ok=%v bad=%v %+v", ok, bad, r)
 	}

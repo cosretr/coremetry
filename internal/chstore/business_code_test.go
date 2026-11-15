@@ -10,7 +10,7 @@ import (
 
 func TestFunctionCodeShape(t *testing.T) {
 	re := regexp.MustCompile(FunctionCodeShape)
-	for _, ok := range []string{"BKRB001", "INV0181", "CRC4013", "CUSPRF1", "BKR1614"} {
+	for _, ok := range []string{"BQRZ001", "IQV0181", "CQC4013", "CXSPRF1", "BQR1614"} {
 		if !re.MatchString(ok) {
 			t.Errorf("%s kod sayılmalı", ok)
 		}

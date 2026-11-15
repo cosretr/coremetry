@@ -32,7 +32,7 @@ describe('vurgulu kod satırı kaydırma genişliğini kaplar', () => {
   });
 
   it('DOM: çit <pre><code> içinde blok satırlar; >>> satırı .hl taşır', () => {
-    const long = 'executeRemoteNonTx("CREDITCARD_CCCORE_YNO_CARD_LIST_INQUIRY_BAG", paramBag); // ' + 'x'.repeat(120);
+    const long = 'executeRemoteNonTx("CREDITCARD_CXCORE_ZNO_CARD_LIST_INQUIRY_SVC", paramBag); // ' + 'x'.repeat(120);
     const html = renderToStaticMarkup(<RenderedMarkdown text={'```java\nfoo();\n>>> ' + long + '\nbar();\n```'} />);
     expect(html).toMatch(/<pre><code>/);
     expect(html).toContain('class="cm-md-code-line hl"');

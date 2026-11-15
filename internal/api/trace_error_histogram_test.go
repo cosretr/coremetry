@@ -20,7 +20,7 @@ import (
 // listenin süzgecine karışmaz).
 func TestTraceErrorHistogramSharesListParser(t *testing.T) {
 	list := "from=1791021600000000000&to=1791025200000000000&hasError=true&service=svc-a&env=prod" +
-		"&filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["KYC0001"]}]`)
+		"&filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["VRF0001"]}]`)
 	lq, _ := url.ParseQuery(list)
 	sq, _ := url.ParseQuery(list + "&step=60&stat=p95")
 	lf, err := parseTraceFilter(lq)
@@ -64,9 +64,9 @@ func TestTraceErrorHistogramRejectsIneligible(t *testing.T) {
 	s := &Server{}
 	cases := []string{
 		"hasError=true&rootOnly=true", // v0.10.1101 — çipsiz + Root → metric-batch (kök trace düzeyi)
-		"filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["KYC0001"]}]`), // Errors yok
-		"hasError=true&search=x&filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["KYC0001"]}]`),
-		"hasError=true&minMs=5&filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["KYC0001"]}]`),
+		"filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["VRF0001"]}]`), // Errors yok
+		"hasError=true&search=x&filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["VRF0001"]}]`),
+		"hasError=true&minMs=5&filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["VRF0001"]}]`),
 	}
 	for _, qs := range cases {
 		w := httptest.NewRecorder()
@@ -88,12 +88,12 @@ func TestTraceErrorHistogramQuantile(t *testing.T) {
 // Anahtar TÜM girdileri taşır (v0.5.187): stat / step / çip değeri / kök
 // tanımı değişince anahtar değişir; from/to ızgarada (cacheRawQuery).
 func TestTraceErrorHistogramKey(t *testing.T) {
-	base := "hasError=true&filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["KYC0001"]}]`) + "&step=60&stat=p50"
+	base := "hasError=true&filters=" + url.QueryEscape(`[{"k":"function_code","op":"=","v":["VRF0001"]}]`) + "&step=60&stat=p50"
 	k0 := traceErrorHistogramKey(base, "")
 	for name, other := range map[string]string{
 		"stat":  traceErrorHistogramKey(strings.Replace(base, "stat=p50", "stat=p95", 1), ""),
 		"step":  traceErrorHistogramKey(strings.Replace(base, "step=60", "step=120", 1), ""),
-		"çip":   traceErrorHistogramKey(strings.Replace(base, "KYC0001", "KYC0002", 1), ""),
+		"çip":   traceErrorHistogramKey(strings.Replace(base, "VRF0001", "VRF0002", 1), ""),
 		"kök":   traceErrorHistogramKey(base, ":rd=entry"),
 		"liste": "traces:" + cacheRawQueryString(base),
 	} {

@@ -13,7 +13,7 @@ import (
 )
 
 // v0.10.1324 — operator-reported: gemma4 31b (yerel openai-compat) CoSRE
-// sohbetinde "INSURANCE_DOCUMENT_TRX_GET_AKSIGORTA_POLICE_PDF_BASIM_REST
+// sohbetinde "INSURANCE_DOCUMENT_TRX_GET_EXAMPLECO_POLICY_PDF_PRINT_REST
 // operasyonu neden hata veriyor?" sorusuna sistem prompt'undaki kapsam
 // cümlesini yankıladı ve "Soru AKSİNİ SÖYLEMEDİKÇE bu boyutları …" satırını
 // max_tokens (4096) dolana dek onlarca kez yazdı. Akışta yineleme kapısı
@@ -28,7 +28,7 @@ import (
 // cümlesi, sonra aynı satırın yinelemesi.
 func prodDegenSample(n int) string {
 	var b strings.Builder
-	b.WriteString("INSURANCE_DOCUMENT_TRX_GET_AKSIGORTA_POLICE_PDF_BASIM_REST operasyonunun hatalarını inceledim.\n")
+	b.WriteString("INSURANCE_DOCUMENT_TRX_GET_EXAMPLECO_POLICY_PDF_PRINT_REST operasyonunun hatalarını inceledim.\n")
 	b.WriteString("soru aksini söylemedikçe bu kapsam geçerli; başka ortam/servis/pencere sorulursa argümanda açıkça yaz.\n")
 	for i := 0; i < n; i++ {
 		b.WriteString("Soru AKSİNİ SÖYLEMEDİKÇE bu boyutları (cluster/namespace/problem/filtreler) tool argümanlarında kullan.\n")
@@ -47,7 +47,7 @@ func feedGuard(text string, chunk int) *degenGuard {
 }
 
 func TestDegenGuardTriggers(t *testing.T) {
-	prodClean := "INSURANCE_DOCUMENT_TRX_GET_AKSIGORTA_POLICE_PDF_BASIM_REST operasyonunun hatalarını inceledim.\n" +
+	prodClean := "INSURANCE_DOCUMENT_TRX_GET_EXAMPLECO_POLICY_PDF_PRINT_REST operasyonunun hatalarını inceledim.\n" +
 		"soru aksini söylemedikçe bu kapsam geçerli; başka ortam/servis/pencere sorulursa argümanda açıkça yaz.\n" +
 		"Soru AKSİNİ SÖYLEMEDİKÇE bu boyutları (cluster/namespace/problem/filtreler) tool argümanlarında kullan."
 	cases := []struct {

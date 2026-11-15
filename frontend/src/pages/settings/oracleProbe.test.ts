@@ -229,8 +229,8 @@ describe('oracleProbe — özne kapsamı', () => {
     expect(noCode.lines).toContain('Satırlarda fonksiyon kodu yok: sorgu çıktısında FUNCTIONCODE kolonu olmalı (eşlenmemiş kalabilir).');
     const failed = coverageText({ ...base, fnError: 'timeout' });
     expect(failed.lines).toContain('Fonksiyon kodu eşlemesi ölçülemedi: timeout');
-    expect(coverageOpLine({ operation: 'DIGITAL_PAYMENT_EFT', rows: 300, withTrace: 0, status: 'unresolved', reason: 'no_trace_id', fnRows: 300, fnService: 'eft-svc' }))
-      .toBe('DIGITAL_PAYMENT_EFT · 300 satır · satırlarda trace kimliği yok · fonksiyon kodundan eft-svc (300 satır)');
+    expect(coverageOpLine({ operation: 'EXAMPLE_PAYMENT_XFR', rows: 300, withTrace: 0, status: 'unresolved', reason: 'no_trace_id', fnRows: 300, fnService: 'eft-svc' }))
+      .toBe('EXAMPLE_PAYMENT_XFR · 300 satır · satırlarda trace kimliği yok · fonksiyon kodundan eft-svc (300 satır)');
   });
   it('satır metni nedeni olmayan op\'ta da kırılmaz; sekme isteği yalnız açılınca atar', () => {
     expect(coverageOpLine({ operation: 'X', rows: 1, withTrace: 1, status: 'unresolved' })).toBe('X · 1 satır · çözülmedi');

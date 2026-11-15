@@ -38,7 +38,7 @@ func (f *fakeExGroups) GetExceptionGroupSamples(_ context.Context, fp string, _ 
 
 var exNow = time.Date(2026, 10, 18, 10, 0, 0, 0, time.UTC)
 
-const exOp = "LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST"
+const exOp = "LEND_PERSONAL_WEB_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST"
 
 func exOraRow(code string, lastAgo time.Duration) chstore.ExceptionGroup {
 	return chstore.ExceptionGroup{Fingerprint: chstore.OracleGroupFingerprint("src1", code, exOp), Type: code, Message: exOp,

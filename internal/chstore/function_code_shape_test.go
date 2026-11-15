@@ -15,7 +15,7 @@ func TestFunctionCodeShapeSQL(t *testing.T) {
 		}
 	}
 	re := regexp.MustCompile(FunctionCodeShape)
-	for code, ok := range map[string]bool{"BKRB001": true, "bkrb001": false, "123ABC": false, "A1B2C3D4E5F6G": false, "ABC": false} {
+	for code, ok := range map[string]bool{"BQRZ001": true, "bqrz001": false, "123ABC": false, "A1B2C3D4E5F6G": false, "ABC": false} {
 		if re.MatchString(code) != ok {
 			t.Errorf("%s: %v bekleniyordu", code, ok)
 		}

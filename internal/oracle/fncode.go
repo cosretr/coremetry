@@ -5,7 +5,7 @@ package oracle
 // FUNCTIONCODE — span'lerdeki FUNCTION_CODE attribute'u ile AYNI değerdir;
 // "zaman içinde öğrendikçe güncellersin").
 //
-// Oracle satırının operasyon adı (DIGITAL_PAYMENT_EFT gibi) trace'lerde yok,
+// Oracle satırının operasyon adı (EXAMPLE_PAYMENT_XFR gibi) trace'lerde yok,
 // ama satır fonksiyon kodunu da taşıyor ve o kod span'lerde var. Trace kimliği
 // olmayan / Coremetry'de bulunmayan satırlar bu köprüyle servise bağlanır:
 //

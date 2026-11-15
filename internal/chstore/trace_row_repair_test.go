@@ -15,7 +15,7 @@ import (
 // WHERE ile yeniden kurulur (trace_row_repair.go).
 
 func TestSpanScopedChips(t *testing.T) {
-	chip := []FilterExpr{{Key: "function_code", Op: "=", Values: []string{"SPE0017"}}}
+	chip := []FilterExpr{{Key: "function_code", Op: "=", Values: []string{"SXQ0017"}}}
 	group := &FilterGroup{Join: "OR", Filters: chip}
 	cases := []struct {
 		name string
@@ -71,7 +71,7 @@ func TestTraceRowRepairBounds(t *testing.T) {
 
 func TestMergeRepairedRows(t *testing.T) {
 	page := []TraceRow{
-		{TraceID: "a", RootName: "log.service.masterlog publish", ServiceName: "chatbot-svc", StartTime: 104, DurationMs: 21.2, SpanCount: 4, Extras: map[string]string{"function_code": "SPE0017"}},
+		{TraceID: "a", RootName: "log.service.masterlog publish", ServiceName: "chatbot-svc", StartTime: 104, DurationMs: 21.2, SpanCount: 4, Extras: map[string]string{"function_code": "SXQ0017"}},
 		{TraceID: "b", RootName: "log.service.servicelog publish", ServiceName: "chatbot-svc", StartTime: 90, DurationMs: 345, SpanCount: 36},
 		{TraceID: "c", RootName: "orphan publish", ServiceName: "chatbot-svc", StartTime: 80, DurationMs: 5, SpanCount: 2},
 	}
@@ -83,7 +83,7 @@ func TestMergeRepairedRows(t *testing.T) {
 	if page[0].TraceID != "a" || page[1].TraceID != "b" || page[2].TraceID != "c" {
 		t.Fatalf("sıra korunmalı: %+v", page)
 	}
-	if a := page[0]; a.RootName != "/ACMWEB/GatewayService/execute" || a.SpanCount != 12 || a.DurationMs != 25.11 || a.StartTime != 100 || a.Extras["function_code"] != "SPE0017" {
+	if a := page[0]; a.RootName != "/ACMWEB/GatewayService/execute" || a.SpanCount != 12 || a.DurationMs != 25.11 || a.StartTime != 100 || a.Extras["function_code"] != "SXQ0017" {
 		t.Errorf("a: kök adı + tüm trace ölçüleri gelmeli, extras korunmalı: %+v", a)
 	}
 	if b := page[1]; b.RootName != "POST /gateway/execute" || b.ServiceName != "gateway-svc" || b.RootRoute != "/gateway/execute" || !b.HasError || b.ErrorSpans != 2 {
@@ -120,7 +120,7 @@ func TestRowRepairWiring(t *testing.T) {
 	}
 	// Çipsiz WHERE: çip yüklemi SQL'e girmez, zaman sınırı ve servis girer.
 	f := withoutChips(TraceFilter{Service: "chatbot-svc", From: time.Unix(100, 0), To: time.Unix(200, 0),
-		Filters: []FilterExpr{{Key: "function_code", Op: "=", Values: []string{"SPE0017"}}}})
+		Filters: []FilterExpr{{Key: "function_code", Op: "=", Values: []string{"SXQ0017"}}}})
 	wc := buildGetTracesWhere(f, "")
 	sql := wc.sql()
 	if strings.Contains(sql, "function_code") || !strings.Contains(sql, "service_name = ?") || !strings.Contains(sql, "time") {
@@ -134,7 +134,7 @@ func TestRowRepairWiring(t *testing.T) {
 // düşüyordu. v0.10.107'nin servis daraltması için koyduğu kural çiplere
 // genellendi: daraltılmış şekilde kök, aday id'ler üstünde MV'den sorulur.
 func TestRootScopeNarrowed(t *testing.T) {
-	chip := []FilterExpr{{Key: "function_code", Op: "=", Values: []string{"SPE0017"}}}
+	chip := []FilterExpr{{Key: "function_code", Op: "=", Values: []string{"SXQ0017"}}}
 	cases := []struct {
 		name string
 		f    TraceFilter
@@ -173,7 +173,7 @@ func TestRootCheckUsesNarrowedRule(t *testing.T) {
 	}
 	// Çipli + Root: WHERE'de çip var, HAVING'de ham countIf(kök) OLMAMALI.
 	f := TraceFilter{RootOnly: true, From: time.Unix(100, 0), To: time.Unix(4000, 0),
-		Filters: []FilterExpr{{Key: "function_code", Op: "=", Values: []string{"SPE0017"}}}}
+		Filters: []FilterExpr{{Key: "function_code", Op: "=", Values: []string{"SXQ0017"}}}}
 	if !rootScopeNarrowed(f) || !spanScopedChips(f) {
 		t.Fatal("çipli süzgeç daraltılmış sayılmalı")
 	}

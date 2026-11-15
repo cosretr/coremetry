@@ -35,7 +35,7 @@ func TestPlanFindTraces(t *testing.T) {
 		{"küme sıralı", findTracesArgs{Services: []string{"payments-api", "orders-api"}}, "", []string{"orders-api", "payments-api"}, 0, false},
 		{"açık servis kümeden üstün", findTracesArgs{Service: "orders-api", Services: []string{"a", "b"}}, "orders-api", nil, 0, false},
 		{"tek elemanlı küme tekil", findTracesArgs{Services: []string{"orders-api"}}, "orders-api", nil, 0, false},
-		{"kod servissiz yeter", findTracesArgs{FunctionCode: "bkrb001"}, "", nil, 1, false},
+		{"kod servissiz yeter", findTracesArgs{FunctionCode: "bqrz001"}, "", nil, 1, false},
 		{"geçersiz kod", findTracesArgs{ChannelCode: "KNL 1;", Service: "orders-api"}, "", nil, 0, true},
 	}
 	for _, c := range cases {

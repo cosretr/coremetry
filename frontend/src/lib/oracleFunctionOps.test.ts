@@ -14,12 +14,12 @@ describe('traceFunctionCodes', () => {
   it('iki yazımı da okur, tekilleştirir, span sırasını ve yazımı korur', () => {
     const codes = traceFunctionCodes([
       span({ 'http.method': 'POST' }),
-      span({ function_code: ' CAF0001 ' }),
+      span({ function_code: ' CLM0001 ' }),
       span({ FUNCTION_CODE: 'INVLD02' }),
-      span({ function_code: 'CAF0001' }),
+      span({ function_code: 'CLM0001' }),
       span({ function_code: '' }),
     ]);
-    expect(codes).toEqual([{ key: 'function_code', code: 'CAF0001' }, { key: 'FUNCTION_CODE', code: 'INVLD02' }]);
+    expect(codes).toEqual([{ key: 'function_code', code: 'CLM0001' }, { key: 'FUNCTION_CODE', code: 'INVLD02' }]);
   });
   it('tavan ve boş girdi', () => {
     expect(traceFunctionCodes(null)).toEqual([]);
@@ -33,19 +33,19 @@ describe('traceOracleOperations', () => {
   const dict: OracleFunctionCodesResponse = {
     enabled: true,
     codes: {
-      CAF0001: { ops: ['CUSTOMER_ADDRESS_REST'], total: 1 },
+      CLM0001: { ops: ['CUSTOMER_ADDRESS_REST'], total: 1 },
       SHARED: { ops: ['OP_A', 'OP_B', 'OP_C'], total: 5 },
       EMPTY: { ops: [], total: 0 },
     },
   };
   const codes = [
-    { key: 'function_code', code: 'CAF0001' }, { key: 'FUNCTION_CODE', code: 'SHARED' },
+    { key: 'function_code', code: 'CLM0001' }, { key: 'FUNCTION_CODE', code: 'SHARED' },
     { key: 'FUNCTION_CODE', code: 'UNKNOWN' }, { key: 'FUNCTION_CODE', code: 'EMPTY' },
   ];
   it('sözlükte olan kod ada çevrilir; olmayan / boş kod sonuç üretmez', () => {
     const ops = traceOracleOperations(codes, dict);
     expect(ops).toEqual([
-      { key: 'function_code', code: 'CAF0001', operation: 'CUSTOMER_ADDRESS_REST', others: [], total: 1 },
+      { key: 'function_code', code: 'CLM0001', operation: 'CUSTOMER_ADDRESS_REST', others: [], total: 1 },
       { key: 'FUNCTION_CODE', code: 'SHARED', operation: 'OP_A', others: ['OP_B', 'OP_C'], total: 5 },
     ]);
   });
@@ -55,7 +55,7 @@ describe('traceOracleOperations', () => {
   });
   it('ipucu: kaynağı söyler; kod birden çok operasyondaysa hepsini ve kalan sayıyı', () => {
     const [one, shared] = traceOracleOperations(codes, dict);
-    expect(oracleOperationTitle(one)).toBe("Kaynak: fonksiyon kodu sözlüğü — kesin DEĞİL. Bu trace'in kendi Oracle satırı ya da operasyon attribute'u yok; ad span'lerdeki function_code = CAF0001 üzerinden son 7 günün Oracle hata tablosundan, en çok satırlı aday olarak seçildi. Tıkla: bu fonksiyon kodunun diğer trace'leri.");
+    expect(oracleOperationTitle(one)).toBe("Kaynak: fonksiyon kodu sözlüğü — kesin DEĞİL. Bu trace'in kendi Oracle satırı ya da operasyon attribute'u yok; ad span'lerdeki function_code = CLM0001 üzerinden son 7 günün Oracle hata tablosundan, en çok satırlı aday olarak seçildi. Tıkla: bu fonksiyon kodunun diğer trace'leri.");
     expect(oracleOperationTitle(shared)).toContain('Bu kod 5 operasyonda görülüyor: OP_A, OP_B, OP_C (+2 daha).');
   });
 });
@@ -63,15 +63,15 @@ describe('traceOracleOperations', () => {
 describe('functionCodeLabel / functionCodeTitle (endpoint kırılımı)', () => {
   const dict: OracleFunctionCodesResponse = {
     enabled: true,
-    codes: { CAF0001: { ops: ['CUSTOMER_MGMT'], total: 1 }, SHARED: { ops: ['OP_A', 'OP_B', 'OP_C'], total: 5 } },
+    codes: { CLM0001: { ops: ['CUSTOMER_MGMT'], total: 1 }, SHARED: { ops: ['OP_A', 'OP_B', 'OP_C'], total: 5 } },
   };
   it('kodun yanına operasyon adı; çok operasyonda sayı; sözlükte yoksa değer aynen', () => {
-    expect(functionCodeLabel('CAF0001', dict)).toBe('CAF0001 · CUSTOMER_MGMT');
+    expect(functionCodeLabel('CLM0001', dict)).toBe('CLM0001 · CUSTOMER_MGMT');
     expect(functionCodeLabel('SHARED', dict)).toBe('SHARED · OP_A (+4)');
     expect(functionCodeTitle('SHARED', dict)).toBe('SHARED — Oracle operasyonu: OP_A, OP_B, OP_C (+2 daha)');
     expect(functionCodeLabel('UNKNOWN', dict)).toBe('UNKNOWN');
     expect(functionCodeLabel('prod', undefined)).toBe('prod');
-    expect(functionCodeTitle('CAF0001', { ...dict, enabled: false })).toBe('CAF0001');
+    expect(functionCodeTitle('CLM0001', { ...dict, enabled: false })).toBe('CLM0001');
   });
   it('endpoint kırılımı: boyut listede, sözlük yalnız o boyutta çekilir', () => {
     const src = readFileSync(resolve(__dirname, '../pages/endpoints/detailSections.tsx'), 'utf8');
@@ -106,9 +106,9 @@ describe('Trace sayfası kablosu', () => {
 // adayını (…APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST, "+15") gösteriyordu.
 // Öncelik: bu trace'in Oracle satırları → span attribute'u → etiketli sözlük.
 describe('pickTraceOperation', () => {
-  const TRX = 'LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST';
-  const INQ = 'LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST';
-  const INQ2 = 'LOAN_CONSUMER_APP_APPLICATIONINQ_CUSTOMER_LIMIT_REST';
+  const TRX = 'LEND_PERSONAL_WEB_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST';
+  const INQ = 'LEND_PERSONAL_WEB_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST';
+  const INQ2 = 'LEND_PERSONAL_WEB_APPLICATIONINQ_CUSTOMER_LIMIT_REST';
   const sp = (o: Partial<SpanRow> & { spanId: string }): SpanRow => ({
     traceId: 't', parentSpanId: '', name: 'n', kind: 'internal', serviceName: 'svc', hostName: '',
     startTime: 0, endTime: 0, durationMs: 0, statusCode: 'unset', statusMessage: '',
@@ -116,12 +116,12 @@ describe('pickTraceOperation', () => {
   });
   const row = (op: string, spanId: string, timestamp: number): OracleOpRow => ({ attributes: op ? { 'operation.code': op } : {}, spanId, timestamp });
   const spans = [
-    sp({ spanId: 'r', kind: 'server', serviceName: 'acmweb', startTime: 1, attributes: { FUNCTION_CODE: 'LCA01' } }),
+    sp({ spanId: 'r', kind: 'server', serviceName: 'acmweb', startTime: 1, attributes: { FUNCTION_CODE: 'LNX01' } }),
     sp({ spanId: 'c1', parentSpanId: 'r', kind: 'server', serviceName: 'loan-inq', startTime: 2 }),
     sp({ spanId: 'c2', parentSpanId: 'r', kind: 'server', serviceName: 'loan-inq', startTime: 3 }),
   ];
   const dict: OracleFunctionCodesResponse = {
-    enabled: true, codes: { LCA01: { ops: [INQ, TRX, INQ2], total: 16 } },
+    enabled: true, codes: { LNX01: { ops: [INQ, TRX, INQ2], total: 16 } },
   };
   const cases: { name: string; rows: OracleOpRow[] | null; spans: SpanRow[]; want: TraceOperationPick | null }[] = [
     { name: 'tek Oracle satırı → o operasyon, +0 (sözlük adayı ne derse desin)',
@@ -146,7 +146,7 @@ describe('pickTraceOperation', () => {
       want: { source: 'span', main: INQ, others: [INQ2], key: 'operation.code', where: 'entry' } },
     { name: 'kesin kaynak yok → sözlük, ETİKETLİ aday (tahmin)',
       rows: [], spans,
-      want: { source: 'dictionary', candidates: [{ key: 'FUNCTION_CODE', code: 'LCA01', operation: INQ, others: [TRX, INQ2], total: 16 }] } },
+      want: { source: 'dictionary', candidates: [{ key: 'FUNCTION_CODE', code: 'LNX01', operation: INQ, others: [TRX, INQ2], total: 16 }] } },
     { name: 'hiçbir şey yok → null', rows: [], spans: [sp({ spanId: 'x' })], want: null },
     { name: 'boş girdi → null', rows: null, spans: [], want: null },
   ];

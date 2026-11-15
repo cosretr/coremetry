@@ -312,7 +312,7 @@ func TestDefaultMetricExclusionsHealthcheck(t *testing.T) {
 	if len(p) != 1 || p[0] != "(?i)healthcheck" {
 		t.Fatalf("desen: %v", p)
 	}
-	if c.DropAtIngest("http.server.request.duration", "/juzdan-overview/healthcheck") {
+	if c.DropAtIngest("http.server.request.duration", "/wallet-overview/healthcheck") {
 		t.Fatal("varsayılan ingest'e dokunmaz")
 	}
 }

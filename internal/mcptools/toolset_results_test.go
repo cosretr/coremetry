@@ -300,11 +300,11 @@ func TestOracleHintLeadsToVisibleToolInSimple(t *testing.T) {
 	if !r.OK || r.Error != nil {
 		t.Fatalf("servissiz çevrilmiş operasyon koşmalı: %+v", r)
 	}
-	if len(c.got) != 1 || c.got[0].Service != "" || len(c.got[0].Filters) != 1 || c.got[0].Filters[0].Key != "FUNCTION_CODE" || c.got[0].Filters[0].Values[0] != "GCWCD01" {
+	if len(c.got) != 1 || c.got[0].Service != "" || len(c.got[0].Filters) != 1 || c.got[0].Filters[0].Key != "FUNCTION_CODE" || c.got[0].Filters[0].Values[0] != "GXWQD01" {
 		t.Fatalf("okuma servissiz FUNCTION_CODE süzgeciyle yapılmalı: %+v", c.got)
 	}
 	raw, _ := json.Marshal(r)
-	if ev, ok := ToolResultEvidence(queryTracesName, string(raw)); !ok || !strings.Contains(ev.Href, "GCWCD01") || strings.Contains(ev.Href, "service=") {
+	if ev, ok := ToolResultEvidence(queryTracesName, string(raw)); !ok || !strings.Contains(ev.Href, "GXWQD01") || strings.Contains(ev.Href, "service=") {
 		t.Errorf("kanıt href'i servissiz kod süzgeci taşımalı: %+v", ev)
 	}
 	// Çevrilemeyen ad servissiz kalırsa yine service ister (eski sözleşme).

@@ -8,7 +8,7 @@ import type { FilterExpr } from '@/lib/types';
 import { traceScopeParams, errorStripEligible, errorStripScopeOnly, chipStripEligible, type TraceScopeInput } from './scopeParams';
 import { encodeFilterGroup } from '@/lib/urlState';
 
-const fc: FilterExpr = { k: 'function_code', op: '=', v: ['KYC0001'] };
+const fc: FilterExpr = { k: 'function_code', op: '=', v: ['VRF0001'] };
 const pod: FilterExpr = { k: 'k8s.pod.name', op: '=', v: ['svc-a-7d9f-x2'] };
 
 function input(over: Partial<TraceScopeInput['filter']> = {}, rest: Partial<Omit<TraceScopeInput, 'filter'>> = {}): TraceScopeInput {

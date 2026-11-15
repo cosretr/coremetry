@@ -3,14 +3,14 @@ package chstore
 // business_code.go — CoSRE iş kodu çözümleme (resolve_business_code).
 //
 // business_code_summary_5m: (tür, kod, servis, 5 dk) → span / hata sayısı.
-// ORDER BY kodla başlar: sohbette SERVİS KAPSAMI OLMADAN "BKRB001 hangi
+// ORDER BY kodla başlar: sohbette SERVİS KAPSAMI OLMADAN "BQRZ001 hangi
 // servis" okuması birkaç granül. Kod ifadeleri promoted kolonlarla AYNI
 // (promotedAttrExpr — iki yazım), ama MATERIALIZED kolona değil diziye
 // dayanır: kolon her kurulumda yok ve Distributed iletimde düşer.
 //
 // FUNCTION_CODE biçim kapısı (prod ölçümü 2026-10-15): günde 17 M farklı
 // değerin ~%98'i GUID / sayısal ID / "LOGIN-43930337" gibi kod+ID karışımı;
-// gerçek kodlar 7 karakter, büyük harf+rakam (BKRB001, INV0181) ve 1 saatte
+// gerçek kodlar 7 karakter, büyük harf+rakam (BQRZ001, IQV0181) ve 1 saatte
 // span'lerin >%90'ı. Kapı ^[A-Z][A-Z0-9]{4,9}$ dışını MV'ye hiç almaz
 // (kardinalite sınırlı). CHANNEL_CODE (günde ~2,3 K değer) kapısız.
 

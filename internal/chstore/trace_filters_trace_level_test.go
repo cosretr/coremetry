@@ -51,7 +51,7 @@ func TestChipsMoveToTraceLevelHavingWithSearch(t *testing.T) {
 	}
 
 	// Birden çok çip → çip başına ayrı countIf (attribute'lar farklı span'de olabilir).
-	two := TraceFilter{Search: "x", Filters: []FilterExpr{chip, {Key: "function_code", Op: "=", Values: []string{"MFY0001"}}}}
+	two := TraceFilter{Search: "x", Filters: []FilterExpr{chip, {Key: "function_code", Op: "=", Values: []string{"MQY0001"}}}}
 	parts, args = traceLevelFilterHaving(two)
 	// function_code terfi değil: dizi yolu anahtar+değer (2 arg) → toplam 3.
 	if len(parts) != 2 || len(args) != 3 || !strings.HasPrefix(parts[1], "countIf(") || !strings.HasSuffix(parts[1], ") > 0") {

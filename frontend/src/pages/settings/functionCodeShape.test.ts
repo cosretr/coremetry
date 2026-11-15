@@ -5,7 +5,7 @@ import { summarizeShape } from './functionCodeShape';
 describe('summarizeShape', () => {
   it('uyan/uymayan toplamları ve en çok 10 biçim dışı kova', () => {
     const rows = [
-      { conforms: true, len: 7, distinct: 3000, spans: 9e6, example: 'BKRB001' },
+      { conforms: true, len: 7, distinct: 3000, spans: 9e6, example: 'BQRZ001' },
       ...Array.from({ length: 12 }, (_, i) => ({ conforms: false, len: 20 + i, distinct: 100 + i, spans: 50, example: 'x' })),
     ];
     const s = summarizeShape(rows);

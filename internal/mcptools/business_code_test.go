@@ -11,9 +11,9 @@ import (
 )
 
 var bizNames = []BizName{
-	{BizFunctionCode, "BKRB001"}, {BizFunctionCode, "BKRB002"}, {BizFunctionCode, "INV0181"},
+	{BizFunctionCode, "BQRZ001"}, {BizFunctionCode, "BQRZ002"}, {BizFunctionCode, "IQV0181"},
 	{BizChannelCode, "060203"},
-	{BizOperation, "ATM_CORE_PIN_CHANGE"}, {BizOperation, "DIGITAL_PAYMENT_EFT"},
+	{BizOperation, "KSK_MAIN_PIN_CHANGE"}, {BizOperation, "EXAMPLE_PAYMENT_XFR"},
 	{BizEndpoint, "/get/v{version}/file/stream/s3"},
 }
 
@@ -23,12 +23,12 @@ func TestRankBizNames(t *testing.T) {
 		want       []string // kind:value sırası
 		match      string
 	}{
-		{"fonksiyon kodu tam", "BKRB001", []string{"function_code:BKRB001"}, "exact"},
-		{"cümle içinde kod", "BKRB001 hangi serviste?", []string{"function_code:BKRB001"}, "exact"},
+		{"fonksiyon kodu tam", "BQRZ001", []string{"function_code:BQRZ001"}, "exact"},
+		{"cümle içinde kod", "BQRZ001 hangi serviste?", []string{"function_code:BQRZ001"}, "exact"},
 		{"kanal kodu", "060203", []string{"channel_code:060203"}, "exact"},
-		{"yazım hatalı operasyon", "ATM_CORE_PIN_CHANGEE", []string{"operation:ATM_CORE_PIN_CHANGE"}, "fuzzy"},
+		{"yazım hatalı operasyon", "KSK_MAIN_PIN_CHANGEE", []string{"operation:KSK_MAIN_PIN_CHANGE"}, "fuzzy"},
 		{"endpoint parçası", "file/stream/s3", []string{"endpoint:/get/v{version}/file/stream/s3"}, "substring"},
-		{"önek → iki aday", "BKRB00", []string{"function_code:BKRB001", "function_code:BKRB002"}, "prefix"},
+		{"önek → iki aday", "BQRZ00", []string{"function_code:BQRZ001", "function_code:BQRZ002"}, "prefix"},
 		{"eşleşme yok", "ZZZZ999", nil, ""},
 	}
 	for _, c := range cases {
@@ -48,16 +48,16 @@ func TestRankBizNames(t *testing.T) {
 }
 
 func TestBizDecision(t *testing.T) {
-	one := []BizCandidate{{Kind: BizFunctionCode, Value: "BKRB001", Score: 100, Services: []BizServiceStat{{Service: "a"}}}}
-	if amb, opts, why := BizDecision(one, "BKRB001", bizKinds); amb || opts != nil || why != nil {
+	one := []BizCandidate{{Kind: BizFunctionCode, Value: "BQRZ001", Score: 100, Services: []BizServiceStat{{Service: "a"}}}}
+	if amb, opts, why := BizDecision(one, "BQRZ001", bizKinds); amb || opts != nil || why != nil {
 		t.Errorf("tek aday tek servis belirsiz değil: %v %v %v", amb, opts, why)
 	}
-	multiSvc := []BizCandidate{{Kind: BizFunctionCode, Value: "BKRB001", Score: 100, Services: []BizServiceStat{{Service: "a"}, {Service: "b"}}}}
-	if amb, opts, _ := BizDecision(multiSvc, "BKRB001", bizKinds); !amb || len(opts) != 2 || opts[0] != "a" {
+	multiSvc := []BizCandidate{{Kind: BizFunctionCode, Value: "BQRZ001", Score: 100, Services: []BizServiceStat{{Service: "a"}, {Service: "b"}}}}
+	if amb, opts, _ := BizDecision(multiSvc, "BQRZ001", bizKinds); !amb || len(opts) != 2 || opts[0] != "a" {
 		t.Errorf("çok servis → belirsiz + servis seçenekleri: %v %v", amb, opts)
 	}
-	multiCand := []BizCandidate{{Kind: BizFunctionCode, Value: "BKRB001", Score: 80}, {Kind: BizFunctionCode, Value: "BKRB002", Score: 80}}
-	if amb, opts, _ := BizDecision(multiCand, "BKRB00", bizKinds); !amb || len(opts) != 2 {
+	multiCand := []BizCandidate{{Kind: BizFunctionCode, Value: "BQRZ001", Score: 80}, {Kind: BizFunctionCode, Value: "BQRZ002", Score: 80}}
+	if amb, opts, _ := BizDecision(multiCand, "BQRZ00", bizKinds); !amb || len(opts) != 2 {
 		t.Errorf("eş güçte iki aday → belirsiz: %v %v", amb, opts)
 	}
 	if amb, _, why := BizDecision(nil, "ZZZ", bizKinds); amb || len(why) < 2 || !strings.Contains(why[0], "eşleşme yok") {
@@ -84,7 +84,7 @@ func TestBizHelpers(t *testing.T) {
 	if st[0].ErrorRatePct != 33.33 || st[1].ErrorRatePct != 0 {
 		t.Errorf("%+v", st)
 	}
-	if f := bizFilter(BizFunctionCode, "BKRB001"); f.Key != "FUNCTION_CODE" || f.Values[0] != "BKRB001" {
+	if f := bizFilter(BizFunctionCode, "BQRZ001"); f.Key != "FUNCTION_CODE" || f.Values[0] != "BQRZ001" {
 		t.Errorf("%+v", f)
 	}
 	if f := bizFilter(BizEndpoint, "/x"); f.Key != "http.route" {

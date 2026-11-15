@@ -12,7 +12,7 @@ package api
 //     Aday okuması sunucuda, SINIRLI: cosre_operation_catalog'da adın
 //     parçalarını içeren ≤60 satır (CatalogCandidates, ön-getirmenin aynı
 //     okuması) → nearNames ile ≤5. Tam katalog listesi asla çekilmez.
-//  2. `DEP1080` biçimli iş kodu (`[A-Z]{2,5}\d{3,5}`) → guided
+//  2. `DQP1080` biçimli iş kodu (`[A-Z]{2,5}\d{3,5}`) → guided
 //     `business_code` rotası: business_code_summary_5m (FUNCTION_CODE /
 //     CHANNEL_CODE, son 7 gün, nokta okuma) servis kırılımı + ilk/son
 //     görülme; operasyonlar cosre_operation_catalog.function_codes'tan. Ham
@@ -43,7 +43,7 @@ const (
 	bizCodeOpsMax = 10
 )
 
-// bizCodeShapeRe — iş kodu biçimi (audit F: `[A-Z]{2,5}\d{3,5}`, "DEP1080").
+// bizCodeShapeRe — iş kodu biçimi (audit F: `[A-Z]{2,5}\d{3,5}`, "DQP1080").
 var bizCodeShapeRe = regexp.MustCompile(`^[A-Z]{2,5}[0-9]{3,5}$`)
 
 // bizCodeDeny — kod biçimine uyan ama iş kodu olmayan önekler.

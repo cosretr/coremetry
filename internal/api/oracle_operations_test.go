@@ -71,7 +71,7 @@ func TestOracleOperationsRoute(t *testing.T) {
 	// Etkin kaynak yok → her rol 200 + enabled:false (CH'ye gidilmez; depo nil).
 	for _, role := range []string{auth.RoleViewer, auth.RoleAdmin} {
 		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, asRole(httptest.NewRequest("GET", "/api/oracle/operations?q=DIGITAL", nil), role))
+		mux.ServeHTTP(w, asRole(httptest.NewRequest("GET", "/api/oracle/operations?q=EXAMPLE", nil), role))
 		if w.Code != http.StatusOK {
 			t.Fatalf("rol %s → %d", role, w.Code)
 		}
@@ -99,7 +99,7 @@ func TestOracleOperationsRoute(t *testing.T) {
 // satırlı ≤3 ad + toplam ad sayısı; sıra girdinin sırası (en çok satırlı önce).
 func TestOracleFunctionCodeDict(t *testing.T) {
 	got := oracleFunctionCodeDict([]chstore.OracleFnOp{
-		{Code: "CAF0001", Operation: "CUSTOMER_MGMT", Rows: 90},
+		{Code: "CLM0001", Operation: "CUSTOMER_MGMT", Rows: 90},
 		{Code: "SHARED", Operation: "OP_A", Rows: 50},
 		{Code: "SHARED", Operation: "OP_B", Rows: 40},
 		{Code: "SHARED", Operation: "OP_C", Rows: 30},
@@ -110,7 +110,7 @@ func TestOracleFunctionCodeDict(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("kod kümesi: %+v", got)
 	}
-	if e := got["CAF0001"]; e.Total != 1 || len(e.Ops) != 1 || e.Ops[0] != "CUSTOMER_MGMT" {
+	if e := got["CLM0001"]; e.Total != 1 || len(e.Ops) != 1 || e.Ops[0] != "CUSTOMER_MGMT" {
 		t.Errorf("tek operasyonlu kod: %+v", e)
 	}
 	if e := got["SHARED"]; e.Total != 4 || strings.Join(e.Ops, ",") != "OP_A,OP_B,OP_C" {

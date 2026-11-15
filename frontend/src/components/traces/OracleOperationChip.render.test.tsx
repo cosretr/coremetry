@@ -25,11 +25,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import type { LogRow, OracleFunctionCodesResponse, SpanRow } from '@/lib/types';
 
-const TRX = 'LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST';
-const INQ = 'LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST';
+const TRX = 'LEND_PERSONAL_WEB_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST';
+const INQ = 'LEND_PERSONAL_WEB_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST';
 
 const dict: OracleFunctionCodesResponse = {
-  enabled: true, codes: { LCA01: { ops: [INQ, TRX, 'OTHER_REST'], total: 16 } },
+  enabled: true, codes: { LNX01: { ops: [INQ, TRX, 'OTHER_REST'], total: 16 } },
 };
 const dictHook = vi.fn((enabled: boolean) => ({ data: enabled ? dict : undefined }));
 vi.mock('@/lib/queries', () => ({ useOracleFunctionCodes: (enabled: boolean) => dictHook(enabled) }));
@@ -44,7 +44,7 @@ const sp = (o: Partial<SpanRow> & { spanId: string }): SpanRow => ({
   statusCode: 'error', statusMessage: '', attributes: {}, resourceAttributes: {}, events: null, scopeName: '', ...o,
 });
 const spans: SpanRow[] = [
-  sp({ spanId: 'r', attributes: { FUNCTION_CODE: 'LCA01' } }),
+  sp({ spanId: 'r', attributes: { FUNCTION_CODE: 'LNX01' } }),
   sp({ spanId: 'c', parentSpanId: 'r', serviceName: 'loan-inq', name: 'GET /inq', startTime: 2 }),
 ];
 const oracleRow = (op: string, spanId: string, timestamp: number): LogRow => ({
@@ -97,7 +97,7 @@ describe('OracleOperationChip (v0.10.1329)', () => {
     expect(chip.title).toContain(`Bu trace'teki diğer operasyonlar: ${INQ}.`);
     const a = chip.querySelector('a')!;
     expect(a.getAttribute('aria-label')).toContain('kendi Oracle hata satırları');
-    expect(a.getAttribute('href')).toContain('LCA01');
+    expect(a.getAttribute('href')).toContain('LNX01');
     expect(dictHook).toHaveBeenLastCalledWith(false);
   });
 
@@ -118,7 +118,7 @@ describe('OracleOperationChip (v0.10.1329)', () => {
     expect(chip.title).toContain(`Bu kod 16 operasyonda görülüyor: ${INQ}, ${TRX}, OTHER_REST (+13 daha).`);
     const a = chip.querySelector('a')!;
     expect(a.getAttribute('aria-label')).toContain('fonksiyon kodu sözlüğü');
-    expect(a.getAttribute('href')).toContain('LCA01');
+    expect(a.getAttribute('href')).toContain('LNX01');
     expect(dictHook).toHaveBeenLastCalledWith(true);
   });
 
@@ -140,28 +140,28 @@ describe('OracleOperationChip (v0.10.1329)', () => {
   });
 
   it('v0.10.1514 — sözlük: her aday kendi çipi, hepsi listitem', async () => {
-    const two = [sp({ spanId: 'r', attributes: { FUNCTION_CODE: 'LCA01', function_code: 'LCA02' } })];
-    dict.codes.LCA02 = { ops: ['SECOND_REST'], total: 1 };
+    const two = [sp({ spanId: 'r', attributes: { FUNCTION_CODE: 'LNX01', function_code: 'LNX02' } })];
+    dict.codes.LNX02 = { ops: ['SECOND_REST'], total: 1 };
     try {
       const h = await mount([], two);
       const chips = [...h.querySelectorAll('[data-op-source="dictionary"]')];
       expect(chips.map(c => c.querySelector('.idchip__val')!.textContent)).toEqual([INQ, 'SECOND_REST']);
       expect(chips.every(c => c.getAttribute('role') === 'listitem')).toBe(true);
       expect(chips[1].querySelector('.idchip__hint')!.textContent).toBe('tahmin · 1 aday');
-    } finally { delete dict.codes.LCA02; }
+    } finally { delete dict.codes.LNX02; }
   });
 });
 
 describe('TraceEntryCodes (v0.10.1497; v0.10.1514 kimlik çipi)', () => {
-  const coded = [sp({ spanId: 'r', attributes: { FUNCTION_CODE: 'SPE0112', channel_code: '060203' } })];
+  const coded = [sp({ spanId: 'r', attributes: { FUNCTION_CODE: 'SXQ0112', channel_code: '060203' } })];
   it('FUNCTION bağlantılı (aynı kodun trace\'leri), CHANNEL çip — ikisi de kopyalanır, anahtar yazımı ipucunda', async () => {
     const h = await mountNode(<TraceEntryCodes spans={coded} pageRange={{ preset: '1h' }} />);
     const fn = h.querySelector('[data-trace-codes="function"]') as HTMLElement;
     const ch = h.querySelector('[data-trace-codes="channel"]') as HTMLElement;
-    expect(fn.textContent).toBe('FUNCTIONSPE0112⧉');
-    expect(fn.title).toBe('FUNCTION_CODE: SPE0112');
+    expect(fn.textContent).toBe('FUNCTIONSXQ0112⧉');
+    expect(fn.title).toBe('FUNCTION_CODE: SXQ0112');
     const a = fn.querySelector('a.idchip__val')!;
-    expect(a.getAttribute('href')).toContain('SPE0112');
+    expect(a.getAttribute('href')).toContain('SXQ0112');
     expect(a.getAttribute('title')).toBe("Bu fonksiyon kodunun diğer trace'leri");
     expect(fn.querySelector('button[aria-label="Fonksiyon kodunu kopyala"]')).not.toBeNull();
     expect(ch.textContent).toBe('CHANNEL060203⧉');

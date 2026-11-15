@@ -16,7 +16,7 @@ import { api } from '@/lib/api';
 import type { AICodeContext } from '@/lib/types';
 import { codeStatusLead, codeStatusLine, codeStatusOperationTail } from './codeSourceRef';
 
-const OP = 'LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST';
+const OP = 'LEND_PERSONAL_WEB_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST';
 const opOK: AICodeContext = {
   repo: 'loan-service', branch: 'release', source: 'operation', operation: OP, operationSource: 'oracle',
   otherOperations: ['A_OTHER_REST', 'B_OTHER_REST'], operationLookup: 'ok',

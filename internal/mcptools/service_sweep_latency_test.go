@@ -93,8 +93,8 @@ func TestSweepSparkChartFallback(t *testing.T) {
 func TestLogBodyPreview(t *testing.T) {
 	long := strings.Repeat("ş", 300)
 	for _, c := range []struct{ in, want string }{
-		{`{"service_name":"CALLCENTER_LOGINIVR_LOGIN_GET_CUSTOMER_INFORMATION_SERVICE","error_code":"CINF_123","duration":12}`,
-			"[CINF_123] CALLCENTER_LOGINIVR_LOGIN_GET_CUSTOMER_INFORMATION_SERVICE"},
+		{`{"service_name":"CALLCENTER_VOICEIVR_LOGIN_GET_CUSTOMER_INFORMATION_SERVICE","error_code":"CQNF_123","duration":12}`,
+			"[CQNF_123] CALLCENTER_VOICEIVR_LOGIN_GET_CUSTOMER_INFORMATION_SERVICE"},
 		{`{"level":"ERROR","message":"Connection refused","error_code":"E42"}`, "[E42] Connection refused"},
 		{`{"msg":"timeout calling ledger","exception":"java.net.SocketTimeoutException: Read timed out\n\tat x.y(Z.java:1)"}`,
 			"timeout calling ledger — java.net.SocketTimeoutException: Read timed out"},
@@ -241,14 +241,14 @@ func TestSweepOpChartBlock(t *testing.T) {
 // TestSweepFindingLogPreview — bulgu logu (modele / anlatıma giden) önizleme;
 // açılır tablo ham gövdeyi taşır.
 func TestSweepFindingLogPreview(t *testing.T) {
-	raw := `{"service_name":"CALLCENTER_LOGINIVR_LOGIN_GET_CUSTOMER_INFORMATION_SERVICE","error_code":"CINF_123","trace":"x"}`
+	raw := `{"service_name":"CALLCENTER_VOICEIVR_LOGIN_GET_CUSTOMER_INFORMATION_SERVICE","error_code":"CQNF_123","trace":"x"}`
 	r := baseSweepReaders()
 	r.logs = &syncLogStore{page: &logstore.Page{Logs: []*logstore.LogRecord{{Severity: 17, Body: raw, ServiceName: "checkout", Timestamp: sweepTo.UnixNano()}}}}
 	res, err := runServiceSweep(context.Background(), r, sweepReq(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "[CINF_123] CALLCENTER_LOGINIVR_LOGIN_GET_CUSTOMER_INFORMATION_SERVICE"
+	want := "[CQNF_123] CALLCENTER_VOICEIVR_LOGIN_GET_CUSTOMER_INFORMATION_SERVICE"
 	sawTable := false
 	for _, f := range res.Findings {
 		if f.Logs == nil || len(f.Logs.Rows) == 0 {

@@ -16,7 +16,7 @@ import (
 // doğru iki trace; hatasız ve çipsiz trace'ler dışarıda).
 
 func chipFilter() []FilterExpr {
-	return []FilterExpr{{Key: "function_code", Op: "=", Values: []string{"CAL1051"}}}
+	return []FilterExpr{{Key: "function_code", Op: "=", Values: []string{"CLX1051"}}}
 }
 
 func TestTraceLevelErrorEligible(t *testing.T) {
@@ -58,7 +58,7 @@ func TestTraceErrScopeAndWheres(t *testing.T) {
 			if a == "function_code" {
 				k = true
 			}
-			if a == "CAL1051" {
+			if a == "CLX1051" {
 				v = true
 			}
 		}
@@ -87,7 +87,7 @@ func TestTraceErrScopeAndWheres(t *testing.T) {
 
 func TestTraceErrJoinSides(t *testing.T) {
 	var chip, errw whereClause
-	chip.add("attr_function_code = ?", "CAL1051")
+	chip.add("attr_function_code = ?", "CLX1051")
 	errw.add("status_code = 'error'")
 	cases := []struct {
 		name          string

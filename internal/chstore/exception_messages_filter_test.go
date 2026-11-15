@@ -10,7 +10,7 @@ import (
 // ex_message üzerinde BİREBİR küme (IN), ILIKE alt-dizesi değil; boşken
 // cümle bayt-bayt eski.
 func TestExceptionGroupWhereMessages(t *testing.T) {
-	op := "LOAN_CONSUMER_APP_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST"
+	op := "LEND_PERSONAL_WEB_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST"
 	wc := buildExceptionGroupWhere(ExceptionGroupFilter{Messages: []string{op}, Oracle: "only", ActiveFromNs: 100, Sort: "lastSeen"})
 	sql := wc.sql()
 	if !strings.Contains(sql, "ex_message IN (?)") {

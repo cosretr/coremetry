@@ -116,7 +116,7 @@ func TestSubjectResolverFunctionCode(t *testing.T) {
 	h.facts["F200"] = []chstore.FunctionCodeService{{Service: "a", Spans: 10, Errors: 5}, {Service: "b", Spans: 10, Errors: 5}}
 	src := SourceConfig{ID: "o-f", Name: "oracle-prod", FunctionCodeMatch: true, Columns: fnCodeCols}
 	rows := []chstore.OracleErrorRow{
-		{OperationCode: "DIGITAL_PAYMENT_EFT", ErrorCode: "F100"}, {OperationCode: "DIGITAL_PAYMENT_EFT", ErrorCode: "F100"},
+		{OperationCode: "EXAMPLE_PAYMENT_XFR", ErrorCode: "F100"}, {OperationCode: "EXAMPLE_PAYMENT_XFR", ErrorCode: "F100"},
 		{OperationCode: "MULTI", ErrorCode: "F200"}, {OperationCode: "UNSEEN", ErrorCode: "F300"}, {OperationCode: "NOCODE"},
 	}
 	res := h.observe(src, rows...)
@@ -128,7 +128,7 @@ func TestSubjectResolverFunctionCode(t *testing.T) {
 		t.Fatalf("arama: %v", h.calls)
 	}
 	// Harita henüz onaysız (1 teyit) → fonksiyon kodu basamağı servisi verir.
-	got := h.r.Resolve(ctx, "o-f", []string{"DIGITAL_PAYMENT_EFT", "F100", "C", "-"})
+	got := h.r.Resolve(ctx, "o-f", []string{"EXAMPLE_PAYMENT_XFR", "F100", "C", "-"})
 	if got.Service != "eft-svc" || got.Source != SubjectSourceFunctionCode || got.Note != "fonksiyon kodundan F100→eft-svc (20/21 hata span'i)" {
 		t.Fatalf("fonksiyon kodundan: %+v", got)
 	}
@@ -154,7 +154,7 @@ func TestSubjectResolverFunctionCode(t *testing.T) {
 		t.Fatalf("seri çözümü (F100): %+v", res)
 	}
 	// Küme Problem'i yalnız operasyonu verir → operasyonun bu tikteki kodları.
-	if got := h.r.Resolve(ctx, "o-f", []string{"DIGITAL_PAYMENT_EFT"}); got.Service != "eft-svc" || got.Source != SubjectSourceFunctionCode {
+	if got := h.r.Resolve(ctx, "o-f", []string{"EXAMPLE_PAYMENT_XFR"}); got.Service != "eft-svc" || got.Source != SubjectSourceFunctionCode {
 		t.Fatalf("küme: %+v", got)
 	}
 	// Operasyon kodu boş ama fonksiyon kodu dolu satır da bağlanır.
@@ -176,7 +176,7 @@ func TestSubjectResolverFunctionCode(t *testing.T) {
 	if len(h.calls) != 3 {
 		t.Fatalf("tazeleme sayısı: %d", len(h.calls))
 	}
-	if got := h.r.Resolve(ctx, "o-f", []string{"DIGITAL_PAYMENT_EFT", "F100", "C", "-"}); got.Service != "eft-svc" || got.Source != "learned" {
+	if got := h.r.Resolve(ctx, "o-f", []string{"EXAMPLE_PAYMENT_XFR", "F100", "C", "-"}); got.Service != "eft-svc" || got.Source != "learned" {
 		t.Fatalf("öğrenilmiş: %+v", got)
 	}
 	// Servis değişir (fonksiyon başka servise taşındı): tek okumada 1 oy —
@@ -187,16 +187,16 @@ func TestSubjectResolverFunctionCode(t *testing.T) {
 		h.now = h.now.Add(11 * time.Minute)
 		h.observe(src, rows...)
 	}
-	if got := h.r.Resolve(ctx, "o-f", []string{"DIGITAL_PAYMENT_EFT", "F100", "C", "-"}); got.Service != "eft-v2" || got.Source != SubjectSourceFunctionCode {
+	if got := h.r.Resolve(ctx, "o-f", []string{"EXAMPLE_PAYMENT_XFR", "F100", "C", "-"}); got.Service != "eft-v2" || got.Source != SubjectSourceFunctionCode {
 		t.Fatalf("servis değişimi: %+v", got)
 	}
-	if e := h.r.Learned(ctx, "o-f").Entries["DIGITAL_PAYMENT_EFT"]; e == nil || e.Service != "eft-svc" || e.Alt != "eft-v2" || e.AltHits != 2 {
+	if e := h.r.Learned(ctx, "o-f").Entries["EXAMPLE_PAYMENT_XFR"]; e == nil || e.Service != "eft-svc" || e.Alt != "eft-v2" || e.AltHits != 2 {
 		t.Fatalf("meydan okuyan birikmeli: %+v", e)
 	}
 	// Üçüncü ardışık okuma: eski servis hiç oy almadı → harita YENİ servise döner.
 	h.now = h.now.Add(11 * time.Minute)
 	h.observe(src, rows...)
-	if got := h.r.Resolve(ctx, "o-f", []string{"DIGITAL_PAYMENT_EFT", "F100", "C", "-"}); got.Service != "eft-v2" || got.Source != "learned" {
+	if got := h.r.Resolve(ctx, "o-f", []string{"EXAMPLE_PAYMENT_XFR", "F100", "C", "-"}); got.Service != "eft-v2" || got.Source != "learned" {
 		t.Fatalf("harita güncellenmeli: %+v", got)
 	}
 }
@@ -317,11 +317,11 @@ func TestFunctionCodeOf(t *testing.T) {
 		row  chstore.OracleErrorRow
 		want string
 	}{
-		{"code ← ERRORCODE, FUNCTIONCODE attribute", SourceConfig{Columns: errCols}, row("COR-91157", "ADET", "2", "FUNCTIONCODE", "CAF0001 "), "CAF0001"},
+		{"code ← ERRORCODE, FUNCTIONCODE attribute", SourceConfig{Columns: errCols}, row("COR-91157", "ADET", "2", "FUNCTIONCODE", "CLM0001 "), "CLM0001"},
 		{"alt çizgili ad", SourceConfig{Columns: errCols}, row("COR-91157", "FUNCTION_CODE", "INVLD02"), "INVLD02"},
 		{"önekli tablo kolonu", SourceConfig{}, row("E1", "APP_ERR_FUNCTIONCODE", "F9"), "F9"},
 		{"küçük harf anahtar", SourceConfig{}, row("E1", "functionCode", "F7"), "F7"},
-		{"code ← FUNCTIONCODE (eski eşleme)", SourceConfig{Columns: fnCodeCols}, row(" CAF0001 ", "ADET", "2"), "CAF0001"},
+		{"code ← FUNCTIONCODE (eski eşleme)", SourceConfig{Columns: fnCodeCols}, row(" CLM0001 ", "ADET", "2"), "CLM0001"},
 		{"code ← function_code", SourceConfig{Columns: map[string]string{FieldCode: "function_code"}}, row("F5"), "F5"},
 		{"fonksiyon kodu yok: hata kodu fonksiyon kodu SAYILMAZ", SourceConfig{Columns: errCols}, row("COR-91157", "ADET", "2"), ""},
 		{"eşleme boş, attribute yok", SourceConfig{}, row("ERR_020"), ""},
@@ -336,24 +336,24 @@ func TestFunctionCodeOf(t *testing.T) {
 func TestSubjectResolverFunctionCodeFromAttribute(t *testing.T) {
 	ctx := context.Background()
 	h := newFnHarness(t)
-	h.facts["CAF0001"] = []chstore.FunctionCodeService{{Service: "mobile-customer-contact-bff-prod", Spans: 400, Errors: 12}}
+	h.facts["CLM0001"] = []chstore.FunctionCodeService{{Service: "mobile-customer-contact-bff-prod", Spans: 400, Errors: 12}}
 	src := SourceConfig{ID: "o-a", Name: "oracle-prod", FunctionCodeMatch: true, Columns: map[string]string{FieldCode: "ERRORCODE"}}
 	attr := func(op, errCode, fn string) chstore.OracleErrorRow {
 		return chstore.OracleErrorRow{OperationCode: op, ErrorCode: errCode, AttrKeys: []string{"ADET", "FUNCTIONCODE"}, AttrValues: []string{"1", fn}}
 	}
 	rows := []chstore.OracleErrorRow{
-		attr("CUSTOMER_ADDRESS_REST", "COR-91157", "CAF0001"),
-		attr("CUSTOMER_ADDRESS_REST", "APP-00196", "CAF0001"),
+		attr("CUSTOMER_ADDRESS_REST", "COR-91157", "CLM0001"),
+		attr("CUSTOMER_ADDRESS_REST", "APP-00196", "CLM0001"),
 		{OperationCode: "NOFN", ErrorCode: "COR-91157"},
 	}
 	h.observe(src, rows...)
 	// Span'lerde aranan FONKSİYON kodu — hata kodu değil.
-	if len(h.calls) != 1 || strings.Join(h.calls[0], ",") != "CAF0001" {
+	if len(h.calls) != 1 || strings.Join(h.calls[0], ",") != "CLM0001" {
 		t.Fatalf("arama: %v", h.calls)
 	}
 	// Seri (op, HATA kodu, kanal, -): operasyonun fonksiyon kodundan çözülür.
 	got := h.r.Resolve(ctx, "o-a", []string{"CUSTOMER_ADDRESS_REST", "COR-91157", "060203", "-"})
-	if got.Service != "mobile-customer-contact-bff-prod" || got.Source != SubjectSourceFunctionCode || !strings.HasPrefix(got.Note, "fonksiyon kodundan CAF0001→") {
+	if got.Service != "mobile-customer-contact-bff-prod" || got.Source != SubjectSourceFunctionCode || !strings.HasPrefix(got.Note, "fonksiyon kodundan CLM0001→") {
 		t.Fatalf("attribute'tan: %+v", got)
 	}
 	// Fonksiyon kodu olmayan operasyon: hata kodu span'lerde ARANMAZ, basamak sessiz.

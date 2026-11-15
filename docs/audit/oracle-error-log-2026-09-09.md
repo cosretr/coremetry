@@ -426,7 +426,7 @@ aynı `row_id` ile RMT'de tek satıra iner, sayaç dakika başına aynı sayıy�
   ya da `DD.MM.YYYY HH24:MI[:SS]` (kaynağın dilimi). `TIMESLICE` zaman kolonu
   kutusuna, `SONUC` tip kutusuna yazılır.
 - Önerilen eşleme: `operation.code ← OPERATIONCODE`, `error.code ← FUNCTIONCODE`
-  (hata kodu yok; fonksiyon kodu ikinci boyut — Inbox başlığında `error.code=FSR0002`
+  (hata kodu yok; fonksiyon kodu ikinci boyut — Inbox başlığında `error.code=FQR0002`
   görünür, hint bunu söyler), `channel.code ← KANALKOD`, `host ← HOSTNAME`.
   `ZAMAN / DURATION / TRACEIDADET` attribute.
 

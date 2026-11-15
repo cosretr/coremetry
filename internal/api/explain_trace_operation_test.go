@@ -17,9 +17,9 @@ import (
 
 func TestPickMainOperation(t *testing.T) {
 	const (
-		trx  = "LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST"
-		inq  = "LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST"
-		inq2 = "LOAN_CONSUMER_APP_APPLICATIONINQ_CUSTOMER_LIMIT_REST"
+		trx  = "LEND_PERSONAL_WEB_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST"
+		inq  = "LEND_PERSONAL_WEB_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST"
+		inq2 = "LEND_PERSONAL_WEB_APPLICATIONINQ_CUSTOMER_LIMIT_REST"
 	)
 	base := time.Unix(1_760_000_000, 0)
 	row := func(op, spanID string, sec int) chstore.OracleErrorRow {
@@ -29,7 +29,7 @@ func TestPickMainOperation(t *testing.T) {
 		return chstore.SpanRow{SpanID: id, ParentSpanID: parent, Kind: kind, ServiceName: svc, StartTime: start, Attributes: attrs}
 	}
 	spans := []chstore.SpanRow{
-		span("r", "", "server", "acmweb", 1, map[string]string{"FUNCTION_CODE": "LCA01"}),
+		span("r", "", "server", "acmweb", 1, map[string]string{"FUNCTION_CODE": "LNX01"}),
 		span("c1", "r", "server", "loan-inq", 2, nil),
 		span("c2", "r", "server", "loan-inq", 3, nil),
 	}

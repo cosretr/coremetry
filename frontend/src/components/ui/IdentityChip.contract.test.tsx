@@ -69,13 +69,13 @@ describe('IdentityChip', () => {
   });
 
   it('kopyala hücresi: ad = başlık, değeri kopyalar, sonra ✓', async () => {
-    const el = render(<IdentityChip label="FUNCTION" value="SPE0112" copyTitle="Fonksiyon kodunu kopyala" />);
+    const el = render(<IdentityChip label="FUNCTION" value="SXQ0112" copyTitle="Fonksiyon kodunu kopyala" />);
     const btn = el.querySelector('button')!;
     expect(btn.getAttribute('aria-label')).toBe('Fonksiyon kodunu kopyala');
     expect(btn.title).toBe('Fonksiyon kodunu kopyala');
     expect(btn.getAttribute('style')).toBeNull(); // hücre ölçüsü CSS'te, satır-içi değil
     await act(async () => { btn.click(); });
-    expect(copySpy).toHaveBeenCalledWith('SPE0112');
+    expect(copySpy).toHaveBeenCalledWith('SXQ0112');
     expect(btn.textContent).toBe('✓');
   });
 

@@ -18,9 +18,9 @@ function filtersOf(href: string): unknown {
 
 describe('functionCodeTracesHref', () => {
   it('tek kodda eşitlik, çok kodda IN; anahtar yazımı AYNEN gider; kök şartı yok', () => {
-    const one = functionCodeTracesHref({ window: win, attrKey: 'function_code', codes: ['CAF0001'] });
+    const one = functionCodeTracesHref({ window: win, attrKey: 'function_code', codes: ['CLM0001'] });
     expect(one.startsWith('/traces?')).toBe(true);
-    expect(filtersOf(one)).toEqual([{ k: 'function_code', op: '=', v: ['CAF0001'] }]);
+    expect(filtersOf(one)).toEqual([{ k: 'function_code', op: '=', v: ['CLM0001'] }]);
     const q = new URLSearchParams(one.slice(one.indexOf('?') + 1));
     expect(q.get('rootOnly')).toBe('false');
     expect(q.get('range')).toBeTruthy();
@@ -33,7 +33,7 @@ describe('oraclePaletteResults', () => {
   const resp: OracleOperationsResponse = {
     enabled: true, spanAttrKey: 'function_code',
     operations: [
-      { operation: 'TRANSFER_CONFIRM_SERVICE', rows: 370, lastSeen: 1, functionCodes: ['EFT001'], lastTraceId: 'ab12cd34ef56ab12cd34ef56ab12cd34', service: 'acme-localtransfer-prod' },
+      { operation: 'TRANSFER_CONFIRM_SERVICE', rows: 370, lastSeen: 1, functionCodes: ['XFR001'], lastTraceId: 'ab12cd34ef56ab12cd34ef56ab12cd34', service: 'acme-localtransfer-prod' },
       { operation: 'OP_MANY', rows: 90, lastSeen: 1, functionCodes: ['A1', 'B2', 'C3'] },
       { operation: 'OP_SERVICE_ONLY', rows: 12, lastSeen: 1, functionCodes: [], service: 'acme-atm-core-prod' },
       { operation: 'OP_NOTHING', rows: 3, lastSeen: 1, functionCodes: [] },
@@ -42,8 +42,8 @@ describe('oraclePaletteResults', () => {
 
   it('fonksiyon kodu olan operasyon: Traces süzgeci + son hata trace\'i', () => {
     const r = oraclePaletteResults(resp, win);
-    expect(r[0]).toMatchObject({ kind: 'operation', label: 'TRANSFER_CONFIRM_SERVICE', hint: "Operasyon · fonksiyon kodu EFT001 → trace'ler" });
-    expect(filtersOf(r[0].to)).toEqual([{ k: 'function_code', op: '=', v: ['EFT001'] }]);
+    expect(r[0]).toMatchObject({ kind: 'operation', label: 'TRANSFER_CONFIRM_SERVICE', hint: "Operasyon · fonksiyon kodu XFR001 → trace'ler" });
+    expect(filtersOf(r[0].to)).toEqual([{ k: 'function_code', op: '=', v: ['XFR001'] }]);
     expect(r[1]).toMatchObject({ kind: 'trace', label: 'TRANSFER_CONFIRM_SERVICE', hint: "Son hata trace'i" });
     expect(r[1].to).toContain('/trace?id=ab12cd34ef56ab12cd34ef56ab12cd34');
     expect(r[1].to).toContain('tab=logs');
@@ -67,7 +67,7 @@ describe('oraclePaletteResults', () => {
     expect(oraclePaletteResults({ ...resp, enabled: false }, win)).toEqual([]);
     expect(oraclePaletteResults(null, win)).toEqual([]);
     const r = oraclePaletteResults({ ...resp, spanAttrKey: '' }, win);
-    expect(filtersOf(r[0].to)).toEqual([{ k: 'FUNCTION_CODE', op: '=', v: ['EFT001'] }]);
+    expect(filtersOf(r[0].to)).toEqual([{ k: 'FUNCTION_CODE', op: '=', v: ['XFR001'] }]);
   });
 });
 

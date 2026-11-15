@@ -9,7 +9,7 @@ import (
 )
 
 // v0.10.1082 — Operator-reported (prod): "Error seçildiğinde histogram
-// gelmiyor." /traces'te Errors + `function_code = KYC0001` (ya da
+// gelmiyor." /traces'te Errors + `function_code = VRF0001` (ya da
 // `k8s.pod.name = …`) çipiyle liste dolu, şerit "0 SPANS · 0 ERROR SPANS".
 // Şerit Errors'u metric-batch'te span düzeyinde `status = error` çipi olarak
 // AND'liyordu (giriş kapsamında üstüne `kind IN (server, consumer)`); liste
@@ -25,7 +25,7 @@ func histFilter(filters ...FilterExpr) TraceFilter {
 }
 
 var (
-	chipFunctionCode = FilterExpr{Key: "function_code", Op: "=", Values: []string{"KYC0001"}}
+	chipFunctionCode = FilterExpr{Key: "function_code", Op: "=", Values: []string{"VRF0001"}}
 	chipPod          = FilterExpr{Key: "k8s.pod.name", Op: "=", Values: []string{"svc-a-7d9f-x2"}}
 )
 
@@ -87,7 +87,7 @@ func TestTraceErrHistSpanSQLGolden(t *testing.T) {
 	// eskiden çıplak from kullanıyordu; hizalı dilimdeki satırlar listede
 	// görünüp şeritte yoktu.
 	wantArgs := []any{histFrom.Truncate(5 * time.Minute), histFrom.Add(time.Hour), "svc-a", "prod",
-		histFrom.Add(-traceRowRepairLead), histFrom.Add(time.Hour).Add(traceRowRepairLead), "function_code", "KYC0001", traceChipSetMax}
+		histFrom.Add(-traceRowRepairLead), histFrom.Add(time.Hour).Add(traceRowRepairLead), "function_code", "VRF0001", traceChipSetMax}
 	if !reflect.DeepEqual(wc.args, wantArgs) {
 		t.Fatalf("args:\n got %#v\nwant %#v", wc.args, wantArgs)
 	}

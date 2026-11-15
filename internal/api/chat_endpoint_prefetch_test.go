@@ -44,7 +44,7 @@ var epCands = []chstore.CatalogOperation{
 	{Operation: "GET /users/{id}", Source: "span", Service: "users", CallCount: 50},
 	{Operation: "/users/{id}", Source: "endpoint", Service: "users", CallCount: 55},
 	{Operation: "/Api/Orders", Source: "endpoint", Service: "orders", CallCount: 10},
-	{Operation: "ATM_CORE_PIN_CHANGE", Source: "oracle", FunctionCodes: []string{"SAMP01"}, CallCount: 5000},
+	{Operation: "KSK_MAIN_PIN_CHANGE", Source: "oracle", FunctionCodes: []string{"SAMP01"}, CallCount: 5000},
 }
 
 func TestEndpointMention(t *testing.T) {
@@ -71,7 +71,7 @@ func TestEndpointMention(t *testing.T) {
 		{"https://example.com yavaş", "", "", false},
 		{"https://example.com/ yavaş", "", "", false},
 		{"GET", "", "", false},
-		{"ATM_CORE_PIN_CHANGE neden hata veriyor", "", "", false},
+		{"KSK_MAIN_PIN_CHANGE neden hata veriyor", "", "", false},
 		// v0.10.1373 (operator-reported) — Markdown sarmalayıcısı `*…*` / `_…_`.
 		{"*/shop/orders/detail* servisi hem eu-a hem tr-c kümelerinde çağrılıyor", "", "/shop/orders/detail", true},
 		{"_/shop/x_ bak", "", "/shop/x", true},
@@ -245,7 +245,7 @@ func TestOpTargetForEndpointSource(t *testing.T) {
 		t.Fatalf("%+v", tg)
 	}
 	// Var olan kaynaklar etkilenmez.
-	if ora := opTargetFor("ATM_CORE_PIN_CHANGE", epCands); ora.HasRoute || !ora.HasOra {
+	if ora := opTargetFor("KSK_MAIN_PIN_CHANGE", epCands); ora.HasRoute || !ora.HasOra {
 		t.Fatalf("%+v", ora)
 	}
 	// Seçilen grup hedefi: yalnız o servis, span + rota birlikte, fiil span adından.

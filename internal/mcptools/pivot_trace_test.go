@@ -100,7 +100,7 @@ func pivotSpan(id, parent, svc, name string, startMs, durMs int64, cluster, ns, 
 	base := int64(1_760_000_000_000) // ms
 	return chstore.SpanRow{TraceID: pivotTID, SpanID: id, ParentSpanID: parent, ServiceName: svc, Name: name,
 		StartTime: (base + startMs) * 1e6, EndTime: (base + startMs + durMs) * 1e6, StatusCode: st,
-		ResourceAttributes: res, Attributes: map[string]string{"FUNCTION_CODE": "BKRB001"}}
+		ResourceAttributes: res, Attributes: map[string]string{"FUNCTION_CODE": "BQRZ001"}}
 }
 
 // pivotSpans — gateway → checkout → payment; checkout 2 cluster'da değil, tek cluster.

@@ -69,13 +69,13 @@ func TestSuggestedCausePriority(t *testing.T) {
 }
 
 func TestDraftFromException(t *testing.T) {
-	e := chstore.ResolvedExceptionForCase{Fingerprint: "ora:abc", Type: "MCA-00029", Message: "ATM_CORE_PIN_CHANGE", Service: "acm-kiosk-core-prod",
+	e := chstore.ResolvedExceptionForCase{Fingerprint: "ora:abc", Type: "MCA-00029", Message: "KSK_MAIN_PIN_CHANGE", Service: "acm-kiosk-core-prod",
 		FirstSeen: c0.Add(-72 * time.Hour), LastSeen: c0.Add(-time.Hour), ResolvedAt: c0, AISummary: "PIN değişimi reddi"}
 	d := DraftFromException(e, c0)
 	if d.CaseID != "ex:ora:abc" || d.Status != chstore.CaseDraft || d.CosreCorrect != -1 {
 		t.Fatalf("kimlik/durum: %+v", d)
 	}
-	if len(d.ErrorCodes) != 1 || d.ErrorCodes[0] != "MCA-00029" || d.Title != "MCA-00029: ATM_CORE_PIN_CHANGE" {
+	if len(d.ErrorCodes) != 1 || d.ErrorCodes[0] != "MCA-00029" || d.Title != "MCA-00029: KSK_MAIN_PIN_CHANGE" {
 		t.Errorf("kod/başlık: %+v", d)
 	}
 	if !d.OpenedAt.Equal(c0.Add(-2 * time.Hour)) {

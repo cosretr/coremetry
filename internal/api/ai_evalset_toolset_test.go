@@ -57,7 +57,7 @@ func newBodyStub(t *testing.T) *bodyStub {
 		st.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		out, _ := json.Marshal(map[string]any{
-			"choices": []any{map[string]any{"message": map[string]any{"content": "BKRB001 acm-wallet-core'da; hata oranı 0.2"}, "finish_reason": "stop"}},
+			"choices": []any{map[string]any{"message": map[string]any{"content": "BQRZ001 acm-wallet-core'da; hata oranı 0.2"}, "finish_reason": "stop"}},
 			"usage":   map[string]any{"prompt_tokens": 5, "completion_tokens": 2},
 		})
 		_, _ = w.Write(out)
@@ -91,7 +91,7 @@ func evalToolsetCases() []evalCase {
 	zero := 0
 	return []evalCase{
 		{ID: "biz", Surface: "ChatCodeResolve", Why: "w",
-			User:   "BKRB001 hangi serviste?\n\n[resolve_business_code sonucu] {\"candidates\":[{\"services\":[{\"service\":\"acm-wallet-core\"}]}]}",
+			User:   "BQRZ001 hangi serviste?\n\n[resolve_business_code sonucu] {\"candidates\":[{\"services\":[{\"service\":\"acm-wallet-core\"}]}]}",
 			Expect: evalExpect{MustContain: []string{"acm-wallet-core"}, KnownEntities: []string{"acm-wallet-core"}, MaxUnknownEntities: &zero}},
 		{ID: "prob", Surface: "Problem", Why: "w", User: "Service: checkout", Expect: evalExpect{}},
 	}

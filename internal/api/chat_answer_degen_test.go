@@ -12,7 +12,7 @@ import (
 )
 
 // v0.10.1324 — operator-reported: gemma4 31b CoSRE sohbetinde
-// "INSURANCE_DOCUMENT_TRX_GET_AKSIGORTA_POLICE_PDF_BASIM_REST operasyonu neden
+// "INSURANCE_DOCUMENT_TRX_GET_EXAMPLECO_POLICY_PDF_PRINT_REST operasyonu neden
 // hata veriyor?" sorusuna sistem prompt'undaki kapsam cümlesini yankıladı ve
 // "Soru AKSİNİ SÖYLEMEDİKÇE bu boyutları …" satırını max_tokens dolana dek
 // onlarca kez yazdı. Kök neden: üç önsözde birbirinin ikizi BÜYÜK HARFLİ
@@ -22,7 +22,7 @@ import (
 
 // fullLoopContexts — ekran + sayfa + pin + sohbet bağlamının hepsi dolu.
 func fullLoopContexts() (ChatScreenContext, *agentctx.PageContext, *agentctx.PageContext, ChatContext) {
-	screen := ChatScreenContext{Service: "policy-service", Operation: "INSURANCE_DOCUMENT_TRX_GET_AKSIGORTA_POLICE_PDF_BASIM_REST", Env: "prod", RangeS: 21600}
+	screen := ChatScreenContext{Service: "policy-service", Operation: "INSURANCE_DOCUMENT_TRX_GET_EXAMPLECO_POLICY_PDF_PRINT_REST", Env: "prod", RangeS: 21600}
 	page := &agentctx.PageContext{Page: "traces", Path: "/traces", Cluster: "c1", Namespace: "insurance", ProblemID: "p-9",
 		Search: "PDF", Filters: []agentctx.PageFilter{{K: "status", Op: "=", V: []string{"error"}}}}
 	pinned := &agentctx.PageContext{Page: "service", Service: "policy-service", Namespace: "insurance"}
@@ -117,7 +117,7 @@ func TestStripInstructionEchoWithRealPreambles(t *testing.T) {
 		}
 	}
 	answer := strings.Join([]string{
-		"policy-service üzerinde INSURANCE_DOCUMENT_TRX_GET_AKSIGORTA_POLICE_PDF_BASIM_REST son 6 saatte 42 kez hata verdi.",
+		"policy-service üzerinde INSURANCE_DOCUMENT_TRX_GET_EXAMPLECO_POLICY_PDF_PRINT_REST son 6 saatte 42 kez hata verdi.",
 		screenScopeLineTR,
 		"EKRAN BAĞLAMI (operatör şu an buna bakıyor; sunucu bunu argüman vermediğin araçlara kendisi uygular):",
 		"- servis: policy-service",
@@ -127,7 +127,7 @@ func TestStripInstructionEchoWithRealPreambles(t *testing.T) {
 	}, "\n")
 	got, n := stripInstructionEcho(answer, phrases)
 	want := strings.Join([]string{
-		"policy-service üzerinde INSURANCE_DOCUMENT_TRX_GET_AKSIGORTA_POLICE_PDF_BASIM_REST son 6 saatte 42 kez hata verdi.",
+		"policy-service üzerinde INSURANCE_DOCUMENT_TRX_GET_EXAMPLECO_POLICY_PDF_PRINT_REST son 6 saatte 42 kez hata verdi.",
 		"- servis: policy-service",
 		"Kök neden: Oracle ORA-01013 zaman aşımı, PDF basım adımı 30 s tavanına takılıyor.",
 		"Namespace insurance içinde başka servis etkilenmedi.",

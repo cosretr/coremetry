@@ -75,7 +75,7 @@ döndürür; insan ONAYLI vakalar önce, onaysız taslak `confirmed:false` + uya
 Salt okumadır.
 
 v0.10.1207'de 67 oldu: `resolve_business_code` — kanal kodu, fonksiyon kodu
-(BKRB001 gibi), operasyon adı ya da endpoint'i servis kapsamı OLMADAN
+(BQRZ001 gibi), operasyon adı ya da endpoint'i servis kapsamı OLMADAN
 servislere çözer (servis başına çağrı/hata); belirsizde `ambiguous=true`.
 Salt okumadır.
 

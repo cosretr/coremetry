@@ -15,7 +15,7 @@ import (
 //
 // ── KUSUR ───────────────────────────────────────────────────────────────
 //
-// Prod'da gemma4 31b "INSURANCE_DOCUMENT_TRX_GET_AKSIGORTA_POLICE_PDF_BASIM_REST
+// Prod'da gemma4 31b "INSURANCE_DOCUMENT_TRX_GET_EXAMPLECO_POLICY_PDF_PRINT_REST
 // operasyonu neden hata veriyor?" sorusuna sistem prompt'undaki kapsam
 // cümlesini yankılayarak başladı ve "Soru AKSİNİ SÖYLEMEDİKÇE bu boyutları …
 // tool argümanlarında kullan." satırını max_tokens dolana dek onlarca kez

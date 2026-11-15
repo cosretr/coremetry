@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const opFixtureOp = "LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST"
+const opFixtureOp = "LEND_PERSONAL_WEB_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST"
 
 // opControllerFixture — operatörün ekranındaki denetleyiciyi örnekler: çok
 // satırlı anotasyon yığını, dizi ilklendiricisi, "}" taşıyan dize, yorumda
@@ -28,13 +28,13 @@ public class CreditProductInformationController {
 
     private OtherManager otherManager;
 
-    @Service(SelfServiceNames.Rest.LOAN_CONSUMER_APP_APPLICATIONINQ_OTHER_REST)
+    @Service(SelfServiceNames.Rest.LEND_PERSONAL_WEB_APPLICATIONINQ_OTHER_REST)
     @RequestMapping(value = "other", method = { RequestMethod.POST })
     public OtherOutput other(@RequestBody OtherInput input) {
         return otherManager.other(input);
     }
 
-    @Service(SelfServiceNames.Rest.LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST)
+    @Service(SelfServiceNames.Rest.LEND_PERSONAL_WEB_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST)
     @RequestMapping(value = "information", method = { RequestMethod.POST })
     @Operation(summary = "Kredi ürün bilgisi {sorgu}", description = "x")
     public CreditProductInformationOutput getCreditProductInformation(@RequestBody CreditProductInformationInput input) throws ACMException {
@@ -46,7 +46,7 @@ public class CreditProductInformationController {
                 output.setReturnMessage("bilinmiyor");
             }
             throw new ExternalSystemException(String.valueOf(output.getReturnCode()), output.getReturnMessage(),
-                SelfServiceNames.Rest.LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST);
+                SelfServiceNames.Rest.LEND_PERSONAL_WEB_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST);
         }
         return output;
     }
@@ -353,8 +353,8 @@ func TestFetchOperationCode_PATNeverInReason(t *testing.T) {
 // tüm döngü ≤15 sn.
 
 const (
-	opCandMissA = "LOAN_CONSUMER_APP_APPLICATIONINQ_MISSING_A_REST"
-	opCandMissB = "LOAN_CONSUMER_APP_APPLICATIONINQ_MISSING_B_REST"
+	opCandMissA = "LEND_PERSONAL_WEB_APPLICATIONINQ_MISSING_A_REST"
+	opCandMissB = "LEND_PERSONAL_WEB_APPLICATIONINQ_MISSING_B_REST"
 )
 
 // candidateFixture — depo YALNIZ opFixtureOp'un controller'ını taşır.

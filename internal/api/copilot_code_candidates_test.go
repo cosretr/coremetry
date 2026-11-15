@@ -24,7 +24,7 @@ import (
 )
 
 func TestLogOperationCode(t *testing.T) {
-	const op = "LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST"
+	const op = "LEND_PERSONAL_WEB_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST"
 	cases := []struct {
 		name  string
 		attrs map[string]string
@@ -55,13 +55,13 @@ func TestLogOperationCode(t *testing.T) {
 // → en erken → ad. (a)/(b) aynen önde (TestPickMainOperation bayt bayt).
 func TestPickMainOperationLogTier(t *testing.T) {
 	const (
-		trx = "LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST"
-		inq = "LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST"
+		trx = "LEND_PERSONAL_WEB_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST"
+		inq = "LEND_PERSONAL_WEB_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST"
 	)
 	lg := func(ts int64, attrs map[string]string) *logstore.LogRecord {
 		return &logstore.LogRecord{Timestamp: ts, Attributes: attrs}
 	}
-	spans := []chstore.SpanRow{{SpanID: "r", Kind: "server", ServiceName: "acmweb", StartTime: 1, Attributes: map[string]string{"FUNCTION_CODE": "LCA01"}}}
+	spans := []chstore.SpanRow{{SpanID: "r", Kind: "server", ServiceName: "acmweb", StartTime: 1, Attributes: map[string]string{"FUNCTION_CODE": "LNX01"}}}
 	logs := []*logstore.LogRecord{
 		lg(30, map[string]string{"operation_code": inq}),
 		lg(10, map[string]string{"operation_code": trx}),
@@ -211,7 +211,7 @@ func candidateServer(t *testing.T, dv *devops.Service, dict *fakeFnDict) *Server
 
 func TestTraceCodeContextCandidateBranch(t *testing.T) {
 	ctx := context.Background()
-	const candA = "LOAN_CONSUMER_APP_APPLICATIONINQ_NOT_IN_REPO_REST"
+	const candA = "LEND_PERSONAL_WEB_APPLICATIONINQ_NOT_IN_REPO_REST"
 	healthy := traceExplainInput{RootService: "loan-service", FunctionCodes: []string{"FC1"}}
 
 	t.Run("(i) boş ana operasyon + sözlük {FC1:[A,B]}, depo yalnız B", func(t *testing.T) {
