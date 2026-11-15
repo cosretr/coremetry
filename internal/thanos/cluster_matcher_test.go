@@ -121,6 +121,11 @@ func promqlTemplateTable() map[string]string {
 		"nodeRequestsQuery":    nodeRequestsQuery(),
 		"nodeLimitsQuery":      nodeLimitsQuery(),
 		"nodeConditionQuery":   nodeConditionQuery(),
+		// v0.10.2176 (Clusters S8) — namespace detayı anlık alanları.
+		"nsResourceSumQuery": nsResourceSumQuery("requests", "ns"),
+		"nsRestarts24hQuery": nsRestarts24hQuery("ns"),
+		"podWaitingNsQuery":  PodWaitingReasonQuery("ns", ""),
+		"podNodeQuery":       PodNodeQuery("", ""),
 	}
 }
 

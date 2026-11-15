@@ -203,6 +203,9 @@ type PodRow struct {
 	// container'ı farklı sebep taşıyabilir; satıra en kötüsü çıkar
 	// (worseTermReason).
 	LastTermReason string `json:"lastTermReason,omitempty"`
+	// v0.10.2176 (Clusters S8, plan §9.3) — pod'un zamanlandığı node
+	// (kube_pod_info, best-effort). Boş = KSM yok ya da henüz atanmadı.
+	Node string `json:"node,omitempty"`
 }
 
 // termReasonRank — son-sonlanma sebeplerinin kötülük sırası
@@ -737,6 +740,17 @@ func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string)
 		}
 	}
 
+	// v0.10.2176 (Clusters S8) — pod'un node'u (best-effort, tek sorgu;
+	// envanter seçicisiyle aynı pod / namespace kapsamı).
+	nodeBy := map[string]string{}
+	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {PodNodeQuery(c.NamespaceFilter, podRe)}}); err == nil {
+		for _, ser := range series {
+			if n := ser.Metric["node"]; n != "" {
+				nodeBy[ser.Metric["namespace"]+"\x00"+ser.Metric["pod"]] = n
+			}
+		}
+	}
+
 	out := make([]PodRow, 0, len(byKey))
 	emitted := map[string]bool{}
 	for k, a := range byKey {
@@ -777,6 +791,9 @@ func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string)
 	// diyordu. KSM faz/restart haritaları o pod'ları zaten biliyor —
 	// applyDeployKSM'in aynası: sıfır-kaynaklı hayalet satır ekle.
 	out = appendGhostPods(out, c.Name, emitted, phaseBy, restartBy, reasonBy)
+	for i := range out {
+		out[i].Node = nodeBy[out[i].Namespace+"\x00"+out[i].Pod]
+	}
 	return out, truncated, nil
 }
 
@@ -1020,6 +1037,11 @@ type DeploymentRow struct {
 	DesiredReplicas int    `json:"desiredReplicas"`
 	ReadyReplicas   int    `json:"readyReplicas"`
 	Status          string `json:"status,omitempty"`
+	// v0.10.2176 (Clusters S8, plan §9.3) — iş yükü türü owner zincirinden:
+	// RS→Deployment "Deployment", doğrudan sahip "StatefulSet" / "DaemonSet"
+	// / "Job", deploy ailesi olmayan RS "ReplicaSet". Boş = ad sezgiseli
+	// (tür bilinmiyor).
+	Kind string `json:"kind,omitempty"`
 }
 
 // unassignedWorkload — eşlenemeyen pod'ların toplandığı satır adı.
@@ -1057,12 +1079,23 @@ func (s *Service) DeploymentMetrics(ctx context.Context, c ClusterConfig, namesp
 		return nil, err
 	}
 
-	// Best-effort eşleme aileleri.
+	// Best-effort eşleme aileleri. v0.10.2176 (Clusters S8) — owner_kind
+	// ReplicaSet dışındaki doğrudan sahipler (StatefulSet / DaemonSet / Job)
+	// de okunur: iş yükü adı + türü sezgisiz gelir. owner_kind etiketi
+	// yoksa (eski fixture / relabel) ReplicaSet sayılır.
 	podToRS := map[string]string{}
+	type ownerRef struct{ name, kind string }
+	podDirect := map[string]ownerRef{}
 	if series, err := s.doQuery(ctx, c, "/api/v1/query", params(nsPodOwnerQuery(namespace))); err == nil {
 		for _, ser := range series {
-			if p, rs := ser.Metric["pod"], ser.Metric["owner_name"]; p != "" && rs != "" {
-				podToRS[p] = rs
+			p, owner, kind := ser.Metric["pod"], ser.Metric["owner_name"], ser.Metric["owner_kind"]
+			if p == "" || owner == "" {
+				continue
+			}
+			if kind == "" || kind == "ReplicaSet" {
+				podToRS[p] = owner
+			} else {
+				podDirect[p] = ownerRef{owner, kind}
 			}
 		}
 	}
@@ -1075,34 +1108,41 @@ func (s *Service) DeploymentMetrics(ctx context.Context, c ClusterConfig, namesp
 		}
 	}
 
-	workloadOf := func(pod string) string {
+	workloadOf := func(pod string) (string, string) {
+		if o, ok := podDirect[pod]; ok {
+			return o.name, o.kind
+		}
 		if rs, ok := podToRS[pod]; ok {
 			if d, ok2 := rsToDeploy[rs]; ok2 {
-				return d // tam join
+				return d, "Deployment" // tam join
 			}
 			// rs bilinen ama deploy ailesi yok: rs-hash'i soy.
 			if i := strings.LastIndex(rs, "-"); i > 0 && isReplicaSetHash(rs[i+1:]) {
-				return rs[:i]
+				return rs[:i], "ReplicaSet"
 			}
-			return rs
+			return rs, "ReplicaSet"
 		}
 		if w := stripPodSuffixes(pod); w != pod || !strings.Contains(pod, "-") {
-			return w
+			return w, ""
 		}
-		return unassignedWorkload
+		return unassignedWorkload, ""
 	}
 
 	type acc struct {
 		cpu, mem float64
 		pods     []string
+		kind     string
 	}
 	byWorkload := map[string]*acc{}
 	touch := func(pod string) *acc {
-		w := workloadOf(pod)
+		w, kind := workloadOf(pod)
 		a := byWorkload[w]
 		if a == nil {
 			a = &acc{}
 			byWorkload[w] = a
+		}
+		if a.kind == "" {
+			a.kind = kind
 		}
 		return a
 	}
@@ -1142,7 +1182,7 @@ func (s *Service) DeploymentMetrics(ctx context.Context, c ClusterConfig, namesp
 		out = append(out, DeploymentRow{
 			Cluster: c.Name, Namespace: namespace, Deployment: w,
 			Pods: len(a.pods), CPUCores: a.cpu, MemBytes: a.mem,
-			PodNames: a.pods,
+			PodNames: a.pods, Kind: a.kind,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {

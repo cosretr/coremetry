@@ -478,7 +478,7 @@ func summaryNetQuery(direction string) string {
 
 func nsPodOwnerQuery(namespace string) string {
 	return fmt.Sprintf(
-		`kube_pod_owner{owner_kind="ReplicaSet",pod!="",namespace="%s"}`,
+		`kube_pod_owner{owner_kind=~"ReplicaSet|StatefulSet|DaemonSet|Job",pod!="",namespace="%s"}`,
 		escapeLabelValue(namespace))
 }
 

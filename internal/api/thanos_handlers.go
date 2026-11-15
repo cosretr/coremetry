@@ -309,7 +309,11 @@ func (s *Server) getClusterNamespaceDetail(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"cluster": name, "namespace": namespace, "trend": trend}, nil
+		// v0.10.2176 (Clusters S8, plan §9.3) — namespace detayının anlık
+		// alanları (istek / limit, son 24 sa restart, pod bekleme sebebi);
+		// best-effort, kendi süre tavanıyla, hata dönmez.
+		sum := s.thanos.NamespaceSummary(qctx, cfg, namespace)
+		return map[string]any{"cluster": name, "namespace": namespace, "trend": trend, "summary": sum}, nil
 	})
 }
 
