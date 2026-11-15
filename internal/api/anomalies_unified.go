@@ -24,6 +24,13 @@ package api
 // liste ml.UnifiedSortCols (started|service|signals|status), tanınmayan →
 // bölüm varsayılanı. Sıra birleşik satırların TAMAMINDA, sayfadan önce
 // (ml.SortUnified) — 2. sayfa aynı sıranın devamı, grup bölünmez.
+//
+// v0.10.2243 (anomali kartı Dilim C, K8/K11) — view: "" servis ekibi listesi
+// (telemetry_volume sınıfı ve eski svc_volume_spike satırları SQL'de
+// dışarıda) | platform (yalnız onlar; eski dedektör olayı okunmaz) | held
+// (yalnız admin: yayın kapılarının GÖLGE kararıyla tutacağı ML olayları,
+// ml.ShadowHeld). held salt okumadır: servis listesi, bildirim ve Problem
+// terfisi bu karara bakmaz (A1 gölge; A2 açılana dek).
 
 import (
 	"context"
@@ -64,6 +71,7 @@ type unifiedParams struct {
 	Event   string // eski olay kimliği; doluysa diğerleri varsayılana iner
 	Sort    string // ml.UnifiedSortCols üyesi; "" = bölüm varsayılanı
 	Dir     string // asc | desc; Sort boşken ""
+	View    string // "" | platform | held (v0.10.2243)
 }
 
 // parseUnifiedParams — SAF: sınırlama anahtardan ÖNCE (crafted değer ayrı
@@ -88,6 +96,10 @@ func parseUnifiedParams(get func(string) string) unifiedParams {
 		p.Offset = min(n, unifiedOffsetMax)
 	}
 	p.Sort, p.Dir = ml.NormalizeUnifiedSort(p.Section, get("sort"), get("dir"))
+	switch v := get("view"); v {
+	case chstore.MLViewPlatform, chstore.MLViewHeld:
+		p.View = v
+	}
 	return p
 }
 
@@ -101,8 +113,8 @@ const unifiedCachePrefix = "anomaly:unified:"
 func unifiedKey(p unifiedParams, tz string) string {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(p.Event))
-	return fmt.Sprintf(unifiedCachePrefix+"v2:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:ev=%x:tz=%s",
-		p.Section, p.Signal, p.Offset, p.Limit, p.Sort, p.Dir, h.Sum64(), tz)
+	return fmt.Sprintf(unifiedCachePrefix+"v3:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:view=%s:ev=%x:tz=%s",
+		p.Section, p.Signal, p.Offset, p.Limit, p.Sort, p.Dir, p.View, h.Sum64(), tz)
 }
 
 // unifiedAnomalyRow — birleşik satır. Liste kipinde yalnız lider (mlLead YA
@@ -161,10 +173,27 @@ func pageUnified(rows []ml.UnifiedRow, p unifiedParams) (page []ml.UnifiedRow, t
 
 func (s *Server) getAnomaliesUnified(w http.ResponseWriter, r *http.Request) {
 	p := parseUnifiedParams(r.URL.Query().Get)
+	if p.View == chstore.MLViewHeld { // Elenenler yalnız admin (K8)
+		if c := auth.FromContext(r.Context()); c == nil || c.Role != auth.RoleAdmin {
+			http.Error(w, "insufficient role", http.StatusForbidden)
+			return
+		}
+	}
 	loc := ml.OperatorLocation(s.store.AnomalySensitivityForDetectors())
 	s.serveCached(w, r, unifiedKey(p, loc.String()), unifiedTTL, func(ctx context.Context) (any, error) {
 		return s.buildAnomaliesUnified(ctx, p, loc)
 	})
+}
+
+// heldOnly — SAF: gölge kapı kararı "tutulur" olan ML olayları (Elenenler).
+func heldOnly(items []chstore.MLEvent) []chstore.MLEvent {
+	out := items[:0:0]
+	for _, e := range items {
+		if ml.ShadowHeld(e) {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 func (s *Server) buildAnomaliesUnified(ctx context.Context, p unifiedParams, loc *time.Location) (any, error) {
@@ -172,9 +201,20 @@ func (s *Server) buildAnomaliesUnified(ctx context.Context, p unifiedParams, loc
 	since := now.Add(-unifiedWindow)
 	resp := unifiedAnomaliesResponse{Items: []unifiedAnomalyRow{}, Offset: p.Offset, Limit: p.Limit}
 
-	items, mlErr := s.store.ListMLEvents(ctx, chstore.MLEventsFilter{Since: since, Limit: chstore.MLUnifiedCap})
-	legacy, legErr := s.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
-		SinceNs: since.UnixNano(), Limit: unifiedLegacyCap, MaxExecSec: unifiedExecSec})
+	view := p.View
+	if view == "" && p.Event == "" {
+		view = chstore.MLViewService
+	}
+	items, mlErr := s.store.ListMLEvents(ctx, chstore.MLEventsFilter{Since: since, Limit: chstore.MLUnifiedCap, View: view})
+	var legacy []chstore.AnomalyEvent
+	var legErr error
+	if p.View == "" { // platform / held: yalnız ML olayları
+		legacy, legErr = s.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
+			SinceNs: since.UnixNano(), Limit: unifiedLegacyCap, MaxExecSec: unifiedExecSec})
+	}
+	if p.View == chstore.MLViewHeld {
+		items = heldOnly(items)
+	}
 	switch {
 	case mlErr != nil && legErr != nil:
 		return nil, mlErr

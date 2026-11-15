@@ -27,7 +27,7 @@ import { Pager } from '@/components/Pager';
 import { useUnifiedAnomalies } from '@/lib/queries';
 import { fmtClock, fmtDateTime } from '@/lib/utils';
 import type { SignalKind } from '@/lib/signalKind';
-import type { UnifiedAnomalyRow } from '@/lib/types';
+import type { AnomalyView, UnifiedAnomalyRow } from '@/lib/types';
 import { groupStatusText } from './mlGroupRows';
 import { useUrlPage } from '@/lib/useUrlPage';
 import { listHeadline, rowHref } from './unifiedRows';
@@ -54,9 +54,12 @@ const UNIFIED_COLS: ColumnDef<UnifiedAnomalyRow>[] = [
 type SignalFilter = '' | Exclude<SignalKind, 'group'>;
 
 /** detectorStatus: sayfanın en altındaki KAPALI "Teknik ayrıntı / Dedektör
- *  durumu" bölümünün içeriği (ML karnesi + eski dedektör kartları). */
-export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus }: {
-  signal?: SignalFilter; onSignal?: (s: SignalFilter) => void; detectorStatus?: ReactNode;
+ *  durumu" bölümünün içeriği (ML karnesi + eski dedektör kartları).
+ *  v0.10.2243 (Dilim C) — view: '' servis listesi | platform | held; emptyText
+ *  o görünümün boş durum metni, hint görünüm açıklaması (sayfa çevirir; held
+ *  uyarı renginde — gölge karar olduğu açık). */
+export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view = '', emptyText, hint }: {
+  signal?: SignalFilter; onSignal?: (s: SignalFilter) => void; detectorStatus?: ReactNode; view?: AnomalyView; emptyText?: string; hint?: string;
 }) {
   const [openPage, setOpenPage] = useUrlPage('page');
   const [donePage, setDonePage] = useUrlPage('donePage');
@@ -64,9 +67,9 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus }: {
   const openSort = parseUnifiedSort('open', sp.get(UNIFIED_SORT_URL_KEY.open));
   const doneSort = parseUnifiedSort('done', sp.get(UNIFIED_SORT_URL_KEY.done));
 
-  const openQ = useUnifiedAnomalies({ section: 'open', signal, offset: openPage * UNIFIED_PAGE_SIZE, limit: UNIFIED_PAGE_SIZE, ...unifiedSortApiParams('open', openSort) });
+  const openQ = useUnifiedAnomalies({ section: 'open', signal, offset: openPage * UNIFIED_PAGE_SIZE, limit: UNIFIED_PAGE_SIZE, ...unifiedSortApiParams('open', openSort), view });
   const doneTotal = openQ.data?.doneTotal ?? 0;
-  const doneQ = useUnifiedAnomalies({ section: 'done', signal, offset: donePage * UNIFIED_PAGE_SIZE, limit: UNIFIED_PAGE_SIZE, ...unifiedSortApiParams('done', doneSort) }, doneTotal > 0);
+  const doneQ = useUnifiedAnomalies({ section: 'done', signal, offset: donePage * UNIFIED_PAGE_SIZE, limit: UNIFIED_PAGE_SIZE, ...unifiedSortApiParams('done', doneSort), view }, doneTotal > 0);
   const open = useMemo(() => openQ.data?.items ?? [], [openQ.data]);
   const done = useMemo(() => doneQ.data?.items ?? [], [doneQ.data]);
   const nowNs = Date.now() * 1e6;
@@ -91,7 +94,7 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus }: {
 
   const state = openQ.isLoading ? { kind: 'loading' as const }
     : openQ.isError ? { kind: 'error' as const, message: 'Anomaliler okunamadı' }
-      : { kind: 'empty' as const, message: 'Şu an süren anomali yok.' };
+      : { kind: 'empty' as const, message: emptyText ?? 'Şu an süren anomali yok.' };
   const partialSrc = openQ.data?.partial;
   const partial = partialSrc === 'ml' ? 'ML olayları' : partialSrc === 'legacy' ? 'eski dedektör olayları' : '';
   const doneState = doneQ.isError ? { kind: 'error' as const, message: 'Biten anomaliler okunamadı' }
@@ -113,6 +116,9 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus }: {
       {onSignal && (
         <SegmentedControl<SignalFilter> value={signal} onChange={onSignal} aria-label="Sinyal" size="sm"
           options={[{ value: '', label: 'Hepsi' }, { value: 'trace', label: 'Trace' }, { value: 'log', label: 'Log' }, { value: 'metric', label: 'Metrik' }]} />
+      )}
+      {hint && (
+        <p data-testid="anomalies-view-hint" className={view === 'held' ? 'm-0 text-sm text-[color:var(--warn)]' : 'm-0 text-sm text-muted-foreground'}>{hint}</p>
       )}
       {partial && <p className="m-0 text-sm text-[color:var(--warn)]">{partial} okunamadı; liste eksik.</p>}
       {/* v0.10.2030 — sayfada DOĞRUDAN duran tablo, diğer liste sayfaları gibi

@@ -47,6 +47,15 @@ const EN: Catalog = {
   'nav.incidents':   'Incidents',
   'nav.problems':    'Exceptions/Errors', // v0.10.1107 (operatör) — Oracle hata grupları da burada; menüde iki ad
   'nav.anomalies':   'Anomalies',
+  // v0.10.2243 — /anomalies görünüm sekmeleri (anomali kartı Dilim C)
+  'anomalies.view.aria':          'Anomaly view',
+  'anomalies.view.service':       'Services',
+  'anomalies.view.platform':      'Platform',
+  'anomalies.view.held':          'Filtered out',
+  'anomalies.view.platformHint':  'Telemetry volume changes: spans per request shifted while error rate and latency stayed in their bands. Not in the service list; no notifications or Problems.',
+  'anomalies.view.heldHint':      'Shadow verdict: events the publish gates would hold back. Gates are not enforced yet — these events still appear in the service list, notifications and Problems unchanged.',
+  'anomalies.view.platformEmpty': 'No telemetry volume change right now.',
+  'anomalies.view.heldEmpty':     'No event the gates would hold back right now.',
   'nav.rollouts':    'Deployment/Rollouts', // v0.10.201 — Deployment Report → Rollouts; v0.10.984 (Rollouts v2 P2.3) — brief adı
   'nav.services':    'Services',
   'nav.endpoints':   'Endpoints',
@@ -862,6 +871,15 @@ const TR: Catalog = {
   'nav.incidents':   'Olaylar',
   'nav.problems':    'Exceptions/Errors', // v0.10.1107 (operatör: "menüde Exceptions/Errors olarak gözüksün")
   'nav.anomalies':   'Anomaliler',
+  // v0.10.2243 — /anomalies görünüm sekmeleri (anomali kartı Dilim C)
+  'anomalies.view.aria':          'Anomali görünümü',
+  'anomalies.view.service':       'Servisler',
+  'anomalies.view.platform':      'Platform',
+  'anomalies.view.held':          'Elenenler',
+  'anomalies.view.platformHint':  'Telemetri hacmi değişimleri: istek başına span değişti, hata oranı ve gecikme bandında kaldı. Servis listesinde görünmez; bildirim ve Problem yok.',
+  'anomalies.view.heldHint':      'Gölge kararı: yayın kapılarının tutacağı olaylar. Kapılar henüz yürürlükte değil — bu olaylar servis listesinde, bildirimde ve Problem\'lerde aynen görünmeye devam eder.',
+  'anomalies.view.platformEmpty': 'Şu an süren telemetri hacmi değişimi yok.',
+  'anomalies.view.heldEmpty':     'Şu an kapıların tutacağı olay yok.',
   'nav.rollouts':    'Deployment/Rollout’lar', // v0.10.984 (Rollouts v2 P2.3)
   'nav.services':    'Servisler',
   'nav.endpoints':   'Endpoint’ler',

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
 import type {
-  LogPatternAnomaly, TraceOpAnomaly, AnomalyEvent, AnomalySilence, Problem, LogPatternSeries, UnifiedAnomaliesPage,
+  LogPatternAnomaly, TraceOpAnomaly, AnomalyEvent, AnomalySilence, Problem, LogPatternSeries, UnifiedAnomaliesPage, AnomalyView,
 } from '@/lib/types';
 
 // /anomalies is the heaviest fan-out page in the app — five
@@ -79,7 +79,7 @@ const EMPTY_UNIFIED: UnifiedAnomaliesPage = { items: [], total: 0, openTotal: 0,
 // aynı (60 sn, RQ gizli sekmede durur); staleTime = sunucu TTL'i (30 sn).
 // Sayfa/süzgeç değişince önceki sayfa yerinde kalır (placeholderData).
 // v0.10.2083 — sort/dir sunucuya gider ve anahtarda (lib/unifiedAnomalySort.ts).
-export function useUnifiedAnomalies(p: { section: 'open' | 'done'; signal: string; offset: number; limit: number; sort?: string; dir?: 'asc' | 'desc' }, enabled = true) {
+export function useUnifiedAnomalies(p: { section: 'open' | 'done'; signal: string; offset: number; limit: number; sort?: string; dir?: 'asc' | 'desc'; view?: AnomalyView }, enabled = true) {
   return useQuery<UnifiedAnomaliesPage>({
     queryKey: keys.anomalies.unified(p),
     queryFn: async ({ signal }) => (await api.anomaliesUnified(p, signal)) ?? EMPTY_UNIFIED,

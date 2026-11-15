@@ -12375,6 +12375,8 @@ export interface UnifiedAnomalyRow {
 /** v0.10.2051 — unifiedAnomaliesResponse. total = bu bölümün kesin satır sayısı
  *  (süzgeç sonrası); truncated = bir kaynak okuma tavanına değdi (son 24 saat);
  *  partial = o kaynak okunamadı. */
+/** v0.10.2243 (anomali kartı Dilim C) — /anomalies görünümü: '' servis listesi, platform = telemetry_volume, held = gölge kapı kararı. */
+export type AnomalyView = '' | 'platform' | 'held';
 export interface UnifiedAnomaliesPage {
   items: UnifiedAnomalyRow[]; total: number; openTotal: number; doneTotal: number;
   offset: number; limit: number; truncated: boolean; partial?: 'ml' | 'legacy';

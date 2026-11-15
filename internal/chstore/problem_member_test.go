@@ -191,3 +191,32 @@ func TestMemberDetectorForRule(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.2243 (anomali kartı Dilim C) — liste süzgeci pini: servis listesi
+// platform satırlarını (telemetry_volume sınıfı + eski svc_volume_spike)
+// SQL'de dışlar, platform yalnız onları okur; varsayılan (View "") süzmez —
+// diğer okuyucular (Problem, bildirim, karne) değişmez.
+func TestMLEventsWhereViews(t *testing.T) {
+	now := time.Now()
+	plat := "(class = 'telemetry_volume' OR detector = 'svc_volume_spike')"
+	cases := []struct {
+		f    MLEventsFilter
+		want string
+		not  string
+	}{
+		{MLEventsFilter{Since: now, View: MLViewService, recCols: true}, "NOT " + plat, ""},
+		{MLEventsFilter{Since: now, View: MLViewPlatform, recCols: true}, plat, "NOT ("},
+		{MLEventsFilter{Since: now, View: MLViewPlatform}, "detector = 'svc_volume_spike'", "class"},
+		{MLEventsFilter{Since: now, View: MLViewHeld, recCols: true}, `position(record, '"passed":false') > 0`, ""},
+		{MLEventsFilter{Since: now, recCols: true}, "", "class"},
+	}
+	for i, c := range cases {
+		where, _ := mlEventsWhere(c.f)
+		if c.want != "" && !strings.Contains(where, c.want) {
+			t.Errorf("%d: %q içinde %q yok", i, where, c.want)
+		}
+		if c.not != "" && strings.Contains(where, c.not) {
+			t.Errorf("%d: %q içinde %q olmamalı", i, where, c.not)
+		}
+	}
+}

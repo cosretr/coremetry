@@ -220,6 +220,31 @@ type MLEventsFilter struct {
 	// yüzeylerinde (liste, akış, sağlık kontrolü) görünmez. Yalnız Problem
 	// olay çizelgesi ve üyelik okumaları true geçer.
 	Members bool
+	// View — v0.10.2243 (anomali kartı Dilim C): "" süzgeç yok (varsayılan;
+	// mevcut okuyucular değişmez) | MLViewService servis listesi (platform
+	// satırları dışarıda) | MLViewPlatform yalnız platform satırları |
+	// MLViewHeld kapı satırında kalan olan kayıtlar (gölge ön süzgeci; kesin
+	// karar ml.ShadowHeld).
+	View string
+	// recCols — ListMLEvents doldurur (hasMLRecordCols); kolon yoksa sınıf
+	// süzgeci yalnız dedektör adına düşer.
+	recCols bool
+}
+
+// Görünüm değerleri (MLEventsFilter.View).
+const (
+	MLViewService  = "service"
+	MLViewPlatform = "platform"
+	MLViewHeld     = "held"
+)
+
+// mlPlatformCond — SAF: platform satırı = sınıfı telemetry_volume (K8) ya da
+// eski svc_volume_spike satırı (K11: dedektör adıyla). Kolon yoksa yalnız ad.
+func mlPlatformCond(recCols bool) string {
+	if !recCols {
+		return "detector = '" + MLDetSvcVolumeSpike + "'"
+	}
+	return "(class = 'telemetry_volume' OR detector = '" + MLDetSvcVolumeSpike + "')"
 }
 
 // mlEventsWhere — SAF: ListMLEvents süzgeci → WHERE gövdesi + argümanlar
@@ -254,6 +279,18 @@ func mlEventsWhere(f MLEventsFilter) (string, []any) {
 	if !f.Members {
 		where = append(where, "detector NOT IN ("+mlMemberDetectorsSQL()+")")
 	}
+	switch f.View {
+	case MLViewService:
+		where = append(where, "NOT "+mlPlatformCond(f.recCols))
+	case MLViewPlatform:
+		where = append(where, mlPlatformCond(f.recCols))
+	case MLViewHeld:
+		if f.recCols {
+			where = append(where, `record != '' AND publish_state != 'invalid' AND position(record, '"passed":false') > 0`)
+		} else {
+			where = append(where, "0")
+		}
+	}
 	return strings.Join(where, " AND "), args
 }
 
@@ -268,9 +305,10 @@ func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, 
 	if f.Since.IsZero() {
 		f.Since = time.Now().Add(-24 * time.Hour)
 	}
+	withRec := s.hasMLRecordCols.Load()
+	f.recCols = withRec
 	where, args := mlEventsWhere(f)
 	args = append(args, f.Limit)
-	withRec := s.hasMLRecordCols.Load()
 	rows, err := s.conn.Query(ctx, fmt.Sprintf(`
 		SELECT %s
 		FROM ml_events FINAL

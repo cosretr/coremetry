@@ -574,6 +574,12 @@ platform görünümünde listelenir (yer K8). Kart şablonu: "<servis> istek ba�
 MV'si var mı doğrulanmadı; yoksa bu kanıt ertelenir, ham `spans` taraması yazılmaz). *Risk:* düşük-orta; rejim kuralı (6 sa sonra bastırma,
 `quality.go:366-369`) bu sınıfta "<tarih>'ten beri" kartını öldürür → muafiyet + süre tavanı gerekir (K15). *Göç:* yok. *Test:* şablon golden; liste süzgeci pini.
 Yeni uç gerekirse kendi dosyasında `registerMLPlatformRoutes` (`api.go` büyümez).
+✅ **gemilendi v0.10.2243** (`chstore/ml_events.go` `MLEventsFilter.View`, `api/anomalies_unified.go` `view=`,
+`ml.ShadowHeld`; FE `AnomalyStreamsPage` sekmeleri, `lib/anomalyView.ts`). Yeni uç yok: `/api/anomalies/unified?view=platform|held`.
+Servis listesi SQL'de `NOT (class = 'telemetry_volume' OR detector = 'svc_volume_spike')`; Platform tersini okur (eski dedektör olayı
+okunmaz). Elenenler (yalnız admin, 403): SQL ön süzgeci (kayıtta kalan kapı satırı) + `ml.ShadowHeld` (gölge `Drop`); salt okuma — liste,
+bildirim, Problem değişmez. Varsayılan `View ""` diğer okuyucuları süzmez (Inbox/menü rozeti `ListAnomalyFeed` dahil). Yapılmayanlar:
+kart şablonu ("<a>'dan <b>'ye … ingest hacmi <k> kat"; başlık B kaydından), aday neden kanıtları (rollout, span-kind kayması, scope adı).
 
 **D0/G0 — mockup.** ✅ **onaylandı 2026-11-15** (https://claude.ai/artifact/RNzbH98KCNtJhVb3vJZ6xQ; kararlar §12). Kod yok. G, D, A, B, C artık engelsiz.
 

@@ -14339,3 +14339,10 @@ Operatör bildirimi (prod /ai, 7 gün): 404 açıklama turunun 78'i "hata"; `err
 - Rejim bastırması (6 sa) bu dedektörde yok, tavan 7 gün (K15). Grup/servis Problem kapısı saymaz (`groupExcluded`), bildirim yok. Ayrı dedektör anahtarı yok (yeni ayar yok): ML ana anahtarıyla, yalnız lider.
 - Evaluator `self-volume-spike` kuralı emekli: `selfhealth_volume.go` (evaluator + chstore) silindi, `VolumeSpikeFactor`/`VolumeSpikeMinSpans` ayarları kalktı (shim yok); açık `svc_volume_spike` satırları tazelenmeyince 4 × pencerede "Bitti". `escalationExempt` yalnız `slo:`.
 - Yük: tik başına 1 MV okuması + 1 `ml_series` yazımı + 1 taban okuması; açık olay başına 1 tek-servis MV okuması + en çok 2 VM aralık sorgusu (tik başına ≤ 5 olay, ≤ 10 VM sorgusu) + RED aile etiket keşfi aile başına saatte bir.
+
+## 2026-11-15 — v0.10.2243 — telemetry_volume sınıfı + Anomaliler sayfasında Platform / Elenenler sekmeleri (Dilim C)
+
+- Liste SQL'i: `MLEventsFilter.View` — `service` (birleşik liste varsayılanı) `NOT (class = 'telemetry_volume' OR detector = 'svc_volume_spike')`; `platform` yalnız onları; `held` kayıt dolu + invalid değil + kayıtta kalan kapı satırı (`"passed":false`) ön süzgeci, kesin karar `ml.ShadowHeld` (A1 gölge kararı `Drop`). `View ""` süzmez: Problem, bildirim, karne, Inbox/menü rozeti okuyucuları değişmedi. Kolon yoksa (`hasMLRecordCols` false) platform yalnız dedektör adıyla, held boş.
+- Uç: yeni uç yok, `/api/anomalies/unified?view=platform|held` (önbellek anahtarı `v3` + view); held yalnız admin (403). Platform/held görünümünde eski `anomaly_events` okunmaz.
+- FE: `/anomalies` üstünde shadcn Tabs (Servisler / Platform / Elenenler — sonuncusu yalnız admin), `?view=` URL'de; metinler `i18n.ts` (EN + TR). Elenenler sekmesi gölge kararına dayandığını ve listeyi/bildirimi/Problem'i değiştirmediğini açıkça yazar.
+- Yapılmayanlar: telemetry_volume kart şablonu ve aday neden kanıtları (rollout, span-kind kayması, instrumentation scope) — açık.

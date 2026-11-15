@@ -12,6 +12,7 @@ package ml
 // kapı olayı tutmaz).
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -307,6 +308,21 @@ func volumeImpactGate(r EventRecord) RecordGate {
 		g.Reason = "hacim değişti; hata oranı ve gecikme bant içinde — servis etkisi yok, telemetry_volume"
 	}
 	return g
+}
+
+// ShadowHeld — SAF (v0.10.2243, Dilim C "Elenenler"): olayın kaydındaki
+// kapı satırlarına göre A2'nin yayımlamayacağı (gölge kararı drop) olay mı.
+// Kayıt yok / çözülemiyor / invalid / kapı satırı yok → false. Yalnız okur:
+// liste, bildirim ve Problem bu karara bakmaz (A1 gölge).
+func ShadowHeld(ev chstore.MLEvent) bool {
+	if ev.Record == "" || ev.PublishState == PublishInvalid {
+		return false
+	}
+	var rec EventRecord
+	if json.Unmarshal([]byte(ev.Record), &rec) != nil || len(rec.Gates) == 0 {
+		return false
+	}
+	return gateVerdict(rec, rec.Gates).Drop
 }
 
 // gateOutcome — bir olayın gölge sonucu (gölge raporunun birimi).
