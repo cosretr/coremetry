@@ -180,10 +180,8 @@ func svcErrorRateVerdict(cur, baseRatio, baseCount []float64, minSamples int) sv
 	return v
 }
 
-// svcErrScore — kalite süzgecinin z kapısı (feedbackZ) için skor. Tetik
-// spec'in oran kuralıdır; z kapısı onu sessizce sıkılaştırmasın diye skor
-// en az CriticalZ — operatörün "değil" etiketleri eşiği yine yükseltir
-// (feedbackZ > CriticalZ → bastırılır). Gerçek z kanıtta ("z").
+// svcErrScore — olayın skoru; tetik spec'in oran kuralıdır, skor en az
+// CriticalZ. Gerçek z kanıtta ("z").
 func svcErrScore(z, criticalZ float64) float64 { return math.Max(math.Abs(z), criticalZ) }
 
 // svcErrorEvents — TraceRED tikinin servis düzeyi adımı: series'teki

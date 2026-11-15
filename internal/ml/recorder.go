@@ -39,7 +39,7 @@ type Deps struct {
 	ObserveES func(d time.Duration)
 	// ObserveVM — VM sorgu süresi; ES bütçesini tüketmez.
 	ObserveVM func(d time.Duration)
-	// Labels — ortak etiket seti (taban hijyeni, geri bildirim); nil güvenli.
+	// Labels — ortak etiket seti (taban hijyeni); nil güvenli.
 	Labels *Labels
 	// Backoff — VM aile backoff'u (vm_budget.go); nil güvenli.
 	Backoff *vmBackoff
@@ -246,15 +246,15 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	// v0.10.2045 — log ML olayı yalnız katalogdaki servise (log_service_identity.go).
 	all, logSvc := resolveLogServices(tctx, deps, all, start, 2*time.Duration(cfg.BucketSec)*time.Second)
 	steps["detectorsMs"] = time.Since(start).Milliseconds() - steps["labelsMs"]
-	kept, sup := qualityFilter(all, cfg, lb, r.runs, start)
+	kept, sup := qualityFilter(all, cfg, r.runs, start)
 	// v0.10.2086 — yaygın yavaşlama: bu tikin op_latency olaylarından
 	// türetilir (sorgu yok); aynı kalite süzgecinden (epizot / teyit) geçer.
 	if cfg.DetectorOn(detSvcBreadth) {
 		bevs, next := breadthEvents(kept, isBatch, r.breadth, start, cfg)
 		r.breadth = next
 		st := chstore.MLSignalTick{Ran: true, Candidates: len(bevs), Services: distinctServices(bevs)}
-		bk, bsup := qualityFilter(bevs, cfg, lb, r.runs, start)
-		sup.Impact, sup.Feedback, sup.Regime = sup.Impact+bsup.Impact, sup.Feedback+bsup.Feedback, sup.Regime+bsup.Regime
+		bk, bsup := qualityFilter(bevs, cfg, r.runs, start)
+		sup.Impact, sup.Regime = sup.Impact+bsup.Impact, sup.Regime+bsup.Regime
 		kept = append(kept, bk...)
 		st.Written = len(bk)
 		signals[detSvcBreadth] = st
@@ -381,8 +381,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		log.Printf("[ml] tik durumu yazılamadı: %v", serr)
 	}
 	scancel()
-	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,feedback:%d,regime:%d,batch:%d labels=%d dur=%dms es_p95=%dms err=%v",
-		r.placement, active, written, sup.Impact, sup.Feedback, sup.Regime, batchCut, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
+	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,regime:%d,batch:%d labels=%d dur=%dms es_p95=%dms err=%v",
+		r.placement, active, written, sup.Impact, sup.Regime, batchCut, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
 	log.Printf("[ml] tick group_problems live=%v opened=%d refreshed=%d resolved=%d", cfg.GroupProblemsOn(), live.Opened, live.Refreshed, live.Resolved)
 	log.Printf("[ml] tick group_shadow groups=%d would_open=%d single_would_open=%d svc_would_open=%d svc_p1=%d contrib_queries=%d log_svc_unmatched=%d log_svc_via_pod=%d", shadow.Groups, shadow.WouldOpen, shadow.SingleWouldOpen, svcOpen, svcP1, contribQ, logSvc.Unmatched, logSvc.ViaPod)
 	log.Printf("[ml] tick steps labels=%dms detectors=%dms write=%dms snapshot=%dms es_queries=%d vm_queries=%d partial=%d docs=%d",

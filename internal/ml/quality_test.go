@@ -1,7 +1,6 @@
 package ml
 
-// v0.10.1751 — kalite çerçevesi: etki eşiği, geri bildirim z artışı, eksik
-// veri, rejim değişimi, teyit skoru ve backtest (ortak etiket seti).
+// v0.10.1751 — kalite çerçevesi: etki eşiği, eksik veri, rejim değişimi, teyit skoru ve backtest (ortak etiket seti).
 
 import (
 	"encoding/json"
@@ -11,7 +10,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
-func TestImpactAndFeedback(t *testing.T) {
+func TestImpactOK(t *testing.T) {
 	q := chstore.DefaultMLQuality()
 	cases := []struct {
 		base, obs float64
@@ -25,20 +24,6 @@ func TestImpactAndFeedback(t *testing.T) {
 	q.ImpactMinAbs = 50
 	if impactOK(100, 140, q) {
 		t.Error("mutlak eşik altında olay olmamalı")
-	}
-	q = chstore.DefaultMLQuality()
-	fz := []struct {
-		neg, pos int
-		want     float64
-	}{{0, 0, 4}, {2, 0, 4}, {3, 0, 4.5}, {5, 0, 5.5}, {5, 5, 4}, {40, 0, 8}}
-	for _, c := range fz {
-		if got := feedbackZ(4, c.neg, c.pos, q); got != c.want {
-			t.Errorf("feedbackZ(neg=%d,pos=%d)=%v want %v", c.neg, c.pos, got, c.want)
-		}
-	}
-	q.FeedbackOff = true
-	if feedbackZ(4, 40, 0, q) != 4 {
-		t.Error("kapalı geri bildirim eşiği değiştirmemeli")
 	}
 }
 
@@ -61,7 +46,7 @@ func TestQualityFilterRegimeAndConfirm(t *testing.T) {
 		return chstore.MLEvent{ID: id, Detector: det, Signal: sig, Service: "pay", Baseline: 100, Observed: 200, Score: 6}
 	}
 	// teyit: aynı tikte log + trace olayı → birbirini teyit eder
-	kept, sup := qualityFilter([]chstore.MLEvent{mk("a", "log_volume", "log"), mk("b", "op_latency", "trace")}, cfg, nil, tr, t0)
+	kept, sup := qualityFilter([]chstore.MLEvent{mk("a", "log_volume", "log"), mk("b", "op_latency", "trace")}, cfg, tr, t0)
 	if len(kept) != 2 || sup != (suppression{}) {
 		t.Fatalf("kept=%d sup=%+v", len(kept), sup)
 	}
@@ -76,24 +61,23 @@ func TestQualityFilterRegimeAndConfirm(t *testing.T) {
 	// rejim: 6 saat + 1 tik kesintisiz → bastırılır
 	var last []chstore.MLEvent
 	for i := 1; i <= 6*12+1; i++ {
-		last, sup = qualityFilter([]chstore.MLEvent{mk("a", "log_volume", "log")}, cfg, nil, tr, t0.Add(time.Duration(i)*5*time.Minute))
+		last, sup = qualityFilter([]chstore.MLEvent{mk("a", "log_volume", "log")}, cfg, tr, t0.Add(time.Duration(i)*5*time.Minute))
 	}
 	if len(last) != 0 || sup.Regime != 1 {
 		t.Fatalf("rejim bastırması bekleniyordu: kept=%d sup=%+v", len(last), sup)
 	}
 	// kesinti sonrası koşu baştan
-	if k, _ := qualityFilter([]chstore.MLEvent{mk("a", "log_volume", "log")}, cfg, nil, tr, t0.Add(20*time.Hour)); len(k) != 1 {
+	if k, _ := qualityFilter([]chstore.MLEvent{mk("a", "log_volume", "log")}, cfg, tr, t0.Add(20*time.Hour)); len(k) != 1 {
 		t.Fatal("kesintiden sonra yeni koşu")
 	}
-	// etki + geri bildirim
+	// etki; eşik üstü zayıf skor (K3: "değil" kararları eşik yükseltmez) kalır
 	small := mk("c", "log_volume", "log")
 	small.Observed = 105
-	lb := NewLabels([]chstore.MLLabel{{Detector: "log_volume", Service: "pay"}, {Detector: "log_volume", Service: "pay"}, {Detector: "log_volume", Service: "pay"}, {Detector: "log_volume", Service: "pay"}})
 	weak := mk("d", "log_volume", "log")
 	weak.Score = 4.2
-	_, sup = qualityFilter([]chstore.MLEvent{small, weak}, cfg, lb, newTracker(), t0)
-	if sup.Impact != 1 || sup.Feedback != 1 {
-		t.Fatalf("etki + geri bildirim bastırması: %+v", sup)
+	kept, sup = qualityFilter([]chstore.MLEvent{small, weak}, cfg, newTracker(), t0)
+	if sup.Impact != 1 || len(kept) != 1 {
+		t.Fatalf("etki bastırması: %+v kept=%d", sup, len(kept))
 	}
 }
 

@@ -26,23 +26,15 @@ type Labels struct {
 	all []chstore.MLLabel
 	// pos — servis → gerçek anomali pencereleri (hijyen).
 	pos map[string][][2]int64
-	// fb — detector\x00service → (değil, gerçek) sayıları.
-	fb map[string][2]int
 }
 
 // NewLabels — SAF.
 func NewLabels(ls []chstore.MLLabel) *Labels {
-	l := &Labels{all: ls, pos: map[string][][2]int64{}, fb: map[string][2]int{}}
+	l := &Labels{all: ls, pos: map[string][][2]int64{}}
 	for _, x := range ls {
-		k := x.Detector + "\x00" + x.Service
-		c := l.fb[k]
 		if x.Positive {
 			l.pos[x.Service] = append(l.pos[x.Service], [2]int64{x.From, x.To})
-			c[1]++
-		} else {
-			c[0]++
 		}
-		l.fb[k] = c
 	}
 	return l
 }
@@ -53,15 +45,6 @@ func (l *Labels) Exclude(cfg chstore.MLConfig) map[string][][2]int64 {
 		return nil
 	}
 	return l.pos
-}
-
-// Feedback — (değil, gerçek) karar sayıları.
-func (l *Labels) Feedback(detector, service string) (neg, pos int) {
-	if l == nil {
-		return 0, 0
-	}
-	c := l.fb[detector+"\x00"+service]
-	return c[0], c[1]
 }
 
 // All — backtest için ham liste.
@@ -112,16 +95,6 @@ func impactOK(baseline, observed float64, q chstore.MLQuality) bool {
 		return false
 	}
 	return true
-}
-
-// feedbackZ — SAF: geri bildirimle yükseltilmiş z eşiği. Net "değil" sayısı
-// (değil − gerçek) eşik sayısına ulaşınca adım başına ZStep, tavan MaxBoost.
-func feedbackZ(baseZ float64, neg, pos int, q chstore.MLQuality) float64 {
-	if q.FeedbackOff || neg < q.FeedbackMinNegatives || neg <= pos {
-		return baseZ
-	}
-	boost := q.FeedbackZStep * float64(neg-pos-q.FeedbackMinNegatives+1)
-	return baseZ + math.Min(math.Max(boost, 0), q.FeedbackMaxBoost)
 }
 
 // ── Epizot modeli (B3, v0.10.1768) ────────────────────────────────────────
@@ -343,13 +316,13 @@ func (t *tracker) gc(now time.Time) {
 }
 
 // suppression — bastırma sayaçları (self-obs).
-type suppression struct{ Impact, Feedback, Regime int64 }
+type suppression struct{ Impact, Regime int64 }
 
-// qualityFilter — recorder'ın tek süzgeci. Sıra: etki → geri bildirim →
-// koşu kaydı (rejim) → teyit. Bastırılan olay yazılmaz; RMT'de son satırı
+// qualityFilter — recorder'ın tek süzgeci. Sıra: etki → koşu kaydı
+// (rejim) → teyit. Operatör kararları burada okunmaz (K3, v0.10.2218). Bastırılan olay yazılmaz; RMT'de son satırı
 // (last_seen) donar. Kalan olayın StartedAt'i koşu başı, kanıtına teyit +
 // config hash eklenir.
-func qualityFilter(evs []chstore.MLEvent, cfg chstore.MLConfig, lb *Labels, tr *tracker, now time.Time) ([]chstore.MLEvent, suppression) {
+func qualityFilter(evs []chstore.MLEvent, cfg chstore.MLConfig, tr *tracker, now time.Time) ([]chstore.MLEvent, suppression) {
 	q := cfg.Quality
 	tick := time.Duration(cfg.TickSec) * time.Second
 	var sup suppression
@@ -367,11 +340,6 @@ func qualityFilter(evs []chstore.MLEvent, cfg chstore.MLConfig, lb *Labels, tr *
 		// YENİ olay; açık koşu tabanın altına inse de sürer.
 		if belowImpactFloor(ev) && !tr.openRun(ev.ID, now, tick) {
 			sup.Impact++
-			continue
-		}
-		neg, pos := lb.Feedback(ev.Detector, ev.Service)
-		if z := feedbackZ(cfg.CriticalZ, neg, pos, q); ev.Score < z {
-			sup.Feedback++
 			continue
 		}
 		first, epID := tr.observe(ev, now, tick)

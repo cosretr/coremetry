@@ -128,9 +128,8 @@ func buildSnapshot(ctx context.Context, deps Deps, ev chstore.MLEvent, cfg chsto
 			}
 		}
 	}
-	neg, pos := deps.Labels.Feedback(ev.Detector, ev.Service)
 	q := cfg.Quality
-	thr, _ := json.Marshal(map[string]any{"criticalZ": cfg.CriticalZ, "effectiveZ": feedbackZ(cfg.CriticalZ, neg, pos, q),
+	thr, _ := json.Marshal(map[string]any{"criticalZ": cfg.CriticalZ,
 		"dwellBuckets": cfg.DwellBuckets, "baselineDays": cfg.BaselineDays, "minBaselineSamples": cfg.MinBaselineSamples,
 		"minBaselineRate": cfg.MinBaselineRate, "impactMinRel": q.ImpactMinRel, "impactMinAbs": q.ImpactMinAbs, "regimeHours": q.RegimeHours,
 		"band": band})

@@ -33,7 +33,7 @@ func TestKafkaLagImpactFloor(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			kept, sup := qualityFilter([]chstore.MLEvent{c.ev}, cfg, nil, newTracker(), t0)
+			kept, sup := qualityFilter([]chstore.MLEvent{c.ev}, cfg, newTracker(), t0)
 			if got := len(kept) == 1; got != c.want {
 				t.Fatalf("yazıldı=%v, istenen %v (sup=%+v)", got, c.want, sup)
 			}
@@ -44,10 +44,10 @@ func TestKafkaLagImpactFloor(t *testing.T) {
 	}
 	// Açık olay: taban altına inse de sürer (yalnız yeni üretim değişir).
 	tr := newTracker()
-	if kept, _ := qualityFilter([]chstore.MLEvent{lag("metric_kafka|consumer_lag", 2800, 10)}, cfg, nil, tr, t0); len(kept) != 1 {
+	if kept, _ := qualityFilter([]chstore.MLEvent{lag("metric_kafka|consumer_lag", 2800, 10)}, cfg, tr, t0); len(kept) != 1 {
 		t.Fatal("açılış yazılmalı")
 	}
-	if kept, _ := qualityFilter([]chstore.MLEvent{lag("metric_kafka|consumer_lag", 600, 10)}, cfg, nil, tr, t0.Add(5*time.Minute)); len(kept) != 1 {
+	if kept, _ := qualityFilter([]chstore.MLEvent{lag("metric_kafka|consumer_lag", 600, 10)}, cfg, tr, t0.Add(5*time.Minute)); len(kept) != 1 {
 		t.Fatal("açık koşu taban altında da sürmeli")
 	}
 }

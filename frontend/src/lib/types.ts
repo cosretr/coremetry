@@ -12414,7 +12414,6 @@ export interface NativeDetectorsView { names: string[]; detectors: Record<string
 /** Kalite çerçevesi (v0.10.1751, üç sinyal ortak). *Off bool'ları ters adlı: eksik = açık. */
 export interface MLQuality {
   impactMinRel: number; impactMinAbs: number; hygieneOff: boolean; regimeHours: number; confirmWindowMin: number;
-  feedbackOff: boolean; feedbackMinNegatives: number; feedbackZStep: number; feedbackMaxBoost: number;
 }
 /** Replay kaydı (v0.10.1752, ml_event_snapshots): JSON alanlar ham string. */
 /** v0.10.2036 — ml.SourceQuery + /api/ml/source-series yanıtı (metrik / bağımlılık olayının detay grafiği). */

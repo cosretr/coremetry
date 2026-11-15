@@ -123,15 +123,9 @@ type MLQuality struct {
 	// ConfirmWindowMin — teyit penceresi: aynı servisin başka dedektör/sinyal
 	// olayı ± bu kadar dakikadaysa teyit (1..120, varsayılan 10).
 	ConfirmWindowMin int `json:"confirmWindowMin"`
-	// FeedbackOff — true: "değil" kararları eşiği yükseltmez.
-	FeedbackOff bool `json:"feedbackOff"`
-	// FeedbackMinNegatives — dedektör × servis için en az bu kadar "değil"
-	// kararından sonra eşik yükselir (1..100, varsayılan 3).
-	FeedbackMinNegatives int `json:"feedbackMinNegatives"`
-	// FeedbackZStep — net "değil" kararı başına z artışı (0..5, varsayılan 0.5).
-	FeedbackZStep float64 `json:"feedbackZStep"`
-	// FeedbackMaxBoost — z artışı tavanı (0..20, varsayılan 4).
-	FeedbackMaxBoost float64 `json:"feedbackMaxBoost"`
+	// Geri bildirim alanları (feedbackOff/MinNegatives/ZStep/MaxBoost)
+	// v0.10.2218'de kalktı (K3): kararlar eşik değiştirmez; eski blob'daki
+	// anahtarlar okunurken yok sayılır.
 }
 
 // MLKafkaLagImpactFloor — v0.10.2041 (Operator-reported: "Consumer lag
@@ -144,8 +138,7 @@ const MLKafkaLagImpactFloor = 1000
 
 // DefaultMLQuality — makul varsayılanlar.
 func DefaultMLQuality() MLQuality {
-	return MLQuality{ImpactMinRel: 0.2, RegimeHours: 6, ConfirmWindowMin: 10,
-		FeedbackMinNegatives: 3, FeedbackZStep: 0.5, FeedbackMaxBoost: 4}
+	return MLQuality{ImpactMinRel: 0.2, RegimeHours: 6, ConfirmWindowMin: 10}
 }
 
 // NormalizeMLQuality — SAF: sınır dışı = varsayılan.
@@ -162,13 +155,6 @@ func NormalizeMLQuality(q MLQuality) MLQuality {
 	}
 	q.RegimeHours = clampInt(q.RegimeHours, 1, 168, d.RegimeHours)
 	q.ConfirmWindowMin = clampInt(q.ConfirmWindowMin, 1, 120, d.ConfirmWindowMin)
-	q.FeedbackMinNegatives = clampInt(q.FeedbackMinNegatives, 1, 100, d.FeedbackMinNegatives)
-	if q.FeedbackZStep < 0 || q.FeedbackZStep > 5 {
-		q.FeedbackZStep = d.FeedbackZStep
-	}
-	if q.FeedbackMaxBoost < 0 || q.FeedbackMaxBoost > 20 {
-		q.FeedbackMaxBoost = d.FeedbackMaxBoost
-	}
 	return q
 }
 
@@ -441,10 +427,9 @@ type MLStats struct {
 	Events         int64  `json:"events"`
 	SeriesInMemory int64  `json:"seriesInMemory"`
 	// Kalite süzgeci bastırmaları (kümülatif, süreç-içi).
-	SuppressedImpact   int64 `json:"suppressedImpact"`
-	SuppressedFeedback int64 `json:"suppressedFeedback"`
-	SuppressedRegime   int64 `json:"suppressedRegime"`
-	SuppressedBatch    int64 `json:"suppressedBatch"` // v0.10.1811: batch kuralının kestiği aday (kümülatif)
+	SuppressedImpact int64 `json:"suppressedImpact"`
+	SuppressedRegime int64 `json:"suppressedRegime"`
+	SuppressedBatch  int64 `json:"suppressedBatch"` // v0.10.1811: batch kuralının kestiği aday (kümülatif)
 	// LastKinds — v0.10.1812: son tikin sinyal türü ölçümü (lider pod belleği).
 	LastKinds map[string]MLKindTick `json:"lastKinds,omitempty"`
 	// RecordInvalid — v0.10.2199 (anomali kartı H1, ölçüt 11): olay-kaydı

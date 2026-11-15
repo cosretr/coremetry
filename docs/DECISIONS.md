@@ -14184,3 +14184,9 @@ Operatör bildirimi (prod /ai, 7 gün): 404 açıklama turunun 78'i "hata"; `err
 - Doğrulayıcı yazımdan önce (H1 `applyRecordContract`); kalan kayıt `publish_state=invalid` + sayaç. Operatör ifadeyi değiştirdiyse kayıt yazılmaz. Maliyet: açık lag olayı başına tik başına 1 aralık sorgusu, tik başına ≤ 20.
 - Kart: geçerli kayıt varsa başlık yalnız kayıttan (`RecordTitle`), `value` gönderilmez → panel tepesi başlığı yeniden yazmaz. Eski kayıtlar etkilenmez. Grafik ve kart tasarımı G/D'de.
 - Operatör kararları (mockup onayı, K3, K4, K8, K10, K2) audit §12'ye kaydedildi; uygulanmadı.
+
+## 2026-11-15 — v0.10.2218 — ML: geri bildirim eşikleri değiştirmez (feedbackZ kalktı)
+
+- Operatör kararı K3 (`docs/ml/anomaly-card-audit.md` §12, B14): "Gerçek anomali / Sorun değil" kararları çalışma zamanında eşik, duyarlılık ya da bastırma değiştirmez. `feedbackZ`, `qualityFilter`'daki geri bildirim kapısı, `Labels.Feedback`, `suppression.Feedback` / `suppressedFeedback` sayacı ve replay kaydındaki `effectiveZ` yazımı silindi; `MLQuality.feedbackOff/feedbackMinNegatives/feedbackZStep/feedbackMaxBoost` ayarları ve Settings alanları kalktı (eski blob anahtarları decode'da yok sayılır, shim yok). Varsayılan `ConfigHash` buna göre değişti.
+- Kararlar `anomaly_verdicts`'te saklanmaya, ML karnesi/backtest ve eval görünümlerinde insan incelemesi etiketi olarak kullanılmaya devam eder. Eski replay kayıtlarındaki `effectiveZ` okuyucuları (explain, MCP, replay sayfası) tarihsel veri için kalır.
+- Prod etkisi: ≥ 3 net "Sorun değil" almış dedektör × servis çiftlerinde etkin z eşiği bir sonraki tikte `criticalZ`'ye döner; önceden bastırılan (skor < yükseltilmiş z) olaylar yeniden yazılır. Taban hijyeni (`Labels.Exclude`) değişmedi — açık soru olarak audit §12'de.
