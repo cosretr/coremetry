@@ -16,9 +16,9 @@ package api
 //
 // Kimliksiz bağlam sayılmaz (sourceRateAllow) — prod'da ulaşılamaz.
 //
-// Pod-yerel (promql_console_guard.go promqlLimiter ile aynı duruş, karar 3):
-// küme-geneli sayaç cache.Cache'te INCR olmadığı için v2 işi. N pod'da üst
-// sınır N × limit; amaç tek kullanıcının kaçak döngüsünü kesmek.
+// v0.10.2231 (Redis R5): sayaç filo geneli (rate_shared.go, Incr); Redis
+// yoksa pod-yerel limiter (N pod'da üst sınır N × limit). Amaç tek
+// kullanıcının kaçak döngüsünü kesmek.
 
 import (
 	"context"
@@ -111,11 +111,19 @@ func sourceRateUser(ctx context.Context) string {
 	return ""
 }
 
-// sourceRateAllow — sınır kapısı: kimliksiz bağlam sayılmaz.
-func sourceRateAllow(ctx context.Context, k sourceRateKind) (bool, time.Duration) {
+// sourceRateAllow — sınır kapısı: kimliksiz bağlam sayılmaz. v0.10.2231
+// (Redis R5): sayaç filo geneli (rate_shared.go); Redis yoksa yerel limiter.
+func (s *Server) sourceRateAllow(ctx context.Context, k sourceRateKind) (bool, time.Duration) {
 	user := sourceRateUser(ctx)
 	if user == "" {
 		return true, 0
+	}
+	scope := "source-read"
+	if k == sourceRateSearch {
+		scope = "source-search"
+	}
+	if ok, retry, shared := s.sharedRateAllow(ctx, scope, user, k.limit(), sourceRateWindow, sourceRate.now()); shared {
+		return ok, retry.Round(time.Second)
 	}
 	return sourceRate.allow(user, k)
 }

@@ -54,7 +54,7 @@ func (s *Server) searchServiceCode(ctx context.Context, service, query string, l
 		return out, nil
 	}
 	// v0.10.1563 — kullanıcı başına git çağrı sınırı (chat_source_rate.go).
-	if ok, retry := sourceRateAllow(ctx, sourceRateSearch); !ok {
+	if ok, retry := s.sourceRateAllow(ctx, sourceRateSearch); !ok {
 		out.Outcome, out.Hint = "rate_limited", sourceRateReason(sourceRateSearch, retry)
 		return out, nil
 	}

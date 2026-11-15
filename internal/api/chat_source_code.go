@@ -210,7 +210,7 @@ func (s *Server) readScopedSource(ctx context.Context, req mcptools.SourceCodeRe
 	}
 	// v0.10.1563 — kullanıcı başına git çağrı sınırı (chat_source_rate.go);
 	// yalnız depo çözüldükten sonra sayılır.
-	if ok, retry := sourceRateAllow(ctx, sourceRateRead); !ok {
+	if ok, retry := s.sourceRateAllow(ctx, sourceRateRead); !ok {
 		out.Outcome, out.Reason = devops.SourceRateLimited, sourceRateReason(sourceRateRead, retry)
 		return out
 	}

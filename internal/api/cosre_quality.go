@@ -103,7 +103,7 @@ func (s *Server) postCosreSignal(w http.ResponseWriter, r *http.Request) {
 	if key == "" {
 		key = email
 	}
-	if ok, wait := cosreSignalRate.allow(key); !ok {
+	if ok, wait := s.cosreSignalAllow(r.Context(), key); !ok {
 		writeCosreSignalLimited(w, wait)
 		return
 	}

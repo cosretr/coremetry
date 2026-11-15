@@ -670,6 +670,7 @@ func main() {
 	// Coremetry" link so the recipient lands on the relevant
 	// detail page in one tap.
 	notifier.SetPublicURL(cfg.PublicURL)
+	notifier.SetDedupCache(cacheImpl) // v0.10.2231 (Redis R5): filo geneli tekrar tabanı; hata = gönder
 
 	// ── SSE event broker (in-process pub/sub) ────────────────────────────────
 	// Producers: evaluator, anomaly detector. Consumers: every

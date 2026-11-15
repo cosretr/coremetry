@@ -154,7 +154,15 @@ func (s *Server) mcpGateDecide(role, id string, c mcp.GateCall, at time.Time) er
 		return err
 	}
 
-	// (2) RATE.
+	// (2) RATE. v0.10.2231 (Redis R5): sayaç filo geneli (rate_shared.go);
+	// Redis yoksa aşağıdaki pod-yerel kova (bugünkü davranış).
+	if ok, retry, shared := s.sharedRateAllow(context.Background(), "mcp", id, mcpRateLimit, mcpRateWindow, at); shared {
+		if ok {
+			return nil
+		}
+		return fmt.Errorf("rate limited: %d calls/min per identity — retry in %ds (%s %q)",
+			mcpRateLimit, int64(retry/time.Second), c.Kind, c.Name)
+	}
 	now := at.Unix()
 	winStart := now - now%int64(mcpRateWindow.Seconds())
 

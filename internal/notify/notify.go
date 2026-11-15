@@ -38,6 +38,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/cache"
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
@@ -212,8 +213,13 @@ type Notifier struct {
 	// problem_dedup.go'da. Süreç-içi: her pod kendi tabanını tutar,
 	// çünkü korunan şey TEK bir dedektörün takılıp aynı problemi her
 	// tikte yeniden açması — ve o dedektör tek bir worker'da koşar.
+	// v0.10.2231 (R5): lider devri / worker + sre yarışı için önüne
+	// filo geneli kapı eklendi (dedupCache).
 	dedupMu   sync.Mutex
 	dedupSeen map[string]dedupStamp
+	// dedupCache — v0.10.2231 (Redis R5): filo geneli kapı
+	// (problem_dedup_shared.go). nil = yalnız süreç içi.
+	dedupCache cache.Cache
 
 	// bus is the optional SSE broker. When set, every problem-
 	// open / problem-resolve / anomaly fire publishes a typed

@@ -275,8 +275,9 @@ func (n *Notifier) allowChannelSend(problemID, channelID, status, severity strin
 		return true, 0
 	}
 	now := time.Now()
+	stateKey := notifyStateKey(problemID, channelID, status, startedAt)
+	rank := severityRank(severity)
 	n.dedupMu.Lock()
-	defer n.dedupMu.Unlock()
 	if n.dedupSeen == nil {
 		n.dedupSeen = map[string]dedupStamp{}
 	}
@@ -286,10 +287,18 @@ func (n *Notifier) allowChannelSend(problemID, channelID, status, severity strin
 		// yeniden açardı.
 		sweepNotifyDedup(n.dedupSeen, now, notifySameStateCooldown)
 	}
-	return allowNotifySend(n.dedupSeen,
+	ok, cnt := allowNotifySend(n.dedupSeen,
 		notifyDedupKey(problemID, channelID, status, severity, startedAt),
-		notifyStateKey(problemID, channelID, status, startedAt),
-		severityRank(severity), now, notifyDedupWindow, notifySameStateCooldown)
+		stateKey, rank, now, notifyDedupWindow, notifySameStateCooldown)
+	n.dedupMu.Unlock()
+	// v0.10.2231 (Redis R5) — yerel kapı geçtiyse filo geneli kapı
+	// (problem_dedup_shared.go; kilit dışında, hata = gönder). Başka pod
+	// gönderdiyse sessiz bastırma (sayaç 0: "bastırılıyor" logu yerel
+	// fırtınaya ait).
+	if ok && !n.sharedAllow(problemID, stateKey, rank) {
+		return false, 0
+	}
+	return ok, cnt
 }
 
 // forgetProblem — çözülme sonrası bastırma durumunu temizler.
@@ -298,8 +307,9 @@ func (n *Notifier) forgetProblem(problemID string) {
 		return
 	}
 	n.dedupMu.Lock()
-	defer n.dedupMu.Unlock()
 	if n.dedupSeen != nil {
 		forgetProblemNotifications(n.dedupSeen, problemID)
 	}
+	n.dedupMu.Unlock()
+	n.sharedForget(problemID) // v0.10.2231 (R5): filo geneli damgalar da
 }

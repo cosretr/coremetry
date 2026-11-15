@@ -5,11 +5,12 @@ package api
 // 60 tavanı; aşımda 429 + Retry-After. Rol ve kabul davranışı aynı (viewer
 // da sinyal verir); yalnız taşma reddedilir. Yeni ayar / UI yok.
 //
-// Pod-yerel sabit dakika penceresi (chat_source_rate.go emsali): cache.Cache'te
-// küme-geneli INCR yok; N pod'da üst sınır N × 60. Amaç tek sekmenin kaçak
-// döngüsünün cosre_signals'ı (TTL 180 gün) şişirmesini kesmek.
+// Sabit dakika penceresi; v0.10.2231 (Redis R5) sayaç Redis'te filo geneli
+// (rate_shared.go), Redis yoksa pod-yerel (N pod'da üst sınır N × 60). Amaç
+// tek sekmenin kaçak döngüsünün cosre_signals'ı (TTL 180 gün) şişirmesini kesmek.
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"sync"
@@ -59,6 +60,18 @@ func (l *cosreSignalLimiter) allow(user string) (bool, time.Duration) {
 	}
 	l.count[user]++
 	return true, 0
+}
+
+// cosreSignalAllow — v0.10.2231 (Redis R5): filo geneli sayaç
+// (rate_shared.go); Redis yoksa pod-yerel limiter (bugünkü davranış).
+func (s *Server) cosreSignalAllow(ctx context.Context, user string) (bool, time.Duration) {
+	if user == "" {
+		return true, 0
+	}
+	if ok, wait, shared := s.sharedRateAllow(ctx, "cosre-signal", user, cosreSignalsPerMin, time.Minute, cosreSignalRate.now()); shared {
+		return ok, wait
+	}
+	return cosreSignalRate.allow(user)
 }
 
 // writeCosreSignalLimited — 429 + Retry-After (tam saniye, yukarı yuvarlı).
