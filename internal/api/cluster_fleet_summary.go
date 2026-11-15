@@ -51,7 +51,7 @@ func (s *Server) registerClusterFleetRoutes(mux *http.ServeMux) {
 }
 
 const (
-	clusterFleetRefreshEvery   = 60 * time.Second // eski kart başına serveCached TTL'iyle aynı
+	clusterFleetRefreshEvery   = 5 * time.Minute // operatör 2026-11-15: dakikada bir fazla, 5 dk
 	clusterFleetClaimTTL       = clusterFleetRefreshEvery - 5*time.Second
 	clusterFleetIdleAfter      = 10 * time.Minute
 	clusterFleetClusterTimeout = 10 * time.Second // getClusterSummary ile aynı tavan
