@@ -212,7 +212,7 @@ Sıra (her biri tek sürüm, her birinden sonra dur):
 
 **P-a ileride istenirse** (P7 büyük çıkarsa): A değil **A2**. Çift koşu ve disk tepesi olmadan aynı iki kolonu verir. Önkoşul: P4'te iş yükü kolonlarının her host'ta bulunması.
 
-**Kapsam dışı ama aynı tabloda görünen:** `entity_seen_1m` okuyucusuz. Düşürülmesi INSERT yolundan bir MV geçişi ve ~207M × K satır kaldırır [T]. Bu bir şema değişikliğidir, S6'ya dahil değildir; ayrı karar (soru 2).
+**Kapsam dışı ama aynı tabloda görünen:** `entity_seen_1m` okuyucusuz. Düşürülmesi INSERT yolundan bir MV geçişi ve ~207M × K satır kaldırır [T]. Bu bir şema değişikliğidir, S6'ya dahil değildir; ayrı karar (soru 2). **v0.10.2265: operatör onayıyla düşürüldü** (`migrations/0016_drop_entity_seen_1m.sql`, boot `dropRetiredEntitySeen1m`).
 
 ## 9. Koddan belirlenemeyenler
 

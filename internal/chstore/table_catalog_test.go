@@ -376,7 +376,7 @@ func TestProductCatalogueCoversEveryProducedName(t *testing.T) {
 	}
 	// Koşullu MV'ler: migrate `mvs`'e append ediyor; adları 0011/0012'de de
 	// geçiyor, yani kapsanmaları migration kaynağına bağlı — açıkça ara.
-	add("koşullu MV (entity/rollouts)", "entity_seen_1m", "entity_seen_5m", "workload_revision_activity_1m")
+	add("koşullu MV (entity/rollouts)", "entity_seen_5m", "workload_revision_activity_1m")
 	// Çalışma zamanı türevleri: adaptDDL'in `_local`'i, onarım sihirbazının
 	// `_fix`'i, 0009/0010 göçünün canlı yedekleri.
 	for hv := range highVolumeTables {

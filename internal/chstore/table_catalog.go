@@ -159,7 +159,7 @@ var migrationTableNames = sync.OnceValue(func() map[string]bool {
 // SUSTURULUYOR → v0.10.818-835 programının ölçtüğü MV replika eksikliği
 // sessizce ölçülmez oluyordu.
 //
-// Koşullu MV'ler (entity_seen_1m/5m, workload_revision_activity_1m) migrate
+// Koşullu MV'ler (entity_seen_5m, workload_revision_activity_1m) migrate
 // içinde `mvs`'e append ediliyor ama adları migrations/0011 + 0012'de de
 // geçiyor, yani (3) onları kapsıyor — bütünlük testi bunu açıkça arıyor.
 //

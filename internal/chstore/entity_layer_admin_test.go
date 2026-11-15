@@ -65,8 +65,8 @@ func TestEntityLayerObjectsCoverEveryDDLTarget(t *testing.T) {
 		"k8s_namespace": "column", "k8s_pod": "column", "k8s_node": "column",
 		"idx_k8s_pod": "index", "idx_k8s_node": "index",
 		"entities": "table", "entity_relations": "table", "entity_sync_runs": "table",
-		"entity_seen_1m_local": "mv", "entity_seen_5m_local": "mv",
-		"entity_seen_1m": "distributed", "entity_seen_5m": "distributed",
+		"entity_seen_5m_local": "mv",
+		"entity_seen_5m":       "distributed",
 	}
 	seen := map[string]bool{}
 	for _, o := range objs {

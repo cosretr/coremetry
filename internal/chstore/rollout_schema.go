@@ -18,7 +18,7 @@ import "fmt"
 //                             ok|partial|failed|skipped — bu kez dördü de yazılır).
 //   workload_revision_activity_1m  Faz 1b MV: spans → dakikalık (cluster,
 //                             namespace, workload, revision, service) etkinlik;
-//                             entity_seen_1m şablonu; YALNIZ terfi kolonu okur
+//                             entity_seen şablonu; YALNIZ terfi kolonu okur
 //                             (INSERT başına indexOf YOK — pod_inventory'nin
 //                             ertelediği maliyet sınıfı). Kapı: store.go,
 //                             k8s_replicaset + k8s_deployment kolonu varsa.

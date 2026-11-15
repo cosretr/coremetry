@@ -49,8 +49,8 @@ func TestEntityHostProofSQLShape(t *testing.T) {
 			t.Errorf("SQL %q içermiyor", want)
 		}
 	}
-	if strings.Contains(entityHostProofSQL, "FROM spans") || strings.Contains(entityHostProofSQL, "entity_seen_1m") {
-		t.Error("ham spans / entity_seen_1m okunmamalı")
+	if strings.Contains(entityHostProofSQL, "FROM spans") {
+		t.Error("ham spans okunmamalı")
 	}
 	names, svcs := hostProofArgs([]entity.HostKey{{Name: "node-a-01", Service: "checkout-api"}, {Name: "node-a-01", Service: "orders-api"}, {Name: "", Service: "x"}})
 	if len(names) != 1 || len(svcs) != 2 {

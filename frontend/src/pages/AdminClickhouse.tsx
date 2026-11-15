@@ -1737,7 +1737,7 @@ function EntityLayerWizardPanel() {
       <p style={{ fontSize: 12, color: 'var(--text2)', margin: '0 0 10px', lineHeight: 1.55 }}>
         spans'a <code className="mono">k8s_namespace / k8s_pod / k8s_node</code> terfi kolonları + set index,
         <code className="mono"> entities / entity_relations / entity_sync_runs</code> state tabloları ve
-        <code className="mono"> entity_seen_1m/5m</code> MV'leri. Uygulama boot'ta kendi de dener; bu kart
+        <code className="mono"> entity_seen_5m</code> MV'si (1m kademesi v0.10.2265'te kaldırıldı; Uygula 0016 ile düşürür). Uygulama boot'ta kendi de dener; bu kart
         hangi host'ta neyin gerçekten indiğini gösterir ve eksiği tamamlar. Sonra: Settings → Remote clusters
         (Thanos etiket + span cluster değeri) → Settings → K8s entity katmanı → Enable.
       </p>

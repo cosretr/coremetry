@@ -14400,3 +14400,11 @@ Operatör onayı (anomali kartı mockup §5): yeni ML kartında "Sorun değil" d
 ## 2026-11-15 — v0.10.2264 — Otomatik yenilemenin varsayılanı 5 dakika
 
 Operatör kararı: `DEFAULT_REFRESH_SEC` 60 → 300 (`lib/autoRefresh.ts`). Öncelik değişmedi: `?refresh=` > kayıtlı kullanıcı seçimi (`cm.refresh`) > varsayılan; seçenekler (Off/10s/30s/1m/5m/15m), tabanlar (10 s, /dashboard 30 s) ve rota allowlist'i aynı. Etkisi yalnız URL'de `?refresh=` ve kayıtlı seçim olmayan kullanıcıda: allowlist rotalarında (services, service, endpoints, metrics, dashboard, service-map, topology, hosts, clusters) göreli pencere ve LIVE_META sorguları 5 dakikada bir kayar/tazelenir. 2026-10-22 kaydındaki "60 s" ve TTL hizalama gerekçesi bu kararla geçersiz.
+
+## 2026-11-16 — v0.10.2265 — Okuyucusuz `entity_seen_1m` kaldırıldı
+
+- Operatör onayı (maliyet notu `docs/architecture/entity-s6-cost-note.md` madde 3, soru 2: "okuyan yok, düşür"). Depoda SELECT eden kod yok (Go, SQL, CoSRE/MCP araçları, frontend, panolar); bütün okuyucular `entity_seen_5m`. 1m kademesi her span INSERT'inde 5m ile aynı MV geçişini ödüyor, ~5 kat satır üretiyordu.
+- Boot artık 1m'i KURMAZ; mevcut kurulumda `dropRetiredEntitySeen1m` küme geneli ölçer (`clusterAllReplicas`), nesne yoksa DDL göndermez; varsa önce combined MV'yi (`dropCombinedMV`: `.inner_id.<uuid>` iç tablo hacim guard'ı kapalı önce, sonra MV ON CLUSTER SYNC), sonra Distributed sarmalayıcıyı düşürür. Beklenmeyen motor ya da `cluster_name` boş dış kümede DROP yok, log 0016'yı gösterir. Boot'u düşürmez.
+- `migrations/0016_drop_entity_seen_1m.sql` (MV `_local` → sarmalayıcı, `IF EXISTS … ON CLUSTER … SYNC`). 0011 düzenlenmedi; "K8s entity katmanı" Uygula'sı 0011'den sonra 0016'yı da koşar: taze kurulum 1m'i kurup hemen düşürür (sıralı migration), mevcut kurulumda Uygula 1m'i temizler.
+- Kayıtlardan (highVolumeTables / defaultShardPolicy / tablesWithoutTraceID), purge listesinden ve durum kartı nesne listesinden çıktı. 0011 rollback'i ve sihirbaz geri alması 1m DROP'larını tutar (IF EXISTS, zararsız).
+- Eski bir binary bu değişiklikten sonra boot ederse (tek düğüm / `cluster_name` set, `k8s_pod` kolonu var) 1m'i BOŞ olarak yeniden kurar ve yazmaya başlar; yeni binary bir sonraki boot'ta yine düşürür. Geri alma: 0011 ADIM 6'nın iki 1m ifadesi ya da eski binary nesneyi boş kurar; tarihçe geri gelmez.

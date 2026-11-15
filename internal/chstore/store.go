@@ -5346,10 +5346,12 @@ func (s *Store) migrate(ctx context.Context) error {
 		return fmt.Errorf("promote doorway MVs: %w", err)
 	}
 
-	// v0.10.127 — K8s entity katmanı: entity_seen_1m/5m (entity_schema.go).
+	// v0.10.127 — K8s entity katmanı: entity_seen_5m (entity_schema.go).
+	// v0.10.2265 — okuyucusuz 1m kademesi artık kurulmuyor; mevcut kurulumda
+	// düşürülür (koşulsuz: kolon sonradan kaybolsa da kalıntı temizlenmeli).
+	s.dropRetiredEntitySeen1m(ctx)
 	if hasK8sPodCol {
 		mvs = append(mvs,
-			entitySeenMVDDL("entity_seen_1m", "1 MINUTE", entitySeen1mTTLDays),
 			entitySeenMVDDL("entity_seen_5m", "5 MINUTE", entitySeen5mTTLDays))
 	} else {
 		log.Println("[chstore] k8s_pod terfi kolonu yok — entity_seen MV'leri ATLANDI (dış Distributed'da 0011 migration'ı)")

@@ -36,7 +36,7 @@ var telemetryPurgeTables = []string{
 	// zaten "her şeyi sil" demek, span-türevli tarihçe (entity_seen) de
 	// gidiyor.
 	"entities", "entity_relations", "entity_sync_runs",
-	"entity_seen_1m", "entity_seen_5m",
+	"entity_seen_5m",
 	// v0.10.193 — rollouts: span/KSM türevi olay tablosu + koşu kaydı
 	// (started_at dondurulmuş tarihçe purge'la gider — audit §5(g),
 	// operatör onayı 2026-08-30; preserve istenirse gerekçe satırıyla taşınır).

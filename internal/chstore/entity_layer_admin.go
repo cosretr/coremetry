@@ -40,7 +40,9 @@ type EntityLayerObject struct {
 	Table string `json:"table,omitempty"`
 }
 
-// EntityLayerObjects — 0011'in yarattığı her nesne (test pinler).
+// EntityLayerObjects — 0011'in yarattığı ve 0016'dan sonra DURAN her nesne
+// (test pinler). v0.10.2265: entity_seen_1m(_local) 0016 ile düştü; durum
+// kartı onu "eksik" göstermesin diye listede yok.
 func EntityLayerObjects() []EntityLayerObject {
 	return []EntityLayerObject{
 		{Name: "k8s_namespace", Kind: "column", Table: "spans_local"},
@@ -51,9 +53,7 @@ func EntityLayerObjects() []EntityLayerObject {
 		{Name: "entities", Kind: "table"},
 		{Name: "entity_relations", Kind: "table"},
 		{Name: "entity_sync_runs", Kind: "table"},
-		{Name: "entity_seen_1m_local", Kind: "mv"},
 		{Name: "entity_seen_5m_local", Kind: "mv"},
-		{Name: "entity_seen_1m", Kind: "distributed"},
 		{Name: "entity_seen_5m", Kind: "distributed"},
 	}
 }
@@ -107,15 +107,26 @@ type EntityLayerPreflightResult struct {
 }
 
 const entityLayerFile = "0011_entity_layer.sql"
+
+// entitySeen1mDropFile — v0.10.2265: 0011'in kurduğu entity_seen_1m'i düşürür.
+// Uygula 0011'den SONRA bunu da koşar: taze kurulum 1m'i kurup hemen düşürür
+// (sıralı migration sözleşmesi; 0011 uygulanmış dosyadır, düzenlenmez),
+// mevcut kurulumda Uygula'ya basmak 1m'i temizler.
+const entitySeen1mDropFile = "0016_drop_entity_seen_1m.sql"
 const entityLayerLCGate = 100_000
 
-// entityLayerStatements — gömülü 0011, küme adıyla, ifadelere bölünmüş. Saf.
+// entityLayerStatements — gömülü 0011 + 0016, küme adıyla, ifadelere
+// bölünmüş. Saf.
 func entityLayerStatements(cluster string) ([]string, error) {
-	raw, err := migrations.FS.ReadFile(entityLayerFile)
-	if err != nil {
-		return nil, fmt.Errorf("gömülü %s okunamadı: %w", entityLayerFile, err)
+	var out []string
+	for _, f := range []string{entityLayerFile, entitySeen1mDropFile} {
+		raw, err := migrations.FS.ReadFile(f)
+		if err != nil {
+			return nil, fmt.Errorf("gömülü %s okunamadı: %w", f, err)
+		}
+		out = append(out, SplitSQLStatements(AdaptRollupDDL(string(raw), cluster))...)
 	}
-	return SplitSQLStatements(AdaptRollupDDL(string(raw), cluster)), nil
+	return out, nil
 }
 
 // entityLayerRollbackStatements — yalnız MV + sarmalayıcı (saf, testli).

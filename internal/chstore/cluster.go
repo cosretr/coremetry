@@ -262,7 +262,6 @@ var tablesWithoutTraceID = map[string]bool{
 	// v0.9.1317 — service lifecycle MV: (service_name) + min/max time
 	// states. No trace_id projected.
 	"service_seen":   true,
-	"entity_seen_1m": true,
 	"entity_seen_5m": true,
 	// v0.10.193 — rollouts etkinlik MV'si: trace_id projekte etmez.
 	"workload_revision_activity_1m": true,
@@ -400,7 +399,6 @@ var defaultShardPolicy = map[string]string{
 	// idempotent across shards regardless, which is the second reason the
 	// column set stops at min/max.
 	"service_seen":   "cityHash64(service_name)",
-	"entity_seen_1m": "cityHash64(service_name)",
 	"entity_seen_5m": "cityHash64(service_name)",
 	// v0.10.193 — rollouts: filtre öznesi (cluster, namespace, workload); MV'de
 	// anahtar dekoratif (insert trigger shard-yerel yazar), okuma yönlendirmesi
@@ -969,8 +967,8 @@ var highVolumeTables = map[string]bool{
 	// ONE shard's services, which for a LIFECYCLE table is worse than an
 	// undercount — a service living on another shard reads as "never seen".
 	"service_seen": true,
-	// v0.10.127 — K8s entity katmanı: entity_seen MV'leri gün-bir kayıtlı.
-	"entity_seen_1m": true,
+	// v0.10.127 — K8s entity katmanı: entity_seen MV'leri gün-bir kayıtlı
+	// (v0.10.2265: 1m kademesi kaldırıldı, yalnız 5m).
 	"entity_seen_5m": true,
 	// v0.10.193 — rollouts etkinlik MV'si (rollout_schema.go), gün-bir üç kayıt.
 	"workload_revision_activity_1m": true,

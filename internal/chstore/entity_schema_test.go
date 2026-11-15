@@ -73,7 +73,6 @@ func TestEntitySeenMVDDL(t *testing.T) {
 		name, interval string
 		ttlDays        int
 	}{
-		{"entity_seen_1m", "1 MINUTE", 3},
 		{"entity_seen_5m", "5 MINUTE", 30},
 	}
 	for _, c := range cases {
@@ -108,7 +107,7 @@ func TestEntitySeenMVDDL(t *testing.T) {
 }
 
 func TestEntitySeenRegisteredDayOne(t *testing.T) {
-	for _, mv := range []string{"entity_seen_1m", "entity_seen_5m"} {
+	for _, mv := range []string{"entity_seen_5m"} {
 		if !highVolumeTables[mv] {
 			t.Errorf("%s highVolumeTables'da yok — küme kipinde _local/Distributed çıkmaz", mv)
 		}
@@ -117,6 +116,87 @@ func TestEntitySeenRegisteredDayOne(t *testing.T) {
 		}
 		if !tablesWithoutTraceID[mv] {
 			t.Errorf("%s tablesWithoutTraceID'de yok", mv)
+		}
+	}
+}
+
+// v0.10.2265 — okuyucusuz 1m kademesi kaldırıldı: kayıtlarda yok, boot
+// temizliği yalnız beklenen şekilleri ve doğru sırayla (MV önce) düşürür.
+func TestEntitySeen1mRetired(t *testing.T) {
+	if highVolumeTables["entity_seen_1m"] || tablesWithoutTraceID["entity_seen_1m"] || defaultShardPolicy["entity_seen_1m"] != "" {
+		t.Error("entity_seen_1m kayıtlarda duruyor — kaldırılan nesne")
+	}
+	for _, n := range telemetryPurgeTables {
+		if n == "entity_seen_1m" {
+			t.Error("entity_seen_1m purge listesinde")
+		}
+	}
+}
+
+func TestEntitySeen1mDropPlan(t *testing.T) {
+	mv, dist := "MaterializedView", "Distributed"
+	cases := []struct {
+		name        string
+		cluster     bool
+		bare, local []string
+		want        []retiredDropStep
+		blocked     bool
+	}{
+		{"küme: yok", true, nil, nil, nil, false},
+		{"küme: MV + sarmalayıcı, MV önce", true, []string{dist}, []string{mv}, []retiredDropStep{{"entity_seen_1m_local", true}, {"entity_seen_1m", false}}, false},
+		{"küme: yalnız sarmalayıcı kaldı", true, []string{dist}, nil, []retiredDropStep{{"entity_seen_1m", false}}, false},
+		{"küme: yalnız MV kaldı", true, nil, []string{mv}, []retiredDropStep{{"entity_seen_1m_local", true}}, false},
+		{"küme: çıplak adlı MV", true, []string{mv}, nil, []retiredDropStep{{"entity_seen_1m", true}}, false},
+		{"küme: _local düz tablo", true, nil, []string{"ReplicatedAggregatingMergeTree"}, nil, true},
+		{"küme: çıplak ad veri tablosu", true, []string{"ReplicatedMergeTree"}, []string{mv}, nil, true},
+		{"tek düğüm: MV", false, []string{mv}, nil, []retiredDropStep{{"entity_seen_1m", true}}, false},
+		{"tek düğüm: dış küme, cluster_name boş", false, []string{dist}, []string{mv}, nil, true},
+		{"tek düğüm: yok", false, nil, nil, nil, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, reason := entitySeen1mDropPlan(c.cluster, c.bare, c.local)
+			if (reason != "") != c.blocked {
+				t.Fatalf("engel=%q, beklenen engel=%v", reason, c.blocked)
+			}
+			if len(got) != len(c.want) {
+				t.Fatalf("plan %v, beklenen %v", got, c.want)
+			}
+			for i := range got {
+				if got[i] != c.want[i] {
+					t.Fatalf("plan %v, beklenen %v", got, c.want)
+				}
+			}
+		})
+	}
+}
+
+// 0016: önce MV, sonra sarmalayıcı; IF EXISTS + ON CLUSTER + SYNC; 5m'ye dokunmaz.
+// Sihirbaz Uygula'sı 0011'den SONRA koşar (taze kurulum kurup düşürür).
+func TestEntitySeen1mDropMigration(t *testing.T) {
+	stmts, err := entityLayerStatements("c1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := len(stmts)
+	if n < 2 {
+		t.Fatalf("ifade yok: %v", stmts)
+	}
+	want := []string{
+		"DROP TABLE IF EXISTS entity_seen_1m_local ON CLUSTER c1 SYNC",
+		"DROP TABLE IF EXISTS entity_seen_1m ON CLUSTER c1 SYNC",
+	}
+	if stmts[n-2] != want[0] || stmts[n-1] != want[1] {
+		t.Fatalf("son iki ifade %q, beklenen %q", stmts[n-2:], want)
+	}
+	for _, st := range stmts {
+		if strings.HasPrefix(st, "DROP") && strings.Contains(st, "entity_seen_5m") {
+			t.Fatalf("5m düşürülmemeli: %s", st)
+		}
+	}
+	for _, o := range EntityLayerObjects() {
+		if strings.HasPrefix(o.Name, "entity_seen_1m") {
+			t.Errorf("durum kartı kaldırılan %s'i bekliyor", o.Name)
 		}
 	}
 }
