@@ -57,6 +57,20 @@ import ClustersPage from './Clusters';
 import { MetricArea } from './clusters/MetricArea';
 
 let host: HTMLElement | null = null;
+// Clusters S7 (D6) — kalıcılık testleri için bellek içi localStorage (jsdom'un
+// deposu bu ortamda işlevsiz; pickerRecents.test emsali).
+function memoryStorage(): Storage {
+  const m = new Map<string, string>();
+  return {
+    get length() { return m.size; },
+    clear: () => m.clear(),
+    getItem: k => m.get(k) ?? null,
+    key: i => [...m.keys()][i] ?? null,
+    removeItem: k => { m.delete(k); },
+    setItem: (k, v) => { m.set(k, String(v)); },
+  };
+}
+
 let root: Root | null = null;
 const wait = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
 async function render(el: React.ReactElement): Promise<HTMLElement> {
@@ -86,7 +100,11 @@ afterEach(() => {
 
 describe('Clusters Overview — mutlak-miktar grafikleri y tabanı 0 (v0.10.1641)', () => {
   it('CPU, Memory ve Network throughput CorePanel\'e zeroBase geçirir', async () => {
+    // Clusters S7 (D6) — Ağ trafiği kapalı bölümde; kayıtlı açık tercihle gelir.
+    vi.stubGlobal('localStorage', memoryStorage());
+    localStorage.setItem('clusters.overview.open', '["net"]');
     const el = await render(<ClustersPage />);
+    vi.unstubAllGlobals();
     const got = panels(el);
     expect(got.map(p => p.names)).toEqual(['node-a', 'node-b', 'Net in (B/s)|Net out (B/s)']);
     for (const p of got) expect(p.zero, p.names).toBe('true');

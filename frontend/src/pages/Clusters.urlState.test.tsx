@@ -79,6 +79,20 @@ vi.mock('@/components/chart/corePanelEntry', () => ({
 
 import ClustersPage from './Clusters';
 
+// Clusters S7 (D6) — kalıcılık testleri için bellek içi localStorage (jsdom'un
+// deposu bu ortamda işlevsiz; pickerRecents.test emsali).
+function memoryStorage(): Storage {
+  const m = new Map<string, string>();
+  return {
+    get length() { return m.size; },
+    clear: () => m.clear(),
+    getItem: k => m.get(k) ?? null,
+    key: i => [...m.keys()][i] ?? null,
+    removeItem: k => { m.delete(k); },
+    setItem: (k, v) => { m.set(k, String(v)); },
+  };
+}
+
 const node = (name: string): ClusterNodeRow => ({ cluster: 'prod-a', node: name, cpuCores: 1, memBytes: 1 });
 const pod = (namespace: string, name: string, service?: string): ClusterPodRow =>
   ({ cluster: 'prod-a', namespace, pod: name, cpuCores: 1, memBytes: 1, service });
@@ -209,14 +223,34 @@ describe('Clusters S0 — liste görünümü (?cluster yok)', () => {
 });
 
 describe('Clusters S0 — sekme başına çağrı (açık olmayan sekme çekmez)', () => {
-  it('Overview (varsayılan): summary + iki kaynak trendi + ağ + alarm + node + namespace', async () => {
+  // Clusters S7 (D2, D6) — "Ağ trafiği" bölümü varsayılan KAPALI: ağ trendi
+  // açılana kadar çekilmez; açılınca çekilir ve tercih tarayıcıda kalır.
+  it('Overview (varsayılan): summary + iki kaynak trendi + alarm + node + namespace; ağ kapalı', async () => {
     const el = await mount('/clusters?cluster=prod-a');
     expect(selectedTab(el)).toBe('Overview');
     expect(clusterCalls()).toEqual({
       clusterSources: 1, clusters: 1, clusterSummary: 1,
-      clusterResourceTrend: 2, clusterNetworkTrend: 1, clusterAlerts: 1,
+      clusterResourceTrend: 2, clusterAlerts: 1,
       clusterNodes: 1, clusterNamespaces: 1,
     });
+  });
+
+  it('S7: Ağ trafiği açılınca ağ trendi çekilir ve açık kalır (localStorage)', async () => {
+    vi.stubGlobal('localStorage', memoryStorage());
+    const el = await mount('/clusters?cluster=prod-a');
+    const trigger = Array.from(el.querySelectorAll('button')).find(b => b.textContent?.includes('Ağ trafiği'))!;
+    await act(async () => { trigger.click(); await new Promise(r => setTimeout(r, 30)); });
+    expect(clusterCalls().clusterNetworkTrend).toBe(1);
+    expect(localStorage.getItem('clusters.overview.open')).toBe('["net"]');
+    vi.unstubAllGlobals();
+  });
+
+  it('S7: kayıtlı açık bölüm sonraki ziyarette açık gelir', async () => {
+    vi.stubGlobal('localStorage', memoryStorage());
+    localStorage.setItem('clusters.overview.open', '["net"]');
+    await mount('/clusters?cluster=prod-a');
+    expect(clusterCalls().clusterNetworkTrend).toBe(1);
+    vi.unstubAllGlobals();
   });
 
   it('K5: kaynak trendleri varsayılan By node kırılımıyla istenir', async () => {

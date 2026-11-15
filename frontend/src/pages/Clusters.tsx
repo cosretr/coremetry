@@ -26,7 +26,11 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs';
 import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
 import { FilterBar, type FilterChip } from '@/components/coremetry/FilterBar';
 import { DetailSheet, SheetSection, useSheetParam } from '@/components/coremetry/DetailSheet';
-import { CheckboxField } from '@/components/coremetry/Field';
+import { CollapsedSection } from '@/components/coremetry/CollapsedSection';
+import { AlertsPanel } from '@/pages/clusters/AlertsPanel';
+import { overviewSentence, overviewBoxes, topSeriesText } from '@/pages/clusters/overviewSummary';
+import { parseOpenSections, serializeOpenSections } from '@/pages/clusters/openSections';
+import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
 import { FIELD_SURFACE } from '@/components/coremetry/Field/fieldSurface';
 import { ClusterCard } from '@/pages/clusters/ClusterCard';
 import { clusterState, fleetSentence, cpuUsageText, memUsageText, usageTone } from '@/pages/clusters/fleetSummary';
@@ -34,7 +38,6 @@ import { api } from '@/lib/api';
 import { useClusters } from '@/lib/queries';
 import { timeRangeToNs, fmtBytes, fmtNum, rowClickHandlers } from '@/lib/utils';
 import { LIVE_META } from '@/lib/autoRefresh';
-import { clusterCapacityChip } from '@/lib/fmtEta'; // v0.10.912 — "kaç gün kaldı"
 import { clampThanosWindow, clampSuffix } from '@/lib/thanosWindow';
 import { useUrlRange, rememberRange } from '@/lib/useUrlRange';
 import { encodeRange } from '@/lib/urlState';
@@ -48,7 +51,7 @@ import {
   NODE_COLS, NODE_COMPACT, NODE_SORT_IDS, nodeStatus, nodePodsText, nodeCpuText, nodeMemText, nodeCpuPct,
   nodeMemPct, nodeAllocText, nodeRequestText, nodeLimitsText, nodeVersionText, nodeVersionTitle,
 } from '@/pages/clusters/nodeColumns';
-import type { ClusterPodRow, ClusterNodeRow, ClusterNamespaceRow, ClusterDeploymentRow, ClusterAlertRow, ClusterSummary, TimeRange, CapacityForecastDays } from '@/lib/types';
+import type { ClusterPodRow, ClusterNodeRow, ClusterNamespaceRow, ClusterDeploymentRow, ClusterSummary, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
 
@@ -70,6 +73,10 @@ import { PageShell } from '@/components/coremetry/PageShell';
 // 11px ikincil hücre yerine ton (S3), sayılar arayüz fontunda (S2), % eşik
 // rengi `pctTone` (>85 err, >60 warn, altı soluk — eski satır içi üçlü).
 const pctTone = (p?: number): CellTone => ((p ?? 0) > 85 ? 'err' : (p ?? 0) > 60 ? 'warn' : 'faint');
+
+// Clusters S7 (D6) — Overview'un kapalı bölümleri (kalıcılık kimlikleri).
+const OVERVIEW_SECTIONS = ['net', 'gauges'] as const;
+type OverviewSection = typeof OVERVIEW_SECTIONS[number];
 
 // Nodes tablosu kolonları Clusters S6'da (D3) pages/clusters/nodeColumns.ts'e taşındı.
 
@@ -324,12 +331,23 @@ export default function ClustersPage() {
   const trendXRange = useMemo(
     () => ({ from: rangeFrom / 1e9, to: rangeTo / 1e9 }),
     [rangeFrom, rangeTo]);
+  // Clusters S7 (D2, D6) — Overview'un "Ağ trafiği" ve "Göstergeler" bölümleri
+  // varsayılan KAPALI; açılan bölüm sonraki ziyarette açık kalır (tarayıcı
+  // başına tek anahtar). Ağ grafiği yalnız bölüm açıkken çekilir.
+  const [overviewOpen, setOverviewOpen] = useState<Set<OverviewSection>>(
+    () => parseOpenSections(getRaw(STORAGE_KEYS.clustersOverviewOpen), OVERVIEW_SECTIONS));
+  const setOverviewSectionOpen = (id: OverviewSection) => (v: boolean) => {
+    const next = new Set(overviewOpen);
+    if (v) next.add(id); else next.delete(id);
+    setOverviewOpen(next);
+    setRaw(STORAGE_KEYS.clustersOverviewOpen, serializeOpenSections(next, OVERVIEW_SECTIONS));
+  };
   const netTrendQ = useQuery({
     queryKey: ['cluster-net-trend', clusterParam, rangeFrom, rangeTo],
     queryFn: () => api.clusterNetworkTrend(clusterParam, rangeFrom, rangeTo),
     staleTime: 60_000,
     retry: 1,
-    enabled: isDetail && section === 'overview',
+    enabled: isDetail && section === 'overview' && overviewOpen.has('net'),
     meta: LIVE_META,
   });
   // v0.9.35 (B2/F4) — CPU/Mem area chart'ları, per-kart Total/By-node
@@ -358,7 +376,6 @@ export default function ClustersPage() {
     staleTime: 60_000, retry: 1, enabled: isDetail && section === 'overview',
     meta: LIVE_META,
   });
-  const [alertsCriticalOnly, setAlertsCriticalOnly] = useState(false);
 
   // Detay: yalnız seçili cluster'ın AKTİF sekme sorguları.
   const detailList = isDetail ? [clusterParam] : [];
@@ -746,6 +763,10 @@ export default function ClustersPage() {
                 : (observed.size > 0 && !observed.has(clusterParam))
                   ? <span className="badge b-warn" title="Name not seen in the last 24h of telemetry — the service pivot will not match">not in telemetry</span>
                   : <span className="cl-status">reachable</span>}
+              {/* Clusters S7 (D2) — Overview'un düz cümlesi (bellek % + ETA + açık kritik). */}
+              {section === 'overview' && !detailSummaryQ.isError && detailSummaryQ.data && (
+                <span className="cl-detail-sentence">{overviewSentence(detailSummaryQ.data)}</span>
+              )}
             </div>
 
             {/* Clusters S5 (v0.10.2170) — süzgeç satırı coremetry/FilterBar:
@@ -987,192 +1008,124 @@ export default function ClustersPage() {
                   </div>
                 </>}
 
-                {/* v0.9.8 — Overview sekmesi: 2 skaler kart (CPU/Mem;
-                    Net kartları + throughput grafiği L2/L3 probe
-                    sonrası — alan yokluğu yanlış sıfır okutmaz). */}
+                {/* Clusters S7 (plan §0 D2, onaylı mockup) — sade Overview:
+                    dört kutu (CPU / Memory kapasiteyle, Pods, Alerts), iki
+                    By node grafiği (en yüksek node altyazıda), node kutucukları
+                    + açık alarmlar (kritik önce), sonra KAPALI "Ağ trafiği" ve
+                    "Göstergeler" (D6: açılan bölüm açık kalır; ağ grafiği yalnız
+                    açıkken çekilir). Net in / out KPI kartları ağ bölümüne indi. */}
                 {section === 'overview' && (() => {
-                  // v0.9.41 (handoff §3 KPI polish) — 26/700 değer
-                  // tipografisi, kapasiteli alt yazılar, Running pods
-                  // + Active alerts kartları. Best-effort: kapasite/faz
-                  // yoksa alt yazı ve kart görünmez-düşer; alerts kartı
-                  // yalnız ALERTS ailesi cevap verdiyse (alertsQ.data).
-                  const d = detailSummaryQ.data;
-                  const kpiVal = { fontSize: 26, fontWeight: 700 } as const;
-                  const kpiSub = { fontSize: 11, color: 'var(--text3)', marginTop: 4 } as const;
-                  const phaseTotal = (d?.podsRunning ?? 0) + (d?.podsPending ?? 0) + (d?.podsFailed ?? 0);
-                  const alertCrit = d?.alertsCritical ?? 0;
-                  const alertWarn = d?.alertsWarning ?? 0;
-                  const showAlerts = alertsQ.data != null || alertCrit + alertWarn > 0;
+                  const boxes = overviewBoxes(detailSummaryQ.data, alertsQ.data != null);
+                  if (boxes.length === 0) return null;
                   return (
-                  <div style={{
-                    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                    gap: 14,
-                  }}>
-                    <ClusterCard header="CPU used (cores)">
-                      <div className="mono" style={kpiVal}>
-                        {d?.cpuUsedCores ? fmtCores(d.cpuUsedCores) : '—'}
-                      </div>
-                      <div style={kpiSub}>
-                        {[
-                          d?.cpuCapacityCores ? `of ${fmtCores(d.cpuCapacityCores)} cores` : '',
-                          d?.nodes ? `${fmtNum(d.nodes)} nodes` : '',
-                        ].filter(Boolean).join(' · ')}
-                      </div>
-                      <CapacityEtaLine f={d?.cpuForecast} />
-                    </ClusterCard>
-                    <ClusterCard header="Memory used">
-                      <div className="mono" style={kpiVal}>
-                        {d?.memUsedBytes ? fmtBytes(d.memUsedBytes) : '—'}
-                      </div>
-                      <div style={kpiSub}>
-                        {d?.memCapacityBytes ? `of ${fmtBytes(d.memCapacityBytes)}`
-                          : d?.pods ? `${fmtNum(d.pods)} pods` : ''}
-                      </div>
-                      <CapacityEtaLine f={d?.memForecast} />
-                    </ClusterCard>
-                    {phaseTotal > 0 && (
-                      <ClusterCard header="Running pods">
-                        {/* v0.10.922 (sade palet adım 1) — K5: çalışan pod
-                            sayısı normal durum; hep-yeşil KPI NÖTR. */}
-                        <div className="mono" style={kpiVal}>
-                          {fmtNum(d?.podsRunning ?? 0)}
-                        </div>
-                        <div style={kpiSub}>
-                          {`${fmtNum(d?.podsPending ?? 0)} pending · ${fmtNum(d?.podsFailed ?? 0)} failed`}
-                        </div>
-                      </ClusterCard>
-                    )}
-                    {/* v0.9.44 — 0'ın sınırı title'da: ALERTS
-                        serisi yalnız firing/pending alarm varken var
-                        olur; kural tanımsız cluster ile alarmsız
-                        sağlıklı cluster ayırt EDİLEMEZ.
-                        v0.10.922 (sade palet adım 1) — K5: 0 alarm
-                        NÖTR (yeşil değil); yalnız crit/warn renkli. */}
-                    {showAlerts && (
-                      <ClusterCard header="Active alerts"
-                        title="Counts firing/pending ALERTS series from Prometheus. 0 also appears when the cluster has no alerting rules configured — the ALERTS metric cannot distinguish the two.">
-                        <div className="mono" style={{
-                          ...kpiVal,
-                          color: alertCrit > 0 ? 'var(--err)' : alertWarn > 0 ? 'var(--warn)' : undefined,
-                        }}>
-                          {fmtNum(alertCrit + alertWarn)}
-                        </div>
-                        <div style={kpiSub}>
-                          {`${fmtNum(alertCrit)} critical · ${fmtNum(alertWarn)} warning`}
-                        </div>
-                      </ClusterCard>
-                    )}
-                    {/* v0.9.10 — net kartları yalnız veri VARSA (alan
-                        yokluğu yanlış sıfır okutmaz — probe duruşu). */}
-                    {(d?.netInBps ?? 0) > 0 && (
-                      <ClusterCard header="Net in">
-                        <div className="mono" style={kpiVal}>
-                          {fmtBps(d!.netInBps!)}
-                        </div>
-                      </ClusterCard>
-                    )}
-                    {(d?.netOutBps ?? 0) > 0 && (
-                      <ClusterCard header="Net out">
-                        <div className="mono" style={kpiVal}>
-                          {fmtBps(d!.netOutBps!)}
-                        </div>
-                      </ClusterCard>
-                    )}
-                  </div>
-                  );
-                })()}
-                {/* v0.9.31 (design handoff F1) — Utilization gauges (2fr)
-                    + Pod phase donut (1fr). Gauge'lar kapasite VARSA
-                    (safePct null→gizli); donut herhangi bir faz sayısı
-                    varsa. Kısmi veri kısmi görsel — best-effort. */}
-                {section === 'overview' && detailSummaryQ.data && (() => {
-                  const d = detailSummaryQ.data;
-                  const cpuP = safePct(d.cpuUsedCores, d.cpuCapacityCores);
-                  const memP = safePct(d.memUsedBytes, d.memCapacityBytes);
-                  const phaseTotal = (d.podsRunning ?? 0) + (d.podsPending ?? 0) + (d.podsFailed ?? 0);
-                  const healthP = phaseTotal > 0 ? ((d.podsRunning ?? 0) / phaseTotal) * 100 : null;
-                  const hasGauges = cpuP != null || memP != null || healthP != null;
-                  const hasDonut = phaseTotal > 0;
-                  if (!hasGauges && !hasDonut) return null;
-                  return (
-                    <div style={{ display: 'grid', gridTemplateColumns: hasGauges && hasDonut ? '2fr 1fr' : '1fr', gap: 14, marginTop: 14 }}>
-                      {hasGauges && (
-                        <ClusterCard header="Utilization">
-                          <div style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: 16, paddingTop: 6 }}>
-                            <Gauge pct={cpuP} label="CPU" sub="utilized" />
-                            <Gauge pct={memP} label="Memory" sub="utilized" />
-                            {/* v0.10.922 (sade palet adım 1) — K5: >95
-                                running normal durum → nötr yay; yalnız
-                                sapma (≤95) --warn (CPU/Mem yaylarıyla aynı). */}
-                            <Gauge pct={healthP} label="Pod health" sub="running"
-                              color={healthP != null && healthP > 95 ? 'var(--text3)' : 'var(--warn)'} />
-                          </div>
+                    <div className="cl-ov-boxes">
+                      {boxes.map(b => (
+                        <ClusterCard key={b.label} title={b.title}>
+                          <div className="cl-ov-box__label">{b.label}</div>
+                          <div className={b.tone ? `cl-ov-box__val cl-ov-box__val--${b.tone}` : 'cl-ov-box__val'}>{b.value}</div>
+                          {b.sub && <div className="cl-ov-box__sub">{b.sub}</div>}
                         </ClusterCard>
-                      )}
-                      {hasDonut && (
-                        <ClusterCard header="Pod phase">
-                          <div style={{ paddingTop: 6 }}>
-                            <PhaseDonut running={d.podsRunning ?? 0} pending={d.podsPending ?? 0} failed={d.podsFailed ?? 0} />
-                          </div>
-                        </ClusterCard>
-                      )}
+                      ))}
                     </div>
                   );
                 })()}
-                {/* v0.9.35 (B2/F4) — CPU + Mem area, Total/By-node
-                    toggle; seri yoksa kart gizli. v0.9.49: MetricArea
-                    ortak bileşeni (§8 Service sekmesiyle paylaşılır). */}
-                {/* v0.10.1641 (operator-reported) — mutlak miktar kartları
-                    (CPU / Memory / Network) zeroBase: tabanı sıfır olmayan
-                    veri-fit y aralığı %0,2'lik değişimi tam boy sıçrama
-                    gibi çiziyordu (7.417 → 7.431 TiB). */}
+                {/* v0.9.35 (B2/F4) — CPU + Mem area, Total/By-node toggle;
+                    seri yoksa kart gizli. v0.10.1641 (operator-reported) —
+                    zeroBase. v0.9.58 — drag-seçim global range'e yazar;
+                    ortak 'clusters' crosshair grubu + çift-tık zoom geri-yığını. */}
                 {section === 'overview' && ((cpuTrendQ.data?.series?.length ?? 0) > 0 || (memTrendQ.data?.series?.length ?? 0) > 0) && (
-                  <div className="grid-2" style={{ display: 'grid', gap: 14, marginTop: 14 }}>
-                    {/* v0.9.58 — drag-seçim global range'e yazar
-                        (Service.tsx emsali; sayfa range'i zaten
-                        useUrlRange'ten geliyor). */}
-                    {/* Madde 4 sweep — ortak 'clusters' crosshair grubu +
-                        çift-tık zoom geri-yığını (chartZoomReset). */}
+                  <div className="grid-2 cl-ov-charts">
                     <MetricArea title={`CPU usage (cores)${clampSuffix(netClamped)}`} byLabel="By node"
+                      subtitle={cpuByNode ? topSeriesText(cpuTrendQ.data?.series, v => `${fmtCores(v)} çekirdek`) || undefined : undefined}
                       by={cpuByNode} onToggle={setCpuByNode} onZoom={chartZoom} onZoomReset={chartZoomReset}
                       syncKey="clusters" xRange={trendXRange} zeroBase
                       series={cpuTrendQ.data?.series} seriesName="CPU" />
                     <MetricArea title={`Memory usage${clampSuffix(netClamped)}`} byLabel="By node"
+                      subtitle={memByNode ? topSeriesText(memTrendQ.data?.series, fmtBytes) || undefined : undefined}
                       by={memByNode} onToggle={setMemByNode} onZoom={chartZoom} onZoomReset={chartZoomReset}
                       syncKey="clusters" xRange={trendXRange} zeroBase
                       series={memTrendQ.data?.series} seriesName="Memory" unit="bytes" />
                   </div>
                 )}
-                {/* v0.9.10 — throughput grafiği: yalnız seri geldiyse
-                    (node_network erişilemezse bölüm hiç görünmez). */}
-                {section === 'overview' && (netTrendQ.data?.trend?.length ?? 0) > 0 && (
-                  <ClusterCard header={`Network throughput${clampSuffix(netClamped)}`} className="cl-section">
-                    {/* Madde 4 sweep — eksen/tooltip byte birimi (değerler
-                        Bps; seri etiketleri "(B/s)" taşır) + drag-zoom
-                        global range'e, çift-tık geri-yığınına. */}
-                    <MultiLineChart
-                      series={netTrendToSeries(netTrendQ.data!.trend!)}
-                      unit="bytes" onZoom={chartZoom} onZoomReset={chartZoomReset}
-                      syncKey="clusters" xRange={trendXRange} zeroBase
-                      height={200} />
-                  </ClusterCard>
+                {/* v0.9.32 (F2) — node kutucukları (aynı clusterNodes verisi) +
+                    v0.9.36 (B3) açık alarmlar; ikisi yan yana (mockup). */}
+                {section === 'overview' && (nodeRows.length > 0 || (alertsQ.data?.alerts?.length ?? 0) > 0) && (
+                  <div className="cl-ov-row">
+                    {nodeRows.length > 0 && (
+                      <ClusterCard header={`Node utilization (${nodeRows.length})`} className="cl-ov-row__nodes">
+                        <NodeHeatmap nodes={nodeRows} />
+                      </ClusterCard>
+                    )}
+                    {(alertsQ.data?.alerts?.length ?? 0) > 0 && (
+                      <div className="cl-ov-row__alerts">
+                        <AlertsPanel alerts={alertsQ.data!.alerts!} />
+                      </div>
+                    )}
+                  </div>
                 )}
-                {/* v0.9.32 (F2) — node utilization heatmap (Overview);
-                    aynı clusterNodes verisi, seri yoksa gizli. */}
-                {section === 'overview' && nodeRows.length > 0 && (
-                  <ClusterCard header={`Node utilization (${nodeRows.length})`} className="cl-section">
-                    <NodeHeatmap nodes={nodeRows} />
-                  </ClusterCard>
-                )}
-                {/* v0.9.574 — "Prometheus / Thanos queries" kartı KALDIRILDI
-                    (operatör: "gerek yok"). Kopyala-yapıştır PromQL örnekleri
-                    bir referanstı, bir gözlem değil: sayfanın yarısını
-                    kaplarken hiçbir soruyu cevaplamıyordu. Firing alerts artık
-                    tam genişlik. */}
-                {section === 'overview' && (alertsQ.data?.alerts?.length ?? 0) > 0 && (
-                  <div style={{ marginTop: 14 }}>
-                    <AlertsPanel alerts={alertsQ.data!.alerts!}
-                      criticalOnly={alertsCriticalOnly} onToggle={setAlertsCriticalOnly} />
+                {section === 'overview' && (
+                  <div className="cl-ov-closed">
+                    <CollapsedSection id="cl-net" title="Ağ trafiği" summary="giriş ve çıkış grafiği"
+                      open={overviewOpen.has('net')} onOpenChange={setOverviewSectionOpen('net')}>
+                      {/* v0.9.10 — throughput grafiği: yalnız seri geldiyse
+                          (node_network erişilemezse düz not). Madde 4 sweep —
+                          byte birimi + drag-zoom global range'e. */}
+                      {(netTrendQ.data?.trend?.length ?? 0) > 0 ? (
+                        <ClusterCard header={`Network throughput${clampSuffix(netClamped)}`}>
+                          {detailSummaryQ.data?.netInBps || detailSummaryQ.data?.netOutBps ? (
+                            <p className="cl-ov-net">
+                              {[detailSummaryQ.data.netInBps ? `giriş ${fmtBps(detailSummaryQ.data.netInBps)}` : '',
+                                detailSummaryQ.data.netOutBps ? `çıkış ${fmtBps(detailSummaryQ.data.netOutBps)}` : '']
+                                .filter(Boolean).join(' · ')}
+                            </p>
+                          ) : null}
+                          <MultiLineChart
+                            series={netTrendToSeries(netTrendQ.data!.trend!)}
+                            unit="bytes" onZoom={chartZoom} onZoomReset={chartZoomReset}
+                            syncKey="clusters" xRange={trendXRange} zeroBase
+                            height={200} />
+                        </ClusterCard>
+                      ) : netTrendQ.isPending ? <Spinner /> : (
+                        <p className="cl-ov-note">Ağ serisi yok (node_exporter ağ metrikleri okunamadı).</p>
+                      )}
+                    </CollapsedSection>
+                    <CollapsedSection id="cl-gauges" title="Göstergeler"
+                      summary="CPU, bellek ve pod sağlığı kadranları, pod durumu halkası"
+                      open={overviewOpen.has('gauges')} onOpenChange={setOverviewSectionOpen('gauges')}>
+                      {/* v0.9.31 (design handoff F1) — kadranlar kapasite VARSA
+                          (safePct null→gizli); halka herhangi bir faz sayısı varsa. */}
+                      {(() => {
+                        const d = detailSummaryQ.data;
+                        const cpuP = d ? safePct(d.cpuUsedCores, d.cpuCapacityCores) : null;
+                        const memP = d ? safePct(d.memUsedBytes, d.memCapacityBytes) : null;
+                        const phaseTotal = d ? (d.podsRunning ?? 0) + (d.podsPending ?? 0) + (d.podsFailed ?? 0) : 0;
+                        const healthP = phaseTotal > 0 ? ((d!.podsRunning ?? 0) / phaseTotal) * 100 : null;
+                        const hasGauges = cpuP != null || memP != null || healthP != null;
+                        if (!d || (!hasGauges && phaseTotal === 0)) return <p className="cl-ov-note">Gösterge verisi yok.</p>;
+                        return (
+                          <div className={hasGauges && phaseTotal > 0 ? 'cl-ov-gauges cl-ov-gauges--split' : 'cl-ov-gauges'}>
+                            {hasGauges && (
+                              <ClusterCard header="Utilization">
+                                <div className="cl-ov-gauges__dials">
+                                  <Gauge pct={cpuP} label="CPU" sub="utilized" />
+                                  <Gauge pct={memP} label="Memory" sub="utilized" />
+                                  {/* v0.10.922 (sade palet) — K5: >95 running nötr yay. */}
+                                  <Gauge pct={healthP} label="Pod health" sub="running"
+                                    color={healthP != null && healthP > 95 ? 'var(--text3)' : 'var(--warn)'} />
+                                </div>
+                              </ClusterCard>
+                            )}
+                            {phaseTotal > 0 && (
+                              <ClusterCard header="Pod phase">
+                                <div className="cl-ov-gauges__donut">
+                                  <PhaseDonut running={d.podsRunning ?? 0} pending={d.podsPending ?? 0} failed={d.podsFailed ?? 0} />
+                                </div>
+                              </ClusterCard>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </CollapsedSection>
                   </div>
                 )}
               </>
@@ -1265,59 +1218,6 @@ function NamespaceDrawer({ cluster, namespace, range, onClose, onZoom, onZoomRes
 // LiveToggle (v0.9.38) v0.10.1430'da SİLİNDİ — auto-refresh global Topbar
 // RefreshPicker'ında (şim yok); ?live=1 artık okunmuyor.
 
-// fmtAgeShort — saniye → "Nm"/"Nh"/"Nd" (design handoff alert "Nm ago").
-function fmtAgeShort(sec?: number): string {
-  if (!sec || sec <= 0) return '';
-  if (sec < 3600) return `${Math.round(sec / 60)}m`;
-  if (sec < 86400) return `${Math.round(sec / 3600)}h`;
-  return `${Math.round(sec / 86400)}d`;
-}
-
-// AlertsPanel — firing alerts (v0.9.36, design handoff). Kritik-önce
-// (backend sıralı), severity badge + alertname + ns/pod + yaş;
-// criticalOnly flag filtreler. Count badge başlıkta.
-function AlertsPanel({ alerts, criticalOnly, onToggle }: {
-  alerts: ClusterAlertRow[];
-  criticalOnly: boolean;
-  onToggle: (v: boolean) => void;
-}) {
-  const shown = criticalOnly ? alerts.filter(a => a.severity === 'critical') : alerts;
-  return (
-    <ClusterCard header={
-      <div className="cl-alerts-head">
-        <span>Firing alerts <span className="badge b-err cl-alerts-count">{alerts.length}</span></span>
-        {/* Clusters S5 — ham onay kutusu → coremetry CheckboxField (shadcn). */}
-        <CheckboxField label="critical only" checked={criticalOnly} onCheckedChange={onToggle} />
-      </div>
-    }>
-      <div style={{ display: 'grid', gap: 2, maxHeight: 320, overflowY: 'auto' }}>
-        {shown.map((a, i) => {
-          const age = fmtAgeShort(a.ageSec);
-          return (
-            <div key={`${a.alertName}|${a.namespace}|${a.pod}|${i}`}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px', borderRadius: 3 }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg2)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-              <span className={`badge ${a.severity === 'critical' ? 'b-err' : 'b-warn'}`}>{a.severity}</span>
-              <span style={{ fontWeight: 600, fontSize: 12 }}>{a.alertName}</span>
-              {(a.namespace || a.pod) && (
-                <span className="mono" style={{ fontSize: 11, color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {a.namespace}{a.pod ? `/${a.pod}` : ''}
-                </span>
-              )}
-              {age && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)', flexShrink: 0 }}>{age} ago</span>}
-            </div>
-          );
-        })}
-        {shown.length === 0 && (
-          <div style={{ fontSize: 12, color: 'var(--text3)', padding: 6 }}>No critical alerts.</div>
-        )}
-      </div>
-    </ClusterCard>
-  );
-}
-
-
 // PromQLList v0.9.51'de pages/clusters/PromQLList.tsx'e taşındı.
 
 // NodeCell — Nodes tablosunun kolon kimliğiyle çizilen hücresi (Clusters S6,
@@ -1363,18 +1263,3 @@ function depStatusBadge(status: string): string {
 }
 
 // podPhaseBadge v0.9.51'de thresholds.ts'e taşındı.
-
-// CapacityEtaLine — v0.10.912 (parite #6 dilim 4 Karar 2): KPI kartında
-// "⌛ ≈ N gün" (son 7 günün küme toplamı; kapasite yoksa hiç çizilmez).
-function CapacityEtaLine({ f }: { f: CapacityForecastDays | undefined }) {
-  const c = clusterCapacityChip(f);
-  if (!c) return null;
-  const text = c.text.replace('⏳', '⌛');
-  return (
-    <div style={{ marginTop: 4 }} title={c.title}>
-      {c.badge
-        ? <span className={`badge ${c.tone}`}>{text}</span>
-        : <span style={{ fontSize: 11, color: 'var(--text3)' }}>{text}</span>}
-    </div>
-  );
-}

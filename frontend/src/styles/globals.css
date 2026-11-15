@@ -5211,7 +5211,6 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 .cl-tabs-row { display: flex; align-items: center; gap: var(--sp-4); margin-bottom: var(--sp-6); }
 .cl-tabs-row > .cl-ns { margin-left: auto; }
 .cl-sheet-tools { margin-bottom: var(--sp-4); }
-.cl-alerts-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); }
 .badge.cl-alerts-count { margin-left: var(--sp-2); }
 /* NamespaceCombobox (plan §0 D4: eager liste, shadcn giydirmesi). Açılır
    kutu içeriğe açılır (left: 0, ColumnManager v0.8.76 dersi). */
@@ -5227,6 +5226,34 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 /* Clusters S6 (plan §0 D3) — Nodes tablosu CPU / Memory hücresi: "kullanılan /
    kapasite · %" metni üstte, eşik renkli çubuk altta. */
 .cl-node-usage { display: grid; gap: var(--sp-2); font-variant-numeric: tabular-nums; }
+/* Clusters S7 (plan §0 D2) — sade Overview: başlıkta düz cümle, dört kutu,
+   grafik satırı, node kutucukları + alarmlar yan yana, kapalı bölümler.
+   Değerler eski satır içi stillerden (14px aralık, 26/700 → 18/600 mockup). */
+.cl-detail-sentence { font-size: var(--fs-md); color: var(--text2); }
+.cl-ov-boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.cl-ov-box__label { font-size: var(--fs-xs); color: var(--text3); }
+.cl-ov-box__val { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cl-ov-box__val--warn { color: var(--warn); }
+.cl-ov-box__val--err { color: var(--err); }
+.cl-ov-box__sub { margin-top: var(--sp-1); font-size: var(--fs-sm); color: var(--text3); }
+.grid-2.cl-ov-charts { display: grid; gap: 14px; margin-top: 14px; }
+.cl-ov-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; }
+.cl-ov-row__nodes { flex: 2 1 420px; min-width: 0; }
+.cl-ov-row__alerts { flex: 1 1 300px; min-width: 0; }
+.cl-ov-closed { margin-top: 14px; }
+.cl-ov-net { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--text2); }
+.cl-ov-note { margin: 0 0 var(--sp-4); font-size: var(--fs-sm); color: var(--text3); }
+.cl-ov-gauges { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: var(--sp-4); }
+.cl-ov-gauges--split { grid-template-columns: 2fr 1fr; }
+.cl-ov-gauges__dials { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 16px; padding-top: 6px; }
+.cl-ov-gauges__donut { padding-top: 6px; }
+.cl-alerts { display: grid; gap: 2px; max-height: 320px; overflow-y: auto; }
+.cl-alert { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 3px; }
+.cl-alert:hover { background: var(--bg2); }
+.cl-alert__name { font-size: var(--fs-sm); font-weight: 600; }
+.cl-alert__where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); color: var(--text3); }
+.cl-alert__age { flex-shrink: 0; margin-left: auto; font-size: var(--fs-xs); color: var(--text3); }
+@media (max-width: 640px) { .cl-ov-gauges--split { grid-template-columns: 1fr; } }
 
 /* ── Copilot araç-çağrısı paneli — v0.10.161 (etüt seçenek A «Adım listesi»).
    Çipler kapalı hâl; DisclosureButton özet satırı + balon içi tablo. ── */
