@@ -12433,9 +12433,9 @@ export interface MLDetectorScore { detector: string; signal?: string; events: nu
 /** Yerleşik dedektörler görünümü (v0.10.1766): own = anomaly_sensitivity içindeki eski anahtarlar. */
 // v0.10.2087: kendi-anahtar görünümü (own) silindi — son üye op_latency de gitti.
 export interface NativeDetectorsView { names: string[]; detectors: Record<string, boolean> }
-/** Kalite çerçevesi (v0.10.1751, üç sinyal ortak). *Off bool'ları ters adlı: eksik = açık. */
+/** Kalite çerçevesi (v0.10.1751, üç sinyal ortak; v0.10.2269 hygieneOff kalktı — kararlar tabanı değiştirmez). */
 export interface MLQuality {
-  impactMinRel: number; impactMinAbs: number; hygieneOff: boolean; regimeHours: number; confirmWindowMin: number;
+  impactMinRel: number; impactMinAbs: number; regimeHours: number; confirmWindowMin: number;
 }
 /** Replay kaydı (v0.10.1752, ml_event_snapshots): JSON alanlar ham string. */
 /** v0.10.2036 — ml.SourceQuery + /api/ml/source-series yanıtı (metrik / bağımlılık olayının detay grafiği). */

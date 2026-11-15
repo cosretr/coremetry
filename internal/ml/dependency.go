@@ -311,7 +311,7 @@ func (d *Dependency) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, 
 	h := last.In(loc).Hour()
 	t0 := time.Now()
 	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalTrace, Dates: dates, HourFrom: max(h-1, 0), HourTo: min(h+1, 23),
-		TargetSec: cfg.BucketSec, TZ: loc.String(), Exclude: deps.Labels.Exclude(cfg)})
+		TargetSec: cfg.BucketSec, TZ: loc.String()})
 	global.lastCHMs.Store(time.Since(t0).Milliseconds())
 	if err != nil {
 		return nil, err

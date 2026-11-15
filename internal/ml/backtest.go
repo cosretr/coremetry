@@ -123,15 +123,13 @@ type mmStat struct {
 	n        int
 }
 
-// baselineIndex — parça başına (yerel gün, saat) → değerler; hijyen pencereleri dışlanmış.
+// baselineIndex — parça başına (yerel gün, saat) → değerler. v0.10.2269:
+// kararlar tabandan dışlanmaz (canlı tabanla aynı); etiketler yalnız puanlar.
 type baselineIndex map[string]map[int][]float64
 
-func buildIndex(pts []chstore.MLPoint, loc *time.Location, exclude [][2]int64) baselineIndex {
+func buildIndex(pts []chstore.MLPoint, loc *time.Location) baselineIndex {
 	idx := baselineIndex{}
 	for _, p := range pts {
-		if chstore.MLExcluded(exclude, p.T) {
-			continue
-		}
 		lt := time.Unix(p.T, 0).In(loc)
 		d := lt.Format("2006-01-02")
 		if idx[d] == nil {
@@ -152,15 +150,12 @@ func RunBacktest(signal, service string, from, to time.Time, pts map[string][]ch
 	}
 	step := int64(cfg.BucketSec)
 	res := BacktestResult{Signal: signal, Service: service, From: from.Unix(), To: to.Unix(), ConfigHash: cfg.ConfigHash()}
-	var excl [][2]int64
+	// etiketler (operatör kararları) YALNIZ isabet puanlamasına (scoreHits)
+	// girer; simüle taban canlı gibi kararsız kurulur (v0.10.2269).
 	var svcLabels []chstore.MLLabel
 	for _, l := range labels {
-		if l.Service != service {
-			continue
-		}
-		svcLabels = append(svcLabels, l)
-		if l.Positive && !cfg.Quality.HygieneOff {
-			excl = append(excl, [2]int64{l.From, l.To})
+		if l.Service == service {
+			svcLabels = append(svcLabels, l)
 		}
 	}
 	// gün → (taban günleri, sınıf) önbelleği
@@ -190,7 +185,7 @@ func RunBacktest(signal, service string, from, to time.Time, pts map[string][]ch
 		}
 		idx, ok := indexes[part]
 		if !ok {
-			idx = buildIndex(pts[part], loc, excl)
+			idx = buildIndex(pts[part], loc)
 			indexes[part] = idx
 		}
 		var xs []float64
@@ -410,7 +405,8 @@ func calendarFor(sens chstore.AnomalySensitivityConfig) (chstore.AnomalyCalendar
 }
 
 // Backtest — store okumalı sarmalayıcı (API what-if / dönem replay). İki
-// okuma: seri (servis, from − taban günü .. to) + ortak etiket seti.
+// okuma: seri (servis, from − taban günü .. to) + ortak etiket seti (yalnız
+// puanlama; tabana girmez).
 func Backtest(ctx context.Context, store *chstore.Store, signal, service string, from, to time.Time, cfg chstore.MLConfig) (BacktestResult, error) {
 	if to.Sub(from) > BacktestMaxRange {
 		from = to.Add(-BacktestMaxRange)

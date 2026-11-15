@@ -45,20 +45,6 @@ type MLBaselineRequest struct {
 	HourTo    int
 	TargetSec int // normalize hedefi (ör. 300)
 	TZ        string
-	// Exclude — taban hijyeni (kalite çerçevesi): servis → [başlangıç, bitiş]
-	// unix sn pencereleri (gerçek anomali diye etiketlenmiş olaylar); bu
-	// kovalar tabana GİRMEZ, olay normali kirletmez. nil = süzme yok.
-	Exclude map[string][][2]int64
-}
-
-// MLExcluded — SAF: ts (unix sn) servisin dışlama pencerelerinden birinde mi.
-func MLExcluded(windows [][2]int64, ts int64) bool {
-	for _, w := range windows {
-		if ts >= w[0] && ts <= w[1] {
-			return true
-		}
-	}
-	return false
 }
 
 // MLBaselineSeries — anahtar → normalize edilmiş oran örnekleri.
@@ -77,7 +63,7 @@ func (s *Store) MLBaseline(ctx context.Context, req MLBaselineRequest) (MLBaseli
 		tz = "UTC"
 	}
 	rows, err := s.conn.Query(ctx, `
-		SELECT service, part, groupArray(toUnixTimestamp(bucket)) AS ts, groupArray(count * ? / bucket_sec) AS xs
+		SELECT service, part, groupArray(count * ? / bucket_sec) AS xs
 		FROM ml_series
 		WHERE signal = ?
 		  AND toDate(bucket, ?) IN (?)
@@ -95,19 +81,9 @@ func (s *Store) MLBaseline(ctx context.Context, req MLBaselineRequest) (MLBaseli
 	out := MLBaselineSeries{}
 	for rows.Next() {
 		var svc, part string
-		var ts []uint32
 		var xs []float64
-		if err := rows.Scan(&svc, &part, &ts, &xs); err != nil {
+		if err := rows.Scan(&svc, &part, &xs); err != nil {
 			return nil, err
-		}
-		if win := req.Exclude[svc]; len(win) > 0 && len(ts) == len(xs) {
-			kept := xs[:0]
-			for i, v := range xs {
-				if !MLExcluded(win, int64(ts[i])) {
-					kept = append(kept, v)
-				}
-			}
-			xs = kept
 		}
 		out[MLSeriesKey(svc, part)] = xs
 	}
@@ -373,12 +349,8 @@ func (s *Store) MLSuffixBaseline(ctx context.Context, req MLBaselineRequest, suf
 		if len(ts) != len(xs) {
 			continue
 		}
-		win := req.Exclude[svc]
 		pts := make([]MLPoint, 0, len(xs))
 		for i, v := range xs {
-			if len(win) > 0 && MLExcluded(win, int64(ts[i])) {
-				continue
-			}
 			pts = append(pts, MLPoint{T: int64(ts[i]), V: v})
 		}
 		out[MLSeriesKey(svc, part)] = pts

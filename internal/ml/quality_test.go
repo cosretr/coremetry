@@ -82,8 +82,8 @@ func TestQualityFilterRegimeAndConfirm(t *testing.T) {
 }
 
 // Sentetik log serisi: 8 gün düz 100/kova, son gün 12:00–12:30 600 → log_volume
-// isabeti; gerçek etiket örtüşür → TP, recall 1. Hijyen: etiketli pencere
-// tabana girmez.
+// isabeti; gerçek etiket örtüşür → TP, recall 1. Etiket yalnız puanlar
+// (v0.10.2269): tabana girmez, isabet seti etiketsiz koşuyla aynı.
 func TestRunBacktestLogSpike(t *testing.T) {
 	cfg := chstore.DefaultMLConfig()
 	day0 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
@@ -120,6 +120,49 @@ func TestRunBacktestLogSpike(t *testing.T) {
 	res = RunBacktest(chstore.MLSignalLog, "pay", from, to, map[string][]chstore.MLPoint{partTotal: pts}, cfg, chstore.AnomalyCalendarConfig{}, time.UTC, nil, nil)
 	if len(res.Hits) != 0 {
 		t.Fatalf("etki eşiği 10'da isabet olmamalı: %+v", res.Hits)
+	}
+}
+
+// v0.10.2269 — "Gerçek anomali" etiketleri simüle tabanı değiştirmez (canlı
+// tabanla aynı): her gün 12:00–12:30 tekrarlayan sıçrama, taban günlerindeki
+// sıçramalar gerçek diye etiketli. Eski hijyen bu kovaları tabandan atıp son
+// günün sıçramasını isabet yapardı; artık isabet seti etiketsiz koşuyla aynı,
+// etiket yalnız puanlamaya girer.
+func TestRunBacktestLabelsDoNotShapeBaseline(t *testing.T) {
+	cfg := chstore.DefaultMLConfig()
+	day0 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	var pts []chstore.MLPoint
+	var labels []chstore.MLLabel
+	for d := 0; d < 8; d++ {
+		sf := day0.Add(time.Duration(d)*24*time.Hour + 12*time.Hour).Unix()
+		if d < 7 {
+			labels = append(labels, chstore.MLLabel{Service: "pay", Signal: "log", Detector: detLogVolume, From: sf, To: sf + 1800, Positive: true})
+		}
+	}
+	// gürültülü taban (MAD > 0): etiketli kovaların dışlanması medyan/MAD'ı
+	// ve dolayısıyla z'yi değiştirirdi.
+	for i, t := 0, day0.Unix(); t < day0.Add(8*24*time.Hour).Unix(); i, t = i+1, t+300 {
+		v := 100.0 + float64(i%7)*4
+		if h := time.Unix(t, 0).UTC(); h.Hour() == 12 && h.Minute() < 30 {
+			v = 160
+			if h.Day() == 8 {
+				v = 240
+			}
+		}
+		pts = append(pts, chstore.MLPoint{T: t, V: v})
+	}
+	from, to := day0.Add(7*24*time.Hour), day0.Add(8*24*time.Hour)
+	series := map[string][]chstore.MLPoint{partTotal: pts}
+	with := RunBacktest(chstore.MLSignalLog, "pay", from, to, series, cfg, chstore.AnomalyCalendarConfig{}, time.UTC, labels, nil)
+	bare := RunBacktest(chstore.MLSignalLog, "pay", from, to, series, cfg, chstore.AnomalyCalendarConfig{}, time.UTC, nil, nil)
+	if len(bare.Hits) == 0 || len(with.Hits) != len(bare.Hits) {
+		t.Fatalf("etiket simüle tabanı değiştirmemeli: etiketli %+v etiketsiz %+v", with.Hits, bare.Hits)
+	}
+	for i := range with.Hits {
+		a, b := with.Hits[i], bare.Hits[i]
+		if a.Detector != b.Detector || a.Part != b.Part || a.From != b.From || a.To != b.To || a.PeakZ != b.PeakZ {
+			t.Fatalf("isabet %d farklı: etiketli %+v etiketsiz %+v", i, a, b)
+		}
 	}
 }
 

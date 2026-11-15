@@ -279,7 +279,7 @@ func (d *LogTemplates) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 	dates, class := baselineDates(last, cfg.BaselineDays, cal, loc)
 	h := last.In(loc).Hour()
 	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalLog, Dates: dates, HourFrom: max(h-1, 0), HourTo: min(h+1, 23),
-		TargetSec: cfg.BucketSec, TZ: loc.String(), Exclude: deps.Labels.Exclude(cfg)})
+		TargetSec: cfg.BucketSec, TZ: loc.String()})
 	if err != nil {
 		return nil, err
 	}

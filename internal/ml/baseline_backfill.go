@@ -664,15 +664,8 @@ func (r *Recorder) backfillEnv(ctx context.Context, cfg chstore.MLConfig, id str
 	}
 	interval := time.Duration(cfg.BackfillIntervalMs) * time.Millisecond
 	cal, loc := calendarFor(r.store.AnomalySensitivityForDetectors())
-	var excl map[string][][2]int64
-	if len(days) > 0 {
-		if from, _, err := baselineDayBounds(days[len(days)-1], loc); err == nil {
-			if labels, lerr := r.store.MLLabels(ctx, from.Add(-baselineLabelsSlack)); lerr == nil {
-				excl = NewLabels(labels).Exclude(cfg)
-			}
-		}
-	}
-	in := baselineInput{Loc: loc, Cal: cal, TargetSec: cfg.BucketSec, Exclude: excl, CfgHash: baselineCfgHash(cfg)}
+	// v0.10.2269 — operatör kararları okunmaz (taban hijyeni kaldırıldı).
+	in := baselineInput{Loc: loc, Cal: cal, TargetSec: cfg.BucketSec, CfgHash: baselineCfgHash(cfg)}
 	srcs := map[string]backfillSource{}
 	if agg, ok := logstore.Unwrap(r.logs).(logstore.MLLogAggregator); ok {
 		srcs[chstore.MLSignalLog] = logBackfillSource{agg: agg, cfg: cfg, sleep: sleep, interval: interval}

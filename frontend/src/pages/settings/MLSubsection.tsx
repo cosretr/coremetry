@@ -186,16 +186,13 @@ export function MLSubsection() {
           </div>
 
           <h3 className={H3}>Kalite çerçevesi</h3>
-          <p className={NOTE}>Log, trace ve metrik için ortak. Olay yazılmadan önce etki eşiği ve rejim kapılarından geçer; "Gerçek anomali / Sorun değil" kararları eşik değiştirmez, yalnız karne için saklanır; bastırılanlar /admin/stats › ml sayaçlarında. Aynı servisin başka sinyaldeki olayı teyit sayılır.</p>
+          <p className={NOTE}>Log, trace ve metrik için ortak. Olay yazılmadan önce etki eşiği ve rejim kapılarından geçer; "Gerçek anomali / Sorun değil" kararları eşiği, tabanı ya da tespiti değiştirmez, yalnız karne için saklanır; bastırılanlar /admin/stats › ml sayaçlarında. Aynı servisin başka sinyaldeki olayı teyit sayılır.</p>
           <div className="grid gap-3 md:grid-cols-2" data-testid="ml-quality">
             {qnum('Etki eşiği (göreli)', 'impactMinRel', '|gözlenen − taban| / taban en az (0.2 = %20)', 0.05)}
             {qnum('Etki eşiği (mutlak)', 'impactMinAbs', 'Serinin biriminde en az fark (0 = yok)', 1)}
             {qnum('Rejim değişimi (saat)', 'regimeHours', 'Bu kadar kesintisiz süren sapma yeni normal sayılır, uzatılmaz (1–168)')}
             {qnum('Teyit penceresi (dk)', 'confirmWindowMin', 'Aynı servisin başka dedektör/sinyal olayı ± bu sürede (1–120)')}
           </div>
-          <CheckboxField className="mt-2" checked={!cfg.quality?.hygieneOff}
-            onCheckedChange={v => setCfg({ ...cfg, quality: { ...cfg.quality, hygieneOff: !v } })}
-            label="Taban hijyeni" hint="Gerçek anomali diye işaretlenen kovalar tabana girmez" />
           </details>
 
           <div className="mt-[18px]">

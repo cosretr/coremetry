@@ -7,9 +7,10 @@ package ml
 //   - rejim değişimi: kesintisiz N saat süren sapma yeni normaldir, uzatılmaz;
 //   - teyit skoru: aynı servis ± pencerede başka dedektör/sinyal olayı;
 //   - config hash: olay hangi ayarla üretildi (replay / what-if).
-// Taban hijyeni (gerçek anomali kovaları tabana girmez) ve eksik veri kuralı
-// dedektör okumasında (Labels.Exclude, dwellWindow). Etiket seti ortak:
-// chstore.MLLabels (sinyal fark etmez).
+// Eksik veri kuralı dedektör okumasında (dwellWindow). v0.10.2269: operatör
+// kararları ("Gerçek anomali / Sorun değil") hiçbir çalışma zamanı yolunu
+// sürmez — taban hijyeni (Labels.Exclude) kaldırıldı; kararlar yalnız karne
+// ve backtest puanlaması içindir (vote_runtime_guard_test.go).
 
 import (
 	"encoding/json"
@@ -20,40 +21,6 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
-
-// Labels — tik başına bir kez yüklenen etiket dizini. nil güvenli.
-type Labels struct {
-	all []chstore.MLLabel
-	// pos — servis → gerçek anomali pencereleri (hijyen).
-	pos map[string][][2]int64
-}
-
-// NewLabels — SAF.
-func NewLabels(ls []chstore.MLLabel) *Labels {
-	l := &Labels{all: ls, pos: map[string][][2]int64{}}
-	for _, x := range ls {
-		if x.Positive {
-			l.pos[x.Service] = append(l.pos[x.Service], [2]int64{x.From, x.To})
-		}
-	}
-	return l
-}
-
-// Exclude — MLBaselineRequest.Exclude; hijyen kapalıysa ya da etiket yoksa nil.
-func (l *Labels) Exclude(cfg chstore.MLConfig) map[string][][2]int64 {
-	if l == nil || cfg.Quality.HygieneOff || len(l.pos) == 0 {
-		return nil
-	}
-	return l.pos
-}
-
-// All — backtest için ham liste.
-func (l *Labels) All() []chstore.MLLabel {
-	if l == nil {
-		return nil
-	}
-	return l.all
-}
 
 // dwellWindow — SAF: [start, last] kovaları (adım step). missingIsZero=false:
 // eksik kova (VM scrape boşluğu) → ok=false, değerlendirme yok. Log'da ES

@@ -111,8 +111,26 @@ func TestMLLabelsFromRows(t *testing.T) {
 	if len(got) != 1 || !got[0].Positive || got[0].From != 100 || got[0].To != 400 || got[0].Service != "pay" {
 		t.Fatalf("got %+v", got)
 	}
-	if !MLExcluded([][2]int64{{100, 400}}, 300) || MLExcluded([][2]int64{{100, 400}}, 401) {
-		t.Fatal("MLExcluded pencere sınırı")
+}
+
+// v0.10.2269 — eski blob'da kalan kaldırılmış anahtarlar (hygieneOff,
+// feedbackOff) temiz çözülür ve yok sayılır; hash'e girmez.
+func TestMLConfigIgnoresRemovedKeys(t *testing.T) {
+	var c MLConfig
+	raw := `{"quality":{"impactMinRel":0.2,"hygieneOff":true,"feedbackOff":true,"regimeHours":6}}`
+	if err := json.Unmarshal([]byte(raw), &c); err != nil {
+		t.Fatalf("eski blob çözülmeli: %v", err)
+	}
+	var d MLConfig
+	if err := json.Unmarshal([]byte(`{"quality":{"impactMinRel":0.2,"regimeHours":6}}`), &d); err != nil {
+		t.Fatal(err)
+	}
+	if NormalizeMLConfig(c).ConfigHash() != NormalizeMLConfig(d).ConfigHash() {
+		t.Fatal("kaldırılmış anahtar hash'i değiştirmemeli")
+	}
+	out, _ := json.Marshal(NormalizeMLConfig(c))
+	if strings.Contains(string(out), "hygieneOff") {
+		t.Fatalf("kaldırılmış anahtar geri yazılmamalı: %s", out)
 	}
 }
 
@@ -193,7 +211,8 @@ func TestMLBaselineSettingOffAndOutOfHash(t *testing.T) {
 // v0.10.2086: svc_breadth (yaygın yavaşlama, varsayılan açık) → 2a9de505e323ff0e.
 // v0.10.2091: dependency_latency varsayılan açık (operatör kararı) → acf357a6c5728b7d.
 // v0.10.2218: geri bildirim alanları kalktı (K3) → 5684c1aa083bb792.
-const mlDefaultHash1813 = "5684c1aa083bb792"
+// v0.10.2269: hygieneOff kalktı (oylar tabanı sürmez) → 95cf5cdad50b25a3.
+const mlDefaultHash1813 = "95cf5cdad50b25a3"
 
 // v0.10.2020 — k8s ailesi: cAdvisor ifadeleri pod toplam satırını
 // (container="") ve duraklatma kabını (POD) süzer; KSM restart ifadesi

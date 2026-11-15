@@ -21,10 +21,8 @@ package ml
 //     Bağımlılık (dep|) serileri toplama girmez.
 //   - Sınıf: tek işlev baselineObsClass (mlDayClass: takvim + yarım gün
 //     13:00 kuralı); hafta içi/cumartesi/pazar = normal (gün slotta).
-//   - Hijyen: etiketli gerçek anomali kovaları (quality.go Labels.Exclude,
-//     MLExcluded ile aynı kapsayıcı sınır) dışlanır. Saatin TÜM kovaları
-//     dışlanırsa satır buckets=0 ile yine yazılır: aynı günün yeniden koşusu
-//     eski satırı ezer (RMT), bant buckets=0 haftayı saymaz.
+//   - Operatör kararları gözleme girmez (v0.10.2269: taban hijyeni
+//     kaldırıldı; "Gerçek anomali" pencereleri artık dışlanmaz).
 //   - Kuantil: Hyndman–Fan tip 7 (doğrusal ara değer, numpy varsayılanı):
 //     h = (n−1)·p, x[⌊h⌋] + (h−⌊h⌋)·(x[⌊h⌋+1] − x[⌊h⌋]). ≤ 12 örnekte de
 //     aynı kural; tek örnek = o değer. Deterministik: girdi sırası çıktıyı
@@ -48,8 +46,7 @@ const baselineCallsPart = "_calls"
 type baselineInput struct {
 	Loc       *time.Location
 	Cal       chstore.AnomalyCalendarConfig
-	TargetSec int                   // canlı kova (cfg.BucketSec)
-	Exclude   map[string][][2]int64 // servis → gerçek anomali pencereleri (nil = hijyen yok)
+	TargetSec int // canlı kova (cfg.BucketSec)
 	CfgHash   string
 }
 
@@ -89,11 +86,13 @@ func baselineObsClass(t time.Time, cal chstore.AnomalyCalendarConfig) string {
 	return chstore.MLBaselineClassNormal
 }
 
-// baselineCfgHash — SAF: gözlemi etkileyen ayarların özeti (kova, hijyen,
-// kuantil yöntemi). Tespit eşikleri gözlemi değiştirmez → hash'e girmez.
+// baselineCfgHash — SAF: gözlemi etkileyen ayarların özeti (kova, kuantil
+// yöntemi). Tespit eşikleri gözlemi değiştirmez → hash'e girmez. obs-v2
+// (v0.10.2269): karar dışlaması kalktı; cfg_hash yalnız kayıt amaçlıdır,
+// hiçbir okuyucu onunla süzmez ya da yeniden hesap tetiklemez.
 func baselineCfgHash(cfg chstore.MLConfig) string {
 	h := fnv.New64a()
-	_, _ = fmt.Fprintf(h, "obs-v1|bucket=%d|hygieneOff=%v|q=hf7", cfg.BucketSec, cfg.Quality.HygieneOff)
+	_, _ = fmt.Fprintf(h, "obs-v2|bucket=%d|q=hf7", cfg.BucketSec)
 	return fmt.Sprintf("%016x", h.Sum64())
 }
 
@@ -260,7 +259,6 @@ func seriesObs(signal, service, part string, pts []obsPoint, in baselineInput) [
 		return keys[i].slot < keys[j].slot
 	})
 	count, rate := baselineCountPart(signal, part)
-	excl := in.Exclude[service]
 	out := make([]chstore.MLBaselineObs, 0, len(keys))
 	for _, k := range keys {
 		g := groups[k]
@@ -273,7 +271,7 @@ func seriesObs(signal, service, part string, pts []obsPoint, in baselineInput) [
 		var vals []float64
 		var calls float64
 		for _, p := range g.pts {
-			if p.sec != fine || chstore.MLExcluded(excl, p.t) {
+			if p.sec != fine {
 				continue
 			}
 			v := p.v

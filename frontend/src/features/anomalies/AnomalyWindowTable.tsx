@@ -77,7 +77,7 @@ export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, 
                   <LinkButton onClick={() => onOpen(e.id)} title={isMLAnomaly(e) ? 'ML olay sayfasını aç' : 'Anomali çekmecesini aç'}>→ detay</LinkButton>
                   {canEdit && e.verdict !== 'anomaly' && (
                     <span style={{ marginLeft: 8 }}>
-                      <LinkButton onClick={() => onVerdict(e, 'anomaly')} title="Gerçek anomali: kararı kaydet (dedektör hassasiyeti için sinyal)">Anomali</LinkButton>
+                      <LinkButton onClick={() => onVerdict(e, 'anomaly')} title="Gerçek anomali: kararı kaydet (yalnız karne etiketi; tespiti değiştirmez)">Anomali</LinkButton>
                     </span>
                   )}
                   {/* v0.10.2080 — ML olayı: susturma yok, «Değil» yalnız ML kararı */}

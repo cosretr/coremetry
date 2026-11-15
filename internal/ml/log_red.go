@@ -357,7 +357,7 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 	if ht > 23 {
 		ht = 23
 	}
-	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalLog, Dates: dates, HourFrom: hf, HourTo: ht, TargetSec: cfg.BucketSec, TZ: loc.String(), Exclude: deps.Labels.Exclude(cfg)})
+	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalLog, Dates: dates, HourFrom: hf, HourTo: ht, TargetSec: cfg.BucketSec, TZ: loc.String()})
 	if err != nil {
 		return nil, err
 	}

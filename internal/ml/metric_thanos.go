@@ -436,7 +436,7 @@ func evalMetricSeries(ctx context.Context, deps Deps, cfg chstore.MLConfig, last
 	dates, class := baselineDates(last, cfg.BaselineDays, sens.Calendar, loc)
 	h := last.In(loc).Hour()
 	t0 := time.Now()
-	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalMetric, Dates: dates, HourFrom: max(h-1, 0), HourTo: min(h+1, 23), TargetSec: cfg.BucketSec, TZ: loc.String(), Exclude: deps.Labels.Exclude(cfg)})
+	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalMetric, Dates: dates, HourFrom: max(h-1, 0), HourTo: min(h+1, 23), TargetSec: cfg.BucketSec, TZ: loc.String()})
 	global.lastCHMs.Store(time.Since(t0).Milliseconds())
 	if err != nil {
 		return nil, err

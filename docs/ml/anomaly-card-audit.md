@@ -390,7 +390,7 @@ boyut kontrolü: tek dosya > 5 MB ise `gzip` ile `.jsonl.gz` (yükleyici E dilim
 | B11 | Kanıt üyeleri 24 sa sonra düşer; aynı kart ertesi gün farklı kanıt gösterir | `mlGroupDetail.ts:5-17` |
 | B12 | Gecikme trafik kapısında birim belirsizliği; çağrı sayısı ve mutlak fark kapısı yok | `trace_red.go:353-355`, `:121-126` |
 | B13 | Olay başına replay kararı yeniden koşmaz; ML için fixture/negatif iddia altyapısı yok; evaluator olayı kayıtsız | §6 |
-| B14 | ✅ **kapandı v0.10.2218** (K3: `feedbackZ` ve dört geri bildirim ayarı silindi). Geri bildirim bugün **çalışma zamanı kararını sürüyor**: `feedbackZ` "değil" sayısıyla z eşiğini yükseltir | `quality.go:119-126,361-365`; `chstore/ml_labels.go:47-49` |
+| B14 | ✅ **kapandı v0.10.2218** (K3: `feedbackZ` ve dört geri bildirim ayarı silindi) + **v0.10.2269** (son etki: taban hijyeni `Labels.Exclude` / `hygieneOff` silindi; oylar artık hiçbir çalışma zamanı yolunu sürmez, bekçi `internal/ml/vote_runtime_guard_test.go`). Geri bildirim bugün **çalışma zamanı kararını sürüyor**: `feedbackZ` "değil" sayısıyla z eşiğini yükseltir | `quality.go:119-126,361-365`; `chstore/ml_labels.go:47-49` |
 | B15 | `svc_volume_spike` worker pod'unda (evaluator) üretilir; ML işleri SRE rolünde | `main.go:705-707`, `main_ml.go:5,33-36` |
 | B16 | Tek sinyal Problem kolu (v0.10.2092) hedefteki "bağımsız kanıt < 2 → Problem adayı değil" kuralıyla çelişir | `group_gate.go:234` † |
 
@@ -712,6 +712,10 @@ dilime gelince sorulur).
   `Labels.Exclude`, ayar `hygieneOff`) de karara bağlı bir çalışma zamanı etkisidir — kalsın mı, operatöre soruldu.
   **Operatör kararı 2026-11-15:** taban hijyeni **kalır** — "Gerçek anomali" işaretli pencereler tabandan dışlanmaya devam eder
   (`Labels.Exclude` / `hygieneOff`); K3 ihlali sayılmaz (gerçek olayları "normal"in dışında tutar). Kod değişikliği yok.
+  **Geçersiz — operatör kararı 2026-11-16 (kesin), v0.10.2269:** oylar yalnız karne etiketidir; taban hijyeni **kaldırıldı**.
+  Canlı tik (`recorder.go`), günlük gözlem işi ve geçmiş doldurma `MLLabels` okumaz; dedektörlerin `MLBaselineRequest.Exclude`'u,
+  `Labels`, `baselineInput.Exclude`, `MLExcluded` ve `hygieneOff` ayarı (Settings onay kutusu) silindi. Backtest etiketleri yalnız
+  isabet puanlamasında kullanır, simüle taban canlı gibi etiketsiz. Yeni hijyen mekanizması yok.
 - **K10:** "bağımsız kanıt < 2 → sınıf `info`, Problem adayı değil" kapısı geçerli; tek sinyal Problem kolu kapı yürürlüğe girince
   kalkar (önce gölge, A1 → A2).
 - **K2:** eşikler kod sabiti, yeni ayar yok.

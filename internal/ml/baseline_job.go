@@ -34,12 +34,11 @@ import (
 )
 
 const (
-	baselineSlices      = 16
-	baselineMaxCatchUp  = 7
-	baselinePoll        = 30 * time.Second
-	baselineDayTimeout  = 30 * time.Minute
-	baselineRetryAfter  = 15 * time.Minute
-	baselineLabelsSlack = 24 * time.Hour
+	baselineSlices     = 16
+	baselineMaxCatchUp = 7
+	baselinePoll       = 30 * time.Second
+	baselineDayTimeout = 30 * time.Minute
+	baselineRetryAfter = 15 * time.Minute
 )
 
 // baselineStore — CH dikişi (testte sahte).
@@ -184,15 +183,8 @@ func (r *Recorder) runBaselineWork(ctx context.Context, st chstore.MLBaselineSta
 		}
 		cal, loc := calendarFor(r.store.AnomalySensitivityForDetectors())
 		dctx, cancel := context.WithTimeout(chstore.WithQueryTag(ctx, "ml:baseline"), baselineDayTimeout)
+		// v0.10.2269 — operatör kararları okunmaz (taban hijyeni kaldırıldı).
 		in := baselineInput{Loc: loc, Cal: cal, TargetSec: cfg.BucketSec, CfgHash: baselineCfgHash(cfg)}
-		from, _, ferr := baselineDayBounds(w.day, loc)
-		if ferr == nil {
-			labels, lerr := r.store.MLLabels(dctx, from.Add(-baselineLabelsSlack))
-			if lerr != nil {
-				log.Printf("[ml] baseline etiketler okunamadı: %v (hijyensiz devam)", lerr)
-			}
-			in.Exclude = NewLabels(labels).Exclude(cfg)
-		}
 		st.Running, st.UpdatedAt = w.day, time.Now().Unix()
 		r.saveBaselineStatus(ctx, st)
 		res, err := runBaselineDay(dctx, r.store, in, w.day)

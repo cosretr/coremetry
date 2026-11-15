@@ -335,7 +335,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	h := last.In(loc).Hour()
 	hf, ht := max(h-1, 0), min(h+1, 23)
 	t0 := time.Now()
-	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalTrace, Dates: dates, HourFrom: hf, HourTo: ht, TargetSec: cfg.BucketSec, TZ: loc.String(), Exclude: deps.Labels.Exclude(cfg)})
+	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalTrace, Dates: dates, HourFrom: hf, HourTo: ht, TargetSec: cfg.BucketSec, TZ: loc.String()})
 	global.lastCHMs.Store(time.Since(t0).Milliseconds())
 	if err != nil {
 		return nil, err

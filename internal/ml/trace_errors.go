@@ -208,7 +208,7 @@ func (d *TraceErrors) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig,
 	dates, class := baselineDates(last, cfg.BaselineDays, sens.Calendar, loc)
 	h := last.In(loc).Hour()
 	base, err := deps.Store.MLSuffixBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalTrace, Dates: dates, HourFrom: max(h-1, 0), HourTo: min(h+1, 23),
-		TargetSec: cfg.BucketSec, TZ: loc.String(), Exclude: deps.Labels.Exclude(cfg)}, traceErrSuffix)
+		TargetSec: cfg.BucketSec, TZ: loc.String()}, traceErrSuffix)
 	if err != nil {
 		return nil, err
 	}

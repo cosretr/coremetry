@@ -108,15 +108,13 @@ func DefaultMLMetricFamilies() map[string][]MLMetricExpr {
 
 // MLQuality — kalite çerçevesi (üç sinyal ortak; operatör 2026-10-31).
 // Dedektör olayı yazılmadan önce recorder bu kapılardan geçirir; bastırılan
-// olay sayacı self-obs'ta (sebep başına). Bool'lar ters adlı: eksik blob
-// alanı = açık (sıfır değer = varsayılan).
+// olay sayacı self-obs'ta (sebep başına). Operatör kararları hiçbir alanı
+// sürmez (v0.10.2269).
 type MLQuality struct {
 	// ImpactMinRel — etki eşiği: |gözlenen − taban| / taban en az bu (0..10, varsayılan 0.2).
 	ImpactMinRel float64 `json:"impactMinRel"`
 	// ImpactMinAbs — etki eşiği mutlak fark (birim serinin birimi; 0 = yok).
 	ImpactMinAbs float64 `json:"impactMinAbs"`
-	// HygieneOff — true: etiketli gerçek anomali kovaları tabandan DIŞLANMAZ.
-	HygieneOff bool `json:"hygieneOff"`
 	// RegimeHours — aynı olay bu kadar saat kesintisiz sürerse rejim değişimi
 	// sayılır: yeni normal, olay uzatılmaz (1..168, varsayılan 6).
 	RegimeHours int `json:"regimeHours"`
@@ -125,7 +123,9 @@ type MLQuality struct {
 	ConfirmWindowMin int `json:"confirmWindowMin"`
 	// Geri bildirim alanları (feedbackOff/MinNegatives/ZStep/MaxBoost)
 	// v0.10.2218'de kalktı (K3): kararlar eşik değiştirmez; eski blob'daki
-	// anahtarlar okunurken yok sayılır.
+	// anahtarlar okunurken yok sayılır. hygieneOff (taban hijyeni) da
+	// v0.10.2269'da kalktı: kararlar tabanı da değiştirmez; eski blob'daki
+	// anahtar aynı şekilde yok sayılır (TestMLConfigIgnoresRemovedKeys).
 }
 
 // MLKafkaLagImpactFloor — v0.10.2041 (Operator-reported: "Consumer lag
@@ -218,7 +218,7 @@ type MLConfig struct {
 	ErrorLevels []string `json:"errorLevels"`
 	// MetricFamilies — aile (dedektör adı) → MetricsQL serileri (M1; varsayılan + düzenlenebilir).
 	MetricFamilies map[string][]MLMetricExpr `json:"metricFamilies"`
-	// Quality — kalite çerçevesi (etki, hijyen, rejim, teyit, geri bildirim).
+	// Quality — kalite çerçevesi (etki, rejim, teyit).
 	Quality MLQuality `json:"quality"`
 	// Baseline — v0.10.1814 (öğrenme döngüsü Faz 1, audit §4.2): günlük
 	// baseline gözlem işi `ml.baseline.enabled`. nil = kapalı (varsayılan).

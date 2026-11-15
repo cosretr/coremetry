@@ -294,7 +294,7 @@ func (d *Volume) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 	dates, class := baselineDates(last, cfg.BaselineDays, sens.Calendar, loc)
 	h := last.In(loc).Hour()
 	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: volSignal, Dates: dates, HourFrom: max(h-1, 0), HourTo: min(h+1, 23),
-		TargetSec: 3600, TZ: loc.String(), Exclude: deps.Labels.Exclude(cfg)})
+		TargetSec: 3600, TZ: loc.String()})
 	if err != nil {
 		return nil, err
 	}

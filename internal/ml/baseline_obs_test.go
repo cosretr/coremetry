@@ -200,21 +200,6 @@ func TestBaselineDayObs(t *testing.T) {
 	}
 }
 
-func TestBaselineDayObsExcludesLabelledBuckets(t *testing.T) {
-	from := time.Date(2026, 11, 4, 10, 0, 0, 0, istanbul).Unix()
-	in := baselineInput{Loc: istanbul, TargetSec: 300, Exclude: map[string][][2]int64{"orders-api": {{from, from + 300}}}}
-	o, ok := findObs(BaselineDayObs(dayFixture(), in), "log", "orders-api", "_total", 58)
-	if !ok || o.Buckets != 10 || o.VMax != 12 || o.Calls != 75 {
-		t.Fatalf("dışlanan iki kova (1, 2) sayılmamalı: %+v", o)
-	}
-	// saatin tüm kovaları dışlanırsa satır buckets=0 ile yine yazılır (yeniden koşu eski satırı ezer)
-	in.Exclude = map[string][][2]int64{"orders-api": {{from, from + 3600}}}
-	o, ok = findObs(BaselineDayObs(dayFixture(), in), "log", "orders-api", "_total", 58)
-	if !ok || o.Buckets != 0 || o.Q50 != 0 {
-		t.Fatalf("tamamı dışlanan saat: %+v ok=%v", o, ok)
-	}
-}
-
 func TestBaselineDayObsHolidayClass(t *testing.T) {
 	cal := chstore.AnomalyCalendarConfig{Timezone: "Europe/Istanbul", FixedHolidaysTR: true}
 	rows := []chstore.MLSeriesRow{
@@ -248,8 +233,8 @@ func TestBaselineCfgHashStable(t *testing.T) {
 		t.Error("gözlem hash'i tespit ayarına bağlı olmamalı")
 	}
 	c := a
-	c.Quality.HygieneOff = true
+	c.BucketSec = 60
 	if baselineCfgHash(a) == baselineCfgHash(c) {
-		t.Error("hijyen gözlemi değiştirir → hash değişmeli")
+		t.Error("kova gözlemi değiştirir → hash değişmeli")
 	}
 }

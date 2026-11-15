@@ -39,8 +39,6 @@ type Deps struct {
 	ObserveES func(d time.Duration)
 	// ObserveVM — VM sorgu süresi; ES bütçesini tüketmez.
 	ObserveVM func(d time.Duration)
-	// Labels — ortak etiket seti (taban hijyeni); nil güvenli.
-	Labels *Labels
 	// Backoff — VM aile backoff'u (vm_budget.go); nil güvenli.
 	Backoff *vmBackoff
 	// Background — alt sistemin ömrüne bağlı context (tik context'i DEĞİL):
@@ -174,17 +172,13 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	// v0.10.1812 — tikin CH sorguları (tracedConn kapısında sayılır)
 	var chQueries atomic.Int64
 	tctx = chstore.WithQueryCounter(tctx, &chQueries)
-	// ortak etiket seti: 30 g kararlar (hijyen + geri bildirim); hata = etiketsiz devam
-	labels, lerr := r.store.MLLabels(tctx, start.Add(-30*24*time.Hour))
-	if lerr != nil {
-		log.Printf("[ml] labels read failed: %v (etiketsiz devam)", lerr)
-	}
-	lb := NewLabels(labels)
-	steps := map[string]int64{"labelsMs": time.Since(start).Milliseconds()}
+	// v0.10.2269 — operatör kararları (anomaly_verdicts / MLLabels) tikte
+	// OKUNMAZ: kararlar yalnız karne etiketidir (vote_runtime_guard_test.go).
+	steps := map[string]int64{}
 	signals := map[string]chstore.MLSignalTick{}
 	esAtStart := global.esQueries.Load()
 	vmAtStart := global.vmQueries.Load()
-	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Labels: lb, Background: ctx, Backoff: r.backoff, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) },
+	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Background: ctx, Backoff: r.backoff, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) },
 		ObserveVM: func(d time.Duration) { global.observeVM(d.Milliseconds()) },
 		ESLeft:    func() int { return cfg.MaxESQueriesPerTick - int(global.esQueries.Load()-esAtStart) }}
 	var firstErr error
@@ -247,7 +241,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	}
 	// v0.10.2045 — log ML olayı yalnız katalogdaki servise (log_service_identity.go).
 	all, logSvc := resolveLogServices(tctx, deps, all, start, 2*time.Duration(cfg.BucketSec)*time.Second)
-	steps["detectorsMs"] = time.Since(start).Milliseconds() - steps["labelsMs"]
+	steps["detectorsMs"] = time.Since(start).Milliseconds()
 	kept, sup := qualityFilter(all, cfg, r.runs, start)
 	// v0.10.2086 — yaygın yavaşlama: bu tikin op_latency olaylarından
 	// türetilir (sorgu yok); aynı kalite süzgecinden (epizot / teyit) geçer.
@@ -467,12 +461,12 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		log.Printf("[ml] tik durumu yazılamadı: %v", serr)
 	}
 	scancel()
-	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,regime:%d,batch:%d labels=%d dur=%dms es_p95=%dms err=%v",
-		r.placement, active, written, sup.Impact, sup.Regime, batchCut, len(labels), time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
+	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,regime:%d,batch:%d dur=%dms es_p95=%dms err=%v",
+		r.placement, active, written, sup.Impact, sup.Regime, batchCut, time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
 	log.Printf("[ml] tick group_problems live=%v opened=%d refreshed=%d resolved=%d", cfg.GroupProblemsOn(), live.Opened, live.Refreshed, live.Resolved)
 	log.Printf("[ml] tick group_shadow groups=%d would_open=%d single_would_open=%d svc_would_open=%d svc_p1=%d contrib_queries=%d log_svc_unmatched=%d log_svc_via_pod=%d", shadow.Groups, shadow.WouldOpen, shadow.SingleWouldOpen, svcOpen, svcP1, contribQ, logSvc.Unmatched, logSvc.ViaPod)
-	log.Printf("[ml] tick steps labels=%dms detectors=%dms write=%dms snapshot=%dms es_queries=%d vm_queries=%d partial=%d docs=%d",
-		steps["labelsMs"], steps["detectorsMs"], steps["writeMs"], steps["snapshotMs"], global.esQueries.Load()-esAtStart, global.vmQueries.Load()-vmAtStart, partialN, global.docs.Load())
+	log.Printf("[ml] tick steps detectors=%dms write=%dms snapshot=%dms es_queries=%d vm_queries=%d partial=%d docs=%d",
+		steps["detectorsMs"], steps["writeMs"], steps["snapshotMs"], global.esQueries.Load()-esAtStart, global.vmQueries.Load()-vmAtStart, partialN, global.docs.Load())
 	for _, line := range kindTickLines(status.Kinds) {
 		log.Print(line)
 	}
