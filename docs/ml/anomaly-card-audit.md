@@ -513,6 +513,19 @@ kırılma) değişmedi, `onset_at` seriden. Hacim log'da aynı seriden, trace p9
 ızgarada basamak (H10 kurucusu); eksik kova 0 (susma). Bant medyan ± criticalZ·effMAD; hacim aynı seriden (log satırı). Maliyet: açık olay
 başına tik başına 1 CH okuması, 0 ES sorgusu, tik başına ≤ 20.
 
+**H12 — `trace_pod_outlier` + `svc_breadth` göçü.** ✅ **gemilendi v0.10.2237** (`internal/ml/pod_outlier_record.go`,
+`breadth_record.go`, `pod_breadth_record_test.go`). *Pod:* seri = aykırı pod'un ölçüsü (5xx oranı % ya da p95 ms), dedektör penceresiyle;
+servis/pod/durum etiketleri tik anında kanıta. Taban `cross_section_pod_median`: her dakikada servisin uygun pod'larının medyanı ve
+dedektörün eşiği (err: max(medyan + z·max(1,4826·MAD, 0,02), 2 × medyan); p95: max(medyan + z·effMAD, 1,5 × medyan)), alt 0. Hacim pod'un
+dakika başına çağrısı. Maliyet: açık olay başına tik başına 3 VM aralık sorgusu, tik başına ≤ 6 olay (≤ 18). *svc_breadth:* seri = "yavaş
+operasyon sayısı" (tik başına üye kuralını sağlayan farklı operasyon), süreç-içi geçmişten (lider değişince sıfır → onset görünmezse kayıt
+`invalid`, kart eski yol); bant sabit kural (üst `breadthMinOps − 1`); üyeler kanıtta bağımsız değil; hacim gerekçeli yok. Ek sorgu yok.
+Sınıf her ikisinde `service_anomaly` (svc_breadth için `info` kararı K8/C ile birlikte açık).
+
+**Kalan (H12 sonrası).** Log `pod_outlier` — atlandı: pod başına seri `ml_series`'te yok; snapshot ES pod kırılım histogramı ister
+(logstore'da toplu yöntem yok; yeni ES yükü) ve sözleşmede snapshot'sız sayısal kayıt istisnası yok. `template_spike` / `rare_template`
+(aile sorgusu kayda; seri `ml_series` `tpl|`), `new_template` / `rare_error_code` (`series.kind=occurrence` dalı), diğer oluşum türleri.
+
 **H3…Hn — dedektör başına birer sürüm** (§9 tablosu; önerilen sıra: VM metrik → `trace_error_count` → `svc_error_rate` → TraceRED →
 bağımlılık → kırılma noktası → log RED → şablon → pod → `svc_breadth` → oluşum türleri). *Risk:* S/M/L sütunu. *Göç:* yok. *Test:* dedektör başına ölçüt 9 + doğrulayıcı.
 

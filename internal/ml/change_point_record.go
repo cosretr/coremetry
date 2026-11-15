@@ -94,37 +94,8 @@ func BuildChangePointRecord(in CPRecordInput) (EventRecord, bool) {
 	if dir != "down" {
 		dir = "up"
 	}
-	out := func(i int) bool { return v[i] > hi[i] }
-	if dir == "down" {
-		out = func(i int) bool { return v[i] < lo[i] }
-	}
 	det := min(max(int((in.DetectedAt.Unix()-in.T0)/recordSnapshotStepSec), 0), n-1)
-	onset := det
-	for onset >= 0 && !out(onset) {
-		onset--
-	}
-	if onset < 0 {
-		onset = det
-	} else {
-		for onset > 0 && out(onset-1) {
-			onset--
-		}
-	}
-	end := n - 1
-	if in.Closed {
-		for j := det + 1; j < n; j++ {
-			if !out(j) {
-				end = j
-				break
-			}
-		}
-	}
-	peak := v[onset]
-	for _, x := range v[onset : end+1] {
-		if (dir == "down" && x < peak) || (dir != "down" && x > peak) {
-			peak = x
-		}
-	}
+	onset, end, peak := bandWindow(v, lo, hi, dir, det, in.Closed)
 	at := func(i int) int64 { return (in.T0 + int64(i)*recordSnapshotStepSec) * 1e9 }
 	trace := in.Signal == chstore.MLSignalTrace
 	seriesSvc := in.SeriesService
@@ -190,6 +161,44 @@ func BuildChangePointRecord(in CPRecordInput) (EventRecord, bool) {
 		rec.Title += " · " + ext + " " + f(peak)
 	}
 	return rec, true
+}
+
+// bandWindow — SAF: seriesWindow'un nokta başına bantlı hali (H10 kova
+// kurucusu, H12 kesitsel/kural bandı): onset = tespit anında ya da öncesindeki
+// son bant-dışı koşunun başı (yoksa tespit anı), bitiş (kapalıysa tespitten
+// sonra banda ilk dönüş, değilse son nokta), penceredeki uç değer.
+func bandWindow(v, lo, hi []float64, dir string, det int, closed bool) (onset, end int, peak float64) {
+	out := func(i int) bool { return v[i] > hi[i] }
+	if dir == "down" {
+		out = func(i int) bool { return v[i] < lo[i] }
+	}
+	onset = det
+	for onset >= 0 && !out(onset) {
+		onset--
+	}
+	if onset < 0 {
+		onset = det
+	} else {
+		for onset > 0 && out(onset-1) {
+			onset--
+		}
+	}
+	end = len(v) - 1
+	if closed {
+		for j := det + 1; j < len(v); j++ {
+			if !out(j) {
+				end = j
+				break
+			}
+		}
+	}
+	peak = v[onset]
+	for _, x := range v[onset : end+1] {
+		if (dir == "down" && x < peak) || (dir != "down" && x > peak) {
+			peak = x
+		}
+	}
+	return onset, end, peak
 }
 
 func anyFloats(x any) []float64 {

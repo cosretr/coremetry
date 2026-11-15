@@ -82,6 +82,8 @@ type Recorder struct {
 	// breadth — v0.10.2086: yaygın yavaşlamanın servis başına ardışık koşul
 	// durumu (svc_breadth.go; süreç-içi, lider değişince sıfır).
 	breadth map[string]breadthRun
+	// breadthH — v0.10.2237 (H12): svc_breadth kaydının sayım geçmişi (süreç-içi).
+	breadthH breadthHist
 }
 
 // WithNotifier — v0.10.2052: grup Problem'i bildirimi için mevcut Problem
@@ -252,6 +254,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	if cfg.DetectorOn(detSvcBreadth) {
 		bevs, next := breadthEvents(kept, isBatch, r.breadth, start, cfg)
 		r.breadth = next
+		r.breadthH.observe(breadthOpsBySvc(kept, isBatch), start) // v0.10.2237 (H12)
 		st := chstore.MLSignalTick{Ran: true, Candidates: len(bevs), Services: distinctServices(bevs)}
 		bk, bsup := qualityFilter(bevs, cfg, r.runs, start)
 		sup.Impact, sup.Regime = sup.Impact+bsup.Impact, sup.Regime+bsup.Regime
@@ -260,6 +263,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		signals[detSvcBreadth] = st
 	} else {
 		r.breadth = nil
+		r.breadthH = breadthHist{}
 	}
 	w0 := time.Now()
 	global.observeSuppression(sup)
@@ -287,6 +291,9 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	// v0.10.2236 (H11): log RED kaydı (ml_series, ES yok)
 	logBudget := logRecordMaxPerTick
 	attachLogREDRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &logBudget, start)
+	podBudget := podRecordMaxPerTick // v0.10.2237 (H12): trace_pod_outlier + svc_breadth kaydı
+	attachPodOutlierRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &podBudget, start)
+	attachBreadthRecords(&r.breadthH, cfg, closing, true, r.runs.firstOf, start)
 	for _, ev := range closing {
 		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {
@@ -377,6 +384,11 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		ids, _ := r.runs.confirmers(ev, start, confirmWin)
 		return ids
 	}, &logBudget, start)
+	attachPodOutlierRecords(tctx, deps, cfg, kept, false, r.runs.firstOf, func(ev chstore.MLEvent) []string {
+		ids, _ := r.runs.confirmers(ev, start, confirmWin)
+		return ids
+	}, &podBudget, start)
+	attachBreadthRecords(&r.breadthH, cfg, kept, false, r.runs.firstOf, start)
 	for _, ev := range kept {
 		if ev.Stage != chstore.MLStageChronic {
 			r.runs.setEvent(ev)

@@ -189,6 +189,7 @@ func (d *TracePods) pods(ctx context.Context, deps Deps, cfg chstore.MLConfig, n
 				StartedAt: last.UnixNano(), LastSeen: to.UnixNano(), WindowSec: uint32(cfg.BucketSec), Baseline: p.Median, Observed: p.Ratio,
 				Score: p.Z, Direction: "up", Evidence: mergeEvidence("", map[string]any{"source": "vm", "family": pin.ID, "measure": measure,
 					"pods": p.Pods, "pod": p.Pod, "errors": p.Errors, "total": p.Total, "windowSec": win,
+					"svcLabel": l.svc, "podLabel": l.pod, "statusLabel": l.status, // v0.10.2237 (H12): kayıt serisi
 					"queryAt": to.Unix(), "sampleTs": sampleTs, "tickAt": now.Unix()})})
 		}
 		for svc, rows := range rowsBy {
