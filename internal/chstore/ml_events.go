@@ -90,6 +90,8 @@ type MLEvent struct {
 	VerdictBy string `json:"verdictBy,omitempty"`
 	VerdictAt int64  `json:"verdictAt,omitempty"`
 	Note      string `json:"note,omitempty"`
+	// VerdictReason — v0.10.2256: "Sorun değil" nedeni (yalnız karne etiketi).
+	VerdictReason string `json:"verdictReason,omitempty"`
 }
 
 // MLEventID — SAF: dedektör × servis × bölüm (level/pod/code) parmak izi.
@@ -340,6 +342,7 @@ func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, 
 			for i := range out {
 				if v, ok := vs[MLVerdictID(out[i].ID)]; ok {
 					out[i].Verdict, out[i].VerdictBy, out[i].VerdictAt, out[i].Note = v.Verdict, v.CreatedBy, v.CreatedAt, v.Note
+					out[i].VerdictReason = v.Reason
 				}
 			}
 		}

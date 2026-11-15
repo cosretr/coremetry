@@ -47,6 +47,8 @@ import { groupStatusText, type MLGroupRow } from './mlGroupRows';
 import { evidenceSource, groupGateLine, groupProblemChip, headerOperation, latestGroupDecision, latestSvcShadow, svcGateLine } from './mlGroupDetail';
 import { MLSourceChart } from './MLSourceChart';
 import { MLRecordCard } from './MLRecordCard';
+import { MLVerdictReasonForm } from './MLVerdictReasonForm';
+import { isVerdictReason, type VerdictReason } from './mlVerdictReason';
 import { recordUsable } from './mlRecord';
 import { useT } from '@/lib/i18n';
 import { contributorLine, leadFromSnapshot, parseLogsLink, type Contributors } from './mlSourcePanel';
@@ -304,10 +306,13 @@ function MLEventActions({ id, card, verdict, localized = false }: { id: string; 
   const role = useAuthRole();
   const canWrite = role === 'admin' || role === 'editor';
   const [busy, setBusy] = useState(false);
-  const put = async (v: 'anomaly' | 'not_anomaly') => {
+  // v0.10.2256 — yeni kartta "Sorun değil" neden sorar (mockup §5); eski kart tek tık kalır.
+  const [asking, setAsking] = useState(false);
+  const put = async (v: 'anomaly' | 'not_anomaly', reason?: VerdictReason, note?: string) => {
     setBusy(true);
     try {
-      await api.putMlVerdict(id, { verdict: v, detector: card.header.detector, service: card.header.service });
+      await api.putMlVerdict(id, { verdict: v, detector: card.header.detector, service: card.header.service, ...(reason ? { reason } : {}), ...(note ? { note } : {}) });
+      setAsking(false);
       await qc.invalidateQueries({ queryKey: keys.anomalies.ml });
       await qc.invalidateQueries({ queryKey: keys.anomalies.unifiedAll }); // v0.10.2051 — birleşik liste ML kararını taşır
     } finally {
@@ -315,14 +320,19 @@ function MLEventActions({ id, card, verdict, localized = false }: { id: string; 
     }
   };
   const why = canWrite ? undefined : L('mlRecord.vote.needEditor', 'Etiketlemek için editör yetkisi gerekir');
+  const reasonText = localized && verdict?.verdict === 'not_anomaly' && isVerdictReason(verdict.reason) ? ` · ${tr(`mlRecord.reason.${verdict.reason}`)}` : '';
   return (
     <div className="rounded-md border border-border bg-card px-3 py-2.5">
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" disabled={busy || !canWrite} title={why} onClick={() => { void put('anomaly'); }}>{L('mlRecord.vote.real', 'Gerçek anomali')}</Button>
-        <Button size="sm" variant="outline" disabled={busy || !canWrite} title={why} onClick={() => { void put('not_anomaly'); }}>{L('mlRecord.vote.notIssue', 'Sorun değil')}</Button>
-        {verdict && <Badge variant="outline" data-testid="ml-verdict">{verdict.verdict === 'anomaly' ? L('mlRecord.vote.isReal', 'gerçek ✓') : L('mlRecord.vote.isNot', 'değil ✗')}{verdict.by ? ` · ${verdict.by}` : ''}</Badge>}
+        <Button size="sm" disabled={busy || !canWrite} title={why} onClick={() => { setAsking(false); void put('anomaly'); }}>{L('mlRecord.vote.real', 'Gerçek anomali')}</Button>
+        <Button size="sm" variant="outline" disabled={busy || !canWrite} title={why} aria-expanded={localized ? asking : undefined}
+          onClick={() => { if (localized) setAsking(a => !a); else void put('not_anomaly'); }}>{L('mlRecord.vote.notIssue', 'Sorun değil')}</Button>
+        {verdict && <Badge variant="outline" data-testid="ml-verdict" title={verdict.note || undefined}>{verdict.verdict === 'anomaly' ? L('mlRecord.vote.isReal', 'gerçek ✓') : L('mlRecord.vote.isNot', 'değil ✗')}{reasonText}{verdict.by ? ` · ${verdict.by}` : ''}</Badge>}
         <span className="text-xs text-muted-foreground">{L('mlRecord.vote.note', 'Etiketiniz bu dedektörün isabet ölçüsüne (ML karnesi) girer.')}</span>
       </div>
+      {localized && asking && canWrite && (
+        <MLVerdictReasonForm busy={busy} onCancel={() => setAsking(false)} onSave={(r, n) => { void put('not_anomaly', r, n); }} />
+      )}
     </div>
   );
 }

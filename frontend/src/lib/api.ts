@@ -1681,7 +1681,7 @@ export const api = {
   mlScorecard: () => get<import('./types').MLScorecard>(`/api/ml/scorecard`),
   // v0.10.2089 — servis düzeyi gölge ↔ eski Problem karşılaştırması (salt-okunur, 60 sn önbellek).
   mlSvcShadowCompare: (days = 14) => get<import('./types').MLSvcShadowCompare>(`/api/ml/svc-shadow-compare?days=${days}`),
-  putMlVerdict: (id: string, body: { verdict: 'anomaly' | 'not_anomaly'; note?: string; detector: string; service: string }) =>
+  putMlVerdict: (id: string, body: { verdict: 'anomaly' | 'not_anomaly'; note?: string; reason?: string; detector: string; service: string }) =>
     request<unknown>(`/api/ml/${encodeURIComponent(id)}/verdict`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }),

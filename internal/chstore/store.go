@@ -300,6 +300,11 @@ type Store struct {
 	// kayıp yok: H1'de hiçbir yazıcı doldurmuyor).
 	hasMLRecordCols atomic.Bool
 
+	// hasVerdictReasonCol — anomaly_verdicts.reason (v0.10.2256, "Sorun
+	// değil" nedeni) var mı. Aynı iki-boot sözleşmesi; false ⇒ INSERT/SELECT
+	// kolonu ATLAR (neden yazılmaz, '' okunur; karar yine kaydedilir).
+	hasVerdictReasonCol atomic.Bool
+
 	// hasDBStmtHashCol records whether the spans table actually carries the
 	// `db_stmt_hash` column (v0.8.375, Stage-2 D1 — persistent DB-statement
 	// identity). Unlike op_group / series_fingerprint the column is
@@ -4327,6 +4332,15 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE ml_events ADD COLUMN IF NOT EXISTS publish_state LowCardinality(String) DEFAULT ''`,
 		`ALTER TABLE ml_events ADD COLUMN IF NOT EXISTS onset_at DateTime64(9) DEFAULT toDateTime64(0, 9)`,
 		`ALTER TABLE ml_events ADD COLUMN IF NOT EXISTS record String DEFAULT '' CODEC(ZSTD(3))`,
+		// v0.10.2256 — "Sorun değil" oyunun nedeni (anomali kartı mockup §5,
+		// operatör onayı): KAPALI küme (no_deviation | no_impact | expected |
+		// other; '' = neden yok / "gerçek" oyu) → LowCardinality (C2-C3).
+		// Serbest metin mevcut `note` kolonunda kalır. Yalnız karne etiketi:
+		// hiçbir tespit / eşik / terfi okuması bu kolonu okumaz. Düşük hacimli
+		// state tablosu: küme kipinde ON CLUSTER (adaptDDL), Distributed
+		// sarmalayıcı yok; ORDER BY / TTL'e girmez; CREATE TABLE'a bilinçli
+		// EKLENMEDİ (promotion emsali). Probe hasVerdictReasonCol (iki-boot).
+		`ALTER TABLE anomaly_verdicts ADD COLUMN IF NOT EXISTS reason LowCardinality(String) DEFAULT ''`,
 		// v0.10.2106 — CoSRE kalite döngüsü D1 (docs/cosre/quality-loop-audit.md
 		// §3.1; operatör onayı 2026-11-13): evalset koşusunun ajan vakalarını
 		// koşan sohbet yolu ('v1' | 'v2'). KAPALI iki değerli küme →
@@ -4829,6 +4843,13 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.hasMLRecordCols.Store(mrOK)
 	if !mrOK {
 		log.Printf("[chstore] `class`/`publish_state`/`onset_at`/`record` columns not present on ml_events (err=%v) — read/INSERT/carry omit them (pre-v0.10.2199 row shape; nothing writes them yet) until the deferred-DDL re-probe or the next boot", mrErr)
+	}
+
+	// anomaly_verdicts.reason probe'u (v0.10.2256) — aynı şekil.
+	vrsOK, vrsErr := s.probeVerdictReasonCol(ctx)
+	s.hasVerdictReasonCol.Store(vrsOK)
+	if !vrsOK {
+		log.Printf("[chstore] `reason` column not present on anomaly_verdicts (err=%v) — read/INSERT omit it; verdicts are stored without a reason until the deferred-DDL re-probe or the next boot", vrsErr)
 	}
 
 	// ai_eval_runs.path probe'u (v0.10.2106) — aynı şekil.

@@ -187,8 +187,11 @@ func (s *Store) reprobePromotedAttrs() {
 		// v0.10.2199 — ml_events olay-kaydı kolonları (anomali kartı H1):
 		// bayrak false kaldıkça dört kolon yazılmaz/okunmaz (eski biçim).
 		mlRecordDone := s.reprobeMLRecordCols(ctx)
+		// v0.10.2256 — anomaly_verdicts.reason: bayrak false kaldıkça "Sorun
+		// değil" nedeni yazılmaz/okunmaz (karar yine kaydedilir).
+		reasonDone := s.reprobeVerdictReasonCol(ctx)
 		cancel()
-		if attrsDone && episodeDone && snapDone && verifiedDone && subjectDone && promotionDone && dirDone && evalPathDone && mlRecordDone {
+		if attrsDone && episodeDone && snapDone && verifiedDone && subjectDone && promotionDone && dirDone && evalPathDone && mlRecordDone && reasonDone {
 			return
 		}
 	}

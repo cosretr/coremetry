@@ -343,6 +343,7 @@ func (s *Server) putMLVerdict(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Verdict  string `json:"verdict"`
 		Note     string `json:"note"`
+		Reason   string `json:"reason"` // v0.10.2256 — "Sorun değil" nedeni (yalnız karne etiketi)
 		Detector string `json:"detector"`
 		Service  string `json:"service"`
 	}
@@ -354,11 +355,16 @@ func (s *Server) putMLVerdict(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "verdict 'anomaly' ya da 'not_anomaly' olmalı")
 		return
 	}
+	reason, ok := chstore.NormalizeVerdictReason(body.Verdict, body.Reason)
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "reason no_deviation | no_impact | expected | other olmalı")
+		return
+	}
 	kind := "ml:" + strings.TrimSpace(body.Detector)
 	v := chstore.AnomalyVerdict{
 		EventID: chstore.MLVerdictID(id), Fingerprint: verdictFingerprint(kind, id, body.Service),
 		Kind: kind, Pattern: id, Service: body.Service,
-		Verdict: body.Verdict, Note: truncRunes(strings.TrimSpace(body.Note), 500),
+		Verdict: body.Verdict, Note: truncRunes(strings.TrimSpace(body.Note), 500), Reason: reason,
 		CreatedBy: claimEmail(auth.FromContext(r.Context())), CreatedAt: time.Now().UnixNano(),
 	}
 	if err := s.store.UpsertAnomalyVerdict(r.Context(), v); err != nil {
@@ -368,7 +374,7 @@ func (s *Server) putMLVerdict(w http.ResponseWriter, r *http.Request) {
 	s.cacheInvalidatePrefix(r.Context(), "ml:")
 	s.cacheInvalidatePrefix(r.Context(), unifiedCachePrefix)     // v0.10.2051 — birleşik liste ML durumunu taşır
 	s.cacheInvalidatePrefix(r.Context(), anomalyFeedCachePrefix) // v0.10.2080 — olay zarfı ML satırı taşır
-	details, _ := json.Marshal(map[string]string{"verdict": body.Verdict, "detector": body.Detector, "service": body.Service, "note": v.Note})
+	details, _ := json.Marshal(map[string]string{"verdict": body.Verdict, "detector": body.Detector, "service": body.Service, "note": v.Note, "reason": v.Reason})
 	s.audit(r, "ml.verdict", "ml_event", id, string(details))
 	writeJSON(w, v)
 }
@@ -484,7 +490,7 @@ func mlReplayVerdict(ev *chstore.MLEvent) map[string]any {
 	if ev == nil || ev.Verdict == "" {
 		return nil
 	}
-	return map[string]any{"verdict": ev.Verdict, "by": ev.VerdictBy, "at": ev.VerdictAt, "note": ev.Note}
+	return map[string]any{"verdict": ev.Verdict, "by": ev.VerdictBy, "at": ev.VerdictAt, "note": ev.Note, "reason": ev.VerdictReason}
 }
 
 // mlReplayKey — SAF: girdiler = olay id + kart saatlerinin dilimi. v2:

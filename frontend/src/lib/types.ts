@@ -12333,7 +12333,7 @@ export interface MLEvent {
   startedAt: number; lastSeen: number; windowSec: number;
   baseline: number; observed: number; score: number; direction: 'up' | 'down' | string;
   evidence?: string; dupOf?: string;
-  verdict?: 'anomaly' | 'not_anomaly'; verdictBy?: string; verdictAt?: number; note?: string;
+  verdict?: 'anomaly' | 'not_anomaly'; verdictBy?: string; verdictAt?: number; note?: string; verdictReason?: string;
   /** v0.10.1843 — tek satır özet, sunucudaki ml.ExplainSummary'den (liste ucu doldurur). */
   summary?: string;
   /** v0.10.1874 — "Seyir": ≤ 24 nokta (olay anı kaydından), a = başlangıç indeksi; kayıt yoksa yok. */
@@ -12441,7 +12441,7 @@ export interface MLSnapshot {
 export interface MLSample { t: number; traceId?: string; body?: string; kind: 'span' | 'log' | string }
 /** v0.10.1843 — snapshot null: kayıt yok/düşmüş, kart canlı olay satırından. */
 /** v0.10.1845 — olay satırının etiketi (anomaly_verdicts 'ml:'); yoksa null. */
-export interface MLReplayVerdict { verdict: 'anomaly' | 'not_anomaly' | string; by?: string; at?: number; note?: string }
+export interface MLReplayVerdict { verdict: 'anomaly' | 'not_anomaly' | string; by?: string; at?: number; note?: string; /** v0.10.2256 — "Sorun değil" nedeni (yalnız karne etiketi). */ reason?: string }
 /** v0.10.1870 — "Olayın seyri" ek katmanı: referans çizgisi (ms) + Go'da kurulmuş etiket. */
 export interface CourseLine { ms: number; label: string }
 /** v0.10.1870 — endpoint'li trace olayının ısı haritası penceresi (ns) ve süzgeci (ml.TraceCourse). */

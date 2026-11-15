@@ -20,3 +20,36 @@ func TestVerdictInPlaceholders(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.2256 — "Sorun değil" nedeni: kapalı küme, yalnız not_anomaly'de.
+func TestNormalizeVerdictReason(t *testing.T) {
+	cases := []struct {
+		verdict, reason, want string
+		ok                    bool
+	}{
+		{VerdictNotAnomaly, "no_impact", "no_impact", true},
+		{VerdictNotAnomaly, " expected ", "expected", true},
+		{VerdictNotAnomaly, "", "", true},
+		{VerdictNotAnomaly, "free text", "", false},
+		{VerdictAnomaly, "no_impact", "", true}, // "gerçek" oyunda neden düşer
+	}
+	for _, c := range cases {
+		got, ok := NormalizeVerdictReason(c.verdict, c.reason)
+		if got != c.want || ok != c.ok {
+			t.Errorf("NormalizeVerdictReason(%q,%q)=(%q,%v) want (%q,%v)", c.verdict, c.reason, got, ok, c.want, c.ok)
+		}
+	}
+}
+
+// v0.10.2256 — kolon yokken (eski replika) INSERT/SELECT reason'ı anmaz.
+func TestVerdictColsReasonGated(t *testing.T) {
+	without, with := verdictCols(false), verdictCols(true)
+	for _, c := range without {
+		if c == "reason" {
+			t.Fatal("kolon görülmeden reason yazılmamalı")
+		}
+	}
+	if len(with) != len(without)+1 || with[len(with)-1] != "reason" {
+		t.Fatalf("reason sona eklenmeli: %v", with)
+	}
+}
