@@ -2356,9 +2356,13 @@ export const api = {
   // podRe (v0.9.536, opsiyonel) — hedefli envanter: sunucu pod=~ ile
   // daraltır, topk(500) servisin kendi pod'ları içinde işler. Boş =
   // tüm cluster (/clusters sayfası, eski davranış).
-  clusterPods: (cluster: string, podRe?: string) =>
+  // namespace (v0.10.2192, opsiyonel) — namespace detayının kapsamlı
+  // envanteri: faz / node / limit sorguları o namespace'e daralır
+  // (cluster-geneli seri tavanı detayı "0/180 çalışıyor" bırakıyordu).
+  clusterPods: (cluster: string, podRe?: string, namespace?: string) =>
     get<ClusterPodsResponse>(`/api/clusters/pods?cluster=${encodeURIComponent(cluster)}` +
-      (podRe ? `&podRe=${encodeURIComponent(podRe)}` : '')),
+      (podRe ? `&podRe=${encodeURIComponent(podRe)}` : '') +
+      (namespace ? `&namespace=${encodeURIComponent(namespace)}` : '')),
   // v0.10.2182 (Clusters S13) — restarts: restart dikey işaretleri (+1 range sorgu; yalnız restart>0).
   clusterPodDetail: (cluster: string, namespace: string, pod: string, fromNs: number, toNs: number, restarts = false) =>
     get<ClusterPodDetail>(`/api/clusters/pods/detail?cluster=${encodeURIComponent(cluster)}` +

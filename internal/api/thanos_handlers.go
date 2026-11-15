@@ -123,10 +123,20 @@ func (s *Server) getClusterPods(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "podRe too long (max 512)", http.StatusBadRequest)
 		return
 	}
-	// Cache anahtarı TÜM girdileri taşır (ev kuralı) — podRe dahil.
+	// v0.10.2192 — namespace: namespace detayının KAPSAMLI envanteri
+	// (PodMetricsInNamespace). Cluster-geneli faz / node / limit sorguları
+	// 1000-seri tavanında kırpılıp detayı "0/180 çalışıyor" bırakıyordu.
+	namespace := strings.TrimSpace(r.URL.Query().Get("namespace"))
+	if len(namespace) > 253 {
+		http.Error(w, "namespace too long", http.StatusBadRequest)
+		return
+	}
+	// Cache anahtarı TÜM girdileri taşır (ev kuralı) — podRe + namespace dahil.
 	// fnv digest'i: regex ham hâliyle Redis anahtarına girmesin.
 	ph := fnv.New64a()
 	ph.Write([]byte(podRe))
+	ph.Write([]byte{0})
+	ph.Write([]byte(namespace))
 	key := fmt.Sprintf("cluster-pods:%s:%s:%x", name, clusterCfgDigest(cfg), ph.Sum64())
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
 		// v0.9.539 — envanter deadline'ı 10s → 6s (operatör: 20+
@@ -138,7 +148,14 @@ func (s *Server) getClusterPods(w http.ResponseWriter, r *http.Request) {
 		// "pod yok" sayılmaz — v0.9.363 sözleşmesi.
 		qctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 		defer cancel()
-		rows, truncated, err := s.thanos.PodMetrics(qctx, cfg, podRe)
+		var rows []thanos.PodRow
+		var truncated bool
+		var err error
+		if namespace != "" {
+			rows, truncated, err = s.thanos.PodMetricsInNamespace(qctx, cfg, namespace)
+		} else {
+			rows, truncated, err = s.thanos.PodMetrics(qctx, cfg, podRe)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -167,6 +184,16 @@ func (s *Server) getClusterPods(w http.ResponseWriter, r *http.Request) {
 			for i := range rows {
 				rows[i].Service = pickPodService(psm[rows[i].Pod], rows[i].Namespace, svcNS)
 			}
+		}
+		// v0.10.2191/2192 — kapsamlı envanterde (≤ namespace'in pod'ları)
+		// entity kenarları boşlukları doldurur: pod →runs→ service ve
+		// span'deki node (kube_pod_info yoksa). Thanos değeri ezilmez.
+		if namespace != "" {
+			names := make([]string, len(rows))
+			for i := range rows {
+				names[i] = rows[i].Pod
+			}
+			fillPodsFromEdges(rows, s.nsPodEdges(qctx, cfg, namespace, names))
 		}
 		return map[string]any{"cluster": name, "pods": rows, "count": len(rows),
 			"truncated": truncated}, nil

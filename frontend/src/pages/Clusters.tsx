@@ -404,8 +404,9 @@ export default function ClustersPage() {
   const detailList = isDetail ? [clusterParam] : [];
   const podQs = useQueries({
     queries: detailList.map(name => ({
-      queryKey: ['cluster-pods', name],
-      queryFn: () => api.clusterPods(name),
+      // v0.10.2192 — namespace detayı kapsamlı envanter çeker (ayrı cache slotu).
+      queryKey: nsView ? ['cluster-pods', name, nsFilterEarly] : ['cluster-pods', name],
+      queryFn: () => api.clusterPods(name, undefined, nsView ? nsFilterEarly : undefined),
       staleTime: 60_000,
       retry: 1,
       enabled: section === 'pods' || nsView,

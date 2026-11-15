@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -649,6 +650,46 @@ func firstN(s string, n int) string {
 // cluster-geneli kesime takılmaz (operator-reported: BFF pod'ları
 // 0.001 core'da top-500'e giremiyordu, "No pods matched").
 func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string) ([]PodRow, bool, error) {
+	return s.podMetrics(ctx, c, podRe, c.NamespaceFilter)
+}
+
+// PodMetricsInNamespace — v0.10.2192 (operator-reported: ocpma/digital
+// namespace detayı "en az 0/180 pod çalışıyor", pod satırlarında Status /
+// Node / CPU "—"; iş yüklerinin hepsi Ready). Namespace detayı cluster-
+// geneli envanteri süzüyordu: faz / node / limit / restart sorguları
+// cluster genelinde koşuyor, binlerce pod'luk OpenShift'te maxSeriesParsed
+// (1000) tavanında kırpılıyor (ya da 8MB gövde tavanında decode düşüyor)
+// ve sorulan namespace'in serileri kesilen kuyrukta kalıyordu — KSM etiket
+// şekli doğru (aynı namespace="digital" seçicisi /deployments'ta çalışıyor).
+// Burada her sorgu namespace="<ns>" ile daralır: seri sayısı namespace'in
+// pod sayısı kadar, topk kesmesi de yalnız o namespace'te.
+// Cluster'ın NamespaceFilter kalkanı korunur: ns filtre dışındaysa boş.
+func (s *Service) PodMetricsInNamespace(ctx context.Context, c ClusterConfig, namespace string) ([]PodRow, bool, error) {
+	nsf, ok := scopedNamespaceFilter(c.NamespaceFilter, namespace)
+	if !ok {
+		return []PodRow{}, false, nil
+	}
+	return s.podMetrics(ctx, c, "", nsf)
+}
+
+// scopedNamespaceFilter — SAF: tek namespace'in nsMatcher regex'i
+// (PromQL regex'i tam-çapalı; QuoteMeta) ve cluster filtresinin onu
+// kapsayıp kapsamadığı. Bozuk cluster filtresi → kapsamıyor (kalkan
+// gevşemez).
+func scopedNamespaceFilter(clusterFilter, namespace string) (string, bool) {
+	if namespace == "" {
+		return "", false
+	}
+	if clusterFilter != "" {
+		re, err := regexp.Compile("^(?:" + clusterFilter + ")$")
+		if err != nil || !re.MatchString(namespace) {
+			return "", false
+		}
+	}
+	return regexp.QuoteMeta(namespace), true
+}
+
+func (s *Service) podMetrics(ctx context.Context, c ClusterConfig, podRe, nsFilter string) ([]PodRow, bool, error) {
 	type acc struct{ cpu, mem, cpuLim, memLim, cpuReq, memReq, netIn, netOut float64 }
 	byKey := map[string]*acc{}
 	get := func(m map[string]string) *acc {
@@ -665,12 +706,12 @@ func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string)
 	// without kube-state-metrics simply leave Pct at 0 — the
 	// HostRow.MemPct contract).
 	cpuSeries, err := s.doQuery(ctx, c, "/api/v1/query",
-		url.Values{"query": {podCPUQuery(c.NamespaceFilter, podRe)}})
+		url.Values{"query": {podCPUQuery(nsFilter, podRe)}})
 	if err != nil {
 		return nil, false, err
 	}
 	memSeries, err := s.doQuery(ctx, c, "/api/v1/query",
-		url.Values{"query": {podMemQuery(c.NamespaceFilter, podRe)}})
+		url.Values{"query": {podMemQuery(nsFilter, podRe)}})
 	if err != nil {
 		return nil, false, err
 	}
@@ -689,15 +730,15 @@ func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string)
 		query string
 		set   func(*acc, float64)
 	}{
-		{podLimitQuery("cpu", c.NamespaceFilter, podRe), func(a *acc, v float64) { a.cpuLim = v }},
-		{podLimitQuery("memory", c.NamespaceFilter, podRe), func(a *acc, v float64) { a.memLim = v }},
+		{podLimitQuery("cpu", nsFilter, podRe), func(a *acc, v float64) { a.cpuLim = v }},
+		{podLimitQuery("memory", nsFilter, podRe), func(a *acc, v float64) { a.memLim = v }},
 		// v0.8.580 — request axis, same best-effort contract:
 		// cluster başına sabit 6 sorgu, hâlâ pod sayısından bağımsız.
-		{podRequestQuery("cpu", c.NamespaceFilter, podRe), func(a *acc, v float64) { a.cpuReq = v }},
-		{podRequestQuery("memory", c.NamespaceFilter, podRe), func(a *acc, v float64) { a.memReq = v }},
+		{podRequestQuery("cpu", nsFilter, podRe), func(a *acc, v float64) { a.cpuReq = v }},
+		{podRequestQuery("memory", nsFilter, podRe), func(a *acc, v float64) { a.memReq = v }},
 		// v0.9.9 — network (best-effort; cluster başına sabit 8 sorgu oldu).
-		{podNetQuery("receive", c.NamespaceFilter, podRe), func(a *acc, v float64) { a.netIn = v }},
-		{podNetQuery("transmit", c.NamespaceFilter, podRe), func(a *acc, v float64) { a.netOut = v }},
+		{podNetQuery("receive", nsFilter, podRe), func(a *acc, v float64) { a.netIn = v }},
+		{podNetQuery("transmit", nsFilter, podRe), func(a *acc, v float64) { a.netOut = v }},
 	} {
 		series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {lim.query}})
 		if err != nil {
@@ -712,7 +753,7 @@ func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string)
 
 	// v0.9.37 — best-effort faz + restart eşlemeleri.
 	phaseBy := map[string]string{}
-	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {podPhaseQuery(c.NamespaceFilter, podRe)}}); err == nil {
+	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {podPhaseQuery(nsFilter, podRe)}}); err == nil {
 		for _, ser := range series {
 			if ser.Metric["phase"] != "" {
 				phaseBy[ser.Metric["namespace"]+"\x00"+ser.Metric["pod"]] = ser.Metric["phase"]
@@ -720,7 +761,7 @@ func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string)
 		}
 	}
 	restartBy := map[string]int{}
-	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {podRestartsQuery(c.NamespaceFilter, podRe)}}); err == nil {
+	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {podRestartsQuery(nsFilter, podRe)}}); err == nil {
 		for _, ser := range series {
 			if v, ok := sampleValue(ser.Value); ok {
 				restartBy[ser.Metric["namespace"]+"\x00"+ser.Metric["pod"]] = int(v)
@@ -732,7 +773,7 @@ func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string)
 	// birebiri). KSM container başına seri basar: aynı pod'un iki
 	// container'ı farklı sebep taşıyabilir, satıra en kötüsü çıkar.
 	reasonBy := map[string]string{}
-	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {podLastTermQuery(c.NamespaceFilter, podRe)}}); err == nil {
+	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {podLastTermQuery(nsFilter, podRe)}}); err == nil {
 		for _, ser := range series {
 			reason := ser.Metric["reason"]
 			if reason == "" {
@@ -746,7 +787,7 @@ func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string)
 	// v0.10.2176 (Clusters S8) — pod'un node'u (best-effort, tek sorgu;
 	// envanter seçicisiyle aynı pod / namespace kapsamı).
 	nodeBy := map[string]string{}
-	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {PodNodeQuery(c.NamespaceFilter, podRe)}}); err == nil {
+	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {PodNodeQuery(nsFilter, podRe)}}); err == nil {
 		for _, ser := range series {
 			if n := ser.Metric["node"]; n != "" {
 				nodeBy[ser.Metric["namespace"]+"\x00"+ser.Metric["pod"]] = n
@@ -755,7 +796,7 @@ func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string)
 	}
 
 	unschedBy := map[string]bool{}
-	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {podUnschedulableQuery(c.NamespaceFilter, podRe)}}); err == nil {
+	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {podUnschedulableQuery(nsFilter, podRe)}}); err == nil {
 		for _, ser := range series {
 			unschedBy[ser.Metric["namespace"]+"\x00"+ser.Metric["pod"]] = true
 		}

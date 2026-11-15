@@ -58,3 +58,20 @@ func (s *Server) attachWorkloadServices(ctx context.Context, cfg thanos.ClusterC
 		rows[i].Service = entity.ResolveWorkloadService(rows[i].Deployment, namespace, rows[i].PodNames, edges, links, known)
 	}
 }
+
+// fillPodsFromEdges — SAF: boş Service / Node alanlarını entity
+// kenarlarından doldurur; Thanos'tan gelen değer ezilmez.
+func fillPodsFromEdges(rows []thanos.PodRow, edges map[string]entity.PodEdges) {
+	for i := range rows {
+		e, ok := edges[rows[i].Pod]
+		if !ok {
+			continue
+		}
+		if rows[i].Service == "" {
+			rows[i].Service = e.Service
+		}
+		if rows[i].Node == "" {
+			rows[i].Node = e.Node
+		}
+	}
+}
