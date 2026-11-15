@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
+
+	"github.com/ClickHouse/clickhouse-go/v2"
 
 	"github.com/cilcenk/coremetry/internal/entity"
 )
@@ -29,63 +32,104 @@ func (s *Store) PutEntitySettingsRaw(ctx context.Context, raw []byte) error {
 	return s.PutSetting(ctx, entitySettingsKey, raw)
 }
 
-// entityOpenLookback — açık ömür okumasının zaman sınırı: staleAfter'ın
-// en büyüğü 30 g; 60 g dışında last_seen'i olan "açık" satır fiilen ölü,
-// diff onu görmez ve yeniden görülürse yeni ömür açılır (doğru davranış).
+// entityOpenLookback — açık ömür okumasının zaman sınırı. Kalıcı satır
+// günde bir tazelenir (entity.RefreshEvery); 60 g dışında last_seen'i
+// olan "açık" satır fiilen ölü, diff onu görmez.
 const entityOpenLookback = 60 * 24 * time.Hour
 
-// EntityOpenLifetimes — cluster'ın açık ömürleri (varlık + ilişki),
-// entity.Store sözleşmesi. İlişki anahtarı "rel|<tip>|<parent>|<child>".
-func (s *Store) EntityOpenLifetimes(ctx context.Context, cid string) (map[string]entity.Lifetime, error) {
-	out := map[string]entity.Lifetime{}
-	since := time.Now().Add(-entityOpenLookback)
-	rows, err := s.conn.Query(ctx, `
-		SELECT entity_id, uid, valid_from, last_seen
+// entityOpenLimit — kalıcı katmanın açık satır tavanı (cluster başına;
+// beklenen ≤ ~90K, entity-storage-cost-note §4 C).
+const entityOpenLimit = 200_000
+
+// entityOpenEntitiesSQL — v0.10.2225: YALNIZ kalıcı tipler. entity_type
+// ORDER BY'ın ilk kolonu: pod/container satırlarının (S1 mirası, TTL'e
+// bırakıldı — E3) granülleri birincil anahtarla elenir; FINAL yalnız
+// kalıcı aralıkta birleştirir. Saf; testte pinli.
+func entityOpenEntitiesSQL() string {
+	return `
+		SELECT entity_type, entity_id, namespace, name, uid, parent_id, label_keys, label_values, source,
+		       valid_from, last_seen
 		FROM entities FINAL
-		WHERE cluster_id = ? AND valid_to = toDateTime(0) AND last_seen >= ?
-		LIMIT 500000
-		SETTINGS max_execution_time = 15`, cid, since)
+		WHERE entity_type IN (?) AND cluster_id = ? AND valid_to = toDateTime(0) AND last_seen >= ?
+		LIMIT ` + strconv.Itoa(entityOpenLimit) + `
+		SETTINGS max_execution_time = 10`
+}
+
+// entityOpenRelationsSQL — kalıcı parent kenarları (cluster→node,
+// cluster→ns, ns→wl): rel_type + cluster_id + parent_id öneki birincil
+// anahtardan; runs / runs_on / wl→pod aralıkları okunmaz. Saf; pinli.
+func entityOpenRelationsSQL() string {
+	return `
+		SELECT rel_type, parent_id, child_id, source, valid_from, last_seen
+		FROM entity_relations FINAL
+		WHERE rel_type = 'parent' AND cluster_id = ?
+		  AND (startsWith(parent_id, 'cluster:') OR startsWith(parent_id, 'ns:'))
+		  AND NOT startsWith(child_id, 'pod:') AND NOT startsWith(child_id, 'ctr:')
+		  AND valid_to = toDateTime(0) AND last_seen >= ?
+		LIMIT ` + strconv.Itoa(entityOpenLimit) + `
+		SETTINGS max_execution_time = 10`
+}
+
+// EntityOpenLifetimes — cluster'ın KALICI katmandaki açık ömürleri + tam
+// alanları (invariant #4: tazeleme/kapanış CH'deki satırı taşır).
+// RowsScanned: sorgu ilerlemesinden gerçek okunan satır (tick günlüğü).
+func (s *Store) EntityOpenLifetimes(ctx context.Context, cid string) (entity.OpenSet, error) {
+	out := entity.OpenSet{Lifetimes: map[string]entity.Lifetime{}, Entities: map[string]entity.Entity{}, Relations: map[string]entity.Relation{}}
+	var scanned atomic.Int64
+	pctx := clickhouse.Context(ctx, clickhouse.WithProgress(func(p *clickhouse.Progress) { scanned.Add(int64(p.Rows)) }))
+	since := time.Now().Add(-entityOpenLookback)
+	rows, err := s.conn.Query(pctx, entityOpenEntitiesSQL(), entity.StableTypes, cid, since)
 	if err != nil {
-		return nil, fmt.Errorf("entity open lifetimes: %w", err)
+		return out, fmt.Errorf("entity open lifetimes: %w", err)
 	}
 	for rows.Next() {
-		var id, uid string
+		var e entity.Entity
+		var keys, vals []string
 		var from, last time.Time
-		if err := rows.Scan(&id, &uid, &from, &last); err != nil {
+		if err := rows.Scan(&e.Type, &e.ID, &e.Namespace, &e.Name, &e.UID, &e.ParentID, &keys, &vals, &e.Source, &from, &last); err != nil {
 			rows.Close()
-			return nil, err
+			return out, err
 		}
-		out[id] = entity.Lifetime{ID: id, UID: uid, ValidFrom: from, LastSeen: last}
+		e.ClusterID = cid
+		e.Labels = make(map[string]string, len(keys))
+		for i, k := range keys {
+			if i < len(vals) {
+				e.Labels[k] = vals[i]
+			}
+		}
+		out.Entities[e.ID] = e
+		out.Lifetimes[e.ID] = entity.Lifetime{ID: e.ID, UID: e.UID, ValidFrom: from, LastSeen: last}
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return out, err
 	}
-	rrows, err := s.conn.Query(ctx, `
-		SELECT rel_type, parent_id, child_id, valid_from, last_seen
-		FROM entity_relations FINAL
-		WHERE cluster_id = ? AND valid_to = toDateTime(0) AND last_seen >= ?
-		LIMIT 1000000
-		SETTINGS max_execution_time = 15`, cid, since)
+	rrows, err := s.conn.Query(pctx, entityOpenRelationsSQL(), cid, since)
 	if err != nil {
-		return nil, fmt.Errorf("entity open relations: %w", err)
+		return out, fmt.Errorf("entity open relations: %w", err)
 	}
 	defer rrows.Close()
 	for rrows.Next() {
-		var typ, parent, child string
+		var r entity.Relation
 		var from, last time.Time
-		if err := rrows.Scan(&typ, &parent, &child, &from, &last); err != nil {
-			return nil, err
+		if err := rrows.Scan(&r.Type, &r.ParentID, &r.ChildID, &r.Source, &from, &last); err != nil {
+			return out, err
 		}
-		key := "rel|" + typ + "|" + parent + "|" + child
-		out[key] = entity.Lifetime{ID: key, ValidFrom: from, LastSeen: last}
+		r.ClusterID = cid
+		key := "rel|" + r.Type + "|" + r.ParentID + "|" + r.ChildID
+		out.Relations[key] = r
+		out.Lifetimes[key] = entity.Lifetime{ID: key, ValidFrom: from, LastSeen: last}
 	}
-	return out, rrows.Err()
+	if err := rrows.Err(); err != nil {
+		return out, err
+	}
+	out.RowsScanned = scanned.Load()
+	return out, nil
 }
 
 // entityApplyBatchRows — v0.10.2214 (S1): tek INSERT'in satır tavanı.
-// Katman her zaman açık; ilk tick (ya da kısma sonrası toplu tazeleme)
-// yüz binlerce satır olabilir — sınırlı parçalar, async_insert dokunulmaz.
+// v0.10.2225'ten beri yalnız kalıcı katman (ilk tick / günlük tazeleme
+// ~27K satır) — sınırlı parçalar, async_insert dokunulmaz.
 const entityApplyBatchRows = 10_000
 
 // EntityApply — tam-satır yazım (varlıklar + ilişkiler), parça parça.
@@ -332,39 +376,4 @@ func isUnknownTableOrColumn(err error) bool {
 	}
 	m := err.Error()
 	return strings.Contains(m, "code: 60") || strings.Contains(m, "code: 47")
-}
-
-// EntityIDsExisting — v0.10.141: verilen id'lerden herhangi bir ömrü olanlar.
-// Backfill yalnız hiç kaydı olmayan ölü pod'ları yazar (yeniden koşum
-// idempotent). FINAL gerekmez (varlık sorusu).
-func (s *Store) EntityIDsExisting(ctx context.Context, cid string, ids []string) (map[string]bool, error) {
-	out := map[string]bool{}
-	// Parçalı sorgu: sessiz kesme yok (inceleme: kesilen kuyruk "kayıt yok"
-	// sayılıp yeniden yazılıyordu). Her parça kendi LIMIT'ini taşır.
-	const chunk = 5000
-	for i := 0; i < len(ids); i += chunk {
-		part := ids[i:min(i+chunk, len(ids))]
-		rows, err := s.conn.Query(ctx, `
-			SELECT DISTINCT entity_id FROM entities
-			WHERE cluster_id = ? AND entity_id IN (?)
-			LIMIT `+strconv.Itoa(chunk)+`
-			SETTINGS max_execution_time = 10`, cid, part)
-		if err != nil {
-			return nil, fmt.Errorf("entity ids existing: %w", err)
-		}
-		for rows.Next() {
-			var id string
-			if err := rows.Scan(&id); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			out[id] = true
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		rows.Close()
-	}
-	return out, nil
 }

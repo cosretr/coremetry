@@ -10,9 +10,11 @@ type Sample struct {
 	Value  float64
 }
 
-// SampleSets — altı serinin yanıtları (kısmi olabilir).
+// SampleSets — beş serinin yanıtları (kısmi olabilir). v0.10.2225: container
+// satırı yazılmadığı için kube_pod_container_info sorgusu düştü (6 → 5);
+// konteyner durumu istek anında Thanos'tan (/api/entity/containers).
 type SampleSets struct {
-	NodeInfo, PodInfo, PodOwner, RSOwner, JobOwner, ContainerInfo []Sample
+	NodeInfo, PodInfo, PodOwner, RSOwner, JobOwner []Sample
 }
 
 // SnapshotQueries — seri adı → PromQL. Her sorgu seçici taşır (filtresiz
@@ -20,12 +22,11 @@ type SampleSets struct {
 // nsMatcher çıktısı) ya da boş. kube_node_info namespace etiketi taşımaz.
 func SnapshotQueries(nsMatcher string) map[string]string {
 	return map[string]string{
-		"node_info":      `kube_node_info{node!=""}`,
-		"pod_info":       `kube_pod_info{pod!=""` + nsMatcher + `}`,
-		"pod_owner":      `kube_pod_owner{pod!=""` + nsMatcher + `}`,
-		"rs_owner":       `kube_replicaset_owner{replicaset!=""` + nsMatcher + `}`,
-		"job_owner":      `kube_job_owner{job_name!=""` + nsMatcher + `}`,
-		"container_info": `kube_pod_container_info{container!=""` + nsMatcher + `}`,
+		"node_info": `kube_node_info{node!=""}`,
+		"pod_info":  `kube_pod_info{pod!=""` + nsMatcher + `}`,
+		"pod_owner": `kube_pod_owner{pod!=""` + nsMatcher + `}`,
+		"rs_owner":  `kube_replicaset_owner{replicaset!=""` + nsMatcher + `}`,
+		"job_owner": `kube_job_owner{job_name!=""` + nsMatcher + `}`,
 	}
 }
 
@@ -84,14 +85,6 @@ func SnapshotFromSamples(ss SampleSets) Snapshot {
 		}
 		out.JobOwners = append(out.JobOwners, JobOwner{Namespace: l["namespace"], Job: l["job_name"],
 			OwnerKind: l["owner_kind"], OwnerName: l["owner_name"]})
-	}
-	for _, s := range ss.ContainerInfo {
-		l := s.Labels
-		if l["namespace"] == "" || l["pod"] == "" || l["container"] == "" || !first("ctr", l["namespace"], l["pod"], l["container"]) {
-			continue
-		}
-		out.Containers = append(out.Containers, ContainerInfo{Namespace: l["namespace"], Pod: l["pod"],
-			Container: l["container"], Image: l["image"]})
 	}
 	return out
 }

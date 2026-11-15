@@ -193,6 +193,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/ai/modelcaps"
 	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/entity"
 	"github.com/cilcenk/coremetry/internal/logstore"
 	"github.com/cilcenk/coremetry/internal/mcp"
 )
@@ -229,6 +230,10 @@ type Deps struct {
 	// yapılandırılmamış (tool dürüst disabled döner). api/mcp_deps.go doldurur.
 	Clusters      func() []ClusterRef
 	EntityEnabled func() bool
+	// v0.10.2225 (entity-storage-cost-note C + R1b) — pod'lar CH satırı değil:
+	// api'nin entity.Resolver.Pods'u (canlı dizin, yoksa entity_seen_5m).
+	// nil = pod kaynağı yok (pod listeleri boş döner).
+	EntityPods func(ctx context.Context, cid string, q entity.PodQuery, at time.Time) ([]entity.ResolvedPod, error)
 	// v0.10.478 (Faz 4, F4-1) — sohbet bağlamı kapanışları (api/chat_context.go);
 	// nil = konuşma yok (dış MCP) → tool'lar dürüst hata.
 	CtxGet   func(ctx context.Context) (map[string]any, error)

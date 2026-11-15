@@ -29,6 +29,16 @@ func (f *fakeSrc) SeenForPods(_ context.Context, _ []string, _ string, pods []st
 	}
 	return out, f.err
 }
+func (f *fakeSrc) SeenPods(_ context.Context, _ []string, ns string, _, _ time.Time) ([]SeenEdge, error) {
+	f.calls++
+	var out []SeenEdge
+	for _, e := range f.seen {
+		if ns == "" || e.Namespace == ns {
+			out = append(out, e)
+		}
+	}
+	return out, f.err
+}
 func (f *fakeSrc) DeploymentLinks(context.Context) ([]DeploymentLink, error) { return f.links, nil }
 func (f *fakeSrc) KnownServices(context.Context) ([]string, error)           { return f.known, nil }
 

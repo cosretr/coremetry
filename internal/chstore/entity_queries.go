@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/entity"
 )
 
 // entity_queries.go — ENTITY SORGU KATMANI (v0.10.130, design §4).
@@ -14,8 +16,8 @@ import (
 // valid_from <= t AND (valid_to = 0 OR valid_to >= t); at sıfırsa "şu an
 // açık". Pivotlar:
 //   servis → pod'lar   entity_seen_5m ORDER BY öneki (service_name önde)
-//   pod → servisler    entity_relations `runs` (parent = pod)
-//   node → pod'lar     entity_relations `runs_on` (child = node, idx_child bloom)
+//   (v0.10.2225: pod yönlü sorular — pod → servis, node → pod — CH satırı
+//   değil, entity.Resolver: canlı dizin, yoksa entity_seen_5m)
 //   pod/pod'lar sağlık entity_seen_5m (cluster, ns, pod) — zaman sınırlı tarama
 
 // EntityRecord — entities satırı (okuma).
@@ -35,6 +37,24 @@ type EntityRecord struct {
 	LastSeen   time.Time         `json:"lastSeen"`
 	Stale      bool              `json:"stale,omitempty"`
 	NameStable bool              `json:"nameStable,omitempty"` // uid yok → ömür ayrımı podGap'e bağlı (UI ilanı)
+}
+
+// PodRecord — v0.10.2225: çözülmüş pod (entity.Resolver; canlı dizin ya da
+// MV) → liste/detay yanıtlarının EntityRecord şekli. Pod'un CH satırı yok;
+// ömür = görülme penceresi, ValidTo yok (açık).
+func PodRecord(p entity.ResolvedPod) EntityRecord {
+	return EntityRecord{Type: entity.TypePod, ClusterID: p.ClusterID, ID: p.ID, Namespace: p.Namespace, Name: p.Name,
+		UID: p.UID, ParentID: p.ParentID(), Source: p.Source, ValidFrom: p.FirstSeen, FirstSeen: p.FirstSeen,
+		LastSeen: p.LastSeen, NameStable: p.UID == ""}
+}
+
+// PodRecords — PodRecord dilimi (nil değil).
+func PodRecords(ps []entity.ResolvedPod) []EntityRecord {
+	out := make([]EntityRecord, len(ps))
+	for i, p := range ps {
+		out[i] = PodRecord(p)
+	}
+	return out
 }
 
 // EntityListQuery — liste/picker girdisi.
@@ -75,6 +95,12 @@ func entityListSQL(q EntityListQuery) (string, []any) {
 	if q.Type != "" {
 		where = append(where, "entity_type = ?")
 		args = append(args, q.Type)
+	} else {
+		// v0.10.2225 (E1/E3): pod/container satırları artık yazılmıyor; S1'in
+		// açık kalmış satırları TTL'e bırakıldı — tipsiz liste yalnız kalıcı
+		// katmanı döner (pod'lar entity.Resolver.Pods'tan).
+		where = append(where, "entity_type IN (?)")
+		args = append(args, entity.StableTypes)
 	}
 	if q.Namespace != "" {
 		where = append(where, "namespace = ?")
@@ -281,52 +307,6 @@ func (s *Store) EntityChildrenCounts(ctx context.Context, cid, id string, at tim
 	return out, rows.Err()
 }
 
-// EntityRelationRow — okuma.
-type EntityRelationRow struct {
-	Type      string     `json:"type"`
-	ParentID  string     `json:"parentId"`
-	ChildID   string     `json:"childId"`
-	Source    string     `json:"source"`
-	ValidFrom time.Time  `json:"validFrom"`
-	ValidTo   *time.Time `json:"validTo,omitempty"`
-	LastSeen  time.Time  `json:"lastSeen"`
-}
-
-// EntityRelations — parent (byChild=false) ya da child (byChild=true, bloom)
-// üzerinden geçerli ilişkiler; from/to penceresine DEĞEN ömürler (pivot
-// penceresi): valid_from <= to AND (valid_to = 0 OR valid_to >= from).
-func (s *Store) EntityRelations(ctx context.Context, cid, relType, id string, byChild bool, from, to time.Time) ([]EntityRelationRow, error) {
-	col := "parent_id"
-	if byChild {
-		col = "child_id"
-	}
-	rows, err := s.conn.Query(ctx, `SELECT rel_type, parent_id, child_id, source, valid_from, valid_to, last_seen
-		FROM entity_relations FINAL
-		WHERE cluster_id = ? AND rel_type = ? AND `+col+` = ?
-		  AND valid_from <= ? AND (valid_to = toDateTime(0) OR valid_to >= ?)
-		ORDER BY last_seen DESC
-		LIMIT 2000
-		SETTINGS max_execution_time = 10`, cid, relType, id, to, from)
-	if err != nil {
-		return nil, fmt.Errorf("entity relations: %w", err)
-	}
-	defer rows.Close()
-	out := []EntityRelationRow{}
-	for rows.Next() {
-		var r EntityRelationRow
-		var vt time.Time
-		if err := rows.Scan(&r.Type, &r.ParentID, &r.ChildID, &r.Source, &r.ValidFrom, &vt, &r.LastSeen); err != nil {
-			return nil, err
-		}
-		if vt.Unix() > 0 {
-			t := vt
-			r.ValidTo = &t
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
-}
-
 // EntitySeenAgg — entity_seen_5m özeti (pod × servis).
 type EntitySeenAgg struct {
 	Cluster   string    `json:"cluster"`
@@ -395,6 +375,36 @@ func (s *Store) EntitySeenForPods(ctx context.Context, clusterValues []string, n
 		args = append(args, namespace)
 	}
 	return s.scanSeenAgg(ctx, entitySeenForPodsSQL(namespace != ""), args...)
+}
+
+// EntitySeenPods — v0.10.2225: cluster değerlerinin pencerede span basan
+// pod'ları (namespace "" = tümü); entity.Resolver.Pods'un MV yedeği (canlı
+// dizin ıskası ya da geçmiş an). Saf SQL testte pinli.
+func (s *Store) EntitySeenPods(ctx context.Context, clusterValues []string, namespace string, from, to time.Time) ([]EntitySeenAgg, error) {
+	if len(clusterValues) == 0 {
+		return []EntitySeenAgg{}, nil
+	}
+	args := []any{from, to, clusterValues}
+	if namespace != "" {
+		args = append(args, namespace)
+	}
+	return s.scanSeenAgg(ctx, entitySeenPodsSQL(namespace != ""), args...)
+}
+
+// entitySeenPodsSQL — zaman sınırı + LIMIT 5000 + max_execution_time.
+// Pod yönlü okuma MV öneki dışıdır (öneki service_name); pencere ≤ 1 saat.
+func entitySeenPodsSQL(withNamespace bool) string {
+	where := "time_bucket >= toStartOfFiveMinute(?) AND time_bucket <= ? AND cluster IN (?) AND k8s_pod != ''"
+	if withNamespace {
+		where += " AND k8s_namespace = ?"
+	}
+	return `SELECT ` + entitySeenAggCols + `
+		FROM entity_seen_5m
+		WHERE ` + where + `
+		GROUP BY cluster, k8s_namespace, k8s_pod, service_name
+		ORDER BY spans DESC
+		LIMIT 5000
+		SETTINGS max_execution_time = 10`
 }
 
 // entitySeenForPodsSQL — v0.10.2193: entity.Resolver'ın pod okuması (Entity

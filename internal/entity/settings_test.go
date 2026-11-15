@@ -13,8 +13,8 @@ func TestConstantsPinned(t *testing.T) {
 	if SyncInterval != time.Minute || PodGap != 10*time.Minute || StaleAfter != 24*time.Hour || ParallelClusters != 4 {
 		t.Fatalf("K1 sabitleri: %v %v %v %d", SyncInterval, PodGap, StaleAfter, ParallelClusters)
 	}
-	if RefreshEvery != 5*time.Minute || RefreshEvery >= PodGap {
-		t.Fatalf("RefreshEvery podGap/2 olmalı: %v", RefreshEvery)
+	if RefreshEvery != 24*time.Hour {
+		t.Fatalf("RefreshEvery 24 saat olmalı (v0.10.2225): %v", RefreshEvery)
 	}
 }
 

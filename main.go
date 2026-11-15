@@ -1218,6 +1218,11 @@ func main() {
 		entitySyncer.SetSeenReader(entity.SeenFromCH(store))
 		entityLeader := cache.NewLeaderHolder(lockImpl, "entity-sync", cache.LeaderTTL(time.Minute))
 		entitySyncer.SetLeaderCheck(entityLeader.IsLeader) // v0.10.141 — API tetikli tick yalnız liderde
+		// v0.10.2225 (entity-storage-cost-note C + R1b): canlı dizin Redis'e
+		// (tek yazıcı = lider); kilit degraded iken (Noop: her replika lider)
+		// tick atlanır — N yazıcı aynı tablolara vurmasın.
+		entitySyncer.SetLive(cacheImpl)
+		entitySyncer.SetLockDegraded(lockDegradedNow.Load)
 		entityLeader.SetOnAcquire(func() { entitySyncer.Tick(ctx) })
 		entityLeader.Start(chstore.WithQueryTag(ctx, "worker:entity-syncer"))
 		go entitySyncer.Run(ctx, entityLeader.IsLeader)

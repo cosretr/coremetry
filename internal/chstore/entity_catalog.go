@@ -36,7 +36,8 @@ func entityCountsByNamespaceSQL(cid, typ string, namespaces []string, at time.Ti
 		SETTINGS max_execution_time = 10`, args
 }
 
-// EntityCountsByNamespace — namespace → adet (workload ya da pod); namespaces
+// EntityCountsByNamespace — namespace → adet (kalıcı tip; v0.10.2225: pod
+// sayısı resolver'dan); namespaces
 // doluysa yalnız onlar.
 func (s *Store) EntityCountsByNamespace(ctx context.Context, cid, typ string, namespaces []string, at time.Time) (map[string]int, error) {
 	if len(namespaces) > 500 {
@@ -56,44 +57,6 @@ func (s *Store) EntityCountsByNamespace(ctx context.Context, cid, typ string, na
 			return nil, err
 		}
 		out[ns] = int(n)
-	}
-	return out, rows.Err()
-}
-
-// entityChildrenCountsByParentsSQL — parent_id başına geçerli çocuk (tip)
-// sayısı; workload'ların pod sayısı. Saf.
-func entityChildrenCountsByParentsSQL(cid, typ string, parents []string, at time.Time) (string, []any) {
-	v, vargs := entityValidAtSQL(at)
-	args := append([]any{cid, typ, parents}, vargs...)
-	return `SELECT parent_id, count() FROM entities FINAL
-		WHERE cluster_id = ? AND entity_type = ? AND parent_id IN (?) AND ` + v + `
-		GROUP BY parent_id
-		LIMIT 5000
-		SETTINGS max_execution_time = 10`, args
-}
-
-// EntityChildrenCountsByParents — {parent_id: adet}; parents boşsa boş.
-func (s *Store) EntityChildrenCountsByParents(ctx context.Context, cid, typ string, parents []string, at time.Time) (map[string]int, error) {
-	if len(parents) == 0 {
-		return map[string]int{}, nil
-	}
-	if len(parents) > 500 {
-		parents = parents[:500]
-	}
-	sql, args := entityChildrenCountsByParentsSQL(cid, typ, parents, at)
-	rows, err := s.conn.Query(ctx, sql, args...)
-	if err != nil {
-		return nil, fmt.Errorf("entity children by parents: %w", err)
-	}
-	defer rows.Close()
-	out := map[string]int{}
-	for rows.Next() {
-		var p string
-		var n uint64
-		if err := rows.Scan(&p, &n); err != nil {
-			return nil, err
-		}
-		out[p] = int(n)
 	}
 	return out, rows.Err()
 }

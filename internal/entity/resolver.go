@@ -16,8 +16,15 @@ import (
 //     IndexPodEdges). Metrik kaynağı S6'da (VM); ham metric_points yok.
 //   - iş yükü → servis: ResolveWorkloadService sırası (pod runs çoğunluğu >
 //     k8s.deployment.name attr bağı > ad eşitliği, son çare).
-//   - iş yükü ↔ pod sahipliği: S0'da depo okumuyor; çağıran KSM'den bildiği
-//     sahipliği `owned` ile verir (S2'de depodan).
+//   - iş yükü ↔ pod sahipliği: çağıran KSM'den bildiği sahipliği `owned`
+//     ile verebilir; vermezse canlı dizinden.
+//
+// v0.10.2225 (entity-storage-cost-note C + R1b): pod'lar CH'de satır
+// DEĞİL. "Şimdi" soruları (at sıfır ya da son 2 tick) önce lider tick'inin
+// Redis'e yazdığı canlı dizinden (live.go) cevaplanır; ıska / Redis
+// kesintisi → aynı soruyu entity_seen_5m'den (S0 yolu). "T anında canlı
+// mıydı" HER ZAMAN MV'den. Pod okuyan her yüzey (api/entities.go,
+// mcptools) Pods / PodsByID'den geçer.
 //
 // Belirsizlikte yanlış kenar yerine kenar yok (alan "").
 
@@ -35,6 +42,9 @@ type ResolverSource interface {
 	SeenForPods(ctx context.Context, clusterValues []string, namespace string, pods []string, from, to time.Time) ([]SeenEdge, error)
 	DeploymentLinks(ctx context.Context) ([]DeploymentLink, error)
 	KnownServices(ctx context.Context) ([]string, error)
+	// SeenPods — v0.10.2225: cluster değerlerinin pencerede span basan pod'ları
+	// (namespace "" = tümü), zaman sınırlı + LIMIT. Pods'un MV yedeği.
+	SeenPods(ctx context.Context, clusterValues []string, namespace string, from, to time.Time) ([]SeenEdge, error)
 }
 
 // ClusterMap — entity cid ↔ span cluster değerleri (Remote Cluster kaydı).
@@ -47,10 +57,36 @@ type ClusterMap interface {
 type Resolver struct {
 	src      ResolverSource
 	clusters ClusterMap
+	live     *LiveIndex
+	now      func() time.Time
 }
 
 func NewResolver(src ResolverSource, clusters ClusterMap) *Resolver {
-	return &Resolver{src: src, clusters: clusters}
+	return &Resolver{src: src, clusters: clusters, now: time.Now}
+}
+
+// WithLive — canlı dizin okuyucusu (nil = yalnız MV yolu).
+func (r *Resolver) WithLive(l *LiveIndex) *Resolver {
+	r.live = l
+	return r
+}
+
+// isNow — soru "şimdi" mi: at sıfır ya da son 2 tick içinde. Daha eski an
+// canlı dizine hiç sorulmaz.
+func (r *Resolver) isNow(at time.Time) bool {
+	if at.IsZero() {
+		return true
+	}
+	d := r.now().Sub(at)
+	return d >= -SyncInterval && d <= 2*SyncInterval
+}
+
+// view — "şimdi" sorusunda cluster'ın canlı görüntüsü.
+func (r *Resolver) view(ctx context.Context, cid string, at time.Time) (*LiveView, bool) {
+	if r.live == nil || !r.isNow(at) {
+		return nil, false
+	}
+	return r.live.View(ctx, cid)
 }
 
 // Hint — ham sinyal (span/metrik/log alanları).
@@ -102,7 +138,16 @@ func (r *Resolver) Lookup(ctx context.Context, h Hint, at time.Time) []Node {
 	}
 	if ok && h.Pod != "" && h.Namespace != "" {
 		out = append(out, Node{ID: PodID(cid, h.Namespace, h.Pod), Type: TypePod, Name: h.Pod})
-		if r.src != nil {
+		served := false
+		if v, live := r.view(ctx, cid, at); live {
+			if p, found := v.Pod(h.Namespace, h.Pod); found {
+				served = true
+				for _, s := range p.Services {
+					addSvc(s.Name)
+				}
+			}
+		}
+		if !served && r.src != nil {
 			seen, err := r.src.SeenForPods(ctx, []string{h.ClusterValue}, h.Namespace, []string{h.Pod}, at.Add(-SeenWindow), at)
 			if err == nil {
 				for _, s := range rankServices(h.Namespace, h.Pod, seen) {
@@ -139,10 +184,20 @@ func rankServices(ns, pod string, seen []SeenEdge) []string {
 }
 
 // Paths — liste sayfaları için toplu yol çözümü. ids: pod: ve wl: id'leri
-// (diğer tipler yok sayılır). owned: wl id → pod id'leri (S0'da KSM'den,
-// çağıran verir). Best-effort: kaynak hatası ilgili alanları boş bırakır,
-// ilk hata döner.
+// (diğer tipler yok sayılır). owned: wl id → pod id'leri (KSM'den, çağıran
+// verir; vermezse "şimdi" sorusunda canlı dizinden). Pod kenarları önce
+// canlı dizinden, bulunamayanlar MV'den. Best-effort: kaynak hatası ilgili
+// alanları boş bırakır, ilk hata döner.
 func (r *Resolver) Paths(ctx context.Context, ids []string, at time.Time, owned map[string][]string) (map[string]Path, error) {
+	views := map[string]*LiveView{}
+	viewOf := func(cid string) *LiveView {
+		v, done := views[cid]
+		if !done {
+			v, _ = r.view(ctx, cid, at)
+			views[cid] = v
+		}
+		return v
+	}
 	ownerOf := map[string]string{}
 	for wl, pods := range owned {
 		for _, p := range pods {
@@ -164,6 +219,7 @@ func (r *Resolver) Paths(ctx context.Context, ids []string, at time.Time, owned 
 		m[ref.Namespace][ref.Name] = true
 	}
 	refs := map[string]Ref{}
+	wlPods := map[string][]string{} // wl id → pod adları
 	for _, id := range ids {
 		ref, ok := ParseID(id)
 		if !ok {
@@ -173,11 +229,28 @@ func (r *Resolver) Paths(ctx context.Context, ids []string, at time.Time, owned 
 		case TypePod:
 			refs[id] = ref
 			addPod(ref)
+			if _, known := ownerOf[id]; !known {
+				if p, found := viewOf(ref.ClusterID).Pod(ref.Namespace, ref.Name); found {
+					ownerOf[id] = p.Workload
+				}
+			}
 		case TypeWorkload:
 			refs[id] = ref
-			for _, p := range owned[id] {
-				if pr, ok := ParseID(p); ok && pr.Type == TypePod {
-					addPod(pr)
+			if pods, given := owned[id]; given {
+				for _, p := range pods {
+					if pr, ok := ParseID(p); ok && pr.Type == TypePod {
+						addPod(pr)
+						wlPods[id] = append(wlPods[id], pr.Name)
+					}
+				}
+				continue
+			}
+			if v := viewOf(ref.ClusterID); v != nil {
+				for _, p := range v.Pods {
+					if p.Namespace == ref.Namespace && SameWorkload(p.Workload, id) {
+						addPod(Ref{Type: TypePod, ClusterID: ref.ClusterID, Namespace: p.Namespace, Name: p.Name})
+						wlPods[id] = append(wlPods[id], p.Name)
+					}
 				}
 			}
 		}
@@ -191,31 +264,35 @@ func (r *Resolver) Paths(ctx context.Context, ids []string, at time.Time, owned 
 	// (cid, ns) → pod → kenar.
 	edges := map[string]map[string]PodEdges{}
 	for cid, byNS := range want {
-		var values []string
-		if r.clusters != nil {
-			values = r.clusters.Values(cid)
-		}
-		if len(values) == 0 || r.src == nil {
-			continue
-		}
+		v := viewOf(cid)
+		var seen []SeenEdge
 		var all []string
 		filterNS := ""
 		for ns, pods := range byNS {
 			filterNS = ns
 			for p := range pods {
+				if lp, found := v.Pod(ns, p); found {
+					seen = append(seen, lp.edges()...)
+					continue
+				}
 				all = append(all, p)
 			}
 		}
 		if len(byNS) > 1 {
 			filterNS = "" // çok namespace'li liste: süzgeç Go'da (IndexPodEdges)
 		}
-		sort.Strings(all)
-		var seen []SeenEdge
-		for i := 0; i < len(all); i += MaxPathIDs {
-			end := min(i+MaxPathIDs, len(all))
-			s, err := r.src.SeenForPods(ctx, values, filterNS, all[i:end], at.Add(-SeenWindow), at)
-			keep(err)
-			seen = append(seen, s...)
+		var values []string
+		if r.clusters != nil {
+			values = r.clusters.Values(cid)
+		}
+		if len(all) > 0 && len(values) > 0 && r.src != nil {
+			sort.Strings(all)
+			for i := 0; i < len(all); i += MaxPathIDs {
+				end := min(i+MaxPathIDs, len(all))
+				s, err := r.src.SeenForPods(ctx, values, filterNS, all[i:end], at.Add(-SeenWindow), at)
+				keep(err)
+				seen = append(seen, s...)
+			}
 		}
 		for ns := range byNS {
 			edges[cid+"/"+ns] = IndexPodEdges(ns, seen)
@@ -241,12 +318,7 @@ func (r *Resolver) Paths(ctx context.Context, ids []string, at time.Time, owned 
 			}
 		case TypeWorkload:
 			p.Workload = id
-			var pods []string
-			for _, pid := range owned[id] {
-				if pr, ok := ParseID(pid); ok {
-					pods = append(pods, pr.Name)
-				}
-			}
+			pods := wlPods[id]
 			svc := ResolveWorkloadService(ref.Name, ref.Namespace, pods, e, nil, nil)
 			if svc == "" && r.src != nil {
 				if !fetched {
@@ -266,4 +338,29 @@ func (r *Resolver) Paths(ctx context.Context, ids []string, at time.Time, owned 
 		out[id] = p
 	}
 	return out, firstErr
+}
+
+// edges — dizindeki pod → SeenEdge'ler (IndexPodEdges girdisi; servisi
+// yoksa yalnız node taşıyan tek satır).
+func (p LivePod) edges() []SeenEdge {
+	if len(p.Services) == 0 {
+		return []SeenEdge{{Namespace: p.Namespace, Pod: p.Name, Node: p.Node, Cluster: p.ClusterValue}}
+	}
+	out := make([]SeenEdge, len(p.Services))
+	for i, s := range p.Services {
+		out[i] = SeenEdge{Namespace: p.Namespace, Pod: p.Name, Node: p.Node, Service: s.Name, Spans: s.Spans, Cluster: p.ClusterValue}
+	}
+	return out
+}
+
+// SameWorkload — iki wl: id aynı iş yükü mü: cluster + namespace + ad;
+// tür yok sayılır (KSM RS sahibi eksikse ReplicaSet, ad türetmesi Derived).
+func SameWorkload(a, b string) bool {
+	if a == b {
+		return a != ""
+	}
+	ra, ok1 := ParseID(a)
+	rb, ok2 := ParseID(b)
+	return ok1 && ok2 && ra.Type == TypeWorkload && rb.Type == TypeWorkload &&
+		ra.ClusterID == rb.ClusterID && ra.Namespace == rb.Namespace && ra.Name == rb.Name
 }

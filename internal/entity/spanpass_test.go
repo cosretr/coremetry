@@ -86,8 +86,9 @@ func TestSpanSeenToEntities(t *testing.T) {
 }
 
 // Syncer'a entegre: span satırları Thanos anlık görüntüsüyle AYNI tick'te
-// aynı diff'e girer (ayrı diff her şeyi kapatırdı); eşlenemeyen değerler
-// '(unmapped)' koşu satırına sayaçlanır.
+// aynı diff'e girer (ayrı diff her şeyi kapatırdı) — yalnız kalıcı katmanı
+// (servis, türetilmiş iş yükü) CH'ye; eşlenemeyen değerler '(unmapped)'
+// koşu satırına sayaçlanır.
 func TestSyncerSpanPass(t *testing.T) {
 	t0 := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
 	src := &fakeSource{clusters: []ClusterRef{{ID: "c-a", Name: "a", SpanClusterValue: "a"}}, sets: map[string]SampleSets{"c-a": podSet("db-0")}}
@@ -100,11 +101,11 @@ func TestSyncerSpanPass(t *testing.T) {
 		{ClusterValue: "ghost", Namespace: "ns", Pod: "g", Service: "g", Spans: 7, LastSeen: t0},
 	}}
 	sy.Tick(context_bg())
-	if _, ok := st.open["c-a"][relKey(RelRuns, PodID("c-a", "ns", "db-0"), ServiceID("db"))]; !ok {
-		t.Fatal("Thanos pod'u için span runs ilişkisi açık olmalı")
+	if _, ok := st.open["c-a"][ServiceID("db")]; !ok {
+		t.Fatal("span'den gelen servis kalıcı varlık olmalı")
 	}
-	if _, ok := st.open["c-a"][PodID("c-a", "ns", "span-only")]; !ok {
-		t.Fatal("span-only pod varlık olmalı")
+	if _, ok := st.open["c-a"][relKey(RelRuns, PodID("c-a", "ns", "db-0"), ServiceID("db"))]; ok {
+		t.Fatal("runs kenarı CH'ye yazılmamalı (canlı dizinde)")
 	}
 	var unmappedRun *Run
 	for i := range st.runs {
@@ -114,13 +115,6 @@ func TestSyncerSpanPass(t *testing.T) {
 	}
 	if unmappedRun == nil || len(unmappedRun.UnmappedKeys) != 1 || unmappedRun.UnmappedKeys[0] != "ghost" || unmappedRun.UnmappedCounts[0] != 1 {
 		t.Fatalf("eşlenemeyen cluster değeri koşu satırına sayaçlanmalı: %+v", unmappedRun)
-	}
-	// İkinci tick: span-only pod artık görülmüyor → kapanır (Thanos ulaşıldı).
-	sy.now = func() time.Time { return t0.Add(time.Minute) }
-	sy.seen = fakeSeen{rows: []SeenRow{{ClusterValue: "a", Namespace: "ns", Pod: "db-0", Node: "w1", Service: "db", Spans: 5, LastSeen: t0.Add(time.Minute)}}}
-	sy.Tick(context_bg())
-	if _, still := st.open["c-a"][PodID("c-a", "ns", "span-only")]; still {
-		t.Fatal("görülmeyen span-only pod kapanmalı")
 	}
 }
 
@@ -133,55 +127,24 @@ func (f fakeSeen) RecentSeen(ctx context.Context, since time.Time) ([]SeenRow, e
 func context_bg() context.Context { return context.Background() }
 
 // v0.10.141 — backfill sözleşmesi (inceleme: küresel pencere ölü pod'ları
-// diriltiyordu): yalnız atanan değer; canlı (≤ podGap) → normal diff, ölü →
-// KAPALI ömür (valid_from = ilk görülme, valid_to = son görülme), yalnız pod
-// entity'si + ilişkileri; aynı pod'un servis satırları birleşir.
-func TestSplitBackfillRowsAndClosedRows(t *testing.T) {
+// diriltiyordu): yalnız atanan değer, yalnız canlı pod'lar; canlı pod'un
+// eski servis satırı da canlı sayılır. v0.10.2225: ölüler yazılmaz.
+func TestBackfillLiveRows(t *testing.T) {
 	now := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
-	cut := now.Add(-10 * time.Minute)
+	cut := now.Add(-time.Hour)
 	rows := []SeenRow{
-		{ClusterValue: "dr-eu-west", Namespace: "pay", Pod: "api-1", Service: "api", Node: "w1", FirstSeen: now.Add(-20 * time.Hour), LastSeen: now.Add(-5 * time.Hour)},
-		{ClusterValue: "dr-eu-west", Namespace: "pay", Pod: "api-1", Service: "billing", FirstSeen: now.Add(-19 * time.Hour), LastSeen: now.Add(-6 * time.Hour)},
-		{ClusterValue: "dr-eu-west", Namespace: "pay", Pod: "api-2", Service: "api", FirstSeen: now.Add(-2 * time.Hour), LastSeen: now.Add(-time.Minute)},
-		{ClusterValue: "dr-eu-west", Namespace: "pay", Pod: "api-2", Service: "old-svc", FirstSeen: now.Add(-20 * time.Hour), LastSeen: now.Add(-8 * time.Hour)}, // canlı pod'un eski servis satırı → CANLI sayılır
-		{ClusterValue: "prod-eu-west", Namespace: "pay", Pod: "api-9", Service: "api", FirstSeen: now.Add(-20 * time.Hour), LastSeen: now.Add(-5 * time.Hour)},
+		{ClusterValue: "dr-eu-west", Namespace: "pay", Pod: "api-1", Service: "api", LastSeen: now.Add(-5 * time.Hour)},
+		{ClusterValue: "dr-eu-west", Namespace: "pay", Pod: "api-2", Service: "api", LastSeen: now.Add(-time.Minute)},
+		{ClusterValue: "dr-eu-west", Namespace: "pay", Pod: "api-2", Service: "old-svc", LastSeen: now.Add(-8 * time.Hour)},
+		{ClusterValue: "prod-eu-west", Namespace: "pay", Pod: "api-9", Service: "api", LastSeen: now},
 		{ClusterValue: "dr-eu-west", Namespace: "", Pod: "x", LastSeen: now},
 	}
-	live, dead := SplitBackfillRows(rows, "dr-eu-west", cut)
-	if len(live) != 2 || live[0].Pod != "api-2" || live[1].Pod != "api-2" || len(dead) != 2 {
-		t.Fatalf("live=%v dead=%v", live, dead)
-	}
-	ents, rels := ClosedRowsForDead("c-1", dead)
-	if len(ents) != 1 || ents[0].ID != "pod:c-1/pay/api-1" || ents[0].Type != TypePod {
-		t.Fatalf("yalnız pod entity'si, birleşik: %+v", ents)
-	}
-	e := ents[0]
-	if !e.ValidFrom.Equal(now.Add(-20*time.Hour)) || !e.ValidTo.Equal(now.Add(-5*time.Hour)) || !e.FirstSeen.Equal(e.ValidFrom) || !e.LastSeen.Equal(e.ValidTo) || e.Source != SourceSpan {
-		t.Fatalf("kapalı ömür zamanları: %+v", e)
-	}
-	kinds := map[string]int{}
-	for _, r := range rels {
-		kinds[r.Type]++
-		if r.ValidTo.IsZero() {
-			t.Fatalf("ilişki kapalı olmalı: %+v", r)
-		}
-	}
-	if kinds[RelParent] != 1 || kinds[RelRuns] != 2 || kinds[RelRunsOn] != 1 {
-		t.Fatalf("ilişkiler parent=1 runs=2 runs_on=1: %v", kinds)
+	live := BackfillLiveRows(rows, "dr-eu-west", cut)
+	if len(live) != 2 || live[0].Pod != "api-2" || live[1].Pod != "api-2" {
+		t.Fatalf("live=%v", live)
 	}
 }
 
 func (f fakeSeen) RecentSeenFor(ctx context.Context, since time.Time, _ string) ([]SeenRow, error) {
 	return f.RecentSeen(ctx, since)
-}
-
-// Canlı kesimi normal pencereyi aşamaz (inceleme: podGap 1 s → 45 dk önce ölen
-// pod "canlı" diye açılıyordu).
-func TestBackfillLiveCutNeverExceedsWindow(t *testing.T) {
-	if got := minDur(time.Hour, seenLookback(60*time.Second)); got != 10*time.Minute {
-		t.Fatalf("podGap 1h, lookback 10m → 10m; got %v", got)
-	}
-	if got := minDur(time.Minute, seenLookback(60*time.Second)); got != time.Minute {
-		t.Fatalf("podGap 1m → 1m; got %v", got)
-	}
 }

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/entity"
 )
 
 // v0.10.130 — entity sorgu katmanı (design §4). Sözleşme: her sorgu
@@ -205,4 +207,47 @@ func TestEntitySeenForPodsSQLShape(t *testing.T) {
 			t.Fatalf("ns=%v: namespace süzgeci %v", ns, got)
 		}
 	}
+}
+
+// v0.10.2225 — Pods'un MV yedeği: zaman sınırlı, LIMIT, max_execution_time.
+func TestEntitySeenPodsSQLShape(t *testing.T) {
+	for _, ns := range []bool{false, true} {
+		sql := entitySeenPodsSQL(ns)
+		for _, want := range []string{"FROM entity_seen_5m", "time_bucket >= toStartOfFiveMinute(?)", "time_bucket <= ?", "cluster IN (?)", "LIMIT 5000", "max_execution_time = 10"} {
+			if !strings.Contains(sql, want) {
+				t.Fatalf("ns=%v: %q yok:\n%s", ns, want, sql)
+			}
+		}
+		if got := strings.Contains(sql, "k8s_namespace = ?"); got != ns {
+			t.Fatalf("ns=%v: namespace süzgeci %v", ns, got)
+		}
+	}
+}
+
+// v0.10.2225 — tick'in açık ömür okuması yalnız kalıcı katman: birincil
+// anahtar öneki (entity_type / rel_type + cluster_id), LIMIT, 10 s tavan.
+func TestEntityOpenLifetimesSQLBounded(t *testing.T) {
+	e, r := entityOpenEntitiesSQL(), entityOpenRelationsSQL()
+	for _, want := range []string{"FROM entities FINAL", "entity_type IN (?) AND cluster_id = ?", "valid_to = toDateTime(0)", "last_seen >= ?", "LIMIT 200000", "max_execution_time = 10"} {
+		if !strings.Contains(e, want) {
+			t.Fatalf("entities: %q yok:\n%s", want, e)
+		}
+	}
+	for _, want := range []string{"FROM entity_relations FINAL", "rel_type = 'parent' AND cluster_id = ?", "NOT startsWith(child_id, 'pod:')", "LIMIT 200000", "max_execution_time = 10"} {
+		if !strings.Contains(r, want) {
+			t.Fatalf("relations: %q yok:\n%s", want, r)
+		}
+	}
+	if sql, args := entityListSQL(EntityListQuery{ClusterID: "c"}); !strings.Contains(sql, "entity_type IN (?)") || !containsStable(args) {
+		t.Fatalf("tipsiz liste yalnız kalıcı katman: %s %v", sql, args)
+	}
+}
+
+func containsStable(args []any) bool {
+	for _, a := range args {
+		if v, ok := a.([]string); ok && len(v) == len(entity.StableTypes) {
+			return true
+		}
+	}
+	return false
 }

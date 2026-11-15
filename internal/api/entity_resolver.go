@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/entity"
 	"github.com/cilcenk/coremetry/internal/thanos"
 )
@@ -18,11 +19,22 @@ type resolverSource struct{ s *Server }
 
 func (a resolverSource) SeenForPods(ctx context.Context, values []string, ns string, pods []string, from, to time.Time) ([]entity.SeenEdge, error) {
 	aggs, err := a.s.store.EntitySeenForPods(ctx, values, ns, pods, from, to)
+	return seenEdges(aggs), err
+}
+
+// SeenPods — v0.10.2225: Resolver.Pods'un MV yedeği.
+func (a resolverSource) SeenPods(ctx context.Context, values []string, ns string, from, to time.Time) ([]entity.SeenEdge, error) {
+	aggs, err := a.s.store.EntitySeenPods(ctx, values, ns, from, to)
+	return seenEdges(aggs), err
+}
+
+func seenEdges(aggs []chstore.EntitySeenAgg) []entity.SeenEdge {
 	out := make([]entity.SeenEdge, len(aggs))
 	for i, g := range aggs {
-		out[i] = entity.SeenEdge{Namespace: g.Namespace, Pod: g.Pod, Node: g.Node, Service: g.Service, Spans: g.Spans, Cluster: g.Cluster}
+		out[i] = entity.SeenEdge{Namespace: g.Namespace, Pod: g.Pod, Node: g.Node, Service: g.Service, Spans: g.Spans, Cluster: g.Cluster,
+			FirstSeen: g.FirstSeen, LastSeen: g.LastSeen}
 	}
-	return out, err
+	return out
 }
 
 func (a resolverSource) DeploymentLinks(ctx context.Context) ([]entity.DeploymentLink, error) {
@@ -60,7 +72,13 @@ func (s *Server) entityResolver() *entity.Resolver {
 	if s.store != nil {
 		src = resolverSource{s}
 	}
-	return entity.NewResolver(src, resolverClusters{s.thanos})
+	// v0.10.2225 (R1b): "şimdi" soruları önce lider tick'inin Redis canlı
+	// dizininden; ıska / Redis yok → MV. Okuyucu süreç başına tek (LiveIndexFor).
+	var live *entity.LiveIndex
+	if s.cache != nil {
+		live = entity.LiveIndexFor(s.cache)
+	}
+	return entity.NewResolver(src, resolverClusters{s.thanos}).WithLive(live)
 }
 
 // attachPodPaths — /pods satırları: servis resolver'dan; node yalnız

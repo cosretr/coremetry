@@ -169,11 +169,13 @@ Ham `spans` hiçbir geçişte okunmaz. A4 ve A10'daki ham okumalar depoya taşı
 - `entity_relations`: pod başına 3 kenar, günde ~1M satır; `serves` ~10K, `calls` ~50K açık satır.
 - **Yazım diyeti (S1):** `Refresh` yalnız `last_seen` sabit bir aralıktan (podGap/2 = 5 dk) eskiyse yazılır;
   boşluk denetimi aynı değeri okuduğundan lider devrinde davranış değişmez. Beklenen: 300K satır/dk → ≤ 60K/dk.
-  Ölçüm yetmezse canlılık Redis ZSET'e (`entity:live:<cid>`), CH'ye yalnız aç/kapa + saatlik damga; Redis
-  kaybında bir tick'te kaynaklardan yeniden kurulur.
+  **v0.10.2225 ile değişti** (`entity-storage-cost-note.md`, C + R1b): CH'de yalnız kalıcı katman (cluster,
+  node, namespace, workload, service + parent kenarları; değişimde + günde bir, ~19 satır/dk); pod/container
+  ve pod uçlu kenarlar satır değil, lider tick'inin Redis'e yazdığı cluster başına tek blob
+  (`coremetry:entity:v1:live:<cid>`, TTL 3 tick). ZSET yedeği düştü.
 - Distributed güvenliği: state tabloları her düğümde tam kopya, okuma yerel, `GLOBAL IN` gerekmez.
-  `entity_seen` shard anahtarı `service_name`; pod yönlü soru MV'yi önek dışı okumak yerine
-  `entity_relations` (`runs`, pod öneki; ters yön `idx_child` bloom) ile cevaplanır.
+  `entity_seen` shard anahtarı `service_name`; pod yönlü "şimdi" sorusu canlı dizinden (bellek içi),
+  ıskada ya da geçmiş anda `entity_seen_5m`'den (v0.10.2225; `entity_relations.runs` artık yazılmıyor).
 - Liste sayfası N+1 yapmaz: toplu yol çözümü (≤ 500 id) 2 sorgudur (`parent_id IN`, `entity_id IN`).
 
 ### 3.4 Pod churn ve çok replika
@@ -217,7 +219,7 @@ Araç çıktıları deterministik veridir; LLM'e bağlı adım yok (prod LLM yal
 | Dilim | İçerik | Kullanıcının gördüğü | Risk | Göç / geri alma | Testler |
 |---|---|---|---|---|---|
 | **S0 — Resolver v0 + Clusters** ✅ v0.10.2193 | `entity.Resolver` (`Lookup`, `Paths`), mevcut kaynaklar üstünde, şema yok. Clusters `/pods` ve `/deployments` aynı yoldan; A1 ve A2 silinir | Pod satırlarının servis kolonu metrik basmayan uygulamalarda da dolar; pod ve iş yükü tabloları aynı cevabı verir | `/pods` gecikmesi (+1 MV okuması) | Şema yok; geri alma = sürümü geri al | Öncelik tablo testi; SQL şekil testi (zaman sınırı, LIMIT, `max_execution_time`); handler golden; `PodServiceMap` çağıranı kalmadı ratchet'i |
-| **S1 — Her zaman açık + yazım diyeti** ✅ v0.10.2214 | Bayrak ve 4 vida → sabit (K1); atanmamış span cluster değeri → cluster entity (K2); `Refresh` kısma; Settings sekmesi yalnız durum | Kurulum yapmadan Pod/Entity sayfaları, Service → Pods, `list_pods`; atanmamış cluster'lar görünür | Açılışta ilk tick yükü; yanlış cluster çoğalması | `entity_layer` blob'unda yalnız backfill durumu kalır; geri alma = sürüm, veri durur | Kısma tablo testi (lider devri dahil); iki syncer aynı girdi → aynı satırlar; prod'da satır/dk ölçümü |
+| **S1 — Her zaman açık + yazım diyeti** ✅ v0.10.2214, değişiklik v0.10.2225 (aşağıda "S1 değişikliği") | Bayrak ve 4 vida → sabit (K1); atanmamış span cluster değeri → cluster entity (K2); `Refresh` kısma; Settings sekmesi yalnız durum | Kurulum yapmadan Pod/Entity sayfaları, Service → Pods, `list_pods`; atanmamış cluster'lar görünür | Açılışta ilk tick yükü; yanlış cluster çoğalması | `entity_layer` blob'unda yalnız backfill durumu kalır; geri alma = sürüm, veri durur | Kısma tablo testi (lider devri dahil); iki syncer aynı girdi → aynı satırlar; prod'da satır/dk ölçümü |
 | **S2 — Kararlı iş yükü kimliği + `serves`** | Kanonik Kind, `same_as`, wl→svc kenarı kalıcı. Rollouts ve Service Infra resolver'dan; A5, A6, A7 silinir | Rollouts iş yükü hapı her zaman doğru servise/entity'ye gider; Service sayfasında "çalıştığı iş yükleri" | Eski `Derived`/ReplicaSet id'li linkler | Yeni `rel_type` değerleri, DDL yok; eski satırlar TTL ile düşer; geri alma = sürüm | Kanonikleştirme tablo testi; `same_as` 1 adım; `bsa-digital-dashboard-prod` regresyon satırı |
 | **S3 — Pod ↔ log ↔ trace** | `/api/logs` entity kapsamı (ES ve CH alan eşlemesiyle); span detayında yol çipleri; pod → trace `k8s_pod` kolonundan; A8, A9 silinir | Pod logları iki backend'de de doğru; trace'ten pod/iş yükü/servise tek tık ve geri | ES alan adı çeşitliliği | Şema yok; geri alma = sürüm | Backend başına süzgeç golden'ı; FE vitest; ES sorgu şekli (term, PIT yok) |
 | **S4 — CoSRE / MCP** | `ServicePodRegex` → `Neighbours`; `resolve_entity` yol + komşu; sweep/healthcheck pod adaptörleri | Adı deployment'tan farklı servislerde pod sağlığı gelir; kardeş önek karışmaz | Depoda olmayan servis (span yok) | Geri dönüş yolu yok (shim yasağı); depo boşsa araç "pod bilinmiyor" der | Araç golden'ları; CoSRE eval setinde pod soruları; regex çağıranı kalmadı ratchet'i |
@@ -254,3 +256,22 @@ karar yalnız CH'deki `last_seen`'e bağlı. K2 span-only cluster: `ClusterRef.S
 sorgusu yok; atanmış değerin eski span-only ömürleri S2'nin `same_as`'ına kadar açık kalır, `last_seen` donar.
 `EntityApply` 10K satırlık parçalar. Tick başına `[entity] tick: … rows_read … refresh_skipped … duration_ms`.
 Settings sekmesi yalnız durum. Şema yok. Beklenen: ~300K satır/dk → ~51K/dk (40K pod).
+
+**S1 değişikliği (v0.10.2225; `entity-storage-cost-note.md`, operatör onayı 2026-11-15: C + R1b, E1–E4
+öneriler gibi):** pod, container ve pod uçlu kenarlar (wl→pod, ns→pod, pod→ctr, `runs`, `runs_on`) CH'ye
+yazılmaz; kalıcı katman (cluster, node, namespace, workload, service + iki ucu kalıcı parent kenarları)
+değişimde + günde bir (`RefreshEvery` 5 dk → 24 sa). `PodGap` sessizlik kuralı kalktı: kapanış yalnız art
+arda başarılı görüntülerde ≥ `PodGap` yokluk (`diff.go` `Absence`); syncer susması ömrü kapatıp yeniden açmaz.
+Tick'in açık ömür okuması yalnız kalıcı tipler (birincil anahtar öneki, LIMIT 200K, 10 s), tam satır taşır
+(invariant #4); günlükte gerçek taranan satır (`rows_scanned`). Canlı dizin: lider tick'i cluster başına tek
+gzip JSON blob, `coremetry:entity:v1:live:<cid>`, TTL 3 tick; `entity.Resolver` "şimdi" sorularında önce
+ondan, ıska/Redis kesintisi/geçmiş anda MV. Redis kilidi degraded iken tick atlanır. `container_info`
+sorgusu düştü (6 → 5). `backfillDead` / `ClosedRowsForDead` / `Existing` silindi. S1'den kalan açık pod
+satırları TTL'e bırakıldı (E3; tipsiz liste ve çocuk sayımı onları okumaz).
+
+**S2–S6 ayarı (aynı onay):** S2 — `serves` (wl→svc) geçici pod ile kalıcı servis arasındaki tek kalıcı
+köprü; "sahiplik S2'de depodan" notu düşer, canlı dizinden gelir. S3 — `/api/logs?entity=pod:…` kimliği
+ayrıştırır, ad + namespace + cluster değeri + zorunlu zaman penceresiyle süzer, depo okuması yok; span
+çipleri span kolonlarından + dizinden. S4 — `Neighbours(svc→pod)` ve `list_pods` canlı dizinden, `at`
+geçmişteyse MV öneki. S5 — host, db, queue, ext ve `calls` kalıcı katmana (aç/kapat + günlük tazeleme).
+S6 — K6'ya pod önekli ömür MV'si seçeneği (Q6'ya göre); VM'den gelen metrik `runs` dizin girdisi olur.

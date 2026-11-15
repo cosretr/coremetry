@@ -8,8 +8,8 @@ import (
 // normalize.go — METRİK ETİKET NORMALİZASYONU + OWNER ZİNCİRİ (saf).
 //
 // Bir cluster'ın Thanos anlık görüntüsü (kube_node_info, kube_pod_info,
-// kube_pod_owner, kube_replicaset_owner, kube_job_owner,
-// kube_pod_container_info) → varlıklar + ilişkiler. Deterministik sıra
+// kube_pod_owner, kube_replicaset_owner, kube_job_owner) → varlıklar +
+// ilişkiler. Deterministik sıra
 // (id'ye göre) — diff ve yazım idempotent kalsın.
 //
 // Owner zinciri yalnız standart K8s tipleri: Pod → ReplicaSet → Deployment;
@@ -29,16 +29,14 @@ type PodInfo struct {
 type PodOwner struct{ Namespace, Pod, OwnerKind, OwnerName string }
 type RSOwner struct{ Namespace, ReplicaSet, OwnerKind, OwnerName string }
 type JobOwner struct{ Namespace, Job, OwnerKind, OwnerName string }
-type ContainerInfo struct{ Namespace, Pod, Container, Image string }
 
 // Snapshot — bir cluster'ın tek tick'lik görüntüsü.
 type Snapshot struct {
-	Nodes      []NodeInfo
-	Pods       []PodInfo
-	PodOwners  []PodOwner
-	RSOwners   []RSOwner
-	JobOwners  []JobOwner
-	Containers []ContainerInfo
+	Nodes     []NodeInfo
+	Pods      []PodInfo
+	PodOwners []PodOwner
+	RSOwners  []RSOwner
+	JobOwners []JobOwner
 }
 
 // Entity — entities satırının yazım-öncesi hâli (ömür alanları diff'te).
@@ -198,19 +196,6 @@ func Normalize(cid string, s Snapshot) ([]Entity, []Relation) {
 			}
 			rel(RelRunsOn, podID, nodeID)
 		}
-	}
-	for _, c := range s.Containers {
-		if c.Namespace == "" || c.Pod == "" || c.Container == "" {
-			continue
-		}
-		podID := PodID(cid, c.Namespace, c.Pod)
-		if _, ok := ents[podID]; !ok {
-			continue // pod listesinde olmayan container: sahipsiz, atla
-		}
-		id := ContainerID(cid, c.Namespace, c.Pod, c.Container)
-		add(Entity{Type: TypeContainer, ID: id, Namespace: c.Namespace, Name: c.Container, ParentID: podID,
-			Labels: AllowedLabels(map[string]string{"image": c.Image})})
-		rel(RelParent, podID, id)
 	}
 	outE := make([]Entity, 0, len(ents))
 	for _, e := range ents {

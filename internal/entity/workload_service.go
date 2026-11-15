@@ -3,6 +3,7 @@ package entity
 import (
 	"sort"
 	"strings"
+	"time"
 )
 
 // workload_service.go — v0.10.2191 (operator-reported: Clusters ns detayında
@@ -29,6 +30,9 @@ type SeenEdge struct {
 	Spans                         int64
 	// Cluster — span'in cluster DEĞERİ (v0.10.2195; trace süzgeci bu değerle).
 	Cluster string
+	// FirstSeen / LastSeen — penceredeki ilk/son span (v0.10.2225: pod kaydı
+	// MV'den kurulurken).
+	FirstSeen, LastSeen time.Time
 }
 
 // PodEdges — bir pod'un baskın servisi ve span'den bilinen node'u.

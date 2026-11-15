@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,13 +16,18 @@ import (
 // Her tick: Clusters() (Remote Cluster listesi — her tick okunur, yeni
 // cluster restart'sız gelir, kaldırılan cluster sync edilmez ama kayıtları
 // kalır) → cluster başına bounded paralel `syncCluster` → altı seçicili
-// anlık sorgu (SnapshotQueries; matcher doQuery'de) → Normalize → açık
-// ömürlerle Diff → tam-satır INSERT → sync_runs satırı. Bir cluster'ın
-// hatası diğerlerini etkilemez; hatalı cluster'da HİÇBİR ömür kapanmaz
-// (yokluk bilinmiyor). Silme yok.
+// anlık sorgu (SnapshotQueries; matcher doQuery'de) → Normalize + span
+// geçişi → (1) canlı dizin blob'u Redis'e (live.go; pod/container ve pod
+// uçlu kenarlar YALNIZ burada) → (2) KALICI katman (cluster, node,
+// namespace, workload, service + parent kenarları) açık ömürlerle Diff →
+// değişimde + günde bir tam-satır INSERT → sync_runs satırı
+// (v0.10.2225, entity-storage-cost-note C + R1b). Bir cluster'ın hatası
+// diğerlerini etkilemez; hatalı cluster'da HİÇBİR ömür kapanmaz (yokluk
+// bilinmiyor). Silme yok.
 //
 // Lider kilidi ve ticker'ı çağıran (main.go) kurar: cache.LeaderHolder
-// key "entity-sync"; Tick, IsLeader() true iken çağrılır.
+// key "entity-sync"; Tick, IsLeader() true iken çağrılır. Redis kilidi
+// degraded iken (Noop kilit: her replika lider) tick HİÇ koşmaz.
 
 // ClusterRef — Remote Cluster kaydının syncer'a gereken kısmı.
 type ClusterRef struct {
@@ -78,14 +85,48 @@ const (
 	RunSkipped = "skipped"
 )
 
+// OpenSet — kalıcı katmanın açık ömürleri + tam alanları. Invariant #4:
+// tazeleme ve kapanış satırları alanlarını CH'den taşır (bellekten değil;
+// lider devrinde yeni lider aynı satırı yazar).
+type OpenSet struct {
+	Lifetimes map[string]Lifetime
+	Entities  map[string]Entity   // varlık ömürlerinin alanları
+	Relations map[string]Relation // ilişki ömürlerinin alanları (anahtar relKey)
+	// RowsScanned — CH'nin gerçekten taradığı satır (sorgu ilerlemesi);
+	// döndürülen satır sayısı değil.
+	RowsScanned int64
+}
+
 // Store — CH kapısı (chstore adaptörü; testte bellek).
 type Store interface {
-	OpenLifetimes(ctx context.Context, cid string) (map[string]Lifetime, error)
+	OpenLifetimes(ctx context.Context, cid string) (OpenSet, error)
 	Apply(ctx context.Context, cid string, rows []EntityRow, rels []RelationRow) error
 	RecordRun(ctx context.Context, run Run) error
-	// Existing — v0.10.141: bu id'lerden HERHANGİ bir ömrü olanlar (backfill
-	// yalnız hiç kaydı olmayan ölü pod'ları yazar; yeniden koşum idempotent).
-	Existing(ctx context.Context, cid string, ids []string) (map[string]bool, error)
+}
+
+// StableTypes — CH'de satır olarak duran kalıcı katman (E1). Pod ve
+// container yalnız canlı dizinde + entity_seen_5m'de.
+var StableTypes = []string{TypeCluster, TypeNode, TypeNamespace, TypeWorkload, TypeService}
+
+// IsStableType — tip kalıcı katmanda mı.
+func IsStableType(t string) bool {
+	for _, x := range StableTypes {
+		if x == t {
+			return true
+		}
+	}
+	return false
+}
+
+// IsStableRelation — iki ucu da kalıcı olan parent kenarı (cluster→node,
+// cluster→ns, ns→wl). runs / runs_on / wl→pod / pod→ctr dizinde.
+func IsStableRelation(rl Relation) bool {
+	if rl.Type != RelParent {
+		return false
+	}
+	p, ok1 := ParseID(rl.ParentID)
+	c, ok2 := ParseID(rl.ChildID)
+	return ok1 && ok2 && IsStableType(p.Type) && IsStableType(c.Type)
 }
 
 // Observability — /api/admin/entities/sync + SystemStats.
@@ -104,9 +145,9 @@ type Observability struct {
 }
 
 type clusterState struct {
-	prevEnts map[string]Entity // son BAŞARILI anlık görüntünün varlıkları (kapanış satırları tam alan taşısın)
-	lastOK   time.Time
-	lastErr  string
+	absent  map[string]Absence // art arda başarılı görüntülerde süren yokluklar (DiffLifetimes)
+	lastOK  time.Time
+	lastErr string
 }
 
 // Syncer — durumlu işçi.
@@ -122,12 +163,23 @@ type Syncer struct {
 
 	ticks, okN, failN, entsN, relsN, lastMs atomic.Int64
 	lastAt                                  atomic.Int64
-	readN, skipN                            atomic.Int64
+	readN, skipN, noLockN                   atomic.Int64
 	// v0.10.141 — TryTick: aynı pod'da örtüşen tick yok (inFlight) ve yalnız
 	// lider (leader nil = kontrol yok, tek-binary kipi).
 	inFlight atomic.Bool
 	leader   func() bool
+	// v0.10.2225 — canlı dizin yazıcısı (cache.Cache; nil = dizin yok) ve
+	// kilit degraded sorgusu (cache.DegradedFlag.Load; nil = hep sağlam).
+	live         LiveStore
+	lockDegraded func() bool
 }
+
+// SetLive — canlı dizinin Redis kapısı (main.go cacheImpl).
+func (s *Syncer) SetLive(kv LiveStore) { s.live = kv }
+
+// SetLockDegraded — Redis kilidi Noop'a düştüğünde (her replika lider olur)
+// tick yazmaz; atlanır ve günlüğe düşer.
+func (s *Syncer) SetLockDegraded(f func() bool) { s.lockDegraded = f }
 
 // SetLeaderCheck — main.go LeaderHolder.IsLeader'ı bağlar.
 func (s *Syncer) SetLeaderCheck(f func() bool) { s.leader = f }
@@ -191,29 +243,35 @@ func (s *Syncer) Tick(ctx context.Context) bool {
 }
 
 func (s *Syncer) tick(ctx context.Context) {
+	// Degraded kilit: Noop kilitte her replika "lider"; aynı tablolara N
+	// yazıcı vurmasın (entity-storage-cost-note §4 A/3). Tick atlanır.
+	if s.lockDegraded != nil && s.lockDegraded() {
+		log.Printf("[entity] tick: skipped_no_lock=%d reason=redis-lock-degraded (yazım yok)", s.noLockN.Add(1))
+		return
+	}
 	r := s.settings()
 	start := s.now()
 	clusters := s.src.Clusters()
-	var tickRead, tickEnts, tickRels, tickSkip, tickOK, tickFail atomic.Int64
+	var tickRead, tickScan, tickEnts, tickRels, tickSkip, tickClosed, tickOK, tickFail atomic.Int64
+	var snapMu sync.Mutex
+	snapBytes := map[string]int{}
 	// Span geçişi: tek okuma (MV, zaman sınırlı + LIMIT + max_execution_time),
 	// cluster'a bölünür; eşlenemeyenler ayrı koşu satırı + K2 span-only cluster.
+	// Pencere = SeenWindow (1 saat): canlı dizinin pod → servis kenarı.
 	spanByCID := map[string][]SeenRow{}
 	if s.seen != nil {
-		rows, err := s.seen.RecentSeen(ctx, start.Add(-seenLookback(SyncInterval)))
+		rows, err := s.seen.RecentSeen(ctx, start.Add(-SeenWindow))
 		if err != nil {
 			log.Printf("[entity] entity_seen okunamadı (span geçişi atlandı): %v", err)
 		} else {
-			// v0.10.141 — atama sonrası geriye dönük geçiş: YALNIZ atanan değer,
-			// canlılar normal diff'e, ölüler kapalı ömür (backfillDead, tick sonunda).
+			// v0.10.141 — atama sonrası geriye dönük geçiş: YALNIZ atanan değer;
+			// canlılar diff'e ve dizine. Ölüler yazılmaz (geçmiş MV'de).
 			if r.BackfillUntil.After(start) && r.BackfillValue != "" {
 				// Değer süzgeci SQL'de (RecentSeenFor): 200k satır kesimi yalnız bu
-				// değerin satırlarına uygulanır. Canlı kesimi normal pencereyi
-				// AŞAMAZ: min(podGap, seenLookback) (inceleme).
+				// değerin satırlarına uygulanır.
 				if extra, berr := s.seen.RecentSeenFor(ctx, start.Add(-BackfillLookback), r.BackfillValue); berr == nil {
 					tickRead.Add(int64(len(extra)))
-					live, dead := SplitBackfillRows(extra, r.BackfillValue, start.Add(-minDur(PodGap, seenLookback(SyncInterval))))
-					rows = append(rows, live...)
-					defer s.backfillDead(ctx, clusters, r.BackfillValue, dead)
+					rows = append(rows, BackfillLiveRows(extra, r.BackfillValue, start.Add(-SeenWindow))...)
 				} else {
 					log.Printf("[entity] backfill entity_seen okunamadı: %v", berr)
 				}
@@ -253,9 +311,16 @@ func (s *Syncer) tick(ctx context.Context) {
 			defer func() { <-sem }()
 			st := s.syncCluster(ctx, c, extra)
 			tickRead.Add(int64(st.read))
+			tickScan.Add(st.scanned)
 			tickEnts.Add(int64(st.ents))
 			tickRels.Add(int64(st.rels))
 			tickSkip.Add(int64(st.skipped))
+			tickClosed.Add(int64(st.closed))
+			if st.snapBytes > 0 {
+				snapMu.Lock()
+				snapBytes[c.ID] = st.snapBytes
+				snapMu.Unlock()
+			}
 			if st.ok {
 				tickOK.Add(1)
 			} else {
@@ -269,9 +334,28 @@ func (s *Syncer) tick(ctx context.Context) {
 	s.readN.Add(tickRead.Load())
 	s.lastMs.Store(int64(dur / time.Millisecond))
 	s.lastAt.Store(s.now().UnixNano())
-	// Tick başına tek satır (S1 prod ölçümü): okunan / yazılan / kısılan.
-	log.Printf("[entity] tick: clusters=%d ok=%d failed=%d rows_read=%d entities_written=%d relations_written=%d refresh_skipped=%d duration_ms=%d",
-		tickOK.Load()+tickFail.Load(), tickOK.Load(), tickFail.Load(), tickRead.Load(), tickEnts.Load(), tickRels.Load(), tickSkip.Load(), dur.Milliseconds())
+	// Tick başına tek satır: okunan / taranan / yazılan (yalnız kalıcı katman)
+	// / kısılan / kapanan / cluster başına blob baytı / kilitsiz atlanan.
+	log.Printf("[entity] tick: clusters=%d ok=%d failed=%d rows_read=%d rows_scanned=%d stable_written=%d relations_written=%d refresh_skipped=%d closed=%d snapshot_bytes=%s skipped_no_lock=%d duration_ms=%d",
+		tickOK.Load()+tickFail.Load(), tickOK.Load(), tickFail.Load(), tickRead.Load(), tickScan.Load(), tickEnts.Load(), tickRels.Load(),
+		tickSkip.Load(), tickClosed.Load(), formatSnapBytes(snapBytes), s.noLockN.Load(), dur.Milliseconds())
+}
+
+// formatSnapBytes — "cid:bayt,…" (cid sırasında; boş = "-").
+func formatSnapBytes(m map[string]int) string {
+	if len(m) == 0 {
+		return "-"
+	}
+	ids := make([]string, 0, len(m))
+	for id := range m {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = id + ":" + strconv.Itoa(m[id])
+	}
+	return strings.Join(parts, ",")
 }
 
 // SpanOnlyClusters — K2 (saf): eşlenemeyen span cluster değerlerinden
@@ -306,8 +390,10 @@ func SpanOnlyClusters(unmapped map[string]int, refs []ClusterRef, max int) []Clu
 
 // clusterTickStats — syncCluster'ın tick günlüğüne katkısı.
 type clusterTickStats struct {
-	ok                        bool
-	read, ents, rels, skipped int
+	ok                                bool
+	read, ents, rels, skipped, closed int
+	snapBytes                         int
+	scanned                           int64
 }
 
 func (s *Syncer) clusterState(cid string) *clusterState {
@@ -315,7 +401,7 @@ func (s *Syncer) clusterState(cid string) *clusterState {
 	defer s.mu.Unlock()
 	st, ok := s.state[cid]
 	if !ok {
-		st = &clusterState{prevEnts: map[string]Entity{}}
+		st = &clusterState{absent: map[string]Absence{}}
 		s.state[cid] = st
 	}
 	return st
@@ -354,10 +440,8 @@ func (s *Syncer) syncCluster(ctx context.Context, c ClusterRef, spanRows []SeenR
 		}
 		ents, rels = Normalize(c.ID, SnapshotFromSamples(sets))
 	}
-	seen := make(map[string]Entity, len(ents)+len(rels))
 	entByID := make(map[string]Entity, len(ents))
 	for _, e := range ents {
-		seen[e.ID] = e
 		entByID[e.ID] = e
 	}
 	// Span geçişi AYNI diff'e girer (ayrı diff, görülmeyen her şeyi kapatırdı).
@@ -365,7 +449,6 @@ func (s *Syncer) syncCluster(ctx context.Context, c ClusterRef, spanRows []SeenR
 		se, sr := SpanSeenToEntities(c.ID, spanRows, entByID)
 		for _, e := range se {
 			if _, ok := entByID[e.ID]; !ok {
-				seen[e.ID] = e
 				entByID[e.ID] = e
 			}
 		}
@@ -377,54 +460,90 @@ func (s *Syncer) syncCluster(ctx context.Context, c ClusterRef, spanRows []SeenR
 		if _, dup := relByKey[k]; dup {
 			continue // Thanos'unki önce geldi, kazanır
 		}
-		seen[k] = Entity{ID: k}
 		relByKey[k] = rl
 	}
-	prev, err := s.store.OpenLifetimes(ctx, c.ID)
+	// (1) Canlı dizin: pod/container dahil TÜM görüntü, CH'den bağımsız —
+	// CH kesintisinde de "şimdi" taze kalır.
+	st.snapBytes = s.publishLive(ctx, c.ID, BuildLiveSnapshot(c.ID, now, entByID, relByKey, spanRows))
+	// (2) Kalıcı katman: yalnız uzun ömürlü varlıklar + parent kenarları.
+	seen := stableSeen(entByID, relByKey)
+	open, err := s.store.OpenLifetimes(ctx, c.ID)
 	if err != nil {
 		fail(err)
 		return
 	}
-	st.read = len(prev)
-	ch := DiffLifetimes(now, prev, seen, PodGap, true)
-	ch.Refresh, st.skipped = ThrottleRefresh(now, prev, ch.Refresh, RefreshEvery)
-	s.skipN.Add(int64(st.skipped))
+	st.read, st.scanned = len(open.Lifetimes), open.RowsScanned
 	cs := s.clusterState(c.ID)
 	s.mu.Lock()
-	prevEnts := cs.prevEnts
+	absent, lastOK := cs.absent, cs.lastOK
 	s.mu.Unlock()
-	rows := RowsForChange(c.ID, ch, entByID, prevEnts)
-	relRows := relationRowsForChange(c.ID, ch, relByKey)
-	t1 := s.now()
-	if err := s.store.Apply(ctx, c.ID, rows, relRows); err != nil {
-		fail(err)
-		return
+	ch, nextAbsent := DiffLifetimes(now, open.Lifetimes, seen, absent, lastOK, PodGap)
+	ch.Refresh, st.skipped = ThrottleRefresh(now, open.Lifetimes, ch.Refresh, RefreshEvery)
+	s.skipN.Add(int64(st.skipped))
+	rows := RowsForChange(c.ID, ch, entByID, open.Entities)
+	relRows := relationRowsForChange(c.ID, ch, relByKey, open.Relations)
+	if len(rows)+len(relRows) > 0 {
+		t1 := s.now()
+		if err := s.store.Apply(ctx, c.ID, rows, relRows); err != nil {
+			fail(err)
+			return
+		}
+		run.CHMs = int(s.now().Sub(t1) / time.Millisecond)
 	}
-	run.CHMs = int(s.now().Sub(t1) / time.Millisecond)
 	run.Status, run.FinishedAt = RunOK, s.now()
 	run.EntitiesWritten, run.RelationsWritten = len(rows), len(relRows)
 	for _, l := range ch.Close {
-		if _, isRel := relByKey[l.ID]; !isRel {
-			if _, wasEnt := prevEnts[l.ID]; wasEnt || ParseIDOK(l.ID) {
-				run.Closed++
-			}
+		if !isRelKey(l.ID) {
+			run.Closed++
 		}
 	}
 	s.mu.Lock()
-	cs.prevEnts, cs.lastOK, cs.lastErr = entByID, now, ""
+	cs.absent, cs.lastOK, cs.lastErr = nextAbsent, now, ""
 	s.mu.Unlock()
 	s.okN.Add(1)
 	s.entsN.Add(int64(len(rows)))
 	s.relsN.Add(int64(len(relRows)))
-	st.ok, st.ents, st.rels = true, len(rows), len(relRows)
+	st.ok, st.ents, st.rels, st.closed = true, len(rows), len(relRows), run.Closed
 	if err := s.store.RecordRun(ctx, run); err != nil {
 		log.Printf("[entity] sync_runs yazılamadı (%s): %v", c.ID, err)
 	}
 	return st
 }
 
-// ParseIDOK — kapanış sayacı için: id bir varlık mı (ilişki anahtarı değil).
-func ParseIDOK(id string) bool { _, ok := ParseID(id); return ok }
+// stableSeen — SAF: görüntünün kalıcı katmanı (diff girdisi). İlişkiler
+// relKey anahtarıyla, yalnız ID taşıyan Entity olarak.
+func stableSeen(ents map[string]Entity, rels map[string]Relation) map[string]Entity {
+	out := make(map[string]Entity, len(ents))
+	for id, e := range ents {
+		if IsStableType(e.Type) {
+			out[id] = e
+		}
+	}
+	for k, rl := range rels {
+		if IsStableRelation(rl) {
+			out[k] = Entity{ID: k}
+		}
+	}
+	return out
+}
+
+// publishLive — blob'u lider yazar; hata yalnız günlük (okuyucu MV'ye
+// düşer, bir sonraki tick yeniden yazar). Dönüş: yazılan bayt.
+func (s *Syncer) publishLive(ctx context.Context, cid string, snap LiveSnapshot) int {
+	if s.live == nil {
+		return 0
+	}
+	b, err := EncodeLive(snap)
+	if err != nil {
+		log.Printf("[entity] canlı dizin kodlanamadı (%s): %v", cid, err)
+		return 0
+	}
+	if err := s.live.Set(ctx, LiveKey(cid), b, LiveTTL); err != nil {
+		log.Printf("[entity] canlı dizin yazılamadı (%s): %v — okuyucular MV yoluna düşer", cid, err)
+		return 0
+	}
+	return len(b)
+}
 
 // relKey — ilişki ömrünün diff anahtarı (entity_id uzayıyla çakışmaz:
 // "rel|" öneki hiçbir tip öneki değil).
@@ -465,7 +584,9 @@ func sortedLabels(m map[string]string) ([]string, []string) {
 }
 
 // RowsForChange — ömür değişikliği → tam satırlar (invariant #4: her satır
-// TÜM alanları taşır; kapanış satırı önceki anlık görüntünün alanlarıyla).
+// TÜM alanları taşır). Açılış/tazeleme bu tick'in görüntüsünden (cur);
+// kapanış CH'den okunan açık satırın alanlarıyla (prev) — uid değişiminde
+// kapanan eski ömür yeni nesnenin alanlarını almaz.
 func RowsForChange(cid string, ch Change, cur, prev map[string]Entity) []EntityRow {
 	out := make([]EntityRow, 0, len(ch.Open)+len(ch.Close)+len(ch.Refresh))
 	mk := func(e Entity, l Lifetime) EntityRow {
@@ -483,11 +604,11 @@ func RowsForChange(cid string, ch Change, cur, prev map[string]Entity) []EntityR
 			LastSeen: l.LastSeen, LabelKeys: lk, LabelValues: lv, Source: e.Source,
 		}
 	}
-	lookup := func(id string) (Entity, bool) {
-		if e, ok := cur[id]; ok {
+	pick := func(id string, first, second map[string]Entity) (Entity, bool) {
+		if e, ok := first[id]; ok {
 			return e, true
 		}
-		e, ok := prev[id]
+		e, ok := second[id]
 		return e, ok
 	}
 	for _, l := range ch.Open {
@@ -496,29 +617,28 @@ func RowsForChange(cid string, ch Change, cur, prev map[string]Entity) []EntityR
 		}
 	}
 	for _, l := range ch.Refresh {
-		if e, ok := lookup(l.ID); ok {
+		if e, ok := pick(l.ID, cur, prev); ok {
 			out = append(out, mk(e, l))
 		}
 	}
 	for _, l := range ch.Close {
-		if e, ok := lookup(l.ID); ok {
+		if e, ok := pick(l.ID, prev, cur); ok {
 			out = append(out, mk(e, l))
-		} else if ref, ok := ParseID(l.ID); ok {
-			// Önceki anlık görüntü bellekte yok (restart sonrası ilk tick):
-			// kimlikten türetilebilen alanlarla kapat — satır boş kalmaz.
-			out = append(out, mk(Entity{Type: ref.Type, ClusterID: cid, ID: l.ID, Namespace: ref.Namespace, Name: ref.Name, Source: SourceThanos}, l))
 		}
 	}
 	return out
 }
 
-// relationRowsForChange — ilişki ömürleri (anahtar "rel|…").
-func relationRowsForChange(cid string, ch Change, rels map[string]Relation) []RelationRow {
+// relationRowsForChange — ilişki ömürleri (anahtar "rel|…"); alanlar bu
+// tick'ten, yoksa CH'deki açık satırdan, o da yoksa anahtardan.
+func relationRowsForChange(cid string, ch Change, cur, prev map[string]Relation) []RelationRow {
 	var out []RelationRow
 	mk := func(l Lifetime) (RelationRow, bool) {
-		r, ok := rels[l.ID]
+		r, ok := cur[l.ID]
 		if !ok {
-			// kapanış: anahtardan çöz
+			r, ok = prev[l.ID]
+		}
+		if !ok {
 			typ, parent, child, pok := parseRelKey(l.ID)
 			if !pok {
 				return RelationRow{}, false
@@ -530,7 +650,7 @@ func relationRowsForChange(cid string, ch Change, rels map[string]Relation) []Re
 	}
 	for _, group := range [][]Lifetime{ch.Open, ch.Refresh, ch.Close} {
 		for _, l := range group {
-			if _, isRel := rels[l.ID]; !isRel && !isRelKey(l.ID) {
+			if !isRelKey(l.ID) {
 				continue
 			}
 			if row, ok := mk(l); ok {
@@ -568,73 +688,4 @@ func indexByte(s string, b byte) int {
 		}
 	}
 	return -1
-}
-
-// backfillDead — ölü pod'ları KAPALI ömür olarak yazar; yalnız hiç kaydı
-// olmayanlar (Existing). Hedef cluster = değerin bağlı olduğu kayıt.
-func (s *Syncer) backfillDead(ctx context.Context, clusters []ClusterRef, value string, dead []SeenRow) {
-	if len(dead) == 0 {
-		return
-	}
-	cid := ""
-	for _, c := range clusters {
-		vals := append([]string{c.SpanClusterValue}, c.SpanClusterValues...)
-		if c.SpanClusterValue == "" && len(c.SpanClusterValues) == 0 {
-			vals = []string{c.Name}
-		}
-		for _, v := range vals {
-			if v == value && c.ID != "" {
-				cid = c.ID
-			}
-		}
-	}
-	if cid == "" {
-		return
-	}
-	rows, rels := ClosedRowsForDead(cid, dead)
-	ids := make([]string, 0, len(rows))
-	for _, r := range rows {
-		ids = append(ids, r.ID)
-	}
-	have, err := s.store.Existing(ctx, cid, ids)
-	if err != nil {
-		log.Printf("[entity] backfill existing (%s): %v", cid, err)
-		return
-	}
-	keepRow := make([]EntityRow, 0, len(rows))
-	skip := map[string]bool{}
-	for _, r := range rows {
-		if have[r.ID] {
-			skip[r.ID] = true
-			continue
-		}
-		keepRow = append(keepRow, r)
-	}
-	keepRel := make([]RelationRow, 0, len(rels))
-	for _, rl := range rels {
-		if skip[rl.ParentID] || skip[rl.ChildID] {
-			continue
-		}
-		keepRel = append(keepRel, rl)
-	}
-	if len(keepRow) == 0 {
-		return
-	}
-	// Ayrı koşu satırı YOK: entity_sync_runs anahtarı (cluster_id, started_at)
-	// saniye çözünürlüklü — aynı saniyede tick'in kendi satırını ezerdi
-	// (inceleme). Sayaç + günlük yeter.
-	if err := s.store.Apply(ctx, cid, keepRow, keepRel); err != nil {
-		log.Printf("[entity] backfill %q → %s yazılamadı: %v", value, cid, err)
-		return
-	}
-	s.entsN.Add(int64(len(keepRow)))
-	s.relsN.Add(int64(len(keepRel)))
-	log.Printf("[entity] backfill %q → %s: %d kapalı pod ömrü, %d ilişki (atlanan mevcut: %d)", value, cid, len(keepRow), len(keepRel), len(skip))
-}
-
-func minDur(a, b time.Duration) time.Duration {
-	if a < b {
-		return a
-	}
-	return b
 }

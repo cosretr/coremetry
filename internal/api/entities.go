@@ -140,11 +140,29 @@ func (s *Server) listEntities(w http.ResponseWriter, r *http.Request) {
 	at := parseAt(q.Get("at"))
 	key := entityListKey(c.EffectiveID(), typ, ns, search, limit, at)
 	s.serveCached(w, r, key, 15*time.Second, func(ctx context.Context) (any, error) {
-		rows, err := s.store.EntityList(ctx, chstore.EntityListQuery{ClusterID: c.EffectiveID(), Type: typ, Namespace: ns, Search: search, At: at, Limit: limit})
+		cid := c.EffectiveID()
+		// v0.10.2225 (E1): pod/container CH satırı değil — pod'lar resolver'dan
+		// (canlı dizin, yoksa MV); container durumu /api/entity/containers.
+		switch typ {
+		case entity.TypePod:
+			pods, err := s.entityResolver().Pods(ctx, cid, entity.PodQuery{Namespace: ns, Search: search, Limit: limit}, at)
+			if err != nil && len(pods) == 0 {
+				return nil, err
+			}
+			return map[string]any{"cluster": cid, "items": chstore.PodRecords(pods)}, nil
+		case entity.TypeContainer:
+			return map[string]any{"cluster": cid, "items": []chstore.EntityRecord{}}, nil
+		}
+		rows, err := s.store.EntityList(ctx, chstore.EntityListQuery{ClusterID: cid, Type: typ, Namespace: ns, Search: search, At: at, Limit: limit})
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"cluster": c.EffectiveID(), "items": rows}, nil
+		if typ == "" && len(rows) < limit {
+			if pods, _ := s.entityResolver().Pods(ctx, cid, entity.PodQuery{Namespace: ns, Search: search, Limit: limit - len(rows)}, at); len(pods) > 0 {
+				rows = append(rows, chstore.PodRecords(pods)...)
+			}
+		}
+		return map[string]any{"cluster": cid, "items": rows}, nil
 	})
 }
 
@@ -161,6 +179,12 @@ func (s *Server) getEntity(w http.ResponseWriter, r *http.Request) {
 	at := parseAt(r.URL.Query().Get("at"))
 	key := entityPivotKey("get", id+"@"+atBucket(at), time.Time{}, time.Time{})
 	s.serveCached(w, r, key, 15*time.Second, func(ctx context.Context) (any, error) {
+		switch ref.Type {
+		case entity.TypePod:
+			return s.podEntityDetail(ctx, id, ref, at)
+		case entity.TypeContainer:
+			return nil, errNotFound // v0.10.2225: container satırı yok
+		}
 		cur, match, all, err := s.store.EntityLifetimesAt(ctx, id, at)
 		if err != nil {
 			return nil, err
@@ -190,34 +214,98 @@ func (s *Server) getEntity(w http.ResponseWriter, r *http.Request) {
 		}
 		parents := s.store.EntityParents(ctx, id, eff)
 		children, _ := s.store.EntityChildrenCounts(ctx, ref.ClusterID, id, eff)
+		if children == nil {
+			children = map[string]int{}
+		}
+		// v0.10.2225 (E1): S1'den kalan pod/container satırları sayılmaz;
+		// doğrudan çocuk pod'lar resolver'dan.
+		delete(children, entity.TypePod)
+		delete(children, entity.TypeContainer)
+		if n := s.podChildren(ctx, ref, id, eff); n > 0 {
+			children[entity.TypePod] = n
+		}
 		out := map[string]any{"entity": cur, "parents": parents, "children": children, "lifetimes": all, "atMatch": match}
 		if id != reqID {
 			out["resolvedFrom"] = reqID // v0.10.1420 — FE: istenen kimlik yedekle çözüldü
-		}
-		if ref.Type == entity.TypePod {
-			// node: runs_on — kaydın zamanına DEĞEN ilişki (canlı pod: son 1 saat)
-			wFrom, wTo := time.Now().Add(-time.Hour), time.Now()
-			if !eff.IsZero() {
-				wFrom, wTo = eff.Add(-time.Hour), eff.Add(time.Hour)
-			}
-			if rels, err := s.store.EntityRelations(ctx, ref.ClusterID, entity.RelRunsOn, id, false, wFrom, wTo); err == nil && len(rels) > 0 {
-				out["node"] = rels[0].ChildID
-			}
-			// Kardeş pod'lar: aynı workload, kendisi hariç. Konteynerler: çocuklar.
-			if cur.ParentID != "" {
-				if sib, err := s.store.EntityList(ctx, chstore.EntityListQuery{ClusterID: ref.ClusterID, Type: entity.TypePod, ParentID: cur.ParentID, ExcludeID: id, At: eff, Limit: 50}); err == nil {
-					out["siblings"] = sib
-				}
-			}
-			if ctrs, err := s.store.EntityList(ctx, chstore.EntityListQuery{ClusterID: ref.ClusterID, Type: entity.TypeContainer, ParentID: id, At: eff, Limit: 50}); err == nil {
-				out["containers"] = ctrs
-			}
 		}
 		if c, ok := s.thanos.ClusterByID(ref.ClusterID); ok {
 			out["cluster"] = map[string]any{"id": c.EffectiveID(), "name": c.Name}
 		}
 		return out, nil
 	})
+}
+
+// podEntityDetail — v0.10.2225 (C + R1b): pod'un CH satırı yok. Kayıt
+// resolver'dan (şimdi → canlı dizin, ıska/geçmiş an → entity_seen_5m);
+// ebeveyn zinciri kalıcı katmandan; node ve kardeşler aynı kaynaktan. Ömür
+// = görülme penceresi (tek kayıt).
+func (s *Server) podEntityDetail(ctx context.Context, id string, ref entity.Ref, at time.Time) (any, error) {
+	res := s.entityResolver()
+	got, err := res.PodsByID(ctx, []string{id}, at)
+	p, ok := got[id]
+	if !ok {
+		if err != nil {
+			return nil, err
+		}
+		return nil, errNotFound
+	}
+	rec := chstore.PodRecord(p)
+	parents := []chstore.EntityRecord{}
+	parentID := p.ParentID()
+	cur, _, perr := s.store.EntityLifetimes(ctx, parentID, at)
+	if (perr != nil || cur == nil) && p.Workload != "" {
+		if wr, ok := entity.ParseID(p.Workload); ok {
+			if alt := s.workloadEntityFallback(ctx, wr); alt != "" {
+				parentID = alt
+				cur, _, _ = s.store.EntityLifetimes(ctx, alt, at)
+			}
+		}
+	}
+	if cur != nil {
+		parents = append(parents, *cur)
+		parents = append(parents, s.store.EntityParents(ctx, parentID, at)...)
+	}
+	out := map[string]any{"entity": rec, "parents": parents, "children": map[string]int{}, "lifetimes": []chstore.EntityRecord{rec}, "atMatch": true, "live": p.Live}
+	if p.Node != "" {
+		out["node"] = entity.NodeID(ref.ClusterID, p.Node)
+	}
+	if p.Workload != "" {
+		if sib, err := res.Pods(ctx, ref.ClusterID, entity.PodQuery{Namespace: p.Namespace, Workload: p.Workload}, at); err == nil || len(sib) > 0 {
+			keep := make([]entity.ResolvedPod, 0, len(sib))
+			for _, x := range sib {
+				if x.ID != id && len(keep) < 50 {
+					keep = append(keep, x)
+				}
+			}
+			out["siblings"] = chstore.PodRecords(keep)
+		}
+	}
+	if c, ok := s.thanos.ClusterByID(ref.ClusterID); ok {
+		out["cluster"] = map[string]any{"id": c.EffectiveID(), "name": c.Name}
+	}
+	return out, nil
+}
+
+// podChildren — v0.10.2225: ebeveyni id olan pod sayısı (iş yükünün
+// pod'ları; namespace'in iş yüksüz pod'ları) resolver'dan.
+func (s *Server) podChildren(ctx context.Context, ref entity.Ref, id string, at time.Time) int {
+	var q entity.PodQuery
+	switch ref.Type {
+	case entity.TypeWorkload:
+		q = entity.PodQuery{Namespace: ref.Namespace, Workload: id}
+	case entity.TypeNamespace:
+		q = entity.PodQuery{Namespace: ref.Name}
+	default:
+		return 0
+	}
+	pods, _ := s.entityResolver().Pods(ctx, ref.ClusterID, q, at)
+	n := 0
+	for _, p := range pods {
+		if ref.Type == entity.TypeWorkload || p.Workload == "" {
+			n++
+		}
+	}
+	return n
 }
 
 // getEntityServices — pod → servisler; node/namespace/workload → altındaki
@@ -240,43 +328,35 @@ func (s *Server) getEntityServices(w http.ResponseWriter, r *http.Request) {
 	}
 	key := entityPivotKey("services", id, from, to)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
+		// v0.10.2225 (C + R1b): pod'lar CH satırı değil — resolver (canlı
+		// dizin, ıska/geçmiş → entity_seen_5m). 500 tavanı süzgeç İÇİ.
+		// İnceleme (v0.10.135): `ns:` id'de ParseID namespace'i Name'e koyar.
+		res := s.entityResolver()
 		var pods []chstore.EntityRecord
+		var q entity.PodQuery
 		switch ref.Type {
 		case entity.TypePod:
-			if cur, _, err := s.store.EntityLifetimes(ctx, id, to); err == nil && cur != nil {
-				pods = []chstore.EntityRecord{*cur}
+			got, _ := res.PodsByID(ctx, []string{id}, to)
+			if p, ok := got[id]; ok {
+				pods = []chstore.EntityRecord{chstore.PodRecord(p)}
 			} else {
 				pods = []chstore.EntityRecord{{Type: entity.TypePod, ClusterID: ref.ClusterID, ID: id, Namespace: ref.Namespace, Name: ref.Name}}
 			}
 		case entity.TypeNode:
-			rels, err := s.store.EntityRelations(ctx, ref.ClusterID, entity.RelRunsOn, id, true, from, to)
-			if err != nil {
-				return nil, err
-			}
-			for _, rl := range rels {
-				if pr, ok := entity.ParseID(rl.ParentID); ok {
-					pods = append(pods, chstore.EntityRecord{Type: entity.TypePod, ClusterID: ref.ClusterID, ID: rl.ParentID, Namespace: pr.Namespace, Name: pr.Name})
-				}
-			}
-		case entity.TypeNamespace, entity.TypeWorkload:
-			// İnceleme (v0.10.135): `ns:` id'de ParseID namespace'i Name'e
-			// koyar — ref.Namespace BOŞ; süzgeç SQL'den düşüyor, LIMIT 500
-			// alfabetik ilk namespace'lerde kesiyor, Go süzgeci sıfır
-			// bırakıyordu. Süzgeç SQL'de: namespace → namespace = ?,
-			// workload → parent_id = ?. 500 tavanı namespace İÇİ.
-			q := chstore.EntityListQuery{ClusterID: ref.ClusterID, Type: entity.TypePod, At: to, Limit: 500}
-			if ref.Type == entity.TypeNamespace {
-				q.Namespace = ref.Name
-			} else {
-				q.Namespace, q.ParentID = ref.Namespace, id
-			}
-			list, err := s.store.EntityList(ctx, q)
-			if err != nil {
-				return nil, err
-			}
-			pods = append(pods, list...)
+			q = entity.PodQuery{Node: ref.Name, Limit: 500}
+		case entity.TypeNamespace:
+			q = entity.PodQuery{Namespace: ref.Name, Limit: 500}
+		case entity.TypeWorkload:
+			q = entity.PodQuery{Namespace: ref.Namespace, Workload: id, Limit: 500}
 		default:
 			return nil, errBadRequest
+		}
+		if ref.Type != entity.TypePod {
+			list, err := res.Pods(ctx, ref.ClusterID, q, to)
+			if err != nil && len(list) == 0 {
+				return nil, err
+			}
+			pods = chstore.PodRecords(list)
 		}
 		if len(pods) == 0 {
 			return map[string]any{"entity": id, "pods": []any{}, "services": []any{}}, nil
@@ -542,6 +622,7 @@ func (s *Server) getServicePods(w http.ResponseWriter, r *http.Request) {
 		// olabilir; boş kalanlar için kimlik üretilmez (bozuk `pod:cid//pod`
 		// yerine link yok). Kayıt okuması ardışık — satır sayısı ≤ 500.
 		nsUnknown := 0
+		podIDs := make([]string, 0, len(out))
 		for i := range out {
 			if out[i].ClusterID == "" {
 				continue
@@ -551,8 +632,15 @@ func (s *Server) getServicePods(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			out[i].EntityID = entity.PodID(out[i].ClusterID, out[i].Namespace, out[i].Pod)
-			if cur, _, err := s.store.EntityLifetimes(ctx, out[i].EntityID, to); err == nil && cur != nil {
-				out[i].Entity = cur
+			podIDs = append(podIDs, out[i].EntityID)
+		}
+		// v0.10.2225: kayıt resolver'dan, tek toplu okuma (eskiden pod başına
+		// bir CH sorgusu).
+		recs, _ := s.entityResolver().PodsByID(ctx, podIDs, to)
+		for i := range out {
+			if p, ok := recs[out[i].EntityID]; ok && out[i].EntityID != "" {
+				rec := chstore.PodRecord(p)
+				out[i].Entity = &rec
 			}
 		}
 		if nsUnknown > 0 {

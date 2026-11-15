@@ -211,7 +211,7 @@ func ReadNamespaces(ctx context.Context, d Deps, cluster, query string, limit in
 		if err != nil {
 			return nil, nil, err
 		}
-		pods, err := d.Store.EntityCountsByNamespace(ctx, c.ID, entity.TypePod, names, time.Time{})
+		pods, err := podCountsByNamespace(ctx, d, c.ID, names)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -388,31 +388,29 @@ func ReadNamespaceOverview(ctx context.Context, d Deps, ns, cluster, query, kind
 			}
 			recs = fuzzyPick(query, all)
 		}
-		pods, err := d.Store.EntityList(ctx, chstore.EntityListQuery{ClusterID: c.ID, Type: entity.TypePod, Namespace: ns, Limit: 500})
+		pods, err := readPods(ctx, d, c.ID, entity.PodQuery{Namespace: ns, Limit: 500})
 		if err != nil {
 			return ov, err
 		}
+		// v0.10.2225: pod → iş yükü eşlemesi türden bağımsız (KSM sahibi ya da
+		// pod adından türetilmiş; entity.SameWorkload).
 		podParent := map[string]string{}
+		podCounts := map[string]int{}
 		podNames := make([]string, 0, len(pods))
-		wlIDs := map[string]bool{}
-		for _, r := range recs {
-			wlIDs[r.ID] = true
-		}
 		for _, p := range pods {
 			podNames = append(podNames, p.Name)
-			if wlIDs[p.ParentID] {
-				podParent[p.Name] = p.ParentID
-			} else {
+			matched := false
+			for _, r := range recs {
+				if entity.SameWorkload(p.ParentID, r.ID) {
+					podParent[p.Name] = r.ID
+					podCounts[r.ID]++
+					matched = true
+					break
+				}
+			}
+			if !matched {
 				ov.OrphanPods++
 			}
-		}
-		parents := make([]string, 0, len(recs))
-		for _, r := range recs {
-			parents = append(parents, r.ID)
-		}
-		podCounts, err := d.Store.EntityChildrenCountsByParents(ctx, c.ID, entity.TypePod, parents, time.Time{})
-		if err != nil {
-			return ov, err
 		}
 		var seen []chstore.EntitySeenAgg
 		if len(podNames) > 0 && len(c.SpanValues) > 0 {
@@ -574,7 +572,7 @@ func ReadNamespacePods(ctx context.Context, d Deps, ns, workload, cluster string
 	}
 	rows := []PodRow{}
 	for _, c := range clusters {
-		q := chstore.EntityListQuery{ClusterID: c.ID, Type: entity.TypePod, Namespace: ns, Limit: limit}
+		q := entity.PodQuery{Namespace: ns, Limit: limit}
 		if workload != "" {
 			wls, err := d.Store.EntityList(ctx, chstore.EntityListQuery{ClusterID: c.ID, Type: entity.TypeWorkload, Namespace: ns, Name: workload, Limit: 5})
 			if err != nil {
@@ -583,9 +581,9 @@ func ReadNamespacePods(ctx context.Context, d Deps, ns, workload, cluster string
 			if len(wls) == 0 {
 				continue
 			}
-			q.ParentID = wls[0].ID
+			q.Workload = wls[0].ID
 		}
-		pods, err := d.Store.EntityList(ctx, q)
+		pods, err := readPods(ctx, d, c.ID, q)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -606,4 +604,40 @@ func ReadNamespacePods(ctx context.Context, d Deps, ns, workload, cluster string
 		rows = append(rows, podRows(c, pods, seen)...)
 	}
 	return rows, clusterNames(clusters), nil
+}
+
+// readPods — v0.10.2225 (entity-storage-cost-note C + R1b): pod'lar CH
+// satırı değil; Deps.EntityPods (api resolver: canlı dizin, yoksa MV).
+func readPods(ctx context.Context, d Deps, cid string, q entity.PodQuery) ([]chstore.EntityRecord, error) {
+	if d.EntityPods == nil {
+		return []chstore.EntityRecord{}, nil
+	}
+	ps, err := d.EntityPods(ctx, cid, q, time.Time{})
+	if err != nil && len(ps) == 0 {
+		return nil, err
+	}
+	return chstore.PodRecords(ps), nil
+}
+
+// podCountsByNamespace — namespace → pod sayısı (yalnız istenenler).
+func podCountsByNamespace(ctx context.Context, d Deps, cid string, namespaces []string) (map[string]int, error) {
+	q := entity.PodQuery{}
+	if len(namespaces) == 1 {
+		q.Namespace = namespaces[0]
+	}
+	pods, err := readPods(ctx, d, cid, q)
+	if err != nil {
+		return nil, err
+	}
+	want := make(map[string]bool, len(namespaces))
+	for _, n := range namespaces {
+		want[n] = true
+	}
+	out := map[string]int{}
+	for _, p := range pods {
+		if want[p.Namespace] {
+			out[p.Namespace]++
+		}
+	}
+	return out, nil
 }

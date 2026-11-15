@@ -22,16 +22,17 @@ import (
 
 const SettingsKey = "entity_layer"
 
-// Sabitler (K1). RefreshEvery: açık ömrün last_seen'i yalnız bu kadar
-// eskidiyse yeniden yazılır (S1 yazım diyeti, plan §3.3: podGap/2).
-// Boşluk denetimi (podGap) CH'deki last_seen'i okur; saklı değer en çok
-// RefreshEvery + bir tick eski olur, podGap'in altında kalır.
+// Sabitler (K1). v0.10.2225 (entity-storage-cost-note C): CH'de yalnız
+// kalıcı katman; RefreshEvery: açık ömrün last_seen'i yalnız bu kadar
+// eskidiyse yeniden yazılır — günde bir (TTL last_seen + 180 g DDL'siz
+// geçerli kalsın). PodGap artık "sessizlik kuralı" DEĞİL: kalıcı bir
+// varlık art arda başarılı görüntülerde en az PodGap yoksa kapanır.
 const (
 	SyncInterval     = 60 * time.Second
 	PodGap           = 10 * time.Minute
 	StaleAfter       = 24 * time.Hour
 	ParallelClusters = 4
-	RefreshEvery     = PodGap / 2
+	RefreshEvery     = 24 * time.Hour
 	// MaxSpanOnlyClusters — K2: Remote Cluster kaydı olmayan span cluster
 	// değerlerinden tick başına en çok bu kadarı cluster entity olur (en çok
 	// satırı olanlar; yanlış değer çoğalmasına tavan).
@@ -163,6 +164,7 @@ func backfillUntil(ms int64) time.Time {
 	return time.UnixMilli(ms)
 }
 
-// BackfillLookback — Tick'in span geçişi penceresi: atama sonrası kısa bir
-// süre (BackfillUntil) 24 saat, sonra normal seenLookback.
+// BackfillLookback — atama sonrası kısa bir süre (BackfillUntil) atanan
+// değerin satırları 24 saatlik pencereden okunur; canlılar (son SeenWindow)
+// normal diff'e ve canlı dizine katılır. Ölüler yazılmaz (geçmiş MV'de).
 const BackfillLookback = 24 * time.Hour

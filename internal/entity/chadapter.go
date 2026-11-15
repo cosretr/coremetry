@@ -10,17 +10,16 @@ import (
 // import ediyor — döngü olmasın); main.go somut *chstore.Store'u geçirir.
 
 type CHStore interface {
-	EntityOpenLifetimes(ctx context.Context, cid string) (map[string]Lifetime, error)
+	EntityOpenLifetimes(ctx context.Context, cid string) (OpenSet, error)
 	EntityApply(ctx context.Context, cid string, rows []EntityRow, rels []RelationRow) error
 	EntityRecordRun(ctx context.Context, run Run) error
-	EntityIDsExisting(ctx context.Context, cid string, ids []string) (map[string]bool, error)
 }
 
 type chAdapter struct{ ch CHStore }
 
 func StoreFromCH(ch CHStore) Store { return chAdapter{ch: ch} }
 
-func (a chAdapter) OpenLifetimes(ctx context.Context, cid string) (map[string]Lifetime, error) {
+func (a chAdapter) OpenLifetimes(ctx context.Context, cid string) (OpenSet, error) {
 	return a.ch.EntityOpenLifetimes(ctx, cid)
 }
 func (a chAdapter) Apply(ctx context.Context, cid string, rows []EntityRow, rels []RelationRow) error {
@@ -28,9 +27,6 @@ func (a chAdapter) Apply(ctx context.Context, cid string, rows []EntityRow, rels
 }
 func (a chAdapter) RecordRun(ctx context.Context, run Run) error {
 	return a.ch.EntityRecordRun(ctx, run)
-}
-func (a chAdapter) Existing(ctx context.Context, cid string, ids []string) (map[string]bool, error) {
-	return a.ch.EntityIDsExisting(ctx, cid, ids)
 }
 
 // CHSeen — chstore.EntitySeenRecent (yapısal tipleme).

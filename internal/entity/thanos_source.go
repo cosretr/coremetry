@@ -65,8 +65,5 @@ func (t *ThanosSource) Fetch(ctx context.Context, c ClusterRef, queries map[stri
 	if ss.JobOwner, err = get("job_owner"); err != nil {
 		return SampleSets{}, err
 	}
-	if ss.ContainerInfo, err = get("container_info"); err != nil {
-		return SampleSets{}, err
-	}
 	return ss, nil
 }

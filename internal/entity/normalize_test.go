@@ -11,7 +11,7 @@ import (
 //
 // Sözleşme: bir cluster'ın Thanos anlık görüntüsü (kube_node_info,
 // kube_pod_info, kube_pod_owner, kube_replicaset_owner, kube_job_owner,
-// kube_pod_container_info) → varlıklar + ilişkiler, DETERMİNİSTİK sırada.
+// …) → varlıklar + ilişkiler, DETERMİNİSTİK sırada.
 // Pod → ReplicaSet → Deployment çözülür; StatefulSet/DaemonSet doğrudan;
 // Job → CronJob iki hop; Node (static pod) ve <none> iş yükü üretmez.
 // Node ataması yoksa runs_on kenarı çıkmaz (pod yine varlık).
@@ -42,10 +42,6 @@ func snap() Snapshot {
 			{Namespace: "pay", ReplicaSet: "rs-only", OwnerKind: "<none>", OwnerName: "<none>"},
 		},
 		JobOwners: []JobOwner{{Namespace: "pay", Job: "eod-123", OwnerKind: "CronJob", OwnerName: "eod"}},
-		Containers: []ContainerInfo{
-			{Namespace: "pay", Pod: "api-7d9f-x1", Container: "app", Image: "reg/api:1.2"},
-			{Namespace: "pay", Pod: "api-7d9f-x1", Container: "sidecar", Image: "reg/sc:9"},
-		},
 	}
 }
 
@@ -93,7 +89,6 @@ func TestNormalizeSnapshot(t *testing.T) {
 		"wl:c-1/pay/Deployment/api", "wl:c-1/pay/StatefulSet/db", "wl:c-1/pay/DaemonSet/agent",
 		"wl:c-1/pay/CronJob/eod", "wl:c-1/pay/ReplicaSet/rs-only",
 		"pod:c-1/pay/api-7d9f-x1", "pod:c-1/pay/db-0", "pod:c-1/kube-system/static-w1", "pod:c-1/pay/orphan",
-		"ctr:c-1/pay/api-7d9f-x1/app", "ctr:c-1/pay/api-7d9f-x1/sidecar",
 	}
 	for _, id := range want {
 		if _, ok := byID[id]; !ok {
@@ -114,9 +109,6 @@ func TestNormalizeSnapshot(t *testing.T) {
 	if n := byID["node:c-1/w1"]; n.UID != "uuid-w1" || n.Labels["internal_ip"] != "10.0.0.1" {
 		t.Fatalf("node alanları: %+v", n)
 	}
-	if c := byID["ctr:c-1/pay/api-7d9f-x1/app"]; c.Labels["image"] != "reg/api:1.2" || c.ParentID != "pod:c-1/pay/api-7d9f-x1" {
-		t.Fatalf("container alanları: %+v", c)
-	}
 	// İlişkiler.
 	has := func(typ, parent, child string) bool {
 		for _, r := range rels {
@@ -131,7 +123,6 @@ func TestNormalizeSnapshot(t *testing.T) {
 		{RelParent, "cluster:c-1", "ns:c-1/pay"},
 		{RelParent, "ns:c-1/pay", "wl:c-1/pay/Deployment/api"},
 		{RelParent, "wl:c-1/pay/Deployment/api", "pod:c-1/pay/api-7d9f-x1"},
-		{RelParent, "pod:c-1/pay/api-7d9f-x1", "ctr:c-1/pay/api-7d9f-x1/app"},
 		{RelRunsOn, "pod:c-1/pay/api-7d9f-x1", "node:c-1/w1"},
 		{RelParent, "ns:c-1/pay", "pod:c-1/pay/orphan"}, // iş yüksüz pod namespace'in altında
 	} {

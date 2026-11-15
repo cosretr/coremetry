@@ -27,9 +27,6 @@ func TestSnapshotFromSamples(t *testing.T) {
 		JobOwner: []Sample{
 			{Labels: map[string]string{"namespace": "pay", "job_name": "eod-1", "owner_kind": "CronJob", "owner_name": "eod"}},
 		},
-		ContainerInfo: []Sample{
-			{Labels: map[string]string{"namespace": "pay", "pod": "api-x1", "container": "app", "image": "reg/api:1"}},
-		},
 	}
 	s := SnapshotFromSamples(samples)
 	if len(s.Nodes) != 1 || s.Nodes[0].Node != "w1" || s.Nodes[0].SystemUUID != "uuid-1" || s.Nodes[0].InternalIP != "10.0.0.1" {
@@ -50,9 +47,6 @@ func TestSnapshotFromSamples(t *testing.T) {
 	}
 	if len(s.JobOwners) != 1 || s.JobOwners[0].Job != "eod-1" || s.JobOwners[0].OwnerKind != "CronJob" {
 		t.Fatalf("job owner: %+v", s.JobOwners)
-	}
-	if len(s.Containers) != 1 || s.Containers[0].Image != "reg/api:1" {
-		t.Fatalf("container: %+v", s.Containers)
 	}
 	// Uçtan uca: normalize edilince Deployment çözülür.
 	ents, _ := Normalize("c-1", s)
@@ -77,8 +71,8 @@ func TestSnapshotFromSamples(t *testing.T) {
 // bir seçici taşır; namespace süzgeci ns matcher ile.
 func TestSnapshotQueriesCarrySelectors(t *testing.T) {
 	qs := SnapshotQueries(`,namespace=~"pay.*"`)
-	if len(qs) != 6 {
-		t.Fatalf("altı sorgu beklenir, alınan %d", len(qs))
+	if len(qs) != 5 || qs["container_info"] != "" {
+		t.Fatalf("beş sorgu beklenir (container_info düştü, v0.10.2225), alınan %d", len(qs))
 	}
 	for name, q := range qs {
 		if q == "" || !contains(q, "{") {

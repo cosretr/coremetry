@@ -37,16 +37,45 @@ func cloneStore(m *memStore) *memStore {
 	c := newMemStore()
 	for cid, ls := range m.open {
 		c.open[cid] = map[string]Lifetime{}
+		c.ents[cid] = map[string]Entity{}
 		for k, v := range ls {
 			c.open[cid][k] = v
+		}
+		for k, v := range m.ents[cid] {
+			c.ents[cid][k] = v
 		}
 	}
 	return c
 }
 
-// Tick dizisi: 1 dk aralık. İlk tick açar; RefreshEvery içinde tazeleme
-// yazılmaz; aştığında bir kez yazılır. Lider devri: yeni Syncer (boş
-// bellek) aynı store'dan aynı kararı verir — aynı girdi → aynı satırlar.
+// v0.10.2225 — RefreshEvery = 24 saat: kalıcı satır günde bir tazelenir
+// (TTL last_seen + 180 g). Aritmetik: 60 sn tick, 24 saat = 1440 tick'te
+// tek tazeleme; saklı last_seen'den tam 24 saat sonra DEĞİL, aşınca.
+func TestRefreshEvery24h(t *testing.T) {
+	if RefreshEvery != 24*time.Hour {
+		t.Fatalf("RefreshEvery 24 saat olmalı: %v", RefreshEvery)
+	}
+	t0 := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
+	prev := map[string]Lifetime{"x": {ID: "x", UID: "u", LastSeen: t0}}
+	writes := 0
+	for tick := 1; tick <= 1441; tick++ {
+		now := t0.Add(time.Duration(tick) * SyncInterval)
+		keep, _ := ThrottleRefresh(now, prev, []Lifetime{{ID: "x", UID: "u", LastSeen: now}}, RefreshEvery)
+		if len(keep) > 0 {
+			writes++
+			if tick != 1441 {
+				t.Fatalf("tazeleme %d. tick'te (24 saat dolmadan)", tick)
+			}
+		}
+	}
+	if writes != 1 {
+		t.Fatalf("24 saatte tek yazım beklenir: %d", writes)
+	}
+}
+
+// Tick dizisi: ilk tick açar; RefreshEvery içinde tazeleme yazılmaz; aştığında
+// bir kez yazılır. Lider devri: yeni Syncer (boş bellek) aynı store'dan aynı
+// kararı verir — aynı girdi → aynı satırlar.
 func TestSyncerRefreshThrottleAndLeaderHandover(t *testing.T) {
 	t0 := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
 	src := &fakeSource{clusters: []ClusterRef{{ID: "c-a", Name: "a"}}, sets: map[string]SampleSets{"c-a": podSet("db-0", "db-1")}}
@@ -58,8 +87,8 @@ func TestSyncerRefreshThrottleAndLeaderHandover(t *testing.T) {
 	if opened == 0 {
 		t.Fatal("ilk tick açmalı")
 	}
-	for m := 1; m <= 5; m++ {
-		at := t0.Add(time.Duration(m) * time.Minute)
+	for h := 1; h <= 23; h++ {
+		at := t0.Add(time.Duration(h) * time.Hour)
 		a.now = func() time.Time { return at }
 		a.Tick(context.Background())
 	}
@@ -70,8 +99,8 @@ func TestSyncerRefreshThrottleAndLeaderHandover(t *testing.T) {
 		t.Fatal("kısılan tazelemeler sayılmalı")
 	}
 
-	// t0+6m: A ile devam eden dünya vs B'ye devredilen dünya — aynı satırlar.
-	t6 := t0.Add(6 * time.Minute)
+	// t0+24h+1m: A ile devam eden dünya vs B'ye devredilen dünya — aynı satırlar.
+	t6 := t0.Add(24*time.Hour + time.Minute)
 	stB := cloneStore(st)
 	nA := len(st.rows)
 	a.now = func() time.Time { return t6 }
@@ -105,8 +134,11 @@ func TestSpanOnlyClusterEntities(t *testing.T) {
 	if _, ok := st.open["edge-b"][ClusterID("edge-b")]; !ok {
 		t.Fatalf("span-only cluster entity açılmalı: %v", st.open["edge-b"])
 	}
-	if _, ok := st.open["edge-b"][PodID("edge-b", "ns", "web-6f7c9-abcde")]; !ok {
-		t.Fatal("span-only cluster'ın pod'u açılmalı")
+	if _, ok := st.open["edge-b"][PodID("edge-b", "ns", "web-6f7c9-abcde")]; ok {
+		t.Fatal("pod satırı yazılmamalı (canlı dizinde)")
+	}
+	if _, ok := st.open["edge-b"][WorkloadID("edge-b", "ns", "Deployment", "web")]; !ok {
+		t.Fatal("span-only cluster'ın türetilmiş iş yükü açılmalı")
 	}
 	if src.calls["edge-b"] != 0 {
 		t.Fatal("span-only cluster için Thanos sorgusu olmamalı")

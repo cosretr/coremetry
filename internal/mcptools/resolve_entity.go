@@ -284,7 +284,7 @@ func loadPodCandidates(ctx context.Context, d Deps, text, namespace string) ([]E
 	var out []EntityCandidate
 	clusters, _ := clustersFor(d, "")
 	for _, c := range clusters {
-		pods, err := d.Store.EntityList(ctx, chstore.EntityListQuery{ClusterID: c.ID, Type: entity.TypePod, Namespace: namespace, Search: text, Limit: 50})
+		pods, err := readPods(ctx, d, c.ID, entity.PodQuery{Namespace: namespace, Search: text, Limit: 50})
 		if err != nil {
 			return nil, err
 		}
