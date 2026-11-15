@@ -14,6 +14,6 @@ describe('Nodes tablosu Pods kolonu', () => {
   });
   it('hücreler kolon kimliğiyle, görünür kolon sırasıyla çizilir', () => {
     // Clusters S12 — coremetry/DataTable renderCell (görünür kolonlar primitifte).
-    expect(page).toContain('renderCell={(r, c) => nodeCellContent(r, c.id)}');
+    expect(page).toContain('renderCell={(r, c) => nodeCellContent(r, c.id, lang)}');
   });
 });

@@ -46,6 +46,11 @@ const m = vi.hoisted(() => ({
   deps: [] as unknown[],
   nss: [] as unknown[],
 }));
+// v0.10.2189 — Clusters metni arayüz dilinde; buradaki Türkçe iddialar TR arayüzde.
+vi.mock('@/lib/i18n', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, unknown>>();
+  return { ...mod, useLang: () => 'tr' };
+});
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
   const real = mod.api as Record<string, (...a: unknown[]) => unknown>;

@@ -61,3 +61,14 @@ describe('Nodes kolonları (D3)', () => {
     expect(status.sortValue!(pressured) as number).toBeGreaterThan(status.sortValue!(hot) as number);
   });
 });
+
+// v0.10.2189 — İngilizce arayüz: baskı sözcüğü, birim, yüzde ve yaş İngilizce.
+describe('Nodes hücreleri — EN', () => {
+  it('durum / CPU / disk / yaş', () => {
+    expect(nodeStatus(row({ ready: 'true', pressure: ['MemoryPressure'] }), 'en').word).toBe('Memory pressure');
+    expect(nodeCpuText(row({ cpuCores: 2, cpuCapacityCores: 8 }), 'en')).toBe('2 / 8 cores · 25%');
+    expect(nodeDiskText(row({ diskUsedPct: 83 }), 'en')).toBe('83%');
+    expect(nodeAgeText(row({ createdUnix: 1 }), (1 + 12 * 86400) * 1000, 'en')).toBe('12 days');
+    expect(nodeAgeText(row({ createdUnix: 1 }), 2 * 3600 * 1000, 'en')).toBe('1 hour');
+  });
+});

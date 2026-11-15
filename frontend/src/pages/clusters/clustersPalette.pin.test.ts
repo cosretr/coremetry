@@ -33,9 +33,9 @@ describe('Clusters — sade palet adım 1', () => {
     // Clusters S12 — Health hücresi trend düğmesi: sağlıklı nötr (.cl-health), failing --err.
     expect(src).toContain("className={(r.failing ?? 0) > 0 ? 'cl-health cl-health--bad' : 'cl-health'}");
     // Liste: sağlıklı NÖTR sınıf (renk değiştiricisi yok); renk yalnız sapmada.
-    expect(src).toContain('{state === \'healthy\' && <span className="cl-status">sağlıklı</span>}');
+    expect(src).toContain('{state === \'healthy\' && <span className="cl-status">{t(\'clusters.state.healthy\', lang)}</span>}');
     expect(src).toContain('<span className="cl-status cl-status--crit">');
-    expect(src).toContain('<span className="cl-status cl-status--down">yanıt vermiyor</span>');
+    expect(src).toContain('<span className="cl-status cl-status--down">{t(\'clusters.state.unreachable\', lang)}</span>');
   });
   it('sapma renkleri korunur (unreachable/failing b-err, >85 --err)', () => {
     expect(src).toContain('<span className="badge b-err">unreachable</span>');

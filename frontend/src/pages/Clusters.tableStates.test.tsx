@@ -44,6 +44,11 @@ const calls = vi.hoisted(() => ({
     return { cluster, namespace, deployments: m.deps, count: m.deps.length };
   },
 }));
+// v0.10.2189 — Clusters metni arayüz dilinde; buradaki Türkçe iddialar TR arayüzde.
+vi.mock('@/lib/i18n', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, unknown>>();
+  return { ...mod, useLang: () => 'tr' };
+});
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
   return { ...mod, api: { ...(mod.api as Record<string, unknown>), ...calls } };

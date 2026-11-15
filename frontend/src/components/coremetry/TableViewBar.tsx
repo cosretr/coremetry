@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Button } from '@/components/shadcn/button';
+import { t, tf, type Lang } from '@/lib/i18n';
 
 // TableViewBar — v0.10.2141 (servis sekmeleri sadeleştirme S3,
 // docs/frontend/service-tabs-plan.md; mockup operatör onayı 2026-11-13).
@@ -21,9 +22,11 @@ export interface TableViewBarProps {
   onAllColumnsChange?: (all: boolean) => void;
   /** Okunan kaynak — tablonun altındaki "kaynak" satırı. */
   source?: ReactNode;
+  /** v0.10.2189 — arayüz dili; verilmezse bugünkü Türkçe metin (çağıran sayfa geçer). */
+  lang?: Lang;
 }
 
-export function TableViewBar({ foldable, expanded, onExpandedChange, allColumns, onAllColumnsChange, source }: TableViewBarProps) {
+export function TableViewBar({ foldable, expanded, onExpandedChange, allColumns, onAllColumnsChange, source, lang = 'tr' }: TableViewBarProps) {
   const hasCols = allColumns !== undefined && !!onAllColumnsChange;
   if (foldable <= 0 && !hasCols && !source) return null;
   return (
@@ -32,25 +35,25 @@ export function TableViewBar({ foldable, expanded, onExpandedChange, allColumns,
         <div className="flex min-h-6 items-center gap-1">
           {foldable > 0 && (expanded ? (
             <Button variant="link" size="xs" className="px-0" onClick={() => onExpandedChange(false)}>
-              {foldable} normal satırı gizle
+              {tf('tableView.hide', lang, { n: foldable })}
             </Button>
           ) : (
             <>
-              <span>{foldable} daha, hepsi normal ·</span>
+              <span>{tf('tableView.more', lang, { n: foldable })}</span>
               <Button variant="link" size="xs" className="px-0" onClick={() => onExpandedChange(true)}>
-                hepsini göster
+                {t('tableView.showAll', lang)}
               </Button>
             </>
           ))}
           <span className="flex-1" />
           {hasCols && (
             <Button variant="outline" size="xs" aria-pressed={allColumns} onClick={() => onAllColumnsChange(!allColumns)}>
-              Tüm kolonlar
+              {t('tableView.allColumns', lang)}
             </Button>
           )}
         </div>
       )}
-      {source && <p className="m-0">kaynak: {source}</p>}
+      {source && <p className="m-0">{t('tableView.source', lang)} {source}</p>}
     </div>
   );
 }

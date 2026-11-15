@@ -15,6 +15,7 @@ import type { ClusterNodeRow } from '@/lib/types';
 import { fmtBytes, fmtNum } from '@/lib/utils';
 import { cpuUsageText, memUsageText } from './fleetSummary';
 import { safePct } from './thresholds';
+import { t, tf, fmtPctLang, type Lang } from '@/lib/i18n';
 
 export interface NodeStatus {
   /** Tek sözcük (mockup: Ready, NotReady, Bellek / Disk / PID baskısı). */
@@ -26,21 +27,22 @@ export interface NodeStatus {
   title?: string;
 }
 
+// v0.10.2189 — sözcükler lib/i18n kataloğunda (arayüz dili).
 const PRESSURE_WORD: Record<string, string> = {
-  MemoryPressure: 'Bellek baskısı',
-  DiskPressure: 'Disk baskısı',
-  PIDPressure: 'PID baskısı',
+  MemoryPressure: 'clusters.node.memPressure',
+  DiskPressure: 'clusters.node.diskPressure',
+  PIDPressure: 'clusters.node.pidPressure',
 };
 // Birden çok baskı varsa sözcük bu sırayla seçilir; hepsi ipucunda.
 const PRESSURE_ORDER = ['MemoryPressure', 'DiskPressure', 'PIDPressure'];
 
 /** Ready koşulu + baskı koşullarından tek sözcük. Koşul serisi yoksa "—". */
-export function nodeStatus(r: Pick<ClusterNodeRow, 'ready' | 'pressure'>): NodeStatus {
+export function nodeStatus(r: Pick<ClusterNodeRow, 'ready' | 'pressure'>, lang: Lang = 'tr'): NodeStatus {
   const pressure = (r.pressure ?? []).filter(p => p in PRESSURE_WORD);
-  const title = pressure.length > 0 ? pressure.map(p => PRESSURE_WORD[p]).join(', ') : undefined;
+  const title = pressure.length > 0 ? pressure.map(p => t(PRESSURE_WORD[p], lang)).join(', ') : undefined;
   if (r.ready === 'false') return { word: 'NotReady', tone: 'err', attention: true, title };
   const first = PRESSURE_ORDER.find(p => pressure.includes(p));
-  if (first) return { word: PRESSURE_WORD[first], tone: 'warn', attention: true, title };
+  if (first) return { word: t(PRESSURE_WORD[first], lang), tone: 'warn', attention: true, title };
   if (r.ready === 'unknown') return { word: 'Unknown', tone: 'warn', attention: true };
   if (r.ready === 'true') return { word: 'Ready', tone: undefined, attention: false };
   return { word: '', tone: undefined, attention: false };
@@ -60,18 +62,18 @@ export function nodePodsText(r: Pick<ClusterNodeRow, 'pods' | 'podCapacity'>): s
   return r.podCapacity ? `${fmtNum(r.pods)} / ${fmtNum(r.podCapacity)}` : fmtNum(r.pods);
 }
 
-export const nodeCpuText = (r: ClusterNodeRow): string => cpuUsageText(r.cpuCores, r.cpuCapacityCores) ?? '';
-export const nodeMemText = (r: ClusterNodeRow): string => memUsageText(r.memBytes, r.memCapacityBytes) ?? '';
+export const nodeCpuText = (r: ClusterNodeRow, lang: Lang = 'tr'): string => cpuUsageText(r.cpuCores, r.cpuCapacityCores, lang) ?? '';
+export const nodeMemText = (r: ClusterNodeRow, lang: Lang = 'tr'): string => memUsageText(r.memBytes, r.memCapacityBytes, lang) ?? '';
 
-const coreText = (v?: number) => (v ? cpuUsageText(v) ?? '' : '');
+const coreText = (v: number | undefined, lang: Lang) => (v ? cpuUsageText(v, undefined, lang) ?? '' : '');
 const pair = (a: string, b: string) => [a, b].filter(Boolean).join(' · ');
 
 /** "30 çekirdek · 120 GiB" (ayrılabilir / limit toplamı). */
-export function nodeAllocText(r: ClusterNodeRow): string {
-  return pair(coreText(r.cpuAllocatableCores), r.memAllocatableBytes ? fmtBytes(r.memAllocatableBytes) : '');
+export function nodeAllocText(r: ClusterNodeRow, lang: Lang = 'tr'): string {
+  return pair(coreText(r.cpuAllocatableCores, lang), r.memAllocatableBytes ? fmtBytes(r.memAllocatableBytes) : '');
 }
-export function nodeLimitsText(r: ClusterNodeRow): string {
-  return pair(coreText(r.cpuLimitCores), r.memLimitBytes ? fmtBytes(r.memLimitBytes) : '');
+export function nodeLimitsText(r: ClusterNodeRow, lang: Lang = 'tr'): string {
+  return pair(coreText(r.cpuLimitCores, lang), r.memLimitBytes ? fmtBytes(r.memLimitBytes) : '');
 }
 
 /** İstek / ayrılabilir: "CPU %52 · Mem %108" (%100 üstü aşırı taahhüt, kırpılmaz). */
@@ -79,9 +81,9 @@ export function nodeRequestPct(r: ClusterNodeRow): { cpu: number | null; mem: nu
   const ratio = (req?: number, alloc?: number) => (req != null && alloc && alloc > 0 ? (req / alloc) * 100 : null);
   return { cpu: ratio(r.cpuRequestCores, r.cpuAllocatableCores), mem: ratio(r.memRequestBytes, r.memAllocatableBytes) };
 }
-export function nodeRequestText(r: ClusterNodeRow): string {
+export function nodeRequestText(r: ClusterNodeRow, lang: Lang = 'tr'): string {
   const { cpu, mem } = nodeRequestPct(r);
-  return pair(cpu == null ? '' : `CPU %${Math.round(cpu)}`, mem == null ? '' : `Mem %${Math.round(mem)}`);
+  return pair(cpu == null ? '' : `CPU ${fmtPctLang(Math.round(cpu), lang)}`, mem == null ? '' : `Mem ${fmtPctLang(Math.round(mem), lang)}`);
 }
 
 export function nodeVersionText(r: ClusterNodeRow): string {
@@ -126,13 +128,14 @@ export const NODE_COLS: ColumnDef<ClusterNodeRow>[] = [
 export const NODE_DEFAULT_HIDDEN = ['cluster', 'alloc', 'reqPct', 'limits', 'netIn', 'netOut', 'versions', 'taints', 'disk', 'age'];
 
 /** Disk "%83" / taint listesi / yaş ("12 gün"); seri yoksa ''. */
-export const nodeDiskText = (r: ClusterNodeRow): string => (r.diskUsedPct ? `%${Math.round(r.diskUsedPct)}` : '');
+export const nodeDiskText = (r: ClusterNodeRow, lang: Lang = 'tr'): string => (r.diskUsedPct ? fmtPctLang(Math.round(r.diskUsedPct), lang) : '');
 export const nodeTaintText = (r: ClusterNodeRow): string => (r.taints ?? []).join(', ');
-export function nodeAgeText(r: ClusterNodeRow, nowMs: number): string {
+export function nodeAgeText(r: ClusterNodeRow, nowMs: number, lang: Lang = 'tr'): string {
   if (!r.createdUnix) return '';
   const days = Math.floor((nowMs / 1000 - r.createdUnix) / 86400);
   if (days < 0) return '';
-  return days >= 1 ? `${days} gün` : `${Math.max(1, Math.floor((nowMs / 1000 - r.createdUnix) / 3600))} saat`;
+  return days >= 1 ? tf('clusters.age.days', lang, { n: days })
+    : tf('clusters.age.hours', lang, { n: Math.max(1, Math.floor((nowMs / 1000 - r.createdUnix) / 3600)) });
 }
 export const NODE_SORT_IDS: readonly string[] = NODE_COLS.map(c => c.id);
 export const NODE_COMPACT: ColumnModel = { v: 1, order: NODE_COLS.map(c => c.id), hidden: NODE_DEFAULT_HIDDEN, sig: 'clusternodes-compact' };

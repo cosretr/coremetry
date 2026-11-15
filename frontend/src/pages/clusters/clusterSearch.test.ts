@@ -49,6 +49,6 @@ describe('Clusters — cluster kartı gerçek link', () => {
   it('yanıt vermeyen kart tıklanabilir görünmez; içindeki iki bağlantı gerçek link', () => {
     expect(src).toContain('<div key={name} className="card cl-card">');
     expect(src).toContain('<Link className="cl-card__name" to={detail} replace>{nameEl}</Link>');
-    expect(src).toContain('<Link className="cl-card__action" to="/settings/clusters">Bağlantı ayarını aç</Link>');
+    expect(src).toContain('<Link className="cl-card__action" to="/settings/clusters">{t(\'clusters.card.openSettings\', lang)}</Link>');
   });
 });

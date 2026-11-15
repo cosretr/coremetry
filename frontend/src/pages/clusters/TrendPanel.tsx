@@ -7,6 +7,7 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { api } from '@/lib/api';
 import { limitThresholds, thanosPodSeriesToSeries, thanosTrendToSeries } from './trendSeries';
 import type { ClusterPodRow } from '@/lib/types';
+import { t, useLang } from '@/lib/i18n';
 
 // TREND_WINDOWS — trend panelinin ?tw= yerel pencere seçenekleri ('' = sayfa
 // range'i). URL'de yaşar: link'le paylaşılınca pencere korunur. (v0.9.151'de
@@ -55,6 +56,7 @@ export function ThanosTrendPanel({ cluster, namespace, pod, row, fromNs, toNs, o
   onZoom?: (fromUnixSec: number, toUnixSec: number) => void;
   onZoomReset?: () => void;
 }) {
+  const lang = useLang(); // v0.10.2189 — restart işaretinin açıklaması arayüz dilinde
   const single = !!pod;
   // v0.10.2182 (Clusters S13, plan §10.4) — restart dikey işaretleri yalnız
   // pod satırı restart>0 dediğinde istenir (+1 range sorgu, probe'lu).
@@ -94,10 +96,10 @@ export function ThanosTrendPanel({ cluster, namespace, pod, row, fromNs, toNs, o
     }));
     // Restart işaretleri aynı dikey çizgi dilinde (veri yoksa çizilmez).
     for (const ts of podQ.data?.restarts ?? []) {
-      out.push({ timeUnixNs: ts * 1e9, label: 'restart', description: 'konteyner yeniden başladı' });
+      out.push({ timeUnixNs: ts * 1e9, label: 'restart', description: t('clusters.trend.restart', lang) });
     }
     return out.length > 0 ? out : undefined;
-  }, [deploysQ.data, podQ.data]);
+  }, [deploysQ.data, podQ.data, lang]);
 
   const { cpuSeries, memSeries, totalPods } = useMemo(() => {
     if (single) {

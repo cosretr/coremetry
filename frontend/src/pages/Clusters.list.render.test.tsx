@@ -120,6 +120,7 @@ afterEach(() => {
 
 describe('Clusters S4 — filo cümlesi', () => {
   it('alarm şeridi yok; kart durumlarından tek cümle', async () => {
+    ui.lang = 'tr';
     const el = await mount();
     expect(el.querySelector('.cl-fleet')!.textContent)
       .toBe("4 cluster: 2 sağlıklı, 1'inde kritik alarm var, 1'i yanıt vermiyor.");
@@ -128,6 +129,7 @@ describe('Clusters S4 — filo cümlesi', () => {
   });
 
   it('hepsi sağlıklıysa kısa cümle', async () => {
+    ui.lang = 'tr';
     m.sources = ['prod-b', 'prod-c'];
     const el = await mount();
     expect(el.querySelector('.cl-fleet')!.textContent).toBe('2 cluster: hepsi sağlıklı.');
@@ -136,6 +138,7 @@ describe('Clusters S4 — filo cümlesi', () => {
 
 describe('Clusters S4 — kart: üç sayı + iki çubuk + durum sözcüğü', () => {
   it('kritik alarmlı kart: sayı + sözcük, kart yine detaya bağlantı', async () => {
+    ui.lang = 'tr';
     const el = await mount();
     const c = card(el, 'prod-a');
     expect(c.tagName).toBe('A');
@@ -149,6 +152,7 @@ describe('Clusters S4 — kart: üç sayı + iki çubuk + durum sözcüğü', ()
   });
 
   it('yalnız uyarı düzeyi alarm kartı sağlıksız yapmaz (eski rozet kuralı)', async () => {
+    ui.lang = 'tr';
     const el = await mount();
     const c = card(el, 'prod-b');
     expect(c.querySelector('.cl-status')!.textContent).toBe('sağlıklı');
@@ -193,8 +197,26 @@ describe('Clusters — CPU metni arayüz dilinde', () => {
   });
 });
 
+// v0.10.2189 — İngilizce arayüzde filo cümlesi, durum sözcükleri ve
+// yanıt vermeyen kartın metni İngilizce (TR karşılıkları yukarıda).
+describe('Clusters — İngilizce arayüz: tüm metin İngilizce', () => {
+  it('filo cümlesi, kart durumları ve yanıt vermeyen kart', async () => {
+    const el = await mount();
+    expect(el.querySelector('.cl-fleet')!.textContent)
+      .toBe('4 clusters: 2 healthy, 1 with a critical alert, 1 not responding.');
+    expect(card(el, 'prod-a').querySelector('.cl-status')!.textContent).toBe('2 critical alerts');
+    expect(card(el, 'prod-b').querySelector('.cl-status')!.textContent).toBe('healthy');
+    const d = card(el, 'prod-d');
+    expect(d.querySelector('.cl-status')!.textContent).toBe('not responding');
+    expect(d.querySelector('.cl-card__note')!.textContent).toBe('Cluster metrics are unreachable. Spans are still arriving.');
+    expect(Array.from(d.querySelectorAll('a')).map(a => a.textContent)).toEqual(['prod-d', 'Open connection settings']);
+    expect(el.textContent).not.toMatch(/[çğıöşü]/);
+  });
+});
+
 describe('Clusters S4 — yanıt vermeyen cluster', () => {
   it('düz cümle + "Bağlantı ayarını aç"; kart tıklanabilir değil, ad detaya gider', async () => {
+    ui.lang = 'tr';
     const el = await mount();
     const c = card(el, 'prod-d');
     expect(c.tagName).toBe('DIV');
@@ -212,6 +234,7 @@ describe('Clusters S4 — yanıt vermeyen cluster', () => {
   });
 
   it('ad telemetride görülmüyorsa "span geliyor" denmez', async () => {
+    ui.lang = 'tr';
     m.observed = ['prod-a', 'prod-b', 'prod-c'];
     const el = await mount();
     expect(card(el, 'prod-d').querySelector('.cl-card__note')!.textContent)

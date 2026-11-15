@@ -7,6 +7,7 @@ import { metricEnvelope } from '@/pages/clusters/metricEnvelope';
 import type { XPin } from '@/lib/chart/xRange';
 import type { Threshold } from '@/lib/chart/thresholdLines';
 import type { ClusterNamedSeries } from '@/lib/types';
+import { t, tf, type Lang } from '@/lib/i18n';
 
 // v0.10.2147 (S8) — zarf kipinin çizimi (viz/TimeSeriesPanel, uPlot'u doğrudan
 // yükler) YALNIZ kip devreye girince indirilir: MetricArea'yı kullanan diğer
@@ -23,7 +24,7 @@ const waitBox = (height: number): CSSProperties => ({ height });
 // CPU/Mem kartlarından çıkarıldı (v0.9.35 ResToggleHeader'ın genel
 // hali): Servis → Infrastructure sekmesi aynı kartı "By pod"
 // etiketiyle kullanır. Seri yoksa null döner — görünmez-düşer.
-export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by, onToggle, series, seriesName, unit, height = 180, maxSeries, totalSeries, onZoom, onZoomReset, syncKey, labelTrimPrefix, xRange, thresholds, zeroBase, envelope }: {
+export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by, onToggle, series, seriesName, unit, height = 180, maxSeries, totalSeries, onZoom, onZoomReset, syncKey, labelTrimPrefix, xRange, thresholds, zeroBase, envelope, lang = 'tr' }: {
   title: string;
   // v0.9.383 (redesign D7) — insanileştirilmiş başlığın altında ham
   // metrik adı (monospace, soluk) — bilgi kaybı yasak.
@@ -78,10 +79,12 @@ export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by,
   // çizim viz/TimeSeriesPanel). 3 ve altı seride ya da verilmezse eski çizgiler.
   // Yalnız eşiksiz, tek birimli paneller verir (Router / HAProxy üçlüsü).
   envelope?: boolean;
+  // v0.10.2189 — arayüz dili (Clusters verir); verilmezse bugünkü Türkçe metin.
+  lang?: Lang;
 }) {
   if (!series || series.length === 0) return null;
   const converted = namedSeriesToSeries(series, seriesName, labelTrimPrefix);
-  const env = envelope ? metricEnvelope(converted, unit) : null;
+  const env = envelope ? metricEnvelope(converted, unit, lang) : null;
   return (
     <Card header={
       <div className="cl-area-head">
@@ -92,14 +95,14 @@ export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by,
           )}
           {totalSeries != null && series.length < totalSeries && (
             <span className="badge b-warn cl-area-cut"
-              title={`Sunucu ortalaması en yüksek ${series.length} pod'u döndürdü (${totalSeries} pod'dan). Pencere sonunda sıçrayan ama ortalaması düşük bir pod bu kesimin dışında kalabilir — tek pod'a bakmak için satırdan pod seçin.`}>
+              title={tf('clusters.area.cutTitle', lang, { shown: series.length, total: totalSeries })}>
               {series.length} / {totalSeries} pod
             </span>
           )}
         </span>
         {onToggle && byLabel && (
           <span onClick={e => e.stopPropagation()}>
-            <SegmentedControl size="sm" aria-label="Kırılım" value={by ? 'by' : 'total'}
+            <SegmentedControl size="sm" aria-label={t('clusters.area.breakdown', lang)} value={by ? 'by' : 'total'}
               onChange={v => onToggle(v === 'by')}
               options={[{ value: 'total', label: totalLabel }, { value: 'by', label: byLabel }]} />
           </span>
@@ -114,7 +117,7 @@ export function MetricArea({ title, subtitle, byLabel, totalLabel = 'Total', by,
               syncKey={syncKey} onZoom={onZoom} onZoomReset={onZoomReset} xRange={xRange} />
           </Suspense>
           <p className="metric-env-note">
-            {env.n} seri · gri alan en düşük–en yüksek aralığı · çizgiler ortanca ve en yüksek (<span className="mono">{env.top}</span>)
+            {tf('clusters.area.envNote', lang, { n: env.n })} (<span className="mono">{env.top}</span>)
           </p>
         </>
       ) : (

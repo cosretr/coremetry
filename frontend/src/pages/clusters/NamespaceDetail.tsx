@@ -17,6 +17,7 @@ import { MiniBar } from './MiniBar';
 import { AlertsPanel } from './AlertsPanel';
 import { ThanosTrendPanel } from './TrendPanel';
 import { parseOpenSections, serializeOpenSections } from './openSections';
+import { t, tf, fmtPctLang, useLang } from '@/lib/i18n';
 import {
   namespaceBoxes, namespaceSentence, podStatusWord, podRestartText, podProblemRank, podProblemSortValue,
   workloadService, workloadLimits, workloadCpuText, workloadMemText, workloadStatusWord, type Tone,
@@ -71,6 +72,7 @@ export function NamespaceDetail({
   onZoom?: (fromUnixSec: number, toUnixSec: number) => void;
   onZoomReset?: () => void;
 }) {
+  const lang = useLang(); // v0.10.2189 — tüm metinler arayüz dilinde (lib/i18n clusters.ns.*)
   const detailQ = useQuery({
     queryKey: ['cluster-ns-detail', cluster, namespace, fromNs, toNs],
     queryFn: () => api.clusterNamespaceDetail(cluster, namespace, fromNs, toNs),
@@ -113,34 +115,34 @@ export function NamespaceDetail({
   const wlFold = useMemo(() => foldNormalRows(workloads, [w => (workloadStatusWord(w.status).tone ? 1 : 0)]), [workloads]);
   const podFold = useMemo(() => foldNormalRows(shownPods, [p => podProblemRank(p, waiting[p.pod])]), [shownPods, waiting]);
 
-  const boxes = namespaceBoxes(pods, summary, { cpu: usedCpu, mem: usedMem }, podsTruncated);
-  const sentence = namespaceSentence(deps.length, pods, summary, podsTruncated);
+  const boxes = namespaceBoxes(pods, summary, { cpu: usedCpu, mem: usedMem }, podsTruncated, lang);
+  const sentence = namespaceSentence(deps.length, pods, summary, podsTruncated, lang);
 
   const wlCols = useMemo<ColumnDef<WorkloadView>[]>(() => [
     { id: 'deployment', label: 'Workload', sortValue: r => r.deployment, naturalDir: 'asc', flex: true, minWidth: 200 },
-    { id: 'kind', label: 'Tür', sortValue: r => r.kind ?? '', naturalDir: 'asc', width: 110 },
+    { id: 'kind', label: t('clusters.ns.colKind', lang), sortValue: r => r.kind ?? '', naturalDir: 'asc', width: 110 },
     { id: 'status', label: 'Status', sortValue: r => (workloadStatusWord(r.status).tone ? 1 : 0), width: 130, tone: r => cellTone(workloadStatusWord(r.status).tone) },
     { id: 'replicas', label: 'Replicas', sortValue: r => (r.status ? (r.desiredReplicas > 0 ? r.readyReplicas / r.desiredReplicas : 1) : -1), numeric: true, width: 90 },
-    { id: 'cpu', label: 'CPU (kullanılan / istek)', sortValue: r => r.cpuCores, width: 170 },
-    { id: 'mem', label: 'Memory (kullanılan / limit)', sortValue: r => workloadMemText(r.memBytes, r.memLim).pct ?? -1, width: 190,
+    { id: 'cpu', label: t('clusters.ns.colCpu', lang), sortValue: r => r.cpuCores, width: 170 },
+    { id: 'mem', label: t('clusters.ns.colMem', lang), sortValue: r => workloadMemText(r.memBytes, r.memLim).pct ?? -1, width: 190,
       tone: r => { const p = workloadMemText(r.memBytes, r.memLim).pct; return p != null && p > 85 ? 'err' : p != null && p > 65 ? 'warn' : undefined; } },
-  ], []);
+  ], [lang]);
   const podCols = useMemo<ColumnDef<ClusterPodRow>[]>(() => [
     { id: 'pod', label: 'Pod', sortValue: r => r.pod, naturalDir: 'asc', flex: true, minWidth: 200, mono: true },
     { id: 'status', label: 'Status', sortValue: r => podProblemSortValue(r, waiting[r.pod]), width: 190, tone: r => cellTone(podStatusWord(r, waiting[r.pod]).tone) },
     { id: 'node', label: 'Node', sortValue: r => r.node ?? '', naturalDir: 'asc', width: 160 },
     { id: 'cpuPct', label: 'CPU / limit', sortValue: r => r.cpuPct ?? -1, numeric: true, width: 100, tone: r => ((r.cpuPct ?? 0) >= 90 ? 'err' : (r.cpuPct ?? 0) > 65 ? 'warn' : undefined) },
     { id: 'memPct', label: 'Mem / limit', sortValue: r => r.memPct ?? -1, numeric: true, width: 100, tone: r => ((r.memPct ?? 0) >= 90 ? 'err' : (r.memPct ?? 0) > 65 ? 'warn' : undefined) },
-    { id: 'restarts', label: 'Yeniden başlama', sortValue: r => (r.restartsUnknown ? -1 : r.restarts ?? 0), numeric: true, width: 150,
+    { id: 'restarts', label: t('clusters.ns.colRestarts', lang), sortValue: r => (r.restartsUnknown ? -1 : r.restarts ?? 0), numeric: true, width: 150,
       tone: r => ((r.restarts ?? 0) > 0 ? 'warn' : undefined) },
-  ], [waiting]);
+  ], [waiting, lang]);
 
   const wlRows = allWorkloads ? workloads : wlFold.shown;
   const podRows = allPods ? shownPods : podFold.shown;
 
   return (
     <div className="cl-ns-detail">
-      <nav className="cl-ns-crumbs" aria-label="Konum">
+      <nav className="cl-ns-crumbs" aria-label={t('clusters.ns.crumbs', lang)}>
         <Button variant="link" size="xs" onClick={onClusters}>Clusters</Button>
         <span aria-hidden="true">/</span>
         <Button variant="link" size="xs" onClick={onCluster}><span className="cluster-name">{cluster}</span></Button>
@@ -165,11 +167,11 @@ export function NamespaceDetail({
         </div>
       )}
 
-      <h3 className="cl-ns-h">İş yükleri</h3>
+      <h3 className="cl-ns-h">{t('clusters.ns.workloadsH', lang)}</h3>
       {workloadsNote}
       <div className="table-wrap">
         <DataTable<WorkloadView>
-          storageKey="clusternsworkloads" ariaLabel={`${namespace} iş yükleri`}
+          storageKey="clusternsworkloads" ariaLabel={tf('clusters.ns.workloadsAria', lang, { ns: namespace })}
           columns={wlCols} rows={wlRows} state={depState}
           sort={{ initial: { id: 'status', dir: 'desc' } }}
           getRowKey={r => r.deployment}
@@ -181,30 +183,30 @@ export function NamespaceDetail({
                   <span className="mono">{r.deployment}</span>
                   <span className="cl-ns-wl__svc">
                     {r.service
-                      ? <>servis: <Link to={serviceHref(r.service, { range })} onClick={e => e.stopPropagation()}>{r.service}</Link></>
-                      : 'servis eşleşmedi'}
+                      ? <>{t('clusters.ns.service', lang)}<Link to={serviceHref(r.service, { range })} onClick={e => e.stopPropagation()}>{r.service}</Link></>
+                      : t('clusters.ns.noService', lang)}
                   </span>
                 </div>
               );
               case 'kind': return r.kind || '—';
-              case 'status': return workloadStatusWord(r.status).word || '—';
+              case 'status': return workloadStatusWord(r.status, lang).word || '—';
               case 'replicas': return r.status ? `${r.readyReplicas} / ${r.desiredReplicas}` : '—';
-              case 'cpu': return workloadCpuText(r.cpuCores, r.cpuReq);
-              case 'mem': return workloadMemText(r.memBytes, r.memLim).text;
+              case 'cpu': return workloadCpuText(r.cpuCores, r.cpuReq, lang);
+              case 'mem': return workloadMemText(r.memBytes, r.memLim, lang).text;
               default: return null;
             }
           }} />
       </div>
-      {wlFold.hidden > 0 && <TableViewBar foldable={wlFold.hidden} expanded={allWorkloads} onExpandedChange={setAllWorkloads} />}
-      <p className="cl-ns-hint">İş yüküne basınca aşağıdaki pod listesi ona süzülür.</p>
+      {wlFold.hidden > 0 && <TableViewBar foldable={wlFold.hidden} expanded={allWorkloads} onExpandedChange={setAllWorkloads} lang={lang} />}
+      <p className="cl-ns-hint">{t('clusters.ns.wlHint', lang)}</p>
 
       <div className="cl-ns-podhead">
-        <h3 className="cl-ns-h">Pod'lar{depFilter ? ` · ${depFilter}` : ''}</h3>
-        <span className="cl-ns-hint">önce sorunlular, sonra bellek yüzdesi</span>
+        <h3 className="cl-ns-h">{t('clusters.ns.podsH', lang)}{depFilter ? ` · ${depFilter}` : ''}</h3>
+        <span className="cl-ns-hint">{t('clusters.ns.podsHint', lang)}</span>
       </div>
       <div className="table-wrap">
         <DataTable<ClusterPodRow>
-          storageKey="clusternspods" ariaLabel={`${namespace} pod'ları`}
+          storageKey="clusternspods" ariaLabel={tf('clusters.ns.podsAria', lang, { ns: namespace })}
           columns={podCols} rows={podRows} state={podState}
           sort={{ initial: { id: 'status', dir: 'desc' } }}
           getRowKey={r => `${r.cluster}|${r.namespace}|${r.pod}`}
@@ -212,28 +214,28 @@ export function NamespaceDetail({
           renderCell={(r, col) => {
             switch (col.id) {
               case 'pod': return r.pod;
-              case 'status': return podStatusWord(r, waiting[r.pod]).word || '—';
-              case 'node': return r.node || (r.phase === 'Pending' ? 'atanmadı' : '—');
-              case 'cpuPct': return r.cpuPct ? `%${Math.round(r.cpuPct)}` : '—';
-              case 'memPct': return r.memPct ? `%${Math.round(r.memPct)}` : '—';
-              case 'restarts': return podRestartText(r) || '—';
+              case 'status': return podStatusWord(r, waiting[r.pod], lang).word || '—';
+              case 'node': return r.node || (r.phase === 'Pending' ? t('clusters.ns.unassigned', lang) : '—');
+              case 'cpuPct': return r.cpuPct ? fmtPctLang(Math.round(r.cpuPct), lang) : '—';
+              case 'memPct': return r.memPct ? fmtPctLang(Math.round(r.memPct), lang) : '—';
+              case 'restarts': return podRestartText(r, lang) || '—';
               default: return null;
             }
           }} />
       </div>
-      {podFold.hidden > 0 && <TableViewBar foldable={podFold.hidden} expanded={allPods} onExpandedChange={setAllPods} />}
+      {podFold.hidden > 0 && <TableViewBar foldable={podFold.hidden} expanded={allPods} onExpandedChange={setAllPods} lang={lang} />}
 
       <div className="cl-ov-closed">
-        <CollapsedSection id="cl-ns-charts" title="Kullanım grafikleri" summary="pod başına CPU ve bellek"
+        <CollapsedSection id="cl-ns-charts" title={t('clusters.ns.charts', lang)} summary={t('clusters.ns.chartsSummary', lang)}
           open={open.has('charts')} onOpenChange={setSectionOpen('charts')}>
           <ThanosTrendPanel cluster={cluster} namespace={namespace} fromNs={fromNs} toNs={toNs}
             onZoom={onZoom} onZoomReset={onZoomReset} />
         </CollapsedSection>
-        <CollapsedSection id="cl-ns-alerts" title="Bu namespace'in alarmları" summary="açık alarmlar"
+        <CollapsedSection id="cl-ns-alerts" title={t('clusters.ns.alerts', lang)} summary={t('clusters.ns.alertsSummary', lang)}
           open={open.has('alerts')} onOpenChange={setSectionOpen('alerts')}>
           {alertsQ.isPending ? <Spinner />
             : nsAlerts.length > 0 ? <AlertsPanel alerts={nsAlerts} />
-            : <p className="cl-ov-note">Bu namespace'te açık alarm yok.</p>}
+            : <p className="cl-ov-note">{t('clusters.ns.noAlerts', lang)}</p>}
         </CollapsedSection>
       </div>
     </div>

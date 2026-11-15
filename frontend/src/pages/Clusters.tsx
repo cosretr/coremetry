@@ -35,7 +35,7 @@ import { FIELD_SURFACE } from '@/components/coremetry/Field/fieldSurface';
 import { ClusterCard } from '@/pages/clusters/ClusterCard';
 import { clusterState, fleetSentence, cpuUsageText, memUsageText, usageTone } from '@/pages/clusters/fleetSummary';
 import { api } from '@/lib/api';
-import { t, useLang } from '@/lib/i18n';
+import { t, tf, useLang, type Lang } from '@/lib/i18n';
 import { useClusters } from '@/lib/queries';
 import { timeRangeToNs, fmtBytes, fmtNum } from '@/lib/utils';
 import { LIVE_META } from '@/lib/autoRefresh';
@@ -604,46 +604,46 @@ export default function ClustersPage() {
   // v0.10.954 — yenileme hatası: satırlar dururken hata notu da görünür (eski
   // davranış; T12 yalnız BOŞ tablonun durumunu tabloya aldı). Metinler tek
   // kopya: boş tablodaki hata satırı ile dolu tablonun üstündeki not aynı.
-  const NODE_ERR = "Node metrikleri okunamadı (muhtemelen tenancy portu — runbook'taki probe adımına bakın).";
-  const DEP_ERR = "İş yükü özeti okunamadı — Settings'teki cluster kaydını kontrol edin.";
-  const POD_ERR = "Pod metrikleri okunamadı — Settings'teki cluster kaydını kontrol edin.";
+  const NODE_ERR = t('clusters.err.node', lang);
+  const DEP_ERR = t('clusters.err.dep', lang);
+  const POD_ERR = t('clusters.err.pod', lang);
   const staleErrNote = (msg: string) => (
     <div role="status" style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>
-      {msg} Son başarılı veri gösteriliyor.
+      {msg} {t('clusters.staleNote', lang)}
     </div>
   );
   const nodeState: DataTableStateInput<ClusterNodeRow> =
     nodeQs[0]?.isPending ? { kind: 'loading' }
     : nodeErr ? { kind: 'error', message: NODE_ERR }
     : qLower && nodeAny ? { kind: 'no-match', ...clearQ }
-    : { kind: 'empty', message: "node-exporter serileri boş döndü — runbook'taki probe adımına bakın" };
+    : { kind: 'empty', message: t('clusters.empty.node', lang) };
   const depState: DataTableStateInput<ClusterDeploymentRow> =
     depQ.isPending ? { kind: 'loading' }
     : depQ.isError ? { kind: 'error', message: DEP_ERR }
     : qLower && depAny ? { kind: 'no-match', ...clearQ }
-    : { kind: 'empty', message: "Bu namespace'te iş yükü örneği yok" };
+    : { kind: 'empty', message: t('clusters.empty.dep', lang) };
   const nsState: DataTableStateInput<ClusterNamespaceRow> =
     nsQs[0]?.isPending ? { kind: 'loading' }
-    : nsErr ? { kind: 'error', message: "Namespace özeti okunamadı — Settings'teki cluster kaydını kontrol edin." }
+    : nsErr ? { kind: 'error', message: t('clusters.err.ns', lang) }
     : qLower && nsAny ? { kind: 'no-match', ...clearQ }
-    : { kind: 'empty', message: 'Namespace örneği yok' };
+    : { kind: 'empty', message: t('clusters.empty.ns', lang) };
   const nsPodState: DataTableStateInput<ClusterPodRow> =
     podQs[0]?.isPending ? { kind: 'loading' }
     : podErr ? { kind: 'error', message: POD_ERR }
-    : depFilter ? { kind: 'no-match', message: `"${depFilter}" iş yükünde pod yok`, onClearFilters: clearDep }
-    : { kind: 'empty', message: `"${nsFilter}" namespace'inde pod örneği yok` };
+    : depFilter ? { kind: 'no-match', message: tf('clusters.nomatch.depPods', lang, { dep: depFilter }), onClearFilters: clearDep }
+    : { kind: 'empty', message: tf('clusters.empty.nsPods', lang, { ns: nsFilter }) };
   const podState: DataTableStateInput<ClusterPodRow> =
     podQs[0]?.isPending ? { kind: 'loading' }
     : podErr ? { kind: 'error', message: POD_ERR }
-    : depFilter ? { kind: 'no-match', message: `"${depFilter}" iş yükünde pod yok`, onClearFilters: clearDep }
+    : depFilter ? { kind: 'no-match', message: tf('clusters.nomatch.depPods', lang, { dep: depFilter }), onClearFilters: clearDep }
     : svcFilter ? {
       kind: 'no-match',
-      message: `"${svcFilter}" servisiyle eşleşen pod yok — etiket Coremetry telemetri eşleştirmesinden gelir (best-effort)`,
+      message: tf('clusters.nomatch.svcPods', lang, { svc: svcFilter }),
       onClearFilters: clearSvc,
     }
-    : nsFilter ? { kind: 'no-match', message: `"${nsFilter}" namespace'inde pod örneği yok`, onClearFilters: clearNs }
+    : nsFilter ? { kind: 'no-match', message: tf('clusters.empty.nsPods', lang, { ns: nsFilter }), onClearFilters: clearNs }
     : qLower && podAny ? { kind: 'no-match', ...clearQ }
-    : { kind: 'empty', message: "Sorgular seri döndürmedi — cluster kaydındaki namespace süzgecini kontrol edin" };
+    : { kind: 'empty', message: t('clusters.empty.pods', lang) };
 
   return (
     <>
@@ -669,8 +669,8 @@ export default function ClustersPage() {
         {!isDetail && sources.length > 0 && (
           <>
             <p className="cl-fleet" role="status">
-              {fleetSentence(summaryQs.map(clusterState))}
-              {fleetStaleMin != null && <span className="cl-fleet__age"> · {fleetStaleMin} dk önce</span>}
+              {fleetSentence(summaryQs.map(clusterState), lang)}
+              {fleetStaleMin != null && <span className="cl-fleet__age"> · {tf('clusters.fleet.ago', lang, { n: fleetStaleMin })}</span>}
             </p>
             <div className="cl-cards">
               {sources.map((name, i) => {
@@ -691,13 +691,13 @@ export default function ClustersPage() {
                     <div key={name} className="card cl-card">
                       <div className="cl-card__head">
                         <Link className="cl-card__name" to={detail} replace>{nameEl}</Link>
-                        <span className="cl-status cl-status--down">yanıt vermiyor</span>
+                        <span className="cl-status cl-status--down">{t('clusters.state.unreachable', lang)}</span>
                       </div>
                       <p className="cl-card__note" title={q?.error instanceof Error ? q.error.message : undefined}>
-                        Cluster metriklerine ulaşılamıyor.
-                        {inTelemetry && <span title="Ad son 24 saatin telemetrisinde görüldü"> Span'ler gelmeye devam ediyor.</span>}
+                        {t('clusters.card.unreachableNote', lang)}
+                        {inTelemetry && <span title={t('clusters.card.seenTitle', lang)}> {t('clusters.card.spansFlowing', lang)}</span>}
                       </p>
-                      <Link className="cl-card__action" to="/settings/clusters">Bağlantı ayarını aç</Link>
+                      <Link className="cl-card__action" to="/settings/clusters">{t('clusters.card.openSettings', lang)}</Link>
                     </div>
                   );
                 }
@@ -718,9 +718,9 @@ export default function ClustersPage() {
                           <span className="badge b-gray" title="Name not seen in the last 24h of telemetry — the service pivot will not match">not in telemetry</span>
                         )}
                         {state === 'critical' && (
-                          <span className="cl-status cl-status--crit">{fmtNum(sum?.alertsCritical ?? 0)} kritik alarm</span>
+                          <span className="cl-status cl-status--crit">{tf('clusters.card.critical', lang, { n: fmtNum(sum?.alertsCritical ?? 0) })}</span>
                         )}
-                        {state === 'healthy' && <span className="cl-status">sağlıklı</span>}
+                        {state === 'healthy' && <span className="cl-status">{t('clusters.state.healthy', lang)}</span>}
                       </span>
                     </div>
                     {state === 'pending' && <Spinner />}
@@ -779,7 +779,7 @@ export default function ClustersPage() {
                   : <span className="cl-status">reachable</span>}
               {/* Clusters S7 (D2) — Overview'un düz cümlesi (bellek % + ETA + açık kritik). */}
               {section === 'overview' && !detailSummaryQ.isError && detailSummaryQ.data && (
-                <span className="cl-detail-sentence">{overviewSentence(detailSummaryQ.data)}</span>
+                <span className="cl-detail-sentence">{overviewSentence(detailSummaryQ.data, lang)}</span>
               )}
             </div>
 
@@ -800,7 +800,7 @@ export default function ClustersPage() {
                 Messaging emsali): sekme başına fetch kapısı aynı kalır. */}
             <div className="cl-tabs-row">
               <Tabs value={section} onValueChange={k => setSection(k)}>
-                <TabsList variant="line" aria-label="Cluster bölümleri">
+                <TabsList variant="line" aria-label={t('clusters.tabs.aria', lang)}>
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="nodes">{`Nodes${section === 'nodes' && nodeRows.length > 0 ? ` (${nodeRows.length})` : ''}`}</TabsTrigger>
                   <TabsTrigger value="namespaces">{`Namespaces${section === 'namespaces' && nsRows.length > 0 ? ` (${nsRows.length})` : ''}`}</TabsTrigger>
@@ -833,10 +833,10 @@ export default function ClustersPage() {
                       sort={{ initial: { id: 'status', dir: 'desc' }, ids: NODE_SORT_IDS }}
                       columnModel={nodeColumnModel} state={nodeState} contentVisibility={nodeRows.length > 100}
                       getRowKey={r => `${r.cluster}|${r.node}`} ariaLabel="Nodes"
-                      renderCell={(r, c) => nodeCellContent(r, c.id)} />
+                      renderCell={(r, c) => nodeCellContent(r, c.id, lang)} />
                   </div>
                   <TableViewBar foldable={0} expanded onExpandedChange={() => {}}
-                    allColumns={nodeAllCols} onAllColumnsChange={setNodeAllCols} />
+                    allColumns={nodeAllCols} onAllColumnsChange={setNodeAllCols} lang={lang} />
                 </>}
 
                 {/* v0.8.588 — namespace rollup: TAM toplamlar (pod
@@ -887,7 +887,7 @@ export default function ClustersPage() {
                             <Button variant="ghost" size="xs" className={(r.failing ?? 0) > 0 ? 'cl-health cl-health--bad' : 'cl-health'}
                               onClick={e => { e.stopPropagation(); openNsDrawer(r); }}
                               aria-label={`Open per-pod trend charts for namespace ${r.namespace}`}
-                              title="Bu namespace'in pod başına trend grafikleri">
+                              title={t('clusters.ns.trendTitle', lang)}>
                               {(r.failing ?? 0) > 0 ? `${r.failing} failing` : 'healthy'}
                               <ChartSpline size={13} strokeWidth={1.75} aria-hidden="true" />
                             </Button>
@@ -897,7 +897,7 @@ export default function ClustersPage() {
                       }} />
                   </div>
                   <TableViewBar foldable={0} expanded onExpandedChange={() => {}}
-                    allColumns={nsAllCols} onAllColumnsChange={setNsAllCols} />
+                    allColumns={nsAllCols} onAllColumnsChange={setNsAllCols} lang={lang} />
                 </>}
 
                 {section === 'pods' && !nsView && <>
@@ -907,8 +907,8 @@ export default function ClustersPage() {
                   {podErr && rows.length > 0 && staleErrNote(POD_ERR)}
                   {!podErr && !podQs[0]?.isPending && truncatedClusters.length > 0 && (
                     <p className="cl-cut-note"
-                      title={`${truncatedClusters.join(', ')}: sunucu en işlek 500 pod'u döndürdü — sakin pod'lar bu listenin dışında kalmış olabilir.`}>
-                      En işlek 500 pod gösteriliyor.
+                      title={tf('clusters.pods.cutTitle', lang, { clusters: truncatedClusters.join(', ') })}>
+                      {t('clusters.pods.cut', lang)}
                     </p>
                   )}
                   <div className="table-wrap">
@@ -916,10 +916,10 @@ export default function ClustersPage() {
                       sort={{ initial: { id: 'cpuPct', dir: 'desc' }, ids: POD_COLS.map(c => c.id) }}
                       columnModel={podColumnModel} state={podState} contentVisibility={rows.length > 100}
                       getRowKey={r => `${r.cluster}|${r.namespace}|${r.pod}`} getRowHref={podHref} ariaLabel="Pods"
-                      renderCell={(r, c) => podCellContent(r, c.id, range)} />
+                      renderCell={(r, c) => podCellContent(r, c.id, range, lang)} />
                   </div>
                   <TableViewBar foldable={0} expanded onExpandedChange={() => {}}
-                    allColumns={podAllCols} onAllColumnsChange={setPodAllCols} />
+                    allColumns={podAllCols} onAllColumnsChange={setPodAllCols} lang={lang} />
                 </>}
 
                 {/* Clusters S7 (plan §0 D2, onaylı mockup) — sade Overview:
@@ -929,7 +929,7 @@ export default function ClustersPage() {
                     "Göstergeler" (D6: açılan bölüm açık kalır; ağ grafiği yalnız
                     açıkken çekilir). Net in / out KPI kartları ağ bölümüne indi. */}
                 {section === 'overview' && (() => {
-                  const boxes = overviewBoxes(detailSummaryQ.data, alertsQ.data != null);
+                  const boxes = overviewBoxes(detailSummaryQ.data, alertsQ.data != null, lang);
                   if (boxes.length === 0) return null;
                   return (
                     <div className="cl-ov-boxes">
@@ -950,15 +950,15 @@ export default function ClustersPage() {
                 {section === 'overview' && ((cpuTrendQ.data?.series?.length ?? 0) > 0 || (memTrendQ.data?.series?.length ?? 0) > 0) && (
                   <div className="grid-2 cl-ov-charts">
                     <MetricArea title={`CPU usage (cores)${clampSuffix(netClamped)}`} byLabel="By node"
-                      subtitle={cpuByNode ? topSeriesText(cpuTrendQ.data?.series, v => `${fmtCores(v)} ${t('clusters.cores', lang)}`) || undefined : undefined}
+                      subtitle={cpuByNode ? topSeriesText(cpuTrendQ.data?.series, v => `${fmtCores(v)} ${t('clusters.cores', lang)}`, lang) || undefined : undefined}
                       by={cpuByNode} onToggle={setCpuByNode} onZoom={chartZoom} onZoomReset={chartZoomReset}
                       syncKey="clusters" xRange={trendXRange} zeroBase
-                      series={cpuTrendQ.data?.series} seriesName="CPU" />
+                      series={cpuTrendQ.data?.series} seriesName="CPU" lang={lang} />
                     <MetricArea title={`Memory usage${clampSuffix(netClamped)}`} byLabel="By node"
-                      subtitle={memByNode ? topSeriesText(memTrendQ.data?.series, fmtBytes) || undefined : undefined}
+                      subtitle={memByNode ? topSeriesText(memTrendQ.data?.series, fmtBytes, lang) || undefined : undefined}
                       by={memByNode} onToggle={setMemByNode} onZoom={chartZoom} onZoomReset={chartZoomReset}
                       syncKey="clusters" xRange={trendXRange} zeroBase
-                      series={memTrendQ.data?.series} seriesName="Memory" unit="bytes" />
+                      series={memTrendQ.data?.series} seriesName="Memory" unit="bytes" lang={lang} />
                   </div>
                 )}
                 {/* v0.9.32 (F2) — node kutucukları (aynı clusterNodes verisi) +
@@ -979,7 +979,7 @@ export default function ClustersPage() {
                 )}
                 {section === 'overview' && (
                   <div className="cl-ov-closed">
-                    <CollapsedSection id="cl-net" title="Ağ trafiği" summary="giriş ve çıkış grafiği"
+                    <CollapsedSection id="cl-net" title={t('clusters.net.title', lang)} summary={t('clusters.net.summary', lang)}
                       open={overviewOpen.has('net')} onOpenChange={setOverviewSectionOpen('net')}>
                       {/* v0.9.10 — throughput grafiği: yalnız seri geldiyse
                           (node_network erişilemezse düz not). Madde 4 sweep —
@@ -988,8 +988,8 @@ export default function ClustersPage() {
                         <ClusterCard header={`Network throughput${clampSuffix(netClamped)}`}>
                           {detailSummaryQ.data?.netInBps || detailSummaryQ.data?.netOutBps ? (
                             <p className="cl-ov-net">
-                              {[detailSummaryQ.data.netInBps ? `giriş ${fmtBps(detailSummaryQ.data.netInBps)}` : '',
-                                detailSummaryQ.data.netOutBps ? `çıkış ${fmtBps(detailSummaryQ.data.netOutBps)}` : '']
+                              {[detailSummaryQ.data.netInBps ? tf('clusters.net.in', lang, { v: fmtBps(detailSummaryQ.data.netInBps) }) : '',
+                                detailSummaryQ.data.netOutBps ? tf('clusters.net.out', lang, { v: fmtBps(detailSummaryQ.data.netOutBps) }) : '']
                                 .filter(Boolean).join(' · ')}
                             </p>
                           ) : null}
@@ -1000,11 +1000,11 @@ export default function ClustersPage() {
                             height={200} />
                         </ClusterCard>
                       ) : netTrendQ.isPending ? <Spinner /> : (
-                        <p className="cl-ov-note">Ağ serisi yok (node_exporter ağ metrikleri okunamadı).</p>
+                        <p className="cl-ov-note">{t('clusters.net.none', lang)}</p>
                       )}
                     </CollapsedSection>
-                    <CollapsedSection id="cl-gauges" title="Göstergeler"
-                      summary="CPU, bellek ve pod sağlığı kadranları, pod durumu halkası"
+                    <CollapsedSection id="cl-gauges" title={t('clusters.gauges.title', lang)}
+                      summary={t('clusters.gauges.summary', lang)}
                       open={overviewOpen.has('gauges')} onOpenChange={setOverviewSectionOpen('gauges')}>
                       {/* v0.9.31 (design handoff F1) — kadranlar kapasite VARSA
                           (safePct null→gizli); halka herhangi bir faz sayısı varsa. */}
@@ -1015,7 +1015,7 @@ export default function ClustersPage() {
                         const phaseTotal = d ? (d.podsRunning ?? 0) + (d.podsPending ?? 0) + (d.podsFailed ?? 0) : 0;
                         const healthP = phaseTotal > 0 ? ((d!.podsRunning ?? 0) / phaseTotal) * 100 : null;
                         const hasGauges = cpuP != null || memP != null || healthP != null;
-                        if (!d || (!hasGauges && phaseTotal === 0)) return <p className="cl-ov-note">Gösterge verisi yok.</p>;
+                        if (!d || (!hasGauges && phaseTotal === 0)) return <p className="cl-ov-note">{t('clusters.gauges.none', lang)}</p>;
                         return (
                           <div className={hasGauges && phaseTotal > 0 ? 'cl-ov-gauges cl-ov-gauges--split' : 'cl-ov-gauges'}>
                             {hasGauges && (
@@ -1073,6 +1073,7 @@ function NamespaceDrawer({ cluster, namespace, range, onClose, onZoom, onZoomRes
   onZoomReset?: () => void;
 }) {
   const [params, setParams] = useSearchParams();
+  const lang = useLang(); // v0.10.2189
   const tw = params.get('tw') ?? '';
   const setTw = (v: string) => setParams(prev => {
     const next = new URLSearchParams(prev);
@@ -1098,8 +1099,8 @@ function NamespaceDrawer({ cluster, namespace, range, onClose, onZoom, onZoomRes
       <SheetSection title="Per-pod trend (per minute)">
         <div className="cl-sheet-tools">
           <NativeSelect size="sm" className={FIELD_SURFACE} value={tw} onChange={e => setTw(e.target.value)}
-            aria-label="Trend penceresi"
-            title="Trend penceresi — sayfa aralığından bağımsız">
+            aria-label={t('clusters.trend.window', lang)}
+            title={t('clusters.trend.windowTitle', lang)}>
             {TREND_WINDOWS.map(w => (
               <NativeSelectOption key={w.key} value={w.key}>{w.label}</NativeSelectOption>
             ))}
@@ -1137,29 +1138,29 @@ function NamespaceDrawer({ cluster, namespace, range, onClose, onZoom, onZoomRes
 // nodeCellContent — Nodes tablosunun hücre içeriği (Clusters S6, D3; S12'de
 // coremetry/DataTable renderCell'ine geçti). Kapasite yoksa CPU / Memory
 // yalnız kullanılanı yazar; boş değer "—".
-function nodeCellContent(r: ClusterNodeRow, col: string): ReactNode {
+function nodeCellContent(r: ClusterNodeRow, col: string, lang: Lang): ReactNode {
   const dash = (v: string, title?: string) => (v ? <span title={title}>{v}</span> : <span className="cell-empty">—</span>);
   switch (col) {
     case 'node': return <span title={r.node}>{r.node}</span>;
     case 'role': return dash(r.role ?? ''); // rol bir kategori: nötr düz metin
-    case 'status': { const st = nodeStatus(r); return dash(st.word, st.title); }
+    case 'status': { const st = nodeStatus(r, lang); return dash(st.word, st.title); }
     case 'pods': return dash(nodePodsText(r));
     case 'cpu':
     case 'mem': {
-      const text = col === 'cpu' ? nodeCpuText(r) : nodeMemText(r);
+      const text = col === 'cpu' ? nodeCpuText(r, lang) : nodeMemText(r, lang);
       if (!text) return dash('');
       return <div className="cl-node-usage"><span>{text}</span><MiniBar pct={col === 'cpu' ? nodeCpuPct(r) : nodeMemPct(r)} /></div>;
     }
     case 'cluster': return r.cluster;
-    case 'alloc': return dash(nodeAllocText(r));
-    case 'reqPct': return dash(nodeRequestText(r));
-    case 'limits': return dash(nodeLimitsText(r));
+    case 'alloc': return dash(nodeAllocText(r, lang));
+    case 'reqPct': return dash(nodeRequestText(r, lang));
+    case 'limits': return dash(nodeLimitsText(r, lang));
     case 'netIn': return dash(r.netInBps ? fmtBps(r.netInBps) : '');
     case 'netOut': return dash(r.netOutBps ? fmtBps(r.netOutBps) : '');
     case 'versions': return dash(nodeVersionText(r), nodeVersionTitle(r));
     case 'taints': return dash(nodeTaintText(r));
-    case 'disk': return dash(nodeDiskText(r), 'kök dosya sistemi: / ya da /sysroot (dolu olanı)');
-    case 'age': return dash(nodeAgeText(r, Date.now()));
+    case 'disk': return dash(nodeDiskText(r, lang), t('clusters.node.diskTitle', lang));
+    case 'age': return dash(nodeAgeText(r, Date.now(), lang));
     default: return null;
   }
 }
@@ -1167,19 +1168,19 @@ function nodeCellContent(r: ClusterNodeRow, col: string): ReactNode {
 // podCellContent — Pods sekmesinin hücre içeriği (Clusters S12, §4). Durum düz
 // sözcük (namespace detayıyla aynı sözlük), restart nedeniyle ("7 · bellek
 // bitti"); % hücresinin istek ekseni ipucunda (v0.8.580).
-function podCellContent(r: ClusterPodRow, col: string, range: TimeRange): ReactNode {
+function podCellContent(r: ClusterPodRow, col: string, range: TimeRange, lang: Lang): ReactNode {
   switch (col) {
     case 'pod': return <span title={r.pod}>{r.pod}</span>;
     case 'namespace': return r.namespace;
     case 'service': return r.service
       ? <Link to={serviceHref(r.service, { range })}>{r.service}</Link>
-      : <span className="cell-empty" title="Eşleşen Coremetry servisi yok (enstrümante edilmemiş, altyapı pod'u ya da belirsiz)">—</span>;
-    case 'phase': return nsPodStatusWord(r).word || <span className="cell-empty">—</span>;
+      : <span className="cell-empty" title={t('clusters.pod.noSvc', lang)}>—</span>;
+    case 'phase': return nsPodStatusWord(r, undefined, lang).word || <span className="cell-empty">—</span>;
     case 'cpuPct': return <span title={pctTitle('CPU', r.cpuPct, r.cpuPctOfReq)}>{r.cpuPct ? r.cpuPct.toFixed(0) : '—'}</span>;
     case 'memPct': return <span title={pctTitle('Memory', r.memPct, r.memPctOfReq)}>{r.memPct ? r.memPct.toFixed(0) : '—'}</span>;
     case 'restarts': return r.restartsUnknown
-      ? <span title="Restart serisi yok (küme metriği yok ya da seri tavanı) — 0 değil, bilinmiyor.">—</span>
-      : <span title={r.lastTermReason ? `${r.lastTermReason} · son sonlanma sebebi` : undefined}>{podRestartText(r)}</span>;
+      ? <span title={t('clusters.pod.restartUnknown', lang)}>—</span>
+      : <span title={r.lastTermReason ? tf('clusters.pod.lastTerm', lang, { reason: r.lastTermReason }) : undefined}>{podRestartText(r, lang)}</span>;
     case 'cluster': return r.cluster;
     case 'cpuCores': return fmtCores(r.cpuCores);
     case 'memBytes': return fmtBytes(r.memBytes);

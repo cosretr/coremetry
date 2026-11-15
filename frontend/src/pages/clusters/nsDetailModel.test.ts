@@ -72,3 +72,27 @@ describe('dört kutu ve düz cümle', () => {
     expect(namespaceSentence(0, [], undefined, false)).toBe('');
   });
 });
+
+// v0.10.2189 — İngilizce arayüz: durum sözcükleri, kutular ve cümle İngilizce.
+describe('namespace detayı — EN', () => {
+  it('durum sözcükleri', () => {
+    expect(podStatusWord(pod({ phase: 'Pending', unschedulable: true }), undefined, 'en').word).toBe('Pending · unschedulable');
+    expect(podStatusWord(pod({}), 'CrashLoopBackOff', 'en').word).toBe('Crash looping');
+    expect(podStatusWord(pod({}), undefined, 'en').word).toBe('Running');
+    expect(workloadStatusWord('Progressing', 'en').word).toBe('Missing replicas');
+    expect(podRestartText(pod({ restarts: 7, lastTermReason: 'OOMKilled' }), 'en')).toBe('7 · out of memory');
+    expect(workloadCpuText(4.2, 9.5, 'en')).toBe('4.2 / 9.5 cores');
+  });
+  it('kutular + cümle', () => {
+    const pods = [pod({ pod: 'a' }), pod({ pod: 'b', phase: 'Pending' }), pod({ pod: 'c', memPct: 95 })];
+    const summary = { cpuRequestCores: 16, memRequestBytes: 48 * GiB, restarts24h: 7, waiting: { b: 'ImagePullBackOff' } };
+    expect(namespaceBoxes(pods, summary, { cpu: 9.4, mem: 52 * GiB }, true, 'en').map(b => [b.label, b.value, b.sub])).toEqual([
+      ['Pods', 'at least 2 / 3 running', '1 pending'],
+      ['CPU', '9.40 cores', 'request 16.00'],
+      ['Memory', '52.0 GiB', 'request 48.0 GiB (exceeded)'],
+      ['Restarts (24h)', '7', ''],
+    ]);
+    expect(namespaceSentence(1, pods, summary, false, 'en'))
+      .toBe('1 workload, 2/3 pods running; 1 pod at 90% of its memory limit; 1 pod waiting; 7 restarts in the last 24h.');
+  });
+});

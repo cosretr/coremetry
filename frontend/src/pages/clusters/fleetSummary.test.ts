@@ -110,3 +110,14 @@ describe('usageTone', () => {
     expect(usageTone(null)).toBeNull();
   });
 });
+
+// v0.10.2189 — İngilizce arayüz: cümle İngilizce, TR sayı eki yok.
+describe('fleetSentence — EN', () => {
+  it('karışık, hepsi, tek', () => {
+    expect(fleetSentence([...rep('healthy', 15), ...rep('critical', 4), 'unreachable'], 'en'))
+      .toBe('20 clusters: 15 healthy, 4 with a critical alert, 1 not responding.');
+    expect(fleetSentence(rep('healthy', 3), 'en')).toBe('3 clusters: all healthy.');
+    expect(fleetSentence(['unreachable'], 'en')).toBe('1 cluster: not responding.');
+    expect(cpuUsageText(148, 320, 'en')).toBe('148 / 320 cores · 46%');
+  });
+});

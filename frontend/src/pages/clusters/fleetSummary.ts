@@ -10,7 +10,7 @@
 import { fmtBytes } from '@/lib/utils';
 import { trPoss, trPossLoc } from '@/lib/trSuffix';
 import { safePct } from './thresholds';
-import { t, type Lang } from '@/lib/i18n';
+import { t, tf, fmtPctLang, type Lang } from '@/lib/i18n';
 import type { ClusterSummary } from '@/lib/types';
 
 export type ClusterState = 'healthy' | 'critical' | 'unreachable' | 'pending';
@@ -24,25 +24,26 @@ export function clusterState(
   return (q.data.alertsCritical ?? 0) > 0 ? 'critical' : 'healthy';
 }
 
-/** Kartlardan filo cümlesi; liste boşsa ''. */
-export function fleetSentence(states: readonly ClusterState[]): string {
+/** Kartlardan filo cümlesi; liste boşsa ''. v0.10.2189 — metin arayüz dilinde
+ *  (lib/i18n clusters.fleet.*); TR sayı ekleri {loc} / {poss}. */
+export function fleetSentence(states: readonly ClusterState[], lang: Lang = 'tr'): string {
   const total = states.length;
   if (total === 0) return '';
   const n = (s: ClusterState) => states.filter(x => x === s).length;
   const healthy = n('healthy'), critical = n('critical'), down = n('unreachable'), pending = n('pending');
-  const head = `${total} cluster: `;
+  const head = tf('clusters.fleet.head', lang, { n: total });
   if (total === 1) {
-    return head + (down ? 'yanıt vermiyor' : pending ? 'yükleniyor' : critical ? 'kritik alarm var' : 'sağlıklı') + '.';
+    return head + t(down ? 'clusters.state.unreachable' : pending ? 'clusters.state.loading' : critical ? 'clusters.fleet.oneCritical' : 'clusters.state.healthy', lang) + '.';
   }
-  if (healthy === total) return `${head}hepsi sağlıklı.`;
-  if (critical === total) return `${head}hepsinde kritik alarm var.`;
-  if (down === total) return `${head}hiçbiri yanıt vermiyor.`;
-  if (pending === total) return `${head}yükleniyor.`;
+  if (healthy === total) return head + t('clusters.fleet.allHealthy', lang);
+  if (critical === total) return head + t('clusters.fleet.allCritical', lang);
+  if (down === total) return head + t('clusters.fleet.allDown', lang);
+  if (pending === total) return `${head}${t('clusters.state.loading', lang)}.`;
   const parts: string[] = [];
-  if (healthy) parts.push(`${healthy} sağlıklı`);
-  if (critical) parts.push(`${trPossLoc(critical)} kritik alarm var`);
-  if (down) parts.push(`${trPoss(down)} yanıt vermiyor`);
-  if (pending) parts.push(`${trPoss(pending)} yükleniyor`);
+  if (healthy) parts.push(tf('clusters.fleet.healthyN', lang, { n: healthy }));
+  if (critical) parts.push(tf('clusters.fleet.criticalN', lang, { n: critical, loc: trPossLoc(critical) }));
+  if (down) parts.push(tf('clusters.fleet.downN', lang, { n: down, poss: trPoss(down) }));
+  if (pending) parts.push(tf('clusters.fleet.pendingN', lang, { n: pending, poss: trPoss(pending) }));
   return `${head}${parts.join(', ')}.`;
 }
 
@@ -52,10 +53,7 @@ function fmtCoreCount(v: number): string {
   return String(Math.round(v * 10) / 10);
 }
 // v0.10.2186 — yüzde biçimi dile göre: TR "%46", EN "46%".
-const pctText = (used: number, cap: number, lang: Lang) => {
-  const n = Math.round(safePct(used, cap) ?? 0);
-  return lang === 'tr' ? `%${n}` : `${n}%`;
-};
+const pctText = (used: number, cap: number, lang: Lang) => fmtPctLang(Math.round(safePct(used, cap) ?? 0), lang);
 
 /** TR "148 / 320 çekirdek · %46", EN "148 / 320 cores · 46%"; kapasite yoksa
  *  "148 çekirdek"; kullanılan yoksa null. Birim i18n kataloğundan (clusters.cores). */

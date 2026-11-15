@@ -1,6 +1,7 @@
 import { seriesEnvelope } from '@/lib/chart/seriesEnvelope';
 import type { TSSeries, TSEnvelope } from '@/components/viz/TimeSeriesPanel';
 import type { SpanMetricSeries } from '@/lib/types';
+import { t, tf, type Lang } from '@/lib/i18n';
 
 // metricEnvelope — v0.10.2147 (servis sekmeleri S8, docs/frontend/
 // service-tabs-plan.md §4; mockup operatör onayı 2026-11-13). Çok serili
@@ -26,19 +27,19 @@ const nameOf = (s: SpanMetricSeries, i: number) => (s.groupKey?.length ? s.group
 // Tam ad varsa (lejant kırpması, v0.9.1369) notta ve tooltip'te o okunur.
 const fullOf = (s: SpanMetricSeries, i: number) => (s.fullKey?.length ? s.fullKey.join(' · ') : nameOf(s, i));
 
-export function metricEnvelope(series: SpanMetricSeries[], unit?: string): MetricEnvelopeView | null {
+export function metricEnvelope(series: SpanMetricSeries[], unit?: string, lang: Lang = 'tr'): MetricEnvelopeView | null {
   if (series.length <= ENVELOPE_OVER) return null;
   const env = seriesEnvelope(series.map((s, i) => ({ label: fullOf(s, i), points: s.points })));
   if (env.n <= ENVELOPE_OVER || !env.top) return null;
   const u = unit ?? '';
   return {
     lines: [
-      { label: 'ortanca', color: 'var(--text2)', unit: u, points: env.median },
-      { label: `en yüksek: ${env.top.label}`, color: 'var(--accent2)', unit: u, points: env.top.points },
+      { label: t('clusters.env.median', lang), color: 'var(--text2)', unit: u, points: env.median },
+      { label: tf('clusters.env.top', lang, { name: env.top.label }), color: 'var(--accent2)', unit: u, points: env.top.points },
     ],
     envelope: {
-      lo: { label: 'en düşük', unit: u, points: env.lo },
-      hi: { label: 'en yüksek değer', unit: u, points: env.hi },
+      lo: { label: t('clusters.env.lo', lang), unit: u, points: env.lo },
+      hi: { label: t('clusters.env.hi', lang), unit: u, points: env.hi },
     },
     n: env.n,
     top: env.top.label,

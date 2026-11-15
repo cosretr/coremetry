@@ -66,3 +66,19 @@ describe('Kapalı bölüm kalıcılığı (D6)', () => {
     expect(serializeOpenSections(new Set(['gauges', 'net'] as const), known)).toBe('["net","gauges"]');
   });
 });
+
+// v0.10.2189 — İngilizce arayüz: cümle, kutular ve altyazı İngilizce.
+describe('overview — EN', () => {
+  it('cümle + kutular + en yüksek', () => {
+    expect(overviewSentence(sum({ memUsedBytes: 72 * GiB, memCapacityBytes: 100 * GiB, memForecast: ok(14), alertsCritical: 2 }), 'en'))
+      .toBe('Running. Memory 72% full and at this rate fills in about 14 days; 2 critical alerts open.');
+    const boxes = overviewBoxes(sum({ cpuUsedCores: 4, cpuCapacityCores: 8, nodes: 1, podsRunning: 5, podsPending: 1, podsFailed: 0, alertsCritical: 0, alertsWarning: 1 }), true, 'en');
+    expect(boxes.map(b => [b.label, b.value, b.sub])).toEqual([
+      ['CPU', '4 / 8 cores', '50% · 1 node'],
+      ['Pods', '5 running', '1 pending · 0 failed'],
+      ['Alerts', '0 critical', '1 warning'],
+    ]);
+    expect(topSeriesText([{ name: 'a', points: [{ t: 0, value: 1 }] }, { name: 'b', points: [{ t: 0, value: 2 }] }] as never, String, 'en'))
+      .toBe('Highest: b · 2');
+  });
+});
