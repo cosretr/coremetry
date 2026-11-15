@@ -338,6 +338,11 @@ type guidedRoute struct {
 	// problems (linkler, çipler, özet kartı aynı); demet hipotez çerçevesi ekler,
 	// /ai rota etiketi problems_root_cause (chat_problems_root_cause.go).
 	ProblemsRootCause bool `json:",omitempty"`
+	// OpNotFound / BusinessCode — v0.10.2197 (router boşlukları D3-F, yalnız v2):
+	// ask_service niyetinde katalog dışı operasyon kodu / iş kodu öznesi;
+	// modelsiz cevap (chat_router_d3f.go). /ai etiketi operation_not_found / business_code.
+	OpNotFound   string `json:",omitempty"`
+	BusinessCode string `json:",omitempty"`
 	// v0.10.2140 (router boşlukları D7, yalnız v2; chat_howto_route.go):
 	// NotAvailable — how_to rotasında "bu veri Coremetry'de yok" cevabı
 	// ("oncall" = nöbet çizelgesi). LinkOnly — trace_search rotasında pencere
@@ -1958,7 +1963,7 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 	}
 	pasted = pasted || fenced || paramsDump
 	if !hasGuidedSignal(norm) && !followCue && !mayNameTeam(norm) && !absShape && !findCue && !peerCue && !affirm && !pasted &&
-		!(v2 && hasLatencyGrowthSignal(norm)) && !v2Cue && !(v2 && v2HowToGate(norm)) {
+		!(v2 && hasLatencyGrowthSignal(norm)) && !v2Cue && !(v2 && v2HowToGate(norm)) && !(v2 && d3fShape(question)) { // v0.10.2197 — D3-F
 		return false, false // zero-cost fast path: no catalogue read
 	}
 	svcNames, envNames := s.guidedServiceNames(ctx), s.guidedEnvNames(ctx)
@@ -1998,6 +2003,7 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 			absShape = false
 		}
 	}
+	route = promoteD3F(route, question, v2) // v0.10.2197 — D3-F: iş kodu / katalog dışı operasyon (chat_router_d3f.go)
 	// v0.10.479 (F4-2, G10) — TAKİP MUTASYONU: "son 1 saate genişlet" / "sadece
 	// hatalı olanlar" / "bunun pod'larını göster" / "aynı filtreyle loglara bak"
 	// → aktif bağlamın son rotası klonlanır, alan değişir, aynı dispatch; router'ın
@@ -2313,6 +2319,9 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		return s.guidedOffTopicDispatch(ctx, emit, msgs, question, ctxService)
 	}
 	if handled, ok := s.guidedD7DirectAnswer(emit, route); handled { // v0.10.2140 — D7: nöbet "yok" / link-yalnız arama
+		return handled, ok
+	}
+	if handled, ok := s.guidedD3FAnswer(ctx, emit, route, question, anchorTo, loc); handled { // v0.10.2197 — D3-F (chat_router_d3f.go)
 		return handled, ok
 	}
 	if route.Intent == guidedHowTo { // v0.10.809 — LLM'siz yol tarifi

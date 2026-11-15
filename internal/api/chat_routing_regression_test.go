@@ -453,6 +453,21 @@ var routingRegressionRows = []routingRow{
 	{release: "komşu v0.10.2140", name: "v1 '<servis> hata oranı nereden görürüm' eski yolunda → service_health",
 		q: rrSvc + " hata oranı nereden görürüm", wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceHealth)},
 
+	// v0.10.2197 — router boşlukları D3-F (audit F): katalog dışı operasyon
+	// kodu → operation_not_found; iş kodu (DEP1080) → business_code; yalnız v2.
+	{release: "v0.10.2197", name: "v2 katalog dışı 'OP_NAME_REST operasyonu neden hata veriyor?' → operation_not_found",
+		q: "OP_NAME_REST operasyonu neden hata veriyor?", v2: true, wantTier: aisurface.TierGuided, wantRoute: guidedOpNotFoundRoute},
+	{release: "v0.10.2197", name: "v2 'kod DEP1080 için tekrar kontrol' → business_code",
+		q: "kod DEP1080 için tekrar kontrol", v2: true, wantTier: aisurface.TierGuided, wantRoute: guidedBusinessCodeRoute},
+	{release: "v0.10.2197", name: "v2 'DEP1080 hatası hangi serviste görülüyor?' → business_code",
+		q: "DEP1080 hatası hangi serviste görülüyor?", v2: true, wantTier: aisurface.TierGuided, wantRoute: guidedBusinessCodeRoute},
+	{release: "v0.10.2197", name: "v2 çıplak 'DEP1080' → business_code",
+		q: "DEP1080", v2: true, wantTier: aisurface.TierGuided, wantRoute: guidedBusinessCodeRoute},
+	{release: "komşu v0.10.2197", name: "v1 aynı operasyon sorusu eski yolunda → problems",
+		q: "OP_NAME_REST operasyonu neden hata veriyor?", wantTier: aisurface.TierGuided, wantRoute: string(guidedProblems)},
+	{release: "komşu v0.10.2197", name: "v2 'HTTP500 hataları' iş kodu sayılmaz → problems",
+		q: "HTTP500 hataları neler", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedProblems)},
+
 	// v0.10.2139 — router boşlukları D6 (audit D, G): çıplak varlık + çitli /
 	// döküm yapıştırma; yalnız v2. Yazım hatalı adın en yakın servis kartı
 	// demette (guidedEntityScanAnswer, store ister) — TestV2EntityNearAsk.

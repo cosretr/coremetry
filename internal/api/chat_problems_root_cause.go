@@ -57,6 +57,9 @@ func guidedRouteLabel(r guidedRoute) string {
 	if r.Intent == guidedHowTo && r.NotAvailable != "" { // v0.10.2140 (chat_howto_route.go)
 		return guidedNotAvailableRoute
 	}
+	if l := d3fRouteLabel(r); l != "" { // v0.10.2197 (chat_router_d3f.go)
+		return l
+	}
 	if r.Intent == guidedTraceSearch && r.LinkOnly != nil {
 		return guidedTraceSearchLinkRoute
 	}

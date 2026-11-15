@@ -14145,3 +14145,11 @@ Operatör bildirimi: Problems sayfası parametresiz açılışta yalnız P1 gös
 - `PRIO_DEFAULT` (`pages/inbox/inboxFilters.ts`) = P1,P2,P3; sıralama öncelik önce kalır (P1 üstte). Açık `?prio=` seçimi yine kazanır ve linke biner; "tüm öncelikler" düğmesi parametreyi siler.
 - Kenar çubuğu rozeti (`inboxBadgeQuery`) aynı kümeyi sayar → rozet artık P2/P3 açık satırları da sayar (sayı büyür).
 - Değişmedi: bildirim kuralları (P1 exception anonsu vb.), tür varsayılanı, `subject`/`minOcc` (S3'ün kalanı).
+
+
+## 2026-11-15 — v0.10.2197 — CoSRE router D3-F: bulunamayan operasyon ve iş kodu yolu
+
+Operatör onayı (2026-11-15) `docs/cosre/router-gaps-audit.md` D3-F'nin iki açık sorusu. Yalnız v2; v1 bayt bayt aynı; cevaplar modelsiz (LLM niyet listesi değişmez, RAG yok, yeni ayar yok).
+- Katalog dışı operasyon kodu (`BÜYÜK_ALT_ÇİZGİ`, servissiz genel rota) → `operation_not_found`: "Operasyon bulunamadı" + en yakın ≤5 katalog adı (ön-getirmenin `CatalogCandidates` okuması, ≤60 aday, tam katalog asla); her öneri sorunun kendisi, ad değiştirilmiş.
+- İş kodu `[A-Z]{2,5}\d{3,5}` (ör. DEP1080) → `business_code`: `business_code_summary_5m` son 7 gün servis kırılımı, sayılar, ilk/son görülme + `cosre_operation_catalog.function_codes` operasyonları; ham span yok. Kayıt yoksa açıkça "bulunamadı" (log gövdesi / exception mesajı aramaya girmez).
+- Açık bıraktığım ayrıntı (en basit güvenli seçim): pencere sabit 7 gün; HTTP/ISO/UTF/RFC/SHA önekleri iş kodu sayılmaz; servis anılan soru ve özel rotalar (log, root_cause …) ezilmez.

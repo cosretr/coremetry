@@ -155,3 +155,68 @@ func (s *Store) CatalogServices(ctx context.Context, source string, names []stri
 	}
 	return out, rows.Err()
 }
+
+// BusinessCodeSeenRow — v0.10.2197 (CoSRE router D3-F): bir iş kodunun bir
+// servisteki görülme özeti (tür, sayılar, ilk/son 5 dk kovası).
+type BusinessCodeSeenRow struct {
+	Kind      string    `json:"kind"` // function_code | channel_code
+	Service   string    `json:"service"`
+	Calls     uint64    `json:"calls"`
+	Errors    uint64    `json:"errors"`
+	FirstSeen time.Time `json:"firstSeen"`
+	LastSeen  time.Time `json:"lastSeen"`
+}
+
+// BusinessCodeSeen — v0.10.2197: tek kodun iki türde servis kırılımı +
+// ilk/son görülme. business_code_summary_5m nokta okuması (ORDER BY kind,
+// code ile başlar); ham span YOK. ≤20 satır.
+func (s *Store) BusinessCodeSeen(ctx context.Context, code string, from, to time.Time) ([]BusinessCodeSeenRow, error) {
+	rows, err := s.conn.Query(ctx, `
+		SELECT kind, service_name, countMerge(span_count_state) AS c, countMerge(error_count_state) AS e,
+		       min(time_bucket) AS f, max(time_bucket) AS l
+		FROM business_code_summary_5m
+		WHERE kind IN ('function_code', 'channel_code') AND code = ? AND time_bucket >= ? AND time_bucket < ?
+		GROUP BY kind, service_name
+		ORDER BY c DESC
+		LIMIT 20
+		SETTINGS max_execution_time = 5`, code, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []BusinessCodeSeenRow
+	for rows.Next() {
+		var r BusinessCodeSeenRow
+		if err := rows.Scan(&r.Kind, &r.Service, &r.Calls, &r.Errors, &r.FirstSeen, &r.LastSeen); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// CatalogOperationsByFunctionCode — v0.10.2197: function_codes dizisinde
+// kodu taşıyan katalog operasyonları (son 24 sa toplamları, ≤limit).
+// cosre_operation_catalog küçük bir meta tablo; ham span YOK.
+func (s *Store) CatalogOperationsByFunctionCode(ctx context.Context, code string, limit int) ([]CatalogOperation, error) {
+	rows, err := s.conn.Query(ctx, `
+		SELECT operation, source, service, function_codes, last_seen, call_count, error_count
+		FROM cosre_operation_catalog FINAL
+		WHERE has(function_codes, ?)
+		ORDER BY call_count DESC
+		LIMIT ?
+		SETTINGS max_execution_time = 3`, code, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []CatalogOperation
+	for rows.Next() {
+		var c CatalogOperation
+		if err := rows.Scan(&c.Operation, &c.Source, &c.Service, &c.FunctionCodes, &c.LastSeen, &c.CallCount, &c.ErrorCount); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
