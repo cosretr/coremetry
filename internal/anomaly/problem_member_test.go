@@ -15,9 +15,11 @@ package anomaly
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/cache"
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
@@ -173,7 +175,7 @@ func TestEscalationAlertSendsRaisedOwner(t *testing.T) {
 	got := make(chan chstore.Problem, 1)
 	before, after := memErrRateOwner(), memErrRateOwner()
 	after.Severity = "critical"
-	EscalationAlert("test", func(_ context.Context, p chstore.Problem) { got <- p })(before, after)
+	EscalationAlert("test", nil, func(_ context.Context, p chstore.Problem) { got <- p })(before, after)
 	select {
 	case p := <-got:
 		if p.ID != "a1" || p.Severity != "critical" {
@@ -182,7 +184,51 @@ func TestEscalationAlertSendsRaisedOwner(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("bildirim gönderilmedi")
 	}
-	EscalationAlert("test", nil)(before, after)
+	EscalationAlert("test", nil, nil)(before, after)
+}
+
+// setnxCache — paylaşılan Redis'in SETNX davranışı (süreçler arası tek
+// önbellek); yalnız SetNX kullanılır.
+type setnxCache struct {
+	cache.Cache
+	mu   sync.Mutex
+	keys map[string]time.Duration
+}
+
+func (c *setnxCache) SetNX(_ context.Context, key string, _ []byte, ttl time.Duration) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.keys[key]; ok {
+		return false, nil
+	}
+	c.keys[key] = ttl
+	return true, nil
+}
+
+// v0.10.2173 — worker ve sre aynı sahibi aynı anda P1'e çıkarır: paylaşılan
+// önbellekte ikinci çağıran susar, tek bildirim gider.
+func TestEscalationAlertDedupesAcrossProcesses(t *testing.T) {
+	shared := &setnxCache{keys: map[string]time.Duration{}}
+	got := make(chan string, 2)
+	before, after := memErrRateOwner(), memErrRateOwner()
+	after.Severity = "critical"
+	EscalationAlert("worker", shared, func(context.Context, chstore.Problem) { got <- "worker" })(before, after)
+	EscalationAlert("sre", shared, func(context.Context, chstore.Problem) { got <- "sre" })(before, after)
+	select {
+	case <-got:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ilk çağıran bildirmeli")
+	}
+	select {
+	case who := <-got:
+		t.Fatalf("ikinci çağıran susturulmalı, %s de gönderdi", who)
+	case <-time.After(200 * time.Millisecond):
+	}
+	shared.mu.Lock()
+	defer shared.mu.Unlock()
+	if ttl := shared.keys[EscalationDedupKey("a1")]; ttl != EscalationDedupTTL {
+		t.Fatalf("anahtar %q TTL %v olmalı, %v", EscalationDedupKey("a1"), EscalationDedupTTL, ttl)
+	}
 }
 
 func TestMembersVirtualRowLifecycle(t *testing.T) {

@@ -21,5 +21,5 @@ func (e *Evaluator) members(ctx context.Context, snap *chstore.OpenProblems, det
 	if e.notifier != nil {
 		send = e.notifier.SendProblemAlert
 	}
-	return anomaly.LoadMembers(ctx, e.store, snap, detector, now).OnEscalate(anomaly.EscalationAlert("evaluator", send))
+	return anomaly.LoadMembers(ctx, e.store, snap, detector, now).OnEscalate(anomaly.EscalationAlert("evaluator", e.stamps, send))
 }

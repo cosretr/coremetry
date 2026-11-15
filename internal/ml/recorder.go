@@ -73,6 +73,9 @@ type Recorder struct {
 	bf backfillJob
 	// notifier — v0.10.2052 (D4): grup Problem'inin açılış bildirimi (mevcut hat).
 	notifier ProblemNotifier
+	// dedup — v0.10.2173: paylaşılan önbellek; D5 yükseliş bildiriminin
+	// süreçler arası tekilleştirmesi (anomaly.EscalationAlert). nil = yok.
+	dedup cache.Cache
 	// leaderTicks — art arda lider tik sayısı; grup Problem'i kapanışı
 	// yalnız > episodeCloseMisses sonra (yeni liderin boş koşu durumu).
 	leaderTicks int
@@ -85,6 +88,13 @@ type Recorder struct {
 // bildirim hattı. nil = bildirim yok (Problem yine açılır).
 func (r *Recorder) WithNotifier(n ProblemNotifier) *Recorder {
 	r.notifier = n
+	return r
+}
+
+// WithDedup — v0.10.2173: D5 yükseliş bildirimi için paylaşılan önbellek
+// (worker ile sre aynı sahibi aynı anda P1'e çıkarırsa tek bildirim).
+func (r *Recorder) WithDedup(c cache.Cache) *Recorder {
+	r.dedup = c
 	return r
 }
 

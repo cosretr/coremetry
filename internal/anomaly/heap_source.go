@@ -85,6 +85,15 @@ type cacheBox struct{ c cache.Cache }
 // SetHeapSource — main.go: det.SetHeapSource(anomaly.NewHeapSource(vmSvc, store)).
 func (d *Detector) SetHeapSource(s *HeapSourceOr) { d.heapWire.source.Store(s) }
 
+// sharedCache — SetHeapCache ile bağlanan paylaşılan önbellek (nil = yok);
+// v0.10.2173: D5 yükseliş bildiriminin süreçler arası tekilleştirmesi de bunu kullanır.
+func (d *Detector) sharedCache() cache.Cache {
+	if box := d.heapWire.cache.Load(); box != nil {
+		return box.c
+	}
+	return nil
+}
+
 // SetHeapCache — gölge/canlı verdict'lerin kart için Redis'e yazılacağı önbellek
 // (Noop kurulumda yazım kaybolur; rozet yalnız lider süreçte görünmez — dürüst).
 func (d *Detector) SetHeapCache(c cache.Cache) {

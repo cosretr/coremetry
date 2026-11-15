@@ -29,7 +29,7 @@ func mlNotifier(n *notify.Notifier) ml.ProblemNotifier {
 	return n
 }
 
-func startML(ctx context.Context, mode runMode, cfg *config.Config, store *chstore.Store, logs logstore.Store, vm anomaly.REDVM, th *thanos.Service, lock cache.Lock, notifier *notify.Notifier) {
+func startML(ctx context.Context, mode runMode, cfg *config.Config, store *chstore.Store, logs logstore.Store, vm anomaly.REDVM, th *thanos.Service, lock cache.Lock, shared cache.Cache, notifier *notify.Notifier) {
 	run, label := ml.Placement(cfg.Background.MLEnabled, cfg.Background.MLRole, ml.Roles{Worker: mode.worker, Sre: mode.sre})
 	if !run {
 		if cfg.Background.MLEnabled && (mode.worker || mode.sre) {
@@ -42,5 +42,6 @@ func startML(ctx context.Context, mode runMode, cfg *config.Config, store *chsto
 	msrc := ml.NewMetricSources()
 	ml.New(store, logs, vm, lock, label, ml.NewLogRED(), ml.NewLogTemplates(), ml.NewLogBreakdown(), ml.NewLogChangePoint(), ml.NewTraceRED(), ml.NewTraceErrors(), ml.NewDependency(), ml.NewTracePods(), ml.NewMetricThanos(ml.NewThanosQuerier(th), msrc), ml.NewMetricML().WithSources(msrc), ml.NewNewTemplates()).
 		WithNotifier(mlNotifier(notifier)). // v0.10.2052 (D4): grup Problem'i bildirimi, mevcut hat
+		WithDedup(shared).                  // v0.10.2173: D5 yükseliş bildirimi süreçler arası tek
 		Start(chstore.WithQueryTag(ctx, "ml:recorder"))
 }

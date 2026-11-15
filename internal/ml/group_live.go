@@ -440,7 +440,7 @@ func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup,
 				if r.notifier != nil {
 					send = r.notifier.SendProblemAlert
 				}
-				anomaly.EscalationAlert("ml", send)(*before, p)
+				anomaly.EscalationAlert("ml", r.dedup, send)(*before, p)
 			}
 		}
 	}

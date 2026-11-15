@@ -34,6 +34,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/cache"
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
@@ -107,13 +108,51 @@ func (m *Members) OnEscalate(fn func(before, after chstore.Problem)) *Members {
 // onaylanmış satır kanal turuna çıkmaz (notify.go). "Bir kez": çağrı yalnız
 // P1'e GEÇİŞ anında (EscalatedToP1); zaten P1 olan sahibe gelen ek üye ve
 // her tazeleme sessizdir. send nil = bildirim kanalı yok (yalnız log).
-func EscalationAlert(tag string, send func(context.Context, chstore.Problem)) func(before, after chstore.Problem) {
+//
+// v0.10.2173 — süreçler arası tekilleştirme: worker ve sre aynı sahibi aynı
+// anda P1'e çıkarırsa ikisi de geçiş görür; gönderimden önce paylaşılan
+// önbellekte EscalationDedupKey SETNX ile sahiplenilir (TTL 24 sa), kaybeden
+// susar. dedup nil / Noop (Redis'siz tek süreç) = her zaman kazanır; SETNX
+// hatası = gönder (çift bildirim, kaçan P1 bildiriminden iyidir).
+func EscalationAlert(tag string, dedup cache.Cache, send func(context.Context, chstore.Problem)) func(before, after chstore.Problem) {
 	return func(before, after chstore.Problem) {
 		log.Printf("[%s] PROBLEM ESCALATED BY MEMBER %s · %s (%s → %s) — üye sahibi P1'e çıkardı, tek bildirim", tag, after.Service, after.ID, before.Severity, after.Severity)
-		if send != nil {
-			go send(context.Background(), after)
+		if send == nil {
+			return
 		}
+		go func() {
+			ctx := context.Background()
+			if !claimEscalation(ctx, dedup, tag, after.ID) {
+				log.Printf("[%s] PROBLEM ESCALATION %s · %s — başka süreç zaten bildirdi, bu kopya susturuldu", tag, after.Service, after.ID)
+				return
+			}
+			send(ctx, after)
+		}()
 	}
+}
+
+// EscalationDedupTTL — P1 yükseliş bildirimi sahiplenme ömrü. Sahip satırı
+// üyeler yüzünden P1'den inmez (D1), dolayısıyla ikinci meşru geçiş yoktur;
+// 24 sa yarışan süreçleri kapsar, anahtarı da sonsuza saklamaz.
+const EscalationDedupTTL = 24 * time.Hour
+
+// EscalationDedupKey — problem başına "p1-escalated" sahiplenme anahtarı.
+func EscalationDedupKey(problemID string) string {
+	return "coremetry:problem:" + problemID + ":p1-escalated"
+}
+
+// claimEscalation — SETNX ile tek gönderici seçer. nil önbellek ya da hata
+// = gönder (fail-open).
+func claimEscalation(ctx context.Context, c cache.Cache, tag, problemID string) bool {
+	if c == nil {
+		return true
+	}
+	won, err := c.SetNX(ctx, EscalationDedupKey(problemID), []byte(tag), EscalationDedupTTL)
+	if err != nil {
+		log.Printf("[%s] PROBLEM ESCALATION %s — tekilleştirme anahtarı alınamadı, yine de gönderiliyor: %v", tag, problemID, err)
+		return true
+	}
+	return won
 }
 
 // loadNoise — "problem değil" imzaları, tik başına en çok bir kez.
