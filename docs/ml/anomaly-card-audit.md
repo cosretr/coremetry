@@ -496,6 +496,11 @@ aralık okuması `thanos.WorkerQuery` + `WorkerLimits.Range*`). Pod kümesi + cl
 ifadenin aynı `combine` birleşimi, kaynak `thanos:<cluster>`; pod görünümü kanıt satırına iner. Maliyet: açık olay başına tik başına 1 Thanos
 aralık sorgusu, tik başına ≤ 10.
 
+**H9 — `dependency_latency` / `dependency_error_rate` göçü.** ✅ **gemilendi v0.10.2234** (`internal/ml/dependency_record.go`,
+`dependency_record_test.go`). Servis + hedef etiket adları tik anında kanıta (`svcLabel/targetLabel`; render anında bugünkü ayardan yeniden
+kurulmaz). Seri = servis × hedef client histogramı, kova penceresi: p95 (ms) ya da `error_type` dolu çağrı oranı (yüzde, `clamp_max` 100);
+bant medyan ± criticalZ·effMAD; hacim aynı çiftin `_count`'u. Maliyet: açık olay başına tik başına 2 VM aralık sorgusu, tik başına ≤ 10 olay.
+
 **H3…Hn — dedektör başına birer sürüm** (§9 tablosu; önerilen sıra: VM metrik → `trace_error_count` → `svc_error_rate` → TraceRED →
 bağımlılık → kırılma noktası → log RED → şablon → pod → `svc_breadth` → oluşum türleri). *Risk:* S/M/L sütunu. *Göç:* yok. *Test:* dedektör başına ölçüt 9 + doğrulayıcı.
 

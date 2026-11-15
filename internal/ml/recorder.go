@@ -281,6 +281,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	attachTraceErrorRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &terrBudget, start)
 	thRanger, thBudget := r.thanosRanger(), thanosRecordMaxPerTick // v0.10.2224 (H8): Thanos metrik kaydı
 	attachThanosMetricRecords(tctx, thRanger, cfg, closing, true, r.runs.firstOf, nil, &thBudget, start)
+	depBudget := depRecordMaxPerTick // v0.10.2234 (H9): dependency_* kaydı
+	attachDependencyRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &depBudget, start)
 	for _, ev := range closing {
 		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {
@@ -359,6 +361,10 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		ids, _ := r.runs.confirmers(ev, start, confirmWin)
 		return ids
 	}, &thBudget, start)
+	attachDependencyRecords(tctx, deps, cfg, kept, false, r.runs.firstOf, func(ev chstore.MLEvent) []string {
+		ids, _ := r.runs.confirmers(ev, start, confirmWin)
+		return ids
+	}, &depBudget, start)
 	for _, ev := range kept {
 		if ev.Stage != chstore.MLStageChronic {
 			r.runs.setEvent(ev)

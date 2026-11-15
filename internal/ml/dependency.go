@@ -200,7 +200,8 @@ func (d *Dependency) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, 
 	win := fmt.Sprintf("%ds", cfg.BucketSec)
 	var waiting, errMissing []string
 	errMeasured := false
-	errNow := map[string]float64{} // err_ratio anahtarı → hatalı istek/sn (son kova)
+	errNow := map[string]float64{}  // err_ratio anahtarı → hatalı istek/sn (son kova)
+	labOf := map[string]depLabels{} // v0.10.2234 (H9): kayıt için aile etiketleri
 	for _, f := range depFamilies {
 		famErr := wantErr && f.ErrorRate
 		if !wantLat && !famErr {
@@ -214,6 +215,7 @@ func (d *Dependency) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, 
 			continue
 		}
 		fams++
+		labOf[f.ID] = l
 		// A: servis başına en çok K hedef — count serisi ucuz (le yok)
 		cq := fmt.Sprintf("topk by (%s) (%d, sum by (%s, %s) (rate(%s_count[%s])))", l.svc, cfg.VMTargetCardinality, l.svc, l.target, f.Metric, win)
 		rows, skip, err := vmInstant(ctx, deps, "dep:"+f.ID, cq, to, now)
@@ -338,6 +340,9 @@ func (d *Dependency) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, 
 				"mad": j.MAD, "unit": unit, "dwell": cfg.DwellBuckets, "bucketSec": cfg.BucketSec, "baselineDays": cfg.BaselineDays}
 			for x, v := range extra {
 				e[x] = v
+			}
+			if fam, _, _ := strings.Cut(target, "|"); labOf[fam].ok { // v0.10.2234 (H9): seri etiketleri tik anında
+				e["svcLabel"], e["targetLabel"] = labOf[fam].svc, labOf[fam].target
 			}
 			return chstore.MLEvent{ID: chstore.MLEventID(det, svc, target), Detector: det,
 				Signal: chstore.MLSignalTrace, Stage: chstore.MLStageShadow, Service: svc, Code: target,
