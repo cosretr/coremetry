@@ -527,7 +527,22 @@ operasyon sayısı" (tik başına üye kuralını sağlayan farklı operasyon), 
 `invalid`, kart eski yol); bant sabit kural (üst `breadthMinOps − 1`); üyeler kanıtta bağımsız değil; hacim gerekçeli yok. Ek sorgu yok.
 Sınıf her ikisinde `service_anomaly` (svc_breadth için `info` kararı K8/C ile birlikte açık).
 
-**Kalan (H12 sonrası).** Log `pod_outlier` — atlandı: pod başına seri `ml_series`'te yok; snapshot ES pod kırılım histogramı ister
+**H13 — şablon + oluşum türleri göçü (`template_spike`, `rare_template`, `new_template`, `rare_error_code`).** ✅ **gemilendi v0.10.2253**
+(`internal/ml/template_record.go`, `occurrence_record.go`, `log_template_record_test.go`). *Şablon:* seri = tikte ES şablon sayımından
+`ml_series`'e yazılan servis × `tpl|<ifade>` kova sayısı; snapshot H11 gibi aynı seriden tek servis, zaman sınırlı CH okuması
+(`MLSeriesRange`), 1 dk ızgarada basamak, eksik kova 0. Bant: `template_spike` medyan ± criticalZ·effMAD; `rare_template` tabanı tamamen 0
+→ [0, 0] (`zero_baseline_all_samples_rare_rule`; hacim tabanı karar kuralı, bant değil). Hacim aynı seriden. Başlık ifadeyi tırnakla taşır;
+ifadede sayı varsa ifadesiz başlık (sayı kuralı), ifade kanıtta. Maliyet: açık olay başına tik başına 1 CH okuması, **0 ES**, tik başına ≤ 20.
+*Oluşum:* sözleşmenin H1'den beri var olan `series.kind=occurrence` dalı (yeni kayıt biçimi yok): seri tanımı dedektörün okuduğu kaynak
+(`new_template`: `ch:log_templates` defter satırı; `rare_error_code`: `ch:ml_series` `code|<kod>`), taban 0 / bant [0, 0] yöntem adıyla,
+onset = ilk görülme, tepe = tespit değeri = hacim = satır sayısı, snapshot yok (kart eski yolda, başlık kayıttan; sayısal kod/kalıp başlığa
+girmez, kanıtta). Kapılar: seri / görünür sapma / etki değerlendirilemez; tek bağımlı kanıt → gölgede `info` (başka dedektör onayı ≥ 2
+ise yayımlanır). Maliyet: ek sorgu yok. Sınıf `service_anomaly`, liste / bildirim / Problem değişmez.
+
+**Kalan (H13 sonrası).** Log `pod_outlier` — atlandı (aşağıdaki gerekçe aynen; tik başına yeni ES sorgusu ister). `svc_volume_spike` göç
+etmez (B ile değişti). Bunların dışında sözleşmesiz ML dedektörü kalmadı (üyelik satırları — `svc_slowdown` vb. — sözleşme dışı, §9).
+
+**Kalan (H12 sonrası; tarihsel).** Log `pod_outlier` — atlandı: pod başına seri `ml_series`'te yok; snapshot ES pod kırılım histogramı ister
 (logstore'da toplu yöntem yok; yeni ES yükü) ve sözleşmede snapshot'sız sayısal kayıt istisnası yok. `template_spike` / `rare_template`
 (aile sorgusu kayda; seri `ml_series` `tpl|`), `new_template` / `rare_error_code` (`series.kind=occurrence` dalı), diğer oluşum türleri.
 

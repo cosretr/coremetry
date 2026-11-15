@@ -291,6 +291,10 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	// v0.10.2236 (H11): log RED kaydı (ml_series, ES yok)
 	logBudget := logRecordMaxPerTick
 	attachLogREDRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &logBudget, start)
+	// v0.10.2253 (H13): şablon (ml_series, ES yok) + oluşum (sorgusuz) kaydı
+	tplBudget := tplRecordMaxPerTick
+	attachTemplateRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &tplBudget, start)
+	attachOccurrenceRecords(cfg, closing, true, r.runs.firstOf, nil, start)
 	podBudget := podRecordMaxPerTick // v0.10.2237 (H12): trace_pod_outlier + svc_breadth kaydı
 	attachPodOutlierRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &podBudget, start)
 	attachBreadthRecords(&r.breadthH, cfg, closing, true, r.runs.firstOf, start)
@@ -386,6 +390,14 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		ids, _ := r.runs.confirmers(ev, start, confirmWin)
 		return ids
 	}, &logBudget, start)
+	attachTemplateRecords(tctx, deps, cfg, kept, false, r.runs.firstOf, func(ev chstore.MLEvent) []string {
+		ids, _ := r.runs.confirmers(ev, start, confirmWin)
+		return ids
+	}, &tplBudget, start)
+	attachOccurrenceRecords(cfg, kept, false, r.runs.firstOf, func(ev chstore.MLEvent) []string {
+		ids, _ := r.runs.confirmers(ev, start, confirmWin)
+		return ids
+	}, start)
 	attachPodOutlierRecords(tctx, deps, cfg, kept, false, r.runs.firstOf, func(ev chstore.MLEvent) []string {
 		ids, _ := r.runs.confirmers(ev, start, confirmWin)
 		return ids
