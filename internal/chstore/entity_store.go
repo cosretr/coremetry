@@ -15,7 +15,7 @@ import (
 // entity.Store'un chstore uygulaması + system_settings["entity_layer"]
 // blob kapısı. Yazım: tam-satır INSERT (ReplacingMergeTree(version) —
 // invariant #4: her alan taşınır), async_insert dokunulmaz (PrepareBatch
-// senkron batch; satır sayısı tick başına küçük). Okuma: FINAL, cluster_id
+// batch, entityApplyBatchRows parçaları). Okuma: FINAL, cluster_id
 // + valid_to = 0 + last_seen zaman sınırı + LIMIT (ev kuralı: her yeni CH
 // sorgusu zaman filtresi + limit).
 
@@ -83,43 +83,62 @@ func (s *Store) EntityOpenLifetimes(ctx context.Context, cid string) (map[string
 	return out, rrows.Err()
 }
 
-// EntityApply — tam-satır yazım (varlıklar + ilişkiler).
+// entityApplyBatchRows — v0.10.2214 (S1): tek INSERT'in satır tavanı.
+// Katman her zaman açık; ilk tick (ya da kısma sonrası toplu tazeleme)
+// yüz binlerce satır olabilir — sınırlı parçalar, async_insert dokunulmaz.
+const entityApplyBatchRows = 10_000
+
+// EntityApply — tam-satır yazım (varlıklar + ilişkiler), parça parça.
 func (s *Store) EntityApply(ctx context.Context, cid string, rows []entity.EntityRow, rels []entity.RelationRow) error {
-	if len(rows) > 0 {
-		b, err := s.conn.PrepareBatch(ctx, `INSERT INTO entities
-			(entity_type, cluster_id, entity_id, valid_from, valid_to, namespace, name, uid, parent_id,
-			 label_keys, label_values, source, first_seen, last_seen, stale)`)
-		if err != nil {
-			return fmt.Errorf("entities batch: %w", err)
-		}
-		for _, r := range rows {
-			stale := uint8(0)
-			if r.Stale {
-				stale = 1
-			}
-			if err := b.Append(r.Type, cid, r.ID, r.ValidFrom, zeroOr(r.ValidTo), r.Namespace, r.Name, r.UID, r.ParentID,
-				r.LabelKeys, r.LabelValues, r.Source, r.FirstSeen, r.LastSeen, stale); err != nil {
-				return err
-			}
-		}
-		if err := b.Send(); err != nil {
-			return fmt.Errorf("entities send: %w", err)
+	for i := 0; i < len(rows); i += entityApplyBatchRows {
+		if err := s.entityApplyRows(ctx, cid, rows[i:min(i+entityApplyBatchRows, len(rows))]); err != nil {
+			return err
 		}
 	}
-	if len(rels) > 0 {
-		b, err := s.conn.PrepareBatch(ctx, `INSERT INTO entity_relations
-			(rel_type, cluster_id, parent_id, child_id, valid_from, valid_to, last_seen, source)`)
-		if err != nil {
-			return fmt.Errorf("entity_relations batch: %w", err)
+	for i := 0; i < len(rels); i += entityApplyBatchRows {
+		if err := s.entityApplyRels(ctx, cid, rels[i:min(i+entityApplyBatchRows, len(rels))]); err != nil {
+			return err
 		}
-		for _, r := range rels {
-			if err := b.Append(r.Type, cid, r.ParentID, r.ChildID, r.ValidFrom, zeroOr(r.ValidTo), r.LastSeen, r.Source); err != nil {
-				return err
-			}
+	}
+	return nil
+}
+
+func (s *Store) entityApplyRows(ctx context.Context, cid string, rows []entity.EntityRow) error {
+	b, err := s.conn.PrepareBatch(ctx, `INSERT INTO entities
+		(entity_type, cluster_id, entity_id, valid_from, valid_to, namespace, name, uid, parent_id,
+		 label_keys, label_values, source, first_seen, last_seen, stale)`)
+	if err != nil {
+		return fmt.Errorf("entities batch: %w", err)
+	}
+	for _, r := range rows {
+		stale := uint8(0)
+		if r.Stale {
+			stale = 1
 		}
-		if err := b.Send(); err != nil {
-			return fmt.Errorf("entity_relations send: %w", err)
+		if err := b.Append(r.Type, cid, r.ID, r.ValidFrom, zeroOr(r.ValidTo), r.Namespace, r.Name, r.UID, r.ParentID,
+			r.LabelKeys, r.LabelValues, r.Source, r.FirstSeen, r.LastSeen, stale); err != nil {
+			return err
 		}
+	}
+	if err := b.Send(); err != nil {
+		return fmt.Errorf("entities send: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) entityApplyRels(ctx context.Context, cid string, rels []entity.RelationRow) error {
+	b, err := s.conn.PrepareBatch(ctx, `INSERT INTO entity_relations
+		(rel_type, cluster_id, parent_id, child_id, valid_from, valid_to, last_seen, source)`)
+	if err != nil {
+		return fmt.Errorf("entity_relations batch: %w", err)
+	}
+	for _, r := range rels {
+		if err := b.Append(r.Type, cid, r.ParentID, r.ChildID, r.ValidFrom, zeroOr(r.ValidTo), r.LastSeen, r.Source); err != nil {
+			return err
+		}
+	}
+	if err := b.Send(); err != nil {
+		return fmt.Errorf("entity_relations send: %w", err)
 	}
 	return nil
 }

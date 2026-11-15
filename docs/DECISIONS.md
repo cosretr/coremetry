@@ -14170,3 +14170,10 @@ Operatör bildirimi (prod /ai, 7 gün): 404 açıklama turunun 78'i "hata"; `err
 - Gerçek yokluk: LLM'siz dürüst cevap + answer `outcome: not_found` → tur `status = not_found` (hata değil, ok değil); routing raporu neden yazmaz; aged_out ayrı metin. Trace/exception/kayıt türleri ve sentez yolu aynı.
 - Araç puanı: yürütülmeyen çağrı (tekrar / kapsam / şema reddi / iptal / tavan) `cosre_tool_quality.skipped` kolonunda ayrı (boot-ALTER), başarı ve yeniden-sorma paydasına girmez; /ai tablosunda "Atlandı" kolonu.
 - Şema integer/number diyen üst düzey argümanda sayı-metin (`"3600"`) doğrulama ve tekrar muhafızından önce sayıya çevrilir (`mcp.CoerceNumericArgs`, Executor, tüm yerli araçlar, kip bağımsız). `get_topology`'ye altyapı kimliği hâlâ hata, ama servis adının nasıl bulunacağını söyler.
+
+## 2026-11-15 — v0.10.2214 — Entity S1: katman her zaman açık, yazma yükü kısıldı
+
+- Karar K1 (operatör onayı 2026-11-15): `entity_layer.enabled` ve dört vida sabit (`internal/entity/settings.go`: 60 s, 10 dk, 24 sa, 4). `GET/PUT /api/settings/entities` ve Settings formu kalktı; sekme yalnız durum. Blobda yalnız backfill durumu kalır; eski alanlar decode'da yok sayılır, sonraki backfill yazımında düşer. Geri uyum katmanı yok.
+- Karar K2: Remote Cluster kaydı olmayan span cluster değeri `cluster:<değer>` entity'si olur (`source = span`, Thanos sorgusu yok). Tick başına tavan 64 değer (en çok satırlı); boş değer ve kayıt id'siyle çakışan değer atlanır. Remote Cluster kaydı asla otomatik yaratılmaz.
+- Yazım diyeti: açık ömrün `last_seen`'i yalnız saklı değer `RefreshEvery = podGap/2 = 5 dk`'dan eskiyse yazılır (`ThrottleRefresh`). Karar CH'den okunan değere bağlı, lider devrinde aynı. Bedeli: kapanış `valid_to` en çok ~6 dk erken; lider devri 4 dk'yı aşarsa yeni ömür açılabilir (LeaderTTL 1 dk).
+- Güvenlik: INSERT 10K satırlık parçalar (async_insert korunur); okumalar mevcut MV/FINAL, zaman sınırlı, LIMIT + `max_execution_time`; tick başına tek `[entity] tick:` satırı; `Observability.RowsRead/RefreshSkipped`. Şema değişikliği yok. Geri alma = imaj geri alma.

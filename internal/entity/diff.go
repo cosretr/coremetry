@@ -71,6 +71,25 @@ func DiffLifetimes(now time.Time, prev map[string]Lifetime, seen map[string]Enti
 	return ch
 }
 
+// ThrottleRefresh — v0.10.2214 (S1 yazım diyeti, plan §3.3): Refresh'ten
+// yalnız saklı last_seen'i `every`'den eski olanları (ya da uid'i yeni
+// dolanları) tutar; gerisi yazılmaz. Karar yalnız CH'den okunan prev'e
+// dayanır — lider devrinde yeni lider aynı girdiyle aynı kararı verir.
+// Dönüş: yazılacaklar + atlanan sayısı.
+func ThrottleRefresh(now time.Time, prev map[string]Lifetime, refresh []Lifetime, every time.Duration) ([]Lifetime, int) {
+	keep := refresh[:0:0]
+	skipped := 0
+	for _, r := range refresh {
+		p, ok := prev[r.ID]
+		if !ok || now.Sub(p.LastSeen) > every || p.UID != r.UID {
+			keep = append(keep, r)
+			continue
+		}
+		skipped++
+	}
+	return keep, skipped
+}
+
 func uidChanged(prev, cur string) bool {
 	return prev != "" && cur != "" && prev != cur
 }

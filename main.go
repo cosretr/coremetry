@@ -1189,9 +1189,10 @@ func main() {
 		}
 		return false
 	})
-	// v0.10.129 — K8s entity katmanı: bayrak + vidalar her modda (uçlar
-	// okur), Thanos senkronizasyonu yalnız worker rolünde ve liderde
-	// (cache.LeaderHolder "entity-sync"). Bayrak kapalıyken Tick no-op.
+	// v0.10.129 — K8s entity katmanı: backfill blobu her modda, Thanos +
+	// span senkronizasyonu yalnız worker rolünde ve liderde (cache.
+	// LeaderHolder "entity-sync"). v0.10.2214 (S1, K1): bayrak yok, her
+	// zaman açık; aralık/podGap/paralellik entity paketinde sabit.
 	entitySettings := entity.NewSettingsService()
 	if err := entitySettings.LoadPersisted(ctx, store); err != nil {
 		log.Printf("[entity] load persisted config: %v", err)

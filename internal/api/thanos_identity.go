@@ -289,8 +289,8 @@ func (s *Server) assignSpanClusterValue(w http.ResponseWriter, r *http.Request) 
 	backfill := "none"
 	switch {
 	case !in.Backfill:
-	case s.entitySettings == nil || !s.entitySettings.Resolved().Enabled:
-		backfill = "skipped: entity katmanı kapalı" // inceleme: kapalıyken "running" yalan olurdu
+	case s.entitySettings == nil:
+		backfill = "skipped: entity katmanı bağlı değil"
 	default:
 		es := s.entitySettings.Current()
 		es.BackfillUntil = time.Now().Add(10 * time.Minute).UnixMilli()

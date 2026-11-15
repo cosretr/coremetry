@@ -92,7 +92,7 @@ func TestSyncerSpanPass(t *testing.T) {
 	t0 := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
 	src := &fakeSource{clusters: []ClusterRef{{ID: "c-a", Name: "a", SpanClusterValue: "a"}}, sets: map[string]SampleSets{"c-a": podSet("db-0")}}
 	st := newMemStore()
-	sy := NewSyncer(src, st, func() Resolved { return Resolved{Enabled: true, PodGap: 10 * time.Minute, ParallelClusters: 1} })
+	sy := NewSyncer(src, st, func() Resolved { return Resolved{} })
 	sy.now = func() time.Time { return t0 }
 	sy.seen = fakeSeen{rows: []SeenRow{
 		{ClusterValue: "a", Namespace: "ns", Pod: "db-0", Node: "w1", Service: "db", Spans: 5, LastSeen: t0},

@@ -57,7 +57,7 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		// Cluster'lar + entity_layer bayrağı (nil-güvenli; her ikisi de
 		// yoksa tool'lar dürüst disabled/boş döner).
 		Clusters:      s.mcpClusterRefs,
-		EntityEnabled: func() bool { return s.entitySettings != nil && s.entitySettings.Resolved().Enabled },
+		EntityEnabled: func() bool { return s.entitySettings != nil }, // v0.10.2214 (K1): her zaman açık
 		// v0.10.478 (Faz 4, F4-1) — sohbet bağlamı (chat_context.go); ctx'te state yoksa tool dürüst hata.
 		CtxGet: s.chatContextGet, CtxSet: s.chatContextSet, CtxClear: s.chatContextClear,
 		// v0.10.555 (Faz 4a) — get_capabilities probları.

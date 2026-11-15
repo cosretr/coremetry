@@ -108,9 +108,7 @@ func TestSyncerPartialFailureAndLifecycle(t *testing.T) {
 	}
 	st := newMemStore()
 	t0 := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
-	sy := NewSyncer(src, st, func() Resolved {
-		return Resolved{Enabled: true, SyncInterval: time.Minute, PodGap: 10 * time.Minute, StaleAfter: 24 * time.Hour, ParallelClusters: 2}
-	})
+	sy := NewSyncer(src, st, func() Resolved { return Resolved{} })
 	sy.now = func() time.Time { return t0 }
 
 	// Tick 1: a başarılı, b hatalı.
@@ -182,13 +180,6 @@ func TestSyncerPartialFailureAndLifecycle(t *testing.T) {
 	if !lt.ValidFrom.Equal(t2) {
 		t.Fatalf("podGap aşıldı → yeni ömür now'da açılmalı: %+v", lt)
 	}
-	// Bayrak kapalı → tick hiçbir şey yapmaz.
-	sy.settings = func() Resolved { return Resolved{Enabled: false} }
-	before := len(st.runs)
-	sy.Tick(context.Background())
-	if len(st.runs) != before {
-		t.Fatal("bayrak kapalıyken koşu olmamalı")
-	}
 }
 
 // Cluster kaldırıldı (Settings'ten silindi): kayıtları SİLİNMEZ; yalnız
@@ -197,7 +188,7 @@ func TestSyncerPartialFailureAndLifecycle(t *testing.T) {
 func TestSyncerClusterAddRemoveWithoutRestart(t *testing.T) {
 	src := &fakeSource{clusters: []ClusterRef{{ID: "c-a", Name: "a"}}, sets: map[string]SampleSets{"c-a": podSet("p1"), "c-n": podSet("q1")}}
 	st := newMemStore()
-	sy := NewSyncer(src, st, func() Resolved { return Resolved{Enabled: true, PodGap: 10 * time.Minute, ParallelClusters: 1} })
+	sy := NewSyncer(src, st, func() Resolved { return Resolved{} })
 	t0 := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
 	sy.now = func() time.Time { return t0 }
 	sy.Tick(context.Background())

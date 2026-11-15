@@ -47,9 +47,10 @@ func (s *Server) registerEntityQueryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/services/{name}/pods", s.getServicePods)
 }
 
-// entityEnabled — bayrak kapısı: kapalıysa 404 {disabled:true} yazar, false döner.
+// entityEnabled — v0.10.2214 (S1, K1): katman her zaman açık; yalnız
+// bağlanmamış sunucu (testler) 404 {disabled:true} döner.
 func (s *Server) entityEnabled(w http.ResponseWriter) bool {
-	if s.entitySettings == nil || !s.entitySettings.Resolved().Enabled {
+	if s.entitySettings == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"disabled":true}`))

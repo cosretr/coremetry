@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { keys } from './keys';
 import type {
   EntityClustersResponse, EntityDetailResponse, EntityListResponse, EntityMetricsResponse, EntityContainersResponse, EntityLatencyResponse, EntityClusterInfo,
-  EntityServicesResponse, EntitySettings, EntitySettingsResponse, EntitySyncResponse, ServicePodsResponse,
+  EntityServicesResponse, EntitySyncResponse, ServicePodsResponse,
 } from '@/lib/types';
 
 // K8s entity katmanı (v0.10.131) — staleTime = sunucu serveCached TTL'i
@@ -102,18 +102,6 @@ export function useServicePods(service: string, cluster: string, range: { from: 
 }
 
 // ── admin ──
-export function useEntitySettings() {
-  return useQuery<EntitySettingsResponse>({ queryKey: keys.entities.settings(), queryFn: () => api.entitySettings(), staleTime: 10_000 });
-}
-
-export function useSaveEntitySettings() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (s: EntitySettings) => api.putEntitySettings(s),
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: keys.entities.all }); },
-  });
-}
-
 export function useEntitySync(enabled = true) {
   return useQuery<EntitySyncResponse>({
     queryKey: keys.entities.sync(),

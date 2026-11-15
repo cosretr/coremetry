@@ -30,7 +30,7 @@ OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   OracleSnapshot, OracleSettingsInput, OracleSource, OracleTestResult, OracleStatusPayload,
   DevOpsSnapshot, DevOpsSettingsInput, DevOpsTestResult, DevOpsResolveDryRun, StackFramesResult,
   EntityClustersResponse, EntityListResponse, EntityDetailResponse, EntityServicesResponse, EntityMetricsResponse, EntityContainersResponse, EntityLatencyResponse,
-  ServicePodsResponse, EntitySettings, EntitySettingsResponse, EntitySyncResponse,
+  ServicePodsResponse, EntitySyncResponse,
   ThanosClusterProbe,
   ThanosSnapshot, ThanosSettingsInput, ClusterPodsResponse, ClusterPodDetail,
   ClusterNodesResponse, ClusterSummary, ClusterNamespacesResponse,
@@ -2249,11 +2249,6 @@ export const api = {
     get<EntityContainersResponse>(`/api/entity/containers?id=${encodeURIComponent(id)}`, signal),
   servicePods: (service: string, cluster: string, from: number, to: number, signal?: AbortSignal) =>
     get<ServicePodsResponse>(`/api/services/${encodeURIComponent(service)}/pods?from=${from}&to=${to}${cluster ? `&cluster=${encodeURIComponent(cluster)}` : ''}`, signal),
-  entitySettings: () => get<EntitySettingsResponse>(`/api/settings/entities`),
-  putEntitySettings: (s: EntitySettings) =>
-    request<EntitySettingsResponse>(`/api/settings/entities`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s),
-    }),
   entitySync: () => get<EntitySyncResponse>(`/api/admin/entities/sync`),
   runEntitySync: () => request<{ ok: boolean; started: boolean }>(`/api/admin/entities/sync/run`, { method: 'POST' }),
   clusterNamespaces: (cluster: string) =>

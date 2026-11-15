@@ -11082,18 +11082,9 @@ export interface EntityObservability {
   RelationsWritten: number;
   LastTickMs: number;
   LastTickAt: string;
-}
-export interface EntitySettings {
-  enabled: boolean;
-  syncInterval?: string;
-  podGap?: string;
-  staleAfter?: string;
-  parallelClusters?: number;
-}
-export interface EntitySettingsResponse {
-  settings: EntitySettings;
-  resolved: { enabled: boolean; syncInterval: string; podGap: string; staleAfter: string; parallelClusters: number };
-  defaults: EntitySettings;
+  /** v0.10.2214 (S1) — okunan satır + kısılan tazeleme, kümülatif. */
+  RowsRead: number;
+  RefreshSkipped: number;
 }
 export interface EntitySyncResponse {
   disabled?: boolean;

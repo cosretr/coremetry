@@ -236,13 +236,11 @@ func TestImportedOldEntityBackupAppliesWithoutRestart(t *testing.T) {
 	ctx := context.Background()
 	store := &fakeEntitySettingsStore{}
 	svc := entity.NewSettingsService()
-	live := entity.DefaultSettings()
-	live.Enabled, live.SyncInterval = true, "60s"
+	live := entity.Settings{BackfillValue: "live-value"}
 	if err := svc.SavePersisted(ctx, store, live); err != nil {
 		t.Fatal(err)
 	}
-	backup := entity.DefaultSettings()
-	backup.Enabled, backup.SyncInterval = false, "5m"
+	backup := entity.Settings{BackfillValue: "backup-value"}
 	backup.UpdatedAt = svc.Current().UpdatedAt - int64(time.Hour)
 	blob, err := json.Marshal(backup)
 	if err != nil {
@@ -253,7 +251,7 @@ func TestImportedOldEntityBackupAppliesWithoutRestart(t *testing.T) {
 	if err := svc.LoadPersisted(ctx, store); err != nil {
 		t.Fatal(err)
 	}
-	if svc.Current().SyncInterval != "60s" {
+	if svc.Current().BackfillValue != "live-value" {
 		t.Fatalf("öncül bozuldu: koruma eski blobu zaten alıyor")
 	}
 
@@ -262,7 +260,7 @@ func TestImportedOldEntityBackupAppliesWithoutRestart(t *testing.T) {
 	if err := svc.LoadPersisted(ctx, store); err != nil {
 		t.Fatal(err)
 	}
-	if got := svc.Current(); got.SyncInterval != "5m" || got.Enabled || got.UpdatedAt != int64(now) {
+	if got := svc.Current(); got.BackfillValue != "backup-value" || got.UpdatedAt != int64(now) {
 		t.Errorf("replace import sonrası yedek canlıya geçmedi: %+v", got)
 	}
 }

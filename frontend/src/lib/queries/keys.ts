@@ -241,7 +241,6 @@ export const keys = {
     latency:     (id: string, range: { from: number; to: number }) => ['entities', 'latency', id, range] as const,
     servicePods: (service: string, cluster: string, range: { from: number; to: number }) =>
                    ['entities', 'service-pods', service, cluster, range] as const,
-    settings:    () => ['entities', 'settings'] as const,
     sync:        () => ['entities', 'sync'] as const,
   },
   // v0.10.248 — kullanıcı-kapsamlı UI tercihleri (prefs.ts). Anahtar
