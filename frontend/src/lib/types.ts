@@ -2539,6 +2539,25 @@ export interface ClusterNodeRow {
   // Node başına çalışan pod sayısı (cAdvisor, yedek kube_pod_info;
   // cluster namespace filtresine tabi). Yok = ölçülemedi; 0 gerçek değer.
   pods?: number;
+  // v0.10.2168 (Clusters S3) — kapasite ailesi (node_capacity.go); hepsi
+  // best-effort, absent = bilinmiyor. cpuPct / memPct paydası DEĞİŞMEDİ.
+  cpuCapacityCores?: number;
+  memCapacityBytes?: number;
+  podCapacity?: number;
+  cpuAllocatableCores?: number;
+  memAllocatableBytes?: number;
+  cpuRequestCores?: number;
+  memRequestBytes?: number;
+  cpuLimitCores?: number;
+  memLimitBytes?: number;
+  /** Ready koşulu; absent = KSM koşul serisi yok. */
+  ready?: 'true' | 'false' | 'unknown';
+  /** Etkin baskı koşulları (MemoryPressure / DiskPressure / PIDPressure). */
+  pressure?: string[];
+  kubeletVersion?: string;
+  osImage?: string;
+  kernelVersion?: string;
+  containerRuntime?: string;
 }
 export interface ClusterNodesResponse {
   cluster: string;

@@ -18,7 +18,8 @@ describe('Clusters — sade palet adım 1', () => {
   });
   it('kategoriler nötr: b-info yok, rol ve süzgeç çipleri b-gray', () => {
     expect(src).not.toMatch(/\bb-info\b/);
-    expect(src).toContain('<span className="badge b-gray">{r.role}</span>');
+    // Clusters S6 (D3) — Nodes rolü rozet değil nötr düz metin (mockup).
+    expect(src).toContain("case 'role': return cell(r.role ?? '');");
     // Clusters S5 — süzgeç çipleri coremetry/FilterBar çipi (nötr, ✕ ile
     // kaldırılır); tıklanınca silinen b-gray rozetleri kalktı.
     expect(src).toContain('<FilterBar chips={filterChips}');
@@ -41,7 +42,9 @@ describe('Clusters — sade palet adım 1', () => {
     // v0.10.943 (tablo standardı dilim 3) — eşik rengi satır içi üçlüden kolon
     // tonuna taşındı (`pctTone` → .cell-err/.cell-warn/.cell-faint); eşikler aynı.
     expect(src).toContain("(p ?? 0) > 85 ? 'err' : (p ?? 0) > 60 ? 'warn' : 'faint'");
-    expect(src.match(/tone: r => pctTone\(r\.(cpuPct|memPct)\)/g)?.length).toBe(4);
+    // Clusters S6 — Nodes kolonları nodeColumns.ts'e taşındı (kendi eşik tonu);
+    // burada yalnız Pods tablosunun iki % kolonu kalır.
+    expect(src.match(/tone: r => pctTone\(r\.(cpuPct|memPct)\)/g)?.length).toBe(2);
   });
   // v0.10.1430 — LiveToggle (ve ?live=1) emekli: auto-refresh global Topbar
   // RefreshPicker'ında. Sayfada kendi canlı anahtarı / 10 s poll'u kalmadı.

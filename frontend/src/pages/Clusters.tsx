@@ -41,8 +41,13 @@ import { encodeRange } from '@/lib/urlState';
 import { pushZoom, popZoom } from '@/lib/chart/zoomHistory';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
-  type ColumnDef, type CellTone, type DataTableStateProps,
+  type ColumnDef, type CellTone, type DataTableStateProps, type DataTable,
 } from '@/components/ui/DataTable';
+import { TableViewBar } from '@/components/coremetry/TableViewBar';
+import {
+  NODE_COLS, NODE_COMPACT, NODE_SORT_IDS, nodeStatus, nodePodsText, nodeCpuText, nodeMemText, nodeCpuPct,
+  nodeMemPct, nodeAllocText, nodeRequestText, nodeLimitsText, nodeVersionText, nodeVersionTitle,
+} from '@/pages/clusters/nodeColumns';
 import type { ClusterPodRow, ClusterNodeRow, ClusterNamespaceRow, ClusterDeploymentRow, ClusterAlertRow, ClusterSummary, TimeRange, CapacityForecastDays } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
@@ -66,21 +71,7 @@ import { PageShell } from '@/components/coremetry/PageShell';
 // rengi `pctTone` (>85 err, >60 warn, altı soluk — eski satır içi üçlü).
 const pctTone = (p?: number): CellTone => ((p ?? 0) > 85 ? 'err' : (p ?? 0) > 60 ? 'warn' : 'faint');
 
-const NODE_COLS: ColumnDef<ClusterNodeRow>[] = [
-  { id: 'cluster',  label: 'Cluster', sortValue: r => r.cluster,  naturalDir: 'asc', width: 130, tone: () => 'muted' },
-  { id: 'node',     label: 'Node',    sortValue: r => r.node,     naturalDir: 'asc', width: 260 },
-  { id: 'role',     label: 'Role',    sortValue: r => r.role ?? '', naturalDir: 'asc', width: 90 },
-  // Node başına çalışan pod (best-effort; ölçülemezse '—', 0 gerçek değer).
-  // Sıralamada bilinmeyen en alta: -1.
-  { id: 'pods',     label: 'Pods',    sortValue: r => r.pods ?? -1, numeric: true, width: 70 },
-  { id: 'cpuCores', label: 'CPU',     sortValue: r => r.cpuCores, numeric: true, width: 90 },
-  { id: 'cpuPct',   label: 'CPU %',   sortValue: r => r.cpuPct ?? 0, numeric: true, width: 80, tone: r => pctTone(r.cpuPct) },
-  { id: 'memBytes', label: 'Memory',  sortValue: r => r.memBytes, numeric: true, width: 100 },
-  { id: 'memPct',   label: 'Mem %',   sortValue: r => r.memPct ?? 0, numeric: true, width: 80, tone: r => pctTone(r.memPct) },
-  // v0.9.10 — network (best-effort; seri yoksa hücre '—').
-  { id: 'netIn',    label: 'Net in',  sortValue: r => r.netInBps ?? 0, numeric: true, width: 90 },
-  { id: 'netOut',   label: 'Net out', sortValue: r => r.netOutBps ?? 0, numeric: true, width: 90 },
-];
+// Nodes tablosu kolonları Clusters S6'da (D3) pages/clusters/nodeColumns.ts'e taşındı.
 
 // v0.8.588 — namespace rollup (satır tıklaması ?namespace= yazar);
 // v0.9.5 — satır sonunda trend-drawer ikonu (filtreyle çakışmaz).
@@ -548,11 +539,18 @@ export default function ClustersPage() {
     rows: depRows,
     initialSort: { id: 'cpuCores', dir: 'desc' },
   });
+  // Clusters S6 (D3) — varsayılan altı kolon; "Tüm kolonlar" oturum içi
+  // (yeni kalıcı anahtar yok). Sıra: dikkat isteyenler önce, sonra bellek %.
+  const [nodeAllCols, setNodeAllCols] = useState(false);
+  const nodeColumnModel = useMemo(() => ({ value: nodeAllCols ? null : NODE_COMPACT }), [nodeAllCols]);
   const ndt = useDataTable<ClusterNodeRow>({
     storageKey: 'clusternodes',
     columns: NODE_COLS,
     rows: nodeRows,
-    initialSort: { id: 'cpuPct', dir: 'desc' },
+    initialSort: { id: 'status', dir: 'desc' },
+    // Eski kayıtlı sıralama (cpuPct) kalktı: tanınmayan kimlik initialSort'a düşer.
+    sortIds: NODE_SORT_IDS,
+    columnModel: nodeColumnModel,
   });
 
   const podErr = podQs[0]?.isError ?? false;
@@ -801,29 +799,14 @@ export default function ClustersPage() {
                       <tbody>
                         {ndt.sortedRows.length === 0 ? <DataTableState dt={ndt} {...nodeState} /> : ndt.sortedRows.map(r => (
                           <tr key={`${r.cluster}|${r.node}`} className="cv-row">
-                            <DataTableCell dt={ndt} col="cluster" row={r} value={r.cluster} />
-                            <td>
-                              <span className="mono" style={{ fontWeight: 500 }} title={r.node}>
-                                {r.node}
-                              </span>
-                            </td>
-                            {/* v0.10.922 (sade palet adım 1) — rol bir
-                                kategori: control-plane dahil hepsi nötr. */}
-                            <td>{r.role
-                              ? <span className="badge b-gray">{r.role}</span>
-                              : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
-                            <DataTableCell dt={ndt} col="pods" row={r} value={r.pods == null ? '—' : fmtNum(r.pods)} />
-                            <DataTableCell dt={ndt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
-                            <DataTableCell dt={ndt} col="cpuPct" row={r} value={r.cpuPct ? r.cpuPct.toFixed(0) : '—'} />
-                            <DataTableCell dt={ndt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
-                            <DataTableCell dt={ndt} col="memPct" row={r} value={r.memPct ? r.memPct.toFixed(0) : '—'} />
-                            <DataTableCell dt={ndt} col="netIn" row={r} value={r.netInBps ? fmtBps(r.netInBps) : '—'} />
-                            <DataTableCell dt={ndt} col="netOut" row={r} value={r.netOutBps ? fmtBps(r.netOutBps) : '—'} />
+                            {ndt.visibleColumns.map(c => <NodeCell key={c.id} dt={ndt} col={c.id} row={r} />)}
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                  <TableViewBar foldable={0} expanded onExpandedChange={() => {}}
+                    allColumns={nodeAllCols} onAllColumnsChange={setNodeAllCols} />
                 </>}
 
                 {/* v0.8.588 — namespace rollup: TAM toplamlar (pod
@@ -1336,6 +1319,37 @@ function AlertsPanel({ alerts, criticalOnly, onToggle }: {
 
 
 // PromQLList v0.9.51'de pages/clusters/PromQLList.tsx'e taşındı.
+
+// NodeCell — Nodes tablosunun kolon kimliğiyle çizilen hücresi (Clusters S6,
+// D3). Satır `visibleColumns` üzerinden döner: "Tüm kolonlar" kapalıyken gizli
+// kolonun hücresi hiç çizilmez. Kapasite yoksa CPU / Memory yalnız kullanılanı yazar.
+function NodeCell({ dt, col, row: r }: { dt: DataTable<ClusterNodeRow>; col: string; row: ClusterNodeRow }) {
+  const cell = (value: string, title?: string) => <DataTableCell dt={dt} col={col} row={r} value={value} title={title} />;
+  switch (col) {
+    case 'node': return cell(r.node);
+    case 'role': return cell(r.role ?? ''); // rol bir kategori: nötr düz metin
+    case 'status': { const s = nodeStatus(r); return cell(s.word, s.title); }
+    case 'pods': return cell(nodePodsText(r));
+    case 'cpu':
+    case 'mem': {
+      const text = col === 'cpu' ? nodeCpuText(r) : nodeMemText(r);
+      if (!text) return cell('');
+      return (
+        <DataTableCell dt={dt} col={col} row={r} value={text}>
+          <div className="cl-node-usage"><span>{text}</span><MiniBar pct={col === 'cpu' ? nodeCpuPct(r) : nodeMemPct(r)} /></div>
+        </DataTableCell>
+      );
+    }
+    case 'cluster': return cell(r.cluster);
+    case 'alloc': return cell(nodeAllocText(r));
+    case 'reqPct': return cell(nodeRequestText(r));
+    case 'limits': return cell(nodeLimitsText(r));
+    case 'netIn': return cell(r.netInBps ? fmtBps(r.netInBps) : '');
+    case 'netOut': return cell(r.netOutBps ? fmtBps(r.netOutBps) : '');
+    case 'versions': return cell(nodeVersionText(r), nodeVersionTitle(r));
+    default: return <td />;
+  }
+}
 
 // podPhaseBadge — kube_pod_status_phase → badge sınıfı (v0.9.37).
 // depStatusBadge — Deployment statü rozeti (v0.9.39, handoff §5):

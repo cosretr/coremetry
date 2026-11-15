@@ -5224,6 +5224,9 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 .cl-ns__opt:hover, .cl-ns__opt.is-sel { background: var(--bg3); }
 .cl-ns__opt--all { color: var(--accent2); }
 .cl-ns__note { padding: 6px 8px; font-size: var(--fs-xs); color: var(--text3); font-style: italic; }
+/* Clusters S6 (plan §0 D3) — Nodes tablosu CPU / Memory hücresi: "kullanılan /
+   kapasite · %" metni üstte, eşik renkli çubuk altta. */
+.cl-node-usage { display: grid; gap: var(--sp-2); font-variant-numeric: tabular-nums; }
 
 /* ── Copilot araç-çağrısı paneli — v0.10.161 (etüt seçenek A «Adım listesi»).
    Çipler kapalı hâl; DisclosureButton özet satırı + balon içi tablo. ── */
