@@ -13,7 +13,7 @@ func TestIdentityToken(t *testing.T) {
 	cases := map[string]string{
 		"060203AFD10049A1B2":               "060203AFD10049A1B2",
 		"  060203AFD10049A1B2  ":           "060203AFD10049A1B2",
-		"POST /BSAWEB/mobile/login":        "", // boşluk: operasyon araması
+		"POST /ACMWEB/mobile/login":        "", // boşluk: operasyon araması
 		"short":                            "", // < 8
 		"abc*defgh":                        "", // joker
 		"ord-2026.09.04:17":                "ord-2026.09.04:17",

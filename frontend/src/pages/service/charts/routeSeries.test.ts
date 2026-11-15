@@ -235,10 +235,10 @@ describe('birim haritası tek sözlük (AS-4)', () => {
 describe('route kırılımında boş anahtar (v0.10.369)', () => {
   it('etiketsiz seri "(http.route etiketi yok)" adını alır, adlı seri kendi adını', () => {
     const items = topRoutesByArea([
-      { groupKey: ['/BSAWEB/loan/assessment'], points: [{ time: 1, value: 1.29 }] },
+      { groupKey: ['/ACMWEB/loan/assessment'], points: [{ time: 1, value: 1.29 }] },
       { groupKey: [''], points: [{ time: 1, value: 0.0135 }] },
     ]).items;
-    expect(items.map(i => i.name)).toEqual(['/BSAWEB/loan/assessment', ROUTE_UNLABELLED]);
+    expect(items.map(i => i.name)).toEqual(['/ACMWEB/loan/assessment', ROUTE_UNLABELLED]);
     expect(ROUTE_UNLABELLED).toBe('(http.route etiketi yok)');
   });
 });

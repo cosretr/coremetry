@@ -1569,7 +1569,7 @@ function ExternalLinkRow({ link: l, url, missing, ctx, identities, srcNote }: {
     return { cand, url: r.url, missing: r.missing };
   });
   // request_id adayları üstte (birincil yol), span adayları anahtar anahtar altta.
-  // v0.10.572 (operatör: "bazen requestid BsaRequestId olarak logta yazıyor")
+  // v0.10.572 (operatör: "bazen requestid AcmRequestId olarak logta yazıyor")
   // — log başlığı sunucunun okuduğu GERÇEK alan adını taşır ve log tarafı da
   // anahtara göre gruplanır: aynı trace'te iki farklı ad geçebilir.
   const logSections: Array<{ title: string; items: typeof resolved }> = [];

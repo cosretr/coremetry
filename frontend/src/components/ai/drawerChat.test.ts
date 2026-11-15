@@ -117,23 +117,23 @@ describe('drawerFollowups', () => {
 // deterministik çözsün diye ek EN SONDA, servis + fiil + rota hemen önünde.
 // Go aynası: TestEndpointAskQuestionResolves.
 describe('endpointAskQuestion (v0.10.1367)', () => {
-  const ep = { kind: 'endpoint', id: 'bsa-web', route: '/BSAWEB/application/{id}', method: 'POST', fromNs: 1, toNs: 2 } as const;
+  const ep = { kind: 'endpoint', id: 'acm-web', route: '/ACMWEB/application/{id}', method: 'POST', fromNs: 1, toNs: 2 } as const;
   it('ek sonda; servis, fiil, rota sırayla önünde', () => {
     const q = endpointAskQuestion(ep);
     expect(q.endsWith(ENDPOINT_ASK_SUFFIX)).toBe(true);
-    expect(q).toContain(`bsa-web POST /BSAWEB/application/{id} ${ENDPOINT_ASK_SUFFIX}`);
+    expect(q).toContain(`acm-web POST /ACMWEB/application/{id} ${ENDPOINT_ASK_SUFFIX}`);
     expect(q).toContain('ne zamandan beri');
   });
   it('fiil yoksa yazılmaz', () => {
     const q = endpointAskQuestion({ ...ep, method: undefined });
-    expect(q).toContain(`bsa-web /BSAWEB/application/{id} ${ENDPOINT_ASK_SUFFIX}`);
+    expect(q).toContain(`acm-web /ACMWEB/application/{id} ${ENDPOINT_ASK_SUFFIX}`);
     expect(q).not.toContain('POST');
   });
   it('subjectRef künyesi bağlamda tam', () => {
     const ctx = buildExplainContext({ subject: ep, text: 'p99 arttı' });
-    expect(ctx).toContain('KONU: Endpoint analizi — endpoint POST /BSAWEB/application/{id} · servis bsa-web');
+    expect(ctx).toContain('KONU: Endpoint analizi — endpoint POST /ACMWEB/application/{id} · servis acm-web');
   });
   it('takip çipleri servis adını taşır', () => {
-    expect(drawerFollowups(ep)).toEqual(['bsa-web hata logları?', "bsa-web en yavaş trace'ler?", 'Hangi kanıta dayanıyorsun?']);
+    expect(drawerFollowups(ep)).toEqual(['acm-web hata logları?', "acm-web en yavaş trace'ler?", 'Hangi kanıta dayanıyorsun?']);
   });
 });

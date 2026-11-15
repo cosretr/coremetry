@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 // endpointsDefaults.test.tsx — v0.10.1348 (operatör isteği, prod /endpoints
-// ekran görüntüsü, servis bsa-loan-assessment-allocation-prod):
+// ekran görüntüsü, servis acm-order-quote-allocation-prod):
 //
 //  1. "Endpoints sayfasında P99 ve P99 delta default kapalı gelsin." —
 //     varsayılan görünür kolonlar P99 / P99 Δ içermez; Columns seçicisi
@@ -38,7 +38,7 @@ const m = vi.hoisted(() => ({
 
 vi.mock('@/lib/api', () => {
   const row: EndpointRow = {
-    service: 'bsa-loan-assessment-allocation-prod', path: '/BSAWeb/api/allocate', method: 'POST',
+    service: 'acm-order-quote-allocation-prod', path: '/ACMWeb/api/allocate', method: 'POST',
     calls: 1400, errors: 0, errorRate: 0, avgMs: 14, p99Ms: 812,
     p50Ms: 10, p90Ms: 40, p95Ms: 60, reqPerMin: 47,
   };
@@ -58,10 +58,10 @@ vi.mock('@/lib/api', () => {
     // v0.10.1429 — aile çözümü: HTTP (metrik kipi sorguları buna bakar).
     serviceRedFamily: (svc: unknown) => Promise.resolve({ service: svc, state: 'known', primary: 'http', http: { id: 'http', kind: 'http' }, tried: [] }),
     // v0.10.1359 — metrik kipi satırları PromQL'den (sekmenin sorguları):
-    // aynı satır (POST /BSAWeb/api/allocate, 1400 çağrı, p50 10 ms).
+    // aynı satır (POST /ACMWeb/api/allocate, 1400 çağrı, p50 10 ms).
     httpMetricsPromql: (p: unknown) => {
       const q = (p as { query: string }).query;
-      const lab = ['http_request_method="POST"', 'http_route="/BSAWeb/api/allocate"'];
+      const lab = ['http_request_method="POST"', 'http_route="/ACMWeb/api/allocate"'];
       const one = (v: number, extra: string[] = []) => Promise.resolve([{ groupKey: [...lab, ...extra], points: [{ time: 1e9, value: v }] }]);
       if (q.startsWith('topk(')) return one(1400);
       if (q.includes('label_replace(')) return one(1400, ['cls="2xx"']);
@@ -229,7 +229,7 @@ describe('/endpoints başlık ↔ gövde hizası + Method rozeti (v0.10.1348)', 
       const tds = [...tr.querySelectorAll('td')];
       expect(tds.length).toBe(ths.length);
       const at = (label: string) => ths.findIndex(th => thLabel(th) === label);
-      expect(tds[at('Path')].textContent).toBe('/BSAWeb/api/allocate');
+      expect(tds[at('Path')].textContent).toBe('/ACMWeb/api/allocate');
       expect(tds[at('Method')].textContent).toBe('POST');
       expect(tds[at('Calls')].textContent).toContain('1.4K');
       expect(tds[at('Error rate')].textContent).toContain('0.00%');
@@ -244,19 +244,19 @@ describe('/endpoints başlık ↔ gövde hizası + Method rozeti (v0.10.1348)', 
     const ths = assertAligned();
     const i = ths.findIndex(th => th.textContent?.trim().startsWith('Service'));
     expect(i).toBeGreaterThan(0);
-    expect(dataRows()[0].querySelectorAll('td')[i].textContent).toBe('bsa-loan-assessment-allocation-prod');
+    expect(dataRows()[0].querySelectorAll('td')[i].textContent).toBe('acm-order-quote-allocation-prod');
   });
 
   it('servis süzgeci seçili: Service başlıkta da gövdede de YOK (prod kayması)', async () => {
-    await mount('/endpoints?range=1h&service=bsa-loan-assessment-allocation-prod');
+    await mount('/endpoints?range=1h&service=acm-order-quote-allocation-prod');
     const ths = assertAligned();
     expect(ths.some(th => th.textContent?.trim().startsWith('Service'))).toBe(false);
-    expect(dataRows()[0].textContent).not.toContain('bsa-loan-assessment-allocation-prod');
+    expect(dataRows()[0].textContent).not.toContain('acm-order-quote-allocation-prod');
   });
 
   it('metrik kipi + P90 seçili: P90 başlıkla birlikte gövdeden de düşer', async () => {
     // v0.10.1359 — metrik kipi servis ister.
-    await mount('/endpoints?range=1h&src=metric&service=bsa-loan-assessment-allocation-prod&cols=path,method,calls,errorRate,status,p50Ms,p90Ms,p95Ms,traces');
+    await mount('/endpoints?range=1h&src=metric&service=acm-order-quote-allocation-prod&cols=path,method,calls,errorRate,status,p50Ms,p90Ms,p95Ms,traces');
     assertAligned();
     expect(headLabels()).not.toContain('P90');
   });

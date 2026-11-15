@@ -165,7 +165,7 @@ func TestTraceREDSourceQuery(t *testing.T) {
 	if !ok || l.Svc != "service_name" || l.Route != "rpc_method" || l.Status != "rpc_grpc_status_code" {
 		t.Fatalf("etiketler %+v ok=%v", l, ok)
 	}
-	svc := "bsa-investment-portfolio-customer-prod"
+	svc := "acm-portfolio-summary-prod"
 	q, ok := TraceREDSourceQuery(pin, l, svc, "callBagService", "p95", 300, 1)
 	if !ok || q.Unit != "ms" || q.By != "" {
 		t.Fatalf("p95: %+v ok=%v", q, ok)

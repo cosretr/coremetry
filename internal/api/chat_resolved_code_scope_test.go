@@ -14,7 +14,7 @@ import (
 )
 
 func TestScopeServicesFrom(t *testing.T) {
-	args := json.RawMessage(`{"service":"bsa-atm","query":"x"}`)
+	args := json.RawMessage(`{"service":"acm-kiosk","query":"x"}`)
 	cases := []struct {
 		name string
 		tool string
@@ -41,10 +41,10 @@ func TestResolvedCodeScopeWrap(t *testing.T) {
 	h := rs.wrap(mcptools.SearchCodeToolName, func(context.Context, json.RawMessage) (any, error) {
 		return mcptools.CodeSearchResult{Outcome: "ok"}, nil
 	})
-	if _, err := h(ctx, json.RawMessage(`{"service":"bsa-atm"}`)); err != nil {
+	if _, err := h(ctx, json.RawMessage(`{"service":"acm-kiosk"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if !rs.has("bsa-atm") || rs.has("other") {
+	if !rs.has("acm-kiosk") || rs.has("other") {
 		t.Error("yalnız araç sonucunun servisi kapsama girer")
 	}
 	if resolvedCodeScopeFrom(context.Background()) != nil {

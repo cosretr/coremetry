@@ -101,12 +101,12 @@ describe('Trace sayfası kablosu', () => {
 });
 
 // v0.10.1329 (operatör-bildirimli) — trace 6008dded… kökü POST
-// /BSAWEB/application/directCreditPreApproval, kendi Oracle satırı
-// …APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST; çip sözlüğün en çok satırlı
+// /ACMWEB/application/expressOrderPreValidate, kendi Oracle satırı
+// …APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST; çip sözlüğün en çok satırlı
 // adayını (…APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST, "+15") gösteriyordu.
 // Öncelik: bu trace'in Oracle satırları → span attribute'u → etiketli sözlük.
 describe('pickTraceOperation', () => {
-  const TRX = 'LOAN_CONSUMER_APP_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST';
+  const TRX = 'LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST';
   const INQ = 'LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST';
   const INQ2 = 'LOAN_CONSUMER_APP_APPLICATIONINQ_CUSTOMER_LIMIT_REST';
   const sp = (o: Partial<SpanRow> & { spanId: string }): SpanRow => ({
@@ -116,7 +116,7 @@ describe('pickTraceOperation', () => {
   });
   const row = (op: string, spanId: string, timestamp: number): OracleOpRow => ({ attributes: op ? { 'operation.code': op } : {}, spanId, timestamp });
   const spans = [
-    sp({ spanId: 'r', kind: 'server', serviceName: 'bsaweb', startTime: 1, attributes: { FUNCTION_CODE: 'LCA01' } }),
+    sp({ spanId: 'r', kind: 'server', serviceName: 'acmweb', startTime: 1, attributes: { FUNCTION_CODE: 'LCA01' } }),
     sp({ spanId: 'c1', parentSpanId: 'r', kind: 'server', serviceName: 'loan-inq', startTime: 2 }),
     sp({ spanId: 'c2', parentSpanId: 'r', kind: 'server', serviceName: 'loan-inq', startTime: 3 }),
   ];

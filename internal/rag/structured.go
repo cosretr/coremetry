@@ -8,7 +8,7 @@ package rag
 // yapıyı yanlış okur. Her "kayıt" (yalnız skaler / skaler-dizi alanları olan
 // eşleme) yolu ile kendi paragrafı olur:
 //
-//	clusters[1] — zone: test · domain: example.com · names: ocpint, ocpuat
+//	clusters[1] — zone: test · domain: example.com · names: kubeint, kubeuat
 //
 // İç içe eşlemeler kendi yollarıyla ayrı paragraf; sıra kaynaktaki sıra.
 // YAML JSON'un üst kümesi: ikisi de yaml.v3 Node ağacıyla okunur (çok

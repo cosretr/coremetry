@@ -69,7 +69,7 @@ func TestSuggestedCausePriority(t *testing.T) {
 }
 
 func TestDraftFromException(t *testing.T) {
-	e := chstore.ResolvedExceptionForCase{Fingerprint: "ora:abc", Type: "MCA-00029", Message: "ATM_CORE_PIN_CHANGE", Service: "bsa-atm-core-prod",
+	e := chstore.ResolvedExceptionForCase{Fingerprint: "ora:abc", Type: "MCA-00029", Message: "ATM_CORE_PIN_CHANGE", Service: "acm-kiosk-core-prod",
 		FirstSeen: c0.Add(-72 * time.Hour), LastSeen: c0.Add(-time.Hour), ResolvedAt: c0, AISummary: "PIN değişimi reddi"}
 	d := DraftFromException(e, c0)
 	if d.CaseID != "ex:ora:abc" || d.Status != chstore.CaseDraft || d.CosreCorrect != -1 {

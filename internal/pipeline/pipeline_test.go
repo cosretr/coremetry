@@ -302,13 +302,13 @@ func TestDropsMetricIsTheDeterministicHalf(t *testing.T) {
 	if !e.HasMetricDropRules() {
 		t.Fatal("enabled metric drop rule must count")
 	}
-	if !e.DropsMetric(pt("/BSAWEB/bsa/core/server/checkReadiness")) {
+	if !e.DropsMetric(pt("/ACMWEB/acm/core/server/checkReadiness")) {
 		t.Fatal("probe route must drop")
 	}
-	if e.DropsMetric(pt("/BSAWEB/loan/assessment")) {
+	if e.DropsMetric(pt("/ACMWEB/loan/assessment")) {
 		t.Fatal("business route must survive")
 	}
-	other := pt("/BSAWEB/bsa/core/server/checkReadiness")
+	other := pt("/ACMWEB/acm/core/server/checkReadiness")
 	other.Metric = "jvm.memory.used"
 	if e.DropsMetric(other) {
 		t.Fatal("And metric condition must scope the rule")

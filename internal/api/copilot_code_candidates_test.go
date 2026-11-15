@@ -4,7 +4,7 @@ package api
 // bir trace'te "Kodu da incele" Code Search açıkken bile "⚠ Kod okunamadı —
 // kodsuz analiz. (bu kayıtta stacktrace yok)" diyordu. Kök neden: ana
 // operasyon yalnız Oracle HATA satırlarından ve span operation.code
-// attribute'undan okunuyordu (BSA span'leri FUNCTION_CODE taşır) ve
+// attribute'undan okunuyordu (ACM span'leri FUNCTION_CODE taşır) ve
 // wantOperationCode geçerli bir MainOperation şart koşuyordu. Düzeltme: (c) log
 // tier'ı + fonksiyon kodu sözlüğünden ADAY operasyonlar.
 
@@ -34,7 +34,7 @@ func TestLogOperationCode(t *testing.T) {
 		{"OPERATION_CODE", map[string]string{"OPERATION_CODE": op}, op},
 		{"nokta + önek (ES labels.)", map[string]string{"labels.operation.code": op}, op},
 		{"camelCase operationCode", map[string]string{"operationCode": op}, op},
-		{"tire", map[string]string{"bsa-operation-name": op}, op},
+		{"tire", map[string]string{"acm-operation-name": op}, op},
 		{"operation.name geçerli kod", map[string]string{"operation.name": op}, op},
 		{"serbest operation.name elenir", map[string]string{"operation.name": "GET /application/x"}, ""},
 		{"kısa değer elenir", map[string]string{"operation_code": "AB"}, ""},
@@ -55,13 +55,13 @@ func TestLogOperationCode(t *testing.T) {
 // → en erken → ad. (a)/(b) aynen önde (TestPickMainOperation bayt bayt).
 func TestPickMainOperationLogTier(t *testing.T) {
 	const (
-		trx = "LOAN_CONSUMER_APP_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST"
+		trx = "LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST"
 		inq = "LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST"
 	)
 	lg := func(ts int64, attrs map[string]string) *logstore.LogRecord {
 		return &logstore.LogRecord{Timestamp: ts, Attributes: attrs}
 	}
-	spans := []chstore.SpanRow{{SpanID: "r", Kind: "server", ServiceName: "bsaweb", StartTime: 1, Attributes: map[string]string{"FUNCTION_CODE": "LCA01"}}}
+	spans := []chstore.SpanRow{{SpanID: "r", Kind: "server", ServiceName: "acmweb", StartTime: 1, Attributes: map[string]string{"FUNCTION_CODE": "LCA01"}}}
 	logs := []*logstore.LogRecord{
 		lg(30, map[string]string{"operation_code": inq}),
 		lg(10, map[string]string{"operation_code": trx}),

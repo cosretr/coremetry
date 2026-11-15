@@ -5,7 +5,7 @@ package mcptools
 // Kompakt açıklamalar tek kanal değil: araç sonuçlarının hint / next / not /
 // hata metinleri ve şema özellik açıklamaları da küçük modele gider. simple
 // varyantta bunlardan biri gizli bir aracı anarsa model sunulmayan araca
-// yönelir ("unknown tool" ile tur yakar) — operatörün sık kullandığı BSA
+// yönelir ("unknown tool" ile tur yakar) — operatörün sık kullandığı ACM
 // operasyon akışı (resolve_oracle_operation → search_traces) tam bu yüzden
 // çıkmaza giriyordu. Kapılar:
 //   - STATİK: mcptools'taki her dizge literali simple tarafıyla basıldığında
@@ -254,8 +254,8 @@ func TestToolResultHintsFollowToolset(t *testing.T) {
 		return string(b)
 	}, "search_traces")
 	check("oracle hint", func(ctx context.Context) string {
-		tool := toolByName(t, ToolList(Deps{OracleOps: bsaOracle()}), OracleOperationToolName)
-		out, err := tool.Handler(ctx, json.RawMessage(`{"name":"`+bsaOpName+`"}`))
+		tool := toolByName(t, ToolList(Deps{OracleOps: acmOracle()}), OracleOperationToolName)
+		out, err := tool.Handler(ctx, json.RawMessage(`{"name":"`+acmOpName+`"}`))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -264,14 +264,14 @@ func TestToolResultHintsFollowToolset(t *testing.T) {
 	}, "search_traces'i KOD BAŞINA")
 }
 
-// Uçtan uca (BSA operasyon akışı): simple ctx'te resolve_oracle_operation'ın
+// Uçtan uca (ACM operasyon akışı): simple ctx'te resolve_oracle_operation'ın
 // ipucu simple katalogda GÖRÜNEN bir aracı anar ve o araç ipucunun dediği
 // argümanla (operation = name, servis yok) fonksiyon kodu süzgeciyle koşar.
 func TestOracleHintLeadsToVisibleToolInSimple(t *testing.T) {
 	ctx := WithAnchor(WithToolset(context.Background(), "simple"), cqAnchor)
-	d := Deps{OracleOps: bsaOracle()}
+	d := Deps{OracleOps: acmOracle()}
 	tool := toolByName(t, ChatToolListFor(d, "simple"), OracleOperationToolName)
-	out, err := tool.Handler(ctx, json.RawMessage(`{"name":"`+bsaOpName+`"}`))
+	out, err := tool.Handler(ctx, json.RawMessage(`{"name":"`+acmOpName+`"}`))
 	if err != nil {
 		t.Fatal(err)
 	}

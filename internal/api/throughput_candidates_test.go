@@ -107,7 +107,7 @@ func TestServiceNameAttemptsOrderAndEnvConstraint(t *testing.T) {
 			t.Errorf("deneme %d ortam anahtarı %q olmalı: %+v", i+1, wk, a.Filters)
 		}
 		// v0.9.681 — TAM eşleşme DEĞİL, desen. Operatörün kurulumunda
-		// değer `uat` değil `uat-ocpuat` (ortam+küme) olabiliyor; tam
+		// değer `uat` değil `uat-kubeuat` (ortam+küme) olabiliyor; tam
 		// eşleşme orada hiç tutmaz ve kısıt sessizce hiçbir şeyi
 		// kısıtlamaz.
 		if a.Filters[0].Op != "=~" {
@@ -117,13 +117,13 @@ func TestServiceNameAttemptsOrderAndEnvConstraint(t *testing.T) {
 			t.Fatalf("deneme %d tek desen taşımalı: %v", i+1, a.Filters[0].Values)
 		}
 		re := regexp.MustCompile(a.Filters[0].Values[0])
-		for _, ok := range []string{"uat", "uat-ocpuat", "uat-anything"} {
+		for _, ok := range []string{"uat", "uat-kubeuat", "uat-anything"} {
 			if !re.MatchString(ok) {
 				t.Errorf("deneme %d: %q eşleşmeliydi (desen %q)", i+1, ok, a.Filters[0].Values[0])
 			}
 		}
 		// Gevşemedik: başka ortam ya da ad uzantısı GİRMEMELİ.
-		for _, bad := range []string{"prod", "prod-ocpuat", "uatest", "preuat"} {
+		for _, bad := range []string{"prod", "prod-kubeuat", "uatest", "preuat"} {
 			if re.MatchString(bad) {
 				t.Errorf("deneme %d: %q eşleşmemeliydi — yanlış ortamın verisi doğru sanılır", i+1, bad)
 			}

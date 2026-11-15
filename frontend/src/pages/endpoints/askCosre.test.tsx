@@ -19,12 +19,12 @@ import type { EndpointRow } from '@/lib/types';
 // sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
 import Page from '../EndpointDetail';
 
-const SVC = 'bsa-web';
-const ROUTE = '/BSAWEB/application/{id}';
+const SVC = 'acm-web';
+const ROUTE = '/ACMWEB/application/{id}';
 
 vi.mock('@/lib/api', () => {
   const row: EndpointRow = {
-    service: 'bsa-web', path: '/BSAWEB/application/{id}', method: 'POST',
+    service: 'acm-web', path: '/ACMWEB/application/{id}', method: 'POST',
     calls: 10, errors: 1, errorRate: 0.1, avgMs: 9, p99Ms: 99, p50Ms: 9, p95Ms: 50, reqPerMin: 1,
   };
   const stub: Record<string, (...a: unknown[]) => Promise<unknown>> = {

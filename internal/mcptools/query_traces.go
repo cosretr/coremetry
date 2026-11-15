@@ -188,7 +188,7 @@ func runQueryTraces(ctx context.Context, b qtBackends, raw json.RawMessage) (cos
 	if env != "" {
 		req["env"] = env
 	}
-	// v0.10.1302 — Oracle/BSA operasyon adı fonksiyon koduna çevrilirse servis
+	// v0.10.1302 — Oracle/ACM operasyon adı fonksiyon koduna çevrilirse servis
 	// gerekmez: kod süzgeci terfi etmiş tek kolona iner (search_traces kapısının
 	// "kapsam çipi" sayımı, isBusinessCodeScopeFilter) — simple araç setinde
 	// resolve_oracle_operation → query_traces zinciri böyle tamamlanır.

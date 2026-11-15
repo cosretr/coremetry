@@ -1,7 +1,7 @@
 package mcptools
 
-// operation_search.go — v0.10.1297 (operatör 2026-10-17: BSA operasyon adı
-// linki yanlış — coremetry.io + search=). Kullanıcı CoSRE'ye bir Oracle/BSA
+// operation_search.go — v0.10.1297 (operatör 2026-10-17: ACM operasyon adı
+// linki yanlış — coremetry.io + search=). Kullanıcı CoSRE'ye bir Oracle/ACM
 // OPERASYON ADI yazdı ("DIGITAL_PAYMENTSYSTEMCAMPAIGN_JUZDAN_LIST_OF_GAINED_
 // CAMPAIGNS"); ön-getirme adı doğru çözdü (kod GCWCD01) ama model build_link'i
 // search=<ad> ile çağırdı ve "Coremetry'de aç" /traces?search=<ad> açtı. Ad

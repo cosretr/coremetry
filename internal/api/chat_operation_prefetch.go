@@ -43,17 +43,17 @@ const (
 	opPrefetchToolID  = "cosre-operation-prefetch"
 	opPrefetchTool    = "operation_prefetch"
 	opPrefetchTimeout = 15 * time.Second
-	// v0.10.1331 — BSA/Oracle operasyonunda Exceptions grupları (chat_exception_groups.go):
+	// v0.10.1331 — ACM/Oracle operasyonunda Exceptions grupları (chat_exception_groups.go):
 	// ayrı adım çipi + operatör onaylı 24 sa geriye bakış (Oracle grubu durgun akış).
 	opExceptionsTool     = "operation_exceptions"
 	opExceptionsLookback = 24 * time.Hour
 )
 
-// opCodeShapeRe — v0.10.1331: BSA operasyon kodu biçimi (BÜYÜK_HARF_ALT_ÇİZGİ,
+// opCodeShapeRe — v0.10.1331: ACM operasyon kodu biçimi (BÜYÜK_HARF_ALT_ÇİZGİ,
 // en az iki parça) — katalogda Oracle satırı olmasa da Exceptions'a bakılır.
 var opCodeShapeRe = regexp.MustCompile(`^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$`)
 
-// opWantsExceptions — SAF: hedef BSA/Oracle operasyonu mu.
+// opWantsExceptions — SAF: hedef ACM/Oracle operasyonu mu.
 func opWantsExceptions(t opTarget) bool {
 	return t.HasOra || opCodeShapeRe.MatchString(strings.TrimSpace(t.Name))
 }
@@ -966,7 +966,7 @@ type epExResult struct {
 }
 
 // endpointDrillPhase — v0.10.1343: trace'ler varsa en yavaş ≤2 trace'in
-// kırılımı (operatör varsayılanı: her hedefte, BSA dahil; ≤10 sn) ve endpoint
+// kırılımı (operatör varsayılanı: her hedefte, ACM dahil; ≤10 sn) ve endpoint
 // hedefinde servisin endpoint span exception'ları (≤4 sn). Exception okuması
 // goroutine'de TOPLANIR; emit yalnız bu (ön-getirme) goroutine'inden.
 func (s *Server) endpointDrillPhase(pctx context.Context, emit func(string, any), p *opPrefetch, t opTarget, svc string, merged []chstore.TraceRow, from, to time.Time) {

@@ -149,7 +149,7 @@ func TestTruncRunes(t *testing.T) {
 // taşımıyorsa log-fallback + logu atan servisin override'ı (v0.9.1182'nin
 // exception yüzeyindeki eksik yarısı).
 func TestPickExceptionStack(t *testing.T) {
-	deep := strings.Repeat("at com.bsa.App.run(App.java:10)\n", 100) // >1800 rune
+	deep := strings.Repeat("at com.example.App.run(App.java:10)\n", 100) // >1800 rune
 	fp, raw, svc, idx := pickExceptionStack([]string{"", deep}, "log-stack", "shop-log-svc")
 	if idx != 1 {
 		t.Fatalf("stack'i veren örneğin indeksi dönmeli (v0.10.1044 — sürüm aynı olaydan): %d", idx)

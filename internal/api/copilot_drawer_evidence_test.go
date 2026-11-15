@@ -62,7 +62,7 @@ func TestParseDrawerSubject(t *testing.T) {
 		// Bozuk yüzde dizisi: çekmece bir URL parçası yüzünden patlamamalı.
 		{name: "bozuk yüzde dizisi", raw: "trace:%zz", wantOK: false},
 		// v0.10.1367 — endpoint: aiSubject.ts parseEndpoint ile aynı katılık.
-		{name: "endpoint fiilli", raw: "endpoint:bsa-web:%2FBSAWEB%2Fapplication%2F%7Bid%7D:1000:2000:POST", wantOK: true, wantKind: "endpoint", wantID: "bsa-web"},
+		{name: "endpoint fiilli", raw: "endpoint:acm-web:%2FACMWEB%2Fapplication%2F%7Bid%7D:1000:2000:POST", wantOK: true, wantKind: "endpoint", wantID: "acm-web"},
 		{name: "endpoint fiilsiz", raw: "endpoint:ns%3Acart:%2Fcart:1000:2000", wantOK: true, wantKind: "endpoint", wantID: "ns:cart"},
 		{name: "endpoint bilinmeyen fiil düşer", raw: "endpoint:svc:%2Fcart:1000:2000:BREW", wantOK: true, wantKind: "endpoint", wantID: "svc"},
 		{name: "endpoint 4 parça", raw: "endpoint:svc:%2Fcart:1000", wantOK: false},
@@ -93,11 +93,11 @@ func TestParseDrawerSubject(t *testing.T) {
 // v0.10.1367 — endpoint öznesinin ek alanları: rota decode edilir, fiil büyük
 // harf + beyaz liste (bilinmeyen → ""), pencere ns → time.Time.
 func TestParseDrawerSubjectEndpointFields(t *testing.T) {
-	got, ok := parseDrawerSubject("endpoint:bsa-web:%2FBSAWEB%2Fapplication%2F%7Bid%7D:1790000000000000000:1790003600000000000:post")
+	got, ok := parseDrawerSubject("endpoint:acm-web:%2FACMWEB%2Fapplication%2F%7Bid%7D:1790000000000000000:1790003600000000000:post")
 	if !ok {
 		t.Fatal("reddedildi")
 	}
-	if got.Route != "/BSAWEB/application/{id}" || got.Method != "POST" ||
+	if got.Route != "/ACMWEB/application/{id}" || got.Method != "POST" ||
 		got.From.UnixNano() != 1790000000000000000 || got.To.UnixNano() != 1790003600000000000 {
 		t.Fatalf("got=%+v", got)
 	}

@@ -11,7 +11,7 @@ import (
 // known_services.go — v0.10.1344: ext-peer çözümünün bilinen-servis yedeği.
 //
 // Operatör raporu (2026-10-18, card-web-api komşuluğu): enstrümante
-// bsa-customer-maininq-prod, GSLB host'u `ext:<svc>-prod-kon.<kurum>` ile
+// acm-customer-lookup-prod, GSLB host'u `ext:<svc>-prod-app.<kurum>` ile
 // çağrılıyordu. ResolveExtPeer'in kümesi yalnız GRAFTAKİ kenar adlarıydı;
 // 1 hop'ta (ya da hedef servis penceredeki kenar setine girmediğinde)
 // gerçek servis kümede yoktu, etiket-önek aşaması da eşleşecek ad bulamadı.

@@ -281,10 +281,10 @@ func TestExchangeRecordedForWikiAdjacentPaths(t *testing.T) {
 
 	t.Run("netleştirme kurtarması", func(t *testing.T) {
 		withWikiService(t, wiki.Config{Enabled: true, Mode: wiki.ModeLive},
-			&fakeWikiAPI{pages: map[string]string{"/Runbooks/BSA cache refresh": bsaRunbook}})
+			&fakeWikiAPI{pages: map[string]string{"/Runbooks/ACM cache refresh": acmRunbook}})
 		recordingNarrator(t, func(string) string { return "Refresh menüsünden tetiklenir." })
 		s, rec := newServer(t)
-		fr := ask(t, s, map[string]any{"messages": []map[string]any{{"role": "user", "text": "bsa servisini bul"}}})
+		fr := ask(t, s, map[string]any{"messages": []map[string]any{{"role": "user", "text": "acm servisini bul"}}})
 		x := collectExchange(t, rec)
 		// Kurtarma guided kademesinin İÇİNDE: rota varlık aramasının
 		// netleştirmesi (find_entity adayları), cevap wiki'den.

@@ -19,8 +19,8 @@ import { endpointDetailHref } from '@/pages/endpoints/endpointParam';
 // ⚠ EN KRİTİK KARAR. Endpoint varlığı ŞABLONLANMIŞ yola göre kuruluyor;
 // ham yola değil. Prod'da ikisi gerçekten ayrışıyor:
 //
-//     url.path   = /BSAWEB/rest/application/directCreditPreApproval
-//     http.route = /BSAWEB/application/directCreditPreApproval   ← endpoint bu
+//     url.path   = /ACMWEB/rest/application/expressOrderPreValidate
+//     http.route = /ACMWEB/application/expressOrderPreValidate   ← endpoint bu
 //
 // `url.path`ten link kurmak, var olmayan bir endpoint'e götürürdü: sayfa
 // açılır, boş gelir, operatör "veri yok" sanır. Yanlış bir link,

@@ -3,10 +3,10 @@ package api
 // chat_wiki_howto.go — v0.10.1126: geniş "nasıl yapılır / bilgi" işareti
 // (ZAYIF wiki işareti; taban kapılı).
 //
-// Operatör (prod): "BSA cache refresh nasıl girilir", "Config cache refresh
+// Operatör (prod): "ACM cache refresh nasıl girilir", "Config cache refresh
 // nasıl girilir?", "Coremetry adresleri" wiki'ye hiç uğramadı — v0.10.1124'ün
 // zayıf işareti yalnız "nasıl" + yap- fiilini tanıyordu; guided "nasıl"ı sağlık
-// sinyali sayıp "BSA"yı servis parçası olarak "Hangi servisi kastettin?"e
+// sinyali sayıp "ACM"yı servis parçası olarak "Hangi servisi kastettin?"e
 // çevirdi. Burada işaret GENİŞLER ama ZAYIF kalır: kademe yalnız en iyi isabet
 // ragWikiFloor'u (0.5) geçerse cevaplar, yoksa akış bayt bayt eski yolda.
 //

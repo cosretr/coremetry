@@ -229,8 +229,8 @@ describe('ML olay sayfası düzeni', () => {
 // boş durum. Hangisinin çizildiği küçük etiketle söylenir; kanıt kaynağı
 // olayın kaynağından (vm).
 describe('Olayın seyri: canlı seri → kayıtlı görüntü → boş durum', () => {
-  const latCard: ExplainCard = { ...card, header: { ...card.header, kind: 'trace', detector: 'op_latency', service: 'bsa-investment-portfolio-customer-prod' } };
-  const latSnap: MLSnapshot = { ...snap, detector: 'op_latency', signal: 'trace', service: 'bsa-investment-portfolio-customer-prod', part: 'callBagService|p95',
+  const latCard: ExplainCard = { ...card, header: { ...card.header, kind: 'trace', detector: 'op_latency', service: 'acm-portfolio-summary-prod' } };
+  const latSnap: MLSnapshot = { ...snap, detector: 'op_latency', signal: 'trace', service: 'acm-portfolio-summary-prod', part: 'callBagService|p95',
     evidence: '{"source":"vm","route":"callBagService","measure":"p95"}' };
   const kind = (el: HTMLElement) => el.querySelector('[data-testid="ml-course"] [data-testid="ml-course-kind"]')?.textContent ?? '';
   it('ham veri varsa canlı seri: dedektörün ölçüsü, route değeriyle', async () => {

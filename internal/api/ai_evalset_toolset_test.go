@@ -57,7 +57,7 @@ func newBodyStub(t *testing.T) *bodyStub {
 		st.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		out, _ := json.Marshal(map[string]any{
-			"choices": []any{map[string]any{"message": map[string]any{"content": "BKRB001 bsa-card-core'da; hata oranı 0.2"}, "finish_reason": "stop"}},
+			"choices": []any{map[string]any{"message": map[string]any{"content": "BKRB001 acm-wallet-core'da; hata oranı 0.2"}, "finish_reason": "stop"}},
 			"usage":   map[string]any{"prompt_tokens": 5, "completion_tokens": 2},
 		})
 		_, _ = w.Write(out)
@@ -91,8 +91,8 @@ func evalToolsetCases() []evalCase {
 	zero := 0
 	return []evalCase{
 		{ID: "biz", Surface: "ChatCodeResolve", Why: "w",
-			User:   "BKRB001 hangi serviste?\n\n[resolve_business_code sonucu] {\"candidates\":[{\"services\":[{\"service\":\"bsa-card-core\"}]}]}",
-			Expect: evalExpect{MustContain: []string{"bsa-card-core"}, KnownEntities: []string{"bsa-card-core"}, MaxUnknownEntities: &zero}},
+			User:   "BKRB001 hangi serviste?\n\n[resolve_business_code sonucu] {\"candidates\":[{\"services\":[{\"service\":\"acm-wallet-core\"}]}]}",
+			Expect: evalExpect{MustContain: []string{"acm-wallet-core"}, KnownEntities: []string{"acm-wallet-core"}, MaxUnknownEntities: &zero}},
 		{ID: "prob", Surface: "Problem", Why: "w", User: "Service: checkout", Expect: evalExpect{}},
 	}
 }
@@ -256,7 +256,7 @@ func TestRunEvalsetCaseReadsToolsetFromCtx(t *testing.T) {
 	var gotSys string
 	call := func(_ context.Context, _, system, _ string, _ map[string]any, _ bool) (string, error) {
 		gotSys = system
-		return "bsa-card-core", nil
+		return "acm-wallet-core", nil
 	}
 	c := evalToolsetCases()[0]
 	o := runEvalsetCase(context.Background(), call, nil, c)

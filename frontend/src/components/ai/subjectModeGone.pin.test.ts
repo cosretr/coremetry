@@ -116,7 +116,7 @@ describe('özne kipinden kalan ölü kod silindi (v0.10.1413)', () => {
   });
 
   it('kayıtlı-bağlam şeridi (saved / ai.ctx.saved) yok', () => {
-    expect(read('components/ai/TraceContextStrip.tsx')).not.toMatch(/\bsaved\b/);
+    expect(read('components/ai/TraceContextStrip.tsx')).not.toMatch(/\acmved\b/);
     expect(read('lib/i18n.ts')).not.toMatch(/'ai\.ctx\.saved'|'ai\.subject\.trace'/);
   });
 });

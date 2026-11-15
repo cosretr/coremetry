@@ -92,14 +92,14 @@ describe('v0.10.986 — klasik üçlü cevap', () => {
 
 // v0.10.1543 — gemma4 başlığı `###` ile yazar; Karar yine çıkar ve gövdeden düşer.
 describe('verdictLine — markdown başlığı (gemma)', () => {
-  const G = '### İşlem Akışı ve Veri Özeti\n- a oldu.\n\n### Kök Neden ve Sonraki Adım\n- `svc-a` bağımlılığa POST attı ve HTTP 400 aldı. Sonra BSAException fırlattı.\n- Bağımlılığın loglarına bak.\n';
+  const G = '### İşlem Akışı ve Veri Özeti\n- a oldu.\n\n### Kök Neden ve Sonraki Adım\n- `svc-a` bağımlılığa POST attı ve HTTP 400 aldı. Sonra ACMException fırlattı.\n- Bağımlılığın loglarına bak.\n';
   it('Karar ilk cümle', () => {
     expect(verdictLine(G)).toBe('svc-a bağımlılığa POST attı ve HTTP 400 aldı.');
   });
   it('gövdeden düşer, başlık ve kalan korunur', () => {
     const out = dropVerdictSentence(G, verdictLine(G)!);
     expect(out).toContain('### Kök Neden ve Sonraki Adım');
-    expect(out).toContain('- Sonra BSAException fırlattı.');
+    expect(out).toContain('- Sonra ACMException fırlattı.');
     expect(out).not.toContain('HTTP 400 aldı');
   });
   it('### olmayan başlık eşleşmez', () => {

@@ -11,7 +11,7 @@
 //   code  dosya:satır (Foo.java:151), paket-nitelikli ad (com.x.y.Foo …),
 //         metot çağrısı (Foo.bar()), HTTP metotlu yol (POST /api/…)
 //   err   HTTP 4xx/5xx, …Exception / …Error türleri, hata kodları
-//         (MCA-00029, BSA_020, ORA-01017)
+//         (MCA-00029, ACM_020, ORA-01017)
 //
 // Desenler bilinçli DAR: Türkçe düzyazıda yanlış çip, hiç çip olmamasından
 // kötü. Tarih (28.10.2026), sürüm (1.4.2), oran (%3) ve tek noktalı sıradan

@@ -44,7 +44,7 @@ func TestRouteExclusionFiltersWrapUnanchoredPatterns(t *testing.T) {
 				t.Fatalf("anchored rule must keep its anchor inside the wrapper: %s", f.Values[0])
 			}
 		default:
-			if !re.MatchString("/BSAWEB/bsa/core/server/checkReadiness") || re.MatchString("/BSAWEB/loan/assessment") {
+			if !re.MatchString("/ACMWEB/acm/core/server/checkReadiness") || re.MatchString("/ACMWEB/loan/assessment") {
 				t.Fatalf("unanchored rule must match anywhere in the path: %s", f.Values[0])
 			}
 		}

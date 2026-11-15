@@ -11,13 +11,13 @@ import (
 func TestNormalizeProblemSettings(t *testing.T) {
 	base := SourceConfig{Name: "o", Host: "h", ServiceName: "s", User: "u", Password: "p", Schema: "S", Table: "T"}
 	src := base
-	src.ProblemMode, src.GenericCodes, src.IgnoreCodes = " LIVE ", []string{" bsa_020", "BSA_020", "", "err_020"}, []string{"x"}
+	src.ProblemMode, src.GenericCodes, src.IgnoreCodes = " LIVE ", []string{" acm_020", "ACM_020", "", "err_020"}, []string{"x"}
 	out, err := Normalize(Settings{Sources: []SourceConfig{src}}, Settings{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := out.Sources[0]
-	if got.ProblemMode != ProblemModeLive || strings.Join(got.GenericCodes, ",") != "BSA_020,ERR_020" || strings.Join(got.IgnoreCodes, ",") != "X" {
+	if got.ProblemMode != ProblemModeLive || strings.Join(got.GenericCodes, ",") != "ACM_020,ERR_020" || strings.Join(got.IgnoreCodes, ",") != "X" {
 		t.Fatalf("normalize: %+v", got)
 	}
 	src2 := base

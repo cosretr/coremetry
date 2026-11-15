@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 //
 // OracleOperationChip.render — v0.10.1329 (operatör-bildirimli): trace
-// 6008dded… kökü POST /BSAWEB/application/directCreditPreApproval, kendi Oracle
-// satırı …APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST; çip fonksiyon kodu
+// 6008dded… kökü POST /ACMWEB/application/expressOrderPreValidate, kendi Oracle
+// satırı …APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST; çip fonksiyon kodu
 // sözlüğünün en çok satırlı adayını (…APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST
 // "(+15)") "Operasyon:" diye gösteriyordu.
 //
@@ -25,7 +25,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import type { LogRow, OracleFunctionCodesResponse, SpanRow } from '@/lib/types';
 
-const TRX = 'LOAN_CONSUMER_APP_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST';
+const TRX = 'LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST';
 const INQ = 'LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST';
 
 const dict: OracleFunctionCodesResponse = {
@@ -39,8 +39,8 @@ import { OracleOperationChip, TraceEntryCodes } from './OracleOperationChip';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const sp = (o: Partial<SpanRow> & { spanId: string }): SpanRow => ({
-  traceId: '6008dded60bb6da25ec0d11b0045e24b', parentSpanId: '', name: 'POST /BSAWEB/application/directCreditPreApproval',
-  kind: 'server', serviceName: 'bsaweb', hostName: '', startTime: 1, endTime: 2, durationMs: 1,
+  traceId: '6008dded60bb6da25ec0d11b0045e24b', parentSpanId: '', name: 'POST /ACMWEB/application/expressOrderPreValidate',
+  kind: 'server', serviceName: 'acmweb', hostName: '', startTime: 1, endTime: 2, durationMs: 1,
   statusCode: 'error', statusMessage: '', attributes: {}, resourceAttributes: {}, events: null, scopeName: '', ...o,
 });
 const spans: SpanRow[] = [

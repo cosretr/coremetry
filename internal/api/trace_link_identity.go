@@ -490,7 +490,7 @@ type linkIdentityLogHit struct {
 	// İDDİA ETMİYORUZ — operatör bunu görmeli.
 	Loose bool
 	// Key — v0.10.572: token'ı taşıyan JSON alanının GERÇEK adı
-	// ("BsaRequestId"). Tarayıcı alan adına bakmaz, şekli tanır; ama
+	// ("AcmRequestId"). Tarayıcı alan adına bakmaz, şekli tanır; ama
 	// operatörün logunda gördüğü ad neyse menü onu yazmalı. Boş =
 	// gövde JSON değil ya da ad çözülemedi.
 	Key string
@@ -501,7 +501,7 @@ const jsonKeyMaxLen = 64
 
 // jsonKeyForToken — SAF: gövdede token'ı taşıyan JSON alan adı.
 //
-// v0.10.572 (operatör: "bazen requestid BsaRequestId olarak logta yazıyor").
+// v0.10.572 (operatör: "bazen requestid AcmRequestId olarak logta yazıyor").
 // Kimlik ARAMASI ad-bağımsız kalır (şekil tanınır); bu yalnız ETİKET içindir.
 // Desen token'dan GERİYE: `"<anahtar>"` boşluk `:` boşluk `"` token.
 // Uymuyorsa "" — ad UYDURULMAZ, çağıran nötr etikete düşer.
@@ -644,7 +644,7 @@ func buildLinkIdentityCandidates(ordered []chstore.SpanRow, selected string, hit
 	}
 	// 1) request_id adayları — log gövdesinden çözülenler.
 	for _, h := range hits {
-		// v0.10.572 — logdaki GERÇEK alan adı ("BsaRequestId"); yoksa nötr ad.
+		// v0.10.572 — logdaki GERÇEK alan adı ("AcmRequestId"); yoksa nötr ad.
 		key := h.Key
 		if key == "" {
 			key = linkIdentityKeyRequestID

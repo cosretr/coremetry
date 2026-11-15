@@ -12,7 +12,7 @@ describe('highlightParts — prod cevabındaki kritik parçalar', () => {
     ['com.acme.juzdan.card.service.CreditCardDetails.CreditCardDetailsService (x)', ['code:com.acme.juzdan.card.service.CreditCardDetails.CreditCardDetailsService']],
     ['DTOCardDetail.getTdrkLimArr() null olduğu için', ['code:DTOCardDetail.getTdrkLimArr()']],
     ['POST /api/card/crdCard/getCardLimitInfo çağrısı HTTP 500 döndü', ['code:POST /api/card/crdCard/getCardLimitInfo', 'err:HTTP 500']],
-    ['NullPointerException üretildi; BSARuntimeException: "BSA_020"', ['err:NullPointerException', 'err:BSARuntimeException', 'err:BSA_020']],
+    ['NullPointerException üretildi; ACMRuntimeException: "ACM_020"', ['err:NullPointerException', 'err:ACMRuntimeException', 'err:ACM_020']],
     ['error_code=MCA-00029 (Oracle)', ['err:MCA-00029']],
     ['com.acme.cards.util.util.OceanBackendFeignBase$FeignClientExceptionHandler.decode', ['code:com.acme.cards.util.util.OceanBackendFeignBase$FeignClientExceptionHandler.decode']],
   ])('%s', (input, want) => {
@@ -27,7 +27,7 @@ describe('highlightParts — düzyazıda yanlış çip yok', () => {
     'Kritik hata noktası: servis sahibi ile incele.',
     'Error oranı yükseldi ama HTTP 200 döndü',
     'Kanıt: 2 span · 1 Oracle satırı',
-    'bsa-creditcard-ccmanagement-prod servisinden çağrı',
+    'acm-card-limits-prod servisinden çağrı',
   ])('%s', input => {
     expect(hits(input)).toEqual([]);
   });

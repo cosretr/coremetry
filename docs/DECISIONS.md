@@ -2607,9 +2607,9 @@ hedefinde uygulanır; başka sayfaya otomatik gidilmez (hedef zaten link çipind
 
 ## 2026-10-08 — CoSRE: nasıl-yapılır soruları wiki'ye, netleştirme yerine wiki kurtarması (v0.10.1126)
 
-**Sorun (operatör, prod):** "BSA cache refresh nasıl girilir", "Config cache refresh nasıl girilir?" ve "Coremetry
+**Sorun (operatör, prod):** "ACM cache refresh nasıl girilir", "Config cache refresh nasıl girilir?" ve "Coremetry
 adresleri" wiki'ye hiç uğramadı. v0.10.1124'ün zayıf işareti yalnız "nasıl" + yap- fiilini tanıyordu; guided "nasıl"ı
-sağlık sinyali (`hasHealthSignal`) saydı, "BSA"yı servis öneki olarak `serviceCandidates`'a verdi ve router
+sağlık sinyali (`hasHealthSignal`) saydı, "ACM"yı servis öneki olarak `serviceCandidates`'a verdi ve router
 `guidedAskService` döndü (`copilot_guided.go` ~1161) → `guidedAskServiceEvidence` `askServiceAnswerTR` ile
 DirectAnswer kurdu → `runGuidedRoute` "Hangi servisi kastettin? Adaylar: …" + sağlık çipleriyle bitirdi. "Coremetry
 adresleri" aynı sınıf (find_entity / entity scan aday çipleri). Ayrıca "Aramayı test et" başarılı canlı arama
@@ -2634,7 +2634,7 @@ kurtarma hiç kurulmaz; isabet aynı kanıt kuralıyla geçer. `armDisambigRescu
 emit işaretli "answer"ı yakalar; wiki LiveOnWeak + `wiki.LiveBudget` ile aranır, iyi isabet → kademeyle AYNI anlatım
 (`wikiNarratedAnswer`) + altında "**Telemetri için:**" ve özgün netleştirme metni/çipleri/linkleri. İsabet yok →
 özgün olay değişmeden. Kademe bir soruyu wiki'den cevaplarken router'ın aynı soruya netleştirme rotası verip
-vermediğine bakar (`guidedDisambigProbe` — router'ın kendisi, rota çalıştırılmaz) ve aynı bloğu ekler; BSA sorusu
+vermediğine bakar (`guidedDisambigProbe` — router'ın kendisi, rota çalıştırılmaz) ve aynı bloğu ekler; ACM sorusu
 böylece hem wiki cevabını hem aday çiplerini taşır. (3) Arama durumu: test yanıtı tazelenmiş paylaşılan durumu
 (`status`) taşır, kart onu çizer (durum yalnız sayfa açılışında okunuyordu); `recordSearch` force'ta (yönetici testi)
 kısma kuralını atlar — imza yalnız bu pod'un son yazdığıyla kıyaslandığından araya başka pod'un "error"ı girince aynı
@@ -6365,7 +6365,7 @@ loglarına (tüm loglara değil)".
 incelemesi" "⚠ Kod okunamadı — kodsuz analiz. (bu kayıtta stacktrace yok)" diyordu. **Kök neden:**
 `MainOperation` boştu — `buildTraceExplainInput` ana operasyonu yalnız `OracleErrorsByTrace`
 (HATA satırları; sağlıklı trace'te yok) ve span'in `operation.code`/`OPERATION_CODE`/`operation_code`
-attribute'undan okuyordu (BSA span'leri `FUNCTION_CODE` taşır); sözlük bilerek dışarıdaydı (v0.10.1329,
+attribute'undan okuyordu (ACM span'leri `FUNCTION_CODE` taşır); sözlük bilerek dışarıdaydı (v0.10.1329,
 yalnız çipin etiketli (c) kademesi); `wantOperationCode` geçerli `MainOperation` şart koştuğu için stack
 yolunun "bu kayıtta stacktrace yok" cevabı aynen kalıyordu. **Karar:** (1) `pickMainOperation` (c)
 **log** kademesi (kesin; Oracle ve span'den SONRA): explain'in zaten okuduğu ES/CH log kayıtlarında
@@ -6441,8 +6441,8 @@ TestCodeEvidenceAttrsSource; copilot TestTraceWithOperationCodePrompt; vitest Co
 ## 2026-10-18 — Trace operasyon çipi: önce kesin kaynak, sözlük etiketli yedek (v0.10.1329)
 
 **Düzeltme (v0.10.1003 kararının üstüne; operatör-bildirimli):** trace 6008dded… (kök POST
-/BSAWEB/application/directCreditPreApproval, kendi Oracle satırı
-LOAN_CONSUMER_APP_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST) özet şeridinde "Operasyon:
+/ACMWEB/application/expressOrderPreValidate, kendi Oracle satırı
+LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST) özet şeridinde "Operasyon:
 LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST (+15)" gösteriyordu. **Kök neden:**
 çip YALNIZ fonksiyon kodu sözlüğünü okuyordu — `ops[0]` = kodun bankanın tamamında son 7 günde EN ÇOK
 satırlı operasyonu, 1:n ilişkinin tahmini; trace'in kendi Oracle satırları hiç sorulmuyordu. 1003'teki
@@ -6466,12 +6466,12 @@ ek sorgu yok; prompt'a henüz girmez (TestTraceExplainUserGolden bayt-bayt aynı
 vitest `pickTraceOperation` tablosu + `OracleOperationChip.render.test.tsx` (kesin + etiketli yedek +
 yüklenirken boş); Go `TestPickMainOperation`.
 
-## 2026-10-18 — v0.10.1331 — CoSRE: BSA operasyonu sorulunca Exceptions grupları da okunur
+## 2026-10-18 — v0.10.1331 — CoSRE: ACM operasyonu sorulunca Exceptions grupları da okunur
 
 **Operatör:** "CoSRE doğrudan operasyonu sorunca cevabı yeterli değil, ancak Exceptions'ta sorunca iyi
-tespit ediyor. Operasyon ismi BSA için verilince CoSRE de Exceptions'a bakabilir, son geleni ve yorumu
+tespit ediyor. Operasyon ismi ACM için verilince CoSRE de Exceptions'a bakabilir, son geleni ve yorumu
 oradan yapabilir." **Karar:** yeni MCP aracı YOK (araç sayısı pinleri + kısa açıklama bütçesi aynı);
-operasyon ön-getirmesi (chat_operation_prefetch.go) hedef BSA/Oracle operasyonuysa (katalogda Oracle
+operasyon ön-getirmesi (chat_operation_prefetch.go) hedef ACM/Oracle operasyonuysa (katalogda Oracle
 satırı ya da BÜYÜK_HARF_ALT_ÇİZGİ biçimi) trace/RED/Oracle'dan sonra ikinci guided adımı
 `operation_exceptions` koşar. Okuma paylaşılan dikişte (`api/chat_exception_groups.go`
 exceptionGroupsEvidence — servis düzeyi okuma aynı yolu kullanacak): TEK `ListExceptionGroups`
@@ -6491,7 +6491,7 @@ toplam, son görülme, `/problems?exc=<fp>` linki isSafeAppPath'ten). Takip çip
 "<KOD> grubunu açıkla" LİNK çipi (`href` = `/problems?exc=<fp>&ai=exception`, mesaj göndermez,
 eski istemcinin suggestions'ına girmez; TestFollowupTemplatesRouteGuided onu aksiyon çipi gibi muaf
 tutar). Evalset: `ChatOperationExceptions` yüzeyi (döngü çekirdeği + ek + sohbet), vaka
-`operation-bsa-exceptions-latest-group`. **Testler:** chstore TestExceptionGroupWhereMessages;
+`operation-acm-exceptions-latest-group`. **Testler:** chstore TestExceptionGroupWhereMessages;
 api TestCollectExceptionGroupsOracleOnly / MixedCapAndErrors, TestExGroupTrendTR,
 TestRenderExceptionGroupsTRGolden, TestOpPrefetchWithExceptionsUnderModelClamp, TestOpWantsExceptions,
 TestExceptionGroupFollowupChip; copilot TestOperationExceptionsAddendum; vitest operationCardView +
@@ -6775,7 +6775,7 @@ trace'e hızlıca Ask CoSRE gibi bakıp birleştir, bütünle." Onaylı tasarım
 
 ## 2026-10-18 — v0.10.1343 — CoSRE: endpoint anılınca (POST /yol, tam URL, /users/{id}) bulunur ve endpoint kapsamlı kanıt gelir (R1)
 
-**Sorun (operator-reported):** "POST /BSAWEB/application/directCreditPreApproval neden yavaş?" —
+**Sorun (operator-reported):** "POST /ACMWEB/application/expressOrderPreValidate neden yavaş?" —
 CoSRE endpoint'i bulamıyordu. Kök nedenler (`api/chat_operation_prefetch.go`): `opTokens` baştaki
 "/"yı kırpıyordu; `identifierLike("POST")` doğru olduğundan bulanık aşama HER POST operasyonunu
 eşleyip sorulanın çoğu kez olmadığı belirsizlik çipleri çıkarıyordu; `CatalogCandidates` belirteçleri
@@ -6809,9 +6809,9 @@ RED/trace yok; ön-getirmede trace kırılımı yoktu. Fable'ın onaylı R1 plan
   (0.5,0.9,0.95,0.99) → ms, servis + http_route, GetEndpointsMV'nin HTTP giriş yüklemi `kind NOT IN
   ('client','producer')`, yarı-açık pencere, max_execution_time=5; SQL pinli). Trace'ler mevcut
   hatalı-önce birleşim, rota hedefinde süzgeç `http.route =`. Yeni faz trace'lerden sonra
-  (`endpointDrillPhase`): trace varsa HER hedefte (BSA dahil, operatör varsayılanı) `traceDrillEvidence`
+  (`endpointDrillPhase`): trace varsa HER hedefte (ACM dahil, operatör varsayılanı) `traceDrillEvidence`
   (≤2 trace, 10 sn) → `p.Drill`; servisli endpoint hedefinde `EndpointTopExceptions` (4 sn, 5 tip)
-  goroutine'de toplanır, emit yalnız ön-getirme goroutine'inden; OKUNAMADI ≠ yok. BSA operasyonu
+  goroutine'de toplanır, emit yalnız ön-getirme goroutine'inden; OKUNAMADI ≠ yok. ACM operasyonu
   `exceptionGroupsEvidence`'ta kalır. Hepsi `opPrefetchTimeout` (15 sn) altında.
 - **Model:** `seed()` kırılım varsa İKİNCİ sentetik tool çifti (ID `cosre-endpoint-drill`, ad
   `trace_drill`); iki içerik de `clampToolResultForModel`'den geçer. `summary()` endpoint dışı
@@ -6838,9 +6838,9 @@ RED/trace yok; ön-getirmede trace kırılımı yoktu. Fable'ın onaylı R1 plan
 ## 2026-10-18 — v0.10.1344 — Topoloji: ext eşi etiket önekiyle ve bilinen-servis yedeğiyle servise çözülür
 
 **Operatör (prod, servis → Topology, "card-web-api neighborhood", 2 hop):** enstrümante iki servis "dış
-bağımlılık" diye çiziliyordu — `ext:bsa-channel-channelutility-prod-grpc.channel.svc.cluster.local`
-(56 span, %0) ve `ext:bsa-customer-maininq-prod-kon.<kurum>` (66 span, %3.03); aynı servis GSLB/route
-host'ları `<svc>-prod-mobil.<kurum>` / `<svc>-prod-sube.<kurum>` ile de geliyordu. **Kök neden:**
+bağımlılık" diye çiziliyordu — `ext:acm-notify-dispatch-prod-grpc.channel.svc.cluster.local`
+(56 span, %0) ve `ext:acm-customer-lookup-prod-app.<kurum>` (66 span, %3.03); aynı servis GSLB/route
+host'ları `<svc>-prod-mobile.<kurum>` / `<svc>-prod-web.<kurum>` ile de geliyordu. **Kök neden:**
 `ServiceNameSet.ResolveExtPeer` yalnız `ExtPeerServiceCandidates`'i deniyordu (ham, normalize host, k8s'te
 ilk DNS etiketi AYNEN → `…-prod-grpc` diye servis yok; GSLB host'u k8s soneki taşımadığı için hiç etiket
 adayı yok). Ayrıca çözüm kümesi yalnız graftaki kenar adlarıydı: 1 hop'ta hedef servisin kendi kenarı yoksa
@@ -6874,7 +6874,7 @@ düşen enstrümante olmayan bir host (ör. `<svc>-query-prod` yokken `<svc>` va
 
 ## 2026-10-18 — v0.10.1350 — Metrik kipi: HTTP durum-kodu etiketi veriden çözülür (present / absent / unknown)
 
-**Operatör (prod):** `/endpoint?service=bsa-loan-assessment-allocation-prod&path=…` "Kaynak: metrik" →
+**Operatör (prod):** `/endpoint?service=acm-order-quote-allocation-prod&path=…` "Kaynak: metrik" →
 "Hata BİLİNMİYOR: metrikte durum-kodu etiketi yok — Errors ve Rate boş" ve P50 grafiği "Bu pencerede veri
 yok" (karo P50 7 ms); aynı servisin Service → HTTP Metrics sekmesi (VM) 200/400 çiziyordu. **Kök neden:**
 (1) etiket varlığı `src.MetricPresentKeys(…, 7g)` ile soruluyordu — VM'de TEK, filo genelinde, 7 günlük
@@ -6903,7 +6903,7 @@ kalan tüketici `service_metric_throughput` presentKeys teşhisi.
 
 ## 2026-10-18 — v0.10.1352 — Endpoint metrik kipi = HTTP Metrics sekmesinin panelleri, route'a süzülü
 
-**Operatör (prod):** `/endpoint?service=bsa-loan-assessment-allocation-prod&path=/BSAWEB/decision/service/rest&range=3h`
+**Operatör (prod):** `/endpoint?service=acm-order-quote-allocation-prod&path=/ACMWEB/decision/service/rest&range=3h`
 "Kaynak: metrik (vm)" → Calls/requests ve gecikme grafikleri (p95 seçiliyken de) Service → HTTP Metrics sekmesindeki
 aynı route ile tutmuyor; "VictoriaMetrics'ten gelmiyor gibi". Karar: "HTTP Metrics tabındaki aynı paneli/grafiği ilgili
 endpoint'e göre filtreleyerek koyabiliriz direkt." **Kök neden:** iki yüzey iki ayrı hesap yapıyordu. Detay sayfası
@@ -7140,7 +7140,7 @@ endpoint kanıtı alır — `parseDrawerSubject` endpoint dalı; `drawerSubjectE
 
 **Operatör-bildirimli:** "Hazır sorularda wiki cache refresh nasıl yapılır var ama düzgün çalışmıyor." Örnek
 ("wikide cache refresh nasıl yapılır") düz cümleydi; kapsam üretmediği için guided/servis yoluna kayabiliyordu. Yeni örnek
-`@wiki BSA cache refresh en sık karşılaşılan hatalar nelerdir?` — `@wiki` composer'da `scope.wiki=true` olur, sunucuda wiki
+`@wiki <sistem> cache refresh en sık karşılaşılan hatalar nelerdir?` — `@wiki` composer'da `scope.wiki=true` olur, sunucuda wiki
 katmanı kesin devreye girer (`chat_scope.go`). Pin: `chatScope.test.ts` (TR/EN örnek i18n'den okunur → wiki kapsamı, servis
 anması yok), `CosreCapabilities.test.tsx`.
 
@@ -7715,7 +7715,7 @@ olabildiği için sinyal değil; takım-iyelik kendi yolunda. Trace kipi: trace/
 o trace'in grafiği; ekrandaki trace + "bu trace'in topolojisi" trace_by_id'ye çevrilmez. Servis: mesaj → tek aday →
 çok aday (ask_service, çip "<svc> topolojisi?" aynı niyete) → ekran servisi → sor. Varsayılan pencere 1 sa (açık
 pencere kazanır). (2) Operasyon anması (SAF `topologyOpMention`): endpoint ("POST /api/payments", URL yolu) →
-"operasyon/operation" sözcüğünün komşusu → BSA kod biçimi (PAYMENT_CREATE); servis/ortam adı operasyon sayılmaz.
+"operasyon/operation" sözcüğünün komşusu → ACM kod biçimi (PAYMENT_CREATE); servis/ortam adı operasyon sayılmaz.
 Çözüm ön-getirmenin eşleyicileriyle (`opTokens`/`CatalogCandidates`/`matchOperations`; endpoint için
 `matchEndpoint` + katalogda yoksa yol-yalnız hedef); çok eşleşme → "<op> operasyonunun örnek trace topolojisi"
 çipleri (akış topolojide kalır), eşleşme yok → dürüst "BULUNAMADI". Örnek trace süzgeçleri ön-getirmeyle AYNI:
@@ -7883,7 +7883,7 @@ basılıyor, okuma tavanı sekmeden farklıydı (2000 ↔ 20000).
   ortak (`graphNodeToMapNode`, FocusedNeighborhood'dan çıkarıldı). Sabit 170 px pil, elips + title; kart kendi kabında
   (`.cm-topo-flow`, ≤480 px yükseklik) kayar. Trace kipi aynı grafikte, kök solda, tüm kenarlar görünür.
 - "via": host kenarın HEDEFİNİN kendi adresiyse (çıplak ad ya da küme-içi DNS adı, ilk etiketi `<ad>` /
-  `<ad>-<belirteç>`) basılmaz (`topoViaInformative`). GSLB/route host'u (küme dışı, ör. `<ad>-prod-kon.<kurum>`)
+  `<ad>-<belirteç>`) basılmaz (`topoViaInformative`). GSLB/route host'u (küme dışı, ör. `<ad>-prod-app.<kurum>`)
   hangi kanaldan gelindiğini söylediği için KALIR — "ad ile başlıyor" kuralını yalnız k8s adına uyguladık.
 **Doğrulama sınırı:** prod verisine erişim yok; kök neden kod + fikstürle kanıtlandı (2. adım kenarları taşıyan okuma →
 ne çizilir ne sayılır; tavan yalnız aşınca). Hub'ın 230 komşusunun gerçekten doğrudan olup olmadığı (ör. v0.10.1344

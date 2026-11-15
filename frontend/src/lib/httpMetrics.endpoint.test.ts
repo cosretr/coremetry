@@ -5,8 +5,8 @@ import {
 } from './httpMetrics';
 import type { SpanMetricSeries } from './types';
 
-// v0.10.1352 — Operator-reported (prod): /endpoint?service=bsa-loan-assessment-
-// allocation-prod&path=/BSAWEB/decision/service/rest&range=3h "Kaynak: metrik
+// v0.10.1352 — Operator-reported (prod): /endpoint?service=acm-order-quote-
+// allocation-prod&path=/ACMWEB/decision/service/rest&range=3h "Kaynak: metrik
 // (vm)" Calls/requests ve gecikme grafikleri (p95 seçiliyken de) Service → HTTP
 // Metrics sekmesindeki aynı route ile tutmuyordu: sayfa /api/endpoints/metric
 // (throughput seam'i, 180 s adım başına yüzdelik, çağrı-ağırlıklı karo
@@ -26,8 +26,8 @@ describe('endpointFilter (v0.10.1352)', () => {
     ['route regex metakarakteri tam eşitlikte kaçmaz', { service: 's', route: '/v1/items.json?x=(1)' }, '{service_name="s", http_route="/v1/items.json?x=(1)"}'],
     ['boş route servis geneline GENİŞLEMEZ', { service: 's', route: '' }, '{service_name="s", http_route=~""}'],
     ['şekil kipi → regex', { service: 's', route: '/users/:id/orders', sig: true }, '{service_name="s", http_route=~"/users/[^/]+/orders"}'],
-    ['operatör vakası', { service: 'bsa-loan-assessment-allocation-prod', route: '/BSAWEB/decision/service/rest' },
-      '{service_name="bsa-loan-assessment-allocation-prod", http_route="/BSAWEB/decision/service/rest"}'],
+    ['operatör vakası', { service: 'acm-order-quote-allocation-prod', route: '/ACMWEB/decision/service/rest' },
+      '{service_name="acm-order-quote-allocation-prod", http_route="/ACMWEB/decision/service/rest"}'],
   ])('%s', (_n, ep, want) => {
     expect(endpointFilter(ep)).toBe(want);
   });
@@ -66,33 +66,33 @@ describe('methodRouteLegend (v0.10.1352)', () => {
 
 describe('endpoint PromQL pinleri — bayt bayt (v0.10.1352, 3h = 36 s adım, 144 s rate, W = 10800 s)', () => {
   const got = endpointHttpQueries(
-    { service: 'bsa-loan-assessment-allocation-prod', route: '/BSAWEB/decision/service/rest' }, 10800, { latQ: 'p95', compare: true });
+    { service: 'acm-order-quote-allocation-prod', route: '/ACMWEB/decision/service/rest' }, 10800, { latQ: 'p95', compare: true });
   it('her sorgu sabit', () => {
     const want: Array<[string, boolean, string]> = [
-      ["rateByRoute", false, "sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[144s]))"],
-      ["err5ByRoute", false, "sum by (http_route, http_request_method, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\", http_response_status_code=~\"5..\"}[144s])) > 0"],
-      ["err4ByRoute", false, "sum by (http_route, http_request_method, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\", http_response_status_code=~\"4..\"}[144s])) > 0"],
-      ["p50", false, "histogram_quantile(0.5, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[144s])))"],
-      ["p90", false, "histogram_quantile(0.9, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[144s])))"],
-      ["p95", false, "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[144s])))"],
-      ["p99", false, "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[144s])))"],
-      ["latByRoute", false, "histogram_quantile(0.95, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[144s])))"],
-      ["statusCodes", true, "sum by (http_response_status_code) (increase(http_server_request_duration_seconds_count{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s]))"],
-      ["wTotal", true, "sum(increase(http_server_request_duration_seconds_count{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s]))"],
-      ["wErr5", true, "sum(increase(http_server_request_duration_seconds_count{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\", http_response_status_code=~\"5..\"}[10800s])) or (0 * sum(increase(http_server_request_duration_seconds_count{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s])))"],
-      ["wAvg", true, "sum(increase(http_server_request_duration_seconds_sum{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s])) / sum(increase(http_server_request_duration_seconds_count{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s]))"],
-      ["wP50", true, "histogram_quantile(0.5, sum by (le) (increase(http_server_request_duration_seconds_bucket{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s])))"],
-      ["wP95", true, "histogram_quantile(0.95, sum by (le) (increase(http_server_request_duration_seconds_bucket{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s])))"],
-      ["wP99", true, "histogram_quantile(0.99, sum by (le) (increase(http_server_request_duration_seconds_bucket{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s])))"],
-      ["pTotal", true, "sum(increase(http_server_request_duration_seconds_count{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s] offset 10800s))"],
-      ["pErr5", true, "sum(increase(http_server_request_duration_seconds_count{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\", http_response_status_code=~\"5..\"}[10800s] offset 10800s)) or (0 * sum(increase(http_server_request_duration_seconds_count{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s] offset 10800s)))"],
-      ["pAvg", true, "sum(increase(http_server_request_duration_seconds_sum{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s] offset 10800s)) / sum(increase(http_server_request_duration_seconds_count{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s] offset 10800s))"],
-      ["pP99", true, "histogram_quantile(0.99, sum by (le) (increase(http_server_request_duration_seconds_bucket{service_name=\"bsa-loan-assessment-allocation-prod\", http_route=\"/BSAWEB/decision/service/rest\"}[10800s] offset 10800s)))"],
+      ["rateByRoute", false, "sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[144s]))"],
+      ["err5ByRoute", false, "sum by (http_route, http_request_method, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\", http_response_status_code=~\"5..\"}[144s])) > 0"],
+      ["err4ByRoute", false, "sum by (http_route, http_request_method, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\", http_response_status_code=~\"4..\"}[144s])) > 0"],
+      ["p50", false, "histogram_quantile(0.5, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[144s])))"],
+      ["p90", false, "histogram_quantile(0.9, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[144s])))"],
+      ["p95", false, "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[144s])))"],
+      ["p99", false, "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[144s])))"],
+      ["latByRoute", false, "histogram_quantile(0.95, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[144s])))"],
+      ["statusCodes", true, "sum by (http_response_status_code) (increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s]))"],
+      ["wTotal", true, "sum(increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s]))"],
+      ["wErr5", true, "sum(increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\", http_response_status_code=~\"5..\"}[10800s])) or (0 * sum(increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s])))"],
+      ["wAvg", true, "sum(increase(http_server_request_duration_seconds_sum{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s])) / sum(increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s]))"],
+      ["wP50", true, "histogram_quantile(0.5, sum by (le) (increase(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s])))"],
+      ["wP95", true, "histogram_quantile(0.95, sum by (le) (increase(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s])))"],
+      ["wP99", true, "histogram_quantile(0.99, sum by (le) (increase(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s])))"],
+      ["pTotal", true, "sum(increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s] offset 10800s))"],
+      ["pErr5", true, "sum(increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\", http_response_status_code=~\"5..\"}[10800s] offset 10800s)) or (0 * sum(increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s] offset 10800s)))"],
+      ["pAvg", true, "sum(increase(http_server_request_duration_seconds_sum{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s] offset 10800s)) / sum(increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s] offset 10800s))"],
+      ["pP99", true, "histogram_quantile(0.99, sum by (le) (increase(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s] offset 10800s)))"],
     ];
     expect(got.map(q => [q.id, q.instant, q.expr])).toEqual(want);
   });
   it('grafikler sekmenin AYNI üreticisi (route süzgeciyle sekme = endpoint)', () => {
-    const tab = httpQueries({ app: 'bsa-loan-assessment-allocation-prod', route: '/BSAWEB/decision/service/rest' }, 10800);
+    const tab = httpQueries({ app: 'acm-order-quote-allocation-prod', route: '/ACMWEB/decision/service/rest' }, 10800);
     const by = Object.fromEntries(got.map(q => [q.id, q.expr]));
     for (const id of ['rateByRoute', 'err5ByRoute', 'err4ByRoute', 'p50', 'p90', 'p95', 'p99', 'statusCodes'] as const) expect(by[id]).toBe(tab[id]);
     expect(by.latByRoute).toBe(tab.p95ByRoute);

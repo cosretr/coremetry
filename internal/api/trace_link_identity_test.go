@@ -1019,16 +1019,16 @@ func TestResolveTraceLinkIdentity_StrictBeatsLoose(t *testing.T) {
 	}
 }
 
-// v0.10.572 — operatör: "bazen requestid BsaRequestId olarak logta yazıyor".
+// v0.10.572 — operatör: "bazen requestid AcmRequestId olarak logta yazıyor".
 // ARAMA ad-bağımsız (şekil tanınır); bu yalnız ETİKET: token'ı taşıyan JSON
 // alanının gerçek adı okunur, çözülemezse ad UYDURULMAZ.
 func TestJSONKeyForToken(t *testing.T) {
 	const tok = "BKRM032060203MGie0018328324206090816550266120"
 	cases := []struct{ name, body, want string }{
-		{"bitişik", `{"BsaRequestId":"` + tok + `","CustomerNumber":"1"}`, "BsaRequestId"},
-		{"boşluklu", `{ "BsaRequestId" : "` + tok + `" }`, "BsaRequestId"},
+		{"bitişik", `{"AcmRequestId":"` + tok + `","CustomerNumber":"1"}`, "AcmRequestId"},
+		{"boşluklu", `{ "AcmRequestId" : "` + tok + `" }`, "AcmRequestId"},
 		{"snake", `{"request_id":"` + tok + `"}`, "request_id"},
-		{"nokta/tire", `{"bsa.request-id":"` + tok + `"}`, "bsa.request-id"},
+		{"nokta/tire", `{"acm.request-id":"` + tok + `"}`, "acm.request-id"},
 		{"düz metin", "islem tamam id=" + tok, ""},
 		{"tırnaksız değer", `{"k":` + tok + `}`, ""},
 		{"iki nokta yok", `{"k" "` + tok + `"}`, ""},
@@ -1051,14 +1051,14 @@ func TestJSONKeyForToken(t *testing.T) {
 // Katı yolda da gerçek alan adı taşınır.
 func TestResolveTraceLinkIdentity_LogKeyIsRealFieldName(t *testing.T) {
 	got := (&Server{logs: &scriptLogStore{bySpan: map[string][]*logstore.LogRecord{
-		"b": {lidRec("b", `{"BsaRequestId":"`+ridA+`","SessionId":"x"}`)},
+		"b": {lidRec("b", `{"AcmRequestId":"`+ridA+`","SessionId":"x"}`)},
 	}}}).resolveTraceLinkIdentity(context.Background(), "abc", "", linkIdentitySpans(), "", nil)
 	if got.RequestID != ridA {
 		t.Fatalf("kimlik bulunmalı: %+v", got)
 	}
 	for _, c := range got.Identities {
 		if c.Source == linkIdentitySourceLog {
-			if c.Key != "BsaRequestId" {
+			if c.Key != "AcmRequestId" {
 				t.Fatalf("anahtar logdaki ad olmalı: %q", c.Key)
 			}
 			return

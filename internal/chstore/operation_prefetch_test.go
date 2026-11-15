@@ -1,6 +1,6 @@
 package chstore
 
-// v0.10.1327 (operator-reported: "bsa-loan-legalproceeding-prod neden yavaş"
+// v0.10.1327 (operator-reported: "acm-order-dispute-prod neden yavaş"
 // SocketTimeoutException dedi ama NEREDE demedi) — trace drill'i baskın span'in
 // operasyon taban çizgisini (24 sa p50) SpanOperationRED'den okur. SQL pini:
 // MV-first (operation_summary_5m, ham spans DEĞİL), zaman-sınırlı, p99 eski
@@ -15,7 +15,7 @@ import (
 func TestSpanOperationREDQueryPinsP50(t *testing.T) {
 	from := time.Date(2026, 10, 17, 10, 0, 0, 0, time.UTC)
 	to := from.Add(24 * time.Hour)
-	q, args := spanOperationREDQuery("bsa-loan-legalproceeding-prod", "POST", from, to)
+	q, args := spanOperationREDQuery("acm-order-dispute-prod", "POST", from, to)
 	for _, want := range []string{
 		"FROM operation_summary_5m",
 		"arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6,",
@@ -35,7 +35,7 @@ func TestSpanOperationREDQueryPinsP50(t *testing.T) {
 	if i, j := strings.Index(q, "), 3) / 1e6"), strings.Index(q, "), 1) / 1e6"); i < 0 || j < 0 || i > j {
 		t.Errorf("kolon sırası p99 sonra p50 olmalı (p99=%d p50=%d)", i, j)
 	}
-	if len(args) != 4 || args[0] != "POST" || args[3] != "bsa-loan-legalproceeding-prod" {
+	if len(args) != 4 || args[0] != "POST" || args[3] != "acm-order-dispute-prod" {
 		t.Errorf("bind'ler: %v", args)
 	}
 	q2, args2 := spanOperationREDQuery("", "POST", from, to)
@@ -45,7 +45,7 @@ func TestSpanOperationREDQueryPinsP50(t *testing.T) {
 }
 
 // TestRouteREDQueryPins — v0.10.1343 (operator-reported: "POST
-// /BSAWEB/application/directCreditPreApproval neden yavaş?" — katalogda yalnız
+// /ACMWEB/application/expressOrderPreValidate neden yavaş?" — katalogda yalnız
 // http_route satırı olan endpoint'te RED/trace gelmiyordu). RouteRED'in SQL
 // pini: MV-first (spanmetrics_1m, ham spans DEĞİL), GetEndpointsMV'nin HTTP
 // giriş-noktası kind yüklemi, zaman-sınırlı yarı-açık pencere, p99 3. / p50 4.
@@ -53,7 +53,7 @@ func TestSpanOperationREDQueryPinsP50(t *testing.T) {
 func TestRouteREDQueryPins(t *testing.T) {
 	from := time.Date(2026, 10, 18, 9, 0, 0, 0, time.UTC)
 	to := from.Add(time.Hour)
-	q, args := routeREDQuery("bsaweb", "/BSAWEB/application/directCreditPreApproval", from, to)
+	q, args := routeREDQuery("acmweb", "/ACMWEB/application/expressOrderPreValidate", from, to)
 	for _, want := range []string{
 		"countMerge(calls_state), countMerge(error_state),",
 		"arrayElement(quantilesTDigestMerge(0.5, 0.9, 0.95, 0.99)(duration_q_state), 4) / 1e6,",
@@ -74,7 +74,7 @@ func TestRouteREDQueryPins(t *testing.T) {
 	if i, j := strings.Index(q, "), 4) / 1e6"), strings.Index(q, "), 1) / 1e6"); i < 0 || j < 0 || i > j {
 		t.Errorf("kolon sırası p99 sonra p50 olmalı (p99=%d p50=%d)", i, j)
 	}
-	if len(args) != 4 || args[0] != "bsaweb" || args[1] != "/BSAWEB/application/directCreditPreApproval" || args[2] != from || args[3] != to {
+	if len(args) != 4 || args[0] != "acmweb" || args[1] != "/ACMWEB/application/expressOrderPreValidate" || args[2] != from || args[3] != to {
 		t.Errorf("bind'ler: %v", args)
 	}
 	q2, args2 := routeREDQuery("", "/x", from, to)

@@ -3,7 +3,7 @@
 Tarih: 2026-09-10 · Taban: HEAD `2f9ada62` = v0.10.612 · Kapsam: salt-okunur denetim, hiçbir dosya değiştirilmedi.
 Yöntem: dört paralel salt-okunur tarama (sızıntı + git geçmişi, `.claude/` + guardrail, CI + katkı altyapısı, onboarding); her bulgu dosya:satır referanslı. Ölçüm komutları ve sayımlar bölüm içinde.
 
-> **Maskeleme politikası (bu doküman repoya girecek):** müşteri/kurum adı, alan adları, LDAP DN'leri ve e-posta yerel kısımları burada `<KURUM>`, `coremetry-prod.<KURUM-domain>`, `CN=<user>` biçiminde maskelidir. Ham değer listesi repo DIŞINDA tutulur (operatöre ayrıca iletilen `leak-raw.txt`). İş kodları yalnız önekiyle (`BSA_0xx`, `ERR_*`) anılır.
+> **Maskeleme politikası (bu doküman repoya girecek):** müşteri/kurum adı, alan adları, LDAP DN'leri ve e-posta yerel kısımları burada `<KURUM>`, `coremetry-prod.<KURUM-domain>`, `CN=<user>` biçiminde maskelidir. Ham değer listesi repo DIŞINDA tutulur (operatöre ayrıca iletilen `leak-raw.txt`). İş kodları yalnız önekiyle (`<ÖNEK>_0xx`, `ERR_*`) anılır.
 
 ---
 
@@ -30,7 +30,7 @@ Kapsam: 3237 takipli dosya + untracked (`.mcp.json`, `.ai/`, `.claude/agent-memo
 **TL;DR**
 - Ağaçta kurum adı / alan adı **doğrudan yok** — v0.9.656 ve v0.9.698 temizliği tutmuş. Ama **dolaylı** kimlikler duruyor: 1 intranet FQDN, 6 prod IP, Oracle şema/tablo/kolon taksonomisi, bir fraud tablosu (Türkçe kolonlu), Influx bucket/alan adları (docs), 82 farklı gerçek OpenShift iş yükü adı (`kurum-öneki*`), cluster adları (`ocp*`), LDAP OU ve iki kişi adı.
 - Gitignore'lu kök manifestler (`deployment-coremetry-prod*.yaml`, `route-*.yaml`, `.env`) kurum alan adlarını **yoğun** taşıyor; git'e hiç girmemişler (pickaxe 0 commit). Tek savunma gitignore; dosyalar repo kökünde durdukça `git add -f` / `-A` riski.
-- **Yalnız geçmişte:** bir çalışanın kurumsal e-postası, `com.<KURUM>.bsa.core.exception.*` Java paket adı, Influx bucket'ları + Flux şablonları (commit mesajlarında da).
+- **Yalnız geçmişte:** bir çalışanın kurumsal e-postası, `com.<KURUM>.<önek>.core.exception.*` Java paket adı, Influx bucket'ları + Flux şablonları (commit mesajlarında da).
 - **History rewrite: EVET** (gerekçe 1.8).
 
 ### 1.1 Hostname / FQDN / IP / URL
@@ -49,7 +49,7 @@ Kapsam: 3237 takipli dosya + untracked (`.mcp.json`, `.ai/`, `.claude/agent-memo
 
 Gitignore'lu yerel dosyalarda (git'te YOK): `coremetry-prod.<KURUM-domain>`, `coremetry-test.<…>`, `ocp-test-es.<…>:9200`, `api-int.ocp*.<…>`, `docker.artifacthub.<KURUM-preprod-domain>/…`, NO_PROXY'de intranet/dmz/iştirak alanları + CIDR'lar, ns `coremetry-prod/-prep` (159 satır). **Öneri:** repo dışına taşı (`~/coremetry-deploy/`), gitignore tek savunma olmasın.
 
-Geçmiş: `history:930a4196` (v0.9.316) `internal/anomaly/log_patterns_cost_test.go:74` `com.<KURUM>.bsa.core.exception.ExternalSystemException` → kaldırıldı `966334a8` (v0.9.656). `history:3d0c17e9` (v0.9.660) `frontend/src/pages/usersColumns.ts:37` yorumda `<ad.soyad>@<KURUM>.com` → kaldırıldı `156f95eb` (v0.9.698). Kurum alan adları: **0 commit** (hiç girmemiş). `172.31.240.*` ilk `6e115529` (2026-07-26), 4 commit, hâlâ ağaçta.
+Geçmiş: `history:930a4196` (v0.9.316) `internal/anomaly/log_patterns_cost_test.go:74` `com.<KURUM>.<önek>.core.exception.ExternalSystemException` → kaldırıldı `966334a8` (v0.9.656). `history:3d0c17e9` (v0.9.660) `frontend/src/pages/usersColumns.ts:37` yorumda `<ad.soyad>@<KURUM>.com` → kaldırıldı `156f95eb` (v0.9.698). Kurum alan adları: **0 commit** (hiç girmemiş). `172.31.240.*` ilk `6e115529` (2026-07-26), 4 commit, hâlâ ağaçta.
 
 ### 1.2 Veritabanı şema / tablo / kolon
 
@@ -57,7 +57,7 @@ Geçmiş: `history:930a4196` (v0.9.316) `internal/anomaly/log_patterns_cost_test
 |---|---|---|
 | `internal/oracle/poller_test.go:71,110` | `FROM <ŞEMA>.ERROR_LOG` (gerçek şema sahibi) | sentetik `SHOP.APP_ERROR_LOG` |
 | `frontend/src/pages/settings/oracleForm.ts:45-72` (**ürün varsayılanı**) | `ORACLE_DEFAULT_TIMESTAMP_COLUMN`, `ORACLE_MAPPING_FIELDS` → 15 `ERR_*` kolonu (`_CHANNELCODE`, `_TASKCODE`, `_TELLERID`, `_CUSTOMERID` …) | config'e taşı (`system_settings` `oracle_sources` eşlemesi; varsayılanlar jenerik `ERR_*`) — Go tarafı `internal/oracle/mapping.go` `DefaultColumns()` aynı |
-| `frontend/src/pages/settings/OracleTab.tsx:174,326,329,351` | placeholder `<ŞEMA>.ERROR_LOG`, `ERR_CODE NOT IN ('BSA_0xx')` | jenerik placeholder |
+| `frontend/src/pages/settings/OracleTab.tsx:174,326,329,351` | placeholder `<ŞEMA>.ERROR_LOG`, `ERR_CODE NOT IN ('<ÖNEK>_0xx')` | jenerik placeholder |
 | `frontend/src/components/LogTable.tsx:449`, `lib/types.ts:1536`, `internal/chstore/store.go:1962`, `oracle_error_log.go:5`, `purge.go:25` | yorum/tooltip `ERROR_LOG` | jenerik |
 | `internal/oracle/{mapping,settings,client,poller}_test.go`, `internal/api/oracle_logs_routes_test.go` | ~20 `ERR_*` fixture kolonu | sentetik `ERR_*` |
 | `docs/audit/oracle-error-log-2026-09-09.md:115,195…`, `.claude/agent-memory/…` | `<SAHİP>.ERROR_LOG`, kolon listesi, kod semantiği | jenerik |
@@ -98,15 +98,15 @@ Sayım (takipli): `kurum-öneki*` 82 farklı ad, 234 geçiş, 41 dosya (5'i ür�
 
 | Konum | Maskeli değer | Öneri |
 |---|---|---|
-| `frontend/src/pages/settings/OracleTab.tsx:351`, `oracleForm.test.ts:171` | `NOT IN ('BSA_0xx')` | jenerik `ERR_CODE NOT IN ('E_GENERIC')` |
-| `internal/oracle/{poller,mapping,settings,client}_test.go`, `internal/api/oracle_logs_routes_test.go` | `BSA_0xx` (3 kod) | `ERR_0xx` |
+| `frontend/src/pages/settings/OracleTab.tsx:351`, `oracleForm.test.ts:171` | `NOT IN ('<ÖNEK>_0xx')` | jenerik `ERR_CODE NOT IN ('E_GENERIC')` |
+| `internal/oracle/{poller,mapping,settings,client}_test.go`, `internal/api/oracle_logs_routes_test.go` | `<ÖNEK>_0xx` (3 kod) | `ERR_0xx` |
 | `docs/audit/oracle-error-log-2026-09-09.md:224-360` | belirli kodların semantiği ("jenerik kod", "asla birleşmez") | jenerik |
 | `cmd/demo/business_dims.go:40-46,63` | 6 haneli kanal kodu listesi + Türkçe bankacılık kanal yorumları | değerler sentetik; yorumları e-ticaret kanallarına çevir |
 | `internal/chstore/promoted_mismatch_test.go:15,95`, `filterexpr_promoted_test.go:26-83`, `trace_filters_trace_level_test.go:18` | `channel_code = '0x0x0x'` | sentetik `'web'` |
 | `frontend/src/pages/Traces.tsx`, `docs/audit/traces-attribute-columns.md:182` | `DEFAULT_TRACE_COLUMNS = [openshift.cluster.name, channel_code, function_code, function_id]` (müşteriye ayarlı) | config'e taşı (`system_settings`) |
 | `oracleForm.ts:64-71`, `migrations/0002,0005,0007`, `internal/chstore/promoted_attr.go` | promoted attr taksonomisi `channel.code`, `function_code`, `operation.code`, `error.external_code`, `task.code`, `teller.id`, `customer.id` (430 geçiş) | İngilizce/jenerik — kalabilir; `teller.id` → `agent.id` |
 
-Sayım: `BSA_0xx` 14 / 8 dosya; kanal kodu değerleri 12 / 4 dosya.
+Sayım: `<ÖNEK>_0xx` 14 / 8 dosya; kanal kodu değerleri 12 / 4 dosya.
 
 ### 1.6 Kullanıcı / LDAP / e-posta
 
@@ -136,11 +136,11 @@ Sayım: `BSA_0xx` 14 / 8 dosya; kanal kodu değerleri 12 / 4 dosya.
 | DB şema | şema sahibi, `ERROR_LOG`, ~20 `ERR_*`, fraud tablosu(+3 kolon), `uptrace_all` | 220+410 / 30 | 0 | 0 | `dcfc81db` 2026-08-28 |
 | Influx | bucket, measurement/field, `<kanal-kolonu>` … | 26 / 8 | 1 | bucket'lar + Flux (47 satır, 9 commit) | `ee8aaf0f` 2026-09-01 |
 | OCP/K8s | 82 `kurum-öneki*` + 6 cluster + 6 düğüm | 265 / 54 | 54 | 0 | `e7449af4` 2026-07-18 |
-| İş kodları | `BSA_0xx`×3, kanal kodları ×8, `DEFAULT_TRACE_COLUMNS` | 45 / 12 | 0 | `<kanal-kolonu>` | `f7c9dd22` 2026-09-09 |
+| İş kodları | `<ÖNEK>_0xx`×3, kanal kodları ×8, `DEFAULT_TRACE_COLUMNS` | 45 / 12 | 0 | `<kanal-kolonu>` | `f7c9dd22` 2026-09-09 |
 | LDAP/e-posta | 2 OU, 2 kişi | 18 / 1 | 0 | 1 kurumsal e-posta | `a7979328` 2026-07-10 |
 | Secret | 0 canlı (1 local-dev literal) | 1 / 1 | 0 | 0 | — |
 
-**History rewrite gerekli: EVET.** (a) Kurumsal e-posta ve `com.<KURUM>.bsa.*` paket adı kurum adını doğrudan taşıyor; ağaçtan silinmiş olsalar da `git log -S` ile iki komutta bulunur. (b) Influx bucket adları + tam Flux sorguları müşterinin Influx topolojisini ifşa eder ve commit mesajlarında da geçer — mesajlar yalnız rewrite ile düzelir. (c) Prod IP'leri ve intranet FQDN ağaçta olduğundan sıra: önce ağaç sentetikleştirme (1.1–1.6), sonra `git filter-repo --replace-text` tek geçiş (kurum adı, preprod alan adı, intranet TLD, 2 e-posta, 2 bucket adı, `172.31.240.*`, `100.80.13.*`); BFG gereksiz. 3654 commit / 69 MiB → dakikalar; sonrasında 3477 tag yeniden yazılır, tüm klonlar yenilenir. Ağaç temizliği rewrite'tan ÖNCE yapılmazsa yeni commit'ler yine kirlenir.
+**History rewrite gerekli: EVET.** (a) Kurumsal e-posta ve `com.<KURUM>.<önek>.*` paket adı kurum adını doğrudan taşıyor; ağaçtan silinmiş olsalar da `git log -S` ile iki komutta bulunur. (b) Influx bucket adları + tam Flux sorguları müşterinin Influx topolojisini ifşa eder ve commit mesajlarında da geçer — mesajlar yalnız rewrite ile düzelir. (c) Prod IP'leri ve intranet FQDN ağaçta olduğundan sıra: önce ağaç sentetikleştirme (1.1–1.6), sonra `git filter-repo --replace-text` tek geçiş (kurum adı, preprod alan adı, intranet TLD, 2 e-posta, 2 bucket adı, `172.31.240.*`, `100.80.13.*`); BFG gereksiz. 3654 commit / 69 MiB → dakikalar; sonrasında 3477 tag yeniden yazılır, tüm klonlar yenilenir. Ağaç temizliği rewrite'tan ÖNCE yapılmazsa yeni commit'ler yine kirlenir.
 
 ---
 
@@ -630,7 +630,7 @@ Etki: Y (yayın/güvenlik engeli) · O (ekip verimliliği) · D (kozmetik). Efor
 
 | # | İş | Etki | Efor | Bölüm |
 |---|---|---|---|---|
-| 1 | Ağaç sentetikleştirme: IP/FQDN fixture'ları (1.1), Oracle şema/kolon varsayılanlarını config'e (1.2), fraud tablosu fixture'ı (1.2), Influx docs (1.3), 82 `kurum-öneki*` + `ocp*` fixture'ları (1.4), `BSA_0xx`/kanal kodları/`DEFAULT_TRACE_COLUMNS` (1.5), LDAP fixture'ı (1.6) | **Y** | M-L (~1-1.5 gün; 100+ dosya ama mekanik) | §1 |
+| 1 | Ağaç sentetikleştirme: IP/FQDN fixture'ları (1.1), Oracle şema/kolon varsayılanlarını config'e (1.2), fraud tablosu fixture'ı (1.2), Influx docs (1.3), 82 `kurum-öneki*` + `ocp*` fixture'ları (1.4), `<ÖNEK>_0xx`/kanal kodları/`DEFAULT_TRACE_COLUMNS` (1.5), LDAP fixture'ı (1.6) | **Y** | M-L (~1-1.5 gün; 100+ dosya ama mekanik) | §1 |
 | 2 | Kök manifestler + `.env` repo dışına; `.gitignore`: `.mcp.json`, `.claude/agent-memory/`, `scratchpad/`; `scratchpad/exc-pods`, `copilot-tools` sil; `values-minikube.yaml` JWT literal'ı → env | **Y** | S | §1.1, 1.7, §2 |
 | 3 | History rewrite (`git filter-repo --replace-text`; 3477 tag; klonlar yenilenir) — 1'den SONRA | **Y** | M | §1.8 |
 | 4 | CI yeşil: vitest TZ düzeltmesi (v0.10.613), `js-yaml`/`browserslist`, `x/crypto`+`grpc` bump | **Y** | S-M | §4.4 #3-5 |

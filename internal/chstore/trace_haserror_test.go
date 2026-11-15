@@ -47,7 +47,7 @@ func TestHasErrorWhereOnlyWhenSpanLocal(t *testing.T) {
 		t.Errorf("yalnız errors: WHERE status yüklemi bekleniyordu:\n%s", sql)
 	}
 	mixed := only
-	mixed.Search = "/BSAWEB/execute"
+	mixed.Search = "/ACMWEB/execute"
 	mixed.RootOnly = true
 	wcMixed := buildGetTracesWhere(mixed, clusterDeriveExpr)
 	if sql := wcMixed.sql(); strings.Contains(sql, "status_code = 'error'") {

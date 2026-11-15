@@ -14,10 +14,10 @@ func TestSearchCodeTool(t *testing.T) {
 		gotSvc, gotQ, gotLim = svc, q, lim
 		return CodeSearchResult{Outcome: "ok"}, nil
 	}})
-	if _, err := tl.Handler(context.Background(), json.RawMessage(`{"service":" bsa-atm ","query":"MCA-00029","limit":50,"repo":"evil"}`)); err != nil {
+	if _, err := tl.Handler(context.Background(), json.RawMessage(`{"service":" acm-kiosk ","query":"MCA-00029","limit":50,"repo":"evil"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if gotSvc != "bsa-atm" || gotQ != "MCA-00029" || gotLim != searchCodeMax {
+	if gotSvc != "acm-kiosk" || gotQ != "MCA-00029" || gotLim != searchCodeMax {
 		t.Errorf("%q %q %d", gotSvc, gotQ, gotLim)
 	}
 	if _, err := tl.Handler(context.Background(), json.RawMessage(`{"service":"a"}`)); err == nil {

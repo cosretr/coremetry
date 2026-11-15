@@ -3,11 +3,11 @@ package api
 // v0.10.1344 — operatör raporu 2026-10-18 (servis sayfası → Topology,
 // "card-web-api neighborhood", 2 hop): enstrümante servisler "dış
 // bağımlılık" diye çiziliyordu —
-// `ext:bsa-channel-channelutility-prod-grpc.channel.svc.cluster.local`
-// (56 span, %0) ve `ext:bsa-customer-maininq-prod-kon.<kurum>` (66 span,
-// %3.03); aynı servis `-prod-mobil` / `-prod-sube` GSLB host'larıyla da.
-// Gerçek servisler bsa-channel-channelutility-prod ve
-// bsa-customer-maininq-prod. Kurum alan adı repoya yazılmaz (v0.10.1146):
+// `ext:acm-notify-dispatch-prod-grpc.channel.svc.cluster.local`
+// (56 span, %0) ve `ext:acm-customer-lookup-prod-app.<kurum>` (66 span,
+// %3.03); aynı servis `-prod-mobile` / `-prod-web` GSLB host'larıyla da.
+// Gerçek servisler acm-notify-dispatch-prod ve
+// acm-customer-lookup-prod. Kurum alan adı repoya yazılmaz (v0.10.1146):
 // testte `.bank.example`.
 
 import (
@@ -19,19 +19,19 @@ import (
 
 const (
 	lblFocus   = "card-web-api"
-	lblChannel = "bsa-channel-channelutility-prod"
-	lblMaininq = "bsa-customer-maininq-prod"
+	lblChannel = "acm-notify-dispatch-prod"
+	lblLookup  = "acm-customer-lookup-prod"
 )
 
 func TestBuildServiceGraphMergesLabelPrefixPeers(t *testing.T) {
 	edges := []chstore.ServiceTopologyEdge{
 		// 2 hop: gerçek servislerin kendi kenarları okunmuş.
 		sgEdge(lblChannel, "db:oracle@h", "db", "db", 5, 0, 3),
-		sgEdge(lblMaininq, "db:oracle@h", "db", "db", 5, 0, 3),
+		sgEdge(lblLookup, "db:oracle@h", "db", "db", 5, 0, 3),
 		sgEdge(lblFocus, "ext:"+lblChannel+"-grpc.channel.svc.cluster.local", "external", "http", 56, 0, 40),
-		sgEdge(lblFocus, "ext:"+lblMaininq+"-kon.bank.example", "external", "http", 66, 2, 90),
-		sgEdge(lblFocus, "ext:"+lblMaininq+"-mobil.bank.example", "external", "http", 10, 0, 20),
-		sgEdge(lblFocus, "ext:"+lblMaininq+"-sube.bank.example", "external", "http", 4, 0, 200),
+		sgEdge(lblFocus, "ext:"+lblLookup+"-app.bank.example", "external", "http", 66, 2, 90),
+		sgEdge(lblFocus, "ext:"+lblLookup+"-mobile.bank.example", "external", "http", 10, 0, 20),
+		sgEdge(lblFocus, "ext:"+lblLookup+"-web.bank.example", "external", "http", 4, 0, 200),
 		sgEdge(lblFocus, "ext:api.stripe.com", "external", "http", 3, 0, 10),
 	}
 	g := buildServiceGraph(edges, lblFocus, "neighborhood", 2, nil, 60)
@@ -43,9 +43,9 @@ func TestBuildServiceGraphMergesLabelPrefixPeers(t *testing.T) {
 func TestBuildServiceGraphMergesViaKnownServiceBackstop(t *testing.T) {
 	edges := []chstore.ServiceTopologyEdge{
 		sgEdge(lblFocus, "ext:"+lblChannel+"-grpc.channel.svc.cluster.local", "external", "http", 56, 0, 40),
-		sgEdge(lblFocus, "ext:"+lblMaininq+"-kon.bank.example", "external", "http", 66, 2, 90),
-		sgEdge(lblFocus, "ext:"+lblMaininq+"-mobil.bank.example", "external", "http", 10, 0, 20),
-		sgEdge(lblFocus, "ext:"+lblMaininq+"-sube.bank.example", "external", "http", 4, 0, 200),
+		sgEdge(lblFocus, "ext:"+lblLookup+"-app.bank.example", "external", "http", 66, 2, 90),
+		sgEdge(lblFocus, "ext:"+lblLookup+"-mobile.bank.example", "external", "http", 10, 0, 20),
+		sgEdge(lblFocus, "ext:"+lblLookup+"-web.bank.example", "external", "http", 4, 0, 200),
 		sgEdge(lblFocus, "ext:api.stripe.com", "external", "http", 3, 0, 10),
 	}
 	// Yedeksiz: eski davranış, hepsi dış düğüm.
@@ -59,7 +59,7 @@ func TestBuildServiceGraphMergesViaKnownServiceBackstop(t *testing.T) {
 	if ext != 5 {
 		t.Fatalf("yedeksiz 5 dış düğüm beklenirdi, got %d (%+v)", ext, g0.Nodes)
 	}
-	known := chstore.NewServiceNameSet(lblChannel, lblMaininq, "payments")
+	known := chstore.NewServiceNameSet(lblChannel, lblLookup, "payments")
 	g := buildServiceGraphWith(edges, lblFocus, "neighborhood", 1, nil, 60, known)
 	checkLabelMerge(t, g)
 }
@@ -78,7 +78,7 @@ func checkLabelMerge(t *testing.T, g ServiceGraphResponse) {
 	if byID["ext:api.stripe.com"].Kind != "external" {
 		t.Errorf("gerçek üçüncü parti dış kalmalı: %+v", byID["ext:api.stripe.com"])
 	}
-	for _, svc := range []string{lblChannel, lblMaininq} {
+	for _, svc := range []string{lblChannel, lblLookup} {
 		if byID[svc].Kind != "service" {
 			t.Errorf("%s service düğümü olmalı: %+v", svc, byID[svc])
 		}
@@ -92,13 +92,13 @@ func checkLabelMerge(t *testing.T, g ServiceGraphResponse) {
 			got[e.Target] = e
 		}
 	}
-	m := got[lblMaininq]
+	m := got[lblLookup]
 	if m.Calls != 80 || m.Errors != 2 || m.P99Ms != 200 {
-		t.Errorf("maininq kenarı calls/errors/p99 = %d/%d/%v, want 80/2/200", m.Calls, m.Errors, m.P99Ms)
+		t.Errorf("lookup kenarı calls/errors/p99 = %d/%d/%v, want 80/2/200", m.Calls, m.Errors, m.P99Ms)
 	}
-	wantVia := []string{lblMaininq + "-kon.bank.example", lblMaininq + "-mobil.bank.example", lblMaininq + "-sube.bank.example"}
+	wantVia := []string{lblLookup + "-app.bank.example", lblLookup + "-mobile.bank.example", lblLookup + "-web.bank.example"}
 	if !reflect.DeepEqual(m.ViaHosts, wantVia) {
-		t.Errorf("maininq ViaHosts = %q, want %q", m.ViaHosts, wantVia)
+		t.Errorf("lookup ViaHosts = %q, want %q", m.ViaHosts, wantVia)
 	}
 	if c := got[lblChannel]; c.Calls != 56 || !reflect.DeepEqual(c.ViaHosts, []string{lblChannel + "-grpc.channel.svc.cluster.local"}) {
 		t.Errorf("channel kenarı = %+v", c)
@@ -134,20 +134,20 @@ func TestFilterExternalPeersWithBackstop(t *testing.T) {
 	edges := []chstore.ServiceTopologyEdge{
 		sgEdge(lblFocus, "payments", "service", "grpc", 10, 0, 5),
 		sgEdge(lblFocus, "ext:payments.pay.svc.cluster.local", "external", "http", 20, 1, 9),
-		sgEdge(lblFocus, "ext:"+lblMaininq+"-kon.bank.example", "external", "http", 66, 2, 90),
-		sgEdge(lblFocus, "ext:"+lblMaininq+"-sube.bank.example", "external", "http", 4, 0, 200),
+		sgEdge(lblFocus, "ext:"+lblLookup+"-app.bank.example", "external", "http", 66, 2, 90),
+		sgEdge(lblFocus, "ext:"+lblLookup+"-web.bank.example", "external", "http", 4, 0, 200),
 		sgEdge(lblFocus, "ext:api.stripe.com", "external", "http", 5, 0, 9),
 	}
-	out := filterExternalPeersWith(append([]chstore.ServiceTopologyEdge(nil), edges...), []string{lblMaininq})
+	out := filterExternalPeersWith(append([]chstore.ServiceTopologyEdge(nil), edges...), []string{lblLookup})
 	if len(out) != 3 {
-		t.Fatalf("3 kenar beklenirdi (payments, maininq, stripe): %+v", out)
+		t.Fatalf("3 kenar beklenirdi (payments, lookup, stripe): %+v", out)
 	}
 	if out[0].ChildNode != "payments" || out[2].ChildNode != "ext:api.stripe.com" {
 		t.Errorf("sıra/üyelik yanlış: %+v", out)
 	}
 	m := out[1]
-	if m.ChildNode != lblMaininq || m.NodeKind != "service" || m.Calls != 70 || m.Errors != 2 || m.P99Ms != 200 ||
-		!reflect.DeepEqual(m.ViaHosts, []string{lblMaininq + "-kon.bank.example", lblMaininq + "-sube.bank.example"}) {
+	if m.ChildNode != lblLookup || m.NodeKind != "service" || m.Calls != 70 || m.Errors != 2 || m.P99Ms != 200 ||
+		!reflect.DeepEqual(m.ViaHosts, []string{lblLookup + "-app.bank.example", lblLookup + "-web.bank.example"}) {
 		t.Errorf("yedekle çözülen kenar = %+v", m)
 	}
 	// Yedeksiz: GSLB host'ları dış kalır (çözülecek servis yok).

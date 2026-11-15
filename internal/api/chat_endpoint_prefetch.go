@@ -1,7 +1,7 @@
 package api
 
 // chat_endpoint_prefetch.go — v0.10.1343 (operator-reported: "POST
-// /BSAWEB/application/directCreditPreApproval neden yavaş?" → CoSRE endpoint'i
+// /ACMWEB/application/expressOrderPreValidate neden yavaş?" → CoSRE endpoint'i
 // bulamadı). Operasyon ön-getirmesinin (chat_operation_prefetch.go) ENDPOINT
 // anma aşaması; saf yarı burada, kablolama chatOperationPrefetch'te.
 //

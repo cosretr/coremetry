@@ -1,8 +1,8 @@
 package api
 
 // explain_trace_operation_test.go — v0.10.1329 (operatör-bildirimli): trace
-// 6008dded… kökü POST /BSAWEB/application/directCreditPreApproval, kendi
-// Oracle satırı …APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST; Trace çipi
+// 6008dded… kökü POST /ACMWEB/application/expressOrderPreValidate, kendi
+// Oracle satırı …APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST; Trace çipi
 // sözlüğün en çok satırlı adayını (…APPLICATIONINQ_…, "+15") gösteriyordu.
 // pickMainOperation FE pickTraceOperation'ın backend ikizi: Oracle satırları →
 // span attribute'u → "" (sözlük YOK).
@@ -17,7 +17,7 @@ import (
 
 func TestPickMainOperation(t *testing.T) {
 	const (
-		trx  = "LOAN_CONSUMER_APP_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST"
+		trx  = "LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST"
 		inq  = "LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST"
 		inq2 = "LOAN_CONSUMER_APP_APPLICATIONINQ_CUSTOMER_LIMIT_REST"
 	)
@@ -29,7 +29,7 @@ func TestPickMainOperation(t *testing.T) {
 		return chstore.SpanRow{SpanID: id, ParentSpanID: parent, Kind: kind, ServiceName: svc, StartTime: start, Attributes: attrs}
 	}
 	spans := []chstore.SpanRow{
-		span("r", "", "server", "bsaweb", 1, map[string]string{"FUNCTION_CODE": "LCA01"}),
+		span("r", "", "server", "acmweb", 1, map[string]string{"FUNCTION_CODE": "LCA01"}),
 		span("c1", "r", "server", "loan-inq", 2, nil),
 		span("c2", "r", "server", "loan-inq", 3, nil),
 	}
@@ -50,17 +50,17 @@ func TestPickMainOperation(t *testing.T) {
 			spans, trx, []string{inq, inq2}, "oracle"},
 		{"operasyonsuz satır sayılmaz", []chstore.OracleErrorRow{row(" ", "r", 1), row(inq, "c1", 2)}, spans, inq, nil, "oracle"},
 		{"satır yok + kök span attribute'u", nil, []chstore.SpanRow{
-			span("r", "", "server", "bsaweb", 1, map[string]string{"OPERATION_CODE": trx}),
+			span("r", "", "server", "acmweb", 1, map[string]string{"OPERATION_CODE": trx}),
 			span("c", "r", "server", "loan-inq", 2, map[string]string{"operation.code": inq}),
 		}, trx, []string{inq}, "span"},
 		{"kökte yok → giriş span'i, sonra herhangi bir span", nil, []chstore.SpanRow{
-			span("r", "", "server", "bsaweb", 1, nil),
-			span("i", "r", "internal", "bsaweb", 2, map[string]string{"operation_code": inq2}),
+			span("r", "", "server", "acmweb", 1, nil),
+			span("i", "r", "internal", "acmweb", 2, map[string]string{"operation_code": inq2}),
 			span("s", "r", "consumer", "loan-inq", 3, map[string]string{"operation.code": inq}),
 		}, inq, []string{inq2}, "span"},
 		{"yalnız internal span taşıyor", nil, []chstore.SpanRow{
-			span("r", "", "server", "bsaweb", 1, nil),
-			span("i", "r", "internal", "bsaweb", 2, map[string]string{"operation_code": inq2}),
+			span("r", "", "server", "acmweb", 1, nil),
+			span("i", "r", "internal", "acmweb", 2, map[string]string{"operation_code": inq2}),
 		}, inq2, nil, "span"},
 		// Sözlük bu fonksiyonda yok: fonksiyon kodu tek başına ana operasyon üretmez.
 		{"yalnız FUNCTION_CODE → bilinmiyor", nil, spans, "", nil, ""},

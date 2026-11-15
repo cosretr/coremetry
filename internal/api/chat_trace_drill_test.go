@@ -1,6 +1,6 @@
 package api
 
-// v0.10.1327 (operator-reported): "bsa-loan-legalproceeding-prod neden yavaş"
+// v0.10.1327 (operator-reported): "acm-order-dispute-prod neden yavaş"
 // SocketTimeoutException dedi ama NEREDE demedi; takip "nereye giderken
 // socketimeoutexception almış" Log kademesine düşüp "son 500 hata logunda yok"
 // dedi. En yavaş trace anında gösteriyordu: kök SERVER 50.02 s, çocuk CLIENT
@@ -24,7 +24,7 @@ const (
 	tdT0      = int64(1_790_000_000_000_000_000)
 	tdTrace1  = "4bf92f3577b34da6a3ce929d0e0e4736"
 	tdTrace2  = "0af7651916cd43dd8448eb211c80319c"
-	tdSvc     = "bsa-loan-legalproceeding-prod"
+	tdSvc     = "acm-order-dispute-prod"
 	tdHost    = "osbprod.bank.example"
 	tdURLFull = "http://osbprod.bank.example/TibcoESB/ExternalXServices/Uyap/DosyaListesiSorgulama?wsdl"
 	tdPath    = "/TibcoESB/ExternalXServices/Uyap/DosyaListesiSorgulama"
@@ -39,7 +39,7 @@ func tdSpan(id, parent, name, kind string, startMs, durMs float64) chstore.SpanR
 
 // tdProdSpans — prod vakası: kök SERVER 50.02 s, çocuk CLIENT 50015 ms.
 func tdProdSpans() []chstore.SpanRow {
-	root := tdSpan("a1", "", "POST /BSAWEB/legalproceeding/dosya", "server", 0, 50020)
+	root := tdSpan("a1", "", "POST /ACMWEB/dispute/case", "server", 0, 50020)
 	root.StatusCode = "error"
 	cl := tdSpan("b2", "a1", "POST", "client", 2, 50015)
 	cl.StatusCode = "error"

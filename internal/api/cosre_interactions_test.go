@@ -23,7 +23,7 @@ func TestAnswerAdmitsNoEvidence(t *testing.T) {
 		in   string
 		want bool
 	}{
-		// operatör örnekleri, 2026-10-15 (MCA-00029, bsa-atm-core-prod)
+		// operatör örnekleri, 2026-10-15 (MCA-00029, acm-kiosk-core-prod)
 		{"drawer neden", "Hata nedeni kanıtlarda belirtilmemiştir; exception grubu için sadece operasyon adı ve hata tipi bilgisi mevcuttur.", true},
 		{"drawer düzelt", "Hatanın nedeni ve detayları kanıtlarda yer almadığı için spesifik bir düzeltme önerisi sunulamamaktadır.", true},
 		{"en", "The root cause is not mentioned in the evidence provided.", true},

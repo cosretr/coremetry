@@ -27,12 +27,12 @@ import (
 // wrapperStack — kanonik JBoss deseni: wrapper bölümünde ÜÇ uygulama
 // frame'i (tavanı tek başına doldurmaya yeter), kök neden en dipte.
 const wrapperStack = "jakarta.ejb.EJBException: host response error\n" +
-	"\tat deployment.BSAWEB.war//com.example.card.CardFacade.handle(CardFacade.java:120)\n" +
-	"\tat deployment.BSAWEB.war//com.example.card.CardService.call(CardService.java:88)\n" +
-	"\tat deployment.BSAWEB.war//com.example.card.CardDetailBusiness.rethrow(CardDetailBusiness.java:246)\n" +
+	"\tat deployment.ACMWEB.war//com.example.card.CardFacade.handle(CardFacade.java:120)\n" +
+	"\tat deployment.ACMWEB.war//com.example.card.CardService.call(CardService.java:88)\n" +
+	"\tat deployment.ACMWEB.war//com.example.card.CardDetailBusiness.rethrow(CardDetailBusiness.java:246)\n" +
 	"\tat org.jboss.as.ee.component.ManagedReference.invoke(ManagedReference.java:60)\n" +
 	"Caused by: java.lang.NullPointerException: pan is null\n" +
-	"\tat deployment.BSAWEB.war//com.example.card.CardRepository.find(CardRepository.java:412)\n" +
+	"\tat deployment.ACMWEB.war//com.example.card.CardRepository.find(CardRepository.java:412)\n" +
 	"\tat java.base/java.util.Optional.orElseThrow(Optional.java:403)\n" +
 	"\t... 17 more\n"
 

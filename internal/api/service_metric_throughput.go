@@ -776,7 +776,7 @@ func serviceNameAttempts(service string) []svcAttempt {
 		out = append(out, svcAttempt{
 			Service: stripped,
 			// v0.9.681 — TAM eşleşme DEĞİL: operatörün kurulumunda değer
-			// `uat` değil `uat-ocpuat` (ortam+küme) olabiliyor. Tam
+			// `uat` değil `uat-kubeuat` (ortam+küme) olabiliyor. Tam
 			// eşleşme böyle bir değerde hiç tutmaz ve kısıt sessizce
 			// hiçbir şeyi kısıtlamaz.
 			Filters: []chstore.FilterExpr{{Key: key, Op: "=~", Values: []string{chstore.EnvValueRegex(env)}}},

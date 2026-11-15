@@ -2374,7 +2374,7 @@ söyle. Soru telemetriyle ilgiliyse bu ek geçersiz: veriyi tool'larla topla.`
 // ChatGeneralQuestionAddendum — v2 döngüsünün genel-soru eki.
 func ChatGeneralQuestionAddendum() string { return chatGeneralQuestionAddendum }
 
-// operationExceptionsAddendum — v0.10.1331 (operatör: "Operasyon ismi BSA için
+// operationExceptionsAddendum — v0.10.1331 (operatör: "Operasyon ismi ACM için
 // verilince CoSRE de Exceptions'a bakabilir, son geleni ve yorumu oradan
 // yapabilir."): operasyon ön-getirmesi Exceptions'ta grup bulduysa serbest
 // döngünün sistem mesajına eklenir (api opPrefetch.exceptionsPromptTR); grup

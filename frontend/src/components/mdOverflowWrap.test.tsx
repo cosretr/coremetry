@@ -16,7 +16,7 @@ import { RenderedMarkdown } from './Markdown';
 // li'yi ve <code>u birden kapsıyor. İki renderer var ve İKİSİ de
 // giydirilmek zorunda ([[feedback-fixes-have-second-halves]]).
 
-const LONG = 'com.example.loan.interrogation.kkbkrsinq.service.KrsMusteriSkorService.KrsMusteriSkorExternalService';
+const LONG = 'com.example.order.verification.bureauinq.service.CustomerScoresService.CustomerScoresExternalService';
 
 describe('uzun nitelikli ad balonu itmez', () => {
   it('RenderedMarkdown kökü cm-md-wrap taşıyor (fragment değil)', () => {

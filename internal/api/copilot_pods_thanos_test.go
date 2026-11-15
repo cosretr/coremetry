@@ -62,13 +62,13 @@ func TestSharedSegmentTokenIsFamily(t *testing.T) {
 
 // v0.10.1252 — servisli exception / teknik hata sorusu exception gruplarına gider.
 func TestServiceExceptionsRoute(t *testing.T) {
-	svcs := []string{"bsa-mobile-login-prod"}
-	for _, q := range []string{"bsa-mobile-login-prod teknik hataları?", "bsa-mobile-login-prod exception'ları?", "bsa-mobile-login-prod istisnaları"} {
-		if r := routeGuidedIntent(q, svcs, nil, nil, ""); r.Intent != guidedServiceExceptions || r.Service != "bsa-mobile-login-prod" {
+	svcs := []string{"acm-app-login-prod"}
+	for _, q := range []string{"acm-app-login-prod teknik hataları?", "acm-app-login-prod exception'ları?", "acm-app-login-prod istisnaları"} {
+		if r := routeGuidedIntent(q, svcs, nil, nil, ""); r.Intent != guidedServiceExceptions || r.Service != "acm-app-login-prod" {
 			t.Errorf("%q → %+v", q, r)
 		}
 	}
-	if r := routeGuidedIntent("bsa-mobile-login-prod hata logları?", svcs, nil, nil, ""); r.Intent == guidedServiceExceptions {
+	if r := routeGuidedIntent("acm-app-login-prod hata logları?", svcs, nil, nil, ""); r.Intent == guidedServiceExceptions {
 		t.Error("log hatası sorusu exception'a kaymamalı")
 	}
 	out := renderServiceExceptionsTR("s", []chstore.ExceptionRow{{Type: "java.net.SocketTimeoutException", Count: 7, Message: "Read timed out"}}, 3600)

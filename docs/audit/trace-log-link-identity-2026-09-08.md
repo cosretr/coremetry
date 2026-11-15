@@ -14,7 +14,7 @@ zamandan?
   `arraysToMap` ile doldurur. (İlk audit "hiçbir backend'de dolmuyor" demişti —
   YANLIŞTI; v0.10.578'de düzeltildi. Ders: "hiçbir yerde yok" iddiası tek bir
   üretim kaydına bakılmadan kayda geçmez.)
-- Bazı servisler kimliği yalnız gövde METNİNE basıyor (`"BsaRequestId": …`
+- Bazı servisler kimliği yalnız gövde METNİNE basıyor (`"AcmRequestId": …`
   gibi farklı anahtar adlarıyla) → gövde taraması yedek olarak gerekli.
 - Aynı trace'te farklı span'ler farklı `function_id` taşıyabiliyor.
 

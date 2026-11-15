@@ -76,25 +76,25 @@ describe('operasyon kartı — Exceptions grupları (v0.10.1331)', () => {
   });
 });
 
-// v0.10.1343 (operator-reported: "POST /BSAWEB/application/directCreditPreApproval
+// v0.10.1343 (operator-reported: "POST /ACMWEB/application/expressOrderPreValidate
 // neden yavaş?") — endpoint hedefi: başlık, /endpoint linki, endpoint exception
 // satırları (güvensiz href düşer), ≥3× kuralının alternatif satırı.
 describe('operasyon kartı — endpoint hedefi (v0.10.1343)', () => {
   const now = Date.UTC(2026, 9, 18, 10, 0, 0);
   const base: ChatOperationPayload = {
-    operation: 'POST /BSAWEB/application/directCreditPreApproval', matchKind: 'endpoint_exact', rangeS: 3600, tracesHref: '/traces',
-    services: ['bsaweb'], current: { calls: 1, errors: 0, p99Ms: 1, measured: true }, previous: { calls: 1, errors: 0, p99Ms: 1, measured: true },
+    operation: 'POST /ACMWEB/application/expressOrderPreValidate', matchKind: 'endpoint_exact', rangeS: 3600, tracesHref: '/traces',
+    services: ['acmweb'], current: { calls: 1, errors: 0, p99Ms: 1, measured: true }, previous: { calls: 1, errors: 0, p99Ms: 1, measured: true },
     traces: null, oracleErrors: null,
   };
   it('başlık "FİİL rota · servis"; endpoint dışı operasyonda null', () => {
-    expect(opEndpointLabel({ ...base, route: '/BSAWEB/application/directCreditPreApproval', method: 'POST' }))
-      .toBe('POST /BSAWEB/application/directCreditPreApproval · bsaweb');
-    expect(opEndpointLabel({ ...base, method: 'POST' })).toBe('POST /BSAWEB/application/directCreditPreApproval · bsaweb');
+    expect(opEndpointLabel({ ...base, route: '/ACMWEB/application/expressOrderPreValidate', method: 'POST' }))
+      .toBe('POST /ACMWEB/application/expressOrderPreValidate · acmweb');
+    expect(opEndpointLabel({ ...base, method: 'POST' })).toBe('POST /ACMWEB/application/expressOrderPreValidate · acmweb');
     expect(opEndpointLabel({ ...base, operation: 'GET /orders', route: '/orders', services: [] })).toBe('/orders');
     expect(opEndpointLabel(base)).toBeNull();
   });
   it('endpoint sayfası linki yalnız güvenli yolsa', () => {
-    expect(opEndpointHref({ ...base, endpointHref: '/endpoint?path=%2Fx&service=bsaweb' })).toBe('/endpoint?path=%2Fx&service=bsaweb');
+    expect(opEndpointHref({ ...base, endpointHref: '/endpoint?path=%2Fx&service=acmweb' })).toBe('/endpoint?path=%2Fx&service=acmweb');
     expect(opEndpointHref({ ...base, endpointHref: '//evil.com/endpoint' })).toBeNull();
     expect(opEndpointHref({ ...base, endpointHref: 'javascript:alert(1)' })).toBeNull();
     expect(opEndpointHref(base)).toBeNull();
@@ -116,7 +116,7 @@ describe('operasyon kartı — endpoint hedefi (v0.10.1343)', () => {
     expect(opEndpointExceptionsNote({ ...base, endpointExceptionsChecked: true, endpointExceptions: [{ type: 'X', count: 1, lastSeenNs: 0, href: '' }] })).toBeNull();
   });
   it('alternatif servis satırı', () => {
-    expect(opAlternativesLine({ ...base, alternatives: [{ service: 'bsaweb-gw', op: '/x', calls: 100 }] })).toBe('Ayrıca şu servislerde de var: bsaweb-gw (100 çağrı)');
+    expect(opAlternativesLine({ ...base, alternatives: [{ service: 'acmweb-gw', op: '/x', calls: 100 }] })).toBe('Ayrıca şu servislerde de var: acmweb-gw (100 çağrı)');
     expect(opAlternativesLine(base)).toBeNull();
   });
 });

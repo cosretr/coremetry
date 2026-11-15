@@ -1293,7 +1293,7 @@ const k8sExtChildRegex = `\\.(svc|svc\\.cluster\\.local|cluster\\.local)(:[0-9]+
 
 // labelExtChildRegex — v0.10.1344: `ext:` çocuğu ilk etiketi '-' içeren,
 // en az üç etiketli bir host mu (GSLB/route adı, ör.
-// `ext:<svc>-prod-kon.<kurum>.<tld>`; `dns:///` önekli de). Etiket-önek
+// `ext:<svc>-prod-app.<kurum>.<tld>`; `dns:///` önekli de). Etiket-önek
 // aşamasının (ExtPeerLabelPrefixes) okuma kapısı; kurum alan adı yok
 // (v0.10.1146). SQL METNİNE gömülür: '?' ve '{' YOK.
 const labelExtChildRegex = `^ext:(dns:///)*[^./:]+[-][^./:]*[.][^./:]+[.]`

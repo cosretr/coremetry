@@ -105,7 +105,7 @@ func TestSvcSlowClassify(t *testing.T) {
 		{"150 → 60 çağrı + tek 300 ms istek → çöküş yok", nil, []chstore.SvcSlowServiceRow{sslSvcRow(sslSvc, 60, 150, 300, 80)}, false, false, false},
 		{"yeterli hacim, −%60 ama p99 300 ms (< 5 s) → çöküş yok", nil, []chstore.SvcSlowServiceRow{sslSvcRow(sslSvc, 400, 1000, 300, 80)}, false, false, false},
 		{"CRM benzeri: p99 15 s, trafik −%40 → çöküş kolu açılır", nil, []chstore.SvcSlowServiceRow{sslSvcRow(sslSvc, 600, 1000, 15000, 140)}, true, false, true},
-		// v0.10.1546 operator-reported (bsa-deposit-commondepositmain-prod): trafik
+		// v0.10.1546 operator-reported (acm-deposit-ledgermain-prod): trafik
 		// düşük kovada TEK 6 s'lik istek (Kafka timeout) p99'u çekti, p95 60 ms;
 		// "trafik çöktü ve yavaşladı — p99 6 sn" P1 açılıyordu.
 		{"çöküş + p99 6 s ama p95 60 ms (tek yavaş istek) → çöküş yok", nil, []chstore.SvcSlowServiceRow{sslSvcRowP95(sslSvc, 300, 1000, 6000, 60, 18)}, false, false, false},

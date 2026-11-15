@@ -124,7 +124,7 @@ func withIndexedWiki(t *testing.T, pages map[string]string) (*indexedWikiStore, 
 	return st, api
 }
 
-const cacheRefreshPage = "# Cache Refresh Akışı\nBSA cache refresh işlemi yönetim ekranından tetiklenir ve tüm düğümlerde cache yeniden yüklenir.\n" +
+const cacheRefreshPage = "# Cache Refresh Akışı\nACM cache refresh işlemi yönetim ekranından tetiklenir ve tüm düğümlerde cache yeniden yüklenir.\n" +
 	"## Sık karşılaşılan hatalar\n- CR-401: refresh yetki belirteci süresi dolmuş; yeniden giriş yapın.\n- CR-503: cache düğümü yanıt vermiyor; düğümü yeniden başlatın ve refresh'i tekrarlayın."
 
 var probeOtherPages = map[string]string{

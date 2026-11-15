@@ -2,7 +2,7 @@ package api
 
 // chat_exception_groups.go — v0.10.1331 (operatör: "CoSRE doğrudan operasyonu
 // sorunca cevabı yeterli değil, ancak Exceptions'ta sorunca iyi tespit
-// ediyor. Operasyon ismi BSA için verilince CoSRE de Exceptions'a bakabilir,
+// ediyor. Operasyon ismi ACM için verilince CoSRE de Exceptions'a bakabilir,
 // son geleni ve yorumu oradan yapabilir.")
 //
 // Sohbetin Exceptions gruplarını okuyan PAYLAŞILAN dikişi: operasyon

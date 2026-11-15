@@ -42,7 +42,7 @@ type Frame struct {
 	File string
 	// Line — kaynak satırı; 0 = bilinmiyor.
 	Line int
-	// Module — soyulan önek: "deployment.BSAWEB.war", "java.base",
+	// Module — soyulan önek: "deployment.ACMWEB.war", "java.base",
 	// "org.jboss.as.ee", "mymodule@1.2.3". Boş = önek yoktu.
 	Module string
 	// IsApp — uygulama kodu mu? Çerçeve/JDK frame'leri false.

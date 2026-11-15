@@ -77,13 +77,13 @@ func TestMergeRepairedRows(t *testing.T) {
 	}
 	repaired := []TraceRow{ // sıra farklı; "c" yok (CH'de başka span'i bulunamadı)
 		{TraceID: "b", RootName: "POST /gateway/execute", ServiceName: "gateway-svc", RootRoute: "/gateway/execute", StartTime: 85, DurationMs: 350, SpanCount: 40, HasError: true, ErrorSpans: 2},
-		{TraceID: "a", RootName: "/BSAWEB/GatewayService/execute", ServiceName: "chatbot-svc", StartTime: 100, DurationMs: 25.11, SpanCount: 12},
+		{TraceID: "a", RootName: "/ACMWEB/GatewayService/execute", ServiceName: "chatbot-svc", StartTime: 100, DurationMs: 25.11, SpanCount: 12},
 	}
 	mergeRepairedRows(page, repaired)
 	if page[0].TraceID != "a" || page[1].TraceID != "b" || page[2].TraceID != "c" {
 		t.Fatalf("sıra korunmalı: %+v", page)
 	}
-	if a := page[0]; a.RootName != "/BSAWEB/GatewayService/execute" || a.SpanCount != 12 || a.DurationMs != 25.11 || a.StartTime != 100 || a.Extras["function_code"] != "SPE0017" {
+	if a := page[0]; a.RootName != "/ACMWEB/GatewayService/execute" || a.SpanCount != 12 || a.DurationMs != 25.11 || a.StartTime != 100 || a.Extras["function_code"] != "SPE0017" {
 		t.Errorf("a: kök adı + tüm trace ölçüleri gelmeli, extras korunmalı: %+v", a)
 	}
 	if b := page[1]; b.RootName != "POST /gateway/execute" || b.ServiceName != "gateway-svc" || b.RootRoute != "/gateway/execute" || !b.HasError || b.ErrorSpans != 2 {

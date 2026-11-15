@@ -14,7 +14,7 @@ func TestPickChatSource(t *testing.T) {
 	wk := srcCand{Kind: srcWiki, Score: 0.75, Label: "OpenTelemetry"}
 	tlm := srcCand{Kind: srcTelemetry, Score: 0.9, Label: "orders servisi"}
 	tlmWeak := srcCand{Kind: srcTelemetry, Score: 0.5, Label: "canlı veri"}
-	exc := srcCand{Kind: srcExceptions, Score: 0.85, Label: "BSAException · 3 grup"}
+	exc := srcCand{Kind: srcExceptions, Score: 0.85, Label: "ACMException · 3 grup"}
 	cases := []struct {
 		name   string
 		in     []srcCand
@@ -61,7 +61,7 @@ func TestSourceChipsAndStep(t *testing.T) {
 
 func TestExceptionTermOf(t *testing.T) {
 	for q, want := range map[string]string{
-		"BSAException neden artıyor":                              "BSAException",
+		"ACMException neden artıyor":                              "ACMException",
 		"org.apache.kafka.common.errors.TimeoutException kaç kez": "TimeoutException",
 		"ORA-00001 hatası hangi serviste":                         "ORA-00001",
 		"BKMQR-39 kodu":                                           "BKMQR-39",
@@ -143,16 +143,16 @@ func TestRecordsNarrativeShape(t *testing.T) {
 
 func TestExceptionsSourceMarkdown(t *testing.T) {
 	ev := exceptionGroupsEvidence{LookbackS: 7 * 24 * 3600, Groups: []exGroupLine{
-		{Type: "BSAException", Service: "bsa-cards", State: "new", Priority: "P2", Occurrences: 1234, LastSeen: 1_700_000_000_000_000_000, Href: "/problems?exc=a"},
+		{Type: "ACMException", Service: "acm-cards", State: "new", Priority: "P2", Occurrences: 1234, LastSeen: 1_700_000_000_000_000_000, Href: "/problems?exc=a"},
 	}}
-	md := exceptionsSourceMarkdown("BSAException", ev)
-	if !strings.Contains(md, "| BSAException | bsa-cards | new | P2 | 1,234 |") {
+	md := exceptionsSourceMarkdown("ACMException", ev)
+	if !strings.Contains(md, "| ACMException | acm-cards | new | P2 | 1,234 |") {
 		t.Fatalf("tablo:\n%s", md)
 	}
 	if got := exceptionsSourceMarkdown("X", exceptionGroupsEvidence{Err: "boom"}); !strings.Contains(got, "okunamadı") {
 		t.Fatalf("hata: %q", got)
 	}
-	if l := exceptionsSourceLinks(ev); len(l) != 1 || l[0].Href != "/problems?exc=a" || l[0].Label != "BSAException · bsa-cards" {
+	if l := exceptionsSourceLinks(ev); len(l) != 1 || l[0].Href != "/problems?exc=a" || l[0].Label != "ACMException · acm-cards" {
 		t.Fatalf("bağlantılar: %+v", l)
 	}
 }

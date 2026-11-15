@@ -169,7 +169,7 @@ func topoOpCleanWord(w string) string {
 // topologyOpMention — SAF: topoloji sorusundaki operasyon anması. Sıra:
 // endpoint ("POST /api/payments", URL yolu) → "operasyon/operation"
 // sözcüğünün komşusu ("charge operasyonunun", "operation PAYMENT_CREATE") →
-// BSA kod biçimi (PAYMENT_CREATE). Servis / ortam adı, kısa (<4) ve durak
+// ACM kod biçimi (PAYMENT_CREATE). Servis / ortam adı, kısa (<4) ve durak
 // sözcükleri operasyon sayılmaz. "" = anma yok.
 func topologyOpMention(raw string, services, envs []string) string {
 	if method, path, ok := endpointMention(raw); ok {

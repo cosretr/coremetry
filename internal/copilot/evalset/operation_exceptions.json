@@ -2,10 +2,10 @@
   "schema": "coremetry.evalset/1",
   "cases": [
     {
-      "id": "operation-bsa-exceptions-latest-group",
+      "id": "operation-acm-exceptions-latest-group",
       "surface": "ChatOperationExceptions",
-      "why": "v0.10.1331 — BSA operasyonu sorulunca cevap Exceptions'taki EN YENİ grubu (hata kodu, patlama) anlatmalı; kod cevapta, başka servis uydurulmaz.",
-      "user": "LOAN_CONSUMER_APP_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST operasyonunda sorun var mı?\n\n[operation_prefetch + operation_exceptions sonucu]\nOperasyon LOAN_CONSUMER_APP_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST otomatik getirildi (eşleşme: exact; pencere son 1sa, 09:00 – 10:00 UTC).\nOracle fonksiyon kodu: BKLN021\nÇağrı 4120 (önceki eşit pencere 3980, +4%) · hata oranı %21.80 (önce %5.10) · p99 2400 ms (önce 900 ms, +167%)\nTrace: 20 (12 hatalı). İlk hatalılar:\n- 4bf92f3577b34da6a3ce929d0e0e4736 · bsa-loan · 2380 ms\nBu trace'lere bağlı Oracle teknik hataları (TRACEID):\n- COR-30518 ×890: Kredi ön onay skoru alınamadı\nExceptions teknik hata grupları — LOAN_CONSUMER_APP_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST operasyonu (son 1gün, en yeni önce):\n1. COR-30518 · LOAN_CONSUMER_APP_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST · P1 (Teknik hata patlaması: son 1 sa 900 (önceki 1 sa 200)) · durum new · son görülme 4dk önce (10-18 09:56 UTC) · ilk 10-17 08:00 UTC · toplam 12,345\n   ne demek: örnek satır mesajı \"Kredi ön onay skoru alınamadı\"\n   nerede yoğunlaşıyor: başlıktaki operasyon/kod · servis bsa-loan, mobile-bff\n   patlama mı sürekli akış mı: son 1 sa 900 · önceki 1 sa 200 → patlama (≥3×)\n   örnek trace: 4bf92f3577b34da6a3ce929d0e0e4736\n   Exceptions: /problems?exc=ora%3A0123456789abcdef\n",
+      "why": "v0.10.1331 — ACM operasyonu sorulunca cevap Exceptions'taki EN YENİ grubu (hata kodu, patlama) anlatmalı; kod cevapta, başka servis uydurulmaz.",
+      "user": "LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST operasyonunda sorun var mı?\n\n[operation_prefetch + operation_exceptions sonucu]\nOperasyon LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST otomatik getirildi (eşleşme: exact; pencere son 1sa, 09:00 – 10:00 UTC).\nOracle fonksiyon kodu: BKLN021\nÇağrı 4120 (önceki eşit pencere 3980, +4%) · hata oranı %21.80 (önce %5.10) · p99 2400 ms (önce 900 ms, +167%)\nTrace: 20 (12 hatalı). İlk hatalılar:\n- 4bf92f3577b34da6a3ce929d0e0e4736 · acm-loan · 2380 ms\nBu trace'lere bağlı Oracle teknik hataları (TRACEID):\n- COR-30518 ×890: Kredi ön onay skoru alınamadı\nExceptions teknik hata grupları — LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST operasyonu (son 1gün, en yeni önce):\n1. COR-30518 · LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST · P1 (Teknik hata patlaması: son 1 sa 900 (önceki 1 sa 200)) · durum new · son görülme 4dk önce (10-18 09:56 UTC) · ilk 10-17 08:00 UTC · toplam 12,345\n   ne demek: örnek satır mesajı \"Kredi ön onay skoru alınamadı\"\n   nerede yoğunlaşıyor: başlıktaki operasyon/kod · servis acm-loan, mobile-bff\n   patlama mı sürekli akış mı: son 1 sa 900 · önceki 1 sa 200 → patlama (≥3×)\n   örnek trace: 4bf92f3577b34da6a3ce929d0e0e4736\n   Exceptions: /problems?exc=ora%3A0123456789abcdef\n",
       "expect": {
         "mustContain": [
           "COR-30518"
@@ -14,7 +14,7 @@
           "kubectl"
         ],
         "knownEntities": [
-          "bsa-loan",
+          "acm-loan",
           "mobile-bff"
         ],
         "maxUnknownEntities": 0,

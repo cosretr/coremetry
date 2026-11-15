@@ -3,11 +3,11 @@ package chstore
 // v0.10.1344 — operatör raporu 2026-10-18 (servis sayfası → Topology,
 // "card-web-api neighborhood", 2 hop): enstrümante iki servis "dış
 // bağımlılık" diye çiziliyordu —
-// `ext:bsa-channel-channelutility-prod-grpc.channel.svc.cluster.local`
-// (56 span, %0) ve `ext:bsa-customer-maininq-prod-kon.<kurum>` (66 span,
-// %3.03); aynı servis GSLB/route host'ları `<svc>-prod-mobil.<kurum>` ve
-// `<svc>-prod-sube.<kurum>` adıyla da geliyordu. Gerçek servisler
-// bsa-channel-channelutility-prod ve bsa-customer-maininq-prod. Kök neden:
+// `ext:acm-notify-dispatch-prod-grpc.channel.svc.cluster.local`
+// (56 span, %0) ve `ext:acm-customer-lookup-prod-app.<kurum>` (66 span,
+// %3.03); aynı servis GSLB/route host'ları `<svc>-prod-mobile.<kurum>` ve
+// `<svc>-prod-web.<kurum>` adıyla da geliyordu. Gerçek servisler
+// acm-notify-dispatch-prod ve acm-customer-lookup-prod. Kök neden:
 // ResolveExtPeer yalnız ExtPeerServiceCandidates'i deniyordu (ham, host,
 // k8s'te ilk DNS etiketi AYNEN → `…-prod-grpc` diye servis yok; GSLB
 // host'unda etiket adayı hiç yok). Kurum alan adı repoya yazılmaz
@@ -24,10 +24,10 @@ import (
 
 func TestExtPeerLabel(t *testing.T) {
 	cases := []struct{ in, want string }{
-		{"ext:bsa-channel-channelutility-prod-grpc.channel.svc.cluster.local", "bsa-channel-channelutility-prod-grpc"},
-		{"ext:bsa-customer-maininq-prod-kon.bank.example", "bsa-customer-maininq-prod-kon"},
-		{"ext:dns:///bsa-customer-maininq-prod-sube.bank.example:443", "bsa-customer-maininq-prod-sube"},
-		{"https://bsa-customer-maininq-prod-mobil.bank.example/v1/x", "bsa-customer-maininq-prod-mobil"},
+		{"ext:acm-notify-dispatch-prod-grpc.channel.svc.cluster.local", "acm-notify-dispatch-prod-grpc"},
+		{"ext:acm-customer-lookup-prod-app.bank.example", "acm-customer-lookup-prod-app"},
+		{"ext:dns:///acm-customer-lookup-prod-web.bank.example:443", "acm-customer-lookup-prod-web"},
+		{"https://acm-customer-lookup-prod-mobile.bank.example/v1/x", "acm-customer-lookup-prod-mobile"},
 		{"ext:api.stripe.com", "api"},
 		{"ext:payments", ""},               // tek etiket
 		{"ext:payments:8080", ""},          // tek etiket + port
@@ -54,9 +54,9 @@ func TestExtPeerLabelPrefixes(t *testing.T) {
 		in   string
 		want []string
 	}{
-		{"bsa-channel-channelutility-prod-grpc", []string{"bsa-channel-channelutility-prod-grpc", "bsa-channel-channelutility-prod", "bsa-channel-channelutility"}},
-		{"bsa-customer-maininq-prod-kon", []string{"bsa-customer-maininq-prod-kon", "bsa-customer-maininq-prod", "bsa-customer-maininq"}},
-		{"foo-prod-grpc", []string{"foo-prod-grpc", "foo-prod"}},                         // R3: "foo" '-' içermez
+		{"acm-notify-dispatch-prod-grpc", []string{"acm-notify-dispatch-prod-grpc", "acm-notify-dispatch-prod", "acm-notify-dispatch"}},
+		{"acm-customer-lookup-prod-app", []string{"acm-customer-lookup-prod-app", "acm-customer-lookup-prod", "acm-customer-lookup"}},
+		{"foo-prod-grpc", []string{"foo-prod-grpc", "foo-prod"}}, // R3: "foo" '-' içermez
 		{"api-grpc", []string{"api-grpc"}},                                               // R3
 		{"foo-prod-a-b-c", []string{"foo-prod-a-b-c", "foo-prod-a-b", "foo-prod-a"}},     // en çok 2 atım
 		{"Foo-Prod-GRPC", []string{"Foo-Prod-GRPC", "Foo-Prod"}},                         // harf duyarsız belirteç
@@ -78,21 +78,21 @@ func TestExtPeerLabelPrefixes(t *testing.T) {
 // extPeerLabelResolveCases — ResolveExtPeer'in 2. aşama tablosu; Go ve
 // canlı SQL eşliği (TestExtPeerIsServiceSQLMirrorMatchesResolve) aynı
 // tabloyu koşar.
-var extPeerLabelSet = []string{"bsa-channel-channelutility-prod", "bsa-customer-maininq-prod", "payments", "api", "foo", "foo-prod"}
+var extPeerLabelSet = []string{"acm-notify-dispatch-prod", "acm-customer-lookup-prod", "payments", "api", "foo", "foo-prod"}
 
 var extPeerLabelResolveCases = []struct {
 	name, peer, want string
 	ok               bool
 }{
-	{"operator: grpc k8s host", "ext:bsa-channel-channelutility-prod-grpc.channel.svc.cluster.local", "bsa-channel-channelutility-prod", true},
-	{"operator: -prod-kon GSLB", "ext:bsa-customer-maininq-prod-kon.bank.example", "bsa-customer-maininq-prod", true},
-	{"operator: -prod-mobil GSLB", "ext:bsa-customer-maininq-prod-mobil.bank.example", "bsa-customer-maininq-prod", true},
-	{"operator: -prod-sube GSLB", "ext:bsa-customer-maininq-prod-sube.bank.example", "bsa-customer-maininq-prod", true},
-	{"GSLB with port", "ext:bsa-customer-maininq-prod-kon.bank.example:443", "bsa-customer-maininq-prod", true},
-	{"dns:/// k8s form", "ext:dns:///bsa-channel-channelutility-prod-grpc.channel.svc.cluster.local:50051", "bsa-channel-channelutility-prod", true},
-	{"dns:/// GSLB form", "ext:dns:///bsa-customer-maininq-prod-sube.bank.example:443", "bsa-customer-maininq-prod", true},
-	{"case-insensitive GSLB", "ext:BSA-Customer-Maininq-Prod-Kon.bank.example", "bsa-customer-maininq-prod", true},
-	{"two-label host", "ext:bsa-customer-maininq-prod-kon.local", "bsa-customer-maininq-prod", true},
+	{"operator: grpc k8s host", "ext:acm-notify-dispatch-prod-grpc.channel.svc.cluster.local", "acm-notify-dispatch-prod", true},
+	{"operator: -prod-app GSLB", "ext:acm-customer-lookup-prod-app.bank.example", "acm-customer-lookup-prod", true},
+	{"operator: -prod-mobile GSLB", "ext:acm-customer-lookup-prod-mobile.bank.example", "acm-customer-lookup-prod", true},
+	{"operator: -prod-web GSLB", "ext:acm-customer-lookup-prod-web.bank.example", "acm-customer-lookup-prod", true},
+	{"GSLB with port", "ext:acm-customer-lookup-prod-app.bank.example:443", "acm-customer-lookup-prod", true},
+	{"dns:/// k8s form", "ext:dns:///acm-notify-dispatch-prod-grpc.channel.svc.cluster.local:50051", "acm-notify-dispatch-prod", true},
+	{"dns:/// GSLB form", "ext:dns:///acm-customer-lookup-prod-web.bank.example:443", "acm-customer-lookup-prod", true},
+	{"case-insensitive GSLB", "ext:ACM-Customer-Lookup-Prod-App.bank.example", "acm-customer-lookup-prod", true},
+	{"two-label host", "ext:acm-customer-lookup-prod-app.local", "acm-customer-lookup-prod", true},
 	{"longest prefix wins", "ext:foo-prod-grpc.ns.svc", "foo-prod", true},
 	{"corp host without '-' label", "ext:nyp1.bank.example", "", false},
 	{"public host", "ext:api.stripe.com", "", false},
@@ -102,8 +102,8 @@ var extPeerLabelResolveCases = []struct {
 	{"token over 16 bytes", "ext:foo-prod-abcdefghijklmnopq.ns.svc", "", false},
 	{"catalogue host never shortened", "ext:foo-prod-api.stripe.com", "", false},
 	{"IP", "ext:10.0.0.7:5432", "", false},
-	{"gateway form", "ext:Svc@bsa-customer-maininq-prod-kon.bank.example:443", "", false},
-	{"unknown prefix", "ext:ghost-prod-kon.bank.example", "", false},
+	{"gateway form", "ext:Svc@acm-customer-lookup-prod-app.bank.example:443", "", false},
+	{"unknown prefix", "ext:ghost-prod-app.bank.example", "", false},
 }
 
 func TestServiceNameSetResolveExtPeerLabelStage(t *testing.T) {
@@ -155,7 +155,7 @@ func extPeerLabelParityTable() []string {
 	}
 	return append(out,
 		"BAR-PROD-grpc.ns.svc", "x-y.svc.cluster.local", "10.0.0.7", "a-b.c", "-x.y.z", "a-.b.c",
-		"foo-prod-x_y.ns.svc", "foo--bar-baz.ns.svc", "my-svc-prod.cognito-idp.example", "  foo-prod-kon.bank.example  ")
+		"foo-prod-x_y.ns.svc", "foo--bar-baz.ns.svc", "my-svc-prod.cognito-idp.example", "  foo-prod-app.bank.example  ")
 }
 
 // TestExtPeerIsServiceSQLMirrorMatchesResolve — 2. aşamanın SQL ikizi
@@ -213,7 +213,7 @@ func TestExtPeerLabelStageSQLPinned(t *testing.T) {
 	// Liste okuması iki aşamayı birlikte, LIMIT'ten önce uygular.
 	q := externalHostsSQL()
 	if !strings.Contains(q, "HAVING NOT "+extPeerIsServiceSQL(extPeerResolveCandidatesSQL("substring(child_node, 5)"))) {
-		t.Error("liste okuması etiket-önek aşamasını taşımıyor — `<svc>-prod-kon.<kurum>` /external'da kalır")
+		t.Error("liste okuması etiket-önek aşamasını taşımıyor — `<svc>-prod-app.<kurum>` /external'da kalır")
 	}
 	if strings.ContainsAny(labelExtChildRegex, "?{}") || strings.ContainsAny(extPeerLabelStageSQL("x"), "?{}") {
 		t.Error("etiket-önek SQL'inde `?`/`{`/`}` olmamalı")
@@ -230,13 +230,13 @@ func TestExtPeerLabelStageSQLPinned(t *testing.T) {
 
 func TestTopologyNextFrontierLabelPrefixes(t *testing.T) {
 	edges := []ServiceTopologyEdge{
-		{ParentService: "card-web-api", ChildNode: "ext:bsa-channel-channelutility-prod-grpc.channel.svc.cluster.local"},
-		{ParentService: "card-web-api", ChildNode: "ext:bsa-customer-maininq-prod-kon.bank.example"},
+		{ParentService: "card-web-api", ChildNode: "ext:acm-notify-dispatch-prod-grpc.channel.svc.cluster.local"},
+		{ParentService: "card-web-api", ChildNode: "ext:acm-customer-lookup-prod-app.bank.example"},
 		{ParentService: "card-web-api", ChildNode: "ext:api.stripe.com"},
 	}
 	seen := map[string]bool{"card-web-api": true}
 	got := topologyNextFrontier(edges, seen, 300)
-	for _, want := range []string{"bsa-channel-channelutility-prod", "bsa-customer-maininq-prod", "bsa-channel-channelutility-prod-grpc"} {
+	for _, want := range []string{"acm-notify-dispatch-prod", "acm-customer-lookup-prod", "acm-notify-dispatch-prod-grpc"} {
 		found := false
 		for _, n := range got {
 			found = found || n == want
@@ -253,13 +253,13 @@ func TestTopologyNextFrontierLabelPrefixes(t *testing.T) {
 }
 
 func TestTopologyTouchWhereLabelPrefixes(t *testing.T) {
-	w, args := topologyTouchWhere([]string{"bsa-customer-maininq-prod"}, []string{"bsa-customer-maininq-prod"})
+	w, args := topologyTouchWhere([]string{"acm-customer-lookup-prod"}, []string{"acm-customer-lookup-prod"})
 	if strings.Count(w, "?") != len(args) {
 		t.Fatalf("yer tutucu (%d) / argüman (%d) uyuşmuyor: %s", strings.Count(w, "?"), len(args), w)
 	}
-	want := []any{"bsa-customer-maininq-prod", "bsa-customer-maininq-prod",
-		"ext:bsa-customer-maininq-prod.", "ext:dns:///bsa-customer-maininq-prod.",
-		"ext:bsa-customer-maininq-prod-", "ext:dns:///bsa-customer-maininq-prod-"}
+	want := []any{"acm-customer-lookup-prod", "acm-customer-lookup-prod",
+		"ext:acm-customer-lookup-prod.", "ext:dns:///acm-customer-lookup-prod.",
+		"ext:acm-customer-lookup-prod-", "ext:dns:///acm-customer-lookup-prod-"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args = %v, want %v", args, want)
 	}
@@ -270,9 +270,9 @@ func TestTopologyTouchWhereLabelPrefixes(t *testing.T) {
 	// etiketli host geçmez. k8s adları zaten k8sExtChildRegex'ten geçer.
 	re := regexp.MustCompile(labelExtChildRegex)
 	for in, ok := range map[string]bool{
-		"ext:bsa-customer-maininq-prod-kon.bank.example":                     true,
-		"ext:dns:///bsa-customer-maininq-prod-sube.bank.example:443":         true,
-		"ext:bsa-channel-channelutility-prod-grpc.channel.svc.cluster.local": true,
+		"ext:acm-customer-lookup-prod-app.bank.example":               true,
+		"ext:dns:///acm-customer-lookup-prod-web.bank.example:443":    true,
+		"ext:acm-notify-dispatch-prod-grpc.channel.svc.cluster.local": true,
 		"ext:api.stripe.com":    false,
 		"ext:payments-x.local":  false,
 		"ext:Svc@10.0.0.1:8080": false,

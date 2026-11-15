@@ -3,11 +3,11 @@ package api
 // chat_trace_drill.go — v0.10.1327 "C-core": CoSRE guided cevaplarına
 // deterministik EN YAVAŞ TRACE kırılımı + YALNIZ o trace id'lerinin logları.
 //
-// Operator-reported: "bsa-loan-legalproceeding-prod neden yavaş" sorusu
+// Operator-reported: "acm-order-dispute-prod neden yavaş" sorusu
 // SocketTimeoutException dedi ama NEREDE demedi; takip sorusu "nereye giderken
 // socketimeoutexception almış" Log kademesine gitti ve "son 500 hata logunda
 // yok" dedi. En yavaş trace cevabı anında veriyordu: kök SERVER span
-// POST /BSAWEB/legalproceeding/… 50.02 s; çocuk CLIENT span
+// POST /ACMWEB/dispute/… 50.02 s; çocuk CLIENT span
 // "POST osbprod.bank.example" 50015 ms, öz süre %100, status error, HTTP 500,
 // url.full …/TibcoESB/ExternalXServices/Uyap/DosyaListesiSorgulama?wsdl,
 // operasyonun 24 sa p50'si 13 ms → ×3825; kaynak Tempo. Operatör: "en yavaş

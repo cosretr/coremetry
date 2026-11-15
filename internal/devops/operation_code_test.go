@@ -37,7 +37,7 @@ public class CreditProductInformationController {
     @Service(SelfServiceNames.Rest.LOAN_CONSUMER_APP_APPLICATIONINQ_CREDIT_PRODUCT_INFORMATION_REST)
     @RequestMapping(value = "information", method = { RequestMethod.POST })
     @Operation(summary = "Kredi ürün bilgisi {sorgu}", description = "x")
-    public CreditProductInformationOutput getCreditProductInformation(@RequestBody CreditProductInformationInput input) throws BSAException {
+    public CreditProductInformationOutput getCreditProductInformation(@RequestBody CreditProductInformationInput input) throws ACMException {
         // otherManager.notThis(input) — yorumdaki çağrı sayılmaz
         String marker = "kapanış } dizede";
         CreditProductInformationOutput output = creditProductInformationManager.getCreditProductInfo(input);

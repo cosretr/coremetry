@@ -245,16 +245,16 @@ describe('externalPinHost bağlantısı', () => {
 });
 
 // v0.10.1344 — operatör raporu 2026-10-18 (card-web-api komşuluğu, 2 hop):
-// enstrümante servisler `ext:bsa-channel-channelutility-prod-grpc.channel.svc.cluster.local`
-// ve `ext:bsa-customer-maininq-prod-kon.<kurum>` adıyla "dış bağımlılık"
+// enstrümante servisler `ext:acm-notify-dispatch-prod-grpc.channel.svc.cluster.local`
+// ve `ext:acm-customer-lookup-prod-app.<kurum>` adıyla "dış bağımlılık"
 // çiziliyordu. Sunucu artık bu kenarları gerçek servise katlıyor ve host'u
 // GraphEdge.viaHosts'ta bırakıyor; inline adapter bu alanı DÜŞÜRÜRSE
 // (v0.8.322 sınıfı) hover kartı "via <host>" satırını hiç basamaz.
 describe('graphEdgeToMapEdge (v0.10.1344)', () => {
   const full: Required<GraphEdge> = {
-    source: 'card-web-api', target: 'bsa-customer-maininq-prod', calls: 80, errors: 2,
+    source: 'card-web-api', target: 'acm-customer-lookup-prod', calls: 80, errors: 2,
     errorRate: 2.5, rate: 1.3, avgMs: 12, p99Ms: 200, protocol: 'http', priorP99Ms: 150,
-    viaHosts: ['bsa-customer-maininq-prod-kon.bank.example', 'bsa-customer-maininq-prod-sube.bank.example'],
+    viaHosts: ['acm-customer-lookup-prod-app.bank.example', 'acm-customer-lookup-prod-web.bank.example'],
   };
   it('carries viaHosts through the adapter', () => {
     const m = graphEdgeToMapEdge(full);
@@ -270,11 +270,11 @@ describe('graphEdgeToMapEdge (v0.10.1344)', () => {
 describe('viaHostsInto (v0.10.1344)', () => {
   it('unions incoming viaHosts, sorted + deduped; outgoing edges ignored', () => {
     const edges: GraphEdge[] = [
-      { ...e('card-web-api', 'svc'), viaHosts: ['svc-prod-sube.bank.example', 'svc-prod-kon.bank.example'] },
-      { ...e('other', 'svc'), viaHosts: ['svc-prod-kon.bank.example'] },
+      { ...e('card-web-api', 'svc'), viaHosts: ['svc-prod-web.bank.example', 'svc-prod-app.bank.example'] },
+      { ...e('other', 'svc'), viaHosts: ['svc-prod-app.bank.example'] },
       { ...e('svc', 'db'), viaHosts: ['nope.example'] },
     ];
-    expect(viaHostsInto(edges, 'svc')).toEqual(['svc-prod-kon.bank.example', 'svc-prod-sube.bank.example']);
+    expect(viaHostsInto(edges, 'svc')).toEqual(['svc-prod-app.bank.example', 'svc-prod-web.bank.example']);
     expect(viaHostsInto(edges, 'ext:api.stripe.com')).toEqual([]);
   });
 });

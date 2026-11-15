@@ -47,10 +47,10 @@ func probeReq() *metricscollpb.ExportMetricsServiceRequest {
 				Resource: &resourcepb.Resource{Attributes: []*commonpb.KeyValue{kv("service.name", "svc-a")}},
 				ScopeMetrics: []*metricspb.ScopeMetrics{{Metrics: []*metricspb.Metric{
 					{Name: "http.server.request.duration", Data: &metricspb.Metric_Sum{Sum: &metricspb.Sum{DataPoints: []*metricspb.NumberDataPoint{
-						numDP("/BSAWEB/bsa/core/server/checkLiveness", 1), numDP("/BSAWEB/loan/assessment", 2),
+						numDP("/ACMWEB/acm/core/server/checkLiveness", 1), numDP("/ACMWEB/loan/assessment", 2),
 					}}}},
 					{Name: "http.server.request.duration", Data: &metricspb.Metric_Histogram{Histogram: &metricspb.Histogram{DataPoints: []*metricspb.HistogramDataPoint{
-						histDP("/BSAWEB/bsa/core/server/checkReadiness"), histDP("/BSAWEB/bsa/core/server/checkStartup"),
+						histDP("/ACMWEB/acm/core/server/checkReadiness"), histDP("/ACMWEB/acm/core/server/checkStartup"),
 					}}}},
 				}}},
 			},
@@ -58,7 +58,7 @@ func probeReq() *metricscollpb.ExportMetricsServiceRequest {
 				Resource: &resourcepb.Resource{Attributes: []*commonpb.KeyValue{kv("service.name", "svc-b")}},
 				ScopeMetrics: []*metricspb.ScopeMetrics{{Metrics: []*metricspb.Metric{
 					{Name: "jvm.memory.used", Data: &metricspb.Metric_Gauge{Gauge: &metricspb.Gauge{DataPoints: []*metricspb.NumberDataPoint{
-						numDP("/BSAWEB/bsa/core/server/checkLiveness", 9),
+						numDP("/ACMWEB/acm/core/server/checkLiveness", 9),
 					}}}},
 				}}},
 			},
@@ -71,8 +71,8 @@ func probeDrop(m *chstore.MetricPoint) bool {
 		return false
 	}
 	for i, k := range m.AttrKeys {
-		if k == "http.route" && len(m.AttrValues[i]) > 0 && (m.AttrValues[i] == "/BSAWEB/bsa/core/server/checkLiveness" ||
-			m.AttrValues[i] == "/BSAWEB/bsa/core/server/checkReadiness" || m.AttrValues[i] == "/BSAWEB/bsa/core/server/checkStartup") {
+		if k == "http.route" && len(m.AttrValues[i]) > 0 && (m.AttrValues[i] == "/ACMWEB/acm/core/server/checkLiveness" ||
+			m.AttrValues[i] == "/ACMWEB/acm/core/server/checkReadiness" || m.AttrValues[i] == "/ACMWEB/acm/core/server/checkStartup") {
 			return true
 		}
 	}
@@ -96,7 +96,7 @@ func TestDropForwardPointsPrunesAcrossShapes(t *testing.T) {
 	if len(ms) != 1 || ms[0].GetSum() == nil || len(ms[0].GetSum().DataPoints) != 1 {
 		t.Fatalf("empty histogram metric must be pruned, sum keeps the business route: %+v", ms)
 	}
-	if got := ms[0].GetSum().DataPoints[0].Attributes[0].Value.GetStringValue(); got != "/BSAWEB/loan/assessment" {
+	if got := ms[0].GetSum().DataPoints[0].Attributes[0].Value.GetStringValue(); got != "/ACMWEB/loan/assessment" {
 		t.Fatalf("survivor = %s", got)
 	}
 	// The view carries what the ClickHouse converter carries.
@@ -187,7 +187,7 @@ func assertProbesGone(t *testing.T, req *metricscollpb.ExportMetricsServiceReque
 				if s := m.GetSum(); s != nil {
 					for _, dp := range s.DataPoints {
 						pts++
-						if r := dp.Attributes[0].Value.GetStringValue(); r != "/BSAWEB/loan/assessment" {
+						if r := dp.Attributes[0].Value.GetStringValue(); r != "/ACMWEB/loan/assessment" {
 							t.Fatalf("probe route forwarded: %s", r)
 						}
 					}
@@ -240,7 +240,7 @@ func TestForwardAllDroppedSendsNothing(t *testing.T) {
 	req := &metricscollpb.ExportMetricsServiceRequest{ResourceMetrics: []*metricspb.ResourceMetrics{{
 		ScopeMetrics: []*metricspb.ScopeMetrics{{Metrics: []*metricspb.Metric{
 			{Name: "http.server.request.duration", Data: &metricspb.Metric_Sum{Sum: &metricspb.Sum{DataPoints: []*metricspb.NumberDataPoint{
-				numDP("/BSAWEB/bsa/core/server/checkStartup", 1),
+				numDP("/ACMWEB/acm/core/server/checkStartup", 1),
 			}}}},
 		}}}}}}
 	pb, _ := proto.Marshal(req)

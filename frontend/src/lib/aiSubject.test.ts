@@ -44,8 +44,8 @@ const CASES: Array<{ name: string; subject: AISubject; param: string }> = [
   {
     // v0.10.1367 — endpoint "CoSRE'ye sor": servis + rota kodlanır, fiil isteğe bağlı.
     name: 'endpoint',
-    subject: { kind: 'endpoint', id: 'bsa-web', route: '/BSAWEB/application/{id}', method: 'POST', fromNs: 1000, toNs: 2000 },
-    param: 'endpoint:bsa-web:%2FBSAWEB%2Fapplication%2F%7Bid%7D:1000:2000:POST',
+    subject: { kind: 'endpoint', id: 'acm-web', route: '/ACMWEB/application/{id}', method: 'POST', fromNs: 1000, toNs: 2000 },
+    param: 'endpoint:acm-web:%2FACMWEB%2Fapplication%2F%7Bid%7D:1000:2000:POST',
   },
   {
     name: 'endpoint (fiilsiz)',

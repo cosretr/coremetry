@@ -33,7 +33,7 @@ const (
 	chRootID   = "c0000000000000a1"
 	chUtilID   = "c0000000000000a2"
 	chClientID = "c0000000000000a3"
-	chOSBURL   = "https://osb.example.test/TibcoESB/KPS/KimlikSorgula?wsdl"
+	chOSBURL   = "https://osb.example.test/esb/IDCHECK/VerifyIdentity?wsdl"
 	chNPEMsg   = `Cannot invoke "String.trim()" because "resp.getAd()" is null`
 )
 
@@ -51,9 +51,9 @@ func chSpan(id, parent, svc, name, kind string, startMs, durMs int64, errStatus 
 // chOperatorTrace — operatörün trace'i: kök SERVER (hata) → INTERNAL util
 // (hata) → CLIENT POST osb.example.test HTTP 500 (50 ms).
 func chOperatorTrace() []chstore.SpanRow {
-	root := chSpan(chRootID, "", "bsa-kps-prod", "POST /BSAWEB/kps/kimlik", "server", 0, 120, true)
-	util := chSpan(chUtilID, chRootID, "bsa-kps-prod", "KpsApsV2Util.sorgula", "internal", 5, 100, true)
-	cl := chSpan(chClientID, chUtilID, "bsa-kps-prod", "POST", "client", 10, 50, true)
+	root := chSpan(chRootID, "", "acm-idcheck-prod", "POST /acmweb/idcheck/verify", "server", 0, 120, true)
+	util := chSpan(chUtilID, chRootID, "acm-idcheck-prod", "KpsApsV2Util.sorgula", "internal", 5, 100, true)
+	cl := chSpan(chClientID, chUtilID, "acm-idcheck-prod", "POST", "client", 10, 50, true)
 	cl.HTTPStatus = 500
 	cl.Attributes = map[string]string{"url.full": chOSBURL, "server.address": "osb.example.test", "http.request.method": "POST"}
 	return []chstore.SpanRow{root, util, cl}
@@ -100,7 +100,7 @@ func TestTraceErrorChainOrigin(t *testing.T) {
 	})
 	t.Run("iki hatalı yaprak → en derin", func(t *testing.T) {
 		spans := append(chOperatorTrace(),
-			chSpan("shallow-err", chRootID, "bsa-kps-prod", "SELECT", "client", 2, 3, true))
+			chSpan("shallow-err", chRootID, "acm-idcheck-prod", "SELECT", "client", 2, 3, true))
 		c := traceErrorChainOf(spans)
 		if c.Origin.Span.SpanID != chClientID || c.OtherLeaf != 1 || len(c.OtherIDs) != 1 || c.OtherIDs[0] != "shallow-err" {
 			t.Fatalf("kaynak=%s other=%d ids=%v", c.Origin.Span.SpanID, c.OtherLeaf, c.OtherIDs)
@@ -164,7 +164,7 @@ func TestTraceErrorChainOrigin(t *testing.T) {
 func TestTraceErrorChainBlockTR(t *testing.T) {
 	c := traceErrorChainOf(chOperatorTrace())
 	c.BaseP50Ms, c.BaseOK = 6.6, true
-	npe := &logstore.LogRecord{ServiceName: "bsa-kps-prod", Body: "KPS sorgusu işlenemedi\njava.lang.NullPointerException: " + chNPEMsg +
+	npe := &logstore.LogRecord{ServiceName: "acm-idcheck-prod", Body: "KPS sorgusu işlenemedi\njava.lang.NullPointerException: " + chNPEMsg +
 		"\n\tat com.example.kps.KpsApsV2Util.map(KpsApsV2Util.java:760)\n\tat com.example.kps.KpsService.call(KpsService.java:42)"}
 	stack, _ := stackFromLogForTest(npe)
 	b := c.Block(traceChainLogException(npe, stack))
@@ -172,14 +172,14 @@ func TestTraceErrorChainBlockTR(t *testing.T) {
 	if !strings.HasPrefix(b, traceChainHeader) || len(lines) < 5 {
 		t.Fatalf("blok başlığı/satırları:\n%s", b)
 	}
-	wantHop1 := "1. [hata kaynağı] bsa-kps-prod · CLIENT · POST osb.example.test → /TibcoESB/KPS/KimlikSorgula · HTTP 500 · 50 ms (24 sa p50 6.6 ms, ×7.6)"
+	wantHop1 := "1. [hata kaynağı] acm-idcheck-prod · CLIENT · POST osb.example.test → /esb/IDCHECK/VerifyIdentity · HTTP 500 · 50 ms (24 sa p50 6.6 ms, ×7.6)"
 	if lines[1] != wantHop1 {
 		t.Errorf("1. halka\n got: %s\nwant: %s", lines[1], wantHop1)
 	}
-	if !strings.HasPrefix(lines[3], "3. [kök] bsa-kps-prod · SERVER · POST /BSAWEB/kps/kimlik · status error · 120 ms") {
+	if !strings.HasPrefix(lines[3], "3. [kök] acm-idcheck-prod · SERVER · POST /acmweb/idcheck/verify · status error · 120 ms") {
 		t.Errorf("kök halka: %s", lines[3])
 	}
-	wantEx := "Zincirin ardından kaydedilen exception: bsa-kps-prod · java.lang.NullPointerException: " + chNPEMsg + " (log)"
+	wantEx := "Zincirin ardından kaydedilen exception: acm-idcheck-prod · java.lang.NullPointerException: " + chNPEMsg + " (log)"
 	if lines[4] != wantEx {
 		t.Errorf("exception satırı\n got: %s\nwant: %s", lines[4], wantEx)
 	}
@@ -200,7 +200,7 @@ func TestTraceErrorChainBlockTR(t *testing.T) {
 	spans := chOperatorTrace()
 	spans[1].Events = []any{evExceptionEvent("java.lang.IllegalStateException", "KPS yanıtı boş", "")}
 	eb := traceErrorChainOf(spans).Block(traceChainLogException(npe, stack))
-	if !strings.Contains(eb, "Zincirin ardından kaydedilen exception: bsa-kps-prod · java.lang.IllegalStateException: KPS yanıtı boş (span event)") {
+	if !strings.Contains(eb, "Zincirin ardından kaydedilen exception: acm-idcheck-prod · java.lang.IllegalStateException: KPS yanıtı boş (span event)") {
 		t.Errorf("span event exception satırı yok:\n%s", eb)
 	}
 
@@ -266,9 +266,9 @@ func chTempoOperatorTrace(t *testing.T) *httptest.Server {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"batches":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"bsa-kps-prod"}}]},
+		fmt.Fprintf(w, `{"batches":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"acm-idcheck-prod"}}]},
  "scopeSpans":[{"spans":[
-  {"traceId":%[1]q,"spanId":%[2]q,"name":"POST /BSAWEB/kps/kimlik","kind":2,"startTimeUnixNano":"%[5]d","endTimeUnixNano":"%[6]d","status":{"code":2}},
+  {"traceId":%[1]q,"spanId":%[2]q,"name":"POST /acmweb/idcheck/verify","kind":2,"startTimeUnixNano":"%[5]d","endTimeUnixNano":"%[6]d","status":{"code":2}},
   {"traceId":%[1]q,"spanId":%[3]q,"parentSpanId":%[2]q,"name":"KpsApsV2Util.sorgula","kind":1,"startTimeUnixNano":"%[7]d","endTimeUnixNano":"%[8]d","status":{"code":2}},
   {"traceId":%[1]q,"spanId":%[4]q,"parentSpanId":%[3]q,"name":"POST","kind":3,"startTimeUnixNano":"%[9]d","endTimeUnixNano":"%[10]d","status":{"code":2},
    "attributes":[{"key":"url.full","value":{"stringValue":%[11]q}},{"key":"http.response.status_code","value":{"intValue":"500"}}]}
@@ -297,7 +297,7 @@ func TestExplainTraceCarriesErrorChain(t *testing.T) {
 	if !strings.HasPrefix(user, "HATA ZİNCİRİ") {
 		t.Errorf("user istemi HATA ZİNCİRİ ile başlamıyor:\n%.300s", user)
 	}
-	for _, want := range []string{"HTTP 500", "POST osb.example.test → /TibcoESB/KPS/KimlikSorgula", "[hata kaynağı]", "Trace " + defTestTrace + " with 3 spans"} {
+	for _, want := range []string{"HTTP 500", "POST osb.example.test → /esb/IDCHECK/VerifyIdentity", "[hata kaynağı]", "Trace " + defTestTrace + " with 3 spans"} {
 		if !strings.Contains(user, want) {
 			t.Errorf("kanıt %q içermiyor:\n%s", want, user)
 		}

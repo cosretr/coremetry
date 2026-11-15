@@ -28,7 +28,7 @@ describe('endpoint gecikme seçicisi', () => {
 import { withEnvParam } from './detailSections';
 describe('kırılımdan ortam süzgeci', () => {
   it('env yazılır, diğer parametreler korunur', () => {
-    expect(withEnvParam('?service=a&path=%2Fx&range=3h', 'ocpy-prod')).toBe('?service=a&path=%2Fx&range=3h&env=ocpy-prod');
-    expect(withEnvParam('?env=old&service=a', 'ocpy-prod')).toBe('?env=ocpy-prod&service=a');
+    expect(withEnvParam('?service=a&path=%2Fx&range=3h', 'kubey-prod')).toBe('?service=a&path=%2Fx&range=3h&env=kubey-prod');
+    expect(withEnvParam('?env=old&service=a', 'kubey-prod')).toBe('?env=kubey-prod&service=a');
   });
 });

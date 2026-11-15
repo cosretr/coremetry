@@ -13,8 +13,8 @@ describe('rankPaletteResults', () => {
     { kind: 'service', label: 'card-web-api-bff', to: '/services/card-web-api-bff', score: 500 },
   ];
   const endpoints = [
-    { kind: 'endpoint', label: 'POST /BSAWEB/application/preApproval', to: '/endpoints?x=1', score: 0 },
-    { kind: 'endpoint', label: 'POST /BSAWEB/mortgageApplication/preApproval', to: '/endpoints?x=2', score: 0 },
+    { kind: 'endpoint', label: 'POST /ACMWEB/application/preApproval', to: '/endpoints?x=1', score: 0 },
+    { kind: 'endpoint', label: 'POST /ACMWEB/mortgageApplication/preApproval', to: '/endpoints?x=2', score: 0 },
   ];
   it('servis → endpoint → sayfa; sayfa tekrarları rotaya göre tekilleşir', () => {
     const out = rankPaletteResults(scored, endpoints);

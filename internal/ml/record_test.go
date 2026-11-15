@@ -49,7 +49,7 @@ func example2Today() EventRecord {
 		sn.V, sn.Lo, sn.Hi = append(sn.V, v), append(sn.Lo, 38), append(sn.Hi, 52) // q25–q75
 	}
 	return EventRecord{V: RecordVersion, Class: ClassServiceAnomaly, Direction: "up",
-		Subject:  RecordSubject{Service: "bsa-loan-interrogation-kkb-krs-inq-prod", Operation: "callBagService"},
+		Subject:  RecordSubject{Service: "acm-risk-score-bureau-inq-prod", Operation: "callBagService"},
 		Baseline: RecordBaseline{Expected: 43, Lo: 0, Hi: 95, Method: "class_days_hour±1_median_mad", StepSec: 300},
 		OnsetAt:  recAt(7, 5), DetectedAt: recAt(7, 5), EndedAt: recAt(7, 10),
 		PeakValue: 107, ValueAtDetection: 107, ExpectedValue: 43,
@@ -70,10 +70,10 @@ func example2Fixed() EventRecord {
 	})
 	sn.Aggregation = "p95"
 	return EventRecord{V: RecordVersion, Class: ClassServiceAnomaly, Direction: "up",
-		Subject: RecordSubject{EntityID: "svc:bsa-loan-interrogation-kkb-krs-inq-prod", Service: "bsa-loan-interrogation-kkb-krs-inq-prod",
+		Subject: RecordSubject{EntityID: "svc:acm-risk-score-bureau-inq-prod", Service: "acm-risk-score-bureau-inq-prod",
 			Operation: "callBagService", Resolved: true},
 		Series: RecordSeries{Source: "vm", Aggregation: "p95", Unit: "ms", StepSec: 60,
-			Query: `histogram_quantile(0.95, sum by (le)(rate(http_server_duration_bucket{service="bsa-loan-interrogation-kkb-krs-inq-prod",route="callBagService"}[60s])))`},
+			Query: `histogram_quantile(0.95, sum by (le)(rate(http_server_duration_bucket{service="acm-risk-score-bureau-inq-prod",route="callBagService"}[60s])))`},
 		Baseline: RecordBaseline{Expected: 43, Lo: 0, Hi: 95, Method: "class_days_hour±1_median_mad", StepSec: 60},
 		OnsetAt:  recAt(6, 58), DetectedAt: recAt(7, 10), EndedAt: recAt(7, 12),
 		PeakValue: 135, ValueAtDetection: 100, ExpectedValue: 43, Volume: f64(412),
@@ -81,13 +81,13 @@ func example2Fixed() EventRecord {
 		Snapshot: sn, Title: "callBagService p95 135 ms (tespit anında 100 ms; beklenen 43 ms; 412 çağrı)"}
 }
 
-// Örnek 1 — 59d8f32338b5e7b5 · bsa-psl-card-gain-prod svc_volume_spike. Bugün:
+// Örnek 1 — 59d8f32338b5e7b5 · acm-promo-points-gain-prod svc_volume_spike. Bugün:
 // seri ve snapshot yok, başlık iki 24 sa toplamı + oran, onset = eşik aşımının
 // fark edildiği tik, tek kanıt satırı başlığın kendisi.
 func example1Today() EventRecord {
-	title := "bsa-psl-card-gain-prod span hacmi önceki 24 saatin 4,2 katı (son 24 sa 1.260.000 span)"
+	title := "acm-promo-points-gain-prod span hacmi önceki 24 saatin 4,2 katı (son 24 sa 1.260.000 span)"
 	return EventRecord{V: RecordVersion, Class: ClassServiceAnomaly, Direction: "up",
-		Subject:  RecordSubject{Service: "bsa-psl-card-gain-prod"},
+		Subject:  RecordSubject{Service: "acm-promo-points-gain-prod"},
 		Baseline: RecordBaseline{Expected: 300000, Method: "previous_24h"},
 		OnsetAt:  recAt(10, 48), DetectedAt: recAt(10, 48), EndedAt: recAt(12, 50),
 		PeakValue: 1260000, ValueAtDetection: 1260000, ExpectedValue: 300000,
@@ -111,14 +111,14 @@ func example1Fixed() EventRecord {
 	})
 	sn.Aggregation = "spans_per_request"
 	return EventRecord{V: RecordVersion, Class: ClassTelemetryVolume, Direction: "up",
-		Subject: RecordSubject{EntityID: "svc:bsa-psl-card-gain-prod", Service: "bsa-psl-card-gain-prod", Resolved: true},
+		Subject: RecordSubject{EntityID: "svc:acm-promo-points-gain-prod", Service: "acm-promo-points-gain-prod", Resolved: true},
 		Series: RecordSeries{Source: "ch:spanmetrics_1m", Aggregation: "spans_per_request", Unit: "span/istek", StepSec: 60,
-			Query: "countMerge(calls_state) / countMergeIf(calls_state, kind IN ('server','consumer')) BY 1m WHERE service_name = 'bsa-psl-card-gain-prod'"},
+			Query: "countMerge(calls_state) / countMergeIf(calls_state, kind IN ('server','consumer')) BY 1m WHERE service_name = 'acm-promo-points-gain-prod'"},
 		Baseline: RecordBaseline{Expected: 3, Lo: 2.4, Hi: 3.6, Method: "weekly_slot", StepSec: 60},
 		OnsetAt:  recAt(12, 20), DetectedAt: recAt(12, 50),
 		PeakValue: 12.9, ValueAtDetection: 12.6, ExpectedValue: 3, Volume: f64(18400),
 		Evidence: []RecordEvidence{{Kind: "rollout", Source: "deploys", Summary: "12:18'de dağıtım (v2.4.1)", Independent: true}},
-		Snapshot: sn, Title: "bsa-psl-card-gain-prod istek başına span 3'ten 12,9'a çıktı; istek hızı değişmedi"}
+		Snapshot: sn, Title: "acm-promo-points-gain-prod istek başına span 3'ten 12,9'a çıktı; istek hızı değişmedi"}
 }
 
 func rulesOf(vs []RecordViolation) []string {

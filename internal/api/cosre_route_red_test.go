@@ -246,7 +246,7 @@ func TestRouteTurnWiring(t *testing.T) {
 // SkipEndpointPick'te ctx.RangeS alıyordu). ✨ sorusu "… endpointine bak" ile
 // biter; o tur ve kartın İncele turu sayfanın penceresini taşır.
 func TestRouteTurnRangeS(t *testing.T) {
-	const ask = "Ne oluyor, ne zamandan beri, en yavaş trace'lerde süre nereye gidiyor, hangi hatalar var? bsa-loan-web POST /api/x endpointine bak"
+	const ask = "Ne oluyor, ne zamandan beri, en yavaş trace'lerde süre nereye gidiyor, hangi hatalar var? acm-loan-web POST /api/x endpointine bak"
 	cases := []struct {
 		name string
 		q    string

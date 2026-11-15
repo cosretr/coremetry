@@ -2,8 +2,8 @@ package api
 
 // chat_disambig_rescue.go — v0.10.1126: netleştirme kurtarması.
 //
-// Operatör (prod): "BSA cache refresh nasıl girilir" → guided "nasıl"ı sağlık
-// sinyali, "BSA"yı servis parçası saydı ve cevap YALNIZ "Hangi servisi
+// Operatör (prod): "ACM cache refresh nasıl girilir" → guided "nasıl"ı sağlık
+// sinyali, "ACM"yı servis parçası saydı ve cevap YALNIZ "Hangi servisi
 // kastettin? Adaylar: …" oldu (copilot_guided.go router → guidedAskService →
 // guidedAskServiceEvidence/askServiceAnswerTR → runGuidedRoute DirectAnswer).
 // "Coremetry adresleri" de katalog adaylarına (find_entity / entity scan)

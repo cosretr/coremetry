@@ -3,8 +3,8 @@ package api
 // explain_trace_operation.go — v0.10.1329 (operatör-bildirimli): trace'in
 // ANA operasyonu, kesin kaynaktan.
 //
-// Olay: trace 6008dded… kökü POST /BSAWEB/application/directCreditPreApproval,
-// kendi Oracle satırı LOAN_…_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST;
+// Olay: trace 6008dded… kökü POST /ACMWEB/application/expressOrderPreValidate,
+// kendi Oracle satırı LOAN_…_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST;
 // Trace sayfası çipi ise fonksiyon kodu sözlüğünün (bankanın tamamında son 7
 // günde en çok satırlı aday) LOAN_…_APPLICATIONINQ_… adını "(+15)" ile "bu
 // trace'in operasyonu" gibi gösteriyordu. Frontend düzeltmesi
@@ -167,7 +167,7 @@ func pickMainOperation(rows []chstore.OracleErrorRow, spans []chstore.SpanRow, l
 // Olay: HATASIZ bir trace'te "Kodu da incele" Code Search açıkken bile "⚠ Kod
 // okunamadı — kodsuz analiz. (bu kayıtta stacktrace yok)" diyordu. Ana
 // operasyon yalnız Oracle HATA satırlarından (sağlıklı trace'te yok) ve
-// span'in operation.code attribute'undan okunuyordu; BSA span'leri ise
+// span'in operation.code attribute'undan okunuyordu; ACM span'leri ise
 // FUNCTION_CODE taşır. İki ek: (c) log tier'ı (kesin) ve fonksiyon kodu
 // listesi (sözlük adayları için — copilot_code_operation.go).
 

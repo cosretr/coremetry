@@ -116,7 +116,7 @@ sınırı (medyan ± 4·effMAD; sade grafikte hiç çizilmez). Eksen birimsiz: `
 
 ### 3.1 Örnek 4 — süren olayda grafik hiç yok (`6a03002be1529b57`, v0.10.2204'te düzeltildi)
 
-`bsa-investment-portfolio-customer-prod` · `callBagService`, `op_latency` p95 ("İzleniyor · 14 dk", 12:30'dan beri).
+`acm-portfolio-summary-prod` · `callBagService`, `op_latency` p95 ("İzleniyor · 14 dk", 12:30'dan beri).
 Kart: "Olayın seyri: Bu olay için grafik kaydı yok"; kanıt satırı başlığı tekrar ediyor, yanında "VictoriaMetrics".
 
 **Kök neden (koddan, kesin):** dedektör VM RED ailesinden okur ve olayın `Code`'u route etiketinin **değeridir**
@@ -324,14 +324,14 @@ export_event() {  # $1 = event id
   echo "$1 FROM=$FROM TO=$TO"
 }
 
-# Örnek 1 — 59d8f32338b5e7b5 · bsa-psl-card-gain-prod (svc_volume_spike)
+# Örnek 1 — 59d8f32338b5e7b5 · acm-promo-points-gain-prod (svc_volume_spike)
 export_event 59d8f32338b5e7b5; D=internal/ml/testdata/fixtures/59d8f32338b5e7b5
-$CH --param_svc=bsa-psl-card-gain-prod --param_from="$FROM" --param_to="$TO" --query "
+$CH --param_svc=acm-promo-points-gain-prod --param_from="$FROM" --param_to="$TO" --query "
   SELECT signal, service, part, bucket, bucket_sec, count
   FROM ml_series FINAL
   WHERE service = {svc:String} AND bucket >= toDateTime({from:UInt32}) AND bucket < toDateTime({to:UInt32})
   ORDER BY part, bucket LIMIT 500000 SETTINGS max_execution_time = 30 FORMAT JSONEachRow" > "$D/ml_series.jsonl"
-$CH --param_svc=bsa-psl-card-gain-prod --param_from="$FROM" --param_to="$TO" --query "
+$CH --param_svc=acm-promo-points-gain-prod --param_from="$FROM" --param_to="$TO" --query "
   SELECT time_bucket, kind, countMerge(calls_state) AS calls, countMerge(error_state) AS errors
   FROM spanmetrics_1m
   WHERE service_name = {svc:String}
@@ -339,15 +339,15 @@ $CH --param_svc=bsa-psl-card-gain-prod --param_from="$FROM" --param_to="$TO" --q
   GROUP BY time_bucket, kind
   ORDER BY time_bucket, kind LIMIT 400000 SETTINGS max_execution_time = 60 FORMAT JSONEachRow" > "$D/spanmetrics_1m.jsonl"
 
-# Örnek 2 — 09ecef247b0557ea · bsa-loan-interrogation-kkb-krs-inq-prod · callBagService (op_latency p95)
+# Örnek 2 — 09ecef247b0557ea · acm-risk-score-bureau-inq-prod · callBagService (op_latency p95)
 export_event 09ecef247b0557ea; D=internal/ml/testdata/fixtures/09ecef247b0557ea
-$CH --param_svc=bsa-loan-interrogation-kkb-krs-inq-prod --param_from="$FROM" --param_to="$TO" --query "
+$CH --param_svc=acm-risk-score-bureau-inq-prod --param_from="$FROM" --param_to="$TO" --query "
   SELECT signal, service, part, bucket, bucket_sec, count
   FROM ml_series FINAL
   WHERE service = {svc:String} AND (part = '' OR startsWith(part, 'callBagService|'))
     AND bucket >= toDateTime({from:UInt32}) AND bucket < toDateTime({to:UInt32})
   ORDER BY part, bucket LIMIT 200000 SETTINGS max_execution_time = 30 FORMAT JSONEachRow" > "$D/ml_series.jsonl"
-$CH --param_svc=bsa-loan-interrogation-kkb-krs-inq-prod --param_op=callBagService --param_from="$FROM" --param_to="$TO" --query "
+$CH --param_svc=acm-risk-score-bureau-inq-prod --param_op=callBagService --param_from="$FROM" --param_to="$TO" --query "
   SELECT time_bucket, name, kind, http_route,
          countMerge(calls_state) AS calls, countMerge(error_state) AS errors,
          arrayElement(quantilesTDigestMerge(0.5, 0.9, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p95_ms,

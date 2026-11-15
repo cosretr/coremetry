@@ -29,7 +29,7 @@ public class CreditProductInformationController {
 
     @Service(SelfServiceNames.Rest.` + opTestOp + `)
     @RequestMapping(value = "information", method = { RequestMethod.POST })
-    public CreditProductInformationOutput getCreditProductInformation(@RequestBody CreditProductInformationInput input) throws BSAException {
+    public CreditProductInformationOutput getCreditProductInformation(@RequestBody CreditProductInformationInput input) throws ACMException {
         CreditProductInformationOutput output = creditProductInformationManager.getCreditProductInfo(input);
         if (output.getReturnCode() != 0) {
             throw new ExternalSystemException(String.valueOf(output.getReturnCode()), output.getReturnMessage(), "}");

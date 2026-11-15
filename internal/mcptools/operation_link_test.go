@@ -1,6 +1,6 @@
 package mcptools
 
-// v0.10.1297 — operatör 2026-10-17: BSA operasyon adı linki yanlış
+// v0.10.1297 — operatör 2026-10-17: ACM operasyon adı linki yanlış
 // (coremetry.io + search=). CoSRE "DIGITAL_PAYMENTSYSTEMCAMPAIGN_JUZDAN_
 // LIST_OF_GAINED_CAMPAIGNS"i doğru çözdü (kod GCWCD01) ama build_link
 // search=<ad> ile çağrıldı → /traces serbest metin araması sıfır trace; model
@@ -20,11 +20,11 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
-const bsaOpName = "DIGITAL_PAYMENTSYSTEMCAMPAIGN_JUZDAN_LIST_OF_GAINED_CAMPAIGNS"
+const acmOpName = "DIGITAL_PAYMENTSYSTEMCAMPAIGN_JUZDAN_LIST_OF_GAINED_CAMPAIGNS"
 
-func bsaOracle() *fakeOracleOps {
+func acmOracle() *fakeOracleOps {
 	return &fakeOracleOps{enabled: true, res: OracleOpResolution{Enabled: true, SpanKey: "FUNCTION_CODE",
-		Matches: []OracleOpMatch{{Code: "GCWCD01", SpanKey: "FUNCTION_CODE", Operation: bsaOpName, Rows: 12}}}}
+		Matches: []OracleOpMatch{{Code: "GCWCD01", SpanKey: "FUNCTION_CODE", Operation: acmOpName, Rows: 12}}}}
 }
 
 func TestAbsoluteAppLink(t *testing.T) {
@@ -117,12 +117,12 @@ func TestBuildLinkOperationNameUsesFunctionCode(t *testing.T) {
 		wantSearch string
 		wantCode   bool
 	}{
-		{"BSA operasyon adı → kod", bsaOracle(), `{"page":"traces","search":"` + bsaOpName + `","sort":"duration"}`, "", true},
-		{"servisle birlikte", bsaOracle(), `{"page":"traces","service":"bsa-digital-paymentsystemscampaign-prod","search":"` + bsaOpName + `"}`, "", true},
-		{"tam eşleşme yok → search kalır", &fakeOracleOps{enabled: true, res: OracleOpResolution{Enabled: true, SpanKey: "FUNCTION_CODE", NearNames: []string{"X_Y"}}}, `{"page":"traces","search":"` + bsaOpName + `"}`, bsaOpName, false},
-		{"Oracle kapalı → search kalır", &fakeOracleOps{enabled: false}, `{"page":"traces","search":"` + bsaOpName + `"}`, bsaOpName, false},
-		{"çözümleyici yok", nil, `{"page":"traces","search":"` + bsaOpName + `"}`, bsaOpName, false},
-		{"operasyon şekli değil", bsaOracle(), `{"page":"traces","search":"checkout"}`, "checkout", false},
+		{"ACM operasyon adı → kod", acmOracle(), `{"page":"traces","search":"` + acmOpName + `","sort":"duration"}`, "", true},
+		{"servisle birlikte", acmOracle(), `{"page":"traces","service":"acm-payments-campaign-prod","search":"` + acmOpName + `"}`, "", true},
+		{"tam eşleşme yok → search kalır", &fakeOracleOps{enabled: true, res: OracleOpResolution{Enabled: true, SpanKey: "FUNCTION_CODE", NearNames: []string{"X_Y"}}}, `{"page":"traces","search":"` + acmOpName + `"}`, acmOpName, false},
+		{"Oracle kapalı → search kalır", &fakeOracleOps{enabled: false}, `{"page":"traces","search":"` + acmOpName + `"}`, acmOpName, false},
+		{"çözümleyici yok", nil, `{"page":"traces","search":"` + acmOpName + `"}`, acmOpName, false},
+		{"operasyon şekli değil", acmOracle(), `{"page":"traces","search":"checkout"}`, "checkout", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -154,15 +154,15 @@ func TestBuildLinkOperationNameUsesFunctionCode(t *testing.T) {
 		})
 	}
 	// Şekil kapısı: operasyon adı değilse çözümleyiciye hiç gidilmez.
-	f := bsaOracle()
+	f := acmOracle()
 	_, _ = buildLinkTool(Deps{OracleOps: f}).Handler(context.Background(), json.RawMessage(`{"page":"traces","search":"checkout"}`))
 	if f.calls != 0 {
 		t.Errorf("şekil dışı search için çözümleyici çağrıldı (%d)", f.calls)
 	}
 	// Traces dışı sayfada search çevrilmez (endpoints serbest metni).
-	f = bsaOracle()
-	out, _ := buildLinkTool(Deps{OracleOps: f}).Handler(context.Background(), json.RawMessage(`{"page":"endpoints","search":"`+bsaOpName+`"}`))
-	if q, _ := traceFilters(t, out.(map[string]any)["href"].(string)); q.Get("search") != bsaOpName || f.calls != 0 {
+	f = acmOracle()
+	out, _ := buildLinkTool(Deps{OracleOps: f}).Handler(context.Background(), json.RawMessage(`{"page":"endpoints","search":"`+acmOpName+`"}`))
+	if q, _ := traceFilters(t, out.(map[string]any)["href"].(string)); q.Get("search") != acmOpName || f.calls != 0 {
 		t.Errorf("endpoints search değişmemeli: %v calls=%d", q, f.calls)
 	}
 }
@@ -170,14 +170,14 @@ func TestBuildLinkOperationNameUsesFunctionCode(t *testing.T) {
 func TestTranslateOperationSearchMultiCode(t *testing.T) {
 	f := &fakeOracleOps{enabled: true, res: OracleOpResolution{Enabled: true, SpanKey: "function_code", Matches: []OracleOpMatch{
 		{Code: "A1"}, {Code: "A1"}, {Code: " B2 "}, {Code: ""}}}}
-	tr, ok := translateOperationSearch(context.Background(), f, "  "+bsaOpName+" ")
-	if !ok || tr.Operation != bsaOpName || strings.Join(tr.Codes, ",") != "A1,B2" {
+	tr, ok := translateOperationSearch(context.Background(), f, "  "+acmOpName+" ")
+	if !ok || tr.Operation != acmOpName || strings.Join(tr.Codes, ",") != "A1,B2" {
 		t.Fatalf("çeviri: %+v ok=%v", tr, ok)
 	}
 	if fe := tr.Filter(); fe.Key != "function_code" || fe.Op != "IN" || len(fe.Values) != 2 {
 		t.Errorf("çok kod IN olmalı: %+v", fe)
 	}
-	if _, ok := translateOperationSearch(context.Background(), &fakeOracleOps{enabled: true, res: OracleOpResolution{Matches: []OracleOpMatch{{Code: "A1"}}}}, bsaOpName); ok {
+	if _, ok := translateOperationSearch(context.Background(), &fakeOracleOps{enabled: true, res: OracleOpResolution{Matches: []OracleOpMatch{{Code: "A1"}}}}, acmOpName); ok {
 		t.Error("span anahtarı boşken çeviri olmamalı")
 	}
 }
@@ -209,8 +209,8 @@ func TestBusinessCodeScopeFilter(t *testing.T) {
 func TestQueryTracesOperationNameUsesFunctionCode(t *testing.T) {
 	c := &cqTraces{}
 	b := c.backends()
-	b.oracleOps = bsaOracle()
-	r, err := runQueryTraces(cqCtx(), b, cqRaw(t, map[string]any{"service": "bsa-digital-paymentsystemscampaign-prod", "operation": bsaOpName}))
+	b.oracleOps = acmOracle()
+	r, err := runQueryTraces(cqCtx(), b, cqRaw(t, map[string]any{"service": "acm-payments-campaign-prod", "operation": acmOpName}))
 	if err != nil {
 		t.Fatal(err)
 	}

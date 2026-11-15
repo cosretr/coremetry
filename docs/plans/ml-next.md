@@ -8,12 +8,12 @@ Prod gözlemi (v0.10.1762) sonrası kodlanmayan maddeler; sıra operatörün. Ge
 
 **5) Tik gözlemlenebilirliği** (tik 25–38 sn). Tik log satırına adım süreleri (ES, VM, CH okuma, CH yazma, backfill durumu). `MLTickStatus.Steps` ve `Signals` (ml_status.go'da alanlar hazır, 1767 doldurur): sinyal başına çalıştı mı, servis sayısı, kaynak süresi, aday / bastırılan / yazılan, kısmi sonuç, backoff'taki aileler, backfill ilerlemesi. Karnede "0 olay" ile "çalışmıyor" ayrımı.
 
-**6) pod_outlier tekrar olay** (bsa-openbanking-accountaggregator 12:10 ve 12:30 aynı değerler, iki satır). Kimlik `signal+detector+service+part`; RMT aynı id'yi ezer — iki satır ya farklı part (ölçü err_ratio/p95) ya dağıtık CH'de farklı shard (FINAL shard'lar arası tekilleştirmez; ml_events hv listesinde mi kontrol). Kanıta sorgu zamanı + VM serisinin son örnek damgası (bayat seri teşhisi). B3 ile birleşir: epizot modeli.
+**6) pod_outlier tekrar olay** (acm-account-aggregator 12:10 ve 12:30 aynı değerler, iki satır). Kimlik `signal+detector+service+part`; RMT aynı id'yi ezer — iki satır ya farklı part (ölçü err_ratio/p95) ya dağıtık CH'de farklı shard (FINAL shard'lar arası tekilleştirmez; ml_events hv listesinde mi kontrol). Kanıta sorgu zamanı + VM serisinin son örnek damgası (bayat seri teşhisi). B3 ile birleşir: epizot modeli.
 
 **7) Varsayılanlar.** BaselineDays 7 → 21 (7 günde tek cumartesi; baselineDates tüm günlere düşüyor, cumartesi sahte düşüş). MaxServices (500) Settings › ML › Eşikler'de (10–5000); karnede "izlenen N / toplam M servis".
 
 ## B2) ML op_latency kronik desen — GEMİDE v0.10.1769
-Prod örneği: bsa-investment-securities-fund-prod, mobil5.prod publish — p99 ~20 ms, birkaç dakikada bir tek istek Kafka timeout'u ile 4–6 sn; eski dedektör 102 kez "normalin 164×" açtı. Yeni ML: kaynak VM örnekleme öncesi histogram; bucket başına asgari istek; p99 yerine yavaş istek oranı + mutlak etkilenen istek eşiği; dwell; son 7 günde ≥ K epizot → olay yerine tek "kronik" kaydı. Test: sentetik seri ile olay yok / kronik var.
+Prod örneği: acm-fund-pricing-prod, app5.prod publish — p99 ~20 ms, birkaç dakikada bir tek istek Kafka timeout'u ile 4–6 sn; eski dedektör 102 kez "normalin 164×" açtı. Yeni ML: kaynak VM örnekleme öncesi histogram; bucket başına asgari istek; p99 yerine yavaş istek oranı + mutlak etkilenen istek eşiği; dwell; son 7 günde ≥ K epizot → olay yerine tek "kronik" kaydı. Test: sentetik seri ile olay yok / kronik var.
 
 ## B3) Epizot modeli — GEMİDE v0.10.1768
 Açık → kapandı (art arda 3 normal bucket), `ended_at`; 30 dk içinde tekrar → aynı epizot. `MLEventID` zamansız, tekrar eden olaylar üzerine yazıyor; kimlik epizot başlangıcını içersin (migrate). Madde 6 bununla birleşir: bölüm farklıysa hata değil.

@@ -12,7 +12,7 @@ package api
 //	excel       yüklenen tablolarda birebir hücre eşleşmesi (docRowsFind, sıkı)
 //	wiki        yerel lexical içerik yoklaması (wikiProbe — ADO'ya istek yok)
 //	telemetri   katalogda servis adı (ya da yalnız telemetri sinyali)
-//	exceptions  exception tipi / hata kodu (BSAException, ORA-00001) Exceptions'ta
+//	exceptions  exception tipi / hata kodu (ACMException, ORA-00001) Exceptions'ta
 //
 // Karar SAF (pickChatSource): en güçlü kanıt cevaplar; kanıtı olan diğerleri
 // cevabın altında "/<kaynak> · <kanıt>" çipi olur (çip = eğik komut, chat_scope;
@@ -57,7 +57,7 @@ const (
 type srcCand struct {
 	Kind  string
 	Score float64
-	Label string // "16 satır", "OpenTelemetry sayfası", "bsa-deposit servisi"
+	Label string // "16 satır", "OpenTelemetry sayfası", "acm-deposit servisi"
 
 	rows   []docRowMatch
 	vals   []string

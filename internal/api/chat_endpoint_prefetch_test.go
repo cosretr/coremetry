@@ -1,6 +1,6 @@
 package api
 
-// v0.10.1343 (operator-reported): "POST /BSAWEB/application/directCreditPreApproval
+// v0.10.1343 (operator-reported): "POST /ACMWEB/application/expressOrderPreValidate
 // neden yavaş?" — CoSRE endpoint'i bulamıyordu. Kök nedenler
 // (chat_operation_prefetch.go): opTokens baştaki "/"yı kırpıyordu; "POST"
 // identifierLike sayılıp bulanık aşamada HER POST operasyonunu eşliyordu
@@ -32,12 +32,12 @@ import (
 	"github.com/cilcenk/coremetry/internal/logstore"
 )
 
-const epBSA = "/BSAWEB/application/directCreditPreApproval"
+const epACM = "/ACMWEB/application/expressOrderPreValidate"
 
 var epCands = []chstore.CatalogOperation{
-	{Operation: "POST " + epBSA, Source: "span", Service: "bsaweb", CallCount: 900},
-	{Operation: epBSA, Source: "endpoint", Service: "bsaweb", CallCount: 910},
-	{Operation: epBSA, Source: "endpoint", Service: "bsaweb-gw", CallCount: 100},
+	{Operation: "POST " + epACM, Source: "span", Service: "acmweb", CallCount: 900},
+	{Operation: epACM, Source: "endpoint", Service: "acmweb", CallCount: 910},
+	{Operation: epACM, Source: "endpoint", Service: "acmweb-gw", CallCount: 100},
 	{Operation: "/api/checkout", Source: "endpoint", Service: "checkout", CallCount: 300},
 	{Operation: "/api/checkout", Source: "endpoint", Service: "cart", CallCount: 200},
 	{Operation: "/api/checkout/confirm", Source: "endpoint", Service: "checkout", CallCount: 40},
@@ -52,7 +52,7 @@ func TestEndpointMention(t *testing.T) {
 		raw, method, path string
 		ok                bool
 	}{
-		{"POST " + epBSA + " neden yavaş?", "POST", epBSA, true},
+		{"POST " + epACM + " neden yavaş?", "POST", epACM, true},
 		{"post /api/checkout hata veriyor mu", "POST", "/api/checkout", true},
 		{"/api/checkout hata veriyor mu", "", "/api/checkout", true},
 		{"https://shop.example.com:8443/api/v1/orders/42?x=1#frag yavaş", "", "/api/v1/orders/42", true},
@@ -97,8 +97,8 @@ func TestEndpointMention(t *testing.T) {
 }
 
 func TestOpTokensSkipHTTPVerbs(t *testing.T) {
-	got := opTokens("POST " + epBSA + " neden yavaş")
-	want := []string{"BSAWEB/application/directCreditPreApproval", "neden", "yavaş"}
+	got := opTokens("POST " + epACM + " neden yavaş")
+	want := []string{"ACMWEB/application/expressOrderPreValidate", "neden", "yavaş"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%v", got)
 	}
@@ -125,10 +125,10 @@ func TestMatchEndpoint(t *testing.T) {
 		name, method, path, hint string
 		w                        want
 	}{
-		{"birebir fiilli + 3× baskın", "POST", epBSA, "",
-			want{kind: "endpoint_exact", pickSvc: "bsaweb", spanOp: "POST " + epBSA, routeOp: epBSA, alts: []string{"bsaweb-gw"}}},
-		{"fiil uyuşmazsa span düşer, rota kalır", "DELETE", epBSA, "",
-			want{kind: "endpoint_exact", pickSvc: "bsaweb", routeOp: epBSA, alts: []string{"bsaweb-gw"}}},
+		{"birebir fiilli + 3× baskın", "POST", epACM, "",
+			want{kind: "endpoint_exact", pickSvc: "acmweb", spanOp: "POST " + epACM, routeOp: epACM, alts: []string{"acmweb-gw"}}},
+		{"fiil uyuşmazsa span düşer, rota kalır", "DELETE", epACM, "",
+			want{kind: "endpoint_exact", pickSvc: "acmweb", routeOp: epACM, alts: []string{"acmweb-gw"}}},
 		{"yalnız rota", "", "/api/checkout/confirm", "",
 			want{kind: "endpoint_exact", pickSvc: "checkout", routeOp: "/api/checkout/confirm"}},
 		{"eşite yakın → soru (içerir elenir)", "", "/api/checkout", "",
@@ -139,8 +139,8 @@ func TestMatchEndpoint(t *testing.T) {
 			want{kind: "endpoint_template", pickSvc: "users", spanOp: "GET /users/{id}", routeOp: "/users/{id}"}},
 		{"harf duyarsız", "", "/api/orders", "",
 			want{kind: "endpoint_case_insensitive", pickSvc: "orders", routeOp: "/Api/Orders"}},
-		{"içerir son çare", "", "/application/directCreditPreApproval", "",
-			want{kind: "endpoint_contains", pickSvc: "bsaweb", spanOp: "POST " + epBSA, routeOp: epBSA, alts: []string{"bsaweb-gw"}}},
+		{"içerir son çare", "", "/application/expressOrderPreValidate", "",
+			want{kind: "endpoint_contains", pickSvc: "acmweb", spanOp: "POST " + epACM, routeOp: epACM, alts: []string{"acmweb-gw"}}},
 		{"yok", "", "/nothing/here", "", want{}},
 	}
 	for _, c := range cases {
@@ -182,7 +182,7 @@ func TestMatchEndpoint(t *testing.T) {
 	if r := matchEndpoint(meth, path, epCands, hint); hint != "cart" || r.Pick == nil || r.Pick.Service != "cart" {
 		t.Fatalf("çip cart'a çözülmeli: hint=%q %+v", hint, r)
 	}
-	if got := endpointChoiceChip(endpointGroup{Service: "bsaweb", SpanOp: "POST " + epBSA, RouteOp: epBSA}, ""); got != "bsaweb POST "+epBSA+" endpointine bak" {
+	if got := endpointChoiceChip(endpointGroup{Service: "acmweb", SpanOp: "POST " + epACM, RouteOp: epACM}, ""); got != "acmweb POST "+epACM+" endpointine bak" {
 		t.Errorf("fiil span adından: %q", got)
 	}
 	// Servis adı yolun İÇİNDE geçiyorsa ipucu değildir.
@@ -193,7 +193,7 @@ func TestMatchEndpoint(t *testing.T) {
 	if got := endpointCatalogTokens("/users/42/orders"); !reflect.DeepEqual(got, []string{"/users/42/orders", "/users/"}) {
 		t.Errorf("belirteçler: %v", got)
 	}
-	if got := endpointCatalogTokens(epBSA); !reflect.DeepEqual(got, []string{epBSA}) {
+	if got := endpointCatalogTokens(epACM); !reflect.DeepEqual(got, []string{epACM}) {
 		t.Errorf("belirteçler: %v", got)
 	}
 }
@@ -228,7 +228,7 @@ func TestEndpointPrefetchVetoesListAsk(t *testing.T) {
 		}
 	}
 	for _, q := range []string{
-		"POST " + epBSA + " neden yavaş?",
+		"POST " + epACM + " neden yavaş?",
 		"/api/checkout hata veriyor mu",
 		"https://shop.example.com/api/checkout yavaş",
 		"checkout POST /api/checkout endpointine bak",
@@ -249,9 +249,9 @@ func TestOpTargetForEndpointSource(t *testing.T) {
 		t.Fatalf("%+v", ora)
 	}
 	// Seçilen grup hedefi: yalnız o servis, span + rota birlikte, fiil span adından.
-	m := matchEndpoint("", epBSA, epCands, "bsaweb")
+	m := matchEndpoint("", epACM, epCands, "acmweb")
 	et := endpointTargetFor(*m.Pick, "")
-	if et.Name != "POST "+epBSA || !et.HasSpan || !et.HasRoute || et.Route != epBSA || et.Method != "POST" || !et.Endpoint || !reflect.DeepEqual(et.Services, []string{"bsaweb"}) {
+	if et.Name != "POST "+epACM || !et.HasSpan || !et.HasRoute || et.Route != epACM || et.Method != "POST" || !et.Endpoint || !reflect.DeepEqual(et.Services, []string{"acmweb"}) {
 		t.Fatalf("%+v", et)
 	}
 	ro := endpointTargetFor(endpointGroup{Service: "checkout", RouteOp: "/api/checkout"}, "GET")
@@ -317,8 +317,8 @@ func TestRenderEndpointExceptionsTR(t *testing.T) {
 	if got := renderEndpointExceptionsTR(nil, ""); !strings.Contains(got, "exception yok") {
 		t.Errorf("boş: %s", got)
 	}
-	alt := renderEndpointAlternativesTR([]opAlternative{{Service: "bsaweb-gw", Op: epBSA, Calls: 100}}, "bsaweb")
-	if alt != "Ayrıca şu servislerde de var: bsaweb-gw ("+epBSA+", 100 çağrı) — en çok çağrılan bsaweb seçildi (≥3×).\n" {
+	alt := renderEndpointAlternativesTR([]opAlternative{{Service: "acmweb-gw", Op: epACM, Calls: 100}}, "acmweb")
+	if alt != "Ayrıca şu servislerde de var: acmweb-gw ("+epACM+", 100 çağrı) — en çok çağrılan acmweb seçildi (≥3×).\n" {
 		t.Errorf("alternatif satırı: %q", alt)
 	}
 	if renderEndpointAlternativesTR(nil, "x") != "" {
@@ -327,13 +327,13 @@ func TestRenderEndpointExceptionsTR(t *testing.T) {
 }
 
 func TestOpPrefetchEndpointSummary(t *testing.T) {
-	p := &opPrefetch{Operation: "POST " + epBSA, MatchKind: "endpoint_exact", Services: []string{"bsaweb"}, RangeS: 3600,
+	p := &opPrefetch{Operation: "POST " + epACM, MatchKind: "endpoint_exact", Services: []string{"acmweb"}, RangeS: 3600,
 		From: time.Date(2026, 10, 18, 9, 0, 0, 0, time.UTC), To: time.Date(2026, 10, 18, 10, 0, 0, 0, time.UTC),
-		Route: epBSA, Method: "POST", endpoint: true, EndpointExceptionsChecked: true,
+		Route: epACM, Method: "POST", endpoint: true, EndpointExceptionsChecked: true,
 		EndpointExceptions: []opEndpointException{{Type: "java.net.SocketTimeoutException", Message: "Read timed out", Count: 4, LastSeenNs: time.Date(2026, 10, 18, 9, 58, 0, 0, time.UTC).UnixNano(), Href: "/problems?exc=f1"}},
-		Alternatives:       []opAlternative{{Service: "bsaweb-gw", Op: epBSA, Calls: 100}}}
+		Alternatives:       []opAlternative{{Service: "acmweb-gw", Op: epACM, Calls: 100}}}
 	sum := p.summary()
-	for _, want := range []string{"Endpoint: POST " + epBSA + " · bsaweb", "Ayrıca şu servislerde de var: bsaweb-gw",
+	for _, want := range []string{"Endpoint: POST " + epACM + " · acmweb", "Ayrıca şu servislerde de var: acmweb-gw",
 		"Endpoint teknik hataları", "java.net.SocketTimeoutException ×4, son 09:58 UTC: Read timed out · /problems?exc=f1"} {
 		if !strings.Contains(sum, want) {
 			t.Errorf("özet %q içermeli:\n%s", want, sum)
@@ -426,11 +426,11 @@ func TestEndpointAskQuestionResolves(t *testing.T) {
 	if !endpointChipShape(normalizeGuidedMsg("x " + suffix)) {
 		t.Fatalf("ek %q sunucunun endpointChipShape'iyle eşleşmiyor", suffix)
 	}
-	const svc, route = "bsa-loan-web", "/BSAWEB/application/{id}"
+	const svc, route = "acm-loan-web", "/ACMWEB/application/{id}"
 	cands := []chstore.CatalogOperation{
 		{Operation: "POST " + route, Source: "span", Service: svc, CallCount: 400},
-		{Operation: "POST " + route, Source: "span", Service: "bsa-loan", CallCount: 390},
-		{Operation: route, Source: "endpoint", Service: "bsa-loan", CallCount: 380},
+		{Operation: "POST " + route, Source: "span", Service: "acm-loan", CallCount: 390},
+		{Operation: route, Source: "endpoint", Service: "acm-loan", CallCount: 380},
 	}
 	for _, c := range []struct{ method, target string }{
 		{"POST", svc + " POST " + route},

@@ -122,7 +122,7 @@ describe('split düğme hizası', () => {
 // bölümleri function_id / channel_code diyor). Anahtar SUNUCUDAN gelir.
 describe('log bölümü başlığı', () => {
   it('anahtar + kaynak', () => {
-    // v0.10.572 — başlık logdaki GERÇEK alan adını taşır (BsaRequestId);
+    // v0.10.572 — başlık logdaki GERÇEK alan adını taşır (AcmRequestId);
     // log tarafı da anahtara göre gruplanır.
     expect(src).toContain('${key} · log gövdesinden');
     expect(src).toContain("r.cand.key || (isLog ? 'request_id' : 'span attribute')");

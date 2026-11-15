@@ -21,8 +21,8 @@ describe('spanAttrHref — endpoint kenarı', () => {
 
   // ⚠ EN KRİTİK KARAR. Endpoint kimliği ŞABLONLANMIŞ yola göre kuruluyor.
   // Prod'da ham yol ile şablon gerçekten ayrışıyor:
-  //   url.path   = /BSAWEB/rest/application/x
-  //   http.route = /BSAWEB/application/x        ← endpoint bu
+  //   url.path   = /ACMWEB/rest/application/x
+  //   http.route = /ACMWEB/application/x        ← endpoint bu
   // Ham yoldan link kurmak var olmayan bir endpoint'e götürür: sayfa
   // açılır, BOŞ gelir, operatör "veri yok" sanır. Yanlış link,
   // linksizlikten kötüdür.

@@ -92,7 +92,7 @@ describe('sourcePanelFor', () => {
   // v0.10.2204 (Örnek 4) — gRPC: Code rpc_method değeri, span adı "…BagService/callBagService";
   // grafik span adında aramaz, dedektörün serisini route değeriyle ister.
   it('endpoint olayı dedektörün serisi: route değeri + ölçü, span adı değil', () => {
-    const bag = { detector: 'op_latency', signal: 'trace', code: 'callBagService', service: 'bsa-investment-portfolio-customer-prod', evidence: '{"source":"vm","measure":"p95"}' };
+    const bag = { detector: 'op_latency', signal: 'trace', code: 'callBagService', service: 'acm-portfolio-summary-prod', evidence: '{"source":"vm","measure":"p95"}' };
     expect(sourcePanelFor(bag, 1)).toEqual({ kind: 'metric', detector: 'op_latency', service: bag.service, code: 'callBagService', cluster: '', measure: 'p95' });
     expect(sourcePanelFor({ ...bag, evidence: 'bozuk' }, 1)).toMatchObject({ kind: 'metric', measure: undefined });
     expect(sourcePanelFor({ ...bag, detector: 'op_error_rate' })).toMatchObject({ kind: 'metric', code: 'callBagService', measure: undefined });

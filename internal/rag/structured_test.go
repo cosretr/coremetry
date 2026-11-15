@@ -8,14 +8,14 @@ import (
 )
 
 func TestStructuredYAMLRecordsKeepKeyPaths(t *testing.T) {
-	y := "clusters:\n  - { zone: dmz, domain: example.com, names: [ocpdmzka, ocpdmzkb] }\n  - zone: test\n    names: [ocpint, ocpuat]\n    thanos: { url: https://t, timeout: 30s }\nversion: 3\n"
+	y := "clusters:\n  - { zone: dmz, domain: example.com, names: [kubedmza, kubedmzb] }\n  - zone: test\n    names: [kubeint, kubeuat]\n    thanos: { url: https://t, timeout: 30s }\nversion: 3\n"
 	got, err := StructuredToText("config.yaml", []byte(y))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"clusters[0] — zone: dmz · domain: example.com · names: ocpdmzka, ocpdmzkb",
-		"clusters[1] — zone: test · names: ocpint, ocpuat",
+		"clusters[0] — zone: dmz · domain: example.com · names: kubedmza, kubedmzb",
+		"clusters[1] — zone: test · names: kubeint, kubeuat",
 		"clusters[1].thanos — url: https://t · timeout: 30s",
 		"kök — version: 3",
 	} {
@@ -36,9 +36,9 @@ func TestStructuredJSONAndFenced(t *testing.T) {
 	if _, err := StructuredToText("bozuk.json", []byte(`{"a":`)); err == nil {
 		t.Fatal("bozuk JSON hata vermeli")
 	}
-	md := "# Kurulum\n\nÖrnek:\n\n```yaml\nclusters:\n  - { zone: dmz, names: [ocpdmzka] }\n```\n\nSon.\n"
+	md := "# Kurulum\n\nÖrnek:\n\n```yaml\nclusters:\n  - { zone: dmz, names: [kubedmza] }\n```\n\nSon.\n"
 	out := AppendFencedStructure(md)
-	if !strings.HasPrefix(out, md) || !strings.Contains(out, "clusters[0] — zone: dmz · names: ocpdmzka") {
+	if !strings.HasPrefix(out, md) || !strings.Contains(out, "clusters[0] — zone: dmz · names: kubedmza") {
 		t.Fatalf("fenced:\n%s", out)
 	}
 	if AppendFencedStructure("düz metin") != "düz metin" {

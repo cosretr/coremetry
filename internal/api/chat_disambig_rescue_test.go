@@ -1,6 +1,6 @@
 package api
 
-// v0.10.1126 — operatör (prod): "BSA cache refresh nasıl girilir" / "Config
+// v0.10.1126 — operatör (prod): "ACM cache refresh nasıl girilir" / "Config
 // cache refresh nasıl girilir?" / "Coremetry adresleri" wiki'ye uğramadı;
 // guided "Hangi servisi kastettin? Adaylar: …" ile bitirdi. Sözleşme:
 //   - geniş nasıl-yapılır işareti ZAYIF (taban kapılı); telemetri "nasıl"ı değil;
@@ -8,7 +8,7 @@ package api
 //     çipleri "Telemetri için:" altında korunur;
 //   - isabet yok → bugünkü netleştirme bayt bayt aynı;
 //   - wiki kapalı / token / bağlamlı sohbet → ctx ve olaylar bayt bayt aynı.
-// Adlar sentetik (svc-orders, bsa-*, example.test).
+// Adlar sentetik (svc-orders, acm-*, example.test).
 
 import (
 	"context"
@@ -25,9 +25,9 @@ import (
 	"github.com/cilcenk/coremetry/internal/wiki"
 )
 
-var rescueSvcs = []string{"bsaorder-api", "bsaledger-api", "bsagateway", "svc-orders", "svc-payments", "coremetry-api", "coremetry-ui"}
+var rescueSvcs = []string{"acmorder-api", "acmledger-api", "acmgateway", "svc-orders", "svc-payments", "coremetry-api", "coremetry-ui"}
 
-const bsaRunbook = "# BSA cache refresh\n## Adımlar\nBSA yönetim ekranında Cache → Refresh menüsüne girilir; refresh tetiklenir ve bsa cache durumu izlenir."
+const acmRunbook = "# ACM cache refresh\n## Adımlar\nACM yönetim ekranında Cache → Refresh menüsüne girilir; refresh tetiklenir ve acm cache durumu izlenir."
 const coremetryAddrPage = "# Coremetry adresleri\nProd: https://coremetry.example.test — UAT: https://coremetry-uat.example.test adresleri."
 
 // guidedTestServer — guided router'ın ad listeleri önbellekten gelir (depo yok).
@@ -66,7 +66,7 @@ func rescueAnswerText(t *testing.T, ev []emitted) string {
 
 func TestWikiHowToCue(t *testing.T) {
 	for _, q := range []string{
-		"BSA cache refresh nasıl girilir", "Config cache refresh nasıl girilir?", "Coremetry adresleri",
+		"ACM cache refresh nasıl girilir", "Config cache refresh nasıl girilir?", "Coremetry adresleri",
 		"vpn nasıl açılır", "yeni kullanıcı nasıl eklenir", "alarm nasıl tanımlanır", "job nasıl çalıştırılır",
 		"sertifika nasıl yenilenir", "kuyruk nasıl temizlenir", "loglara nasıl erişebilirim", "bunu nasıl yaparım",
 		"deploy için ne yapmalı", "release adımları", "token nasıl alınır", "bu servisten kim sorumlu",
@@ -92,20 +92,20 @@ func TestWikiHowToCue(t *testing.T) {
 	}
 }
 
-// Yerinde netleştirme: BSA sorusu bugün guided'da ask_service'e düşüyor.
-func TestBSAQuestionRoutesToAskService(t *testing.T) {
-	r := routeGuidedIntent("BSA cache refresh nasıl girilir", rescueSvcs, nil, nil, "")
+// Yerinde netleştirme: ACM sorusu bugün guided'da ask_service'e düşüyor.
+func TestACMQuestionRoutesToAskService(t *testing.T) {
+	r := routeGuidedIntent("ACM cache refresh nasıl girilir", rescueSvcs, nil, nil, "")
 	if r.Intent != guidedAskService || len(r.ServiceOptions) < 2 {
 		t.Fatalf("ön koşul: guided netleştirme rotası (%s %v)", r.Intent, r.ServiceOptions)
 	}
 }
 
-func TestBSAHowToWithWikiHitAnswersFromWikiKeepsChips(t *testing.T) {
-	api := &fakeWikiAPI{pages: map[string]string{"/Runbooks/BSA cache refresh": bsaRunbook}}
+func TestACMHowToWithWikiHitAnswersFromWikiKeepsChips(t *testing.T) {
+	api := &fakeWikiAPI{pages: map[string]string{"/Runbooks/ACM cache refresh": acmRunbook}}
 	withWikiService(t, wiki.Config{Enabled: true}, api)
 	seen := withFakeNarrator(t, "Cache → Refresh menüsüne girilir.")
 	s := guidedTestServer(t)
-	ev := runChatTiers(t, s, sessionCtx(), "BSA cache refresh nasıl girilir", wikiTierContext{})
+	ev := runChatTiers(t, s, sessionCtx(), "ACM cache refresh nasıl girilir", wikiTierContext{})
 	if len(*seen) != 1 || !strings.Contains((*seen)[0], "<wiki_data>") || !strings.Contains((*seen)[0], "Refresh menüsüne") {
 		t.Fatalf("model wiki bağlamını görmeli: %v", *seen)
 	}
@@ -115,7 +115,7 @@ func TestBSAHowToWithWikiHitAnswersFromWikiKeepsChips(t *testing.T) {
 		t.Errorf("wiki cevabı + Telemetri için netleştirmesi: %q", txt)
 	}
 	chips, _ := a["suggestions"].([]string)
-	if len(chips) < 2 || !strings.Contains(strings.Join(chips, "|"), "bsa") {
+	if len(chips) < 2 || !strings.Contains(strings.Join(chips, "|"), "acm") {
 		t.Errorf("netleştirme çipleri korunmalı: %v", chips)
 	}
 	if links, _ := a["links"].([]guidedAnswerLink); len(links) == 0 || !strings.Contains(links[0].Href, "devops.example.test") {
@@ -126,8 +126,8 @@ func TestBSAHowToWithWikiHitAnswersFromWikiKeepsChips(t *testing.T) {
 	}
 }
 
-func TestBSAHowToWithoutWikiHitKeepsTodaysDisambiguation(t *testing.T) {
-	q := "BSA cache refresh nasıl girilir"
+func TestACMHowToWithoutWikiHitKeepsTodaysDisambiguation(t *testing.T) {
+	q := "ACM cache refresh nasıl girilir"
 	base := runChatTiers(t, guidedTestServer(t), sessionCtx(), q, wikiTierContext{}) // wiki yok (global nil)
 	api := &fakeWikiAPI{pages: map[string]string{"/Mimari": "# Mimari\nÖdeme akışı svc-payments ve svc-ledger arasında."}}
 	withWikiService(t, wiki.Config{Enabled: true}, api)
@@ -146,13 +146,13 @@ func TestBSAHowToWithoutWikiHitKeepsTodaysDisambiguation(t *testing.T) {
 
 // İşaretsiz soru guided'da netleştirmeye düşerse kurtarma devreye girer.
 func TestDisambiguationRescueWithWikiHit(t *testing.T) {
-	q := "bsa servisini bul"
+	q := "acm servisini bul"
 	if s, w := wikiQuestionCue(q); s || w {
 		t.Fatal("ön koşul: işaretsiz soru")
 	}
 	base := runChatTiers(t, guidedTestServer(t), sessionCtx(), q, wikiTierContext{})
 	baseAns := answerOf(t, base)
-	api := &fakeWikiAPI{pages: map[string]string{"/Runbooks/BSA cache refresh": bsaRunbook}}
+	api := &fakeWikiAPI{pages: map[string]string{"/Runbooks/ACM cache refresh": acmRunbook}}
 	withWikiService(t, wiki.Config{Enabled: true, Mode: wiki.ModeLive}, api)
 	seen := withFakeNarrator(t, "Refresh menüsünden tetiklenir.")
 	ev := runChatTiers(t, guidedTestServer(t), sessionCtx(), q, wikiTierContext{})
@@ -179,7 +179,7 @@ func TestDisambiguationRescueWithWikiHit(t *testing.T) {
 }
 
 func TestDisambiguationRescueWithoutHitIsUnchanged(t *testing.T) {
-	q := "bsa servisini bul"
+	q := "acm servisini bul"
 	base := runChatTiers(t, guidedTestServer(t), sessionCtx(), q, wikiTierContext{})
 	api := &fakeWikiAPI{pages: map[string]string{"/Mimari": "# Mimari\nÖdeme akışı svc-payments."}}
 	withWikiService(t, wiki.Config{Enabled: true, Mode: wiki.ModeLive}, api)
@@ -231,7 +231,7 @@ func TestTelemetryQuestionsUnchangedWithWiki(t *testing.T) {
 
 // Kapı: wiki kapalı / token / bağlamlı sohbet → ctx ve emit DOKUNULMAZ.
 func TestDisambigRescueGateUnchanged(t *testing.T) {
-	msgs := []copilot.ChatMessage{{Role: "user", Text: "bsa servisini bul"}}
+	msgs := []copilot.ChatMessage{{Role: "user", Text: "acm servisini bul"}}
 	s := &Server{}
 	check := func(name string, ctx context.Context, tc wikiTierContext) {
 		t.Helper()
@@ -241,7 +241,7 @@ func TestDisambigRescueGateUnchanged(t *testing.T) {
 		}
 	}
 	check("wiki yok", sessionCtx(), wikiTierContext{})
-	api := &fakeWikiAPI{pages: map[string]string{"/Runbooks/BSA cache refresh": bsaRunbook}}
+	api := &fakeWikiAPI{pages: map[string]string{"/Runbooks/ACM cache refresh": acmRunbook}}
 	withWikiService(t, wiki.Config{Enabled: false}, api)
 	check("wiki kapalı", sessionCtx(), wikiTierContext{})
 	withWikiService(t, wiki.Config{Enabled: true}, api)
@@ -253,9 +253,9 @@ func TestDisambigRescueGateUnchanged(t *testing.T) {
 	}
 	// Wiki kapalıyken (Enabled:false) guided olayları wiki'siz kurulumla aynı.
 	withWikiService(t, wiki.Config{Enabled: false}, api)
-	off := runChatTiers(t, guidedTestServer(t), sessionCtx(), "BSA cache refresh nasıl girilir", wikiTierContext{})
+	off := runChatTiers(t, guidedTestServer(t), sessionCtx(), "ACM cache refresh nasıl girilir", wikiTierContext{})
 	SetWiki(nil)
-	none := runChatTiers(t, guidedTestServer(t), sessionCtx(), "BSA cache refresh nasıl girilir", wikiTierContext{})
+	none := runChatTiers(t, guidedTestServer(t), sessionCtx(), "ACM cache refresh nasıl girilir", wikiTierContext{})
 	if !reflect.DeepEqual(off, none) || len(api.searches) != 0 {
 		t.Errorf("wiki kapalı → bayt bayt aynı: %+v vs %+v (%v)", off, none, api.searches)
 	}
@@ -263,12 +263,12 @@ func TestDisambigRescueGateUnchanged(t *testing.T) {
 
 // Netleştirme işareti yalnız kurulu kurtarmada etkili; işaretsiz cevap geçer.
 func TestDisambigMarkOnlyRescuesMarkedAnswer(t *testing.T) {
-	api := &fakeWikiAPI{pages: map[string]string{"/Runbooks/BSA cache refresh": bsaRunbook}}
+	api := &fakeWikiAPI{pages: map[string]string{"/Runbooks/ACM cache refresh": acmRunbook}}
 	withWikiService(t, wiki.Config{Enabled: true}, api)
 	withFakeNarrator(t, "x")
 	markDisambiguation(context.Background()) // kurulu değil → etkisiz, panik yok
 	ev, emit := collectEmit()
-	_, wrapped := (&Server{}).armDisambigRescue(sessionCtx(), emit, []copilot.ChatMessage{{Role: "user", Text: "bsa servisini bul"}}, wikiTierContext{})
+	_, wrapped := (&Server{}).armDisambigRescue(sessionCtx(), emit, []copilot.ChatMessage{{Role: "user", Text: "acm servisini bul"}}, wikiTierContext{})
 	orig := map[string]any{"text": "svc-orders sağlıklı"}
 	wrapped("answer", orig)
 	if len(*ev) != 1 || !reflect.DeepEqual((*ev)[0].v, orig) || len(api.searches) != 0 {
@@ -362,7 +362,7 @@ func TestWeakCueLiveHitNeedsCoverage(t *testing.T) {
 	withWikiService(t, wiki.Config{Enabled: true, Mode: wiki.ModeLive}, api)
 	seen := withFakeNarrator(t, "x")
 	ev, emit := collectEmit()
-	if h, _ := (&Server{}).wikiChatAnswer(sessionCtx(), emit, []copilot.ChatMessage{{Role: "user", Text: "BSA cache refresh nasıl girilir"}}, wikiTierContext{}); h || len(*ev) != 0 || len(*seen) != 0 {
+	if h, _ := (&Server{}).wikiChatAnswer(sessionCtx(), emit, []copilot.ChatMessage{{Role: "user", Text: "ACM cache refresh nasıl girilir"}}, wikiTierContext{}); h || len(*ev) != 0 || len(*seen) != 0 {
 		t.Errorf("kapsamsız sıra-0 canlı isabet zayıf kademeyi geçmemeli: h=%v %+v", h, *ev)
 	}
 }

@@ -16,9 +16,9 @@ import (
 
 func TestFoldDuplicateLogStacks(t *testing.T) {
 	deep := "java.lang.NullPointerException: boom\n" +
-		strings.Repeat("\tat com.bsa.card.CardService.load(CardService.java:246)\n", 60)
+		strings.Repeat("\tat com.example.card.CardService.load(CardService.java:246)\n", 60)
 	other := "java.sql.SQLException: connection reset\n" +
-		strings.Repeat("\tat com.bsa.db.Pool.borrow(Pool.java:88)\n", 60)
+		strings.Repeat("\tat com.example.db.Pool.borrow(Pool.java:88)\n", 60)
 	// Prompt'ta GÖRÜNEN temsilî kopya (pickExceptionStack ile aynı kırpma).
 	primary := truncRunes(deep, 1800)
 
@@ -111,7 +111,7 @@ func TestFoldDuplicateLogStacks(t *testing.T) {
 // 12 kopya prompt'ta ~10.8k rune tutuyordu.
 func TestFoldDuplicateLogStacksSavesBudget(t *testing.T) {
 	deep := "java.lang.IllegalStateException: x\n" +
-		strings.Repeat("\tat com.bsa.a.B.c(B.java:12)\n", 80)
+		strings.Repeat("\tat com.example.a.B.c(B.java:12)\n", 80)
 	stacks := make([]string, 12)
 	for i := range stacks {
 		stacks[i] = deep
@@ -134,7 +134,7 @@ func TestFoldDuplicateLogStacksSavesBudget(t *testing.T) {
 
 func TestSameStackText(t *testing.T) {
 	long := "java.lang.NullPointerException: something failed badly here\n" +
-		strings.Repeat("\tat com.bsa.x.Y.z(Y.java:10)\n", 10)
+		strings.Repeat("\tat com.example.x.Y.z(Y.java:10)\n", 10)
 
 	tests := []struct {
 		name string

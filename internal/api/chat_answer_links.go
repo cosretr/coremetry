@@ -1,7 +1,7 @@
 package api
 
 // chat_answer_links.go — v0.10.1297 (operatör 2026-10-17, prod CoSRE, gemma4
-// 31b): BSA operasyon adı sorusunun cevabında model metne
+// 31b): ACM operasyon adı sorusunun cevabında model metne
 //
 //	// build_link result
 //	https://coremetry.io/traces?order=desc&range=custom:…&search=<ad>&sort=duration

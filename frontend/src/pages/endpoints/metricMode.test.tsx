@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 // metricMode.test.tsx — v0.10.1352, Operator-reported (prod):
-// /endpoint?service=bsa-loan-assessment-allocation-prod&path=/BSAWEB/decision/
+// /endpoint?service=acm-order-quote-allocation-prod&path=/ACMWEB/decision/
 // service/rest&range=3h "Kaynak: metrik (vm)" — Calls/requests ve gecikme
 // grafikleri (p95 seçiliyken de) Service → HTTP Metrics sekmesindeki aynı
 // route ile tutmuyordu; sayfa /api/endpoints/metric'in kendi adım-başı
@@ -31,8 +31,8 @@ const m = vi.hoisted(() => ({
   scope: null as unknown, scopeCalls: [] as unknown[], gate: Promise.resolve() as Promise<void>,
 }));
 
-const SVC = 'bsa-loan-assessment-allocation-prod';
-const ROUTE = '/BSAWEB/decision/service/rest';
+const SVC = 'acm-order-quote-allocation-prod';
+const ROUTE = '/ACMWEB/decision/service/rest';
 const one = (v: number, labels: Record<string, string> = {}): SpanMetricSeries[] => [{
   groupKey: Object.entries(labels).map(([k, x]) => `${k}="${x}"`),
   points: [{ time: 1e9, value: v }],
@@ -40,14 +40,14 @@ const one = (v: number, labels: Record<string, string> = {}): SpanMetricSeries[]
 
 vi.mock('@/lib/api', () => {
   const row: EndpointRow = {
-    service: 'bsa-loan-assessment-allocation-prod', path: '/BSAWEB/decision/service/rest',
+    service: 'acm-order-quote-allocation-prod', path: '/ACMWEB/decision/service/rest',
     calls: 999, errors: 9, errorRate: 0.9, avgMs: 99, p99Ms: 999, p50Ms: 9, p95Ms: 99, reqPerMin: 9,
   };
   // Pencere sorgularına sabit değer (ifadenin ŞEKLİNDEN): sayfa karoları
   // bunlardan doldurmalı, satırdan (999…) DEĞİL.
   const answer = (q: string): SpanMetricSeries[] => {
     if (!q.includes('[10800s]')) {
-      if (q.startsWith('sum by (http_request_method, http_route) (rate(')) return one(0.11, { http_request_method: 'POST', http_route: '/BSAWEB/decision/service/rest' });
+      if (q.startsWith('sum by (http_request_method, http_route) (rate(')) return one(0.11, { http_request_method: 'POST', http_route: '/ACMWEB/decision/service/rest' });
       return [];
     }
     if (q.startsWith('sum by (http_response_status_code)')) return one(1188, { http_response_status_code: '200' });
@@ -156,7 +156,7 @@ describe('/endpoint metrik kipi = HTTP Metrics sekmesinin sorguları (v0.10.1352
     expect(m.prom.map(c => c.query)).toContain(
       `histogram_quantile(0.95, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_name="${SVC}", http_route="${ROUTE}"}[144s])))`);
     expect(host!.textContent).toContain('P95 gecikme (route)');
-    expect(host!.textContent).toContain('POST /BSAWEB/decision/service/rest');
+    expect(host!.textContent).toContain('POST /ACMWEB/decision/service/rest');
   });
 
   it('?lat=p99 seçimi route panelini p99\'a çevirir', async () => {

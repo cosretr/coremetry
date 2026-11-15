@@ -279,8 +279,8 @@ func TestEnvSuffixesMirrorLogstore(t *testing.T) {
 // v0.9.681 — ORTAM DEĞERİ ORTAM+KÜME olabiliyor.
 //
 // Operatör: "Deploy env-cluster şeklinde sanki geliyor
-// deployment.environment.name" — yani `uat` değil `uat-ocpuat`
-// (ekran görüntüsünde openshift.cluster.name = ocpuat).
+// deployment.environment.name" — yani `uat` değil `uat-kubeuat`
+// (ekran görüntüsünde openshift.cluster.name = kubeuat).
 //
 // v0.9.679/680 TAM eşleşme yapıyordu; böyle bir değerde hiç tutmaz ve
 // kısıt SESSİZCE hiçbir şeyi kısıtlamazdı — "çalışıyor görünür, hiçbir
@@ -289,7 +289,7 @@ func TestEnvValueRegexAcceptsEnvClusterForm(t *testing.T) {
 	re := regexp.MustCompile(EnvValueRegex("uat"))
 	for _, ok := range []string{
 		"uat",          // düz ortam
-		"uat-ocpuat",   // operatörün kurulumu: ortam+küme
+		"uat-kubeuat",  // operatörün kurulumu: ortam+küme
 		"uat-ocp-eu-1", // çok parçalı sonek
 	} {
 		if !re.MatchString(ok) {
@@ -303,7 +303,7 @@ func TestEnvValueRegexAcceptsEnvClusterForm(t *testing.T) {
 func TestEnvValueRegexRejectsOtherEnvs(t *testing.T) {
 	re := regexp.MustCompile(EnvValueRegex("uat"))
 	for _, bad := range []string{
-		"prod", "prod-ocpuat", // başka ortam
+		"prod", "prod-kubeuat", // başka ortam
 		"uatest", "uat2", // ad uzantısı, ayırıcı yok
 		"preuat", "x-uat", // önek
 	} {

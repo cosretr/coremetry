@@ -18,7 +18,7 @@ describe('api.spanMetricBatch gövdesi', () => {
     }));
     await api.spanMetricBatch({
       from: 1, to: 2, step: 60,
-      search: '/BSAWEB/x/execute', rootOnly: true, hasError: true,
+      search: '/ACMWEB/x/execute', rootOnly: true, hasError: true,
       filters: JSON.stringify([{ k: 'kind', op: 'IN', v: ['server'] }]),
       dsl: 'service.name = "svc"',
       aggs: [{ name: 'count', agg: 'count' }],
@@ -26,7 +26,7 @@ describe('api.spanMetricBatch gövdesi', () => {
     expect(calls.length).toBe(1);
     expect(calls[0].url).toContain('/api/spans/metric-batch');
     const b = calls[0].body as Record<string, unknown>;
-    expect(b.search).toBe('/BSAWEB/x/execute');
+    expect(b.search).toBe('/ACMWEB/x/execute');
     expect(b.rootOnly).toBe(true);
     expect(b.hasError).toBe(true);
     expect(b.filters).toEqual([{ k: 'kind', op: 'IN', v: ['server'] }]);

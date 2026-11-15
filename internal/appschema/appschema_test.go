@@ -26,7 +26,7 @@ func TestParseCSVDialects(t *testing.T) {
 	}{
 		{"db2 syscat", db2CSV},
 		{"oracle all_tab_columns ; ayraç", "OWNER;TABLE_NAME;COLUMN_NAME;DATA_TYPE;DATA_LENGTH;DATA_SCALE;NULLABLE\nSHOP;ORDER_PHONE;CUSTOMER_NO;NUMBER;15;0;N\nSHOP;ORDER_PHONE;PHONE;VARCHAR2;10;;N\nSHOP;ORDER_PHONE;NOTE;VARCHAR2;200;;Y\nSHOP;CUSTOMER;CUSTOMER_NO;NUMBER;15;0;N\n"},
-		{"information_schema sekme + BOM + küçük harf", "\uFEFFtable_schema\ttable_name\tcolumn_name\tdata_type\tcharacter_maximum_length\tnumeric_scale\tis_nullable\nbsa\torder_phone\tcustomer_no\tnumeric\t15\t0\tNO\nbsa\torder_phone\tphone\tcharacter varying\t10\t\tNO\nbsa\torder_phone\tnote\tcharacter varying\t200\t\tYES\nbsa\tcustomer\tcustomer_no\tnumeric\t15\t0\tNO\n"},
+		{"information_schema sekme + BOM + küçük harf", "\uFEFFtable_schema\ttable_name\tcolumn_name\tdata_type\tcharacter_maximum_length\tnumeric_scale\tis_nullable\nacm\torder_phone\tcustomer_no\tnumeric\t15\t0\tNO\nacm\torder_phone\tphone\tcharacter varying\t10\t\tNO\nacm\torder_phone\tnote\tcharacter varying\t200\t\tYES\nacm\tcustomer\tcustomer_no\tnumeric\t15\t0\tNO\n"},
 		{"el yazımı", "table,column,type,length,nullable\nORDER_PHONE,CUSTOMER_NO,DECIMAL,15,N\nORDER_PHONE,PHONE,VARCHAR,10,N\nORDER_PHONE,NOTE,VARCHAR,200,Y\nCUSTOMER,CUSTOMER_NO,DECIMAL,15,N\n"},
 	}
 	for _, c := range cases {

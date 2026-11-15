@@ -3,7 +3,7 @@ package api
 // v0.10.1331 — CoSRE operasyon → Exceptions: paylaşılan okuma dikişi
 // (chat_exception_groups.go) — sahte okuyucuyla toplama (yalnız Oracle,
 // karışık, 5 tavanı, OKUNAMADI ≠ grup yok), saf render altını, ön-getirme
-// metninin model tavanı altında kalması ve BSA biçim kapısı.
+// metninin model tavanı altında kalması ve ACM biçim kapısı.
 
 import (
 	"context"
@@ -38,11 +38,11 @@ func (f *fakeExGroups) GetExceptionGroupSamples(_ context.Context, fp string, _ 
 
 var exNow = time.Date(2026, 10, 18, 10, 0, 0, 0, time.UTC)
 
-const exOp = "LOAN_CONSUMER_APP_APPLICATIONTRX_DIRECT_CREDIT_PRE_APPROVAL_REST"
+const exOp = "LOAN_CONSUMER_APP_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST"
 
 func exOraRow(code string, lastAgo time.Duration) chstore.ExceptionGroup {
 	return chstore.ExceptionGroup{Fingerprint: chstore.OracleGroupFingerprint("src1", code, exOp), Type: code, Message: exOp,
-		Service: "bsa-loan", State: "new", Occurrences: 12345,
+		Service: "acm-loan", State: "new", Occurrences: 12345,
 		FirstSeen: exNow.Add(-26 * time.Hour).UnixNano(), LastSeen: exNow.Add(-lastAgo).UnixNano()}
 }
 
@@ -51,7 +51,7 @@ func exHooks() exGroupHooks {
 		priority: func(g chstore.ExceptionGroup) (string, string) { return "P1", "Teknik hata patlaması" },
 		oracleInfo: func(g chstore.ExceptionGroup) *chstore.OracleGroupInfo {
 			return &chstore.OracleGroupInfo{Known: true, LastHour: 900, PrevHour: 200, ServiceCount: 2,
-				Services: []chstore.OracleNamedNum{{Name: "bsa-loan", Count: 800}, {Name: "mobile-bff", Count: 100}}}
+				Services: []chstore.OracleNamedNum{{Name: "acm-loan", Count: 800}, {Name: "mobile-bff", Count: 100}}}
 		},
 	}
 }
@@ -74,7 +74,7 @@ func TestCollectExceptionGroupsOracleOnly(t *testing.T) {
 	}
 	g := ev.Groups[0]
 	if !g.Oracle || g.Code != "COR-30518" || g.Operation != exOp || g.Priority != "P1" || !g.HourKnown || g.LastHour != 900 ||
-		!reflect.DeepEqual(g.Services, []string{"bsa-loan", "mobile-bff"}) || g.Sample != "Kredi ön onay zaman aşımı" ||
+		!reflect.DeepEqual(g.Services, []string{"acm-loan", "mobile-bff"}) || g.Sample != "Kredi ön onay zaman aşımı" ||
 		!reflect.DeepEqual(g.SampleTraceIDs, []string{"bbbb", "cccc"}) || g.Href != "/problems?exc="+strings.Replace(r.Fingerprint, ":", "%3A", 1) ||
 		g.ExplainHref != g.Href+"&ai=exception" {
 		t.Fatalf("satır: %+v", g)
@@ -87,7 +87,7 @@ func TestCollectExceptionGroupsMixedCapAndErrors(t *testing.T) {
 		rows = append(rows, exOraRow(fmt.Sprintf("COR-%05d", i), time.Duration(i+1)*time.Minute))
 	}
 	span := chstore.ExceptionGroup{Fingerprint: "0123456789abcdef", Type: "java.net.SocketTimeoutException", Message: exOp,
-		Service: "bsa-gw", State: "acknowledged", Occurrences: 7, LastSeen: exNow.UnixNano()}
+		Service: "acm-gw", State: "acknowledged", Occurrences: 7, LastSeen: exNow.UnixNano()}
 	rows[1] = span
 	fk := &fakeExGroups{rows: rows}
 	ev := collectExceptionGroups(context.Background(), fk, exScope{Messages: []string{exOp}, From: exNow.Add(-time.Hour), To: exNow}, exHooks())
@@ -98,7 +98,7 @@ func TestCollectExceptionGroupsMixedCapAndErrors(t *testing.T) {
 		t.Fatalf("örnek okuması ≤%d grup: %v", exGroupSampleGroups, fk.sampled)
 	}
 	sg := ev.Groups[1]
-	if sg.Oracle || sg.Code != "" || sg.HourKnown || !reflect.DeepEqual(sg.Services, []string{"bsa-gw"}) {
+	if sg.Oracle || sg.Code != "" || sg.HourKnown || !reflect.DeepEqual(sg.Services, []string{"acm-gw"}) {
 		t.Fatalf("span grubu Oracle istatistiği almaz: %+v", sg)
 	}
 	if !strings.Contains(exGroupTrendTR(sg), "span grubu") {
@@ -143,22 +143,22 @@ func TestRenderExceptionGroupsTRGolden(t *testing.T) {
 		Fingerprint: "ora:0123456789abcdef", Type: "COR-30518", Message: exOp, State: "new", Priority: "P1", PriorityReason: "Teknik hata patlaması: son 1 sa 900",
 		Oracle: true, Code: "COR-30518", Operation: exOp, HourKnown: true, LastHour: 900, PrevHour: 200, Occurrences: 12345,
 		FirstSeen: exNow.Add(-26 * time.Hour).UnixNano(), LastSeen: exNow.Add(-4 * time.Minute).UnixNano(),
-		Services: []string{"bsa-loan"}, ServiceCount: 2, SampleTraceIDs: []string{"4bf92f3577b34da6a3ce929d0e0e4736"},
+		Services: []string{"acm-loan"}, ServiceCount: 2, SampleTraceIDs: []string{"4bf92f3577b34da6a3ce929d0e0e4736"},
 		Sample: "Kredi ön onay zaman aşımı", Href: "/problems?exc=ora%3A0123456789abcdef",
-	}, {Fingerprint: "0123456789abcdef", Type: "java.net.SocketTimeoutException", Message: "Read timed out", Service: "bsa-gw", State: "resolved",
-		Priority: "P3", PriorityReason: "düşük hacim", Occurrences: 7, LastSeen: exNow.Add(-2 * time.Hour).UnixNano(), Services: []string{"bsa-gw"}, ServiceCount: 1,
+	}, {Fingerprint: "0123456789abcdef", Type: "java.net.SocketTimeoutException", Message: "Read timed out", Service: "acm-gw", State: "resolved",
+		Priority: "P3", PriorityReason: "düşük hacim", Occurrences: 7, LastSeen: exNow.Add(-2 * time.Hour).UnixNano(), Services: []string{"acm-gw"}, ServiceCount: 1,
 		Href: "/problems?exc=0123456789abcdef"}, {Fingerprint: "ora:fedcba9876543210", Oracle: true, Code: "COR-1", Operation: exOp, State: "new",
 		HourKnown: true, LastHour: 50, PrevHour: 60, Occurrences: 110, LastSeen: exNow.Add(-90 * time.Second).UnixNano(), Href: "/problems?exc=ora%3Afedcba9876543210"}}}
 	want := "Exceptions teknik hata grupları — " + exOp + " operasyonu (son 1gün, en yeni önce):\n" +
 		"1. COR-30518 · " + exOp + " · P1 (Teknik hata patlaması: son 1 sa 900) · durum new · son görülme 4dk önce (10-18 09:56 UTC) · ilk 10-17 08:00 UTC · toplam 12,345\n" +
 		"   ne demek: örnek satır mesajı \"Kredi ön onay zaman aşımı\"\n" +
-		"   nerede yoğunlaşıyor: başlıktaki operasyon/kod · servis bsa-loan (toplam 2 servis)\n" +
+		"   nerede yoğunlaşıyor: başlıktaki operasyon/kod · servis acm-loan (toplam 2 servis)\n" +
 		"   patlama mı sürekli akış mı: son 1 sa 900 · önceki 1 sa 200 → patlama (≥3×)\n" +
 		"   örnek trace: 4bf92f3577b34da6a3ce929d0e0e4736\n" +
 		"   Exceptions: /problems?exc=ora%3A0123456789abcdef\n" +
 		"2. java.net.SocketTimeoutException · P3 (düşük hacim) · durum resolved · son görülme 2sa önce (10-18 08:00 UTC) · toplam 7\n" +
 		"   ne demek: mesaj \"Read timed out\"\n" +
-		"   nerede yoğunlaşıyor: başlıktaki operasyon/kod · servis bsa-gw\n" +
+		"   nerede yoğunlaşıyor: başlıktaki operasyon/kod · servis acm-gw\n" +
 		"   patlama mı sürekli akış mı: saatlik sayı yok (span grubu; ömür boyu toplam 7)\n" +
 		"   Exceptions: /problems?exc=0123456789abcdef\n" +
 		"3. COR-1 · " + exOp + " · durum new · son görülme 1dk önce (10-18 09:58 UTC) · toplam 110 · son 1 sa 50 · önceki 1 sa 60 → sürekli akış · Exceptions: /problems?exc=ora%3Afedcba9876543210\n" +

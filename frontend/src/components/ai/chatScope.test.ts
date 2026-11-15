@@ -141,7 +141,7 @@ describe('kaynak komutları', () => {
   it('çip metni komut olarak çözülür', () => {
     expect(commandOf('/excel · 16 satır')).toBe('excel');
     expect(commandOf('/telemetri · orders servisi')).toBe('telemetri');
-    expect(commandOf('/exceptions BSAException')).toBe('exceptions');
+    expect(commandOf('/exceptions ACMException')).toBe('exceptions');
     expect(commandOf('/genel opentelemetry java')).toBe('genel');
     expect(commandOf('/excelx')).toBeUndefined();
   });

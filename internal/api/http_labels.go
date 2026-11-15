@@ -4,7 +4,7 @@ package api
 // çözümü; Service Overview metrik RED'i (service_metric_red.go) kullanır.
 // v0.10.1361 — ikinci tüketici /api/endpoints/metric silindi.
 //
-// Operator-reported (prod): /endpoint?service=bsa-loan-assessment-allocation-
+// Operator-reported (prod): /endpoint?service=acm-order-quote-allocation-
 // prod&… "Kaynak: metrik" → "Hata BİLİNMİYOR: metrikte durum-kodu etiketi yok"
 // derken Service → HTTP Metrics sekmesi (VM) AYNI servis için 200/400
 // kodlarını çiziyordu. Kök neden: etiket varlığı src.MetricPresentKeys ile

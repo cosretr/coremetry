@@ -713,11 +713,11 @@ func extPeerK8sLabel(host string) string {
 // ─── v0.10.1344 — etiket-önek aşaması (ResolveExtPeer 2. aşama) ──────
 //
 // Operatör raporu (2026-10-18, card-web-api komşuluğu, 2 hop): enstrümante
-// `bsa-channel-channelutility-prod` gRPC ile
-// `ext:bsa-channel-channelutility-prod-grpc.channel.svc.cluster.local`,
-// `bsa-customer-maininq-prod` de GSLB/route host'ları
-// `<svc>-prod-kon.<kurum>`, `<svc>-prod-mobil.<kurum>`,
-// `<svc>-prod-sube.<kurum>` adıyla çağrılıyor ve "dış bağımlılık" diye
+// `acm-notify-dispatch-prod` gRPC ile
+// `ext:acm-notify-dispatch-prod-grpc.channel.svc.cluster.local`,
+// `acm-customer-lookup-prod` de GSLB/route host'ları
+// `<svc>-prod-app.<kurum>`, `<svc>-prod-mobile.<kurum>`,
+// `<svc>-prod-web.<kurum>` adıyla çağrılıyor ve "dış bağımlılık" diye
 // çiziliyordu. 1. aşama (ExtPeerServiceCandidates, SQL ikiziyle eşli,
 // DEĞİŞMEDİ) k8s adında yalnız ilk DNS etiketini AYNEN dener
 // (`…-prod-grpc` diye servis yok), GSLB host'unda hiç etiket denemez.
