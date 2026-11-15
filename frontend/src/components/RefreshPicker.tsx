@@ -22,11 +22,11 @@ import { useManualRefresh, useRefreshSettings } from '@/lib/useAutoRefresh';
 //        range", "paused · editing"). Re-rendered every 5 s (a LOCAL tick,
 //        no request; skipped while the tab is hidden). Hidden ≤640px.
 // Screen readers: the manual ↻ announces "Refreshed" once the in-flight
-// count returns to zero (aria-live=polite, manual path only — a 60 s auto
+// count returns to zero (aria-live=polite, manual path only — a periodic auto
 // announcement would be noise).
 //
 // All state lives in lib/useAutoRefresh.ts (URL `?refresh=` > localStorage >
-// 60 s); this component holds only the caption tick and the live message.
+// DEFAULT_REFRESH_SEC, 5 min since v0.10.2264); this component holds only the caption tick and the live message.
 
 function agoLabel(t: (k: string) => string, ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));

@@ -40,11 +40,10 @@ export const REFRESH_CHOICE_SECONDS: Record<RefreshChoice, number> = {
   off: 0, '10s': 10, '30s': 30, '1m': 60, '5m': 300, '15m': 900,
 };
 
-/** Operator default: 60 s. Aligns with the server TTLs — /api/metrics/promql
- *  keys are bucketed to the minute (internal/api/promql.go), red-family and
- *  topology caches are 60 s — so a 60 s tick lands on a fresh bucket every
- *  time while a 30 s tick would hit the same cached minute half the time. */
-export const DEFAULT_REFRESH_SEC = 60;
+/** Operator default: 5 minutes (v0.10.2264, operator decision; was 60 s).
+ *  Applies only when neither `?refresh=` nor a stored user choice exists;
+ *  every shorter choice (10s/30s/1m) stays one pick away in RefreshPicker. */
+export const DEFAULT_REFRESH_SEC = 300;
 /** House floor (CLAUDE.md: polling ≥ 10 s). */
 export const REFRESH_MIN_SEC = 10;
 /** /dashboard floor (lib/dashboardUrl.ts v0.9.779 rationale: a bundle

@@ -3,7 +3,7 @@
 // olabilir. 60 saniye default olabilir, özellikle metrikler için işe yarar."
 //
 // Tablolar: `?refresh=` ayrıştırma/biçimleme (off/0/10s/1m/legacy 30/çöp),
-// öncelik (URL > localStorage > 60 s), taban (10 s; /dashboard 30 s), rota
+// öncelik (URL > localStorage > varsayılan; v0.10.2264: 5 dk), taban (10 s; /dashboard 30 s), rota
 // politikası (kapalı allowlist, önek eşleşmesi, /dashboards ≠ /dashboard),
 // ağır sorgu rung kesmesi, mağaza (bump / hold).
 import { afterEach, describe, expect, it } from 'vitest';
@@ -54,12 +54,12 @@ describe('parseRefreshParam / formatRefreshParam', () => {
   });
 });
 
-describe('resolveRefresh — URL > localStorage > 60 s, sonra taban', () => {
+describe('resolveRefresh — URL > localStorage > 5 dk, sonra taban', () => {
   it('öncelik zinciri', () => {
     expect(resolveRefresh('5m', '30s', REFRESH_MIN_SEC)).toBe(300);
     expect(resolveRefresh(null, '30s', REFRESH_MIN_SEC)).toBe(30);
     expect(resolveRefresh(null, null, REFRESH_MIN_SEC)).toBe(DEFAULT_REFRESH_SEC);
-    expect(DEFAULT_REFRESH_SEC).toBe(60); // operatör: "60 saniye default"
+    expect(DEFAULT_REFRESH_SEC).toBe(300); // v0.10.2264 — operatör kararı: varsayılan 5 dakika
   });
 
   it('URL\'deki açık "off" kaydı EZER (paylaşılan link gönderenin niyetini taşır)', () => {
@@ -69,7 +69,7 @@ describe('resolveRefresh — URL > localStorage > 60 s, sonra taban', () => {
 
   it('çöp URL bir sonraki basamağa düşer', () => {
     expect(resolveRefresh('junk', '5m', REFRESH_MIN_SEC)).toBe(300);
-    expect(resolveRefresh('junk', 'junk', REFRESH_MIN_SEC)).toBe(60);
+    expect(resolveRefresh('junk', 'junk', REFRESH_MIN_SEC)).toBe(DEFAULT_REFRESH_SEC);
   });
 
   it('taban: 10 s genel, 30 s /dashboard; off tabana takılmaz', () => {

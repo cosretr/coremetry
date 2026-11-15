@@ -14397,3 +14397,6 @@ Operatör onayı (anomali kartı mockup §5): yeni ML kartında "Sorun değil" d
 - Önbellek `serveCached` 15 dk (L1 + Redis L2 + singleflight): önbellek süresince entity başına en çok bir log sorgusu. Backend hatası ve uygulanamayan süzgeç (`UnappliedFilters`) "bilinmiyor" (`hasLogs: null` + not) olarak önbelleğe girer; yanlış "log var" yerine bilinmiyor.
 - UI: entity detay sayfasında "log var" / "log yok (1 sa)" rozeti, yalnız şimdi görünümünde ve log kapsamı olan tiplerde. CoSRE'ye bağlanmadı (çözüm başına log sorgusu olmasın; istenirse ayrı karar).
 - Maliyet: ES'e en çok (açılan farklı entity sayfası / 15 dk) kadar `size 1` arama, pencere 1 saat.
+## 2026-11-15 — v0.10.2264 — Otomatik yenilemenin varsayılanı 5 dakika
+
+Operatör kararı: `DEFAULT_REFRESH_SEC` 60 → 300 (`lib/autoRefresh.ts`). Öncelik değişmedi: `?refresh=` > kayıtlı kullanıcı seçimi (`cm.refresh`) > varsayılan; seçenekler (Off/10s/30s/1m/5m/15m), tabanlar (10 s, /dashboard 30 s) ve rota allowlist'i aynı. Etkisi yalnız URL'de `?refresh=` ve kayıtlı seçim olmayan kullanıcıda: allowlist rotalarında (services, service, endpoints, metrics, dashboard, service-map, topology, hosts, clusters) göreli pencere ve LIVE_META sorguları 5 dakikada bir kayar/tazelenir. 2026-10-22 kaydındaki "60 s" ve TTL hizalama gerekçesi bu kararla geçersiz.

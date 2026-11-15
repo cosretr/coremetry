@@ -105,8 +105,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('useAutoRefresh — tik (varsayılan 60 s, allowlist rotası)', () => {
-  it('60 s\'de kimlik kayar, LIVE_META sorgusu tazelenir, etiketsiz sorgu dokunulmaz', async () => {
+describe('useAutoRefresh — tik (varsayılan 5 dk — v0.10.2264, allowlist rotası)', () => {
+  it('5 dk\'da kimlik kayar, LIVE_META sorgusu tazelenir, etiketsiz sorgu dokunulmaz', async () => {
     await mount('/services');
     const first = last();
     expect(first.preset).toBe('3h');
@@ -114,18 +114,18 @@ describe('useAutoRefresh — tik (varsayılan 60 s, allowlist rotası)', () => {
     expect(plainFn).toHaveBeenCalledTimes(1);
     const a0 = refreshSnapshot().anchorMs;
 
-    await advance(59_000);
+    await advance(299_000);
     expect(refreshSnapshot().anchorMs).toBe(a0);
     expect(last()).toBe(first); // tik öncesi aynı kimlik (v0.5.184 sözleşmesi)
 
     await advance(1_000);
-    expect(refreshSnapshot().anchorMs).toBe(a0 + 60_000);
+    expect(refreshSnapshot().anchorMs).toBe(a0 + 300_000);
     expect(last()).not.toBe(first);
     expect(last()).toEqual(first); // aynı değer, yeni kimlik = useMemo([range]) yeniden koşar
     expect(liveFn).toHaveBeenCalledTimes(2);
     expect(plainFn).toHaveBeenCalledTimes(1);
 
-    await advance(60_000);
+    await advance(300_000);
     expect(liveFn).toHaveBeenCalledTimes(3);
   });
 
@@ -133,13 +133,13 @@ describe('useAutoRefresh — tik (varsayılan 60 s, allowlist rotası)', () => {
     await mount('/services');
     const a0 = refreshSnapshot().anchorMs;
     setHidden(true);
-    await advance(180_000);
+    await advance(360_000);
     expect(refreshSnapshot().anchorMs).toBe(a0);
     expect(liveFn).toHaveBeenCalledTimes(1);
     setHidden(false);
     await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
     await advance(0);
-    expect(refreshSnapshot().anchorMs).toBe(a0 + 180_000);
+    expect(refreshSnapshot().anchorMs).toBe(a0 + 360_000);
     expect(liveFn).toHaveBeenCalledTimes(2);
   });
 
@@ -158,22 +158,22 @@ describe('useAutoRefresh — tik (varsayılan 60 s, allowlist rotası)', () => {
     await mount('/services?range=custom:1000-2000');
     const first = last();
     expect(first.preset).toBe('custom');
-    await advance(130_000);
+    await advance(330_000);
     expect(last()).toBe(first);
     expect(liveFn).toHaveBeenCalledTimes(1);
   });
 
   it('?refresh=off, manuel rota ve hold → tik yok', async () => {
     await mount('/services?refresh=off');
-    await advance(130_000);
+    await advance(330_000);
     expect(liveFn).toHaveBeenCalledTimes(1);
 
     await remount('/logs');
-    await advance(130_000);
+    await advance(330_000);
     expect(liveFn).toHaveBeenCalledTimes(2); // yalnız mount fetch'i
 
     await remount('/services', true);
-    await advance(130_000);
+    await advance(330_000);
     expect(liveFn).toHaveBeenCalledTimes(3);
   });
 

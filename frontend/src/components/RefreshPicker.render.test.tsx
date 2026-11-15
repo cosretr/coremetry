@@ -86,9 +86,9 @@ afterEach(() => {
 });
 
 describe('RefreshPicker (v0.10.1430)', () => {
-  it('allowlist rotasında varsayılan 1m ve altı seçenek; zaman seçicinin sağında', async () => {
+  it('allowlist rotasında varsayılan 5m (v0.10.2264) ve altı seçenek; zaman seçicinin sağında', async () => {
     await mount('/services', topbar());
-    expect(sel().value).toBe('1m');
+    expect(sel().value).toBe('5m');
     expect(sel().disabled).toBe(false);
     expect(options()).toEqual(['off', '10s', '30s', '1m', '5m', '15m']);
     const trp = host.querySelector('.trp')!;

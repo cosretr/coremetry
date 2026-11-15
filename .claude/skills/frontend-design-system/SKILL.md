@@ -386,7 +386,7 @@ Bonus ret: native `confirm()` · `chartsV2` kelimesi (yorumda bile) ·
 - **Themes** are token-level CSS vars only (dark/light/redhat v0.8.268); chrome variants via scoped token remap; charts re-resolve on `data-theme`.
 - **ES-cost UI:** fetch on expand/open only, no list prefetch, staleTime ≥ server TTL, cache-key params snapped to bounded rungs (v0.8.270).
 - **Shapes:** `lib/types.ts` is the single source — never re-declare in components. PascalCase types, camelCase props, `?:` for `omitempty`.
-- Range-keyed data refreshes through the ONE global clock (`lib/autoRefresh.ts` + Topbar `RefreshPicker`, default 60s, closed route allowlist): never add `refetchInterval` to a `from/to`-keyed query (re-requests a frozen window); `since`-keyed queries opt in with `meta: LIVE_META`. New polling loops extend `lib/pollingBudget.pin.test.ts` (v0.10.1430).
+- Range-keyed data refreshes through the ONE global clock (`lib/autoRefresh.ts` + Topbar `RefreshPicker`, default 5 min since v0.10.2264, closed route allowlist): never add `refetchInterval` to a `from/to`-keyed query (re-requests a frozen window); `since`-keyed queries opt in with `meta: LIVE_META`. New polling loops extend `lib/pollingBudget.pin.test.ts` (v0.10.1430).
 - Live updates: ONE SSE bus — `/api/events` held by the shell's `useEventStream` (leader tab + BroadcastChannel); new event kind → `lib/queries/eventInvalidations.ts`. Components never open their own `EventSource` (HTTP/1.1 ~6-connection budget). Event-less data polls ≥10s.
 
 ## Ev kuralları (eski /frontend-conventions)
