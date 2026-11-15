@@ -303,6 +303,21 @@ func podRestartsQuery(nsFilter, podRe string) string {
 		podMatcher(podRe), nsMatcher(nsFilter))
 }
 
+// v0.10.2245 — Ready kolonu (OpenShift Console "2/2"): hazır container
+// sayısı ve toplam container sayısı. İç max by container: HA Prometheus /
+// çift KSM kopyası aynı container'ı iki kez saydırmasın.
+func podReadyQuery(nsFilter, podRe string) string {
+	return fmt.Sprintf(
+		`sum by (namespace, pod) (max by (namespace, pod, container) (kube_pod_container_status_ready{%s%s}))`,
+		podMatcher(podRe), nsMatcher(nsFilter))
+}
+
+func podContainerCountQuery(nsFilter, podRe string) string {
+	return fmt.Sprintf(
+		`count by (namespace, pod) (max by (namespace, pod, container) (kube_pod_container_status_ready{%s%s}))`,
+		podMatcher(podRe), nsMatcher(nsFilter))
+}
+
 // Pod son-sonlanma sebebi (v0.9.1276, Dynatrace-parite #5): restart
 // SAYISI vardı ama SEBEBİ yoktu — OOMKilled'ı operatör yalnız
 // kubectl'de görüyordu. KSM (ns,pod,container,reason) etiketli seri

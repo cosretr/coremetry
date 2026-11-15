@@ -132,6 +132,9 @@ func promqlTemplateTable() map[string]string {
 		"nodeCreatedQuery":       nodeCreatedQuery(),
 		"podUnschedulableQuery":  podUnschedulableQuery("", ""),
 		"podRestartChangesQuery": podRestartChangesQuery("ns", "p", 60),
+		// v0.10.2245 — Ready kolonu.
+		"podReadyQuery":          podReadyQuery("ns", ""),
+		"podContainerCountQuery": podContainerCountQuery("ns", ""),
 	}
 }
 

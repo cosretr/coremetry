@@ -31,3 +31,23 @@ export function podLimitHint(pctOfLimit: number | undefined, lang: Lang): string
 export function podStatusText(r: Pick<ClusterPodRow, 'phase' | 'unschedulable'>, lang: Lang): string {
   return podStatusWord(r, undefined, lang).word;
 }
+
+// v0.10.2245 — OpenShift Console "Ready" kolonu: hazır / toplam container.
+// Sunucu yalnız namespace kapsamında doldurur; containers yoksa ''.
+type ReadyRow = Pick<ClusterPodRow, 'readyContainers' | 'containers'>;
+
+/** "2/2"; bilinmiyorsa ''. */
+export function podReadyText(r: ReadyRow): string {
+  if (!r.containers) return '';
+  return `${r.readyContainers ?? 0}/${r.containers}`;
+}
+
+/** Hazır < toplam → tablonun uyarı tonu; aksi hâlde undefined. */
+export function podReadyTone(r: ReadyRow): 'warn' | undefined {
+  return r.containers && (r.readyContainers ?? 0) < r.containers ? 'warn' : undefined;
+}
+
+/** Sıralama değeri: hazır oranı; bilinmiyorsa -1 (en sona). */
+export function podReadySortValue(r: ReadyRow): number {
+  return r.containers ? (r.readyContainers ?? 0) / r.containers : -1;
+}

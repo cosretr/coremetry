@@ -51,6 +51,10 @@ func clusterWideQuerier(t *testing.T, seen *[]string, mu *sync.Mutex) *httptest.
 				series = append(series, fmt.Sprintf(`{"metric":{"namespace":"%s","pod":"%s","node":"kprod-worker-3"},"value":[1784271068,"1"]}`, ns, pod))
 			case strings.Contains(q, "kube_pod_container_status_restarts_total"):
 				series = append(series, fmt.Sprintf(`{"metric":{"namespace":"%s","pod":"%s"},"value":[1784271068,"0"]}`, ns, pod))
+			case strings.Contains(q, "count by (namespace, pod)") && strings.Contains(q, "kube_pod_container_status_ready"):
+				series = append(series, fmt.Sprintf(`{"metric":{"namespace":"%s","pod":"%s"},"value":[1784271068,"2"]}`, ns, pod))
+			case strings.Contains(q, "kube_pod_container_status_ready"):
+				series = append(series, fmt.Sprintf(`{"metric":{"namespace":"%s","pod":"%s"},"value":[1784271068,"1"]}`, ns, pod))
 			}
 		}
 		usage := strings.Contains(q, "container_")
@@ -95,6 +99,12 @@ func TestPodMetricsInNamespaceJoinsPhaseNodeLimit(t *testing.T) {
 	if !found {
 		t.Fatal("fixture: portal row missing from cluster-wide inventory")
 	}
+	// v0.10.2245 — Ready sorgusu cluster genelinde ASLA koşmaz (seri tavanı).
+	for _, q := range seen {
+		if strings.Contains(q, "kube_pod_container_status_ready") {
+			t.Errorf("cluster-wide inventory ran a Ready query: %s", q)
+		}
+	}
 
 	seen = nil
 	rows, trunc, err := s.PodMetricsInNamespace(context.Background(), c, "portal")
@@ -107,6 +117,9 @@ func TestPodMetricsInNamespaceJoinsPhaseNodeLimit(t *testing.T) {
 	r := rows[0]
 	if r.Phase != "Running" || r.Node != "kprod-worker-3" || r.CPUPct != 20 || r.RestartsUnknown {
 		t.Fatalf("phase/node/cpu%%/restarts not joined: %+v", r)
+	}
+	if r.ReadyContainers != 1 || r.Containers != 2 {
+		t.Fatalf("ready/total not joined: %+v", r)
 	}
 	for _, q := range seen {
 		if !strings.Contains(q, `namespace=~"portal"`) {

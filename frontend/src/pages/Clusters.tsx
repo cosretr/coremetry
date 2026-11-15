@@ -47,7 +47,7 @@ import { pushZoom, popZoom } from '@/lib/chart/zoomHistory';
 // (v0.10.2181 ADDİTİF seçenek) ile cv-row basar.
 import { DataTable as CmDataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { podStatusWord as nsPodStatusWord, podRestartText } from '@/pages/clusters/nsDetailModel';
-import { podCpuText, podMemText, podLimitHint, podStatusText } from '@/pages/clusters/podUsage';
+import { podCpuText, podMemText, podLimitHint, podStatusText, podReadyText, podReadyTone, podReadySortValue } from '@/pages/clusters/podUsage';
 import { TableViewBar } from '@/components/coremetry/TableViewBar';
 import {
   NODE_COLS, NODE_COMPACT, NODE_SORT_IDS, nodeStatus, nodePodsText, nodeCpuText, nodeMemText, nodeCpuPct,
@@ -121,6 +121,8 @@ const POD_COLS: ColumnDef<ClusterPodRow>[] = [
   { id: 'service',   label: 'Service',   sortValue: r => r.service ?? '', naturalDir: 'asc', width: 150, minWidth: 110, ownLink: true },
   { id: 'phase',     label: 'Status',    sortValue: r => r.phase ?? '', naturalDir: 'asc', width: 110, minWidth: 90,
     tone: r => nsPodStatusWord(r).tone ?? undefined },
+  // v0.10.2245 — OpenShift Console "Ready" (hazır / toplam container); yalnız namespace kapsamında dolu.
+  { id: 'ready',     label: 'Ready',     sortValue: podReadySortValue, numeric: true, width: 80, minWidth: 64, tone: podReadyTone },
   { id: 'cpuCores',  label: 'CPU',       sortValue: r => r.cpuCores,  numeric: true, width: 150, minWidth: 110 },
   { id: 'memBytes',  label: 'Memory',    sortValue: r => r.memBytes,  numeric: true, width: 160, minWidth: 110 },
   { id: 'restarts',  label: 'Restarts',  sortValue: r => (r.restartsUnknown ? -1 : r.restarts ?? 0), numeric: true, width: 150, minWidth: 96,
@@ -406,8 +408,11 @@ export default function ClustersPage() {
   const podQs = useQueries({
     queries: detailList.map(name => ({
       // v0.10.2192 — namespace detayı kapsamlı envanter çeker (ayrı cache slotu).
-      queryKey: nsView ? ['cluster-pods', name, nsFilterEarly] : ['cluster-pods', name],
-      queryFn: () => api.clusterPods(name, undefined, nsView ? nsFilterEarly : undefined),
+      // v0.10.2245 — Pods sekmesi ?namespace= ile açıldığında da kapsamlı
+      // envanter (satırlar zaten o namespace'e süzülüyordu; Ready kolonu
+      // yalnız kapsamlı sorguda gelir).
+      queryKey: nsFilterEarly ? ['cluster-pods', name, nsFilterEarly] : ['cluster-pods', name],
+      queryFn: () => api.clusterPods(name, undefined, nsFilterEarly || undefined),
       staleTime: 60_000,
       retry: 1,
       enabled: section === 'pods' || nsView,
@@ -1155,6 +1160,7 @@ function podCellContent(r: ClusterPodRow, col: string, range: TimeRange, lang: L
       ? <Link to={serviceHref(r.service, { range })}>{r.service}</Link>
       : <span className="cell-empty" title={t('clusters.pod.noSvc', lang)}>—</span>;
     case 'phase': return podStatusText(r, lang) || <span className="cell-empty">—</span>;
+    case 'ready': return podReadyText(r) || <span className="cell-empty" title={t('clusters.pod.readyNsOnly', lang)}>—</span>;
     case 'cpuCores': return <span title={pctTitle('CPU', r.cpuPct, r.cpuPctOfReq)}>{podCpuText(r.cpuCores, lang) || '—'}{r.cpuPct ? <span className="cell-muted"> {podLimitHint(r.cpuPct, lang)}</span> : null}</span>;
     case 'memBytes': return <span title={pctTitle('Memory', r.memPct, r.memPctOfReq)}>{podMemText(r.memBytes) || '—'}{r.memPct ? <span className="cell-muted"> {podLimitHint(r.memPct, lang)}</span> : null}</span>;
     case 'cpuPct': return <span title={pctTitle('CPU', r.cpuPct, r.cpuPctOfReq)}>{r.cpuPct ? fmtPctLang(Math.round(r.cpuPct), lang) : '—'}</span>;

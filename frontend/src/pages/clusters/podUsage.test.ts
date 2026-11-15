@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { podCpuText, podMemText, podLimitHint, podStatusText } from './podUsage';
+import { podCpuText, podMemText, podLimitHint, podStatusText, podReadyText, podReadyTone, podReadySortValue } from './podUsage';
 
 // v0.10.2194 — pod kullanımı OpenShift Console gibi mutlak; limit yüzdesi ipucu.
 describe('pod kullanım hücreleri', () => {
@@ -35,5 +35,28 @@ describe('pod kullanım hücreleri', () => {
     const ns = readFileSync(new URL('./NamespaceDetail.tsx', import.meta.url), 'utf8');
     expect(ns).toContain("podMemText(r.memBytes)");
     expect(ns).not.toContain("'Mem / limit'");
+  });
+});
+
+// v0.10.2245 — Ready kolonu: hazır / toplam container, eksikte uyarı tonu.
+describe('pod Ready hücresi', () => {
+  it('"2/2", eksikte warn, bilinmiyorsa boş', () => {
+    expect(podReadyText({ readyContainers: 2, containers: 2 })).toBe('2/2');
+    expect(podReadyTone({ readyContainers: 2, containers: 2 })).toBeUndefined();
+    expect(podReadyText({ containers: 3 })).toBe('0/3');
+    expect(podReadyTone({ readyContainers: 1, containers: 3 })).toBe('warn');
+    expect(podReadyText({})).toBe('');
+    expect(podReadyTone({})).toBeUndefined();
+  });
+  it('sıralama: oran, bilinmeyen en sonda', () => {
+    expect(podReadySortValue({ readyContainers: 1, containers: 2 })).toBe(0.5);
+    expect(podReadySortValue({})).toBe(-1);
+  });
+  it('iki pod tablosu da Ready kolonunu taşır', () => {
+    for (const f of ['../Clusters.tsx', './NamespaceDetail.tsx']) {
+      const src = readFileSync(new URL(f, import.meta.url), 'utf8');
+      expect(src).toMatch(/id: 'ready',\s+label: 'Ready'/);
+      expect(src).toContain('tone: podReadyTone');
+    }
   });
 });

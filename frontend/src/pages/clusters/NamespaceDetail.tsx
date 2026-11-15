@@ -1,4 +1,4 @@
-import { podCpuText, podMemText, podLimitHint } from './podUsage';
+import { podCpuText, podMemText, podLimitHint, podReadyText, podReadyTone, podReadySortValue } from './podUsage';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -132,6 +132,8 @@ export function NamespaceDetail({
   const podCols = useMemo<ColumnDef<ClusterPodRow>[]>(() => [
     { id: 'pod', label: 'Pod', sortValue: r => r.pod, naturalDir: 'asc', flex: true, minWidth: 200, mono: true },
     { id: 'status', label: 'Status', sortValue: r => podProblemSortValue(r, waiting[r.pod]), width: 190, tone: r => cellTone(podStatusWord(r, waiting[r.pod]).tone) },
+    // v0.10.2245 — OpenShift Console "Ready" (hazır / toplam container).
+    { id: 'ready', label: 'Ready', sortValue: podReadySortValue, numeric: true, width: 80, tone: podReadyTone },
     { id: 'node', label: 'Node', sortValue: r => r.node ?? '', naturalDir: 'asc', width: 160 },
     // v0.10.2194 — OpenShift Console gibi mutlak kullanım; limit yüzdesi ipucu.
     { id: 'cpu', label: 'CPU', sortValue: r => r.cpuCores, numeric: true, width: 160, tone: r => ((r.cpuPct ?? 0) >= 90 ? 'err' : (r.cpuPct ?? 0) > 65 ? 'warn' : undefined) },
@@ -218,6 +220,7 @@ export function NamespaceDetail({
             switch (col.id) {
               case 'pod': return r.pod;
               case 'status': return podStatusWord(r, waiting[r.pod], lang).word || '—';
+              case 'ready': return podReadyText(r) || '—';
               case 'node': return r.node || (r.phase === 'Pending' ? t('clusters.ns.unassigned', lang) : '—');
               case 'cpu': return `${podCpuText(r.cpuCores, lang) || '—'} ${podLimitHint(r.cpuPct, lang)}`.trim();
               case 'mem': return `${podMemText(r.memBytes) || '—'} ${podLimitHint(r.memPct, lang)}`.trim();

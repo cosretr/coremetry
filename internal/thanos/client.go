@@ -210,6 +210,13 @@ type PodRow struct {
 	// v0.10.2182 (Clusters S13) — zamanlanamıyor (kube_pod_status_unschedulable,
 	// best-effort probe; seri yoksa false). Namespace detayında "Bekliyor · yer yok".
 	Unschedulable bool `json:"unschedulable,omitempty"`
+	// v0.10.2245 — OpenShift Console "Ready" kolonu: hazır container /
+	// toplam container (kube_pod_container_status_ready). YALNIZ
+	// namespace-kapsamlı envanterde doldurulur (PodMetricsInNamespace);
+	// cluster-geneli sorgu 1000-seri tavanına takılırdı. Containers=0 =
+	// bilinmiyor (UI "—").
+	ReadyContainers int `json:"readyContainers,omitempty"`
+	Containers      int `json:"containers,omitempty"`
 }
 
 // termReasonRank — son-sonlanma sebeplerinin kötülük sırası
@@ -650,7 +657,7 @@ func firstN(s string, n int) string {
 // cluster-geneli kesime takılmaz (operator-reported: BFF pod'ları
 // 0.001 core'da top-500'e giremiyordu, "No pods matched").
 func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string) ([]PodRow, bool, error) {
-	return s.podMetrics(ctx, c, podRe, c.NamespaceFilter)
+	return s.podMetrics(ctx, c, podRe, c.NamespaceFilter, false)
 }
 
 // PodMetricsInNamespace — v0.10.2192 (operator-reported: kprod/portal
@@ -669,7 +676,7 @@ func (s *Service) PodMetricsInNamespace(ctx context.Context, c ClusterConfig, na
 	if !ok {
 		return []PodRow{}, false, nil
 	}
-	return s.podMetrics(ctx, c, "", nsf)
+	return s.podMetrics(ctx, c, "", nsf, true)
 }
 
 // scopedNamespaceFilter — SAF: tek namespace'in nsMatcher regex'i
@@ -689,7 +696,9 @@ func scopedNamespaceFilter(clusterFilter, namespace string) (string, bool) {
 	return regexp.QuoteMeta(namespace), true
 }
 
-func (s *Service) podMetrics(ctx context.Context, c ClusterConfig, podRe, nsFilter string) ([]PodRow, bool, error) {
+// withReady — Ready kolonu sorguları (2 sabit sorgu); yalnız namespace
+// kapsamında (v0.10.2245).
+func (s *Service) podMetrics(ctx context.Context, c ClusterConfig, podRe, nsFilter string, withReady bool) ([]PodRow, bool, error) {
 	type acc struct{ cpu, mem, cpuLim, memLim, cpuReq, memReq, netIn, netOut float64 }
 	byKey := map[string]*acc{}
 	get := func(m map[string]string) *acc {
@@ -802,6 +811,26 @@ func (s *Service) podMetrics(ctx context.Context, c ClusterConfig, podRe, nsFilt
 		}
 	}
 
+	// v0.10.2245 — Ready (hazır / toplam container), best-effort, yalnız
+	// namespace kapsamında: seri sayısı o namespace'in pod sayısı kadar.
+	readyBy, ctrBy := map[string]int{}, map[string]int{}
+	if withReady {
+		for _, q := range []struct {
+			query string
+			dst   map[string]int
+		}{{podReadyQuery(nsFilter, podRe), readyBy}, {podContainerCountQuery(nsFilter, podRe), ctrBy}} {
+			series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {q.query}})
+			if err != nil {
+				continue
+			}
+			for _, ser := range series {
+				if v, ok := sampleValue(ser.Value); ok {
+					q.dst[ser.Metric["namespace"]+"\x00"+ser.Metric["pod"]] = int(v)
+				}
+			}
+		}
+	}
+
 	out := make([]PodRow, 0, len(byKey))
 	emitted := map[string]bool{}
 	for k, a := range byKey {
@@ -845,6 +874,10 @@ func (s *Service) podMetrics(ctx context.Context, c ClusterConfig, podRe, nsFilt
 	for i := range out {
 		out[i].Node = nodeBy[out[i].Namespace+"\x00"+out[i].Pod]
 		out[i].Unschedulable = unschedBy[out[i].Namespace+"\x00"+out[i].Pod]
+		if n := ctrBy[out[i].Namespace+"\x00"+out[i].Pod]; n > 0 {
+			out[i].Containers = n
+			out[i].ReadyContainers = readyBy[out[i].Namespace+"\x00"+out[i].Pod]
+		}
 	}
 	return out, truncated, nil
 }

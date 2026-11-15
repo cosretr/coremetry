@@ -2498,6 +2498,10 @@ export interface ClusterPodRow {
   node?: string;
   // v0.10.2182 (Clusters S13) — zamanlanamıyor (probe; yok = false / bilinmiyor).
   unschedulable?: boolean;
+  // v0.10.2245 — Ready kolonu (hazır / toplam container). Yalnız
+  // namespace-kapsamlı envanterde gelir; containers yok = bilinmiyor.
+  readyContainers?: number;
+  containers?: number;
 }
 // v0.9.3 — multi-pod trend serisi (top-10, sunucu keser).
 export interface ClusterPodSeriesTrend {
