@@ -181,6 +181,14 @@ const selectedTab = (el: HTMLElement) =>
 const dataRows = (el: HTMLElement) =>
   Array.from(el.querySelectorAll<HTMLTableRowElement>('tbody tr:not([data-dt-state])'));
 const rowTexts = (el: HTMLElement) => dataRows(el).map(r => r.textContent ?? '');
+// Clusters S9 (D7) — namespace detayında iki tablo: pod satırları gerçek /pod
+// bağlantısıyla, iş yükleri tablo adıyla ayrılır.
+const podLinks = (el: HTMLElement) =>
+  Array.from(el.querySelectorAll<HTMLTableRowElement>('tbody tr:not([data-dt-state])'))
+    .map(r => r.querySelector<HTMLAnchorElement>('a[href^="/pod?"]')?.textContent ?? null)
+    .filter((t): t is string => t != null);
+const workloadRows = (el: HTMLElement, ns: string) =>
+  Array.from(el.querySelectorAll<HTMLTableRowElement>(`table[aria-label="${ns} iş yükleri"] tbody tr:not([data-dt-state])`));
 const filterInput = (el: HTMLElement) =>
   el.querySelector<HTMLInputElement>('input[placeholder="Filter by name…"]')!;
 const dialog = () => document.body.querySelector<HTMLElement>('[role="dialog"]');
@@ -309,11 +317,14 @@ describe('Clusters S0 — ?section', () => {
 });
 
 describe('Clusters S0 — K13 derin bağlantılar pod listesine düşer', () => {
-  it('?namespace= (section yok): o namespace\'in pod\'ları', async () => {
+  // Clusters S9 (D7) — ?section'sız ?namespace= namespace detayına düşer;
+  // pod listesi detayın Pod'lar tablosunda (aynı süzgeç, aynı veri).
+  it('?namespace= (section yok): namespace detayı, o namespace\'in pod\'ları', async () => {
     const el = await mount('/clusters?cluster=prod-a&namespace=billing');
     expect(callsOf('clusterPods').length).toBe(1);
-    expect(rowTexts(el).length).toBe(1);
-    expect(rowTexts(el)[0]).toContain('ledger-0');
+    expect(el.querySelector('[role="tablist"]')).toBeNull();
+    expect(el.querySelector('nav[aria-label="Konum"]')?.textContent).toContain('Namespaces');
+    expect(podLinks(el)).toEqual(['ledger-0']);
   });
 
   it('?service= (section yok): o servisin pod\'ları', async () => {
@@ -359,27 +370,28 @@ describe('Clusters S0 — K3 satır davranışı', () => {
     expect(sp().get('section')).toBe('namespaces');
     await until(() => callsOf('clusterDeployments').length === 1, 'iş yükü sorgusu');
     expect(callsOf('clusterDeployments')[0].args).toEqual(['prod-a', 'shop']);
-    await until(() => rowTexts(el).some(t => t.includes('cart-canary')), 'iş yükü satırları');
-    expect(rowTexts(el).length).toBe(2);
+    await until(() => workloadRows(el, 'shop').some(r => (r.textContent ?? '').includes('cart-canary')), 'iş yükü satırları');
+    expect(workloadRows(el, 'shop').length).toBe(2);
   });
 
   it('iş yükü satırı ?deployment yazar; pod\'lar gerçek üyelikle süzülür', async () => {
     const el = await mount('/clusters?cluster=prod-a&section=namespaces&namespace=shop');
-    const row = dataRows(el).find(r => /^cart(?!-canary)/.test(r.textContent ?? ''))!;
+    await until(() => workloadRows(el, 'shop').length === 2, 'iş yükü satırları');
+    const row = workloadRows(el, 'shop').find(r => /^cart(?!-canary)/.test(r.textContent ?? ''))!;
     click(row);
     await until(() => sp().get('deployment') === 'cart', '?deployment=cart');
-    expect(sp().get('section')).toBe('pods');
+    // Clusters S9 (D7) — süzgeç detayın içindeki pod tablosuna; sekme değişmez.
+    expect(sp().get('section')).toBe('namespaces');
     expect(sp().get('namespace')).toBe('shop');
-    await until(() => rowTexts(el).some(t => t.includes('cart-7d9f-aaaaa')), 'pod satırları');
+    await until(() => podLinks(el).some(t => t.includes('cart-7d9f-aaaaa')), 'pod satırları');
     // cart-canary-… "cart" önekini taşır ama podNames'te YOK → listede yok.
-    expect(rowTexts(el).length).toBe(2);
-    expect(rowTexts(el).some(t => t.includes('cart-canary'))).toBe(false);
+    expect(podLinks(el).length).toBe(2);
+    expect(podLinks(el).some(t => t.includes('cart-canary'))).toBe(false);
   });
 
   it('?deployment= derin bağlantısı aynı süzgeci kurar', async () => {
     const el = await mount('/clusters?cluster=prod-a&namespace=shop&deployment=cart-canary');
-    expect(rowTexts(el).length).toBe(1);
-    expect(rowTexts(el)[0]).toContain('cart-canary-5c6d-ccccc');
+    expect(podLinks(el)).toEqual(['cart-canary-5c6d-ccccc']);
   });
 });
 

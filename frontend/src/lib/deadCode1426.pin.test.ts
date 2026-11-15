@@ -39,8 +39,10 @@ const DELETED_SPECIFIERS = [
   './streaming', './useTransformWorker', './workerClient', './transform.worker',
 ];
 
+// v0.10.2177 (Clusters S9) — clusterNamespaceDetail geri geldi, tüketicisi
+// var: namespace detayı görünümü (pages/clusters/NamespaceDetail.tsx).
 const REMOVED_API_METHODS = [
-  'anomalyRootCause', 'clusterNamespaceDetail', 'copilotCompareTraces', 'correlations',
+  'anomalyRootCause', 'copilotCompareTraces', 'correlations',
   'deployHistory', 'flowTopologyDrawIOURL', 'getMonitor', 'getSLO', 'getTopologyHidden',
   'linkAiConversation', 'metricsCompare', 'operations', 'problemRootCause', 'putAIRates',
   'putFailureSLO', 'putTopologyHidden', 'serviceBlastRadius', 'serviceEnvironments',

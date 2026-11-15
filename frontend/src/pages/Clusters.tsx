@@ -28,6 +28,7 @@ import { FilterBar, type FilterChip } from '@/components/coremetry/FilterBar';
 import { DetailSheet, SheetSection, useSheetParam } from '@/components/coremetry/DetailSheet';
 import { CollapsedSection } from '@/components/coremetry/CollapsedSection';
 import { AlertsPanel } from '@/pages/clusters/AlertsPanel';
+import { NamespaceDetail } from '@/pages/clusters/NamespaceDetail';
 import { overviewSentence, overviewBoxes, topSeriesText } from '@/pages/clusters/overviewSummary';
 import { parseOpenSections, serializeOpenSections } from '@/pages/clusters/openSections';
 import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
@@ -93,18 +94,6 @@ const NS_COLS: ColumnDef<ClusterNamespaceRow>[] = [
   { id: 'trend',     label: 'Actions',   kind: 'actions', width: 44 },
 ];
 
-// v0.9.23 — namespace içi iş yükü kademesi (Namespace → Deployment → Pod).
-const DEP_COLS: ColumnDef<ClusterDeploymentRow>[] = [
-  { id: 'deployment', label: 'Workload', sortValue: r => r.deployment, naturalDir: 'asc', width: 240, mono: true },
-  // v0.9.39 — KSM replicas/status (handoff §5). status boş = '—'.
-  // v0.9.42 — scale-to-zero (0/0) sağlıklıdır: tam kesintinin (0/3=0)
-  // yanına sıralanmasın diye ratio 1 sayılır.
-  { id: 'replicas',   label: 'Replicas', sortValue: r => r.status ? (r.desiredReplicas > 0 ? r.readyReplicas / r.desiredReplicas : 1) : -1, numeric: true, width: 90 },
-  { id: 'status',     label: 'Status',   sortValue: r => r.status ?? '', naturalDir: 'asc', width: 110 },
-  { id: 'pods',       label: 'Pods',     sortValue: r => r.pods,       numeric: true, width: 80 },
-  { id: 'cpuCores',   label: 'CPU',      sortValue: r => r.cpuCores,   numeric: true, width: 90 },
-  { id: 'memBytes',   label: 'Memory',   sortValue: r => r.memBytes,   numeric: true, width: 100 },
-];
 
 // v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor") — iki esneyen kolonun
 // varsayılan tabanı (160+160) sayıları 60 px'e eziyordu: okunurluk tabanları +
@@ -232,6 +221,12 @@ export default function ClustersPage() {
     if (raw === 'nodes' || raw === 'namespaces' || raw === 'pods' || raw === 'overview') return raw;
     return (nsFilterEarly || params.get('service') || params.get('deployment')) ? 'pods' : 'overview';
   })();
+  // Clusters S9 (plan §0 D7, §9.2) — namespace detayı SAYFA GÖRÜNÜMÜ, yeni
+  // route yok: ?namespace= dolu + ?section yok (ya da section=namespaces) →
+  // sekme şeridi yerine ekmek kırıntısı + namespace detayı. Açık
+  // section=pods&namespace= (servis sayfası pivotu, K13) sekmede KALIR.
+  const nsView = !!clusterParam && !!nsFilterEarly &&
+    (section === 'namespaces' || (section === 'pods' && params.get('section') !== 'pods'));
   // v0.9.17 (self-review fix) — 'overview' PARAM YOKLUĞU olarak
   // kodlanmıştı; ?namespace=/?service= varken türetme 'pods'a
   // düştüğünden Overview düğmesi ölüyordu (majör). Kullanıcı
@@ -385,7 +380,7 @@ export default function ClustersPage() {
       queryFn: () => api.clusterPods(name),
       staleTime: 60_000,
       retry: 1,
-      enabled: section === 'pods',
+      enabled: section === 'pods' || nsView,
       meta: LIVE_META,
     })),
   });
@@ -538,6 +533,14 @@ export default function ClustersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nsDataKey, qLower]);
 
+  // Clusters S9 — namespace detayının pod'ları (iş yükü süzgeci detayın
+  // içinde uygulanır) ve namespace satırının tam CPU / bellek toplamı.
+  const nsPods = useMemo(
+    () => (nsView ? podDatas.flatMap(d => d?.pods ?? []).filter(r => r.namespace === nsFilter) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [podDataKey, nsView, nsFilter]);
+  const nsUsed = nsView ? (nsQs[0]?.data?.namespaces ?? []).find(r => r.namespace === nsFilter) : undefined;
+
   const dt = useDataTable<ClusterPodRow>({
     storageKey: 'clusterpods',
     columns: POD_COLS,
@@ -548,12 +551,6 @@ export default function ClustersPage() {
     storageKey: 'clusternamespaces',
     columns: NS_COLS,
     rows: nsRows,
-    initialSort: { id: 'cpuCores', dir: 'desc' },
-  });
-  const depdt = useDataTable<ClusterDeploymentRow>({
-    storageKey: 'clusterdeployments',
-    columns: DEP_COLS,
-    rows: depRows,
     initialSort: { id: 'cpuCores', dir: 'desc' },
   });
   // Clusters S6 (D3) — varsayılan altı kolon; "Tüm kolonlar" oturum içi
@@ -622,6 +619,11 @@ export default function ClustersPage() {
     : nsErr ? { kind: 'error', message: "Namespace özeti okunamadı — Settings'teki cluster kaydını kontrol edin." }
     : qLower && nsAny ? { kind: 'no-match', ...clearQ }
     : { kind: 'empty', message: 'Namespace örneği yok' };
+  const nsPodState: Omit<DataTableStateProps<ClusterPodRow>, 'dt'> =
+    podQs[0]?.isPending ? { kind: 'loading' }
+    : podErr ? { kind: 'error', message: POD_ERR }
+    : depFilter ? { kind: 'no-match', message: `"${depFilter}" iş yükünde pod yok`, onClearFilters: clearDep }
+    : { kind: 'empty', message: `"${nsFilter}" namespace'inde pod örneği yok` };
   const podState: Omit<DataTableStateProps<ClusterPodRow>, 'dt'> =
     podQs[0]?.isPending ? { kind: 'loading' }
     : podErr ? { kind: 'error', message: POD_ERR }
@@ -751,6 +753,7 @@ export default function ClustersPage() {
         {/* ── Detay: geri → Nodes → Pods ───────────────────────── */}
         {isDetail && (
           <>
+            {!nsView && <>
             <div className="cl-detail-head">
               <Button variant="link" size="xs" onClick={backToOverview}>
                 ← All clusters
@@ -802,6 +805,7 @@ export default function ClustersPage() {
                 onPick={ns => setSection('namespaces', p => { p.set('namespace', ns); p.delete('deployment'); })}
                 onClear={() => setSection('namespaces', p => { p.delete('namespace'); p.delete('deployment'); })} />
             </div>
+            </>}
 
             {detailUnreachable ? (
               <Empty icon="✗" title={`${clusterParam} is unreachable`}>
@@ -833,46 +837,31 @@ export default function ClustersPage() {
                 {/* v0.8.588 — namespace rollup: TAM toplamlar (pod
                     topk kesmesinden bağımsız); satır tıklaması filtre +
                     Pods sekmesine geçiş (v0.9.8, audit §2). */}
-                {section === 'namespaces' && nsFilter && <>
-                  {/* v0.9.23 — Namespace → Deployment ara kademesi:
-                      çip nsFilter'ı temizleyip ns listesine döndürür. */}
-                  {depQ.isError && depdt.sortedRows.length > 0 && staleErrNote(DEP_ERR)}
-                  <div className="table-wrap">
-                    <table {...depdt.tableProps}>
-                      <DataTableColgroup dt={depdt} />
-                      <DataTableHead dt={depdt} />
-                      <tbody>
-                        {depdt.sortedRows.length === 0 ? <DataTableState dt={depdt} {...depState} /> : depdt.sortedRows.map(r => (
-                          // v0.10.943 — talimat ipucu (satır title) kalktı (T7); seçili + cv-row tek className.
-                          <tr key={r.deployment}
-                            className={[r.deployment === depFilter ? 'row-selected' : '', depdt.sortedRows.length > 100 ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
-                            {...rowActivation(() => setSection('pods', p => p.set('deployment', r.deployment)))}>
-                            <DataTableCell dt={depdt} col="deployment" row={r} value={r.deployment} />
-                            {/* v0.9.39 — ready/desired rozeti + statü; KSM
-                                yoksa '—'. v0.9.42: surge'de (ready>desired,
-                                backend Available der) rozet de yeşil —
-                                strict eşitlik aynı satırda sarı 4/3 + yeşil
-                                Available çelişkisi üretiyordu.
-                                v0.10.922 (sade palet adım 1) — K5: tam
-                                hazır = normal durum, rozet NÖTR (b-gray);
-                                yalnız eksik replika b-warn kalır. */}
-                            <td>{r.status
-                              ? <span className={`badge ${r.readyReplicas >= r.desiredReplicas ? 'b-gray' : 'b-warn'}`}>
-                                  {r.readyReplicas}/{r.desiredReplicas}
-                                </span>
-                              : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
-                            <td>{r.status
-                              ? <span className={`badge ${depStatusBadge(r.status)}`}>{r.status}</span>
-                              : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
-                            <DataTableCell dt={depdt} col="pods" row={r} value={fmtNum(r.pods)} />
-                            <DataTableCell dt={depdt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
-                            <DataTableCell dt={depdt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>}
+                {/* Clusters S9 (D7) — namespace detayı: ekmek kırıntısı, düz cümle,
+                    dört kutu, İş yükleri (satır → ?deployment= pod tablosunu süzer,
+                    K3) + Pod'lar (sorunlular önce), kapalı grafik / alarm bölümleri. */}
+                {nsView && (
+                  <NamespaceDetail cluster={clusterParam} namespace={nsFilter} range={range}
+                    fromNs={rangeFrom} toNs={rangeTo}
+                    pods={nsPods} podsTruncated={truncatedClusters.length > 0}
+                    podState={nsPodState} deps={depRows} depState={depState} depFilter={depFilter}
+                    onPickWorkload={dep => setParams(prev => {
+                      const next = new URLSearchParams(prev);
+                      if (next.get('deployment') === dep) next.delete('deployment'); else next.set('deployment', dep);
+                      return next;
+                    }, { replace: true })}
+                    workloadsNote={depQ.isError && depRows.length > 0 ? staleErrNote(DEP_ERR) : undefined}
+                    usedCpu={nsUsed?.cpuCores} usedMem={nsUsed?.memBytes}
+                    podHref={podHref}
+                    onClusters={backToOverview}
+                    onCluster={() => setParams(prev => {
+                      const next = new URLSearchParams(prev);
+                      for (const k of ['namespace', 'deployment', 'service', 'q', 'section']) next.delete(k);
+                      return next;
+                    }, { replace: true })}
+                    onNamespaces={() => setSection('namespaces', p => { p.delete('namespace'); p.delete('deployment'); })}
+                    onZoom={chartZoom} onZoomReset={chartZoomReset} />
+                )}
                 {section === 'namespaces' && !nsFilter && <>
                   <div className="table-wrap">
                     <table {...nsdt.tableProps}>
@@ -929,7 +918,7 @@ export default function ClustersPage() {
                   </div>
                 </>}
 
-                {section === 'pods' && <>
+                {section === 'pods' && !nsView && <>
                   {/* v0.9.959 (G8/Ö22) — kesik liste BEYAN edilir. Hem dolu
                       hem boş listede: dolu listede "hepsi bu değil", boş
                       listede "yok, kesin değil". */}
@@ -1251,15 +1240,5 @@ function NodeCell({ dt, col, row: r }: { dt: DataTable<ClusterNodeRow>; col: str
   }
 }
 
-// podPhaseBadge — kube_pod_status_phase → badge sınıfı (v0.9.37).
-// depStatusBadge — Deployment statü rozeti (v0.9.39, handoff §5):
-// Progressing sarı (rollout sürüyor), Degraded kırmızı.
-// v0.10.922 (sade palet adım 1) — K5: Available normal durum → NÖTR
-// (b-gray); kelime kalır, yeşil rozet yok.
-function depStatusBadge(status: string): string {
-  if (status === 'Available') return 'b-gray';
-  if (status === 'Progressing') return 'b-warn';
-  return 'b-err';
-}
 
 // podPhaseBadge v0.9.51'de thresholds.ts'e taşındı.

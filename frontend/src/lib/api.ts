@@ -34,7 +34,7 @@ OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   ThanosClusterProbe,
   ThanosSnapshot, ThanosSettingsInput, ClusterPodsResponse, ClusterPodDetail,
   ClusterNodesResponse, ClusterSummary, ClusterNamespacesResponse,
-  ClusterPodsTrendResponse, ClusterNetworkTrendResponse, ClusterDeploymentsResponse, ClusterResourceTrendResponse, ClusterAlertsResponse, ClusterDeployTrendResponse, ClusterJMXTrendResponse, ClusterJMXMetricsResponse,
+  ClusterPodsTrendResponse, ClusterNamespaceDetailResponse, ClusterNetworkTrendResponse, ClusterDeploymentsResponse, ClusterResourceTrendResponse, ClusterAlertsResponse, ClusterDeployTrendResponse, ClusterJMXTrendResponse, ClusterJMXMetricsResponse,
   KibanaSettings,
   Role, LDAPConfig, LDAPDirectoryUser,
   FilterExpr,
@@ -2341,6 +2341,11 @@ export const api = {
   clusterNetworkTrend: (cluster: string, fromNs: number, toNs: number) =>
     get<ClusterNetworkTrendResponse>(`/api/clusters/network-trend?cluster=${encodeURIComponent(cluster)}` +
       `&from=${fromNs}&to=${toNs}`),
+  // v0.10.2177 (Clusters S9) — namespace detayı: toplam trend + anlık özet
+  // (istek / limit, son 24 sa restart, pod bekleme sebebi; S8).
+  clusterNamespaceDetail: (cluster: string, namespace: string, fromNs: number, toNs: number) =>
+    get<ClusterNamespaceDetailResponse>(`/api/clusters/namespaces/detail?cluster=${encodeURIComponent(cluster)}` +
+      `&namespace=${encodeURIComponent(namespace)}&from=${fromNs}&to=${toNs}`),
   clusterNamespacePodsTrend: (cluster: string, namespace: string, fromNs: number, toNs: number, maxDataPoints?: number) =>
     get<ClusterPodsTrendResponse>(`/api/clusters/namespaces/pods-trend?cluster=${encodeURIComponent(cluster)}` +
       `&namespace=${encodeURIComponent(namespace)}&from=${fromNs}&to=${toNs}` +

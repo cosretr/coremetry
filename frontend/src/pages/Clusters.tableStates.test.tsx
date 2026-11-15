@@ -139,14 +139,16 @@ describe('Clusters — yenileme hatası bayat satırların üstünde görünür 
   it('workloads: dolu tabloda refetch düşerse satırlar durur + hata notu', async () => {
     m.nss = [ns('ns1')];
     m.deps = [dep('d1'), dep('d2')];
+    // Clusters S9 (D7) — iş yükleri namespace detayı görünümünde; tablo adıyla kapsanır.
     const el = await mount('/clusters?cluster=c1&section=namespaces&namespace=ns1');
-    expect(dataRows(el)).toBe(2);
+    const wl = () => el.querySelector<HTMLElement>('table[aria-label="ns1 iş yükleri"]')!;
+    expect(dataRows(wl())).toBe(2);
     m.failDeps = true;
     await refetch('cluster-deployments');
-    expect(dataRows(el)).toBe(2);
+    expect(dataRows(wl())).toBe(2);
     expect(el.textContent).toContain('İş yükü özeti okunamadı');
     expect(el.textContent).toContain(STALE);
-    expect(stateRow(el)).toBeNull();
+    expect(stateRow(wl())).toBeNull();
   });
 });
 

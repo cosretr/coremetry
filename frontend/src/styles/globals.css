@@ -5253,6 +5253,21 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 .cl-alert__name { font-size: var(--fs-sm); font-weight: 600; }
 .cl-alert__where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); color: var(--text3); }
 .cl-alert__age { flex-shrink: 0; margin-left: auto; font-size: var(--fs-xs); color: var(--text3); }
+/* Clusters S9 (plan §0 D7, §9) — namespace detayı görünümü: ekmek kırıntısı,
+   ad + düz cümle, dört kutu (Overview kutularının sınıfları), iki tablo başlığı. */
+.cl-ns-detail { display: grid; gap: var(--sp-5); }
+.cl-ns-crumbs { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-sm); color: var(--text3); }
+.cl-ns-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-4) var(--sp-6); }
+.cl-ns-name { margin: 0; font-family: var(--font-mono); font-size: 16px; font-weight: 600; }
+.cl-ns-sentence { font-size: var(--fs-md); color: var(--text2); }
+.cl-ns-val { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cl-ns-val--warn { color: var(--warn); }
+.cl-ns-val--err { color: var(--err); }
+.cl-ns-h { margin: var(--sp-4) 0 0; font-size: var(--fs-md); font-weight: 600; }
+.cl-ns-podhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-4); }
+.cl-ns-wl { display: grid; gap: var(--sp-1); min-width: 0; }
+.cl-ns-wl__svc { font-size: var(--fs-xs); color: var(--text3); }
+.cl-ns-hint { margin: 0; font-size: var(--fs-xs); color: var(--text3); }
 @media (max-width: 640px) { .cl-ov-gauges--split { grid-template-columns: 1fr; } }
 
 /* ── Copilot araç-çağrısı paneli — v0.10.161 (etüt seçenek A «Adım listesi»).

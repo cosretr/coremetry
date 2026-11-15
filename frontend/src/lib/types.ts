@@ -2491,6 +2491,8 @@ export interface ClusterPodRow {
   // yok — restartsUnknown'dan BAĞIMSIZ best-effort. Çok container'lı
   // pod'da sunucu en kötü sebebi seçer (worseTermReason).
   lastTermReason?: string;
+  // v0.10.2176 (Clusters S8) — pod'un node'u (kube_pod_info); yok = bilinmiyor / atanmadı.
+  node?: string;
 }
 // v0.9.3 — multi-pod trend serisi (top-10, sunucu keser).
 export interface ClusterPodSeriesTrend {
@@ -2627,12 +2629,31 @@ export interface ClusterDeploymentRow {
   desiredReplicas: number;
   readyReplicas: number;
   status?: string;
+  // v0.10.2176 (Clusters S8) — iş yükü türü (owner zinciri); yok = ad sezgiseli.
+  kind?: string;
 }
 export interface ClusterDeploymentsResponse {
   cluster: string;
   namespace: string;
   deployments: ClusterDeploymentRow[] | null;
   count: number;
+}
+// v0.10.2176 (Clusters S8) — /api/clusters/namespaces/detail `summary`:
+// namespace detayının anlık alanları (hepsi best-effort; yok = bilinmiyor).
+export interface ClusterNamespaceSummary {
+  cpuRequestCores?: number;
+  cpuLimitCores?: number;
+  memRequestBytes?: number;
+  memLimitBytes?: number;
+  restarts24h?: number;
+  /** pod → şu anki bekleme sebebi (CrashLoopBackOff, ImagePullBackOff …). */
+  waiting?: Record<string, string>;
+}
+export interface ClusterNamespaceDetailResponse {
+  cluster: string;
+  namespace: string;
+  trend: ClusterPodTrendPoint[] | null;
+  summary?: ClusterNamespaceSummary;
 }
 // v0.9.36 — firing alert (panel). ageSec best-effort (0 = bilinmiyor).
 export interface ClusterAlertRow {
