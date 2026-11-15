@@ -182,3 +182,35 @@ func TestAnswerLinkGuardsReachable(t *testing.T) {
 		t.Errorf("deep_link + build_link çipleri yeniden yazılmalı (got %d)", n)
 	}
 }
+
+// v0.10.2212 — Operator-reported (prod endpoint "Ask CoSRE", gemma4 31b, v2):
+// başlık cümlesinin altına araç iç notu sızdı. Yalnız bilinen şablon silinir.
+func TestStripServerToolNoticeExactProdString(t *testing.T) {
+	const leak = "__':build_link' calls were already provided by the server."
+	in := "POST /api/x son 30 dakikada 13 çağrı, %53,85 hata.\n" + leak + "\n\nEn yavaş trace'ler aşağıda."
+	got := sanitizeAnswerLinks(in, nil, "", map[string]bool{"build_link": true})
+	if strings.Contains(got, "already provided by the server") {
+		t.Fatalf("iç not sızdı: %q", got)
+	}
+	if got != "POST /api/x son 30 dakikada 13 çağrı, %53,85 hata.\n\nEn yavaş trace'ler aşağıda." {
+		t.Fatalf("çevre metin değişti: %q", got)
+	}
+	for _, v := range []string{
+		"`build_link` call was already provided by the server",
+		"**operation_prefetch calls were already provided by the server.**",
+	} {
+		if out := stripServerToolNotices("a\n" + v + "\nb"); out != "a\nb" {
+			t.Errorf("%q silinmedi: %q", v, out)
+		}
+	}
+	// Şablon dışı cümleler aynen kalır (geniş regex yok).
+	for _, keep := range []string{
+		"Linkler sunucu tarafından eklendi.",
+		"The data was already provided by the server team yesterday, see build_link.",
+		"build_link calls were already provided by the server, ve hata oranı %5.",
+	} {
+		if out := stripServerToolNotices(keep); out != keep {
+			t.Errorf("dokunulmamalı: %q → %q", keep, out)
+		}
+	}
+}

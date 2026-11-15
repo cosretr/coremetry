@@ -82,6 +82,35 @@ func stripToolEchoes(text string, tools map[string]bool) string {
 	return b.String()
 }
 
+// answerServerNoticeRe — v0.10.2212 (operator-reported, prod endpoint "Ask
+// CoSRE", gemma4 31b, v2): cevap gövdesine başlık cümlesinin hemen altında
+//
+//	__':build_link' calls were already provided by the server.
+//
+// satırı düştü. Bu cümle Coremetry'de HİÇBİR yerde üretilmiyor (kod, prompt,
+// araç sonucu): küçük model, ön-getirmenin konuşmaya tohumladığı sentetik
+// tool çiftlerini (chat_operation_prefetch.go seed — modelin kendisinin
+// yapmadığı tool_calls) kendi araç protokolünün "sunucu zaten sağladı"
+// iç notu gibi okuyup metne yazdı. Yalnız BİLİNEN şablon eşleşir (tek satır,
+// tek araç adı, "call(s) were/was already provided by the server"); geniş
+// regex yok — operatörün yazacağı sıradan cümleye dokunulmaz.
+var answerServerNoticeRe = regexp.MustCompile(`(?i)^[ \t>*_'"` + "`" + `:-]*[A-Za-z][A-Za-z0-9_.]*[ \t*_'"` + "`" + `]*[ \t]+calls?[ \t]+(?:were|was|are|is)[ \t]+already[ \t]+provided[ \t]+by[ \t]+the[ \t]+server[ \t]*\.?[ \t*_'"` + "`" + `]*$`)
+
+// stripServerToolNotices — SAF: answerServerNoticeRe satırlarını (satır sonuyla) siler.
+func stripServerToolNotices(text string) string {
+	if !strings.Contains(strings.ToLower(text), "already provided by the server") {
+		return text
+	}
+	var b strings.Builder
+	for _, ln := range strings.SplitAfter(text, "\n") {
+		if answerServerNoticeRe.MatchString(strings.TrimRight(ln, "\r\n")) {
+			continue
+		}
+		b.WriteString(ln)
+	}
+	return b.String()
+}
+
 // answerMDLinkRe — markdown link, mutlak hedef.
 var answerMDLinkRe = regexp.MustCompile(`\[([^\]\n]*)\]\((https?://[^\s)]+)\)`)
 
@@ -98,6 +127,7 @@ func sanitizeAnswerLinks(text string, validated []guidedAnswerLink, publicURL st
 	if text == "" {
 		return text
 	}
+	text = stripServerToolNotices(text) // v0.10.2212
 	text = stripToolEchoes(text, tools)
 	if !strings.Contains(text, "://") {
 		return answerEmptyFenceRe.ReplaceAllString(text, "")
