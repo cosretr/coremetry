@@ -105,8 +105,9 @@ type Store interface {
 }
 
 // StableTypes — CH'de satır olarak duran kalıcı katman (E1). Pod ve
-// container yalnız canlı dizinde + entity_seen_5m'de.
-var StableTypes = []string{TypeCluster, TypeNode, TypeNamespace, TypeWorkload, TypeService}
+// container yalnız canlı dizinde + entity_seen_5m'de. v0.10.2240 (S5):
+// database / queue / external (topology_edges_5m; calls.go).
+var StableTypes = []string{TypeCluster, TypeNode, TypeNamespace, TypeWorkload, TypeService, TypeDatabase, TypeQueue, TypeExternal}
 
 // IsStableType — tip kalıcı katmanda mı.
 func IsStableType(t string) bool {
@@ -119,10 +120,10 @@ func IsStableType(t string) bool {
 }
 
 // IsStableRelation — iki ucu da kalıcı olan parent kenarı (cluster→node,
-// cluster→ns, ns→wl) ve S2 köprüleri (serves, same_as). runs / runs_on /
-// wl→pod / pod→ctr dizinde.
+// cluster→ns, ns→wl), S2 köprüleri (serves, same_as) ve S5 calls. runs /
+// runs_on / wl→pod / pod→ctr dizinde.
 func IsStableRelation(rl Relation) bool {
-	if rl.Type != RelParent && rl.Type != RelServes && rl.Type != RelSameAs {
+	if rl.Type != RelParent && rl.Type != RelServes && rl.Type != RelSameAs && rl.Type != RelCalls {
 		return false
 	}
 	p, ok1 := ParseID(rl.ParentID)
@@ -174,6 +175,10 @@ type Syncer struct {
 	// kilit degraded sorgusu (cache.DegradedFlag.Load; nil = hep sağlam).
 	live         LiveStore
 	lockDegraded func() bool
+	// v0.10.2240 (S5) — yatay eksen kaynağı (nil = geçiş yok) ve son
+	// geçişin anı (UnixNano; CallsEvery kadansı, calls.go).
+	calls     CallSource
+	callsLast atomic.Int64
 }
 
 // SetLive — canlı dizinin Redis kapısı (main.go cacheImpl).
@@ -331,6 +336,17 @@ func (s *Syncer) tick(ctx context.Context) {
 		}(c, spanByCID[c.ID])
 	}
 	wg.Wait()
+	// S5 — yatay eksen (db/queue/ext + calls): ayrı, yavaş kadans; cluster
+	// geçişlerinden bağımsız (topology_edges_5m cluster'sız).
+	if s.calls != nil && s.now().Sub(time.Unix(0, s.callsLast.Load())) >= CallsEvery {
+		cst := s.syncCalls(ctx)
+		tickRead.Add(int64(cst.read))
+		tickScan.Add(cst.scanned)
+		tickEnts.Add(int64(cst.ents))
+		tickRels.Add(int64(cst.rels))
+		tickSkip.Add(int64(cst.skipped))
+		tickClosed.Add(int64(cst.closed))
+	}
 	dur := s.now().Sub(start)
 	s.ticks.Add(1)
 	s.readN.Add(tickRead.Load())
@@ -370,7 +386,7 @@ func SpanOnlyClusters(unmapped map[string]int, refs []ClusterRef, max int) []Clu
 	}
 	vals := make([]string, 0, len(unmapped))
 	for v := range unmapped {
-		if v != "" && v != UnmappedClusterID && !taken[v] {
+		if v != "" && v != UnmappedClusterID && v != TopologyClusterID && !taken[v] {
 			vals = append(vals, v)
 		}
 	}

@@ -53,7 +53,14 @@ type EntityNeighbours struct {
 	PodCount      int            `json:"pod_count"`
 	PodsTruncated bool           `json:"pods_truncated,omitempty"`
 	PodSource     string         `json:"pod_source,omitempty"` // live | mv | live+mv
-	Note          string         `json:"note,omitempty"`
+	// v0.10.2240 (S5) — servis düzeyi calls kenarları (kalıcı katman,
+	// topology_edges_5m'den): Calls = bu entity'nin çağırdıkları (svc →
+	// svc/db/queue/ext; queue → tüketici servisler), CalledBy = onu
+	// çağıranlar. entity id'leri, ≤ entity.MaxCallNeighbours.
+	Calls          []string `json:"calls,omitempty"`
+	CalledBy       []string `json:"called_by,omitempty"`
+	CallsTruncated bool     `json:"calls_truncated,omitempty"`
+	Note           string   `json:"note,omitempty"`
 }
 
 // EntityPathIDs — pod → iş yükü → servis → namespace → node → cluster.
@@ -75,6 +82,9 @@ type EntityCatalogIndex struct {
 	Namespaces []EntityCandidate // Kind=namespace, Cluster/ClusterID/Name
 	Workloads  []EntityCandidate // Kind=workload, + Namespace/WlKind
 	Pods       []EntityCandidate // yalnız pod-şekilli metinde doldurulur
+	// Dependencies — v0.10.2240 (S5): database / queue / external entity'leri
+	// (kalıcı katman, TopologyClusterID altında; tür başına ≤ 500).
+	Dependencies []EntityCandidate
 	// EntityLayer=false → yalnız servis ekseni (cevap ilan eder).
 	EntityLayer bool
 }
@@ -149,7 +159,11 @@ func ResolveEntities(text string, idx EntityCatalogIndex, max int) []EntityCandi
 	for _, p := range idx.Pods {
 		add(p)
 	}
-	kindRank := map[string]int{entity.TypeService: 0, entity.TypeNamespace: 1, entity.TypeWorkload: 2, entity.TypePod: 3}
+	for _, d := range idx.Dependencies {
+		add(d)
+	}
+	kindRank := map[string]int{entity.TypeService: 0, entity.TypeNamespace: 1, entity.TypeWorkload: 2, entity.TypePod: 3,
+		entity.TypeDatabase: 4, entity.TypeQueue: 5, entity.TypeExternal: 6}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Score != out[j].Score {
 			return out[i].Score > out[j].Score
@@ -294,6 +308,16 @@ func loadEntityIndex(ctx context.Context, d Deps) (EntityCatalogIndex, error) {
 				idx.Workloads = append(idx.Workloads, EntityCandidate{Kind: entity.TypeWorkload, Cluster: c.Name, ClusterID: c.ID, Namespace: r.Namespace, Name: r.Name, WlKind: r.Labels["kind"], ID: r.ID})
 			}
 		}
+		// v0.10.2240 (S5) — yatay eksen: db / queue / ext (cluster'sız).
+		for _, typ := range []string{entity.TypeDatabase, entity.TypeQueue, entity.TypeExternal} {
+			deps, err := d.Store.EntityList(ctx, chstore.EntityListQuery{ClusterID: entity.TopologyClusterID, Type: typ, Limit: 500})
+			if err != nil {
+				return idx, err
+			}
+			for _, r := range deps {
+				idx.Dependencies = append(idx.Dependencies, EntityCandidate{Kind: typ, Name: r.Name, ID: r.ID})
+			}
+		}
 	}
 	entityIndexCache.at, entityIndexCache.key, entityIndexCache.idx = cacheNow(), key, idx
 	return idx, nil
@@ -373,12 +397,13 @@ type resolveEntityArgs struct {
 func resolveEntityTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             "resolve_entity",
-		ShortDescription: "Serbest metni {servis, namespace, workload, pod} adaylarına çözer (skorlu, cluster'lı). Operatör bir ad andığında ÖNCE bunu çağır; tahmin etme.",
+		ShortDescription: "Serbest metni {servis, namespace, workload, pod, db/kuyruk/dış} adaylarına çözer (skorlu, cluster'lı). Ad anılınca ÖNCE bunu çağır; tahmin etme.",
 		Description: "Resolve free text the operator typed (\"shop-payment\", \"shop namespace\", \"api-7d9f\") into catalogue candidates: OTel service.name values, Kubernetes namespaces, " +
-			"workloads and (only when the text looks like a pod name) pods — each scored (exact > prefix > substring > tokens > fuzzy) and tagged with cluster + namespace. " +
+			"workloads, (only when the text looks like a pod name) pods, and the databases / queues / external endpoints seen in the service topology — each scored (exact > prefix > substring > tokens > fuzzy) and tagged with cluster + namespace. " +
 			"Call this FIRST whenever the operator names an entity in free text; never guess whether a string is a namespace, a workload or a service. " +
 			"`resolved` is set only when exactly one strong candidate exists — proceed silently then; it then carries `neighbours`: the entity path (pod → workload → service → namespace → node → cluster) " +
-			"and its neighbours (service → workloads + pods, workload → services + pods) from the entity store — use those pods, never guess pods from a name prefix; `pod_count` 0 means no pod is known. Several candidates → show them with cluster + namespace + kind and ask which one; " +
+			"and its neighbours (service → workloads + pods, workload → services + pods) from the entity store — use those pods, never guess pods from a name prefix; `pod_count` 0 means no pod is known. " +
+			"For a service, database, queue or external endpoint `neighbours.calls` lists what it calls and `neighbours.called_by` what calls it (service-level `calls` edges from the topology, entity ids: svc:, db:, queue:, ext:) — answer \"what does X call / what calls this database\" from these. Several candidates → show them with cluster + namespace + kind and ask which one; " +
 			"none → say so, offer nothing invented. `cluster` / `namespace` narrow the catalogue side. When the entity layer is off, only the service axis is searched and " +
 			"`entity_layer` is false — say that instead of claiming a namespace does not exist.",
 		InputSchema: map[string]any{

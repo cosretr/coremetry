@@ -68,6 +68,9 @@ export interface GraphNode {
   // TAMAMLANMAMALI: çok-cluster kurulumda uydurma bir cluster çekmeceyi
   // sessizce BOŞ açar (v0.9.973). O hâlde katalog köprüsü kullanılır.
   cluster?: string;
+  // v0.10.2240 (Entity S5) — düğümün entity kimliği (ek alan; `id` aynen):
+  // svc:<ad> | db:… | queue:… | ext:… ; diğer düğümlerde yok.
+  entityId?: string;
 }
 export interface GraphEdge {
   source: string;

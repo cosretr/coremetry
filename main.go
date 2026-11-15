@@ -1231,6 +1231,7 @@ func main() {
 	if mode.worker {
 		entitySyncer = entity.NewSyncer(entity.NewThanosSource(thanosSvc), entity.StoreFromCH(store), entitySettings.Resolved)
 		entitySyncer.SetSeenReader(entity.SeenFromCH(store))
+		entitySyncer.SetCallSource(entity.CallsFromCH(store)) // v0.10.2240 (S5): db/queue/ext + calls, 15 dk'da bir
 		entityLeader := cache.NewLeaderHolder(lockImpl, "entity-sync", cache.LeaderTTL(time.Minute))
 		entitySyncer.SetLeaderCheck(entityLeader.IsLeader) // v0.10.141 — API tetikli tick yalnız liderde
 		// v0.10.2225 (entity-storage-cost-note C + R1b): canlı dizin Redis'e

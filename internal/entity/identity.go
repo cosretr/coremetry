@@ -23,6 +23,12 @@ const (
 	TypePod       = "pod"
 	TypeContainer = "container"
 	TypeService   = "service"
+	// v0.10.2240 (S5, yatay eksen) — topoloji düğümleri. Kimlik topoloji
+	// düğüm id'siyle BİREBİR (chstore.TopologyNodeIDPrefixes): ikinci şema
+	// yok, cluster bileşeni yok (topology_edges_5m cluster'sız).
+	TypeDatabase = "database"
+	TypeQueue    = "queue"
+	TypeExternal = "external"
 )
 
 // İlişki tipleri (entity_relations.rel_type).
@@ -33,6 +39,9 @@ const (
 	// v0.10.2232 (S2) — kalıcı köprüler (iki ucu kalıcı katmanda):
 	RelServes = "serves"  // wl→service: pod'dan servise TEK kalıcı köprü
 	RelSameAs = "same_as" // eski id→kanonik id (Derived/ReplicaSet → yetkili iş yükü; span-only cluster → kayıt)
+	// v0.10.2240 (S5) — servis düzeyi çağrı: svc→svc|db|queue|ext ve
+	// queue→svc (tüketici). topology_edges_5m'den; yalnız ömür, sayılar MV'de.
+	RelCalls = "calls"
 )
 
 // DerivedKind — pod adının kısa sonekinden tür ayırt edilemeyen iş yükü
@@ -43,12 +52,15 @@ const DerivedKind = wlkind.Derived
 const (
 	SourceThanos = "thanos"
 	SourceSpan   = "span"
+	// SourceTopology — v0.10.2240 (S5): topology_edges_5m (servis düzeyi MV).
+	SourceTopology = "topology"
 )
 
 // id önekleri — TopologyNodeIdentity emsali: tip önekten okunur.
 var typePrefix = map[string]string{
 	TypeCluster: "cluster", TypeNode: "node", TypeNamespace: "ns",
 	TypeWorkload: "wl", TypePod: "pod", TypeContainer: "ctr", TypeService: "svc",
+	TypeDatabase: "db", TypeQueue: "queue", TypeExternal: "ext",
 }
 
 var prefixType = func() map[string]string {
@@ -98,6 +110,8 @@ func (r Ref) String() string {
 		return ContainerID(r.ClusterID, r.Namespace, r.Pod, r.Name)
 	case TypeService:
 		return ServiceID(r.Name)
+	case TypeDatabase, TypeQueue, TypeExternal:
+		return typePrefix[r.Type] + ":" + r.Name
 	}
 	return ""
 }
@@ -117,7 +131,9 @@ func ParseID(id string) (Ref, bool) {
 	rest := id[i+1:]
 	r := Ref{Type: typ}
 	switch typ {
-	case TypeService:
+	case TypeService, TypeDatabase, TypeQueue, TypeExternal:
+		// S5: db/queue/ext adı topoloji düğümünün öneksiz hâli, verbatim
+		// (":" "/" "@" içerebilir); cluster bileşeni yok.
 		r.Name = rest
 		return r, rest != ""
 	case TypeCluster:

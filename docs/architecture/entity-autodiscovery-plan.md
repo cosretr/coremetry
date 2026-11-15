@@ -156,7 +156,7 @@ bugünkü gibi fail-open kalır. Atanmamış span cluster değeri kendi cluster 
 | KSM | cluster başına seçicili 6 anlık sorgu (bugünkü) | paralel 4 cluster, cluster başına zaman aşımı; düşen cluster atlanır |
 | Span | `entity_seen_5m`, son ≤ 1 saat, `GROUP BY cluster, ns, pod, service` (bugünkü, `entity_store.go:195-204`) | `LIMIT 200000`, `max_execution_time = 10`; LIMIT dolarsa cluster başına sayfalanır |
 | `serves` | Yeni okuma yok: aynı tick'in `wl→pod` ve `pod→svc` kümelerinden bellekte | O(pod) |
-| `calls` | `topology_edges_5m`, son 15 dk, `GROUP BY parent_service, child_service`, zaman sınırlı + LIMIT | yalnız aç/kapa yazılır |
+| `calls` | `topology_edges_5m`, son 1 saat (v0.10.2240; 15 dk'da bir), `GROUP BY parent_service, child_node`, zaman sınırlı + LIMIT 20K | yalnız aç/kapa + günlük tazeleme |
 | Metrik `runs` (S6) | VM'de tek anlık `count by (service, pod\|host)`; ham `metric_points` taraması yok | etiket kardinalitesi ≈ pod sayısı |
 
 Ham `spans` hiçbir geçişte okunmaz. A4 ve A10'daki ham okumalar depoya taşınınca silinir.
@@ -223,8 +223,8 @@ Araç çıktıları deterministik veridir; LLM'e bağlı adım yok (prod LLM yal
 | **S2 — Kararlı iş yükü kimliği + `serves`** ✅ v0.10.2232 | Kanonik Kind, `same_as`, wl→svc kenarı kalıcı. Rollouts ve Service Infra resolver'dan; A5, A6, A7 silinir | Rollouts iş yükü hapı her zaman doğru servise/entity'ye gider; Service sayfasında "çalıştığı iş yükleri" | Eski `Derived`/ReplicaSet id'li linkler | Yeni `rel_type` değerleri, DDL yok; eski satırlar TTL ile düşer; geri alma = sürüm | Kanonikleştirme tablo testi; `same_as` 1 adım; `bsa-digital-dashboard-prod` regresyon satırı |
 | **S3 — Pod ↔ log ↔ trace** ✅ v0.10.2233 | `/api/logs` entity kapsamı (ES ve CH alan eşlemesiyle); span detayında yol çipleri; pod → trace `k8s_pod` kolonundan; A8, A9 silinir | Pod logları iki backend'de de doğru; trace'ten pod/iş yükü/servise tek tık ve geri | ES alan adı çeşitliliği | Şema yok; geri alma = sürüm | Backend başına süzgeç golden'ı; FE vitest; ES sorgu şekli (term, PIT yok) |
 | **S4 — CoSRE / MCP** ✅ v0.10.2239 | `ServicePodRegex` → `Neighbours`; `resolve_entity` yol + komşu; sweep/healthcheck pod adaptörleri | Adı deployment'tan farklı servislerde pod sağlığı gelir; kardeş önek karışmaz | Depoda olmayan servis (span yok) | Geri dönüş yolu yok (shim yasağı); depo boşsa araç "pod bilinmiyor" der | Araç golden'ları; CoSRE eval setinde pod soruları; regex çağıranı kalmadı ratchet'i |
-| **S5 — Yatay eksen** | host, db, queue, ext entity; `calls` kenarı; topoloji id = entity id; A10 silinir | DB/queue/host entity sayfaları; "bu pod'un servisi hangi DB'yi çağırıyor" yolu; blast radius tek kaynaktan | `ext:` kardinalitesi | Yeni tip/rel değerleri; `LowCardinality` tip kolonları uygun; geri alma = sürüm | `calls` SQL şekli; kardinalite tavanı testi; topoloji ↔ entity id gidiş-dönüş |
-| **S6 — Sinyal tamamlama** | `entity_seen` v2 MV (iş yükü kolonları, host satırları); VM'den metrik `runs`; log kapsama işareti (K5, K6) | Yalnız metrik/log basan servisler entity olur; regex türevi iş yükü kalmaz | MV INSERT maliyeti; çift MV dönemi | Yeni MV 30 gün çift koşar, sonra eski düşer; geri alma = yeni MV'yi DROP | MV DDL testi; prod preflight; INSERT gecikmesi öncesi/sonrası |
+| **S5 — Yatay eksen (daraltılmış)** ✅ v0.10.2240 (aşağıda "S5 notları"; host → S6, A10 → takip) | db, queue, ext entity; `calls` kenarı; topoloji düğümüne ek `entityId` (düğüm id'si aynen) | DB/queue/host entity sayfaları; "bu pod'un servisi hangi DB'yi çağırıyor" yolu; blast radius tek kaynaktan | `ext:` kardinalitesi | Yeni tip/rel değerleri; `LowCardinality` tip kolonları uygun; geri alma = sürüm | `calls` SQL şekli; kardinalite tavanı testi; topoloji ↔ entity id gidiş-dönüş |
+| **S6 — Sinyal tamamlama** | `entity_seen` v2 MV (iş yükü kolonları, host satırları); host entity'leri ve `runs` (host→svc) (S5'ten taşındı, şema + ayrı operatör onayı); VM'den metrik `runs`; log kapsama işareti (K5, K6) | Yalnız metrik/log basan servisler entity olur; regex türevi iş yükü kalmaz | MV INSERT maliyeti; çift MV dönemi | Yeni MV 30 gün çift koşar, sonra eski düşer; geri alma = yeni MV'yi DROP | MV DDL testi; prod preflight; INSERT gecikmesi öncesi/sonrası |
 
 Her dilim sonunda dur, onay al. S0 → S1 → S2 sıralı; S3, S4, S5 S2'den sonra herhangi bir sırada; S6 en son.
 
@@ -306,3 +306,19 @@ aday çözülünce `neighbours` (yol + svc → iş yükleri/pod'lar, wl → serv
 Sapma: `thanos.ServicePodRegex` fonksiyonu `internal/ml`'in metrik Thanos yolu için kaldı (ayrı iş akışı;
 ratchet ML dışını kilitler). FE `servicePodRegex` (Service → Infra) bu dilimin (CoSRE/MCP) dışında.
 Şema yok, ayar yok.
+
+**S5 notları (v0.10.2240, daraltılmış kapsam):** host entity'leri bu dilimde YOK — MV-first kaynakları şema
+değişikliği istiyor (ham `metric_points` okunmaz), **S6'ya taşındı** (şema + ayrı operatör onayı). A10 (envanter
+kartları) olduğu gibi kaldı, takip işi. `internal/entity/calls.go`: yeni tipler `database` / `queue` / `external`
+(id = topoloji düğüm id'si verbatim: `db:…`, `queue:…`, `ext:…`; öneksiz düğüm `svc:<ad>`; `TopologyEntityID`
+tek kural) ve `calls` kenarı (svc → svc/db/queue/ext; tüketici kenarı queue → svc). Kaynak `topology_edges_5m`,
+son 1 saat, `GROUP BY parent_service, child_node` (FINAL yok, RUNS_ON dışlı, LIMIT 20K, 10 s; chstore
+`EntityCallEdges`); `ext:` çocuğu bilinen servise servis grafiğinin kuralıyla katlanır (bilinen küme aynı
+okumadan). Operasyon düzeyi kenar saklanmaz. Lider tick'inde ayrı geçiş, 15 dk'da bir (`CallsEvery`);
+satırlar sahte `cluster_id = "(topology)"` altında (MV cluster'sız; `UnmappedClusterID` emsali), kalıcı
+katmanın aynı diff / `ThrottleRefresh` (24 sa) / tam satır yazımı. Kapanış: art arda başarılı geçişlerde ≥ 24 sa
+yokluk; LIMIT dolarsa ya da okuma hatasında kapanış yok. `ext:` tavanı 5000 (çağrı sayısına göre). Okuma
+`Resolver.Callees` / `Callers` (`EntityRelationsFor`, ≤ 100) → `resolve_entity` `neighbours.calls` /
+`called_by` ve `GET /api/entity/neighbours` (svc, db, queue, ext id'leri); `resolve_entity` kataloğu db/queue/ext
+adaylarını içerir (tür başına ≤ 500). Servis grafiği düğümüne ek `entityId` (saf türetim, okuma yok). Şema yok,
+ayar yok.

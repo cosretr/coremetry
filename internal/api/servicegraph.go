@@ -50,6 +50,11 @@ type GraphNode struct {
 	// kuyruk olmayan düğümler. İstemci bu hâlde daraltılmış KATALOG
 	// köprüsüne düşer; '(default)' varsaymaz.
 	Cluster string `json:"cluster,omitempty"`
+	// v0.10.2240 (Entity S5) — düğümün entity kimliği (EK alan; ID
+	// değişmedi): servis → svc:<ad>, db/queue/ext → düğüm id'si verbatim
+	// (entity.TopologyEntityID; syncer aynı fonksiyonla yazar). Diğer
+	// düğümlerde boş.
+	EntityID string `json:"entityId,omitempty"`
 }
 
 // GraphEdge is one directed caller→callee edge carrying RED metrics + protocol.
@@ -650,7 +655,7 @@ func buildServiceGraphWith(edges []chstore.ServiceTopologyEdge, focus, scope str
 			kind = k
 		}
 		name, sys := decodeNodeName(id)
-		n := &GraphNode{ID: id, Name: name, Kind: kind, System: sys}
+		n := &GraphNode{ID: id, Name: name, Kind: kind, System: sys, EntityID: graphNodeEntityID(id, kind)}
 		nodes[id] = n
 		return n
 	}

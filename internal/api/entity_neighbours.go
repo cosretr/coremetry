@@ -6,6 +6,8 @@ package api
 // entity.Resolver'dan: svc → wl `serves` (kalıcı katman), svc / wl → pod
 // canlı dizinden (geçmiş anda entity_seen_5m öneki), pod → yol Paths.
 // Ad eşitliği yalnız resolver'ın kendi son çare yedeğinde.
+// v0.10.2240 (S5): servis / db / queue / ext için calls kenarları (çağırdıkları
+// + çağıranlar; kalıcı katman, iki sınırlı okuma).
 //
 // GET /api/entity/neighbours?id=<entity id>&at=<RFC3339|unix>  viewer, 30 s
 
@@ -59,6 +61,19 @@ func (s *Server) entityNeighboursAt(ctx context.Context, c mcptools.EntityCandid
 		if err == nil {
 			err = perr
 		}
+		if cerr := fillNeighbourCalls(ctx, res, out, entity.ServiceID(c.Name), at); err == nil {
+			err = cerr
+		}
+		return out, err
+	case entity.TypeDatabase, entity.TypeQueue, entity.TypeExternal:
+		id := c.ID
+		if id == "" {
+			id = entity.Ref{Type: c.Kind, Name: c.Name}.String()
+		}
+		err := fillNeighbourCalls(ctx, res, out, id, at)
+		if len(out.Calls) == 0 && len(out.CalledBy) == 0 {
+			out.Note = "çağrı kenarı bilinmiyor — topolojide son 24 saatte görülmedi ya da entity deposu henüz yazmadı"
+		}
 		return out, err
 	case entity.TypeWorkload:
 		id := res.Canonical(ctx, c.ID, at)
@@ -88,6 +103,19 @@ func (s *Server) entityNeighboursAt(ctx context.Context, c mcptools.EntityCandid
 		return out, err
 	}
 	return nil, nil
+}
+
+// fillNeighbourCalls — calls kenarının iki yönü (entity.Resolver.Callees /
+// Callers; her biri tek sınırlı okuma, ≤ entity.MaxCallNeighbours).
+func fillNeighbourCalls(ctx context.Context, res *entity.Resolver, out *mcptools.EntityNeighbours, id string, at time.Time) error {
+	callees, err := res.Callees(ctx, id, at)
+	callers, cerr := res.Callers(ctx, id, at)
+	out.Calls, out.CalledBy = callees.IDs, callers.IDs
+	out.CallsTruncated = callees.Truncated || callers.Truncated
+	if err == nil {
+		err = cerr
+	}
+	return err
 }
 
 // fillNeighbourPods — SAF: pod kümesi → cevap alanları (liste tavanlı, sayı tam).

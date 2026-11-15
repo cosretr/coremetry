@@ -290,8 +290,10 @@ func TestTopologyTouchWhereLabelPrefixes(t *testing.T) {
 func TestResolveExtPeerCallSitesPinned(t *testing.T) {
 	want := map[string]int{
 		"chstore/service_map.go": 1,
-		"api/servicegraph.go":    1,
-		"api/topology.go":        1,
+		// v0.10.2240 (Entity S5): calls kenarı servis grafiğiyle aynı katlamayı seçer.
+		"chstore/entity_calls.go": 1,
+		"api/servicegraph.go":     1,
+		"api/topology.go":         1,
 	}
 	got := map[string]int{}
 	root := filepath.Join("..")
