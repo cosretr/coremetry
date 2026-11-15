@@ -1713,7 +1713,7 @@ export const api = {
   mlBaselineBackfillCancel: () => request<{ cancelled: boolean }>(`/api/ml/baseline/backfill`, { method: 'DELETE' }),
   // v0.10.1816 — servis profilleri (sunucu-sayfalı + arama + süzgeç; admin sabitleme)
   mlProfiles: (p: { q?: string; profile?: string; offset?: number; limit?: number }) =>
-    get<import('./types').MLServiceProfilePage>(`/api/ml/profiles${qs({ q: p.q, profile: p.profile, offset: p.offset, limit: p.limit })}`),
+    get<import('./types').MLServiceProfilePage>(`/api/ml/profiles?${qs({ q: p.q, profile: p.profile, offset: p.offset, limit: p.limit })}`),
   mlProfilePin: (service: string, body: { profile: string; reason: string }) =>
     request<import('./types').MLServiceProfile>(`/api/ml/profiles/${encodeURIComponent(service)}/pin`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
