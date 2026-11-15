@@ -94,12 +94,23 @@ func (s *Server) applyLogsEntityParam(w http.ResponseWriter, r *http.Request, q 
 	if f.To.Sub(f.From) > logsEntityMaxWindow {
 		return bad("entity kapsamının penceresi en çok 7 gün")
 	}
-	ref, ok := entity.ParseID(raw)
-	if !ok {
-		return bad("geçersiz entity id")
-	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
+	if status, msg := s.logsEntityFilter(ctx, raw, f); msg != "" {
+		writeJSONError(w, status, msg)
+		return false
+	}
+	return true
+}
+
+// logsEntityFilter — v0.10.2263: kimlik → Filter alanları (S3 gövdesi;
+// /api/logs?entity= ve /api/entity/log-coverage ortak). Hata: (HTTP durumu,
+// metin); başarı: (0, "").
+func (s *Server) logsEntityFilter(ctx context.Context, raw string, f *logstore.Filter) (int, string) {
+	ref, ok := entity.ParseID(raw)
+	if !ok {
+		return http.StatusBadRequest, "geçersiz entity id"
+	}
 	res := s.entityResolver()
 	id := raw
 	if ref.Type == entity.TypeWorkload || ref.Type == entity.TypeCluster {
@@ -110,17 +121,16 @@ func (s *Server) applyLogsEntityParam(w http.ResponseWriter, r *http.Request, q 
 	}
 	sc, err := logsEntityScopeFor(ref, s.spanClusterValues(ref.ClusterID))
 	if err != nil {
-		return bad(err.Error())
+		return http.StatusBadRequest, err.Error()
 	}
 	if sc.Service != "" && f.Service != "" && f.Service != sc.Service {
-		return bad("service ve entity kapsamı çelişiyor")
+		return http.StatusBadRequest, "service ve entity kapsamı çelişiyor"
 	}
 	if sc.Workload {
 		m, _ := res.WorkloadServices(ctx, []string{id}, f.To)
 		svcs := m[id]
 		if len(svcs) == 0 {
-			writeJSONError(w, http.StatusNotFound, "iş yükünün servisi çözülemedi (span görülmedi)")
-			return false
+			return http.StatusNotFound, "iş yükünün servisi çözülemedi (span görülmedi)"
 		}
 		if f.Service == "" {
 			f.Services = svcs
@@ -133,7 +143,7 @@ func (s *Server) applyLogsEntityParam(w http.ResponseWriter, r *http.Request, q 
 	if sc.Cluster != "" {
 		f.Cluster = sc.Cluster
 	}
-	return true
+	return 0, ""
 }
 
 // logsEntityKey — SAF: önbellek anahtarının pod / namespace parçası

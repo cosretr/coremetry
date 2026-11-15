@@ -14390,3 +14390,10 @@ Operatör onayı (anomali kartı mockup §5): yeni ML kartında "Sorun değil" d
 - Okuma: lider tick'inde 15 dk'da bir, son 1 saat, anahtar öneki `GROUP BY` (kova düşer), LIMIT 50K, 10 s. Tahmini tarama [T/V] ~0,6M satır/okuma (~8K iş yükü × 1,2 revizyon × 60 dk), günde 96 okuma. CH'ye ek satır yazılmaz; değişen yalnız kalıcı iş yükü kimliği / `serves` kenarı (değişimde + günde bir).
 - KSM'siz pod → iş yükü: revizyon eşleşmesi > ad türevinin tabloyla doğrulanması > ad türevi. Açık adlı iş yükü `source=attr`, `derived` etiketi yok (S2 `same_as` eski Derived kimliği ona bağlar). Tablo yoksa bir kez günlük ve bugünkü davranış.
 - Bilinçli sınır: tablonun eşleyemediği pod (k8s.deployment/statefulset/daemonset.name attr'ı basmayan ya da son 1 saatte revizyonu görülmeyen) ad türevinde kalır; tamamı için şema gerekirdi (not §4 P-a), yapılmadı.
+
+## 2026-11-15 — v0.10.2263 — Entity S6 parça 4: tembel log kapsama işareti
+
+- Maliyet notu P-d, K5 ("log tick'te keşif kaynağı değil"). `GET /api/entity/log-coverage?id=` (viewer): entity başına tek log sorgusu, yalnız uç çağrılınca; S3 alan süzgeçleri (ortak `logsEntityFilter`), son 1 saat, Limit 1, 5 s zaman aşımı. Liste sayfalarında ve tick'te hesaplanmaz.
+- Önbellek `serveCached` 15 dk (L1 + Redis L2 + singleflight): önbellek süresince entity başına en çok bir log sorgusu. Backend hatası ve uygulanamayan süzgeç (`UnappliedFilters`) "bilinmiyor" (`hasLogs: null` + not) olarak önbelleğe girer; yanlış "log var" yerine bilinmiyor.
+- UI: entity detay sayfasında "log var" / "log yok (1 sa)" rozeti, yalnız şimdi görünümünde ve log kapsamı olan tiplerde. CoSRE'ye bağlanmadı (çözüm başına log sorgusu olmasın; istenirse ayrı karar).
+- Maliyet: ES'e en çok (açılan farklı entity sayfası / 15 dk) kadar `size 1` arama, pencere 1 saat.

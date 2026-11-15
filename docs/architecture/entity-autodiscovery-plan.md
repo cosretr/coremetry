@@ -224,7 +224,7 @@ Araç çıktıları deterministik veridir; LLM'e bağlı adım yok (prod LLM yal
 | **S3 — Pod ↔ log ↔ trace** ✅ v0.10.2233 | `/api/logs` entity kapsamı (ES ve CH alan eşlemesiyle); span detayında yol çipleri; pod → trace `k8s_pod` kolonundan; A8, A9 silinir | Pod logları iki backend'de de doğru; trace'ten pod/iş yükü/servise tek tık ve geri | ES alan adı çeşitliliği | Şema yok; geri alma = sürüm | Backend başına süzgeç golden'ı; FE vitest; ES sorgu şekli (term, PIT yok) |
 | **S4 — CoSRE / MCP** ✅ v0.10.2239 | `ServicePodRegex` → `Neighbours`; `resolve_entity` yol + komşu; sweep/healthcheck pod adaptörleri | Adı deployment'tan farklı servislerde pod sağlığı gelir; kardeş önek karışmaz | Depoda olmayan servis (span yok) | Geri dönüş yolu yok (shim yasağı); depo boşsa araç "pod bilinmiyor" der | Araç golden'ları; CoSRE eval setinde pod soruları; regex çağıranı kalmadı ratchet'i |
 | **S5 — Yatay eksen (daraltılmış)** ✅ v0.10.2240 (aşağıda "S5 notları"; host → S6, A10 → takip) | db, queue, ext entity; `calls` kenarı; topoloji düğümüne ek `entityId` (düğüm id'si aynen) | DB/queue/host entity sayfaları; "bu pod'un servisi hangi DB'yi çağırıyor" yolu; blast radius tek kaynaktan | `ext:` kardinalitesi | Yeni tip/rel değerleri; `LowCardinality` tip kolonları uygun; geri alma = sürüm | `calls` SQL şekli; kardinalite tavanı testi; topoloji ↔ entity id gidiş-dönüş |
-| **S6 — Sinyal tamamlama** (şemasız, `entity-s6-cost-note.md` seçenek C; aşağıda "S6 notları") — parça 1 host ✅ v0.10.2260, parça 2 metrik ✅ v0.10.2261, parça 3 açık iş yükü adı ✅ v0.10.2262 | `entity_seen` v2 MV (iş yükü kolonları, host satırları); host entity'leri ve `runs` (host→svc) (S5'ten taşındı, şema + ayrı operatör onayı); VM'den metrik `runs`; log kapsama işareti (K5, K6) | Yalnız metrik/log basan servisler entity olur; regex türevi iş yükü kalmaz | MV INSERT maliyeti; çift MV dönemi | Yeni MV 30 gün çift koşar, sonra eski düşer; geri alma = yeni MV'yi DROP | MV DDL testi; prod preflight; INSERT gecikmesi öncesi/sonrası |
+| **S6 — Sinyal tamamlama** (şemasız, `entity-s6-cost-note.md` seçenek C; aşağıda "S6 notları") — parça 1 host ✅ v0.10.2260, parça 2 metrik ✅ v0.10.2261, parça 3 açık iş yükü adı ✅ v0.10.2262, parça 4 log işareti ✅ v0.10.2263 — S6 tamam | `entity_seen` v2 MV (iş yükü kolonları, host satırları); host entity'leri ve `runs` (host→svc) (S5'ten taşındı, şema + ayrı operatör onayı); VM'den metrik `runs`; log kapsama işareti (K5, K6) | Yalnız metrik/log basan servisler entity olur; regex türevi iş yükü kalmaz | MV INSERT maliyeti; çift MV dönemi | Yeni MV 30 gün çift koşar, sonra eski düşer; geri alma = yeni MV'yi DROP | MV DDL testi; prod preflight; INSERT gecikmesi öncesi/sonrası |
 
 Her dilim sonunda dur, onay al. S0 → S1 → S2 sıralı; S3, S4, S5 S2'den sonra herhangi bir sırada; S6 en son.
 
@@ -361,3 +361,10 @@ v2 MV'si yapılmadı, `entity_seen_1m`'e dokunulmadı).**
   bilmiyorsa iş yükü entity'si de). Tablonun eşleyemediği pod (attr'sız ya da pencere dışı revizyon) ad türevinde
   kalır. Tablo yoksa (0012 uygulanmamış) süreçte bir kez günlük, ad türevi tek yol; dizin son başarılı okumadan
   en çok ~31 dk kullanılır.
+- **Parça 4 — log kapsama işareti (v0.10.2263).** `GET /api/entity/log-coverage?id=` (`internal/api/
+  entity_log_coverage.go`), K5'e uygun: tick'te ve liste sayfalarında YOK; yalnız uç çağrılınca entity başına tek
+  log sorgusu — S3'ün alan süzgeçleri (`logsEntityFilter`, `/api/logs?entity=` ile ortak gövde), zorunlu son 1 saat,
+  Limit 1, 5 s; sonuç `serveCached` 15 dk (L1 + Redis L2 + singleflight; hata ve uygulanamayan süzgeç de
+  "bilinmiyor" olarak önbelleğe girer). Desteklenen tipler pod / namespace / workload / service / cluster; host,
+  db, queue, ext "kapsam çözülemedi" (log sorgusu yok). Entity detay sayfası "log var" / "log yok (1 sa)" rozeti
+  (yalnız "şimdi" görünümü). CoSRE araçlarına bağlanmadı (her `resolve_entity` çözümü log sorgusu tetiklemesin).

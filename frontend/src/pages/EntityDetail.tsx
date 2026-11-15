@@ -22,7 +22,7 @@ import { Stack, Row, Badge, Button } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { timeRangeToNs, fmtDateTime } from '@/lib/utils';
-import { useEntityEnabled, useEntity, useEntityServices, useEntityLatency } from '@/lib/queries';
+import { useEntityEnabled, useEntity, useEntityServices, useEntityLatency, useEntityLogCoverage } from '@/lib/queries';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
 import { serviceHref } from '@/lib/serviceHref';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
@@ -101,10 +101,16 @@ const POD_SVC_COLS: ColumnDef<EntitySeenAgg>[] = [
   { id: 'lastSeen',  label: 'Last seen', sortValue: r => Date.parse(r.lastSeen), width: 170 },
 ];
 
+// v0.10.2263 — /api/logs?entity= kapsamı olan tipler (logs_entity.go).
+const LOG_COVERAGE_TYPES = new Set(['pod', 'namespace', 'workload', 'service', 'cluster']);
+
 function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDetailResponse; svc?: EntityServicesResponse; svcError?: string; at: number; pageRange: TimeRange; from: number; to: number }) {
   const { entity, parents, children, lifetimes, cluster, atMatch } = data;
   const [showLabels, setShowLabels] = useState(false);
   const live = entityLiveness(entity);
+  // v0.10.2263 (S6 parça 4) — log kapsama işareti yalnız log kapsamı olan
+  // tiplerde ve yalnız "şimdi" görünümünde (geçmiş an için anlamsız).
+  const logCov = useEntityLogCoverage(entity.id, !at && LOG_COVERAGE_TYPES.has(entity.type)).data;
   const hrefOpts = { range: pageRange, at: at || undefined, clusterName: cluster?.name };
   const chain = [...parents].reverse().filter(p => p.type !== 'cluster');
   const labels = Object.entries(entity.labels ?? {}).sort(([a], [b]) => a.localeCompare(b));
@@ -139,6 +145,8 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
         {live === 'live' && <Badge>live</Badge>}
         {live === 'stale' && <Badge tone="warning" title="Son senkronda görülmedi; ömür henüz kapanmadı">stale</Badge>}
         {live === 'gone' && <Badge tone="danger">artık mevcut değil</Badge>}
+        {logCov?.hasLogs === true && <Badge title={`Son ${logCov.window} içinde bu entity'ye ait log var (${logCov.backend ?? 'log'}; ${fmtDateTime(new Date(logCov.checkedAt))} kontrolü)`}>log var</Badge>}
+        {logCov?.hasLogs === false && <Badge tone="neutral" title={`Son ${logCov.window} içinde bu entity'ye ait log bulunamadı (${fmtDateTime(new Date(logCov.checkedAt))} kontrolü)`}>log yok (1 sa)</Badge>}
       </Row>
       <Row gap={2} wrap>
         <span className="field-hint">

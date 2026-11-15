@@ -11114,6 +11114,17 @@ export interface EntityClustersResponse {
   unmapped?: EntitySyncRun;
 }
 export interface EntityListResponse { cluster: string; items: EntityRecord[] }
+/** v0.10.2263 (Entity S6 parça 4) — GET /api/entity/log-coverage: tembel,
+ *  entity başına tek sınırlı log sorgusu (son 1 saat), 15 dk önbellek.
+ *  hasLogs null = bilinmiyor (note söyler). */
+export interface EntityLogCoverage {
+  id: string;
+  hasLogs: boolean | null;
+  window: string;
+  checkedAt: string;
+  backend?: string;
+  note?: string;
+}
 export interface EntityDetailResponse {
   entity: EntityRecord;
   parents: EntityRecord[];

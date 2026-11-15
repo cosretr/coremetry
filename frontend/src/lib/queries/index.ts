@@ -66,7 +66,7 @@ export { useSlowQueries, useDBStatements, useDBStmtDetail } from './databases';
 export { useEndpoints, useEndpointDetail, useEndpointSplit, useEndpointDownstream, useEndpointCallers, useOperationCard, useOperationCardCode } from './endpoints';
 export { useMessagingClients, useServiceKafkaClients } from './messaging';
 export {
-  useEntityClusters, useEntityEnabled, useEntities, useEntity, useEntityServices, useEntityMetrics, useEntityContainers, useEntityLatency, useEntityPaths,
+  useEntityClusters, useEntityEnabled, useEntities, useEntity, useEntityServices, useEntityMetrics, useEntityContainers, useEntityLatency, useEntityPaths, useEntityLogCoverage,
 } from './entities';
 export {
   useServicePods as useEntityServicePods, useEntitySync, useRunEntitySync,

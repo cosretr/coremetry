@@ -29,7 +29,7 @@ OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   VMSnapshot, VMSettingsInput, VMTestResult,
   OracleSnapshot, OracleSettingsInput, OracleSource, OracleTestResult, OracleStatusPayload,
   DevOpsSnapshot, DevOpsSettingsInput, DevOpsTestResult, DevOpsResolveDryRun, StackFramesResult,
-  EntityClustersResponse, EntityListResponse, EntityDetailResponse, EntityServicesResponse, EntityMetricsResponse, EntityContainersResponse, EntityLatencyResponse,
+  EntityClustersResponse, EntityListResponse, EntityDetailResponse, EntityLogCoverage, EntityServicesResponse, EntityMetricsResponse, EntityContainersResponse, EntityLatencyResponse,
   ServicePodsResponse, EntitySyncResponse,
   ThanosClusterProbe,
   ThanosSnapshot, ThanosSettingsInput, ClusterPodsResponse, ClusterPodDetail,
@@ -2239,6 +2239,8 @@ export const api = {
     get<EntityListResponse>(`/api/entities?cluster=${encodeURIComponent(q.cluster)}${q.type ? `&type=${encodeURIComponent(q.type)}` : ''}${q.namespace ? `&namespace=${encodeURIComponent(q.namespace)}` : ''}${q.q ? `&q=${encodeURIComponent(q.q)}` : ''}${q.at ? `&at=${q.at}` : ''}${q.limit ? `&limit=${q.limit}` : ''}`, signal),
   entity: (id: string, at?: number, signal?: AbortSignal) =>
     get<EntityDetailResponse>(`/api/entity?id=${encodeURIComponent(id)}${at ? `&at=${at}` : ''}`, signal),
+  entityLogCoverage: (id: string, signal?: AbortSignal) =>
+    get<EntityLogCoverage>(`/api/entity/log-coverage?id=${encodeURIComponent(id)}`, signal),
   entityServices: (id: string, from: number, to: number, signal?: AbortSignal) =>
     get<EntityServicesResponse>(`/api/entity/services?id=${encodeURIComponent(id)}&from=${from}&to=${to}`, signal),
   entityMetrics: (id: string, from: number, to: number, signal?: AbortSignal) =>

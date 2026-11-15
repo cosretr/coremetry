@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { keys } from './keys';
 import type {
   EntityClustersResponse, EntityDetailResponse, EntityListResponse, EntityMetricsResponse, EntityContainersResponse, EntityLatencyResponse, EntityClusterInfo,
-  EntityServicesResponse, EntitySyncResponse, ServicePodsResponse, EntityPathHint, EntityPathsResponse,
+  EntityServicesResponse, EntitySyncResponse, ServicePodsResponse, EntityPathHint, EntityPathsResponse, EntityLogCoverage,
 } from '@/lib/types';
 
 // K8s entity katmanı (v0.10.131) — staleTime = sunucu serveCached TTL'i
@@ -49,6 +49,16 @@ export function useEntity(id: string, at?: number, enabled = true) {
     queryKey: keys.entities.get(id, at),
     queryFn: ({ signal }) => api.entity(id, at, signal),
     staleTime: 15_000,
+    enabled: enabled && !!id,
+  });
+}
+
+/** v0.10.2263 — tembel log kapsama işareti; staleTime = sunucu önbelleği (15 dk). */
+export function useEntityLogCoverage(id: string, enabled = true) {
+  return useQuery<EntityLogCoverage>({
+    queryKey: keys.entities.logCoverage(id),
+    queryFn: ({ signal }) => api.entityLogCoverage(id, signal),
+    staleTime: 15 * 60_000,
     enabled: enabled && !!id,
   });
 }
