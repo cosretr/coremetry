@@ -1,9 +1,8 @@
 // v0.10.1753 — ML replay görünümü: kayıt → grafik (bant = medyan ± etkin z ×
 // effMAD, sunucuyla aynı), tetik kovaları bölge, rollout işareti; what-if
-// penceresi şimdiyi aşmaz; dönem replay gün çözümü; backtest satırı.
+// penceresi şimdiyi aşmaz; backtest satırı (dönem replay'i v0.10.2254'te silindi).
 import { describe, it, expect } from 'vitest';
 import { effMAD, replayChart, whatIfWindow, dayClassLabel, replayContext, exceptionGroupHref } from '@/lib/mlReplay';
-import { resolveBacktestDays } from '@/components/coremetry/anomalies/MLPeriodReplay';
 import { backtestLine } from '@/components/coremetry/anomalies/MLReplaySheet';
 import type { MLSnapshot } from '@/lib/types';
 
@@ -47,12 +46,9 @@ describe('ml replay', () => {
     expect(whatIfWindow(10_000e9, 9_000_000)).toEqual({ from: 10_000 - 86400, to: 9_000 });
     expect(whatIfWindow(10_000e9, 1e12)).toEqual({ from: 10_000 - 86400, to: 10_000 + 7200 });
   });
-  it('labels and days', () => {
+  it('labels and backtest line', () => {
     expect(dayClassLabel('holiday')).toBe('tatil');
     expect(dayClassLabel('')).toBe('—');
-    expect(resolveBacktestDays(null)).toBe(7);
-    expect(resolveBacktestDays('20')).toBe(7);
-    expect(resolveBacktestDays('3')).toBe(3);
     expect(backtestLine(undefined, 'op_latency')).toBe('0 isabet');
     expect(backtestLine({ signal: 'trace', service: 'p', from: 0, to: 1, series: 1, buckets: 1, configHash: '', truncated: false, hits: [],
       detectors: [{ detector: 'op_latency', fired: 3, tp: 1, fp: 1, unlabeled: 1, positives: 1, covered: 1, precision: 0.5, recall: 1 }] }, 'op_latency'))

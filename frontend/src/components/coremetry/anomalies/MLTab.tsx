@@ -8,7 +8,6 @@ import type { ColumnDef } from '@/components/coremetry/DataTable';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { useMLScorecard } from '@/lib/queries';
 import type { MLEvent, MLDetectorScore, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus, MLThanosTick } from '@/lib/types';
-import { MLPeriodReplay } from './MLPeriodReplay';
 import { MLSvcShadowCompareSection } from './MLSvcShadowCompare';
 import { SIGNAL_KINDS } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
@@ -360,7 +359,6 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
           </details>
         </>
       )}
-      <MLPeriodReplay signal={signal} />
     </div>
   );
 }

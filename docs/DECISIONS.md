@@ -14358,3 +14358,8 @@ Operatör bildirimi (prod /ai, 7 gün): 404 açıklama turunun 78'i "hata"; `err
 - `template_spike` / `rare_template` olayları `EventRecord` taşır (`internal/ml/template_record.go`): seri = tikte ES şablon sayımından `ml_series`'e yazılan servis × `tpl|<ifade>` kova sayısı; snapshot H11 gibi tek servis, zaman sınırlı CH okumasıyla (`MLSeriesRange`), ES'e gidilmez. Bant: spike medyan ± criticalZ·effMAD, rare [0, 0]. Maliyet: açık olay başına tik başına 1 CH okuması, 0 ES, tik başına ≤ 20.
 - `new_template` / `rare_error_code` olayları sözleşmenin mevcut `series.kind=occurrence` dalıyla kayıt taşır (`internal/ml/occurrence_record.go`; yeni kayıt biçimi yok): seri tanımı, taban 0, onset = ilk görülme, hacim = satır sayısı, snapshot yok (kart eski yolda). Ek sorgu yok.
 - Tespit, eşik, sınıf (`service_anomaly`), liste, bildirim, Problem değişmedi; kapılar gölgede. Log `pod_outlier` atlandı (yeni ES sorgusu ister).
+
+## 2026-11-15 — v0.10.2254 — "Dönem replay'i" kaldırıldı (operatör kararı)
+
+- Silindi: ML sekmesinin altındaki "Dönem replay'i" bölümü (`frontend/src/components/coremetry/anomalies/MLPeriodReplay.tsx`, ~120 satır), `MLTab.tsx`'teki bağlaması, `?bt=` / `?btDays=` URL durumu ve `resolveBacktestDays` testi. Shim yok.
+- Kaldı (başka çağıranı var): `POST /api/ml/backtest` (`internal/api/ml.go` `postMLBacktest`), backtest motoru (`internal/ml/backtest.go` `Backtest`/`RunBacktest` + testleri), `api.mlBacktest` ve `MLBacktestResult`/`MLBacktestDetector`/`MLBacktestHit` tipleri — olay replay Sheet'indeki "What-if" karşılaştırması (`MLReplaySheet.tsx` `WhatIf`, `backtestLine`) aynı ucu ve motoru kullanıyor. v0.10.2252 olay replay koşumu (`internal/ml/replay.go`) ayrı şeydir, dokunulmadı.
