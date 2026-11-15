@@ -121,39 +121,10 @@ func BuildLagRecord(in LagRecordInput) (EventRecord, bool) {
 	}
 	lo, hi := lagBand(in.Median, in.MAD, in.CriticalZ)
 	at := func(i int) int64 { return (t0 + int64(i)*step) * 1e9 }
-	det := int((in.DetectedAt.Unix() - t0) / step)
-	if det < 0 {
-		det = 0
-	}
-	if det >= len(v) {
-		det = len(v) - 1
-	}
-	// onset: tespit anında ya da öncesindeki son bant-dışı koşunun başı.
-	onset := det
-	for onset >= 0 && v[onset] <= hi {
-		onset--
-	}
-	if onset < 0 {
-		onset = det // bant dışı nokta yok → doğrulayıcı onset_from_series ile kalır
-	} else {
-		for onset > 0 && v[onset-1] > hi {
-			onset--
-		}
-	}
-	end := len(v) - 1
+	onset, det, end, peak := seriesWindow(v, t0, step, lo, hi, "up", in.DetectedAt, in.Closed)
 	var endedAt int64
 	if in.Closed {
-		for j := det + 1; j < len(v); j++ {
-			if v[j] <= hi {
-				end = j
-				break
-			}
-		}
 		endedAt = at(end)
-	}
-	peak := v[onset]
-	for _, x := range v[onset : end+1] {
-		peak = math.Max(peak, x)
 	}
 	los, his := make([]float64, len(v)), make([]float64, len(v))
 	for i := range v {
@@ -188,6 +159,47 @@ func BuildLagRecord(in LagRecordInput) (EventRecord, bool) {
 		rec.Title += " · tepe " + trInt(peak)
 	}
 	return rec, true
+}
+
+// seriesWindow — SAF (H2/H3/H4 ortak): ızgarada tespit indeksi, onset
+// (tespit anında ya da öncesindeki son bant-dışı koşunun başı; bant dışı
+// nokta yoksa tespit anı → doğrulayıcı onset_from_series ile kalır), bitiş
+// (kapalıysa tespitten sonra banda ilk dönüş, değilse son nokta) ve bu
+// penceredeki uç değer (yön "down" ise dip).
+func seriesWindow(v []float64, t0, step int64, lo, hi float64, dir string, detectedAt time.Time, closed bool) (onset, det, end int, peak float64) {
+	out := func(x float64) bool { return x > hi }
+	if dir == "down" {
+		out = func(x float64) bool { return x < lo }
+	}
+	det = int((detectedAt.Unix() - t0) / step)
+	det = min(max(det, 0), len(v)-1)
+	onset = det
+	for onset >= 0 && !out(v[onset]) {
+		onset--
+	}
+	if onset < 0 {
+		onset = det
+	} else {
+		for onset > 0 && out(v[onset-1]) {
+			onset--
+		}
+	}
+	end = len(v) - 1
+	if closed {
+		for j := det + 1; j < len(v); j++ {
+			if !out(v[j]) {
+				end = j
+				break
+			}
+		}
+	}
+	peak = v[onset]
+	for _, x := range v[onset : end+1] {
+		if (dir == "down" && x < peak) || (dir != "down" && x > peak) {
+			peak = x
+		}
+	}
+	return onset, det, end, peak
 }
 
 // attachLagRecords — recorder: consumer lag olaylarına kayıt (yazım öncesi,

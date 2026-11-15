@@ -224,6 +224,9 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		series[k][t] = v
 	}
 	families := 0
+	// v0.10.2219 (H3): servis × route serisini hangi aile/etiketlerin
+	// ürettiği — olay kaydının seri ifadesi için kanıta yazılır.
+	srcOf := map[string]map[string]any{}
 	agg := newSvcAgg() // v0.10.2077: servis düzeyi count/err (ek sorgu yok)
 	for fi, pin := range anomaly.REDFamilyPins() {
 		fl := d.familyLabels(ctx, deps.VM, pin, from, to)
@@ -266,6 +269,9 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 					v = math.Max(0, 1-v) // pay → yavaş istek oranı
 				}
 				put(svc, tracePart(route, x.measure), last.Unix(), v)
+				if x.measure == "p95" || x.measure == "slow" {
+					srcOf[chstore.MLSeriesKey(svc, route)] = map[string]any{"redFamily": pin.ID, "svcLabel": fl.svc, "routeLabel": fl.route}
+				}
 			}
 		}
 	}
@@ -380,6 +386,9 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 					ev = d.event(detOpLatency, svc, route, j, last, cfg, class)
 					ev.Evidence = mergeEvidence(ev.Evidence, map[string]any{"measure": "slow_ratio", "slowSec": cfg.SlowRequestSec, "affected": math.Round(affected),
 						"p95Ms": series[pk][last.Unix()], "episodes7d": episodes[chstore.MLSeriesKey(svc, route)]})
+				}
+				if src := srcOf[chstore.MLSeriesKey(svc, route)]; src != nil {
+					ev.Evidence = mergeEvidence(ev.Evidence, src)
 				}
 				if isChronic(episodes[chstore.MLSeriesKey(svc, route)], cfg.ChronicEpisodes) {
 					ev.ID, ev.Stage = chstore.MLEventID("chronic:"+detOpLatency, svc, route), chstore.MLStageChronic

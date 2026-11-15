@@ -468,6 +468,11 @@ satırı "doğrulayıcıdan kalan kayıt (dedektör başına)". Hiçbir dedektö
 **H2 — consumer lag göçü.** ✅ **gemilendi v0.10.2215** (`internal/ml/kafka_lag_record.go`, `kafka_lag_record_test.go`; kart `RecordTitle`). Kayıt dolar; kart `record` varsa yalnız onu okur. *Risk:* orta (K4 çelişkisi). *Göç:* yok.
 *Test:* render'da ölçü sayısı için ek istek atılmadığını sabitleyen FE testi (ölçüt 9); başlık sayısı = alan.
 
+**H3 — `op_latency` göçü.** ✅ **gemilendi v0.10.2219** (`internal/ml/op_latency_record.go`, `op_latency_record_test.go`; ortak `seriesWindow`).
+Seri = ölçünün (p95 ms | yavaş istek %) servis × route için çözülmüş VM RED ifadesi, dedektörün kova penceresiyle (aile + etiket adları
+tik anında kanıta: `redFamily/svcLabel/routeLabel`); hacim aynı ailenin `_count`'u (dakika başına çağrı, `snapshot.n`). Tespit, eşik,
+`started_at` ve G'nin 1 dk kuralı **değişmedi** (G'de). Maliyet: açık olay başına tik başına 2 VM aralık sorgusu, tik başına ≤ 10 olay.
+
 **H3…Hn — dedektör başına birer sürüm** (§9 tablosu; önerilen sıra: VM metrik → `trace_error_count` → `svc_error_rate` → TraceRED →
 bağımlılık → kırılma noktası → log RED → şablon → pod → `svc_breadth` → oluşum türleri). *Risk:* S/M/L sütunu. *Göç:* yok. *Test:* dedektör başına ölçüt 9 + doğrulayıcı.
 
