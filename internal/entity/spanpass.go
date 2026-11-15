@@ -69,6 +69,13 @@ func GroupSeenByCluster(rows []SeenRow, refs []ClusterRef) (map[string][]SeenRow
 // SpanSeenToEntities — bir cluster'ın span satırları → ek varlık/ilişki.
 // known: Thanos'un bu tick ürettiği varlıklar (pod çakışmasında kazanır).
 func SpanSeenToEntities(cid string, rows []SeenRow, known map[string]Entity) ([]Entity, []Relation) {
+	return SpanSeenToEntitiesWith(cid, rows, known, nil)
+}
+
+// SpanSeenToEntitiesWith — v0.10.2262 (S6 parça 3): ex = cluster'ın açık
+// iş yükü dizini (workloads.go; nil = yalnız ad türevi). KSM'siz pod'un iş
+// yükü önce açık addan; tablodaki (iş yükü, servis) çiftleri serves olur.
+func SpanSeenToEntitiesWith(cid string, rows []SeenRow, known map[string]Entity, ex *ExplicitIndex) ([]Entity, []Relation) {
 	ents := map[string]Entity{}
 	rels := map[string]Relation{}
 	rel := func(typ, parent, child string) {
@@ -97,7 +104,13 @@ func SpanSeenToEntities(cid string, rows []SeenRow, known map[string]Entity) ([]
 				// v0.10.471 (F2-4, G14) — KSM sahibi yok: workload'ı pod adından türet
 				// (derived_workload.go); türetilemezse pod doğrudan namespace'in altında.
 				parent := nsID
-				if kind, name, ok := wlkind.FromPod(r.Pod); ok {
+				kind, name, ok := wlkind.FromPod(r.Pod)
+				labels := map[string]string{"kind": kind, "derived": "pod-name"}
+				if k, n, found := ex.ForPod(r.Namespace, r.Pod, kind, name, ok); found {
+					kind, name, ok = k, n, true
+					labels = map[string]string{"kind": kind, "source": "attr"}
+				}
+				if ok {
 					wlID := WorkloadID(cid, r.Namespace, kind, name)
 					if ksm, found := knownWl[r.Namespace+"/"+name]; found {
 						wlID = ksm
@@ -105,7 +118,7 @@ func SpanSeenToEntities(cid string, rows []SeenRow, known map[string]Entity) ([]
 					if _, known := known[wlID]; !known {
 						if _, dup := ents[wlID]; !dup {
 							ents[wlID] = Entity{Type: TypeWorkload, ClusterID: cid, ID: wlID, Namespace: r.Namespace, Name: name, ParentID: nsID,
-								Labels: map[string]string{"kind": kind, "derived": "pod-name"}, Source: SourceSpan}
+								Labels: labels, Source: SourceSpan}
 							rel(RelParent, nsID, wlID)
 						}
 					}
@@ -133,6 +146,7 @@ func SpanSeenToEntities(cid string, rows []SeenRow, known map[string]Entity) ([]
 			rel(RelRunsOn, podID, nodeID)
 		}
 	}
+	ExplicitServes(cid, ex, known, knownWl, ents, rels)
 	outE := make([]Entity, 0, len(ents))
 	for _, e := range ents {
 		outE = append(outE, e)

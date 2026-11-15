@@ -14383,3 +14383,10 @@ Operatör onayı (anomali kartı mockup §5): yeni ML kartında "Sorun değil" d
 - Etiket adları LabelMap'ten; pod etiketi yapılandırılmamışsa ya da VM tanımlı değilse geçiş koşmaz ve süreçte bir kez günlükler (`[entity] metrics: geçiş atlandı`). Ayar eklenmedi.
 - Yalnız metrik basan servis (son 1 saatte span'i yok) kalıcı katmanda `svc:<ad>`, `cluster_id = "(metric)"`, source `metric`. Metrik `runs` (pod|host → svc) yalnız canlı dizinde (Redis); CH'ye satır yazılmaz. Metrikte görülen host kalıcı katmana terfi etmez (24 sa MV kanıtı yalnız span host'larında).
 - Tahmini yazım [V]: M metrik-only servis (örnek 200) → ilk geçişte M satır, sonra değişimde + günde bir M satır.
+
+## 2026-11-15 — v0.10.2262 — Entity S6 parça 3: açık iş yükü adı (rollout MV'sinden)
+
+- Maliyet notu bulgu 2 / seçenek C: K6'nın v2 MV'si yerine zaten toplanan `workload_revision_activity_1m`. Şema yok.
+- Okuma: lider tick'inde 15 dk'da bir, son 1 saat, anahtar öneki `GROUP BY` (kova düşer), LIMIT 50K, 10 s. Tahmini tarama [T/V] ~0,6M satır/okuma (~8K iş yükü × 1,2 revizyon × 60 dk), günde 96 okuma. CH'ye ek satır yazılmaz; değişen yalnız kalıcı iş yükü kimliği / `serves` kenarı (değişimde + günde bir).
+- KSM'siz pod → iş yükü: revizyon eşleşmesi > ad türevinin tabloyla doğrulanması > ad türevi. Açık adlı iş yükü `source=attr`, `derived` etiketi yok (S2 `same_as` eski Derived kimliği ona bağlar). Tablo yoksa bir kez günlük ve bugünkü davranış.
+- Bilinçli sınır: tablonun eşleyemediği pod (k8s.deployment/statefulset/daemonset.name attr'ı basmayan ya da son 1 saatte revizyonu görülmeyen) ad türevinde kalır; tamamı için şema gerekirdi (not §4 P-a), yapılmadı.

@@ -1231,8 +1231,9 @@ func main() {
 	if mode.worker {
 		entitySyncer = entity.NewSyncer(entity.NewThanosSource(thanosSvc), entity.StoreFromCH(store), entitySettings.Resolved)
 		entitySyncer.SetSeenReader(entity.SeenFromCH(store))
-		entitySyncer.SetCallSource(entity.CallsFromCH(store))    // v0.10.2240 (S5): db/queue/ext + calls, 15 dk'da bir
-		entitySyncer.SetHostProof(entity.HostProofFromCH(store)) // v0.10.2260 (S6): host terfi kanıtı, 15 dk'da bir, yalnız yeni aday
+		entitySyncer.SetCallSource(entity.CallsFromCH(store))                    // v0.10.2240 (S5): db/queue/ext + calls, 15 dk'da bir
+		entitySyncer.SetHostProof(entity.HostProofFromCH(store))                 // v0.10.2260 (S6): host terfi kanıtı, 15 dk'da bir, yalnız yeni aday
+		entitySyncer.SetExplicitWorkloads(entity.ExplicitWorkloadsFromCH(store)) // v0.10.2262 (S6): açık iş yükü adı, 15 dk'da bir
 		entityLeader := cache.NewLeaderHolder(lockImpl, "entity-sync", cache.LeaderTTL(time.Minute))
 		entitySyncer.SetLeaderCheck(entityLeader.IsLeader) // v0.10.141 — API tetikli tick yalnız liderde
 		// v0.10.2225 (entity-storage-cost-note C + R1b): canlı dizin Redis'e

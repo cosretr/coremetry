@@ -57,3 +57,19 @@ func TestEntityHostProofSQLShape(t *testing.T) {
 		t.Fatalf("argümanlar: %v %v", names, svcs)
 	}
 }
+
+// v0.10.2262 (S6 parça 3) — açık iş yükü okuması: rollout MV'si, anahtar
+// öneki GROUP BY, zaman sınırlı, LIMIT + max_execution_time; ham spans yok.
+func TestEntityExplicitWorkloadsSQLShape(t *testing.T) {
+	for _, want := range []string{
+		"FROM workload_revision_activity_1m", "bucket >= toStartOfMinute(?)", "bucket <= now()",
+		"GROUP BY cluster, k8s_namespace, workload, revision, service_name", "anyLast(workload_kind)", "LIMIT ?", "max_execution_time = 10",
+	} {
+		if !strings.Contains(entityExplicitWorkloadsSQL, want) {
+			t.Errorf("SQL %q içermiyor", want)
+		}
+	}
+	if strings.Contains(entityExplicitWorkloadsSQL, "FROM spans") {
+		t.Error("ham spans okunmamalı")
+	}
+}

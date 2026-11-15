@@ -195,6 +195,12 @@ type Syncer struct {
 	metricsLast       atomic.Int64
 	metricsSkipLogged atomic.Bool
 	metricIx          *MetricIndex
+	// v0.10.2262 (S6 parça 3) — açık iş yükü adları (workloads.go).
+	explicit           ExplicitWorkloadSource
+	explicitLast       atomic.Int64
+	explicitSkipLogged atomic.Bool
+	explicitIx         map[string]*ExplicitIndex
+	explicitAt         time.Time
 }
 
 // SetLive — canlı dizinin Redis kapısı (main.go cacheImpl).
@@ -343,6 +349,9 @@ func (s *Syncer) tick(ctx context.Context) {
 		tickSkip.Add(int64(mst.skipped))
 		tickClosed.Add(int64(mst.closed))
 	}
+	// S6 parça 3 — açık iş yükü adları (15 dk'da bir tek sınırlı okuma).
+	tickRead.Add(int64(s.refreshExplicit(ctx, clusters)))
+	exIx := s.explicitIndexes(start)
 	sem := make(chan struct{}, ParallelClusters)
 	var wg sync.WaitGroup
 	for _, c := range clusters {
@@ -351,10 +360,10 @@ func (s *Syncer) tick(ctx context.Context) {
 		}
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(c ClusterRef, extra []SeenRow) {
+		go func(c ClusterRef, extra []SeenRow, ex *ExplicitIndex) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			st := s.syncCluster(ctx, c, extra)
+			st := s.syncCluster(ctx, c, extra, ex)
 			tickRead.Add(int64(st.read))
 			tickScan.Add(st.scanned)
 			tickEnts.Add(int64(st.ents))
@@ -371,7 +380,7 @@ func (s *Syncer) tick(ctx context.Context) {
 			} else {
 				tickFail.Add(1)
 			}
-		}(c, spanByCID[c.ID])
+		}(c, spanByCID[c.ID], exIx[c.ID])
 	}
 	wg.Wait()
 	// S6 parça 1 — host adayları: tick'in AYNI span satırlarından (ek okuma
@@ -483,7 +492,7 @@ func (s *Syncer) clusterState(cid string) *clusterState {
 // syncCluster — tek cluster; hata = sync_runs failed, hiçbir yazım yok.
 // SpanOnly cluster (K2): Thanos sorgusu yok; tek Thanos varlığı yerine
 // source=span cluster entity'si + span geçişi.
-func (s *Syncer) syncCluster(ctx context.Context, c ClusterRef, spanRows []SeenRow) (st clusterTickStats) {
+func (s *Syncer) syncCluster(ctx context.Context, c ClusterRef, spanRows []SeenRow, ex *ExplicitIndex) (st clusterTickStats) {
 	now := s.now()
 	run := Run{ClusterID: c.ID, StartedAt: now}
 	fail := func(err error) {
@@ -525,8 +534,8 @@ func (s *Syncer) syncCluster(ctx context.Context, c ClusterRef, spanRows []SeenR
 		entByID[e.ID] = e
 	}
 	// Span geçişi AYNI diff'e girer (ayrı diff, görülmeyen her şeyi kapatırdı).
-	if len(spanRows) > 0 {
-		se, sr := SpanSeenToEntities(c.ID, spanRows, entByID)
+	if len(spanRows) > 0 || ex != nil {
+		se, sr := SpanSeenToEntitiesWith(c.ID, spanRows, entByID, ex)
 		for _, e := range se {
 			if _, ok := entByID[e.ID]; !ok {
 				entByID[e.ID] = e
