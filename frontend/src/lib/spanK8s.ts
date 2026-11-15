@@ -1,24 +1,23 @@
 // spanK8s — v0.10.137 (DETAY SAYFALARI adım 3: trace pivotları). Bir span'in
-// Kubernetes bağlamını (resource attrs → resolveResource, backend coalesce
-// zinciriyle aynı) entity linklerine çevirir. Dört sonuç:
-//   'ok'               pod linki (+ node/namespace/cluster), at = span başlangıcı
+// Kubernetes bağlamını entity linklerine çevirir. v0.10.2233 (Entity S3, A9):
+// cluster eşlemesi ve kimlikler SUNUCUDAN (POST /api/entity/paths — tek
+// çözüm); burada yalnız ipucu (spanK8sHint) ve link kurulumu. Durumlar:
+//   'ok'               pod linki (+ iş yükü/servis/node/namespace/cluster), at = span başlangıcı
 //   'no-k8s'           k8s.pod.name yok → link YOK, "bu span'de Kubernetes bağlamı yok"
 //   'no-cluster'       pod var ama cluster değeri yok → link YOK (hangi cluster? bilinmiyor)
-//   'no-namespace'     v0.10.190: pod linki HAM /pod yolu (namespace'i sayfa Thanos'tan çözer)
+//   'no-namespace'     pod linki HAM /pod yolu (namespace'i sayfa Thanos'tan çözer)
 //   'unmapped-cluster' cluster değeri hiçbir Remote Cluster'a eşlenmemiş → link YOK, değer ilan
+//   'pending'          yol henüz çözülmedi (istek sürüyor) → link yok, not yok
 // Aynı pod adı iki cluster'da iki ayrı kayıt: cluster id linke girer. Saf; vitest'li.
 import { resolveResource } from './otel/semconv';
 import { entityHref } from './entityHref';
+import { serviceHref } from './serviceHref';
 import { podDetailPath } from '@/pages/service/podDetailPath';
+import { workloadOf } from '@/pages/service/podsMerge';
 import { windowRangeParam } from './urlState';
-import type { EntityClusterInfo, SpanRow, TimeRange } from './types';
+import type { EntityPath, EntityPathHint, EntityPathReason, SpanRow, TimeRange } from './types';
 
-// v0.10.148 — 'no-namespace': pod adı var, cluster eşlenmiş ama
-// k8s.namespace.name yok (o cluster'ın collector'ı basmıyor / Tempo-fallback).
-// Entity linki (`pod:<cid>/<ns>/<pod>`) üretilmez — eskiden `pod:<cid>//<pod>`
-// diye bozuk bir link çıkıyordu. v0.10.190: pod linki HAM /pod yolu (sayfa
-// namespace'i Thanos pod listesinden çözmeye çalışır); traceK8sLinks aynı kural.
-export type SpanK8sReason = 'ok' | 'no-k8s' | 'no-cluster' | 'unmapped-cluster' | 'no-namespace';
+export type SpanK8sReason = EntityPathReason | 'pending';
 
 export interface SpanK8sContext {
   reason: SpanK8sReason;
@@ -35,50 +34,62 @@ export interface SpanK8sContext {
   nodeHref?: string;
   namespaceHref?: string;
   clusterHref?: string;
+  /** v0.10.2233 (S3) — yol çipleri: pod → iş yükü → servis */
+  workloadName?: string;
+  workloadKind?: string;
+  workloadHref?: string;
+  serviceName?: string;
+  serviceHref?: string;
 }
 
 type SpanLike = Pick<SpanRow, 'resourceAttributes' | 'startTime'> & { serviceName?: string };
 
-export function spanK8sContext(span: SpanLike, clusters: EntityClusterInfo[], range?: TimeRange | string | null): SpanK8sContext {
+/** Span → /api/entity/paths ipucu (resource attr çözümü, backend coalesce zinciriyle aynı). */
+export function spanK8sHint(span: SpanLike): EntityPathHint {
   const r = resolveResource(span.resourceAttributes);
+  return { cluster: r.cluster || '', namespace: r.k8s.namespace || '', pod: r.k8s.pod || '', node: r.k8s.node || '', service: span.serviceName || '' };
+}
+
+export function spanK8sContext(span: SpanLike, path: EntityPath | undefined, range?: TimeRange | string | null): SpanK8sContext {
+  const h = spanK8sHint(span);
   const atMs = Math.floor((span.startTime || 0) / 1e6);
-  const base: SpanK8sContext = { reason: 'no-k8s', atMs, namespace: r.k8s.namespace, pod: r.k8s.pod, node: r.k8s.node, clusterValue: r.cluster };
-  if (!r.k8s.pod) return base;
-  if (!r.cluster) return { ...base, reason: 'no-cluster' };
-  // Yalnız spanClusterValue (sunucu SpanClusterKey ile aynı: değer boşsa ad
-  // zaten oraya yazılır). Ad yedeği, değeri farklı bir kaydı yanlış cluster'a
-  // bağlayabilirdi (inceleme).
-  const c = clusters.find(x => x.spanClusterValue === r.cluster || (x.spanClusterValues ?? []).includes(r.cluster!));
-  if (!c) return { ...base, reason: 'unmapped-cluster' };
-  const ns = r.k8s.namespace ?? '';
-  const opts = { range, at: atMs, clusterName: c.name, service: span.serviceName || undefined };
-  const linked = {
+  const base: SpanK8sContext = { reason: 'no-k8s', atMs, namespace: h.namespace || undefined, pod: h.pod || undefined, node: h.node || undefined, clusterValue: h.cluster || undefined };
+  if (!h.pod) return base;
+  if (!path) return { ...base, reason: h.cluster ? 'pending' : 'no-cluster' };
+  if (path.reason === 'no-cluster' || path.reason === 'unmapped-cluster' || path.reason === 'no-k8s' || !path.clusterId) {
+    return { ...base, reason: path.reason === 'ok' ? 'unmapped-cluster' : path.reason };
+  }
+  const cid = path.clusterId;
+  const cname = path.clusterName || cid;
+  const opts = { range, at: atMs, clusterName: cname, service: span.serviceName || undefined };
+  const wl = workloadOf(path.workload);
+  const svc = path.service?.startsWith('svc:') ? path.service.slice(4) : '';
+  const rangeParam = range ? (typeof range === 'string' ? range : windowRangeParam(range)) : undefined;
+  const linked: SpanK8sContext = {
     ...base,
-    clusterId: c.id,
-    clusterName: c.name,
-    nodeHref: r.k8s.node ? entityHref({ type: 'node', id: `node:${c.id}/${r.k8s.node}`, name: r.k8s.node, clusterId: c.id }, opts) : undefined,
-    clusterHref: entityHref({ type: 'cluster', id: `cluster:${c.id}`, name: c.name, clusterId: c.id }, { range }),
+    clusterId: cid,
+    clusterName: cname,
+    nodeHref: path.node && h.node ? entityHref({ type: 'node', id: path.node, name: h.node, clusterId: cid }, opts) : undefined,
+    clusterHref: entityHref({ type: 'cluster', id: path.cluster || `cluster:${cid}`, name: cname, clusterId: cid }, { range }),
+    workloadName: wl?.name,
+    workloadKind: wl?.kind,
+    workloadHref: wl ? entityHref({ type: 'workload', id: wl.id, name: wl.name, clusterId: cid }, opts) : undefined,
+    serviceName: svc || undefined,
+    serviceHref: svc ? serviceHref(svc) : undefined,
   };
-  // v0.10.190 (operatör: "neden link yok diyor") — namespace'siz span
-  // (o cluster'ın collector'ı k8s.namespace.name basmıyor) artık ÇIKMAZ
-  // değil: /pod sayfası namespace'i Thanos pod listesinden kendisi çözer
-  // (v0.10.135'ten beri ?namespace= zorunlu değil). Entity linki (pod:cid/ns/pod)
-  // üretilmez — id namespace ister; ham sayfa yolu verilir, neden ilan edilir.
-  if (!ns) {
+  // v0.10.190 — namespace'siz span: ham /pod linki (sayfa namespace'i Thanos'tan çözer).
+  if (path.reason === 'no-namespace' || !path.namespace || !path.pod) {
     return {
       ...linked,
       reason: 'no-namespace',
-      // İnceleme (190): range NESNE gelir (SpanDetail pageRange) — 'ok' dalıyla
-      // aynı kodlama (windowRangeParam); pencere düşerse /pod son 1 saate düşerdi.
-      podHref: podDetailPath({ pod: r.k8s.pod, cluster: c.name, service: span.serviceName || undefined,
-        range: range ? (typeof range === 'string' ? range : windowRangeParam(range)) : undefined, at: atMs }),
+      podHref: podDetailPath({ pod: h.pod, cluster: cname, service: span.serviceName || undefined, range: rangeParam, at: atMs }),
     };
   }
   return {
     ...linked,
     reason: 'ok',
-    podHref: entityHref({ type: 'pod', id: `pod:${c.id}/${ns}/${r.k8s.pod}`, name: r.k8s.pod, namespace: ns, clusterId: c.id }, opts),
-    namespaceHref: entityHref({ type: 'namespace', id: `ns:${c.id}/${ns}`, name: ns, clusterId: c.id }, opts),
+    podHref: entityHref({ type: 'pod', id: path.pod, name: h.pod, namespace: h.namespace, clusterId: cid }, opts),
+    namespaceHref: entityHref({ type: 'namespace', id: path.namespace, name: h.namespace || '', clusterId: cid }, opts),
   };
 }
 

@@ -1,6 +1,6 @@
 # Entity auto-discovery planı — "her şey bir entity"
 
-**Tarih:** 2026-11-15 · **Durum:** onaylı (operatör 2026-11-15); S0 v0.10.2193, S1 v0.10.2214, S2 v0.10.2232 · **Taban:** v0.10.2190
+**Tarih:** 2026-11-15 · **Durum:** onaylı (operatör 2026-11-15); S0 v0.10.2193, S1 v0.10.2214, S2 v0.10.2232, S3 v0.10.2233 · **Taban:** v0.10.2190
 **Operatör ilkesi:** "everything is an entity — pod, service, deployment, namespace, node, cluster";
 "entities can be auto-discovered like Dynatrace (Smartscape); later needed for pod logs, traces etc."
 **Tetik:** Clusters namespace detayı, aynı adlı servis varken Deployment `bsa-digital-dashboard-prod` için
@@ -221,7 +221,7 @@ Araç çıktıları deterministik veridir; LLM'e bağlı adım yok (prod LLM yal
 | **S0 — Resolver v0 + Clusters** ✅ v0.10.2193 | `entity.Resolver` (`Lookup`, `Paths`), mevcut kaynaklar üstünde, şema yok. Clusters `/pods` ve `/deployments` aynı yoldan; A1 ve A2 silinir | Pod satırlarının servis kolonu metrik basmayan uygulamalarda da dolar; pod ve iş yükü tabloları aynı cevabı verir | `/pods` gecikmesi (+1 MV okuması) | Şema yok; geri alma = sürümü geri al | Öncelik tablo testi; SQL şekil testi (zaman sınırı, LIMIT, `max_execution_time`); handler golden; `PodServiceMap` çağıranı kalmadı ratchet'i |
 | **S1 — Her zaman açık + yazım diyeti** ✅ v0.10.2214, değişiklik v0.10.2225 (aşağıda "S1 değişikliği") | Bayrak ve 4 vida → sabit (K1); atanmamış span cluster değeri → cluster entity (K2); `Refresh` kısma; Settings sekmesi yalnız durum | Kurulum yapmadan Pod/Entity sayfaları, Service → Pods, `list_pods`; atanmamış cluster'lar görünür | Açılışta ilk tick yükü; yanlış cluster çoğalması | `entity_layer` blob'unda yalnız backfill durumu kalır; geri alma = sürüm, veri durur | Kısma tablo testi (lider devri dahil); iki syncer aynı girdi → aynı satırlar; prod'da satır/dk ölçümü |
 | **S2 — Kararlı iş yükü kimliği + `serves`** ✅ v0.10.2232 | Kanonik Kind, `same_as`, wl→svc kenarı kalıcı. Rollouts ve Service Infra resolver'dan; A5, A6, A7 silinir | Rollouts iş yükü hapı her zaman doğru servise/entity'ye gider; Service sayfasında "çalıştığı iş yükleri" | Eski `Derived`/ReplicaSet id'li linkler | Yeni `rel_type` değerleri, DDL yok; eski satırlar TTL ile düşer; geri alma = sürüm | Kanonikleştirme tablo testi; `same_as` 1 adım; `bsa-digital-dashboard-prod` regresyon satırı |
-| **S3 — Pod ↔ log ↔ trace** | `/api/logs` entity kapsamı (ES ve CH alan eşlemesiyle); span detayında yol çipleri; pod → trace `k8s_pod` kolonundan; A8, A9 silinir | Pod logları iki backend'de de doğru; trace'ten pod/iş yükü/servise tek tık ve geri | ES alan adı çeşitliliği | Şema yok; geri alma = sürüm | Backend başına süzgeç golden'ı; FE vitest; ES sorgu şekli (term, PIT yok) |
+| **S3 — Pod ↔ log ↔ trace** ✅ v0.10.2233 | `/api/logs` entity kapsamı (ES ve CH alan eşlemesiyle); span detayında yol çipleri; pod → trace `k8s_pod` kolonundan; A8, A9 silinir | Pod logları iki backend'de de doğru; trace'ten pod/iş yükü/servise tek tık ve geri | ES alan adı çeşitliliği | Şema yok; geri alma = sürüm | Backend başına süzgeç golden'ı; FE vitest; ES sorgu şekli (term, PIT yok) |
 | **S4 — CoSRE / MCP** | `ServicePodRegex` → `Neighbours`; `resolve_entity` yol + komşu; sweep/healthcheck pod adaptörleri | Adı deployment'tan farklı servislerde pod sağlığı gelir; kardeş önek karışmaz | Depoda olmayan servis (span yok) | Geri dönüş yolu yok (shim yasağı); depo boşsa araç "pod bilinmiyor" der | Araç golden'ları; CoSRE eval setinde pod soruları; regex çağıranı kalmadı ratchet'i |
 | **S5 — Yatay eksen** | host, db, queue, ext entity; `calls` kenarı; topoloji id = entity id; A10 silinir | DB/queue/host entity sayfaları; "bu pod'un servisi hangi DB'yi çağırıyor" yolu; blast radius tek kaynaktan | `ext:` kardinalitesi | Yeni tip/rel değerleri; `LowCardinality` tip kolonları uygun; geri alma = sürüm | `calls` SQL şekli; kardinalite tavanı testi; topoloji ↔ entity id gidiş-dönüş |
 | **S6 — Sinyal tamamlama** | `entity_seen` v2 MV (iş yükü kolonları, host satırları); VM'den metrik `runs`; log kapsama işareti (K5, K6) | Yalnız metrik/log basan servisler entity olur; regex türevi iş yükü kalmaz | MV INSERT maliyeti; çift MV dönemi | Yeni MV 30 gün çift koşar, sonra eski düşer; geri alma = yeni MV'yi DROP | MV DDL testi; prod preflight; INSERT gecikmesi öncesi/sonrası |
@@ -282,3 +282,10 @@ silindi). `serves` ve `same_as` lider tick'inde `BridgeRelations` (bellekte, ayn
 (`Canonical`, `WorkloadServices`, `ServiceWorkloads`; `neighbours.go`) + chstore `EntityRelationsFor`.
 HTTP: `GET /api/services/{name}/workloads`; genel `/api/entity/neighbours` S4'te ilk MCP tüketicisiyle.
 Regresyon satırı kurgusal adla (`shop-dashboard-prod`). Şema yok.
+
+**S3 notları (v0.10.2233):** `/api/logs?entity=` (`internal/api/logs_entity.go`) kimliği backend alan
+süzgeçlerine indirir (iki backend; CH liste yolunun eksik cluster/namespace conjunct'ı eklendi); pencere
+zorunlu, ≤ 7 gün. `POST /api/entity/paths` (`internal/api/entity_paths.go`) span → yol; cluster çözümü tek
+yerde (`resolveSpanCluster`). Trace listesi hücreleri v0.10.330'dan beri düz metin; FE'deki ölü
+`traceK8sHref` silindi. Sapma: `GET /api/entity/resolve` ayrı uç olarak açılmadı — tekil ipucu aynı
+`POST /api/entity/paths`'ten.

@@ -51,6 +51,8 @@ func chSearchLogFilter(f Filter) chstore.LogFilter {
 		Services:    f.Services, // v0.10.1684
 		Env:         f.Env,      // v0.8.400 — env-separation Phase 4
 		Pod:         f.Pod,      // v0.9.1249 — bağlam pod kapsamı
+		Cluster:     f.Cluster,  // v0.10.2233 (S3) — liste yolu da süzer
+		Namespace:   f.Namespace,
 		Search:      f.Search,
 		From:        f.From,
 		To:          f.To,

@@ -169,10 +169,10 @@ func TestApplyScreenContextPivot(t *testing.T) {
 	})
 }
 
-func TestTracePodClusterForNoThanos(t *testing.T) {
+func TestResolveSpanClusterNoThanos(t *testing.T) {
 	s := &Server{}
-	if _, on, reason := s.tracePodClusterFor("prod-a"); on || reason != "" {
-		t.Fatalf("Thanos yokken: on=%v reason=%q", on, reason)
+	if sc := s.resolveSpanCluster("prod-a"); sc.ThanosOn || sc.Reason != "" {
+		t.Fatalf("Thanos yokken: %+v", sc)
 	}
 	if s.mcpTracePodsOrNil() != nil {
 		t.Fatal("Thanos yokken pod okuyucusu nil olmalı")

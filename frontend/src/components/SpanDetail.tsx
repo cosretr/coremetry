@@ -25,11 +25,11 @@ import { SqlCode } from '@/components/coremetry/SqlCode'; // v0.10.1955
 import { useDBStmtDetail } from '@/lib/queries/databases'; // v0.10.1956
 import { useT } from '@/lib/i18n';
 import { BreakdownBar, KindBadge } from './KindBadge';
-import { useEntityEnabled, useStackFrameLinks } from '@/lib/queries';
+import { useEntityEnabled, useEntityPaths, useStackFrameLinks } from '@/lib/queries';
 import { StackTrace } from './StackTrace';
 import { runningVersion } from '@/lib/runningVersion'; // v0.10.590
 import { SpanK8sSection } from './SpanK8sSection';
-import { spanK8sContext, k8sAttrHref, type SpanK8sContext } from '@/lib/spanK8s';
+import { spanK8sContext, spanK8sHint, k8sAttrHref, type SpanK8sContext } from '@/lib/spanK8s';
 
 const PANEL_MIN = 300;
 const PANEL_MAX = 1100;
@@ -136,12 +136,18 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
   // each render would re-render every Row in the panel.
   // v0.10.137 (DETAY SAYFALARI adım 3) — Kubernetes bölümü: bayrak açık VE
   // uygulama-içi linkler açıkken (public trace'te kapalı). Hook koşulsuz.
-  const { enabled: k8sOn, clusters: entityClusters } = useEntityEnabled(serviceLinks);
+  const { enabled: k8sOn } = useEntityEnabled(serviceLinks);
+  // v0.10.2233 (Entity S3) — yol sunucudan (POST /api/entity/paths: tek
+  // cluster çözümü + iş yükü); FE eşleme yapmaz. İpucu k8s.pod.name yoksa istek yok.
+  const k8sHint = useMemo(() => spanK8sHint(span), [span]);
+  const k8sAtMs = Math.floor((span.startTime || 0) / 1e6);
+  const pathQ = useEntityPaths(k8sHint.pod ? [k8sHint] : [], k8sAtMs, true, serviceLinks && k8sOn);
   // v0.10.150 — Row'lar için tek çözüm (SpanK8sCtx); gösterim kararı
   // Kubernetes bölümüyle aynı: serviceLinks && bayrak.
+  const k8sPath = pathQ.data?.paths[0];
   const k8sCtx = useMemo(
-    () => (serviceLinks && k8sOn) ? spanK8sContext(span, entityClusters, pageRange) : null,
-    [serviceLinks, k8sOn, span, entityClusters, pageRange]);
+    () => (serviceLinks && k8sOn) ? spanK8sContext(span, k8sPath, pageRange) : null,
+    [serviceLinks, k8sOn, span, k8sPath, pageRange]);
   const spanLinkCtx = useMemo(() => ({
     on: serviceLinks,
     window: logsFromBound && logsToBound
@@ -417,7 +423,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
 
         {serviceLinks && k8sOn && (
           <Section wide title="Kubernetes">
-            <SpanK8sSection span={span} clusters={entityClusters} range={pageRange} />
+            {k8sCtx && <SpanK8sSection ctx={k8sCtx} />}
           </Section>
         )}
 

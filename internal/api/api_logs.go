@@ -307,7 +307,8 @@ func logsSearchKey(f logstore.Filter, fromRaw, toRaw string) string {
 		logsScopeKeys(f) + // v0.10.1477 — team= (takımsız anahtar değişmez)
 		logsLangKey(f) + // v0.10.1819 — lang=lucene (otomatikte anahtar değişmez)
 		logsSourceKey(f) + // v0.10.1831 — dar _source kolonları + sayım yok (yoksa anahtar değişmez)
-		logsSortKey(f) // v0.10.1833 — kullanıcı sıralaması (yoksa anahtar değişmez)
+		logsSortKey(f) + // v0.10.1833 — kullanıcı sıralaması (yoksa anahtar değişmez)
+		logsEntityKey(f) // v0.10.2233 — entity kapsamı (yoksa anahtar değişmez)
 }
 
 func (s *Server) getLogs(w http.ResponseWriter, r *http.Request) {
@@ -452,6 +453,9 @@ func (s *Server) serveLogsSearch(w http.ResponseWriter, r *http.Request, q url.V
 		return
 	}
 	if !s.applyLogsTeamParam(w, r, q, &f) { // v0.10.1477 — /logs?team=
+		return
+	}
+	if !s.applyLogsEntityParam(w, r, q, &f) { // v0.10.2233 — /logs?entity= (logs_entity.go)
 		return
 	}
 	if !s.applyLogsScopeParam(w, r, q, &f) { // v0.10.1855 — /logs?scope=mine

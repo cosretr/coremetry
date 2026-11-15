@@ -185,6 +185,8 @@ function PodDetail() {
   // v0.10.130 öncesi anatomide kalır (kimlik satırı düz metin).
   const cid = entityCluster?.id ?? '';
   const entityId = entityOn && cid && (namespace || nsParam) && pod ? `pod:${cid}/${namespace || nsParam}/${pod}` : '';
+  // v0.10.2233 (S3) — log kapsamı entity kimliğiyle (/api/logs?entity=); bayraktan bağımsız.
+  const logsEntityId = cid && (namespace || nsParam) && pod ? `pod:${cid}/${namespace || nsParam}/${pod}` : '';
   const entQ = useEntity(entityId, atParam || undefined, entityOn && !!entityId);
   const entRange = useMemo(() => ({ from, to }), [from, to]);
   const svcQ = useEntityServices(entityId, entRange, entityOn && !!entityId);
@@ -438,7 +440,7 @@ function PodDetail() {
         </div>
 
         {/* v0.10.910 — bu pod'un logları (varsayılan kapalı; açılınca yüklenir) */}
-        <PodLogsSection pod={pod} from={from} to={to} service={service || undefined} cluster={traceCluster || undefined}
+        <PodLogsSection entityId={logsEntityId} from={from} to={to}
           logsLink={logsHref({ window: range, service: service || undefined, cluster: traceCluster || undefined, filters: logsPodPill })} />
 
       </PageShell>

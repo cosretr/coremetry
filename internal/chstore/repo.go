@@ -5179,6 +5179,11 @@ type LogFilter struct {
 	// TraceIDs (v0.10.584) — çoğul trace filtresi (DQL join'i). v0.5.271'den
 	// beri logstore.Filter'da vardı ama CH'ye HİÇ ulaşmıyordu — sessiz no-op.
 	TraceIDs []string
+	// Cluster / Namespace (v0.10.2233, Entity S3) — /api/logs?entity=
+	// kapsamının iki ucu; res-array conjunct LogsClusterChainSQL /
+	// namespaceExpr (filtre dilinin aynı ifadeleri). Önceden liste yolu
+	// Filter.Cluster'ı CH'de sessizce yok sayıyordu (yalnız histogram süzüyordu).
+	Cluster, Namespace string
 	// HasTrace (v0.8.406) — only rows with a trace correlation
 	// (trace_id != ''). Applied before the SinceNs branch so the
 	// count(), page read AND forward-tail all carry it.
@@ -5442,6 +5447,14 @@ func logsWhere(f LogFilter) whereClause {
 	if f.Pod != "" {
 		// v0.9.1249 — pod conjunct (Context modal "yalnız bu pod").
 		wc.add(logsPodChainSQL+" = ?", f.Pod)
+	}
+	if f.Cluster != "" {
+		wc.add(LogsClusterChainSQL+" = ?", f.Cluster) // v0.10.2233 (S3)
+	}
+	if f.Namespace != "" {
+		// v0.10.2233 (S3) — identity.go'nun TEK namespace sözlüğü (filtre
+		// dilinin `namespace:` alanıyla aynı ifade).
+		wc.add(namespaceExpr()+" = ?", f.Namespace)
 	}
 	if f.Search != "" {
 		// v0.9.1385 — yüklem log_search_predicate.go'ya çıktı. İki kusur

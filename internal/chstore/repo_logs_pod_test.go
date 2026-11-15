@@ -108,3 +108,19 @@ func TestLogsWhere_PodComposesWithOtherFilters(t *testing.T) {
 		t.Errorf("placeholder/arg sayısı ayrışmış: %d ? vs %d arg", got, len(wc.args))
 	}
 }
+
+// v0.10.2233 (Entity S3) — /api/logs?entity=pod:… kapsamı CH liste yolunda
+// pod + namespace + cluster conjunct'ı olarak iner (gövde araması değil);
+// önceden Cluster liste yolunda sessizce yok sayılıyordu.
+func TestLogsWhere_EntityScopeConjuncts(t *testing.T) {
+	wc := logsWhere(LogFilter{Pod: "web-5c7dbf9b8d-x2b9z", Namespace: "shop", Cluster: "east", From: time.Unix(0, 1), To: time.Unix(0, 2)})
+	sql := wc.sql()
+	for _, want := range []string{logsPodChainSQL + " = ?", LogsClusterChainSQL + " = ?", namespaceExpr() + " = ?", "time >= ?", "time <= ?"} {
+		if !strings.Contains(sql, want) {
+			t.Fatalf("conjunct eksik %q:\n%s", want, sql)
+		}
+	}
+	if strings.Contains(sql, "body") {
+		t.Fatalf("entity kapsamı gövde araması olmamalı:\n%s", sql)
+	}
+}

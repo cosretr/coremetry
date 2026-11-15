@@ -226,9 +226,10 @@ func (s *Server) getTracePodMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 	mdp := tracePodMDP(q.Get("mdp"))
 
-	// 2–4. Eşleme (v0.10.1275: pivot_from_trace'in pod halkasıyla ORTAK —
-	// tracePodClusterFor).
-	c, thanosOn, reason := s.tracePodClusterFor(cv)
+	// 2–4. Eşleme (v0.10.1275: pivot_from_trace'in pod halkasıyla ORTAK;
+	// v0.10.2233: entity yolunun TEK cluster çözümü — resolveSpanCluster).
+	sc := s.resolveSpanCluster(cv)
+	c, thanosOn, reason := sc.Cfg, sc.ThanosOn, sc.Reason
 	if !thanosOn || reason != "" {
 		writeJSON(w, &tracePodMetricsResponse{Thanos: thanosOn, ClusterValue: cv,
 			UnmappedReason: reason, Pods: []thanos.TracePodSeries{}})
@@ -249,25 +250,6 @@ func (s *Server) getTracePodMetrics(w http.ResponseWriter, r *http.Request) {
 		// v0.8.319).
 		return s.computeTracePodMetrics(ctx, c, cv, refs, from, to, mdp)
 	})
-}
-
-// tracePodClusterFor — v0.10.1275: span cluster değeri → Remote Cluster kaydı.
-// thanosOn=false: hiç etkin cluster yok (sekme metrik kolonlarını gizler).
-// reason: "no_cluster_value" (span'ler cluster taşımıyor) | "no_remote_cluster"
-// (değer hiçbir kayda bağlı değil ya da kayıt kapalı) | "" (eşlendi). Uç ve
-// pivot_from_trace'in pod halkası AYNI kuralı okur.
-func (s *Server) tracePodClusterFor(cv string) (thanos.ClusterConfig, bool, string) {
-	if s.thanos == nil || !s.thanos.HasEnabledClusters() {
-		return thanos.ClusterConfig{}, false, ""
-	}
-	if strings.TrimSpace(cv) == "" {
-		return thanos.ClusterConfig{}, true, "no_cluster_value"
-	}
-	c, ok := thanos.SpanClusterOwner(s.thanos.CurrentSettings(), cv)
-	if !ok || !c.Enabled {
-		return thanos.ClusterConfig{}, true, "no_remote_cluster"
-	}
-	return c, true, ""
 }
 
 // computeTracePodMetrics — v0.10.1275: önbellek dolum fonksiyonu (uç ve

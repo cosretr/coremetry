@@ -2359,6 +2359,12 @@ export const api = {
       (podRe ? `&podRe=${encodeURIComponent(podRe)}` : '') +
       (namespace ? `&namespace=${encodeURIComponent(namespace)}` : '')),
   // v0.10.2195 — pod → trace kapsamı entity modelinden (pod kenarı / iş yükü servisi).
+  // v0.10.2233 (Entity S3) — span k8s alanları → entity yolu (tek cluster çözümü sunucuda).
+  entityPaths: (hints: import('./types').EntityPathHint[], at: number, workloads: boolean, signal?: AbortSignal) =>
+    request<import('./types').EntityPathsResponse>('/api/entity/paths', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hints, at, workloads }), signal,
+    }),
   // v0.10.2232 (Entity S2) — servisin iş yükleri (kalıcı serves kenarı; yoksa pod'larının iş yükleri).
   serviceWorkloads: (service: string) =>
     get<import('./types').ServiceWorkloads>(`/api/services/${encodeURIComponent(service)}/workloads`),
@@ -4562,6 +4568,9 @@ export interface LogsParams {
   // yok). Verilmezse otomatik. URL `lang=lucene` (lib/logsUrl parseLogsLang).
   lang?: 'lucene';
   cluster?: string;  // v0.5.471 — k8s/openshift cluster name
+  // entity (v0.10.2233, Entity S3) — pod:/wl:/svc:/ns:/cluster: kimliği;
+  // sunucu backend ALAN süzgeçlerine indirir (gövde araması değil); from+to zorunlu.
+  entity?: string;
   env?: string;      // v0.8.400 — global ?env= deployment-environment filter
   search?: string;
   // pattern (v0.10.1071) — küratörlü log deseni ADI; sunucu dedektörün

@@ -4,6 +4,9 @@
 // URL'de (?logs=1&plvl=&plq=, replace). Mevcut primitifler: /api/logs
 // (servis log sekmesiyle aynı istemci), LogTable, LogContextModal (satır →
 // bağlam; modalın "yalnız bu pod" kapsamı kendisinde).
+// v0.10.2233 (Entity S3, A8): pod kapsamı /api/logs?entity=pod:<cid>/<ns>/<pod>
+// — sunucu iki backend'in ALAN süzgeçlerine indirir (pod + namespace +
+// cluster); CH'de pod adının gövdede aranması kalktı.
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -14,15 +17,16 @@ import { PanelTitle } from '@/components/ui/PanelTitle';
 import { LogTable } from '@/components/LogTable';
 import type { DataTableStateProps } from '@/components/ui/DataTable';
 import { LogContextModal } from '@/components/LogContextModal';
-import { podLogSearch, levelCounts, POD_LOG_MIN_SEV, type PodLogLevel } from './podLogs';
+import { levelCounts, POD_LOG_MIN_SEV, type PodLogLevel } from './podLogs';
 
 const POD_LOG_LIMIT = 100;
 // v0.10.967 — kararlı boş dizi: satır gösterilmeyen durumlarda LogTable'a
 // (ServiceSignalTabs emsali).
 const NO_LOGS: LogRow[] = [];
 
-export function PodLogsSection({ pod, from, to, service, cluster, logsLink }: {
-  pod: string; from: number; to: number; service?: string; cluster?: string;
+export function PodLogsSection({ entityId, from, to, logsLink }: {
+  /** pod:<cid>/<ns>/<pod> — boşsa (cluster kaydı çözülmedi) bölüm sorgu atmaz. */
+  entityId: string; from: number; to: number;
   /** /logs sayfasında aynı pod piliyle aç. */
   logsLink: string;
 }) {
@@ -46,13 +50,13 @@ export function PodLogsSection({ pod, from, to, service, cluster, logsLink }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input]);
 
-  const search = useMemo(() => podLogSearch(pod, text), [pod, text]);
+  const search = text.trim();
   const minSev = POD_LOG_MIN_SEV[lvl];
   const q = useQuery({
-    queryKey: ['pod-logs', pod, from, to, search, minSev ?? 0, service ?? '', cluster ?? ''],
+    queryKey: ['pod-logs', entityId, from, to, search, minSev ?? 0],
     // v0.10.1822 — RQ sinyali: süzgeç değişince / çıkışta ES işi iptal.
-    queryFn: ({ signal }) => api.logs({ limit: POD_LOG_LIMIT, from, to, search, severity: minSev, service: service || undefined, cluster: cluster || undefined }, signal),
-    enabled: open && !!pod,
+    queryFn: ({ signal }) => api.logs({ limit: POD_LOG_LIMIT, from, to, search: search || undefined, severity: minSev, entity: entityId }, signal),
+    enabled: open && !!entityId,
     staleTime: 15_000,
     refetchOnWindowFocus: false, // /api/logs önbelleksiz; ES PIT açar (servis sekmesi gerekçesi)
   });
@@ -72,11 +76,12 @@ export function PodLogsSection({ pod, from, to, service, cluster, logsLink }: {
   const showRows = !q.isPending && !q.isError && !degraded && rows.length > 0;
   const bodyHint = (
     <span>
-      Log backend&apos;i ClickHouse ise pod adı log gövdesinde aranır; gövdede geçmiyorsa sonuç çıkmaz — <Link to={logsLink}>Loglar sayfasında</Link> pili kaldırıp servis kapsamıyla bakın.
+      Süzgeç pod + namespace + cluster alanlarıdır; log kayıtları bu alanları taşımıyorsa sonuç çıkmaz — <Link to={logsLink}>Loglar sayfasında</Link> servis kapsamıyla bakın.
     </span>
   );
   const logsState: Omit<DataTableStateProps<LogRow>, 'dt' | 'leading' | 'trailing'> =
-    q.isPending ? { kind: 'loading' }
+    !entityId ? { kind: 'empty', message: 'Pod kimliği çözülemedi (cluster kaydı yok) — loglar pod kapsamıyla sorulamıyor.', detail: bodyHint }
+    : q.isPending ? { kind: 'loading' }
     : q.isError ? { kind: 'error', message: "Log backend'i yanıt vermedi." }
     : degraded ? {
         kind: 'error',
@@ -114,7 +119,7 @@ export function PodLogsSection({ pod, from, to, service, cluster, logsLink }: {
               <div className="pod-cap">
                 {rows.length} satır (en yeni önce){rows.length >= POD_LOG_LIMIT ? ' · daha fazlası için Loglar sayfası' : ''}
                 {lvl === 'all' ? ' · çip sayıları bu sayfadaki satırlardan' : ''}
-                {' · '}süzgeç kubernetes.pod_name (ES alan süzgeci; CH'de gövde araması) · satıra tıkla → bağlam
+                {' · '}süzgeç: pod + namespace + cluster alanları (entity kapsamı) · satıra tıkla → bağlam
               </div>
             )}
           </div>

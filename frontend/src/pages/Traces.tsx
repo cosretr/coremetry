@@ -97,7 +97,6 @@ import { PageControls } from '@/components/coremetry/PageControls';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { useEntityEnabled, useTraceRootDef } from '@/lib/queries';
 import { isTraceK8sCol, withK8sColumns, canAddK8sColumns } from '@/lib/traceK8sLinks';
-import type { EntityClusterInfo } from '@/lib/types';
 
 // v0.9.304 (operatör) — 'relations' kaldırıldı. Yapısal self-join
 // sorgusu ham spans üzerinde koşuyordu, yani sayfadaki en pahalı okuma
@@ -385,7 +384,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   const grouped = advGroup !== null;
   const advGroupParam = useMemo(() => encodeFilterGroup(advGroup), [advGroup]);
   // v0.10.143 — Kubernetes kolonları/linkleri yalnız entity katmanı açıkken.
-  const { enabled: k8sOn, clusters: entityClusters } = useEntityEnabled();
+  const { enabled: k8sOn } = useEntityEnabled();
   const [extraCols, setExtraCols] = useState<string[]>(() => {
     // URL ?cols= wins; then the persisted per-browser selection; then
     // DEFAULT_TRACE_COLUMNS (v0.9.841 — no longer empty; see the
@@ -1761,7 +1760,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                       // v0.10.330 — K8s hücreleri artık düz metin (kendi <a>'sı yok) → satır
                       // linkine diğer hücreler gibi sarılır; ölü hücre kalmaz.
                       const ownLink = false;
-                      const cell = renderTraceCell(id, t, visibleMax, k8sOn ? { clusters: entityClusters, range } : undefined, filter.op, serviceScoped);
+                      const cell = renderTraceCell(id, t, visibleMax, k8sOn, filter.op, serviceScoped);
                       // v0.10.723 — sola sabit hücre: sınıf + kümülatif left (Endpoints deseni).
                       const stickyL = leftOffs[id];
                       return (
@@ -1955,7 +1954,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
 // Per-column cell content for a trace row. k8s: v0.10.143 — entity katmanı
 // açıkken Kubernetes kolonları entity sayfalarına link (traceK8sLinks).
 // op (v0.10.752) — seçili operasyon; Name hücresi onu yazar (opPick.ts).
-function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { clusters: EntityClusterInfo[]; range: TimeRange }, op = '', serviceScoped = false) {
+function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s = false, op = '', serviceScoped = false) {
   if (k8s && isTraceK8sCol(id)) {
     const v = t.extras?.[id] ?? '';
     if (!v) return <span className="mono trl-c3">—</span>;
@@ -1964,8 +1963,8 @@ function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s?: { cl
     // entity-sayfası çipi (a.sec: kutu + 5×14 px dolgu + 13 px) hücreyi
     // iki-üç satıra sarıp tabloyu taşırıyordu. Artık DÜZ tek satır metin,
     // taşan kısım üç nokta, tam değer title'da; entity pivotu trace
-    // sayfasında ve satır linkinde duruyor. traceK8sHref korunur (pivot
-    // kaynağı başka yüzeylerde), burada çağrılmaz.
+    // sayfasında ve satır linkinde duruyor (v0.10.2233: yol çipleri span
+    // detayında, POST /api/entity/paths).
     return <span className="mono cell-ellipsis" style={{ color: 'var(--text2)' }} title={v}>{v}</span>;
   }
   switch (id) {

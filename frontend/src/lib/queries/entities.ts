@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { keys } from './keys';
 import type {
   EntityClustersResponse, EntityDetailResponse, EntityListResponse, EntityMetricsResponse, EntityContainersResponse, EntityLatencyResponse, EntityClusterInfo,
-  EntityServicesResponse, EntitySyncResponse, ServicePodsResponse,
+  EntityServicesResponse, EntitySyncResponse, ServicePodsResponse, EntityPathHint, EntityPathsResponse,
 } from '@/lib/types';
 
 // K8s entity katmanı (v0.10.131) — staleTime = sunucu serveCached TTL'i
@@ -117,5 +117,17 @@ export function useRunEntitySync() {
   return useMutation({
     mutationFn: () => api.runEntitySync(),
     onSuccess: () => { setTimeout(() => { void qc.invalidateQueries({ queryKey: keys.entities.sync() }); }, 3000); },
+  });
+}
+
+// v0.10.2233 (Entity S3) — span k8s alanları → entity yolu (POST /api/entity/paths,
+// sunucu 30 s önbellek). workloads=false: yalnız kimlik (depo okuması yok —
+// trace listesi); true: iş yükü (span detayı çipleri). Anahtar tüm ipuçlarını taşır.
+export function useEntityPaths(hints: EntityPathHint[], atMs: number, workloads: boolean, enabled = true) {
+  return useQuery<EntityPathsResponse>({
+    queryKey: ['entities', 'paths', atMs, workloads, hints],
+    queryFn: ({ signal }) => api.entityPaths(hints, atMs, workloads, signal),
+    staleTime: 30_000, retry: 1,
+    enabled: enabled && hints.length > 0,
   });
 }

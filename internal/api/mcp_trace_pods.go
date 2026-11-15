@@ -4,7 +4,7 @@ package api
 // halkasının (H1) Thanos adaptörü.
 //
 // Kural GET /api/trace-pods/metrics ile TEK: span cluster değeri sunucuda
-// eşlenir (tracePodClusterFor — SpanClusterOwner + Enabled), eşlenmeyen değer
+// eşlenir (resolveSpanCluster — SpanClusterOwner + Enabled), eşlenmeyen değer
 // Thanos'a gitmez; okuma aynı önbellek anahtarına (tracePodMetricsKey) aynı
 // dolum fonksiyonuyla (computeTracePodMetrics) yazar — Trace › Metrics sekmesi
 // ile sohbet pivotu birbirinin önbelleğini ısıtır. Pencere 6 sa'e kırpılır
@@ -34,7 +34,8 @@ func (s *Server) mcpTracePodsOrNil() mcptools.TracePodReader {
 }
 
 func (m mcpTracePods) TracePods(ctx context.Context, cv string, refs []thanos.TracePodRef, from, to time.Time) (mcptools.TracePodHop, error) {
-	c, thanosOn, reason := m.s.tracePodClusterFor(cv)
+	sc := m.s.resolveSpanCluster(cv)
+	c, thanosOn, reason := sc.Cfg, sc.ThanosOn, sc.Reason
 	hop := mcptools.TracePodHop{Thanos: thanosOn, ClusterValue: cv, UnmappedReason: reason}
 	if !thanosOn || reason != "" {
 		return hop, nil

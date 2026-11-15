@@ -12663,6 +12663,14 @@ export interface HealthcheckResult {
 /** v0.10.2195 — GET /api/pods/trace-scope (entity.Resolver yolu). */
 // v0.10.2232 (S2) — workload: pod'un iş yükü (wl:<cid>/<ns>/<Kind>/<ad>; canlı dizin / KSM sahibi).
 export interface PodTraceScope { mode: 'pod' | 'service' | 'none'; clusterValue?: string; service?: string; workload?: string }
+// v0.10.2233 (Entity S3) — POST /api/entity/paths: span k8s alanları → entity yolu.
+export interface EntityPathHint { cluster?: string; namespace?: string; pod?: string; node?: string; service?: string }
+export type EntityPathReason = 'ok' | 'no-k8s' | 'no-cluster' | 'unmapped-cluster' | 'no-namespace';
+export interface EntityPath {
+  reason: EntityPathReason; clusterValue?: string; clusterId?: string; clusterName?: string;
+  cluster?: string; namespace?: string; node?: string; pod?: string; workload?: string; service?: string;
+}
+export interface EntityPathsResponse { paths: EntityPath[] }
 // v0.10.2232 (Entity S2) — /api/services/{name}/workloads.
 export interface ServiceWorkload { id: string; clusterId: string; cluster?: string; namespace: string; kind: string; name: string }
 export interface ServiceWorkloads { workloads: ServiceWorkload[]; source: 'serves' | 'pods' | 'none' }

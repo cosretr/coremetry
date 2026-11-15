@@ -3,8 +3,8 @@
 // cluster id linkte; aynı pod adı iki cluster'da iki ayrı link
 // ayrık pod sayımı + hata sayısı + servisler.
 import { describe, it, expect } from 'vitest';
-import { spanK8sContext, spanK8sNote } from './spanK8s';
-import type { EntityClusterInfo } from './types';
+import { spanK8sContext as ctxOf, spanK8sNote, spanK8sHint } from './spanK8s';
+import type { EntityClusterInfo, EntityPath } from './types';
 
 const clusters: EntityClusterInfo[] = [
   { id: 'c-a', name: 'prod-eu', spanClusterValue: 'prod-eu-west', spanClusterValues: ['prod-eu-west', 'eu-legacy'] },
@@ -12,6 +12,22 @@ const clusters: EntityClusterInfo[] = [
 ];
 const span = (ra: Record<string, string>, startNs = 1_700_000_000_123_456_789, extra: Partial<{ serviceName: string; statusCode: string }> = {}) =>
   ({ resourceAttributes: ra, startTime: startNs, serviceName: extra.serviceName ?? 'api', statusCode: extra.statusCode ?? 'ok' });
+
+// v0.10.2233 (S3): cluster eşlemesi sunucuda (POST /api/entity/paths,
+// entityPathFor — Go testli). Bu yardımcı sunucu cevabının ŞEKLİNİ üretir;
+// FE yalnız ipucu + link kurar.
+function serverPath(s: ReturnType<typeof span>, workload?: string): EntityPath {
+  const h = spanK8sHint(s);
+  const base: EntityPath = { reason: 'no-k8s', clusterValue: h.cluster || undefined, service: h.service ? `svc:${h.service}` : undefined };
+  if (!h.pod && !h.namespace && !h.node) return base;
+  if (!h.cluster) return { ...base, reason: 'no-cluster' };
+  const c = clusters.find(x => [x.spanClusterValue, ...(x.spanClusterValues ?? [])].includes(h.cluster ?? ''));
+  if (!c) return { ...base, reason: 'unmapped-cluster' };
+  const p: EntityPath = { ...base, reason: 'ok', clusterId: c.id, clusterName: c.name, cluster: `cluster:${c.id}`, node: h.node ? `node:${c.id}/${h.node}` : undefined, workload };
+  if (!h.namespace) return { ...p, reason: 'no-namespace' };
+  return { ...p, namespace: `ns:${c.id}/${h.namespace}`, pod: h.pod ? `pod:${c.id}/${h.namespace}/${h.pod}` : undefined };
+}
+const spanK8sContext = (s: ReturnType<typeof span>, _clusters: unknown, range?: Parameters<typeof ctxOf>[2]) => ctxOf(s, serverPath(s), range);
 
 function params(href: string) { return new URLSearchParams(href.slice(href.indexOf('?') + 1)); }
 
@@ -150,6 +166,20 @@ describe('k8sAttrHref (v0.10.150)', () => {
 });
 
 // v0.10.163 — şerit kaldırıldı; span detayındaki k8s linkleri pod'a giden TEK yol, kapı burada kalır.
+describe('yol çipleri (v0.10.2233 S3)', () => {
+  it('iş yükü ve servis sunucu yolundan; yol yokken pending, link yok', () => {
+    const s = span({ 'k8s.pod.name': 'api-5c7dbf9b8d-x2b9z', 'k8s.namespace.name': 'pay', 'k8s.cluster.name': 'prod-eu-west' });
+    const ctx = ctxOf(s, serverPath(s, 'wl:c-a/pay/Deployment/api'), '1h');
+    expect(ctx.workloadName).toBe('api');
+    expect(params(ctx.workloadHref!).get('id')).toBe('wl:c-a/pay/Deployment/api');
+    expect(ctx.serviceName).toBe('api');
+    expect(ctx.serviceHref).toContain('name=api');
+    const pend = ctxOf(s, undefined);
+    expect(pend.reason).toBe('pending');
+    expect(pend.podHref).toBeUndefined();
+  });
+});
+
 describe('SpanDetail k8s attribute links (v0.10.150, v0.10.163 tek yol)', () => {
   it('SpanDetail rows resolve k8s attribute links through the provider (source scan)', () => {
     const src = readFileSync(resolvePath(__dirname, '../components/SpanDetail.tsx'), 'utf8').replace(/^\s*\/\/.*$/gm, '');

@@ -1,61 +1,16 @@
 // traceK8sLinks — v0.10.143 (DETAY SAYFALARI adım 6: traces listesi).
-// Bir trace satırının Kubernetes kolonları (k8s.namespace.name / k8s.pod.name /
-// k8s.node.name / cluster) entity sayfalarına link olur: doğru cluster
-// (span cluster değeri → Remote Cluster, spanClusterValues), at = trace
-// başlangıcı (ms), range korunur, pod linki servis bağlamını taşır. Cluster
-// çözülemezse link YOK (düz metin + gerekçe). Saf; vitest'li.
-import { entityHref } from './entityHref';
-import { podDetailPath } from '@/pages/service/podDetailPath';
-import { windowRangeParam } from './urlState';
-import type { EntityClusterInfo, TimeRange, TraceRow } from './types';
+// Trace listesinin Kubernetes kolon seti. v0.10.330'dan beri hücreler düz
+// metin; v0.10.2233 (Entity S3, A9) — FE'deki cluster eşlemesi
+// (traceK8sHref) silindi: span → entity yolu tek yerden, POST
+// /api/entity/paths (span detayı çipleri). Saf; vitest'li.
 
 // Sıra ÖNEMLİ: `cluster` önce — link için tek zorunlu anahtar; 8 kolon tavanı
 // kuyruğu düşürür (inceleme). Değer terfi `cluster` kolonundan (coalesce zinciri).
 export const TRACE_K8S_COLS = ['cluster', 'k8s.namespace.name', 'k8s.pod.name', 'k8s.node.name'] as const;
-/** Operatörün kendi kolon listesinde cluster değeri bu adlarla da yaşayabilir. */
-const CLUSTER_KEYS = ['cluster', 'k8s.cluster.name', 'openshift.cluster.name'] as const;
 export type TraceK8sCol = typeof TRACE_K8S_COLS[number];
 
 export function isTraceK8sCol(id: string): id is TraceK8sCol {
   return (TRACE_K8S_COLS as readonly string[]).includes(id);
-}
-
-export interface TraceK8sLink { href?: string; note?: string }
-
-/** clusters: /api/entities/clusters (spanClusterValues ile eşleşme). */
-export function traceK8sHref(col: TraceK8sCol, t: Pick<TraceRow, 'extras' | 'startTime'>, clusters: EntityClusterInfo[], range?: TimeRange | string | null): TraceK8sLink {
-  const ex = t.extras ?? {};
-  const value = ex[col] ?? '';
-  if (!value) return {};
-  const clusterValue = CLUSTER_KEYS.map(k => ex[k] ?? '').find(Boolean) ?? '';
-  const c = clusterValue ? clusters.find(x => x.spanClusterValue === clusterValue || (x.spanClusterValues ?? []).includes(clusterValue)) : undefined;
-  if (!c) {
-    return { note: clusterValue ? `cluster değeri "${clusterValue}" bir Remote Cluster kaydına eşlenmemiş — link yok` : 'cluster kolonu yok — hangi cluster bilinmiyor, link yok' };
-  }
-  const atMs = Math.floor((t.startTime || 0) / 1e6);
-  const ns = ex['k8s.namespace.name'] ?? '';
-  const opts = { range, at: atMs, clusterName: c.name };
-  switch (col) {
-    case 'cluster':
-      return { href: entityHref({ type: 'cluster', id: `cluster:${c.id}`, name: c.name, clusterId: c.id }, { range }) };
-    case 'k8s.namespace.name':
-      return { href: entityHref({ type: 'namespace', id: `ns:${c.id}/${value}`, name: value, clusterId: c.id }, opts) };
-    case 'k8s.node.name':
-      return { href: entityHref({ type: 'node', id: `node:${c.id}/${value}`, name: value, clusterId: c.id }, opts) };
-    case 'k8s.pod.name':
-      // v0.10.190 — namespace'siz (collector basmıyor): ham /pod linki, sayfa
-      // namespace'i Thanos'tan çözmeye çalışır; neden notta kalır (spanK8s ile aynı).
-      if (!ns) {
-        return {
-          href: podDetailPath({ pod: value, cluster: c.name, at: atMs, range: range ? (typeof range === 'string' ? range : windowRangeParam(range)) : undefined }),
-          note: 'k8s.namespace.name kolonu yok (collector basmıyor) — pod sayfası namespace\'i Thanos\'tan çözmeye çalışır',
-        };
-      }
-      // Servis bağlamı BİLİNÇLİ yok: pod/namespace değerleri trace-geneli
-      // any() örnekleri, serviceName ise kök span'in servisi — ikisi aynı
-      // pod'a ait olmayabilir (inceleme). /pod entity yoluyla kendi kapsamını kurar.
-      return { href: entityHref({ type: 'pod', id: `pod:${c.id}/${ns}/${value}`, name: value, namespace: ns, clusterId: c.id }, opts) };
-  }
 }
 
 /** Kubernetes kolon seti: 8 kolon tavanına uyacak biçimde eklenir (mevcutlar atlanır; cluster önce). */

@@ -5,7 +5,7 @@
 //
 // NE ÇİVİLİYOR: pod sayfasının log bölümü durumlarını LogTable'ın İÇİNDE
 // çizer, sütun başlıkları yerinde:
-//   • boş: CH gövde-araması ipucu + "Loglar sayfasında" BAĞLANTISI durum
+//   • boş: entity alan süzgeci ipucu (S3) + "Loglar sayfasında" BAĞLANTISI durum
 //     satırının detail yuvasında (silinmedi, tablonun dışına park edilmedi);
 //   • arama ya da seviye seçiliyken boş sonuç "eşleşme yok" — aynı ipucu ve
 //     bağlantı orada da;
@@ -67,7 +67,7 @@ async function mount(url = '/pod?logs=1'): Promise<HTMLElement> {
     root.render(
       <QueryClientProvider client={qc}>
         <MemoryRouter initialEntries={[url]}>
-          <PodLogsSection pod="p-1" from={1} to={2} logsLink={LOGS_LINK} />
+          <PodLogsSection entityId="pod:c-1/shop/p-1" from={1} to={2} logsLink={LOGS_LINK} />
         </MemoryRouter>
       </QueryClientProvider>,
     );
@@ -99,7 +99,7 @@ describe('PodLogsSection — durumlar LogTable\'ın içinde (v0.10.967)', () => 
     expect(row.dataset.dtState).toBe('empty');
     expect(row.querySelectorAll('td').length).toBe(1);
     expect(row.textContent).toContain('Bu pod için bu pencerede log yok.');
-    expect(row.textContent).toContain('pod adı log gövdesinde aranır');
+    expect(row.textContent).toContain('pod + namespace + cluster alanları');
     expect(detailLink(row)?.getAttribute('href')).toBe(LOGS_LINK);
     expect(detailLink(row)?.textContent).toBe('Loglar sayfasında');
   });
