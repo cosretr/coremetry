@@ -63,6 +63,11 @@ describe('cpuUsageText', () => {
     expect(cpuUsageText(148.3, 320)).toBe('148 / 320 çekirdek · %46');
     expect(cpuUsageText(22, 96)).toBe('22 / 96 çekirdek · %23');
   });
+  it('v0.10.2186 — İngilizce arayüz: cores · 9%', () => {
+    expect(cpuUsageText(85, 988, 'en')).toBe('85 / 988 cores · 9%');
+    expect(cpuUsageText(148.3, undefined, 'en')).toBe('148 cores');
+    expect(memUsageText(118 * 1024 ** 3, 384 * 1024 ** 3, 'en')).toBe('118 / 384 GiB · 31%');
+  });
   it('10 çekirdeğin altında bir ondalık', () => {
     expect(cpuUsageText(2.44, 16)).toBe('2.4 / 16 çekirdek · %15');
     expect(cpuUsageText(0.04, 8)).toBe('0 / 8 çekirdek · %1');

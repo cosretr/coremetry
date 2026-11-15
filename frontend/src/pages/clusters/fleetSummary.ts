@@ -10,6 +10,7 @@
 import { fmtBytes } from '@/lib/utils';
 import { trPoss, trPossLoc } from '@/lib/trSuffix';
 import { safePct } from './thresholds';
+import { t, type Lang } from '@/lib/i18n';
 import type { ClusterSummary } from '@/lib/types';
 
 export type ClusterState = 'healthy' | 'critical' | 'unreachable' | 'pending';
@@ -50,17 +51,23 @@ function fmtCoreCount(v: number): string {
   if (v >= 10) return String(Math.round(v));
   return String(Math.round(v * 10) / 10);
 }
-const pctText = (used: number, cap: number) => `%${Math.round(safePct(used, cap) ?? 0)}`;
+// v0.10.2186 — yüzde biçimi dile göre: TR "%46", EN "46%".
+const pctText = (used: number, cap: number, lang: Lang) => {
+  const n = Math.round(safePct(used, cap) ?? 0);
+  return lang === 'tr' ? `%${n}` : `${n}%`;
+};
 
-/** "148 / 320 çekirdek · %46"; kapasite yoksa "148 çekirdek"; kullanılan yoksa null. */
-export function cpuUsageText(usedCores?: number, capacityCores?: number): string | null {
+/** TR "148 / 320 çekirdek · %46", EN "148 / 320 cores · 46%"; kapasite yoksa
+ *  "148 çekirdek"; kullanılan yoksa null. Birim i18n kataloğundan (clusters.cores). */
+export function cpuUsageText(usedCores?: number, capacityCores?: number, lang: Lang = 'tr'): string | null {
   if (usedCores == null) return null;
-  if (!capacityCores || capacityCores <= 0) return `${fmtCoreCount(usedCores)} çekirdek`;
-  return `${fmtCoreCount(usedCores)} / ${fmtCoreCount(capacityCores)} çekirdek · ${pctText(usedCores, capacityCores)}`;
+  const unit = t('clusters.cores', lang);
+  if (!capacityCores || capacityCores <= 0) return `${fmtCoreCount(usedCores)} ${unit}`;
+  return `${fmtCoreCount(usedCores)} / ${fmtCoreCount(capacityCores)} ${unit} · ${pctText(usedCores, capacityCores, lang)}`;
 }
 
 /** "922 GiB / 1.28 TiB · %72"; birim aynıysa "118 / 384 GiB · %31"; kapasite yoksa "118 GiB". */
-export function memUsageText(usedBytes?: number, capacityBytes?: number): string | null {
+export function memUsageText(usedBytes?: number, capacityBytes?: number, lang: Lang = 'tr'): string | null {
   if (usedBytes == null) return null;
   const used = fmtBytes(usedBytes);
   if (!capacityBytes || capacityBytes <= 0) return used;
@@ -68,7 +75,7 @@ export function memUsageText(usedBytes?: number, capacityBytes?: number): string
   const [uVal, uUnit] = used.split(' ');
   const [, cUnit] = cap.split(' ');
   const left = uUnit === cUnit ? uVal : used;
-  return `${left} / ${cap} · ${pctText(usedBytes, capacityBytes)}`;
+  return `${left} / ${cap} · ${pctText(usedBytes, capacityBytes, lang)}`;
 }
 
 /** Metnin tonu: çubuk rengiyle (pctColor) aynı eşikler; normal doluluk nötr. */

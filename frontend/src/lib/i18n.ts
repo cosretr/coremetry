@@ -654,6 +654,8 @@ const EN: Catalog = {
   'traces.colFilter.topN': 'Top {n} by trace count — search to find others',
   'traces.colFilter.counts': 'Trace counts in this window and filters',
   'traces.colFilter.orBlocked': 'Column filters add AND chips; switch the filter builder back to AND to use them.',
+  // v0.10.2186 — /clusters CPU birimi (fleetSummary cpuUsageText)
+  'clusters.cores': 'cores',
 };
 
 const TR: Catalog = {
@@ -1268,6 +1270,7 @@ const TR: Catalog = {
   'traces.colFilter.topN': 'Trace sayısına göre ilk {n} — diğerleri için ara',
   'traces.colFilter.counts': 'Bu pencere ve filtrelerdeki trace sayıları',
   'traces.colFilter.orBlocked': 'Kolon filtreleri AND çipi ekler; kullanmak için filtre kurucusunu AND\'e çevirin.',
+  'clusters.cores': 'çekirdek',
 };
 
 const CATALOGS: Record<Lang, Catalog> = { en: EN, tr: TR };

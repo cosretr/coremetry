@@ -35,6 +35,7 @@ import { FIELD_SURFACE } from '@/components/coremetry/Field/fieldSurface';
 import { ClusterCard } from '@/pages/clusters/ClusterCard';
 import { clusterState, fleetSentence, cpuUsageText, memUsageText, usageTone } from '@/pages/clusters/fleetSummary';
 import { api } from '@/lib/api';
+import { t, useLang } from '@/lib/i18n';
 import { useClusters } from '@/lib/queries';
 import { timeRangeToNs, fmtBytes, fmtNum } from '@/lib/utils';
 import { LIVE_META } from '@/lib/autoRefresh';
@@ -146,6 +147,7 @@ function pctTitle(what: string, ofLimit?: number, ofReq?: number): string {
 
 export default function ClustersPage() {
   const [range, setRange] = useUrlRange('15m'); // inline namespace/pod trendi
+  const lang = useLang(); // v0.10.2186 — CPU birimi + yüzde biçimi (i18n)
   const [params, setParams] = useSearchParams();
 
   const sourcesQ = useQuery({
@@ -703,8 +705,8 @@ export default function ClustersPage() {
                 const cpuP = sum ? safePct(sum.cpuUsedCores, sum.cpuCapacityCores) : null;
                 const memP = sum ? safePct(sum.memUsedBytes, sum.memCapacityBytes) : null;
                 const usage = sum ? ([
-                  ['CPU', cpuUsageText(sum.cpuUsedCores, sum.cpuCapacityCores), cpuP],
-                  ['Memory', memUsageText(sum.memUsedBytes, sum.memCapacityBytes), memP],
+                  ['CPU', cpuUsageText(sum.cpuUsedCores, sum.cpuCapacityCores, lang), cpuP],
+                  ['Memory', memUsageText(sum.memUsedBytes, sum.memCapacityBytes, lang), memP],
                 ] as const).filter(([, text]) => text != null) : [];
                 return (
                   <Link key={name} to={detail} replace
@@ -942,7 +944,7 @@ export default function ClustersPage() {
                 {section === 'overview' && ((cpuTrendQ.data?.series?.length ?? 0) > 0 || (memTrendQ.data?.series?.length ?? 0) > 0) && (
                   <div className="grid-2 cl-ov-charts">
                     <MetricArea title={`CPU usage (cores)${clampSuffix(netClamped)}`} byLabel="By node"
-                      subtitle={cpuByNode ? topSeriesText(cpuTrendQ.data?.series, v => `${fmtCores(v)} çekirdek`) || undefined : undefined}
+                      subtitle={cpuByNode ? topSeriesText(cpuTrendQ.data?.series, v => `${fmtCores(v)} ${t('clusters.cores', lang)}`) || undefined : undefined}
                       by={cpuByNode} onToggle={setCpuByNode} onZoom={chartZoom} onZoomReset={chartZoomReset}
                       syncKey="clusters" xRange={trendXRange} zeroBase
                       series={cpuTrendQ.data?.series} seriesName="CPU" />

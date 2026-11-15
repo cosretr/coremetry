@@ -54,6 +54,13 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return { ...mod, api: { ...(mod.api as Record<string, unknown>), ...calls } };
 });
 
+// v0.10.2186 — arayüz dili testten seçilir (varsayılan EN, marka/kullanıcı seçimi yok).
+const ui = vi.hoisted(() => ({ lang: 'en' as 'en' | 'tr' }));
+vi.mock('@/lib/i18n', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, unknown>>();
+  return { ...mod, useLang: () => ui.lang };
+});
+
 import ClustersPage from './Clusters';
 
 let host: HTMLElement | null = null;
@@ -103,6 +110,7 @@ beforeEach(() => {
     'prod-c': sum('prod-c', { nodes: 6, pods: 212, cpuUsedCores: 22, cpuCapacityCores: 96, memUsedBytes: 118 * GiB, memCapacityBytes: 384 * GiB }),
     'prod-d': 'down',
   };
+  ui.lang = 'en';
   try { localStorage.clear(); } catch { /* jsdom */ }
 });
 afterEach(() => {
@@ -152,14 +160,14 @@ describe('Clusters S4 — kart: üç sayı + iki çubuk + durum sözcüğü', ()
     const el = await mount();
     const rows = Array.from(card(el, 'prod-a').querySelectorAll<HTMLElement>('.cl-usage__row'));
     expect(rows.map(r => r.querySelector('.cl-usage__text')!.textContent)).toEqual([
-      'CPU148 / 320 çekirdek · %46',
-      'Memory922 GiB / 1.28 TiB · %70',
+      'CPU148 / 320 cores · 46%',
+      'Memory922 GiB / 1.28 TiB · 70%',
     ]);
     expect(rows[0].querySelector('.cl-usage__val')!.className).toBe('cl-usage__val');
     expect(rows[1].querySelector('.cl-usage__val')!.className).toBe('cl-usage__val cl-usage__val--warn');
     expect(rows.every(r => r.querySelector('.cl-bar'))).toBe(true);
     // Birim aynıysa bir kez yazılır.
-    expect(card(el, 'prod-c').querySelectorAll('.cl-usage__val')[1].textContent).toBe('118 / 384 GiB · %31');
+    expect(card(el, 'prod-c').querySelectorAll('.cl-usage__val')[1].textContent).toBe('118 / 384 GiB · 31%');
   });
 
   it('kapasite yoksa yalnız kullanılan; kullanım da yoksa çubuk satırı yok', async () => {
@@ -168,9 +176,20 @@ describe('Clusters S4 — kart: üç sayı + iki çubuk + durum sözcüğü', ()
     m.summaries['prod-c'] = { cluster: 'prod-c', nodes: 3, pods: 40 };
     const el = await mount();
     expect(Array.from(card(el, 'prod-b').querySelectorAll('.cl-usage__val')).map(n => n.textContent))
-      .toEqual(['148 çekirdek', '922 GiB']);
+      .toEqual(['148 cores', '922 GiB']);
     expect(card(el, 'prod-c').querySelector('.cl-usage')).toBeNull();
     expect(card(el, 'prod-c').querySelectorAll('.cl-kpi__val').length).toBe(3);
+  });
+});
+
+// v0.10.2186 — CPU birimi ve yüzde biçimi arayüz dilinden (lib/i18n): EN
+// varsayılan "cores · 46%", TR "çekirdek · %46".
+describe('Clusters — CPU metni arayüz dilinde', () => {
+  it('Türkçe arayüz: çekirdek · %46', async () => {
+    ui.lang = 'tr';
+    const el = await mount();
+    expect(Array.from(card(el, 'prod-a').querySelectorAll('.cl-usage__val')).map(n => n.textContent))
+      .toEqual(['148 / 320 çekirdek · %46', '922 GiB / 1.28 TiB · %70']);
   });
 });
 
