@@ -40,6 +40,10 @@ describe('iş yükü hücreleri', () => {
     const m = new Map([['a', pod({ pod: 'a', service: 'order-api' })], ['b', pod({ pod: 'b', service: 'order-api' })], ['c', pod({ pod: 'c', service: 'x' })]]);
     expect(workloadService({ podNames: ['a', 'b', 'c'] }, m)).toBe('order-api');
     expect(workloadService({ podNames: ['zzz'] }, m)).toBe('');
+    // v0.10.2191 — operatör örneği: sunucu entity çözümü pod eşlemesi boşken de kazanır.
+    expect(workloadService({ podNames: ['bsa-digital-dashboard-prod-7d9f8c6b5-abcde'], service: 'bsa-digital-dashboard-prod' }, new Map()))
+      .toBe('bsa-digital-dashboard-prod');
+    expect(workloadService({ podNames: ['a'], service: '' }, m)).toBe('order-api');
   });
   it('kullanılan / istek, kullanılan / limit · %', () => {
     expect(workloadCpuText(4.2, 9.5)).toBe('4.2 / 9.5 çekirdek');

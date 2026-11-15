@@ -281,6 +281,8 @@ func (s *Server) getClusterDeployments(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return nil, err
 		}
+		// v0.10.2191 — iş yükü → servis entity grafiğinden (best-effort).
+		s.attachWorkloadServices(qctx, cfg, namespace, rows)
 		return map[string]any{
 			"cluster": name, "namespace": namespace,
 			"deployments": rows, "count": len(rows),

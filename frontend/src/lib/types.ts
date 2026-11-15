@@ -2647,6 +2647,8 @@ export interface ClusterDeploymentRow {
   status?: string;
   // v0.10.2176 (Clusters S8) — iş yükü türü (owner zinciri); yok = ad sezgiseli.
   kind?: string;
+  // v0.10.2191 — iş yükünün servisi (sunucu entity çözümü); yok = eşleşme yok.
+  service?: string;
 }
 export interface ClusterDeploymentsResponse {
   cluster: string;

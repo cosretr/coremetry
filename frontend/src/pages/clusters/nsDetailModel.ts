@@ -72,8 +72,11 @@ export function podProblemSortValue(r: ClusterPodRow, waiting?: string): number 
   return podProblemRank(r, waiting) * 1000 + (r.memPct ?? 0);
 }
 
-/** İş yükünün servisi: pod'larının çoğunluk servisi (eşit ise alfabetik ilk); yoksa ''. */
-export function workloadService(dep: Pick<ClusterDeploymentRow, 'podNames'>, podsByName: ReadonlyMap<string, ClusterPodRow>): string {
+/** İş yükünün servisi. v0.10.2191 — önce sunucunun entity çözümü (`service`:
+ *  pod →runs→ servis kenarları → k8s.deployment.name attr bağı → ad eşitliği);
+ *  yoksa pod'larının çoğunluk servisi (eşit ise alfabetik ilk); yoksa ''. */
+export function workloadService(dep: Pick<ClusterDeploymentRow, 'podNames' | 'service'>, podsByName: ReadonlyMap<string, ClusterPodRow>): string {
+  if (dep.service) return dep.service;
   const count = new Map<string, number>();
   for (const name of dep.podNames ?? []) {
     const svc = podsByName.get(name)?.service;

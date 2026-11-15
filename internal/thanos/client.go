@@ -1053,6 +1053,10 @@ type DeploymentRow struct {
 	// / "Job", deploy ailesi olmayan RS "ReplicaSet". Boş = ad sezgiseli
 	// (tür bilinmiyor).
 	Kind string `json:"kind,omitempty"`
+	// Service — v0.10.2191: iş yükünün Coremetry servisi. API katmanı
+	// doldurur (attachWorkloadServices: span resource attr bağı → ad
+	// eşitliği); thanos paketi yazmaz. Boş = eşleşme yok.
+	Service string `json:"service,omitempty"`
 }
 
 // unassignedWorkload — eşlenemeyen pod'ların toplandığı satır adı.
