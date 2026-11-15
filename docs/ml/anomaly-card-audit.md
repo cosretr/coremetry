@@ -473,6 +473,10 @@ Seri = ölçünün (p95 ms | yavaş istek %) servis × route için çözülmüş
 tik anında kanıta: `redFamily/svcLabel/routeLabel`); hacim aynı ailenin `_count`'u (dakika başına çağrı, `snapshot.n`). Tespit, eşik,
 `started_at` ve G'nin 1 dk kuralı **değişmedi** (G'de). Maliyet: açık olay başına tik başına 2 VM aralık sorgusu, tik başına ≤ 10 olay.
 
+**H4 — VM `metric_*` göçü.** ✅ **gemilendi v0.10.2220** (`internal/ml/metric_vm_record.go`, `metric_vm_record_test.go`). Seri = aile
+ifadesinin tik hâli (`renderExpr`, `{win}` = kova) + servis eşleyicisi; yön "down" ise dip ve alt sınır; hacim `null` + neden (gauge/oran).
+Thanos (`@cluster`) olayları ve consumer lag (H2) kapsam dışı. Maliyet: açık olay başına tik başına 1 VM aralık sorgusu, tik başına ≤ 20.
+
 **H3…Hn — dedektör başına birer sürüm** (§9 tablosu; önerilen sıra: VM metrik → `trace_error_count` → `svc_error_rate` → TraceRED →
 bağımlılık → kırılma noktası → log RED → şablon → pod → `svc_breadth` → oluşum türleri). *Risk:* S/M/L sütunu. *Göç:* yok. *Test:* dedektör başına ölçüt 9 + doğrulayıcı.
 
