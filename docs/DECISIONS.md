@@ -14177,3 +14177,10 @@ Operatör bildirimi (prod /ai, 7 gün): 404 açıklama turunun 78'i "hata"; `err
 - Karar K2: Remote Cluster kaydı olmayan span cluster değeri `cluster:<değer>` entity'si olur (`source = span`, Thanos sorgusu yok). Tick başına tavan 64 değer (en çok satırlı); boş değer ve kayıt id'siyle çakışan değer atlanır. Remote Cluster kaydı asla otomatik yaratılmaz.
 - Yazım diyeti: açık ömrün `last_seen`'i yalnız saklı değer `RefreshEvery = podGap/2 = 5 dk`'dan eskiyse yazılır (`ThrottleRefresh`). Karar CH'den okunan değere bağlı, lider devrinde aynı. Bedeli: kapanış `valid_to` en çok ~6 dk erken; lider devri 4 dk'yı aşarsa yeni ömür açılabilir (LeaderTTL 1 dk).
 - Güvenlik: INSERT 10K satırlık parçalar (async_insert korunur); okumalar mevcut MV/FINAL, zaman sınırlı, LIMIT + `max_execution_time`; tick başına tek `[entity] tick:` satırı; `Observability.RowsRead/RefreshSkipped`. Şema değişikliği yok. Geri alma = imaj geri alma.
+
+## 2026-11-15 — v0.10.2215 — ML olay kaydı H2: consumer lag dedektörü sözleşmeyi doldurur
+
+- `metric_kafka|consumer_lag[#topic]` olayları `EventRecord` taşır (`internal/ml/kafka_lag_record.go`): seri = varsayılan ifadenin servis (+ topic) için çözülmüş hali; snapshot aynı ifadenin 1 dk VM aralık sorgusu (olay ±30 dk, 720 nokta tavanı); onset/tepe/tespit değeri/bitiş yalnız bu seriden; bant = alarm bandı (medyan ± criticalZ·effMAD). Hacim gauge olduğundan `null` + neden. Kanıt: seri (bağımsız değil) + aynı servisteki başka dedektör (bağımsız). `gates[]` boş, sınıf `service_anomaly` (A1'e kadar).
+- Doğrulayıcı yazımdan önce (H1 `applyRecordContract`); kalan kayıt `publish_state=invalid` + sayaç. Operatör ifadeyi değiştirdiyse kayıt yazılmaz. Maliyet: açık lag olayı başına tik başına 1 aralık sorgusu, tik başına ≤ 20.
+- Kart: geçerli kayıt varsa başlık yalnız kayıttan (`RecordTitle`), `value` gönderilmez → panel tepesi başlığı yeniden yazmaz. Eski kayıtlar etkilenmez. Grafik ve kart tasarımı G/D'de.
+- Operatör kararları (mockup onayı, K3, K4, K8, K10, K2) audit §12'ye kaydedildi; uygulanmadı.

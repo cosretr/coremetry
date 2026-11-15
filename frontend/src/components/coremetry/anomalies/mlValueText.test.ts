@@ -51,4 +51,10 @@ describe('withPanelPeak', () => {
     expect(withPanelPeak('başka cümle', value, 2800)).toBe('başka cümle');
     expect(withPanelPeak(summary, value, Number.NaN)).toBe(summary);
   });
+  // v0.10.2215 (H2) — olay kaydı olan kartta sunucu `value` göndermez:
+  // başlık sayıları kayıttan, panel tepesi (ek sorgu) başlığı değiştirmez.
+  it('kayıtlı kart: başlık panel tepesinden bağımsız', () => {
+    const title = 'Consumer lag tespit anında 500 kayıt, normal üst sınır 144';
+    for (const p of [null, 2800, 0]) expect(withPanelPeak(title, undefined, p)).toBe(title);
+  });
 });

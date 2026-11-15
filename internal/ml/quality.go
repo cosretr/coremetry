@@ -231,6 +231,17 @@ func (t *tracker) confirmers(ev chstore.MLEvent, now time.Time, win time.Duratio
 	return ids, len(sig)
 }
 
+// firstOf — v0.10.2215 (H2): epizodun ilk görüldüğü tik (kayıt detected_at);
+// bilinmiyorsa sıfır.
+func (t *tracker) firstOf(epID string) time.Time {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if r := t.byEpisode(epID); r != nil {
+		return r.first
+	}
+	return time.Time{}
+}
+
 // setEvent — süzgeçten geçen olayın son hali (epizot kimliğiyle).
 func (t *tracker) setEvent(ev chstore.MLEvent) {
 	t.mu.Lock()

@@ -7,7 +7,7 @@ package ml
 // eklemez. Saklama: ml_events.class / publish_state / onset_at tipli
 // kolonları + record (bu yapının JSON'u). Seri ml_event_snapshots'ta kalır.
 //
-// H1 sınırı: hiçbir dedektör bu kaydı doldurmaz (H2 consumer lag ilk göç);
+// H2 (v0.10.2215): consumer lag kaydı doldurur (kafka_lag_record.go);
 // applyRecordContract kaydı OLAN olaya uygulanır, olmayan eski kayıt aynen
 // geçer. Doğrulayıcıdan kalan kayıt publish_state=invalid yazılır (yayımlanmaz)
 // ve dedektör başına sayaca girer (stats.go recordInvalid, tik log satırı).
@@ -403,4 +403,17 @@ func applyRecordContract(ev chstore.MLEvent) chstore.MLEvent {
 	global.observeRecordInvalid(ev.Detector)
 	log.Printf("[ml] record invalid %s %s: %s — %s (+%d kural)", ev.Detector, ev.ID, vs[0].Rule, vs[0].Reason, len(vs)-1)
 	return ev
+}
+
+// recordTitle — v0.10.2215 (H2): yayımlanabilir kaydın başlığı; kayıt yok,
+// çözülemiyor ya da doğrulayıcıdan kalmışsa "" (kart eski yola düşer).
+func recordTitle(ev chstore.MLEvent) string {
+	if ev.Record == "" || ev.PublishState == PublishInvalid {
+		return ""
+	}
+	var rec EventRecord
+	if json.Unmarshal([]byte(ev.Record), &rec) != nil {
+		return ""
+	}
+	return rec.Title
 }

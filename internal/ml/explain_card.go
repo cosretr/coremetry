@@ -162,6 +162,7 @@ type CardInput struct {
 	LogQuery                                                              string      // v0.10.2069 — new_template: kalıbın /logs araması (logstore.PatternSearchQuery)
 	BreadthOps                                                            []BreadthOp // v0.10.2086 — svc_breadth: yavaş operasyonlar (kanıt slowOps)
 	BreadthTotal                                                          int         // v0.10.2086 — svc_breadth: yavaş operasyon toplamı
+	RecordTitle                                                           string      // v0.10.2215 (H2) — geçerli olay kaydının başlığı; doluysa kart başlığı yalnız kayıttan
 }
 
 // ── sözlük ───────────────────────────────────────────────────────────────
@@ -895,6 +896,9 @@ func BuildExplainCard(in CardInput) ExplainCard {
 		v := metricValue(in, sp)
 		c.Value = &v
 		c.Technical.Measured = v.Measured
+	}
+	if in.RecordTitle != "" {
+		c.Summary, c.Value = in.RecordTitle, nil // H2: ölçü sayısı kayıttan, render'da ek istek yok
 	}
 	return c
 }

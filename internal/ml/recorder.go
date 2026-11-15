@@ -265,7 +265,11 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	global.observeSuppression(sup)
 	global.supBatch.Add(int64(batchCut))
 	// epizot kapanışı: 3 tik görülmeyen koşu stage=closed yazılır (B3)
-	for _, ev := range r.runs.closeStale(start) {
+	// v0.10.2215 (H2) — consumer lag olay kaydı: kapanış satırı ended_at ile.
+	lagBudget := lagRecordMaxPerTick
+	closing := r.runs.closeStale(start)
+	attachLagRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &lagBudget, start)
+	for _, ev := range closing {
 		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {
 			firstErr = werr
@@ -314,6 +318,11 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	stampGroupDecisions(kept, groups)
 	stampSvcShadow(kept, svcDec)
 	svcOpen, svcP1 := svcShadowCounts(svcDec)
+	confirmWin := time.Duration(cfg.Quality.ConfirmWindowMin) * time.Minute
+	attachLagRecords(tctx, deps, cfg, kept, false, r.runs.firstOf, func(ev chstore.MLEvent) []string {
+		ids, _ := r.runs.confirmers(ev, start, confirmWin)
+		return ids
+	}, &lagBudget, start)
 	for _, ev := range kept {
 		if ev.Stage != chstore.MLStageChronic {
 			r.runs.setEvent(ev)

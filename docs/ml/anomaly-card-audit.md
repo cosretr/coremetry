@@ -458,14 +458,14 @@ muaf. Bildirim kuralı değişmez (yalnız açılış + P1'e çıkış); `info`/
 | `new_template`, `rare_error_code` | L | sayısal seri yok → sözleşmede `series.kind=occurrence` istisnası, doğrulayıcı dalı | sözleşme istisnası |
 | `svc_volume_spike` | L | göç edilmez; Dilim B'de yeni dedektörle değişir | eski satırlar TTL ile düşer |
 
-## 10. Dilimler (her biri tek sürüm, bağımsız gemilenir; sıra H → A → F → B, C → G, D → E)
+## 10. Dilimler (her biri tek sürüm, bağımsız gemilenir; sıra H → A → F → B, C → G, D → E; D0/G0 onaylı → G/D/A/B/C engelsiz)
 
 **H1 — sözleşme tipi + doğrulayıcı + saklama.** ✅ **gemilendi v0.10.2199** (`internal/ml/record.go`, `record_test.go`; kolonlar `store.go` alters, probe `hasMLRecordCols`; sayaç `ml.recordInvalid`). `internal/ml/record.go` (saf tip + `Validate`), dört kolon, gölge sayaç ve rapor
 satırı "doğrulayıcıdan kalan kayıt (dedektör başına)". Hiçbir dedektör göçmez, davranış değişmez. *Risk:* düşük; tek risk kolon taşıma.
 *Göç:* 4 × `ADD COLUMN` (yukarıdaki sınıf, iki boot, SRE yoklaması). *Test:* doğrulayıcı tablo testi — iki prod örneğinin bugünkü hâli
 **kalır** (nedenleriyle), düzeltilmiş hâli geçer; üçüncü örnek ayrıntısı gelince eklenir (ölçüt 10); kolon gidiş-dönüş pini.
 
-**H2 — consumer lag göçü.** Kayıt dolar; kart `record` varsa yalnız onu okur. *Risk:* orta (K4 çelişkisi). *Göç:* yok.
+**H2 — consumer lag göçü.** ✅ **gemilendi v0.10.2215** (`internal/ml/kafka_lag_record.go`, `kafka_lag_record_test.go`; kart `RecordTitle`). Kayıt dolar; kart `record` varsa yalnız onu okur. *Risk:* orta (K4 çelişkisi). *Göç:* yok.
 *Test:* render'da ölçü sayısı için ek istek atılmadığını sabitleyen FE testi (ölçüt 9); başlık sayısı = alan.
 
 **H3…Hn — dedektör başına birer sürüm** (§9 tablosu; önerilen sıra: VM metrik → `trace_error_count` → `svc_error_rate` → TraceRED →
@@ -497,7 +497,7 @@ MV'si var mı doğrulanmadı; yoksa bu kanıt ertelenir, ham `spans` taraması y
 `quality.go:366-369`) bu sınıfta "<tarih>'ten beri" kartını öldürür → muafiyet + süre tavanı gerekir (K15). *Göç:* yok. *Test:* şablon golden; liste süzgeci pini.
 Yeni uç gerekirse kendi dosyasında `registerMLPlatformRoutes` (`api.go` büyümez).
 
-**D0/G0 — mockup.** Kart ve grafik yeniden tasarımı kod öncesi `docs/frontend/mockups/` altında; operatör onayı beklenir. Kod yok.
+**D0/G0 — mockup.** ✅ **onaylandı 2026-11-15** (https://claude.ai/artifact/RNzbH98KCNtJhVb3vJZ6xQ; kararlar §12). Kod yok. G, D, A, B, C artık engelsiz.
 
 **G — karar destekleyen tek grafik.** Kartta tek bileşen (grafik katmanının hedef `viz/TimeSeriesPanel`'i; yeni sarmalayıcı yok): birimli
 eksen, yuvarlak etiket, gölgeli beklenen bant, sapma bölgesi, `onset_at` ve `detected_at` işaretleri. Kaynak sırası: ham veri duruyorsa canlı
@@ -558,3 +558,16 @@ snapshot adımı 300 sn; bant yöntemi alarm bandı değil. **Örnek 3** — (me
 kapsamı). K2 öneriyi izler — eşikler **kod sabiti**, operatör açıkça "config" demedikçe `MLConfig`'e eklenmez. K13:
 dışa aktarım sorguları §7.1'de, operatör koşar. **Açık kalanlar:** K3, K4, K10 (ve K5–K9, K11, K12, K14–K16 ilgili
 dilime gelince sorulur).
+
+**Kayıtlı kararlar (2026-11-15, ikinci tur; koordinatörün "mockup onay" yorumu — operatöre bildirildi, düzeltebilir).**
+- **Mockup (D0/G0) onaylı:** https://claude.ai/artifact/RNzbH98KCNtJhVb3vJZ6xQ. **K4 = A seçeneği:** kart yalnız test edilen seriyi
+  çizer (servis paneli bağlantı). **K8:** `telemetry_volume` için "Platform" sekmesi + yalnız admin "Elenenler" sekmesi, çizildiği gibi.
+  G kapı eşikleri **kod sabiti**: art arda ≥ 3 dakika, pencerede ≥ 100 çağrı, ≥ 25 ms mutlak fark. Başlık sayısı kuralı çizildiği gibi:
+  tespit anındaki değer + kapanınca adlandırılmış tepe; sürerken "şu an". Çağrı/dk hacim şeridi tek grafik bileşeninin parçası.
+- **K3:** "Gerçek anomali / Sorun değil" kararları çalışma zamanında eşik **değiştirmez** — `feedbackZ` etkisi kendi diliminde kalkar
+  (H2 değil); karar + neden yalnız insan incelemesi ve ML karnesi için saklanır.
+- **K10:** "bağımsız kanıt < 2 → sınıf `info`, Problem adayı değil" kapısı geçerli; tek sinyal Problem kolu kapı yürürlüğe girince
+  kalkar (önce gölge, A1 → A2).
+- **K2:** eşikler kod sabiti, yeni ayar yok.
+- H2 bunlardan hiçbirini uygulamaz: kayıtta `gates[]` boş, sınıf bugünkü davranış (`service_anomaly`), başlık H2 biçiminde
+  (tespit anı + kapanınca tepe; "şu an" D'de).
