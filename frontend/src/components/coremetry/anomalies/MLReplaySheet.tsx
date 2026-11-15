@@ -46,6 +46,8 @@ import { MLSignalEvidence } from './MLSignalEvidence';
 import { groupStatusText, type MLGroupRow } from './mlGroupRows';
 import { evidenceSource, groupGateLine, groupProblemChip, headerOperation, latestGroupDecision, latestSvcShadow, svcGateLine } from './mlGroupDetail';
 import { MLSourceChart } from './MLSourceChart';
+import { MLRecordChart } from './MLRecordChart';
+import { recordUsable } from './mlRecord';
 import { useT } from '@/lib/i18n';
 import { contributorLine, leadFromSnapshot, parseLogsLink, type Contributors } from './mlSourcePanel';
 import { evidenceRows, evidenceSub } from './mlEvidenceRows';
@@ -147,6 +149,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   const q = useQuery({ queryKey: [...keys.anomalies.ml, 'replay', id], queryFn: () => api.mlReplay(id), enabled: !!id, staleTime: 30_000, retry: false });
   const snap = q.data?.snapshot ?? null;
   const card = q.data?.card;
+  const rec = recordUsable(q.data?.record) ? q.data!.record! : null;
   // v0.10.2033 — panel verisinden suçlu seri(ler) (ek sorgu yok).
   const [contrib, setContrib] = useState<Contributors>({ kind: 'none' });
   // v0.10.2044 — panelin olay aralığındaki tepesi: cümle panelin ölçüsünü söyler.
@@ -200,7 +203,8 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
       )}
       <Section id="ml-course" title="Olayın seyri">
         {/* v0.10.2033 — servis sayfasındaki panelin aynısı (mlSourcePanel); yoksa kayıtlı 5 dakikalık görüntü. */}
-        {chartLead ? (
+        {/* v0.10.2247 (Dilim G, K4 A) — geçerli olay kaydı varsa TEK grafik kayıttaki seriden (gerçek kova boyu); yoksa eski yol. */}
+        {rec ? <MLRecordChart rec={rec} /> : chartLead ? (
           <MLSourceChart lead={chartLead} open={running} onContributors={setContrib} fallback={snapshotView}
             onPeak={setPeak} direction={card.value?.direction}
             logsLink={card.whereToLook.find(l => parseLogsLink(l.href))?.href} />
@@ -255,12 +259,13 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
             ]} />
           </div>
           {/* v0.10.2032 — tam görünüm (seriler + alarm sınırları + oynatma) burada; özetteki grafik sade. */}
-          {snap && !lc && (
+          {/* v0.10.2247 (G, ölçüt 7) — kayıtlı olayda sayfada tek grafik: tam oynatıcı ve ısı haritası yok. */}
+          {snap && !lc && !rec && (
             <div data-testid="ml-replay-full">
               <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} />
             </div>
           )}
-          {tc && <MLTraceCourse tc={tc} cursorSec={null} />}
+          {tc && !rec && <MLTraceCourse tc={tc} cursorSec={null} />}
           <MLSignalEvidence id={id} signal={h.kind} />
           {snap ? <MLEvidence snap={snap} /> : <p className="text-sm text-muted-foreground">Olay anı kaydı yok; örnek satır gösterilemiyor.</p>}
           <div data-testid="ml-context"><MLContext snap={snap} related={q.data?.related ?? []} /></div>

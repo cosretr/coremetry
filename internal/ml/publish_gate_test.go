@@ -204,3 +204,42 @@ func TestApplyRecordContractWritesGatesShadow(t *testing.T) {
 		t.Fatalf("gölge raporu olayı görmüyor: %+v", r["op_latency"])
 	}
 }
+
+// v0.10.2247 (Dilim G) — 5 dk kovalık gecikme serisi 1 dk ızgarada
+// basamaklanır; tek bant dışı kova art arda 5 dk DEĞİL, 1 kova sayılır.
+func gateStepped5m(buckets int) EventRecord {
+	r := gateSingleBucket()
+	r.Series.StepSec, r.Baseline.StepSec = 300, 300
+	end := 32 + 5*buckets // 07:00 hizalı kovadan başlar
+	r.Snapshot = series1m(recAt(6, 28), 75, 0, 95, func(i int) float64 {
+		if i >= 32 && i < end {
+			return 135
+		}
+		return 43
+	})
+	r.Snapshot.Aggregation = "p95"
+	r.OnsetAt, r.DetectedAt, r.EndedAt = recAt(7, 0), recAt(7, 0), recAt(6, 28+end)
+	return r
+}
+
+func TestVisibleDeviationCountsSeriesBuckets(t *testing.T) {
+	for _, c := range []struct {
+		buckets int
+		pass    bool
+	}{{1, false}, {2, false}, {3, true}} {
+		r := gateStepped5m(c.buckets)
+		if vs := ValidateRecord(r); len(vs) != 0 {
+			t.Fatalf("%d kova: doğrulayıcıdan kaldı: %+v", c.buckets, vs)
+		}
+		g := gateByName(EvaluateGates(r), GateVisibleDeviation)
+		if g.Passed != c.pass || g.Value != float64(c.buckets) || g.Threshold != 3 {
+			t.Errorf("%d kova (5 dk seri): geçti=%v beklenen %v, değer %v: %+v", c.buckets, g.Passed, c.pass, g.Value, g)
+		}
+	}
+	// Gecikme dışı seri (ör. hacim, 5 dk): tek kova yeter (≥ 1 nokta kuralı korunur).
+	r := gateStepped5m(1)
+	r.Series.Unit, r.Series.Aggregation, r.Snapshot.Aggregation = "count", "sum", "sum"
+	if g := gateByName(EvaluateGates(r), GateVisibleDeviation); !g.Passed || g.Value != 1 || g.Threshold != 1 {
+		t.Errorf("gecikme dışı tek kova geçmeli: %+v", g)
+	}
+}

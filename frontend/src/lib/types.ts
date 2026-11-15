@@ -12471,7 +12471,24 @@ export interface LogStack { key: string; label: string; new?: boolean; values: n
 export interface LogCourse { times: number[]; shadow?: (number | null)[]; byPattern: LogStack[]; byLevel?: LogStack[] }
 /** v0.10.1870 — replay yanıtının `course` alanı (ml.ExplainCourse); sinyale göre biri dolu. */
 export interface ExplainCourse { trace?: TraceCourse; log?: LogCourse }
-export interface MLReplay { snapshot: MLSnapshot | null; related: MLSnapshot[]; card: ExplainCard; verdict?: MLReplayVerdict | null; course?: ExplainCourse }
+/** v0.10.2247 (anomali kartı G) — ml.EventRecord + kimlik (ml.RecordView). Zamanlar unix ns, snapshot t0 unix sn. */
+export interface MLRecordSnapshot { t0: number; step: number; aggregation: string; v: number[]; lo?: number[]; hi?: number[]; n?: number[] }
+export interface MLRecordGate { name: string; passed: boolean; value: number; threshold: number; reason?: string; notEvaluable?: boolean }
+export interface MLRecordEvidence { kind: string; source: string; summary: string; link?: string; independent: boolean }
+export interface MLRecordContext { measure: string; source: string; query: string; unit: string; method: string; snapshot: MLRecordSnapshot }
+export interface MLRecordView {
+  v: number;
+  subject: { entityId?: string; service: string; operation?: string; pod?: string; resolved: boolean };
+  series: { source: string; query: string; aggregation: string; unit: string; stepSec: number; kind?: string };
+  baseline: { expected: number; lo: number; hi: number; method: string; stepSec: number };
+  direction: string; onsetAt: number; detectedAt: number; endedAt?: number;
+  peakValue: number; valueAtDetection: number; expectedValue: number;
+  volume: number | null; volumeReason?: string;
+  evidence: MLRecordEvidence[] | null; class: string; gates?: MLRecordGate[];
+  snapshot: MLRecordSnapshot; context?: MLRecordContext[]; title: string;
+  detector: string; publishState?: string; metricId?: string; metricLabel?: string;
+}
+export interface MLReplay { snapshot: MLSnapshot | null; related: MLSnapshot[]; card: ExplainCard; verdict?: MLReplayVerdict | null; course?: ExplainCourse; record?: MLRecordView | null }
 export interface MLBacktestDetector { detector: string; fired: number; tp: number; fp: number; unlabeled: number; positives: number; covered: number; precision: number; recall: number }
 export interface MLBacktestHit { detector: string; part: string; from: number; to: number; peakZ: number; label?: string }
 export interface MLBacktestResult {

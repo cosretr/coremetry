@@ -25,7 +25,7 @@ import (
 // Kapı adları — gates[].name, gölge raporu ve testler bu adlarla konuşur.
 const (
 	GateSeriesConsistency = "series_consistency"   // çizilen seri = test edilen seri
-	GateVisibleDeviation  = "visible_deviation"    // snapshot penceresinde bant dışı
+	GateVisibleDeviation  = "visible_deviation"    // olay penceresinde bant dışı seri kovası
 	GateMinVolume         = "min_volume"           // gecikme: pencerede asgari çağrı
 	GateMinAbsDiff        = "min_abs_diff"         // gecikme: asgari mutlak fark (ms)
 	GateEvidence          = "independent_evidence" // bağımsız kanıt ≥ 2 (K10)
@@ -34,7 +34,7 @@ const (
 
 // Eşikler — K2: kod sabiti, ayar değil (operatör kararı 2026-11-15).
 const (
-	gateLatencyMinRunMin    = 3   // art arda ≥ 3 dakika sapma (gecikme serisi)
+	gateLatencyMinRunMin    = 3   // art arda ≥ 3 seri kovası sapma (gecikme; 1 dk seride 3 dk)
 	gateLatencyMinCalls     = 100 // olay penceresinde ≥ 100 çağrı
 	gateLatencyMinAbsDiffMs = 25  // |tepe − beklenen| ≥ 25 ms
 	gateMinIndependent      = 2   // bağımsız kanıt (K10)
@@ -142,8 +142,51 @@ func outsideRunMin(r EventRecord, from, to int, dir string) float64 {
 	return float64(best) * float64(sn.StepSec) / 60
 }
 
+// outsideRunBuckets — SAF (v0.10.2247, Dilim G): pencerede yönünde bant
+// dışında kalan en uzun art arda koşu, SERİ KOVASI cinsinden. Snapshot 1 dk
+// ızgarada, seri adımı daha büyükse (5 dk kova 1 dk'ya basamaklanmış ya da
+// kova pencereli kayan değer) noktalar hizalı seri kovasına (unix sn / kova)
+// toplanır; kovadaki herhangi bir nokta bant dışındaysa kova bant dışı. Böylece
+// tek değerlendirme kovası "art arda 5 dakika" sayılmaz. Bant yoksa -1.
+// bucketSec = max(seri adımı, snapshot adımı).
+func outsideRunBuckets(r EventRecord, from, to int, dir string) (run int, bucketSec int64) {
+	sn := r.Snapshot
+	if len(sn.Lo) != len(sn.V) || len(sn.Hi) != len(sn.V) {
+		return -1, 0
+	}
+	step := int64(sn.StepSec)
+	bucketSec = max(int64(r.Series.StepSec), step)
+	var keys []int64
+	outside := map[int64]bool{}
+	for i := from; i <= to; i++ {
+		k := (sn.T0 + int64(i)*step) / bucketSec
+		if len(keys) == 0 || keys[len(keys)-1] != k {
+			keys = append(keys, k)
+		}
+		if (dir == "down" && sn.V[i] < sn.Lo[i]) || (dir != "down" && sn.V[i] > sn.Hi[i]) {
+			outside[k] = true
+		}
+	}
+	cur := 0
+	for j, k := range keys {
+		switch {
+		case !outside[k]:
+			cur = 0
+		case j > 0 && outside[keys[j-1]] && keys[j-1] == k-1:
+			cur++
+		default:
+			cur = 1
+		}
+		run = max(run, cur)
+	}
+	return run, bucketSec
+}
+
 // visibleDeviationGate — snapshot penceresinde değer beklenen bandın dışına
-// çıkıyor mu. Gecikme serisinde art arda ≥ 3 dk (G kuralı), diğerlerinde ≥ 1 nokta.
+// çıkıyor mu. v0.10.2247 (Dilim G): sayım SERİ KOVASI cinsinden (dedektörün
+// yargıladığı nokta); gecikme serisinde art arda ≥ 3 kova (1 dk seride 3 dk),
+// diğerlerinde ≥ 1 kova. Önceden 5 dk kovanın 1 dk ızgaradaki basamağı art
+// arda 5 dk sayılıyor, tek kovalık sapma gecikme kuralını geçiyordu.
 func visibleDeviationGate(r EventRecord, occ, latency bool) RecordGate {
 	if occ {
 		return notEvaluable(GateVisibleDeviation, "oluşum kaydı; bant yok")
@@ -152,22 +195,18 @@ func visibleDeviationGate(r EventRecord, occ, latency bool) RecordGate {
 	if !ok {
 		return notEvaluable(GateVisibleDeviation, "olay penceresi snapshot dışında")
 	}
-	run := outsideRunMin(r, from, to, r.Direction)
+	run, bucketSec := outsideRunBuckets(r, from, to, r.Direction)
 	if run < 0 {
 		return notEvaluable(GateVisibleDeviation, "snapshot bandı yok")
 	}
-	th := float64(r.Snapshot.StepSec) / 60
+	th := 1
 	if latency {
 		th = gateLatencyMinRunMin
 	}
-	g := RecordGate{Name: GateVisibleDeviation, Passed: run >= th, Value: run, Threshold: th}
-	if g.Passed {
-		g.Reason = fmt.Sprintf("bant dışında art arda %s dk", fmtNum(run))
-	} else {
-		g.Reason = fmt.Sprintf("bant dışında art arda %s dk < %s dk", fmtNum(run), fmtNum(th))
-	}
-	if r.Series.StepSec > r.Snapshot.StepSec && r.Snapshot.StepSec > 0 {
-		g.Reason += fmt.Sprintf(" (seri adımı %d sn; 1 dk noktalar kova basamağı)", r.Series.StepSec)
+	g := RecordGate{Name: GateVisibleDeviation, Passed: run >= th, Value: float64(run), Threshold: float64(th)}
+	g.Reason = fmt.Sprintf("bant dışında art arda %d kova (%d sn kova, %s dk)", run, bucketSec, fmtNum(float64(int64(run)*bucketSec)/60))
+	if !g.Passed {
+		g.Reason += fmt.Sprintf(" < %d kova", th)
 	}
 	return g
 }

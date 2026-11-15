@@ -72,8 +72,8 @@ func TestMLHandlersReturnCardAndSummary(t *testing.T) {
 	if !strings.Contains(body("getMLReplay"), "ml.ResolveProfile(src.Profile, service,") {
 		t.Error("getMLReplay batch adlı revizyonsuz servisi çözmüyor")
 	}
-	if !strings.Contains(mlReplayKey("a", "UTC"), "ml:replay:v3:") {
-		t.Error("replay yanıt şekli değişti, anahtar sürümü v3 olmalı")
+	if !strings.Contains(mlReplayKey("a", "UTC"), "ml:replay:v4:") {
+		t.Error("replay yanıt şekli değişti, anahtar sürümü v4 olmalı")
 	}
 }
 

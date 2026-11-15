@@ -468,7 +468,7 @@ func (s *Server) getMLReplay(w http.ResponseWriter, r *http.Request) {
 		src.Profile = ml.ResolveProfile(src.Profile, service, s.store.AnomalySensitivityForDetectors().IsBatchService)
 		in, _ := ml.AssembleCardInput(src)
 		return map[string]any{"snapshot": snapOut, "related": others, "card": ml.BuildExplainCard(in), "verdict": mlReplayVerdict(src.Event),
-			"course": s.mlCourse(ctx, in, src.Config)}, nil
+			"course": s.mlCourse(ctx, in, src.Config), "record": ml.CardRecordView(src.Event, in)}, nil
 	})
 }
 
@@ -489,8 +489,9 @@ func mlReplayVerdict(ev *chstore.MLEvent) map[string]any {
 
 // mlReplayKey — SAF: girdiler = olay id + kart saatlerinin dilimi. v2:
 // yanıt `card` taşır, snapshot null olabilir. v3 (v0.10.1870): `course`.
+// v4 (v0.10.2247, Dilim G): `record` (geçerli olay kaydı; yoksa null).
 func mlReplayKey(id, tz string) string {
-	return fmt.Sprintf("ml:replay:v3:id=%s:tz=%s", id, tz)
+	return fmt.Sprintf("ml:replay:v4:id=%s:tz=%s", id, tz)
 }
 
 // mlEventPath — SAF: ML olay detayı (FE lib/anomalyHref.ts mlEventHref ikizi).

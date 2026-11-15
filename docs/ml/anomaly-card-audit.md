@@ -590,6 +590,15 @@ seri (≤ 1 dk; `series.query` kayıttan) + kayıtlı bant; yoksa snapshot; hang
 yavaş çağrı sayısı; süresi tek değerlendirme kovası olan kayıt yayımlanmaz; kart metni hacim taşır ("p95 107 ms (N çağrı)"). *Risk:* yüksek —
 olay sayısı ve VM yükü değişir (K7); eşiklerin yeri K2. *Göç:* yok (K7'de öneri seçilirse). *Test:* sayfada tam bir grafik bileşeni kaldığını
 sabitleyen test (ölçüt 7); örnek 2 fixture (ölçüt 8); kapı testleri.
+✅ **gemilendi v0.10.2247** (FE `anomalies/MLRecordChart.tsx`, `mlRecord.ts`; BE `ml/record_view.go`, `publish_gate.go`
+`outsideRunBuckets`). Replay ucu `record` taşır (geçerli kayıt; yok/invalid → `null`, kart eski yol; önbellek anahtarı v4).
+Kayıtlı olayda "Olayın seyri" tek bileşen (`viz/TimeSeriesPanel`): kayıttaki seri, seri adımında (5 dk seri 1 dk snapshot'tan
+hizalı kovaya; kova değeri yönündeki uç nokta), beklenen bant + kesikli beklenen değer, bant dışı kovalar bölge, başlangıç /
+tespit / bitiş işaretleri, sağ eksende hacim (çağrı/dk); servis paneli bağlantı (K4 A). Teknik ayrıntıdaki tam oynatıcı ve ısı
+haritası kayıtlı olayda çizilmez (ölçüt 7 testi `MLRecordChart.layout.test.tsx`). Kapı: `visible_deviation` artık seri KOVASI
+sayar (kovadaki herhangi bir nokta bant dışı → kova bant dışı); gecikmede art arda ≥ 3 kova, diğerlerinde ≥ 1. Önceden 5 dk
+kovanın 1 dk basamağı "art arda 5 dk" sayılıp tek kovalık gecikme sapması kapıyı geçiyordu. Gölge kalır. Yapılmayanlar: canlı
+seri (render'da sorgu), 1 dk gecikme kararı (K7), seyrek uçta yavaş çağrı sayısı.
 
 **D — kart.** Başlık şablonu (kim, ne, ne zamandan beri, ne kadar); kanıt satırları başlıktan farklı bilgi ve süzülmüş sayfaya bağlantı
 (entity id üstünden); kaynak etiketi `series.source`'tan (B10); "Teknik ayrıntı"da kapılar + seri tanımı; "anomali değil" neden sorar
