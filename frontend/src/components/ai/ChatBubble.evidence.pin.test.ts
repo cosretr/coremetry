@@ -13,7 +13,7 @@ describe('EvidenceCard yerleşimi', () => {
     const ev = bubble.indexOf('evidenceBlocks(turn.blocks).map(');
     expect(chart).toBeGreaterThan(0);
     expect(ev).toBeGreaterThan(chart);
-    expect(bubble).toContain('{!turn.pending && evidenceBlocks(turn.blocks)');
+    expect(bubble).toContain('!turn.pending && evidenceBlocks(turn.blocks)'); // v0.10.2213 — sıra kurucusu içinde
   });
   it('kart: verdict, RED tablosu, değişiklikler, desenler, problem linki', () => {
     for (const w of ['ev-verdict', 'RED şimdi / taban', 'Değişiklikler (pencere)', 'Log desenleri', '/problems?problem=']) {

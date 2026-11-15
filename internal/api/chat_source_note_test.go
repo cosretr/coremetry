@@ -186,3 +186,18 @@ func TestSourceNoteCountsOnlyToolsThatReturnedData(t *testing.T) {
 		t.Error("künye kaydı başarı dalından ÖNCE: hata dönen araç da kaynak sayılır")
 	}
 }
+
+// v0.10.2213 — v2: düz "Kaynak:" künyesi metinden Adımlar'a; uyarılı künye metinde kalır; v1 aynı.
+func TestSplitSourceNoteV2(t *testing.T) {
+	plain := chatSourceNoteTR([]string{"operation_prefetch", "trace_drill", "build_link"})
+	if in, st := splitSourceNoteV2(plain, true); in != "" || st != "Kaynak: operation_prefetch, trace_drill, build_link (3 araç)" {
+		t.Fatalf("v2 düz künye: %q / %q", in, st)
+	}
+	if in, st := splitSourceNoteV2(plain, false); in != plain || st != "" {
+		t.Fatalf("v1 bayt bayt aynı olmalı: %q / %q", in, st)
+	}
+	warn := chatSourceNoteTR(nil)
+	if in, st := splitSourceNoteV2(warn, true); in != warn || st != "" {
+		t.Fatalf("uyarılı künye metinde kalmalı: %q / %q", in, st)
+	}
+}

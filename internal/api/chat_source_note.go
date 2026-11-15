@@ -117,3 +117,18 @@ func loopSourceNoteTR(isFollowUp bool, prefetched, dataTools []string, attempted
 	}
 	return traceFollowUpSourceNoteTR(isFollowUp, tools, chatSourceNoteTR(tools))
 }
+
+// v0.10.2213 (operatör onayı 2026-11-15, endpoint cevabı yerleşimi) — v2'de
+// "Kaynak: <araç adları> (N araç)" künyesi cevap METNİNE girmez: iç araç
+// adları cevap içeriği değil. Aynı satır kapalı "Adımlar" bölümüne bağlam
+// adımı olarak düşer. Uyarılı künyeler (⚠ araç çağrılmadı / veri yok) ve
+// takip künyesi metinde KALIR — dürüstlük işaretidir. v1 bayt bayt aynı.
+//
+// splitSourceNoteV2 — SAF: (metne eklenecek, adım etiketi).
+func splitSourceNoteV2(note string, v2 bool) (inText, step string) {
+	t := strings.TrimSpace(note)
+	if !v2 || !strings.HasPrefix(t, "Kaynak: ") || strings.Contains(t, "\n") {
+		return note, ""
+	}
+	return "", t
+}

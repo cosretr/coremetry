@@ -39,7 +39,7 @@ const TOKENISED: Record<string, number> = {
   'components/ai/ChatBubble.tsx': 1,  // araç adımı çipi
 };
 const NUM_CELLS: Record<string, number> = {
-  'components/ai/ChatTraceList.tsx': 2, // süre, span
+  'components/ai/ChatTraceList.tsx': 1, // süre (v0.10.2213 — span kolonu kalktı)
   'components/ai/EvidenceCard.tsx': 2,  // şimdi, taban
 };
 const FILES = [...Object.keys(TOKENISED), ...Object.keys(NUM_CELLS)];

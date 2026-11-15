@@ -22,13 +22,15 @@ data: {"id":"t1","type":"text-start"}
 
 data: {"delta":"**Bulgu** — orders-api p95 yükseldi.","id":"t1","type":"text-delta"}
 
+data: {"data":{"i":3,"label":"Kaynak: get_service_health (1 araç)"},"id":"s3","type":"data-step"}
+
 data: {"id":"t1","type":"text-end"}
 
 data: {"data":{"textId":"t1"},"transient":true,"type":"data-reset"}
 
 data: {"id":"t2","type":"text-start"}
 
-data: {"delta":"**Bulgu** — orders-api p95 yükseldi.\n\nKaynak: get_service_health (1 araç)","id":"t2","type":"text-delta"}
+data: {"delta":"**Bulgu** — orders-api p95 yükseldi.","id":"t2","type":"text-delta"}
 
 data: {"id":"t2","type":"text-end"}
 

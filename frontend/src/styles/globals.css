@@ -4516,6 +4516,12 @@ tr:hover .pv-row, tr:focus-within .pv-row, .pv-row.is-set, .pv-row:focus-within 
 /* v0.10.1291 — sohbet tablolarının satır başı ✨ sütunu (RowExplainCell): dar, satırı büyütmez. */
 .cm-md-table th.cm-row-ai, .cm-md-table td.cm-row-ai { width: 1%; white-space: nowrap; padding-left: var(--sp-1); padding-right: var(--sp-1); }
 .cm-trace-list__more { margin-top: var(--sp-2); font-size: var(--fs-xs); }
+/* v0.10.2213 — sohbetin tek trace tablosu: hücreler sarmaz (ad 4 satıra
+   bölünmez), sabit düzen kap genişliğinde kalır (çekmecede yatay kaydırma
+   yok); uzun ad ellipsis, tam değer title'da. Ortak Servis / İşlem başlıkta. */
+.cm-trace-list__cap { font-size: var(--fs-xs); color: var(--text2); margin-bottom: var(--sp-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-md-table.cm-trace-table { table-layout: fixed; width: 100%; min-width: 0; }
+.cm-md-table.cm-trace-table tbody td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* ── v0.10.1346 (operatör-bildirimli, /cosre): sohbet tablosu hücre sarması ──
    "Kolon adı kısa ama satırlardaki değerler uzun olduğunda tablo kötü
    gözüküyor" — yüklenen belge satırlarında "LOGIN_14300.aspx" L/O/GI/N_/…,

@@ -11,10 +11,11 @@ import { SREHypothesisButton } from './SREHypothesisButton';
 import { showSREHypothesisButton } from './sreHypothesisDedup'; // v0.10.1300
 import { CosreRuleConfirm } from './CosreRuleConfirm';
 import { OperationCard } from './OperationCard';
+import { opTraceListPayload } from './chatTraceListView'; // v0.10.2213
 import { ServiceReportCard } from './ServiceReportCard';
 import { ChatTopologyCard } from './ChatTopologyCard'; // v0.10.1388 — topology bloğu
 import { Button } from '@/components/ui/Button';
-import type { ChatTurn, ChatStepDetail, ChatTypedBlock, CosreSignalKind, ChatQueryEvidence, ChatFollowup } from '@/lib/types';
+import type { ChatTurn, ChatStepDetail, ChatTypedBlock, CosreSignalKind, ChatQueryEvidence, ChatFollowup, ChatTraceListPayload } from '@/lib/types';
 import { api } from '@/lib/api';
 import { traceHref } from '@/lib/traceHref';
 import { isPlainLeftClick } from '@/lib/a11y'; // v0.10.1105
@@ -1157,14 +1158,39 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
               </div>
             )}
             {body}
-            {/* v0.10.541 — tipli chart blokları (mutlak pencere; CosreChart fromNs/toNs'i önceler) */}
-            {!turn.pending && chartBlocks(turn.blocks).map((spec, i) => <CosreChart key={`blk-${i}`} spec={spec as CosreChartSpec} />)}
-            {/* v0.10.558 — kök-neden rotasının yapısal kanıt kartı (operatör mockup onayı) */}
-            {!turn.pending && evidenceBlocks(turn.blocks).map((ev, i) => <EvidenceCard key={`ev-${i}`} ev={ev} />)}
-            {/* v0.10.688 — endpoint trace listesi: deterministik tablo (D6), satır = trace linki */}
-            {!turn.pending && traceListBlocks(turn.blocks).map((tl, i) => <ChatTraceList key={`tl-${i}`} tl={tl} />)}
-            {/* Operasyon adı ön-getirmesi — metrikler, hatalı trace'ler, Oracle kodları (chat_operation_prefetch.go) */}
-            {operationBlocks(turn.blocks).map((op, i) => <OperationCard key={`op-${i}`} op={op} />)}
+            {/* v0.10.2213 (operatör onayı 2026-11-15) — operasyon / endpoint
+                cevabı sırası: cümle → hatalar (kartın head'i) → TEK trace
+                tablosu (trace_list bloğu; yoksa kartın trace'leri) → grafik →
+                linkler. Kart yoksa sıra eskisi gibi. */}
+            {(() => {
+              const ops = operationBlocks(turn.blocks);
+              const charts = !turn.pending && chartBlocks(turn.blocks).map((spec, i) => <CosreChart key={`blk-${i}`} spec={spec as CosreChartSpec} />);
+              const evid = !turn.pending && evidenceBlocks(turn.blocks).map((ev, i) => <EvidenceCard key={`ev-${i}`} ev={ev} />);
+              const lists = turn.pending ? [] : traceListBlocks(turn.blocks);
+              if (ops.length === 0) {
+                return (
+                  <>
+                    {/* v0.10.541 — tipli chart blokları (mutlak pencere; CosreChart fromNs/toNs'i önceler) */}
+                    {charts}
+                    {/* v0.10.558 — kök-neden rotasının yapısal kanıt kartı (operatör mockup onayı) */}
+                    {evid}
+                    {/* v0.10.688 — endpoint trace listesi: deterministik tablo (D6), satır = trace linki */}
+                    {lists.map((tl, i) => <ChatTraceList key={`tl-${i}`} tl={tl} />)}
+                  </>
+                );
+              }
+              const headline = operationDeltaTexts(turn.blocks).length > 0 || !!turn.text?.trim();
+              const tables = lists.length > 0 ? lists : ops.map(opTraceListPayload).filter((x): x is ChatTraceListPayload => x !== null);
+              return (
+                <>
+                  {ops.map((op, i) => <OperationCard key={`oph-${i}`} op={op} part="head" headline={headline} />)}
+                  {tables.map((tl, i) => <ChatTraceList key={`tl-${i}`} tl={tl} more={lists.length > 0} />)}
+                  {charts}
+                  {evid}
+                  {ops.map((op, i) => <OperationCard key={`opl-${i}`} op={op} part="links" />)}
+                </>
+              );
+            })()}
             {/* v0.10.1337 — servis raporu kartı: hüküm, operasyonlar, teknik hatalar, trace + log kanıtı (copilot_service_report.go) */}
             {!turn.pending && serviceReportBlocks(turn.blocks).map((rep, i) => <ServiceReportCard key={`sr-${i}`} rep={rep} />)}
             {/* v0.10.1388 — servis / örnek trace topolojisi grafiği (copilot_service_topology.go) */}

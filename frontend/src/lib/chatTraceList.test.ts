@@ -24,7 +24,7 @@ describe('BAĞLANMA', () => {
   const bubble = readFileSync(resolve(__dirname, '../components/ai/ChatBubble.tsx'), 'utf8');
   const list = readFileSync(resolve(__dirname, '../components/ai/ChatTraceList.tsx'), 'utf8');
   it('ChatBubble trace_list bloğunu ChatTraceList ile çizer', () => {
-    expect(bubble).toContain('traceListBlocks(turn.blocks).map(');
+    expect(bubble).toContain('traceListBlocks(turn.blocks)'); // v0.10.2213 — kart varken de tek tablo
     expect(bubble).toContain('<ChatTraceList');
   });
   it('satır linki üreticiden, daha fazla deepLink', () => {

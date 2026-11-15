@@ -297,6 +297,10 @@ type opTraceRow struct {
 	Service    string  `json:"service"`
 	DurationMs float64 `json:"durationMs"`
 	Error      bool    `json:"error"`
+	// v0.10.2213 — kartın tek trace tablosu (paylaşılan trace_list biçimi):
+	// başlangıç (ns) ve kök işlem adı. Ek okuma yok (aynı GetTraces satırı).
+	StartTime int64  `json:"startTime,omitempty"`
+	RootName  string `json:"rootName,omitempty"`
 }
 
 // seed — serbest döngünün konuşmasına sentetik tool çağrısı + sonucu
@@ -781,7 +785,7 @@ func (s *Server) opPrefetchForTarget(pctx context.Context, emit func(string, any
 	ids := []string{}
 	merged := mergeErrorsFirst(sets, opTraceLimit)
 	for _, r := range merged {
-		p.Traces = append(p.Traces, opTraceRow{TraceID: r.TraceID, Service: r.ServiceName, DurationMs: r.DurationMs, Error: r.HasError})
+		p.Traces = append(p.Traces, opTraceRow{TraceID: r.TraceID, Service: r.ServiceName, DurationMs: r.DurationMs, Error: r.HasError, StartTime: r.StartTime, RootName: r.RootName})
 		ids = append(ids, r.TraceID)
 	}
 	if sc.Enabled {

@@ -8463,7 +8463,8 @@ export interface ChatOperationPayload {
   rangeS: number;
   current: ChatOperationRED;
   previous: ChatOperationRED;
-  traces: Array<{ traceId: string; service: string; durationMs: number; error: boolean }> | null;
+  /** v0.10.2213 — startTime (ns) / rootName: kartın tek trace tablosu. */
+  traces: Array<{ traceId: string; service: string; durationMs: number; error: boolean; startTime?: number; rootName?: string }> | null;
   oracleErrors: Array<{ code: string; count: number; sample: string; channel?: string }> | null;
   tracesHref: string;
   /** v0.10.1331 — operasyonun Exceptions grupları (yok = bakılmadı). */

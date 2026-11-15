@@ -1359,8 +1359,12 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// v0.10.1297 — model metnindeki uydurma host / araç yankısı süzgeci (chat_answer_links.go).
 			// v0.10.1324 — yineleme/yankı süzgeci + düşüş, sanitizeAnswerLinks'ten ÖNCE.
 			answerText := finalAnswerText(turn, loopPrompt, round)
+			srcNote, srcStep := splitSourceNoteV2(loopSourceNoteTR(fuHadExplain, opPre.seededTools(), calledTools, executedN+skippedN), cosreV2Marked(ctx)) // v0.10.2213
+			if srcStep != "" {
+				emit("step", map[string]string{"label": srcStep}) // araçsız etiket adımı (pencere çıpası emsali)
+			}
 			finalText = appendCharts(sanitizeAnswerLinks(answerText, loopLinks, s.publicBaseURL(), chatToolNameSet(toolSchemas))) + traceFollowUpNumericWarning(isTraceFollowUp, answerText, fuEvidence.String()) +
-				loopSourceNoteTR(fuHadExplain, opPre.seededTools(), calledTools, executedN+skippedN)
+				srcNote
 			// v0.9.709 (operatör-bildirimi) — cevaptaki request_id'ler log
 			// köprüsü çipi olur; altyapı (links + ChatBubble çipleri)
 			// v0.9.419'dan beri hazırdı, yalnız guided yayınlıyordu.
@@ -1739,8 +1743,12 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				// v0.10.948 — iki çıkış tek sözleşme: sayı denetimi ve takip künyesi burada da.
 				// v0.10.1324 — iki çıkış tek sözleşme: süzgeç + düşüş burada da (tavan prompt'uyla).
 				answerText := finalAnswerText(turn2, capPrompt, round)
+				srcNote, srcStep := splitSourceNoteV2(loopSourceNoteTR(fuHadExplain, opPre.seededTools(), calledTools, executedN+skippedN), cosreV2Marked(ctx)) // v0.10.2213
+				if srcStep != "" {
+					emit("step", map[string]string{"label": srcStep})
+				}
 				finalText = appendCharts(sanitizeAnswerLinks(answerText, loopLinks, s.publicBaseURL(), chatToolNameSet(toolSchemas))) + traceFollowUpNumericWarning(isTraceFollowUp, answerText, fuEvidence.String()) +
-					loopSourceNoteTR(fuHadExplain, opPre.seededTools(), calledTools, executedN+skippedN)
+					srcNote
 				// v0.9.709 (operatör-bildirimi) — cevaptaki request_id'ler log
 				// köprüsü çipi olur. v0.9.1228 — tool köprüleri de burada:
 				// tur-tavanı cevabı da döngünün kanıt linklerini taşır.
