@@ -1,6 +1,6 @@
 # Redis kullanım denetimi ve tasarım önerisi
 
-Durum: **onaylandı (operatör, 2026-11-15) — K1–K5 öneri gibi; R0 gönderildi (v0.10.2226).** Okunan ağaç: `int` @ v0.10.2220. Operatör cümlesi: "Coremetry Redis'i daha etkin kullanabilir."
+Durum: **onaylandı (operatör, 2026-11-15) — K1–K5 öneri gibi; R0 (v0.10.2226), R1 (v0.10.2227) gönderildi.** Okunan ağaç: `int` @ v0.10.2220. Operatör cümlesi: "Coremetry Redis'i daha etkin kullanabilir."
 Etiketler: **[Ö]** kodda okundu (dosya:satır) · **[T]** koddan türetildi, ölçülmedi · **[V]** varsayım. Sayısal kazançların hepsi [T]/[V]; her dilim kendi ölçümünü taşır (§5).
 
 ## 0. Özet
@@ -110,7 +110,7 @@ Ortak: her anahtar TTL'li; `coremetry:<alan>:v<N>:` öneki; istek yolunda `SCAN`
 | Dilim | İçerik | Risk | Test | Ölçüm (önce/sonra) |
 |---|---|---|---|---|
 | R0 ✅ v0.10.2226 | Degraded tutarlılığı: kilit kuralı (K1) boot = çalışma anı; fleet özeti Redis hatasında beklemeden hesaplar (G6); `acache` aynı istemciyi/sınırları ve yeniden yoklamayı kullanır (G7); L2 devre kesici + kesintide L1 tavanı = TTL (G8) | orta: lider davranışı değişir | `leader_test.go`, `lockdegraded_test.go`, `switchable_test.go` genişler; sahte `Lock`/`Cache` ile kesinti senaryoları | Redis durdurulmuş stack'te: lider sayısı/işçi, `/api/clusters/fleet-summary` süresi, `/api/services` p99 |
-| R1 | Arayüz: `Pipeline` (toplu `Set`/`Del`) ve `Incr`; saatlik sayaçlar `Incr`'e (G11); chart'a `maxmemory` + politika (K3); taban ölçüm: katman sayaçları ve Redis tur süresi selfobs metriği; `cacheStats` kilidi (G12) | düşük | Noop + Redis uygulaması sözleşme testi | taban tablo: rota başına MISS oranı, `DBSIZE`, `used_memory`, `redis-cli --latency` |
+| R1 ✅ v0.10.2227 | Arayüz: `Pipeline` (toplu `Set`/`Del`) ve `Incr`; saatlik sayaçlar `Incr`'e (G11); chart'a `maxmemory` + politika (K3); taban ölçüm: katman sayaçları ve Redis tur süresi selfobs metriği; `cacheStats` kilidi (G12) | düşük | Noop + Redis uygulaması sözleşme testi | taban tablo: rota başına MISS oranı, `DBSIZE`, `used_memory`, `redis-cli --latency` |
 | R2 | O1 canlı pencere anahtarı; önce 5 sıcak uç (services, clusters, namespaces, databases, messaging), sonra kalan `cacheBucket` çağrıları; G1'in 5 dk anahtarları düzelir | orta: bayatlık semantiği (K2) | `cache_key_test.go` pinleri; canlı/geçmiş ayrımı saf fonksiyon testi | rota başına MISS oranı ve p99; `ListClusters` sorgu sayısı/saat |
 | R3 | O2 nesil sayaçlı geçersizleştirme; 15 önek kayıt altına; `DelPrefix` istek yolundan çıkar | orta: kayıt dışı önek bayat kalır | `cache_invalidate_test.go`: yazdığını oku, replikalar arası | ack/resolve p50/p99; `commandstats` scan çağrısı → 0 |
 | R4 | O3 dağıtık singleflight + O4 negatif önbellek | orta: kaybedene ek bekleme; hata = hemen hesapla | iki sahte replika, tek hesap; hak sahibi ölürse zaman aşımı | pahalı 5 rotada 5 dk CH sorgu sayısı; zaman aşımı tekrarı |

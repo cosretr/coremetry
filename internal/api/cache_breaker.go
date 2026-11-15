@@ -7,6 +7,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/selfobs"
 )
 
 // v0.10.2226 (Redis R0, G8) — L2 (Redis) yanıt önbelleği için devre kesici.
@@ -103,7 +105,9 @@ func (s *Server) l2Get(ctx context.Context, key string) ([]byte, bool) {
 	if !b.allow() {
 		return nil, false
 	}
+	t0 := time.Now()
 	raw, ok, err := s.cache.Get(ctx, key)
+	selfobs.ObserveCacheL2("get", time.Since(t0), err) // v0.10.2227 (R1)
 	b.done(ctx, err)
 	return raw, err == nil && ok
 }
@@ -114,7 +118,9 @@ func (s *Server) l2Set(ctx context.Context, key string, val []byte, ttl time.Dur
 	if !b.allow() {
 		return nil
 	}
+	t0 := time.Now()
 	err := s.cache.Set(ctx, key, val, ttl)
+	selfobs.ObserveCacheL2("set", time.Since(t0), err)
 	b.done(ctx, err)
 	return err
 }

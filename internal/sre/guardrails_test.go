@@ -53,10 +53,8 @@ var mutatingAllow = map[string]string{
 	// soğuma kilidi (TTL'li, coremetry:sre:* önekli); telemetri ya da problem
 	// durumu değil.
 	"drain.go:dr.d.Cache.Set":         "kalp atışı (coremetry:sre:hb:<pod>, 30 s TTL)",
-	"enqueuer.go:e.cache.Set":         "saatlik kuyruk sayacı (sre:enq:hour, 2 sa TTL)",
 	"enqueuer.go:e.cache.SetNX":       "servis soğuma sahibi (sre:enq:svc, TTL)",
 	"enqueuer.go:leader.SetOnAcquire": "lider kilidi geri çağrısı (süreç-içi)",
-	"orchestrator.go:b.cache.Set":     "saatlik AI çağrı sayacı (coremetry:sre:llm:hour, 2 sa TTL)",
 }
 
 func TestSRENoMutatingCalls(t *testing.T) {

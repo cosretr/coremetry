@@ -609,9 +609,8 @@ func mergeFindings(groups map[string][]Finding) []Finding {
 }
 
 // llmBudget — saatlik AI çağrı sayacı (sre_agent.MaxLLMCallsPerHour). Redis
-// (pod'lar arası, Get/Set — cache arayüzünde INCR yok) + bellek; ikisinin
-// büyüğü. Yarış pod'lar arasında ±1 sapabilir (bilinçli: tavan koruma, fatura
-// değil).
+// (pod'lar arası, v0.10.2227: atomik Incr — önceki Get+Set ±1 yarışı yok) +
+// bellek; ikisinin büyüğü (Redis'siz / kesintide bellek tek kaynak).
 type llmBudget struct {
 	mu    sync.Mutex
 	cache cache.Cache
@@ -666,11 +665,16 @@ func (b *llmBudget) inc(ctx context.Context) {
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	n := b.usedLocked(ctx) + 1
-	b.mem = n
+	k := b.hourKey()
+	if k != b.key {
+		b.key, b.mem = k, 0
+	}
+	b.mem++
 	if b.cache != nil {
 		c, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 		defer cancel()
-		_ = b.cache.Set(c, b.key, []byte(strconv.Itoa(n)), 2*time.Hour)
+		if v, err := b.cache.Incr(c, b.key, 1, 2*time.Hour); err == nil && int(v) > b.mem {
+			b.mem = int(v)
+		}
 	}
 }

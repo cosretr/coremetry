@@ -35,7 +35,23 @@ spec:
           {{- end }}
           # All cached/locked data is rebuildable from ClickHouse, so
           # appendonly + RDB are off. Treat this Redis as ephemeral.
-          args: ["redis-server", "--appendonly", "no", "--save", ""]
+          # v0.10.2227 (K3): maxmemory = %75 × kap limiti + volatile-lru —
+          # dolunca yalnız TTL'li anahtarlar (önbellek) tahliye edilir,
+          # OOMKill olmaz; tahliye /admin/stats evictedKeys + selfobs
+          # redis.evicted_keys'te görünür.
+          {{- $maxmem := include "coremetry.redisMaxmemory" . }}
+          args:
+            - redis-server
+            - --appendonly
+            - "no"
+            - --save
+            - ""
+            {{- if $maxmem }}
+            - --maxmemory
+            - {{ $maxmem | quote }}
+            {{- end }}
+            - --maxmemory-policy
+            - volatile-lru
           ports:
             - name: redis
               containerPort: 6379

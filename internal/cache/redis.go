@@ -153,6 +153,44 @@ func (r *redisCache) ScanPrefix(ctx context.Context, prefix string) ([][]byte, e
 	return out, nil
 }
 
+// Pipeline — v0.10.2227 (R1): toplu Set/Del tek gidiş-dönüşte.
+func (r *redisCache) Pipeline(ctx context.Context, ops []PipeOp) error {
+	if len(ops) == 0 {
+		return nil
+	}
+	_, err := r.cli.Pipelined(ctx, func(p redis.Pipeliner) error {
+		for _, op := range ops {
+			if op.Del {
+				p.Del(ctx, op.Key)
+			} else {
+				p.Set(ctx, op.Key, op.Value, op.TTL)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("redis pipeline: %w", err)
+	}
+	return nil
+}
+
+// Incr — v0.10.2227 (R1): INCRBY + EXPIRE NX tek gidiş-dönüşte (MULTI);
+// sabit pencere sonraki artışlarla uzamaz (Redis ≥ 7.0).
+func (r *redisCache) Incr(ctx context.Context, key string, delta int64, ttl time.Duration) (int64, error) {
+	var inc *redis.IntCmd
+	_, err := r.cli.TxPipelined(ctx, func(p redis.Pipeliner) error {
+		inc = p.IncrBy(ctx, key, delta)
+		if ttl > 0 {
+			p.ExpireNX(ctx, key, ttl)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("redis incr: %w", err)
+	}
+	return inc.Val(), nil
+}
+
 // DelPrefix evicts every key matching `prefix*` (v0.6.11 —
 // bug-fix). Cursor-paginated SCAN to walk the keyspace without
 // blocking the server; batched UNLINK (non-blocking, async

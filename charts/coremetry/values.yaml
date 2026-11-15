@@ -569,7 +569,8 @@ redis:
   # Coremetry rarely pushes Redis past 50 MB resident — keys are
   # short and TTLs are seconds — but giving it room means a
   # cardinality spike (lots of distinct dashboard keys) doesn't
-  # evict hot entries.
+  # evict hot entries. limits.memory also sets the bundled Redis
+  # `maxmemory` (75 %, integer Gi/Mi only) + `volatile-lru` (v0.10.2227).
   resources:
     requests: { cpu: 100m, memory: 128Mi }
     limits:   { cpu: "1",  memory: 1Gi }

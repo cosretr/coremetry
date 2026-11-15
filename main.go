@@ -630,6 +630,15 @@ func main() {
 	// unchanged, cost is one atomic pointer load per call.
 	cacheSw := cache.NewSwitchableCache(cacheImpl)
 	lockSw := cache.NewSwitchableLock(lockImpl)
+	// v0.10.2227 (Redis R1) — redis.keys / redis.evicted_keys selfobs (K3:
+	// maxmemory tahliyesi görünür). Noop'ta gözlem yok.
+	selfobs.RegisterRedisGauges(func(ctx context.Context) (int64, int64, error) {
+		if cache.IsNoop(cacheSw) {
+			return 0, 0, cache.ErrRedisUnavailable
+		}
+		st, err := cacheSw.Stats(ctx)
+		return st.Keys, st.EvictedKeys, err
+	})
 	cacheImpl, lockImpl = cacheSw, lockSw
 	// v0.8.212 — multi-pod HA hazard: Redis was configured (operator wants a
 	// distributed leader lock) but the connection failed, so this pod runs the

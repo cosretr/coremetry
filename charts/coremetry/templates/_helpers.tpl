@@ -323,3 +323,21 @@ eder, o env Secret'tan gelir (internal/mcpclient/seed.go).
   value: {{ . | quote }}
 {{- end }}
 {{- end -}}
+
+{{/*
+coremetry.redisMaxmemory — v0.10.2227 (Redis R1, K3): bundled Redis
+maxmemory = %75 × redis.resources.limits.memory (Gi / Mi tam sayı). Kap
+limitine ulaşmadan tahliye başlar (OOMKill = tüm kilit/hak anahtarlarının
+aynı anda kaybı). Ayrıştırılamayan limit ("1.5Gi", "1G", boş) → boş dize;
+şablon bayrağı hiç basmaz. Yeni değer yok: limitten türetilir.
+*/}}
+{{- define "coremetry.redisMaxmemory" -}}
+{{- $lim := toString (dig "limits" "memory" "" .Values.redis.resources) -}}
+{{- $mb := 0 -}}
+{{- if regexMatch "^[0-9]+Gi$" $lim -}}
+{{- $mb = mul (trimSuffix "Gi" $lim | atoi) 1024 -}}
+{{- else if regexMatch "^[0-9]+Mi$" $lim -}}
+{{- $mb = trimSuffix "Mi" $lim | atoi -}}
+{{- end -}}
+{{- if gt (int $mb) 0 -}}{{ div (mul $mb 3) 4 }}mb{{- end -}}
+{{- end -}}

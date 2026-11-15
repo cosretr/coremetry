@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/selfobs"
 	"log"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -756,49 +759,83 @@ func (s *Server) StartCacheInvalidation(ctx context.Context) {
 // the System page can show whether the multi-tier cache is
 // actually doing useful work in production.
 //
-// Memory is bounded: tier counts is fixed (6 strings),
-// keyHits is capped at 4096 keys with the lowest-count entry
-// evicted on insertion to keep working-set-sized.
+// Memory is bounded: tier × family counters are capped (cacheComboCap,
+// then family "other"); keyHits is capped at 4096 keys.
+//
+// v0.10.2227 (Redis R1, G12): tier sayaçları kilitsiz (sync.Map + atomic);
+// global mutex yalnız isabet katmanlarında keyHits için, tavanda doğrusal
+// tarama yok (tek kayıt düşer — sıralama yaklaşık, admin tanısı için yeter).
+// Her kayıt selfobs cache.requests{family,tier} sayacına da gider.
 type cacheStats struct {
+	tiers   sync.Map     // cacheTierKey → *atomic.Int64
+	combos  atomic.Int32 // tier × family kayıt sayısı
 	mu      sync.Mutex
-	counts  map[string]int64
 	keyHits map[string]int64
 	started time.Time
 }
 
-const cacheStatsKeyCap = 4096
+type cacheTierKey struct{ tier, family string }
+
+const (
+	cacheStatsKeyCap = 4096
+	cacheComboCap    = 2048 // tier × family; aşılınca aile "other"
+)
 
 func newCacheStats() *cacheStats {
 	return &cacheStats{
-		counts:  map[string]int64{},
 		keyHits: map[string]int64{},
 		started: time.Now(),
 	}
 }
 
-// record bumps the tier counter and (for hit tiers only)
+// cacheKeyFamily — anahtarın ailesi: ilk ':' öncesi kod sabiti önek
+// (problems, svc-bundle, clusters …). Kullanıcı girdisi ölçü etiketine
+// sızmasın: yalnız [a-z0-9._-], ≤ 40 karakter; değilse "other".
+func cacheKeyFamily(key string) string {
+	i := strings.IndexByte(key, ':')
+	if i <= 0 || i > 40 {
+		return "other"
+	}
+	for j := 0; j < i; j++ {
+		c := key[j]
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '.') {
+			return "other"
+		}
+	}
+	return key[:i]
+}
+
+// record bumps the tier × family counter and (for hit tiers only)
 // the per-key counter. Misses don't update keyHits because a
 // missing key isn't yet "hot" — it's a cold one.
 func (cs *cacheStats) record(tier, key string) {
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-	cs.counts[tier]++
+	fam := cacheKeyFamily(key)
+	k := cacheTierKey{tier, fam}
+	v, ok := cs.tiers.Load(k)
+	if !ok {
+		if cs.combos.Load() >= cacheComboCap {
+			fam = "other"
+			k = cacheTierKey{tier, fam}
+		}
+		var loaded bool
+		v, loaded = cs.tiers.LoadOrStore(k, new(atomic.Int64))
+		if !loaded {
+			cs.combos.Add(1)
+		}
+	}
+	v.(*atomic.Int64).Add(1)
+	selfobs.ObserveCacheTier(fam, tier)
 	switch tier {
 	case "HIT-L1", "HIT", "STALE":
-		cs.keyHits[key]++
-		if len(cs.keyHits) > cacheStatsKeyCap {
-			// Evict the smallest-count entry. Linear scan;
-			// O(n) but n is bounded at 4096 and this only
-			// runs on the rare overflow.
-			var minKey string
-			var minCount int64 = -1
-			for k, v := range cs.keyHits {
-				if minCount < 0 || v < minCount {
-					minKey, minCount = k, v
-				}
+		cs.mu.Lock()
+		if _, seen := cs.keyHits[key]; !seen && len(cs.keyHits) >= cacheStatsKeyCap {
+			for drop := range cs.keyHits { // O(1): ilk gelen kayıt düşer
+				delete(cs.keyHits, drop)
+				break
 			}
-			delete(cs.keyHits, minKey)
 		}
+		cs.keyHits[key]++
+		cs.mu.Unlock()
 	}
 }
 
@@ -808,9 +845,12 @@ func (cs *cacheStats) record(tier, key string) {
 type CacheStatsSnapshot struct {
 	SinceUnixNano int64            `json:"sinceUnixNano"`
 	Counts        map[string]int64 `json:"counts"`
-	TopKeys       []CacheKeyHit    `json:"topKeys"`
-	L1Size        int              `json:"l1Size"`
-	L1Cap         int              `json:"l1Cap"`
+	// Families — v0.10.2227 (R1): anahtar ailesi → katman → sayı; R2'nin
+	// önce/sonra ölçüsü (aile başına MISS ÷ (HIT-L1+HIT+STALE+MISS)).
+	Families map[string]map[string]int64 `json:"families"`
+	TopKeys  []CacheKeyHit               `json:"topKeys"`
+	L1Size   int                         `json:"l1Size"`
+	L1Cap    int                         `json:"l1Cap"`
 }
 
 type CacheKeyHit struct {
@@ -819,15 +859,22 @@ type CacheKeyHit struct {
 }
 
 func (cs *cacheStats) snapshot(l1 *l1Cache) CacheStatsSnapshot {
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
 	out := CacheStatsSnapshot{
 		SinceUnixNano: cs.started.UnixNano(),
-		Counts:        make(map[string]int64, len(cs.counts)),
+		Counts:        map[string]int64{},
+		Families:      map[string]map[string]int64{},
 	}
-	for k, v := range cs.counts {
-		out.Counts[k] = v
-	}
+	cs.tiers.Range(func(k, v any) bool {
+		tk, n := k.(cacheTierKey), v.(*atomic.Int64).Load()
+		out.Counts[tk.tier] += n
+		if out.Families[tk.family] == nil {
+			out.Families[tk.family] = map[string]int64{}
+		}
+		out.Families[tk.family][tk.tier] += n
+		return true
+	})
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
 	// Sort keys by hit count desc, take top 20. Cheap on the
 	// bounded map; runs on admin requests not hot path.
 	keys := make([]CacheKeyHit, 0, len(cs.keyHits))

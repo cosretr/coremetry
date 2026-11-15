@@ -79,6 +79,25 @@ type Cache interface {
 	// cursor-paginated SCAN + batched UNLINK so a runaway
 	// prefix doesn't pin the client.
 	DelPrefix(ctx context.Context, prefix string) error
+	// Pipeline applies a batch of writes (Set with TTL / Del) in ONE round
+	// trip — v0.10.2227 (Redis R1). Not a transaction: ops apply in order,
+	// the first error is returned. Noop returns nil.
+	Pipeline(ctx context.Context, ops []PipeOp) error
+	// Incr atomically adds delta to the integer at key and returns the new
+	// value (Redis INCRBY; the value reads back via Get as a decimal
+	// string). ttl > 0 sets the expiry only when the key has none yet
+	// (EXPIRE NX), so a fixed window (hour bucket) is not extended by later
+	// increments. v0.10.2227 — replaces Get+Set counters. Noop returns
+	// (0, nil): no shared counter; callers keep their own in-process count.
+	Incr(ctx context.Context, key string, delta int64, ttl time.Duration) (int64, error)
+}
+
+// PipeOp — one Pipeline write: Del removes Key; otherwise Set(Key, Value, TTL).
+type PipeOp struct {
+	Key   string
+	Value []byte
+	TTL   time.Duration
+	Del   bool
 }
 
 // Lock is a best-effort distributed lock. TryAcquire returns ok=false
@@ -135,8 +154,12 @@ func (noopCache) MGet(_ context.Context, keys []string) ([][]byte, error) {
 }
 func (noopCache) ScanPrefix(context.Context, string) ([][]byte, error) { return nil, nil }
 func (noopCache) DelPrefix(context.Context, string) error              { return nil }
-func (noopCache) Ping(context.Context) error                           { return nil }
-func (noopCache) Publish(context.Context, string, []byte) error        { return nil }
+func (noopCache) Pipeline(context.Context, []PipeOp) error             { return nil }
+func (noopCache) Incr(context.Context, string, int64, time.Duration) (int64, error) {
+	return 0, nil
+}
+func (noopCache) Ping(context.Context) error                    { return nil }
+func (noopCache) Publish(context.Context, string, []byte) error { return nil }
 func (noopCache) Subscribe(ctx context.Context, _ string) (<-chan []byte, error) {
 	// Idle channel that closes on ctx cancellation. The
 	// invalidation loop sits in a select on this — without the

@@ -131,3 +131,8 @@ func TestCacheInvalidatePrefix_DelPrefixWired(t *testing.T) {
 		})
 	}
 }
+
+func (*fakeCache) Pipeline(context.Context, []cache.PipeOp) error { return nil }
+func (*fakeCache) Incr(context.Context, string, int64, time.Duration) (int64, error) {
+	return 0, nil
+}

@@ -367,3 +367,8 @@ func TestStampMirrorTTLArgs(t *testing.T) {
 		t.Fatalf("resolve TTL = %v, want the 10m floor", ttl)
 	}
 }
+
+func (*fakeStampCache) Pipeline(context.Context, []cache.PipeOp) error { return nil }
+func (*fakeStampCache) Incr(context.Context, string, int64, time.Duration) (int64, error) {
+	return 0, nil
+}

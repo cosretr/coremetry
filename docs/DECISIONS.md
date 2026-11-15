@@ -14237,3 +14237,9 @@ Operatör bildirimi (prod /ai, 7 gün): 404 açıklama turunun 78'i "hata"; `err
 - Fleet özeti: Redis hatası hakkı kaybetmek sayılmaz (hesap bu replikada, 45 sn bekleme yok); Redis kipinde de yerel son görüntü tutulur, kesintide o sunulur.
 - `acache` istemcisi `internal/cache` ile aynı sınırlar (500 ms, yeniden deneme yok); boot ping'i kaçarsa 15 sn'de bir yoklar, Redis dönünce açılır.
 - L2 devre kesici (`internal/api/cache_breaker.go`): art arda 5 hata → 5 sn L2 atlanır, sonra tek yoklama; açıkken L1 tavanı anahtar TTL'i. Yeni ayar yok.
+
+## 2026-11-15 — v0.10.2227 — Redis R1: Pipeline ve Incr, bellek sınırı, temel ölçümler
+
+- `cache.Cache` `Pipeline([]PipeOp)` (toplu Set/Del, tek tur) ve `Incr(key, delta, ttl)` (INCRBY + EXPIRE NX, MULTI; pencere uzamaz) kazanır; Noop: nil / (0, nil). SRE saatlik sayaçları (`coremetry:sre:enq:hour:*`, `coremetry:sre:llm:hour:*`) Get+Set yerine `Incr` — pod'lar arası ±1 yarışı kapandı; bellek kopyası Redis'in büyüğüne çekilir.
+- Chart (K3): bundled Redis `--maxmemory` = %75 × `redis.resources.limits.memory` (Gi/Mi tam sayıdan türetilir, varsayılan 1Gi → 768mb) + `--maxmemory-policy volatile-lru`. Yeni değer yok.
+- Taban ölçümler (selfobs, VM): `cache.requests{family,tier}`, `cache.l2.duration{op,result}`, `redis.keys`, `redis.evicted_keys`; `/api/admin/cache-stats` yanıtı `families` (aile → katman → sayı) taşır. `cacheStats` katman sayaçları kilitsiz, keyHits tavanında doğrusal tarama yok (G12).

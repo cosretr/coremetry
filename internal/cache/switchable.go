@@ -79,6 +79,14 @@ func (s *SwitchableCache) DelPrefix(ctx context.Context, prefix string) error {
 	return s.Current().DelPrefix(ctx, prefix)
 }
 
+func (s *SwitchableCache) Pipeline(ctx context.Context, ops []PipeOp) error {
+	return s.Current().Pipeline(ctx, ops)
+}
+
+func (s *SwitchableCache) Incr(ctx context.Context, key string, delta int64, ttl time.Duration) (int64, error) {
+	return s.Current().Incr(ctx, key, delta, ttl)
+}
+
 func (s *SwitchableCache) Ping(ctx context.Context) error {
 	return s.Current().Ping(ctx)
 }

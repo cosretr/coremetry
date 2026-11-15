@@ -201,11 +201,18 @@ func (e *enqueuer) hourCount(ctx context.Context, now time.Time) int {
 	return n
 }
 
+// incHour — v0.10.2227 (Redis R1): atomik Incr (önceki Get+Set pod'lar
+// arası ±1 yarışı yok); bellek Redis'in büyüğüne çekilir.
 func (e *enqueuer) incHour(ctx context.Context, now time.Time) {
-	n := e.hourCount(ctx, now) + 1
-	e.hourMem = n
+	k := hourKeyOf(now)
+	if k != e.hourKey {
+		e.hourKey, e.hourMem = k, 0
+	}
+	e.hourMem++
 	if e.cache != nil {
-		_ = e.cache.Set(ctx, hourKeyOf(now), []byte(strconv.Itoa(n)), 2*time.Hour)
+		if v, err := e.cache.Incr(ctx, k, 1, 2*time.Hour); err == nil && int(v) > e.hourMem {
+			e.hourMem = int(v)
+		}
 	}
 }
 
