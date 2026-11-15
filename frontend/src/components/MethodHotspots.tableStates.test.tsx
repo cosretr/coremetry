@@ -6,13 +6,16 @@
 // "Eşleşme yok · Filtreleri temizle" basar; temizle iki süzgeci başlangıca
 // döndürür ve odak filtre kutusuna iner. Süzgeçsiz küme boşsa bölüm eskisi
 // gibi hiç çizilmez (ürün kararı) — "no-match" yalnız kaynak doluyken.
-import { describe, it, expect, afterEach } from 'vitest';
+import { vi, describe, it, expect, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import type { FlameNode } from '@/lib/types';
 import { DATA_TABLE_STATE_TEXT } from '@/components/ui/DataTable';
 import { MethodHotspots } from './MethodHotspots';
+// v0.10.2258 — tablo durum metinleri / rozet arayüz dilinde; bu dosya Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
+
 
 const ROOT: FlameNode = {
   name: 'root', value: 100,

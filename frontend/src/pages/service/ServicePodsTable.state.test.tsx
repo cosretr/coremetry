@@ -8,7 +8,7 @@
 //
 // v0.10.973 — ServicePodsTab artık `state` veriyor ve tabloyu her durumda
 // bağlıyor; sekme tarafı ServicePodsTab.tableStates.test.tsx'te çivili.
-import { describe, it, expect, afterEach } from 'vitest';
+import { vi, describe, it, expect, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Link } from 'react-router-dom';
@@ -16,6 +16,9 @@ import { useDataTable, DATA_TABLE_STATE_TEXT, type DataTableStateProps } from '@
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { MergedPodRow } from './podsMerge';
 import { ServicePodsTable } from './ServicePodsTable';
+// v0.10.2258 — tablo durum metinleri / rozet arayüz dilinde; bu dosya Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
+
 
 const COLS: DataTableColumn<MergedPodRow>[] = [
   { id: 'pod', label: 'Pod', sortValue: r => r.pod, width: 200 },

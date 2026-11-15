@@ -59,6 +59,9 @@ vi.mock('@/components/Topbar', () => ({ Topbar: () => null }));
 vi.mock('./alerts/NoisyRulesPanel', () => ({ NoisyRulesPanel: () => null }));
 
 import AlertsPage from './Alerts';
+// v0.10.2258 — tablo durum metinleri / rozet arayüz dilinde; bu dosya Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
+
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

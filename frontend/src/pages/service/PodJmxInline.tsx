@@ -6,6 +6,7 @@ import { Spinner } from '@/components/Spinner';
 import { MultiLineChart } from '@/components/MultiLineChart';
 import { namedSeriesToSeries } from '@/pages/clusters/trendSeries';
 import { PodInlineResourceCharts } from './PodInlineResourceCharts';
+import { t, useLang, type Lang } from '@/lib/i18n';
 
 // PodJmxInline (v0.9.155) — Infrastructure açılır-grup tasarımında (operatör
 // onaylı mock A) bir pod satırı açılınca YERİNDE gösterilen JVM/JBoss JMX
@@ -18,8 +19,9 @@ import { PodInlineResourceCharts } from './PodInlineResourceCharts';
 // jmxTitle — v0.10.1210 (operatör: "BFF'lerde JVM/JBoss yazmaya gerek yok, onlar
 // Spring Boot"): başlık keşfedilen metriklerden — JMX yoksa kaynak kullanımı,
 // JBoss/WildFly metriği varsa JBoss, aksi hâlde yalnız JVM. SAF.
-export function jmxTitle(metrics: string[]): string {
-  if (metrics.length === 0) return 'Pod kaynak kullanımı';
+// v0.10.2258 — dil parametresi (varsayılan 'tr'; TR metin aynı).
+export function jmxTitle(metrics: string[], lang: Lang = 'tr'): string {
+  if (metrics.length === 0) return t('jmx.title.resources', lang);
   return metrics.some(m => /jboss|wildfly|undertow/i.test(m)) ? 'JBoss / JVM (JMX)' : 'JVM (JMX)';
 }
 
@@ -32,6 +34,7 @@ export function PodJmxInline({ cluster, ns, deploy, pod, cFrom, cTo, onFull }: {
   cTo: number;
   onFull: () => void;
 }) {
+  const lang = useLang();
   const metricsQ = useQuery({
     queryKey: ['jmx-metrics', cluster, ns, deploy],
     queryFn: () => api.clusterJmxMetrics(cluster, ns, deploy),
@@ -55,7 +58,7 @@ export function PodJmxInline({ cluster, ns, deploy, pod, cFrom, cTo, onFull }: {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>
-          {jmxTitle(metrics)} · <span className="mono">{pod}</span>
+          {jmxTitle(metrics, lang)} · <span className="mono">{pod}</span>
         </span>
         <Button variant="accent" size="sm" onClick={onFull}
           title="Tam pod detayı (RED + infra + JMX)">

@@ -386,7 +386,7 @@ function PodDetail() {
             {row && (row.netInBps || row.netOutBps) ? (
               <div className="pod-cap">{t('podpage.net', lang)} {[row.netInBps ? tf('podpage.netIn', lang, { v: fmtBps(row.netInBps) }) : '', row.netOutBps ? tf('podpage.netOut', lang, { v: fmtBps(row.netOutBps) }) : ''].filter(Boolean).join(' · ')}</div>
             ) : null}
-            <h4 className="pod-sub">{jmxMetrics.length === 0 ? t('podpage.jmxNoMetrics', lang) : jmxTitle(jmxMetrics)} <span className="field-hint">{tf('podpage.jmxHint', lang, { d: deploy || '—' })}</span></h4>
+            <h4 className="pod-sub">{jmxMetrics.length === 0 ? t('podpage.jmxNoMetrics', lang) : jmxTitle(jmxMetrics, lang)} <span className="field-hint">{tf('podpage.jmxHint', lang, { d: deploy || '—' })}</span></h4>
             {!cluster || !namespace ? <div className="pod-cap">{t('podpage.jmxNeedNs', lang)}</div>
               : jmxMetricsQ.isPending ? <Spinner />
               : jmxMetrics.length === 0 ? <div className="pod-cap">{t('podpage.jmxNone', lang)}</div>

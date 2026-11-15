@@ -30,6 +30,7 @@ import type { SignalKind } from '@/lib/signalKind';
 import type { AnomalyView, UnifiedAnomalyRow } from '@/lib/types';
 import { groupStatusText } from './mlGroupRows';
 import { useUrlPage } from '@/lib/useUrlPage';
+import { t as tr, tf, useLang } from '@/lib/i18n';
 import { listHeadline, rowHref } from './unifiedRows';
 import {
   UNIFIED_SORT_DEFAULT, UNIFIED_SORT_IDS, UNIFIED_SORT_URL_KEY, parseUnifiedSort, unifiedSortApiParams,
@@ -43,13 +44,16 @@ const UNIFIED_PAGE_SIZE = 50;
 // v0.10.2027 — sütun kimlikleri v0.10.2021 ML listesiyle aynı; fazla sütun yok.
 // v0.10.2083 — sortValue serverSort kipinde yalnız "sıralanabilir" işareti +
 // naturalDir taşıyıcısı (hiç çağrılmaz); sıra sunucunun (SortUnified).
-const UNIFIED_COLS: ColumnDef<UnifiedAnomalyRow>[] = [
-  { id: 'started', label: 'Başlangıç', width: 110, priority: 1, sortValue: r => r.start, naturalDir: 'desc' },
-  { id: 'service', label: 'Servis', width: 260, minWidth: 160, priority: 1, sortValue: r => r.service, naturalDir: 'asc' },
-  { id: 'headline', label: 'Ne oldu', flex: true, minWidth: 280 },
-  { id: 'signals', label: 'Sinyaller', width: 190, minWidth: 120, priority: 2, sortValue: r => r.signals.join(','), naturalDir: 'asc' },
-  { id: 'status', label: 'Durum', width: 170, minWidth: 130, priority: 1, sortValue: r => r.status, naturalDir: 'desc' },
-];
+// v0.10.2258 — başlıklar arayüz dilinde (TR metin aynı).
+function unifiedCols(t: (k: string) => string): ColumnDef<UnifiedAnomalyRow>[] {
+  return [
+    { id: 'started', label: t('anomalies.col.started'), width: 110, priority: 1, sortValue: r => r.start, naturalDir: 'desc' },
+    { id: 'service', label: t('anomalies.col.service'), width: 260, minWidth: 160, priority: 1, sortValue: r => r.service, naturalDir: 'asc' },
+    { id: 'headline', label: t('anomalies.col.headline'), flex: true, minWidth: 280 },
+    { id: 'signals', label: t('anomalies.col.signals'), width: 190, minWidth: 120, priority: 2, sortValue: r => r.signals.join(','), naturalDir: 'asc' },
+    { id: 'status', label: t('anomalies.col.status'), width: 170, minWidth: 130, priority: 1, sortValue: r => r.status, naturalDir: 'desc' },
+  ];
+}
 
 type SignalFilter = '' | Exclude<SignalKind, 'group'>;
 
@@ -61,6 +65,9 @@ type SignalFilter = '' | Exclude<SignalKind, 'group'>;
 export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view = '', emptyText, hint }: {
   signal?: SignalFilter; onSignal?: (s: SignalFilter) => void; detectorStatus?: ReactNode; view?: AnomalyView; emptyText?: string; hint?: string;
 }) {
+  const lang = useLang();
+  const t = (k: string) => tr(k, lang);
+  const cols = useMemo(() => unifiedCols(k => tr(k, lang)), [lang]);
   const [openPage, setOpenPage] = useUrlPage('page');
   const [donePage, setDonePage] = useUrlPage('donePage');
   const [sp] = useSearchParams();
@@ -85,20 +92,20 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
         </span>
       );
       case 'status': {
-        const t = groupStatusText(r, nowNs);
-        return r.status === 'running' ? <span className="text-[color:var(--warn)]">{t}</span> : <span className="text-muted-foreground">{t}</span>;
+        const st = groupStatusText(r, nowNs, lang);
+        return r.status === 'running' ? <span className="text-[color:var(--warn)]">{st}</span> : <span className="text-muted-foreground">{st}</span>;
       }
       default: return null;
     }
   };
 
   const state = openQ.isLoading ? { kind: 'loading' as const }
-    : openQ.isError ? { kind: 'error' as const, message: 'Anomaliler okunamadı' }
-      : { kind: 'empty' as const, message: emptyText ?? 'Şu an süren anomali yok.' };
+    : openQ.isError ? { kind: 'error' as const, message: t('anomalies.list.error') }
+      : { kind: 'empty' as const, message: emptyText ?? t('anomalies.list.empty') };
   const partialSrc = openQ.data?.partial;
-  const partial = partialSrc === 'ml' ? 'ML olayları' : partialSrc === 'legacy' ? 'eski dedektör olayları' : '';
-  const doneState = doneQ.isError ? { kind: 'error' as const, message: 'Biten anomaliler okunamadı' }
-    : doneQ.isLoading ? { kind: 'loading' as const } : { kind: 'empty' as const, message: 'Biten anomali yok.' };
+  const partial = partialSrc === 'ml' ? t('anomalies.list.partialMl') : partialSrc === 'legacy' ? t('anomalies.list.partialLegacy') : '';
+  const doneState = doneQ.isError ? { kind: 'error' as const, message: t('anomalies.list.doneError') }
+    : doneQ.isLoading ? { kind: 'loading' as const } : { kind: 'empty' as const, message: t('anomalies.list.doneEmpty') };
   const openTotal = openQ.data?.total ?? 0;
   // Sıra değişince o tablonun sayfası başa (server.onSort yalnız başlık
   // eylemiyle koşar; geri/ileri ile gelen URL sayfayı silmez).
@@ -114,20 +121,20 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
   return (
     <div data-testid="anomalies-unified" className="flex flex-col gap-3">
       {onSignal && (
-        <SegmentedControl<SignalFilter> value={signal} onChange={onSignal} aria-label="Sinyal" size="sm"
-          options={[{ value: '', label: 'Hepsi' }, { value: 'trace', label: 'Trace' }, { value: 'log', label: 'Log' }, { value: 'metric', label: 'Metrik' }]} />
+        <SegmentedControl<SignalFilter> value={signal} onChange={onSignal} aria-label={t('anomalies.signal.aria')} size="sm"
+          options={[{ value: '', label: t('anomalies.signal.all') }, { value: 'trace', label: 'Trace' }, { value: 'log', label: 'Log' }, { value: 'metric', label: t('signalKind.metric') }]} />
       )}
       {hint && (
         <p data-testid="anomalies-view-hint" className={view === 'held' ? 'm-0 text-sm text-[color:var(--warn)]' : 'm-0 text-sm text-muted-foreground'}>{hint}</p>
       )}
-      {partial && <p className="m-0 text-sm text-[color:var(--warn)]">{partial} okunamadı; liste eksik.</p>}
+      {partial && <p className="m-0 text-sm text-[color:var(--warn)]">{tf('anomalies.list.partial', lang, { src: partial })}</p>}
       {/* v0.10.2030 — sayfada DOĞRUDAN duran tablo, diğer liste sayfaları gibi
           .table-wrap yüzeyinde (Inbox emsali; coremetry DataTable çıplak <table>). */}
       <div className="table-wrap">
         <DataTable<UnifiedAnomalyRow>
-          storageKey="anomalies-unified" columns={UNIFIED_COLS} rows={open} state={state} sort={openSortOpts}
+          storageKey="anomalies-unified" columns={cols} rows={open} state={state} sort={openSortOpts}
           getRowHref={rowHref}
-          getRowKey={r => r.key} renderCell={renderCell} ariaLabel="Süren anomaliler" />
+          getRowKey={r => r.key} renderCell={renderCell} ariaLabel={t('anomalies.list.openAria')} />
       </div>
       {openTotal > UNIFIED_PAGE_SIZE && (
         <Pager mode="offset" count="exact" total={openTotal} page={openPage} pageSize={UNIFIED_PAGE_SIZE}
@@ -135,12 +142,12 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
       )}
       {doneTotal > 0 && (
         <details data-testid="anomalies-done" className="rounded-md border border-border bg-card px-2.5 py-1.5">
-          <summary className="cursor-pointer text-sm font-semibold">Bitenler ({doneTotal})</summary>
+          <summary className="cursor-pointer text-sm font-semibold">{tf('anomalies.list.done', lang, { n: doneTotal })}</summary>
           <div className="mt-2">
             <DataTable<UnifiedAnomalyRow>
-              storageKey="anomalies-unified-done" columns={UNIFIED_COLS} rows={done} state={doneState} sort={doneSortOpts}
+              storageKey="anomalies-unified-done" columns={cols} rows={done} state={doneState} sort={doneSortOpts}
               getRowHref={rowHref}
-              getRowKey={r => r.key} renderCell={renderCell} ariaLabel="Biten anomaliler" />
+              getRowKey={r => r.key} renderCell={renderCell} ariaLabel={t('anomalies.list.doneAria')} />
             {doneTotal > UNIFIED_PAGE_SIZE && (
               <Pager mode="offset" count="exact" total={doneTotal} page={donePage} pageSize={UNIFIED_PAGE_SIZE}
                 onPage={setDonePage} />
@@ -148,10 +155,10 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
           </div>
         </details>
       )}
-      {openQ.data?.truncated && <p className="m-0 text-xs text-muted-foreground">Liste kaynak tavanında kesildi (son 24 saat).</p>}
+      {openQ.data?.truncated && <p className="m-0 text-xs text-muted-foreground">{t('anomalies.list.truncated')}</p>}
       {detectorStatus && (
         <details data-testid="anomalies-detector-status" className="mt-2 rounded-md border border-border bg-card px-2.5 py-1.5">
-          <summary className="cursor-pointer text-sm font-semibold">Teknik ayrıntı / Dedektör durumu</summary>
+          <summary className="cursor-pointer text-sm font-semibold">{t('anomalies.list.technical')}</summary>
           <div className="mt-2 flex flex-col gap-4">{detectorStatus}</div>
         </details>
       )}

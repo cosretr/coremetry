@@ -24,6 +24,9 @@ import type { LogRow, LogsResponse } from '@/lib/types';
 // testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
 // sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
 import Logs from './Logs';
+// v0.10.2258 — tablo durum metinleri / rozet arayüz dilinde; bu dosya Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
+
 
 type Mode = 'rows' | 'empty' | 'error' | 'pending' | 'degraded';
 const m = vi.hoisted(() => ({ mode: 'rows' as string, calls: 0 }));

@@ -75,6 +75,9 @@ vi.mock('./TracePodPanel', () => ({
 }));
 import { TraceMetricsPanel } from './TraceMetricsPanel';
 import { buildTraceMetricsModel, spanDepthMap } from './traceMetrics';
+// v0.10.2258 — tablo durum metinleri / rozet arayüz dilinde; bu dosya Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
+
 
 const MS = 1e6;
 const T0 = 1_700_000_000_000 * MS; // 2023 — açık pencere değil (yeniden çekme zamanlayıcısı yok)

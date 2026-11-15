@@ -26,7 +26,7 @@
 //     çizgi; empty / no-match / error gövdesi dt'li sürümle BİREBİR aynı,
 //     odak dönüşü dahil. `dt` ile `colSpan`dan TAM OLARAK biri: ikisi de
 //     yoksa ya da ikisi birden verilirse DERLEME hatası (tsc kapısı).
-import { describe, it, expect, afterEach } from 'vitest';
+import { vi, describe, it, expect, afterEach } from 'vitest';
 import { act, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
@@ -37,6 +37,9 @@ import {
 } from './index';
 import { Button } from '../Button';
 import { DEFAULT_W } from './rowHeight';
+// v0.10.2258 — tablo durum metinleri / rozet arayüz dilinde; bu dosya Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
+
 
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;

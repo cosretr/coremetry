@@ -8,6 +8,7 @@ import { Badge } from '@/components/shadcn/badge';
 import { cn } from '@/lib/cn';
 import { SIGNAL_KINDS, type SignalKind } from '@/lib/signalKind';
 import { SIGNAL_KIND_CLASS } from './signalKindClass';
+import { t, useLang } from '@/lib/i18n';
 
 export interface SignalKindBadgeProps {
   kind: SignalKind;
@@ -16,12 +17,13 @@ export interface SignalKindBadgeProps {
 }
 
 export function SignalKindBadge({ kind, label }: SignalKindBadgeProps) {
+  const lang = useLang();
   const spec = SIGNAL_KINDS[kind];
   const Icon = spec.icon;
   return (
     <Badge variant="ghost" data-signal={kind} className={cn('gap-1 px-0 text-[11px] font-semibold [&>svg]:size-3.5', SIGNAL_KIND_CLASS[kind])}>
       <Icon aria-hidden="true" />
-      {label ?? spec.label}
+      {label ?? t(`signalKind.${kind}`, lang)}
     </Badge>
   );
 }

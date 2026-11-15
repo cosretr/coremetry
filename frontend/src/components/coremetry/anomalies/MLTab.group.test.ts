@@ -37,9 +37,9 @@ describe('thanosTickText', () => {
 describe('anomali tablosu', () => {
   const src = readFileSync(resolve(__dirname, 'UnifiedAnomalies.tsx'), 'utf8');
   it('sütun sırası Başlangıç · Servis · Ne oldu · Sinyaller · Durum', () => {
-    const ids = [...src.matchAll(/\{ id: '(\w+)', label: '([^']+)'/g)].map(m => m[1]);
+    const ids = [...src.matchAll(/\{ id: '(\w+)', label: t\('anomalies\.col\.\w+'\)/g)].map(m => m[1]);
     expect(ids).toEqual(['started', 'service', 'headline', 'signals', 'status']);
     expect(src).toContain('storageKey="anomalies-unified"');
-    expect(src).toContain('Bitenler (');
+    expect(src).toContain("tf('anomalies.list.done'"); // v0.10.2258 — metin i18n'de
   });
 });

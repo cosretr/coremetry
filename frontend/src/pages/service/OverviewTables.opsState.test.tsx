@@ -10,7 +10,7 @@
 //     yeniden deneme YOK — sayfanın tek denemesi üstteki QueryError'da;
 //   • başarılı ama boş → "Bu pencerede operasyon yok";
 //   • satır varken durum satırı yok (satırlar kazanır), satır tıkı aynen.
-import { describe, it, expect, afterEach } from 'vitest';
+import { vi, describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { act } from 'react';
@@ -19,6 +19,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { DATA_TABLE_STATE_TEXT } from '@/components/ui/DataTable';
 import type { OperationSummary } from '@/lib/types';
 import { OpsCard } from './OverviewTables';
+// v0.10.2258 — tablo durum metinleri / rozet arayüz dilinde; bu dosya Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
+
 
 type OpsState = Parameters<typeof OpsCard>[0]['state'];
 

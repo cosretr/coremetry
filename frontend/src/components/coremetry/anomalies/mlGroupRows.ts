@@ -14,6 +14,7 @@
 //   İzleniyor    — açık üye var, karar "açmazdı" (tek dedektör vb.) ya da yok
 //   Bitti        — bütün üyeler kapandı ("N sürdü")
 import type { MLEvent } from '@/lib/types';
+import { t, tf, type Lang } from '@/lib/i18n';
 import { signalKindOf, type SignalKind } from '@/lib/signalKind';
 
 export type MLGroupStatus = 'running' | 'watching' | 'done' | 'rejected';
@@ -80,25 +81,26 @@ export function groupStatus(members: MLEvent[], nowNs = Date.now() * 1e6): MLGro
 }
 
 /** SAF: süre (ns) → kısa metin. */
-function dur(ns: number): string {
+function dur(ns: number, lang: Lang = 'tr'): string {
   const m = Math.max(0, Math.round(ns / 60e9));
-  if (m < 60) return `${m} dk`;
+  if (m < 60) return tf('anomalies.dur.m', lang, { m });
   const h = Math.floor(m / 60);
-  return h < 48 ? `${h} sa ${m % 60} dk` : `${Math.round(h / 24)} g`;
+  return h < 48 ? tf('anomalies.dur.hm', lang, { h, m: m % 60 }) : tf('anomalies.dur.d', lang, { d: Math.round(h / 24) });
 }
 
 /** SAF (test): durum metni. nowNs: şimdi. */
-export function groupStatusText(r: Pick<MLGroupRow, 'status' | 'start' | 'end'>, nowNs: number): string {
+// v0.10.2258 — lang (varsayılan 'tr'; TR metin aynı).
+export function groupStatusText(r: Pick<MLGroupRow, 'status' | 'start' | 'end'>, nowNs: number, lang: Lang = 'tr'): string {
   switch (r.status) {
-    case 'running': return `Sürüyor · ${dur(nowNs - r.start)}`;
-    case 'watching': return `İzleniyor · ${dur(nowNs - r.start)}`;
-    case 'rejected': return 'Değil dendi';
+    case 'running': return tf('anomalies.status.running', lang, { d: dur(nowNs - r.start, lang) });
+    case 'watching': return tf('anomalies.status.watching', lang, { d: dur(nowNs - r.start, lang) });
+    case 'rejected': return t('anomalies.status.rejected', lang);
     default: {
       // v0.10.2034 (operatör: "Bittiyse bitişini de göstersin") — bitiş SAATİ
       // açıkça; başka güne taşıyorsa tarihle. Bitiş = son anormal kovanın sonu
       // (olayın last_seen'i; kapanış kararının verildiği an DEĞİL).
-      if (!(r.end > r.start)) return `Bitti ${endClock(r.end, nowNs)} · tek ölçüm`;
-      return `Bitti ${endClock(r.end, nowNs)} · ${dur(r.end - r.start)} sürdü`;
+      if (!(r.end > r.start)) return tf('anomalies.status.doneSingle', lang, { end: endClock(r.end, nowNs) });
+      return tf('anomalies.status.done', lang, { end: endClock(r.end, nowNs), d: dur(r.end - r.start, lang) });
     }
   }
 }

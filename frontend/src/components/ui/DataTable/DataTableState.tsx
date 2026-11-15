@@ -3,7 +3,7 @@ import type { DataTable } from './DataTable';
 import { LinkButton } from '../LinkButton';
 import { QueryErrorInline } from '@/components/QueryError';
 import { Skeleton } from '@/components/Skeleton';
-import { DATA_TABLE_STATE_TEXT } from './dataTableStateText';
+import { t as tr, useLang } from '@/lib/i18n';
 // v0.10.939 (tablo standardı T12) — genişliği bilinmeyen kolonun colgroup'ta
 // aldığı px; iskelet orantısı colgroup'u taklit ettiği için AYNI sabit
 // (eskiden burada elle kopyası vardı — iki değer ayrışırsa iskelet kayar).
@@ -279,6 +279,9 @@ function hasContent(node: ReactNode): boolean {
 
 export function DataTableState<T>(props: DataTableStateProps<T> | DataTableStateStaticProps) {
   const { kind, message, detail, detailKey, onClearFilters, onRetry, skeletonRows = 8, returnFocusRef } = props;
+  // v0.10.2258 — varsayılan metinler arayüz dilinde (TR katalog = DATA_TABLE_STATE_TEXT).
+  const lang = useLang();
+  const t = (k: string) => tr(k, lang);
   const leading = props.leading ?? [];
   const trailing = props.trailing ?? [];
   // v0.10.967 (P-2) — dt varsa sayım dt'nin (görünür kolonlar); yoksa statik
@@ -299,7 +302,7 @@ export function DataTableState<T>(props: DataTableStateProps<T> | DataTableState
     return (
       <tr data-dt-state={kind}>
         <td colSpan={span} className="dt-state dt-state--loading">
-          <div role="status" aria-busy="true" aria-label={message ?? DATA_TABLE_STATE_TEXT.loading}>
+          <div role="status" aria-busy="true" aria-label={message ?? t('dataTable.state.loading')}>
             {Array.from({ length: skeletonRows }, (_, ri) => (
               <div key={ri} className="dt-state-skel" aria-hidden="true">
                 {cells.map((c, ci) => {
@@ -338,16 +341,16 @@ export function DataTableState<T>(props: DataTableStateProps<T> | DataTableState
         <StateBody key={`${kind}:${hasAction ? 'action' : 'none'}`}
           onFocusOrphaned={onFocusOrphaned}>
           {kind === 'error' && (
-            <QueryErrorInline text={message ?? DATA_TABLE_STATE_TEXT.error} onRetry={onRetry} />
+            <QueryErrorInline text={message ?? t('dataTable.state.error')} onRetry={onRetry} />
           )}
-          {kind === 'empty' && <span>{message ?? DATA_TABLE_STATE_TEXT.empty}</span>}
+          {kind === 'empty' && <span>{message ?? t('dataTable.state.empty')}</span>}
           {kind === 'no-match' && (
             <>
-              <span>{message ?? DATA_TABLE_STATE_TEXT.noMatch}</span>
+              <span>{message ?? t('dataTable.state.noMatch')}</span>
               {onClearFilters && (
                 <>
                   <span aria-hidden="true">·</span>
-                  <LinkButton onClick={onClearFilters}>{DATA_TABLE_STATE_TEXT.clearFilters}</LinkButton>
+                  <LinkButton onClick={onClearFilters}>{t('dataTable.state.clearFilters')}</LinkButton>
                 </>
               )}
             </>

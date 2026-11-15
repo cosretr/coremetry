@@ -3,11 +3,14 @@
 // SignalKindBadge sözleşmesi — v0.10.1844 (öğrenme döngüsü Faz 2 dilim 2.4).
 // Renk hiçbir zaman tek taşıyıcı değil: her tür ikon (dekoratif) + METİN
 // çizer; renk yalnız --sig-* token sınıfından.
-import { describe, it, expect, afterEach } from 'vitest';
+import { vi, describe, it, expect, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { SignalKindBadge } from './SignalKindBadge';
 import type { SignalKind } from '@/lib/signalKind';
+// v0.10.2258 — tablo durum metinleri / rozet arayüz dilinde; bu dosya Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
+
 
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;
