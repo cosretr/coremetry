@@ -37,9 +37,9 @@ describe('Overview dört kutu (D2)', () => {
       podsRunning: 1204, podsPending: 3, podsFailed: 1, alertsCritical: 2, alertsWarning: 5,
     }), true);
     expect(boxes.map(b => b.label)).toEqual(['CPU', 'Memory', 'Pods', 'Alerts']);
-    expect(boxes[0]).toMatchObject({ value: '148 / 320 çekirdek', sub: '%46 · 12 node', tone: null });
-    expect(boxes[1]).toMatchObject({ value: '72.0 GiB / 100 GiB', sub: '%72 · yaklaşık 14 günde dolar', tone: 'warn' });
-    expect(boxes[2]).toMatchObject({ value: '1.2K çalışıyor', sub: '3 bekliyor · 1 başarısız' });
+    expect(boxes[0]).toMatchObject({ value: '148 / 320 çekirdek · 12 node', sub: '', tone: null, pct: 46.25 });
+    expect(boxes[1]).toMatchObject({ value: '72.0 GiB / 100 GiB', sub: 'yaklaşık 14 günde dolar', tone: 'warn', pct: 72 });
+    expect(boxes[2]).toMatchObject({ value: '1.2K çalışıyor', sub: '3 bekliyor · 1 başarısız', phase: { running: 1204, pending: 3, failed: 1 } });
     expect(boxes[3]).toMatchObject({ value: '2 kritik', sub: '5 uyarı', tone: 'err' });
   });
   it('kapasite yoksa yalnız kullanılan; alarm ailesi bilinmiyorsa Alerts kutusu yok', () => {
@@ -74,7 +74,7 @@ describe('overview — EN', () => {
       .toBe('Running. Memory 72% full and at this rate fills in about 14 days; 2 critical alerts open.');
     const boxes = overviewBoxes(sum({ cpuUsedCores: 4, cpuCapacityCores: 8, nodes: 1, podsRunning: 5, podsPending: 1, podsFailed: 0, alertsCritical: 0, alertsWarning: 1 }), true, 'en');
     expect(boxes.map(b => [b.label, b.value, b.sub])).toEqual([
-      ['CPU', '4 / 8 cores', '50% · 1 node'],
+      ['CPU', '4 / 8 cores · 1 node', ''],
       ['Pods', '5 running', '1 pending · 0 failed'],
       ['Alerts', '0 critical', '1 warning'],
     ]);

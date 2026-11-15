@@ -87,7 +87,9 @@ function fleetAgeMin(d: ClusterFleetSummary | undefined, nowMs = Date.now()): nu
 }
 
 // Clusters S7 (D6) — Overview'un kapalı bölümleri (kalıcılık kimlikleri).
-const OVERVIEW_SECTIONS = ['net', 'gauges'] as const;
+// v0.10.2190 — "Göstergeler" kalktı (halka / donut üst satıra çıktı); eski
+// kayıttaki 'gauges' parseOpenSections'ta bilinmeyen diye düşer.
+const OVERVIEW_SECTIONS = ['net'] as const;
 type OverviewSection = typeof OVERVIEW_SECTIONS[number];
 
 // Nodes tablosu kolonları Clusters S6'da (D3) pages/clusters/nodeColumns.ts'e taşındı.
@@ -352,7 +354,7 @@ export default function ClustersPage() {
   const trendXRange = useMemo(
     () => ({ from: rangeFrom / 1e9, to: rangeTo / 1e9 }),
     [rangeFrom, rangeTo]);
-  // Clusters S7 (D2, D6) — Overview'un "Ağ trafiği" ve "Göstergeler" bölümleri
+  // Clusters S7 (D2, D6) — Overview'un "Ağ trafiği" bölümü
   // varsayılan KAPALI; açılan bölüm sonraki ziyarette açık kalır (tarayıcı
   // başına tek anahtar). Ağ grafiği yalnız bölüm açıkken çekilir.
   const [overviewOpen, setOverviewOpen] = useState<Set<OverviewSection>>(
@@ -925,9 +927,11 @@ export default function ClustersPage() {
                 {/* Clusters S7 (plan §0 D2, onaylı mockup) — sade Overview:
                     dört kutu (CPU / Memory kapasiteyle, Pods, Alerts), iki
                     By node grafiği (en yüksek node altyazıda), node kutucukları
-                    + açık alarmlar (kritik önce), sonra KAPALI "Ağ trafiği" ve
-                    "Göstergeler" (D6: açılan bölüm açık kalır; ağ grafiği yalnız
-                    açıkken çekilir). Net in / out KPI kartları ağ bölümüne indi. */}
+                    + açık alarmlar (kritik önce), sonra KAPALI "Ağ trafiği" (D6:
+                    açılan bölüm açık kalır; grafik yalnız açıkken çekilir). Net
+                    in / out KPI kartları ağ bölümüne indi. v0.10.2190 (operatör):
+                    CPU / Memory kutusu halka (yüzde ortada), Pods faz donut'u;
+                    alttaki "Göstergeler" bölümü kalktı (pod sağlığı halkası da). */}
                 {section === 'overview' && (() => {
                   const boxes = overviewBoxes(detailSummaryQ.data, alertsQ.data != null, lang);
                   if (boxes.length === 0) return null;
@@ -936,8 +940,18 @@ export default function ClustersPage() {
                       {boxes.map(b => (
                         <ClusterCard key={b.label} title={b.title}>
                           <div className="cl-ov-box__label">{b.label}</div>
-                          <div className={b.tone ? `cl-ov-box__val cl-ov-box__val--${b.tone}` : 'cl-ov-box__val'}>{b.value}</div>
-                          {b.sub && <div className="cl-ov-box__sub">{b.sub}</div>}
+                          {b.pct != null ? (
+                            <div className="cl-ov-box__ring">
+                              <Gauge pct={b.pct} label={b.value} sub={b.sub || undefined} size={64} stroke={7} />
+                            </div>
+                          ) : b.phase ? (
+                            <div className="cl-ov-box__ring">
+                              <PhaseDonut {...b.phase} size={64} stroke={8} lang={lang} />
+                            </div>
+                          ) : <>
+                            <div className={b.tone ? `cl-ov-box__val cl-ov-box__val--${b.tone}` : 'cl-ov-box__val'}>{b.value}</div>
+                            {b.sub && <div className="cl-ov-box__sub">{b.sub}</div>}
+                          </>}
                         </ClusterCard>
                       ))}
                     </div>
@@ -1002,43 +1016,6 @@ export default function ClustersPage() {
                       ) : netTrendQ.isPending ? <Spinner /> : (
                         <p className="cl-ov-note">{t('clusters.net.none', lang)}</p>
                       )}
-                    </CollapsedSection>
-                    <CollapsedSection id="cl-gauges" title={t('clusters.gauges.title', lang)}
-                      summary={t('clusters.gauges.summary', lang)}
-                      open={overviewOpen.has('gauges')} onOpenChange={setOverviewSectionOpen('gauges')}>
-                      {/* v0.9.31 (design handoff F1) — kadranlar kapasite VARSA
-                          (safePct null→gizli); halka herhangi bir faz sayısı varsa. */}
-                      {(() => {
-                        const d = detailSummaryQ.data;
-                        const cpuP = d ? safePct(d.cpuUsedCores, d.cpuCapacityCores) : null;
-                        const memP = d ? safePct(d.memUsedBytes, d.memCapacityBytes) : null;
-                        const phaseTotal = d ? (d.podsRunning ?? 0) + (d.podsPending ?? 0) + (d.podsFailed ?? 0) : 0;
-                        const healthP = phaseTotal > 0 ? ((d!.podsRunning ?? 0) / phaseTotal) * 100 : null;
-                        const hasGauges = cpuP != null || memP != null || healthP != null;
-                        if (!d || (!hasGauges && phaseTotal === 0)) return <p className="cl-ov-note">{t('clusters.gauges.none', lang)}</p>;
-                        return (
-                          <div className={hasGauges && phaseTotal > 0 ? 'cl-ov-gauges cl-ov-gauges--split' : 'cl-ov-gauges'}>
-                            {hasGauges && (
-                              <ClusterCard header="Utilization">
-                                <div className="cl-ov-gauges__dials">
-                                  <Gauge pct={cpuP} label="CPU" sub="utilized" />
-                                  <Gauge pct={memP} label="Memory" sub="utilized" />
-                                  {/* v0.10.922 (sade palet) — K5: >95 running nötr yay. */}
-                                  <Gauge pct={healthP} label="Pod health" sub="running"
-                                    color={healthP != null && healthP > 95 ? 'var(--text3)' : 'var(--warn)'} />
-                                </div>
-                              </ClusterCard>
-                            )}
-                            {phaseTotal > 0 && (
-                              <ClusterCard header="Pod phase">
-                                <div className="cl-ov-gauges__donut">
-                                  <PhaseDonut running={d.podsRunning ?? 0} pending={d.podsPending ?? 0} failed={d.podsFailed ?? 0} />
-                                </div>
-                              </ClusterCard>
-                            )}
-                          </div>
-                        );
-                      })()}
                     </CollapsedSection>
                   </div>
                 )}

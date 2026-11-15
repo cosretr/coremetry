@@ -56,6 +56,10 @@ export interface OverviewBox {
   sub: string;
   tone: 'err' | 'warn' | null;
   title?: string;
+  /** CPU / Memory: kapasite biliniyorsa halka yüzdesi (v0.10.2190). */
+  pct?: number | null;
+  /** Pods: faz sayıları — kutu PhaseDonut çizer (v0.10.2190). */
+  phase?: { running: number; pending: number; failed: number };
 }
 
 const join = (...xs: string[]) => xs.filter(Boolean).join(' · ');
@@ -67,11 +71,12 @@ export function overviewBoxes(d: ClusterSummary | undefined, alertsKnown: boolea
   const out: OverviewBox[] = [];
   const cpuP = safePct(d.cpuUsedCores, d.cpuCapacityCores);
   const cpuText = cpuUsageText(d.cpuUsedCores, d.cpuCapacityCores, lang);
-  const pct = (p: number | null) => (p != null ? fmtPctLang(Math.round(p), lang) : '');
+  // v0.10.2190 — yüzde halkanın ortasında; değer satırı "kullanılan / kapasite · N node".
   if (cpuText) {
     out.push({
-      label: 'CPU', value: cpuText.split(' · ')[0], tone: usageTone(cpuP),
-      sub: join(pct(cpuP), d.nodes ? tf('clusters.ov.nodes', lang, { n: fmtNum(d.nodes) }) : '', etaPhrase(d.cpuForecast, lang)),
+      label: 'CPU', tone: usageTone(cpuP), pct: cpuP,
+      value: join(cpuText.split(' · ')[0], d.nodes ? tf('clusters.ov.nodes', lang, { n: fmtNum(d.nodes) }) : ''),
+      sub: etaPhrase(d.cpuForecast, lang),
     });
   }
   const memP = safePct(d.memUsedBytes, d.memCapacityBytes);
@@ -80,8 +85,8 @@ export function overviewBoxes(d: ClusterSummary | undefined, alertsKnown: boolea
     // Kutu değeri iki tarafı da birimle yazar ("922 GiB / 1.28 TiB").
     const value = d.memCapacityBytes ? `${fmtBytes(d.memUsedBytes!)} / ${fmtBytes(d.memCapacityBytes)}` : memText;
     out.push({
-      label: 'Memory', value, tone: usageTone(memP),
-      sub: join(pct(memP), etaPhrase(d.memForecast, lang)),
+      label: 'Memory', value, tone: usageTone(memP), pct: memP,
+      sub: etaPhrase(d.memForecast, lang),
     });
   }
   const phaseTotal = (d.podsRunning ?? 0) + (d.podsPending ?? 0) + (d.podsFailed ?? 0);
@@ -90,6 +95,7 @@ export function overviewBoxes(d: ClusterSummary | undefined, alertsKnown: boolea
       label: 'Pods', value: tf('clusters.pods.running', lang, { n: fmtNum(d.podsRunning ?? 0) }),
       tone: (d.podsFailed ?? 0) > 0 ? 'warn' : null,
       sub: `${tf('clusters.pods.pending', lang, { n: fmtNum(d.podsPending ?? 0) })} · ${tf('clusters.pods.failed', lang, { n: fmtNum(d.podsFailed ?? 0) })}`,
+      phase: { running: d.podsRunning ?? 0, pending: d.podsPending ?? 0, failed: d.podsFailed ?? 0 },
     });
   }
   const crit = d.alertsCritical ?? 0, warn = d.alertsWarning ?? 0;

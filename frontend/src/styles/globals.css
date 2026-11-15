@@ -5253,6 +5253,13 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 .cl-ov-box__val--warn { color: var(--warn); }
 .cl-ov-box__val--err { color: var(--err); }
 .cl-ov-box__sub { margin-top: var(--sp-1); font-size: var(--fs-sm); color: var(--text3); }
+/* v0.10.2190 — CPU / Memory halka, Pods faz donut'u (eski "Göstergeler"
+   bileşenleri, 64px'e küçültülmüş; satır yüksekliği az büyür). */
+.cl-ov-box__ring { display: flex; justify-content: center; margin-top: var(--sp-1); }
+.cl-ov-box__ring .cl-gauge { gap: var(--sp-1); text-align: center; }
+.cl-ov-box__ring .cl-gauge__val,
+.cl-ov-box__ring .cl-donut__total { font-size: 15px; }
+.cl-ov-box__ring .cl-donut { gap: var(--sp-5); }
 .grid-2.cl-ov-charts { display: grid; gap: 14px; margin-top: 14px; }
 .cl-ov-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; }
 .cl-ov-row__nodes { flex: 2 1 420px; min-width: 0; }
@@ -5260,10 +5267,6 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 .cl-ov-closed { margin-top: 14px; }
 .cl-ov-net { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--text2); }
 .cl-ov-note { margin: 0 0 var(--sp-4); font-size: var(--fs-sm); color: var(--text3); }
-.cl-ov-gauges { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: var(--sp-4); }
-.cl-ov-gauges--split { grid-template-columns: 2fr 1fr; }
-.cl-ov-gauges__dials { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 16px; padding-top: 6px; }
-.cl-ov-gauges__donut { padding-top: 6px; }
 .cl-alerts { display: grid; gap: 2px; max-height: 320px; overflow-y: auto; }
 .cl-alert { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 3px; }
 .cl-alert:hover { background: var(--bg2); }
@@ -5285,7 +5288,6 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 .cl-ns-wl { display: grid; gap: var(--sp-1); min-width: 0; }
 .cl-ns-wl__svc { font-size: var(--fs-xs); color: var(--text3); }
 .cl-ns-hint { margin: 0; font-size: var(--fs-xs); color: var(--text3); }
-@media (max-width: 640px) { .cl-ov-gauges--split { grid-template-columns: 1fr; } }
 
 /* ── Copilot araç-çağrısı paneli — v0.10.161 (etüt seçenek A «Adım listesi»).
    Çipler kapalı hâl; DisclosureButton özet satırı + balon içi tablo. ── */

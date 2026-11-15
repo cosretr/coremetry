@@ -6,6 +6,7 @@
 // Clusters S2 — statik stil `.cl-donut*` / `.cl-dial*` sınıflarında
 // (globals.css); `size` kutusu ve dilim rengi hesaplanan değer.
 import type { CSSProperties } from 'react';
+import { t, type Lang } from '@/lib/i18n';
 
 const squareBox = (size: number): CSSProperties => ({ width: size, height: size });
 const swatch = (color: string): CSSProperties => ({ background: color });
@@ -16,12 +17,14 @@ const SEGMENTS = [
   { key: 'failed', label: 'Failed', color: 'var(--err)' },
 ] as const;
 
-export function PhaseDonut({ running, pending, failed, size = 130, stroke = 13 }: {
+// v0.10.2190 — `lang` verilirse lejant + birim i18n'den (Clusters Overview kutusu).
+export function PhaseDonut({ running, pending, failed, size = 130, stroke = 13, lang }: {
   running: number;
   pending: number;
   failed: number;
   size?: number;
   stroke?: number;
+  lang?: Lang;
 }) {
   const counts = { running, pending, failed };
   const total = running + pending + failed;
@@ -57,14 +60,14 @@ export function PhaseDonut({ running, pending, failed, size = 130, stroke = 13 }
           <span className="cl-donut__total">
             {total > 0 ? total : '—'}
           </span>
-          <span className="cl-donut__unit">pods</span>
+          <span className="cl-donut__unit">{lang ? t('clusters.ov.podsUnit', lang) : 'pods'}</span>
         </div>
       </div>
       <div className="cl-donut__legend">
         {SEGMENTS.map(seg => (
           <div key={seg.key} className="cl-donut__row">
             <span className="cl-donut__swatch" style={swatch(seg.color)} />
-            <span className="cl-donut__name">{seg.label}</span>
+            <span className="cl-donut__name">{lang ? t(`clusters.pod.${seg.key}`, lang) : seg.label}</span>
             <span className="mono cl-donut__n">{counts[seg.key]}</span>
           </div>
         ))}
