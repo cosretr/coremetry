@@ -224,7 +224,7 @@ Araç çıktıları deterministik veridir; LLM'e bağlı adım yok (prod LLM yal
 | **S3 — Pod ↔ log ↔ trace** ✅ v0.10.2233 | `/api/logs` entity kapsamı (ES ve CH alan eşlemesiyle); span detayında yol çipleri; pod → trace `k8s_pod` kolonundan; A8, A9 silinir | Pod logları iki backend'de de doğru; trace'ten pod/iş yükü/servise tek tık ve geri | ES alan adı çeşitliliği | Şema yok; geri alma = sürüm | Backend başına süzgeç golden'ı; FE vitest; ES sorgu şekli (term, PIT yok) |
 | **S4 — CoSRE / MCP** ✅ v0.10.2239 | `ServicePodRegex` → `Neighbours`; `resolve_entity` yol + komşu; sweep/healthcheck pod adaptörleri | Adı deployment'tan farklı servislerde pod sağlığı gelir; kardeş önek karışmaz | Depoda olmayan servis (span yok) | Geri dönüş yolu yok (shim yasağı); depo boşsa araç "pod bilinmiyor" der | Araç golden'ları; CoSRE eval setinde pod soruları; regex çağıranı kalmadı ratchet'i |
 | **S5 — Yatay eksen (daraltılmış)** ✅ v0.10.2240 (aşağıda "S5 notları"; host → S6, A10 → takip) | db, queue, ext entity; `calls` kenarı; topoloji düğümüne ek `entityId` (düğüm id'si aynen) | DB/queue/host entity sayfaları; "bu pod'un servisi hangi DB'yi çağırıyor" yolu; blast radius tek kaynaktan | `ext:` kardinalitesi | Yeni tip/rel değerleri; `LowCardinality` tip kolonları uygun; geri alma = sürüm | `calls` SQL şekli; kardinalite tavanı testi; topoloji ↔ entity id gidiş-dönüş |
-| **S6 — Sinyal tamamlama** (şemasız, `entity-s6-cost-note.md` seçenek C; aşağıda "S6 notları") — parça 1 host ✅ v0.10.2260 | `entity_seen` v2 MV (iş yükü kolonları, host satırları); host entity'leri ve `runs` (host→svc) (S5'ten taşındı, şema + ayrı operatör onayı); VM'den metrik `runs`; log kapsama işareti (K5, K6) | Yalnız metrik/log basan servisler entity olur; regex türevi iş yükü kalmaz | MV INSERT maliyeti; çift MV dönemi | Yeni MV 30 gün çift koşar, sonra eski düşer; geri alma = yeni MV'yi DROP | MV DDL testi; prod preflight; INSERT gecikmesi öncesi/sonrası |
+| **S6 — Sinyal tamamlama** (şemasız, `entity-s6-cost-note.md` seçenek C; aşağıda "S6 notları") — parça 1 host ✅ v0.10.2260, parça 2 metrik ✅ v0.10.2261 | `entity_seen` v2 MV (iş yükü kolonları, host satırları); host entity'leri ve `runs` (host→svc) (S5'ten taşındı, şema + ayrı operatör onayı); VM'den metrik `runs`; log kapsama işareti (K5, K6) | Yalnız metrik/log basan servisler entity olur; regex türevi iş yükü kalmaz | MV INSERT maliyeti; çift MV dönemi | Yeni MV 30 gün çift koşar, sonra eski düşer; geri alma = yeni MV'yi DROP | MV DDL testi; prod preflight; INSERT gecikmesi öncesi/sonrası |
 
 Her dilim sonunda dur, onay al. S0 → S1 → S2 sıralı; S3, S4, S5 S2'den sonra herhangi bir sırada; S6 en son.
 
@@ -340,3 +340,15 @@ v2 MV'si yapılmadı, `entity_seen_1m`'e dokunulmadı).**
   `Resolver.HostServices` / `ServiceHosts` → `resolve_entity` `neighbours.hosts` / host adayları,
   `GET /api/entity/neighbours?id=host:<ad>`. Bilinen sınır: KSM'siz cluster'da k8s attr'ı basmayan
   StatefulSet pod'u (sıra numaralı ad) 24 saat sonra host görünebilir.
+- **Parça 2 — metrik kolu (v0.10.2261).** `internal/entity/metrics.go` + `internal/vmetrics/entity_pairs.go`:
+  lider tick'inde 15 dk'da bir (`MetricsEvery`), geçiş başına sabit 3 istek: servis etiketinin değerleri
+  (`match[] {<servis>!=""}`, son 15 dk, VM limit 5000) ve tek metrik (`target_info`, OTel kaynak serisi) üstünde
+  `topk(40000, count by (<servis>, <pod>[, <ns>]) (last_over_time(...[15m])))` + aynısı host_name için (pod
+  etiketi boş seriler). Etiket adları `vmetrics` LabelMap'inden; pod etiketi yapılandırılmamışsa (ya da VM yoksa)
+  geçiş koşmaz, süreçte bir kez günlükler. Son 1 saatte span'i görülmeyen metrik servisi kalıcı `svc:<ad>`
+  (`cluster_id = "(metric)"`, source `metric`, etiket `signal=metric-only`; tavan 5000, kapanış ≥ 24 sa yokluk;
+  span okuması başarısızsa servis yazımı yok). Metrik `runs` CH'ye yazılmaz: pod→svc cluster canlı blob'una
+  (pod adı + varsa namespace eşleşmesi, source `metric`, span'in bildiği kenar önce), host→svc host blob'una
+  (yalnız metrikte görülen host `Source=metric`, kalıcı katmana terfi etmez). Dizin son başarılı geçişten en çok
+  ~31 dk kullanılır. `resolve_entity` servis kataloğu metrik servislerini de içerir. Bilinen sınır: `target_info`
+  basmayan (Prometheus kazımalı) kurulumda pod/host eşleşmesi boş, servis adları yine gelir.

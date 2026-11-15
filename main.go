@@ -1419,6 +1419,11 @@ func main() {
 		log.Printf("[vmetrics] load persisted config: %v", err)
 	}
 	cfgRefresh.Add("vmetrics", func(ctx context.Context) error { return vmSvc.LoadPersisted(ctx, store) })
+	// v0.10.2261 (Entity S6 parça 2) — entity syncer'ının metrik kolu: lider
+	// tick'inde 15 dk'da bir ≤ 3 istek; etiket eşlemesi (pod) yoksa atlanır.
+	if entitySyncer != nil {
+		entitySyncer.SetMetricSource(vmSvc)
+	}
 	// v0.10.1905 — anonim login özeti (docs/frontend/login-redesign.md). Branding
 	// anahtarları (loginSummary/loginTopology) her rolde bellekte tutulur: uç
 	// istek yolunda CH okumaz, ayar ≤ 30 sn gecikmeyle gelir. Henüz hiç

@@ -330,6 +330,22 @@ func loadEntityIndex(ctx context.Context, d Deps) (EntityCatalogIndex, error) {
 		for _, r := range hosts {
 			idx.Dependencies = append(idx.Dependencies, EntityCandidate{Kind: entity.TypeHost, Name: r.Name, ID: r.ID})
 		}
+		// v0.10.2261 (S6 parça 2) — yalnız metrik basan servisler (span
+		// kataloğunda yok; kalıcı katman, MetricClusterID, ≤ 500).
+		msvcs, err := d.Store.EntityList(ctx, chstore.EntityListQuery{ClusterID: entity.MetricClusterID, Type: entity.TypeService, Limit: 500})
+		if err != nil {
+			return idx, err
+		}
+		have := make(map[string]bool, len(idx.Services))
+		for _, n := range idx.Services {
+			have[n] = true
+		}
+		for _, r := range msvcs {
+			if !have[r.Name] {
+				have[r.Name] = true
+				idx.Services = append(idx.Services, r.Name)
+			}
+		}
 	}
 	entityIndexCache.at, entityIndexCache.key, entityIndexCache.idx = cacheNow(), key, idx
 	return idx, nil

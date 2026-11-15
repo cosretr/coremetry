@@ -14376,3 +14376,10 @@ Operatör onayı (anomali kartı mockup §5): yeni ML kartında "Sorun değil" d
 - Kimlik `host:<ad>` (küresel); satırlar `cluster_id = "(host)"`; `runs` host→svc kalıcı kenar (pod→svc dizinde kalır). Tick'in açık kenar okuması yalnız `host:` ebeveynli `runs`'ı alır (S1'den kalan pod runs satırları okunmaz). Kapanış ≥ 24 sa art arda başarılı yokluk; tavan 5000.
 - calls geçişinin diff/yazım gövdesi `applyStable` olarak ortaklaştı (davranış aynı).
 - Tahmini yazım [V]: H host × (1 + s servis) satır ilk terfide, sonra değişimde + günde bir; H = 1.000, s = 1,5 → ~2.500 satır/gün. Geçiş başına okuma: `(host)` açık ömürleri + (yalnız yeni aday varsa) 1 kanıt okuması.
+
+## 2026-11-15 — v0.10.2261 — Entity S6 parça 2: yalnız metrik basan servisler ve metrik runs
+
+- Maliyet notu seçenek C, P-c. Kaynak metrik backend'i (VictoriaMetrics / Thanos, `vmetrics`), ham `metric_points` değil. Lider tick'inde 15 dk'da bir, geçiş başına sabit 3 istek (servis etiket değerleri, pod çifti, host çifti); çift sorguları tek metrik (`target_info`) üstünde `topk(40000, count by …)`, gövde promapi'nin 8 MB tavanında. Günde +288 istek.
+- Etiket adları LabelMap'ten; pod etiketi yapılandırılmamışsa ya da VM tanımlı değilse geçiş koşmaz ve süreçte bir kez günlükler (`[entity] metrics: geçiş atlandı`). Ayar eklenmedi.
+- Yalnız metrik basan servis (son 1 saatte span'i yok) kalıcı katmanda `svc:<ad>`, `cluster_id = "(metric)"`, source `metric`. Metrik `runs` (pod|host → svc) yalnız canlı dizinde (Redis); CH'ye satır yazılmaz. Metrikte görülen host kalıcı katmana terfi etmez (24 sa MV kanıtı yalnız span host'larında).
+- Tahmini yazım [V]: M metrik-only servis (örnek 200) → ilk geçişte M satır, sonra değişimde + günde bir M satır.

@@ -189,6 +189,12 @@ type Syncer struct {
 	hostStable map[string]Entity
 	hostProved map[string]bool
 	tickPods   map[string]bool
+	// v0.10.2261 (S6 parça 2) — metrik kolu (metrics.go): kaynak (kilitli;
+	// main.go Run başladıktan sonra bağlar), son geçiş, runs dizini.
+	metrics           MetricSource
+	metricsLast       atomic.Int64
+	metricsSkipLogged atomic.Bool
+	metricIx          *MetricIndex
 }
 
 // SetLive — canlı dizinin Redis kapısı (main.go cacheImpl).
@@ -321,6 +327,22 @@ func (s *Syncer) tick(ctx context.Context) {
 			}
 		}
 	}
+	// S6 parça 2 — metrik kolu (15 dk'da bir): runs dizini cluster
+	// geçişlerinden ÖNCE tazelenir; yalnız metrik basan servisler kalıcı.
+	if s.seen != nil {
+		spanSvcs := make(map[string]bool, 256)
+		for _, r := range seenRows {
+			if r.Service != "" {
+				spanSvcs[r.Service] = true
+			}
+		}
+		mst := s.syncMetrics(ctx, spanSvcs, seenOK)
+		tickRead.Add(int64(mst.read))
+		tickScan.Add(mst.scanned)
+		tickEnts.Add(int64(mst.ents))
+		tickSkip.Add(int64(mst.skipped))
+		tickClosed.Add(int64(mst.closed))
+	}
 	sem := make(chan struct{}, ParallelClusters)
 	var wg sync.WaitGroup
 	for _, c := range clusters {
@@ -419,7 +441,7 @@ func SpanOnlyClusters(unmapped map[string]int, refs []ClusterRef, max int) []Clu
 	}
 	vals := make([]string, 0, len(unmapped))
 	for v := range unmapped {
-		if v != "" && v != UnmappedClusterID && v != TopologyClusterID && v != HostClusterID && !taken[v] {
+		if v != "" && v != UnmappedClusterID && v != TopologyClusterID && v != HostClusterID && v != MetricClusterID && !taken[v] {
 			vals = append(vals, v)
 		}
 	}
@@ -512,6 +534,9 @@ func (s *Syncer) syncCluster(ctx context.Context, c ClusterRef, spanRows []SeenR
 		}
 		rels = append(rels, sr...)
 	}
+	// S6 parça 2 — metrik runs (pod→svc, source=metric): yalnız canlı dizin
+	// (pod kalıcı tip değil); span'in bildiği kenar önce gelir, kazanır.
+	rels = append(rels, MetricPodRuns(c.ID, entByID, s.currentMetricIndex(now))...)
 	relByKey := make(map[string]Relation, len(rels))
 	for _, rl := range rels {
 		k := relKey(rl.Type, rl.ParentID, rl.ChildID)

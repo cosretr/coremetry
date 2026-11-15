@@ -229,7 +229,9 @@ func (s *Syncer) syncHosts(ctx context.Context, rows []SeenRow, rowsOK bool, kno
 			s.setHostStableIDs(stableNow)
 		}
 	}
-	st.snapBytes = s.publishLive(ctx, HostClusterID, BuildHostLive(now, cands, stableNow))
+	live := BuildHostLive(now, cands, stableNow)
+	MergeMetricHosts(&live, s.currentMetricIndex(now), knownPods) // S6 parça 2
+	st.snapBytes = s.publishLive(ctx, HostClusterID, live)
 	return st
 }
 
