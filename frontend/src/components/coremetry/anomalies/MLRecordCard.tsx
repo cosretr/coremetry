@@ -12,7 +12,10 @@ import { KeyValue } from '@/components/coremetry/KeyValue';
 import { serviceHref } from '@/lib/serviceHref';
 import { tf, useLang, useT } from '@/lib/i18n';
 import { fmtClock } from '@/lib/utils';
-import type { MLRecordView } from '@/lib/types';
+import type { MLEvent, MLRecordView } from '@/lib/types';
+import { mlEventHref } from '@/lib/anomalyHref';
+import { ML_DETECTOR_TR } from '@/lib/mlDetectorLabels';
+import { GROUP_MEMBERS_OPEN_MAX, groupMemberRows } from './mlGroupMembers';
 import { MLRecordChart, measureLabel, stepText } from './MLRecordChart';
 import { fmtRecordNum, fmtRecordValue, sourceLabel } from './mlRecord';
 import {
@@ -48,7 +51,33 @@ function Section({ id, title, sub, children }: { id: string; title: string; sub?
 /** Sayfa bölümlerinin sırası (mockup "ÖNERİLEN"). */
 export const ML_RECORD_SECTIONS = ['ml-header', 'ml-summary', 'ml-course', 'ml-measured', 'ml-evidence', 'ml-actions', 'ml-technical'] as const;
 
-export function MLRecordCard({ rec, actions }: { rec: MLRecordView; actions: ReactNode }) {
+/** v0.10.2257 — grubun diğer üye olayları (lider hariç); veri grup sayfasının
+ *  liste satırlarından, üye başına sorgu yok. > 5 üyede kapalı açılır. */
+function GroupMembers({ members, leadId }: { members: MLEvent[]; leadId: string }) {
+  const t = useT();
+  const lang = useLang();
+  const rows = groupMemberRows(members, leadId, lang);
+  if (rows.length === 0) return null;
+  return (
+    <details className="mt-3 rounded-md border border-border bg-card px-2.5 py-1.5 text-sm" data-testid="ml-group-members" open={rows.length <= GROUP_MEMBERS_OPEN_MAX}>
+      <summary className="cursor-pointer text-xs font-semibold">{tf('mlRecord.group.title', lang, { n: rows.length })}</summary>
+      <ul className="m-0 mt-1.5 flex list-none flex-col p-0" data-testid="ml-group-member-rows">
+        {rows.map(r => (
+          <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-t border-border py-1.5 first:border-t-0">
+            <Link to={mlEventHref(r.id)} className="min-w-0 font-mono [overflow-wrap:anywhere]">
+              {r.service} · {r.whatIsDetector && lang === 'tr' ? (ML_DETECTOR_TR[r.detector] ?? r.detector) : r.what}
+            </Link>
+            {r.cls && <Badge variant="outline">{t(CLASS_KEY[r.cls] ?? 'mlRecord.class.info')}</Badge>}
+            <span className="font-mono text-xs">{tf('mlRecord.group.peakVs', lang, { peak: r.peak, exp: r.expected })}</span>
+            <span className="ml-auto font-mono text-xs text-muted-foreground">{hm(r.at)}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+export function MLRecordCard({ rec, actions, groupMembers, leadId = '' }: { rec: MLRecordView; actions: ReactNode; groupMembers?: MLEvent[]; leadId?: string }) {
   const t = useT();
   const lang = useLang();
   const measure = measureLabel(rec, t);
@@ -112,6 +141,7 @@ export function MLRecordCard({ rec, actions }: { rec: MLRecordView; actions: Rea
           </ul>
         )}
       </Section>
+      {groupMembers && groupMembers.length > 0 && <GroupMembers members={groupMembers} leadId={leadId} />}
       <Section id="ml-actions" title={t('mlRecord.card.actions')}>{actions}</Section>
       <details className="mt-3.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-sm" data-testid="ml-technical">
         <summary className="cursor-pointer text-xs font-semibold">{t('mlRecord.card.technical')}</summary>

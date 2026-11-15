@@ -12333,6 +12333,8 @@ export interface MLEvent {
   startedAt: number; lastSeen: number; windowSec: number;
   baseline: number; observed: number; score: number; direction: 'up' | 'down' | string;
   evidence?: string; dupOf?: string;
+  /** v0.10.2199 — ml_events olay-kaydı kolonları (liste satırı taşır; '' = eski kayıt). v0.10.2257: grup üyeleri bloğu okur. */
+  class?: string; record?: string;
   verdict?: 'anomaly' | 'not_anomaly'; verdictBy?: string; verdictAt?: number; note?: string; verdictReason?: string;
   /** v0.10.1843 — tek satır özet, sunucudaki ml.ExplainSummary'den (liste ucu doldurur). */
   summary?: string;

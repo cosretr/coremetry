@@ -493,6 +493,9 @@ const EN: Catalog = {
   'mlRecord.reason.cancel': 'Cancel',
   'mlRecord.reason.pick': 'Pick a reason.',
   'mlRecord.reason.otherNote': 'Write the reason for “Other”.',
+  // v0.10.2257 — group members on the record card.
+  'mlRecord.group.title': 'Group members ({n})',
+  'mlRecord.group.peakVs': 'peak {peak} vs expected {exp}',
   'mlRecord.card.sampleTrace': 'Open sample trace',
   'mlRecord.card.serviceLink': 'Service',
   'mlRecord.card.actions': 'What do you want to do?',
@@ -1647,6 +1650,9 @@ const TR: Catalog = {
   'mlRecord.reason.cancel': 'Vazgeç',
   'mlRecord.reason.pick': 'Bir neden seç.',
   'mlRecord.reason.otherNote': '“Diğer” için nedeni yaz.',
+  // v0.10.2257 — kayıtlı kartta grup üyeleri.
+  'mlRecord.group.title': 'Grup üyeleri ({n})',
+  'mlRecord.group.peakVs': 'tepe {peak} · beklenen {exp}',
   'mlRecord.card.sampleTrace': 'Örnek trace\'i aç',
   'mlRecord.card.serviceLink': 'Servis',
   'mlRecord.card.actions': 'Ne yapmak istersiniz?',

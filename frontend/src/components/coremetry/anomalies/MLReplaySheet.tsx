@@ -166,7 +166,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
     const recSample = snap ? replaySamples(snap).find(x => x.traceId) : undefined;
     return (
       <div data-testid="ml-replay" className="flex flex-col">
-        <MLRecordCard rec={rec} actions={<>
+        <MLRecordCard rec={rec} groupMembers={group?.members} leadId={id} actions={<>
           <div className="mb-2 flex flex-wrap gap-2" data-testid="ml-where">
             {card.header.kind !== 'metric' && recSample?.traceId && <Chip link={{ label: t('mlRecord.card.sampleTrace'), href: traceHref(recSample.traceId) }} />}
             <Chip link={{ label: t('mlRecord.card.serviceLink'), href: serviceHref(rec.subject.service) }} />

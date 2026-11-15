@@ -32,6 +32,9 @@ vi.mock('@/components/viz/TimeSeriesPanel', () => ({ TimeSeriesPanel: () => <div
 
 import { MLReplayContent } from './MLReplaySheet';
 import { ML_RECORD_SECTIONS } from './MLRecordCard';
+import type { MLGroupRow } from './mlGroupRows';
+import type { MLEvent } from '@/lib/types';
+import { groupMemberRows, parseMemberRecord } from './mlGroupMembers';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -61,14 +64,14 @@ let host: HTMLDivElement | null = null;
 let root: Root | null = null;
 afterEach(() => { act(() => { root?.unmount(); }); host?.remove(); host = null; root = null; m.lang = 'en'; });
 
-async function render(replay: MLReplay): Promise<HTMLElement> {
+async function render(replay: MLReplay, group: MLGroupRow | null = null): Promise<HTMLElement> {
   m.replay = replay;
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
-    root!.render(<QueryClientProvider client={qc}><MemoryRouter><MLReplayContent id="e1" /></MemoryRouter></QueryClientProvider>);
+    root!.render(<QueryClientProvider client={qc}><MemoryRouter><MLReplayContent id="e1" group={group} /></MemoryRouter></QueryClientProvider>);
   });
   for (let i = 0; i < 3; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)); });
   return host;
@@ -108,5 +111,47 @@ describe('kayıtlı ML kartı (Dilim D)', () => {
     const el = await render({ snapshot: null, related: [], card, record: null });
     expect(el.querySelector('[data-testid="ml-record-card"]')).toBeNull();
     expect(el.querySelector('[data-testid="ml-summary"]')!.textContent).toBe('Eski kart cümlesi');
+  });
+});
+
+// v0.10.2257 — grup üyeleri bloğu: lider hariç üyeler, birimli tepe/beklenen,
+// kendi olay sayfasına bağlantı; > 5 üyede kapalı. Veri grup satırından.
+function member(id: string, i: number, extra: Partial<MLEvent> = {}): MLEvent {
+  return { id, detector: 'log_volume', signal: 'log', stage: 'closed', service: 'checkout-api', startedAt: (T0 + 60 * i) * 1e9,
+    lastSeen: (T0 + 60 * i + 300) * 1e9, windowSec: 300, baseline: 10, observed: 42, score: 4, direction: 'up', ...extra };
+}
+function groupOf(ms: MLEvent[]): MLGroupRow {
+  return { key: 'g1', lead: ms[0], members: ms, service: 'checkout-api', start: ms[0].startedAt, end: ms[0].lastSeen, signals: ['trace', 'log'], status: 'done' };
+}
+describe('kayıtlı ML kartı — grup üyeleri (v0.10.2257)', () => {
+  const lead = member('e1', 0, { detector: 'op_latency', signal: 'trace' });
+  const withRec = member('e2', 2, { detector: 'op_error_rate', signal: 'trace', class: 'service_anomaly',
+    record: JSON.stringify({ subject: { service: 'checkout-api', operation: 'POST /api/v1/orders' }, series: { unit: 'percent' }, peakValue: 12.5, expectedValue: 0.4, class: 'service_anomaly' }) });
+  it('SAF: kayıttan birim ve operasyon, kayıtsızda dedektör; lider hariç, zaman sırası', () => {
+    const rows = groupMemberRows([member('e3', 5), lead, withRec], 'e1', 'en');
+    expect(rows.map(r => r.id)).toEqual(['e2', 'e3']);
+    expect(rows[0]).toMatchObject({ what: 'POST /api/v1/orders', whatIsDetector: false, cls: 'service_anomaly', peak: '12.5%', expected: '0.4%' });
+    expect(rows[1]).toMatchObject({ what: 'log_volume', whatIsDetector: true, peak: '42', expected: '10' });
+    expect(parseMemberRecord('{bozuk')).toBeNull();
+  });
+  it('≤ 5 üye açık, bağlantı üyenin sayfası, İngilizce', async () => {
+    const el = await render({ snapshot: null, related: [], card, record: rec }, groupOf([lead, withRec]));
+    const box = el.querySelector('[data-testid="ml-group-members"]') as HTMLDetailsElement;
+    expect(box.open).toBe(true);
+    expect(box.querySelector('summary')!.textContent).toBe('Group members (1)');
+    expect(box.querySelector('a')!.getAttribute('href')).toBe('/anomalies/ml/e2');
+    expect(box.textContent).toContain('peak 12.5% vs expected 0.4%');
+    expect(box.textContent).toContain('Service anomaly');
+    const actions = el.querySelector('[data-testid="ml-actions"]')!;
+    expect(box.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+  it('> 5 üye kapalı; tek üyeli grupta blok yok', async () => {
+    const many = [lead, ...Array.from({ length: 6 }, (_, i) => member(`m${i}`, i + 1))];
+    let el = await render({ snapshot: null, related: [], card, record: rec }, groupOf(many));
+    expect((el.querySelector('[data-testid="ml-group-members"]') as HTMLDetailsElement).open).toBe(false);
+    expect(el.querySelectorAll('[data-testid="ml-group-member-rows"] li').length).toBe(6);
+    act(() => { root?.unmount(); }); host?.remove(); root = null;
+    el = await render({ snapshot: null, related: [], card, record: rec }, groupOf([lead]));
+    expect(el.querySelector('[data-testid="ml-group-members"]')).toBeNull();
   });
 });
