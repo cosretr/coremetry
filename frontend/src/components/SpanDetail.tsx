@@ -17,14 +17,13 @@ import {
   dbSpanRef, dbLinkWindow, dbSpanAttrHref, dbSpanDatabaseHref, dbSpanStatementHref, stmtVerdict,
   type DbSpanRef, type DbLinkKind,
 } from '@/lib/dbSpanLinks';
-import { IconFlame, IconSparkles } from './icons';
+import { IconFlame } from './icons';
 import { CopyButton } from './CopyButton';
 import { IconButton } from './ui/IconButton';
 import { DisclosureButton } from './ui/DisclosureButton';
 import { SqlCode } from '@/components/coremetry/SqlCode'; // v0.10.1955
 import { useDBStmtDetail } from '@/lib/queries/databases'; // v0.10.1956
-import { AIExplainButton } from './ai/AIExplainButton';
-import { useT } from '@/lib/i18n'; // v0.10.1338 — "Ask CoSRE" etiketi
+import { useT } from '@/lib/i18n';
 import { BreakdownBar, KindBadge } from './KindBadge';
 import { useEntityEnabled, useStackFrameLinks } from '@/lib/queries';
 import { StackTrace } from './StackTrace';
@@ -375,19 +374,9 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
             </span>
           )}
         </div>
-        {/* AI explain (v0.5.144). Per-span LLM summary — backend sends only
-            target + parent + direct children + error siblings so the prompt
-            stays tight. Auto-hides when copilot isn't configured. v0.9.477 —
-            cevap tek sağ-kenar AI çekmecesinde (?ai=span:<traceId>:<spanId>). */}
-        {span.traceId && span.spanId && (
-          <div className="kiosk-span__actions">
-            {/* v0.10.1338 (operatör) — görünen ad "Ask CoSRE" / "CoSRE’ye sor";
-                Trace sayfasındaki trace düğmesiyle aynı ad, ayrımı ipucu yapar. */}
-            <AIExplainButton subject={{ kind: 'span', id: span.traceId, spanId: span.spanId }}
-              title={tr('ai.askCosreSpanHint')}
-              label={<><IconSparkles /> <span style={{ marginLeft: 6 }}>{tr('ai.askCosre')}</span></>} />
-          </div>
-        )}
+        {/* v0.10.2208 (operatör) — span panelinin kendi "Ask CoSRE" düğmesi
+            kalktı: trace başlığındaki "Ask CoSRE" yeterli. Span açıklaması
+            ?ai=span:<traceId>:<spanId> derin linki ve arşivden hâlâ açılır. */}
         {/* v0.10.1955 (operatör: "db sorguları Toad gibi highlight edilebilir mi") — DB span'inde
             sorgu metni renkli blok + kopyala (coremetry/SqlCode, Database sayfasıyla aynı bileşen). */}
         {spanSql && (

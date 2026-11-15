@@ -241,9 +241,6 @@ const EN: Catalog = {
   'ai.askCosreMetricPanelHint': 'Explain this chart in the CoSRE chat (brushed range and selected series included)',
   // v0.10.1435 END
   'ai.askCosreTraceHint': 'Ask CoSRE about this trace.',
-  // v0.10.1338 — span düğmesi Trace sayfasında trace düğmesiyle AYNI adı
-  // taşır; ikisini ipucu ayırır.
-  'ai.askCosreSpanHint':  'Ask CoSRE · span — explain this span.',
   // v0.10.1338 (operatör) — log satırı / log artışı düğmeleri de "Ask CoSRE"; ipucu ayırır.
   'ai.askCosreLogHint':      'Ask CoSRE · log — explain this log line.',
   // v0.10.1367 — Endpoint detay / arama endpoint sonucu: tek tık "Ask CoSRE".
@@ -1053,7 +1050,6 @@ const TR: Catalog = {
   'ai.askCosreMetricPanelHint': 'Bu grafiği CoSRE sohbetinde açıkla (seçili aralık ve seri dahil)',
   // v0.10.1435 END
   'ai.askCosreTraceHint': 'Bu trace hakkında CoSRE’ye soru sor.',
-  'ai.askCosreSpanHint':  'CoSRE’ye sor · span — bu span’i açıkla.',
   // v0.10.1338
   'ai.askCosreLogHint':      'CoSRE’ye sor · log — bu log satırını açıkla.',
   'ai.askCosreEndpointHint': 'CoSRE’ye sor · endpoint — ne oluyor, ne zamandan beri, süre nereye gidiyor, hangi hatalar.', // v0.10.1367

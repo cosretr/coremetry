@@ -2636,7 +2636,6 @@ body.cm-col-resizing { cursor: col-resize; user-select: none; }
 .span-panel-inline .ps-kv { font-size: 11.5px; line-height: 1.35; }
 .span-panel-inline .ps-kv td { padding: 2px 0; }
 .span-panel-inline .ps-kv td:first-child { width: 1%; min-width: 0; max-width: none; white-space: nowrap; padding-right: var(--sp-8); color: var(--text2); }
-.kiosk-span__actions { display: flex; gap: var(--sp-3); }
 #span-panel .kiosk-span__facts { padding: 0 0 var(--sp-2); }
 .ps-sec { margin-bottom: 14px; }
 .ps-sec-title { font-size: 10px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }

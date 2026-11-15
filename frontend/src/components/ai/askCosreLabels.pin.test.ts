@@ -61,8 +61,10 @@ describe('Ask CoSRE etiketleri (v0.10.1338)', () => {
   });
 
   // Incidents ölü kod dilimi 2: incident düğmesi arşiv sayfasıyla silindi.
-  it('span / problem / anomaly düğmeleri ai.askCosre kullanır', () => {
-    for (const kind of ['span', 'problem']) {
+  // v0.10.2208 (operatör) — span panelinin kendi düğmesi kalktı (trace başlığı yeterli).
+  it('problem / anomaly düğmeleri ai.askCosre kullanır; span düğmesi yok', () => {
+    expect(hits.some(h => h.el.includes(`kind: 'span'`))).toBe(false);
+    for (const kind of ['problem']) {
       const els = hits.filter(h => h.el.includes(`kind: '${kind}'`));
       expect(els.length, kind).toBeGreaterThan(0);
       for (const h of els) expect(h.el, `${kind} @ ${h.file}`).toContain("tr('ai.askCosre')");
@@ -74,9 +76,7 @@ describe('Ask CoSRE etiketleri (v0.10.1338)', () => {
     for (const h of named) expect(h.el, h.file).toContain("tr('ai.askCosre')");
   });
 
-  it('Trace sayfasında trace + span düğmeleri aynı adı ipucuyla ayırır', () => {
-    const span = hits.find(h => h.file.endsWith('SpanDetail.tsx') && h.el.includes("kind: 'span'"));
-    expect(span?.el).toContain("title={tr('ai.askCosreSpanHint')}");
+  it('Trace sayfasında yalnız trace düğmesi (ipuçlu)', () => {
     const trace = hits.find(h => h.file.endsWith('pages/Trace.tsx') && h.el.includes("kind: 'trace'"));
     expect(trace?.el).toContain("title={tr('ai.askCosreTraceHint')}");
   });
