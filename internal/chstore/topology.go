@@ -804,7 +804,7 @@ func (s *Store) WriteTopologyBucket(ctx context.Context, bucketStart time.Time) 
 				-- v0.7.31 — messaging.destination (topic) so each Kafka topic is a
 				-- DISTINCT queue node (queue:<system>:<topic>) instead of every
 				-- topic on a broker collapsing into one queue:<system> hairball.
-				-- Operator-reported: a broadcast topic (bsa.kafka.core.cache.refresh)
+				-- Operator-reported: a broadcast topic (orders.kafka.core.cache.refresh)
 				-- fanned out to thousands of consumers and tangled the whole graph;
 				-- separating topics lets it be muted/collapsed surgically. The
 				-- attr_values[indexOf(...)] lookup mirrors what messaging_summary_5m

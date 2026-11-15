@@ -489,7 +489,7 @@ export function OracleTab() {
                 </SelectField>
                 <Field label="Jenerik kodlar (virgül)" className={NARROW} value={(src.genericCodes ?? []).join(', ')}
                   onChange={e => patch(i, { genericCodes: parseTypeFilter(e.target.value) })}
-                  hint="external_code / exception tipiyle ayrılan kodlar (ör. ERR_020, BSA_020)" />
+                  hint="external_code / exception tipiyle ayrılan kodlar (ör. ERR_020, PAY_020)" />
                 <Field label="Sayılmayan kodlar (virgül)" className={NARROW} value={(src.ignoreCodes ?? []).join(', ')}
                   onChange={e => patch(i, { ignoreCodes: parseTypeFilter(e.target.value) })}
                   hint="Problem üretmez; satır Trace › Logs'ta yine görünür" />

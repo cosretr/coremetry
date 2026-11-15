@@ -325,14 +325,14 @@ export_event() {  # $1 = event id
   echo "$1 FROM=$FROM TO=$TO"
 }
 
-# Örnek 1 — 59d8f32338b5e7b5 · acm-promo-points-gain-prod (svc_volume_spike)
+# Örnek 1 — 59d8f32338b5e7b5 · <service> (svc_volume_spike)
 export_event 59d8f32338b5e7b5; D=internal/ml/testdata/fixtures/59d8f32338b5e7b5
-$CH --param_svc=acm-promo-points-gain-prod --param_from="$FROM" --param_to="$TO" --query "
+$CH --param_svc=<service> --param_from="$FROM" --param_to="$TO" --query "
   SELECT signal, service, part, bucket, bucket_sec, count
   FROM ml_series FINAL
   WHERE service = {svc:String} AND bucket >= toDateTime({from:UInt32}) AND bucket < toDateTime({to:UInt32})
   ORDER BY part, bucket LIMIT 500000 SETTINGS max_execution_time = 30 FORMAT JSONEachRow" > "$D/ml_series.jsonl"
-$CH --param_svc=acm-promo-points-gain-prod --param_from="$FROM" --param_to="$TO" --query "
+$CH --param_svc=<service> --param_from="$FROM" --param_to="$TO" --query "
   SELECT time_bucket, kind, countMerge(calls_state) AS calls, countMerge(error_state) AS errors
   FROM spanmetrics_1m
   WHERE service_name = {svc:String}
@@ -340,15 +340,15 @@ $CH --param_svc=acm-promo-points-gain-prod --param_from="$FROM" --param_to="$TO"
   GROUP BY time_bucket, kind
   ORDER BY time_bucket, kind LIMIT 400000 SETTINGS max_execution_time = 60 FORMAT JSONEachRow" > "$D/spanmetrics_1m.jsonl"
 
-# Örnek 2 — 09ecef247b0557ea · acm-risk-score-bureau-inq-prod · callBagService (op_latency p95)
+# Örnek 2 — 09ecef247b0557ea · <service> · <operation> (op_latency p95)
 export_event 09ecef247b0557ea; D=internal/ml/testdata/fixtures/09ecef247b0557ea
-$CH --param_svc=acm-risk-score-bureau-inq-prod --param_from="$FROM" --param_to="$TO" --query "
+$CH --param_svc=<service> --param_from="$FROM" --param_to="$TO" --query "
   SELECT signal, service, part, bucket, bucket_sec, count
   FROM ml_series FINAL
-  WHERE service = {svc:String} AND (part = '' OR startsWith(part, 'callBagService|'))
+  WHERE service = {svc:String} AND (part = '' OR startsWith(part, '<operation>|'))
     AND bucket >= toDateTime({from:UInt32}) AND bucket < toDateTime({to:UInt32})
   ORDER BY part, bucket LIMIT 200000 SETTINGS max_execution_time = 30 FORMAT JSONEachRow" > "$D/ml_series.jsonl"
-$CH --param_svc=acm-risk-score-bureau-inq-prod --param_op=callBagService --param_from="$FROM" --param_to="$TO" --query "
+$CH --param_svc=<service> --param_op=<operation> --param_from="$FROM" --param_to="$TO" --query "
   SELECT time_bucket, name, kind, http_route,
          countMerge(calls_state) AS calls, countMerge(error_state) AS errors,
          arrayElement(quantilesTDigestMerge(0.5, 0.9, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p95_ms,
@@ -369,7 +369,7 @@ adlarla değiştirilir (ör. `checkout-api`) ve dizin `internal/ml/testdata/repl
 Notlar: (1) `FROM` 28 g geriye gider ama tablo TTL'inden eskisi zaten yoktur — fazladan tarama yok. (2) Örnek 1 dedektörü
 `ml_series` yazmaz (evaluator kuralı); oradaki satırlar aynı servisin trace RED parçalarıdır (B dilimi tabanı için yine
 gerekli). Asıl hacim serisi `spanmetrics_1m` `kind` kırılımı (istek başına span = tüm kind / `server`+`consumer`).
-(3) Örnek 2 `part` biçimi `route|measure` (`trace_red.go` `tracePart`); `callBagService` VM `route` etiketidir,
+(3) Örnek 2 `part` biçimi `route|measure` (`trace_red.go` `tracePart`); `<operation>` VM `route` etiketidir,
 span adıyla uyuşmayabilir (§3 S13) — bu yüzden `name` **ya da** `http_route`. (4) Dosyalar commit edilmeden önce
 boyut kontrolü: tek dosya > 5 MB ise `gzip` ile `.jsonl.gz` (yükleyici E diliminde ikisini de okur).
 

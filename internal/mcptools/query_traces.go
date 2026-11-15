@@ -109,7 +109,7 @@ func queryTracesTool(d Deps) mcp.Tool {
 			"(spans, errors, error %, avg/p50/p95/p99 ms) read from the 5-minute service summary pre-aggregate " +
 			"(env-scoped variant when env is given). The sample list uses the bounded trace reader " +
 			"(trace-summary pre-aggregate when eligible, else LIMIT + time-bounded raw scan). " +
-			"Args: service (required unless operation is an Oracle/BSA operation name that resolves to function codes — then the search runs fleet-wide on the code filter), " +
+			"Args: service (required unless operation is an Oracle operation name that resolves to function codes — then the search runs fleet-wide on the code filter), " +
 			"operation (exact span/operation name, optional), status any|error, " +
 			"min_duration_ms, sort_by slowest|recent, limit (default 10, max 20), window 15m|1h|6h|24h (default 1h, max 24h) " +
 			"or from_ms+to_ms, env. An operation filter narrows the window (≤6h, ≤1h with slowest) and drops the totals. " +
@@ -119,8 +119,8 @@ func queryTracesTool(d Deps) mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"service":         map[string]any{"type": "string", "description": "Exact service name (list_services). Required unless operation is an Oracle/BSA operation name."}, // v0.10.1302
-				"operation":       map[string]any{"type": "string", "description": "Exact operation/span name (list_operations), or an Oracle/BSA operation name (UPPER_CASE_WITH_UNDERSCORES) — translated to its FUNCTION_CODE filter. Optional."},
+				"service":         map[string]any{"type": "string", "description": "Exact service name (list_services). Required unless operation is an Oracle operation name."}, // v0.10.1302
+				"operation":       map[string]any{"type": "string", "description": "Exact operation/span name (list_operations), or an Oracle operation name (UPPER_CASE_WITH_UNDERSCORES) — translated to its FUNCTION_CODE filter. Optional."},
 				"status":          map[string]any{"type": "string", "enum": qtStatusEnum, "description": "error = only traces with an error span. Default any."},
 				"min_duration_ms": map[string]any{"type": "number", "minimum": 0, "description": "Only traces at least this slow (ms)."},
 				"sort_by":         map[string]any{"type": "string", "enum": qtSortEnum, "description": "slowest first or most recent first. Default recent."},
@@ -188,14 +188,14 @@ func runQueryTraces(ctx context.Context, b qtBackends, raw json.RawMessage) (cos
 	if env != "" {
 		req["env"] = env
 	}
-	// v0.10.1302 — Oracle/ACM operasyon adı fonksiyon koduna çevrilirse servis
+	// v0.10.1302 — Oracle operasyon adı fonksiyon koduna çevrilirse servis
 	// gerekmez: kod süzgeci terfi etmiş tek kolona iner (search_traces kapısının
 	// "kapsam çipi" sayımı, isBusinessCodeScopeFilter) — simple araç setinde
 	// resolve_oracle_operation → query_traces zinciri böyle tamamlanır.
 	tr, translated := translateOperationSearch(ctx, b.oracleOps, operation)
 	if service == "" && !translated {
 		r := cosreFail(queryTracesName, req, warnings, cosreErrBadArgs, mcp.ToolsetText(ctx,
-			"service gerekli (list_services ile tam adı bul; Oracle/BSA operasyon adı operation ile servissiz çalışır)⟦; filo geneli arama için search_traces|⟧"))
+			"service gerekli (list_services ile tam adı bul; Oracle operasyon adı operation ile servissiz çalışır)⟦; filo geneli arama için search_traces|⟧"))
 		r.Error.Need = []string{"service"}
 		return r, nil
 	}

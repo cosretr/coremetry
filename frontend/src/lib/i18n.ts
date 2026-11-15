@@ -284,8 +284,8 @@ const EN: Catalog = {
   // `|` in a prompt marks where the caret lands (the user types the name).
   'cosre.cap.aria':             'What CoSRE can do',
   'cosre.cap.tryHint':          'Fills the box with an example — edit it, then send',
-  'cosre.cap.wiki':             'I can search the company wiki — e.g. “@wiki BSA cache refresh most common errors”', // v0.10.1368
-  'cosre.cap.wiki.prompt':      '@wiki BSA cache refresh most common errors', // v0.10.1368
+  'cosre.cap.wiki':             'I can search the company wiki — e.g. “@wiki payments cache refresh most common errors”', // v0.10.1368
+  'cosre.cap.wiki.prompt':      '@wiki payments cache refresh most common errors', // v0.10.1368
   'cosre.cap.service':          'I can look at a service’s traces, errors and latency — type the service name (@ completes it)',
   'cosre.cap.service.prompt':   '@| traces, errors and latency in the last hour?',
   'cosre.cap.operation':        'I can dig into failing technical operations — type the operation name',
@@ -1419,8 +1419,8 @@ const TR: Catalog = {
   // v0.10.1368 (operatör: "wiki cache refresh nasıl yapılır var ama düzgün çalışmıyor") — örnek
   // `@wiki` kapsam önekiyle başlar: wiki katmanı kesin devreye girer (chat_scope), serbest
   // "wikide …" cümlesi guided'a kayabiliyordu.
-  'cosre.cap.wiki':             'Kurum wiki’sinde arayabilirim — ör. “@wiki BSA cache refresh en sık karşılaşılan hatalar nelerdir?”',
-  'cosre.cap.wiki.prompt':      '@wiki BSA cache refresh en sık karşılaşılan hatalar nelerdir?',
+  'cosre.cap.wiki':             'Kurum wiki’sinde arayabilirim — ör. “@wiki payments cache refresh en sık karşılaşılan hatalar nelerdir?”',
+  'cosre.cap.wiki.prompt':      '@wiki payments cache refresh en sık karşılaşılan hatalar nelerdir?',
   'cosre.cap.service':          'Bir servisin trace’lerine, hatalarına, gecikmesine bakabilirim — servis adını yaz (@ ile tamamla)',
   'cosre.cap.service.prompt':   '@| servisinin son 1 saatteki trace\'leri, hataları ve gecikmesi?',
   'cosre.cap.operation':        'Hata veren teknik operasyonları inceleyebilirim — operasyon adını yaz',
