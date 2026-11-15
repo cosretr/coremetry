@@ -94,6 +94,9 @@ type RecordGate struct {
 	Value     float64 `json:"value"`
 	Threshold float64 `json:"threshold"`
 	Reason    string  `json:"reason,omitempty"`
+	// NotEvaluable — v0.10.2241 (A1): kayıtta kapının gerektirdiği veri yok
+	// (Passed=true, neden Reason'da); kapı sorgu atmaz.
+	NotEvaluable bool `json:"notEvaluable,omitempty"`
 }
 
 // RecordSnapshot — sütunlu görüntü: nokta i = T0 + i·StepSec (unix sn, kova
@@ -385,8 +388,14 @@ func parseTRNumber(tok string) (v float64, decimals int, ok bool) {
 // applyRecordContract — yazım öncesi: kaydı olan olayı doğrular; kalan
 // kayıt publish_state=invalid (yayımlanmaz) ve dedektör sayacına girer.
 // Kaydı olmayan (eski) olay aynen döner — H1'de her olay böyle.
+//
+// v0.10.2241 (A1): geçen kayıt yayın kapılarından geçirilir (publish_gate.go);
+// sonuç YALNIZ record.gates[]'e ve gölge sayacına yazılır — sınıf,
+// publish_state, bildirim, Problem ve kart değişmez. Kaydı olmayan / kalan
+// olay gölgede "değerlendirilmedi" sayılır.
 func applyRecordContract(ev chstore.MLEvent) chstore.MLEvent {
 	if ev.Record == "" {
+		global.observeGate(ev.ID, ev.Detector, gateOutcome{})
 		return ev
 	}
 	var rec EventRecord
@@ -397,9 +406,15 @@ func applyRecordContract(ev chstore.MLEvent) chstore.MLEvent {
 		vs = ValidateRecord(rec)
 	}
 	if len(vs) == 0 {
+		rec.Gates = EvaluateGates(rec)
+		if b, err := json.Marshal(rec); err == nil {
+			ev.Record = string(b)
+		}
+		global.observeGate(ev.ID, ev.Detector, gateVerdict(rec, rec.Gates))
 		return ev
 	}
 	ev.PublishState = PublishInvalid
+	global.observeGate(ev.ID, ev.Detector, gateOutcome{Invalid: true})
 	global.observeRecordInvalid(ev.Detector)
 	log.Printf("[ml] record invalid %s %s: %s — %s (+%d kural)", ev.Detector, ev.ID, vs[0].Rule, vs[0].Reason, len(vs)-1)
 	return ev

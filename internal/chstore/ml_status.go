@@ -86,6 +86,11 @@ type MLTickStatus struct {
 	// kapısı (anomaly-auto:svc:*) — "Problem açardı" servis sayısı + P1 olanlar.
 	ShadowSvcWouldOpen int64 `json:"shadowSvcWouldOpen,omitempty"`
 	ShadowSvcP1        int64 `json:"shadowSvcP1,omitempty"`
+	// PublishGates — v0.10.2241 (anomali kartı A1, gölge): dedektör başına yayın
+	// kapısı sonucu, son PublishGatesWindowH saatte değerlendirilen FARKLI olay
+	// (son değerlendirme geçerli; recorder pod belleği, lider değişince sıfır).
+	PublishGates        map[string]MLGateShadow `json:"publishGates,omitempty"`
+	PublishGatesWindowH int                     `json:"publishGatesWindowH,omitempty"`
 	// v0.10.2052 (D4) — canlı kip: anahtar açık mı (izleyici de görür) ve
 	// bu tikte açılan / tazelenen / kapanan grup Problem'i sayısı.
 	GroupLive bool `json:"groupLive,omitempty"`
@@ -144,4 +149,21 @@ func (s *Store) SaveMLTickStatus(ctx context.Context, t MLTickStatus) error {
 		return err
 	}
 	return s.PutSetting(ctx, mlTickStatusKey, raw)
+}
+
+// MLGateShadow — v0.10.2241 (A1): bir dedektörün yayın kapısı gölge raporu.
+// Evaluated = WouldPublish + WouldDrop + WouldInfo + WouldTelemetryVolume.
+// NotEvaluated = sözleşmesiz (göç etmemiş dedektör) + Invalid (doğrulayıcıdan
+// kalan). FailedByGate: kalan kapı başına olay (drop kapıları + kanıt/etki);
+// NotEvaluableByGate: kayıtta verisi olmayan kapı başına olay.
+type MLGateShadow struct {
+	Evaluated            int64            `json:"evaluated"`
+	WouldPublish         int64            `json:"wouldPublish"`
+	WouldDrop            int64            `json:"wouldDrop"`
+	WouldInfo            int64            `json:"wouldInfo"`
+	WouldTelemetryVolume int64            `json:"wouldTelemetryVolume"`
+	NotEvaluated         int64            `json:"notEvaluated"`
+	Invalid              int64            `json:"invalid"`
+	FailedByGate         map[string]int64 `json:"failedByGate,omitempty"`
+	NotEvaluableByGate   map[string]int64 `json:"notEvaluableByGate,omitempty"`
 }

@@ -20,6 +20,7 @@ type stats struct {
 	esSamples                                                                       []int64
 	lastKinds                                                                       map[string]chstore.MLKindTick // v0.10.1812: son tik ölçümü
 	recordInvalid                                                                   map[string]int64              // v0.10.2199: doğrulayıcıdan kalan kayıt, dedektör başına (kümülatif)
+	gateShadow                                                                      map[string]gateEntry          // v0.10.2241 (A1): olay id → son kapı sonucu
 	lastErr                                                                         string
 }
 

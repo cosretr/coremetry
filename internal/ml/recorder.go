@@ -430,6 +430,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		ShadowGroups: shadow.Groups, ShadowWouldOpen: shadow.WouldOpen, ShadowSingleWouldOpen: shadow.SingleWouldOpen, ContribQueries: int64(contribQ),
 		GroupLive: cfg.GroupProblemsOn(), GroupOpened: live.Opened, GroupRefreshed: live.Refreshed, GroupResolved: live.Resolved, GroupSingleOpened: live.SingleOpened, SvcOpened: live.SvcOpened,
 		LogSvcUnmatched: int64(logSvc.Unmatched), LogSvcViaPod: int64(logSvc.ViaPod), ShadowSvcWouldOpen: svcOpen, ShadowSvcP1: svcP1}
+	// v0.10.2241 (A1) — yayın kapısı gölge raporu: /api/ml/scorecard tick.publishGates
+	status.PublishGates, status.PublishGatesWindowH = global.gateShadowReport(start), int(gateShadowWindow/time.Hour)
 	// v0.10.2019 — metrik aile kaynakları + Thanos ölçümü (MetricThanos)
 	for _, det := range r.detectors {
 		if ts, ok := det.(interface {
@@ -457,6 +459,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		log.Print(line)
 	}
 	log.Print(recordInvalidLine(global.recordInvalidCopy()))
+	log.Print(gateShadowLine(status.PublishGates))
 	for name, st := range signals {
 		log.Printf("[ml] tick %s ran=%v services=%d source=%dms candidates=%d batch_cut=%d written=%d partial=%d err=%s", name, st.Ran, st.Services, st.SourceMs, st.Candidates, st.BatchCut, st.Written, st.Partial, st.Error)
 	}

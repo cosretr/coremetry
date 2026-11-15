@@ -532,6 +532,19 @@ bağımlılık → kırılma noktası → log RED → şablon → pod → `svc_b
 **A1 — yayın kapıları, gölge.** Recorder'da `qualityFilter` sonrası tek katman (`internal/ml/publish_gate.go`): seri tutarlılığı,
 görünür sapma, kanıt (bağımsız < 2 → `info`), etki (hata oranı ve gecikme bant içinde → `service_anomaly` olamaz). Sonuç yalnız
 `gates[]`'e yazılır, hiçbir şey gizlenmez. *Risk:* düşük. *Göç:* yok. *Test:* kapı başına bir geçen bir kalan örnek.
+✅ **gemilendi v0.10.2241** (`internal/ml/publish_gate.go`, `publish_gate_test.go`; çağrı `applyRecordContract`). Doğrulayıcıdan geçen
+her kayıt yazımdan önce değerlendirilir; kapılar yalnız kaydı okur (ek sorgu yok), veri yoksa satır `notEvaluable` + neden (geçti sayılır).
+Satırlar: `series_consistency` (tutarsızlık sayısı, eşik 0), `visible_deviation` (olay penceresinde yönünde art arda bant dışı dk; gecikme
+serisinde ≥ 3, diğerlerinde ≥ 1 nokta), yalnız gecikme serisinde (ms | `slow_ratio` | `ml:op_latency`) `min_volume` (`volume` ≥ 100 çağrı)
+ve `min_abs_diff` (|tepe − beklenen| ≥ 25 ms; `slow_ratio`'da değerlendirilemez), `independent_evidence` (≥ 2; bağımsız işaretsiz, başlık
+tekrarı, seriyle aynı kaynak + K9 dışı tür, türetilmiş serinin onay satırı sayılmaz), `service_impact` (seri hata oranı/gecikmeyse yukarı
+yönde bant dışı dk > 0; diğer ölçülerde kayıtta hata oranı/gecikme yok → değerlendirilemez). Eşikler kod sabiti (K2). Sınıf,
+`publish_state`, bildirim, Problem terfisi, kart **değişmedi**. Gölge raporu: `GET /api/ml/scorecard` → `tick.publishGates` (dedektör
+başına son 24 sa farklı olay: evaluated / wouldPublish / wouldDrop / wouldInfo / wouldTelemetryVolume / notEvaluated (sözleşmesiz +
+invalid) / invalid / failedByGate / notEvaluableByGate) + tik satırı `[ml] tick publish_gates_shadow …` (toplamlar). Sınır:
+`wouldTelemetryVolume` A1'de hep 0 (hiçbir kayıt hata oranı + gecikmeyi birlikte taşımıyor; B/C hacim kaydıyla dolar).
+**A2'nin değiştireceği:** `wouldDrop` olaylar `publish_state=held` (liste SQL'i ve grup/servis Problem kapısı düşürür); kanıt/etki kalanlar
+`class=info` (Problem adayı değil, tek sinyal kolu kapanır — K10); bildirim yalnız yayımlanan `service_anomaly`'den.
 **A2 — kapılar yürürlükte.** Gölge raporu operatörce okunduktan sonra: `publish_state=held` listeden ve Problem kapısından düşer.
 *Risk:* **yüksek** — gerçek olay gizlenebilir; B16 çelişkisi çözülmeden açılmaz. *Göç:* yok. *Test:* liste SQL süzgeci pini, grup kapısı pini.
 
