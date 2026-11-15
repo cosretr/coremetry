@@ -3833,10 +3833,12 @@ tbody td.infra-where-note { color: var(--text2); }
 /* v0.10.2148 (servis sekmeleri S9) — Runtime kart başlığının sağ notu
    (kaç pod, hangi görünüm) + görünüm bağlantısı. */
 .rt-view-note { display: inline-flex; gap: var(--sp-4); align-items: baseline; font-size: var(--fs-xs); color: var(--text3); }
-.heap-near-b { padding-top: var(--sp-5); padding-bottom: var(--sp-5); }
-.heap-near-foot { margin: var(--sp-3) 0 0; }
+/* v0.10.2172 — çift sınıf: dosyada sonra gelen `.ov-card-b { padding: 16px }`
+   ve `.kc-line { margin-bottom }` tek sınıflı kuralı eziyordu (S11 bulgusu). */
+.ov-card-b.heap-near-b { padding-top: var(--sp-5); padding-bottom: var(--sp-5); }
+.kc-line.heap-near-foot { margin: var(--sp-3) 0 0; }
 /* v0.10.2149 (servis sekmeleri S10) — düz non-heap kartının tek cümlesi. */
-.rt-flat { display: flex; gap: var(--sp-4); align-items: baseline; flex-wrap: wrap; padding-top: var(--sp-5); padding-bottom: var(--sp-5); font-size: var(--fs-sm); color: var(--text2); }
+.ov-card-b.rt-flat { display: flex; gap: var(--sp-4); align-items: baseline; flex-wrap: wrap; padding-top: var(--sp-5); padding-bottom: var(--sp-5); font-size: var(--fs-sm); color: var(--text2); }
 .infra-src { margin: 0 0 var(--sp-6); padding-left: var(--sp-7); font-size: var(--fs-sm); color: var(--text2); }
 .infra-src li { padding: var(--sp-1) 0; }
 /* v0.10.2162 (servis sekmeleri S11) — S0–S10'un dokunduğu dosyalarda kalan
