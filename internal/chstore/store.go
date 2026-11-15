@@ -294,6 +294,12 @@ type Store struct {
 	// false ⇒ INSERT/SELECT kolonu ATLAR, okuma 'v1' sayar.
 	hasEvalRunsPathCol atomic.Bool
 
+	// hasMLRecordCols — ml_events olay-kaydı kolonları (class, publish_state,
+	// onset_at, record; v0.10.2199, anomali kartı H1) var mı. Aynı iki-boot
+	// sözleşmesi; false ⇒ INSERT/SELECT dördünü de ATLAR (eski biçim yazılır,
+	// kayıp yok: H1'de hiçbir yazıcı doldurmuyor).
+	hasMLRecordCols atomic.Bool
+
 	// hasDBStmtHashCol records whether the spans table actually carries the
 	// `db_stmt_hash` column (v0.8.375, Stage-2 D1 — persistent DB-statement
 	// identity). Unlike op_group / series_fingerprint the column is
@@ -4302,6 +4308,21 @@ func (s *Store) migrate(ctx context.Context) error {
 		// TABLE'a bilinçli EKLENMEDİ (episode emsali). Probe
 		// hasAnomalyPromotionCol (iki-boot).
 		`ALTER TABLE anomaly_events ADD COLUMN IF NOT EXISTS promotion LowCardinality(String) DEFAULT ''`,
+		// v0.10.2199 — anomali kartı sözleşmesi H1 (docs/ml/anomaly-card-audit.md
+		// §9, K1): ml_events olay-kaydı kolonları. class / publish_state KAPALI
+		// küme (≤4 değer: service_anomaly|telemetry_volume|info; ''|published|
+		// held|invalid) → LowCardinality (C2-C3); liste SQL'i ileride bunları
+		// süzer (Go'da süzmek MLUnifiedCap'i gizli satırla doldurur). onset_at
+		// sapmanın başı (0 = bilinmiyor). record = sözleşmenin geri kalanı JSON
+		// (sürüm alanı içinde; '' = eski kayıt → kart bugünkü yolda). Düşük
+		// hacimli state tablosu → ADD COLUMN IF NOT EXISTS güvenli sınıf;
+		// ORDER BY / TTL'e girmez (dedup anahtarı id); CREATE TABLE'a bilinçli
+		// EKLENMEDİ (episode emsali). Probe hasMLRecordCols (iki-boot): H1
+		// hiçbir yazıcıyla doldurmaz, yalnız taşır.
+		`ALTER TABLE ml_events ADD COLUMN IF NOT EXISTS class LowCardinality(String) DEFAULT ''`,
+		`ALTER TABLE ml_events ADD COLUMN IF NOT EXISTS publish_state LowCardinality(String) DEFAULT ''`,
+		`ALTER TABLE ml_events ADD COLUMN IF NOT EXISTS onset_at DateTime64(9) DEFAULT toDateTime64(0, 9)`,
+		`ALTER TABLE ml_events ADD COLUMN IF NOT EXISTS record String DEFAULT '' CODEC(ZSTD(3))`,
 		// v0.10.2106 — CoSRE kalite döngüsü D1 (docs/cosre/quality-loop-audit.md
 		// §3.1; operatör onayı 2026-11-13): evalset koşusunun ajan vakalarını
 		// koşan sohbet yolu ('v1' | 'v2'). KAPALI iki değerli küme →
@@ -4797,6 +4818,13 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.hasAnomalyPromotionCol.Store(prOK)
 	if !prOK {
 		log.Printf("[chstore] `promotion` column not present on anomaly_events (err=%v) — read/INSERT/carry omit it; promotion trace reads empty (no shadow badge) until the deferred-DDL re-probe or the next boot", prErr)
+	}
+
+	// ml_events olay-kaydı kolonları probe'u (v0.10.2199) — aynı şekil.
+	mrOK, mrErr := s.probeMLRecordCols(ctx)
+	s.hasMLRecordCols.Store(mrOK)
+	if !mrOK {
+		log.Printf("[chstore] `class`/`publish_state`/`onset_at`/`record` columns not present on ml_events (err=%v) — read/INSERT/carry omit them (pre-v0.10.2199 row shape; nothing writes them yet) until the deferred-DDL re-probe or the next boot", mrErr)
 	}
 
 	// ai_eval_runs.path probe'u (v0.10.2106) — aynı şekil.

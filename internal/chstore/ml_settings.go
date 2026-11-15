@@ -447,5 +447,8 @@ type MLStats struct {
 	SuppressedBatch    int64 `json:"suppressedBatch"` // v0.10.1811: batch kuralının kestiği aday (kümülatif)
 	// LastKinds — v0.10.1812: son tikin sinyal türü ölçümü (lider pod belleği).
 	LastKinds map[string]MLKindTick `json:"lastKinds,omitempty"`
-	LastError string                `json:"lastError,omitempty"`
+	// RecordInvalid — v0.10.2199 (anomali kartı H1, ölçüt 11): olay-kaydı
+	// doğrulayıcısından kalan kayıt, dedektör başına (kümülatif, süreç-içi).
+	RecordInvalid map[string]int64 `json:"recordInvalid,omitempty"`
+	LastError     string           `json:"lastError,omitempty"`
 }

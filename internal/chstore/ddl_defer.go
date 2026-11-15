@@ -184,8 +184,11 @@ func (s *Store) reprobePromotedAttrs() {
 		// v0.10.2106 — ai_eval_runs.path: bayrak false kaldıkça koşu yolu
 		// yazılmaz (kolon inince DEFAULT 'v1' okunur).
 		evalPathDone := s.reprobeEvalRunsPathCol(ctx)
+		// v0.10.2199 — ml_events olay-kaydı kolonları (anomali kartı H1):
+		// bayrak false kaldıkça dört kolon yazılmaz/okunmaz (eski biçim).
+		mlRecordDone := s.reprobeMLRecordCols(ctx)
 		cancel()
-		if attrsDone && episodeDone && snapDone && verifiedDone && subjectDone && promotionDone && dirDone && evalPathDone {
+		if attrsDone && episodeDone && snapDone && verifiedDone && subjectDone && promotionDone && dirDone && evalPathDone && mlRecordDone {
 			return
 		}
 	}

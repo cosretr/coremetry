@@ -1,7 +1,9 @@
 package ml
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +19,7 @@ type stats struct {
 	mu                                                                              sync.Mutex
 	esSamples                                                                       []int64
 	lastKinds                                                                       map[string]chstore.MLKindTick // v0.10.1812: son tik ölçümü
+	recordInvalid                                                                   map[string]int64              // v0.10.2199: doğrulayıcıdan kalan kayıt, dedektör başına (kümülatif)
 	lastErr                                                                         string
 }
 
@@ -49,6 +52,48 @@ func (s *stats) observeSuppression(sup suppression) {
 	s.supImpact.Add(sup.Impact)
 	s.supFeedback.Add(sup.Feedback)
 	s.supRegime.Add(sup.Regime)
+}
+
+// observeRecordInvalid — v0.10.2199 (anomali kartı H1, ölçüt 11):
+// doğrulayıcıdan kalan kayıt sayacı, dedektör başına (kümülatif, süreç-içi).
+func (s *stats) observeRecordInvalid(detector string) {
+	s.mu.Lock()
+	if s.recordInvalid == nil {
+		s.recordInvalid = map[string]int64{}
+	}
+	s.recordInvalid[detector]++
+	s.mu.Unlock()
+}
+
+// recordInvalidCopy — sayacın kopyası (boşsa nil).
+func (s *stats) recordInvalidCopy() map[string]int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.recordInvalid) == 0 {
+		return nil
+	}
+	out := make(map[string]int64, len(s.recordInvalid))
+	for k, v := range s.recordInvalid {
+		out[k] = v
+	}
+	return out
+}
+
+// recordInvalidLine — SAF: gölge rapor satırı "doğrulayıcıdan kalan kayıt
+// (dedektör başına)", sabit sıra.
+func recordInvalidLine(m map[string]int64) string {
+	names := make([]string, 0, len(m))
+	var total int64
+	for k, v := range m {
+		names = append(names, k)
+		total += v
+	}
+	sort.Strings(names)
+	parts := make([]string, 0, len(names))
+	for _, k := range names {
+		parts = append(parts, fmt.Sprintf("%s:%d", k, m[k]))
+	}
+	return fmt.Sprintf("[ml] tick record_invalid total=%d by_detector=%s", total, strings.Join(parts, ","))
 }
 
 func (s *stats) setError(err error) {
@@ -86,13 +131,14 @@ func (s *stats) snapshot(placement string, enabled, leader, tableReady bool) chs
 	lastErr := s.lastErr
 	lastKinds := s.lastKinds
 	s.mu.Unlock()
+	recInvalid := s.recordInvalidCopy()
 	return chstore.MLStats{
 		Placement: placement, Enabled: enabled, Leader: leader, TableReady: tableReady,
 		Ticks: s.ticks.Load(), Skipped: s.skipped.Load(), LastUnix: s.lastUnix.Load(),
 		LastDurationMs: s.lastMs.Load(), LastESMs: s.lastESMs.Load(), ESP95Ms: p95,
 		ESQueries: s.esQueries.Load(), Events: s.events.Load(), SeriesInMemory: s.series.Load(), LastCHMs: s.lastCHMs.Load(),
 		VMQueries: s.vmQueries.Load(), Partial: s.partial.Load(), LastDocs: s.docs.Load(), SuppressedImpact: s.supImpact.Load(), SuppressedFeedback: s.supFeedback.Load(), SuppressedRegime: s.supRegime.Load(), SuppressedBatch: s.supBatch.Load(),
-		LastError: lastErr, LastKinds: lastKinds,
+		LastError: lastErr, LastKinds: lastKinds, RecordInvalid: recInvalid,
 	}
 }
 

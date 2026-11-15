@@ -11,6 +11,7 @@ package chstore
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -67,6 +68,16 @@ type MLEvent struct {
 	Direction string  `json:"direction"` // up | down
 	Evidence  string  `json:"evidence,omitempty"`
 	DupOf     string  `json:"dupOf,omitempty"`
+	// v0.10.2199 — olay-kaydı sözleşmesi H1 (docs/ml/anomaly-card-audit.md §9):
+	// Class / PublishState tipli süzgeç kolonları, OnsetAt sapmanın başı
+	// (unix ns, 0 = bilinmiyor), Record sözleşmenin geri kalanı (ml.EventRecord
+	// JSON; '' = eski kayıt). H1'de hiçbir dedektör doldurmaz; yazım/okuma
+	// hasMLRecordCols'a bağlı ve RMT tam satır taşıması için ListMLEvents
+	// bunları okur.
+	Class        string `json:"class,omitempty"`
+	PublishState string `json:"publishState,omitempty"`
+	OnsetAt      int64  `json:"onsetAt,omitempty"`
+	Record       string `json:"record,omitempty"`
 	// Karar (anomaly_verdicts'ten, listede zenginleştirilir).
 	Verdict   string `json:"verdict,omitempty"`
 	VerdictBy string `json:"verdictBy,omitempty"`
@@ -98,15 +109,88 @@ func (s *Store) UpsertMLEvent(ctx context.Context, e MLEvent) error {
 	if e.Direction == "" {
 		e.Direction = "up"
 	}
-	batch, err := s.conn.PrepareBatch(ctx, `INSERT INTO ml_events (id, detector, signal, stage, service, level, pod, code, started_at, last_seen, window_sec, baseline, observed, score, direction, evidence, dup_of)`)
+	withRec := s.hasMLRecordCols.Load()
+	batch, err := s.conn.PrepareBatch(ctx, `INSERT INTO ml_events (`+strings.Join(mlEventCols(withRec), ", ")+`)`)
 	if err != nil {
 		return err
 	}
-	if err := batch.Append(e.ID, e.Detector, e.Signal, e.Stage, e.Service, e.Level, e.Pod, e.Code,
-		time.Unix(0, e.StartedAt), time.Unix(0, e.LastSeen), e.WindowSec, e.Baseline, e.Observed, e.Score, e.Direction, e.Evidence, e.DupOf); err != nil {
+	if err := batch.Append(mlEventInsertArgs(e, withRec)...); err != nil {
 		return err
 	}
 	return batch.Send()
+}
+
+// mlEventBaseCols — ml_events'in CREATE TABLE kolonları (version hariç).
+var mlEventBaseCols = []string{"id", "detector", "signal", "stage", "service", "level", "pod", "code",
+	"started_at", "last_seen", "window_sec", "baseline", "observed", "score", "direction", "evidence", "dup_of"}
+
+// mlEventRecordCols — v0.10.2199 H1 kolonları (ALTER; hasMLRecordCols).
+var mlEventRecordCols = []string{"class", "publish_state", "onset_at", "record"}
+
+// mlEventCols — SAF: INSERT ve tam satır SELECT'in TEK kolon listesi
+// (ikisi aynı listeden kurulur → taşıma okuması yazılanı eksiksiz görür).
+func mlEventCols(withRecord bool) []string {
+	cols := append([]string(nil), mlEventBaseCols...)
+	if withRecord {
+		cols = append(cols, mlEventRecordCols...)
+	}
+	return cols
+}
+
+// mlEventInsertArgs — SAF: mlEventCols sırasıyla INSERT değerleri.
+func mlEventInsertArgs(e MLEvent, withRecord bool) []any {
+	args := []any{e.ID, e.Detector, e.Signal, e.Stage, e.Service, e.Level, e.Pod, e.Code,
+		time.Unix(0, e.StartedAt), time.Unix(0, e.LastSeen), e.WindowSec, e.Baseline, e.Observed, e.Score, e.Direction, e.Evidence, e.DupOf}
+	if withRecord {
+		args = append(args, e.Class, e.PublishState, time.Unix(0, e.OnsetAt), e.Record)
+	}
+	return args
+}
+
+// mlEventScan — mlEventCols sırasıyla Scan hedefleri; done() zaman
+// kolonlarını e'ye çevirir (Scan'den SONRA çağrılır).
+func mlEventScan(e *MLEvent, withRecord bool) (dest []any, done func()) {
+	var st, ls, on time.Time
+	dest = []any{&e.ID, &e.Detector, &e.Signal, &e.Stage, &e.Service, &e.Level, &e.Pod, &e.Code, &st, &ls,
+		&e.WindowSec, &e.Baseline, &e.Observed, &e.Score, &e.Direction, &e.Evidence, &e.DupOf}
+	if withRecord {
+		dest = append(dest, &e.Class, &e.PublishState, &on, &e.Record)
+	}
+	return dest, func() {
+		e.StartedAt, e.LastSeen = st.UnixNano(), ls.UnixNano()
+		if withRecord && on.Unix() > 0 {
+			e.OnsetAt = on.UnixNano()
+		}
+	}
+}
+
+// probeMLRecordCols — ml_events H1 kolonları (class, publish_state,
+// onset_at, record) var mı (v0.10.2199). probeAnomalySubjectCols'un şekli
+// (system.columns metadata). DÖRT kolon TEK probe: aynı ALTER turunda
+// giderler; yarım tur false sayılır (okuma/yazım ya hepsini ya hiçbirini anar).
+func (s *Store) probeMLRecordCols(ctx context.Context) (bool, error) {
+	var n uint64
+	err := s.conn.QueryRow(ctx,
+		`SELECT count() FROM system.columns
+		 WHERE database = currentDatabase() AND table = 'ml_events'
+		   AND name IN ('class', 'publish_state', 'onset_at', 'record')
+		 SETTINGS max_execution_time = 5`).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n == uint64(len(mlEventRecordCols)), nil
+}
+
+// reprobeMLRecordCols — ertelenen DDL sonrası yeniden deneme; bayrak yalnız
+// false → true döner, geçiş BİR KEZ loglanır. Dönüş: bayrağın son hâli.
+func (s *Store) reprobeMLRecordCols(ctx context.Context) bool {
+	if s.hasMLRecordCols.Load() {
+		return true
+	}
+	if ok, _ := s.probeMLRecordCols(ctx); ok && s.hasMLRecordCols.CompareAndSwap(false, true) {
+		log.Printf("[chstore] ml_events class/publish_state/onset_at/record ertelenen DDL sonrası görüldü — olay-kaydı kolonları yazım ve okumada (restart gerekmedi)")
+	}
+	return s.hasMLRecordCols.Load()
 }
 
 // MLEventsFilter — liste süzgeci; boş alan = süzme yok.
@@ -179,14 +263,14 @@ func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, 
 	}
 	where, args := mlEventsWhere(f)
 	args = append(args, f.Limit)
+	withRec := s.hasMLRecordCols.Load()
 	rows, err := s.conn.Query(ctx, fmt.Sprintf(`
-		SELECT id, detector, signal, stage, service, level, pod, code, started_at, last_seen,
-		       window_sec, baseline, observed, score, direction, evidence, dup_of
+		SELECT %s
 		FROM ml_events FINAL
 		WHERE %s
 		ORDER BY last_seen DESC
 		LIMIT ?
-		SETTINGS max_execution_time = 5`, where), args...)
+		SETTINGS max_execution_time = 5`, strings.Join(mlEventCols(withRec), ", "), where), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -195,12 +279,11 @@ func (s *Store) ListMLEvents(ctx context.Context, f MLEventsFilter) ([]MLEvent, 
 	var ids []string
 	for rows.Next() {
 		var e MLEvent
-		var st, ls time.Time
-		if err := rows.Scan(&e.ID, &e.Detector, &e.Signal, &e.Stage, &e.Service, &e.Level, &e.Pod, &e.Code, &st, &ls,
-			&e.WindowSec, &e.Baseline, &e.Observed, &e.Score, &e.Direction, &e.Evidence, &e.DupOf); err != nil {
+		dest, done := mlEventScan(&e, withRec)
+		if err := rows.Scan(dest...); err != nil {
 			return nil, err
 		}
-		e.StartedAt, e.LastSeen = st.UnixNano(), ls.UnixNano()
+		done()
 		out = append(out, e)
 		ids = append(ids, MLVerdictID(e.ID))
 	}

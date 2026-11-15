@@ -14153,3 +14153,11 @@ Operatör onayı (2026-11-15) `docs/cosre/router-gaps-audit.md` D3-F'nin iki aç
 - Katalog dışı operasyon kodu (`BÜYÜK_ALT_ÇİZGİ`, servissiz genel rota) → `operation_not_found`: "Operasyon bulunamadı" + en yakın ≤5 katalog adı (ön-getirmenin `CatalogCandidates` okuması, ≤60 aday, tam katalog asla); her öneri sorunun kendisi, ad değiştirilmiş.
 - İş kodu `[A-Z]{2,5}\d{3,5}` (ör. DEP1080) → `business_code`: `business_code_summary_5m` son 7 gün servis kırılımı, sayılar, ilk/son görülme + `cosre_operation_catalog.function_codes` operasyonları; ham span yok. Kayıt yoksa açıkça "bulunamadı" (log gövdesi / exception mesajı aramaya girmez).
 - Açık bıraktığım ayrıntı (en basit güvenli seçim): pencere sabit 7 gün; HTTP/ISO/UTF/RFC/SHA önekleri iş kodu sayılmaz; servis anılan soru ve özel rotalar (log, root_cause …) ezilmez.
+
+## 2026-11-15 — v0.10.2199 — ML olay kaydı sözleşmesi H1: tip, doğrulayıcı, ml_events kolonları
+
+Operatör onayı (2026-11-15, "sırayla") `docs/ml/anomaly-card-audit.md` Dilim H1. Davranış değişmez: hiçbir dedektör göçmez (H2 consumer lag), kart/liste/Problem kapısı aynı.
+- Tek sözleşme `internal/ml/record.go` `EventRecord` (özne, seri tanımı, alarm bandı, onset/detected/ended, tepe/tespit/beklenen, hacim, kanıt, sınıf, kapılar, snapshot, başlık); A–G yalnız bunu kullanır, yeni alan tanımlamaz.
+- `ValidateRecord` yazım öncesi: seri tanımı, onset ≤ detected, tepe = olay penceresinde serinin uç değeri, tespit değeri seriden, onset = sapmanın başı, snapshot ≤ 1 dk ve toplaması seriyle aynı, snapshot bandı = alarm bandı, hacim ya da nedeni, başlık sayıları alanlarla aynı (TR biçimi; saat/süre atlanır; oran yok), kanıtta başlık tekrarı yok, ≤ 64 KB. Kalan kayıt `publish_state=invalid` + dedektör başına sayaç (`/admin/stats` `ml.recordInvalid`, tik log `record_invalid`). Eşikler kod sabiti (K2).
+- `ml_events` + `class`, `publish_state` (LowCardinality, kapalı küme), `onset_at DateTime64(9)`, `record String ZSTD(3)`; ADD COLUMN IF NOT EXISTS (state tablosu, `adaptDDL` küme yolu), probe `hasMLRecordCols` + ertelenen-DDL reprobe; INSERT/SELECT tek kolon listesinden (taşıma pini). H1 kolonlara bir şey yazmaz (kaydı olan olay yok).
+- Ölçüt 10: iki prod örneğinin bugünkü hâli nedenleriyle kalır, düzeltilmişi geçer (sayılar audit §1–§3'ten; gerçek seri §7.1 dışa aktarımıyla E'de). Örnek 3 ayrıntı gelince. Açık: K3, K4, K10.

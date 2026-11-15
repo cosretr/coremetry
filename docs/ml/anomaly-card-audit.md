@@ -438,7 +438,7 @@ muaf. Bildirim kuralı değişmez (yalnız açılış + P1'e çıkış); `info`/
 
 ## 10. Dilimler (her biri tek sürüm, bağımsız gemilenir; sıra H → A → F → B, C → G, D → E)
 
-**H1 — sözleşme tipi + doğrulayıcı + saklama.** `internal/ml/record.go` (saf tip + `Validate`), dört kolon, gölge sayaç ve rapor
+**H1 — sözleşme tipi + doğrulayıcı + saklama.** ✅ **gemilendi v0.10.2199** (`internal/ml/record.go`, `record_test.go`; kolonlar `store.go` alters, probe `hasMLRecordCols`; sayaç `ml.recordInvalid`). `internal/ml/record.go` (saf tip + `Validate`), dört kolon, gölge sayaç ve rapor
 satırı "doğrulayıcıdan kalan kayıt (dedektör başına)". Hiçbir dedektör göçmez, davranış değişmez. *Risk:* düşük; tek risk kolon taşıma.
 *Göç:* 4 × `ADD COLUMN` (yukarıdaki sınıf, iki boot, SRE yoklaması). *Test:* doğrulayıcı tablo testi — iki prod örneğinin bugünkü hâli
 **kalır** (nedenleriyle), düzeltilmiş hâli geçer; üçüncü örnek ayrıntısı gelince eklenir (ölçüt 10); kolon gidiş-dönüş pini.

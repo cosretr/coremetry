@@ -266,6 +266,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	global.supBatch.Add(int64(batchCut))
 	// epizot kapanışı: 3 tik görülmeyen koşu stage=closed yazılır (B3)
 	for _, ev := range r.runs.closeStale(start) {
+		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {
 			firstErr = werr
 		}
@@ -319,6 +320,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		}
 	}
 	for _, ev := range kept {
+		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil {
 			if firstErr == nil {
 				firstErr = werr
@@ -379,6 +381,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	for _, line := range kindTickLines(status.Kinds) {
 		log.Print(line)
 	}
+	log.Print(recordInvalidLine(global.recordInvalidCopy()))
 	for name, st := range signals {
 		log.Printf("[ml] tick %s ran=%v services=%d source=%dms candidates=%d batch_cut=%d written=%d partial=%d err=%s", name, st.Ran, st.Services, st.SourceMs, st.Candidates, st.BatchCut, st.Written, st.Partial, st.Error)
 	}
