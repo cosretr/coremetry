@@ -167,32 +167,34 @@ export function NamespaceDetail({
 
       <h3 className="cl-ns-h">İş yükleri</h3>
       {workloadsNote}
-      <DataTable<WorkloadView>
-        storageKey="clusternsworkloads" ariaLabel={`${namespace} iş yükleri`}
-        columns={wlCols} rows={wlRows} state={depState}
-        sort={{ initial: { id: 'status', dir: 'desc' } }}
-        getRowKey={r => r.deployment}
-        openRow={{ isOpen: r => r.deployment === depFilter, onActivate: r => onPickWorkload(r.deployment) }}
-        renderCell={(r, col) => {
-          switch (col.id) {
-            case 'deployment': return (
-              <div className="cl-ns-wl">
-                <span className="mono">{r.deployment}</span>
-                <span className="cl-ns-wl__svc">
-                  {r.service
-                    ? <>servis: <Link to={serviceHref(r.service, { range })} onClick={e => e.stopPropagation()}>{r.service}</Link></>
-                    : 'servis eşleşmedi'}
-                </span>
-              </div>
-            );
-            case 'kind': return r.kind || '—';
-            case 'status': return workloadStatusWord(r.status).word || '—';
-            case 'replicas': return r.status ? `${r.readyReplicas} / ${r.desiredReplicas}` : '—';
-            case 'cpu': return workloadCpuText(r.cpuCores, r.cpuReq);
-            case 'mem': return workloadMemText(r.memBytes, r.memLim).text;
-            default: return null;
-          }
-        }} />
+      <div className="table-wrap">
+        <DataTable<WorkloadView>
+          storageKey="clusternsworkloads" ariaLabel={`${namespace} iş yükleri`}
+          columns={wlCols} rows={wlRows} state={depState}
+          sort={{ initial: { id: 'status', dir: 'desc' } }}
+          getRowKey={r => r.deployment}
+          openRow={{ isOpen: r => r.deployment === depFilter, onActivate: r => onPickWorkload(r.deployment) }}
+          renderCell={(r, col) => {
+            switch (col.id) {
+              case 'deployment': return (
+                <div className="cl-ns-wl">
+                  <span className="mono">{r.deployment}</span>
+                  <span className="cl-ns-wl__svc">
+                    {r.service
+                      ? <>servis: <Link to={serviceHref(r.service, { range })} onClick={e => e.stopPropagation()}>{r.service}</Link></>
+                      : 'servis eşleşmedi'}
+                  </span>
+                </div>
+              );
+              case 'kind': return r.kind || '—';
+              case 'status': return workloadStatusWord(r.status).word || '—';
+              case 'replicas': return r.status ? `${r.readyReplicas} / ${r.desiredReplicas}` : '—';
+              case 'cpu': return workloadCpuText(r.cpuCores, r.cpuReq);
+              case 'mem': return workloadMemText(r.memBytes, r.memLim).text;
+              default: return null;
+            }
+          }} />
+      </div>
       {wlFold.hidden > 0 && <TableViewBar foldable={wlFold.hidden} expanded={allWorkloads} onExpandedChange={setAllWorkloads} />}
       <p className="cl-ns-hint">İş yüküne basınca aşağıdaki pod listesi ona süzülür.</p>
 
@@ -200,23 +202,25 @@ export function NamespaceDetail({
         <h3 className="cl-ns-h">Pod'lar{depFilter ? ` · ${depFilter}` : ''}</h3>
         <span className="cl-ns-hint">önce sorunlular, sonra bellek yüzdesi</span>
       </div>
-      <DataTable<ClusterPodRow>
-        storageKey="clusternspods" ariaLabel={`${namespace} pod'ları`}
-        columns={podCols} rows={podRows} state={podState}
-        sort={{ initial: { id: 'status', dir: 'desc' } }}
-        getRowKey={r => `${r.cluster}|${r.namespace}|${r.pod}`}
-        getRowHref={podHref}
-        renderCell={(r, col) => {
-          switch (col.id) {
-            case 'pod': return r.pod;
-            case 'status': return podStatusWord(r, waiting[r.pod]).word || '—';
-            case 'node': return r.node || (r.phase === 'Pending' ? 'atanmadı' : '—');
-            case 'cpuPct': return r.cpuPct ? `%${Math.round(r.cpuPct)}` : '—';
-            case 'memPct': return r.memPct ? `%${Math.round(r.memPct)}` : '—';
-            case 'restarts': return podRestartText(r) || '—';
-            default: return null;
-          }
-        }} />
+      <div className="table-wrap">
+        <DataTable<ClusterPodRow>
+          storageKey="clusternspods" ariaLabel={`${namespace} pod'ları`}
+          columns={podCols} rows={podRows} state={podState}
+          sort={{ initial: { id: 'status', dir: 'desc' } }}
+          getRowKey={r => `${r.cluster}|${r.namespace}|${r.pod}`}
+          getRowHref={podHref}
+          renderCell={(r, col) => {
+            switch (col.id) {
+              case 'pod': return r.pod;
+              case 'status': return podStatusWord(r, waiting[r.pod]).word || '—';
+              case 'node': return r.node || (r.phase === 'Pending' ? 'atanmadı' : '—');
+              case 'cpuPct': return r.cpuPct ? `%${Math.round(r.cpuPct)}` : '—';
+              case 'memPct': return r.memPct ? `%${Math.round(r.memPct)}` : '—';
+              case 'restarts': return podRestartText(r) || '—';
+              default: return null;
+            }
+          }} />
+      </div>
       {podFold.hidden > 0 && <TableViewBar foldable={podFold.hidden} expanded={allPods} onExpandedChange={setAllPods} />}
 
       <div className="cl-ov-closed">

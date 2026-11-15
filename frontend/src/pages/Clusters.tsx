@@ -828,11 +828,13 @@ export default function ClustersPage() {
               <>
                 {section === 'nodes' && <>
                   {nodeErr && nodeRows.length > 0 && staleErrNote(NODE_ERR)}
-                  <CmDataTable<ClusterNodeRow> storageKey="clusternodes" columns={NODE_COLS} rows={nodeRows}
-                    sort={{ initial: { id: 'status', dir: 'desc' }, ids: NODE_SORT_IDS }}
-                    columnModel={nodeColumnModel} state={nodeState} contentVisibility={nodeRows.length > 100}
-                    getRowKey={r => `${r.cluster}|${r.node}`} ariaLabel="Nodes"
-                    renderCell={(r, c) => nodeCellContent(r, c.id)} />
+                  <div className="table-wrap">
+                    <CmDataTable<ClusterNodeRow> storageKey="clusternodes" columns={NODE_COLS} rows={nodeRows}
+                      sort={{ initial: { id: 'status', dir: 'desc' }, ids: NODE_SORT_IDS }}
+                      columnModel={nodeColumnModel} state={nodeState} contentVisibility={nodeRows.length > 100}
+                      getRowKey={r => `${r.cluster}|${r.node}`} ariaLabel="Nodes"
+                      renderCell={(r, c) => nodeCellContent(r, c.id)} />
+                  </div>
                   <TableViewBar foldable={0} expanded onExpandedChange={() => {}}
                     allColumns={nodeAllCols} onAllColumnsChange={setNodeAllCols} />
                 </>}
@@ -866,32 +868,34 @@ export default function ClustersPage() {
                     onZoom={chartZoom} onZoomReset={chartZoomReset} />
                 )}
                 {section === 'namespaces' && !nsFilter && <>
-                  <CmDataTable<ClusterNamespaceRow> storageKey="clusternamespaces" columns={NS_COLS} rows={nsRows}
-                    sort={{ initial: { id: 'cpuCores', dir: 'desc' } }}
-                    columnModel={nsColumnModel} state={nsState} contentVisibility={nsRows.length > 100}
-                    getRowKey={r => `${r.cluster}|${r.namespace}`} ariaLabel="Namespaces"
-                    // D7 — satır namespace detayını açar (sayfa içi süzgeç; gezinme değil).
-                    openRow={{ isOpen: () => false, onActivate: r => setSection('namespaces', p => { p.set('namespace', r.namespace); p.delete('deployment'); }) }}
-                    renderCell={(r, c) => {
-                      switch (c.id) {
-                        case 'namespace': return r.namespace;
-                        case 'pods': return r.pods ? fmtNum(r.pods) : '—';
-                        case 'cpuCores': return fmtCores(r.cpuCores);
-                        case 'memBytes': return fmtBytes(r.memBytes);
-                        case 'restarts': return r.restarts != null ? fmtNum(r.restarts) : '—';
-                        case 'health': return (
-                          // v0.9.5 — pod başına trend çekmecesi; satır davranışına karışmaz.
-                          <Button variant="ghost" size="xs" className={(r.failing ?? 0) > 0 ? 'cl-health cl-health--bad' : 'cl-health'}
-                            onClick={e => { e.stopPropagation(); openNsDrawer(r); }}
-                            aria-label={`Open per-pod trend charts for namespace ${r.namespace}`}
-                            title="Bu namespace'in pod başına trend grafikleri">
-                            {(r.failing ?? 0) > 0 ? `${r.failing} failing` : 'healthy'}
-                            <ChartSpline size={13} strokeWidth={1.75} aria-hidden="true" />
-                          </Button>
-                        );
-                        default: return null;
-                      }
-                    }} />
+                  <div className="table-wrap">
+                    <CmDataTable<ClusterNamespaceRow> storageKey="clusternamespaces" columns={NS_COLS} rows={nsRows}
+                      sort={{ initial: { id: 'cpuCores', dir: 'desc' } }}
+                      columnModel={nsColumnModel} state={nsState} contentVisibility={nsRows.length > 100}
+                      getRowKey={r => `${r.cluster}|${r.namespace}`} ariaLabel="Namespaces"
+                      // D7 — satır namespace detayını açar (sayfa içi süzgeç; gezinme değil).
+                      openRow={{ isOpen: () => false, onActivate: r => setSection('namespaces', p => { p.set('namespace', r.namespace); p.delete('deployment'); }) }}
+                      renderCell={(r, c) => {
+                        switch (c.id) {
+                          case 'namespace': return r.namespace;
+                          case 'pods': return r.pods ? fmtNum(r.pods) : '—';
+                          case 'cpuCores': return fmtCores(r.cpuCores);
+                          case 'memBytes': return fmtBytes(r.memBytes);
+                          case 'restarts': return r.restarts != null ? fmtNum(r.restarts) : '—';
+                          case 'health': return (
+                            // v0.9.5 — pod başına trend çekmecesi; satır davranışına karışmaz.
+                            <Button variant="ghost" size="xs" className={(r.failing ?? 0) > 0 ? 'cl-health cl-health--bad' : 'cl-health'}
+                              onClick={e => { e.stopPropagation(); openNsDrawer(r); }}
+                              aria-label={`Open per-pod trend charts for namespace ${r.namespace}`}
+                              title="Bu namespace'in pod başına trend grafikleri">
+                              {(r.failing ?? 0) > 0 ? `${r.failing} failing` : 'healthy'}
+                              <ChartSpline size={13} strokeWidth={1.75} aria-hidden="true" />
+                            </Button>
+                          );
+                          default: return null;
+                        }
+                      }} />
+                  </div>
                   <TableViewBar foldable={0} expanded onExpandedChange={() => {}}
                     allColumns={nsAllCols} onAllColumnsChange={setNsAllCols} />
                 </>}
@@ -907,11 +911,13 @@ export default function ClustersPage() {
                       En işlek 500 pod gösteriliyor.
                     </p>
                   )}
-                  <CmDataTable<ClusterPodRow> storageKey="clusterpods" columns={POD_COLS} rows={rows}
-                    sort={{ initial: { id: 'cpuPct', dir: 'desc' }, ids: POD_COLS.map(c => c.id) }}
-                    columnModel={podColumnModel} state={podState} contentVisibility={rows.length > 100}
-                    getRowKey={r => `${r.cluster}|${r.namespace}|${r.pod}`} getRowHref={podHref} ariaLabel="Pods"
-                    renderCell={(r, c) => podCellContent(r, c.id, range)} />
+                  <div className="table-wrap">
+                    <CmDataTable<ClusterPodRow> storageKey="clusterpods" columns={POD_COLS} rows={rows}
+                      sort={{ initial: { id: 'cpuPct', dir: 'desc' }, ids: POD_COLS.map(c => c.id) }}
+                      columnModel={podColumnModel} state={podState} contentVisibility={rows.length > 100}
+                      getRowKey={r => `${r.cluster}|${r.namespace}|${r.pod}`} getRowHref={podHref} ariaLabel="Pods"
+                      renderCell={(r, c) => podCellContent(r, c.id, range)} />
+                  </div>
                   <TableViewBar foldable={0} expanded onExpandedChange={() => {}}
                     allColumns={podAllCols} onAllColumnsChange={setPodAllCols} />
                 </>}
