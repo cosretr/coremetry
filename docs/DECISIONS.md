@@ -14129,3 +14129,11 @@ Plan: `docs/architecture/entity-autodiscovery-plan.md`; plan ve K1–K6 operatö
 - Clusters `/pods` ve `/deployments` aynı `Paths` çağrısıyla zenginleşir. Silindi: `chstore.PodServiceMap` (15 dk ham `metric_points` taraması), `pickPodService`, `cluster_entity_links.go`, FE `workloadService` çoğunluğu. Ratchet `TestNoAdHocPodServiceJoin`.
 - Davranış: pod servis kolonu yalnız metrik basan (span basmayan) uygulamalarda artık boş (metrik kolu S6'da VM'den); span basan ama metrik basmayanlarda dolar.
 - Doğrulanmadı: prod'da `/pods` gecikmesi, tarayıcıda görünüm.
+
+
+## 2026-11-15 — v0.10.2195 — Pod sayfası: İstek metrikleri kalktı, trace kapsamı entity modelinden
+
+Operatör geri bildirimi (prod pod sayfası, "Son trace'ler" boş).
+- "İstek metrikleri" (RED üçlüsü + Compare to + anomali bantları + annotation şeridi) ve onu besleyen sorgular silindi; «Yavaş» çipi p95 kaynağıyla birlikte gitti (eski `?spans=slow` → Hatalı).
+- `GET /api/pods/trace-scope`: `entity.Resolver.Paths` ile pod kenarı varsa k8s.pod.name + kenarın gerçek span cluster değeri; yoksa iş yükü → servis ("servis geneli" etiketiyle, pod süzgeci yok). Cluster süzgeci Remote Cluster eşlemesinden, ham ad değil.
+- URL'de çip yokken penceredeki hatalı trace sayısı sıfırsa varsayılan «Tümü».

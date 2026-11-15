@@ -65,7 +65,12 @@ type Node struct {
 
 // Path — pod → iş yükü → servis → namespace → node → cluster (entity id'leri;
 // "" = bilinmiyor).
-type Path struct{ Pod, Workload, Service, Namespace, Node, Cluster string }
+type Path struct {
+	Pod, Workload, Service, Namespace, Node, Cluster string
+	// ClusterValue — pod'un span'lerinin taşıdığı cluster DEĞERİ (yalnız pod
+	// yolunda, kenar varsa). Trace süzgeci ham ad değil bu değerle (v0.10.2195).
+	ClusterValue string
+}
 
 // ServiceName — svc:<ad> → ad.
 func (p Path) ServiceName() string { return strings.TrimPrefix(p.Service, "svc:") }
@@ -226,13 +231,13 @@ func (r *Resolver) Paths(ctx context.Context, ids []string, at time.Time, owned 
 		switch ref.Type {
 		case TypePod:
 			p.Pod, p.Workload = id, ownerOf[id]
-			if pe := e[ref.Name]; pe.Service != "" || pe.Node != "" {
-				if pe.Service != "" {
-					p.Service = ServiceID(pe.Service)
-				}
-				if pe.Node != "" {
-					p.Node = NodeID(ref.ClusterID, pe.Node)
-				}
+			pe := e[ref.Name]
+			if pe.Service != "" {
+				p.Service = ServiceID(pe.Service)
+				p.ClusterValue = pe.ClusterValue
+			}
+			if pe.Node != "" {
+				p.Node = NodeID(ref.ClusterID, pe.Node)
 			}
 		case TypeWorkload:
 			p.Workload = id

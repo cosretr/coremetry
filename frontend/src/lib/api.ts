@@ -2363,6 +2363,11 @@ export const api = {
     get<ClusterPodsResponse>(`/api/clusters/pods?cluster=${encodeURIComponent(cluster)}` +
       (podRe ? `&podRe=${encodeURIComponent(podRe)}` : '') +
       (namespace ? `&namespace=${encodeURIComponent(namespace)}` : '')),
+  // v0.10.2195 — pod → trace kapsamı entity modelinden (pod kenarı / iş yükü servisi).
+  podTraceScope: (cluster: string, namespace: string, pod: string, deploy: string, toNs: number) =>
+    get<import('./types').PodTraceScope>(`/api/pods/trace-scope?cluster=${encodeURIComponent(cluster)}` +
+      `&namespace=${encodeURIComponent(namespace)}&pod=${encodeURIComponent(pod)}` +
+      (deploy ? `&deploy=${encodeURIComponent(deploy)}` : '') + `&to=${toNs}`),
   // v0.10.2182 (Clusters S13) — restarts: restart dikey işaretleri (+1 range sorgu; yalnız restart>0).
   clusterPodDetail: (cluster: string, namespace: string, pod: string, fromNs: number, toNs: number, restarts = false) =>
     get<ClusterPodDetail>(`/api/clusters/pods/detail?cluster=${encodeURIComponent(cluster)}` +

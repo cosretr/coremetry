@@ -20,7 +20,7 @@ func (a resolverSource) SeenForPods(ctx context.Context, values []string, ns str
 	aggs, err := a.s.store.EntitySeenForPods(ctx, values, ns, pods, from, to)
 	out := make([]entity.SeenEdge, len(aggs))
 	for i, g := range aggs {
-		out[i] = entity.SeenEdge{Namespace: g.Namespace, Pod: g.Pod, Node: g.Node, Service: g.Service, Spans: g.Spans}
+		out[i] = entity.SeenEdge{Namespace: g.Namespace, Pod: g.Pod, Node: g.Node, Service: g.Service, Spans: g.Spans, Cluster: g.Cluster}
 	}
 	return out, err
 }

@@ -12660,3 +12660,6 @@ export interface HealthcheckResult {
   durationMs: number;
   notApplicable?: string[]; // v0.10.2046 — bu serviste verisi olmayan kontroller (satır değil, dipnot)
 }
+
+/** v0.10.2195 — GET /api/pods/trace-scope (entity.Resolver yolu). */
+export interface PodTraceScope { mode: 'pod' | 'service' | 'none'; clusterValue?: string; service?: string }

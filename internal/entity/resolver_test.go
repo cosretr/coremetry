@@ -137,3 +137,13 @@ func TestResolverLookup(t *testing.T) {
 		t.Errorf("kayıtsız cluster değeri → pod yok (K2 S1'de): %+v", got)
 	}
 }
+
+// v0.10.2195 — pod yolu kenarın span cluster değerini taşır (trace süzgeci).
+func TestResolverPathsClusterValue(t *testing.T) {
+	src := &fakeSrc{seen: []SeenEdge{{Namespace: "ns", Pod: "p", Service: "s", Spans: 3, Cluster: "OCPA"}}}
+	id := PodID("c-1", "ns", "p")
+	got, _ := NewResolver(src, fakeClusters{}).Paths(context.Background(), []string{id}, time.Now(), nil)
+	if got[id].ClusterValue != "OCPA" {
+		t.Fatalf("%+v", got[id])
+	}
+}

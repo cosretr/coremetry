@@ -14,9 +14,9 @@ describe('okErrorPoints', () => {
     expect(ok).toEqual([{ time: 1, value: 90 }, { time: 2, value: 0 }, { time: 3, value: 0 }]);
     expect(err).toEqual([{ time: 1, value: 10 }, { time: 2, value: 100 }, { time: 3, value: 0 }]);
   });
-  it('kaynak pini: Overview ve Pod kendi map satırını taşımaz', () => {
+  it('kaynak pini: Overview kendi map satırını taşımaz (Pod RED v0.10.2195\'te kalktı)', () => {
     const root = resolve(__dirname, '../../');
-    for (const f of ['pages/service/Overview.tsx', 'pages/Pod.tsx']) {
+    for (const f of ['pages/service/Overview.tsx']) {
       const src = readFileSync(resolve(root, f), 'utf8');
       expect(src, f).toContain('okErrorPoints(');
       expect(src, f).not.toMatch(/p\.value \* \(1 - \(erPts\[i\]/);

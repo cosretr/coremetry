@@ -971,10 +971,6 @@ describe('crosshair sync ad alanı (v0.9.945)', () => {
       .toMatch(/syncKey=\{msSyncKey\(syncKey\)\}/);
   });
 
-  it('Pod CorePanel’i DOĞRUDAN çağırdığı için eki KENDİ yazar', () => {
-    expect(pod).toMatch(/podChartSync = msSyncKey\(`podjmx:\$\{pod\}`\)/);
-  });
-
   it('Pod’un RED kartları artık saniye eksenli motoru KULLANMAZ', () => {
     // ChartCard → OverviewChart (saniye ekseni). Sayfada kalırsa iki
     // motor yine iki gruba bölünür ve kusur geri gelir.
@@ -983,10 +979,8 @@ describe('crosshair sync ad alanı (v0.9.945)', () => {
       .not.toMatch(/<ChartCard\b/);
   });
 
-  it('Pod’un TÜM panelleri tek gruba düşer (RED doğrudan, JMX MLC ekiyle)', () => {
+  it('Pod JMX panelleri tek gruba düşer (v0.10.2195: RED bölümü kalktı)', () => {
     const body = pod.replace(/\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
-    // RED üçlüsü: ek YAZILI değişkeni kullanır.
-    expect((body.match(/syncKey=\{podChartSync\}/g) ?? []).length).toBe(3);
     // JMX: MLC'ye eksiz verilir (eki bileşen ekler).
     expect(body).toMatch(/syncKey=\{`podjmx:\$\{pod\}`\}/);
   });

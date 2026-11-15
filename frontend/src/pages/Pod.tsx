@@ -1,38 +1,26 @@
-import { Suspense, lazy, useMemo, useState, useCallback } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import type { SpanMetricSeries } from '@/lib/types';
-import { msSyncKey } from '@/lib/chart/syncNamespace';
-import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { panelMaxDataPoints } from '@/lib/chartStep';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
-import { defaultLatencyHidden } from '@/lib/chart/legendVisibility';
 import { timeRangeToNs } from '@/lib/utils';
 import { clampThanosWindow, THANOS_MAX_WINDOW_LABEL } from '@/lib/thanosWindow';
 import { Topbar } from '@/components/Topbar';
-import { Badge, LinkButton } from '@/components/ui';
+import { Badge } from '@/components/ui';
 import { CollapsedSection } from '@/components/coremetry/CollapsedSection';
 import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
 import { parseOpenSections, serializeOpenSections } from '@/pages/clusters/openSections';
 import { ClusterCard } from '@/pages/clusters/ClusterCard';
 import { fmtBps } from '@/pages/clusters/thresholds';
 import { jmxTitle } from '@/pages/service/PodJmxInline';
-import { readBandsParam, writeBandsParam } from '@/lib/bandsParam';
-import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import { PanelTitle } from '@/components/ui/PanelTitle';
-import { ServiceAnnotationLane } from '@/components/charts/ServiceAnnotationLane';
-import { CompareToggle } from '@/components/charts/CompareToggle';
-import { useCompareParam } from '@/lib/chart/useCompareParam';
-import { compareOffsetNs, ghostItemsFrom } from '@/lib/chart/compareParam';
-import { okErrorPoints } from '@/lib/chart/redBands';
 import { Spinner, Empty } from '@/components/Spinner';
 import { MultiLineChart } from '@/components/MultiLineChart';
 // v0.9.945 (D2/K10) — RED kartları ChartCard'dan (saniye eksenli
 // OverviewChart motoru) CorePanelMulti'ye taşındı; gerekçe grid'in
 // başında. Lazy: sayfa @grafana/data'ya STATİK bağlanmamalı
 // (corePanelEntry.tsx yorumunun ölçümü — 35 KB → 1 MB).
-import type { CorePanelMultiItem } from '@/components/chart/corePanelEntry';
 import { ThanosTrendPanel } from '@/pages/clusters/TrendPanel';
 import { namedSeriesToSeries } from '@/pages/clusters/trendSeries';
 import { PromQLList } from '@/pages/clusters/PromQLList';
@@ -45,9 +33,7 @@ import { logsHref } from '@/lib/logsUrl';
 import { encodeFiltersParam } from '@/lib/logFilters';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { PageShell } from '@/components/coremetry/PageShell';
-import { useEntityEnabled, useEntity, useEntityServices, useEntityContainers, useAnomalyEvents, useAnomalySilences } from '@/lib/queries';
-import { windowAnomalies, anomalyRegions, silencedSet } from '@/lib/anomalyRegions';
-import { isMLAnomaly, mlEventHref } from '@/lib/anomalyHref';
+import { useEntityEnabled, useEntity, useEntityServices, useEntityContainers } from '@/lib/queries';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
 import { PodIdentityLine, type PodPivot } from '@/pages/pod/PodIdentityLine';
 import { PodMetaRow, type PodMeta } from '@/pages/pod/PodMetaRow';
@@ -57,21 +43,16 @@ import { PodServicesTable } from '@/pages/pod/PodServicesTable';
 import { PodTracesTable } from '@/pages/pod/PodTracesTable';
 import { PodLogsSection } from '@/pages/pod/PodLogsSection';
 import { PodContainersTable, PodSiblingsTable, PodLabelsTable, PodLifetimesTable } from '@/pages/pod/PodContextTables';
-import { windowP95, joinSiblings } from '@/pages/pod/podPage';
+import { joinSiblings, traceScopeCtx } from '@/pages/pod/podPage';
 
 // Clusters S10 (D8, D6) — kapalı bölümlerin kalıcılık kimlikleri.
-const POD_SECTIONS = ['red', 'traces', 'netjvm', 'labels'] as const;
+const POD_SECTIONS = ['traces', 'netjvm', 'labels'] as const;
 type PodSection = typeof POD_SECTIONS[number];
 
-const CorePanelMultiLazy = lazy(() =>
-  import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
 
 // Pod detay sayfası (v0.9.151) — H.Polat önerisi: pod'a tıklayınca cramped
 // drawer YERİNE tam sayfa. Üç kaynak tek yerde, hepsi POD'a scope'lu:
-//   • RED — servisin kümülatif metrikleri (throughput/error/latency) bu pod'da.
-//     Overview'un iki spanMetricBatch'i AYNEN, DSL'e host.name=<pod> eklenir;
-//     operationMVGate host.name'i reddeder → bounded raw-spans (host_name kolonu;
-//     service_summary_5m'de host_name YOK). service yoksa RED gizlenir.
+//   • (RED bölümü v0.10.2195'te kalktı — operatör; trace listesi kaldı.)
 //   • Infra — tek-pod CPU/Mem (ThanosTrendPanel, drawer'dan taşındı).
 //   • JVM/JBoss JMX — pod'a filtreli (clusterJmxTrend pod arg, v0.9.149);
 //     deploy JMX keşfini sürer (verilmezse pod adından türetilir).
@@ -95,7 +76,7 @@ export default function PodPage() {
 }
 
 function PodDetail() {
-  const [sp, setSp] = useSearchParams();
+  const [sp] = useSearchParams();
   const clusterParam = sp.get('cluster') ?? '';
   const nsParam = sp.get('namespace') ?? '';
   const pod = sp.get('pod') ?? '';
@@ -115,29 +96,16 @@ function PodDetail() {
   // v0.9.429 — zoom-yığını paylaşılan usePageZoomRange hook'unda.
   const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
-  const xRange = useMemo(() => ({ from: from / 1e9, to: to / 1e9 }), [from, to]);
-  // v0.9.945 (D2/K10) — SAYFANIN TEK crosshair grubu.
-  //
-  // `-ms` bir MOTOR AD ALANI, süs değil (MultiLineChart.tsx:164-172):
-  // uPlot.sync imleci karşı grafiğin ÖLÇEĞİNE VALUE olarak taşır, yani
-  // ms-eksenli ve saniye-eksenli iki motor aynı anahtarı paylaşırsa
-  // crosshair 1000× yanlış yere düşer. MLC kendi syncKey'ine bu eki
-  // KENDİ ekliyor; CorePanel'i DOĞRUDAN çağıran (RED üçlüsü) ekin
-  // kendisini yazmak zorunda — DetailsMetricsSection'ın v0.9.789'da
-  // kurduğu desen.
-  const podChartSync = msSyncKey(`podjmx:${pod}`); // v0.10.289 — tek yerden
 
   // Sunucu pencere tavanı — Infra/JMX Thanos sorgularıyla aynı dürüstlük
-  // (Clusters/ServiceInfraTab emsali). RED spans tarafında tavan YOK
-  // (raw-spans zaten bounded + auto-sample); yalnız Thanos eksenlerine.
+  // (Clusters/ServiceInfraTab emsali); yalnız Thanos eksenlerine.
   const { cFrom, cTo, clamped } = useMemo(
     () => clampThanosWindow(from, to), [from, to]);
 
   // cluster/namespace çözümü (v0.9.153): Infra/Clusters drill'i cluster'ı
   // taşır (tek fetch); Metrics drill'i YALNIZ service+pod taşır → pod'un
   // hangi cluster'da olduğunu tüm Thanos kaynaklarında arayarak çöz. row da
-  // (phase/cpu/mem başlığı) buradan gelir. cluster çözülene dek RED zaten
-  // çalışır (service+pod), yalnız infra/JMX bekler — kademeli.
+  // (phase/cpu/mem başlığı) buradan gelir; infra/JMX cluster çözümünü bekler.
   const sourcesQ = useQuery({
     queryKey: ['cluster-sources'],
     queryFn: () => api.clusterSources(),
@@ -174,18 +142,8 @@ function PodDetail() {
   const clusterIdx = searchClusters.indexOf(cluster);
   const clusterPodsList = clusterIdx >= 0 ? podsQs[clusterIdx]?.data : undefined;
 
-  // Per-pod RED — Overview.tsx'in iki batch'ini birebir aynala + host.name.
-  // v0.10.135 — servis parametresi yokken (entity linkinden gelindi) ve entity
-  // katmanı açıkken RED üçlüsü pod'un TERFİ kolonuyla scope'lanır
-  // (k8s.pod.name + k8s.namespace.name → k8s_pod/k8s_namespace, set index):
-  // bu pod'dan geçen TÜM servislerin span'leri. Bayrak kapalı = eski davranış.
-  // İnceleme (v0.10.135): pod adı cluster-benzersiz DEĞİL (StatefulSet
-  // kafka-0 iki cluster'da aynı ad) → `cluster` DSL anahtarı ŞART; span
-  // tarafı değeri Remote Cluster kaydının spanClusterValue'su. Değer
-  // bilinmiyorsa (eşlenmemiş cluster) entity dalı KAPALI kalır — yanlış
-  // kapsamdansa eski "eşlenmedi" ekranı. `resource.` öneki: terfi haritası
-  // boot probe'unda dolmadıysa bile res_values'a düşer (doğru ama yavaş);
-  // çıplak yazım o durumda attr_values'a düşüp SIFIR satır verirdi.
+  // Remote Cluster kaydı (entity katmanının cluster eşlemesi): span cluster
+  // değerleri. v0.10.2195 — pod RED bölümü kalktı (operatör).
   const { enabled: entityOn, clusters: entityClusters } = useEntityEnabled();
   const clusterRef = cluster || clusterParam;
   const entityCluster = entityClusters.find(c => c.id === clusterRef || c.name === clusterRef);
@@ -193,26 +151,12 @@ function PodDetail() {
   // (dsl.go: operatör KÜÇÜK harf, köşeli parantez, tırnaklı değerler — TestDSLClusterInList pinler).
   const spanClusters = (entityCluster?.spanClusterValues?.length ? entityCluster.spanClusterValues : [entityCluster?.spanClusterValue ?? '']).filter(Boolean);
   const spanCluster = spanClusters.join(', ');
-  // Trace listesi/linkleri için TEK cluster değeri: kayıt birden çok değer
-  // taşıyorsa süzgeç UYGULANMAZ ve bunu söyleriz (inceleme #8) — grafikler
-  // `in [..]` ile hepsini ölçerken liste alt küme olmasın.
-  const traceCluster = spanClusters.length === 1 ? spanClusters[0] : '';
+  // Log/pivot linkleri için TEK cluster değeri: kayıt birden çok değer
+  // taşıyorsa süzgeç UYGULANMAZ ve bunu söyleriz (inceleme #8).
   const multiSpanCluster = spanClusters.length > 1;
-  const esc = (v: string) => v.replace(/"/g, '\\"');
-  const podScope = service
-    ? `service.name = "${esc(service)}" AND host.name = "${esc(pod)}"`
-    : `resource.k8s.pod.name = "${esc(pod)}"${namespace ? ` AND resource.k8s.namespace.name = "${esc(namespace)}"` : ''} AND cluster in [${spanClusters.map(v => `"${esc(v)}"`).join(', ')}]`;
-  const redEnabled = !!pod && (!!service || (entityOn && spanClusters.length > 0));
-  // v0.9.391 (Faz B) — mdp + zarf select'i (Overview deseniyle aynı).
-  const podMdp = panelMaxDataPoints(3);
-  // v0.10.315 (chart-layer Dilim 2.3b) — önceki-dönem hayaleti: ?compare=
-  // (ServiceCharts ile aynı sözleşme/URL anahtarı). Açıkken AYNI iki batch
-  // kaydırılmış pencereyle bir kez daha çekilir; seriler bugünün eksenine
-  // bindirilip kesikli/soluk ghost olarak biner (CorePanelMulti ghostItems).
-  // Clusters S10 (plan §0 D8, §10.1) — İstek metrikleri (RED), Son trace'ler,
-  // Ağ ve JVM, Etiketler ve geçmiş varsayılan KAPALI; kapalı bölümün verisi
-  // açılana kadar ÇEKİLMEZ (RED + hayalet + anomali bantları, trace listesi,
-  // JMX keşfi). Açılan bölüm sonraki ziyarette açık kalır (D6, tarayıcı başına).
+  // Clusters S10 (plan §0 D8, §10.1) — Son trace'ler, Ağ ve JVM, Etiketler ve
+  // geçmiş varsayılan KAPALI; kapalı bölümün verisi açılana kadar ÇEKİLMEZ
+  // (trace listesi + kapsam çözümü, JMX keşfi). Açılan bölüm sonraki ziyarette açık kalır (D6, tarayıcı başına).
   const [openSecs, setOpenSecs] = useState<Set<PodSection>>(
     () => parseOpenSections(getRaw(STORAGE_KEYS.podSectionsOpen), POD_SECTIONS));
   const setSecOpen = (id: PodSection) => (v: boolean) => {
@@ -221,103 +165,18 @@ function PodDetail() {
     setOpenSecs(next);
     setRaw(STORAGE_KEYS.podSectionsOpen, serializeOpenSections(next, POD_SECTIONS));
   };
-  const redOpen = openSecs.has('red');
-  const [compare, setCompare] = useCompareParam();
-  const compareOff = compareOffsetNs(compare, from, to);
-  const ghostEnabled = redEnabled && redOpen && compareOff > 0;
-  const redQ = useQuery({
-    queryKey: ['pod-red', podScope, pod, from, to, podMdp],
-    queryFn: () => api.spanMetricBatch({ from, to, maxDataPoints: podMdp, dsl: podScope, aggs: [
-      { name: 'rate', agg: 'rate' },
-      { name: 'error_rate', agg: 'error_rate' },
-    ] }),
-    // Zarfın stepSeconds'ı KPI toplamına gider (Σ rate·step kesin; inceleme #4).
-    select: d => ({ series: d.series, stepSeconds: d.stepSeconds }),
-    enabled: redEnabled && redOpen, staleTime: 30_000,
+  // v0.10.2195 — pod → trace kapsamı entity modelinden (GET /api/pods/trace-scope):
+  // pod kenarı varsa k8s.pod.name + span'in GERÇEK cluster değeri; yoksa iş yükü
+  // servisi ("servis geneli"). Ham ad karşılaştırması yok.
+  const tracesOpen = openSecs.has('traces');
+  const nsForScope = namespace || nsParam;
+  const scopeQ = useQuery({
+    queryKey: ['pod-trace-scope', clusterRef, nsForScope, pod, sp.get('deploy') ?? '', to],
+    queryFn: () => api.podTraceScope(clusterRef, nsForScope, pod, sp.get('deploy') ?? '', to),
+    enabled: tracesOpen && !!clusterRef && !!nsForScope && !!pod, staleTime: 60_000, retry: 1,
   });
-  // Latency kafka messaging span'lerini HARİÇ tutar (Overview v0.9.129 emsali).
-  const latQ = useQuery({
-    queryKey: ['pod-latency-nokafka', podScope, pod, from, to, podMdp],
-    queryFn: () => api.spanMetricBatch({ from, to, maxDataPoints: podMdp, dsl: `${podScope} AND messaging.system != "kafka"`, aggs: [
-      { name: 'p99', agg: 'p99', field: 'duration_ms' },
-      { name: 'p95', agg: 'p95', field: 'duration_ms' },
-      { name: 'p50', agg: 'p50', field: 'duration_ms' },
-      // Madde 4 sweep — avg serisi (Overview latency batch'iyle ayna kalır).
-      { name: 'avg', agg: 'avg', field: 'duration_ms' },
-    ] }),
-    select: d => d.series,
-    enabled: redEnabled && redOpen, staleTime: 30_000,
-  });
-  const redGhostQ = useQuery({
-    queryKey: ['pod-red', podScope, pod, from - compareOff, to - compareOff, podMdp],
-    queryFn: () => api.spanMetricBatch({ from: from - compareOff, to: to - compareOff, maxDataPoints: podMdp, dsl: podScope, aggs: [
-      { name: 'rate', agg: 'rate' },
-      { name: 'error_rate', agg: 'error_rate' },
-    ] }),
-    select: d => ({ series: d.series, stepSeconds: d.stepSeconds }),
-    enabled: ghostEnabled, staleTime: 30_000,
-  });
-  const latGhostQ = useQuery({
-    queryKey: ['pod-latency-nokafka', podScope, pod, from - compareOff, to - compareOff, podMdp],
-    queryFn: () => api.spanMetricBatch({ from: from - compareOff, to: to - compareOff, maxDataPoints: podMdp, dsl: `${podScope} AND messaging.system != "kafka"`, aggs: [
-      { name: 'p99', agg: 'p99', field: 'duration_ms' },
-      { name: 'p95', agg: 'p95', field: 'duration_ms' },
-      { name: 'p50', agg: 'p50', field: 'duration_ms' },
-      { name: 'avg', agg: 'avg', field: 'duration_ms' },
-    ] }),
-    select: d => d.series,
-    enabled: ghostEnabled, staleTime: 30_000,
-  });
-  const s = redQ.data?.series;
-  const lat = latQ.data;
-  const redStatus: 'loading' | 'error' | 'ready' = redQ.isLoading ? 'loading' : redQ.isError ? 'error' : 'ready';
-  const latStatus: 'loading' | 'error' | 'ready' = latQ.isLoading ? 'loading' : latQ.isError ? 'error' : 'ready';
-
-  // v0.10.162 — servis anomalileri bant olarak RED panellerinde (servis
-  // kapsamlı pod'da; anomali olayında pod boyutu yok → servis düzeyi,
-  // paneldeki altyazı söyler) — v0.10.170'ten beri yalnız ?bands=1 iken.
-  // Sorgu global anahtar (60 s), sayfa başına ek yük yok; kapalıyken de
-  // çekilir — «aç» bağlantısı anomali varken gösterilsin diye.
-  // v0.10.170 — bantlar varsayılan KAPALI; ?bands=1 açar (Overview ile aynı anahtar).
-  const anomaliesQ = useAnomalyEvents(!!service && redOpen);
-  const silencesQ = useAnomalySilences(!!service && redOpen);
-  const bandsOn = readBandsParam(sp);
-  const toggleBands = () => setSp(prev => writeBandsParam(prev, !bandsOn, window.location.search), { replace: true });
-  const podWindowEvents = useMemo(() => (service ? windowAnomalies(anomaliesQ.data?.items, service, from, to) : []), [service, anomaliesQ.data, from, to]);
-  // v0.10.180 — banda tık: anomali çekmecesi servis sayfasında (?anomaly=), pod'da çekmece yok.
-  const navigate = useNavigate();
-  const onRegionClick = useCallback((rg: ChartTimeRegion) => {
-    if (!rg.id || !service) return;
-    // v0.10.2080 — ML olayı kendi tam sayfasına (eski çekmece ML kimliğini çözemez).
-    const ev = podWindowEvents.find(e => e.id === rg.id);
-    if (ev && isMLAnomaly(ev)) { navigate(mlEventHref(ev.id)); return; }
-    navigate(serviceHref(service, { range, params: { anomaly: rg.id } }));
-  }, [navigate, service, range, podWindowEvents]);
-  const podAnomalyRegions = useMemo(() => {
-    if (!bandsOn || podWindowEvents.length === 0) return undefined;
-    return anomalyRegions(podWindowEvents, silencedSet(silencesQ.data), from, to);
-  }, [bandsOn, podWindowEvents, silencesQ.data, from, to]);
-
-  // «Yavaş» eşiği gecikme serisinden (podPage.ts, ek sorgu yok); İstek
-  // metrikleri kapalıyken eşik yok (Clusters S10 — KPI şeridi kalktı).
-  const p95Ms = useMemo(() => windowP95(lat?.p95?.[0]?.points ?? [], s?.rate?.[0]?.points ?? []), [lat, s]);
-
-  // Throughput OK/Errors band türetimi — Overview ile birebir (ek sorgu yok).
-  // v0.9.945 — CorePanelMultiItem şekli: renk ARTIK ROLDEN geliyor
-  // (success/error), elle var(--ok)/var(--err) verilmiyor. Overview'un
-  // "Failure rate · trace" paneliyle aynı sözleşme, yani iki sayfa aynı
-  // bandı aynı renkte çiziyor.
-  const throughputBands = useMemo<CorePanelMultiItem[]>(() => throughputBandsFrom(s), [s]);
-  // v0.10.315 — ghost'lar: aynı band/seri kurucuları, kaydırılmış pencere.
-  const sg = ghostEnabled ? redGhostQ.data?.series : undefined;
-  const latg = ghostEnabled ? latGhostQ.data : undefined;
-  const throughputGhost = useMemo(() => ghostItemsFrom(sg ? throughputBandsFrom(sg) : undefined, compareOff), [sg, compareOff]);
-  const latencyGhost = useMemo(() => ghostItemsFrom(latg ? [
-    { name: 'P50', role: 'data', series: latg.p50 ?? [] },
-    { name: 'P99', role: 'data', series: latg.p99 ?? [] },
-  ] : undefined, compareOff), [latg, compareOff]);
-  const failureGhost = useMemo(() => ghostItemsFrom(sg ? [{ name: 'errors', role: 'error', series: sg.error_rate ?? [] }] : undefined, compareOff), [sg, compareOff]);
-
+  const traceScope = traceScopeCtx(scopeQ.data, spanClusters, service);
+  const traceCluster = traceScope.cluster;
   // v0.10.135/160 — entity katmanı: kimlik zinciri, servisler, konteynerler,
   // kardeşler, etiketler, ömürler. Bayrak kapalı → bu bölümler çizilmez, sayfa
   // v0.10.130 öncesi anatomide kalır (kimlik satırı düz metin).
@@ -374,15 +233,15 @@ function PodDetail() {
   // kaldırılabilir bir PİL (`filters`), `q` değil — `q` CH'de gövde LIKE'ı,
   // alan:"değer" orada ölü (inceleme #1; prod ES query_string'te çalışır).
   // Servis kapsamı ayrıca `service`te: pil kaldırılsa bile makul görünüm.
-  const traceFilters = JSON.stringify([{ k: 'k8s.pod.name', op: '=', v: [pod] }]);
-  const tracesHref = tracesPivotHref({ window: range, service: service || undefined, cluster: traceCluster || undefined, filters: traceFilters, hasError: true });
+  const traceFilters = traceScope.podExact ? JSON.stringify([{ k: 'k8s.pod.name', op: '=', v: [pod] }]) : undefined;
+  const tracesHref = tracesPivotHref({ window: range, service: traceScope.service || undefined, cluster: traceCluster || undefined, filters: traceFilters });
   const logsPodPill = encodeFiltersParam([{ key: 'kubernetes.pod_name', value: pod, negated: false, disabled: false }]);
   const pivots: PodPivot[] = [
     // v0.9.965 — GERİ linki penceresini taşır: pod'a özel bir pencereden
     // gelen operatör "← servis" dediğinde aynı zaman aralığına döner.
     { href: service ? serviceHref(service, { range, tab: backTab }) : '/clusters', label: `← ${service ? `${service} · ${backLabel}` : 'Clusters'}` },
     ...(service ? [{ href: serviceHref(service, { range }), label: 'Servis sayfası ↗' }] : []),
-    { href: tracesHref, label: 'Trace\'ler ↗', title: 'k8s.pod.name = pod, hatalı önce' },
+    { href: tracesHref, label: 'Trace\'ler ↗', title: traceScope.podExact ? 'k8s.pod.name = pod' : `servis geneli · ${traceScope.service}` },
     { href: logsHref({ window: range, service: service || undefined, cluster: traceCluster || undefined, filters: logsPodPill }), label: 'Loglar ↗', title: 'kubernetes.pod_name pili (ES alan süzgeci; CH lokalde gövde araması — pili kaldırınca servis kapsamı kalır)' },
   ];
   // Clusters S11 — durum sözcüğü / cümle (ClusterPodRow + konteynerler) ve
@@ -405,8 +264,6 @@ function PodDetail() {
     validFrom: detail?.entity.validFrom,
     version: podVersion(detail?.entity.labels) || undefined,
   };
-  // v0.10.187 (görsel inceleme F2) — 5 cluster değeri başlığı taşırıyordu: >2 ise «N cluster» (tam liste KPI şeridi title'ında).
-  const scopeLabel = service || `bu pod'dan geçen tüm servisler${spanClusters.length > 2 ? ` · ${spanClusters.length} cluster` : spanCluster ? ` · cluster ${spanCluster}` : ''}`;
 
   return (
     <>
@@ -510,91 +367,11 @@ function PodDetail() {
         {/* Clusters S10 (plan §0 D8, onaylı Pod mockup'ı) — KAPALI bölümler;
             gövde yalnız açıkken monte edilir, verisi açılınca çekilir. */}
         <div className="pod-sec">
-          <CollapsedSection id="pod-red" title="İstek metrikleri" summary="bu pod'un yanıt süresi, istek sayısı ve hata oranı"
-            meta={redEnabled ? scopeLabel : undefined}
-            actions={service ? <Link to={serviceHref(service, { range })} className="sec">→ {service} · Overview</Link> : undefined}
-            open={redOpen} onOpenChange={setSecOpen('red')}>
-            {redEnabled && podWindowEvents.length > 0 && (
-              <div className="pod-cap">anomali bantları (servis düzeyi): {bandsOn ? 'açık' : 'kapalı'} · <LinkButton onClick={toggleBands} aria-pressed={bandsOn} title="Anomali bantlarını grafiklerde göster/gizle (?bands=1)" className="bands-toggle">{bandsOn ? 'kapat' : 'aç'}</LinkButton></div>
-            )}
-          {redEnabled ? (
-            <>
-            {/* v0.10.315 — Compare to: (?compare=, ServiceCharts ile aynı). */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 11, color: 'var(--text2)', flexWrap: 'wrap', rowGap: 6 }}>
-              <CompareToggle value={compare} onChange={setCompare} />
-              {ghostEnabled && (redGhostQ.isError || latGhostQ.isError) && <span className="badge b-warn">önceki dönem yüklenemedi</span>}
-            </div>
-            <div className="ov-grid ov-charts-3 ov-mb">
-              <Suspense fallback={<Spinner />}>
-                <CorePanelMultiLazy
-                  title="Response time"
-                  storageKey="pod-response-time" height={200}
-                  unit="ms" viz="line" xRange={xRange}
-                  syncKey={podChartSync}
-                  regions={podAnomalyRegions} onRegionClick={onRegionClick} regionClickHint="tıkla → servis sayfası"
-                  loading={latStatus === 'loading'}
-                  error={latStatus === 'error' ? 'Metrikler yüklenemedi' : undefined}
-                  defaultHidden={[...defaultLatencyHidden(['avg', 'P50', 'P95', 'P99'])]}
-                  ghostItems={latencyGhost}
-                  items={[
-                    { name: 'avg', role: 'data', series: lat?.avg ?? [] },
-                    { name: 'P50', role: 'data', series: lat?.p50 ?? [] },
-                    { name: 'P95', role: 'data', series: lat?.p95 ?? [] },
-                    { name: 'P99', role: 'data', series: lat?.p99 ?? [] },
-                  ]}
-                />
-              </Suspense>
-              <Suspense fallback={<Spinner />}>
-                <CorePanelMultiLazy
-                  title="Throughput"
-                  storageKey="pod-throughput" height={200}
-                  unit="reqps" viz="stacked" xRange={xRange}
-                  syncKey={podChartSync}
-                  regions={podAnomalyRegions} onRegionClick={onRegionClick} regionClickHint="tıkla → servis sayfası"
-                  loading={redStatus === 'loading'}
-                  error={redStatus === 'error' ? 'Metrikler yüklenemedi' : undefined}
-                  ghostItems={throughputGhost}
-                  items={throughputBands}
-                />
-              </Suspense>
-              <Suspense fallback={<Spinner />}>
-                <CorePanelMultiLazy
-                  title="Failure rate"
-                  storageKey="pod-failure-rate" height={200}
-                  unit="percent" viz="area" xRange={xRange}
-                  syncKey={podChartSync}
-                  regions={podAnomalyRegions} onRegionClick={onRegionClick} regionClickHint="tıkla → servis sayfası"
-                  loading={redStatus === 'loading'}
-                  error={redStatus === 'error' ? 'Metrikler yüklenemedi' : undefined}
-                  ghostItems={failureGhost}
-                  items={[{ name: 'errors', role: 'error', series: s?.error_rate ?? [] }]}
-                />
-              </Suspense>
-            </div>
-            {/* v0.10.312 (chart-layer audit Dilim 2.1) — annotation şeridi
-                Pod'da: üç RED paneli aynı x-eksenini paylaşır, yığının
-                altında TEK şerit (Service.tsx v0.9.395 emsali; aynı
-                queryKey → servis sayfasıyla cache paylaşımı). Şerit servis
-                düzeyi (rollout/problem/alarm olaylarında pod boyutu yok);
-                boşsa yer kaplamaz. Tık = ±15 dk zoom (aynı zoom yığını). */}
-            <ServiceAnnotationLane service={service} fromNs={from} toNs={to} onZoomTo={handleZoom} />
-            </>
-          ) : (
-            <Empty icon="—" title="Bu pod bir Coremetry servisine eşlenmedi — RED metrikleri yok (trace listesi ve altyapı aşağıda).">
-              {/* v0.9.959 (G8/Ö22) — "eşlenmedi" ile "kesik listede
-                  bulunamadı" aynı ekran olamaz. İkincisi bir eksiklik
-                  beyanıdır, bir sonuç değil. */}
-              {entityOn && !entityCluster && cluster && (
-                <div style={{ marginTop: 6 }}>Cluster <span className="mono">{cluster}</span> için Remote Cluster kaydı / span cluster değeri yok — Settings → Clusters'ta eşle.</div>
-              )}
-            </Empty>
-          )}
-          </CollapsedSection>
-          <CollapsedSection id="pod-traces" title="Son trace'ler" summary="hatalı olanlar önce"
+          <CollapsedSection id="pod-traces" title="Son trace'ler" summary={traceScope.podExact ? 'hatalı olanlar önce' : `servis geneli · ${traceScope.service}`}
             actions={<Link to={tracesHref} className="sec">→ Traces'te aç</Link>}
-            open={openSecs.has('traces')} onOpenChange={setSecOpen('traces')}>
-          {multiSpanCluster && <div className="pod-cap">Cluster kaydı birden çok span değeri taşıyor ({spanCluster}) — trace süzgecinde cluster UYGULANMADI; grafikler hepsini ölçer.</div>}
-          <PodTracesTable ctx={{ pod, from, to, cluster: traceCluster, service }} p95Ms={p95Ms} />
+            open={tracesOpen} onOpenChange={setSecOpen('traces')}>
+          {multiSpanCluster && !traceCluster && <div className="pod-cap">Cluster kaydı birden çok span değeri taşıyor ({spanCluster}) — trace süzgecinde cluster UYGULANMADI.</div>}
+          {scopeQ.isLoading ? <Spinner /> : <PodTracesTable ctx={{ pod, from, to, cluster: traceCluster, service: traceScope.service, podExact: traceScope.podExact }} />}
           </CollapsedSection>
           <CollapsedSection id="pod-netjvm" title="Ağ ve JVM" summary="ağ giriş / çıkış, heap, GC, thread"
             open={jmxOpen} onOpenChange={setSecOpen('netjvm')}>
@@ -664,17 +441,4 @@ function PodDetail() {
       </PageShell>
     </>
   );
-}
-
-// throughputBandsFrom — v0.9.x band kurucusu (OK/Errors = rate × (1 ∓ er));
-// v0.10.315'te saf fonksiyona çıktı: canlı seriler ve ghost aynı kurucudan.
-function throughputBandsFrom(s: Record<string, SpanMetricSeries[] | null> | undefined): CorePanelMultiItem[] {
-  const ratePts = s?.rate?.[0]?.points ?? [];
-  const erPts = s?.error_rate?.[0]?.points ?? [];
-  if (ratePts.length < 2) return [{ series: s?.rate ?? [], name: 'req/s', role: 'data' }];
-  const { ok, err } = okErrorPoints(ratePts, erPts);
-  return [
-    { series: [{ groupKey: [], points: ok }], name: 'OK', role: 'success' },
-    { series: [{ groupKey: [], points: err }], name: 'Errors', role: 'error' },
-  ];
 }

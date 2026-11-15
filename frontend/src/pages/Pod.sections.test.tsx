@@ -14,9 +14,9 @@
 // açık, cluster + servis verilmiş): Thanos pod satırı (cluster-pods), tek-pod
 // CPU/Bellek trendi + deploy işaretleri, entity (kimlik, taşıdığı servisler —
 // v0.10.190 gereği hep görünür —, konteynerler).
-// Mount'ta ÇEKİLMEYEN (kapalı bölüm açılınca): RED iki toplu sorgusu +
-// anomali bantları + annotation şeridi (İstek metrikleri), trace listesi (Son
-// trace'ler), JMX keşfi ve trendleri (Ağ ve JVM), loglar.
+// Mount'ta ÇEKİLMEYEN (kapalı bölüm açılınca): trace kapsamı + listesi (Son
+// trace'ler), JMX keşfi ve trendleri (Ağ ve JVM), loglar. v0.10.2195 — İstek
+// metrikleri (RED) bölümü kalktı; trace kapsamı entity modelinden.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -43,7 +43,8 @@ const rec = (over: Record<string, unknown>) => ({
   ...over,
 });
 
-const m = vi.hoisted(() => ({ calls: [] as { name: string; args: unknown[] }[], entityDisabled: false }));
+const m = vi.hoisted(() => ({ calls: [] as { name: string; args: unknown[] }[], entityDisabled: false,
+  scope: { mode: 'pod', clusterValue: 'prod-a' } as { mode: string; clusterValue?: string; service?: string } }));
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
   const real = mod.api as Record<string, (...a: unknown[]) => unknown>;
@@ -56,6 +57,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     clusterPodDetail: async () => ({ trend: [] }),
     serviceDeploys: async () => [],
     spanMetricBatch: async () => ({ series: {}, stepSeconds: 60 }),
+    podTraceScope: async () => m.scope,
     anomalyEvents: async () => ({ items: [], activeTotal: 0, clearedTotal: 0, truncated: false }),
     anomalySilences: async () => [],
     annotations: async () => [],
@@ -140,6 +142,7 @@ function memoryStorage(): Storage {
 beforeEach(() => {
   m.calls.length = 0;
   m.entityDisabled = false;
+  m.scope = { mode: 'pod', clusterValue: 'prod-a' };
   try { localStorage.clear(); } catch { /* jsdom */ }
 });
 afterEach(() => {
@@ -161,16 +164,6 @@ describe('Pod S0 — mount\'ta çağrılan uçlar (entity katmanı açık)', () 
       'entityServices',
       'serviceDeploys',
     ]);
-  });
-
-  it('İstek metrikleri açılınca RED iki toplu sorgu (karşılaştırma kapalıyken hayalet yok) + bantlar', async () => {
-    const el = await mount(URL_FULL, 'entityContainers');
-    expect(count('spanMetricBatch')).toBe(0);
-    await openSection(el, 'İstek metrikleri');
-    await until(() => count('spanMetricBatch') === 2, 'RED sorguları');
-    expect(count('anomalyEvents')).toBe(1);
-    expect(Array.from(el.querySelectorAll<HTMLElement>('[data-cpm]')).map(n => n.dataset.cpm))
-      .toEqual(['Response time', 'Throughput', 'Failure rate']);
   });
 
   it('Son trace\'ler açılınca trace listesi çekilir; açık bölüm kalıcı', async () => {
@@ -215,13 +208,14 @@ describe('Pod S0 — mount\'ta çizilen bölümler', () => {
     const text = el.textContent ?? '';
     const order = [
       'Sağlıklı', 'CoSRE\'ye sor', 'CPU / Bellek · Thanos', 'Taşıdığı servisler', 'Konteynerler',
-      'İstek metrikleri', 'Son trace\'ler', 'Ağ ve JVM', 'Etiketler ve geçmiş',
+      'Son trace\'ler', 'Ağ ve JVM', 'Etiketler ve geçmiş',
     ];
     const at = order.map(t => text.indexOf(t));
     expect(at.every(i => i >= 0), JSON.stringify(order.filter((_, i) => at[i] < 0))).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
-    // KPI şeridi yok; RED üçlüsü kapalıyken çizilmez.
+    // KPI şeridi ve RED üçlüsü yok (v0.10.2195).
     expect(el.querySelectorAll('[data-cpm]').length).toBe(0);
+    expect(text).not.toContain('İstek metrikleri');
     expect(text).not.toContain('Trace listesi');
     // Clusters S11 — durum cümlesi; kardeş tablosu kapalı bölümde, kardeş yokken kıyas cümlesi yok.
     expect(el.querySelector('.pod-status')?.textContent).toBe('SağlıklıÇalışıyor.');
@@ -263,13 +257,31 @@ describe('Pod S0 — entity katmanı kapalı', () => {
   });
 });
 
-describe('Pod S0 — servis parametresi yok, entity kapalı', () => {
-  it('İstek metrikleri açılsa da RED sorgusu atılmaz ("eşlenmedi" ekranı)', async () => {
-    m.entityDisabled = true;
+describe('Pod — trace kapsamı entity modelinden (v0.10.2195)', () => {
+  it('pod kenarı: k8s.pod.name + span\'in cluster değeri', async () => {
+    m.scope = { mode: 'pod', clusterValue: 'PROD-A' };
     const el = await mount(`/pod?cluster=prod-a&namespace=shop&pod=${POD}`, 'clusterPodDetail');
-    await openSection(el, 'İstek metrikleri');
-    expect(count('spanMetricBatch')).toBe(0);
-    expect(count('anomalyEvents')).toBe(0);
-    expect(el.textContent).toContain('Bu pod bir Coremetry servisine eşlenmedi');
+    await openSection(el, 'Son trace\'ler');
+    await until(() => count('traces') > 0, 'trace listesi');
+    expect(count('podTraceScope')).toBe(1);
+    const p = m.calls.find(c => c.name === 'traces')!.args[0] as Record<string, unknown>;
+    expect(p.cluster).toBe('PROD-A');
+    expect(JSON.parse(p.filters as string)).toEqual([{ k: 'k8s.pod.name', op: '=', v: [POD] }]);
+  });
+  it('pod span\'i yok → iş yükünün servisi, "servis geneli" etiketi, pod süzgeci yok', async () => {
+    m.scope = { mode: 'service', clusterValue: 'prod-a', service: 'cart' };
+    const el = await mount(`/pod?cluster=prod-a&namespace=shop&pod=${POD}`, 'clusterPodDetail');
+    await openSection(el, 'Son trace\'ler');
+    await until(() => count('traces') > 0, 'trace listesi');
+    const p = m.calls.find(c => c.name === 'traces')!.args[0] as Record<string, unknown>;
+    expect(p.service).toBe('cart');
+    expect(p.filters).toBeUndefined();
+    expect(el.textContent).toContain('servis geneli');
+  });
+  it('pencerede hatalı trace yoksa varsayılan Tümü (hasError\'suz sorgu)', async () => {
+    m.scope = { mode: 'pod', clusterValue: 'prod-a' };
+    const el = await mount(`/pod?cluster=prod-a&namespace=shop&pod=${POD}`, 'clusterPodDetail');
+    await openSection(el, 'Son trace\'ler');
+    await until(() => m.calls.some(c => c.name === 'traces' && !(c.args[0] as Record<string, unknown>).hasError), 'Tümü sorgusu');
   });
 });

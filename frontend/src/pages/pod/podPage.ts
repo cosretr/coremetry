@@ -4,47 +4,28 @@
 // mevcut uçlara (spanMetricBatch, /api/traces, /api/entity, /api/clusters/pods)
 // bağlar — YENİ uç yok.
 import type { TracesParams } from '@/lib/api';
-import type { EntityRecord, ClusterPodRow } from '@/lib/types';
+import type { EntityRecord, ClusterPodRow, PodTraceScope } from '@/lib/types';
 
 /** ?spans= — trace listesi süzgeci. errors varsayılan ve URL'de YAZILMAZ. */
-export type SpansMode = 'errors' | 'slow' | 'all';
+export type SpansMode = 'errors' | 'all';
 
 export function parseSpansParam(raw: string | null): SpansMode {
-  return raw === 'slow' || raw === 'all' ? raw : 'errors';
+  return raw === 'all' ? 'all' : 'errors';
+}
+
+/**
+ * v0.10.2195 — URL'de çip yokken: penceredeki hatalı trace sayısı biliniyor
+ * ve sıfırsa «Tümü» (boş liste yerine); bilinmiyorsa / varsa «Hatalı».
+ */
+export function effectiveSpansMode(raw: string | null, errorRowsFirstPage: number | null): SpansMode {
+  if (raw != null) return parseSpansParam(raw);
+  return errorRowsFirstPage === 0 ? 'all' : 'errors';
 }
 
 /** Yerinde yazar (replace:true ile kullanılır); yabancı paramlara dokunmaz. */
 export function writeSpansParam(p: URLSearchParams, mode: SpansMode): URLSearchParams {
   if (mode === 'errors') p.delete('spans'); else p.set('spans', mode);
   return p;
-}
-
-type Pt = { time: number; value: number };
-
-// Zamana göre eşle (inceleme #3): avg/p95 AYRI bir batch'ten gelir
-// (messaging.system != kafka) ve kovalar seyrek — indeksle eşlemek kafka
-// taşıyan pod'da yanlış kovaları çiftlerdi.
-function byTime(points: Pt[]): Map<number, number> {
-  const m = new Map<number, number>();
-  for (const p of points) m.set(p.time, p.value);
-  return m;
-}
-
-// v0.10.2178 (Clusters S10) — windowTotals / bucketStep KPI şeridiyle birlikte
-// kalktı (şerit RED serilerinden türüyordu; RED kapalı bölümde).
-
-/** «Yavaş» çipinin eşiği — p95 serisinin rate-ağırlıklı (zamana göre eşlenmiş) ortalaması; rate yoksa düz ortalama. */
-export function windowP95(p95: Pt[], rate: Pt[]): number | null {
-  if (p95.length === 0) return null;
-  const rt = byTime(rate);
-  let w = 0, s = 0;
-  for (const p of p95) {
-    const r = rt.get(p.time);
-    const wt = r !== undefined && r > 0 ? r : 0;
-    w += wt; s += wt * p.value;
-  }
-  if (w > 0) return s / w;
-  return p95.reduce((a, p) => a + p.value, 0) / p95.length;
 }
 
 export const POD_TRACE_PAGE = 50;
@@ -56,28 +37,41 @@ export interface PodTraceCtx {
   /** span tarafı cluster değeri (?cluster= — boşsa anahtar yazılmaz) */
   cluster: string;
   service: string;
+  /** v0.10.2195 — false = pod'a ait span yok, servis geneli (k8s.pod.name süzgeci yok) */
+  podExact: boolean;
   mode: SpansMode;
-  /** «Yavaş» eşiği (ms); null = henüz bilinmiyor → yavaş modu SORGU ÜRETMEZ */
-  p95Ms: number | null;
+}
+
+
+/**
+ * v0.10.2195 — trace kapsamı entity modelinden. Kapsam yüklenmeden / yoksa:
+ * kaydın tek span cluster değeri (çoksa süzgeç yok), pod süzgeci. URL'deki
+ * ?service= pod kipinde daraltıcı kalır; servis kipinde iş yükünün servisi.
+ */
+export function traceScopeCtx(scope: PodTraceScope | undefined, spanClusters: string[], urlService: string):
+  { cluster: string; service: string; podExact: boolean } {
+  const single = spanClusters.length === 1 ? spanClusters[0] : '';
+  if (scope?.mode === 'service' && scope.service) {
+    return { cluster: scope.clusterValue ?? single, service: scope.service, podExact: false };
+  }
+  return { cluster: scope?.clusterValue || single, service: urlService, podExact: true };
 }
 
 /**
  * /api/traces parametreleri. ExceptionPodsPanel'in k8s.pod.name süzgeciyle
  * aynı sözleşme (features/anomalies/ExceptionPodsPanel.tsx:65-66). Sayfa 50,
- * count=skip (toplam sayım yok — «daha fazla var» hasMore'dan). Yavaş modu
- * p95 gelmeden null döner: sabit bir ms'e düşmek yanlış kapsam olurdu.
+ * count=skip (toplam sayım yok — «daha fazla var» hasMore'dan). Servis
+ * geneli kipte (podExact=false) k8s.pod.name süzgeci yazılmaz.
  */
-export function podTraceParams(ctx: PodTraceCtx, offset: number): TracesParams | null {
-  if (ctx.mode === 'slow' && (ctx.p95Ms === null || !(ctx.p95Ms > 0))) return null;
+export function podTraceParams(ctx: PodTraceCtx, offset: number): TracesParams {
   const p: TracesParams = {
-    filters: JSON.stringify([{ k: 'k8s.pod.name', op: '=', v: [ctx.pod] }]),
     from: ctx.from, to: ctx.to,
     limit: POD_TRACE_PAGE, offset, count: 'skip',
   };
+  if (ctx.podExact) p.filters = JSON.stringify([{ k: 'k8s.pod.name', op: '=', v: [ctx.pod] }]);
   if (ctx.service) p.service = ctx.service;
   if (ctx.cluster) p.cluster = ctx.cluster;
   if (ctx.mode === 'errors') p.hasError = true;
-  if (ctx.mode === 'slow') p.minMs = Math.round(ctx.p95Ms as number);
   return p;
 }
 

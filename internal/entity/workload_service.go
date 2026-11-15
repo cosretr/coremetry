@@ -27,10 +27,12 @@ import (
 type SeenEdge struct {
 	Namespace, Pod, Node, Service string
 	Spans                         int64
+	// Cluster — span'in cluster DEĞERİ (v0.10.2195; trace süzgeci bu değerle).
+	Cluster string
 }
 
 // PodEdges — bir pod'un baskın servisi ve span'den bilinen node'u.
-type PodEdges struct{ Service, Node string }
+type PodEdges struct{ Service, Node, ClusterValue string }
 
 // IndexPodEdges — SAF: namespace'in pod'ları için kenar indeksi. Satırın
 // namespace'i boşsa da sayılır (collector k8s.namespace.name basmıyor —
@@ -38,8 +40,9 @@ type PodEdges struct{ Service, Node string }
 // Baskın servis = en çok span (eşitlikte alfabetik ilk — kararlı).
 func IndexPodEdges(namespace string, seen []SeenEdge) map[string]PodEdges {
 	type acc struct {
-		spans map[string]int64
-		node  string
+		spans   map[string]int64
+		node    string
+		cluster map[string]int64
 	}
 	by := map[string]*acc{}
 	for _, e := range seen {
@@ -48,11 +51,14 @@ func IndexPodEdges(namespace string, seen []SeenEdge) map[string]PodEdges {
 		}
 		a := by[e.Pod]
 		if a == nil {
-			a = &acc{spans: map[string]int64{}}
+			a = &acc{spans: map[string]int64{}, cluster: map[string]int64{}}
 			by[e.Pod] = a
 		}
 		if e.Service != "" {
 			a.spans[e.Service] += e.Spans
+		}
+		if e.Cluster != "" {
+			a.cluster[e.Cluster] += e.Spans
 		}
 		if a.node == "" && e.Node != "" {
 			a.node = e.Node
@@ -60,7 +66,7 @@ func IndexPodEdges(namespace string, seen []SeenEdge) map[string]PodEdges {
 	}
 	out := make(map[string]PodEdges, len(by))
 	for pod, a := range by {
-		out[pod] = PodEdges{Service: argmax(a.spans), Node: a.node}
+		out[pod] = PodEdges{Service: argmax(a.spans), Node: a.node, ClusterValue: argmax(a.cluster)}
 	}
 	return out
 }
