@@ -84,7 +84,10 @@ func newHCFakeServer(t *testing.T, f *hcFakeThanos) *Server {
 	t.Cleanup(srv.Close)
 	svc := thanos.New()
 	svc.Configure(thanos.Settings{Clusters: []thanos.ClusterConfig{{Name: "cluster-a", URL: srv.URL, Enabled: true}}})
-	return &Server{thanos: svc}
+	s := &Server{thanos: svc, cache: newMemCache()}
+	// v0.10.2239 (S4): pod kümesi resolver'ın canlı dizininden.
+	seedLivePods(t, s, "shop", "orders-api", "orders-api-7c9d8f6b5d-x2kqz")
+	return s
 }
 
 func TestMCPServicePodsHealthcheckExtras(t *testing.T) {

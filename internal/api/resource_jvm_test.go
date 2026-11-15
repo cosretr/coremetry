@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
-	"github.com/cilcenk/coremetry/internal/thanos"
 	"github.com/cilcenk/coremetry/internal/vmetrics"
 )
 
@@ -96,7 +95,7 @@ func TestResJVMScopeFor(t *testing.T) {
 		t.Errorf("pod: %+v %q", sc, why)
 	}
 	sc, why = resJVMScopeFor(riRoute(resKindWorkload, "orders-worker", "", resFamJVM), vmetrics.LabelMap{}, set)
-	if why != "" || sc.PodRe != thanos.ServicePodRegex("orders-worker", "") || sc.Service != "" {
+	if why != "" || sc.PodRe != `(orders-worker)-.*` || sc.Service != "" {
 		t.Errorf("workload: %+v %q", sc, why)
 	}
 	// Servis etiketi yok → yanlış servisin JVM'i okunmaz (gerekçe).
@@ -339,7 +338,7 @@ func TestResJVMChipsRoute(t *testing.T) {
 		kinds = append(kinds, f.Kind)
 		if f.Kind == fuKindResJVM {
 			r := routeGuidedIntent(f.Text, riServices, riEnvs, nil, "")
-			if r.Intent != guidedResourceInvestigation || r.ResFamily != resFamJVM || r.ResTarget != riPod || r.Service != "orders-api" {
+			if r.Intent != guidedResourceInvestigation || r.ResFamily != resFamJVM || r.ResTarget != riPod || r.Service != "" { // v0.10.2239 (S4): sahip demette resolver'dan
 				t.Errorf("GC/heap çipi %q → %+v", f.Text, r)
 			}
 		}

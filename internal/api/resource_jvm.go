@@ -61,7 +61,6 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcptools"
-	"github.com/cilcenk/coremetry/internal/thanos"
 	"github.com/cilcenk/coremetry/internal/vmetrics"
 )
 
@@ -292,7 +291,10 @@ func resJVMScopeFor(route *guidedRoute, lm vmetrics.LabelMap, set map[string]boo
 		if sc.PodLabel == "" {
 			return sc, "JVM metriği pod etiketi taşımıyor — workload pod'ları süzülemedi"
 		}
-		sc.PodRe = thanos.ServicePodRegex(route.ResTarget, "")
+		if route.ResPodRe == "" { // v0.10.2239 (S4): resolver komşusu yok
+			return sc, "workload'un pod'u entity deposunda bilinmiyor — pod süzülemedi"
+		}
+		sc.PodRe = route.ResPodRe
 	default:
 		svc := route.Service
 		if svc == "" {

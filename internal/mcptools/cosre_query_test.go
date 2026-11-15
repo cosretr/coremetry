@@ -116,7 +116,12 @@ func newCQEnv(vmConfigured bool) *cqEnv {
 			return e.spanRes, 60, e.spanErr
 		},
 		clusterValues: func(context.Context, string, time.Time, time.Time) ([]string, error) { return e.svcCl, nil },
-		deployment:    func(context.Context, string) string { return "checkout-deploy" },
+		podSelector: func(_ context.Context, svc, _ string, _ time.Time) string {
+			if svc == "" {
+				return ""
+			}
+			return "^(" + svc + "-7d9f6c5b4-a1b2c)$"
+		},
 	}
 	return e
 }
@@ -872,5 +877,22 @@ func TestQueryMetricsAppREDViaVM(t *testing.T) {
 	r := e.run(t, map[string]any{"service": "checkout", "env": "prod"})
 	if gotEnv != "prod" || r.Evidence.Env != "prod" || !strings.Contains(strings.Join(r.Warnings, "|"), "TÜM ortamları") {
 		t.Errorf("env propagation: got=%q evidence=%q warnings=%v", gotEnv, r.Evidence.Env, r.Warnings)
+	}
+}
+
+// v0.10.2239 (Entity S4): pod ailesinin seçicisi resolver komşularından; depoda
+// pod yoksa Thanos'a cluster geneli gidilmez, dürüst "pod bilinmiyor".
+func TestQueryMetricsPodSelectorFromResolver(t *testing.T) {
+	e := newCQEnv(false)
+	e.th.samples = []thanos.Sample{{Labels: map[string]string{"namespace": "shop", "pod": "checkout-7d9f6c5b4-a1b2c"}, Value: 0.5}}
+	r := e.run(t, map[string]any{"service": "checkout", "family": "pod_cpu", "cluster": "cluster-a"})
+	if !r.OK || len(e.th.exprs) != 1 || !strings.Contains(e.th.exprs[0], `pod=~"^(checkout-7d9f6c5b4-a1b2c)$"`) {
+		t.Fatalf("tam ad seçicisi: ok=%v exprs=%v", r.OK, e.th.exprs)
+	}
+	e = newCQEnv(false)
+	e.b.podSelector = func(context.Context, string, string, time.Time) string { return "" }
+	r = e.run(t, map[string]any{"service": "checkout", "family": "pod_cpu", "cluster": "cluster-a"})
+	if !r.OK || !r.Empty || len(e.th.exprs) != 0 || !strings.Contains(r.Message, "pod bilinmiyor") {
+		t.Fatalf("bilinmiyor → Thanos yok: %+v exprs=%v", r, e.th.exprs)
 	}
 }

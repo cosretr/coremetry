@@ -222,7 +222,7 @@ Araç çıktıları deterministik veridir; LLM'e bağlı adım yok (prod LLM yal
 | **S1 — Her zaman açık + yazım diyeti** ✅ v0.10.2214, değişiklik v0.10.2225 (aşağıda "S1 değişikliği") | Bayrak ve 4 vida → sabit (K1); atanmamış span cluster değeri → cluster entity (K2); `Refresh` kısma; Settings sekmesi yalnız durum | Kurulum yapmadan Pod/Entity sayfaları, Service → Pods, `list_pods`; atanmamış cluster'lar görünür | Açılışta ilk tick yükü; yanlış cluster çoğalması | `entity_layer` blob'unda yalnız backfill durumu kalır; geri alma = sürüm, veri durur | Kısma tablo testi (lider devri dahil); iki syncer aynı girdi → aynı satırlar; prod'da satır/dk ölçümü |
 | **S2 — Kararlı iş yükü kimliği + `serves`** ✅ v0.10.2232 | Kanonik Kind, `same_as`, wl→svc kenarı kalıcı. Rollouts ve Service Infra resolver'dan; A5, A6, A7 silinir | Rollouts iş yükü hapı her zaman doğru servise/entity'ye gider; Service sayfasında "çalıştığı iş yükleri" | Eski `Derived`/ReplicaSet id'li linkler | Yeni `rel_type` değerleri, DDL yok; eski satırlar TTL ile düşer; geri alma = sürüm | Kanonikleştirme tablo testi; `same_as` 1 adım; `bsa-digital-dashboard-prod` regresyon satırı |
 | **S3 — Pod ↔ log ↔ trace** ✅ v0.10.2233 | `/api/logs` entity kapsamı (ES ve CH alan eşlemesiyle); span detayında yol çipleri; pod → trace `k8s_pod` kolonundan; A8, A9 silinir | Pod logları iki backend'de de doğru; trace'ten pod/iş yükü/servise tek tık ve geri | ES alan adı çeşitliliği | Şema yok; geri alma = sürüm | Backend başına süzgeç golden'ı; FE vitest; ES sorgu şekli (term, PIT yok) |
-| **S4 — CoSRE / MCP** | `ServicePodRegex` → `Neighbours`; `resolve_entity` yol + komşu; sweep/healthcheck pod adaptörleri | Adı deployment'tan farklı servislerde pod sağlığı gelir; kardeş önek karışmaz | Depoda olmayan servis (span yok) | Geri dönüş yolu yok (shim yasağı); depo boşsa araç "pod bilinmiyor" der | Araç golden'ları; CoSRE eval setinde pod soruları; regex çağıranı kalmadı ratchet'i |
+| **S4 — CoSRE / MCP** ✅ v0.10.2239 | `ServicePodRegex` → `Neighbours`; `resolve_entity` yol + komşu; sweep/healthcheck pod adaptörleri | Adı deployment'tan farklı servislerde pod sağlığı gelir; kardeş önek karışmaz | Depoda olmayan servis (span yok) | Geri dönüş yolu yok (shim yasağı); depo boşsa araç "pod bilinmiyor" der | Araç golden'ları; CoSRE eval setinde pod soruları; regex çağıranı kalmadı ratchet'i |
 | **S5 — Yatay eksen** | host, db, queue, ext entity; `calls` kenarı; topoloji id = entity id; A10 silinir | DB/queue/host entity sayfaları; "bu pod'un servisi hangi DB'yi çağırıyor" yolu; blast radius tek kaynaktan | `ext:` kardinalitesi | Yeni tip/rel değerleri; `LowCardinality` tip kolonları uygun; geri alma = sürüm | `calls` SQL şekli; kardinalite tavanı testi; topoloji ↔ entity id gidiş-dönüş |
 | **S6 — Sinyal tamamlama** | `entity_seen` v2 MV (iş yükü kolonları, host satırları); VM'den metrik `runs`; log kapsama işareti (K5, K6) | Yalnız metrik/log basan servisler entity olur; regex türevi iş yükü kalmaz | MV INSERT maliyeti; çift MV dönemi | Yeni MV 30 gün çift koşar, sonra eski düşer; geri alma = yeni MV'yi DROP | MV DDL testi; prod preflight; INSERT gecikmesi öncesi/sonrası |
 
@@ -289,3 +289,20 @@ zorunlu, ≤ 7 gün. `POST /api/entity/paths` (`internal/api/entity_paths.go`) s
 yerde (`resolveSpanCluster`). Trace listesi hücreleri v0.10.330'dan beri düz metin; FE'deki ölü
 `traceK8sHref` silindi. Sapma: `GET /api/entity/resolve` ayrı uç olarak açılmadı — tekil ipucu aynı
 `POST /api/entity/paths`'ten.
+
+**S4 notları (v0.10.2239):** `entity.Resolver.ServicePods` (`internal/entity/service_pods.go`): svc → pod
+canlı dizinden (pod'un span servisi YA DA iş yükünün `serves` kenarı — span basmayan CrashLoop pod'u da),
+ıskada / geçmiş anda tek `entity_seen_5m` servis öneki okuması (yeni `ResolverSource.SeenForService`).
+`WorkloadPodsNamed` (metin sorusundaki iş yükü adı, kanonik ad eşitliği) ve `PodsNamed` (pod → sahibi
+servis) aynı dosyada. api `servicePodSelector` (`internal/api/entity_service_pods.go`) cluster başına tam
+ad seçicisi (`thanos.PodNamesRegex`, ≤ 200 ad / 4000 karakter, fazlası ilan); küme boşsa Thanos'a gidilmez
+(boş seçici cluster geneli olurdu), araç "pod bilinmiyor" der. Tüketiciler: `service_health_sweep` /
+healthcheck pod adaptörü (`PodsUnknown`), sohbet pod envanteri (`guidedThanosPods`), kaynak incelemesi
+(`route.ResPodRe`; pod sahibi demette resolver'dan, router'da ad öneki yok), JVM workload kapsamı,
+`query_metrics` pod aileleri (`Deps.ServicePodSelector`, `at` geçmişteyse MV). `resolve_entity` tek
+aday çözülünce `neighbours` (yol + svc → iş yükleri/pod'lar, wl → servisler/pod'lar) taşır; aynı fonksiyon
+`GET /api/entity/neighbours` (30 s `serveCached`). Silindi: `thanosServicePodRegex`, `thanosPodRegexFor`,
+`resPodOwnerService`, `query_metrics`'in metadata deployment okuması. Ratchet `TestNoServicePodRegexOutsideML`.
+Sapma: `thanos.ServicePodRegex` fonksiyonu `internal/ml`'in metrik Thanos yolu için kaldı (ayrı iş akışı;
+ratchet ML dışını kilitler). FE `servicePodRegex` (Service → Infra) bu dilimin (CoSRE/MCP) dışında.
+Şema yok, ayar yok.

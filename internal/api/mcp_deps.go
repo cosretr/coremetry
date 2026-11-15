@@ -89,6 +89,10 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		// v0.10.1276 (CoSRE adım 7) — service_health_sweep'in pod bölümü (Thanos
 		// PodMetrics + penceredeki restart artışı; mcp_service_pods.go).
 		ServicePods: s.mcpServicePodsOrNil(),
+		ServicePodSelector: func(ctx context.Context, service, cid string, at time.Time) string {
+			return s.servicePodSelector(ctx, service, at).ByCluster[cid]
+		},
+		EntityNeighbours: s.entityNeighboursFor,
 		// v0.10.1287 (AI SRE Faz 1b) — get_problem `investigation` (kayıtlı araştırma
 		// özeti; sre_investigation_chat.go).
 		Investigation: s.mcpInvestigationSummary,

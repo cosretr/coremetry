@@ -406,6 +406,10 @@ type guidedRoute struct {
 	ResNamespace      string   `json:"-"`
 	ResHref           string   `json:"-"`
 	ResJVM            bool     `json:"-"`
+	// ResPodRe — v0.10.2239 (Entity S4): servis / iş yükü kipinde hedefin pod
+	// seçicisi, entity.Resolver komşularından (tam adlar; demet doldurur).
+	// "" = depoda pod bilinmiyor → Thanos'a cluster geneli gidilmez.
+	ResPodRe string `json:"-"`
 	// v0.10.1432 — R2 drill isteği (GİRDİ, JSON): "jvm" (JVM sözcüğü başka
 	// kaynak sözcüğüyle birlikte → aile all + JVM drill'i) | "slow"
 	// (yavaş/latency sorusu) | "". Drill yine JVM metriği VARSA koşar.

@@ -45,6 +45,9 @@ type ResolverSource interface {
 	// SeenPods — v0.10.2225: cluster değerlerinin pencerede span basan pod'ları
 	// (namespace "" = tümü), zaman sınırlı + LIMIT. Pods'un MV yedeği.
 	SeenPods(ctx context.Context, clusterValues []string, namespace string, from, to time.Time) ([]SeenEdge, error)
+	// SeenForService — v0.10.2239 (S4): servisin pod'ları (MV öneki service_name),
+	// zaman sınırlı + LIMIT. ServicePods'un canlı dizin ıskası yedeği.
+	SeenForService(ctx context.Context, service string, clusterValues []string, from, to time.Time) ([]SeenEdge, error)
 }
 
 // ClusterMap — entity cid ↔ span cluster değerleri (Remote Cluster kaydı).

@@ -31,7 +31,11 @@ const (
 
 var servicePodEnvSuffixes = []string{"-prod", "-int", "-uat", "-prep"}
 
-// ServicePodRegex — SAF; frontend pages/clusters/podWorkload.ts
+// ServicePodRegex — v0.10.2239 (Entity S4): api / mcptools çağıranları
+// silindi (pod kümesi entity.Resolver komşularından); yalnız internal/ml'in
+// metrik Thanos yolu kullanır (ayrı iş akışı) — ratchet
+// TestNoServicePodRegexOutsideML yeni çağıranı reddeder.
+// Eski not: frontend pages/clusters/podWorkload.ts
 // servicePodRegex ile birebir (Infrastructure sekmesiyle aynı pod kümesi):
 // deployment | servis | ortam eksiz ad, "-.*" son eki. v0.10.1271 — api'deki
 // thanosServicePodRegex'ten taşındı (mcptools da kullanır; api delege eder).

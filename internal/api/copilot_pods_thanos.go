@@ -3,8 +3,8 @@ package api
 // copilot_pods_thanos.go — v0.10.1250 (operatör: "pod'ları nasıl" cevabı
 // "0 pod" diyordu; Infrastructure sekmesi aynı servisin pod'larını Thanos'ta
 // (kube-state + cAdvisor) buluyor). Pod sorusu artık Thanos'a da bakar:
-// Infrastructure sekmesiyle AYNI hedefli seçici (servicePodRegex ikizi:
-// deployment | servis | ortam eksiz ad, "-.*" son eki), etkin her cluster
+// v0.10.2239 (S4): seçici entity.Resolver'ın svc → pod komşuları (cluster
+// başına tam adlar; entity_service_pods.go), pod'u olan her cluster
 // paralel ve 6 sn tavanlı (getClusterPods'un bütçesi). Bulursa cluster başına
 // pod/çalışan/restart/CPU/bellek özeti + en çok kaynak tüketen pod'lar; ve
 // HTTP metrikleri (VictoriaMetrics) için deterministik grafik kartları.
@@ -26,15 +26,12 @@ const (
 	thanosPodsListMax    = 8
 )
 
-// thanosServicePodRegex — SAF; v0.10.1271'den beri thanos.ServicePodRegex'e
-// delege eder (query_metrics aracı aynı pod kümesini kullanır).
-func thanosServicePodRegex(service, deploy string) string {
-	return thanos.ServicePodRegex(service, deploy)
-}
-
 type thanosPodsResult struct {
 	Rows   []thanos.PodRow
 	Errors []string // okunamayan cluster adları
+	// Unknown — v0.10.2239 (S4): entity deposunda servisin pod'u yok; Thanos
+	// sorgulanmadı.
+	Unknown bool
 }
 
 // guidedThanosPods — etkin cluster'larda servisin pod'ları (Thanos yoksa boş).
@@ -43,8 +40,17 @@ func (s *Server) guidedThanosPods(ctx context.Context, service string) thanosPod
 	if s.thanos == nil || !s.thanos.HasEnabledClusters() || service == "" {
 		return out
 	}
-	re := s.thanosPodRegexFor(ctx, service)
-	clusters := s.thanosEnabledClusters()
+	sel := s.servicePodSelector(ctx, service, time.Time{})
+	if sel.Unknown() {
+		out.Unknown = true
+		return out
+	}
+	var clusters []thanos.ClusterConfig
+	for _, c := range s.thanosEnabledClusters() {
+		if sel.ByCluster[c.EffectiveID()] != "" {
+			clusters = append(clusters, c)
+		}
+	}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, thanosPodsParallel)
@@ -56,7 +62,7 @@ func (s *Server) guidedThanosPods(ctx context.Context, service string) thanosPod
 			defer func() { <-sem }()
 			cctx, cancel := context.WithTimeout(ctx, thanosPodsPerCluster)
 			defer cancel()
-			rows, _, err := s.thanos.PodMetrics(cctx, c, re)
+			rows, _, err := s.thanos.PodMetrics(cctx, c, sel.ByCluster[c.EffectiveID()])
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -74,19 +80,6 @@ func (s *Server) guidedThanosPods(ctx context.Context, service string) thanosPod
 	wg.Wait()
 	sort.Strings(out.Errors)
 	return out
-}
-
-// thanosPodRegexFor — v0.10.1276: servisin pod seçicisi (metadata'daki
-// deployment adıyla; Infrastructure sekmesiyle aynı küme). guidedThanosPods ve
-// service_health_sweep'in pod adaptörü (mcp_service_pods.go) ORTAK okur.
-func (s *Server) thanosPodRegexFor(ctx context.Context, service string) string {
-	deploy := ""
-	if s.store != nil {
-		if md, err := s.store.GetServiceMetadata(ctx, service); err == nil && md != nil {
-			deploy = md.Deployment
-		}
-	}
-	return thanosServicePodRegex(service, deploy)
 }
 
 // thanosEnabledClusters — v0.10.1276: etkin cluster'ların GERÇEK yapılandırması
@@ -116,6 +109,9 @@ func fmtGiB(b float64) string {
 
 // renderThanosPodsTR — SAF: cluster başına özet + kaynakça en ağır pod'lar.
 func renderThanosPodsTR(res thanosPodsResult, service string) string {
+	if res.Unknown {
+		return podsUnknownTR(service) + ".\n"
+	}
 	if len(res.Rows) == 0 && len(res.Errors) == 0 {
 		return ""
 	}

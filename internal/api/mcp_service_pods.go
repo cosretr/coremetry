@@ -3,8 +3,9 @@ package api
 // mcp_service_pods.go — v0.10.1276 (CoSRE adım 7): service_health_sweep'in pod
 // bölümünün Thanos adaptörü (Deps.ServicePods).
 //
-// Pod kümesi guidedThanosPods ile AYNI (thanosPodRegexFor: deployment | servis
-// | ortam eksiz ad, Infrastructure sekmesinin seçicisi); cluster başına:
+// Pod kümesi guidedThanosPods ile AYNI — v0.10.2239 (S4): entity.Resolver'ın
+// svc → pod komşuları, cluster başına tam ad seçicisi (servicePodSelector);
+// depo boşsa PodsUnknown, Thanos sorgulanmaz. Cluster başına:
 //   - thanos.PodMetrics — anlık CPU/bellek, limit %, faz, son sonlanma (kube-state);
 //   - increase(kube_pod_container_status_restarts_total[pencere]) — penceredeki
 //     restart ARTIŞI (KSM sayacı ömür boyu; ham sayaç puanlanmaz), PodFamilyQuery
@@ -45,6 +46,12 @@ func (s *Server) mcpServicePods(ctx context.Context, service string, refs []stri
 	if service == "" {
 		return out, fmt.Errorf("service gerekli")
 	}
+	sel := s.servicePodSelector(ctx, service, time.Time{})
+	out.PodRegex = sel.Union
+	if sel.Unknown() {
+		out.PodsUnknown = true
+		return out, nil
+	}
 	var clusters []thanos.ClusterConfig
 	seen := map[string]bool{}
 	if len(refs) == 0 {
@@ -56,11 +63,17 @@ func (s *Server) mcpServicePods(ctx context.Context, service string, refs []stri
 			clusters = append(clusters, c)
 		}
 	}
+	// Yalnız servisin pod'u bilinen cluster'lar (boş seçici = cluster geneli).
+	kept := clusters[:0]
+	for _, c := range clusters {
+		if sel.ByCluster[c.EffectiveID()] != "" {
+			kept = append(kept, c)
+		}
+	}
+	clusters = kept
 	if len(clusters) > mcpServicePodsMaxClusters {
 		clusters = clusters[:mcpServicePodsMaxClusters]
 	}
-	re := s.thanosPodRegexFor(ctx, service)
-	out.PodRegex = re
 	window := to.Sub(from)
 	if window < time.Minute {
 		window = time.Minute
@@ -78,7 +91,7 @@ func (s *Server) mcpServicePods(ctx context.Context, service string, refs []stri
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			out.Clusters[i] = s.mcpServicePodsCluster(ctx, c, re, window, offset, opt)
+			out.Clusters[i] = s.mcpServicePodsCluster(ctx, c, sel.ByCluster[c.EffectiveID()], window, offset, opt)
 		}(i, c)
 	}
 	wg.Wait()

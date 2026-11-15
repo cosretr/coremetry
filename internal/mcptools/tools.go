@@ -293,6 +293,13 @@ type Deps struct {
 	// PodMetrics + penceredeki restart artışı; api/mcp_service_pods.go,
 	// guidedThanosPods ile aynı pod seçicisi). nil = Thanos yok → bölüm skipped.
 	ServicePods ServicePodsFunc
+	// v0.10.2239 (Entity S4) — query_metrics pod ailelerinin seçicisi: servisin
+	// cluster'daki pod'ları entity.Resolver komşularından (tam adlar; api
+	// servicePodSelector). "" = depoda pod yok → Thanos sorgulanmaz. nil = yok.
+	ServicePodSelector func(ctx context.Context, service, clusterID string, at time.Time) string
+	// EntityNeighbours — resolve_entity'nin yol + komşu cevabı (api
+	// entityNeighboursFor). nil = entity katmanı yok → alan yazılmaz.
+	EntityNeighbours func(ctx context.Context, c EntityCandidate) (*EntityNeighbours, error)
 	// v0.10.1287 (AI SRE Faz 1b) — problemin kayıtlı AI SRE araştırmasının
 	// özeti (get_problem `investigation`; api/mcp_deps.go sre kaydından doldurur).
 	// Tip burada: sre → mcptools importu var, ters yön döngü olurdu. nil = yok.

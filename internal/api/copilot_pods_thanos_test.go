@@ -8,20 +8,6 @@ import (
 	"github.com/cilcenk/coremetry/internal/thanos"
 )
 
-// v0.10.1250 — pod sorusu Thanos envanterini de okur (Infrastructure ile aynı seçici).
-func TestThanosServicePodRegex(t *testing.T) {
-	cases := map[[2]string]string{
-		{"bsa-mobile-login-prod", ""}: `(bsa-mobile-login-prod|bsa-mobile-login)-.*`,
-		{"shop.api-prod", "shop-api"}: `(shop-api|shop\.api-prod|shop\.api)-.*`,
-		{"checkout", "checkout"}:      `(checkout)-.*`,
-	}
-	for in, want := range cases {
-		if got := thanosServicePodRegex(in[0], in[1]); got != want {
-			t.Errorf("%v → %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestRenderThanosPodsTR(t *testing.T) {
 	if renderThanosPodsTR(thanosPodsResult{}, "s") != "" {
 		t.Fatal("Thanos yok/boş → kanıt yok")

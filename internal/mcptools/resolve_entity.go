@@ -41,6 +41,34 @@ type EntityCandidate struct {
 	Match     string `json:"match"` // exact | prefix | substring | tokens | fuzzy
 }
 
+// EntityNeighbours — v0.10.2239 (Entity S4; plan §4): tek çözülen adayın
+// yolu ve komşuları entity.Resolver'dan (ad öneki tahmini yok). Servis →
+// iş yükleri (serves) + pod'lar (canlı dizin; geçmişte entity_seen_5m);
+// iş yükü → servisler + pod'lar; pod → yol (iş yükü, servis, node, cluster).
+type EntityNeighbours struct {
+	Path          *EntityPathIDs `json:"path,omitempty"`
+	Services      []string       `json:"services,omitempty"`
+	Workloads     []string       `json:"workloads,omitempty"` // wl: id'leri
+	Pods          []string       `json:"pods,omitempty"`      // pod: id'leri, ≤ EntityNeighbourPodsMax
+	PodCount      int            `json:"pod_count"`
+	PodsTruncated bool           `json:"pods_truncated,omitempty"`
+	PodSource     string         `json:"pod_source,omitempty"` // live | mv | live+mv
+	Note          string         `json:"note,omitempty"`
+}
+
+// EntityPathIDs — pod → iş yükü → servis → namespace → node → cluster.
+type EntityPathIDs struct {
+	Pod       string `json:"pod,omitempty"`
+	Workload  string `json:"workload,omitempty"`
+	Service   string `json:"service,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+	Node      string `json:"node,omitempty"`
+	Cluster   string `json:"cluster,omitempty"`
+}
+
+// EntityNeighbourPodsMax — cevapta listelenen pod id tavanı (sayı ayrı).
+const EntityNeighbourPodsMax = 20
+
 // EntityCatalogIndex — çözümün baktığı küme (SAF; test edilir).
 type EntityCatalogIndex struct {
 	Services   []string
@@ -349,7 +377,8 @@ func resolveEntityTool(d Deps) mcp.Tool {
 		Description: "Resolve free text the operator typed (\"shop-payment\", \"shop namespace\", \"api-7d9f\") into catalogue candidates: OTel service.name values, Kubernetes namespaces, " +
 			"workloads and (only when the text looks like a pod name) pods — each scored (exact > prefix > substring > tokens > fuzzy) and tagged with cluster + namespace. " +
 			"Call this FIRST whenever the operator names an entity in free text; never guess whether a string is a namespace, a workload or a service. " +
-			"`resolved` is set only when exactly one strong candidate exists — proceed silently then. Several candidates → show them with cluster + namespace + kind and ask which one; " +
+			"`resolved` is set only when exactly one strong candidate exists — proceed silently then; it then carries `neighbours`: the entity path (pod → workload → service → namespace → node → cluster) " +
+			"and its neighbours (service → workloads + pods, workload → services + pods) from the entity store — use those pods, never guess pods from a name prefix; `pod_count` 0 means no pod is known. Several candidates → show them with cluster + namespace + kind and ask which one; " +
 			"none → say so, offer nothing invented. `cluster` / `namespace` narrow the catalogue side. When the entity layer is off, only the service axis is searched and " +
 			"`entity_layer` is false — say that instead of claiming a namespace does not exist.",
 		InputSchema: map[string]any{
@@ -380,6 +409,12 @@ func resolveEntityTool(d Deps) mcp.Tool {
 			res := map[string]any{"text": text, "candidates": cands, "count": len(cands), "entity_layer": idx.EntityLayer}
 			if one := ResolvedOne(cands); one != nil {
 				res["resolved"] = one
+				// v0.10.2239 (S4): yol + komşular (tek resolver okuması; model çağrısı yok).
+				if d.EntityNeighbours != nil {
+					if nb, nerr := d.EntityNeighbours(ctx, *one); nerr == nil && nb != nil {
+						res["neighbours"] = nb
+					}
+				}
 			}
 			switch {
 			case len(cands) == 0 && !idx.EntityLayer:

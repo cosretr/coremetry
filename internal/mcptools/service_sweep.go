@@ -169,7 +169,10 @@ type ServicePodsCluster struct {
 type ServicePodsResult struct {
 	Thanos   bool // en az bir etkin cluster var mı
 	PodRegex string
-	Clusters []ServicePodsCluster
+	// PodsUnknown — v0.10.2239 (Entity S4): entity deposunda servisin pod'u
+	// yok (svc → pod komşusu yok); Thanos sorgulanmadı.
+	PodsUnknown bool
+	Clusters    []ServicePodsCluster
 }
 
 // ServicePodsOpts — v0.10.1287: isteğe bağlı ek okumalar. WaitingReasons =
@@ -1311,6 +1314,11 @@ func sweepRunPods(ctx context.Context, r sweepReaders, req SweepRequest) sweepOu
 		o.section.State, o.section.Summary = hopSkipped, "Thanos'ta etkin cluster yok"
 		return o
 	}
+	if res.PodsUnknown { // v0.10.2239 (S4): svc → pod komşusu yok, Thanos sorgulanmadı
+		o.section.State, o.section.Summary = hopEmpty, "pod bilinmiyor: entity deposunda "+req.Service+" için pod yok (span ya da Kubernetes eşlemesi yok)"
+		o.section.Note = strings.Join(notes, "; ")
+		return o
+	}
 	var states []string
 	crit, warn := 0, 0
 	type pr struct {
@@ -1424,7 +1432,7 @@ func sweepRunPods(ctx context.Context, r sweepReaders, req SweepRequest) sweepOu
 		if o.section.State == hopOK {
 			o.section.State = hopEmpty
 		}
-		o.section.Summary = "veri yok: Thanos'ta " + firstNonEmpty(res.PodRegex, req.Service) + " kalıbına uyan pod yok"
+		o.section.Summary = "veri yok: Thanos'ta " + req.Service + " servisinin bilinen pod'ları bulunamadı"
 		return o
 	}
 	o.anyDataFound = true

@@ -52,8 +52,10 @@ func TestRouteResourceInvestigation(t *testing.T) {
 		{"what is the memory usage of orders-api", "", want{ri, resKindService, "orders-api", "orders-api", resFamMemory, ""}},
 		{"is orders-api saturated? resource usage", "", want{ri, resKindService, "orders-api", "orders-api", resFamAll, ""}},
 		// ── pozitif: pod adı (sahip servis Infrastructure regex'iyle)
-		{riPod + " neden restart ediyor", "", want{ri, resKindPod, riPod, "orders-api", resFamRestarts, ""}},
-		{riPod + " pod'unun cpu ve belleği", "", want{ri, resKindPod, riPod, "orders-api", resFamAll, ""}},
+		// v0.10.2239 (S4): pod'un sahibi servis router'da ad önekinden DEĞİL,
+		// demette resolver'dan (resolveResourcePods) — burada boş.
+		{riPod + " neden restart ediyor", "", want{ri, resKindPod, riPod, "", resFamRestarts, ""}},
+		{riPod + " pod'unun cpu ve belleği", "", want{ri, resKindPod, riPod, "", resFamAll, ""}},
 		{"payments-worker-0 pod'u restart ediyor mu", "", want{ri, resKindPod, "payments-worker-0", "", resFamRestarts, ""}},
 		// ── pozitif: workload + cluster anması
 		{"deployment orders-worker cpu kullanımı", "", want{ri, resKindWorkload, "orders-worker", "", resFamCPU, ""}},
@@ -216,7 +218,8 @@ func TestResourceFollowupsAndLinks(t *testing.T) {
 			continue
 		}
 		r := routeGuidedIntent(f.Text, riServices, riEnvs, nil, "")
-		if r.Intent != want || r.Service != "orders-api" {
+		// v0.10.2239 (S4): pod kipli JVM çipinin servisi demette resolver'dan.
+		if r.Intent != want || (r.Service != "orders-api" && !(f.Kind == fuKindResJVM && r.Service == "")) {
 			t.Errorf("%q → %s/%q, want %s", f.Text, r.Intent, r.Service, want)
 		}
 		if f.Kind == fuKindResJVM && (f.Label != "GC/heap'e bak" || r.ResFamily != resFamJVM || r.ResKind != resKindPod || r.ResTarget != riPod) {

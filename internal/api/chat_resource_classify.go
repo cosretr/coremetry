@@ -44,7 +44,6 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/ai/aisurface"
 	"github.com/cilcenk/coremetry/internal/copilot"
-	"github.com/cilcenk/coremetry/internal/thanos"
 )
 
 const (
@@ -130,6 +129,11 @@ type resClassifyEnv struct {
 	// PodsExist — Thanos kube_pod_info'da regex'e uyan pod var mı (son 24 sa);
 	// readable=false ⇒ hiçbir cluster okunamadı. nil ⇒ Thanos yapılandırılmamış.
 	PodsExist func(podRe string) (found, readable bool)
+	// v0.10.2239 (Entity S4) — resolver komşuları (ad önekinden tahmin yok):
+	// PodOwner pod adının sahibi servis ("" = bilinmiyor); WorkloadKnown iş
+	// yükü adının depoda pod'u var mı. nil = bilinmiyor.
+	PodOwner      func(pod string) string
+	WorkloadKnown func(name string) bool
 }
 
 func tokenIn(toks []string, t string) bool {
@@ -168,7 +172,10 @@ func resolveResClassifyTarget(in resClassifyJSON, norm string, toks []string, en
 		if !podShape {
 			return "", "", "", "pod adı şekli değil", false
 		}
-		owner := resPodOwnerService(t, env.Services)
+		owner := ""
+		if env.PodOwner != nil {
+			owner = env.PodOwner(t)
+		}
 		if env.PodsExist != nil {
 			if found, readable := env.PodsExist(regexp.QuoteMeta(t) + ".*"); readable {
 				if !found {
@@ -188,10 +195,8 @@ func resolveResClassifyTarget(in resClassifyJSON, norm string, toks []string, en
 		if liveSvc != "" {
 			return liveSvc, liveSvc, resKindService, "", true
 		}
-		if env.PodsExist != nil {
-			if found, _ := env.PodsExist(thanos.ServicePodRegex(t, "")); found {
-				return "", t, resKindWorkload, "", true
-			}
+		if env.WorkloadKnown != nil && env.WorkloadKnown(t) {
+			return "", t, resKindWorkload, "", true
 		}
 		return "", "", "", "workload canlı değil", false
 	}
@@ -326,7 +331,11 @@ func (s *Server) resourceClassifyFallback(ctx context.Context, emit func(string,
 		to = time.Now()
 	}
 	route, rangeS, why, ok := decideResourceClassify(raw, question, resClassifyEnv{Services: svcNames, CtxService: ctxService,
-		PodsExist: s.resClassifyPodsExist(ctx, to.Truncate(time.Minute))})
+		PodsExist: s.resClassifyPodsExist(ctx, to.Truncate(time.Minute)),
+		PodOwner:  func(pod string) string { return s.podOwnerService(ctx, pod, time.Time{}) },
+		WorkloadKnown: func(name string) bool {
+			return !s.workloadPodSelector(ctx, name, time.Time{}).Unknown()
+		}})
 	if i > 0 {
 		text := intentSummary(route, rangeS, ok)
 		if ok && route.ResTarget != "" {

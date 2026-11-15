@@ -28,6 +28,12 @@ func (a resolverSource) SeenPods(ctx context.Context, values []string, ns string
 	return seenEdges(aggs), err
 }
 
+// SeenForService — v0.10.2239 (S4): Resolver.ServicePods'un MV yedeği.
+func (a resolverSource) SeenForService(ctx context.Context, service string, values []string, from, to time.Time) ([]entity.SeenEdge, error) {
+	aggs, err := a.s.store.EntitySeenForService(ctx, service, values, from, to)
+	return seenEdges(aggs), err
+}
+
 func seenEdges(aggs []chstore.EntitySeenAgg) []entity.SeenEdge {
 	out := make([]entity.SeenEdge, len(aggs))
 	for i, g := range aggs {

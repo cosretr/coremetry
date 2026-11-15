@@ -39,6 +39,16 @@ func (f *fakeSrc) SeenPods(_ context.Context, _ []string, ns string, _, _ time.T
 	}
 	return out, f.err
 }
+func (f *fakeSrc) SeenForService(_ context.Context, svc string, _ []string, _, _ time.Time) ([]SeenEdge, error) {
+	f.calls++
+	var out []SeenEdge
+	for _, e := range f.seen {
+		if e.Service == svc {
+			out = append(out, e)
+		}
+	}
+	return out, f.err
+}
 func (f *fakeSrc) DeploymentLinks(context.Context) ([]DeploymentLink, error) { return f.links, nil }
 func (f *fakeSrc) KnownServices(context.Context) ([]string, error)           { return f.known, nil }
 

@@ -117,7 +117,21 @@ func TestDecideResourceClassify(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			route, rangeS, why, ok := decideResourceClassify(tc.raw, tc.q, resClassifyEnv{Services: rcServices, CtxService: tc.ctxSvc, PodsExist: tc.pods})
+			route, rangeS, why, ok := decideResourceClassify(tc.raw, tc.q, resClassifyEnv{Services: rcServices, CtxService: tc.ctxSvc, PodsExist: tc.pods,
+				// v0.10.2239 (S4): sahip / iş yükü resolver'dan — sahte komşuluk.
+				PodOwner: func(pod string) string {
+					if pod == rcPod {
+						return "orders-api"
+					}
+					return ""
+				},
+				WorkloadKnown: func(name string) bool {
+					if tc.pods == nil {
+						return false
+					}
+					found, _ := tc.pods(name)
+					return found
+				}})
 			if ok != tc.wantOK {
 				t.Fatalf("ok=%v (why=%q), want %v; route=%+v", ok, why, tc.wantOK, route)
 			}

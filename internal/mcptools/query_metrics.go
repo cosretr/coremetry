@@ -143,7 +143,9 @@ type qmBackends struct {
 	router        MetricRouter
 	runtime       chstore.RuntimePodReader // router nil iken
 	clusterValues func(ctx context.Context, service string, from, to time.Time) ([]string, error)
-	deployment    func(ctx context.Context, service string) string
+	// podSelector — v0.10.2239 (Entity S4): servisin o cluster'daki pod
+	// seçicisi (resolver komşuları, tam adlar); "" = bilinmiyor.
+	podSelector func(ctx context.Context, service, clusterID string, at time.Time) string
 }
 
 func qmBackendsFrom(d Deps) qmBackends {
@@ -162,14 +164,18 @@ func qmBackendsFrom(d Deps) qmBackends {
 			}
 			return out, err
 		}
-		b.deployment = func(ctx context.Context, service string) string {
-			if md, err := st.GetServiceMetadata(ctx, service); err == nil && md != nil {
-				return md.Deployment
-			}
-			return ""
-		}
 	}
+	b.podSelector = d.ServicePodSelector
 	return b
+}
+
+// qmPodAt — SAF: pod kümesinin anı. Pencere "şimdi"de bitiyorsa sıfır (canlı
+// dizin), geçmişteyse pencere sonu (entity_seen_5m servis öneki).
+func qmPodAt(to time.Time) time.Time {
+	if wallNow().Sub(to) < 2*time.Minute {
+		return time.Time{}
+	}
+	return to
 }
 
 // qmPoint / qmSeries — çıktı şekli.
@@ -785,11 +791,14 @@ func qmRunPod(ctx context.Context, d Deps, b qmBackends, q qmReq, warnings []str
 	}
 	podRe := ""
 	if q.service != "" {
-		deploy := ""
-		if b.deployment != nil {
-			deploy = b.deployment(ctx, q.service)
+		if b.podSelector != nil {
+			podRe = b.podSelector(ctx, q.service, route.Cluster.EffectiveID(), qmPodAt(q.to))
 		}
-		podRe = thanos.ServicePodRegex(q.service, deploy)
+		if podRe == "" { // boş seçici cluster geneli olurdu — Thanos'a gidilmez
+			return cosreResult{Tool: queryMetricsName, OK: true, Empty: true, Request: q.echo(), Warnings: warnings,
+				Message: "pod bilinmiyor: entity deposunda " + q.service + " servisinin " + route.Cluster.Name +
+					" cluster'ında pod'u yok (span ya da Kubernetes eşlemesi yok) — Thanos sorgulanmadı"}, nil
+		}
 	}
 	var offset time.Duration
 	if now := wallNow(); now.Sub(q.to) >= time.Minute {
@@ -821,7 +830,7 @@ func qmRunPod(ctx context.Context, d Deps, b qmBackends, q qmReq, warnings []str
 	if len(rows) == 0 {
 		out.Empty = true
 		out.Message = "veri yok: " + scopeTR([2]string{"servis", q.service}, [2]string{"aile", q.family}, [2]string{"cluster", route.Cluster.Name}) +
-			" için " + windowTR(q.from, q.to) + " penceresinde Thanos serisi bulunamadı (pod adı " + podRe + " kalıbına uymuyor olabilir)"
+			" için " + windowTR(q.from, q.to) + " penceresinde Thanos serisi bulunamadı"
 		return out, nil
 	}
 	out.Data = map[string]any{"summary": qmRowsSummary(rows), "rows": rows}

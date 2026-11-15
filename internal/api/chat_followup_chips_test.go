@@ -307,7 +307,8 @@ func TestFollowupTemplatesRouteGuided(t *testing.T) {
 	for _, c := range guidedFollowups(resRoute, nil) {
 		want, ok := resPinned[c.Kind]
 		r := routeGuidedIntent(c.Text, fuServices, fuEnvs, nil, "")
-		if !ok || r.Intent != want || r.Service != "checkout-service" || c.Scope == nil || c.Scope.Services[0] != "checkout-service" {
+		svcOK := r.Service == "checkout-service" || (c.Kind == fuKindResJVM && r.Service == "") // v0.10.2239 (S4): pod sahibi demette resolver'dan
+		if !ok || r.Intent != want || !svcOK || c.Scope == nil || c.Scope.Services[0] != "checkout-service" {
 			t.Errorf("kaynak takibi %+v → %s/%q", c, r.Intent, r.Service)
 		}
 	}

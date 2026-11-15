@@ -28,7 +28,7 @@ import (
 )
 
 func TestResourceQueriesGolden(t *testing.T) {
-	re := thanos.ServicePodRegex("orders-api", "")
+	re := `(orders-api)-.*`
 	got := resourceQueries(resFamAll, re, "shop|shop-b", 120)
 	want := []string{
 		`topk(20, sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{container!="",container!="POD",pod=~"(orders-api)-.*",namespace=~"shop|shop-b"}[120s])))`,
@@ -452,7 +452,25 @@ var riClusters = []thanos.ClusterConfig{
 }
 
 func riRoute(kind, target, svc, fam string) *guidedRoute {
-	return &guidedRoute{Intent: guidedResourceInvestigation, Service: svc, ResTarget: target, ResKind: kind, ResFamily: fam}
+	r := &guidedRoute{Intent: guidedResourceInvestigation, Service: svc, ResTarget: target, ResKind: kind, ResFamily: fam}
+	if kind != resKindPod {
+		// v0.10.2239 (S4): demetin resolveResourcePods'u doldurur; burada sabit
+		// seçici — testler yalnız seçicinin sorgulara aynen geçtiğini denetler.
+		r.ResPodRe = `(` + target + `)-.*`
+	}
+	return r
+}
+
+// v0.10.2239 (Entity S4): depoda pod yoksa seçici boş — cluster geneli Thanos
+// okuması YOK, dürüst "pod bilinmiyor".
+func TestResourceRunPodsUnknown(t *testing.T) {
+	th := &fakeResThanos{pods: map[string][]string{"kxzone": {riPod}}, results: riResults()}
+	route := riRoute(resKindService, "orders-api", "orders-api", resFamAll)
+	route.ResPodRe = ""
+	text, _, err := (&Server{}).resourceRun(context.Background(), (&mcEvents{}).emit(), route, resourceDeps{Thanos: th, Clusters: riClusters}, riTo, 3600, time.UTC)
+	if err != nil || len(th.lookups) != 0 || len(th.queries) != 0 || !strings.Contains(text, "pod bilinmiyor") || !route.ResNotFound {
+		t.Fatalf("Thanos'a gidilmemeli: lookups=%v queries=%v text=%q", th.lookups, th.queries, text)
+	}
 }
 
 var riTo = time.Date(2026, 10, 22, 12, 0, 20, 0, time.UTC)
@@ -463,7 +481,7 @@ func TestResourceRunService(t *testing.T) {
 	s := &Server{cache: newMemCache()}
 	ev := &mcEvents{}
 	route := riRoute(resKindService, "orders-api", "orders-api", resFamAll)
-	d := resourceDeps{Thanos: th, Clusters: riClusters, VM: vm, IsVM: true, ServicePodRe: thanos.ServicePodRegex("orders-api", "orders-api")}
+	d := resourceDeps{Thanos: th, Clusters: riClusters, VM: vm, IsVM: true}
 	text, src, err := s.resourceRun(context.Background(), ev.emit(), route, d, riTo, 3600, time.UTC)
 	if err != nil || route.DirectAnswer != "" {
 		t.Fatalf("err=%v direct=%q", err, route.DirectAnswer)

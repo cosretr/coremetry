@@ -208,22 +208,6 @@ func resPodToken(toks []string, services []string, podWord bool) string {
 	return ""
 }
 
-// resPodOwnerService — SAF: pod adının sahibi canlı servis (Infrastructure
-// sekmesinin servis → pod regex'iyle; en uzun eşleşme). Yoksa "".
-func resPodOwnerService(pod string, services []string) string {
-	best := ""
-	for _, s := range services {
-		ls := strings.ToLower(s)
-		if len(ls) < 3 || len(ls) <= len(best) || len(pod) < 3 || ls[:3] != pod[:3] {
-			continue
-		}
-		if re, err := regexp.Compile("^(?:" + thanos.ServicePodRegex(ls, "") + ")$"); err == nil && re.MatchString(pod) {
-			best = s
-		}
-	}
-	return best
-}
-
 // resNeighbourName — SAF: i'nci jetonun komşusu (önce sol, sonra sağ) ad ise o.
 func resNeighbourName(toks []string, i int, skip map[string]bool) string {
 	for _, j := range []int{i - 1, i + 1} {
@@ -298,11 +282,9 @@ func routeResourceInvestigation(raw, msg string, toks []string, svc, env string,
 	cluster := resClusterMention(toks)
 	r := guidedRoute{Intent: guidedResourceInvestigation, Env: env, ResFamily: fam, ResCluster: cluster, ResDrillAsk: resDrillAskOf(toks, fam)}
 	if pod != "" {
-		owner := svc
-		if owner == "" {
-			owner = resPodOwnerService(pod, services)
-		}
-		r.Service, r.ResTarget, r.ResKind = owner, pod, resKindPod
+		// v0.10.2239 (S4): sahibi servis (ekranda yoksa) demette resolver'dan
+		// (podOwnerService); ad önekinden tahmin yok.
+		r.Service, r.ResTarget, r.ResKind = svc, pod, resKindPod
 		return r, true
 	}
 	if svc != "" {
@@ -520,11 +502,10 @@ func resAskClusterTR(target string, d resTargetDecision) string {
 
 // resourceDeps — demetin okuyucuları (test dikişi).
 type resourceDeps struct {
-	Thanos       resourceThanosReader
-	Clusters     []thanos.ClusterConfig
-	VM           metricChartReader
-	IsVM         bool
-	ServicePodRe string // servis kipinde Infrastructure'ın pod regex'i (metadata deployment adıyla)
+	Thanos   resourceThanosReader
+	Clusters []thanos.ClusterConfig
+	VM       metricChartReader
+	IsVM     bool
 	// Runtime — v0.10.1432: operatörün JVM alarm eşikleri (GC payı); nil = varsayılan.
 	Runtime *chstore.RuntimeAlertConfig
 }
@@ -539,24 +520,40 @@ func (s *Server) guidedResourceBundle(ctx context.Context, emit func(string, any
 	if d.IsVM {
 		d.Runtime = s.resourceRuntimeAlerts(ctx)
 	}
-	if route.ResKind == resKindService && route.ResTarget != "" {
-		d.ServicePodRe = s.thanosPodRegexFor(ctx, route.ResTarget)
-	}
+	s.resolveResourcePods(ctx, route, to)
 	return s.resourceRun(ctx, emit, route, d, to, rangeS, loc)
 }
 
-// resourcePodRegex — SAF: hedefin pod regex'i (PromQL =~ tam eşleşir).
-func resourcePodRegex(route *guidedRoute, servicePodRe string) string {
+// resolveResourcePods — v0.10.2239 (Entity S4): hedefin pod kümesi
+// entity.Resolver'dan. Servis → svc → pod komşuları; iş yükü → kanonik adı
+// eşit pod'lar; pod → sahibi servis (ekranda servis yoksa).
+func (s *Server) resolveResourcePods(ctx context.Context, route *guidedRoute, to time.Time) {
+	if route.ResTarget == "" && route.Service != "" {
+		route.ResTarget, route.ResKind = route.Service, resKindService
+	}
+	at := to
+	if time.Since(to) < 2*time.Minute {
+		at = time.Time{} // "şimdi": canlı dizin
+	}
 	switch route.ResKind {
 	case resKindPod:
-		return regexp.QuoteMeta(route.ResTarget) + ".*" // önek araması; koşuda tam ada daralır
+		if route.Service == "" {
+			route.Service = s.podOwnerService(ctx, route.ResTarget, at)
+		}
 	case resKindWorkload:
-		return thanos.ServicePodRegex(route.ResTarget, "")
+		route.ResPodRe = s.workloadPodSelector(ctx, route.ResTarget, at).Union
+	case resKindService, "":
+		route.ResPodRe = s.servicePodSelector(ctx, route.ResTarget, at).Union
 	}
-	if servicePodRe != "" {
-		return servicePodRe
+}
+
+// resourcePodRegex — SAF: hedefin pod regex'i (PromQL =~ tam eşleşir). Pod
+// kipi tam ad öneki; servis / iş yükü kipi resolver seçicisi ("" = bilinmiyor).
+func resourcePodRegex(route *guidedRoute) string {
+	if route.ResKind == resKindPod {
+		return regexp.QuoteMeta(route.ResTarget) + ".*" // önek araması; koşuda tam ada daralır
 	}
-	return thanos.ServicePodRegex(route.ResTarget, "")
+	return route.ResPodRe
 }
 
 // resourceRun — demetin çekirdeği. Hiçbir okuma hatası demeti düşürmez:
@@ -628,7 +625,11 @@ func (s *Server) resourceRun(ctx context.Context, emit func(string, any), route 
 			clusters = only
 		}
 	}
-	podRe := resourcePodRegex(route, d.ServicePodRe)
+	podRe := resourcePodRegex(route)
+	if podRe == "" { // boş seçici cluster geneli olurdu
+		route.ResNotFound = true
+		return direct(podsUnknownTR(route.ResTarget)+".", "entity (pod bilinmiyor)")
+	}
 	looks := s.resourceLookupPods(ctx, d.Thanos, clusters, podRe, qTo)
 	dec := decideResourceTarget(route.ResKind, route.ResTarget, looks)
 	match := resourcePodLookupMatch(podRe, "")

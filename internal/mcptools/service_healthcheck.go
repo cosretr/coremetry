@@ -867,6 +867,8 @@ func hcClassifyPodsOpts(service string, res ServicePodsResult, err error, skippe
 		return allUnknown("", "Thanos Remote Cluster yapılandırılmamış — pod / cluster metrikleri okunamaz")
 	case err != nil:
 		return allUnknown("", "pod'lar "+hcErrSeen(err))
+	case res.PodsUnknown: // v0.10.2239 (S4)
+		return allUnknown("", "pod bilinmiyor — entity deposunda bu servisin pod'u yok (Thanos sorgulanmadı)")
 	}
 	var per [][]HealthcheckRow
 	empty := 0
@@ -897,10 +899,7 @@ func hcClassifyPodsOpts(service string, res ServicePodsResult, err error, skippe
 		per = append(per, rows)
 	}
 	if len(per) == 0 {
-		seen := "Thanos'ta bu servisin pod'u bulunamadı"
-		if res.PodRegex != "" {
-			seen += " (kalıp " + res.PodRegex + ")"
-		}
+		seen := "Thanos'ta bu servisin bilinen pod'ları bulunamadı"
 		if empty == 0 {
 			seen = "taranacak cluster yok"
 		} else if o.scanNote != "" {
