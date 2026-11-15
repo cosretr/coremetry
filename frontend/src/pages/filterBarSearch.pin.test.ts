@@ -3,7 +3,8 @@
 //
 // Ne çiviliyor (kaynak): üç liste sayfasının filtre barında
 //   · Search SON filtrenin hemen arkasında, md boy (size="sm" yok — üç barda
-//     tek Search boyu) ve yanında "Enter ↵" ipucu (`EnterHint`);
+//     tek Search boyu); Services'te yanında "Enter ↵" ipucu (`EnterHint`),
+//     Traces'te v0.10.2202'den beri ipucu yok;
 //   · Services: Search Δ prior'dan SONRA, Reset'ten ÖNCE; Reset sağda
 //     (`pc-push`); Search sarmalı `data-pc-pin` (telefonda panele inmez —
 //     mekanizma pageControlsCollapse.test'te mount ile çivili);
@@ -80,10 +81,12 @@ describe('v0.10.1332 — Traces', () => {
     expect(src).toMatch(/<OperationPicker[\s\S]{0,400}?onEnter=\{\(\) => apply\(\)\}/);
   });
 
-  it('filtre barı: Search md + ipucu, Root\'tan SONRA, boşluk + görünüm anahtarından ÖNCE', () => {
+  // v0.10.2202 (operatör) — Traces'te "Enter ↵" ipucu yok (Enter yine arar); Services'te kalır.
+  it('filtre barı: Search md, ipucusuz, Root\'tan SONRA, boşluk + görünüm anahtarından ÖNCE', () => {
     const seg = bar(src);
     expect(searchTag(seg)).not.toMatch(/size="sm"/);
-    expect(seg).toMatch(/<span className="search-go">\s*<Button variant="(?:primary|default)"(?:=>|[^>])*?>Search<\/Button>\s*<EnterHint /);
+    expect(seg).toMatch(/<span className="search-go">\s*<Button variant="(?:primary|default)"(?:=>|[^>])*?>Search<\/Button>\s*<\/span>/);
+    expect(src).not.toMatch(/<EnterHint/);
     const iRoot = at(seg, '>Root</span>');
     const iSearch = at(seg, '>Search</Button>');
     const iSpacer = at(seg, "<span style={{ marginLeft: 'auto' }} />");

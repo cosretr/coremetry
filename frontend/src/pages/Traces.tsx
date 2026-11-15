@@ -34,7 +34,6 @@ import { FilterGroupBuilder } from '@/components/FilterGroupBuilder';
 // v0.10.1951 — shadcn Traces dilimi 1 (karar g = B: tablo motoru değişmez): ui Button → shadcn Button.
 // Eşleme: primary→default, secondary→outline, ghost→ghost; ui sm/xs (24 px) → shadcn xs (24 px) — yoğunluk birebir.
 import { Button } from '@/components/shadcn/button';
-import { EnterHint } from '@/components/ui'; // EnterHint: filterBarSearch.pin çiviliyor (Traces shadcn S4'te kaldı)
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/coremetry/overlay'; // Traces shadcn S4 — ikon düğmesi ipucu
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl'; // v0.10.1993 — Traces dilimi 2 (shadcn; API aynı)
 import { Chip } from '@/components/ui/Chip';
@@ -1531,11 +1530,11 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 <span className={draft.rootOnly ? 'trl-check-l is-on' : 'trl-check-l'}>Root</span>
               </label>
               {/* v0.10.1332 (operatör onaylı mockup) — Search md (üç barda tek
-                  boy) + "Enter ↵" ipucu; son filtrenin (Errors / Root) hemen
-                  arkasında, ardından boşluk ve sağ küme (görünüm anahtarı). */}
+                  boy); son filtrenin (Errors / Root) hemen arkasında, ardından
+                  boşluk ve sağ küme (görünüm anahtarı). v0.10.2202 (operatör):
+                  "Enter ↵" ipucu Traces'te kalktı — Enter yine arar. */}
               <span className="search-go">
                 <Button variant="default" onClick={() => apply()}>Search</Button>
-                <EnterHint title="Arama kutusunda Enter" />
               </span>
           {/* v0.10.1088 (operatör: "Traces sayfasındaki service search sol başta
               olabilir") — görünüm anahtarı (Traces / Aggregated / Shapes) ve
