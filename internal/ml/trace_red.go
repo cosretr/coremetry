@@ -227,6 +227,9 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	// v0.10.2219 (H3): servis × route serisini hangi aile/etiketlerin
 	// ürettiği — olay kaydının seri ifadesi için kanıta yazılır.
 	srcOf := map[string]map[string]any{}
+	// v0.10.2221 (H5): hata oranı serisinin aile/etiketleri (err satırı).
+	errOf := map[string]map[string]any{}
+	famOf := map[int]map[string]any{}
 	agg := newSvcAgg() // v0.10.2077: servis düzeyi count/err (ek sorgu yok)
 	for fi, pin := range anomaly.REDFamilyPins() {
 		fl := d.familyLabels(ctx, deps.VM, pin, from, to)
@@ -234,6 +237,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 			continue
 		}
 		families++
+		famOf[fi] = map[string]any{"redFamily": pin.ID, "svcLabel": fl.svc, "statusLabel": fl.status}
 		cq, eq, pq := traceQueries(pin, fl.svc, fl.route, fl.status, cfg.BucketSec)
 		scale := 1.0
 		if pin.Unit == "s" {
@@ -272,14 +276,18 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 				if x.measure == "p95" || x.measure == "slow" {
 					srcOf[chstore.MLSeriesKey(svc, route)] = map[string]any{"redFamily": pin.ID, "svcLabel": fl.svc, "routeLabel": fl.route}
 				}
+				if x.measure == "err" {
+					errOf[chstore.MLSeriesKey(svc, route)] = map[string]any{"redFamily": pin.ID, "svcLabel": fl.svc, "routeLabel": fl.route, "statusLabel": fl.status}
+				}
 			}
 		}
 	}
 	if families == 0 {
 		return nil, fmt.Errorf("VM'de RED ailesi/etiketi bulunamadı (servis, route, durum)")
 	}
+	svcFam := map[string]int{}
 	if cfg.DetectorOn(detSvcErrorRate) {
-		agg.emit(series)
+		svcFam = agg.emit(series)
 	}
 	// hata ORANI serisi: err/count (count>0)
 	for k, byB := range series {
@@ -346,7 +354,12 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	}
 	var evs []chstore.MLEvent
 	if cfg.DetectorOn(detSvcErrorRate) {
-		evs = append(evs, d.svcErrorEvents(series, base, last, cfg, class, now)...)
+		for _, ev := range d.svcErrorEvents(series, base, last, cfg, class, now) {
+			if fi, ok := svcFam[ev.Service]; ok && famOf[fi] != nil {
+				ev.Evidence = mergeEvidence(ev.Evidence, famOf[fi]) // v0.10.2221 (H5)
+			}
+			evs = append(evs, ev)
+		}
 	}
 	for k := range series {
 		svc, part, _ := strings.Cut(k, "\x00")
@@ -402,7 +415,11 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 			c2 := cfg
 			c2.MinBaselineRate = 0
 			if j := judge(curOf(ek), base[ek], c2, true); j.Fire && j.Observed >= 0.01 && d.dayCap(detOpErrorRate, cfg, now) {
-				evs = append(evs, d.event(detOpErrorRate, svc, route, j, last, cfg, class))
+				ev := d.event(detOpErrorRate, svc, route, j, last, cfg, class)
+				if src := errOf[chstore.MLSeriesKey(svc, route)]; src != nil {
+					ev.Evidence = mergeEvidence(ev.Evidence, src) // v0.10.2221 (H5)
+				}
+				evs = append(evs, ev)
 			}
 		}
 	}

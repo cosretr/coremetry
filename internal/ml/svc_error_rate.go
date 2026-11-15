@@ -95,7 +95,9 @@ func (a *svcAgg) errRan(famIdx int) { a.errOK[famIdx] = true }
 // emit — SAF: servis × kova başına İLK ailenin (en küçük sıra, count > 0)
 // değerleri → series haritasına `*|svc_count` ve (err koştuysa)
 // `*|svc_err_ratio`. Seri tavanı UYGULANMAZ (servis sayısıyla sınırlı).
-func (a *svcAgg) emit(series map[string]map[int64]float64) {
+// Dönüş (v0.10.2221 H5): servis → en yeni kovada seçilen ailenin sırası
+// (olay kaydının seri ifadesi için).
+func (a *svcAgg) emit(series map[string]map[int64]float64) map[string]int {
 	type pick struct {
 		fam        int
 		count, err float64
@@ -128,14 +130,20 @@ func (a *svcAgg) emit(series map[string]map[int64]float64) {
 		}
 		series[k][t] = v
 	}
+	famOf := map[string]int{}
 	for svc, byT := range best {
+		var latest int64
 		for t, p := range byT {
 			put(svc, tracePart(svcRoute, svcMeasureCount), t, p.count)
 			if p.errKnown {
 				put(svc, tracePart(svcRoute, svcMeasureRatio), t, p.err/p.count)
 			}
+			if _, ok := famOf[svc]; !ok || t > latest {
+				famOf[svc], latest = p.fam, t
+			}
 		}
 	}
+	return famOf
 }
 
 // svcErrVerdict — servis hata oranı kararı.

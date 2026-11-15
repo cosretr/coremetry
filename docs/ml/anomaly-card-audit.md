@@ -477,6 +477,11 @@ tik anında kanıta: `redFamily/svcLabel/routeLabel`); hacim aynı ailenin `_cou
 ifadesinin tik hâli (`renderExpr`, `{win}` = kova) + servis eşleyicisi; yön "down" ise dip ve alt sınır; hacim `null` + neden (gauge/oran).
 Thanos (`@cluster`) olayları ve consumer lag (H2) kapsam dışı. Maliyet: açık olay başına tik başına 1 VM aralık sorgusu, tik başına ≤ 20.
 
+**H5 — hata oranı göçü (`svc_error_rate`, `op_error_rate`).** ✅ **gemilendi v0.10.2221** (`internal/ml/error_rate_record.go`,
+`error_rate_record_test.go`; ortak `BuildREDRecord`). Seri = err/count oranının VM RED ifadesi (yüzde), servis [× route], kova penceresi;
+aile + etiketler tik anında kanıta (`statusLabel` dahil). Bant: op medyan ± criticalZ·effMAD; servis üst max(2 × medyan, %1), alt 0.
+Hacim aynı ailenin `_count`'u. Maliyet: açık olay başına tik başına 2 VM aralık sorgusu, tik başına ≤ 10 olay.
+
 **H3…Hn — dedektör başına birer sürüm** (§9 tablosu; önerilen sıra: VM metrik → `trace_error_count` → `svc_error_rate` → TraceRED →
 bağımlılık → kırılma noktası → log RED → şablon → pod → `svc_breadth` → oluşum türleri). *Risk:* S/M/L sütunu. *Göç:* yok. *Test:* dedektör başına ölçüt 9 + doğrulayıcı.
 
@@ -577,6 +582,8 @@ dilime gelince sorulur).
   (H2 değil); karar + neden yalnız insan incelemesi ve ML karnesi için saklanır. ✅ **uygulandı v0.10.2218** (`qualityFilter` kararları
   okumaz; `Labels` yalnız taban hijyeni + backtest). Açık soru: taban hijyeni ("Gerçek anomali" pencereleri tabandan dışlanır,
   `Labels.Exclude`, ayar `hygieneOff`) de karara bağlı bir çalışma zamanı etkisidir — kalsın mı, operatöre soruldu.
+  **Operatör kararı 2026-11-15:** taban hijyeni **kalır** — "Gerçek anomali" işaretli pencereler tabandan dışlanmaya devam eder
+  (`Labels.Exclude` / `hygieneOff`); K3 ihlali sayılmaz (gerçek olayları "normal"in dışında tutar). Kod değişikliği yok.
 - **K10:** "bağımsız kanıt < 2 → sınıf `info`, Problem adayı değil" kapısı geçerli; tek sinyal Problem kolu kapı yürürlüğe girince
   kalkar (önce gölge, A1 → A2).
 - **K2:** eşikler kod sabiti, yeni ayar yok.
