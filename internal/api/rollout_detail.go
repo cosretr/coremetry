@@ -101,7 +101,7 @@ func (s *Server) getRolloutDetail(w http.ResponseWriter, r *http.Request) {
 			return nil, err
 		}
 		if capped {
-			det.Note = appendDetailNote(det.Note, "servis listesi kesildi (ilk 200)")
+			det.Note = appendDetailNote(det.Note, "servis listesi kesildi (ilk 20)")
 		}
 		return det, nil
 	})
@@ -133,7 +133,7 @@ func (s *Server) getRolloutDetailV2(w http.ResponseWriter, r *http.Request, id c
 		if !haveCluster {
 			return rolloutDetailNoCluster(*row), nil
 		}
-		svcs, capped, err := s.rolloutV2Services(ctx, c.SpanClusterKeys(), *row)
+		svcs, capped, err := s.rolloutV2Services(ctx, c.EffectiveID(), *row)
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +142,7 @@ func (s *Server) getRolloutDetailV2(w http.ResponseWriter, r *http.Request, id c
 			return nil, err
 		}
 		if capped {
-			det.Note = appendDetailNote(det.Note, "servis listesi kesildi (ilk 200)")
+			det.Note = appendDetailNote(det.Note, "servis listesi kesildi (ilk 20)")
 		}
 		return det, nil
 	})

@@ -4,6 +4,8 @@ import (
 	"context"
 	"sort"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/entity/wlkind"
 )
 
 // spanpass.go — SPAN-TÜREVLİ çıkarım (design §3). entity_seen_5m'in son
@@ -72,6 +74,14 @@ func SpanSeenToEntities(cid string, rows []SeenRow, known map[string]Entity) ([]
 	rel := func(typ, parent, child string) {
 		rels[typ+"|"+parent+"|"+child] = Relation{Type: typ, ClusterID: cid, ParentID: parent, ChildID: child, Source: SourceSpan}
 	}
+	// v0.10.2232 (S2): KSM'nin bildiği iş yükü (ns + kanonik ad) türetmeden
+	// önce gelir — aynı iş yükü için ikinci (Derived) kimlik doğmaz.
+	knownWl := map[string]string{}
+	for id, e := range known {
+		if e.Type == TypeWorkload {
+			knownWl[e.Namespace+"/"+e.Name] = id
+		}
+	}
 	for _, r := range rows {
 		if r.Namespace == "" || r.Pod == "" {
 			continue
@@ -87,8 +97,11 @@ func SpanSeenToEntities(cid string, rows []SeenRow, known map[string]Entity) ([]
 				// v0.10.471 (F2-4, G14) — KSM sahibi yok: workload'ı pod adından türet
 				// (derived_workload.go); türetilemezse pod doğrudan namespace'in altında.
 				parent := nsID
-				if kind, name, ok := DerivedWorkload(r.Pod); ok {
+				if kind, name, ok := wlkind.FromPod(r.Pod); ok {
 					wlID := WorkloadID(cid, r.Namespace, kind, name)
+					if ksm, found := knownWl[r.Namespace+"/"+name]; found {
+						wlID = ksm
+					}
 					if _, known := known[wlID]; !known {
 						if _, dup := ents[wlID]; !dup {
 							ents[wlID] = Entity{Type: TypeWorkload, ClusterID: cid, ID: wlID, Namespace: r.Namespace, Name: name, ParentID: nsID,

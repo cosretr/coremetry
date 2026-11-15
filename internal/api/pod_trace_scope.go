@@ -32,6 +32,9 @@ type podTraceScope struct {
 	Mode         string `json:"mode"` // pod | service | none
 	ClusterValue string `json:"clusterValue,omitempty"`
 	Service      string `json:"service,omitempty"`
+	// Workload — v0.10.2232 (S2): pod'un iş yükü (wl: id; canlı dizin /
+	// KSM sahibi). FE JMX/iş yükü adını pod adından türetmez, buradan alır.
+	Workload string `json:"workload,omitempty"`
 }
 
 // podTraceScopeFrom — SAF: yol çözümünden trace kapsamı. values: kaydın span
@@ -96,6 +99,8 @@ func (s *Server) getPodTraceScope(w http.ResponseWriter, r *http.Request) {
 			owned = map[string][]string{wlID: {podID}}
 		}
 		paths, _ := s.entityResolver().Paths(qctx, ids, at, owned)
-		return podTraceScopeFrom(paths[podID], paths[wlID], cfg.SpanClusterKeys()), nil
+		out := podTraceScopeFrom(paths[podID], paths[wlID], cfg.SpanClusterKeys())
+		out.Workload = paths[podID].Workload
+		return out, nil
 	})
 }

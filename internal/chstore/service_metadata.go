@@ -379,7 +379,7 @@ func (s *Store) populateTeams(ctx context.Context, derived map[string]ServiceTea
 // Infrastructure sekmeleri "No pods matched" gösteriyordu — CPU/Memory
 // grafikleri dahil, çünkü PromQL seçicisi de servis adına düşüyordu.
 //
-// thanos/promql.go'daki stripPodSuffixes'ten BİLİNÇLİ olarak daha
+// entity/wlkind.FromPod'dan BİLİNÇLİ olarak daha
 // muhafazakâr: o bir görüntüleme sezgiseli, bu bir KATALOG ALANI yazar.
 //
 //	<ad>-<rs-hash 8-10 hex>-<rand5>  → ad   (Deployment — asıl hedef)
@@ -420,7 +420,7 @@ func isOrdinalSuffix(s string) bool {
 }
 
 // isPodRandom5 — k8s'in 5'lik rand alfabesi (rakam + sessiz harfler),
-// thanos/promql.go isPodRandomSuffix ile aynı küme.
+// entity/wlkind rand5 kümesi.
 func isPodRandom5(s string) bool {
 	if len(s) != 5 {
 		return false
@@ -433,7 +433,7 @@ func isPodRandom5(s string) bool {
 	return true
 }
 
-// isRSHash — thanos/promql.go isReplicaSetHash ile aynı küme.
+// isRSHash — eski hex pod-template-hash (wlkind hex kolu).
 func isRSHash(s string) bool {
 	if len(s) < 8 || len(s) > 10 {
 		return false

@@ -119,9 +119,10 @@ func IsStableType(t string) bool {
 }
 
 // IsStableRelation — iki ucu da kalıcı olan parent kenarı (cluster→node,
-// cluster→ns, ns→wl). runs / runs_on / wl→pod / pod→ctr dizinde.
+// cluster→ns, ns→wl) ve S2 köprüleri (serves, same_as). runs / runs_on /
+// wl→pod / pod→ctr dizinde.
 func IsStableRelation(rl Relation) bool {
-	if rl.Type != RelParent {
+	if rl.Type != RelParent && rl.Type != RelServes && rl.Type != RelSameAs {
 		return false
 	}
 	p, ok1 := ParseID(rl.ParentID)
@@ -148,6 +149,7 @@ type clusterState struct {
 	absent  map[string]Absence // art arda başarılı görüntülerde süren yokluklar (DiffLifetimes)
 	lastOK  time.Time
 	lastErr string
+	merged  map[string]bool // S2: süreçte birleştirilmiş span-only değerler (mergeSpanOnly)
 }
 
 // Syncer — durumlu işçi.
@@ -464,15 +466,25 @@ func (s *Syncer) syncCluster(ctx context.Context, c ClusterRef, spanRows []SeenR
 	}
 	// (1) Canlı dizin: pod/container dahil TÜM görüntü, CH'den bağımsız —
 	// CH kesintisinde de "şimdi" taze kalır.
-	st.snapBytes = s.publishLive(ctx, c.ID, BuildLiveSnapshot(c.ID, now, entByID, relByKey, spanRows))
-	// (2) Kalıcı katman: yalnız uzun ömürlü varlıklar + parent kenarları.
-	seen := stableSeen(entByID, relByKey)
+	snap := BuildLiveSnapshot(c.ID, now, entByID, relByKey, spanRows)
+	st.snapBytes = s.publishLive(ctx, c.ID, snap)
+	// (2) Kalıcı katman: yalnız uzun ömürlü varlıklar + parent kenarları + köprüler.
 	open, err := s.store.OpenLifetimes(ctx, c.ID)
 	if err != nil {
 		fail(err)
 		return
 	}
 	st.read, st.scanned = len(open.Lifetimes), open.RowsScanned
+	// S2 köprüleri (serves, same_as) — aynı görüntüden, bellekte.
+	for _, rl := range BridgeRelations(c.ID, entByID, snap, open) {
+		relByKey[relKey(rl.Type, rl.ParentID, rl.ChildID)] = rl
+	}
+	if !c.SpanOnly {
+		for _, rl := range s.mergeSpanOnly(ctx, c) {
+			relByKey[relKey(rl.Type, rl.ParentID, rl.ChildID)] = rl
+		}
+	}
+	seen := stableSeen(entByID, relByKey)
 	cs := s.clusterState(c.ID)
 	s.mu.Lock()
 	absent, lastOK := cs.absent, cs.lastOK
@@ -508,6 +520,52 @@ func (s *Syncer) syncCluster(ctx context.Context, c ClusterRef, spanRows []SeenR
 		log.Printf("[entity] sync_runs yazılamadı (%s): %v", c.ID, err)
 	}
 	return st
+}
+
+// mergeSpanOnly — K2 + S2: kaydın sahiplendiği span değerinin eski
+// span-only ömürleri (S1 notu: "same_as'a kadar açık kalır, last_seen
+// donar") kapanır ve cluster:<değer> → cluster:<cid> same_as kenarı döner
+// (cid'nin diff'ine girer; hedef görüldükçe korunur). Değer başına süreçte
+// bir okuma (OpenLifetimes, sınırlı); boş küme de "birleşti" sayılır.
+func (s *Syncer) mergeSpanOnly(ctx context.Context, c ClusterRef) []Relation {
+	cs := s.clusterState(c.ID)
+	var out []Relation
+	for _, v := range append([]string{c.SpanClusterValue}, c.SpanClusterValues...) {
+		s.mu.Lock()
+		done := v == "" || v == c.ID || cs.merged[v]
+		s.mu.Unlock()
+		if done {
+			continue
+		}
+		open, err := s.store.OpenLifetimes(ctx, v)
+		if err != nil {
+			log.Printf("[entity] span-only birleştirme okunamadı (%s←%s): %v", c.ID, v, err)
+			continue
+		}
+		if len(open.Lifetimes) > 0 {
+			var ch Change
+			for _, l := range open.Lifetimes {
+				l.ValidTo = l.LastSeen
+				ch.Close = append(ch.Close, l)
+			}
+			sort.Slice(ch.Close, func(i, j int) bool { return ch.Close[i].ID < ch.Close[j].ID })
+			if err := s.store.Apply(ctx, v, RowsForChange(v, ch, nil, open.Entities), relationRowsForChange(v, ch, nil, open.Relations)); err != nil {
+				log.Printf("[entity] span-only birleştirme yazılamadı (%s←%s): %v", c.ID, v, err)
+				continue
+			}
+			if _, had := open.Entities[ClusterID(v)]; had {
+				out = append(out, ClusterSameAs(c.ID, v))
+			}
+			log.Printf("[entity] span-only cluster %s → %s birleşti: closed=%d", v, c.ID, len(ch.Close))
+		}
+		s.mu.Lock()
+		if cs.merged == nil {
+			cs.merged = map[string]bool{}
+		}
+		cs.merged[v] = true
+		s.mu.Unlock()
+	}
+	return out
 }
 
 // stableSeen — SAF: görüntünün kalıcı katmanı (diff girdisi). İlişkiler

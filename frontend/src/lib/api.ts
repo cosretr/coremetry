@@ -2359,6 +2359,9 @@ export const api = {
       (podRe ? `&podRe=${encodeURIComponent(podRe)}` : '') +
       (namespace ? `&namespace=${encodeURIComponent(namespace)}` : '')),
   // v0.10.2195 — pod → trace kapsamı entity modelinden (pod kenarı / iş yükü servisi).
+  // v0.10.2232 (Entity S2) — servisin iş yükleri (kalıcı serves kenarı; yoksa pod'larının iş yükleri).
+  serviceWorkloads: (service: string) =>
+    get<import('./types').ServiceWorkloads>(`/api/services/${encodeURIComponent(service)}/workloads`),
   podTraceScope: (cluster: string, namespace: string, pod: string, deploy: string, toNs: number) =>
     get<import('./types').PodTraceScope>(`/api/pods/trace-scope?cluster=${encodeURIComponent(cluster)}` +
       `&namespace=${encodeURIComponent(namespace)}&pod=${encodeURIComponent(pod)}` +

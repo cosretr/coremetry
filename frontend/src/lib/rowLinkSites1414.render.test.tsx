@@ -73,7 +73,6 @@ import { endpointDetailHref } from '@/pages/endpoints/endpointParam';
 import { databaseDetailHref } from '@/pages/databases/databaseParam';
 import { stmtDetailHref } from '@/pages/slowqueries/stmtParam';
 import { podDetailPath } from '@/pages/service/podDetailPath';
-import { podWorkloadName } from '@/pages/clusters/podWorkload';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 Element.prototype.scrollIntoView = function scrollIntoView() {};
@@ -262,7 +261,7 @@ const SITES: Site[] = [
     // Clusters S12 (§4) — Pod ilk kolon; servissiz hücre bağlantısız (ownLink).
     start: '/clusters?cluster=c1&section=pods', rowText: POD.pod, primary: 0, text: POD.pod, blankCell: 2,
     href: () => podDetailPath({
-      cluster: 'c1', namespace: 'ns1', pod: POD.pod, service: '', deploy: podWorkloadName(POD.pod), range: null, from: 'clusters',
+      cluster: 'c1', namespace: 'ns1', pod: POD.pod, service: '', range: null, from: 'clusters',
     }),
   },
   {

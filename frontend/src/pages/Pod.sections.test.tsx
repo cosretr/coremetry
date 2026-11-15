@@ -44,7 +44,7 @@ const rec = (over: Record<string, unknown>) => ({
 });
 
 const m = vi.hoisted(() => ({ calls: [] as { name: string; args: unknown[] }[], entityDisabled: false,
-  scope: { mode: 'pod', clusterValue: 'prod-a' } as { mode: string; clusterValue?: string; service?: string } }));
+  scope: { mode: 'pod', clusterValue: 'prod-a', workload: 'wl:c-1/shop/Deployment/cart' } as { mode: string; clusterValue?: string; service?: string; workload?: string } }));
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
   const real = mod.api as Record<string, (...a: unknown[]) => unknown>;
@@ -65,7 +65,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
       ? { disabled: true }
       : { clusters: [{ id: 'c-1', name: 'prod-a', spanClusterValue: 'prod-a' }] }),
     entity: async () => ({
-      entity: rec({ labels: { app: 'cart' } }), parents: [], children: {}, lifetimes: [rec({})],
+      entity: rec({ labels: { app: 'cart' } }), parents: [rec({ type: 'workload', id: 'wl:c-1/shop/Deployment/cart', name: 'cart', labels: { kind: 'Deployment' } })], children: {}, lifetimes: [rec({})],
       cluster: { id: 'c-1', name: 'prod-a' }, atMatch: true, siblings: [], containers: [],
     }),
     entityServices: async () => ({ entity: 'pod:c-1/shop/cart-7d9f-aaaaa', pods: [], services: [] }),
@@ -142,7 +142,7 @@ function memoryStorage(): Storage {
 beforeEach(() => {
   m.calls.length = 0;
   m.entityDisabled = false;
-  m.scope = { mode: 'pod', clusterValue: 'prod-a' };
+  m.scope = { mode: 'pod', clusterValue: 'prod-a', workload: 'wl:c-1/shop/Deployment/cart' };
   try { localStorage.clear(); } catch { /* jsdom */ }
 });
 afterEach(() => {
@@ -223,7 +223,7 @@ describe('Pod S0 — mount\'ta çizilen bölümler', () => {
     expect(text).not.toContain('Aynı iş yükündeki diğer pod');
   });
 
-  it('meta satırı: servis, iş yükü sezgiseli, yaş; sürüm etiketi yoksa çizilmez', async () => {
+  it('meta satırı: servis, iş yükü (entity modeli, S2), yaş; sürüm etiketi yoksa çizilmez', async () => {
     const el = await mount(URL_FULL, 'entityContainers');
     const meta = el.querySelector('.pod-meta')!.textContent ?? '';
     expect(meta).toContain('Serviscart');

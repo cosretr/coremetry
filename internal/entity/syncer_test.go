@@ -199,10 +199,20 @@ func TestSyncerPersistsStableOnly(t *testing.T) {
 			t.Errorf("%s satırı yazılmalı: %v", want, types)
 		}
 	}
+	serves := 0
 	for _, r := range st.rels {
-		if r.Type != RelParent || strings.HasPrefix(r.ChildID, "pod:") || strings.HasPrefix(r.ParentID, "pod:") {
+		if !IsStableRelation(Relation{Type: r.Type, ParentID: r.ParentID, ChildID: r.ChildID}) || strings.HasPrefix(r.ChildID, "pod:") || strings.HasPrefix(r.ParentID, "pod:") {
 			t.Fatalf("pod uçlu kenar yazıldı: %+v", r)
 		}
+		if r.Type == RelServes {
+			serves++
+			if r.ParentID != "wl:c-a/ns/StatefulSet/db" || r.ChildID != "svc:db" {
+				t.Fatalf("serves kenarı: %+v", r)
+			}
+		}
+	}
+	if serves != 1 {
+		t.Fatalf("S2: wl→svc serves kenarı kalıcı yazılmalı (1), %d", serves)
 	}
 	raw, ok := kv.m[LiveKey("c-a")]
 	if !ok || kv.ttl[LiveKey("c-a")] != LiveTTL {

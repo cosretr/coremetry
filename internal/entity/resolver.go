@@ -58,6 +58,7 @@ type Resolver struct {
 	src      ResolverSource
 	clusters ClusterMap
 	live     *LiveIndex
+	rels     RelationSource // v0.10.2232 (S2): kalıcı köprüler (neighbours.go)
 	now      func() time.Time
 }
 

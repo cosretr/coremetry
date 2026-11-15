@@ -9,7 +9,6 @@ import { Gauge } from '@/pages/clusters/Gauge';
 import { PhaseDonut } from '@/pages/clusters/PhaseDonut';
 import { safePct, fmtCores, fmtBps } from '@/pages/clusters/thresholds';
 import { TREND_WINDOWS } from '@/pages/clusters/TrendPanel';
-import { podWorkloadName } from '@/pages/clusters/podWorkload';
 import { podDetailPath } from '@/pages/service/podDetailPath';
 import { NodeHeatmap } from '@/pages/clusters/NodeHeatmap';
 import { MiniBar } from '@/pages/clusters/MiniBar';
@@ -203,12 +202,12 @@ export default function ClustersPage() {
 
   // v0.9.151 — pod'a tıklama artık cramped drawer yerine TAM /pod detay
   // sayfasına gider (H.Polat önerisi). r.service (eşleşen Coremetry servisi,
-  // boş olabilir) RED'i, pod adından türetilen deploy JMX keşfini sürer.
+  // boş olabilir) RED'i sürer; JMX iş yükü /pod'da entity modelinden (S2).
   // v0.10.1414 — adres ayrı: pod hücresi bu adrese GERÇEK <Link> (Ctrl/⌘/orta
   // tık yeni sekme, "bağlantıyı kopyala"); satırın boş yeri rowClickHandlers.
   const podHref = (r: ClusterPodRow) => podDetailPath({
     cluster: r.cluster, namespace: r.namespace, pod: r.pod,
-    service: r.service ?? '', deploy: podWorkloadName(r.pod),
+    service: r.service ?? '',
     range: params.get('range'), from: 'clusters',
   });
 

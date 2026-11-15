@@ -189,13 +189,13 @@ func (s *Server) getEntity(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return nil, err
 		}
-		// v0.10.1420 — wl: kimliği birebir yoksa aynı cluster/namespace/ad'ın
-		// envanterdeki iş yükü kaydına düş (tür farkı: KSM RS sahibi eksik →
-		// ReplicaSet, pod-adı türetmesi → Derived; entity_workload_fallback.go).
+		// v0.10.2232 (S2) — birebir kayıt yoksa kanonik kimlik (sahipsiz
+		// ReplicaSet → Deployment) ve same_as (Derived → yetkili iş yükü,
+		// span-only cluster → kayıt), en çok 1 adım. Ad araması yok.
 		reqID := id
 		id := id
-		if cur == nil && ref.Type == entity.TypeWorkload {
-			if alt := s.workloadEntityFallback(ctx, ref); alt != "" && alt != id {
+		if cur == nil {
+			if alt := s.entityResolver().Canonical(ctx, id, at); alt != id {
 				if c2, m2, a2, err2 := s.store.EntityLifetimesAt(ctx, alt, at); err2 == nil && c2 != nil {
 					cur, match, all, id = c2, m2, a2, alt
 				}
@@ -254,11 +254,9 @@ func (s *Server) podEntityDetail(ctx context.Context, id string, ref entity.Ref,
 	parentID := p.ParentID()
 	cur, _, perr := s.store.EntityLifetimes(ctx, parentID, at)
 	if (perr != nil || cur == nil) && p.Workload != "" {
-		if wr, ok := entity.ParseID(p.Workload); ok {
-			if alt := s.workloadEntityFallback(ctx, wr); alt != "" {
-				parentID = alt
-				cur, _, _ = s.store.EntityLifetimes(ctx, alt, at)
-			}
+		if alt := s.entityResolver().Canonical(ctx, p.Workload, at); alt != p.Workload {
+			parentID = alt
+			cur, _, _ = s.store.EntityLifetimes(ctx, alt, at)
 		}
 	}
 	if cur != nil {

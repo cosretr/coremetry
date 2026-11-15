@@ -473,7 +473,7 @@ func summaryNetQuery(direction string) string {
 // NamespacePodsTrend'in Go-tarafı top-N emsali): kube_pod_owner
 // pod→ReplicaSet, kube_replicaset_owner ReplicaSet→Deployment.
 // İkisi de BEST-EFFORT: aileler yoksa ad-sezgiseli fallback
-// (stripPodSuffixes), o da tutmazsa satır "(unassigned)" altında
+// (wlkind.FromPod), o da tutmazsa satır "(unassigned)" altında
 // toplanır — katman hiç veri bulamazsa UI kademeyi göstermez.
 
 func nsPodOwnerQuery(namespace string) string {
@@ -661,70 +661,6 @@ func jmxTrendQuery(namespace, deploy, metric string, byPod bool, podFilter strin
 		return fmt.Sprintf(`sum by (%s) (%s)`, byClause, expr)
 	}
 	return "sum(" + expr + ")"
-}
-
-// stripPodSuffixes — eşleme aileleri yokken pod adından iş yükü adı
-// sezgiseli: Deployment pod'u <ad>-<rs-hash 8-10 hex>-<5 rasgele>,
-// StatefulSet <ad>-<N>, DaemonSet <ad>-<5 rasgele>. Son segment
-// rasgele/sayıysa soyulur; kalan son segment rs-hash'e benziyorsa o
-// da soyulur. Tutmayan ada dokunulmaz ("" değil — bilinçli).
-func stripPodSuffixes(pod string) string {
-	segs := strings.Split(pod, "-")
-	if len(segs) < 2 {
-		return pod
-	}
-	last := segs[len(segs)-1]
-	if isPodRandomSuffix(last) || isAllDigits(last) {
-		segs = segs[:len(segs)-1]
-		if len(segs) >= 2 && isReplicaSetHash(segs[len(segs)-1]) {
-			segs = segs[:len(segs)-1]
-		}
-		return strings.Join(segs, "-")
-	}
-	return pod
-}
-
-func isAllDigits(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return true
-}
-
-// isPodRandomSuffix — k8s'in 5 karakterlik rand suffix alfabesi
-// (rakam + bcdfghjklmnpqrstvwxz; sesli harf yok).
-func isPodRandomSuffix(s string) bool {
-	if len(s) != 5 {
-		return false
-	}
-	for _, c := range s {
-		if !strings.ContainsRune("0123456789bcdfghjklmnpqrstvwxz", c) {
-			return false
-		}
-	}
-	return true
-}
-
-// isReplicaSetHash — pod-template-hash mi? v0.10.192: gerçek k8s hash'leri
-// rand.SafeEncodeString alfabesiyle (bcdfghjklmnpqrstvwxz2456789) üretilir,
-// yani HEX DEĞİL — yalnız hex kabul eden eski sürüm gerçek RS'lerin çoğunu
-// reddediyordu (demo hex yaydığı için fixture bunu onaylıyordu). Küçük
-// harf + rakam, 8-10 karakter.
-func isReplicaSetHash(s string) bool {
-	if len(s) < 8 || len(s) > 10 {
-		return false
-	}
-	for _, c := range s {
-		if (c < '0' || c > '9') && (c < 'a' || c > 'z') {
-			return false
-		}
-	}
-	return true
 }
 
 // ── sample decoding ─────────────────────────────────────────────

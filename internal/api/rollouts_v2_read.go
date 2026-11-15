@@ -34,7 +34,6 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -170,47 +169,24 @@ type rolloutStatsResp struct {
 	ExcludeApplied    bool     `json:"excludeApplied"`
 }
 
-// v2RowServiceKeys — v2 satırının iş yükü düzeyi servis anahtarları (span
-// cluster değerleri × (ns, workload); Revision boş — rollout_services.go).
-func v2RowServiceKeys(spanClusters []string, row chstore.RolloutRow) []chstore.RolloutServiceKey {
-	out := make([]chstore.RolloutServiceKey, 0, len(spanClusters))
-	for _, c := range spanClusters {
-		out = append(out, chstore.RolloutServiceKey{Cluster: c, Namespace: row.Namespace, Workload: row.Workload})
-	}
-	return out
-}
-
-// rolloutV2Services — çekmece: v2 satırının servisleri (iş yükü düzeyi,
-// başlangıç − 1 sa'ten beri). capped = bir anahtar MV tavanına (200) değdi.
-func (s *Server) rolloutV2Services(ctx context.Context, spanClusters []string, row chstore.RolloutRow) ([]string, bool, error) {
-	keys := v2RowServiceKeys(spanClusters, row)
-	if len(keys) == 0 {
+// rolloutV2Services — çekmece: v2 satırının servisleri (v0.10.2232, S2):
+// kanonik wl: id → serves kenarları, rollout başlangıcı anında geçerli
+// olanlar (yoksa resolver'ın Paths yedeği, aynı an). capped = 20'de kesildi.
+func (s *Server) rolloutV2Services(ctx context.Context, cid string, row chstore.RolloutRow) ([]string, bool, error) {
+	id := rolloutWorkloadID(cid, row)
+	if id == "" {
 		return []string{}, false, nil
 	}
-	m, err := s.store.RolloutWorkloadServicesBatch(ctx, keys, row.StartedAt.Add(-time.Hour))
-	if err != nil {
+	m, err := s.entityResolver().WorkloadServices(ctx, []string{id}, row.StartedAt)
+	if err != nil && len(m) == 0 {
 		return nil, false, err
 	}
-	set := map[string]bool{}
-	capped := false
-	for _, k := range keys {
-		svcs := m[k]
-		if len(svcs) >= 200 {
-			capped = true
-		}
-		for _, v := range svcs {
-			set[v] = true
-		}
+	all := m[id]
+	out := capServices(all)
+	if out == nil {
+		out = []string{}
 	}
-	out := make([]string, 0, len(set))
-	for v := range set {
-		out = append(out, v)
-	}
-	sort.Strings(out)
-	if len(out) > 200 {
-		out, capped = out[:200], true
-	}
-	return out, capped, nil
+	return out, len(all) > len(out), nil
 }
 
 // ── servis kapsamlı okuma (pod-churn tüketicileri, §2.2) ───────────────────

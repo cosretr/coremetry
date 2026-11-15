@@ -110,7 +110,7 @@ export function ServicePodInventory({ service, range, cluster }: {
     {th.noClusters
       ? <>Thanos cluster&#39;ı tanımlı değil (Settings → Remote clusters).</>
       : <>Thanos: {th.ns && th.deploy ? `k8s.namespace=${th.ns} · ${th.deploy}` : 'k8s metadata eşlemesi'}
-        {' '}ve pod adı kalıbı (<span className="mono">{servicePodRegex(service, th.deploy)}</span>) {th.matched.length} cluster&#39;da denendi — eşleşme yok.</>}
+        {' '}ve pod adı kalıbı (<span className="mono">{servicePodRegex(service, th.deploy, (th.workloads ?? []).map(w => w.name))}</span>) {th.matched.length} cluster&#39;da denendi — eşleşme yok.</>}
   </>;
   const podsState: Omit<DataTableStateProps<MergedPodRow>, 'dt' | 'leading' | 'trailing'> =
     pending ? { kind: 'loading' }

@@ -678,22 +678,6 @@ func TestDeploymentMetricsFallbackChain(t *testing.T) {
 	}
 }
 
-func TestStripPodSuffixes(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"api-7d9f8c6b5-x2k4j", "api"},        // deployment (rs-hash + rand5)
-		{"my-app-59d4f7b6c8-tk9wz", "my-app"}, // tireli ad
-		{"db-0", "db"},                        // statefulset
-		{"agent-x2k4j", "agent"},              // daemonset (rand5)
-		{"plain", "plain"},                    // tek segment
-		{"web-server", "web-server"},          // suffix değil
-	}
-	for _, c := range cases {
-		if got := stripPodSuffixes(c.in); got != c.want {
-			t.Fatalf("stripPodSuffixes(%q) = %q, want %q", c.in, got, c.want)
-		}
-	}
-}
-
 // v0.9.2 — namespace trend: PodTrend'in pod pinsiz aynası (ortak
 // rangeTrend gövdesi); sorgu şekli + bucket sözleşmesi.
 func TestNamespaceTrendQueriesAndBuckets(t *testing.T) {

@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/entity/wlkind"
 )
 
 // pods.go — v0.10.2225 (entity-storage-cost-note C + R1b, E1): pod okuma
@@ -54,7 +56,7 @@ func liveResolvedPod(cid string, gen time.Time, p LivePod) ResolvedPod {
 }
 
 // seenResolvedPods — SAF: MV satırları → pod'lar (namespace'siz satır kimlik
-// üretemez, düşer). İş yükü pod adından türetilir (DerivedWorkload).
+// üretemez, düşer). İş yükü pod adından türetilir (wlkind.FromPod).
 func seenResolvedPods(cid string, rows []SeenEdge) map[string]*ResolvedPod {
 	type acc struct {
 		pi    *ResolvedPod
@@ -70,7 +72,7 @@ func seenResolvedPods(cid string, rows []SeenEdge) map[string]*ResolvedPod {
 		a := by[id]
 		if a == nil {
 			pi := &ResolvedPod{ID: id, ClusterID: cid, Namespace: e.Namespace, Name: e.Pod, Source: SourceSpan}
-			if kind, name, ok := DerivedWorkload(e.Pod); ok {
+			if kind, name, ok := wlkind.FromPod(e.Pod); ok {
 				pi.Workload = WorkloadID(cid, e.Namespace, kind, name)
 			}
 			a = &acc{pi: pi, spans: map[string]int64{}, cv: map[string]int64{}}

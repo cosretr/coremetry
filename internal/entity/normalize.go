@@ -3,6 +3,8 @@ package entity
 import (
 	"sort"
 	"strings"
+
+	"github.com/cilcenk/coremetry/internal/entity/wlkind"
 )
 
 // normalize.go — METRİK ETİKET NORMALİZASYONU + OWNER ZİNCİRİ (saf).
@@ -103,7 +105,10 @@ func ResolveWorkload(ns, pod string, idx OwnerIndex) (kind, name string, ok bool
 		if rs, ok := idx.rs[[2]string{ns, o.OwnerName}]; ok && !noOwner(rs.OwnerKind, rs.OwnerName) {
 			return rs.OwnerKind, rs.OwnerName, true // Deployment
 		}
-		return "ReplicaSet", o.OwnerName, true
+		// v0.10.2232 (S2): RS sahibi okunamadı → "<ad>-<hash>" Deployment
+		// <ad>'dır (wlkind tek kanonikleştirme; aynı iş yükü tek kimlik).
+		k, n := wlkind.Canonical(wlkind.ReplicaSet, o.OwnerName)
+		return k, n, true
 	case "Job":
 		if j, ok := idx.job[[2]string{ns, o.OwnerName}]; ok && !noOwner(j.OwnerKind, j.OwnerName) {
 			return j.OwnerKind, j.OwnerName, true // CronJob

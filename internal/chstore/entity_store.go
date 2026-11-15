@@ -56,15 +56,16 @@ func entityOpenEntitiesSQL() string {
 }
 
 // entityOpenRelationsSQL — kalıcı parent kenarları (cluster→node,
-// cluster→ns, ns→wl): rel_type + cluster_id + parent_id öneki birincil
-// anahtardan; runs / runs_on / wl→pod aralıkları okunmaz. Saf; pinli.
+// cluster→ns, ns→wl) + S2 köprüleri (serves, same_as; v0.10.2232):
+// rel_type + cluster_id + parent_id öneki birincil anahtardan; runs /
+// runs_on / wl→pod aralıkları okunmaz. Saf; pinli.
 func entityOpenRelationsSQL() string {
 	return `
 		SELECT rel_type, parent_id, child_id, source, valid_from, last_seen
 		FROM entity_relations FINAL
-		WHERE rel_type = 'parent' AND cluster_id = ?
-		  AND (startsWith(parent_id, 'cluster:') OR startsWith(parent_id, 'ns:'))
-		  AND NOT startsWith(child_id, 'pod:') AND NOT startsWith(child_id, 'ctr:')
+		WHERE rel_type IN ('parent', 'serves', 'same_as') AND cluster_id = ?
+		  AND (rel_type != 'parent' OR ((startsWith(parent_id, 'cluster:') OR startsWith(parent_id, 'ns:'))
+		  AND NOT startsWith(child_id, 'pod:') AND NOT startsWith(child_id, 'ctr:')))
 		  AND valid_to = toDateTime(0) AND last_seen >= ?
 		LIMIT ` + strconv.Itoa(entityOpenLimit) + `
 		SETTINGS max_execution_time = 10`

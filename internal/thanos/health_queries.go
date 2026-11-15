@@ -7,8 +7,8 @@ package thanos
 //	v0.10.2042  hazır replika — kube-state Deployment + StatefulSet (tek sorgu)
 //	            cluster sağlığı — node Ready koşulu + firing ALERTS (iki sorgu)
 //
-// İş yükü adı pod adından türetilir (stripPodSuffixes; Infrastructure
-// sekmesinin sezgiseli): servisin GERÇEKTE koşan pod'larının sahipleri —
+// İş yükü adı pod adından türetilir (wlkind.FromPod — tek kanonikleştirme,
+// v0.10.2232): servisin GERÇEKTE koşan pod'larının sahipleri —
 // ad regex'i değil, böylece "orders-api-worker" gibi komşu iş yükü karışmaz.
 // OpenShift DeploymentConfig pod'u (<dc>-<N>-<rasgele>) bu kümeye girmez;
 // kontrol o zaman "iş yükü bulunamadı" (Ölçülemedi) der, uydurmaz.
@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/cilcenk/coremetry/internal/entity/wlkind"
 )
 
 // WorkloadNamesFromPods — SAF: pod adları → tekil, sıralı iş yükü adları (≤max).
@@ -25,7 +27,11 @@ func WorkloadNamesFromPods(pods []string, max int) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, p := range pods {
-		if n := stripPodSuffixes(p); n != "" && !seen[n] {
+		n := p
+		if _, w, ok := wlkind.FromPod(p); ok {
+			n = w
+		}
+		if n != "" && !seen[n] {
 			seen[n] = true
 			out = append(out, n)
 		}

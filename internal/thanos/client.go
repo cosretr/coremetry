@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/cilcenk/coremetry/internal/entity/wlkind"
 	"github.com/cilcenk/coremetry/internal/secretref"
 	"io"
 	"log"
@@ -1171,14 +1172,16 @@ func (s *Service) DeploymentMetrics(ctx context.Context, c ClusterConfig, namesp
 			if d, ok2 := rsToDeploy[rs]; ok2 {
 				return d, "Deployment" // tam join
 			}
-			// rs bilinen ama deploy ailesi yok: rs-hash'i soy.
-			if i := strings.LastIndex(rs, "-"); i > 0 && isReplicaSetHash(rs[i+1:]) {
-				return rs[:i], "ReplicaSet"
-			}
-			return rs, "ReplicaSet"
+			// rs bilinen ama deploy ailesi yok: tek kanonikleştirme
+			// (wlkind, v0.10.2232) — "<ad>-<hash>" Deployment <ad>'dır.
+			k, n := wlkind.Canonical(wlkind.ReplicaSet, rs)
+			return n, k
 		}
-		if w := stripPodSuffixes(pod); w != pod || !strings.Contains(pod, "-") {
+		if _, w, ok := wlkind.FromPod(pod); ok {
 			return w, ""
+		}
+		if !strings.Contains(pod, "-") {
+			return pod, ""
 		}
 		return unassignedWorkload, ""
 	}

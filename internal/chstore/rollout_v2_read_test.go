@@ -96,14 +96,6 @@ func TestRolloutV2ReadPathSQLShape(t *testing.T) {
 	if n := len(strings.Split(rolloutWorkerRunReadCols, ",")); n != 16 {
 		t.Fatalf("koşu okuması 16 kolon (version hariç): %d", n)
 	}
-
-	svc := rolloutWorkloadServicesBatchSQL(2)
-	mustContainAll(t, "servis", svc, "FROM workload_revision_activity_1m",
-		"(cluster, k8s_namespace, workload) IN ((?, ?, ?), (?, ?, ?))", "bucket >= toDateTime(?, 'UTC')", "LIMIT 400",
-		"max_execution_time = 10")
-	if strings.Contains(svc, "revision =") || strings.Contains(svc, "workload, revision") {
-		t.Fatalf("iş yükü düzeyi servis çözümü revizyonla süzmez: %s", svc)
-	}
 }
 
 func TestRolloutRowFromV2(t *testing.T) {

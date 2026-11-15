@@ -25,8 +25,8 @@ import { ThanosTrendPanel } from '@/pages/clusters/TrendPanel';
 import { namedSeriesToSeries } from '@/pages/clusters/trendSeries';
 import { PromQLList } from '@/pages/clusters/PromQLList';
 import { promQuote } from '@/pages/clusters/promQuote';
-import { podWorkloadName } from '@/pages/clusters/podWorkload';
 import { resolvePodCluster } from '@/pages/service/podResolve';
+import { workloadOf } from '@/pages/service/podsMerge';
 import { podDetailPath } from '@/pages/service/podDetailPath';
 import { serviceHref } from '@/lib/serviceHref';
 import { logsHref } from '@/lib/logsUrl';
@@ -55,7 +55,7 @@ type PodSection = typeof POD_SECTIONS[number];
 //   • (RED bölümü v0.10.2195'te kalktı — operatör; trace listesi kaldı.)
 //   • Infra — tek-pod CPU/Mem (ThanosTrendPanel, drawer'dan taşındı).
 //   • JVM/JBoss JMX — pod'a filtreli (clusterJmxTrend pod arg, v0.9.149);
-//     deploy JMX keşfini sürer (verilmezse pod adından türetilir).
+//     deploy JMX keşfini sürer (verilmezse entity modelinden: trace-scope workload).
 // Rota: /pod?cluster=&namespace=&pod=&service=&deploy= (App.tsx flat route).
 //
 // v0.10.160 — A anatomisi (mockup scratchpad/pod-detail/option-A.html, iki
@@ -82,8 +82,9 @@ function PodDetail() {
   const pod = sp.get('pod') ?? '';
   const service = sp.get('service') ?? '';
   const rangeParam = sp.get('range') ?? '';
-  // deploy yalnız JMX keşfi için gerekir; verilmezse pod adından türet.
-  const deploy = sp.get('deploy') || (pod ? podWorkloadName(pod) : '');
+  // deploy yalnız JMX keşfi için gerekir; verilmezse entity modelinden
+  // (v0.10.2232 S2: trace-scope workload — pod adı sezgiseli yok).
+  const deployParam = sp.get('deploy') ?? '';
   // ?from= geri-breadcrumb etiketini sürer (drill kaynağı, v0.9.159):
   // pods/metrics → "Pods" sekmesi (v0.9.158 rename), infra → "Infrastructure".
   // clusters → /clusters sayfası (aşağıda service boşsa zaten oraya gider).
@@ -171,10 +172,12 @@ function PodDetail() {
   const tracesOpen = openSecs.has('traces');
   const nsForScope = namespace || nsParam;
   const scopeQ = useQuery({
-    queryKey: ['pod-trace-scope', clusterRef, nsForScope, pod, sp.get('deploy') ?? '', to],
-    queryFn: () => api.podTraceScope(clusterRef, nsForScope, pod, sp.get('deploy') ?? '', to),
-    enabled: tracesOpen && !!clusterRef && !!nsForScope && !!pod, staleTime: 60_000, retry: 1,
+    queryKey: ['pod-trace-scope', clusterRef, nsForScope, pod, deployParam, to],
+    queryFn: () => api.podTraceScope(clusterRef, nsForScope, pod, deployParam, to),
+    enabled: (tracesOpen || (openSecs.has('netjvm') && !deployParam)) && !!clusterRef && !!nsForScope && !!pod,
+    staleTime: 60_000, retry: 1,
   });
+  const deploy = deployParam || (workloadOf(scopeQ.data?.workload)?.name ?? '');
   const traceScope = traceScopeCtx(scopeQ.data, spanClusters, service);
   const traceCluster = traceScope.cluster;
   // v0.10.135/160 — entity katmanı: kimlik zinciri, servisler, konteynerler,

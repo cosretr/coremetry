@@ -233,7 +233,7 @@ func TestEntityOpenLifetimesSQLBounded(t *testing.T) {
 			t.Fatalf("entities: %q yok:\n%s", want, e)
 		}
 	}
-	for _, want := range []string{"FROM entity_relations FINAL", "rel_type = 'parent' AND cluster_id = ?", "NOT startsWith(child_id, 'pod:')", "LIMIT 200000", "max_execution_time = 10"} {
+	for _, want := range []string{"FROM entity_relations FINAL", "rel_type IN ('parent', 'serves', 'same_as') AND cluster_id = ?", "NOT startsWith(child_id, 'pod:')", "LIMIT 200000", "max_execution_time = 10"} {
 		if !strings.Contains(r, want) {
 			t.Fatalf("relations: %q yok:\n%s", want, r)
 		}

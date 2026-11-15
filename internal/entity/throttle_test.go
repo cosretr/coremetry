@@ -126,7 +126,7 @@ func TestSpanOnlyClusterEntities(t *testing.T) {
 	sy := NewSyncer(src, st, func() Resolved { return Resolved{} })
 	sy.now = func() time.Time { return t0 }
 	sy.seen = fakeSeen{rows: []SeenRow{
-		{ClusterValue: "edge-b", Namespace: "ns", Pod: "web-6f7c9-abcde", Service: "web", Spans: 3, LastSeen: t0},
+		{ClusterValue: "edge-b", Namespace: "ns", Pod: "web-6f7c9b8d-x2b9z", Service: "web", Spans: 3, LastSeen: t0},
 		{ClusterValue: "", Namespace: "ns", Pod: "x", Service: "x", Spans: 1, LastSeen: t0},
 		{ClusterValue: "c-a", Namespace: "ns", Pod: "y", Service: "y", Spans: 1, LastSeen: t0},
 	}}
@@ -134,7 +134,7 @@ func TestSpanOnlyClusterEntities(t *testing.T) {
 	if _, ok := st.open["edge-b"][ClusterID("edge-b")]; !ok {
 		t.Fatalf("span-only cluster entity açılmalı: %v", st.open["edge-b"])
 	}
-	if _, ok := st.open["edge-b"][PodID("edge-b", "ns", "web-6f7c9-abcde")]; ok {
+	if _, ok := st.open["edge-b"][PodID("edge-b", "ns", "web-6f7c9b8d-x2b9z")]; ok {
 		t.Fatal("pod satırı yazılmamalı (canlı dizinde)")
 	}
 	if _, ok := st.open["edge-b"][WorkloadID("edge-b", "ns", "Deployment", "web")]; !ok {

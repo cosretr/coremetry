@@ -8,7 +8,11 @@
 // senkronizasyon işçisini taşır; CH okuma/yazma chstore'da.
 package entity
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/cilcenk/coremetry/internal/entity/wlkind"
+)
 
 // Varlık tipleri (entities.entity_type).
 const (
@@ -26,7 +30,14 @@ const (
 	RelParent = "parent"  // cluster→node, cluster→ns, ns→wl, wl→pod, ns→pod (iş yüksüz), pod→ctr
 	RelRunsOn = "runs_on" // pod→node
 	RelRuns   = "runs"    // pod→service
+	// v0.10.2232 (S2) — kalıcı köprüler (iki ucu kalıcı katmanda):
+	RelServes = "serves"  // wl→service: pod'dan servise TEK kalıcı köprü
+	RelSameAs = "same_as" // eski id→kanonik id (Derived/ReplicaSet → yetkili iş yükü; span-only cluster → kayıt)
 )
+
+// DerivedKind — pod adının kısa sonekinden tür ayırt edilemeyen iş yükü
+// (wlkind tek kanonikleştirme).
+const DerivedKind = wlkind.Derived
 
 // Kaynak damgaları (entities.source).
 const (

@@ -48,6 +48,11 @@ func (a resolverSource) DeploymentLinks(ctx context.Context) ([]entity.Deploymen
 	return out, err
 }
 
+// RelationsFor — v0.10.2232 (S2): kalıcı köprüler (serves, same_as).
+func (a resolverSource) RelationsFor(ctx context.Context, rel string, ids []string, byChild bool, at time.Time, limit int) ([]entity.Relation, error) {
+	return a.s.store.EntityRelationsFor(ctx, rel, ids, byChild, at, limit)
+}
+
 func (a resolverSource) KnownServices(ctx context.Context) ([]string, error) {
 	return a.s.store.ListActiveServiceNames(ctx, 24*time.Hour)
 }
@@ -69,8 +74,9 @@ func (c resolverClusters) ID(value string) (string, bool) {
 
 func (s *Server) entityResolver() *entity.Resolver {
 	var src entity.ResolverSource
+	var rels entity.RelationSource
 	if s.store != nil {
-		src = resolverSource{s}
+		src, rels = resolverSource{s}, resolverSource{s}
 	}
 	// v0.10.2225 (R1b): "şimdi" soruları önce lider tick'inin Redis canlı
 	// dizininden; ıska / Redis yok → MV. Okuyucu süreç başına tek (LiveIndexFor).
@@ -78,7 +84,7 @@ func (s *Server) entityResolver() *entity.Resolver {
 	if s.cache != nil {
 		live = entity.LiveIndexFor(s.cache)
 	}
-	return entity.NewResolver(src, resolverClusters{s.thanos}).WithLive(live)
+	return entity.NewResolver(src, resolverClusters{s.thanos}).WithLive(live).WithRelations(rels)
 }
 
 // attachPodPaths — /pods satırları: servis resolver'dan; node yalnız

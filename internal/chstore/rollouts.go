@@ -384,8 +384,8 @@ type RolloutRow struct {
 	// yükleyicisi doldurur, store yazmaz.
 	ProblemsCaused int `json:"problemsCaused,omitempty"`
 	// Service / Services — v0.10.1420 (operatör: "Deployment Workload basınca
-	// service'e girsin"): iş yükünün span'lerde görülen servisleri
-	// (workload_revision_activity_1m, iş yükü düzeyi) ve Workload hücresinin
+	// service'e girsin"): iş yükünün servisleri (v0.10.2232: entity serves
+	// kenarı, entity.Resolver.WorkloadServices) ve Workload hücresinin
 	// birincil tıkının açacağı servis (deterministik seçim). Liste yükleyicisi
 	// doldurur (api/rollout_row_services.go); boşsa JSON'a anahtar GİRMEZ.
 	Service  string   `json:"-"`

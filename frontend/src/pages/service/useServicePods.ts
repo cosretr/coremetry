@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 import { useServicesMetadata } from '@/lib/queries';
 import { timeRangeToNs } from '@/lib/utils';
 import { clampThanosWindow } from '@/lib/thanosWindow';
-import { podMatchesService, dominantWorkload, servicePodRegex } from '@/pages/clusters/podWorkload';
+import { podMatchesService, servicePodRegex } from '@/pages/clusters/podWorkload';
 import type { ClusterPodRow, TimeRange } from '@/lib/types';
 
 // dominantNamespace — eşleşen pod'ların en sık namespace'i (v0.9.56):
@@ -45,11 +45,35 @@ export function useServicePods(service: string, range: TimeRange) {
   });
   const matched = useMemo(() => sourcesQ.data?.clusters ?? [], [sourcesQ.data]);
 
+  // v0.10.2232 (Entity S2) — servisin iş yükleri entity modelinden (kalıcı
+  // serves kenarı). Pod adından iş yükü sezgiseli yok: iş yükünün pod'ları
+  // KSM sahiplik zincirinden (/deployments podNames).
+  const wlQ = useQuery({
+    queryKey: ['service-workloads', service],
+    queryFn: () => api.serviceWorkloads(service),
+    staleTime: 60_000, retry: 1, enabled: service !== '',
+  });
+  const workloads = useMemo(() => wlQ.data?.workloads ?? [], [wlQ.data]);
+  // (cluster adı, namespace) çiftleri: katalog ns'i varsa her cluster'da o;
+  // yoksa entity iş yüklerinin bulunduğu cluster/namespace'ler.
+  const depPairs = useMemo(() => {
+    const out: { c: string; ns: string }[] = [];
+    const seen = new Set<string>();
+    const add = (c: string, n: string) => {
+      const k = c + '\u0000' + n;
+      if (n && !seen.has(k)) { seen.add(k); out.push({ c, ns: n }); }
+    };
+    for (const c of matched) {
+      if (ns) add(c, ns);
+      for (const w of workloads) if (w.cluster === c) add(c, w.namespace);
+    }
+    return out;
+  }, [matched, ns, workloads]);
   const depQs = useQueries({
-    queries: matched.map(c => ({
-      queryKey: ['cluster-deployments', c, ns],
-      queryFn: () => api.clusterDeployments(c, ns),
-      staleTime: 60_000, retry: 1, enabled: ns !== '',
+    queries: depPairs.map(({ c, ns: n }) => ({
+      queryKey: ['cluster-deployments', c, n],
+      queryFn: () => api.clusterDeployments(c, n),
+      staleTime: 60_000, retry: 1,
     })),
   });
   // v0.9.536 — HEDEFLİ envanter (operator-reported: BFF pod'ları
@@ -57,7 +81,8 @@ export function useServicePods(service: string, range: TimeRange) {
   // gelmeyen pod'u eşleştiremez, "No pods matched"). Sunucu regex'le
   // daraltır; anahtar podRe'yi taşır — /clusters sayfasının düz
   // envanter cache'iyle ÇAKIŞMAZ (farklı anahtar, farklı sonuç).
-  const podRe = servicePodRegex(service, deploy);
+  const wlNames = [...new Set(workloads.map(w => w.name))];
+  const podRe = servicePodRegex(service, deploy, wlNames);
   const podQs = useQueries({
     queries: matched.map(c => ({
       queryKey: ['cluster-pods', c, podRe],
@@ -75,27 +100,29 @@ export function useServicePods(service: string, range: TimeRange) {
     })),
   });
 
-  // Pod eşleşme (podMatchesService, testli): ns süzgeci + deploy varken podSet
-  // ÜYELİĞİ ⋃ "<deploy>-" prefix VEYA yedek modda isim-eşitliği. Bilinçli
-  // memo'suz: useQueries kimliği her render değişir, tarama ≤ birkaç bin satır.
+  // Pod eşleşme (podMatchesService, testli): ns süzgeci + podSet ÜYELİĞİ
+  // (katalog deploy'u ⋃ entity iş yüklerinin KSM pod'ları) ⋃ resolver'ın
+  // pod→servis alanı ⋃ "<deploy>-" önek. Bilinçli memo'suz: useQueries
+  // kimliği her render değişir, tarama ≤ birkaç bin satır.
   const rows: ClusterPodRow[] = [];
   matched.forEach((c, i) => {
-    const depRow = deploy
-      ? (depQs[i]?.data?.deployments ?? []).find(d => d.deployment === deploy)
-      : undefined;
-    const podSet = depRow ? new Set(depRow.podNames) : null;
+    const owned = new Set<string>();
+    depPairs.forEach((pair, j) => {
+      if (pair.c !== c) return;
+      for (const d of depQs[j]?.data?.deployments ?? []) {
+        const mine = (deploy && pair.ns === ns && d.deployment === deploy) ||
+          workloads.some(w => w.cluster === c && w.namespace === pair.ns && w.name === d.deployment);
+        if (mine) for (const p of d.podNames ?? []) owned.add(p);
+      }
+    });
     for (const p of podQs[i]?.data?.pods ?? []) {
-      if (podMatchesService(p, { service, deploy, ns, podNames: podSet })) rows.push(p);
+      if (podMatchesService(p, { service, deploy, ns, podNames: owned })) rows.push(p);
     }
   });
   const clustersWithPods = [...new Set(rows.map(r => r.cluster))];
-  // v0.9.535 — deploy yedeği artık EŞLEŞEN pod'ların iş-yükü adı,
-  // servis adı son çare. BFF'te servis adı env ekli (mobile-loans-
-  // bff-prod), pod'lar eksiz — PromQL pod=~"<servis>-.*" hiç tutmuyordu
-  // ve CPU/Mem boş kalıyordu. Gözlemlenen pod'un iş-yükü adı her zaman
-  // doğru önektir; satır yoksa eski davranış (servis adı) aynen kalır.
-  const effDeploy = deploy || dominantWorkload(rows.map(r => r.pod)) || service;
-  const effNs = ns || dominantNamespace(rows);
+  // PromQL iş yükü adı: katalog > entity iş yükü (serves) > servis adı.
+  const effDeploy = deploy || workloads[0]?.name || service;
+  const effNs = ns || workloads[0]?.namespace || dominantNamespace(rows);
 
   // Sunucu pencere tavanı — Clusters Overview'la aynı dürüstlük
   // (v0.9.21). Kural tek gövdede (lib/thanosWindow), sunucuyla
@@ -148,7 +175,7 @@ export function useServicePods(service: string, range: TimeRange) {
 
   return {
     podsUpdatedAt, podsFetching, refetchPods,
-    metaQ, ns, deploy, matched, rows, clustersWithPods,
+    metaQ, ns, deploy, matched, rows, clustersWithPods, workloads,
     effNs, effDeploy, from, to, cFrom, cTo, clamped,
     sourcesPending, noClusters, podsPending, podsBlocking, podsSettled, podsTotal,
     sourcesError, podErrors,

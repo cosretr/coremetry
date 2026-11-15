@@ -131,7 +131,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
 }) {
   const [params, setParams] = useSearchParams();
   const {
-    metaQ, ns, deploy, matched, rows, clustersWithPods,
+    metaQ, ns, deploy, matched, rows, clustersWithPods, workloads = [],
     effNs, effDeploy, from, to, cFrom, cTo, clamped,
     sourcesPending, noClusters, podsPending, podsBlocking, sourcesError,
     podsSettled, podsTotal, podErrors, truncatedClusters,
@@ -323,7 +323,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
     // bu yüzden ayrı bir hata durum satırı yok.
     const diag = (where_: string) => <>
       Denenen: {ns && deploy ? `k8s.namespace=${ns} · ${deploy}` : 'k8s metadata eşlemesi'}
-      {' '}ve pod adı kalıbı (<span className="mono">{servicePodRegex(service, deploy)}</span>),{' '}
+      {' '}ve pod adı kalıbı (<span className="mono">{servicePodRegex(service, deploy, workloads.map(w => w.name))}</span>),{' '}
       {where_}. Pod&#39;ların{' '}
       <span className="mono">&lt;service&gt;-&lt;hash&gt;-&lt;rand&gt;</span> adlandırmasına uyduğunu
       kontrol et ya da servis kataloğunda namespace/deployment tanımla.
@@ -404,6 +404,21 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
             <IconButton size="sm" icon={<span aria-hidden="true">↻</span>} aria-label="Pod envanterini yenile"
               tooltip="Tüm cluster'ları yeniden oku" disabled={podsFetching} onClick={refetchPods} />
           </>} />
+        {/* v0.10.2232 (Entity S2) — çalıştığı iş yükleri: kalıcı serves kenarı
+            (entity modeli); her ad kendi entity sayfasına gider. */}
+        {workloads.length > 0 && (
+          <p className="field-hint">
+            Çalıştığı iş yükleri:{' '}
+            {workloads.slice(0, 12).map((w, i) => (
+              <Fragment key={w.id}>
+                {i > 0 ? ' · ' : ''}
+                <Link to={entityHref({ type: 'workload', id: w.id, name: w.name, clusterId: w.clusterId }, { range })}
+                  title={`${w.kind} · ${w.cluster || w.clusterId} / ${w.namespace}`}>{w.name}</Link>
+              </Fragment>
+            ))}
+            {workloads.length > 12 ? ` · +${workloads.length - 12}` : ''}
+          </p>
+        )}
         <div className="table-wrap infra-where">
           <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} />
@@ -596,7 +611,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
           topk kısmi, okuma hataları) sayfanın ALTINDA kapalı tek satır. */}
       {!metaQ.isPending && !sourcesPending && (
         <InfraSourceNote entityEnabled={entityEnabled}
-          match={ns && deploy ? `k8s.namespace=${ns} · ${deploy}` : `pod adı: ${servicePodRegex(service, deploy)}${effNs ? ` · ns:${effNs}` : ''}`}
+          match={ns && deploy ? `k8s.namespace=${ns} · ${deploy}` : `pod adı: ${servicePodRegex(service, deploy, workloads.map(w => w.name))}${effNs ? ` · ns:${effNs}` : ''}`}
           counts={src}
           scanned={noClusters ? "Thanos cluster'ı tanımlı değil." : `${podsSettled} / ${podsTotal} cluster tarandı.`}
           unmapped={entityQ.data?.unmappedClusters ?? []}
