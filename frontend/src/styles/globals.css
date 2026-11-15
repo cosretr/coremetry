@@ -5102,6 +5102,10 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 .pod-pivot:hover { background: var(--bg2); color: var(--text); }
 /* Clusters S10 (plan §0 D8) — KPI şeridinin yerine meta satırı (dt/dd çiftleri)
    + "CoSRE'ye sor"; kapalı bölümlerin alt başlığı ve JMX ızgarası. */
+.pod-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-3) var(--sp-5); margin: 0 0 var(--sp-4); font-size: var(--fs-md); color: var(--text2); }
+.pod-status__word { font-weight: 600; color: var(--text); }
+.pod-status__word--warn { color: var(--warn); }
+.pod-status__word--err { color: var(--err); }
 .pod-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-4) var(--sp-6); }
 .pod-meta__list { display: flex; flex-wrap: wrap; gap: var(--sp-2) 28px; margin: 0; font-size: var(--fs-sm); }
 .pod-meta__list > div { display: flex; gap: var(--sp-3); }

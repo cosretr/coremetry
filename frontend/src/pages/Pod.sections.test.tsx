@@ -210,11 +210,11 @@ describe('Pod S0 — mount\'ta çağrılan uçlar (entity katmanı açık)', () 
 });
 
 describe('Pod S0 — mount\'ta çizilen bölümler', () => {
-  it('S10 sırası: meta satırı, CPU/Bellek, taşıdığı servisler, konteynerler, kardeşler, kapalı bölümler', async () => {
+  it('S10/S11 sırası: durum cümlesi, meta satırı, CPU/Bellek, taşıdığı servisler, konteynerler, kardeşler, kapalı bölümler', async () => {
     const el = await mount(URL_FULL, 'entityContainers');
     const text = el.textContent ?? '';
     const order = [
-      'CoSRE\'ye sor', 'CPU / Bellek · Thanos', 'Taşıdığı servisler', 'Konteynerler', 'Kardeş pod\'lar',
+      'Sağlıklı', 'CoSRE\'ye sor', 'CPU / Bellek · Thanos', 'Taşıdığı servisler', 'Konteynerler',
       'İstek metrikleri', 'Son trace\'ler', 'Ağ ve JVM', 'Etiketler ve geçmiş',
     ];
     const at = order.map(t => text.indexOf(t));
@@ -223,6 +223,10 @@ describe('Pod S0 — mount\'ta çizilen bölümler', () => {
     // KPI şeridi yok; RED üçlüsü kapalıyken çizilmez.
     expect(el.querySelectorAll('[data-cpm]').length).toBe(0);
     expect(text).not.toContain('Trace listesi');
+    // Clusters S11 — durum cümlesi; kardeş tablosu kapalı bölümde, kardeş yokken kıyas cümlesi yok.
+    expect(el.querySelector('.pod-status')?.textContent).toBe('SağlıklıÇalışıyor.');
+    expect(text).not.toContain('Kardeş pod\'lar');
+    expect(text).not.toContain('Aynı iş yükündeki diğer pod');
   });
 
   it('meta satırı: servis, iş yükü sezgiseli, yaş; sürüm etiketi yoksa çizilmez', async () => {

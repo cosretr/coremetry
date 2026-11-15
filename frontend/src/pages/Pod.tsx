@@ -52,6 +52,7 @@ import { entityHref, entityLiveness } from '@/lib/entityHref';
 import { PodIdentityLine, type PodPivot } from '@/pages/pod/PodIdentityLine';
 import { PodMetaRow, type PodMeta } from '@/pages/pod/PodMetaRow';
 import { podVersion } from '@/pages/pod/podMeta';
+import { podStatusWord, podSentence, siblingSentence } from '@/pages/pod/podSentence';
 import { PodServicesTable } from '@/pages/pod/PodServicesTable';
 import { PodTracesTable } from '@/pages/pod/PodTracesTable';
 import { PodLogsSection } from '@/pages/pod/PodLogsSection';
@@ -384,6 +385,13 @@ function PodDetail() {
     { href: tracesHref, label: 'Trace\'ler ↗', title: 'k8s.pod.name = pod, hatalı önce' },
     { href: logsHref({ window: range, service: service || undefined, cluster: traceCluster || undefined, filters: logsPodPill }), label: 'Loglar ↗', title: 'kubernetes.pod_name pili (ES alan süzgeci; CH lokalde gövde araması — pili kaldırınca servis kapsamı kalır)' },
   ];
+  // Clusters S11 — durum sözcüğü / cümle (ClusterPodRow + konteynerler) ve
+  // kardeş kıyası (kardeşlerin limit %si aynı topk listesinden; ek sorgu yok).
+  const statusWord = podStatusWord(row, ctrQ.data?.containers);
+  const statusSentence = podSentence(row, ctrQ.data?.containers);
+  const podPctByName = new Map((clusterPodsList?.pods ?? []).map(p => [p.pod, p.memPct]));
+  const siblingText = siblingSentence(row, siblingRows.filter(r => r.known && r.name !== pod)
+    .map(r => ({ memPct: podPctByName.get(r.name), memBytes: r.memBytes })));
   // Clusters S10 — meta satırı zaten yüklü veriden (ek sorgu yok); olmayan alan çizilmez.
   const metaServices = svcQ.data?.services ?? [];
   const metaWorkload = detail?.parents.find(p => p.type === 'workload');
@@ -421,6 +429,13 @@ function PodDetail() {
 
         {/* Clusters S10 (D8) — KPI şeridi kalktı (RED serilerinden türüyordu,
             RED artık kapalı bölümde); yerine meta satırı + "CoSRE'ye sor". */}
+        {/* Clusters S11 (§10.2) — durum sözcüğü + deterministik düz cümle (model yok). */}
+        {(statusWord || statusSentence) && (
+          <p className="pod-status">
+            {statusWord && <span className={statusWord === 'Sorunlu' ? 'pod-status__word pod-status__word--err' : statusWord === 'Dikkat' ? 'pod-status__word pod-status__word--warn' : 'pod-status__word'}>{statusWord}</span>}
+            {statusSentence && <span>{statusSentence}</span>}
+          </p>
+        )}
         <PodMetaRow meta={podMeta} cluster={cluster || clusterParam} namespace={namespace || nsParam} pod={pod}
           range={range} nowMs={nowMs} />
 
@@ -480,15 +495,15 @@ function PodDetail() {
           </div>
         )}
 
-        {/* Kardeş pod'lar (S11'de kıyas cümlesine döner) */}
-        {entityOn && detail && (
+        {/* Clusters S11 (§10.3) — kardeş kıyası CÜMLESİ (siblingRows, 0 yeni sorgu);
+            tablo "Etiketler ve geçmiş" kapalı bölümünde. Kardeş yoksa çizilmez. */}
+        {entityOn && detail && siblingText && (
           <div className="pod-sec">
-            <PanelTitle sub={`${siblingLabel} · ${detail.siblings?.length ?? 0}${(detail.siblings?.length ?? 0) >= 50 ? '+' : ''} pod`}
+            <PanelTitle sub={siblingLabel}
               right={nearest?.type === 'workload' ? <Link to={entityHref(nearest, { range, at: atParam || undefined, clusterName: detail.cluster?.name ?? cluster })} className="sec">→ iş yükü sayfası</Link> : undefined}>
-              Kardeş pod'lar
+              Aynı iş yükündeki diğer pod'lar
             </PanelTitle>
-            <PodSiblingsTable rows={siblingRows} pageRange={range} at={atParam} clusterName={detail.cluster?.name ?? cluster}
-              truncated={!!clusterPodsList?.truncated} />
+            <p className="pod-cap">{siblingText}</p>
           </div>
         )}
 
@@ -623,7 +638,12 @@ function PodDetail() {
           {entityOn && detail && (
             <CollapsedSection id="pod-labels" title="Etiketler ve geçmiş" summary="pod etiketleri, aynı adla önceki kayıtlar"
               open={openSecs.has('labels')} onOpenChange={setSecOpen('labels')}>
-              <div className="pod-two">
+              <PanelTitle sub={`${siblingLabel} · ${detail.siblings?.length ?? 0}${(detail.siblings?.length ?? 0) >= 50 ? '+' : ''} pod`}>
+                Kardeş pod'lar
+              </PanelTitle>
+              <PodSiblingsTable rows={siblingRows} pageRange={range} at={atParam} clusterName={detail.cluster?.name ?? cluster}
+                truncated={!!clusterPodsList?.truncated} />
+              <div className="pod-two pod-sec">
                 <div>
                   <PanelTitle sub="kube_pod_labels">Etiketler</PanelTitle>
                   <PodLabelsTable labels={detail.entity.labels} />
