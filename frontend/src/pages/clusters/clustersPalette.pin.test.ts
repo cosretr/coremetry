@@ -52,6 +52,6 @@ describe('Clusters — sade palet adım 1', () => {
   it('kendi Live anahtarı yok; anlık-durum sorguları global tik etiketini taşır', () => {
     expect(src).not.toMatch(/function LiveToggle|<LiveToggle|params\.get\('live'\)|const liveMs|setLiveTick/);
     expect(src).toContain("import { LIVE_META } from '@/lib/autoRefresh';");
-    expect(src.match(/meta: LIVE_META,/g)?.length).toBe(9); // summary, net, cpu, mem, alerts, pods, nodes, ns, deployments
+    expect(src.match(/meta: LIVE_META,/g)?.length).toBe(10); // fleet-summary (v0.10.2185), summary, net, cpu, mem, alerts, pods, nodes, ns, deployments
   });
 });

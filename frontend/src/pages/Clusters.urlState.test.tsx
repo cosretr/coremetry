@@ -53,6 +53,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
     clusterSources: async () => ({ clusters: ['prod-a', 'prod-b'] }),
     clusters: async () => ({ clusters: ['prod-a', 'prod-b'] }),
     clusterSummary: async (cluster: string) => ({ cluster, nodes: 3, pods: 40 }),
+    clusterFleetSummary: async () => ({
+      generated_at: new Date().toISOString(), refresh_seconds: 60,
+      clusters: ['prod-a', 'prod-b'].map(name => ({ name, summary: { cluster: name, nodes: 3, pods: 40 } })),
+    }),
     clusterNodes: async (cluster: string) => ({ cluster, nodes: m.nodes, count: m.nodes.length }),
     clusterPods: async (cluster: string) => ({ cluster, pods: m.pods, count: m.pods.length }),
     clusterNamespaces: async (cluster: string) => ({ cluster, namespaces: m.nss, count: m.nss.length }),
@@ -214,10 +218,9 @@ afterEach(() => {
 });
 
 describe('Clusters S0 — liste görünümü (?cluster yok)', () => {
-  it('kart başına bir summary; pod/node/namespace çekilmez', async () => {
+  it('tüm kartlar tek fleet-summary isteğinden; kart başına fan-out yok', async () => {
     await mount('/clusters');
-    expect(clusterCalls()).toEqual({ clusterSources: 1, clusters: 1, clusterSummary: 2 });
-    expect(callsOf('clusterSummary').map(c => c.args[0]).sort()).toEqual(['prod-a', 'prod-b']);
+    expect(clusterCalls()).toEqual({ clusterSources: 1, clusters: 1, clusterFleetSummary: 1 });
   });
 
   it('kart gerçek bağlantı: ?cluster=<ad>, pencere korunur, önceki sekme taşınmaz', async () => {

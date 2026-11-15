@@ -2615,6 +2615,14 @@ export interface ClusterSummary {
   memForecast?: CapacityForecastDays;
 }
 
+/** v0.10.2185 — /api/clusters/fleet-summary: tüm kartlar tek yanıtta (sunucu
+ *  anlık görüntüsü). Kayıt `error` taşıyorsa kart "yanıt vermiyor". */
+export interface ClusterFleetSummary {
+  generated_at: string;
+  refresh_seconds: number;
+  clusters: { name: string; summary?: ClusterSummary; error?: string }[];
+}
+
 /** api.CapacityForecastDays — kapasite projeksiyonu (gün). */
 export interface CapacityForecastDays {
   status: 'ok' | 'at_limit' | 'none';

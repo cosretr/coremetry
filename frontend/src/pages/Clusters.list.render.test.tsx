@@ -40,6 +40,14 @@ const calls = vi.hoisted(() => ({
     if (s === 'down') throw new Error('HTTP 502: bad gateway');
     return s ?? { cluster };
   },
+  // v0.10.2185 — genel görünüm tek yanıttan; bozuk cluster kaydı `error` taşır.
+  clusterFleetSummary: async () => ({
+    generated_at: new Date().toISOString(), refresh_seconds: 60,
+    clusters: m.sources.map(name => {
+      const s = m.summaries[name];
+      return s === 'down' ? { name, error: 'HTTP 502: bad gateway' } : { name, summary: s ?? { cluster: name } };
+    }),
+  }),
 }));
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();

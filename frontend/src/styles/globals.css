@@ -5186,6 +5186,7 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
    ui/Card'ınkiyle aynı (--divider, --fs-md / 600). Durum düz sözcük: sağlıklı
    nötr (K5), kritik alarm --err, yanıt vermiyor --warn. */
 .cl-fleet { margin: 0 0 var(--sp-6); font-size: var(--fs-md); color: var(--text2); }
+.cl-fleet__age { color: var(--text3); font-size: var(--fs-sm); }
 .cl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .cl-card { min-width: 0; }
 .cl-card--crit { border-color: color-mix(in srgb, var(--err) 45%, var(--border)); }

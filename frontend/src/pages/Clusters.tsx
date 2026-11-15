@@ -53,7 +53,7 @@ import {
   nodeMemPct, nodeAllocText, nodeRequestText, nodeLimitsText, nodeVersionText, nodeVersionTitle,
   nodeTaintText, nodeDiskText, nodeAgeText,
 } from '@/pages/clusters/nodeColumns';
-import type { ClusterPodRow, ClusterNodeRow, ClusterNamespaceRow, ClusterDeploymentRow, ClusterSummary, TimeRange } from '@/lib/types';
+import type { ClusterPodRow, ClusterNodeRow, ClusterNamespaceRow, ClusterDeploymentRow, ClusterSummary, ClusterFleetSummary, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
 
@@ -66,16 +66,24 @@ import { PageShell } from '@/components/coremetry/PageShell';
 // (Servis→Cluster pivotu ?cluster=&namespace=) kırılmadan detaya
 // düşer; v0.8.584'ün geçici tab-strip'i kalktı (?tab yok sayılır).
 //
-// Fan-out İSTEMCİDE kalır: genel görünümde kart başına bir summary
-// isteği (kendi 60s cache slotu, bozuk cluster kendi kartında
-// "erişilemiyor"); detayda YALNIZ o cluster'ın nodes+pods sorguları
-// koşar (fetch-on-open).
+// v0.10.2185: genel görünüm TEK istek (/api/clusters/fleet-summary, sunucu
+// anlık görüntüsü; bozuk cluster yine kendi kartında "yanıt vermiyor");
+// detayda YALNIZ o cluster'ın nodes+pods sorguları koşar (fetch-on-open).
 
 // v0.10.943 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında:
 // 11px ikincil hücre yerine ton (S3), sayılar arayüz fontunda (S2), % eşik
 // rengi `pctTone` (>85 err, >60 warn, altı soluk — eski satır içi üçlü).
 type CellTone = NonNullable<ReturnType<NonNullable<ColumnDef<unknown>['tone']>>>;
 const pctTone = (p?: number): CellTone => ((p ?? 0) > 85 ? 'err' : (p ?? 0) > 60 ? 'warn' : 'faint');
+
+// v0.10.2185 — anlık görüntü yaşı (dk); yalnız tazeleme aralığının 2 katını
+// aştıysa (sunucu boştaydı / tazeleme takıldı) dolu, yoksa null (ipucu yok).
+function fleetAgeMin(d: ClusterFleetSummary | undefined, nowMs = Date.now()): number | null {
+  if (!d?.generated_at) return null;
+  const ageS = (nowMs - Date.parse(d.generated_at)) / 1000;
+  if (!(ageS > 2 * (d.refresh_seconds || 60))) return null;
+  return Math.max(1, Math.round(ageS / 60));
+}
 
 // Clusters S7 (D6) — Overview'un kapalı bölümleri (kalıcılık kimlikleri).
 const OVERVIEW_SECTIONS = ['net', 'gauges'] as const;
@@ -198,15 +206,32 @@ export default function ClustersPage() {
     range: params.get('range'), from: 'clusters',
   });
 
-  // Genel görünüm: yalnız summary fan-out'u (skaler, kart başına).
-  const summaryQs = useQueries({
-    queries: (isDetail ? [] : sources).map(name => ({
-      queryKey: ['cluster-summary', name],
-      queryFn: () => api.clusterSummary(name),
-      staleTime: 60_000,
-      retry: 1,
-    })),
+  // Genel görünüm: v0.10.2185 — kart başına fan-out KALKTI (20 cluster'da ilk
+  // boyama en yavaş cluster'ı bekliyordu); tüm kartlar tek yanıttan, sunucunun
+  // arka planda tazelediği anlık görüntüden (/api/clusters/fleet-summary).
+  // Bayat görüntü (sunucu boştaydı) sunucuda tazelenir; global tik yenisini çeker.
+  const fleetQ = useQuery({
+    queryKey: ['cluster-fleet-summary'],
+    queryFn: () => api.clusterFleetSummary(),
+    staleTime: 30_000,
+    retry: 1,
+    enabled: !isDetail && sources.length > 0,
+    meta: LIVE_META,
   });
+  const fleetStaleMin = fleetAgeMin(fleetQ.data);
+  const summaryQs = useMemo(() => {
+    const byName = new Map((fleetQ.data?.clusters ?? []).map(c => [c.name, c]));
+    return sources.map(name => {
+      const e = byName.get(name);
+      if (fleetQ.isError) return { isError: true, isPending: false, error: fleetQ.error as unknown, data: undefined };
+      return {
+        isError: !!e?.error,
+        isPending: !e,
+        error: e?.error ? new Error(e.error) as unknown : undefined,
+        data: e?.summary as ClusterSummary | undefined,
+      };
+    });
+  }, [sources, fleetQ.data, fleetQ.isError, fleetQ.error]);
 
   // v0.9.8 (L1, tabbed-detail audit §2) — sekme yönlendirmesi:
   // ?section=overview|nodes|namespaces|pods (yokluğu = overview).
@@ -296,8 +321,8 @@ export default function ClustersPage() {
     if (view) { zoomWroteRef.current = true; setRange(view); return; }
     if (rangeRef.current.preset === 'custom') { zoomWroteRef.current = true; setRange({ preset: '15m' }); }
   }, [setRange]);
-  // Detay başlık rozeti + Overview kartları: aynı skaler summary
-  // (genel görünümle queryKey paylaşır — cache ortak).
+  // Detay başlık rozeti + Overview kartları: skaler summary + kapasite tahmini
+  // (v0.10.2185'ten beri genel görünüm fleet-summary'den okur; cache ayrı).
   const detailSummaryQ = useQuery({
     queryKey: ['cluster-summary', clusterParam],
     queryFn: () => api.clusterSummary(clusterParam),
@@ -641,7 +666,10 @@ export default function ClustersPage() {
             korunur: sağlıklı nötr metin, renk yalnız sapmada. */}
         {!isDetail && sources.length > 0 && (
           <>
-            <p className="cl-fleet" role="status">{fleetSentence(summaryQs.map(clusterState))}</p>
+            <p className="cl-fleet" role="status">
+              {fleetSentence(summaryQs.map(clusterState))}
+              {fleetStaleMin != null && <span className="cl-fleet__age"> · {fleetStaleMin} dk önce</span>}
+            </p>
             <div className="cl-cards">
               {sources.map((name, i) => {
                 const q = summaryQs[i];

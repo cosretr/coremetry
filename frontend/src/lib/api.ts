@@ -2218,6 +2218,9 @@ export const api = {
     get<ClusterNodesResponse>(`/api/clusters/nodes?cluster=${encodeURIComponent(cluster)}`),
   clusterSummary: (cluster: string) =>
     get<ClusterSummary>(`/api/clusters/summary?cluster=${encodeURIComponent(cluster)}`),
+  /** v0.10.2185 — genel görünümün tüm kartları (sunucu anlık görüntüsü). */
+  clusterFleetSummary: () =>
+    get<import('./types').ClusterFleetSummary>(`/api/clusters/fleet-summary`),
   /** v0.10.128 — Settings "Test label": matcher'lı kube_node_info seri sayısı (200 + ok:false on failure). */
   thanosClusterProbe: (cluster: string) =>
     get<ThanosClusterProbe>(`/api/clusters/sources/probe?cluster=${encodeURIComponent(cluster)}`),
