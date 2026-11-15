@@ -3,6 +3,8 @@
 // kuralları, Influx/Oracle akışları, Elastic ML poller, exception akışı,
 // slo_burn, heartbeat, self-health ve rollout korelasyonu bu listede YOK —
 // hep açık. Kaydet → audit (eski/yeni), bir sonraki tikte geçerli.
+// v0.10.2270 — log_pattern, trace_op ve behavior satırları dedektörleriyle
+// birlikte silindi; kayıtlı blobdaki eski adları sunucu sessizce düşürür.
 import { useEffect, useState } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/shadcn/button';
@@ -12,10 +14,7 @@ import { api } from '@/lib/api';
 import { FlashBox, humanize } from './shared';
 
 export const NATIVE_DETECTORS: { id: string; label: string; hint: string }[] = [
-  { id: 'log_pattern', label: 'Log deseni (regex new/spike)', hint: 'Worker 60 sn, ES _msearch; ~20 sabit desen' },
-  { id: 'trace_op', label: 'Trace op anomalileri', hint: 'new_error / error_spike, operation_summary_5m' },
   { id: 'metric_anomaly', label: 'Metrik anomali (hata / gecikme / trafik)', hint: 'CH MV mevsimsel taban; anomaliden Problem\'e terfi ve error_ramp bununla birlikte' },
-  { id: 'behavior', label: 'Davranış motoru', hint: '28 günlük MV taraması' },
   { id: 'service_slowdown', label: 'Servis yavaşlaması', hint: 'Evaluator yerleşiği' },
   { id: 'db_health', label: 'DB sağlığı', hint: 'Evaluator yerleşiği' },
   { id: 'db_capacity', label: 'DB kapasitesi', hint: 'Evaluator yerleşiği' },

@@ -379,11 +379,8 @@ func PatternKey(p *PatternSpec) string {
 // counts in the "current" + "baseline" windows, a representative
 // service + sample, and the most recent occurrence time.
 type PatternStats struct {
-	Cur  uint64
-	Base uint64
-	// Prev — v0.10.1586: sürdürme pencerelerinin sayıları, prevStarts ile aynı
-	// sıra (yeniden eskiye); prevStarts boşken nil.
-	Prev       []uint64
+	Cur        uint64
+	Base       uint64
 	Service    string
 	Sample     string
 	LastSeenNs int64
@@ -533,13 +530,7 @@ type Store interface {
 	// tokenbf_v1 skip index). Result slice index matches the
 	// input slice index; empty PatternStats indicates "no match
 	// in current window" (detector ignores these).
-	//
-	// v0.10.1586 — prevStarts (yeniden eskiye, boş = yok): cari pencereden
-	// önceki ardışık sürdürme pencereleri. Pencere i = [prevStarts[i],
-	// prevStarts[i−1] ya da curStart); taban [baseStart, en eski başlangıç).
-	// Boşken iki arka uçta da sorgu bayt bayt öncekiyle aynı ve Prev nil.
-	// Aynı tek sorgu / tek _msearch — ek gidiş-dönüş yok.
-	CountPatterns(ctx context.Context, pats []PatternSpec, curStart time.Time, prevStarts []time.Time, baseStart, now time.Time) ([]PatternStats, error)
+	CountPatterns(ctx context.Context, pats []PatternSpec, curStart, baseStart, now time.Time) ([]PatternStats, error)
 
 	// VerifyPatterns — v0.10.1080: CountPatterns'ın ES'teki kör noktasının
 	// doğrulaması. ES sayımı regex'i UYGULAMAZ (token-OR query_string;

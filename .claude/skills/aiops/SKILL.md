@@ -25,7 +25,6 @@ Tüm döngüler `if mode.worker` (`main.go:652,1221,1251`) + Redis lider kilidi
 |---|---|---|---|
 | Alert evaluator | `evaluator.go:26` `coremetry:lock:evaluator` | 1 dk | problems, incidents, notify |
 | Anomaly detector | `anomaly.go:28` `coremetry:lock:anomaly` | 2 dk (`config.go:474`) | problems (anomaly:*) |
-| Anomaly recorder | `recorder.go:36` | 1 dk, pencere 5 dk | anomaly_events (log_pattern / trace_op / new_template) |
 | Exception refresher | `main.go:1616` | 60 s; bayat süpürme her 6. tik | exception_groups |
 | Oracle exception tazeleyicisi (v0.10.1092) | `oracle/exgroups.go` ← oracle poller kancası (oracle-poller lideri) | başarılı poll başına | exception_groups (`ora:`) |
 | ProblemExplainer / ExceptionExplainer | `problem_explainer.go:43`, `exception_explainer.go:35` | 30 s / 60 s | ai_summary — v0.10.1100: `ora:` grubu Oracle bağlamı + `SystemPromptOracleException`; aday yaşı kapanmış dakika gecikmesi kadar geriden (`isExceptionExplainCandidateAt`, `GroupStatsCache` gecikmesi), kaynaksız Oracle grubu aday değil |
@@ -45,8 +44,9 @@ süpürmeden ÖNCE koşar.
 **Anomaly tik sırası** (`anomaly.go:481-697`): aktif servisler (24 sa) →
 mevsimsel vidalar → izlenen set → duyarlılık (tik başına bir kez) → toplu MV
 okuması `batchSeries` → `OpenProblemsSnapshot` → faz 1 kararlar → faz 1.5
-kümeleme → bayat küme çözümü → `applyOutcome` → davranış motoru → exception
-fırtınası. (Yerel service_silent v0.10.2068'de kalktı; ML log `service_silent`
+kümeleme → bayat küme çözümü → `applyOutcome` → heap bandı → özneler → exception
+fırtınası. (Eski kayıtçı — `log_pattern` / `trace_op` — ve davranış motoru v0.10.2270'da
+silindi; geçmiş satırları okunur, yeniden önerme.) (Yerel service_silent v0.10.2068'de kalktı; ML log `service_silent`
 dedektörü ayrıdır, dokunulmadı.)
 
 ## 2. Karar ağacı — "yeni bir sinyal üreteceğim"
@@ -339,7 +339,7 @@ değil. Golden pinler: `anomaly/prompt_golden_test.go`, `rootcause_prompt_test.g
 Settings → Bildirim politikası) — hepsi
 `system_settings` JSON blobu: `Default*` / `Normalize*` / `Get*` (hataya
 varsayılana düşer) + boot `Load*` + 30 s `Start*Refresh` + sıcak yol için paket
-düzeyi atomic. Varsayılanı TRUE olan her bayrak `*bool` (Behavior.Enabled,
+düzeyi atomic. Varsayılanı TRUE olan her bayrak `*bool` (ServiceSlowdown.Enabled,
 SelfHealth.Enabled) — `false` ile "yok" ayrılsın. Varsayılanı DOLU
 liste `*[]string` (`batchServicePatterns`, v0.10.1039): nil = varsayılan, `[]` = kapalı;
 Normalize boş listeyi `[]` (nil olmayan dilim) yazar — `null` geri okununca nil olur ve

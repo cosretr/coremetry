@@ -4,8 +4,7 @@ package anomaly
 // haftalık olağan akışlarını takip etse ve gerçek bir anomaly öyle yakalasa").
 // SAF: VM RED ailesi kataloğu + 5 dk kova PromQL kurucuları + sorgu planı.
 //
-// NEDEN: metrik dedektörü (anomaly.go) ve davranış motoru (behavior*.go)
-// RED'i span MV'sinden (service_summary_5m) okuyordu. Prod trace'leri
+// NEDEN: metrik dedektörü (anomaly.go) RED'i span MV'sinden (service_summary_5m) okuyordu. Prod trace'leri
 // gateway'de kuyruk örnekleniyor: hatalar hep tutulur + ~%5 taban → span
 // error_rate yukarı yanlı ve örnekleme politikasıyla oynuyor, istek hızı %5'lik
 // gürültülü bir örnek. VictoriaMetrics OTel collector'ın ÖRNEKLENMEMİŞ

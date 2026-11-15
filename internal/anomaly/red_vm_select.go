@@ -177,13 +177,11 @@ type vmREDView struct {
 	// seasonalDayKey — v0.10.1791: gün çeşitliliğinin gün anahtarı (nil = UTC
 	// günü b/86400; seasonalDayKey).
 	seasonalDayKey func(int64) int64
-	behavior       []int64
 	readyDet       [vmFamN][vmKindN]bool
 	// readyConsec — yalnız ardışık 24 sa kovaları hazır (mevsimsel eksik
 	// olabilir). vmStrictMetric bununla VM'de kalır: mevsimsel taban yoksa VM'in
 	// ardışık penceresi kullanılır, span'inki DEĞİL.
 	readyConsec [vmFamN][vmKindN]bool
-	readyBeh    [vmFamN][vmKindN]bool
 	failed      [vmFamN][vmKindN]bool // son okuma hata verdi (geri çekilme sürüyor)
 	// selected — v0.10.1791 endpoint kipi: seçilen (servis, rota) sayısı.
 	selected int
@@ -204,13 +202,11 @@ type redSeriesProvider interface {
 	seriesFor(service, metric string, dwell int) (vmSeries, redSourceUsed)
 }
 
-// famFor — servisin ailesi: sıradaki ilk aile ki kapsamı kullanılabilir,
+// famForMode — servisin ailesi: sıradaki ilk aile ki kapsamı kullanılabilir,
 // istek türü hazır ve servisin ardışık pencerede en az bir isteği var.
-// Aileler ASLA toplanmaz. ok=false → gerekçe.
-func (v *vmREDView) famFor(service string) (int, string) { return v.famForMode(service, false) }
-
-// famForMode — consecOnly: istek türünün yalnız ARDIŞIK kovaları hazır olsa
-// yeter (vmStrictMetric; mevsimsel ısınması VM'den çıkarmaz).
+// Aileler ASLA toplanmaz. ok=false → gerekçe. consecOnly: istek türünün yalnız
+// ARDIŞIK kovaları hazır olsa yeter (vmStrictMetric; mevsimsel ısınması VM'den
+// çıkarmaz).
 func (v *vmREDView) famForMode(service string, consecOnly bool) (int, string) {
 	reason := ""
 	for fi := range vmREDFamilies {
@@ -513,45 +509,4 @@ func overlayREDSeries(p redSeriesProvider, services, tracked []string, dwell int
 		}
 	}
 	return used
-}
-
-// behaviorRowsFor — davranış motorunun VM satırları: üç tür de hazır, servis
-// durum etiketi taşıyor (hata oranı ölçülebilir) ve aile seçilmiş olmalı.
-// ok=false → span satırları kalır.
-func (v *vmREDView) behaviorRowsFor(service string) ([]behaviorRow, redSourceUsed, bool) {
-	if v == nil || v.mode == "span" || !v.configured || len(v.behavior) == 0 {
-		return nil, redSourceUsed{}, false
-	}
-	fi, _ := v.famFor(service)
-	if fi < 0 {
-		return nil, redSourceUsed{}, false
-	}
-	m := v.meta[fi]
-	if len(m.scope.StatusLabels) == 0 || m.statusSvc == nil || !m.statusSvc[service] {
-		return nil, redSourceUsed{}, false
-	}
-	for k := vmREDKind(0); k < vmKindN; k++ {
-		if !v.readyBeh[fi][k] {
-			return nil, redSourceUsed{}, false
-		}
-	}
-	var rows []behaviorRow
-	for _, b := range v.behavior {
-		c, ok := v.store.get(fi, vmKindCount, b, service)
-		spans := uint64(math.Round(c))
-		if !ok || spans == 0 {
-			continue
-		}
-		e, _ := v.store.get(fi, vmKindErr, b, service)
-		errs := uint64(math.Round(math.Max(e, 0)))
-		if errs > spans {
-			errs = spans
-		}
-		p99, _ := v.store.get(fi, vmKindP99, b, service)
-		rows = append(rows, behaviorRow{Unix: b, HOW: hourOfWeek(time.Unix(b, 0)), Spans: spans, Errs: errs, P99Ms: p99})
-	}
-	if len(rows) == 0 {
-		return nil, redSourceUsed{}, false
-	}
-	return rows, redSourceUsed{VM: true, Family: vmREDFamilies[fi].Label}, true
 }

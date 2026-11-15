@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
 import type {
-  LogPatternAnomaly, TraceOpAnomaly, AnomalyEvent, AnomalySilence, Problem, LogPatternSeries, UnifiedAnomaliesPage, AnomalyView,
+  LogPatternAnomaly, AnomalyEvent, AnomalySilence, Problem, LogPatternSeries, UnifiedAnomaliesPage, AnomalyView,
 } from '@/lib/types';
 
 // /anomalies is the heaviest fan-out page in the app — five
@@ -16,20 +16,6 @@ export function useLogPatternAnomalies() {
   return useQuery<LogPatternAnomaly[]>({
     queryKey: keys.anomalies.logPatterns,
     queryFn: async () => (await api.logPatternAnomalies()) ?? [],
-    refetchInterval: 60_000,
-    // staleTime matches refetchInterval so a re-mount inside the
-    // poll window doesn't fire a duplicate refetch on top of the
-    // already-scheduled background poll. Pre-v0.4.79 we had
-    // staleTime=50s < refetchInterval=60s which double-fetched
-    // any time the operator switched tabs near the 50-60s mark.
-    staleTime: 60_000,
-  });
-}
-
-export function useTraceOpAnomalies() {
-  return useQuery<TraceOpAnomaly[]>({
-    queryKey: keys.anomalies.traceOps,
-    queryFn: async () => (await api.traceOpAnomalies()) ?? [],
     refetchInterval: 60_000,
     // staleTime matches refetchInterval so a re-mount inside the
     // poll window doesn't fire a duplicate refetch on top of the

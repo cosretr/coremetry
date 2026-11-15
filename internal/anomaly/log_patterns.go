@@ -84,8 +84,8 @@ type logPattern struct {
 //
 // No denominator exists here the way trace_ops has calls — a pattern count
 // has no natural per-request base — so the two levers are the count and the
-// ratio, both raised. Kept numerically identical to the trace_op floors so
-// the two detectors don't disagree about what "enough to matter" means.
+// ratio, both raised. (Once kept identical to the old trace_op detector's
+// floors; that detector was deleted in v0.10.2270.)
 const (
 	logPatternMinCount = 10
 	logPatternMinRatio = 3.0
@@ -386,66 +386,13 @@ func compiledLogPatterns() []*regexp.Regexp {
 // terimi); tetiklemek üzere olan adaylar verifyLogPatternCands ile örneklemle
 // regex'e karşı doğrulanır (CH'de no-op).
 func DetectLogPatterns(ctx context.Context, store logstore.Store, window time.Duration) ([]LogPatternAnomaly, error) {
-	// Canlı şeritler (/logs, /anomalies, MCP, insight) tek pencereye bakar —
-	// sürdürme yalnız olay YAZAN recorder yolunda (DetectLogPatternsSustained).
-	return detectLogPatterns(ctx, store, time.Now(), window, 1, nil)
+	// Canlı şeritler (/logs, /anomalies, MCP, insight) tek pencereye bakar.
+	// v0.10.2270 — olay yazan sürdürmeli yol (log_pattern dedektörü,
+	// DetectLogPatternsSustained) silindi.
+	return detectLogPatterns(ctx, store, time.Now(), window)
 }
 
-// DetectLogPatternsSustained — v0.10.1586 (Davis paritesi FAZ 0.5 / C,
-// operatör onayı 2026-10-29): recorder'ın olay yazan yolu. dwell ≥ 2'de desen
-// ancak cari pencereden önceki dwell−1 ardışık pencerenin HER BİRİ de aynı
-// eşikleri (qualifyLogPattern: "new" ya da "spike") geçerse aday olur; tek
-// pencerelik patlama olay yazmaz (FP sınıfı d_single_window / d_flapping —
-// recorder 1 dk'da bir 5 dk pencereye bakar, tek kovalık sıçrama 5 tik
-// yeniden yazılıp terfi sürdürmesini geçiyordu). active = olayı zaten AKTİF
-// desenlerin FingerprintAnomaly("log_pattern", ad, servis) kümesi: yalnız
-// AÇILIŞ kapılı (op_latency v0.10.1085 emsali), aktif olay tek pencerede
-// tazelenir. Aynı tek CountPatterns çağrısı (CH tek sorgu / ES tek _msearch).
-func DetectLogPatternsSustained(ctx context.Context, store logstore.Store, window time.Duration, dwell int, active map[string]bool) ([]LogPatternAnomaly, error) {
-	return detectLogPatterns(ctx, store, time.Now(), window, dwell, active)
-}
-
-// logPatternWindows — SAF (v0.10.1586): sürdürme pencerelerinin başları
-// (yeniden eskiye, dwell−1 adet) ve tabanın pencereye normalize oranı. Taban
-// [baseStart, en eski sürdürme başı) — sürdürme pencereleri kendi tabanlarını
-// şişirmez; oran = window / (en eski sürdürme başı − baseStart). dwell ≤ 1 →
-// nil ve bugünkü oran BİREBİR (window / (now − baseStart)). Taban en az bir
-// pencere kalacak şekilde sürdürme kısaltılır (savunma: varsayılan aralıkta
-// 1 sa taban ≥ 6 × 5 dk).
-func logPatternWindows(now, curStart, baseStart time.Time, window time.Duration, dwell int) ([]time.Time, float64) {
-	if dwell <= 1 || window <= 0 {
-		return nil, float64(window) / float64(now.Sub(baseStart))
-	}
-	var prev []time.Time
-	for i := 1; i < dwell; i++ {
-		ps := curStart.Add(-time.Duration(i) * window)
-		if ps.Sub(baseStart) < window {
-			break
-		}
-		prev = append(prev, ps)
-	}
-	if len(prev) == 0 {
-		return nil, float64(window) / float64(now.Sub(baseStart))
-	}
-	return prev, float64(window) / float64(prev[len(prev)-1].Sub(baseStart))
-}
-
-// logPatternSustained — SAF (v0.10.1586): her sürdürme penceresi de eşikleri
-// geçiyor mu? Eksik pencere sayısı → false (bilinmiyor = açma; aktif olay
-// muafiyeti çağıranda).
-func logPatternSustained(prev []uint64, want int, basePerWindow float64) bool {
-	if len(prev) < want {
-		return false
-	}
-	for _, c := range prev[:want] {
-		if k, _ := qualifyLogPattern(c, basePerWindow); k == "" {
-			return false
-		}
-	}
-	return true
-}
-
-func detectLogPatterns(ctx context.Context, store logstore.Store, now time.Time, window time.Duration, dwell int, active map[string]bool) ([]LogPatternAnomaly, error) {
+func detectLogPatterns(ctx context.Context, store logstore.Store, now time.Time, window time.Duration) ([]LogPatternAnomaly, error) {
 	curStart := now.Add(-window)
 	// Trailing baseline = 1h (or the longer of 1h vs 12×window).
 	// Cap the lookback so a freshly deployed instance doesn't try
@@ -467,10 +414,7 @@ func detectLogPatterns(ctx context.Context, store logstore.Store, now time.Time,
 	for i, p := range patterns {
 		specs[i] = p.spec()
 	}
-	// v0.10.1586 — sürdürme pencereleri aynı çağrıda (dwell ≤ 1 → yok,
-	// sorgu bayt bayt öncekiyle aynı).
-	prevStarts, windowRatio := logPatternWindows(now, curStart, baseStart, window, dwell)
-	stats, err := store.CountPatterns(ctx, specs, curStart, prevStarts, baseStart, now)
+	stats, err := store.CountPatterns(ctx, specs, curStart, baseStart, now)
 	if err != nil {
 		return nil, err
 	}
@@ -479,8 +423,8 @@ func detectLogPatterns(ctx context.Context, store logstore.Store, now time.Time,
 	// so a spike is "current rate is 2x+ the trailing-window rate"
 	// regardless of how long the baseline lookback is. Without this, a 12x
 	// longer baseline window inflates `base` by 12x and the spike check
-	// would never fire. (windowRatio logPatternWindows'tan: taban sürdürme
-	// pencereleri kadar kısa.)
+	// would never fire.
+	windowRatio := float64(window) / float64(now.Sub(baseStart))
 	cands := make([]logPatternCand, 0, 4)
 	for i := range patterns {
 		if i >= len(stats) || stats[i].Cur == 0 {
@@ -489,12 +433,6 @@ func detectLogPatterns(ctx context.Context, store logstore.Store, now time.Time,
 		basePerWindow := float64(stats[i].Base) * windowRatio
 		kind, ratio := qualifyLogPattern(stats[i].Cur, basePerWindow)
 		if kind == "" {
-			continue
-		}
-		// v0.10.1586 — sürdürme (yalnız açılış): önceki her pencere de aynı
-		// eşikleri geçmeli; olayı AKTİF desen tek pencerede tazelenir.
-		if len(prevStarts) > 0 && !active[chstore.FingerprintAnomaly("log_pattern", patterns[i].Name, stats[i].Service)] &&
-			!logPatternSustained(stats[i].Prev, len(prevStarts), basePerWindow) {
 			continue
 		}
 		cands = append(cands, logPatternCand{

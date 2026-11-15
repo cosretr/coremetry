@@ -65,12 +65,6 @@ const ALLOWED: { file: string; needle: string; why: string }[] = [
   },
   {
     file: 'features/anomalies/streams.tsx',
-    needle: 'serviceHref(a.service',
-    why: 'TraceOpAnomaly satırı — span türevli operasyon anomalisi, ' +
-      'service_name doğrudan spans\'ten. Problem öznesi DEĞİL.',
-  },
-  {
-    file: 'features/anomalies/streams.tsx',
     needle: 'serviceHref(e.service',
     why: 'AnomalyEvent satırı — anomaly.go/clustering.go GERÇEK servis adı ' +
       'yazar (üretici denetimi 2026-08-24). Problem öznesi DEĞİL.',

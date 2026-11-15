@@ -449,10 +449,6 @@ func sensitivityLogLine(c chstore.AnomalySensitivityConfig) string {
 		fmt.Fprintf(&b, " | %s floorPct=%.2f absFloor=%.2f minAbsDelta=%.2f minMAD=%.2f minRate=%.2f",
 			m, s.FloorPct, s.AbsFloor, s.MinAbsDelta, s.MinMAD, s.MinBaselineRate)
 	}
-	// v0.9.936 — davranış motoru AYNI satırda. Ayrı bir log satırı
-	// ikinci bir "değişti mi" takibi demek olurdu; operatörün sorusu
-	// tek: "vidalarım canlıya indi mi?".
-	b.WriteString(behaviorLogLine(c.Behavior))
 	r := c.Runtime // v0.10.890 — heap bandı vidaları aynı satırda
 	fmt.Fprintf(&b, " | runtime heapMode=%s heapSource=%s minMAD=%.1f floorPct=%.2f minAbsDelta=%.1f silent=%d maxPods=%d",
 		r.HeapMode, r.HeapSource, r.HeapMinMAD, r.HeapFloorPct, r.HeapMinAbsDelta, r.HeapSilentBuckets, r.HeapMaxPods)
@@ -806,18 +802,10 @@ func (d *Detector) scan(ctx context.Context) {
 		}
 		d.applyOutcome(ctx, pa.service, pa.metric, pa.oc, sens, mem)
 	}
-	// v0.9.936 — DAVRANIŞ MOTORU, aynı tikin sonunda.
-	//
-	// SONDA olması bilinçli: ani-sapma dedektörü operatörün bugün
-	// güvendiği hat ve onun gecikmesi/başarısı bu motorun ek iki
-	// sorgusuna bağlanmamalı. scanBehavior kendi içinde soft-fail —
-	// panik/hata buraya sızmaz, tarama tamamlanmış sayılır.
-	//
-	// AYNI `now`: kova hesabı ve pencere sınırı yukarıdaki okumalarla
-	// hizalı kalsın (v0.8.507 tik-tutarlılığı).
 	// v0.10.891 — JVM HEAP BANDI fazı (paritesi #4 dilim 2, gölge): kümeleme
-	// SONRASI (pending'e girmez, RED kümesi bastıramaz), davranış motoru
-	// ÖNCESİ; kendi içinde soft-fail. Kip off'ta hiç koşmaz.
+	// SONRASI (pending'e girmez, RED kümesi bastıramaz); kendi içinde
+	// soft-fail. Kip off'ta hiç koşmaz. (v0.10.2270: ardından koşan davranış
+	// motoru silindi.)
 	d.scanHeap(ctx, now, snap, sens)
 
 	// v0.10.1791 (Davis F1.3) — ÖZNE serileri (endpoint / db / queue). Kapalıyken
@@ -825,8 +813,6 @@ func (d *Detector) scan(ctx context.Context) {
 	// yönlü anomaly_events yazımı (Problem değil; terfi etmez).
 	subjects := d.scanSubjects(ctx, now, sens, tracked, days, neighbor, redView.queries)
 	d.applySubjects(ctx, subjects, sens, minSamples, now)
-
-	d.scanBehavior(ctx, now, sens, redView)
 	// Fırtına burada DEĞİL: runIfLeader'da, kapıdan bağımsız (v0.10.2011).
 }
 

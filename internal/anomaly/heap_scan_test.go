@@ -165,9 +165,10 @@ func TestHeapPhasePlacement(t *testing.T) {
 	src := detectorSrc(t)
 	i := strings.Index(src, "func (d *Detector) scan(")
 	body := src[i:]
-	iCluster, iHeap, iBehavior := strings.Index(body, "d.resolveStaleClusters("), strings.Index(body, "d.scanHeap("), strings.Index(body, "d.scanBehavior(")
-	if iCluster < 0 || iHeap < 0 || iBehavior < 0 || !(iCluster < iHeap && iHeap < iBehavior) {
-		t.Fatalf("heap fazı kümeleme SONRASI ve davranış ÖNCESİ olmalı: %d %d %d", iCluster, iHeap, iBehavior)
+	// v0.10.2270 — ardından koşan davranış motoru silindi; kural: kümeleme SONRASI.
+	iCluster, iHeap := strings.Index(body, "d.resolveStaleClusters("), strings.Index(body, "d.scanHeap(")
+	if iCluster < 0 || iHeap < 0 || iCluster >= iHeap {
+		t.Fatalf("heap fazı kümeleme SONRASI olmalı: %d %d", iCluster, iHeap)
 	}
 }
 

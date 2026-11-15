@@ -31,10 +31,10 @@ import (
 const batchLoadMetric = "request_rate"
 
 // BatchErrorShareFactor — v0.10.1811: batch serviste hata SAYISI artışı
-// ancak hata PAYI da bu kat arttıysa olaydır (traceOpBatchShareHolds).
-// ML hattı (internal/ml/batch.go) aynı sabiti okur; ikinci bir sayı yazmak
-// iki hattın farklı batch kuralı uygulaması demek.
-const BatchErrorShareFactor = traceOpMinRatio
+// ancak hata PAYI da bu kat arttıysa olaydır. ML hattı (internal/ml/batch.go)
+// okur. Değer eski trace_op dedektörünün oran tabanından geliyordu (3×);
+// dedektör v0.10.2270'da silindi, sabit burada kaldı.
+const BatchErrorShareFactor = 3.0
 
 // batchLoadResolveNote — açık request_rate problemini kapatan geçişin
 // DÜRÜST gerekçesi. Bayat süpürmeye bırakılsaydı satır "source silent"

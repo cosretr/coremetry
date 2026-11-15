@@ -70,18 +70,6 @@ func TestQualifyLogPattern(t *testing.T) {
 	}
 }
 
-// The two detectors must agree on what "enough to matter" means. If one is
-// loosened without the other, the queue fills from whichever side is laxer
-// and the operator sees exactly the inconsistency this release removed.
-func TestDetectorFloorsAgree(t *testing.T) {
-	if logPatternMinCount != traceOpMinErrs {
-		t.Errorf("count floors diverged: log=%d trace=%d", logPatternMinCount, traceOpMinErrs)
-	}
-	if logPatternMinRatio != traceOpMinRatio {
-		t.Errorf("ratio floors diverged: log=%v trace=%v", logPatternMinRatio, traceOpMinRatio)
-	}
-}
-
 // v0.10.1587 — Davis paritesi FAZ 0.5 / B: "new" dalının tabanı yok; ham
 // sayıyı oran diye raporlamak terfide 30 yeni satırı "30×" (critical ≥ 20)
 // yapıyordu. Artık oran 0 (= yok); kapı sayım tabanıyla.

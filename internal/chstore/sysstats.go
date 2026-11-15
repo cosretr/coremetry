@@ -35,23 +35,13 @@ type SystemStats struct {
 	Health    SystemHealth   `json:"health"`
 	Exemplars ExemplarIngest `json:"exemplars"`
 	SpanLinks SpanLinkIngest `json:"spanLinks"`
-	// Behavior (v0.9.936) — davranış motorunun kendi ölçümü: son tikin
-	// süresi, ürettiği aday sayısı, kapsadığı servis sayısı ve son
-	// hatası. Ingest sayaçlarıyla AYNI kablo: API getSystemStats
-	// handler'ı süreç-içi atomiklerden doldurur, GetSystemStats (yalnız
-	// CH) sıfır bırakır — chstore, anomaly paketini import ETMEZ (ters
-	// yön: anomaly zaten chstore'u import ediyor).
-	//
-	// NEDEN GEREKLİ: bu motorun tek pahalı yanı 28 GÜNLÜK bir MV
-	// taraması. Süresi görünmezse "vidaları sıkmalı mıyım" sorusunun
-	// cevabı da yok; sessizce 20 saniyeye çıkmış bir tarama hiçbir
-	// ekranda iz bırakmazdı.
-	Behavior BehaviorDetectorStats `json:"behavior"`
 	// Heap (v0.10.891) — JVM heap bandı fazının (paritesi #4 dilim 2) tik
-	// ölçümü; Behavior ile AYNI kablo (süreç-içi atomikler, lider dışı sıfır).
+	// ölçümü; süreç-içi atomikler, lider dışı sıfır. API getSystemStats
+	// handler'ı doldurur, GetSystemStats (yalnız CH) sıfır bırakır — chstore,
+	// anomaly paketini import ETMEZ.
 	Heap HeapDetectorStats `json:"heap"`
 	// CodeFetch (v0.9.1241) — "Kodu da incele" kod-çekme sonuçları.
-	// Behavior ile AYNI kablo: API getSystemStats handler'ı süreç-içi
+	// Heap ile AYNI kablo: API getSystemStats handler'ı süreç-içi
 	// atomiklerden doldurur, GetSystemStats (yalnız CH) sıfır bırakır —
 	// chstore, devops paketini import ETMEZ.
 	//
@@ -63,7 +53,7 @@ type SystemStats struct {
 	// NotifyRouting (v0.9.1344) — bildirim yönlendirmesinin sonucu:
 	// kaç problem gerçekten gönderildi, kaçı bastırıldı, kaçı hiç
 	// yapılandırılmamış bir filoya düştü ve kaçı YAPILANDIRILMIŞ
-	// olmasına rağmen kimseye ulaşmadı. Behavior / CodeFetch ile AYNI
+	// olmasına rağmen kimseye ulaşmadı. Heap / CodeFetch ile AYNI
 	// kablo: API getSystemStats handler'ı süreç-içi atomiklerden
 	// doldurur, GetSystemStats (yalnız CH) sıfır bırakır — chstore,
 	// notify paketini import ETMEZ (ters yön: notify zaten chstore'u
@@ -81,37 +71,17 @@ type SystemStats struct {
 	// olmadan 3.5 saatlik ölü ingest tüm ekranlarda yeşil görünüyordu.
 	DistributionQueue *DistributionQueue `json:"distributionQueue,omitempty"`
 	// Briefing (v0.10.1728) — CoSRE Login Briefing üreticisinin tik
-	// maliyeti (son tik + süreç başından toplamlar). Behavior ile AYNI kablo:
+	// maliyeti (son tik + süreç başından toplamlar). Heap ile AYNI kablo:
 	// API handler'ı süreç-içi sayaçtan doldurur; GetSystemStats sıfır bırakır.
 	Briefing briefing.CostStats `json:"briefing"`
-	// ML (log ML dilim 0) — alt sistemin tik/ES/bellek ölçümü; Behavior
+	// ML (log ML dilim 0) — alt sistemin tik/ES/bellek ölçümü; Heap
 	// ile aynı kablo (süreç-içi, lider dışı sıfır). Tip log_ml_settings.go.
 	ML MLStats `json:"ml"`
 }
 
-// BehaviorDetectorStats — davranış motorunun /admin/stats görüntüsü.
-// Alan adları internal/anomaly.BehaviorStats ile birebir; ayrı tip
-// çünkü chstore o paketi import edemez (döngü).
-type BehaviorDetectorStats struct {
-	Ticks          int64 `json:"ticks"`
-	Candidates     int64 `json:"candidates"`
-	LastUnix       int64 `json:"lastUnix"`
-	LastDurationMs int64 `json:"lastDurationMs"`
-	// v0.9.957 — bütçenin kırılımı (sorgu / yazım) ve sessizliğin
-	// gerekçesi (yetersiz geçmiş yüzünden atlanan kova). Gerekçeler
-	// internal/anomaly.BehaviorStats'ta.
-	LastQueryMs       int64  `json:"lastQueryMs"`
-	LastWriteMs       int64  `json:"lastWriteMs"`
-	LastCandidates    int64  `json:"lastCandidates"`
-	LastServices      int64  `json:"lastServices"`
-	LastScarceBuckets int64  `json:"lastScarceBuckets"`
-	LastError         string `json:"lastError,omitempty"`
-}
-
 // CodeFetchStats — kod-çekme sonuçlarının /admin/stats görüntüsü
 // (v0.9.1241). Alan adları internal/devops.CodeStats ile birebir; ayrı
-// tip çünkü chstore o paketi import edemez (döngü) — BehaviorDetectorStats
-// ile aynı gerekçe.
+// tip çünkü chstore o paketi import edemez (döngü).
 //
 // TÜM SAYAÇLAR SÜREÇ BAŞLANGICINDAN BERİ; restart sıfırlar. Panelde
 // aynen böyle yazıyor: kalıcı sayaç yeni bir tablo ve yeni bir yazma

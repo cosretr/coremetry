@@ -11,9 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"time"
-
-	"github.com/cilcenk/coremetry/internal/anomaly"
 
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -47,16 +44,6 @@ func (s *Server) postNativeDetectorsOffAll(w http.ResponseWriter, r *http.Reques
 	s.audit(r, "native_detectors.off_all", "settings", "native_detectors", string(details))
 	s.cacheInvalidatePrefix(r.Context(), "anomaly:")
 	writeJSON(w, s.nativeView(r.Context()))
-}
-
-// traceOpHits — Anomalies "Trace operation anomalies" kartı (api.go
-// getTraceOpAnomalies): yerleşik trace_op anahtarı kapalıyken canlı tarama
-// YAPILMAZ, kart boş (A3: kapalı anahtara rağmen kart canlı spike gösteriyordu).
-func (s *Server) traceOpHits(ctx context.Context, window time.Duration) ([]anomaly.TraceOpAnomaly, error) {
-	if !s.store.GetNativeDetectors(ctx).On(chstore.NativeTraceOp) {
-		return nil, nil
-	}
-	return anomaly.DetectTraceOpAnomalies(ctx, s.store, window)
 }
 
 func (s *Server) putNativeDetectors(w http.ResponseWriter, r *http.Request) {

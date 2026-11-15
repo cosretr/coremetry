@@ -66,9 +66,6 @@ type Config struct {
 type BackgroundConfig struct {
 	// Interval between anomaly-detector sweeps. Default 2m.
 	AnomalyInterval time.Duration `yaml:"anomaly_interval"`
-	// Recorder cadence + backfill window. Default 1m / 5m.
-	AnomalyRecordInterval time.Duration `yaml:"anomaly_record_interval"`
-	AnomalyRecordBackfill time.Duration `yaml:"anomaly_record_backfill"`
 	// SMTP settings refresh TTL. Default 30s — short so the
 	// operator's Settings change is picked up on the next
 	// alert send without a restart.
@@ -77,10 +74,9 @@ type BackgroundConfig struct {
 	// stuck CH/Redis client driver doesn't park the goroutine
 	// forever. Default 5s, well above the per-probe 2s timeout.
 	StatusProbeTimeout time.Duration `yaml:"status_probe_timeout"`
-	// LogAnomalyEnabled gates the worker-role log-pattern anomaly
-	// recorder + Drain template puller — the jobs that periodically
-	// QUERY the logstore (ES at billion-doc scale: curated-pattern
-	// _msearch, significant_text, sample pulls). Default true. Set
+	// LogAnomalyEnabled gates the worker-role Drain template puller —
+	// the job that periodically QUERIES the logstore (the old log-pattern
+	// recorder was deleted in v0.10.2270). Default true. Set
 	// COREMETRY_LOG_ANOMALY_ENABLED=false to silence that ES traffic
 	// when the operator doesn't want log-based anomalies. Metric
 	// anomaly detection (CH-backed) is unaffected.
@@ -543,14 +539,12 @@ var defaults = Config{
 		InitialPassword: "admin",
 	},
 	Background: BackgroundConfig{
-		AnomalyInterval:       2 * time.Minute,
-		AnomalyRecordInterval: 1 * time.Minute,
-		AnomalyRecordBackfill: 5 * time.Minute,
-		SMTPCacheTTL:          30 * time.Second,
-		StatusProbeTimeout:    5 * time.Second,
-		LogAnomalyEnabled:     true,
-		MLEnabled:             true,
-		MLRole:                "sre",
+		AnomalyInterval:    2 * time.Minute,
+		SMTPCacheTTL:       30 * time.Second,
+		StatusProbeTimeout: 5 * time.Second,
+		LogAnomalyEnabled:  true,
+		MLEnabled:          true,
+		MLRole:             "sre",
 	},
 	// v0.8.328 — exemplars without trace context are dropped by default;
 	// yaml merges over this so only an explicit false disables the gate.
@@ -568,12 +562,6 @@ var defaults = Config{
 func applyBackgroundDefaults(b *BackgroundConfig) {
 	if b.AnomalyInterval == 0 {
 		b.AnomalyInterval = defaults.Background.AnomalyInterval
-	}
-	if b.AnomalyRecordInterval == 0 {
-		b.AnomalyRecordInterval = defaults.Background.AnomalyRecordInterval
-	}
-	if b.AnomalyRecordBackfill == 0 {
-		b.AnomalyRecordBackfill = defaults.Background.AnomalyRecordBackfill
 	}
 	if b.SMTPCacheTTL == 0 {
 		b.SMTPCacheTTL = defaults.Background.SMTPCacheTTL

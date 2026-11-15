@@ -252,7 +252,7 @@ func (s *Service) RecordCodeOutcome(class CodeOutcome, reason string) {
 }
 
 // CodeObservability — sayaçların anlık görüntüsü; API sunucusu
-// /admin/stats için çağırır (anomaly.BehaviorObservability muadili).
+// /admin/stats için çağırır (anomaly.HeapObservability muadili).
 func (s *Service) CodeObservability() CodeStats {
 	if s == nil {
 		return CodeStats{}

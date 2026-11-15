@@ -942,7 +942,6 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/version", s.getVersion)
 	s.registerAnnouncementRoutes(mux) // v0.8.486 — sayfa-üstü duyuru şeridi (Settings'ten), announcement.go
 	mux.HandleFunc("GET /api/anomalies/log-patterns", s.getLogPatternAnomalies)
-	mux.HandleFunc("GET /api/anomalies/trace-ops", s.getTraceOpAnomalies)
 	mux.HandleFunc("GET /api/anomalies/metric", s.getMetricAnomalies)
 	mux.HandleFunc("GET /api/anomalies/events", s.getAnomalyEvents)
 	// v0.9.471 — ?id= sorgu paramı, path segmenti DEĞİL: Go 1.22 ServeMux
@@ -2019,24 +2018,7 @@ func (s *Server) getSystemStats(w http.ResponseWriter, r *http.Request) {
 			st.SpanLinks.Ingested = int64(s.ing.SpanLinksIngested())
 			st.SpanLinks.DroppedInvalid = int64(s.ing.SpanLinksDroppedInvalid())
 		}
-		// v0.9.936 — davranış motorunun tik ölçümü. Süreç-içi atomikler
-		// (ingest sayaçlarıyla aynı kablo): motor bu pod'da koşmuyorsa
-		// (COREMETRY_MODE=api, ya da lider başka pod) sıfır kalır ve bu
 		st.Heap = anomaly.HeapObservability() // v0.10.891 — heap bandı fazı, aynı kablo (lider dışı sıfır = doğru cevap)
-		obs := anomaly.BehaviorObservability()
-		st.Behavior = chstore.BehaviorDetectorStats{
-			Ticks:          obs.Ticks,
-			Candidates:     obs.Candidates,
-			LastUnix:       obs.LastUnix,
-			LastDurationMs: obs.LastDurationMs,
-			// v0.9.957 — bütçe kırılımı + sessizliğin gerekçesi.
-			LastQueryMs:       obs.LastQueryMs,
-			LastWriteMs:       obs.LastWriteMs,
-			LastCandidates:    obs.LastCandidates,
-			LastServices:      obs.LastServices,
-			LastScarceBuckets: obs.LastScarceBuckets,
-			LastError:         obs.LastError,
-		}
 		// v0.9.1241 — "Kodu da incele" kod-çekme sonuçları. Aynı kablo:
 		// süreç-içi atomikler, CH yazımı yok. Bu yol FAIL-OPEN olduğu
 		// için başarısızlığı hiçbir ekranda iz bırakmıyordu; toplamda
@@ -9151,33 +9133,6 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 		"version":      v,
 		"buildVersion": b,
 		"overridden":   v != b,
-	})
-}
-
-// getTraceOpAnomalies pinpoints per-(service, operation) error
-// spikes — operations that are either failing for the first time
-// in the window or whose error count just doubled. Sits beside
-// the metric anomaly stream on /anomalies so the SRE sees both
-// "service X is bad" and "the specific endpoint that's bad". 60s
-// cached; the underlying CH query is partition-pruned to 2× the
-// window so cost is bounded at scale.
-func (s *Server) getTraceOpAnomalies(w http.ResponseWriter, r *http.Request) {
-	window := parseDuration(r.URL.Query().Get("window"), 5*time.Minute)
-	key := fmt.Sprintf("anomaly:trace-ops:window=%s", window)
-	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
-		hits, err := s.traceOpHits(ctx, window) // A3: yerleşik trace_op kapalıyken kart boş
-		if err != nil {
-			return nil, err
-		}
-		muted := s.activeSilencedAnomalies(ctx, "trace-ops") // v0.10.1042 — hata loglanır, süzgeçsiz
-		out := hits[:0]
-		for _, a := range hits {
-			fp := chstore.FingerprintAnomaly("trace_op", a.Operation, a.Service)
-			if !muted[fp] {
-				out = append(out, a)
-			}
-		}
-		return out, nil
 	})
 }
 

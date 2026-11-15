@@ -10,9 +10,8 @@ package anomaly
 //
 // Yaz saati olmayan dilimde (TR) saat-of-day eşlemesi sabit bir dönmedir ve
 // dairesel uzaklık değişmez; değişen yalnız gün sınıfı sınırıdır (UTC 21-24
-// kovaları ertesi yerel güne geçer). Davranış motorunun haftanın-saati
-// kovası (behavior.go hourOfWeek) UTC'de kalır: sabit ofsette dairesel
-// haftanın-saati uzaklığı da değişmez.
+// kovaları ertesi yerel güne geçer). (v0.10.2270'da silinen davranış motorunun
+// haftanın-saati kovası UTC'de kalırdı.)
 
 import (
 	"strings"

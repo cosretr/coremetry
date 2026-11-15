@@ -11,11 +11,15 @@ package chstore
 // 1746'dan beri `anomaly.scan()` erken dönüşü onu da susturuyordu
 // (anomaly-reassessment-audit N3); şimdi `runIfLeader` kapıdan ayrı çağırır.
 // Aynı kapının arkasında KALANLAR (metric_anomaly kapalıyken koşmaz):
-// error_ramp, takvim düşüşü, kümeleme, heap bandı, Davis
-// özneleri ve davranış motoru; evaluator'da anomali terfi süpürmesi.
-// Kendi anahtarı olan dedektörler burada tekrar listelenmez: heap bandı
-// (varsayılan kapalı). log_template_new v0.10.2085'te, op_latency v0.10.2087'de
-// silindi.
+// error_ramp, takvim düşüşü, kümeleme, heap bandı ve Davis özneleri;
+// evaluator'da anomali terfi süpürmesi. Kendi anahtarı olan dedektörler
+// burada tekrar listelenmez: heap bandı (varsayılan kapalı). log_template_new
+// v0.10.2085'te, op_latency v0.10.2087'de silindi.
+//
+// v0.10.2270 — log_pattern, trace_op ve behavior (davranış motoru) eski
+// motordan silindi (operatör kararı); anahtarları da kalktı. Kayıtlı blobda
+// kalan bu adlar NormalizeNativeDetectors'ta bilinmeyen ad olarak sessizce
+// düşer (log yok, hata yok) ve bir sonraki kayıtta yazılmaz.
 //
 // Okuma her tikte (restart yok): blob 15 sn süreç-içi önbellekle okunur
 // (tik başına ≤1 CH nokta okuması). CH hatasında SON bilinen değer, hiç
@@ -31,10 +35,7 @@ import (
 const nativeDetectorsKey = "native_detectors"
 
 const (
-	NativeLogPattern      = "log_pattern"
-	NativeTraceOp         = "trace_op"
 	NativeMetricAnomaly   = "metric_anomaly" // CH MV hata/gecikme/trafik + anomaliden terfi + error_ramp
-	NativeBehavior        = "behavior"
 	NativeServiceSlowdown = "service_slowdown"
 	NativeDBHealth        = "db_health"
 	NativeDBCapacity      = "db_capacity"
@@ -43,7 +44,7 @@ const (
 )
 
 // NativeDetectorNames — Settings listesi (sıra = ekran sırası).
-var NativeDetectorNames = []string{NativeLogPattern, NativeTraceOp, NativeMetricAnomaly, NativeBehavior,
+var NativeDetectorNames = []string{NativeMetricAnomaly,
 	NativeServiceSlowdown, NativeDBHealth, NativeDBCapacity, NativeDBSlowStatement, NativeRuntimePods}
 
 // NativeDetectorsConfig — blob: ad → açık mı. Eksik ad = KAPALI.

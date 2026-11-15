@@ -19,7 +19,7 @@ package anomaly
 // Gerekli küme, span okumalarının WHERE yüklemlerinin BİREBİR Go ikizi
 // (kaba kuvvetle, 5 dk ızgarada sayılarak — tablo testi SQL yüklemini aynı
 // biçimde yeniden yazıp karşılaştırır): ardışık = buildAllBucketsQuery,
-// mevsimsel = buildAllSeasonalQuery, davranış = buildBehaviorBucketsQuery.
+// mevsimsel = buildAllSeasonalQuery.
 
 import (
 	"math"
@@ -244,19 +244,6 @@ func vmSeasonalBucketsCal(at time.Time, days, neighborBuckets int, cal chstore.A
 		}
 	}
 	return out, class
-}
-
-// vmBehaviorBuckets — buildBehaviorBucketsQuery'nin WHERE'i (behaviorBinds):
-// [upper−28g, upper) içinde haftanın-saati dairesel uzaklığı ≤ 1 YA DA son 3 sa.
-func vmBehaviorBuckets(now time.Time) []int64 {
-	upper, cutoff, recentFrom, target := behaviorBinds(now)
-	var out []int64
-	for _, b := range vmBucketsBetween(cutoff.Unix(), upper.Unix()) {
-		if b >= recentFrom.Unix() || hourOfWeekDistance(hourOfWeek(time.Unix(b, 0)), target) <= behaviorNeighborHours {
-			out = append(out, b)
-		}
-	}
-	return out
 }
 
 // vmRequiredSet — üç kümenin birleşimi (retain girdisi).

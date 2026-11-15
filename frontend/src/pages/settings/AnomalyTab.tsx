@@ -6,7 +6,7 @@ import { Field, SelectField, CheckboxField, type FieldProps } from '@/components
 import { ActionRow } from '@/components/coremetry/ActionRow';
 import { cn } from '@/lib/cn';
 import { api } from '@/lib/api';
-import type { AnomalyPromotionConfig, AnomalyTrackedConfig, AnomalySensitivityConfig, AnomalyBehaviorConfig, ExceptionTriageConfig, ProblemPriorityConfig, DBSlowQueryConfig, DBHealthConfig } from '@/lib/types';
+import type { AnomalyPromotionConfig, AnomalyTrackedConfig, AnomalySensitivityConfig, ExceptionTriageConfig, ProblemPriorityConfig, DBSlowQueryConfig, DBHealthConfig } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
 import { droppedPatternCount, formatBatchPatterns, parseBatchPatterns } from './batchPatterns'; // v0.10.1039
 import { ServiceSlowdownSubsection } from './ServiceSlowdownSubsection'; // v0.10.1091
@@ -478,10 +478,6 @@ function SensitivitySection() {
             );
           })}
 
-          <BehaviorSubsection
-            behavior={cfg.behavior}
-            onChange={b => setCfg({ ...cfg, behavior: b })}
-          />
           {/* v0.10.890 (paritesi #4 dilim 2, Onay 2026-09-23) — JVM heap bandı → Problem
               vidaları. Bu sürümde yalnız vida: kip varsayılan KAPALI, hiçbir davranış
               değişmez; gölge sayaçları 891, canlı kip 892. */}
@@ -526,28 +522,6 @@ function SensitivitySection() {
               ona ulaşmıyordu: üstteki "terfi ettir" kutucuğu BAŞKA bir
               hattı yönetiyor. Operatör onu kapatıp metrik dedektörünün
               incident açmaya devam ettiğini görüyordu. */}
-          {/* v0.10.1586 — trace_op / log_pattern sürdürme (Davis paritesi FAZ 0.5 / C):
-              olay ancak ardışık N pencerede eşiği geçerse açılır; aynı Kaydet. */}
-          <div className={SEP}>
-            <div className="text-[length:var(--fs-md)] text-(--text)">
-              Operasyon hatası ve log deseni olayları: sürdürme
-            </div>
-            <div className={cn(NOTE, 'mt-1')}>
-              Operasyon hata sıçraması / yeni hata ve log deseni (yeni ya da sıçrama) olayı
-              ancak bu kadar ardışık 5 dakikalık pencerenin her birinde eşiği geçerse açılır;
-              zaten açık olay tek pencerede tazelenir. 1–6, varsayılan 2. 1 = eski davranış.
-            </div>
-            <div className="mt-2.5 flex flex-wrap gap-4">
-              <Num className="w-auto" label="Operasyon hatası: kaç ardışık pencere" min={1} max={6} step={1}
-                aria-label="Operasyon hatası ardışık pencere"
-                value={cfg.traceOpDwellBuckets ?? 2}
-                onChange={e => setCfg({ ...cfg, traceOpDwellBuckets: Number(e.target.value) })} />
-              <Num className="w-auto" label="Log deseni: kaç ardışık pencere" min={1} max={6} step={1}
-                aria-label="Log deseni ardışık pencere"
-                value={cfg.logPatternDwellBuckets ?? 2}
-                onChange={e => setCfg({ ...cfg, logPatternDwellBuckets: Number(e.target.value) })} />
-            </div>
-          </div>
           {/* v0.10.1091 — yaygın yavaşlama hızlı yolu (operatör: "Dün söylediğim
               CRM sorunu yine oldu, bir sürü anomali geldi ama P1 problem
               gelmedi" → "Onay"). Operasyon gecikmesinin yanında, aynı Kaydet. */}
@@ -593,222 +567,18 @@ function SensitivitySection() {
               uyarısı) uzanıyor; eski "yalnız metrik dedektörü" cümlesi yanlış
               kalırdı. */}
           <div className={cn(NOTE, 'mt-4')}>
-            Bu eşikler <b>metrik anomali dedektörünü</b> ve davranış motorunu bağlar;
-            <b> batch servis ad kalıpları</b> ayrıca iz (trace) operasyon hata ve gecikme
-            anomalilerini ve servis hacmi sıçraması uyarısını da etkiler. Elle kurduğunuz alarm kuralları
+            Bu eşikler <b>metrik anomali dedektörünü</b> bağlar;
+            <b> batch servis ad kalıpları</b> ayrıca servis hacmi sıçraması uyarısını da etkiler. Elle kurduğunuz alarm kuralları
             kendi eşiklerini kullanır; log/iz desen anomalilerinin Problem&apos;e terfisi
             yukarıdaki terfi hattından geçer. Sertleştirmek açık kayıtları silmez: yeni
             tespit üretilmez, mevcut anomaliler kendi bantlarına dönünce kapanır. Batch
             kalıbına giren servislerin açık istek hızı ve hacim sıçraması problemleri ise
-            bir sonraki taramada kapanır (davranış değişiminden terfi edenler, olay
-            yenilenmeyi bıraktıktan ~10 dakika sonra).
+            bir sonraki taramada kapanır.
           </div>
 
           <SaveRow label="Kaydet" onClick={save} busy={busy} flash={flash} />
         </>
       )}
-    </div>
-  );
-}
-
-// ── Davranış değişimi (v0.9.936) ────────────────────────────────
-//
-// "Dedektör hassasiyeti"nin ALT BÖLÜMÜ, kardeş bölüm değil: aynı
-// blob'un (anomaly_sensitivity) parçası ve aynı Kaydet düğmesiyle
-// kaydediliyor. Operatör buraya tek bir soruyla geliyor — "ne zaman
-// olay sayılsın?" — ve cevabın iki yarısı var: ANİ sapma (üstteki
-// alanlar) ve KALICI değişim (burası).
-//
-// DÜRÜST KAPSAM METNİ: bu aşamada LLM YOK. Motor tamamen istatistiksel
-// (medyan + MAD, haftanın saati baseline'ı). Bunu yazmak zorundayız,
-// çünkü "davranış motoru" adı kolayca "yapay zekâ karar veriyor" diye
-// okunur ve operatör eşikleri neden ayarladığını anlamaz.
-function BehaviorSubsection({ behavior, onChange }: {
-  behavior?: AnomalyBehaviorConfig;
-  onChange: (b: AnomalyBehaviorConfig) => void;
-}) {
-  // Sunucu Normalize'da daima dolduruyor; bu düşüş yalnız bu sürümden
-  // ESKİ bir backend'e bakan bir sekme için. Boş kutu göstermek yerine
-  // varsayılanlarla çiziyoruz — kaydedilirse sunucu zaten kelepçeler.
-  const b: AnomalyBehaviorConfig = behavior ?? {
-    enabled: true, seasonalZ: 4, regimeRatio: 1.5,
-    dwellSeasonal: 3, dwellRegime: 6, maxCandidatesPerTick: 50,
-    minSamplesPerBucket: 12, minBucketRepeats: 3,
-    minP99Ms: 200, minErrorRatePct: 1, spikyBandFactor: 1.5,
-    highVolumeErrorFloor: true, highVolumeErrorsPerSec: 1, highVolumeMinErrorRatePct: 0.2,
-  };
-  // v0.10.1521 — hacim farkında hata tabanı; yok = AÇIK.
-  const hvOn = b.highVolumeErrorFloor !== false;
-  // `!== false` ŞART: alan yoksa (eski satır) motor AÇIKtır.
-  const on = b.enabled !== false;
-  const set = (patch: Partial<AnomalyBehaviorConfig>) => onChange({ ...b, ...patch });
-
-  return (
-    <div className={cn(SEP, 'mb-[18px]')}>
-      <div className={cn(SUBHEAD, 'mb-1.5')}>
-        Davranış değişimi
-      </div>
-      <p className={cn(LEAD, 'mb-3')}>
-        Yukarıdaki eşikler <b>ani</b> sapmayı ölçer (son 5 dakika, 24 saatlik geçmiş).
-        Bu bölüm <b>kalıcı</b> değişimi ölçer: her servisin hata oranı, P99 gecikmesi ve
-        istek hızı <b>haftanın aynı saatine</b> (168 kova, son 28 gün) göre
-        karşılaştırılır. Deploy sonrası P99&apos;un 120 ms&apos;ten 190 ms&apos;e
-        <i> oturması</i> 24 saat içinde &laquo;yeni normal&raquo; olur ve ani-sapma
-        dedektörü onu ertesi gün göremez &mdash; bu motor tam olarak onu söyler.
-      </p>
-      <p className={cn(LEAD, BOXED, 'mb-3.5')}>
-        <b>Yöntem:</b> tamamen istatistiksel &mdash; medyan + MAD ile sağlam z-skoru ve
-        oran karşılaştırması. <b>Bu aşamada yapay zekâ kullanılmıyor.</b> Bulgular
-        /anomalies akışına <span className="font-mono">behavior_change</span> olarak düşer ve
-        yukarıdaki <b>terfi kapısından</b> geçer; kendiliğinden Problem açmaz.
-        Yukarıdaki metrik tabanları (mutlak değer / fark / MAD / hacim) bu motora da
-        aynen uygulanır &mdash; 1,90 ms&apos;ten 2,90 ms&apos;e kalıcı bir kayma
-        istatistiksel olarak gerçektir ve kimseyi ilgilendirmez.
-      </p>
-
-      <CheckboxField className="mb-3.5" checked={on} onCheckedChange={v => set({ enabled: v })}
-        label="Kalıcı davranış değişimlerini ara" />
-
-      <div data-disabled={!on || undefined} className={cn('ml-3 grid gap-2.5', DIM)}>
-        <Num label="Rejim kayması oranı (× baseline)" min={1.05} max={100} step={0.05}
-          value={b.regimeRatio}
-          onChange={e => set({ regimeRatio: Number(e.target.value) })}
-          disabled={!on}
-          hint={<>
-            Bu kadar katına çıkan (ya da bu kadar katı altına düşen) ve orada
-            <b> kalan</b> bir metrik &laquo;davranış değişti&raquo; sayılır.
-            Varsayılan <b>1,5</b>. Düşürmek daha çok, yükseltmek daha az bulgu demek.
-          </>} />
-
-        <Num label="Kalıcılık — rejim (kaç 5-dakikalık dilim)" min={1} max={24} step={1}
-          value={b.dwellRegime}
-          onChange={e => set({ dwellRegime: Number(e.target.value) })}
-          disabled={!on}
-          hint={<>
-            Kaymanın kesintisiz sürmesi gereken dilim sayısı. Varsayılan <b>6</b>
-            {' '}({(b.dwellRegime || 6) * 5} dakika). <b>Geçici sıçramayı kalıcı
-            kaymadan ayıran tek vida budur</b> &mdash; kısaltırsanız ani-sapma
-            dedektörüyle çakışmaya başlar.
-          </>} />
-
-        <Num label="Mevsimsel sapma eşiği (σ)" min={1} max={50} step={0.5}
-          value={b.seasonalZ}
-          onChange={e => set({ seasonalZ: Number(e.target.value) })}
-          disabled={!on}
-          hint={<>
-            Rejim eşiğini geçmeyen ama kendi haftalık kovasından çok uzak değerler
-            için. Varsayılan <b>4,0</b> &mdash; üstteki kritik z&apos;den (6,0) düşük
-            olması normaldir: burada gürültünün mevsimsel bileşeni baseline&apos;dan
-            zaten çıkarılmış.
-          </>} />
-
-        <Num label="Kalıcılık — mevsimsel (kaç dilim)" min={1} max={24} step={1}
-          value={b.dwellSeasonal}
-          onChange={e => set({ dwellSeasonal: Number(e.target.value) })}
-          disabled={!on}
-          hint={<>
-            Varsayılan <b>3</b> ({(b.dwellSeasonal || 3) * 5} dakika). Rejim
-            kalıcılığından küçük olmalı; kalıcı bir kayma ikisini de tetiklerse
-            <b> rejim</b> kazanır, yani aynı olay iki satır olarak görünmez.
-            {b.dwellSeasonal >= b.dwellRegime && (
-              <span className={WARN}>
-                Rejim kalıcılığından küçük değil: iki sinyalin anlamı çakışır.
-              </span>
-            )}
-          </>} />
-
-        <Num label="Tik başına en fazla bulgu" min={1} max={5000} step={10}
-          value={b.maxCandidatesPerTick}
-          onChange={e => set({ maxCandidatesPerTick: Number(e.target.value) })}
-          disabled={!on}
-          hint={<>
-            Fırtına koruması: filo geneli bir olayda (ortak bağımlılık çöktü) her
-            servis birden bulgu üretir. Tavan <b>en güçlü</b> N tanesini geçirir;
-            kesilenler kaybolmaz, bir sonraki taramada hâlâ değişikse yine sıraya
-            girerler. Varsayılan <b>50</b>.
-          </>} />
-
-        {/* v0.9.957 — örnek-kıtlığı kapısı. İKİ vida çünkü iki farklı
-            soru: "kaç örneğim var" ve "kaç FARKLI GÜN gördüm". */}
-        <Num label="Kova başına en az örnek" min={1} max={576} step={1}
-          value={b.minSamplesPerBucket ?? 12}
-          onChange={e => set({ minSamplesPerBucket: Number(e.target.value) })}
-          disabled={!on}
-          hint={<>
-            Bir haftanın-saati kovasının baseline sayılması için gereken en az
-            5&#8209;dakikalık örnek. Altında o kova <b>sessiz</b> kalır.
-            Varsayılan <b>12</b>.
-          </>} />
-
-        <Num label="Kova başına en az farklı gün" min={1} max={4} step={1}
-          value={b.minBucketRepeats ?? 3}
-          onChange={e => set({ minBucketRepeats: Number(e.target.value) })}
-          disabled={!on}
-          hint={<>
-            Örnek <b>sayısı</b> yetmez, <b>çeşitliliği</b> de gerekir: 24 örneğin
-            hepsi iki günden geliyorsa haftadan haftaya yayılım iki gözlemden
-            kestiriliyor demektir, sapma ölçüsü patlar ve normal dalgalanmalar
-            bulgu görünür. 28 günlük pencerede en fazla <b>4</b> tekrar olur;
-            varsayılan <b>3</b>.
-          </>} />
-
-        {/* v0.10.1070 — mutlak taban + sıçramalı geçmiş toleransı. */}
-        <Num label="P99 için en düşük değer (ms)" min={1} max={60000} step={10}
-          value={b.minP99Ms ?? 200}
-          onChange={e => set({ minP99Ms: Number(e.target.value) })}
-          disabled={!on}
-          hint={<>P99 bu değerin altındaysa oran ne olursa olsun bulgu üretilmez. Varsayılan <b>200</b>.</>} />
-
-        <Num label="Hata oranı için en düşük değer (%)" min={0.01} max={100} step={0.1}
-          value={b.minErrorRatePct ?? 1}
-          onChange={e => set({ minErrorRatePct: Number(e.target.value) })}
-          disabled={!on}
-          hint={<>Hata oranı bu yüzdenin altındaysa oran ne olursa olsun bulgu üretilmez. Varsayılan <b>1</b>.</>} />
-
-        {/* v0.10.1521 — hacim farkında hata tabanı (v0.10.1518 errorRamp'ın ikizi). */}
-        <div>
-          <CheckboxField aria-label="Yüksek hacimde düşük hata tabanı"
-            checked={hvOn} disabled={!on}
-            onCheckedChange={v => set({ highVolumeErrorFloor: v })}
-            label="Yüksek hacimde düşük hata tabanı"
-            hint={<>
-              Açık (varsayılan): yükselen hata oranının penceresindeki <b>her</b> dilim saniyede en az{' '}
-              {b.highVolumeErrorsPerSec ?? 1} teknik hata taşıyorsa, %1 tabanı yerine aşağıdaki taban kullanılır
-              &mdash; 1000 istek/sn&apos;de 5 hata/sn yalnız %0,5&apos;tir ama kendi haftalık normalinin çok
-              üstündeyse gerçek bir olaydır. Oran, kalıcılık, sıçrama bandı kapıları aynen geçerli; düşük hacimli
-              servisler %1 tabanında kalır.
-            </>} />
-          <div data-disabled={!hvOn || undefined} className={cn('mt-2 ml-6 flex flex-wrap gap-3', DIM)}>
-            <Num className="w-auto" label="Hata hızı eşiği (hata/sn)" min={0.05} max={100000} step={0.5}
-              aria-label="Yüksek hacim: hata hızı eşiği"
-              value={b.highVolumeErrorsPerSec ?? 1}
-              onChange={e => set({ highVolumeErrorsPerSec: Number(e.target.value) })}
-              disabled={!on || !hvOn}
-              hint={<>0,05–100000, varsayılan <b>1</b>.</>} />
-            <Num className="w-auto" label="Yüksek hacimde hata oranı tabanı (%)" min={0.01} max={100} step={0.05}
-              aria-label="Yüksek hacim: hata oranı tabanı"
-              value={b.highVolumeMinErrorRatePct ?? 0.2}
-              onChange={e => set({ highVolumeMinErrorRatePct: Number(e.target.value) })}
-              disabled={!on || !hvOn}
-              hint={<>0,01–100, varsayılan <b>0,2</b>.</>} />
-          </div>
-        </div>
-
-        <Num label="Sıçramalı geçmiş toleransı (× geçmiş p90)" min={1} max={10} step={0.1}
-          value={b.spikyBandFactor ?? 1.5}
-          onChange={e => set({ spikyBandFactor: Number(e.target.value) })}
-          disabled={!on}
-          hint={<>Yükseliş, o saatin geçmişteki p90 değerinin bu katını aşmazsa (düzenli kısa sıçramalar) bulgu sayılmaz. Varsayılan <b>1,5</b>.</>} />
-      </div>
-
-      <div className={cn(NOTE, 'mt-3 ml-3')}>
-        Yeni bir servis ilk dört haftasında <b>sessiz</b> kalır: baseline&apos;ı
-        yoksa motor bulgu üretmez (&laquo;veri yok&raquo; bir anomali değildir).
-        Yeni <b>kurulan</b> bir Coremetry de aynı sebeple sessizdir; kaç kovanın
-        bu yüzden atlandığını ve motorun tarama süresini{' '}
-        <span className="font-mono">/admin/stats</span> &rarr; Davranış motoru
-        kartından izleyebilirsiniz.
-      </div>
     </div>
   );
 }

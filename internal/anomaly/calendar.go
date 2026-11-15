@@ -18,10 +18,7 @@ package anomaly
 // görünür, bildirim/incident yok). Kapsam dışı ve bilinçli: sıçramalar, hata
 // oranı, gecikme, zaten açık
 // bir Problem'in tazelenmesi/kapanması ve month-end-like günleri (ay sonu
-// yoğun gün; düşüş anlamlı). Davranış motorunun düşüş adayları zaten terfi
-// etmez (behavior_scan.go behaviorEvent); motorun 28 günlük haftanın-saati
-// baseline'ından geçmiş holiday / half-day kovaları çıkarılır
-// (dropCalendarBaselineRows) — tatil pazartesisi sıradan pazartesiyi kirletmez.
+// yoğun gün; düşüş anlamlı).
 //
 // v0.10.1490 — takvim dilimi (cal.Timezone, boş = UTC): özel gün üyeliği ve ay
 // sonu iş günü hesabı YEREL günle; gün sınıfı (dayClass) ve slot (saniye-of-
@@ -283,39 +280,4 @@ func calendarDropEvent(service, kind string, current, median float64, bkind stri
 		BaselineKind:  bkind,
 		SubjectKind:   chstore.AnomalySubjectService,
 	}
-}
-
-// dropCalendarBaselineRows — SAF (v0.10.1483): davranış motorunun BASELINE
-// satırlarından (Unix < recentCutoff) holiday / half-day günlerine düşenleri
-// çıkarır. Takvim boşsa girdi aynen döner (kopya yok).
-func dropCalendarBaselineRows(in map[string][]behaviorRow, cal chstore.AnomalyCalendarConfig, recentCutoff int64) map[string][]behaviorRow {
-	if len(cal.Days) == 0 {
-		return in
-	}
-	// v0.10.1490 — önbellek 15 dk diliminde: her IANA ofseti 15 dk'nın katı,
-	// yerel gün sınırı bir dilimin içine düşmez (UTC gün anahtarı yerel
-	// sınırı kaçırırdı).
-	special := map[int64]bool{}
-	isSpecial := func(unix int64) bool {
-		slot := unix / 900
-		v, ok := special[slot]
-		if !ok {
-			k := cal.SpecialKindOn(time.Unix(slot*900, 0))
-			v = k == chstore.CalendarHoliday || k == chstore.CalendarHalfDay
-			special[slot] = v
-		}
-		return v
-	}
-	out := make(map[string][]behaviorRow, len(in))
-	for svc, rows := range in {
-		kept := make([]behaviorRow, 0, len(rows))
-		for _, r := range rows {
-			if r.Unix < recentCutoff && isSpecial(r.Unix) {
-				continue
-			}
-			kept = append(kept, r)
-		}
-		out[svc] = kept
-	}
-	return out
 }

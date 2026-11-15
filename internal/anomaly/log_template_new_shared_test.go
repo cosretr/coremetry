@@ -42,11 +42,8 @@ func TestNewLogTemplateFamiliesReusesDecision(t *testing.T) {
 		t.Fatalf("ortak karar sırası bozuk: masker=%d çekirdek=%d gürültü=%d", gate, core, noise)
 	}
 	// v0.10.2085 — eski kayıtçı ve anahtarı silindi: tek çağıran ML.
-	rec, err := os.ReadFile("recorder.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(rec), "filterNewTemplateNoise(") || strings.Contains(string(rec), "NewLogTemplateFamilies(") {
-		t.Fatal("eski kayıtçı yeni log kalıbı olayı yazmamalı (ML new_template tek yazıcı)")
+	// v0.10.2270 — eski kayıtçı (recorder.go) tümüyle silindi.
+	if _, err := os.Stat("recorder.go"); err == nil {
+		t.Fatal("eski kayıtçı geri gelmemeli (ML new_template tek yazıcı)")
 	}
 }

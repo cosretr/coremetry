@@ -114,7 +114,6 @@ export const keys = {
     mlProfiles: ['anomalies', 'ml', 'profiles'] as const, // v0.10.1816
     mlSvcShadow: ['anomalies', 'ml', 'svc-shadow'] as const, // v0.10.2089
     logPatterns: ['anomalies', 'log-patterns'] as const,
-    traceOps:    ['anomalies', 'trace-ops'] as const,
     metrics:     ['anomalies', 'metrics'] as const,
     events:      ['anomalies', 'events'] as const,
     // v0.10.2051 — birleşik liste (bölüm × süzgeç × sayfa) ve olayın birleşik satırı.

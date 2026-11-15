@@ -335,7 +335,6 @@ func TestInboxSilenceWiring(t *testing.T) {
 		t.Errorf("api.go depoyu %d kez doğrudan okuyor — canlı uçlar hatayı yine yutar", n)
 	}
 	for _, w := range []string{
-		`muted := s.activeSilencedAnomalies(ctx, "trace-ops")`,
 		`muted := s.activeSilencedAnomalies(ctx, "log-patterns")`,
 	} {
 		if !strings.Contains(apiSrc, w) {

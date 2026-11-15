@@ -23,10 +23,8 @@ package anomaly
 // okuması yerine yedek sınıf; batch p99 yük kapısının mevsimsel hacmi yok
 // (yalnız p99_ms + batch serviste fark eder).
 //
-// v0.10.1521 — davranış motoru da AYNI adımlarda replay edilir
-// (anomaly_explain_behavior.go): adım başına davranış hükmü (aday / yok),
-// kaynağı ve durduran kapı. Ek okumalar: span MV'sine servis-filtreli tek
-// 28 günlük sorgu + VM'e ≤ explainMaxVMBehaviorQueries kova sorgusu.
+// v0.10.2270 — davranış motoru (v0.10.1521'den beri adım başına replay
+// edilirdi) silindi; replay yalnız metrik dedektörünü koşar.
 
 import (
 	"context"
@@ -44,11 +42,8 @@ const (
 	explainMaxWindow     = 12 * time.Hour
 	explainDefaultWindow = 6 * time.Hour
 	explainMaxVMQueries  = 60
-	// explainMaxVMBehaviorQueries — v0.10.1521 davranış replay'inin 28 günlük
-	// kova planının AYRI tavanı.
-	explainMaxVMBehaviorQueries = 48
-	explainVMRunLen             = 144 // tek servis: 144 nokta/seri
-	explainBudget               = 45 * time.Second
+	explainVMRunLen      = 144 // tek servis: 144 nokta/seri
+	explainBudget        = 45 * time.Second
 	// explainTickOffset — adımın "şimdi"si kova sınırından bu kadar sonra:
 	// span okuması bir önceki kovayı, VM (2 dk gecikme) aynı kovayı tamamlanmış
 	// görür — liderin tipik tik konumu.
@@ -82,8 +77,6 @@ type ExplainStep struct {
 	RampThresh   float64 `json:"rampThreshold"`
 	RampEPS      float64 `json:"rampErrorsPerSec"`
 	Open         bool    `json:"open"` // adım sonrası simüle açık durum
-	// v0.10.1521 — davranış motorunun AYNI adımdaki hükmü (anomaly_explain_behavior.go).
-	Behavior *ExplainBehaviorStep `json:"behavior,omitempty"`
 }
 
 // ExplainReport — cevap gövdesi.
@@ -110,12 +103,6 @@ type ExplainReport struct {
 	Notes          []string      `json:"notes,omitempty"`
 	SpanReadError  string        `json:"spanReadError,omitempty"`
 	EnvExcludesSvc bool          `json:"envExcludesService,omitempty"`
-	// v0.10.1521 — davranış motoru özeti (adım ayrıntısı Steps[].behavior).
-	BehaviorVerdict     string   `json:"behaviorVerdict,omitempty"`
-	BehaviorFirstAt     int64    `json:"behaviorFirstAt,omitempty"`
-	BehaviorSteps       int      `json:"behaviorCandidateSteps"`
-	BehaviorTopBlockers []string `json:"behaviorTopBlockers,omitempty"`
-	BehaviorReadError   string   `json:"behaviorReadError,omitempty"`
 }
 
 // spanRow — span MV'sinin bir kovası.
@@ -130,9 +117,6 @@ type ExplainDeps struct {
 	VM    REDVM // nil = VM yok
 	// spanRows — testte sahte; nil → Store üzerinden.
 	spanRows spanRowsReader
-	// behaviorRows — v0.10.1521 davranış replay'inin span okuması; testte
-	// sahte, nil → Store üzerinden.
-	behaviorRows behaviorRowsReader
 }
 
 // NormalizeExplainWindow — SAF: pencereyi 5 dk ızgarasına hizalar, tavanlar.
@@ -174,16 +158,11 @@ func ExplainServiceWindow(ctx context.Context, deps ExplainDeps, req ExplainRequ
 	if reader == nil {
 		reader = storeSpanRows(deps.Store)
 	}
-	beh := deps.behaviorRows
-	if beh == nil {
-		beh = storeBehaviorRows(deps.Store)
-	}
-	return explainRun(ctx, deps.VM, reader, beh, req.Service, metric, req.From, req.To, sens, days, minS, neighbor, tracked), nil
+	return explainRun(ctx, deps.VM, reader, req.Service, metric, req.From, req.To, sens, days, minS, neighbor, tracked), nil
 }
 
 // explainRun — çekirdek (sahte okuyucularla testli).
-// beh nil → davranış replay'inde span satırı yok (VM satırları yine okunur).
-func explainRun(ctx context.Context, vm REDVM, reader spanRowsReader, beh behaviorRowsReader, service, metric string, from, to time.Time,
+func explainRun(ctx context.Context, vm REDVM, reader spanRowsReader, service, metric string, from, to time.Time,
 	sens chstore.AnomalySensitivityConfig, days, minS, neighbor int, tracked bool) ExplainReport {
 	rep := ExplainReport{Service: service, Metric: metric, From: from.Unix(), To: to.Unix(), Tracked: tracked,
 		Batch: sens.IsBatchService(service), VMMode: sens.REDSourceMode(), Sensitivity: sensitivityLogLine(sens)}
@@ -207,9 +186,7 @@ func explainRun(ctx context.Context, vm REDVM, reader spanRowsReader, beh behavi
 		}
 	}
 	// ── VM: taze bellek, servis eşleştiricili sorgular ──
-	withBeh := behaviorReplayable(metric, sens)
-	vx := newExplainVM(ctx, vm, service, sens, steps, days, neighbor, withBeh)
-	bx := newExplainBehavior(ctx, beh, withBeh, service, metric, steps, sens)
+	vx := newExplainVM(ctx, vm, service, sens, steps, days, neighbor)
 	rep.VMConfigured, rep.VMFamilies, rep.VMQueries, rep.VMErrors = vx.configured, vx.famLines(), vx.queries, vx.errs
 	rep.EnvExcludesSvc = vx.envExcludes
 	if vx.envExcludes {
@@ -223,7 +200,6 @@ func explainRun(ctx context.Context, vm REDVM, reader spanRowsReader, beh behavi
 	for _, now := range steps {
 		st := ExplainStep{At: now.Unix()}
 		view := vx.viewAt(now, sens, days, neighbor)
-		bx.step(&st, now, view)
 		s, u := view.seriesFor(service, metric, sens.DwellBuckets)
 		if !rep.VMPresent && view.vmKnows(service) {
 			rep.VMPresent = true
@@ -286,7 +262,6 @@ func explainRun(ctx context.Context, vm REDVM, reader spanRowsReader, beh behavi
 	}
 	rep.TopBlockers = topBlockers(blockers, 4)
 	rep.Verdict = explainVerdict(rep)
-	bx.finish(&rep)
 	rep.Notes = append(rep.Notes, "takvim özel gününde mevsimsel taban yedek sınıftan")
 	return rep
 }
@@ -442,14 +417,13 @@ type explainVM struct {
 	queries     int
 	errs        []string
 	envExcludes bool
-	behavior    bool // v0.10.1521: davranış kovaları okundu → görünüm readyBeh hesaplar
 }
 
 // newExplainVM — aile keşfi (liderle AYNI refreshMeta: servis etiketi, durum
 // etiketleri, ortam kapsamı), sonra kapsam servis eşleştiricisiyle daraltılır
 // ve adımların gerektirdiği kovalar okunur.
-func newExplainVM(ctx context.Context, vm REDVM, service string, sens chstore.AnomalySensitivityConfig, steps []time.Time, days, neighbor int, withBehavior bool) *explainVM {
-	x := &explainVM{src: newVMREDSource(), behavior: withBehavior}
+func newExplainVM(ctx context.Context, vm REDVM, service string, sens chstore.AnomalySensitivityConfig, steps []time.Time, days, neighbor int) *explainVM {
+	x := &explainVM{src: newVMREDSource()}
 	if vm == nil || !vm.Configured() || sens.REDSourceMode() == chstore.AnomalyREDSourceSpan || len(steps) == 0 {
 		return x
 	}
@@ -484,26 +458,6 @@ func newExplainVM(ctx context.Context, vm REDVM, service string, sens chstore.An
 	x.queries += n
 	if nerr > 0 {
 		x.errs = append(x.errs, fmt.Sprintf("%d sorgu hata verdi: %s", nerr, lastErr))
-	}
-	// v0.10.1521 — davranış replay'inin 28 günlük haftanın-saati kovaları:
-	// AYRI plan ve AYRI tavan (dedektörün kovalarını tavandan itmesin).
-	if withBehavior {
-		breq := map[int64]bool{}
-		for _, now := range steps {
-			for _, b := range vmBehaviorBuckets(now.Add(-vmIngestLag)) {
-				breq[b] = true
-			}
-		}
-		bplan := x.planFor(breq)
-		if len(bplan) > explainMaxVMBehaviorQueries {
-			x.errs = append(x.errs, fmt.Sprintf("davranış sorgu tavanı: %d/%d — eksik kovalı adımlarda davranış span satırlarından", explainMaxVMBehaviorQueries, len(bplan)))
-			bplan = bplan[:explainMaxVMBehaviorQueries]
-		}
-		n, nerr, _, lastErr := x.src.execute(ctx, vm, bplan, last)
-		x.queries += n
-		if nerr > 0 {
-			x.errs = append(x.errs, fmt.Sprintf("davranış: %d sorgu hata verdi: %s", nerr, lastErr))
-		}
 	}
 	// Ortam kapsamı servisi dışarıda mı bırakıyor? Kapsamlı okuma hiç istek
 	// görmediyse, ortamsız tek bir sayım sorgusu (son 1 sa) sorulur.
@@ -626,9 +580,6 @@ func (x *explainVM) viewAt(now time.Time, sens chstore.AnomalySensitivityConfig,
 	v.consec = vmConsecutiveBuckets(vnow)
 	v.seasonal, v.seasonalClass = vmSeasonalBucketsCal(vnow, days, neighbor, sens.Calendar, seasonalLocation(sens.SeasonalTimezone))
 	v.seasonalDayKey = seasonalDayKey(seasonalLocation(sens.SeasonalTimezone))
-	if x.behavior {
-		v.behavior = vmBehaviorBuckets(vnow)
-	}
 	v.meta = append([]vmFamMeta(nil), x.src.meta...)
 	for fi, f := range vmREDFamilies {
 		if !x.src.meta[fi].ok {
@@ -640,7 +591,6 @@ func (x *explainVM) viewAt(now time.Time, sens chstore.AnomalySensitivityConfig,
 			}
 			v.readyConsec[fi][k] = len(x.src.store.missing(fi, k, v.consec)) == 0
 			v.readyDet[fi][k] = v.readyConsec[fi][k] && len(x.src.store.missing(fi, k, v.seasonal)) == 0
-			v.readyBeh[fi][k] = len(v.behavior) > 0 && len(x.src.store.missing(fi, k, v.behavior)) == 0
 			if until, ok := x.src.backoff[[2]int{fi, int(k)}]; ok && !until.IsZero() {
 				v.failed[fi][k] = true
 			}

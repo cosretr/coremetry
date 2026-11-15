@@ -178,24 +178,6 @@ func TestCalendarLocalDayKey(t *testing.T) {
 	}
 }
 
-// TestDropCalendarBaselineRowsTimezone — davranış baseline'ı yerel tatil
-// kovalarını düşürür: İstanbul'da UTC 21:00 önceki gün kovası tatildir.
-func TestDropCalendarBaselineRowsTimezone(t *testing.T) {
-	ist := tzCal("Europe/Istanbul")
-	early := utcAt("2030-12-31T21:00:00Z").Unix()   // yerel yılbaşı 00:00
-	before := utcAt("2030-12-31T20:00:00Z").Unix()  // yerel 23:00 önceki gün
-	lateUTC := utcAt("2031-01-01T22:00:00Z").Unix() // yerel 2 Ocak 01:00 (UTC'de hâlâ yılbaşı)
-	in := map[string][]behaviorRow{"orders-api": {{Unix: before}, {Unix: early}, {Unix: lateUTC}}}
-	got := dropCalendarBaselineRows(in, ist, utcAt("2031-03-01T00:00:00Z").Unix())["orders-api"]
-	if len(got) != 2 || got[0].Unix != before || got[1].Unix != lateUTC {
-		t.Errorf("İstanbul: %+v", got)
-	}
-	got = dropCalendarBaselineRows(in, tzCal(""), utcAt("2031-03-01T00:00:00Z").Unix())["orders-api"]
-	if len(got) != 2 || got[0].Unix != before || got[1].Unix != early {
-		t.Errorf("UTC eski davranış: %+v", got)
-	}
-}
-
 // TestVMSeasonalBucketsCalendarTimezone — VM yolu yerel tatilde yedek sınıfa
 // (pazar) iner: İstanbul'da UTC 22:00 (31 Aralık salı) yerel yılbaşıdır.
 func TestVMSeasonalBucketsCalendarTimezone(t *testing.T) {

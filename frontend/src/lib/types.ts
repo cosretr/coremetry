@@ -7327,20 +7327,6 @@ export interface ServiceReportSection {
   newErrors: ExceptionGroup[];
 }
 
-// Per-operation error anomaly — a (service, operation) tuple
-// that is either failing for the first time in the window or
-// whose error count just doubled.
-export interface TraceOpAnomaly {
-  service: string;
-  operation: string;
-  kind: 'new_error' | 'error_spike';
-  currentErrors: number;
-  baselineErrors: number;
-  ratio: number;
-  sampleTraceId: string;
-  lastSeenNs: number;
-}
-
 // One curated log-shape anomaly — either brand new in the
 // detection window or up 2x+ over baseline. Pattern + regex
 // match the server-side definitions in internal/anomaly/log_patterns.go.
@@ -7692,40 +7678,6 @@ export interface SystemStats {
     // Redis configured but unreachable → always-leader fallback. In a multi-pod
     // deployment every pod becomes leader → duplicate alerts/notifications.
     lockDegraded: boolean;
-  };
-  // v0.9.936 — davranış motorunun kendi ölçümü. Motorun tek pahalı yanı
-  // 28 GÜNLÜK bir MV taraması; süresi görünmezse "vidaları sıkmalı
-  // mıyım" sorusunun cevabı da yok.
-  //
-  // OPSİYONEL: bu sürümden eski bir backend'e bakan bir tarayıcı sekmesi
-  // alanı hiç görmez. Motor bu pod'da koşmuyorsa (COREMETRY_MODE=api, ya
-  // da lider başka pod) sayaçlar SIFIR olur ve bu doğru cevaptır.
-  behavior?: {
-    ticks: number;            // süreç başından beri koşan tarama sayısı
-    candidates: number;       // yazılan aday (tavandan SONRA)
-    lastUnix: number;         // son taramanın bitiş anı (0 = hiç koşmadı)
-    lastDurationMs: number;   // son taramanın toplam süresi
-    // v0.9.957 — bütçenin KIRILIMI. Toplam süre tek başına ne
-    // yapılacağını söylemiyor: yük 28 günlük MV sorgusundaysa vidalar,
-    // olay yazımındaysa toplu yazım hattı sorumludur. v0.9.936'nın 25.6
-    // saniyesi bu kırılım olmadığı için "MV pahalı" diye okunmuştu;
-    // ölçünce ~20 saniyenin YAZIMDA olduğu çıktı.
-    //
-    // OPSİYONEL: bu sürümden eski bir backend alanı hiç döndürmez.
-    lastQueryMs?: number;
-    lastWriteMs?: number;
-    lastCandidates: number;
-    lastServices: number;
-    // Yetersiz geçmiş yüzünden atlanan kova sayısı. SESSİZLİĞİN
-    // GEREKÇESİ: motor aday üretmiyorsa bunun "her şey normal" mi yoksa
-    // "henüz öğrenecek kadar geçmiş yok" mu olduğunu başka hiçbir ekran
-    // söyleyemez.
-    lastScarceBuckets?: number;
-    // Son taramanın hatası ("" / yok = temiz). Sessiz kapanma bu depoda
-    // tekrarlayan hata sınıfı — motor bir CH hatasıyla hiç aday
-    // üretmiyor olabilir ve başka hiçbir ekran bunu söylemez.
-    lastError?: string;
-    lastErrorAtNs?: number; // v0.9.1077 — istisnanın zamanı (yaş etiketi)
   };
   // v0.9.1241 — "Kodu da incele" kod-çekme sonuçları (backend:
   // devops.CodeStats → chstore.CodeFetchStats).
@@ -10505,11 +10457,8 @@ export interface AnomalySensitivityConfig {
   criticalZ: number;
   // v0.10.2087 — opLatency / opLatencyDwellBuckets / opLatencyMinAffected
   // trace_op_latency dedektörüyle birlikte silindi (operatör kararı 2026-11-13).
-  // v0.10.1586 — trace_op (operasyon hata sıçraması / yeni hata) ve
-  // log_pattern olaylarının açılması için ardışık 5 dk pencere sayısı;
-  // 1–6, yok/aralık dışı = 2 (sunucu kelepçeler). 1 = eski tek pencere.
-  traceOpDwellBuckets?: number;
-  logPatternDwellBuckets?: number;
+  // v0.10.2270 — traceOpDwellBuckets / logPatternDwellBuckets / behavior
+  // eski log_pattern, trace_op ve davranış motoru dedektörleriyle silindi.
   // v0.10.1091 — yaygın yavaşlama hızlı yolu (`svc-slowdown:<servis>`, operatör
   // onaylı). Bölüm yoksa sunucu varsayılanlarla doldurur; enabled okuması
   // `!== false` (backend *bool, yok = AÇIK).
@@ -10524,7 +10473,7 @@ export interface AnomalySensitivityConfig {
   // v0.10.700 — kök neden hipotezinde zamansal çarpan: 'shadow' (varsayılan,
   // yok dahil) yalnız yazar, 'on' skoru çarpar. Okuma `=== 'on'`.
   temporalRanking?: 'shadow' | 'on';
-  // v0.10.1478 — metrik dedektörü + davranış motorunun RED serisi kaynağı:
+  // v0.10.1478 — metrik dedektörünün RED serisi kaynağı:
   // 'auto' (varsayılan, yok dahil) = VictoriaMetrics yapılandırılmışsa ve
   // servisin OTel HTTP/gRPC sunucu histogramı varsa ÖRNEKLENMEMİŞ VM serisi,
   // yoksa span; 'span' = eski davranış (geri alma). Okuma `=== 'span'`.
@@ -10545,14 +10494,6 @@ export interface AnomalySensitivityConfig {
    *  (chstore.AnomalyRuntimeConfig). heapMode varsayılan 'off'; 'on' Problem'i
    *  v0.10.892'den itibaren açar (öncesinde gölge gibi). */
   runtime?: AnomalyRuntimeConfig;
-  // v0.9.936 — davranış motoru AŞAMA 1'in vidaları. Üstteki alanlar
-  // ANİ sapmayı (5-dk pencere, 24s geçmiş) ayarlıyor; bu bölüm KALICI
-  // davranış değişimini (haftanın saati baseline'ı, 28 gün).
-  //
-  // OPSİYONEL çünkü bu sürümden ESKİ settings satırlarında alan yok;
-  // sunucu Normalize'da varsayılanlarla dolduruyor, ama tip GET'in
-  // döndürebileceği her şekli kabul etmeli.
-  behavior?: AnomalyBehaviorConfig;
   /** v0.10.1039 — batch servis ad kalıpları (backend *[]string): adında biri
    *  geçen (ASCII büyük-küçük duyarsız alt dizgi) servislerde yük artışı
    *  anomali sayılmaz. YOK = varsayılan ['-batch']; BOŞ dizi = kural KAPALI —
@@ -10562,13 +10503,6 @@ export interface AnomalySensitivityConfig {
   batchServicePatterns?: string[];
 }
 
-// v0.9.936 — davranış motorunun eşikleri (backend:
-// chstore.AnomalyBehaviorConfig).
-//
-// Ani-sapma vidalarından AYRI olması bilinçli: "şu an sıçradı mı" ile
-// "bu servis artık başka türlü mü davranıyor" aynı eşikle
-// cevaplanmaz. Bir rejim kayması 1.5× ile gerçektir ve 6σ'ya hiç
-// ulaşmayabilir.
 export interface AnomalyRuntimeConfig {
   heapMode?: 'off' | 'shadow' | 'on';
   heapSource?: 'auto' | 'vm' | 'ch';
@@ -10578,55 +10512,10 @@ export interface AnomalyRuntimeConfig {
   heapSilentBuckets: number; // kova (varsayılan 3)
   heapMaxPods: number;       // halka/okuma tavanı (varsayılan 5000)
 }
-export interface AnomalyBehaviorConfig {
-  // Motor koşsun mu? OPSİYONEL çünkü backend'de *bool ve varsayılan
-  // AÇIK — okuma daima `!== false` ile yapılmalı (`=== true` eski
-  // satırları kapalı gösterir).
-  enabled?: boolean;
-  // Mevsimsel sapmanın açılma eşiği (robust z, σ).
-  seasonalZ: number;
-  // Rejim kaymasının açılma oranı (× baseline medyanı). Düşüş
-  // tarafında karşılığı 1/regimeRatio.
-  regimeRatio: number;
-  // Kaç ardışık 5-dk dilimin AYNI yönde ateşlemesi gerektiği.
-  dwellSeasonal: number;
-  dwellRegime: number;
-  // Fırtına koruması: tik başına yazılacak EN GÜÇLÜ aday sayısı.
-  maxCandidatesPerTick: number;
-  // v0.9.957 — örnek-kıtlığı kapısının iki boyutu. OPSİYONEL çünkü bu
-  // sürümden ESKİ settings satırlarında alan yok; sunucu Normalize'da
-  // varsayılanlarla dolduruyor.
-  //
-  // minSamplesPerBucket : kova başına asgari 5-dk örneği (vars. 12).
-  // minBucketRepeats    : kovanın kaç FARKLI GÜNDEN geldiği (vars. 3).
-  //
-  // İkisi AYRI soru: 24 örnek bol görünür ama hepsi iki günden
-  // geliyorsa mevsimsel yayılım n=2'den kestiriliyor demektir ve z
-  // patlar. Ölçülmüş vaka: lokal 9 günlük geçmişte tek tikte 178 aday.
-  minSamplesPerBucket?: number;
-  minBucketRepeats?: number;
-  // v0.10.1070 — mutlak taban + sıçramalı geçmiş toleransı. OPSİYONEL
-  // çünkü eski backend/blob alanı taşımaz; sunucu Normalize'da doldurur.
-  //
-  // minP99Ms        : p99 bu değerin altındaysa bulgu yok (vars. 200 ms).
-  // minErrorRatePct : hata oranı bunun altındaysa bulgu yok (vars. %1).
-  // spikyBandFactor : yükseliş, kovanın geçmiş p90'ının bu katını aşmalı
-  //                   (vars. 1.5) — düzenli kısa sıçramalar normal sayılır.
-  minP99Ms?: number;
-  minErrorRatePct?: number;
-  spikyBandFactor?: number;
-  // v0.10.1521 — hacim farkında hata tabanı (v0.10.1518 errorRamp'ın ikizi):
-  // yukarı yönlü error_rate penceresinin HER dilimi ≥ highVolumeErrorsPerSec
-  // hata/sn ise iki %1 tabanı (minErrorRatePct + ani-sapma absFloor)
-  // highVolumeMinErrorRatePct'e iner. Bayrak backend'de *bool, yok = AÇIK:
-  // okuma `!== false`. Sayılar yoksa sunucu doldurur (1 hata/sn, %0.2).
-  highVolumeErrorFloor?: boolean;
-  highVolumeErrorsPerSec?: number;
-  highVolumeMinErrorRatePct?: number;
-}
 
 // BehaviorChangeDetails — `behavior_change` kindli bir AnomalyEvent'in
-// `sample` alanındaki JSON. Backend: internal/anomaly.behaviorDetails.
+// `sample` alanındaki JSON. Backend: (silinen, v0.10.2270) davranış motoru;
+// yalnız geçmiş satırların çekmecesi için kalır.
 //
 // Neden `sample`: yeni kolon/tablo açmamak için (invariant #5 ile aynı
 // duruş). Alan zaten "tespit anında yakalanan kanıt" demek; log/trace
@@ -12246,7 +12135,6 @@ export interface AnomalyREDSourceFamilyStats {
   statusLabels?: string;
   statusServices: number;
   readyDetector: string;
-  readyBehavior: string;
 }
 export interface AnomalyREDSourceStats {
   mode: string;

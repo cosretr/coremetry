@@ -47,8 +47,6 @@ func TestREDVMLive(t *testing.T) {
 		s, u := v.seriesFor(svc, m, sens.DwellBuckets)
 		t.Logf("%s: %s · ardışık %d nokta (son %v) · mevsimsel %d", m, redSourceEvidenceTR(u), len(s.Values), tail(s.Values, 3), len(s.Seasonal))
 	}
-	rows, u, ok := v.behaviorRowsFor(svc)
-	t.Logf("davranış: ok=%v %s · %d satır", ok, redSourceEvidenceTR(u), len(rows))
 	// Sabit durum: bir sonraki 5 dk kovası.
 	start := time.Now()
 	v = src.prepare(context.Background(), now.Add(5*time.Minute), sens, seasonalDays, seasonalNeighborBuckets)

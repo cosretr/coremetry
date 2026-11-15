@@ -148,12 +148,12 @@ func TestDecodePatternHistogram(t *testing.T) {
 	}
 }
 
-// v0.10.1586 — sürdürme penceresi yokken ana sayım sorgusu ve argümanları
-// bayt bayt öncekiyle aynı (eski satır içi metin buraya sabitlendi).
+// Ana sayım sorgusu ve argümanları bayt bayt sabit (eski satır içi metin
+// buraya sabitlendi; v0.10.2270 sürdürme pencereleri silindi).
 func TestCHCountPatternSQLLegacyIdentity(t *testing.T) {
 	cur := time.Date(2026, 10, 29, 9, 55, 0, 0, time.UTC)
 	base, now := cur.Add(-55*time.Minute), cur.Add(5*time.Minute)
-	sql, args := chCountPatternSQL("['ora-']", `ORA-[0-9]+`, cur, nil, base, now)
+	sql, args := chCountPatternSQL("['ora-']", `ORA-[0-9]+`, cur, base, now)
 	want := `
 		SELECT
 		  countIf(time >= ?)                                      AS cur,
@@ -170,14 +170,5 @@ func TestCHCountPatternSQLLegacyIdentity(t *testing.T) {
 	wantArgs := []any{cur, cur, cur, cur, cur, base, now, `ORA-[0-9]+`}
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Fatalf("argümanlar: %v", args)
-	}
-	p0, p1 := cur.Add(-5*time.Minute), cur.Add(-10*time.Minute)
-	sql, args = chCountPatternSQL("['ora-']", `ORA-[0-9]+`, cur, []time.Time{p0, p1}, base, now)
-	if strings.Count(sql, "?") != len(args) || !strings.Contains(sql, "AS prev_0") || !strings.Contains(sql, "AS prev_1") {
-		t.Fatalf("sürdürme kolonları: %s %v", sql, args)
-	}
-	if !args[1].(time.Time).Equal(p1) || !args[5].(time.Time).Equal(p0) || !args[6].(time.Time).Equal(cur) ||
-		!args[7].(time.Time).Equal(p1) || !args[8].(time.Time).Equal(p0) {
-		t.Fatalf("pencere bağları: taban üstü en eski başlangıç, prev_0=[p0,cur), prev_1=[p1,p0): %v", args)
 	}
 }

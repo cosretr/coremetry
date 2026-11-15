@@ -10,8 +10,7 @@ package anomaly
 //     ise resolveHTTPEnvScope kuralı). Kapsam değişirse ailenin kovaları atılır.
 //  2. durum-etiketli servis kümesi (vmStatusTTL'de bir, aile başına TEK anlık
 //     sorgu): etiketsiz servisin hata oranı VM'den okunmaz.
-//  3. eksik kovalar: gerekli küme (ardışık 24 sa ∪ mevsimsel slot ∪ davranış
-//     haftanın-saati) − bellek → koşular → aynı uzunlukta koşular tek sorguda
+//  3. eksik kovalar: gerekli küme (ardışık 24 sa ∪ mevsimsel slot) − bellek → koşular → aynı uzunlukta koşular tek sorguda
 //     (ofset birleşimi) → en yeni önce, tik başına ≤ vmMaxQueriesPerTick sorgu,
 //     sorgu başına vmQueryTimeout, vmConcurrency paralel. Hata veren (aile, tür)
 //     vmKindBackoff boyunca denenmez (o tür span'e düşer).
@@ -196,10 +195,7 @@ func (s *vmREDSource) prepare(ctx context.Context, now time.Time, sens chstore.A
 	sloc := seasonalLocation(sens.SeasonalTimezone)
 	v.seasonal, v.seasonalClass = vmSeasonalBucketsCal(vnow, days, neighbor, sens.Calendar, sloc) // v0.10.1483 — takvim yedek sınıfı
 	v.seasonalDayKey = seasonalDayKey(sloc)
-	if sens.Behavior.IsEnabled() && !s.routes { // endpoint kipinde davranış motoru yok
-		v.behavior = vmBehaviorBuckets(vnow)
-	}
-	req := vmRequiredSet(v.consec, v.seasonal, v.behavior)
+	req := vmRequiredSet(v.consec, v.seasonal)
 	s.store.retain(req)
 
 	bctx, cancel := context.WithTimeout(ctx, vmTickBudget)
@@ -261,7 +257,6 @@ func (s *vmREDSource) prepare(ctx context.Context, now time.Time, sens chstore.A
 			}
 			v.readyConsec[fi][k] = len(s.store.missing(fi, k, v.consec)) == 0
 			v.readyDet[fi][k] = v.readyConsec[fi][k] && len(s.store.missing(fi, k, v.seasonal)) == 0
-			v.readyBeh[fi][k] = len(s.store.missing(fi, k, v.behavior)) == 0
 			v.pending += len(s.store.missing(fi, k, required))
 		}
 	}
@@ -645,7 +640,6 @@ type REDSourceFamilyStats struct {
 	StatusLabels   string `json:"statusLabels,omitempty"`
 	StatusServices int    `json:"statusServices"`
 	ReadyDetector  string `json:"readyDetector"` // "count,err,p99" hazır türler
-	ReadyBehavior  string `json:"readyBehavior"`
 }
 
 // REDSourceStats — /api/settings/anomaly-red-source/status gövdesi.
@@ -717,7 +711,7 @@ func (s *vmREDSource) publish(v *vmREDView, took time.Duration) {
 		m := s.meta[fi]
 		fs := REDSourceFamilyStats{ID: f.ID, Present: m.present, Usable: m.ok, Reason: m.reason, ServiceLabel: m.scope.SvcLabel,
 			EnvMatcher: m.scope.EnvMatcher, StatusLabels: strings.Join(m.scope.StatusLabels, ","), StatusServices: len(m.statusSvc),
-			ReadyDetector: kindsReady(v.readyDet[fi]), ReadyBehavior: kindsReady(v.readyBeh[fi])}
+			ReadyDetector: kindsReady(v.readyDet[fi])}
 		st.Families = append(st.Families, fs)
 	}
 	if prev := redObs.Load(); prev != nil && prev.Sources != nil {
@@ -727,7 +721,7 @@ func (s *vmREDSource) publish(v *vmREDView, took time.Duration) {
 	redObs.Store(&st)
 	line := fmt.Sprintf("mode=%s configured=%v reason=%q pending=%d frames=%d svc=%d", st.Mode, st.Configured, st.Reason, st.PendingBuckets, st.Frames, st.Services)
 	for _, fs := range st.Families {
-		line += fmt.Sprintf(" | %s usable=%v %q det=%s beh=%s", fs.ID, fs.Usable, fs.Reason, fs.ReadyDetector, fs.ReadyBehavior)
+		line += fmt.Sprintf(" | %s usable=%v %q det=%s", fs.ID, fs.Usable, fs.Reason, fs.ReadyDetector)
 	}
 	if v.queries > 0 || line != s.lastLog {
 		log.Printf("[anomaly] RED kaynağı: %d VM sorgusu (%d hata) %d ms, %d kova okundu · %s", v.queries, v.queryErrs, st.LastMs, v.bucketsFetched, line)

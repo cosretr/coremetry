@@ -7,25 +7,18 @@
 //
 // KURAL — tek cümle: batch kalıbına giren bir serviste gecikme sapması,
 // AYNI ANDA ölçülen istek hacmi işin OLAĞAN ÇALIŞMA hacminin en az
-// batchLoadSurgeFactor katıyken yeni olay AÇMAZ. Tek sabit, iki karar noktası
-// (v0.10.2087: üçüncüsü trace_op_latency dedektörüyle birlikte silindi):
+// batchLoadSurgeFactor katıyken yeni olay AÇMAZ. Tek sabit, tek karar noktası
+// (v0.10.2087: trace_op_latency, v0.10.2270: davranış motoru ile birlikte
+// diğer noktalar silindi):
 //
 //	metrik dedektörü  (verdict.go)     p99_ms dwell kovalarının HER BİRİNİN istek
 //	                                   hızı ≥ 2 × p99 tabanının KENDİ kovalarının
 //	                                   istek hızı medyanı (ardışık ya da mevsimsel
 //	                                   slot; batchLatMetricUnderLoad)
-//	davranış motoru   (behavior_scan)  p99_ms penceresinin HER diliminin hacmi ≥
-//	                                   2 × kendi haftanın-saati kovasının hacim medyanı
 //
-// YALNIZ AÇILIŞI KESER — "zaten aktif" olana kapı UYGULANMAZ, iki noktada da:
-//
-//	metrik dedektörü  açık (open/acknowledged) anomaly:<svc>:p99_ms satırı varsa
-//	                  (hasOpen) kapı koşmaz: tazelenir, kapanır, küme kaynağı olur
-//	davranış motoru   servisin behavior_change p99_ms olayı AKTİFSE (son yazım
-//	                  ≤ 10 dk; her taramada yeniden yazılır) aday kalır
-//
-// Aktif küme okunamazsa o tik kapı HİÇ uygulanmaz (süzgeç okunamıyorsa
-// süzme). Ayrı bir kapatma geçişi YOK.
+// YALNIZ AÇILIŞI KESER — "zaten aktif" olana kapı UYGULANMAZ: açık
+// (open/acknowledged) anomaly:<svc>:p99_ms satırı varsa (hasOpen) kapı
+// koşmaz: tazelenir, kapanır, küme kaynağı olur. Ayrı bir kapatma geçişi YOK.
 //
 // YALNIZ OLUMLU KANITLA SUSTURUR: taban hacmi bilinmiyorsa (sıfır, yok,
 // yetersiz kova, hizasız seri) kural susturmaz — bugünkü gibi açılır. Yük
@@ -39,7 +32,7 @@ package anomaly
 import "math"
 
 // batchLoadSurgeFactor — "yük sıçraması" eşiği: cari hacim olağan çalışma
-// hacminin EN AZ bu katı. Tek sabit, iki karar noktası.
+// hacminin EN AZ bu katı.
 const batchLoadSurgeFactor = 2
 
 // batchLatencyMetric — kuralın dokunduğu TEK servis metriği. Liste değil
@@ -47,8 +40,7 @@ const batchLoadSurgeFactor = 2
 // susturmak olurdu.
 const batchLatencyMetric = "p99_ms"
 
-// batchLoadSurge — SAF yardımcı (ondalık kol: medyanla kıyaslayan metrik
-// dedektörü ve davranış motoru). cur ≥ batchLoadSurgeFactor × base mı?
+// batchLoadSurge — SAF yardımcı (medyanla kıyaslayan metrik dedektörü). cur ≥ batchLoadSurgeFactor × base mı?
 //
 // base BİLİNMİYORSA (≤ 0, NaN, +Inf) → false: kanıt yok = susturma yok.
 // NaN cur da false döner (NaN karşılaştırması).
@@ -117,65 +109,4 @@ func batchLatMetricUnderLoad(rates []float64, split, nConsecutive int, seasonalU
 		base = rates[:nConsecutive]
 	}
 	return batchRatesUnderLoad(rates[split:], base)
-}
-
-// behaviorWindowUnderLoad — davranış motorunun p99_ms adayı için SAF kapı:
-// adayın penceresindeki (son c.Dwell dilim — evalBehaviorWindow'un puanladığı
-// dilimlerin ta kendisi) HER dilimin hacmi, KENDİ haftanın-saati kovasının
-// hacim medyanının ≥ 2 katı mı? volBase = splitBehaviorSeries(rows,
-// "request_rate", …) — p99 tabanıyla aynı satırlar, aynı kova, aynı kesim.
-//
-// Kova yoksa / yetersizse (behaviorSufficient) / medyan sıfırsa → bilinmiyor
-// → false (aday kalır).
-func behaviorWindowUnderLoad(c behaviorCandidate, recent []behaviorRow, volBase map[int]behaviorBucket, b behaviorConfigView) bool {
-	if c.Dwell <= 0 || len(recent) < c.Dwell {
-		return false
-	}
-	for _, r := range recent[len(recent)-c.Dwell:] {
-		vb, ok := volBase[r.HOW]
-		if !ok || !behaviorSufficient(vb, b) {
-			return false
-		}
-		if !batchLoadSurge(behaviorMetricValue("request_rate", r), medianOf(vb.Values)) {
-			return false
-		}
-	}
-	return true
-}
-
-// behaviorBatchLatencyGate — batch servisin p99_ms adayına kapı (SAF).
-// Dönen (c, true) yazılır — c DAİMA değiştirilmeden (saf susturma);
-// (_, false) aday DEĞİL.
-//
-// Sıra:
-//  1. Yalnız YUKARI yönlü aday susabilir (gecikme ARTIŞI).
-//  2. Rejim adayı yük altındaysa mevsimsel pencere AYRICA sorulur:
-//     DwellSeasonal > DwellRegime ayarında mevsimsel pencere yükün
-//     açıklamadığı dilim taşıyabilir — o zaman sinyal yükle açıklanamıyor,
-//     aday (rejim, alanları aynen) KALIR.
-//  3. Susturmadan hemen önce `active` sorulur (TEMBEL okuma burada tetiklenir):
-//     servisin p99 davranış olayı zaten AKTİFSE ya da aktif küme
-//     okunamadıysa aday kalır. nil `active` = bilinmiyor = aday kalır.
-func behaviorBatchLatencyGate(
-	c behaviorCandidate,
-	baseline map[int]behaviorBucket,
-	recent []behaviorRow,
-	volBase map[int]behaviorBucket,
-	pol metricPolicy,
-	b behaviorConfigView,
-	active func(service string) bool,
-) (behaviorCandidate, bool) {
-	if c.Direction != "up" || !behaviorWindowUnderLoad(c, recent, volBase, b) {
-		return c, true
-	}
-	if c.Signal == "regime" {
-		s, ok := evalBehaviorWindow(c.Service, c.Metric, baseline, recent, pol, b, "seasonal", b.DwellSeasonal)
-		if ok && (s.Direction != "up" || !behaviorWindowUnderLoad(s, recent, volBase, b)) {
-			return c, true
-		}
-	}
-	if active == nil || active(c.Service) {
-		return c, true
-	}
-	return behaviorCandidate{}, false
 }

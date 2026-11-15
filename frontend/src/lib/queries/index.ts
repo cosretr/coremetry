@@ -8,7 +8,7 @@ export { useHealth } from './health';
 export { useLoginSummary } from './loginSummary'; // v0.10.1907 — kimliksiz Login özeti
 export { useProblems, useProblemByID, useProblemSourceEvent, useProblemLogTemplates, useProblemInvestigation, useSREStatus, useOpenProblemCount, useOpenCriticalCount, useEvaluatorHealth } from './problems';
 export {
-  useLogPatternAnomalies, useTraceOpAnomalies, useMetricAnomalies,
+  useLogPatternAnomalies, useMetricAnomalies,
   useAnomalyEvents, useAnomalySilences, useAnomalyEventByID, useLogPatternSeries,
   useUnifiedAnomalies, useUnifiedAnomalyRow,
   useCreateAnomalySilence, usePutAnomalyVerdict, useDeleteAnomalySilence,

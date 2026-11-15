@@ -14,7 +14,7 @@ import type {
 } from '@/lib/types';
 import { SectionHeader, KPI, fmtBytes, fmtRate } from './adminstats/shared';
 import { statusHeadline, Banner, ComponentRow, Legend } from './adminstats/StatusSection';
-import { DropsPanel, BehaviorPanel, CodeFetchPanel, NotifyRoutingPanel, RedisPanel, ApiCachePanel, DistributionQueuePanel } from './adminstats/panels';
+import { DropsPanel, CodeFetchPanel, NotifyRoutingPanel, RedisPanel, ApiCachePanel, DistributionQueuePanel } from './adminstats/panels';
 
 // Row types for the shared sortable + resizable DataTable adoption.
 type TableStatRow = SystemStats['tables'][number];
@@ -262,12 +262,9 @@ export default function AdminStatsPage() {
                 hepsi temiz kalır ve veri hiç inmez. Tek düğümde çizilmez. */}
             <DistributionQueuePanel dq={data.distributionQueue} />
 
-            {/* ── Davranış motoru (v0.9.936) ──────────────────────── */}
-            <BehaviorPanel behavior={data.behavior} />
-
             {/* ── CoSRE kod bağlamı (v0.9.1241) ───────────────────────
-                Davranış motorunun HEMEN ALTINDA: ikisi de bu sürecin
-                KENDİ ölçümü (süreç-içi atomik sayaç, CH yazımı yok).
+                Bu sürecin KENDİ ölçümü (süreç-içi atomik sayaç, CH
+                yazımı yok).
                 Kod-çekme yolu fail-open olduğu için başarısızlığı
                 hiçbir ekranda iz bırakmıyordu — toplamda "isabet
                 ediyor mu" sorusunun cevabı yalnız bu kartta. */}

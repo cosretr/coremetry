@@ -29,7 +29,16 @@ SKILL.md ile aynı; kod yorumlarındaki `/aiops §3` vb. atıflar buraya çözü
 | `monitor:<id>` | `monitor/runner.go:378-461` | prob durumu | — | Value 0 / Threshold 1 → totalLoss P1 |
 | `incident:<id>` (notify-only) | `incident_alert.go:35` | created/resolved | — | saklanmaz |
 
-anomaly_events üreticileri (Problem değil): recorder (`recorder.go:107,129`; `log_pattern`
+**v0.10.2270 — eski motorun `log_pattern`, `trace_op` ve davranış motoru (`behavior_change`) dedektörleri SİLİNDİ**
+(operatör kararı): `internal/anomaly/recorder.go` (eski kayıtçı, worker), `trace_ops.go`, `behavior*.go`,
+`anomaly_explain_behavior.go`, `batch_latency_active.go`, `chstore.ListActiveAnomalyKeys`, `native_detectors` anahtarları
+`log_pattern`/`trace_op`/`behavior`, `anomaly_sensitivity.behavior` / `traceOpDwellBuckets` / `logPatternDwellBuckets`,
+`GET /api/anomalies/trace-ops` + kartı, /admin/stats davranış kartı, `CountPatterns` sürdürme pencereleri. Kayıtlı bloblardaki
+eski anahtarlar sessizce düşer. Geçmiş `anomaly_events` satırları (bu üç tür) listede/detayda aynen görünür, tür etiketleri
+kalır; terfi Problem'leri "anomaly cleared" ile kapanır. CANLI kalan: `DetectLogPatterns` (tek pencere; /logs desen şeridi,
+`/api/anomalies/log-patterns`, MCP, insight, copilot). Aşağıdaki bu üç dedektöre ait cümleler TARİHÇEDİR — yeniden önerme.
+
+anomaly_events üreticileri (Problem değil): ~~recorder (`recorder.go:107,129`)~~ (silindi v0.10.2270); `log_pattern`
 koşulsuz — ES'te sayım token-OR, regex'in ÜST kümesi (`"tns-"` → çıplak `tns` terimi); v0.10.1080
 tetiklemek üzere olan ≤10 aday (oran sırası) tek `_msearch` örneklemiyle (`VerifyPatterns`, ≤50
 gövde) Go'da regex'e karşı doğrulanır: r=0 bastırır, 0<r<1 cur VE taban ×r, oran
@@ -52,7 +61,7 @@ sıçramalı geçmiş toleransı `spikyBandFactor` 1.5: yukarı HER dilim kovas�
 aşmalı, p90 aynı `Values`'tan Go'da, SQL aynı; saklanan baseline medyan. Bedel: sıkı kovada
 1.3× mevsimsel artık açılmaz — tabanları kaldırmayı önerme).
 
-**trace_op + log_pattern sürdürmesi (v0.10.1586, Davis FAZ 0.5 / C, operatör onayı 2026-10-29):** recorder'ın olay
+**[SİLİNDİ v0.10.2270 — tarihçe] trace_op + log_pattern sürdürmesi (v0.10.1586, Davis FAZ 0.5 / C, operatör onayı 2026-10-29):** recorder'ın olay
 YAZAN yolu (`DetectTraceOpAnomaliesSustained`, `DetectLogPatternsSustained`) ardışık `anomaly_sensitivity.traceOpDwellBuckets` /
 `logPatternDwellBuckets` (vars. 2, 1–6; 1 = tek pencere) penceresinin HER BİRİNDE eşik ister — trace_op'ta error_spike VE
 new_error (önceki kova: ≥10 hata, ≥%1 pay, spike'ta ≥3× normalize taban; `traceOpSustained`), log_pattern'de "new" ve "spike"
@@ -100,7 +109,7 @@ kapı eklerken `decideBlocker` ikizini de güncelle (`TestDecideBlockerMatchesDe
 (`pages/settings/ErrorRampSubsection.tsx`, aynı Kaydet). `NormalizeErrorRamp` aralık dışını KELEPÇELEMEZ, varsayılana döndürür
 → form aralık dışını kayıttan ÖNCE reddeder; aralıklar `pages/settings/errorRamp.ts` `ERROR_RAMP_BOUNDS` — Go
 `errRamp*Lo/Hi` ile birebir, pin `chstore/anomaly_sensitivity_error_ramp_ui_pin_test.go` (birini değiştirirsen ikisini).
-**Davranış motorunun hacim farkında hata tabanı (v0.10.1521,** 1518'in ikizi**):** `behavior.minErrorRatePct` %1 + ani-sapmanın paylaşılan
+**[SİLİNDİ v0.10.2270 — tarihçe] Davranış motorunun hacim farkında hata tabanı (v0.10.1521,** 1518'in ikizi**):** `behavior.minErrorRatePct` %1 + ani-sapmanın paylaşılan
 error_rate `absFloor` %1'i yüksek hacimde dev, kalıcı 5xx yükselişini gizliyordu. Yukarı yönlü error_rate penceresinin HER dilimi
 ≥ `behavior.highVolumeErrorsPerSec` (1) hata/sn ise iki taban min(taban, `highVolumeMinErrorRatePct` %0.2)'ye İNER (`behaviorHighVolumeErrors`,
 `evalBehaviorWindowWhy`); oran/z, dwell, aynı yön, sıçrama bandı, floorPct/minAbsDelta, kova kıtlığı AYNEN; düşüş yönü ve düşük hacim %1'de.
@@ -122,7 +131,7 @@ sorgusu / 15 s, CH prefetch'iyle paralel. Geri alma `alertSource=span`.
 **Yük altında gecikme (v0.10.1046, operatör: "Batch servislerde yük altındaki gecikme
 artışı da anomali sayılmasın"):** hacim işin OLAĞAN ÇALIŞMA hacminin ≥ 2 katıyken gecikme
 artışı YENİ olay açmaz. **v0.10.2087: `trace_op_latency` kolu dedektörle silindi — aşağıdaki
-trace_op_latency cümleleri tarihçedir; canlı kollar metrik + davranış.** Tek sabit `batchLoadSurgeFactor = 2`;
+trace_op_latency cümleleri tarihçedir; v0.10.2270: davranış kolu da silindi — canlı kol yalnız metrik.** Tek sabit `batchLoadSurgeFactor = 2`;
 kol `batchLoadSurge` (ondalık, medyan; tamsayı ikizi `batchLoadSurgeCounts` silindi) — `batch_latency.go`; taban
 bilinmiyorsa SUSTURMA YOK. `trace_op_latency`: `cur_calls × base_buckets ≥ 2 × base_calls ×
 cur_buckets` (v0.10.1085: sürdürme penceresinin HER kovası için, AND), `base_buckets` = taban penceresinin AKTİF kovaları (`uniqExact(time_bucket)`,
@@ -154,7 +163,7 @@ YENİ olayları susturur. Kalıplar tik başına
 doğrulanmadıysa batch listesi BOŞ (süzgeçsiz) ve kapatma geçişi koşmaz; okuma hatası
 son değeri KORUR (`LoadAnomalySensitivity`).
 
-**Seyrek koşan batch işi (v0.10.1043, operatör: "son 24 saatte hiç koşmamış bir iş her
+**[SİLİNDİ v0.10.2270 — tarihçe, trace_op ile] Seyrek koşan batch işi (v0.10.1043, operatör: "son 24 saatte hiç koşmamış bir iş her
 koşuda 'yeni hata' diye açılıyor"):** batch çiftinde 24 sa tabanda hata yoksa trace_op
 new_error demeden önce UZUN tabana bakar — aynı MV, [hizalı şimdi − 8 g, taban başı) yarı
 açık (`traceOpBatchExtWindow`). Uzun tabanda hata varsa taban payı = ext_errs /

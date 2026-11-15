@@ -1,8 +1,8 @@
 package anomaly
 
 // batch_latency_test.go — v0.10.1046: batch servislerde YÜK ALTINDAKİ
-// gecikme artışı YENİ anomali açmaz (metrik dedektörü
-// p99_ms, davranış motoru p99_ms).
+// gecikme artışı YENİ anomali açmaz (metrik dedektörü p99_ms; davranış
+// motoru v0.10.2270'da silindi).
 //
 // Operatör (prod): "Batch servislerde yük altındaki gecikme artışı da
 // anomali sayılmasın."
@@ -13,20 +13,17 @@ package anomaly
 // vakaları bu korkunun pinleridir.
 
 import (
-	"errors"
-	"fmt"
 	"math"
 	"os"
 	"reflect"
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
-// ── Yardımcılar (iki kol, tek sabit) ────────────────────────────────
+// ── Yardımcılar (tek sabit) ────────────────────────────────
 
 func TestBatchLatLoadSurge(t *testing.T) {
 	tests := []struct {
@@ -55,84 +52,7 @@ func TestBatchLatLoadSurge(t *testing.T) {
 	}
 }
 
-// ── 1. Aktif-olay okuma tavanları (trace_op / log_pattern sürdürmesi) ──
-// v0.10.2087 — trace_op_latency dedektörü silindi; tavan yardımcıları
-// trace_op sürdürmesinde yaşar (DetectTraceOpAnomaliesSustained).
-
-// activeKeys — aktif trace_op olayları (servis, operasyon) çiftleri.
-func activeKeys(pairs ...string) []chstore.ActiveAnomalyKey {
-	var out []chstore.ActiveAnomalyKey
-	for i := 0; i+1 < len(pairs); i += 2 {
-		out = append(out, chstore.ActiveAnomalyKey{
-			ID:      chstore.FingerprintAnomaly(traceOpKind, pairs[i+1], pairs[i]),
-			Service: pairs[i], Pattern: pairs[i+1]})
-	}
-	return out
-}
-
-// TestBatchLatCapKeys — okuma tavan+1 ister; tavan içi kalır, ötesi kesilir.
-func TestBatchLatCapKeys(t *testing.T) {
-	var pairs []string
-	for i := 0; i <= batchLatActiveCap; i++ { // tavan+1 aktif çift
-		pairs = append(pairs, "orders-batch", fmt.Sprintf("op-%03d", i))
-	}
-	kept, overflow := batchLatCapKeys(activeKeys(pairs...))
-	if len(kept) != batchLatActiveCap || !overflow {
-		t.Fatalf("kesim: %d / aşım %v", len(kept), overflow)
-	}
-	if k, o := batchLatCapKeys(kept); len(k) != batchLatActiveCap || o {
-		t.Fatal("tam tavanda aşım bildirildi")
-	}
-}
-
-// TestOpLatCapExemptBytes — muaf listesi TOPLAM metinle de sınırlı (operasyon
-// adları sınırsız): en tazeler muaf, tavanı aşan ilk anahtardan itibaren muaf
-// DEĞİL; bind edilen metin tavanı geçmez.
-func TestOpLatCapExemptBytes(t *testing.T) {
-	long := func(i int) string { return fmt.Sprintf("SELECT-%d-", i) + strings.Repeat("x", 30_000) }
-	keys := activeKeys("orders-batch", long(0), "orders-batch", long(1), "orders-batch", long(2), "orders-batch", long(3))
-	kept, dropped := opLatCapExemptBytes(keys)
-	if len(kept) != 2 || dropped != 2 || kept[0].Pattern != long(0) {
-		t.Fatalf("kesim: %d muaf, %d düşen (2/2 bekleniyordu)", len(kept), dropped)
-	}
-	bound := 0
-	for _, k := range kept {
-		bound += len(k.Service) + len(k.Pattern)
-	}
-	if bound > opLatExemptMaxBytes {
-		t.Fatalf("bind edilen metin %d bayt, tavan %d", bound, opLatExemptMaxBytes)
-	}
-	// Tam tavanda kesim yok (<=); kısa adlarda hiçbir şey düşmez.
-	exact := []chstore.ActiveAnomalyKey{{Service: "s", Pattern: strings.Repeat("y", opLatExemptMaxBytes-1)}}
-	if k, d := opLatCapExemptBytes(exact); len(k) != 1 || d != 0 {
-		t.Fatal("tam tavanda anahtar düştü")
-	}
-	if k, d := opLatCapExemptBytes(activeKeys("a-batch", "op1", "b-batch", "op2")); len(k) != 2 || d != 0 {
-		t.Fatal("kısa adlarda anahtar düştü")
-	}
-	// 10 dk aktiflik + bir 5 dk kova: tek kaçırılmış kova tolere edilir.
-	if opLatActiveAge != 15*time.Minute {
-		t.Fatalf("opLatActiveAge = %v, 15 dk bekleniyordu", opLatActiveAge)
-	}
-}
-
-// TestSustainExemptPairs — sürdürme muafiyeti: dwell 1 / okuma hatası → yok;
-// aksi tekilleştirilmiş, okuma sırasıyla.
-func TestSustainExemptPairs(t *testing.T) {
-	keys := activeKeys("a", "op1", "b", "op2", "a", "op1")
-	if got := sustainExemptPairs(1, keys, nil); len(got) != 0 {
-		t.Fatalf("dwell 1'de muafiyet olmamalı: %v", got)
-	}
-	if got := sustainExemptPairs(2, keys, errors.New("ch down")); len(got) != 0 {
-		t.Fatalf("okuma hatasında muafiyet olmamalı: %v", got)
-	}
-	want := []chstore.OpPair{{Service: "a", Operation: "op1"}, {Service: "b", Operation: "op2"}}
-	if got := sustainExemptPairs(2, keys, nil); !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, beklenen %v", got, want)
-	}
-}
-
-// ── 2. Metrik dedektörü (p99_ms) ────────────────────────────────────
+// ── Metrik dedektörü (p99_ms) ──────────────────────────────────────
 
 // batchLatMetricSeries — 40 kova: p99 100 ms, istek hızı 10/sn; son dwell
 // kovası p99 `p99`, istek hızı `win`.
@@ -272,7 +192,7 @@ func TestScanWiresBatchLatencyGate(t *testing.T) {
 	if strings.Count(body, "fetchAllSeasonal(") != 1 {
 		t.Fatal("mevsimsel okuma metrik başına tek değil — hacim ikinci bir sorguyla mı okunuyor?")
 	}
-	for _, f := range []string{"batch_latency.go", "batch_latency_active.go"} {
+	for _, f := range []string{"batch_latency.go"} {
 		b, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)
@@ -322,221 +242,5 @@ func TestBatchLatSeasonalRateRidesTheSameQuery(t *testing.T) {
 	// kapısı); diğer metriklerde nil = bilinmiyor.
 	if !strings.Contains(detectorSrc(t), "if metric == batchLatencyMetric {\n\t\trates = make(map[string][]float64)") {
 		t.Fatal("mevsimsel hacim serisi p99_ms dışında da biriktiriliyor")
-	}
-}
-
-// ── 3. Davranış motoru (p99_ms) ─────────────────────────────────────
-
-// batchLatBehaviorRows — behaviorFleetRows tabanı + dilim dilim "şimdi".
-func batchLatBehaviorRows(cutoff int64, recent []behaviorRow) []behaviorRow {
-	out := behaviorFleetRows(cutoff, 0, 0, 0, 0)
-	for i, r := range recent {
-		r.Unix, r.HOW = cutoff+int64(i)*300, 10
-		out = append(out, r)
-	}
-	return out
-}
-
-// batchLatNoneActive — aktif-olay okuması başarılı, hiçbir olay aktif değil.
-func batchLatNoneActive(string) bool { return false }
-
-func TestBehaviorBatchLatencyGate(t *testing.T) {
-	const cutoff = int64(1_700_000_000)
-	def := chstore.DefaultAnomalySensitivity() // batch kalıpları: ["-batch"]
-	off := chstore.DefaultAnomalySensitivity()
-	empty := []string{}
-	off.BatchServicePatterns = &empty // kural KAPALI
-
-	// Taban: 30.000 span / 5 dk, hata %3, p99 100 ms (behaviorFleetRows).
-	surge := behaviorFleetRows(cutoff, 8, 150_000, 4_500, 400)     // hacim ×5, hata %3, p99 ×4
-	flat := behaviorFleetRows(cutoff, 8, 30_000, 900, 400)         // hacim düz, p99 ×4
-	surgeErr := behaviorFleetRows(cutoff, 8, 150_000, 22_500, 400) // hacim ×5, hata %15, p99 ×4
-	surgeDown := behaviorFleetRows(cutoff, 8, 150_000, 4_500, 25)  // hacim ×5, p99 ÷4 (düşüş)
-	// Taban hacim medyanı (48 örnek, ±%4 salınım) = (29.400 + 30.000) / 2 =
-	// 29.700 span = 99 istek/sn; tam 2× = 59.400 span = 198 istek/sn (ikili
-	// kesirle tam, yuvarlama yok).
-	exact := behaviorFleetRows(cutoff, 8, 59_400, 1_782, 400)      // hacim tam ×2
-	underExact := behaviorFleetRows(cutoff, 8, 59_100, 1_773, 400) // hacim 2×'in altı (197/sn)
-	var mixed []behaviorRow                                        // önce gecikme, SONRA yük
-	for i := 0; i < 8; i++ {
-		spans := uint64(30_000)
-		if i >= 5 {
-			spans = 150_000
-		}
-		mixed = append(mixed, behaviorRow{Spans: spans, Errs: spans * 3 / 100, P99Ms: 400})
-	}
-	partial := batchLatBehaviorRows(cutoff, mixed)
-	// Taban hacmi bilinmiyor: geçmiş kovalar p99 taşıyor ama span sayısı 0.
-	unknown := behaviorFleetRows(cutoff, 8, 150_000, 0, 400)
-	for i := range unknown {
-		if unknown[i].Unix < cutoff {
-			unknown[i].Spans, unknown[i].Errs = 0, 0
-		}
-	}
-	activeBatch := func(svc string) bool { return svc == "orders-batch" }
-	// v0.10.1070 — düşüş vakası 100 → 25 ms: davranış motorunun mutlak tabanı
-	// (MinP99Ms, vars. 200) yön fark etmeden onu eler. Bu testin konusu batch
-	// kapısının yalnız ARTIŞI susturması, taban değil → taban en alta.
-	lowFloor := def
-	lowFloor.Behavior.MinP99Ms = 1
-
-	tests := []struct {
-		name   string
-		cfg    chstore.AnomalySensitivityConfig
-		svc    string
-		rows   []behaviorRow
-		active func(string) bool
-		want   map[string]bool
-	}{
-		// ── ASIL VAKA (request_rate v0.10.1039'dan beri batch'te zaten yok) ──
-		{"batch + p99 ×4 + hacim ×5 → aday YOK", def, "orders-batch", surge, batchLatNoneActive, map[string]bool{}},
-		{"batch + p99 ×4 + tam 2× hacim → aday YOK (>=)", def, "orders-batch", exact, batchLatNoneActive, map[string]bool{}},
-		// ── ZATEN AKTİF (M3): olay tazelenmeye devam eder ──
-		{"batch + hacim ×5 + p99 olayı AKTİF → p99 adayı sürer", def, "orders-batch", surge, activeBatch, map[string]bool{"p99_ms": true}},
-		{"aktif küme bilinmiyor (nil) → p99 adayı", def, "orders-batch", surge, nil, map[string]bool{"p99_ms": true}},
-		{"okuma hatası → p99 adayı", def, "orders-batch", surge, batchLatBehaviorExempt(nil, errors.New("ch timeout")), map[string]bool{"p99_ms": true}},
-		// ── AŞIRI SUSTURMA PİNLERİ ──
-		{"batch + p99 ×4 + düz hacim → p99 adayı", def, "orders-batch", flat, batchLatNoneActive, map[string]bool{"p99_ms": true}},
-		{"batch + p99 ×4 + hacim 2×'in altı → p99 adayı", def, "orders-batch", underExact, batchLatNoneActive, map[string]bool{"p99_ms": true}},
-		{"batch + gecikme yükten ÖNCE başladı → p99 adayı", def, "orders-batch", partial, batchLatNoneActive, map[string]bool{"p99_ms": true}},
-		{"batch olmayan + p99 ×4 + hacim ×5 → p99 + request_rate", def, "payments-api", surge, batchLatNoneActive, map[string]bool{"p99_ms": true, "request_rate": true}},
-		{"kural kapalı → batch adlı servis de p99 + request_rate", off, "orders-batch", surge, batchLatNoneActive, map[string]bool{"p99_ms": true, "request_rate": true}},
-		{"batch + hacim ×5 + hata %15 → error_rate adayı (kural yalnız gecikme)", def, "orders-batch", surgeErr, batchLatNoneActive, map[string]bool{"error_rate": true}},
-		{"batch + hacim ×5 + p99 DÜŞÜŞÜ → p99 adayı (yalnız artış susar)", lowFloor, "orders-batch", surgeDown, batchLatNoneActive, map[string]bool{"p99_ms": true}},
-		{"taban hacmi bilinmiyor → p99 adayı", def, "orders-batch", unknown, batchLatNoneActive, map[string]bool{"p99_ms": true}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cands, _ := behaviorFleetCandidates(map[string][]behaviorRow{tt.svc: tt.rows}, nil, cutoff, tt.cfg, tt.active)
-			got := candidateMetrics(cands, tt.svc)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("aday metrikleri %v, beklenen %v", got, tt.want)
-			}
-		})
-	}
-
-	// TEMBEL: aktif küme yalnız bir aday susturulmak üzereyken sorulur.
-	for name, tc := range map[string]struct {
-		cfg   chstore.AnomalySensitivityConfig
-		svc   string
-		rows  []behaviorRow
-		calls int
-	}{
-		"susturulacak aday var": {def, "orders-batch", surge, 1},
-		"yük yok":               {def, "orders-batch", flat, 0},
-		"batch olmayan servis":  {def, "payments-api", surge, 0},
-		"kural kapalı":          {off, "orders-batch", surge, 0},
-	} {
-		n := 0
-		count := func(string) bool { n++; return false }
-		behaviorFleetCandidates(map[string][]behaviorRow{tc.svc: tc.rows}, nil, cutoff, tc.cfg, count)
-		if n != tc.calls {
-			t.Errorf("%s: aktif küme %d kez soruldu, beklenen %d", name, n, tc.calls)
-		}
-	}
-}
-
-// TestBatchLatBehaviorExempt — aktif-olay muafiyet yüklemi: kararlı
-// fingerprint ile eşleşir; okuma hatası ya da tavan aşımı = herkes muaf.
-func TestBatchLatBehaviorExempt(t *testing.T) {
-	keys := []chstore.ActiveAnomalyKey{{ID: behaviorEventID("orders-batch", "p99_ms"), Service: "orders-batch", Pattern: behaviorPattern("p99_ms")}}
-	ex := batchLatBehaviorExempt(keys, nil)
-	if !ex("orders-batch") || ex("nightly-batch") {
-		t.Fatal("aktif p99 olayı eşleşmesi yanlış")
-	}
-	// Aynı servisin error_rate olayı p99'u muaf KILMAZ.
-	if batchLatBehaviorExempt([]chstore.ActiveAnomalyKey{{ID: behaviorEventID("orders-batch", "error_rate")}}, nil)("orders-batch") {
-		t.Fatal("error_rate olayı p99 kapısını muaf kıldı")
-	}
-	if !batchLatBehaviorExempt(nil, errors.New("ch timeout"))("nightly-batch") {
-		t.Fatal("okuma hatasında susturma yapılabilir")
-	}
-	over := make([]chstore.ActiveAnomalyKey, batchLatActiveCap+1)
-	if !batchLatBehaviorExempt(over, nil)("nightly-batch") {
-		t.Fatal("tavan aşımında susturma yapılabilir")
-	}
-}
-
-// TestBatchLatencyCandidateFieldsUnchanged — kalan p99 adayı, kural kapalı
-// hâlindekiyle BİREBİR (saf susturma): yük artmadan gelen artış, yük altındaki
-// DÜŞÜŞ, aktif olay ve rejim→mevsimsel geri dönüşü (F3: rejim adayı aynen).
-func TestBatchLatencyCandidateFieldsUnchanged(t *testing.T) {
-	const cutoff = int64(1_700_000_000)
-	def := chstore.DefaultAnomalySensitivity()
-	off := chstore.DefaultAnomalySensitivity()
-	empty := []string{}
-	off.BatchServicePatterns = &empty
-	wide, wideOff := def, off
-	wide.Behavior.DwellRegime, wide.Behavior.DwellSeasonal = 3, 6
-	wideOff.Behavior.DwellRegime, wideOff.Behavior.DwellSeasonal = 3, 6
-	p99Only := func(cands []behaviorCandidate) []behaviorCandidate {
-		var out []behaviorCandidate
-		for _, c := range cands {
-			if c.Metric == "p99_ms" {
-				out = append(out, c)
-			}
-		}
-		return out
-	}
-	var mixed []behaviorRow // son 3 dilim yük altında, öncesi değil
-	for i := 0; i < 8; i++ {
-		spans := uint64(30_000)
-		if i >= 5 {
-			spans = 150_000
-		}
-		mixed = append(mixed, behaviorRow{Spans: spans, Errs: spans * 3 / 100, P99Ms: 400})
-	}
-	activeAll := func(string) bool { return true }
-	// v0.10.1070 — düşüş vakası (100 → 25 ms) mutlak tabanın altında; konu
-	// taban değil batch kapısı → iki tarafta da taban en alta.
-	lowDef, lowOff := def, off
-	lowDef.Behavior.MinP99Ms, lowOff.Behavior.MinP99Ms = 1, 1
-	for name, tc := range map[string]struct {
-		on, off chstore.AnomalySensitivityConfig
-		rows    []behaviorRow
-		active  func(string) bool
-	}{
-		"yük artmadan p99 ×4":                {def, off, behaviorFleetRows(cutoff, 8, 30_000, 900, 400), batchLatNoneActive},
-		"hacim ×5 + p99 ÷4":                  {lowDef, lowOff, behaviorFleetRows(cutoff, 8, 150_000, 4_500, 25), batchLatNoneActive},
-		"hacim ×5 + p99 ×4, olay aktif":      {def, off, behaviorFleetRows(cutoff, 8, 150_000, 4_500, 400), activeAll},
-		"rejim yük altında, mevsimsel değil": {wide, wideOff, batchLatBehaviorRows(cutoff, mixed), batchLatNoneActive},
-	} {
-		on, _ := behaviorFleetCandidates(map[string][]behaviorRow{"orders-batch": tc.rows}, nil, cutoff, tc.on, tc.active)
-		was, _ := behaviorFleetCandidates(map[string][]behaviorRow{"orders-batch": tc.rows}, nil, cutoff, tc.off, tc.active)
-		if len(p99Only(was)) != 1 || !reflect.DeepEqual(p99Only(on), p99Only(was)) {
-			t.Fatalf("%s: p99 adayı değişti:\n%+v\n%+v", name, p99Only(on), p99Only(was))
-		}
-	}
-	// İki pencere de yük altında → aday YOK (geri dönüş susturmayı delmez).
-	if cands, _ := behaviorFleetCandidates(map[string][]behaviorRow{"orders-batch": behaviorFleetRows(cutoff, 8, 150_000, 4_500, 400)},
-		nil, cutoff, wide, batchLatNoneActive); len(p99Only(cands)) != 0 {
-		t.Fatalf("iki pencere de yük altında → p99 adayı YOK bekleniyordu: %+v", cands)
-	}
-}
-
-// TestBehaviorScanWiresActiveRead — davranış taraması aktif-olay okumasını
-// TEMBEL işlevle geçirir; okuma tek ve sınırlı.
-func TestBehaviorScanWiresActiveRead(t *testing.T) {
-	b, err := os.ReadFile("behavior_scan.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	src := regexp.MustCompile(`(?m)^\s*//.*$`).ReplaceAllString(string(b), "")
-	for _, want := range []string{
-		// v0.10.1478 — kaynak bölünmesi: tek tembel işlev iki çağrıda ortak.
-		"batchActive := d.batchLatBehaviorActive(ctx, cfg)",
-		"behaviorFleetCandidates(spanRows, deploysByService, recentCutoff, cfg, batchActive)",
-		"behaviorFleetCandidates(vmRows, deploysByService, vmRecent, cfg, batchActive)",
-		// Davranış: p99 pattern'i WHERE'de, varsayılan 10 dk aktiflik.
-		"d.store.ListActiveAnomalyKeys(ctx, behaviorKind, behaviorPattern(batchLatencyMetric), 0, cond, args, batchLatActiveCap+1)",
-		"exempt = batchLatBehaviorExempt(keys, err)",
-		"if exempt == nil {",
-	} {
-		if !strings.Contains(src, want) {
-			t.Fatalf("behavior_scan.go %q taşımıyor", want)
-		}
-	}
-	if strings.Count(src, "ListActiveAnomalyKeys(") != 1 {
-		t.Fatal("aktif-olay okuması tek değil")
 	}
 }

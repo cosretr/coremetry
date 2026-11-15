@@ -20,12 +20,6 @@ func TestApplyBackgroundDefaults(t *testing.T) {
 		if b.AnomalyInterval != 2*time.Minute {
 			t.Errorf("AnomalyInterval: got %v, want 2m", b.AnomalyInterval)
 		}
-		if b.AnomalyRecordInterval != 1*time.Minute {
-			t.Errorf("AnomalyRecordInterval: got %v, want 1m", b.AnomalyRecordInterval)
-		}
-		if b.AnomalyRecordBackfill != 5*time.Minute {
-			t.Errorf("AnomalyRecordBackfill: got %v, want 5m", b.AnomalyRecordBackfill)
-		}
 		if b.SMTPCacheTTL != 30*time.Second {
 			t.Errorf("SMTPCacheTTL: got %v, want 30s", b.SMTPCacheTTL)
 		}
@@ -46,8 +40,8 @@ func TestApplyBackgroundDefaults(t *testing.T) {
 			t.Errorf("explicit StatusProbeTimeout clobbered: got %v", b.StatusProbeTimeout)
 		}
 		// Untouched fields still get defaults.
-		if b.AnomalyRecordInterval != 1*time.Minute {
-			t.Errorf("AnomalyRecordInterval should default when others set: got %v", b.AnomalyRecordInterval)
+		if b.SMTPCacheTTL != 30*time.Second {
+			t.Errorf("SMTPCacheTTL should default when others set: got %v", b.SMTPCacheTTL)
 		}
 	})
 }

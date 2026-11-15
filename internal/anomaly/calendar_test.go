@@ -157,21 +157,6 @@ func TestApplyOutcomeCalendarWiring(t *testing.T) {
 	}
 }
 
-func TestDropCalendarBaselineRows(t *testing.T) {
-	cal := testCal()
-	hol := day("2031-01-01 10:00").Unix()
-	normal := day("2031-01-08 10:00").Unix()
-	recent := day("2031-03-12 08:00").Unix() // bugün tatil, şimdi penceresi
-	in := map[string][]behaviorRow{"orders-api": {{Unix: hol}, {Unix: normal}, {Unix: recent}}}
-	out := dropCalendarBaselineRows(in, cal, day("2031-03-12 07:00").Unix())
-	if got := out["orders-api"]; len(got) != 2 || got[0].Unix != normal || got[1].Unix != recent {
-		t.Errorf("baseline tatil kovası düşmeli, şimdi penceresi kalmalı: %+v", got)
-	}
-	if out := dropCalendarBaselineRows(in, chstore.AnomalyCalendarConfig{}, 0); len(out["orders-api"]) != 3 {
-		t.Error("takvim boşken dokunulmamalı")
-	}
-}
-
 // TestVMSeasonalBucketsCalendar — v0.10.1483: VM yolu özel günde yedek sınıfı
 // kullanır; takvim boşken küme vmSeasonalBuckets ile aynı.
 func TestVMSeasonalBucketsCalendar(t *testing.T) {

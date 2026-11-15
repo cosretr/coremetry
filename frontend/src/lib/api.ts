@@ -986,8 +986,6 @@ export const api = {
   // on the server side; no need to debounce client requests.
   logPatternAnomalies: () =>
     get<import('./types').LogPatternAnomaly[]>(`/api/anomalies/log-patterns`),
-  traceOpAnomalies:    () =>
-    get<import('./types').TraceOpAnomaly[]>(`/api/anomalies/trace-ops`),
   metricAnomalies:     () =>
     get<import('./types').Problem[]>(`/api/anomalies/metric`),
   // Persistent anomaly history — every log-pattern + trace-op

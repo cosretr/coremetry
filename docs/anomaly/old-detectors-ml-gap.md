@@ -4,6 +4,9 @@
 (özneler: `docs/anomaly/davis-ml-gap.md`). Kanıt koddan; denetim metninden değil.
 Doğrulanan iddia: `docs/anomaly/anomaly-reassessment-audit.md` §5 (:145-158) ve N5 (:95-102).
 
+> **Güncelleme v0.10.2270:** `log_pattern` (#1), `trace_op` ve `behavior_change` (#5) dedektörleri operatör onayıyla
+> SİLİNDİ (kod, anahtar, ayar, kart). Geçmiş satırlar okunur. Aşağıdaki dosya:satır atıfları bu üçü için tarihçedir.
+
 ## Kısa sonuç
 
 Denetimin "ML zaten kapsıyor" iddiası yine kısmen yanlış. Eski yolların hiçbiri ML ile

@@ -720,7 +720,7 @@ func (s *Store) UpsertAnomalyEvent(ctx context.Context, e AnomalyEvent) error {
 // round-trips total: one FINAL lookup for the whole id set, one INSERT.
 //
 // ── Neden toplu (v0.9.957) ───────────────────────────────────────────
-// Davranış motoru (internal/anomaly/behavior_scan.go) bir tikte 37 olay
+// Davranış motoru (v0.10.2270'da silindi) bir tikte 37 olay
 // yazıyordu ve bunu 37 ardışık UpsertAnomalyEvent çağrısıyla yapıyordu.
 // ÖLÇÜLDÜ: 25.6 saniyelik tikin ~20 saniyesi buradaydı — MV sorgusu
 // değil, olay YAZIMI. Her çağrı iki gidiş-dönüş (FINAL SELECT + INSERT)

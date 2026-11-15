@@ -236,27 +236,8 @@ func TestVMSeasonalBucketsMatchSQLPredicate(t *testing.T) {
 	}
 }
 
-func TestVMBehaviorAndConsecutiveBuckets(t *testing.T) {
+func TestVMConsecutiveBuckets(t *testing.T) {
 	now := time.Date(2026, 10, 22, 14, 31, 0, 0, time.UTC)
-	upper, cutoff, recentFrom, target := behaviorBinds(now)
-	got := vmBehaviorBuckets(now)
-	var want []int64
-	for tb := cutoff.Unix(); tb < upper.Unix(); tb += 300 {
-		how := hourOfWeek(time.Unix(tb, 0))
-		d := int(math.Abs(float64(how - target)))
-		if d2 := hoursPerWeek - d; d2 < d {
-			d = d2
-		}
-		if d <= behaviorNeighborHours || tb >= recentFrom.Unix() {
-			want = append(want, tb)
-		}
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("davranış kümesi SQL yüklemiyle ayrışıyor (%d ≠ %d)", len(got), len(want))
-	}
-	if len(got) > 600 {
-		t.Fatalf("davranış kümesi %d kova — SQL LIMIT 600 BY ile aynı tavanın altında olmalı", len(got))
-	}
 	c := vmConsecutiveBuckets(now)
 	if len(c) != 288 && len(c) != 287 {
 		t.Fatalf("ardışık 24 sa ≈ 288 kova olmalı, %d", len(c))

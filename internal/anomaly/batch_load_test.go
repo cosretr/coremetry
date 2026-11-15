@@ -1,30 +1,21 @@
 package anomaly
 
 // batch_load_test.go — v0.10.1039: batch servislerde yük (request_rate)
-// anomali değil — davranış motoru + metrik dedektörü.
+// anomali değil — metrik dedektörü (davranış motoru v0.10.2270'da silindi).
 //
 // Operatör (prod): "Bazı batch işlerde ani yük artışı olabilir, onları
 // anomali gibi düşünme — özellikle `-batch` geçen servis isimlerinde."
 //
-// Ölçülen yol: `orders-batch` gibi bir serviste 20× istek artışı, hata
-// yüzdesi SABİT → davranış motoru request_rate için behavior_change yazar
-// (Problems'ta P1, promoteStrongAnomalies ile anomaly-auto: Problem'e
-// terfi). Metrik dedektörü request_rate'i izliyorsa anomaly:<svc>:
-// request_rate de açılır.
-//
 // EN KÖTÜ SONUÇ AŞIRI SUSTURMA: aşağıdaki her "batch ama SİNYAL" vakası
-// (error_rate rejim kayması, p99) bu korkunun pinidir.
+// (error_rate, p99) bu korkunun pinidir.
 //
 // MUTASYON KANITLARI (çalıştırıldı, geri alındı — rapor v0.10.1039):
-//   (a) behaviorFleetCandidates'teki `batchLoadSkipped` kapısı silinince
-//       "batch + 20× yük" vakası request_rate adayı üretir → kızarır.
 //   (b) batchLoadSkipped `metric == batchLoadMetric &&` koşulu atılıp tüm
-//       metriklere genişletilince "batch + error_rate rejim kayması" ve
-//       batchLoadSkipped tablosunun error_rate/p99 satırları kızarır;
-//       batchLoadResolutions'ın tam RuleID eşleşmesi önek eşleşmesine
-//       gevşetilince (batch servisin TÜM anomali satırları kapanır)
-//       TestBatchLoadResolutions kızarır. scan()'deki faz-1 kapısı silinince
-//       TestScanWiresBatchLoadGate (kaynak pini) kızarır.
+//       metriklere genişletilince batchLoadSkipped tablosunun error_rate/p99
+//       satırları kızarır; batchLoadResolutions'ın tam RuleID eşleşmesi önek
+//       eşleşmesine gevşetilince (batch servisin TÜM anomali satırları
+//       kapanır) TestBatchLoadResolutions kızarır. scan()'deki faz-1 kapısı
+//       silinince TestScanWiresBatchLoadGate (kaynak pini) kızarır.
 
 import (
 	"context"
@@ -36,100 +27,6 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
-
-// behaviorFleetRows — 4 haftalık taban (aynı HOW kovası, her hafta farklı
-// gün, 12 dilim) + cutoff'tan sonra `recentN` dilimlik "şimdi" penceresi.
-// Taban: 30.000 span / 5 dk (100 istek/sn), hata %3, p99 100 ms; küçük
-// salınım MAD'i sıfırdan uzak tutar.
-func behaviorFleetRows(cutoff int64, recentN int, recentSpans, recentErrs uint64, recentP99 float64) []behaviorRow {
-	const how = 10
-	var out []behaviorRow
-	for w := behaviorTestFullRepeats; w >= 1; w-- {
-		day := cutoff - int64(w)*7*86400
-		for i := 0; i < 12; i++ {
-			jit := float64(i%5-2) * 0.02
-			spans := uint64(30_000 * (1 + jit))
-			out = append(out, behaviorRow{
-				Unix: day + int64(i)*300, HOW: how,
-				Spans: spans, Errs: spans * 3 / 100, P99Ms: 100 * (1 + jit),
-			})
-		}
-	}
-	for i := 0; i < recentN; i++ {
-		out = append(out, behaviorRow{
-			Unix: cutoff + int64(i)*300, HOW: how,
-			Spans: recentSpans, Errs: recentErrs, P99Ms: recentP99,
-		})
-	}
-	return out
-}
-
-func candidateMetrics(cands []behaviorCandidate, svc string) map[string]bool {
-	out := map[string]bool{}
-	for _, c := range cands {
-		if c.Service == svc {
-			out[c.Metric] = true
-		}
-	}
-	return out
-}
-
-func TestBehaviorBatchLoadGate(t *testing.T) {
-	const cutoff = int64(1_700_000_000)
-	def := chstore.DefaultAnomalySensitivity() // batch kalıpları: ["-batch"]
-	off := chstore.DefaultAnomalySensitivity()
-	empty := []string{}
-	off.BatchServicePatterns = &empty // kural KAPALI
-
-	surge := behaviorFleetRows(cutoff, 8, 600_000, 18_000, 100)    // 20× yük, hata %3 sabit, p99 sabit
-	errShift := behaviorFleetRows(cutoff, 8, 30_000, 4_500, 100)   // yük sabit, hata %3 → %15
-	p99Shift := behaviorFleetRows(cutoff, 8, 30_000, 900, 250)     // yük/hata sabit, p99 2.5×
-	surgeErr := behaviorFleetRows(cutoff, 8, 600_000, 90_000, 100) // 20× yük VE hata %15
-	collapse := behaviorFleetRows(cutoff, 8, 3_000, 90, 100)       // yük 1/10 (düşüş yönü)
-
-	tests := []struct {
-		name string
-		cfg  chstore.AnomalySensitivityConfig
-		svc  string
-		rows []behaviorRow
-		want map[string]bool // aday üreten metrikler
-	}{
-		// ── ASIL VAKA ──
-		{"batch + 20× yük → aday YOK", def, "orders-batch", surge, map[string]bool{}},
-		{"aynı yük batch olmayan serviste → request_rate adayı (bugünkü gibi)", def, "payments-api", surge, map[string]bool{"request_rate": true}},
-		{"kural kapalı → batch adı sıradan servis gibi", off, "orders-batch", surge, map[string]bool{"request_rate": true}},
-		// İki yön de yük: batch işinin durması/bitmesi de olay değil.
-		{"batch + yük çöküşü → aday YOK", def, "orders-batch", collapse, map[string]bool{}},
-		{"batch olmayan + yük çöküşü → request_rate adayı", def, "payments-api", collapse, map[string]bool{"request_rate": true}},
-
-		// ── AŞIRI SUSTURMA PİNLERİ: batch'te gerçek sinyal SUSMAZ ──
-		{"batch + error_rate rejim kayması → error_rate adayı", def, "orders-batch", errShift, map[string]bool{"error_rate": true}},
-		{"batch + p99 kayması → p99 adayı", def, "orders-batch", p99Shift, map[string]bool{"p99_ms": true}},
-		{"batch + 20× yük + hata %15 → error_rate adayı (yük değil)", def, "orders-batch", surgeErr, map[string]bool{"error_rate": true}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cands, _ := behaviorFleetCandidates(map[string][]behaviorRow{tt.svc: tt.rows}, nil, cutoff, tt.cfg, nil)
-			got := candidateMetrics(cands, tt.svc)
-			if len(got) != len(tt.want) {
-				t.Fatalf("aday metrikleri %v, beklenen %v", got, tt.want)
-			}
-			for m := range tt.want {
-				if !got[m] {
-					t.Fatalf("aday metrikleri %v, beklenen %v", got, tt.want)
-				}
-			}
-		})
-	}
-
-	// Kıtlık sayımı kapıdan ETKİLENMEZ (servis başına bir kez, metrikten bağımsız).
-	short := []behaviorRow{{Unix: cutoff - 86400, HOW: 10, Spans: 100}, {Unix: cutoff, HOW: 10, Spans: 100}}
-	_, sBatch := behaviorFleetCandidates(map[string][]behaviorRow{"orders-batch": short}, nil, cutoff, def, nil)
-	_, sPlain := behaviorFleetCandidates(map[string][]behaviorRow{"payments-api": short}, nil, cutoff, def, nil)
-	if sBatch != sPlain || sBatch == 0 {
-		t.Fatalf("kıtlık sayımı batch kapısından etkilendi: batch=%d sıradan=%d", sBatch, sPlain)
-	}
-}
 
 func TestBatchLoadSkipped(t *testing.T) {
 	def := chstore.DefaultAnomalySensitivity()

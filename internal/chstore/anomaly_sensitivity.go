@@ -46,17 +46,11 @@ type AnomalySensitivityConfig struct {
 	// 0 = ayarlanmamış → varsayılan (20). Kapatma sunulmuyor: sel kapısı
 	// bilinçli olarak her zaman açık; 200 pratik tavan.
 	ExternalOpenCapPerTick int `json:"externalOpenCapPerTick,omitempty"`
-	// Behavior — DAVRANIŞ MOTORU AŞAMA 1 (v0.9.935). Aynı blob'un
-	// altında, çünkü operatör buraya tek bir soruyla geliyor: "ne zaman
-	// olay sayılsın?". Üstteki alanlar ANİ sapmayı (5-dk pencere, 24s
-	// geçmiş) ayarlıyor; bu bölüm KALICI davranış değişimini (haftanın
-	// saati baseline'ı, 28 gün) ayarlıyor.
-	//
-	// AYRI VİDA GEREKTİ çünkü iki soru farklı: "şu an sıçradı mı" ile
-	// "bu servis artık başka türlü davranıyor mu" aynı eşikle
-	// cevaplanmaz. Bir rejim kayması 1.5× ile gerçektir ve 6σ'ya hiç
-	// ulaşmayabilir; bir sıçrama 6σ ile gerçektir ve 30 dakika sürmez.
-	Behavior AnomalyBehaviorConfig `json:"behavior"`
+	// v0.10.2270 — `behavior` (davranış motoru, v0.9.935), `traceOpDwellBuckets`
+	// ve `logPatternDwellBuckets` (trace_op / log_pattern sürdürmesi) eski
+	// dedektörlerle birlikte SİLİNDİ (operatör kararı). Kayıtlı blobdaki
+	// alanlar okunmaz; Normalize yalnız bilinen alanları yazdığı için bir
+	// sonraki kayıtta düşer (TestAnomalySensitivityRetiredFields).
 	// v0.10.2073 — eski `attachToIncident` anahtarı (dedektör problemini incident'a
 	// bağlama vidası) Incidents ölü kod diliminde kalktı; kapısı v0.10.2070'te
 	// silinmişti. Kayıtlı blobdaki alan okunmaz, bir sonraki kayıtta düşer.
@@ -78,7 +72,7 @@ type AnomalySensitivityConfig struct {
 	// geçen servis isimlerinde"): adında bu kalıplardan biri (ASCII büyük-
 	// küçük duyarsız ALT DİZGİ) geçen servislerde yük artışı anomali sayılmaz
 	// (anomaly_sensitivity_batch.go). *[]string ÇÜNKÜ "yok" ile "boş"
-	// AYRI anlamlar taşıyor — Behavior.Enabled'ın *bool gerekçesinin aynısı:
+	// AYRI anlamlar taşıyor:
 	// nil = alan yazılmamış = varsayılan ["-batch"]; boş liste = operatör
 	// kuralı KAPATTI. Normalize somutlaştırır (nil → varsayılan liste), boş
 	// liste `[]` olarak yazılır, `null` olarak DEĞİL.
@@ -87,17 +81,6 @@ type AnomalySensitivityConfig struct {
 	// alanları trace_op_latency dedektörüyle birlikte SİLİNDİ (operatör kararı
 	// 2026-11-13). Kayıtlı bloblarda kalan alanlar okunmaz; bir sonraki
 	// kayıtta Normalize onları yazmaz.
-	// TraceOpDwellBuckets — v0.10.1586 (Davis paritesi FAZ 0.5 / C, operatör
-	// onayı 2026-10-29): trace_op olayının (error_spike VE new_error) AÇILMASI
-	// için ardışık tamamlanmış kova sayısı; her önceki kova aynı tabanları
-	// (≥ 10 hata, ≥ %1 pay) ve aynı türün oran kuralını taşımalı. Aktif olay
-	// muaf (yalnız açılış). Batch uzun-taban dalı kapısız. 1–6, varsayılan 2;
-	// 1 = tek pencere (eski davranış). omitempty YOK (Normalize her zaman yazar).
-	TraceOpDwellBuckets int `json:"traceOpDwellBuckets"`
-	// LogPatternDwellBuckets — v0.10.1586: log_pattern olayının ("new" ve
-	// "spike") açılması için ardışık pencere sayısı (aynı semantik, aynı
-	// aktif-olay muafiyeti). 1–6, varsayılan 2; 1 = tek pencere.
-	LogPatternDwellBuckets int `json:"logPatternDwellBuckets"`
 	// ServiceSlowdown — v0.10.1091 (operatör: "Dün söylediğim CRM sorunu yine
 	// oldu, bir sürü anomali geldi ama P1 problem gelmedi" → "Onay"): yaygın
 	// yavaşlama hızlı yolu (`svc-slowdown:<servis>`, evaluator). Tek kovada ≥ 3
@@ -160,247 +143,6 @@ func normalizeTemporalRanking(v string) string {
 // TemporalRankingOn — nil-güvenli okuma: yalnız açıkça "on".
 func (c AnomalySensitivityConfig) TemporalRankingOn() bool {
 	return normalizeTemporalRanking(c.TemporalRanking) == TemporalRankingModeOn
-}
-
-// trace_op / log_pattern sürdürme penceresi (v0.10.1586). Üst sınır 6 = 30 dk:
-// ötesinde tepe çoktan "anomaly cleared" olmuş olur, vida "hiç açma"ya döner.
-const (
-	traceOpDwellMin        = 1
-	traceOpDwellMax        = 6
-	traceOpDwellDefault    = 2
-	logPatternDwellMin     = 1
-	logPatternDwellMax     = 6
-	logPatternDwellDefault = 2
-)
-
-// TraceOpDwell — aralık dışı (eski blobun 0'ı dahil) → varsayılan 2.
-func (c AnomalySensitivityConfig) TraceOpDwell() int {
-	return clampRangeI(c.TraceOpDwellBuckets, traceOpDwellMin, traceOpDwellMax, traceOpDwellDefault)
-}
-
-// LogPatternDwell — aralık dışı (eski blobun 0'ı dahil) → varsayılan 2.
-func (c AnomalySensitivityConfig) LogPatternDwell() int {
-	return clampRangeI(c.LogPatternDwellBuckets, logPatternDwellMin, logPatternDwellMax, logPatternDwellDefault)
-}
-
-// AnomalyBehaviorConfig — davranış motoru AŞAMA 1'in vidaları
-// (v0.9.935). Motorun kendisi internal/anomaly/behavior.go'da.
-//
-// NE YAPAR: her servisin RED metriklerini (hata oranı, P99, istek hızı)
-// HAFTANIN SAATİ kovasına göre (168 kova, UTC) son 28 günün MV
-// bucket'larından öğrenilen medyan+MAD baseline'ına karşı puanlar. İki
-// sinyal üretir:
-//
-//	mevsimsel sapma : kendi kovasının baseline'ından robust-z ile ayrılma
-//	                  (DwellSeasonal ardışık dilim boyunca, aynı yönde)
-//	rejim kayması   : baseline'a karşı KALICI oransal kayma
-//	                  (DwellRegime dilim; deploy ilişkisi varsa iliştirilir)
-//
-// İkisi de anomaly_events'e kind="behavior_change" olarak düşer — yeni
-// tablo, yeni lane, yeni bildirim hunisi YOK. Mevcut terfi kapısı
-// (anomaly_promotion) hangisinin Problem olacağına karar verir.
-//
-// NEDEN VİDA: eşikler filoya bağlı. 1.5× kalıcı kayma bir ödeme
-// servisinde olaydır, bir batch işçisinde günlük rutindir.
-type AnomalyBehaviorConfig struct {
-	// Enabled — motor koşsun mu? *bool ÇÜNKÜ VARSAYILAN TRUE: düz
-	// bool'da JSON'ın sıfır değeri false olurdu ve bu sürümden ESKİ
-	// her settings satırı motoru sessizce kapalı gösterirdi
-	// nil = "yazılmamış" = açık.
-	Enabled *bool `json:"enabled,omitempty"`
-	// SeasonalZ — mevsimsel sapmanın açılma eşiği (robust z, σ).
-	// Ani-sapma dedektörünün CriticalZ'sinden AYRI ve daha düşük
-	// olması normaldir: burada baseline haftanın aynı saatinden
-	// geliyor, yani gürültünün mevsimsel bileşeni zaten çıkarılmış.
-	SeasonalZ float64 `json:"seasonalZ"`
-	// RegimeRatio — rejim kaymasının açılma oranı (× baseline
-	// medyanı). Düşüş tarafında karşılığı 1/RegimeRatio'dur.
-	RegimeRatio float64 `json:"regimeRatio"`
-	// DwellSeasonal / DwellRegime — kaç ardışık 5-dk dilimin AYNI
-	// yönde ateşlemesi gerektiği. Geçici sıçramayı kalıcı kaymadan
-	// ayıran tek şey bu: rejim kayması varsayılan 6 dilim = 30 dakika.
-	DwellSeasonal int `json:"dwellSeasonal"`
-	DwellRegime   int `json:"dwellRegime"`
-	// MaxCandidatesPerTick — fırtına koruması. Filo geneli bir olayda
-	// (ortak bağımlılık çöktü) her servis birden aday üretir; tavan,
-	// EN GÜÇLÜ N tanesini geçirir. Kesilenler kaybolmaz, bir sonraki
-	// tikte hâlâ ateşliyorlarsa yine sıraya girerler.
-	MaxCandidatesPerTick int `json:"maxCandidatesPerTick"`
-	// MinSamplesPerBucket — bir kovanın baseline sayılması için gereken
-	// asgari 5-dk örneği (v0.9.957). v0.9.935'te bu kodda sabit 12'ydi;
-	// vidalaştırıldı, DEĞERİ DEĞİŞMEDİ.
-	//
-	// Neden vida: "yeterli geçmiş" filoya bağlı. Sürekli trafik alan bir
-	// API'de saat başına 12 bucket'ın hepsi dolar; günde birkaç kez
-	// koşan bir batch işçisinde 3 tanesi dolar ve o servis 28 gün
-	// beklese de bu eşiği geçemez.
-	MinSamplesPerBucket int `json:"minSamplesPerBucket"`
-	// MinBucketRepeats — bir kovanın baseline sayılması için gereken
-	// asgari FARKLI GÜN sayısı, yani "bu haftanın-saatini kaç kez
-	// gördüm" (v0.9.957).
-	//
-	// ── Neden AYRI bir kapı, MinSamplesPerBucket yetmiyor ────────────
-	// ÖLÇÜLDÜ (lokal, 2026-08-11): service_summary_5m 9 gün taşıyordu
-	// ve her servisin hedef kovasında TAM 24 örnek vardı — yani 12'lik
-	// örnek kapısı rahat geçiliyordu. Ama o 24 örnek YALNIZ İKİ GÜNDEN
-	// geliyordu (aynı saatin iki haftalık tekrarı). Mevsimsel z'nin
-	// ölçtüğü şey haftadan haftaya YAYILIM; iki gözlemden yayılım
-	// kestirilemez. Sonuç: MAD dejenere, z patladı, tek tikte 178 aday
-	// (ezici çoğunluğu "istek hızı mevsimsel sapma ↓", hepsi aynı
-	// kovada). Örnek SAYISI kapısı bunu göremez çünkü sayı yeterliydi;
-	// eksik olan ÇEŞİTLİLİKTİ.
-	//
-	// Bu v0.8.250'nin sınıfı (örnek kıtlığı → baseline'a güvenilemez)
-	// ve oradaki karar burada da geçerli: SESSİZ KALMAK yalan
-	// söylemekten iyidir. 3 = "yayılımdan söz edebilmek için en az üç
-	// gözlem". 28 günlük pencerede 4 tekrar var, yani vida dolu bir
-	// kurulumu susturmuyor; henüz 3 haftası dolmamış bir kurulumu
-	// (ya da lokal 9 günü) susturuyor — ki orada söyleyecek dürüst bir
-	// şey zaten yok.
-	MinBucketRepeats int `json:"minBucketRepeats"`
-	// MinP99Ms / MinErrorRatePct — v0.10.1070 (operatör onaylı, prod: "Bu
-	// da mesela false pozitif"): MUTLAK taban. Son dilimin değeri bunun
-	// altındaysa p99_ms / error_rate adayı açılmaz — mevsimsel ve rejim
-	// dalı AYNI kapıdan geçer, yön fark etmez (tabanın altına inen bir
-	// değer de olay değildir). Vaka: medyanı 4 ms olan bir servisin 118 ms
-	// p99'u "28×" diye geldi; oran büyük ama 118 ms kimsenin sorunu değil.
-	// 200 ms = silinen op-latency dedektörünün mutlak tabanıydı (aynı
-	// gerekçe); %1 = ani-sapma error_rate AbsFloor'u. request_rate'te
-	// taban YOK: orada düşüşün kendisi sinyal.
-	//
-	// 0 meşru DEĞİL (bölümün kelepçe duruşu): bu sürümden ESKİ blob alanı
-	// taşımaz ve 0 okunur — 0'ı "kapalı" saymak tabanı sessizce kaldırırdı.
-	MinP99Ms        float64 `json:"minP99Ms"`
-	MinErrorRatePct float64 `json:"minErrorRatePct"`
-	// SpikyBandFactor — v0.10.1070: SIÇRAMALI GEÇMİŞ toleransı. Yukarı
-	// yönlü bir dilim ancak kendi kovasının baseline p90'ının bu katını
-	// AŞARSA ateşler (z / oran testlerine EK). Medyan düzenli kısa
-	// sıçramaları görmez (4 ms medyan, birkaç dakikada bir ~100 ms); p90
-	// görür ve o sıçramalar zaten "normal"in parçasıdır. p90, medyan+MAD
-	// ile AYNI örnek kümesinden (kova.Values) — ek sorgu yok.
-	SpikyBandFactor float64 `json:"spikyBandFactor"`
-	// HighVolumeErrorFloor / HighVolumeErrorsPerSec / HighVolumeMinErrorRatePct
-	// — v0.10.1521, v0.10.1518'in (sürekli teknik hata yükselişi) davranış
-	// motoru ikizi. MinErrorRatePct (%1) ve ani-sapmanın paylaşılan error_rate
-	// AbsFloor'u (%1) yüksek hacimli serviste istatistiksel olarak dev, kalıcı
-	// 5xx yükselişini gizliyordu: 1000 istek/sn'de 5 hata/sn %0.5'tir. HACİM
-	// FARKINDA taban: YUKARI yönlü error_rate adayında pencerenin HER dilimi
-	// ≥ HighVolumeErrorsPerSec hata/sn taşıyorsa iki mutlak taban
-	// min(taban, HighVolumeMinErrorRatePct)'e iner. Diğer bütün kapılar (rejim
-	// oranı / mevsimsel z, dwell, aynı yön, sıçrama bandı, göreli ve mutlak
-	// fark, kova kıtlığı) AYNEN. Düşük hacimli servis (dilimlerden biri bile
-	// hız tabanının altında) %1 tabanında kalır. Sayılar ramp'ınkiyle aynı
-	// (1 hata/sn, %0.2). Enabled *bool, nil = AÇIK.
-	HighVolumeErrorFloor      *bool   `json:"highVolumeErrorFloor,omitempty"`
-	HighVolumeErrorsPerSec    float64 `json:"highVolumeErrorsPerSec"`
-	HighVolumeMinErrorRatePct float64 `json:"highVolumeMinErrorRatePct"`
-}
-
-// HighVolumeErrorFloorOn — nil-güvenli: yazılmamış = AÇIK.
-func (b AnomalyBehaviorConfig) HighVolumeErrorFloorOn() bool {
-	return b.HighVolumeErrorFloor == nil || *b.HighVolumeErrorFloor
-}
-
-// IsEnabled — nil-güvenli okuma. Yazılmamış = AÇIK.
-func (b AnomalyBehaviorConfig) IsEnabled() bool {
-	return b.Enabled == nil || *b.Enabled
-}
-
-// Davranış motoru kelepçeleri. Üst sınırlar "vidayı sonuna kadar
-// çevirdim, motor sustu / motor her şeyi açtı" hallerini engelliyor.
-const (
-	behaviorMinSeasonalZ   = 1.0
-	behaviorMaxSeasonalZ   = 50.0
-	behaviorMinRegimeRatio = 1.05 // 1.0 = "her kıpırtı rejim kaymasıdır"
-	behaviorMaxRegimeRatio = 100.0
-	behaviorMinDwell       = 1
-	behaviorMaxDwell       = 24 // 2 saat; ötesi "hiç açma" demek
-	behaviorMinCandidates  = 1
-	behaviorMaxCandidates  = 5000
-	behaviorMinSamplesLo   = 1
-	behaviorMinSamplesHi   = 576 // 28 gün × 4 tekrar × 12 bucket'ın üstü: ötesi "hiç açma"
-	behaviorMinRepeatsLo   = 1
-	// behaviorMinRepeatsHi — pencerede FİİLEN mümkün olan tekrar sayısı
-	// (28 gün / 7). Üstüne çıkmak motoru KALICI olarak susturur ve bunu
-	// hiçbir ekran açıklayamazdı; kelepçe o sessiz hâli imkânsız kılıyor.
-	behaviorMinRepeatsHi = behaviorBaselineWeeks
-	// behaviorBaselineWeeks — internal/anomaly.behaviorBaselineDays / 7.
-	// BİLİNÇLİ TEKRAR: chstore, anomaly'yi import EDEMEZ (ters yön —
-	// anomaly zaten chstore'u import ediyor), AnomalySensitivityMetrics
-	// ile aynı durum. Pencere değişirse burası da değişmeli.
-	behaviorBaselineWeeks = 4
-	// v0.10.1070 — mutlak taban ve sıçrama bandı kelepçeleri. Alt sınırlar
-	// "neredeyse kapalı"ya izin verir (1 ms, %0.01, 1× = p90'ı aşmak yeter);
-	// üst sınırlar "motoru kalıcı susturdum" hâlini engeller.
-	behaviorMinP99MsLo        = 1.0
-	behaviorMinP99MsHi        = 60000.0 // 60 sn: ötesi "p99'da hiç açma"
-	behaviorMinErrRateLo      = 0.01
-	behaviorMinErrRateHi      = 100.0
-	behaviorSpikyBandFactorLo = 1.0
-	behaviorSpikyBandFactorHi = 10.0
-	// v0.10.1521 — hacim farkında hata tabanı; aralıklar errorRamp'ın
-	// (errRampEPS*, errRampRatio* alt sınırı) ikizi.
-	behaviorHVEPSLo, behaviorHVEPSHi = 0.05, 100000.0
-	behaviorHVPctLo, behaviorHVPctHi = 0.01, 100.0
-)
-
-// DefaultAnomalyBehavior — spec'te onaylanan varsayılanlar
-// (2026-08-10). Ayrı fonksiyon çünkü Normalize hem eksik alanı hem de
-// aralık dışı alanı BURADAN dolduruyor.
-func DefaultAnomalyBehavior() AnomalyBehaviorConfig {
-	return AnomalyBehaviorConfig{
-		Enabled:              boolPtr(true),
-		SeasonalZ:            4.0,
-		RegimeRatio:          1.5,
-		DwellSeasonal:        3, // 15 dk
-		DwellRegime:          6, // 30 dk
-		MaxCandidatesPerTick: 50,
-		// v0.9.957 — 12: v0.9.935'in koddaki sabitinin AYNISI (davranış
-		// değişmiyor, yalnız vidalaşıyor). 3: ölçülmüş kapı; gerekçe
-		// MinBucketRepeats alanının yorumunda.
-		MinSamplesPerBucket: 12,
-		MinBucketRepeats:    3,
-		// v0.10.1070 — operatör onaylı varsayılanlar; gerekçe alanlarda.
-		MinP99Ms:        200,
-		MinErrorRatePct: 1.0,
-		SpikyBandFactor: 1.5,
-		// v0.10.1521 — v0.10.1518 errorRamp'ın sayıları (1 hata/sn, %0.2).
-		HighVolumeErrorFloor:      boolPtr(true),
-		HighVolumeErrorsPerSec:    1.0,
-		HighVolumeMinErrorRatePct: 0.2,
-	}
-}
-
-// NormalizeAnomalyBehavior — her alanı kelepçeler; aralık dışı ya da
-// sayı-olmayan değer VARSAYILANA döner (sıfırlanmaz).
-//
-// Ani-sapma alanlarından FARKLI duruş: orada 0 meşrudur ("vidayı
-// kapat"), burada değildir. seasonalZ=0 ya da dwell=0 "her bucket
-// aday" demek olurdu, yani motoru kapatmak değil AÇIK SONUNA KADAR
-// açmak. Motoru kapatmanın yolu Enabled=false.
-func NormalizeAnomalyBehavior(b AnomalyBehaviorConfig) AnomalyBehaviorConfig {
-	d := DefaultAnomalyBehavior()
-	out := AnomalyBehaviorConfig{
-		// Normalize SOMUTLAŞTIRIR: nil gelen bayrak açık haliyle
-		// yazılır, böylece kaydedilen blob ne olduğunu AÇIKÇA söyler.
-		Enabled:              boolPtr(b.IsEnabled()),
-		SeasonalZ:            clampRangeF(b.SeasonalZ, behaviorMinSeasonalZ, behaviorMaxSeasonalZ, d.SeasonalZ),
-		RegimeRatio:          clampRangeF(b.RegimeRatio, behaviorMinRegimeRatio, behaviorMaxRegimeRatio, d.RegimeRatio),
-		DwellSeasonal:        clampRangeI(b.DwellSeasonal, behaviorMinDwell, behaviorMaxDwell, d.DwellSeasonal),
-		DwellRegime:          clampRangeI(b.DwellRegime, behaviorMinDwell, behaviorMaxDwell, d.DwellRegime),
-		MaxCandidatesPerTick: clampRangeI(b.MaxCandidatesPerTick, behaviorMinCandidates, behaviorMaxCandidates, d.MaxCandidatesPerTick),
-		MinSamplesPerBucket:  clampRangeI(b.MinSamplesPerBucket, behaviorMinSamplesLo, behaviorMinSamplesHi, d.MinSamplesPerBucket),
-		MinBucketRepeats:     clampRangeI(b.MinBucketRepeats, behaviorMinRepeatsLo, behaviorMinRepeatsHi, d.MinBucketRepeats),
-		// v0.10.1070 — eksik alan (eski blob) 0 okunur → varsayılan.
-		MinP99Ms:        clampRangeF(b.MinP99Ms, behaviorMinP99MsLo, behaviorMinP99MsHi, d.MinP99Ms),
-		MinErrorRatePct: clampRangeF(b.MinErrorRatePct, behaviorMinErrRateLo, behaviorMinErrRateHi, d.MinErrorRatePct),
-		SpikyBandFactor: clampRangeF(b.SpikyBandFactor, behaviorSpikyBandFactorLo, behaviorSpikyBandFactorHi, d.SpikyBandFactor),
-		// v0.10.1521 — kopyalanmazsa PUT'ta düşerdi; bayrak somutlaşır.
-		HighVolumeErrorFloor:      boolPtr(b.HighVolumeErrorFloorOn()),
-		HighVolumeErrorsPerSec:    clampRangeF(b.HighVolumeErrorsPerSec, behaviorHVEPSLo, behaviorHVEPSHi, d.HighVolumeErrorsPerSec),
-		HighVolumeMinErrorRatePct: clampRangeF(b.HighVolumeMinErrorRatePct, behaviorHVPctLo, behaviorHVPctHi, d.HighVolumeMinErrorRatePct),
-	}
-	return out
 }
 
 // clampRangeF / clampRangeI — aralık dışı (ya da NaN/Inf) → varsayılan.
@@ -499,7 +241,7 @@ const (
 // kovada 60 istek → tek hata %1.67 ≈ absFloor %1), p99_ms 0.5 istek/sn (150
 // istek → p99 en az iki örnekle). request_rate 0: düşüş yönünde son kova
 // tanım gereği düşüktür, taban düşüşü susturur. Kapı SON kovaya bakar (aynı
-// semantik); davranış motoru da aynı politikayı okur (evalBehaviorWhy).
+// semantik).
 // Kayıtlı 0 Normalize'dan geçtiği için yeni değer prod'a tek seferlik göçle
 // ulaşır (anomaly_sensitivity_minrate_migrate.go).
 func DefaultAnomalySensitivity() AnomalySensitivityConfig {
@@ -514,20 +256,13 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 			// bir evrensel taban yok).
 			"request_rate": {FloorPct: 0.15},
 		},
-		DwellBuckets:           3,   // v0.8.220 — 3 × 5dk = 15 dk sürekli ateşleme
-		CriticalZ:              6.0, // v0.9.193 — operatör: yalnız P1-sınıfı gelsin
-		ExternalOpenCapPerTick: 20,  // v0.10.587 — Oracle audit §6.5 önerisi
-		// v0.9.935 — davranış motoru AŞAMA 1; varsayılan AÇIK, ama
-		// adaylar mevcut terfi kapısından geçtiği için kendiliğinden
-		// Problem/bildirim üretmez: /anomalies akışına düşerler.
-		Behavior: DefaultAnomalyBehavior(),
-		Runtime:  DefaultAnomalyRuntime(), // v0.10.890 — heap kipi off
+		DwellBuckets:           3,                       // v0.8.220 — 3 × 5dk = 15 dk sürekli ateşleme
+		CriticalZ:              6.0,                     // v0.9.193 — operatör: yalnız P1-sınıfı gelsin
+		ExternalOpenCapPerTick: 20,                      // v0.10.587 — Oracle audit §6.5 önerisi
+		Runtime:                DefaultAnomalyRuntime(), // v0.10.890 — heap kipi off
 		// v0.10.1039 — BİLİNÇLİ varsayılan davranış değişikliği: operatörün
 		// adını verdiği `-batch` kalıbı kutudan açık gelir.
 		BatchServicePatterns: batchPatternsPtr(DefaultBatchServicePatterns()),
-		// v0.10.1586 — trace_op / log_pattern iki ardışık pencere (operatör onayı).
-		TraceOpDwellBuckets:    traceOpDwellDefault,
-		LogPatternDwellBuckets: logPatternDwellDefault,
 		// v0.10.1091 — yaygın yavaşlama hızlı yolu, operatör onaylı: AÇIK.
 		ServiceSlowdown: DefaultServiceSlowdown(),
 		ErrorRamp:       DefaultErrorRamp(),
@@ -560,19 +295,11 @@ func NormalizeAnomalySensitivity(c AnomalySensitivityConfig) AnomalySensitivityC
 		CriticalZ:              c.CriticalZ,
 		ExternalOpenCapPerTick: c.ExternalOpenCapPerTick,                    // v0.10.587 — kopyalanmazsa PUT'ta sessizce düşer
 		TemporalRanking:        normalizeTemporalRanking(c.TemporalRanking), // v0.10.700
-		// v0.9.935 — davranış bölümü kendi kelepçesinden geçer. Eksik
-		// bölüm (bu sürümden ESKİ her settings satırı) varsayılanını
-		// alır: sıfır-değerli bir AnomalyBehaviorConfig aralık dışıdır,
-		// dolayısıyla Normalize onu varsayılanlara doldurur.
-		Behavior: NormalizeAnomalyBehavior(c.Behavior),
-		Runtime:  NormalizeAnomalyRuntime(c.Runtime), // v0.10.890 — kopyalanmazsa PUT'ta düşer
+		Runtime:                NormalizeAnomalyRuntime(c.Runtime),          // v0.10.890 — kopyalanmazsa PUT'ta düşer
 		// v0.10.1039 — kopyalanmazsa PUT'ta sessizce düşer ve her kayıt
 		// kuralı varsayılana döndürürdü. SOMUTLAŞTIRIR: nil → varsayılan
 		// liste; boş liste boş kalır (kural kapalı) ve `[]` yazılır.
 		BatchServicePatterns: batchPatternsPtr(c.BatchServicePatternList()),
-		// v0.10.1586 — kopyalanmazsa PUT'ta düşerdi; aralık dışı / eksik → 2.
-		TraceOpDwellBuckets:    c.TraceOpDwell(),
-		LogPatternDwellBuckets: c.LogPatternDwell(),
 		// v0.10.1091 — kopyalanmazsa PUT'ta düşerdi. Eksik bölüm (eski blob)
 		// sıfır değerdir → kelepçe varsayılanlara doldurur, bayrak nil → açık.
 		ServiceSlowdown: NormalizeServiceSlowdown(c.ServiceSlowdown),

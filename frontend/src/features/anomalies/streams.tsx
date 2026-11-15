@@ -24,7 +24,7 @@ import { RootCauseRibbon } from '@/components/RootCauseRibbon';
 import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
 import {
-  useLogPatternAnomalies, useTraceOpAnomalies, useMetricAnomalies,
+  useLogPatternAnomalies, useMetricAnomalies,
   useAnomalyEvents, useAnomalySilences,
   useCreateAnomalySilence, useDeleteAnomalySilence,
   useBulkDeleteAnomalySilences,
@@ -37,9 +37,8 @@ import { durationLabel } from '@/components/coremetry/anomalies/MLTab';
 import { RecurringMarker } from './RecurringMarker'; // v0.10.1049
 import { SnoozeButton } from './SnoozeButton';
 import { serviceHref, inboxItemWindow, pointEventWindow, eventLifespanWindow } from '@/lib/serviceHref';
-import { traceHref } from '@/lib/traceHref';
 import type {
-  LogPatternAnomaly, TraceOpAnomaly, Problem, AnomalyEvent,
+  LogPatternAnomaly, Problem, AnomalyEvent,
   AnomalySilence,
 } from '@/lib/types';
 import { SubjectLink } from '../../components/SubjectLink';
@@ -60,7 +59,6 @@ export function AnomalyStreams({ withHistory = true }: { withHistory?: boolean }
   // the buttons here keeps viewers from clicking into a 403.
   const canEdit = user?.role === 'admin' || user?.role === 'editor';
   const logPatterns = useLogPatternAnomalies().data;
-  const traceOps    = useTraceOpAnomalies().data;
   const metrics     = useMetricAnomalies().data;
   const historyQ    = useAnomalyEvents();
   const history     = historyQ.data?.items;
@@ -109,7 +107,6 @@ export function AnomalyStreams({ withHistory = true }: { withHistory?: boolean }
     <>
       <SilencesSection items={silences} onUnmute={onUnmute} onUnmuteAll={onUnmuteAll} canEdit={canEdit} />
       <LogPatternsSection items={logPatterns} onMute={onMute} canEdit={canEdit} />
-      <TraceOpsSection    items={traceOps}    onMute={onMute} canEdit={canEdit} />
       <MetricSection      items={metrics} />
       {withHistory && <HistorySection items={history} meta={historyMeta} error={historyQ.isError} />}
     </>
@@ -133,57 +130,6 @@ function AnomalyShell({ title, hint, count, error, children }: {
       </Row>
       {children}
     </Card>
-  );
-}
-
-function TraceOpsSection({ items, onMute, canEdit }: {
-  items: TraceOpAnomaly[] | undefined;
-  onMute: (kind: string, pattern: string, service: string, durationSec: number) => void;
-  canEdit: boolean;
-}) {
-  if (items === undefined) return null;
-  return (
-    <AnomalyShell
-      title="Trace operation anomalies"
-      hint={`${items.length} operation${items.length === 1 ? '' : 's'} with new or doubled error rate`}
-      count={items.length}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 10 }}>
-        {items.map((a, i) => (
-          <Card key={i}
-                style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-            <Row gap={2} style={{ minWidth: 0 }}>
-              {a.kind === 'new_error'
-                ? <Badge tone="warning" style={{ fontSize: 10, flexShrink: 0 }}>NEW ERROR</Badge>
-                : <Badge tone="danger"  style={{ fontSize: 10, flexShrink: 0 }}>SPIKE ×{a.ratio.toFixed(1)}</Badge>}
-              <span style={{
-                fontWeight: 600, fontSize: 12,
-                flex: 1, minWidth: 0,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }} title={a.operation || '(unnamed)'}>
-                {a.operation || '(unnamed)'}
-              </span>
-              {a.sampleTraceId && (
-                <Link to={traceHref(a.sampleTraceId)}
-                      style={{ fontSize: 11, color: 'var(--accent2)', flexShrink: 0 }}>
-                  trace ↗
-                </Link>
-              )}
-              {canEdit && <SnoozeButton onMute={d => onMute('trace_op', a.operation, a.service, d)} />}
-            </Row>
-            <div style={{ fontSize: 11, color: 'var(--text2)' }}>
-              {/* v0.9.966 — satır TEK bir an taşıyor (lastSeenNs), aralık
-                  değil: pointEventWindow o anın etrafını açar. */}
-              <Link to={serviceHref(a.service, { range: pointEventWindow(a.lastSeenNs) })}
-                    className="mono" style={{ color: 'var(--text)', textDecoration: 'none' }}>
-                {a.service}
-              </Link>
-              {' · '}<span className="mono">{fmtNum(a.currentErrors)}</span> errors now
-              {a.baselineErrors > 0 && <> · <span className="mono">{fmtNum(a.baselineErrors)}</span> prev</>}
-            </div>
-          </Card>
-        ))}
-      </div>
-    </AnomalyShell>
   );
 }
 

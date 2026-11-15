@@ -67,12 +67,6 @@ func TestEveryEventWriterFillsDirectionBaseline(t *testing.T) {
 		want want
 		base float64
 	}{
-		{"log_pattern spike", logPatternEvent(LogPatternAnomaly{Pattern: "p", Service: "s", Ratio: 4, BaselineCount: 10}, now), want{"up", "consecutive"}, 10},
-		{"log_pattern new", logPatternEvent(LogPatternAnomaly{Pattern: "p", Service: "s", Ratio: 0}, now), want{"up", "none"}, 0},
-		{"trace_op spike", traceOpEvent(TraceOpAnomaly{Operation: "o", Service: "s", Ratio: 6, BaselineErrors: 3}, now), want{"up", "consecutive"}, 3},
-		{"trace_op new_error", traceOpEvent(TraceOpAnomaly{Operation: "o", Service: "s", Ratio: 0}, now), want{"up", "none"}, 0},
-		{"davranış mevsimsel düşüş", behaviorEvent(behaviorCandidate{Service: "s", Metric: "request_rate", Signal: "seasonal", Direction: "down", Ratio: 0.4, Baseline: 50}, now), want{"down", "seasonal"}, 50},
-		{"davranış rejim", behaviorEvent(behaviorCandidate{Service: "s", Metric: "p99_ms", Signal: "regime", Direction: "up", Ratio: 3, Baseline: 80}, now), want{"up", "consecutive"}, 80},
 		{"takvim düşüşü", calendarDropEvent("s", chstore.CalendarHoliday, 2, 10, "consecutive", now), want{"down", "consecutive"}, 10},
 		{"takvim düşüşü (taban boş → mevsimsel)", calendarDropEvent("s", chstore.CalendarHoliday, 2, 10, "", now), want{"down", "seasonal"}, 10},
 	}

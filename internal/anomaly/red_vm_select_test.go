@@ -441,35 +441,6 @@ func TestScanOverlaysBeforeVerdict(t *testing.T) {
 	}
 }
 
-// TestBehaviorRowsSplitBySource — davranış motoru: VM satırı olan servis span
-// haritasından çıkar, kaynağı işaretlenir; görünüm yoksa her şey span.
-func TestBehaviorRowsSplitBySource(t *testing.T) {
-	rows := map[string][]behaviorRow{"orders-api": {{Unix: 1, Spans: 5}}, "billing-api": {{Unix: 1, Spans: 5}}}
-	span, vm, src := splitBehaviorRowsBySource(rows, nil)
-	if len(span) != 2 || len(vm) != 0 || src["orders-api"] != redSourceSpan {
-		t.Fatalf("görünümsüz: span=%d vm=%d src=%v", len(span), len(vm), src)
-	}
-	now := time.Date(2026, 10, 22, 14, 31, 0, 0, time.UTC)
-	f := &fakeREDVM{labels: map[string][]string{vmREDFamilies[0].Probe: {"service_name", "http_response_status_code"}},
-		statusSvcs: []string{"orders-api"}, val: steadyVal, svcs: []string{"orders-api"}}
-	v := warm(t, newFakeSource(f), now, chstore.DefaultAnomalySensitivity())
-	span, vm, src = splitBehaviorRowsBySource(rows, v)
-	if _, ok := span["orders-api"]; ok || len(vm["orders-api"]) == 0 || src["orders-api"] != redSourceVM {
-		t.Fatalf("VM servisi ayrılmalı: span=%v vm=%d src=%v", span, len(vm["orders-api"]), src)
-	}
-	r := vm["orders-api"][len(vm["orders-api"])-1]
-	if r.Spans != 3000 || r.Errs != 30 || r.P99Ms != 120 {
-		t.Errorf("VM satırı: %+v", r)
-	}
-	if src["billing-api"] != redSourceSpan || len(span["billing-api"]) != 1 {
-		t.Error("VM'siz servis span'de kalmalı")
-	}
-	d := encodeBehaviorDetails(behaviorCandidate{Metric: "p99_ms", Source: redSourceVM})
-	if !strings.Contains(d, `"source":"vm"`) {
-		t.Errorf("olay ayrıntısı kaynağı taşımalı: %s", d)
-	}
-}
-
 // TestSourceReasonHiddenOnlyWhenVMNotConfigured — operatör 2026-10-24: VM hiç
 // yapılandırılmamış kurulumda "VM kullanılmadı: VictoriaMetrics
 // yapılandırılmamış" gürültü; gizlenir. VM yapılandırılmış ama kullanılamamışsa

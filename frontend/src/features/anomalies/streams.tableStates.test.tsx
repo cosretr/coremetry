@@ -25,7 +25,6 @@ const m = vi.hoisted(() => ({
 vi.mock('@/lib/api', () => {
   const stub: Record<string, (...a: unknown[]) => Promise<unknown>> = {
     logPatternAnomalies: async () => [],
-    traceOpAnomalies: async () => [],
     metricAnomalies: async () => [],
     anomalySilences: async () => [],
     anomalyEvents: () => {

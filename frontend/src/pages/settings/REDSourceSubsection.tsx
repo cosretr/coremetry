@@ -6,7 +6,7 @@ import { humanize } from './shared';
 
 // REDSourceSubsection — v0.10.1478 (operatör: "Servislerin kendi içerisinde
 // haftalık olağan akışlarını takip etse ve gerçek bir anomaly öyle yakalasa").
-// Metrik dedektörü + davranış motorunun RED serisi kaynağı
+// Metrik dedektörünün RED serisi kaynağı
 // (anomaly_sensitivity.redSource / redSourceEnv; Dedektör hassasiyeti bölümü,
 // aynı Kaydet). Altında dedektörün son tikinin ölçümü (yalnız okunur; açılışta
 // bir kez — ayar sayfası, polling yok).

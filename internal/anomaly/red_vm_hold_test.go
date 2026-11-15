@@ -164,7 +164,7 @@ func TestExplainReplayBFFFromVM(t *testing.T) {
 	noSpan := func(context.Context, string, string, time.Time, time.Time) (map[int64]spanRow, error) {
 		return nil, nil
 	}
-	rep := explainRun(context.Background(), gwFake(gwScenario{baseRatio: 0.05, incident: true}), noSpan, nil, gwSvc, "error_rate",
+	rep := explainRun(context.Background(), gwFake(gwScenario{baseRatio: 0.05, incident: true}), noSpan, gwSvc, "error_rate",
 		from, to, sens, days, minS, neighbor, true)
 	if rep.SpanPresent || !rep.VMPresent || !rep.VMConfigured {
 		t.Fatalf("span yok / VM var bekleniyordu: %+v", rep)
@@ -193,7 +193,7 @@ func TestExplainReplayBFFFromVM(t *testing.T) {
 	// Kural kapalıyken aynı pencere: açılmaz ve kapı absFloor olarak raporlanır.
 	off := sens
 	off.ErrorRamp.Enabled = boolPtrT(false)
-	rep2 := explainRun(context.Background(), gwFake(gwScenario{baseRatio: 0.05, incident: true}), noSpan, nil, gwSvc, "error_rate",
+	rep2 := explainRun(context.Background(), gwFake(gwScenario{baseRatio: 0.05, incident: true}), noSpan, gwSvc, "error_rate",
 		from, to, off, days, minS, neighbor, true)
 	if rep2.Problems != 0 || len(rep2.TopBlockers) == 0 || !strings.HasPrefix(rep2.TopBlockers[0], zBlockAbsFloor) {
 		t.Errorf("kural kapalı: %d açılış, kapılar %v", rep2.Problems, rep2.TopBlockers)
