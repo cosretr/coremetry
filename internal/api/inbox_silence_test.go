@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/cache/cachetest"
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
@@ -353,28 +354,13 @@ func TestInboxSilenceWiring(t *testing.T) {
 
 // ── Önbellek ─────────────────────────────────────────────────────────────
 
-// prefixMemCache — Get/Set/DelPrefix çalışan cache.Cache (memCache +
-// gerçek önek silme). Redis'in SCAN+UNLINK'ine karşılık.
-type prefixMemCache struct{ *memCache }
-
-func (c prefixMemCache) DelPrefix(_ context.Context, prefix string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for k := range c.m {
-		if strings.HasPrefix(k, prefix) {
-			delete(c.m, k)
-		}
-	}
-	return nil
-}
-
 // Susturma yazımından sonra inbox listesi ve rozet önbellekten mute öncesi
 // gövdeyi DÖNMEZ: bir sonraki okuma upstream'e gider (MISS). Emsal: ack /
 // exception durumu / incident yazımlarının açık önek düşürmesi
 // (inboxListCachePrefix). L1 ve L2 ikisi birden.
 func TestSilenceWriteDropsCachedInboxPayload(t *testing.T) {
 	ctx := context.Background()
-	s := &Server{cache: prefixMemCache{newMemCache()}, l1: newL1Cache(64), stats: newCacheStats()}
+	s := &Server{cache: cachetest.NewMem(), l1: newL1Cache(64), stats: newCacheStats()}
 	const ttl = 15 * time.Second
 	listKey := inboxListKey("open", "", "", "", "", "", "", 200, "priority", "desc", 5,
 		inboxKindsAll, inboxPriosAll, inboxSubjectService) + ":since=:cat=:floorDefault=true"
@@ -382,7 +368,7 @@ func TestSilenceWriteDropsCachedInboxPayload(t *testing.T) {
 
 	pre, _ := json.Marshal(map[string]any{"items": []string{"anomaly:" + silFpMuted}})
 	for _, k := range keys {
-		s.storeCached(ctx, k, pre, ttl)
+		s.storeCached(ctx, k, pre, ttl, s.cacheGenOf(ctx, k))
 	}
 	upstream := 0
 	fresh := func(context.Context) (any, error) {

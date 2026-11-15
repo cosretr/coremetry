@@ -14249,3 +14249,9 @@ Operatör bildirimi (prod /ai, 7 gün): 404 açıklama turunun 78'i "hata"; `err
 - Denetim O1 (K2 kabul): `cacheBucket` / `cacheRawQuery` `to` şimdiye ≤ 60 sn yakınsa anahtara mutlak zaman yerine `live:<süre>` (süre = to−from, 30 sn ızgaraya yuvarlı) girer; ham sorguda `to=live&from=<süre>`. Geçmiş pencerenin anahtarı birebir aynı (mutlak, 30 sn ızgara). Yükleyici isteğin gerçek penceresini kullanır; SWR artık canlı görünümlerde kova devrinde de çalışır. Bayatlık sınırı 3 × TTL; `?refresh=1` taze yolu korur.
 - `clusters:` / `namespaces:v2:` 5 dk TTL'li anahtarları canlı anahtarla gerçekten 5 dk yaşar; ısıtıcının `clusters` girdisi 60 sn yerine handler TTL'i (5 dk) ile — `ListClusters` 30 sn yerine 5 dk'da bir.
 - `cacheBucket` api.go'dan `internal/api/cache_live_key.go`'ya taşındı (api.go tabanı 10081 → 10063).
+
+## 2026-11-15 — v0.10.2229 — Redis R3: sayaçlı geçersiz kılma
+
+- Denetim O2/G2: `cacheInvalidatePrefix` artık `DelPrefix` (istek yolunda tam anahtar uzayı SCAN) yapmaz; kayıtlı önekin nesil sayacına tek `INCR` (`coremetry:cache:gen:v1:<önek>`, TTL 7 gün, ilk kuruluşta milisaniyeye taşınır → yeniden kurulan sayaç eski değere dönmez). 14 ayrı önek (`internal/api/cache_gen.go` `cacheGenPrefixes`; 42 çağrının hepsi, kaynak taraması testi sabitler).
+- L2 zarfı hesaplamadan ÖNCE okunan nesil dizisini taşır (`g`); okuma anahtar + sayaçları tek `MGET`'te alır, tutmazsa miss. Eski nesil girdileri Redis TTL'iyle düşer. Hesaplama sürerken gelen geçersizleştirme artık yazılan sonucu da bayat bırakır (DelPrefix'te taze sayılıyordu); singleflight anahtarı nesli içerir. Nesil okunamazsa (Redis hatası / devre açık) L2'ye yazılmaz.
+- L1 (≤ 5 sn) değişmedi: yerel `delPrefix` + `prefix:` yayını. Kayıt dışı önek gelirse `DelPrefix` istek yolu dışında goroutine'de koşar (emniyet ağı); başka `DelPrefix` çağıranı yok, yöntem arayüzde kalır.

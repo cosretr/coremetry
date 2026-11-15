@@ -1437,10 +1437,9 @@ func (s *Server) warmDependenciesCache() {
 		// fresh envelope (within the soft TTL). Stale-but-
 		// usable entries still get refreshed so the next read
 		// gets a fresh hit.
-		if raw, ok, _ := s.cache.Get(ctx, key); ok {
-			if written, _, envOK := unwrapEnvelope(raw); envOK && time.Since(written) < useTTL {
-				return
-			}
+		gen, fresh := s.l2FreshGen(ctx, key, useTTL) // v0.10.2229 (R3): + nesil, hesaplamadan önce
+		if fresh {
+			return
 		}
 		v, err := fn(ctx)
 		if err != nil {
@@ -1462,7 +1461,7 @@ func (s *Server) warmDependenciesCache() {
 			log.Printf("[warm] %s marshal: %v", label, err)
 			return
 		}
-		s.storeCached(ctx, key, body, useTTL)
+		s.storeCached(ctx, key, body, useTTL, gen)
 	}
 	for {
 		// v0.8.350 (HA 🟡4) — cross-pod dedup: ONE warm cycle per fleet

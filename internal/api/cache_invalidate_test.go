@@ -86,49 +86,34 @@ func (f *fakeCache) Subscribe(ctx context.Context, _ string) (<-chan []byte, err
 	return ch, nil
 }
 
-func TestCacheInvalidatePrefix_DelPrefixWired(t *testing.T) {
-	cases := []struct {
-		name   string
-		prefix string
-	}{
-		{"topology edges", "topology-edges:"},
-		{"topology services", "topology-service:"},
-		{"db summary", "db-summary:"},
-		{"empty-string prefix is a no-op-ish call but still goes through", ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			fc := &fakeCache{}
-			srv := &Server{
-				cache: fc,
-				l1:    newL1Cache(8),
-				stats: newCacheStats(),
-			}
-			srv.cacheInvalidatePrefix(context.Background(), tc.prefix)
-
+// v0.10.2229 (Redis R3): kayıt dışı önek → DelPrefix İSTEK YOLU DIŞINDA
+// (goroutine), yayın yine eşzamanlı; ScanPrefix asla.
+func TestCacheInvalidatePrefix_UnregisteredOffPath(t *testing.T) {
+	for _, prefix := range []string{"topology-edges:", "topology-service:", "db-summary:"} {
+		fc := &fakeCache{}
+		srv := &Server{cache: fc, l1: newL1Cache(8), stats: newCacheStats()}
+		srv.cacheInvalidatePrefix(context.Background(), prefix)
+		deadline := time.Now().Add(2 * time.Second)
+		for {
 			fc.mu.Lock()
-			defer fc.mu.Unlock()
-
-			if len(fc.delPrefixCalls) != 1 {
-				t.Fatalf("DelPrefix should be called exactly once, got %d", len(fc.delPrefixCalls))
+			n := len(fc.delPrefixCalls)
+			fc.mu.Unlock()
+			if n == 1 || time.Now().After(deadline) {
+				break
 			}
-			if fc.delPrefixCalls[0] != tc.prefix {
-				t.Errorf("DelPrefix called with %q, want %q", fc.delPrefixCalls[0], tc.prefix)
-			}
-			if fc.scanPrefixHits != 0 {
-				t.Errorf("ScanPrefix MUST NOT be called from the invalidate path (pre-fix bug); got %d hits",
-					fc.scanPrefixHits)
-			}
-			// Broadcast must still happen so peer pods drain
-			// their L1.
-			if len(fc.publishCalls) != 1 {
-				t.Fatalf("Publish should be called exactly once, got %d", len(fc.publishCalls))
-			}
-			want := "prefix:" + tc.prefix
-			if fc.publishCalls[0].msg != want {
-				t.Errorf("Publish payload = %q, want %q", fc.publishCalls[0].msg, want)
-			}
-		})
+			time.Sleep(5 * time.Millisecond)
+		}
+		fc.mu.Lock()
+		if len(fc.delPrefixCalls) != 1 || fc.delPrefixCalls[0] != prefix {
+			t.Errorf("%s: DelPrefix arka planda bir kez çağrılmalı: %v", prefix, fc.delPrefixCalls)
+		}
+		if fc.scanPrefixHits != 0 {
+			t.Errorf("%s: ScanPrefix çağrılmamalı", prefix)
+		}
+		if len(fc.publishCalls) != 1 || fc.publishCalls[0].msg != "prefix:"+prefix {
+			t.Errorf("%s: yayın %v", prefix, fc.publishCalls)
+		}
+		fc.mu.Unlock()
 	}
 }
 

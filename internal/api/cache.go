@@ -148,13 +148,27 @@ func (l *l1Cache) set(key string, data []byte, ttl time.Duration) {
 type cacheEnvelope struct {
 	Written int64           `json:"w"` // unix nanoseconds at write time
 	Body    json.RawMessage `json:"b"`
+	// Gen — v0.10.2229 (R3): hesaplamadan önce okunan nesil dizisi
+	// (cache_gen.go); kayıtlı aileye ait olmayan anahtarda boş.
+	Gen string `json:"g,omitempty"`
 }
 
-func wrapEnvelope(body []byte) ([]byte, error) {
+func wrapEnvelope(body []byte, gen string) ([]byte, error) {
 	return json.Marshal(cacheEnvelope{
 		Written: time.Now().UnixNano(),
 		Body:    body,
+		Gen:     gen,
 	})
+}
+
+// unwrapEnvelopeGen — unwrapEnvelope + zarfın nesil dizisi.
+func unwrapEnvelopeGen(raw []byte) (time.Time, []byte, string, bool) {
+	var env cacheEnvelope
+	if err := json.Unmarshal(raw, &env); err != nil ||
+		env.Written == 0 || len(env.Body) == 0 {
+		return time.Time{}, nil, "", false
+	}
+	return time.Unix(0, env.Written), env.Body, env.Gen, true
 }
 
 // unwrapEnvelope returns (written, body, true) when raw matches
@@ -253,15 +267,28 @@ func (s *Server) serveCached(w http.ResponseWriter, r *http.Request, key string,
 // HIT-LEGACY / MISS / BYPASS). `bypass` = ?refresh=1 semantiği: okuma
 // katmanları atlanır, sonuç yine yazılır.
 func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, bypass bool, fn func(ctx context.Context) (any, error)) ([]byte, string, error) {
-	if !bypass {
+	// gen — v0.10.2229 (R3): hesaplamadan ÖNCE okunan nesil; yazılan zarf
+	// bunu taşır, araya giren bir geçersizleştirme sonucu bayat bırakır.
+	gen := ""
+	if bypass {
+		gen = s.cacheGenOf(ctx, key)
+	} else {
 		// ── L1 ────────────────────────────────────────────────
 		if data, ok := s.l1.get(key); ok {
 			s.stats.record("HIT-L1", key)
 			return data, "HIT-L1", nil
 		}
 		// ── L2 with SWR ───────────────────────────────────────
-		if raw, ok := s.l2Get(ctx, key); ok { // v0.10.2226: devre kesicili (G8)
-			if written, body, envOK := unwrapEnvelope(raw); envOK {
+		var raw []byte
+		var ok bool
+		raw, gen, ok = s.l2GetGen(ctx, key) // v0.10.2226: devre kesicili (G8); R3: + nesil, tek MGET
+		if ok {
+			written, body, envGen, envOK := unwrapEnvelopeGen(raw)
+			switch {
+			case gen != "" && (!envOK || !genMatches(gen, envGen)):
+				// v0.10.2229 (R3) — eski nesil (ya da nesilsiz eski zarf):
+				// geçersizleştirilmiş, miss'e düş.
+			case envOK:
 				age := time.Since(written)
 				if age < ttl {
 					// Fresh hit. Populate L1 with the remaining
@@ -276,12 +303,12 @@ func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, 
 					// kick a background refresh (deduped via
 					// singleflight so concurrent stale hits
 					// share one upstream call).
-					go s.refreshKey(key, ttl, fn)
+					go s.refreshKey(key, ttl, fn, gen)
 					s.stats.record("STALE", key)
 					return body, "STALE", nil
 				}
 				// Past hard window → fall through to miss.
-			} else {
+			default:
 				// Legacy entry (no envelope). Serve as-is and
 				// let Redis TTL evict it; new writes go
 				// through the envelope path.
@@ -292,7 +319,7 @@ func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, 
 	}
 
 	// ── Miss path with singleflight dedupe ────────────────────
-	body, noStore, err := s.computeBodyStore(ctx, key, fn)
+	body, noStore, err := s.computeBodyStore(ctx, key, gen, fn)
 	if err != nil {
 		return nil, "", err
 	}
@@ -316,7 +343,7 @@ func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		s.storeL2(ctx, key, body, ttl)
+		s.storeL2(ctx, key, body, ttl, gen)
 	}()
 	tier := "MISS"
 	if bypass {
@@ -343,15 +370,18 @@ func writeCacheHit(w http.ResponseWriter, tier string, body []byte) {
 // (v0.8.350), which sets L1 inline and detaches the L2 write.
 // The remaining synchronous callers (refreshKey, the warmer)
 // already run on background goroutines.
-func (s *Server) storeCached(ctx context.Context, key string, body []byte, ttl time.Duration) {
-	s.storeL2(ctx, key, body, ttl)
+func (s *Server) storeCached(ctx context.Context, key string, body []byte, ttl time.Duration, gen string) {
+	s.storeL2(ctx, key, body, ttl, gen)
 	s.l1.set(key, body, s.l2().l1Cap(ttl))
 }
 
 // storeL2 is the Redis half of storeCached (split out in v0.8.350 so
 // the miss path can run it async while keeping the L1 set synchronous).
-func (s *Server) storeL2(ctx context.Context, key string, body []byte, ttl time.Duration) {
-	if env, err := wrapEnvelope(body); err == nil {
+func (s *Server) storeL2(ctx context.Context, key string, body []byte, ttl time.Duration, gen string) {
+	if gen == cacheGenUnknown {
+		return // R3: nesil okunamadı — hiçbir okumayla eşleşmeyecek girdi yazılmaz
+	}
+	if env, err := wrapEnvelope(body, gen); err == nil {
 		if err := s.l2Set(ctx, key, env, ttl*staleFactor); err != nil {
 			log.Printf("[cache] set %s: %v", key, err)
 		}
@@ -363,7 +393,7 @@ func (s *Server) storeL2(ctx context.Context, key string, body []byte, ttl time.
 // refresh has already returned), updates both cache tiers.
 // Deduped via singleflight under the cache key so concurrent
 // stale-hits don't fan out into N parallel CH queries.
-func (s *Server) refreshKey(key string, ttl time.Duration, fn func(ctx context.Context) (any, error)) {
+func (s *Server) refreshKey(key string, ttl time.Duration, fn func(ctx context.Context) (any, error), gen string) {
 	// Defensive timeout — same as the warmer's queryBudg.
 	// A refresh that hangs longer than this would block
 	// the singleflight slot for new concurrent refreshes
@@ -374,7 +404,7 @@ func (s *Server) refreshKey(key string, ttl time.Duration, fn func(ctx context.C
 	// upstream query. fn() used to close over the (already
 	// cancelled) request context, so every background refresh
 	// aborted with context.Canceled.
-	body, noStore, err := s.computeBodyStore(ctx, key, fn)
+	body, noStore, err := s.computeBodyStore(ctx, key, gen, fn)
 	if err != nil {
 		log.Printf("[cache] refresh %s: %v", key, err)
 		return
@@ -383,7 +413,7 @@ func (s *Server) refreshKey(key string, ttl time.Duration, fn func(ctx context.C
 		// v0.10.1119 — kısmi (uncacheable) sonuç bayat girdiyi EZMEZ.
 		return
 	}
-	s.storeCached(ctx, key, body, ttl)
+	s.storeCached(ctx, key, body, ttl, gen)
 }
 
 // computeBodyStore — singleflight altındaki TEK hesaplama noktası (v0.10.146):
@@ -423,8 +453,16 @@ type computedBody struct {
 }
 
 // computeBodyStore — gövde + uncacheable işareti (v0.10.1119).
-func (s *Server) computeBodyStore(ctx context.Context, key string, fn func(ctx context.Context) (any, error)) ([]byte, bool, error) {
-	v, err, _ := s.sf.Do(key, func() (any, error) {
+//
+// gen (v0.10.2229, R3) singleflight anahtarına girer: geçersizleştirmeden
+// sonra gelen çağıran, öncesinde başlamış bir hesaplamaya katılıp eski
+// gövdeyi yeni nesille yazamaz.
+func (s *Server) computeBodyStore(ctx context.Context, key, gen string, fn func(ctx context.Context) (any, error)) ([]byte, bool, error) {
+	sfKey := key
+	if gen != "" {
+		sfKey = key + "\x00g" + gen
+	}
+	v, err, _ := s.sf.Do(sfKey, func() (any, error) {
 		val, err := fn(ctx)
 		if err != nil {
 			return nil, err
@@ -482,7 +520,8 @@ func (s *Server) cacheInvalidate(ctx context.Context, key string) {
 
 // cacheInvalidatePrefix evicts every cached entry whose key
 // starts with prefix — across L1 (local + peers via pub/sub)
-// and L2 (Redis SCAN + DEL). Use for parameter-keyed cache
+// and L2 (v0.10.2229, R3: one INCR on the prefix's generation
+// counter, see cache_gen.go — no SCAN). Use for parameter-keyed cache
 // namespaces where a single mutation affects many keys (e.g.
 // "topology-edges:*" — one mute change invalidates every
 // time-window-keyed topology view).
@@ -492,20 +531,19 @@ func (s *Server) cacheInvalidate(ctx context.Context, key string) {
 // delPrefix rather than del. Exact-key payloads stay
 // unprefixed for compatibility.
 func (s *Server) cacheInvalidatePrefix(ctx context.Context, prefix string) {
-	// L2 — SCAN + UNLINK every match. v0.6.11 bug-fix: pre-v0.6.11
-	// this path called ScanPrefix and discarded the returned
-	// values without ever deleting anything (the comment honestly
-	// admitted it: "ScanPrefix returns values not keys"). L2 was
-	// never drained — operator-reported staleness after exclude /
-	// mute changes was the symptom. Now we go through the
-	// dedicated DelPrefix which UNLINKs the matched keys.
+	// L2 — v0.10.2229 (Redis R3, G2): nesil sayacına tek INCR; eski
+	// nesil girdileri okumada miss, Redis TTL'iyle düşer. v0.6.11'den beri
+	// burada istek yolunda SCAN + UNLINK (DelPrefix) vardı. Kayıt dışı önek
+	// (olmamalı — cache_gen_test.go) DelPrefix'e istek yolu DIŞINDA düşer.
 	//
 	// Best-effort: an error here logs and continues so the L1
-	// eviction + cross-pod broadcast still happen. The peer pods'
-	// invalidator loop also runs DelPrefix on its own L2 path so
-	// every replica converges.
-	if err := s.cache.DelPrefix(ctx, prefix); err != nil {
-		log.Printf("[cache] invalidate L2 del prefix %s: %v", prefix, err)
+	// eviction + cross-pod broadcast still happen.
+	if isCacheGenPrefix(prefix) {
+		if err := s.bumpCacheGen(ctx, prefix); err != nil {
+			log.Printf("[cache] invalidate L2 gen %s: %v", prefix, err)
+		}
+	} else {
+		s.delPrefixOffPath(prefix)
 	}
 	// Local L1.
 	s.l1.delPrefix(prefix)
@@ -903,8 +941,12 @@ func (s *Server) cachePeek(ctx context.Context, key string) ([]byte, bool) {
 	if data, ok := s.l1.get(key); ok {
 		return data, true
 	}
-	if raw, ok := s.l2Get(ctx, key); ok && len(raw) > 0 {
-		if _, body, isEnv := unwrapEnvelope(raw); isEnv {
+	if raw, gen, ok := s.l2GetGen(ctx, key); ok && len(raw) > 0 {
+		_, body, envGen, isEnv := unwrapEnvelopeGen(raw)
+		if gen != "" && (!isEnv || !genMatches(gen, envGen)) {
+			return nil, false // R3: geçersizleştirilmiş nesil
+		}
+		if isEnv {
 			return body, true
 		}
 		return raw, true
