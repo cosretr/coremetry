@@ -255,11 +255,16 @@ describe('VirtualTable — href\'li satır', () => {
     const proto = HTMLElement.prototype;
     const h = Object.getOwnPropertyDescriptor(proto, 'offsetHeight');
     const w = Object.getOwnPropertyDescriptor(proto, 'offsetWidth');
+    const ch = Object.getOwnPropertyDescriptor(proto, 'clientHeight');
     Object.defineProperty(proto, 'offsetHeight', { configurable: true, get(this: HTMLElement) { return this.classList.contains('vt-scroll') ? 200 : 0; } });
     Object.defineProperty(proto, 'offsetWidth', { configurable: true, get(this: HTMLElement) { return this.classList.contains('vt-scroll') ? 800 : 0; } });
+    // virtual-core ≥3.19.6 görünür alanı clientHeight'tan ölçer.
+    Object.defineProperty(proto, 'clientHeight', { configurable: true, get(this: HTMLElement) { return this.classList.contains('vt-scroll') ? 200 : 0; } });
     restore = () => {
       if (h) Object.defineProperty(proto, 'offsetHeight', h);
       if (w) Object.defineProperty(proto, 'offsetWidth', w);
+      if (ch) Object.defineProperty(proto, 'clientHeight', ch);
+      else delete (proto as unknown as Record<string, unknown>).clientHeight;
     };
   });
   afterEach(() => { restore?.(); restore = null; });

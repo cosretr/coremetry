@@ -35,7 +35,7 @@
     "@opentelemetry/sdk-trace-web": "^2.12.0",
     "@opentelemetry/semantic-conventions": "^1.45.0",
     "@tanstack/react-query": "^5.107.1",
-    "@tanstack/react-virtual": "^3.13.26",
+    "@tanstack/react-virtual": "^3.14.26",
     "@types/dagre": "^0.7.54",
     "ai": "5.0.276",
     "class-variance-authority": "0.7.1",

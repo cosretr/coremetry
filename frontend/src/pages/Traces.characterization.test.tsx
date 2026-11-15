@@ -78,7 +78,7 @@ window.matchMedia = ((q: string) => ({
 
 // Yerleşim taklidi: yalnız `.vt-scroll` (Traces'in liste kabı) boyut taşır.
 let vtWidth = 4000;
-const saved: { oh?: PropertyDescriptor; ow?: PropertyDescriptor; cw?: PropertyDescriptor; ro?: unknown } = {};
+const saved: { oh?: PropertyDescriptor; ow?: PropertyDescriptor; cw?: PropertyDescriptor; ch?: PropertyDescriptor; ro?: unknown } = {};
 const isVt = (el: HTMLElement) => el.classList?.contains('vt-scroll');
 
 let root: Root | null = null;
@@ -114,9 +114,15 @@ beforeEach(() => {
   saved.oh = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
   saved.ow = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
   saved.cw = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+  saved.ch = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
   saved.ro = (globalThis as { ResizeObserver?: unknown }).ResizeObserver;
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
   Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    configurable: true, get(this: HTMLElement) { return isVt(this) ? 4000 : 0; },
+  });
+  // virtual-core ≥3.19.6 görünür alanı clientHeight'tan ölçer (kenarlık /
+  // kaydırma çubuğu hariç); eski sürüm offsetHeight okuyordu. İkisi de aynı.
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
     configurable: true, get(this: HTMLElement) { return isVt(this) ? 4000 : 0; },
   });
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
@@ -141,7 +147,7 @@ afterEach(() => {
   root = null; host = null;
   document.body.innerHTML = '';
   vi.unstubAllGlobals();
-  for (const [k, d] of [['offsetHeight', saved.oh], ['offsetWidth', saved.ow], ['clientWidth', saved.cw]] as const) {
+  for (const [k, d] of [['offsetHeight', saved.oh], ['offsetWidth', saved.ow], ['clientWidth', saved.cw], ['clientHeight', saved.ch]] as const) {
     if (d) Object.defineProperty(HTMLElement.prototype, k, d);
     else delete (HTMLElement.prototype as unknown as Record<string, unknown>)[k];
   }
