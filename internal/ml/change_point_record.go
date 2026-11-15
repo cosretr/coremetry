@@ -61,6 +61,7 @@ func cpFreeze(evm map[string]any, pts []chstore.MLPoint, ref map[int]chstore.MLP
 // CPRecordInput — BuildChangePointRecord girdisi (saf); seri hedef kova adımında.
 type CPRecordInput struct {
 	Detector, Signal, Service, Route, Part string
+	SeriesService                          string // ml_series servis adı ('' = Service; log: ES adı)
 	BucketSec                              int
 	T0                                     int64 // ilk kova (unix s)
 	V, Lo, Hi                              []float64
@@ -126,6 +127,10 @@ func BuildChangePointRecord(in CPRecordInput) (EventRecord, bool) {
 	}
 	at := func(i int) int64 { return (in.T0 + int64(i)*recordSnapshotStepSec) * 1e9 }
 	trace := in.Signal == chstore.MLSignalTrace
+	seriesSvc := in.SeriesService
+	if seriesSvc == "" {
+		seriesSvc = in.Service
+	}
 	agg, unit := "count", "count"
 	if trace {
 		agg, unit = "p95", "ms"
@@ -136,7 +141,7 @@ func BuildChangePointRecord(in CPRecordInput) (EventRecord, bool) {
 		Subject: RecordSubject{EntityID: entity.ServiceID(in.Service), Service: in.Service, Operation: in.Route, Resolved: true},
 		Series: RecordSeries{Source: "ch:ml_series", Aggregation: agg, Unit: unit, StepSec: uint32(in.BucketSec),
 			Query: fmt.Sprintf("SELECT toUnixTimestamp(bucket) AS t, max(count) AS v FROM ml_series WHERE signal = %s AND service = %s AND part = %s AND bucket_sec = %d GROUP BY t ORDER BY t",
-				sqlLit(in.Signal), sqlLit(in.Service), sqlLit(in.Part), in.BucketSec)},
+				sqlLit(in.Signal), sqlLit(seriesSvc), sqlLit(in.Part), in.BucketSec)},
 		Baseline:  RecordBaseline{Expected: exp, Lo: lo[det], Hi: hi[det], Method: cpBandMethod, StepSec: uint32(in.BucketSec)},
 		Direction: dir, OnsetAt: at(onset), DetectedAt: at(det),
 		PeakValue: peak, ValueAtDetection: v[det], ExpectedValue: exp,

@@ -507,6 +507,12 @@ gördüğü bitişik kuyruk (kırılmadan 30 dk önce → son kova) ve kova baş
 eşiği) tik anında kanıta dondurulur, yeniden okunmaz. Snapshot 1 dk ızgarada basamak (kova değeri kova boyunca); `started_at` (hesaplanmış
 kırılma) değişmedi, `onset_at` seriden. Hacim log'da aynı seriden, trace p95'te gerekçeli yok. ±15 dk rollout bağımsız kanıt. Maliyet: ek sorgu yok.
 
+**H11 — `log_volume` / log `error_rate` / `service_silent` göçü.** ✅ **gemilendi v0.10.2236** (`internal/ml/log_red_record.go`,
+`log_red_record_test.go`). Seri = tikte ES sayımından `ml_series`'e yazılan servis × `_total`/`_error` kova sayısı (ES adıyla,
+`logServiceOf`). Snapshot için ES'e gidilmez: aynı seri tek servis, zaman sınırlı CH okumasıyla (`MLSeriesRange`, LIMIT + 10 sn), 1 dk
+ızgarada basamak (H10 kurucusu); eksik kova 0 (susma). Bant medyan ± criticalZ·effMAD; hacim aynı seriden (log satırı). Maliyet: açık olay
+başına tik başına 1 CH okuması, 0 ES sorgusu, tik başına ≤ 20.
+
 **H3…Hn — dedektör başına birer sürüm** (§9 tablosu; önerilen sıra: VM metrik → `trace_error_count` → `svc_error_rate` → TraceRED →
 bağımlılık → kırılma noktası → log RED → şablon → pod → `svc_breadth` → oluşum türleri). *Risk:* S/M/L sütunu. *Göç:* yok. *Test:* dedektör başına ölçüt 9 + doğrulayıcı.
 
