@@ -629,7 +629,7 @@ export default function EndpointsPage() {
   // v0.10.1359 — metrik kipi artık sunucu notu taşımaz (PromQL okuması).
   // v0.10.1377 — env/cluster VM ortam etiketine çözülüp UYGULANIR; not hangi
   // değerle uygulandığını ya da neden uygulanamadığını söyler.
-  const metricNote = metricMode && (env || cluster)
+  const metricNote = metricMode && (env || cluster) && envScope.state !== 'applied' // v0.10.2211: uygulanmış süzgeç satırı yok
     ? httpEnvScopeNote(envScope)?.text ?? 'Metrik kipi: servis seçilince env/cluster süzgeci VictoriaMetrics ortam etiketine çözülüp uygulanır.'
     : null;
   // v0.10.1429 — aile notu: yalnız gRPC / ikisi / çözüm bilinemedi.

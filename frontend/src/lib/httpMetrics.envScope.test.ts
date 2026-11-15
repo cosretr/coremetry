@@ -144,6 +144,14 @@ describe('httpEnvScopeNote — bant metni', () => {
     expect(httpEnvScopeNote(httpEnvScopeView('eu-a', 'prod-eu-a', { data: sc }))!.text)
       .toBe('Ortam süzgeci metrikte uygulandı: deployment_environment_name=prod-eu-a (env eu-a → dr-eu-a | prod-eu-a, önek eşleşmesi; cluster prod-eu-a, birebir)');
   });
+  it('v0.10.2211: cluster varlığı → span ortamı (cl-a → prod-cl-a)', () => {
+    const sc: HttpEnvScope = {
+      label: 'deployment_environment_name', source: 'default', applied: true, matcher: 'deployment_environment_name="prod-cl-a"',
+      terms: [{ role: 'cluster', want: 'cl-a', label: 'deployment_environment_name', values: ['prod-cl-a'], tier: 'entity' }],
+    };
+    expect(httpEnvScopeNote(httpEnvScopeView('', 'cl-a', { data: sc }))!.text)
+      .toBe('Ortam süzgeci metrikte uygulandı: deployment_environment_name=prod-cl-a (cluster cl-a → prod-cl-a, cluster varlığının span ortamları)');
+  });
   it('uygulanamadı: ilk çözülmeyen terimi adlandırır, TÜM ortamlar uyarısı', () => {
     const sc: HttpEnvScope = {
       label: 'deployment_environment_name', source: 'default', applied: false,

@@ -297,7 +297,10 @@ func redFamilyStatusLabel(f redFamily, present map[string]bool) string {
 func (s *Server) resolveServiceREDFamily(ctx context.Context, rd redFamilyReader, service string, terms map[string]string, to time.Time) (redFamilyResolution, error) {
 	at := to.Truncate(time.Minute)
 	lm := rd.MetricLabelMap().Normalized()
-	key := redFamilyKey(lm, service, terms[vmetrics.RoleEnv], terms[vmetrics.RoleCluster], at, metricSourceVM)
+	// v0.10.2211 — cluster varlığı → servisin o cluster'daki span ortamları
+	// (cl-a → prod-cl-a); anahtar çözülen kümeyi de taşır.
+	clusterEnvs := s.serviceClusterEnvs(ctx, service, terms[vmetrics.RoleCluster], at)
+	key := redFamilyKey(lm, service, terms[vmetrics.RoleEnv], terms[vmetrics.RoleCluster]+"\x00"+strings.Join(clusterEnvs, "|"), at, metricSourceVM)
 	var cached redFamilyResolution
 	if s.metricChartCacheGet(ctx, key, &cached) {
 		return cached, nil
@@ -355,7 +358,7 @@ func (s *Server) resolveServiceREDFamily(ctx context.Context, rd redFamilyReader
 		}
 		p := &redFamilyPresence{ID: f.ID, Kind: f.Kind, StatusLabel: redFamilyStatusLabel(f, labels)}
 		if len(terms) > 0 {
-			sc, eerr := s.resolveMetricEnvScope(ctx, rd, f.Probe, terms, at)
+			sc, eerr := s.resolveMetricEnvScopeMapped(ctx, rd, f.Probe, terms, clusterEnvs, at)
 			if eerr != nil {
 				fs := httpEnvScopeFailed(eerr)
 				p.EnvScope = &fs

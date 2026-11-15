@@ -199,3 +199,48 @@ func TestResolveHTTPEnvScope_v0101376(t *testing.T) {
 		t.Fatal("okuma hatası err dönmeli")
 	}
 }
+
+// v0.10.2211 — operatör (prod): cluster=cl-a ortam etiketinde "cl-a" değeri
+// başka servislerden BİREBİR bulunuyordu → deployment_environment_name="cl-a",
+// bu servisin serileri prod-cl-a taşıdığı için karolar boş. Cluster varlığının
+// span ortamları (service_env_summary_5m) önce denenir.
+func TestResolveMetricEnvScopeClusterEntity(t *testing.T) {
+	live := map[string][]string{"deployment_environment_name": {"cl-a", "prod-cl-c", "prod-cl-a", "prod-cl-b"}}
+	cl := map[string]string{"cluster": "cl-a"}
+	run := func(envs []string) httpEnvScope {
+		sc, err := (&Server{}).resolveMetricEnvScopeMapped(context.Background(), &fakeVMReader{values: live}, httpEnvMetric, cl, envs, ccTo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return sc
+	}
+	if sc := run([]string{"prod-cl-a"}); !sc.Applied || sc.Matcher != `deployment_environment_name="prod-cl-a"` || sc.Terms[0].Tier != httpEnvTierEntity {
+		t.Fatalf("eşlemeli: %+v", sc)
+	}
+	if sc := run([]string{"prod-cl-a", "dr-cl-a"}); sc.Matcher != `deployment_environment_name="prod-cl-a"` {
+		t.Fatalf("metrikte olmayan ortam düşer: %+v", sc)
+	}
+	if sc := run(nil); sc.Matcher != `deployment_environment_name="cl-a"` || sc.Terms[0].Tier != vmetrics.EnvTierExact {
+		t.Fatalf("eşleme yoksa bugünkü davranış: %+v", sc)
+	}
+	if sc := run([]string{"qa-x"}); sc.Matcher != `deployment_environment_name="cl-a"` {
+		t.Fatalf("eşleşmeyen eşleme ham ada düşer: %+v", sc)
+	}
+	// Cluster kendi etiketindeyse (LabelMap.Cluster) eşleme kullanılmaz.
+	r := &fakeVMReader{lm: vmetrics.LabelMap{Cluster: "k8s_cluster_name"}, values: map[string][]string{
+		"deployment_environment_name": {"prod-cl-a"}, "k8s_cluster_name": {"cl-a"}}}
+	sc, _ := (&Server{}).resolveMetricEnvScopeMapped(context.Background(), r, httpEnvMetric, cl, []string{"prod-cl-a"}, ccTo)
+	if sc.Matcher != `k8s_cluster_name="cl-a"` {
+		t.Fatalf("cluster etiketi: %+v", sc)
+	}
+}
+
+func TestServiceClusterEnvsNilSafe(t *testing.T) {
+	if got := (&Server{}).serviceClusterEnvs(context.Background(), "svc", "cl-a", ccTo); got != nil {
+		t.Fatalf("store yokken nil: %v", got)
+	}
+	if !strings.Contains(redFamilyKey(vmetrics.LabelMap{}, "s", "", "cl-a\x00prod-cl-a", ccTo, "vm"), "red-family:v1:") ||
+		redFamilyKey(vmetrics.LabelMap{}, "s", "", "cl-a\x00prod-cl-a", ccTo, "vm") == redFamilyKey(vmetrics.LabelMap{}, "s", "", "cl-a\x00", ccTo, "vm") {
+		t.Fatal("anahtar çözülen ortam kümesini taşımalı")
+	}
+}

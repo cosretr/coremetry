@@ -34,19 +34,15 @@ describe('HttpEnvScopeBand (v0.10.1377)', () => {
     expect(host!.innerHTML).toBe('');
   });
 
-  it('uygulandı → b-info, etiket=değer, title PromQL eşleyicisini taşır', () => {
+  it('v0.10.2211: uygulandı → bant çizilmez (seçici yalnız ipucu metinlerinde)', () => {
     const el = render({
-      state: 'applied', envSel: 'deployment_environment_name="prod-eu-a"',
+      state: 'applied', envSel: 'deployment_environment_name="prod-cl-a"',
       scope: {
-        label: 'deployment_environment_name', source: 'default', applied: true, matcher: 'deployment_environment_name="prod-eu-a"',
-        terms: [{ role: 'env', want: 'eu-a', label: 'deployment_environment_name', values: ['prod-eu-a'], tier: 'prefix' }],
+        label: 'deployment_environment_name', source: 'default', applied: true, matcher: 'deployment_environment_name="prod-cl-a"',
+        terms: [{ role: 'cluster', want: 'cl-a', label: 'deployment_environment_name', values: ['prod-cl-a'], tier: 'entity' }],
       },
-    })!;
-    expect(el.className).toContain('b-info');
-    expect(el.dataset.state).toBe('applied');
-    expect(el.textContent).toBe('Ortam süzgeci metrikte uygulandı: deployment_environment_name=prod-eu-a (env eu-a → prod-eu-a, önek eşleşmesi)');
-    expect(el.getAttribute('title')).toContain('PromQL: deployment_environment_name="prod-eu-a"');
-    expect(el.getAttribute('title')).toContain('Ortam etiketi deployment_environment_name (varsayılan)');
+    });
+    expect(el).toBeNull();
   });
 
   it('uygulanamadı / çözülemedi → b-warn + TÜM ortamlar', () => {

@@ -240,7 +240,9 @@ export function HttpDonutPanel({ title, rows, loading, fmt, colorOf, onSelect }:
  */
 export function HttpEnvScopeBand({ view, style }: { view: HttpEnvScopeView; style?: CSSProperties }) {
   const n = httpEnvScopeNote(view);
-  if (!n) return null;
+  // v0.10.2211 (operatör) — uygulanmış süzgeç satırı hata ayıklama gibi
+  // okunuyordu; yalnız uygulanamadı / çözülemedi / bekliyor hâli çizilir.
+  if (!n || view.state === 'applied') return null;
   return (
     <Badge tone={n.tone} title={n.title} data-testid="http-env-scope-band" data-state={view.state}
       style={{ whiteSpace: 'normal', textAlign: 'left', lineHeight: 1.4, ...style }}>

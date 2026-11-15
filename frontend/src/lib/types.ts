@@ -4477,7 +4477,7 @@ export interface ServiceMetricRED {
 // değer(ler)ine ("prod-eu-a") çözülür. applied=false → süzgeç UYGULANMAZ,
 // reason söyler; failed=true → etiket okuması başarısız ("yok" değil).
 // matcher = PromQL seçici parçası (service_name'den hemen sonra girer).
-export type HttpEnvTier = 'exact' | 'ci' | 'prefix' | 'none';
+export type HttpEnvTier = 'exact' | 'ci' | 'prefix' | 'entity' | 'none'; // v0.10.2211: entity = cluster varlığının span ortamları
 export interface HttpEnvTerm {
   role: 'env' | 'cluster';
   want: string;

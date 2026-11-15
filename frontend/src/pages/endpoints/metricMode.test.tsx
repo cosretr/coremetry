@@ -234,7 +234,7 @@ describe('/endpoint metrik kipi: env/cluster süzgeci (v0.10.1377)', () => {
     await settle();
     expect(m.prom.length).toBeGreaterThanOrEqual(15);
     for (const c of m.prom) expect(c.query).toContain(`{service_name="${SVC}", ${ENV}, http_route="${ROUTE}"`);
-    expect(host!.textContent).toContain('Ortam süzgeci metrikte uygulandı: deployment_environment_name=prod-eu-a (env eu-a → prod-eu-a, önek eşleşmesi; cluster prod-eu-a, birebir)');
+    expect(host!.textContent).not.toContain('Ortam süzgeci metrikte uygulandı'); // v0.10.2211: uygulanmış süzgeç satırı yok
     expect(host!.textContent).not.toContain('uygulanmaz');
   });
 

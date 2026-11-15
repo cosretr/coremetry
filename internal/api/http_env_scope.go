@@ -32,6 +32,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -253,6 +254,74 @@ func (s *Server) resolveHTTPEnvScope(ctx context.Context, vm httpEnvLabelReader,
 // SORGULANAN metrikle — o metrik HTTP histogramı değilse ortam etiketi ve canlı
 // değerleri kendi serilerinden gelir.
 func (s *Server) resolveMetricEnvScope(ctx context.Context, vm httpEnvLabelReader, metric string, terms map[string]string, to time.Time) (httpEnvScope, error) {
+	return s.resolveMetricEnvScopeMapped(ctx, vm, metric, terms, nil, to)
+}
+
+// httpEnvTierEntity — v0.10.2211: cluster terimi cluster varlığının span
+// ortamlarıyla çözüldü (ham ad ortam etiketiyle kıyaslanmadı).
+const httpEnvTierEntity = "entity"
+
+// serviceClusterEnvsLookback — cluster → ortam eşlemesinin penceresi.
+const serviceClusterEnvsLookback = 24 * time.Hour
+
+// serviceClusterEnvs — v0.10.2211 (operatör, prod: endpoint detayında
+// cluster=cl-a → "deployment_environment_name=cl-a, birebir", karolar boş;
+// servisin serileri prod-cl-a taşıyor). Span tarafının cluster kapsamıyla
+// aynı boyut: service_env_summary_5m (cluster × deploy_env), son 24 sa.
+// Okunamazsa / eşleme yoksa nil (çağıran ham ada düşer).
+func (s *Server) serviceClusterEnvs(ctx context.Context, service, cluster string, to time.Time) []string {
+	if s == nil || s.store == nil || service == "" || strings.TrimSpace(cluster) == "" {
+		return nil
+	}
+	envs, err := s.store.ServiceClusterEnvs(ctx, service, strings.TrimSpace(cluster), to.Add(-serviceClusterEnvsLookback), to)
+	if err != nil {
+		return nil
+	}
+	return envs
+}
+
+// matchClusterEnvs — SAF (v0.10.2211): cluster varlığının span ortamları →
+// metrik etiketinin canlı değerleri (her ortam aynı toleranslı eşlemeyle;
+// birleşim; yalnız birebir / harf duyarsız). Eşleşme yoksa Tier none (çağıran ham ada düşer).
+func matchClusterEnvs(envs, live []string) vmetrics.EnvMatch {
+	m := vmetrics.EnvMatch{Tier: vmetrics.EnvTierNone}
+	var vals []string
+	for _, e := range envs {
+		// Span ortamı gerçek öznitelik değeri: yalnız birebir / harf duyarsız
+		// (önek gevşetmesi "dr-cl-a"yı "cl-a"ya bağlardı).
+		if em := vmetrics.MatchEnvValue(e, live); em.Tier == vmetrics.EnvTierExact || em.Tier == vmetrics.EnvTierCI {
+			vals = append(vals, em.Values...)
+		}
+	}
+	if len(vals) == 0 {
+		return m
+	}
+	m.Tier, m.Values = httpEnvTierEntity, intersectStrings(sortedUniqueStrings(vals), live)
+	if len(m.Values) == 0 {
+		m.Tier, m.Values = vmetrics.EnvTierNone, nil
+	}
+	return m
+}
+
+// sortedUniqueStrings — SAF.
+func sortedUniqueStrings(in []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		if v != "" && !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// resolveMetricEnvScopeMapped — resolveMetricEnvScope + cluster varlığının
+// span ortamları (clusterEnvs; nil = eşleme yok, bugünkü davranış). Cluster
+// metrikte ayrı etikette (LabelMap.Cluster) değilse, yani ortam etiketinde
+// aranıyorsa, önce eşlenen ortamlar denenir; eşleşmezse ham ad.
+func (s *Server) resolveMetricEnvScopeMapped(ctx context.Context, vm httpEnvLabelReader, metric string, terms map[string]string, clusterEnvs []string, to time.Time) (httpEnvScope, error) {
 	el, err := s.metricEnvLabelFor(ctx, vm, metric, to)
 	if err != nil {
 		return httpEnvScope{}, err
@@ -276,6 +345,11 @@ func (s *Server) resolveMetricEnvScope(ctx context.Context, vm httpEnvLabelReade
 			live, sc.Partial = vals, sc.Partial || partial
 		}
 		m := vmetrics.MatchEnvValue(want, live)
+		if role == vmetrics.RoleCluster && label == el.Label && len(clusterEnvs) > 0 {
+			if cm := matchClusterEnvs(clusterEnvs, live); cm.Tier != vmetrics.EnvTierNone {
+				m = cm
+			}
+		}
 		sc.Terms = append(sc.Terms, httpEnvTerm{Role: role, Want: want, Label: label, Values: m.Values, Tier: m.Tier})
 		if m.Tier == vmetrics.EnvTierNone {
 			if sc.Reason == "" {

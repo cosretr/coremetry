@@ -46,6 +46,7 @@ export function httpEnvScopeReady(v: HttpEnvScopeView): boolean {
 
 const TIER_TEXT: Record<string, string> = {
   exact: 'birebir', ci: 'harf duyarsız eşleşme', prefix: 'önek eşleşmesi',
+  entity: 'cluster varlığının span ortamları', // v0.10.2211
 };
 
 const SOURCE_TEXT: Record<string, string> = {

@@ -207,7 +207,7 @@ describe('/endpoints metrik kipi: env süzgeci (v0.10.1377)', () => {
     await settle();
     expect(m.prom.length).toBe(7);
     for (const c of m.prom) expect(c.query).toContain(`{service_name="${SVC}", ${ENV2}`);
-    expect(host!.textContent).toContain('Ortam süzgeci metrikte uygulandı: deployment_environment_name=dr-eu-a|prod-eu-a (env eu-a → dr-eu-a | prod-eu-a, önek eşleşmesi)');
+    expect(host!.textContent).not.toContain('Ortam süzgeci metrikte uygulandı'); // v0.10.2211
     expect(host!.textContent).not.toContain('süzgeci bu tabloya uygulanmaz');
   });
 
