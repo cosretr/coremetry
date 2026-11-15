@@ -54,9 +54,11 @@ describe('v0.10.1332 — Services filtre barı', () => {
     expect(order).toEqual([...order].sort((x, y) => x - y));
   });
 
-  it('Search md (size="sm" yok), Enter ipucu yanında, sarmal data-pc-pin', () => {
+  // v0.10.2217 (operatör) — Services'te "Enter ↵" ipucu kalktı; Enter yine arar.
+  it('Search md (size="sm" yok), Enter ipucu YOK, sarmal data-pc-pin', () => {
     expect(searchTag(seg)).not.toMatch(/size="sm"/);
-    expect(seg).toMatch(/<span className="search-go" data-pc-pin>\s*<Button variant="primary"(?:=>|[^>])*?>Search<\/Button>\s*<EnterHint /);
+    expect(seg).toMatch(/<span className="search-go" data-pc-pin>\s*<Button variant="primary"(?:=>|[^>])*?>Search<\/Button>\s*<\/span>/);
+    expect(seg).not.toContain('<EnterHint');
   });
 
   it('Reset sağda (pc-push), sarmalın DIŞINDA', () => {

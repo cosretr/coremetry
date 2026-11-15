@@ -31,7 +31,6 @@ import { getItem, setItem } from '@/lib/storage';
 import { getPinnedServices, isServicePinned, toggleServicePin } from '@/lib/recentServices';
 import type { Service, SparklineBucket, TimeRange, SpanAgg } from '@/lib/types';
 import { PageControls } from '@/components/coremetry/PageControls';
-import { EnterHint } from '@/components/ui/EnterHint';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { Pager } from '@/components/Pager';
@@ -610,7 +609,7 @@ export default function ServicesPage() {
               onEnter={apply}
               placeholder="Filter services…" width={220} optionMeta={pickerMeta} />
             {/* v0.10.1332 — Enter iki sayı kutusunda da Search'ü tetikler
-                (`EnterHint` ipucu bu yüzden dürüst: picker + iki kutu). */}
+                (v0.10.2217: görünür "Enter ↵" ipucu kalktı, davranış aynı). */}
             <input placeholder="Min spans" aria-label="Minimum spans" value={minSpans} type="number"
               onChange={e => setMinSpans(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') apply(); }} style={{ width: 100 }} />
@@ -693,7 +692,6 @@ export default function ServicesPage() {
             <span className="search-go" data-pc-pin>
               <Button variant="primary" onClick={apply}
                       title="Search server-side for matching services">Search</Button>
-              <EnterHint title="Arama kutusunda (ve Min spans / Min P99 kutularında) Enter" />
             </span>
             <Button variant="secondary" className="pc-push" onClick={reset}>Reset</Button>
             {/* v0.9.344 warned that these three only narrowed the visible
