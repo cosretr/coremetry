@@ -129,7 +129,8 @@ export function escapeHTML(s: string): string {
 // Canonical binary-unit byte formatter (v0.8.272 dedup — was
 // re-implemented in adminstats/shared and AdminClickhouse with
 // drifting precision/fallbacks).
-export function fmtBytes(n: number): string {
+// fixed — v0.10.2194: sabit ondalık (OpenShift Console gibi "248.3 MiB").
+export function fmtBytes(n: number, fixed?: number): string {
   if (!n || n < 0) return '0 B';
   const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
   let i = 0;
@@ -138,6 +139,7 @@ export function fmtBytes(n: number): string {
     v /= 1024;
     i++;
   }
+  if (fixed != null) return `${v.toFixed(i === 0 ? 0 : fixed)} ${units[i]}`;
   return `${v.toFixed(v < 10 ? 2 : v < 100 ? 1 : 0)} ${units[i]}`;
 }
 

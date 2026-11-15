@@ -35,7 +35,7 @@ import { FIELD_SURFACE } from '@/components/coremetry/Field/fieldSurface';
 import { ClusterCard } from '@/pages/clusters/ClusterCard';
 import { clusterState, fleetSentence, cpuUsageText, memUsageText, usageTone } from '@/pages/clusters/fleetSummary';
 import { api } from '@/lib/api';
-import { t, tf, useLang, type Lang } from '@/lib/i18n';
+import { t, tf, fmtPctLang, useLang, type Lang } from '@/lib/i18n';
 import { useClusters } from '@/lib/queries';
 import { timeRangeToNs, fmtBytes, fmtNum } from '@/lib/utils';
 import { LIVE_META } from '@/lib/autoRefresh';
@@ -48,6 +48,7 @@ import { pushZoom, popZoom } from '@/lib/chart/zoomHistory';
 // (v0.10.2181 ADDİTİF seçenek) ile cv-row basar.
 import { DataTable as CmDataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { podStatusWord as nsPodStatusWord, podRestartText } from '@/pages/clusters/nsDetailModel';
+import { podCpuText, podMemText, podLimitHint, podStatusText } from '@/pages/clusters/podUsage';
 import { TableViewBar } from '@/components/coremetry/TableViewBar';
 import {
   NODE_COLS, NODE_COMPACT, NODE_SORT_IDS, nodeStatus, nodePodsText, nodeCpuText, nodeMemText, nodeCpuPct,
@@ -110,9 +111,10 @@ const NS_COLS: ColumnDef<ClusterNamespaceRow>[] = [
 const NS_COMPACT = { v: 1 as const, order: NS_COLS.map(c => c.id), hidden: ['restarts'], sig: 'clusternamespaces-compact' };
 
 // Clusters S12 (§4): Pods sekmesi varsayılanı Pod · Namespace · Service ·
-// Status · CPU % · Mem % · Restarts; Cluster, ham CPU / Memory, Net ve
-// Limit / Request "Tüm kolonlar"da. v0.10.1068 tabanları (iki esneyen kolon)
-// korunur. Satır = gerçek /pod bağlantısı (getRowHref, K3); servis hücresi
+// Status · CPU · Memory · Restarts; Cluster, limit yüzdeleri, Net ve
+// Limit / Request "Tüm kolonlar"da. v0.10.2194 — CPU / Memory OpenShift
+// Console gibi mutlak (podUsage.ts); limit yüzdesi yalnız ikincil ipucu.
+// v0.10.1068 tabanları (iki esneyen kolon) korunur. Satır = gerçek /pod bağlantısı (getRowHref, K3); servis hücresi
 // kendi bağlantısını taşır (ownLink).
 const POD_COLS: ColumnDef<ClusterPodRow>[] = [
   { id: 'pod',       label: 'Pod',       sortValue: r => r.pod,       naturalDir: 'asc', flex: true, minWidth: 180, mono: true },
@@ -120,18 +122,18 @@ const POD_COLS: ColumnDef<ClusterPodRow>[] = [
   { id: 'service',   label: 'Service',   sortValue: r => r.service ?? '', naturalDir: 'asc', width: 150, minWidth: 110, ownLink: true },
   { id: 'phase',     label: 'Status',    sortValue: r => r.phase ?? '', naturalDir: 'asc', width: 110, minWidth: 90,
     tone: r => nsPodStatusWord(r).tone ?? undefined },
-  { id: 'cpuPct',    label: 'CPU %',     sortValue: r => r.cpuPct ?? 0, numeric: true, width: 80, minWidth: 72, tone: r => pctTone(r.cpuPct) },
-  { id: 'memPct',    label: 'Mem %',     sortValue: r => r.memPct ?? 0, numeric: true, width: 80, minWidth: 72, tone: r => pctTone(r.memPct) },
+  { id: 'cpuCores',  label: 'CPU',       sortValue: r => r.cpuCores,  numeric: true, width: 150, minWidth: 110 },
+  { id: 'memBytes',  label: 'Memory',    sortValue: r => r.memBytes,  numeric: true, width: 160, minWidth: 110 },
   { id: 'restarts',  label: 'Restarts',  sortValue: r => (r.restartsUnknown ? -1 : r.restarts ?? 0), numeric: true, width: 150, minWidth: 96,
     tone: r => (r.restartsUnknown ? 'faint' : (r.restarts ?? 0) > 8 ? 'err' : (r.restarts ?? 0) > 2 ? 'warn' : 'faint') },
   { id: 'cluster',   label: 'Cluster',   sortValue: r => r.cluster,   naturalDir: 'asc', width: 130, tone: () => 'muted' },
-  { id: 'cpuCores',  label: 'CPU',       sortValue: r => r.cpuCores,  numeric: true, width: 90 },
-  { id: 'memBytes',  label: 'Memory',    sortValue: r => r.memBytes,  numeric: true, width: 100 },
+  { id: 'cpuPct',    label: 'CPU % limit', sortValue: r => r.cpuPct ?? 0, numeric: true, width: 100, minWidth: 72, tone: r => pctTone(r.cpuPct) },
+  { id: 'memPct',    label: 'Mem % limit', sortValue: r => r.memPct ?? 0, numeric: true, width: 100, minWidth: 72, tone: r => pctTone(r.memPct) },
   { id: 'netIn',     label: 'Net in',    sortValue: r => r.netInBps ?? 0, numeric: true, width: 90 },
   { id: 'netOut',    label: 'Net out',   sortValue: r => r.netOutBps ?? 0, numeric: true, width: 90 },
   { id: 'limits',    label: 'Limit / Request', sortValue: r => r.memLimitBytes ?? 0, width: 220 },
 ];
-const POD_COMPACT = { v: 1 as const, order: POD_COLS.map(c => c.id), hidden: ['cluster', 'cpuCores', 'memBytes', 'netIn', 'netOut', 'limits'], sig: 'clusterpods-compact' };
+const POD_COMPACT = { v: 1 as const, order: POD_COLS.map(c => c.id), hidden: ['cluster', 'cpuPct', 'memPct', 'netIn', 'netOut', 'limits'], sig: 'clusterpods-compact' };
 
 // fmtCores v0.9.51'de thresholds.ts'e taşındı (PodDrawer + §8 ortak).
 
@@ -916,7 +918,7 @@ export default function ClustersPage() {
                   )}
                   <div className="table-wrap">
                     <CmDataTable<ClusterPodRow> storageKey="clusterpods" columns={POD_COLS} rows={rows}
-                      sort={{ initial: { id: 'cpuPct', dir: 'desc' }, ids: POD_COLS.map(c => c.id) }}
+                      sort={{ initial: { id: 'cpuCores', dir: 'desc' }, ids: POD_COLS.map(c => c.id) }}
                       columnModel={podColumnModel} state={podState} contentVisibility={rows.length > 100}
                       getRowKey={r => `${r.cluster}|${r.namespace}|${r.pod}`} getRowHref={podHref} ariaLabel="Pods"
                       renderCell={(r, c) => podCellContent(r, c.id, range, lang)} />
@@ -1153,15 +1155,15 @@ function podCellContent(r: ClusterPodRow, col: string, range: TimeRange, lang: L
     case 'service': return r.service
       ? <Link to={serviceHref(r.service, { range })}>{r.service}</Link>
       : <span className="cell-empty" title={t('clusters.pod.noSvc', lang)}>—</span>;
-    case 'phase': return nsPodStatusWord(r, undefined, lang).word || <span className="cell-empty">—</span>;
-    case 'cpuPct': return <span title={pctTitle('CPU', r.cpuPct, r.cpuPctOfReq)}>{r.cpuPct ? r.cpuPct.toFixed(0) : '—'}</span>;
-    case 'memPct': return <span title={pctTitle('Memory', r.memPct, r.memPctOfReq)}>{r.memPct ? r.memPct.toFixed(0) : '—'}</span>;
+    case 'phase': return podStatusText(r, lang) || <span className="cell-empty">—</span>;
+    case 'cpuCores': return <span title={pctTitle('CPU', r.cpuPct, r.cpuPctOfReq)}>{podCpuText(r.cpuCores, lang) || '—'}{r.cpuPct ? <span className="cell-muted"> {podLimitHint(r.cpuPct, lang)}</span> : null}</span>;
+    case 'memBytes': return <span title={pctTitle('Memory', r.memPct, r.memPctOfReq)}>{podMemText(r.memBytes) || '—'}{r.memPct ? <span className="cell-muted"> {podLimitHint(r.memPct, lang)}</span> : null}</span>;
+    case 'cpuPct': return <span title={pctTitle('CPU', r.cpuPct, r.cpuPctOfReq)}>{r.cpuPct ? fmtPctLang(Math.round(r.cpuPct), lang) : '—'}</span>;
+    case 'memPct': return <span title={pctTitle('Memory', r.memPct, r.memPctOfReq)}>{r.memPct ? fmtPctLang(Math.round(r.memPct), lang) : '—'}</span>;
     case 'restarts': return r.restartsUnknown
       ? <span title={t('clusters.pod.restartUnknown', lang)}>—</span>
       : <span title={r.lastTermReason ? tf('clusters.pod.lastTerm', lang, { reason: r.lastTermReason }) : undefined}>{podRestartText(r, lang)}</span>;
     case 'cluster': return r.cluster;
-    case 'cpuCores': return fmtCores(r.cpuCores);
-    case 'memBytes': return fmtBytes(r.memBytes);
     case 'netIn': return r.netInBps ? fmtBps(r.netInBps) : '—';
     case 'netOut': return r.netOutBps ? fmtBps(r.netOutBps) : '—';
     case 'limits': {

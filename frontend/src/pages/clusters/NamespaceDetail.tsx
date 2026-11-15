@@ -1,3 +1,4 @@
+import { podCpuText, podMemText, podLimitHint } from './podUsage';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -17,7 +18,7 @@ import { MiniBar } from './MiniBar';
 import { AlertsPanel } from './AlertsPanel';
 import { ThanosTrendPanel } from './TrendPanel';
 import { parseOpenSections, serializeOpenSections } from './openSections';
-import { t, tf, fmtPctLang, useLang } from '@/lib/i18n';
+import { t, tf, useLang } from '@/lib/i18n';
 import {
   namespaceBoxes, namespaceSentence, podStatusWord, podRestartText, podProblemRank, podProblemSortValue,
   workloadLimits, workloadCpuText, workloadMemText, workloadStatusWord, type Tone,
@@ -132,8 +133,9 @@ export function NamespaceDetail({
     { id: 'pod', label: 'Pod', sortValue: r => r.pod, naturalDir: 'asc', flex: true, minWidth: 200, mono: true },
     { id: 'status', label: 'Status', sortValue: r => podProblemSortValue(r, waiting[r.pod]), width: 190, tone: r => cellTone(podStatusWord(r, waiting[r.pod]).tone) },
     { id: 'node', label: 'Node', sortValue: r => r.node ?? '', naturalDir: 'asc', width: 160 },
-    { id: 'cpuPct', label: 'CPU / limit', sortValue: r => r.cpuPct ?? -1, numeric: true, width: 100, tone: r => ((r.cpuPct ?? 0) >= 90 ? 'err' : (r.cpuPct ?? 0) > 65 ? 'warn' : undefined) },
-    { id: 'memPct', label: 'Mem / limit', sortValue: r => r.memPct ?? -1, numeric: true, width: 100, tone: r => ((r.memPct ?? 0) >= 90 ? 'err' : (r.memPct ?? 0) > 65 ? 'warn' : undefined) },
+    // v0.10.2194 — OpenShift Console gibi mutlak kullanım; limit yüzdesi ipucu.
+    { id: 'cpu', label: 'CPU', sortValue: r => r.cpuCores, numeric: true, width: 160, tone: r => ((r.cpuPct ?? 0) >= 90 ? 'err' : (r.cpuPct ?? 0) > 65 ? 'warn' : undefined) },
+    { id: 'mem', label: 'Memory', sortValue: r => r.memBytes, numeric: true, width: 170, tone: r => ((r.memPct ?? 0) >= 90 ? 'err' : (r.memPct ?? 0) > 65 ? 'warn' : undefined) },
     { id: 'restarts', label: t('clusters.ns.colRestarts', lang), sortValue: r => (r.restartsUnknown ? -1 : r.restarts ?? 0), numeric: true, width: 150,
       tone: r => ((r.restarts ?? 0) > 0 ? 'warn' : undefined) },
   ], [waiting, lang]);
@@ -217,8 +219,8 @@ export function NamespaceDetail({
               case 'pod': return r.pod;
               case 'status': return podStatusWord(r, waiting[r.pod], lang).word || '—';
               case 'node': return r.node || (r.phase === 'Pending' ? t('clusters.ns.unassigned', lang) : '—');
-              case 'cpuPct': return r.cpuPct ? fmtPctLang(Math.round(r.cpuPct), lang) : '—';
-              case 'memPct': return r.memPct ? fmtPctLang(Math.round(r.memPct), lang) : '—';
+              case 'cpu': return `${podCpuText(r.cpuCores, lang) || '—'} ${podLimitHint(r.cpuPct, lang)}`.trim();
+              case 'mem': return `${podMemText(r.memBytes) || '—'} ${podLimitHint(r.memPct, lang)}`.trim();
               case 'restarts': return podRestartText(r, lang) || '—';
               default: return null;
             }

@@ -656,6 +656,8 @@ const EN: Catalog = {
   'traces.colFilter.orBlocked': 'Column filters add AND chips; switch the filter builder back to AND to use them.',
   // v0.10.2186 — /clusters CPU birimi (fleetSummary cpuUsageText)
   'clusters.cores': 'cores',
+  // v0.10.2194 — pod kullanımında limit yüzdesi ikincil ipucu
+  'clusters.pod.ofLimit': '· {pct} of limit',
   // v0.10.2189 — /clusters tüm metinler ({ad} yer tutucu → tf; `_one` = EN tekil)
   'clusters.state.healthy': 'healthy',
   'clusters.state.unreachable': 'not responding',
@@ -1408,6 +1410,7 @@ const TR: Catalog = {
   'traces.colFilter.counts': 'Bu pencere ve filtrelerdeki trace sayıları',
   'traces.colFilter.orBlocked': 'Kolon filtreleri AND çipi ekler; kullanmak için filtre kurucusunu AND\'e çevirin.',
   'clusters.cores': 'çekirdek',
+  'clusters.pod.ofLimit': '· limit: {pct}',
   // v0.10.2189 — /clusters; TR metinler değişmeden kataloğa taşındı. {loc} / {poss}
   // Türkçe sayı ekleri (lib/trSuffix) — EN {n} kullanır.
   'clusters.state.healthy': 'sağlıklı',
