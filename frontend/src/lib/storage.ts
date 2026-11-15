@@ -78,6 +78,9 @@ export const STORAGE_KEYS = {
   // v0.10.2177 (Clusters S9, plan §0 D6) — namespace detayının açık kapalı-bölümleri
   // (JSON kimlik dizisi: charts / alerts; tarayıcı başına, namespace'ten bağımsız).
   clustersNsOpen:       'clusters.ns.open',
+  // v0.10.2178 (Clusters S10, plan §0 D6/D8) — /pod'un açık kapalı-bölümleri
+  // (JSON kimlik dizisi: red / traces / netjvm / labels; tarayıcı başına).
+  podSectionsOpen:      'pod.sections.open',
   svcChartsCompare:    'svc.charts.compare',
   // v0.10.577 — Trace Detail Logs sekmesi: gRPC per-message span event'leri
   // (SENT/RECEIVED) varsayılan olarak GİZLİ. Tercih küresel, trace başına

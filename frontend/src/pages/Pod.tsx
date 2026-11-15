@@ -11,7 +11,13 @@ import { defaultLatencyHidden } from '@/lib/chart/legendVisibility';
 import { timeRangeToNs } from '@/lib/utils';
 import { clampThanosWindow, THANOS_MAX_WINDOW_LABEL } from '@/lib/thanosWindow';
 import { Topbar } from '@/components/Topbar';
-import { Card, DisclosureButton, Badge, LinkButton } from '@/components/ui';
+import { Badge, LinkButton } from '@/components/ui';
+import { CollapsedSection } from '@/components/coremetry/CollapsedSection';
+import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
+import { parseOpenSections, serializeOpenSections } from '@/pages/clusters/openSections';
+import { ClusterCard } from '@/pages/clusters/ClusterCard';
+import { fmtBps } from '@/pages/clusters/thresholds';
+import { jmxTitle } from '@/pages/service/PodJmxInline';
 import { readBandsParam, writeBandsParam } from '@/lib/bandsParam';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import { PanelTitle } from '@/components/ui/PanelTitle';
@@ -44,12 +50,17 @@ import { windowAnomalies, anomalyRegions, silencedSet } from '@/lib/anomalyRegio
 import { isMLAnomaly, mlEventHref } from '@/lib/anomalyHref';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
 import { PodIdentityLine, type PodPivot } from '@/pages/pod/PodIdentityLine';
-import { PodKpiStrip, type RedState } from '@/pages/pod/PodKpiStrip';
+import { PodMetaRow, type PodMeta } from '@/pages/pod/PodMetaRow';
+import { podVersion } from '@/pages/pod/podMeta';
 import { PodServicesTable } from '@/pages/pod/PodServicesTable';
 import { PodTracesTable } from '@/pages/pod/PodTracesTable';
 import { PodLogsSection } from '@/pages/pod/PodLogsSection';
 import { PodContainersTable, PodSiblingsTable, PodLabelsTable, PodLifetimesTable } from '@/pages/pod/PodContextTables';
-import { windowTotals, windowP95, joinSiblings } from '@/pages/pod/podPage';
+import { windowP95, joinSiblings } from '@/pages/pod/podPage';
+
+// Clusters S10 (D8, D6) — kapalı bölümlerin kalıcılık kimlikleri.
+const POD_SECTIONS = ['red', 'traces', 'netjvm', 'labels'] as const;
+type PodSection = typeof POD_SECTIONS[number];
 
 const CorePanelMultiLazy = lazy(() =>
   import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
@@ -197,9 +208,22 @@ function PodDetail() {
   // (ServiceCharts ile aynı sözleşme/URL anahtarı). Açıkken AYNI iki batch
   // kaydırılmış pencereyle bir kez daha çekilir; seriler bugünün eksenine
   // bindirilip kesikli/soluk ghost olarak biner (CorePanelMulti ghostItems).
+  // Clusters S10 (plan §0 D8, §10.1) — İstek metrikleri (RED), Son trace'ler,
+  // Ağ ve JVM, Etiketler ve geçmiş varsayılan KAPALI; kapalı bölümün verisi
+  // açılana kadar ÇEKİLMEZ (RED + hayalet + anomali bantları, trace listesi,
+  // JMX keşfi). Açılan bölüm sonraki ziyarette açık kalır (D6, tarayıcı başına).
+  const [openSecs, setOpenSecs] = useState<Set<PodSection>>(
+    () => parseOpenSections(getRaw(STORAGE_KEYS.podSectionsOpen), POD_SECTIONS));
+  const setSecOpen = (id: PodSection) => (v: boolean) => {
+    const next = new Set(openSecs);
+    if (v) next.add(id); else next.delete(id);
+    setOpenSecs(next);
+    setRaw(STORAGE_KEYS.podSectionsOpen, serializeOpenSections(next, POD_SECTIONS));
+  };
+  const redOpen = openSecs.has('red');
   const [compare, setCompare] = useCompareParam();
   const compareOff = compareOffsetNs(compare, from, to);
-  const ghostEnabled = redEnabled && compareOff > 0;
+  const ghostEnabled = redEnabled && redOpen && compareOff > 0;
   const redQ = useQuery({
     queryKey: ['pod-red', podScope, pod, from, to, podMdp],
     queryFn: () => api.spanMetricBatch({ from, to, maxDataPoints: podMdp, dsl: podScope, aggs: [
@@ -208,7 +232,7 @@ function PodDetail() {
     ] }),
     // Zarfın stepSeconds'ı KPI toplamına gider (Σ rate·step kesin; inceleme #4).
     select: d => ({ series: d.series, stepSeconds: d.stepSeconds }),
-    enabled: redEnabled, staleTime: 30_000,
+    enabled: redEnabled && redOpen, staleTime: 30_000,
   });
   // Latency kafka messaging span'lerini HARİÇ tutar (Overview v0.9.129 emsali).
   const latQ = useQuery({
@@ -221,7 +245,7 @@ function PodDetail() {
       { name: 'avg', agg: 'avg', field: 'duration_ms' },
     ] }),
     select: d => d.series,
-    enabled: redEnabled, staleTime: 30_000,
+    enabled: redEnabled && redOpen, staleTime: 30_000,
   });
   const redGhostQ = useQuery({
     queryKey: ['pod-red', podScope, pod, from - compareOff, to - compareOff, podMdp],
@@ -244,11 +268,9 @@ function PodDetail() {
     enabled: ghostEnabled, staleTime: 30_000,
   });
   const s = redQ.data?.series;
-  const stepSec = redQ.data?.stepSeconds;
   const lat = latQ.data;
   const redStatus: 'loading' | 'error' | 'ready' = redQ.isLoading ? 'loading' : redQ.isError ? 'error' : 'ready';
   const latStatus: 'loading' | 'error' | 'ready' = latQ.isLoading ? 'loading' : latQ.isError ? 'error' : 'ready';
-  const redState: RedState = !redEnabled ? 'off' : (redStatus === 'loading' || latStatus === 'loading') ? 'loading' : (redStatus === 'error' || latStatus === 'error') ? 'error' : 'ready';
 
   // v0.10.162 — servis anomalileri bant olarak RED panellerinde (servis
   // kapsamlı pod'da; anomali olayında pod boyutu yok → servis düzeyi,
@@ -256,8 +278,8 @@ function PodDetail() {
   // Sorgu global anahtar (60 s), sayfa başına ek yük yok; kapalıyken de
   // çekilir — «aç» bağlantısı anomali varken gösterilsin diye.
   // v0.10.170 — bantlar varsayılan KAPALI; ?bands=1 açar (Overview ile aynı anahtar).
-  const anomaliesQ = useAnomalyEvents(!!service);
-  const silencesQ = useAnomalySilences(!!service);
+  const anomaliesQ = useAnomalyEvents(!!service && redOpen);
+  const silencesQ = useAnomalySilences(!!service && redOpen);
   const bandsOn = readBandsParam(sp);
   const toggleBands = () => setSp(prev => writeBandsParam(prev, !bandsOn, window.location.search), { replace: true });
   const podWindowEvents = useMemo(() => (service ? windowAnomalies(anomaliesQ.data?.items, service, from, to) : []), [service, anomaliesQ.data, from, to]);
@@ -275,10 +297,8 @@ function PodDetail() {
     return anomalyRegions(podWindowEvents, silencedSet(silencesQ.data), from, to);
   }, [bandsOn, podWindowEvents, silencesQ.data, from, to]);
 
-  // v0.10.160 — KPI şeridi + «Yavaş» eşiği grafik serilerinden (podPage.ts, ek sorgu yok).
-  const totals = useMemo(() => (redEnabled
-    ? windowTotals(s?.rate?.[0]?.points ?? [], s?.error_rate?.[0]?.points ?? [], lat?.avg?.[0]?.points ?? [], stepSec)
-    : null), [redEnabled, s, lat, stepSec]);
+  // «Yavaş» eşiği gecikme serisinden (podPage.ts, ek sorgu yok); İstek
+  // metrikleri kapalıyken eşik yok (Clusters S10 — KPI şeridi kalktı).
   const p95Ms = useMemo(() => windowP95(lat?.p95?.[0]?.points ?? [], s?.rate?.[0]?.points ?? []), [lat, s]);
 
   // Throughput OK/Errors band türetimi — Overview ile birebir (ek sorgu yok).
@@ -317,14 +337,13 @@ function PodDetail() {
   // JVM/JBoss JMX — pod'a filtreli (byPod=false: tek pod, jboss datasource'a
   // gruplanır, jvm toplam). deploy JMX keşfini sürer. v0.10.160: KAPALI
   // disclosure, açılınca fetch (Thanos maliyet disiplini).
-  const [jmxOpen, setJmxOpen] = useState(false);
-  const [promOpen, setPromOpen] = useState(false);
-  // Keşif (tek etiket sorgusu) HEP açık — kapalı satır «N metrik» diyebilsin
-  // (inceleme #10); yalnız N trend sorgusu açılınca.
+  // Clusters S10 (D8) — keşif de bölüm açılınca (eskiden HEP açıktı, kapalı
+  // satır «N metrik» desin diye; v0.10.160 inceleme #10 kararı D8 ile kalktı).
+  const jmxOpen = openSecs.has('netjvm');
   const jmxMetricsQ = useQuery({
     queryKey: ['jmx-metrics', cluster, namespace, deploy],
     queryFn: () => api.clusterJmxMetrics(cluster, namespace, deploy),
-    staleTime: 60_000, retry: 1, enabled: !!cluster && !!namespace && !!deploy,
+    staleTime: 60_000, retry: 1, enabled: jmxOpen && !!cluster && !!namespace && !!deploy,
   });
   const jmxMetrics = useMemo(() => jmxMetricsQ.data?.metrics ?? [], [jmxMetricsQ.data]);
   const jmxPanelQs = useQueries({
@@ -334,6 +353,9 @@ function PodDetail() {
       staleTime: 60_000, retry: 1, enabled: jmxOpen,
     })),
   });
+
+  // Meta satırının "Yaş"ı için sabit an (render başına Date.now() yerine).
+  const [nowMs] = useState(() => Date.now());
 
   if (!pod) {
     return (
@@ -362,6 +384,19 @@ function PodDetail() {
     { href: tracesHref, label: 'Trace\'ler ↗', title: 'k8s.pod.name = pod, hatalı önce' },
     { href: logsHref({ window: range, service: service || undefined, cluster: traceCluster || undefined, filters: logsPodPill }), label: 'Loglar ↗', title: 'kubernetes.pod_name pili (ES alan süzgeci; CH lokalde gövde araması — pili kaldırınca servis kapsamı kalır)' },
   ];
+  // Clusters S10 — meta satırı zaten yüklü veriden (ek sorgu yok); olmayan alan çizilmez.
+  const metaServices = svcQ.data?.services ?? [];
+  const metaWorkload = detail?.parents.find(p => p.type === 'workload');
+  const podMeta: PodMeta = {
+    service: service || metaServices[0]?.service || row?.service || undefined,
+    serviceCount: metaServices.length || undefined,
+    workload: metaWorkload
+      ? { label: `${metaWorkload.labels?.kind ?? 'workload'}/${metaWorkload.name}`, href: entityHref(metaWorkload, { range, at: atParam || undefined, clusterName: detail?.cluster?.name ?? cluster }) }
+      : deploy ? { label: deploy } : undefined,
+    node: row?.node || (detail?.node ? detail.node.slice(detail.node.lastIndexOf('/') + 1) : undefined),
+    validFrom: detail?.entity.validFrom,
+    version: podVersion(detail?.entity.labels) || undefined,
+  };
   // v0.10.187 (görsel inceleme F2) — 5 cluster değeri başlığı taşırıyordu: >2 ise «N cluster» (tam liste KPI şeridi title'ında).
   const scopeLabel = service || `bu pod'dan geçen tüm servisler${spanClusters.length > 2 ? ` · ${spanClusters.length} cluster` : spanCluster ? ` · cluster ${spanCluster}` : ''}`;
 
@@ -384,7 +419,10 @@ function PodDetail() {
           <div className="pod-cap"><Badge tone="warning">Pod listesi sunucuda kesildi (topk 500)</Badge> bu pod kesilen kuyrukta kalmış olabilir; Thanos alanları «—» ise «yok» kesin değil.</div>
         )}
 
-        <PodKpiStrip totals={totals} redState={redState} scopeLabel={scopeLabel} row={row} rowPending={podsPending} clamped={clamped} />
+        {/* Clusters S10 (D8) — KPI şeridi kalktı (RED serilerinden türüyordu,
+            RED artık kapalı bölümde); yerine meta satırı + "CoSRE'ye sor". */}
+        <PodMetaRow meta={podMeta} cluster={cluster || clusterParam} namespace={namespace || nsParam} pod={pod}
+          range={range} nowMs={nowMs} />
 
         {/* Infra — tek-pod CPU/Mem trend (Thanos). v0.10.177 (operatör, prod):
             EN ÜSTE, KPI şeridinin hemen altına — pod'un kendi sinyali; RED
@@ -412,12 +450,58 @@ function PodDetail() {
           )}
         </div>
 
-        {/* RED — servisin kümülatif metrikleri, bu pod'a scope'lu */}
+        {/* Taşıdığı servisler — entity_seen_5m (bayrak açıkken) */}
+        {entityOn && (entityId ? (
+          <div className="pod-sec">
+            <PanelTitle sub="entity_seen_5m · seçili pencere">Taşıdığı servisler</PanelTitle>
+            <PodServicesTable data={svcQ.data} pending={svcQ.isPending} error={svcQ.error} pod={pod}
+              spanCluster={traceCluster} pageRange={range} />
+          </div>
+        ) : (
+          /* v0.10.190 (inceleme #7) — bölüm GİZLENMEZ: namespace çözülemedi
+             (URL'de yok + Thanos topk 500 listesinde değil / Thanos yok) → açık ilan */
+          <div className="pod-sec">
+            <PanelTitle sub="entity_seen_5m · seçili pencere">Taşıdığı servisler</PanelTitle>
+            <Empty icon="—" title="Namespace çözülemedi — servis listesi kurulamadı">{cid ? 'Pod adı Thanos pod listesinde (topk 500) bulunamadı ya da Thanos yanıt vermedi; URL\'de ?namespace= yok. Alttaki trace listesi yalnız pod adıyla süzer.' : 'Cluster çözülemedi.'}</Empty>
+          </div>
+        ))}
+
+        {/* Konteynerler — Thanos KSM anlık (canlı pod) */}
+        {entityOn && detail && live !== 'gone' && (
+          <div className="pod-sec">
+            <PanelTitle sub="Thanos KSM · anlık durum">Konteynerler</PanelTitle>
+            <PodContainersTable ctr={ctrQ.data} pending={ctrQ.isPending} containerRecs={detail.containers} />
+          </div>
+        )}
+        {entityOn && detail && live === 'gone' && (
+          <div className="pod-sec">
+            <PanelTitle sub="pod artık mevcut değil">Konteynerler</PanelTitle>
+            <div className="pod-cap">Sonlanmış pod: KSM anlık durum yok{detail.containers && detail.containers.length > 0 ? ` · kayıtlı konteynerler: ${detail.containers.map(c => c.name).join(', ')}` : ''}. Ömür ve son görülme yukarıda.</div>
+          </div>
+        )}
+
+        {/* Kardeş pod'lar (S11'de kıyas cümlesine döner) */}
+        {entityOn && detail && (
+          <div className="pod-sec">
+            <PanelTitle sub={`${siblingLabel} · ${detail.siblings?.length ?? 0}${(detail.siblings?.length ?? 0) >= 50 ? '+' : ''} pod`}
+              right={nearest?.type === 'workload' ? <Link to={entityHref(nearest, { range, at: atParam || undefined, clusterName: detail.cluster?.name ?? cluster })} className="sec">→ iş yükü sayfası</Link> : undefined}>
+              Kardeş pod'lar
+            </PanelTitle>
+            <PodSiblingsTable rows={siblingRows} pageRange={range} at={atParam} clusterName={detail.cluster?.name ?? cluster}
+              truncated={!!clusterPodsList?.truncated} />
+          </div>
+        )}
+
+        {/* Clusters S10 (plan §0 D8, onaylı Pod mockup'ı) — KAPALI bölümler;
+            gövde yalnız açıkken monte edilir, verisi açılınca çekilir. */}
         <div className="pod-sec">
-          <PanelTitle sub={redEnabled ? <>{scopeLabel} · paylaşılan crosshair{podWindowEvents.length > 0 && <> · anomali bantları (servis düzeyi): {bandsOn ? 'açık' : 'kapalı'} · <LinkButton onClick={toggleBands} aria-pressed={bandsOn} title="Anomali bantlarını grafiklerde göster/gizle (?bands=1)" className="bands-toggle">{bandsOn ? 'kapat' : 'aç'}</LinkButton></>}</> : undefined}
-            right={service ? <Link to={serviceHref(service, { range })} className="sec">→ {service} · Overview</Link> : undefined}>
-            Servis metrikleri · bu pod
-          </PanelTitle>
+          <CollapsedSection id="pod-red" title="İstek metrikleri" summary="bu pod'un yanıt süresi, istek sayısı ve hata oranı"
+            meta={redEnabled ? scopeLabel : undefined}
+            actions={service ? <Link to={serviceHref(service, { range })} className="sec">→ {service} · Overview</Link> : undefined}
+            open={redOpen} onOpenChange={setSecOpen('red')}>
+            {redEnabled && podWindowEvents.length > 0 && (
+              <div className="pod-cap">anomali bantları (servis düzeyi): {bandsOn ? 'açık' : 'kapalı'} · <LinkButton onClick={toggleBands} aria-pressed={bandsOn} title="Anomali bantlarını grafiklerde göster/gizle (?bands=1)" className="bands-toggle">{bandsOn ? 'kapat' : 'aç'}</LinkButton></div>
+            )}
           {redEnabled ? (
             <>
             {/* v0.10.315 — Compare to: (?compare=, ServiceCharts ile aynı). */}
@@ -490,121 +574,73 @@ function PodDetail() {
               )}
             </Empty>
           )}
-        </div>
-
-        {/* Taşıdığı servisler — entity_seen_5m (bayrak açıkken) */}
-        {entityOn && (entityId ? (
-          <div className="pod-sec">
-            <PanelTitle sub="entity_seen_5m · seçili pencere">Taşıdığı servisler</PanelTitle>
-            <PodServicesTable data={svcQ.data} pending={svcQ.isPending} error={svcQ.error} pod={pod}
-              spanCluster={traceCluster} pageRange={range} />
-          </div>
-        ) : (
-          /* v0.10.190 (inceleme #7) — bölüm GİZLENMEZ: namespace çözülemedi
-             (URL'de yok + Thanos topk 500 listesinde değil / Thanos yok) → açık ilan */
-          <div className="pod-sec">
-            <PanelTitle sub="entity_seen_5m · seçili pencere">Taşıdığı servisler</PanelTitle>
-            <Empty icon="—" title="Namespace çözülemedi — servis listesi kurulamadı">{cid ? 'Pod adı Thanos pod listesinde (topk 500) bulunamadı ya da Thanos yanıt vermedi; URL\'de ?namespace= yok. Alttaki trace listesi yalnız pod adıyla süzer.' : 'Cluster çözülemedi.'}</Empty>
-          </div>
-        ))}
-
-        {/* Trace listesi — B aşısı: varsayılan «Hatalı» */}
-        <div className="pod-sec">
-          <PanelTitle sub="/api/traces · k8s.pod.name süzgeci" right={<Link to={tracesHref} className="sec">→ Traces'te aç</Link>}>Trace listesi</PanelTitle>
+          </CollapsedSection>
+          <CollapsedSection id="pod-traces" title="Son trace'ler" summary="hatalı olanlar önce"
+            actions={<Link to={tracesHref} className="sec">→ Traces'te aç</Link>}
+            open={openSecs.has('traces')} onOpenChange={setSecOpen('traces')}>
           {multiSpanCluster && <div className="pod-cap">Cluster kaydı birden çok span değeri taşıyor ({spanCluster}) — trace süzgecinde cluster UYGULANMADI; grafikler hepsini ölçer.</div>}
           <PodTracesTable ctx={{ pod, from, to, cluster: traceCluster, service }} p95Ms={p95Ms} />
+          </CollapsedSection>
+          <CollapsedSection id="pod-netjvm" title="Ağ ve JVM" summary="ağ giriş / çıkış, heap, GC, thread"
+            open={jmxOpen} onOpenChange={setSecOpen('netjvm')}>
+            {row && (row.netInBps || row.netOutBps) ? (
+              <div className="pod-cap">Ağ: {[row.netInBps ? `giriş ${fmtBps(row.netInBps)}` : '', row.netOutBps ? `çıkış ${fmtBps(row.netOutBps)}` : ''].filter(Boolean).join(' · ')}</div>
+            ) : null}
+            <h4 className="pod-sub">{jmxTitle(jmxMetrics)} <span className="field-hint">· pod'a filtreli · deploy {deploy || '—'}</span></h4>
+            {!cluster || !namespace ? <div className="pod-cap">cluster/namespace çözülmeden JMX keşfi yapılamaz.</div>
+              : jmxMetricsQ.isPending ? <Spinner />
+              : jmxMetrics.length === 0 ? <div className="pod-cap">Bu deploy için JMX metriği keşfedilmedi.</div>
+              : (
+                <div className="grid-2 pod-jmx-grid">
+                  {jmxMetrics.map((m, i) => {
+                    const data = jmxPanelQs[i]?.data?.series;
+                    if (!data || data.length === 0) return null;
+                    const unit = m.includes('bytes') ? 'bytes' : m.includes('seconds') ? 's' : undefined;
+                    const isJboss = m.startsWith('jboss_');
+                    return (
+                      <ClusterCard key={m} header={m}>
+                        {/* Madde 4 sweep — pod'un JMX panelleri ortak crosshair
+                            grubu (PodJmxInline ile aynı anahtar) + drag-zoom
+                            sayfa range'ine, çift-tık geri-yığınına. syncKey
+                            EK'SİZ: MLC `-ms`i kendi ekliyor (v0.9.945). */}
+                        <MultiLineChart series={namedSeriesToSeries(data, m)} height={180}
+                          unit={unit} maxSeries={isJboss ? 40 : undefined}
+                          syncKey={`podjmx:${pod}`} onZoom={handleZoom} onZoomReset={handleZoomReset} />
+                      </ClusterCard>
+                    );
+                  })}
+                </div>
+              )}
+            {/* v0.9.574 — PromQL listesi UI'da yok; pod kapsamlı statik metin bu bölümde kalır. */}
+            <h4 className="pod-sub">Prometheus sorguları <span className="field-hint">· pod kapsamı</span></h4>
+            <div className="pod-ek-prom">
+              <PromQLList queries={[
+                ['CPU (cores)', `rate(container_cpu_usage_seconds_total{namespace="${promQuote(namespace)}",pod="${promQuote(pod)}"}[5m])`],
+                ['Working-set memory', `container_memory_working_set_bytes{namespace="${promQuote(namespace)}",pod="${promQuote(pod)}"}`],
+              ]} />
+            </div>
+          </CollapsedSection>
+          {entityOn && detail && (
+            <CollapsedSection id="pod-labels" title="Etiketler ve geçmiş" summary="pod etiketleri, aynı adla önceki kayıtlar"
+              open={openSecs.has('labels')} onOpenChange={setSecOpen('labels')}>
+              <div className="pod-two">
+                <div>
+                  <PanelTitle sub="kube_pod_labels">Etiketler</PanelTitle>
+                  <PodLabelsTable labels={detail.entity.labels} />
+                </div>
+                <div>
+                  <PanelTitle sub="aynı ad · entity kayıtları">Yaşam döngüsü</PanelTitle>
+                  <PodLifetimesTable lifetimes={detail.lifetimes} atMatch={detail.atMatch} at={atParam} />
+                </div>
+              </div>
+            </CollapsedSection>
+          )}
         </div>
 
         {/* v0.10.910 — bu pod'un logları (varsayılan kapalı; açılınca yüklenir) */}
         <PodLogsSection pod={pod} from={from} to={to} service={service || undefined} cluster={traceCluster || undefined}
           logsLink={logsHref({ window: range, service: service || undefined, cluster: traceCluster || undefined, filters: logsPodPill })} />
 
-        {/* Konteynerler — Thanos KSM anlık (canlı pod) */}
-        {entityOn && detail && live !== 'gone' && (
-          <div className="pod-sec">
-            <PanelTitle sub="Thanos KSM · anlık durum">Konteynerler</PanelTitle>
-            <PodContainersTable ctr={ctrQ.data} pending={ctrQ.isPending} containerRecs={detail.containers} />
-          </div>
-        )}
-        {entityOn && detail && live === 'gone' && (
-          <div className="pod-sec">
-            <PanelTitle sub="pod artık mevcut değil">Konteynerler</PanelTitle>
-            <div className="pod-cap">Sonlanmış pod: KSM anlık durum yok{detail.containers && detail.containers.length > 0 ? ` · kayıtlı konteynerler: ${detail.containers.map(c => c.name).join(', ')}` : ''}. Ömür ve son görülme yukarıda.</div>
-          </div>
-        )}
-
-        {/* Kardeşler | Etiketler + Yaşam döngüsü */}
-        {entityOn && detail && (
-          <div className="pod-sec pod-two">
-            <div>
-              <PanelTitle sub={`${siblingLabel} · ${detail.siblings?.length ?? 0}${(detail.siblings?.length ?? 0) >= 50 ? '+' : ''} pod`}
-                right={nearest?.type === 'workload' ? <Link to={entityHref(nearest, { range, at: atParam || undefined, clusterName: detail.cluster?.name ?? cluster })} className="sec">→ iş yükü sayfası</Link> : undefined}>
-                Kardeş pod'lar
-              </PanelTitle>
-              <PodSiblingsTable rows={siblingRows} pageRange={range} at={atParam} clusterName={detail.cluster?.name ?? cluster}
-                truncated={!!clusterPodsList?.truncated} />
-            </div>
-            <div>
-              <PanelTitle sub="kube_pod_labels">Etiketler</PanelTitle>
-              <PodLabelsTable labels={detail.entity.labels} />
-              <div style={{ height: 14 }} />
-              <PanelTitle sub="aynı ad · entity kayıtları">Yaşam döngüsü</PanelTitle>
-              <PodLifetimesTable lifetimes={detail.lifetimes} atMatch={detail.atMatch} at={atParam} />
-            </div>
-          </div>
-        )}
-
-        {/* Ek — varsayılan kapalı; açılınca yüklenir */}
-        <div className="pod-sec pod-ek">
-          <PanelTitle sub="varsayılan kapalı · açılınca yüklenir">Ek</PanelTitle>
-          <Card style={{ padding: 0 }}>
-            <DisclosureButton anatomy="section" expanded={jmxOpen} onClick={() => setJmxOpen(v => !v)}>
-              JVM / JBoss (JMX) <span className="field-hint">· pod'a filtreli · deploy {deploy || '—'} · {jmxMetricsQ.isPending && cluster ? '…' : `${jmxMetrics.length} metrik`}</span>
-            </DisclosureButton>
-            {jmxOpen && (
-              <div className="pod-ek-body">
-                {!cluster || !namespace ? <div className="pod-cap">cluster/namespace çözülmeden JMX keşfi yapılamaz.</div>
-                  : jmxMetricsQ.isPending ? <Spinner />
-                  : jmxMetrics.length === 0 ? <div className="pod-cap">Bu deploy için JMX metriği keşfedilmedi.</div>
-                  : (
-                    <div className="grid-2" style={{ display: 'grid', gap: 14 }}>
-                      {jmxMetrics.map((m, i) => {
-                        const data = jmxPanelQs[i]?.data?.series;
-                        if (!data || data.length === 0) return null;
-                        const unit = m.includes('bytes') ? 'bytes' : m.includes('seconds') ? 's' : undefined;
-                        const isJboss = m.startsWith('jboss_');
-                        return (
-                          <Card key={m} header={m}>
-                            {/* Madde 4 sweep — pod'un JMX panelleri ortak crosshair
-                                grubu (PodJmxInline ile aynı anahtar) + drag-zoom
-                                sayfa range'ine, çift-tık geri-yığınına. */}
-                            <MultiLineChart series={namedSeriesToSeries(data, m)} height={180}
-                              unit={unit} maxSeries={isJboss ? 40 : undefined}
-                              // syncKey EK'SİZ: MLC `-ms`i kendi ekliyor, yani bu
-                              // panel de podChartSync grubuna düşer (v0.9.945).
-                              syncKey={`podjmx:${pod}`} onZoom={handleZoom} onZoomReset={handleZoomReset} />
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  )}
-              </div>
-            )}
-          </Card>
-          <Card style={{ padding: 0 }}>
-            <DisclosureButton anatomy="section" expanded={promOpen} onClick={() => setPromOpen(v => !v)}>
-              Prometheus sorguları <span className="field-hint">· pod kapsamı</span>
-            </DisclosureButton>
-            {promOpen && (
-              <div className="pod-ek-body pod-ek-prom">
-                <PromQLList queries={[
-                  ['CPU (cores)', `rate(container_cpu_usage_seconds_total{namespace="${promQuote(namespace)}",pod="${promQuote(pod)}"}[5m])`],
-                  ['Working-set memory', `container_memory_working_set_bytes{namespace="${promQuote(namespace)}",pod="${promQuote(pod)}"}`],
-                ]} />
-              </div>
-            )}
-          </Card>
-        </div>
       </PageShell>
     </>
   );

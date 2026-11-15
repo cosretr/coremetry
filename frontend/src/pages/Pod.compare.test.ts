@@ -14,7 +14,7 @@ describe('Pod önceki-dönem hayaleti', () => {
     }
     expect(src.split('throughputBandsFrom(').length - 1).toBeGreaterThanOrEqual(3); // tanım + canlı + ghost
     expect(src.split('enabled: ghostEnabled').length - 1).toBe(2);
-    expect(src).toContain('const ghostEnabled = redEnabled && compareOff > 0');
+    expect(src).toContain('const ghostEnabled = redEnabled && redOpen && compareOff > 0');
   });
   // v0.10.2154 — ServiceCharts (Details Performance bölümü) kalktı; ortak
   // hook + bileşenin diğer tüketicisi Overview (Overview.compare.test.ts).

@@ -5100,14 +5100,21 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 .pod-pivots { display: flex; gap: 8px; flex-wrap: wrap; }
 .pod-pivot { padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: var(--fs-xs); color: var(--text); text-decoration: none; background: var(--bg1); white-space: nowrap; }
 .pod-pivot:hover { background: var(--bg2); color: var(--text); }
-.pod-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-.pod-kpi-sub { display: block; font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 400; color: var(--text3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Clusters S10 (plan §0 D8) — KPI şeridinin yerine meta satırı (dt/dd çiftleri)
+   + "CoSRE'ye sor"; kapalı bölümlerin alt başlığı ve JMX ızgarası. */
+.pod-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-4) var(--sp-6); }
+.pod-meta__list { display: flex; flex-wrap: wrap; gap: var(--sp-2) 28px; margin: 0; font-size: var(--fs-sm); }
+.pod-meta__list > div { display: flex; gap: var(--sp-3); }
+.pod-meta__list dt { color: var(--text3); }
+.pod-meta__list dd { margin: 0; }
+.pod-meta__more { color: var(--text3); }
+.pod-sub { margin: var(--sp-5) 0 var(--sp-3); font-size: var(--fs-sm); font-weight: 600; }
+.grid-2.pod-jmx-grid { display: grid; gap: 14px; }
 .pod-cap { font-size: var(--fs-xs); color: var(--text3); margin: 6px 0 0; }
 .pod-sec { margin-top: 18px; }
 .pod-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 @media (max-width: 1024px) { .pod-two { grid-template-columns: 1fr; } }
 .pod-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
-.pod-ek > * + * { margin-top: 8px; }
 .pod-ek-body { padding: 10px 14px 12px; }
 .pod-ek-prom { max-width: 720px; }
 

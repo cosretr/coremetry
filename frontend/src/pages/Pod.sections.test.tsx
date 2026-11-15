@@ -10,12 +10,13 @@
 // kadar ÇEKİLMEZ"); o dilim aşağıdaki "BUGÜN mount'ta" listesini bilerek
 // daraltır — bu dosya daralmanın ölçüsüdür, sessizce değişmez.
 //
-// Bugünkü mount listesi (entity katmanı açık, cluster + servis verilmiş):
-//   Thanos pod satırı (cluster-pods), tek-pod CPU/Bellek trendi + deploy
-//   işaretleri, RED iki toplu sorgusu, servis anomalileri + sessize alma,
-//   annotation şeridi, entity (kimlik, taşıdığı servisler, konteynerler),
-//   trace listesi, JMX metrik KEŞFİ (trend değil).
-// Mount'ta ÇEKİLMEYEN: JMX trendleri ve loglar (ikisi de açılınca).
+// v0.10.2178 (Clusters S10, D8) — daraldı. Mount listesi (entity katmanı
+// açık, cluster + servis verilmiş): Thanos pod satırı (cluster-pods), tek-pod
+// CPU/Bellek trendi + deploy işaretleri, entity (kimlik, taşıdığı servisler —
+// v0.10.190 gereği hep görünür —, konteynerler).
+// Mount'ta ÇEKİLMEYEN (kapalı bölüm açılınca): RED iki toplu sorgusu +
+// anomali bantları + annotation şeridi (İstek metrikleri), trace listesi (Son
+// trace'ler), JMX keşfi ve trendleri (Ağ ve JVM), loglar.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -119,6 +120,23 @@ async function mount(url: string, settledOn: string): Promise<HTMLElement> {
   for (let i = 0; i < 6; i++) await tick();
   return host!;
 }
+// Kapalı bölümü başlık düğmesinden açar (CollapsedSection tetikleyicisi).
+async function openSection(el: HTMLElement, title: string) {
+  const btn = Array.from(el.querySelectorAll('button')).find(b => b.textContent?.trim() === title)!;
+  await act(async () => { btn.click(); await new Promise(r => setTimeout(r, 20)); });
+}
+// Kalıcılık testi için bellek içi localStorage (jsdom deposu bu ortamda işlevsiz).
+function memoryStorage(): Storage {
+  const s = new Map<string, string>();
+  return {
+    get length() { return s.size; },
+    clear: () => s.clear(),
+    getItem: k => s.get(k) ?? null,
+    key: i => [...s.keys()][i] ?? null,
+    removeItem: k => { s.delete(k); },
+    setItem: (k, v) => { s.set(k, String(v)); },
+  };
+}
 beforeEach(() => {
   m.calls.length = 0;
   m.entityDisabled = false;
@@ -132,13 +150,9 @@ afterEach(() => {
 const URL_FULL = `/pod?cluster=prod-a&namespace=shop&pod=${POD}&service=cart&range=1h`;
 
 describe('Pod S0 — mount\'ta çağrılan uçlar (entity katmanı açık)', () => {
-  it('bugünkü mount listesi', async () => {
+  it('S10 mount listesi: kapalı bölümlerin (RED, trace, JMX) verisi yok', async () => {
     await mount(URL_FULL, 'entityContainers');
     expect(names()).toEqual([
-      'annotations',
-      'anomalyEvents',
-      'anomalySilences',
-      'clusterJmxMetrics',
       'clusterPodDetail',
       'clusterPods',
       'entity',
@@ -146,14 +160,27 @@ describe('Pod S0 — mount\'ta çağrılan uçlar (entity katmanı açık)', () 
       'entityContainers',
       'entityServices',
       'serviceDeploys',
-      'spanMetricBatch',
-      'traces',
     ]);
   });
 
-  it('RED iki toplu sorgu (throughput/hata + gecikme); karşılaştırma kapalıyken hayalet yok', async () => {
-    await mount(URL_FULL, 'entityContainers');
-    expect(count('spanMetricBatch')).toBe(2);
+  it('İstek metrikleri açılınca RED iki toplu sorgu (karşılaştırma kapalıyken hayalet yok) + bantlar', async () => {
+    const el = await mount(URL_FULL, 'entityContainers');
+    expect(count('spanMetricBatch')).toBe(0);
+    await openSection(el, 'İstek metrikleri');
+    await until(() => count('spanMetricBatch') === 2, 'RED sorguları');
+    expect(count('anomalyEvents')).toBe(1);
+    expect(Array.from(el.querySelectorAll<HTMLElement>('[data-cpm]')).map(n => n.dataset.cpm))
+      .toEqual(['Response time', 'Throughput', 'Failure rate']);
+  });
+
+  it('Son trace\'ler açılınca trace listesi çekilir; açık bölüm kalıcı', async () => {
+    vi.stubGlobal('localStorage', memoryStorage());
+    const el = await mount(URL_FULL, 'entityContainers');
+    expect(count('traces')).toBe(0);
+    await openSection(el, 'Son trace\'ler');
+    await until(() => count('traces') > 0, 'trace listesi');
+    expect(localStorage.getItem('pod.sections.open')).toBe('["traces"]');
+    vi.unstubAllGlobals();
   });
 
   it('cluster verildiyse kaynak listesi aranmaz; pod satırı tek istekle', async () => {
@@ -163,11 +190,16 @@ describe('Pod S0 — mount\'ta çağrılan uçlar (entity katmanı açık)', () 
     expect(m.calls.find(c => c.name === 'clusterPods')!.args[0]).toBe('prod-a');
   });
 
-  it('JMX: yalnız keşif; trendler ve loglar açılana dek çekilmez', async () => {
-    await mount(URL_FULL, 'entityContainers');
-    expect(count('clusterJmxMetrics')).toBe(1);
+  it('JMX: keşif de trendler de loglar da açılana dek çekilmez; Ağ ve JVM açılınca keşif + jmxTitle', async () => {
+    const el = await mount(URL_FULL, 'entityContainers');
+    expect(count('clusterJmxMetrics')).toBe(0);
     expect(count('clusterJmxTrend')).toBe(0);
     expect(count('logs')).toBe(0);
+    await openSection(el, 'Ağ ve JVM');
+    await until(() => count('clusterJmxTrend') > 0, 'JMX trendi');
+    expect(count('clusterJmxMetrics')).toBe(1);
+    expect(el.textContent).toContain('JVM (JMX)');
+    expect(el.textContent).not.toContain('JVM / JBoss (JMX)');
   });
 
   it('tek-pod trendi adıyla sorulur (cluster, namespace, pod)', async () => {
@@ -178,34 +210,48 @@ describe('Pod S0 — mount\'ta çağrılan uçlar (entity katmanı açık)', () 
 });
 
 describe('Pod S0 — mount\'ta çizilen bölümler', () => {
-  it('sıra: CPU/Bellek, servis metrikleri, taşıdığı servisler, trace listesi, konteynerler, kardeşler/etiketler/yaşam döngüsü, ek', async () => {
+  it('S10 sırası: meta satırı, CPU/Bellek, taşıdığı servisler, konteynerler, kardeşler, kapalı bölümler', async () => {
     const el = await mount(URL_FULL, 'entityContainers');
     const text = el.textContent ?? '';
     const order = [
-      'CPU / Bellek · Thanos', 'Servis metrikleri · bu pod', 'Taşıdığı servisler', 'Trace listesi',
-      'Konteynerler', 'Kardeş pod\'lar', 'Etiketler', 'Yaşam döngüsü', 'JVM / JBoss (JMX)', 'Prometheus sorguları',
+      'CoSRE\'ye sor', 'CPU / Bellek · Thanos', 'Taşıdığı servisler', 'Konteynerler', 'Kardeş pod\'lar',
+      'İstek metrikleri', 'Son trace\'ler', 'Ağ ve JVM', 'Etiketler ve geçmiş',
     ];
     const at = order.map(t => text.indexOf(t));
     expect(at.every(i => i >= 0), JSON.stringify(order.filter((_, i) => at[i] < 0))).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
-    // RED üçlüsü açık çizilir.
-    expect(Array.from(el.querySelectorAll<HTMLElement>('[data-cpm]')).map(n => n.dataset.cpm))
-      .toEqual(['Response time', 'Throughput', 'Failure rate']);
+    // KPI şeridi yok; RED üçlüsü kapalıyken çizilmez.
+    expect(el.querySelectorAll('[data-cpm]').length).toBe(0);
+    expect(text).not.toContain('Trace listesi');
   });
 
-  it('kapalı JMX satırı keşfedilen metrik sayısını söyler', async () => {
+  it('meta satırı: servis, iş yükü sezgiseli, yaş; sürüm etiketi yoksa çizilmez', async () => {
     const el = await mount(URL_FULL, 'entityContainers');
-    expect(el.textContent).toContain('1 metrik');
+    const meta = el.querySelector('.pod-meta')!.textContent ?? '';
+    expect(meta).toContain('Serviscart');
+    expect(meta).toContain('İş yükü');
+    expect(meta).toContain('Yaş');
+    expect(meta).not.toContain('Sürüm');
+  });
+
+  it('CoSRE\'ye sor: çekmeceyi bağlamlı soruyla doldurur (göndermez)', async () => {
+    const el = await mount(URL_FULL, 'entityContainers');
+    const got: string[] = [];
+    const h = (e: Event) => got.push((e as CustomEvent<{ question?: string }>).detail.question ?? '');
+    window.addEventListener('coremetry:ai-prefill', h);
+    const btn = Array.from(el.querySelectorAll('button')).find(b => b.textContent?.includes('CoSRE\'ye sor'))!;
+    await act(async () => { btn.click(); });
+    window.removeEventListener('coremetry:ai-prefill', h);
+    expect(got).toEqual([`${POD} pod'unun durumu nedir, bir sorun var mı? (cluster prod-a, namespace shop, servis cart)`]);
   });
 });
 
 describe('Pod S0 — entity katmanı kapalı', () => {
-  it('entity uçları çağrılmaz; RED, trend, trace ve JMX keşfi yine çekilir', async () => {
+  it('entity uçları çağrılmaz; trend yine çekilir', async () => {
     m.entityDisabled = true;
-    const el = await mount(URL_FULL, 'traces');
-    await until(() => count('clusterJmxMetrics') > 0, 'JMX keşfi');
+    const el = await mount(URL_FULL, 'clusterPodDetail');
     for (const n of ['entity', 'entityServices', 'entityContainers']) expect(count(n), n).toBe(0);
-    for (const n of ['clusterPods', 'clusterPodDetail', 'spanMetricBatch', 'traces', 'clusterJmxMetrics']) {
+    for (const n of ['clusterPods', 'clusterPodDetail']) {
       expect(count(n), n).toBeGreaterThan(0);
     }
     expect(el.textContent).not.toContain('Taşıdığı servisler');
@@ -214,9 +260,10 @@ describe('Pod S0 — entity katmanı kapalı', () => {
 });
 
 describe('Pod S0 — servis parametresi yok, entity kapalı', () => {
-  it('RED sorgusu atılmaz ("eşlenmedi" ekranı); trend ve trace listesi çekilir', async () => {
+  it('İstek metrikleri açılsa da RED sorgusu atılmaz ("eşlenmedi" ekranı)', async () => {
     m.entityDisabled = true;
-    const el = await mount(`/pod?cluster=prod-a&namespace=shop&pod=${POD}`, 'traces');
+    const el = await mount(`/pod?cluster=prod-a&namespace=shop&pod=${POD}`, 'clusterPodDetail');
+    await openSection(el, 'İstek metrikleri');
     expect(count('spanMetricBatch')).toBe(0);
     expect(count('anomalyEvents')).toBe(0);
     expect(el.textContent).toContain('Bu pod bir Coremetry servisine eşlenmedi');

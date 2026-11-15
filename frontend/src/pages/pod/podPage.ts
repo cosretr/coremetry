@@ -21,25 +21,6 @@ export function writeSpansParam(p: URLSearchParams, mode: SpansMode): URLSearchP
 
 type Pt = { time: number; value: number };
 
-// Kova adımı (s): sunucu zarfı `stepSeconds` verirse o; yoksa ardışık
-// noktaların en küçük pozitif aralığı. «Sonraki noktaya uzaklık» DEĞİL (inceleme #4):
-// sunucu kovaları SEYREK yayar (GROUP BY, WITH FILL yok) — bir istek + bir
-// saat sessizlik, son kovayı bütün boşlukla çarpardı. rate = count/step
-// olduğundan Σ rate·step kesindir. İki noktadan az seri → adım BİLİNMİYOR.
-function bucketStep(points: Pt[], stepSec?: number): number | null {
-  if (stepSec !== undefined && stepSec > 0) return stepSec;
-  if (points.length < 2) return null;
-  // En KÜÇÜK pozitif Δt: kovalar adımın katlarına oturur, boşluklar adımın
-  // katı olur → minimum, kafes adımının en güvenli kestirimi (medyan iki
-  // noktalı seride boşluğu seçebilir).
-  let m = Infinity;
-  for (let i = 1; i < points.length; i++) {
-    const d = (points[i].time - points[i - 1].time) / 1e9;
-    if (d > 0 && d < m) m = d;
-  }
-  return Number.isFinite(m) ? m : null;
-}
-
 // Zamana göre eşle (inceleme #3): avg/p95 AYRI bir batch'ten gelir
 // (messaging.system != kafka) ve kovalar seyrek — indeksle eşlemek kafka
 // taşıyan pod'da yanlış kovaları çiftlerdi.
@@ -49,36 +30,8 @@ function byTime(points: Pt[]): Map<number, number> {
   return m;
 }
 
-export interface WindowTotals {
-  /** pencere toplam çağrı (Σ rate·Δt); seri yetersizse null */
-  calls: number | null;
-  /** rate-ağırlıklı hata yüzdesi; trafik 0 ise null (0 DEĞİL) */
-  errPct: number | null;
-  /** rate-ağırlıklı ortalama süre (ms); trafik 0 ise null */
-  avgMs: number | null;
-}
-
-/**
- * KPI şeridi RED grafiklerinin serilerinden türer — ayrı bir "pencere
- * toplamı" ucu YOK (brief §3; tasarımcı riski: "seriden toplama yapılmalı,
- * ayrı endpoint eklenmemeli"). error_rate/avg noktaları rate ile ZAMANA göre
- * eşlenir; o kovada nokta yoksa 0 (hata) / ağırlığa girmez (avg).
- */
-export function windowTotals(rate: Pt[], errorRate: Pt[], avg: Pt[], stepSec?: number): WindowTotals {
-  const step = bucketStep(rate, stepSec);
-  if (step === null) return { calls: null, errPct: null, avgMs: null };
-  const er = byTime(errorRate), av = byTime(avg);
-  let calls = 0, errs = 0, wAvg = 0, wAvgCalls = 0;
-  for (const p of rate) {
-    const c = Math.max(0, p.value) * step;
-    calls += c;
-    errs += c * Math.max(0, er.get(p.time) ?? 0) / 100;
-    const a = av.get(p.time);
-    if (a !== undefined) { wAvg += c * Math.max(0, a); wAvgCalls += c; }
-  }
-  if (calls <= 0) return { calls: 0, errPct: null, avgMs: null };
-  return { calls, errPct: (100 * errs) / calls, avgMs: wAvgCalls > 0 ? wAvg / wAvgCalls : null };
-}
+// v0.10.2178 (Clusters S10) — windowTotals / bucketStep KPI şeridiyle birlikte
+// kalktı (şerit RED serilerinden türüyordu; RED kapalı bölümde).
 
 /** «Yavaş» çipinin eşiği — p95 serisinin rate-ağırlıklı (zamana göre eşlenmiş) ortalaması; rate yoksa düz ortalama. */
 export function windowP95(p95: Pt[], rate: Pt[]): number | null {

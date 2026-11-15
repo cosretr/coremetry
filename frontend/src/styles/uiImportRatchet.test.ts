@@ -96,11 +96,11 @@ const CEILINGS: Record<string, number> = {
   // düğmesini hâlâ DisclosureButton ile çiziyor; ui/ içindeyken sayılmıyordu.
   // Düğmeyi shadcn'e çevirmek görünür değişiklik olur — PageControls'ü
   // geçiren dilimin işi; o commit bunu 31'e indirir.
-  DisclosureButton: 28, // v0.10.1853 (Logs alan kenar çubuğu): 29 → 28; Faz 2 dilim 1 R15 (Argo CD): 30 → 29; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 31 → 30; Faz 2 dilim 1 R10 (erişim): 32 → 31
+  DisclosureButton: 27, // Clusters S10 (Pod Ek bölümü → CollapsedSection): 28 → 27; v0.10.1853 (Logs alan kenar çubuğu): 29 → 28; Faz 2 dilim 1 R15 (Argo CD): 30 → 29; Faz 2 dilim 1 R12 (AI SRE + Knowledge): 31 → 30; Faz 2 dilim 1 R10 (erişim): 32 → 31
   LinkButton: 24, // Clusters S4 ("All clusters" → shadcn Button): 25 → 24; v0.10.1854 (Logs süzgeç satırı): 26 → 25; Faz 2 dilim 1 R15 (Argo CD): 29 → 26; R7: 31 → 30; etkileşim P2: 30 → 29 (⌘K)
   Modal: 19, // Faz 2 dilim 1 R14 (işletim): 20 → 19; Faz 2 dilim 1 R11 (CoSRE): 21 → 20; Faz 2 dilim 1 R10 (erişim): 23 → 21
   Stack: 15, // Faz 2 dilim 1 R14 (işletim): 16 → 15; Faz 2 dilim 1 R10 (erişim): 18 → 16; R7: 23 → 21; R8: 21 → 18
-  Card: 17, // Clusters S4 (liste + Overview kartları → .card / ClusterCard): 18 → 17; Faz 2 dilim 1 R11 (CoSRE): 19 → 18
+  Card: 16, // Clusters S10 (Pod JMX kartları → ClusterCard): 17 → 16; Clusters S4 (liste + Overview kartları → .card / ClusterCard): 18 → 17; Faz 2 dilim 1 R11 (CoSRE): 19 → 18
   TabStrip: 14, // Clusters S5 (ayrıntı sekmeleri → shadcn Tabs): 15 → 14; Faz 2 dilim 1 R11 (CoSRE): 16 → 15; Faz 2 dilim 1 R10 (erişim): 17 → 16
   Drawer: 9, // Clusters S5 (namespace trend çekmecesi → coremetry/DetailSheet): 10 → 9; Faz 2 dilim 1 R11 (CoSRE): 15 → 14; etkileşim S2 (External + Hosts → DetailSheet): 14 → 12; S3 (Watchers + ExchangesPanel): 12 → 10
   Menu: 13, // Faz 2 dilim 1 R15 (Argo CD): 14 → 13

@@ -1,13 +1,12 @@
 // podPage.test.ts — v0.10.160 (pod detay sayfası, A anatomisi). Saf çekirdekler:
 //   - ?spans= kodeği: errors (varsayılan, URL'de yazılmaz) | slow | all
-//   - windowTotals: rate/error_rate/avg serilerinden pencere toplamları
 //     (çağrı = Σ rate·Δt, hata % = ağırlıklı, ort. ms = rate-ağırlıklı)
 //   - podTraceParams: /api/traces parametreleri (k8s.pod.name süzgeci,
 //     hatalı/yavaş/tümü, sayfa 50, count=skip)
 //   - joinSiblings: entity kardeşleri × clusterPods (topk 500) — eşleşmeyen
 //     satırda faz/restart/cpu/mem BİLİNMİYOR ('—'), 0 değil
 import { describe, it, expect } from 'vitest';
-import { parseSpansParam, writeSpansParam, windowTotals, podTraceParams, joinSiblings, windowP95 } from './podPage';
+import { parseSpansParam, writeSpansParam, podTraceParams, joinSiblings, windowP95 } from './podPage';
 import type { EntityRecord, ClusterPodRow } from '@/lib/types';
 
 const pt = (t: number, v: number) => ({ time: t * 1e9, value: v });
@@ -28,50 +27,6 @@ describe('spans param', () => {
     expect(p.get('pod')).toBe('x');
     writeSpansParam(p, 'errors');
     expect(p.has('spans')).toBe(false);
-  });
-});
-
-describe('windowTotals', () => {
-  it('çağrı = Σ rate·Δt; hata % ağırlıklı; ort. ms rate-ağırlıklı', () => {
-    const rate = [pt(0, 10), pt(60, 10), pt(120, 30)];          // req/s, 60 s adım
-    const er = [pt(0, 0), pt(60, 50), pt(120, 0)];              // %
-    const avg = [pt(0, 100), pt(60, 100), pt(120, 400)];        // ms
-    const t = windowTotals(rate, er, avg);
-    // Δt = 60: çağrı = (10+10+30)·60 = 3000; hata = 10·60·0.5 = 300 → %10
-    expect(t.calls).toBe(3000);
-    expect(t.errPct).toBeCloseTo(10, 5);
-    // ort = (100·600 + 100·600 + 400·1800) / 3000 = 280
-    expect(t.avgMs).toBeCloseTo(280, 5);
-  });
-  it('seyrek kovalar: adım en küçük pozitif Δt (boşluk çarpılmaz); zarf adımı verilirse o kazanır (inceleme #4)', () => {
-    // 60 s adım, sonra 1 saat sessizlik: son kovadan önceki nokta 3600 s ile ÇARPILMAMALI
-    const rate = [pt(0, 10), pt(60, 10), pt(3660, 10)];
-    const t = windowTotals(rate, [], []);
-    expect(t.calls).toBe(30 * 60);
-    expect(windowTotals(rate, [], [], 15).calls).toBe(30 * 15);
-  });
-  it('avg/p95 ayrı batch: ZAMANA göre eşlenir, kova eksikse ağırlığa girmez (inceleme #3)', () => {
-    const rate = [pt(0, 10), pt(60, 10), pt(120, 10)];
-    const avg = [pt(0, 100), pt(120, 300)]; // 60 s kovası kafka-only → latency batch'inde yok
-    expect(windowTotals(rate, [], avg).avgMs).toBeCloseTo(200, 5);
-    expect(windowP95([pt(0, 100), pt(120, 300)], rate)).toBeCloseTo(200, 5);
-    // indeksle eşleseydi: avg[1]=300 60 s kovasına düşer, 120 s kovası 0 → 133
-  });
-  it('tek nokta ya da boş seri → çağrı bilinmiyor (null), NaN yok', () => {
-    expect(windowTotals([], [], [])).toEqual({ calls: null, errPct: null, avgMs: null });
-    const t = windowTotals([pt(0, 5)], [pt(0, 0)], [pt(0, 10)]);
-    expect(t.calls).toBeNull();
-  });
-  it('sıfır trafik → hata % ve ort. null (0 değil)', () => {
-    const t = windowTotals([pt(0, 0), pt(60, 0)], [pt(0, 0), pt(60, 0)], [pt(0, 0), pt(60, 0)]);
-    expect(t.calls).toBe(0);
-    expect(t.errPct).toBeNull();
-    expect(t.avgMs).toBeNull();
-  });
-  it('windowP95 = p95 serisinin rate-ağırlıklı ortalaması; veri yoksa null', () => {
-    expect(windowP95([pt(0, 100), pt(60, 300)], [pt(0, 10), pt(60, 30)])).toBeCloseTo(250, 5);
-    expect(windowP95([], [])).toBeNull();
-    expect(windowP95([pt(0, 100)], [])).toBe(100);
   });
 });
 
