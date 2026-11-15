@@ -200,6 +200,10 @@ type EndpointsQuery struct {
 	// compare=prior read, which only needs calls/errors/avg/p99 for the
 	// delta merge.
 	SkipStatus bool
+	// Method / StatusClass (v0.10.2209, Endpoints başlık hunisi) — http_method
+	// ve http_status MV'de YOK: cluster/env gibi sınırlı ham yola zorlar.
+	// StatusClass "2xx".."5xx" (çağıran doğrular).
+	Method, StatusClass string
 }
 
 // forcesRaw reports whether the query carries a filter dimension the
@@ -207,7 +211,15 @@ type EndpointsQuery struct {
 // v0.8.356) or env (deploy_env, v0.8.385). Either one sends the read
 // down the bounded raw-spans path. Pinned by env_filter_phase2_test.go.
 func (q EndpointsQuery) forcesRaw() bool {
-	return q.Cluster != "" || q.Env != ""
+	return q.Cluster != "" || q.Env != "" || q.Method != "" || q.StatusClass != ""
+}
+
+// statusClassDigit — SAF (v0.10.2209): "2xx".."5xx" → 2..5; diğerleri 0.
+func statusClassDigit(c string) int {
+	if len(c) == 3 && c[1:] == "xx" && c[0] >= '2' && c[0] <= '5' {
+		return int(c[0] - '0')
+	}
+	return 0
 }
 
 // endpointsRawFilters builds the OPTIONAL AND-conjuncts of the raw
@@ -259,6 +271,16 @@ func (s *Store) endpointsRawFilters(q EndpointsQuery, pathExpr string) (string, 
 	if q.Env != "" {
 		sql.WriteString(" AND deploy_env = ?")
 		args = append(args, q.Env)
+	}
+	// v0.10.2209 — başlık hunisi: sidecar'ın durum hapı / metot çipiyle AYNI
+	// kolonlar (http_method, http_status).
+	if q.Method != "" {
+		sql.WriteString(" AND http_method = ?")
+		args = append(args, q.Method)
+	}
+	if c := statusClassDigit(q.StatusClass); c > 0 {
+		sql.WriteString(" AND intDiv(http_status, 100) = ?")
+		args = append(args, c)
 	}
 	return sql.String(), args
 }

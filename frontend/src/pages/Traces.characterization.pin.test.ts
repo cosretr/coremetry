@@ -96,12 +96,13 @@ describe('S0 pin — ColumnFilterShell paylaşımı (Traces + Problems/Exception
     return out;
   }
   // v0.10.2205 — Databases başlık hunisi de aynı kabuğu kullanır (çatal yok).
-  it('kabuğu yalnız Traces ColumnFilter, AnomaliesPage ve Databases DbColumnFilter kullanır', () => {
+  // v0.10.2209 — Endpoints başlık hunisi de aynı kabuk.
+  it('kabuğu yalnız Traces ColumnFilter, AnomaliesPage, Databases ve Endpoints hunileri kullanır', () => {
     const users = walk(SRC)
       .filter(p => /<ColumnFilterShell\b/.test(readFileSync(p, 'utf8')))
       .map(p => relative(SRC, p).split(sep).join('/'))
       .sort();
-    expect(users).toEqual(['features/anomalies/AnomaliesPage.tsx', 'pages/databases/DbColumnFilter.tsx', 'pages/traces/ColumnFilter.tsx']);
+    expect(users).toEqual(['features/anomalies/AnomaliesPage.tsx', 'pages/databases/DbColumnFilter.tsx', 'pages/endpoints/EndpointColumnFilter.tsx', 'pages/traces/ColumnFilter.tsx']);
   });
   it('AnomaliesPage kabuğu Traces modülünden alır (çatallanmış ikinci kabuk yok)', () => {
     const src = readFileSync(resolve(SRC, 'features/anomalies/AnomaliesPage.tsx'), 'utf8');

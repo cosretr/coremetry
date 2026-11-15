@@ -3240,7 +3240,9 @@ export const api = {
   endpoints: (params: { from: number; to: number; service?: string; search?: string; cluster?: string; env?: string; limit?: number; compare?: 'prior'; groupBy?: 'signature'; sort?: string; dir?: 'asc' | 'desc';
     // v0.9.313 (brief N1) — which inbound surface. Omitted = http, the
     // pre-v0.9.313 table.
-    entry?: 'rpc' }, signal?: AbortSignal) =>
+    entry?: 'rpc';
+    // v0.10.2209 — başlık hunisi (HTTP sekmesi): metot ve durum sınıfı (2xx..5xx), sunucuda süzülür.
+    method?: string; status?: string }, signal?: AbortSignal) =>
     // v0.9.812 — zarf: satırların yanında sıralama havuzunun boyutu ve
     // havuzun dolup dolmadığı (EndpointsListResponse).
     // v0.10.1361 — yalnız span türevli tablo; metrik kipi (liste + detay)

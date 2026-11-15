@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -38,6 +38,11 @@ import { IconButton } from '@/components/ui/IconButton';
 import { useAuth } from '@/components/AuthProvider';
 import { RouteAlertModal } from '@/pages/alerts/RouteAlertModal'; // v0.10.705
 import { PageShell } from '@/components/coremetry/PageShell';
+import { EndpointColumnFilter, type EndpointFilterCol } from './endpoints/EndpointColumnFilter'; // v0.10.2209
+import { endpointOrderKey, normMethod, normStatusClass } from './endpoints/endpointColFilter';
+import { parseStoredOrder } from '@/lib/depsTable';
+import { reconcileColumnModel } from '@/lib/columnModel';
+import { getRaw, setRaw, removeRaw } from '@/lib/storage';
 // v0.10.1359 — metrik kipi: Service → HTTP Metrics sekmesinin PromQL'i.
 import { useHttpPromql, useRedFamily, sectionEnvScope } from '@/lib/queries/httpMetrics';
 // v0.10.1429 — RED ailesi: yalnız gRPC sunan serviste liste rpc_server_duration_* ailesinden
@@ -235,6 +240,14 @@ export default function EndpointsPage() {
   const setSearchParam = (v: string) => setParams(prev => {
     const next = new URLSearchParams(prev);
     if (v) next.set('search', v); else next.delete('search');
+    return next;
+  }, { replace: true });
+  // v0.10.2209 — başlık hunisi: Method / Status sınıfı (sunucuda süzülür).
+  const methodF = normMethod(params.get('method'));
+  const statusF = normStatusClass(params.get('status'));
+  const setUrlParam = (k: 'method' | 'status', v: string) => setParams(prev => {
+    const next = new URLSearchParams(prev);
+    if (v) next.set(k, v); else next.delete(k);
     return next;
   }, { replace: true });
 
@@ -493,8 +506,27 @@ export default function EndpointsPage() {
     [visibleCols, entry, service, src]);
   // onOpen + searchRef wire the app-wide keyboard nav: j/k select a
   // row, Enter/o open its service detail, "/" focuses the path filter.
+  // v0.10.2209 — kolon yer değiştirme (/traces deseni): sıra sekme başına
+  // localStorage'da; Service / Path sabit (stickyLeft), Traces sağda sabit.
+  const orderKey = endpointOrderKey(ENDPOINTS_TABLE_KEY, entry);
+  const [colOrder, setColOrder] = useState<string[] | null>(() => parseStoredOrder(getRaw(orderKey)));
+  useEffect(() => { setColOrder(parseStoredOrder(getRaw(orderKey))); }, [orderKey]);
+  const colModel = useMemo(() => {
+    const ids = ENDPOINT_COLS.map(c => c.id);
+    const order = colOrder ? reconcileColumnModel({ v: 1, order: colOrder, hidden: [], sig: '' }, ids.map(id => ({ id })), '').order : ids;
+    return {
+      value: { v: 1 as const, order, hidden: [], sig: orderKey },
+      onChange: (m: { order: string[] }) => {
+        const next = m.order.join(',') === ids.join(',') ? null : [...m.order];
+        setColOrder(next);
+        if (next) setRaw(orderKey, JSON.stringify(next)); else removeRaw(orderKey);
+      },
+    };
+  }, [colOrder, orderKey]);
   const dt = useDataTable<EndpointRow>({
     storageKey: ENDPOINTS_TABLE_KEY,
+    columnModel: colModel,
+    reorderable: true,
     // v0.10.1348 — URL parametre adı sabit (`s_endpoints`): anahtar v2'ye
     // geçse de paylaşılan link / kayıtlı görünüm sırası aynen okunur.
     sortUrlKey: ENDPOINTS_SORT_URL_KEY,
@@ -516,6 +548,24 @@ export default function EndpointsPage() {
   // v0.9.1256 — sola sabit kimlik kolonlarının kümülatif ofsetleri
   // (görünür kolonlar + resize'lı genişliklerle; saf çekirdek).
   const leftOffs = stickyLeftOffsets(dt.visibleColumns, dt.colWidths, 120);
+  // v0.10.2209 — başlık hunisi (Service / Path / Method / Status). Service ve
+  // Path üstteki süzgeç çubuğuyla TEK durum; Method / Status yalnız span
+  // kaynağı HTTP sekmesinde (metrik kipi ve RPC'de bu boyut yok).
+  const renderEpHead = (c: { id: string; label: string }): React.ReactNode => {
+    const span = !metricMode && entry === 'http';
+    const f = c.id === 'service' ? { v: service, set: setService }
+      : c.id === 'path' ? { v: search.trim(), set: (v: string) => { setSearch(v); setSearchParam(v); } }
+        : c.id === 'method' && span ? { v: methodF, set: (v: string) => setUrlParam('method', v) }
+          : c.id === 'status' && span ? { v: statusF, set: (v: string) => setUrlParam('status', v) }
+            : null;
+    if (!f) return c.label;
+    return (
+      <span className="tcf-th">
+        <span className="tcf-th-l">{c.label}</span>
+        <EndpointColumnFilter col={c.id as EndpointFilterCol} label={c.label} value={f.v} onChange={f.set} />
+      </span>
+    );
+  };
   // v0.10.1348 — operatör-bildirimli (prod /endpoints, servis süzgeci
   // seçili): başlık "Path"in altında servis adı, "Method"un altında yol
   // duruyordu. Kök neden: başlık `visibleColumns`tan (servis süzgecinde
@@ -543,6 +593,9 @@ export default function EndpointsPage() {
     sort: sortBy,
     dir: sortDir,
     entry: entry === 'rpc' ? 'rpc' : undefined, // v0.9.313 (entry=rpc → src zaten span, v0.10.361)
+    // v0.10.2209 — başlık hunisi; liste kesik (Top N) → sunucuda süzülür.
+    method: entry === 'http' && methodF ? methodF : undefined,
+    status: entry === 'http' && statusF ? statusF : undefined,
     // v0.10.1359 — metrik kipinde satır okunmaz (aşağıda PromQL);
     // v0.10.1361 — /api/endpoints/metric silindi, bu okuma yalnız span.
   }, !metricMode);
@@ -890,7 +943,7 @@ export default function EndpointsPage() {
         <div className="table-wrap">
           <table {...dt.tableProps}>
             <DataTableColgroup dt={dt} leading={[22]} />
-            <DataTableHead dt={dt} leading={<th style={{ width: 22 }} />} />
+            <DataTableHead dt={dt} leading={<th style={{ width: 22 }} />} renderLabel={renderEpHead} />
             <tbody>
               {!hasRows ? <DataTableState dt={dt} leading={[22]} {...tableState} /> : dt.sortedRows.map((r, i) => {
                 // v0.10.929 (K5) — eşikler aynı; eşik altı sağlıklı dal nötr.
@@ -957,24 +1010,34 @@ export default function EndpointsPage() {
                         its column is visible (?cols=); order stays in
                         lockstep with ENDPOINT_COLS so the colgroup and
                         body never misalign. */}
-                    {cellOn.has('service') && <td className="sticky-left" style={{ left: leftOffs['service'] }}>
+                    {/* v0.10.2209 — hücreler başlığın kullanıcı sırasıyla (dt.visibleColumns; kolon yer değiştirme). */}
+                    {dt.visibleColumns.map(col => <Fragment key={col.id}>{(() => {
+                      switch (col.id) {
+                        case 'service': return (
+                          <td className="sticky-left" style={{ left: leftOffs['service'] }}>
                       <Link to={serviceHref(r.service, { range, env })} className="mono">
                         {r.service}
                       </Link>
-                    </td>}
-                    {cellOn.has('path') && <td className="mono sticky-left" style={{ left: leftOffs['path'] }} title={r.path}>
+                    </td>
+                        );
+                        case 'path': return (
+                          <td className="mono sticky-left" style={{ left: leftOffs['path'] }} title={r.path}>
                       {/* v0.10.1359 — metrik: http_route etiketsiz seriler (sekmedeki "(route yok)"). */}
                       {r.path || (metricMode ? <span className="cell-muted">(route yok)</span> : r.path)}
-                    </td>}
-                    {/* v0.10.1348 — Method rozet (tek nötr ton: renk yalnız
-                        sapan değerde, T9); boş metot (RPC) düz tire. */}
-                    {cellOn.has('method') && <td>
+                    </td>
+                        );
+                        /* v0.10.1348 — Method rozet (tek nötr ton: renk yalnız
+                        sapan değerde, T9); boş metot (RPC) düz tire. */
+                        case 'method': return (
+                          <td>
                       {/* v0.10.1429 — method rozeti atomdan (v0.10.1425 göçü); gRPC satırında rpc_service düz mono (HTTP fiili değil, büyük harfe çevrilmez). */}
                       {r.method
                         ? (r.family === 'grpc' ? <span className="mono" title="rpc_service (gRPC)">{r.method}</span> : <MethodBadge method={r.method} />)
                         : <span className="cell-muted">—</span>}
-                    </td>}
-                    {cellOn.has('calls') && <td className="num">
+                    </td>
+                        );
+                        case 'calls': return (
+                          <td className="num">
                       {fmtNum(r.calls)}
                       {/* v0.9.642 — Req/min varsayılandan çıktı; hızı
                           BURADA taşıyoruz ki bilgi kaybolmasın. Ayrı
@@ -986,12 +1049,16 @@ export default function EndpointsPage() {
                         </span>
                       )}
                       {compare && <TrendDelta cur={r.calls} prior={r.priorCalls} kind="neutral" />}
-                    </td>}
-                    {cellOn.has('errors') && <td className="num">
+                    </td>
+                        );
+                        case 'errors': return (
+                          <td className="num">
                       {fmtNum(r.errors)}
                       {compare && <TrendDelta cur={r.errors} prior={r.priorErrors} kind="lowerBetter" />}
-                    </td>}
-                    {cellOn.has('errorRate') && <td className="num">
+                    </td>
+                        );
+                        case 'errorRate': return (
+                          <td className="num">
                       <span className={`badge ${errCls}`}>{r.errorRate.toFixed(2)}%</span>
                       {/* v0.9.642 — Errors varsayılandan çıktı; mutlak
                           sayı BURADA. Oran tek başına ölçek saklıyor:
@@ -1002,21 +1069,37 @@ export default function EndpointsPage() {
                           · {fmtNum(r.errors)}
                         </span>
                       )}
-                    </td>}
-                    {cellOn.has('status') && <td><StatusBreakdown r={r} /></td>}
-                    {cellOn.has('reqPerMin') && <td className="num">{fmtRate(r.reqPerMin)}</td>}
-                    {cellOn.has('avgMs') && <td className="num">
+                    </td>
+                        );
+                        case 'status': return (
+                          <td><StatusBreakdown r={r} /></td>
+                        );
+                        case 'reqPerMin': return (
+                          <td className="num">{fmtRate(r.reqPerMin)}</td>
+                        );
+                        case 'avgMs': return (
+                          <td className="num">
                       {r.avgMs.toFixed(1)} ms
                       {compare && <TrendDelta cur={r.avgMs} prior={r.priorAvgMs} kind="lowerBetter" />}
-                    </td>}
-                    {cellOn.has('p50Ms') && <td className="num">{fmtMs(r.p50Ms)}</td>}
-                    {cellOn.has('p90Ms') && <td className="num">{fmtMs(r.p90Ms)}</td>}
-                    {cellOn.has('p95Ms') && <td className="num">{fmtMs(r.p95Ms)}</td>}
-                    {cellOn.has('p99Ms') && <td className="num">
+                    </td>
+                        );
+                        case 'p50Ms': return (
+                          <td className="num">{fmtMs(r.p50Ms)}</td>
+                        );
+                        case 'p90Ms': return (
+                          <td className="num">{fmtMs(r.p90Ms)}</td>
+                        );
+                        case 'p95Ms': return (
+                          <td className="num">{fmtMs(r.p95Ms)}</td>
+                        );
+                        case 'p99Ms': return (
+                          <td className="num">
                       {r.p99Ms.toFixed(0)} ms
                       {compare && <TrendDelta cur={r.p99Ms} prior={r.priorP99Ms} kind="lowerBetter" />}
-                    </td>}
-                    {cellOn.has('p99Delta') && <td className="num">
+                    </td>
+                        );
+                        case 'p99Delta': return (
+                          <td className="num">
                       {(() => {
                         // v0.9.818 — "YENİ" YALANDI. Prior okuma da
                         // top-N (api.go getEndpoints prior taraması aynı
@@ -1034,8 +1117,10 @@ export default function EndpointsPage() {
                         const cls = d.pct > 5 ? 'var(--err)' : d.pct < -5 ? 'var(--text2)' : 'var(--text3)';
                         return <b style={{ color: cls }}>{d.pct > 0 ? '▲' : d.pct < 0 ? '▼' : ''}{Math.abs(d.pct).toFixed(0)}%</b>;
                       })()}
-                    </td>}
-                    {cellOn.has('spread') && <td className="num"
+                    </td>
+                        );
+                        case 'spread': return (
+                          <td className="num"
                       title="p99 ÷ p50 — the SHAPE of the latency, not its level.\nNear 1: the whole distribution moved, every caller is slow (dependency, pool, node).\nHigh: most calls are fine and a tail is dragging (retries, GC, cold cache, one bad shard).\nSame p99, opposite causes.">
                       {(() => {
                         const sp = spreadOf(r);
@@ -1045,8 +1130,10 @@ export default function EndpointsPage() {
                         const tone = sp >= 10 ? 'var(--err)' : sp >= 4 ? 'var(--warn)' : 'var(--text2)';
                         return <span style={{ color: tone }}>{sp < 10 ? sp.toFixed(1) : Math.round(sp)}×</span>;
                       })()}
-                    </td>}
-                    {cellOn.has('traces') && <td className="sticky-right">
+                    </td>
+                        );
+                        case 'traces': return (
+                          <td className="sticky-right">
                       {/* /traces, bu endpoint'e kapsamlı.
                           ⚠ Bu şerh v0.9.1372'ye kadar "search=path …
                           rootOnly=false" diyordu ve o sürümde YANLIŞ
@@ -1088,7 +1175,11 @@ export default function EndpointsPage() {
                             onClick={e => { e.stopPropagation(); setAlertRow(r); }} />
                         )}
                       </span>
-                    </td>}
+                    </td>
+                        );
+                        default: return null;
+                      }
+                    })()}</Fragment>)}
                   </tr>
                   {isExpanded && (
                     <tr>

@@ -264,10 +264,13 @@ func TestCompareSitesUseSharedPriorWindow(t *testing.T) {
 			[]string{"from.Add(-dur)", "pq.To = from"}},
 		{"api.go",
 			[]string{
-				"prior.From, prior.To = chstore.EndpointsPriorWindow(eq)",
 				"pfrom, pto := servicesPriorWindow(from, to, useMV)",
 			},
 			[]string{"prior.From = from.Add(-dur)", "pfrom, pto := from.Add(-dur), from"}},
+		// v0.10.2209 — getEndpoints kendi dosyasında.
+		{"endpoints_list.go",
+			[]string{"prior.From, prior.To = chstore.EndpointsPriorWindow(eq)"},
+			[]string{"prior.From = from.Add(-dur)"}},
 		{"topology.go",
 			[]string{
 				"pFrom, pTo := chstore.TopologyPriorWindow(from, to)",

@@ -7,7 +7,9 @@
 // üstteki seçicilerle TEK durum; Instance → ?dbinst, Top callers → ?dbcaller).
 import { useMemo, useState, type ReactNode } from 'react';
 import { ColumnFilterShell } from '@/pages/traces/ColumnFilter';
-import { SearchField } from '@/components/ui/SearchField';
+import { Input } from '@/components/shadcn/input'; // ui/SearchField donmuş (uiImportRatchet)
+
+const SEARCH_CTL = 'h-7 bg-field dark:bg-field';
 import { useT } from '@/lib/i18n';
 import { dbFilterValues } from './dbFilterValues';
 
@@ -27,7 +29,7 @@ function Body({ label, value, values, onPick }: { label: string; value: string; 
   const { shown, more } = useMemo(() => dbFilterValues(values, q, value), [values, q, value]);
   return (
     <>
-      <SearchField value={q} onChange={setQ} width="100%" autoFocus
+      <Input type="search" className={SEARCH_CTL} value={q} onChange={e => setQ(e.target.value)} autoFocus
         aria-label={tr('traces.colFilter.search')} placeholder={tr('traces.colFilter.search')}
         onKeyDown={e => { if (e.key === 'Enter' && shown[0]) { e.preventDefault(); onPick(shown[0]); } }} />
       <div className="tcf-list" role="radiogroup" aria-label={label}>
