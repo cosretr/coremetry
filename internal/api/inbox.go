@@ -1148,7 +1148,7 @@ const inboxDefaultPageLimit = 300
 // inboxBadgeQuery — v0.10.1086: Problems sayfasının PARAMETRESİZ açılışta
 // gönderdiği istek (Inbox.tsx: status open, limit 300, sort priority desc —
 // v0.10.2122 S2; önce firstSeen desc —
-// tüm türler, PRIO_DEFAULT ['P1'], servis şeridi, minOcc yok = varsayılan
+// tüm türler, PRIO_DEFAULT ['P1','P2','P3'] (v0.10.2196; önce yalnız P1), servis şeridi, minOcc yok = varsayılan
 // taban + istisna, since/cat yok) + kenar çubuğunun env'i. Aynı parametreler
 // → inboxView'da aynı anahtar: rozet sayfanın önbellek girdisini paylaşır.
 func inboxBadgeQuery(env string) url.Values {
@@ -1160,7 +1160,7 @@ func inboxBadgeQuery(env string) url.Values {
 	// v0.10.1796 — sayfa varsayılanıyla aynı; v0.10.1827 — Incidents ana
 	// anahtarına göre (kapalıyken problem + anomaly).
 	q.Set("kind", strings.Join(inboxKindsDefaultFor(chstore.IncidentsEnabled()), ","))
-	q.Set("prio", "P1")
+	q.Set("prio", "P1,P2,P3") // v0.10.2196 — sayfa PRIO_DEFAULT ile aynı (hepsi)
 	if env != "" {
 		q.Set("env", env)
 	}
@@ -1791,7 +1791,7 @@ func sortInboxItems(items []InboxItem, id, dir string) {
 // the page now.
 //
 // v0.10.1081 (operatör: "Problems sayfasında sadece P1'ler gözüksün ve first
-// seen'e göre sıralı olsun") — sayfanın varsayılan isteği prio=P1 &
+// seen'e göre sıralı olsun") — sayfanın varsayılan isteği prio=P1 (v0.10.2196'dan beri P1,P2,P3) &
 // sort=firstSeen&dir=desc. Öncelik süzgeci (applyInboxFacets) bu çağrıdan
 // ÖNCE koştuğu için tavan yalnız P1'ler arasında ve ilk görülmeye göre
 // keser: en yeni P1 hiçbir zaman tavanın altında kalmaz

@@ -36,7 +36,13 @@ export const PRIO_ALL = ['P1', 'P2', 'P3'] as const;
 // süzgeçten önceki kümeyi sayar; P2/P3 tek tıkla açılır ("tüm öncelikler")
 // ve ?prio= linke biner. Parametresiz eski link artık yalnız P1 gösterir;
 // açık ?prio=P1,P2,P3 bugünkü gibi hepsini.
-export const PRIO_DEFAULT = ['P1'] as const;
+//
+// v0.10.2196 (operatör kararı 2026-11-15, plan S3) — VARSAYILAN YENİDEN HEPSİ:
+// "P1, P2 ve P3 birlikte görünsün". v0.10.1081'in tersi. Sıralama öncelik
+// önce kalır (P1 üstte, SORT_DEFAULT). Açık ?prio=P1 (veya alt küme) yine
+// kazanır ve linke biner; parametresiz adres artık P1+P2+P3 gösterir.
+// Rozet (inboxBadgeQuery) aynı kümeyi sayar. Bildirim kuralları DEĞİŞMEDİ.
+export const PRIO_DEFAULT = ['P1', 'P2', 'P3'] as const;
 // v0.10.1081 — varsayılan sıralama İLK GÖRÜLME, en yeni önce (aynı karar).
 // URL'de `s_inbox` (DataTable sözleşmesi); parametresiz adres bu varsayılanı
 // alır — kişisel localStorage sıralaması OKUNMAZ (persistSort:false), yoksa

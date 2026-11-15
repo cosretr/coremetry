@@ -75,7 +75,7 @@ describe('serviceInboxHref ↔ Inbox süzgeci gidiş-dönüşü', () => {
   it('eski link (?service=&status=open) bu kapsamı VERMİYORDU — hata sınıfı pinli', () => {
     const old = `/inbox?service=orders-api&status=open`;
     const s = inboxScope(old, 'uat');
-    expect(s.prio).toEqual(PRIO_DEFAULT); // yalnız P1 → P2 satırı düşer
+    expect(s.prio).toEqual(PRIO_DEFAULT); // v0.10.2196: varsayılan artık hepsi
     expect(s.kind).toEqual(KIND_DEFAULT); // v0.10.1796: exception satırı düşer
     expect(s.env).toBe('uat');            // yapışkan env → servis elenir
   });

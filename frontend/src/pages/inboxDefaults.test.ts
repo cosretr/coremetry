@@ -43,8 +43,9 @@ describe('Problems varsayılan görünümü', () => {
   // v0.10.1081 — operatör: "Problems sayfasında sadece P1'ler gözüksün ve
   // first seen'e göre sıralı olsun". v0.10.1014'ün öncelik yarısının tersi;
   // tür varsayılanı HER ŞEY kalır. İstek düzeyi Inbox.rowOpen.test.tsx'te.
-  it('öncelik varsayılanı: yalnız P1', () => {
-    expect(arr('PRIO_DEFAULT')).toEqual(['P1']);
+  // v0.10.2196 — operatör 2026-11-15: P1, P2 ve P3 birlikte (1081'in tersi).
+  it('öncelik varsayılanı: P1 + P2 + P3', () => {
+    expect(arr('PRIO_DEFAULT')).toEqual(['P1', 'P2', 'P3']);
     expect(arr('PRIO_ALL')).toEqual(['P1', 'P2', 'P3']);
   });
 

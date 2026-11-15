@@ -730,8 +730,8 @@ export default function InboxPage() {
         <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 14 }}>
           Everything needing a human — Problems (alert rules), open Exception
           groups, and active Anomaly detections. Default view:{' '}
-          <b>{PRIO_DEFAULT.join(' + ')}</b> only, {kindDefault.map(k => KIND_LABEL[k]).join(' + ')},
-          newest first seen first. Click any row to open its detail page.
+          <b>{PRIO_DEFAULT.length === PRIO_ALL.length ? 'all priorities' : `${PRIO_DEFAULT.join(' + ')} only`}</b>,{' '}
+          {kindDefault.map(k => KIND_LABEL[k]).join(' + ')}, P1 first. Click any row to open its detail page.
         </p>
 
         {/* One grouped facet bar (v0.8.38) — status pivot + priority + kind
@@ -767,7 +767,7 @@ export default function InboxPage() {
               tıkla açılır (açılır menüye girmeden), sayılarıyla. */}
           {prioSet.size < PRIO_ALL.length && (
             <Button variant="ghost" size="sm" onClick={allPrio}
-              title="P1, P2 ve P3'ün hepsini göster (?prio=P1,P2,P3)">
+              title="P1, P2 ve P3'ün hepsini göster (varsayılan görünüm)">
               {`tüm öncelikler (${PRIO_ALL.reduce((n, pp) => n + (counts[pp] ?? 0), 0)})`}
             </Button>
           )}

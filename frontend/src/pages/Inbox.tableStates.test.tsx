@@ -155,8 +155,9 @@ describe('Inbox kuyruğu — durumlar tablonun içinde (v0.10.967)', () => {
   // sadece P1'ler gözüksün …"): parametresiz + boş artık "eşleşme yok" der ve
   // süzgeci genişletmeyi önerir — boş bir P1 listesi kuyruğun boş olduğu
   // anlamına gelmez.
-  it('varsayılan (parametresiz, yalnız P1) + boş: eşleşme yok, "genişlet" çaresi', async () => {
-    const el = await mount();
+  // v0.10.2196 — varsayılan artık tüm öncelikler; daraltma açık ?prio=P1 ile.
+  it('açık ?prio=P1 + boş: eşleşme yok, "genişlet" çaresi', async () => {
+    const el = await mount('/inbox?prio=P1&kind=problem,exception,httperror,anomaly,incident');
     const row = stateRow(el);
     expect(row?.dataset.dtState).toBe('no-match');
     expect(row?.textContent).toContain('öncelik / tür süzgecini genişlet');

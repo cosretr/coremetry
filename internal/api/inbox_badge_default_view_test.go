@@ -59,7 +59,7 @@ func badgeMixedFixture() ([]InboxItem, map[string][]string) {
 			Service: "demo-payments", Status: "open", Title: "DemoTimeoutException", StartedAt: base + 40*minute,
 			Exception: &InboxExceptionRef{Fingerprint: "fp-demo-1", Type: "DemoTimeoutException", Occurrences: 120},
 		},
-		// P3 exception — varsayılan (yalnız P1) görünümde yok.
+		// P3 exception — exception türü varsayılanda kapalı (Exceptions çipi).
 		{
 			ID: "exception:fp-demo-2", Kind: "exception", Source: "Exception", Priority: "P3", Severity: "warning",
 			Service: "demo-payments", Status: "open", Title: "DemoParseException", StartedAt: base + 41*minute,
@@ -119,8 +119,10 @@ func TestInboxBadgeEqualsDefaultListRows(t *testing.T) {
 	rows, total := inboxDefaultViewRows(t, items, attached, inboxBadgeQuery(""))
 	// v0.10.1796 — varsayılan tür problem+anomaly+incident: P1 exception
 	// varsayılan görünümde (ve rozette) YOK, Exceptions çipiyle gelir.
-	if total != 1 {
-		t.Fatalf("rozet (total) = %d, want 1 (katlanmış incident; exception çipte)", total)
+	// v0.10.2196 — varsayılan tüm öncelikler: katlanmış P1 incident + P3'e
+	// düşen CPU problemi + P3 log anomalisi.
+	if total != 3 {
+		t.Fatalf("rozet (total) = %d, want 3 (katlanmış incident + 2 P3; exception çipte)", total)
 	}
 	if len(rows) != total {
 		t.Fatalf("liste satırı %d ≠ rozet %d — rozet ekrandaki satır sayısı olmalı", len(rows), total)
@@ -128,19 +130,20 @@ func TestInboxBadgeEqualsDefaultListRows(t *testing.T) {
 	got := map[string]bool{}
 	for _, r := range rows {
 		got[r.ID] = true
-		if r.Priority != "P1" {
-			t.Errorf("%s önceliği %s — varsayılan görünüm yalnız P1", r.ID, r.Priority)
-		}
 	}
-	if !got["incident:inc-1"] || got["exception:fp-demo-1"] {
-		t.Errorf("beklenen satır yalnız incident:inc-1 (exception varsayılanda yok), gelen %v", got)
+	if !got["incident:inc-1"] || !got["problem:p-cpu"] || !got["anomaly:a-demo"] || got["exception:fp-demo-1"] {
+		t.Errorf("beklenen satırlar incident:inc-1 + p-cpu + a-demo (exception varsayılanda yok), gelen %v", got)
+	}
+	// Sıra öncelik önce: P1 üstte.
+	if rows[0].Priority != "P1" || rows[len(rows)-1].Priority != "P3" {
+		t.Errorf("varsayılan sıra P1 üstte olmalı: ilk %s, son %s", rows[0].Priority, rows[len(rows)-1].Priority)
 	}
 	// Exceptions çipi açılınca P1 exception satırı yerinde.
 	withExc := inboxBadgeQuery("")
 	withExc.Set("kind", "problem,exception,httperror,anomaly,incident")
 	rowsExc, totalExc := inboxDefaultViewRows(t, items, attached, withExc)
-	if totalExc != 2 || len(rowsExc) != 2 {
-		t.Errorf("tüm türler görünümü = %d satır / %d toplam, want 2", len(rowsExc), totalExc)
+	if totalExc != 5 || len(rowsExc) != 5 {
+		t.Errorf("tüm türler görünümü = %d satır / %d toplam, want 5", len(rowsExc), totalExc)
 	}
 	for _, r := range rows {
 		if r.ID == "incident:inc-1" && (r.Incident == nil || r.Incident.ProblemCount != 2) {
@@ -176,7 +179,7 @@ func badgeSharesDefaultListKey(t *testing.T, kind string) {
 	s := &Server{}
 	page := url.Values{
 		"status": {"open"}, "limit": {"300"}, "sort": {"priority"}, "dir": {"desc"}, // v0.10.2122 S2
-		"kind": {kind}, "prio": {"P1"}, "subject": {"service"},
+		"kind": {kind}, "prio": {"P1,P2,P3"}, "subject": {"service"},
 	}
 	pageKey, _ := s.inboxView(page)
 	badgeKey, _ := s.inboxView(inboxBadgeQuery(""))
@@ -189,9 +192,9 @@ func badgeSharesDefaultListKey(t *testing.T, kind string) {
 	if envPage != envBadge || envBadge == badgeKey {
 		t.Fatalf("env kapsamlı rozet sayfanın env anahtarını okumalı: %s vs %s", envPage, envBadge)
 	}
-	all := url.Values{"status": {"open"}, "limit": {"300"}, "sort": {"priority"}, "dir": {"desc"}, "prio": {"P1,P2,P3"}}
-	if k, _ := s.inboxView(all); k == badgeKey {
-		t.Fatal("tüm öncelikler görünümü rozetle aynı anahtarı paylaşmamalı")
+	p1 := url.Values{"status": {"open"}, "limit": {"300"}, "sort": {"priority"}, "dir": {"desc"}, "kind": {kind}, "prio": {"P1"}, "subject": {"service"}}
+	if k, _ := s.inboxView(p1); k == badgeKey {
+		t.Fatal("açık ?prio=P1 görünümü rozetle (hepsi) aynı anahtarı paylaşmamalı")
 	}
 }
 
@@ -209,7 +212,7 @@ func TestInboxBadgeQueryMatchesPageDefaults(t *testing.T) {
 	}
 	src := string(b) + "\n" + string(f)
 	for _, want := range []string{
-		"const PRIO_DEFAULT = ['P1'] as const;",
+		"const PRIO_DEFAULT = ['P1', 'P2', 'P3'] as const;",                              // v0.10.2196 (operatör 2026-11-15)
 		"const SORT_DEFAULT = { id: 'priority', dir: 'desc' as const };",                 // v0.10.2122 (S2, onaylı mockup)
 		"const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'anomaly', 'incident'];", // v0.10.1796
 		"const KIND_DEFAULT_RETIRED: readonly InboxKind[] = ['problem', 'anomaly'];",     // v0.10.1827
@@ -220,7 +223,7 @@ func TestInboxBadgeQueryMatchesPageDefaults(t *testing.T) {
 		}
 	}
 	q := inboxBadgeQuery("")
-	if q.Get("limit") != "300" || q.Get("prio") != "P1" || q.Get("sort") != "priority" || q.Get("dir") != "desc" ||
+	if q.Get("limit") != "300" || q.Get("prio") != "P1,P2,P3" || q.Get("sort") != "priority" || q.Get("dir") != "desc" ||
 		q.Get("minOcc") != "" || q.Get("since") != "" || q.Get("cat") != "" {
 		t.Errorf("rozet sorgusu varsayılan görünümden sapıyor: %v", q)
 	}

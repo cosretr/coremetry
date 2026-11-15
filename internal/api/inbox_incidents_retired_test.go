@@ -70,8 +70,9 @@ func TestInboxBadgeDefaultViewRetired(t *testing.T) {
 	withIncidentsOn(t, false)
 	items, attached := badgeMixedFixture()
 	rows, total := inboxDefaultViewRows(t, items, attached, inboxBadgeQuery(""))
-	if total != 2 || len(rows) != 2 {
-		t.Fatalf("emekli varsayılan görünüm %d satır / %d toplam, istenen 2 (katlamasız)", len(rows), total)
+	// v0.10.2196 — varsayılan tüm öncelikler: iki P1 problem + P3 CPU + P3 anomali.
+	if total != 4 || len(rows) != 4 {
+		t.Fatalf("emekli varsayılan görünüm %d satır / %d toplam, istenen 4 (katlamasız)", len(rows), total)
 	}
 	got := map[string]bool{}
 	for _, r := range rows {

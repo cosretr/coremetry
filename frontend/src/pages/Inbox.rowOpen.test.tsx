@@ -294,15 +294,16 @@ describe('eski ?item= linki — tam sayfaya yönlendirme', () => {
 // sıralama ilk görülme yerine ÖNCELİK (aynı öncelikte en eski önce, sunucuda).
 describe('Problems varsayılan isteği', () => {
   const last = () => m.calls[m.calls.length - 1];
-  it('parametresiz /inbox → prio=P1, sort=priority, dir=desc', async () => {
+  // v0.10.2196 — varsayılan tüm öncelikler (operatör 2026-11-15).
+  it('parametresiz /inbox → prio=P1,P2,P3, sort=priority, dir=desc', async () => {
     await mount('/inbox');
-    expect(last().prio).toBe('P1');
+    expect(last().prio).toBe('P1,P2,P3');
     expect(last().sort).toBe('priority');
     expect(last().dir).toBe('desc');
   });
   it('açık ?prio= ve ?s_inbox= aynen gider', async () => {
-    await mount('/inbox?prio=P1,P2,P3&s_inbox=firstSeen.desc');
-    expect(last().prio).toBe('P1,P2,P3');
+    await mount('/inbox?prio=P1&s_inbox=firstSeen.desc');
+    expect(last().prio).toBe('P1');
     expect(last().sort).toBe('firstSeen');
     expect(last().dir).toBe('desc');
   });
@@ -317,13 +318,17 @@ describe('Problems varsayılan isteği', () => {
     await mount('/inbox');
     expect(last().sort).toBe('priority');
   });
-  it('"tüm öncelikler" tek tıkla P1,P2,P3 yazar', async () => {
-    const el = await mount('/inbox');
+  // v0.10.2196 — hepsi artık varsayılan: düğme yalnız daraltılmışken çıkar
+  // ve parametreyi siler (temiz link = varsayılan).
+  it('"tüm öncelikler" tek tıkla varsayılana (P1,P2,P3) döner', async () => {
+    expect([...(await mount('/inbox')).querySelectorAll('button')]
+      .some(b => b.textContent?.startsWith('tüm öncelikler'))).toBe(false);
+    const el = await mount('/inbox?prio=P1');
     const btn = [...el.querySelectorAll('button')].find(b => b.textContent?.startsWith('tüm öncelikler'));
     expect(btn).toBeTruthy();
     act(() => { btn!.click(); });
     await settle();
-    expect(params(el).get('prio')).toBe('P1,P2,P3');
+    expect(params(el).get('prio')).toBeNull();
     expect(last().prio).toBe('P1,P2,P3');
   });
 });

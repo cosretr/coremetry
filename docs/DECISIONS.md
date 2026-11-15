@@ -14137,3 +14137,11 @@ Operatör geri bildirimi (prod pod sayfası, "Son trace'ler" boş).
 - "İstek metrikleri" (RED üçlüsü + Compare to + anomali bantları + annotation şeridi) ve onu besleyen sorgular silindi; «Yavaş» çipi p95 kaynağıyla birlikte gitti (eski `?spans=slow` → Hatalı).
 - `GET /api/pods/trace-scope`: `entity.Resolver.Paths` ile pod kenarı varsa k8s.pod.name + kenarın gerçek span cluster değeri; yoksa iş yükü → servis ("servis geneli" etiketiyle, pod süzgeci yok). Cluster süzgeci Remote Cluster eşlemesinden, ham ad değil.
 - URL'de çip yokken penceredeki hatalı trace sayısı sıfırsa varsayılan «Tümü».
+
+
+## 2026-11-15 — v0.10.2196 — Problems varsayılanı P1 + P2 + P3 (v0.10.1081 "yalnız P1" kararının tersi)
+
+Operatör bildirimi: Problems sayfası parametresiz açılışta yalnız P1 gösteriyordu; P1, P2 ve P3 birlikte görünsün (plan S3'ün öncelik yarısı).
+- `PRIO_DEFAULT` (`pages/inbox/inboxFilters.ts`) = P1,P2,P3; sıralama öncelik önce kalır (P1 üstte). Açık `?prio=` seçimi yine kazanır ve linke biner; "tüm öncelikler" düğmesi parametreyi siler.
+- Kenar çubuğu rozeti (`inboxBadgeQuery`) aynı kümeyi sayar → rozet artık P2/P3 açık satırları da sayar (sayı büyür).
+- Değişmedi: bildirim kuralları (P1 exception anonsu vb.), tür varsayılanı, `subject`/`minOcc` (S3'ün kalanı).
