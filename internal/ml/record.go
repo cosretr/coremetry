@@ -131,7 +131,22 @@ type EventRecord struct {
 	Class            string           `json:"class"`
 	Gates            []RecordGate     `json:"gates,omitempty"`
 	Snapshot         RecordSnapshot   `json:"snapshot"`
-	Title            string           `json:"title"`
+	// Context — v0.10.2242 (Dilim B): aynı penceredeki yan seriler (hacim
+	// kaydı: hata oranı + gecikme). Snapshot ızgarasıyla aynı t0/adım/uzunluk;
+	// A kapıları servis etkisini buradan okur. Boş = yok (diğer dedektörler).
+	Context []RecordContext `json:"context,omitempty"`
+	Title   string          `json:"title"`
+}
+
+// RecordContext — yan seri: ölçü (error_rate | latency), tanımı ve bantlı
+// görüntüsü. Bant olay öncesi referanstan (Method), alarm bandı değil.
+type RecordContext struct {
+	Measure  string         `json:"measure"`
+	Source   string         `json:"source"`
+	Query    string         `json:"query"`
+	Unit     string         `json:"unit"`
+	Method   string         `json:"method"`
+	Snapshot RecordSnapshot `json:"snapshot"`
 }
 
 // DetectionDelay — detected − onset (türetilir, saklanmaz).
@@ -161,6 +176,7 @@ const (
 	RuleEvidenceTitle  = "evidence_repeats_title"
 	RuleClass          = "class"
 	RuleSize           = "size"
+	RuleContextShape   = "context_shape" // v0.10.2242: yan seri ızgarası ana snapshot'la aynı
 )
 
 // ValidateRecord — SAF yazım-öncesi doğrulayıcı. Boş dönüş = geçti.
@@ -197,6 +213,12 @@ func ValidateRecord(r EventRecord) []RecordViolation {
 	}
 	if s.Kind != SeriesKindOccurrence {
 		out = append(out, validateSnapshot(r)...)
+	}
+	for _, c := range r.Context {
+		cs, sn := c.Snapshot, r.Snapshot
+		if cs.T0 != sn.T0 || cs.StepSec != sn.StepSec || len(cs.V) != len(sn.V) || len(cs.Lo) != len(cs.V) || len(cs.Hi) != len(cs.V) || c.Measure == "" || c.Query == "" {
+			add(RuleContextShape, "yan seri %q ızgarası/bandı ana snapshot'la uyuşmuyor", c.Measure)
+		}
 	}
 	if bad := titleNumbersOutsideFields(r); len(bad) > 0 {
 		add(RuleTitleNumbers, "başlıktaki sayı(lar) hiçbir alanla eşleşmiyor: %s", strings.Join(bad, ", "))

@@ -34,6 +34,15 @@ const sloBurnDisabledReason = "slo burn problems disabled"
 // escalationExempt ile aynı önek (tip sistemi kural id önekidir).
 func isSLOBurnRule(ruleID string) bool { return strings.HasPrefix(ruleID, "slo:") }
 
+// escalationExempt — bu kurallar YAŞLANMAYLA ŞİDDET KAZANMAZ (v0.10.800,
+// dış skill denetimi S1): SLO burn-rate problemlerinin şiddeti politikadan
+// gelir (chstore.BurnPolicies); yavaş burn saatlerce açık kalır ve merdiven
+// onu 30 dk'da critical'a, 4 sa'de P1'e taşırdı. İki yerde okunur —
+// escalateStaleProblems süpürmesi ve tazeleme dalı (iki kelepçe).
+// v0.10.2242: v0.9.1294'ün self-volume-spike muafiyeti kural emekli olunca
+// kalktı (hacim artık ML anomalisi, Problem değil).
+func escalationExempt(ruleID string) bool { return isSLOBurnRule(ruleID) }
+
 // evaluateSLOs runs the burn-rate alarm pass — fired by the
 // main evaluator tick. Single-leader gating is already in place
 // at the caller; this just walks SLOs and opens / closes

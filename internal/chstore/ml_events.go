@@ -39,6 +39,13 @@ const (
 	// MLDetectorSignal'da trace. Grup kapısı bu dedektörü hiçbir kolda
 	// saymaz (ml/group_gate.go) — Problem ve bildirim üretmez.
 	MLDetSvcVolumeSpike = "svc_volume_spike"
+	// MLDetSvcTelemetryVolume — v0.10.2242 (anomali kartı Dilim B): ML
+	// motorunun telemetri hacmi dedektörü (ml/volume.go; istek başına span).
+	// svc_volume_spike'ın yerine geçer (evaluator kuralı emekli). Ayrı dedektör
+	// anahtarı YOK (yeni ayar yok): ML ana anahtarıyla koşar; bu yüzden
+	// MLDetectorNames'te yok, sinyali MLDetectorSignal'da trace. Grup/servis
+	// kapısı saymaz (ml/group_gate.go) — Problem ve bildirim üretmez.
+	MLDetSvcTelemetryVolume = "svc_telemetry_volume"
 )
 
 // MLVerdictID — anomaly_verdicts.event_id anahtarı. Önek, eski

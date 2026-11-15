@@ -194,8 +194,10 @@ var (
 // kolunu ya da tek-sinyal kolunu besleyip Problem + bildirimi arka
 // kapıdan geri getirirdi. Açık üye de sayılmaz (yalnız o kalmış grup
 // "bitti" kabul edilir). Pin: group_gate_volume_pin_test.go.
+// v0.10.2242 (Dilim B): halefi svc_telemetry_volume da aynı kuralla (sınıfı
+// ne olursa olsun; servis etkisi hata/gecikme dedektörlerinden gelir).
 func groupExcluded(e chstore.MLEvent) bool {
-	return e.Detector == chstore.MLDetSvcVolumeSpike
+	return e.Detector == chstore.MLDetSvcVolumeSpike || e.Detector == chstore.MLDetSvcTelemetryVolume
 }
 
 // singleWorsening — SAF: olay kötüleşme yönünde mi; count = değeri bir SAYI

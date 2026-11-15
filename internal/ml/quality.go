@@ -315,6 +315,16 @@ func (t *tracker) gc(now time.Time) {
 	t.mu.Unlock()
 }
 
+// regimeLimit — SAF: rejim bastırmasının süresi. v0.10.2242 (Dilim B, K15):
+// telemetri hacmi kaydı rejim kuralından muaf ("<tarih>'ten beri" kartı
+// yaşar), tavan 7 gün; diğerleri RegimeHours.
+func regimeLimit(detector string, q chstore.MLQuality) time.Duration {
+	if detector == detTelemetryVolume {
+		return volMaxDuration
+	}
+	return time.Duration(q.RegimeHours) * time.Hour
+}
+
 // suppression — bastırma sayaçları (self-obs).
 type suppression struct{ Impact, Regime int64 }
 
@@ -343,7 +353,7 @@ func qualityFilter(evs []chstore.MLEvent, cfg chstore.MLConfig, tr *tracker, now
 			continue
 		}
 		first, epID := tr.observe(ev, now, tick)
-		if now.Sub(first) > time.Duration(q.RegimeHours)*time.Hour {
+		if now.Sub(first) > regimeLimit(ev.Detector, q) {
 			sup.Regime++
 			continue
 		}

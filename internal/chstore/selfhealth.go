@@ -58,18 +58,6 @@ type SelfHealthConfig struct {
 	// ChannelConsecFails — bir bildirim kanalını ÖLÜ saymak için gereken
 	// ardışık başarısız gönderim.
 	ChannelConsecFails int `json:"channelConsecFails"`
-	// VolumeSpikeFactor / VolumeSpikeMinSpans — v0.9.1294, hacim
-	// sıçraması kuralı (self-volume-spike). Factor: son 24 saatlik span
-	// hacmi önceki 24 saatin kaç katına çıkarsa sıçrama sayılır.
-	// MinSpans: TABAN GÜRÜLTÜ KAPISI — küçük serviste 3 span → 30 span
-	// 10×'tir ama hiçbir şey ifade etmez; güncel pencere bu mutlak
-	// hacme ulaşmadan kural hiç konuşmaz.
-	//
-	// Eksik alan (bu sürümden ÖNCE kaydedilmiş her blob) patchSelfHealth
-	// ile varsayılana düşer — kısmi blob'un aileyi bozmaması Enabled
-	// pointer'ıyla aynı sözleşme.
-	VolumeSpikeFactor   float64 `json:"volumeSpikeFactor"`
-	VolumeSpikeMinSpans uint64  `json:"volumeSpikeMinSpans"`
 }
 
 // DefaultSelfHealth — kodda yaşayan varsayılanlar.
@@ -101,14 +89,12 @@ type SelfHealthConfig struct {
 func DefaultSelfHealth() SelfHealthConfig {
 	on := true
 	return SelfHealthConfig{
-		Enabled:             &on,
-		IngestStallMin:      10,
-		SpoolMaxFiles:       100_000,
-		SpoolMaxBytes:       10 << 30, // 10 GiB
-		DiskEtaDays:         7,
-		ChannelConsecFails:  3,
-		VolumeSpikeFactor:   4.0,
-		VolumeSpikeMinSpans: 100_000,
+		Enabled:            &on,
+		IngestStallMin:     10,
+		SpoolMaxFiles:      100_000,
+		SpoolMaxBytes:      10 << 30, // 10 GiB
+		DiskEtaDays:        7,
+		ChannelConsecFails: 3,
 	}
 }
 
@@ -161,12 +147,6 @@ func patchSelfHealth(c, d SelfHealthConfig) SelfHealthConfig {
 	}
 	if c.ChannelConsecFails <= 0 {
 		c.ChannelConsecFails = d.ChannelConsecFails
-	}
-	if c.VolumeSpikeFactor <= 0 {
-		c.VolumeSpikeFactor = d.VolumeSpikeFactor
-	}
-	if c.VolumeSpikeMinSpans == 0 {
-		c.VolumeSpikeMinSpans = d.VolumeSpikeMinSpans
 	}
 	return c
 }

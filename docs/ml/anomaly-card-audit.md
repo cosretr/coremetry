@@ -559,6 +559,13 @@ oran `ml_series`'e yazılır (taban okuması oradan, her tikte 4 haftalık MV ta
 (`change_point.go` CUSUM çekirdeği); bitiş: seri banda dönünce. *Risk:* orta-yüksek — giriş span'i olmayan servis (oran tanımsız → ham
 sayım + her zaman `telemetry_volume`); 4 haftada dilim başına ≤ 4 örnek (K6); iki yazıcı aynı anda yaşamamalı (yeni dedektör adı → kimlik
 uzayı ayrık). *Göç:* yok (`ml_series` yeni `part`). *Test:* saf karar tablo testi; kayan pencere simülasyonu; örnek 1 negatif fixture.
+✅ **gemilendi v0.10.2242** (`internal/ml/volume.go`, `volume_record.go`, `volume_test.go`; okuma `chstore/ml_volume.go`). Dedektör
+`svc_telemetry_volume` (ayrı anahtar yok, ML ana anahtarı; lider). Ölçü 5 dk istek başına span (giriş span'i yoksa 5 dk span sayısı); taban
+`ml_series` signal `volume` (part `ratio`/`spans`, saatlik), takvim sınıfı × saat ±1, ≥ 4 örnek, K6 küçük örnek bandı; karar art arda 3 kova
++ saatlik ≥ 6.000 span. Onset kayıtta seriden (`seriesWindow`; CUSUM kullanılmadı). Kayıt `context[]` (yeni isteğe bağlı alan): aynı
+pencerede servis hata oranı + p95 (VM, olay öncesi referans bandı); A1 etki kapısı bunları okur → `wouldTelemetryVolume`. Rejim muafiyeti +
+7 gün tavanı (K15; "yeni normal" notu yok). Evaluator kuralı + `VolumeSpike*` ayarları silindi. Maliyet: tik başına 3 CH; açık olay başına
+1 CH + ≤ 2 VM (tik başına ≤ 5 olay, ≤ 10 VM).
 
 **C — sınıf `telemetry_volume`.** Servis ekibi listesinden SQL'de gizli (`class` süzgeci; eski `svc_volume_spike` satırları dedektör adıyla),
 platform görünümünde listelenir (yer K8). Kart şablonu: "<servis> istek başına span sayısı <a>'dan <b>'ye çıktı (<tarih saat>'ten beri).

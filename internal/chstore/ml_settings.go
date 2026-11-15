@@ -40,7 +40,7 @@ var (
 
 // MLDetectorSignal — SAF: dedektör → 'log' | 'trace' (bilinmeyen → 'log').
 func MLDetectorSignal(detector string) string {
-	if detector == MLDetSvcVolumeSpike {
+	if detector == MLDetSvcVolumeSpike || detector == MLDetSvcTelemetryVolume {
 		return MLSignalTrace // v0.10.2118: evaluator yazar, ML motoru değil (listeye girmez)
 	}
 	if detector == MLDetMemberSvcSlowdown || detector == MLDetMemberMetricAnomaly {

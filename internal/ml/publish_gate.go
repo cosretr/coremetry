@@ -47,9 +47,12 @@ var independentKinds = map[string]bool{"rollout": true, "confirm": true, "except
 
 // seriesMeasure — SAF: serinin ölçü ailesi (yalnız kayıt alanlarından).
 // latency: ms ya da yavaş istek oranı ya da op_latency'den türetilmiş seri;
-// error: hata oranı; "" diğer (hacim, lag, metrik, sayım).
+// error: hata oranı; volume: telemetri hacmi (v0.10.2242, Dilim B);
+// "" diğer (lag, metrik, sayım).
 func seriesMeasure(s RecordSeries) string {
 	switch {
+	case s.Aggregation == volAggRatio || s.Aggregation == volAggSpans:
+		return "volume"
 	case s.Unit == "ms" || s.Aggregation == "slow_ratio" || s.Source == "ml:op_latency":
 		return "latency"
 	case s.Aggregation == "err_ratio":
@@ -238,6 +241,9 @@ func evidenceGate(r EventRecord) RecordGate {
 // service_anomaly olamaz. Diğer ölçülerde hata oranı / gecikme kayıtta yok →
 // değerlendirilemez (B/C hacim kaydı ikisini taşıyınca dolar).
 func impactGate(r EventRecord, occ bool, measure string) RecordGate {
+	if measure == "volume" && !occ {
+		return volumeImpactGate(r)
+	}
 	if occ || measure == "" {
 		return notEvaluable(GateImpact, "kayıtta hata oranı / gecikme serisi yok")
 	}
@@ -259,6 +265,50 @@ func impactGate(r EventRecord, occ bool, measure string) RecordGate {
 	return g
 }
 
+// contextImpact — SAF (v0.10.2242, Dilim B): yan serilerde (hata oranı,
+// gecikme) olay penceresinde yukarı yönde üst bandın üstündeki en uzun art
+// arda koşu (dk) ve değerlendirilebilen yan seri ölçüleri.
+func contextImpact(r EventRecord) (run float64, evaluated []string) {
+	from, to, ok := eventWindow(r)
+	if !ok {
+		return 0, nil
+	}
+	for _, c := range r.Context {
+		if c.Measure != ctxErrorRate && c.Measure != ctxLatency {
+			continue
+		}
+		cr := EventRecord{Snapshot: c.Snapshot}
+		if len(c.Snapshot.V) != len(r.Snapshot.V) {
+			continue
+		}
+		x := outsideRunMin(cr, from, to, "up")
+		if x < 0 {
+			continue
+		}
+		evaluated = append(evaluated, c.Measure)
+		run = math.Max(run, x)
+	}
+	return run, evaluated
+}
+
+// volumeImpactGate — hacim kaydında servis etkisi YAN serilerden: hata oranı
+// ya da gecikme üst bandı aşıyorsa etki var (Passed). İkisi de değerlendirilip
+// bant içindeyse etki yok → sınıf telemetry_volume. Biri eksikse ve etki
+// görünmüyorsa değerlendirilemez.
+func volumeImpactGate(r EventRecord) RecordGate {
+	run, ev := contextImpact(r)
+	g := RecordGate{Name: GateImpact, Passed: run > 0, Value: run, Threshold: float64(r.Snapshot.StepSec) / 60}
+	switch {
+	case run > 0:
+		g.Reason = fmt.Sprintf("hacimle birlikte hata oranı / gecikme üst bandın üstünde %s dk", fmtNum(run))
+	case len(ev) < 2:
+		return notEvaluable(GateImpact, "kayıtta hata oranı / gecikme serisi yok (hacim kaydının yan serisi eksik)")
+	default:
+		g.Reason = "hacim değişti; hata oranı ve gecikme bant içinde — servis etkisi yok, telemetry_volume"
+	}
+	return g
+}
+
 // gateOutcome — bir olayın gölge sonucu (gölge raporunun birimi).
 type gateOutcome struct {
 	Evaluated    bool
@@ -274,6 +324,16 @@ type gateOutcome struct {
 func gateVerdict(r EventRecord, gates []RecordGate) gateOutcome {
 	o := gateOutcome{Evaluated: true}
 	demote := false
+	// v0.10.2242 (Dilim B): hacim kaydı etki kapısı "etki yok" derse (ya da
+	// değerlendirilemeyip kayıt zaten telemetry_volume ise — giriş span'i
+	// olmayan servis) sınıf telemetry_volume; kanıt kapısı onu info'ya indirmez.
+	volume := seriesMeasure(r.Series) == "volume" && r.Series.Kind != SeriesKindOccurrence
+	telemetry := false
+	for _, g := range gates {
+		if volume && g.Name == GateImpact {
+			telemetry = (!g.NotEvaluable && !g.Passed) || (g.NotEvaluable && r.Class == ClassTelemetryVolume)
+		}
+	}
 	for _, g := range gates {
 		switch {
 		case g.NotEvaluable:
@@ -287,7 +347,11 @@ func gateVerdict(r EventRecord, gates []RecordGate) gateOutcome {
 			}
 		}
 	}
-	if !o.Drop && demote && r.Class != ClassInfo {
+	switch {
+	case o.Drop:
+	case telemetry:
+		o.WouldClass = ClassTelemetryVolume
+	case demote && r.Class != ClassInfo:
 		o.WouldClass = ClassInfo
 	}
 	return o

@@ -15,4 +15,5 @@ export const ML_DETECTOR_TR: Record<string, string> = {
   svc_error_rate: 'Servis hata oranı', // v0.10.2077 (spec-ml-service-level dilim 1)
   svc_breadth: 'Yaygın yavaşlama', // v0.10.2086 (dilim 2)
   svc_volume_spike: 'Servis hacmi sıçradı', // v0.10.2119 — evaluator yazar (24 sa / önceki 24 sa span sayısı)
+  svc_telemetry_volume: 'Telemetri hacmi', // v0.10.2242 (Dilim B) — ML hacim dedektörü (istek başına span)
 };

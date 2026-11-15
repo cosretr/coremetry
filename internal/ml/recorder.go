@@ -294,6 +294,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	podBudget := podRecordMaxPerTick // v0.10.2237 (H12): trace_pod_outlier + svc_breadth kaydı
 	attachPodOutlierRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &podBudget, start)
 	attachBreadthRecords(&r.breadthH, cfg, closing, true, r.runs.firstOf, start)
+	vol, volBudget, volVM := r.volume(), volRecordMaxPerTick, volVMMaxPerTick // v0.10.2242 (B): hacim kaydı
+	vol.attachVolumeRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &volBudget, &volVM, start)
 	for _, ev := range closing {
 		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {
@@ -389,6 +391,10 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		return ids
 	}, &podBudget, start)
 	attachBreadthRecords(&r.breadthH, cfg, kept, false, r.runs.firstOf, start)
+	vol.attachVolumeRecords(tctx, deps, cfg, kept, false, r.runs.firstOf, func(ev chstore.MLEvent) []string {
+		ids, _ := r.runs.confirmers(ev, start, confirmWin)
+		return ids
+	}, &volBudget, &volVM, start)
 	for _, ev := range kept {
 		if ev.Stage != chstore.MLStageChronic {
 			r.runs.setEvent(ev)
@@ -465,6 +471,16 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	}
 }
 
+// volume — v0.10.2242 (B): kayıtlı hacim dedektörü (yoksa nil; attach nil güvenli).
+func (r *Recorder) volume() *Volume {
+	for _, d := range r.detectors {
+		if v, ok := d.(*Volume); ok {
+			return v
+		}
+	}
+	return nil
+}
+
 // contribSource — kırılım sorgusunun kaynakları: VM deps'ten; Thanos
 // MetricThanos dedektöründen (querier + backoff paylaşılır).
 func (r *Recorder) contribSource() contribSource {
@@ -490,7 +506,7 @@ func signalOfDetector(dets []Detector, name string) string {
 	switch {
 	case strings.HasPrefix(name, "log"):
 		return chstore.MLSignalLog
-	case strings.HasPrefix(name, "trace"), name == "dependency":
+	case strings.HasPrefix(name, "trace"), name == "dependency", name == detTelemetryVolume:
 		return chstore.MLSignalTrace
 	case strings.HasPrefix(name, "metric"):
 		return chstore.MLSignalMetric

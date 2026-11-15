@@ -67,7 +67,7 @@ export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' |
   // YOK): kayıtlı görüntüye düşünce grafik alanı "grafik kaydı yok" diyordu.
   // Servis Overview'ın istek hızı serisi (aynı ServiceRedChart, aynı uç; yeni
   // sorgu yolu yok).
-  if (e.detector === 'svc_volume_spike') return e.service ? { kind: 'service-red', service: e.service, agg: 'rate', label: 'istek hızı' } : { kind: 'snapshot', reason: 'olay kaydında servis yok' };
+  if (e.detector === 'svc_volume_spike' || e.detector === 'svc_telemetry_volume') return e.service ? { kind: 'service-red', service: e.service, agg: 'rate', label: 'istek hızı' } : { kind: 'snapshot', reason: 'olay kaydında servis yok' };
   if (e.detector === 'metric_kafka' && code.startsWith('metric_kafka|consumer_lag') && !code.includes('@')) {
     return { kind: 'kafka-lag', service: e.service };
   }
