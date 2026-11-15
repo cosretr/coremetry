@@ -482,6 +482,10 @@ Thanos (`@cluster`) olayları ve consumer lag (H2) kapsam dışı. Maliyet: aç�
 aile + etiketler tik anında kanıta (`statusLabel` dahil). Bant: op medyan ± criticalZ·effMAD; servis üst max(2 × medyan, %1), alt 0.
 Hacim aynı ailenin `_count`'u. Maliyet: açık olay başına tik başına 2 VM aralık sorgusu, tik başına ≤ 10 olay.
 
+**H6 — `throughput_drop` göçü.** ✅ **gemilendi v0.10.2222** (`internal/ml/throughput_record.go`, `throughput_record_test.go`). Seri =
+servis × route istek/sn'si (`count` ölçüsünün VM ifadesi, kova penceresi); yön "down" (dip, alt sınır); hacim aynı seriden (istek/sn × adım).
+Maliyet: açık olay başına tik başına 1 VM aralık sorgusu, tik başına ≤ 20.
+
 **H3…Hn — dedektör başına birer sürüm** (§9 tablosu; önerilen sıra: VM metrik → `trace_error_count` → `svc_error_rate` → TraceRED →
 bağımlılık → kırılma noktası → log RED → şablon → pod → `svc_breadth` → oluşum türleri). *Risk:* S/M/L sütunu. *Göç:* yok. *Test:* dedektör başına ölçüt 9 + doğrulayıcı.
 

@@ -275,6 +275,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	attachMetricRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &metBudget, start)
 	errBudget := errRecordMaxPerTick // v0.10.2221 (H5): hata oranı kaydı
 	attachErrorRateRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &errBudget, start)
+	tpBudget := tpRecordMaxPerTick // v0.10.2222 (H6): throughput_drop kaydı
+	attachThroughputRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &tpBudget, start)
 	for _, ev := range closing {
 		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {
@@ -341,6 +343,10 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		ids, _ := r.runs.confirmers(ev, start, confirmWin)
 		return ids
 	}, &errBudget, start)
+	attachThroughputRecords(tctx, deps, cfg, kept, false, r.runs.firstOf, func(ev chstore.MLEvent) []string {
+		ids, _ := r.runs.confirmers(ev, start, confirmWin)
+		return ids
+	}, &tpBudget, start)
 	for _, ev := range kept {
 		if ev.Stage != chstore.MLStageChronic {
 			r.runs.setEvent(ev)

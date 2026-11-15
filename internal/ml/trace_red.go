@@ -230,6 +230,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	// v0.10.2221 (H5): hata oranı serisinin aile/etiketleri (err satırı).
 	errOf := map[string]map[string]any{}
 	famOf := map[int]map[string]any{}
+	cntOf := map[string]map[string]any{}
 	agg := newSvcAgg() // v0.10.2077: servis düzeyi count/err (ek sorgu yok)
 	for fi, pin := range anomaly.REDFamilyPins() {
 		fl := d.familyLabels(ctx, deps.VM, pin, from, to)
@@ -275,6 +276,9 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 				put(svc, tracePart(route, x.measure), last.Unix(), v)
 				if x.measure == "p95" || x.measure == "slow" {
 					srcOf[chstore.MLSeriesKey(svc, route)] = map[string]any{"redFamily": pin.ID, "svcLabel": fl.svc, "routeLabel": fl.route}
+				}
+				if x.measure == "count" { // v0.10.2222 (H6): throughput serisinin aile/etiketleri
+					cntOf[chstore.MLSeriesKey(svc, route)] = map[string]any{"redFamily": pin.ID, "svcLabel": fl.svc, "routeLabel": fl.route}
 				}
 				if x.measure == "err" {
 					errOf[chstore.MLSeriesKey(svc, route)] = map[string]any{"redFamily": pin.ID, "svcLabel": fl.svc, "routeLabel": fl.route, "statusLabel": fl.status}
@@ -374,7 +378,11 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		}
 		if cfg.DetectorOn(detThroughputDrop) && !off {
 			if j := judge(curOf(k), cntBase, cfg, false); j.Fire && j.Direction == "down" && d.dayCap(detThroughputDrop, cfg, now) {
-				evs = append(evs, d.event(detThroughputDrop, svc, route, j, last, cfg, class))
+				ev := d.event(detThroughputDrop, svc, route, j, last, cfg, class)
+				if src := cntOf[chstore.MLSeriesKey(svc, route)]; src != nil {
+					ev.Evidence = mergeEvidence(ev.Evidence, src) // v0.10.2222 (H6)
+				}
+				evs = append(evs, ev)
 			}
 		}
 		if cfg.DetectorOn(detOpLatency) {
