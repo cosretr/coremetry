@@ -46,6 +46,7 @@ import { MLSignalEvidence } from './MLSignalEvidence';
 import { groupStatusText, type MLGroupRow } from './mlGroupRows';
 import { evidenceSource, groupGateLine, groupProblemChip, headerOperation, latestGroupDecision, latestSvcShadow, svcGateLine } from './mlGroupDetail';
 import { MLSourceChart } from './MLSourceChart';
+import { useT } from '@/lib/i18n';
 import { contributorLine, leadFromSnapshot, parseLogsLink, type Contributors } from './mlSourcePanel';
 import { evidenceRows, evidenceSub } from './mlEvidenceRows';
 import { withPanelPeak } from './mlValueText';
@@ -142,6 +143,7 @@ function Section({ id, title, sub, children }: { id: string; title: string; sub?
 }
 
 export function MLReplayContent({ id, autoPlay = false, group = null }: { id: string; autoPlay?: boolean; group?: MLGroupRow | null }) {
+  const t = useT();
   const q = useQuery({ queryKey: [...keys.anomalies.ml, 'replay', id], queryFn: () => api.mlReplay(id), enabled: !!id, staleTime: 30_000, retry: false });
   const snap = q.data?.snapshot ?? null;
   const card = q.data?.card;
@@ -176,7 +178,8 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
     : [{ key: 'lead', kind: signalKindOf(h.detector, h.kind), detector: h.detector, text: card.howMuch, ids: [] as string[] }];
   const snapshotView = (
     <div className="rounded-md border border-border bg-card px-3 py-2.5">
-      {snap && <p className="m-0 mb-1.5 text-xs text-muted-foreground">Kayıtlı görüntü · {Math.round((snap.bucketSec || 300) / 60)} dakikalık kova · normal aralık ince çizgilerle</p>}
+      {/* v0.10.2204 — canlı seri yoksa kayıtlı görüntü; boş durum yalnız ikisi de yokken (courseKind). */}
+      {snap && <p className="m-0 mb-1.5 text-xs text-muted-foreground"><span data-testid="ml-course-kind">{t('mlCourse.snapshot')}</span> · {Math.round((snap.bucketSec || 300) / 60)} dakikalık kova · normal aralık ince çizgilerle</p>}
       {snap && lc ? <MLLogPlayer snap={snap} play={card.play} autoPlay={autoPlay} lc={lc} />
         : snap ? <MLEventPlayer snap={snap} play={card.play} compact />
           : <p className="text-sm text-muted-foreground">Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).</p>}

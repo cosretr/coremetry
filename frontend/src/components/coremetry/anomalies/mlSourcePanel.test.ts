@@ -24,7 +24,7 @@ describe('sourcePanelFor', () => {
     ['Kafka lag → Messaging paneli', ev('metric_kafka', 'metric', 'metric_kafka|consumer_lag'), 'kafka-lag'],
     ['Kafka lag Thanos cluster olayı → o cluster\'ın serisi', ev('metric_kafka', 'metric', 'metric_kafka|consumer_lag@prod-east'), 'metric'],
     ['Kafka throttle → dedektörün serisi (VM)', ev('metric_kafka', 'metric', 'metric_kafka|fetch_throttle'), 'metric'],
-    ['gecikme → Traces şeridi', ev('op_latency', 'trace', 'POST /orders'), 'traces'],
+    ['gecikme → dedektörün VM serisi (v0.10.2204)', ev('op_latency', 'trace', 'POST /orders'), 'metric'],
     ['hata sayısı → Traces şeridi', ev('trace_error_count', 'trace', 'POST /orders'), 'traces'],
     ['bağımlılık → hedefin p95 serisi', ev('dependency_latency', 'trace', 'db|orders'), 'metric'],
     ['bağımlılık hata oranı → hedefin oran serisi (v0.10.2063)', ev('dependency_error_rate', 'trace', 'db|orders'), 'metric'],
@@ -89,16 +89,15 @@ describe('sourcePanelFor', () => {
     expect(highlightColors(['a', 'b'], 'z', res).size).toBe(0);
     expect(highlightColors(['a', 'b'], undefined, res).size).toBe(0);
   });
-  it('gecikme olayı p99 + minMs eşiği; hata olayı hata çubukları önde; route ayrımı', () => {
-    const lat = sourcePanelFor(ev('op_latency', 'trace', '/orders/{id}'), 1);
-    expect(lat).toMatchObject({ kind: 'traces', stat: 'p99', minMs: 1000, byRoute: true, errorsFirst: false });
-    expect(sourcePanelFor(ev('trace_error_count', 'trace', 'POST /orders'))).toMatchObject({ errorsFirst: true, byRoute: false });
-  });
-  it('v0.10.2059: p95 ölçülü gecikme olayı şeridin p95\'ini çizer, eşik çizgisi yok', () => {
-    const p95 = sourcePanelFor({ ...ev('op_latency', 'trace', '/orders/{id}'), evidence: '{"measure":"p95"}' }, 1);
-    expect(p95).toMatchObject({ kind: 'traces', stat: 'p95', byRoute: true });
-    expect(p95).not.toHaveProperty('minMs');
-    expect(sourcePanelFor({ ...ev('op_latency', 'trace', '/x'), evidence: 'bozuk' }, 1)).toMatchObject({ stat: 'p99', minMs: 1000 });
+  // v0.10.2204 (Örnek 4) — gRPC: Code rpc_method değeri, span adı "…BagService/callBagService";
+  // grafik span adında aramaz, dedektörün serisini route değeriyle ister.
+  it('endpoint olayı dedektörün serisi: route değeri + ölçü, span adı değil', () => {
+    const bag = { detector: 'op_latency', signal: 'trace', code: 'callBagService', service: 'bsa-investment-portfolio-customer-prod', evidence: '{"source":"vm","measure":"p95"}' };
+    expect(sourcePanelFor(bag, 1)).toEqual({ kind: 'metric', detector: 'op_latency', service: bag.service, code: 'callBagService', cluster: '', measure: 'p95' });
+    expect(sourcePanelFor({ ...bag, evidence: 'bozuk' }, 1)).toMatchObject({ kind: 'metric', measure: undefined });
+    expect(sourcePanelFor({ ...bag, detector: 'op_error_rate' })).toMatchObject({ kind: 'metric', code: 'callBagService', measure: undefined });
+    expect(sourcePanelFor({ ...bag, code: '' })).toMatchObject({ kind: 'snapshot' });
+    expect(sourcePanelFor(ev('trace_error_count', 'trace', 'POST /orders'))).toMatchObject({ kind: 'traces', errorsFirst: true, byRoute: false });
   });
 });
 

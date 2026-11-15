@@ -153,3 +153,41 @@ func TestTracePodSourceQuery(t *testing.T) {
 		t.Fatal("servissiz sorgu kurulmamalı")
 	}
 }
+
+// v0.10.2204 (Örnek 4) — gRPC endpoint olayının Code'u rpc_method değeri
+// ("callBagService"); grafik span adıyla değil RED serisinin route etiketiyle
+// eşleşir, dedektörün p95'i ve kova penceresiyle.
+func TestTraceREDSourceQuery(t *testing.T) {
+	pin := anomaly.REDFamilyPin{ID: "grpc", Names: "rpc_server_duration_milliseconds", Unit: "ms", ServerErr: "2|13|14",
+		StatusLabels: []string{"rpc_grpc_status_code"}}
+	names := []string{"service_name", "rpc_method", "rpc_service", "rpc_grpc_status_code", "le"}
+	l, ok := PickTraceREDLabels(names, "", pin)
+	if !ok || l.Svc != "service_name" || l.Route != "rpc_method" || l.Status != "rpc_grpc_status_code" {
+		t.Fatalf("etiketler %+v ok=%v", l, ok)
+	}
+	svc := "bsa-investment-portfolio-customer-prod"
+	q, ok := TraceREDSourceQuery(pin, l, svc, "callBagService", "p95", 300, 1)
+	if !ok || q.Unit != "ms" || q.By != "" {
+		t.Fatalf("p95: %+v ok=%v", q, ok)
+	}
+	for _, s := range []string{`histogram_quantile(0.95, sum by (le)`, `rpc_method="callBagService"`, `service_name="` + svc + `"`, "[300s]", "* 1"} {
+		if !strings.Contains(q.Expr, s) {
+			t.Fatalf("p95 ifadesi %q içermiyor: %s", s, q.Expr)
+		}
+	}
+	if strings.Contains(q.Expr, "BagService/") {
+		t.Fatalf("span adı sorguya girmemeli: %s", q.Expr)
+	}
+	if q, _ := TraceREDSourceQuery(pin, l, svc, "callBagService", "slow_ratio", 300, 1); !strings.Contains(q.Expr, "histogram_share(1000,") {
+		t.Fatalf("ms ailesinde eşik ms olmalı: %s", q.Expr)
+	}
+	if q, _ := TraceREDSourceQuery(pin, l, svc, "x", "err_ratio", 0, 1); !strings.Contains(q.Expr, `rpc_grpc_status_code=~"2|13|14"`) || !strings.Contains(q.Expr, "[120s]") {
+		t.Fatalf("err_ratio: %s", q.Expr)
+	}
+	if _, ok := TraceREDSourceQuery(pin, l, svc, "", "p95", 300, 1); ok {
+		t.Fatal("route boşken ok olmamalı")
+	}
+	if _, ok := TraceREDSourceQuery(pin, l, svc, "x", "count", 300, 1); ok {
+		t.Fatal("bilinmeyen ölçü ok olmamalı")
+	}
+}

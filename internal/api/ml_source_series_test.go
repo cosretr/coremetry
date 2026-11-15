@@ -92,3 +92,17 @@ func TestSeriesByLabel(t *testing.T) {
 		t.Fatalf("tavan 1, %d", n)
 	}
 }
+
+func TestTraceREDMeasure(t *testing.T) {
+	for _, c := range [][3]string{
+		{"op_latency", "p95", "p95"}, {"op_latency", "slow_ratio", "slow_ratio"}, {"op_latency", "", "slow_ratio"},
+		{"op_error_rate", "", "err_ratio"}, {"throughput_drop", "p95", "rate"},
+	} {
+		if got := traceREDMeasure(c[0], c[1]); got != c[2] {
+			t.Fatalf("%s/%s = %s", c[0], c[1], got)
+		}
+	}
+	if !isTraceREDDetector("op_latency") || isTraceREDDetector("trace_error_count") {
+		t.Fatal("isTraceREDDetector")
+	}
+}

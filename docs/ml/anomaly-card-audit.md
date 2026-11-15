@@ -114,6 +114,28 @@ kovası "başlangıç"tan **öncedir**. Kapanış satırı son yazılan kopyadı
 Üç ayrı "normal" var: kart metnindeki medyan (43), grafikteki ince çizgiler (aynı 5 dk diliminin q25–q75'i) ve asıl alarm
 sınırı (medyan ± 4·effMAD; sade grafikte hiç çizilmez). Eksen birimsiz: `MLEventPlayer` kayıttaki ham sayıyı çizer.
 
+### 3.1 Örnek 4 — süren olayda grafik hiç yok (`6a03002be1529b57`, v0.10.2204'te düzeltildi)
+
+`bsa-investment-portfolio-customer-prod` · `callBagService`, `op_latency` p95 ("İzleniyor · 14 dk", 12:30'dan beri).
+Kart: "Olayın seyri: Bu olay için grafik kaydı yok"; kanıt satırı başlığı tekrar ediyor, yanında "VictoriaMetrics".
+
+**Kök neden (koddan, kesin):** dedektör VM RED ailesinden okur ve olayın `Code`'u route etiketinin **değeridir**
+(`trace_red.go` `routeLabelCandidates` → gRPC'de `rpc_method="callBagService"`, `event()` `Code: route`). Canlı
+grafik ise Traces şeridiydi: `mlSourcePanel.ts` `op_latency` → `kind:'traces'`, `MLSourceChart.tsx` `TracesStrip`
+→ `spanMetricBatch` (ClickHouse span'leri) süzgeci `{k:'name', op:'=', v:['callBagService']}`; prod span adı
+`com.example.core.grpc.BagService/callBagService` → hiçbir span eşleşmez → `count` boş → sessizce kayıtlı
+görüntüye düşer. Olay 14 dk'lık ve 5 dk'lık görüntü henüz yazılmamış (`snapshot.go`) → boş durum. Örnek 2'deki
+"yol 2 boş" da aynı uyuşmazlık (HTTP'de `http_route` şablonu ile span adı da aynı biçimde ayrışabilir).
+
+**Düzeltme (v0.10.2204):** `op_latency` / `op_error_rate` / `throughput_drop` grafiği dedektörün kendi serisi:
+`/api/ml/source-series?detector=op_latency&code=callBagService&measure=p95` → `ml.TraceREDSourceQuery`
+(aynı aile pinleri ve etiket keşfi `pickTraceLabels`, servis + route matcher, `histogram_quantile(0.95, sum by (le)
+(rate(…_bucket[BucketSec])))` ms; slow → `histogram_share`, hata → oran %, düşüş → istek/sn), 1 dk adım.
+Sıra: canlı seri → kayıtlı görüntü → boş durum (yalnız ikisi de yoksa); başlıkta küçük "canlı seri" / "kayıtlı
+görüntü" etiketi (i18n `mlCourse.*`). Kanıt kaynağı olayın `evidence.source`'undan: trace + `vm` →
+"VictoriaMetrics · span RED metrikleri" (ham trace değil), aksi → "ClickHouse span'leri". Dedektör/eşik değişmedi
+(dilim G/D). Prod doğrulama: kartın Network sekmesinde `source-series` yanıtında `query.expr` ve `series[0].points`.
+
 ## 4. Kayıt nasıl dolar, render'da ne yeniden sorgulanır (Soru 17–18) ve örüntü tablosu (Soru 6)
 
 **S17/S6.** Başlık ve "Ne kadar" her dedektörde `BuildExplainCard` (`explain_card.go:872`) ile `ev.Observed/Baseline/StartedAt/LastSeen`'den

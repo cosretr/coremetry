@@ -16,13 +16,21 @@ export function findGroup(events: MLEvent[] | undefined, id: string): MLGroupRow
   return groupRows(events.filter(e => (e.groupId || `ev:${e.id}`) === key))[0] ?? null;
 }
 
+/** Kaynağı VM RED ailesi olan trace dedektörleri (ml/trace_red.go, trace_pods.go). */
+const TRACE_VM_DETECTORS = new Set(['op_latency', 'op_error_rate', 'throughput_drop', 'trace_pod_outlier']);
+
 /** SAF (test): kanıt satırının kaynak notu — sinyal nereden okundu. */
 export function evidenceSource(detector: string, signal: string, evidence?: string): string {
   if (detector === 'trace_error_count') return "ClickHouse span'leri";
   if (signal === 'log') return 'Elasticsearch';
-  if (signal === 'metric') {
-    const ev = parseObj(evidence ?? '');
-    if (ev.source === 'thanos') return `Thanos · ${typeof ev.cluster === 'string' && ev.cluster ? ev.cluster : 'cluster'}`;
+  const ev = parseObj(evidence ?? '');
+  if (ev.source === 'thanos') return `Thanos · ${typeof ev.cluster === 'string' && ev.cluster ? ev.cluster : 'cluster'}`;
+  // v0.10.2204 (Örnek 4) — trace olayında kaynak olayın kendi kaynağından:
+  // VM RED serisi (span metrikleri) ya da ClickHouse span'leri; "Trace"
+  // rozetinin yanında çıplak "VictoriaMetrics" ham trace sanılıyordu.
+  if (signal === 'trace') {
+    const vm = ev.source === 'vm' || (ev.source === undefined && TRACE_VM_DETECTORS.has(detector));
+    return vm ? 'VictoriaMetrics · span RED metrikleri' : "ClickHouse span'leri";
   }
   return 'VictoriaMetrics';
 }

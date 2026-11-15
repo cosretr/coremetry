@@ -103,7 +103,8 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	family := strings.TrimSpace(q.Get("family"))
-	s.serveCached(w, r, mlSourceSeriesKey(det, svc, code, family, from, to, step), mlSourceSeriesTTL, func(ctx context.Context) (any, error) {
+	measure := strings.TrimSpace(q.Get("measure")) // v0.10.2204: trace_red ölçüsü (p95 | slow_ratio | err_ratio | rate)
+	s.serveCached(w, r, mlSourceSeriesKey(det, svc, code, family+"\x00"+measure, from, to, step), mlSourceSeriesTTL, func(ctx context.Context) (any, error) {
 		out := mlSourceSeriesResponse{StepSec: step, Series: []chstore.SpanMetricSeries{}}
 		rd, vmOK := s.metricChartReaderFor()
 		if det == "trace_pod_outlier" {
@@ -111,6 +112,12 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 				return withReason(out, srcGapNoVM), nil
 			}
 			return s.tracePodSourceSeries(ctx, rd, out, svc, code, family, from, to, step)
+		}
+		if isTraceREDDetector(det) {
+			if !vmOK {
+				return withReason(out, srcGapNoVM), nil
+			}
+			return s.traceREDSourceSeries(ctx, rd, out, svc, code, traceREDMeasure(det, measure), from, to, step)
 		}
 		svcLabel := ""
 		if vmOK {
@@ -203,6 +210,67 @@ func (s *Server) tracePodSourceSeries(ctx context.Context, rd metricChartReader,
 	}
 	if out.Query.Expr == "" {
 		return withReason(out, srcGapNoPodLabels), nil
+	}
+	return withReason(out, ""), nil
+}
+
+// isTraceREDDetector — SAF (v0.10.2204): kaynağı VM RED ailesi olan endpoint
+// dedektörleri (ml/trace_red.go); Code = route etiketinin değeri.
+func isTraceREDDetector(det string) bool {
+	return det == "op_latency" || det == "op_error_rate" || det == "throughput_drop"
+}
+
+// traceREDMeasure — SAF: dedektör + kanıttaki ölçü → sorgu ölçüsü.
+func traceREDMeasure(det, measure string) string {
+	switch det {
+	case "op_error_rate":
+		return "err_ratio"
+	case "throughput_drop":
+		return "rate"
+	}
+	if measure == "p95" {
+		return "p95"
+	}
+	return "slow_ratio" // v0.10.2059 öncesi olay ve "slow" ölçüsü
+}
+
+// traceREDSourceSeries — v0.10.2204: endpoint olayının detay grafiği,
+// dedektörün kendi kaynağı (VM RED ailesi, servis + route etiketi, dedektörün
+// kova penceresi). Eskiden Traces şeridi ClickHouse span'lerinde name =
+// Code arıyordu; gRPC'de Code rpc_method değeri ("callBagService"), span adı
+// "…BagService/callBagService" → hiç nokta yok. Aile başına bir etiket keşfi
+// + bir aralık sorgusu; ilk veri dönen aile.
+func (s *Server) traceREDSourceSeries(ctx context.Context, rd metricChartReader, out mlSourceSeriesResponse, svc, route, measure string,
+	from, to time.Time, step int) (any, error) {
+	cctx, cancel := context.WithTimeout(ctx, mlSourceSeriesTimeout)
+	defer cancel()
+	cfg := s.store.GetMLConfig(ctx)
+	pref := rd.MetricLabelMap().Normalized().Service
+	for _, pin := range anomaly.REDFamilyPins() {
+		names, _, err := rd.MetricLabelNamesIn(cctx, pin.Names+"_count", from.Add(-time.Hour), to)
+		if err != nil {
+			return nil, fmt.Errorf("%w: vm: %v", errUpstream, err)
+		}
+		labels, ok := ml.PickTraceREDLabels(names, pref, pin)
+		if !ok {
+			continue
+		}
+		sq, ok := ml.TraceREDSourceQuery(pin, labels, svc, route, measure, cfg.BucketSec, cfg.SlowRequestSec)
+		if !ok {
+			continue
+		}
+		res, err := rd.QueryPromQLRange(cctx, sq.Expr, from, to, step, anomalyLogChartMaxBuckets+1)
+		if err != nil {
+			return nil, fmt.Errorf("%w: vm: %v", errUpstream, err)
+		}
+		out.Query = sq
+		if len(res) > 0 && len(res[0].Points) > 0 {
+			out.Series = res[:1]
+			return out, nil
+		}
+	}
+	if out.Query.Expr == "" {
+		return withReason(out, srcGapNoExpr), nil
 	}
 	return withReason(out, ""), nil
 }

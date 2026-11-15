@@ -181,6 +181,63 @@ func TracePodSourceQuery(pin anomaly.REDFamilyPin, l TracePodLabels, service, me
 	return SourceQuery{}, false
 }
 
+// TraceREDLabels — v0.10.2204: trace_red'in (op_latency / op_error_rate /
+// throughput_drop) RED ailesinde keşfettiği etiket adları.
+type TraceREDLabels struct{ Svc, Route, Status string }
+
+// PickTraceREDLabels — SAF: dedektörün seçtiği üçlü (pickTraceLabels ile aynı
+// aday sırası; route = http_route | rpc_method | …).
+func PickTraceREDLabels(names []string, svcPreferred string, pin anomaly.REDFamilyPin) (TraceREDLabels, bool) {
+	fl := pickTraceLabels(names, svcPreferred, pin)
+	return TraceREDLabels{Svc: fl.svc, Route: fl.route, Status: fl.status}, fl.ok
+}
+
+// TraceREDSourceQuery — SAF (v0.10.2204): trace_red olayının detay grafiği.
+// Olayın Code'u dedektörün route etiketinin DEĞERİDİR (gRPC'de rpc_method =
+// "callBagService"); span adı ("…BagService/callBagService") değil. Bu yüzden
+// grafik ClickHouse span'lerinden değil dedektörün VM RED serisinden, aynı
+// toplama ve dedektörün kova penceresiyle (winSec) çizilir. measure: p95 (ms) |
+// slow_ratio (%, slowSec eşiği) | err_ratio (%) | rate (istek/sn).
+func TraceREDSourceQuery(pin anomaly.REDFamilyPin, l TraceREDLabels, service, route, measure string, winSec int, slowSec float64) (SourceQuery, bool) {
+	if strings.TrimSpace(service) == "" || strings.TrimSpace(route) == "" || l.Svc == "" || l.Route == "" {
+		return SourceQuery{}, false
+	}
+	if winSec <= 0 {
+		winSec = SourceQueryWinSec
+	}
+	w := fmt.Sprintf("[%ds]", winSec)
+	scope := func(m string) string {
+		return thanos.WithEqualMatcher(thanos.WithEqualMatcher(m, l.Svc, service), l.Route, route)
+	}
+	count, bucket := scope(pin.Names+"_count"), scope(pin.Names+"_bucket")
+	switch measure {
+	case "p95":
+		scale := 1.0
+		if pin.Unit == "s" {
+			scale = 1000
+		}
+		return SourceQuery{Expr: fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s%s))) * %g", bucket, w, scale), Unit: "ms", Label: "Yanıt süresi (p95)"}, true
+	case "slow_ratio":
+		if slowSec <= 0 {
+			return SourceQuery{}, false
+		}
+		thr := slowSec
+		if pin.Unit == "ms" {
+			thr = slowSec * 1000
+		}
+		return SourceQuery{Expr: fmt.Sprintf("100 * (1 - histogram_share(%g, sum by (le) (rate(%s%s))))", thr, bucket, w), Unit: "percent", Label: "Yavaş istek oranı"}, true
+	case "err_ratio":
+		if l.Status == "" {
+			return SourceQuery{}, false
+		}
+		errSel := thanos.WithRegexMatcher(count, l.Status, pin.ServerErr)
+		return SourceQuery{Expr: fmt.Sprintf("100 * sum(rate(%s%s)) / sum(rate(%s%s))", errSel, w, count, w), Unit: "percent", Label: "Hata oranı"}, true
+	case "rate":
+		return SourceQuery{Expr: fmt.Sprintf("sum(rate(%s%s))", count, w), Label: "İstek hızı (istek/sn)"}, true
+	}
+	return SourceQuery{}, false
+}
+
 // depFamilyOf — SAF: olay kodu ("aile|hedef") → aile + hedef.
 func depFamilyOf(code string) (*depFamily, string, bool) {
 	famID, target, ok := strings.Cut(code, "|")

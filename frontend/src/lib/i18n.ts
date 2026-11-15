@@ -384,6 +384,8 @@ const EN: Catalog = {
   'affected.rel.cluster':           'cluster',
   'alertChart.belowFloor':          'points below the rule’s minimum sample count — the evaluator did not measure there (gap)',
   'alertChart.sourceUnknown':       'source: unknown — the server did not report the series source',
+  'mlCourse.live':                  'live series',
+  'mlCourse.snapshot':              'stored snapshot',
 
   // v0.10.1120 — Settings > SSO: trust unverified email (email_verified=false).
   'sso.trustEmail.label':        'Trust unverified email (not recommended)',
@@ -1190,6 +1192,8 @@ const TR: Catalog = {
   'affected.rel.cluster':           'cluster',
   'alertChart.belowFloor':          'nokta kuralın en az örnek sayısının altında — değerlendirici orada ölçmedi (boşluk)',
   'alertChart.sourceUnknown':       'kaynak: bilinmiyor — sunucu dizinin kaynağını bildirmedi',
+  'mlCourse.live':                  'canlı seri',
+  'mlCourse.snapshot':              'kayıtlı görüntü',
 
   'sso.trustEmail.label':        'Doğrulanmamış e-postaya güven (önerilmez)',
   'sso.trustEmail.warning':      'email_verified=false olan girişler yalnız izinli alan adlarından kabul edilir. Risk: e-posta çarpışmasıyla hesap ele geçirme — yalnız kullanıcının e-postasını kendisinin belirleyemediği/değiştiremediği kurumsal IdP\'de (self-registration, e-posta düzenleme, sosyal/brokered IdP yok) ve izinli alan adları tanımlıyken kullanın. Admin ve yerel/LDAP hesaplar bu yolla bağlanmaz (aşağıdaki LDAP hesabı bağlama seçeneği açık değilse). Tercih edilen düzeltme IdP tarafında (Keycloak "Trust Email").',

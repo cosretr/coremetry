@@ -21,6 +21,7 @@ import { api, isCanceled } from '@/lib/api';
 import { serviceHref } from '@/lib/serviceHref';
 import { operationTracesHref, tracesPivotHref } from '@/lib/pivotHref';
 import { fmtClock } from '@/lib/utils';
+import { useT } from '@/lib/i18n';
 import { entryLatencyDSL } from '@/lib/entrySpans';
 import { metricRedSeries, metricRedUnit } from '@/components/cosreChartSpec';
 import type { MLEvent, MLSourceSeries, SpanMetricSeries } from '@/lib/types';
@@ -48,9 +49,12 @@ function Frame({ title, source, marks, link, children }: {
   /** Boş: panelin kendi başlığı yeter (Messaging / metrik paneli başlık taşır; v0.10.2044 tek başlık). */
   title?: string; source: string; marks: string; link?: { label: string; href: string }; children: ReactNode;
 }) {
+  const t = useT();
   return (
     <div data-testid="ml-source-chart" className="rounded-md border border-border bg-card px-3 py-2.5">
       <p className="m-0 mb-1.5 text-xs">
+        {/* v0.10.2204 — hangisi çiziliyor: canlı seri (kayıtlı görüntü değil). */}
+        <span data-testid="ml-course-kind" className="text-muted-foreground">{t('mlCourse.live')} · </span>
         {title && <span className="font-semibold">{title} · </span>}
         <span className="text-muted-foreground">{source}</span>
       </p>
@@ -197,7 +201,7 @@ function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction }: 
   const [data, setData] = useState<MLSourceSeries | null | undefined>(undefined);
   useEffect(() => {
     const ctl = new AbortController();
-    api.mlSourceSeries({ detector: panel.detector, service: panel.service, code: panel.code, family: panel.family, from: win.fromNs, to: win.toNs }, ctl.signal)
+    api.mlSourceSeries({ detector: panel.detector, service: panel.service, code: panel.code, family: panel.family, measure: panel.measure, from: win.fromNs, to: win.toNs }, ctl.signal)
       .then(setData)
       .catch((e: unknown) => { if (!isCanceled(e)) setData(null); });
     return () => ctl.abort();

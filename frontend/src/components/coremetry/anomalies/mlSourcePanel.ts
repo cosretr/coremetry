@@ -7,8 +7,9 @@
 //
 //   Kafka consumer lag (metric_kafka|consumer_lag) → Messaging "Consumer lag
 //     (en kötü partition)" paneli (lib/kafkaMetrics.ts sorgusu, VictoriaMetrics)
-//   trace gecikme / hata / hacim (trace_red, trace_change_point,
-//     trace_error_count) → Traces üst şeridi (VolumeChart, spanMetricBatch)
+//   trace_change_point, trace_error_count → Traces üst şeridi (VolumeChart,
+//     spanMetricBatch); endpoint RED (op_latency / op_error_rate /
+//     throughput_drop, v0.10.2204) → dedektörün VM serisi (source-series)
 //   log olayları → Logs sayfasının histogramı (v0.10.2035; süzgeç kartın Logs
 //     bağlantısından: servis + q + severity; /api/anomalies/log-chart, TEK
 //     _search, ES sayacında `anomaly-detail-log-chart`); bağlantı yoksa kayıtlı
@@ -28,7 +29,7 @@ export type SourcePanel =
   | { kind: 'traces'; service: string; operation: string; byRoute: boolean; stat: StripStat; errorsFirst: boolean; minMs?: number }
   | { kind: 'logs'; service: string; search: string; pattern?: string; severity: number; href: string }
   /** highlight: vurgulanacak seri (sapan pod); family: RED ailesi (trace pod). */
-  | { kind: 'metric'; detector: string; service: string; code: string; cluster: string; highlight?: string; family?: string }
+  | { kind: 'metric'; detector: string; service: string; code: string; cluster: string; highlight?: string; family?: string; measure?: string }
   /** v0.10.2077 — servis düzeyi ML olayı: servis Overview panelinin serisi (ServiceRedChart). */
   | { kind: 'service-red'; service: string; agg: ServiceRedAgg; label: string }
   | { kind: 'snapshot'; reason: string };
@@ -75,14 +76,19 @@ export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' |
     const at = code.indexOf('@');
     return { kind: 'metric', detector: e.detector, service: e.service, code, cluster: at >= 0 ? code.slice(at + 1) : '' };
   }
+  // v0.10.2204 (Örnek 4) — endpoint RED olayları: Code dedektörün VM route
+  // etiketinin DEĞERİ (gRPC'de rpc_method "callBagService"); Traces şeridi
+  // span adında (…BagService/callBagService) arıyordu → nokta yok, grafik boş.
+  // Dedektörün kendi serisi (/api/ml/source-series, aynı ölçü ve kova).
+  if (e.detector === 'op_latency' || e.detector === 'op_error_rate' || e.detector === 'throughput_drop') {
+    if (!code || !e.service) return { kind: 'snapshot', reason: e.service ? 'operasyon yok' : 'olay kaydında servis yok' };
+    const measure = e.detector === 'op_latency' ? (str(evidenceObj(e.evidence).measure) || undefined) : undefined;
+    return { kind: 'metric', detector: e.detector, service: e.service, code, cluster: '', measure };
+  }
   const route = (svc: string, op: string, o: Omit<Extract<SourcePanel, { kind: 'traces' }>, 'kind' | 'service' | 'operation' | 'byRoute'>) =>
     ({ kind: 'traces' as const, service: svc, operation: op, byRoute: op.startsWith('/'), ...o });
   switch (e.detector) {
-    // v0.10.2059 (Davis S1): p95 ölçülü olay → şeridin p95'i (eşik çizgisi yok).
-    case 'op_latency': return code ? route(e.service, code, str(evidenceObj(e.evidence).measure) === 'p95' ? { stat: 'p95', errorsFirst: false } : { stat: 'p99', errorsFirst: false, minMs: slowSec * 1000 }) : { kind: 'snapshot', reason: 'operasyon yok' };
     case 'trace_change_point': return code ? route(e.service, code, { stat: 'p95', errorsFirst: false }) : { kind: 'snapshot', reason: 'operasyon yok' };
-    case 'op_error_rate': return code ? route(e.service, code, { stat: 'p50', errorsFirst: true }) : { kind: 'snapshot', reason: 'operasyon yok' };
-    case 'throughput_drop': return code ? route(e.service, code, { stat: 'p50', errorsFirst: false }) : { kind: 'snapshot', reason: 'operasyon yok' };
     case 'trace_error_count': return code ? { kind: 'traces', service: e.service, operation: code, byRoute: false, stat: 'p50', errorsFirst: true } : { kind: 'snapshot', reason: 'operasyon yok' };
   }
   return { kind: 'snapshot', reason: 'bu sinyal için hazır servis paneli yok' };

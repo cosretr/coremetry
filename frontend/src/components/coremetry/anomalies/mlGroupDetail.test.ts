@@ -25,7 +25,11 @@ describe('findGroup', () => {
 describe('evidenceSource', () => {
   it('sinyalin okunduğu yer', () => {
     expect(evidenceSource('trace_error_count', 'trace')).toBe("ClickHouse span'leri");
-    expect(evidenceSource('op_latency', 'trace')).toBe('VictoriaMetrics');
+    expect(evidenceSource('op_latency', 'trace')).toBe('VictoriaMetrics · span RED metrikleri');
+    // v0.10.2204 — trace olayı kaynağını kanıttan alır; VM değilse VM yazmaz.
+    expect(evidenceSource('op_latency', 'trace', '{"source":"vm","route":"callBagService"}')).toBe('VictoriaMetrics · span RED metrikleri');
+    expect(evidenceSource('trace_change_point', 'trace')).toBe("ClickHouse span'leri");
+    expect(evidenceSource('x', 'trace', '{"source":"spanmetrics_1m"}')).toBe("ClickHouse span'leri");
     expect(evidenceSource('template_spike', 'log')).toBe('Elasticsearch');
     expect(evidenceSource('metric_jvm', 'metric', '{"source":"thanos","cluster":"prod-east"}')).toBe('Thanos · prod-east');
     expect(evidenceSource('metric_kafka', 'metric', '{"source":"vm"}')).toBe('VictoriaMetrics');

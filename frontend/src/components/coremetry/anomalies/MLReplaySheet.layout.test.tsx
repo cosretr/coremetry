@@ -23,10 +23,12 @@ const m = vi.hoisted(() => {
     matches: false, media: q, onchange: null, addListener: () => {}, removeListener: () => {},
     addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
-  return { role: 'viewer', replay: null as unknown, calls: [] as string[], logChart: null as unknown, logChartArgs: [] as unknown[] };
+  return { role: 'viewer', replay: null as unknown, calls: [] as string[], logChart: null as unknown, logChartArgs: [] as unknown[],
+    sourceSeries: null as unknown, sourceArgs: [] as unknown[] };
 });
 vi.mock('@/lib/api', () => ({
   api: new Proxy({}, { get: (_t, k: string) => (k === 'mlReplay' ? async () => m.replay
+    : k === 'mlSourceSeries' ? async (p: unknown) => { m.calls.push(k); m.sourceArgs.push(p); return m.sourceSeries; }
     : k === 'anomalyLogChart' ? async (p: unknown) => { m.calls.push(k); m.logChartArgs.push(p); return m.logChart; }
       : async () => { m.calls.push(k); return null; }) }),
   isCanceled: () => false,
@@ -34,6 +36,7 @@ vi.mock('@/lib/api', () => ({
 vi.mock('@/components/AuthProvider', () => ({ useAuthRole: () => m.role }));
 // uPlot jsdom'da çizilmez (ResizeObserver/canvas yok); düzen testi grafiği değil yerleşimi ölçer.
 vi.mock('@/components/charts/TimeChart', () => ({ TimeChart: () => null }));
+vi.mock('@/pages/service/httpMetricsViz', () => ({ HttpChartPanel: () => null }));
 
 import { MLReplayContent, ML_EVENT_SECTIONS, contextRows } from './MLReplaySheet';
 
@@ -208,7 +211,7 @@ describe('ML olay sayfası düzeni', () => {
     expect(m.calls.filter(c => c === 'anomalyLogChart')).toHaveLength(1);
     expect(m.calls).not.toContain('logsTimeseries');
     expect(m.logChartArgs[0]).toMatchObject({ service: 'orders-api', search: '"payment failed"' });
-    expect(el.querySelector('[data-testid="ml-course"]')!.textContent).toContain('Kayıtlı görüntü');
+    expect(el.querySelector('[data-testid="ml-course"]')!.textContent).toMatch(/kayıtlı görüntü|stored snapshot/);
     act(() => { root?.unmount(); }); host?.remove();
     m.calls = []; m.logChart = [{ name: 'ERROR', points: [{ t: snap.detectedAt, v: 40 }] }];
     el = await render({ snapshot: snap, related: [], card: logCard });
@@ -216,5 +219,33 @@ describe('ML olay sayfası düzeni', () => {
     expect(chart).not.toBeNull();
     expect(chart!.textContent).toContain("Logs'ta aç (bu kalıp)");
     expect(m.calls.filter(c => c === 'anomalyLogChart')).toHaveLength(1);
+  });
+
+});
+
+// v0.10.2204 (Örnek 4, anomaly-card-audit.md) — gRPC endpoint gecikmesi
+// (Code = rpc_method "callBagService", span adı "…BagService/callBagService"):
+// canlı seri dedektörün VM serisinden; yoksa kayıtlı görüntü; ikisi de yoksa
+// boş durum. Hangisinin çizildiği küçük etiketle söylenir; kanıt kaynağı
+// olayın kaynağından (vm).
+describe('Olayın seyri: canlı seri → kayıtlı görüntü → boş durum', () => {
+  const latCard: ExplainCard = { ...card, header: { ...card.header, kind: 'trace', detector: 'op_latency', service: 'bsa-investment-portfolio-customer-prod' } };
+  const latSnap: MLSnapshot = { ...snap, detector: 'op_latency', signal: 'trace', service: 'bsa-investment-portfolio-customer-prod', part: 'callBagService|p95',
+    evidence: '{"source":"vm","route":"callBagService","measure":"p95"}' };
+  const kind = (el: HTMLElement) => el.querySelector('[data-testid="ml-course"] [data-testid="ml-course-kind"]')?.textContent ?? '';
+  it('ham veri varsa canlı seri: dedektörün ölçüsü, route değeriyle', async () => {
+    m.sourceArgs = [];
+    m.sourceSeries = { query: { expr: 'x', unit: 'ms', label: 'Yanıt süresi (p95)' }, stepSec: 60, series: [{ groupKey: [''], points: [{ time: 1, value: 116 }] }] };
+    const el = await render({ snapshot: latSnap, related: [], card: latCard });
+    expect(kind(el)).toMatch(/canlı seri|live series/);
+    expect(m.sourceArgs[0]).toMatchObject({ detector: 'op_latency', code: 'callBagService', measure: 'p95' });
+    expect(m.calls).not.toContain('spanMetricBatch');
+    expect(el.querySelector('[data-testid="ml-evidence-rows"] li')!.textContent).toContain('VictoriaMetrics · span RED metrikleri');
+  });
+  it('canlı seri boşsa kayıtlı görüntü, boş durum değil', async () => {
+    m.sourceSeries = { query: { expr: 'x', label: 'p95' }, stepSec: 60, series: [], reason: 'olay penceresinde kaynakta seri yok' };
+    const el = await render({ snapshot: latSnap, related: [], card: latCard });
+    expect(kind(el)).toMatch(/kayıtlı görüntü|stored snapshot/);
+    expect(el.querySelector('[data-testid="ml-course"]')!.textContent).not.toContain('grafik kaydı yok');
   });
 });
