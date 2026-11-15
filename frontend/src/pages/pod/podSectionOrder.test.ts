@@ -11,7 +11,7 @@ describe('pod sayfası bölüm sırası (v0.10.177, S10)', () => {
   const src = readFileSync(resolve(__dirname, '../Pod.tsx'), 'utf8');
   it('meta satırı → CPU / Bellek · Thanos → Son trace\'ler (v0.10.2195: İstek metrikleri kalktı)', () => {
     const meta = src.indexOf('<PodMetaRow');
-    const infra = src.indexOf('CPU / Bellek · Thanos');
+    const infra = src.indexOf("t('podpage.infraTitle', lang)"); // v0.10.2246 — 'CPU / Bellek · Thanos' (TR katalog)
     const trend = src.indexOf('<ThanosTrendPanel');
     const red = src.indexOf('id="pod-traces"');
     expect(src).not.toContain('PodKpiStrip');

@@ -13,11 +13,13 @@
 //     prop'u; Pod.tsx `ctrQ.error`) ikisi de;
 //   • tazeleme düştüğü hâlde önbellekteki satırlar ekrandaysa şerit görünür
 //     (eski liste sessizce "güncel" okunmasın); hata iki kez basılmaz.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { EntityContainersResponse, EntityRecord } from '@/lib/types';
 import { PodContainersTable } from './PodContextTables';
+// v0.10.2246 — sayfa arayüz dilinde; bu dosya Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

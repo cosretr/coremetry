@@ -44,6 +44,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
 });
 
 import { PodLogsSection } from './PodLogsSection';
+// v0.10.2246 — sayfa arayüz dilinde; bu dosya Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

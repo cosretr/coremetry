@@ -17,6 +17,7 @@ import { PanelTitle } from '@/components/ui/PanelTitle';
 import { LogTable } from '@/components/LogTable';
 import type { DataTableStateProps } from '@/components/ui/DataTable';
 import { LogContextModal } from '@/components/LogContextModal';
+import { t, tf, useLang } from '@/lib/i18n';
 import { levelCounts, POD_LOG_MIN_SEV, type PodLogLevel } from './podLogs';
 
 const POD_LOG_LIMIT = 100;
@@ -30,6 +31,7 @@ export function PodLogsSection({ entityId, from, to, logsLink }: {
   /** /logs sayfasında aynı pod piliyle aç. */
   logsLink: string;
 }) {
+  const lang = useLang(); // v0.10.2246 — metinler arayüz dilinde (podpage.logs.*)
   const [sp, setSp] = useSearchParams();
   const open = sp.get('logs') === '1';
   const lvl = ((sp.get('plvl') as PodLogLevel | null) ?? 'all');
@@ -45,8 +47,8 @@ export function PodLogsSection({ entityId, from, to, logsLink }: {
   }, { replace: true });
 
   useEffect(() => {
-    const t = setTimeout(() => { setText(input); setParam('plq', input.trim() || null); }, 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => { setText(input); setParam('plq', input.trim() || null); }, 300);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input]);
 
@@ -76,50 +78,50 @@ export function PodLogsSection({ entityId, from, to, logsLink }: {
   const showRows = !q.isPending && !q.isError && !degraded && rows.length > 0;
   const bodyHint = (
     <span>
-      Süzgeç pod + namespace + cluster alanlarıdır; log kayıtları bu alanları taşımıyorsa sonuç çıkmaz — <Link to={logsLink}>Loglar sayfasında</Link> servis kapsamıyla bakın.
+      {t('podpage.logs.hint1', lang)}<Link to={logsLink}>{t('podpage.logs.hint2', lang)}</Link>{t('podpage.logs.hint3', lang)}
     </span>
   );
   const logsState: Omit<DataTableStateProps<LogRow>, 'dt' | 'leading' | 'trailing'> =
-    !entityId ? { kind: 'empty', message: 'Pod kimliği çözülemedi (cluster kaydı yok) — loglar pod kapsamıyla sorulamıyor.', detail: bodyHint }
+    !entityId ? { kind: 'empty', message: t('podpage.logs.noId', lang), detail: bodyHint }
     : q.isPending ? { kind: 'loading' }
-    : q.isError ? { kind: 'error', message: "Log backend'i yanıt vermedi." }
+    : q.isError ? { kind: 'error', message: t('podpage.logs.noResp', lang) }
     : degraded ? {
         kind: 'error',
-        message: `Log backend'i yavaş/erişilemez — liste boş gösterilmedi${q.data?.reason ? `: ${q.data.reason}` : '.'}`,
+        message: `${t('podpage.logs.degraded', lang)}${q.data?.reason ? `: ${q.data.reason}` : '.'}`,
       }
     : (text.trim() || lvl !== 'all') ? {
-        kind: 'no-match', message: 'Bu pod için bu pencerede süzgeçle eşleşen log yok.', detail: bodyHint,
+        kind: 'no-match', message: t('podpage.logs.noMatch', lang), detail: bodyHint,
       }
-    : { kind: 'empty', message: 'Bu pod için bu pencerede log yok.', detail: bodyHint };
+    : { kind: 'empty', message: t('podpage.logs.empty', lang), detail: bodyHint };
 
   // v0.10.914 (buton bütünlüğü) — tek seçimli seviye: ortak SegmentedControl.
   const lvlLabel = (label: string, n?: number) => (n !== undefined ? `${label} · ${n}` : label);
 
   return (
     <div className="pod-sec">
-      <PanelTitle sub="varsayılan kapalı · açılınca yüklenir" right={<Link to={logsLink} className="sec">→ Loglar sayfasında aç</Link>}>Loglar</PanelTitle>
+      <PanelTitle sub={t('podpage.logs.sub', lang)} right={<Link to={logsLink} className="sec">{t('podpage.logs.openPage', lang)}</Link>}>{t('podpage.logs.title', lang)}</PanelTitle>
       <Card style={{ padding: 0 }}>
         <DisclosureButton anatomy="section" expanded={open} onClick={() => setParam('logs', open ? null : '1')}>
-          Bu pod'un logları <span className="field-hint">· seçili pencere · en yeni {POD_LOG_LIMIT} satır</span>
+          {t('podpage.logs.disclosure', lang)} <span className="field-hint">{tf('podpage.logs.disclosureHint', lang, { n: POD_LOG_LIMIT })}</span>
         </DisclosureButton>
         {open && (
           <div className="pod-ek-body">
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-              <SegmentedControl size="sm" aria-label="Log seviyesi" value={lvl}
+              <SegmentedControl size="sm" aria-label={t('podpage.logs.level', lang)} value={lvl}
                 onChange={v => setParam('plvl', v === 'all' ? null : v)} options={[
-                  { value: 'all', label: 'Tümü' },
+                  { value: 'all', label: t('podpage.all', lang) },
                   { value: 'error', label: lvlLabel('ERROR', lvl === 'all' && showRows ? counts.error : undefined) },
                   { value: 'warn', label: lvlLabel('WARN+', lvl === 'all' && showRows ? counts.warn : undefined) },
                 ]} />
-              <input className="field" style={{ flex: '1 1 240px', maxWidth: 360 }} placeholder="Ara (mesaj içinde)…"
-                value={input} onChange={e => setInput(e.target.value)} aria-label="Pod logları içinde ara" />
+              <input className="field" style={{ flex: '1 1 240px', maxWidth: 360 }} placeholder={t('podpage.logs.search', lang)}
+                value={input} onChange={e => setInput(e.target.value)} aria-label={t('podpage.logs.searchAria', lang)} />
             </div>
             <LogTable logs={showRows ? rows : NO_LOGS} state={logsState} onContextOpen={setPivot} />
             {showRows && (
               <div className="pod-cap">
-                {rows.length} satır (en yeni önce){rows.length >= POD_LOG_LIMIT ? ' · daha fazlası için Loglar sayfası' : ''}
-                {lvl === 'all' ? ' · çip sayıları bu sayfadaki satırlardan' : ''}
-                {' · '}süzgeç: pod + namespace + cluster alanları (entity kapsamı) · satıra tıkla → bağlam
+                {tf('podpage.logs.count', lang, { n: rows.length })}{rows.length >= POD_LOG_LIMIT ? t('podpage.logs.morePage', lang) : ''}
+                {lvl === 'all' ? t('podpage.logs.chipNote', lang) : ''}
+                {' · '}{t('podpage.logs.filterNote', lang)}
               </div>
             )}
           </div>

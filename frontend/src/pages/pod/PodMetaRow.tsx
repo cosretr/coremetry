@@ -4,6 +4,7 @@ import { Button } from '@/components/shadcn/button';
 import { emitAiPrefill } from '@/components/ai/aiEvents';
 import { serviceHref } from '@/lib/serviceHref';
 import type { TimeRange } from '@/lib/types';
+import { t, tf, useLang } from '@/lib/i18n';
 import { podAgeText, podCosreQuestion } from './podMeta';
 
 // PodMetaRow — /pod meta satırı + "CoSRE'ye sor" eylemi (Clusters S10, plan
@@ -32,26 +33,27 @@ export function PodMetaRow({ meta, cluster, namespace, pod, range, nowMs }: {
   range: TimeRange;
   nowMs: number;
 }) {
-  const age = meta.validFrom ? podAgeText(meta.validFrom, nowMs) : '';
+  const lang = useLang(); // v0.10.2246 — metinler arayüz dilinde (podpage.meta.*)
+  const age = meta.validFrom ? podAgeText(meta.validFrom, nowMs, lang) : '';
   return (
     <div className="pod-meta">
       <dl className="pod-meta__list">
         {meta.service && (
-          <div><dt>Servis</dt><dd title={meta.serviceCount && meta.serviceCount > 1 ? `${meta.serviceCount} servis — tamamı «Taşıdığı servisler»de` : undefined}>
+          <div><dt>{t('podpage.meta.service', lang)}</dt><dd title={meta.serviceCount && meta.serviceCount > 1 ? tf('podpage.meta.svcMore', lang, { n: meta.serviceCount }) : undefined}>
             <Link to={serviceHref(meta.service, { range })}>{meta.service}</Link>
             {meta.serviceCount && meta.serviceCount > 1 ? <span className="pod-meta__more"> +{meta.serviceCount - 1}</span> : null}
           </dd></div>
         )}
         {meta.workload && (
-          <div><dt>İş yükü</dt><dd>{meta.workload.href ? <Link to={meta.workload.href}>{meta.workload.label}</Link> : <span className="mono">{meta.workload.label}</span>}</dd></div>
+          <div><dt>{t('podpage.meta.workload', lang)}</dt><dd>{meta.workload.href ? <Link to={meta.workload.href}>{meta.workload.label}</Link> : <span className="mono">{meta.workload.label}</span>}</dd></div>
         )}
         {meta.node && <div><dt>Node</dt><dd className="mono">{meta.node}</dd></div>}
-        {age && <div><dt>Yaş</dt><dd>{age}</dd></div>}
-        {meta.version && <div><dt>Sürüm</dt><dd className="mono">{meta.version}</dd></div>}
+        {age && <div><dt>{t('podpage.meta.age', lang)}</dt><dd>{age}</dd></div>}
+        {meta.version && <div><dt>{t('podpage.meta.version', lang)}</dt><dd className="mono">{meta.version}</dd></div>}
       </dl>
       <Button variant="outline" size="sm"
-        onClick={() => emitAiPrefill({ question: podCosreQuestion({ cluster, namespace, pod, service: meta.service }) })}>
-        <Sparkles aria-hidden="true" /> CoSRE'ye sor
+        onClick={() => emitAiPrefill({ question: podCosreQuestion({ cluster, namespace, pod, service: meta.service }, lang) })}>
+        <Sparkles aria-hidden="true" /> {t('podpage.meta.ask', lang)}
       </Button>
     </div>
   );

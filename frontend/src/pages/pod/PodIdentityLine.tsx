@@ -8,6 +8,7 @@
 import { Link } from 'react-router-dom';
 import { Stack, Row, Badge } from '@/components/ui';
 import { fmtDateTime } from '@/lib/utils';
+import { t, tf, useLang } from '@/lib/i18n';
 import { entityHref, entityLiveness } from '@/lib/entityHref';
 import { podPhaseBadge } from '@/pages/clusters/thresholds';
 import type { EntityDetailResponse, ClusterPodRow, TimeRange } from '@/lib/types';
@@ -33,6 +34,7 @@ export function PodIdentityLine({ detail, clusterName, namespace, pod, row, at, 
   pageRange: TimeRange;
   pivots: PodPivot[];
 }) {
+  const lang = useLang(); // v0.10.2246 — metinler arayüz dilinde (podpage.id.*)
   const live = detail ? entityLiveness(detail.entity) : null;
   const hrefOpts = { range: pageRange, at: at || undefined, clusterName: detail?.cluster?.name ?? clusterName };
   const chain = detail ? [...detail.parents].reverse().filter(p => p.type !== 'cluster') : [];
@@ -65,23 +67,23 @@ export function PodIdentityLine({ detail, clusterName, namespace, pod, row, at, 
           <Badge tone="info" title={detail?.entity.id ?? pod}>{pod}</Badge>
           {/* v0.10.929 (K5) — canlı pod normal hâl: nötr (EntityDetail emsali). */}
           {live === 'live' && <Badge>live</Badge>}
-          {live === 'stale' && <Badge tone="warning" title="Son senkronda görülmedi; ömür henüz kapanmadı">stale</Badge>}
-          {live === 'gone' && <Badge tone="danger">artık mevcut değil</Badge>}
-          {row?.phase && <span className={`badge ${podPhaseBadge(row.phase)}`} title="Faz — Thanos KSM anlık">{row.phase}</span>}
-          {detail?.entity.nameStable && <Badge tone="neutral" title="Pod uid yok — ömür bölünmesi podGap'e dayanır">name-stable</Badge>}
+          {live === 'stale' && <Badge tone="warning" title={t('podpage.id.stale', lang)}>stale</Badge>}
+          {live === 'gone' && <Badge tone="danger">{t('podpage.id.gone', lang)}</Badge>}
+          {row?.phase && <span className={`badge ${podPhaseBadge(row.phase)}`} title={t('podpage.id.phase', lang)}>{row.phase}</span>}
+          {detail?.entity.nameStable && <Badge tone="neutral" title={t('podpage.id.nameStable', lang)}>name-stable</Badge>}
         </Row>
         {detail && (
           <Row gap={2} wrap>
             <span className="field-hint">
               {live === 'gone'
-                ? `son görülme ${fmtDateTime(new Date(detail.entity.lastSeen))} · ömür ${fmtDateTime(new Date(detail.entity.validFrom))} → ${detail.entity.validTo ? fmtDateTime(new Date(detail.entity.validTo)) : '—'}`
-                : `ömür ${fmtDateTime(new Date(detail.entity.validFrom))} → (açık) · son görülme ${fmtDateTime(new Date(detail.entity.lastSeen))}`}
-              {' · '}kaynak {detail.entity.source}{detail.entity.uid ? ` · uid ${detail.entity.uid}` : ''}
+                ? `${tf('podpage.id.lastSeen', lang, { t: fmtDateTime(new Date(detail.entity.lastSeen)) })} · ${tf('podpage.id.lifetime', lang, { from: fmtDateTime(new Date(detail.entity.validFrom)), to: detail.entity.validTo ? fmtDateTime(new Date(detail.entity.validTo)) : '—' })}`
+                : `${tf('podpage.id.lifetime', lang, { from: fmtDateTime(new Date(detail.entity.validFrom)), to: t('podpage.open', lang) })} · ${tf('podpage.id.lastSeen', lang, { t: fmtDateTime(new Date(detail.entity.lastSeen)) })}`}
+              {' · '}{tf('podpage.id.source', lang, { src: detail.entity.source })}{detail.entity.uid ? ` · uid ${detail.entity.uid}` : ''}
             </span>
             {!!at && detail.atMatch === false && (
-              <Badge tone="warning" title={`İstenen an: ${fmtDateTime(new Date(at))}`}>o anda geçerli kayıt yok — en yakın ömür gösteriliyor</Badge>
+              <Badge tone="warning" title={tf('podpage.id.atWanted', lang, { t: fmtDateTime(new Date(at)) })}>{t('podpage.id.atMiss', lang)}</Badge>
             )}
-            {detail.lifetimes.length > 1 && <span className="field-hint">· {detail.lifetimes.length} ömür (aşağıda «Yaşam döngüsü»)</span>}
+            {detail.lifetimes.length > 1 && <span className="field-hint">{tf('podpage.id.lifetimes', lang, { n: detail.lifetimes.length })}</span>}
           </Row>
         )}
       </Stack>

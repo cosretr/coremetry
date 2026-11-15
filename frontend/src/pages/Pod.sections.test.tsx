@@ -89,6 +89,9 @@ vi.mock('@/components/chart/corePanelEntry', () => ({
 }));
 
 import PodPage from './Pod';
+// v0.10.2246 — sayfa arayüz dilinde; bu dosya Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/i18n')>()), useLang: () => lang.v }));
+const lang = vi.hoisted(() => ({ v: 'tr' as 'tr' | 'en' }));
 
 let host: HTMLElement | null = null;
 let root: Root | null = null;
@@ -142,6 +145,7 @@ function memoryStorage(): Storage {
 beforeEach(() => {
   m.calls.length = 0;
   m.entityDisabled = false;
+  lang.v = 'tr';
   m.scope = { mode: 'pod', clusterValue: 'prod-a', workload: 'wl:c-1/shop/Deployment/cart' };
   try { localStorage.clear(); } catch { /* jsdom */ }
 });
@@ -283,5 +287,32 @@ describe('Pod — trace kapsamı entity modelinden (v0.10.2195)', () => {
     const el = await mount(`/pod?cluster=prod-a&namespace=shop&pod=${POD}`, 'clusterPodDetail');
     await openSection(el, 'Son trace\'ler');
     await until(() => m.calls.some(c => c.name === 'traces' && !(c.args[0] as Record<string, unknown>).hasError), 'Tümü sorgusu');
+  });
+});
+
+// v0.10.2246 — pin: arayüz dili İngilizceyken pod sayfasında bilinen Türkçe
+// etiket ÇİZİLMEZ (kapalı bölümler açılmış hâlde de); İngilizce karşılıklar
+// OpenShift Console sözlüğüyle.
+describe('Pod — İngilizce arayüz (v0.10.2246)', () => {
+  const TR_LABELS = [
+    'Sağlıklı', 'Çalışıyor', 'CoSRE\'ye sor', 'CPU / Bellek', 'Taşıdığı servisler', 'Konteynerler',
+    'Son trace\'ler', 'Ağ ve JVM', 'Etiketler ve geçmiş', 'İş yükü', 'Yaş', 'Servis sayfası', 'Loglar',
+    'seçili pencere', 'anlık durum', 'Son sonlanma', 'Hatalı', 'Tümü', 'Zaman', 'Operasyon', 'Süre',
+    'Eylemler', 'Prometheus sorguları', 'Kardeş pod', 'Yaşam döngüsü', 'Bu pod\'un logları', 'ömür', 'kaynak ',
+  ];
+  it('Türkçe etiket yok; İngilizce başlıklar var', async () => {
+    lang.v = 'en';
+    const el = await mount(URL_FULL, 'entityContainers');
+    await openSection(el, 'Recent traces');
+    await openSection(el, 'Network and JVM');
+    await openSection(el, 'Labels and history');
+    for (let i = 0; i < 6; i++) await tick();
+    const text = el.textContent ?? '';
+    const leaked = TR_LABELS.filter(l => text.includes(l));
+    expect(leaked, `Türkçe etiket İngilizce arayüzde: ${leaked.join(' | ')}`).toEqual([]);
+    for (const en of ['Healthy', 'Running.', 'Ask CoSRE', 'CPU / Memory · Thanos', 'Services on this pod', 'Containers',
+      'Recent traces', 'Network and JVM', 'Labels and history', 'Workload', 'Age', 'Last termination']) {
+      expect(text, en).toContain(en);
+    }
   });
 });

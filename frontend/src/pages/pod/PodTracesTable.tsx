@@ -8,7 +8,7 @@
 // (server-paged tabloda client sort yasak, LOG_COLS/v0.7.54). Sayfa 50, «Daha
 // fazla yükle» sayfa ekler (offset), toplam sayım kapalı (count=skip):
 // «50 · daha fazla var», «50 / N» değil.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -18,25 +18,28 @@ import {
   type ColumnDef, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import { fmtDateTime } from '@/lib/utils';
+import { t, tf, useLang, type Lang } from '@/lib/i18n';
 import { fmtDur } from '@/components/traces/shared';
 import { traceHref } from '@/lib/traceHref';
 import type { TraceRow } from '@/lib/types';
 import { effectiveSpansMode, writeSpansParam, podTraceParams, POD_TRACE_PAGE, type PodTraceCtx, type SpansMode } from './podPage';
 
-const COLS: ColumnDef<TraceRow>[] = [
-  { id: 'time', label: 'Zaman', width: 176 }, // v0.10.191 — fmtDateTime 19 karakter mono; 150'de saniye kırpılıyordu (operatör, prod)
+// v0.10.2246 — başlıklar arayüz dilinde (podpage.col.*).
+const cols = (lang: Lang): ColumnDef<TraceRow>[] => [
+  { id: 'time', label: t('podpage.col.time', lang), width: 176 }, // v0.10.191 — fmtDateTime 19 karakter mono; 150'de saniye kırpılıyordu (operatör, prod)
   { id: 'trace', label: 'Trace', width: 150 },
-  { id: 'service', label: 'Servis', width: 180 },
-  { id: 'op', label: 'Operasyon', width: 320 },
+  { id: 'service', label: t('podpage.col.service', lang), width: 180 },
+  { id: 'op', label: t('podpage.col.op', lang), width: 320 },
   // v0.10.943 (tablo standardı dilim 3) — hatalı trace'in süresi kolon tonu (T9).
-  { id: 'dur', label: 'Süre', width: 90, numeric: true, tone: r => (r.hasError ? 'err' : undefined) },
-  { id: 'spans', label: 'Span', width: 70, numeric: true },
-  { id: 'status', label: 'Durum', width: 90 },
+  { id: 'dur', label: t('podpage.col.dur', lang), width: 90, numeric: true, tone: r => (r.hasError ? 'err' : undefined) },
+  { id: 'spans', label: t('podpage.col.spans', lang), width: 70, numeric: true },
+  { id: 'status', label: t('podpage.col.status', lang), width: 90 },
   // v0.10.943 — satır sonu "→" bağlantısı eylem kolonu (T8); id/width aynı.
-  { id: 'links', label: 'Eylemler', kind: 'actions', width: 50 },
+  { id: 'links', label: t('podpage.col.actions', lang), kind: 'actions', width: 50 },
 ];
 
 export function PodTracesTable({ ctx }: { ctx: Omit<PodTraceCtx, 'mode'> }) {
+  const lang = useLang();
   const [sp, setSp] = useSearchParams();
   const rawSpans = sp.get('spans');
   // Hatalı ilk sayfa (asıl liste errors kipindeyken AYNI queryKey — ek istek yok).
@@ -79,7 +82,8 @@ export function PodTracesTable({ ctx }: { ctx: Omit<PodTraceCtx, 'mode'> }) {
   const error = qs.find(q => q.error)?.error;
   const mvGap = qs.some(q => q.data?.mvGap);
   const narrowed = qs.find(q => q.data?.narrowedFromNs)?.data?.narrowedFromNs;
-  const dt = useDataTable<TraceRow>({ storageKey: 'pod-traces', columns: COLS, rows });
+  const columns = useMemo(() => cols(lang), [lang]);
+  const dt = useDataTable<TraceRow>({ storageKey: 'pod-traces', columns, rows });
   // v0.10.954 — tablo standardı T12: yükleniyor / hata / boş tablonun
   // İÇİNDE, başlık durur; «p95 eşiği yok» kapısı dışarıda (sorgu atılmadı).
   // Zincirin sırası aynı: hata, yüklenmiş sayfalar olsa da satırları gizler
@@ -88,26 +92,24 @@ export function PodTracesTable({ ctx }: { ctx: Omit<PodTraceCtx, 'mode'> }) {
   const showRows = !error && rows.length > 0;
   const tableState: Omit<DataTableStateProps<TraceRow>, 'dt'> =
     rows.length === 0 && loading ? { kind: 'loading' }
-    : error ? { kind: 'error', message: `Trace listesi yüklenemedi: ${String(error)}` }
+    : error ? { kind: 'error', message: tf('podpage.tr.loadErr', lang, { err: String(error) }) }
     : mode !== 'all' ? {
       kind: 'no-match',
-      message: ctx.podExact ? 'Bu pencerede bu pod\'da hatalı trace yok' : 'Bu pencerede servisin hatalı trace\'i yok',
+      message: t(ctx.podExact ? 'podpage.tr.noErrPod' : 'podpage.tr.noErrSvc', lang),
       onClearFilters: () => setMode('all'),
     }
-    : { kind: 'empty', message: ctx.podExact
-      ? 'Bu pencerede bu pod\'a ait trace yok — span\'ler k8s.pod.name taşımıyor ve iş yükü bir servise çözülemedi.'
-      : 'Bu pencerede servisin trace\'i yok.' };
+    : { kind: 'empty', message: t(ctx.podExact ? 'podpage.tr.emptyPod' : 'podpage.tr.emptySvc', lang) };
   return (
     <>
       <div className="pod-chips">
         <span className="field-hint">{ctx.podExact
           ? <>k8s.pod.name = <span className="mono">{ctx.pod}</span></>
-          : <><Badge tone="warning" title="Bu pod'a ait (k8s.pod.name taşıyan) span yok; iş yükünün servisi gösteriliyor — pod'a özgü değil">servis geneli</Badge> servis <span className="mono">{ctx.service}</span></>}
-          {ctx.cluster ? <> · cluster <span className="mono">{ctx.cluster}</span></> : ' · cluster süzgeci yok'}{ctx.podExact && ctx.service ? <> · servis <span className="mono">{ctx.service}</span></> : ''}</span>
-        <Chip active={mode === 'errors'} tone="accent" onClick={() => setMode('errors')} title="hasError=true">Hatalı</Chip>
-        <Chip active={mode === 'all'} onClick={() => setMode('all')}>Tümü</Chip>
-        {mvGap && <Badge tone="warning" title="trace_summary_5m boş bir güne değiyor; liste ham span'lerden okundu (daha yavaş)">MV boşluğu</Badge>}
-        {narrowed && <Badge tone="warning" title={`Sunucu pencereyi daralttı: ${fmtDateTime(new Date(narrowed / 1e6))} sonrası`}>pencere daraltıldı</Badge>}
+          : <><Badge tone="warning" title={t('podpage.tr.wideTitle', lang)}>{t('podpage.tr.wide', lang)}</Badge> {t('podpage.tr.svc', lang)} <span className="mono">{ctx.service}</span></>}
+          {ctx.cluster ? <> · cluster <span className="mono">{ctx.cluster}</span></> : t('podpage.tr.noCluster', lang)}{ctx.podExact && ctx.service ? <> · {t('podpage.tr.svc', lang)} <span className="mono">{ctx.service}</span></> : ''}</span>
+        <Chip active={mode === 'errors'} tone="accent" onClick={() => setMode('errors')} title="hasError=true">{t('podpage.tr.errors', lang)}</Chip>
+        <Chip active={mode === 'all'} onClick={() => setMode('all')}>{t('podpage.all', lang)}</Chip>
+        {mvGap && <Badge tone="warning" title={t('podpage.tr.mvGapTitle', lang)}>{t('podpage.tr.mvGap', lang)}</Badge>}
+        {narrowed && <Badge tone="warning" title={tf('podpage.tr.narrowedTitle', lang, { t: fmtDateTime(new Date(narrowed / 1e6)) })}>{t('podpage.tr.narrowed', lang)}</Badge>}
       </div>
       <div className="table-wrap">
         <table {...dt.tableProps}>
@@ -126,7 +128,7 @@ export function PodTracesTable({ ctx }: { ctx: Omit<PodTraceCtx, 'mode'> }) {
                 <td>{r.hasError
                   ? <span className="badge b-err">error</span>
                   : <span className="sr-only">ok</span>}</td>
-                <DataTableCell dt={dt} col="links" row={r}><Link to={traceHref(r.traceId)} className="sec" title="Trace'i aç">→</Link></DataTableCell>
+                <DataTableCell dt={dt} col="links" row={r}><Link to={traceHref(r.traceId)} className="sec" title={t('podpage.tr.open', lang)}>→</Link></DataTableCell>
               </tr>
             ))}
           </tbody>
@@ -134,9 +136,9 @@ export function PodTracesTable({ ctx }: { ctx: Omit<PodTraceCtx, 'mode'> }) {
       </div>
       <div className="pod-cap" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <span>
-          <code className="mono">GET /api/traces</code> · sunucu sayfalı, {POD_TRACE_PAGE}/sayfa · {rows.length > 0 ? `${rows.length}${hasMore ? ' · daha fazla var' : ' · hepsi bu'}` : ''} · toplam sayım kapalı (count=skip)
+          <code className="mono">GET /api/traces</code>{tf('podpage.tr.paged', lang, { n: POD_TRACE_PAGE })}{rows.length > 0 ? `${rows.length}${t(hasMore ? 'podpage.tr.more' : 'podpage.tr.allShown', lang)}` : ''}{t('podpage.tr.noCount', lang)}
         </span>
-        {(hasMore || loading) && rows.length > 0 && <Button variant="secondary" size="xs" onClick={() => setPages(p => p + 1)} disabled={loading}>{loading ? 'yükleniyor…' : 'Daha fazla yükle'}</Button>}
+        {(hasMore || loading) && rows.length > 0 && <Button variant="secondary" size="xs" onClick={() => setPages(p => p + 1)} disabled={loading}>{t(loading ? 'podpage.loading' : 'podpage.loadMore', lang)}</Button>}
       </div>
     </>
   );

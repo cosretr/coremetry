@@ -5,6 +5,7 @@ import { useQuery, useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { timeRangeToNs } from '@/lib/utils';
+import { t, tf, useLang } from '@/lib/i18n';
 import { clampThanosWindow, THANOS_MAX_WINDOW_LABEL } from '@/lib/thanosWindow';
 import { Topbar } from '@/components/Topbar';
 import { Badge } from '@/components/ui';
@@ -38,7 +39,7 @@ import { entityHref, entityLiveness } from '@/lib/entityHref';
 import { PodIdentityLine, type PodPivot } from '@/pages/pod/PodIdentityLine';
 import { PodMetaRow, type PodMeta } from '@/pages/pod/PodMetaRow';
 import { podVersion } from '@/pages/pod/podMeta';
-import { podStatusWord, podSentence, siblingSentence } from '@/pages/pod/podSentence';
+import { podStatusWord, podStatusWordText, podSentence, siblingSentence } from '@/pages/pod/podSentence';
 import { PodServicesTable } from '@/pages/pod/PodServicesTable';
 import { PodTracesTable } from '@/pages/pod/PodTracesTable';
 import { PodLogsSection } from '@/pages/pod/PodLogsSection';
@@ -76,6 +77,8 @@ export default function PodPage() {
 }
 
 function PodDetail() {
+  // v0.10.2246 — sayfa metinleri arayüz dilinde (lib/i18n podpage.*); TR metin aynen.
+  const lang = useLang();
   const [sp] = useSearchParams();
   const clusterParam = sp.get('cluster') ?? '';
   const nsParam = sp.get('namespace') ?? '';
@@ -196,8 +199,8 @@ function PodDetail() {
   const siblingRows = useMemo(() => joinSiblings(detail?.siblings ?? [], clusterPodsList?.pods), [detail, clusterPodsList]);
   const nearest = detail?.parents[0];
   const siblingLabel = nearest?.type === 'workload'
-    ? `aynı iş yükü · ${nearest.labels?.kind ?? 'workload'}/${nearest.name}`
-    : nearest?.type === 'namespace' ? `namespace ${nearest.name} içindeki diğer pod'lar` : 'kardeş pod\'lar';
+    ? tf('podpage.sibSame', lang, { wl: `${nearest.labels?.kind ?? 'workload'}/${nearest.name}` })
+    : nearest?.type === 'namespace' ? tf('podpage.sibNs', lang, { ns: nearest.name }) : t('podpage.sibGeneric', lang);
 
   // JVM/JBoss JMX — pod'a filtreli (byPod=false: tek pod, jboss datasource'a
   // gruplanır, jvm toplam). deploy JMX keşfini sürer. v0.10.160: KAPALI
@@ -226,7 +229,7 @@ function PodDetail() {
     return (
       <>
         <Topbar title="Pod" />
-        <PageShell><Empty icon="—" title="Pod belirtilmedi (pod parametresi gerekli)." /></PageShell>
+        <PageShell><Empty icon="—" title={t('podpage.noPod', lang)} /></PageShell>
       </>
     );
   }
@@ -245,17 +248,17 @@ function PodDetail() {
     // v0.9.965 — GERİ linki penceresini taşır: pod'a özel bir pencereden
     // gelen operatör "← servis" dediğinde aynı zaman aralığına döner.
     { href: service ? serviceHref(service, { range, tab: backTab }) : '/clusters', label: `← ${service ? `${service} · ${backLabel}` : 'Clusters'}` },
-    ...(service ? [{ href: serviceHref(service, { range }), label: 'Servis sayfası ↗' }] : []),
-    { href: tracesHref, label: 'Trace\'ler ↗', title: traceScope.podExact ? 'k8s.pod.name = pod' : `servis geneli · ${traceScope.service}` },
-    { href: logsHref({ window: range, service: service || undefined, cluster: traceCluster || undefined, filters: logsPodPill }), label: 'Loglar ↗', title: 'kubernetes.pod_name pili (ES alan süzgeci; CH lokalde gövde araması — pili kaldırınca servis kapsamı kalır)' },
+    ...(service ? [{ href: serviceHref(service, { range }), label: t('podpage.svcPage', lang) }] : []),
+    { href: tracesHref, label: t('podpage.traces', lang), title: traceScope.podExact ? 'k8s.pod.name = pod' : tf('podpage.svcWide', lang, { svc: traceScope.service }) },
+    { href: logsHref({ window: range, service: service || undefined, cluster: traceCluster || undefined, filters: logsPodPill }), label: t('podpage.logs', lang), title: t('podpage.logsTitle', lang) },
   ];
   // Clusters S11 — durum sözcüğü / cümle (ClusterPodRow + konteynerler) ve
   // kardeş kıyası (kardeşlerin limit %si aynı topk listesinden; ek sorgu yok).
   const statusWord = podStatusWord(row, ctrQ.data?.containers);
-  const statusSentence = podSentence(row, ctrQ.data?.containers);
+  const statusSentence = podSentence(row, ctrQ.data?.containers, lang);
   const podPctByName = new Map((clusterPodsList?.pods ?? []).map(p => [p.pod, p.memPct]));
   const siblingText = siblingSentence(row, siblingRows.filter(r => r.known && r.name !== pod)
-    .map(r => ({ memPct: podPctByName.get(r.name), memBytes: r.memBytes })));
+    .map(r => ({ memPct: podPctByName.get(r.name), memBytes: r.memBytes })), lang);
   // Clusters S10 — meta satırı zaten yüklü veriden (ek sorgu yok); olmayan alan çizilmez.
   const metaServices = svcQ.data?.services ?? [];
   const metaWorkload = detail?.parents.find(p => p.type === 'workload');
@@ -278,15 +281,15 @@ function PodDetail() {
           row={row} at={atParam} pageRange={range} pivots={pivots} />
         {podClusterMatches.length > 1 && (
           <div className="pod-cap" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
-            <Badge tone="warning">bu ad {podClusterMatches.length} cluster'da var</Badge>
-            <span>gösterilen: <span className="mono">{cluster}</span> · öteki:</span>
+            <Badge tone="warning">{tf('podpage.multiCluster', lang, { n: podClusterMatches.length })}</Badge>
+            <span>{t('podpage.shown', lang)} <span className="mono">{cluster}</span> {t('podpage.others', lang)}</span>
             {podClusterMatches.filter(c => c !== cluster).map(c => (
               <Link key={c} to={podDetailPath({ pod, cluster: c, namespace: nsParam || undefined, service: service || undefined, range: rangeParam || null, at: atParam || undefined })} className="sec mono">{c}</Link>
             ))}
           </div>
         )}
         {!row && !podsPending && searchTruncated && (
-          <div className="pod-cap"><Badge tone="warning">Pod listesi sunucuda kesildi (topk 500)</Badge> bu pod kesilen kuyrukta kalmış olabilir; Thanos alanları «—» ise «yok» kesin değil.</div>
+          <div className="pod-cap"><Badge tone="warning">{t('podpage.cut', lang)}</Badge> {t('podpage.cutTail', lang)}</div>
         )}
 
         {/* Clusters S10 (D8) — KPI şeridi kalktı (RED serilerinden türüyordu,
@@ -294,7 +297,7 @@ function PodDetail() {
         {/* Clusters S11 (§10.2) — durum sözcüğü + deterministik düz cümle (model yok). */}
         {(statusWord || statusSentence) && (
           <p className="pod-status">
-            {statusWord && <span className={statusWord === 'Sorunlu' ? 'pod-status__word pod-status__word--err' : statusWord === 'Dikkat' ? 'pod-status__word pod-status__word--warn' : 'pod-status__word'}>{statusWord}</span>}
+            {statusWord && <span className={statusWord === 'Sorunlu' ? 'pod-status__word pod-status__word--err' : statusWord === 'Dikkat' ? 'pod-status__word pod-status__word--warn' : 'pod-status__word'}>{podStatusWordText(statusWord, lang)}</span>}
             {statusSentence && <span>{statusSentence}</span>}
           </p>
         )}
@@ -306,8 +309,8 @@ function PodDetail() {
             grafikleri span'lerden türer ve span'siz pod'da boştur (görüntü:
             üç «çizilecek nokta yok» kartı, CPU/Mem ekran dışındaydı). */}
         <div className="pod-sec">
-          <PanelTitle sub={cluster ? `Thanos PodTrend · konteynerlerin toplamı${clamped ? ` · pencere tavanı son ${THANOS_MAX_WINDOW_LABEL}` : ''}` : undefined}>
-            CPU / Bellek · Thanos{cluster ? <> · <span className="mono">{cluster}</span></> : ''}
+          <PanelTitle sub={cluster ? `${t('podpage.infraSub', lang)}${clamped ? tf('podpage.infraClamp', lang, { w: THANOS_MAX_WINDOW_LABEL }) : ''}` : undefined}>
+            {t('podpage.infraTitle', lang)}{cluster ? <> · <span className="mono">{cluster}</span></> : ''}
           </PanelTitle>
           {cluster ? (
             <>
@@ -315,7 +318,7 @@ function PodDetail() {
                   sorgular, satırsız modu destekler ve boş pencereyi kendisi
                   söyler — «seri yok» demek için önce Thanos'a bakılır. */}
               {!row && !podsPending && (
-                <div className="pod-cap">{live === 'gone' ? 'Sonlanmış pod — Thanos\'ta güncel seri beklenmez; ömür penceresi için Clusters sayfasında tarihsel pencere seçin.' : 'Pod topk 500 listesinde değil — request/limit çizgileri yok; seri varsa yine çizilir.'}</div>
+                <div className="pod-cap">{t(live === 'gone' ? 'podpage.goneInfra' : 'podpage.notInTopk', lang)}</div>
               )}
               {/* Madde 4 sweep — trend drag-zoom sayfa range'ine yazar,
                   çift-tık geri-yığını pop eder (audit §2.4 kararı güncellendi). */}
@@ -323,14 +326,14 @@ function PodDetail() {
                 onZoom={handleZoom} onZoomReset={handleZoomReset} />
             </>
           ) : (
-            <div className="pod-cap">{podsPending ? 'cluster çözülüyor…' : 'cluster çözülemedi — Thanos kaynaklarında bu pod bulunamadı.'}</div>
+            <div className="pod-cap">{t(podsPending ? 'podpage.resolving' : 'podpage.unresolved', lang)}</div>
           )}
         </div>
 
         {/* Taşıdığı servisler — entity_seen_5m (bayrak açıkken) */}
         {entityOn && (entityId ? (
           <div className="pod-sec">
-            <PanelTitle sub="entity_seen_5m · seçili pencere">Taşıdığı servisler</PanelTitle>
+            <PanelTitle sub={t('podpage.seenSub', lang)}>{t('podpage.services', lang)}</PanelTitle>
             <PodServicesTable data={svcQ.data} pending={svcQ.isPending} error={svcQ.error} pod={pod}
               spanCluster={traceCluster} pageRange={range} />
           </div>
@@ -338,22 +341,22 @@ function PodDetail() {
           /* v0.10.190 (inceleme #7) — bölüm GİZLENMEZ: namespace çözülemedi
              (URL'de yok + Thanos topk 500 listesinde değil / Thanos yok) → açık ilan */
           <div className="pod-sec">
-            <PanelTitle sub="entity_seen_5m · seçili pencere">Taşıdığı servisler</PanelTitle>
-            <Empty icon="—" title="Namespace çözülemedi — servis listesi kurulamadı">{cid ? 'Pod adı Thanos pod listesinde (topk 500) bulunamadı ya da Thanos yanıt vermedi; URL\'de ?namespace= yok. Alttaki trace listesi yalnız pod adıyla süzer.' : 'Cluster çözülemedi.'}</Empty>
+            <PanelTitle sub={t('podpage.seenSub', lang)}>{t('podpage.services', lang)}</PanelTitle>
+            <Empty icon="—" title={t('podpage.nsUnresolved', lang)}>{t(cid ? 'podpage.nsUnresolvedBody' : 'podpage.clusterUnresolved', lang)}</Empty>
           </div>
         ))}
 
         {/* Konteynerler — Thanos KSM anlık (canlı pod) */}
         {entityOn && detail && live !== 'gone' && (
           <div className="pod-sec">
-            <PanelTitle sub="Thanos KSM · anlık durum">Konteynerler</PanelTitle>
+            <PanelTitle sub={t('podpage.ksmSub', lang)}>{t('podpage.containers', lang)}</PanelTitle>
             <PodContainersTable ctr={ctrQ.data} pending={ctrQ.isPending} containerRecs={detail.containers} />
           </div>
         )}
         {entityOn && detail && live === 'gone' && (
           <div className="pod-sec">
-            <PanelTitle sub="pod artık mevcut değil">Konteynerler</PanelTitle>
-            <div className="pod-cap">Sonlanmış pod: KSM anlık durum yok{detail.containers && detail.containers.length > 0 ? ` · kayıtlı konteynerler: ${detail.containers.map(c => c.name).join(', ')}` : ''}. Ömür ve son görülme yukarıda.</div>
+            <PanelTitle sub={t('podpage.goneSub', lang)}>{t('podpage.containers', lang)}</PanelTitle>
+            <div className="pod-cap">{t('podpage.goneCtr', lang)}{detail.containers && detail.containers.length > 0 ? tf('podpage.goneCtrNames', lang, { names: detail.containers.map(c => c.name).join(', ') }) : ''}{t('podpage.goneCtrTail', lang)}</div>
           </div>
         )}
 
@@ -362,8 +365,8 @@ function PodDetail() {
         {entityOn && detail && siblingText && (
           <div className="pod-sec">
             <PanelTitle sub={siblingLabel}
-              right={nearest?.type === 'workload' ? <Link to={entityHref(nearest, { range, at: atParam || undefined, clusterName: detail.cluster?.name ?? cluster })} className="sec">→ iş yükü sayfası</Link> : undefined}>
-              Aynı iş yükündeki diğer pod'lar
+              right={nearest?.type === 'workload' ? <Link to={entityHref(nearest, { range, at: atParam || undefined, clusterName: detail.cluster?.name ?? cluster })} className="sec">{t('podpage.wlPage', lang)}</Link> : undefined}>
+              {t('podpage.sameWl', lang)}
             </PanelTitle>
             <p className="pod-cap">{siblingText}</p>
           </div>
@@ -372,21 +375,21 @@ function PodDetail() {
         {/* Clusters S10 (plan §0 D8, onaylı Pod mockup'ı) — KAPALI bölümler;
             gövde yalnız açıkken monte edilir, verisi açılınca çekilir. */}
         <div className="pod-sec">
-          <CollapsedSection id="pod-traces" title="Son trace'ler" summary={traceScope.podExact ? 'hatalı olanlar önce' : `servis geneli · ${traceScope.service}`}
-            actions={<Link to={tracesHref} className="sec">→ Traces'te aç</Link>}
+          <CollapsedSection id="pod-traces" title={t('podpage.recentTraces', lang)} summary={traceScope.podExact ? t('podpage.errorsFirst', lang) : tf('podpage.svcWide', lang, { svc: traceScope.service })}
+            actions={<Link to={tracesHref} className="sec">{t('podpage.openTraces', lang)}</Link>}
             open={tracesOpen} onOpenChange={setSecOpen('traces')}>
-          {multiSpanCluster && !traceCluster && <div className="pod-cap">Cluster kaydı birden çok span değeri taşıyor ({spanCluster}) — trace süzgecinde cluster UYGULANMADI.</div>}
+          {multiSpanCluster && !traceCluster && <div className="pod-cap">{tf('podpage.multiSpan', lang, { values: spanCluster })}</div>}
           {scopeQ.isLoading ? <Spinner /> : <PodTracesTable ctx={{ pod, from, to, cluster: traceCluster, service: traceScope.service, podExact: traceScope.podExact }} />}
           </CollapsedSection>
-          <CollapsedSection id="pod-netjvm" title="Ağ ve JVM" summary="ağ giriş / çıkış, heap, GC, thread"
+          <CollapsedSection id="pod-netjvm" title={t('podpage.netJvm', lang)} summary={t('podpage.netJvmSum', lang)}
             open={jmxOpen} onOpenChange={setSecOpen('netjvm')}>
             {row && (row.netInBps || row.netOutBps) ? (
-              <div className="pod-cap">Ağ: {[row.netInBps ? `giriş ${fmtBps(row.netInBps)}` : '', row.netOutBps ? `çıkış ${fmtBps(row.netOutBps)}` : ''].filter(Boolean).join(' · ')}</div>
+              <div className="pod-cap">{t('podpage.net', lang)} {[row.netInBps ? tf('podpage.netIn', lang, { v: fmtBps(row.netInBps) }) : '', row.netOutBps ? tf('podpage.netOut', lang, { v: fmtBps(row.netOutBps) }) : ''].filter(Boolean).join(' · ')}</div>
             ) : null}
-            <h4 className="pod-sub">{jmxTitle(jmxMetrics)} <span className="field-hint">· pod'a filtreli · deploy {deploy || '—'}</span></h4>
-            {!cluster || !namespace ? <div className="pod-cap">cluster/namespace çözülmeden JMX keşfi yapılamaz.</div>
+            <h4 className="pod-sub">{jmxMetrics.length === 0 ? t('podpage.jmxNoMetrics', lang) : jmxTitle(jmxMetrics)} <span className="field-hint">{tf('podpage.jmxHint', lang, { d: deploy || '—' })}</span></h4>
+            {!cluster || !namespace ? <div className="pod-cap">{t('podpage.jmxNeedNs', lang)}</div>
               : jmxMetricsQ.isPending ? <Spinner />
-              : jmxMetrics.length === 0 ? <div className="pod-cap">Bu deploy için JMX metriği keşfedilmedi.</div>
+              : jmxMetrics.length === 0 ? <div className="pod-cap">{t('podpage.jmxNone', lang)}</div>
               : (
                 <div className="grid-2 pod-jmx-grid">
                   {jmxMetrics.map((m, i) => {
@@ -409,7 +412,7 @@ function PodDetail() {
                 </div>
               )}
             {/* v0.9.574 — PromQL listesi UI'da yok; pod kapsamlı statik metin bu bölümde kalır. */}
-            <h4 className="pod-sub">Prometheus sorguları <span className="field-hint">· pod kapsamı</span></h4>
+            <h4 className="pod-sub">{t('podpage.promQueries', lang)} <span className="field-hint">{t('podpage.podScope', lang)}</span></h4>
             <div className="pod-ek-prom">
               <PromQLList queries={[
                 ['CPU (cores)', `rate(container_cpu_usage_seconds_total{namespace="${promQuote(namespace)}",pod="${promQuote(pod)}"}[5m])`],
@@ -418,20 +421,20 @@ function PodDetail() {
             </div>
           </CollapsedSection>
           {entityOn && detail && (
-            <CollapsedSection id="pod-labels" title="Etiketler ve geçmiş" summary="pod etiketleri, aynı adla önceki kayıtlar"
+            <CollapsedSection id="pod-labels" title={t('podpage.labelsHist', lang)} summary={t('podpage.labelsHistSum', lang)}
               open={openSecs.has('labels')} onOpenChange={setSecOpen('labels')}>
               <PanelTitle sub={`${siblingLabel} · ${detail.siblings?.length ?? 0}${(detail.siblings?.length ?? 0) >= 50 ? '+' : ''} pod`}>
-                Kardeş pod'lar
+                {t('podpage.siblings', lang)}
               </PanelTitle>
               <PodSiblingsTable rows={siblingRows} pageRange={range} at={atParam} clusterName={detail.cluster?.name ?? cluster}
                 truncated={!!clusterPodsList?.truncated} />
               <div className="pod-two pod-sec">
                 <div>
-                  <PanelTitle sub="kube_pod_labels">Etiketler</PanelTitle>
+                  <PanelTitle sub="kube_pod_labels">{t('podpage.labels', lang)}</PanelTitle>
                   <PodLabelsTable labels={detail.entity.labels} />
                 </div>
                 <div>
-                  <PanelTitle sub="aynı ad · entity kayıtları">Yaşam döngüsü</PanelTitle>
+                  <PanelTitle sub={t('podpage.sameNameSub', lang)}>{t('podpage.lifecycle', lang)}</PanelTitle>
                   <PodLifetimesTable lifetimes={detail.lifetimes} atMatch={detail.atMatch} at={atParam} />
                 </div>
               </div>
