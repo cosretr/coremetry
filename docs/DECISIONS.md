@@ -14120,3 +14120,12 @@ Plan: `docs/frontend/clusters-shadcn-plan.md` (mockup "Clusters sayfası öneris
 - **D8** Pod: AÇIK CPU/Bellek, Taşıdığı servisler (v0.10.190 "gizlenmez" kararı korundu, operatör 2026-11-15), Konteynerler, durum sözcüğü + deterministik cümle + kardeş kıyası cümlesi (S11); KAPALI İstek metrikleri, Son trace'ler, Ağ ve JVM (`jmxTitle()`), Etiketler ve geçmiş (kardeş tablosu dahil). KPI şeridi kalktı; meta satırı Servis / İş yükü / Node / Yaş (entity ömrü) / Sürüm (service.version ya da app.kubernetes.io/version; yoksa alan çizilmez); "CoSRE'ye sor" çekmeceyi bağlamlı soruyla doldurur, göndermez (S10, S11).
 - **Operatör kararı (2026-11-15):** S12 — `coremetry/DataTable` additif `contentVisibility` seçeneği (v0.10.2181). S13 — node disk `/` ve `/sysroot`un en dolusu (v0.10.2182).
 - Doğrulanmadı: tarayıcıda görünüm, prod KSM ailelerinin varlığı (plan §8).
+
+
+## 2026-11-15 — v0.10.2193 — Entity S0: tek çözümleyici, Clusters pod ve iş yükü listeleri
+
+Plan: `docs/architecture/entity-autodiscovery-plan.md`; plan ve K1–K6 operatör onayı 2026-11-15 (öneriler gibi). İlke: sayfalar arası her bağ entity modelinden geçer; ad eşitliği yalnız son çare.
+- `entity.Resolver` v0 (`Lookup`, `Paths`), şema yok: pod → servis `entity_seen_5m` runs kenarları (span payı); iş yükü → servis pod runs çoğunluğu > `k8s.deployment.name` attr bağı > ad eşitliği. Belirsizlik → boş.
+- Clusters `/pods` ve `/deployments` aynı `Paths` çağrısıyla zenginleşir. Silindi: `chstore.PodServiceMap` (15 dk ham `metric_points` taraması), `pickPodService`, `cluster_entity_links.go`, FE `workloadService` çoğunluğu. Ratchet `TestNoAdHocPodServiceJoin`.
+- Davranış: pod servis kolonu yalnız metrik basan (span basmayan) uygulamalarda artık boş (metrik kolu S6'da VM'den); span basan ama metrik basmayanlarda dolar.
+- Doğrulanmadı: prod'da `/pods` gecikmesi, tarayıcıda görünüm.

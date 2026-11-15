@@ -20,7 +20,7 @@ import { parseOpenSections, serializeOpenSections } from './openSections';
 import { t, tf, fmtPctLang, useLang } from '@/lib/i18n';
 import {
   namespaceBoxes, namespaceSentence, podStatusWord, podRestartText, podProblemRank, podProblemSortValue,
-  workloadService, workloadLimits, workloadCpuText, workloadMemText, workloadStatusWord, type Tone,
+  workloadLimits, workloadCpuText, workloadMemText, workloadStatusWord, type Tone,
 } from './nsDetailModel';
 
 // NamespaceDetail — Clusters namespace detayı SAYFA GÖRÜNÜMÜ (Clusters S9,
@@ -97,7 +97,8 @@ export function NamespaceDetail({
 
   const podsByName = useMemo(() => new Map(pods.map(p => [p.pod, p])), [pods]);
   const workloads = useMemo<WorkloadView[]>(() => deps.map(d => ({
-    ...d, service: workloadService(d, podsByName), ...workloadLimits(d, podsByName),
+    // v0.10.2193 (Entity S0) — servis sunucunun entity.Resolver cevabı; FE join yok.
+    ...d, service: d.service ?? '', ...workloadLimits(d, podsByName),
   })), [deps, podsByName]);
   const depPodSet = useMemo(() => {
     if (!depFilter) return null;

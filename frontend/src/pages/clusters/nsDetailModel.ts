@@ -72,23 +72,6 @@ export function podProblemSortValue(r: ClusterPodRow, waiting?: string): number 
   return podProblemRank(r, waiting) * 1000 + (r.memPct ?? 0);
 }
 
-/** İş yükünün servisi. v0.10.2191 — önce sunucunun entity çözümü (`service`:
- *  pod →runs→ servis kenarları → k8s.deployment.name attr bağı → ad eşitliği);
- *  yoksa pod'larının çoğunluk servisi (eşit ise alfabetik ilk); yoksa ''. */
-export function workloadService(dep: Pick<ClusterDeploymentRow, 'podNames' | 'service'>, podsByName: ReadonlyMap<string, ClusterPodRow>): string {
-  if (dep.service) return dep.service;
-  const count = new Map<string, number>();
-  for (const name of dep.podNames ?? []) {
-    const svc = podsByName.get(name)?.service;
-    if (svc) count.set(svc, (count.get(svc) ?? 0) + 1);
-  }
-  let best = '';
-  for (const [svc, n] of [...count].sort((a, b) => a[0].localeCompare(b[0]))) {
-    if (!best || n > (count.get(best) ?? 0)) best = svc;
-  }
-  return best;
-}
-
 /** İş yükünün pod'larının istek / limit toplamı (yalnız envanterdeki pod'lar). */
 export function workloadLimits(dep: Pick<ClusterDeploymentRow, 'podNames'>, podsByName: ReadonlyMap<string, ClusterPodRow>) {
   let cpuReq = 0, memLim = 0;

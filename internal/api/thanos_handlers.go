@@ -159,42 +159,10 @@ func (s *Server) getClusterPods(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return nil, err
 		}
-		// v0.9.11 — pod↔servis etiketi (korelasyon audit'i §2.2):
-		// host_name = pod adı köprüsüyle metric_points'ten tek
-		// bounded sorgu (≤15dk pencere, GetHosts emsali). Best-effort:
-		// CH hatası satırları etiketsiz bırakır, okuma düşmez. Cache
-		// key/TTL aynı — eşleşme aynı 60s yaşamı paylaşır.
-		// v0.9.19 (self-review fix) — ctx değil qctx: CH zenginleştirmesi
-		// handler'ın 10s deadline'ının DIŞINA kaçıyordu; asılı CH,
-		// singleflight slotunu süresiz tutabilirdi.
-		now := time.Now()
-		if psm, perr := s.store.PodServiceMap(qctx, name, now.Add(-15*time.Minute), now); perr == nil {
-			var svcNS map[string]string
-			for _, cands := range psm {
-				if len(cands) > 1 { // metadata yalnız belirsizlik varsa okunur
-					if meta, merr := s.store.ListServiceMetadata(qctx); merr == nil {
-						svcNS = make(map[string]string, len(meta))
-						for k, m := range meta {
-							svcNS[k] = m.Namespace
-						}
-					}
-					break
-				}
-			}
-			for i := range rows {
-				rows[i].Service = pickPodService(psm[rows[i].Pod], rows[i].Namespace, svcNS)
-			}
-		}
-		// v0.10.2191/2192 — kapsamlı envanterde (≤ namespace'in pod'ları)
-		// entity kenarları boşlukları doldurur: pod →runs→ service ve
-		// span'deki node (kube_pod_info yoksa). Thanos değeri ezilmez.
-		if namespace != "" {
-			names := make([]string, len(rows))
-			for i := range rows {
-				names[i] = rows[i].Pod
-			}
-			fillPodsFromEdges(rows, s.nsPodEdges(qctx, cfg, namespace, names))
-		}
+		// v0.10.2193 (Entity S0) — pod → servis / node tek çözümleyiciden
+		// (entity.Resolver.Paths; entity_seen_5m runs kenarları). qctx: CH
+		// zenginleştirmesi handler deadline'ının içinde kalır (v0.9.19).
+		s.attachPodPaths(qctx, cfg, rows)
 		return map[string]any{"cluster": name, "pods": rows, "count": len(rows),
 			"truncated": truncated}, nil
 	})

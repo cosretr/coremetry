@@ -190,3 +190,19 @@ func TestEntityLatencySQL(t *testing.T) {
 		t.Fatalf("namespace + cluster: 4 arg + iki yan tümce; n=%d", n2)
 	}
 }
+
+// v0.10.2193 (Entity S0) — resolver'ın pod okuması: MV, zaman sınırlı, LIMIT,
+// max_execution_time; namespace süzgeci namespace'siz satırı da kabul eder.
+func TestEntitySeenForPodsSQLShape(t *testing.T) {
+	for _, ns := range []bool{false, true} {
+		sql := entitySeenForPodsSQL(ns)
+		for _, want := range []string{"FROM entity_seen_5m", "time_bucket >= toStartOfFiveMinute(?)", "time_bucket <= ?", "k8s_pod IN (?)", "LIMIT 2000", "max_execution_time = 10"} {
+			if !strings.Contains(sql, want) {
+				t.Fatalf("ns=%v: %q yok:\n%s", ns, want, sql)
+			}
+		}
+		if got := strings.Contains(sql, "k8s_namespace IN (?, '')"); got != ns {
+			t.Fatalf("ns=%v: namespace süzgeci %v", ns, got)
+		}
+	}
+}

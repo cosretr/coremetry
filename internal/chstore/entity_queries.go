@@ -390,9 +390,18 @@ func (s *Store) EntitySeenForPods(ctx context.Context, clusterValues []string, n
 	if len(pods) > 500 {
 		pods = pods[:500]
 	}
-	where := "time_bucket >= toStartOfFiveMinute(?) AND time_bucket <= ? AND cluster IN (?) AND k8s_pod IN (?)"
 	args := []any{from, to, clusterValues, pods}
 	if namespace != "" {
+		args = append(args, namespace)
+	}
+	return s.scanSeenAgg(ctx, entitySeenForPodsSQL(namespace != ""), args...)
+}
+
+// entitySeenForPodsSQL — v0.10.2193: entity.Resolver'ın pod okuması (Entity
+// S0); şekli testte pinli (zaman sınırı, LIMIT, max_execution_time).
+func entitySeenForPodsSQL(withNamespace bool) string {
+	where := "time_bucket >= toStartOfFiveMinute(?) AND time_bucket <= ? AND cluster IN (?) AND k8s_pod IN (?)"
+	if withNamespace {
 		// v0.10.190 (operatör-bildirimi, prod: "pod'dan geçen servis yok diyor
 		// ama var"): bir cluster'ın collector'ı k8s.namespace.name BASMIYOR →
 		// MV satırları k8s_namespace = '' ile duruyor; pod sayfası namespace'i
@@ -402,13 +411,12 @@ func (s *Store) EntitySeenForPods(ctx context.Context, clusterValues []string, n
 		// varsayılır, çağıran boş satır sayısını İLAN eder (nsMissingRows).
 		// (Tekil EntitySeenForPod çağıransızdı, v0.10.190'da silindi.)
 		where += " AND k8s_namespace IN (?, '')"
-		args = append(args, namespace)
 	}
-	return s.scanSeenAgg(ctx, `SELECT `+entitySeenAggCols+`
+	return `SELECT ` + entitySeenAggCols + `
 		FROM entity_seen_5m
-		WHERE `+where+`
+		WHERE ` + where + `
 		GROUP BY cluster, k8s_namespace, k8s_pod, service_name
 		ORDER BY spans DESC
 		LIMIT 2000
-		SETTINGS max_execution_time = 10`, args...)
+		SETTINGS max_execution_time = 10`
 }

@@ -180,10 +180,9 @@ type PodRow struct {
 	// v0.9.9 — pod network hızı (cAdvisor, best-effort).
 	NetInBps  float64 `json:"netInBps,omitempty"`
 	NetOutBps float64 `json:"netOutBps,omitempty"`
-	// Service (v0.9.11) — Coremetry servis eşleşmesi (host_name =
-	// pod adı köprüsü). API katmanı doldurur (chstore.PodServiceMap
-	// + pickPodService); thanos paketi bu alana yazmaz. Boş =
-	// eşleşme yok (instrument edilmemiş / infra pod'u / belirsiz).
+	// Service (v0.9.11) — Coremetry servis eşleşmesi. API katmanı
+	// doldurur (v0.10.2193: entity.Resolver.Paths); thanos paketi bu
+	// alana yazmaz. Boş = eşleşme yok (span yok / belirsiz).
 	Service string `json:"service,omitempty"`
 	// v0.9.37 (B4) — faz + restart (Pods tab Status/Restarts).
 	// Best-effort: kube-state-metrics yoksa Phase="" / Restarts=0.
