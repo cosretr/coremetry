@@ -98,7 +98,7 @@ func NewExceptionNotifier(store *chstore.Store, n *Notifier, lock cache.Lock, pr
 	interval := 60 * time.Second
 	return &ExceptionNotifier{
 		n: n, store: store,
-		leader:   cache.NewLeaderHolder(lock, exceptionNotifierLockKey, cache.LeaderTTL(interval)),
+		leader:   cache.NewFailOpenLeaderHolder(lock, exceptionNotifierLockKey, cache.LeaderTTL(interval)), // K1: alarm yolu
 		interval: interval,
 		prio:     prio,
 		sent:     map[string]int64{},

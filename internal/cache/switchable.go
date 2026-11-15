@@ -119,8 +119,9 @@ func (s *SwitchableLock) Current() Lock { return *s.inner.Load() }
 
 // Swap atomically replaces the inner lock; nil is ignored.
 //
-// Convergence window — v0.8.341 (H4): while degraded, every pod's Noop
-// lock said "always leader" (unchanged single-instance semantics). After
+// Convergence window — v0.8.341 (H4); since v0.10.2226 (K1) a degraded
+// boot wires UnavailableLock (not the always-leader Noop), so only
+// FailOpen holders lead on every pod while degraded. After
 // the swap, each holder's next heartbeat calls Refresh on the REAL
 // redisLock, which has no token registered for the key → returns
 // (false, nil) → the holder drops held and races TryAcquire (SetNX)

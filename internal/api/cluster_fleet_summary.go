@@ -78,7 +78,7 @@ type clusterFleetSnapshot struct {
 
 type clusterFleetMemo struct {
 	mu      sync.Mutex
-	local   *clusterFleetSnapshot // yalnız Noop kipinde
+	local   *clusterFleetSnapshot // Noop kipinde tek kopya; Redis kipinde kesinti yedeği (v0.10.2226)
 	lastHit time.Time
 	started bool
 	sf      singleflight.Group
@@ -127,7 +127,13 @@ func (s *Server) getClusterFleetSummary(w http.ResponseWriter, r *http.Request) 
 	var snap *clusterFleetSnapshot
 	if shared {
 		m.touch(s)
-		snap = s.clusterFleetLoad(r.Context(), digest)
+		var redisErr bool
+		snap, redisErr = s.clusterFleetLoad(r.Context(), digest)
+		if redisErr {
+			// v0.10.2226 (Redis R0, G6): Redis kesintisinde bu replikanın
+			// son hesabı sunulur (A sınıfı: hata = miss, yerel kopya).
+			snap = m.localSnap(digest)
+		}
 	} else {
 		snap = m.localSnap(digest)
 	}
@@ -186,26 +192,34 @@ func (m *clusterFleetMemo) setLocal(snap *clusterFleetSnapshot) {
 	m.mu.Unlock()
 }
 
-func (s *Server) clusterFleetLoad(ctx context.Context, digest string) *clusterFleetSnapshot {
+// clusterFleetLoad — Redis'teki görüntü; redisErr = Redis'e ulaşılamadı
+// (miss'ten ayrı: çağıran yerel kopyaya düşer, beklemez).
+func (s *Server) clusterFleetLoad(ctx context.Context, digest string) (snap *clusterFleetSnapshot, redisErr bool) {
 	rctx, cancel := context.WithTimeout(ctx, clusterFleetRedisTimeout)
 	defer cancel()
 	raw, ok, err := s.cache.Get(rctx, clusterFleetCacheKeyPrefix+digest)
-	if err != nil || !ok {
-		return nil
+	if err != nil {
+		return nil, true
 	}
-	var snap clusterFleetSnapshot
-	if json.Unmarshal(raw, &snap) != nil || snap.Digest != digest {
-		return nil
+	if !ok {
+		return nil, false
 	}
-	return &snap
+	var v clusterFleetSnapshot
+	if json.Unmarshal(raw, &v) != nil || v.Digest != digest {
+		return nil, false
+	}
+	return &v, false
 }
 
 // clusterFleetClaim — bu tur hesabı bu replikaya mı düştü (SetNX, TTL'li).
+// v0.10.2226 (Redis R0, G6): Redis hatası "hakkı kaybettim" DEĞİL —
+// B sınıfı (hata = işi yap): hesap bu replikada, beklemeden. Önceden
+// kesintide her ilk istek 45 sn tur tavanını bekleyip sonra hesaplıyordu.
 func (s *Server) clusterFleetClaim(ctx context.Context, digest string) bool {
 	rctx, cancel := context.WithTimeout(ctx, clusterFleetRedisTimeout)
 	defer cancel()
 	ok, err := s.cache.SetNX(rctx, clusterFleetCacheKeyPrefix+digest+":claim", []byte("1"), clusterFleetClaimTTL)
-	return err == nil && ok
+	return err != nil || ok
 }
 
 // clusterFleetTryRound — tazeleme turu. Redis kipinde yalnız hakkı kazanan
@@ -232,8 +246,13 @@ func (s *Server) clusterFleetFirst(m *clusterFleetMemo, shared bool) *clusterFle
 		tk := time.NewTicker(clusterFleetWaitPoll)
 		defer tk.Stop()
 		for {
-			if snap := s.clusterFleetLoad(ctx, digest); snap != nil {
+			snap, redisErr := s.clusterFleetLoad(ctx, digest)
+			if snap != nil {
 				return snap
+			}
+			if redisErr {
+				// Bekleme sırasında Redis düştü: kazananın yazısı gelmeyecek.
+				return s.clusterFleetComputeAndPublish(ctx, m, shared, cfgs, digest)
 			}
 			select {
 			case <-ctx.Done():
@@ -254,8 +273,10 @@ func (s *Server) clusterFleetComputeAndPublish(ctx context.Context, m *clusterFl
 		Clusters:       s.clusterFleetCompute(ctx, cfgs),
 		GeneratedAt:    time.Now().UTC(),
 	}
+	// Redis kipinde de yerel kopya tutulur: Redis kesintisinde istek
+	// yolu bunu sunar (G6); ~20–60 KB, süreç başına tek.
+	m.setLocal(snap)
 	if !shared {
-		m.setLocal(snap)
 		return snap
 	}
 	if raw, err := json.Marshal(snap); err == nil {

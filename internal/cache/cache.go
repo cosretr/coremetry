@@ -13,6 +13,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -154,3 +155,26 @@ func (noopCache) Subscribe(ctx context.Context, _ string) (<-chan []byte, error)
 func (noopLock) TryAcquire(context.Context, string, time.Duration) (bool, error) { return true, nil }
 func (noopLock) Release(context.Context, string) error                           { return nil }
 func (noopLock) Refresh(context.Context, string, time.Duration) (bool, error)    { return true, nil }
+
+// ErrRedisUnavailable — UnavailableLock'un her çağrıda döndürdüğü hata.
+var ErrRedisUnavailable = errors.New("redis unavailable (boot ping failed)")
+
+// unavailableLock — v0.10.2226 (Redis R0, K1): Redis TANIMLI ama boot'ta
+// erişilemezken kullanılan kilit. v0.8.212'den beri burada always-leader
+// Noop vardı → boot'ta "herkes lider", çalışırken Redis düşünce "kimse lider
+// değil" (G5). Artık boot da çalışma anıyla aynı hatayı görür; LeaderHolder
+// politikası (FailOpen / FailClosed) iki durumda da aynı sonucu verir. Öğe
+// kiraları (sre drain, runbook ajanı) hata = atla, çalışma anındaki gibi.
+// Reprobe gerçek kilidi takınca SwitchableLock üstünden değişir.
+type unavailableLock struct{}
+
+// NewUnavailableLock — bkz. unavailableLock.
+func NewUnavailableLock() Lock { return unavailableLock{} }
+
+func (unavailableLock) TryAcquire(context.Context, string, time.Duration) (bool, error) {
+	return false, ErrRedisUnavailable
+}
+func (unavailableLock) Release(context.Context, string) error { return nil }
+func (unavailableLock) Refresh(context.Context, string, time.Duration) (bool, error) {
+	return false, ErrRedisUnavailable
+}

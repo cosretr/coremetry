@@ -3,6 +3,9 @@ package acache
 import (
 	"context"
 	"testing"
+	"time"
+
+	"github.com/redis/go-redis/v9"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -120,7 +123,7 @@ func TestObserveSpanAggregates(t *testing.T) {
 	s := NewStore(nil, Options{Policy: pol}) // nil client: disabled for I/O
 	// Disabled stores short-circuit ObserveSpan, so flip the flag off to
 	// exercise the aggregator directly (white-box test).
-	s.disabled = false
+	s.disabled.Store(false)
 
 	mk := func(svc, op, route, method string, status uint16) *chstore.Span {
 		return &chstore.Span{
@@ -176,7 +179,7 @@ func TestObserveSpanAggregates(t *testing.T) {
 func TestObserveSpanNoDoubleCount(t *testing.T) {
 	pol := NewStaticPolicy([]string{"http.method", "db.statement"}, nil, CardHLL)
 	s := NewStore(nil, Options{Policy: pol})
-	s.disabled = false
+	s.disabled.Store(false)
 
 	// http.method appears as a dedicated column AND in the attr arrays (as the
 	// converter actually stores it); db.statement only in the arrays.
@@ -200,7 +203,7 @@ func TestObserveSpanNoDoubleCount(t *testing.T) {
 func TestObserveSpanMaxValLen(t *testing.T) {
 	pol := NewStaticPolicy([]string{"big.attr"}, nil, CardSkip)
 	s := NewStore(nil, Options{Policy: pol, MaxValLen: 8})
-	s.disabled = false
+	s.disabled.Store(false)
 	big := "0123456789" // len 10 > 8
 	s.ObserveSpan(&chstore.Span{
 		ServiceName: "svc", AttrKeys: []string{"big.attr"}, AttrValues: []string{big},
@@ -240,5 +243,41 @@ func TestClampLimit(t *testing.T) {
 		if got := clampLimit(c.in); got != c.want {
 			t.Errorf("clampLimit(%d) = %d, want %d", c.in, got, c.want)
 		}
+	}
+}
+
+// v0.10.2226 (Redis R0, G7): ikinci istemci internal/cache ile aynı sınırları
+// taşır; URL'de açık değer kazanır.
+func TestBoundOptions(t *testing.T) {
+	o := &redis.Options{}
+	boundOptions(o)
+	if o.DialTimeout != 500*time.Millisecond || o.ReadTimeout != 500*time.Millisecond ||
+		o.WriteTimeout != 500*time.Millisecond || o.MaxRetries != -1 {
+		t.Fatalf("sınırlar uygulanmadı: %+v", o)
+	}
+	o = &redis.Options{DialTimeout: 2 * time.Second, MaxRetries: 2}
+	boundOptions(o)
+	if o.DialTimeout != 2*time.Second || o.MaxRetries != 2 {
+		t.Fatal("açık URL değeri ezilmemeli")
+	}
+}
+
+// Boot ping'i kaçan store: disabled başlar (istemci kapanmaz), Start
+// bekletilir; Reprobe başarısı (enable) store'u açar ve bekleyen Start'ı
+// devralır.
+func TestReprobeEnablesAfterFailedBoot(t *testing.T) {
+	s, err := NewStoreFromURL("redis://127.0.0.1:1", Options{})
+	if err == nil || s.Enabled() || s.cli == nil {
+		t.Fatalf("kapalı Redis'te istemcili disabled başlamalı: err=%v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s.Start(ctx)
+	if s.startCtx == nil {
+		t.Fatal("disabled Start bekletilmeli")
+	}
+	s.enable()
+	if !s.Enabled() || s.startCtx != nil {
+		t.Fatal("enable store'u açıp bekleyen Start'ı devralmalı")
 	}
 }

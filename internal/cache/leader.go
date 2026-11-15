@@ -58,6 +58,14 @@ type LeaderHolder struct {
 
 	held atomic.Bool
 
+	// v0.10.2226 (Redis R0, K1) — Redis'e ulaşılamazken davranış. Sıfır
+	// değer FailClosed: ağır yazıcılar Redis yokken kimsede koşmaz.
+	// FailOpen yalnız alarm yolunda (NewFailOpenLeaderHolder).
+	policy LeaderPolicy
+	// degraded — kilit çağrıları en az ttl boyunca kesintisiz hata verdi
+	// (Redis yok). Boot'ta (UnavailableLock) ve çalışırken aynı kural.
+	degraded atomic.Bool
+
 	// onAcquire (v0.9.730) — liderlik EDİNİM anında (false→true geçişi)
 	// bir kez çağrılır; kendi goroutine'inde (heartbeat'i bloklamaz).
 	// Kullanım: rolling restart'ta eski pod kilidi kapanırken bırakır,
@@ -68,6 +76,49 @@ type LeaderHolder struct {
 
 	startOnce sync.Once
 }
+
+// LeaderPolicy — v0.10.2226 (Redis R0, karar K1): Redis'e ulaşılamazken
+// bir işçinin liderliği. Kural boot'ta ve çalışırken AYNI: kilit çağrıları
+// lease TTL boyunca kesintisiz hata verirse holder "degraded" olur (TTL
+// bekleyişi kısa Redis kesintilerini süzer ve önceki liderin lease'inin
+// sunucu tarafında bittiği andır). Redis bir yanıt verdiği anda (edinim ya
+// da "başkasında") degraded düşer ve pod'lar gerçek kilidi yarışır.
+//
+//   - FailClosed (varsayılan): degraded iken IsLeader=false — ağır
+//     yazıcılar (retention, aggregator, entity-sync, rollout, LLM işçileri,
+//     türeticiler …) hiçbir pod'da koşmaz; N yazıcı aynı tabloya vurmaz.
+//   - FailOpen: degraded iken IsLeader=true — HER pod koşar. Yalnız alarm
+//     yolu (evaluator, anomaly detector/recorder, exception notifier):
+//     gözlem aracının alarmı kendi önbelleği düştü diye susmamalı. Çift iş
+//     deterministik kimliklerle (problem/anomaly fingerprint) idempotent.
+type LeaderPolicy uint8
+
+const (
+	FailClosed LeaderPolicy = iota
+	FailOpen
+)
+
+func (p LeaderPolicy) String() string {
+	if p == FailOpen {
+		return "fail-open"
+	}
+	return "fail-closed"
+}
+
+// NewFailOpenLeaderHolder — alarm yolu işçileri için (bkz. LeaderPolicy).
+// Yeni çağıran eklemeden önce işin çift koşuda idempotent olduğundan emin ol.
+func NewFailOpenLeaderHolder(lock Lock, key string, ttl time.Duration) *LeaderHolder {
+	h := NewLeaderHolder(lock, key, ttl)
+	h.policy = FailOpen
+	return h
+}
+
+// Policy — holder'ın Redis-yok davranışı.
+func (h *LeaderHolder) Policy() LeaderPolicy { return h.policy }
+
+// Degraded — Redis en az bir lease TTL boyunca erişilemez (bkz. LeaderPolicy).
+// FailClosed işçiler bunu "kilit yok, atlandı" sayacı için okur.
+func (h *LeaderHolder) Degraded() bool { return h.degraded.Load() }
 
 // SetOnAcquire — edinim callback'i. Start'tan ÖNCE çağrılmalı (yarı
 // yarışsız basitlik; Start sonrası çağrı desteklenmez).
@@ -123,10 +174,29 @@ func (h *LeaderHolder) Start(ctx context.Context) {
 	})
 }
 
-// IsLeader returns true when this pod currently holds the lock.
-// Cheap (atomic load) — safe to call in tick hot paths.
+// IsLeader returns true when this pod currently holds the lock — or, for a
+// FailOpen holder, while Redis is unreachable (degraded; see LeaderPolicy).
+// Cheap (atomic loads) — safe to call in tick hot paths.
 func (h *LeaderHolder) IsLeader() bool {
-	return h.held.Load()
+	if h.held.Load() {
+		return true
+	}
+	return h.policy == FailOpen && h.degraded.Load()
+}
+
+// noteLockErr / noteLockOK — degraded geçişleri (K1). errSince: kesintisiz
+// hata serisinin başı; sıfır = son çağrı Redis'ten yanıt aldı.
+func (h *LeaderHolder) noteLockErr(errSince time.Time, err error) {
+	if refreshOutlivedLease(time.Since(errSince), h.ttl) && !h.degraded.Swap(true) {
+		log.Printf("[leader] %s DEGRADED (%s) — Redis unreachable for ≥%s (%v); leader=%v on this pod",
+			h.key, h.policy, h.ttl, err, h.policy == FailOpen)
+	}
+}
+
+func (h *LeaderHolder) noteLockOK() {
+	if h.degraded.Swap(false) {
+		log.Printf("[leader] %s Redis reachable again — leaving degraded (%s), racing the real lock", h.key, h.policy)
+	}
 }
 
 // refreshOutlivedLease is the pure demote decision — v0.8.341 (H4). True
@@ -175,11 +245,21 @@ func (h *LeaderHolder) run(ctx context.Context) {
 	// a peer acquired it, and two evaluators ran concurrently (duplicate
 	// Problem rows + duplicate pages). Now error streaks are bounded by the
 	// lease TTL, after which we demote and drop back here.
+	var errSince time.Time // K1: kesintisiz kilit hatası serisinin başı
 	for {
 		// Acquire loop — retry until success or ctx done. Non-leader
 		// pods sit here until the current leader dies or demotes.
 		for {
 			ok, err := h.lock.TryAcquire(ctx, h.key, h.ttl)
+			if err != nil {
+				if errSince.IsZero() {
+					errSince = time.Now()
+				}
+				h.noteLockErr(errSince, err)
+			} else {
+				errSince = time.Time{}
+				h.noteLockOK()
+			}
 			if err == nil && ok {
 				h.held.Store(true)
 				log.Printf("[leader] became leader for %s (ttl=%s)", h.key, h.ttl)
@@ -213,6 +293,7 @@ func (h *LeaderHolder) run(ctx context.Context) {
 			case err == nil && ok:
 				lastOK = time.Now()
 			case err != nil:
+				h.noteLockErr(lastOK, err)
 				// Refresh at ttl/3 → up to ~3 consecutive failures
 				// before the streak reaches the TTL and we demote —
 				// short blips never drop leadership.
@@ -223,6 +304,7 @@ func (h *LeaderHolder) run(ctx context.Context) {
 					// held=true here is the split-brain: two pods
 					// running the same worker.
 					h.held.Store(false)
+					errSince = lastOK // seri edinim döngüsünde sürer (K1)
 					log.Printf("[leader] DEMOTED %s — refresh failures outlived the lease "+
 						"(ttl=%s, last successful refresh %s ago; last error: %v). "+
 						"A peer may hold leadership now; falling back to acquire loop.",

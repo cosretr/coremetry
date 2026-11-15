@@ -541,7 +541,8 @@ func main() {
 	// flusher only runs where spans land (ingest / all); api pods read-only.
 	acStore, acErr := acache.NewStoreFromURL(cfg.Redis.URL, acache.Options{Policy: buildAcachePolicy()})
 	if acErr != nil {
-		log.Printf("[acache] %v — autocomplete cache disabled", acErr)
+		log.Printf("[acache] %v — autocomplete cache disabled until Redis answers", acErr)
+		acStore.Reprobe(ctx, 15*time.Second) // v0.10.2226 (R0, G7)
 	} else if acStore.Enabled() {
 		log.Printf("[acache] ready — picker autocomplete served from Redis")
 	}
@@ -607,7 +608,11 @@ func main() {
 	if cfg.Redis.URL != "" {
 		c, l, err := cache.New(cfg.Redis.URL)
 		if err != nil {
-			log.Printf("[cache] redis unavailable — running without cache + always-leader: %v", err)
+			// v0.10.2226 (Redis R0, K1) — always-leader Noop değil: boot,
+			// çalışma anındaki Redis kesintisiyle aynı kuralı görür (alarm
+			// yolu açık geçer, ağır yazıcılar durur; cache.LeaderPolicy).
+			lockImpl = cache.NewUnavailableLock()
+			log.Printf("[cache] redis unavailable — running without cache; leader rule = degraded (alert path fail-open, heavy writers fail-closed): %v", err)
 		} else {
 			cacheImpl, lockImpl = c, l
 			redisConnected = true
@@ -638,9 +643,9 @@ func main() {
 	lockDegradedNow := cache.NewDegradedFlag(lockDegraded)
 	if lockDegraded {
 		log.Printf("[leader] WARNING: COREMETRY_REDIS_URL is set but Redis is unreachable — " +
-			"this pod runs the ALWAYS-LEADER fallback lock. If you run more than one replica, " +
-			"background jobs (alerts, notifications, aggregation, retention) are DUPLICATED across " +
-			"pods. Restore Redis so exactly one pod holds leadership.")
+			"after one lease TTL the alert path (evaluator, anomaly, exception notifier) runs on EVERY " +
+			"replica (idempotent) and heavy background writers (retention, aggregation, entity sync, " +
+			"rollout, LLM workers) PAUSE. Restore Redis so exactly one pod holds leadership.")
 	}
 
 	// ── Notifier (SMTP-driven email; slack/webhook stubs) ────────────────────
@@ -1219,13 +1224,15 @@ func main() {
 		entityLeader := cache.NewLeaderHolder(lockImpl, "entity-sync", cache.LeaderTTL(time.Minute))
 		entitySyncer.SetLeaderCheck(entityLeader.IsLeader) // v0.10.141 — API tetikli tick yalnız liderde
 		// v0.10.2225 (entity-storage-cost-note C + R1b): canlı dizin Redis'e
-		// (tek yazıcı = lider); kilit degraded iken (Noop: her replika lider)
-		// tick atlanır — N yazıcı aynı tablolara vurmasın.
+		// (tek yazıcı = lider); kilit degraded iken tick atlanır — N yazıcı
+		// aynı tablolara vurmasın. v0.10.2226 (R0, K1): entity-sync
+		// FailClosed; degraded = holder'ın kendi durumu (boot ve çalışma anı
+		// aynı). Run degraded iken de Tick'e girer ki skipped_no_lock sayılsın.
 		entitySyncer.SetLive(cacheImpl)
-		entitySyncer.SetLockDegraded(lockDegradedNow.Load)
+		entitySyncer.SetLockDegraded(entityLeader.Degraded)
 		entityLeader.SetOnAcquire(func() { entitySyncer.Tick(ctx) })
 		entityLeader.Start(chstore.WithQueryTag(ctx, "worker:entity-syncer"))
-		go entitySyncer.Run(ctx, entityLeader.IsLeader)
+		go entitySyncer.Run(ctx, func() bool { return entityLeader.IsLeader() || entityLeader.Degraded() })
 		// v0.10.228 (D3) — dış seri anomalisi tarayıcısı (internal/anomaly/
 		// external.go): kind=external Problem'ler; kaynak sağlığı (588), tavan
 		// (587), küme (597) bu hattın parçası. Üreticisi Oracle poller'ı (sağlık
@@ -1714,9 +1721,9 @@ func main() {
 	// until it answers, then hot-swap the real cache+lock into the
 	// switchables every consumer already holds. On recovery:
 	//   - lockDegraded clears on /admin/stats (no pod restart needed);
-	//   - LeaderHolders demote off the always-leader Noop on their next
-	//     heartbeat and race the REAL lock — the fleet converges from
-	//     N leaders to exactly 1 per worker within one refresh cadence;
+	//   - LeaderHolders leave degraded on their next acquire attempt and
+	//     race the REAL lock (v0.10.2226, K1: FailOpen holders were leader
+	//     on every pod, FailClosed ones nowhere) — one leader per worker;
 	//   - the SSE bridge + L1-invalidation subscribers are re-kicked (their
 	//     boot-time Subscribe latched onto the Noop's never-delivering
 	//     channel; re-calling opens a real Redis subscription — the stale

@@ -473,7 +473,7 @@ func New(store *chstore.Store, interval time.Duration, lock cache.Lock, notifier
 	return &Detector{
 		store: store, interval: interval,
 		lock:     lock,
-		leader:   cache.NewLeaderHolder(lock, lockKey, cache.LeaderTTL(interval)),
+		leader:   cache.NewFailOpenLeaderHolder(lock, lockKey, cache.LeaderTTL(interval)), // K1: alarm yolu
 		notifier: notifier,
 		red:      newVMREDSource(),
 		// v0.10.1791 — endpoint öznelerinin VM kaynağı (özneler kapalıyken boşta).

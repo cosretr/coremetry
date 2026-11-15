@@ -257,7 +257,7 @@ func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, 
 			return data, "HIT-L1", nil
 		}
 		// ── L2 with SWR ───────────────────────────────────────
-		if raw, ok, err := s.cache.Get(ctx, key); err == nil && ok {
+		if raw, ok := s.l2Get(ctx, key); ok { // v0.10.2226: devre kesicili (G8)
 			if written, body, envOK := unwrapEnvelope(raw); envOK {
 				age := time.Since(written)
 				if age < ttl {
@@ -309,7 +309,7 @@ func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, 
 	// a second time AFTER the upstream query had already succeeded.
 	// The SWR refreshKey path keeps its synchronous storeCached — it
 	// already runs on a detached background goroutine.
-	s.l1.set(key, body, minDur(ttl, l1TTL))
+	s.l1.set(key, body, s.l2().l1Cap(ttl)) // devre açıkken TTL boyunca (G8)
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -342,14 +342,14 @@ func writeCacheHit(w http.ResponseWriter, tier string, body []byte) {
 // already run on background goroutines.
 func (s *Server) storeCached(ctx context.Context, key string, body []byte, ttl time.Duration) {
 	s.storeL2(ctx, key, body, ttl)
-	s.l1.set(key, body, minDur(ttl, l1TTL))
+	s.l1.set(key, body, s.l2().l1Cap(ttl))
 }
 
 // storeL2 is the Redis half of storeCached (split out in v0.8.350 so
 // the miss path can run it async while keeping the L1 set synchronous).
 func (s *Server) storeL2(ctx context.Context, key string, body []byte, ttl time.Duration) {
 	if env, err := wrapEnvelope(body); err == nil {
-		if err := s.cache.Set(ctx, key, env, ttl*staleFactor); err != nil {
+		if err := s.l2Set(ctx, key, env, ttl*staleFactor); err != nil {
 			log.Printf("[cache] set %s: %v", key, err)
 		}
 	}
@@ -856,7 +856,7 @@ func (s *Server) cachePeek(ctx context.Context, key string) ([]byte, bool) {
 	if data, ok := s.l1.get(key); ok {
 		return data, true
 	}
-	if raw, ok, err := s.cache.Get(ctx, key); err == nil && ok && len(raw) > 0 {
+	if raw, ok := s.l2Get(ctx, key); ok && len(raw) > 0 {
 		if _, body, isEnv := unwrapEnvelope(raw); isEnv {
 			return body, true
 		}

@@ -14229,3 +14229,11 @@ Operatör bildirimi (prod /ai, 7 gün): 404 açıklama turunun 78'i "hata"; `err
 - S1 bulguları kapandı: `PodGap` sessizlik kuralı kalktı (kapanış art arda başarılı görüntülerde ≥ 10 dk yokluk); tick'in açık ömür okuması yalnız kalıcı tipler (birincil anahtar öneki, LIMIT 200K, 10 s, gerçek taranan satır günlükte); Redis kilidi degraded iken tick atlanır (`skipped_no_lock`).
 - Beklenen (40K pod, 20 cluster): CH yazımı ~51K–61K satır/dk → çoğu tick 0, günde ~27K satır (~19 satır/dk); Redis tick başına cluster başına 1 `SET` (20), blob ~2K pod × ~310 B ≈ 0,6 MB ham, gzip ~0,1 MB/cluster (toplam ~2,5 MB) [T/V]. S1'den kalan açık pod satırları TTL'e (E3). Geri alma: v0.10.2224'e dön; şema iki yönde aynı, Redis anahtarları TTL ile düşer.
 
+
+## 2026-11-15 — v0.10.2226 — Redis R0: Redis yokken tutarlı davranış
+
+- Karar (operatör onayı, `docs/architecture/redis-usage-audit.md` K1): Redis'e ulaşılamazken liderlik boot'ta ve çalışırken AYNI kural. `cache.LeaderPolicy`: kilit çağrıları lease TTL boyunca kesintisiz hata verirse holder degraded; `FailOpen` (evaluator, anomaly detector, anomaly recorder, exception notifier) her pod'da lider, `FailClosed` (varsayılan; tüm diğer işçiler) hiçbir pod'da. Redis tanımlı ama boot'ta yoksa `UnavailableLock` (önceden always-leader Noop → herkes lider). Redis tanımsız tek pod: Noop always-leader değişmedi.
+- Entity sync `FailClosed`; `skipped_no_lock` artık holder'ın kendi degraded durumundan (boot + çalışma anı).
+- Fleet özeti: Redis hatası hakkı kaybetmek sayılmaz (hesap bu replikada, 45 sn bekleme yok); Redis kipinde de yerel son görüntü tutulur, kesintide o sunulur.
+- `acache` istemcisi `internal/cache` ile aynı sınırlar (500 ms, yeniden deneme yok); boot ping'i kaçarsa 15 sn'de bir yoklar, Redis dönünce açılır.
+- L2 devre kesici (`internal/api/cache_breaker.go`): art arda 5 hata → 5 sn L2 atlanır, sonra tek yoklama; açıkken L1 tavanı anahtar TTL'i. Yeni ayar yok.

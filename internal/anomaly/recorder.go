@@ -50,7 +50,7 @@ func NewRecorder(store *chstore.Store, logs logstore.Store, interval, window tim
 		store: store, logs: logs,
 		interval: interval, window: window,
 		lock:   lock,
-		leader: cache.NewLeaderHolder(lock, recorderLockKey, 3*interval),
+		leader: cache.NewFailOpenLeaderHolder(lock, recorderLockKey, 3*interval), // K1: alarm yolu, fingerprint kimlik
 	}
 }
 

@@ -200,3 +200,67 @@ func TestAcquireRetryInterval(t *testing.T) {
 		t.Fatalf("kısa refresh değişmemeli: %v", got)
 	}
 }
+
+// v0.10.2226 (Redis R0, K1) — Redis yokken liderlik boot'ta ve çalışırken
+// AYNI: kesintisiz hata ≥ ttl → degraded; FailOpen (alarm yolu) lider olur,
+// FailClosed (ağır yazıcı) olmaz. Redis yanıt verince degraded düşer.
+func TestLeaderPolicyDegradedAtBoot(t *testing.T) {
+	for _, pol := range []LeaderPolicy{FailOpen, FailClosed} {
+		t.Run(pol.String(), func(t *testing.T) {
+			sl := &scriptLock{acquireErr: ErrRedisUnavailable}
+			h := &LeaderHolder{lock: sl, key: "k", ttl: 150 * time.Millisecond, refresh: 50 * time.Millisecond, policy: pol}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			h.Start(ctx)
+			if h.IsLeader() || h.Degraded() {
+				t.Fatal("ilk hatada lider/degraded olmamalı (ttl kadar süzülür)")
+			}
+			waitFor(t, 2*time.Second, h.Degraded, "degraded")
+			if h.IsLeader() != (pol == FailOpen) {
+				t.Fatalf("degraded IsLeader=%v, politika %s", h.IsLeader(), pol)
+			}
+			// Redis döndü, kilit başka pod'da: degraded düşer, lider değil.
+			sl.set(func(s *scriptLock) { s.acquireErr = nil; s.acquireOK = false })
+			waitFor(t, 2*time.Second, func() bool { return !h.Degraded() }, "degraded düşmeli")
+			if h.IsLeader() {
+				t.Fatal("kilit başkasındayken lider kalmamalı")
+			}
+		})
+	}
+}
+
+// Çalışırken kesinti: FailOpen lider demote anında da lider kalır (alarm
+// yolunda boşluk yok); FailClosed demote edilir ve degraded olur.
+func TestLeaderPolicyDegradedAtRuntime(t *testing.T) {
+	for _, pol := range []LeaderPolicy{FailOpen, FailClosed} {
+		t.Run(pol.String(), func(t *testing.T) {
+			sl := &scriptLock{acquireOK: true, refreshOK: true}
+			h := &LeaderHolder{lock: sl, key: "k", ttl: 150 * time.Millisecond, refresh: 50 * time.Millisecond, policy: pol}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			h.Start(ctx)
+			waitFor(t, 2*time.Second, h.IsLeader, "edinim")
+			sl.set(func(s *scriptLock) {
+				s.refreshOK, s.refreshErr = false, ErrRedisUnavailable
+				s.acquireOK, s.acquireErr = false, ErrRedisUnavailable
+			})
+			waitFor(t, 2*time.Second, h.Degraded, "degraded")
+			time.Sleep(60 * time.Millisecond)
+			if h.IsLeader() != (pol == FailOpen) {
+				t.Fatalf("çalışırken degraded IsLeader=%v, politika %s", h.IsLeader(), pol)
+			}
+			sl.set(func(s *scriptLock) { s.acquireOK, s.acquireErr = true, nil })
+			waitFor(t, 2*time.Second, func() bool { return !h.Degraded() && h.IsLeader() }, "Redis dönünce yeniden edinim")
+		})
+	}
+}
+
+func TestUnavailableLockErrors(t *testing.T) {
+	l := NewUnavailableLock()
+	if ok, err := l.TryAcquire(context.Background(), "k", time.Second); ok || err == nil {
+		t.Fatal("UnavailableLock edinim vermemeli, hata döndürmeli")
+	}
+	if ok, err := l.Refresh(context.Background(), "k", time.Second); ok || err == nil {
+		t.Fatal("UnavailableLock refresh hata döndürmeli")
+	}
+}

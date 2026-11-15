@@ -227,8 +227,13 @@ func (o *Options) applyDefaults() {
 // same graceful-degradation contract as cache.NewNoop.
 type Store struct {
 	cli      *redis.Client
-	disabled bool
+	disabled atomic.Bool // v0.10.2226: boot ping'i kaçarsa Reprobe açar
 	opt      Options
+
+	// startMu/startCtx — Start disabled iken çağrıldıysa (boot ping'i
+	// kaçtı) iş parçacıkları Reprobe başarısında başlatılır.
+	startMu  sync.Mutex
+	startCtx context.Context
 	policy   atomic.Value // holds Policy, swappable at runtime via SetPolicy
 
 	mu  sync.Mutex
@@ -241,7 +246,8 @@ type Store struct {
 // to get a disabled (no-op) store.
 func NewStore(cli *redis.Client, opt Options) *Store {
 	opt.applyDefaults()
-	s := &Store{cli: cli, disabled: cli == nil, opt: opt, cur: newAgg()}
+	s := &Store{cli: cli, opt: opt, cur: newAgg()}
+	s.disabled.Store(cli == nil)
 	s.policy.Store(opt.Policy)
 	return s
 }
@@ -260,18 +266,84 @@ func NewStoreFromURL(url string, opt Options) (*Store, error) {
 	if err != nil {
 		return NewStore(nil, opt), fmt.Errorf("acache: parse redis url: %w", err)
 	}
+	// v0.10.2226 (Redis R0, G7): internal/cache ile aynı ağ sınırları
+	// (dial/read/write 500 ms, yeniden deneme yok); go-redis varsayılanı
+	// (dial 5 sn × 3 deneme) kara delik Redis'te picker'ı 5 sn+ takıyordu.
+	// URL'de açıkça verilen değer kazanır.
+	boundOptions(opts)
 	cli := redis.NewClient(opts)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := cli.Ping(ctx).Err(); err != nil {
-		_ = cli.Close()
-		return NewStore(nil, opt), fmt.Errorf("acache: redis ping: %w", err)
+		// İstemci kapanmaz: store disabled başlar, Reprobe Redis dönünce
+		// açar (önceden süreç ömrünce kapalı kalıyordu).
+		s := NewStore(cli, opt)
+		s.disabled.Store(true)
+		return s, fmt.Errorf("acache: redis ping: %w", err)
 	}
 	return NewStore(cli, opt), nil
 }
 
+// boundOptions — internal/cache.New ile aynı varsayılanlar (yalnız sıfır
+// değerler; MaxRetries -1 = yeniden deneme yok).
+func boundOptions(o *redis.Options) {
+	if o.DialTimeout == 0 {
+		o.DialTimeout = 500 * time.Millisecond
+	}
+	if o.ReadTimeout == 0 {
+		o.ReadTimeout = 500 * time.Millisecond
+	}
+	if o.WriteTimeout == 0 {
+		o.WriteTimeout = 500 * time.Millisecond
+	}
+	if o.MaxRetries == 0 {
+		o.MaxRetries = -1
+	}
+}
+
+// Reprobe — boot ping'i kaçmış (istemcisi olan ama disabled) store'u
+// interval'de bir yoklar; ilk başarılı PING'de açar, Start bekliyorsa iş
+// parçacıklarını başlatır ve durur. Sağlıklı / istemcisiz store'da no-op.
+func (s *Store) Reprobe(ctx context.Context, interval time.Duration) {
+	if s == nil || s.cli == nil || !s.disabled.Load() {
+		return
+	}
+	go func() {
+		t := time.NewTicker(interval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			pctx, cancel := context.WithTimeout(ctx, time.Second)
+			err := s.cli.Ping(pctx).Err()
+			cancel()
+			if err != nil {
+				continue
+			}
+			s.enable()
+			return
+		}
+	}()
+}
+
+// enable — Reprobe başarısı: store açılır, bekleyen Start iş parçacıklarını
+// başlatır. Start ile yarışsız (ikisi de startMu altında karar verir).
+func (s *Store) enable() {
+	s.startMu.Lock()
+	s.disabled.Store(false)
+	sc := s.startCtx
+	s.startCtx = nil
+	s.startMu.Unlock()
+	if sc != nil {
+		s.startWorkers(sc)
+	}
+}
+
 // Enabled reports whether the store talks to a live Redis.
-func (s *Store) Enabled() bool { return s != nil && !s.disabled }
+func (s *Store) Enabled() bool { return s != nil && !s.disabled.Load() }
 
 // SetPolicy swaps the cardinality policy atomically. Use it to apply an
 // admin-edited allowlist/denylist at runtime without restarting.
@@ -316,7 +388,7 @@ func (a *agg) empty() bool {
 // (a brief mutex around map writes only — no Redis I/O) and safe to call from
 // the fire-and-forget ingest side-effect path with context.Background().
 func (s *Store) ObserveSpan(sp *chstore.Span) {
-	if s == nil || s.disabled || sp == nil {
+	if s == nil || s.disabled.Load() || sp == nil {
 		return
 	}
 	pol := s.loadPolicy()
@@ -429,9 +501,22 @@ func (s *Store) observeAttr(a *agg, pol Policy, key, val string) {
 // sweeper). Both stop when ctx is cancelled, after a final drain. No-op on a
 // disabled store.
 func (s *Store) Start(ctx context.Context) {
-	if s == nil || s.disabled {
+	if s == nil {
 		return
 	}
+	s.startMu.Lock()
+	if s.disabled.Load() {
+		if s.cli != nil { // boot ping'i kaçtı: Reprobe açınca başlar
+			s.startCtx = ctx
+		}
+		s.startMu.Unlock()
+		return
+	}
+	s.startMu.Unlock()
+	s.startWorkers(ctx)
+}
+
+func (s *Store) startWorkers(ctx context.Context) {
 	go s.runFlush(ctx)
 	if s.opt.WindowMode {
 		go s.runSweep(ctx)
@@ -460,7 +545,7 @@ func (s *Store) runFlush(ctx context.Context) {
 // Exported so callers can force a flush (tests, graceful shutdown). Safe to
 // call concurrently with ObserveSpan.
 func (s *Store) Flush(ctx context.Context) error {
-	if s == nil || s.disabled {
+	if s == nil || s.disabled.Load() {
 		return nil
 	}
 	// Swap the accumulator out under the lock; pipeline outside it so
@@ -606,7 +691,7 @@ func (s *Store) runSweep(ctx context.Context) {
 // the rank ZSET, SREMs them from the companion set, then prunes the :ts ZSET.
 // No-op unless WindowMode is on.
 func (s *Store) Sweep(ctx context.Context) error {
-	if s == nil || s.disabled || !s.opt.WindowMode {
+	if s == nil || s.disabled.Load() || !s.opt.WindowMode {
 		return nil
 	}
 	reg, err := s.cli.HGetAll(ctx, tsRegistry).Result()
@@ -650,7 +735,7 @@ type ValueCount struct {
 // total is the number of matches; hit is false on a cold cache or Redis error
 // so the caller can fall back to ClickHouse.
 func (s *Store) GetServices(ctx context.Context, prefix string, limit int) (names []string, total int, hit bool) {
-	if s == nil || s.disabled {
+	if s == nil || s.disabled.Load() {
 		return nil, 0, false
 	}
 	return s.readRank(ctx, keyServicesRank, prefix, limit)
@@ -658,7 +743,7 @@ func (s *Store) GetServices(ctx context.Context, prefix string, limit int) (name
 
 // GetOperations returns operation names for a service, ordered by frequency.
 func (s *Store) GetOperations(ctx context.Context, svc, prefix string, limit int) (names []string, total int, hit bool) {
-	if s == nil || s.disabled || svc == "" {
+	if s == nil || s.disabled.Load() || svc == "" {
 		return nil, 0, false
 	}
 	return s.readRank(ctx, keyOpsRankPrefix+svc, prefix, limit)
@@ -695,7 +780,7 @@ func (s *Store) readRank(ctx context.Context, rankKey, prefix string, limit int)
 // GetAttributeKeys returns the known attribute keys (sorted). hit is false on a
 // cold cache or error.
 func (s *Store) GetAttributeKeys(ctx context.Context) (keys []string, hit bool) {
-	if s == nil || s.disabled {
+	if s == nil || s.disabled.Load() {
 		return nil, false
 	}
 	ks, err := s.cli.SMembers(ctx, keyAttrKeys).Result()
@@ -715,7 +800,7 @@ func (s *Store) GetAttributeKeys(ctx context.Context) (keys []string, hit bool) 
 //     ("~N distinct values") instead of a dropdown.
 //   - CardSkip key (or cold): hit false → caller falls back to ClickHouse.
 func (s *Store) GetAttributeValues(ctx context.Context, key, prefix string, limit int) (vals []ValueCount, approxCount int64, freeText bool, hit bool) {
-	if s == nil || s.disabled || key == "" {
+	if s == nil || s.disabled.Load() || key == "" {
 		return nil, 0, false, false
 	}
 	limit = clampLimit(limit)

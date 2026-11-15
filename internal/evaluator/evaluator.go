@@ -176,7 +176,7 @@ func New(store *chstore.Store, interval time.Duration, lock cache.Lock, notifier
 		store:          store,
 		interval:       interval,
 		lock:           lock,
-		leader:         cache.NewLeaderHolder(lock, lockKey, cache.LeaderTTL(interval)),
+		leader:         cache.NewFailOpenLeaderHolder(lock, lockKey, cache.LeaderTTL(interval)), // K1: alarm yolu
 		notifier:       notifier,
 		breachSince:    make(map[breachKey]time.Time),
 		lastResolved:   make(map[breachKey]time.Time),
