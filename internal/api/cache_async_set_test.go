@@ -13,6 +13,8 @@ package api
 
 import (
 	"context"
+
+	"github.com/cilcenk/coremetry/internal/cache"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -29,6 +31,20 @@ type blockingSetCache struct {
 }
 
 func (c *blockingSetCache) Set(_ context.Context, key string, _ []byte, _ time.Duration) error {
+	return c.set(key)
+}
+
+// Pipeline — v0.10.2230 (R4): miss yolunun L2 yazımı Pipeline'dan geçer.
+func (c *blockingSetCache) Pipeline(_ context.Context, ops []cache.PipeOp) error {
+	for _, op := range ops {
+		if !op.Del {
+			return c.set(op.Key)
+		}
+	}
+	return nil
+}
+
+func (c *blockingSetCache) set(key string) error {
 	c.setEntered <- key
 	<-c.release
 	close(c.setDone)

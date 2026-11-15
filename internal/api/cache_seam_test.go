@@ -8,6 +8,8 @@ package api
 
 import (
 	"context"
+
+	"github.com/cilcenk/coremetry/internal/cache"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -26,6 +28,24 @@ func (c *seamMemCache) Get(_ context.Context, key string) ([]byte, bool, error) 
 	defer c.mu.Unlock()
 	v, ok := c.m[key]
 	return v, ok, nil
+}
+
+// MGet / Pipeline — v0.10.2230 (R4): L2 okuma tek MGET, yazım Pipeline.
+func (c *seamMemCache) MGet(ctx context.Context, keys []string) ([][]byte, error) {
+	out := make([][]byte, len(keys))
+	for i, k := range keys {
+		out[i], _, _ = c.Get(ctx, k)
+	}
+	return out, nil
+}
+
+func (c *seamMemCache) Pipeline(ctx context.Context, ops []cache.PipeOp) error {
+	for _, op := range ops {
+		if !op.Del {
+			_ = c.Set(ctx, op.Key, op.Value, op.TTL)
+		}
+	}
+	return nil
 }
 
 func (c *seamMemCache) Set(_ context.Context, key string, val []byte, _ time.Duration) error {

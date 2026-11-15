@@ -1,6 +1,6 @@
 # Redis kullanım denetimi ve tasarım önerisi
 
-Durum: **onaylandı (operatör, 2026-11-15) — K1–K5 öneri gibi; R0 (v0.10.2226), R1 (v0.10.2227), R2 (v0.10.2228), R3 (v0.10.2229) gönderildi.** Okunan ağaç: `int` @ v0.10.2220. Operatör cümlesi: "Coremetry Redis'i daha etkin kullanabilir."
+Durum: **onaylandı (operatör, 2026-11-15) — K1–K5 öneri gibi; R0 (v0.10.2226), R1 (v0.10.2227), R2 (v0.10.2228), R3 (v0.10.2229), R4 (v0.10.2230) gönderildi.** Okunan ağaç: `int` @ v0.10.2220. Operatör cümlesi: "Coremetry Redis'i daha etkin kullanabilir."
 Etiketler: **[Ö]** kodda okundu (dosya:satır) · **[T]** koddan türetildi, ölçülmedi · **[V]** varsayım. Sayısal kazançların hepsi [T]/[V]; her dilim kendi ölçümünü taşır (§5).
 
 ## 0. Özet
@@ -113,7 +113,7 @@ Ortak: her anahtar TTL'li; `coremetry:<alan>:v<N>:` öneki; istek yolunda `SCAN`
 | R1 ✅ v0.10.2227 | Arayüz: `Pipeline` (toplu `Set`/`Del`) ve `Incr`; saatlik sayaçlar `Incr`'e (G11); chart'a `maxmemory` + politika (K3); taban ölçüm: katman sayaçları ve Redis tur süresi selfobs metriği; `cacheStats` kilidi (G12) | düşük | Noop + Redis uygulaması sözleşme testi | taban tablo: rota başına MISS oranı, `DBSIZE`, `used_memory`, `redis-cli --latency` |
 | R2 ✅ v0.10.2228 | O1 canlı pencere anahtarı; önce 5 sıcak uç (services, clusters, namespaces, databases, messaging), sonra kalan `cacheBucket` çağrıları; G1'in 5 dk anahtarları düzelir | orta: bayatlık semantiği (K2) | `cache_key_test.go` pinleri; canlı/geçmiş ayrımı saf fonksiyon testi | rota başına MISS oranı ve p99; `ListClusters` sorgu sayısı/saat |
 | R3 ✅ v0.10.2229 | O2 nesil sayaçlı geçersizleştirme; 15 önek kayıt altına; `DelPrefix` istek yolundan çıkar | orta: kayıt dışı önek bayat kalır | `cache_invalidate_test.go`: yazdığını oku, replikalar arası | ack/resolve p50/p99; `commandstats` scan çağrısı → 0 |
-| R4 | O3 dağıtık singleflight + O4 negatif önbellek | orta: kaybedene ek bekleme; hata = hemen hesapla | iki sahte replika, tek hesap; hak sahibi ölürse zaman aşımı | pahalı 5 rotada 5 dk CH sorgu sayısı; zaman aşımı tekrarı |
+| R4 ✅ v0.10.2230 | O3 dağıtık singleflight + O4 negatif önbellek | orta: kaybedene ek bekleme; hata = hemen hesapla | iki sahte replika, tek hesap; hak sahibi ölürse zaman aşımı | pahalı 5 rotada 5 dk CH sorgu sayısı; zaman aşımı tekrarı |
 | R5 | O5 bildirim tekilleştirme + hız sınırları Redis'te | düşük: hata = gönder | lider devri simülasyonu, tek gönderim | çift bildirim sayısı/hafta |
 | R6 | O7 ikili zarf, sıkıştırma, 1 MB tavan (eski zarf `HIT-LEGACY` yoluyla okunur) | düşük–orta: sürüm geçişi | gidiş-dönüş + karışık sürüm testi | `used_memory`, değer boyutu p99, isabet CPU'su |
 | R7 | O6 servis filo görüntüsü — **yalnız** R2 sonrası `/api/services` MISS payı hâlâ yüksekse | yüksek: SQL semantiğinin Go kopyası | CH yolu ile satır satır eşlik testi | `/api/services` sorgu sayısı ve p99 |

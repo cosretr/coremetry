@@ -263,6 +263,20 @@ func (c *keyRecorderCache) Get(_ context.Context, key string) ([]byte, bool, err
 }
 
 func (c *keyRecorderCache) last() string {
+	return c.lastKey()
+}
+
+// MGet — v0.10.2230 (R4): L2 okuması anahtar + olumsuz girdi + nesil tek
+// MGET; ilk anahtar kaydedilir ve isabet döner (Get ile aynı).
+func (c *keyRecorderCache) MGet(ctx context.Context, keys []string) ([][]byte, error) {
+	out := make([][]byte, len(keys))
+	if len(keys) > 0 {
+		out[0], _, _ = c.Get(ctx, keys[0])
+	}
+	return out, nil
+}
+
+func (c *keyRecorderCache) lastKey() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if len(c.keys) == 0 {

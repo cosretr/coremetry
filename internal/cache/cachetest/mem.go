@@ -27,20 +27,37 @@ type entry struct {
 type Mem struct {
 	mu    sync.Mutex
 	m     map[string]entry
-	Now   func() time.Time
+	off   time.Duration // Advance ile ileri sarılan saat (mu altında)
 	Down  atomic.Bool
 	Scans atomic.Int32 // ScanPrefix + DelPrefix çağrısı
 	Incrs atomic.Int32
 }
 
 // NewMem — boş bellek içi "Redis".
-func NewMem() *Mem { return &Mem{m: map[string]entry{}, Now: time.Now} }
+func NewMem() *Mem { return &Mem{m: map[string]entry{}} }
+
+func (c *Mem) now() time.Time { return time.Now().Add(c.off) }
+
+// Advance — saati ileri sarar (TTL düşüşü testleri).
+func (c *Mem) Advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.off += d
+}
+
+// Has — anahtar canlı mı (test yardımcısı; kesinti anahtarından bağımsız).
+func (c *Mem) Has(k string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, ok := c.live(k)
+	return ok
+}
 
 var _ cache.Cache = (*Mem)(nil)
 
 func (c *Mem) live(k string) (entry, bool) {
 	e, ok := c.m[k]
-	if ok && !e.exp.IsZero() && !c.Now().Before(e.exp) {
+	if ok && !e.exp.IsZero() && !c.now().Before(e.exp) {
 		delete(c.m, k)
 		return entry{}, false
 	}
@@ -51,7 +68,7 @@ func (c *Mem) exp(ttl time.Duration) time.Time {
 	if ttl <= 0 {
 		return time.Time{}
 	}
-	return c.Now().Add(ttl)
+	return c.now().Add(ttl)
 }
 
 func (c *Mem) Get(_ context.Context, k string) ([]byte, bool, error) {

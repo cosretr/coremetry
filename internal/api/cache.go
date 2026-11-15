@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"github.com/cilcenk/coremetry/internal/cache"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/selfobs"
 	"log"
@@ -279,10 +281,12 @@ func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, 
 			return data, "HIT-L1", nil
 		}
 		// ── L2 with SWR ───────────────────────────────────────
-		var raw []byte
-		var ok bool
-		raw, gen, ok = s.l2GetGen(ctx, key) // v0.10.2226: devre kesicili (G8); R3: + nesil, tek MGET
-		if ok {
+		// v0.10.2226: devre kesicili (G8); R3: + nesil; R4: + olumsuz
+		// girdi — hepsi tek MGET.
+		lk := s.l2Lookup(ctx, key, false)
+		gen = lk.gen
+		if lk.ok {
+			raw := lk.raw
 			written, body, envGen, envOK := unwrapEnvelopeGen(raw)
 			switch {
 			case gen != "" && (!envOK || !genMatches(gen, envGen)):
@@ -303,7 +307,9 @@ func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, 
 					// kick a background refresh (deduped via
 					// singleflight so concurrent stale hits
 					// share one upstream call).
-					go s.refreshKey(key, ttl, fn, gen)
+					if lk.neg == nil { // R4: zaman aşımı yeni düştüyse tazeleme bekler
+						go s.refreshKey(key, ttl, fn, gen)
+					}
 					s.stats.record("STALE", key)
 					return body, "STALE", nil
 				}
@@ -316,12 +322,29 @@ func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, 
 				return raw, "HIT-LEGACY", nil
 			}
 		}
+
+		// v0.10.2230 (R4, O4) — bu nesilde yakın zamanda zaman aşımına
+		// düşmüş: CH'yi yeniden yormadan aynı hata, < 10 ms.
+		if lk.neg != nil {
+			s.stats.record("NEG", key)
+			return nil, "", lk.neg
+		}
 	}
 
 	// ── Miss path with singleflight dedupe ────────────────────
-	body, noStore, err := s.computeBodyStore(ctx, key, gen, fn)
+	mode := dsfWait // R4: soğuk anahtar replikalar arası tek hesap
+	if bypass {
+		mode = dsfOff
+	}
+	body, noStore, peer, err := s.computeBodyStore(ctx, key, gen, mode, ttl, fn)
 	if err != nil {
 		return nil, "", err
+	}
+	if peer {
+		// R4 — başka replikanın az önce yazdığı zarf: L2'ye yeniden yazılmaz.
+		s.l1.set(key, body, minDur(ttl, l1TTL))
+		s.stats.record("HIT-PEER", key)
+		return body, "HIT-PEER", nil
 	}
 	if noStore {
 		// v0.10.1119 — fn gövdeyi uncacheable() ile işaretledi (ör. kök-neden
@@ -381,10 +404,21 @@ func (s *Server) storeL2(ctx context.Context, key string, body []byte, ttl time.
 	if gen == cacheGenUnknown {
 		return // R3: nesil okunamadı — hiçbir okumayla eşleşmeyecek girdi yazılmaz
 	}
-	if env, err := wrapEnvelope(body, gen); err == nil {
-		if err := s.l2Set(ctx, key, env, ttl*staleFactor); err != nil {
-			log.Printf("[cache] set %s: %v", key, err)
-		}
+	env, err := wrapEnvelope(body, gen)
+	if err != nil || !s.l2().allow() {
+		return
+	}
+	// v0.10.2230 (R4): gövde + olumsuz girdiyi ve claim'i silme tek turda.
+	t0 := time.Now()
+	err = s.cache.Pipeline(ctx, []cache.PipeOp{
+		{Key: key, Value: env, TTL: ttl * staleFactor},
+		{Key: cacheNegKeyPrefix + key, Del: true},
+		{Key: cacheClaimKeyPrefix + key, Del: true},
+	})
+	selfobs.ObserveCacheL2("set", time.Since(t0), err)
+	s.l2().done(ctx, err)
+	if err != nil {
+		log.Printf("[cache] set %s: %v", key, err)
 	}
 }
 
@@ -404,7 +438,10 @@ func (s *Server) refreshKey(key string, ttl time.Duration, fn func(ctx context.C
 	// upstream query. fn() used to close over the (already
 	// cancelled) request context, so every background refresh
 	// aborted with context.Canceled.
-	body, noStore, err := s.computeBodyStore(ctx, key, gen, fn)
+	body, noStore, _, err := s.computeBodyStore(ctx, key, gen, dsfSkip, ttl, fn)
+	if errors.Is(err, errDSFSkipped) {
+		return // R4: tazelemeyi başka replika yapıyor
+	}
 	if err != nil {
 		log.Printf("[cache] refresh %s: %v", key, err)
 		return
@@ -450,6 +487,7 @@ func uncacheable(v any) any { return noStoreResult{v: v} }
 type computedBody struct {
 	body    []byte
 	noStore bool
+	peer    bool // R4: gövde başka replikanın L2 yazımından
 }
 
 // computeBodyStore — gövde + uncacheable işareti (v0.10.1119).
@@ -457,14 +495,36 @@ type computedBody struct {
 // gen (v0.10.2229, R3) singleflight anahtarına girer: geçersizleştirmeden
 // sonra gelen çağıran, öncesinde başlamış bir hesaplamaya katılıp eski
 // gövdeyi yeni nesille yazamaz.
-func (s *Server) computeBodyStore(ctx context.Context, key, gen string, fn func(ctx context.Context) (any, error)) ([]byte, bool, error) {
+//
+// mode/ttl (v0.10.2230, R4): süreç içi slot'un İÇİNDE dağıtık claim
+// (cache_dsf.go); zaman aşımı sınıfı hata olumsuz önbelleğe yazılır.
+func (s *Server) computeBodyStore(ctx context.Context, key, gen string, mode dsfMode, ttl time.Duration, fn func(ctx context.Context) (any, error)) ([]byte, bool, bool, error) {
 	sfKey := key
 	if gen != "" {
 		sfKey = key + "\x00g" + gen
 	}
 	v, err, _ := s.sf.Do(sfKey, func() (any, error) {
+		claimed := false
+		if mode != dsfOff && gen != cacheGenUnknown {
+			claimed = s.dsfClaim(ctx, key)
+			if !claimed {
+				if mode == dsfSkip {
+					return nil, errDSFSkipped
+				}
+				if body, err, done := s.dsfAwait(ctx, key, gen, ttl); done {
+					if err != nil {
+						return nil, err
+					}
+					return computedBody{body: body, peer: true}, nil
+				}
+			}
+		}
 		val, err := fn(ctx)
 		if err != nil {
+			s.storeNeg(key, gen, ttl, err)
+			if claimed {
+				s.dsfRelease(key)
+			}
 			return nil, err
 		}
 		noStore := false
@@ -476,13 +536,16 @@ func (s *Server) computeBodyStore(ctx context.Context, key, gen string, fn func(
 		if err != nil {
 			return nil, err
 		}
+		if noStore && claimed {
+			s.dsfRelease(key)
+		}
 		return computedBody{body: b, noStore: noStore}, nil
 	})
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 	cb, _ := v.(computedBody)
-	return cb.body, cb.noStore, nil
+	return cb.body, cb.noStore, cb.peer, nil
 }
 
 // invalidateCacheChannel is the Redis pub/sub channel that
