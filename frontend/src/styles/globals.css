@@ -3825,6 +3825,9 @@ a.dbq-act { display: inline-flex; align-items: center; gap: var(--sp-2); font-si
    cümlesi + sayfa altındaki "Kaynak" satırının gövdesi. */
 tbody td.infra-where-note { color: var(--text2); }
 .infra-where .cluster-name { font-weight: 600; }
+/* v0.10.2206 — cluster detayı ↗: satır içi küçük ikon (row-link block'tu, ad hücresini bağlantıya çeviriyordu). */
+.infra-where-open { display: inline-block; padding: 0 var(--sp-1); color: var(--text3); text-decoration: none; }
+.infra-where-open:hover { color: var(--accent); }
 .infra-where-run { margin-right: var(--sp-3); }
 .infra-where-diag { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); color: var(--text3); }
 .infra-where-bar { margin-bottom: var(--sp-7); }

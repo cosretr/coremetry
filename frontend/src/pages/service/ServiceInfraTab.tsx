@@ -415,6 +415,10 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
                 // Açılacak pod'u olmayan satır (yanıt vermeyen, span'siz cluster) tıklanmaz.
                 const canOpen = r.kind === 'thanos' || r.pods > 0;
                 const toggle = () => setICluster(sel ? '' : r.cluster);
+                // v0.10.2206 (operatör: satıra tıklayınca cluster sayfası açılıyordu) —
+                // ↗ `row-link` sınıfıyla display:block'tu: ad hücresinin büyük kısmı
+                // bağlantıydı ve tık gezinmeye gidiyordu. Artık satır içi küçük ikon
+                // (infra-where-open); satırın kalanı yalnız açar/kapar.
                 const nameCell = (
                   // v0.10.1224 — operatör: ada basınca pod'lar açılsın. Ad satır tıkının
                   // parçası; cluster detayı yanındaki ↗ linkte.
@@ -423,7 +427,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
                     <span className="cluster-name">{r.cluster}</span>
                     <span onClick={e => e.stopPropagation()}>
                       {' '}<Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })}
-                        className="row-link" title="Cluster detayı" aria-label={`${r.cluster} cluster detayı`}>↗</Link>
+                        className="infra-where-open" title="Cluster detayı" aria-label={`${r.cluster} cluster detayı`}>↗</Link>
                     </span>
                   </td>
                 );
@@ -466,7 +470,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
                   <Fragment key={r.cluster}>
                   <tr {...rp}
                       className={[rp.className, sel && canOpen ? 'row-selected' : ''].filter(Boolean).join(' ') || undefined}
-                      aria-pressed={canOpen ? sel : undefined}
+                      aria-expanded={canOpen ? sel : undefined}
                       {...(canOpen ? rowActivation(toggle) : {})}>
                     {note
                       // Thanos dışı satır: sayı hücreleri yerine TEK düz cümle (boş hücre yok).

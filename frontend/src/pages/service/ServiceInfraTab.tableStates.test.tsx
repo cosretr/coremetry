@@ -189,9 +189,28 @@ describe('ServiceInfraTab — "Nerede çalışıyor" tek tablo (S6)', () => {
     expect(el.querySelector('[data-testid="inv"]')).toBeNull();
     await act(async () => { rowOf(el, 'c1')!.click(); });
     expect(el.querySelector('[data-testid="inv"]')?.textContent).toBe('c1');
-    expect(rowOf(el, 'c1')?.getAttribute('aria-pressed')).toBe('true');
+    expect(rowOf(el, 'c1')?.getAttribute('aria-expanded')).toBe('true');
     await act(async () => { rowOf(el, 'c1')!.click(); });
     expect(el.querySelector('[data-testid="inv"]')).toBeNull();
+  });
+
+  // v0.10.2206 — satır tıkı gezinmez, açar/kapar; yalnız ↗ cluster detayına gider
+  // (satır içi ikon, block bağlantı değil); klavye Enter/Space aynı geçiş.
+  it('satır genişletir (aria-expanded, Enter/Space); yalnız ↗ cluster detayına bağlanır', async () => {
+    m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde')];
+    const el = await mount();
+    const row = rowOf(el, 'c1')!;
+    expect(row.getAttribute('aria-expanded')).toBe('false');
+    expect(row.getAttribute('role')).toBe('button');
+    const links = [...row.querySelectorAll('a')];
+    expect(links).toHaveLength(1);
+    expect(links[0].className).toBe('infra-where-open');
+    expect(links[0].getAttribute('aria-label')).toBe('c1 cluster detayı');
+    expect(row.querySelector('.row-link')).toBeNull();
+    await act(async () => { row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+    expect(rowOf(el, 'c1')!.getAttribute('aria-expanded')).toBe('true');
+    await act(async () => { rowOf(el, 'c1')!.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })); });
+    expect(rowOf(el, 'c1')!.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('eski linkteki ?psrc / ?pview yok sayılır; ?icluster çalışır', async () => {
@@ -278,7 +297,7 @@ describe('ServiceInfraTab — "Nerede çalışıyor" tek tablo (S6)', () => {
     expect(attn.querySelectorAll('li').length).toBe(1);
     const open = [...attn.querySelectorAll('button')].find(b => b.textContent?.includes("pod'ları aç"))!;
     await act(async () => { open.click(); });
-    expect(el.querySelector('tbody tr[aria-pressed="true"]')).not.toBeNull();
+    expect(el.querySelector('tbody tr[aria-expanded="true"]')).not.toBeNull();
   });
 
   it('Thanos\'ta görünmeyen pod Dikkat\'te: "pod\'ları aç" o cluster satırını açar (eski "aşağıda" bağlantısı yok)', async () => {
