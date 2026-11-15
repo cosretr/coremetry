@@ -56,7 +56,7 @@ func cusum(pts []chstore.MLPoint, ref map[int]chstore.MLProfileStat, slotOf func
 		}
 		prevT = p.T
 		n++
-		sigma := math.Max((st.Q75-st.Q25)/1.349, math.Max(0.1*st.Q50, 1))
+		sigma := cpSigma(st)
 		// kırpılmış katkı: tek bir dev sıçrama birikimi tek başına taşımasın
 		z := math.Max(-h/2, math.Min(h/2, (p.V-st.Q50)/sigma))
 		tail = append(tail, z)
@@ -109,6 +109,11 @@ func cusum(pts []chstore.MLPoint, ref map[int]chstore.MLProfileStat, slotOf func
 		r.Shift = r.After - r.Ref
 	}
 	return r
+}
+
+// cpSigma — SAF: CUSUM ölçeği max(IQR/1.349, 0.1·Q50, 1).
+func cpSigma(st chstore.MLProfileStat) float64 {
+	return math.Max((st.Q75-st.Q25)/1.349, math.Max(0.1*st.Q50, 1))
 }
 
 // cpTarget — bir kırılma taraması: sinyal, parçalar, dedektör adı.
@@ -180,6 +185,7 @@ func runChangePoint(ctx context.Context, deps Deps, cfg chstore.MLConfig, now ti
 		if len(match) > 0 {
 			evm["rollouts"] = match
 		}
+		cpFreeze(evm, pts, ref, slotOf, step, r.At) // v0.10.2235 (H10): kaydın serisi + bandı
 		evs = append(evs, chstore.MLEvent{ID: chstore.MLEventID(tg.detector, svc, part), Detector: tg.detector, Signal: tg.signal,
 			Stage: chstore.MLStageShadow, Service: svc, Level: level, Code: code, StartedAt: r.At * 1e9, LastSeen: last.Add(time.Duration(step) * time.Second).UnixNano(),
 			WindowSec: uint32(cfg.BucketSec), Baseline: r.Ref, Observed: r.After, Score: r.S, Direction: r.Direction, Evidence: mergeEvidence("", evm)})

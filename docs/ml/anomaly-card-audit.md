@@ -501,6 +501,12 @@ aralık sorgusu, tik başına ≤ 10.
 kurulmaz). Seri = servis × hedef client histogramı, kova penceresi: p95 (ms) ya da `error_type` dolu çağrı oranı (yüzde, `clamp_max` 100);
 bant medyan ± criticalZ·effMAD; hacim aynı çiftin `_count`'u. Maliyet: açık olay başına tik başına 2 VM aralık sorgusu, tik başına ≤ 10 olay.
 
+**H10 — `trace_change_point` / `change_point` göçü.** ✅ **gemilendi v0.10.2235** (`internal/ml/change_point_record.go`,
+`change_point_record_test.go`). Seri = dedektörün koştuğu `ml_series` parçası (route `|p95` ya da log `_total`/`_error`, hedef kova); CUSUM'un
+gördüğü bitişik kuyruk (kırılmadan 30 dk önce → son kova) ve kova başına referans bandı (aynı takvim sınıfı dilimi, Q50 ± k·σ — CUSUM'un katkı
+eşiği) tik anında kanıta dondurulur, yeniden okunmaz. Snapshot 1 dk ızgarada basamak (kova değeri kova boyunca); `started_at` (hesaplanmış
+kırılma) değişmedi, `onset_at` seriden. Hacim log'da aynı seriden, trace p95'te gerekçeli yok. ±15 dk rollout bağımsız kanıt. Maliyet: ek sorgu yok.
+
 **H3…Hn — dedektör başına birer sürüm** (§9 tablosu; önerilen sıra: VM metrik → `trace_error_count` → `svc_error_rate` → TraceRED →
 bağımlılık → kırılma noktası → log RED → şablon → pod → `svc_breadth` → oluşum türleri). *Risk:* S/M/L sütunu. *Göç:* yok. *Test:* dedektör başına ölçüt 9 + doğrulayıcı.
 

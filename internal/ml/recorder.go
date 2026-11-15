@@ -283,6 +283,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	attachThanosMetricRecords(tctx, thRanger, cfg, closing, true, r.runs.firstOf, nil, &thBudget, start)
 	depBudget := depRecordMaxPerTick // v0.10.2234 (H9): dependency_* kaydı
 	attachDependencyRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &depBudget, start)
+	attachChangePointRecords(closing, true, r.runs.firstOf, nil, start) // v0.10.2235 (H10): sorgusuz
 	for _, ev := range closing {
 		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {
@@ -365,6 +366,10 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		ids, _ := r.runs.confirmers(ev, start, confirmWin)
 		return ids
 	}, &depBudget, start)
+	attachChangePointRecords(kept, false, r.runs.firstOf, func(ev chstore.MLEvent) []string {
+		ids, _ := r.runs.confirmers(ev, start, confirmWin)
+		return ids
+	}, start)
 	for _, ev := range kept {
 		if ev.Stage != chstore.MLStageChronic {
 			r.runs.setEvent(ev)
