@@ -52,7 +52,7 @@ const m = vi.hoisted(() => ({
   // v0.10.968 — kube-state-metrics kısmen düştü: instant "partial", limitsiz satır.
   partial: false,
 }));
-const stubs = vi.hoisted(() => ({ panel: null as null | Record<string, unknown>, focus: null as null | Record<string, unknown> }));
+const stubs = vi.hoisted(() => ({ panel: null as null | Record<string, unknown> }));
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
@@ -73,13 +73,6 @@ vi.mock('./TracePodPanel', () => ({
     return <div data-testid="pod-panel">{p.selected.pod}</div>;
   },
 }));
-vi.mock('./TracePodFocus', () => ({
-  TracePodFocus: (p: Record<string, unknown> & { selected: { pod: string } }) => {
-    stubs.focus = p;
-    return <div data-testid="pod-focus">{p.selected.pod}</div>;
-  },
-}));
-
 import { TraceMetricsPanel } from './TraceMetricsPanel';
 import { buildTraceMetricsModel, spanDepthMap } from './traceMetrics';
 
@@ -203,7 +196,7 @@ afterEach(() => {
   root = null; host = null;
   m.calls.length = 0; m.held.length = 0;
   m.mode = {}; m.podState = {}; m.cpu = {}; m.partial = false;
-  stubs.panel = null; stubs.focus = null;
+  stubs.panel = null;
   shown.length = 0; opened.length = 0;
   __resetEscLayers();
   window.history.replaceState({}, '', '/');
@@ -229,10 +222,11 @@ describe('TraceMetricsPanel — v0.10.968', () => {
     m.cpu = { [P_F3]: 0.99, [P_CK]: 0.95 };
     const el = await mount('?id=tr-synthetic&tab=metrics');
     const before = rowKeys(el);
+    // v0.10.2207 — tek pod'lu servis (checkout-api, audit-log-prod) grup satırı açmaz.
     expect(before).toEqual([
       'g:fraud-score-prod', `p:${P_F2}`, `p:${P_F1}`, `p:${P_F3}`,
-      'g:checkout-api', `p:${P_CK}`,
-      'g:audit-log-prod', `p:${P_AU}`,
+      `p:${P_CK}`,
+      `p:${P_AU}`,
       'n:',
     ]);
     expect(rowOf(el, `p:${P_F3}`).querySelector('[aria-label="Yükleniyor"]')).not.toBeNull();
@@ -282,15 +276,9 @@ describe('TraceMetricsPanel — v0.10.968', () => {
     // Diğer cluster'ın hücreleri etkilenmez.
     expect(metricTds(rowOf(el, `p:${P_F1}`))[0].textContent).toContain('%20');
     expect(el.querySelector('.tpm-strip')!.textContent).toContain('1 servis okunamadı');
-    // v0.10.968 (MF-4) — zaman aşımı kapsam açığı DEĞİL: tetik 5/5, uyarı renginde değil.
-    const cov = [...el.querySelectorAll('button')].find(b => b.textContent?.startsWith('Metrik kapsamı'))!;
-    expect(cov.textContent).toContain('5/5 pod');
-    expect(cov.classList.contains('is-warn')).toBe(false);
-    // v0.10.968 (MF-10) — sonuç satırı hash eki değil SERVİS adını söyler.
-    click(cov);
-    const dlg = el.querySelector('[role="dialog"][aria-label="Metrik kapsamı"]')!;
-    expect(dlg.querySelector('.tpm-cov-result')!.textContent).toContain('1 pod okunamadı (audit-log-prod, 10 sn zaman aşımı)');
-    click(cov);
+    // v0.10.968 (MF-4) — zaman aşımı kapsam açığı DEĞİL (5/5); v0.10.2207 —
+    // kapsam tam iken "Metrik kapsamı" tetiği hiç çizilmez.
+    expect([...el.querySelectorAll('button')].some(b => b.textContent?.startsWith('Metrik kapsamı'))).toBe(false);
     const before = m.calls.map(c => c.clusterValue);
     expect(before.sort()).toEqual(['dc-east-1', 'dc-east-2']);
     const retry = [...el.querySelectorAll<HTMLButtonElement>('.tpm-strip button')].find(b => b.textContent === 'Yeniden dene')!;
@@ -311,6 +299,19 @@ describe('TraceMetricsPanel — v0.10.968', () => {
     expect(el.querySelector('.sr-only[role="status"]')!.textContent).toBe('Metrikler yeniden yüklendi.');
   });
 
+  // v0.10.2207 (operatör: "kalabalık") — üst alan TEK satır: solda sayılar,
+  // sağda pencere; kapsam yalnız eksikken; kritik yol özeti ve odak yok.
+  it('v0.10.2207: üst şerit tek satır — "N pod · M servis · K cluster" + pencere; kapsam tamken yok', async () => {
+    const el = await mount('?id=tr-synthetic&tab=metrics');
+    const strip = el.querySelector('.tpm-strip')!;
+    expect(strip.querySelector('.tpm-strip-left')!.textContent).toBe('5 pod · 3 servis · 2 cluster');
+    expect(strip.querySelector('.tpm-strip-right [aria-label="Metrik penceresi"]')).not.toBeNull();
+    expect(el.textContent).not.toContain('Metrik kapsamı');
+    expect(el.textContent).not.toContain('Kritik yolun');
+    expect(el.textContent).not.toContain('dk önce');
+    expect(el.querySelector('.tpm-notes')).toBeNull();
+  });
+
   it('4. no_samples → nötr "örnek yok"; ambiguous → "belirsiz"', async () => {
     m.podState = { [P_F3]: 'no_samples', [P_F1]: 'ambiguous' };
     const el = await mount('?id=tr-synthetic&tab=metrics');
@@ -328,7 +329,7 @@ describe('TraceMetricsPanel — v0.10.968', () => {
     const el = await mount('?id=tr-synthetic&span=s0&tab=metrics');
     // Varsayılan seçim: kök neden pod'u (tek pod).
     expect(rowOf(el, `p:${P_F2}`).getAttribute('aria-selected')).toBe('true');
-    expect(stubs.panel!.compare).toEqual([P_F2]);
+    expect((stubs.panel!.selected as { pod: string }).pod).toBe(P_F2);
     // v0.10.968 (F8) — Trace.tsx span/tab/xn'i router'a haber vermeden ham
     // replaceState ile yazar; `prev` kopyalayan bir yazıcı bunları düşürürdü.
     window.history.replaceState({}, '', '/trace?id=tr-synthetic&span=s9&tab=metrics&xn=1');
@@ -392,7 +393,7 @@ describe('TraceMetricsPanel — v0.10.968', () => {
     // Arama namespace/servis/pod'da, büyük/küçük harf duyarsız.
     typeInto(input, 'AUDIT');
     await settle(2);
-    expect(rowKeys(el)).toEqual(['g:audit-log-prod', `p:${P_AU}`]);
+    expect(rowKeys(el)).toEqual([`p:${P_AU}`]); // v0.10.2207 — tek pod'lu servis: grup satırı yok
   });
 
   it('8. klavye: ↓ → Enter seçer; ← grubu kapatır; Esc önce aramayı sonra seçimi temizler', async () => {
@@ -405,7 +406,7 @@ describe('TraceMetricsPanel — v0.10.968', () => {
     expect((document.activeElement as HTMLElement).dataset.key).toBe(`p:${P_F1}`);
     key(document.activeElement!, 'Enter');
     await settle(2);
-    expect(params().get('mpod')).toBe(`${P_F1},${P_F2}`); // aynı servis + ikisi ok → karşılaştırmaya eklenir
+    expect(params().get('mpod')).toBe(P_F1); // v0.10.2207 — tek pod (karşılaştırma yok)
     expect(rowOf(el, `p:${P_F1}`).getAttribute('aria-selected')).toBe('true');
     // v0.10.976 — Enter ile açılan satır altı ayrıntı odağı BÖLGEYE alır
     // (v0.10.968'de yan panel odağı satırda bırakıyordu); satıra dönüp ← ile
@@ -424,7 +425,7 @@ describe('TraceMetricsPanel — v0.10.968', () => {
     act(() => { input.focus(); });
     key(input, 'Escape');
     expect(input.value).toBe('');
-    expect(params().get('mpod')).toBe(`${P_F1},${P_F2}`);
+    expect(params().get('mpod')).toBe(P_F1);
     // Kabuğun katmanı: arama boş → seçimi kapatır (mpod=-).
     typeInto(input, 'x');
     act(() => { topEscLayer()!(); });
@@ -466,37 +467,15 @@ describe('TraceMetricsPanel — v0.10.968', () => {
     expect(live).toHaveLength(1);
     expect(live[0].textContent).toBe('');
     const announce = stubs.panel!.announce as (s: string) => void;
-    act(() => { announce('Karşılaştırmada en çok 4 pod.'); });
+    act(() => { announce('Pod adı kopyalandı: x'); });
     await act(async () => { await new Promise(r => setTimeout(r, 80)); });
-    expect(live[0].textContent).toBe('Karşılaştırmada en çok 4 pod.');
-    act(() => { announce('Karşılaştırmada en çok 4 pod.'); });
+    expect(live[0].textContent).toBe('Pod adı kopyalandı: x');
+    act(() => { announce('Pod adı kopyalandı: x'); });
     expect(live[0].textContent).toBe('');
     await act(async () => { await new Promise(r => setTimeout(r, 80)); });
-    expect(live[0].textContent).toBe('Karşılaştırmada en çok 4 pod.');
-    // Servis değişince kabuk kendisi duyurur.
-    click(rowOf(el, `p:${P_AU}`).querySelector('td.mono')!);
-    await act(async () => { await new Promise(r => setTimeout(r, 80)); });
-    expect(live[0].textContent).toBe('Karşılaştırma servisi değişti: audit-log-prod.');
+    expect(live[0].textContent).toBe('Pod adı kopyalandı: x');
   });
 
-  it('12. mview=pod + seçim → tablo yerine TracePodFocus', async () => {
-    const el = await mount(`?id=tr-synthetic&tab=metrics&mpod=${P_F1}&mview=pod`);
-    expect(el.querySelector('[data-testid="pod-focus"]')!.textContent).toBe(P_F1);
-    expect(el.querySelector('table[role="treegrid"]')).toBeNull();
-    expect(stubs.focus!.focus).toBe(true);
-    // v0.10.968 (MF-5) — odak görünümü tablo araç çubuğunun da YERİNE geçer.
-    expect(el.querySelector('[aria-label="Pod süzgeci"]')).toBeNull();
-    expect(el.querySelector('[data-shortcut-search]')).toBeNull();
-    // Odaktan çıkış (Esc katmanı ilk olarak odak görünümünü kapatır).
-    act(() => { topEscLayer()!(); });
-    await settle(2);
-    expect(params().has('mview')).toBe(false);
-    expect(el.querySelector('table[role="treegrid"]')).not.toBeNull();
-    expect(el.querySelector('[aria-label="Pod süzgeci"]')).not.toBeNull();
-    expect(el.querySelector('[data-shortcut-search]')).not.toBeNull();
-    // v0.10.968 (F1 ui) — odak <body>'de kalmaz, çıkılan pod'un satırına döner.
-    expect((document.activeElement as HTMLElement).dataset.key).toBe(`p:${P_F1}`);
-  });
 });
 
 // ── v0.10.968 — inceleme turu ───────────────────────────────────────────────
@@ -525,22 +504,12 @@ describe('TraceMetricsPanel — v0.10.968 inceleme turu', () => {
     expect(rowOf(el, `p:${P_F2}`).getAttribute('aria-selected')).toBe('true');
   });
 
-  it('F1 ui: panel kapanınca odak kapanan pod\'un satırına; odak görünümünden "Daralt" ile dönünce de', async () => {
+  it('F1 ui: panel kapanınca odak kapanan pod\'un satırına', async () => {
     const el = await mount('?id=tr-synthetic&tab=metrics');
     act(() => { (stubs.panel!.onClose as () => void)(); });
     await settle(2);
     expect(params().get('mpod')).toBe('-');
     expect((document.activeElement as HTMLElement).dataset.key).toBe(`p:${P_F2}`);
-    click(rowOf(el, `p:${P_F1}`).querySelector('td.mono')!);
-    await settle(2);
-    act(() => { (document.activeElement as HTMLElement).blur(); });
-    act(() => { (stubs.panel!.onToggleFocus as () => void)(); });
-    await settle(2);
-    expect(el.querySelector('[data-testid="pod-focus"]')).not.toBeNull();
-    act(() => { (stubs.focus!.onToggleFocus as () => void)(); });
-    await settle(2);
-    expect(el.querySelector('[data-testid="pod-focus"]')).toBeNull();
-    expect((document.activeElement as HTMLElement).dataset.key).toBe(`p:${P_F1}`);
   });
 
   it('F12 ui: "N pod daha" FAREYLE açılınca odak ilk açılan pod\'a geçer (<body>\'ye düşmez)', async () => {
@@ -636,13 +605,13 @@ describe('TraceMetricsPanel — v0.10.976 satır altı ayrıntı', () => {
     expect(region(el, P_CK)).not.toBeNull();
     expect(region(el, P_F2)).toBeNull();
     expect(params().get('mpod')).toBe(P_CK);
-    // Aynı servisten ikinci pod: karşılaştırmaya girer, ayrıntı YENİ seçilinin (compare[0]) altında.
+    // Aynı servisten ikinci pod: seçimi DEĞİŞTİRİR (v0.10.2207 — karşılaştırma yok).
     click(rowOf(el, `p:${P_F1}`).querySelector('td.mono')!);
     await settle(2);
     expect(params().get('mpod')).toBe(P_F1);
     click(rowOf(el, `p:${P_F2}`).querySelector('td.mono')!);
     await settle(2);
-    expect(params().get('mpod')).toBe(`${P_F2},${P_F1}`);
+    expect(params().get('mpod')).toBe(P_F2);
     expect(detailRows(el)).toHaveLength(1);
     expect(rowOf(el, `p:${P_F2}`).nextElementSibling!.classList.contains('tpm-detail-row')).toBe(true);
     // Seçili pod'a yeniden tık → kapanır. Odak <body>'deyken (jsdom tıkı odak
@@ -674,8 +643,10 @@ describe('TraceMetricsPanel — v0.10.976 satır altı ayrıntı', () => {
     expect(rowOf(el, `p:${P_AU}`)).toBe(tr);               // hâlâ aynı düğüm
     expect(document.activeElement).toBe(tr);               // odak satırda KALIR
     // Kapanıştan sonra ok tuşları çalışır (gezici tabindex konumu yitmedi).
+    // v0.10.2207 — tek pod'lu servis grup satırı açmaz: yukarısı önceki satır.
+    const ks = rowKeys(el);
     key(tr, 'ArrowUp');
-    expect((document.activeElement as HTMLElement).dataset.key).toBe('g:audit-log-prod');
+    expect((document.activeElement as HTMLElement).dataset.key).toBe(ks[ks.indexOf(`p:${P_AU}`) - 1]);
     // Yabancı parametreler korunur, geçmiş büyümez (replace).
     expect([params().get('id'), params().get('tab')]).toEqual(['tr-synthetic', 'metrics']);
     expect(window.history.length).toBe(len);
@@ -814,34 +785,5 @@ describe('TraceMetricsPanel — v0.10.976 satır altı ayrıntı', () => {
     expect(rowOf(el, `p:${P_F1}`).nextElementSibling!.classList.contains('tpm-detail-row')).toBe(true);
     // Ayrıntı satırı >100 satır kipinin cv-row'unu ALMAZ (grafik ölçümü kırpılmasın).
     expect(detailRows(el)[0].classList.contains('cv-row')).toBe(false);
-  });
-
-  it('6. çip yolu seçimi taşıyınca (compare[0] çıkar) ayrıntı düğümü TAŞINIR ve odak yeni bölgeye; seçim taşınmadan odak yerinde; odak dışarıdaysa çalınmaz', async () => {
-    const el = await mount(`?id=tr-synthetic&tab=metrics&mpod=${P_F2},${P_F1}`);
-    const before = region(el, P_F2)!;
-    act(() => { before.focus(); });
-    act(() => { (stubs.panel!.onCompareChange as (n: string[]) => void)([P_F1]); });
-    await settle(2);
-    expect(params().get('mpod')).toBe(P_F1);
-    expect(rowOf(el, `p:${P_F1}`).nextElementSibling!.classList.contains('tpm-detail-row')).toBe(true);
-    expect(region(el, P_F2)).toBeNull();
-    // Sabit anahtar: aynı bölge elemanı yeni satırın altına TAŞINDI (alt ağacın
-    // durumu — "+N" menüsü, JVM açık/kapalı — yaşar); taşınan düğüm odağı
-    // yitirir, kabuğun d:<pod> isteği geri verir.
-    expect(region(el, P_F1)).toBe(before);
-    expect(document.activeElement).toBe(region(el, P_F1));
-    // compare[0] değişmeden (pod eklendi): düğüm yerinde, odak yerinde.
-    act(() => { (stubs.panel!.onCompareChange as (n: string[]) => void)([P_F1, P_F3]); });
-    await settle(2);
-    expect(params().get('mpod')).toBe(`${P_F1},${P_F3}`);
-    expect(document.activeElement).toBe(region(el, P_F1));
-    // Odak ayrıntının dışındaysa (arama kutusu) seçim taşınsa da çalınmaz.
-    const input = el.querySelector<HTMLInputElement>('input[type="search"]')!;
-    act(() => { input.focus(); });
-    act(() => { (stubs.panel!.onCompareChange as (n: string[]) => void)([P_F3, P_F1]); });
-    await settle(2);
-    expect(params().get('mpod')).toBe(`${P_F3},${P_F1}`);
-    expect(region(el, P_F3)).toBe(before);
-    expect(document.activeElement).toBe(input);
   });
 });

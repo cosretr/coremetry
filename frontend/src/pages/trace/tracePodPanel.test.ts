@@ -1,16 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import type { SpanRow } from '@/lib/types';
 import type {
-  PodMetricSeries, PodMetricState, TraceMetricsModel, TracePodInfo, TraceErrorMark,
+  PodMetricSeries, PodMetricState, TraceMetricsModel, TracePodInfo,
 } from './traceMetricsModel';
-import { MAX_SIBLING_LINES } from './traceMetricsModel';
 import {
-  median, siblingRatio, siblingStats, siblingCopy, compareChipLayout, CAP_REASON, buildChartItems, chartPods,
-  chartCaption, timelineLanes, timelineTicks, timelineModel, nowSection, nowNote, stateMessage, errorReason,
-  momentRow, THROTTLE_NOTE, flaggedNav, relToTrace, agoText, podBadges, subLine,
-  clusterNameOf, funnelCaption, compareColors, chartHeadline, podFacts, type LaneSpan,
+  median, siblingRatio, siblingStats, siblingCopy, buildChartItems, chartPod,
+  chartCaption, nowSection, nowNote, stateMessage, errorReason,
+  momentRow, THROTTLE_NOTE, relToTrace, agoText, podBadges, subLine,
+  clusterNameOf, podColors, chartHeadline, podFacts,
 } from './tracePodPanelModel';
-import { preferredSlot, seriesColor, seriesPalette } from '@/lib/chartFmt';
+import { seriesPalette, preferredSlot } from '@/lib/chartFmt';
 
 // tracePodPanel.test.ts — v0.10.968 — Trace › Metrics seçili pod paneli ve
 // odak görünümünün SAF yardımcıları (tablo testli). Model fikstürleri elle
@@ -110,188 +109,57 @@ describe('v0.10.968 — kardeş oranı (medyan)', () => {
 });
 
 // ── 2. compareChipLayout ────────────────────────────────────────────────────
-describe('v0.10.968 — karşılaştırma çipleri', () => {
-  const ps = Array.from({ length: 10 }, (_, i) => pod(`${SVC}-6b7d9f8c5-p${i}aaa`, { flagged: i === 8 }));
-  const allOk = () => ok();
-
-  it('10 pod → ilk 6 + işaretli + karşılaştırılan görünür, gerisi taşmada (sıra korunur)', () => {
-    const { visible, overflow } = compareChipLayout(ps, [ps[0].pod, ps[7].pod], allOk);
-    expect(visible.map(c => c.pod)).toEqual([0, 1, 2, 3, 4, 5, 7, 8].map(i => ps[i].pod));
-    expect(overflow.map(c => c.pod)).toEqual([ps[6].pod, ps[9].pod]);
-    expect(visible[0]).toMatchObject({ on: true, slot: 0, label: ps[0].pod, disabled: false });
-    expect(visible[6]).toMatchObject({ on: true, slot: 1 });
-    expect(visible[0].title).toBe(`${ps[0].pod} · karşılaştırmadan çıkar`);
-    expect(visible[1].title).toBe(`${ps[1].pod} · karşılaştırmaya ekle`);
-  });
-  it('tavanda (4) seçisiz aynı-servis çipi devre dışı + gerekçe BİREBİR; seçili çipler açık', () => {
-    const cmp = ps.slice(0, 4).map(p => p.pod);
-    const { visible } = compareChipLayout(ps, cmp, allOk);
-    const blocked = visible.find(c => c.pod === ps[4].pod)!;
-    expect(blocked).toMatchObject({ disabled: true, title: CAP_REASON });
-    expect(CAP_REASON).toBe('En çok 4 pod üst üste çizilir — önce birini çıkarın');
-    expect(visible.filter(c => c.on).every(c => !c.disabled)).toBe(true);
-  });
-  it('eşlenmemiş kardeş: "metrik yok (<cl> eşlenmemiş)" ile devre dışı; menü notu', () => {
-    const st = (p: string): PodMetricState => (p === ps[2].pod
-      ? { kind: 'unmapped', clusterValue: 'dc-east-2', reason: 'no_remote_cluster' } : ok());
-    const { visible } = compareChipLayout(ps, [ps[0].pod], st);
-    const c = visible.find(x => x.pod === ps[2].pod)!;
-    expect(c).toMatchObject({ disabled: true, note: 'metrik yok' });
-    expect(c.title).toBe(`${ps[2].pod} · metrik yok (dc-east-2 eşlenmemiş)`);
-    const noCv = compareChipLayout(ps, [ps[0].pod], p => (p === ps[2].pod
-      ? { kind: 'unmapped', clusterValue: '', reason: 'no_cluster_value' } : ok())).visible.find(x => x.pod === ps[2].pod)!;
-    expect(noCv.title).toBe(`${ps[2].pod} · metrik yok (span'lerde cluster özniteliği yok)`);
-  });
-});
-
 // ── 3. buildChartItems ──────────────────────────────────────────────────────
-describe('v0.10.968 — grafik öğeleri', () => {
-  const ps = Array.from({ length: 16 }, (_, i) => pod(`${SVC}-6b7d9f8c5-p${String(i).padStart(2, '0')}aa`));
-  const m = model(ps);
-  const cmp = [ps[0].pod, ps[1].pod];
-  const base = (siblingLines: boolean, st: (p: string) => PodMetricState = () => ok()) => {
-    const cp = chartPods(m, ps[0], cmp, st);
-    return { ...cp, siblingLines, traceStartNs: m.traceStartNs, traceEndNs: m.traceEndNs, stepSec: 15 };
-  };
+describe('v0.10.968 — grafik öğeleri (v0.10.2207: yalnız seçili pod)', () => {
+  const p0 = pod(`${SVC}-6b7d9f8c5-p00aa`);
+  const base = (st: (p: string) => PodMetricState = () => ok()) => ({
+    pod: chartPod(p0, st), traceStartNs: T0, traceEndNs: T0 + 3.42e9, stepSec: 15,
+  });
 
-  it('karşılaştırılan → data, kardeş → muted; en çok 12 kardeş + "+N çizilmedi" sayısı', () => {
-    const b = buildChartItems('mem', base(true));
-    expect(b.items.slice(0, 2).map(i => [i.name, i.role])).toEqual([[ps[0].pod, 'data'], [ps[1].pod, 'data']]);
-    const muted = b.items.filter(i => i.role === 'muted');
-    expect(muted).toHaveLength(MAX_SIBLING_LINES);
-    expect(b.siblingsDrawn).toBe(12);
-    expect(b.siblingsHidden).toBe(2);
-    expect(b.legend.map(l => l.label)).toEqual([ps[0].pod, ps[1].pod]);
-    expect(chartCaption({ durNs: 3.42e9, stepSec: 15, service: SVC, siblingsDrawn: 12, siblingsHidden: 2, cpuNoLimit: false }))
-      .toContain(`Soluk çizgiler: ${SVC} servisinin bu trace'teki diğer 14 pod'u (+2 çizilmedi).`);
+  it('tek data çizgisi = seçili pod; kardeş / soluk çizgi yok', () => {
+    const b = buildChartItems('mem', base());
+    expect(b.items.map(i => [i.name, i.role])).toEqual([[p0.pod, 'data']]);
+    expect(chartCaption({ durNs: 3.42e9, stepSec: 15, cpuNoLimit: false })).not.toContain('Soluk çizgiler');
   });
-  it('kardeş çizgileri kapalı → kardeş yok, not yok', () => {
-    const b = buildChartItems('cpu', base(false));
-    expect(b.items.every(i => i.role === 'data')).toBe(true);
-    expect(b.siblingsDrawn).toBe(0);
-    expect(b.siblingsHidden).toBe(0);
-    expect(chartCaption({ durNs: 3.42e9, stepSec: 15, service: SVC, siblingsDrawn: 0, siblingsHidden: 0, cpuNoLimit: false }))
-      .not.toContain('Soluk çizgiler');
-  });
-  it('metriği olmayan pod ne karşılaştırmada ne kardeşte çizilir', () => {
-    const b = buildChartItems('cpu', base(true, p => (p === ps[1].pod || p === ps[5].pod ? { kind: 'loading' } : ok())));
-    expect(b.items.filter(i => i.role === 'data').map(i => i.name)).toEqual([ps[0].pod]);
-    expect(b.items.some(i => i.name === 'p05aa')).toBe(false);
+  it('metriği olmayan pod çizilmez', () => {
+    expect(buildChartItems('cpu', base(() => ({ kind: 'loading' }))).items).toEqual([]);
   });
   it('trace bandı en az BİR adım geniş; gerçek bitiş endSec\'te; renk accent2, etiket trace', () => {
-    const b = buildChartItems('mem', base(false));
+    const b = buildChartItems('mem', base());
     expect(b.regions).toHaveLength(1);
     expect(b.regions[0]).toMatchObject({ fromSec: T0 / 1e9, toSec: T0 / 1e9 + 15, color: 'var(--accent2)', label: 'trace' });
     expect(b.regions[0].endSec).toBeCloseTo(T0 / 1e9 + 3.42, 3);
-    const long = buildChartItems('mem', { ...base(false), traceEndNs: T0 + 40e9 });
+    const long = buildChartItems('mem', { ...base(), traceEndNs: T0 + 40e9 });
     expect(long.regions[0].toSec).toBe(T0 / 1e9 + 40);
   });
   it('limit çizgisi yalnız limit BİLİNİRKEN; CPU limitsizse bayrak', () => {
-    expect(buildChartItems('cpu', base(false)).thresholds).toEqual([{ value: 1, label: 'limit (şu an)', color: 'var(--warn)' }]);
-    const nolim = base(false, () => ok({ cpuLimit: undefined, memLimit: undefined }));
+    expect(buildChartItems('cpu', base()).thresholds).toEqual([{ value: 1, label: 'limit (şu an)', color: 'var(--warn)' }]);
+    const nolim = base(() => ok({ cpuLimit: undefined, memLimit: undefined }));
     const c = buildChartItems('cpu', nolim);
     expect(c.thresholds).toEqual([]);
     expect(c.noLimit).toBe(true);
     const mm = buildChartItems('mem', nolim);
     expect(mm.thresholds).toEqual([]);
     expect(mm.noLimit).toBe(false);
-    expect(chartCaption({ durNs: 3.42e9, stepSec: 15, service: SVC, siblingsDrawn: 0, siblingsHidden: 0, cpuNoLimit: true }))
-      .toContain('CPU limiti tanımsız: limit çizgisi yok.');
+    expect(chartCaption({ durNs: 3.42e9, stepSec: 15, cpuNoLimit: true })).toContain('CPU limiti tanımsız: limit çizgisi yok.');
   });
   it('seri: zaman = start + i·step (ns), boşluk NaN (sıfır çizilmez)', () => {
-    const b = buildChartItems('cpu', base(false));
-    const pts = b.items[0].series[0].points;
+    const pts = buildChartItems('cpu', base()).items[0].series[0].points;
     expect(pts[0]).toEqual({ time: (T0 / 1e9 - 300) * 1e9, value: 0.4 });
     expect(pts[1].time).toBe((T0 / 1e9 - 285) * 1e9);
     expect(Number.isNaN(pts[1].value)).toBe(true);
   });
-  it('huni cümlesi: tek adım / çok adım / adım yok', () => {
-    expect(funnelCaption(3.42e9, 15)).toBe("Metrik grafiklerinde bu 3,42 sn tek bir 15 sn'lik adıma düşer.");
-    expect(funnelCaption(40e9, 15)).toBe('Metrik grafiklerinde bu 40,00 sn yaklaşık 3 adıma (15 sn) yayılır.');
-    expect(funnelCaption(3.42e9, null)).toBeNull();
-  });
   it('başlık gerçek adımı söyler', () => {
-    expect(chartCaption({ durNs: 3.42e9, stepSec: 60, service: SVC, siblingsDrawn: 0, siblingsHidden: 0, cpuNoLimit: false }))
+    expect(chartCaption({ durNs: 3.42e9, stepSec: 60, cpuNoLimit: false }))
       .toMatch(/^Mavi bant: trace \(3,42 sn; en az bir 60 sn adım genişliğinde çizilir\)\./);
   });
-});
-
-// ── 4. timelineLanes / timelineTicks ────────────────────────────────────────
-describe('v0.10.968 — span zaman çizelgesi', () => {
-  const S = (id: string, a: number, b: number): LaneSpan => ({ id, startNs: a, endNs: b });
-  const overlaps = (items: LaneSpan[], laneOf: Map<string, number>) => {
-    for (const a of items) for (const b of items) {
-      if (a.id >= b.id || laneOf.get(a.id) !== laneOf.get(b.id)) continue;
-      if (a.startNs < b.endNs && b.startNs < a.endNs) return true;
-    }
-    return false;
-  };
-
-  it('çakışma yok, en az şerit (en çok eşzamanlılık), bitişe dokunan aynı şeride', () => {
-    const items = [S('a', 0, 10), S('b', 5, 15), S('c', 10, 20), S('d', 12, 14), S('e', 20, 30)];
-    const r = timelineLanes(items);
-    expect(overlaps(items, r.laneOf)).toBe(false);
-    expect(r.lanes).toBe(3);          // 12–14 anında a? hayır: b, c, d → 3
-    expect(r.laneOf.get('c')).toBe(0); // a bitti (10) → şerit 0
-    expect(r.overflow).toBe(0);
-  });
-  it('deterministik: girdi sırası sonucu değiştirmez', () => {
-    const items = [S('a', 0, 10), S('b', 0, 10), S('c', 2, 4), S('d', 3, 9), S('e', 9, 12)];
-    const want = [...timelineLanes(items).laneOf.entries()].sort();
-    for (const perm of [[...items].reverse(), [items[2], items[0], items[4], items[1], items[3]]]) {
-      expect([...timelineLanes(perm).laneOf.entries()].sort()).toEqual(want);
-    }
-  });
-  it('rastgele 200 span: çakışma yok ve şerit sayısı = en yüksek eşzamanlılık', () => {
-    let seed = 42;
-    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
-    const items = Array.from({ length: 200 }, (_, i) => { const a = Math.floor(rnd() * 1000); return S(`s${i}`, a, a + 1 + Math.floor(rnd() * 80)); });
-    const r = timelineLanes(items);
-    expect(overlaps(items, r.laneOf)).toBe(false);
-    let peak = 0;
-    for (let t = 0; t < 1100; t++) peak = Math.max(peak, items.filter(s => s.startNs <= t && t < s.endNs).length);
-    expect(r.lanes).toBe(peak);
-  });
-  it('maxLanes aşılınca en erken boşalan şeride biner ve sayılır', () => {
-    const r = timelineLanes([S('a', 0, 10), S('b', 0, 20), S('c', 0, 5)], 2);
-    expect(r.lanes).toBe(2);
-    expect(r.overflow).toBe(1);
-  });
-  it.each([
-    [3.42e9, ['0', '0,5 sn', '1 sn', '1,5 sn', '2 sn', '2,5 sn', '3 sn', '3,42 sn']],
-    [440e6, ['0', '100 ms', '200 ms', '300 ms', '440 ms']],
-    [1e9, ['0', '0,2 sn', '0,4 sn', '0,6 sn', '0,8 sn', '1,00 sn']],
-  ])('timelineTicks(%s) düzgün adımlar + trace süresi', (dur, want) => {
-    expect(timelineTicks(dur).map(t => t.label)).toEqual(want);
-    const t = timelineTicks(dur);
-    expect(t[t.length - 1]).toMatchObject({ ns: dur, end: true });
-  });
-
-  it('timelineModel: hatalı / kritik span, bu pod\'un hatası ayrı, işaret başlığı', () => {
-    const p = pod(`${SVC}-6b7d9f8c5-m3t9w`, { spans: 2, errors: 1, critNs: 1.3e9, activeFromNs: T0 + 0.294e9, activeToNs: T0 + 2.81e9 });
-    const other = pod('audit-log-prod-5f9c7d6b8-q2w4e', { service: 'audit-log-prod' });
-    const sp = (id: string, name: string, start: number, ms: number, status = 'ok') =>
-      ({ spanId: id, name, startTime: start, durationMs: ms, statusCode: status } as unknown as SpanRow);
-    const marks: TraceErrorMark[] = [
-      { spanId: 'e1', pod: p.pod, service: SVC, name: 'POST /v1/score', status: 'DEADLINE_EXCEEDED', timeNs: T0 + 1.802e9 },
-      { spanId: 'x1', pod: other.pod, service: 'audit-log-prod', name: 'PUT /v1/audit', status: '409', timeNs: T0 + 0.758e9 },
-    ];
-    const m = model([p, other], {
-      podSpans: new Map([[p.pod, [sp('e1', 'POST /v1/score', T0 + 0.294e9, 1508, 'error'), sp('k1', 'score.model.evaluate', T0 + 0.338e9, 1100)]]]),
-      criticalIds: new Set(['k1']), errorMarks: marks,
-    });
-    const tl = timelineModel(m, p);
-    expect(tl.bars.find(b => b.id === 'e1')).toMatchObject({ error: true, critical: false, status: 'DEADLINE_EXCEEDED' });
-    expect(tl.bars.find(b => b.id === 'k1')).toMatchObject({ error: false, critical: true, status: 'ok' });
-    expect(tl.lanes).toBe(2);
-    expect(tl.marks.map(x => x.own)).toEqual([true, false]);
-    expect(tl.marks[0].title).toBe(`${SVC} ${p.pod} · POST /v1/score · DEADLINE_EXCEEDED · +1,802 sn`);
-    expect(tl.summary).toBe('2 span · 1 hata · kritik yolda 1,30 sn');
-    expect(tl.active.x0).toBeCloseTo(0.294 / 3.42);
+  it('çizgi rengi = podColors haritası (JVM çizgileriyle aynı)', () => {
+    const c = podColors(p0.pod, 'dark');
+    expect(buildChartItems('mem', { ...base(), colors: c }).items[0].color).toBe(c.get(p0.pod));
+    expect(c.get(p0.pod)).toBe(seriesPalette('dark')[preferredSlot(p0.pod)]);
   });
 });
 
-// ── 5. nowSection ───────────────────────────────────────────────────────────
 describe('v0.10.968 — "Şu an" satırları', () => {
   const row = (d: PodMetricSeries, k: string) => nowSection(d, T0).rows.find(r => r.k === k)!;
   it('restart: 0 nötr, >0 uyarı, bilinmiyor soluk "—"', () => {
@@ -414,21 +282,13 @@ describe('v0.10.968 — trace anı satırı ve başlık', () => {
     expect(clusterNameOf({ kind: 'error', message: '', timeout: false })).toBe('');
     expect(clusterNameOf({ kind: 'no_samples', cluster: { id: 'c', name: 'dc-east-2' } })).toBe('dc-east-2');
   });
-  it('rozetler: kök hata · giriş · N hata · kritik yol · en büyük öz süre', () => {
+  it('rozetler: kök hata · giriş · N hata · kritik yol; v0.10.2207 — "en büyük öz süre" rozeti yok', () => {
     const p = pod(`${SVC}-6b7d9f8c5-m3t9w`, { rootCause: true, entry: true, errors: 4, critShare: 0.38, critNs: 1.3e9, topSelf: true });
     expect(podBadges(p, 0.03)).toEqual([
       { t: 'kök hata', tone: 'danger' }, { t: 'giriş', tone: 'neutral' }, { t: '4 hata', tone: 'danger' },
-      { t: 'kritik yol %38 · 1,30 sn', tone: 'neutral' }, { t: 'en büyük öz süre', tone: 'neutral' },
+      { t: 'kritik yol %38 · 1,30 sn', tone: 'neutral' },
     ]);
     expect(podBadges(pod('x-y'), 0.03)).toEqual([]);
-  });
-  it('flaggedNav: model sırasında önceki / sonraki işaretli; uçlarda null', () => {
-    const ps = ['a', 'b', 'c', 'd', 'e'].map((s, i) => pod(`${SVC}-6b7d9f8c5-${s}0000`, { flagged: i !== 2 }));
-    const m = model(ps);
-    expect(flaggedNav(m, ps[0].pod)).toMatchObject({ prev: null, next: ps[1] });
-    expect(flaggedNav(m, ps[2].pod)).toMatchObject({ prev: ps[1], next: ps[3] });   // işaretsiz seçili
-    expect(flaggedNav(m, ps[4].pod)).toMatchObject({ prev: ps[3], next: null });
-    expect(flaggedNav(m, ps[0].pod).list).toHaveLength(4);
   });
 });
 
@@ -450,13 +310,6 @@ describe('v0.10.968 — okunamayan kardeş boş sayılmaz (F6)', () => {
     expect(st.failed).toBe(1);
     expect(siblingCopy(st)[0]).toMatchObject({ tone: 'err' });
   });
-  it('taşma menüsü notu: okunamayan çip "okunamadı", eşlenmemiş "metrik yok" kalır', () => {
-    const st = (p: string): PodMetricState => (p === ps[1].pod ? err
-      : p === ps[2].pod ? { kind: 'unmapped', clusterValue: 'dc-east-2', reason: 'no_remote_cluster' } : ok());
-    const { visible } = compareChipLayout(ps, [ps[0].pod], st);
-    expect(visible.find(c => c.pod === ps[1].pod)!.note).toBe('okunamadı');
-    expect(visible.find(c => c.pod === ps[2].pod)!.note).toBe('metrik yok');
-  });
 });
 
 describe('v0.10.968 — kube-state-metrics kısmen düştü: "tanımsız" değil "bilinmiyor" (MF-3)', () => {
@@ -475,62 +328,6 @@ describe('v0.10.968 — kube-state-metrics kısmen düştü: "tanımsız" değil
     expect(rows.find(r => r.k === 'Bellek limit / istek')!.v).toBe('bilinmiyor / bilinmiyor');
     expect(note).toBe('kube-state-metrics kısmen okunamadı: eksik alanlar bilinmiyor.');
     expect(nowSection(series({ cpuLimit: undefined }), T0).rows.find(r => r.k === 'CPU limit / istek')!.v).toBe('tanımsız / 0,5 çekirdek');
-  });
-});
-
-describe('v0.10.968 — çakışmasız karşılaştırma renkleri (MF-1)', () => {
-  // v0.10.1644: etiket tam pod adı → hash yuvası ÇAKIŞAN iki tam ad aranır.
-  const names = Array.from({ length: 200 }, (_, i) => `${SVC}-6b7d9f8c5-x${String(i).padStart(4, '0')}`);
-  const an = names[0];
-  const bn = names.find(n => n !== an && preferredSlot(n) === preferredSlot(an))!;
-  const a = pod(an);
-  const b = pod(bn);
-  const m = model([a, b]);
-  it('önkoşul: iki etiket de aynı hash yuvası (hash-yalnız renk ÇAKIŞIR)', () => {
-    expect(bn).toBeDefined();
-    expect(seriesColor(an)).toBe(seriesColor(bn));
-  });
-  it('compareColors farklı renk verir; ilk gelen tercih ettiği yuvayı korur', () => {
-    const c = compareColors([a.pod, b.pod], 'dark');
-    expect(c.get(an)).not.toBe(c.get(bn));
-    // v0.10.1610: seriesColor belge yokken DEFAULT_THEME paletini okur;
-    // compareColors'a verilen 'dark' ile aynı paletten kıyasla.
-    expect(c.get(an)).toBe(seriesPalette('dark')[preferredSlot(an)]);
-  });
-  it('buildChartItems: çizgi rengi = lejant rengi = harita; kardeş (muted) renksiz', () => {
-    const c = compareColors([a.pod, b.pod], 'dark');
-    const cp = chartPods(m, a, [a.pod, b.pod], () => ok());
-    const bld = buildChartItems('mem', { ...cp, siblingLines: true, traceStartNs: T0, traceEndNs: T0 + 1e9, stepSec: 15, colors: c });
-    const data = bld.items.filter(i => i.role === 'data');
-    expect(data.map(i => i.color)).toEqual([c.get(an), c.get(bn)]);
-    expect(new Set(data.map(i => i.color)).size).toBe(2);
-    expect(bld.legend.map(l => l.color)).toEqual(data.map(i => i.color));
-    const three = pod(`${SVC}-6b7d9f8c5-z9z9z`);
-    const m3 = model([a, b, three]);
-    const cp3 = chartPods(m3, a, [a.pod], () => ok());
-    const b3 = buildChartItems('cpu', { ...cp3, siblingLines: true, traceStartNs: T0, traceEndNs: T0 + 1e9, stepSec: 15, colors: compareColors([a.pod], 'dark') });
-    expect(b3.items.filter(i => i.role === 'muted').every(i => i.color === undefined)).toBe(true);
-  });
-});
-
-describe('v0.10.968 — "+N" menüsü açıkken üyelik donar (F4 ui)', () => {
-  const ps = Array.from({ length: 8 }, (_, i) => pod(`${SVC}-6b7d9f8c5-q${i}aaa`));
-  it('pinned: işaretlenen taşma çipi menüde kalır; bırakılınca görünür akar', () => {
-    const pinned = new Set([ps[6].pod, ps[7].pod]);
-    const open = compareChipLayout(ps, [ps[0].pod, ps[6].pod], () => ok(), pinned);
-    expect(open.overflow.map(c => [c.pod, c.on])).toEqual([[ps[6].pod, true], [ps[7].pod, false]]);
-    const closed = compareChipLayout(ps, [ps[0].pod, ps[6].pod], () => ok());
-    expect(closed.visible.map(c => c.pod)).toContain(ps[6].pod);
-    expect(closed.overflow.map(c => c.pod)).toEqual([ps[7].pod]);
-  });
-  it('visibleOnlyByOn yalnız ilk 6 dışı + işaretsiz + karşılaştırmadaki çipte', () => {
-    const { visible } = compareChipLayout(ps, [ps[0].pod, ps[6].pod], () => ok());
-    expect(visible.filter(c => c.visibleOnlyByOn).map(c => c.pod)).toEqual([ps[6].pod]);
-  });
-  it('son çipin ipucu reddi söyler (eylemi vaat etmez)', () => {
-    const { visible } = compareChipLayout(ps, [ps[0].pod], () => ok());
-    expect(visible[0].title).toBe(`${ps[0].pod} · son pod karşılaştırmadan çıkarılamaz`);
-    expect(compareChipLayout(ps, [ps[0].pod, ps[1].pod], () => ok()).visible[0].title).toBe(`${ps[0].pod} · karşılaştırmadan çıkar`);
   });
 });
 

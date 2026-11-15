@@ -5628,9 +5628,8 @@ tbody td.pods-jmx { padding: 0; background: var(--bg); }
 .ui-popover:focus { outline: none; }
 .ui-popover a.menuitem { text-decoration: none; }
 
-/* ── v0.10.968 — Trace › Metrics seçili pod paneli + odak görünümü (tpp-*) ──
-   L-pod (TracePodPanel / TracePodFocus / TracePodCharts / TracePodSpanTimeline)
-   YALNIZ bu sınıfları, mevcut sınıfları ve atomları kullanır; satır içi stil
+/* ── v0.10.968 — Trace › Metrics seçili pod paneli (tpp-*) ──
+   L-pod (TracePodPanel / TracePodCharts) YALNIZ bu sınıfları, mevcut sınıfları ve atomları kullanır; satır içi stil
    yalnız hesaplanmış değer taşır (örnek renk, çubuk genişliği). */
 .tpp { display: grid; gap: var(--sp-5); min-width: 0; align-content: start; }
 .tpp-head { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
@@ -5643,35 +5642,19 @@ tbody td.pods-jmx { padding: 0; background: var(--bg); }
 .tpp-note { font-size: var(--fs-xs); color: var(--text3); }
 .tpp-msg { background: var(--bg2); border-radius: var(--radius-sm); padding: var(--sp-3) var(--sp-4); font-size: var(--fs-sm); }
 .tpp-msg.is-err { color: var(--err); }
-.tpp-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-/* v0.10.1644 — tam pod adı (çip, lejant, odak rayı, konum): dar yerde CSS
-   ellipsis; tam ad title'da (elle kırpılmış dizgi YOK). */
-.tpp-pod-name { display: inline-block; min-width: 0; max-width: 36ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
-.tpp-rail-item .tpp-pod-name { flex: 1 1 auto; max-width: none; }
-.tpp-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; flex: none; vertical-align: middle; }
 /* v0.10.1096 — tek kolon minmax(0,1fr): örtük `auto` iz, uPlot tuvalinin
    ilk çizim genişliğini min-content sayıp dar ızgara hücresinden taşıyordu
    (JVM heap/GC hücreleri komşusunun üstüne biniyordu). */
 .tpp-chart { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); min-width: 0; }
-.tpp-legend { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--fs-xs); color: var(--text2); }
 .tpp-caption { font-size: var(--fs-2xs); color: var(--text3); line-height: 1.5; }
-.tpp-focus { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--sp-6); min-width: 0; }
-.tpp-focus-bar { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
-.tpp-rail { overflow: auto; border-right: 1px solid var(--divider); min-width: 0; }
-.tpp-rail-item { display: flex; align-items: center; gap: var(--sp-3); width: 100%; padding: var(--sp-3) var(--sp-4); box-sizing: border-box; font-size: var(--fs-sm); text-align: left; }
-.tpp-rail-item.is-current { background: var(--accent-bg); }
-.tpp-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-6); min-width: 0; }
-.tpp-tl { display: block; min-width: 0; }
-.tpp-tl svg { width: 100%; display: block; }
-.tpp-tl-legend { display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--fs-xs); color: var(--text2); }
 /* v0.10.976 — satır altı KOMPAKT ayrıntı (TracePodPanel; operatör "inline daha
-   iyi olur"). Başlık satırı sarar (ad + kopyala + Odak görünümü + Pod sayfası +
-   Span'lar + ×).
+   iyi olur"). Başlık satırı sarar (ad + kopyala + Pod sayfası + Span'lar + ×).
    v0.10.1096 (operatör: "sadece metrik yatayda inline gözükse olacak. Diğer
    yazılar aşağı olabilir.") — iki sütunlu gövde (.tpp-detail-body /
-   .tpp-detail-charts) söküldü. Sıra: sağa yaslı Karşılaştır çubuğu → TEK yatay
-   grafik ızgarası (Bellek · CPU · JVM heap · GC) → tek satır özet → kapalı
-   "Teknik ayrıntı" (içinde üç özet bloğu yan yana, .tpp-kv3). */
+   .tpp-detail-charts) söküldü. Sıra: TEK yatay grafik ızgarası (Bellek · CPU ·
+   JVM heap · GC) → tek satır özet → kapalı "Teknik ayrıntı" (içinde üç özet
+   bloğu yan yana, .tpp-kv3). v0.10.2207 — Karşılaştır çubuğu, lejant, odak
+   görünümü kalktı. */
 .tpp-detail { gap: var(--sp-4); }
 .tpp-detail > .tpp-head { flex-wrap: wrap; }
 .tpp-detail > .tpp-sub { align-items: center; }
@@ -5688,11 +5671,6 @@ tbody td.pods-jmx { padding: 0; background: var(--bg); }
 .tpp-chart-head .cell-strong { color: var(--text); }
 .tpp-chart-head .cell-warn.cell-strong { color: var(--warn); }
 .tpp-chart-head .cell-err.cell-strong { color: var(--err); }
-/* Karşılaştır: blok değil, ızgaranın başlık çubuğunda sağa yaslı tek satır. */
-.tpp-chart-bar { display: flex; justify-content: flex-end; min-width: 0; }
-.tpp-cmp { display: grid; justify-items: end; gap: var(--sp-2); min-width: 0; }
-.tpp-cmp-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-2) var(--sp-3); min-width: 0; }
-.tpp-cmp-label { font-size: var(--fs-xs); color: var(--text2); }
 /* Tek satır özet: segmentler "·" ile ayrılır (ayraç CSS'te, metinde değil). */
 .tpp-facts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); min-width: 0; }
 .tpp-facts > li { display: inline-flex; align-items: center; gap: var(--sp-2); min-width: 0; }
@@ -5775,14 +5753,6 @@ tbody td.tpm-nopod-label { color: var(--text2); }
 /* v0.10.968 — "N pod daha" etiketi sapma değil: hücrenin text2'sini devralır (T9). */
 tbody td.tpm-more-cell { color: var(--text2); }
 .tpm-note { font-size: var(--fs-xs); flex: none; }
-
-/* v0.10.968 — tablet eşiği (mevcut 1024): odak görünümü tek kolona iner.
-   v0.10.1096 — satır altı ayrıntının grafik ızgarası buradan çıktı: içsel
-   auto-fit kendi sarar (tam genişlikte 1024'te de iki grafik yan yana sığar). */
-@media (max-width: 1024px) {
-  .tpp-focus, .tpp-cols { grid-template-columns: minmax(0, 1fr); }
-  .tpp-rail { border-right: 0; border-bottom: 1px solid var(--divider); max-height: 240px; }
-}
 
 /* ── v0.10.1137 — CoSRE sohbeti "Claude gibi" (operatör, prod ekran görüntüsü) ──
    Çekmece (CopilotChat drawer) ve /cosre sayfası AYNI bileşenleri paylaşır.

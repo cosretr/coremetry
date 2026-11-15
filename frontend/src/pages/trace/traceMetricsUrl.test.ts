@@ -13,11 +13,10 @@ const BY = new Map<string, { service: string }>([
 ]);
 const sp = (q: string) => new URLSearchParams(q);
 
-describe('parseMpod', () => {
-  it('bilinmeyen düşer; ilkinin servisinden olmayan düşer; >4 kesilir; tekrar düşer', () => {
-    expect(parseMpod(`nope,${F(1)},${A},${F(2)},${F(1)}`, BY)).toEqual({ kind: 'list', pods: [F(1), F(2)] });
-    expect(parseMpod([0, 1, 2, 3, 4, 5].map(F).join(','), BY)).toEqual({ kind: 'list', pods: [F(0), F(1), F(2), F(3)] });
-    expect(parseMpod(`${A},${F(0)}`, BY)).toEqual({ kind: 'list', pods: [A] });
+describe('parseMpod (v0.10.2207 — tek pod)', () => {
+  it('ilk bilinen ad seçilir; eski virgüllü linkte de', () => {
+    expect(parseMpod(`nope,${F(1)},${A},${F(2)}`, BY)).toEqual({ kind: 'pod', pod: F(1) });
+    expect(parseMpod(A, BY)).toEqual({ kind: 'pod', pod: A });
   });
   it('"-" kapalı; yok ya da hepsi bilinmeyen → varsayılan', () => {
     expect(parseMpod('-', BY)).toEqual({ kind: 'closed' });
@@ -30,8 +29,7 @@ describe('parseMpod', () => {
 describe('parseTraceMetricsUrl', () => {
   it('varsayılanlar', () => {
     expect(parseTraceMetricsUrl(sp(''), BY, F(0))).toEqual({
-      compare: [F(0)], closed: false, isDefault: true, win: 15, filter: 'all', query: '',
-      grouping: 'service', siblingLines: true, focus: false,
+      pod: F(0), closed: false, isDefault: true, win: 15, filter: 'all', query: '', grouping: 'service',
     });
   });
   it('mwin basamakları; bilinmeyen → 15', () => {
@@ -39,42 +37,39 @@ describe('parseTraceMetricsUrl', () => {
     expect(parseTraceMetricsUrl(sp('mwin=60'), BY, '').win).toBe(60);
     expect(parseTraceMetricsUrl(sp('mwin=30'), BY, '').win).toBe(15);
   });
-  it('mf / mq / mgrp=flat / msib=0', () => {
-    const u = parseTraceMetricsUrl(sp('mf=crit&mq=audit&mgrp=flat&msib=0'), BY, '');
-    expect([u.filter, u.query, u.grouping, u.siblingLines]).toEqual(['crit', 'audit', 'flat', false]);
+  it('mf / mq / mgrp=flat; eski msib / mview yok sayılır', () => {
+    const u = parseTraceMetricsUrl(sp('mf=crit&mq=audit&mgrp=flat&msib=0&mview=pod'), BY, '');
+    expect([u.filter, u.query, u.grouping]).toEqual(['crit', 'audit', 'flat']);
+    expect(Object.keys(u).sort()).toEqual(['closed', 'filter', 'grouping', 'isDefault', 'pod', 'query', 'win']);
     expect(parseTraceMetricsUrl(sp('mf=weird'), BY, '').filter).toBe('all');
   });
-  it('mview yalnız seçim varken; kapalı panelde düşer', () => {
-    expect(parseTraceMetricsUrl(sp(`mpod=${F(1)}&mview=pod`), BY, F(0)).focus).toBe(true);
-    expect(parseTraceMetricsUrl(sp('mview=pod'), BY, F(0)).focus).toBe(true); // varsayılan seçim de seçimdir
-    const closed = parseTraceMetricsUrl(sp('mpod=-&mview=pod'), BY, F(0));
-    expect([closed.compare, closed.closed, closed.focus]).toEqual([[], true, false]);
-    expect(parseTraceMetricsUrl(sp('mview=pod'), BY, '').focus).toBe(false);
+  it('kapalı panel: pod boş', () => {
+    const closed = parseTraceMetricsUrl(sp('mpod=-'), BY, F(0));
+    expect([closed.pod, closed.closed]).toEqual(['', true]);
   });
 });
 
 describe('applyTraceMetricsPatch — üst kümeden yazar', () => {
   const SEARCH = '?id=4f1c9e2a7b3d8e60&span=00ab&tab=metrics&xn=1&range=1h';
   it('yabancı id / span / tab / xn / range korunur', () => {
-    const n = applyTraceMetricsPatch(SEARCH, { compare: [F(1), F(2)] });
+    const n = applyTraceMetricsPatch(SEARCH, { pod: F(1) });
     expect([n.get('id'), n.get('span'), n.get('tab'), n.get('xn'), n.get('range')]).toEqual(['4f1c9e2a7b3d8e60', '00ab', 'metrics', '1', '1h']);
-    expect(n.get('mpod')).toBe(`${F(1)},${F(2)}`);
+    expect(n.get('mpod')).toBe(F(1));
   });
-  it('varsayılan değerler URL\'e yazılmaz; kapalı "-" ve mview düşer', () => {
-    const n = applyTraceMetricsPatch(`${SEARCH}&mwin=5&mf=err&mq=x&mgrp=flat&msib=0&mview=pod&mpod=${F(0)}`, {
-      win: 15, filter: 'all', query: '  ', grouping: 'service', siblingLines: true,
+  it('varsayılan değerler URL\'e yazılmaz; kapalı "-"', () => {
+    const n = applyTraceMetricsPatch(`${SEARCH}&mwin=5&mf=err&mq=x&mgrp=flat&mpod=${F(0)}`, {
+      win: 15, filter: 'all', query: '  ', grouping: 'service',
     });
-    for (const k of ['mwin', 'mf', 'mq', 'mgrp', 'msib']) expect(n.has(k), k).toBe(false);
-    expect(n.get('mview')).toBe('pod');
-    const c = applyTraceMetricsPatch(n.toString(), { compare: 'closed' });
-    expect([c.get('mpod'), c.has('mview')]).toEqual(['-', false]);
-    expect(applyTraceMetricsPatch(c.toString(), { compare: null }).has('mpod')).toBe(false);
-    const w = applyTraceMetricsPatch('', { win: 60, filter: 'slow', query: 'fraud', grouping: 'flat', siblingLines: false, focus: true });
-    expect(w.toString()).toBe('mwin=60&mf=slow&mq=fraud&mgrp=flat&msib=0&mview=pod');
+    for (const k of ['mwin', 'mf', 'mq', 'mgrp']) expect(n.has(k), k).toBe(false);
+    const c = applyTraceMetricsPatch(n.toString(), { pod: 'closed' });
+    expect(c.get('mpod')).toBe('-');
+    expect(applyTraceMetricsPatch(c.toString(), { pod: null }).has('mpod')).toBe(false);
+    const w = applyTraceMetricsPatch('', { win: 60, filter: 'slow', query: 'fraud', grouping: 'flat' });
+    expect(w.toString()).toBe('mwin=60&mf=slow&mq=fraud&mgrp=flat');
   });
-  it('TRACE_METRICS_URL_PARAMS yedisini listeler; temizleyici hepsini siler, yabancıya dokunmaz', () => {
-    expect([...TRACE_METRICS_URL_PARAMS]).toEqual(['mpod', 'mwin', 'mf', 'mq', 'mgrp', 'msib', 'mview']);
-    const s = sp(`${SEARCH}&mpod=-&mwin=5&mf=err&mq=x&mgrp=flat&msib=0&mview=pod`);
+  it('TRACE_METRICS_URL_PARAMS beşini listeler; temizleyici hepsini siler, yabancıya dokunmaz', () => {
+    expect([...TRACE_METRICS_URL_PARAMS]).toEqual(['mpod', 'mwin', 'mf', 'mq', 'mgrp']);
+    const s = sp(`${SEARCH}&mpod=-&mwin=5&mf=err&mq=x&mgrp=flat`);
     clearTraceMetricsParams(s);
     expect(s.toString()).toBe('id=4f1c9e2a7b3d8e60&span=00ab&tab=metrics&xn=1&range=1h');
   });

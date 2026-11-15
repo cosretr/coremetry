@@ -8,11 +8,13 @@
 //
 // v0.10.968 — Operatör onayı 2026-09-27 ("3 onay", mockup PodDetail.dc.html +
 // Main.dc.html sağ panel). Buradaki her karar DOM'suz: kardeş oranı (medyan),
-// karşılaştırma çiplerinin yerleşimi ve devre dışı gerekçeleri, grafik
-// öğeleri (veri / soluk kardeş / trace bandı / limit çizgisi), span zaman
-// çizelgesinin şerit paketlemesi + eksen işaretleri, "Şu an" satırları ve
-// metrik durum mesajları. Bileşenler (TracePodPanel / TracePodFocus /
-// TracePodCharts / TracePodSpanTimeline) yalnız bunları çizer.
+// grafik öğeleri (pod çizgisi / trace bandı / limit çizgisi), "Şu an"
+// satırları ve metrik durum mesajları. Bileşenler (TracePodPanel /
+// TracePodCharts) yalnız bunları çizer.
+//
+// v0.10.2207 (operatör: panel "kalabalık") — karşılaştırma çipleri, kardeş
+// çizgileri, odak görünümü (span zaman çizelgesi, huni cümlesi, işaretli
+// gezinme) ve "en büyük öz süre" rozeti kalktı; grafik yalnız seçili pod.
 //
 // v0.10.968 — Kural: bir HATA hiçbir zaman "boş sonuç" gibi yazılmaz
 // (v0.10.962 hata 3). stateMessage('error') "okunamadı" der, hata tonunu
@@ -21,12 +23,11 @@ import type { SpanMetricSeries } from '@/lib/types';
 import type { ChartThreshold, ChartTimeRegion } from '@/lib/chart/overlays';
 import { seriesColorsFor, type ChartTheme } from '@/lib/chartFmt';
 import {
-  LEVEL_ERR, MAX_SIBLING_LINES, SIBLING_RATIO_WARN,
+  LEVEL_ERR, SIBLING_RATIO_WARN,
   type MetricLevel, type PodMetricSeries, type PodMetricState, type TraceMetricsModel, type TracePodInfo,
 } from './traceMetricsModel';
 import { fmtBytesTr, fmtClockNs, fmtClockSec, fmtCores, fmtCoresShort, fmtDurNs, fmtPct, fmtRatio } from './traceMetricsFmt';
 import { trPossessive } from './trSuffix';
-import { podAtCap } from './traceMetrics';
 
 // ── Ortak ─────────────────────────────────────────────────────────────────
 
@@ -191,109 +192,24 @@ export function momentRow(kind: 'cpu' | 'mem', d: PodMetricSeries): MomentRow {
   return { k, main: `${val(v)} · limit tanımsız`, level: 'none', rest: ' · istek de tanımsız' };
 }
 
-// ── Karşılaştırma çipleri ────────────────────────────────────────────────
-
-export const CAP_REASON = 'En çok 4 pod üst üste çizilir — önce birini çıkarın';
-export const CHIPS_VISIBLE_FIRST = 6;
-
-/** v0.10.968 — metriği olmayan kardeşin NEDENİ (çip devre dışı gerekçesi). */
-export function noMetricsWhy(s: PodMetricState): string {
-  switch (s.kind) {
-    case 'unmapped': return s.reason === 'no_cluster_value' ? "span'lerde cluster özniteliği yok" : `${s.clusterValue} eşlenmemiş`;
-    case 'no_samples': return 'bu pencerede örnek yok';
-    case 'ambiguous': return 'namespace belirsiz';
-    case 'error': return 'okunamadı';
-    case 'loading': return 'yükleniyor';
-    case 'idle': return 'yüklenmedi';
-    case 'off': return 'Thanos Remote Cluster tanımlı değil';
-    case 'ok': return '';
-  }
-}
-
-export interface CompareChip {
-  pod: string;
-  label: string;
-  /** v0.10.968 — yalnız karşılaştırmada olduğu için görünür (ilk 6'da değil,
-   *  işaretsiz): çıkarılınca "+N" menüsüne kayar → odak "+N"ye taşınmalı. */
-  visibleOnlyByOn: boolean;
-  spans: number;
-  errors: number;
-  flagged: boolean;
-  on: boolean;
-  slot: number;         // karşılaştırma sırası (0 = seçili), kapalıysa -1
-  disabled: boolean;
-  title: string;        // tam ad + eylem YA DA devre dışı gerekçesi
-  note: string;         // menü satırı notu ("metrik yok")
-}
-
-/** v0.10.968 — çip yerleşimi: görünür = ilk 6 + işaretli + karşılaştırılan;
- *  gerisi "+N" menüsüne. Devre dışı: karşılaştırmada olmayan ve (metriği yok
- *  YA DA tavanda — podAtCap, v0.10.962 anlamı). Gerekçe title'da.
- *
- *  v0.10.968 — `pinned`: menü AÇIKKEN üyeliği donmuş pod'lar (açılış anının
- *  taşması). İşaretlenen satır menüden düşüp odağı <body>'ye bırakmasın diye
- *  `on` olsa da taşmada kalır; yerleşim menü kapanınca akar. */
-export function compareChipLayout(
-  pods: TracePodInfo[],
-  compare: readonly string[],
-  metrics: (pod: string) => PodMetricState,
-  pinned?: ReadonlySet<string>,
-): { visible: CompareChip[]; overflow: CompareChip[] } {
-  const sel = [...compare];
-  const chips = pods.map((p, i): CompareChip & { i: number } => {
-    const slot = sel.indexOf(p.pod);
-    const on = slot >= 0;
-    const st = metrics(p.pod);
-    const noM = st.kind !== 'ok';
-    const capped = podAtCap(sel, p.pod, pods);
-    const disabled = !on && (noM || capped);
-    // v0.10.968 — son çip çıkarılamaz: ipucu eylemi vaat etmez, reddi söyler.
-    const title = !on && noM ? `${p.pod} · metrik yok (${noMetricsWhy(st)})`
-      : disabled ? CAP_REASON
-      : on && sel.length === 1 ? `${p.pod} · son pod karşılaştırmadan çıkarılamaz`
-      : `${p.pod} · ${on ? 'karşılaştırmadan çıkar' : 'karşılaştırmaya ekle'}`;
-    const byRank = i < CHIPS_VISIBLE_FIRST || p.flagged;
-    return {
-      i, pod: p.pod, label: p.pod, spans: p.spans, errors: p.errors,
-      flagged: p.flagged, on, slot, disabled, title,
-      // v0.10.968 — okunamayan kardeş "metrik yok" değil: hata boş sonuç gibi yazılmaz.
-      note: noM ? (st.kind === 'error' ? 'okunamadı' : 'metrik yok') : '',
-      visibleOnlyByOn: on && !byRank,
-    };
-  });
-  const strip = ({ i: _i, ...c }: CompareChip & { i: number }): CompareChip => c;
-  const vis = (c: CompareChip & { i: number }) => !pinned?.has(c.pod) && (c.i < CHIPS_VISIBLE_FIRST || c.flagged || c.on);
-  return { visible: chips.filter(vis).map(strip), overflow: chips.filter(c => !vis(c)).map(strip) };
-}
-
-/** v0.10.968 — karşılaştırılan pod'ların ÇAKIŞMASIZ renkleri (etiket → renk),
- *  karşılaştırma sırasıyla: seriesColorsFor her etikete tercih ettiği hash
- *  yuvasını, doluysa sıradaki boş yuvayı verir. Hash-yalnız renkte aynı
- *  servisin iki pod'u (ör. "p5r8d" ve "b2q6f", ikisi de yuva 0) aynı çizgi,
- *  aynı lejant ve aynı çip rengini alıyordu. Çip swatch'ı, Bellek / CPU
- *  çizgileri ve JVM çizgileri BU haritadan okur (tek pod = tek renk).
- *  Tema-farkında: çağıran render'da (useThemeTick altında) çağırır. */
-export function compareColors(
-  compare: readonly string[], theme?: ChartTheme,
-): Map<string, string> {
-  return seriesColorsFor(compare, undefined, theme);
+/** v0.10.968 — seçili pod'un çizgi rengi (etiket → renk; seriesColorsFor,
+ *  tema-farkında: çağıran render'da useThemeTick altında çağırır). Bellek /
+ *  CPU ve JVM çizgileri BU haritadan okur (tek pod = tek renk). */
+export function podColors(pod: string, theme?: ChartTheme): Map<string, string> {
+  return seriesColorsFor([pod], undefined, theme);
 }
 
 // ── Grafik öğeleri ────────────────────────────────────────────────────────
 
-export interface ChartItem { name: string; role: 'data' | 'muted'; series: SpanMetricSeries[]; color?: string }
+export interface ChartItem { name: string; role: 'data'; series: SpanMetricSeries[]; color?: string }
 export interface ChartPod { pod: string; label: string; data: PodMetricSeries }
-export interface ChartLegendItem { pod: string; label: string; value: number | null; color?: string }
 
 export interface ChartBuild {
   kind: 'mem' | 'cpu';
   items: ChartItem[];
   regions: ChartTimeRegion[];
   thresholds: ChartThreshold[];
-  legend: ChartLegendItem[];
   limit: number | null;
-  siblingsDrawn: number;
-  siblingsHidden: number;   // "+N çizilmedi"
   noLimit: boolean;         // CPU: "CPU limiti tanımsız: limit çizgisi yok."
 }
 
@@ -307,32 +223,25 @@ export function podSeries(label: string, d: PodMetricSeries, kind: 'mem' | 'cpu'
   };
 }
 
-/** v0.10.968 — seçili pod paneli / odak görünümü grafiği:
- *   • karşılaştırılan pod'lar `role:'data'` (renk addan, CorePanel ile aynı);
- *   • kardeşler (karşılaştırmada olmayan, metriği olan) `role:'muted'`, en çok
- *     MAX_SIBLING_LINES, fazlası "+N çizilmedi"; kardeş çizgileri kapalıysa yok;
+/** v0.10.968 — seçili pod paneli grafiği (v0.10.2207: yalnız seçili pod):
+ *   • pod çizgisi `role:'data'`;
  *   • trace bandı: en az bir adım geniş (`toSec = max(son, baş + adım)`),
  *     gerçek bitiş `endSec`te; renk var(--accent2), etiket "trace";
- *   • limit çizgisi yalnız limit BİLİNİRKEN (seçili pod'un şu anki limiti). */
+ *   • limit çizgisi yalnız limit BİLİNİRKEN (pod'un şu anki limiti). */
 export function buildChartItems(kind: 'mem' | 'cpu', inp: {
-  compared: readonly ChartPod[];
-  siblings: readonly ChartPod[];
-  siblingLines: boolean;
+  pod: ChartPod | null;
   traceStartNs: number;
   traceEndNs: number;
   stepSec: number;
-  /** v0.10.968 — compareColors (etiket → renk); verilmezse renk addan (CorePanel). */
+  /** podColors (etiket → renk); verilmezse renk addan (CorePanel). */
   colors?: ReadonlyMap<string, string>;
 }): ChartBuild {
-  const sel = inp.compared[0]?.data;
+  const sel = inp.pod?.data;
   const rawLimit = sel ? (kind === 'cpu' ? sel.cpuLimit : sel.memLimit) : undefined;
   const limit = isNum(rawLimit) && rawLimit > 0 ? rawLimit : null;
-  const sibs = inp.siblingLines ? inp.siblings : [];
-  const drawn = sibs.slice(0, MAX_SIBLING_LINES);
-  const items: ChartItem[] = [
-    ...inp.compared.map(c => ({ name: c.label, role: 'data' as const, series: [podSeries(c.label, c.data, kind)], color: inp.colors?.get(c.label) })),
-    ...drawn.map(c => ({ name: c.label, role: 'muted' as const, series: [podSeries(c.label, c.data, kind)] })),
-  ];
+  const items: ChartItem[] = inp.pod
+    ? [{ name: inp.pod.label, role: 'data', series: [podSeries(inp.pod.label, inp.pod.data, kind)], color: inp.colors?.get(inp.pod.label) }]
+    : [];
   const fromSec = inp.traceStartNs / 1e9;
   const endSec = inp.traceEndNs / 1e9;
   const step = inp.stepSec > 0 ? inp.stepSec : 0;
@@ -341,141 +250,26 @@ export function buildChartItems(kind: 'mem' | 'cpu', inp: {
     items,
     regions: [{ fromSec, toSec: Math.max(endSec, fromSec + step), endSec, color: 'var(--accent2)', label: 'trace' }],
     thresholds: limit != null ? [{ value: limit, label: 'limit (şu an)', color: 'var(--warn)' }] : [],
-    legend: inp.compared.map(c => ({ pod: c.pod, label: c.label, value: kind === 'cpu' ? c.data.cpuAt : c.data.memAt, color: inp.colors?.get(c.label) })),
     limit,
-    siblingsDrawn: drawn.length,
-    siblingsHidden: sibs.length - drawn.length,
     noLimit: kind === 'cpu' && limit == null,
   };
 }
 
-/** v0.10.968 — panel bağlamından grafik girdisi: karşılaştırılan (metriği ok,
- *  karşılaştırma sırasıyla) + kardeşler (servisin diğer ok pod'ları, model
- *  sırasıyla). Etiket tam pod adı (v0.10.1644). */
-export function chartPods(model: TraceMetricsModel, selected: TracePodInfo, compare: readonly string[], metrics: (pod: string) => PodMetricState): { compared: ChartPod[]; siblings: ChartPod[] } {
-  const pods = servicePods(model, selected.service);
-  const pick = (pod: string): ChartPod | null => {
-    const d = okData(metrics(pod));
-    return d ? { pod, label: pod, data: d } : null;
-  };
-  const compared = compare.map(pick).filter((c): c is ChartPod => c != null);
-  const siblings = pods.filter(p => !compare.includes(p.pod)).map(p => pick(p.pod)).filter((c): c is ChartPod => c != null);
-  return { compared, siblings };
+/** v0.10.968 — seçili pod'un grafik girdisi (metriği ok değilse null). Etiket
+ *  tam pod adı (v0.10.1644). */
+export function chartPod(selected: TracePodInfo, metrics: (pod: string) => PodMetricState): ChartPod | null {
+  const d = okData(metrics(selected.pod));
+  return d ? { pod: selected.pod, label: selected.pod, data: d } : null;
 }
 
-/** v0.10.968 — grafik altı açıklama (gerçek adımla). Servis adı ek almaz. */
-export function chartCaption(o: { durNs: number; stepSec: number | null; service: string; siblingsDrawn: number; siblingsHidden: number; cpuNoLimit: boolean; focus?: boolean }): string {
+/** v0.10.968 — grafik altı açıklama (gerçek adımla). */
+export function chartCaption(o: { durNs: number; stepSec: number | null; cpuNoLimit: boolean }): string {
   const step = o.stepSec != null ? `${o.stepSec} sn` : 'bir';
   const parts = [`Mavi bant: trace (${fmtDurNs(o.durNs)}; en az bir ${step} adım genişliğinde çizilir).`];
-  if (o.siblingsDrawn > 0) {
-    const more = o.siblingsHidden > 0 ? ` (+${o.siblingsHidden} çizilmedi)` : '';
-    parts.push(`Soluk çizgiler: ${o.service} servisinin bu trace'teki diğer ${o.siblingsDrawn + o.siblingsHidden} pod'u${more}.`);
-  }
   if (o.cpuNoLimit) parts.push('CPU limiti tanımsız: limit çizgisi yok.');
   parts.push('CPU rate[5m] ile yumuşatılmıştır; saniyelik sıçramalar görünmez.');
   parts.push('Grafikler eşzamanlılığı gösterir, nedenselliği değil.');
-  if (o.focus) parts.push('Limitler bugünkü değerdir. JVM grafiklerinde kardeş çizgisi yok.');
   return parts.join(' ');
-}
-
-// ── Span zaman çizelgesi ─────────────────────────────────────────────────
-
-export interface LaneSpan { id: string; startNs: number; endNs: number }
-export interface LaneLayout { lanes: number; laneOf: Map<string, number>; overflow: number }
-
-/** v0.10.968 — açgözlü şerit paketleme: başlangıca göre (eşitlikte bitiş,
- *  sonra kimlik) sırala, her span'i bitişi ≤ başlangıcı olan İLK şeride koy.
- *  Başlangıca göre sıralı açgözlü atama aralık grafiği boyamasında en az
- *  şeridi verir; sıralama tam belirli (deterministik). `maxLanes` aşılınca
- *  span EN ERKEN boşalan şeride biner ve `overflow` sayılır (dürüst not). */
-export function timelineLanes(items: readonly LaneSpan[], maxLanes = Infinity): LaneLayout {
-  const sorted = [...items].sort((a, b) => (a.startNs - b.startNs) || (a.endNs - b.endNs) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const ends: number[] = [];
-  const laneOf = new Map<string, number>();
-  let overflow = 0;
-  for (const s of sorted) {
-    let lane = ends.findIndex(e => e <= s.startNs);
-    if (lane < 0) {
-      if (ends.length < maxLanes) {
-        lane = ends.length;
-        ends.push(s.endNs);
-      } else {
-        lane = ends.indexOf(Math.min(...ends));
-        overflow++;
-        ends[lane] = Math.max(ends[lane], s.endNs);
-      }
-    } else {
-      ends[lane] = s.endNs;
-    }
-    laneOf.set(s.id, lane);
-  }
-  return { lanes: ends.length, laneOf, overflow };
-}
-
-export interface TimelineTick { ns: number; label: string; end?: boolean }
-
-/** v0.10.968 — eksen işaretleri: 1 / 2 / 2,5 / 5 × 10^k adımları, en çok
- *  `maxTicks`; birim trace süresinden (sn / ms / µs). Son işaret trace süresi
- *  (fmtDurNs); ona çok yakın düzgün işaret (yarım adımdan az) düşer. */
-export function timelineTicks(durNs: number, maxTicks = 8): TimelineTick[] {
-  if (!(durNs > 0)) return [{ ns: 0, label: '0' }];
-  const raw = durNs / maxTicks;
-  const pow = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map(m => m * pow).find(s => s >= raw) ?? 10 * pow;
-  const unit = durNs >= 1e9 ? { d: 1e9, s: 'sn' } : durNs >= 1e6 ? { d: 1e6, s: 'ms' } : { d: 1e3, s: 'µs' };
-  const out: TimelineTick[] = [];
-  for (let k = 0; k * step < durNs; k++) {
-    const ns = k * step;
-    out.push({ ns, label: ns === 0 ? '0' : `${trNum(ns / unit.d)} ${unit.s}` });
-  }
-  if (out.length > 1 && durNs - out[out.length - 1].ns < step * 0.5) out.pop();
-  out.push({ ns: durNs, label: fmtDurNs(durNs), end: true });
-  return out;
-}
-
-export interface TimelineBar { id: string; name: string; x0: number; x1: number; lane: number; error: boolean; critical: boolean; status: string; startNs: number; endNs: number }
-export interface TimelineMark { spanId: string; x: number; own: boolean; title: string }
-
-/** v0.10.968 — pod'un span'larını trace ekseninde (0 → trace süresi) şeritlere
- *  dizer; hata işaretleri TRACE'in tüm hatalı span'larıdır (bu pod'unkiler
- *  ayrı tonda). x'ler 0..1 kesir (SVG genişliğiyle çarpılır). */
-export function timelineModel(model: TraceMetricsModel, pod: TracePodInfo, maxLanes = 10) {
-  const t0 = model.traceStartNs;
-  const dur = Math.max(1, model.traceEndNs - model.traceStartNs);
-  const frac = (ns: number) => Math.min(1, Math.max(0, (ns - t0) / dur));
-  const errStatus = new Map(model.errorMarks.map(m => [m.spanId, m.status]));
-  const spans = (model.podSpans.get(pod.pod) ?? []).map(s => ({
-    id: s.spanId, name: s.name, startNs: s.startTime, endNs: s.startTime + s.durationMs * 1e6,
-    error: errStatus.has(s.spanId), status: errStatus.get(s.spanId) ?? (s.statusCode || 'unset'),
-  }));
-  const lay = timelineLanes(spans, maxLanes);
-  const bars: TimelineBar[] = spans.map(s => ({
-    ...s, x0: frac(s.startNs), x1: frac(s.endNs), lane: lay.laneOf.get(s.id) ?? 0, critical: model.criticalIds.has(s.id),
-  }));
-  const marks: TimelineMark[] = model.errorMarks.map(m => ({
-    spanId: m.spanId, x: frac(m.timeNs), own: m.pod === pod.pod,
-    title: `${m.service}${m.pod ? ` ${m.pod}` : ''} · ${m.name} · ${m.status} · +${((m.timeNs - t0) / 1e9).toFixed(3).replace('.', ',')} sn`,
-  }));
-  const critNs = pod.critNs;
-  return {
-    durNs: model.traceEndNs - model.traceStartNs,
-    lanes: Math.max(1, lay.lanes), overflow: lay.overflow,
-    bars, marks,
-    active: { x0: frac(pod.activeFromNs), x1: frac(pod.activeToNs) },
-    ticks: timelineTicks(model.traceEndNs - model.traceStartNs).map(t => ({ ...t, x: t.ns / dur })),
-    summary: `${pod.spans} span · ${pod.errors} hata · kritik yolda ${fmtDurNs(critNs)}`,
-  };
-}
-
-/** v0.10.968 — odak görünümü "huni" cümlesi (mockup çizimi süs, atlandı):
- *  "Metrik grafiklerinde bu 3,42 sn tek bir 15 sn'lik adıma düşer." Trace
- *  adımı AŞARSA yanlış iddia yazılmaz: "… yaklaşık N adıma (15 sn) yayılır."
- *  Adım henüz bilinmiyorsa (ilk eşli cevap yok) cümle yok. */
-export function funnelCaption(durNs: number, stepSec: number | null): string | null {
-  if (stepSec == null || !(stepSec > 0)) return null;
-  const dur = fmtDurNs(durNs);
-  if (durNs <= stepSec * 1e9) return `Metrik grafiklerinde bu ${dur} tek bir ${stepSec} sn'lik adıma düşer.`;
-  return `Metrik grafiklerinde bu ${dur} yaklaşık ${Math.ceil(durNs / (stepSec * 1e9))} adıma (${stepSec} sn) yayılır.`;
 }
 
 // ── Şu an (trace anı değil) ──────────────────────────────────────────────
@@ -635,43 +429,15 @@ export function subLine(p: TracePodInfo, s: PodMetricState): string[] {
 export interface PodBadge { t: string; tone: 'danger' | 'neutral' }
 
 /** v0.10.968 — rozetler: kök hata (tehlike) · giriş · N hata (tehlike) ·
- *  kritik yol %X · Y (nötr, ≥%3) · en büyük öz süre (nötr, topSelf). */
+ *  kritik yol %X · Y (nötr, ≥%3). v0.10.2207 — "en büyük öz süre" rozeti
+ *  kalktı (alt özet satırında bağlantı olarak duruyor). */
 export function podBadges(p: TracePodInfo, critShareMin: number): PodBadge[] {
   const out: PodBadge[] = [];
   if (p.rootCause) out.push({ t: 'kök hata', tone: 'danger' });
   if (p.entry) out.push({ t: 'giriş', tone: 'neutral' });
   if (p.errors > 0) out.push({ t: `${p.errors} hata`, tone: 'danger' });
   if (p.critShare >= critShareMin) out.push({ t: `kritik yol ${fmtPct(p.critShare)} · ${fmtDurNs(p.critNs)}`, tone: 'neutral' });
-  if (p.topSelf) out.push({ t: 'en büyük öz süre', tone: 'neutral' });
   return out;
-}
-
-/** v0.10.968 — odak görünümünde işaretli pod'lar arasında önceki / sonraki
- *  (trace ilgisi sırası = model.pods). Seçili pod işaretli değilse komşular
- *  model sırasındaki konumuna göre bulunur. */
-export function flaggedNav(model: TraceMetricsModel, pod: string): { list: TracePodInfo[]; prev: TracePodInfo | null; next: TracePodInfo | null } {
-  const list = model.pods.filter(p => p.flagged);
-  const pos = new Map(model.pods.map((p, i) => [p.pod, i]));
-  const at = pos.get(pod) ?? -1;
-  let prev: TracePodInfo | null = null;
-  let next: TracePodInfo | null = null;
-  for (const p of list) {
-    const i = pos.get(p.pod) ?? -1;
-    if (i < at) prev = p;
-    else if (i > at && !next) next = p;
-  }
-  return { list, prev, next };
-}
-
-/** v0.10.968 — CPU grafiği lejant değeri (kısa) / bellek. */
-export function legendValue(kind: 'mem' | 'cpu', v: number | null): string {
-  if (!isNum(v)) return '—';
-  return kind === 'cpu' ? fmtCoresShort(v) : fmtBytesTr(v);
-}
-
-/** v0.10.968 — lejant limit metni: "limit 1 çekirdek (şu an)" / "limit 2 GiB (şu an)". */
-export function limitLegend(kind: 'mem' | 'cpu', limit: number): string {
-  return `limit ${kind === 'cpu' ? fmtCores(limit) : fmtBytesTr(limit)} (şu an)`;
 }
 
 // ── v0.10.1096 — grafik başlığı + tek satırlık özet ──────────────────────

@@ -7,9 +7,9 @@
 // sırayı DEĞİŞTİRMEZ (satırlar metrik gelince zıplamaz). Buradaki her şey
 // saf: model (buildTraceMetricsModel), satırlar (buildRows), toplu uç dilimleri
 // (tracePodChunks / chunksToEnable), dilim sonucu → pod durumu
-// (podMetricState), seçim kuralı (selectPod). v0.10.962'nin dışa aktarımları
-// (jvmPodSeries, traceMetricsPodHref, togglePod, podAtCap,
-// tracePods) aynı imzayla duruyor.
+// (podMetricState). v0.10.962'nin dışa aktarımları (jvmPodSeries,
+// traceMetricsPodHref, tracePods) aynı imzayla duruyor. v0.10.2207 —
+// karşılaştırma seçim kuralları (selectPod / togglePod / podAtCap) kalktı.
 import type { SpanMetricSeries, SpanRow, TraceAnalysis, TracePodMetricsResponse, TracePodSeriesRow } from '@/lib/types';
 import type { CriticalPath } from '@/lib/criticalPath';
 import { spanHasError } from '@/lib/otel/links';
@@ -20,7 +20,7 @@ import type { CellTone } from '@/components/ui/DataTable';
 import { fmtBytesTr, fmtCores, fmtCoresShort, fmtPct } from './traceMetricsFmt';
 import { trPossessive } from './trSuffix';
 import {
-  CRIT_FLAG_SHARE, LEVEL_ERR, LEVEL_WARN, TOP_SELF_N, TRACE_METRICS_MAX_COMPARE,
+  CRIT_FLAG_SHARE, LEVEL_ERR, LEVEL_WARN, TOP_SELF_N,
   TRACE_POD_AUTO_CHUNKS, TRACE_POD_CHUNK_MAX, TRACE_POD_CHUNK_REGEX_MAX, TRACE_POD_MAX_INFLIGHT,
   type MetricLevel, type NoPodService, type NoPodSummary, type PodMetricSeries, type PodMetricState,
   type PodNameParts, type TraceErrorMark, type TraceMetricsFilter, type TraceMetricsGrouping,
@@ -435,6 +435,13 @@ export function buildRows(model: TraceMetricsModel, view: TraceMetricsRowView): 
     for (const g of model.groups) {
       const pods = filtered ? g.pods.filter(p => podMatches(p, view.filter, view.query)) : g.pods;
       if (pods.length === 0) continue;
+      // v0.10.2207 (operatör: "kalabalık") — TEK pod'lu servis grup satırı
+      // açmaz: servis satırı ile pod satırı aynı sayıları tekrar ediyordu. Pod
+      // satırı doğrudan, servis önekiyle (Düz sıradaki gibi).
+      if (g.pods.length === 1) {
+        top.push({ head: { kind: 'pod', key: `p:${pods[0].pod}`, pod: pods[0], prefix: true }, kids: [] });
+        continue;
+      }
       const open = filtered || view.openGroups.has(g.service);
       const kids: BareRow[] = [];
       if (open) {
@@ -849,44 +856,6 @@ export function coverageSummary(model: TraceMetricsModel, metrics: (pod: string)
     });
   }
   return out;
-}
-
-/** v0.10.968 — seçim kuralı (spec §4.4): aynı servisten ve iki pod'un da
- *  metriği `ok` ise yeni pod BAŞA gelir, diğerleri kalır (≤4, sondaki düşer);
- *  aksi hâlde karşılaştırma [pod]'a iner. Servis değiştiyse çağıran duyurur. */
-export function selectPod(
-  compare: string[], pod: string, model: TraceMetricsModel, ok: (p: string) => boolean,
-): { next: string[]; serviceChanged: boolean } {
-  const cur = compare[0];
-  const curSvc = cur ? model.byPod.get(cur)?.service : undefined;
-  const svc = model.byPod.get(pod)?.service;
-  if (cur && curSvc !== undefined && curSvc === svc && ok(pod) && ok(cur)) {
-    return { next: [pod, ...compare.filter(p => p !== pod)].slice(0, TRACE_METRICS_MAX_COMPARE), serviceChanged: false };
-  }
-  return { next: [pod], serviceChanged: !!cur && curSvc !== undefined && curSvc !== svc };
-}
-
-/** v0.10.962 — tavan: seçim 4'te ve pod AYNI servisten, seçili değil →
- *  tıklama bir şey yapamaz. Panel bu çipi devre dışı + gerekçeli gösterir
- *  (eskiden tıklama sessizce yutuluyordu); togglePod aynı kuralı kullanır. */
-export function podAtCap(selected: string[], pod: string, pods: { pod: string; service: string }[]): boolean {
-  if (selected.includes(pod) || selected.length < TRACE_METRICS_MAX_COMPARE) return false;
-  const svcOf = (p: string) => pods.find(x => x.pod === p)?.service;
-  return svcOf(selected[0]) === svcOf(pod);
-}
-
-/** Seçim kuralı: yalnız AYNI servisin pod'ları üst üste (≤4). Başka servisten
- *  pod seçmek seçimi o pod'la değiştirir; seçili pod'a tıklamak çıkarır (son
- *  pod çıkarılamaz); tavandayken yeni pod eklenmez (podAtCap). */
-export function togglePod(selected: string[], pod: string, pods: { pod: string; service: string }[]): string[] {
-  const svcOf = (p: string) => pods.find(x => x.pod === p)?.service;
-  if (selected.includes(pod)) {
-    return selected.length > 1 ? selected.filter(p => p !== pod) : selected;
-  }
-  const svc = svcOf(pod);
-  if (selected.length === 0 || svcOf(selected[0]) !== svc) return [pod];
-  if (podAtCap(selected, pod, pods)) return selected;
-  return [...selected, pod];
 }
 
 /** Trace span'larının zaman aralığı ± pencere (ns).

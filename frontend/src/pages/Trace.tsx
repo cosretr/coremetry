@@ -250,7 +250,8 @@ function TraceDetailInner() {
     if (tab === 'logs' || tab === 'metrics') url.searchParams.set('tab', tab);
     else url.searchParams.delete('tab');
     // v0.10.968 — Metrics sekmesinin BÜTÜN parametreleri (mpod, mwin, mf, mq,
-    // mgrp, msib, mview) sekmeden çıkınca düşer; liste traceMetricsModel'de.
+    // mgrp; v0.10.2207 — msib / mview kalktı) sekmeden çıkınca düşer; liste
+    // traceMetricsModel'de.
     if (tab !== 'metrics') { for (const k of TRACE_METRICS_URL_PARAMS) url.searchParams.delete(k); }
     if (groupSimilar) url.searchParams.set('xn', '1');
     else url.searchParams.delete('xn');

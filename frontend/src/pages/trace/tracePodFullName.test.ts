@@ -1,13 +1,13 @@
 // tracePodFullName.test — v0.10.1644 (operator-reported): Trace › Metrics
 // yüzeyleri pod adını `…<rs-hash>-<suffix>` / `<suffix>` diye kırpıyordu
 // (shortPod / podSuffix / suffixLabels); deployment öneki yoktu. Aynı hata
-// sınıfı: v0.10.1640 podLineLabel. Tam ad her yerde (çip, lejant, tooltip,
-// seri listesi, işaret başlığı); dar alan CSS ellipsis + title ile kısalır.
+// sınıfı: v0.10.1640 podLineLabel. Tam ad her yerde (seri, tooltip); dar alan
+// CSS ellipsis + title ile kısalır. v0.10.2207 — çip ve zaman çizelgesi kalktı.
 import { describe, it, expect } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import type { PodMetricState, TraceMetricsModel, TracePodInfo } from './traceMetricsModel';
+import type { PodMetricState, TracePodInfo } from './traceMetricsModel';
 import { jvmPodSeries } from './traceMetrics';
-import { chartPods, compareChipLayout, timelineModel } from './tracePodPanelModel';
+import { chartPod } from './tracePodPanelModel';
 
 const T0 = 1_790_496_000 * 1e9;
 const SVC = 'orders-api';
@@ -20,17 +20,6 @@ function pod(name: string): TracePodInfo {
     topSelf: false, rootCause: false, entry: false, firstError: null,
     activeFromNs: T0, activeToNs: T0 + 1e9, flagged: false, runtime: 'java', replicaSet: m ? `${m[1]}-${m[2]}` : '',
     nameParts: m ? { head: m[1], rs: m[2], tail: m[3] } : { head: name, rs: '', tail: '' },
-  };
-}
-
-function model(pods: TracePodInfo[], o: Partial<TraceMetricsModel> = {}): TraceMetricsModel {
-  return {
-    pods, groups: [{ service: SVC, pods, spans: 0, errors: 0, maxSelfNs: 0, critShare: 0, flagged: 0, lead: false }],
-    byPod: new Map(pods.map(p => [p.pod, p])), podSpans: new Map(), criticalIds: new Set(), errorMarks: [],
-    noPod: null, clusterValues: ['dc-1'], primaryCluster: 'dc-1',
-    traceStartNs: T0, traceEndNs: T0 + 2e9, rootWallNs: 2e9, selfKnown: true, truncated: false,
-    errorSpans: 0, rootCausePod: '', entryPod: '', counts: { all: pods.length, err: 0, crit: 0, slow: 0 },
-    ...o,
   };
 }
 
@@ -52,7 +41,6 @@ const NAMES = [
 
 describe('v0.10.1644 — Trace Metrics pod etiketi = tam ad', () => {
   const ps = NAMES.map(pod);
-  const m = model(ps);
 
   it.each(NAMES)('jvmPodSeries seri adı (lejant/tooltip) tam: %s', (name) => {
     const s: SpanMetricSeries = { groupKey: [name], points: [{ time: 0, value: 1 }] };
@@ -61,18 +49,8 @@ describe('v0.10.1644 — Trace Metrics pod etiketi = tam ad', () => {
     expect(out[0].fullKey).toEqual([name]);
   });
 
-  it.each(NAMES)('karşılaştırma çipi etiketi tam: %s', (name) => {
-    const { visible } = compareChipLayout(ps, [ps[0].pod], () => okState());
-    expect(visible.find(c => c.pod === name)?.label).toBe(name);
-  });
-
-  it.each(NAMES)('grafik (Bellek/CPU) seri + lejant etiketi tam: %s', (name) => {
-    const cp = chartPods(m, ps[0], NAMES.slice(0, 4), () => okState());
-    expect([...cp.compared, ...cp.siblings].find(c => c.pod === name)?.label).toBe(name);
-  });
-
-  it('zaman çizelgesi hata işareti başlığı tam ad', () => {
-    const tm = model(ps, { errorMarks: [{ spanId: 'e1', pod: ps[0].pod, service: SVC, name: 'GET /orders', status: '500', timeNs: T0 + 1e9 }] });
-    expect(timelineModel(tm, ps[0]).marks[0].title).toBe(`${SVC} orders-api-6b49d8f679-69tf7 · GET /orders · 500 · +1,000 sn`);
+  it.each(NAMES)('grafik (Bellek/CPU) seri etiketi tam: %s', (name) => {
+    const p = ps.find(x => x.pod === name)!;
+    expect(chartPod(p, () => okState())?.label).toBe(name);
   });
 });

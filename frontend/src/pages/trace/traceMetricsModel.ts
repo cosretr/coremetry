@@ -6,7 +6,6 @@
 // TRACE_POD_CHUNK_REGEX_MAX değerlerini bu dosyadan pinler (route_pins emsali).
 import type { SpanRow } from '@/lib/types';
 
-export const TRACE_METRICS_MAX_COMPARE = 4;
 export const TRACE_METRICS_WINDOWS = [5, 15, 60] as const;
 export type TraceMetricsWindow = (typeof TRACE_METRICS_WINDOWS)[number];
 export const TRACE_METRICS_DEFAULT_WINDOW: TraceMetricsWindow = 15;
@@ -16,12 +15,11 @@ export const TOP_SELF_N = 5;
 export const LEVEL_WARN = 0.7;
 export const LEVEL_ERR = 0.9;
 export const SIBLING_RATIO_WARN = 1.5;
-export const MAX_SIBLING_LINES = 12;
 export const TRACE_POD_CHUNK_MAX = 64;
 export const TRACE_POD_CHUNK_REGEX_MAX = 4000;
 export const TRACE_POD_AUTO_CHUNKS = 4;
 export const TRACE_POD_MAX_INFLIGHT = 4;
-export const TRACE_METRICS_URL_PARAMS = ['mpod', 'mwin', 'mf', 'mq', 'mgrp', 'msib', 'mview'] as const;
+export const TRACE_METRICS_URL_PARAMS = ['mpod', 'mwin', 'mf', 'mq', 'mgrp'] as const; // v0.10.2207 — msib / mview kalktı
 
 export type MetricLevel = 'none' | 'warn' | 'err';
 export type TraceMetricsFilter = 'all' | 'err' | 'crit' | 'slow';
@@ -128,17 +126,10 @@ export type PodMetricState =
 
 export interface TracePodPanelProps {
   model: TraceMetricsModel;
-  selected: TracePodInfo;                      // === byPod.get(compare[0])
-  compare: string[];                           // pod names, ≤4, same service, first = selected
+  selected: TracePodInfo;                      // === byPod.get(mpod)
   metrics: (pod: string) => PodMetricState;
   window: TraceMetricsWindowInfo;
-  siblingLines: boolean;
-  focus: boolean;                              // mview=pod
-  onCompareChange: (next: string[]) => void;
-  onSelect: (pod: string) => void;             // applies selectPod rule
   onClose: () => void;                         // mpod=-
-  onToggleFocus: () => void;
-  onToggleSiblingLines: () => void;
   onShowSpans: (pod: string) => void;
   onOpenSpan: (spanId: string) => void;
   onRetry: (pod: string) => void;              // refetch or enable the chunk holding this pod

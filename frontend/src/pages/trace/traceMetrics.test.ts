@@ -4,20 +4,21 @@ import { computeCriticalPath, type CriticalPath } from '@/lib/criticalPath';
 import { decodeRange } from '@/lib/urlState';
 import {
   buildRows, buildTraceMetricsModel, chunkEligible, chunksToEnable, coverageSummary, defaultOpenGroups, defaultTracePod,
-  hottestPodState, jvmPodSeries, metricErrorReason, metricLevel, moreRowNotes, okCellText, podAtCap, podMetricState,
-  podNameParts, quoteMetaLen, selectPod, spanDepthMap, spanErrorStatus, stateCellText, togglePod,
+  hottestPodState, jvmPodSeries, metricErrorReason, metricLevel, moreRowNotes, okCellText, podMetricState,
+  podNameParts, quoteMetaLen, spanDepthMap, spanErrorStatus, stateCellText,
   traceMetricsPodHref, traceMetricsWindow, traceMomentValue, tracePodChunks, tracePods,
   type ChunkPhase, type ChunkSnapshot, type TraceMetricsRow, type TraceMetricsRowView,
 } from './traceMetrics';
 import {
-  TRACE_METRICS_MAX_COMPARE, TRACE_POD_AUTO_CHUNKS, TRACE_POD_CHUNK_MAX, TRACE_POD_CHUNK_REGEX_MAX,
+  TRACE_POD_AUTO_CHUNKS, TRACE_POD_CHUNK_MAX, TRACE_POD_CHUNK_REGEX_MAX,
   type PodMetricSeries, type PodMetricState, type TraceMetricsModel,
 } from './traceMetricsModel';
 
 // v0.10.968 — Trace › Metrics yeniden tasarımı (operatör onayı 2026-09-27):
 // model (pod çıkarma, hata kuralı, öz süre, kritik yol payı, kök neden, sıra,
-// bayraklar), satırlar, toplu uç dilimleri, dilim → pod durumu, seçim kuralı.
-// v0.10.962'nin togglePod / podAtCap / href / jvm tabloları aynen korunur;
+// bayraklar), satırlar, toplu uç dilimleri, dilim → pod durumu.
+// v0.10.962'nin href / jvm tabloları aynen korunur (v0.10.2207 —
+// karşılaştırma kuralları togglePod / podAtCap / selectPod kalktı);
 // sıra kuralı ve varsayılan seçim BİLEREK değişti (aşağıda "hata 5").
 
 const MS = 1e6;
@@ -261,60 +262,6 @@ describe('sıra — v0.10.968 kuralı', () => {
   });
 });
 
-describe('togglePod / podAtCap — v0.10.962 tabloları aynen', () => {
-  const many = [
-    ...Array.from({ length: 6 }, (_, i) => span(`x${i}`, '', 'fraud-score-prod', `fraud-score-prod-aaaaaa-p${i}xxx`)),
-    span('o', '', 'audit-log-prod', 'audit-log-prod-aaaaaa-o0000'),
-  ];
-  const mp = tracePods(many);
-  const sel = mp.slice(0, TRACE_METRICS_MAX_COMPARE).map(p => p.pod);
-  it('ekle / çıkar / başka servis değiştirir / tavan', () => {
-    let s = [mp[0].pod];
-    s = togglePod(s, mp[1].pod, mp);
-    expect(s).toHaveLength(2);
-    expect(togglePod(s, 'audit-log-prod-aaaaaa-o0000', mp)).toEqual(['audit-log-prod-aaaaaa-o0000']);
-    expect(togglePod(s, mp[1].pod, mp)).toEqual([mp[0].pod]);
-    expect(togglePod([mp[0].pod], mp[0].pod, mp)).toEqual([mp[0].pod]);
-    let all: string[] = [mp[0].pod];
-    for (const p of mp.slice(1, 6)) all = togglePod(all, p.pod, mp);
-    expect(all).toHaveLength(TRACE_METRICS_MAX_COMPARE);
-  });
-  it('podAtCap yalnız aynı servisten SEÇİLİ OLMAYAN pod için, tavanda true', () => {
-    expect(podAtCap(sel, mp[4].pod, mp)).toBe(true);
-    expect(podAtCap(sel, mp[0].pod, mp)).toBe(false);
-    expect(podAtCap(sel, 'audit-log-prod-aaaaaa-o0000', mp)).toBe(false);
-    expect(podAtCap(sel.slice(0, 3), mp[4].pod, mp)).toBe(false);
-  });
-  it('togglePod SAF kalır; seçili olmayan pod için no-op ⇔ podAtCap', () => {
-    const before = [...sel];
-    for (const p of mp) {
-      if (sel.includes(p.pod)) continue;
-      expect(togglePod(sel, p.pod, mp) === sel).toBe(podAtCap(sel, p.pod, mp));
-    }
-    expect(sel).toEqual(before);
-  });
-});
-
-describe('13. selectPod', () => {
-  const pods = Array.from({ length: 6 }, (_, i) => `fraud-score-prod-6b7d9f8c5-p${i}aaa`);
-  const sp = [span('r', '', 'checkout-api', P_CK, { dur: 100 }), ...pods.map((p, i) => span(`f${i}`, 'r', 'fraud-score-prod', p))];
-  const m = buildTraceMetricsModel(sp, undefined, null, false);
-  const all = () => true;
-  it('aynı servis + ikisi de ok → yeni pod başa, diğerleri kalır, ≤4 (sondaki düşer)', () => {
-    expect(selectPod([pods[0], pods[1]], pods[2], m, all)).toEqual({ next: [pods[2], pods[0], pods[1]], serviceChanged: false });
-    expect(selectPod(pods.slice(0, 4), pods[4], m, all).next).toEqual([pods[4], pods[0], pods[1], pods[2]]);
-    expect(selectPod([pods[0], pods[1]], pods[1], m, all).next).toEqual([pods[1], pods[0]]);
-  });
-  it('başka servis → [pod] + serviceChanged', () => {
-    expect(selectPod([pods[0], pods[1]], P_CK, m, all)).toEqual({ next: [P_CK], serviceChanged: true });
-    expect(selectPod([], P_CK, m, all)).toEqual({ next: [P_CK], serviceChanged: false });
-  });
-  it('metrik yok (ok değil) → sıfırla', () => {
-    expect(selectPod([pods[0], pods[1]], pods[2], m, p => p !== pods[2])).toEqual({ next: [pods[2]], serviceChanged: false });
-    expect(selectPod([pods[0]], pods[2], m, p => p !== pods[0])).toEqual({ next: [pods[2]], serviceChanged: false });
-  });
-});
-
 // Satır testleri için 14 pod'luk trace: fraud-score-prod 8 pod (1 hatalı),
 // audit-log-prod 4 pod (işaretsiz), checkout-api 2 pod (kök, kritik yol).
 const FR = Array.from({ length: 8 }, (_, i) => `fraud-score-prod-6b7d9f8c5-f${i}aaa`);
@@ -407,6 +354,21 @@ describe('14. buildRows', () => {
     const all = buildRows(BIG, view({ openGroups: new Set(BIG.groups.map(g => g.service)), expanded: new Set(BIG.groups.map(g => g.service)), noPodOpen: true }));
     expect(all.filter(r => r.kind === 'pod')).toHaveLength(BIG.pods.length);
     expect(keysOf(all).slice(-2)).toEqual(['n:', 'n:checkout-api']);
+  });
+
+  // v0.10.2207 (operatör: "kalabalık") — tek pod'lu servis grup satırı açmaz.
+  it('tek pod\'lu servis: grup satırı yok, pod satırı doğrudan (servis önekiyle); ≥2 pod grubu kalır; Düz aynı', () => {
+    const one = buildTraceMetricsModel([
+      span('r', '', 'svc-a', 'svc-a-6b7d9f8c5-a0aaa', { dur: 100 }),
+      span('b0', 'r', 'svc-b', 'svc-b-5f9c7d6b8-b0aaa'),
+      span('b1', 'r', 'svc-b', 'svc-b-5f9c7d6b8-b1aaa'),
+    ], undefined, null, false);
+    const rows = buildRows(one, view({ openGroups: new Set(['svc-a', 'svc-b']) }));
+    expect(rows.filter(r => r.kind === 'group').map(r => r.key)).toEqual(['g:svc-b']);
+    const a = rows.find(r => r.key === 'p:svc-a-6b7d9f8c5-a0aaa')!;
+    expect(a).toMatchObject({ kind: 'pod', level: 1, prefix: true });
+    expect(rows.filter(r => r.kind === 'pod' && r.level === 2)).toHaveLength(2);
+    expect(rows.filter(r => r.kind === 'pod')).toHaveLength(3);
   });
 });
 

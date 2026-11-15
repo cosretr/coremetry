@@ -58,11 +58,8 @@
 //     aynı anahtarla tr ⇄ Fragment geçişi React'ta satırı söküp yeniden
 //     kuruyordu, seçili satırdan Enter / Boşluk / tık ile kapanışta odak
 //     <body>'ye düşüyordu. Ayrıntı satırının anahtarı SABİT ("detail"): seçim
-//     başka pod'a taşınınca React düğümü TAŞIR, yeniden bağlamaz — Karşılaştır
-//     "+N" menüsü / odak devri ve JVM açık-kapalı durumu yaşar. Taşınan düğüm
-//     odağı yitirir (tarayıcı ve jsdom); kabuk çip yolunda `d:<pod>` focusRow
-//     isteği yollar, bölge yeniden odaklanır (çocuk etkisi "+N"ye almışsa
-//     çalınmaz).
+//     başka pod'a taşınınca React düğümü TAŞIR, yeniden bağlamaz (v0.10.2207 —
+//     karşılaştırma ve onun `d:<pod>` odak isteği kalktı).
 //   • Kaydırma YALNIZ tablonun kendi kabında (.tpm-scroll) ve yalnız satırdan
 //     AÇILAN pod ya da ilk bağlanmada AÇIK derin link (mpod dolu) için; alt
 //     kenar taşması kadar, seçili satır yapışkan başlığın altında görünür
@@ -192,8 +189,7 @@ export function TracePodTable(props: TracePodTableProps) {
   // v0.10.976 — satır altı ayrıntı: bölge (odaklanabilir grup) ve açılış
   // isteği. `pendingDetail` yalnız satırdan AÇILAN pod için dolar; soğuk derin
   // linkte boş kalır (odak çalınmaz). `firstDetail`: ilk çizilen ayrıntı —
-  // derin link kaydırması yalnız o anda. Bildirimler focusRow etkisinden ÖNCE:
-  // o etki `detailPod`a bağlı (d:<pod> isteği).
+  // derin link kaydırması yalnız o anda.
   const detailRef = useRef<HTMLElement>(null);
   const pendingDetail = useRef<string | null>(null);
   const firstDetail = useRef(true);
@@ -208,13 +204,8 @@ export function TracePodTable(props: TracePodTableProps) {
     const a = document.activeElement;
     if (a && a !== document.body) { lastFocusN.current = focusN; return; } // odak başka yerde: çalma
     lastFocusN.current = focusN;
-    const pod = /^[pd]:/.test(focusKey) ? focusKey.slice(2) : '';
-    // v0.10.976 — `d:<pod>`: ayrıntı bölgesi (çip yolu seçimi taşıdı; taşınan
-    // düğümde odak düşmüştü). Bölge çizilmemişse satır kuralına düşer.
-    if (focusKey.startsWith('d:') && pod === detailPod && detailRef.current) {
-      detailRef.current.focus({ preventScroll: true });
-      return;
-    }
+    // v0.10.2207 — çip yolu (`d:<pod>` isteği) karşılaştırmayla kalktı.
+    const pod = focusKey.startsWith('p:') ? focusKey.slice(2) : '';
     const svc = pod ? model.byPod.get(pod)?.service : undefined;
     let i = rows.findIndex(r => r.key === `p:${pod}`);
     if (i < 0 && svc !== undefined) i = rows.findIndex(r => r.key === `g:${svc}`);
@@ -222,7 +213,7 @@ export function TracePodTable(props: TracePodTableProps) {
     if (i < 0) return;
     setCursor(rows[i].key);
     tbodyRef.current?.querySelector<HTMLElement>(`tr[data-ri="${i}"]`)?.focus();
-  }, [focusN, focusKey, rows, model, detailPod]);
+  }, [focusN, focusKey, rows, model]);
 
   // v0.10.976 — açılış kaydırması + odak. Kaydırma YALNIZ tablonun kendi
   // kabında (.tpm-scroll) ve yalnız (a) satırdan AÇILAN pod (pendingDetail) ya
