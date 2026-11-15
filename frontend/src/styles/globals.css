@@ -5236,6 +5236,11 @@ a.sec.trl-csv, a.sec.trl-csv:hover, a.sec.trl-csv:active { padding: 5px 10px; fo
 .cl-ns__note { padding: 6px 8px; font-size: var(--fs-xs); color: var(--text3); font-style: italic; }
 /* Clusters S6 (plan §0 D3) — Nodes tablosu CPU / Memory hücresi: "kullanılan /
    kapasite · %" metni üstte, eşik renkli çubuk altta. */
+/* Clusters S12 (plan §4) — Namespaces Health hücresi trend çekmecesinin düğmesi
+   (sağlıklı nötr, failing hata rengi); Pods kesik liste notu düz cümle. */
+.cl-health { color: var(--text3); }
+.cl-health--bad { font-weight: 600; color: var(--err); }
+.cl-cut-note { margin: 0 0 var(--sp-4); font-size: var(--fs-xs); color: var(--warn); }
 .cl-node-usage { display: grid; gap: var(--sp-2); font-variant-numeric: tabular-nums; }
 /* Clusters S7 (plan §0 D2) — sade Overview: başlıkta düz cümle, dört kutu,
    grafik satırı, node kutucukları + alarmlar yan yana, kapalı bölümler.

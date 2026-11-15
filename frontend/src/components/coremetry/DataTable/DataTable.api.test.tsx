@@ -61,6 +61,13 @@ describe('coremetry/DataTable — devretme', () => {
     expect(h.querySelector('tbody')!.textContent).toContain('checkout');
     expect(h.querySelector('thead')!.textContent).toContain('Service');
   });
+  it('contentVisibility (ADDİTİF): veri satırları cv-row alır, ariaLabel kalır; verilmezse sınıf yok', () => {
+    const rows = [{ id: 'a', svc: 'checkout', n: 3 }];
+    const on = render({ rows, getRowKey: r => r.id, contentVisibility: true, ariaLabel: 'liste' });
+    expect(on.querySelector('table[aria-label="liste"] tbody tr')!.classList.contains('cv-row')).toBe(true);
+    const off = render({ rows, getRowKey: r => r.id });
+    expect(off.querySelector('tbody tr')!.className).toBe('');
+  });
   it('satır yoksa DataTableState basılır', () => {
     const h = render({ rows: [], state: { kind: 'empty', message: 'Nothing here' } });
     expect(h.querySelector('[data-dt-state="empty"]')).not.toBeNull();

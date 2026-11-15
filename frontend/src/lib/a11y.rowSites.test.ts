@@ -69,9 +69,10 @@ describe('clickable rows use rowActivation (D3)', () => {
     // v0.10.1356 (R4) — Profiling ve servis OverviewTables gezinen satırdı:
     // rowActivation'dan rowClickHandlers + <Link>'e geçtiler (aşağıdaki R4 kapısı).
     // v0.10.1414 — Inbox, Hosts, Databases da (gezinen satır; aşağıdaki v0.10.1414
-    // kapısı). Clusters listede KALIR: namespace / deployment satırları sayfa içi
-    // süzgeç seçimi (aria-pressed), gezinme değil — rowActivation doğru.
-    for (const f of ['components/DBQueriesPanel.tsx', 'features/anomalies/AnomaliesPage.tsx', 'pages/AIObservability.tsx', 'pages/AdminElastic.tsx', 'pages/service/ServicePodsTable.tsx', 'pages/Clusters.tsx', 'pages/SlowQueries.tsx', 'components/LogPatternsPanel.tsx']) {
+    // kapısı). v0.10.2181 (Clusters S12) — Clusters listeden çıktı: namespace
+    // satırı coremetry/DataTable `openRow` ile (rowActivation primitifte), pod
+    // satırı getRowHref (gerçek bağlantı primitifte).
+    for (const f of ['components/DBQueriesPanel.tsx', 'features/anomalies/AnomaliesPage.tsx', 'pages/AIObservability.tsx', 'pages/AdminElastic.tsx', 'pages/service/ServicePodsTable.tsx', 'pages/SlowQueries.tsx', 'components/LogPatternsPanel.tsx']) {
       expect(readFileSync(join(root, f), 'utf8')).toMatch(ROW_ACTIVATION_SPREAD);
     }
     // v0.10.1865 — pages/Metrics.tsx düştü: Keşif tablosunun satırı gerçek bağlantı (getRowHref).
@@ -169,7 +170,9 @@ describe('navigating rows are real links (R4, v0.10.1356)', () => {
     // 8'i (TopEndpoints, DetailsEndpoints, Hosts, External, Databases ifade,
     // DependenciesTable, Clusters pod, Inbox). v0.10.1865 — Metrics katalog sitesi
     // düştü (Keşif tablosu DataTable getRowHref: gerçek bağlantı primitifte) → 16.
-    expect(checked).toBeGreaterThanOrEqual(16);
+    // v0.10.2181 (Clusters S12) — Clusters pod da düştü (coremetry/DataTable
+    // getRowHref) → 15.
+    expect(checked).toBeGreaterThanOrEqual(15);
   });
 
   it('the six R4 sites use rowClickHandlers + a Link guarded by stopRowClick', () => {
@@ -195,7 +198,6 @@ const WRAPPED_NAV_SITES = [
   'pages/External.tsx',
   'pages/Databases.tsx',
   'components/DependenciesTable.tsx',
-  'pages/Clusters.tsx',
   'pages/Inbox.tsx',
 ];
 /** Gezinen satırın sarmalayıcı adları (v0.10.1414 öncesi). */

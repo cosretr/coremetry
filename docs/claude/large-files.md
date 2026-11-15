@@ -3,7 +3,7 @@
 Üretim: 2026-11-05, `find internal cmd main*.go frontend/src docs migrations charts` + `wc -l`
 (node_modules, dist, `components/shadcn/`, `*.min.*` ve ikili dosyalar hariç). Yenilemek için aynı
 komutu koş; liste değişirse bu dosyayı güncelle. 2026-11-14 (v0.10.2170, Problems S10):
-`Inbox.tsx`, `globals.css`, `api.ts` yeniden sayıldı, `ProblemsSection.tsx` listeden çıktı (113 satır). 2026-11-15 (v0.10.2180, Clusters S14): `Clusters.tsx` 1367 → 1244 yeniden sayıldı. Kaynak: `docs/claude/token-audit.md` §4.
+`Inbox.tsx`, `globals.css`, `api.ts` yeniden sayıldı, `ProblemsSection.tsx` listeden çıktı (113 satır). 2026-11-15 (v0.10.2180, Clusters S14): `Clusters.tsx` 1367 → 1244 (S14) → 1157 (S12) yeniden sayıldı. Kaynak: `docs/claude/token-audit.md` §4.
 
 ## Grup kuralları
 
@@ -70,7 +70,7 @@ komutu koş; liste değişirse bu dosyayı güncelle. 2026-11-14 (v0.10.2170, Pr
 | `frontend/src/pages/Logs.tsx` | 1387 | S |
 | `internal/api/ai_evalset_core.go` | 1375 | S |
 | `internal/vmetrics/promql.go` | 1368 | S |
-| `frontend/src/pages/Clusters.tsx` | 1244 | S |
+| `frontend/src/pages/Clusters.tsx` | 1157 | S |
 | `docs/ux-parity/00-inventory.md` | 1351 | D |
 | `frontend/src/features/anomalies/ProblemDetail.tsx` | 1347 | S |
 | `internal/api/copilot_service_topology.go` | 1337 | S |

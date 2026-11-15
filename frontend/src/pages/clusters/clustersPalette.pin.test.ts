@@ -19,7 +19,7 @@ describe('Clusters — sade palet adım 1', () => {
   it('kategoriler nötr: b-info yok, rol ve süzgeç çipleri b-gray', () => {
     expect(src).not.toMatch(/\bb-info\b/);
     // Clusters S6 (D3) — Nodes rolü rozet değil nötr düz metin (mockup).
-    expect(src).toContain("case 'role': return cell(r.role ?? '');");
+    expect(src).toContain("case 'role': return dash(r.role ?? '');");
     // Clusters S5 — süzgeç çipleri coremetry/FilterBar çipi (nötr, ✕ ile
     // kaldırılır); tıklanınca silinen b-gray rozetleri kalktı.
     expect(src).toContain('<FilterBar chips={filterChips}');
@@ -30,7 +30,8 @@ describe('Clusters — sade palet adım 1', () => {
     expect(src).toContain('<span className="cl-status">reachable</span>');
     // Clusters S4 — liste kartının "healthy" rozeti düz sözcük "sağlıklı" oldu
     // (D1); kalan tek "healthy" Namespaces tablosunun Health hücresi.
-    expect(src.match(/color: 'var\(--text3\)' \}\}>healthy<\/span>/g)?.length).toBe(1);
+    // Clusters S12 — Health hücresi trend düğmesi: sağlıklı nötr (.cl-health), failing --err.
+    expect(src).toContain("className={(r.failing ?? 0) > 0 ? 'cl-health cl-health--bad' : 'cl-health'}");
     // Liste: sağlıklı NÖTR sınıf (renk değiştiricisi yok); renk yalnız sapmada.
     expect(src).toContain('{state === \'healthy\' && <span className="cl-status">sağlıklı</span>}');
     expect(src).toContain('<span className="cl-status cl-status--crit">');
@@ -38,7 +39,7 @@ describe('Clusters — sade palet adım 1', () => {
   });
   it('sapma renkleri korunur (unreachable/failing b-err, >85 --err)', () => {
     expect(src).toContain('<span className="badge b-err">unreachable</span>');
-    expect(src).toContain('failing</span>');
+    expect(src).toContain("`${r.failing} failing`");
     // v0.10.943 (tablo standardı dilim 3) — eşik rengi satır içi üçlüden kolon
     // tonuna taşındı (`pctTone` → .cell-err/.cell-warn/.cell-faint); eşikler aynı.
     expect(src).toContain("(p ?? 0) > 85 ? 'err' : (p ?? 0) > 60 ? 'warn' : 'faint'");

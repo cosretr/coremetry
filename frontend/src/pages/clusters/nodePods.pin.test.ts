@@ -10,9 +10,10 @@ describe('Nodes tablosu Pods kolonu', () => {
   it('kolon tanımı + hücre', () => {
     expect(cols).toContain("{ id: 'pods',     label: 'Pods',    sortValue: r => r.pods ?? -1");
     expect(cols).toContain("if (r.pods == null) return '';");
-    expect(page).toContain("case 'pods': return cell(nodePodsText(r));");
+    expect(page).toContain("case 'pods': return dash(nodePodsText(r));");
   });
   it('hücreler kolon kimliğiyle, görünür kolon sırasıyla çizilir', () => {
-    expect(page).toContain('{ndt.visibleColumns.map(c => <NodeCell key={c.id} dt={ndt} col={c.id} row={r} />)}');
+    // Clusters S12 — coremetry/DataTable renderCell (görünür kolonlar primitifte).
+    expect(page).toContain('renderCell={(r, c) => nodeCellContent(r, c.id)}');
   });
 });

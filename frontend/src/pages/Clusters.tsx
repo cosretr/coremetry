@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { rowActivation, stopRowClick } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3); v0.10.1414 pod satırı linki
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { ChartSpline } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { ThanosTrendPanel } from '@/pages/clusters/TrendPanel';
 import { netTrendToSeries } from '@/pages/clusters/trendSeries';
 import { Gauge } from '@/pages/clusters/Gauge';
 import { PhaseDonut } from '@/pages/clusters/PhaseDonut';
-import { safePct, restartColor, fmtCores, fmtBps, podPhaseBadge } from '@/pages/clusters/thresholds';
+import { safePct, fmtCores, fmtBps } from '@/pages/clusters/thresholds';
 import { TREND_WINDOWS } from '@/pages/clusters/TrendPanel';
 import { podWorkloadName } from '@/pages/clusters/podWorkload';
-import { termReasonTone } from '@/lib/podTerm';
 import { podDetailPath } from '@/pages/service/podDetailPath';
 import { NodeHeatmap } from '@/pages/clusters/NodeHeatmap';
 import { MiniBar } from '@/pages/clusters/MiniBar';
@@ -37,16 +36,17 @@ import { ClusterCard } from '@/pages/clusters/ClusterCard';
 import { clusterState, fleetSentence, cpuUsageText, memUsageText, usageTone } from '@/pages/clusters/fleetSummary';
 import { api } from '@/lib/api';
 import { useClusters } from '@/lib/queries';
-import { timeRangeToNs, fmtBytes, fmtNum, rowClickHandlers } from '@/lib/utils';
+import { timeRangeToNs, fmtBytes, fmtNum } from '@/lib/utils';
 import { LIVE_META } from '@/lib/autoRefresh';
 import { clampThanosWindow, clampSuffix } from '@/lib/thanosWindow';
 import { useUrlRange, rememberRange } from '@/lib/useUrlRange';
 import { encodeRange } from '@/lib/urlState';
 import { pushZoom, popZoom } from '@/lib/chart/zoomHistory';
-import {
-  useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
-  type ColumnDef, type CellTone, type DataTableStateProps, type DataTable,
-} from '@/components/ui/DataTable';
+// Clusters S12 (plan §4, §11 S12) — üç tablo coremetry/DataTable'a geçti
+// (ui/DataTable içe aktarımı kalktı); uzun listeler `contentVisibility`
+// (v0.10.2181 ADDİTİF seçenek) ile cv-row basar.
+import { DataTable as CmDataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
+import { podStatusWord as nsPodStatusWord, podRestartText } from '@/pages/clusters/nsDetailModel';
 import { TableViewBar } from '@/components/coremetry/TableViewBar';
 import {
   NODE_COLS, NODE_COMPACT, NODE_SORT_IDS, nodeStatus, nodePodsText, nodeCpuText, nodeMemText, nodeCpuPct,
@@ -73,6 +73,7 @@ import { PageShell } from '@/components/coremetry/PageShell';
 // v0.10.943 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında:
 // 11px ikincil hücre yerine ton (S3), sayılar arayüz fontunda (S2), % eşik
 // rengi `pctTone` (>85 err, >60 warn, altı soluk — eski satır içi üçlü).
+type CellTone = NonNullable<ReturnType<NonNullable<ColumnDef<unknown>['tone']>>>;
 const pctTone = (p?: number): CellTone => ((p ?? 0) > 85 ? 'err' : (p ?? 0) > 60 ? 'warn' : 'faint');
 
 // Clusters S7 (D6) — Overview'un kapalı bölümleri (kalıcılık kimlikleri).
@@ -81,46 +82,44 @@ type OverviewSection = typeof OVERVIEW_SECTIONS[number];
 
 // Nodes tablosu kolonları Clusters S6'da (D3) pages/clusters/nodeColumns.ts'e taşındı.
 
-// v0.8.588 — namespace rollup (satır tıklaması ?namespace= yazar);
-// v0.9.5 — satır sonunda trend-drawer ikonu (filtreyle çakışmaz).
+// v0.8.588 — namespace rollup. Clusters S12 (§4): varsayılan Namespace · Pods
+// · CPU · Memory · Health; Restarts "Tüm kolonlar"da. Satır namespace detayını
+// açar (D7); Health hücresi pod başına trend çekmecesinin düğmesi (eski
+// Actions ikonu, aynı erişilebilir ad).
 const NS_COLS: ColumnDef<ClusterNamespaceRow>[] = [
-  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', width: 220, mono: true },
+  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', flex: true, minWidth: 180, mono: true },
   { id: 'pods',      label: 'Pods',      sortValue: r => r.pods ?? 0, numeric: true, width: 80 },
   { id: 'cpuCores',  label: 'CPU',       sortValue: r => r.cpuCores,  numeric: true, width: 90 },
   { id: 'memBytes',  label: 'Memory',    sortValue: r => r.memBytes,  numeric: true, width: 100 },
-  { id: 'restarts',  label: 'Restarts',  sortValue: r => r.restarts ?? 0, numeric: true, width: 84 },
-  { id: 'health',    label: 'Health',    sortValue: r => r.failing ?? 0, numeric: true, width: 90 },
-  // v0.10.943 — trend düğmesi satırın eylemi (T8): `kind: 'actions'`; id/width aynı.
-  { id: 'trend',     label: 'Actions',   kind: 'actions', width: 44 },
+  { id: 'health',    label: 'Health',    sortValue: r => r.failing ?? 0, numeric: true, width: 130, ownLink: true },
+  { id: 'restarts',  label: 'Restarts',  sortValue: r => r.restarts ?? 0, numeric: true, width: 90,
+    tone: r => ((r.restarts ?? 0) > 8 ? 'err' : (r.restarts ?? 0) > 2 ? 'warn' : 'faint') },
 ];
+const NS_COMPACT = { v: 1 as const, order: NS_COLS.map(c => c.id), hidden: ['restarts'], sig: 'clusternamespaces-compact' };
 
-
-// v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor") — iki esneyen kolonun
-// varsayılan tabanı (160+160) sayıları 60 px'e eziyordu: okunurluk tabanları +
-// öncelik; kap taşıyamazsa önce Net in/out, sonra Memory / Mem % / Namespace /
-// Cluster düşer ("+N sütun").
+// Clusters S12 (§4): Pods sekmesi varsayılanı Pod · Namespace · Service ·
+// Status · CPU % · Mem % · Restarts; Cluster, ham CPU / Memory, Net ve
+// Limit / Request "Tüm kolonlar"da. v0.10.1068 tabanları (iki esneyen kolon)
+// korunur. Satır = gerçek /pod bağlantısı (getRowHref, K3); servis hücresi
+// kendi bağlantısını taşır (ownLink).
 const POD_COLS: ColumnDef<ClusterPodRow>[] = [
-  { id: 'cluster',   label: 'Cluster',   sortValue: r => r.cluster,   naturalDir: 'asc', width: 130, minWidth: 100, priority: 3, tone: () => 'muted' },
-  // v0.9.649 — ikinci ESNEK kolon: pod tek başına 1154px bırakıyordu
-  // (eşik 1150). Namespace de değişken uzunlukta, artanı paylaşıyorlar.
-  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', flex: true, minWidth: 110, priority: 3, tone: () => 'muted' },
-  { id: 'pod',       label: 'Pod',       sortValue: r => r.pod,       naturalDir: 'asc', flex: true, minWidth: 180, priority: 1 },
-  // v0.9.12 — Coremetry servis eşleşmesi (korelasyon audit'i).
-  { id: 'service',   label: 'Service',   sortValue: r => r.service ?? '', naturalDir: 'asc', width: 150, minWidth: 110, priority: 2 },
-  { id: 'phase',     label: 'Status',    sortValue: r => r.phase ?? '', naturalDir: 'asc', width: 100, minWidth: 90, priority: 1 },
-  { id: 'cpuCores',  label: 'CPU',       sortValue: r => r.cpuCores,  numeric: true, width: 90, minWidth: 72, priority: 2 },
-  { id: 'cpuPct',    label: 'CPU %',     sortValue: r => r.cpuPct ?? 0, numeric: true, width: 80, minWidth: 72, priority: 2, tone: r => pctTone(r.cpuPct) },
-  { id: 'memBytes',  label: 'Memory',    sortValue: r => r.memBytes,  numeric: true, width: 100, minWidth: 84, priority: 3 },
-  { id: 'memPct',    label: 'Mem %',     sortValue: r => r.memPct ?? 0, numeric: true, width: 80, minWidth: 72, priority: 3, tone: r => pctTone(r.memPct) },
-  // v0.9.10 — network (best-effort).
-  { id: 'netIn',     label: 'Net in',    sortValue: r => r.netInBps ?? 0, numeric: true, width: 90, minWidth: 84, priority: 4 },
-  { id: 'netOut',    label: 'Net out',   sortValue: r => r.netOutBps ?? 0, numeric: true, width: 90, minWidth: 84, priority: 4 },
-  // v0.9.1276 — hücre artık sayının yanında son-sonlanma rozeti de
-  // taşıyor ("OOMKilled"); varsayılan genişlik 84→150. Kaydedilmiş
-  // genişliği olan operatörde eski değer kalır — rozet ellipsis +
-  // title ile okunur kalsın diye ikisi de var (tablo-kırpma olayı).
-  { id: 'restarts',  label: 'Restarts',  sortValue: r => (r.restartsUnknown ? -1 : r.restarts ?? 0), numeric: true, width: 150, minWidth: 96, priority: 2 },
+  { id: 'pod',       label: 'Pod',       sortValue: r => r.pod,       naturalDir: 'asc', flex: true, minWidth: 180, mono: true },
+  { id: 'namespace', label: 'Namespace', sortValue: r => r.namespace, naturalDir: 'asc', flex: true, minWidth: 110, tone: () => 'muted' },
+  { id: 'service',   label: 'Service',   sortValue: r => r.service ?? '', naturalDir: 'asc', width: 150, minWidth: 110, ownLink: true },
+  { id: 'phase',     label: 'Status',    sortValue: r => r.phase ?? '', naturalDir: 'asc', width: 110, minWidth: 90,
+    tone: r => nsPodStatusWord(r).tone ?? undefined },
+  { id: 'cpuPct',    label: 'CPU %',     sortValue: r => r.cpuPct ?? 0, numeric: true, width: 80, minWidth: 72, tone: r => pctTone(r.cpuPct) },
+  { id: 'memPct',    label: 'Mem %',     sortValue: r => r.memPct ?? 0, numeric: true, width: 80, minWidth: 72, tone: r => pctTone(r.memPct) },
+  { id: 'restarts',  label: 'Restarts',  sortValue: r => (r.restartsUnknown ? -1 : r.restarts ?? 0), numeric: true, width: 150, minWidth: 96,
+    tone: r => (r.restartsUnknown ? 'faint' : (r.restarts ?? 0) > 8 ? 'err' : (r.restarts ?? 0) > 2 ? 'warn' : 'faint') },
+  { id: 'cluster',   label: 'Cluster',   sortValue: r => r.cluster,   naturalDir: 'asc', width: 130, tone: () => 'muted' },
+  { id: 'cpuCores',  label: 'CPU',       sortValue: r => r.cpuCores,  numeric: true, width: 90 },
+  { id: 'memBytes',  label: 'Memory',    sortValue: r => r.memBytes,  numeric: true, width: 100 },
+  { id: 'netIn',     label: 'Net in',    sortValue: r => r.netInBps ?? 0, numeric: true, width: 90 },
+  { id: 'netOut',    label: 'Net out',   sortValue: r => r.netOutBps ?? 0, numeric: true, width: 90 },
+  { id: 'limits',    label: 'Limit / Request', sortValue: r => r.memLimitBytes ?? 0, width: 220 },
 ];
+const POD_COMPACT = { v: 1 as const, order: POD_COLS.map(c => c.id), hidden: ['cluster', 'cpuCores', 'memBytes', 'netIn', 'netOut', 'limits'], sig: 'clusterpods-compact' };
 
 // fmtCores v0.9.51'de thresholds.ts'e taşındı (PodDrawer + §8 ortak).
 
@@ -139,7 +138,6 @@ function pctTitle(what: string, ofLimit?: number, ofReq?: number): string {
 export default function ClustersPage() {
   const [range, setRange] = useUrlRange('15m'); // inline namespace/pod trendi
   const [params, setParams] = useSearchParams();
-  const navigate = useNavigate();
 
   const sourcesQ = useQuery({
     queryKey: ['cluster-sources'],
@@ -541,31 +539,13 @@ export default function ClustersPage() {
     [podDataKey, nsView, nsFilter]);
   const nsUsed = nsView ? (nsQs[0]?.data?.namespaces ?? []).find(r => r.namespace === nsFilter) : undefined;
 
-  const dt = useDataTable<ClusterPodRow>({
-    storageKey: 'clusterpods',
-    columns: POD_COLS,
-    rows,
-    initialSort: { id: 'cpuCores', dir: 'desc' },
-  });
-  const nsdt = useDataTable<ClusterNamespaceRow>({
-    storageKey: 'clusternamespaces',
-    columns: NS_COLS,
-    rows: nsRows,
-    initialSort: { id: 'cpuCores', dir: 'desc' },
-  });
-  // Clusters S6 (D3) — varsayılan altı kolon; "Tüm kolonlar" oturum içi
-  // (yeni kalıcı anahtar yok). Sıra: dikkat isteyenler önce, sonra bellek %.
+  // Clusters S6 / S12 — "Tüm kolonlar" oturum içi (yeni kalıcı anahtar yok).
   const [nodeAllCols, setNodeAllCols] = useState(false);
-  const nodeColumnModel = useMemo(() => ({ value: nodeAllCols ? null : NODE_COMPACT }), [nodeAllCols]);
-  const ndt = useDataTable<ClusterNodeRow>({
-    storageKey: 'clusternodes',
-    columns: NODE_COLS,
-    rows: nodeRows,
-    initialSort: { id: 'status', dir: 'desc' },
-    // Eski kayıtlı sıralama (cpuPct) kalktı: tanınmayan kimlik initialSort'a düşer.
-    sortIds: NODE_SORT_IDS,
-    columnModel: nodeColumnModel,
-  });
+  const [nsAllCols, setNsAllCols] = useState(false);
+  const [podAllCols, setPodAllCols] = useState(false);
+  const nodeColumnModel = useMemo(() => ({ value: nodeAllCols ? null : NODE_COMPACT, onChange: () => {} }), [nodeAllCols]);
+  const nsColumnModel = useMemo(() => ({ value: nsAllCols ? null : NS_COMPACT, onChange: () => {} }), [nsAllCols]);
+  const podColumnModel = useMemo(() => ({ value: podAllCols ? null : POD_COMPACT, onChange: () => {} }), [podAllCols]);
 
   const podErr = podQs[0]?.isError ?? false;
   const nodeErr = nodeQs[0]?.isError ?? false;
@@ -604,27 +584,27 @@ export default function ClustersPage() {
       {msg} Son başarılı veri gösteriliyor.
     </div>
   );
-  const nodeState: Omit<DataTableStateProps<ClusterNodeRow>, 'dt'> =
+  const nodeState: DataTableStateInput<ClusterNodeRow> =
     nodeQs[0]?.isPending ? { kind: 'loading' }
     : nodeErr ? { kind: 'error', message: NODE_ERR }
     : qLower && nodeAny ? { kind: 'no-match', ...clearQ }
     : { kind: 'empty', message: "node-exporter serileri boş döndü — runbook'taki probe adımına bakın" };
-  const depState: Omit<DataTableStateProps<ClusterDeploymentRow>, 'dt'> =
+  const depState: DataTableStateInput<ClusterDeploymentRow> =
     depQ.isPending ? { kind: 'loading' }
     : depQ.isError ? { kind: 'error', message: DEP_ERR }
     : qLower && depAny ? { kind: 'no-match', ...clearQ }
     : { kind: 'empty', message: "Bu namespace'te iş yükü örneği yok" };
-  const nsState: Omit<DataTableStateProps<ClusterNamespaceRow>, 'dt'> =
+  const nsState: DataTableStateInput<ClusterNamespaceRow> =
     nsQs[0]?.isPending ? { kind: 'loading' }
     : nsErr ? { kind: 'error', message: "Namespace özeti okunamadı — Settings'teki cluster kaydını kontrol edin." }
     : qLower && nsAny ? { kind: 'no-match', ...clearQ }
     : { kind: 'empty', message: 'Namespace örneği yok' };
-  const nsPodState: Omit<DataTableStateProps<ClusterPodRow>, 'dt'> =
+  const nsPodState: DataTableStateInput<ClusterPodRow> =
     podQs[0]?.isPending ? { kind: 'loading' }
     : podErr ? { kind: 'error', message: POD_ERR }
     : depFilter ? { kind: 'no-match', message: `"${depFilter}" iş yükünde pod yok`, onClearFilters: clearDep }
     : { kind: 'empty', message: `"${nsFilter}" namespace'inde pod örneği yok` };
-  const podState: Omit<DataTableStateProps<ClusterPodRow>, 'dt'> =
+  const podState: DataTableStateInput<ClusterPodRow> =
     podQs[0]?.isPending ? { kind: 'loading' }
     : podErr ? { kind: 'error', message: POD_ERR }
     : depFilter ? { kind: 'no-match', message: `"${depFilter}" iş yükünde pod yok`, onClearFilters: clearDep }
@@ -816,20 +796,12 @@ export default function ClustersPage() {
             ) : (
               <>
                 {section === 'nodes' && <>
-                  {nodeErr && ndt.sortedRows.length > 0 && staleErrNote(NODE_ERR)}
-                  <div className="table-wrap">
-                    <table {...ndt.tableProps}>
-                      <DataTableColgroup dt={ndt} />
-                      <DataTableHead dt={ndt} />
-                      <tbody>
-                        {ndt.sortedRows.length === 0 ? <DataTableState dt={ndt} {...nodeState} /> : ndt.sortedRows.map(r => (
-                          <tr key={`${r.cluster}|${r.node}`} className="cv-row">
-                            {ndt.visibleColumns.map(c => <NodeCell key={c.id} dt={ndt} col={c.id} row={r} />)}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  {nodeErr && nodeRows.length > 0 && staleErrNote(NODE_ERR)}
+                  <CmDataTable<ClusterNodeRow> storageKey="clusternodes" columns={NODE_COLS} rows={nodeRows}
+                    sort={{ initial: { id: 'status', dir: 'desc' }, ids: NODE_SORT_IDS }}
+                    columnModel={nodeColumnModel} state={nodeState} contentVisibility={nodeRows.length > 100}
+                    getRowKey={r => `${r.cluster}|${r.node}`} ariaLabel="Nodes"
+                    renderCell={(r, c) => nodeCellContent(r, c.id)} />
                   <TableViewBar foldable={0} expanded onExpandedChange={() => {}}
                     allColumns={nodeAllCols} onAllColumnsChange={setNodeAllCols} />
                 </>}
@@ -863,138 +835,54 @@ export default function ClustersPage() {
                     onZoom={chartZoom} onZoomReset={chartZoomReset} />
                 )}
                 {section === 'namespaces' && !nsFilter && <>
-                  <div className="table-wrap">
-                    <table {...nsdt.tableProps}>
-                      <DataTableColgroup dt={nsdt} />
-                      <DataTableHead dt={nsdt} />
-                      <tbody>
-                        {nsdt.sortedRows.length === 0 ? <DataTableState dt={nsdt} {...nsState} /> : nsdt.sortedRows.map(r => {
-                          const selected = r.namespace === nsFilter;
-                          return (
-                            <tr key={r.namespace}
-                              className={[selected ? 'row-selected' : '', nsdt.sortedRows.length > 100 ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}
-                              aria-pressed={selected}
-                              {...rowActivation(() => setSection('namespaces', p => {
-                                // v0.9.23 — ara kademe: seçim iş yükü
-                                // rollup'unu açar (pods'a atlamaz);
-                                // deployment seçimi pods'a götürür.
-                                if (selected) { p.delete('namespace'); p.delete('deployment'); }
-                                else { p.set('namespace', r.namespace); p.delete('deployment'); }
-                              }))}>
-                              {/* v0.10.943 — duruma bağlı ipucu satırdan kimlik hücresine (T7); seçili filtre durumu AT'ye satırdaki aria-pressed ile. */}
-                              <DataTableCell dt={nsdt} col="namespace" row={r} value={r.namespace}
-                                title={selected
-                                  ? 'Clear the namespace selection'
-                                  : 'Show workloads in this namespace'} />
-                              <DataTableCell dt={nsdt} col="pods" row={r} value={r.pods ? fmtNum(r.pods) : '—'} />
-                              <DataTableCell dt={nsdt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
-                              <DataTableCell dt={nsdt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
-                              {/* v0.9.37 (B4/F6) — restart toplamı + health.
-                                  v0.10.922 (sade palet adım 1) — K5: sağlıklı
-                                  NÖTR metin; yalnız failing b-err rozet. */}
-                              <DataTableCell dt={nsdt} col="restarts" row={r} style={{ color: restartColor(r.restarts ?? 0) }}
-                                value={r.restarts != null ? fmtNum(r.restarts) : '—'} />
-                              <td className="num" onClick={e => e.stopPropagation()}>
-                                {(r.failing ?? 0) > 0
-                                  ? <span className="badge b-err">{r.failing} failing</span>
-                                  : <span style={{ fontSize: 11, color: 'var(--text3)' }}>healthy</span>}
-                              </td>
-                              <DataTableCell dt={nsdt} col="trend" row={r}>
-                                {/* v0.9.5 — trend drawer'ı; satırın filtre
-                                    davranışına karışmaz (stopPropagation). */}
-                                <Button
-                                  variant="ghost" size="icon-xs" className="cl-trend-btn"
-                                  onClick={e => { e.stopPropagation(); openNsDrawer(r); }}
-                                  aria-label={`Open per-pod trend charts for namespace ${r.namespace}`}
-                                  title="Bu namespace'in pod başına trend grafikleri">
-                                  <ChartSpline size={14} strokeWidth={1.75} aria-hidden="true" />
-                                </Button>
-                              </DataTableCell>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <CmDataTable<ClusterNamespaceRow> storageKey="clusternamespaces" columns={NS_COLS} rows={nsRows}
+                    sort={{ initial: { id: 'cpuCores', dir: 'desc' } }}
+                    columnModel={nsColumnModel} state={nsState} contentVisibility={nsRows.length > 100}
+                    getRowKey={r => `${r.cluster}|${r.namespace}`} ariaLabel="Namespaces"
+                    // D7 — satır namespace detayını açar (sayfa içi süzgeç; gezinme değil).
+                    openRow={{ isOpen: () => false, onActivate: r => setSection('namespaces', p => { p.set('namespace', r.namespace); p.delete('deployment'); }) }}
+                    renderCell={(r, c) => {
+                      switch (c.id) {
+                        case 'namespace': return r.namespace;
+                        case 'pods': return r.pods ? fmtNum(r.pods) : '—';
+                        case 'cpuCores': return fmtCores(r.cpuCores);
+                        case 'memBytes': return fmtBytes(r.memBytes);
+                        case 'restarts': return r.restarts != null ? fmtNum(r.restarts) : '—';
+                        case 'health': return (
+                          // v0.9.5 — pod başına trend çekmecesi; satır davranışına karışmaz.
+                          <Button variant="ghost" size="xs" className={(r.failing ?? 0) > 0 ? 'cl-health cl-health--bad' : 'cl-health'}
+                            onClick={e => { e.stopPropagation(); openNsDrawer(r); }}
+                            aria-label={`Open per-pod trend charts for namespace ${r.namespace}`}
+                            title="Bu namespace'in pod başına trend grafikleri">
+                            {(r.failing ?? 0) > 0 ? `${r.failing} failing` : 'healthy'}
+                            <ChartSpline size={13} strokeWidth={1.75} aria-hidden="true" />
+                          </Button>
+                        );
+                        default: return null;
+                      }
+                    }} />
+                  <TableViewBar foldable={0} expanded onExpandedChange={() => {}}
+                    allColumns={nsAllCols} onAllColumnsChange={setNsAllCols} />
                 </>}
 
                 {section === 'pods' && !nsView && <>
                   {/* v0.9.959 (G8/Ö22) — kesik liste BEYAN edilir. Hem dolu
                       hem boş listede: dolu listede "hepsi bu değil", boş
                       listede "yok, kesin değil". */}
-                  {podErr && dt.sortedRows.length > 0 && staleErrNote(POD_ERR)}
+                  {podErr && rows.length > 0 && staleErrNote(POD_ERR)}
                   {!podErr && !podQs[0]?.isPending && truncatedClusters.length > 0 && (
-                    <div className="badge b-warn" style={{ marginBottom: 8 }}
-                      title={`${truncatedClusters.join(', ')}: sunucu en işlek 500 pod'u döndürdü (topk tavanı) — sakin pod'lar bu listenin dışında kalmış olabilir.`}>
-                      kısmi liste — topk(500)
-                    </div>
+                    <p className="cl-cut-note"
+                      title={`${truncatedClusters.join(', ')}: sunucu en işlek 500 pod'u döndürdü — sakin pod'lar bu listenin dışında kalmış olabilir.`}>
+                      En işlek 500 pod gösteriliyor.
+                    </p>
                   )}
-                  <div className="table-wrap">
-                    <table {...dt.tableProps}>
-                      <DataTableColgroup dt={dt} />
-                      <DataTableHead dt={dt} />
-                      <tbody>
-                        {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...podState} /> : dt.sortedRows.map(r => {
-                          const href = podHref(r);
-                          return (
-                          <tr key={`${r.cluster}|${r.namespace}|${r.pod}`} className="cv-row"
-                            {...rowClickHandlers(href, () => navigate(href))}>
-                            <DataTableCell dt={dt} col="cluster" row={r} value={r.cluster} />
-                            <DataTableCell dt={dt} col="namespace" row={r} value={r.namespace} />
-                            <td>
-                              <Link to={href} onClick={stopRowClick} className="mono cell-link cell-link--block" style={{ fontWeight: 500 }} title={r.pod}>
-                                {r.pod}
-                              </Link>
-                            </td>
-                            <td onClick={e => e.stopPropagation()}>
-                              {r.service ? (
-                                <Link to={serviceHref(r.service, { range })}
-                                  style={{ fontSize: 11 }}>{r.service}</Link>
-                              ) : (
-                                <span style={{ fontSize: 11, color: 'var(--text3)' }}
-                                  title="No matching Coremetry service (uninstrumented, infra pod, or ambiguous)">—</span>
-                              )}
-                            </td>
-                            {/* v0.9.37 (B4/F6) — Status: kube_pod_status_phase. */}
-                            <td>{r.phase
-                              ? <span className={`badge ${podPhaseBadge(r.phase)}`}>{r.phase}</span>
-                              : <span style={{ color: 'var(--text3)' }}>—</span>}</td>
-                            <DataTableCell dt={dt} col="cpuCores" row={r} value={fmtCores(r.cpuCores)} />
-                            {/* v0.8.580 — % hücresi limit-bazlı; request
-                                ekseni title'da (clamp'siz, aşım sinyal). */}
-                            <DataTableCell dt={dt} col="cpuPct" row={r} title={pctTitle('CPU', r.cpuPct, r.cpuPctOfReq)}
-                              value={r.cpuPct ? r.cpuPct.toFixed(0) : '—'} />
-                            <DataTableCell dt={dt} col="memBytes" row={r} value={fmtBytes(r.memBytes)} />
-                            <DataTableCell dt={dt} col="memPct" row={r} title={pctTitle('Memory', r.memPct, r.memPctOfReq)}
-                              value={r.memPct ? r.memPct.toFixed(0) : '—'} />
-                            <DataTableCell dt={dt} col="netIn" row={r} value={r.netInBps ? fmtBps(r.netInBps) : '—'} />
-                            <DataTableCell dt={dt} col="netOut" row={r} value={r.netOutBps ? fmtBps(r.netOutBps) : '—'} />
-                            {/* v0.9.1276 — restart SAYISININ yanında son
-                                sonlanma SEBEBİ: OOMKilled'ı görmek için
-                                kubectl'e düşmek gerekmiyor artık. Sebep
-                                serisi yoksa rozet hiç çizilmez (sessiz
-                                düşüş doğru davranış — '—' zaten ayrı bir
-                                bilinmezlik sinyali, restartsUnknown). */}
-                            <DataTableCell dt={dt} col="restarts" row={r}
-                              title={r.restartsUnknown ? 'Restart serisi yok (KSM eksik ya da seri tavanı) — 0 değil, bilinmiyor.' : undefined}
-                              style={{ color: r.restartsUnknown ? 'var(--text3)' : restartColor(r.restarts ?? 0) }}>
-                              {r.restartsUnknown ? '—' : fmtNum(r.restarts ?? 0)}
-                              {r.lastTermReason && (
-                                <span className={`badge b-${termReasonTone(r.lastTermReason)}`}
-                                  style={{
-                                    marginLeft: 5, fontSize: 10, verticalAlign: 'middle',
-                                    maxWidth: 96, overflow: 'hidden', textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap', display: 'inline-block',
-                                  }}
-                                  title={`${r.lastTermReason} · Son sonlanma sebebi (kube-state-metrics)`}>
-                                  {r.lastTermReason}</span>
-                              )}</DataTableCell>
-                          </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <CmDataTable<ClusterPodRow> storageKey="clusterpods" columns={POD_COLS} rows={rows}
+                    sort={{ initial: { id: 'cpuPct', dir: 'desc' }, ids: POD_COLS.map(c => c.id) }}
+                    columnModel={podColumnModel} state={podState} contentVisibility={rows.length > 100}
+                    getRowKey={r => `${r.cluster}|${r.namespace}|${r.pod}`} getRowHref={podHref} ariaLabel="Pods"
+                    renderCell={(r, c) => podCellContent(r, c.id, range)} />
+                  <TableViewBar foldable={0} expanded onExpandedChange={() => {}}
+                    allColumns={podAllCols} onAllColumnsChange={setPodAllCols} />
                 </>}
 
                 {/* Clusters S7 (plan §0 D2, onaylı mockup) — sade Overview:
@@ -1209,36 +1097,61 @@ function NamespaceDrawer({ cluster, namespace, range, onClose, onZoom, onZoomRes
 
 // PromQLList v0.9.51'de pages/clusters/PromQLList.tsx'e taşındı.
 
-// NodeCell — Nodes tablosunun kolon kimliğiyle çizilen hücresi (Clusters S6,
-// D3). Satır `visibleColumns` üzerinden döner: "Tüm kolonlar" kapalıyken gizli
-// kolonun hücresi hiç çizilmez. Kapasite yoksa CPU / Memory yalnız kullanılanı yazar.
-function NodeCell({ dt, col, row: r }: { dt: DataTable<ClusterNodeRow>; col: string; row: ClusterNodeRow }) {
-  const cell = (value: string, title?: string) => <DataTableCell dt={dt} col={col} row={r} value={value} title={title} />;
+// nodeCellContent — Nodes tablosunun hücre içeriği (Clusters S6, D3; S12'de
+// coremetry/DataTable renderCell'ine geçti). Kapasite yoksa CPU / Memory
+// yalnız kullanılanı yazar; boş değer "—".
+function nodeCellContent(r: ClusterNodeRow, col: string): ReactNode {
+  const dash = (v: string, title?: string) => (v ? <span title={title}>{v}</span> : <span className="cell-empty">—</span>);
   switch (col) {
-    case 'node': return cell(r.node);
-    case 'role': return cell(r.role ?? ''); // rol bir kategori: nötr düz metin
-    case 'status': { const s = nodeStatus(r); return cell(s.word, s.title); }
-    case 'pods': return cell(nodePodsText(r));
+    case 'node': return <span title={r.node}>{r.node}</span>;
+    case 'role': return dash(r.role ?? ''); // rol bir kategori: nötr düz metin
+    case 'status': { const st = nodeStatus(r); return dash(st.word, st.title); }
+    case 'pods': return dash(nodePodsText(r));
     case 'cpu':
     case 'mem': {
       const text = col === 'cpu' ? nodeCpuText(r) : nodeMemText(r);
-      if (!text) return cell('');
-      return (
-        <DataTableCell dt={dt} col={col} row={r} value={text}>
-          <div className="cl-node-usage"><span>{text}</span><MiniBar pct={col === 'cpu' ? nodeCpuPct(r) : nodeMemPct(r)} /></div>
-        </DataTableCell>
-      );
+      if (!text) return dash('');
+      return <div className="cl-node-usage"><span>{text}</span><MiniBar pct={col === 'cpu' ? nodeCpuPct(r) : nodeMemPct(r)} /></div>;
     }
-    case 'cluster': return cell(r.cluster);
-    case 'alloc': return cell(nodeAllocText(r));
-    case 'reqPct': return cell(nodeRequestText(r));
-    case 'limits': return cell(nodeLimitsText(r));
-    case 'netIn': return cell(r.netInBps ? fmtBps(r.netInBps) : '');
-    case 'netOut': return cell(r.netOutBps ? fmtBps(r.netOutBps) : '');
-    case 'versions': return cell(nodeVersionText(r), nodeVersionTitle(r));
-    default: return <td />;
+    case 'cluster': return r.cluster;
+    case 'alloc': return dash(nodeAllocText(r));
+    case 'reqPct': return dash(nodeRequestText(r));
+    case 'limits': return dash(nodeLimitsText(r));
+    case 'netIn': return dash(r.netInBps ? fmtBps(r.netInBps) : '');
+    case 'netOut': return dash(r.netOutBps ? fmtBps(r.netOutBps) : '');
+    case 'versions': return dash(nodeVersionText(r), nodeVersionTitle(r));
+    default: return null;
   }
 }
 
+// podCellContent — Pods sekmesinin hücre içeriği (Clusters S12, §4). Durum düz
+// sözcük (namespace detayıyla aynı sözlük), restart nedeniyle ("7 · bellek
+// bitti"); % hücresinin istek ekseni ipucunda (v0.8.580).
+function podCellContent(r: ClusterPodRow, col: string, range: TimeRange): ReactNode {
+  switch (col) {
+    case 'pod': return <span title={r.pod}>{r.pod}</span>;
+    case 'namespace': return r.namespace;
+    case 'service': return r.service
+      ? <Link to={serviceHref(r.service, { range })}>{r.service}</Link>
+      : <span className="cell-empty" title="Eşleşen Coremetry servisi yok (enstrümante edilmemiş, altyapı pod'u ya da belirsiz)">—</span>;
+    case 'phase': return nsPodStatusWord(r).word || <span className="cell-empty">—</span>;
+    case 'cpuPct': return <span title={pctTitle('CPU', r.cpuPct, r.cpuPctOfReq)}>{r.cpuPct ? r.cpuPct.toFixed(0) : '—'}</span>;
+    case 'memPct': return <span title={pctTitle('Memory', r.memPct, r.memPctOfReq)}>{r.memPct ? r.memPct.toFixed(0) : '—'}</span>;
+    case 'restarts': return r.restartsUnknown
+      ? <span title="Restart serisi yok (küme metriği yok ya da seri tavanı) — 0 değil, bilinmiyor.">—</span>
+      : <span title={r.lastTermReason ? `${r.lastTermReason} · son sonlanma sebebi` : undefined}>{podRestartText(r)}</span>;
+    case 'cluster': return r.cluster;
+    case 'cpuCores': return fmtCores(r.cpuCores);
+    case 'memBytes': return fmtBytes(r.memBytes);
+    case 'netIn': return r.netInBps ? fmtBps(r.netInBps) : '—';
+    case 'netOut': return r.netOutBps ? fmtBps(r.netOutBps) : '—';
+    case 'limits': {
+      const cpu = r.cpuLimitCores || r.cpuRequestCores ? `CPU ${r.cpuLimitCores ? fmtCores(r.cpuLimitCores) : '—'} / ${r.cpuRequestCores ? fmtCores(r.cpuRequestCores) : '—'}` : '';
+      const mem = r.memLimitBytes || r.memRequestBytes ? `Mem ${r.memLimitBytes ? fmtBytes(r.memLimitBytes) : '—'} / ${r.memRequestBytes ? fmtBytes(r.memRequestBytes) : '—'}` : '';
+      return [cpu, mem].filter(Boolean).join(' · ') || <span className="cell-empty">—</span>;
+    }
+    default: return null;
+  }
+}
 
 // podPhaseBadge v0.9.51'de thresholds.ts'e taşındı.

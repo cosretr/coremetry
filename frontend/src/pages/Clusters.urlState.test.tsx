@@ -362,7 +362,8 @@ describe('Clusters S0 — K3 satır davranışı', () => {
   it('namespace satırı sayfa içi süzgeç: ?namespace yazar, iş yükleri çekilir', async () => {
     const el = await mount('/clusters?cluster=prod-a&section=namespaces');
     const row = dataRows(el).find(r => (r.textContent ?? '').includes('shop'))!;
-    expect(row.getAttribute('aria-pressed')).toBe('false');
+    // Clusters S12 — coremetry/DataTable openRow: satır düğme (sayfa içi seçim, gezinme değil).
+    expect(row.getAttribute('role')).toBe('button');
     expect(row.querySelector('a')).toBeNull();
     expect(callsOf('clusterDeployments').length).toBe(0);
     click(row);

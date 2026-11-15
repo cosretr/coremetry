@@ -110,4 +110,10 @@ export interface DataTableProps<T> {
    *  sayfada birden çok tablo: "hub-1 keşif adayları"). Verilmezse basılmaz.
    *  `virtual` kipinde çizilmez. */
   ariaLabel?: string;
+  /** v0.10.2181 (Clusters S12, ADDİTİF, operatör onayı 2026-11-15): uzun
+   *  (>100 satır) sanal-olmayan liste — veri satırları `cv-row` alır
+   *  (`content-visibility: auto` + `contain-intrinsic-size`, globals.css).
+   *  ariaLabel, openRow, getRowHref ve rowActions aynen çalışır (`virtual`
+   *  kipinin aksine). Verilmezse işaretleme bayt bayt eski. */
+  contentVisibility?: boolean;
 }

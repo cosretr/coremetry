@@ -17,7 +17,7 @@ import type { ColumnDef, DataTableProps } from './types';
 const ACTIONS_W = 40;
 
 export function DataTable<T>(props: DataTableProps<T>) {
-  const { storageKey, columns, rows, sort, columnModel, selection, getRowHref, rowLinkReplace, onOpen, state, virtual, density, renderCell, renderHeader, rowActions, getRowKey, detail, pinnedRows, openRow, ariaLabel } = props;
+  const { storageKey, columns, rows, sort, columnModel, selection, getRowHref, rowLinkReplace, onOpen, state, virtual, density, renderCell, renderHeader, rowActions, getRowKey, detail, pinnedRows, openRow, ariaLabel, contentVisibility } = props;
   const dt = useDataTable<T>({
     storageKey, columns, rows,
     initialSort: sort?.initial,
@@ -75,7 +75,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
     const act = openRow?.onActivate ? rowActivation(() => openRow.onActivate!(row)) : undefined;
     return (
       <Fragment key={keyOf(row, i)}>
-        <tr {...rp} {...act} className={open ? 'row-selected' : rp.className}>
+        <tr {...rp} {...act} className={[open ? 'row-selected' : rp.className, contentVisibility ? 'cv-row' : ''].filter(Boolean).join(' ') || undefined}>
           {dt.shownColumns.map(c => cell(row, c))}
           {actionsCell(row)}
         </tr>

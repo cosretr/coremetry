@@ -259,7 +259,8 @@ const SITES: Site[] = [
   {
     name: 'Clusters → Pods',
     el: () => <ClustersPage />,
-    start: '/clusters?cluster=c1&section=pods', rowText: POD.pod, primary: 2, text: POD.pod, blankCell: 0,
+    // Clusters S12 (§4) — Pod ilk kolon; servissiz hücre bağlantısız (ownLink).
+    start: '/clusters?cluster=c1&section=pods', rowText: POD.pod, primary: 0, text: POD.pod, blankCell: 2,
     href: () => podDetailPath({
       cluster: 'c1', namespace: 'ns1', pod: POD.pod, service: '', deploy: podWorkloadName(POD.pod), range: null, from: 'clusters',
     }),
