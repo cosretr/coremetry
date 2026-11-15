@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { TimeRange } from '@/lib/types';
-import { tracesLink, exploreLink, endpointIdentityFilter } from '@/pages/endpoints/links';
+import { tracesLink, endpointIdentityFilter } from '@/pages/endpoints/links';
 
 // v0.9.307 (brief N6b) — a pivot must carry the SCOPE it was launched
 // from.
@@ -29,8 +29,6 @@ import { tracesLink, exploreLink, endpointIdentityFilter } from '@/pages/endpoin
 const range: TimeRange = { preset: '1h' } as TimeRange;
 const T = (service: string, path: string, env?: string, cluster?: string) =>
   tracesLink({ service, path }, range, env, cluster);
-const E = (service: string, path: string, agg: string, env?: string, cluster?: string) =>
-  exploreLink({ service, path }, range, agg, env, cluster);
 
 describe('endpoints → traces pivot', () => {
   it('carries the env the row was read under', () => {
@@ -92,48 +90,7 @@ describe('endpoints → traces pivot', () => {
   });
 });
 
-describe('endpoints → explore pivot', () => {
-  it('filters on service.name AND http.route, not just the service', () => {
-    // Dropping the route would open the WHOLE service's latency — a
-    // plausible chart about the wrong thing.
-    const filters = decodeURIComponent(new URL(E('checkout', '/api/orders', 'p99'), 'http://x').searchParams.get('filters') ?? '');
-    expect(filters).toContain('service.name');
-    expect(filters).toContain('http.route');
-    expect(filters).toContain('/api/orders');
-  });
-
-  it('carries the scope', () => {
-    expect(E('checkout', '/api/orders', 'p99', 'uat')).toContain('env=uat');
-  });
-
-  it('drops empty scope params so the URL stays clean', () => {
-    const link = E('checkout', '/api/orders', 'p99');
-    expect(link).not.toContain('env=');
-    expect(link).not.toContain('cluster=');
-  });
-
-  it('requests the metric result mode Explore decodes', () => {
-    const p = new URL(E('checkout', '/api/orders', 'p99'), 'http://x').searchParams;
-    expect(p.get('result')).toBe('metric');
-    expect(p.get('field')).toBe('duration_ms');
-    expect(p.get('agg')).toBe('p99');
-  });
-});
-
-describe('iki pivot aynı satırdan aynı evrene gider', () => {
-  it('ikisi de http.route üzerinden aynı rotayı taşır', () => {
-    // v0.9.1372 öncesi ıraksama: explore yapısal `http.route` filtresi
-    // kurarken traces serbest metin arıyordu. Aynı satırdan çıkan iki
-    // buton farklı popülasyon gösteriyordu ve hiçbiri hata vermiyordu.
-    const path = '/api/users/{id}';
-    const t = new URL(T('checkout', path), 'http://x').searchParams.get('filters') ?? '';
-    const e = new URL(E('checkout', path, 'p99'), 'http://x').searchParams.get('filters') ?? '';
-    for (const f of [t, e]) {
-      expect(decodeURIComponent(f)).toContain('http.route');
-      expect(decodeURIComponent(f)).toContain(path);
-    }
-  });
-});
+// v0.10.2210 — endpoint detayındaki Explore düğmesi ve exploreLink kalktı (Traces pivotu kalır).
 
 // v0.10.1117 — boş liste düzeltmesi. "Group by shape" satırı bir ŞEKİLDİR
 // (`/users/:id`, sunucuda opSigWrap(http_route)); `http.route = <şekil>` ham id
@@ -160,21 +117,10 @@ describe('endpoint kimlik çipi — şekil ve RPC (v0.10.1117)', () => {
     expect(p.get('env')).toBe('uat');
   });
 
-  it('HTTP şekil: Explore çipleri service.name + http.route_shape', () => {
-    expect(chips(exploreLink({ service: 'svc-orders', path: '/users/:id', sig: true }, range, 'p99'))).toEqual([
-      { k: 'service.name', op: '=', v: ['svc-orders'] },
-      { k: 'http.route_shape', op: '=', v: ['/users/:id'] },
-    ]);
-  });
-
   it('RPC satırı: Traces çipi name = <span adı> (+ servis), http.route YOK', () => {
     const href = tracesLink({ service: 'svc-orders', path: 'orders.v1.Orders/Get', entry: 'rpc' }, range);
     expect(chips(href)).toEqual([{ k: 'name', op: '=', v: ['orders.v1.Orders/Get'] }]);
     expect(new URL(href, 'http://x').searchParams.get('service')).toBe('svc-orders');
-    expect(chips(exploreLink({ service: 'svc-orders', path: 'orders.v1.Orders/Get', entry: 'rpc' }, range, 'p99'))).toEqual([
-      { k: 'service.name', op: '=', v: ['svc-orders'] },
-      { k: 'name', op: '=', v: ['orders.v1.Orders/Get'] },
-    ]);
   });
 
   it('RPC şekil satırı: name_shape = <şekil> (ad şekli, sunucuda opSigWrap(name))', () => {

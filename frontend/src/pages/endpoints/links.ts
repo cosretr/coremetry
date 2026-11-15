@@ -97,36 +97,6 @@ export function tracesLink(
   ])}`;
 }
 
-/**
- * exploreLink — "Open in Explore →" (v0.9.307, brief N6b).
- *
- * Zero new queries: http.route is already a resolver tier dimension
- * (TIER_DIM_KEYS), so Explore answers this from the spanmetrics
- * rollups rather than raw spans. The URL is the SAME legacy
- * ?result=metric shape OperationsTable already emits — no new scheme
- * invented, and seedFromLegacyParams decodes it unchanged.
- */
-export function exploreLink(
-  r: EndpointPivotRef, range: TimeRange, agg: string,
-  env?: string, cluster?: string,
-): string {
-  // v0.10.1117 — şekil çipi rollup boyutu değil: Explore o hâlde ham spans
-  // yolundan cevaplar (TIER_DIM_KEYS dışı); ham rota / ad yine kademelerden.
-  const filters = encodeFilters([
-    { k: 'service.name', op: '=', v: [r.service] },
-    endpointIdentityFilter(r),
-  ]);
-  return `/explore?${buildQuery([
-    ['range', encodeRange(range)],
-    ['filters', filters],
-    ['agg', agg],
-    ['field', 'duration_ms'],
-    ['result', 'metric'],
-    ['env', env ?? ''],
-    ['cluster', cluster ?? ''],
-  ])}`;
-}
-
 // ── Operasyon kartı (v0.10.1491, R3) ─────────────────────────────────
 //
 // Kart /endpoint sayfasının bir bölümü ("Kod ve çağrılar", çapa #opcard);

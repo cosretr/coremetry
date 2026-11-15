@@ -65,7 +65,8 @@ export function MetricREDStrip({ res, windowSec, compare, onToggleCompare, famil
         </StatTile>
         <StatTile label="Errors" tone={tone}>
           {v(fmtCount(cur.errors))}
-          {compare && cur.errors !== null && <TrendDelta cur={cur.errors} prior={und(prior.errors)} kind="lowerBetter" />}
+          {/* v0.10.2210 (operatör) — "listede yeni" rozeti yok: önceki 0 / yoksa delta çizilmez. */}
+          {compare && cur.errors !== null && <TrendDelta cur={cur.errors} prior={und(prior.errors) || undefined} kind="lowerBetter" />}
         </StatTile>
         <StatTile label="Err rate" tone={tone}>{v(fmtRatio(cur.errRate))}</StatTile>
         <StatTile label="Req/min">{v(fmtCount(cur.reqPerMin, 1))}</StatTile>

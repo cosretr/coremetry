@@ -11,8 +11,8 @@
 //     (kural `http_route = <şekil>` eşler, hiç tetiklenmezdi);
 //   • liste, ham kip     → bugünkü `http.route = <rota>` + ⚠ (kontrol);
 //   • liste, RPC sekmesi → `name = <ad>` (+ servis);
-//   • detay, sig=1       → Traces + Explore `http.route_shape`;
-//   • detay, entry=rpc   → Traces + Explore `name`.
+//   • detay, sig=1       → Traces `http.route_shape`;
+//   • detay, entry=rpc   → Traces `name` (Explore düğmesi v0.10.2210'da kalktı).
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
@@ -119,17 +119,13 @@ describe('/endpoints listesi — Traces pivotu (v0.10.1117)', () => {
   });
 });
 
-describe('/endpoint detay — Traces / Explore pivotları (v0.10.1117)', () => {
+describe('/endpoint detay — Traces pivotu (v0.10.1117; Explore v0.10.2210\'da kalktı)', () => {
   it('sig=1: iki bağlantı da http.route_shape = <şekil>', async () => {
     m.rowPath = '/users/:id';
     await mount(`/endpoint?service=svc-orders&path=${encodeURIComponent('/users/:id')}&sig=1&range=1h`, 'detail');
     const traces = linkByText('Traces')[0].getAttribute('href')!;
     expect(chipsOf(traces)).toEqual([{ k: 'http.route_shape', op: '=', v: ['/users/:id'] }]);
-    const explore = linkByText('Explore')[0].getAttribute('href')!;
-    expect(chipsOf(explore)).toEqual([
-      { k: 'service.name', op: '=', v: ['svc-orders'] },
-      { k: 'http.route_shape', op: '=', v: ['/users/:id'] },
-    ]);
+    expect(linkByText('Explore')).toHaveLength(0); // v0.10.2210 — Explore düğmesi kalktı
   });
 
   it('entry=rpc: iki bağlantı da name = <span adı>', async () => {
@@ -137,9 +133,6 @@ describe('/endpoint detay — Traces / Explore pivotları (v0.10.1117)', () => {
     await mount(`/endpoint?service=svc-orders&path=${encodeURIComponent('orders.v1.Orders/Get')}&entry=rpc&range=1h`, 'detail');
     expect(chipsOf(linkByText('Traces')[0].getAttribute('href')!))
       .toEqual([{ k: 'name', op: '=', v: ['orders.v1.Orders/Get'] }]);
-    expect(chipsOf(linkByText('Explore')[0].getAttribute('href')!)).toEqual([
-      { k: 'service.name', op: '=', v: ['svc-orders'] },
-      { k: 'name', op: '=', v: ['orders.v1.Orders/Get'] },
-    ]);
+    expect(linkByText('Explore')).toHaveLength(0);
   });
 });

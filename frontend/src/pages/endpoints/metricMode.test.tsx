@@ -175,13 +175,17 @@ describe('/endpoint metrik kipi = HTTP Metrics sekmesinin sorguları (v0.10.1352
     expect(tile('P95')).toContain(fmtSmart(0.2, 's'));
     expect(tile('P99')).toContain(fmtSmart(0.4, 's'));
     expect(host!.textContent).not.toContain('999');
-    expect(host!.textContent).toContain('Tüm RED karoları ve grafikler: VictoriaMetrics');
+    expect(host!.textContent).not.toContain('Tüm RED karoları ve grafikler'); // v0.10.2210
     expect(host!.textContent).not.toContain('tdigest');
   });
 
   it('compare: önceki pencere aynı sorgular + offset', async () => {
     await mount('&compare=1');
     expect(m.prom.some(c => c.query.includes('[10800s] offset 10800s'))).toBe(true);
+    // v0.10.2210 — "listede yeni" rozeti ve Explore düğmesi yok; Traces en sağda.
+    expect(host!.textContent).not.toContain('listede yeni');
+    const acts = [...host!.querySelectorAll('a')].map(a => a.textContent ?? '').filter(t => /^(Service|Traces|Explore) →$/.test(t));
+    expect(acts).toEqual(['Service →', 'Traces →']);
   });
 
   it('span kipi değişmedi: PromQL atılmaz, satır okunur, tdigest notu durur', async () => {

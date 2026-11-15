@@ -18,7 +18,7 @@ import type { EndpointDetail, EndpointRow } from '@/lib/types';
 import {
   parseEndpointPageRef, endpointSearchHint, type EndpointRef,
 } from '@/pages/endpoints/endpointParam';
-import { tracesLink, exploreLink } from '@/pages/endpoints/links';
+import { tracesLink } from '@/pages/endpoints/links';
 import { serviceHref } from '@/lib/serviceHref';
 import { MetricTile } from '@/pages/endpoints/MetricTile';
 import { bucketsToSeries } from '@/pages/endpoints/series';
@@ -314,17 +314,14 @@ export default function EndpointDetailPage() {
                 label={<><IconSparkles /> <span style={{ marginLeft: 6 }}>{tr('ai.askCosre')}</span></>}
                 title={tr('ai.askCosreEndpointHint')} />
             )}
+            {/* v0.10.2210 (operatör) — Explore düğmesi kalktı; sıra Kaynak · Ask CoSRE ·
+                Service → · Traces → (Traces en sağda). */}
+            <Link className="accent" style={{ fontSize: 12, padding: '3px 10px' }}
+              to={serviceHref(refObj.service, { range, env })}>Service →</Link>
             {/* v0.10.1117 — şekil (sig) ve RPC (entry) kimliği pivota taşınır:
                 `http.route_shape` / `name` / `name_shape` (endpoints/links.ts). */}
             <Link className="accent" style={{ fontSize: 12, padding: '3px 10px' }}
               to={tracesLink({ ...refObj, entry }, range, env, cluster)}>Traces →</Link>
-            <Link className="accent" style={{ fontSize: 12, padding: '3px 10px' }}
-              to={exploreLink({ ...refObj, entry }, range, 'p99', env, cluster)}
-              title="Open this route's p99 in Explore — charted from the metric rollups, where you can add dimensions or compare against another query.">
-              Explore →
-            </Link>
-            <Link className="accent" style={{ fontSize: 12, padding: '3px 10px' }}
-              to={serviceHref(refObj.service, { range, env })}>Service →</Link>
           </span>
         </div>
 
@@ -332,13 +329,7 @@ export default function EndpointDetailPage() {
           <>
             <MetricREDStrip res={httpRes} windowSec={windowSec} compare={compare} family={family}
               onToggleCompare={() => setCompare(!compare)} />
-            {/* v0.10.1352 (operatör bildirimi) — şerit + grafikler sekmenin
-                PromQL'i (VM), alt bölümler span türevli. v0.10.1350 metni
-                "satırın kovaları" diyordu; o satır artık okunmuyor. */}
-            <div className="badge b-info" style={{ marginTop: -6, marginBottom: 12 }}
-              title="Metrik kipi: RED karoları ve grafikler Service → HTTP/GRPC sekmesinin aynı sorguları (/api/metrics/promql, VictoriaMetrics), bu route'a süzülü; karolar gerçek pencere değerleri (increase[pencere]). Histogram, durum kırılımı, çağıranlar ve trace bölümleri span türevlidir">
-              Tüm RED karoları ve grafikler: VictoriaMetrics (HTTP/GRPC sekmesiyle aynı sorgular{family.kind === 'grpc' ? `, gRPC ailesi ${family.names.count.replace(/_count$/, '_*')} — rpc_service=${refObj.method ?? '*'}, rpc_method=${refObj.path}` /* v0.10.1429 */ : refObj.sig ? ', route şekle göre regex' : refObj.method ? `, method=${refObj.method}` /* v0.10.1359 */ : ', tüm methodlar'}) · histogram, durum kırılımı, çağıranlar ve trace bölümleri span türevli
-            </div>
+            {/* v0.10.2210 (operatör) — "Tüm RED karoları…" kaynak notu kalktı; kaynak başlıktaki Kaynak seçicisinde. */}
             {/* v0.10.1377 — env/cluster süzgecinin metrikteki hâli (uygulandı / uygulanamadı / çözülemedi). */}
             <HttpEnvScopeBand view={envScope} style={{ display: 'block', marginTop: -6, marginBottom: 12 }} />
           </>
@@ -492,7 +483,8 @@ function REDStrip({ row, pending, compare, onToggleCompare }: {
         </StatTile>
         <StatTile label="Errors" tone={tone}>
           {fmtNum(row.errors)}
-          {compare && <TrendDelta cur={row.errors} prior={row.priorErrors} kind="lowerBetter" />}
+          {/* v0.10.2210 (operatör) — "listede yeni" rozeti yok: önceki 0 / yoksa delta çizilmez. */}
+          {compare && <TrendDelta cur={row.errors} prior={row.priorErrors || undefined} kind="lowerBetter" />}
         </StatTile>
         <StatTile label="Err rate" tone={tone}>{row.errorRate.toFixed(2)}%</StatTile>
         {row.reqPerMin != null && <StatTile label="Req/min">{row.reqPerMin.toFixed(1)}</StatTile>}
