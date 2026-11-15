@@ -46,7 +46,7 @@ import { MLSignalEvidence } from './MLSignalEvidence';
 import { groupStatusText, type MLGroupRow } from './mlGroupRows';
 import { evidenceSource, groupGateLine, groupProblemChip, headerOperation, latestGroupDecision, latestSvcShadow, svcGateLine } from './mlGroupDetail';
 import { MLSourceChart } from './MLSourceChart';
-import { MLRecordChart } from './MLRecordChart';
+import { MLRecordCard } from './MLRecordCard';
 import { recordUsable } from './mlRecord';
 import { useT } from '@/lib/i18n';
 import { contributorLine, leadFromSnapshot, parseLogsLink, type Contributors } from './mlSourcePanel';
@@ -158,6 +158,22 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   if (q.error || !card) {
     return <Empty icon={<SearchX size={28} strokeWidth={1.5} />} title="Bu olay bulunamadı">Olay kaydı 30, olay anı kaydı 120 gün saklanır; daha eski olaylar listeden de düşer.</Empty>;
   }
+  // v0.10.2248 (Dilim D) — geçerli olay kaydı: mockup "ÖNERİLEN" kartı (tek grafik
+  // MLRecordChart, metin kayıttan); kayıtsız olay aşağıdaki eski kartı çizer.
+  if (rec) {
+    const recSample = snap ? replaySamples(snap).find(x => x.traceId) : undefined;
+    return (
+      <div data-testid="ml-replay" className="flex flex-col">
+        <MLRecordCard rec={rec} actions={<>
+          <div className="mb-2 flex flex-wrap gap-2" data-testid="ml-where">
+            {card.header.kind !== 'metric' && recSample?.traceId && <Chip link={{ label: t('mlRecord.card.sampleTrace'), href: traceHref(recSample.traceId) }} />}
+            <Chip link={{ label: t('mlRecord.card.serviceLink'), href: serviceHref(rec.subject.service) }} />
+          </div>
+          <MLEventActions id={id} card={card} verdict={q.data?.verdict ?? null} localized />
+        </>} />
+      </div>
+    );
+  }
   const h = card.header;
   const tc = q.data?.course?.trace; // v0.10.1870 — endpoint'li trace olayı: ısı haritası (teknik ayrıntıda)
   const lc = q.data?.course?.log; // v0.10.1871 — log olayı: yığılı çubuk + gölge
@@ -203,8 +219,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
       )}
       <Section id="ml-course" title="Olayın seyri">
         {/* v0.10.2033 — servis sayfasındaki panelin aynısı (mlSourcePanel); yoksa kayıtlı 5 dakikalık görüntü. */}
-        {/* v0.10.2247 (Dilim G, K4 A) — geçerli olay kaydı varsa TEK grafik kayıttaki seriden (gerçek kova boyu); yoksa eski yol. */}
-        {rec ? <MLRecordChart rec={rec} /> : chartLead ? (
+        {chartLead ? (
           <MLSourceChart lead={chartLead} open={running} onContributors={setContrib} fallback={snapshotView}
             onPeak={setPeak} direction={card.value?.direction}
             logsLink={card.whereToLook.find(l => parseLogsLink(l.href))?.href} />
@@ -259,13 +274,12 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
             ]} />
           </div>
           {/* v0.10.2032 — tam görünüm (seriler + alarm sınırları + oynatma) burada; özetteki grafik sade. */}
-          {/* v0.10.2247 (G, ölçüt 7) — kayıtlı olayda sayfada tek grafik: tam oynatıcı ve ısı haritası yok. */}
-          {snap && !lc && !rec && (
+          {snap && !lc && (
             <div data-testid="ml-replay-full">
               <MLEventPlayer snap={snap} play={card.play} autoPlay={autoPlay} />
             </div>
           )}
-          {tc && !rec && <MLTraceCourse tc={tc} cursorSec={null} />}
+          {tc && <MLTraceCourse tc={tc} cursorSec={null} />}
           <MLSignalEvidence id={id} signal={h.kind} />
           {snap ? <MLEvidence snap={snap} /> : <p className="text-sm text-muted-foreground">Olay anı kaydı yok; örnek satır gösterilemiyor.</p>}
           <div data-testid="ml-context"><MLContext snap={snap} related={q.data?.related ?? []} /></div>
@@ -281,7 +295,11 @@ function MLTraceCourse({ tc, cursorSec }: { tc: TraceCourse; cursorSec: number |
   return tc.view === 'dots' ? <MLTraceDots tc={tc} cursorSec={cursorSec} /> : <MLTraceHeatmap tc={tc} cursorSec={cursorSec} />;
 }
 
-function MLEventActions({ id, card, verdict }: { id: string; card: ExplainCard; verdict: MLReplayVerdict | null }) {
+// localized (v0.10.2248): kayıtlı kartta metinler i18n'den (EN/TR); eski kart Türkçe kalır.
+// Oylar yalnız etiket/karne içindir; hiçbir çalışma zamanı kararını sürmez (K3).
+function MLEventActions({ id, card, verdict, localized = false }: { id: string; card: ExplainCard; verdict: MLReplayVerdict | null; localized?: boolean }) {
+  const tr = useT();
+  const L = (key: string, fallback: string) => (localized ? tr(key) : fallback);
   const qc = useQueryClient();
   const role = useAuthRole();
   const canWrite = role === 'admin' || role === 'editor';
@@ -296,14 +314,14 @@ function MLEventActions({ id, card, verdict }: { id: string; card: ExplainCard; 
       setBusy(false);
     }
   };
-  const why = canWrite ? undefined : 'Etiketlemek için editör yetkisi gerekir';
+  const why = canWrite ? undefined : L('mlRecord.vote.needEditor', 'Etiketlemek için editör yetkisi gerekir');
   return (
     <div className="rounded-md border border-border bg-card px-3 py-2.5">
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" disabled={busy || !canWrite} title={why} onClick={() => { void put('anomaly'); }}>Gerçek anomali</Button>
-        <Button size="sm" variant="outline" disabled={busy || !canWrite} title={why} onClick={() => { void put('not_anomaly'); }}>Sorun değil</Button>
-        {verdict && <Badge variant="outline" data-testid="ml-verdict">{verdict.verdict === 'anomaly' ? 'gerçek ✓' : 'değil ✗'}{verdict.by ? ` · ${verdict.by}` : ''}</Badge>}
-        <span className="text-xs text-muted-foreground">Etiketiniz bu dedektörün isabet ölçüsüne (ML karnesi) girer.</span>
+        <Button size="sm" disabled={busy || !canWrite} title={why} onClick={() => { void put('anomaly'); }}>{L('mlRecord.vote.real', 'Gerçek anomali')}</Button>
+        <Button size="sm" variant="outline" disabled={busy || !canWrite} title={why} onClick={() => { void put('not_anomaly'); }}>{L('mlRecord.vote.notIssue', 'Sorun değil')}</Button>
+        {verdict && <Badge variant="outline" data-testid="ml-verdict">{verdict.verdict === 'anomaly' ? L('mlRecord.vote.isReal', 'gerçek ✓') : L('mlRecord.vote.isNot', 'değil ✗')}{verdict.by ? ` · ${verdict.by}` : ''}</Badge>}
+        <span className="text-xs text-muted-foreground">{L('mlRecord.vote.note', 'Etiketiniz bu dedektörün isabet ölçüsüne (ML karnesi) girer.')}</span>
       </div>
     </div>
   );

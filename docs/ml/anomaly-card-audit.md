@@ -605,6 +605,17 @@ seri (render'da sorgu), 1 dk gecikme kararı (K7), seyrek uçta yavaş çağrı 
 (grafikte sapma yok / servis etkisi yok / beklenen / diğer + serbest metin). *Risk:* orta; neden alanı yalnız insan/eval incelemesi içindir,
 `Labels.Feedback`'e **girmez** (B14, K3). *Göç:* `anomaly_verdicts`'e `reason LowCardinality(String) DEFAULT ''` (güvenli sınıf; RMT tam satır:
 `UpsertAnomalyVerdict` + okuyucuları taşır) — ya da DDL'siz `note` öneki (önerilmez: sayılamaz). *Test:* şablon golden; kanıt ≠ başlık pini; neden zorunluluğu.
+✅ **gemilendi v0.10.2248** (FE `anomalies/MLRecordCard.tsx`, `mlRecordText.ts`; `MLReplaySheet` kayıtlı olayda yeni kartı çizer,
+kayıtsız olay eski kart). Mockup "ÖNERİLEN" sırası: servis · operasyon + durum + sınıf çipi → düz dilde cümle (tespit anında / sürerken
+"şu an" değeri, hacim, beklenen) + zaman satırı (başlangıç, tespit, banda dönüş, adlandırılmış tepe/dip) → G grafiği → ölçülen /
+beklenen (birimli; hacim kaydında yan seriler önce → olay sırasında, ingest katı) → kanıt satırları (metin kayıt alanlarından FE'de,
+etiket bağımsız / aynı seri ailesi / bağlam, kaynak `series.source`/kanıt kaynağından, süzülmüş sayfaya bağlantı) → eylemler → kapalı
+teknik ayrıntı (yayın kapıları gölge notuyla + seri tanımı, bant, zamanlar, sınıf · yayın). `telemetry_volume` şablonu (C'den açık
+kalan): "<servis> istek başına span sayısı a değerinden b değerine çıktı (<tarih saat> itibarıyla). Hata oranı ve gecikme değişmedi.
+Servis etkisi yok; ingest hacmi k kat." — "değişmedi" yalnız etki kapısı "etki yok" derse; k = hacim şeridinin olay penceresi /
+öncesi ortalaması; istek hızı kayıtta olmadığından cümleye girmedi. Metinler i18n (EN + TR). Kritik yol yüzdesi cümlesi yok; oylar
+yalnız etiket. Yapılmayanlar: "Sorun değil" neden alanı (şema değişikliği gerektirir), liste satırı özeti, aday neden kanıtları
+(span-kind kayması, scope adı), canlı seri.
 
 **E — replay.** Fixture biçimi `internal/ml/testdata/replay/<id>.json` (seri + taban örnekleri + ayar özeti + beklenen `publish_state`/`class`/`onset_at`);
 yükleyici + negatif iddia; `make eval-ml` karnesi. Örnek 1: servis anomalisi **üretmez**, `telemetry_volume` `info` kaydı üretir, başlangıç =
