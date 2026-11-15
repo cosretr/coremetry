@@ -365,12 +365,12 @@ func (s *Server) getOtelServiceGraph(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// v0.8.264 (operator-reported): the hidden-pattern policy
-	// (v0.8.241, defaults kafka:log*/kafka:bsa*) was applied to
+	// (v0.8.241, system_settings "topology_hidden") was applied to
 	// /api/topology and /api/service-map but NOT here — and THIS
 	// endpoint feeds FocusedNeighborhood, i.e. both /topology's
 	// focused view AND the service-detail Topology tab. The
 	// config-server drops a kafka client into every project, so
-	// unfiltered kafka:log*/kafka:bsa* queue nodes drowned those
+	// unfiltered operator-hidden queue nodes drowned those
 	// graphs. Same matcher as the other two endpoints; digest in
 	// the cache key per the v0.5.187 rule.
 	// Neighborhood radius (v0.8.294) — server-side hops so the service-detail
@@ -457,7 +457,7 @@ func mergePriorGraphEdges(cur, prior []GraphEdge) {
 }
 
 // filterHiddenTopologyEdges drops every edge that touches a hidden
-// node (either endpoint). Pure so the kafka:log*/kafka:bsa* class of
+// node (either endpoint). Pure so the queue-node class of
 // operator-hidden noise is unit-testable without ClickHouse.
 func filterHiddenTopologyEdges(edges []chstore.ServiceTopologyEdge, patterns []string) []chstore.ServiceTopologyEdge {
 	if len(patterns) == 0 {

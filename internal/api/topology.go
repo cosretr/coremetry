@@ -246,17 +246,17 @@ type ServiceTopologyNode struct {
 }
 
 // ── Topology hidden patterns (v0.8.241, operator-requested) ────────────────
-// Nodes matching an operator-defined glob list ("kafka:log*",
-// "kafka:bsa*", …) never render in any topology view — a GLOBAL
-// policy, not a per-user toggle ("hiç gözükmesin"). Persisted under
-// system_settings "topology_hidden"; unset installs use the seeded
-// defaults below (the operator's two standing noise sources).
+// Nodes matching an operator-defined glob list ("kafka:noise*", …) never
+// render in any topology view — a GLOBAL policy, not a per-user toggle
+// ("hiç gözükmesin"). Persisted under system_settings "topology_hidden".
+// v0.10.2268: the code default is EMPTY; existing installs that never saved
+// a list get the previous default written once by topology_hidden_seed.go.
 
 type topologyHidden struct {
 	Patterns []string `json:"patterns"`
 }
 
-var defaultTopologyHiddenPatterns = []string{"kafka:log*", "kafka:bsa*"}
+var defaultTopologyHiddenPatterns = []string{}
 
 // topologyHiddenPatterns loads the persisted list; unset or corrupt →
 // defaults. One tiny FINAL read per topology request — the graph reads
@@ -279,7 +279,7 @@ func (s *Server) topologyHiddenPatterns(ctx context.Context) []string {
 // hiddenNodeMatcher compiles the glob list (*, ? wildcards) into one
 // predicate over a topology node identifier. The "queue:" prefix is
 // stripped before matching so patterns are written the way the UI
-// labels queue nodes ("kafka:log.orders"). Pure for tests.
+// labels queue nodes ("kafka:noise.orders"). Pure for tests.
 func hiddenNodeMatcher(patterns []string) func(string) bool {
 	res := make([]*regexp.Regexp, 0, len(patterns))
 	for _, p := range patterns {

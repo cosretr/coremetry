@@ -8433,7 +8433,7 @@ devam ediyordu — aynı DB-kör downstream modele gidiyordu.
 - Testler: `internal/api/service_context_neighbours_test.go` — `TestServiceContextNeighboursFromRollup` (callee'si sıfır
   + db/dış HTTP/kuyruk → snapshot Downstream'de üçü, etiket+sayı+hata; hub tavanı "+3 daha"; boş),
   `TestProblemExplainEvidenceListsDBAndExternalCallees` (`explainStoreSeam` ile uçtan uca `serviceCorrelationContext`:
-  callees db+ext+kuyruk, gizli desen `kafka:log*` süzülüyor, okuma hatası/boş → blok yok, pencere
+  callees db+ext+kuyruk, gizli desen süzülüyor, okuma hatası/boş → blok yok, pencere
   `[anchor-30m, anchor+5m]`). `chat_explain_registry_test` sahte yüzeyi `ReadServiceTopologyAggForFocus`'a geçti.
 
 ## 2026-10-20 — v0.10.1411 — CoSRE operasyon hatası: grup seçimi tüm açık gruplardan (yalnız en yeni 5 değil)
@@ -14408,3 +14408,10 @@ Operatör kararı: `DEFAULT_REFRESH_SEC` 60 → 300 (`lib/autoRefresh.ts`). Önc
 - `migrations/0016_drop_entity_seen_1m.sql` (MV `_local` → sarmalayıcı, `IF EXISTS … ON CLUSTER … SYNC`). 0011 düzenlenmedi; "K8s entity katmanı" Uygula'sı 0011'den sonra 0016'yı da koşar: taze kurulum 1m'i kurup hemen düşürür (sıralı migration), mevcut kurulumda Uygula 1m'i temizler.
 - Kayıtlardan (highVolumeTables / defaultShardPolicy / tablesWithoutTraceID), purge listesinden ve durum kartı nesne listesinden çıktı. 0011 rollback'i ve sihirbaz geri alması 1m DROP'larını tutar (IF EXISTS, zararsız).
 - Eski bir binary bu değişiklikten sonra boot ederse (tek düğüm / `cluster_name` set, `k8s_pod` kolonu var) 1m'i BOŞ olarak yeniden kurar ve yazmaya başlar; yeni binary bir sonraki boot'ta yine düşürür. Geri alma: 0011 ADIM 6'nın iki 1m ifadesi ya da eski binary nesneyi boş kurar; tarihçe geri gelmez.
+
+## 2026-11-16 — v0.10.2268 — Varsayılan gizli topoloji deseni kaynaktan çıktı
+
+- `internal/api/topology.go` kod varsayılanı boş. Desenler zaten `system_settings["topology_hidden"]`'da (v0.8.241, PUT `/api/topology/hidden`); yeni ayar / anahtar / işaret yok.
+- Süreklilik: `topology_hidden_seed.go` — worker'da lider kilidiyle (`topology-hidden-seed`), başarıya dek dakikada bir, sonra kilidi bırakır. Kayıt varsa dokunmaz (operatör değeri, boş liste dahil). Kayıt yoksa kurulum yaşına bakar: `system_settings FINAL` en eski kaydın son yazımı ≥ 24 sa önce → önceki varsayılanı yazar + system audit (`topology.hidden.seed`); değilse boş listeyi yazar (karar kalıcı, taze kurulum sonradan tohumlanmaz). Yaş okunamazsa hiçbir şey yazılmaz.
+- Önceki varsayılan değer yalnız bu göçün verisi olarak kaynakta kalır. Testler ve yorumlar nötr desenlere geçti.
+- Bilinen pencere: yeni binary'nin API pod'ları worker lideri tohumlamadan önce istek alırsa o kısa sürede (≤ bir tur) gizli düğümler görünebilir; tohumdan sonra önbellek anahtarı (desen özeti) değişir.

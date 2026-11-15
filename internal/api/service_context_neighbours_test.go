@@ -149,11 +149,11 @@ func TestProblemExplainEvidenceListsDBAndExternalCallees(t *testing.T) {
 			callers: []string{"edge-gateway (400 calls)"},
 		},
 		{
-			name: "Topology hidden patterns apply (default kafka:log*)",
+			name: "Topology hidden patterns apply (store'suz yolda kod varsayılanı)",
 			edges: append(ctxNeighbourEdges(), chstore.ServiceTopologyEdge{
-				ParentService: "orders-api", ChildNode: "queue:kafka:log.app", NodeKind: "queue", Protocol: "kafka", Calls: 5000}),
+				ParentService: "orders-api", ChildNode: "queue:kafka:noise.app", NodeKind: "queue", Protocol: "kafka", Calls: 5000}),
 			callees: []string{"oracle@db.example.test [database]"},
-			absent:  []string{"kafka:log.app"},
+			absent:  []string{"kafka:noise.app"},
 		},
 		{
 			name:    "read error → block omitted (best-effort), explain still built",
@@ -170,6 +170,10 @@ func TestProblemExplainEvidenceListsDBAndExternalCallees(t *testing.T) {
 			var from, to time.Time
 			explainStoreSeam = ncStore{edges: c.edges, err: c.err, from: &from, to: &to}
 			t.Cleanup(func() { explainStoreSeam = nil })
+			// v0.10.2268 — kod varsayılanı boş; gizleme yolunu nötr bir desenle sür.
+			prevHidden := defaultTopologyHiddenPatterns
+			defaultTopologyHiddenPatterns = []string{"kafka:noise*"}
+			t.Cleanup(func() { defaultTopologyHiddenPatterns = prevHidden })
 			s := &Server{}
 			got := s.serviceCorrelationContext(context.Background(), "orders-api", anchor)
 			if !from.Equal(anchor.Add(-30*time.Minute)) || !to.Equal(anchor.Add(5*time.Minute)) {

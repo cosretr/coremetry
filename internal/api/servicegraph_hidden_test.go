@@ -6,7 +6,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
-// v0.8.264 — operator-reported: kafka:log*/kafka:bsa* queue nodes
+// v0.8.264 — operator-reported: operator-hidden kafka queue nodes
 // (the config-server drops a kafka client into every project)
 // drowned the service-detail Topology tab and /topology's focused
 // view. Root cause: /api/servicegraph never applied the v0.8.241
@@ -18,15 +18,15 @@ func TestFilterHiddenTopologyEdges(t *testing.T) {
 	edge := func(parent, child string) chstore.ServiceTopologyEdge {
 		return chstore.ServiceTopologyEdge{ParentService: parent, ChildNode: child, Calls: 1}
 	}
-	patterns := []string{"kafka:log*", "kafka:bsa*"}
+	patterns := []string{"kafka:noise*", "kafka:chatter*"}
 
 	in := []chstore.ServiceTopologyEdge{
-		edge("shop-msg-smssender", "oracle@orabcore-prod"),              // kept
-		edge("shop-msg-smssender", "kafka:log.service.acm.stat"),        // hidden child
-		edge("kafka:bsa.kafka.core.cfg", "shop-customer-profile-prod"),  // hidden parent
-		edge("shop-framework-batchjob", "queue:kafka:bsa.log.core.svc"), // queue: prefix stripped → hidden
-		edge("shop-callcenter-core", "shop-bpm-workflow"),               // kept
-		edge("shop-loan-consumer", "kafka:payments.orders"),             // kafka but NOT log*/bsa* → kept
+		edge("shop-msg-smssender", "oracle@orabcore-prod"),                    // kept
+		edge("shop-msg-smssender", "kafka:noise.service.acm.stat"),            // hidden child
+		edge("kafka:chatter.kafka.core.cfg", "shop-customer-profile-prod"),    // hidden parent
+		edge("shop-framework-batchjob", "queue:kafka:chatter.noise.core.svc"), // queue: prefix stripped → hidden
+		edge("shop-callcenter-core", "shop-bpm-workflow"),                     // kept
+		edge("shop-loan-consumer", "kafka:payments.orders"),                   // kafka but NOT noise*/chatter* → kept
 	}
 
 	// No patterns → passthrough. Checked FIRST because the filter

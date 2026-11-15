@@ -62,7 +62,7 @@ package mcptools
 // GET /api/logs/timeseries. Her tool'da AÇIKÇA yazılı.
 //
 // BİLİNÇLİ SAPMA (get_topology): /topology sayfasının operatör-gizli
-// gürültü kalıpları (v0.8.241, varsayılan kafka:log*/kafka:bsa*)
+// gürültü kalıpları (v0.8.241, system_settings "topology_hidden")
 // UYGULANMIYOR. Kalıp yükleyici + matcher api paketinde yaşıyor
 // (topology.go: topologyHiddenPatterns/hiddenNodeMatcher) ve api →
 // mcptools import'u var, yani ters yön import DÖNGÜSÜ olur; matcher'ı
