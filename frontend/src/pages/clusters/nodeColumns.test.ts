@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ClusterNodeRow } from '@/lib/types';
 import {
   NODE_COLS, NODE_DEFAULT_HIDDEN, nodeStatus, nodePodsText, nodeCpuText, nodeMemText,
-  nodeRequestText, nodeAllocText,
+  nodeRequestText, nodeAllocText, nodeDiskText, nodeTaintText, nodeAgeText,
 } from './nodeColumns';
 
 // Clusters S6 (plan §0 D3): Nodes tablosu kolon seti, durum sözcüğü,
@@ -13,7 +13,7 @@ const row = (o: Partial<ClusterNodeRow>): ClusterNodeRow => ({ cluster: 'c1', no
 describe('Nodes kolonları (D3)', () => {
   it('kolon kimlikleri ve varsayılan görünür set sabit', () => {
     expect(NODE_COLS.map(c => c.id)).toEqual(
-      ['node', 'role', 'status', 'pods', 'cpu', 'mem', 'cluster', 'alloc', 'reqPct', 'limits', 'netIn', 'netOut', 'versions']);
+      ['node', 'role', 'status', 'pods', 'cpu', 'mem', 'cluster', 'alloc', 'reqPct', 'limits', 'netIn', 'netOut', 'versions', 'taints', 'disk', 'age']);
     expect(NODE_COLS.map(c => c.id).filter(id => !NODE_DEFAULT_HIDDEN.includes(id)))
       .toEqual(['node', 'role', 'status', 'pods', 'cpu', 'mem']);
   });
@@ -40,6 +40,13 @@ describe('Nodes kolonları (D3)', () => {
     expect(nodePodsText(row({}))).toBe('');
     expect(nodeAllocText(bare)).toBe('');
     expect(nodeRequestText(bare)).toBe('');
+  });
+
+  it('S13 probe hücreleri: disk / taint / yaş; seri yoksa boş', () => {
+    const now = Date.UTC(2026, 10, 15) ;
+    const r = row({ diskUsedPct: 83.4, taints: ['dedicated=infra:NoSchedule', 'x:NoExecute'], createdUnix: now / 1000 - 12 * 86400 });
+    expect([nodeDiskText(r), nodeTaintText(r), nodeAgeText(r, now)]).toEqual(['%83', 'dedicated=infra:NoSchedule, x:NoExecute', '12 gün']);
+    expect([nodeDiskText(row({})), nodeTaintText(row({})), nodeAgeText(row({}), now)]).toEqual(['', '', '']);
   });
 
   it('istek / ayrılabilir %100 üstünü kırpmaz (aşırı taahhüt)', () => {

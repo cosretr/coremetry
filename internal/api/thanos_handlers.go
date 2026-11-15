@@ -196,8 +196,11 @@ func (s *Server) getClusterPodDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	from, to := parseFromTo(r, time.Hour)
 	from, to, _ = clampThanosWindow(from, to)
-	key := fmt.Sprintf("cluster-pod-detail:%s:%s:%s:%s:%s",
-		name, namespace, pod, clusterCfgDigest(cfg), cacheBucket(from, to))
+	// v0.10.2182 (Clusters S13) — restarts=1: restart dikey işaretleri için +1
+	// range sorgusu (yalnız istemci restart>0 bildiğinde ister).
+	withRestarts := q.Get("restarts") == "1"
+	key := fmt.Sprintf("cluster-pod-detail:%s:%s:%s:%s:%s:%t",
+		name, namespace, pod, clusterCfgDigest(cfg), cacheBucket(from, to), withRestarts)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
 		qctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
@@ -205,10 +208,17 @@ func (s *Server) getClusterPodDetail(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{
+		out := map[string]any{
 			"cluster": name, "namespace": namespace, "pod": pod,
 			"trend": trend,
-		}, nil
+		}
+		if withRestarts {
+			// best-effort: seri yoksa alan yok, grafik işaretsiz çizilir.
+			if marks, err := s.thanos.PodRestartMarkers(qctx, cfg, namespace, pod, from, to); err == nil && len(marks) > 0 {
+				out["restarts"] = marks
+			}
+		}
+		return out, nil
 	})
 }
 

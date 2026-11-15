@@ -19,6 +19,8 @@ describe('pod durum sözcüğü', () => {
     expect(podStatusWord(pod({}))).toEqual({ word: 'Çalışıyor', tone: null });
     expect(podStatusWord(pod({ phase: 'Pending' })).tone).toBe('warn');
     expect(podStatusWord(pod({ phase: undefined })).word).toBe('');
+    // S13 — zamanlanamıyor (probe).
+    expect(podStatusWord(pod({ phase: 'Pending', unschedulable: true }))).toEqual({ word: 'Bekliyor · yer yok', tone: 'warn' });
   });
   it('restart hücresi nedenle; bilinmiyorsa boş', () => {
     expect(podRestartText(pod({ restarts: 7, lastTermReason: 'OOMKilled' }))).toBe('7 · bellek bitti');

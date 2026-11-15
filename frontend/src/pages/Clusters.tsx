@@ -51,6 +51,7 @@ import { TableViewBar } from '@/components/coremetry/TableViewBar';
 import {
   NODE_COLS, NODE_COMPACT, NODE_SORT_IDS, nodeStatus, nodePodsText, nodeCpuText, nodeMemText, nodeCpuPct,
   nodeMemPct, nodeAllocText, nodeRequestText, nodeLimitsText, nodeVersionText, nodeVersionTitle,
+  nodeTaintText, nodeDiskText, nodeAgeText,
 } from '@/pages/clusters/nodeColumns';
 import type { ClusterPodRow, ClusterNodeRow, ClusterNamespaceRow, ClusterDeploymentRow, ClusterSummary, TimeRange } from '@/lib/types';
 import { serviceHref } from '@/lib/serviceHref';
@@ -1120,6 +1121,9 @@ function nodeCellContent(r: ClusterNodeRow, col: string): ReactNode {
     case 'netIn': return dash(r.netInBps ? fmtBps(r.netInBps) : '');
     case 'netOut': return dash(r.netOutBps ? fmtBps(r.netOutBps) : '');
     case 'versions': return dash(nodeVersionText(r), nodeVersionTitle(r));
+    case 'taints': return dash(nodeTaintText(r));
+    case 'disk': return dash(nodeDiskText(r), 'kök dosya sistemi: / ya da /sysroot (dolu olanı)');
+    case 'age': return dash(nodeAgeText(r, Date.now()));
     default: return null;
   }
 }

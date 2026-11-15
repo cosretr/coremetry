@@ -56,9 +56,12 @@ export function ThanosTrendPanel({ cluster, namespace, pod, row, fromNs, toNs, o
   onZoomReset?: () => void;
 }) {
   const single = !!pod;
+  // v0.10.2182 (Clusters S13, plan §10.4) — restart dikey işaretleri yalnız
+  // pod satırı restart>0 dediğinde istenir (+1 range sorgu, probe'lu).
+  const wantRestarts = single && (row?.restarts ?? 0) > 0;
   const podQ = useQuery({
-    queryKey: ['cluster-pod-detail', cluster, namespace, pod, fromNs, toNs],
-    queryFn: () => api.clusterPodDetail(cluster, namespace, pod!, fromNs, toNs),
+    queryKey: ['cluster-pod-detail', cluster, namespace, pod, fromNs, toNs, wantRestarts],
+    queryFn: () => api.clusterPodDetail(cluster, namespace, pod!, fromNs, toNs, wantRestarts),
     staleTime: 60_000,
     enabled: single,
   });
@@ -84,14 +87,17 @@ export function ThanosTrendPanel({ cluster, namespace, pod, row, fromNs, toNs, o
     enabled: !!svc,
   });
   const deployMarkers: DeployMarker[] | undefined = useMemo(() => {
-    const ds = deploysQ.data;
-    if (!ds || ds.length === 0) return undefined;
-    return ds.map(d => ({
+    const out: DeployMarker[] = (deploysQ.data ?? []).map(d => ({
       timeUnixNs: d.timeUnixNs,
       label: d.version,
       description: `${d.service} deploy · ${d.version}`,
     }));
-  }, [deploysQ.data]);
+    // Restart işaretleri aynı dikey çizgi dilinde (veri yoksa çizilmez).
+    for (const ts of podQ.data?.restarts ?? []) {
+      out.push({ timeUnixNs: ts * 1e9, label: 'restart', description: 'konteyner yeniden başladı' });
+    }
+    return out.length > 0 ? out : undefined;
+  }, [deploysQ.data, podQ.data]);
 
   const { cpuSeries, memSeries, totalPods } = useMemo(() => {
     if (single) {

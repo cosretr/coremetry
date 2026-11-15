@@ -109,17 +109,17 @@ func TestMCPServicePodsHealthcheckExtras(t *testing.T) {
 	if !cl.AlertsOK || len(cl.Alerts) != 1 || cl.Alerts[0].Name != "KubePodCrashLooping" {
 		t.Fatalf("alert: %+v", cl.Alerts)
 	}
-	// Cluster başına sorgu sayısı: PodMetrics 12 (v0.10.2176 Clusters S8: + pod node) + restart artışı 1 + bekleme
-	// sebebi 1 + replika 1 + node 1 + alert 1 = 17 (sabit, pod sayısından bağımsız).
-	if n := len(f.queries); n != 17 {
-		t.Fatalf("cluster başına 17 sorgu beklenir, got %d:\n%s", n, strings.Join(f.queries, "\n"))
+	// Cluster başına sorgu sayısı: PodMetrics 13 (v0.10.2176 Clusters S8: + pod node; v0.10.2182 S13: + unschedulable) + restart artışı 1 + bekleme
+	// sebebi 1 + replika 1 + node 1 + alert 1 = 18 (sabit, pod sayısından bağımsız).
+	if n := len(f.queries); n != 18 {
+		t.Fatalf("cluster başına 18 sorgu beklenir, got %d:\n%s", n, strings.Join(f.queries, "\n"))
 	}
-	// Seçenekler kapalıyken (tarama) ek sorgu YOK: 14.
+	// Seçenekler kapalıyken (tarama) ek sorgu YOK: 15.
 	f.queries = nil
 	if _, err := s.mcpServicePods(context.Background(), "orders-api", nil, to.Add(-15*time.Minute), to, mcptools.ServicePodsOpts{WaitingReasons: true}); err != nil {
 		t.Fatal(err)
 	}
-	if n := len(f.queries); n != 14 {
+	if n := len(f.queries); n != 15 {
 		t.Fatalf("tarama yolu değişmemeli (13 sorgu), got %d", n)
 	}
 }
@@ -171,15 +171,15 @@ func TestMCPServicePodsJBossDS(t *testing.T) {
 				cl.DS[0].WaitInc == nil || *cl.DS[0].WaitInc != 2 {
 				t.Fatalf("havuz: %+v", cl.DS)
 			}
-			// 14 (pod) + keşif 1 + değer 2 = 17.
-			if n := len(f.queries); n != 17 {
-				t.Fatalf("sorgu sayısı %d, want 17", n)
+			// 15 (pod) + keşif 1 + değer 2 = 18.
+			if n := len(f.queries); n != 18 {
+				t.Fatalf("sorgu sayısı %d, want 18", n)
 			}
 			f.queries = nil
 			if _, err := s.mcpServicePods(context.Background(), "orders-api", nil, to.Add(-15*time.Minute), to, opt); err != nil {
 				t.Fatal(err)
 			}
-			if d := count(f, "count by (__name__)"); d != 0 || len(f.queries) != 16 {
+			if d := count(f, "count by (__name__)"); d != 0 || len(f.queries) != 17 {
 				t.Fatalf("ikinci koşuda keşif önbellekten gelmeli: keşif=%d toplam=%d", d, len(f.queries))
 			}
 		})

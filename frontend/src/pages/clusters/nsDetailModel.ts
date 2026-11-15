@@ -29,8 +29,10 @@ const PHASE_WORD: Record<string, { word: string; tone: Tone }> = {
 };
 
 /** Pod durumu tek ifade: bekleme sebebi fazı ezer. Faz yoksa ''. */
-export function podStatusWord(r: Pick<ClusterPodRow, 'phase'>, waiting?: string): { word: string; tone: Tone } {
+export function podStatusWord(r: Pick<ClusterPodRow, 'phase' | 'unschedulable'>, waiting?: string): { word: string; tone: Tone } {
   if (waiting) return WAITING_WORD[waiting] ?? { word: `Bekliyor · ${waiting}`, tone: 'warn' };
+  // v0.10.2182 (Clusters S13) — kube_pod_status_unschedulable (probe): mockup "Bekliyor · yer yok".
+  if (r.unschedulable) return { word: 'Bekliyor · yer yok', tone: 'warn' };
   return PHASE_WORD[r.phase ?? ''] ?? { word: r.phase ?? '', tone: null };
 }
 

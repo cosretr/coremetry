@@ -126,6 +126,12 @@ func promqlTemplateTable() map[string]string {
 		"nsRestarts24hQuery": nsRestarts24hQuery("ns"),
 		"podWaitingNsQuery":  PodWaitingReasonQuery("ns", ""),
 		"podNodeQuery":       PodNodeQuery("", ""),
+		// v0.10.2182 (Clusters S13) — probe'lu ekler.
+		"nodeDiskUsedQuery":      nodeDiskUsedQuery(),
+		"nodeTaintQuery":         nodeTaintQuery(),
+		"nodeCreatedQuery":       nodeCreatedQuery(),
+		"podUnschedulableQuery":  podUnschedulableQuery("", ""),
+		"podRestartChangesQuery": podRestartChangesQuery("ns", "p", 60),
 	}
 }
 

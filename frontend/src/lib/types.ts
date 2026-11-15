@@ -2493,6 +2493,8 @@ export interface ClusterPodRow {
   lastTermReason?: string;
   // v0.10.2176 (Clusters S8) — pod'un node'u (kube_pod_info); yok = bilinmiyor / atanmadı.
   node?: string;
+  // v0.10.2182 (Clusters S13) — zamanlanamıyor (probe; yok = false / bilinmiyor).
+  unschedulable?: boolean;
 }
 // v0.9.3 — multi-pod trend serisi (top-10, sunucu keser).
 export interface ClusterPodSeriesTrend {
@@ -2560,6 +2562,12 @@ export interface ClusterNodeRow {
   osImage?: string;
   kernelVersion?: string;
   containerRuntime?: string;
+  // v0.10.2182 (Clusters S13) — probe'lu; yok = seri yok.
+  /** `/` ya da `/sysroot`un dolu olanının kullanılan yüzdesi. */
+  diskUsedPct?: number;
+  /** "key=value:effect" */
+  taints?: string[];
+  createdUnix?: number;
 }
 export interface ClusterNodesResponse {
   cluster: string;
@@ -2735,6 +2743,8 @@ export interface ClusterPodDetail {
   namespace: string;
   pod: string;
   trend: ClusterPodTrendPoint[] | null;
+  /** v0.10.2182 (Clusters S13) — ?restarts=1 ile: yeniden başlamanın görüldüğü kova anları (unix sn). */
+  restarts?: number[];
 }
 
 // External Kibana deep-link config (v0.5.236). Operator-curated

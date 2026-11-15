@@ -115,9 +115,24 @@ export const NODE_COLS: ColumnDef<ClusterNodeRow>[] = [
   { id: 'netIn',    label: 'Net in',  sortValue: r => r.netInBps ?? 0, numeric: true, width: 90 },
   { id: 'netOut',   label: 'Net out', sortValue: r => r.netOutBps ?? 0, numeric: true, width: 90 },
   { id: 'versions', label: 'Kubelet', sortValue: r => r.kubeletVersion ?? '', naturalDir: 'asc', width: 130, tone: () => 'muted' },
+  // v0.10.2182 (Clusters S13) — probe'lu; seri yoksa hücre "—".
+  { id: 'taints',   label: 'Taints',  sortValue: r => (r.taints ?? []).join(','), naturalDir: 'asc', width: 200 },
+  { id: 'disk',     label: 'Disk',    sortValue: r => r.diskUsedPct ?? -1, numeric: true, width: 80,
+    tone: r => usageCellTone(r.diskUsedPct ?? null) },
+  { id: 'age',      label: 'Age',     sortValue: r => (r.createdUnix ? -r.createdUnix : 1), numeric: true, width: 90 },
 ];
 
 /** D3 varsayılanı: yalnız ilk altı kolon; gerisi "Tüm kolonlar". */
-export const NODE_DEFAULT_HIDDEN = ['cluster', 'alloc', 'reqPct', 'limits', 'netIn', 'netOut', 'versions'];
+export const NODE_DEFAULT_HIDDEN = ['cluster', 'alloc', 'reqPct', 'limits', 'netIn', 'netOut', 'versions', 'taints', 'disk', 'age'];
+
+/** Disk "%83" / taint listesi / yaş ("12 gün"); seri yoksa ''. */
+export const nodeDiskText = (r: ClusterNodeRow): string => (r.diskUsedPct ? `%${Math.round(r.diskUsedPct)}` : '');
+export const nodeTaintText = (r: ClusterNodeRow): string => (r.taints ?? []).join(', ');
+export function nodeAgeText(r: ClusterNodeRow, nowMs: number): string {
+  if (!r.createdUnix) return '';
+  const days = Math.floor((nowMs / 1000 - r.createdUnix) / 86400);
+  if (days < 0) return '';
+  return days >= 1 ? `${days} gün` : `${Math.max(1, Math.floor((nowMs / 1000 - r.createdUnix) / 3600))} saat`;
+}
 export const NODE_SORT_IDS: readonly string[] = NODE_COLS.map(c => c.id);
 export const NODE_COMPACT: ColumnModel = { v: 1, order: NODE_COLS.map(c => c.id), hidden: NODE_DEFAULT_HIDDEN, sig: 'clusternodes-compact' };

@@ -41,6 +41,8 @@ type nodeExtra struct {
 	podCapacity                             int
 	ready                                   string
 	pressure                                []string
+	taints                                  []string // v0.10.2182 (S13) "key=value:effect"
+	created                                 int64    // v0.10.2182 (S13) kube_node_created (unix sn)
 }
 
 // nodeInfoLabels — kube_node_info'nun zaten çekilen etiketleri (0 ek sorgu).
@@ -166,6 +168,21 @@ func (s *Service) nodeExtras(ctx context.Context, c ClusterConfig) map[string]*n
 		{nodeAllocatableQuery(), pairs(func(e *nodeExtra, p nodeResPair) { e.allocatable = p })},
 		{nodeRequestsQuery(), pairs(func(e *nodeExtra, p nodeResPair) { e.requests = p })},
 		{nodeLimitsQuery(), pairs(func(e *nodeExtra, p nodeResPair) { e.limits = p })},
+		// v0.10.2182 (Clusters S13) — probe'lu; seri yoksa alan boş.
+		{nodeTaintQuery(), func(series []promSeries) {
+			for node, list := range nodeTaints(series) {
+				get(node).taints = list
+			}
+		}},
+		{nodeCreatedQuery(), func(series []promSeries) {
+			for _, ser := range series {
+				if node := ser.Metric["node"]; node != "" {
+					if v, ok := sampleValue(ser.Value); ok && v > 0 {
+						get(node).created = int64(v)
+					}
+				}
+			}
+		}},
 	}
 	for _, st := range steps {
 		if ctx.Err() != nil {
@@ -201,4 +218,5 @@ func applyNodeExtra(row *NodeRow, e *nodeExtra, info nodeInfoLabels, neCores, ne
 	row.CPURequestCores, row.MemRequestBytes = e.requests.cpu, e.requests.mem
 	row.CPULimitCores, row.MemLimitBytes = e.limits.cpu, e.limits.mem
 	row.Ready, row.Pressure = e.ready, e.pressure
+	row.Taints, row.CreatedUnix = e.taints, e.created
 }

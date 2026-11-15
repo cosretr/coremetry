@@ -206,6 +206,9 @@ type PodRow struct {
 	// v0.10.2176 (Clusters S8, plan §9.3) — pod'un zamanlandığı node
 	// (kube_pod_info, best-effort). Boş = KSM yok ya da henüz atanmadı.
 	Node string `json:"node,omitempty"`
+	// v0.10.2182 (Clusters S13) — zamanlanamıyor (kube_pod_status_unschedulable,
+	// best-effort probe; seri yoksa false). Namespace detayında "Bekliyor · yer yok".
+	Unschedulable bool `json:"unschedulable,omitempty"`
 }
 
 // termReasonRank — son-sonlanma sebeplerinin kötülük sırası
@@ -751,6 +754,13 @@ func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string)
 		}
 	}
 
+	unschedBy := map[string]bool{}
+	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {podUnschedulableQuery(c.NamespaceFilter, podRe)}}); err == nil {
+		for _, ser := range series {
+			unschedBy[ser.Metric["namespace"]+"\x00"+ser.Metric["pod"]] = true
+		}
+	}
+
 	out := make([]PodRow, 0, len(byKey))
 	emitted := map[string]bool{}
 	for k, a := range byKey {
@@ -793,6 +803,7 @@ func (s *Service) PodMetrics(ctx context.Context, c ClusterConfig, podRe string)
 	out = appendGhostPods(out, c.Name, emitted, phaseBy, restartBy, reasonBy)
 	for i := range out {
 		out[i].Node = nodeBy[out[i].Namespace+"\x00"+out[i].Pod]
+		out[i].Unschedulable = unschedBy[out[i].Namespace+"\x00"+out[i].Pod]
 	}
 	return out, truncated, nil
 }
@@ -1330,6 +1341,12 @@ type NodeRow struct {
 	OSImage          string `json:"osImage,omitempty"`
 	KernelVersion    string `json:"kernelVersion,omitempty"`
 	ContainerRuntime string `json:"containerRuntime,omitempty"`
+	// v0.10.2182 (Clusters S13) — probe'lu ekler; hepsi best-effort, boş =
+	// seri yok. Disk: `/` ve `/sysroot` bağlama noktalarının DOLU olanı
+	// (operatör kararı 2026-11-15), node_exporter instance'ından.
+	DiskUsedPct float64  `json:"diskUsedPct,omitempty"`
+	Taints      []string `json:"taints,omitempty"`
+	CreatedUnix int64    `json:"createdUnix,omitempty"`
 }
 
 // instanceHost — "10.0.1.5:9100" → "10.0.1.5" (kube_node_info
@@ -1358,7 +1375,7 @@ func instanceHost(inst string) string {
 // v0.10.2168'in kapasite ailesiyle (6 sorgu, nodeExtras) bugün 15–16;
 // hepsi SIRALI ve node sayısından bağımsız.
 func (s *Service) NodeMetrics(ctx context.Context, c ClusterConfig) ([]NodeRow, error) {
-	type acc struct{ cpuUsed, memTotal, memAvail, cores, netIn, netOut float64 }
+	type acc struct{ cpuUsed, memTotal, memAvail, cores, netIn, netOut, disk float64 }
 	byInst := map[string]*acc{}
 	get := func(m map[string]string) *acc {
 		k := m["instance"]
@@ -1445,6 +1462,18 @@ func (s *Service) NodeMetrics(ctx context.Context, c ClusterConfig) ([]NodeRow, 
 		}
 	}
 
+	// v0.10.2182 (Clusters S13) — best-effort disk doluluğu (instance anahtarlı;
+	// yalnız zaten bilinen instance'lara yazılır, gürültü satırı açmaz).
+	if series, err := s.doQuery(ctx, c, "/api/v1/query", url.Values{"query": {nodeDiskUsedQuery()}}); err == nil {
+		for _, ser := range series {
+			if a := byInst[ser.Metric["instance"]]; a != nil {
+				if v, ok := sampleValue(ser.Value); ok {
+					a.disk = clampPct(v * 100)
+				}
+			}
+		}
+	}
+
 	// Best-effort: node başına pod sayısı (node adı anahtarlı).
 	podsByNode := s.nodePodCounts(ctx, c)
 
@@ -1464,7 +1493,7 @@ func (s *Service) NodeMetrics(ctx context.Context, c ClusterConfig) ([]NodeRow, 
 			name = pretty
 		}
 		row := NodeRow{Cluster: c.Name, Node: name, CPUCores: a.cpuUsed,
-			NetInBps: a.netIn, NetOutBps: a.netOut}
+			NetInBps: a.netIn, NetOutBps: a.netOut, DiskUsedPct: a.disk}
 		if a.memTotal > 0 {
 			row.MemBytes = a.memTotal - a.memAvail
 			row.MemPct = clampPct(row.MemBytes / a.memTotal * 100)

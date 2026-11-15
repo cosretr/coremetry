@@ -2356,9 +2356,11 @@ export const api = {
   clusterPods: (cluster: string, podRe?: string) =>
     get<ClusterPodsResponse>(`/api/clusters/pods?cluster=${encodeURIComponent(cluster)}` +
       (podRe ? `&podRe=${encodeURIComponent(podRe)}` : '')),
-  clusterPodDetail: (cluster: string, namespace: string, pod: string, fromNs: number, toNs: number) =>
+  // v0.10.2182 (Clusters S13) — restarts: restart dikey işaretleri (+1 range sorgu; yalnız restart>0).
+  clusterPodDetail: (cluster: string, namespace: string, pod: string, fromNs: number, toNs: number, restarts = false) =>
     get<ClusterPodDetail>(`/api/clusters/pods/detail?cluster=${encodeURIComponent(cluster)}` +
-      `&namespace=${encodeURIComponent(namespace)}&pod=${encodeURIComponent(pod)}&from=${fromNs}&to=${toNs}`),
+      `&namespace=${encodeURIComponent(namespace)}&pod=${encodeURIComponent(pod)}&from=${fromNs}&to=${toNs}` +
+      (restarts ? '&restarts=1' : '')),
   // UI-managed logstore backend (v0.8.232, admin). Test builds +
   // pings a candidate config WITHOUT touching the live backend —
   // the response carries the real ES error for the operator.

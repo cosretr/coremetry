@@ -58,6 +58,11 @@ probe 'count(kube_node_status_condition)'         # Status sözcüğü (Ready / 
 probe 'count(kube_pod_container_resource_requests)'  # istek toplamları (node + namespace)
 probe 'count(kube_pod_container_status_waiting_reason)'  # pod durum sözcüğü
 probe 'count(kube_pod_info{node!=""})'            # Pod'lar tablosunda Node
+# v0.10.2182 (Clusters S13) — probe'lu ekler (yoksa "—" / işaret yok):
+probe 'count(kube_node_spec_taint)'               # Nodes "Tüm kolonlar": Taints
+probe 'count(kube_node_created)'                  # Nodes "Tüm kolonlar": Age
+probe 'count(node_filesystem_size_bytes{mountpoint=~"/|/sysroot"})'  # Disk (dolu olanı)
+probe 'count(kube_pod_status_unschedulable)'      # "Bekliyor · yer yok"
 ```
 
 Okuma: `"status":"success"` + sıfırdan büyük değer = eksen hazır.
