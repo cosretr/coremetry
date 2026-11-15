@@ -8,6 +8,8 @@ package api
 // Ad eşitliği yalnız resolver'ın kendi son çare yedeğinde.
 // v0.10.2240 (S5): servis / db / queue / ext için calls kenarları (çağırdıkları
 // + çağıranlar; kalıcı katman, iki sınırlı okuma).
+// v0.10.2260 (S6 parça 1): servis → host'lar, host → servisler ("şimdi" canlı
+// blob'dan, geçmiş anda kalıcı host→svc runs; tek sınırlı okuma).
 //
 // GET /api/entity/neighbours?id=<entity id>&at=<RFC3339|unix>  viewer, 30 s
 
@@ -63,6 +65,18 @@ func (s *Server) entityNeighboursAt(ctx context.Context, c mcptools.EntityCandid
 		}
 		if cerr := fillNeighbourCalls(ctx, res, out, entity.ServiceID(c.Name), at); err == nil {
 			err = cerr
+		}
+		hosts, herr := res.ServiceHosts(ctx, c.Name, at)
+		out.Hosts = hosts
+		if err == nil {
+			err = herr
+		}
+		return out, err
+	case entity.TypeHost:
+		svcs, err := res.HostServices(ctx, c.Name, at)
+		out.Services = svcs
+		if len(svcs) == 0 {
+			out.Note = "host'ta servis bilinmiyor — son 1 saatte span görülmedi ya da host kalıcı katmana terfi etmedi (≥ 24 sa kesintisiz görülme)"
 		}
 		return out, err
 	case entity.TypeDatabase, entity.TypeQueue, entity.TypeExternal:

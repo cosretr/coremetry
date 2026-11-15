@@ -37,3 +37,23 @@ func TestFoldExtCallEdges(t *testing.T) {
 		t.Fatalf("katlama: %+v", out)
 	}
 }
+
+// v0.10.2260 (S6 parça 1) — host kanıt okuması: MV, servis öneki, yalnız
+// namespace'siz satır, zaman sınırlı, LIMIT + max_execution_time; ham spans yok.
+func TestEntityHostProofSQLShape(t *testing.T) {
+	for _, want := range []string{
+		"FROM entity_seen_5m", "service_name IN (?)", "k8s_namespace = ''", "k8s_pod IN (?)",
+		"time_bucket >= toStartOfFiveMinute(?)", "time_bucket <= now()", "LIMIT 1000", "max_execution_time = 10",
+	} {
+		if !strings.Contains(entityHostProofSQL, want) {
+			t.Errorf("SQL %q içermiyor", want)
+		}
+	}
+	if strings.Contains(entityHostProofSQL, "FROM spans") || strings.Contains(entityHostProofSQL, "entity_seen_1m") {
+		t.Error("ham spans / entity_seen_1m okunmamalı")
+	}
+	names, svcs := hostProofArgs([]entity.HostKey{{Name: "node-a-01", Service: "checkout-api"}, {Name: "node-a-01", Service: "orders-api"}, {Name: "", Service: "x"}})
+	if len(names) != 1 || len(svcs) != 2 {
+		t.Fatalf("argümanlar: %v %v", names, svcs)
+	}
+}

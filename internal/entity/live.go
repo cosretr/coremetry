@@ -60,12 +60,27 @@ type LivePod struct {
 	LastSeen     int64         `json:"l,omitempty"` // span son görülme (unix sn)
 }
 
+// LiveHost — v0.10.2260 (S6 parça 1): K8s dışı host adayı (yalnız
+// HostClusterID blob'unda). Stable: kalıcı katmana terfi etti mi (≥ 24 sa
+// kesintisiz görülme, hosts.go); terfi etmemiş aday YALNIZ burada.
+type LiveHost struct {
+	Name         string        `json:"n"`
+	Services     []LiveService `json:"s,omitempty"` // span payı azalan
+	ClusterValue string        `json:"cv,omitempty"`
+	Source       string        `json:"src,omitempty"`
+	Stable       bool          `json:"st,omitempty"`
+	FirstSeen    int64         `json:"f,omitempty"`
+	LastSeen     int64         `json:"l,omitempty"`
+}
+
 // LiveSnapshot — bir cluster'ın tek tick'lik canlı görüntüsü.
 type LiveSnapshot struct {
 	Format    int       `json:"v"`
 	ClusterID string    `json:"cid"`
 	Gen       int64     `json:"gen"` // tick anı (unix ms)
 	Pods      []LivePod `json:"pods"`
+	// Hosts — v0.10.2260: yalnız HostClusterID blob'u (ek alan; biçim aynı).
+	Hosts []LiveHost `json:"hosts,omitempty"`
 }
 
 // BuildLiveSnapshot — SAF: tick'in birleşik görüntüsünden (Thanos + span
@@ -216,15 +231,33 @@ type LiveView struct {
 	ClusterID string
 	Gen       time.Time
 	Pods      []LivePod
+	Hosts     []LiveHost
 	byKey     map[string]int // ns/pod → Pods indeksi
+	byHost    map[string]int // ad → Hosts indeksi
 }
 
 func newLiveView(s LiveSnapshot) *LiveView {
-	v := &LiveView{ClusterID: s.ClusterID, Gen: time.UnixMilli(s.Gen), Pods: s.Pods, byKey: make(map[string]int, len(s.Pods))}
+	v := &LiveView{ClusterID: s.ClusterID, Gen: time.UnixMilli(s.Gen), Pods: s.Pods, Hosts: s.Hosts,
+		byKey: make(map[string]int, len(s.Pods)), byHost: make(map[string]int, len(s.Hosts))}
 	for i, p := range s.Pods {
 		v.byKey[p.Namespace+"/"+p.Name] = i
 	}
+	for i, h := range s.Hosts {
+		v.byHost[h.Name] = i
+	}
 	return v
+}
+
+// Host — adla host (yalnız HostClusterID görüntüsü).
+func (v *LiveView) Host(name string) (LiveHost, bool) {
+	if v == nil {
+		return LiveHost{}, false
+	}
+	i, ok := v.byHost[name]
+	if !ok {
+		return LiveHost{}, false
+	}
+	return v.Hosts[i], true
 }
 
 // Pod — ns/ad ile pod.

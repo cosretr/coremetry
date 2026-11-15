@@ -106,8 +106,9 @@ type Store interface {
 
 // StableTypes — CH'de satır olarak duran kalıcı katman (E1). Pod ve
 // container yalnız canlı dizinde + entity_seen_5m'de. v0.10.2240 (S5):
-// database / queue / external (topology_edges_5m; calls.go).
-var StableTypes = []string{TypeCluster, TypeNode, TypeNamespace, TypeWorkload, TypeService, TypeDatabase, TypeQueue, TypeExternal}
+// database / queue / external (topology_edges_5m; calls.go). v0.10.2260
+// (S6): host (yalnız ≥ 24 sa kanıtlı; hosts.go).
+var StableTypes = []string{TypeCluster, TypeNode, TypeNamespace, TypeWorkload, TypeService, TypeDatabase, TypeQueue, TypeExternal, TypeHost}
 
 // IsStableType — tip kalıcı katmanda mı.
 func IsStableType(t string) bool {
@@ -120,10 +121,11 @@ func IsStableType(t string) bool {
 }
 
 // IsStableRelation — iki ucu da kalıcı olan parent kenarı (cluster→node,
-// cluster→ns, ns→wl), S2 köprüleri (serves, same_as) ve S5 calls. runs /
-// runs_on / wl→pod / pod→ctr dizinde.
+// cluster→ns, ns→wl), S2 köprüleri (serves, same_as), S5 calls ve S6
+// host→svc runs. pod→svc runs / runs_on / wl→pod / pod→ctr dizinde (pod
+// kalıcı tip değil).
 func IsStableRelation(rl Relation) bool {
-	if rl.Type != RelParent && rl.Type != RelServes && rl.Type != RelSameAs && rl.Type != RelCalls {
+	if rl.Type != RelParent && rl.Type != RelServes && rl.Type != RelSameAs && rl.Type != RelCalls && rl.Type != RelRuns {
 		return false
 	}
 	p, ok1 := ParseID(rl.ParentID)
@@ -179,6 +181,14 @@ type Syncer struct {
 	// geçişin anı (UnixNano; CallsEvery kadansı, calls.go).
 	calls     CallSource
 	callsLast atomic.Int64
+	// v0.10.2260 (S6 parça 1) — host geçişi (hosts.go): terfi kanıtı
+	// kaynağı, son kalıcı geçiş anı, kalıcı host kümesi (canlı blob'un
+	// Stable işareti), süreçte kanıtlanmış adlar ve tick'in KSM pod adları.
+	hostProof  HostProofReader
+	hostsLast  atomic.Int64
+	hostStable map[string]Entity
+	hostProved map[string]bool
+	tickPods   map[string]bool
 }
 
 // SetLive — canlı dizinin Redis kapısı (main.go cacheImpl).
@@ -266,8 +276,14 @@ func (s *Syncer) tick(ctx context.Context) {
 	// cluster'a bölünür; eşlenemeyenler ayrı koşu satırı + K2 span-only cluster.
 	// Pencere = SeenWindow (1 saat): canlı dizinin pod → servis kenarı.
 	spanByCID := map[string][]SeenRow{}
+	var seenRows []SeenRow
+	seenOK := false
+	s.mu.Lock()
+	s.tickPods = map[string]bool{}
+	s.mu.Unlock()
 	if s.seen != nil {
 		rows, err := s.seen.RecentSeen(ctx, start.Add(-SeenWindow))
+		seenRows, seenOK = rows, err == nil
 		if err != nil {
 			log.Printf("[entity] entity_seen okunamadı (span geçişi atlandı): %v", err)
 		} else {
@@ -336,6 +352,23 @@ func (s *Syncer) tick(ctx context.Context) {
 		}(c, spanByCID[c.ID])
 	}
 	wg.Wait()
+	// S6 parça 1 — host adayları: tick'in AYNI span satırlarından (ek okuma
+	// yok); KSM'nin bu tick bildiği pod adları host olmaz.
+	if s.seen != nil {
+		s.mu.Lock()
+		pods := s.tickPods
+		s.mu.Unlock()
+		hst := s.syncHosts(ctx, seenRows, seenOK, pods)
+		tickRead.Add(int64(hst.read))
+		tickScan.Add(hst.scanned)
+		tickEnts.Add(int64(hst.ents))
+		tickRels.Add(int64(hst.rels))
+		tickSkip.Add(int64(hst.skipped))
+		tickClosed.Add(int64(hst.closed))
+		if hst.snapBytes > 0 {
+			snapBytes[HostClusterID] = hst.snapBytes
+		}
+	}
 	// S5 — yatay eksen (db/queue/ext + calls): ayrı, yavaş kadans; cluster
 	// geçişlerinden bağımsız (topology_edges_5m cluster'sız).
 	if s.calls != nil && s.now().Sub(time.Unix(0, s.callsLast.Load())) >= CallsEvery {
@@ -386,7 +419,7 @@ func SpanOnlyClusters(unmapped map[string]int, refs []ClusterRef, max int) []Clu
 	}
 	vals := make([]string, 0, len(unmapped))
 	for v := range unmapped {
-		if v != "" && v != UnmappedClusterID && v != TopologyClusterID && !taken[v] {
+		if v != "" && v != UnmappedClusterID && v != TopologyClusterID && v != HostClusterID && !taken[v] {
 			vals = append(vals, v)
 		}
 	}
@@ -457,6 +490,13 @@ func (s *Syncer) syncCluster(ctx context.Context, c ClusterRef, spanRows []SeenR
 			return
 		}
 		ents, rels = Normalize(c.ID, SnapshotFromSamples(sets))
+		s.mu.Lock()
+		for _, e := range ents {
+			if e.Type == TypePod && s.tickPods != nil {
+				s.tickPods[e.Name] = true
+			}
+		}
+		s.mu.Unlock()
 	}
 	entByID := make(map[string]Entity, len(ents))
 	for _, e := range ents {

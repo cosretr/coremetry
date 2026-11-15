@@ -14367,3 +14367,12 @@ Operatör bildirimi (prod /ai, 7 gün): 404 açıklama turunun 78'i "hata"; `err
 ## 2026-11-15 — v0.10.2256 — "Sorun değil" oyu neden sorar; anomaly_verdicts.reason
 
 Operatör onayı (anomali kartı mockup §5): yeni ML kartında "Sorun değil" dört hazır nedenden birini (grafikte sapma yok / servis etkisi yok / beklenen / diğer) ve isteğe bağlı notu ister ("Diğer" için not zorunlu, ≤500 karakter). Şema: tek ek kolon `anomaly_verdicts.reason LowCardinality(String) DEFAULT ''` (kapalı küme; serbest metin mevcut `note`'ta). İki-boot sözleşmesi: `hasVerdictReasonCol` false iken INSERT/SELECT kolonu anmaz, karar nedensiz kaydedilir. Neden YALNIZ karne etiketidir: tespit, eşik, bastırma, bildirim, Problem terfisi ve eval etiketi bu kolonu okumaz (MLLabels / MLScorecard yalnız event_id + verdict okur). Eski kart ve liste "Değil" bağlantısı tek tık kalır (nedensiz).
+
+## 2026-11-15 — v0.10.2260 — Entity S6 parça 1: K8s dışı host entity'leri (şemasız)
+
+- Operatör onayı: `docs/architecture/entity-s6-cost-note.md` seçenek C — S6'da ClickHouse şema değişikliği yok (yeni MV / tablo / kolon yok; `entity_seen_1m` ayrı karar). Not bu sürümle depoya girdi.
+- Kaynak: tick'in zaten okuduğu `entity_seen_5m` satırlarının namespace'siz olanları (k8s_pod kolonu host_name'e düşmüş). Tick'e ek okuma yok. Pod şekilli ad (rasgele sonek, `wlkind.FromPod`) ve aynı tick'te KSM'nin bildiği pod adı asla host değil.
+- Kalıcı katmana terfi kapısı: MV'nin `first_seen`'i ≥ 24 sa önce ve son 24 saatin ≥ 24 saatlik diliminde kova. Bu, prod'daki namespace'siz adların gerçek host mu yoksa attr'sız pod mu olduğu bilinmediği için; o zamana dek ad yalnız Redis canlı blob'unda. Kanıt okuması 15 dk'da bir, yalnız henüz kanıtlanmamış adaylar için (servis öneki, ≤ 500 ad, 25 sa, LIMIT 1000, 10 s); süreçte kanıtlanan ya da CH'de açık olan ad bir daha sorulmaz.
+- Kimlik `host:<ad>` (küresel); satırlar `cluster_id = "(host)"`; `runs` host→svc kalıcı kenar (pod→svc dizinde kalır). Tick'in açık kenar okuması yalnız `host:` ebeveynli `runs`'ı alır (S1'den kalan pod runs satırları okunmaz). Kapanış ≥ 24 sa art arda başarılı yokluk; tavan 5000.
+- calls geçişinin diff/yazım gövdesi `applyStable` olarak ortaklaştı (davranış aynı).
+- Tahmini yazım [V]: H host × (1 + s servis) satır ilk terfide, sonra değişimde + günde bir; H = 1.000, s = 1,5 → ~2.500 satır/gün. Geçiş başına okuma: `(host)` açık ömürleri + (yalnız yeni aday varsa) 1 kanıt okuması.

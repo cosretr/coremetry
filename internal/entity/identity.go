@@ -29,13 +29,16 @@ const (
 	TypeDatabase = "database"
 	TypeQueue    = "queue"
 	TypeExternal = "external"
+	// v0.10.2260 (S6 parça 1) — K8s dışı host (hosts.go). Kimlik küresel
+	// `host:<ad>` (servis emsali; host'un cluster değeri çoğu kurulumda boş).
+	TypeHost = "host"
 )
 
 // İlişki tipleri (entity_relations.rel_type).
 const (
 	RelParent = "parent"  // cluster→node, cluster→ns, ns→wl, wl→pod, ns→pod (iş yüksüz), pod→ctr
 	RelRunsOn = "runs_on" // pod→node
-	RelRuns   = "runs"    // pod→service
+	RelRuns   = "runs"    // pod→service (dizin); host→service (v0.10.2260, kalıcı)
 	// v0.10.2232 (S2) — kalıcı köprüler (iki ucu kalıcı katmanda):
 	RelServes = "serves"  // wl→service: pod'dan servise TEK kalıcı köprü
 	RelSameAs = "same_as" // eski id→kanonik id (Derived/ReplicaSet → yetkili iş yükü; span-only cluster → kayıt)
@@ -60,7 +63,7 @@ const (
 var typePrefix = map[string]string{
 	TypeCluster: "cluster", TypeNode: "node", TypeNamespace: "ns",
 	TypeWorkload: "wl", TypePod: "pod", TypeContainer: "ctr", TypeService: "svc",
-	TypeDatabase: "db", TypeQueue: "queue", TypeExternal: "ext",
+	TypeDatabase: "db", TypeQueue: "queue", TypeExternal: "ext", TypeHost: "host",
 }
 
 var prefixType = func() map[string]string {
@@ -110,6 +113,8 @@ func (r Ref) String() string {
 		return ContainerID(r.ClusterID, r.Namespace, r.Pod, r.Name)
 	case TypeService:
 		return ServiceID(r.Name)
+	case TypeHost:
+		return HostID(r.Name)
 	case TypeDatabase, TypeQueue, TypeExternal:
 		return typePrefix[r.Type] + ":" + r.Name
 	}
@@ -131,7 +136,7 @@ func ParseID(id string) (Ref, bool) {
 	rest := id[i+1:]
 	r := Ref{Type: typ}
 	switch typ {
-	case TypeService, TypeDatabase, TypeQueue, TypeExternal:
+	case TypeService, TypeDatabase, TypeQueue, TypeExternal, TypeHost:
 		// S5: db/queue/ext adı topoloji düğümünün öneksiz hâli, verbatim
 		// (":" "/" "@" içerebilir); cluster bileşeni yok.
 		r.Name = rest

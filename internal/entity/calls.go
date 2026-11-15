@@ -198,45 +198,62 @@ func BuildCallSnapshot(edges []CallEdge, maxExt int) CallSnapshot {
 func (s *Syncer) syncCalls(ctx context.Context) (st clusterTickStats) {
 	now := s.now()
 	s.callsLast.Store(now.UnixNano())
-	run := Run{ClusterID: TopologyClusterID, StartedAt: now}
-	fail := func(err error) {
-		run.Status, run.Error, run.FinishedAt = RunFailed, err.Error(), s.now()
-		if rerr := s.store.RecordRun(ctx, run); rerr != nil {
-			log.Printf("[entity] calls sync_runs yazılamadı: %v", rerr)
-		}
-		log.Printf("[entity] calls geçişi: %v", err)
-	}
 	edges, truncated, err := s.calls.RecentCalls(ctx, now.Add(-CallsWindow), MaxCallEdges)
 	if err != nil {
-		fail(err)
+		s.recordPassFailure(ctx, TopologyClusterID, now, "calls", err)
 		return
 	}
 	snap := BuildCallSnapshot(edges, MaxExternalEntities)
 	open, err := s.store.OpenLifetimes(ctx, TopologyClusterID)
 	if err != nil {
-		fail(err)
+		s.recordPassFailure(ctx, TopologyClusterID, now, "calls", err)
 		return
 	}
-	st.read, st.scanned = len(edges)+len(open.Lifetimes), open.RowsScanned
-	seen := stableSeen(snap.Entities, snap.Relations)
-	cs := s.clusterState(TopologyClusterID)
+	st, err = s.applyStable(ctx, TopologyClusterID, now, open, snap.Entities, snap.Relations, CallsCloseAfter, truncated)
+	if err != nil {
+		return st
+	}
+	st.read += len(edges)
+	log.Printf("[entity] calls: edges=%d truncated=%v deps=%d relations=%d ext_dropped=%d written=%d/%d closed=%d",
+		len(edges), truncated, len(snap.Entities), len(snap.Relations), snap.DroppedExt, st.ents, st.rels, st.closed)
+	return st
+}
+
+// recordPassFailure — sahte cluster_id'li geçişin (calls / hosts / metrik)
+// hatası: failed koşu satırı + günlük; hiçbir yazım / kapanış yok.
+func (s *Syncer) recordPassFailure(ctx context.Context, cid string, started time.Time, pass string, err error) {
+	run := Run{ClusterID: cid, StartedAt: started, Status: RunFailed, Error: err.Error(), FinishedAt: s.now()}
+	if rerr := s.store.RecordRun(ctx, run); rerr != nil {
+		log.Printf("[entity] %s sync_runs yazılamadı: %v", pass, rerr)
+	}
+	log.Printf("[entity] %s geçişi: %v", pass, err)
+}
+
+// applyStable — sahte cluster_id'li kalıcı aralığın ortak gövdesi (S5 calls,
+// S6 hosts / metrik servisler): açık ömürlerle diff, değişimde + günde bir
+// tazeleme (ThrottleRefresh), tam satır yazımı, koşu satırı. partial: eksik
+// görüntü — yokluk sayılır ama kapanış yok. Yazım hatası → failed koşu.
+func (s *Syncer) applyStable(ctx context.Context, cid string, now time.Time, open OpenSet, ents map[string]Entity, rels map[string]Relation, closeAfter time.Duration, partial bool) (st clusterTickStats, err error) {
+	run := Run{ClusterID: cid, StartedAt: now}
+	st.read, st.scanned = len(open.Lifetimes), open.RowsScanned
+	seen := stableSeen(ents, rels)
+	cs := s.clusterState(cid)
 	s.mu.Lock()
 	absent, lastOK := cs.absent, cs.lastOK
 	s.mu.Unlock()
-	closeAfter := CallsCloseAfter
-	if truncated {
-		closeAfter = 1<<63 - 1 // eksik görüntü: yokluk sayılır ama kapanmaz
+	if partial {
+		closeAfter = 1<<63 - 1
 	}
 	ch, nextAbsent := DiffLifetimes(now, open.Lifetimes, seen, absent, lastOK, closeAfter)
 	ch.Refresh, st.skipped = ThrottleRefresh(now, open.Lifetimes, ch.Refresh, RefreshEvery)
 	s.skipN.Add(int64(st.skipped))
-	rows := RowsForChange(TopologyClusterID, ch, snap.Entities, open.Entities)
-	relRows := relationRowsForChange(TopologyClusterID, ch, snap.Relations, open.Relations)
+	rows := RowsForChange(cid, ch, ents, open.Entities)
+	relRows := relationRowsForChange(cid, ch, rels, open.Relations)
 	if len(rows)+len(relRows) > 0 {
 		t1 := s.now()
-		if err := s.store.Apply(ctx, TopologyClusterID, rows, relRows); err != nil {
-			fail(err)
-			return
+		if err := s.store.Apply(ctx, cid, rows, relRows); err != nil {
+			s.recordPassFailure(ctx, cid, now, cid, err)
+			return st, err
 		}
 		run.CHMs = int(s.now().Sub(t1) / time.Millisecond)
 	}
@@ -246,7 +263,7 @@ func (s *Syncer) syncCalls(ctx context.Context) (st clusterTickStats) {
 		}
 	}
 	run.Status, run.FinishedAt = RunOK, s.now()
-	if truncated {
+	if partial {
 		run.Status = RunPartial
 	}
 	run.EntitiesWritten, run.RelationsWritten = len(rows), len(relRows)
@@ -257,11 +274,9 @@ func (s *Syncer) syncCalls(ctx context.Context) (st clusterTickStats) {
 	s.relsN.Add(int64(len(relRows)))
 	st.ok, st.ents, st.rels, st.closed = true, len(rows), len(relRows), run.Closed
 	if err := s.store.RecordRun(ctx, run); err != nil {
-		log.Printf("[entity] calls sync_runs yazılamadı: %v", err)
+		log.Printf("[entity] %s sync_runs yazılamadı: %v", cid, err)
 	}
-	log.Printf("[entity] calls: edges=%d truncated=%v deps=%d relations=%d ext_dropped=%d written=%d/%d closed=%d",
-		len(edges), truncated, len(snap.Entities), len(snap.Relations), snap.DroppedExt, len(rows), len(relRows), run.Closed)
-	return st
+	return st, nil
 }
 
 // ── okuma (resolver) ────────────────────────────────────────────────

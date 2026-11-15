@@ -224,7 +224,7 @@ Araç çıktıları deterministik veridir; LLM'e bağlı adım yok (prod LLM yal
 | **S3 — Pod ↔ log ↔ trace** ✅ v0.10.2233 | `/api/logs` entity kapsamı (ES ve CH alan eşlemesiyle); span detayında yol çipleri; pod → trace `k8s_pod` kolonundan; A8, A9 silinir | Pod logları iki backend'de de doğru; trace'ten pod/iş yükü/servise tek tık ve geri | ES alan adı çeşitliliği | Şema yok; geri alma = sürüm | Backend başına süzgeç golden'ı; FE vitest; ES sorgu şekli (term, PIT yok) |
 | **S4 — CoSRE / MCP** ✅ v0.10.2239 | `ServicePodRegex` → `Neighbours`; `resolve_entity` yol + komşu; sweep/healthcheck pod adaptörleri | Adı deployment'tan farklı servislerde pod sağlığı gelir; kardeş önek karışmaz | Depoda olmayan servis (span yok) | Geri dönüş yolu yok (shim yasağı); depo boşsa araç "pod bilinmiyor" der | Araç golden'ları; CoSRE eval setinde pod soruları; regex çağıranı kalmadı ratchet'i |
 | **S5 — Yatay eksen (daraltılmış)** ✅ v0.10.2240 (aşağıda "S5 notları"; host → S6, A10 → takip) | db, queue, ext entity; `calls` kenarı; topoloji düğümüne ek `entityId` (düğüm id'si aynen) | DB/queue/host entity sayfaları; "bu pod'un servisi hangi DB'yi çağırıyor" yolu; blast radius tek kaynaktan | `ext:` kardinalitesi | Yeni tip/rel değerleri; `LowCardinality` tip kolonları uygun; geri alma = sürüm | `calls` SQL şekli; kardinalite tavanı testi; topoloji ↔ entity id gidiş-dönüş |
-| **S6 — Sinyal tamamlama** | `entity_seen` v2 MV (iş yükü kolonları, host satırları); host entity'leri ve `runs` (host→svc) (S5'ten taşındı, şema + ayrı operatör onayı); VM'den metrik `runs`; log kapsama işareti (K5, K6) | Yalnız metrik/log basan servisler entity olur; regex türevi iş yükü kalmaz | MV INSERT maliyeti; çift MV dönemi | Yeni MV 30 gün çift koşar, sonra eski düşer; geri alma = yeni MV'yi DROP | MV DDL testi; prod preflight; INSERT gecikmesi öncesi/sonrası |
+| **S6 — Sinyal tamamlama** (şemasız, `entity-s6-cost-note.md` seçenek C; aşağıda "S6 notları") — parça 1 host ✅ v0.10.2260 | `entity_seen` v2 MV (iş yükü kolonları, host satırları); host entity'leri ve `runs` (host→svc) (S5'ten taşındı, şema + ayrı operatör onayı); VM'den metrik `runs`; log kapsama işareti (K5, K6) | Yalnız metrik/log basan servisler entity olur; regex türevi iş yükü kalmaz | MV INSERT maliyeti; çift MV dönemi | Yeni MV 30 gün çift koşar, sonra eski düşer; geri alma = yeni MV'yi DROP | MV DDL testi; prod preflight; INSERT gecikmesi öncesi/sonrası |
 
 Her dilim sonunda dur, onay al. S0 → S1 → S2 sıralı; S3, S4, S5 S2'den sonra herhangi bir sırada; S6 en son.
 
@@ -322,3 +322,21 @@ yokluk; LIMIT dolarsa ya da okuma hatasında kapanış yok. `ext:` tavanı 5000 
 `called_by` ve `GET /api/entity/neighbours` (svc, db, queue, ext id'leri); `resolve_entity` kataloğu db/queue/ext
 adaylarını içerir (tür başına ≤ 500). Servis grafiği düğümüne ek `entityId` (saf türetim, okuma yok). Şema yok,
 ayar yok.
+
+**S6 notları (operatör onayı 2026-11-15: `entity-s6-cost-note.md` seçenek C — şema değişikliği YOK; K6'nın
+v2 MV'si yapılmadı, `entity_seen_1m`'e dokunulmadı).**
+
+- **Parça 1 — host (v0.10.2260).** `internal/entity/hosts.go`: tick'in zaten okuduğu `entity_seen_5m`
+  satırlarından namespace'siz olanlar (k8s_pod → host_name düşüşü) host adayı; span geçişi bunları atmaya devam
+  eder. Kapılar: rasgele pod soneki olan ad (`wlkind.FromPod`, Deployment / Derived) asla host değil; aynı
+  tick'te KSM'nin pod olarak bildiği ad host değil; kalıcı katmana terfi yalnız MV'nin kendi `first_seen`'i
+  ≥ 24 sa önce VE son 24 saatin ≥ 24 saatlik diliminde kova (sabitler, ayar yok). Terfi etmemiş aday yalnız
+  Redis canlı blob'unda (`coremetry:entity:v1:live:(host)`, `Hosts[]`, `Stable` işareti). Kimlik küresel
+  `host:<ad>`; kalıcı satırlar `cluster_id = "(host)"`; `runs` host→svc kalıcı kenar (`IsStableRelation`),
+  pod→svc `runs` dizinde kalır. Kalıcı geçiş 15 dk'da bir (`HostEvery`): açık ömür okuması + yalnız henüz
+  kanıtlanmamış adaylar için tek kanıt okuması (`EntityHostProof`: servis öneki, `k8s_namespace = ''`, ≤ 500
+  ad, 25 sa pencere, LIMIT 1000, 10 s); süreçte kanıtlanan ad bir daha sorulmaz. Kapanış ≥ 24 sa art arda
+  başarılı yokluk; span okuması hatalıysa geçiş yok, LIMIT dolduysa kapanış yok. Tavan 5000 host. Okuma:
+  `Resolver.HostServices` / `ServiceHosts` → `resolve_entity` `neighbours.hosts` / host adayları,
+  `GET /api/entity/neighbours?id=host:<ad>`. Bilinen sınır: KSM'siz cluster'da k8s attr'ı basmayan
+  StatefulSet pod'u (sıra numaralı ad) 24 saat sonra host görünebilir.
