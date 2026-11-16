@@ -112,7 +112,7 @@ export interface LegacyEvidenceGroup {
 /** SAF (v0.10.2038; operatör: aynı kalıp 100 ms arayla iki satır olarak
  *  listeleniyordu): eski olaylar → kanıt grupları. Aynı tür + aynı kalıp
  *  tek grup; log türünde satır sayıları toplanır, örnekler tekilleşir. */
-export function legacyEvidenceGroups(events: AnomalyEvent[]): LegacyEvidenceGroup[] {
+export function legacyEvidenceGroups(events: AnomalyEvent[], lang: Lang = 'tr'): LegacyEvidenceGroup[] {
   const out: LegacyEvidenceGroup[] = [];
   const byKey = new Map<string, LegacyEvidenceGroup>();
   const counts = new Map<string, number>();
@@ -121,7 +121,7 @@ export function legacyEvidenceGroups(events: AnomalyEvent[]): LegacyEvidenceGrou
     const key = isLog ? `${e.kind}|${e.service}|${e.pattern}` : `id|${e.id}`;
     let g = byKey.get(key);
     if (!g) {
-      g = { key, kind: e.kind, ids: [], text: isLog ? '' : legacyEvidenceText(e), pattern: isLog && e.pattern ? e.pattern : undefined, samples: [], source: legacySource(e) };
+      g = { key, kind: e.kind, ids: [], text: isLog ? '' : legacyEvidenceText(e), pattern: isLog && e.pattern ? e.pattern : undefined, samples: [], source: legacySource(e, lang) };
       byKey.set(key, g);
       out.push(g);
     }
@@ -131,36 +131,36 @@ export function legacyEvidenceGroups(events: AnomalyEvent[]): LegacyEvidenceGrou
     if (isLog && one && g.samples.length < 2 && !g.samples.includes(one)) g.samples.push(one.length > 400 ? `${one.slice(0, 400)}…` : one);
   }
   for (const g of byKey.values()) {
-    if (!g.text) g.text = `${(counts.get(g.key) ?? 0).toLocaleString('tr-TR')} satır${g.samples.length ? '; örnek:' : ''}`;
+    if (!g.text) g.text = `${tf('aed.sum.lines', lang, { n: (counts.get(g.key) ?? 0).toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US') })}${g.samples.length ? t('mlx.leg.sample', lang) : ''}`;
   }
   return out;
 }
 
 /** SAF: eski olayın kaynak notu (sinyalin nereden okunduğu). */
-export function legacySource(e: Pick<AnomalyEvent, 'kind'>): string {
+export function legacySource(e: Pick<AnomalyEvent, 'kind'>, lang: Lang = 'tr'): string {
   switch (String(e.kind)) {
-    case 'log_template_new': return 'log kalıpları (Drain)';
-    case 'log_pattern': return 'log deseni sayımı';
+    case 'log_template_new': return t('mlx.leg.src.tpl', lang);
+    case 'log_pattern': return t('mlx.leg.src.pattern', lang);
     case 'elastic_ml': return 'Elastic ML';
-    case 'trace_op': case 'trace_op_latency': case 'op_latency': return "ClickHouse span'leri";
-    case 'behavior_change': return 'davranış motoru (28 gün)';
-    default: return 'metrikler';
+    case 'trace_op': case 'trace_op_latency': case 'op_latency': return t('mlx.src.chSpans', lang);
+    case 'behavior_change': return t('mlx.leg.src.behavior', lang);
+    default: return t('mlx.leg.src.metrics', lang);
   }
 }
 
 /** SAF: eski olay detayının durum metni (liste kuralıyla aynı; 0 süre = tek ölçüm). */
-export function legacyStatusText(e: AnomalyEvent, nowNs: number): string {
+export function legacyStatusText(e: AnomalyEvent, nowNs: number, lang: Lang = 'tr'): string {
   const st = legacyStatus(e);
-  if (st === 'rejected') return 'Değil dendi';
+  if (st === 'rejected') return t('anomalies.status.rejected', lang);
   const end = st === 'watching' ? nowNs : e.lastSeen;
 
-  return groupStatusText({ status: st, start: e.startedAt, end }, nowNs);
+  return groupStatusText({ status: st, start: e.startedAt, end }, nowNs, lang);
 }
 
 /** SAF (v0.10.2030; operatör: "Ne oldu" servisi tekrar ediyor): liste hücresi
  *  cümlesi — servis kendi sütununda; baştaki "<servis>: " / "<servis> " öneki
  *  atılır, ilk harf büyür. Cümle KURULMAZ, yalnız önek kırpılır. */
-export function stripServicePrefix(text: string, service: string): string {
+export function stripServicePrefix(text: string, service: string, lang: Lang = 'tr'): string {
   let t = text.trim();
   const svc = service.trim();
   if (svc) {
@@ -169,11 +169,12 @@ export function stripServicePrefix(text: string, service: string): string {
     }
   }
   if (!t) return text;
-  const first = t[0] === 'i' ? 'İ' : t[0].toLocaleUpperCase('tr-TR');
+  // v0.10.2291 — Türkçe büyük harf kuralı (i → İ) yalnız TR metinde.
+  const first = lang !== 'tr' ? t[0].toLocaleUpperCase('en-US') : t[0] === 'i' ? 'İ' : t[0].toLocaleUpperCase('tr-TR');
   return first + t.slice(1);
 }
 
 /** SAF: listedeki "Ne oldu" metni. */
 export function listHeadline(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLead' | 'service'>, lang: Lang = 'tr'): string {
-  return stripServicePrefix(rowHeadline(r, lang), r.service);
+  return stripServicePrefix(rowHeadline(r, lang), r.service, lang);
 }

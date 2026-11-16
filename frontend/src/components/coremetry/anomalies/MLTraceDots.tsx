@@ -8,6 +8,7 @@
 import { useMemo } from 'react';
 import { TimeChart, type TimeChartSeries } from '@/components/charts/TimeChart';
 import type { CallPoint, TraceCourse } from '@/lib/types';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2291 — metin arayüz dilinde
 
 export interface DotSeries { times: number[]; above: (number | null)[]; below: (number | null)[] }
 
@@ -28,30 +29,31 @@ export function dotSeries(dots: readonly CallPoint[], lineMs: number | null | un
 export function MLTraceDots({ tc, cursorSec }: { tc: TraceCourse; cursorSec: number | null }) {
   const dots = tc.dots ?? [];
   const ds = useMemo(() => dotSeries(dots, tc.line?.ms), [dots, tc.line?.ms]);
+  const lang = useLang();
   const series = useMemo<TimeChartSeries[]>(() => [
-    { key: 'below', label: 'çağrı', data: ds.below, color: 'var(--sig-trace)', type: 'points', hollow: true },
-    { key: 'above', label: 'sınırın üstünde', data: ds.above, color: 'var(--sig-trace)', type: 'points' },
-  ], [ds]);
+    { key: 'below', label: t('mlx.dots.call', lang), data: ds.below, color: 'var(--sig-trace)', type: 'points', hollow: true },
+    { key: 'above', label: t('mlx.dots.above', lang), data: ds.above, color: 'var(--sig-trace)', type: 'points' },
+  ], [ds, lang]);
   const thresholds = useMemo(() => (tc.line ? [{ value: tc.line.ms, label: tc.line.label, color: 'var(--text)' }] : undefined), [tc.line]);
-  const regions = useMemo(() => [{ fromSec: tc.onsetNs / 1e9, toSec: tc.endNs / 1e9, label: 'anomali', color: 'var(--err)' }], [tc.onsetNs, tc.endNs]);
+  const regions = useMemo(() => [{ fromSec: tc.onsetNs / 1e9, toSec: tc.endNs / 1e9, label: t('mlx.region.anomaly', lang), color: 'var(--err)' }], [tc.onsetNs, tc.endNs, lang]);
   return (
     <div className="mb-3" data-testid="ml-trace-dots">
       {tc.dotsSummary && <p className="mt-0 mb-1.5 text-sm font-semibold" data-testid="ml-trace-dots-summary">{tc.dotsSummary}</p>}
       <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-        <span>tek tek çağrılar · örneklenmiş span'ler{tc.route ? <> · <span className="font-mono">{tc.route}</span></> : ' · servisin giriş istekleri'}</span>
+        <span>{t('mlx.dots.head', lang)}{tc.route ? <> · <span className="font-mono">{tc.route}</span></> : t('mlx.tc.entry', lang)}</span>
         {tc.line && <span>┄ {tc.line.label}</span>}
-        {tc.dotsCapped && <span className="text-[color:var(--warn)]">ilk {dots.length} çağrı gösteriliyor</span>}
+        {tc.dotsCapped && <span className="text-[color:var(--warn)]">{tf('mlx.dots.capped', lang, { n: dots.length })}</span>}
       </div>
       {ds.times.length >= 2 ? (
         <TimeChart height={170} times={ds.times} series={series} thresholds={thresholds} regions={regions} hideLegend leftUnit="ms"
           playhead={cursorSec != null ? { cursorSec } : null} />
       ) : (
         <p className="m-0 text-sm text-muted-foreground" data-testid="ml-trace-dots-empty">
-          {tc.dotsUnread ? 'Çağrılar okunamadı (yok demek değil).' : ds.times.length === 1 ? 'Bu pencerede yalnız bir çağrı var.' : 'Bu pencerede örneklenmiş çağrı yok.'}
+          {t(tc.dotsUnread ? 'mlx.dots.unread' : ds.times.length === 1 ? 'mlx.dots.one' : 'mlx.dots.none', lang)}
         </p>
       )}
       <p className="mt-1.5 mb-0 text-xs text-muted-foreground">
-        Her nokta bir çağrı. Dolu nokta: çizginin üstünde. Az çağrı alan serviste ortalama yanıltır; bu yüzden çağrılar tek tek gösterilir.
+        {t('mlx.dots.foot', lang)}
       </p>
     </div>
   );

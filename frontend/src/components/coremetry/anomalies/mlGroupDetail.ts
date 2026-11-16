@@ -6,6 +6,7 @@
 import type { MLEvent, MLGroupDecision, MLSvcShadow } from '@/lib/types';
 import { parseObj } from '@/lib/mlReplay';
 import { groupRows, type MLGroupRow } from './mlGroupRows';
+import { t, type Lang } from '@/lib/i18n'; // v0.10.2291 — görünen metin isteğe bağlı lang (varsayılan 'tr')
 
 /** SAF: açılan olay kimliğinin grubu (liste satırlarında yoksa null — tek olay görünümü). */
 export function findGroup(events: MLEvent[] | undefined, id: string): MLGroupRow | null {
@@ -20,8 +21,8 @@ export function findGroup(events: MLEvent[] | undefined, id: string): MLGroupRow
 const TRACE_VM_DETECTORS = new Set(['op_latency', 'op_error_rate', 'throughput_drop', 'trace_pod_outlier']);
 
 /** SAF (test): kanıt satırının kaynak notu — sinyal nereden okundu. */
-export function evidenceSource(detector: string, signal: string, evidence?: string): string {
-  if (detector === 'trace_error_count') return "ClickHouse span'leri";
+export function evidenceSource(detector: string, signal: string, evidence?: string, lang: Lang = 'tr'): string {
+  if (detector === 'trace_error_count') return t('mlx.src.chSpans', lang);
   if (signal === 'log') return 'Elasticsearch';
   const ev = parseObj(evidence ?? '');
   if (ev.source === 'thanos') return `Thanos · ${typeof ev.cluster === 'string' && ev.cluster ? ev.cluster : 'cluster'}`;
@@ -30,7 +31,7 @@ export function evidenceSource(detector: string, signal: string, evidence?: stri
   // rozetinin yanında çıplak "VictoriaMetrics" ham trace sanılıyordu.
   if (signal === 'trace') {
     const vm = ev.source === 'vm' || (ev.source === undefined && TRACE_VM_DETECTORS.has(detector));
-    return vm ? 'VictoriaMetrics · span RED metrikleri' : "ClickHouse span'leri";
+    return t(vm ? 'mlx.src.vmRed' : 'mlx.src.chSpans', lang);
   }
   return 'VictoriaMetrics';
 }
@@ -42,10 +43,10 @@ export function latestGroupDecision(members: Pick<MLEvent, 'groupShadow'>[]): ML
 
 /** v0.10.2053 (D4) — SAF: grup kararı çipi. Canlı → "Problem açtı" + Problem
  *  bağlantısı; gölge "açardı" (anahtar kapalı) → bağlantısız; açmaz → null. */
-export function groupProblemChip(d: MLGroupDecision | undefined): { label: string; href?: string } | null {
+export function groupProblemChip(d: MLGroupDecision | undefined, lang: Lang = 'tr'): { label: string; href?: string } | null {
   if (!d) return null;
-  if (d.live && d.problemId) return { label: `Problem açtı${d.priority ? ` · ${d.priority}` : ''}`, href: `/inbox?problem=${encodeURIComponent(d.problemId)}` };
-  if (d.wouldOpen) return { label: 'Problem açardı (canlı kip kapalı)' };
+  if (d.live && d.problemId) return { label: `${t('mlx.gate.opened', lang)}${d.priority ? ` · ${d.priority}` : ''}`, href: `/inbox?problem=${encodeURIComponent(d.problemId)}` };
+  if (d.wouldOpen) return { label: t('mlx.gate.wouldLiveOff', lang) };
   return null;
 }
 
@@ -56,17 +57,17 @@ export function latestSvcShadow(members: Pick<MLEvent, 'svcShadow'>[]): MLSvcSha
 
 /** v0.10.2089 — SAF: servis düzeyi kapı satırı. v0.10.2130: canlı — Problem'e
  *  bağlandıysa "Problem açtı" (ya da servisin ML Problem'ine üye); kapalıyken gölge. */
-export function svcGateLine(d: MLSvcShadow): string {
-  const verb = d.live ? (d.problemId && d.problemId !== d.rule ? 'servisin ML Problem\'ine üye' : 'Problem açtı')
-    : !d.wouldOpen ? 'açmazdı' : d.joinsRule ? 'grup Problem\'ine üye olurdu (gölge)' : 'Problem açardı (gölge)';
+export function svcGateLine(d: MLSvcShadow, lang: Lang = 'tr'): string {
+  const verb = t(d.live ? (d.problemId && d.problemId !== d.rule ? 'mlx.gate.svcMember' : 'mlx.gate.opened')
+    : !d.wouldOpen ? 'mlx.gate.wouldNot' : d.joinsRule ? 'mlx.gate.wouldJoin' : 'mlx.gate.wouldShadow', lang);
   return `${verb}${d.priority ? ` · ${d.priority}` : ''} — ${d.reason}`;
 }
 
 /** v0.10.2053 (D4) — SAF: teknik ayrıntıdaki "Problem kapısı" satırı. */
-export function groupGateLine(d: MLGroupDecision | undefined): string {
-  if (!d) return 'karar yok';
+export function groupGateLine(d: MLGroupDecision | undefined, lang: Lang = 'tr'): string {
+  if (!d) return t('mlx.gate.none', lang);
   // v0.10.2092: tek sinyal kolu canlı — "açtı" / "açardı" ortak; kol yalnız ekte.
-  const verb = (d.live ? 'Problem açtı' : d.wouldOpen ? 'açardı' : 'açmazdı') + (d.singleWouldOpen && d.wouldOpen ? ' (tek sinyal)' : '');
+  const verb = t(d.live ? 'mlx.gate.opened' : d.wouldOpen ? 'mlx.gate.would' : 'mlx.gate.wouldNot', lang) + (d.singleWouldOpen && d.wouldOpen ? t('mlx.gate.single', lang) : '');
   return `${verb}${d.priority ? ` · ${d.priority}` : ''} — ${d.reason}`;
 }
 

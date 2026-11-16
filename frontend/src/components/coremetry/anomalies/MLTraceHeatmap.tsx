@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { keys } from '@/lib/queries/keys';
 import { heatmapFilters } from '@/pages/service/heatmapFilters';
 import type { FilterExpr, TraceCourse } from '@/lib/types';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2291 — metin arayüz dilinde
 
 /** SAF (test): giriş span'leri (server+consumer) + varsa http.route. */
 export function mlHeatmapFilters(tc: TraceCourse): FilterExpr[] {
@@ -37,23 +38,24 @@ export function MLTraceHeatmap({ tc, cursorSec }: { tc: TraceCourse; cursorSec: 
     retry: false,
   });
   const empty = !q.data || q.data.times.length === 0 || q.data.maxCount === 0;
+  const lang = useLang();
   return (
     <div className="mb-3" data-testid="ml-trace-heatmap">
       <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-        <span>istek süreleri · örneklenmiş span'ler{tc.route ? <> · <span className="font-mono">{tc.route}</span></> : ' · servisin giriş istekleri'}</span>
+        <span>{t('mlx.hm.head', lang)}{tc.route ? <> · <span className="font-mono">{tc.route}</span></> : t('mlx.tc.entry', lang)}</span>
         {tc.line && <span>┄ {tc.line.label}</span>}
-        <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="inline-block h-2 w-3 rounded-[2px] bg-[color:var(--err-bg)]" />anomali penceresi</span>
+        <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="inline-block h-2 w-3 rounded-[2px] bg-[color:var(--err-bg)]" />{t('mlx.hm.window', lang)}</span>
       </div>
       {q.isLoading ? <Spinner /> : q.error || empty ? (
         <p className="m-0 text-sm text-muted-foreground" data-testid="ml-trace-heatmap-empty">
-          {q.error ? 'Isı haritası okunamadı.' : 'Bu pencerede örneklenmiş span yok.'}
+          {t(q.error ? 'mlx.hm.err' : 'mlx.hm.empty', lang)}
         </p>
       ) : q.data && (
         <LatencyHeatmap data={q.data} height={200}
           overlay={{ lineMs: tc.line?.ms ?? null, lineLabel: tc.line?.label, windowNs: [tc.onsetNs, tc.endNs], cursorSec }} />
       )}
       <p className="mt-1.5 mb-0 text-xs text-muted-foreground">
-        Her kare o dakikada o sürede biten istek sayısını gösterir; yukarı çıktıkça istek daha yavaştır. Örnekleme yavaş ve hatalı istekleri olduğundan fazla gösterebilir.
+        {t('mlx.hm.foot', lang)}
       </p>
     </div>
   );

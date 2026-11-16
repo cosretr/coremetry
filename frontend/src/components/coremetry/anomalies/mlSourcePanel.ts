@@ -23,6 +23,7 @@
 //   log dışı kalanlar → kayıtlı görüntü
 import type { MLEvent, MLSnapshot, SpanMetricSeries } from '@/lib/types';
 import type { StripStat } from '@/components/traces/stripStat';
+import { t, tf, type Lang } from '@/lib/i18n'; // v0.10.2291 — görünen metin isteğe bağlı lang (varsayılan 'tr')
 
 export type SourcePanel =
   | { kind: 'kafka-lag'; service: string }
@@ -48,31 +49,33 @@ export function evidenceObj(raw?: string): Record<string, unknown> {
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
 /** SAF: olay → panel. */
-export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' | 'service' | 'pod' | 'evidence'>, slowSec = 1, logsHref?: string): SourcePanel {
+export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' | 'service' | 'pod' | 'evidence'>, slowSec = 1, logsHref?: string, lang: Lang = 'tr'): SourcePanel {
   const code = e.code ?? '';
+  const snapshot = (k: string): SourcePanel => ({ kind: 'snapshot', reason: t(`mlx.reason.${k}`, lang) });
+  const noSvc = snapshot('noService');
   if (e.detector === 'trace_pod_outlier') {
     // Olayın Code'u ölçü (err_ratio | p95); kayıttan açılınca kanıttan.
     const ev = evidenceObj(e.evidence);
     const measure = code || str(ev.measure);
-    if (!e.service || (measure !== 'err_ratio' && measure !== 'p95')) return { kind: 'snapshot', reason: 'pod ölçüsü yok' };
+    if (!e.service || (measure !== 'err_ratio' && measure !== 'p95')) return snapshot('podMeasure');
     return { kind: 'metric', detector: e.detector, service: e.service, code: measure, cluster: '',
       highlight: e.pod || str(ev.pod) || undefined, family: str(ev.family) || undefined };
   }
-  if (e.signal === 'log') return logsPanelFromHref(logsHref) ?? { kind: 'snapshot', reason: 'log olayı: Logs bağlantısı yok' };
+  if (e.signal === 'log') return logsPanelFromHref(logsHref) ?? snapshot('logNoLink');
   // v0.10.2077 — servis hata oranı: Overview'ın hata oranı serisi (v0.10.2062 deseni).
   // v0.10.2086 — yaygın yavaşlama: Overview'ın p99 serisi (yavaş işlemler cümlede adıyla).
-  if (e.detector === 'svc_breadth') return e.service ? { kind: 'service-red', service: e.service, agg: 'p99', label: 'p99 yanıt süresi' } : { kind: 'snapshot', reason: 'olay kaydında servis yok' };
-  if (e.detector === 'svc_error_rate') return e.service ? { kind: 'service-red', service: e.service, agg: 'error_rate', label: 'hata oranı' } : { kind: 'snapshot', reason: 'olay kaydında servis yok' };
+  if (e.detector === 'svc_breadth') return e.service ? { kind: 'service-red', service: e.service, agg: 'p99', label: t('mlx.p99rt', lang) } : noSvc;
+  if (e.detector === 'svc_error_rate') return e.service ? { kind: 'service-red', service: e.service, agg: 'error_rate', label: t('aed.metric.error_rate', lang) } : noSvc;
   // v0.10.2128 (Problems S8) — hacim sıçraması (evaluator yazar, anlık görüntü
   // YOK): kayıtlı görüntüye düşünce grafik alanı "grafik kaydı yok" diyordu.
   // Servis Overview'ın istek hızı serisi (aynı ServiceRedChart, aynı uç; yeni
   // sorgu yolu yok).
-  if (e.detector === 'svc_volume_spike' || e.detector === 'svc_telemetry_volume') return e.service ? { kind: 'service-red', service: e.service, agg: 'rate', label: 'istek hızı' } : { kind: 'snapshot', reason: 'olay kaydında servis yok' };
+  if (e.detector === 'svc_volume_spike' || e.detector === 'svc_telemetry_volume') return e.service ? { kind: 'service-red', service: e.service, agg: 'rate', label: t('aed.metric.request_rate', lang) } : noSvc;
   if (e.detector === 'metric_kafka' && code.startsWith('metric_kafka|consumer_lag') && !code.includes('@')) {
     return { kind: 'kafka-lag', service: e.service };
   }
   if ((e.signal === 'metric' && e.detector.startsWith('metric_')) || e.detector === 'dependency_latency' || e.detector === 'dependency_error_rate') { // v0.10.2063: hata oranı da dedektörün ifadesi
-    if (!code || !e.service) return { kind: 'snapshot', reason: e.service ? 'olay kaydı ölçülen serinin adını taşımıyor' : 'olay kaydında servis yok' };
+    if (!code || !e.service) return e.service ? snapshot('noSeriesName') : noSvc;
     const at = code.indexOf('@');
     return { kind: 'metric', detector: e.detector, service: e.service, code, cluster: at >= 0 ? code.slice(at + 1) : '' };
   }
@@ -81,17 +84,17 @@ export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' |
   // span adında (…BagService/callBagService) arıyordu → nokta yok, grafik boş.
   // Dedektörün kendi serisi (/api/ml/source-series, aynı ölçü ve kova).
   if (e.detector === 'op_latency' || e.detector === 'op_error_rate' || e.detector === 'throughput_drop') {
-    if (!code || !e.service) return { kind: 'snapshot', reason: e.service ? 'operasyon yok' : 'olay kaydında servis yok' };
+    if (!code || !e.service) return e.service ? snapshot('noOp') : noSvc;
     const measure = e.detector === 'op_latency' ? (str(evidenceObj(e.evidence).measure) || undefined) : undefined;
     return { kind: 'metric', detector: e.detector, service: e.service, code, cluster: '', measure };
   }
   const route = (svc: string, op: string, o: Omit<Extract<SourcePanel, { kind: 'traces' }>, 'kind' | 'service' | 'operation' | 'byRoute'>) =>
     ({ kind: 'traces' as const, service: svc, operation: op, byRoute: op.startsWith('/'), ...o });
   switch (e.detector) {
-    case 'trace_change_point': return code ? route(e.service, code, { stat: 'p95', errorsFirst: false }) : { kind: 'snapshot', reason: 'operasyon yok' };
-    case 'trace_error_count': return code ? { kind: 'traces', service: e.service, operation: code, byRoute: false, stat: 'p50', errorsFirst: true } : { kind: 'snapshot', reason: 'operasyon yok' };
+    case 'trace_change_point': return code ? route(e.service, code, { stat: 'p95', errorsFirst: false }) : snapshot('noOp');
+    case 'trace_error_count': return code ? { kind: 'traces', service: e.service, operation: code, byRoute: false, stat: 'p50', errorsFirst: true } : snapshot('noOp');
   }
-  return { kind: 'snapshot', reason: 'bu sinyal için hazır servis paneli yok' };
+  return snapshot('noPanel');
 }
 
 /** SAF: bağlantı Logs sayfasınaysa ayrıştırılmış URL; değilse null. */
@@ -109,29 +112,29 @@ export type ServiceRedAgg = 'error_rate' | 'p99' | 'rate';
 /** SAF (v0.10.2062): eski servis düzeyi RED olayları (davranış değişimi: hata
  *  oranı / p99 / istek hızı; takvim günü düşüşü: istek hızı) → servis
  *  Overview panelinin serisi. Diğer türler null. */
-export function serviceRedAggFor(kind: string, metric?: string): { agg: ServiceRedAgg; label: string } | null {
-  if (kind === 'calendar_traffic_drop') return { agg: 'rate', label: 'istek hızı' };
+export function serviceRedAggFor(kind: string, metric?: string, lang: Lang = 'tr'): { agg: ServiceRedAgg; label: string } | null {
+  if (kind === 'calendar_traffic_drop') return { agg: 'rate', label: t('aed.metric.request_rate', lang) };
   if (kind !== 'behavior_change') return null;
   switch (metric) {
-    case 'error_rate': return { agg: 'error_rate', label: 'hata oranı' };
-    case 'p99_ms': return { agg: 'p99', label: 'p99 yanıt süresi' };
-    case 'request_rate': return { agg: 'rate', label: 'istek hızı' };
+    case 'error_rate': return { agg: 'error_rate', label: t('aed.metric.error_rate', lang) };
+    case 'p99_ms': return { agg: 'p99', label: t('mlx.p99rt', lang) };
+    case 'request_rate': return { agg: 'rate', label: t('aed.metric.request_rate', lang) };
   }
   return null;
 }
 
 /** SAF (v0.10.2061): canlı grafik yokken kayıtlı görüntünün üstündeki tek
  *  düz satır — neden canlı değil (sessiz düşüş yok). */
-export function liveGapLine(reason?: string): string {
-  const r = (reason ?? '').trim() || 'kaynak okunamadı';
-  return `Canlı grafik çizilemedi: ${r}. Aşağıdaki, olay anında kaydedilen 5 dakikalık görüntü.`;
+export function liveGapLine(reason?: string, lang: Lang = 'tr'): string {
+  const r = (reason ?? '').trim() || t('mlx.gap.noSource', lang);
+  return tf('mlx.gap', lang, { r });
 }
 
 /** SAF (v0.10.2060): Thanos grafiğinin kaynak satırı — eşi olan Pods paneli. */
-export function thanosSourceText(p?: string): string {
-  if (p === 'pods-resource') return 'Servis › Pods sekmesindeki panelin aynı sorgusu';
-  if (p === 'pods') return 'Servis › Pods sekmesinin pod kümesi';
-  return "servisin pod regex'i (namespace bilinmiyor)";
+export function thanosSourceText(p?: string, lang: Lang = 'tr'): string {
+  if (p === 'pods-resource') return t('mlx.thanos.podsRes', lang);
+  if (p === 'pods') return t('mlx.thanos.pods', lang);
+  return t('mlx.thanos.regex', lang);
 }
 
 /** SAF: kartın Logs bağlantısı (/logs?service=&q=&severity=) → grafik süzgeci.
@@ -191,17 +194,19 @@ export function highlightColors(names: readonly string[], highlight: string | un
   return out;
 }
 
-/** SAF: suçlu seri kanıt satırı (adlar kırpılmaz). noun: "istemci" vb. */
-export function contributorLine(c: Contributors, noun: string): string {
-  const n = (v: number) => Math.round(v).toLocaleString('tr-TR');
+/** SAF: suçlu seri kanıt satırı (adlar kırpılmaz). noun: "istemci" vb.
+ *  v0.10.2291 — isteğe bağlı lang (varsayılan 'tr'); nouns çoğul ad (TR'de aynı). */
+export function contributorLine(c: Contributors, noun: string, lang: Lang = 'tr', nouns: string = noun): string {
+  const n = (v: number) => Math.round(v).toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US');
+  const rest = (k: string, others: number) => tf(k, lang, { n: others, noun, nouns });
   switch (c.kind) {
     case 'single':
-      return `Tepe anında neredeyse tamamı tek ${noun}: ${c.name} (${n(c.value)})` +
-        (c.others ? (c.othersZero ? `; diğer ${c.others} ${noun} 0.` : `; diğer ${c.others} ${noun} daha düşük.`) : '.');
+      return tf('mlx.contrib.single', lang, { noun, name: c.name, v: n(c.value) }) +
+        (c.others ? rest(c.othersZero ? 'mlx.contrib.zero' : 'mlx.contrib.lower', c.others) : '.');
     case 'top':
-      return `Tepe anında en çok: ${c.items.map(i => `${i.name} (${n(i.value)})`).join(', ')}` + (c.others > 0 ? `; diğer ${c.others} ${noun} daha düşük.` : '.');
+      return tf('mlx.contrib.top', lang, { items: c.items.map(i => `${i.name} (${n(i.value)})`).join(', ') }) + (c.others > 0 ? rest('mlx.contrib.lower', c.others) : '.');
     case 'spread':
-      return `Tepe anında ${c.count} ${noun}ye yayılmış; tek bir öne çıkan yok.`;
+      return tf('mlx.contrib.spread', lang, { n: c.count, noun, nouns });
   }
   return '';
 }

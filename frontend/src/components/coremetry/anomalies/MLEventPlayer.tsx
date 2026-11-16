@@ -15,6 +15,7 @@ import { Button } from '@/components/shadcn/button';
 import { Slider } from '@/components/shadcn/slider';
 import { compactRegions, replayChart } from '@/lib/mlReplay';
 import { fmtClock } from '@/lib/utils';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2291 — grafik / oynatma metni arayüz dilinde
 
 import {
   activeStep, frameAt, nextIndex, nextReduced, playStart, reducedSequence, stepIndices, PLAY_REDUCED_STEP_MS, PLAY_TICK_MS,
@@ -55,6 +56,9 @@ export function MLEventPlayer({ snap, play, autoPlay = false, above, series, com
   const stepIdx = useMemo(() => (play ? stepIndices(times, play.steps) : []), [times, play]);
   const seq = useMemo(() => reducedSequence(stepIdx), [stepIdx]);
   const canPlay = !compact && !!play && play.frames.length > 0 && times.length > 1;
+  const lang = useLang();
+  // v0.10.2291 — bölge etiketi ('anomali' / 'tetik') kıyas değeri; yalnız gösterimi dilde.
+  const regionLabel = (l: string) => (l === 'anomali' ? t('mlx.region.anomaly', lang) : l === 'tetik' ? t('mlx.region.trigger', lang) : l);
 
   const start = () => {
     reducedRef.current = prefersReducedMotion();
@@ -97,32 +101,32 @@ export function MLEventPlayer({ snap, play, autoPlay = false, above, series, com
       {times.length > 0 ? (
         <TimeChart height={220} times={times} deployMarkers={ch.deploys}
           regions={compact
-            ? compactRegions(ch.regions, clockHM).map(r => ({ ...r, color: 'var(--text3)', subtle: true }))
-            : ch.regions.map(r => ({ ...r, color: r.label === 'anomali' ? 'var(--err)' : 'var(--warn)' }))}
+            ? compactRegions(ch.regions, clockHM, lang).map(r => ({ ...r, color: 'var(--text3)', subtle: true }))
+            : ch.regions.map(r => ({ ...r, label: regionLabel(r.label), color: r.label === 'anomali' ? 'var(--err)' : 'var(--warn)' }))}
           playhead={canPlay && cursorSec != null ? { cursorSec, fromSec: play?.from } : null}
           hideLegend={!!override || compact} leftInteger={!!override} yAxisLeft={compact}
           series={override ?? [
-            { key: 'v', label: snap.part || 'değer', data: ch.value, color: 'var(--accent)', type: 'line', width: 2 },
-            { key: 'hi', label: ch.banded ? 'beklenen aralık üst' : 'alarm sınırı üst', data: ch.upper, color: 'var(--text3)', type: 'line', width: 1 },
-            { key: 'lo', label: ch.banded ? 'beklenen aralık alt' : 'alarm sınırı alt', data: ch.lower, color: 'var(--text3)', type: 'line', width: 1 },
-            ...(ch.banded && !compact ? [{ key: 'alarm', label: 'alarm sınırı', data: ch.alarm, color: 'var(--warn)', type: 'line' as const, width: 1 }] : []),
+            { key: 'v', label: snap.part || t('mlRecord.measure.value', lang), data: ch.value, color: 'var(--accent)', type: 'line', width: 2 },
+            { key: 'hi', label: t(ch.banded ? 'mlx.pl.bandHi' : 'mlx.pl.alarmHi', lang), data: ch.upper, color: 'var(--text3)', type: 'line', width: 1 },
+            { key: 'lo', label: t(ch.banded ? 'mlx.pl.bandLo' : 'mlx.pl.alarmLo', lang), data: ch.lower, color: 'var(--text3)', type: 'line', width: 1 },
+            ...(ch.banded && !compact ? [{ key: 'alarm', label: t('mlx.pl.alarm', lang), data: ch.alarm, color: 'var(--warn)', type: 'line' as const, width: 1 }] : []),
           ]} />
-      ) : <p className="text-sm text-muted-foreground">{snap.part ? 'Seri boş (ml_series bu pencereyi taşımıyor).' : 'Bu dedektör seri tutmaz (kesitsel karar); kanıt aşağıda.'}</p>}
+      ) : <p className="text-sm text-muted-foreground">{t(snap.part ? 'mlx.pl.emptySeries' : 'mlx.pl.noSeries', lang)}</p>}
       {compact && times.length > 0 && !override && (
-        <p className="m-0 mt-1 text-xs text-muted-foreground" data-testid="ml-chart-legend">düz çizgi: değer · ince çizgiler: normal aralık</p>
+        <p className="m-0 mt-1 text-xs text-muted-foreground" data-testid="ml-chart-legend">{t('mlx.pl.legend', lang)}</p>
       )}
       {canPlay && play && (
         <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-2 border-t border-[color:var(--divider)] pt-2" data-testid="ml-play-controls">
-          <Button size="sm" onClick={toggle} aria-label={playing ? 'Oynatmayı duraklat' : 'Olayı oynat'} data-testid="ml-play-toggle">
-            {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}{playing ? 'Duraklat' : 'Oynat'}
+          <Button size="sm" onClick={toggle} aria-label={t(playing ? 'mlx.pl.pauseAria' : 'mlx.pl.playAria', lang)} data-testid="ml-play-toggle">
+            {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}{t(playing ? 'mlx.pl.pause' : 'mlx.pl.play', lang)}
           </Button>
-          <div className="inline-flex flex-wrap gap-1" role="group" aria-label="Olay adımları">
+          <div className="inline-flex flex-wrap gap-1" role="group" aria-label={t('mlx.pl.steps', lang)}>
             {play.steps.map((s, j) => (
               <Button key={s.key} size="sm" variant="outline" aria-pressed={j === act} data-testid={`ml-step-${s.key}`}
                 onClick={() => { setPlaying(false); setI(stepIdx[j]); }}>{s.label}</Button>
             ))}
           </div>
-          <Slider className="min-w-[120px] flex-[1_1_160px]" min={0} max={last} step={1} value={[i]} thumbLabel="Zaman çizgisinde gez"
+          <Slider className="min-w-[120px] flex-[1_1_160px]" min={0} max={last} step={1} value={[i]} thumbLabel={t('mlx.pl.scrub', lang)}
             onValueChange={v => { setPlaying(false); setI(v[0] ?? last); }} />
           <p className="m-0 basis-full text-sm tabular-nums" aria-live="polite" data-testid="ml-play-say">
             {frame && <><b>{frame.clock}</b> — {frame.text}</>}

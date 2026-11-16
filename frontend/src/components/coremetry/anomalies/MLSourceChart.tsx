@@ -21,7 +21,7 @@ import { api, isCanceled } from '@/lib/api';
 import { serviceHref } from '@/lib/serviceHref';
 import { operationTracesHref, tracesPivotHref } from '@/lib/pivotHref';
 import { fmtClock } from '@/lib/utils';
-import { useT } from '@/lib/i18n';
+import { t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; // v0.10.2291 — kaynak / işaret / bağlantı metni arayüz dilinde
 import { entryLatencyDSL } from '@/lib/entrySpans';
 import { metricRedSeries, metricRedUnit } from '@/components/cosreChartSpec';
 import type { MLEvent, MLSourceSeries, SpanMetricSeries } from '@/lib/types';
@@ -29,6 +29,12 @@ import { highlightColors, liveGapLine, type ServiceRedAgg, thanosSourceText, pan
 
 const hm = (ns: number) => fmtClock(new Date(ns / 1e6)).slice(0, 5);
 const cssVar = (t: string) => getComputedStyle(document.documentElement).getPropertyValue(t);
+const marksText = (open: boolean, startNs: number, endNs: number, lang: Lang) =>
+  (open ? tf('mlx.marks.open', lang, { d: hm(startNs) }) : tf('mlx.marks.closed', lang, { d: hm(startNs), e: hm(endNs) }));
+const stepText = (step: number, lang: Lang) =>
+  (step < 60 ? tf('aed.unit.s', lang, { n: step }) : tf('aed.unit.m', lang, { n: Math.round(step / 60) }));
+const detectedRegion = (startNs: number, endNs: number, lang: Lang) =>
+  [{ fromSec: Math.floor(startNs / 1e9), toSec: Math.floor(endNs / 1e9), label: tf('mlx.region.detected', lang, { t: hm(startNs) }), color: 'var(--text3)', subtle: true }];
 
 export interface SourceChartProps {
   lead: Pick<MLEvent, 'detector' | 'signal' | 'code' | 'service' | 'startedAt' | 'lastSeen' | 'pod' | 'evidence'>;
@@ -68,10 +74,11 @@ function Frame({ title, source, marks, link, children }: {
 }
 
 export function MLSourceChart({ lead, open, fallback, onContributors, logsLink, onPeak, direction }: SourceChartProps) {
-  const panel = useMemo(() => sourcePanelFor(lead, 1, logsLink), [lead, logsLink]);
+  const lang = useLang();
+  const panel = useMemo(() => sourcePanelFor(lead, 1, logsLink, lang), [lead, logsLink, lang]);
   // Pencere bir kez (sayfa açılışı) sabitlenir: her render'da now() oynarsa sorgu anahtarı değişirdi.
   const [win] = useState(() => panelWindow(lead.startedAt, lead.lastSeen, open, Date.now() * 1e6));
-  const marks = open ? `Tespit ${hm(lead.startedAt)} · sürüyor` : `Tespit ${hm(lead.startedAt)} · Bitti ${hm(lead.lastSeen)}`;
+  const marks = marksText(open, lead.startedAt, lead.lastSeen, lang);
   if (panel.kind === 'kafka-lag') return <KafkaLag panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} onContributors={onContributors} onPeak={onPeak} direction={direction} />;
   if (panel.kind === 'traces') return <TracesStrip panel={panel} win={win} marks={marks} fallback={fallback} />;
   if (panel.kind === 'metric') return <MetricSeries panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} onPeak={onPeak} direction={direction} />;
@@ -83,9 +90,10 @@ export function MLSourceChart({ lead, open, fallback, onContributors, logsLink, 
 }
 
 function Gap({ reason, children }: { reason?: string; children: ReactNode }) {
+  const lang = useLang();
   return (
     <>
-      <p data-testid="ml-source-gap" className="m-0 mb-1.5 text-xs text-muted-foreground">{liveGapLine(reason)}</p>
+      <p data-testid="ml-source-gap" className="m-0 mb-1.5 text-xs text-muted-foreground">{liveGapLine(reason, lang)}</p>
       {children}
     </>
   );
@@ -97,6 +105,7 @@ function KafkaLag({ panel, win, lead, marks, fallback, onContributors, onPeak, d
   onPeak?: (p: number | null) => void; direction?: string;
 }) {
   const def = useMemo(() => kafkaPanels({ service: panel.service }).find(p => p.id === 'lag'), [panel.service]);
+  const lang = useLang();
   const items = useMemo(() => (def ? def.queries.map((q, i) => ({ id: `lag#${i}`, expr: q.expr, instant: false })) : []), [def]);
   const r = useHttpPromql(items, { from: win.fromNs, to: win.toNs }, !!def);
   const series: SpanMetricSeries[] = useMemo(
@@ -113,11 +122,11 @@ function KafkaLag({ panel, win, lead, marks, fallback, onContributors, onPeak, d
   const step = stepSeconds(Math.max(60, Math.round((win.toNs - win.fromNs) / 1e9)));
   const range = { preset: 'custom' as const, fromMs: Math.floor(win.fromNs / 1e6), toMs: Math.ceil(win.toNs / 1e6) };
   return (
-    <Frame source={`Messaging sayfasındaki panelin aynısı · ${step < 60 ? `${step} sn` : `${Math.round(step / 60)} dk`} adım · VictoriaMetrics`}
-      marks={marks} link={{ label: 'Messaging sayfasında aç', href: serviceHref(lead.service, { tab: 'messaging', range }) }}>
+    <Frame source={tf('mlx.src.kafka', lang, { step: stepText(step, lang) })}
+      marks={marks} link={{ label: tl('mlx.link.messaging', lang), href: serviceHref(lead.service, { tab: 'messaging', range }) }}>
       <HttpChartPanel title={def.title} series={series} unit={def.unit} stepSec={step} loading={pending}
         syncKey="ml-source" legendKey="ml-source:kafka-lag" legendOpen={false}
-        regions={[{ fromSec: Math.floor(lead.startedAt / 1e9), toSec: Math.floor(lead.lastSeen / 1e9), label: `tespit ${hm(lead.startedAt)}`, color: 'var(--text3)', subtle: true }]} />
+        regions={detectedRegion(lead.startedAt, lead.lastSeen, lang)} />
     </Frame>
   );
 }
@@ -127,6 +136,7 @@ function TracesStrip({ panel, win, marks, fallback }: {
   marks: string; fallback: ReactNode;
 }) {
   const [data, setData] = useState<{ count: SpanMetricSeries[]; errors: SpanMetricSeries[]; rt: SpanMetricSeries[] } | null | undefined>(undefined);
+  const lang = useLang();
   useEffect(() => {
     const ctl = new AbortController();
     const filters = [
@@ -155,10 +165,10 @@ function TracesStrip({ panel, win, marks, fallback }: {
     ? tracesPivotHref({ window: range, service: panel.service, minMs: panel.minMs, hasError: panel.errorsFirst || undefined,
       filters: JSON.stringify([{ k: 'http.route', op: '=', v: [panel.operation] }]) })
     : operationTracesHref({ window: range, service: panel.service, operation: panel.operation, hasError: panel.errorsFirst || undefined });
-  const title = panel.errorsFirst ? `${panel.operation} · hata trace'leri` : `${panel.operation} · yanıt süresi (${panel.stat})`;
+  const title = panel.errorsFirst ? tf('mlx.tr.errTitle', lang, { op: panel.operation }) : tf('mlx.tr.rtTitle', lang, { op: panel.operation, stat: panel.stat });
   return (
-    <Frame title={title} source="Traces sayfasındaki şeridin aynısı · 1 dakikalık · örneklenmiş trace'ler (ClickHouse)"
-      marks={marks} link={{ label: "Traces'te aç", href }}>
+    <Frame title={title} source={tl('mlx.src.traces', lang)}
+      marks={marks} link={{ label: tl('mlx.link.traces', lang), href }}>
       <VolumeChart count={data?.count ?? null} errors={data?.errors ?? null} latency={data?.rt ?? null} stat={panel.stat}
         height={150} xRange={{ from: win.fromNs / 1e9, to: win.toNs / 1e9 }} />
     </Frame>
@@ -173,19 +183,21 @@ function LogsChart({ panel, win, lead, marks, fallback }: {
   lead: SourceChartProps['lead']; marks: string; fallback: ReactNode;
 }) {
   const [state, setState] = useState<'loading' | 'ok' | 'fallback'>('loading');
+  const lang = useLang();
   const filter = useMemo(() => ({ service: panel.service, search: panel.search, pattern: panel.pattern, severity: panel.severity, traceId: '', spanId: '' }), [panel]);
   const range = useMemo(() => ({ from: win.fromNs, to: win.toNs }), [win]);
-  const regions = useMemo(() => [{ fromSec: Math.floor(lead.startedAt / 1e9), toSec: Math.floor(lead.lastSeen / 1e9), label: `tespit ${hm(lead.startedAt)}`, color: 'var(--text3)', subtle: true }],
-    [lead.startedAt, lead.lastSeen]);
+  const regions = useMemo(() => detectedRegion(lead.startedAt, lead.lastSeen, lang),
+    [lead.startedAt, lead.lastSeen, lang]);
   const onSeries = useCallback((s: { name: string; total: number }[] | null) => {
     setState(s && s.some(x => x.total > 0) ? 'ok' : 'fallback');
   }, []);
   if (state === 'fallback') return <>{fallback}</>;
   const href = logsHref({ service: panel.service, q: panel.search || undefined, pattern: panel.pattern, severity: panel.severity || undefined, window: { fromNs: win.fromNs, toNs: win.toNs } });
-  const what = panel.pattern ? `${panel.pattern} deseni` : panel.search ? 'bu mesajı içeren loglar' : panel.severity > 0 ? 'hata logları' : 'tüm loglar';
+  const what = panel.pattern ? tf('mlx.logs.pattern', lang, { p: panel.pattern })
+    : tl(panel.search ? 'mlx.logs.search' : panel.severity > 0 ? 'mlx.logs.errors' : 'mlx.logs.all', lang);
   return (
-    <Frame title={`${panel.service} · ${what}`} source="Logs sayfasındaki histogramın aynısı · seviyeye göre · 3 saate kadar 1 dakikalık kova"
-      marks={marks} link={{ label: panel.search || panel.pattern ? "Logs'ta aç (bu kalıp)" : "Logs'ta aç", href }}>
+    <Frame title={`${panel.service} · ${what}`} source={tl('mlx.src.logs', lang)}
+      marks={marks} link={{ label: tl(panel.search || panel.pattern ? 'mlx.openLogs.tpl' : 'mlx.openLogs', lang), href }}>
       <LogsHistogram source="anomaly" range={range} filter={filter} onSeries={onSeries} height={150} regions={regions} />
     </Frame>
   );
@@ -199,6 +211,7 @@ function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction }: 
   lead: SourceChartProps['lead']; marks: string; fallback: ReactNode; onPeak?: (p: number | null) => void; direction?: string;
 }) {
   const [data, setData] = useState<MLSourceSeries | null | undefined>(undefined);
+  const lang = useLang();
   useEffect(() => {
     const ctl = new AbortController();
     api.mlSourceSeries({ detector: panel.detector, service: panel.service, code: panel.code, family: panel.family, measure: panel.measure, from: win.fromNs, to: win.toNs }, ctl.signal)
@@ -206,8 +219,8 @@ function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction }: 
       .catch((e: unknown) => { if (!isCanceled(e)) setData(null); });
     return () => ctl.abort();
   }, [panel, win]);
-  const regions = useMemo(() => [{ fromSec: Math.floor(lead.startedAt / 1e9), toSec: Math.floor(lead.lastSeen / 1e9), label: `tespit ${hm(lead.startedAt)}`, color: 'var(--text3)', subtle: true }],
-    [lead.startedAt, lead.lastSeen]);
+  const regions = useMemo(() => detectedRegion(lead.startedAt, lead.lastSeen, lang),
+    [lead.startedAt, lead.lastSeen, lang]);
   // Tepe yalnız tek seride (VM: dedektörün ölçtüğü seri). Thanos pod başına
   // çizer; pod tepesi servis değeri değil → cümle dedektör değerinde kalır.
   useEffect(() => {
@@ -224,18 +237,18 @@ function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction }: 
   const byPod = thanos || !!q?.by;
   const range = { preset: 'custom' as const, fromMs: Math.floor(win.fromNs / 1e6), toMs: Math.ceil(win.toNs / 1e6) };
   const step = data?.stepSec ?? 60;
-  const stepTxt = step < 60 ? `${step} sn` : `${Math.round(step / 60)} dk`;
+  const stepTxt = stepText(step, lang);
   const title = `${q?.label ?? panel.code}${thanos ? ` · ${panel.cluster}` : ''}`;
-  const tail = data?.truncated ? ' · seri tavanı aşıldı' : '';
+  const tail = data?.truncated ? tl('mlx.src.capped', lang) : '';
   const source = thanos
-    ? `${thanosSourceText(q?.panel)} · pod başına · ${stepTxt} adım · Thanos (${panel.cluster})${tail}`
-    : q?.by ? `dedektörün kaynağı · pod başına · ${stepTxt} adım · VictoriaMetrics${tail}`
-      : `dedektörün ölçtüğü seri · ${stepTxt} adım · VictoriaMetrics`;
+    ? tf('mlx.src.thanos', lang, { panel: thanosSourceText(q?.panel, lang), step: stepTxt, cluster: panel.cluster, tail })
+    : q?.by ? tf('mlx.src.vmPod', lang, { step: stepTxt, tail })
+      : tf('mlx.src.vm', lang, { step: stepTxt });
   const link = thanos
-    ? { label: "Clusters'ta aç", href: serviceHref(panel.service, { tab: 'infra', range, params: { icluster: panel.cluster } }) }
-    : { label: 'Servis sayfasında aç', href: serviceHref(panel.service, { range }) };
+    ? { label: tl('mlx.link.clusters', lang), href: serviceHref(panel.service, { tab: 'infra', range, params: { icluster: panel.cluster } }) }
+    : { label: tl('mlx.link.service', lang), href: serviceHref(panel.service, { range }) };
   const note = panel.highlight
-    ? (colors.size ? `Sapan pod kırmızı: ${panel.highlight}; diğer ${names.length - 1} pod gri.` : `Sapan pod (${panel.highlight}) bu pencerede seri döndürmedi.`)
+    ? (colors.size ? tf('mlx.pod.hl', lang, { pod: panel.highlight, n: names.length - 1 }) : tf('mlx.pod.hlNone', lang, { pod: panel.highlight }))
     : undefined;
   return (
     <Frame source={source} marks={marks} link={link}>
@@ -268,7 +281,8 @@ export function LegacyLogChart({ service, search, pattern, startedAt, lastSeen, 
     () => ({ kind: 'logs', service, search: search ?? '', pattern: pattern || undefined, severity: 0, href: '' }), [service, search, pattern]);
   const [win] = useState(() => panelWindow(startedAt, lastSeen, open, Date.now() * 1e6));
   const lead = useMemo(() => ({ detector: '', signal: 'log', service, startedAt, lastSeen }), [service, startedAt, lastSeen]);
-  const marks = open ? `Tespit ${hm(startedAt)} · sürüyor` : `Tespit ${hm(startedAt)} · Bitti ${hm(lastSeen)}`;
+  const lang = useLang();
+  const marks = marksText(open, startedAt, lastSeen, lang);
   if (!service) return <>{fallback}</>;
   return <LogsChart panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} />;
 }
@@ -284,6 +298,7 @@ export function ServiceRedChart({ service, agg, label, startedAt, lastSeen, open
 }) {
   const [win] = useState(() => panelWindow(startedAt, lastSeen, open, Date.now() * 1e6));
   const [data, setData] = useState<{ series: SpanMetricSeries[]; unit: string; metric: boolean } | null | undefined>(undefined);
+  const lang = useLang();
   useEffect(() => {
     const ctl = new AbortController();
     const run = async () => {
@@ -300,17 +315,16 @@ export function ServiceRedChart({ service, agg, label, startedAt, lastSeen, open
       .catch((e: unknown) => { if (!isCanceled(e)) setData(null); });
     return () => ctl.abort();
   }, [service, agg, win]);
-  const regions = useMemo(() => [{ fromSec: Math.floor(startedAt / 1e9), toSec: Math.floor(lastSeen / 1e9), label: `tespit ${hm(startedAt)}`, color: 'var(--text3)', subtle: true }],
-    [startedAt, lastSeen]);
+  const regions = useMemo(() => detectedRegion(startedAt, lastSeen, lang),
+    [startedAt, lastSeen, lang]);
   if (data === null) return <Gap>{fallback}</Gap>;
-  if (data && !data.series.some(s => (s.points ?? []).length)) return <Gap reason="olay penceresinde servisin RED serisi yok">{fallback}</Gap>;
-  const marks = open ? `Tespit ${hm(startedAt)} · sürüyor` : `Tespit ${hm(startedAt)} · Bitti ${hm(lastSeen)}`;
+  if (data && !data.series.some(s => (s.points ?? []).length)) return <Gap reason={tl('mlx.reason.noRed', lang)}>{fallback}</Gap>;
+  const marks = marksText(open, startedAt, lastSeen, lang);
   const range = { preset: 'custom' as const, fromMs: Math.floor(win.fromNs / 1e6), toMs: Math.ceil(win.toNs / 1e6) };
-  const source = data?.metric ? 'Servis Overview panelinin serisi · metrik (VictoriaMetrics)'
-    : "Servis Overview panelinin serisi · giriş span'leri (ClickHouse)";
+  const source = tl(data?.metric ? 'mlx.src.redMetric' : 'mlx.src.redSpans', lang);
   const named = (data?.series ?? []).map(s => (s.groupKey.some(Boolean) ? s : { ...s, groupKey: [label] }));
   return (
-    <Frame source={source} marks={marks} link={{ label: "Overview'da aç", href: serviceHref(service, { range }) }}>
+    <Frame source={source} marks={marks} link={{ label: tl('mlx.link.overview', lang), href: serviceHref(service, { range }) }}>
       <HttpChartPanel title={`${service} · ${label}`} series={named} unit={data?.unit ?? ''} stepSec={60} loading={data === undefined}
         syncKey="ml-source" legendKey={`ml-source:svc-red:${agg}`} legendOpen={false} regions={regions} />
     </Frame>

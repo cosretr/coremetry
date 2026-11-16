@@ -7,6 +7,9 @@
 //   • sekme gizlenince duraklar; adım düğmesi imleci oraya taşır;
 //   • ?play=1 (autoPlay) veri gelince kendiliğinden başlar.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+
+// v0.10.2291 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ExplainPlay, MLSnapshot } from '@/lib/types';

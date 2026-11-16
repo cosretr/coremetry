@@ -10,6 +10,7 @@ import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { replayChart } from '@/lib/mlReplay';
 import type { ExplainPlay, LogCourse, MLSnapshot } from '@/lib/types';
 import { MLEventPlayer } from './MLEventPlayer';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2291 — lejant metni arayüz dilinde
 import { LOG_SHADOW_COLOR, logCourseSeries, logStackColor, resolveLogStackView, type LogStackView } from './mlLogCourse';
 
 /** SAF (test): sunucu yığını kaydın zaman ekseniyle birebir mi (değilse çizgi grafiğe düşülür). */
@@ -22,6 +23,7 @@ export function MLLogPlayer({ snap, play, autoPlay, lc }: { snap: MLSnapshot; pl
   const view = resolveLogStackView(sp.get('stack'), lc);
   const times = useMemo(() => replayChart(snap).times, [snap]);
   const aligned = logCourseAligned(lc, times);
+  const lang = useLang();
   const series = useMemo(() => (aligned ? logCourseSeries(lc, view) : null), [aligned, lc, view]);
   const stacks = view === 'level' ? lc.byLevel ?? [] : lc.byPattern;
   const setView = (v: LogStackView) => setSp(prev => {
@@ -34,18 +36,18 @@ export function MLLogPlayer({ snap, play, autoPlay, lc }: { snap: MLSnapshot; pl
       {aligned && (
         <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground" data-testid="ml-log-legend">
           {(lc.byLevel?.length ?? 0) > 0 && (
-            <SegmentedControl<LogStackView> size="sm" value={view} onChange={setView} aria-label="Yığın türü"
-              options={[{ value: 'pattern', label: 'Mesaj kalıbı' }, { value: 'level', label: 'Seviye' }]} />
+            <SegmentedControl<LogStackView> size="sm" value={view} onChange={setView} aria-label={t('mlx.lp.stack', lang)}
+              options={[{ value: 'pattern', label: t('mlx.ev.template', lang) }, { value: 'level', label: t('mlx.lp.level', lang) }]} />
           )}
           {stacks.map((s, i) => (
             <span key={s.key} className="inline-flex max-w-[320px] items-center gap-1" title={s.label}>
               <i aria-hidden="true" className="inline-block h-2 w-3 shrink-0 rounded-[2px]" style={swatch(logStackColor(s, i))} />
-              <span className="truncate">{s.label}</span>{s.new && <span className="shrink-0 font-medium text-[color:var(--err)]">(yeni)</span>}
+              <span className="truncate">{s.label}</span>{s.new && <span className="shrink-0 font-medium text-[color:var(--err)]">{t('mlx.lp.new', lang)}</span>}
             </span>
           ))}
           {lc.shadow && (
             <span className="inline-flex items-center gap-1">
-              <i aria-hidden="true" className="inline-block h-2 w-3 rounded-[2px] opacity-40" style={swatch(LOG_SHADOW_COLOR)} />gölge çubuk: bu kovada beklenen
+              <i aria-hidden="true" className="inline-block h-2 w-3 rounded-[2px] opacity-40" style={swatch(LOG_SHADOW_COLOR)} />{t('mlx.lp.shadow', lang)}
             </span>
           )}
         </div>

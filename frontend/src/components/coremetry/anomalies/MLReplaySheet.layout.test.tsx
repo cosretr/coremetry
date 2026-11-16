@@ -12,6 +12,9 @@
 //   • kayıt yoksa grafik yerine not;
 //   • grup verilince her üye bir kanıt satırı, durum grubun durumu.
 import { describe, it, expect, vi, afterEach } from 'vitest';
+
+// v0.10.2291 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';

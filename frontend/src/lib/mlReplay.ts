@@ -2,6 +2,7 @@
 // (ml_event_snapshots) kendine yeter: seri, taban medyan+MAD, eşikler,
 // tetiklenen kovalar, rollout'lar JSON string olarak gelir; burada çözülür.
 import type { MLSample, MLSnapshot, RecentDeployEntry } from '@/lib/types';
+import { t, tf, type Lang } from '@/lib/i18n'; // v0.10.2291 — görünen etiket isteğe bağlı lang (varsayılan 'tr')
 
 export interface ReplayPoint { t: number; v: number }
 
@@ -99,12 +100,11 @@ export function replayDeploys(s: MLSnapshot): RecentDeployEntry[] {
   return parseArr<RecentDeployEntry>(s.deploys).filter(d => Number.isFinite(d.firstSeenNs) && d.firstSeenNs > 0);
 }
 
-const DAY_CLASS_TR: Record<string, string> = {
-  holiday: 'tatil', half_day: 'yarım gün', sunday: 'pazar', saturday: 'cumartesi', weekday: 'iş günü', month_end: 'ay sonu benzeri',
-};
+// v0.10.2291 — etiketler lib/i18n'de (mlx.day.*).
+const DAY_CLASSES = new Set(['holiday', 'half_day', 'sunday', 'saturday', 'weekday', 'month_end']);
 /** SAF: takvim sınıfı etiketi (bilinmeyen = ham). */
-export function dayClassLabel(c: string): string {
-  return DAY_CLASS_TR[c] ?? (c || '—');
+export function dayClassLabel(c: string, lang: Lang = 'tr'): string {
+  return DAY_CLASSES.has(c) ? t(`mlx.day.${c}`, lang) : (c || '—');
 }
 
 /** SAF: what-if penceresi — tespitten 24 sa önce → 2 sa sonra (şimdiyi aşmaz). unix sn. */
@@ -170,8 +170,8 @@ export function snapDirection(s: MLSnapshot): 'up' | 'down' {
  *  sade grafik için tek bölge — olay aralığı tek hafif bant, tek etiket
  *  "tespit HH:MM". Tetik kovaları ayrı çizilmez (oynatmalı tam görünüm
  *  teknik ayrıntıda). clock: unix sn → "HH:MM". */
-export function compactRegions(regions: { fromSec: number; toSec: number; label: string }[], clock: (sec: number) => string): { fromSec: number; toSec: number; label: string }[] {
+export function compactRegions(regions: { fromSec: number; toSec: number; label: string }[], clock: (sec: number) => string, lang: Lang = 'tr'): { fromSec: number; toSec: number; label: string }[] {
   const ev = regions.find(r => r.label === 'anomali') ?? regions[0];
   if (!ev) return [];
-  return [{ fromSec: ev.fromSec, toSec: ev.toSec, label: `tespit ${clock(ev.fromSec)}` }];
+  return [{ fromSec: ev.fromSec, toSec: ev.toSec, label: tf('mlx.region.detected', lang, { t: clock(ev.fromSec) }) }];
 }

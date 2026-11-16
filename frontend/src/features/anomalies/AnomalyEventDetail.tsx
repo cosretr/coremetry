@@ -208,7 +208,7 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
         <AnomalyLogVolume service={event.service} win={win} bare />
       </Sect>
     ) : null;
-  const svcRed = serviceRedAggFor(event.kind, details?.metric);
+  const svcRed = serviceRedAggFor(event.kind, details?.metric, lang);
   const seyir = chart ? (
     <Sect title={t('aed.sect.trend', lang)} sub={t(chart.spec.operation ? 'aed.sub.opWin' : 'aed.sub.svcWin', lang)}>
       <CosreChart spec={chart.spec} presentation={chartPresentation} />
@@ -249,7 +249,7 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
       <div data-testid="anomaly-header" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', margin: '8px 0 2px', fontSize: 13 }}>
         <span className="mono">{event.service || '—'}</span>
         {isTraceAnomalyKind(event.kind) && event.pattern && <span className="mono" style={{ color: 'var(--text3)' }}>· {event.pattern}</span>}
-        <Badge tone={event.status === 'active' ? 'neutral' : 'success'}>{legacyStatusText(event, Date.now() * 1e6)}</Badge>
+        <Badge tone={event.status === 'active' ? 'neutral' : 'success'}>{legacyStatusText(event, Date.now() * 1e6, lang)}</Badge>
       </div>
       {/* v0.10.2128 (Problems sadeleştirme S8) — alarm detayıyla aynı tek
           satır üst veri: Servis · Ekip · SRE (farklıysa) · Tür. Ne zaman
@@ -369,12 +369,12 @@ function AnomalyEvidenceRows({ event }: { event: AnomalyEvent }) {
   const others = (row?.legacy ?? []).filter(e => e.id !== event.id);
   // v0.10.2038 — aynı tür + aynı kalıp TEK satır (örnekler alt alta, en çok 2);
   // log türünde kanıt cümleyi tekrar etmez, kalıp tam ve kopyalanabilir.
-  const groups = legacyEvidenceGroups([event, ...others]);
+  const groups = legacyEvidenceGroups([event, ...others], lang);
   const items: { key: string; kind: SignalKind; text: string; source: string; pattern?: string; samples?: string[] }[] = [
     ...groups.map(g => ({ key: g.key, kind: legacySignal({ kind: g.kind } as Pick<AnomalyEvent, 'kind'>), text: g.text, source: g.source, pattern: g.pattern, samples: g.samples })),
     ...(row?.ml ?? []).map(m => ({
       key: `ml:${m.id}`, kind: signalKindOf(m.detector, m.signal), text: m.summary || m.detector,
-      source: evidenceSource(m.detector, m.signal, m.evidence),
+      source: evidenceSource(m.detector, m.signal, m.evidence, lang),
     })),
   ];
   return (
