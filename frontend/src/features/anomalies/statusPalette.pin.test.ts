@@ -66,7 +66,7 @@ describe('v0.10.922 — tek durum → ton sözlüğü', () => {
   });
 
   it('yüzeyler sözlükten okur, kendi tonunu seçmez', () => {
-    expect(inbox).toContain('<TriageStatusBadge s={k} label={k} title={`Durum: ${s}`} />');
+    expect(inbox).toContain("<TriageStatusBadge s={k} label={k} title={tf('inbox.cell.status', lang, { s })} />"); // v0.10.2283
     expect(anomalies).toContain('<TriageStatusBadge s={s} label={label}');
     expect(detail).toContain('<ProblemStatusBadge status={problem.status} />');
     expect(detail).toContain('<TriageStatusBadge s={state} label={STATE_LABEL[state]} />');

@@ -12,6 +12,7 @@
 // Okuyucular `in` daraltmasıyla yazılı: alanların lib/types.ts/api.ts
 // karşılığı ayrı birleştirme adımında geliyor; iki hâlde de tip güvenli
 // (cast yok).
+import { tf, type Lang } from '@/lib/i18n'; // v0.10.2283 — ipuçları arayüz dilinde (varsayılan 'tr')
 
 /** Satırın yayılım işareti: n = servis sayısı (kendisi dahil), partners = ortaklar (≤5). */
 export type SpreadMark = { n: number; partners: string[] };
@@ -31,11 +32,11 @@ export function spreadOf(row: object | null | undefined): SpreadMark | null {
  * "Aynı exception aynı anda 3 serviste: a, b (+1) · pencere ±10 dk".
  * `+k` = adı yazılmayan ortaklar (n − 1 − partners).
  */
-export function spreadTitle(n: number, partners: readonly string[], windowMin?: number): string {
+export function spreadTitle(n: number, partners: readonly string[], windowMin?: number, lang: Lang = 'tr'): string {
   const rest = Math.max(0, n - 1 - partners.length);
   const names = partners.length ? partners.join(', ') + (rest > 0 ? ` (+${rest})` : '') : '';
-  const win = typeof windowMin === 'number' && windowMin > 0 ? ` · pencere ±${windowMin} dk` : '';
-  return `Aynı exception aynı anda ${n} serviste${names ? `: ${names}` : ''}${win}`;
+  const win = typeof windowMin === 'number' && windowMin > 0 ? tf('spread.win', lang, { m: windowMin }) : '';
+  return tf('spread.title', lang, { n, names: names ? `: ${names}` : '', win });
 }
 
 /**
@@ -46,11 +47,9 @@ export function spreadTitle(n: number, partners: readonly string[], windowMin?: 
  * yeniden görülmüş) tabanın altında ve tek serviste de olsa gösterilir;
  * kural cümlesi bunu söyler (sunucu: exceptionIsRegressed / FloorExemptRegressed).
  */
-export function defaultFloorTitle(floor: number, windowMin?: number): string {
-  const win = typeof windowMin === 'number' && windowMin > 0 ? ` (±${windowMin} dk)` : '';
-  return `Varsayılan kural: ${floor}+ oluşumlu gruplar, regressed gruplar (çözülmüş, sonra yeniden görülmüş) `
-    + `ve aynı anda${win} en az 2 serviste görülen gruplar gösterilir. `
-    + `${floor}'in altında, tek serviste kalan ve regressed olmayan gruplar gizli — hepsini görmek için "show all".`;
+export function defaultFloorTitle(floor: number, windowMin?: number, lang: Lang = 'tr'): string {
+  const win = typeof windowMin === 'number' && windowMin > 0 ? tf('spread.floorWin', lang, { m: windowMin }) : '';
+  return tf('spread.floor', lang, { f: floor, win });
 }
 
 /**
@@ -58,12 +57,10 @@ export function defaultFloorTitle(floor: number, windowMin?: number): string {
  * CH hatası ya da hata sonrası backoff) varsayılan şeridin ipucu. Taban
  * istisnasız uygulandı; gizli sayı o an çoklu-servis grupları da içerir.
  */
-export function spreadOffFloorTitle(floor: number): string {
+export function spreadOffFloorTitle(floor: number, lang: Lang = 'tr'): string {
   // v0.10.949 — regressed istisnası yayılımdan bağımsız: yayılım okunamasa da
-  // regressed gruplar görünür kalır.
-  return `Çoklu-servis istisnası geçici olarak kullanılamıyor (yayılım okunamadı): `
-    + `${floor}'in altındaki gruplar gizli, aynı anda birden çok serviste görülenler dahil — `
-    + `yalnız regressed gruplar (çözülmüş, sonra yeniden görülmüş) gösteriliyor. Hepsini görmek için "show all".`;
+  // regressed gruplar görünür kalır. v0.10.2283 — metin lib/i18n spread.* (TR aynı).
+  return tf('spread.off', lang, { f: floor });
 }
 
 /** Yanıttaki taban alanları (Inbox + /api/exception-groups). Hepsi opsiyonel. */

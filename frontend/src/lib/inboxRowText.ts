@@ -13,6 +13,7 @@
 //                   olay sayısı ("3 olay", v0.10.2163); diğerleri "—".
 import type { InboxItem } from './types';
 import { isInboxExcFamily } from './inboxHref';
+import { t, tf, type Lang } from './i18n'; // v0.10.2283 — lang isteğe bağlı (varsayılan 'tr')
 
 // Açıklamaya eklenen yaşam döngüsü ekleri (olayın cümlesi değil).
 // v0.10.2163 — ' · merged into ': başka bir Problem'e katılıp kapanan satır
@@ -49,13 +50,13 @@ export function inboxRowLabel(it: InboxItem): string | null {
 export const EVENT_COUNT_MIN = 2;
 
 /** Occurrences hücresi: sayı metni ya da null ("—"). */
-export function inboxOccurrencesLabel(it: InboxItem): string | null {
+export function inboxOccurrencesLabel(it: InboxItem, lang: Lang = 'tr'): string | null {
   if (it.exception) return it.exception.occurrences.toLocaleString();
   const n = it.incident?.problemCount ?? 0;
-  if (it.kind === 'incident' && n > 0) return `${n} problem`;
+  if (it.kind === 'incident' && n > 0) return tf('inbox.occ.problems', lang, { n });
   // v0.10.2163 (Davis tarzı tek Problem D4) — bu Problem'e birleşen olaylar
   // (aynı servisin başka dedektörleri); tek olayda rozet yok.
-  if (it.kind === 'problem' && (it.eventCount ?? 0) >= EVENT_COUNT_MIN) return `${it.eventCount} olay`;
+  if (it.kind === 'problem' && (it.eventCount ?? 0) >= EVENT_COUNT_MIN) return tf('inbox.occ.events', lang, { n: it.eventCount ?? 0 });
   return null;
 }
 
@@ -66,31 +67,36 @@ const KIND_LABEL_TR: Record<string, string> = {
   problem: 'Alarm', exception: 'Exception', httperror: 'HTTP hatası', anomaly: 'Anomali', incident: 'Incident',
 };
 
-export function inboxKindLabel(it: Pick<InboxItem, 'kind' | 'source'>): string {
-  return KIND_LABEL_TR[it.kind] ?? it.source;
+export function inboxKindLabel(it: Pick<InboxItem, 'kind' | 'source'>, lang: Lang = 'tr'): string {
+  return KIND_LABEL_TR[it.kind] != null ? t(`inbox.kind.${it.kind}`, lang) : it.source;
 }
 
 // v0.10.2122 (Problems sadeleştirme S2) — üst sayım cümlesi, TEK satır, şerit
 // değil: "N açık problem: a P1, b P2, c P3. En eskisi X gündür açık."
 // Sayılar sunucunun öncelik çiplerinden (süzgeç ve tavandan önceki küme),
 // "en eskisi" aynı kümeden (oldestFirstSeen). Sayı yoksa null (cümle yok).
-export function inboxCountSentence(counts: Record<string, number> | undefined, oldestNs: number | undefined, nowNs: number): string | null {
+export function inboxCountSentence(counts: Record<string, number> | undefined, oldestNs: number | undefined, nowNs: number, lang: Lang = 'tr'): string | null {
   if (!counts) return null;
   const p1 = counts.P1 ?? 0, p2 = counts.P2 ?? 0, p3 = counts.P3 ?? 0;
   const n = p1 + p2 + p3;
-  if (n === 0) return 'Açık problem yok.';
-  const f = (v: number) => v.toLocaleString('tr-TR');
-  let s = `${f(n)} açık problem: ${f(p1)} P1, ${f(p2)} P2, ${f(p3)} P3.`;
+  if (n === 0) return t('inbox.count.none', lang);
+  const f = (v: number) => v.toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US');
+  let s = tf('inbox.count', lang, { n: f(n), p1: f(p1), p2: f(p2), p3: f(p3) });
   if (oldestNs && oldestNs > 0 && nowNs > oldestNs) {
-    s += ` En eskisi ${openForTR(nowNs - oldestNs)} açık.`;
+    s += tf('inbox.count.oldest', lang, { d: openFor(nowNs - oldestNs, lang) });
   }
   return s;
 }
 
 /** SAF: süre → "3 gündür" / "5 saattir" / "12 dakikadır" (aşağı yuvarlar, en az 1). */
 export function openForTR(ns: number): string {
+  return openFor(ns, 'tr');
+}
+
+/** v0.10.2283 — openForTR'nin dil alan hâli: EN "3 days" / "5 hours" / "12 minutes". */
+export function openFor(ns: number, lang: Lang): string {
   const min = Math.floor(ns / 60e9);
-  if (min >= 24 * 60) return `${Math.floor(min / (24 * 60))} gündür`;
-  if (min >= 60) return `${Math.floor(min / 60)} saattir`;
-  return `${Math.max(1, min)} dakikadır`;
+  if (min >= 24 * 60) return tf('inbox.openFor.d', lang, { n: Math.floor(min / (24 * 60)) });
+  if (min >= 60) return tf('inbox.openFor.h', lang, { n: Math.floor(min / 60) });
+  return tf('inbox.openFor.m', lang, { n: Math.max(1, min) });
 }

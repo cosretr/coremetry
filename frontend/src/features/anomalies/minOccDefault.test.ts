@@ -28,7 +28,10 @@ describe('varsayılan occurrence tabanı (v0.10.740 → v0.10.949)', () => {
       expect(src).toContain('if (raw === null) return DEFAULT_MIN_OCC;');
       expect(src).toContain("if (v === DEFAULT_MIN_OCC) next.delete('minOcc'); else next.set('minOcc', String(v));");
       expect(src).toContain('onClick={() => setMinOcc(0)}>show all</Button>');
-      expect(src).toContain('onClick={() => setMinOcc(DEFAULT_MIN_OCC)}>{DEFAULT_MIN_OCC}+ (varsayılan)</Button>');
+      // v0.10.2283 — Inbox düğmesi lib/i18n inbox.minOcc.default (TR "{n}+ (varsayılan)").
+      expect(src).toContain(name === 'Inbox'
+        ? "onClick={() => setMinOcc(DEFAULT_MIN_OCC)}>{tf('inbox.minOcc.default', lang, { n: DEFAULT_MIN_OCC })}</Button>"
+        : 'onClick={() => setMinOcc(DEFAULT_MIN_OCC)}>{DEFAULT_MIN_OCC}+ (varsayılan)</Button>');
     });
     it(`${name}: varsayılan kip param yokluğu; istisna şeridi ve satır işareti var; "5+ only" yok`, () => {
       expect(src).toContain("const floorDefault = searchParams.get('minOcc') === null;");

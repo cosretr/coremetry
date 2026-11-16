@@ -22,6 +22,7 @@
 import type {
   AnomalyEvent, ExceptionGroup, InboxItem, NoiseReason, Problem, ProblemVerdict, ProblemVerdictKind, ProblemVerdictPolicy,
 } from '@/lib/types';
+import { t, type Lang } from '@/lib/i18n'; // v0.10.2283 — gerekçe etiketleri arayüz dilinde
 
 // v0.10.1032 (operatör: "Anomali ve alert rule'lara girdiğimde drawer çıkıyor.
 // Exception gibi detay gözükmüyor.") — imza artık yalnız kuyruk satırından
@@ -102,8 +103,14 @@ export const NOISE_REASONS: { id: NoiseReason; label: string; hint: string }[] =
   { id: 'wrong_attribution', label: 'Yanlış atıf', hint: 'servis ya da kaynak yanlış' },
   { id: 'other', label: 'Diğer', hint: 'not zorunlu' },
 ];
-export function noiseReasonLabel(r: NoiseReason | undefined | ''): string {
-  return NOISE_REASONS.find(x => x.id === r)?.label ?? '';
+export function noiseReasonLabel(r: NoiseReason | undefined | '', lang: Lang = 'tr'): string {
+  const x = NOISE_REASONS.find(y => y.id === r);
+  return x ? (lang === 'tr' ? x.label : t(`verdict.reason.${x.id}`, lang)) : '';
+}
+
+/** v0.10.2283 — gerekçe ipucu arayüz dilinde (TR = NOISE_REASONS.hint). */
+export function noiseReasonHint(r: NoiseReason, lang: Lang): string {
+  return lang === 'tr' ? (NOISE_REASONS.find(y => y.id === r)?.hint ?? '') : t(`verdict.reason.${r}.hint`, lang);
 }
 
 /** Alarm problemi detayından özne. Etiket = kural adı (inbox.go problemToInbox

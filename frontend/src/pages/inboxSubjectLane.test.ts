@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseSubjectLane } from '@/lib/problemSubject';
+import { t } from '@/lib/i18n';
 
 // inboxSubjectLane.test.ts — v0.9.1342, ŞERİDİN BAĞLI OLDUĞU kapı.
 //
@@ -63,7 +64,8 @@ describe('inbox özne şeridi — bağlantı kapısı', () => {
     expect(parseSubjectLane('queue')).toBe('service');
     expect(page).toContain('inboxQ.data?.externalSubjectCount');
     expect(page).toContain('externalLaneCount !== undefined');
-    expect(page).toContain("external: 'Dış kaynaklar'");
+    expect(page).toContain("external: 'inbox.lane.external'"); // v0.10.2283 — metin lib/i18n'de
+    expect(t('inbox.lane.external', 'tr')).toBe('Dış kaynaklar');
   });
 
   // v0.10.1026 (operatör kararı 2026-10-01: "14 girsin") — dış kaynak
@@ -72,11 +74,15 @@ describe('inbox özne şeridi — bağlantı kapısı', () => {
   // daraltma olduğunu. İpucu çipe GERÇEKTEN bağlı olmalı — sabit tanımlı
   // ama hiç basılmayan bir metin kapıyı yeşil tutardı (v0.9.1339 dersi).
   it('çip ipuçları: varsayılan şerit dış kaynağı da içeriyor', () => {
-    expect(page).toContain("service: 'Servisler ve dış kaynak (ör. Oracle) problemleri'");
-    expect(page).toContain("external: 'Yalnız dış kaynak problemleri — varsayılan listede de görünürler'");
-    expect(page).toContain('title={SUBJECT_TITLE[l]}');
+    // v0.10.2283 — metinler lib/i18n inbox.lane.* (TR aynı); çip ipucu anahtarı okur.
+    expect(page).toContain("service: 'inbox.lane.service.title'");
+    expect(page).toContain("external: 'inbox.lane.external.title'");
+    expect(t('inbox.lane.service.title', 'tr')).toBe('Servisler ve dış kaynak (ör. Oracle) problemleri');
+    expect(t('inbox.lane.external.title', 'tr')).toBe('Yalnız dış kaynak problemleri — varsayılan listede de görünürler');
+    expect(page).toContain('title={SUBJECT_TITLE[l] ? tl(SUBJECT_TITLE[l], lang) : undefined}');
     // Etiket DEĞİŞMEDİ — yeni şerit ya da yeni ad yok.
-    expect(page).toContain("service: 'Servisler', db: 'Veritabanları', external: 'Dış kaynaklar'");
+    expect(page).toContain("service: 'inbox.lane.service', db: 'inbox.lane.db', external: 'inbox.lane.external'");
+    expect(['service', 'db', 'external'].map(l => t(`inbox.lane.${l}`, 'tr'))).toEqual(['Servisler', 'Veritabanları', 'Dış kaynaklar']);
   });
 });
 

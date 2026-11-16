@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui';
 import { Field } from '@/components/ui/Field';
 import { Popover } from '@/components/ui/Popover';
-import { NOISE_REASONS } from '@/lib/problemVerdict';
+import { NOISE_REASONS, noiseReasonLabel, noiseReasonHint } from '@/lib/problemVerdict';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2283 — metinler arayüz dilinde (TR aynı)
 import type { NoiseReason } from '@/lib/types';
 
 // NoiseReasonButton — v0.10.1531 (Problem standardı R3, D5; mockup "Problem
@@ -34,6 +35,7 @@ export function NoiseReasonButton({ label, onConfirm, active, disabled, loading,
   size?: 'sm' | 'md';
   ariaLabel?: string;
 }) {
+  const lang = useLang();
   const anchorRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<NoiseReason | ''>('');
@@ -53,32 +55,31 @@ export function NoiseReasonButton({ label, onConfirm, active, disabled, loading,
         {label} ▾
       </Button>
       <Popover anchorRef={anchorRef} open={open} onClose={() => setOpen(false)} kind="dialog"
-        ariaLabel="Problem değil — gerekçe" width={300}>
+        ariaLabel={t('noise.aria', lang)} width={300}>
         <div className="nr-pop" onClick={e => e.stopPropagation()}>
           <fieldset className="nr-reasons">
-            <legend className="field-label">Neden problem değil?</legend>
+            <legend className="field-label">{t('noise.legend', lang)}</legend>
             {NOISE_REASONS.map(r => (
               <label key={r.id} className="nr-reason">
                 <input type="radio" name="noise-reason" value={r.id}
                   checked={reason === r.id} onChange={() => setReason(r.id)} />
-                <span><b>{r.label}</b> <span className="field-hint">— {r.hint}</span></span>
+                <span><b>{noiseReasonLabel(r.id, lang)}</b> <span className="field-hint">— {noiseReasonHint(r.id, lang)}</span></span>
               </label>
             ))}
           </fieldset>
-          <Field label={reason === 'other' ? 'Not (zorunlu)' : 'Not (isteğe bağlı)'} value={note} maxLength={280}
-            onChange={e => setNote(e.target.value)} error={noteNeeded ? '“Diğer” için kısa bir not yazın' : undefined} />
+          <Field label={t(reason === 'other' ? 'noise.noteReq' : 'noise.noteOpt', lang)} value={note} maxLength={280}
+            onChange={e => setNote(e.target.value)} error={noteNeeded ? t('noise.noteNeeded', lang) : undefined} />
           {isAdmin && (
             <label className="nr-reason">
               <input type="checkbox" checked={permanent} onChange={e => setPermanent(e.target.checked)} />
-              <span><b>Kalıcı gizle</b> <span className="field-hint">— bildirim süresiz susar (yalnız yönetici)</span></span>
+              <span><b>{t('noise.permanent', lang)}</b> <span className="field-hint">{t('noise.permanentHint', lang)}</span></span>
             </label>
           )}
           <div className="field-hint">
-            Satırı listeden gizler. Bildirim {permanent && isAdmin ? 'süresiz' : '7 gün'} susar
-            {permanent && isAdmin ? '.' : '; öncelik yükselir ya da etki 2 katına çıkarsa yine gelir.'} Geri alınabilir.
+            {t(permanent && isAdmin ? 'noise.hint.forever' : 'noise.hint.days', lang)}
           </div>
           <Button variant="primary" size="sm" disabled={!reason || noteNeeded} onClick={confirm}>
-            Problem değil olarak işaretle
+            {t('noise.confirm', lang)}
           </Button>
         </div>
       </Popover>

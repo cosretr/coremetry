@@ -105,16 +105,18 @@ export const KIND_LABEL: Record<InboxKind, string> = {
 // üçüncü şerit: dış metrik kaynağı özneleri (Oracle / Influx, kind=external).
 // O satırlar ne servis ne db şeridine giriyordu; hiçbir yerde görünmüyorlardı.
 export const SUBJECT_LANES: readonly SubjectLane[] = ['service', 'db', 'external'];
+// v0.10.2283 — değerler lib/i18n anahtarı (inbox.lane.*; TR "Servisler", "Veritabanları", "Dış kaynaklar").
 export const SUBJECT_LABEL: Record<SubjectLane, string> = {
-  service: 'Servisler', db: 'Veritabanları', external: 'Dış kaynaklar',
+  service: 'inbox.lane.service', db: 'inbox.lane.db', external: 'inbox.lane.external',
 };
 // v0.10.1026 (operatör kararı 2026-10-01: "14 girsin") — dış kaynak
 // problemleri VARSAYILAN listede de görünür (sunucu: varsayılan şerit =
 // servis + dış kaynak). Yeni şerit yok; çip ipuçları kümeyi söylüyor, yoksa
 // "Servisler" çipi altında bir Oracle satırı yanlış şeritte sanılırdı.
+// v0.10.2283 — değerler lib/i18n anahtarı (inbox.lane.*.title; TR metin aynı).
 export const SUBJECT_TITLE: Partial<Record<SubjectLane, string>> = {
-  service: 'Servisler ve dış kaynak (ör. Oracle) problemleri',
-  external: 'Yalnız dış kaynak problemleri — varsayılan listede de görünürler',
+  service: 'inbox.lane.service.title',
+  external: 'inbox.lane.external.title',
 };
 export type InboxStatus = 'open' | 'all' | 'ignored';
 export const STATUS_PIVOTS: readonly InboxStatus[] = ['open', 'all', 'ignored'];

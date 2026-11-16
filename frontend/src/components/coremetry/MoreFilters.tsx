@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { tf, t as tl, useLang } from '@/lib/i18n'; // v0.10.2283 — varsayılan etiket arayüz dilinde (TR aynı)
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/shadcn/collapsible';
 
 // MoreFilters — v0.10.2124 (Problems sadeleştirme S4, mockup operatör onaylı):
@@ -20,7 +21,9 @@ export interface MoreFiltersProps {
   children: ReactNode;
 }
 
-export function MoreFilters({ activeCount, label = 'Diğer süzgeçler', children }: MoreFiltersProps) {
+export function MoreFilters({ activeCount, label: labelProp, children }: MoreFiltersProps) {
+  const lang = useLang();
+  const label = labelProp ?? tl('moreFilters.label', lang);
   const [open, setOpen] = useState(activeCount > 0);
   const active = activeCount > 0;
   useEffect(() => {
@@ -31,7 +34,7 @@ export function MoreFilters({ activeCount, label = 'Diğer süzgeçler', childre
       <CollapsibleTrigger className="group/mf inline-flex cursor-pointer items-center gap-1.5 rounded-(--radius-sm) border-0 bg-transparent px-1 py-0.5 text-[length:var(--fs-sm)] text-(--text2) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-(--focus)">
         <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 transition-transform group-data-[state=open]/mf:rotate-90" />
         {label}
-        {active && <span className="text-(--accent2)">{` (${activeCount} etkin)`}</span>}
+        {active && <span className="text-(--accent2)">{tf('moreFilters.active', lang, { c: activeCount })}</span>}
       </CollapsibleTrigger>
       <CollapsibleContent className="pt-2">
         {children}

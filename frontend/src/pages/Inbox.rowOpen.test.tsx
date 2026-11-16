@@ -17,6 +17,9 @@
 //   • exception satırı → /problems?exc= (değişmedi);
 //   • varsayılan istek prio=P1 + sort=firstSeen desc; açık parametreler aynen.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// v0.10.2283 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';

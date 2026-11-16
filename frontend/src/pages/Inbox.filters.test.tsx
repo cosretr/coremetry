@@ -6,6 +6,9 @@
 // Owner/SRE, taban ve kayıtlı görünümler "Diğer süzgeçler" altında KAPALI;
 // varsayılan-dışı bir değer etkinse bölüm AÇIK gelir; sayfa altı bağlantıları.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// v0.10.2283 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 import { act } from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

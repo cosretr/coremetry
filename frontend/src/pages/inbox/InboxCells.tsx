@@ -13,7 +13,7 @@ import { RecurringMarker } from '@/features/anomalies/RecurringMarker'; // v0.10
 import { promotedRecurrence } from '@/features/anomalies/detailSummary'; // v0.10.1054
 import { Badge } from '@/components/ui/Badge';
 import type { InboxItem } from '@/lib/types';
-import { tf, useLang } from '@/lib/i18n';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2283 — hücre metinleri arayüz dilinde (TR aynı)
 import { graphRowSubText, type ProblemGraphRowSummary } from '@/lib/problemGraph';
 import { FrequentChip } from '@/components/coremetry/problems/ProblemRepeatBlock';
 
@@ -26,9 +26,9 @@ const isExcFamily = isInboxExcFamily;
 // operatörün önce okuması gereken şey değerin kesin olmadığıdır.
 // Rozette ayrıca görünür bir '≈' var: yalnız tooltip'e saklamak, üstüne
 // gelmeyen operatör için kesin bir atıftan farksız olurdu.
-function teamChipTitle(it: InboxItem, filterHint: string): string {
+function teamChipTitle(it: InboxItem, filterHint: string, lang: 'en' | 'tr'): string {
   if (!it.teamsVia) return filterHint;
-  return `${derivedTeamTitle(it.teamsVia, it.service)}\n\n${filterHint}`;
+  return `${derivedTeamTitle(it.teamsVia, it.service, lang)}\n\n${filterHint}`;
 }
 
 // v0.9.255 — durum rozeti. Üç kaynağın state sözlükleri farklı (problem:
@@ -46,9 +46,10 @@ function teamChipTitle(it: InboxItem, filterHint: string): string {
 // düzelt.") — sözlükte new nötre indi; amber yalnız regressed. Bu rozet
 // sözlükten okuduğu için burada ayrı eşleme yok.
 function StatusBadge({ s }: { s?: string }) {
+  const lang = useLang();
   if (!s) return null;
   const k = s.toLowerCase();
-  return <TriageStatusBadge s={k} label={k} title={`Durum: ${s}`} />;
+  return <TriageStatusBadge s={k} label={k} title={tf('inbox.cell.status', lang, { s })} />;
 }
 
 // v0.10.922 (sade palet adım 1) — atanan kişi/takım üst veri: mavi değil nötr.
@@ -56,17 +57,18 @@ function StatusBadge({ s }: { s?: string }) {
 // süzgeci, owner VEYA SRE); çok ekipli exception → "N ekip" (liste title'da);
 // eşleme yok → soluk "sahipsiz". Owner yoksa SRE.
 export function TeamCell({ it, active, onPick }: { it: InboxItem; active: string; onPick: (v: string) => void }) {
+  const lang = useLang();
   if (it.teams && it.teams.length >= 2) {
-    return <span className="ib-team" title={it.teams.join(', ')}>{it.teams.length} ekip</span>;
+    return <span className="ib-team" title={it.teams.join(', ')}>{tf('inbox.cell.teams', lang, { n: it.teams.length })}</span>;
   }
-  const t = it.ownerTeam || it.sreTeam;
-  if (!t) return <span className="cell-faint">sahipsiz</span>;
-  const on = active === t;
+  const team = it.ownerTeam || it.sreTeam;
+  if (!team) return <span className="cell-faint">{t('inbox.cell.unowned', lang)}</span>;
+  const on = active === team;
   return (
     <Chip size="xs" active={on}
-      onClick={e => { e.stopPropagation(); onPick(on ? '' : t); }}
-      title={teamChipTitle(it, on ? 'Ekip süzgecini kaldır' : `Yalnız ${t} ekibinin problemleri`)}>
-      {it.ownerTeam ? <Users size={11} strokeWidth={1.75} /> : <Shield size={11} strokeWidth={1.75} />} {it.teamsVia ? '≈ ' : ''}{t}
+      onClick={e => { e.stopPropagation(); onPick(on ? '' : team); }}
+      title={teamChipTitle(it, on ? t('inbox.cell.teamOff', lang) : tf('inbox.cell.teamOnly', lang, { t: team }), lang)}>
+      {it.ownerTeam ? <Users size={11} strokeWidth={1.75} /> : <Shield size={11} strokeWidth={1.75} />} {it.teamsVia ? '≈ ' : ''}{team}
     </Chip>
   );
 }
@@ -85,6 +87,7 @@ export function AssigneePill({ v }: { v: string }) {
 // işareti, yinelenen, runbook, deploy. AI özeti artık TriageTitleCell'de
 // (köken ✨ + yaş damgası korunur; v0.9.530 gerekçesi orada).
 export function RowChips({ it, real, oraLabel }: { it: InboxItem; real: boolean; oraLabel?: string }) {
+  const lang = useLang();
   return (
     <>
       {/* v0.9.255 — durum rozeti. `status` alanı telde vardı ama hiç
@@ -94,7 +97,7 @@ export function RowChips({ it, real, oraLabel }: { it: InboxItem; real: boolean;
       {/* v0.10.1109 — Oracle hata tablosu grubu rozeti (Exceptions satırıyla aynı). */}
       {oraLabel && (
         <Badge tone="info" style={{ fontSize: 9, padding: '0 5px' }}
-          title="Oracle hata tablosu satırlarından oluşan grup (kaynak · hata kodu · operasyon)">
+          title={t('inbox.cell.oraTitle', lang)}>
           {oraLabel}
         </Badge>
       )}
@@ -108,7 +111,7 @@ export function RowChips({ it, real, oraLabel }: { it: InboxItem; real: boolean;
       {/* v0.10.1015 — öğretme işareti (yalnız "gerçek problem"; "problem
           değil" satırları kendi görünümünde). */}
       {real && (
-        <span className="badge b-gray" style={{ fontSize: 9 }} title="Gerçek problem olarak işaretlendi">gerçek</span>
+        <span className="badge b-gray" style={{ fontSize: 9 }} title={t('inbox.cell.realTitle', lang)}>{t('inbox.cell.real', lang)}</span>
       )}
       {/* v0.10.1049 — yinelenen anomali: nötr tek kelime, sayı + ilk görülme
           ipucunda (yinelenmemişte hiçbir şey). */}
@@ -127,7 +130,7 @@ export function RowChips({ it, real, oraLabel }: { it: InboxItem; real: boolean;
         // v0.10.922 (sade palet adım 1) — üst veri: nötr.
         <SafeHref href={it.runbookUrl}
           onClick={e => e.stopPropagation()}
-          className="badge b-gray" title="Runbook aç">📕 runbook</SafeHref>
+          className="badge b-gray" title={t('inbox.cell.runbook', lang)}>📕 runbook</SafeHref>
       )}
       {/* v0.10.1055 (operatör: "Okdir") — ipucu "undefined v…" başlıyordu:
           deploy nesnesinde `service` yok (chstore.RecentDeploy), servis

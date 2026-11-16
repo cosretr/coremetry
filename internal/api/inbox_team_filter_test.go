@@ -182,7 +182,7 @@ func TestInboxTeamParamPairing(t *testing.T) {
 	}
 	// GÖRÜNÜRLÜK: filtre çip olarak basılmalı. Görünmeyen bir daraltma,
 	// kısa listeyi "kuyrukta bir şey yok" diye okutur.
-	if !strings.Contains(src, "takım: {teamFilter}") || !strings.Contains(src, "setTeamFilter('')") {
+	if !strings.Contains(src, "{tl('inbox.teamChip', lang)}{teamFilter}") || !strings.Contains(src, "setTeamFilter('')") {
 		t.Error("takım süzgeci çipi (ya da × temizleme) yok — sessiz daraltma")
 	}
 }

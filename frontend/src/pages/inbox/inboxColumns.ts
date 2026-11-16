@@ -4,6 +4,7 @@
 import { inboxRowHeadline, inboxOccurrencesLabel } from '@/lib/inboxRowText';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { InboxItem } from '@/lib/types';
+import { t, tf, type Lang } from '@/lib/i18n'; // v0.10.2283 — kolon ve kırpma metinleri arayüz dilinde (TR aynı)
 
 const PRIO_RANK: Record<string, number> = { P1: 3, P2: 2, P3: 1 };
 
@@ -35,37 +36,36 @@ const PRIO_RANK: Record<string, number> = { P1: 3, P2: 2, P3: 1 };
 // oluşum sayısı "Ne bozuk"un alt satırında, satır triyajı (D1) İlgilenen
 // hücresinde hover/focus'ta (tablo standardı: eylemler tek sağ sütunda).
 // "Ne zamandan beri" `firstSeen` sıralama kimliğini korur (s_inbox linkleri).
-export const INBOX_COLS: DataTableColumn<InboxItem>[] = [
-  { id: 'priority', label: 'Öncelik', sortValue: it => PRIO_RANK[it.priority] ?? 0, naturalDir: 'desc', width: 84, minWidth: 80, priority: 1 },
+// v0.10.2283 — etiketler lib/i18n inbox.col.* (TR aynı); dil başına bir dizi.
+export const inboxCols = (lang: Lang): DataTableColumn<InboxItem>[] => [
+  { id: 'priority', label: t('inbox.col.priority', lang), sortValue: it => PRIO_RANK[it.priority] ?? 0, naturalDir: 'desc', width: 84, minWidth: 80, priority: 1 },
   // v0.9.648 — ESNEK kolon: başlık serbest metin ve en geniş olan.
-  { id: 'detail',   label: 'Ne bozuk',  sortValue: it => it.std?.headline ?? inboxRowHeadline(it), naturalDir: 'asc', flex: true, minWidth: 260, priority: 1 },
-  { id: 'service',  label: 'Servis', sortValue: it => it.service, naturalDir: 'asc', width: 170, minWidth: 120, priority: 2 },
-  { id: 'team',     label: 'Ekip', width: 150, minWidth: 110, priority: 2 },
-  { id: 'kind',     label: 'Tür', width: 110, minWidth: 90, priority: 3 },
-  { id: 'firstSeen', label: 'Ne zamandan beri', sortValue: it => it.startedAt, naturalDir: 'desc', width: 160, minWidth: 140, priority: 2 },
-  { id: 'assignee', label: 'İlgilenen', sortValue: it => it.assignee ?? '', naturalDir: 'asc', width: 236, minWidth: 150, priority: 3 },
+  { id: 'detail',   label: t('inbox.col.detail', lang),  sortValue: it => it.std?.headline ?? inboxRowHeadline(it), naturalDir: 'asc', flex: true, minWidth: 260, priority: 1 },
+  { id: 'service',  label: t('inbox.col.service', lang), sortValue: it => it.service, naturalDir: 'asc', width: 170, minWidth: 120, priority: 2 },
+  { id: 'team',     label: t('inbox.col.team', lang), width: 150, minWidth: 110, priority: 2 },
+  { id: 'kind',     label: t('inbox.col.kind', lang), width: 110, minWidth: 90, priority: 3 },
+  { id: 'firstSeen', label: t('inbox.col.firstSeen', lang), sortValue: it => it.startedAt, naturalDir: 'desc', width: 160, minWidth: 140, priority: 2 },
+  { id: 'assignee', label: t('inbox.col.assignee', lang), sortValue: it => it.assignee ?? '', naturalDir: 'asc', width: 236, minWidth: 150, priority: 3 },
 ];
 
 // capSortLabel — v0.10.1081: kırpma rozetinin "neye göre" yarısı. Sunucu
 // tavanı seçili sıralamayla keser; eski metin her durumda "öncelik sırasına
 // göre" diyordu ve varsayılan artık ilk görülme.
-const CAP_SORT_LABEL: Record<string, string> = {
-  priority: 'öncelik', firstSeen: 'ilk görülme', lastSeen: 'son görülme', occurrences: 'oluşum sayısı',
-  service: 'servis', source: 'kaynak', detail: 'başlık', assignee: 'atanan',
-  confidence: 'güven', // v0.10.1529
-};
-export function capSortLabel(id: string | null, dir: 'asc' | 'desc'): string {
-  const name = CAP_SORT_LABEL[id ?? ''] ?? CAP_SORT_LABEL.priority;
+// v0.10.2283 — adlar lib/i18n inbox.capSort.* (TR aynı).
+const CAP_SORT_IDS = new Set(['priority', 'firstSeen', 'lastSeen', 'occurrences', 'service', 'source', 'detail', 'assignee',
+  'confidence']); // confidence: v0.10.1529
+export function capSortLabel(id: string | null, dir: 'asc' | 'desc', lang: Lang = 'tr'): string {
+  const name = t(`inbox.capSort.${CAP_SORT_IDS.has(id ?? '') ? id : 'priority'}`, lang);
   const order = id === 'firstSeen' || id === 'lastSeen'
-    ? (dir === 'desc' ? ', en yeni önce' : ', en eski önce')
+    ? t(dir === 'desc' ? 'inbox.capSort.newest' : 'inbox.capSort.oldest', lang)
     : '';
-  return `${name} sırasına göre${order}`;
+  return tf('inbox.capSort', lang, { name, order });
 }
 
 // occLine — v0.10.2121: "Ne bozuk" alt satırındaki oluşum sayısı (exception →
 // "N oluşum", katlanmış incident → "N problem"); yoksa null.
-export function occLine(it: InboxItem): string | null {
-  const l = inboxOccurrencesLabel(it);
+export function occLine(it: InboxItem, lang: Lang = 'tr'): string | null {
+  const l = inboxOccurrencesLabel(it, lang);
   if (!l) return null;
-  return it.exception ? `${l} oluşum` : l;
+  return it.exception ? tf('inbox.occ', lang, { l }) : l;
 }

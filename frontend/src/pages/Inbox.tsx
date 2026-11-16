@@ -61,7 +61,8 @@ import {
   PRIO_ALL, PRIO_DEFAULT, SORT_DEFAULT, INBOX_SORT_IDS, KIND_ALL, KIND_DEFAULT, KIND_ALL_RETIRED, KIND_DEFAULT_RETIRED,
   KIND_LABEL, SUBJECT_LANES, SUBJECT_LABEL, SUBJECT_TITLE, STATUS_PIVOTS, DEFAULT_MIN_OCC, type InboxStatus,
 } from './inbox/inboxFilters';
-import { INBOX_COLS, capSortLabel, occLine } from './inbox/inboxColumns';
+import { inboxCols, capSortLabel, occLine } from './inbox/inboxColumns';
+import { t as tl, tf, useLang } from '@/lib/i18n'; // v0.10.2283 — Türkçe metinler lib/i18n inbox.* (TR aynı)
 import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub, GraphFrequentChip } from './inbox/InboxCells';
 
 
@@ -93,6 +94,7 @@ export default function InboxPage() {
   // v0.10.1827 — tür sözlüğü + varsayılan Incidents ana anahtarına bağlı
   // (kabuk bayrağı user.features.incidents; yoksa emekli).
   const { user } = useAuth();
+  const lang = useLang();
   const incidentsOn = user?.features?.incidents === true;
   const kindAll = incidentsOn ? KIND_ALL : KIND_ALL_RETIRED;
   const kindDefault = incidentsOn ? KIND_DEFAULT : KIND_DEFAULT_RETIRED;
@@ -461,8 +463,8 @@ export default function InboxPage() {
   // v0.10.2122 (S2) — üst sayım cümlesi; "şimdi" yanıt geldiğinde sabitlenir
   // (render başına değişmez, yalnız metin — sorgu anahtarına girmez).
   const countSentence = useMemo(() => (inboxQ.isPending || inboxQ.isError ? null
-    : inboxCountSentence(inboxQ.data?.counts, inboxQ.data?.oldestFirstSeen, inboxQ.dataUpdatedAt * 1e6)),
-  [inboxQ.isPending, inboxQ.isError, inboxQ.data, inboxQ.dataUpdatedAt]);
+    : inboxCountSentence(inboxQ.data?.counts, inboxQ.data?.oldestFirstSeen, inboxQ.dataUpdatedAt * 1e6, lang)),
+  [inboxQ.isPending, inboxQ.isError, inboxQ.data, inboxQ.dataUpdatedAt, lang]);
   // v0.9.487 (operatör kararı) — v0.9.328/330 "bakmadığın türler" ve v0.9.424
   // "öncelik filtresi dışında" şeritleri KALDIRILDI: "kafa karıştırıyor".
   // Görünürlük sözleşmesi chip sayılarına devrolur (facet chip'leri seçili
@@ -505,12 +507,13 @@ export default function InboxPage() {
   // priority"; the server now ranks the whole candidate set before capping,
   // so re-ordering here would corrupt the order the cap was applied in.
   const inboxRows = filtered ?? [];
+  const cols = useMemo(() => inboxCols(lang), [lang]); // v0.10.2283
   const dt = useDataTable<InboxItem>({
     // v0.10.2121 — 'inbox2': eski kolon genişlikleri yeni düzene taşınmasın;
     // sıralama URL'i paylaşılan linkler için `s_inbox` kalır.
     storageKey: 'inbox2',
     sortUrlKey: 's_inbox',
-    columns: INBOX_COLS,
+    columns: cols,
     rows: inboxRows,
     // v0.10.1081 — varsayılan ilk görülme (en yeni önce); kişisel kayıt yok,
     // URL `s_inbox` kazanır, bayat kimlik varsayılana düşer.
@@ -567,10 +570,10 @@ export default function InboxPage() {
   const inboxState: Omit<DataTableStateProps<InboxItem>, 'dt'> =
     data === undefined ? { kind: 'loading' }
     : data === null ? { kind: 'error' }
-    : verdictView === 'noise' ? { kind: 'no-match', message: 'Bu görünümde satır yok — şu an açık olanlar arasında “problem değil” olarak işaretlediğin bir imza yok' } // v0.10.1015
-    : facetNarrowed ? { kind: 'no-match', message: 'Kuyruk boş — daha fazlasını görmek için öncelik / tür süzgecini genişlet' }
+    : verdictView === 'noise' ? { kind: 'no-match', message: tl('inbox.empty.noise', lang) } // v0.10.1015
+    : facetNarrowed ? { kind: 'no-match', message: tl('inbox.empty.facet', lang) }
     : otherNarrowed || data.length > 0 ? { kind: 'no-match' }
-    : { kind: 'empty', message: 'Kuyruk boş — şu an ilgini bekleyen bir şey yok' };
+    : { kind: 'empty', message: tl('inbox.empty.none', lang) };
 
   const toggleRow = (id: string) => setPicked(prev => {
     const next = new Set(prev);
@@ -585,7 +588,7 @@ export default function InboxPage() {
     setBulkBusy(true); setBulkNote(null);
     try {
       const r = await api.resolveProblemsBulk(bulkIds);
-      setBulkNote(`${r.resolvedProblems + r.resolvedExceptions} kayıt kapatıldı`);
+      setBulkNote(tf('inbox.note.resolved', lang, { c: r.resolvedProblems + r.resolvedExceptions }));
       setPicked(new Set());
       qc.invalidateQueries({ queryKey: ['inbox'] });
     } catch (e) {
@@ -599,7 +602,7 @@ export default function InboxPage() {
     setBulkBusy(true); setBulkNote(null);
     try {
       const r = await api.deleteProblemsBulk(bulkIds);
-      setBulkNote(`${r.deletedProblems + r.deletedExceptions} kayıt silindi`);
+      setBulkNote(tf('inbox.note.deleted', lang, { c: r.deletedProblems + r.deletedExceptions }));
       setPicked(new Set());
       qc.invalidateQueries({ queryKey: ['inbox'] });
     } catch (e) {
@@ -625,8 +628,8 @@ export default function InboxPage() {
     const errs = [pRes, eRes].filter(r => r.status === 'rejected').length;
     const ok = okProblems + okExceptions;
     setBulkNote(errs
-      ? `${ok} onaylandı, ${errs} istek başarısız`
-      : `${ok} onaylandı`);
+      ? tf('inbox.note.ackErr', lang, { c: ok, e: errs })
+      : tf('inbox.note.ack', lang, { c: ok }));
     setPicked(new Set());
     // The server already dropped the cached list + badge; refetch so
     // the rows leave the screen instead of lingering a poll cycle.
@@ -648,8 +651,8 @@ export default function InboxPage() {
       ...(verdict === 'noise' && noise ? { reason: noise.reason, note: noise.note || undefined, permanent: noise.permanent || undefined } : {}),
     })));
     const ok = res.filter(r => r.status === 'fulfilled').length;
-    const label = verdict === 'real' ? 'gerçek problem' : 'problem değil';
-    setBulkNote(ok === res.length ? `${ok} satır “${label}” işaretlendi` : `${ok} işaretlendi, ${res.length - ok} istek başarısız`);
+    const label = tl(verdict === 'real' ? 'inbox.verdict.real' : 'inbox.verdict.noise', lang);
+    setBulkNote(ok === res.length ? tf('inbox.note.verdict', lang, { c: ok, label }) : tf('inbox.note.verdictErr', lang, { c: ok, e: res.length - ok }));
     setPicked(new Set());
     void qc.invalidateQueries({ queryKey: ['problem-verdicts'] });
     setBulkBusy(false);
@@ -750,10 +753,10 @@ export default function InboxPage() {
               linki) seçenek olarak eklenir, sessizce düşmez. */}
           <NativeSelect size="sm" value={teamFilter}
             onChange={e => setTeamFilter(e.target.value)}
-            aria-label="Ekip"
-            title="Takım süzgeci (?team=): servisin ownerTeam VEYA sreTeam'i bu takımsa satır kalır."
+            aria-label={tl('inbox.team.aria', lang)}
+            title={tl('inbox.team.title', lang)}
             className={cn('ib-team-select', FIELD_SURFACE)}>
-            <NativeSelectOption value="">Ekip: hepsi</NativeSelectOption>
+            <NativeSelectOption value="">{tl('inbox.team.all', lang)}</NativeSelectOption>
             {teamOptions.map(o => <NativeSelectOption key={o} value={o}>{o}</NativeSelectOption>)}
           </NativeSelect>
           {/* v0.9.357 (mockup C, operatör: "C daha uygun bizim kuruma") —
@@ -761,7 +764,7 @@ export default function InboxPage() {
               select'leriyle tek dil. v0.9.356'nın "sadece"/"tümü" jestleri
               panelin içinde yaşıyor; sayılar da orada — yoğunluk bir tık
               arkaya taşındı, kaybolmadı. */}
-          <FacetMultiSelect label="Öncelik"
+          <FacetMultiSelect label={tl('inbox.f.priority', lang)}
             options={(['P1', 'P2', 'P3'] as const).map(pp => ({
               value: pp, label: pp, count: counts[pp] ?? 0 }))}
             selected={prioSet}
@@ -770,8 +773,8 @@ export default function InboxPage() {
               tıkla açılır (açılır menüye girmeden), sayılarıyla. */}
           {prioSet.size < PRIO_ALL.length && (
             <Button variant="ghost" size="sm" onClick={allPrio}
-              title="P1, P2 ve P3'ün hepsini göster (varsayılan görünüm)">
-              {`tüm öncelikler (${PRIO_ALL.reduce((n, pp) => n + (counts[pp] ?? 0), 0)})`}
+              title={tl('inbox.allPrio.title', lang)}>
+              {tf('inbox.allPrio', lang, { c: PRIO_ALL.reduce((n, pp) => n + (counts[pp] ?? 0), 0) })}
             </Button>
           )}
 
@@ -781,7 +784,7 @@ export default function InboxPage() {
               kaynağında var). Açık bırakmak, tıklandığında hiçbir şey
               değiştirmeyen bir kontrol göstermek olurdu. */}
           {subjectLane === 'service' && (
-            <FacetMultiSelect label="Tür"
+            <FacetMultiSelect label={tl('inbox.f.kind', lang)}
               options={kindAll.map(k => ({
                 value: k, label: KIND_LABEL[k], count: counts[k] ?? 0 }))}
               selected={kindSet as Set<string>}
@@ -826,9 +829,9 @@ export default function InboxPage() {
               beri Ekip açılırı da aynı paramı gösterir, çip derin linkte kalır. */}
           {teamFilter && (
             <Chip onRemove={() => setTeamFilter('')}
-              removeLabel={`${teamFilter} takım filtresini kaldır`}
-              title="Takım süzgeci URL'de taşınıyor (?team=). Servisin ownerTeam VEYA sreTeam'i bu takımsa satır kalır; owner/SRE açılırlarıyla birlikte kullanılırsa hepsi birden daraltır.">
-              takım: {teamFilter}
+              removeLabel={tf('inbox.teamChip.remove', lang, { t: teamFilter })}
+              title={tl('inbox.teamChip.title', lang)}>
+              {tl('inbox.teamChip', lang)}{teamFilter}
             </Chip>
           )}
         </div>
@@ -848,7 +851,7 @@ export default function InboxPage() {
                 açıyordu. Operatörün "iki anlamı belirsiz All" gözlemi düpedüz
                 etiket hatasıydı. */}
             <span className="facet-grp">
-              <span className="gl">Durum</span>
+              <span className="gl">{tl('inbox.f.status', lang)}</span>
               {STATUS_PIVOTS.map(s => (
                 <span key={s} onClick={() => setStatusFilter(s)}
                   className={`facet${statusFilter === s ? ' on' : ''}`}>
@@ -862,14 +865,14 @@ export default function InboxPage() {
                 "Problem değil" işaretli imzalar varsayılanda gizlenir; sayısı
                 çipte hep görünür ve tek tıkla açılır (gizlenen şey saklanmaz). */}
             <span className="facet-grp">
-              <span className="gl">Öğrenilen</span>
+              <span className="gl">{tl('inbox.f.learned', lang)}</span>
               <span onClick={() => setVerdictView('triage')} className={`facet${verdictView === 'triage' ? ' on' : ''}`}
-                title="Problem değil olarak işaretlenenler dışındaki her şey">
+                title={tl('inbox.v.triage.title', lang)}>
                 Triage
               </span>
               <span onClick={() => setVerdictView('noise')} className={`facet${verdictView === 'noise' ? ' on' : ''}`}
-                title="Problem değil olarak işaretlediğin imzalar — satırı açıp işareti kaldırabilirsin">
-                Problem değil ({noiseCount})
+                title={tl('inbox.v.noise.title', lang)}>
+                {tf('inbox.v.noise', lang, { c: noiseCount })}
               </span>
             </span>
 
@@ -890,12 +893,12 @@ export default function InboxPage() {
                 satırlarını da içeriyor; Dış kaynaklar çipi onların
                 daraltılmış görünümü. İkisi de title ile söyleniyor. */}
             <span className="facet-grp">
-              <span className="gl">Özne</span>
+              <span className="gl">{tl('inbox.f.subject', lang)}</span>
               {SUBJECT_LANES.map(l => (
                 <span key={l} onClick={() => setSubjectLane(l)}
-                  title={SUBJECT_TITLE[l]}
+                  title={SUBJECT_TITLE[l] ? tl(SUBJECT_TITLE[l], lang) : undefined}
                   className={`facet${subjectLane === l ? ' on' : ''}`}>
-                  {SUBJECT_LABEL[l]}
+                  {tl(SUBJECT_LABEL[l], lang)}
                   {l === 'db' && dbLaneCount !== undefined && ` (${dbLaneCount})`}
                   {l === 'external' && externalLaneCount !== undefined && ` (${externalLaneCount})`}
                 </span>
@@ -903,7 +906,7 @@ export default function InboxPage() {
             </span>
             {/* v0.10.706 — kategori (Davis sınıfı). Sayılar sayfadaki
                 satırlardan (sunucu sayımı yok; sözlük küçük, ucuz). */}
-            <FacetMultiSelect label="Kategori"
+            <FacetMultiSelect label={tl('inbox.f.category', lang)}
               options={INBOX_CAT_ALL.map(c => ({
                 value: c, label: INBOX_CAT_LABEL[c], count: catCounts[c] ?? 0 }))}
               selected={catSet as Set<string>}
@@ -914,7 +917,7 @@ export default function InboxPage() {
             <select
               value={sinceFilter}
               onChange={e => setParam('since', e.target.value || null)}
-              title="İlk görülme penceresi: yalnız bu pencerede ORTAYA ÇIKAN kayıtlar. Eski ama hâlâ açık kayıtlar 'any' seçiliyken görünür."
+              title={tl('inbox.since.title', lang)}
               style={{
                 background: 'var(--field-bg)', color: 'var(--text)',
                 border: '1px solid var(--border)', borderRadius: 6,
@@ -956,7 +959,7 @@ export default function InboxPage() {
                 // Yayılım kapalıysa (spreadOff) düz taban dili: "Showing N+ groups · X hidden".
                 // v0.10.949 — regressed istisnası her iki dilde de (yayılımdan bağımsız).
                 <>
-                  <span title={spreadOff ? spreadOffFloorTitle(effFloor) : defaultFloorTitle(effFloor, spreadWin)}>
+                  <span title={spreadOff ? spreadOffFloorTitle(effFloor, lang) : defaultFloorTitle(effFloor, spreadWin, lang)}>
                     Showing <b style={{ color: 'var(--text2)' }}>{effFloor}+</b> groups{spreadOff ? ' and regressed groups' : <>, regressed groups and groups (2+ occurrences) seen in ≥2 services at the same time{spreadWin ? ` (±${spreadWin} min)` : ''}</>}
                     {floorLive && hiddenByMinOcc > 0 && <> · <b style={{ color: 'var(--text2)' }}>{hiddenByMinOcc}</b> {spreadOff ? 'hidden' : <>groups below {effFloor}, single service, hidden</>}</>}
                     {!spreadOff && keptBySpread > 0 && <> · <b style={{ color: 'var(--text2)' }}>{keptBySpread}</b> multi-service groups shown although below {effFloor}</>}
@@ -967,7 +970,7 @@ export default function InboxPage() {
                 </>
               ) : minOcc > 0 ? (
                 <>
-                  <span title="Bir kez düşen bir exception bu pencere hakkında bir olgudur, triage edilecek bir problem değil. Eşiğin altındakiler gizli — hepsini görmek için tıkla.">
+                  <span title={tl('inbox.minOcc.title', lang)}>
                     Showing groups with <b style={{ color: 'var(--text2)' }}>{minOcc}+</b> occurrences
                     {hiddenByMinOcc > 0 && <> — <b style={{ color: 'var(--text2)' }}>{hiddenByMinOcc}</b> hidden</>}
                   </span>
@@ -979,7 +982,7 @@ export default function InboxPage() {
               ) : (
                 <>
                   <span>Showing <b style={{ color: 'var(--text2)' }}>every</b> row, including one-off exceptions</span>
-                  <Button variant="ghost" size="sm" onClick={() => setMinOcc(DEFAULT_MIN_OCC)}>{DEFAULT_MIN_OCC}+ (varsayılan)</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setMinOcc(DEFAULT_MIN_OCC)}>{tf('inbox.minOcc.default', lang, { n: DEFAULT_MIN_OCC })}</Button>
                 </>
               )}
               {/* v0.9.1332 — sürüklenmiş kolon genişliklerinin çıkmazı (operatör:
@@ -1005,27 +1008,27 @@ export default function InboxPage() {
             padding: '8px 12px', marginBottom: 8, borderRadius: 6,
             background: 'var(--bg2)', border: '1px solid var(--accent)',
           }}>
-            <b style={{ fontSize: 12 }}>{selCount} seçili</b>
+            <b style={{ fontSize: 12 }}>{tf('inbox.bulk.selected', lang, { c: selCount })}</b>
             <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-              {ackable} onaylanabilir
+              {tf('inbox.bulk.ackable', lang, { c: ackable })}
               {/* Onay yolu yalnız problem + exception grubunda; anomali
                   susturma ister, eski incident emekli (v0.10.2075). */}
-              {skipped > 0 && ` · ${skipped} satır atlanacak (onaylanamaz)`}
+              {skipped > 0 && tf('inbox.bulk.skipped', lang, { c: skipped })}
             </span>
             <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
               {bulkNote && <span style={{ fontSize: 11, color: 'var(--text2)' }}>{bulkNote}</span>}
               <Button variant="primary" size="sm" disabled={ackable === 0}
                 onClick={bulkAcknowledge} loading={bulkBusy}>
-                {`Onayla (${ackable})`}
+                {tf('inbox.bulk.ack', lang, { c: ackable })}
               </Button>
               {/* v0.10.1531 (R3, D1) — toplu triyaj; yalnız editor/admin (sunucu da kapalı). */}
               {isAdmin && (
                 <>
                   <Button variant="secondary" size="sm" disabled={verdictSubjects.length === 0 || bulkBusy}
                     onClick={() => { void bulkVerdict('real'); }}>
-                    {`Gerçek problem (${verdictSubjects.length})`}
+                    {tf('inbox.bulk.real', lang, { c: verdictSubjects.length })}
                   </Button>
-                  <NoiseReasonButton label={`Problem değil (${verdictSubjects.length})`} isAdmin={user?.role === 'admin'}
+                  <NoiseReasonButton label={tf('inbox.bulk.noise', lang, { c: verdictSubjects.length })} isAdmin={user?.role === 'admin'}
                     disabled={verdictSubjects.length === 0 || bulkBusy}
                     onConfirm={c => { void bulkVerdict('noise', c); }} />
                 </>
@@ -1033,30 +1036,30 @@ export default function InboxPage() {
               {isAdmin && (
                 <Button variant="secondary" size="sm" disabled={bulkCloseable === 0 || bulkBusy}
                   onClick={() => { void bulkResolve(); }} data-testid="bulk-resolve">
-                  {`Kapat (${bulkCloseable})`}
+                  {tf('inbox.bulk.close', lang, { c: bulkCloseable })}
                 </Button>
               )}
               {user?.role === 'admin' && (
                 <Button variant="danger" size="sm" disabled={bulkCloseable === 0 || bulkBusy}
                   onClick={() => setDelOpen(true)} data-testid="bulk-delete">
-                  {`Kalıcı sil (${bulkCloseable})`}
+                  {tf('inbox.bulk.delete', lang, { c: bulkCloseable })}
                 </Button>
               )}
               <AlertDialog open={delOpen} onOpenChange={setDelOpen}>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>{`${bulkCloseable} kayıt kalıcı olarak silinsin mi?`}</AlertDialogTitle>
-                    <AlertDialogDescription>Problem ve exception grubu satırları veritabanından silinir; geri alınamaz. Aynı imza yeniden oluşursa yeni kayıt olarak döner. İşlem audit&apos;e düşer.</AlertDialogDescription>
+                    <AlertDialogTitle>{tf('inbox.del.title', lang, { c: bulkCloseable })}</AlertDialogTitle>
+                    <AlertDialogDescription>{tl('inbox.del.body', lang)}</AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Vazgeç</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => { void bulkDelete(); }} data-testid="bulk-delete-confirm">Kalıcı sil</AlertDialogAction>
+                    <AlertDialogCancel>{tl('inbox.del.cancel', lang)}</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => { void bulkDelete(); }} data-testid="bulk-delete-confirm">{tl('inbox.del.confirm', lang)}</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
               <Button variant="secondary" size="sm" disabled={bulkBusy}
                 onClick={() => { setPicked(new Set()); setBulkNote(null); }}>
-                Seçimi temizle
+                {tl('inbox.bulk.clear', lang)}
               </Button>
             </span>
           </div>
@@ -1065,7 +1068,7 @@ export default function InboxPage() {
         {showingStale && (
           <div style={{ marginBottom: 8 }}>
             <span className="badge b-warn">
-              ⏳ Filtre uygulanıyor — aşağıdaki satırlar ÖNCEKİ filtrenin sonucu
+              {tl('inbox.stale', lang)}
             </span>
           </div>
         )}
@@ -1077,9 +1080,8 @@ export default function InboxPage() {
         {scanCapped && (
           <div style={{ marginBottom: 8 }}>
             <span className="badge b-warn"
-              title="Her kaynaktan sınırlı sayıda aday okunuyor. Filtre bu adaylar üzerinde çalıştı — sonuç boşsa 'hiç yok' demek değil, 'taranan adaylar içinde yok' demek. Servis, takım veya ortam ile daralt.">
-              ⚠ Filtre taranan adaylar üzerinde çalıştı — kuyruk bundan
-              büyük olabilir
+              title={tl('inbox.scanCapped.title', lang)}>
+              {tl('inbox.scanCapped', lang)}
             </span>
           </div>
         )}
@@ -1089,8 +1091,7 @@ export default function InboxPage() {
                 görülme); öncelik süzgeci tavandan önce uygulanır. */}
             <span className="badge b-warn"
               title="The server filters by the chosen priorities, sorts the whole matching queue by the chosen column and returns the top slice. Narrow by service, team or environment to reach the rest.">
-              ⚠ {capped.total} kalemden ilk {capped.shown}'i gösteriliyor —{' '}
-              {capSortLabel(srvSort.id, srvSort.dir)} kırpıldı
+              {tf('inbox.capped', lang, { total: capped.total, shown: capped.shown, sort: capSortLabel(srvSort.id, srvSort.dir, lang) })}
             </span>
           </div>
         )}
@@ -1115,8 +1116,8 @@ export default function InboxPage() {
                     whole server-side queue — the list is a capped top
                     slice, so "all" can only honestly mean what is
                     visible. */}
-                <input type="checkbox" aria-label="Görünen satırların hepsini seç"
-                  title="Görünen satırların hepsini seç"
+                <input type="checkbox" aria-label={tl('inbox.selectAll', lang)}
+                  title={tl('inbox.selectAll', lang)}
                   checked={allPickedOnScreen}
                   disabled={(filtered?.length ?? 0) === 0}
                   ref={el => { if (el) el.indeterminate = selCount > 0 && !allPickedOnScreen; }}
@@ -1148,7 +1149,7 @@ export default function InboxPage() {
                     {/* stopPropagation: the row itself opens the detail
                         page, and ticking a box must not also navigate. */}
                     <input type="checkbox" checked={picked.has(it.id)}
-                      aria-label={`Seç: ${it.title}`}
+                      aria-label={tf('inbox.selectRow', lang, { t: it.title })}
                       onChange={() => toggleRow(it.id)} />
                   </td>
                   <td>
@@ -1168,7 +1169,7 @@ export default function InboxPage() {
                         ? <>{head.subject && <><span className="std-subject">{head.subject}</span> · </>}{head.rest}</>
                         : titleText;
                       const detail = it.std
-                        ? <><span className="std-src" title={`Kaynak: ${stdSourceName(it.std.evidence.source)} · ${stdSamplingNote(it.std)}`}>{stdSourceChip(it.std)}</span>
+                        ? <><span className="std-src" title={tf('inbox.srcTitle', lang, { name: stdSourceName(it.std.evidence.source, lang), note: stdSamplingNote(it.std, lang) })}>{stdSourceChip(it.std, lang)}</span>
                             {ora ? oracleInboxDetail(it.exception!.message, oraLabel)
                               : isExcFamily(it) ? <span className="mono">{it.exception?.message}</span>
                                 : it.std.evidence.sentence}</>
@@ -1192,22 +1193,22 @@ export default function InboxPage() {
                     {it.problem && <GraphRowSub row={graphSum.data?.rows?.[it.problem.id]} />}
                     <div className="std-ctx">
                       {/* v0.10.2121 — özne Servis, ekip Ekip kolonunda; oluşum sayısı burada. */}
-                      {occLine(it) && <span className="ib-occ">{occLine(it)}</span>}
+                      {occLine(it, lang) && <span className="ib-occ">{occLine(it, lang)}</span>}
                       {it.std?.context?.map(c => <span key={c}>{c}</span>)}
                       {/* v0.10.949 — aynı exception aynı anda N serviste. */}
                       {spread && (
-                        <span title={spreadTitle(spread.n, spread.partners, spreadWin)}
+                        <span title={spreadTitle(spread.n, spread.partners, spreadWin, lang)}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
                           <span className="dot" aria-hidden="true"
                             style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', flex: 'none' }} />
-                          {spread.n} servis
+                          {tf('inbox.spread', lang, { n: spread.n })}
                         </span>
                       )}
                     </div>
                   </td>
                   <td>
                     {ora && isSyntheticOracleService(it.service) ? (
-                      <span className="mono cell-faint" title="Trace → servis çözümü bu operasyon için servis bulamadı">{it.service}</span>
+                      <span className="mono cell-faint" title={tl('inbox.oraNoSvc', lang)}>{it.service}</span>
                     ) : (
                       <SubjectLink service={it.service} subjectKind={it.subjectKind}
                         href={serviceHref(it.service, { range: inboxItemWindow(it) })}
@@ -1218,14 +1219,14 @@ export default function InboxPage() {
                   <td>
                     <TeamCell it={it} active={teamFilter} onPick={setTeamFilter} />
                   </td>
-                  <td>{inboxKindLabel(it)}</td>
+                  <td>{inboxKindLabel(it, lang)}</td>
                   {/* v0.10.736 — 13 px mono damga sınıfta (ib-when). v0.10.1529 —
                       "Ne zamandan beri": başlangıç + süre · sürüyor; tam damga title'da. */}
                   <td className="ib-when" title={it.startedAt ? tsLong(it.startedAt) : undefined}>
                     {it.std && it.std.since.startedAt
                       ? <>
-                          {stdSinceLine(it.std)}
-                          <div className="ib-when__ago">{stdDurationLine(it.std)}</div>
+                          {stdSinceLine(it.std, Date.now(), lang)}
+                          <div className="ib-when__ago">{stdDurationLine(it.std, lang)}</div>
                         </>
                       : it.startedAt
                         ? <>
@@ -1265,12 +1266,12 @@ export default function InboxPage() {
             hücresinde; ROOT CAUSE rozeti ve "Ne oldu?" detayda (?problem=). */}
         {/* v0.10.2124 (S4) — sayfa altı bağlantıları (mockup): durum
             görünümleri mevcut süzgeçleri korur; kural yönetimi /alerts. */}
-        <nav className="ib-foot" aria-label="Diğer görünümler">
-          <Link to={inboxStatusHref(searchParams, 'all')}>Çözülenler</Link>
+        <nav className="ib-foot" aria-label={tl('inbox.foot', lang)}>
+          <Link to={inboxStatusHref(searchParams, 'all')}>{tl('inbox.foot.resolved', lang)}</Link>
           <span aria-hidden="true">·</span>
-          <Link to={inboxStatusHref(searchParams, 'ignored')}>Yok sayılanlar</Link>
+          <Link to={inboxStatusHref(searchParams, 'ignored')}>{tl('inbox.foot.ignored', lang)}</Link>
           <span aria-hidden="true">·</span>
-          <Link to="/alerts">Alarm kurallarını yönet</Link>
+          <Link to="/alerts">{tl('inbox.foot.rules', lang)}</Link>
         </nav>
       </div>
 

@@ -108,7 +108,7 @@ describe('Inbox sayfası ?team= kablolaması', () => {
   });
 
   it('süzgeç GÖRÜNÜR: çip + × temizleme', () => {
-    expect(src).toContain('takım: {teamFilter}');
+    expect(src).toContain("{tl('inbox.teamChip', lang)}{teamFilter}"); // v0.10.2283 — TR "takım: "
     expect(src).toContain("setTeamFilter('')");
     expect(src).toContain('setParam(INBOX_TEAM_PARAM,');
   });

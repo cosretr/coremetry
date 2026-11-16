@@ -32,7 +32,8 @@ describe('Inbox tarih hücreleri (v0.10.736)', () => {
   // taban = genişlik, yani sığdırma onu ezemez (gizler).
   it('kolon genişlikleri 13 px damgayı sığdırır', () => {
     // v0.10.1529 — first seen "Ne zamandan beri" oldu (aynı sıralama kimliği, 160 px).
-    expect(page).toContain("{ id: 'firstSeen', label: 'Ne zamandan beri', sortValue: it => it.startedAt, naturalDir: 'desc', width: 160, minWidth: 140, priority: 2 }");
+    // v0.10.2283 — etiket lib/i18n inbox.col.firstSeen (TR "Ne zamandan beri").
+    expect(page).toContain("{ id: 'firstSeen', label: t('inbox.col.firstSeen', lang), sortValue: it => it.startedAt, naturalDir: 'desc', width: 160, minWidth: 140, priority: 2 }");
     // v0.10.2121 — Last seen kolonu kalktı (S1); tek damga hücresi.
     expect(page).not.toContain("id: 'lastSeen'");
     expect((page.match(/\{tsCompact\(it\.(startedAt|lastSeen)\)\}/g) ?? []).length).toBe(1);

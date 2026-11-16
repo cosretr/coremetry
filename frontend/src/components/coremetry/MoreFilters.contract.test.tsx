@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 // MoreFilters — v0.10.2124 (Problems S4): kapalı gelir; etkin süzgeç varsa
 // açık gelir ve sayıyı söyler; sonradan etkinleşirse yeniden açılır.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+
+// v0.10.2283 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MoreFilters } from './MoreFilters';

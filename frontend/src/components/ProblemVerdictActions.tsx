@@ -6,6 +6,7 @@ import { NoiseReasonButton, type NoiseReasonChoice } from '@/components/NoiseRea
 import type { InboxItem, ProblemVerdictKind } from '@/lib/types';
 import { verdictInput, type VerdictRowContext } from '@/components/useVerdictRowContext'; // v0.10.1626
 import { useMemo } from 'react';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2283
 
 // ProblemVerdictActions — v0.10.1015 — Problems sekmesinde ÖĞRETME'nin
 // düğmeleri (operatör: "ben hangisi gerçek problem hangisi değil zamanla
@@ -141,6 +142,7 @@ export function ProblemVerdictActions({ item, subject, onDone, flush, compact }:
 // başına yeniden kuruyordu (300 satır = 300 harita). Artık dizin, sorgu ve
 // mutation tablo düzeyinde bir kez (useVerdictRowContext); satır yalnız bakar.
 export function ProblemVerdictRow({ item, ctx }: { item: InboxItem; ctx: VerdictRowContext }) {
+  const lang = useLang(); // v0.10.2283 — satır triyajı arayüz dilinde (TR aynı)
   const subj = inboxVerdictSubject(item);
   if (!subj) return null;
   const sig = subj.signature;
@@ -148,7 +150,7 @@ export function ProblemVerdictRow({ item, ctx }: { item: InboxItem; ctx: Verdict
   const pending = ctx.pendingSig === sig;
   const write = (verdict: ProblemVerdictKind | '', noise?: NoiseReasonChoice) => ctx.write(verdictInput(subj, verdict, noise));
   const noiseDetail = current?.verdict === 'noise'
-    ? [noiseReasonLabel(current.reason), current.permanent ? 'kalıcı' : ''].filter(Boolean).join(' · ')
+    ? [noiseReasonLabel(current.reason, lang), current.permanent ? t('verdict.permanent', lang) : ''].filter(Boolean).join(' · ')
     : '';
   const label = item.title ?? subj.label;
   return (
@@ -156,19 +158,19 @@ export function ProblemVerdictRow({ item, ctx }: { item: InboxItem; ctx: Verdict
       {ctx.isEditor ? (
         <>
           <Button size="sm" variant="secondary" active={current?.verdict === 'real'}
-            aria-label={`Gerçek problem: ${label}`}
+            aria-label={tf('verdict.realAria', lang, { l: label })}
             loading={pending} disabled={current?.verdict === 'real'} onClick={() => write('real')}>
-            Gerçek problem
+            {t('verdict.real', lang)}
           </Button>
-          <NoiseReasonButton label="Problem değil" ariaLabel={`Problem değil: ${label}`} isAdmin={ctx.isAdmin}
+          <NoiseReasonButton label={t('verdict.noise', lang)} ariaLabel={tf('verdict.noiseAria', lang, { l: label })} isAdmin={ctx.isAdmin}
             active={current?.verdict === 'noise'} loading={pending} disabled={current?.verdict === 'noise'}
             onConfirm={c => write('noise', c)} />
           {noiseDetail && <span className="pv-compact__state" title={current?.note || undefined}>{noiseDetail}</span>}
         </>
       ) : current ? (
-        <span className="pv-compact__state">{current.verdict === 'real' ? 'gerçek problem' : `problem değil${noiseDetail ? ` · ${noiseDetail}` : ''}`}</span>
+        <span className="pv-compact__state">{current.verdict === 'real' ? t('verdict.realState', lang) : `${t('verdict.noiseState', lang)}${noiseDetail ? ` · ${noiseDetail}` : ''}`}</span>
       ) : null}
-      {ctx.errorSig === sig && <span role="alert" className="field-error">Yazılamadı</span>}
+      {ctx.errorSig === sig && <span role="alert" className="field-error">{t('verdict.writeFailed', lang)}</span>}
     </span>
   );
 }

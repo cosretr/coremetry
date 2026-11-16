@@ -9,6 +9,7 @@
 // "çağıran" yazılmaz, dakikalık hata ölçülmediyse ikinci satır boş kalır.
 import type { ProblemStandard, SignalGate, StdConfidenceLevel } from './types';
 import { isSafeAppPath } from './safeAppPath';
+import { t, tf, type Lang } from './i18n'; // v0.10.2283 — metinler arayüz dilinde (varsayılan 'tr')
 
 const two = (n: number) => String(n).padStart(2, '0');
 
@@ -35,33 +36,34 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 /** Kaynak adı ("VictoriaMetrics", "span" …). Bilinmeyen kaynak kendi adıyla. */
-export function stdSourceName(source: string): string {
+export function stdSourceName(source: string, lang: Lang = 'tr'): string {
+  if (lang !== 'tr') return SOURCE_LABEL[source] ? t(`std.src.${source}`, lang) : (source || t('std.src.unknown', lang));
   return SOURCE_LABEL[source] ?? (source || 'bilinmiyor');
 }
 
 /** Satırın kaynak çipi: "VM · örneklenmemiş" / "span · örneklenmiş" / "exception grubu". */
-export function stdSourceChip(std: ProblemStandard): string {
+export function stdSourceChip(std: ProblemStandard, lang: Lang = 'tr'): string {
   const src = std.evidence.source;
-  if (src === 'vm') return 'VM · örneklenmemiş';
-  if (src === 'span') return 'span · örneklenmiş';
-  return stdSourceName(src);
+  if (src === 'vm') return t('std.chip.vm', lang);
+  if (src === 'span') return t('std.chip.span', lang);
+  return stdSourceName(src, lang);
 }
 
 /** Kaynağın örnekleme notu (başlık kartının ikinci satırı). */
-export function stdSamplingNote(std: ProblemStandard): string {
-  return std.evidence.sampled ? 'örneklenmiş' : 'örneklenmemiş';
+export function stdSamplingNote(std: ProblemStandard, lang: Lang = 'tr'): string {
+  return t(std.evidence.sampled ? 'std.sampled' : 'std.unsampled', lang);
 }
 
 /** Süre: "45 sn" · "35 dk" · "5 sa 40 dk" · "2 g 3 sa". */
-export function fmtStdDuration(sec: number): string {
+export function fmtStdDuration(sec: number, lang: Lang = 'tr'): string {
   const s = Math.max(0, Math.floor(sec));
-  if (s < 60) return `${s} sn`;
+  if (s < 60) return tf('std.dur.s', lang, { s });
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m} dk`;
+  if (m < 60) return tf('std.dur.m', lang, { m });
   const h = Math.floor(m / 60);
-  if (h < 24) return m % 60 ? `${h} sa ${m % 60} dk` : `${h} sa`;
+  if (h < 24) return m % 60 ? tf('std.dur.hm', lang, { h, m: m % 60 }) : tf('std.dur.h', lang, { h });
   const d = Math.floor(h / 24);
-  return h % 24 ? `${d} g ${h % 24} sa` : `${d} g`;
+  return h % 24 ? tf('std.dur.dh', lang, { d, h: h % 24 }) : tf('std.dur.d', lang, { d });
 }
 
 /** Başlangıç saati: bugünse "06:05", değilse "24.10 06:05". */
@@ -95,16 +97,16 @@ export function sinceSuffix(clock: string): string {
 }
 
 /** "06:05'ten beri" — satırın birinci zaman satırı. */
-export function stdSinceLine(std: ProblemStandard, nowMs: number = Date.now()): string {
+export function stdSinceLine(std: ProblemStandard, nowMs: number = Date.now(), lang: Lang = 'tr'): string {
   if (!std.since.startedAt) return '—';
   const c = fmtStdClock(std.since.startedAt, nowMs);
-  return `${c}${sinceSuffix(c)} beri`;
+  return tf('std.since', lang, { c: lang === 'tr' ? `${c}${sinceSuffix(c)}` : c });
 }
 
 /** "5 sa 40 dk · sürüyor" / "35 dk · bitti" (+ "· 3. kez"). */
-export function stdDurationLine(std: ProblemStandard): string {
-  const parts = [fmtStdDuration(std.since.durationSec), std.since.ongoing ? 'sürüyor' : 'bitti'];
-  if ((std.since.episode ?? 0) > 1) parts.push(`${std.since.episode}. kez`);
+export function stdDurationLine(std: ProblemStandard, lang: Lang = 'tr'): string {
+  const parts = [fmtStdDuration(std.since.durationSec, lang), t(std.since.ongoing ? 'std.ongoing' : 'std.ended', lang)];
+  if ((std.since.episode ?? 0) > 1) parts.push(tf('std.episode', lang, { n: std.since.episode ?? 0 }));
   return parts.join(' · ');
 }
 

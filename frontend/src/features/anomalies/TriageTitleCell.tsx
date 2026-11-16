@@ -14,6 +14,7 @@
 // DIŞINDA kalır (<a> içinde <a> geçersiz).
 import type { ReactNode } from 'react';
 import { IconSparkles } from '@/components/icons';
+import { tf, useLang } from '@/lib/i18n'; // v0.10.2283 — AI yaş ipucu arayüz dilinde
 
 export interface TriageTitleCellProps {
   /** Kalın başlık (title özniteliğinde tam hâli). */
@@ -38,6 +39,7 @@ export interface TriageTitleCellProps {
 }
 
 export function TriageTitleCell({ title, titleNode, code, chips, detail, detailTitle, detailMono, ai, aiAge }: TriageTitleCellProps) {
+  const lang = useLang();
   return (
     <>
       <div className={code ? 'triage-title triage-title--code mono' : 'triage-title'} title={title}>
@@ -50,7 +52,7 @@ export function TriageTitleCell({ title, titleNode, code, chips, detail, detailT
         </div>
       )}
       {ai && (
-        <div className="triage-ai" title={aiAge ? `${ai}\n\nAI çıkarımı · ${aiAge}` : ai}>
+        <div className="triage-ai" title={aiAge ? `${ai}\n\n${tf('inbox.aiAge', lang, { age: aiAge })}` : ai}>
           <IconSparkles size={10} />
           <span className="triage-ai__text">{ai}</span>
           {aiAge && <span className="triage-ai__age">· {aiAge}</span>}

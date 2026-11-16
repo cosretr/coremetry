@@ -158,7 +158,7 @@ describe('kablolama', () => {
   it('liste kararları süzer, çip sayıyı gösterir; detay sayfaları düğmeleri taşır', () => {
     const inbox = readFileSync(resolve(__dirname, '../pages/Inbox.tsx'), 'utf8');
     expect(inbox).toContain('return filterByVerdictView(facet, verdicts, verdictView);');
-    expect(inbox).toContain('Problem değil ({noiseCount})');
+    expect(inbox).toContain("{tf('inbox.v.noise', lang, { c: noiseCount })}"); // v0.10.2283 — TR "Problem değil ({c})"
     expect(inbox).toContain("setParam('verdict', v === 'triage' ? null : v)");
     // v0.10.1081 — çekmece kalktı; öğretme düğmeleri tam sayfa detaylarda.
     const detail = readFileSync(resolve(__dirname, '../features/anomalies/ProblemDetail.tsx'), 'utf8');

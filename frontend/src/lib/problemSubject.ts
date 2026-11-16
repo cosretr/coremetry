@@ -11,6 +11,7 @@
 // Bu dosya SAF: React yok, router yok, fetch yok. Tek işi bir özne
 // dizgisini sınıflandırmak ve nasıl basılacağını söylemek.
 
+import { t, tf, type Lang } from './i18n'; // v0.10.2283 — derivedTeamTitle arayüz dilinde (varsayılan 'tr')
 /** Backend'in `problems.kind` evreni (chstore ProblemKind* sabitleri). */
 export type SubjectKind = 'service' | 'db' | 'external';
 export type ExternalSubject = { source: string; values: string[] };
@@ -189,13 +190,10 @@ export function subjectTitle(service: string): string | undefined {
  * (2) olmadan bu metin kesin bir atıf gibi okunur. Bu repoda kendinden
  * emin görünen yanlış cevap, çekinceli cevaptan kötüdür.
  */
-export function derivedTeamTitle(via: string, service?: string): string {
+export function derivedTeamTitle(via: string, service?: string, lang: Lang = 'tr'): string {
   const db = service ? parseDbSubject(service) : null;
-  const what = db ? `${db.system} veritabanını` : 'bu veritabanını';
-  return `Türetilmiş sahiplik (kesin atıf değil) — ${what} en çok çağıran ` +
-    `servis "${via}" olduğu için onun katalog takımı gösteriliyor. ` +
-    `Çözüm veritabanı SİSTEMİ düzeyinde yapılır, tekil örnek düzeyinde değil: ` +
-    `aynı sistemden birden çok küme varsa hepsi bu takıma yazılır.`;
+  const what = db ? tf('inbox.derivedTeam.db', lang, { sys: db.system }) : t('inbox.derivedTeam.this', lang);
+  return tf('inbox.derivedTeam', lang, { what, via });
 }
 
 
