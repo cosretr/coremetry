@@ -134,7 +134,7 @@ func TestChatToolArgNote(t *testing.T) {
 	}
 }
 
-// chatArgRun — list_problems'e metin limit'li çağrı + cevap; modele giden
+// chatArgRun — list_exception_groups'a (v0.10.2296 — list_problems trace takibinde düştü) metin limit'li çağrı + cevap; modele giden
 // İKİNCİ istek gövdesinin tool mesajı, step-result çerçevesi ve sahte
 // aracın çağrı sayısı.
 func chatArgRun(t *testing.T, mode, conv string, toMs int64) (toolMsg string, stepResult map[string]any, ran int, secondReq map[string]any, errMsgs []string) {
@@ -142,7 +142,7 @@ func chatArgRun(t *testing.T, mode, conv string, toMs int64) (toolMsg string, st
 	setChatArgMode(t, mode)
 	llm := newLoopLLM(t, func(n int, _ map[string]any) map[string]any {
 		if n == 0 {
-			return toolCallMsg([2]string{"list_problems", `{"limit":"yirmi beş"}`}) // v0.10.2201 — "25" artık Executor'da sayıya düzelir (mcp.CoerceNumericArgs); tip hatası sayıya çevrilemeyen metinle
+			return toolCallMsg([2]string{"list_exception_groups", `{"limit":"yirmi beş"}`}) // v0.10.2201 — "25" artık Executor'da sayıya düzelir (mcp.CoerceNumericArgs); tip hatası sayıya çevrilemeyen metinle
 		}
 		return answerMsg("**Bulgu** — açık problem yok.")
 	})
@@ -162,12 +162,12 @@ func chatArgRun(t *testing.T, mode, conv string, toMs int64) (toolMsg string, st
 		}
 	}
 	for _, c := range ft.snapshot() {
-		if c.name == "list_problems" {
+		if c.name == "list_exception_groups" {
 			ran++
 		}
 	}
 	for _, sr := range framesOf(fr, "step-result") {
-		if sr["tool"] == "list_problems" {
+		if sr["tool"] == "list_exception_groups" {
 			stepResult = sr
 		}
 	}
@@ -196,7 +196,7 @@ func TestChatToolArgWarnIsByteIdenticalForModel(t *testing.T) {
 	if strings.Contains(joinedNotes(offNotes), "tool_args") {
 		t.Fatalf("off kipinde not olmamalı: %q", offNotes)
 	}
-	if !strings.Contains(joinedNotes(warnNotes), "tool_args warn: list_problems(limit:type)") {
+	if !strings.Contains(joinedNotes(warnNotes), "tool_args warn: list_exception_groups(limit:type)") {
 		t.Fatalf("warn notu ai_calls'a inmedi: %q", warnNotes)
 	}
 	if offRan != 1 || warnRan != 1 {
@@ -222,7 +222,7 @@ func TestChatToolArgWarnIsByteIdenticalForModel(t *testing.T) {
 
 func TestChatToolArgEnforceBurnsSlotNoWork(t *testing.T) {
 	msg, sr, ran, _, notes := chatArgRun(t, chstore.ToolArgModeEnforce, "conv-arg-enf", anchoredToMs())
-	if !strings.Contains(joinedNotes(notes), "tool_args enforce: list_problems(limit:type)") {
+	if !strings.Contains(joinedNotes(notes), "tool_args enforce: list_exception_groups(limit:type)") {
 		t.Fatalf("enforce notu = %q", notes)
 	}
 	if ran != 0 {

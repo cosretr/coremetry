@@ -813,6 +813,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		codeScope := !isTraceFollowUp && ct.On
 		tools = sourceCodeToolsFor(tools, isTraceFollowUp, c, codeScope)
 		tools = standaloneSearchCodeFor(tools, isTraceFollowUp, codeScope)
+		tools = traceFollowUpToolsFor(tools, isTraceFollowUp) // v0.10.2296 — takipte dar katalog
 		return tools, codeScope
 	}
 	tools, codeScope := nativeTools(toolset)
