@@ -11,6 +11,17 @@ package api
 // eşleşmenin matched_names'i), resolve_entity (service türü adaylar),
 // get_service_health (found → çözülen ad). İlke aynı: servis EKRANDAN ya da
 // bir ARAÇ SONUCUNDAN gelir, model metninden değil.
+//
+// v0.10.2294 — trace takibi (panel serbest döngüsü) de ayrı bir kapsam taşır
+// (withTraceSearchScope, ayrı ctx anahtarı): YALNIZ search_code besler, aynı
+// kural (depo çözüldü: ok / no_hits). Tohum yok, kod turu audit'i yok; ötekiler
+// (list_services, resolve_entity, get_service_health, resolve_business_code)
+// trace takibinde kapsamı GENİŞLETMEZ. Kabul edilebilir çünkü: servis bir araç
+// sonucundan gelir (model metninden değil); trace takibinin kataloğu yalnız
+// yerli salt-okur araçlardır, dış MCP / onay-kapılı araç yoktur (okunan kod dış
+// araca taşınamaz — TestTraceFollowUpCatalogNativeOnlyWithCodeTools);
+// search_code o depodan eşleşen satırları aynı kullanıcıya zaten döndürdü.
+// Kapsam alışveriş ctx'inde yaşar, turlar arası taşınmaz.
 
 import (
 	"context"
@@ -28,6 +39,36 @@ type resolvedCodeScopeKey struct{}
 type resolvedCodeScope struct {
 	mu  sync.Mutex
 	set map[string]bool
+	// feeders — kapsamı besleyen araçlar; nil → scopeFeeders (kod turu).
+	feeders map[string]bool
+}
+
+type traceSearchScopeKey struct{}
+
+// traceSearchFeeders — v0.10.2294: trace takibinde kapsamı YALNIZ search_code besler.
+var traceSearchFeeders = map[string]bool{mcptools.SearchCodeToolName: true}
+
+// withTraceSearchScope — trace takibinin alışveriş kapsamı (kod turununkinden
+// ayrı anahtar: readSourceCode'un öznesiz dalı onu görmez).
+func withTraceSearchScope(ctx context.Context) context.Context {
+	return context.WithValue(ctx, traceSearchScopeKey{}, &resolvedCodeScope{set: map[string]bool{}, feeders: traceSearchFeeders})
+}
+
+func traceSearchScopeFrom(ctx context.Context) *resolvedCodeScope {
+	rs, _ := ctx.Value(traceSearchScopeKey{}).(*resolvedCodeScope)
+	return rs
+}
+
+// wrapTraceSearchScope — trace takibinde search_code handler'ını kapsamı
+// besleyecek şekilde sarar; kapsam yoksa (trace takibi değil) dokunmaz.
+func wrapTraceSearchScope(ctx context.Context, byName map[string]mcp.ToolHandler) {
+	ts := traceSearchScopeFrom(ctx)
+	if ts == nil {
+		return
+	}
+	for n, h := range byName {
+		byName[n] = ts.wrap(n, h)
+	}
 }
 
 func withResolvedCodeScope(ctx context.Context) context.Context {
@@ -134,7 +175,11 @@ var scopeFeeders = map[string]bool{
 
 // wrap — kapsamı besleyen araçların işleyicisini sarar; diğerleri aynen.
 func (r *resolvedCodeScope) wrap(name string, h mcp.ToolHandler) mcp.ToolHandler {
-	if !scopeFeeders[name] {
+	feeders := r.feeders
+	if feeders == nil {
+		feeders = scopeFeeders
+	}
+	if !feeders[name] {
 		return h
 	}
 	return func(ctx context.Context, args json.RawMessage) (any, error) {

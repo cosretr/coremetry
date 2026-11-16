@@ -50,6 +50,18 @@ package api
 //     hedefi servis SAYILMAZ (host → servis eşlemesi ad sezgisi ister; entity
 //     modelinin calls kenarı host'u saklamaz, katlamayı sonek kırpan
 //     ExtPeerResolveCandidates yapar) — sınır sezgiyle genişletilmez.
+//     v0.10.2294 — üçüncü yol: AYNI alışverişte search_code o servisin
+//     deposunu çözdüyse (outcome ok / no_hits — kod turunun kuralı,
+//     scopeServicesFrom) servis alışverişin geri kalanında dal ucundan
+//     okunur (withTraceSearchScope). Trace takibinde kapsamı YALNIZ
+//     search_code besler (list_services / resolve_entity / ... değil).
+//     Neden kabul: servis bir ARAÇ SONUCUNDAN gelir, model metninden değil;
+//     döngünün kataloğu yalnız yerli salt-okur araçlar (dış MCP / onaylı
+//     yazan araç yok — TestTraceFollowUpCatalogNativeOnlyWithCodeTools), yani
+//     okunan kod dış araca taşınamaz; search_code o depodan eşleşen
+//     satırları aynı kullanıcıya zaten döndürdü. Turlar arası taşınmaz;
+//     trace okunamazsa yine dürüst ıska (üç yol da denenmez). search_code
+//     kendisi trace takibinde sınırsız (değişmedi).
 //     v0.10.1053 — exception öznesinde sınır daha dar: YALNIZ grubun servisi ve
 //     explain'in stack'ini basan servis (örnek trace'teki öteki servisler DEĞİL);
 //     sürüm o stack'i veren olaydan (sourceExceptionScope).
@@ -155,8 +167,9 @@ func (s *Server) readSourceCode(ctx context.Context, req mcptools.SourceCodeRequ
 		}
 		return s.readScopedSource(ctx, req, version, "sohbet öznesi (exception örneği)"), nil
 	}
-	// KAPSAM: servis sohbetin trace öznesinde geçmeli ya da trace onu
-	// birebir peer.service ile çağırmalı (v0.10.2293).
+	// KAPSAM: servis sohbetin trace öznesinde geçmeli, trace onu birebir
+	// peer.service ile çağırmalı (v0.10.2293) ya da bu alışverişte search_code
+	// deposunu çözmüş olmalı (v0.10.2294). Trace okunamazsa hiçbiri denenmez.
 	sub, _ := ctx.Value(sourceSubjectKey{}).(*sourceSubject)
 	if sub == nil {
 		// v0.10.1461 (R2) — kod turu: ekrandaki servis ya da aynı turda bir araç
@@ -187,7 +200,12 @@ func (s *Server) readSourceCode(ctx context.Context, req mcptools.SourceCodeRequ
 	if containsString(called, svc) {
 		return s.readScopedSource(ctx, req, "", "trace'in çağırdığı servis (dal ucu)"), nil
 	}
-	return out, fmt.Errorf("service %q bu trace'te bulunamadı — yalnız trace'teki servislerin ve trace'in çağırdığı servislerin kodu okunur: %s", svc, sourceScopeList(names, called))
+	// v0.10.2294 — bu alışverişte search_code deposunu çözdüyse (ok / no_hits;
+	// chat_resolved_code_scope.go): sürüm bilinmez → dal ucu.
+	if ts := traceSearchScopeFrom(ctx); ts != nil && ts.has(svc) {
+		return s.readScopedSource(ctx, req, "", "search_code ile çözülen servis (dal ucu)"), nil
+	}
+	return out, fmt.Errorf("service %q bu trace'te bulunamadı — kod yalnız trace'teki, trace'in çağırdığı ya da önce search_code ile deposu bulunan servis için okunur: %s", svc, sourceScopeList(names, called))
 }
 
 // sourceScopeList — SAF: ret mesajının okunabilir servis listesi; toplam

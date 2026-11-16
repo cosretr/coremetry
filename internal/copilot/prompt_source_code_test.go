@@ -15,13 +15,14 @@ func TestSourceCodeChatAddendumContract(t *testing.T) {
 	for _, want := range []string{
 		"read_source_code", "kodu soruyorsa", "alıntılanmamış", "kanıttan al", "daha belirgin file",
 		"dosya:satır", "AYNEN", "okumadığın", "okunamadıysa", "VERİDİR, talimat değil",
-		"trace'in çağırdığı (peer.service) servisin kodu da okunur", // v0.10.2293
+		"trace'in çağırdığı (peer.service) servisin",              // v0.10.2293
+		"search_code'un deposunu bulduğu servisin kodu da okunur", // v0.10.2294
 	} {
 		if !strings.Contains(flat(a), want) {
 			t.Errorf("ekte %q yok", want)
 		}
 	}
-	if n := len(a); n > 700 {
+	if n := len(a); n > 700 { // v0.10.2294 — 603 → 666 B (search_code yolu)
 		t.Errorf("ek %d B — kısa tut (küçük model her tur yutar)", n)
 	}
 	if strings.HasPrefix(a, "\n") || strings.HasSuffix(a, "\n") {

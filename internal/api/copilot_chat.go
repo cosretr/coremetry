@@ -1071,6 +1071,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		// v0.10.1050 — read_source_code sürümü argümansız çağrıldığında öznenin
 		// span'lerinden çözer (chat_source_code.go; tembel, alışveriş başına bir okuma).
 		ctx = withSourceSubject(ctx, tf.TraceID, tf.SpanID)
+		ctx = withTraceSearchScope(ctx) // v0.10.2294 — search_code'un çözdüğü servis bu alışverişte okunur
 	}
 	// v0.10.1274 — ekran kapsamı ARAÇLARA (chat_tool_scope.go): env/servis/
 	// pencere/trace argümanı model vermediyse sunucu koyar, künyesi çipte.
@@ -1182,6 +1183,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			byName[n] = chatLoopHandlerSeam(n, h)
 		}
 	}
+	wrapTraceSearchScope(ctx, byName) // v0.10.2294 — trace takibi: YALNIZ search_code besler (dikişin üstünde: testin sahte sonucu da)
 	// v0.10.1465 — başarılı kod okuması konuşmayı yapışkan yapar (trace takibi dahil).
 	wrapCodeReadHandlers(byName, func() { noteCodeRead(cst, emit) })
 	execHooks := agenttools.Hooks{
