@@ -50,7 +50,9 @@ const (
 	sreStatusKey        = "sre:status"
 )
 
-func sreInvestigationKey(problemID string) string { return "sre:inv:" + problemID }
+// :v2: — v0.10.2301 (sunucu metinleri S4) kayıt gövdesine metin anahtarları
+// eklendi (summaryMsg, textMsg, labelMsg, gateMsg); dil anahtara GİRMEZ.
+func sreInvestigationKey(problemID string) string { return "sre:inv:v2:" + problemID }
 
 // sreAPIStore — uçların okumaları/yazmaları (*chstore.Store karşılar);
 // testte sahte depo (problemLogTemplatesStoreOf emsali).

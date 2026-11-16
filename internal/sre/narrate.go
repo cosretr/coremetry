@@ -53,17 +53,24 @@ type Narrator interface {
 
 // narrationGate — SAF: arka plan AI çağrısı yapılabilir mi; değilse nedeni.
 func narrationGate(n Narrator, cfg Settings, usedThisHour int) (bool, string) {
+	ok, why, _ := narrationGateMsg(n, cfg, usedThisHour)
+	return ok, why
+}
+
+// narrationGateMsg — narrationGate + nedenin metin anahtarı (v0.10.2301 S4).
+func narrationGateMsg(n Narrator, cfg Settings, usedThisHour int) (bool, string, *chstore.StdMsg) {
 	switch {
 	case n == nil || !n.Active():
-		return false, "AI yapılandırılmamış ya da kapalı"
+		return false, "AI yapılandırılmamış ya da kapalı", chstore.NewStdMsg("inv.gate.off")
 	case !n.AutoExplainEnabled():
-		return false, "otomatik AI açıklaması kapalı (Ayarlar → AI)"
+		return false, "otomatik AI açıklaması kapalı (Ayarlar → AI)", chstore.NewStdMsg("inv.gate.autoOff")
 	case n.QuotaBackoffActive():
-		return false, "sağlayıcı kotası doldu — arka plan AI 1 saat bekliyor"
+		return false, "sağlayıcı kotası doldu — arka plan AI 1 saat bekliyor", chstore.NewStdMsg("inv.gate.quota")
 	case usedThisHour >= cfg.MaxLLMCallsPerHour:
-		return false, fmt.Sprintf("saatlik AI çağrı tavanı doldu (%d)", cfg.MaxLLMCallsPerHour)
+		return false, fmt.Sprintf("saatlik AI çağrı tavanı doldu (%d)", cfg.MaxLLMCallsPerHour),
+			chstore.NewStdMsg("inv.gate.cap", "n", fmt.Sprintf("%d", cfg.MaxLLMCallsPerHour))
 	}
-	return true, ""
+	return true, "", nil
 }
 
 // narrate — anlatım adımı. Kayda dokunmaz; dönen adımı koordinatör yazar,
@@ -80,10 +87,12 @@ func narrate(ctx context.Context, rd readers, inv *Investigation, p chstore.Prob
 	if rd.settings != nil {
 		cfg = rd.settings()
 	}
-	ok, why := narrationGate(rd.narrator, cfg, rd.budget.used(ctx))
+	ok, why, whyMsg := narrationGateMsg(rd.narrator, cfg, rd.budget.used(ctx))
 	if !ok {
-		inv.Summary = &Narration{Text: NarrationGatedText, At: t0.UnixNano(), Gated: true, Reason: why}
+		gate := chstore.NewStdMsg("inv.gated", "whyM", whyMsg)
+		inv.Summary = &Narration{Text: NarrationGatedText, At: t0.UnixNano(), Gated: true, Reason: why, GateMsg: gate}
 		st.State, st.Summary = StepSkipped, NarrationGatedText+" — "+why
+		st.SummaryMsg = gate
 		return finish()
 	}
 	if dl, has := ctx.Deadline(); (has && time.Until(dl) < narrationMinLeft) || ctx.Err() != nil {

@@ -1,0 +1,556 @@
+[
+ {
+  "name": "rec:rollback",
+  "tr": "svc-a rev 42 → rev 41 geri alma değerlendirilebilir — kararı ve uygulamayı insan verir",
+  "msg": {
+   "k": "rec.rollback",
+   "a": {
+    "from": "rev 42",
+    "name": "svc-a",
+    "to": "rev 41"
+   }
+  }
+ },
+ {
+  "name": "rec:rollback-bare",
+  "tr": "svc-a rev 42 → rev 41 geri alma değerlendirilebilir — kararı ve uygulamayı insan verir",
+  "msg": {
+   "k": "rec.rollback",
+   "a": {
+    "from": "rev 42",
+    "name": "svc-a",
+    "to": "rev 41"
+   }
+  }
+ },
+ {
+  "name": "rec:rollback-argo",
+  "tr": "svc-a rev 42 → rev 41 geri alma değerlendirilebilir (Argo: OutOfSync, Degraded) — kararı ve uygulamayı insan verir",
+  "msg": {
+   "k": "rec.rollbackArgo",
+   "a": {
+    "argo": "OutOfSync, Degraded",
+    "from": "rev 42",
+    "name": "svc-a",
+    "to": "rev 41"
+   }
+  }
+ },
+ {
+  "name": "rec:rollback-argo-unknown",
+  "tr": "svc-a rev 42 → rev 41 geri alma değerlendirilebilir (Argo: durum bilinmiyor) — kararı ve uygulamayı insan verir",
+  "msg": {
+   "k": "rec.rollbackArgo",
+   "a": {
+    "argoK": "rec.argoUnknown",
+    "from": "rev 42",
+    "name": "svc-a",
+    "to": "rev 41"
+   }
+  }
+ },
+ {
+  "name": "rec:rollback-bare-event",
+  "tr": "svc-a rev 42 → rev 41 geri alma değerlendirilebilir — kararı ve uygulamayı insan verir",
+  "msg": {
+   "k": "rec.rollback",
+   "a": {
+    "from": "rev 42",
+    "name": "svc-a",
+    "to": "rev 41"
+   }
+  }
+ },
+ {
+  "name": "rec:rollback-bare-inferred",
+  "tr": "svc-a rev 42 → rev 41 geri alma değerlendirilebilir — kararı ve uygulamayı insan verir",
+  "msg": {
+   "k": "rec.rollback",
+   "a": {
+    "from": "rev 42",
+    "name": "svc-a",
+    "to": "rev 41"
+   }
+  }
+ },
+ {
+  "name": "rec:deploy",
+  "tr": "Başlangıca yakın değişikliği (deploy adımı) sürüm notlarıyla birlikte gözden geçirin",
+  "msg": {
+   "k": "rec.deploy"
+  }
+ },
+ {
+  "name": "rec:code-regression",
+  "tr": "Yeni hata desenini ve son kod değişikliğini inceleyin (kanıt: log artışı / temsilci trace)",
+  "msg": {
+   "k": "rec.codeRegression"
+  }
+ },
+ {
+  "name": "rec:config",
+  "tr": "İmaj değişmeden yapılan son yapılandırma / secret değişikliğini gözden geçirin",
+  "msg": {
+   "k": "rec.config"
+  }
+ },
+ {
+  "name": "rec:config-argo",
+  "tr": "İmaj değişmeden yapılan son yapılandırma / secret değişikliğini gözden geçirin (Argo app-1: Synced, Progressing)",
+  "msg": {
+   "k": "rec.configArgo",
+   "a": {
+    "app": "app-1",
+    "argo": "Synced, Progressing"
+   }
+  }
+ },
+ {
+  "name": "rec:sat-oom",
+  "tr": "OOMKilled pod'lar (pod-1, pod-2): bellek limitini / sızıntıyı gözden geçirin",
+  "msg": {
+   "k": "rec.sat.oom",
+   "a": {
+    "pods": "pod-1, pod-2"
+   }
+  }
+ },
+ {
+  "name": "rec:sat-hot",
+  "tr": "pod-1 kaynak kullanımını (CPU %91 / bellek %62 limit) ve ölçeklemeyi gözden geçirin",
+  "msg": {
+   "k": "rec.sat.hot",
+   "a": {
+    "cpu": "91%",
+    "mem": "62%",
+    "pod": "pod-1"
+   }
+  }
+ },
+ {
+  "name": "rec:sat-hot-nil",
+  "tr": "pod-1 kaynak kullanımını (CPU %91 / bellek ? limit) ve ölçeklemeyi gözden geçirin",
+  "msg": {
+   "k": "rec.sat.hot",
+   "a": {
+    "cpu": "91%",
+    "mem": "?",
+    "pod": "pod-1"
+   }
+  }
+ },
+ {
+  "name": "rec:sat-jvm",
+  "tr": "pod-1 JVM heap baskısını (GC sonrası %88) gözden geçirin",
+  "msg": {
+   "k": "rec.sat.jvm",
+   "a": {
+    "gc": "88%",
+    "pod": "pod-1"
+   }
+  }
+ },
+ {
+  "name": "rec:sat-generic",
+  "tr": "Pod / node kaynak baskısını ve ölçeklemeyi gözden geçirin",
+  "msg": {
+   "k": "rec.sat.generic"
+  }
+ },
+ {
+  "name": "rec:dep",
+  "tr": "Aşağı akış svc-b servisinin sağlığını ve açık problemlerini kontrol edin",
+  "msg": {
+   "k": "rec.dep",
+   "a": {
+    "svc": "svc-b"
+   }
+  }
+ },
+ {
+  "name": "rec:dep-generic",
+  "tr": "Aşağı akış bağımlılıklarının sağlığını kontrol edin",
+  "msg": {
+   "k": "rec.depGeneric"
+  }
+ },
+ {
+  "name": "rec:ext",
+  "tr": "Dış servis api.example durumunu sağlayıcının durum sayfasından doğrulayın",
+  "msg": {
+   "k": "rec.ext",
+   "a": {
+    "target": "api.example"
+   }
+  }
+ },
+ {
+  "name": "rec:ext-generic",
+  "tr": "Dış bağımlılığın durumunu sağlayıcıdan doğrulayın",
+  "msg": {
+   "k": "rec.extGeneric"
+  }
+ },
+ {
+  "name": "rec:db",
+  "tr": "db-1 veritabanının yavaş sorgularını ve bağlantı havuzunu inceleyin",
+  "msg": {
+   "k": "rec.db",
+   "a": {
+    "db": "db-1"
+   }
+  }
+ },
+ {
+  "name": "rec:db-generic",
+  "tr": "Veritabanı yavaş sorgularını ve bağlantı havuzunu inceleyin",
+  "msg": {
+   "k": "rec.dbGeneric"
+  }
+ },
+ {
+  "name": "rec:traffic",
+  "tr": "Trafik +246% arttı: ölçeklemeyi / hız sınırlamayı değerlendirin",
+  "msg": {
+   "k": "rec.traffic",
+   "a": {
+    "d": "+246%"
+   }
+  }
+ },
+ {
+  "name": "rec:traffic-generic",
+  "tr": "Trafik artışı: ölçeklemeyi / hız sınırlamayı değerlendirin",
+  "msg": {
+   "k": "rec.trafficGeneric"
+  }
+ },
+ {
+  "name": "rec:runbook:rb-rb-1",
+  "tr": "Runbook'u gözden geçirin: Runbook bir — çalıştırmayı insan başlatır",
+  "msg": {
+   "k": "rec.runbook",
+   "a": {
+    "title": "Runbook bir"
+   }
+  }
+ },
+ {
+  "name": "tl:deploy:0",
+  "tr": "Deploy: svc-a@rev 2 (←rev 1)",
+  "msg": {
+   "k": "tl.deployPrev",
+   "a": {
+    "name": "svc-a@rev 2",
+    "prev": "rev 1"
+   }
+  }
+ },
+ {
+  "name": "tl:deploy:1",
+  "tr": "Rollout (imaj değişmedi): svc-a",
+  "msg": {
+   "k": "tl.rollout",
+   "a": {
+    "name": "svc-a"
+   }
+  }
+ },
+ {
+  "name": "tl:deploy:2",
+  "tr": "Deploy: svc-a@v3 · failed",
+  "msg": {
+   "k": "tl.deploySt",
+   "a": {
+    "name": "svc-a@v3",
+    "st": "failed"
+   }
+  }
+ },
+ {
+  "name": "tl:deploy:3",
+  "tr": "Rollout (imaj değişmedi): svc-a",
+  "msg": {
+   "k": "tl.rollout",
+   "a": {
+    "name": "svc-a"
+   }
+  }
+ },
+ {
+  "name": "tl:first_error:4",
+  "tr": "İlk hata (ERROR log artışı)",
+  "msg": {
+   "k": "tl.firstError",
+   "a": {
+    "srcK": "tl.src.errorLog"
+   }
+  }
+ },
+ {
+  "name": "tl:spike_start:5",
+  "tr": "Log artışı başladı (×5.2, ERROR)",
+  "msg": {
+   "k": "tl.spikeErr",
+   "a": {
+    "f": "5.2"
+   }
+  }
+ },
+ {
+  "name": "tl:problem_start:6",
+  "tr": "Problem başladı: rule-1",
+  "msg": {
+   "k": "tl.startRule",
+   "a": {
+    "name": "rule-1"
+   }
+  }
+ },
+ {
+  "name": "tl:alert:7",
+  "tr": "Alarm açıldı: rule-2 (P2)",
+  "msg": {
+   "k": "tl.alertP",
+   "a": {
+    "name": "rule-2",
+    "p": "P2"
+   }
+  }
+ },
+ {
+  "name": "tl:alert:8",
+  "tr": "Alarm açıldı: rule-3",
+  "msg": {
+   "k": "tl.alert",
+   "a": {
+    "name": "rule-3"
+   }
+  }
+ },
+ {
+  "name": "tl:alert:9",
+  "tr": "Alarm açıldı: svc-b — rule-4 (P1)",
+  "msg": {
+   "k": "tl.alertP",
+   "a": {
+    "name": "svc-b — rule-4",
+    "p": "P1"
+   }
+  }
+ },
+ {
+  "name": "tl:alert_resolved:10",
+  "tr": "Alarm kapandı: rule-2",
+  "msg": {
+   "k": "tl.alertResolved",
+   "a": {
+    "name": "rule-2"
+   }
+  }
+ },
+ {
+  "name": "tl:incident_attach:11",
+  "tr": "Incident'a bağlandı",
+  "msg": {
+   "k": "tl.incident"
+  }
+ },
+ {
+  "name": "tl:first_error:12",
+  "tr": "İlk hata (hatalı temsilci trace)",
+  "msg": {
+   "k": "tl.firstError",
+   "a": {
+    "srcK": "tl.src.errorTrace"
+   }
+  }
+ },
+ {
+  "name": "tl:spike_start:13",
+  "tr": "Log artışı başladı (×3.0)",
+  "msg": {
+   "k": "tl.spike",
+   "a": {
+    "f": "3.0"
+   }
+  }
+ },
+ {
+  "name": "tl:problem_start:14",
+  "tr": "Problem başladı",
+  "msg": {
+   "k": "tl.start"
+  }
+ },
+ {
+  "name": "step:sweep:0",
+  "tr": "tarama okuyucusu bağlı değil",
+  "msg": {
+   "k": "step.skip.sweepReader"
+  }
+ },
+ {
+  "name": "step:deploys:1",
+  "tr": "deploy okuyucusu bağlı değil",
+  "msg": {
+   "k": "step.skip.deploysReader"
+  }
+ },
+ {
+  "name": "step:deps:2",
+  "tr": "bağımlılık isteği yok",
+  "msg": {
+   "k": "step.skip.depsReq"
+  }
+ },
+ {
+  "name": "step:pivot:3",
+  "tr": "pivot okuyucusu bağlı değil",
+  "msg": {
+   "k": "step.skip.pivotReader"
+  }
+ },
+ {
+  "name": "step:log_spike:4",
+  "tr": "log okuyucusu bağlı değil",
+  "msg": {
+   "k": "step.skip.logReader"
+  }
+ },
+ {
+  "name": "step:events:5",
+  "tr": "olay okuyucusu bağlı değil",
+  "msg": {
+   "k": "step.skip.eventsReader"
+  }
+ },
+ {
+  "name": "step:node:6",
+  "tr": "node okuyucusu bağlı değil",
+  "msg": {
+   "k": "step.skip.nodeReader"
+  }
+ },
+ {
+  "name": "step:baseline:7",
+  "tr": "baseline isteği yok",
+  "msg": {
+   "k": "step.skip.baselineReq"
+  }
+ },
+ {
+  "name": "step:anomalies:8",
+  "tr": "anomali isteği yok",
+  "msg": {
+   "k": "step.skip.anomaliesReq"
+  }
+ },
+ {
+  "name": "step:errors:9",
+  "tr": "hata özeti isteği yok",
+  "msg": {
+   "k": "step.skip.errorsReq"
+  }
+ },
+ {
+  "name": "step:bogus:10",
+  "tr": "bilinmeyen adım",
+  "msg": {
+   "k": "step.skip.unknown"
+  }
+ },
+ {
+  "name": "step:anomalies:11",
+  "tr": "anomali okuyucusu bağlı değil",
+  "msg": {
+   "k": "step.skip.anomaliesReader"
+  }
+ },
+ {
+  "name": "step:errors:12",
+  "tr": "hata okuyucusu bağlı değil",
+  "msg": {
+   "k": "step.skip.errorsReader"
+  }
+ },
+ {
+  "name": "step:anomalies:13",
+  "tr": "veri yok: pencerede öznede ve komşularda anomali olayı yok",
+  "msg": {
+   "k": "step.noData.anomalies"
+  }
+ },
+ {
+  "name": "step:errors:14",
+  "tr": "veri yok: pencerede hatalı operasyon ya da istisna grubu yok",
+  "msg": {
+   "k": "step.noData.errors"
+  }
+ },
+ {
+  "name": "gated:0",
+  "tr": "AI özeti yok (otomatik AI kapalı) — AI yapılandırılmamış ya da kapalı",
+  "msg": {
+   "k": "inv.gated",
+   "a": {
+    "whyM": {
+     "k": "inv.gate.off"
+    }
+   }
+  }
+ },
+ {
+  "name": "gated:1",
+  "tr": "AI özeti yok (otomatik AI kapalı) — otomatik AI açıklaması kapalı (Ayarlar → AI)",
+  "msg": {
+   "k": "inv.gated",
+   "a": {
+    "whyM": {
+     "k": "inv.gate.autoOff"
+    }
+   }
+  }
+ },
+ {
+  "name": "gated:2",
+  "tr": "AI özeti yok (otomatik AI kapalı) — sağlayıcı kotası doldu — arka plan AI 1 saat bekliyor",
+  "msg": {
+   "k": "inv.gated",
+   "a": {
+    "whyM": {
+     "k": "inv.gate.quota"
+    }
+   }
+  }
+ },
+ {
+  "name": "gated:3",
+  "tr": "AI özeti yok (otomatik AI kapalı) — saatlik AI çağrı tavanı doldu (20)",
+  "msg": {
+   "k": "inv.gated",
+   "a": {
+    "whyM": {
+     "k": "inv.gate.cap",
+     "a": {
+      "n": "20"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "replay-gated",
+  "tr": "AI özeti yok (değerlendirme tekrarı — puanlama anlatım kullanmaz) — değerlendirme tekrarı",
+  "msg": {
+   "k": "inv.replayGated"
+  }
+ },
+ {
+  "name": "replay-step",
+  "tr": "AI özeti yok (değerlendirme tekrarı — puanlama anlatım kullanmaz)",
+  "msg": {
+   "k": "step.replayNarration"
+  }
+ }
+]

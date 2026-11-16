@@ -22,7 +22,7 @@ import { Badge, Button } from '@/components/ui';
 import { tsLong } from '@/lib/utils';
 import { agoLang, t, tf, useLang } from '@/lib/i18n'; // v0.10.2285 — metinler arayüz dilinde (TR aynı)
 import type { SREInvestigation } from '@/lib/types';
-import { OrigLang } from './OrigLang';
+import { OrigLang, MsgText } from './OrigLang'; // v0.10.2301 — MsgText: anahtarlı sunucu metni (S4)
 import { ProblemInvestigationCards } from './ProblemInvestigationCards';
 import { ProblemInvestigationRecommendations } from './ProblemInvestigationRecommendations';
 import {
@@ -42,7 +42,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
     <div style={{ display: 'grid', gap: 10, fontSize: 13 }}>
       {inv.error && <div className="cm-callout is-caution" role="alert">{inv.error}</div>}
       {!multi && sweep?.summary && (
-        <div><b>{tf('inv.res.sweep', lang, { svc: inv.service })}</b> <OrigLang>{sweep.summary}</OrigLang></div>
+        <div><b>{tf('inv.res.sweep', lang, { svc: inv.service })}</b> <MsgText msg={sweep.summaryMsg} text={sweep.summary} /></div>
       )}
       {!multi && sweep && sweep.state !== 'ok' && !inv.error && (
         <div style={{ color: 'var(--text3)' }}>{t(sweep.state === 'partial' ? 'inv.res.sweepPartial' : 'inv.res.sweepFailed', lang)}</div>
@@ -68,7 +68,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
                   <td>{stepLabel(s.name, lang)}</td>
                   <td>{v.tone ? <Badge tone={v.tone}>{v.label}</Badge> : v.label}</td>
                   <td className="num">{fmtStepDuration(s.durationMs, lang)}</td>
-                  <td className="cell-wrap">{s.summary ? <OrigLang>{s.summary}</OrigLang> : '—'}</td>
+                  <td className="cell-wrap">{s.summary ? <MsgText msg={s.summaryMsg} text={s.summary} /> : '—'}</td>
                 </tr>
               );
             })}
@@ -78,7 +78,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
       {inv.summary && (inv.summary.gated
         ? (
           <div style={{ color: 'var(--text3)' }}>
-            <OrigLang>{inv.summary.text}{inv.summary.reason ? ` — ${inv.summary.reason}` : ''}</OrigLang>
+            <MsgText msg={inv.summary.gateMsg} text={`${inv.summary.text}${inv.summary.reason ? ` — ${inv.summary.reason}` : ''}`} />
           </div>
         )
         : (

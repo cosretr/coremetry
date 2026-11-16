@@ -11678,6 +11678,8 @@ export interface SREInvestigationStep {
   evidenceRefs?: string[];
   // v0.10.1287 — Faz 1b: adımın kanıt künyeleri (sohbet çipiyle aynı şekil, ≤6).
   evidence?: ChatQueryEvidence[];
+  /** v0.10.2301 (S4) — atlama / veri-yok özetinin metin anahtarı (yalnız yeni kayıtlarda). */
+  summaryMsg?: StdMsg;
 }
 export interface SREInvestigationFinding {
   kind: string;
@@ -11750,6 +11752,8 @@ export type SRERecommendationState = 'öneri — uygulanmadı' | 'ack' | 'dismis
 export interface SRERecommendation {
   id: string;
   text: string;
+  /** v0.10.2301 (S4) — metnin anahtarı (yalnız yeni kayıtlarda); gerekçe özgün dilde kalır. */
+  textMsg?: StdMsg;
   rationale: string;
   hypothesisKind?: SREHypothesisKind;
   /** url: UI yolu (/runbook?id=…&problemId=…) ya da problemin dış runbook bağlantısı; id yok = dış bağlantı. */
@@ -11794,6 +11798,8 @@ export interface SRETimelineEvent {
   kind: SRETimelineKind;
   label: string;
   ref?: string;
+  /** v0.10.2301 (S4) — etiketin anahtarı (yalnız yeni kayıtlarda). */
+  labelMsg?: StdMsg;
 }
 // v0.10.1287 — Go: sre.Narration (tek LLM çağrısı; gated = arka plan AI kapısı kapalı).
 // (v0.10.1393 — sunucunun callId / exchangeId alanları yalnız özetin 👍/👎
@@ -11804,6 +11810,8 @@ export interface SRENarration {
   at: number; // unix ns
   gated?: boolean;
   reason?: string;
+  /** v0.10.2301 (S4) — kapalı kapı satırının ("text — reason") anahtarı. */
+  gateMsg?: StdMsg;
 }
 // v0.10.1287 — Go: sre.SynthRef (root_cause_hypotheses okunur, yazılmaz).
 export interface SRESynthRef {

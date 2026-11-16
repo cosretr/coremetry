@@ -25,7 +25,7 @@ import {
   ROOT_CAUSE_ANCHOR, bandLabel, bandTone, canAct, checkEvidence, checkTitle, fmtScore, humanLabel, hypCategoryLabel, hypKindName, hypLabel,
   outcomeView, queueReasonText, shownHypotheses, timelineKindLabel,
 } from './hypothesisView';
-import { OrigLang } from './OrigLang';
+import { OrigLang, MsgText } from './OrigLang';
 
 const muted = { color: 'var(--text3)' } as const;
 
@@ -65,7 +65,7 @@ export function ProblemInvestigationCards({ inv, canEdit }: { inv: SREInvestigat
               <li key={`${e.kind}:${e.at}:${i}`} style={{ display: 'grid', gridTemplateColumns: '72px 96px 1fr', gap: 8 }}>
                 <span className="num" style={muted} title={tsLong(e.at)}>{fmtClock(e.at / 1e6)}</span>
                 <span style={muted}>{timelineKindLabel(e.kind, lang)}</span>
-                <span style={{ fontWeight: e.kind === 'problem_start' ? 600 : undefined }}><OrigLang>{e.label}</OrigLang></span>
+                <span style={{ fontWeight: e.kind === 'problem_start' ? 600 : undefined }}><MsgText msg={e.labelMsg} text={e.label} /></span>
               </li>
             ))}
           </ol>

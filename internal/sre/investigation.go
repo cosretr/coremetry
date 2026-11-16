@@ -83,6 +83,11 @@ type Step struct {
 	// yok: …" — saklama dışı / örneklenmemiş / hiç gelmemiş). Okunamadı
 	// (StepError) ≠ yok; değerlendirmenin kapsam ölçüsü buradan sayar.
 	NoData bool `json:"noData,omitempty"`
+	// SummaryMsg — v0.10.2301 (sunucu metinleri S4): atlama / veri-yok
+	// özetinin metin anahtarı (ek alan; Summary aynen). Araç mesajı geçen
+	// özetlerde YOK (özgün dil + işaret). Yalnız bu sürümden sonra yazılan
+	// kayıtlarda; eski kayıt anahtarsız → EN arayüz özgün metni işaretle çizer.
+	SummaryMsg *chstore.StdMsg `json:"summaryMsg,omitempty"`
 }
 
 // Finding — sıralı bulgu (0a: servis taramasının bulguları).
@@ -115,6 +120,9 @@ type Narration struct {
 	At         int64  `json:"at"` // unix ns
 	Gated      bool   `json:"gated,omitempty"`
 	Reason     string `json:"reason,omitempty"` // kapı nedeni (kapalı / kota / saatlik tavan / yapılandırılmamış)
+	// GateMsg — v0.10.2301 (S4): kapalı kapı satırının ("Text — Reason")
+	// metin anahtarı; yalnız Gated'de. Sohbet özeti (SummaryOf) okumaz.
+	GateMsg *chstore.StdMsg `json:"gateMsg,omitempty"`
 }
 
 // SynthRef — v0.10.1287: kök-neden sentezleyicisinin hipotezinin SALT-OKUNUR
@@ -218,7 +226,7 @@ func (inv *Investigation) setStep(s Step) {
 }
 
 // Encode — SAF: kaydı ≤ SREInvestigationMaxBytes JSON'a kodlar. Sığmazsa
-// sırayla küçültür: adım yükleri → uyarılar → bulgular ≤3 → adım özetleri
+// sırayla küçültür: metin anahtarları (v0.10.2301) → adım yükleri → uyarılar → bulgular ≤3 → adım özetleri
 // kırpılır; yine sığmazsa hata (yazım reddedilir, kayıt yarım yazılmaz).
 func Encode(inv Investigation) (string, error) {
 	if inv.Steps == nil {
@@ -269,6 +277,9 @@ func Encode(inv Investigation) (string, error) {
 		}
 	}
 	shrink := []func(){
+		// v0.10.2301 (S4) — metin anahtarları İLK düşer: bu sürümden önce
+		// sığan bir kayıt, anahtarlar yüzünden başka hiçbir şey kaybetmez.
+		func() { dropTextMsgs(&inv) },
 		func() {
 			for i := range inv.Steps {
 				inv.Steps[i].Payload = nil
@@ -363,4 +374,21 @@ func truncRunes(s string, n int) string {
 		return s
 	}
 	return strings.TrimSpace(string(r[:n])) + "…"
+}
+
+// dropTextMsgs — v0.10.2301 (S4): kayıttaki metin anahtarlarını siler (EN
+// arayüz özgün metni işaretle çizer). Elemanlar kopya dilimde (yukarıda).
+func dropTextMsgs(inv *Investigation) {
+	for i := range inv.Steps {
+		inv.Steps[i].SummaryMsg = nil
+	}
+	for i := range inv.Recommendations {
+		inv.Recommendations[i].TextMsg = nil
+	}
+	for i := range inv.Timeline {
+		inv.Timeline[i].LabelMsg = nil
+	}
+	if inv.Summary != nil {
+		inv.Summary.GateMsg = nil
+	}
 }

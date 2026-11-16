@@ -89,8 +89,11 @@ type RecRollout struct {
 
 // Recommendation — tek öneri kartı. YALNIZ METİN + bağlantı.
 type Recommendation struct {
-	ID             string      `json:"id"`
-	Text           string      `json:"text"`
+	ID   string `json:"id"`
+	Text string `json:"text"`
+	// TextMsg — v0.10.2301 (S4): Text'in metin anahtarı (ek alan; Text aynen;
+	// MCP özeti Text'i kopyalar). Rationale kontrol gerekçesi taşır → özgün.
+	TextMsg        *RecTextMsg `json:"textMsg,omitempty"`
 	Rationale      string      `json:"rationale"`
 	HypothesisKind string      `json:"hypothesisKind,omitempty"`
 	Runbook        *RecRunbook `json:"runbook,omitempty"`
@@ -99,6 +102,83 @@ type Recommendation struct {
 	State          string      `json:"state"`
 	AckBy          string      `json:"ackBy,omitempty"`
 	AckAt          int64       `json:"ackAt,omitempty"` // unix ns
+}
+
+// RecTextMsg — v0.10.2301 (S4): öneri metninin anahtarı. JSON şekli
+// chstore.StdMsg ile AYNI ({k, a}; FE stdMsgText çizer) ama tip ağacı yalnız
+// metin: öneri harita / arayüz taşımaz (TestRecommendationIsTextOnly).
+type RecTextMsg struct {
+	K string       `json:"k"`
+	A *RecTextArgs `json:"a,omitempty"`
+}
+
+// RecTextArgs — öneri anahtarlarının ham argümanları (hepsi metin).
+type RecTextArgs struct {
+	Name   string `json:"name,omitempty"`
+	From   string `json:"from,omitempty"`
+	To     string `json:"to,omitempty"`
+	Argo   string `json:"argo,omitempty"`
+	ArgoK  string `json:"argoK,omitempty"`
+	App    string `json:"app,omitempty"`
+	Pods   string `json:"pods,omitempty"`
+	Pod    string `json:"pod,omitempty"`
+	CPU    string `json:"cpu,omitempty"`
+	Mem    string `json:"mem,omitempty"`
+	GC     string `json:"gc,omitempty"`
+	Svc    string `json:"svc,omitempty"`
+	Target string `json:"target,omitempty"`
+	DB     string `json:"db,omitempty"`
+	D      string `json:"d,omitempty"`
+	Title  string `json:"title,omitempty"`
+}
+
+// recMsg — SAF: anahtar + ad/değer çiftleri (bilinmeyen ad yok sayılır —
+// testte fikstür her argümanın çizildiğini doğrular).
+func recMsg(k string, kv ...string) *RecTextMsg {
+	m := &RecTextMsg{K: k}
+	if len(kv) == 0 {
+		return m
+	}
+	a := &RecTextArgs{}
+	for i := 0; i+1 < len(kv); i += 2 {
+		v := kv[i+1]
+		switch kv[i] {
+		case "name":
+			a.Name = v
+		case "from":
+			a.From = v
+		case "to":
+			a.To = v
+		case "argo":
+			a.Argo = v
+		case "argoK":
+			a.ArgoK = v
+		case "app":
+			a.App = v
+		case "pods":
+			a.Pods = v
+		case "pod":
+			a.Pod = v
+		case "cpu":
+			a.CPU = v
+		case "mem":
+			a.Mem = v
+		case "gc":
+			a.GC = v
+		case "svc":
+			a.Svc = v
+		case "target":
+			a.Target = v
+		case "db":
+			a.DB = v
+		case "d":
+			a.D = v
+		case "title":
+			a.Title = v
+		}
+	}
+	m.A = a
+	return m
 }
 
 // recInput — SAF buildRecommendations'ın girdisi.
@@ -201,6 +281,22 @@ func hypRationale(h Hypothesis, extra string) string {
 	return truncRunes(r, recRationaleMax)
 }
 
+// argoStatusArg — SAF: argoStatusTR'nin anahtar ikizi (ad, değer).
+func argoStatusArg(a mcptools.ArgoAppStatus) (string, string) {
+	if st := argoStatusTR(a); st != "durum bilinmiyor" {
+		return "argo", st
+	}
+	return "argoK", "rec.argoUnknown"
+}
+
+// pctRaw — SAF: pctTR'nin dilden bağımsız ikizi ("91%", "?").
+func pctRaw(p *float64) string {
+	if p == nil {
+		return "?"
+	}
+	return fmt.Sprintf("%.0f%%", *p)
+}
+
 func pctTR(p *float64) string {
 	if p == nil {
 		return "?"
@@ -213,6 +309,7 @@ func rollbackRec(h Hypothesis, r DeployFact, in recInput) Recommendation {
 	rec := Recommendation{ID: "rollback", HypothesisKind: h.Kind, State: RecPending,
 		Rollout: &RecRollout{Workload: r.Name, From: r.Version, To: r.Prev}}
 	text := fmt.Sprintf("%s %s → %s geri alma değerlendirilebilir", r.Name, r.Version, r.Prev)
+	rec.TextMsg = recMsg("rec.rollback", "name", r.Name, "from", r.Version, "to", r.Prev)
 	argoNote := ""
 	if in.ArgoRead {
 		if a := argoFor(in.Argo, r.Name, in.Service); a != nil {
@@ -220,6 +317,8 @@ func rollbackRec(h Hypothesis, r DeployFact, in recInput) Recommendation {
 			rec.Argo = &RecArgo{App: a.App, Status: st, PrevRevision: r.Prev}
 			text += " (Argo: " + st + ")"
 			argoNote = "Argo CD uygulaması " + a.App
+			an, av := argoStatusArg(*a)
+			rec.TextMsg = recMsg("rec.rollbackArgo", "name", r.Name, "from", r.Version, "to", r.Prev, an, av)
 		}
 	}
 	text += " — kararı ve uygulamayı insan verir"
@@ -253,22 +352,25 @@ func hypothesisRec(h Hypothesis, in recInput, rb *DeployFact) (Recommendation, b
 		f = &Facts{}
 	}
 	text := ""
+	var msg *RecTextMsg
 	switch h.Kind {
 	case HypDeploy, HypCodeRegression:
 		if rb != nil {
 			return rollbackRec(h, *rb, in), true
 		}
 		if h.Kind == HypDeploy {
-			text = "Başlangıca yakın değişikliği (deploy adımı) sürüm notlarıyla birlikte gözden geçirin"
+			text, msg = "Başlangıca yakın değişikliği (deploy adımı) sürüm notlarıyla birlikte gözden geçirin", recMsg("rec.deploy")
 		} else {
-			text = "Yeni hata desenini ve son kod değişikliğini inceleyin (kanıt: log artışı / temsilci trace)"
+			text, msg = "Yeni hata desenini ve son kod değişikliğini inceleyin (kanıt: log artışı / temsilci trace)", recMsg("rec.codeRegression")
 		}
 	case HypConfig:
-		text = "İmaj değişmeden yapılan son yapılandırma / secret değişikliğini gözden geçirin"
+		text, msg = "İmaj değişmeden yapılan son yapılandırma / secret değişikliğini gözden geçirin", recMsg("rec.config")
 		if in.ArgoRead {
 			if a := argoFor(in.Argo, "", in.Service); a != nil {
 				rec.Argo = &RecArgo{App: a.App, Status: argoStatusTR(*a)}
 				text += fmt.Sprintf(" (Argo %s: %s)", a.App, rec.Argo.Status)
+				an, av := argoStatusArg(*a)
+				msg = recMsg("rec.configArgo", "app", a.App, an, av)
 			}
 		}
 	case HypSaturation:
@@ -276,41 +378,49 @@ func hypothesisRec(h Hypothesis, in recInput, rb *DeployFact) (Recommendation, b
 		switch {
 		case p != nil && len(p.OOMPods) > 0:
 			text = fmt.Sprintf("OOMKilled pod'lar (%s): bellek limitini / sızıntıyı gözden geçirin", strings.Join(p.OOMPods, ", "))
+			msg = recMsg("rec.sat.oom", "pods", strings.Join(p.OOMPods, ", "))
 		case p != nil && p.HotPod != "":
 			text = fmt.Sprintf("%s kaynak kullanımını (CPU %s / bellek %s limit) ve ölçeklemeyi gözden geçirin", p.HotPod, pctTR(p.MaxCPUPct), pctTR(p.MaxMemPct))
+			msg = recMsg("rec.sat.hot", "pod", p.HotPod, "cpu", pctRaw(p.MaxCPUPct), "mem", pctRaw(p.MaxMemPct))
 		case p != nil && p.HotJVM != "":
 			text = fmt.Sprintf("%s JVM heap baskısını (GC sonrası %s) gözden geçirin", p.HotJVM, pctTR(p.MaxPostGCPct))
+			msg = recMsg("rec.sat.jvm", "pod", p.HotJVM, "gc", pctRaw(p.MaxPostGCPct))
 		default:
-			text = "Pod / node kaynak baskısını ve ölçeklemeyi gözden geçirin"
+			text, msg = "Pod / node kaynak baskısını ve ölçeklemeyi gözden geçirin", recMsg("rec.sat.generic")
 		}
 	case HypDependency:
 		if f.Deps != nil && len(f.Deps.Causes) > 0 {
 			text = fmt.Sprintf("Aşağı akış %s servisinin sağlığını ve açık problemlerini kontrol edin", f.Deps.Causes[0].Service)
+			msg = recMsg("rec.dep", "svc", f.Deps.Causes[0].Service)
 		} else {
-			text = "Aşağı akış bağımlılıklarının sağlığını kontrol edin"
+			text, msg = "Aşağı akış bağımlılıklarının sağlığını kontrol edin", recMsg("rec.depGeneric")
 		}
 	case HypExternal:
 		if ext := (Evidence{Facts: *f}).edgesWithPrefix("ext:"); len(ext) > 0 {
 			text = fmt.Sprintf("Dış servis %s durumunu sağlayıcının durum sayfasından doğrulayın", strings.TrimPrefix(ext[0].Target, "ext:"))
+			msg = recMsg("rec.ext", "target", strings.TrimPrefix(ext[0].Target, "ext:"))
 		} else {
-			text = "Dış bağımlılığın durumunu sağlayıcıdan doğrulayın"
+			text, msg = "Dış bağımlılığın durumunu sağlayıcıdan doğrulayın", recMsg("rec.extGeneric")
 		}
 	case HypDBSlow:
 		if db := (Evidence{Facts: *f}).edgesWithPrefix("db:"); len(db) > 0 {
 			text = fmt.Sprintf("%s veritabanının yavaş sorgularını ve bağlantı havuzunu inceleyin", strings.TrimPrefix(db[0].Target, "db:"))
+			msg = recMsg("rec.db", "db", strings.TrimPrefix(db[0].Target, "db:"))
 		} else {
-			text = "Veritabanı yavaş sorgularını ve bağlantı havuzunu inceleyin"
+			text, msg = "Veritabanı yavaş sorgularını ve bağlantı havuzunu inceleyin", recMsg("rec.dbGeneric")
 		}
 	case HypTrafficSurge:
 		if f.Deps != nil && f.Deps.Subject != nil {
 			text = fmt.Sprintf("Trafik %+.0f%% arttı: ölçeklemeyi / hız sınırlamayı değerlendirin", f.Deps.Subject.RateDeltaPct)
+			msg = recMsg("rec.traffic", "d", fmt.Sprintf("%+.0f%%", f.Deps.Subject.RateDeltaPct))
 		} else {
-			text = "Trafik artışı: ölçeklemeyi / hız sınırlamayı değerlendirin"
+			text, msg = "Trafik artışı: ölçeklemeyi / hız sınırlamayı değerlendirin", recMsg("rec.trafficGeneric")
 		}
 	default:
 		return Recommendation{}, false
 	}
 	rec.Text = truncRunes(text, recTextMax)
+	rec.TextMsg = msg
 	rec.Rationale = hypRationale(h, "")
 	return rec, true
 }
@@ -565,6 +675,7 @@ func buildRecommendations(in recInput) []Recommendation {
 		r := m.Runbook
 		out = append(out, Recommendation{ID: id, HypothesisKind: m.Kind, State: RecPending, Runbook: &r,
 			Text:      truncRunes(fmt.Sprintf("Runbook'u gözden geçirin: %s — çalıştırmayı insan başlatır", r.Title), recTextMax),
+			TextMsg:   recMsg("rec.runbook", "title", r.Title),
 			Rationale: truncRunes(m.Reason, recRationaleMax)})
 	}
 	if len(out) > RecommendationsMax {

@@ -353,8 +353,10 @@ func runInvestigation(ctx context.Context, rd readers, inv *Investigation, check
 		// Sıfır LLM çağrısı → bütçeye 0 düşer.
 		checkpoint(inv)
 		if !fresh(inv.step(stepSummary), t0) {
-			inv.Summary = &Narration{Text: ReplayNarrationText, At: now().UnixNano(), Gated: true, Reason: "değerlendirme tekrarı"}
-			apply(stepOutcome{step: Step{Name: stepSummary, State: StepSkipped, Summary: ReplayNarrationText, At: now().UnixNano()}})
+			inv.Summary = &Narration{Text: ReplayNarrationText, At: now().UnixNano(), Gated: true, Reason: "değerlendirme tekrarı",
+				GateMsg: chstore.NewStdMsg("inv.replayGated")}
+			apply(stepOutcome{step: Step{Name: stepSummary, State: StepSkipped, Summary: ReplayNarrationText, At: now().UnixNano(),
+				SummaryMsg: chstore.NewStdMsg("step.replayNarration")}})
 		}
 		return
 	}
@@ -424,7 +426,7 @@ func execStep(ctx context.Context, rd readers, service string, s StepSpec) stepO
 	switch s.Name {
 	case stepSweep:
 		if rd.sweep == nil || s.Sweep == nil {
-			return skippedOutcome(s.Name, "tarama okuyucusu bağlı değil")
+			return skippedOutcome(s.Name, "tarama okuyucusu bağlı değil", "step.skip.sweepReader")
 		}
 		res, err := rd.sweep(ctx, *s.Sweep)
 		st, f, w := sweepStep(res, err)
@@ -435,7 +437,7 @@ func execStep(ctx context.Context, rd readers, service string, s StepSpec) stepO
 		return o
 	case stepDeploys:
 		if rd.deploys == nil {
-			return skippedOutcome(s.Name, "deploy okuyucusu bağlı değil")
+			return skippedOutcome(s.Name, "deploy okuyucusu bağlı değil", "step.skip.deploysReader")
 		}
 		dc, err := rd.deploys(ctx, service, s.DeployAnchor, s.DeployTo)
 		ds, f := deployStep(dc, err)
@@ -446,13 +448,13 @@ func execStep(ctx context.Context, rd readers, service string, s StepSpec) stepO
 		return o
 	case stepDeps:
 		if s.Deps == nil {
-			return skippedOutcome(s.Name, "bağımlılık isteği yok")
+			return skippedOutcome(s.Name, "bağımlılık isteği yok", "step.skip.depsReq")
 		}
 		st, f, df := runDeps(ctx, rd, *s.Deps)
 		return stepOutcome{step: st, findings: f, facts: &Facts{Deps: df}}
 	case stepPivot:
 		if rd.pivot == nil || s.Pivot == nil {
-			return skippedOutcome(s.Name, "pivot okuyucusu bağlı değil")
+			return skippedOutcome(s.Name, "pivot okuyucusu bağlı değil", "step.skip.pivotReader")
 		}
 		req := *s.Pivot
 		via := "hipotezin temsilci trace'i"
@@ -475,7 +477,7 @@ func execStep(ctx context.Context, rd readers, service string, s StepSpec) stepO
 		return o
 	case stepLogSpike:
 		if rd.spike == nil || s.Spike == nil {
-			return skippedOutcome(s.Name, "log okuyucusu bağlı değil")
+			return skippedOutcome(s.Name, "log okuyucusu bağlı değil", "step.skip.logReader")
 		}
 		res, err := rd.spike(ctx, *s.Spike)
 		st, f := spikeStep(res, err)
@@ -486,12 +488,12 @@ func execStep(ctx context.Context, rd readers, service string, s StepSpec) stepO
 		return o
 	case stepEvents:
 		if rd.events == nil || s.Events == nil {
-			return skippedOutcome(s.Name, "olay okuyucusu bağlı değil")
+			return skippedOutcome(s.Name, "olay okuyucusu bağlı değil", "step.skip.eventsReader")
 		}
 		return runEvents(ctx, rd, *s.Events)
 	case stepNode:
 		if rd.node == nil || s.Node == nil {
-			return skippedOutcome(s.Name, "node okuyucusu bağlı değil")
+			return skippedOutcome(s.Name, "node okuyucusu bağlı değil", "step.skip.nodeReader")
 		}
 		nc, err := rd.node(ctx, s.Node.Service, s.Node.From, s.Node.To)
 		st, f := nodeStep(nc, err)
@@ -502,25 +504,26 @@ func execStep(ctx context.Context, rd readers, service string, s StepSpec) stepO
 		return o
 	case stepBaseline:
 		if s.Baseline == nil {
-			return skippedOutcome(s.Name, "baseline isteği yok")
+			return skippedOutcome(s.Name, "baseline isteği yok", "step.skip.baselineReq")
 		}
 		return runBaseline(ctx, rd, *s.Baseline)
 	case stepAnomalies:
 		if s.Anomalies == nil {
-			return skippedOutcome(s.Name, "anomali isteği yok")
+			return skippedOutcome(s.Name, "anomali isteği yok", "step.skip.anomaliesReq")
 		}
 		return runAnomalies(ctx, rd, *s.Anomalies)
 	case stepErrors:
 		if s.Errors == nil {
-			return skippedOutcome(s.Name, "hata özeti isteği yok")
+			return skippedOutcome(s.Name, "hata özeti isteği yok", "step.skip.errorsReq")
 		}
 		return runErrors(ctx, rd, *s.Errors)
 	}
-	return skippedOutcome(s.Name, "bilinmeyen adım")
+	return skippedOutcome(s.Name, "bilinmeyen adım", "step.skip.unknown")
 }
 
-func skippedOutcome(name, why string) stepOutcome {
-	return stepOutcome{step: Step{Name: name, State: StepSkipped, Summary: why}}
+// skippedOutcome — atlanan adım; key = why'ın metin anahtarı (v0.10.2301 S4).
+func skippedOutcome(name, why, key string) stepOutcome {
+	return stepOutcome{step: Step{Name: name, State: StepSkipped, Summary: why, SummaryMsg: chstore.NewStdMsg(key)}}
 }
 
 // groupFindings — SAF: kayıttaki bulgular → adım başına (0a kaydı: Step boş = sweep).

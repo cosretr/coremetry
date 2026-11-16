@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"sort"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 // TimelineEvent — çizelgenin tek satırı.
@@ -23,6 +25,9 @@ type TimelineEvent struct {
 	Kind  string `json:"kind"`
 	Label string `json:"label"`
 	Ref   string `json:"ref,omitempty"` // problem / incident kimliği ya da kanıt künyesi
+	// LabelMsg — v0.10.2301 (S4): Label'ın metin anahtarı (ek alan; Label
+	// aynen). Kural / servis adları ham argüman.
+	LabelMsg *chstore.StdMsg `json:"labelMsg,omitempty"`
 }
 
 // Olay türleri (FE aynası hypothesisView.ts TIMELINE_KIND).
@@ -52,25 +57,28 @@ func buildTimeline(ev Evidence, problemID string, now time.Time) []TimelineEvent
 	var must, deploys, alerts []TimelineEvent
 
 	label := "Problem başladı"
+	labelMsg := chstore.NewStdMsg("tl.start")
 	if pf := ev.Facts.Problem; pf != nil && firstNonEmpty(pf.RuleName, pf.RuleID) != "" {
 		label += ": " + truncRunes(firstNonEmpty(pf.RuleName, pf.RuleID), 80)
+		labelMsg = chstore.NewStdMsg("tl.startRule", "name", truncRunes(firstNonEmpty(pf.RuleName, pf.RuleID), 80))
 	}
-	must = append(must, TimelineEvent{At: ev.StartNs, Kind: TLProblemStart, Label: label, Ref: problemID})
-	if e, src, ok := ev.firstError(); ok && src != "problem başlangıcı" && in(e) {
-		must = append(must, TimelineEvent{At: e, Kind: TLFirstError, Label: "İlk hata (" + src + ")"})
+	must = append(must, TimelineEvent{At: ev.StartNs, Kind: TLProblemStart, Label: label, Ref: problemID, LabelMsg: labelMsg})
+	if e, src, srcK, ok := ev.firstErrorK(); ok && src != "problem başlangıcı" && in(e) {
+		must = append(must, TimelineEvent{At: e, Kind: TLFirstError, Label: "İlk hata (" + src + ")", LabelMsg: chstore.NewStdMsg("tl.firstError", "srcK", srcK)})
 	}
 	if sp := ev.Facts.Spike; sp != nil && sp.FromMs > 0 && sp.Factor >= spikeFindingFactor {
 		at := sp.FromMs * int64(time.Millisecond)
 		if in(at) {
-			lvl := ""
+			lvl, k := "", "tl.spike"
 			if sp.Level == "error" {
-				lvl = ", ERROR"
+				lvl, k = ", ERROR", "tl.spikeErr"
 			}
-			must = append(must, TimelineEvent{At: at, Kind: TLSpikeStart, Label: fmt.Sprintf("Log artışı başladı (×%.1f%s)", sp.Factor, lvl), Ref: ev.ref(stepLogSpike, "")})
+			must = append(must, TimelineEvent{At: at, Kind: TLSpikeStart, Label: fmt.Sprintf("Log artışı başladı (×%.1f%s)", sp.Factor, lvl), Ref: ev.ref(stepLogSpike, ""),
+				LabelMsg: chstore.NewStdMsg(k, "f", fmt.Sprintf("%.1f", sp.Factor))})
 		}
 	}
 	if ef := ev.Facts.Events; ef != nil && ef.IncidentID != "" && in(ef.IncidentAt) {
-		must = append(must, TimelineEvent{At: ef.IncidentAt, Kind: TLIncident, Label: "Incident'a bağlandı", Ref: ef.IncidentID})
+		must = append(must, TimelineEvent{At: ef.IncidentAt, Kind: TLIncident, Label: "Incident'a bağlandı", Ref: ef.IncidentID, LabelMsg: chstore.NewStdMsg("tl.incident")})
 	}
 	if df := ev.Facts.Deploys; df != nil {
 		for _, r := range df.Rows {
@@ -78,16 +86,20 @@ func buildTimeline(ev Evidence, problemID string, now time.Time) []TimelineEvent
 				continue
 			}
 			l := "Deploy: " + deployName(r)
+			k, kv := "tl.deploy", []any{"name", deployName(r)}
 			if r.Prev != "" && r.Prev != r.Version {
 				l += " (←" + r.Prev + ")"
+				k, kv = "tl.deployPrev", append(kv, "prev", r.Prev)
 			}
 			if r.Source == "rollout" && !imageChanged(r) {
 				l = "Rollout (imaj değişmedi): " + r.Name
+				k, kv = "tl.rollout", []any{"name", r.Name}
 			}
 			if deployFailed(r.Status) {
 				l += " · " + r.Status
+				k, kv = k+"St", append(kv, "st", r.Status)
 			}
-			deploys = append(deploys, TimelineEvent{At: r.At, Kind: TLDeploy, Label: truncRunes(l, 140), Ref: ev.ref(stepDeploys, "")})
+			deploys = append(deploys, TimelineEvent{At: r.At, Kind: TLDeploy, Label: truncRunes(l, 140), Ref: ev.ref(stepDeploys, ""), LabelMsg: chstore.NewStdMsg(k, kv...)})
 		}
 	}
 	if ef := ev.Facts.Events; ef != nil {
@@ -98,13 +110,16 @@ func buildTimeline(ev Evidence, problemID string, now time.Time) []TimelineEvent
 			}
 			if a.StartedAt > 0 && in(a.StartedAt) {
 				l := "Alarm açıldı: " + name
+				m := chstore.NewStdMsg("tl.alert", "name", name)
 				if a.Priority != "" {
 					l += " (" + a.Priority + ")"
+					m = chstore.NewStdMsg("tl.alertP", "name", name, "p", a.Priority)
 				}
-				alerts = append(alerts, TimelineEvent{At: a.StartedAt, Kind: TLAlert, Label: l, Ref: a.ID})
+				alerts = append(alerts, TimelineEvent{At: a.StartedAt, Kind: TLAlert, Label: l, Ref: a.ID, LabelMsg: m})
 			}
 			if a.ResolvedAt > 0 && in(a.ResolvedAt) {
-				alerts = append(alerts, TimelineEvent{At: a.ResolvedAt, Kind: TLAlertResolved, Label: "Alarm kapandı: " + name, Ref: a.ID})
+				alerts = append(alerts, TimelineEvent{At: a.ResolvedAt, Kind: TLAlertResolved, Label: "Alarm kapandı: " + name, Ref: a.ID,
+					LabelMsg: chstore.NewStdMsg("tl.alertResolved", "name", name)})
 			}
 		}
 		for _, a := range ef.Alerts {

@@ -362,23 +362,30 @@ func (ev Evidence) deploysWithin() int {
 // başlangıcı; log artışı (ERROR seviyesi) ve hatalı temsilci trace daha erken
 // bir anı gösterebilir. Bilinmiyorsa ok=false.
 func (ev Evidence) firstError() (int64, string, bool) {
+	at, src, _, ok := ev.firstErrorK()
+	return at, src, ok
+}
+
+// firstErrorK — firstError + kaynağın metin anahtarı (v0.10.2301 S4; çizelge
+// etiketi). Türkçe kaynak metni aynen.
+func (ev Evidence) firstErrorK() (int64, string, string, bool) {
 	var at int64
-	src := ""
-	take := func(ns int64, s string) {
+	src, key := "", ""
+	take := func(ns int64, s, k string) {
 		if ns > 0 && (at == 0 || ns < at) {
-			at, src = ns, s
+			at, src, key = ns, s, k
 		}
 	}
 	if ev.Symptom == symptomError || ev.Symptom == symptomDown {
-		take(ev.StartNs, "problem başlangıcı")
+		take(ev.StartNs, "problem başlangıcı", "tl.src.start")
 	}
 	if sp := ev.Facts.Spike; sp != nil && sp.Level == "error" && sp.FromMs > 0 && sp.Factor >= spikeFindingFactor {
-		take(sp.FromMs*int64(time.Millisecond), "ERROR log artışı")
+		take(sp.FromMs*int64(time.Millisecond), "ERROR log artışı", "tl.src.errorLog")
 	}
 	if pv := ev.Facts.Pivot; pv != nil && pv.ErrorSpans > 0 && pv.StartMs > 0 {
-		take(pv.StartMs*int64(time.Millisecond), "hatalı temsilci trace")
+		take(pv.StartMs*int64(time.Millisecond), "hatalı temsilci trace", "tl.src.errorTrace")
 	}
-	return at, src, at > 0
+	return at, src, key, at > 0
 }
 
 func relMin(at, anchor int64) string {

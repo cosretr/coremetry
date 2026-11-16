@@ -82,7 +82,7 @@ func errorGroupsOf(rows []chstore.ExceptionRow) []ErrorGroup {
 func runErrors(ctx context.Context, rd readers, req errorsRequest) stepOutcome {
 	st := Step{Name: stepErrors}
 	if rd.errorOps == nil && rd.exceptions == nil {
-		return skippedOutcome(stepErrors, "hata okuyucusu bağlı değil")
+		return skippedOutcome(stepErrors, "hata okuyucusu bağlı değil", "step.skip.errorsReader")
 	}
 	ef := &ErrorFacts{}
 	var errs []string
@@ -118,6 +118,7 @@ func runErrors(ctx context.Context, rd readers, req errorsRequest) stepOutcome {
 	if len(ef.Ops) == 0 && len(ef.Groups) == 0 && st.State == StepOK {
 		st.NoData = true
 		st.Summary = "veri yok: pencerede hatalı operasyon ya da istisna grubu yok"
+		st.SummaryMsg = chstore.NewStdMsg("step.noData.errors")
 	}
 	return stepOutcome{step: st, facts: &Facts{Errors: ef}}
 }

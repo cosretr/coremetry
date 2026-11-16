@@ -1,0 +1,258 @@
+[
+ {
+  "name": "rec:rollback:rollback",
+  "text": "svc-a rev 42 → rev 41 geri alma değerlendirilebilir — kararı ve uygulamayı insan verir",
+  "rationale": "Deploy hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:rollback-bare:rollback",
+  "text": "svc-a rev 42 → rev 41 geri alma değerlendirilebilir — kararı ve uygulamayı insan verir",
+  "rationale": "Kod gerilemesi / yeni exception hipotezi orta 0.62 (kod skoru); başlangıçtan 12 dk önce rollout"
+ },
+ {
+  "name": "rec:rollback-argo:rollback",
+  "text": "svc-a rev 42 → rev 41 geri alma değerlendirilebilir (Argo: OutOfSync, Degraded) — kararı ve uygulamayı insan verir",
+  "rationale": "Deploy hipotezi orta 0.62 (kod skoru) — destek-1; Argo CD uygulaması app-1"
+ },
+ {
+  "name": "rec:rollback-argo-unknown:rollback",
+  "text": "svc-a rev 42 → rev 41 geri alma değerlendirilebilir (Argo: durum bilinmiyor) — kararı ve uygulamayı insan verir",
+  "rationale": "Deploy hipotezi orta 0.62 (kod skoru) — destek-1; Argo CD uygulaması app-1"
+ },
+ {
+  "name": "rec:rollback-bare-event:rollback",
+  "text": "svc-a rev 42 → rev 41 geri alma değerlendirilebilir — kararı ve uygulamayı insan verir",
+  "rationale": "Deploy hipotezi orta 0.62 (kod skoru); başlangıçtan 12 dk önce deploy olayı"
+ },
+ {
+  "name": "rec:rollback-bare-inferred:rollback",
+  "text": "svc-a rev 42 → rev 41 geri alma değerlendirilebilir — kararı ve uygulamayı insan verir",
+  "rationale": "Deploy hipotezi orta 0.62 (kod skoru); başlangıçtan 12 dk önce sürüm geçişi"
+ },
+ {
+  "name": "rec:deploy:hyp-deploy",
+  "text": "Başlangıca yakın değişikliği (deploy adımı) sürüm notlarıyla birlikte gözden geçirin",
+  "rationale": "Deploy hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:code-regression:hyp-code_regression",
+  "text": "Yeni hata desenini ve son kod değişikliğini inceleyin (kanıt: log artışı / temsilci trace)",
+  "rationale": "Kod gerilemesi / yeni exception hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:config:hyp-config",
+  "text": "İmaj değişmeden yapılan son yapılandırma / secret değişikliğini gözden geçirin",
+  "rationale": "Konfigürasyon değişikliği hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:config-argo:hyp-config",
+  "text": "İmaj değişmeden yapılan son yapılandırma / secret değişikliğini gözden geçirin (Argo app-1: Synced, Progressing)",
+  "rationale": "Konfigürasyon değişikliği hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:sat-oom:hyp-saturation",
+  "text": "OOMKilled pod'lar (pod-1, pod-2): bellek limitini / sızıntıyı gözden geçirin",
+  "rationale": "Doygunluk / OOM hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:sat-hot:hyp-saturation",
+  "text": "pod-1 kaynak kullanımını (CPU %91 / bellek %62 limit) ve ölçeklemeyi gözden geçirin",
+  "rationale": "Doygunluk / OOM hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:sat-hot-nil:hyp-saturation",
+  "text": "pod-1 kaynak kullanımını (CPU %91 / bellek ? limit) ve ölçeklemeyi gözden geçirin",
+  "rationale": "Doygunluk / OOM hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:sat-jvm:hyp-saturation",
+  "text": "pod-1 JVM heap baskısını (GC sonrası %88) gözden geçirin",
+  "rationale": "Doygunluk / OOM hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:sat-generic:hyp-saturation",
+  "text": "Pod / node kaynak baskısını ve ölçeklemeyi gözden geçirin",
+  "rationale": "Doygunluk / OOM hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:dep:hyp-dependency",
+  "text": "Aşağı akış svc-b servisinin sağlığını ve açık problemlerini kontrol edin",
+  "rationale": "Bağımlılık arızası hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:dep-generic:hyp-dependency",
+  "text": "Aşağı akış bağımlılıklarının sağlığını kontrol edin",
+  "rationale": "Bağımlılık arızası hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:ext:hyp-external",
+  "text": "Dış servis api.example durumunu sağlayıcının durum sayfasından doğrulayın",
+  "rationale": "Dış servis kesintisi hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:ext-generic:hyp-external",
+  "text": "Dış bağımlılığın durumunu sağlayıcıdan doğrulayın",
+  "rationale": "Dış servis kesintisi hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:db:hyp-db_slow",
+  "text": "db-1 veritabanının yavaş sorgularını ve bağlantı havuzunu inceleyin",
+  "rationale": "Veritabanı yavaşlığı hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:db-generic:hyp-db_slow",
+  "text": "Veritabanı yavaş sorgularını ve bağlantı havuzunu inceleyin",
+  "rationale": "Veritabanı yavaşlığı hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:traffic:hyp-traffic_surge",
+  "text": "Trafik +246% arttı: ölçeklemeyi / hız sınırlamayı değerlendirin",
+  "rationale": "Trafik sıçraması hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:traffic-generic:hyp-traffic_surge",
+  "text": "Trafik artışı: ölçeklemeyi / hız sınırlamayı değerlendirin",
+  "rationale": "Trafik sıçraması hipotezi orta 0.62 (kod skoru) — destek-1"
+ },
+ {
+  "name": "rec:runbook:rb-rb-1:rb-rb-1",
+  "text": "Runbook'u gözden geçirin: Runbook bir — çalıştırmayı insan başlatır",
+  "rationale": "etiket eşleşmesi: service:svc-a"
+ },
+ {
+  "name": "tl:deploy",
+  "text": "Deploy: svc-a@rev 2 (←rev 1)"
+ },
+ {
+  "name": "tl:deploy",
+  "text": "Rollout (imaj değişmedi): svc-a"
+ },
+ {
+  "name": "tl:deploy",
+  "text": "Deploy: svc-a@v3 · failed"
+ },
+ {
+  "name": "tl:deploy",
+  "text": "Rollout (imaj değişmedi): svc-a"
+ },
+ {
+  "name": "tl:first_error",
+  "text": "İlk hata (ERROR log artışı)"
+ },
+ {
+  "name": "tl:spike_start",
+  "text": "Log artışı başladı (×5.2, ERROR)"
+ },
+ {
+  "name": "tl:problem_start",
+  "text": "Problem başladı: rule-1"
+ },
+ {
+  "name": "tl:alert",
+  "text": "Alarm açıldı: rule-2 (P2)"
+ },
+ {
+  "name": "tl:alert",
+  "text": "Alarm açıldı: rule-3"
+ },
+ {
+  "name": "tl:alert",
+  "text": "Alarm açıldı: svc-b — rule-4 (P1)"
+ },
+ {
+  "name": "tl:alert_resolved",
+  "text": "Alarm kapandı: rule-2"
+ },
+ {
+  "name": "tl:incident_attach",
+  "text": "Incident'a bağlandı"
+ },
+ {
+  "name": "tl:first_error",
+  "text": "İlk hata (hatalı temsilci trace)"
+ },
+ {
+  "name": "tl:spike_start",
+  "text": "Log artışı başladı (×3.0)"
+ },
+ {
+  "name": "tl:problem_start",
+  "text": "Problem başladı"
+ },
+ {
+  "name": "step:sweep:skipped",
+  "text": "tarama okuyucusu bağlı değil"
+ },
+ {
+  "name": "step:deploys:skipped",
+  "text": "deploy okuyucusu bağlı değil"
+ },
+ {
+  "name": "step:deps:skipped",
+  "text": "bağımlılık isteği yok"
+ },
+ {
+  "name": "step:pivot:skipped",
+  "text": "pivot okuyucusu bağlı değil"
+ },
+ {
+  "name": "step:log_spike:skipped",
+  "text": "log okuyucusu bağlı değil"
+ },
+ {
+  "name": "step:events:skipped",
+  "text": "olay okuyucusu bağlı değil"
+ },
+ {
+  "name": "step:node:skipped",
+  "text": "node okuyucusu bağlı değil"
+ },
+ {
+  "name": "step:baseline:skipped",
+  "text": "baseline isteği yok"
+ },
+ {
+  "name": "step:anomalies:skipped",
+  "text": "anomali isteği yok"
+ },
+ {
+  "name": "step:errors:skipped",
+  "text": "hata özeti isteği yok"
+ },
+ {
+  "name": "step:bogus:skipped",
+  "text": "bilinmeyen adım"
+ },
+ {
+  "name": "step:anomalies:skipped",
+  "text": "anomali okuyucusu bağlı değil"
+ },
+ {
+  "name": "step:errors:skipped",
+  "text": "hata okuyucusu bağlı değil"
+ },
+ {
+  "name": "step:anomalies:ok",
+  "text": "veri yok: pencerede öznede ve komşularda anomali olayı yok"
+ },
+ {
+  "name": "step:errors:ok",
+  "text": "veri yok: pencerede hatalı operasyon ya da istisna grubu yok"
+ },
+ {
+  "name": "step:gate:",
+  "text": "AI yapılandırılmamış ya da kapalı"
+ },
+ {
+  "name": "step:gate:",
+  "text": "otomatik AI açıklaması kapalı (Ayarlar → AI)"
+ },
+ {
+  "name": "step:gate:",
+  "text": "sağlayıcı kotası doldu — arka plan AI 1 saat bekliyor"
+ },
+ {
+  "name": "step:gate:",
+  "text": "saatlik AI çağrı tavanı doldu (20)"
+ }
+]

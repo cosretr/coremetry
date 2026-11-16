@@ -140,7 +140,7 @@ func neighborAnomaliesOf(targets []string, evs []chstore.AnomalyEvent, at time.T
 func runAnomalies(ctx context.Context, rd readers, req anomaliesRequest) stepOutcome {
 	st := Step{Name: stepAnomalies}
 	if rd.anomalies == nil {
-		return skippedOutcome(stepAnomalies, "anomali okuyucusu bağlı değil")
+		return skippedOutcome(stepAnomalies, "anomali okuyucusu bağlı değil", "step.skip.anomaliesReader")
 	}
 	filter := func(svcs []string) chstore.ListAnomalyEventsFilter {
 		return chstore.ListAnomalyEventsFilter{Services: svcs, SinceNs: req.From.Add(-anomalyLookbackSlack).UnixNano(), ToNs: req.To.UnixNano(), Limit: anomalyReadLimit}
@@ -184,6 +184,7 @@ func runAnomalies(ctx context.Context, rd readers, req anomaliesRequest) stepOut
 	if af.SubjectAll == 0 && len(af.Neighbors) == 0 && st.State == StepOK {
 		st.NoData = true
 		st.Summary = "veri yok: pencerede öznede ve komşularda anomali olayı yok"
+		st.SummaryMsg = chstore.NewStdMsg("step.noData.anomalies")
 	}
 	return stepOutcome{step: st, facts: &Facts{Anomalies: af}}
 }
