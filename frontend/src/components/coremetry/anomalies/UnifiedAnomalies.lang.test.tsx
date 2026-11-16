@@ -33,11 +33,19 @@ function mlRow(rec = true): UnifiedAnomalyRow {
     mlLead: { id: rec ? 'ev1' : 'ev0', detector: 'op_latency', signal: 'trace', stage: 'shadow', service: 'checkout-api', startedAt: NOW_NS - 12 * 60e9, lastSeen: NOW_NS,
       windowSec: 300, baseline: 43, observed: 135, score: 5, direction: 'up', summary: SERVER_TR, record: rec ? JSON.stringify(record) : undefined } };
 }
+// v0.10.2277 — yalnız eski dedektör olayıyla yönetilen satır: başlık
+// (anomalyPlainHeadline) arayüz dilinde; Türkçe metin aynen.
+function legacyRow(key: string, kind: string, pattern: string, currentCount: number): UnifiedAnomalyRow {
+  return { ...row(key, 'running', 12, 0), mlCount: 0, legacyCount: 1,
+    legacyLead: { id: `le-${key}`, kind, pattern, service: 'checkout-api', startedAt: NOW_NS - 12 * 60e9, lastSeen: NOW_NS,
+      peakRatio: 0, currentRatio: 3, currentCount, sample: '', status: 'active' } as import('@/lib/types').AnomalyEvent };
+}
 vi.mock('@/lib/queries', () => ({
   useUnifiedAnomalies: (p: { section: 'open' | 'done' }) => {
     if (m.mode === 'error') return { data: undefined, isLoading: false, isError: true };
     const items = m.mode === 'empty' ? [] : p.section === 'open'
-      ? [row('a', 'running', 12, 0), row('b', 'watching', 75, 0), row('c', 'rejected', 30, 20), mlRow()]
+      ? [row('a', 'running', 12, 0), row('b', 'watching', 75, 0), row('c', 'rejected', 30, 20), mlRow(),
+        legacyRow('l1', 'op_latency', 'POST /pay', 5), legacyRow('l2', 'log_template_new', 'ERROR db timeout', 1240)]
       : [row('d', 'done', 90, 60)];
     const data: UnifiedAnomaliesPage = { items, total: items.length, openTotal: 3, doneTotal: m.mode === 'empty' ? 0 : 1, offset: 0, limit: 50, truncated: true, partial: 'legacy' };
     return { data, isLoading: false, isError: false };
@@ -81,6 +89,10 @@ describe('Anomalies → Services tablosu — İngilizce arayüz (v0.10.2258)', (
     // "Ne oldu": kayıtlı ML liderinde İngilizce kart başlığı, sunucu cümlesi yok.
     expect(text).toContain('GET /cart p95 latency now 135 ms (1,240 calls); expected ≈ 43 ms.');
     expect(text).not.toContain('yanıt süresi normalin');
+    // v0.10.2277 — eski olay lideri: İngilizce başlık, Türkçe cümle yok.
+    expect(text).toContain('POST /pay slowed down');
+    expect(text).toContain('A new log template appeared, 1,240 lines');
+    for (const trh of ['yavaşladı', 'log kalıbı belirdi', ' satır']) expect(text, trh).not.toContain(trh);
   });
   it('boş ve hata metni İngilizce', () => {
     m.mode = 'empty';
@@ -98,7 +110,8 @@ describe('Anomalies → Services tablosu — İngilizce arayüz (v0.10.2258)', (
     const text = el.textContent ?? '';
     for (const tr of ['Başlangıç', 'Ne oldu', 'Sürüyor · 12 dk', 'İzleniyor · 1 sa 15 dk', 'Değil dendi', 'Bitenler (1)', 'Metrik', 'Hepsi',
       'eski dedektör olayları okunamadı; liste eksik.', 'Liste kaynak tavanında kesildi (son 24 saat).',
-      'GET /cart p95 gecikmesi şu an 135 ms (1.240 çağrı); beklenen ≈ 43 ms.']) {
+      'GET /cart p95 gecikmesi şu an 135 ms (1.240 çağrı); beklenen ≈ 43 ms.',
+      'POST /pay yavaşladı', 'Yeni bir log kalıbı belirdi, 1.240 satır']) {
       expect(text, tr).toContain(tr);
     }
   });

@@ -9,7 +9,7 @@
 // yoksa eski olayın anlatımı (lib/anomalyNarrative.ts) — yeni log kalıbında
 // kaç satır görüldüğüyle.
 import type { AnomalyEvent, MLEvent, MLRecordView, UnifiedAnomalyRow } from '@/lib/types';
-import { t, type Lang } from '@/lib/i18n';
+import { t, tf, type Lang } from '@/lib/i18n';
 import { measureKey, recordUsable } from './mlRecord';
 import { recordHeadline } from './mlRecordText';
 import { anomalyPlainHeadline } from '@/lib/anomalyNarrative';
@@ -50,7 +50,7 @@ export function rowHeadline(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLead' |
     if (rec) return recordHeadline(rec, t(measureKey(rec)!, lang), lang);
     return mlRowText(r.mlLead);
   }
-  if (r.legacyLead) return legacyHeadline(r.legacyLead);
+  if (r.legacyLead) return legacyHeadline(r.legacyLead, lang);
   return r.service;
 }
 
@@ -77,9 +77,12 @@ function legacyStatus(e: AnomalyEvent): MLGroupStatus {
 }
 
 /** SAF: eski olay satır cümlesi — yeni log kalıbında kaç satır görüldüğü de. */
-export function legacyHeadline(e: AnomalyEvent): string {
-  const h = anomalyPlainHeadline(e);
-  if (e.kind === 'log_template_new' && e.currentCount > 0) return `${h}, ${e.currentCount.toLocaleString('tr-TR')} satır`;
+export function legacyHeadline(e: AnomalyEvent, lang: Lang = 'tr'): string {
+  const h = anomalyPlainHeadline(e, lang);
+  if (e.kind === 'log_template_new' && e.currentCount > 0) {
+    const n = e.currentCount.toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US');
+    return `${h}, ${tf('anomalyHeadline.lines', lang, { n })}`;
+  }
   return h;
 }
 

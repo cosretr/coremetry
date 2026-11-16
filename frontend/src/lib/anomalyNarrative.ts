@@ -1,25 +1,20 @@
 // anomalyNarrative.ts — eski dedektör olayı için insan diliyle başlık + özet
 // (C3, v0.10.1771). Saf; "normalin N×" yok, birimli "normal → şimdi".
 import type { AnomalyEvent } from '@/lib/types';
+import { tf, type Lang } from '@/lib/i18n';
 
 import { subjectEventTopic, subjectMetricOf } from '@/lib/anomalySubjectMetric';
 
 // v0.10.1804 — Kafka consumer lag özne olayı (subject_red, "consumer_lag @ queue:kafka@<topic>").
 const isConsumerLag = (e: AnomalyEvent) => subjectMetricOf(e) === 'consumer_lag';
 
-const KIND_TR: Record<string, (e: AnomalyEvent) => string> = {
-  log_pattern: e => `${e.service}: "${e.pattern}" log deseni arttı`,
-  log_template_new: e => `${e.service}: yeni bir log kalıbı belirdi`,
-  trace_op: e => `${e.service} ${e.pattern} hata vermeye başladı`,
-  op_latency: e => `${e.service} ${e.pattern} yavaşladı`,
-  elastic_ml: e => `${e.service}: Elastic ML sapma gördü (${e.pattern})`,
-  heap: e => `${e.service} belleği (heap) bandın dışında`,
-};
+// v0.10.2277 — metinler i18n kataloğunda (anomalyHeadline.*); TR çıktı
+// önceki sabit metinle birebir, EN eklendi.
+const HEADLINE_KINDS = new Set(['log_pattern', 'log_template_new', 'trace_op', 'op_latency', 'elastic_ml', 'heap']);
 
-export function anomalyPlainHeadline(e: AnomalyEvent): string {
-  if (isConsumerLag(e)) return `${e.service}: ${subjectEventTopic(e)} topic'inde consumer lag arttı`;
-  const f = KIND_TR[e.kind];
-  if (f) return f(e);
+export function anomalyPlainHeadline(e: AnomalyEvent, lang: Lang = 'tr'): string {
+  if (isConsumerLag(e)) return tf('anomalyHeadline.consumer_lag', lang, { service: `${e.service}`, topic: `${subjectEventTopic(e)}` });
+  if (HEADLINE_KINDS.has(e.kind)) return tf(`anomalyHeadline.${e.kind}`, lang, { service: `${e.service}`, pattern: `${e.pattern}` });
   if (e.kind.startsWith('ml:')) return `${e.service}: ${e.pattern}`;
   return `${e.service}: ${e.pattern || e.kind}`;
 }
