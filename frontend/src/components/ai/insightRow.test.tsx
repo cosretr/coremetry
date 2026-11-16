@@ -36,6 +36,9 @@ import { escLayerDepth, topEscLayer, __resetEscLayers } from '@/lib/escLayer';
 // InsightCard.test.tsx'te. Burada tek soru "kaç kez ve ne zaman doğdu".
 const seen = vi.hoisted(() => ({ mounts: [] as string[], unmounts: [] as string[] }));
 
+// v0.10.2282 — çip metni arayüz dilinde; bu test Türkçe metni ("Ne oldu?") pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
+
 vi.mock('@/components/ai/InsightCard', async () => {
   const { useEffect } = await import('react');
   return {

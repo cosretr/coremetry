@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { useEscLayer } from '@/lib/escLayer';
+import { t, useLang } from '@/lib/i18n';
 import { InsightCard } from '@/components/ai/InsightCard';
 import type { InsightKind } from '@/lib/types';
 
@@ -227,13 +228,14 @@ export function InsightRowChip({ open, onToggle, title }: {
   onToggle: () => void;
   title?: string;
 }) {
+  const lang = useLang(); // v0.10.2282 — metin arayüz dilinde (insightRow.*; TR aynı)
   return (
     <Button variant="accent" size="xs"
       aria-expanded={open}
-      title={title ?? 'Bu satır için ilişkili sinyalleri topla ve ne olduğunu anlat (AI)'}
+      title={title ?? t('insightRow.title', lang)}
       onClick={e => { e.stopPropagation(); onToggle(); }}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); }}>
-      {open ? '▾' : '▸'} Ne oldu?
+      {open ? '▾' : '▸'} {t('insightRow.chip', lang)}
     </Button>
   );
 }

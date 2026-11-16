@@ -3,6 +3,8 @@
 // ve admin raporunun SAF metin yardımcıları. Kural kimlikleri (M-*, N-*)
 // sunucuyla sözleşmedir; cümleler burada kimlikten kurulur.
 
+import { t as tr, tf, type Lang } from './i18n';
+
 export const GRAPH_LINK_RULES = ['M-SVC', 'M-CALL', 'M-DEP', 'M-WL', 'M-NODE', 'M-HOST'] as const;
 export const GRAPH_NOLINK_REASONS = ['N-REL', 'N-TIME', 'N-CAP', 'N-HUB', 'N-KIND', 'N-SIZE', 'N-GRAPH'] as const;
 
@@ -73,34 +75,37 @@ export interface ProblemGraphShadowResponse {
 }
 
 export const ORIGIN_RULES = ['K-ROLLOUT', 'K-SHARED', 'K-DEEP', 'K-FIRST'] as const;
-const CONF_TR: Record<string, string> = { strong: 'güçlü', weak: 'zayıf', unclear: 'belirsiz' };
+const CONF_KEYS = new Set(['strong', 'weak', 'unclear']); // metin: pgShadow.conf.*
 
 const SIZE_ORDER = ['2', '3', '4-5', '6-10', '11-25'];
 const AGE_ORDER = ['0-30', '30-60', '60-90', '>90'];
 
-function kv(m: Record<string, number> | undefined, order: readonly string[], fmt: (k: string) => string = k => k): string {
+function kv(m: Record<string, number> | undefined, order: readonly string[], fmt: (k: string) => string = k => k, lang: Lang = 'tr'): string {
   const parts = order.filter(k => (m?.[k] ?? 0) > 0).map(k => `${fmt(k)} ${m![k]}`);
-  return parts.length ? parts.join(' · ') : 'yok';
+  return parts.length ? parts.join(' · ') : tr('pgShadow.none2', lang);
 }
 
 /** SAF: admin gölge raporunun satırları (Anomalies › ML › Teknik detay). */
-export function graphShadowLines(r: ProblemGraphShadowReport): string[] {
+// v0.10.2282 — satırlar arayüz dilinde (lib/i18n pgShadow.*; TR metin aynı, varsayılan 'tr').
+export function graphShadowLines(r: ProblemGraphShadowReport, lang: Lang = 'tr'): string[] {
+  const L = (k: string, v: Record<string, string | number>) => tf(`pgShadow.l.${k}`, lang, v);
+  const ent = (k: string) => tf('pgShadow.entities', lang, { c: k });
   const since = new Date(r.since * 1000);
   const hm = `${String(since.getHours()).padStart(2, '0')}:${String(since.getMinutes()).padStart(2, '0')}`;
   const off = r.familyOff && Object.keys(r.familyOff).length
     ? Object.keys(r.familyOff).sort().map(k => `${k} ${r.familyOff![k]}`).join(' · ')
-    : 'yok';
+    : tr('pgShadow.none2', lang);
   const rd = r.reads;
   return [
-    `Pencere ${r.windowH} sa · sayaç başlangıcı ${hm} (lider değişince sıfırlanır) · bu tik ${r.units} aday varlık`,
-    `Kurulurdu (farklı bağ): ${kv(r.links, GRAPH_LINK_RULES)} · M-CALL katı sürüm (çağıranda bağımlılık olayı): ${r.callStrict}`,
-    `Bağlanmazdı (farklı Problem): ${kv(r.noLink, GRAPH_NOLINK_REASONS)} (N-CAP yalnız ölçülür, uygulanmadı)`,
-    `Küme boyu, düz M-CALL: ${kv(r.sizes, SIZE_ORDER, k => `${k} varlık`)} · katı M-CALL: ${kv(r.sizesStrict, SIZE_ORDER, k => `${k} varlık`)}`,
-    `Bağlanırken sahibin yaşı (servisler arası): ${kv(r.age, AGE_ORDER, k => `${k} dk`)}`,
-    `Graf verisi yok: ${r.graphMissing} Problem · kural ailesi kapalı geçen okuma turu: ${off}`,
-    ...frequentReportLines(r.frequentReport),
-    `Olası köken (farklı küme): kazanan kural ${kv(r.originWins, ORIGIN_RULES)} · belirsiz ${r.originUnclear ?? 0} · güven ${kv(r.originConf, ['strong', 'weak', 'unclear'], k => CONF_TR[k] ?? k)}`,
-    `Okuma: ${rd.passes} tik, ${rd.skippedFew} tik aday < 2 (okuma yok), ${rd.refreshes} okuma turu · entity_relations ${rd.relations} (tur başına en çok ${rd.maxRelPerPass}) · tazelik ${rd.runs} · bağımlılık olayı ${rd.evidence} · rollout ${rd.rollouts ?? 0} · called_by ${rd.blast ?? 0} · hata ${rd.errors}`,
+    L('window', { w: r.windowH, hm, u: r.units }),
+    L('links', { links: kv(r.links, GRAPH_LINK_RULES, undefined, lang), cs: r.callStrict }),
+    L('noLink', { nl: kv(r.noLink, GRAPH_NOLINK_REASONS, undefined, lang) }),
+    L('sizes', { s: kv(r.sizes, SIZE_ORDER, ent, lang), ss: kv(r.sizesStrict, SIZE_ORDER, ent, lang) }),
+    L('age', { a: kv(r.age, AGE_ORDER, k => L('ageMin', { k }), lang) }),
+    L('missing', { g: r.graphMissing, off }),
+    ...frequentReportLines(r.frequentReport, lang),
+    L('origin', { w: kv(r.originWins, ORIGIN_RULES, undefined, lang), u: r.originUnclear ?? 0, c: kv(r.originConf, ['strong', 'weak', 'unclear'], k => (CONF_KEYS.has(k) ? tr(`pgShadow.conf.${k}`, lang) : k), lang) }),
+    L('reads', { p: rd.passes, sf: rd.skippedFew, r: rd.refreshes, rel: rd.relations, mx: rd.maxRelPerPass, runs: rd.runs, ev: rd.evidence, ro: rd.rollouts ?? 0, b: rd.blast ?? 0, e: rd.errors }),
   ];
 }
 
@@ -389,15 +394,16 @@ export interface FrequentReport {
 }
 
 /** SAF: admin raporunun S3 satırları (rapor yoksa boş). */
-export function frequentReportLines(f: FrequentReport | undefined): string[] {
+export function frequentReportLines(f: FrequentReport | undefined, lang: Lang = 'tr'): string[] {
   if (!f) return [];
-  const top = (f.topSignatures ?? []).slice(0, 5).map(s => `${s.name} · ${s.family}${s.direction ? ` ${s.direction}` : ''} ${s.held}`).join(' · ') || 'yok';
+  const top = (f.topSignatures ?? []).slice(0, 5).map(s => `${s.name} · ${s.family}${s.direction ? ` ${s.direction}` : ''} ${s.held}`).join(' · ') || tr('pgShadow.none2', lang);
   const p1 = (f.becameP1 ?? []).map(x => `${x.name} (${x.id.slice(0, 12)})`).join(', ');
+  const F = (k: string, v: Record<string, string | number>) => tf(`pgShadow.f.${k}`, lang, v);
   return [
-    `Sık tekrar eden (gölge, farklı Problem): ${f.frequent} · kural uygulansaydı tutulurdu ${f.wouldHold} · şiddet arttığı için yine giderdi ${f.severityUp} · eşik 24 sa 2/3/5: ${f.atThreshold?.['2'] ?? 0}/${f.atThreshold?.['3'] ?? 0}/${f.atThreshold?.['5'] ?? 0}`,
-    `Tutulacakken sonradan P1'e çıkan (hedef 0): ${f.heldBecameP1}${p1 ? ` — ${p1}` : ''}`,
-    `En çok tutulacak imzalar: ${top}`,
-    `Geçmiş okuması: ${f.reads.reads} okuma · ${f.reads.rows} satır (okuma başına en çok ${f.reads.maxRows}) · LIMIT'e değen ${f.reads.capped} · hata ${f.reads.errors}`,
+    F('head', { f: f.frequent, h: f.wouldHold, su: f.severityUp, a: f.atThreshold?.['2'] ?? 0, b: f.atThreshold?.['3'] ?? 0, c: f.atThreshold?.['5'] ?? 0 }),
+    F('p1', { x: f.heldBecameP1, list: p1 ? ` — ${p1}` : '' }),
+    F('top', { top }),
+    F('reads', { r: f.reads.reads, rows: f.reads.rows, mx: f.reads.maxRows, cap: f.reads.capped, e: f.reads.errors }),
   ];
 }
 

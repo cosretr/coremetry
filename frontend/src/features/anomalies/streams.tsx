@@ -17,7 +17,7 @@ import { Badge, Button, Card, DisclosureButton, Row, useConfirm } from '@/compon
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import { ClusterChips } from '@/components/ClusterChips';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
-import { useT } from '@/lib/i18n'; // v0.10.1338
+import { t as tl, tf, useLang, useT } from '@/lib/i18n'; // v0.10.1338; v0.10.2282 useLang
 // v0.9.1137 (AI Faz 2.4) — log deseni kartının yuvası (ızgara varyantı).
 import { useInsightRow, InsightRowChip, InsightGridSlot } from '@/components/ai/insightRow';
 import { RootCauseRibbon } from '@/components/RootCauseRibbon';
@@ -53,6 +53,7 @@ import { SubjectLink } from '../../components/SubjectLink';
 export function AnomalyStreams({ withHistory = true }: { withHistory?: boolean } = {}) {
   const confirm = useConfirm();
   const { user } = useAuth();
+  const lang = useLang(); // v0.10.2282 — Türkçe metinler lib/i18n anomalyStreams.* (TR aynı)
   // Editor+ can mute/unmute; viewers see the silence chips and
   // anomaly cards read-only (invariant #7). The backend enforces
   // the same gate on POST/DELETE /api/anomalies/silences — hiding
@@ -83,21 +84,19 @@ export function AnomalyStreams({ withHistory = true }: { withHistory?: boolean }
   // gün onaysız bir yol doğardı. Onay eylemin YANINDA duruyor.
   const onUnmute = async (id: string, label: string, service?: string) => {
     if (!await confirm({
-      title: 'Susturma kaldırılsın mı?',
+      title: tl('anomalyStreams.unmute.title', lang),
       body: <><code>{label}</code>{service ? <> @ <code>{service}</code></> : null}
-        {' '}susturma kaydı silinecek ve bu anomali uyarı akışına
-        GERİ AÇILACAK.</>,
-      confirmLabel: 'Susturmayı kaldır',
+        {' '}{tl('anomalyStreams.unmute.body', lang)}</>,
+      confirmLabel: tl('anomalyStreams.unmute.confirm', lang),
       danger: true,
     })) return;
     await deleteSilence.mutateAsync(id);
   };
   const onUnmuteAll = async (ids: string[]) => {
     if (!await confirm({
-      title: 'Tüm susturmalar kaldırılsın mı?',
-      body: <>Aktif <b>{ids.length}</b> susturma kaydı silinecek ve bu
-        anomaliler uyarı akışına GERİ AÇILACAK.</>,
-      confirmLabel: `${ids.length} susturmayı kaldır`,
+      title: tl('anomalyStreams.unmuteAll.title', lang),
+      body: <>{tl('anomalyStreams.unmuteAll.pre', lang)}<b>{ids.length}</b>{tl('anomalyStreams.unmuteAll.post', lang)}</>,
+      confirmLabel: tf('anomalyStreams.unmuteAll.confirm', lang, { c: ids.length }),
       danger: true,
     })) return;
     await bulkDeleteSilences.mutateAsync(ids);
@@ -231,6 +230,7 @@ function HistorySection({ items, meta, error = false }: {
   error?: boolean;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const lang = useLang();
   // ?event=<id> deep-link target. We scroll + flash the matching
   // row when it appears so inbox navigation lands the operator
   // on the right row visually, not just at the top of the list.
@@ -255,11 +255,11 @@ function HistorySection({ items, meta, error = false }: {
   const activeN = live.filter(e => e.status === 'active').length;
   const state: Omit<DataTableStateProps<AnomalyEvent>, 'dt' | 'leading' | 'trailing'> = error
     ? { kind: 'error' }
-    : { kind: 'empty', message: 'Son 24 saatte anomali yok' };
+    : { kind: 'empty', message: tl('anomalyStreams.history.empty', lang) };
   return (
     <AnomalyShell
       title="Anomaly history (last 24h)"
-      hint={error ? '' : `${meta?.activeTotal ?? activeN} active · ${meta?.clearedTotal ?? live.length - activeN} cleared${meta?.truncated ? ` · ilk ${live.length} satır yüklendi` : ''}`}
+      hint={error ? '' : `${meta?.activeTotal ?? activeN} active · ${meta?.clearedTotal ?? live.length - activeN} cleared${meta?.truncated ? ` · ${tf('anomalyStreams.history.loaded', lang, { c: live.length })}` : ''}`}
       count={live.length} error={error}>
       <AnomalyTable rows={live}
         storageKey="anomaly-history"
@@ -327,6 +327,7 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, title, state }: {
   // last_seen DESC` döndürüyor ve sayfa zaten active/cleared olarak ayırıyor.
   const navigate = useNavigate(); // C1: drawer yerine /anomalies/:id
   const tr = useT(); // v0.10.1338
+  const lang = useLang();
   const askCosreName = `${tr('ai.askCosre')} · anomaly`;
   const dt = useDataTable<AnomalyEvent>({
     storageKey, columns: ANOMALY_HISTORY_COLS, rows,
@@ -377,13 +378,13 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, title, state }: {
                 <td>
                   {/* v0.10.929 (K5) — aktif nötr; bitti geçiş, yeşil kalır. */}
                   <span className={`badge ${e.status === 'active' ? 'b-gray' : 'b-ok'}`}>
-                    {e.status === 'active' ? 'Sürüyor' : 'Bitti'}
+                    {tl(e.status === 'active' ? 'anomalies.state.active' : 'anomalies.state.cleared', lang)}
                   </span>
                 </td>
-                <td className="num cell-faint">{durationLabel(e.lastSeen - e.startedAt)}</td>
+                <td className="num cell-faint">{durationLabel(e.lastSeen - e.startedAt, lang)}</td>
                 <td className="cell-strong" title={e.pattern}>
                   {/* gerçek link: orta tık / yeni sekme / klavye çalışır (C1) */}
-                  <Link to={anomalyEventHref(e.id)} data-testid="anomaly-row-link">{anomalyPlainHeadline(e)}</Link>
+                  <Link to={anomalyEventHref(e.id)} data-testid="anomaly-row-link">{anomalyPlainHeadline(e, lang)}</Link>
                 </td>
                 <td>
                   {/* v0.9.966 — anomalinin gözlem aralığı. CLEARED bir
@@ -457,6 +458,7 @@ function LogPatternsSection({ items, onMute, canEdit }: {
 }) {
   // Kanca KOŞULSUZ çağrılıyor (hooks kuralı): erken dönüşler aşağıda.
   const insight = useInsightRow('log-pattern');
+  const lang = useLang();
   if (items === undefined) return null;
   if (items.length === 0) return null;
   return (
@@ -506,7 +508,7 @@ function LogPatternsSection({ items, onMute, canEdit }: {
                   stopPropagation'ı InsightRowChip'te). */}
               <InsightRowChip open={insight.openId === a.pattern}
                 onToggle={() => insight.toggle(a.pattern)}
-                title="Bu desen için ilişkili sinyalleri topla ve ne olduğunu anlat (AI)" />
+                title={tl('anomalyStreams.insightTitle', lang)} />
               {canEdit && <SnoozeButton onMute={d => onMute('log_pattern', a.pattern, a.service, d)} />}
             </Row>
             <div style={{ fontSize: 11, color: 'var(--text2)' }}>

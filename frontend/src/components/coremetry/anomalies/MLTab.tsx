@@ -12,7 +12,8 @@ import { MLSvcShadowCompareSection } from './MLSvcShadowCompare';
 import { ProblemGraphShadowSection } from './ProblemGraphShadow';
 import { SIGNAL_KINDS } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
-import { ML_DETECTOR_TR } from '@/lib/mlDetectorLabels';
+import { ML_DETECTOR_TR, mlDetectorLabel } from '@/lib/mlDetectorLabels';
+import { t as tr, tf, useLang, type Lang } from '@/lib/i18n';
 
 // v0.10.2163 — harita lib/mlDetectorLabels.ts'te (Problem olay çizelgesi de okur;
 // bu ağır modülü Problems parçasına çekmesin). Buradan yeniden dışa açılır.
@@ -32,6 +33,12 @@ export function scoreLabel(s: MLDetectorScore): string {
 
 // v0.10.1844 — sinyal adları tek yerden (lib/signalKind.ts).
 const SIGNAL_TR: Record<string, string> = { log: SIGNAL_KINDS.log.label, trace: SIGNAL_KINDS.trace.label, metric: SIGNAL_KINDS.metric.label };
+// v0.10.2282 — arayüz dilinde sinyal adı (TR yukarıdaki; EN signalKind.*).
+const signalName = (k: string, lang: Lang): string | undefined =>
+  lang === 'tr' ? SIGNAL_TR[k] : (k in SIGNAL_TR ? tr(`signalKind.${k}`, lang) : undefined);
+// v0.10.2282 — ekranın metinleri lib/i18n mlTab.* (TR metin birebir aynı).
+const M = (k: string, lang: Lang, vars?: Record<string, string | number>) => tf(`mlTab.${k}`, lang, vars);
+const loc = (lang: Lang) => (lang === 'tr' ? 'tr-TR' : 'en-US');
 
 /** Sinyal karnesi satırı — SAF (test). */
 export function signalScoreLabel(s: MLDetectorScore): string {
@@ -51,30 +58,30 @@ export function backfillLabel(b: MLBackfillProgress): string {
 }
 
 /** SAF (test): v0.10.2019 — tikin Thanos ölçümü (VM sayacından ayrı). */
-export function thanosTickText(t: MLThanosTick): string {
-  const bits = [`Thanos ${t.queries} sorgu · ${(t.ms / 1000).toFixed(1)} sn (en yavaş ${(t.maxMs / 1000).toFixed(1)} sn)`];
-  if (t.errors) bits.push(`${t.errors} hata/kısmi`);
-  if (t.budgetCut) bits.push(`${t.budgetCut} ifade tavan dışı`);
-  if (t.unmatched) bits.push(`${t.unmatched} pod servise eşlenemedi`);
-  if (t.failed?.length) bits.push(`yanıtsız: ${t.failed.join(', ')}`);
+export function thanosTickText(t: MLThanosTick, lang: Lang = 'tr'): string {
+  const bits = [M('thanos', lang, { q: t.queries, s: (t.ms / 1000).toFixed(1), m: (t.maxMs / 1000).toFixed(1) })];
+  if (t.errors) bits.push(M('thanos.errors', lang, { c: t.errors }));
+  if (t.budgetCut) bits.push(M('thanos.budget', lang, { c: t.budgetCut }));
+  if (t.unmatched) bits.push(M('thanos.unmatched', lang, { c: t.unmatched }));
+  if (t.failed?.length) bits.push(M('thanos.failed', lang, { list: t.failed.join(', ') }));
   return bits.join(' · ');
 }
 
 /** v0.10.2053 (D4) — SAF: grup → Problem tik özeti. Canlı kipte açılan /
  *  kapanan sayısı (izleyici de görür); kapalıyken gölge sayacı. Boş = satır yok. */
-export function groupTickText(t: MLTickStatus): string {
+export function groupTickText(t: MLTickStatus, lang: Lang = 'tr'): string {
   // v0.10.2058: tek sinyal kolu yalnız gölgede — her iki kipte ayrı sayaç
   // v0.10.2092: tek sinyal kolu canlı — canlı kipte AÇILAN sayısı, kapalıyken "açardı".
-  const single = (t.groupLive ? (t.groupSingleOpened ? ` · tek sinyal: ${t.groupSingleOpened} Problem açtı` : '')
-    : (t.shadowSingleWouldOpen ? ` · tek sinyal: ${t.shadowSingleWouldOpen} Problem açardı` : '')) +
+  const single = (t.groupLive ? (t.groupSingleOpened ? M('group.singleOpened', lang, { c: t.groupSingleOpened }) : '')
+    : (t.shadowSingleWouldOpen ? M('group.singleWould', lang, { c: t.shadowSingleWouldOpen }) : '')) +
     // v0.10.2089: servis düzeyi kapı (svc_error_rate / svc_breadth). v0.10.2130: canlı kipte AÇILAN sayısı.
-    (t.groupLive ? (t.svcOpened ? ` · servis düzeyi: ${t.svcOpened} Problem açtı` : '')
-      : (t.shadowSvcWouldOpen ? ` · servis düzeyi: ${t.shadowSvcWouldOpen} Problem açardı (gölge${t.shadowSvcP1 ? `, ${t.shadowSvcP1} P1` : ''})` : ''));
+    (t.groupLive ? (t.svcOpened ? M('group.svcOpened', lang, { c: t.svcOpened }) : '')
+      : (t.shadowSvcWouldOpen ? M('group.svcWould', lang, { c: t.shadowSvcWouldOpen, p1: t.shadowSvcP1 ? `, ${t.shadowSvcP1} P1` : '' }) : ''));
   if (t.groupLive) {
-    const bits = [`${t.groupOpened ?? 0} açıldı`, `${t.groupRefreshed ?? 0} sürüyor`, `${t.groupResolved ?? 0} kapandı`];
-    return `grup Problem'i (canlı): ${bits.join(', ')}${t.shadowGroups ? ` · ${t.shadowGroups} grup değerlendirildi` : ''}${single}`;
+    const bits = [M('group.opened', lang, { c: t.groupOpened ?? 0 }), M('group.ongoing', lang, { c: t.groupRefreshed ?? 0 }), M('group.resolved', lang, { c: t.groupResolved ?? 0 })];
+    return M('group.live', lang, { bits: bits.join(', '), ev: t.shadowGroups ? M('group.evaluated', lang, { c: t.shadowGroups }) : '', single });
   }
-  return t.shadowGroups ? `gölge terfi: ${t.shadowGroups} grup, ${t.shadowWouldOpen ?? 0} Problem açardı (açılmadı)${single}` : '';
+  return t.shadowGroups ? M('group.shadow', lang, { g: t.shadowGroups, o: t.shadowWouldOpen ?? 0, single }) : '';
 }
 
 /** Son tik + VM bekleme satırı — SAF (test). nowSec: şimdi (unix sn). */
@@ -108,11 +115,12 @@ export function stageLabel(stage: string): string {
   return stage === 'promoted' ? 'terfi' : stage === 'closed' ? 'kapandı' : stage === 'chronic' ? 'kronik' : 'açık';
 }
 /** Süre (ns) → kısa metin — SAF (test). */
-export function durationLabel(ns: number): string {
+// v0.10.2282 — lang (varsayılan 'tr'); anomalies.dur.* (mlGroupRows ile aynı kalıp).
+export function durationLabel(ns: number, lang: Lang = 'tr'): string {
   const m = Math.max(0, Math.round(ns / 60e9));
-  if (m < 60) return `${m} dk`;
+  if (m < 60) return tf('anomalies.dur.m', lang, { m });
   const h = Math.floor(m / 60);
-  return h < 48 ? `${h} sa ${m % 60} dk` : `${Math.round(h / 24)} g`;
+  return h < 48 ? tf('anomalies.dur.hm', lang, { h, m: m % 60 }) : tf('anomalies.dur.d', lang, { d: Math.round(h / 24) });
 }
 
 /** Dedektör → recorder dedektör grubu (tik özeti anahtarı) — SAF. */
@@ -148,7 +156,7 @@ export function detectorRows(sc: MLScorecard, signal: MLSignal): DetectorRow[] {
 }
 
 /** Durum kutuları — SAF (test). */
-export function statusTiles(sc: MLScorecard, signal: MLSignal, nowSec: number): { k: string; v: string; s: string; warn?: boolean }[] {
+export function statusTiles(sc: MLScorecard, signal: MLSignal, nowSec: number, lang: Lang = 'tr'): { k: string; v: string; s: string; warn?: boolean }[] {
   const t = sc.tick;
   const ago = t ? Math.max(0, Math.round((nowSec - t.at) / 60)) : null;
   const bf = (sc.backfill ?? []).find(b => !signal || b.signal === signal);
@@ -157,42 +165,42 @@ export function statusTiles(sc: MLScorecard, signal: MLSignal, nowSec: number): 
   const samples = (sc.bySignal ?? []).filter(s => !signal || s.detector === signal).reduce((a, s) => a + s.samples, 0);
   const bo = t?.backoff ?? [];
   return [
-    { k: 'Son tik', v: t ? `${ago} dk önce` : 'yok', s: t ? `${Math.round(t.durationMs / 1000)} sn · ${t.events} olay${t.docs ? ` · ${t.docs.toLocaleString('tr-TR')} belge` : ''}${t.partial ? ` · ${t.partial} kısmi` : ''}${t.batchCut ? ` · batch kuralı ${t.batchCut} adayı kesti` : ''}${groupTickText(t) ? ` · ${groupTickText(t)}` : ''}${t.thanos?.queries ? ` · ${thanosTickText(t.thanos)}` : ''}${t.contribQueries ? ` · suçlu seri sorgusu ${t.contribQueries}` : ''}${t.logSvcUnmatched ? ` · katalogda olmayan log servisi: ${t.logSvcUnmatched} (yazılmadı)` : ''}${t.logSvcViaPod ? ` · pod'dan servise çözülen: ${t.logSvcViaPod}` : ''}` : 'tik yok', warn: !!t?.lastError },
-    { k: 'Log geçmişi', v: bf ? `${bf.done + miss} / ${bf.total} sa` : '—', s: bf ? (bf.complete ? 'tamam' : bf.running ? 'sürüyor' : 'duraklı') + (miss ? ` · eksik ${miss}` : '') : 'kayıt yok' },
-    { k: 'Olay · 30 gün', v: String(events), s: samples ? `${samples} karar` : 'karar yok' },
-    { k: 'VM bekleme', v: bo.length ? `${bo.length} aile` : 'yok', s: bo.map(b => `${b.family} · ${Math.max(1, Math.round((b.until - nowSec) / 60))} dk`).join(', ') || 'tüm aileler açık', warn: bo.length > 0 },
+    { k: M('tile.tick', lang), v: t ? M('tile.ago', lang, { c: ago ?? 0 }) : M('none', lang), s: t ? `${M('sec', lang, { s: Math.round(t.durationMs / 1000) })} · ${M('events', lang, { c: t.events })}${t.docs ? ` · ${M('docs', lang, { c: t.docs.toLocaleString(loc(lang)) })}` : ''}${t.partial ? ` · ${M('partial', lang, { c: t.partial })}` : ''}${t.batchCut ? ` · ${M('batchCut', lang, { c: t.batchCut })}` : ''}${groupTickText(t, lang) ? ` · ${groupTickText(t, lang)}` : ''}${t.thanos?.queries ? ` · ${thanosTickText(t.thanos, lang)}` : ''}${t.contribQueries ? ` · ${M('contrib', lang, { c: t.contribQueries })}` : ''}${t.logSvcUnmatched ? ` · ${M('logSvcUnmatched', lang, { c: t.logSvcUnmatched })}` : ''}${t.logSvcViaPod ? ` · ${M('logSvcViaPod', lang, { c: t.logSvcViaPod })}` : ''}` : M('tile.tickNone', lang), warn: !!t?.lastError },
+    { k: M('tile.backfill', lang), v: bf ? M('tile.backfillV', lang, { a: bf.done + miss, b: bf.total }) : '—', s: bf ? M(bf.complete ? 'tile.complete' : bf.running ? 'tile.running' : 'tile.paused', lang) + (miss ? M('tile.missing', lang, { c: miss }) : '') : M('tile.noRecord', lang) },
+    { k: M('tile.events', lang), v: String(events), s: samples ? M('tile.verdicts', lang, { c: samples }) : M('tile.noVerdicts', lang) },
+    { k: M('tile.vm', lang), v: bo.length ? M('tile.families', lang, { c: bo.length }) : M('none', lang), s: bo.map(b => M('tile.famMin', lang, { f: b.family, c: Math.max(1, Math.round((b.until - nowSec) / 60)) })).join(', ') || M('tile.allOpen', lang), warn: bo.length > 0 },
   ];
 }
 
 const KIND_ORDER = ['log', 'trace', 'metric'];
 
 /** Sinyal türü başına son tik ölçümü — SAF (test). v0.10.1812, audit §10 dilim 1.1. */
-export function kindTickLines(t: MLTickStatus | undefined, signal: MLSignal): { kind: string; text: string; warn: boolean }[] {
+export function kindTickLines(t: MLTickStatus | undefined, signal: MLSignal, lang: Lang = 'tr'): { kind: string; text: string; warn: boolean }[] {
   const kinds = t?.kinds ?? {};
   return Object.keys(kinds).filter(k => !signal || k === signal)
     .sort((a, b) => (KIND_ORDER.indexOf(a) + 1 || 99) - (KIND_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b))
     .map(kind => {
       const k: MLKindTick = kinds[kind];
-      const n = (v: number) => v.toLocaleString('tr-TR');
-      const bits = [`${n(k.services)} servis`, `${n(k.series)} seri (${n(k.seriesRows)} satır)`, `sorgu ES ${k.es} · VM ${k.vm} · CH ${k.ch}`, `${(k.durationMs / 1000).toFixed(1)} sn`];
-      if (k.dropped) bits.push(`${SIGNAL_TR[kind]?.toLowerCase() ?? kind} sinyalinde ${n(k.dropped)} servis tavan dışında kaldı`);
-      return { kind, text: `${SIGNAL_TR[kind] ?? kind} · ${bits.join(' · ')}`, warn: k.dropped > 0 };
+      const n = (v: number) => v.toLocaleString(loc(lang));
+      const bits = [M('kind.services', lang, { c: n(k.services) }), M('kind.series', lang, { c: n(k.series), r: n(k.seriesRows) }), M('kind.queries', lang, { es: k.es, vm: k.vm, ch: k.ch }), M('sec', lang, { s: (k.durationMs / 1000).toFixed(1) })];
+      if (k.dropped) bits.push(M('kind.dropped', lang, { sig: signalName(kind, lang)?.toLowerCase() ?? kind, c: n(k.dropped) }));
+      return { kind, text: `${signalName(kind, lang) ?? kind} · ${bits.join(' · ')}`, warn: k.dropped > 0 };
     });
 }
 
 /** Günlük baseline işinin tek satırı — SAF (test). v0.10.1814, audit §4.2. null = durum kaydı yok (iş hiç koşmadı / kapalı). */
-export function baselineStatusLine(st: MLBaselineStatus | undefined): { text: string; warn: boolean } | null {
+export function baselineStatusLine(st: MLBaselineStatus | undefined, lang: Lang = 'tr'): { text: string; warn: boolean } | null {
   if (!st) return null;
-  const n = (v: number) => v.toLocaleString('tr-TR');
+  const n = (v: number) => v.toLocaleString(loc(lang));
   const run = st.last;
   const bits: string[] = [];
-  if (st.lastDay) bits.push(`son gün ${st.lastDay}`);
-  if (run) bits.push(`${n(run.rows)} satır`, `${(run.durationMs / 1000).toFixed(1)} sn`);
-  if (st.running) bits.push(`işleniyor: ${st.running}`);
-  if (run?.error) bits.push(`${run.day} hatalı: ${run.error}`);
-  if (st.manual) bits.push(`elle ${st.manual.day}: ${st.manual.error ? `hata — ${st.manual.error}` : `${n(st.manual.rows)} satır`}`);
-  if (st.profiles) bits.push(st.profiles.error ? `profil haftası ${st.profiles.week} hatalı: ${st.profiles.error}` : `profil haftası ${st.profiles.week}: ${n(st.profiles.services)} servis, ${n(st.profiles.changed)} değişim`);
-  if (!bits.length) bits.push('henüz işlenmiş gün yok');
+  if (st.lastDay) bits.push(M('base.lastDay', lang, { d: st.lastDay }));
+  if (run) bits.push(M('base.rows', lang, { c: n(run.rows) }), M('sec', lang, { s: (run.durationMs / 1000).toFixed(1) }));
+  if (st.running) bits.push(M('base.processing', lang, { x: st.running }));
+  if (run?.error) bits.push(M('base.failed', lang, { d: run.day, err: run.error }));
+  if (st.manual) bits.push(M('base.manual', lang, { d: st.manual.day, x: st.manual.error ? M('base.error', lang, { err: st.manual.error }) : M('base.rows', lang, { c: n(st.manual.rows) }) }));
+  if (st.profiles) bits.push(st.profiles.error ? M('base.profileFailed', lang, { w: st.profiles.week, err: st.profiles.error }) : M('base.profile', lang, { w: st.profiles.week, s: n(st.profiles.services), c: n(st.profiles.changed) }));
+  if (!bits.length) bits.push(M('base.none', lang));
   return { text: `Baseline · ${bits.join(' · ')}`, warn: !!run?.error || !!st.manual?.error || !!st.profiles?.error };
 }
 
@@ -203,8 +211,8 @@ export function baselineStatusLine(st: MLBaselineStatus | undefined): { text: st
 // sütunu (dedektör başına terfi kapısı) kopya yoluyla birlikte kalktı.
 
 /** Durumun düz cümlesi + (varsa) dikkat satırları — SAF (test). */
-export function mlStatusSummary(sc: MLScorecard, signal: MLSignal, nowSec: number): { text: string; warnings: string[] } {
-  const n = (v: number) => v.toLocaleString('tr-TR');
+export function mlStatusSummary(sc: MLScorecard, signal: MLSignal, nowSec: number, lang: Lang = 'tr'): { text: string; warnings: string[] } {
+  const n = (v: number) => v.toLocaleString(loc(lang));
   const t = sc.tick;
   const scoped = (sc.bySignal ?? []).filter(x => !signal || x.detector === signal);
   const events = scoped.reduce((a, x) => a + x.events, 0);
@@ -212,52 +220,55 @@ export function mlStatusSummary(sc: MLScorecard, signal: MLSignal, nowSec: numbe
   const warnings: string[] = [];
   let head: string;
   if (!t) {
-    head = 'Anomali tespiti henüz hiç çalışmadı.';
-    warnings.push('Son kontrol kaydı yok: tespit kapalı olabilir (Settings › Anomaly).');
+    head = M('notRun', lang);
+    warnings.push(M('noTick', lang));
   } else {
     const ago = Math.max(0, Math.round((nowSec - t.at) / 60));
     const dur = Math.max(1, Math.round(t.durationMs / 1000));
-    const when = ago === 0 ? 'az önce' : `${n(ago)} dakika önce`;
-    head = `Anomali tespiti çalışıyor. Son kontrol ${when} yapıldı, ${n(dur)} saniye sürdü ve ${t.events > 0 ? `${n(t.events)} olay buldu` : 'olay bulmadı'}.`;
+    const when = ago === 0 ? M('justNow', lang) : M('minAgo', lang, { c: n(ago) });
+    head = M('running', lang, { when, dur: n(dur), found: t.events > 0 ? M('found', lang, { c: n(t.events) }) : M('foundNone', lang) });
     if (ago > 15) {
-      head = `Anomali tespiti gecikiyor: son kontrol ${n(ago)} dakika önce yapıldı.`;
-      warnings.push('Kontroller beş dakikada bir çalışır; bu kadar uzun ara, tespitin durduğunu gösterebilir.');
+      head = M('late', lang, { c: n(ago) });
+      warnings.push(M('lateWarn', lang));
     }
     const bo = t.backoff ?? [];
-    if (bo.length > 0) warnings.push(`Metrik kaynağı ${n(bo.length)} metrik ailesinde geçici olarak bekletiliyor (${bo.map(b => b.family).join(', ')}).`);
-    if (t.partial) warnings.push(`Son kontrolde ${n(t.partial)} kaynak eksik okundu.`);
+    if (bo.length > 0) warnings.push(M('backoffWarn', lang, { c: n(bo.length), fams: bo.map(b => b.family).join(', ') }));
+    if (t.partial) warnings.push(M('partialWarn', lang, { c: n(t.partial) }));
   }
   const bf = (sc.backfill ?? []).find(b => !signal || b.signal === signal);
-  if (bf && !bf.complete) warnings.push(`Log geçmişi henüz tamamlanmadı: ${n(bf.done + (bf.missing?.length ?? 0))} / ${n(bf.total)} saat${bf.running ? ', sürüyor' : ', duraklı'}.`);
+  if (bf && !bf.complete) warnings.push(M('backfillWarn', lang, { done: n(bf.done + (bf.missing?.length ?? 0)), total: n(bf.total), state: M(bf.running ? 'backfillRunning' : 'backfillPaused', lang) }));
   const tail = events > 0
-    ? ` Son ${sc.windowDays} günde ${n(events)} olay kaydedildi; ${samples > 0 ? `${n(samples)} tanesi değerlendirildi` : 'henüz hiçbiri değerlendirilmedi'}.`
-    : ` Son ${sc.windowDays} günde olay kaydedilmedi.`;
+    ? M('tail', lang, { days: sc.windowDays, c: n(events), judged: samples > 0 ? M('tailJudged', lang, { c: n(samples) }) : M('tailNone', lang) })
+    : M('tailEmpty', lang, { days: sc.windowDays });
   return { text: head + tail, warnings };
 }
 
 /** Değerlendirme hücresi — SAF (test): "%0 (2)" yerine "2 değerlendirme · 0 doğru". */
-export function detectorVerdictText(r: Pick<DetectorRow, 'samples' | 'hitRate'>): string {
+export function detectorVerdictText(r: Pick<DetectorRow, 'samples' | 'hitRate'>, lang: Lang = 'tr'): string {
   if (r.samples <= 0) return '';
-  return `${r.samples.toLocaleString('tr-TR')} değerlendirme · ${Math.round(r.hitRate * r.samples).toLocaleString('tr-TR')} doğru`;
+  return M('verdictText', lang, { s: r.samples.toLocaleString(loc(lang)), c: Math.round(r.hitRate * r.samples).toLocaleString(loc(lang)) });
 }
 
-const DCOLS: ColumnDef<DetectorRow>[] = [
-  { id: 'detector', label: 'Dedektör', width: 220, minWidth: 150, flex: true, priority: 1, sortValue: r => ML_DETECTOR_TR[r.detector] ?? r.detector, naturalDir: 'asc' },
-  { id: 'signal', label: 'İzlediği', width: 110, minWidth: 90, priority: 1, sortValue: r => r.signal, naturalDir: 'asc' },
+// v0.10.2282 — başlıklar ve dedektör adları (sıralama da görünene göre) arayüz dilinde.
+const dcolsFor = (lang: Lang): ColumnDef<DetectorRow>[] => [
+  { id: 'detector', label: M('col.detector', lang), width: 220, minWidth: 150, flex: true, priority: 1, sortValue: r => mlDetectorLabel(r.detector, lang), naturalDir: 'asc' },
+  { id: 'signal', label: M('col.signal', lang), width: 110, minWidth: 90, priority: 1, sortValue: r => r.signal, naturalDir: 'asc' },
   // Açık olanlar önde, kendi içinde bulduğu olay sayısına göre.
-  { id: 'state', label: 'Durum', width: 100, minWidth: 80, priority: 1, sortValue: r => (r.enabled ? 1e9 : 0) + r.events },
-  { id: 'events', label: 'Son 30 günde olay', width: 150, minWidth: 110, priority: 1, numeric: true, sortValue: r => r.events },
-  { id: 'hit', label: 'Değerlendirme', width: 200, minWidth: 130, priority: 2, sortValue: r => (r.samples > 0 ? r.hitRate : -1) },
+  { id: 'state', label: tr('anomalies.col.status', lang), width: 100, minWidth: 80, priority: 1, sortValue: r => (r.enabled ? 1e9 : 0) + r.events },
+  { id: 'events', label: M('col.events', lang), width: 150, minWidth: 110, priority: 1, numeric: true, sortValue: r => r.events },
+  { id: 'hit', label: M('col.hit', lang), width: 200, minWidth: 130, priority: 2, sortValue: r => (r.samples > 0 ? r.hitRate : -1) },
 ];
+const DCOLS = { tr: dcolsFor('tr'), en: dcolsFor('en') } as const;
 
 // Teknik detay tablosu: son kontrolün dedektör başına ölçümü.
-const DTECH: ColumnDef<DetectorRow>[] = [
-  { id: 'detector', label: 'Dedektör', width: 180, minWidth: 140, priority: 1, sortValue: r => ML_DETECTOR_TR[r.detector] ?? r.detector, naturalDir: 'asc' },
-  { id: 'tick', label: 'Kontrol süresi', width: 110, numeric: true, priority: 2, sortValue: r => r.tick?.sourceMs ?? -1 },
-  { id: 'services', label: 'Bakılan servis', width: 110, numeric: true, priority: 2, sortValue: r => r.tick?.services ?? -1 },
-  { id: 'candidates', label: 'Aday', width: 70, numeric: true, priority: 3, sortValue: r => r.tick?.candidates ?? -1 },
-  { id: 'written', label: 'Kaydedilen', width: 90, numeric: true, priority: 3, sortValue: r => r.tick?.written ?? -1 },
+const dtechFor = (lang: Lang): ColumnDef<DetectorRow>[] => [
+  { id: 'detector', label: M('col.detector', lang), width: 180, minWidth: 140, priority: 1, sortValue: r => mlDetectorLabel(r.detector, lang), naturalDir: 'asc' },
+  { id: 'tick', label: M('col.tick', lang), width: 110, numeric: true, priority: 2, sortValue: r => r.tick?.sourceMs ?? -1 },
+  { id: 'services', label: M('col.services', lang), width: 110, numeric: true, priority: 2, sortValue: r => r.tick?.services ?? -1 },
+  { id: 'candidates', label: M('col.candidates', lang), width: 70, numeric: true, priority: 3, sortValue: r => r.tick?.candidates ?? -1 },
+  { id: 'written', label: M('col.written', lang), width: 90, numeric: true, priority: 3, sortValue: r => r.tick?.written ?? -1 },
 ];
+const DTECH = { tr: dtechFor('tr'), en: dtechFor('en') } as const;
 
 /** SAF (test): seyrin tepe değeri (sıralama); seyir yoksa -1. */
 export function sparkPeak(e: MLEvent): number {
@@ -265,8 +276,8 @@ export function sparkPeak(e: MLEvent): number {
 }
 
 /** SAF (test): satır metni — sunucu özeti; yoksa (eski sunucu) servis · dedektör adı. Cümle KURMAZ. */
-export function mlRowText(e: MLEvent): string {
-  return e.summary || `${e.service} · ${ML_DETECTOR_TR[e.detector] ?? e.detector}`;
+export function mlRowText(e: MLEvent, lang: Lang = 'tr'): string {
+  return e.summary || `${e.service} · ${mlDetectorLabel(e.detector, lang)}`;
 }
 
 // v0.10.2027 — /anomalies tek sayfa: olay listesi UnifiedAnomalies'te; MLTab yalnız
@@ -274,14 +285,15 @@ export function mlRowText(e: MLEvent): string {
 // "Teknik ayrıntı / Dedektör durumu" bölümünde.
 export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?: (s: MLSignal) => void }) {
   const sc = useMLScorecard();
+  const lang = useLang();
   return (
     <div data-testid="ml-tab" className="flex flex-col gap-3">
       {onSignal && (
-        <SegmentedControl<MLSignal> value={signal} onChange={onSignal} aria-label="Sinyal" size="sm"
-          options={[{ value: '', label: 'Hepsi' }, { value: 'log', label: 'Log' }, { value: 'trace', label: 'Trace' }, { value: 'metric', label: 'Metrik' }]} />
+        <SegmentedControl<MLSignal> value={signal} onChange={onSignal} aria-label={tr('anomalies.signal.aria', lang)} size="sm"
+          options={[{ value: '', label: tr('anomalies.signal.all', lang) }, { value: 'log', label: 'Log' }, { value: 'trace', label: 'Trace' }, { value: 'metric', label: tr('signalKind.metric', lang) }]} />
       )}
       {sc.data && (() => {
-        const sum = mlStatusSummary(sc.data, signal, Math.floor(Date.now() / 1000));
+        const sum = mlStatusSummary(sc.data, signal, Math.floor(Date.now() / 1000), lang);
         return (
           <div data-testid="ml-status-summary" className="rounded-md border border-border bg-card px-3 py-2">
             <p className="m-0 text-[length:var(--fs-md)] text-foreground">{sum.text}</p>
@@ -293,36 +305,35 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
       })()}
       {sc.data && (
         <>
-          <h3 className="mt-1 mb-0 font-semibold">Dedektörler</h3>
+          <h3 className="mt-1 mb-0 font-semibold">{M('detectors', lang)}</h3>
           <DataTable<DetectorRow>
-            storageKey="anomalies-ml-detectors-v2" columns={DCOLS} rows={detectorRows(sc.data, signal)}
-            state={{ kind: 'empty', message: 'Dedektör yok' }} sort={{ initial: { id: 'state', dir: 'desc' } }}
-            getRowKey={r => r.detector} ariaLabel="Dedektörler"
+            storageKey="anomalies-ml-detectors-v2" columns={DCOLS[lang]} rows={detectorRows(sc.data, signal)}
+            state={{ kind: 'empty', message: M('noDetectors', lang) }} sort={{ initial: { id: 'state', dir: 'desc' } }}
+            getRowKey={r => r.detector} ariaLabel={M('detectors', lang)}
             renderCell={(r, c) => {
               switch (c.id) {
-                case 'detector': return ML_DETECTOR_TR[r.detector] ?? r.detector;
+                case 'detector': return mlDetectorLabel(r.detector, lang);
                 case 'signal': return r.signal === 'log' || r.signal === 'trace' || r.signal === 'metric'
-                  ? <SignalKindBadge kind={r.signal} /> : (SIGNAL_TR[r.signal] ?? r.signal);
+                  ? <SignalKindBadge kind={r.signal} /> : (signalName(r.signal, lang) ?? r.signal);
                 case 'state': return r.enabled
-                  ? (r.unmeasured ? <span className="text-[color:var(--warn)]" title={r.unmeasured}>Açık · {r.unmeasured.startsWith('kısmen') ? 'kısmen ölçülüyor' : 'ölçülemedi'}</span> : 'Açık')
-                  : <span className="text-muted-foreground">Kapalı</span>;
-                case 'events': return r.events.toLocaleString('tr-TR');
+                  ? (r.unmeasured ? <span className="text-[color:var(--warn)]" title={r.unmeasured}>{M(r.unmeasured.startsWith('kısmen') ? 'onPartly' : 'onUnmeasured', lang)}</span> : M('on', lang))
+                  : <span className="text-muted-foreground">{M('off', lang)}</span>;
+                case 'events': return r.events.toLocaleString(loc(lang));
                 case 'hit': {
-                  const v = detectorVerdictText(r);
-                  return v || <span className="text-muted-foreground" title="Bu dedektörün olaylarından henüz hiçbiri “gerçek / değil” diye işaretlenmedi">—</span>;
+                  const v = detectorVerdictText(r, lang);
+                  return v || <span className="text-muted-foreground" title={M('noVerdictTitle', lang)}>—</span>;
                 }
                 default: return null;
               }
             }} />
           <p className="m-0 text-[length:var(--fs-sm)] text-muted-foreground">
-            Dedektörler anomali kaydeder. Aynı serviste en az 2 farklı sinyalde (trace, log, metrik) anomali varsa ya da tek bir
-            sinyal güçlü (tabanın en az iki misli) ve en az 10 dakika sürerse anomali grubu Problem açar (Settings › Anomaly). Ayrıntı “Teknik detay”da.
+            {M('explain', lang)}
           </p>
           <details data-testid="ml-tech-details" className="rounded-md border border-border px-3 py-2">
-            <summary className="cursor-pointer text-[length:var(--fs-sm)] font-semibold text-muted-foreground">Teknik detay</summary>
+            <summary className="cursor-pointer text-[length:var(--fs-sm)] font-semibold text-muted-foreground">{M('tech', lang)}</summary>
             <div className="mt-2 flex flex-col gap-3">
               <div className="grid gap-2 md:grid-cols-4" data-testid="ml-status-tiles">
-                {statusTiles(sc.data, signal, Math.floor(Date.now() / 1000)).map(t => (
+                {statusTiles(sc.data, signal, Math.floor(Date.now() / 1000), lang).map(t => (
                   <div key={t.k} className="rounded-md border border-border bg-card px-3 py-2">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t.k}</div>
                     <div className={`text-lg font-semibold ${t.warn ? 'text-[color:var(--warn)]' : ''}`}>{t.v}</div>
@@ -332,23 +343,23 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
               </div>
               {(sc.data.tick?.kinds || sc.data.baseline) && (
                 <div className="flex flex-col gap-0.5 text-xs text-muted-foreground" data-testid="ml-kind-ticks">
-                  {kindTickLines(sc.data.tick, signal).map(l => (
+                  {kindTickLines(sc.data.tick, signal, lang).map(l => (
                     <div key={l.kind} className={l.warn ? 'text-[color:var(--warn)]' : ''}>{l.text}</div>
                   ))}
                   {(() => {
-                    const b = baselineStatusLine(sc.data.baseline);
+                    const b = baselineStatusLine(sc.data.baseline, lang);
                     return b && <div data-testid="ml-baseline-line" className={b.warn ? 'text-[color:var(--warn)]' : ''}>{b.text}</div>;
                   })()}
                 </div>
               )}
               <DataTable<DetectorRow>
-                storageKey="anomalies-ml-detectors-tech" columns={DTECH} rows={detectorRows(sc.data, signal)}
-                state={{ kind: 'empty', message: 'Dedektör yok' }} sort={{ initial: { id: 'detector', dir: 'asc' } }}
-                getRowKey={r => r.detector} ariaLabel="Dedektörler, teknik detay"
+                storageKey="anomalies-ml-detectors-tech" columns={DTECH[lang]} rows={detectorRows(sc.data, signal)}
+                state={{ kind: 'empty', message: M('noDetectors', lang) }} sort={{ initial: { id: 'detector', dir: 'asc' } }}
+                getRowKey={r => r.detector} ariaLabel={M('techAria', lang)}
                 renderCell={(r, c) => {
                   switch (c.id) {
-                    case 'detector': return ML_DETECTOR_TR[r.detector] ?? r.detector;
-                    case 'tick': return r.tick ? `${(r.tick.sourceMs / 1000).toFixed(1)} sn` : '—';
+                    case 'detector': return mlDetectorLabel(r.detector, lang);
+                    case 'tick': return r.tick ? M('sec', lang, { s: (r.tick.sourceMs / 1000).toFixed(1) }) : '—';
                     case 'services': return r.tick ? r.tick.services : '—';
                     case 'candidates': return r.tick ? r.tick.candidates : '—';
                     case 'written': return r.tick ? r.tick.written : '—';

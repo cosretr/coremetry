@@ -48,7 +48,7 @@ export function rowHeadline(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLead' |
   if (r.mlLead) {
     const rec = leadRecord(r.mlLead);
     if (rec) return recordHeadline(rec, t(measureKey(rec)!, lang), lang);
-    return mlRowText(r.mlLead);
+    return mlRowText(r.mlLead, lang);
   }
   if (r.legacyLead) return legacyHeadline(r.legacyLead, lang);
   return r.service;
@@ -87,13 +87,14 @@ export function legacyHeadline(e: AnomalyEvent, lang: Lang = 'tr'): string {
 }
 
 /** SAF: eski olayın kanıt satırı cümlesi — log türünde örnek satır, yoksa başlık. */
-export function legacyEvidenceText(e: AnomalyEvent): string {
+// v0.10.2282 — lang (varsayılan 'tr'; TR metin aynı).
+export function legacyEvidenceText(e: AnomalyEvent, lang: Lang = 'tr'): string {
   const sample = (e.sample || '').trim();
   if ((e.kind === 'log_template_new' || e.kind === 'log_pattern') && sample) {
     const one = sample.split('\n')[0];
-    return `${legacyHeadline(e)}. Örnek satır: ${one.length > 240 ? `${one.slice(0, 240)}…` : one}`;
+    return tf('anomalyHeadline.sample', lang, { h: legacyHeadline(e, lang), line: one.length > 240 ? `${one.slice(0, 240)}…` : one });
   }
-  return legacyHeadline(e);
+  return legacyHeadline(e, lang);
 }
 
 /** v0.10.2038 — eski olayların kanıt grubu: aynı tür + aynı kalıp TEK satır. */

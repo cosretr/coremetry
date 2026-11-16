@@ -4,6 +4,8 @@
 // okuyor ve o sayfa Problems parçasında; adlar için ML sekmesinin tamamı o
 // parçaya girmesin. MLTab aynı adı yeniden dışa açar (mevcut içe aktarmalar
 // değişmedi).
+import { t, type Lang } from './i18n';
+
 export const ML_DETECTOR_TR: Record<string, string> = {
   log_volume: 'Log hacmi', error_rate: 'Hata oranı', service_silent: 'Servis sustu',
   template_spike: 'Şablon spike', rare_template: 'Nadir şablon', new_template: 'Yeni log kalıbı', rare_error_code: 'Nadir hata kodu',
@@ -17,3 +19,12 @@ export const ML_DETECTOR_TR: Record<string, string> = {
   svc_volume_spike: 'Servis hacmi sıçradı', // v0.10.2119 — evaluator yazar (24 sa / önceki 24 sa span sayısı)
   svc_telemetry_volume: 'Telemetri hacmi', // v0.10.2242 (Dilim B) — ML hacim dedektörü (istek başına span)
 };
+
+/** v0.10.2282 — arayüz dilinde dedektör adı (TR yukarıdaki harita, EN i18n mlDetector.*);
+ *  bilinmeyen dedektör kimliğiyle döner. */
+export function mlDetectorLabel(d: string, lang: Lang = 'tr'): string {
+  if (lang === 'tr') return ML_DETECTOR_TR[d] ?? d;
+  const k = `mlDetector.${d}`;
+  const v = t(k, lang);
+  return v === k ? d : v;
+}
