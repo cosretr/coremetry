@@ -14626,3 +14626,10 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Tüketiciler: `SummaryOf` (MCP `investigation_summary`, CoSRE `RenderSavedTR`) ve anlatım istemi alan alan okur; `TestInvestigationBlobTextMsgs` anahtarlı / anahtarsız kayıtta özetin ve sohbet bloğunun bayt aynı olduğunu, ack taşımasını ve eski kaydın çözülmesini pinler. Kayıt tavanında anahtarlar İLK düşer (önceden sığan kayıt başka alan kaybetmez).
 - Önbellek: `sre:inv:` → `sre:inv:v2:` (gövde şekli); dil anahtara girmez.
 - Pin: Türkçe altın `internal/sre/testdata/inv_text_tr.golden.json` anahtar eklenmeden ÖNCE donduruldu (bayt eşit; değişiklik öncesi koddan yeniden üretilip karşılaştırıldı); anahtar fikstürü `inv_text_msgs.golden.json`; FE `features/anomalies/invMsg.lang.test.tsx` (EN Türkçe yok, TR HTML anahtarlı/anahtarsız aynı, eski kayıt işaretli).
+## 2026-11-16 — v0.10.2302 — ML ekranlarında sunucu cümlelerine TR işareti
+
+- Kapsam: S1'in `OrigLang` işareti ML anomali ekranlarında eksik kalan sunucu cümlelerine; yalnız render yerinde sarılır, Go ve metinler değişmedi. TR arayüzde `OrigLang` öğe eklemez (DOM aynen).
+- `MLReplaySheet` eski (kayıtsız) kart: başlık cümlesi (`withPanelPeak(stripServicePrefix(card.summary))`) ve kanıt satırları (`evidenceRows` / `card.howMuch`; boş satır işaretsiz). Kayıttan çizilen kart (`MLRecordCard`) dokunulmadı. `mlValueText` / `withPanelPeak` ve kanıt satırının başlıkla eşitlik karşılaştırması aynen.
+- Birleşik liste "Ne oldu": `unifiedRows.listHeadlineView` → `{ text, serverText }`; `serverText` = ML lideri kayıtsız ve `summary` taşıyor (mlRowText sunucu cümlesi). Kayıttan / katalogdan kurulan satır, eski dedektör satırı ve summary'siz dedektör adı yedeği işaretsiz. `title` ve sıralama metni düz kalır.
+- `AnomalyEventDetail` kanıt satırlarında ML üyesinin `summary`'si işaretli (summary yoksa dedektör kimliği işaretsiz). Özet cümlesi (`anomalySummary`) zaten katalogdan, atlandı.
+- Pin: `MLReplaySheet.lang.test`, `UnifiedAnomalies.lang.test`, `AnomalyEventDetail.lang.test` (EN işaretli / kayıtlı işaretsiz / TR innerHTML düz); `MLRecordCard.layout.test` eski kart beklentisi işaret çıkarılarak.

@@ -41,6 +41,7 @@ import { hasLogPatternSeries, logPatternSeriesArgs, patternLogsPivot } from './l
 import { LogPatternCountSection } from './LogPatternCountSection';
 import { LegacyLogChart, ServiceRedChart } from '@/components/coremetry/anomalies/MLSourceChart';
 import { serviceRedAggFor } from '@/components/coremetry/anomalies/mlSourcePanel';
+import { OrigLang } from './OrigLang'; // v0.10.2302
 
 // AnomalyEventDetail — anomali olayının TAM SAYFA detayı (v0.10.1032).
 //
@@ -370,10 +371,10 @@ function AnomalyEvidenceRows({ event }: { event: AnomalyEvent }) {
   // v0.10.2038 — aynı tür + aynı kalıp TEK satır (örnekler alt alta, en çok 2);
   // log türünde kanıt cümleyi tekrar etmez, kalıp tam ve kopyalanabilir.
   const groups = legacyEvidenceGroups([event, ...others], lang);
-  const items: { key: string; kind: SignalKind; text: string; source: string; pattern?: string; samples?: string[] }[] = [
+  const items: { key: string; kind: SignalKind; text: string; source: string; pattern?: string; samples?: string[]; server?: boolean }[] = [
     ...groups.map(g => ({ key: g.key, kind: legacySignal({ kind: g.kind } as Pick<AnomalyEvent, 'kind'>), text: g.text, source: g.source, pattern: g.pattern, samples: g.samples })),
     ...(row?.ml ?? []).map(m => ({
-      key: `ml:${m.id}`, kind: signalKindOf(m.detector, m.signal), text: m.summary || m.detector,
+      key: `ml:${m.id}`, kind: signalKindOf(m.detector, m.signal), text: m.summary || m.detector, server: !!m.summary, // v0.10.2302 — sunucu cümlesi
       source: evidenceSource(m.detector, m.signal, m.evidence, lang),
     })),
   ];
@@ -389,7 +390,7 @@ function AnomalyEvidenceRows({ event }: { event: AnomalyEvent }) {
                 <CopyButton value={it.pattern} title={t('aed.copyPattern', lang)} />
               </span>
             )}
-            {it.text}
+            {it.server ? <OrigLang>{it.text}</OrigLang> : it.text}
             {(it.samples ?? []).map(x => (
               <code key={x} className="mono" style={{ display: 'block', fontSize: 12, color: 'var(--text2)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{x}</code>
             ))}

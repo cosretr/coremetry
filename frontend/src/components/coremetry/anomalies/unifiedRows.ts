@@ -174,6 +174,13 @@ export function stripServicePrefix(text: string, service: string, lang: Lang = '
   return first + t.slice(1);
 }
 
+/** v0.10.2302 — liste hücresinin metni + sunucu cümlesi mi (ML lideri kayıtsız ve
+ *  summary taşıyor → mlRowText sunucu cümlesi). Kayıttan / katalogdan kurulan
+ *  metin false; render yeri true'yu EN arayüzde OrigLang ile sarar. SAF. */
+export function listHeadlineView(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLead' | 'service'>, lang: Lang = 'tr'): { text: string; serverText: boolean } {
+  return { text: listHeadline(r, lang), serverText: !!r.mlLead && !leadRecord(r.mlLead) && !!r.mlLead.summary };
+}
+
 /** SAF: listedeki "Ne oldu" metni. */
 export function listHeadline(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLead' | 'service'>, lang: Lang = 'tr'): string {
   return stripServicePrefix(rowHeadline(r, lang), r.service, lang);

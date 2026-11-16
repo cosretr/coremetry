@@ -110,7 +110,10 @@ describe('kayıtlı ML kartı (Dilim D)', () => {
   it('kayıt yoksa eski kart', async () => {
     const el = await render({ snapshot: null, related: [], card, record: null });
     expect(el.querySelector('[data-testid="ml-record-card"]')).toBeNull();
-    expect(el.querySelector('[data-testid="ml-summary"]')!.textContent).toBe('Eski kart cümlesi');
+    // v0.10.2302 — sunucu cümlesi; arayüz İngilizceyse TR işaretiyle (OrigLang).
+    const sum = el.querySelector('[data-testid="ml-summary"]')!;
+    sum.querySelectorAll('[data-orig-lang]').forEach(x => x.remove());
+    expect(sum.textContent).toBe('Eski kart cümlesi');
   });
 });
 

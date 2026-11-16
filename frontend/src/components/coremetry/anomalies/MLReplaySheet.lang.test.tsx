@@ -4,7 +4,8 @@
 // bölüm başlıkları, kanıt satırları, eylemler, Teknik ayrıntı — kart, bağlam,
 // örnekler, what-if —, oynatıcı, trace noktaları / ısı haritası, log yığını,
 // kanıt tabloları, kaynak grafiği) bilinen Türkçe etiket ÇİZMEZ; Türkçe
-// arayüzde metin aynen kalır. Sunucu metni (kart cümleleri) iki dilde aynen.
+// arayüzde metin aynen kalır. Sunucu metni (kart cümleleri) iki dilde aynen;
+// v0.10.2302'den beri İngilizce arayüzde TR işaretli (OrigLang).
 // Saf yardımcılar lang verilmezse Türkçe.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
@@ -209,5 +210,51 @@ describe('ML olay sayfası — Türkçe arayüzde metin aynen (v0.10.2291)', () 
     ]) expect(r.text + r.html, tr).toContain(tr);
     for (const tr of ['data-regions="tespit ', 'aria-label="Yığın türü"', 'sınırı üst|', 'aria-label="Endpoint dağılımı"'])
       expect(r.html, tr).toContain(tr);
+  });
+});
+
+// v0.10.2302 — eski (kayıtsız) kartın sunucu cümleleri (başlık + kanıt satırı)
+// İngilizce arayüzde TR işaretli; kayıttan çizilen kart işaretsiz; Türkçe
+// arayüzde işaret YOK ve hücre içeriği düz metin (innerHTML aynen).
+describe('ML olay sayfası — sunucu cümlesi işareti (v0.10.2302)', () => {
+  const NOW = T0 * 1e9;
+  const v = Array.from({ length: 20 }, (_, i) => (i >= 10 ? 135 : 43));
+  const record = {
+    v: 1, detector: 'op_latency', subject: { service: 'svc-a', operation: 'GET /x', resolved: true },
+    series: { source: 'vm', query: 'q', aggregation: 'p95', unit: 'ms', stepSec: 60 },
+    baseline: { expected: 43, lo: 31, hi: 58, method: 'm', stepSec: 60 }, direction: 'up',
+    onsetAt: NOW - 12 * 60e9, detectedAt: NOW - 10 * 60e9, peakValue: 135, valueAtDetection: 107, expectedValue: 43, volume: 1240,
+    evidence: [], class: 'service_anomaly', title: '',
+    snapshot: { t0: T0 - 1200, step: 60, aggregation: 'p95', v, lo: v.map(() => 31), hi: v.map(() => 58) },
+  };
+  async function legacy() {
+    const out = await render({ snapshot: null, related: [], card: card('log') } as MLReplay);
+    const doc = new DOMParser().parseFromString(out.html, 'text/html');
+    return { doc, html: out.html };
+  }
+  it('İngilizce: eski kart başlığı ve kanıt satırı işaretli', async () => {
+    const { doc } = await legacy();
+    const sum = doc.querySelector('[data-testid="ml-summary"]')!;
+    expect(sum.querySelector('span[lang="tr"]')?.textContent).toBe('X1TR');
+    expect(sum.querySelector('[data-orig-lang]')).not.toBeNull();
+    const rows = doc.querySelectorAll('[data-testid="ml-evidence-rows"] li span[lang="tr"]');
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toBe('x3TR');
+  });
+  it('İngilizce: kayıttan çizilen kart işaretsiz', async () => {
+    const out = await render({ snapshot: null, related: [], card: card('trace'), record } as unknown as MLReplay);
+    expect(out.html).toContain('data-testid="ml-replay"');
+    expect(out.html).toContain('data-testid="ml-record-card"'); // kayıt dalı (eski kart değil)
+    expect(out.html).not.toContain('data-orig-lang');
+    expect(out.html).not.toContain('lang="tr"');
+  });
+  it('Türkçe: işaret yok, metin aynen', async () => {
+    m.lang = 'tr';
+    const { doc, html } = await legacy();
+    expect(html).not.toContain('data-orig-lang');
+    expect(html).not.toContain('lang="tr"');
+    expect(doc.querySelector('[data-testid="ml-summary"]')!.innerHTML).toBe('X1');
+    const li = doc.querySelector('[data-testid="ml-evidence-rows"] li')!;
+    expect(li.querySelector('span.min-w-0')!.innerHTML).toBe('x3');
   });
 });

@@ -10,7 +10,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import type { UnifiedAnomaliesPage, UnifiedAnomalyRow } from '@/lib/types';
 
-const m = vi.hoisted(() => ({ lang: 'en' as 'en' | 'tr', mode: 'rows' as 'rows' | 'empty' | 'error' }));
+const m = vi.hoisted(() => ({ lang: 'en' as 'en' | 'tr', mode: 'rows' as 'rows' | 'empty' | 'error', extra: [] as UnifiedAnomalyRow[] }));
 vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => m.lang }));
 
 const NOW_NS = Date.now() * 1e6;
@@ -45,7 +45,7 @@ vi.mock('@/lib/queries', () => ({
     if (m.mode === 'error') return { data: undefined, isLoading: false, isError: true };
     const items = m.mode === 'empty' ? [] : p.section === 'open'
       ? [row('a', 'running', 12, 0), row('b', 'watching', 75, 0), row('c', 'rejected', 30, 20), mlRow(),
-        legacyRow('l1', 'op_latency', 'POST /pay', 5), legacyRow('l2', 'log_template_new', 'ERROR db timeout', 1240)]
+        legacyRow('l1', 'op_latency', 'POST /pay', 5), legacyRow('l2', 'log_template_new', 'ERROR db timeout', 1240), ...m.extra]
       : [row('d', 'done', 90, 60)];
     const data: UnifiedAnomaliesPage = { items, total: items.length, openTotal: 3, doneTotal: m.mode === 'empty' ? 0 : 1, offset: 0, limit: 50, truncated: true, partial: 'legacy' };
     return { data, isLoading: false, isError: false };
@@ -58,7 +58,7 @@ import { UnifiedAnomalies } from './UnifiedAnomalies';
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
-afterEach(() => { act(() => root?.unmount()); host?.remove(); root = null; host = null; m.lang = 'en'; m.mode = 'rows'; });
+afterEach(() => { act(() => root?.unmount()); host?.remove(); root = null; host = null; m.lang = 'en'; m.mode = 'rows'; m.extra = []; });
 
 function render(): HTMLElement {
   host = document.createElement('div');
@@ -189,5 +189,50 @@ describe('AnomalyWindowTable — İngilizce arayüz (v0.10.2272)', () => {
       expect(text, tr).toContain(tr);
     }
     expect(html).toContain('Gerçek anomali: kararı kaydet (yalnız karne etiketi; tespiti değiştirmez)');
+  });
+});
+
+// v0.10.2302 — "Ne oldu" sunucu cümlesine düşen satır (kayıtsız ML lideri)
+// İngilizce arayüzde TR işaretli; kayıttan / katalogdan kurulan satır işaretsiz;
+// Türkçe arayüzde işaret yok, bağlantı içeriği düz metin.
+describe('"Ne oldu" — sunucu cümlesi işareti (v0.10.2302)', () => {
+  const svcRow = (rec: boolean): UnifiedAnomalyRow => {
+    const r = mlRow(rec);
+    return { ...r, key: rec ? 'sr' : 'sr0', service: 'svc-a',
+      mlLead: { ...r.mlLead!, id: rec ? 'sv1' : 'sv0', service: 'svc-a', summary: 'svc-a: GET /x yanıt süresi normalin 3 katı.' } };
+  };
+  it('listHeadlineView: serverText yalnız sunucu cümlesinde', async () => {
+    const { listHeadlineView } = await import('./unifiedRows');
+    expect(listHeadlineView(svcRow(false), 'en')).toEqual({ text: 'GET /x yanıt süresi normalin 3 katı.', serverText: true });
+    expect(listHeadlineView(svcRow(true), 'en').serverText).toBe(false);
+    expect(listHeadlineView(legacyRow('l9', 'op_latency', 'POST /pay', 5), 'en').serverText).toBe(false);
+    const noSum = svcRow(false); noSum.mlLead = { ...noSum.mlLead!, summary: '' };
+    expect(listHeadlineView(noSum, 'en').serverText).toBe(false); // dedektör adı katalogdan
+    expect(listHeadlineView(row('z', 'running', 1, 0), 'en').serverText).toBe(false);
+  });
+  async function renderRows(lang: 'en' | 'tr') {
+    m.lang = lang;
+    const el = render();
+    return { el };
+  }
+  it('İngilizce: kayıtsız satır işaretli, kayıtlı / eski satır işaretsiz', async () => {
+    const { mlEventHref, anomalyEventHref } = await import('@/lib/anomalyHref');
+    m.extra = [svcRow(false)];
+    const { el } = await renderRows('en');
+    const a0 = el.querySelector<HTMLAnchorElement>(`a.dt-trunc[href="${mlEventHref('sv0')}"]`)!;
+    expect(a0.querySelector('span[lang="tr"] [data-orig-lang]')).not.toBeNull();
+    expect(a0.getAttribute('title')).toBe('GET /x yanıt süresi normalin 3 katı.');
+    const a1 = el.querySelector<HTMLAnchorElement>(`a.dt-trunc[href="${mlEventHref('ev1')}"]`)!;
+    expect(a1.querySelector('[data-orig-lang]')).toBeNull();
+    const l1 = el.querySelector<HTMLAnchorElement>(`a.dt-trunc[href="${anomalyEventHref('le-l1')}"]`)!;
+    expect(l1.querySelector('[data-orig-lang]')).toBeNull();
+  });
+  it('Türkçe: işaret yok, bağlantı içeriği düz metin', async () => {
+    const { mlEventHref } = await import('@/lib/anomalyHref');
+    m.extra = [svcRow(false)];
+    const { el } = await renderRows('tr');
+    expect(el.innerHTML).not.toContain('data-orig-lang');
+    expect(el.innerHTML).not.toContain('lang="tr"');
+    expect(el.querySelector(`a.dt-trunc[href="${mlEventHref('sv0')}"]`)!.innerHTML).toBe('GET /x yanıt süresi normalin 3 katı.');
   });
 });

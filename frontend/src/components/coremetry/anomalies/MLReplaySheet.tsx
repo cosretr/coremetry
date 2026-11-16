@@ -54,6 +54,7 @@ import { fmtPctLang, t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; 
 import { contributorLine, leadFromSnapshot, parseLogsLink, type Contributors } from './mlSourcePanel';
 import { evidenceRows, evidenceSub } from './mlEvidenceRows';
 import { withPanelPeak } from './mlValueText';
+import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2302 — EN arayüzde sunucu cümlesi işaretli
 import { stripServicePrefix } from './unifiedRows';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
@@ -217,7 +218,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
         {/* v0.10.2053 (D4) — grubun kararı: canlıda "Problem açtı" + bağlantı. */}
         {problemChip && <span data-testid="ml-group-problem"><Chip link={problemChip} /></span>}
       </div>
-      <p className="mb-2.5 text-sm font-semibold leading-normal" data-testid="ml-summary">{headline}</p>
+      <p className="mb-2.5 text-sm font-semibold leading-normal" data-testid="ml-summary"><OrigLang>{headline}</OrigLang></p>
       {snap?.detector === 'op_latency' && episodes >= 5 && (
         <p className="mb-2 text-sm text-muted-foreground" data-testid="ml-chronic">{tf('mlx.chronic', lang, { n: episodes })}</p>
       )}
@@ -243,7 +244,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
             return (
               <li key={r.key} className="flex flex-wrap items-baseline gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
                 <SignalKindBadge kind={r.kind} />
-                <span className="min-w-0 flex-1">{r.text}</span>
+                <span className="min-w-0 flex-1">{r.text ? <OrigLang>{r.text}</OrigLang> : r.text}</span>
                 {m?.groupShadow?.live && <span className="text-xs font-medium" data-testid="ml-row-problem">{tl('mlx.gate.opened', lang)}</span>}
                 <span className="text-xs text-muted-foreground">{m ? evidenceSource(m.detector, m.signal, m.evidence, lang) : evidenceSource(h.detector, h.kind, snap?.evidence, lang)}</span>
               </li>

@@ -31,7 +31,8 @@ import type { AnomalyView, UnifiedAnomalyRow } from '@/lib/types';
 import { groupStatusText } from './mlGroupRows';
 import { useUrlPage } from '@/lib/useUrlPage';
 import { t as tr, tf, useLang } from '@/lib/i18n';
-import { listHeadline, rowHref } from './unifiedRows';
+import { listHeadlineView, rowHref } from './unifiedRows';
+import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2302
 import {
   UNIFIED_SORT_DEFAULT, UNIFIED_SORT_IDS, UNIFIED_SORT_URL_KEY, parseUnifiedSort, unifiedSortApiParams,
 } from '@/lib/unifiedAnomalySort';
@@ -85,7 +86,7 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
     switch (col.id) {
       case 'started': return <span className="font-mono" title={fmtTs(r.start)}>{fmtClock(new Date(r.start / 1e6)).slice(0, 5)}</span>;
       case 'service': return <span className="dt-trunc font-mono" title={r.service}>{r.service || '—'}</span>;
-      case 'headline': { const h = listHeadline(r, lang); return <Link to={rowHref(r)} className="dt-trunc" title={h}>{h}</Link>; }
+      case 'headline': { const { text: h, serverText } = listHeadlineView(r, lang); return <Link to={rowHref(r)} className="dt-trunc" title={h}>{serverText ? <OrigLang>{h}</OrigLang> : h}</Link>; }
       case 'signals': return (
         <span className="inline-flex flex-wrap items-center gap-2">
           {r.signals.map(k => <SignalKindBadge key={k} kind={k} />)}

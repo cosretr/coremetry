@@ -18,7 +18,7 @@ const m = vi.hoisted(() => {
     addListener: () => {}, removeListener: () => {},
     addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
-  return { lang: 'en' as 'en' | 'tr', events: {} as Record<string, unknown>, mode: 'ok' as 'ok' | 'missing' | 'fail', logEmpty: false };
+  return { lang: 'en' as 'en' | 'tr', events: {} as Record<string, unknown>, mode: 'ok' as 'ok' | 'missing' | 'fail', logEmpty: false, row: null as unknown };
 });
 vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => m.lang }));
 vi.mock('@/lib/api', () => {
@@ -29,6 +29,7 @@ vi.mock('@/lib/api', () => {
       return Promise.resolve(m.events[String(id)] ?? null);
     },
     problemVerdicts: async () => ({ verdicts: [], policy: { muteNotifications: false } }),
+    anomalyUnifiedRow: async () => m.row, // v0.10.2302 — kanıt satırındaki ML üyeleri
     servicesMetadata: async () => ({ 'svc-a': { ownerTeam: 'team-1', sreTeam: 'team-2' } }),
     anomalyLogPatternSeries: async () => ({
       pattern: 'p', bucketSec: 60, from: 0, to: 120e9, points: [{ t: 0, v: 3 }, { t: 60e9, v: 900 }],
@@ -140,7 +141,7 @@ async function all() {
   return { text: out.map(r => r.text).join('\n'), html: out.map(r => r.html).join('\n') };
 }
 
-beforeEach(() => { m.lang = 'en'; m.mode = 'ok'; m.logEmpty = false; });
+beforeEach(() => { m.lang = 'en'; m.mode = 'ok'; m.logEmpty = false; m.row = null; });
 afterEach(() => { close(); document.body.innerHTML = ''; });
 
 const TR_LABELS = [
@@ -240,5 +241,42 @@ describe('Anomali olay detayı — Türkçe arayüzde metin aynen (v0.10.2290)',
     ]) expect(r.text + r.html, tr).toContain(tr);
     for (const tr of ['aria-label="Triyaj"', 'aria-label="Susturma süresi"', 'title="Kalıbı kopyala"', 'data-series="hata sayısı"',
       'data-chart-title="svc-a · hata oranı"', 'data-aria="Desen sayısı"', 'data-series="eşleşen log"']) expect(r.html, tr).toContain(tr);
+  });
+});
+
+// v0.10.2302 — kanıt satırındaki ML üyesinin sunucu cümlesi (summary) İngilizce
+// arayüzde TR işaretli; summary yoksa dedektör adı işaretsiz; katalogdan kurulan
+// özet cümlesi ve eski olay satırı işaretsiz. Türkçe arayüzde işaret yok.
+describe('Anomali olay detayı — ML sunucu cümlesi işareti (v0.10.2302)', () => {
+  const ml = (id: string, summary: string) => ({ id, detector: 'op_latency', signal: 'trace', stage: 'shadow', service: 'svc-a',
+    startedAt: T0, lastSeen: T0 + 600e9, windowSec: 300, baseline: 1, observed: 3, score: 5, direction: 'up', summary });
+  const withRow = () => {
+    m.events = { a1: ev() };
+    m.row = { items: [], total: 0, openTotal: 0, doneTotal: 0, offset: 0, limit: 1, truncated: false,
+      row: { key: 'k', service: 'svc-a', start: T0, end: T0 + 600e9, signals: ['trace'], status: 'running', mlCount: 2, legacyCount: 1,
+        ml: [ml('m1', 'svc-a: GET /x yanıt süresi arttı.'), ml('m2', '')], legacy: [] } };
+  };
+  const rows = (html: string) => [...new DOMParser().parseFromString(html, 'text/html')
+    .querySelectorAll('[data-testid="anomaly-evidence-rows"] li')];
+  it('İngilizce: ML sunucu cümlesi işaretli, gerisi işaretsiz', async () => {
+    withRow();
+    const r = await mount('a1'); close();
+    const li = rows(r.html);
+    expect(li.length).toBe(3);
+    const marked = li.filter(x => x.querySelector('span[lang="tr"] [data-orig-lang]'));
+    expect(marked.length).toBe(1);
+    expect(marked[0].querySelector('span[lang="tr"]')!.textContent).toBe('svc-a: GET /x yanıt süresi arttı.TR');
+    expect(r.text).toContain('In svc-a, errors for GET /x rose to 4.2× normal.');
+    expect((r.html.match(/data-orig-lang/g) ?? []).length).toBe(1);
+  });
+  it('Türkçe: işaret yok, satır metni aynen', async () => {
+    m.lang = 'tr';
+    withRow();
+    const r = await mount('a1'); close();
+    expect(r.html).not.toContain('data-orig-lang');
+    expect(r.html).not.toContain('lang="tr"');
+    const li = rows(r.html);
+    expect(li[1].children[1].innerHTML).toBe('svc-a: GET /x yanıt süresi arttı.');
+    expect(li[2].children[1].innerHTML).toBe('op_latency');
   });
 });
