@@ -62,7 +62,7 @@ func (f *fakePivotIO) drain() {
 
 // pfSpecAt — op_latency biçimi, dwell 2: ilk cari kova now − 10 dk.
 func pfSpecAt(now time.Time) OpP99PivotSpec {
-	sp := pfOpLatSpec(2, nil, false, nil)
+	sp := pfOpLatSpec(2, false)
 	sp.SlotStarts = []time.Time{now.Add(-5 * time.Minute), now.Add(-10 * time.Minute)}
 	sp.BaseStart, sp.AlignedNow = sp.SlotStarts[1].Add(-24*time.Hour), now
 	return sp
@@ -262,13 +262,13 @@ func TestOpPivotCacheShared(t *testing.T) {
 	}
 
 	// Taban DEĞERİNİ değiştirmeyenler aynı anahtar: kapsam, dışlama, BaseP95,
-	// aktif küme, batch kapısı. Değiştirenler ayrı: çağrı tabanı, pencere uzunluğu.
+	// batch kapısı. Değiştirenler ayrı: çağrı tabanı, pencere uzunluğu.
 	same := op
-	same.BaseP95, same.Active = true, []OpPair{{Service: "a", Operation: "b"}}
-	same.Batch = pfOpLatSpec(2, nil, true, nil).Batch
+	same.BaseP95 = true
+	same.Batch = pfOpLatSpec(2, true).Batch
 	same.ExcludeCond, same.ExcludeArgs = "(positionCaseInsensitive(service_name, ?) > 0)", []any{"-job"}
 	if opBaselineKeyOf(same) != opBaselineKeyOf(op) || opBaselineKeyOf(svc) != opBaselineKeyOf(op) {
-		t.Fatal("dışlama / nicelik / aktif küme / batch kapısı anahtarı bölmemeli")
+		t.Fatal("dışlama / nicelik / batch kapısı anahtarı bölmemeli")
 	}
 	mc := op
 	mc.Floors.MinCalls = 50

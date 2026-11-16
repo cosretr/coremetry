@@ -10,8 +10,10 @@ package chstore
 // tabanlar 30 çağrı / 5000 ms / 20×, tek kova, batch servisler iç WHERE'de
 // düşer. İlk tüketici trace_op_latency (sürdürme penceresi, batch yük kapısı,
 // aktif-olay muafiyeti) operatör kararıyla silindi (2026-11-13); o dalların
-// parametreleri (Batch, Active, çoklu SlotStarts) sıfır değerde metni
-// değiştirmez ve op_p99_cached_test.go eşdeğerlik tablosunda pinli kalır.
+// parametreleri (Batch, çoklu SlotStarts) sıfır değerde metni değiştirmez ve
+// op_p99_cached_test.go eşdeğerlik tablosunda pinli kalır. v0.10.2273: aktif
+// çift (Active) ve batch muaf çift (Batch.Exempt) üreticisiz kaldığı için
+// silindi.
 
 import (
 	"fmt"
@@ -19,8 +21,7 @@ import (
 	"time"
 )
 
-// OpPair — (servis, operasyon) çifti (anomaly paketinde trace_op sürdürme
-// muafiyetinin de çift tipi — sustainExemptPairs).
+// OpPair — (servis, operasyon) çifti (taban önbelleği anahtarı).
 type OpPair struct{ Service, Operation string }
 
 // OpP99Floors — HAVING'in üç tabanı. Tipler bilinçli (int / float64): bind
@@ -36,7 +37,6 @@ type OpP99Floors struct {
 type OpP99BatchGate struct {
 	Cond        string // BatchServiceSQL("service_name") koşulu
 	Args        []any  // Cond'un argümanları
-	Exempt      []OpPair
 	SurgeFactor int    // batchLoadSurgeFactor (2)
 	CurBuckets  uint64 // cari penceredeki 5 dk kova sayısı
 }
@@ -47,9 +47,6 @@ type OpP99BatchGate struct {
 // tamamlanmış kova, len = dwell ≥ 1. BaseStart / AlignedNow — taban
 // penceresinin başı ve hizalı "şimdi" (iç WHERE sınırları).
 //
-// Active — olayı zaten AKTİF çiftler (dwell ≥ 2'de anlamlı): önceki kovaların
-// koşullarından muaf.
-//
 // ExcludeCond / ExcludeArgs — v0.10.1091: iç WHERE'e `AND NOT <koşul>` (yaygın
 // yavaşlama batch servisleri burada düşürür — LIMIT onlara harcanmasın). Boş =
 // koşul yok, metin taşınmadan önceki biçimle birebir.
@@ -58,7 +55,6 @@ type OpP99PivotSpec struct {
 	BaseStart, AlignedNow time.Time
 	Floors                OpP99Floors
 	Batch                 OpP99BatchGate
-	Active                []OpPair
 	ExcludeCond           string
 	ExcludeArgs           []any
 	// CurP95MinMs — v0.10.1091 (yaygın yavaşlama, inceleme A): cari kovanın
@@ -165,8 +161,7 @@ func OpP99PivotQuery(sp OpP99PivotSpec) (string, []any) {
 	}
 	args = append(args, f.MinCalls, f.MinCalls, f.Ratio, f.MinP99Ms)
 	// v0.10.1085 — önceki kovalar: kolon + aynı üç taban (en yeni kovanınkiyle
-	// aynı biçim). Tamsayı kova numarası metne gömülür, bind değil. Aktif
-	// çiftler önceki kova koşullarından muaf (OR tuple IN).
+	// aynı biçim). Tamsayı kova numarası metne gömülür, bind değil.
 	var earlier []string
 	for i := 2; i <= dwell; i++ {
 		sel += fmt.Sprintf(`,
@@ -175,25 +170,9 @@ func OpP99PivotQuery(sp OpP99PivotSpec) (string, []any) {
 		earlier = append(earlier, fmt.Sprintf(`calls_%d >= ? AND p99_%d >= ? * %s AND p99_%d >= ?`, i, i, base, i))
 		args = append(args, f.MinCalls, f.Ratio, f.MinP99Ms)
 	}
-	switch {
-	case len(earlier) == 0:
-	case len(sp.Active) == 0:
-		for _, c := range earlier {
-			having += `
-		   AND ` + c
-		}
-	default:
-		tuples := make([]string, len(sp.Active))
-		for i := range tuples {
-			tuples[i] = "(?, ?)"
-		}
+	for _, c := range earlier {
 		having += `
-		   AND ((` + strings.Join(earlier, `
-		         AND `) + `)
-		        OR (service_name, name) IN (` + strings.Join(tuples, ", ") + `))`
-		for _, p := range sp.Active {
-			args = append(args, p.Service, p.Operation)
-		}
+		   AND ` + c
 	}
 	if sp.CurP95MinMs > 0 {
 		sel += `,
@@ -207,16 +186,8 @@ func OpP99PivotQuery(sp OpP99PivotSpec) (string, []any) {
 		       maxIf(buckets, ` + slot + ` = 0) AS base_buckets`
 		inner += `,
 		         uniqExact(time_bucket) AS buckets`
-		exempt := ""
-		if len(b.Exempt) > 0 {
-			tuples := make([]string, len(b.Exempt))
-			for i := range tuples {
-				tuples[i] = "(?, ?)"
-			}
-			exempt = ` AND (service_name, name) NOT IN (` + strings.Join(tuples, ", ") + `)`
-		}
 		having += `
-		   AND NOT (` + b.Cond + exempt + `
+		   AND NOT (` + b.Cond + `
 		            AND cur_calls * base_buckets >= ? * base_calls * ?`
 		for i := 2; i <= dwell; i++ {
 			having += fmt.Sprintf(`
@@ -224,9 +195,6 @@ func OpP99PivotQuery(sp OpP99PivotSpec) (string, []any) {
 		}
 		having += `)`
 		args = append(args, b.Args...)
-		for _, p := range b.Exempt {
-			args = append(args, p.Service, p.Operation)
-		}
 		for i := 1; i <= dwell; i++ {
 			args = append(args, b.SurgeFactor, b.CurBuckets)
 		}

@@ -18,9 +18,8 @@ package chstore
 //     liderin belleğinde durur (op_p99_cache.go).
 //  2. TUR — OpP99CurrentQuery: yalnız sürdürme penceresinin kovaları
 //     [SlotStarts[dwell−1], AlignedNow); tabandan BAĞIMSIZ tabanlar HAVING'de
-//     (cur_calls, cur_p99, cur_p95, önceki kovaların çağrı + mutlak p99'u; aktif
-//     çift önceki kova koşullarından muaf — eski HAVING'in tabana bağlı
-//     olmayan yarısı, gerekli koşul).
+//     (cur_calls, cur_p99, cur_p95, önceki kovaların çağrı + mutlak p99'u —
+//     eski HAVING'in tabana bağlı olmayan yarısı, gerekli koşul).
 //  3. BİRLEŞİM — JoinOpP99Pivot: eski HAVING'in tabana bağlı koşulları
 //     (base_calls, base > 0, her kovada cur ≥ kat × taban, batch yük kapısı +
 //     muaf çiftler), ORDER BY oran DESC, LIMIT OpP99PivotLimit — birebir.
@@ -121,13 +120,12 @@ func OpP99PivotScanDest(r *OpP99Row, sp OpP99PivotSpec) []any {
 //
 // HAVING — eski HAVING'in tabandan BAĞIMSIZ koşulları (gerekli koşul; nihai
 // hüküm JoinOpP99Pivot'ta): cur_calls ≥ MinCalls, cur_p99 ≥ MinP99Ms,
-// [cur_p95 ≥ CurP95MinMs], önceki her kovada çağrı + mutlak p99 (aktif çift
-// muaf — eski metnin aynı OR tuple IN'i). Oran sırası yok (taban yok): LIMIT
+// [cur_p95 ≥ CurP95MinMs], önceki her kovada çağrı + mutlak p99. Oran sırası yok (taban yok): LIMIT
 // OpP99CurrentLimit tavandır, dayanırsa çağıran eski yola düşer.
 //
 // Bind sırası metin sırası: [batch kalıpları], kova başları, pencere başı,
 // AlignedNow, [dışlama], MinCalls, MinP99Ms, [CurP95MinMs], önceki kova başına
-// (MinCalls, MinP99Ms), [aktif çiftler].
+// (MinCalls, MinP99Ms).
 func OpP99CurrentQuery(sp OpP99PivotSpec) (string, []any) {
 	dwell := len(sp.SlotStarts)
 	f := sp.Floors
@@ -179,23 +177,9 @@ func OpP99CurrentQuery(sp OpP99PivotSpec) (string, []any) {
 			earlier = append(earlier, fmt.Sprintf(`calls_%d >= ? AND p99_%d >= ?`, i, i))
 			args = append(args, f.MinCalls, f.MinP99Ms)
 		}
-		if len(sp.Active) == 0 {
-			for _, c := range earlier {
-				having += `
-		   AND ` + c
-			}
-		} else {
-			tuples := make([]string, len(sp.Active))
-			for i := range tuples {
-				tuples[i] = "(?, ?)"
-			}
+		for _, c := range earlier {
 			having += `
-		   AND ((` + strings.Join(earlier, `
-		         AND `) + `)
-		        OR (service_name, name) IN (` + strings.Join(tuples, ", ") + `))`
-			for _, p := range sp.Active {
-				args = append(args, p.Service, p.Operation)
-			}
+		   AND ` + c
 		}
 	}
 	return sel + `
@@ -272,9 +256,9 @@ func opCallsAtLeast(calls uint64, min int) bool {
 //	cur_calls ≥ MinCalls AND base_calls ≥ MinCalls
 //	AND base > 0 AND cur_p99 ≥ Ratio × base AND cur_p99 ≥ MinP99Ms
 //	AND [her önceki kova: calls_i ≥ MinCalls AND p99_i ≥ Ratio × base AND
-//	     p99_i ≥ MinP99Ms] — ya da çift Active'te
+//	     p99_i ≥ MinP99Ms]
 //	AND [cur_p95 ≥ CurP95MinMs]
-//	AND NOT [is_batch AND çift Batch.Exempt'te değil AND her kova
+//	AND NOT [is_batch AND her kova
 //	         calls × base_buckets ≥ SurgeFactor × base_calls × CurBuckets]
 //	ORDER BY cur_p99 / base DESC LIMIT OpP99PivotLimit
 //
@@ -291,15 +275,7 @@ func JoinOpP99Pivot(sp OpP99PivotSpec, cur []OpP99CurRow, base map[OpPair]OpBase
 		dwell = 1
 	}
 	f := sp.Floors
-	active := make(map[OpPair]bool, len(sp.Active))
-	for _, p := range sp.Active {
-		active[p] = true
-	}
 	g := sp.Batch
-	exempt := make(map[OpPair]bool, len(g.Exempt))
-	for _, p := range g.Exempt {
-		exempt[p] = true
-	}
 	surge := uint64(0)
 	if g.SurgeFactor > 0 {
 		surge = uint64(g.SurgeFactor)
@@ -323,7 +299,7 @@ func JoinOpP99Pivot(sp OpP99PivotSpec, cur []OpP99CurRow, base map[OpPair]OpBase
 			!(bv > 0) || !(c.P99Ms >= f.Ratio*bv) || !(c.P99Ms >= f.MinP99Ms) {
 			continue
 		}
-		if dwell > 1 && !active[p] {
+		if dwell > 1 {
 			ok := true
 			for i := 1; i < dwell; i++ {
 				s := slot(i)
@@ -339,7 +315,7 @@ func JoinOpP99Pivot(sp OpP99PivotSpec, cur []OpP99CurRow, base map[OpPair]OpBase
 		if sp.CurP95MinMs > 0 && !(r.CurP95Ms >= sp.CurP95MinMs) {
 			continue
 		}
-		if g.Cond != "" && r.IsBatch && !exempt[p] {
+		if g.Cond != "" && r.IsBatch {
 			underLoad := true
 			for i := 0; i < dwell; i++ {
 				if !(slot(i).Calls*b.Buckets >= surge*b.Calls*g.CurBuckets) {

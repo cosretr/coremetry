@@ -13,8 +13,7 @@ package chstore
 //   - refLegacyPivot: eski SQL'in (dış maxIf/sumIf, HAVING, ORDER BY oran,
 //     LIMIT) metinden yazılmış Go referansı; yeni yol (taban HAVING'i + tur
 //     HAVING'inin Go ikizi + JoinOpP99Pivot) aynı sentetik satırlarla AYNI
-//     çıktıyı verir: dwell 1/2/3, aktif-küme histerezisi, batch kapısı + muaf
-//     çiftler, BaseP95 kipi, CurP95MinMs, eşit oran sırası, LIMIT kesimi, sınır
+//     çıktıyı verir: dwell 1/2/3, batch kapısı, BaseP95 kipi, CurP95MinMs, eşit oran sırası, LIMIT kesimi, sınır
 //     eşitlikleri, NaN; ayrıca rastgele özellik testi;
 //   - iki yeni sorgu SINIRLI (zaman aralıklı WHERE, LIMIT, max_execution_time,
 //     tek FROM operation_summary_5m) ve tur sorgusu TABAN penceresini okumaz;
@@ -57,15 +56,6 @@ func baseAgg(p99, p95 float64) *pfAgg {
 	return &pfAgg{p99: p99, p95: p95, calls: 28_800, buckets: 288}
 }
 
-func pfInList(l []OpPair, svc, op string) bool {
-	for _, p := range l {
-		if p.Service == svc && p.Operation == op {
-			return true
-		}
-	}
-	return false
-}
-
 // refLegacyPivot — ESKİ tek geçişin (OpP99PivotQuery) anlamı, SQL metninden
 // birebir: dış sorgu kova başına maxIf/sumIf (satırı olmayan kova 0), HAVING
 // metin sırasıyla, ORDER BY cur_p99 / base DESC, LIMIT OpP99PivotLimit. SQL
@@ -106,26 +96,21 @@ func refLegacyPivot(sp OpP99PivotSpec, pairs []pfPair, isBatch func(string) bool
 		h := int64(curCalls) >= int64(f.MinCalls) && int64(b.calls) >= int64(f.MinCalls) &&
 			base > 0 && curP99 >= f.Ratio*base && curP99 >= f.MinP99Ms
 		// AND calls_i >= ? AND p99_i >= ? * base AND p99_i >= ?   (i = 2..dwell)
-		// [OR (service_name, name) IN (aktif)]
 		earlier := true
 		for i := 2; i <= dwell; i++ {
 			s := slot(i)
 			earlier = earlier && int64(s.calls) >= int64(f.MinCalls) && s.p99 >= f.Ratio*base && s.p99 >= f.MinP99Ms
 		}
-		switch {
-		case dwell <= 1:
-		case len(sp.Active) == 0:
+		if dwell > 1 {
 			h = h && earlier
-		default:
-			h = h && (earlier || pfInList(sp.Active, pp.svc, pp.op))
 		}
 		// AND cur_p95 >= ?
 		if sp.CurP95MinMs > 0 {
 			h = h && curP95 >= sp.CurP95MinMs
 		}
-		// AND NOT (<batch> AND (s, n) NOT IN (muaf) AND her kova calls * base_buckets >= ? * base_calls * ?)
+		// AND NOT (<batch> AND her kova calls * base_buckets >= ? * base_calls * ?)
 		if g := sp.Batch; g.Cond != "" {
-			load := isBatch(pp.svc) && !pfInList(g.Exempt, pp.svc, pp.op)
+			load := isBatch(pp.svc)
 			for i := 1; i <= dwell; i++ {
 				load = load && slot(i).calls*b.buckets >= uint64(g.SurgeFactor)*b.calls*g.CurBuckets
 			}
@@ -176,11 +161,7 @@ func curHavingTwin(sp OpP99PivotSpec, r OpP99CurRow) bool {
 		for _, s := range r.Slots[1:] {
 			e = e && int64(s.Calls) >= int64(f.MinCalls) && s.P99Ms >= f.MinP99Ms
 		}
-		if len(sp.Active) == 0 {
-			ok = ok && e
-		} else {
-			ok = ok && (e || pfInList(sp.Active, r.Service, r.Operation))
-		}
+		ok = ok && e
 	}
 	return ok
 }
@@ -239,7 +220,7 @@ var pfNow = time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
 
 // pfOpLatSpec — trace_op_latency biçimi (tabanlar 30 / 3× / 200 ms; batch
 // kapısı opsiyonel). Kova başları yeniden eskiye, taban 24 sa.
-func pfOpLatSpec(dwell int, active []OpPair, batch bool, exempt []OpPair) OpP99PivotSpec {
+func pfOpLatSpec(dwell int, batch bool) OpP99PivotSpec {
 	slots := make([]time.Time, dwell)
 	for i := range slots {
 		slots[i] = pfNow.Add(-time.Duration(i+1) * 5 * time.Minute)
@@ -247,11 +228,10 @@ func pfOpLatSpec(dwell int, active []OpPair, batch bool, exempt []OpPair) OpP99P
 	sp := OpP99PivotSpec{
 		SlotStarts: slots, BaseStart: slots[dwell-1].Add(-24 * time.Hour), AlignedNow: pfNow,
 		Floors: OpP99Floors{MinCalls: 30, Ratio: 3.0, MinP99Ms: 200.0},
-		Active: active,
 	}
 	if batch {
 		cond, args := DefaultAnomalySensitivity().BatchServiceSQL("service_name")
-		sp.Batch = OpP99BatchGate{Cond: cond, Args: args, Exempt: exempt, SurgeFactor: 2, CurBuckets: 1}
+		sp.Batch = OpP99BatchGate{Cond: cond, Args: args, SurgeFactor: 2, CurBuckets: 1}
 	}
 	return sp
 }
@@ -276,7 +256,6 @@ func pfKeys(rows []OpP99Row) []string {
 // yeni yol (tur HAVING'i uygulanmış VE uygulanmamış) birebir aynı; ayrıca
 // beklenen çiftler (anlam pini).
 func TestJoinOpP99PivotMatchesLegacy(t *testing.T) {
-	ex := []OpPair{{Service: "orders-batch", Operation: "Exempt"}}
 	nan := math.NaN()
 	tests := []struct {
 		name  string
@@ -286,7 +265,7 @@ func TestJoinOpP99PivotMatchesLegacy(t *testing.T) {
 	}{
 		{
 			name: "dwell 1 — tabanlar ve sınır eşitlikleri",
-			sp:   pfOpLatSpec(1, nil, false, nil),
+			sp:   pfOpLatSpec(1, false),
 			pairs: []pfPair{
 				{svc: "a", op: "fire", base: baseAgg(100, 90), slots: []*pfAgg{agg(400, 40)}},
 				{svc: "a", op: "ratio-eq", base: baseAgg(100, 90), slots: []*pfAgg{agg(300, 40)}}, // tam 3× → geçer (>=)
@@ -306,7 +285,7 @@ func TestJoinOpP99PivotMatchesLegacy(t *testing.T) {
 		},
 		{
 			name: "dwell 2 — sürdürme (aktif küme yok)",
-			sp:   pfOpLatSpec(2, nil, false, nil),
+			sp:   pfOpLatSpec(2, false),
 			pairs: []pfPair{
 				{svc: "b", op: "sustained", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 40), agg(800, 40)}},
 				{svc: "b", op: "single-spike", base: baseAgg(20, 20), slots: []*pfAgg{agg(4000, 40), agg(20, 40)}},
@@ -319,44 +298,29 @@ func TestJoinOpP99PivotMatchesLegacy(t *testing.T) {
 			want: []string{"b/sustained", "b/prev-ratio-eq"},
 		},
 		{
-			name: "dwell 2 — aktif-küme histerezisi",
-			sp: pfOpLatSpec(2, []OpPair{{Service: "c", Operation: "active-dip"}, {Service: "c", Operation: "active-clean"},
-				{Service: "c", Operation: "active-no-prev"}}, false, nil),
-			pairs: []pfPair{
-				{svc: "c", op: "active-dip", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 40), agg(20, 40)}},
-				{svc: "c", op: "active-clean", base: baseAgg(20, 20), slots: []*pfAgg{agg(20, 40), agg(800, 40)}},
-				{svc: "c", op: "active-no-prev", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 40), nil}},
-				{svc: "c", op: "inactive-dip", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 40), agg(20, 40)}},
-				{svc: "c", op: "inactive-sustained", base: baseAgg(20, 20), slots: []*pfAgg{agg(900, 40), agg(900, 40)}},
-			},
-			want: []string{"c/inactive-sustained", "c/active-dip", "c/active-no-prev"},
-		},
-		{
-			name: "dwell 3 — aktif + eksik orta kova",
-			sp:   pfOpLatSpec(3, []OpPair{{Service: "d", Operation: "act"}}, false, nil),
+			name: "dwell 3 — eksik orta kova",
+			sp:   pfOpLatSpec(3, false),
 			pairs: []pfPair{
 				{svc: "d", op: "all-three", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 40), agg(700, 40), agg(600, 40)}},
 				{svc: "d", op: "gap-middle", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 40), nil, agg(600, 40)}},
-				{svc: "d", op: "act", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 40), nil, nil}},
 			},
-			want: []string{"d/act", "d/all-three"},
+			want: []string{"d/all-three"},
 		},
 		{
-			name: "dwell 1 — batch yük kapısı + muaf çift",
-			sp:   pfOpLatSpec(1, nil, true, ex),
+			name: "dwell 1 — batch yük kapısı",
+			sp:   pfOpLatSpec(1, true),
 			pairs: []pfPair{
 				{svc: "orders-batch", op: "surge", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 500)}},                                     // 500 ≥ 2×100 → susar
 				{svc: "orders-batch", op: "surge-eq", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 200)}},                                  // tam 2× → susar (>=)
 				{svc: "orders-batch", op: "normal-load", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 199)}},                               // yük yok → açar
-				{svc: "orders-batch", op: "Exempt", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 500)}},                                    // muaf → açar
 				{svc: "api", op: "surge", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 500)}},                                              // batch değil → açar
 				{svc: "nightly-BATCH", op: "drip", base: &pfAgg{p99: 20, p95: 20, calls: 1_276, buckets: 288}, slots: []*pfAgg{agg(800, 40)}}, // aktif kova ort. ~4.4 → 40 ≥ 2× → susar
 			},
-			want: []string{"api/surge", "orders-batch/Exempt", "orders-batch/normal-load"},
+			want: []string{"api/surge", "orders-batch/normal-load"},
 		},
 		{
 			name: "dwell 2 — batch: her kova yük altında olmalı",
-			sp:   pfOpLatSpec(2, nil, true, nil),
+			sp:   pfOpLatSpec(2, true),
 			pairs: []pfPair{
 				{svc: "orders-batch", op: "surge-both", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 500), agg(800, 500)}},
 				{svc: "orders-batch", op: "surge-latest", base: baseAgg(20, 20), slots: []*pfAgg{agg(800, 500), agg(800, 100)}},
@@ -399,7 +363,7 @@ func TestJoinOpP99PivotMatchesLegacy(t *testing.T) {
 // tanımsız bıraktığı sıra artık kararlı (servis, operasyon) ve referansla
 // aynı; ayrık oranlarda en büyük 200.
 func TestJoinOpP99PivotTiesAndLimit(t *testing.T) {
-	sp := pfOpLatSpec(1, nil, false, nil)
+	sp := pfOpLatSpec(1, false)
 	var pairs []pfPair
 	for i := 0; i < 10; i++ { // en yüksek oran (10×), LIMIT'in başında
 		pairs = append(pairs, pfPair{svc: fmt.Sprintf("hot-%02d", i), op: "op", base: baseAgg(100, 100), slots: []*pfAgg{agg(1000, 40)}})
@@ -444,7 +408,7 @@ func TestJoinOpP99PivotRandomized(t *testing.T) {
 			sp.CurP95MinMs = []float64{0, 2500}[rng.Intn(2)]
 			sp.BaseP95 = rng.Intn(2) == 0
 		} else {
-			sp = pfOpLatSpec(dwell, nil, rng.Intn(2) == 0, nil)
+			sp = pfOpLatSpec(dwell, rng.Intn(2) == 0)
 		}
 		dwell = len(sp.SlotStarts)
 		n := rng.Intn(260)
@@ -463,12 +427,6 @@ func TestJoinOpP99PivotRandomized(t *testing.T) {
 				pp.slots = append(pp.slots, &pfAgg{p99: pick(p99s), p95: pick(p99s), calls: pickC()})
 			}
 			pairs = append(pairs, pp)
-			if rng.Intn(5) == 0 && dwell > 1 {
-				sp.Active = append(sp.Active, OpPair{Service: pp.svc, Operation: pp.op})
-			}
-			if sp.Batch.Cond != "" && rng.Intn(8) == 0 {
-				sp.Batch.Exempt = append(sp.Batch.Exempt, OpPair{Service: pp.svc, Operation: pp.op})
-			}
 		}
 		ref := refLegacyPivot(sp, pairs, pfIsBatch)
 		for _, push := range []bool{false, true} {
@@ -519,7 +477,7 @@ const goldenOpBaselineSQL = `
 		SETTINGS max_execution_time = 60`
 
 func TestOpP99CachedQueriesGolden(t *testing.T) {
-	sp := pfOpLatSpec(2, nil, false, nil)
+	sp := pfOpLatSpec(2, false)
 	q, args := OpP99CurrentQuery(sp)
 	if q != goldenOpP99CurrentDwell2SQL {
 		t.Fatalf("tur sorgusu metni değişti:\n%s", q)
@@ -559,11 +517,10 @@ func TestOpP99CachedQueriesBounded(t *testing.T) {
 			t.Fatalf("%s: yer tutucu %d, argüman %d", name, strings.Count(q, "?"), nArgs)
 		}
 	}
-	act := []OpPair{{Service: "a", Operation: "x"}, {Service: "b", Operation: "y"}}
 	for dwell := 1; dwell <= 6; dwell++ {
 		for _, sp := range []OpP99PivotSpec{
-			pfOpLatSpec(dwell, nil, false, nil),
-			pfOpLatSpec(dwell, act, true, act[:1]),
+			pfOpLatSpec(dwell, false),
+			pfOpLatSpec(dwell, true),
 		} {
 			name := fmt.Sprintf("dwell %d batch=%v", dwell, sp.Batch.Cond != "")
 			q, args := OpP99CurrentQuery(sp)
@@ -608,7 +565,7 @@ func TestOpP99PivotScanDestOrder(t *testing.T) {
 		sel := q[:strings.Index(q, "\n\t\tFROM (")]
 		return strings.Count(sel, " AS ") + 2 // service_name, name
 	}
-	for _, sp := range []OpP99PivotSpec{pfOpLatSpec(1, nil, false, nil), pfOpLatSpec(3, nil, true, nil), pfSvcSlowSpec()} {
+	for _, sp := range []OpP99PivotSpec{pfOpLatSpec(1, false), pfOpLatSpec(3, true), pfSvcSlowSpec()} {
 		var r OpP99Row
 		q, _ := OpP99PivotQuery(sp)
 		if n := len(OpP99PivotScanDest(&r, sp)); n != cols(q) {
@@ -667,7 +624,7 @@ func TestOpP99CachedAgreesOnClickHouse(t *testing.T) {
 		fmt.Fprintf(&fixture, "INSERT INTO operation_summary_5m SELECT '%s' AS s, '%s' AS o, %s AS tb, countState(), quantilesTDigestState(0.5, 0.95, 0.99)(toUInt64(%d)) FROM numbers(%d) GROUP BY s, o, tb;\n",
 			svc, op, bucket, ms*1_000_000, n)
 	}
-	for _, sp := range []OpP99PivotSpec{pfOpLatSpec(2, nil, false, nil)} {
+	for _, sp := range []OpP99PivotSpec{pfOpLatSpec(2, false)} {
 		slots, base := sp.SlotStarts, sp.BaseStart
 		for _, c := range cases {
 			if c.baseCalls > 0 {
@@ -735,17 +692,16 @@ func TestOpP99CachedAgreesOnClickHouse(t *testing.T) {
 		}
 	}
 
-	active := []OpPair{{Service: "orders-batch", Operation: "Active"}, {Service: "svc-f", Operation: "active-dip"}, {Service: "svc-g", Operation: "active-clean"}}
-	svcSpec := pfOpLatSpec(1, nil, false, nil)
+	svcSpec := pfOpLatSpec(1, false)
 	svcSpec.Floors = OpP99Floors{MinCalls: 30, Ratio: 20, MinP99Ms: 5000}
 	svcSpec.CurP95MinMs, svcSpec.BaseP95, svcSpec.TimeoutSec = 2500, true, 10
 	cond, bargs := DefaultAnomalySensitivity().BatchServiceSQL("service_name")
 	svcSpec.ExcludeCond, svcSpec.ExcludeArgs = cond, bargs
 	specs := map[string]OpP99PivotSpec{
-		"op_latency dwell 1":                   pfOpLatSpec(1, nil, false, nil),
-		"op_latency dwell 1 batch":             pfOpLatSpec(1, nil, true, active[:1]),
-		"op_latency dwell 2":                   pfOpLatSpec(2, nil, false, nil),
-		"op_latency dwell 2 aktif + batch":     pfOpLatSpec(2, active, true, active[:1]),
+		"op_latency dwell 1":                   pfOpLatSpec(1, false),
+		"op_latency dwell 1 batch":             pfOpLatSpec(1, true),
+		"op_latency dwell 2":                   pfOpLatSpec(2, false),
+		"op_latency dwell 2 batch":             pfOpLatSpec(2, true),
 		"svc-slowdown (p95, yavaş pay, dışla)": svcSpec,
 	}
 	// dwell 1 kipleri en yeni kovayı slots[0]'dan okur: aynı fikstür (pfNow).
