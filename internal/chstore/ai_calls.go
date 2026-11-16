@@ -58,6 +58,13 @@ type AICall struct {
 	// bağlanır; /ai çekmecesi "Trace" linkini bundan çizer. Kolon ayrı probe
 	// ile (iki-boot); kolon yokken alan boş döner.
 	TraceID string `json:"traceId,omitempty"`
+	// ModelRounds / PeakInputTokens — v0.10.2297: serbest döngünün TEK
+	// satırı turların toplamını taşır; bu iki alan kaç model gidiş-dönüşü
+	// olduğunu (tavan turu + bozuk-cevap yeniden denemesi dahil) ve en büyük
+	// tek tur giriş token'ını söyler. 0 = bilinmiyor (döngü dışı satır, eski
+	// satır ya da kolon henüz yok) — asla "1 tur" diye okunmaz.
+	ModelRounds     uint16 `json:"modelRounds,omitempty"`
+	PeakInputTokens uint32 `json:"peakInputTokens,omitempty"`
 }
 
 // aiCallsExtended — v0.10.409 kolonları bu kurulumda var mı (boot probe;
@@ -104,6 +111,28 @@ func (s *Store) probeAICallsTraceColumn(ctx context.Context) bool {
 	return ok
 }
 
+// aiCallsRoundsCol — v0.10.2297 model_rounds + peak_input_tokens INSERT
+// hedefinde var mı (İKİSİ birden; tek ALTER dizisinde gelirler ama küme
+// kipinde ertelenen DDL birini önce indirebilir).
+var aiCallsRoundsCol atomic.Bool
+
+// AICallsRoundsCol — okuma yolları için.
+func AICallsRoundsCol() bool { return aiCallsRoundsCol.Load() }
+
+// probeAICallsRoundsColumns — v0.10.2297; trace_id probe'uyla aynı sözleşme
+// (yalnız INSERT hedefi ai_calls; iki kolon da görünene dek false → INSERT ve
+// SELECT kolonları anmaz, alanlar 0 = bilinmiyor okunur).
+func (s *Store) probeAICallsRoundsColumns(ctx context.Context) bool {
+	var n uint64
+	err := s.conn.QueryRow(ctx,
+		`SELECT count() FROM system.columns
+		 WHERE database = currentDatabase() AND table = 'ai_calls'
+		   AND name IN ('model_rounds', 'peak_input_tokens')`).Scan(&n)
+	ok := err == nil && n == 2
+	aiCallsRoundsCol.Store(ok)
+	return ok
+}
+
 // probeAICallsColumns — INSERT hedefi olan ai_calls'ta (küme kipinde
 // Distributed) error_class var mı. Yalnız INSERT hedefine bakılır: yerel
 // parçada olup Distributed'da henüz olmayan kolon INSERT'i kırar.
@@ -144,8 +173,11 @@ const aiCallsCachedCols = `cached_tokens`
 // aiCallsTraceCols — v0.10.1463; kendi bayrağıyla (aiCallsTraceCol).
 const aiCallsTraceCols = `trace_id`
 
+// aiCallsRoundsCols — v0.10.2297; kendi bayrağıyla (aiCallsRoundsCol).
+const aiCallsRoundsCols = `model_rounds, peak_input_tokens`
+
 // aiCallsInsertSQL — saf: kolon listesi bayraklara göre (ai_calls_insert_test).
-func aiCallsInsertSQL(extended, cached, traced bool) string {
+func aiCallsInsertSQL(extended, cached, traced, rounds bool) string {
 	cols := aiCallsBaseCols
 	if extended {
 		cols += ",\n\t\t " + aiCallsExtCols
@@ -156,11 +188,14 @@ func aiCallsInsertSQL(extended, cached, traced bool) string {
 	if traced {
 		cols += ",\n\t\t " + aiCallsTraceCols
 	}
+	if rounds {
+		cols += ",\n\t\t " + aiCallsRoundsCols
+	}
 	return "INSERT INTO ai_calls (" + cols + ")"
 }
 
 // aiCallsInsertArgs — saf: aiCallsInsertSQL kolon sırasıyla birebir.
-func aiCallsInsertArgs(c AICall, created time.Time, extended, cached, traced bool) []any {
+func aiCallsInsertArgs(c AICall, created time.Time, extended, cached, traced, rounds bool) []any {
 	args := []any{c.ID, created, c.Surface, c.ExchangeID, c.Provider, c.Model, c.BaseURL,
 		c.DurationMs, c.InputTokens, c.OutputTokens, c.Status,
 		c.ErrorMsg, c.PromptChars, c.ResponseChars,
@@ -174,13 +209,17 @@ func aiCallsInsertArgs(c AICall, created time.Time, extended, cached, traced boo
 	if traced {
 		args = append(args, c.TraceID)
 	}
+	if rounds {
+		args = append(args, c.ModelRounds, c.PeakInputTokens)
+	}
 	return args
 }
 
 // aiCallsRowSelect / aiCallsRowScan — v0.10.807: liste ve nokta okuması
 // cached_tokens'ı yalnız kolon varsa seçer (SQL kolon sayısı == Scan hedefi).
 // v0.10.1463 — trace_id aynı kuralla (kendi bayrağı).
-func aiCallsRowSelect(cached, traced bool) string {
+// v0.10.2297 — model_rounds / peak_input_tokens aynı kuralla (kendi bayrağı).
+func aiCallsRowSelect(cached, traced, rounds bool) string {
 	q := `SELECT id, toUnixTimestamp64Nano(created_at), surface, exchange_id, provider, model, base_url,
 		       duration_ms, input_tokens, output_tokens, status, error_msg,
 		       prompt_chars, response_chars, user_id, user_email,
@@ -191,10 +230,13 @@ func aiCallsRowSelect(cached, traced bool) string {
 	if traced {
 		q += `, trace_id`
 	}
+	if rounds {
+		q += `, model_rounds, peak_input_tokens`
+	}
 	return q
 }
 
-func aiCallsRowScan(c *AICall, cached, traced bool) []any {
+func aiCallsRowScan(c *AICall, cached, traced, rounds bool) []any {
 	dest := []any{
 		&c.ID, &c.CreatedAt, &c.Surface, &c.ExchangeID, &c.Provider, &c.Model, &c.BaseURL,
 		&c.DurationMs, &c.InputTokens, &c.OutputTokens, &c.Status, &c.ErrorMsg,
@@ -206,6 +248,9 @@ func aiCallsRowScan(c *AICall, cached, traced bool) []any {
 	}
 	if traced {
 		dest = append(dest, &c.TraceID)
+	}
+	if rounds {
+		dest = append(dest, &c.ModelRounds, &c.PeakInputTokens)
 	}
 	return dest
 }
@@ -225,12 +270,12 @@ func (s *Store) InsertAICall(ctx context.Context, c AICall) error {
 		c.ResponseSample = c.ResponseSample[:SamplePromptCap]
 	}
 	// v0.10.409 — tek dal, bayraklar yalnız kolon listesini seçer.
-	ext, cached, traced := aiCallsExtended.Load(), aiCallsCachedCol.Load(), aiCallsTraceCol.Load()
-	batch, err := s.conn.PrepareBatch(ctx, aiCallsInsertSQL(ext, cached, traced))
+	ext, cached, traced, rounds := aiCallsExtended.Load(), aiCallsCachedCol.Load(), aiCallsTraceCol.Load(), aiCallsRoundsCol.Load()
+	batch, err := s.conn.PrepareBatch(ctx, aiCallsInsertSQL(ext, cached, traced, rounds))
 	if err != nil {
 		return err
 	}
-	if err := batch.Append(aiCallsInsertArgs(c, created, ext, cached, traced)...); err != nil {
+	if err := batch.Append(aiCallsInsertArgs(c, created, ext, cached, traced, rounds)...); err != nil {
 		return err
 	}
 	return batch.Send()
@@ -310,7 +355,7 @@ type ListAICallsParams struct {
 // rağmen: üretim görünümünde açıkça surface=evalset-X istemek boş döner.
 // Kaynak yüzeyden önce gelir — yoksa tek bir süzgeç üretim listesine
 // evalset satırı sızdırırdı.
-func aiCallsListSQL(p ListAICallsParams, cached, traced bool) (string, []any) {
+func aiCallsListSQL(p ListAICallsParams, cached, traced, rounds bool) (string, []any) {
 	var wc whereClause
 	if !p.From.IsZero() {
 		wc.add("created_at >= toDateTime64(?, 9, 'UTC')", chDateTime64Arg(p.From))
@@ -326,7 +371,7 @@ func aiCallsListSQL(p ListAICallsParams, cached, traced bool) (string, []any) {
 	if p.Status != "" {
 		wc.add("status = ?", p.Status)
 	}
-	q := aiCallsRowSelect(cached, traced) + `
+	q := aiCallsRowSelect(cached, traced, rounds) + `
 		FROM ai_calls ` + wc.sql() + `
 		ORDER BY created_at DESC
 		LIMIT ?`
@@ -340,8 +385,8 @@ func (s *Store) ListAICalls(ctx context.Context, p ListAICallsParams) ([]AICall,
 	if p.To.IsZero() {
 		p.To = time.Now().UTC()
 	}
-	cached, traced := aiCallsCachedCol.Load(), aiCallsTraceCol.Load() // v0.10.807; v0.10.1463
-	q, args := aiCallsListSQL(p, cached, traced)
+	cached, traced, rounds := aiCallsCachedCol.Load(), aiCallsTraceCol.Load(), aiCallsRoundsCol.Load() // v0.10.807; v0.10.1463; v0.10.2297
+	q, args := aiCallsListSQL(p, cached, traced, rounds)
 	rows, err := s.conn.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -350,7 +395,7 @@ func (s *Store) ListAICalls(ctx context.Context, p ListAICallsParams) ([]AICall,
 	out := make([]AICall, 0, p.Limit)
 	for rows.Next() {
 		var c AICall
-		if err := rows.Scan(aiCallsRowScan(&c, cached, traced)...); err != nil {
+		if err := rows.Scan(aiCallsRowScan(&c, cached, traced, rounds)...); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -364,12 +409,12 @@ func (s *Store) GetAICall(ctx context.Context, id string) (*AICall, error) {
 	if id == "" {
 		return nil, nil
 	}
-	cached, traced := aiCallsCachedCol.Load(), aiCallsTraceCol.Load() // v0.10.807; v0.10.1463
-	row := s.conn.QueryRow(ctx, aiCallsRowSelect(cached, traced)+`
+	cached, traced, rounds := aiCallsCachedCol.Load(), aiCallsTraceCol.Load(), aiCallsRoundsCol.Load() // v0.10.807; v0.10.1463; v0.10.2297
+	row := s.conn.QueryRow(ctx, aiCallsRowSelect(cached, traced, rounds)+`
 		FROM ai_calls
 		WHERE id = ? LIMIT 1`, id)
 	var c AICall
-	if err := row.Scan(aiCallsRowScan(&c, cached, traced)...); err != nil {
+	if err := row.Scan(aiCallsRowScan(&c, cached, traced, rounds)...); err != nil {
 		if strings.Contains(err.Error(), "no rows") {
 			return nil, nil
 		}

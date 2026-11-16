@@ -43,6 +43,10 @@ type AIExchangeCall struct {
 	Status       string `json:"status"`
 	// LLM — false: model koşmadan yazılan işaret satırı (chat-offtopic …).
 	LLM bool `json:"llm"`
+	// v0.10.2297 — serbest döngü satırının model gidiş-dönüşü sayısı ve en
+	// büyük tek tur giriş token'ı (AICall aynı adlı alanlar); 0 = bilinmiyor.
+	ModelRounds     uint16 `json:"modelRounds,omitempty"`
+	PeakInputTokens uint32 `json:"peakInputTokens,omitempty"`
 }
 
 // AIExchange — bir CoSRE kullanıcı turu.
@@ -322,9 +326,14 @@ func aiExchangeUsersArgs(from, to time.Time, q string, limit int) []any {
 
 // aiExchangeCallsSQL — SAF: verilen köklerin model çağrıları. Üretim kaynak
 // koşulu (evalset ve etkileşim satırları dışarıda). Bind: from, to, roots, limit.
-func aiExchangeCallsSQL() string {
+// v0.10.2297 — rounds: model_rounds + peak_input_tokens yalnız kolonlar varken.
+func aiExchangeCallsSQL(rounds bool) string {
+	cols := ``
+	if rounds {
+		cols = `, model_rounds, peak_input_tokens`
+	}
 	return `SELECT ` + aiExchangeRootExpr + `, id, toUnixTimestamp64Nano(created_at), surface,
-		       provider, model, duration_ms, input_tokens, output_tokens, status
+		       provider, model, duration_ms, input_tokens, output_tokens, status` + cols + `
 		FROM ai_calls
 		WHERE created_at >= toDateTime64(?, 9, 'UTC')
 		  AND created_at <  toDateTime64(?, 9, 'UTC')
@@ -496,15 +505,20 @@ func (s *Store) ListAIExchanges(ctx context.Context, p ListAIExchangesParams) ([
 	}
 	cFrom, cTo := aiExchangeCallWindow(turns)
 	var calls []aiExchangeChild
-	cRows, err := s.conn.Query(ctx, aiExchangeCallsSQL(), chDateTime64Arg(cFrom), chDateTime64Arg(cTo),
+	rounds := aiCallsRoundsCol.Load() // v0.10.2297
+	cRows, err := s.conn.Query(ctx, aiExchangeCallsSQL(rounds), chDateTime64Arg(cFrom), chDateTime64Arg(cTo),
 		roots, len(roots)*aiExchangeCallsPerTurn)
 	if err != nil {
 		return nil, err
 	}
 	for cRows.Next() {
 		var c aiExchangeChild
-		if err := cRows.Scan(&c.Root, &c.Call.ID, &c.Call.CreatedAt, &c.Call.Surface, &c.Call.Provider,
-			&c.Call.Model, &c.Call.DurationMs, &c.Call.InputTokens, &c.Call.OutputTokens, &c.Call.Status); err != nil {
+		dest := []any{&c.Root, &c.Call.ID, &c.Call.CreatedAt, &c.Call.Surface, &c.Call.Provider,
+			&c.Call.Model, &c.Call.DurationMs, &c.Call.InputTokens, &c.Call.OutputTokens, &c.Call.Status}
+		if rounds {
+			dest = append(dest, &c.Call.ModelRounds, &c.Call.PeakInputTokens)
+		}
+		if err := cRows.Scan(dest...); err != nil {
 			cRows.Close()
 			return nil, err
 		}

@@ -236,6 +236,11 @@ type CallRecord struct {
 	// TraceID — v0.10.1463 (CoSRE D1): çağrı anındaki ÖRNEKLENMİŞ
 	// self-telemetri trace'i (callTraceID); '' = örneklenmedi / self-obs kapalı.
 	TraceID string
+	// ModelRounds / PeakInputTokens — v0.10.2297: serbest döngünün tek
+	// satırında model gidiş-dönüşü sayısı ve en büyük tek tur giriş token'ı
+	// (WithLoopUsage); 0 = bilinmiyor.
+	ModelRounds     uint16
+	PeakInputTokens uint32
 }
 
 // metaKey is the unexported type for ctx.WithValue lookups so other

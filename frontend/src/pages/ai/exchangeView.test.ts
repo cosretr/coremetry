@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AIExchange } from '@/lib/types';
 import {
   NO_LLM_LABEL, exchangeCallsSummary, exchangeFeedbackLabel, exchangeModelLabel, exchangeTokensKey,
-  exchangeTierLabel, exchangeTokensLabel, exchangeUsedLLM,
+  exchangeTierLabel, exchangeTokensLabel, exchangeUsedLLM, exchangeLoopRounds, fmtTokenK,
   AI_EXCHANGES_QUERY_FIELDS, aiExchangesQueryKey, aiExchangesRequestParams,
   exchangeConversationHref, exchangeFeedbackCounts, exchangeStatusBadge,
   parseExchangeFeedbackFilter, type AIExchangesQueryParams,
@@ -56,6 +56,29 @@ describe('exchangeView', () => {
     expect(exchangeCallsSummary(ex)).toBe('1 çağrı kaydı (döngü turlarının toplamı)');
     expect(exchangeTokensKey(ex)).toBe('Token (turların toplamı, gir / çık)');
     expect(exchangeTokensKey({ tier: 'intent' })).toBe('Token (gir / çık)');
+  });
+
+  it('v0.10.2297 — döngü satırı tur sayısını bildiriyorsa başlık turu ve en büyük prompt\'u söyler', () => {
+    const ex: AIExchange = {
+      ...base, tier: 'loop', llmCalls: 1, models: ['gemma4'],
+      calls: [
+        { id: '1', createdAt: 1, surface: 'chat', provider: 'openai', model: 'gemma4', durationMs: 1, inputTokens: 92100, outputTokens: 400, status: 'ok', llm: true, modelRounds: 3, peakInputTokens: 34100 },
+      ],
+    };
+    expect(exchangeCallsSummary(ex)).toBe('3 tur · en büyük prompt 34.1K token');
+    expect(exchangeLoopRounds(ex)).toEqual({ rounds: 3, peakInputTokens: 34100 });
+  });
+
+  it('v0.10.2297 — tur bilinmiyorsa (eski satır / 0) v0.10.2295 metni aynen; döngü dışı kademe tur göstermez', () => {
+    const call = { id: '1', createdAt: 1, surface: 'chat', provider: 'openai', model: 'gemma4', durationMs: 1, inputTokens: 90000, outputTokens: 400, status: 'ok', llm: true };
+    const old: AIExchange = { ...base, tier: 'loop', llmCalls: 1, models: ['gemma4'], calls: [call] };
+    expect(exchangeCallsSummary(old)).toBe('1 çağrı kaydı (döngü turlarının toplamı)');
+    expect(exchangeLoopRounds(old)).toBeNull();
+    const zero: AIExchange = { ...old, calls: [{ ...call, modelRounds: 0, peakInputTokens: 0 }] };
+    expect(exchangeCallsSummary(zero)).toBe('1 çağrı kaydı (döngü turlarının toplamı)');
+    const intent: AIExchange = { ...old, tier: 'intent', calls: [{ ...call, modelRounds: 3, peakInputTokens: 34100 }] };
+    expect(exchangeCallsSummary(intent)).toBe('1 model çağrısı');
+    expect(fmtTokenK(950)).toBe('950');
   });
 
   it('kademe + rota etiketi; bilinmeyen kademe adıyla kalır', () => {

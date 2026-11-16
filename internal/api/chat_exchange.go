@@ -154,8 +154,15 @@ func (x *chatExchange) noteModelCall(n copilot.CallNote) {
 	if n.Model != "" {
 		x.model = n.Model
 	}
-	if x.modelCalls < 65535 {
-		x.modelCalls++
+	// v0.10.2297 — serbest döngünün tek notu N gidiş-dönüşü temsil eder.
+	n16 := uint16(1)
+	if n.Rounds > 0 {
+		n16 = n.Rounds
+	}
+	if x.modelCalls > 65535-n16 {
+		x.modelCalls = 65535
+	} else {
+		x.modelCalls += n16
 	}
 	x.inTok += n.InputTokens
 	x.outTok += n.OutputTokens

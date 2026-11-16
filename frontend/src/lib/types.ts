@@ -3134,6 +3134,9 @@ export interface AICall {
   traceId?: string;
   /** v0.10.1470 — yalnız GET /api/ai/calls/{id}: self-obs trace'leri bu Coremetry'de sorgulanabilir mi (uç nokta kendi alıcısı / aynı kurulum). false → trace dış collector'da, link yok. Go: api.aiCallDetail. */
   traceQueryable?: boolean;
+  /** v0.10.2297 — serbest döngü: tur sayısı ve en büyük tek tur giriş token'ı (0/yok = bilinmiyor). Go: chstore.AICall. */
+  modelRounds?: number;
+  peakInputTokens?: number;
 }
 
 export interface AIStats {
@@ -3259,6 +3262,10 @@ export interface AIExchangeCall {
   outputTokens: number;
   status: string;
   llm: boolean;
+  /** v0.10.2297 — serbest döngü satırının model gidiş-dönüşü sayısı (tavan turu ve yeniden deneme dahil); yok/0 = bilinmiyor (eski satır / döngü dışı). */
+  modelRounds?: number;
+  /** v0.10.2297 — en büyük tek tur giriş token'ı; yok/0 = bilinmiyor. */
+  peakInputTokens?: number;
 }
 
 /** v0.10.1153 — /api/ai/exchanges: bir CoSRE kullanıcı turu (LLM'siz

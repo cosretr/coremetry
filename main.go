@@ -2584,6 +2584,9 @@ func (r aiCallRecorder) RecordCall(ctx context.Context, c copilot.CallRecord) {
 		StreamFallback: c.StreamFallback,
 		ShieldHits:     c.ShieldHits,
 		TraceID:        c.TraceID, // v0.10.1463 (D1)
+		// v0.10.2297 — serbest döngü: tur sayısı + en büyük tek prompt (0 = bilinmiyor)
+		ModelRounds:     c.ModelRounds,
+		PeakInputTokens: c.PeakInputTokens,
 	}
 	if err := r.store.InsertAICall(ctx, row); err != nil {
 		log.Printf("[ai-obs] insert call: %v", err)

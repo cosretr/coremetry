@@ -3348,6 +3348,11 @@ func canonicalTables(sd, ld, md int) []string {
 		// örneklenmedi / self-obs kapalı). Kimlik: LowCardinality DEĞİL, ORDER
 		// BY'a girmez; aynı iki-boot sözleşmesi, AYRI probe.
 		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS trace_id String DEFAULT ''`,
+		// v0.10.2297 — serbest döngünün tek satırında model gidiş-dönüşü sayısı
+		// ve en büyük tek tur giriş token'ı. 0 = bilinmiyor (eski satır / döngü
+		// dışı); aynı iki-boot sözleşmesi, AYRI probe (ikisi birden).
+		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS model_rounds UInt16 DEFAULT 0`,
+		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS peak_input_tokens UInt32 DEFAULT 0`,
 
 		// rca_verdicts — kök-neden hakem kararının KALICI kaydı
 		// (v0.9.591). Öncesinde verdict istek başına üretilip
@@ -5257,6 +5262,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.probeAICallsColumns(ctx)
 	s.probeAICallsCachedColumn(ctx)      // v0.10.807
 	s.probeAICallsTraceColumn(ctx)       // v0.10.1463
+	s.probeAICallsRoundsColumns(ctx)     // v0.10.2297
 	s.probeAIFeedbackCallColumns(ctx)    // v0.10.1280
 	s.probeCosreInteractionsColumns(ctx) // v0.10.1280 tool_evidence; v0.10.1302 + toolset
 

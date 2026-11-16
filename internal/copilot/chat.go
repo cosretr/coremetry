@@ -150,8 +150,9 @@ func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, out
 	// v0.10.1280 — kimlik ctx'te sabitlendiyse (WithCallID: döngü cevabı bu
 	// satırdan önce yayınladı ve kimliği taşıdı) o, yoksa taze.
 	callID := callIDFor(ctx)
+	lu := loopUsageFrom(ctx) // v0.10.2297 — serbest döngü: tur sayısı + en büyük prompt (yoksa 0)
 	notifyCallSink(ctx, CallNote{CallID: callID, ExchangeID: meta.ExchangeID, Model: model,
-		InputTokens: inTok, OutputTokens: outTok}) // Faz 1 — cosre_interactions
+		InputTokens: inTok, OutputTokens: outTok, Rounds: lu.Rounds}) // Faz 1 — cosre_interactions
 	if s.recorder == nil {
 		return
 	}
@@ -175,6 +176,9 @@ func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, out
 		PromptSample:   truncForSample(promptSample),
 		ResponseSample: truncForSample(respSample),
 		TraceID:        callTraceID(ctx), // v0.10.1463 (D1)
+		// v0.10.2297 — 0 = bilinmiyor (döngü dışı satır ya da eski kayıt)
+		ModelRounds:     lu.Rounds,
+		PeakInputTokens: lu.PeakInputTokens,
 	}
 	if status == "error" {
 		rec.ErrorMsg = truncErr(errMsg)

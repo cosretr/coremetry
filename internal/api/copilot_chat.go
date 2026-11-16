@@ -981,6 +981,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// mesajları + YÜRÜTÜLEN çağrıların argümanı ve tam çıktısı (chat_trace_followup.go).
 	var fuEvidence strings.Builder
 	var totalIn, totalOut, totalCached uint32 // v0.10.807 — cached: önek önbelleği toplamı
+	var loopRounds loopUsage                  // v0.10.2297 — tur sayısı + en büyük tek prompt (chat_loop_usage.go)
 	var lastErr error
 	var finalText string
 	// v0.9.1181 (Faz 4.3) — ⚙ çipi ile onun "veriyi göster" bloğunu eşleyen
@@ -1256,6 +1257,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			rt, _, rerr := s.loopTurn(rctx, prompt, stepInput{Kind: stepDegenRetry, Conv: conv, Specs: specs, Role: role}, emit)
 			endR(rt.InputTokens, rt.OutputTokens, rt.CachedTokens, rerr)
 			totalIn += rt.InputTokens
+			loopRounds.add(rt.InputTokens)
 			totalCached += rt.CachedTokens
 			totalOut += rt.OutputTokens
 			if rerr == nil {
@@ -1317,6 +1319,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			emit("step", map[string]string{"label": "tool çağrısı metinden ayrıştırıldı (sunucu parser yok)"})
 		}
 		totalIn += turn.InputTokens
+		loopRounds.add(turn.InputTokens)
 		totalCached += turn.CachedTokens
 		totalOut += turn.OutputTokens
 		// v0.10.26 — BAĞLAM TAŞMASI. isContextOverflowErr yazılı ve
@@ -1712,6 +1715,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				evm.OnTurn(-1, turn2, err2) // v0.10.1316 — tavan turu
 			}
 			totalIn += turn2.InputTokens
+			loopRounds.add(turn2.InputTokens)
 			totalCached += turn2.CachedTokens
 			totalOut += turn2.OutputTokens
 			if err2 != nil {
@@ -1784,7 +1788,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// eklenir (explain yolunun sözleşmesi); okunmadıysa bayt bayt eski örnek.
 	// v0.10.2134 (router boşlukları D1) — ön-getirme / rota planı tohumlu döngü
 	// "chat-prefetch" yazar (boşluk sayılmaz); profil sabit, yalnız etiket.
-	s.copilot.RecordUsage(copilot.WithCallID(s.loopRecordCtx(ctx, opPre != nil || rtPlan != nil), loopCallID), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
+	s.copilot.RecordUsage(copilot.WithLoopUsage(copilot.WithCallID(s.loopRecordCtx(ctx, opPre != nil || rtPlan != nil), loopCallID), loopRounds.usage()), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
 
 	if exitReason == stopNone {
 		exitReason = stopRoundCap // savunma: döngü break'siz yalnız turlar bitince biter

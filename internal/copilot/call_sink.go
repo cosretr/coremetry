@@ -30,6 +30,9 @@ type CallNote struct {
 	Model        string
 	InputTokens  uint32
 	OutputTokens uint32
+	// Rounds — v0.10.2297: bu notun temsil ettiği model gidiş-dönüşü sayısı
+	// (serbest döngünün tek satırı N tur). 0 = tek çağrı.
+	Rounds uint16
 }
 
 // CallSink — bir model çağrısı bittiğinde çağrılır (başarılı ya da değil).

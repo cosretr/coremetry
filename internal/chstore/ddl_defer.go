@@ -155,6 +155,9 @@ func (s *Store) reprobePromotedAttrs() {
 		if !AICallsTraceCol() { // v0.10.1463
 			s.probeAICallsTraceColumn(ctx)
 		}
+		if !AICallsRoundsCol() { // v0.10.2297
+			s.probeAICallsRoundsColumns(ctx)
+		}
 		if !AIFeedbackCallCols() { // v0.10.1280
 			s.probeAIFeedbackCallColumns(ctx)
 		}
