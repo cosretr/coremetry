@@ -2943,8 +2943,10 @@ export interface InboxItem {
 export type StdConfidenceLevel = 'high' | 'medium' | 'low';
 /** pass | fail | unknown | na | context | flag */
 export type SignalGateStatus = 'pass' | 'fail' | 'unknown' | 'na' | 'context' | 'flag';
-export interface SignalGate { id: string; name: string; status: SignalGateStatus; note?: string }
-export interface StdMeasure { text: string; value: number; normal: number; unit?: string; ratio?: number }
+// v0.10.2299 (sunucu metinleri S2) — Türkçe metnin YANINDAKİ anahtar + ham argümanlar (Go chstore.StdMsg).
+export interface StdMsg { k: string; a?: Record<string, string | number | boolean> }
+export interface SignalGate { id: string; name: string; status: SignalGateStatus; note?: string; noteMsg?: StdMsg }
+export interface StdMeasure { text: string; value: number; normal: number; unit?: string; ratio?: number; msg?: StdMsg }
 export interface StdImpact {
   primary: StdMeasure;
   failedPerMin?: number;
@@ -2956,19 +2958,22 @@ export interface StdSince {
   startedAt: number; lastSeen?: number; durationSec: number; ongoing: boolean; episode?: number;
 }
 /** vm | span | db_mv | probe | exception | oracle | self | external | rule */
-export interface StdEvidence { sentence: string; source: string; sampled: boolean }
+export interface StdEvidence { sentence: string; source: string; sampled: boolean; msg?: StdMsg }
 export interface ProblemStandard {
   family: string;
   kind: string;
   subject: string;
   operation?: string;
   headline: string;
+  headlineMsg?: StdMsg;
   impact: StdImpact;
   since: StdSince;
   evidence: StdEvidence;
   confidence: { level: StdConfidenceLevel; gates: SignalGate[] };
-  nextStep: { text: string; href?: string };
+  nextStep: { text: string; href?: string; msg?: StdMsg };
   context?: string[];
+  /** Context ile aynı sıra / uzunluk. */
+  contextMsgs?: StdMsg[];
 }
 
 // Role hierarchy used everywhere. `editor` was introduced for the

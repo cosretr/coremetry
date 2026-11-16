@@ -1308,7 +1308,9 @@ func inboxListKey(status, service, search, ownerTeam, sreTeam, team, env string,
 	// anahtara girer, sürüm eski girdiyi yeni sözleşmeymiş gibi sunmasın.
 	// :v12: — v0.10.2122 (Problems sadeleştirme S2) öncelik sırasının eşitlik
 	// kırıcısı en eski önce oldu ve gövdeye oldestFirstSeen eklendi (:v6: emsali).
-	return fmt.Sprintf("inbox:v12:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
+	// :v13: — v0.10.2299 (sunucu metinleri S2) std gövdesine metin anahtarları
+	// eklendi (headlineMsg, msg, noteMsg, contextMsgs); dil anahtara GİRMEZ.
+	return fmt.Sprintf("inbox:v13:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
 		status, service, search, ownerTeam, sreTeam, chstore.NormTeamName(team), env, limit, sortID, sortDir, minOcc,
 		strings.Join(sortedCopyOf(kinds), "+"), strings.Join(sortedCopyOf(prios), "+"), subject)
 }

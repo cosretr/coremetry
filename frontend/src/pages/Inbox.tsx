@@ -51,7 +51,9 @@ import { useVerdictRowContext } from '@/components/useVerdictRowContext'; // v0.
 import { NoiseReasonButton, type NoiseReasonChoice } from '@/components/NoiseReasonButton'; // v0.10.1531 — toplu triyaj
 import {
   splitStdHeadline, stdSourceChip, stdSourceName, stdSamplingNote, stdSinceLine, stdDurationLine,
-} from '@/lib/problemStandardView'; // v0.10.1529 — Problem standardı R2
+  stdHeadlineView, stdEvidenceView,
+} from '@/lib/problemStandardView'; // v0.10.1529 — Problem standardı R2; v0.10.2299 EN anahtardan
+import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2299 — çizilemeyen sunucu metni (EN)
 import { verdictOf, countNoise, filterByVerdictView, parseVerdictView, inboxVerdictSubject, type VerdictView } from '@/lib/problemVerdict';
 import { rowPassesKindFacet } from '@/lib/inboxBuckets'; // v0.10.1803 — Oracle P1 problem kovasında
 
@@ -1163,16 +1165,18 @@ export default function InboxPage() {
                         3. satır bağlam + takım çipleri + yayılım. std yoksa
                         v0.10.1084 biçimi aynen. */}
                     {(() => {
-                      const head = it.std ? splitStdHeadline(it.std) : null;
-                      const titleText = it.std ? it.std.headline : inboxRowHeadline(it);
+                      const head = it.std ? splitStdHeadline(it.std, lang) : null;
+                      const headV = it.std ? stdHeadlineView(it.std, lang) : null;
+                      const evV = it.std ? stdEvidenceView(it.std, lang) : null;
+                      const titleText = headV ? headV.text : inboxRowHeadline(it);
                       const titleInner = head
-                        ? <>{head.subject && <><span className="std-subject">{head.subject}</span> · </>}{head.rest}</>
+                        ? <>{head.subject && <><span className="std-subject">{head.subject}</span> · </>}{headV?.orig ? <OrigLang>{head.rest}</OrigLang> : head.rest}</>
                         : titleText;
                       const detail = it.std
                         ? <><span className="std-src" title={tf('inbox.srcTitle', lang, { name: stdSourceName(it.std.evidence.source, lang), note: stdSamplingNote(it.std, lang) })}>{stdSourceChip(it.std, lang)}</span>
                             {ora ? oracleInboxDetail(it.exception!.message, oraLabel)
                               : isExcFamily(it) ? <span className="mono">{it.exception?.message}</span>
-                                : it.std.evidence.sentence}</>
+                                : evV?.orig ? <OrigLang>{evV.text}</OrigLang> : evV?.text}</>
                         : ora ? oracleInboxDetail(it.exception!.message, oraLabel) : <DetailLine it={it} />;
                       return (
                         <TriageTitleCell
@@ -1185,7 +1189,7 @@ export default function InboxPage() {
                             {it.problem && <GraphFrequentChip row={graphSum.data?.rows?.[it.problem.id]} />}</>}
                           detail={detail}
                           detailMono={!it.std && isExcFamily(it)}
-                          detailTitle={isExcFamily(it) ? it.exception?.message : (it.std?.evidence.sentence ?? inboxRowLabel(it) ?? undefined)}
+                          detailTitle={isExcFamily(it) ? it.exception?.message : (evV?.text ?? inboxRowLabel(it) ?? undefined)}
                           ai={it.aiSummary ? stripMarkdown(it.aiSummary) : undefined}
                           aiAge={it.aiSummaryAt ? fmtAgoNs(it.aiSummaryAt) : undefined} />
                       );

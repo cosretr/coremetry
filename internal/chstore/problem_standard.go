@@ -100,7 +100,11 @@ type ProblemStandard struct {
 	Confidence StdConfidence `json:"confidence"`
 	NextStep   StdNextStep   `json:"nextStep"`
 	Context    []string      `json:"context,omitempty"`
-	Notify     StdNotify     `json:"notify"`
+	// v0.10.2299 (S2) — metin anahtarları: Türkçe alanların YANINDA (ek alan;
+	// TR metin aynen). ContextMsgs, Context ile aynı sıra ve uzunlukta.
+	HeadlineMsg *StdMsg   `json:"headlineMsg,omitempty"`
+	ContextMsgs []StdMsg  `json:"contextMsgs,omitempty"`
+	Notify      StdNotify `json:"notify"`
 }
 
 // StdMeasure — birincil etki ölçüsü.
@@ -110,6 +114,7 @@ type StdMeasure struct {
 	Normal float64 `json:"normal"`
 	Unit   string  `json:"unit,omitempty"`
 	Ratio  float64 `json:"ratio,omitempty"` // değer / normal (aşağı yönlü kuralda ters çevrilmiş); 0 = bilinmiyor
+	Msg    *StdMsg `json:"msg,omitempty"`   // v0.10.2299 — Text'in anahtarı
 }
 
 // StdFloorMeasures — etki tabanı (D6) ölçüleri. nil = ölçülmedi (bilinmiyor
@@ -143,9 +148,10 @@ type StdSince struct {
 
 // StdEvidence — neden.
 type StdEvidence struct {
-	Sentence string `json:"sentence"`
-	Source   string `json:"source"`
-	Sampled  bool   `json:"sampled"`
+	Sentence string  `json:"sentence"`
+	Msg      *StdMsg `json:"msg,omitempty"` // v0.10.2299 — Sentence'ın anahtarı
+	Source   string  `json:"source"`
+	Sampled  bool    `json:"sampled"`
 }
 
 // StdConfidence — güven; YALNIZ kapılardan (signal_gates.go).
@@ -156,8 +162,9 @@ type StdConfidence struct {
 
 // StdNextStep — sonraki adım.
 type StdNextStep struct {
-	Text string `json:"text"`
-	Href string `json:"href,omitempty"`
+	Text string  `json:"text"`
+	Href string  `json:"href,omitempty"`
+	Msg  *StdMsg `json:"msg,omitempty"` // v0.10.2299 — Text'in anahtarı
 }
 
 // StdNotify — NotifiableAt sonucu (Standardize* doldurmaz).
@@ -486,9 +493,11 @@ func StandardizeProblem(p Problem, f StdFacts) ProblemStandard {
 		Operation: k.operation,
 	}
 	std.Impact = problemImpact(p, k, f, ratio)
-	std.Headline = clipHeadline(problemHeadline(p, k, std.Impact))
+	head, hm := problemHeadline(p, k, std.Impact)
+	std.Headline, std.HeadlineMsg = clipHeadline(head), hm
 	std.Since = problemSince(p, f, now)
-	std.Evidence = StdEvidence{Sentence: problemEvidenceSentence(p, k, src, hold), Source: src, Sampled: stdSampled(src)}
+	sent, sm := problemEvidenceSentence(p, k, src, hold)
+	std.Evidence = StdEvidence{Sentence: sent, Source: src, Sampled: stdSampled(src), Msg: sm}
 	gin := GateInput{
 		Family:           k.family,
 		Traffic:          k.traffic,
@@ -512,7 +521,7 @@ func StandardizeProblem(p Problem, f StdFacts) ProblemStandard {
 		ImpactUnverified: k.family == StdFamilyRuntime && !std.Impact.Known,
 	}), Gates: gates}
 	std.NextStep = problemNextStep(p, k)
-	std.Context = stdContext(f, p.EpisodeCount)
+	std.Context, std.ContextMsgs = stdContext(f, p.EpisodeCount)
 	return std
 }
 
@@ -540,7 +549,7 @@ func problemImpact(p Problem, k stdKindInfo, f StdFacts, ratio float64) StdImpac
 	switch k.kind {
 	case "anomaly.error_rate", "anomaly.error_rate.ramp":
 		im.Primary = StdMeasure{Text: "hata oranı " + trPct(p.Value) + " (normal " + trPct(p.Threshold) + ")",
-			Value: p.Value, Normal: p.Threshold, Unit: "%", Ratio: r}
+			Value: p.Value, Normal: p.Threshold, Unit: "%", Ratio: r, Msg: stdM("imp.err", "vPct", p.Value, "nPct", p.Threshold)}
 		im.Known = true
 		im.Floor.ErrorPct = f64(p.Value)
 		if m := rampDescRe.FindStringSubmatch(p.Description); m != nil {
@@ -551,14 +560,14 @@ func problemImpact(p Problem, k stdKindInfo, f StdFacts, ratio float64) StdImpac
 		}
 	case "anomaly.p99_ms":
 		im.Primary = StdMeasure{Text: "p99 " + trMs(p.Value) + " (normal " + trMs(p.Threshold) + ")",
-			Value: p.Value, Normal: p.Threshold, Unit: "ms", Ratio: r}
+			Value: p.Value, Normal: p.Threshold, Unit: "ms", Ratio: r, Msg: stdM("imp.p99", "vMs", p.Value, "nMs", p.Threshold)}
 		im.Known = true
 		if p.Threshold > 0 {
 			im.Floor.P99DeltaMs = f64(p.Value - p.Threshold)
 		}
 	case "anomaly.request_rate":
 		im.Primary = StdMeasure{Text: "trafik " + trNum(p.Value) + "/sn (normal " + trNum(p.Threshold) + "/sn)",
-			Value: p.Value, Normal: p.Threshold, Unit: "/sn", Ratio: r}
+			Value: p.Value, Normal: p.Threshold, Unit: "/sn", Ratio: r, Msg: stdM("imp.rate", "vNum", p.Value, "nNum", p.Threshold)}
 		im.Known = true
 		if p.Threshold > 0 && p.Value < p.Threshold {
 			im.Floor.DropPct = f64((1 - p.Value/p.Threshold) * 100)
@@ -566,56 +575,57 @@ func problemImpact(p Problem, k stdKindInfo, f StdFacts, ratio float64) StdImpac
 		}
 	case "svc_slowdown", "svc_slowdown.collapse":
 		im.Primary = StdMeasure{Text: "p99 " + trMs(p.Value) + " (taban " + trMs(p.Threshold) + ")",
-			Value: p.Value, Normal: p.Threshold, Unit: "ms", Ratio: r}
+			Value: p.Value, Normal: p.Threshold, Unit: "ms", Ratio: r, Msg: stdM("imp.p99Base", "vMs", p.Value, "nMs", p.Threshold)}
 		im.Known = true
 		if p.Threshold > 0 {
 			im.Floor.P99DeltaMs = f64(p.Value - p.Threshold)
 		}
 	case "runtime.gc":
 		if f.SameServiceErrOrP99Open {
-			im.Primary = StdMeasure{Text: "aynı serviste açık hata/gecikme problemi var", Value: p.Value, Normal: p.Threshold, Unit: k.unit, Ratio: r}
+			im.Primary = StdMeasure{Text: "aynı serviste açık hata/gecikme problemi var", Value: p.Value, Normal: p.Threshold, Unit: k.unit, Ratio: r, Msg: stdM("imp.gcOpen")}
 			im.Known = true
 		} else {
-			im.Primary = StdMeasure{Text: StdImpactUnverified, Value: p.Value, Normal: p.Threshold, Unit: k.unit, Ratio: r}
+			im.Primary = StdMeasure{Text: StdImpactUnverified, Value: p.Value, Normal: p.Threshold, Unit: k.unit, Ratio: r, Msg: stdM("imp.unverified")}
 		}
 	case "monitor":
-		im.Primary = StdMeasure{Text: "sentetik kontrol erişemiyor", Value: p.Value, Normal: p.Threshold, Ratio: r}
+		im.Primary = StdMeasure{Text: "sentetik kontrol erişemiyor", Value: p.Value, Normal: p.Threshold, Ratio: r, Msg: stdM("imp.monitor")}
 		im.Known = true
 	case "exception_storm", "exception_shared":
-		im.Primary = StdMeasure{Text: trNum(p.Value) + " serviste aynı anda", Value: p.Value, Normal: p.Threshold, Ratio: r}
+		im.Primary = StdMeasure{Text: trNum(p.Value) + " serviste aynı anda", Value: p.Value, Normal: p.Threshold, Ratio: r, Msg: stdM("imp.services", "cNum", p.Value)}
 		im.Known = true
 	case "exception_group", "exception_group.http", "exception_group.oracle":
 		// Sentetik Problem (notify exceptionGroupProblem): "<tip> — N occurrence · …".
-		im.Primary = StdMeasure{Text: "hata grubu"}
+		im.Primary = StdMeasure{Text: "hata grubu", Msg: stdM("imp.group")}
 		if m := exOccurDescRe.FindStringSubmatch(p.Description); m != nil {
 			if n, err := strconv.ParseFloat(m[1], 64); err == nil {
-				im.Primary = StdMeasure{Text: trNum(n) + " oluşum", Value: n}
+				im.Primary = StdMeasure{Text: trNum(n) + " oluşum", Value: n, Msg: stdM("imp.occur", "cNum", n)}
 			}
 		}
 		im.Known = true
 	case "exception_fatal":
-		im.Primary = StdMeasure{Text: trNum(p.Value) + " oluşum", Value: p.Value, Normal: p.Threshold}
+		im.Primary = StdMeasure{Text: trNum(p.Value) + " oluşum", Value: p.Value, Normal: p.Threshold, Msg: stdM("imp.occur", "cNum", p.Value)}
 		im.Known = true
 	case "anomaly_cluster", "anomaly_cluster.ext":
-		im.Primary = StdMeasure{Text: trNum(p.Value) + " sinyal birlikte", Value: p.Value, Normal: p.Threshold, Ratio: r}
+		im.Primary = StdMeasure{Text: trNum(p.Value) + " sinyal birlikte", Value: p.Value, Normal: p.Threshold, Ratio: r, Msg: stdM("imp.signals", "cNum", p.Value)}
 		im.Known = true
 	case "incident":
-		im.Primary = StdMeasure{Text: "olay ilan edildi"}
+		im.Primary = StdMeasure{Text: "olay ilan edildi", Msg: stdM("imp.incident")}
 		if f.IncidentProblems > 0 {
 			im.Primary.Text = strconv.Itoa(f.IncidentProblems) + " bağlı problem"
+			im.Primary.Msg = stdM("imp.linked", "cNum", float64(f.IncidentProblems))
 		}
 		im.Known = true
 	case "self":
-		im.Primary = StdMeasure{Text: "Coremetry iç sağlığı", Value: p.Value, Normal: p.Threshold}
+		im.Primary = StdMeasure{Text: "Coremetry iç sağlığı", Value: p.Value, Normal: p.Threshold, Msg: stdM("imp.self")}
 		im.Known = true
 	case "db_health":
 		switch p.Metric {
 		case DBHealthMetricErrorPct:
-			im.Primary = StdMeasure{Text: "hata oranı " + trPct(p.Value) + " (eşik " + trPct(p.Threshold) + ")", Value: p.Value, Normal: p.Threshold, Unit: "%", Ratio: r}
+			im.Primary = StdMeasure{Text: "hata oranı " + trPct(p.Value) + " (eşik " + trPct(p.Threshold) + ")", Value: p.Value, Normal: p.Threshold, Unit: "%", Ratio: r, Msg: stdM("imp.dbErr", "vPct", p.Value, "tPct", p.Threshold)}
 		case DBHealthMetricP99Ms:
-			im.Primary = StdMeasure{Text: "p99 " + trMs(p.Value) + " (eşik " + trMs(p.Threshold) + ")", Value: p.Value, Normal: p.Threshold, Unit: "ms", Ratio: r}
+			im.Primary = StdMeasure{Text: "p99 " + trMs(p.Value) + " (eşik " + trMs(p.Threshold) + ")", Value: p.Value, Normal: p.Threshold, Unit: "ms", Ratio: r, Msg: stdM("imp.dbP99", "vMs", p.Value, "tMs", p.Threshold)}
 		default:
-			im.Primary = StdMeasure{Text: trNum(p.Value) + " hata / 5 dk (eşik " + trNum(p.Threshold) + ")", Value: p.Value, Normal: p.Threshold, Ratio: r}
+			im.Primary = StdMeasure{Text: trNum(p.Value) + " hata / 5 dk (eşik " + trNum(p.Threshold) + ")", Value: p.Value, Normal: p.Threshold, Ratio: r, Msg: stdM("imp.dbCount", "vNum", p.Value, "tNum", p.Threshold)}
 		}
 		im.Known = true
 	default:
@@ -624,7 +634,7 @@ func problemImpact(p Problem, k stdKindInfo, f StdFacts, ratio float64) StdImpac
 			unit = guessRuleUnit(p.Metric)
 		}
 		im.Primary = StdMeasure{Text: "değer " + trUnit(p.Value, unit) + " (eşik " + trUnit(p.Threshold, unit) + ")",
-			Value: p.Value, Normal: p.Threshold, Unit: unit, Ratio: r}
+			Value: p.Value, Normal: p.Threshold, Unit: unit, Ratio: r, Msg: ruleValueMsg(p.Value, p.Threshold, unit)}
 		im.Known = p.Threshold != 0 || p.Value != 0
 	}
 	if t := f.Traffic; t != nil && k.traffic {
@@ -678,101 +688,104 @@ func MLPromotedHeadline(p Problem) (string, bool) {
 }
 
 // problemHeadline — SAF: Türkçe manşet (tavan uygulanmadan).
-func problemHeadline(p Problem, k stdKindInfo, im StdImpact) string {
+// v0.10.2299 — ikinci dönüş metnin anahtarı (nil = serbest metin: ML özeti, olay adı).
+func problemHeadline(p Problem, k stdKindInfo, im StdImpact) (string, *StdMsg) {
 	sp := subjectPrefix(k.subject)
 	switch k.kind {
 	case "anomaly.error_rate.ramp":
-		return sp + "teknik hata (5xx) sürekli artıyor — " + trPct(p.Value) + ", normal " + trPct(p.Threshold)
+		return sp + "teknik hata (5xx) sürekli artıyor — " + trPct(p.Value) + ", normal " + trPct(p.Threshold), stdM("h.errRamp", "sp", sp, "vPct", p.Value, "nPct", p.Threshold)
 	case "anomaly.error_rate":
 		if isDown(p) {
-			return sp + "hata oranı düştü — " + trPct(p.Value) + ", normal " + trPct(p.Threshold)
+			return sp + "hata oranı düştü — " + trPct(p.Value) + ", normal " + trPct(p.Threshold), stdM("h.errDown", "sp", sp, "vPct", p.Value, "nPct", p.Threshold)
 		}
-		return sp + "hata oranı arttı — " + trPct(p.Value) + ", normal " + trPct(p.Threshold)
+		return sp + "hata oranı arttı — " + trPct(p.Value) + ", normal " + trPct(p.Threshold), stdM("h.errUp", "sp", sp, "vPct", p.Value, "nPct", p.Threshold)
 	case "anomaly.p99_ms":
 		if isDown(p) {
-			return sp + "yanıt süresi kısaldı — p99 " + trMs(p.Value) + ", normal " + trMs(p.Threshold)
+			return sp + "yanıt süresi kısaldı — p99 " + trMs(p.Value) + ", normal " + trMs(p.Threshold), stdM("h.p99Down", "sp", sp, "vMs", p.Value, "nMs", p.Threshold)
 		}
-		return sp + "yanıt süresi uzadı — p99 " + trMs(p.Value) + ", normal " + trMs(p.Threshold)
+		return sp + "yanıt süresi uzadı — p99 " + trMs(p.Value) + ", normal " + trMs(p.Threshold), stdM("h.p99Up", "sp", sp, "vMs", p.Value, "nMs", p.Threshold)
 	case "anomaly.request_rate":
 		if isDown(p) || (p.Threshold > 0 && p.Value < p.Threshold) {
 			if im.Floor.DropPct != nil {
-				return sp + "trafik düştü — %" + trNum(*im.Floor.DropPct) + " azaldı (" + trNum(p.Value) + "/sn)"
+				return sp + "trafik düştü — %" + trNum(*im.Floor.DropPct) + " azaldı (" + trNum(p.Value) + "/sn)", stdM("h.rateDropPct", "sp", sp, "dPct", *im.Floor.DropPct, "vNum", p.Value)
 			}
-			return sp + "trafik düştü — " + trNum(p.Value) + "/sn, normal " + trNum(p.Threshold) + "/sn"
+			return sp + "trafik düştü — " + trNum(p.Value) + "/sn, normal " + trNum(p.Threshold) + "/sn", stdM("h.rateDrop", "sp", sp, "vNum", p.Value, "nNum", p.Threshold)
 		}
-		return sp + "trafik arttı — " + trNum(p.Value) + "/sn, normal " + trNum(p.Threshold) + "/sn"
+		return sp + "trafik arttı — " + trNum(p.Value) + "/sn, normal " + trNum(p.Threshold) + "/sn", stdM("h.rateUp", "sp", sp, "vNum", p.Value, "nNum", p.Threshold)
 	case "anomaly.service_silent":
-		return sp + "servis sustu — son kovalarda hiç istek yok"
+		return sp + "servis sustu — son kovalarda hiç istek yok", stdM("h.silent", "sp", sp)
 	case "anomaly.other", "anomaly_auto":
 		// v0.10.1875 — ML olayının terfi kopyası: manşet (bildirim konusu)
 		// kartın tek satır özetidir (ml.ExplainSummary — liste/detay/CoSRE ile
 		// AYNI cümle; özet servis adıyla başlar, önek eklenmez). Yeni metin
 		// üretici yok: evaluator açıklamaya özeti koyar.
 		if h, ok := MLPromotedHeadline(p); ok {
-			return h
+			return h, nil
 		}
 		r := stdBreachRatio(p)
+		ml, mv := metricLabelArgs(p.Metric)
 		if r > 0 && !math.IsInf(r, 1) {
-			return sp + metricLabelTR(p.Metric) + " olağandışı — normalin " + trRatio(r)
+			return sp + metricLabelTR(p.Metric) + " olağandışı — normalin " + trRatio(r), stdM("h.unusualX", "sp", sp, ml, mv, "rX", r)
 		}
-		return sp + metricLabelTR(p.Metric) + " olağandışı"
+		return sp + metricLabelTR(p.Metric) + " olağandışı", stdM("h.unusual", "sp", sp, ml, mv)
 	case "anomaly.ext":
-		return sp + "dış kaynak " + metricLabelTR(p.Metric) + " arttı — " + trNum(p.Value) + ", normal " + trNum(p.Threshold)
+		ml, mv := metricLabelArgs(p.Metric)
+		return sp + "dış kaynak " + metricLabelTR(p.Metric) + " arttı — " + trNum(p.Value) + ", normal " + trNum(p.Threshold), stdM("h.ext", "sp", sp, ml, mv, "vNum", p.Value, "nNum", p.Threshold)
 	case "anomaly.ext_down":
-		return sp + "dış kaynak erişilemiyor — ardışık sorgu hatası"
+		return sp + "dış kaynak erişilemiyor — ardışık sorgu hatası", stdM("h.extDown", "sp", sp)
 	case "anomaly.ext_cap":
-		return sp + "dış kaynakta çok sayıda eşzamanlı anomali (özet)"
+		return sp + "dış kaynakta çok sayıda eşzamanlı anomali (özet)", stdM("h.extCap", "sp", sp)
 	case "anomaly_cluster.ext":
-		return sp + "dış kaynakta yayılan anomali — " + trNum(p.Value) + " sinyal"
+		return sp + "dış kaynakta yayılan anomali — " + trNum(p.Value) + " sinyal", stdM("h.extCluster", "sp", sp, "cNum", p.Value)
 	case "anomaly_cluster":
-		return sp + "yayılan sorun — " + trNum(p.Value) + " sinyal birlikte"
+		return sp + "yayılan sorun — " + trNum(p.Value) + " sinyal birlikte", stdM("h.cluster", "sp", sp, "cNum", p.Value)
 	case "svc_slowdown":
-		return sp + "yaygın yavaşlama — p99 " + trMs(p.Value) + ", taban " + trMs(p.Threshold)
+		return sp + "yaygın yavaşlama — p99 " + trMs(p.Value) + ", taban " + trMs(p.Threshold), stdM("h.slowdown", "sp", sp, "vMs", p.Value, "nMs", p.Threshold)
 	case "svc_slowdown.collapse":
-		return sp + "trafik çöktü ve yavaşladı — p99 " + trMs(p.Value)
+		return sp + "trafik çöktü ve yavaşladı — p99 " + trMs(p.Value), stdM("h.collapse", "sp", sp, "vMs", p.Value)
 	case "db_health":
 		switch p.Metric {
 		case DBHealthMetricErrorPct:
-			return sp + "veritabanı hata oranı yüksek — " + trPct(p.Value)
+			return sp + "veritabanı hata oranı yüksek — " + trPct(p.Value), stdM("h.dbErr", "sp", sp, "vPct", p.Value)
 		case DBHealthMetricP99Ms:
-			return sp + "veritabanı yanıt süresi uzadı — p99 " + trMs(p.Value)
+			return sp + "veritabanı yanıt süresi uzadı — p99 " + trMs(p.Value), stdM("h.dbP99", "sp", sp, "vMs", p.Value)
 		}
-		return sp + "veritabanı hataları arttı — 5 dk'da " + trNum(p.Value) + " hata"
+		return sp + "veritabanı hataları arttı — 5 dk'da " + trNum(p.Value) + " hata", stdM("h.dbCount", "sp", sp, "cNum", p.Value)
 	case "db_capacity":
-		return sp + "kapasite " + trPct(p.Value) + " dolu (eşik " + trPct(p.Threshold) + ")"
+		return sp + "kapasite " + trPct(p.Value) + " dolu (eşik " + trPct(p.Threshold) + ")", stdM("h.dbCap", "sp", sp, "vPct", p.Value, "tPct", p.Threshold)
 	case "db_slow_stmt":
-		return sp + "yavaş SQL ifadesi — p95 " + trMs(p.Value)
+		return sp + "yavaş SQL ifadesi — p95 " + trMs(p.Value), stdM("h.slowStmt", "sp", sp, "vMs", p.Value)
 	case "runtime.gc":
 		if p.Metric == "runtime.jvm_gc" {
-			return sp + "JVM GC duraklaması uzun — ort. " + trMs(p.Value)
+			return sp + "JVM GC duraklaması uzun — ort. " + trMs(p.Value), stdM("h.gcPause", "sp", sp, "vMs", p.Value)
 		}
-		return sp + "JVM zamanının " + trPct(p.Value) + "'i GC'de"
+		return sp + "JVM zamanının " + trPct(p.Value) + "'i GC'de", stdM("h.gcPct", "sp", sp, "vPct", p.Value)
 	case "monitor":
 		name := strings.TrimPrefix(p.RuleName, "Monitor: ")
 		if name == "" {
 			name = p.Service
 		}
-		return subjectPrefix(name) + "sentetik kontrol başarısız"
+		return subjectPrefix(name) + "sentetik kontrol başarısız", stdM("h.monitor", "sp", subjectPrefix(name))
 	case "self":
-		return "Coremetry: " + selfHeadlineTR(p.RuleID)
+		return "Coremetry: " + selfHeadlineTR(p.RuleID), stdM(selfHeadlineKey(p.RuleID))
 	case "exception_storm":
-		return "Exception fırtınası — " + trNum(p.Value) + " serviste yeni hata"
+		return "Exception fırtınası — " + trNum(p.Value) + " serviste yeni hata", stdM("h.storm", "cNum", p.Value)
 	case "exception_shared":
-		return sp + "paylaşılan bağımlılık hatası — " + trNum(p.Value) + " serviste aynı anda"
+		return sp + "paylaşılan bağımlılık hatası — " + trNum(p.Value) + " serviste aynı anda", stdM("h.shared", "sp", sp, "cNum", p.Value)
 	case "exception_fatal":
-		return sp + "ölümcül altyapı hatası"
+		return sp + "ölümcül altyapı hatası", stdM("h.fatal", "sp", sp)
 	case "exception_group", "exception_group.http", "exception_group.oracle":
-		return sp + exceptionGroupLabel(k.kind, p.RuleName)
+		return sp + exceptionGroupLabel(k.kind, p.RuleName), exceptionGroupMsg(sp, k.kind, p.RuleName)
 	case "incident":
-		return "Olay: " + strings.TrimSpace(strings.TrimPrefix(p.RuleName, "Incident · "))
+		return "Olay: " + strings.TrimSpace(strings.TrimPrefix(p.RuleName, "Incident · ")), nil // olay adı serbest metin
 	case "slo":
-		return sp + "SLO hata bütçesi hızla tükeniyor — " + trRatio(stdBreachRatio(p))
+		return sp + "SLO hata bütçesi hızla tükeniyor — " + trRatio(stdBreachRatio(p)), stdM("h.slo", "sp", sp, "rX", stdBreachRatio(p))
 	}
 	name := strings.TrimSpace(p.RuleName)
 	if name == "" {
 		name = p.RuleID
 	}
-	return sp + "kural ihlali — " + name
+	return sp + "kural ihlali — " + name, stdM("h.rule", "sp", sp, "name", name)
 }
 
 // exceptionGroupLabel — SAF: sentetik exception Problem'inin adından
@@ -834,13 +847,17 @@ func selfHeadlineTR(ruleID string) string {
 }
 
 // problemEvidenceSentence — SAF: kısa Türkçe kanıt cümlesi.
-func problemEvidenceSentence(p Problem, k stdKindInfo, src string, hold bool) string {
+// v0.10.2299 — ikinci dönüş anahtar: "baseK" (dwell) + "srcK" (kaynak).
+func problemEvidenceSentence(p Problem, k stdKindInfo, src string, hold bool) (string, *StdMsg) {
 	var s string
+	baseK, srcK := "ev.base.rule", "ev.src.none"
 	switch k.dwell {
 	case "pass":
 		s = "Dedektör sürdürme koşulunu geçti"
+		baseK = "ev.base.dwell"
 	case "na":
 		s = "Tek ölçümde eşik aşıldı"
+		baseK = "ev.base.single"
 	default:
 		s = "Kural eşiği aşıldı"
 	}
@@ -848,25 +865,34 @@ func problemEvidenceSentence(p Problem, k stdKindInfo, src string, hold bool) st
 	case StdSourceVM:
 		if hold {
 			s += "; VictoriaMetrics bu turda karar vermedi"
+			srcK = "ev.src.vmHold"
 		} else {
 			s += "; ölçü VictoriaMetrics'ten (örneklenmemiş)"
+			srcK = "ev.src.vm"
 		}
 	case StdSourceSpan:
 		s += "; ölçü span'lerden (örneklenmiş)"
+		srcK = "ev.src.span"
 	case StdSourceDBMV:
 		s += "; ölçü veritabanı çağrı özetinden (örneklenmiş span)"
+		srcK = "ev.src.dbmv"
 	case StdSourceProbe:
 		s += "; sentetik kontrol sonucu"
+		srcK = "ev.src.probe"
 	case StdSourceException:
 		s += "; exception kayıtlarından"
+		srcK = "ev.src.exception"
 	case StdSourceOracle:
 		s += "; Oracle hata tablosundan"
+		srcK = "ev.src.oracle"
 	case StdSourceSelf:
 		s += "; Coremetry'nin kendi ölçümü"
+		srcK = "ev.src.self"
 	case StdSourceExternal:
 		s += "; dış kaynak sorgusundan"
+		srcK = "ev.src.external"
 	}
-	return s + "."
+	return s + ".", stdM("ev.sentence", "baseK", baseK, "srcK", srcK)
 }
 
 // problemNextStep — SAF.
@@ -874,55 +900,63 @@ func problemNextStep(p Problem, k stdKindInfo) StdNextStep {
 	svc := url.QueryEscape(p.Service)
 	switch k.family {
 	case StdFamilyError:
-		return StdNextStep{Text: "Servisin hata kırılımına bak", Href: "/service?name=" + svc}
+		return StdNextStep{Text: "Servisin hata kırılımına bak", Href: "/service?name=" + svc, Msg: stdM("next.errBreakdown")}
 	case StdFamilyLatency:
-		return StdNextStep{Text: "Yavaş operasyonları ve trace'leri aç", Href: "/service?name=" + svc}
+		return StdNextStep{Text: "Yavaş operasyonları ve trace'leri aç", Href: "/service?name=" + svc, Msg: stdM("next.slowOps")}
 	case StdFamilyTraffic:
-		return StdNextStep{Text: "Trafiğin nereden düştüğünü/arttığını kontrol et", Href: "/service?name=" + svc}
+		return StdNextStep{Text: "Trafiğin nereden düştüğünü/arttığını kontrol et", Href: "/service?name=" + svc, Msg: stdM("next.trafficWhere")}
 	case StdFamilyDB:
-		return StdNextStep{Text: "Veritabanı detayını aç", Href: "/databases"}
+		return StdNextStep{Text: "Veritabanı detayını aç", Href: "/databases", Msg: stdM("next.db")}
 	case StdFamilyException:
-		return StdNextStep{Text: "Hata grubunu ve örnek trace'i incele", Href: "/exceptions"}
+		return StdNextStep{Text: "Hata grubunu ve örnek trace'i incele", Href: "/exceptions", Msg: stdM("next.exGroup")}
 	case StdFamilyExternal:
-		return StdNextStep{Text: "Dış kaynak serisini aç", Href: "/external"}
+		return StdNextStep{Text: "Dış kaynak serisini aç", Href: "/external", Msg: stdM("next.external")}
 	case StdFamilyRuntime:
-		return StdNextStep{Text: "Aynı serviste kullanıcı etkisi olup olmadığını kontrol et", Href: "/service?name=" + svc}
+		return StdNextStep{Text: "Aynı serviste kullanıcı etkisi olup olmadığını kontrol et", Href: "/service?name=" + svc, Msg: stdM("next.userImpact")}
 	case StdFamilySelf:
-		return StdNextStep{Text: "Coremetry sistem sayfasını aç", Href: "/system"}
+		return StdNextStep{Text: "Coremetry sistem sayfasını aç", Href: "/system", Msg: stdM("next.system")}
 	case StdFamilyIncident:
-		return StdNextStep{Text: "Olay sayfasını aç", Href: "/incident?id=" + url.QueryEscape(strings.TrimPrefix(p.RuleID, "incident:"))}
+		return StdNextStep{Text: "Olay sayfasını aç", Href: "/incident?id=" + url.QueryEscape(strings.TrimPrefix(p.RuleID, "incident:")), Msg: stdM("next.incident")}
 	case StdFamilyAvailability:
 		if k.kind == "monitor" {
-			return StdNextStep{Text: "Kontrolün son sonuçlarını aç", Href: "/monitors"}
+			return StdNextStep{Text: "Kontrolün son sonuçlarını aç", Href: "/monitors", Msg: stdM("next.monitor")}
 		}
-		return StdNextStep{Text: "Servisin son trafiğini kontrol et", Href: "/service?name=" + svc}
+		return StdNextStep{Text: "Servisin son trafiğini kontrol et", Href: "/service?name=" + svc, Msg: stdM("next.recentTraffic")}
 	case StdFamilyCluster:
-		return StdNextStep{Text: "Kök neden panelinden yayılımı incele", Href: "/problems?problem=" + url.QueryEscape(p.ID)}
+		return StdNextStep{Text: "Kök neden panelinden yayılımı incele", Href: "/problems?problem=" + url.QueryEscape(p.ID), Msg: stdM("next.rootCause")}
 	}
-	return StdNextStep{Text: "Kural ayrıntısını aç", Href: "/problems?problem=" + url.QueryEscape(p.ID)}
+	return StdNextStep{Text: "Kural ayrıntısını aç", Href: "/problems?problem=" + url.QueryEscape(p.ID), Msg: stdM("next.rule")}
 }
 
 // stdContext — SAF: bağlam satırları (önceliğe ve güvene KARIŞMAZ; G5).
-func stdContext(f StdFacts, episode uint32) []string {
+// v0.10.2299 — ikinci dönüş satır başına anahtar (aynı sıra / uzunluk).
+func stdContext(f StdFacts, episode uint32) ([]string, []StdMsg) {
 	var out []string
+	var msgs []StdMsg
 	if f.RecentDeploy != "" {
 		out = append(out, "yakın deploy: "+f.RecentDeploy)
+		msgs = append(msgs, *stdM("ctx.deploy", "name", f.RecentDeploy))
 	}
 	switch f.CalendarKind {
 	case CalendarHoliday:
 		out = append(out, "takvim: tatil günü")
+		msgs = append(msgs, *stdM("ctx.holiday"))
 	case CalendarHalfDay:
 		out = append(out, "takvim: yarım gün")
+		msgs = append(msgs, *stdM("ctx.halfDay"))
 	case CalendarMonthEnd:
 		out = append(out, "takvim: ay sonu")
+		msgs = append(msgs, *stdM("ctx.monthEnd"))
 	}
 	if f.Batch {
 		out = append(out, "batch servis")
+		msgs = append(msgs, *stdM("ctx.batch"))
 	}
 	if episode > 1 {
 		out = append(out, strconv.FormatUint(uint64(episode), 10)+". tekrar")
+		msgs = append(msgs, *stdM("ctx.episode", "n", strconv.FormatUint(uint64(episode), 10)))
 	}
-	return out
+	return out, msgs
 }
 
 // ── Exception grubu / anomali olayı / incident ──────────────────────────
@@ -936,16 +970,17 @@ func StandardizeException(g ExceptionGroup, f StdFacts) ProblemStandard {
 	std := ProblemStandard{Family: StdFamilyException, Kind: "exception_group", Subject: g.Service}
 	src := StdSourceException
 	label := "Exception"
+	labelK := "h.ex.generic" // v0.10.2299 — etiketin anahtar ikizi
 	switch {
 	case IsOracleGroup(g.Fingerprint):
-		std.Kind, src, label = "exception_group.oracle", StdSourceOracle, "Oracle hata"
+		std.Kind, src, label, labelK = "exception_group.oracle", StdSourceOracle, "Oracle hata", "h.ex.oracle"
 		std.Operation = strings.TrimSpace(g.Message)
 	case stdHTTPTypeRe.MatchString(g.Type):
 		std.Kind = "exception_group.http"
 		if strings.HasPrefix(g.Type, "5") {
-			label = "Teknik hata"
+			label, labelK = "Teknik hata", "h.ex.tech"
 		} else {
-			label = "HTTP hatası"
+			label, labelK = "HTTP hatası", "h.ex.http"
 		}
 	}
 	typ := g.Type
@@ -953,14 +988,18 @@ func StandardizeException(g ExceptionGroup, f StdFacts) ProblemStandard {
 		typ = "HTTP " + typ // exceptionGroupLabel ile aynı biçim
 	}
 	h := subjectPrefix(g.Service) + label + " · " + typ
+	tail := typ
 	if std.Operation != "" {
 		h += " · " + std.Operation
+		tail += " · " + std.Operation
 	}
 	if g.State == ExStateRegressed {
 		h += " (geri döndü)"
+		labelK += ".reg"
 	}
 	std.Headline = clipHeadline(h)
-	std.Impact = StdImpact{Primary: StdMeasure{Text: trNum(float64(g.Occurrences)) + " oluşum", Value: float64(g.Occurrences)},
+	std.HeadlineMsg = stdM(labelK, "sp", subjectPrefix(g.Service), "t", tail)
+	std.Impact = StdImpact{Primary: StdMeasure{Text: trNum(float64(g.Occurrences)) + " oluşum", Value: float64(g.Occurrences), Msg: stdM("imp.occur", "cNum", float64(g.Occurrences))},
 		Known: true, Callers: f.VerifiedCallers}
 	if t := f.Traffic; t != nil {
 		std.Impact.Floor.Calls5m = f64(t.Calls5m)
@@ -975,7 +1014,8 @@ func StandardizeException(g ExceptionGroup, f StdFacts) ProblemStandard {
 	if g.FirstSeen > 0 && end > g.FirstSeen {
 		std.Since.DurationSec = (end - g.FirstSeen) / int64(time.Second)
 	}
-	std.Evidence = StdEvidence{Sentence: "Hata grubu " + trNum(float64(g.Occurrences)) + " kez görüldü.", Source: src, Sampled: stdSampled(src)}
+	std.Evidence = StdEvidence{Sentence: "Hata grubu " + trNum(float64(g.Occurrences)) + " kez görüldü.", Source: src, Sampled: stdSampled(src),
+		Msg: stdM("ev.group", "cNum", float64(g.Occurrences))}
 	gates := ComputeSignalGates(GateInput{
 		Family: StdFamilyException, Dwell: "na", Source: src,
 		Occurrences: int64(g.Occurrences), OccurrencesKnown: true,
@@ -983,8 +1023,8 @@ func StandardizeException(g ExceptionGroup, f StdFacts) ProblemStandard {
 		RecentDeploy: f.RecentDeploy, CalendarKind: f.CalendarKind, Batch: f.Batch,
 	})
 	std.Confidence = StdConfidence{Level: ConfidenceFromGates(gates, ConfidenceInput{Sampled: std.Evidence.Sampled, Ratio: exceptionMagnitude(g, f)}), Gates: gates}
-	std.NextStep = StdNextStep{Text: "Hata grubunu ve örnek trace'i incele", Href: "/exceptions"}
-	std.Context = stdContext(f, 0)
+	std.NextStep = StdNextStep{Text: "Hata grubunu ve örnek trace'i incele", Href: "/exceptions", Msg: stdM("next.exGroup")}
+	std.Context, std.ContextMsgs = stdContext(f, 0)
 	return std
 }
 
@@ -1015,12 +1055,14 @@ func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
 	now := f.now()
 	fam := StdFamilyRule
 	label := e.Kind
+	labelArg, labelVal := "label", e.Kind // v0.10.2299 — etiketin anahtar ikizi
 	// v0.10.2082 — ML olayı aynı satır şeklinde gelir (kind "ml:<dedektör>",
 	// ListAnomalyFeed): aile / etiket / kaynak dedektör adından, ayrıntı ML
 	// olay sayfası.
 	kind, isML := strings.CutPrefix(e.Kind, MLAnomalyKindPrefix)
 	if isML {
 		label = "ML " + kind
+		labelVal = label
 		if kind == "new_template" {
 			fam = StdFamilyError
 		}
@@ -1028,34 +1070,46 @@ func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
 	switch kind {
 	case "trace_op_latency":
 		fam, label = StdFamilyLatency, "operasyon yavaşladı"
+		labelArg, labelVal = "labelK", "evl.opSlow"
 	case "trace_op":
 		fam, label = StdFamilyError, "operasyon hataları arttı"
+		labelArg, labelVal = "labelK", "evl.opErr"
 	case "log_pattern":
 		fam, label = StdFamilyError, "log deseni arttı"
+		labelArg, labelVal = "labelK", "evl.logPattern"
 	case "behavior_change":
 		fam, label = StdFamilyRule, "davranış değişti"
+		labelArg, labelVal = "labelK", "evl.behavior"
 	case "new_template", "log_template_new":
 		fam, label = StdFamilyError, "yeni log şablonu"
+		labelArg, labelVal = "labelK", "evl.newTemplate"
 	case SubjectAnomalyKind: // v0.10.1792 — özne tabanı (endpoint / db / queue)
 		fam, label = subjectAnomalyFamily(e.Pattern), "özne sapması"
+		labelArg, labelVal = "labelK", "evl.subject"
 	}
 	std := ProblemStandard{Family: fam, Kind: "anomaly_event." + e.Kind, Subject: e.Service, Operation: e.Pattern}
 	h := subjectPrefix(e.Service) + label
+	hk := "h.ev"
 	if e.Pattern != "" {
 		h += " — " + e.Pattern
+		hk += ".p"
 	}
 	// v0.10.1792 — oran yalnız tabanı bilinen satırda (AnomalyRatioKnown);
 	// tabansız satır "taban yok" der, "0×" değil (1587 tuzağı).
 	known := AnomalyRatioKnown(e)
 	if known {
 		h += " (" + trRatio(e.PeakRatio) + ")"
+		hk += ".x"
 	}
 	std.Headline = clipHeadline(h)
+	std.HeadlineMsg = stdM(hk, "sp", subjectPrefix(e.Service), labelArg, labelVal, "pat", e.Pattern, "rX", e.PeakRatio)
 	impactText := "normalin " + trRatio(e.PeakRatio)
+	impactMsg := stdM("imp.ratio", "rX", e.PeakRatio)
 	if AnomalyBaselineless(e) {
 		impactText = "taban yok (ilk görülme)"
+		impactMsg = stdM("imp.noBase")
 	}
-	std.Impact = StdImpact{Primary: StdMeasure{Text: impactText, Value: e.CurrentRatio, Ratio: e.PeakRatio},
+	std.Impact = StdImpact{Primary: StdMeasure{Text: impactText, Value: e.CurrentRatio, Ratio: e.PeakRatio, Msg: impactMsg},
 		Known: known, Callers: f.VerifiedCallers}
 	std.Since = StdSince{StartedAt: e.StartedAt, LastSeen: e.LastSeen, Ongoing: e.Status != "cleared", Episode: e.EpisodeCount}
 	end := now.UnixNano()
@@ -1069,16 +1123,16 @@ func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
 	if isML {
 		src = mlAnomalySource(kind)
 	}
-	std.Evidence = StdEvidence{Sentence: "Anomali olayı (henüz problem değil).", Source: src, Sampled: true}
+	std.Evidence = StdEvidence{Sentence: "Anomali olayı (henüz problem değil).", Source: src, Sampled: true, Msg: stdM("ev.anomaly")}
 	gates := ComputeSignalGates(GateInput{Family: fam, Dwell: "unknown", Source: src,
 		RelationClaimed: f.RelationClaimed, RelationVerified: f.RelationVerified,
 		RecentDeploy: f.RecentDeploy, CalendarKind: f.CalendarKind, Batch: f.Batch})
 	std.Confidence = StdConfidence{Level: ConfidenceFromGates(gates, ConfidenceInput{Sampled: true, Ratio: e.PeakRatio, BigBreach: f.bigBreach()}), Gates: gates}
-	std.NextStep = StdNextStep{Text: "Anomali detayını aç", Href: "/inbox?anomaly=" + url.QueryEscape(e.ID)}
+	std.NextStep = StdNextStep{Text: "Anomali detayını aç", Href: "/inbox?anomaly=" + url.QueryEscape(e.ID), Msg: stdM("next.anomaly")}
 	if isML {
 		std.NextStep.Href = "/anomalies/ml/" + url.PathEscape(e.ID)
 	}
-	std.Context = stdContext(f, e.EpisodeCount)
+	std.Context, std.ContextMsgs = stdContext(f, e.EpisodeCount)
 	return std
 }
 
@@ -1112,10 +1166,12 @@ func StandardizeIncident(inc Incident, f StdFacts) ProblemStandard {
 	std := ProblemStandard{Family: StdFamilyIncident, Kind: "incident", Subject: inc.Service}
 	std.Headline = clipHeadline("Olay: " + strings.TrimSpace(inc.Title))
 	text := "olay ilan edildi"
+	tm := stdM("imp.incident")
 	if f.IncidentProblems > 0 {
 		text = strconv.Itoa(f.IncidentProblems) + " bağlı problem"
+		tm = stdM("imp.linked", "cNum", float64(f.IncidentProblems))
 	}
-	std.Impact = StdImpact{Primary: StdMeasure{Text: text}, Known: true, Callers: f.VerifiedCallers}
+	std.Impact = StdImpact{Primary: StdMeasure{Text: text, Msg: tm}, Known: true, Callers: f.VerifiedCallers}
 	std.Since = StdSince{StartedAt: inc.StartedAt, Ongoing: inc.Status != "resolved" && inc.Status != "closed"}
 	end := now.UnixNano()
 	if inc.ResolvedAt != nil && *inc.ResolvedAt > 0 {
@@ -1124,7 +1180,7 @@ func StandardizeIncident(inc Incident, f StdFacts) ProblemStandard {
 	if inc.StartedAt > 0 && end > inc.StartedAt {
 		std.Since.DurationSec = (end - inc.StartedAt) / int64(time.Second)
 	}
-	std.Evidence = StdEvidence{Sentence: "Bağlı problemlerden oluşan olay.", Source: StdSourceRule, Sampled: true}
+	std.Evidence = StdEvidence{Sentence: "Bağlı problemlerden oluşan olay.", Source: StdSourceRule, Sampled: true, Msg: stdM("ev.incident")}
 	gates := ComputeSignalGates(GateInput{Family: StdFamilyIncident, Dwell: "na", Source: StdSourceRule,
 		RelationClaimed: true, RelationVerified: f.RelationVerified,
 		RecentDeploy: f.RecentDeploy, CalendarKind: f.CalendarKind, Batch: f.Batch})
@@ -1133,7 +1189,7 @@ func StandardizeIncident(inc Incident, f StdFacts) ProblemStandard {
 		ratio = math.Inf(1)
 	}
 	std.Confidence = StdConfidence{Level: ConfidenceFromGates(gates, ConfidenceInput{Sampled: true, Ratio: ratio}), Gates: gates}
-	std.NextStep = StdNextStep{Text: "Olay sayfasını aç", Href: "/incident?id=" + url.QueryEscape(inc.ID)}
-	std.Context = stdContext(f, 0)
+	std.NextStep = StdNextStep{Text: "Olay sayfasını aç", Href: "/incident?id=" + url.QueryEscape(inc.ID), Msg: stdM("next.incident")}
+	std.Context, std.ContextMsgs = stdContext(f, 0)
 	return std
 }

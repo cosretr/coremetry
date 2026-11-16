@@ -21,6 +21,7 @@ import { AffectedEntitiesList } from '@/components/AffectedEntitiesList'; // v0.
 import { ProblemRunbookPanel } from '@/components/ProblemRunbookPanel';
 import { ProblemNotifyPanel } from './ProblemNotifyPanel';
 import { OrigLang } from './OrigLang'; // v0.10.2298 — LLM özeti EN arayüzde özgün dil etiketiyle
+import { stdHeadlineView } from '@/lib/problemStandardView'; // v0.10.2299 — manşet EN anahtardan
 import { IconSparkles } from '@/components/icons';
 import { TimeChart } from '@/components/charts/TimeChart';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
@@ -73,7 +74,7 @@ import { Badge } from '@/components/ui/Badge';
 import { OracleGroupPanel } from './OracleGroupPanel';
 import { isOracleGroup, isSyntheticOracleService } from './oracleGroup';
 import { useBranding } from '@/lib/branding'; // v0.10.1108 — Oracle grubu görünen adı
-import { t as tl, tf, useLang, useT } from '@/lib/i18n'; // v0.10.1326 — "Ask CoSRE" etiketi; v0.10.2284 Problem detayı (pd.*)
+import { t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; // v0.10.1326 — "Ask CoSRE" etiketi; v0.10.2284 Problem detayı (pd.*)
 // v0.10.1032 — triyaj eylemleri tam sayfaya taşındı (çekmece atlanınca
 // "Gerçek problem / Problem değil" ve Assign… kaybolmasın).
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
@@ -119,6 +120,13 @@ export { TriageStatusBadge, ProblemStatusBadge } from './statusTone';
 // "copy from the address bar" for an operator pasting into Slack.
 
 // Esc = back — same muscle memory the old drawer had.
+// v0.10.2299 (S2) — detay başlığının manşeti: TR sunucu metni aynen; EN
+// anahtardan, çizilemezse (ML özeti / olay adı) özgün dil işaretiyle.
+function StdHeadlineText({ std, lang }: { std: ProblemStandard; lang: Lang }) {
+  const v = stdHeadlineView(std, lang);
+  return v.orig ? <OrigLang>{v.text}</OrigLang> : <>{v.text}</>;
+}
+
 function useEscBack(onBack: () => void) {
   // v0.9.950 (E2/Ö28) — Esc KATMAN. Detayın ÜSTÜNDE açılan bir modal
   // (exemplar, paylaşım) Esc'i önce alır; geri gitmek en alttaki iş.
@@ -1184,7 +1192,8 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
       <DetailTitle prefix={problem.priority
         ? <PriorityBadge p={problem.priority} reason={problem.priorityReason} />
         : undefined}>
-        {std?.headline || alertProblemSummary(problem, lang)}
+        {/* v0.10.2299 (S2) — EN'de manşet anahtardan; serbest metin özgün dil işaretiyle. */}
+        {std?.headline ? <StdHeadlineText std={std} lang={lang} /> : alertProblemSummary(problem, lang)}
         {/* v0.10.2281 (S3) — nötr "sık tekrar eden" gölge çipi; sık değilse yok. */}
         <ProblemFrequentChip problemId={problem.id} />
       </DetailTitle>

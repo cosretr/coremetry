@@ -7,7 +7,7 @@
 // adım) olduğu gibi geçer; burada yalnız zaman, güven ve kaynak etiketleri
 // kurulur. Hiçbir işlev ölçülmemiş bir şeyi iddia etmez: çağıran yoksa
 // "çağıran" yazılmaz, dakikalık hata ölçülmediyse ikinci satır boş kalır.
-import type { ProblemStandard, SignalGate, StdConfidenceLevel } from './types';
+import type { ProblemStandard, SignalGate, StdConfidenceLevel, StdMsg } from './types';
 import { isSafeAppPath } from './safeAppPath';
 import { t, tf, type Lang } from './i18n'; // v0.10.2283 — metinler arayüz dilinde (varsayılan 'tr')
 
@@ -161,15 +161,106 @@ export function stdConfidenceLabel(level: StdConfidenceLevel, lang: Lang = 'tr')
 export function stdGateTitle(std: ProblemStandard, lang: Lang = 'tr'): string {
   const lines = std.confidence.gates
     .filter(g => g.status !== 'na')
-    .map(g => `${g.id} ${stdGateName(g, lang)}: ${GATE_MARK[g.status] ?? g.status}${g.note ? ` — ${g.note}` : ''}`);
+    .map(g => `${g.id} ${stdGateName(g, lang)}: ${GATE_MARK[g.status] ?? g.status}${g.note ? ` — ${stdGateNote(g, lang)}` : ''}`);
   return [tf('pd.std.confTitle', lang, { l: stdConfidenceLabel(std.confidence.level, lang) }), ...lines].join('\n');
 }
 
+// ── v0.10.2299 (sunucu metinleri S2) — metin anahtarından EN çizim ──────────
+// Sunucu her standart cümlesinin YANINA anahtar + ham argüman koyar (Go
+// chstore std_msg.go). TR arayüz sunucu metnini AYNEN çizer (bayt bayt);
+// EN arayüz anahtarı std.m.* kataloğundan çizer, çizemezse (anahtar yok /
+// bilinmiyor / argüman eksik) sunucu metnine düşer ve `orig` işaretlenir
+// (çağıran OrigLang ile sarar).
+
+const STD_HEADLINE_MAX = 90; // Go StdHeadlineMax
+
+// Go trNum ile aynı hassasiyet ve yuvarlama (strconv: tam eşitlikte çifte;
+// toFixed eşitlikte yukarı yuvarlar — %91,25 TR "91,2", EN "91.2" olsun).
+function enNum(v: number): string {
+  const a = Math.abs(v);
+  const prec = a >= 100 ? 0 : a >= 10 ? 1 : 2;
+  const sc = v * 10 ** prec;
+  const tie = Math.abs(sc - Math.trunc(sc)) === 0.5;
+  const s = tie ? (2 * Math.round(sc / 2) / 10 ** prec).toFixed(prec) : v.toFixed(prec);
+  return s.includes('.') ? s.replace(/0+$/, '').replace(/\.$/, '') : s;
+}
+
+function stdArg(name: string, v: string | number | boolean, lang: Lang): string | null {
+  if (name.endsWith('K')) {
+    const k = `std.m.${String(v)}`;
+    const r = t(k, lang);
+    return r === k ? null : r;
+  }
+  if (typeof v !== 'number') {
+    if (v === 'inf' && name.endsWith('X')) return t('std.m.fullLoss', lang);
+    return String(v);
+  }
+  if (name.endsWith('Pct')) return `${enNum(v)}%`;
+  if (name.endsWith('Ms')) return v >= 1000 ? `${enNum(v / 1000)} s` : `${Math.round(v)} ms`;
+  if (name.endsWith('X')) return `${enNum(v)}×`;
+  return enNum(v);
+}
+
+/** Anahtardan EN metin; çizilemezse null. TR'de çağrılmaz (sunucu metni aynen). */
+export function stdMsgText(msg: StdMsg | undefined | null, lang: Lang = 'en'): string | null {
+  if (!msg?.k) return null;
+  const args = msg.a ?? {};
+  const base = `std.m.${msg.k}`;
+  const one = args.cNum === 1 && t(`${base}_one`, lang) !== `${base}_one` ? `${base}_one` : base;
+  const tpl = t(one, lang);
+  if (tpl === one) return null;
+  let ok = true;
+  const out = tpl.replace(/\{(\w+)\}/g, (_m, ph: string) => {
+    const hit = ph in args ? ph : `${ph}K` in args ? `${ph}K` : '';
+    const r = hit ? stdArg(hit, args[hit], lang) : null;
+    if (r == null) { ok = false; return ''; }
+    return r;
+  });
+  return ok ? out : null;
+}
+
+/** Görünüm: TR = sunucu metni; EN = anahtardan, yoksa sunucu metni + orig. */
+export function stdMsgView(msg: StdMsg | undefined | null, fallback: string, lang: Lang = 'tr'): { text: string; orig: boolean } {
+  if (lang === 'tr') return { text: fallback, orig: false };
+  const r = stdMsgText(msg, lang);
+  return r != null ? { text: r, orig: false } : { text: fallback, orig: !!fallback };
+}
+
+function clipStd(s: string): string {
+  const r = [...s];
+  return r.length <= STD_HEADLINE_MAX ? s : `${r.slice(0, STD_HEADLINE_MAX - 1).join('').trim()}…`;
+}
+
+/** Manşet (EN'de Go ile aynı tavan). */
+export function stdHeadlineView(std: ProblemStandard, lang: Lang = 'tr'): { text: string; orig: boolean } {
+  const v = stdMsgView(std.headlineMsg, std.headline, lang);
+  return v.orig || lang === 'tr' ? v : { text: clipStd(v.text), orig: false };
+}
+
+export const stdImpactView = (std: ProblemStandard, lang: Lang = 'tr') => stdMsgView(std.impact.primary.msg, std.impact.primary.text, lang);
+export const stdEvidenceView = (std: ProblemStandard, lang: Lang = 'tr') => stdMsgView(std.evidence.msg, std.evidence.sentence, lang);
+export const stdNextView = (std: ProblemStandard, lang: Lang = 'tr') => stdMsgView(std.nextStep.msg, std.nextStep.text, lang);
+
+/** Bağlam satırları (" · " ile): anahtar dizisi eşleşmezse sunucu metni. */
+export function stdContextView(std: ProblemStandard, lang: Lang = 'tr'): { text: string; orig: boolean } {
+  const ctx = std.context ?? [];
+  const msgs = std.contextMsgs ?? [];
+  if (lang === 'tr' || msgs.length !== ctx.length) return stdMsgView(null, ctx.join(' · '), lang);
+  const parts = ctx.map((c, i) => stdMsgView(msgs[i], c, lang));
+  return { text: parts.map(p => p.text).join(' · '), orig: parts.some(p => p.orig) };
+}
+
+/** Kapı notu arayüz dilinde (TR sunucu notu aynen). */
+export function stdGateNote(g: SignalGate, lang: Lang = 'tr'): string {
+  return g.note ? stdMsgView(g.noteMsg, g.note, lang).text : '';
+}
+
 /** Manşeti özne + gövde olarak böler ("svc: X" → ["svc", "X"]); önek yoksa özne boş. */
-export function splitStdHeadline(std: ProblemStandard): { subject: string; rest: string } {
+export function splitStdHeadline(std: ProblemStandard, lang: Lang = 'tr'): { subject: string; rest: string } {
+  const h = stdHeadlineView(std, lang).text; // v0.10.2299 — EN'de anahtardan (özne öneki aynı "svc: "); orig → stdHeadlineView
   const p = std.subject ? `${std.subject}: ` : '';
-  if (p && std.headline.startsWith(p)) return { subject: std.subject, rest: std.headline.slice(p.length) };
-  return { subject: '', rest: std.headline };
+  if (p && h.startsWith(p)) return { subject: std.subject, rest: h.slice(p.length) };
+  return { subject: '', rest: h };
 }
 
 // Detay sayfasının KENDİSİNE dönen sonraki-adım adresleri (exception grubu →

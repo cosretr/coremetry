@@ -1,0 +1,1275 @@
+[
+ {
+  "name": "err-up-vm",
+  "kind": "anomaly.error_rate",
+  "headline": "svc-a: hata oranı arttı — %3,25, normal %0,4",
+  "impact": "hata oranı %3,25 (normal %0,4)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü VictoriaMetrics'ten (örneklenmemiş).",
+  "next": "Servisin hata kırılımına bak",
+  "gates": [
+   "G1 trafik pass ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar pass ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "err-up-hold",
+  "kind": "anomaly.error_rate",
+  "headline": "svc-a: hata oranı arttı — %12,5, normal %1",
+  "impact": "hata oranı %12,5 (normal %1)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; VictoriaMetrics bu turda karar vermedi.",
+  "next": "Servisin hata kırılımına bak",
+  "gates": [
+   "G1 trafik fail 5 dk'da çağrı tabanın altında",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar fail VictoriaMetrics bu turda karar vermedi",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "err-down-span",
+  "kind": "anomaly.error_rate",
+  "headline": "svc-a: hata oranı düştü — %0,05, normal %2",
+  "impact": "hata oranı %0,05 (normal %2)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Servisin hata kırılımına bak",
+  "gates": [
+   "G1 trafik unknown trafik okunmadı",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar unknown ölçü span'den (VM kullanılmadı)",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "err-ramp",
+  "kind": "anomaly.error_rate.ramp",
+  "headline": "svc-a: teknik hata (5xx) sürekli artıyor — %7,75, normal %0,5",
+  "impact": "hata oranı %7,75 (normal %0,5)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Servisin hata kırılımına bak",
+  "gates": [
+   "G1 trafik pass ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar unknown ölçü span'den (VM kullanılmadı)",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "p99-up",
+  "kind": "anomaly.p99_ms",
+  "headline": "svc-a: yanıt süresi uzadı — p99 1,45 sn, normal 320 ms",
+  "impact": "p99 1,45 sn (normal 320 ms)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü VictoriaMetrics'ten (örneklenmemiş).",
+  "next": "Yavaş operasyonları ve trace'leri aç",
+  "gates": [
+   "G1 trafik fail 5 dk'da çağrı tabanın altında",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar pass ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "p99-down",
+  "kind": "anomaly.p99_ms",
+  "headline": "svc-a: yanıt süresi kısaldı — p99 80 ms, normal 320 ms",
+  "impact": "p99 80 ms (normal 320 ms)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Yavaş operasyonları ve trace'leri aç",
+  "gates": [
+   "G1 trafik unknown trafik okunmadı",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar unknown ölçü span'den (VM kullanılmadı)",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "rate-up",
+  "kind": "anomaly.request_rate",
+  "headline": "svc-a: trafik arttı — 250/sn, normal 40/sn",
+  "impact": "trafik 250/sn (normal 40/sn)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Trafiğin nereden düştüğünü/arttığını kontrol et",
+  "gates": [
+   "G1 trafik pass ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar unknown ölçü span'den (VM kullanılmadı)",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "rate-drop-pct",
+  "kind": "anomaly.request_rate",
+  "headline": "svc-a: trafik düştü — %91,2 azaldı (3,5/sn)",
+  "impact": "trafik 3,5/sn (normal 40/sn)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Trafiğin nereden düştüğünü/arttığını kontrol et",
+  "gates": [
+   "G1 trafik fail referans trafik tabanın altında",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar unknown ölçü span'den (VM kullanılmadı)",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "rate-drop-plain",
+  "kind": "anomaly.request_rate",
+  "headline": "svc-a: trafik düştü — 3,5/sn, normal 0/sn",
+  "impact": "trafik 3,5/sn (normal 0/sn)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Trafiğin nereden düştüğünü/arttığını kontrol et",
+  "gates": [
+   "G1 trafik unknown trafik okunmadı",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar unknown ölçü span'den (VM kullanılmadı)",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "silent",
+  "kind": "anomaly.service_silent",
+  "headline": "svc-a: servis sustu — son kovalarda hiç istek yok",
+  "impact": "değer 0 (eşik 0)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Servisin son trafiğini kontrol et",
+  "gates": [
+   "G1 trafik unknown trafik okunmadı",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "other-ratio",
+  "kind": "anomaly.other",
+  "headline": "svc-a: queue_depth olağandışı — normalin 5×",
+  "impact": "değer 50 (eşik 10)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Kural ayrıntısını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "other-noratio",
+  "kind": "anomaly.other",
+  "headline": "svc-a: hata sayısı olağandışı",
+  "impact": "değer 0 (eşik 0)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Servisin hata kırılımına bak",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "auto-fail",
+  "kind": "anomaly_auto",
+  "headline": "svc-a: başarısız işlem sayısı olağandışı — normalin 3×",
+  "impact": "değer 9 (eşik 3)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Kural ayrıntısını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "auto-ml",
+  "kind": "anomaly_auto",
+  "headline": "svc-a: özet cümlesi",
+  "impact": "değer 9 (eşik 3)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Kural ayrıntısını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "auto-inf",
+  "kind": "anomaly_auto",
+  "headline": "svc-a: trafik olağandışı",
+  "impact": "değer 0 (eşik 30)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Trafiğin nereden düştüğünü/arttığını kontrol et",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "ext",
+  "kind": "anomaly.ext",
+  "headline": "svc-a: dış kaynak hata sayısı arttı — 14, normal 2",
+  "impact": "değer 14 (eşik 2)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; dış kaynak sorgusundan.",
+  "next": "Dış kaynak serisini aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "ext-down",
+  "kind": "anomaly.ext_down",
+  "headline": "src-1: dış kaynak erişilemiyor — ardışık sorgu hatası",
+  "impact": "değer 0 (eşik 0)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; dış kaynak sorgusundan.",
+  "next": "Dış kaynak serisini aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "ext-cap",
+  "kind": "anomaly.ext_cap",
+  "headline": "svc-a: dış kaynakta çok sayıda eşzamanlı anomali (özet)",
+  "impact": "değer 0 (eşik 0)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; dış kaynak sorgusundan.",
+  "next": "Dış kaynak serisini aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "ext-cluster",
+  "kind": "anomaly_cluster.ext",
+  "headline": "svc-a: dış kaynakta yayılan anomali — 6 sinyal",
+  "impact": "6 sinyal birlikte",
+  "evidence": "Dedektör sürdürme koşulunu geçti; dış kaynak sorgusundan.",
+  "next": "Dış kaynak serisini aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji pass ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "cluster",
+  "kind": "anomaly_cluster",
+  "headline": "svc-a: yayılan sorun — 4 sinyal birlikte",
+  "impact": "4 sinyal birlikte",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Kök neden panelinden yayılımı incele",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji fail iddia edilen ilişki topolojide yok",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "slowdown",
+  "kind": "svc_slowdown",
+  "headline": "svc-a: yaygın yavaşlama — p99 2,3 sn, taban 700 ms",
+  "impact": "p99 2,3 sn (taban 700 ms)",
+  "evidence": "Tek ölçümde eşik aşıldı; ölçü span'lerden (örneklenmiş).",
+  "next": "Yavaş operasyonları ve trace'leri aç",
+  "gates": [
+   "G1 trafik fail 5 dk'da çağrı tabanın altında",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "collapse",
+  "kind": "svc_slowdown.collapse",
+  "headline": "svc-a: trafik çöktü ve yavaşladı — p99 2,3 sn",
+  "impact": "p99 2,3 sn (taban 700 ms)",
+  "evidence": "Tek ölçümde eşik aşıldı; ölçü span'lerden (örneklenmiş).",
+  "next": "Trafiğin nereden düştüğünü/arttığını kontrol et",
+  "gates": [
+   "G1 trafik fail referans trafik tabanın altında",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "db-err",
+  "kind": "db_health",
+  "headline": "postgresql@db-host-1/db-1: veritabanı hata oranı yüksek — %4,5",
+  "impact": "hata oranı %4,5 (eşik %2)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü veritabanı çağrı özetinden (örneklenmiş span).",
+  "next": "Veritabanı detayını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "db-p99",
+  "kind": "db_health",
+  "headline": "postgresql@db-host-1/db-1: veritabanı yanıt süresi uzadı — p99 1,8 sn",
+  "impact": "p99 1,8 sn (eşik 500 ms)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü veritabanı çağrı özetinden (örneklenmiş span).",
+  "next": "Veritabanı detayını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "db-count",
+  "kind": "db_health",
+  "headline": "postgresql@db-host-1/db-1: veritabanı hataları arttı — 5 dk'da 37 hata",
+  "impact": "37 hata / 5 dk (eşik 10)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü veritabanı çağrı özetinden (örneklenmiş span).",
+  "next": "Veritabanı detayını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "db-cap",
+  "kind": "db_capacity",
+  "headline": "svc-a: kapasite %91,5 dolu (eşik %85)",
+  "impact": "değer %91,5 (eşik %85)",
+  "evidence": "Tek ölçümde eşik aşıldı; dış kaynak sorgusundan.",
+  "next": "Veritabanı detayını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "db-slow-stmt",
+  "kind": "db_slow_stmt",
+  "headline": "svc-a: yavaş SQL ifadesi — p95 4,2 sn",
+  "impact": "değer 4,2 sn (eşik 1 sn)",
+  "evidence": "Tek ölçümde eşik aşıldı; ölçü veritabanı çağrı özetinden (örneklenmiş span).",
+  "next": "Veritabanı detayını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "gc-ms",
+  "kind": "runtime.gc",
+  "headline": "svc-a: JVM GC duraklaması uzun — ort. 640 ms",
+  "impact": "kullanıcı etkisi doğrulanmadı",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü VictoriaMetrics'ten (örneklenmemiş).",
+  "next": "Aynı serviste kullanıcı etkisi olup olmadığını kontrol et",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "gc-pct-open",
+  "kind": "runtime.gc",
+  "headline": "svc-a: JVM zamanının %23,4'i GC'de",
+  "impact": "aynı serviste açık hata/gecikme problemi var",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü VictoriaMetrics'ten (örneklenmemiş).",
+  "next": "Aynı serviste kullanıcı etkisi olup olmadığını kontrol et",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "monitor",
+  "kind": "monitor",
+  "headline": "check-1: sentetik kontrol başarısız",
+  "impact": "sentetik kontrol erişemiyor",
+  "evidence": "Tek ölçümde eşik aşıldı; sentetik kontrol sonucu.",
+  "next": "Kontrolün son sonuçlarını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "monitor-noname",
+  "kind": "monitor",
+  "headline": "svc-a: sentetik kontrol başarısız",
+  "impact": "sentetik kontrol erişemiyor",
+  "evidence": "Tek ölçümde eşik aşıldı; sentetik kontrol sonucu.",
+  "next": "Kontrolün son sonuçlarını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "self-ingest-stall",
+  "kind": "self",
+  "headline": "Coremetry: veri alımı durdu",
+  "impact": "Coremetry iç sağlığı",
+  "evidence": "Tek ölçümde eşik aşıldı; Coremetry'nin kendi ölçümü.",
+  "next": "Coremetry sistem sayfasını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "self-spool-depth",
+  "kind": "self",
+  "headline": "Coremetry: yerel kuyruk birikiyor",
+  "impact": "Coremetry iç sağlığı",
+  "evidence": "Tek ölçümde eşik aşıldı; Coremetry'nin kendi ölçümü.",
+  "next": "Coremetry sistem sayfasını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "self-disk-eta",
+  "kind": "self",
+  "headline": "Coremetry: disk dolmak üzere",
+  "impact": "Coremetry iç sağlığı",
+  "evidence": "Tek ölçümde eşik aşıldı; Coremetry'nin kendi ölçümü.",
+  "next": "Coremetry sistem sayfasını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "self-channel-broken:c",
+  "kind": "self",
+  "headline": "Coremetry: bildirim kanalı çalışmıyor",
+  "impact": "Coremetry iç sağlığı",
+  "evidence": "Tek ölçümde eşik aşıldı; Coremetry'nin kendi ölçümü.",
+  "next": "Coremetry sistem sayfasını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "self-volume-spike",
+  "kind": "self",
+  "headline": "Coremetry: telemetri hacmi sıçradı",
+  "impact": "Coremetry iç sağlığı",
+  "evidence": "Tek ölçümde eşik aşıldı; Coremetry'nin kendi ölçümü.",
+  "next": "Coremetry sistem sayfasını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "self-other",
+  "kind": "self",
+  "headline": "Coremetry: iç sağlık uyarısı",
+  "impact": "Coremetry iç sağlığı",
+  "evidence": "Tek ölçümde eşik aşıldı; Coremetry'nin kendi ölçümü.",
+  "next": "Coremetry sistem sayfasını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "slo",
+  "kind": "slo",
+  "headline": "svc-a: SLO hata bütçesi hızla tükeniyor — 14,4×",
+  "impact": "değer 14,4 (eşik 1)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Kural ayrıntısını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "slo-inf",
+  "kind": "slo",
+  "headline": "svc-a: SLO hata bütçesi hızla tükeniyor — tam kayıp",
+  "impact": "değer 0 (eşik 1)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "next": "Kural ayrıntısını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "storm",
+  "kind": "exception_storm",
+  "headline": "Exception fırtınası — 7 serviste yeni hata",
+  "impact": "7 serviste aynı anda",
+  "evidence": "Dedektör sürdürme koşulunu geçti; exception kayıtlarından.",
+  "next": "Hata grubunu ve örnek trace'i incele",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "shared",
+  "kind": "exception_shared",
+  "headline": "svc-a: paylaşılan bağımlılık hatası — 3 serviste aynı anda",
+  "impact": "3 serviste aynı anda",
+  "evidence": "Dedektör sürdürme koşulunu geçti; exception kayıtlarından.",
+  "next": "Hata grubunu ve örnek trace'i incele",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji unknown ilişki doğrulanamadı",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "fatal",
+  "kind": "exception_fatal",
+  "headline": "svc-a: ölümcül altyapı hatası",
+  "impact": "12 oluşum",
+  "evidence": "Tek ölçümde eşik aşıldı; exception kayıtlarından.",
+  "next": "Hata grubunu ve örnek trace'i incele",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "exgroup",
+  "kind": "exception_group",
+  "headline": "svc-a: Exception · ErrorType-1",
+  "impact": "42 oluşum",
+  "evidence": "Tek ölçümde eşik aşıldı; exception kayıtlarından.",
+  "next": "Hata grubunu ve örnek trace'i incele",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "exgroup-http5",
+  "kind": "exception_group.http",
+  "headline": "svc-a: Teknik hata · HTTP 503",
+  "impact": "hata grubu",
+  "evidence": "Tek ölçümde eşik aşıldı; exception kayıtlarından.",
+  "next": "Hata grubunu ve örnek trace'i incele",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "exgroup-http4",
+  "kind": "exception_group.http",
+  "headline": "svc-a: HTTP hatası · 404",
+  "impact": "hata grubu",
+  "evidence": "Tek ölçümde eşik aşıldı; exception kayıtlarından.",
+  "next": "Hata grubunu ve örnek trace'i incele",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "exgroup-oracle",
+  "kind": "exception_group.oracle",
+  "headline": "svc-a: Oracle hata · ERR-1",
+  "impact": "hata grubu",
+  "evidence": "Tek ölçümde eşik aşıldı; Oracle hata tablosundan.",
+  "next": "Hata grubunu ve örnek trace'i incele",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "incident-problem",
+  "kind": "incident",
+  "headline": "Olay: başlık-1",
+  "impact": "3 bağlı problem",
+  "evidence": "Tek ölçümde eşik aşıldı.",
+  "next": "Olay sayfasını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji unknown ilişki doğrulanamadı",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "rule-builtin-err",
+  "kind": "rule.builtin",
+  "headline": "svc-a: kural ihlali — Kural-1",
+  "impact": "değer %6 (eşik %5)",
+  "evidence": "Kural eşiği aşıldı.",
+  "next": "Servisin hata kırılımına bak",
+  "gates": [
+   "G1 trafik pass ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "rule-user-ms",
+  "kind": "rule.user",
+  "headline": "svc-a: kural ihlali — Kural-2",
+  "impact": "değer 1,3 sn (eşik 1 sn)",
+  "evidence": "Kural eşiği aşıldı.",
+  "next": "Yavaş operasyonları ve trace'leri aç",
+  "gates": [
+   "G1 trafik unknown trafik okunmadı",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "rule-user-rate",
+  "kind": "rule.user",
+  "headline": "svc-a: kural ihlali — r-2",
+  "impact": "değer 0 (eşik 0)",
+  "evidence": "Kural eşiği aşıldı.",
+  "next": "Kural ayrıntısını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "rule-user-sn",
+  "kind": "rule.user",
+  "headline": "svc-a: kural ihlali — Kural-3",
+  "impact": "değer 2,5 (eşik 1)",
+  "evidence": "Kural eşiği aşıldı.",
+  "next": "Kural ayrıntısını aç",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim context özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ },
+ {
+  "name": "rule-episode-ctx",
+  "kind": "rule.user",
+  "headline": "svc-a: kural ihlali — Kural-4",
+  "impact": "değer %81,2 (eşik %80)",
+  "evidence": "Kural eşiği aşıldı.",
+  "next": "Kural ayrıntısını aç",
+  "context": [
+   "takvim: ay sonu",
+   "3. tekrar"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim context özel gün: month-end-like",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "rule-halfday",
+  "kind": "rule.user",
+  "headline": "svc-a: kural ihlali — Kural-5",
+  "impact": "değer 1 (eşik 1)",
+  "evidence": "Kural eşiği aşıldı.",
+  "next": "Kural ayrıntısını aç",
+  "context": [
+   "yakın deploy: svc-a v3",
+   "takvim: yarım gün"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v3",
+   "G6 takvim context özel gün: half-day",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "rule-long-clip",
+  "kind": "rule.user",
+  "headline": "svc-a: kural ihlali — Çok uzun kural adı ğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğ…",
+  "impact": "değer 1 (eşik 1)",
+  "evidence": "Kural eşiği aşıldı.",
+  "next": "Kural ayrıntısını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "ex",
+  "kind": "exception_group",
+  "headline": "svc-a: Exception · ErrorType-9",
+  "impact": "1234 oluşum",
+  "evidence": "Hata grubu 1234 kez görüldü.",
+  "next": "Hata grubunu ve örnek trace'i incele",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis"
+  ],
+  "gates": [
+   "G1 trafik pass ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim context özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ },
+ {
+  "name": "ex-http5-regressed",
+  "kind": "exception_group.http",
+  "headline": "svc-a: Teknik hata · HTTP 503 (geri döndü)",
+  "impact": "3 oluşum",
+  "evidence": "Hata grubu 3 kez görüldü.",
+  "next": "Hata grubunu ve örnek trace'i incele",
+  "gates": [
+   "G1 trafik fail oluşum tabanın altında",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "ex-http4",
+  "kind": "exception_group.http",
+  "headline": "svc-a: HTTP hatası · HTTP 429",
+  "impact": "1234 oluşum",
+  "evidence": "Hata grubu 1234 kez görüldü.",
+  "next": "Hata grubunu ve örnek trace'i incele",
+  "gates": [
+   "G1 trafik pass ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "ex-oracle",
+  "kind": "exception_group.oracle",
+  "headline": "svc-a: Oracle hata · ErrorType-9 · SELECT op",
+  "impact": "1234 oluşum",
+  "evidence": "Hata grubu 1234 kez görüldü.",
+  "next": "Hata grubunu ve örnek trace'i incele",
+  "gates": [
+   "G1 trafik pass ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "ev-op-latency",
+  "kind": "anomaly_event.trace_op_latency",
+  "headline": "svc-a: operasyon yavaşladı — GET /a (4,2×)",
+  "impact": "normalin 4,2×",
+  "evidence": "Anomali olayı (henüz problem değil).",
+  "next": "Anomali detayını aç",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis",
+   "2. tekrar"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim flag özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ },
+ {
+  "name": "ev-op",
+  "kind": "anomaly_event.trace_op",
+  "headline": "svc-a: operasyon hataları arttı — GET /a (2,5×)",
+  "impact": "normalin 2,5×",
+  "evidence": "Anomali olayı (henüz problem değil).",
+  "next": "Anomali detayını aç",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis",
+   "2. tekrar"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim flag özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ },
+ {
+  "name": "ev-log",
+  "kind": "anomaly_event.log_pattern",
+  "headline": "svc-a: log deseni arttı — pat-1 (9×)",
+  "impact": "normalin 9×",
+  "evidence": "Anomali olayı (henüz problem değil).",
+  "next": "Anomali detayını aç",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis",
+   "2. tekrar"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim flag özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ },
+ {
+  "name": "ev-behavior",
+  "kind": "anomaly_event.behavior_change",
+  "headline": "svc-a: davranış değişti (3×)",
+  "impact": "normalin 3×",
+  "evidence": "Anomali olayı (henüz problem değil).",
+  "next": "Anomali detayını aç",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis",
+   "2. tekrar"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim context özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ },
+ {
+  "name": "ev-newtpl",
+  "kind": "anomaly_event.log_template_new",
+  "headline": "svc-a: yeni log şablonu — tpl-1",
+  "impact": "taban yok (ilk görülme)",
+  "evidence": "Anomali olayı (henüz problem değil).",
+  "next": "Anomali detayını aç",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis",
+   "2. tekrar"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim flag özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ },
+ {
+  "name": "ev-subject",
+  "kind": "anomaly_event.subject_red",
+  "headline": "svc-a: özne sapması — p99_ms @ GET /a (6×)",
+  "impact": "normalin 6×",
+  "evidence": "Anomali olayı (henüz problem değil).",
+  "next": "Anomali detayını aç",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis",
+   "2. tekrar"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim flag özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ },
+ {
+  "name": "ev-raw",
+  "kind": "anomaly_event.custom_kind",
+  "headline": "svc-a: custom_kind — x (1,5×)",
+  "impact": "normalin 1,5×",
+  "evidence": "Anomali olayı (henüz problem değil).",
+  "next": "Anomali detayını aç",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis",
+   "2. tekrar"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim context özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ },
+ {
+  "name": "ev-ml",
+  "kind": "anomaly_event.ml:new_template",
+  "headline": "svc-a: yeni log şablonu (2×)",
+  "impact": "normalin 2×",
+  "evidence": "Anomali olayı (henüz problem değil).",
+  "next": "Anomali detayını aç",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis",
+   "2. tekrar"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim flag özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ },
+ {
+  "name": "ev-ml-metric",
+  "kind": "anomaly_event.ml:metric_cpu",
+  "headline": "svc-a: ML metric_cpu — cpu (3,3×)",
+  "impact": "normalin 3,3×",
+  "evidence": "Anomali olayı (henüz problem değil).",
+  "next": "Anomali detayını aç",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis",
+   "2. tekrar"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim context özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ },
+ {
+  "name": "ev-nopat-noratio",
+  "kind": "anomaly_event.trace_op",
+  "headline": "svc-a: operasyon hataları arttı",
+  "impact": "normalin —×",
+  "evidence": "Anomali olayı (henüz problem değil).",
+  "next": "Anomali detayını aç",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis",
+   "2. tekrar"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme unknown sürdürme bilinmiyor",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim flag özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ },
+ {
+  "name": "inc",
+  "kind": "incident",
+  "headline": "Olay: başlık-2",
+  "impact": "2 bağlı problem",
+  "evidence": "Bağlı problemlerden oluşan olay.",
+  "next": "Olay sayfasını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji unknown ilişki doğrulanamadı",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ]
+ },
+ {
+  "name": "inc-resolved",
+  "kind": "incident",
+  "headline": "Olay: başlık-3",
+  "impact": "olay ilan edildi",
+  "evidence": "Bağlı problemlerden oluşan olay.",
+  "next": "Olay sayfasını aç",
+  "context": [
+   "yakın deploy: svc-a v2",
+   "takvim: tatil günü",
+   "batch servis"
+  ],
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme na tasarım gereği tek ölçüm",
+   "G3 VM karar na ",
+   "G4 topoloji unknown ilişki doğrulanamadı",
+   "G5 deploy context yakın deploy: svc-a v2",
+   "G6 takvim context özel gün: holiday",
+   "G7 batch context batch servis"
+  ]
+ }
+]

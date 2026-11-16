@@ -1,0 +1,1767 @@
+[
+ {
+  "field": "headline",
+  "tr": "svc-a: hata oranı arttı — %3,25, normal %0,4",
+  "msg": {
+   "k": "h.errUp",
+   "a": {
+    "nPct": 0.4,
+    "sp": "svc-a: ",
+    "vPct": 3.25
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "hata oranı %3,25 (normal %0,4)",
+  "msg": {
+   "k": "imp.err",
+   "a": {
+    "nPct": 0.4,
+    "vPct": 3.25
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Dedektör sürdürme koşulunu geçti; ölçü VictoriaMetrics'ten (örneklenmemiş).",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.dwell",
+    "srcK": "ev.src.vm"
+   }
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Servisin hata kırılımına bak",
+  "msg": {
+   "k": "next.errBreakdown"
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "dedektörün sürdürme kuralı",
+  "msg": {
+   "k": "gate.dwellPass"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: hata oranı arttı — %12,5, normal %1",
+  "msg": {
+   "k": "h.errUp",
+   "a": {
+    "nPct": 1,
+    "sp": "svc-a: ",
+    "vPct": 12.5
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "hata oranı %12,5 (normal %1)",
+  "msg": {
+   "k": "imp.err",
+   "a": {
+    "nPct": 1,
+    "vPct": 12.5
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Dedektör sürdürme koşulunu geçti; VictoriaMetrics bu turda karar vermedi.",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.dwell",
+    "srcK": "ev.src.vmHold"
+   }
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "5 dk'da çağrı tabanın altında",
+  "msg": {
+   "k": "gate.callsBelow"
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "VictoriaMetrics bu turda karar vermedi",
+  "msg": {
+   "k": "gate.vmHold"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: hata oranı düştü — %0,05, normal %2",
+  "msg": {
+   "k": "h.errDown",
+   "a": {
+    "nPct": 2,
+    "sp": "svc-a: ",
+    "vPct": 0.05
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "hata oranı %0,05 (normal %2)",
+  "msg": {
+   "k": "imp.err",
+   "a": {
+    "nPct": 2,
+    "vPct": 0.05
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Dedektör sürdürme koşulunu geçti; ölçü span'lerden (örneklenmiş).",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.dwell",
+    "srcK": "ev.src.span"
+   }
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "trafik okunmadı",
+  "msg": {
+   "k": "gate.trafficUnread"
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "ölçü span'den (VM kullanılmadı)",
+  "msg": {
+   "k": "gate.vmSpan"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: teknik hata (5xx) sürekli artıyor — %7,75, normal %0,5",
+  "msg": {
+   "k": "h.errRamp",
+   "a": {
+    "nPct": 0.5,
+    "sp": "svc-a: ",
+    "vPct": 7.75
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "hata oranı %7,75 (normal %0,5)",
+  "msg": {
+   "k": "imp.err",
+   "a": {
+    "nPct": 0.5,
+    "vPct": 7.75
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: yanıt süresi uzadı — p99 1,45 sn, normal 320 ms",
+  "msg": {
+   "k": "h.p99Up",
+   "a": {
+    "nMs": 320,
+    "sp": "svc-a: ",
+    "vMs": 1450
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "p99 1,45 sn (normal 320 ms)",
+  "msg": {
+   "k": "imp.p99",
+   "a": {
+    "nMs": 320,
+    "vMs": 1450
+   }
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Yavaş operasyonları ve trace'leri aç",
+  "msg": {
+   "k": "next.slowOps"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: yanıt süresi kısaldı — p99 80 ms, normal 320 ms",
+  "msg": {
+   "k": "h.p99Down",
+   "a": {
+    "nMs": 320,
+    "sp": "svc-a: ",
+    "vMs": 80
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "p99 80 ms (normal 320 ms)",
+  "msg": {
+   "k": "imp.p99",
+   "a": {
+    "nMs": 320,
+    "vMs": 80
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: trafik arttı — 250/sn, normal 40/sn",
+  "msg": {
+   "k": "h.rateUp",
+   "a": {
+    "nNum": 40,
+    "sp": "svc-a: ",
+    "vNum": 250.5
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "trafik 250/sn (normal 40/sn)",
+  "msg": {
+   "k": "imp.rate",
+   "a": {
+    "nNum": 40,
+    "vNum": 250.5
+   }
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Trafiğin nereden düştüğünü/arttığını kontrol et",
+  "msg": {
+   "k": "next.trafficWhere"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: trafik düştü — %91,2 azaldı (3,5/sn)",
+  "msg": {
+   "k": "h.rateDropPct",
+   "a": {
+    "dPct": 91.25,
+    "sp": "svc-a: ",
+    "vNum": 3.5
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "trafik 3,5/sn (normal 40/sn)",
+  "msg": {
+   "k": "imp.rate",
+   "a": {
+    "nNum": 40,
+    "vNum": 3.5
+   }
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "referans trafik tabanın altında",
+  "msg": {
+   "k": "gate.baseBelow"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: trafik düştü — 3,5/sn, normal 0/sn",
+  "msg": {
+   "k": "h.rateDrop",
+   "a": {
+    "nNum": 0,
+    "sp": "svc-a: ",
+    "vNum": 3.5
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "trafik 3,5/sn (normal 0/sn)",
+  "msg": {
+   "k": "imp.rate",
+   "a": {
+    "nNum": 0,
+    "vNum": 3.5
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: servis sustu — son kovalarda hiç istek yok",
+  "msg": {
+   "k": "h.silent",
+   "a": {
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 0 (eşik 0)",
+  "msg": {
+   "k": "imp.rule",
+   "a": {
+    "tNum": 0,
+    "vNum": 0
+   }
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Servisin son trafiğini kontrol et",
+  "msg": {
+   "k": "next.recentTraffic"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: queue_depth olağandışı — normalin 5×",
+  "msg": {
+   "k": "h.unusualX",
+   "a": {
+    "metric": "queue_depth",
+    "rX": 5,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 50 (eşik 10)",
+  "msg": {
+   "k": "imp.rule",
+   "a": {
+    "tNum": 10,
+    "vNum": 50
+   }
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Kural ayrıntısını aç",
+  "msg": {
+   "k": "next.rule"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: hata sayısı olağandışı",
+  "msg": {
+   "k": "h.unusual",
+   "a": {
+    "metricK": "metric.error_count",
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: başarısız işlem sayısı olağandışı — normalin 3×",
+  "msg": {
+   "k": "h.unusualX",
+   "a": {
+    "metricK": "metric.fail_count",
+    "rX": 3,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 9 (eşik 3)",
+  "msg": {
+   "k": "imp.rule",
+   "a": {
+    "tNum": 3,
+    "vNum": 9
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: trafik olağandışı",
+  "msg": {
+   "k": "h.unusual",
+   "a": {
+    "metricK": "metric.request_rate",
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 0 (eşik 30)",
+  "msg": {
+   "k": "imp.rule",
+   "a": {
+    "tNum": 30,
+    "vNum": 0
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: dış kaynak hata sayısı arttı — 14, normal 2",
+  "msg": {
+   "k": "h.ext",
+   "a": {
+    "metricK": "metric.error_count",
+    "nNum": 2,
+    "sp": "svc-a: ",
+    "vNum": 14
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 14 (eşik 2)",
+  "msg": {
+   "k": "imp.rule",
+   "a": {
+    "tNum": 2,
+    "vNum": 14
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Dedektör sürdürme koşulunu geçti; dış kaynak sorgusundan.",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.dwell",
+    "srcK": "ev.src.external"
+   }
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Dış kaynak serisini aç",
+  "msg": {
+   "k": "next.external"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "src-1: dış kaynak erişilemiyor — ardışık sorgu hatası",
+  "msg": {
+   "k": "h.extDown",
+   "a": {
+    "sp": "src-1: "
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: dış kaynakta çok sayıda eşzamanlı anomali (özet)",
+  "msg": {
+   "k": "h.extCap",
+   "a": {
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: dış kaynakta yayılan anomali — 6 sinyal",
+  "msg": {
+   "k": "h.extCluster",
+   "a": {
+    "cNum": 6,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "6 sinyal birlikte",
+  "msg": {
+   "k": "imp.signals",
+   "a": {
+    "cNum": 6
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: yayılan sorun — 4 sinyal birlikte",
+  "msg": {
+   "k": "h.cluster",
+   "a": {
+    "cNum": 4,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "4 sinyal birlikte",
+  "msg": {
+   "k": "imp.signals",
+   "a": {
+    "cNum": 4
+   }
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Kök neden panelinden yayılımı incele",
+  "msg": {
+   "k": "next.rootCause"
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "iddia edilen ilişki topolojide yok",
+  "msg": {
+   "k": "gate.relFail"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: yaygın yavaşlama — p99 2,3 sn, taban 700 ms",
+  "msg": {
+   "k": "h.slowdown",
+   "a": {
+    "nMs": 700,
+    "sp": "svc-a: ",
+    "vMs": 2300
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "p99 2,3 sn (taban 700 ms)",
+  "msg": {
+   "k": "imp.p99Base",
+   "a": {
+    "nMs": 700,
+    "vMs": 2300
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Tek ölçümde eşik aşıldı; ölçü span'lerden (örneklenmiş).",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.single",
+    "srcK": "ev.src.span"
+   }
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "tasarım gereği tek ölçüm",
+  "msg": {
+   "k": "gate.dwellNA"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: trafik çöktü ve yavaşladı — p99 2,3 sn",
+  "msg": {
+   "k": "h.collapse",
+   "a": {
+    "sp": "svc-a: ",
+    "vMs": 2300
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "postgresql@db-host-1/db-1: veritabanı hata oranı yüksek — %4,5",
+  "msg": {
+   "k": "h.dbErr",
+   "a": {
+    "sp": "postgresql@db-host-1/db-1: ",
+    "vPct": 4.5
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "hata oranı %4,5 (eşik %2)",
+  "msg": {
+   "k": "imp.dbErr",
+   "a": {
+    "tPct": 2,
+    "vPct": 4.5
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Dedektör sürdürme koşulunu geçti; ölçü veritabanı çağrı özetinden (örneklenmiş span).",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.dwell",
+    "srcK": "ev.src.dbmv"
+   }
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Veritabanı detayını aç",
+  "msg": {
+   "k": "next.db"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "postgresql@db-host-1/db-1: veritabanı yanıt süresi uzadı — p99 1,8 sn",
+  "msg": {
+   "k": "h.dbP99",
+   "a": {
+    "sp": "postgresql@db-host-1/db-1: ",
+    "vMs": 1800
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "p99 1,8 sn (eşik 500 ms)",
+  "msg": {
+   "k": "imp.dbP99",
+   "a": {
+    "tMs": 500,
+    "vMs": 1800
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "postgresql@db-host-1/db-1: veritabanı hataları arttı — 5 dk'da 37 hata",
+  "msg": {
+   "k": "h.dbCount",
+   "a": {
+    "cNum": 37,
+    "sp": "postgresql@db-host-1/db-1: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "37 hata / 5 dk (eşik 10)",
+  "msg": {
+   "k": "imp.dbCount",
+   "a": {
+    "tNum": 10,
+    "vNum": 37
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: kapasite %91,5 dolu (eşik %85)",
+  "msg": {
+   "k": "h.dbCap",
+   "a": {
+    "sp": "svc-a: ",
+    "tPct": 85,
+    "vPct": 91.5
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer %91,5 (eşik %85)",
+  "msg": {
+   "k": "imp.rule.pct",
+   "a": {
+    "tPct": 85,
+    "vPct": 91.5
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Tek ölçümde eşik aşıldı; dış kaynak sorgusundan.",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.single",
+    "srcK": "ev.src.external"
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: yavaş SQL ifadesi — p95 4,2 sn",
+  "msg": {
+   "k": "h.slowStmt",
+   "a": {
+    "sp": "svc-a: ",
+    "vMs": 4200
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 4,2 sn (eşik 1 sn)",
+  "msg": {
+   "k": "imp.rule.ms",
+   "a": {
+    "tMs": 1000,
+    "vMs": 4200
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Tek ölçümde eşik aşıldı; ölçü veritabanı çağrı özetinden (örneklenmiş span).",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.single",
+    "srcK": "ev.src.dbmv"
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: JVM GC duraklaması uzun — ort. 640 ms",
+  "msg": {
+   "k": "h.gcPause",
+   "a": {
+    "sp": "svc-a: ",
+    "vMs": 640
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "kullanıcı etkisi doğrulanmadı",
+  "msg": {
+   "k": "imp.unverified"
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Aynı serviste kullanıcı etkisi olup olmadığını kontrol et",
+  "msg": {
+   "k": "next.userImpact"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: JVM zamanının %23,4'i GC'de",
+  "msg": {
+   "k": "h.gcPct",
+   "a": {
+    "sp": "svc-a: ",
+    "vPct": 23.4
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "aynı serviste açık hata/gecikme problemi var",
+  "msg": {
+   "k": "imp.gcOpen"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "check-1: sentetik kontrol başarısız",
+  "msg": {
+   "k": "h.monitor",
+   "a": {
+    "sp": "check-1: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "sentetik kontrol erişemiyor",
+  "msg": {
+   "k": "imp.monitor"
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Tek ölçümde eşik aşıldı; sentetik kontrol sonucu.",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.single",
+    "srcK": "ev.src.probe"
+   }
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Kontrolün son sonuçlarını aç",
+  "msg": {
+   "k": "next.monitor"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: sentetik kontrol başarısız",
+  "msg": {
+   "k": "h.monitor",
+   "a": {
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "Coremetry: veri alımı durdu",
+  "msg": {
+   "k": "h.self.ingest"
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "Coremetry iç sağlığı",
+  "msg": {
+   "k": "imp.self"
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Tek ölçümde eşik aşıldı; Coremetry'nin kendi ölçümü.",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.single",
+    "srcK": "ev.src.self"
+   }
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Coremetry sistem sayfasını aç",
+  "msg": {
+   "k": "next.system"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "Coremetry: yerel kuyruk birikiyor",
+  "msg": {
+   "k": "h.self.spool"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "Coremetry: disk dolmak üzere",
+  "msg": {
+   "k": "h.self.disk"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "Coremetry: bildirim kanalı çalışmıyor",
+  "msg": {
+   "k": "h.self.channel"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "Coremetry: telemetri hacmi sıçradı",
+  "msg": {
+   "k": "h.self.volume"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "Coremetry: iç sağlık uyarısı",
+  "msg": {
+   "k": "h.self.other"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: SLO hata bütçesi hızla tükeniyor — 14,4×",
+  "msg": {
+   "k": "h.slo",
+   "a": {
+    "rX": 14.4,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 14,4 (eşik 1)",
+  "msg": {
+   "k": "imp.rule",
+   "a": {
+    "tNum": 1,
+    "vNum": 14.4
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: SLO hata bütçesi hızla tükeniyor — tam kayıp",
+  "msg": {
+   "k": "h.slo",
+   "a": {
+    "rX": "inf",
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 0 (eşik 1)",
+  "msg": {
+   "k": "imp.rule",
+   "a": {
+    "tNum": 1,
+    "vNum": 0
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "Exception fırtınası — 7 serviste yeni hata",
+  "msg": {
+   "k": "h.storm",
+   "a": {
+    "cNum": 7
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "7 serviste aynı anda",
+  "msg": {
+   "k": "imp.services",
+   "a": {
+    "cNum": 7
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Dedektör sürdürme koşulunu geçti; exception kayıtlarından.",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.dwell",
+    "srcK": "ev.src.exception"
+   }
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Hata grubunu ve örnek trace'i incele",
+  "msg": {
+   "k": "next.exGroup"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: paylaşılan bağımlılık hatası — 3 serviste aynı anda",
+  "msg": {
+   "k": "h.shared",
+   "a": {
+    "cNum": 3,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "3 serviste aynı anda",
+  "msg": {
+   "k": "imp.services",
+   "a": {
+    "cNum": 3
+   }
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "ilişki doğrulanamadı",
+  "msg": {
+   "k": "gate.relUnknown"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: ölümcül altyapı hatası",
+  "msg": {
+   "k": "h.fatal",
+   "a": {
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "12 oluşum",
+  "msg": {
+   "k": "imp.occur",
+   "a": {
+    "cNum": 12
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Tek ölçümde eşik aşıldı; exception kayıtlarından.",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.single",
+    "srcK": "ev.src.exception"
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: Exception · ErrorType-1",
+  "msg": {
+   "k": "h.ex.generic",
+   "a": {
+    "sp": "svc-a: ",
+    "t": "ErrorType-1"
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "42 oluşum",
+  "msg": {
+   "k": "imp.occur",
+   "a": {
+    "cNum": 42
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: Teknik hata · HTTP 503",
+  "msg": {
+   "k": "h.ex.tech",
+   "a": {
+    "sp": "svc-a: ",
+    "t": "HTTP 503"
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "hata grubu",
+  "msg": {
+   "k": "imp.group"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: HTTP hatası · 404",
+  "msg": {
+   "k": "h.ex.http",
+   "a": {
+    "sp": "svc-a: ",
+    "t": "404"
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: Oracle hata · ERR-1",
+  "msg": {
+   "k": "h.ex.oracle",
+   "a": {
+    "sp": "svc-a: ",
+    "t": "ERR-1"
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Tek ölçümde eşik aşıldı; Oracle hata tablosundan.",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.single",
+    "srcK": "ev.src.oracle"
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "3 bağlı problem",
+  "msg": {
+   "k": "imp.linked",
+   "a": {
+    "cNum": 3
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Tek ölçümde eşik aşıldı.",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.single",
+    "srcK": "ev.src.none"
+   }
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Olay sayfasını aç",
+  "msg": {
+   "k": "next.incident"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: kural ihlali — Kural-1",
+  "msg": {
+   "k": "h.rule",
+   "a": {
+    "name": "Kural-1",
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer %6 (eşik %5)",
+  "msg": {
+   "k": "imp.rule.pct",
+   "a": {
+    "tPct": 5,
+    "vPct": 6
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Kural eşiği aşıldı.",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.rule",
+    "srcK": "ev.src.none"
+   }
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "sürdürme bilinmiyor",
+  "msg": {
+   "k": "gate.dwellUnknown"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: kural ihlali — Kural-2",
+  "msg": {
+   "k": "h.rule",
+   "a": {
+    "name": "Kural-2",
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 1,3 sn (eşik 1 sn)",
+  "msg": {
+   "k": "imp.rule.ms",
+   "a": {
+    "tMs": 1000,
+    "vMs": 1300
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: kural ihlali — r-2",
+  "msg": {
+   "k": "h.rule",
+   "a": {
+    "name": "r-2",
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: kural ihlali — Kural-3",
+  "msg": {
+   "k": "h.rule",
+   "a": {
+    "name": "Kural-3",
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 2,5 (eşik 1)",
+  "msg": {
+   "k": "imp.rule",
+   "a": {
+    "tNum": 1,
+    "vNum": 2.5
+   }
+  }
+ },
+ {
+  "field": "context",
+  "tr": "yakın deploy: svc-a v2",
+  "msg": {
+   "k": "ctx.deploy",
+   "a": {
+    "name": "svc-a v2"
+   }
+  }
+ },
+ {
+  "field": "context",
+  "tr": "takvim: tatil günü",
+  "msg": {
+   "k": "ctx.holiday"
+  }
+ },
+ {
+  "field": "context",
+  "tr": "batch servis",
+  "msg": {
+   "k": "ctx.batch"
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "yakın deploy: svc-a v2",
+  "msg": {
+   "k": "gate.deploy",
+   "a": {
+    "name": "svc-a v2"
+   }
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "özel gün: holiday",
+  "msg": {
+   "k": "gate.calendar",
+   "a": {
+    "calK": "cal.holiday"
+   }
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "batch servis",
+  "msg": {
+   "k": "gate.batch"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: kural ihlali — Kural-4",
+  "msg": {
+   "k": "h.rule",
+   "a": {
+    "name": "Kural-4",
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer %81,2 (eşik %80)",
+  "msg": {
+   "k": "imp.rule.pct",
+   "a": {
+    "tPct": 80,
+    "vPct": 81.25
+   }
+  }
+ },
+ {
+  "field": "context",
+  "tr": "takvim: ay sonu",
+  "msg": {
+   "k": "ctx.monthEnd"
+  }
+ },
+ {
+  "field": "context",
+  "tr": "3. tekrar",
+  "msg": {
+   "k": "ctx.episode",
+   "a": {
+    "n": "3"
+   }
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "özel gün: month-end-like",
+  "msg": {
+   "k": "gate.calendar",
+   "a": {
+    "calK": "cal.month-end-like"
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: kural ihlali — Kural-5",
+  "msg": {
+   "k": "h.rule",
+   "a": {
+    "name": "Kural-5",
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 1 (eşik 1)",
+  "msg": {
+   "k": "imp.rule",
+   "a": {
+    "tNum": 1,
+    "vNum": 1
+   }
+  }
+ },
+ {
+  "field": "context",
+  "tr": "yakın deploy: svc-a v3",
+  "msg": {
+   "k": "ctx.deploy",
+   "a": {
+    "name": "svc-a v3"
+   }
+  }
+ },
+ {
+  "field": "context",
+  "tr": "takvim: yarım gün",
+  "msg": {
+   "k": "ctx.halfDay"
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "yakın deploy: svc-a v3",
+  "msg": {
+   "k": "gate.deploy",
+   "a": {
+    "name": "svc-a v3"
+   }
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "özel gün: half-day",
+  "msg": {
+   "k": "gate.calendar",
+   "a": {
+    "calK": "cal.half-day"
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: kural ihlali — Çok uzun kural adı ğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğ…",
+  "msg": {
+   "k": "h.rule",
+   "a": {
+    "name": "Çok uzun kural adı ğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğğ",
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: Exception · ErrorType-9",
+  "msg": {
+   "k": "h.ex.generic",
+   "a": {
+    "sp": "svc-a: ",
+    "t": "ErrorType-9"
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "1234 oluşum",
+  "msg": {
+   "k": "imp.occur",
+   "a": {
+    "cNum": 1234
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Hata grubu 1234 kez görüldü.",
+  "msg": {
+   "k": "ev.group",
+   "a": {
+    "cNum": 1234
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: Teknik hata · HTTP 503 (geri döndü)",
+  "msg": {
+   "k": "h.ex.tech.reg",
+   "a": {
+    "sp": "svc-a: ",
+    "t": "HTTP 503"
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "3 oluşum",
+  "msg": {
+   "k": "imp.occur",
+   "a": {
+    "cNum": 3
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Hata grubu 3 kez görüldü.",
+  "msg": {
+   "k": "ev.group",
+   "a": {
+    "cNum": 3
+   }
+  }
+ },
+ {
+  "field": "gate",
+  "tr": "oluşum tabanın altında",
+  "msg": {
+   "k": "gate.occBelow"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: HTTP hatası · HTTP 429",
+  "msg": {
+   "k": "h.ex.http",
+   "a": {
+    "sp": "svc-a: ",
+    "t": "HTTP 429"
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: Oracle hata · ErrorType-9 · SELECT op",
+  "msg": {
+   "k": "h.ex.oracle",
+   "a": {
+    "sp": "svc-a: ",
+    "t": "ErrorType-9 · SELECT op"
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: operasyon yavaşladı — GET /a (4,2×)",
+  "msg": {
+   "k": "h.ev.p.x",
+   "a": {
+    "labelK": "evl.opSlow",
+    "pat": "GET /a",
+    "rX": 4.2,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "normalin 4,2×",
+  "msg": {
+   "k": "imp.ratio",
+   "a": {
+    "rX": 4.2
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Anomali olayı (henüz problem değil).",
+  "msg": {
+   "k": "ev.anomaly"
+  }
+ },
+ {
+  "field": "next",
+  "tr": "Anomali detayını aç",
+  "msg": {
+   "k": "next.anomaly"
+  }
+ },
+ {
+  "field": "context",
+  "tr": "2. tekrar",
+  "msg": {
+   "k": "ctx.episode",
+   "a": {
+    "n": "2"
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: operasyon hataları arttı — GET /a (2,5×)",
+  "msg": {
+   "k": "h.ev.p.x",
+   "a": {
+    "labelK": "evl.opErr",
+    "pat": "GET /a",
+    "rX": 2.5,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "normalin 2,5×",
+  "msg": {
+   "k": "imp.ratio",
+   "a": {
+    "rX": 2.5
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: log deseni arttı — pat-1 (9×)",
+  "msg": {
+   "k": "h.ev.p.x",
+   "a": {
+    "labelK": "evl.logPattern",
+    "pat": "pat-1",
+    "rX": 9,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "normalin 9×",
+  "msg": {
+   "k": "imp.ratio",
+   "a": {
+    "rX": 9
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: davranış değişti (3×)",
+  "msg": {
+   "k": "h.ev.x",
+   "a": {
+    "labelK": "evl.behavior",
+    "pat": "",
+    "rX": 3,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "normalin 3×",
+  "msg": {
+   "k": "imp.ratio",
+   "a": {
+    "rX": 3
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: yeni log şablonu — tpl-1",
+  "msg": {
+   "k": "h.ev.p",
+   "a": {
+    "labelK": "evl.newTemplate",
+    "pat": "tpl-1",
+    "rX": 0,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "taban yok (ilk görülme)",
+  "msg": {
+   "k": "imp.noBase"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: özne sapması — p99_ms @ GET /a (6×)",
+  "msg": {
+   "k": "h.ev.p.x",
+   "a": {
+    "labelK": "evl.subject",
+    "pat": "p99_ms @ GET /a",
+    "rX": 6,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "normalin 6×",
+  "msg": {
+   "k": "imp.ratio",
+   "a": {
+    "rX": 6
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: custom_kind — x (1,5×)",
+  "msg": {
+   "k": "h.ev.p.x",
+   "a": {
+    "label": "custom_kind",
+    "pat": "x",
+    "rX": 1.5,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "normalin 1,5×",
+  "msg": {
+   "k": "imp.ratio",
+   "a": {
+    "rX": 1.5
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: yeni log şablonu (2×)",
+  "msg": {
+   "k": "h.ev.x",
+   "a": {
+    "labelK": "evl.newTemplate",
+    "pat": "",
+    "rX": 2,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "normalin 2×",
+  "msg": {
+   "k": "imp.ratio",
+   "a": {
+    "rX": 2
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: ML metric_cpu — cpu (3,3×)",
+  "msg": {
+   "k": "h.ev.p.x",
+   "a": {
+    "label": "ML metric_cpu",
+    "pat": "cpu",
+    "rX": 3.3,
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "normalin 3,3×",
+  "msg": {
+   "k": "imp.ratio",
+   "a": {
+    "rX": 3.3
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a: operasyon hataları arttı",
+  "msg": {
+   "k": "h.ev",
+   "a": {
+    "labelK": "evl.opErr",
+    "pat": "",
+    "rX": "—",
+    "sp": "svc-a: "
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "normalin —×",
+  "msg": {
+   "k": "imp.ratio",
+   "a": {
+    "rX": "—"
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "2 bağlı problem",
+  "msg": {
+   "k": "imp.linked",
+   "a": {
+    "cNum": 2
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Bağlı problemlerden oluşan olay.",
+  "msg": {
+   "k": "ev.incident"
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "olay ilan edildi",
+  "msg": {
+   "k": "imp.incident"
+  }
+ }
+]

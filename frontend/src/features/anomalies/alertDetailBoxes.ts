@@ -18,6 +18,7 @@ import { subjectLabel } from '@/lib/problemSubject';
 import { alertProblemSummary } from './detailSummary';
 import { showRootCauseInSummary } from './anomalyDetail';
 import { tf, type Lang } from '@/lib/i18n'; // v0.10.2284 — metinler arayüz dilinde (varsayılan 'tr')
+import { stdImpactView } from '@/lib/problemStandardView'; // v0.10.2299 — etki EN anahtardan (TR aynı)
 
 type BoxProblem = Pick<Problem, 'ruleName' | 'metric' | 'value' | 'threshold' | 'service' | 'ruleId'
   | 'priorityReason' | 'pod' | 'clusters' | 'rootCause' | 'recentDeploy'>;
@@ -38,7 +39,7 @@ const CALLERS_SHOWN = 3;
 export function alertWhoText(p: BoxProblem, std?: ProblemStandard | null, lang: Lang = 'tr'): string | null {
   const subject = p.service ? subjectLabel(p.service) : '';
   if (!subject) return null;
-  const impact = std?.impact?.known ? std.impact.primary?.text?.trim() : '';
+  const impact = std?.impact?.known && std.impact.primary ? (stdImpactView(std, lang).text ?? '').trim() : '';
   const parts = [impact ? tf('pd.text.affectedImpact', lang, { s: subject, impact }) : tf('pd.text.affected', lang, { s: subject })];
   const callers = std?.impact?.callers ?? [];
   if (callers.length > 0) {

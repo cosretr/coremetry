@@ -73,6 +73,8 @@ type SignalGate struct {
 	Name   string `json:"name"`
 	Status string `json:"status"`
 	Note   string `json:"note,omitempty"`
+	// NoteMsg — v0.10.2299 (S2): Note'un metin anahtarı (ek alan; Note aynen).
+	NoteMsg *StdMsg `json:"noteMsg,omitempty"`
 }
 
 // GateInput — kapıların girdisi (Standardize* doldurur).
@@ -119,21 +121,25 @@ func gateTraffic(in GateInput) SignalGate {
 			g.Status = GatePass
 		} else {
 			g.Status, g.Note = GateFail, "oluşum tabanın altında"
+			g.NoteMsg = stdM("gate.occBelow")
 		}
 	case in.Traffic && in.Family == StdFamilyTraffic && in.Floor.BaselineCalls5m != nil:
 		if *in.Floor.BaselineCalls5m >= StdMinBaselineCalls5m {
 			g.Status = GatePass
 		} else {
 			g.Status, g.Note = GateFail, "referans trafik tabanın altında"
+			g.NoteMsg = stdM("gate.baseBelow")
 		}
 	case in.Traffic && in.Floor.Calls5m != nil:
 		if *in.Floor.Calls5m >= StdMinCalls5m {
 			g.Status = GatePass
 		} else {
 			g.Status, g.Note = GateFail, "5 dk'da çağrı tabanın altında"
+			g.NoteMsg = stdM("gate.callsBelow")
 		}
 	case in.Traffic:
 		g.Status, g.Note = GateUnknown, "trafik okunmadı"
+		g.NoteMsg = stdM("gate.trafficUnread")
 	}
 	return g
 }
@@ -143,12 +149,16 @@ func gateSustained(in GateInput) SignalGate {
 	switch in.Dwell {
 	case GatePass:
 		g.Note = "dedektörün sürdürme kuralı"
+		g.NoteMsg = stdM("gate.dwellPass")
 	case GateNA:
 		g.Note = "tasarım gereği tek ölçüm"
+		g.NoteMsg = stdM("gate.dwellNA")
 	case GateFail:
 		g.Note = "sürdürme sağlanmadı"
+		g.NoteMsg = stdM("gate.dwellFail")
 	default:
 		g.Status, g.Note = GateUnknown, "sürdürme bilinmiyor"
+		g.NoteMsg = stdM("gate.dwellUnknown")
 	}
 	return g
 }
@@ -161,10 +171,12 @@ func gateVMDecides(in GateInput) SignalGate {
 	switch {
 	case in.Source == StdSourceVM && in.VMHold:
 		g.Status, g.Note = GateFail, "VictoriaMetrics bu turda karar vermedi"
+		g.NoteMsg = stdM("gate.vmHold")
 	case in.Source == StdSourceVM:
 		g.Status = GatePass
 	default:
 		g.Status, g.Note = GateUnknown, "ölçü span'den (VM kullanılmadı)"
+		g.NoteMsg = stdM("gate.vmSpan")
 	}
 	return g
 }
@@ -177,10 +189,12 @@ func gateTopology(in GateInput) SignalGate {
 	switch {
 	case in.RelationVerified == nil:
 		g.Status, g.Note = GateUnknown, "ilişki doğrulanamadı"
+		g.NoteMsg = stdM("gate.relUnknown")
 	case *in.RelationVerified:
 		g.Status = GatePass
 	default:
 		g.Status, g.Note = GateFail, "iddia edilen ilişki topolojide yok"
+		g.NoteMsg = stdM("gate.relFail")
 	}
 	return g
 }
@@ -189,6 +203,7 @@ func gateDeploy(in GateInput) SignalGate {
 	g := SignalGate{ID: "G5", Name: "deploy", Status: GateNA}
 	if in.RecentDeploy != "" {
 		g.Status, g.Note = GateContext, "yakın deploy: "+in.RecentDeploy
+		g.NoteMsg = stdM("gate.deploy", "name", in.RecentDeploy)
 	}
 	return g
 }
@@ -201,8 +216,10 @@ func gateCalendar(in GateInput) SignalGate {
 	switch in.Family {
 	case StdFamilyTraffic, StdFamilyError, StdFamilyLatency:
 		g.Status, g.Note = GateFlag, "özel gün: "+in.CalendarKind
+		g.NoteMsg = stdM("gate.calendar", "calK", "cal."+in.CalendarKind)
 	default:
 		g.Status, g.Note = GateContext, "özel gün: "+in.CalendarKind
+		g.NoteMsg = stdM("gate.calendar", "calK", "cal."+in.CalendarKind)
 	}
 	return g
 }
@@ -211,6 +228,7 @@ func gateBatch(in GateInput) SignalGate {
 	g := SignalGate{ID: "G7", Name: "batch", Status: GateNA}
 	if in.Batch {
 		g.Status, g.Note = GateContext, "batch servis"
+		g.NoteMsg = stdM("gate.batch")
 	}
 	return g
 }
