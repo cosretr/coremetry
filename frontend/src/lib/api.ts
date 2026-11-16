@@ -57,6 +57,7 @@ import { withMetricSource } from './metricSource';
 // içinden (copilotChat'in gövdesinden) çıkarıldı: ikinci tüketici (akan
 // ✨ Explain) gelince gömülü ayrıştırıcı ikinci kopya demekti.
 import { readSSE } from './sse';
+import { currentLang, t as tl } from './i18n'; // v0.10.2292 — akış hata metni arayüz dilinde
 // GoDuration — every `since` below is forwarded to Go's time.ParseDuration,
 // which has no day unit; see the type's comment in utils.ts.
 import type { GoDuration } from './utils';
@@ -164,7 +165,7 @@ async function explainStream<T>(path: string, init: RequestInit, opts: ExplainSt
     if (f.kind === 'error') failed = typeof f.error === 'string' ? f.error : 'explain failed';
   });
   if (failed) throw new Error(failed);
-  if (answer === null) throw new Error('AI akışı cevapsız kapandı');
+  if (answer === null) throw new Error(tl('aiStream.noAnswer', currentLang()));
   return answer;
 }
 
@@ -299,7 +300,7 @@ async function insightStream(path: string, opts: InsightStreamOpts): Promise<Ins
     };
   }
   if (acc.base?.aiOff) return acc.base;
-  throw new Error(acc.base ? 'AI akışı cevapsız kapandı' : 'insight akışı boş kapandı');
+  throw new Error(tl(acc.base ? 'aiStream.noAnswer' : 'aiStream.empty', currentLang()));
 }
 
 // v0.8.413 — heavy, deliberate admin actions (telemetry purge) may

@@ -95,22 +95,19 @@ export function inboxVerdictSubject(it: InboxItem): VerdictSubject | null {
     : null;
 }
 
-/** v0.10.1531 (R3) — gerekçe etiketleri (menü sırası = Go chstore.NoiseReasons). */
-export const NOISE_REASONS: { id: NoiseReason; label: string; hint: string }[] = [
-  { id: 'expected', label: 'Beklenen davranış', hint: 'batch, bakım, test ya da planlı iş' },
-  { id: 'too_sensitive', label: 'Eşik fazla hassas', hint: 'gerçek bir bozulma yok, dedektör erken ötüyor' },
-  { id: 'known_accepted', label: 'Bilinen ve kabul edilmiş', hint: 'sorun biliniyor, takip ediliyor' },
-  { id: 'wrong_attribution', label: 'Yanlış atıf', hint: 'servis ya da kaynak yanlış' },
-  { id: 'other', label: 'Diğer', hint: 'not zorunlu' },
-];
+/** v0.10.1531 (R3) — gerekçe etiketleri (menü sırası = Go chstore.NoiseReasons).
+ *  v0.10.2292 — etiket / ipucu metni lib/i18n'de (verdict.reason.*); bu kayıt TR görünümü. */
+const NOISE_REASON_IDS: NoiseReason[] = ['expected', 'too_sensitive', 'known_accepted', 'wrong_attribution', 'other'];
+export const NOISE_REASONS: { id: NoiseReason; label: string; hint: string }[] = NOISE_REASON_IDS.map(id => ({
+  id, label: t(`verdict.reason.${id}`, 'tr'), hint: t(`verdict.reason.${id}.hint`, 'tr'),
+}));
 export function noiseReasonLabel(r: NoiseReason | undefined | '', lang: Lang = 'tr'): string {
-  const x = NOISE_REASONS.find(y => y.id === r);
-  return x ? (lang === 'tr' ? x.label : t(`verdict.reason.${x.id}`, lang)) : '';
+  return r && NOISE_REASON_IDS.includes(r) ? t(`verdict.reason.${r}`, lang) : '';
 }
 
-/** v0.10.2283 — gerekçe ipucu arayüz dilinde (TR = NOISE_REASONS.hint). */
+/** v0.10.2283 — gerekçe ipucu arayüz dilinde. */
 export function noiseReasonHint(r: NoiseReason, lang: Lang): string {
-  return lang === 'tr' ? (NOISE_REASONS.find(y => y.id === r)?.hint ?? '') : t(`verdict.reason.${r}.hint`, lang);
+  return NOISE_REASON_IDS.includes(r) ? t(`verdict.reason.${r}.hint`, lang) : '';
 }
 
 /** Alarm problemi detayından özne. Etiket = kural adı (inbox.go problemToInbox

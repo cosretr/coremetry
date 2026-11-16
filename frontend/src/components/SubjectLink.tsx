@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { CSSProperties, ReactNode } from 'react';
 import { subjectIsLinkable, subjectLabel, subjectTitle, subjectKind } from '../lib/problemSubject';
+import { useLang } from '../lib/i18n'; // v0.10.2292 — linksiz öznenin ipucu arayüz dilinde
 
 // SubjectLink — v0.9.1339 (entity-model Faz 4b).
 //
@@ -40,6 +41,7 @@ type Props = {
 
 export function SubjectLink({ service, subjectKind: kind, href, style, className, onClick, emptyFallback }: Props) {
   const label = subjectLabel(service);
+  const lang = useLang();
 
   if (!service && emptyFallback !== undefined) {
     return <span style={style} className={className}>{emptyFallback}</span>;
@@ -49,7 +51,7 @@ export function SubjectLink({ service, subjectKind: kind, href, style, className
     // gerekçe chstore selfHealthRunbooks yorumunda yazılı. Rozet, düz
     // metnin "bu satır bozuk" gibi okunmasını engelliyor.
     return (
-      <span style={style} className={className} title={subjectTitle(service)}>
+      <span style={style} className={className} title={subjectTitle(service, lang)}>
         {subjectKind(service, kind) === 'db' && (
           <span className="badge b-gray" style={{ fontSize: 9, marginRight: 4 }}>DB</span>
         )}

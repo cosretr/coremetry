@@ -3,6 +3,7 @@ import { api } from '@/lib/api';
 import type { GoDuration } from '@/lib/utils';
 import { keys } from './keys';
 import type { Problem, EvaluatorHealth, BlastRadius } from '@/lib/types';
+import { currentLang, t } from '@/lib/i18n'; // v0.10.2292 — ağ hatası gerekçesi arayüz dilinde
 
 // /api/problems — the open-incident inbox feeding /problems,
 // /anomalies, the sidebar badge, and several deep-link
@@ -135,7 +136,7 @@ export function useEvaluatorHealth() {
       (await api.evaluatorHealth()) ?? {
         // Ağ hatası = ÖLÇEMEDİK. 'ok' varsaymak, bu sürümün
         // düzelttiği hatayı istemci tarafında yeniden kurardı.
-        status: 'unknown', reason: 'Sağlık okunamadı (ağ hatası).',
+        status: 'unknown', reason: t('evalHealth.netErr', currentLang()),
         ageSec: -1, durationMs: 0, rules: 0, opened: 0, resolved: 0,
       },
     refetchInterval: 30_000,

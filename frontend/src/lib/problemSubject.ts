@@ -158,17 +158,12 @@ export function subjectIsLinkable(service: string, kind?: string): boolean {
  * tıklayamadığını görebilmeli; sessiz bir düz-metin "bu satır bozuk"
  * gibi okunur.
  */
-export function subjectTitle(service: string): string | undefined {
+export function subjectTitle(service: string, lang: Lang = 'tr'): string | undefined {
+  // v0.10.2292 — metin lib/i18n'de (subj.title.*), isteğe bağlı lang (varsayılan 'tr').
   const ext = parseExternalSubject(service);
-  if (ext) {
-    return `Dış metrik kaynağı (${ext.source}) serisi — bir servis değil, ` +
-      `bu yüzden servis sayfası linki yok`;
-  }
+  if (ext) return tf('subj.title.ext', lang, { src: ext.source });
   const db = parseDbSubject(service);
-  if (db) {
-    return `${db.system} veritabanı örneği (${db.instance}) — bir servis değil, ` +
-      `bu yüzden servis sayfası linki yok`;
-  }
+  if (db) return tf('subj.title.db', lang, { sys: db.system, inst: db.instance });
   return undefined;
 }
 

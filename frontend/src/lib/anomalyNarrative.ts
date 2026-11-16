@@ -1,7 +1,7 @@
 // anomalyNarrative.ts — eski dedektör olayı için insan diliyle başlık + özet
 // (C3, v0.10.1771). Saf; "normalin N×" yok, birimli "normal → şimdi".
 import type { AnomalyEvent } from '@/lib/types';
-import { tf, type Lang } from '@/lib/i18n';
+import { t, tf, type Lang } from '@/lib/i18n';
 
 import { subjectEventTopic, subjectMetricOf } from '@/lib/anomalySubjectMetric';
 
@@ -20,15 +20,16 @@ export function anomalyPlainHeadline(e: AnomalyEvent, lang: Lang = 'tr'): string
 }
 
 /** Durum + süre + sayı; "normalin N×" yok (C3). nowMs: açık olayın süresi için. */
-export function anomalyPlainSummary(e: AnomalyEvent, nowMs = Date.now()): string {
+export function anomalyPlainSummary(e: AnomalyEvent, nowMs = Date.now(), lang: Lang = 'tr'): string {
+  // v0.10.2292 — metin lib/i18n'de (anNarr.*), isteğe bağlı lang (varsayılan 'tr').
   const open = e.status === 'active';
   const endNs = open ? nowMs * 1e6 : e.lastSeen;
   const m = Math.max(1, Math.round((endNs - e.startedAt) / 60e9));
-  const dur = m < 60 ? `${m} dk` : `${Math.floor(m / 60)} sa ${m % 60} dk`;
+  const dur = m < 60 ? tf('aed.unit.m', lang, { n: m }) : tf('anNarr.hm', lang, { h: Math.floor(m / 60), m: m % 60 });
   // v0.10.1804 — consumer lag'de sayım olay değil, cari lag (kayıt).
   const now = isConsumerLag(e)
-    ? `lag ${(e.currentCount ?? 0).toLocaleString('tr-TR')} kayıt`
-    : e.currentCount ? `${e.currentCount} olay` : 'olay';
-  const dir = e.currentRatio >= 1 ? 'normalin üstünde' : 'normalin altında';
-  return `${open ? 'Sürüyor' : 'Bitti'} · ${dur} · ${now}, ${dir}`;
+    ? tf('anNarr.lag', lang, { n: (e.currentCount ?? 0).toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US') })
+    : e.currentCount ? tf('anNarr.events', lang, { n: e.currentCount }) : t('anNarr.event', lang);
+  const dir = t(e.currentRatio >= 1 ? 'anNarr.above' : 'anNarr.below', lang);
+  return `${t(open ? 'anNarr.open' : 'anNarr.ended', lang)} · ${dur} · ${now}, ${dir}`;
 }

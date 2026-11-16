@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+// v0.10.2292 — akış hata metni arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('./i18n', async (orig) => ({ ...(await orig<typeof import('./i18n')>()), currentLang: () => 'tr' as const }));
 import { api } from './api';
 
 // v0.9.1130 (AI Faz 2.2) — insight kartının İSTEMCİ sözleşmesi.
