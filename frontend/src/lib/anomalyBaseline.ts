@@ -1,4 +1,5 @@
 import type { AnomalyEvent } from '@/lib/types';
+import { t, type Lang } from '@/lib/i18n';
 
 // anomalyBaseline — v0.10.1792 (Davis F1.4): olayın tabansızlığı ve oran
 // etiketi; backend chstore.AnomalyBaselineless'ın ikizi. Yeni satır
@@ -14,6 +15,6 @@ export function anomalyBaselineless(e: Pick<AnomalyEvent, 'baselineKind' | 'peak
 }
 
 /** "×4.2" ya da tabansızda "taban yok". */
-export function anomalyRatioLabel(e: Pick<AnomalyEvent, 'baselineKind' | 'peakRatio'>, ratio: number = e.peakRatio): string {
-  return anomalyBaselineless(e) ? 'taban yok' : `×${ratio.toFixed(1)}`;
+export function anomalyRatioLabel(e: Pick<AnomalyEvent, 'baselineKind' | 'peakRatio'>, ratio: number = e.peakRatio, lang: Lang = 'tr'): string {
+  return anomalyBaselineless(e) ? t('anomalyRatio.noBaseline', lang) : `×${ratio.toFixed(1)}`;
 }

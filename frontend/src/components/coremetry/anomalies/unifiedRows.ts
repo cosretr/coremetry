@@ -8,16 +8,48 @@
 // "Ne oldu": ML lideri varsa sunucu özeti (ml.ExplainSummary, mlRowText);
 // yoksa eski olayın anlatımı (lib/anomalyNarrative.ts) — yeni log kalıbında
 // kaç satır görüldüğüyle.
-import type { AnomalyEvent, UnifiedAnomalyRow } from '@/lib/types';
+import type { AnomalyEvent, MLEvent, MLRecordView, UnifiedAnomalyRow } from '@/lib/types';
+import { t, type Lang } from '@/lib/i18n';
+import { measureKey, recordUsable } from './mlRecord';
+import { recordHeadline } from './mlRecordText';
 import { anomalyPlainHeadline } from '@/lib/anomalyNarrative';
 import { anomalyEventHref, mlEventHref } from '@/lib/anomalyHref';
 import type { SignalKind } from '@/lib/signalKind';
 import { groupStatusText, type MLGroupStatus } from './mlGroupRows';
 import { mlRowText } from './MLTab';
 
+// v0.10.2272 — ML liderinin olay kaydı (ml_events.record; liste yanıtı zaten
+// taşır, yeni sorgu yok) okunur ve bilinen bir ölçüsü varsa "Ne oldu" yeni
+// kartın başlığıyla (mlRecordText.recordHeadline) arayüz dilinde kurulur.
+// Kayıt yok / bozuk / invalid / ölçü bilinmiyor → sunucu cümlesi (mlRowText).
+const recordCache = new WeakMap<MLEvent, MLRecordView | null>();
+
+/** SAF: liderin kart başlığına yeten kaydı; yetmiyorsa null. */
+export function leadRecord(e: MLEvent): MLRecordView | null {
+  const hit = recordCache.get(e);
+  if (hit !== undefined) return hit;
+  let rec: MLRecordView | null = null;
+  if (e.record && e.publishState !== 'invalid') {
+    try {
+      const raw = JSON.parse(e.record) as Partial<MLRecordView>;
+      const cand = { ...raw, detector: e.detector } as MLRecordView;
+      if (raw && raw.v === 1 && raw.series && raw.subject && typeof raw.expectedValue === 'number' && recordUsable(cand)) {
+        const k = measureKey(cand);
+        if (k && k !== 'mlRecord.measure.value') rec = cand;
+      }
+    } catch { rec = null; }
+  }
+  recordCache.set(e, rec);
+  return rec;
+}
+
 /** SAF: satırın "Ne oldu" cümlesi (servis önekli; liste hücresi listHeadline). */
-export function rowHeadline(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLead' | 'service'>): string {
-  if (r.mlLead) return mlRowText(r.mlLead);
+export function rowHeadline(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLead' | 'service'>, lang: Lang = 'tr'): string {
+  if (r.mlLead) {
+    const rec = leadRecord(r.mlLead);
+    if (rec) return recordHeadline(rec, t(measureKey(rec)!, lang), lang);
+    return mlRowText(r.mlLead);
+  }
   if (r.legacyLead) return legacyHeadline(r.legacyLead);
   return r.service;
 }
@@ -138,6 +170,6 @@ export function stripServicePrefix(text: string, service: string): string {
 }
 
 /** SAF: listedeki "Ne oldu" metni. */
-export function listHeadline(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLead' | 'service'>): string {
-  return stripServicePrefix(rowHeadline(r), r.service);
+export function listHeadline(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLead' | 'service'>, lang: Lang = 'tr'): string {
+  return stripServicePrefix(rowHeadline(r, lang), r.service);
 }

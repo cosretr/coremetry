@@ -2,7 +2,9 @@
 // çalışma zamanında — satır başına tür/tepe/durum, sessiz satır rozeti
 // (iki parmak izi yazımı), «Değil» yalnız düzenleyici + sessiz olmayan
 // satırda, boş liste → hiç çizilmez, kesik liste altyazısı.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+// v0.10.2272 — metinler i18n'de; bu dosya Türkçe arayüzü pinler (EN pini UnifiedAnomalies.lang.test).
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' }));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { AnomalyWindowTable } from './AnomalyWindowTable';

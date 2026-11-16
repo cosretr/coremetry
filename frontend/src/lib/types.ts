@@ -12234,6 +12234,8 @@ export interface MLEvent {
   evidence?: string; dupOf?: string;
   /** v0.10.2199 — ml_events olay-kaydı kolonları (liste satırı taşır; '' = eski kayıt). v0.10.2257: grup üyeleri bloğu okur. */
   class?: string; record?: string;
+  /** v0.10.2272 — ml_events.publish_state ('invalid' = kayıt kullanılmaz). */
+  publishState?: string;
   verdict?: 'anomaly' | 'not_anomaly'; verdictBy?: string; verdictAt?: number; note?: string; verdictReason?: string;
   /** v0.10.1843 — tek satır özet, sunucudaki ml.ExplainSummary'den (liste ucu doldurur). */
   summary?: string;

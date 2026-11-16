@@ -11,6 +11,7 @@
 //     must-fix) ve --err DEĞİL (Problem bantlarının rengi),
 //   - sessize alınmış (silences.fingerprint == id) → --text3 + «▮ sessiz»,
 //   - etiket «▮ tür ×tepe» (peakRatio VAR; güven puanı YOK — çizilmez).
+import { t, type Lang } from '@/lib/i18n';
 import type { AnomalyEvent, AnomalySilence } from '@/lib/types';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import { anomalyRatioLabel } from '@/lib/anomalyBaseline';
@@ -24,8 +25,10 @@ function regionKindLabel(e: Pick<AnomalyEvent, 'kind' | 'pattern'>): string {
   return anomalyKindLabel(e.kind);
 }
 
-/** Tür etiketi: eski türler sözlükten, ML olayı "ML · <dedektör>". */
-export function anomalyKindLabel(kind: AnomalyEvent['kind']): string {
+/** Tür etiketi: eski türler sözlükten, ML olayı "ML · <dedektör>".
+ *  v0.10.2272 — lang: 'en' İngilizce eşini anomalyKind.* kataloğundan okur (TR aynı). */
+export function anomalyKindLabel(kind: AnomalyEvent['kind'], lang: Lang = 'tr'): string {
+  if (lang === 'en' && ANOMALY_KIND_TR[kind]) return t(`anomalyKind.${kind}`, 'en');
   return ANOMALY_KIND_TR[kind] ?? (kind.startsWith('ml:') ? `ML · ${kind.slice(3)}` : kind);
 }
 

@@ -85,7 +85,7 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
     switch (col.id) {
       case 'started': return <span className="font-mono" title={fmtTs(r.start)}>{fmtClock(new Date(r.start / 1e6)).slice(0, 5)}</span>;
       case 'service': return <span className="dt-trunc font-mono" title={r.service}>{r.service || '—'}</span>;
-      case 'headline': { const h = listHeadline(r); return <Link to={rowHref(r)} className="dt-trunc" title={h}>{h}</Link>; }
+      case 'headline': { const h = listHeadline(r, lang); return <Link to={rowHref(r)} className="dt-trunc" title={h}>{h}</Link>; }
       case 'signals': return (
         <span className="inline-flex flex-wrap items-center gap-2">
           {r.signals.map(k => <SignalKindBadge key={k} kind={k} />)}
