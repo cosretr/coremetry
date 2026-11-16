@@ -18,6 +18,7 @@ import { Button, SelectField, TextareaField } from '@/components/ui';
 import { toast } from '@/lib/toast';
 import type { IncidentCase } from '@/lib/types';
 import { Sect } from './detailSections';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2285 — metinler arayüz dilinde (TR aynı)
 import { caseSignalLines, categoryLabel, correctnessLabel, defaultCaseCategory, independenceNote } from './incidentCaseView';
 
 export function IncidentCaseCard({ source, sourceId }: { source: 'problem' | 'exception'; sourceId: string }) {
@@ -26,13 +27,14 @@ export function IncidentCaseCard({ source, sourceId }: { source: 'problem' | 'ex
     queryFn: () => api.incidentCase(source, sourceId),
     staleTime: 60_000,
   });
+  const lang = useLang();
   const c = q.data?.case;
   if (!c) return null;
   return (
-    <Sect title="Vaka kaydı" accent={c.status === 'draft'}
+    <Sect title={t('case.title', lang)} accent={c.status === 'draft'}
       sub={c.status === 'confirmed'
-        ? `onaylı · ${c.confirmedBy ?? ''}`
-        : 'CoSRE taslağı — onaylanana dek olgu sayılmaz'}>
+        ? tf('case.confirmed', lang, { who: c.confirmedBy ?? '' })
+        : t('case.draft', lang)}>
       <CaseSignals c={c} />
       {c.status === 'confirmed'
         ? <ConfirmedCase c={c} />
@@ -42,7 +44,8 @@ export function IncidentCaseCard({ source, sourceId }: { source: 'problem' | 'ex
 }
 
 export function CaseSignals({ c }: { c: IncidentCase }) {
-  const lines = caseSignalLines(c);
+  const lang = useLang();
+  const lines = caseSignalLines(c, lang);
   if (lines.length === 0) return null;
   return (
     <ul style={{ margin: '0 0 10px', paddingLeft: 18, fontSize: 13, color: 'var(--text2)' }}>
@@ -52,12 +55,13 @@ export function CaseSignals({ c }: { c: IncidentCase }) {
 }
 
 function ConfirmedCase({ c }: { c: IncidentCase }) {
+  const lang = useLang();
   return (
     <div style={{ fontSize: 13, display: 'grid', gap: 4 }}>
-      <div><b>Neden:</b> {c.finalCause}</div>
-      <div><b>Kategori:</b> {categoryLabel(c.category)}</div>
-      {c.resolution && <div><b>Çözüm:</b> {c.resolution}</div>}
-      <div style={{ color: 'var(--text3)', fontSize: 12 }}>CoSRE önerisi: {correctnessLabel(c.cosreCorrect)}</div>
+      <div><b>{t('case.cause', lang)}</b> {c.finalCause}</div>
+      <div><b>{t('case.category', lang)}</b> {categoryLabel(c.category, lang)}</div>
+      {c.resolution && <div><b>{t('case.resolution', lang)}</b> {c.resolution}</div>}
+      <div style={{ color: 'var(--text3)', fontSize: 12 }}>{tf('case.cosre', lang, { v: correctnessLabel(c.cosreCorrect, lang) })}</div>
     </div>
   );
 }
@@ -75,56 +79,57 @@ export function ConfirmForm({ c, categories, onConfirmed }: {
   const [category, setCategory] = useState(defaultCaseCategory(c));
   const [resolution, setResolution] = useState('');
   const [busy, setBusy] = useState(false);
+  const lang = useLang();
   useEffect(() => { setCause(c.suggestedCause); }, [c.caseId, c.suggestedCause]);
   if (!isEditor) {
     return (
       <div style={{ fontSize: 13 }}>
-        <div><b>CoSRE önerisi (doğrulanmadı):</b> {c.suggestedCause || '—'}</div>
-        <div style={{ color: 'var(--text3)', fontSize: 12, marginTop: 4 }}>Onay editor ya da admin rolü ister.</div>
+        <div><b>{t('case.suggested', lang)}</b> {c.suggestedCause || '—'}</div>
+        <div style={{ color: 'var(--text3)', fontSize: 12, marginTop: 4 }}>{t('case.needsRole', lang)}</div>
       </div>
     );
   }
-  const note = independenceNote(c.suggestedCause, cause);
+  const note = independenceNote(c.suggestedCause, cause, lang);
   const confirm = async () => {
     setBusy(true);
     try {
       const out = await api.confirmIncidentCase(c.caseId, { finalCause: cause, category, resolution });
-      toast.success('Vaka onaylandı — CoSRE benzer olaylarda bunu kullanacak');
+      toast.success(t('case.toast.ok', lang));
       await qc.invalidateQueries({ queryKey: ['incident-case', c.source, c.sourceId] });
       onConfirmed?.(out?.case ?? c);
     } catch (e) {
-      toast.error(`Onaylanamadı: ${e instanceof Error ? e.message : String(e)}`);
+      toast.error(tf('case.toast.err', lang, { e: e instanceof Error ? e.message : String(e) }));
     } finally {
       setBusy(false);
     }
   };
   return (
     <div style={{ display: 'grid', gap: 8, maxWidth: 720 }}>
-      <TextareaField label="Kök neden" rows={3} value={cause} onChange={e => setCause(e.target.value)}
-        hint={c.suggestedCause ? 'CoSRE önerisiyle dolu — doğru değilse düzeltin' : 'CoSRE bir neden önermedi'} />
+      <TextareaField label={t('case.f.cause', lang)} rows={3} value={cause} onChange={e => setCause(e.target.value)}
+        hint={t(c.suggestedCause ? 'case.f.cause.prefilled' : 'case.f.cause.none', lang)} />
       {c.suggestedCause && (
         <div className={note.independent ? 'field-hint' : 'field-hint case-accepts-suggestion'} data-testid="case-independence">
           {note.text}
         </div>
       )}
-      <SelectField label="Kategori" value={category} onChange={e => setCategory(e.target.value)}>
-        {categories.map(k => <option key={k} value={k}>{categoryLabel(k)}</option>)}
+      <SelectField label={t('case.f.category', lang)} value={category} onChange={e => setCategory(e.target.value)}>
+        {categories.map(k => <option key={k} value={k}>{categoryLabel(k, lang)}</option>)}
       </SelectField>
-      <TextareaField label="Çözüm (isteğe bağlı)" rows={2} value={resolution} onChange={e => setResolution(e.target.value)} />
+      <TextareaField label={t('case.f.resolution', lang)} rows={2} value={resolution} onChange={e => setResolution(e.target.value)} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Button variant="primary" size="sm" onClick={confirm} loading={busy} disabled={!cause.trim()}>
-          Onayla
+          {t('case.btn.confirm', lang)}
         </Button>
         {c.suggestedCause && (
           <Button variant="secondary" size="sm" disabled={busy || cause === ''} onClick={() => setCause('')}
-            title="Öneriyi silip kök nedeni kendiniz yazın">
-            Öneriyi temizle
+            title={t('case.btn.clear.title', lang)}>
+            {t('case.btn.clear', lang)}
           </Button>
         )}
         {categories.includes('noise') && (
           <Button variant="ghost" size="sm" disabled={busy || category === 'noise'} onClick={() => setCategory('noise')}
-            title="Kategoriyi Gürültü yapar (gerçek olay değil) — yine Onayla ister; değerlendirme gürültü vakasını puanlamaz">
-            Gürültü
+            title={t('case.btn.noise.title', lang)}>
+            {t('case.btn.noise', lang)}
           </Button>
         )}
       </div>

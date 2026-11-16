@@ -12,7 +12,8 @@ describe('ExternalEvidencePanel — özet Problem', () => {
   });
   it('özet dalı, ⏳ "henüz toplanmadı" dalından ÖNCE döner', () => {
     const s = CODE.indexOf('if (summary) {');
-    const wait = CODE.indexOf('Kanıt henüz toplanmadı');
+    // v0.10.2285 — metin katalogda; dal anahtarıyla bulunur.
+    const wait = CODE.indexOf("t('ext.pending', lang)");
     expect(s).toBeGreaterThan(-1);
     expect(wait).toBeGreaterThan(s);
   });

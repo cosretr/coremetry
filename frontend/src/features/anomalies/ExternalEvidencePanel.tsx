@@ -24,38 +24,40 @@ import { fmtDateTime } from '@/lib/utils';
 import { fmtDur } from '@/components/traces/shared';
 import { traceHref } from '@/lib/traceHref';
 import type { Problem, PodHit, LogSignature } from '@/lib/types';
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2285 — metinler arayüz dilinde (TR aynı)
 import { traceRows, endpointRows, evidenceCounts, pickSeries, labelKeys, labelValues, toChart, sevTone, type ExternalTraceRow, type ExternalEndpointRow } from './externalEvidence';
 
 const BASELINE_LOOKBACK_NS = 3 * 3600e9;
 
-const TRACE_COLS: ColumnDef<ExternalTraceRow>[] = [
-  { id: 'time', label: 'Zaman', width: 176, sortValue: r => r.startNs, numeric: true },
+// v0.10.2285 — kolon etiketleri arayüz dilinde (ext.col.*); id / genişlik / sıralama aynı.
+const traceCols = (lang: Lang): ColumnDef<ExternalTraceRow>[] => [
+  { id: 'time', label: t('ext.col.time', lang), width: 176, sortValue: r => r.startNs, numeric: true },
   { id: 'trace', label: 'Trace', width: 150 },
-  { id: 'root', label: 'Kök servis · op', width: 260, sortValue: r => `${r.rootService ?? ''} ${r.rootOp ?? ''}` },
-  { id: 'err', label: 'Hata servis · op', width: 260, sortValue: r => `${r.errorService ?? ''} ${r.errorOp ?? ''}` },
-  { id: 'dur', label: 'Süre', width: 90, numeric: true, sortValue: r => r.durationNs },
+  { id: 'root', label: t('ext.col.root', lang), width: 260, sortValue: r => `${r.rootService ?? ''} ${r.rootOp ?? ''}` },
+  { id: 'err', label: t('ext.col.err', lang), width: 260, sortValue: r => `${r.errorService ?? ''} ${r.errorOp ?? ''}` },
+  { id: 'dur', label: t('ext.col.dur', lang), width: 90, numeric: true, sortValue: r => r.durationNs },
   { id: 'spans', label: 'Span', width: 70, numeric: true, sortValue: r => r.spans },
-  { id: 'status', label: 'Durum', width: 100, sortValue: r => (r.missing ? 2 : r.errorSpans > 0 ? 0 : 1), numeric: true },
+  { id: 'status', label: t('ext.col.status', lang), width: 100, sortValue: r => (r.missing ? 2 : r.errorSpans > 0 ? 0 : 1), numeric: true },
 ];
 
 // v0.10.1004 — ilgili endpoint'ler (kanıt trace'lerinin geçtiği endpoint).
-const ENDPOINT_COLS: ColumnDef<ExternalEndpointRow>[] = [
-  { id: 'service', label: 'Servis', width: 260, sortValue: r => r.service },
+const endpointCols = (lang: Lang): ColumnDef<ExternalEndpointRow>[] => [
+  { id: 'service', label: t('ext.col.service', lang), width: 260, sortValue: r => r.service },
   { id: 'path', label: 'Endpoint', width: 420, sortValue: r => r.path },
   { id: 'traces', label: 'Trace', width: 80, numeric: true, sortValue: r => r.traces },
-  { id: 'errors', label: 'Hatalı', width: 80, numeric: true, sortValue: r => r.errorTraces },
+  { id: 'errors', label: t('ext.col.errors', lang), width: 80, numeric: true, sortValue: r => r.errorTraces },
 ];
 
-const POD_COLS: ColumnDef<PodHit>[] = [
+const podCols = (lang: Lang): ColumnDef<PodHit>[] => [
   { id: 'pod', label: 'Pod', width: 320, sortValue: r => r.pod },
-  { id: 'count', label: 'Satır', width: 90, numeric: true, sortValue: r => r.count },
-  { id: 'last', label: 'Son görülme', width: 176, numeric: true, sortValue: r => r.lastSeenNs },
+  { id: 'count', label: t('ext.col.lines', lang), width: 90, numeric: true, sortValue: r => r.count },
+  { id: 'last', label: t('ext.col.lastSeen', lang), width: 176, numeric: true, sortValue: r => r.lastSeenNs },
 ];
 
-const SIG_COLS: ColumnDef<LogSignature>[] = [
-  { id: 'sev', label: 'Şiddet', width: 90, sortValue: r => r.severity },
-  { id: 'tpl', label: 'İmza (örnek mesaj başlıkta)', width: 520, sortValue: r => r.template },
-  { id: 'count', label: 'Kayıt', width: 80, numeric: true, sortValue: r => r.count },
+const sigCols = (lang: Lang): ColumnDef<LogSignature>[] => [
+  { id: 'sev', label: t('ext.col.sev', lang), width: 90, sortValue: r => r.severity },
+  { id: 'tpl', label: t('ext.col.tpl', lang), width: 520, sortValue: r => r.template },
+  { id: 'count', label: t('ext.col.records', lang), width: 80, numeric: true, sortValue: r => r.count },
   { id: 'traces', label: 'Trace', width: 80, numeric: true, sortValue: r => r.traceCount },
 ];
 
@@ -66,6 +68,8 @@ export function ExternalEvidencePanel({ problem, window: win }: {
   // v0.10.598 — ÖZET Problem'ler (tavan/düştü/küme) hipotez satırı HİÇ
   // almaz; onlar için "kanıt henüz toplanmadı" bir vaat, /rootcause isteği
   // boşa. Türü kural önekinden tanı, isteği hiç atma, dürüst açıklama çiz.
+  const lang = useLang();
+  const cols = useMemo(() => ({ t: traceCols(lang), e: endpointCols(lang), p: podCols(lang), s: sigCols(lang) }), [lang]);
   const summary = externalSummaryKind(problem.ruleId);
   const rc = useQuery({
     // v0.10.1119 — yalnız hypothesis okunur: çekirdek uç (bubbleUp taraması yok).
@@ -107,24 +111,23 @@ export function ExternalEvidencePanel({ problem, window: win }: {
   const epRows = useMemo(() => endpointRows(deep), [deep]); // v0.10.1004
   const pods = deep?.affectedPods ?? [];
   const sigs = deep?.logSignatures ?? [];
-  const dtT = useDataTable<ExternalTraceRow>({ storageKey: 'ext-evidence-traces', columns: TRACE_COLS, rows: tRows });
-  const dtE = useDataTable<ExternalEndpointRow>({ storageKey: 'ext-evidence-endpoints', columns: ENDPOINT_COLS, rows: epRows });
-  const dtP = useDataTable<PodHit>({ storageKey: 'ext-evidence-pods', columns: POD_COLS, rows: pods });
-  const dtS = useDataTable<LogSignature>({ storageKey: 'ext-evidence-sigs', columns: SIG_COLS, rows: sigs });
+  const dtT = useDataTable<ExternalTraceRow>({ storageKey: 'ext-evidence-traces', columns: cols.t, rows: tRows });
+  const dtE = useDataTable<ExternalEndpointRow>({ storageKey: 'ext-evidence-endpoints', columns: cols.e, rows: epRows });
+  const dtP = useDataTable<PodHit>({ storageKey: 'ext-evidence-pods', columns: cols.p, rows: pods });
+  const dtS = useDataTable<LogSignature>({ storageKey: 'ext-evidence-sigs', columns: cols.s, rows: sigs });
 
   if (summary) {
-    const n = externalSummaryNote(summary);
+    const n = externalSummaryNote(summary, lang);
     return <Empty icon="ℹ" title={n.title}>{n.body}</Empty>;
   }
   if (rc.isPending) return <Spinner />;
   if (rc.error) {
-    return <div style={{ fontSize: 12, color: 'var(--err)' }}>Kanıt zinciri yüklenemedi — {String(rc.error)}</div>;
+    return <div style={{ fontSize: 12, color: 'var(--err)' }}>{tf('ext.loadErr', lang, { e: String(rc.error) })}</div>;
   }
   if (!ext) {
     return (
-      <Empty icon="⏳" title="Kanıt henüz toplanmadı">
-        Dış kaynak anomalisi açıldığında kanıt (SORGU 2 → trace/pod/log) ilk poll'da toplanır ve 5 dk'da bir tazelenir.
-        Kaynağın enrich sorgusu tanımlı değilse yalnız metrik kanıtı gelir.
+      <Empty icon="⏳" title={t('ext.pending', lang)}>
+        {t('ext.pending.body', lang)}
       </Empty>
     );
   }
@@ -139,7 +142,7 @@ export function ExternalEvidencePanel({ problem, window: win }: {
             / baseline {ext.median.toFixed(1)} · MAD {ext.mad.toFixed(2)} · {ext.z.toFixed(1)}σ
           </span>
           <span className="mono" style={{ color: 'var(--text3)', fontSize: 11, marginLeft: 'auto' }}>
-            {ext.source} · {ext.query} · güncellendi {fmtDateTime(new Date(ext.updatedNs / 1e6))}
+            {ext.source} · {ext.query} · {tf('ext.updated', lang, { ts: fmtDateTime(new Date(ext.updatedNs / 1e6)) })}
           </span>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
@@ -150,7 +153,7 @@ export function ExternalEvidencePanel({ problem, window: win }: {
         {/* v0.10.898 (Oracle Aşama 3 dilim E) — özne kaynağı dürüstçe: trace'ten / ≈ öğrenilmiş / bilinmiyor. */}
         {ext.subjectNote && (
           <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
-            özne: {ext.subjectSource === 'learned' || ext.subjectSource === 'function_code' ? '≈ ' : ''}{ext.subjectNote}
+            {t('ext.subject', lang)}{ext.subjectSource === 'learned' || ext.subjectSource === 'function_code' ? '≈ ' : ''}{ext.subjectNote}
           </div>
         )}
         {ext.distributions && Object.keys(ext.distributions).length > 0 && (
@@ -173,14 +176,14 @@ export function ExternalEvidencePanel({ problem, window: win }: {
               hideLegend
             />
           ) : (
-            <div style={{ fontSize: 12, color: 'var(--text3)' }}>Seri okunamadı — metric_points'te bu etiket kümesi için nokta yok.</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)' }}>{t('ext.noSeries', lang)}</div>
           )}
         </div>
       </div>
 
       {/* 2. Dürüstlük şeridi */}
       <div style={{ fontSize: 12, color: 'var(--text2)' }}>
-        SORGU 2: {c.errors > c.rows ? `${c.errors} hata (${c.rows} satır)` : `${c.rows} satır`} · {c.traces} trace id{c.invalid > 0 ? ` (${c.invalid} geçersiz düşürüldü)` : ''} · {c.withSpans} trace CH'de bulundu · {c.pods} pod · {c.signatures} log imzası
+        {t('ext.q2', lang)} {c.errors > c.rows ? tf('ext.q2.errRows', lang, { e: c.errors, r: c.rows }) : tf('ext.q2.rows', lang, { r: c.rows })} · {c.traces} trace id{c.invalid > 0 ? tf('ext.q2.invalid', lang, { n: c.invalid }) : ''} · {tf('ext.q2.found', lang, { n: c.withSpans })} · {c.pods} pod · {tf('ext.q2.sigs', lang, { n: c.signatures })}
         {(ext.notes ?? []).length > 0 && (
           <ul style={{ margin: '4px 0 0 16px', padding: 0, color: 'var(--text3)' }}>
             {ext.notes!.map((n, i) => <li key={i}>{n}</li>)}
@@ -189,24 +192,24 @@ export function ExternalEvidencePanel({ problem, window: win }: {
       </div>
 
       {/* 3. Trace'ler */}
-      <EvidenceBlock title="İlgili trace'ler" count={tRows.length}>
+      <EvidenceBlock title={t('ext.traces', lang)} count={tRows.length}>
         <div className="table-wrap">
           <table {...dtT.tableProps}>
             <DataTableColgroup dt={dtT} />
             <DataTableHead dt={dtT} />
             <tbody>
-              {dtT.sortedRows.length === 0 ? <DataTableState dt={dtT} kind="empty" message="Trace kanıtı yok" /> : dtT.sortedRows.map(r => (
+              {dtT.sortedRows.length === 0 ? <DataTableState dt={dtT} kind="empty" message={t('ext.traces.empty', lang)} /> : dtT.sortedRows.map(r => (
                 <tr key={r.traceId}>
                   <td className="mono">{r.startNs > 0 ? fmtDateTime(new Date(r.startNs / 1e6)) : '—'}</td>
-                  <td className="mono"><Link to={traceHref(r.traceId, { tab: 'logs' })} className="sec" title={`${r.traceId} — Logs sekmesi (Oracle satırları)`}>{r.traceId.slice(0, 12)}…</Link></td>
+                  <td className="mono"><Link to={traceHref(r.traceId, { tab: 'logs' })} className="sec" title={tf('ext.traces.link', lang, { id: r.traceId })}>{r.traceId.slice(0, 12)}…</Link></td>
                   <td title={`${r.rootService ?? ''} ${r.rootOp ?? ''}`}>{r.rootService ? <>{r.rootService} <span style={{ color: 'var(--text3)' }}>· {r.rootOp}</span></> : '—'}</td>
                   <td title={`${r.errorService ?? ''} ${r.errorOp ?? ''}`}>{r.errorService ? <>{r.errorService} <span style={{ color: 'var(--text3)' }}>· {r.errorOp}</span></> : '—'}</td>
                   <td className="num">{r.durationNs > 0 ? fmtDur(r.durationNs / 1e6) : '—'}</td>
                   <td className="num">{r.spans || '—'}</td>
                   <td>{r.missing
-                    ? <span className="badge b-gray" title="Trace id dış kaynaktan geldi ama bu pencerede CH'de span'i yok (retention ya da henüz gelmedi)">CH'de yok</span>
+                    ? <span className="badge b-gray" title={t('ext.traces.missing.title', lang)}>{t('ext.traces.missing', lang)}</span>
                     : r.errorSpans > 0
-                      ? <span className="badge b-err">{`${r.errorSpans} hata`}</span>
+                      ? <span className="badge b-err">{tf('ext.traces.errs', lang, { n: r.errorSpans })}</span>
                       : <span style={{ color: 'var(--text3)' }}>ok</span>}</td>
                 </tr>
               ))}
@@ -218,17 +221,17 @@ export function ExternalEvidencePanel({ problem, window: win }: {
       {/* v0.10.1004 — ilgili endpoint'ler: kanıt trace'lerinin geçtiği endpoint
           (özne servis aynı kalır). Kardeş bloklar gibi hep çizilir; kanıt yoksa
           boş durumu tablonun içinde. */}
-      <EvidenceBlock title="İlgili endpoint'ler" count={epRows.length}>
+      <EvidenceBlock title={t('ext.endpoints', lang)} count={epRows.length}>
         <div className="table-wrap">
           <table {...dtE.tableProps}>
             <DataTableColgroup dt={dtE} />
             <DataTableHead dt={dtE} />
             <tbody>
-              {dtE.sortedRows.length === 0 ? <DataTableState dt={dtE} kind="empty" message="Endpoint kanıtı yok — trace'ler Coremetry'de bulunamadı ya da giriş span'i taşımıyor" /> : dtE.sortedRows.map(r => (
+              {dtE.sortedRows.length === 0 ? <DataTableState dt={dtE} kind="empty" message={t('ext.endpoints.empty', lang)} /> : dtE.sortedRows.map(r => (
                 <tr key={`${r.service}|${r.path}|${r.rpc ? 'rpc' : 'http'}`}>
                   <td title={r.service}>{r.service}</td>
                   <td className="mono" title={r.path}>
-                    <Link to={r.href} className="sec" title={`${r.path} — endpoint sayfası (olay penceresi)`}>{r.path}</Link>
+                    <Link to={r.href} className="sec" title={tf('ext.endpoints.link', lang, { path: r.path })}>{r.path}</Link>
                     {r.rpc ? <span style={{ color: 'var(--text3)' }}> · rpc</span> : null}
                   </td>
                   <td className="num">{r.traces}</td>
@@ -241,13 +244,13 @@ export function ExternalEvidencePanel({ problem, window: win }: {
       </EvidenceBlock>
 
       {/* 4. Pod'lar */}
-      <EvidenceBlock title="Etkilenen pod'lar" count={pods.length}>
+      <EvidenceBlock title={t('ext.pods', lang)} count={pods.length}>
         <div className="table-wrap">
           <table {...dtP.tableProps}>
             <DataTableColgroup dt={dtP} />
             <DataTableHead dt={dtP} />
             <tbody>
-              {dtP.sortedRows.length === 0 ? <DataTableState dt={dtP} kind="empty" message="Pod kanıtı yok — kaynak pod kimliği döndürmedi" /> : dtP.sortedRows.map(r => (
+              {dtP.sortedRows.length === 0 ? <DataTableState dt={dtP} kind="empty" message={t('ext.pods.empty', lang)} /> : dtP.sortedRows.map(r => (
                 <tr key={r.pod}>
                   <td className="mono" title={r.pod}>{r.pod}</td>
                   <td className="num">{r.count}</td>
@@ -260,13 +263,13 @@ export function ExternalEvidencePanel({ problem, window: win }: {
       </EvidenceBlock>
 
       {/* 5. Log imzaları */}
-      <EvidenceBlock title="Log imzaları (WARN+)" count={sigs.length}>
+      <EvidenceBlock title={t('ext.sigs', lang)} count={sigs.length}>
         <div className="table-wrap">
           <table {...dtS.tableProps}>
             <DataTableColgroup dt={dtS} />
             <DataTableHead dt={dtS} />
             <tbody>
-              {dtS.sortedRows.length === 0 ? <DataTableState dt={dtS} kind="empty" message="Log imzası yok" /> : dtS.sortedRows.map(r => (
+              {dtS.sortedRows.length === 0 ? <DataTableState dt={dtS} kind="empty" message={t('ext.sigs.empty', lang)} /> : dtS.sortedRows.map(r => (
                 <tr key={r.hash}>
                   <td><span className={`badge ${sevTone(r.severity)}`}>{r.severity || '—'}</span></td>
                   <td className="mono" title={r.sample}>{r.template}</td>

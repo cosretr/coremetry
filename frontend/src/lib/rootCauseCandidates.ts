@@ -1,4 +1,5 @@
 import type { ChangedService, RootCause, RootCauseHypothesis } from '@/lib/types';
+import { t, type Lang } from '@/lib/i18n'; // v0.10.2285 — localizedNote lang alır (varsayılan 'tr')
 
 // rootCauseCandidates.ts — v0.10.700 (Dynatrace paritesi #2, dilim 1).
 //
@@ -75,13 +76,13 @@ export function coMovingCause(rc: RootCause, service: string): ChangedService | 
 // okunamadıysa ya da alan yoksa (eski yanıt) "bağlantı doğrulanamadı".
 // v0.10.1090 — `who`: panel listeyi ALTTA çizer ("services below"), şerit
 // çizmez ("other services"); hüküm cümlesi iki yüzeyde aynı.
-export function localizedNote(rc: RootCause, service: string, who = 'services below'): string {
+export function localizedNote(rc: RootCause, service: string, who = 'services below', lang: Lang = 'tr'): string {
   const moved = (rc.correlations ?? []).some(c => c.service !== service);
   if (!moved) return '';
   if (rc.topologyKnown === true) {
     return `; ${who} moved in the same window but none is a connected, worsening dependency of ${service}`;
   }
-  return `; ${who} moved in the same window — bağlantı doğrulanamadı (topology unavailable)`;
+  return `; ${who} moved in the same window — ${t('rcp.note.unverified', lang)} (topology unavailable)`;
 }
 
 // ribbonNoCandidateNote — v0.10.1090. Şeridin canlı yolunda uygun aday

@@ -15,7 +15,7 @@ import { serviceHref } from '@/lib/serviceHref';
 import { traceHref } from '@/lib/traceHref';
 import { coMovingCause, localizedNote } from '@/lib/rootCauseCandidates';
 import { withBubbleUp, headlineNeedsBubble } from '@/lib/rootCauseProgressive';
-import { useT } from '@/lib/i18n';
+import { useT, useLang, t as tk, tf, type Lang } from '@/lib/i18n'; // v0.10.2285 — Türkçe kalan metinler arayüz dilinde (TR aynı)
 import { DisclosureButton } from '@/components/ui/DisclosureButton';
 // v0.10.1495 — kıyas bölümü problem türünden; bağlantısız co-mover'lar ayrı grup.
 import { bubbleModeOf, bubbleCopyKeys, splitCorrelations } from '@/lib/rootCauseBubbleMode';
@@ -56,6 +56,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
   // Manşet bu durumda bubbleUp'sız tam demetin manşetine döner (bu = null).
   const [buFailed, setBuFailed] = useState(false);
   const t = useT();
+  const lang = useLang();
   const [coMoversOpen, setCoMoversOpen] = useState(false);
   useEffect(() => {
     setRc(undefined);
@@ -100,7 +101,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
   // Manşet bubbleUp'a bağlıysa (deploy / sıcak rollout yok) o gelene dek
   // "inceleniyor" der — önce "localized" deyip sonra fikir değiştirmez.
   const headlinePending = bubblePending && headlineNeedsBubble(full, rollouts);
-  const headline = likelyCause(full, service, bubble, rollouts, mode);
+  const headline = likelyCause(full, service, bubble, rollouts, mode, lang);
   // buFailed: bubbleUp bilinmiyor — "ilişkili sinyal yok" boş hâli iddia edilmez.
   const nothing = !bubblePending && !(bubbleOn && buFailed) && !full.recentDeploy && !bubble && !blast && corr.length === 0 && !full.exemplar && rollouts.length === 0;
 
@@ -205,7 +206,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                 {/* v0.10.967 (tablo standardı dilim 5, P-2) — statik tablonun durum satırı; colSpan = thead'deki 4 <th>.
                     Panelin yükleniyor / hata dönüşleri yukarıda kalır (yanıt bölümleri belirliyor). */}
                 {(blast.callers ?? []).length === 0 ? (
-                  <DataTableState colSpan={4} kind="empty" message={`Bu pencerede çağıran yok — ${service} bir giriş noktası`} />
+                  <DataTableState colSpan={4} kind="empty" message={tf('rcp.blast.noCallers', lang, { svc: service })} />
                 ) : [...(blast.callers ?? [])]
                   .sort((a, b) => b.errorRate - a.errorRate || b.rps - a.rps)
                   .slice(0, 6)
@@ -262,7 +263,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                         {c.service}
                       </Link>
                       {c.relation && <span className="cell-faint" style={{ marginLeft: 6, fontSize: 11 }}>{c.relation}</span>}
-                      {changeBadge(c)}
+                      {changeBadge(c, lang)}
                     </td>
                     <td style={{ lineHeight: 1.5 }}>
                       {c.reasons.map((r, k) => <div key={k}>{r}</div>)}
@@ -295,7 +296,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
               {corrUnlinked.slice(0, 12).map(c => (
                 <div key={c.service} style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'baseline' }}>
                   <Link to={serviceHref(c.service, { range: win })} className="mono">{c.service}</Link>
-                  {changeBadge(c)}
+                  {changeBadge(c, lang)}
                   <span style={{ color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         title={c.reasons.join(' · ')}>{c.reasons[0] ?? ''}</span>
                 </div>
@@ -334,17 +335,17 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
           Puan bandı: 0–30 dk yüksek, 30–120 dk düşük; pod eşlemesi ayrıca
           işaretli. Satır = /rollouts çekmece linki. */}
       {rollouts.length > 0 && (
-        <Section title="İlgili dağıtımlar"
-                 subtitle="problem başlangıcından önceki 120 dk içinde bu servisin iş yüklerinde başlayan rollout'lar">
+        <Section title={tk('rcp.rollouts', lang)}
+                 subtitle={tk('rcp.rollouts.sub', lang)}>
           <div className="table-wrap">
             {/* v0.10.945 — statik tablo (T1): worker en çok 3 rollout puanlar; sıralanmaz. */}
             <table>
               <thead><tr>
-                <th>İş yükü</th>
-                <th>Geçiş</th>
-                <th style={{ width: 110 }}>Ne zaman</th>
-                <th style={{ width: 90 }}>Durum</th>
-                <th className="num" style={{ width: 64 }}>Puan</th>
+                <th>{tk('rcp.rollouts.workload', lang)}</th>
+                <th>{tk('rcp.rollouts.change', lang)}</th>
+                <th style={{ width: 110 }}>{tk('rcp.rollouts.when', lang)}</th>
+                <th style={{ width: 90 }}>{tk('rcp.rollouts.status', lang)}</th>
+                <th className="num" style={{ width: 64 }}>{tk('rcp.rollouts.score', lang)}</th>
               </tr></thead>
               <tbody>
                 {rollouts.map(ev => (
@@ -354,7 +355,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                         {ev.namespace}/{ev.workload}
                       </Link>
                       {ev.matchedBy === 'pod' && (
-                        <span className="badge b-warn" style={{ marginLeft: 6 }} title="problemin pod'u bu revizyonda">POD</span>
+                        <span className="badge b-warn" style={{ marginLeft: 6 }} title={tk('rcp.rollouts.pod', lang)}>POD</span>
                       )}
                     </td>
                     <td className="mono">
@@ -363,7 +364,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                         : (ev.imageTag || shortRevision(ev.revision, ev.workload))}
                     </td>
                     <td className="mono cell-muted" title={tsLong(ev.startedAtNs)}>
-                      {ev.ageMin <= 0 ? 'aynı dakika' : `${ev.ageMin} dk önce`}
+                      {ev.ageMin <= 0 ? tk('rcp.rollouts.sameMin', lang) : tf('rcp.rollouts.ago', lang, { m: ev.ageMin })}
                     </td>
                     <td>
                       {/* v0.10.929 (K5) — ton rolloutRow statusTone()'dan TÜRER (Rollouts sayfası /
@@ -393,18 +394,18 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
       {/* v0.10.452 (log arama denetimi C3) — servis kapsamlı kalıcı Drain
           şablonları; sayım ÖMÜR BOYU (pencere sayımı değil) — alt başlık söyler. */}
       {(rc.hypothesis?.deep?.templates?.length ?? 0) > 0 && (
-        <Section title="Log şablonları (bu servis)"
-                 subtitle="kalıcı Drain şablonları, son 60 dk görülen; sayım ömür boyu gözlem, problem penceresinin sayımı değil">
+        <Section title={tk('rcp.tpl', lang)}
+                 subtitle={tk('rcp.tpl.sub', lang)}>
           <div className="table-wrap">
             {/* v0.10.945 — statik tablo (T1): sunucu en çok 5 şablon döner (deepEvidenceLimit), sayıma göre sıralı. */}
             <table>
-              <thead><tr><th>Şablon</th><th className="num" style={{ width: 90 }}>Toplam</th><th style={{ width: 110 }}>Son görülme</th></tr></thead>
+              <thead><tr><th>{tk('rcp.tpl.template', lang)}</th><th className="num" style={{ width: 90 }}>{tk('rcp.tpl.total', lang)}</th><th style={{ width: 110 }}>{tk('rcp.tpl.lastSeen', lang)}</th></tr></thead>
               <tbody>
-                {rc.hypothesis!.deep!.templates!.map(t => (
-                  <tr key={t.id}>
-                    <td className="mono" title={t.sample}>{t.template}</td>
-                    <td className="num">{t.totalCount.toLocaleString()}</td>
-                    <td className="mono cell-muted" title={tsLong(t.lastSeen)}>{tsLong(t.lastSeen)}</td>
+                {rc.hypothesis!.deep!.templates!.map(tp => (
+                  <tr key={tp.id}>
+                    <td className="mono" title={tp.sample}>{tp.template}</td>
+                    <td className="num">{tp.totalCount.toLocaleString()}</td>
+                    <td className="mono cell-muted" title={tsLong(tp.lastSeen)}>{tsLong(tp.lastSeen)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -413,8 +414,8 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
         </Section>
       )}
       {(rc.hypothesis?.deep?.checked?.length ?? 0) > 0 && (
-        <Section title="Neye bakıldı"
-                 subtitle="derin soruşturmanın denetim izi — bakılan her sinyal ailesi">
+        <Section title={tk('rcp.checked', lang)}
+                 subtitle={tk('rcp.checked.sub', lang)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {rc.hypothesis!.deep!.checked!.map((c, i) => (
               <div key={i} style={{
@@ -427,7 +428,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                 <span style={{ flex: '0 0 120px', fontWeight: 600 }}>{c.family}</span>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                       title={c.detail}>
-                  {c.found ? c.detail : 'bakıldı — kayıt bulunamadı'}
+                  {c.found ? c.detail : tk('rcp.checked.none', lang)}
                 </span>
               </div>
             ))}
@@ -461,6 +462,7 @@ function likelyCause(
   bubble: { key: string; values: BubbleUpValue[] } | null,
   rollouts: RolloutEvidence[] = [],
   mode: RootCauseBubbleMode = 'errors',
+  lang: Lang = 'tr',
 ): { text: ReactNode; accent: string; bg: string; border: string } {
   const deploy = { accent: 'var(--warn)', bg: 'color-mix(in srgb, var(--warn) 10%, transparent)', border: 'color-mix(in srgb, var(--warn) 40%, transparent)' };
   const dim = { accent: 'var(--err)', bg: 'color-mix(in srgb, var(--err) 8%, transparent)', border: 'color-mix(in srgb, var(--err) 35%, transparent)' };
@@ -516,15 +518,15 @@ function likelyCause(
   // bunu SÖYLE (topoloji okunamadıysa "doğrulanamadı" — localizedNote).
   return {
     ...local,
-    text: <>No strong external signal — the fire appears <b>localized to {service}</b>{localizedNote(rc, service)}.</>,
+    text: <>No strong external signal — the fire appears <b>localized to {service}</b>{localizedNote(rc, service, undefined, lang)}.</>,
   };
 }
 
 // changeBadge — v0.10.1063. "What else changed" satırında yön/bağ etiketi.
-function changeBadge(c: ChangedService): ReactNode {
-  if (c.direction === 'better') return <Badge tone="success" style={{ marginLeft: 6 }} title="hata/gecikme/trafik yalnız düştü — bozulmanın nedeni sayılmaz">iyileşti</Badge>;
-  if (c.direction === 'lost') return <Badge tone="warning" style={{ marginLeft: 6 }} title="trafik ≥%90 düştü">trafik kesildi</Badge>;
-  if (c.direction === 'quieter') return <Badge tone="neutral" style={{ marginLeft: 6 }} title="yalnız trafik düştü; hata/gecikme yerinde">trafik azaldı</Badge>;
+function changeBadge(c: ChangedService, lang: Lang): ReactNode {
+  if (c.direction === 'better') return <Badge tone="success" style={{ marginLeft: 6 }} title={tk('rcp.chg.better.title', lang)}>{tk('rcp.chg.better', lang)}</Badge>;
+  if (c.direction === 'lost') return <Badge tone="warning" style={{ marginLeft: 6 }} title={tk('rcp.chg.lost.title', lang)}>{tk('rcp.chg.lost', lang)}</Badge>;
+  if (c.direction === 'quieter') return <Badge tone="neutral" style={{ marginLeft: 6 }} title={tk('rcp.chg.quieter.title', lang)}>{tk('rcp.chg.quieter', lang)}</Badge>;
   return null;
 }
 

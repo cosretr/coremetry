@@ -1,37 +1,38 @@
 // incidentCaseView — CoSRE öğrenme Faz 3: vaka kartının saf yardımcıları.
 import type { IncidentCase } from '@/lib/types';
+import { t, tf, type Lang } from '@/lib/i18n'; // v0.10.2285 — metinler lang alır (varsayılan 'tr')
 
-const CATEGORY_LABEL: Record<string, string> = {
-  deploy: 'Deploy', config: 'Yapılandırma', capacity: 'Kapasite', dependency: 'Bağımlılık',
-  code_bug: 'Kod hatası', infra: 'Altyapı', data: 'Veri', external: 'Dış sistem',
-  noise: 'Gürültü (gerçek olay değil)', other: 'Diğer',
+// v0.10.2285 — etiketler katalogda (case.cat.<k>); bilinmeyen kategori olduğu gibi.
+const CATEGORIES = new Set(['deploy', 'config', 'capacity', 'dependency', 'code_bug', 'infra', 'data', 'external', 'noise', 'other']);
+
+export function categoryLabel(k: string, lang: Lang = 'tr'): string {
+  return CATEGORIES.has(k) ? t(`case.cat.${k}`, lang) : k;
+}
+
+export function correctnessLabel(v: number, lang: Lang = 'tr'): string {
+  if (v === 1) return t('case.correct.yes', lang);
+  if (v === 0) return t('case.correct.no', lang);
+  return t('case.correct.na', lang);
+}
+
+const pct = (v: number, lang: Lang) => {
+  const n = (v * 100).toFixed(v * 100 < 10 ? 1 : 0);
+  return lang === 'tr' ? `%${n}` : `${n}%`;
 };
-
-export function categoryLabel(k: string): string {
-  return CATEGORY_LABEL[k] ?? k;
-}
-
-export function correctnessLabel(v: number): string {
-  if (v === 1) return 'doğruydu';
-  if (v === 0) return 'yanlıştı';
-  return 'değerlendirilemedi';
-}
-
-const pct = (v: number) => `%${(v * 100).toFixed(v * 100 < 10 ? 1 : 0)}`;
 const ms = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)} s` : `${Math.round(v)} ms`);
 
 /** Ölçülen sinyaller düz cümle; ölçülmeyen (0/boş) satır yazılmaz. */
-export function caseSignalLines(c: IncidentCase): string[] {
+export function caseSignalLines(c: IncidentCase, lang: Lang = 'tr'): string[] {
   const out: string[] = [];
   const codes = c.errorCodes ?? [];
-  if (codes.length) out.push(`Hata kodları: ${codes.join(', ')}`);
+  if (codes.length) out.push(tf('case.sig.codes', lang, { v: codes.join(', ') }));
   const fn = c.functionCodes ?? [];
-  if (fn.length) out.push(`Hata veren function code: ${fn.join(', ')}`);
+  if (fn.length) out.push(tf('case.sig.fn', lang, { v: fn.join(', ') }));
   const ch = c.channelCodes ?? [];
-  if (ch.length) out.push(`Kanal: ${ch.join(', ')}`);
-  if (c.errRateBefore > 0 || c.errRateDuring > 0) out.push(`Hata oranı ${pct(c.errRateBefore)} → ${pct(c.errRateDuring)}`);
+  if (ch.length) out.push(tf('case.sig.channel', lang, { v: ch.join(', ') }));
+  if (c.errRateBefore > 0 || c.errRateDuring > 0) out.push(tf('case.sig.errRate', lang, { a: pct(c.errRateBefore, lang), b: pct(c.errRateDuring, lang) }));
   if (c.p99BeforeMs > 0 || c.p99DuringMs > 0) out.push(`p99 ${ms(c.p99BeforeMs)} → ${ms(c.p99DuringMs)}`);
-  out.push(c.deployInWindow ? `Pencerede deploy: ${c.deployVersion || 'evet'}` : 'Pencerede deploy yok');
+  out.push(c.deployInWindow ? tf('case.sig.deploy', lang, { v: c.deployVersion || t('case.sig.yes', lang) }) : t('case.sig.noDeploy', lang));
   return out;
 }
 
@@ -53,12 +54,12 @@ export function defaultCaseCategory(c: Pick<IncidentCase, 'deployInWindow'>): st
 }
 
 /** Formun altındaki canlı not: onay manşet "bağımsız" ölçüye sayılacak mı. */
-export function independenceNote(suggested: string, cause: string): { independent: boolean; text: string } {
-  if (!suggested.trim()) return { independent: true, text: 'CoSRE öneri vermemişti — onay bağımsız vaka sayılır' };
+export function independenceNote(suggested: string, cause: string, lang: Lang = 'tr'): { independent: boolean; text: string } {
+  if (!suggested.trim()) return { independent: true, text: t('case.ind.none', lang) };
   if (sameCause(suggested, cause)) {
-    return { independent: false, text: 'Öneri aynen kabul ediliyor — doğruluk manşetine (bağımsız vakalar) sayılmaz; yanlışsa düzeltin' };
+    return { independent: false, text: t('case.ind.same', lang) };
   }
-  return { independent: true, text: 'Öneri düzeltildi — bağımsız vaka olarak manşet ölçüye sayılır' };
+  return { independent: true, text: t('case.ind.edited', lang) };
 }
 
 /** Vakanın kaynak sayfası (Problem çekmecesi / exception grubu). */

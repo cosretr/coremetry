@@ -218,15 +218,9 @@ export function externalSummaryKind(ruleId: string | null | undefined): External
 }
 
 /** Özet Problem'in kanıt paneli yerine geçen DÜRÜST açıklama — "toplanıyor" vaadi YOK. */
-export function externalSummaryNote(kind: ExternalSummaryKind): { title: string; body: string } {
-  switch (kind) {
-    case 'cap':
-      return { title: 'Tavan özeti — seri kanıtı yok', body: 'Bu Problem tik başına açılış tavanına takılan serilerin özetidir; hangi seriler olduğu ve sayısı gerekçede. Seri kanıtı (trace/pod/log) yalnız tek tek açılan seri Problem\'lerinde toplanır.' };
-    case 'down':
-      return { title: 'Kaynak erişilemiyor — seri kanıtı yok', body: 'Bu Problem dış kaynağın kendisine (ardışık başarısız poll) ait; son hata ve sayı gerekçede. Kaynak erişilemezken seri taraması koşmaz, dolayısıyla toplanacak seri kanıtı yoktur.' };
-    case 'cluster':
-      return { title: 'Küme özeti — seri kanıtı üyelerde', body: 'Aynı üst boyutta aynı anda patlayan seriler tek Problem\'de toplandı; üyeler gerekçede. Üyelerin bireysel Problem\'i açılmadığı için trace/pod/log kanıtı bu satırda değil, kaynağın seri Problem\'lerinde aranır.' };
-  }
+// v0.10.2285 — metin katalogda (ext.sum.<tür>), isteğe bağlı lang (varsayılan 'tr').
+export function externalSummaryNote(kind: ExternalSummaryKind, lang: Lang = 'tr'): { title: string; body: string } {
+  return { title: t(`ext.sum.${kind}`, lang), body: t(`ext.sum.${kind}.body`, lang) };
 }
 
 // ── Anomali Problem'i mi? (v0.10.1055) ─────────────────────────────────────

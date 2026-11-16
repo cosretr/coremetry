@@ -19,15 +19,17 @@
 import { ExplainBody } from '@/components/ai/ExplainBody';
 import { EvidenceChips } from '@/components/ai/EvidenceChips';
 import { Badge, Button } from '@/components/ui';
-import { agoTR, tsLong } from '@/lib/utils';
+import { tsLong } from '@/lib/utils';
+import { agoLang, t, tf, useLang } from '@/lib/i18n'; // v0.10.2285 — metinler arayüz dilinde (TR aynı)
 import type { SREInvestigation } from '@/lib/types';
 import { ProblemInvestigationCards } from './ProblemInvestigationCards';
 import { ProblemInvestigationRecommendations } from './ProblemInvestigationRecommendations';
 import {
-  STEP_LABEL, askInChatQuestion, findingEvidence, findingKindLabel, fmtStepDuration, orderedSteps, stepStateView,
+  stepLabel, askInChatQuestion, findingEvidence, findingKindLabel, fmtStepDuration, orderedSteps, stepStateView,
 } from './investigationResultView';
 
 export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestigation; canEdit?: boolean }) {
+  const lang = useLang();
   const sweep = inv.steps.find(s => s.name === 'sweep');
   const multi = inv.steps.length > 1;
   const steps = orderedSteps(inv.steps);
@@ -39,10 +41,10 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
     <div style={{ display: 'grid', gap: 10, fontSize: 13 }}>
       {inv.error && <div className="cm-callout is-caution" role="alert">{inv.error}</div>}
       {!multi && sweep?.summary && (
-        <div><b>Servis taraması ({inv.service}):</b> {sweep.summary}</div>
+        <div><b>{tf('inv.res.sweep', lang, { svc: inv.service })}</b> {sweep.summary}</div>
       )}
       {!multi && sweep && sweep.state !== 'ok' && !inv.error && (
-        <div style={{ color: 'var(--text3)' }}>Tarama {sweep.state === 'partial' ? 'kısmi tamamlandı' : 'tamamlanamadı'}.</div>
+        <div style={{ color: 'var(--text3)' }}>{t(sweep.state === 'partial' ? 'inv.res.sweepPartial' : 'inv.res.sweepFailed', lang)}</div>
       )}
       {multi && (
         // statik tablo (T1): ≤8 sabit satır (v0.10.1288: + olaylar, node), sıra
@@ -51,20 +53,20 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
           <colgroup><col style={{ width: 130 }} /><col style={{ width: 92 }} /><col style={{ width: 64 }} /><col /></colgroup>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left' }}>Adım</th>
-              <th style={{ textAlign: 'left' }}>Durum</th>
-              <th className="num">Süre</th>
-              <th style={{ textAlign: 'left' }}>Özet</th>
+              <th style={{ textAlign: 'left' }}>{t('inv.res.step', lang)}</th>
+              <th style={{ textAlign: 'left' }}>{t('inv.res.status', lang)}</th>
+              <th className="num">{t('inv.res.duration', lang)}</th>
+              <th style={{ textAlign: 'left' }}>{t('inv.res.summary', lang)}</th>
             </tr>
           </thead>
           <tbody>
             {steps.map(s => {
-              const v = stepStateView(s.state);
+              const v = stepStateView(s.state, lang);
               return (
                 <tr key={s.name}>
-                  <td>{STEP_LABEL[s.name] ?? s.name}</td>
+                  <td>{stepLabel(s.name, lang)}</td>
                   <td>{v.tone ? <Badge tone={v.tone}>{v.label}</Badge> : v.label}</td>
-                  <td className="num">{fmtStepDuration(s.durationMs)}</td>
+                  <td className="num">{fmtStepDuration(s.durationMs, lang)}</td>
                   <td className="cell-wrap">{s.summary || '—'}</td>
                 </tr>
               );
@@ -81,8 +83,8 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
         : (
           <div>
             <div style={{ color: 'var(--text3)', fontSize: 12, marginBottom: 4 }}>
-              AI özeti{inv.summary.model ? ` · ${inv.summary.model}` : ''}
-              {inv.summary.at ? <span title={tsLong(inv.summary.at)}> · {agoTR(inv.summary.at)}</span> : null}
+              {t('inv.res.aiSummary', lang)}{inv.summary.model ? ` · ${inv.summary.model}` : ''}
+              {inv.summary.at ? <span title={tsLong(inv.summary.at)}> · {agoLang(inv.summary.at, lang)}</span> : null}
             </div>
             <ExplainBody text={inv.summary.text} busy={false} verdict={false} />
           </div>
@@ -94,7 +96,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
           {inv.findings.map(f => (
             <li key={`${f.step ?? 'sweep'}:${f.kind}:${f.name}`}>
               <span className="mono">{f.name}</span>{' '}
-              <span style={{ color: 'var(--text3)' }}>({findingKindLabel(f.kind)} · {f.level})</span>
+              <span style={{ color: 'var(--text3)' }}>({findingKindLabel(f.kind, lang)} · {f.level})</span>
               {f.reasons && f.reasons.length > 0 && <> — {f.reasons.join('; ')}</>}
               <EvidenceChips items={findingEvidence(inv, f)} />
             </li>
@@ -102,12 +104,12 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
         </ul>
       )}
       <div style={{ color: 'var(--text3)', fontSize: 12 }}>
-        Öneri niteliğinde — hiçbir değişiklik uygulanmadı.
-        {inv.kind === 'manual' && inv.requestBy ? ` İsteyen: ${inv.requestBy}.` : ''}
+        {t('inv.res.advisory', lang)}
+        {inv.kind === 'manual' && inv.requestBy ? tf('inv.res.requestBy', lang, { who: inv.requestBy }) : ''}
       </div>
       {finished && (
         <div>
-          <Button variant="secondary" size="sm" onClick={askInChat}>Sohbette sor</Button>
+          <Button variant="secondary" size="sm" onClick={askInChat}>{t('inv.res.ask', lang)}</Button>
         </div>
       )}
     </div>

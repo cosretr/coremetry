@@ -1,4 +1,5 @@
 import type { Tone } from '@/components/ui';
+import { t, type Lang } from '@/lib/i18n'; // v0.10.2285 — etiketler lang alır (varsayılan 'tr')
 import type { ChatQueryEvidence, SREInvestigation, SREInvestigationFinding, SREInvestigationStep } from '@/lib/types';
 
 // investigationResultView — v0.10.1287 (AI SRE Faz 1b). InvestigationResult'ın
@@ -8,16 +9,12 @@ import type { ChatQueryEvidence, SREInvestigation, SREInvestigationFinding, SREI
 /** Boru hattı sırası (dalga 1 → dalga 2 → anlatım); tablo bu sırayla, sıralanmaz. */
 export const STEP_ORDER = ['sweep', 'deploys', 'deps', 'pivot', 'log_spike', 'events', 'node', 'summary'] as const;
 
-export const STEP_LABEL: Record<string, string> = {
-  sweep: 'Servis taraması',
-  deploys: 'Deploy',
-  deps: 'Bağımlılık',
-  pivot: 'Trace pivotu',
-  log_spike: 'Log artışı',
-  events: 'Olaylar', // v0.10.1288 — alarmlar + aşağı akış db/ext problemleri + incident
-  node: 'Node baskısı', // v0.10.1288 — tembel; yalnız doygunluk hipotezi isterse
-  summary: 'AI özeti',
-};
+// v0.10.2285 — adım adları katalogda (inv.step.*): events (v0.10.1288) = alarmlar +
+// aşağı akış db/ext problemleri + incident; node (v0.10.1288) tembel, yalnız
+// doygunluk hipotezi isterse. Bilinmeyen ad olduğu gibi.
+export function stepLabel(name: string, lang: Lang = 'tr'): string {
+  return (STEP_ORDER as readonly string[]).includes(name) ? t(`inv.step.${name}`, lang) : name;
+}
 
 /** orderedSteps — adımlar boru hattı sırasıyla (bilinmeyen sonda), en çok 8. */
 export function orderedSteps(steps: readonly SREInvestigationStep[]): SREInvestigationStep[] {
@@ -29,21 +26,21 @@ export function orderedSteps(steps: readonly SREInvestigationStep[]): SREInvesti
 }
 
 /** Adım durumu: yalnız sapan durum renk alır (tablo standardı — ok düz metin). */
-export function stepStateView(state: string): { label: string; tone: Tone | null } {
+export function stepStateView(state: string, lang: Lang = 'tr'): { label: string; tone: Tone | null } {
   switch (state) {
-    case 'ok': return { label: 'tamam', tone: null };
-    case 'partial': return { label: 'kısmi', tone: 'warning' };
-    case 'error': return { label: 'okunamadı', tone: 'danger' };
-    case 'skipped': return { label: 'atlandı', tone: null };
+    case 'ok': return { label: t('inv.stepState.ok', lang), tone: null };
+    case 'partial': return { label: t('inv.stepState.partial', lang), tone: 'warning' };
+    case 'error': return { label: t('inv.stepState.error', lang), tone: 'danger' };
+    case 'skipped': return { label: t('inv.stepState.skipped', lang), tone: null };
     default: return { label: state, tone: null };
   }
 }
 
 /** Adım süresi: 950 ms / 1,2 sn. */
-export function fmtStepDuration(ms: number): string {
+export function fmtStepDuration(ms: number, lang: Lang = 'tr'): string {
   if (!Number.isFinite(ms) || ms <= 0) return '—';
   if (ms < 1000) return `${Math.round(ms)} ms`;
-  return `${(ms / 1000).toFixed(1).replace('.', ',')} sn`;
+  return lang === 'tr' ? `${(ms / 1000).toFixed(1).replace('.', ',')} sn` : `${(ms / 1000).toFixed(1)} s`;
 }
 
 /** findingEvidence — bulgunun kanıt künyeleri: `evidences[i]` → bulguyu üreten
@@ -65,11 +62,11 @@ export function findingEvidence(inv: SREInvestigation, f: SREInvestigationFindin
 }
 
 /** Bulgu türünün Türkçe adı (Go sre kindTR aynası). */
-export function findingKindLabel(kind: string): string {
+export function findingKindLabel(kind: string, lang: Lang = 'tr'): string {
   switch (kind) {
-    case 'operation': return 'operasyon';
-    case 'function': return 'fonksiyon';
-    case 'dependency': return 'bağımlılık';
+    case 'operation': return t('inv.kind.operation', lang);
+    case 'function': return t('inv.kind.function', lang);
+    case 'dependency': return t('inv.kind.dependency', lang);
     case 'k8s': return 'Kubernetes';
     case 'jvm': return 'JVM';
     case 'node': return 'node';
