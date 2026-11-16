@@ -249,6 +249,19 @@ export function useProblemGraph(id: string, enabled = true) {
   });
 }
 
+// v0.10.2279 (entity grafı S2) — Problems listesi "Ne bozuk" alt satırı için
+// gölge özet (tek blob, sunucu 15 s önbellek). Liste satırlarını katlamaz,
+// sıralamaz, süzmez. 30 s yoklama; RQ gizli sekmede durur.
+export function useProblemGraphSummary(enabled = true) {
+  return useQuery({
+    queryKey: keys.problems.graphSummary(),
+    queryFn: ({ signal }) => api.problemGraphSummary(signal),
+    enabled,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+}
+
 // v0.10.1282 — AI SRE araştırması (Problem detayı açıkken). staleTime = sunucu
 // TTL (10 s). Yoklama YALNIZ iş kuyrukta / koşarken, 10 s (RQ gizli sekmede
 // durur); bitmiş kayıt yoklanmaz — değişim SSE 'sre.investigation' ile gelir.

@@ -40,7 +40,7 @@ export function ProblemGraphShadowSection() {
                 <div className="font-semibold">En büyük kümeler (şu an, en çok 20)</div>
                 {q.data.largest.map(g => (
                   <div key={g.ownerId}>
-                    {g.ownerName} · {g.entities} varlık · {fmtDateTime(new Date(g.startedAt / 1e6))} · {Object.keys(g.rules).sort().map(k => `${k} ${g.rules[k]}`).join(', ')}
+                    {g.ownerName} · {g.entities} varlık · {fmtDateTime(new Date(g.startedAt / 1e6))} · {Object.keys(g.rules).sort().map(k => `${k} ${g.rules[k]}`).join(', ')}{g.confidence ? ` · köken ${g.origin || 'belirsiz'} (${g.confidence})` : ''}
                   </div>
                 ))}
               </div>

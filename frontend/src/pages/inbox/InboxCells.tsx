@@ -13,6 +13,8 @@ import { RecurringMarker } from '@/features/anomalies/RecurringMarker'; // v0.10
 import { promotedRecurrence } from '@/features/anomalies/detailSummary'; // v0.10.1054
 import { Badge } from '@/components/ui/Badge';
 import type { InboxItem } from '@/lib/types';
+import { tf, useLang } from '@/lib/i18n';
+import { graphRowSubText, type ProblemGraphRowSummary } from '@/lib/problemGraph';
 
 const isExcFamily = isInboxExcFamily;
 
@@ -184,4 +186,15 @@ export function DetailLine({ it }: { it: InboxItem }) {
   }
   const rest = it.priorityReason || it.description;
   return <>{lead}{rest && <> · {rest}</>}</>;
+}
+
+// GraphRowSub — v0.10.2279 (entity grafı S2, taslak bölüm 2): "Ne bozuk"
+// hücresinin alt satırı — "köken orders-db · 4 varlık · 5 olay" ya da
+// "köken belirsiz · en erken başlayan …"; tek servisli Problem'de hiçbir
+// şey. Gölge önizleme: satır katlanmaz, sıralanmaz, süzülmez.
+export function GraphRowSub({ row }: { row?: ProblemGraphRowSummary }) {
+  const lang = useLang();
+  const text = graphRowSubText(row, (k, v) => tf(k, lang, v));
+  if (!text) return null;
+  return <div className="triage-sub" data-testid="pg-row-sub" title={tf('pg.row.title', lang)}>{text}</div>;
 }

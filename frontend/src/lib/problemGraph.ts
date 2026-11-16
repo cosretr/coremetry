@@ -39,6 +39,7 @@ export interface ProblemGraphNearMiss {
 export interface ProblemGraphReads {
   passes: number; skippedFew: number; refreshes: number; relations: number;
   maxRelPerPass: number; runs: number; evidence: number; errors: number;
+  rollouts?: number; blast?: number; // v0.10.2278 (S2)
 }
 
 export interface ProblemGraphShadowReport {
@@ -52,12 +53,16 @@ export interface ProblemGraphShadowReport {
   ageByRule?: Record<string, Record<string, number>>;
   graphMissing: number;
   familyOff?: Record<string, number>;
+  originWins?: Record<string, number>; // v0.10.2278 (S2)
+  originUnclear?: number;
+  originConf?: Record<string, number>;
   reads: ProblemGraphReads;
   truncated?: boolean;
 }
 
 export interface ProblemGraphTopGroup {
   ownerId: string; ownerName: string; entities: number; startedAt: number; rules: Record<string, number>;
+  origin?: string; confidence?: string; // v0.10.2278 (S2)
 }
 
 export interface ProblemGraphShadowResponse {
@@ -65,6 +70,9 @@ export interface ProblemGraphShadowResponse {
   report: ProblemGraphShadowReport;
   largest: ProblemGraphTopGroup[];
 }
+
+export const ORIGIN_RULES = ['K-ROLLOUT', 'K-SHARED', 'K-DEEP', 'K-FIRST'] as const;
+const CONF_TR: Record<string, string> = { strong: 'güçlü', weak: 'zayıf', unclear: 'belirsiz' };
 
 const SIZE_ORDER = ['2', '3', '4-5', '6-10', '11-25'];
 const AGE_ORDER = ['0-30', '30-60', '60-90', '>90'];
@@ -89,11 +97,46 @@ export function graphShadowLines(r: ProblemGraphShadowReport): string[] {
     `Küme boyu, düz M-CALL: ${kv(r.sizes, SIZE_ORDER, k => `${k} varlık`)} · katı M-CALL: ${kv(r.sizesStrict, SIZE_ORDER, k => `${k} varlık`)}`,
     `Bağlanırken sahibin yaşı (servisler arası): ${kv(r.age, AGE_ORDER, k => `${k} dk`)}`,
     `Graf verisi yok: ${r.graphMissing} Problem · kural ailesi kapalı geçen okuma turu: ${off}`,
-    `Okuma: ${rd.passes} tik, ${rd.skippedFew} tik aday < 2 (okuma yok), ${rd.refreshes} okuma turu · entity_relations ${rd.relations} (tur başına en çok ${rd.maxRelPerPass}) · tazelik ${rd.runs} · bağımlılık olayı ${rd.evidence} · hata ${rd.errors}`,
+    `Olası köken (farklı küme): kazanan kural ${kv(r.originWins, ORIGIN_RULES)} · belirsiz ${r.originUnclear ?? 0} · güven ${kv(r.originConf, ['strong', 'weak', 'unclear'], k => CONF_TR[k] ?? k)}`,
+    `Okuma: ${rd.passes} tik, ${rd.skippedFew} tik aday < 2 (okuma yok), ${rd.refreshes} okuma turu · entity_relations ${rd.relations} (tur başına en çok ${rd.maxRelPerPass}) · tazelik ${rd.runs} · bağımlılık olayı ${rd.evidence} · rollout ${rd.rollouts ?? 0} · called_by ${rd.blast ?? 0} · hata ${rd.errors}`,
   ];
 }
 
 // ── v0.10.2275 — Problem detayı "Neden tek Problem" (gölge) ─────────────
+
+// ── v0.10.2279 (S2) — olası köken, etki alanı, köken kanıtı ────────────
+
+export interface ProblemGraphOriginRule {
+  rule: string; // K-*
+  separated: boolean;
+  off?: boolean;
+  leader?: string;
+  others?: string[];
+  via?: string;
+  at?: number;     // unix ns
+  runner?: string;
+  runAt?: number;  // unix ns
+  source: string;  // rollout | calls | dep_events | onset
+}
+
+export interface ProblemGraphBlast {
+  affected: string[];
+  atRisk1?: string[]; atRisk1N: number;
+  atRisk2?: string[]; atRisk2N: number;
+  cut?: boolean; off?: boolean; namesDrop?: boolean;
+}
+
+export interface ProblemGraphOrigin {
+  entity?: string; name?: string; type?: string;
+  confidence: 'strong' | 'weak' | 'unclear' | string;
+  rule?: string;
+  leads?: string[];
+  onsetAt?: number;
+  earliest: string;
+  earliestAt: number;
+  rules: ProblemGraphOriginRule[];
+  blast?: ProblemGraphBlast;
+}
 
 export interface ProblemGraphResponse {
   problemId: string;
@@ -104,6 +147,7 @@ export interface ProblemGraphResponse {
   members: ProblemGraphMember[];
   nearMisses: ProblemGraphNearMiss[];
   truncated?: boolean;
+  origin?: ProblemGraphOrigin; // v0.10.2278 (S2)
 }
 
 /** Çeviri işlevi (tf'nin dil bağlanmış hali) — saf yardımcılar dile bağlı değil. */
@@ -158,4 +202,164 @@ export function graphReasonText(n: ProblemGraphNearMiss, t: GraphT): string {
 export function graphCounts(d: ProblemGraphResponse): { entities: number; rules: number } {
   const rules = new Set(d.members.map(m => m.link).filter((l): l is string => !!l));
   return { entities: d.entities, rules: rules.size };
+}
+
+// ── v0.10.2279 (S2) — köken cümlesi, kanıt listesi, etki alanı, liste alt satırı ──
+
+/** SAF: güven rozeti metni. */
+export function originConfText(o: ProblemGraphOrigin, t: GraphT): string {
+  if (o.confidence === 'strong') return t('pg.conf.strong', { n: o.leads?.length ?? 2 });
+  if (o.confidence === 'weak') return t('pg.conf.weak');
+  return t('pg.conf.unclear');
+}
+
+/** SAF: manşet altı köken cümlesi (kural kimliklerinden). */
+export function originLineText(o: ProblemGraphOrigin, t: GraphT, clock: (ns: number) => string): string {
+  if (o.confidence === 'unclear' || !o.name) return t('pg.origin.unclear', { name: o.earliest, time: clock(o.earliestAt) });
+  const why = (o.leads ?? []).map(id => {
+    const r = o.rules.find(x => x.rule === id);
+    switch (id) {
+      case 'K-ROLLOUT': return t('pg.origin.why.K-ROLLOUT', { via: r?.via ?? '', time: r?.at ? clock(r.at) : '' });
+      case 'K-SHARED': return t('pg.origin.why.K-SHARED', { others: (r?.others ?? []).join(', ') });
+      case 'K-DEEP': return t('pg.origin.why.K-DEEP');
+      case 'K-FIRST': return t('pg.origin.why.K-FIRST');
+    }
+    return id;
+  });
+  const first = o.onsetAt ? t('pg.origin.first', { time: clock(o.onsetAt) }) : '.';
+  return t('pg.origin.line', { name: o.name, why: why.join(t('pg.origin.and')) }) + first;
+}
+
+/** SAF: köken kanıtı satırının cümlesi. */
+export function originRuleText(r: ProblemGraphOriginRule, t: GraphT, clock: (ns: number) => string): string {
+  if (r.off) return t('pg.ev.off');
+  const others = (r.others ?? []).join(', ');
+  const v = { leader: r.leader ?? '', others, via: r.via ?? '', time: r.at ? clock(r.at) : '',
+    t1: r.at ? clock(r.at) : '', runner: r.runner ?? '', t2: r.runAt ? clock(r.runAt) : '' };
+  if (r.separated) return t(`pg.ev.${r.rule}.sep`, v);
+  if (r.rule === 'K-FIRST') return r.runner ? t('pg.ev.K-FIRST.tie', v) : t('pg.ev.K-FIRST.one', v);
+  if ((r.rule === 'K-ROLLOUT' || r.rule === 'K-DEEP') && others) return t(`pg.ev.${r.rule}.many`, v);
+  return t(`pg.ev.${r.rule}.none`, v);
+}
+
+/** SAF: kanıt kaynağı etiketi. */
+export function originSourceText(src: string, t: GraphT): string {
+  return ['rollout', 'calls', 'dep_events', 'onset'].includes(src) ? t(`pg.src.${src}`) : src;
+}
+
+/** SAF: ilk N ad + "+M". */
+export function namesPlus(names: string[] | undefined, total: number): string {
+  const ns = names ?? [];
+  const rest = total - ns.length;
+  return ns.join(', ') + (rest > 0 ? `${ns.length ? ' ' : ''}+${rest}` : '');
+}
+
+export interface ProblemGraphRowSummary {
+  origin?: string; confidence: string; earliest?: string; entities: number; events: number;
+}
+export interface ProblemGraphSummaryResponse {
+  shadow: boolean; at?: number; rows: Record<string, ProblemGraphRowSummary>;
+}
+
+/** SAF: Problems listesi "Ne bozuk" alt satırı; tek servisli Problem'de null. */
+export function graphRowSubText(s: ProblemGraphRowSummary | undefined, t: GraphT): string | null {
+  if (!s || s.entities < 2) return null;
+  if (s.confidence === 'unclear' || !s.origin) return t('pg.row.unclear', { name: s.earliest ?? '', n: s.entities, e: s.events });
+  return t('pg.row.origin', { name: s.origin, n: s.entities, e: s.events });
+}
+
+// ── bağımlılık yolu çizimi (SAF yerleşim; çizim ProblemGraphDiagram) ──
+
+export const DIAGRAM_MAX_NODES = 25;
+export const DIA = { colW: 200, nodeW: 160, nodeH: 40, rowH: 56, pad: 16, top: 28 } as const;
+
+export interface DiaNode {
+  id: string; name: string; type: string; kind: 'origin' | 'member' | 'calm';
+  order?: number; onset?: number; x: number; y: number;
+}
+export interface DiaEdge { from: string; to: string; kind: 'call' | 'link' | 'calm'; label?: string }
+export interface DiaLayout { nodes: DiaNode[]; edges: DiaEdge[]; width: number; height: number; truncated: boolean }
+
+/** SAF: düğümler (üyeler varlık başına bir, köken, sapmasız çağıranlar) + kenarlar
+ *  + sütun yerleşimi (köken sağda, çağıranlar solda). En çok 25 düğüm. */
+export function graphDiagramLayout(members: ProblemGraphMember[], origin?: ProblemGraphOrigin): DiaLayout {
+  const byName = new Map<string, DiaNode>();
+  const nodes: DiaNode[] = [];
+  let truncated = false;
+  const add = (n: Omit<DiaNode, 'x' | 'y'>) => {
+    if (byName.has(n.name)) return byName.get(n.name)!;
+    if (nodes.length >= DIAGRAM_MAX_NODES) { truncated = true; return undefined; }
+    const d = { ...n, x: 0, y: 0 };
+    byName.set(n.name, d); nodes.push(d);
+    return d;
+  };
+  const originName = origin?.confidence !== 'unclear' ? origin?.name : undefined;
+  let order = 0;
+  for (const m of members) {
+    if (byName.has(m.name)) continue;
+    order += 1;
+    add({ id: m.entity, name: m.name, type: m.type, kind: m.name === originName ? 'origin' : 'member', order, onset: m.startedAt });
+  }
+  if (originName && !byName.has(originName)) {
+    add({ id: origin!.entity ?? originName, name: originName, type: origin!.type ?? '', kind: 'origin', onset: origin!.onsetAt || undefined });
+  }
+  const edges: DiaEdge[] = [];
+  const seen = new Set<string>();
+  const edge = (e: DiaEdge) => {
+    const k = `${e.from}|${e.to}|${e.kind}`;
+    if (e.from === e.to || seen.has(k) || !byName.has(e.from) || !byName.has(e.to)) return;
+    seen.add(k); edges.push(e);
+  };
+  for (const m of members) {
+    if (!m.link || m.link === 'M-SVC') continue;
+    if (m.link === 'M-CALL' && m.path && m.path.length === 2) edge({ from: m.path[0], to: m.path[1], kind: 'call' });
+    else if (m.link === 'M-DEP' && m.via && byName.has(m.via)) {
+      edge({ from: m.name, to: m.via, kind: 'call' });
+      if (m.peer) edge({ from: m.peer, to: m.via, kind: 'call' });
+    } else if (m.peer) edge({ from: m.peer, to: m.name, kind: 'link', label: m.via });
+  }
+  if (originName) {
+    for (const c of origin?.blast?.atRisk1 ?? []) {
+      if (add({ id: `calm:${c}`, name: c, type: 'service', kind: 'calm' })) edge({ from: c, to: originName, kind: 'calm' });
+    }
+  }
+  // Seviye: köken (yoksa giden çağrısı olmayanlar) 0; çağıran = çağrılan + 1; bağ = eş seviye.
+  const level = new Map<string, number>();
+  const outCall = new Set(edges.filter(e => e.kind === 'call').map(e => e.from));
+  for (const n of nodes) {
+    if (n.kind === 'calm') continue;
+    if (originName ? n.name === originName : !outCall.has(n.name)) level.set(n.name, 0);
+  }
+  for (let pass = 0; pass < nodes.length + 1; pass++) {
+    let changed = false;
+    for (const e of edges) {
+      if (e.kind === 'calm') continue;
+      const lt = level.get(e.to), lf = level.get(e.from);
+      if (e.kind === 'call' && lt !== undefined && lf === undefined) { level.set(e.from, lt + 1); changed = true; }
+      if (e.kind === 'link') {
+        if (lf !== undefined && lt === undefined) { level.set(e.to, lf); changed = true; }
+        if (lt !== undefined && lf === undefined) { level.set(e.from, lt); changed = true; }
+      }
+    }
+    if (!changed) break;
+  }
+  let maxL = 0;
+  for (const n of nodes) if (n.kind !== 'calm') maxL = Math.max(maxL, level.get(n.name) ?? 0);
+  const hasCalm = nodes.some(n => n.kind === 'calm');
+  const cols = maxL + 1 + (hasCalm ? 1 : 0);
+  const rows = new Map<number, number>();
+  for (const n of nodes) {
+    const l = n.kind === 'calm' ? maxL + 1 : (level.get(n.name) ?? 0);
+    const col = cols - 1 - l;
+    const r = rows.get(col) ?? 0;
+    rows.set(col, r + 1);
+    n.x = DIA.pad + col * DIA.colW;
+    n.y = DIA.top + r * DIA.rowH;
+  }
+  const maxRows = Math.max(1, ...rows.values());
+  return {
+    nodes, edges, truncated,
+    width: DIA.pad * 2 + (cols - 1) * DIA.colW + DIA.nodeW,
+    height: DIA.top + maxRows * DIA.rowH,
+  };
 }

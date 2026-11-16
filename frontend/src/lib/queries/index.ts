@@ -74,6 +74,7 @@ export {
 export { useRollouts, useRolloutStats, useRolloutRuns, useRolloutDetail, useServiceGitOps } from './rollouts'; // v0.10.201/203, v0.10.981
 export { useTablePrefs } from './prefs'; // v0.10.248 — kalıcı sütun tercihi
 export { useProblemStandard } from './problems'; // v0.10.1529 — Problem standardı detay başlığı
+export { useProblemGraphSummary } from './problems'; // v0.10.2279 — entity grafı S2 liste alt satırı
 export { useSREEvalRuns, useSREEvalRun, useSREEvalReview, useSREEvalCompare } from './sreEval'; // v0.10.1301 — AI SRE Faz 5 değerlendirmesi
 export { usePendingCases } from './cases'; // v0.10.1475 — /ai onay bekleyen vakalar
 export { useStackFrameLinks } from './devops'; // v0.10.581 — tıklanabilir stack frame

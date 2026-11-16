@@ -8,7 +8,7 @@ import { Button, Chip, SearchField } from '@/components/ui';
 import { Link, useLocation, useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { anomalyEventHref } from '@/lib/anomalyHref';
 import { Topbar } from '@/components/Topbar';
-import { useInbox, useServicesMetadata } from '@/lib/queries';
+import { useInbox, useServicesMetadata, useProblemGraphSummary } from '@/lib/queries';
 import { tsCompact, tsLong, fmtAgoNs, rowClickHandlers } from '@/lib/utils';
 // v0.10.1084 — Exceptions listesiyle ortak başlık hücresi + satır metni (saf).
 import { TriageTitleCell } from '@/features/anomalies/TriageTitleCell';
@@ -62,7 +62,7 @@ import {
   KIND_LABEL, SUBJECT_LANES, SUBJECT_LABEL, SUBJECT_TITLE, STATUS_PIVOTS, DEFAULT_MIN_OCC, type InboxStatus,
 } from './inbox/inboxFilters';
 import { INBOX_COLS, capSortLabel, occLine } from './inbox/inboxColumns';
-import { TeamCell, AssigneePill, RowChips, DetailLine } from './inbox/InboxCells';
+import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub } from './inbox/InboxCells';
 
 
 // exception ailesi — httperror satırları da exception payload'u taşır
@@ -480,6 +480,9 @@ export default function InboxPage() {
   // hücreleri (ProblemVerdictRow) aynı bağlamdan yalnız bakar.
   const verdictCtx = useVerdictRowContext();
   const verdicts = verdictCtx.index;
+  // v0.10.2279 (entity grafı S2) — "Ne bozuk" alt satırı (köken · varlık
+  // sayısı); gölge özet, satırlar katlanmaz / sıralanmaz / süzülmez.
+  const graphSum = useProblemGraphSummary();
   // Düz hesap (memo değil): satır başına bir harita bakışı; `data`ya bağlı bir
   // memo daha, bu dosyadaki "data conditional" lint sınıfını büyütürdü.
   const noiseCount = countNoise(Array.isArray(data) ? data : null, verdicts);
@@ -1185,6 +1188,7 @@ export default function InboxPage() {
                           aiAge={it.aiSummaryAt ? fmtAgoNs(it.aiSummaryAt) : undefined} />
                       );
                     })()}
+                    {it.problem && <GraphRowSub row={graphSum.data?.rows?.[it.problem.id]} />}
                     <div className="std-ctx">
                       {/* v0.10.2121 — özne Servis, ekip Ekip kolonunda; oluşum sayısı burada. */}
                       {occLine(it) && <span className="ib-occ">{occLine(it)}</span>}

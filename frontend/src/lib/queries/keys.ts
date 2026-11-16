@@ -73,6 +73,7 @@ export const keys = {
     affected:    (id: string) => ['problems', 'affected', id] as const, // v0.10.707
     events:      (id: string) => ['problems', 'events', id] as const, // v0.10.2163 — birleşen olaylar
     graph:       (id: string) => ['problems', 'graph', id] as const, // v0.10.2275 — entity grafı gölge bağları
+    graphSummary: () => ['problems', 'graph-summary'] as const, // v0.10.2279 — liste alt satırı (gölge özet)
     sourceEvent: (id: string) => ['problems', 'source-event', id] as const, // v0.10.1106
     logTemplates: (id: string) => ['problems', 'log-templates', id] as const, // v0.10.1113
     // v0.10.1282 — AI SRE araştırma kaydı; SSE 'sre.investigation' tüm dalı düşürür.

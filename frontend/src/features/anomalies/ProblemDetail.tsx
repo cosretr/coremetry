@@ -37,7 +37,7 @@ import { representativeStack, frameLinksRef } from './stackSource'; // v0.10.104
 import { ExternalEvidencePanel } from './ExternalEvidencePanel';
 import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
 import { ProblemEventTimeline, ProblemEventEvidence } from './ProblemEventTimeline'; // v0.10.2163 — birleşen olaylar
-import { ProblemGraphSection } from './ProblemGraphSection'; // v0.10.2275 — entity grafı gölge bağları
+import { ProblemGraphSection, ProblemOriginLine } from './ProblemGraphSection'; // v0.10.2275 — entity grafı gölge bağları; v0.10.2279 köken satırı
 import type { ExceptionGroup, ExceptionGroupState, Problem, ProblemStandard, RolloutEvidence } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable'; // v0.10.977 (T12, P-2)
@@ -1179,6 +1179,9 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         : undefined}>
         {std?.headline || alertProblemSummary(problem)}
       </DetailTitle>
+      {/* v0.10.2279 (entity grafı S2) — olası köken satırı (gölge önizleme);
+          bağlı küme yoksa hiçbir şey çizmez. "Olası neden" kutusu ayrı kalır. */}
+      <ProblemOriginLine problemId={problem.id} />
       <AlertProblemMeta problem={problem} window={probWindow} endNs={endNs} />
       <ProblemTriage problem={problem} isAdmin={isAdmin} onBack={onBack} onChanged={onChanged} />
       {/* CoSRE öğrenme Faz 3 — kapanmış problemin vaka kaydı (taslak → tek tık onay). */}
