@@ -703,6 +703,9 @@ func main() {
 	// the resolved log store regardless of mode. Non-worker modes
 	// construct it but never Start() — keeps the wiring symmetric.
 	evalr := evaluator.New(store, time.Minute, lockImpl, notifier)
+	// v0.10.2280 (entity grafı S3) — "sık tekrar eden" kuralının GÖLGE kararı
+	// bildirim gölgesine ayrı satır olarak yazılır; gönderim değişmez.
+	notifier.SetFrequentShadow(evalr)
 	// v0.8.354 — sustain/cooldown stamps write-through to Redis so a leader
 	// failover (or every maxUnavailable:0 deploy) no longer resets ForSec
 	// clocks / punches CooldownSec holes. cacheImpl is the Switchable, so

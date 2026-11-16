@@ -61,6 +61,9 @@ type graphShadowStore interface {
 	ProblemGraphDependencyEvents(ctx context.Context, services []string, since time.Time, limit int) ([]chstore.GraphDependencyEvent, error)
 	// RolloutsForWorkloads — S2 K-ROLLOUT (≤ 50 iş yükü, LIMIT 200, 10 sn).
 	RolloutsForWorkloads(ctx context.Context, keys []rollout.Key, from, to time.Time) ([]chstore.RolloutRow, error)
+	// ProblemHistoryForSubjects — S3 sık tekrar geçmişi (≤ 200 özne, ≤ 14 gün,
+	// LIMIT 2000, 5 sn, max_rows_to_read 5M 'break').
+	ProblemHistoryForSubjects(ctx context.Context, subjects []string, since time.Time) (chstore.FrequentHistoryRead, error)
 	SaveProblemGraphShadow(ctx context.Context, r chstore.ProblemGraphShadow) error
 }
 
@@ -109,9 +112,17 @@ func (g graphLive) HostView(ctx context.Context) (*entity.LiveView, bool) {
 
 // graphShadow — Evaluator'daki gölge durumu (sıfır değer kullanılabilir).
 type graphShadow struct {
-	live atomic.Value // GraphLiveSource
-	mu   sync.Mutex
-	st   *graphShadowState
+	live     atomic.Value // GraphLiveSource
+	mu       sync.Mutex
+	st       *graphShadowState
+	freqOnce sync.Once
+	freq     *frequentState // S3: ayrı kilit (bildirim gölgesi de okur)
+}
+
+// frequent — S3 durumu (tembel; pas ve bildirim gölgesi paylaşır).
+func (e *Evaluator) frequent() *frequentState {
+	e.graphShadow.freqOnce.Do(func() { e.graphShadow.freq = newFrequentState() })
+	return e.graphShadow.freq
 }
 
 // SetProblemGraphLive — v0.10.2274: canlı dizin kaynağı (main; Start sonrası güvenli).
@@ -156,6 +167,7 @@ type graphShadowState struct {
 	omemo       *originFacts // S2: S1 turuyla aynı anda tazelenir
 	omemoAt     time.Time
 	origins     map[string]graphSeen // sahip → "kural|güven" (S2)
+	freq        *frequentState       // S3
 	lastWrite   time.Time
 	lastHash    uint64
 }
@@ -163,7 +175,7 @@ type graphShadowState struct {
 func newGraphShadowState(now time.Time) *graphShadowState {
 	return &graphShadowState{since: now, links: map[string]graphLinkEntry{}, noLink: map[string]graphSeen{},
 		missing: map[string]int64{}, sizes: map[string]graphSeen{}, sizesStrict: map[string]graphSeen{}, familyOff: map[string]int64{},
-		origins: map[string]graphSeen{}}
+		origins: map[string]graphSeen{}, freq: newFrequentState()}
 }
 
 // problemGraphShadow — mergeServiceTwins'in anlık görüntüsüyle gölge pası.
@@ -179,6 +191,7 @@ func (e *Evaluator) problemGraphShadow(ctx context.Context, open []*chstore.Prob
 	now := time.Now()
 	if e.graphShadow.st == nil {
 		e.graphShadow.st = newGraphShadowState(now)
+		e.graphShadow.st.freq = e.frequent()
 	}
 	prio := chstore.CurrentProblemPriority()
 	pol := chstore.OwnerPolicy{Keep: prio.InboxKeepSourcePriorityList(), Priority: prio, NowNs: now.UnixNano()}
@@ -209,8 +222,18 @@ func runGraphShadow(ctx context.Context, st graphShadowStore, live GraphLiveSour
 		attachOrigins(&plan, facts, s.omemo)
 	}
 	s.observe(plan, now)
+	// S3: sık tekrar gölgesi (tek Problem'ler dahil; köken varsa imza kökenden).
+	var freq map[string]chstore.FrequentVerdict
+	if s.freq != nil {
+		freq = s.freq.pass(ctx, st, open, planOrigins(plan), pol.Keep, now)
+	}
 	rep := s.report(now, len(units))
 	rep.Groups = plan.Groups
+	if s.freq != nil {
+		rep.Frequent = capFrequentBlob(freq)
+		fr := s.freq.report()
+		rep.FrequentReport = &fr
+	}
 	size := chstore.FitProblemGraphBlob(&rep, chstore.ProblemGraphBlobMax)
 	h := graphReportHash(rep)
 	if h == s.lastHash && now.Sub(s.lastWrite) < graphWriteEvery {
@@ -228,6 +251,11 @@ func runGraphShadow(ctx context.Context, st graphShadowStore, live GraphLiveSour
 // graphReportHash — SAF: At hariç içerik özeti (değişmeyen blob yeniden yazılmaz).
 func graphReportHash(r chstore.ProblemGraphShadow) uint64 {
 	r.At, r.Reads = 0, chstore.ProblemGraphReads{} // tur sayaçları içerik değil
+	if r.FrequentReport != nil {
+		fr := *r.FrequentReport
+		fr.Reads = chstore.FrequentReads{}
+		r.FrequentReport = &fr
+	}
 	raw, _ := json.Marshal(r)
 	h := fnv.New64a()
 	_, _ = h.Write(raw)
@@ -589,13 +617,22 @@ func graphKV(m map[string]int64) string {
 
 // graphShadowLine — SAF: yazım başına tek log satırı.
 func graphShadowLine(r chstore.ProblemGraphShadow, bytes int) string {
-	return fmt.Sprintf("[evaluator] problem_graph_shadow window=%dh units=%d links=%s call_strict=%d no_link=%s sizes=%s sizes_strict=%s age=%s graph_missing=%d family_off=%s origin_wins=%s origin_unclear=%d origin_conf=%s reads=passes:%d,skipped_few:%d,refreshes:%d,relations:%d,max_rel_per_pass:%d,runs:%d,evidence:%d,rollouts:%d,blast:%d,errors:%d groups=%d bytes=%d truncated=%v",
+	return fmt.Sprintf("[evaluator] problem_graph_shadow window=%dh units=%d links=%s call_strict=%d no_link=%s sizes=%s sizes_strict=%s age=%s graph_missing=%d family_off=%s origin_wins=%s origin_unclear=%d origin_conf=%s frequent=%s reads=passes:%d,skipped_few:%d,refreshes:%d,relations:%d,max_rel_per_pass:%d,runs:%d,evidence:%d,rollouts:%d,blast:%d,errors:%d groups=%d bytes=%d truncated=%v",
 		r.WindowH, r.Units, graphKV(r.Links), r.CallStrict, graphKV(r.NoLink), graphKV(r.Sizes), graphKV(r.SizesStrict), graphKV(r.Age),
-		r.GraphMissing, graphKV(r.FamilyOff), graphKV(r.OriginWins), r.OriginUnclear, graphKV(r.OriginConf),
+		r.GraphMissing, graphKV(r.FamilyOff), graphKV(r.OriginWins), r.OriginUnclear, graphKV(r.OriginConf), frequentKV(r.FrequentReport),
 		r.Reads.Passes, r.Reads.SkippedFew, r.Reads.Refreshes, r.Reads.Relations, r.Reads.MaxRelPerPass,
 		r.Reads.Runs, r.Reads.Evidence, r.Reads.Rollouts, r.Reads.Blast, r.Reads.Errors, len(r.Groups), bytes, r.Truncated)
 }
 
 func logGraphReadErr(what string, err error) {
 	log.Printf("[evaluator] problem_graph_shadow: %s okunamadı (bu tur o kural ailesi kapalı): %v", what, err)
+}
+
+// frequentKV — SAF: log satırının S3 parçası.
+func frequentKV(f *chstore.FrequentReport) string {
+	if f == nil {
+		return "off"
+	}
+	return fmt.Sprintf("frequent:%d,would_hold:%d,severity_up:%d,held_became_p1:%d,hist_reads:%d,hist_rows:%d,hist_max_rows:%d,hist_capped:%d,hist_errors:%d",
+		f.Frequent, f.WouldHold, f.SeverityUp, f.HeldBecameP1, f.Reads.Reads, f.Reads.Rows, f.Reads.MaxRows, f.Reads.Capped, f.Reads.Errors)
 }

@@ -199,12 +199,16 @@ type ProblemGraphShadow struct {
 	FamilyOff map[string]int64 `json:"familyOff,omitempty"`
 	// OriginWins — S2: kazanan köken kuralı başına FARKLI küme (24 sa);
 	// OriginUnclear — kökeni belirsiz küme; OriginConf — güven dağılımı.
-	OriginWins    map[string]int64    `json:"originWins,omitempty"`
-	OriginUnclear int64               `json:"originUnclear"`
-	OriginConf    map[string]int64    `json:"originConf,omitempty"`
-	Reads         ProblemGraphReads   `json:"reads"`
-	Groups        []ProblemGraphGroup `json:"groups,omitempty"`
-	Truncated     bool                `json:"truncated,omitempty"` // blob tavanı
+	OriginWins    map[string]int64  `json:"originWins,omitempty"`
+	OriginUnclear int64             `json:"originUnclear"`
+	OriginConf    map[string]int64  `json:"originConf,omitempty"`
+	Reads         ProblemGraphReads `json:"reads"`
+	// Frequent — v0.10.2280 (S3): sık tekrar eden AÇIK Problem'lerin gölge
+	// kararı (Problem kimliği → karar; ≤ 200). FrequentReport — 24 sa sayaçları.
+	Frequent       map[string]FrequentVerdict `json:"frequent,omitempty"`
+	FrequentReport *FrequentReport            `json:"frequentReport,omitempty"`
+	Groups         []ProblemGraphGroup        `json:"groups,omitempty"`
+	Truncated      bool                       `json:"truncated,omitempty"` // blob tavanı
 }
 
 // GetProblemGraphShadow — son blob (yoksa ok=false).
@@ -230,7 +234,8 @@ func (s *Store) SaveProblemGraphShadow(ctx context.Context, r ProblemGraphShadow
 }
 
 // FitProblemGraphBlob — SAF: blob tavanı aşılırsa ÖNCE etki alanının risk
-// adı listeleri düşer (sayılar kalır, NamesDrop), hâlâ aşıyorsa SONDAKİ
+// adı listeleri düşer (sayılar kalır, NamesDrop), sonra sık tekrar
+// kararlarının bölüm listeleri, hâlâ aşıyorsa SONDAKİ
 // kümeler düşer (çağıran önemliyi öne dizer); Truncated işaretlenir. Dönüş
 // JSON boyu.
 func FitProblemGraphBlob(r *ProblemGraphShadow, max int) int {
@@ -244,6 +249,16 @@ func FitProblemGraphBlob(r *ProblemGraphShadow, max int) int {
 				r.Groups[i].Origin = &oo
 			}
 		}
+	}
+	// v0.10.2280 (S3): ikinci olarak sık tekrar kararlarının bölüm listeleri
+	// düşer (sayılar kalır).
+	if raw, err := json.Marshal(r); err == nil && len(raw) > max && len(r.Frequent) > 0 {
+		m := make(map[string]FrequentVerdict, len(r.Frequent))
+		for id, v := range r.Frequent {
+			v.Episodes = nil
+			m[id] = v
+		}
+		r.Frequent = m
 	}
 	for {
 		raw, err := json.Marshal(r)

@@ -278,6 +278,24 @@ type fakeGraphStore struct {
 	saved                    chstore.ProblemGraphShadow
 	edges                    map[string][]entity.Relation // rel|byChild
 	rollouts                 []chstore.RolloutRow
+	hist                     []chstore.Problem
+	histReads                int
+	histSubjects             []string
+}
+
+func (f *fakeGraphStore) ProblemHistoryForSubjects(_ context.Context, subjects []string, _ time.Time) (chstore.FrequentHistoryRead, error) {
+	f.histReads++
+	if len(subjects) > chstore.FrequentHistorySubjects {
+		panic("unbounded history read")
+	}
+	f.histSubjects = append([]string(nil), subjects...)
+	var out []chstore.Problem
+	for _, p := range f.hist {
+		if contains(subjects, p.Service) {
+			out = append(out, p)
+		}
+	}
+	return chstore.FrequentHistoryRead{Rows: out, RowsRead: int64(len(f.hist))}, nil
 }
 
 func (f *fakeGraphStore) RolloutsForWorkloads(_ context.Context, keys []rollout.Key, _, _ time.Time) ([]chstore.RolloutRow, error) {
@@ -324,7 +342,7 @@ func TestGraphShadowStoreHasNoProblemWritePath(t *testing.T) {
 	for i := 0; i < typ.NumMethod(); i++ {
 		got = append(got, typ.Method(i).Name)
 	}
-	want := []string{"EntityLastRunAt", "EntityRelationsFor", "ProblemGraphDependencyEvents", "RolloutsForWorkloads", "SaveProblemGraphShadow"}
+	want := []string{"EntityLastRunAt", "EntityRelationsFor", "ProblemGraphDependencyEvents", "ProblemHistoryForSubjects", "RolloutsForWorkloads", "SaveProblemGraphShadow"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("graphShadowStore methods = %v, want %v (new method = review the S1 no-write rule)", got, want)
 	}

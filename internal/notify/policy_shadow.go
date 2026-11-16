@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -56,6 +57,24 @@ type policyShadow struct {
 	verdict func(ctx context.Context) ([]chstore.ProblemVerdict, error)                     // test; nil = store
 	sink    func(ctx context.Context, e chstore.NotificationLog) error                      // test; nil = store
 	sens    func() chstore.AnomalySensitivityConfig                                         // test; nil = store
+	// freq — v0.10.2280 (S3): "sık tekrar eden" gölge kararı kaynağı
+	// (evaluator); nil = ölçülmez. Yalnız AYRI bir gölge satırı yazar.
+	freq atomic.Value // FrequentShadowSource
+}
+
+// FrequentShadowSource — v0.10.2280 (entity grafı S3): Problem için "sık
+// tekrar eden" kuralının gölge kararı. ok=false = karar yok.
+type FrequentShadowSource interface {
+	FrequentShadowVerdict(ctx context.Context, p chstore.Problem) (chstore.FrequentVerdict, bool)
+}
+
+// SetFrequentShadow — main bağlar (evaluator). Gönderimi ETKİLEMEZ: kaynak
+// yalnız recordShadowDecision'ın goroutine'inde, politika satırı yazıldıktan
+// SONRA sorulur; NotifiableAt ve enforceGate onu hiç görmez.
+func (n *Notifier) SetFrequentShadow(src FrequentShadowSource) {
+	if n != nil && src != nil {
+		n.shadow.freq.Store(src)
+	}
 }
 
 // shadowMemoKey — SAF.
@@ -242,5 +261,59 @@ func (n *Notifier) recordShadowDecision(ctx context.Context, p chstore.Problem, 
 	}
 	if err != nil {
 		log.Printf("[notify] policy shadow write %s: %v", p.ID, err)
+	}
+	n.recordFrequentShadow(ctx, p, dec, pol.Mode)
+}
+
+// frequentShadowRow — SAF: S3 gölge kararı → AYRI notification_log satırı
+// (channel_kind='policy'; error = chstore.FrequentShadow* kodu). Politika
+// satırı bayt bayt aynı kalır; "" = satır yok (sık değil).
+func frequentShadowRow(p chstore.Problem, dec chstore.NotifyDecision, v chstore.FrequentVerdict, mode string) (chstore.NotificationLog, bool) {
+	code := chstore.FrequentShadowCode(dec, v)
+	if code == "" {
+		return chstore.NotificationLog{}, false
+	}
+	body := fmt.Sprintf("imza %s · 24 sa %d bölüm · 7 gün %d gün · öncelik %s (pencerede en yüksek %s)",
+		v.Signature, v.Prior24h, v.Days7d, v.Priority, v.MaxPriority)
+	if v.Bypass != "" {
+		body += " · şiddet arttı " + v.Bypass
+	}
+	if dec.Hold != "" {
+		body += " · politika " + dec.Hold
+	}
+	return chstore.NotificationLog{
+		ChannelKind: chstore.NotifyShadowChannelKind,
+		ChannelName: mode,
+		Subject:     alertTitle(p),
+		BodyPreview: preview(body, 200),
+		RelatedKind: chstore.NotifyShadowRelatedKind,
+		RelatedID:   p.ID,
+		OK:          false,
+		Error:       code,
+	}, true
+}
+
+// recordFrequentShadow — S3 gölge satırı (varsa). Hata yalnız log.
+func (n *Notifier) recordFrequentShadow(ctx context.Context, p chstore.Problem, dec chstore.NotifyDecision, mode string) {
+	src, _ := n.shadow.freq.Load().(FrequentShadowSource)
+	if src == nil {
+		return
+	}
+	v, ok := src.FrequentShadowVerdict(ctx, p)
+	if !ok {
+		return
+	}
+	row, ok := frequentShadowRow(p, dec, v, mode)
+	if !ok {
+		return
+	}
+	var err error
+	if n.shadow.sink != nil {
+		err = n.shadow.sink(ctx, row)
+	} else if n.store != nil {
+		err = n.store.InsertNotificationLog(ctx, row)
+	}
+	if err != nil {
+		log.Printf("[notify] frequent shadow write %s: %v", p.ID, err)
 	}
 }

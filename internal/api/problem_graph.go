@@ -45,10 +45,12 @@ type problemGraphResponse struct {
 	Truncated  bool                           `json:"truncated,omitempty"`
 	// Origin — v0.10.2278 (S2): olası köken + etki alanı (≥ 2 varlıklı kümede).
 	Origin *chstore.ProblemGraphOrigin `json:"origin,omitempty"`
+	// Frequent — v0.10.2280 (S3): "sık tekrar eden" gölge kararı (yalnız sık ise).
+	Frequent *chstore.FrequentVerdict `json:"frequent,omitempty"`
 }
 
 // problemGraphKey — SAF: önbellek anahtarı (tek girdi: kimlik).
-func problemGraphKey(id string) string { return "problem:graph:v2:" + id }
+func problemGraphKey(id string) string { return "problem:graph:v3:" + id }
 
 // buildProblemGraphResponse — SAF: blob → Problem'in görünümü. Tek üyeli
 // kümede üye listesi boş döner (bağ yok); yalnız bağlanmayanlar kalır.
@@ -56,6 +58,10 @@ func buildProblemGraphResponse(r chstore.ProblemGraphShadow, ok bool, id string)
 	out := problemGraphResponse{ProblemID: id, Shadow: true, Members: []chstore.ProblemGraphMember{}, NearMisses: []chstore.ProblemGraphNearMiss{}}
 	if !ok {
 		return out
+	}
+	if v, f := r.Frequent[id]; f {
+		out.Frequent = &v
+		out.At = r.At
 	}
 	g, found := chstore.FindProblemGraphGroup(r, id)
 	if !found {

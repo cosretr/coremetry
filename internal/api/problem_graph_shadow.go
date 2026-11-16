@@ -78,13 +78,13 @@ func buildProblemGraphShadowResponse(r chstore.ProblemGraphShadow, ok bool) prob
 	if len(out.Largest) > 20 {
 		out.Largest = out.Largest[:20]
 	}
-	r.Groups = nil
+	r.Groups, r.Frequent = nil, nil // rapor sayaçları; Problem kararları detayda
 	out.Report = r
 	return out
 }
 
 func (s *Server) getProblemGraphShadow(w http.ResponseWriter, r *http.Request) {
-	s.serveCached(w, r, "problem-graph-shadow:v2:report", 15*time.Second, func(ctx context.Context) (any, error) {
+	s.serveCached(w, r, "problem-graph-shadow:v3:report", 15*time.Second, func(ctx context.Context) (any, error) {
 		rep, ok, err := s.store.GetProblemGraphShadow(ctx)
 		if err != nil {
 			return nil, err

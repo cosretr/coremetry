@@ -29,7 +29,7 @@ func TestBuildProblemGraphResponse(t *testing.T) {
 			t.Fatalf("empty view = %+v", r)
 		}
 	}
-	if problemGraphKey("p-db") != "problem:graph:v2:p-db" {
+	if problemGraphKey("p-db") != "problem:graph:v3:p-db" {
 		t.Fatal("cache key carries the id")
 	}
 }
@@ -49,5 +49,21 @@ func TestBuildProblemGraphSummary(t *testing.T) {
 	}
 	if e := buildProblemGraphSummary(rep, false); e.Rows == nil || len(e.Rows) != 0 {
 		t.Fatalf("no blob = %+v", e)
+	}
+}
+
+func TestProblemGraphFrequentViews(t *testing.T) {
+	rep := chstore.ProblemGraphShadow{At: 9, Frequent: map[string]chstore.FrequentVerdict{
+		"p-batch": {Signature: "svc:report-batch|traffic|down", Frequent: true, Kind: chstore.FrequentKindHold, Prior24h: 1, Days7d: 5},
+	}}
+	if r := buildProblemGraphResponse(rep, true, "p-batch"); r.Frequent == nil || r.Frequent.Days7d != 5 || len(r.Members) != 0 {
+		t.Fatalf("detail = %+v", r)
+	}
+	s := buildProblemGraphSummary(rep, true)
+	if row := s.Rows["p-batch"]; row.Frequent == nil || row.Frequent.Kind != chstore.FrequentKindHold || row.Entities != 0 {
+		t.Fatalf("summary row = %+v", row)
+	}
+	if a := buildProblemGraphShadowResponse(rep, true); a.Report.Frequent != nil {
+		t.Fatal("admin report must not carry per-Problem verdicts")
 	}
 }

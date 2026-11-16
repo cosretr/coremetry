@@ -8,6 +8,8 @@ package api
 // Problems listesinin "Ne bozuk" alt satırı için kompakt özet: bağlı bir
 // gölge kümenin üyesi olan her açık Problem → (köken, güven, varlık ve olay
 // sayısı, en erken başlayan). Tek Problem'de kayıt yok (alt satır çizilmez).
+// v0.10.2280 (S3): "sık tekrar eden" gölge kararı olan Problem'ler de
+// (tek servisli dahil) `frequent` sayılarıyla gelir (satır çipi).
 // Liste satırları katlanmaz, sıralanmaz, süzülmez — yalnız alt satır okur.
 //
 // Kaynak evaluator liderinin `system_settings` blobu (tek ayar okuması).
@@ -37,6 +39,15 @@ type problemGraphRowSummary struct {
 	Earliest   string `json:"earliest,omitempty"`
 	Entities   int    `json:"entities"`
 	Events     int    `json:"events"` // üye Problem satırı sayısı
+	// Frequent — v0.10.2280 (S3): "sık tekrar eden" gölge çipi (yalnız sık ise).
+	Frequent *problemGraphRowFrequent `json:"frequent,omitempty"`
+}
+
+// problemGraphRowFrequent — çip ipucunun sayıları.
+type problemGraphRowFrequent struct {
+	Kind     string `json:"kind"` // hold | severity
+	Prior24h int    `json:"prior24h"`
+	Days7d   int    `json:"days7d"`
 }
 
 type problemGraphSummaryResponse struct {
@@ -62,11 +73,16 @@ func buildProblemGraphSummary(r chstore.ProblemGraphShadow, ok bool) problemGrap
 			out.Rows[m.ProblemID] = row
 		}
 	}
+	for id, v := range r.Frequent {
+		row := out.Rows[id]
+		row.Frequent = &problemGraphRowFrequent{Kind: v.Kind, Prior24h: v.Prior24h, Days7d: v.Days7d}
+		out.Rows[id] = row
+	}
 	return out
 }
 
 func (s *Server) getProblemGraphSummary(w http.ResponseWriter, r *http.Request) {
-	s.serveCached(w, r, "problem:graph-summary:v1", 15*time.Second, func(ctx context.Context) (any, error) {
+	s.serveCached(w, r, "problem:graph-summary:v2", 15*time.Second, func(ctx context.Context) (any, error) {
 		rep, ok, err := s.store.GetProblemGraphShadow(ctx)
 		if err != nil {
 			return nil, err
