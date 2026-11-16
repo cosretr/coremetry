@@ -142,8 +142,8 @@ export function AnomalyDetailDrawer({ event, onClose }: {
                 "Gerçek problem / Problem değil" orada. */}
             <Link to={anomalyDetailHref(event.id)} className="sec"
               style={{ fontSize: 12, padding: '4px 10px', textDecoration: 'none' }}
-              title="Bu anomalinin tam sayfa detayını aç (Problems)">
-              Tam detay →
+              title={tr('aed.drawer.full.title')}>
+              {tr('aed.drawer.full')}
             </Link>
             {/* v0.10.1407 (Tek CoSRE adım 4) — v0.9.477'nin satır-içi istisnası
                 (CopilotExplain) kalktı: açıklama CoSRE sohbetinin bir turu

@@ -3,9 +3,10 @@ import { Spinner } from '@/components/Spinner';
 import { useLogPatternSeries } from '@/lib/queries';
 import { Sect } from './detailSections';
 import {
-  LOG_PATTERN_SERIES_TEXT, anomalyRegion, bucketLabel, logPatternSeriesArgs, logPatternSeriesState,
+  logPatternSeriesText, anomalyRegion, bucketLabel, logPatternSeriesArgs, logPatternSeriesState,
   logPatternSeriesToSpan, verifiedRatioNote, type LogPatternChartEvent,
 } from './logPatternSeries';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2290 — bölüm metni arayüz dilinde
 
 // LogPatternCountSection — log deseni anomalisinin "Desen sayısı" bar grafiği
 // (v0.10.1060). Operatör (prod): "Bunu doğru yakalamış ama artışın ne zaman
@@ -35,36 +36,39 @@ export function LogPatternCountSection({ event }: { event: LogPatternChartEvent 
     () => logPatternSeriesArgs({ pattern: event.pattern, startedAt: event.startedAt, lastSeen: event.lastSeen, status: event.status }),
     [event.pattern, event.startedAt, event.lastSeen, event.status]);
   const q = useLogPatternSeries(args, { live: event.status === 'active' });
+  const lang = useLang();
+  const txt = logPatternSeriesText(lang);
   const data = q.data;
   const state = logPatternSeriesState({ isPending: q.isPending, isError: q.isError, data });
   const series = useMemo(() => (data ? logPatternSeriesToSpan(data) : []), [data]);
   const xRange = useMemo(() => (data ? { from: data.from / 1e9, to: data.to / 1e9 } : null), [data]);
   const regions = useMemo(
-    () => (data ? [anomalyRegion({ startedAt: event.startedAt, lastSeen: event.lastSeen, status: event.status }, data.to)] : []),
-    [data, event.startedAt, event.lastSeen, event.status]);
+    () => (data ? [anomalyRegion({ startedAt: event.startedAt, lastSeen: event.lastSeen, status: event.status }, data.to, lang)] : []),
+    [data, event.startedAt, event.lastSeen, event.status, lang]);
   // v0.10.1080 — ES'te örneklem doğrulaması < 1 ise kısa not (CH'de hiç yok).
-  const note = verifiedRatioNote(event.verifiedRatio);
-  const sub = (data ? `${bucketLabel(data.bucketSec)} · tüm servisler` : 'tüm servisler') + (note ? ` · ${note}` : '');
+  const note = verifiedRatioNote(event.verifiedRatio, lang);
+  const all = t('aed.lp.allSvc', lang);
+  const sub = (data ? `${bucketLabel(data.bucketSec, lang)} · ${all}` : all) + (note ? ` · ${note}` : '');
 
   return (
-    <Sect title="Desen sayısı" sub={sub}>
+    <Sect title={t('aed.lp.title', lang)} sub={sub}>
       <Suspense fallback={<Spinner />}>
         <CorePanelMultiLazy
           title=""
-          ariaLabel="Desen sayısı"
+          ariaLabel={t('aed.lp.title', lang)}
           storageKey="anomaly-log-pattern-count"
           height={180}
           viz="bars"
           zeroBase
           hideLegend
           loading={state === 'loading'}
-          error={state === 'error' ? LOG_PATTERN_SERIES_TEXT.error : undefined}
-          emptyReason={state === 'empty' ? LOG_PATTERN_SERIES_TEXT.empty
-            : state === 'gone' ? LOG_PATTERN_SERIES_TEXT.gone : undefined}
+          error={state === 'error' ? txt.error : undefined}
+          emptyReason={state === 'empty' ? txt.empty
+            : state === 'gone' ? txt.gone : undefined}
           xRange={xRange}
           regions={regions}
-          note={data?.partial ? LOG_PATTERN_SERIES_TEXT.partial : null}
-          items={[{ name: 'eşleşen log', role: 'data', series }]} />
+          note={data?.partial ? txt.partial : null}
+          items={[{ name: t('aed.lp.series', lang), role: 'data', series }]} />
       </Suspense>
     </Sect>
   );

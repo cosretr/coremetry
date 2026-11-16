@@ -4,7 +4,8 @@ import { fmtNum, tsLong } from '@/lib/utils';
 import type { AnomalyEvent, BehaviorChangeDetails } from '@/lib/types';
 import { fmtDurationNs } from './problemTime';
 import { anomalyRatioLabel } from '@/lib/anomalyBaseline';
-import { ANOMALY_CHART_EMPTY, anomalyDurationNs, hourOfWeekLabel, spikeDurationLabel } from './anomalyDetail';
+import { anomalyChartEmpty, anomalyDurationNs, hourOfWeekLabel, spikeDurationLabel } from './anomalyDetail';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2290 — etiketler arayüz dilinde
 
 // anomalyDetailParts — anomali olayı detayının görsel parçaları (v0.10.1032).
 //
@@ -36,27 +37,28 @@ export function Fact({ k, v, title }: { k: string; v: React.ReactNode; title?: s
 // aynı ızgarayı basar.
 export function SpikeFacts({ event }: { event: AnomalyEvent }) {
   const durationNs = anomalyDurationNs(event);
+  const lang = useLang();
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
       gap: 12, padding: 12, marginBottom: 12,
       background: 'var(--bg1)', border: '1px solid var(--border)', borderRadius: 8,
     }}>
-      <Fact k="Başladı" v={tsLong(event.startedAt)} />
-      <Fact k="Son görülme" v={tsLong(event.lastSeen)} />
+      <Fact k={t('aed.fact.started', lang)} v={tsLong(event.startedAt)} />
+      <Fact k={t('aed.fact.lastSeen', lang)} v={tsLong(event.lastSeen)} />
       {/* v0.10.2027 (operatör: "0s · sürüyor" anlamsız) — tek gözlemli olay "tek ölçüm". */}
-      <Fact k="Süre" v={spikeDurationLabel(event.status, durationNs, fmtDurationNs(durationNs))} />
+      <Fact k={t('aed.fact.duration', lang)} v={spikeDurationLabel(event.status, durationNs, fmtDurationNs(durationNs), lang)} />
       {/* v0.10.1792 — tabansız olayda "×0.0" değil "taban yok" (Davis F1.4).
           v0.10.2027 — tabansız olayda alan hiç çizilmez ("taban yok" bilgi değil). */}
       {event.baselineKind !== 'none' && event.peakRatio > 0 && (
-        <Fact k="En yüksek artış" v={anomalyRatioLabel(event)}
-          title="Tepe sayım / spike öncesi taban penceresi" />
+        <Fact k={t('aed.fact.peak', lang)} v={anomalyRatioLabel(event)}
+          title={t('aed.fact.peak.title', lang)} />
       )}
       {event.currentRatio > 0 && (
-        <Fact k="Şimdiki artış" v={`×${event.currentRatio.toFixed(1)}`} />
+        <Fact k={t('aed.fact.current', lang)} v={`×${event.currentRatio.toFixed(1)}`} />
       )}
       {event.currentCount > 0 && (
-        <Fact k="Penceredeki sayım" v={fmtNum(event.currentCount)} />
+        <Fact k={t('aed.fact.count', lang)} v={fmtNum(event.currentCount)} />
       )}
     </div>
   );
@@ -68,9 +70,8 @@ export function SpikeFacts({ event }: { event: AnomalyEvent }) {
 // (tam sayfada yalnız kapalı "Teknik ayrıntı" bölümünde görünür).
 export function BehaviorDetailsBox({ d }: { d: BehaviorChangeDetails }) {
   const up = d.direction === 'up';
-  const signalLabel = d.signal === 'regime'
-    ? 'Kalıcı kayma — haftanın aynı saatine göre sürüyor'
-    : 'Mevsimsel sapma — kendi haftalık saat tabanından uzak';
+  const lang = useLang();
+  const signalLabel = t(d.signal === 'regime' ? 'aed.beh.regime' : 'aed.beh.seasonal', lang);
   const fmt = (v: number) => `${fmtNum(Math.round(v * 100) / 100)}${d.unit}`;
   return (
     <div style={{
@@ -82,15 +83,15 @@ export function BehaviorDetailsBox({ d }: { d: BehaviorChangeDetails }) {
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12 }}>
         <div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>NORMAL</div>
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>{t('aed.beh.normal', lang)}</div>
           <div className="mono">{fmt(d.baseline)}</div>
         </div>
         <div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>ŞİMDİ</div>
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>{t('aed.beh.now', lang)}</div>
           <div className="mono" style={{ color: up ? 'var(--err)' : 'var(--warn)' }}>{fmt(d.current)}</div>
         </div>
         <div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>DEĞİŞİM</div>
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>{t('aed.beh.change', lang)}</div>
           <div className="mono">{up ? '↑' : '↓'} {fmtNum(Math.round(d.ratio * 100) / 100)}×</div>
         </div>
         <div>
@@ -98,18 +99,18 @@ export function BehaviorDetailsBox({ d }: { d: BehaviorChangeDetails }) {
           <div className="mono">{fmtNum(Math.round(d.z * 10) / 10)}σ</div>
         </div>
         <div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>SÜRDÜ</div>
-          <div className="mono">{d.dwell} × 5 dk</div>
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>{t('aed.beh.dwell', lang)}</div>
+          <div className="mono">{tf('aed.beh.dwellV', lang, { n: d.dwell })}</div>
         </div>
         <div>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>KIYAS SAATİ</div>
-          <div className="mono">{hourOfWeekLabel(d.hourOfWeek)}</div>
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>{t('aed.beh.how', lang)}</div>
+          <div className="mono">{hourOfWeekLabel(d.hourOfWeek, lang)}</div>
         </div>
       </div>
       {d.deploy && (
         <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 8 }}>
-          ⬇ Deploy <b className="mono">{d.deploy.version}</b> kaymadan{' '}
-          <b>{Math.max(1, Math.round(d.deploy.ageSeconds / 60))} dk önce</b> indi.
+          ⬇ Deploy <b className="mono">{d.deploy.version}</b>{t('aed.beh.dep.pre', lang)}{' '}
+          <b>{tf('aed.beh.dep.ago', lang, { n: Math.max(1, Math.round(d.deploy.ageSeconds / 60)) })}</b>{t('aed.beh.dep.post', lang)}
         </div>
       )}
     </div>
@@ -152,6 +153,7 @@ export function AnomalyLogVolume({ service, win, bare = false }: {
     service, search: '', severity: 0, traceId: '', spanId: '',
   }), [service]);
   const [state, setState] = useState<'pending' | 'ok' | 'empty' | 'error'>('pending');
+  const lang = useLang();
   const onSeries = useCallback((s: { name: string; total: number }[] | null) => {
     if (s === null) setState('error');
     else setState(s.reduce((a, x) => a + x.total, 0) > 0 ? 'ok' : 'empty');
@@ -165,9 +167,9 @@ export function AnomalyLogVolume({ service, win, bare = false }: {
         </div>
       )}
       <LogsHistogram range={range} filter={filter} onSeries={bare ? onSeries : undefined} />
-      {bare && state === 'empty' && <div className="field-hint">{ANOMALY_CHART_EMPTY}</div>}
+      {bare && state === 'empty' && <div className="field-hint">{anomalyChartEmpty(lang)}</div>}
       {bare && state === 'error' && (
-        <div className="field-hint">Log hacmi okunamadı — bu bir hata, boş sonuç değil.</div>
+        <div className="field-hint">{t('aed.logVol.err', lang)}</div>
       )}
     </div>
   );

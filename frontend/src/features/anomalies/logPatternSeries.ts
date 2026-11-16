@@ -12,6 +12,7 @@ import type { AnomalyEvent, LogPatternSeries, Problem, PromotedSourceEvent, Span
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import { logsHref } from '@/lib/logsUrl';
 import { anomalyChartWindow } from './anomalyDetail';
+import { fmtPctLang, t, tf, type Lang } from '@/lib/i18n'; // v0.10.2290 — görünen metin isteğe bağlı lang (varsayılan 'tr')
 
 // Grafiği olan türler: YALNIZ log_pattern. Desen adı dedektörün küratörlü
 // listesinden (internal/anomaly/log_patterns.go) — sunucu adı dedektörün kendi
@@ -118,19 +119,19 @@ export function patternLogsPivot(
 // Oran < 1 ise barlar token eşleşmesidir, desen sayısı değil — alt başlık
 // bunu kısaca söyler. Oran yok / 0 (CH, örneklenmedi) / 1 → not yok. Yüzde
 // [1, 99]'a kıstırılır (Go VerifiedRatioNote ikizi).
-export function verifiedRatioNote(r: number | null | undefined): string | null {
+export function verifiedRatioNote(r: number | null | undefined, lang: Lang = 'tr'): string | null {
   if (r == null || !Number.isFinite(r) || r <= 0 || r >= 1) return null;
   const pct = Math.min(99, Math.max(1, Math.round(r * 100)));
-  return `token eşleşmesi · örneklemde %${pct} doğrulandı`;
+  return tf('aed.lp.verified', lang, { pct: fmtPctLang(pct, lang) });
 }
 
-/** Kova genişliği düz Türkçe ("1 dk", "2 sa", "1 gün"). */
-export function bucketLabel(sec: number): string {
+/** Kova genişliği düz Türkçe ("1 dk", "2 sa", "1 gün"); v0.10.2290 — isteğe bağlı lang. */
+export function bucketLabel(sec: number, lang: Lang = 'tr'): string {
   if (!Number.isFinite(sec) || sec <= 0) return '—';
-  if (sec % 86400 === 0) return `${sec / 86400} gün`;
-  if (sec % 3600 === 0) return `${sec / 3600} sa`;
-  if (sec % 60 === 0) return `${sec / 60} dk`;
-  return `${sec} sn`;
+  if (sec % 86400 === 0) return tf('aed.unit.d', lang, { n: sec / 86400 });
+  if (sec % 3600 === 0) return tf('aed.unit.h', lang, { n: sec / 3600 });
+  if (sec % 60 === 0) return tf('aed.unit.m', lang, { n: sec / 60 });
+  return tf('aed.unit.s', lang, { n: sec });
 }
 
 /** Cevap → CorePanelMulti'nin tek serisi (zaman ns, değer = kovadaki eşleşme). */
@@ -147,6 +148,7 @@ export function logPatternSeriesToSpan(s: LogPatternSeries): SpanMetricSeries[] 
 export function anomalyRegion(
   e: Pick<AnomalyEvent, 'startedAt' | 'lastSeen' | 'status'>,
   chartToNs: number,
+  lang: Lang = 'tr',
 ): ChartTimeRegion {
   const fromSec = e.startedAt / 1e9;
   const active = e.status === 'active';
@@ -155,7 +157,7 @@ export function anomalyRegion(
     fromSec,
     toSec: endNs / 1e9,
     color: 'var(--err)',
-    label: 'başladı',
+    label: t('aed.region.started', lang),
     ...(active ? {} : { endSec: endNs / 1e9 }),
   };
 }
@@ -174,9 +176,12 @@ export function logPatternSeriesState(q: {
   return (q.data.points ?? []).some(p => p.v > 0) ? 'ready' : 'empty';
 }
 
-export const LOG_PATTERN_SERIES_TEXT = {
-  error: 'Desen sayısı okunamadı.',
-  empty: 'Bu pencerede desene uyan log yok.',
-  gone: 'Bu desenin tanımı artık yok — sayım çizilemiyor.',
-  partial: 'Log arka ucu zaman aşımına uğradı — sayımlar eksik olabilir.',
-} as const;
+// v0.10.2290 — metin lib/i18n'de (aed.lp.*); sabit TR görünümü.
+export function logPatternSeriesText(lang: Lang = 'tr') {
+  return {
+    error: t('aed.lp.err', lang),
+    empty: t('aed.lp.empty', lang),
+    gone: t('aed.lp.gone', lang),
+    partial: t('aed.lp.partial', lang),
+  } as const;
+}

@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui';
 import type { PriorDeploy } from '@/lib/types';
 import { anomalyRecurrence, recurrenceTitle } from './detailSummary';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2290
 
 // RecurringMarker — v0.10.1049, yinelenen anomali ayrımı.
 //
@@ -20,11 +21,12 @@ export function RecurringMarker({ episodeCount, firstStartedAt, priorDeploy, lin
   priorDeploy?: PriorDeploy;
   line?: boolean;
 }) {
+  const lang = useLang();
   const r = anomalyRecurrence({ episodeCount, firstStartedAt });
   if (!r) return null;
   const badge = (
-    <Badge tone="neutral" style={{ fontSize: 9 }} title={recurrenceTitle(r, undefined, priorDeploy)} data-recurring={r.count}>
-      yinelenen
+    <Badge tone="neutral" style={{ fontSize: 9 }} title={recurrenceTitle(r, undefined, priorDeploy, lang)} data-recurring={r.count}>
+      {t('pd.when.recurring', lang)}
     </Badge>
   );
   return line ? <div className="ib-when__ago">{badge}</div> : badge;

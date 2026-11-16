@@ -4,9 +4,9 @@ import { AlertSourceBadge } from '@/components/AlertSourceBadge';
 import { useAlertRuleSeries } from '@/lib/queries';
 import type { Problem } from '@/lib/types';
 import { Sect } from './detailSections';
-import { useT } from '@/lib/i18n';
+import { useLang, useT } from '@/lib/i18n';
 import {
-  ALERT_SERIES_TEXT, alertBelowFloorCount, alertChartThresholds, alertMetricUnit, alertSeriesArgs, alertSeriesState, alertSeriesToSpan, alertSeriesXRange,
+  alertSeriesText, alertBelowFloorCount, alertChartThresholds, alertMetricUnit, alertSeriesArgs, alertSeriesState, alertSeriesToSpan, alertSeriesXRange,
   isProblemLive, problemRegion, windowLabel,
 } from './alertMetricSeries';
 
@@ -31,6 +31,7 @@ export function AlertMetricChartSection({ problem }: { problem: Problem }) {
   // yeni problem nesnesi (aynı değerler) sorgu anahtarını ve grafiği oynatmasın.
   const { ruleId, service, metric, startedAt, resolvedAt, status, threshold, comparator, severity } = problem;
   const live = isProblemLive({ status, resolvedAt });
+  const lang = useLang(); // v0.10.2290
   const args = useMemo(
     () => alertSeriesArgs({ ruleId, service, metric, startedAt, resolvedAt, status }),
     [ruleId, service, metric, startedAt, resolvedAt, status]);
@@ -40,8 +41,8 @@ export function AlertMetricChartSection({ problem }: { problem: Problem }) {
   const series = useMemo(() => (data ? alertSeriesToSpan(data) : []), [data]);
   const xRange = useMemo(() => (data ? alertSeriesXRange(data) : null), [data]);
   const regions = useMemo(
-    () => (xRange ? [problemRegion({ startedAt, resolvedAt, status }, xRange.to)] : []),
-    [xRange, startedAt, resolvedAt, status]);
+    () => (xRange ? [problemRegion({ startedAt, resolvedAt, status }, xRange.to, lang)] : []),
+    [xRange, startedAt, resolvedAt, status, lang]);
   // Eşik dizisi KİMLİĞİ sabit: CorePanel eşik değişince grafiği yeniden kurar.
   // v0.10.1091 — sunucu çizgi eşiği verdiyse (sentetik kural: yaygın
   // yavaşlamada ayardaki minP99Ms) o çizilir; Problem'in threshold'u orada en
@@ -50,8 +51,8 @@ export function AlertMetricChartSection({ problem }: { problem: Problem }) {
   const { ruleName } = problem;
   const serverThr = data?.threshold;
   const thresholds = useMemo(
-    () => alertChartThresholds({ ruleId, ruleName, threshold, comparator, severity, metric }, serverThr),
-    [ruleId, ruleName, threshold, comparator, severity, metric, serverThr]);
+    () => alertChartThresholds({ ruleId, ruleName, threshold, comparator, severity, metric }, serverThr, lang),
+    [ruleId, ruleName, threshold, comparator, severity, metric, serverThr, lang]);
 
   const t = useT();
   if (state === 'gone') return null;
@@ -63,7 +64,7 @@ export function AlertMetricChartSection({ problem }: { problem: Problem }) {
     // satırı başlığın sağ ucundan GÖVDEYE indi ve HER cevapta çizilir: kaynak
     // alanı yoksa "bilinmiyor" der (sessiz yokluk değil); span'e düşüldüyse
     // gerekçe rozetin yanında.
-    <Sect title={title} sub={data ? windowLabel(data.windowSec) : undefined}>
+    <Sect title={title} sub={data ? windowLabel(data.windowSec, lang) : undefined}>
       {data && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }} data-alert-source>
           {data.source
@@ -81,8 +82,8 @@ export function AlertMetricChartSection({ problem }: { problem: Problem }) {
           zeroBase
           hideLegend
           loading={state === 'loading'}
-          error={state === 'error' ? ALERT_SERIES_TEXT.error : undefined}
-          emptyReason={state === 'empty' ? ALERT_SERIES_TEXT.empty : undefined}
+          error={state === 'error' ? alertSeriesText(lang).error : undefined}
+          emptyReason={state === 'empty' ? alertSeriesText(lang).empty : undefined}
           xRange={xRange}
           regions={regions}
           thresholds={thresholds}

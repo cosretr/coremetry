@@ -30,13 +30,13 @@ export function fmtRatio(r: number): string {
 // behaviorMetricValue) → düz Türkçe. Dış kaynak serisi "ext:" önekiyle gelir
 // (anomaly.ExternalMetricPrefix); bilinmeyen ad olduğu gibi basılır.
 const EXT_PREFIX = 'ext:';
-export function behaviorMetricLabel(metric: string): string {
+export function behaviorMetricLabel(metric: string, lang: Lang = 'tr'): string {
   switch (metric) {
-    case 'error_rate': return 'hata oranı';
-    case 'p99_ms': return 'p99 gecikme';
-    case 'request_rate': return 'istek hızı';
+    case 'error_rate':
+    case 'p99_ms':
+    case 'request_rate': return t(`aed.metric.${metric}`, lang); // v0.10.2290
   }
-  if (metric.startsWith(EXT_PREFIX)) return `${metric.slice(EXT_PREFIX.length)} (dış kaynak)`;
+  if (metric.startsWith(EXT_PREFIX)) return tf('aed.metric.ext', lang, { m: metric.slice(EXT_PREFIX.length) });
   return metric;
 }
 
@@ -46,12 +46,13 @@ function fmtBehaviorValue(v: number, unit: string): string {
   return `${fmtNum(Math.round(v * 100) / 100)}${unit}`;
 }
 
-const inService = (svc: string) => (svc ? `${svc} servisinde` : 'Bir serviste');
-const inLogs = (svc: string) => (svc ? `${svc} loglarında` : 'Loglarda');
+// v0.10.2290 — cümleler lib/i18n'de (aed.sum.*), isteğe bağlı lang (varsayılan 'tr').
+const inService = (svc: string, lang: Lang) => (svc ? tf('aed.sum.inSvc', lang, { svc }) : t('aed.sum.inAnySvc', lang));
+const inLogs = (svc: string, lang: Lang) => (svc ? tf('aed.sum.inLogs', lang, { svc }) : t('aed.sum.inAnyLogs', lang));
 
 /** Oranın taşınmadığı / güvenilmediği her durumun cümlesi. */
-export function genericAnomalySentence(service: string): string {
-  return `${inService(service)} olağan dışı bir değişim saptandı.`;
+export function genericAnomalySentence(service: string, lang: Lang = 'tr'): string {
+  return tf('aed.sum.generic', lang, { where: inService(service, lang) });
 }
 
 // anomalySummary — anomali olayının cümlesi, türe göre:
@@ -73,19 +74,20 @@ export function genericAnomalySentence(service: string): string {
 export function anomalySummary(
   e: Pick<AnomalyEvent, 'kind' | 'service' | 'pattern' | 'peakRatio'> & Partial<Pick<AnomalyEvent, 'currentCount' | 'startedAt'>>,
   details: BehaviorChangeDetails | null,
+  lang: Lang = 'tr',
 ): string {
   const svc = e.service ?? '';
   const peak = finite(e.peakRatio) && e.peakRatio > 1 ? e.peakRatio : null;
   switch (e.kind) {
     case 'behavior_change': {
-      if (!details || !details.metric) return genericAnomalySentence(svc);
-      const metric = behaviorMetricLabel(details.metric);
+      if (!details || !details.metric) return genericAnomalySentence(svc, lang);
+      const metric = behaviorMetricLabel(details.metric, lang);
       const ratio = finite(details.ratio) && details.ratio > 0 ? details.ratio : null;
       // Yön kanıttan; eksik / tanımsızsa orandan (≥1 yukarı).
       const up = details.direction === 'up' ? true
         : details.direction === 'down' ? false
         : ratio !== null ? ratio >= 1 : null;
-      if (up === null) return genericAnomalySentence(svc);
+      if (up === null) return genericAnomalySentence(svc, lang);
       const unit = typeof details.unit === 'string' ? details.unit : '';
       const values = finite(details.baseline) && finite(details.current)
         ? ` (${fmtBehaviorValue(details.baseline, unit)} → ${fmtBehaviorValue(details.current, unit)})`
@@ -95,31 +97,31 @@ export function anomalySummary(
       // Yuvarlanınca "0" kalan oran ("normalin 0 katına") da oransız biçime düşer.
       const ratioFits = ratio !== null && (up ? ratio > 1 : ratio < 1) && fmtRatio(ratio) !== '0';
       const move = ratioFits
-        ? `normalin ${fmtRatio(ratio)} katına ${up ? 'çıktı' : 'düştü'}`
-        : `normalin ${up ? 'üstüne çıktı' : 'altına düştü'}`;
-      return `${inService(svc)} ${metric} ${move}${values}.`;
+        ? tf(up ? 'aed.sum.upRatio' : 'aed.sum.downRatio', lang, { x: fmtRatio(ratio) })
+        : t(up ? 'aed.sum.up' : 'aed.sum.down', lang);
+      return `${inService(svc, lang)} ${metric} ${move}${values}.`;
     }
     case 'trace_op':
     case 'trace_op_latency': {
-      if (peak === null) return genericAnomalySentence(svc);
-      const what = e.kind === 'trace_op' ? 'hata' : 'gecikme';
-      const op = e.pattern ? ` ${e.pattern} için` : '';
-      return `${inService(svc)}${op} ${what} normalin ${fmtRatio(peak)} katına çıktı.`;
+      if (peak === null) return genericAnomalySentence(svc, lang);
+      const what = t(e.kind === 'trace_op' ? 'aed.sum.what.err' : 'aed.sum.what.lat', lang);
+      const vars = { where: inService(svc, lang), p: e.pattern, what, x: fmtRatio(peak) };
+      return tf(e.pattern ? 'aed.sum.traceOp' : 'aed.sum.trace', lang, vars);
     }
     case 'log_pattern':
     case 'elastic_ml':
-      if (peak === null) return genericAnomalySentence(svc);
-      return `${inLogs(svc)} bu desen normalin ${fmtRatio(peak)} katına çıktı.`;
+      if (peak === null) return genericAnomalySentence(svc, lang);
+      return tf('aed.sum.logs', lang, { where: inLogs(svc, lang), x: fmtRatio(peak) });
     case 'log_template_new': {
-      const where = svc ? 'bu serviste' : 'bir serviste';
+      const where = t(svc ? 'aed.sum.thisSvc' : 'aed.sum.aSvc', lang);
       const bits = [
-        e.currentCount && e.currentCount > 0 ? `${e.currentCount.toLocaleString('tr-TR')} satır` : '',
+        e.currentCount && e.currentCount > 0 ? tf('aed.sum.lines', lang, { n: e.currentCount.toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US') }) : '',
         e.startedAt && e.startedAt > 0 ? clockMinute(e.startedAt) : '',
       ].filter(Boolean);
-      return `Bu satır biçimi ${where} ilk kez görüldü (kalıp defterinde yok)${bits.length ? `; ${bits.join(', ')}` : ''}.`;
+      return tf('aed.sum.newTpl', lang, { where, bits: bits.length ? `; ${bits.join(', ')}` : '' });
     }
     default:
-      return genericAnomalySentence(svc);
+      return genericAnomalySentence(svc, lang);
   }
 }
 
@@ -261,12 +263,13 @@ export function recurrenceTitle(
   r: AnomalyRecurrence | null,
   fmtTs: (ns: number) => string = tsMinute,
   prior?: PriorDeploy | null,
+  lang: Lang = 'tr',
 ): string {
   if (!r) return '';
-  const first = r.firstNs !== null ? `, ilk kez ${fmtTs(r.firstNs)}` : '';
-  const base = `Yinelenen anomali: bu ${r.count}. kez${first}. Sayaç kaydın ömrüyle sınırlı (son tetiklenmeden 30 gün sonra kayıt düşer).`;
-  const dep = priorDeployText(prior);
-  return dep ? `${base}\n${dep} — öncesinde de görülüyordu` : base;
+  const first = r.firstNs !== null ? tf('aed.rec.first', lang, { ts: fmtTs(r.firstNs) }) : '';
+  const base = tf('aed.rec.title', lang, { c: r.count, first });
+  const dep = priorDeployText(prior, lang);
+  return dep ? `${base}\n${tf('aed.rec.dep', lang, { dep })}` : base;
 }
 
 // ── Anomaliden terfi eden Problem (v0.10.1054) ───────────────────────────
@@ -319,13 +322,14 @@ export function anomalyWhenLine(
   e: Pick<AnomalyEvent, 'startedAt' | 'lastSeen' | 'status' | 'episodeCount' | 'firstStartedAt' | 'priorDeploy'>,
   fmtTs: (ns: number) => string = tsMinute,
   fmtClock: (ns: number) => string = clockMinute,
+  lang: Lang = 'tr',
 ): string {
   const ongoing = e.status === 'active';
   const base = detailWhenLine({
     startedAt: e.startedAt, durationNs: anomalyDurationNs(e), ongoing,
     endedAt: ongoing ? undefined : e.lastSeen,
-  }, fmtTs, fmtClock);
-  const clause = recurrenceClause(anomalyRecurrence(e), fmtTs, e.priorDeploy);
+  }, fmtTs, fmtClock, lang);
+  const clause = recurrenceClause(anomalyRecurrence(e), fmtTs, e.priorDeploy, lang);
   return clause ? `${base} · ${clause}` : base;
 }
 

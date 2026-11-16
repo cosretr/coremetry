@@ -9,7 +9,10 @@
 // yinelenen satırda nötr (.b-gray) tek kelime "yinelenen", sayı + ilk tarih
 // ipucunda; iki tüketici (Problems kuyruğu, /anomalies geçmişi) işareti bu
 // bileşenden alıyor.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+
+// v0.10.2290 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { readFileSync } from 'node:fs';

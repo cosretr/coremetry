@@ -16,6 +16,7 @@
 // düzeltmeye çalıştığımız hatanın ta kendisi.
 import { useEvaluatorHealth } from '@/lib/queries';
 import type { EvaluatorHealth } from '@/lib/types';
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2290 — şerit metni arayüz dilinde
 
 // tone — durumdan rozet sınıfına. Paylaşılan .badge tokenları
 // kullanılır (b-warn/b-err/b-gray); elle renk yazılmaz, tema
@@ -29,12 +30,12 @@ function tone(status: EvaluatorHealth['status']): string {
   }
 }
 
-function label(status: EvaluatorHealth['status']): string {
+function label(status: EvaluatorHealth['status'], lang: Lang): string {
   switch (status) {
-    case 'ok':      return 'Evaluator çalışıyor';
-    case 'stale':   return 'Evaluator takılmış olabilir';
-    case 'failing': return 'Evaluator hata veriyor';
-    default:        return 'Evaluator durumu bilinmiyor';
+    case 'ok':      return t('aed.eval.ok', lang);
+    case 'stale':   return t('aed.eval.stale', lang);
+    case 'failing': return t('aed.eval.failing', lang);
+    default:        return t('aed.eval.unknown', lang);
   }
 }
 
@@ -46,6 +47,7 @@ function label(status: EvaluatorHealth['status']): string {
  */
 export default function EvaluatorStatus({ compact = false }: { compact?: boolean }) {
   const { data } = useEvaluatorHealth();
+  const lang = useLang();
 
   // Veri henüz yokken hiçbir şey çizme. Yükleniyorken "bilinmiyor"
   // göstermek, iki saniyede bir yanıp sönen sahte bir uyarı olurdu.
@@ -53,7 +55,7 @@ export default function EvaluatorStatus({ compact = false }: { compact?: boolean
 
   const detail =
     data.status === 'ok' && data.durationMs > 0
-      ? ` · son tik ${data.durationMs} ms`
+      ? ` · ${tf('aed.eval.tick', lang, { ms: data.durationMs })}`
       : '';
 
   return (
@@ -68,7 +70,7 @@ export default function EvaluatorStatus({ compact = false }: { compact?: boolean
         background: compact ? 'transparent' : 'var(--bg2)',
       }}
     >
-      <span className={`badge ${tone(data.status)}`}>{label(data.status)}</span>
+      <span className={`badge ${tone(data.status)}`}>{label(data.status, lang)}</span>
       <span>{data.reason}{detail}</span>
     </div>
   );

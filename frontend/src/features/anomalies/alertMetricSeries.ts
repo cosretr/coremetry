@@ -14,6 +14,7 @@ import type { AlertRuleSeries, Problem, SpanMetricSeries } from '@/lib/types';
 import type { ChartThreshold, ChartTimeRegion } from '@/lib/chart/overlays';
 import { comparatorSide } from '@/lib/chart/thresholdLines';
 import { isSvcSlowdownRule } from './svcSlowdownPivots'; // v0.10.1091
+import { t, tf, type Lang } from '@/lib/i18n'; // v0.10.2290 — görünen metin isteğe bağlı lang (varsayılan 'tr')
 
 // Değerlendiricinin span-metrik yolunun ölçtüğü metrikler (Go:
 // chstore.measureAllServicesPlan + TransportFilter/TransportOp). Hedefli kural
@@ -131,12 +132,13 @@ function fmtOpFloor(ms: number): string {
 export function alertChartThresholds(
   p: Pick<Problem, 'ruleId' | 'ruleName' | 'threshold' | 'comparator' | 'severity' | 'metric'>,
   serverThreshold: number | undefined,
+  lang: Lang = 'tr',
 ): ChartThreshold[] {
   if (isSvcSlowdownRule(p.ruleId)) {
     const t = serverThreshold;
     if (p.ruleName === SVC_SLOWDOWN_COLLAPSE_RULE_NAME || typeof t !== 'number' || !Number.isFinite(t) || t <= 0) return [];
     return [{
-      value: t, label: `op tabanı ${fmtOpFloor(t)}`,
+      value: t, label: tf('aed.alert.opFloor', lang, { v: fmtOpFloor(t) }),
       color: p.severity === 'critical' ? 'var(--err)' : 'var(--warn)', side: comparatorSide('>='),
     }];
   }
@@ -146,11 +148,11 @@ export function alertChartThresholds(
 }
 
 /** Pencere uzunluğu düz Türkçe ("10 dk pencere", "1 sa pencere"). */
-export function windowLabel(sec: number): string {
+export function windowLabel(sec: number, lang: Lang = 'tr'): string {
   if (!Number.isFinite(sec) || sec <= 0) return '';
-  if (sec % 3600 === 0) return `${sec / 3600} sa pencere`;
-  if (sec % 60 === 0) return `${sec / 60} dk pencere`;
-  return `${sec} sn pencere`;
+  if (sec % 3600 === 0) return tf('aed.alert.winH', lang, { n: sec / 3600 });
+  if (sec % 60 === 0) return tf('aed.alert.winM', lang, { n: sec / 60 });
+  return tf('aed.alert.winS', lang, { n: sec });
 }
 
 /** Cevap → CorePanelMulti'nin tek serisi; null nokta NaN = boşluk (sıfır değil). */
@@ -177,6 +179,7 @@ export function alertSeriesXRange(s: AlertRuleSeries): { from: number; to: numbe
 export function problemRegion(
   p: Pick<Problem, 'startedAt' | 'resolvedAt' | 'status'>,
   chartToSec: number,
+  lang: Lang = 'tr',
 ): ChartTimeRegion {
   const fromSec = p.startedAt / 1e9;
   const live = isProblemLive(p);
@@ -185,7 +188,7 @@ export function problemRegion(
     fromSec,
     toSec: endSec,
     color: 'var(--err)',
-    label: 'başladı',
+    label: t('aed.region.started', lang),
     ...(live ? {} : { endSec }),
   };
 }
@@ -204,7 +207,7 @@ export function alertSeriesState(q: {
   return (q.data.points ?? []).some(p => p.v !== null && Number.isFinite(p.v)) ? 'ready' : 'empty';
 }
 
-export const ALERT_SERIES_TEXT = {
-  error: 'Metrik dizisi okunamadı.',
-  empty: 'Bu pencerede bu servis için veri yok.',
-} as const;
+// v0.10.2290 — metin lib/i18n'de (aed.alert.*).
+export function alertSeriesText(lang: Lang = 'tr') {
+  return { error: t('aed.alert.err', lang), empty: t('aed.alert.empty', lang) } as const;
+}

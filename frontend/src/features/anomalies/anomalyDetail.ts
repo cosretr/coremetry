@@ -17,6 +17,7 @@ import { logsHref } from '@/lib/logsUrl';
 import { tracesPivotHref, operationTracesHref } from '@/lib/pivotHref';
 import { traceHref } from '@/lib/traceHref';
 import { serviceHref } from '@/lib/serviceHref';
+import { t, tf, type Lang } from '@/lib/i18n'; // v0.10.2290 — görünen metin isteğe bağlı lang (varsayılan 'tr')
 
 export type AnomalyKind = AnomalyEvent['kind'];
 
@@ -34,42 +35,43 @@ export const ANOMALY_KIND_LABEL: Record<AnomalyKind, string> = {
 // v0.10.1032 (operatör: "Anlaşılır olsun") — tam sayfanın tür rozeti düz
 // Türkçe. Çekmece ve /anomalies tablosu yukarıdaki kısa İngilizce etiketleri
 // korur (değişmeyen yüzeyler).
-export const ANOMALY_KIND_PLAIN: Record<AnomalyKind, string> = {
-  log_pattern: 'Log deseni',
-  log_template_new: 'Yeni log biçimi',
-  trace_op: 'Operasyon hatası',
-  trace_op_latency: 'Operasyon gecikmesi',
-  behavior_change: 'Davranış değişimi',
-  calendar_traffic_drop: 'Takvim günü düşüşü', // v0.10.1483
-  elastic_ml: 'Elastic ML',
-  subject_red: 'Özne sapması', // v0.10.1792 — endpoint / veritabanı / kuyruk
-};
+// v0.10.2290 — metin lib/i18n'de (aed.kind.*); bu kayıt TR görünümü.
+const ANOMALY_KINDS: AnomalyKind[] = [
+  'log_pattern', 'log_template_new', 'trace_op', 'trace_op_latency', 'behavior_change',
+  'calendar_traffic_drop', // v0.10.1483
+  'elastic_ml',
+  'subject_red', // v0.10.1792 — endpoint / veritabanı / kuyruk
+];
+export const ANOMALY_KIND_PLAIN = Object.fromEntries(
+  ANOMALY_KINDS.map(k => [k, t(`aed.kind.${k}`, 'tr')]),
+) as Record<AnomalyKind, string>;
+
+/** Tür rozeti düz dilde; bilinmeyen tür ham kimliğiyle. */
+export function anomalyKindPlain(kind: string, lang: Lang = 'tr'): string {
+  return (ANOMALY_KINDS as string[]).includes(kind) ? t(`aed.kind.${kind}`, lang) : String(kind);
+}
 
 // ── Yön · taban (v0.10.1792, Davis F1.4) ────────────────────────────────
 // Detay sayfasında TEK sade satır (operatör: detay sayfaları sade). Eski satır
 // (alanlar yok) → "bilinmiyor"; tabansız olayda oran yazılmaz ("×0.0" değil).
 
-const DIRECTION_TR: Record<'up' | 'down', string> = { up: 'artış', down: 'düşüş' };
-const BASELINE_TR: Record<'seasonal' | 'consecutive' | 'none', string> = {
-  seasonal: 'mevsimsel taban (haftanın aynı günü, aynı saat)',
-  consecutive: 'son 24 saatin tabanı',
-  none: 'taban yok (ilk görülme)',
-};
+// v0.10.2290 — yön / taban metni lib/i18n'de (aed.dir.*, aed.base.*).
 
 /** "artış · mevsimsel taban (…) 120.5" — iki parça da yoksa "bilinmiyor".
  *  v0.10.1804 — özne metriği biliniyorsa taban değeri birimiyle ("1200 kayıt"). */
 export function anomalyDirectionBaselineLine(
   e: Pick<AnomalyEvent, 'direction' | 'baselineKind' | 'baselineValue'> & Partial<Pick<AnomalyEvent, 'kind' | 'pattern'>>,
+  lang: Lang = 'tr',
 ): string {
-  const dir = e.direction ? DIRECTION_TR[e.direction] : '';
-  let base = e.baselineKind ? BASELINE_TR[e.baselineKind] : '';
+  const dir = e.direction ? t(`aed.dir.${e.direction}`, lang) : '';
+  let base = e.baselineKind ? t(`aed.base.${e.baselineKind}`, lang) : '';
   if (base && e.baselineKind !== 'none' && e.baselineValue != null && Number.isFinite(e.baselineValue)) {
     base += ` ${Math.round(e.baselineValue * 100) / 100}`;
     const sm = e.kind && e.pattern != null ? subjectMetricOf({ kind: e.kind, pattern: e.pattern }) : null;
-    if (sm) base += ` ${SUBJECT_METRIC_TR[sm].unit}`;
+    if (sm) base += ` ${lang === 'tr' ? SUBJECT_METRIC_TR[sm].unit : t(`aed.subjUnit.${sm}`, lang)}`;
   }
-  if (!dir && !base) return 'bilinmiyor';
-  return [dir || 'yön bilinmiyor', base || 'taban bilinmiyor'].join(' · ');
+  if (!dir && !base) return t('aed.unknown', lang);
+  return [dir || t('aed.dir.unknown', lang), base || t('aed.base.unknown', lang)].join(' · ');
 }
 
 // ── Terfi izi (v0.10.1799, Davis FAZ 3) ─────────────────────────────────
@@ -78,11 +80,11 @@ export function anomalyDirectionBaselineLine(
 // okuma anında (promotionGroupSize); db / queue tek özne, sayı yazılmaz.
 
 /** "Gölge: Problem açılırdı (3 rota)" | "Problem açıldı (3 rota)" | null. */
-export function anomalyPromotionBadge(e: Pick<AnomalyEvent, 'promotion' | 'promotionGroupSize' | 'subjectKind'>): string | null {
+export function anomalyPromotionBadge(e: Pick<AnomalyEvent, 'promotion' | 'promotionGroupSize' | 'subjectKind'>, lang: Lang = 'tr'): string | null {
   if (e.promotion !== 'shadow' && e.promotion !== 'live') return null;
   const n = e.subjectKind === 'endpoint' && e.promotionGroupSize && e.promotionGroupSize > 0
-    ? ` (${e.promotionGroupSize} rota)` : '';
-  return e.promotion === 'shadow' ? `Gölge: Problem açılırdı${n}` : `Problem açıldı${n}`;
+    ? tf('aed.promo.routes', lang, { n: e.promotionGroupSize }) : '';
+  return tf(e.promotion === 'shadow' ? 'aed.promo.shadow' : 'aed.promo.live', lang, { r: n });
 }
 
 /** Log biçimli türler: grafik servisin log hacmidir (tek sınırlı /api/logs/timeseries). */
@@ -123,10 +125,10 @@ export function behaviorDetailsOf(e: Pick<AnomalyEvent, 'kind' | 'sample'>): Beh
 // hesaplanıyor (Go ve SQL tarafı da öyle), etiket de öyle diyor:
 // operatörün "10:00 dedin ama bizde 13:00'tü" demesi bir hata raporu
 // değil, bir birim karışıklığı olurdu.
-const HOW_DAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-export function hourOfWeekLabel(how: number): string {
+// v0.10.2290 — gün kısaltmaları lib/i18n'de (aed.how.0..6, Pazartesi'den).
+export function hourOfWeekLabel(how: number, lang: Lang = 'tr'): string {
   if (!Number.isFinite(how) || how < 0 || how > 167) return '—';
-  const day = HOW_DAYS[Math.floor(how / 24)] ?? '—';
+  const day = t(`aed.how.${Math.floor(how / 24)}`, lang);
   return `${day} ${String(how % 24).padStart(2, '0')}:00 UTC`;
 }
 
@@ -263,31 +265,39 @@ export interface AnomalyChart {
   seriesName: string;
 }
 
-const BEHAVIOR_CHART: Record<string, { agg: CosreChartSpec['agg']; label: string }> = {
-  error_rate: { agg: 'error_rate', label: 'hata oranı' },
-  p99_ms: { agg: 'p99', label: 'p99 gecikme' },
-  request_rate: { agg: 'rate', label: 'istek hızı' },
+// v0.10.2290 — etiketler lib/i18n'de (aed.metric.*; detailSummary.behaviorMetricLabel ile ortak).
+const BEHAVIOR_CHART: Record<string, CosreChartSpec['agg']> = {
+  error_rate: 'error_rate',
+  p99_ms: 'p99',
+  request_rate: 'rate',
 };
 
 export function anomalyChart(
   e: Pick<AnomalyEvent, 'kind' | 'service' | 'pattern'>,
   win: { fromNs: number; toNs: number },
   details: BehaviorChangeDetails | null,
+  lang: Lang = 'tr',
 ): AnomalyChart | null {
   if (!e.service) return null;
   const base = { service: e.service, fromNs: win.fromNs, toNs: win.toNs };
   switch (e.kind) {
-    case 'trace_op':
+    case 'trace_op': {
+      const l = t('aed.metric.errors', lang);
       return e.pattern
-        ? { spec: { ...base, operation: e.pattern, agg: 'errors' }, title: `${e.pattern} · hata sayısı`, seriesName: 'hata sayısı' }
+        ? { spec: { ...base, operation: e.pattern, agg: 'errors' }, title: `${e.pattern} · ${l}`, seriesName: l }
         : null;
-    case 'trace_op_latency':
+    }
+    case 'trace_op_latency': {
+      const l = t('aed.metric.p99_ms', lang);
       return e.pattern
-        ? { spec: { ...base, operation: e.pattern, agg: 'p99' }, title: `${e.pattern} · p99 gecikme`, seriesName: 'p99 gecikme' }
+        ? { spec: { ...base, operation: e.pattern, agg: 'p99' }, title: `${e.pattern} · ${l}`, seriesName: l }
         : null;
+    }
     case 'behavior_change': {
-      const c = details ? BEHAVIOR_CHART[details.metric] : undefined;
-      return c ? { spec: { ...base, agg: c.agg }, title: `${e.service} · ${c.label}`, seriesName: c.label } : null;
+      const agg = details ? BEHAVIOR_CHART[details.metric] : undefined;
+      if (!agg || !details) return null;
+      const label = t(`aed.metric.${details.metric}`, lang);
+      return { spec: { ...base, agg }, title: `${e.service} · ${label}`, seriesName: label };
     }
     default:
       return null;
@@ -295,13 +305,14 @@ export function anomalyChart(
 }
 
 /** Seyir grafiği boşken sayfanın kendi notu (sohbetin çit-dili notu değil). */
-export const ANOMALY_CHART_EMPTY = 'Bu pencere için seri yok — olay saklama süresinin dışında olabilir.';
+export const ANOMALY_CHART_EMPTY = t('aed.chart.empty', 'tr');
+export const anomalyChartEmpty = (lang: Lang = 'tr') => t('aed.chart.empty', lang);
 
 /** SAF (v0.10.2027; operatör: "0s · sürüyor" anlamsız): süre metni. Sıfır
  *  süre = tek gözlem → "tek ölçüm"; açık olay "· sürüyor" eki alır. */
-export function spikeDurationLabel(status: string, durationNs: number, formatted: string): string {
-  if (!(durationNs > 0)) return 'tek ölçüm';
-  return status === 'active' ? `${formatted} · sürüyor` : formatted;
+export function spikeDurationLabel(status: string, durationNs: number, formatted: string, lang: Lang = 'tr'): string {
+  if (!(durationNs > 0)) return t('aed.dur.single', lang);
+  return status === 'active' ? `${formatted} · ${t('pd.when.ongoing', lang)}` : formatted;
 }
 
 /** SAF (v0.10.2027): kök neden özetinin özet bölümünde gösterilip

@@ -13,6 +13,9 @@
 // anomali satırının kendi davranışıyla aynı. Alarm kuralı satırı alan gelse
 // bile işaretsiz; tek bölümlü terfi satırı işaretsiz.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// v0.10.2290 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';

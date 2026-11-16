@@ -10,7 +10,7 @@ import { ShareButton } from '@/components/ShareButton';
 import { RootCauseRibbon } from '@/components/RootCauseRibbon';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { IconSparkles } from '@/components/icons';
-import { useT } from '@/lib/i18n'; // v0.10.1338 — "Ask CoSRE" etiketi
+import { t, useLang, useT } from '@/lib/i18n'; // v0.10.1338 — "Ask CoSRE" etiketi; v0.10.2290 — sayfa metni arayüz dilinde
 import { CosreChart } from '@/components/CosreChart';
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
 import { ProblemStandardHeader } from './ProblemStandardHeader'; // v0.10.1529
@@ -27,7 +27,7 @@ import type { AnomalyEvent } from '@/lib/types';
 import { Sect, SignalLink, DeployBox, DetailSummary, DetailMeta, type DetailMetaItem } from './detailSections';
 import { anomalySummary, anomalyWhenLine } from './detailSummary';
 import {
-  ANOMALY_CHART_EMPTY, ANOMALY_KIND_PLAIN, anomalyChart, anomalyChartWindow, anomalySignalHrefs,
+  anomalyChartEmpty, anomalyKindPlain, anomalyChart, anomalyChartWindow, anomalySignalHrefs,
   anomalyDirectionBaselineLine, anomalyPromotionBadge, behaviorDetailsOf, findAnomalyEventInCache, isLogAnomalyKind, isTraceAnomalyKind,
   sampleTraceHref, showRootCauseInSummary,
 } from './anomalyDetail';
@@ -109,6 +109,7 @@ export function AnomalyEventHost({ id, isAdmin, onBack, backLabel = '← Problem
       qc.getQueryData<{ items?: AnomalyEvent[] | null }>(keys.anomalies.events), id),
     [qc, id]);
   const byID = useAnomalyEventByID(id);
+  const lang = useLang();
   // Kimlik denetimi kemer + askı: placeholderData kapalı olsa da dönen kayıt
   // bu adresin olayı değilse ÇİZİLMEZ.
   const fromRead = byID.data && byID.data.id === id ? byID.data : undefined;
@@ -118,7 +119,7 @@ export function AnomalyEventHost({ id, isAdmin, onBack, backLabel = '← Problem
   if (ev) {
     return (
       <>
-        <Topbar title="Anomali" />
+        <Topbar title={t('pd.meta.anomaly', lang)} />
         <AnomalyEventDetail event={ev} isAdmin={isAdmin} onBack={onBack} />
       </>
     );
@@ -126,11 +127,10 @@ export function AnomalyEventHost({ id, isAdmin, onBack, backLabel = '← Problem
   if (gone) {
     return (
       <>
-        <Topbar title="Anomali" />
+        <Topbar title={t('pd.meta.anomaly', lang)} />
         <PageShell>
-          <Empty icon="❓" title="Anomali kaydı yok">
-            Bu kimlikle bir anomali olayı bulunamadı — kayıt saklama penceresini
-            aşmış ya da bağlantı eksik kopyalanmış olabilir.{' '}
+          <Empty icon="❓" title={t('aed.host.missing', lang)}>
+            {t('aed.host.missingBody', lang)}{' '}
             <Button variant="secondary" size="sm" onClick={onBack}>{backLabel}</Button>
           </Empty>
         </PageShell>
@@ -140,10 +140,10 @@ export function AnomalyEventHost({ id, isAdmin, onBack, backLabel = '← Problem
   if (byID.isError) {
     return (
       <>
-        <Topbar title="Anomali" />
+        <Topbar title={t('pd.meta.anomaly', lang)} />
         <PageShell>
-          <Empty icon="⚠" title="Anomali yüklenemedi">
-            <Button variant="secondary" size="sm" onClick={() => { void byID.refetch(); }}>Tekrar dene</Button>{' '}
+          <Empty icon="⚠" title={t('aed.host.failed', lang)}>
+            <Button variant="secondary" size="sm" onClick={() => { void byID.refetch(); }}>{t('pd.host.retry', lang)}</Button>{' '}
             <Button variant="secondary" size="sm" onClick={onBack}>{backLabel}</Button>
           </Empty>
         </PageShell>
@@ -152,7 +152,7 @@ export function AnomalyEventHost({ id, isAdmin, onBack, backLabel = '← Problem
   }
   return (
     <>
-      <Topbar title="Anomali" />
+      <Topbar title={t('pd.meta.anomaly', lang)} />
       <PageShell><Spinner /></PageShell>
     </>
   );
@@ -166,6 +166,7 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
   onBack: () => void;
 }) {
   const tr = useT(); // v0.10.1338
+  const lang = useLang(); // v0.10.2290
   // Esc = geri (AlertProblemDetail / ProblemDetail ile aynı kas hafızası);
   // üstte açılan bir modal Esc'i önce alır (katman yığını, v0.9.950).
   useEscLayer(true, onBack);
@@ -182,11 +183,11 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
     () => anomalySignalHrefs({ kind: event.kind, service: event.service, pattern: event.pattern, logQuery: event.logQuery }, win),
     [event.kind, event.service, event.pattern, event.logQuery, win]);
   const chart = useMemo(
-    () => anomalyChart({ kind: event.kind, service: event.service, pattern: event.pattern }, win, details),
-    [event.kind, event.service, event.pattern, win, details]);
+    () => anomalyChart({ kind: event.kind, service: event.service, pattern: event.pattern }, win, details, lang),
+    [event.kind, event.service, event.pattern, win, details, lang]);
   const chartPresentation = useMemo(
-    () => (chart ? { title: chart.title, seriesName: chart.seriesName, emptyNote: ANOMALY_CHART_EMPTY } : undefined),
-    [chart]);
+    () => (chart ? { title: chart.title, seriesName: chart.seriesName, emptyNote: anomalyChartEmpty(lang) } : undefined),
+    [chart, lang]);
   const sampleTrace = sampleTraceHref({ kind: event.kind, sample: event.sample });
   const isLog = isLogAnomalyKind(event.kind);
   const patternSeries = hasLogPatternSeries(event);
@@ -196,29 +197,29 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
   // histogram boşsa dürüst not, servis hacmi çizilmez.
   const oldLogChart = patternSeries ? <LogPatternCountSection event={event} />
     : event.kind === 'log_template_new' ? (
-      <Sect title="Seyir" sub="bu kalıp · olay penceresi">
+      <Sect title={t('aed.sect.trend', lang)} sub={t('aed.sub.tplWin', lang)}>
         <p data-testid="template-chart-empty" style={{ margin: 0, fontSize: 13, color: 'var(--text3)' }}>
-          Bu kalıba uyan satırlar log aramasında bulunamadı (kalıp örneklemle çıkarılır; satırlar saklama süresini aşmış olabilir). Kalıp metni kanıt satırında.
+          {t('aed.tpl.empty', lang)}
         </p>
       </Sect>
     )
     : isLog && event.service ? (
-      <Sect title="Log hacmi" sub="servis · olay penceresi">
+      <Sect title={t('aed.sect.logVol', lang)} sub={t('aed.sub.svcWin', lang)}>
         <AnomalyLogVolume service={event.service} win={win} bare />
       </Sect>
     ) : null;
   const svcRed = serviceRedAggFor(event.kind, details?.metric);
   const seyir = chart ? (
-    <Sect title="Seyir" sub={chart.spec.operation ? 'operasyon · olay penceresi' : 'servis · olay penceresi'}>
+    <Sect title={t('aed.sect.trend', lang)} sub={t(chart.spec.operation ? 'aed.sub.opWin' : 'aed.sub.svcWin', lang)}>
       <CosreChart spec={chart.spec} presentation={chartPresentation} />
     </Sect>
   ) : null;
-  const sentence = anomalySummary(event, details);
+  const sentence = anomalySummary(event, details, lang);
   // Bitmiş (cleared) olayda bitiş = son gözlem (durum last_seen tazeliğinden
   // türer: chstore GetAnomalyEvent). v0.10.1049 — yinelenen olayda satırın
   // sonunda tek ek: "yinelenen · bu N. kez · ilk kez <tarih>" (yeni bölüm yok).
-  const when = anomalyWhenLine(event);
-  const promotionBadge = anomalyPromotionBadge(event); // v0.10.1799
+  const when = anomalyWhenLine(event, undefined, undefined, lang);
+  const promotionBadge = anomalyPromotionBadge(event, lang); // v0.10.1799
 
   const rcInSummary = showRootCauseInSummary(event.rootCause?.confidence);
   const rootCause = (
@@ -284,20 +285,20 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
             </div>
           ) : oldLogChart ?? seyir}
 
-          <Sect title="Kanıt">
+          <Sect title={t('mlRecord.card.evidence', lang)}>
             <AnomalyEvidenceRows event={event} />
           </Sect>
 
           {/* Güveni yeterli kök neden özette; düşükse yalnız teknik ayrıntıda. */}
-          {rcInSummary && <Sect title="Kök neden">{rootCause}</Sect>}
+          {rcInSummary && <Sect title={t('case.f.cause', lang)}>{rootCause}</Sect>}
 
           {/* Geri kalan her şey TEK kapalı bölümde; kapalıyken mount edilmez. */}
-          <Sect title="Teknik ayrıntı" collapsible>
+          <Sect title={t('mlRecord.card.technical', lang)} collapsible>
             <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text3)' }}>
-              Tür: <span className="badge b-gray">{ANOMALY_KIND_PLAIN[event.kind] ?? String(event.kind)}</span>
+              {t('aed.tech.kind', lang)} <span className="badge b-gray">{anomalyKindPlain(event.kind, lang)}</span>
             </p>
             <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text3)' }} data-testid="anomaly-direction-baseline">
-              Yön · taban: {anomalyDirectionBaselineLine(event)}
+              {t('aed.tech.dirBase', lang)} {anomalyDirectionBaselineLine(event, lang)}
             </p>
             {promotionBadge && (
               <p style={{ margin: '0 0 8px' }} data-testid="anomaly-promotion">
@@ -312,21 +313,21 @@ export function AnomalyEventDetail({ event, isAdmin, onBack }: {
         </div>
 
         <div style={{ minWidth: 0 }}>
-          <Sect title="Ne yapabilirim">
+          <Sect title={t('aed.sect.do', lang)}>
             {hrefs ? (
               <>
-                <SignalLink to={hrefs.logs} label="Logları aç"
-                  sub={patternSeries ? 'servis + desen, olay penceresi'
-                    : event.kind === 'log_template_new' && event.logQuery ? 'servis + bu kalıp, olay penceresi' : 'servis, olay penceresi'} />
+                <SignalLink to={hrefs.logs} label={t('pnt.open', lang)}
+                  sub={t(patternSeries ? 'aed.do.logs.pat'
+                    : event.kind === 'log_template_new' && event.logQuery ? 'aed.do.logs.tpl' : 'aed.do.svcWin', lang)} />
                 {hrefs.operationTraces
                   ? <SignalLink to={hrefs.operationTraces}
-                      label={event.kind === 'trace_op' ? "Operasyonun hatalı trace'leri" : "Operasyonun trace'leri"}
-                      sub="olay penceresi" />
-                  : <SignalLink to={hrefs.errorTraces} label="Hatalı trace'ler" sub="servis, olay penceresi" />}
+                      label={t(event.kind === 'trace_op' ? 'aed.do.opErrTraces' : 'aed.do.opTraces', lang)}
+                      sub={t('aed.do.win', lang)} />
+                  : <SignalLink to={hrefs.errorTraces} label={t('pd.box.errTraces', lang)} sub={t('aed.do.svcWin', lang)} />}
                 {sampleTrace && (
-                  <SignalLink to={sampleTrace} label="Örnek trace" sub="tespit anındaki en çarpıcı istek" />
+                  <SignalLink to={sampleTrace} label={t('aed.do.sample', lang)} sub={t('aed.do.sample.sub', lang)} />
                 )}
-                <SignalLink to={hrefs.servicePage} label="Servis sayfası" sub="olay penceresiyle" />
+                <SignalLink to={hrefs.servicePage} label={t('pd.box.svcPage', lang)} sub={t('aed.do.svcPage.sub', lang)} />
               </>
             ) : patternSeries ? (
               <PatternLogsAction event={event} win={win} />
@@ -347,12 +348,13 @@ function AnomalyMeta({ service, win }: { service: string; win: { fromNs: number;
   const meta = useServicesMetadata().data?.[service];
   const owner = meta?.ownerTeam || '';
   const sre = meta?.sreTeam || '';
-  const team = (t: string) => <Link to={`/inbox?team=${encodeURIComponent(t)}`} className="mono">{t}</Link>;
+  const lang = useLang(); // v0.10.2290 — alarm detayıyla aynı pd.meta.* anahtarları
+  const team = (tm: string) => <Link to={`/inbox?team=${encodeURIComponent(tm)}`} className="mono">{tm}</Link>;
   const items: DetailMetaItem[] = [];
-  if (service) items.push({ k: 'Servis', v: <Link to={serviceHref(service, { range: win })} className="mono">{service}</Link> });
-  if (owner) items.push({ k: 'Ekip', v: team(owner) });
-  if (sre && sre !== owner) items.push({ k: owner ? 'SRE' : 'Ekip', v: team(sre) });
-  items.push({ k: 'Tür', v: 'Anomali' });
+  if (service) items.push({ k: t('pd.meta.service', lang), v: <Link to={serviceHref(service, { range: win })} className="mono">{service}</Link> });
+  if (owner) items.push({ k: t('pd.meta.team', lang), v: team(owner) });
+  if (sre && sre !== owner) items.push({ k: t(owner ? 'pd.meta.sre' : 'pd.meta.team', lang), v: team(sre) });
+  items.push({ k: t('pd.meta.kind', lang), v: t('pd.meta.anomaly', lang) });
   return <DetailMeta items={items} />;
 }
 
@@ -363,6 +365,7 @@ function AnomalyMeta({ service, win }: { service: string; win: { fromNs: number;
 // liste ile AYNI kural; istemci birleştirmesi kaldırıldı).
 function AnomalyEvidenceRows({ event }: { event: AnomalyEvent }) {
   const row = useUnifiedAnomalyRow(event.id).data?.row ?? null;
+  const lang = useLang();
   const others = (row?.legacy ?? []).filter(e => e.id !== event.id);
   // v0.10.2038 — aynı tür + aynı kalıp TEK satır (örnekler alt alta, en çok 2);
   // log türünde kanıt cümleyi tekrar etmez, kalıp tam ve kopyalanabilir.
@@ -383,7 +386,7 @@ function AnomalyEvidenceRows({ event }: { event: AnomalyEvent }) {
             {it.pattern && (
               <span data-testid="anomaly-evidence-pattern" style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: 4 }}>
                 <code className="mono" style={{ fontSize: 12, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{it.pattern}</code>
-                <CopyButton value={it.pattern} title="Kalıbı kopyala" />
+                <CopyButton value={it.pattern} title={t('aed.copyPattern', lang)} />
               </span>
             )}
             {it.text}
@@ -399,9 +402,10 @@ function AnomalyEvidenceRows({ event }: { event: AnomalyEvent }) {
 }
 
 function NoServiceNote() {
+  const lang = useLang();
   return (
     <div className="pd-pivot-note">
-      Bu olay bir servis adı taşımıyor — log / trace / servis pivotları bir servis adı gerektiriyor.
+      {t('aed.noService', lang)}
     </div>
   );
 }
@@ -425,15 +429,16 @@ function PatternLogsAction({ event, win }: {
     () => logPatternSeriesArgs({ pattern: event.pattern, startedAt: event.startedAt, lastSeen: event.lastSeen, status: event.status }),
     [event.pattern, event.startedAt, event.lastSeen, event.status]);
   const q = useLogPatternSeries(args, { live: false });
+  const lang = useLang();
   const pivot = useMemo(
     () => (q.data === null ? null : patternLogsPivot(event.pattern, q.data, win)),
     [event.pattern, q.data, win]);
   if (pivot) {
     return (
       <>
-        <SignalLink to={pivot.href} label="Logları aç" sub="desene uyan satırlar, olay penceresi" />
+        <SignalLink to={pivot.href} label={t('pnt.open', lang)} sub={t('pd.sig.patternLogs.sub', lang)} />
         {pivot.topServices.length > 0 && (
-          <div className="pd-pivot-note">En çok: {pivot.topServices.join(', ')}</div>
+          <div className="pd-pivot-note">{t('pd.sig.top', lang)}{pivot.topServices.join(', ')}</div>
         )}
       </>
     );
@@ -450,12 +455,13 @@ function AnomalyTechnical({ event, win, hasDetails, sampleIsTrace }: {
   hasDetails: boolean;
   sampleIsTrace: boolean;
 }) {
+  const lang = useLang();
   return (
     <>
       <SpikeFacts event={event} />
       {event.sample && !hasDetails && !sampleIsTrace && <AnomalySample sample={event.sample} />}
       <div style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text2)', marginBottom: 12, minWidth: 0 }}>
-        <div style={{ overflowWrap: 'anywhere' }}>desen <span className="mono">{event.pattern || '—'}</span></div>
+        <div style={{ overflowWrap: 'anywhere' }}>{t('aed.tech.pattern', lang)} <span className="mono">{event.pattern || '—'}</span></div>
         {(event.clusters ?? []).length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             cluster
@@ -464,8 +470,8 @@ function AnomalyTechnical({ event, win, hasDetails, sampleIsTrace }: {
             ))}
           </div>
         )}
-        <div>pencere <span className="mono">{tsLong(win.fromNs)} → {tsLong(win.toNs)}</span></div>
-        <div>kimlik <span className="mono">{event.id}</span></div>
+        <div>{t('aed.tech.window', lang)} <span className="mono">{tsLong(win.fromNs)} → {tsLong(win.toNs)}</span></div>
+        <div>{t('aed.tech.id', lang)} <span className="mono">{event.id}</span></div>
       </div>
       {event.recentDeploy && (
         <DeployBox version={event.recentDeploy.version} ageSeconds={event.recentDeploy.ageSeconds}
@@ -491,6 +497,7 @@ function AnomalyTriage({ event, isAdmin, onBack }: {
 }) {
   const qc = useQueryClient();
   const [durationSec, setDurationSec] = useState<number>(60 * 60);
+  const lang = useLang();
   const muteMut = useMutation({
     mutationFn: () => {
       const body = anomalyEventSilenceBody(
@@ -505,13 +512,13 @@ function AnomalyTriage({ event, isAdmin, onBack }: {
     },
   });
   return (
-    <div className="pd-triage" role="group" aria-label="Triyaj">
+    <div className="pd-triage" role="group" aria-label={t('pd.triage.aria', lang)}>
       {isAdmin && (
         <>
           <select value={durationSec}
             onChange={e => setDurationSec(Number(e.target.value))}
-            aria-label="Susturma süresi"
-            title="Susturma süresi"
+            aria-label={t('aed.mute.dur', lang)}
+            title={t('aed.mute.dur', lang)}
             style={{ fontSize: 12, padding: '4px 8px' }}>
             {DEFAULT_DURATIONS.map(d => (
               <option key={d.seconds} value={d.seconds}>{d.label}</option>
@@ -520,7 +527,7 @@ function AnomalyTriage({ event, isAdmin, onBack }: {
           <Button variant="secondary" size="sm" loading={muteMut.isPending} onClick={() => muteMut.mutate()}>
             Mute…
           </Button>
-          {muteMut.isError && <span role="alert" className="field-error">Susturma yazılamadı — yeniden deneyin.</span>}
+          {muteMut.isError && <span role="alert" className="field-error">{t('aed.mute.err', lang)}</span>}
           <span className="pd-triage__sep" aria-hidden="true">·</span>
         </>
       )}
