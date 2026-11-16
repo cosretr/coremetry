@@ -37,6 +37,7 @@ import { representativeStack, frameLinksRef } from './stackSource'; // v0.10.104
 import { ExternalEvidencePanel } from './ExternalEvidencePanel';
 import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
 import { ProblemEventTimeline, ProblemEventEvidence } from './ProblemEventTimeline'; // v0.10.2163 — birleşen olaylar
+import { ProblemGraphSection } from './ProblemGraphSection'; // v0.10.2275 — entity grafı gölge bağları
 import type { ExceptionGroup, ExceptionGroupState, Problem, ProblemStandard, RolloutEvidence } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { DataTableState, type DataTableStateStaticProps } from '@/components/ui/DataTable'; // v0.10.977 (T12, P-2)
@@ -1209,6 +1210,10 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
           </Sect>
         </div>
       </div>
+
+      {/* v0.10.2275 (entity grafı S1) — "Neden tek Problem" (gölge önizleme):
+          bağ ya da bağlanmayan yoksa hiçbir şey çizmez. */}
+      <ProblemGraphSection problemId={problem.id} />
 
       <Sect title="Teknik kanıt" collapsible>
         {/* v0.10.1529 — standart kartlar (Etki · Ne zamandan beri · Güven ·

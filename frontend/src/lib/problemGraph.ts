@@ -92,3 +92,70 @@ export function graphShadowLines(r: ProblemGraphShadowReport): string[] {
     `Okuma: ${rd.passes} tik, ${rd.skippedFew} tik aday < 2 (okuma yok), ${rd.refreshes} okuma turu · entity_relations ${rd.relations} (tur başına en çok ${rd.maxRelPerPass}) · tazelik ${rd.runs} · bağımlılık olayı ${rd.evidence} · hata ${rd.errors}`,
   ];
 }
+
+// ── v0.10.2275 — Problem detayı "Neden tek Problem" (gölge) ─────────────
+
+export interface ProblemGraphResponse {
+  problemId: string;
+  shadow: boolean;
+  at?: number;
+  ownerId?: string;
+  entities: number;
+  members: ProblemGraphMember[];
+  nearMisses: ProblemGraphNearMiss[];
+  truncated?: boolean;
+}
+
+/** Çeviri işlevi (tf'nin dil bağlanmış hali) — saf yardımcılar dile bağlı değil. */
+export type GraphT = (key: string, vars?: Record<string, string | number>) => string;
+
+/** SAF: bölümün kipi — üyeler tablosu, yalnız bağlanmayanlar bloğu ya da hiçbir şey. */
+export function graphSectionMode(d: ProblemGraphResponse | null | undefined): 'members' | 'near' | null {
+  if (!d) return null;
+  if (d.members.length > 1) return 'members';
+  if (d.nearMisses.length > 0) return 'near';
+  return null;
+}
+
+/** SAF: varlık türü etiketi. */
+export function graphTypeLabel(type: string, t: GraphT): string {
+  return ['service', 'database', 'queue', 'external'].includes(type) ? t(`pg.type.${type}`) : type;
+}
+
+/** SAF: birleşme gerekçesi cümlesi — kural kimliğinden ve adlardan kurulur. */
+export function graphLinkText(m: ProblemGraphMember, t: GraphT): string {
+  if (m.owner) return t('pg.rule.owner');
+  const caller = m.path?.[0] ?? m.peer ?? '';
+  const callee = m.path?.[m.path.length - 1] ?? m.name;
+  switch (m.link) {
+    case 'M-SVC': return t('pg.rule.M-SVC');
+    case 'M-CALL': return t('pg.rule.M-CALL', { a: caller, b: callee }) + (m.strict ? t('pg.rule.strict') : '');
+    case 'M-DEP': return t('pg.rule.M-DEP', { via: m.via ?? '' });
+    case 'M-WL': return t('pg.rule.M-WL', { peer: m.peer ?? '', via: m.via ?? '' });
+    case 'M-NODE': return t('pg.rule.M-NODE', { via: m.via ?? '' });
+    case 'M-HOST': return t('pg.rule.M-HOST', { via: m.via ?? '' });
+  }
+  return m.link ?? '';
+}
+
+/** SAF: graftaki yol ("checkout-api → orders-db"); yoksa "—". */
+export function graphPathText(m: ProblemGraphMember): string {
+  return m.path && m.path.length > 1 ? m.path.join(' → ') : '—';
+}
+
+/** SAF: bağlanmama nedeni cümlesi (N-* kimliği + ilişki ipucu). */
+export function graphReasonText(n: ProblemGraphNearMiss, t: GraphT): string {
+  if (n.reason === 'N-REL' && n.hint && ['M-DEP', 'M-NODE', 'M-HOST'].includes(n.hint)) {
+    return t(`pg.hint.${n.hint}`, { via: n.via ?? '' });
+  }
+  if (GRAPH_NOLINK_REASONS.includes(n.reason as (typeof GRAPH_NOLINK_REASONS)[number])) {
+    return t(`pg.reason.${n.reason}`, { via: n.via ?? '' });
+  }
+  return n.reason;
+}
+
+/** SAF: bölüm alt başlığı sayıları (varlık, kural). */
+export function graphCounts(d: ProblemGraphResponse): { entities: number; rules: number } {
+  const rules = new Set(d.members.map(m => m.link).filter((l): l is string => !!l));
+  return { entities: d.entities, rules: rules.size };
+}

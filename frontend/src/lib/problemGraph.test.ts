@@ -20,3 +20,22 @@ describe('graphShadowLines', () => {
     expect(graphShadowLines(base)[1]).toContain('Kurulurdu (farklı bağ): yok');
   });
 });
+
+import { graphSectionMode, graphReasonText, graphLinkText, type ProblemGraphResponse } from './problemGraph';
+import { tf } from './i18n';
+
+describe('graph section helpers', () => {
+  const empty: ProblemGraphResponse = { problemId: 'p', shadow: true, entities: 0, members: [], nearMisses: [] };
+  it('renders nothing without links and near misses', () => {
+    expect(graphSectionMode(undefined)).toBeNull();
+    expect(graphSectionMode(empty)).toBeNull();
+    expect(graphSectionMode({ ...empty, nearMisses: [{ id: 'x', name: 'cart-api', type: 'service', startedAt: 1, reason: 'N-REL' }] })).toBe('near');
+  });
+  it('templated reason and rule sentences in both languages', () => {
+    const t = (k: string, v?: Record<string, string | number>) => tf(k, 'en', v);
+    expect(graphReasonText({ id: 'x', name: 'a', type: 'service', startedAt: 1, reason: 'N-HUB', via: 'orders-db' }, t))
+      .toBe('shared point orders-db is used by more than 20 services and has no signal of its own');
+    expect(graphLinkText({ id: 'x', entity: 'svc:a', type: 'service', name: 'checkout-grpc', startedAt: 1, link: 'M-WL', peer: 'checkout-api', via: 'checkout' },
+      (k, v) => tf(k, 'tr', v))).toBe('checkout-api ile aynı iş yükü: checkout');
+  });
+});

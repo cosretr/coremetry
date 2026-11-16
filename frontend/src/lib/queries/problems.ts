@@ -238,6 +238,17 @@ export function useProblemEvents(id: string, enabled = true) {
   });
 }
 
+// v0.10.2275 (entity grafı S1) — Problem'in gölge bağları; yalnız detay
+// açıkken, staleTime = sunucu TTL (15 s). Yoklama yok.
+export function useProblemGraph(id: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.problems.graph(id),
+    queryFn: ({ signal }) => api.problemGraph(id, signal),
+    enabled: enabled && !!id,
+    staleTime: 15_000,
+  });
+}
+
 // v0.10.1282 — AI SRE araştırması (Problem detayı açıkken). staleTime = sunucu
 // TTL (10 s). Yoklama YALNIZ iş kuyrukta / koşarken, 10 s (RQ gizli sekmede
 // durur); bitmiş kayıt yoklanmaz — değişim SSE 'sre.investigation' ile gelir.
