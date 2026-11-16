@@ -14519,3 +14519,11 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - `sampleTrace.ts` sabitleri (`TRACE_MISSING_TITLE`, `TRACE_TEMPO_TITLE`) TR katalog değerinden türer; kullanılmayan etiket sabitleri silindi.
 - Çevrilmeyenler: Oracle grup etiketi (branding `oracleGroupLabel`, varsayılan "Teknik hata" — ayar değeri), sunucu metni (tip, mesaj, stack, AI özeti, kimseye gitmedi gerekçesi). Exceptions LİSTESİ (`AnomaliesPage` satırları, `oracleRowDetail` / `oracleRowTooltip`, liste örnek paneli) bu dilimde yok.
 - Pin: `features/anomalies/ExceptionDetail.lang.test.tsx`. Türkçe metni pinleyen render testleri dili `'tr'`ye sabitler; `excPodsLayout` / `stackSource` kaynak pinleri yeni anahtarı ve TR katalog değerini okur.
+
+## 2026-11-16 — v0.10.2288 — İnceleme sonucu kartları İngilizce arayüzde
+
+- Arayüz dili İngilizceyken `InvestigationResult`'ın altındaki iki kartta kalan Türkçe metinler `lib/i18n`'e taşındı (56 anahtar: `hyp.*`, `rec.*`); TR değerler bugünkü metnin birebir aynısı. Mekanizma 2285 ile aynı (`useLang` + `t`/`tf`).
+- Kapsam: `ProblemInvestigationCards` (hipotez başlığı, korelatör kutusu, zaman çizelgesi başlığı / olay türleri, kart üst satırı, skor / kontrol ipuçları, Doğrula / Ele / Onayla, işaret formu, bildirimler), `ProblemInvestigationRecommendations` (başlık, "öneri — uygulanmadı" rozeti, Gerekçe, Runbook'u aç, Uygulandı / Ele, bildirimler).
+- Saf yardımcılar isteğe bağlı `lang` alır, varsayılan `'tr'`: `outcomeView`, `humanLabel`, `recHumanLabel`; yeni `bandLabel` (bant belirteci sunucudan gelir, yalnız gösterimi dilde) ve `timelineKindLabel` (`TIMELINE_KIND` artık bilinen türlerin listesi). `REC_PENDING` durum belirteci olarak kalır (kıyas değeri); rozet metni `rec.pending`.
+- Çevrilmeyenler: sunucu metni (hipotez adı, kategori, kontrol gerekçesi, olay etiketi, öneri metni / gerekçesi, kuyruk nedeni, Argo durumu).
+- Pin: `features/anomalies/InvestigationCards.lang.test.tsx`. Türkçe metni pinleyen `ProblemInvestigationCards` / `ProblemInvestigationRecommendations` render testleri dili `'tr'`ye sabitler; kaynak pini etkilenmedi.

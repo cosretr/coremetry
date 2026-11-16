@@ -1,4 +1,5 @@
 import type { Tone } from '@/components/ui';
+import { t, type Lang } from '@/lib/i18n'; // v0.10.2288 — etiketler lang alır (varsayılan 'tr')
 import type {
   ChatQueryEvidence, SREHypothesis, SREHypothesisBand, SREHypothesisCheck, SREInvestigation, SRETimelineKind,
 } from '@/lib/types';
@@ -20,11 +21,22 @@ export function bandTone(b: SREHypothesisBand): Tone {
   }
 }
 
+/** Bant rozetinin metni: değer sunucu belirtecidir (Go aynası); yalnız
+ *  gösterim dile göre — TR'de belirtecin kendisi, bilinmeyen olduğu gibi. */
+export function bandLabel(b: SREHypothesisBand, lang: Lang = 'tr'): string {
+  switch (b) {
+    case 'yüksek': return t('hyp.band.high', lang);
+    case 'orta': return t('hyp.band.mid', lang);
+    case 'düşük': return t('hyp.band.low', lang);
+    default: return b;
+  }
+}
+
 /** Kontrol sonucunun görünümü (+1 doğrular · −1 çürütür · 0 bilinmiyor). */
-export function outcomeView(o: SREHypothesisCheck['outcome']): { glyph: string; label: string } {
-  if (o > 0) return { glyph: '✓', label: 'doğrular' };
-  if (o < 0) return { glyph: '✗', label: 'çürütür' };
-  return { glyph: '?', label: 'bilinmiyor' };
+export function outcomeView(o: SREHypothesisCheck['outcome'], lang: Lang = 'tr'): { glyph: string; label: string } {
+  if (o > 0) return { glyph: '✓', label: t('hyp.outcome.pos', lang) };
+  if (o < 0) return { glyph: '✗', label: t('hyp.outcome.neg', lang) };
+  return { glyph: '?', label: t('hyp.outcome.unknown', lang) };
 }
 
 /** Skor iki ondalık (Go aynı yuvarlamayı yapar). */
@@ -48,11 +60,11 @@ export function checkEvidence(inv: SREInvestigation, ref: string | undefined): C
 }
 
 /** İşaret metni ("elendi" / "onaylandı" + kim). */
-export function humanLabel(h: SREHypothesis): string | null {
+export function humanLabel(h: SREHypothesis, lang: Lang = 'tr'): string | null {
   const hs = h.humanState;
   if (!hs) return null;
   const who = hs.by ? ` · ${hs.by}` : '';
-  return (hs.state === 'dismissed' ? 'operatör eledi' : 'operatör onayladı') + who;
+  return t(hs.state === 'dismissed' ? 'hyp.human.dismissed' : 'hyp.human.confirmed', lang) + who;
 }
 
 /** Doğrula / Ele / Onayla yalnız bitmiş kayıtta (kuyruk / koşu işareti ezerdi). */
@@ -60,15 +72,15 @@ export function canAct(inv: SREInvestigation): boolean {
   return inv.state === 'done' || inv.state === 'partial';
 }
 
-export const TIMELINE_KIND: Record<SRETimelineKind, string> = {
-  problem_start: 'Başlangıç',
-  deploy: 'Deploy',
-  spike_start: 'Log artışı',
-  first_error: 'İlk hata',
-  alert: 'Alarm',
-  alert_resolved: 'Alarm kapandı',
-  incident_attach: 'Incident',
-};
+// v0.10.2288 — olay türü adları katalogda (hyp.tl.*); TIMELINE_KIND bilinen
+// türlerin listesi (Go timeline.go aynası). Bilinmeyen tür olduğu gibi.
+export const TIMELINE_KIND: readonly SRETimelineKind[] = [
+  'problem_start', 'deploy', 'spike_start', 'first_error', 'alert', 'alert_resolved', 'incident_attach',
+];
+
+export function timelineKindLabel(kind: string, lang: Lang = 'tr'): string {
+  return (TIMELINE_KIND as readonly string[]).includes(kind) ? t(`hyp.tl.${kind}`, lang) : kind;
+}
 
 /** Kök-neden paneline kaydırma hedefi (ProblemDetail sarmalayıcısı). */
 export const ROOT_CAUSE_ANCHOR = 'problem-root-cause';

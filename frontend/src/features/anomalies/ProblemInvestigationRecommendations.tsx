@@ -17,18 +17,20 @@ import { api } from '@/lib/api';
 import { keys } from '@/lib/queries';
 import { toast } from '@/lib/toast';
 import { tsLong } from '@/lib/utils';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2288 — metinler arayüz dilinde (TR aynı)
 import type { SRERecommendation, SREInvestigation } from '@/lib/types';
-import { REC_PENDING, canAckRecommendation, recHumanLabel, runbookTarget, shownRecommendations } from './recommendationView';
+import { canAckRecommendation, recHumanLabel, runbookTarget, shownRecommendations } from './recommendationView';
 
 const muted = { color: 'var(--text3)' } as const;
 
 export function ProblemInvestigationRecommendations({ inv, canEdit }: { inv: SREInvestigation; canEdit: boolean }) {
+  const lang = useLang();
   const recs = shownRecommendations(inv);
   if (recs.length === 0) return null;
   return (
     <div>
       <div style={{ ...muted, fontSize: 12, marginBottom: 6 }}>
-        Öneriler — AI SRE ajanı · yalnız öneri: ajan hiçbir şeyi uygulamaz; kararı ve uygulamayı insan verir
+        {t('rec.head', lang)}
       </div>
       <div style={{ display: 'grid', gap: 8 }}>
         {recs.map(r => <RecommendationCard key={r.id} inv={inv} r={r} canEdit={canEdit} />)}
@@ -40,8 +42,9 @@ export function ProblemInvestigationRecommendations({ inv, canEdit }: { inv: SRE
 function RecommendationCard({ inv, r, canEdit }: { inv: SREInvestigation; r: SRERecommendation; canEdit: boolean }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const lang = useLang();
   const [busy, setBusy] = useState<'' | 'ack' | 'dismissed'>('');
-  const human = recHumanLabel(r);
+  const human = recHumanLabel(r, lang);
   const target = runbookTarget(r);
   const actionable = canEdit && canAckRecommendation(inv, r);
 
@@ -49,10 +52,10 @@ function RecommendationCard({ inv, r, canEdit }: { inv: SREInvestigation; r: SRE
     setBusy(state);
     try {
       await api.ackProblemRecommendation(inv.problemId, r.id, { state });
-      toast.success(state === 'ack' ? 'Öneri "uygulandı" olarak işaretlendi (ajan bir şey uygulamadı)' : 'Öneri elendi');
+      toast.success(t(state === 'ack' ? 'rec.toast.ack' : 'rec.toast.dismissed', lang));
       await qc.invalidateQueries({ queryKey: keys.problems.investigation(inv.problemId) });
     } catch (e) {
-      toast.error(`İşaretlenemedi: ${e instanceof Error ? e.message : String(e)}`);
+      toast.error(tf('hyp.toast.markErr', lang, { e: e instanceof Error ? e.message : String(e) }));
     } finally {
       setBusy('');
     }
@@ -64,11 +67,11 @@ function RecommendationCard({ inv, r, canEdit }: { inv: SREInvestigation; r: SRE
       opacity: r.state === 'dismissed' ? 0.7 : undefined,
     }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-        <Badge tone="neutral" title="Ajan yalnız öneri üretir — hiçbir şeyi uygulamaz">{REC_PENDING}</Badge>
+        <Badge tone="neutral" title={t('rec.pending.title', lang)}>{t('rec.pending', lang)}</Badge>
         {human && <Badge tone={human.tone} title={r.ackAt ? tsLong(r.ackAt) : undefined}>{human.text}</Badge>}
       </div>
       <div style={{ marginTop: 4 }}>{r.text}</div>
-      {r.rationale && <div style={{ ...muted, fontSize: 12, marginTop: 2 }}>Gerekçe: {r.rationale}</div>}
+      {r.rationale && <div style={{ ...muted, fontSize: 12, marginTop: 2 }}>{tf('rec.rationale', lang, { r: r.rationale })}</div>}
       {r.rollout && (
         <div style={{ ...muted, fontSize: 12, marginTop: 2 }}>
           Rollout: <span className="mono">{r.rollout.workload}</span> {r.rollout.from} → {r.rollout.to}
@@ -82,23 +85,23 @@ function RecommendationCard({ inv, r, canEdit }: { inv: SREInvestigation; r: SRE
         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {target?.kind === 'internal' && (
             <Button variant="secondary" size="sm" onClick={() => navigate(target.href)}
-              title="Runbook sayfası problem bağlı açılır — çalıştırmayı siz başlatırsınız">
-              Runbook&apos;u aç
+              title={t('rec.runbook.title', lang)}>
+              {t('rec.runbook', lang)}
             </Button>
           )}
           {target?.kind === 'external' && (
-            <a href={target.href} target="_blank" rel="noopener noreferrer" title="Problemin runbook bağlantısı (yeni sekme)">
-              Runbook&apos;u aç ↗
+            <a href={target.href} target="_blank" rel="noopener noreferrer" title={t('rec.runbook.ext.title', lang)}>
+              {t('rec.runbook', lang)} ↗
             </a>
           )}
           {actionable && (
             <>
               <Button variant="ghost" size="sm" loading={busy === 'ack'} disabled={!!busy} onClick={() => { void mark('ack'); }}
-                title="Öneriyi siz uyguladıysanız işaretleyin — yalnız etiket">
-                Uygulandı
+                title={t('rec.ack.title', lang)}>
+                {t('rec.ack', lang)}
               </Button>
               <Button variant="ghost" size="sm" loading={busy === 'dismissed'} disabled={!!busy} onClick={() => { void mark('dismissed'); }}>
-                Ele
+                {t('hyp.dismiss', lang)}
               </Button>
             </>
           )}
