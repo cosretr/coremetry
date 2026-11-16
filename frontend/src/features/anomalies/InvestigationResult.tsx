@@ -22,6 +22,7 @@ import { Badge, Button } from '@/components/ui';
 import { tsLong } from '@/lib/utils';
 import { agoLang, t, tf, useLang } from '@/lib/i18n'; // v0.10.2285 — metinler arayüz dilinde (TR aynı)
 import type { SREInvestigation } from '@/lib/types';
+import { OrigLang } from './OrigLang';
 import { ProblemInvestigationCards } from './ProblemInvestigationCards';
 import { ProblemInvestigationRecommendations } from './ProblemInvestigationRecommendations';
 import {
@@ -41,7 +42,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
     <div style={{ display: 'grid', gap: 10, fontSize: 13 }}>
       {inv.error && <div className="cm-callout is-caution" role="alert">{inv.error}</div>}
       {!multi && sweep?.summary && (
-        <div><b>{tf('inv.res.sweep', lang, { svc: inv.service })}</b> {sweep.summary}</div>
+        <div><b>{tf('inv.res.sweep', lang, { svc: inv.service })}</b> <OrigLang>{sweep.summary}</OrigLang></div>
       )}
       {!multi && sweep && sweep.state !== 'ok' && !inv.error && (
         <div style={{ color: 'var(--text3)' }}>{t(sweep.state === 'partial' ? 'inv.res.sweepPartial' : 'inv.res.sweepFailed', lang)}</div>
@@ -67,7 +68,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
                   <td>{stepLabel(s.name, lang)}</td>
                   <td>{v.tone ? <Badge tone={v.tone}>{v.label}</Badge> : v.label}</td>
                   <td className="num">{fmtStepDuration(s.durationMs, lang)}</td>
-                  <td className="cell-wrap">{s.summary || '—'}</td>
+                  <td className="cell-wrap">{s.summary ? <OrigLang>{s.summary}</OrigLang> : '—'}</td>
                 </tr>
               );
             })}
@@ -77,7 +78,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
       {inv.summary && (inv.summary.gated
         ? (
           <div style={{ color: 'var(--text3)' }}>
-            {inv.summary.text}{inv.summary.reason ? ` — ${inv.summary.reason}` : ''}
+            <OrigLang>{inv.summary.text}{inv.summary.reason ? ` — ${inv.summary.reason}` : ''}</OrigLang>
           </div>
         )
         : (
@@ -86,7 +87,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
               {t('inv.res.aiSummary', lang)}{inv.summary.model ? ` · ${inv.summary.model}` : ''}
               {inv.summary.at ? <span title={tsLong(inv.summary.at)}> · {agoLang(inv.summary.at, lang)}</span> : null}
             </div>
-            <ExplainBody text={inv.summary.text} busy={false} verdict={false} />
+            <OrigLang block><ExplainBody text={inv.summary.text} busy={false} verdict={false} /></OrigLang>
           </div>
         ))}
       <ProblemInvestigationCards inv={inv} canEdit={canEdit} />
@@ -97,7 +98,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
             <li key={`${f.step ?? 'sweep'}:${f.kind}:${f.name}`}>
               <span className="mono">{f.name}</span>{' '}
               <span style={{ color: 'var(--text3)' }}>({findingKindLabel(f.kind, lang)} · {f.level})</span>
-              {f.reasons && f.reasons.length > 0 && <> — {f.reasons.join('; ')}</>}
+              {f.reasons && f.reasons.length > 0 && <> — <OrigLang>{f.reasons.join('; ')}</OrigLang></>}
               <EvidenceChips items={findingEvidence(inv, f)} />
             </li>
           ))}

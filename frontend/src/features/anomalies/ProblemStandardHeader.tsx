@@ -66,7 +66,7 @@ export function ProblemStandardBlock({ std, showTitle = true, factsOnly = false 
           <div className="std-card__value">
             {stdConfidenceLabel(std.confidence.level, lang)}
           </div>
-          <div className="std-card__sub mono">{stdGateSummary(std.confidence.gates) || t('pd.std.noGates', lang)}</div>
+          <div className="std-card__sub mono">{stdGateSummary(std.confidence.gates, lang) || t('pd.std.noGates', lang)}</div>
         </div>
         <div className="std-card">
           <div className="std-card__label">{t('pd.std.source', lang)}</div>

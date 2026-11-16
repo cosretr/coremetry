@@ -17,6 +17,7 @@ import {
 import { serviceHref, pointEventWindow } from '@/lib/serviceHref';
 import type { NotificationLogEntry } from '@/lib/types';
 import { UNMATCHED_KIND } from '@/lib/notifyRouting';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2298 — "kimseye gitmedi" işareti arayüz dilinde (TR aynı)
 import { PageShell } from '@/components/coremetry/PageShell';
 
 // v0.6.15 — Operator events list/delete UI.
@@ -115,6 +116,7 @@ export default function EventsPage() {
 
 // ── Notifications tab ────────────────────────────────────────────────
 function NotificationsTab({ from, to }: { from: number; to: number }) {
+  const lang = useLang();
   // v0.9.196 review-fix — URL = source of truth: her iki filtre de
   // ?nkind= / ?related= üzerinden yaşar (replace:true, yabancı paramlar
   // korunur, boş değer paramı siler) — kopyalanan link aynı görünümü verir.
@@ -179,7 +181,7 @@ function NotificationsTab({ from, to }: { from: number; to: number }) {
               "hangi problemlerden kimsenin haberi olmadı" sorusunu
               cevaplıyor. Backend channel_kind üzerinden birebir
               süzdüğü için ek uç gerekmiyor. */}
-          <option value={UNMATCHED_KIND}>— kimseye gitmedi</option>
+          <option value={UNMATCHED_KIND}>{`— ${t('pnotify.unmatched.row', lang)}`}</option>
         </select>
         <span style={{ fontSize: 12, color: 'var(--text2)' }}>Related:</span>
         <select value={related} onChange={e => setRelated(e.target.value)}
@@ -239,7 +241,7 @@ function NotificationsTab({ from, to }: { from: number; to: number }) {
                       GİTMEDİ ile BAŞARISIZ farklı arızalar, farklı
                       düzeltmeler. */}
                   {n.channelKind === UNMATCHED_KIND
-                    ? <span className="badge b-err" title={n.error}>kimseye gitmedi</span>
+                    ? <span className="badge b-err" title={n.error}>{t('pnotify.unmatched.row', lang)}</span>
                     : n.ok
                       ? <span className="badge b-gray">sent</span>
                       : <span className="badge b-err" title={n.error}>failed</span>}

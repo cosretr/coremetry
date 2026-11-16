@@ -22,8 +22,10 @@ import { fmtClock, tsLong } from '@/lib/utils';
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2288 — metinler arayüz dilinde (TR aynı)
 import type { SREHypothesis, SREInvestigation } from '@/lib/types';
 import {
-  ROOT_CAUSE_ANCHOR, bandLabel, bandTone, canAct, checkEvidence, fmtScore, humanLabel, outcomeView, shownHypotheses, timelineKindLabel,
+  ROOT_CAUSE_ANCHOR, bandLabel, bandTone, canAct, checkEvidence, checkTitle, fmtScore, humanLabel, hypCategoryLabel, hypKindName, hypLabel,
+  outcomeView, queueReasonText, shownHypotheses, timelineKindLabel,
 } from './hypothesisView';
+import { OrigLang } from './OrigLang';
 
 const muted = { color: 'var(--text3)' } as const;
 
@@ -39,7 +41,7 @@ export function ProblemInvestigationCards({ inv, canEdit }: { inv: SREInvestigat
         <div>
           <div style={{ ...muted, fontSize: 12, marginBottom: 6 }}>
             {t('hyp.head', lang)}
-            {inv.kind === 'verify' && inv.hypothesis ? tf('hyp.head.verify', lang, { h: inv.hypothesis }) : ''}
+            {inv.kind === 'verify' && inv.hypothesis ? tf('hyp.head.verify', lang, { h: hypKindName(inv.hypothesis, lang) }) : ''}
           </div>
           <div style={{ display: 'grid', gap: 8 }}>
             {hyps.map(h => <HypothesisCard key={h.kind} inv={inv} h={h} canEdit={canEdit} />)}
@@ -63,7 +65,7 @@ export function ProblemInvestigationCards({ inv, canEdit }: { inv: SREInvestigat
               <li key={`${e.kind}:${e.at}:${i}`} style={{ display: 'grid', gridTemplateColumns: '72px 96px 1fr', gap: 8 }}>
                 <span className="num" style={muted} title={tsLong(e.at)}>{fmtClock(e.at / 1e6)}</span>
                 <span style={muted}>{timelineKindLabel(e.kind, lang)}</span>
-                <span style={{ fontWeight: e.kind === 'problem_start' ? 600 : undefined }}>{e.label}</span>
+                <span style={{ fontWeight: e.kind === 'problem_start' ? 600 : undefined }}><OrigLang>{e.label}</OrigLang></span>
               </li>
             ))}
           </ol>
@@ -90,8 +92,8 @@ function HypothesisCard({ inv, h, canEdit }: { inv: SREInvestigation; h: SREHypo
     setBusy('verify');
     try {
       const r = await api.enqueueProblemInvestigation(inv.problemId, { kind: 'verify', hypothesis: h.kind });
-      if (r.created) toast.success(tf('hyp.toast.queued', lang, { h: h.label }));
-      else toast.info(r.reason ? tf('hyp.toast.already', lang, { r: r.reason }) : t('hyp.toast.inQueue', lang));
+      if (r.created) toast.success(tf('hyp.toast.queued', lang, { h: hypLabel(h, lang) }));
+      else toast.info(r.reason ? tf('hyp.toast.already', lang, { r: queueReasonText(r.state, r.reason, lang) }) : t('hyp.toast.inQueue', lang));
       await refresh();
     } catch (e) {
       toast.error(tf('hyp.toast.queueErr', lang, { e: e instanceof Error ? e.message : String(e) }));
@@ -121,10 +123,10 @@ function HypothesisCard({ inv, h, canEdit }: { inv: SREInvestigation; h: SREHypo
       opacity: h.humanState?.state === 'dismissed' ? 0.7 : undefined,
     }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-        <b>{h.label}</b>
+        <b>{hypLabel(h, lang)}</b>
         <Badge tone={bandTone(h.band)}>{bandLabel(h.band, lang)}</Badge>
         <span className="num" title={tf('hyp.score.title', lang, { p: fmtScore(h.prior) })}>{fmtScore(h.score)}</span>
-        <span style={{ ...muted, fontSize: 12 }}>{tf('hyp.category', lang, { c: h.category })}</span>
+        <span style={{ ...muted, fontSize: 12 }}>{tf('hyp.category', lang, { c: hypCategoryLabel(h.category, lang) })}</span>
         {human && (
           <Badge tone={h.humanState?.state === 'confirmed' ? 'success' : 'neutral'} title={h.humanState?.at ? tsLong(h.humanState.at) : undefined}>
             {human}
@@ -135,12 +137,13 @@ function HypothesisCard({ inv, h, canEdit }: { inv: SREInvestigation; h: SREHypo
       <ul style={{ margin: '6px 0 0', paddingLeft: 0, listStyle: 'none', display: 'grid', gap: 3 }}>
         {h.checks.map(c => {
           const v = outcomeView(c.outcome, lang);
+          const title = checkTitle(c.name, lang);
           return (
             <li key={c.name} style={{ display: 'grid', gridTemplateColumns: '18px 1fr', gap: 4 }}>
               <span aria-label={v.label} title={tf('hyp.check.title', lang, { l: v.label, w: c.weight })}
                 style={{ color: c.outcome > 0 ? 'var(--ok)' : c.outcome < 0 ? 'var(--err)' : 'var(--text3)' }}>{v.glyph}</span>
               <span style={c.outcome === 0 ? muted : undefined}>
-                {c.reason}
+                {title && <>{title}: </>}<OrigLang>{c.reason}</OrigLang>
                 <EvidenceChips items={checkEvidence(inv, c.evidenceRef)} />
               </span>
             </li>

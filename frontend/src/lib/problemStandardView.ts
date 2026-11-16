@@ -135,11 +135,20 @@ function fmtCount(v: number): string {
 
 const GATE_MARK: Record<string, string> = { pass: '✓', fail: '✗', unknown: '?', flag: '!', context: '·' };
 
+// v0.10.2298 (sunucu metinleri S1) — kapı adı `id`'den (Go signal_gates.go
+// G1–G7). TR = sunucu `name` aynen; EN = katalog; bilinmeyen id → `name`.
+export const STD_GATE_IDS = ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7'] as const;
+
+/** Kapı adı arayüz dilinde (TR sunucu metni aynen). */
+export function stdGateName(g: Pick<SignalGate, 'id' | 'name'>, lang: Lang = 'tr'): string {
+  return lang !== 'tr' && (STD_GATE_IDS as readonly string[]).includes(g.id) ? t(`std.gate.${g.id}`, lang) : g.name;
+}
+
 /** Kapı özeti: "trafik ✓ sürdürme ✓ VM karar ? takvim !"; na kapılar yazılmaz. */
-export function stdGateSummary(gates: SignalGate[]): string {
+export function stdGateSummary(gates: SignalGate[], lang: Lang = 'tr'): string {
   return gates
     .filter(g => g.status !== 'na' && g.status !== 'context')
-    .map(g => `${g.name} ${GATE_MARK[g.status] ?? '?'}`)
+    .map(g => `${stdGateName(g, lang)} ${GATE_MARK[g.status] ?? '?'}`)
     .join(' ');
 }
 
@@ -152,7 +161,7 @@ export function stdConfidenceLabel(level: StdConfidenceLevel, lang: Lang = 'tr')
 export function stdGateTitle(std: ProblemStandard, lang: Lang = 'tr'): string {
   const lines = std.confidence.gates
     .filter(g => g.status !== 'na')
-    .map(g => `${g.id} ${g.name}: ${GATE_MARK[g.status] ?? g.status}${g.note ? ` — ${g.note}` : ''}`);
+    .map(g => `${g.id} ${stdGateName(g, lang)}: ${GATE_MARK[g.status] ?? g.status}${g.note ? ` — ${g.note}` : ''}`);
   return [tf('pd.std.confTitle', lang, { l: stdConfidenceLabel(std.confidence.level, lang) }), ...lines].join('\n');
 }
 

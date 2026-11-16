@@ -19,6 +19,7 @@ import { toast } from '@/lib/toast';
 import { tsLong } from '@/lib/utils';
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2288 — metinler arayüz dilinde (TR aynı)
 import type { SRERecommendation, SREInvestigation } from '@/lib/types';
+import { OrigLang } from './OrigLang';
 import { canAckRecommendation, recHumanLabel, runbookTarget, shownRecommendations } from './recommendationView';
 
 const muted = { color: 'var(--text3)' } as const;
@@ -70,8 +71,8 @@ function RecommendationCard({ inv, r, canEdit }: { inv: SREInvestigation; r: SRE
         <Badge tone="neutral" title={t('rec.pending.title', lang)}>{t('rec.pending', lang)}</Badge>
         {human && <Badge tone={human.tone} title={r.ackAt ? tsLong(r.ackAt) : undefined}>{human.text}</Badge>}
       </div>
-      <div style={{ marginTop: 4 }}>{r.text}</div>
-      {r.rationale && <div style={{ ...muted, fontSize: 12, marginTop: 2 }}>{tf('rec.rationale', lang, { r: r.rationale })}</div>}
+      <div style={{ marginTop: 4 }}><OrigLang>{r.text}</OrigLang></div>
+      {r.rationale && <div style={{ ...muted, fontSize: 12, marginTop: 2 }}>{tf('rec.rationale', lang, { r: '' })}<OrigLang>{r.rationale}</OrigLang></div>}
       {r.rollout && (
         <div style={{ ...muted, fontSize: 12, marginTop: 2 }}>
           Rollout: <span className="mono">{r.rollout.workload}</span> {r.rollout.from} → {r.rollout.to}

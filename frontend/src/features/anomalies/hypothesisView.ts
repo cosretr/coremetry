@@ -82,5 +82,56 @@ export function timelineKindLabel(kind: string, lang: Lang = 'tr'): string {
   return (TIMELINE_KIND as readonly string[]).includes(kind) ? t(`hyp.tl.${kind}`, lang) : kind;
 }
 
+// v0.10.2298 (sunucu metinleri S1) — kapalı kodlar katalogdan. TR arayüz
+// sunucu metnini AYNEN çizer; EN arayüz bilinen kodu katalogdan çizer,
+// bilinmeyen kodda sunucu metnine düşer. Listeler Go internal/sre
+// hypotheses.go hypothesisTable aynası (hypothesisView.codes.test pinler).
+export const HYP_KINDS = [
+  'deploy', 'config', 'saturation', 'dependency', 'external', 'db_slow', 'traffic_surge', 'code_regression',
+] as const;
+export const HYP_CATEGORIES = ['deploy', 'config', 'capacity', 'dependency', 'external', 'code_bug'] as const;
+export const HYP_CHECKS = [
+  'deploy_near', 'deploy_before_error', 'recurring_before_deploy', 'rollout_failed',
+  'change_without_image', 'change_before_error', 'argo_sync',
+  'pod_limits', 'jvm_post_gc', 'node_pressure', 'latency_symptom',
+  'downstream_worse', 'synth_agrees', 'downstream_errors',
+  'external_problem_open', 'external_edge_errors',
+  'db_health_open', 'pivot_db_path', 'db_edge_slow',
+  'rate_up', 'p99_up', 'upstream_surge',
+  'new_error_pattern', 'after_deploy', 'pivot_error_spans', 'error_symptom',
+] as const;
+
+const has = (list: readonly string[], v: string) => list.includes(v);
+
+/** Hipotez adı: TR = sunucu `label`; EN = `kind` katalogdan (bilinmeyen → label). */
+export function hypLabel(h: Pick<SREHypothesis, 'kind' | 'label'>, lang: Lang = 'tr'): string {
+  return lang !== 'tr' && has(HYP_KINDS, h.kind) ? t(`hyp.kind.${h.kind}`, lang) : h.label;
+}
+
+/** Hipotez türü kodunun adı (son koşu "… doğrulaması"): TR = kod aynen. */
+export function hypKindName(kind: string, lang: Lang = 'tr'): string {
+  return lang !== 'tr' && has(HYP_KINDS, kind) ? t(`hyp.kind.${kind}`, lang) : kind;
+}
+
+/** Kategori: TR = sunucu kodu aynen; EN = katalog (bilinmeyen → kod). */
+export function hypCategoryLabel(c: string, lang: Lang = 'tr'): string {
+  return lang !== 'tr' && has(HYP_CATEGORIES, c) ? t(`hyp.cat.${c}`, lang) : c;
+}
+
+/** Kontrol başlığı (yalnız EN; operatör kararı 7: gerekçe özgün dilde kalır).
+ *  TR ya da bilinmeyen ad → boş (başlık çizilmez, TR ekran aynı). */
+export function checkTitle(name: string, lang: Lang = 'tr'): string {
+  return lang !== 'tr' && has(HYP_CHECKS, name) ? t(`hyp.chk.${name}`, lang) : '';
+}
+
+/** Kuyruk "zaten …" gerekçesi: TR = sunucu metni aynen; EN = `state`
+ *  kodundan (Go sre/queue.go: kuyrukta/koşuyor → "zaten kuyrukta", diğer →
+ *  "zaten araştırıldı"). Gerekçe yoksa boş. */
+export function queueReasonText(state: string, reason: string | undefined, lang: Lang = 'tr'): string {
+  if (!reason) return '';
+  if (lang === 'tr') return reason;
+  return t(state === 'queued' || state === 'running' ? 'inv.queue.queued' : 'inv.queue.done', lang);
+}
+
 /** Kök-neden paneline kaydırma hedefi (ProblemDetail sarmalayıcısı). */
 export const ROOT_CAUSE_ANCHOR = 'problem-root-cause';

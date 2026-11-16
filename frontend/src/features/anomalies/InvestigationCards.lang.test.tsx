@@ -101,7 +101,7 @@ describe('İnceleme sonucu kartları — İngilizce arayüz (v0.10.2288)', () =>
     const r = await all();
     expect(leaked(r), `Türkçe etiket İngilizce arayüzde: ${leaked(r).join(' | ')}`).toEqual([]);
     for (const en of [
-      'Hypotheses — AI SRE agent · code score', ' · last run: verification of deploy', 'Correlator',
+      'Hypotheses — AI SRE agent · code score', ' · last run: verification of Deploy', 'Correlator', 'Dependency failure', 'Saturation / OOM',
       '(root-cause synthesizer — a separate engine, not the agent\'s score):', 'suspect svc-b (confidence 58%)',
       'Go to the root cause panel', 'Timeline (7 events)', 'Start', 'Log spike', 'First error', 'Alert resolved', 'Incident',
       'high', 'medium', 'low', 'operator dismissed · op@x', 'operator confirmed · op@x', 'category: cat-1', 'Note: note-1',

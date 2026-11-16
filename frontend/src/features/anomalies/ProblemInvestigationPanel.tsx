@@ -26,6 +26,7 @@ import type { ProblemInvestigationResponse, SREInvestigation, SREStatus } from '
 import { Sect } from './detailSections';
 // v0.10.1287 — Faz 1b sonuç gövdesi (adım tablosu, bulgular + kanıt, AI özeti, Sohbette sor).
 import { InvestigationResult } from './InvestigationResult';
+import { queueReasonText } from './hypothesisView';
 import { SRE_SETTINGS_PATH, sreRoleMissing } from './sreInvestigationView';
 
 // v0.10.2285 — etiketler katalogda (inv.state.<durum>); ton burada.
@@ -66,7 +67,7 @@ export function ProblemInvestigationPanel({ problemId }: { problemId: string }) 
     try {
       const r = await api.enqueueProblemInvestigation(problemId);
       if (r.created) toast.success(t('inv.toast.queued', lang));
-      else toast.info(r.reason ? tf('inv.toast.already', lang, { r: r.reason }) : t('inv.toast.alreadyQueued', lang));
+      else toast.info(r.reason ? tf('inv.toast.already', lang, { r: queueReasonText(r.state, r.reason, lang) }) : t('inv.toast.alreadyQueued', lang));
       await qc.invalidateQueries({ queryKey: keys.problems.investigation(problemId) });
       await qc.invalidateQueries({ queryKey: keys.sre.all });
     } catch (e) {

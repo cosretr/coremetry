@@ -5,6 +5,7 @@ import { QueryErrorInline } from '@/components/QueryError';
 import { tsLong } from '@/lib/utils';
 import { summarizeNotifyRouting } from '@/lib/notifyRouting';
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2286 — metinler arayüz dilinde (TR aynı)
+import { OrigLang } from './OrigLang'; // v0.10.2298 — günlük hatası gönderilenin denetim kopyası (özgün dil)
 
 // ProblemNotifyPanel — v0.9.1344. "Bu problemden kimin haberi var?"
 //
@@ -71,7 +72,7 @@ export function ProblemNotifyPanel({ problemId }: { problemId: string }) {
               fontSize: 11.5, color: 'var(--text2)', marginTop: 6, lineHeight: 1.6,
               overflowWrap: 'anywhere',
             }}>
-              {s.unmatched.error}
+              <OrigLang>{s.unmatched.error}</OrigLang>
             </div>
           )}
           <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>

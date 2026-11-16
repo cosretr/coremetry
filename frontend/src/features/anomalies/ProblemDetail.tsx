@@ -20,6 +20,7 @@ import { RootCausePanel } from '@/components/RootCausePanel';
 import { AffectedEntitiesList } from '@/components/AffectedEntitiesList'; // v0.10.707
 import { ProblemRunbookPanel } from '@/components/ProblemRunbookPanel';
 import { ProblemNotifyPanel } from './ProblemNotifyPanel';
+import { OrigLang } from './OrigLang'; // v0.10.2298 — LLM özeti EN arayüzde özgün dil etiketiyle
 import { IconSparkles } from '@/components/icons';
 import { TimeChart } from '@/components/charts/TimeChart';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
@@ -681,7 +682,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
           {/* v0.9.696 — pre-wrap KALKTI: RenderedMarkdown zaten <p>/<ul>
               üretiyor, ikisi birlikte satır aralarını ikiye katlıyor
               (v0.9.641'de CopilotExplain'de öğrenildi). */}
-          <IconSparkles size={11} /> <RenderedMarkdown text={group.aiSummary} />
+          <IconSparkles size={11} /> <OrigLang block><RenderedMarkdown text={group.aiSummary} /></OrigLang>
         </div>
       )}
 
@@ -1285,7 +1286,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                     borderLeft: '2px solid var(--accent)',
                   }}>
                     {/* v0.9.696 — exception ikiziyle aynı: markdown basılıyor. */}
-                    <IconSparkles size={11} /> <RenderedMarkdown text={problem.aiSummary} />
+                    <IconSparkles size={11} /> <OrigLang block><RenderedMarkdown text={problem.aiSummary} /></OrigLang>
                   </div>
                 )}
                 {problem.recentDeploy && (
