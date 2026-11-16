@@ -17,9 +17,9 @@ func wikiTableFixture(n, owners int) wiki.PageRecord {
 	for i := 1; i <= n; i++ {
 		owner := "Payments"
 		if i%2 == 0 && owners > 0 {
-			owner, owners = "CRMHouse", owners-1
+			owner, owners = "PlatformTeam", owners-1
 		}
-		fmt.Fprintf(&b, "vserver · satır %d — Load Balancer: lb-loancentral-assessment-prod-kon.example.com_443 · Load Balancer IpAddress: 10.240.84.%d · Environment: PROD · CC Name: Gerçek Zamanlı Karar Destek Datamart Etl · CC Owner: %s · Application Name: Kampanya Datamarti\n", i+1, i%250, owner)
+		fmt.Fprintf(&b, "vserver · satır %d — Load Balancer: lb-orders-scoring-prod-east.example.com_443 · Load Balancer IpAddress: 192.0.2.%d · Environment: PROD · CC Name: Örnek Sipariş Raporlama Ambarı Etl · CC Owner: %s · Application Name: Rapor Ambari\n", i+1, i%250, owner)
 	}
 	return wiki.PageRecord{Project: wiki.LocalProject, WikiName: wiki.LocalWikiName, Path: "/vserver_cc_iliskisi.xlsx", Title: "vserver_cc_iliskisi.xlsx", Content: b.String()}
 }
@@ -29,11 +29,11 @@ func TestWikiPageFindRowsScansWholeDocument(t *testing.T) {
 	if len([]rune(rec.Content)) <= WikiPageMaxRunes {
 		t.Fatal("fixture sayfa tavanını aşmalı")
 	}
-	out := WikiPageFindRows(rec, "crmhouse")
+	out := WikiPageFindRows(rec, "platformteam")
 	if out["matched_rows"] != 120 || len(out["rows"].([]string)) != 120 || out["total_rows"] != 600 {
 		t.Fatalf("matched=%v rows=%d total=%v", out["matched_rows"], len(out["rows"].([]string)), out["total_rows"])
 	}
-	if last := out["rows"].([]string)[119]; !strings.Contains(last, "satır 241 ") || !strings.Contains(last, "CC Owner: CRMHouse") {
+	if last := out["rows"].([]string)[119]; !strings.Contains(last, "satır 241 ") || !strings.Contains(last, "CC Owner: PlatformTeam") {
 		t.Fatalf("son satır tavan ötesinden gelmeli: %q", last)
 	}
 	if !strings.Contains(out["note"].(string), "HEPSİ") {
@@ -42,7 +42,7 @@ func TestWikiPageFindRowsScansWholeDocument(t *testing.T) {
 	if out := WikiPageFindRows(rec, "yok-boyle-deger"); out["matched_rows"] != 0 || !strings.Contains(out["note"].(string), "hiçbir hücre") {
 		t.Fatalf("eşleşmesiz: %v", out["note"])
 	}
-	if out := WikiPageFindRows(wikiTableFixture(600, 300), "CRMHouse"); out["matched_rows"] != 300 || len(out["rows"].([]string)) != WikiFindRowsMax || !strings.Contains(out["note"].(string), "ilk 200") {
+	if out := WikiPageFindRows(wikiTableFixture(600, 300), "PlatformTeam"); out["matched_rows"] != 300 || len(out["rows"].([]string)) != WikiFindRowsMax || !strings.Contains(out["note"].(string), "ilk 200") {
 		t.Fatalf("tavan: matched=%v note=%v", out["matched_rows"], out["note"])
 	}
 	plain := wiki.PageRecord{Content: "# Runbook\n\nnormal metin"}
@@ -56,7 +56,7 @@ func TestReadWikiPageFindArgAndTableHint(t *testing.T) {
 	src := &fakeWikiSource{page: &rec}
 	tool := readWikiPageTool(Deps{Wiki: src})
 	ctx := context.Background()
-	got, err := tool.Handler(ctx, json.RawMessage(`{"project":"p","wiki":"w","path":"/vserver_cc_iliskisi.xlsx","find":"CRMHouse"}`))
+	got, err := tool.Handler(ctx, json.RawMessage(`{"project":"p","wiki":"w","path":"/vserver_cc_iliskisi.xlsx","find":"PlatformTeam"}`))
 	if err != nil {
 		t.Fatal(err)
 	}

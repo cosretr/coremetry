@@ -83,24 +83,24 @@ func TestDocRowsWiring(t *testing.T) {
 	}
 }
 
-// v0.10.1551 operator-reported: "CRMHouse ait vserver adreslerini getir" →
-// 16 satırın hepsi (CC Owner = CRMHouse); karışık harfli kimlik güçlü; değer
+// v0.10.1551 operator-reported: "PlatformTeam ait vserver adreslerini getir" →
+// 16 satırın hepsi (CC Owner = PlatformTeam); karışık harfli kimlik güçlü; değer
 // 50'den çok satırda da geçse (tek seçici değer) satırlar gelir.
 func TestDocRowsMixedCaseOwnerAllRows(t *testing.T) {
 	var b strings.Builder
 	for i := 1; i <= 80; i++ {
-		fmt.Fprintf(&b, "vserver · satır %d — Load Balancer: lb-%d_443 · Load Balancer IpAddress: 10.240.84.%d · Environment: PROD · CC Owner: CRMHouse · Application Name: Kampanya Datamarti\n", i+1, i, i)
+		fmt.Fprintf(&b, "vserver · satır %d — Load Balancer: lb-%d_443 · Load Balancer IpAddress: 192.0.2.%d · Environment: PROD · CC Owner: PlatformTeam · Application Name: Rapor Ambari\n", i+1, i, i)
 	}
 	b.WriteString("vserver · satır 99 — Load Balancer: other_443 · Load Balancer IpAddress: 10.0.0.1 · Environment: PROD · CC Owner: Payments\n")
 	chunks := []docRowChunk{{Title: "vserver_cc_iliskisi", Text: b.String()}}
-	rows, vals := matchDocRows(chunks, "CRMHouse ait vserver adreslerini getir", true)
-	if len(rows) != 80 || len(vals) != 1 || vals[0] != "crmhouse" {
+	rows, vals := matchDocRows(chunks, "PlatformTeam ait vserver adreslerini getir", true)
+	if len(rows) != 80 || len(vals) != 1 || vals[0] != "platformteam" {
 		t.Fatalf("satır %d, değerler %v", len(rows), vals)
 	}
 	for _, c := range []struct {
 		w    string
 		want bool
-	}{{"CRMHouse", true}, {"OrderService", true}, {"orderId", true}, {"Opentelemetry", false}, {"Kampanya", false}, {"prod", false}} {
+	}{{"PlatformTeam", true}, {"OrderService", true}, {"orderId", true}, {"Opentelemetry", false}, {"Kampanya", false}, {"prod", false}} {
 		if got := isMixedCaseIdent(c.w); got != c.want {
 			t.Errorf("isMixedCaseIdent(%q) = %v", c.w, got)
 		}
@@ -111,24 +111,24 @@ func TestDocRowsMixedCaseOwnerAllRows(t *testing.T) {
 // olmayan sayfa parçalarıyla kalır, aynı sayfanın parçaları tekilleşir.
 func TestDocRowsMergeFullPage(t *testing.T) {
 	row := func(i int) string {
-		return fmt.Sprintf("vserver · satır %d — Load Balancer: lb-%d_443 · Environment: PROD · CC Owner: CRMHouse\n", i, i)
+		return fmt.Sprintf("vserver · satır %d — Load Balancer: lb-%d_443 · Environment: PROD · CC Owner: PlatformTeam\n", i, i)
 	}
 	full := row(1) + row(2) + row(3)
-	cut := strings.Index(full, "CC Owner: CRMHouse\nvserver · satır 3")
+	cut := strings.Index(full, "CC Owner: PlatformTeam\nvserver · satır 3")
 	chunks := []docRowChunk{
 		{Title: "vserver", Path: "/vserver.xlsx", Text: full[:cut+3]}, // satır 2 "CC " ile kesik
 		{Title: "vserver", Path: "/vserver.xlsx", Text: full[cut+3:]},
-		{Title: "diger", Path: "/diger.xlsx", Text: "diger · satır 7 — Host: x · CC Owner: CRMHouse\n"},
+		{Title: "diger", Path: "/diger.xlsx", Text: "diger · satır 7 — Host: x · CC Owner: PlatformTeam\n"},
 	}
-	if rows, _ := matchDocRows(chunks, "CRMHouse satırlarını getir", true); len(rows) != 3 {
+	if rows, _ := matchDocRows(chunks, "PlatformTeam satırlarını getir", true); len(rows) != 3 {
 		t.Fatalf("parçalardan %d satır (kesik satır 2 kaçar) — beklenen 3", len(rows))
 	}
 	merged := docRowsMergeFull(chunks, map[string]string{"/vserver.xlsx": full})
 	if len(merged) != 2 || merged[0].Text != full || merged[1].Title != "diger" {
 		t.Fatalf("birleşme: %+v", merged)
 	}
-	rows, vals := matchDocRows(merged, "CRMHouse satırlarını getir", true)
-	if len(rows) != 4 || vals[0] != "crmhouse" {
+	rows, vals := matchDocRows(merged, "PlatformTeam satırlarını getir", true)
+	if len(rows) != 4 || vals[0] != "platformteam" {
 		t.Fatalf("tam sayfadan %d satır %v — beklenen 4", len(rows), vals)
 	}
 }

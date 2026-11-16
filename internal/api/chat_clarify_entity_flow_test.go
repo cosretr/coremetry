@@ -200,7 +200,7 @@ func TestBareEntityOf(t *testing.T) {
 		{"Payments-Core sunucuları", "", ""},
 		{"order-api hataları", "", ""},
 		{"Payments-Core sunucuları hangi ortamda", "", ""},
-		{"CRMHouse", "", ""},
+		{"PlatformTeam", "", ""},
 		{"", "", ""},
 	} {
 		k, n := bareEntityOf(c.in, teams, svcs)

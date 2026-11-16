@@ -375,7 +375,8 @@ const anomalySensitivityKey = "anomaly_sensitivity"
 // okumadır, "ayar yok" bilgisi. CH ya da JSON hatası → hata döner; çağıran
 // ne yapacağına kendisi karar verir.
 //
-// NEDEN AYRILDI: GetAnomalySensitivity hatada varsayılana düşüyordu ve
+// NEDEN AYRILDI: eski GetAnomalySensitivity (v0.10.2276'da çağıransız
+// olduğu için silindi) hatada varsayılana düşüyordu ve
 // LoadAnomalySensitivity o varsayılanı YAYINLIYORDU. v0.10.1039 öncesi
 // bunun bedeli bir tikte eşik kaymasıydı; batch kalıplarıyla birlikte
 // varsayılan liste TEK YÖNLÜ kapatma eylemleri sürüyor (açık batch
@@ -394,19 +395,6 @@ func (s *Store) ReadAnomalySensitivity(ctx context.Context) (AnomalySensitivityC
 		return AnomalySensitivityConfig{}, fmt.Errorf("anomaly_sensitivity blob'u çözülemedi: %w", err)
 	}
 	return NormalizeAnomalySensitivity(c), nil
-}
-
-// GetAnomalySensitivity — ReadAnomalySensitivity'nin hatada varsayılana
-// yumuşak düşen hâli (eski imza ve davranış). v0.10.1039 itibarıyla iki
-// çağıranı da (Load* ve ayar GET ucu) ReadAnomalySensitivity'ye geçti:
-// ikisi için de "hata = varsayılan" YANLIŞTI (Load varsayılanı yayınlıyordu,
-// GET ekranı varsayılanla doldurup bir Kaydet'te kayıtlı değeri ezdirebilirdi).
-func (s *Store) GetAnomalySensitivity(ctx context.Context) AnomalySensitivityConfig {
-	c, err := s.ReadAnomalySensitivity(ctx)
-	if err != nil {
-		return DefaultAnomalySensitivity()
-	}
-	return c
 }
 
 // SaveAnomalySensitivity — system_settings'e yazar (yeni şema yok,

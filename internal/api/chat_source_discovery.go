@@ -5,7 +5,7 @@ package api
 // alternatif çipleri; spec onayı "Önerin").
 //
 // Kök sorun: sohbet kademeleri "ilk eşleşen kazanır" sırasıyla koşuyordu; bir
-// kaynak cevaplayınca diğerine hiç bakılmıyordu (CRMHouse vakası: wiki anlatımı
+// kaynak cevaplayınca diğerine hiç bakılmıyordu (PlatformTeam vakası: wiki anlatımı
 // Excel'in 16 satırından 1'ini okudu). Burada cevaplamadan ÖNCE dört kaynak
 // PARALEL ve LLM'siz yoklanır, her biri kendi bütçesiyle:
 //
@@ -446,7 +446,7 @@ func (s *Server) sourceForcedAnswer(ctx context.Context, emit func(string, any),
 		return ctx, true, true
 	}
 	if question == "" {
-		return plain(fmt.Sprintf("`/%s` ile hangi soruyu cevaplayayım? Örnek: `/%s CRMHouse kayıtları`.", kind, kind))
+		return plain(fmt.Sprintf("`/%s` ile hangi soruyu cevaplayayım? Örnek: `/%s PlatformTeam kayıtları`.", kind, kind))
 	}
 	ctx = withRecordsQuestion(ctx, question)
 	switch kind {

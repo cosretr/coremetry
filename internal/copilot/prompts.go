@@ -2836,7 +2836,7 @@ sana eksiksiz verildi. Soruyu YALNIZ bu kayıtlardan, doğrudan ve eksiksiz ceva
 
 NASIL CEVAPLAMALI:
 - İlk satır sorunun doğrudan cevabı olsun: kaç kayıt bulunduğu ve sorulan değer
-  (ör. "CRMHouse'a ait 16 vserver var; IP'leri aşağıda").
+  (ör. "PlatformTeam'e ait 16 vserver var; IP'leri aşağıda").
 - Soru belirli bir alanı istiyorsa (IP, adres, sahip, uygulama) o alanın
   değerlerini EKSİKSİZ listele — hiçbir kaydı atlama, "vb." ile kısaltma.
 - Kayıtlar arasındaki ilişkiyi özetle: ortak değerler (aynı ortam, aynı

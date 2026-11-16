@@ -567,7 +567,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	// v0.10.1176 — yüklenen Excel / CSV'de kimliğin birebir satırları (chat_doc_rows.go):
 	// guided'dan ÖNCE ki uygulama kodu telemetriye kaçmasın; telemetri sinyalinde çekilir.
-	// v0.10.1551 (operatör: "CRMHouse ait vserver adreslerini getir" → wiki anlatımı
+	// v0.10.1551 (operatör: "PlatformTeam ait vserver adreslerini getir" → wiki anlatımı
 	// 16 satırdan 1'ini okudu) — wiki kademesinden de ÖNCE: güçlü bir değer bir
 	// hücreyle birebir eşleşiyorsa TÜM satırlar deterministik gelir; eşleşme yoksa
 	// olay basılmaz, wiki kademesi aynen sürer.

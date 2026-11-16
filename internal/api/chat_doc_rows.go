@@ -33,7 +33,7 @@ import (
 
 const (
 	docRowsChunkLimit = 400
-	// v0.10.1551 (operatör: "CRMHouse ait vserver adreslerini getir" → 16 satırdan
+	// v0.10.1551 (operatör: "PlatformTeam ait vserver adreslerini getir" → 16 satırdan
 	// 1'i): kullanıcı "ilgili TÜM kayıtları" ister — çıktı tavanı 200.
 	docRowsMax = 200
 	// docRowsCommon — bu kadardan çok satırda geçen değer (PROD, Hayır) yaygın:
@@ -108,7 +108,7 @@ func rowNeedles(question string) []rowNeedle {
 }
 
 // isMixedCaseIdent — SAF (v0.10.1551): kelime içinde (ilk harften sonra)
-// büyük harf + küçük harf — PascalCase / camelCase kimlik (CRMHouse,
+// büyük harf + küçük harf — PascalCase / camelCase kimlik (PlatformTeam,
 // OrderService, orderId). Yalnız baş harfi büyük olağan kelime (Opentelemetry,
 // Kampanya) değildir.
 func isMixedCaseIdent(w string) bool {
@@ -224,7 +224,7 @@ func matchDocRows(chunks []docRowChunk, question string, strict bool) ([]docRowM
 	var used []string
 	// v0.10.1551 — yaygın değer (PROD, Hayır) başka seçici değer varken satır
 	// seçmez; soruda YALNIZ yaygın değerler eşleştiyse ve değer GÜÇLÜ yazılmışsa
-	// ("CRMHouse'un 80 kaydı") onlar seçer — aksi hâlde istenen kayıtlar hiç
+	// ("PlatformTeam'in 80 kaydı") onlar seçer — aksi hâlde istenen kayıtlar hiç
 	// gelmezdi. Küçük harfli genel kelime ("prod ortamındaki") yine seçmez.
 	selective := false
 	for _, n := range count {

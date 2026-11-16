@@ -110,7 +110,7 @@ func TestNormalizeBatchServicePatterns(t *testing.T) {
 
 // TestBatchPatternsJSONRoundTrip — "yok" ile "boş" kayıt-okuma turlarında
 // ayrı kalmalı. PUT = Normalize + Marshal (SaveAnomalySensitivity) ; GET =
-// Unmarshal + Normalize (GetAnomalySensitivity).
+// Unmarshal + Normalize (ReadAnomalySensitivity).
 func TestBatchPatternsJSONRoundTrip(t *testing.T) {
 	putGet := func(t *testing.T, in AnomalySensitivityConfig) (AnomalySensitivityConfig, string) {
 		t.Helper()

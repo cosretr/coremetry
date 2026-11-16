@@ -24,7 +24,7 @@ func TestPickChatSource(t *testing.T) {
 	}{
 		{"boş", nil, "", nil, nil},
 		{"tek kaynak", []srcCand{wk}, srcWiki, nil, nil},
-		{"CRMHouse: Excel kazanır, wiki çip", []srcCand{wk, ex}, srcExcel, []string{srcWiki}, nil},
+		{"PlatformTeam: Excel kazanır, wiki çip", []srcCand{wk, ex}, srcExcel, []string{srcWiki}, nil},
 		{"zayıf telemetri başa baş sayılmaz", []srcCand{wk, tlmWeak}, srcWiki, []string{srcTelemetry}, nil},
 		{"Excel + servis adı eşit güçlü → sor", []srcCand{tlm, ex}, "", nil, []string{srcExcel, srcTelemetry}},
 		{"exceptions 0.85 ile excel 0.9 başa baş → sor", []srcCand{exc, ex}, "", nil, []string{srcExcel, srcExceptions}},
@@ -66,7 +66,7 @@ func TestExceptionTermOf(t *testing.T) {
 		"ORA-00001 hatası hangi serviste":                         "ORA-00001",
 		"BKMQR-39 kodu":                                           "BKMQR-39",
 		"opentelemetry java instrumentation":                      "",
-		"CRMHouse ait vserver adreslerini getir":                  "",
+		"PlatformTeam ait vserver adreslerini getir":              "",
 		"NullPointerException ve IllegalStateException farkı":     "NullPointerException",
 	} {
 		if got := exceptionTermOf(q); got != want {
@@ -77,14 +77,14 @@ func TestExceptionTermOf(t *testing.T) {
 
 func TestSourceCommandQuestion(t *testing.T) {
 	msgs := []copilot.ChatMessage{
-		{Role: "user", Text: "CRMHouse ait vserver adreslerini getir"},
+		{Role: "user", Text: "PlatformTeam ait vserver adreslerini getir"},
 		{Role: "assistant", Text: "…"},
 		{Role: "user", Text: "/wiki · OpenTelemetry"},
 	}
-	if got := sourceCommandQuestion("· OpenTelemetry", msgs); got != "CRMHouse ait vserver adreslerini getir" {
+	if got := sourceCommandQuestion("· OpenTelemetry", msgs); got != "PlatformTeam ait vserver adreslerini getir" {
 		t.Fatalf("çip etiketi → önceki soru: %q", got)
 	}
-	if got := sourceCommandQuestion("", msgs); got != "CRMHouse ait vserver adreslerini getir" {
+	if got := sourceCommandQuestion("", msgs); got != "PlatformTeam ait vserver adreslerini getir" {
 		t.Fatalf("argümansız → önceki soru: %q", got)
 	}
 	if got := sourceCommandQuestion("PROD sunucuları", msgs); got != "PROD sunucuları" {
@@ -93,7 +93,7 @@ func TestSourceCommandQuestion(t *testing.T) {
 	// Önceki mesaj da bir çipse onu atlar, gerçek soruya iner.
 	msgs2 := append(append([]copilot.ChatMessage(nil), msgs...),
 		copilot.ChatMessage{Role: "assistant", Text: "…"}, copilot.ChatMessage{Role: "user", Text: "/excel · 16 satır"})
-	if got := previousUserQuestion(msgs2); got != "CRMHouse ait vserver adreslerini getir" {
+	if got := previousUserQuestion(msgs2); got != "PlatformTeam ait vserver adreslerini getir" {
 		t.Fatalf("çip zinciri: %q", got)
 	}
 	if got := previousUserQuestion(msgs[:1]); got != "" {
@@ -129,7 +129,7 @@ func TestRecordsNarrativeShape(t *testing.T) {
 	if withRecordsNarrative("", "TABLO") != "TABLO" {
 		t.Fatal("anlatım yoksa yalnız tablo")
 	}
-	if got := withRecordsNarrative("CRMHouse'a ait 16 kayıt.", "TABLO"); got != "CRMHouse'a ait 16 kayıt.\n\n---\n\nTABLO" {
+	if got := withRecordsNarrative("PlatformTeam'e ait 16 kayıt.", "TABLO"); got != "PlatformTeam'e ait 16 kayıt.\n\n---\n\nTABLO" {
 		t.Fatalf("biçim: %q", got)
 	}
 	p := recordsUserPrompt("soru", "yüklenen tablo satırları", strings.Repeat("x", recordsMaxRunes+10))
@@ -161,7 +161,7 @@ func TestExceptionsSourceMarkdown(t *testing.T) {
 // anlatımdır.
 func TestNarrateRecordsCallsModel(t *testing.T) {
 	llm := newLoopLLM(t, func(int, map[string]any) map[string]any {
-		return map[string]any{"content": "CRMHouse'a ait 2 vserver var: 10.240.84.231, 10.240.84.233."}
+		return map[string]any{"content": "PlatformTeam'e ait 2 vserver var: 192.0.2.231, 192.0.2.233."}
 	})
 	s, _ := newLoopTestServer(t, llm, "u-rec")
 	var deltas strings.Builder
@@ -169,16 +169,16 @@ func TestNarrateRecordsCallsModel(t *testing.T) {
 		if ev == "delta" {
 			deltas.WriteString(d.(map[string]string)["text"])
 		}
-	}, "CRMHouse ait vserver adreslerini getir", "yüklenen tablo satırları", "| 1 | lb-a | 10.240.84.231 | CRMHouse |")
+	}, "PlatformTeam ait vserver adreslerini getir", "yüklenen tablo satırları", "| 1 | lb-a | 192.0.2.231 | PlatformTeam |")
 	// Delta yalnız akış destekleyen sağlayıcıda gelir (sahte sağlayıcı tek parça döner).
-	if !strings.Contains(got, "10.240.84.233") {
+	if !strings.Contains(got, "192.0.2.233") {
 		t.Fatalf("anlatım %q, delta %q", got, deltas.String())
 	}
 	calls := llm.calls()
 	if len(calls) != 1 {
 		t.Fatalf("LLM çağrı sayısı %d", len(calls))
 	}
-	if body := mustJSON(t, calls[0]); !strings.Contains(body, "KAYITLAR") || !strings.Contains(body, "10.240.84.231") {
+	if body := mustJSON(t, calls[0]); !strings.Contains(body, "KAYITLAR") || !strings.Contains(body, "192.0.2.231") {
 		t.Fatalf("istem kayıtları taşımalı: %s", body)
 	}
 }

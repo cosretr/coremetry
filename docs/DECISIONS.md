@@ -11957,7 +11957,7 @@ records/request) tek birimli iki ayrı grafiğe bölündü (uPlot panelimiz tek 
 kaynaktan cevabı istersin diye sorsun mu, otomatik mi discover etsin?" → spec
 onayı "Önerin"; ek direktif: "LLM'i iyi kullanalım muhakkak, kullanıcı
 cevaplardan tatmin olsun". Kök sorun: sohbet kademeleri "ilk eşleşen kazanır";
-CRMHouse vakasında wiki anlatımı Excel'in 16 satırından 1'ini okudu.
+PlatformTeam vakasında wiki anlatımı Excel'in 16 satırından 1'ini okudu.
 
 **Karar.**
 - Cevaplamadan ÖNCE dört kaynak paralel + LLM'siz yoklanır

@@ -2,7 +2,7 @@ package mcptools
 
 // wiki_rows.go — v0.10.1554 — Operator-reported ("Hepsini getirsin istiyorum"):
 // Derin kipte model 1,9M karakterlik yüklenen Excel'i read_wiki_page'in 4800
-// karakterlik ilk penceresinden okudu ve "CRMHouse" için 2 satırla durdu;
+// karakterlik ilk penceresinden okudu ve "PlatformTeam" için 2 satırla durdu;
 // sayfa tavanı (WikiPageMaxRunes) yüzünden sayfalama da tamamına ulaşamaz.
 // Yeni `find` argümanı: yüklenen tablo belgesinin TAMAMI (pencere / tavan
 // yok) satır satır taranır, hücresi değeri içeren satırların hepsi
