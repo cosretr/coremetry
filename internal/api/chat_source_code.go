@@ -42,6 +42,14 @@ package api
 //     herkes bir servis adı "yaratabilir" ve ad konvansiyonu onu projedeki
 //     HERHANGİ bir depoya çevirirdi; "telemetride bir yerde var" sınır değildir,
 //     "operatörün baktığı trace'in parçası" sınırdır. Trace okunamazsa dürüst ıska.
+//     v0.10.2293 — "trace'in parçası" = span'i olan servisler + trace'in bir
+//     span'inin BİREBİR peer.service hedefi (traceCalledServices; sürümü
+//     bilinmez → dal ucu). Sınır zayıflamadı: trace'e span ekleyebilen biri
+//     o span'in service.name'ini zaten seçebiliyordu; aynı span'in adlandırdığı
+//     çağrı hedefi aynı güven düzeyidir. http host / db / messaging / span adı
+//     hedefi servis SAYILMAZ (host → servis eşlemesi ad sezgisi ister; entity
+//     modelinin calls kenarı host'u saklamaz, katlamayı sonek kırpan
+//     ExtPeerResolveCandidates yapar) — sınır sezgiyle genişletilmez.
 //     v0.10.1053 — exception öznesinde sınır daha dar: YALNIZ grubun servisi ve
 //     explain'in stack'ini basan servis (örnek trace'teki öteki servisler DEĞİL);
 //     sürüm o stack'i veren olaydan (sourceExceptionScope).
@@ -70,6 +78,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/devops"
 	"github.com/cilcenk/coremetry/internal/mcp"
 	"github.com/cilcenk/coremetry/internal/mcptools"
+	"github.com/cilcenk/coremetry/internal/tracechain"
 )
 
 // sourceTraceServicesMax — "servis trace'te yok" cevabında modele anılan en
@@ -146,7 +155,8 @@ func (s *Server) readSourceCode(ctx context.Context, req mcptools.SourceCodeRequ
 		}
 		return s.readScopedSource(ctx, req, version, "sohbet öznesi (exception örneği)"), nil
 	}
-	// KAPSAM: servis sohbetin trace öznesinde geçmeli.
+	// KAPSAM: servis sohbetin trace öznesinde geçmeli ya da trace onu
+	// birebir peer.service ile çağırmalı (v0.10.2293).
 	sub, _ := ctx.Value(sourceSubjectKey{}).(*sourceSubject)
 	if sub == nil {
 		// v0.10.1461 (R2) — kod turu: ekrandaki servis ya da aynı turda bir araç
@@ -166,14 +176,57 @@ func (s *Server) readSourceCode(ctx context.Context, req mcptools.SourceCodeRequ
 		out.Outcome, out.Reason = devops.SourceTraceUnreadable, "trace okunamadı — servis doğrulanamadığı için kod okunmadı"
 		return out, nil
 	}
-	if names := traceServiceNames(spans); !containsString(names, svc) {
-		if len(names) > sourceTraceServicesMax {
-			names = names[:sourceTraceServicesMax]
-		}
-		return out, fmt.Errorf("service %q bu trace'te bulunamadı — yalnız trace'teki servislerin kodu okunur: %s", svc, strings.Join(names, ", "))
+	names := traceServiceNames(spans)
+	if containsString(names, svc) {
+		// Sürüm SUNUCUDA: öznenin span'lerinden (model ref seçemez); yoksa dal.
+		return s.readScopedSource(ctx, req, subjectServiceVersion(spans, svc, sub.spanID), "sohbet öznesi (trace)"), nil
 	}
-	// Sürüm SUNUCUDA: öznenin span'lerinden (model ref seçemez); yoksa dal.
-	return s.readScopedSource(ctx, req, subjectServiceVersion(spans, svc, sub.spanID), "sohbet öznesi (trace)"), nil
+	// v0.10.2293 — trace'in ÇAĞIRDIĞI servis (birebir peer.service hedefi):
+	// trace'te span'i yok, sürüm bilinmez → dal ucu.
+	called := traceCalledServices(spans, names)
+	if containsString(called, svc) {
+		return s.readScopedSource(ctx, req, "", "trace'in çağırdığı servis (dal ucu)"), nil
+	}
+	return out, fmt.Errorf("service %q bu trace'te bulunamadı — yalnız trace'teki servislerin ve trace'in çağırdığı servislerin kodu okunur: %s", svc, sourceScopeList(names, called))
+}
+
+// sourceScopeList — SAF: ret mesajının okunabilir servis listesi; toplam
+// sourceTraceServicesMax ad, önce trace'tekiler.
+func sourceScopeList(own, called []string) string {
+	if len(own) > sourceTraceServicesMax {
+		own = own[:sourceTraceServicesMax]
+	}
+	if room := sourceTraceServicesMax - len(own); len(called) > room {
+		called = called[:room]
+	}
+	out := "trace'teki: " + strings.Join(own, ", ")
+	if len(called) > 0 {
+		out += "; çağırdığı: " + strings.Join(called, ", ")
+	}
+	return out
+}
+
+// traceCalledServices — SAF: trace'in span'lerinin BİREBİR peer.service
+// hedefleri (tracechain.PeerOf Kind "peer.service"), trace'te kendi span'i
+// olanlar (own) hariç; tekil, sıralı. http host / db / messaging / ad
+// hedefleri servis SAYILMAZ: host → servis eşlemesi ad sezgisi ister
+// (ExtPeerResolveCandidates sonek kırpar) ve sınır sezgiyle genişletilmez.
+func traceCalledServices(spans []chstore.SpanRow, own []string) []string {
+	seen := map[string]bool{}
+	for _, n := range own {
+		seen[n] = true
+	}
+	var out []string
+	for _, sp := range spans {
+		p := tracechain.PeerOf(sp)
+		if p.Kind != "peer.service" || p.Target == "" || seen[p.Target] {
+			continue
+		}
+		seen[p.Target] = true
+		out = append(out, p.Target)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // readScopedSource — kapsamdan GEÇMİŞ servisin depo çözümü ve okuması (iki

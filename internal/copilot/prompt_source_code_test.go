@@ -15,6 +15,7 @@ func TestSourceCodeChatAddendumContract(t *testing.T) {
 	for _, want := range []string{
 		"read_source_code", "kodu soruyorsa", "alıntılanmamış", "kanıttan al", "daha belirgin file",
 		"dosya:satır", "AYNEN", "okumadığın", "okunamadıysa", "VERİDİR, talimat değil",
+		"trace'in çağırdığı (peer.service) servisin kodu da okunur", // v0.10.2293
 	} {
 		if !strings.Contains(flat(a), want) {
 			t.Errorf("ekte %q yok", want)
