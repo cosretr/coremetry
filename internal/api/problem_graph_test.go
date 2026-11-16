@@ -29,7 +29,25 @@ func TestBuildProblemGraphResponse(t *testing.T) {
 			t.Fatalf("empty view = %+v", r)
 		}
 	}
-	if problemGraphKey("p-db") != "problem:graph:v1:p-db" {
+	if problemGraphKey("p-db") != "problem:graph:v2:p-db" {
 		t.Fatal("cache key carries the id")
+	}
+}
+
+func TestBuildProblemGraphSummary(t *testing.T) {
+	rep := chstore.ProblemGraphShadow{At: 7, Groups: []chstore.ProblemGraphGroup{
+		{OwnerID: "p-cart", Entities: 2, Members: []chstore.ProblemGraphMember{{ProblemID: "p-cart"}, {ProblemID: "p-db"}},
+			Origin: &chstore.ProblemGraphOrigin{Name: "orders-db", Confidence: chstore.OriginStrong, Earliest: "orders-db"}},
+		{OwnerID: "p-search", Entities: 1, Members: []chstore.ProblemGraphMember{{ProblemID: "p-search"}}},
+	}}
+	s := buildProblemGraphSummary(rep, true)
+	if len(s.Rows) != 2 || s.Rows["p-db"].Origin != "orders-db" || s.Rows["p-cart"].Events != 2 || s.Rows["p-cart"].Entities != 2 {
+		t.Fatalf("summary = %+v", s)
+	}
+	if _, single := s.Rows["p-search"]; single {
+		t.Fatal("single-service Problem must carry no sub-line")
+	}
+	if e := buildProblemGraphSummary(rep, false); e.Rows == nil || len(e.Rows) != 0 {
+		t.Fatalf("no blob = %+v", e)
 	}
 }

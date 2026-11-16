@@ -10,6 +10,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/entity"
+	"github.com/cilcenk/coremetry/internal/rollout"
 )
 
 const gMin = int64(60 * 1e9)
@@ -273,9 +274,18 @@ func TestGraphBuckets(t *testing.T) {
 // ── gölge pası: yazma yolu yok, okuma sınırları ──────────────────────────
 
 type fakeGraphStore struct {
-	rel, runs, ev, saves int
-	saved                chstore.ProblemGraphShadow
-	edges                map[string][]entity.Relation // rel|byChild
+	rel, runs, ev, saves, ro int
+	saved                    chstore.ProblemGraphShadow
+	edges                    map[string][]entity.Relation // rel|byChild
+	rollouts                 []chstore.RolloutRow
+}
+
+func (f *fakeGraphStore) RolloutsForWorkloads(_ context.Context, keys []rollout.Key, _, _ time.Time) ([]chstore.RolloutRow, error) {
+	f.ro++
+	if len(keys) > 50 {
+		panic("unbounded rollout read")
+	}
+	return f.rollouts, nil
 }
 
 func (f *fakeGraphStore) EntityRelationsFor(_ context.Context, rel string, ids []string, byChild bool, _ time.Time, limit int) ([]entity.Relation, error) {
@@ -314,7 +324,7 @@ func TestGraphShadowStoreHasNoProblemWritePath(t *testing.T) {
 	for i := 0; i < typ.NumMethod(); i++ {
 		got = append(got, typ.Method(i).Name)
 	}
-	want := []string{"EntityLastRunAt", "EntityRelationsFor", "ProblemGraphDependencyEvents", "SaveProblemGraphShadow"}
+	want := []string{"EntityLastRunAt", "EntityRelationsFor", "ProblemGraphDependencyEvents", "RolloutsForWorkloads", "SaveProblemGraphShadow"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("graphShadowStore methods = %v, want %v (new method = review the S1 no-write rule)", got, want)
 	}
@@ -355,8 +365,9 @@ func TestGraphShadowPassReadsAndNoMutation(t *testing.T) {
 	if !wrote || st.saves != 1 {
 		t.Fatalf("blob write: wrote=%v saves=%d", wrote, st.saves)
 	}
-	// db Problem'i olan hedef: ortak bağımlılık okuması gerekmez → 2 okuma.
-	if st.rel > 3 || st.rel != 2 || st.runs != 1 || st.ev != 1 {
+	// db Problem'i olan hedef: ortak bağımlılık okuması gerekmez → 2 okuma
+	// (S1) + S2 etki alanı called_by en çok 2; iş yükü yok → rollout okuması yok.
+	if st.rel != 4 || st.runs != 1 || st.ev != 1 || st.ro != 0 {
 		t.Fatalf("reads rel=%d runs=%d ev=%d", st.rel, st.runs, st.ev)
 	}
 	g, ok := groupOf(pl, "p-co")
@@ -372,7 +383,7 @@ func TestGraphShadowPassReadsAndNoMutation(t *testing.T) {
 	}
 	// Aynı aday kümesi 5 dk içinde: okuma yok, değişmeyen blob yazılmaz.
 	_, wrote = runGraphShadow(context.Background(), st, nil, s, open, chstore.OwnerPolicy{}, now.Add(time.Minute))
-	if st.rel != 2 || st.runs != 1 || st.ev != 1 || wrote {
+	if st.rel != 4 || st.runs != 1 || st.ev != 1 || wrote {
 		t.Fatalf("memo: rel=%d runs=%d ev=%d wrote=%v", st.rel, st.runs, st.ev, wrote)
 	}
 	if !strings.Contains(graphShadowLine(r, 100), "problem_graph_shadow window=24h") {

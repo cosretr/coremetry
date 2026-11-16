@@ -39,6 +39,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/entity"
+	"github.com/cilcenk/coremetry/internal/rollout"
 )
 
 const (
@@ -58,6 +59,8 @@ type graphShadowStore interface {
 	EntityRelationsFor(ctx context.Context, rel string, ids []string, byChild bool, at time.Time, limit int) ([]entity.Relation, error)
 	EntityLastRunAt(ctx context.Context, cid string, since time.Time) (time.Time, error)
 	ProblemGraphDependencyEvents(ctx context.Context, services []string, since time.Time, limit int) ([]chstore.GraphDependencyEvent, error)
+	// RolloutsForWorkloads — S2 K-ROLLOUT (≤ 50 iş yükü, LIMIT 200, 10 sn).
+	RolloutsForWorkloads(ctx context.Context, keys []rollout.Key, from, to time.Time) ([]chstore.RolloutRow, error)
 	SaveProblemGraphShadow(ctx context.Context, r chstore.ProblemGraphShadow) error
 }
 
@@ -150,13 +153,17 @@ type graphShadowState struct {
 	memoKey     uint64
 	memoAt      time.Time
 	memo        *graphFacts
+	omemo       *originFacts // S2: S1 turuyla aynı anda tazelenir
+	omemoAt     time.Time
+	origins     map[string]graphSeen // sahip → "kural|güven" (S2)
 	lastWrite   time.Time
 	lastHash    uint64
 }
 
 func newGraphShadowState(now time.Time) *graphShadowState {
 	return &graphShadowState{since: now, links: map[string]graphLinkEntry{}, noLink: map[string]graphSeen{},
-		missing: map[string]int64{}, sizes: map[string]graphSeen{}, sizesStrict: map[string]graphSeen{}, familyOff: map[string]int64{}}
+		missing: map[string]int64{}, sizes: map[string]graphSeen{}, sizesStrict: map[string]graphSeen{}, familyOff: map[string]int64{},
+		origins: map[string]graphSeen{}}
 }
 
 // problemGraphShadow — mergeServiceTwins'in anlık görüntüsüyle gölge pası.
@@ -194,6 +201,13 @@ func runGraphShadow(ctx context.Context, st graphShadowStore, live GraphLiveSour
 		facts = s.factsFor(ctx, st, live, units, now)
 	}
 	plan := planGraph(units, kinds, facts)
+	if len(units) >= 2 {
+		// S2: köken + etki alanı; okumalar yalnız S1 turu tazelendiğinde.
+		if s.omemo == nil || !s.omemoAt.Equal(s.memoAt) {
+			s.omemo, s.omemoAt = fetchOriginFacts(ctx, st, plan, facts, &s.reads), s.memoAt
+		}
+		attachOrigins(&plan, facts, s.omemo)
+	}
 	s.observe(plan, now)
 	rep := s.report(now, len(units))
 	rep.Groups = plan.Groups
@@ -274,7 +288,7 @@ func fetchGraphFacts(ctx context.Context, st graphShadowStore, live GraphLiveSou
 	rel := 0
 	fail := func(what string, err error) {
 		rd.Errors++
-		log.Printf("[evaluator] problem_graph_shadow: %s okunamadı (bu tur o kural ailesi kapalı): %v", what, err)
+		logGraphReadErr(what, err)
 	}
 	// 1) calls tazeliği + çağıran yönü.
 	rd.Runs++
@@ -470,6 +484,11 @@ func (s *graphShadowState) observe(p graphPlan, now time.Time) {
 	for id, r := range p.NoLink {
 		s.noLink[id] = graphSeen{val: r, at: at}
 	}
+	for _, g := range p.Groups {
+		if o := g.Origin; o != nil {
+			s.origins[g.OwnerID] = graphSeen{val: o.Rule + "|" + o.Confidence, at: at}
+		}
+	}
 	for _, id := range p.GraphMissing {
 		s.missing[id] = at
 	}
@@ -492,7 +511,7 @@ func (s *graphShadowState) prune(now time.Time) {
 			delete(s.links, k)
 		}
 	}
-	for _, m := range []map[string]graphSeen{s.noLink, s.sizes, s.sizesStrict} {
+	for _, m := range []map[string]graphSeen{s.noLink, s.sizes, s.sizesStrict, s.origins} {
 		for k, e := range m {
 			if e.at < cut {
 				delete(m, k)
@@ -542,6 +561,16 @@ func (s *graphShadowState) report(now time.Time, units int) chstore.ProblemGraph
 	for k, v := range s.familyOff {
 		r.FamilyOff[k] = v
 	}
+	r.OriginWins, r.OriginConf = map[string]int64{}, map[string]int64{}
+	for _, e := range s.origins {
+		rule, conf, _ := strings.Cut(e.val, "|")
+		r.OriginConf[conf]++
+		if conf == chstore.OriginUnclear {
+			r.OriginUnclear++
+		} else {
+			r.OriginWins[rule]++
+		}
+	}
 	return r
 }
 
@@ -560,8 +589,13 @@ func graphKV(m map[string]int64) string {
 
 // graphShadowLine — SAF: yazım başına tek log satırı.
 func graphShadowLine(r chstore.ProblemGraphShadow, bytes int) string {
-	return fmt.Sprintf("[evaluator] problem_graph_shadow window=%dh units=%d links=%s call_strict=%d no_link=%s sizes=%s sizes_strict=%s age=%s graph_missing=%d family_off=%s reads=passes:%d,skipped_few:%d,refreshes:%d,relations:%d,max_rel_per_pass:%d,runs:%d,evidence:%d,errors:%d groups=%d bytes=%d truncated=%v",
+	return fmt.Sprintf("[evaluator] problem_graph_shadow window=%dh units=%d links=%s call_strict=%d no_link=%s sizes=%s sizes_strict=%s age=%s graph_missing=%d family_off=%s origin_wins=%s origin_unclear=%d origin_conf=%s reads=passes:%d,skipped_few:%d,refreshes:%d,relations:%d,max_rel_per_pass:%d,runs:%d,evidence:%d,rollouts:%d,blast:%d,errors:%d groups=%d bytes=%d truncated=%v",
 		r.WindowH, r.Units, graphKV(r.Links), r.CallStrict, graphKV(r.NoLink), graphKV(r.Sizes), graphKV(r.SizesStrict), graphKV(r.Age),
-		r.GraphMissing, graphKV(r.FamilyOff), r.Reads.Passes, r.Reads.SkippedFew, r.Reads.Refreshes, r.Reads.Relations, r.Reads.MaxRelPerPass,
-		r.Reads.Runs, r.Reads.Evidence, r.Reads.Errors, len(r.Groups), bytes, r.Truncated)
+		r.GraphMissing, graphKV(r.FamilyOff), graphKV(r.OriginWins), r.OriginUnclear, graphKV(r.OriginConf),
+		r.Reads.Passes, r.Reads.SkippedFew, r.Reads.Refreshes, r.Reads.Relations, r.Reads.MaxRelPerPass,
+		r.Reads.Runs, r.Reads.Evidence, r.Reads.Rollouts, r.Reads.Blast, r.Reads.Errors, len(r.Groups), bytes, r.Truncated)
+}
+
+func logGraphReadErr(what string, err error) {
+	log.Printf("[evaluator] problem_graph_shadow: %s okunamadı (bu tur o kural ailesi kapalı): %v", what, err)
 }

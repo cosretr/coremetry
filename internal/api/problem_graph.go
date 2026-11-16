@@ -43,10 +43,12 @@ type problemGraphResponse struct {
 	Members    []chstore.ProblemGraphMember   `json:"members"`
 	NearMisses []chstore.ProblemGraphNearMiss `json:"nearMisses"`
 	Truncated  bool                           `json:"truncated,omitempty"`
+	// Origin — v0.10.2278 (S2): olası köken + etki alanı (≥ 2 varlıklı kümede).
+	Origin *chstore.ProblemGraphOrigin `json:"origin,omitempty"`
 }
 
 // problemGraphKey — SAF: önbellek anahtarı (tek girdi: kimlik).
-func problemGraphKey(id string) string { return "problem:graph:v1:" + id }
+func problemGraphKey(id string) string { return "problem:graph:v2:" + id }
 
 // buildProblemGraphResponse — SAF: blob → Problem'in görünümü. Tek üyeli
 // kümede üye listesi boş döner (bağ yok); yalnız bağlanmayanlar kalır.
@@ -62,6 +64,7 @@ func buildProblemGraphResponse(r chstore.ProblemGraphShadow, ok bool, id string)
 	out.At, out.OwnerID, out.Entities, out.Truncated = r.At, g.OwnerID, g.Entities, g.Truncated
 	if len(g.Members) > 1 {
 		out.Members = g.Members
+		out.Origin = g.Origin
 	}
 	for _, n := range g.NearMisses {
 		if n.ProblemID != id {

@@ -39,6 +39,9 @@ type problemGraphTopGroup struct {
 	Entities  int            `json:"entities"`
 	StartedAt int64          `json:"startedAt"`
 	Rules     map[string]int `json:"rules"`
+	// v0.10.2278 (S2): olası köken ve güven ("" = hesaplanmadı).
+	Origin     string `json:"origin,omitempty"`
+	Confidence string `json:"confidence,omitempty"`
 }
 
 type problemGraphShadowResponse struct {
@@ -58,6 +61,9 @@ func buildProblemGraphShadowResponse(r chstore.ProblemGraphShadow, ok bool) prob
 			continue
 		}
 		t := problemGraphTopGroup{OwnerID: g.OwnerID, Entities: g.Entities, Rules: map[string]int{}}
+		if g.Origin != nil {
+			t.Origin, t.Confidence = g.Origin.Name, g.Origin.Confidence
+		}
 		for _, m := range g.Members {
 			if m.Owner {
 				t.OwnerName, t.StartedAt = m.Name, m.StartedAt
@@ -78,7 +84,7 @@ func buildProblemGraphShadowResponse(r chstore.ProblemGraphShadow, ok bool) prob
 }
 
 func (s *Server) getProblemGraphShadow(w http.ResponseWriter, r *http.Request) {
-	s.serveCached(w, r, "problem-graph-shadow:v1:report", 15*time.Second, func(ctx context.Context) (any, error) {
+	s.serveCached(w, r, "problem-graph-shadow:v2:report", 15*time.Second, func(ctx context.Context) (any, error) {
 		rep, ok, err := s.store.GetProblemGraphShadow(ctx)
 		if err != nil {
 			return nil, err

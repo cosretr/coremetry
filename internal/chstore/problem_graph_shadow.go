@@ -87,6 +87,68 @@ type ProblemGraphNearMiss struct {
 	GroupSize int `json:"groupSize,omitempty"`
 }
 
+// Köken kuralları (S2, tasarım §3) — sıralı; ilk ayıran kazanır, puan yok.
+// Kimlikler SÖZLEŞMEDİR (arayüz cümleyi kimlikten kurar).
+const (
+	OriginRuleRollout = "K-ROLLOUT" // başlangıçtan önceki 30 dk'da iş yükünde rollout, en erkenlerden
+	OriginRuleShared  = "K-SHARED"  // ≥ 2 üyenin bağlı olduğu, kendi sinyali olan ortak varlık
+	OriginRuleDeep    = "K-DEEP"    // çağrı zincirinin en derin halkası
+	OriginRuleFirst   = "K-FIRST"   // en erken başlangıç (5 dk içi eşit)
+
+	OriginStrong  = "strong"  // kazanan ≥ 2 kuralda önde ("güçlü")
+	OriginWeak    = "weak"    // tek kural ("zayıf")
+	OriginUnclear = "unclear" // hiçbir kural ayırmadı ("köken belirsiz")
+
+	// Kanıt kaynağı kimlikleri.
+	OriginSrcRollout = "rollout"    // workload_rollouts
+	OriginSrcCalls   = "calls"      // entity_relations calls
+	OriginSrcDepEv   = "dep_events" // ml_events bağımlılık olayları
+	OriginSrcOnset   = "onset"      // problems.started_at
+)
+
+// ProblemGraphOriginRule — bir köken kuralının sonucu (kural sırasıyla).
+type ProblemGraphOriginRule struct {
+	Rule      string `json:"rule"`
+	Separated bool   `json:"separated"`
+	// Off — kuralın verisi bu tur yok (okuma hatası / bayat): ayırmadı sayılır.
+	Off    bool   `json:"off,omitempty"`
+	Leader string `json:"leader,omitempty"` // önde olan varlığın adı
+	// Others — K-SHARED: lidere bağlı üyeler; K-ROLLOUT / K-DEEP / K-FIRST eşitlerde: eşit adaylar.
+	Others []string `json:"others,omitempty"`
+	Via    string   `json:"via,omitempty"`    // K-ROLLOUT: iş yükü adı
+	At     int64    `json:"at,omitempty"`     // K-ROLLOUT: rollout başlangıcı; K-FIRST: liderin başlangıcı (unix ns)
+	Runner string   `json:"runner,omitempty"` // K-FIRST: ikinci en erken
+	RunAt  int64    `json:"runAt,omitempty"`  // K-FIRST: ikincinin başlangıcı
+	Source string   `json:"source"`
+}
+
+// ProblemGraphBlast — kökenin etki alanı (called_by, 2 adım, adım başına ≤ 100).
+type ProblemGraphBlast struct {
+	Affected  []string `json:"affected"`            // ölçülmüş sapması olan üyeler (köken hariç)
+	AtRisk1   []string `json:"atRisk1,omitempty"`   // kökeni çağırıyor, sapma yok (ilk 8)
+	AtRisk1N  int      `json:"atRisk1N"`            // toplam
+	AtRisk2   []string `json:"atRisk2,omitempty"`   // etkilenenleri / ilk adımı çağırıyor, sapma yok (ilk 8)
+	AtRisk2N  int      `json:"atRisk2N"`            // toplam
+	Cut       bool     `json:"cut,omitempty"`       // adım tavanı (100) ya da LIMIT'e değdi
+	Off       bool     `json:"off,omitempty"`       // called_by okunamadı / calls bayat
+	NamesDrop bool     `json:"namesDrop,omitempty"` // blob tavanı: risk adları düşürüldü, sayılar duruyor
+}
+
+// ProblemGraphOrigin — kümenin olası kökeni (S2; salt okunur gölge).
+type ProblemGraphOrigin struct {
+	Entity     string                   `json:"entity,omitempty"` // belirsizde boş
+	Name       string                   `json:"name,omitempty"`
+	Type       string                   `json:"type,omitempty"`
+	Confidence string                   `json:"confidence"`
+	Rule       string                   `json:"rule,omitempty"` // kazanan (ilk ayıran) kural
+	Leads      []string                 `json:"leads,omitempty"`
+	OnsetAt    int64                    `json:"onsetAt,omitempty"` // kökenin ilk sapması (kendi Problem'i yoksa 0)
+	Earliest   string                   `json:"earliest"`          // en erken başlayan üye
+	EarliestAt int64                    `json:"earliestAt"`
+	Rules      []ProblemGraphOriginRule `json:"rules"`
+	Blast      *ProblemGraphBlast       `json:"blast,omitempty"`
+}
+
 // ProblemGraphGroup — bir birleşik Problem (gölge) ya da bağlanmayanları
 // olan tek Problem. OwnerID = en erken açılan üyenin Problem kimliği.
 type ProblemGraphGroup struct {
@@ -95,6 +157,8 @@ type ProblemGraphGroup struct {
 	Members    []ProblemGraphMember   `json:"members"`
 	NearMisses []ProblemGraphNearMiss `json:"nearMisses,omitempty"`
 	Truncated  bool                   `json:"truncated,omitempty"` // üye satırı tavanı (25)
+	// Origin — S2: olası köken + etki alanı (yalnız ≥ 2 varlıklı kümede).
+	Origin *ProblemGraphOrigin `json:"origin,omitempty"`
 }
 
 // ProblemGraphReads — okuma ölçümü (lider başlangıcından beri).
@@ -107,6 +171,8 @@ type ProblemGraphReads struct {
 	Runs          int64 `json:"runs"`          // entity_sync_runs tazelik okuması
 	Evidence      int64 `json:"evidence"`      // ml_events bağımlılık olayı okuması
 	Errors        int64 `json:"errors"`
+	Rollouts      int64 `json:"rollouts"` // S2: workload_rollouts okuması (K-ROLLOUT)
+	Blast         int64 `json:"blast"`    // S2: called_by okuması (etki alanı, tur başına ≤ 2)
 }
 
 // ProblemGraphShadow — gölge raporu + o anki kümeler (detay sayfası okur).
@@ -130,10 +196,15 @@ type ProblemGraphShadow struct {
 	// GraphMissing — graf verisi olmadığı için bağ aranmayan FARKLI Problem.
 	GraphMissing int64 `json:"graphMissing"`
 	// FamilyOff — kural ailesi kapalı geçen okuma turu (bayat / okunamadı).
-	FamilyOff map[string]int64    `json:"familyOff,omitempty"`
-	Reads     ProblemGraphReads   `json:"reads"`
-	Groups    []ProblemGraphGroup `json:"groups,omitempty"`
-	Truncated bool                `json:"truncated,omitempty"` // blob tavanı
+	FamilyOff map[string]int64 `json:"familyOff,omitempty"`
+	// OriginWins — S2: kazanan köken kuralı başına FARKLI küme (24 sa);
+	// OriginUnclear — kökeni belirsiz küme; OriginConf — güven dağılımı.
+	OriginWins    map[string]int64    `json:"originWins,omitempty"`
+	OriginUnclear int64               `json:"originUnclear"`
+	OriginConf    map[string]int64    `json:"originConf,omitempty"`
+	Reads         ProblemGraphReads   `json:"reads"`
+	Groups        []ProblemGraphGroup `json:"groups,omitempty"`
+	Truncated     bool                `json:"truncated,omitempty"` // blob tavanı
 }
 
 // GetProblemGraphShadow — son blob (yoksa ok=false).
@@ -158,9 +229,22 @@ func (s *Store) SaveProblemGraphShadow(ctx context.Context, r ProblemGraphShadow
 	return s.PutSetting(ctx, problemGraphShadowKey, raw)
 }
 
-// FitProblemGraphBlob — SAF: blob tavanı aşılırsa SONDAKİ kümeler düşer
-// (çağıran önemliyi öne dizer); Truncated işaretlenir. Dönüş JSON boyu.
+// FitProblemGraphBlob — SAF: blob tavanı aşılırsa ÖNCE etki alanının risk
+// adı listeleri düşer (sayılar kalır, NamesDrop), hâlâ aşıyorsa SONDAKİ
+// kümeler düşer (çağıran önemliyi öne dizer); Truncated işaretlenir. Dönüş
+// JSON boyu.
 func FitProblemGraphBlob(r *ProblemGraphShadow, max int) int {
+	if raw, err := json.Marshal(r); err == nil && len(raw) > max {
+		for i := range r.Groups {
+			if o := r.Groups[i].Origin; o != nil && o.Blast != nil && (len(o.Blast.AtRisk1)+len(o.Blast.AtRisk2)) > 0 {
+				b := *o.Blast
+				b.AtRisk1, b.AtRisk2, b.NamesDrop = nil, nil, true
+				oo := *o
+				oo.Blast = &b
+				r.Groups[i].Origin = &oo
+			}
+		}
+	}
 	for {
 		raw, err := json.Marshal(r)
 		if err != nil {
