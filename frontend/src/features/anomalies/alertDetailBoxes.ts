@@ -18,7 +18,7 @@ import { subjectLabel } from '@/lib/problemSubject';
 import { alertProblemSummary } from './detailSummary';
 import { showRootCauseInSummary } from './anomalyDetail';
 import { tf, type Lang } from '@/lib/i18n'; // v0.10.2284 — metinler arayüz dilinde (varsayılan 'tr')
-import { stdImpactView } from '@/lib/problemStandardView'; // v0.10.2299 — etki EN anahtardan (TR aynı)
+import { stdImpactView, prioReasonView, detailPrioReasonMsg } from '@/lib/problemStandardView'; // v0.10.2299 — etki EN anahtardan (TR aynı); v0.10.2300 gerekçe
 
 type BoxProblem = Pick<Problem, 'ruleName' | 'metric' | 'value' | 'threshold' | 'service' | 'ruleId'
   | 'priorityReason' | 'pod' | 'clusters' | 'rootCause' | 'recentDeploy'>;
@@ -28,7 +28,7 @@ export function alertWhatText(p: BoxProblem, std?: ProblemStandard | null, lang:
   const parts = [alertProblemSummary(p, lang)];
   const ev = std?.evidence?.sentence?.trim();
   if (ev) parts.push(ev);
-  const why = p.priorityReason?.trim();
+  const why = prioReasonView(p.priorityReason, detailPrioReasonMsg(p.priorityReason, std), lang).text.trim();
   if (why) parts.push(tf('pd.text.prioWhy', lang, { why }));
   return parts.join(' ');
 }

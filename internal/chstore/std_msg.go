@@ -12,7 +12,10 @@ package chstore
 //
 //	…Pct  yüzde       …Ms  milisaniye     …Num  sayı
 //	…X    oran (×; "inf" = tam kayıp)     …K    katalog anahtarı (std.m.<değer>)
-//	diğer ham metin (özne öneki "sp", ad, tip, …)
+//	…Sec  süre, saniye (v0.10.2300 S3; Go shortDur'un dalları)
+//	…M    iç içe mesaj (*StdMsg; v0.10.2300 S3 — "gerekçe · iç gerekçe")
+//	diğer ham metin (özne öneki "sp", ad, tip, sunucunun dilden bağımsız
+//	biçimlediği sayı: "2.5", "11,260", …)
 //
 // Sonlu olmayan sayı JSON'a giremez: argüman "inf" (+Inf) ya da "—" metni olur.
 
@@ -49,6 +52,9 @@ func stdM(k string, kv ...any) *StdMsg {
 	}
 	return m
 }
+
+// NewStdMsg — stdM'nin paket dışı adı (api'nin öncelik gerekçeleri, S3).
+func NewStdMsg(k string, kv ...any) *StdMsg { return stdM(k, kv...) }
 
 // ruleValueMsg — SAF: "değer V (eşik T)" etkisinin anahtarı; birim trUnit
 // ile aynı dallar.

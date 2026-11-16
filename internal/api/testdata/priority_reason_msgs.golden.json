@@ -1,0 +1,667 @@
+[
+ {
+  "name": "ex-burst-fresh",
+  "tr": "11,260 olay / 11dk (~1024/dk)",
+  "msg": {
+   "k": "prio.ex.burst",
+   "a": {
+    "durSec": 660,
+    "occ": "11,260",
+    "rate": "1024"
+   }
+  }
+ },
+ {
+  "name": "ex-burst-secs",
+  "tr": "1,200 olay / 30sn (~1200/dk)",
+  "msg": {
+   "k": "prio.ex.burst",
+   "a": {
+    "durSec": 30,
+    "occ": "1,200",
+    "rate": "1200"
+   }
+  }
+ },
+ {
+  "name": "ex-burst-ended",
+  "tr": "11,260 olay / 12dk (~938/dk) · 5sa önce bitti",
+  "msg": {
+   "k": "prio.ex.burstEnded",
+   "a": {
+    "agoSec": 18000,
+    "durSec": 720,
+    "occ": "11,260",
+    "rate": "938"
+   }
+  }
+ },
+ {
+  "name": "ex-burst-ended-hours",
+  "tr": "2,500 olay / 10dk (~250/dk) · 26sa önce bitti",
+  "msg": {
+   "k": "prio.ex.burstEnded",
+   "a": {
+    "agoSec": 93600,
+    "durSec": 600,
+    "occ": "2,500",
+    "rate": "250"
+   }
+  }
+ },
+ {
+  "name": "ex-regressed-p1",
+  "tr": "yeniden açıldıktan sonra ≥500 oluşum (900 yeni · 1,900 toplam)",
+  "msg": {
+   "k": "prio.ex.regP1",
+   "a": {
+    "min": "500",
+    "since": "900",
+    "total": "1,900"
+   }
+  }
+ },
+ {
+  "name": "ex-regressed-p2",
+  "tr": "regressed",
+  "msg": {
+   "k": "prio.ex.regressed"
+  }
+ },
+ {
+  "name": "ex-active",
+  "tr": "active in last 5min · 18,217 total",
+  "msg": {
+   "k": "prio.ex.active",
+   "a": {
+    "total": "18,217"
+   }
+  }
+ },
+ {
+  "name": "ex-stopped",
+  "tr": "600 total · stopped 2sa 5dk ago",
+  "msg": {
+   "k": "prio.ex.stopped",
+   "a": {
+    "agoSec": 7500,
+    "total": "600"
+   }
+  }
+ },
+ {
+  "name": "ex-seen",
+  "tr": "seen in last 4sa · 150 total",
+  "msg": {
+   "k": "prio.ex.seen",
+   "a": {
+    "total": "150",
+    "winSec": 14400
+   }
+  }
+ },
+ {
+  "name": "ex-near-burst",
+  "tr": "450 olay / 6dk (~75/dk · patlama eşiği 100/dk)",
+  "msg": {
+   "k": "prio.ex.nearBurst",
+   "a": {
+    "durSec": 360,
+    "occ": "450",
+    "rate": "75",
+    "thr": "100"
+   }
+  }
+ },
+ {
+  "name": "ex-steady",
+  "tr": "steady",
+  "msg": {
+   "k": "prio.ex.steady"
+  }
+ },
+ {
+  "name": "ora-burst",
+  "tr": "lbl-1 patlaması: son 1 sa 1,200 > eşik 30 (önceki 1 sa 10, ≥3×)",
+  "msg": {
+   "k": "prio.ora.burst",
+   "a": {
+    "f": "3",
+    "label": "lbl-1",
+    "last": "1,200",
+    "prev": "10",
+    "thr": "30"
+   }
+  }
+ },
+ {
+  "name": "ora-new",
+  "tr": "yeni lbl-1 grubu: son 1 sa 120 > eşik 30",
+  "msg": {
+   "k": "prio.ora.new",
+   "a": {
+    "label": "lbl-1",
+    "last": "120",
+    "thr": "30"
+   }
+  }
+ },
+ {
+  "name": "ora-p1",
+  "tr": "lbl-1: son 1 sa 120 > eşik 30 (önceki 1 sa 100)",
+  "msg": {
+   "k": "prio.ora.p1",
+   "a": {
+    "label": "lbl-1",
+    "last": "120",
+    "prev": "100",
+    "thr": "30"
+   }
+  }
+ },
+ {
+  "name": "ora-regressed",
+  "tr": "regressed · son 1 sa 150",
+  "msg": {
+   "k": "prio.ora.regressed",
+   "a": {
+    "last": "150"
+   }
+  }
+ },
+ {
+  "name": "ora-p2",
+  "tr": "son 1 sa 150 (önceki 1 sa 90)",
+  "msg": {
+   "k": "prio.ora.p2",
+   "a": {
+    "last": "150",
+    "prev": "90"
+   }
+  }
+ },
+ {
+  "name": "ora-steady",
+  "tr": "sürekli akış (lbl-1) · son 1 sa 5",
+  "msg": {
+   "k": "prio.ora.steady",
+   "a": {
+    "label": "lbl-1",
+    "last": "5"
+   }
+  }
+ },
+ {
+  "name": "an-cleared",
+  "tr": "cleared",
+  "msg": {
+   "k": "prio.an.cleared"
+  }
+ },
+ {
+  "name": "an-no-baseline",
+  "tr": "no baseline",
+  "msg": {
+   "k": "prio.an.noBaseline"
+  }
+ },
+ {
+  "name": "an-no-signal",
+  "tr": "no signal",
+  "msg": {
+   "k": "prio.an.noSignal"
+  }
+ },
+ {
+  "name": "an-peak",
+  "tr": "3.2x baseline",
+  "msg": {
+   "k": "prio.an.peak",
+   "a": {
+    "r": "3.2"
+   }
+  }
+ },
+ {
+  "name": "an-mild",
+  "tr": "mild",
+  "msg": {
+   "k": "prio.an.mild"
+  }
+ },
+ {
+  "name": "keep:anomaly:*:error_rate:critical",
+  "tr": "kaynak önceliği korundu (kritik hata oranı) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.errRateCritical"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:anomaly:*:error_rate:warning",
+  "tr": "kaynak önceliği korundu (hata oranı anomalisi) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.errRate"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:builtin-*:critical",
+  "tr": "kaynak önceliği korundu (yerleşik kural) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.builtin"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:builtin-*:warning",
+  "tr": "kaynak önceliği korundu (yerleşik kural) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.builtin"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:db-health:*:critical",
+  "tr": "kaynak önceliği korundu (DB sağlık kuralı) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.dbHealth"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:db-health:*:warning",
+  "tr": "kaynak önceliği korundu (DB sağlık kuralı) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.dbHealth"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:incident:critical",
+  "tr": "kaynak önceliği korundu (kritik incident) · Declared incident, critical",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.critIncident"
+    },
+    "rM": {
+     "k": "prio.inc.critical"
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:anomaly:ext:*:ext:error_count:critical",
+  "tr": "kaynak önceliği korundu (dış kaynak hata serisi) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.extErrors"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:anomaly:ext:*:ext:error_count:warning",
+  "tr": "kaynak önceliği korundu (dış kaynak hata serisi) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.extErrors"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:anomaly-cluster:ext:*:critical",
+  "tr": "kaynak önceliği korundu (dış kaynak hata kümesi) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.extCluster"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:anomaly-cluster:ext:*:warning",
+  "tr": "kaynak önceliği korundu (dış kaynak hata kümesi) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.extCluster"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:anomaly:ext-cap:*:critical",
+  "tr": "kaynak önceliği korundu (dış kaynak tavan özeti) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.extCap"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:anomaly:ext-cap:*:warning",
+  "tr": "kaynak önceliği korundu (dış kaynak tavan özeti) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.extCap"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:svc-slowdown:*:critical",
+  "tr": "kaynak önceliği korundu (yaygın yavaşlama) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.svcSlowdown"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:svc-slowdown:*:warning",
+  "tr": "kaynak önceliği korundu (yaygın yavaşlama) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.svcSlowdown"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:anomaly-auto:group:*:critical",
+  "tr": "kaynak önceliği korundu (anomali grubu: birden çok sinyal) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.mlGroup"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:anomaly-auto:group:*:warning",
+  "tr": "kaynak önceliği korundu (anomali grubu: birden çok sinyal) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.mlGroup"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:anomaly-auto:svc:*:critical",
+  "tr": "kaynak önceliği korundu (ML servis düzeyi anomali) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.mlSvc"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:anomaly-auto:svc:*:warning",
+  "tr": "kaynak önceliği korundu (ML servis düzeyi anomali) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.mlSvc"
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:custom-*:critical",
+  "tr": "kaynak önceliği korundu (istisna listesi: custom-*) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.list",
+     "a": {
+      "pattern": "custom-*"
+     }
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:custom-*:warning",
+  "tr": "kaynak önceliği korundu (istisna listesi: custom-*) · critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.keepR",
+   "a": {
+    "labelM": {
+     "k": "keep.list",
+     "a": {
+      "pattern": "custom-*"
+     }
+    },
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "keep:no-reason",
+  "tr": "kaynak önceliği korundu (yerleşik kural)",
+  "msg": {
+   "k": "prio.keep",
+   "a": {
+    "labelM": {
+     "k": "keep.builtin"
+    }
+   }
+  }
+ },
+ {
+  "name": "force:problem",
+  "tr": "tür kuralı: exception/HTTP error dışı kalemler inbox'ta P3 (kaynak önceliği P1)",
+  "msg": {
+   "k": "prio.forceP3",
+   "a": {
+    "orig": "P1"
+   }
+  }
+ },
+ {
+  "name": "force:anomaly",
+  "tr": "tür kuralı: exception/HTTP error dışı kalemler inbox'ta P3 (kaynak önceliği P2)",
+  "msg": {
+   "k": "prio.forceP3",
+   "a": {
+    "orig": "P2"
+   }
+  }
+ },
+ {
+  "name": "skip:p3",
+  "tr": "warning steady",
+  "msg": {
+   "k": "prio.warnSteady"
+  }
+ },
+ {
+  "name": "fold:incident:i-1",
+  "tr": "bağlı problem: critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.linked",
+   "a": {
+    "rM": {
+     "k": "prio.breach.critical",
+     "a": {
+      "r": "2.5"
+     }
+    }
+   }
+  }
+ }
+]

@@ -78,7 +78,9 @@ func parseStdRef(ref string) (kind, id string, ok bool) {
 
 // problemStandardKey — SAF: önbellek anahtarı; tek girdi ref (kimlik zaten
 // env'e özgü nesneyi seçer).
-func problemStandardKey(ref string) string { return "pstd:v1:ref=" + strings.TrimSpace(ref) }
+// :v2: — v0.10.2300 (sunucu metinleri S3) gövdeye öncelik gerekçesi + anahtarı
+// eklendi (priorityReason, priorityReasonMsg); dil anahtara GİRMEZ.
+func problemStandardKey(ref string) string { return "pstd:v2:ref=" + strings.TrimSpace(ref) }
 
 // stdBaseFacts — SAF: trafik dışındaki gerçekler (takvim, batch, deploy).
 func stdBaseFacts(now time.Time, sens chstore.AnomalySensitivityConfig, service string) chstore.StdFacts {
@@ -223,6 +225,10 @@ func (s *Server) getProblemStandard(w http.ResponseWriter, r *http.Request) {
 			items[0].Service = src.incident.Service
 		}
 		s.attachInboxStandards(ctx, items, time.Now())
+		if std := items[0].Std; std != nil && src.problem != nil {
+			// v0.10.2300 (S3) — detay başlığının öncelik gerekçesi anahtarı.
+			std.PriorityReason, std.PriorityReasonMsg = src.problem.PriorityReason, src.problem.PriorityReasonMsg
+		}
 		return items[0].Std, nil
 	})
 }

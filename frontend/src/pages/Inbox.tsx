@@ -51,7 +51,7 @@ import { useVerdictRowContext } from '@/components/useVerdictRowContext'; // v0.
 import { NoiseReasonButton, type NoiseReasonChoice } from '@/components/NoiseReasonButton'; // v0.10.1531 — toplu triyaj
 import {
   splitStdHeadline, stdSourceChip, stdSourceName, stdSamplingNote, stdSinceLine, stdDurationLine,
-  stdHeadlineView, stdEvidenceView,
+  stdHeadlineView, stdEvidenceView, prioReasonView,
 } from '@/lib/problemStandardView'; // v0.10.1529 — Problem standardı R2; v0.10.2299 EN anahtardan
 import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2299 — çizilemeyen sunucu metni (EN)
 import { verdictOf, countNoise, filterByVerdictView, parseVerdictView, inboxVerdictSubject, type VerdictView } from '@/lib/problemVerdict';
@@ -1155,7 +1155,8 @@ export default function InboxPage() {
                       onChange={() => toggleRow(it.id)} />
                   </td>
                   <td>
-                    <PriorityBadge p={it.priority} reason={it.priorityReason} />
+                    {/* v0.10.2300 (S3) — gerekçe EN'de anahtardan (TR aynen). */}
+                    <PriorityBadge p={it.priority} reason={prioReasonView(it.priorityReason, it.priorityReasonMsg, lang).text} />
                   </td>
                   <td>
                     {/* v0.10.1084 — Exceptions listesiyle ORTAK başlık hücresi

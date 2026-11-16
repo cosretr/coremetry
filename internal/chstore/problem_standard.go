@@ -105,6 +105,14 @@ type ProblemStandard struct {
 	HeadlineMsg *StdMsg   `json:"headlineMsg,omitempty"`
 	ContextMsgs []StdMsg  `json:"contextMsgs,omitempty"`
 	Notify      StdNotify `json:"notify"`
+	// PriorityReason / PriorityReasonMsg — v0.10.2300 (S3): YALNIZ detay ucu
+	// (GET /api/problem-standard, problem ref'i) doldurur — Problem'in
+	// gerekçe anahtarı JSON'a çıkmadığı için (Problem.PriorityReasonMsg)
+	// detay başlığına buradan gider. FE anahtarı yalnız buradaki metin
+	// satırdaki gerekçeyle aynıysa kullanır. Standardize* doldurmaz;
+	// bildirim / politika / özet bu alanları okumaz.
+	PriorityReason    string  `json:"priorityReason,omitempty"`
+	PriorityReasonMsg *StdMsg `json:"priorityReasonMsg,omitempty"`
 }
 
 // StdMeasure — birincil etki ölçüsü.

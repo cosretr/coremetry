@@ -32,14 +32,19 @@ func forceNonExceptionP3With(items []InboxItem, keep []string) {
 		orig := it.Priority
 		if p, ok := chstore.MatchInboxKeepSourcePriority(keep, inboxKeepSourceID(*it)); ok && (orig == "P1" || orig == "P2") {
 			reason := "kaynak önceliği korundu (" + inboxKeepLabel(p, it.Severity) + ")"
+			label := inboxKeepLabelMsg(p, it.Severity)
 			if it.PriorityReason != "" {
 				reason += " · " + it.PriorityReason
+				it.PriorityReasonMsg = nestedReasonMsg("prio.keepR", label, it.PriorityReasonMsg)
+			} else {
+				it.PriorityReasonMsg = chstore.NewStdMsg("prio.keep", "labelM", label)
 			}
 			it.PriorityReason = reason
 			continue
 		}
 		it.Priority = "P3"
 		it.PriorityReason = "tür kuralı: exception/HTTP error dışı kalemler inbox'ta P3 (kaynak önceliği " + orig + ")"
+		it.PriorityReasonMsg = chstore.NewStdMsg("prio.forceP3", "orig", orig)
 	}
 }
 
@@ -61,6 +66,49 @@ func inboxKeepSourceID(it InboxItem) string {
 		}
 	}
 	return ""
+}
+
+// nestedReasonMsg — v0.10.2300 (S3): "önek · iç gerekçe" anahtarı. İç
+// gerekçenin anahtarı yoksa nil: EN arayüz bütün cümleyi sunucu metniyle
+// çizer (yarım çeviri yok). label nil değilse "labelM" olarak taşınır.
+func nestedReasonMsg(k string, label, inner *chstore.StdMsg) *chstore.StdMsg {
+	if inner == nil {
+		return nil
+	}
+	if label != nil {
+		return chstore.NewStdMsg(k, "labelM", label, "rM", inner)
+	}
+	return chstore.NewStdMsg(k, "rM", inner)
+}
+
+// inboxKeepLabelMsg — inboxKeepLabel'ın anahtar ikizi (aynı dallar).
+func inboxKeepLabelMsg(pattern, severity string) *chstore.StdMsg {
+	switch pattern {
+	case chstore.InboxKeepErrorRateAnomaly:
+		if severity == "critical" {
+			return chstore.NewStdMsg("keep.errRateCritical")
+		}
+		return chstore.NewStdMsg("keep.errRate")
+	case chstore.InboxKeepBuiltin:
+		return chstore.NewStdMsg("keep.builtin")
+	case chstore.InboxKeepDBHealth:
+		return chstore.NewStdMsg("keep.dbHealth")
+	case chstore.InboxKeepCriticalIncident:
+		return chstore.NewStdMsg("keep.critIncident")
+	case chstore.InboxKeepExtErrorCount:
+		return chstore.NewStdMsg("keep.extErrors")
+	case chstore.InboxKeepExtCluster:
+		return chstore.NewStdMsg("keep.extCluster")
+	case chstore.InboxKeepExtCap:
+		return chstore.NewStdMsg("keep.extCap")
+	case chstore.InboxKeepSvcSlowdown:
+		return chstore.NewStdMsg("keep.svcSlowdown")
+	case chstore.InboxKeepMLGroup:
+		return chstore.NewStdMsg("keep.mlGroup")
+	case chstore.InboxKeepMLSvc:
+		return chstore.NewStdMsg("keep.mlSvc")
+	}
+	return chstore.NewStdMsg("keep.list", "pattern", pattern)
 }
 
 // inboxKeepLabel — gerekçedeki "neden": varsayılan kalıplar için insan

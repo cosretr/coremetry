@@ -118,6 +118,7 @@ func foldIncidentProblems(items []InboxItem, attached map[string][]string) []Inb
 			if priorityRank(p.Priority) > priorityRank(items[i].Priority) {
 				items[i].Priority = p.Priority
 				items[i].PriorityReason = "bağlı problem: " + p.PriorityReason
+				items[i].PriorityReasonMsg = nestedReasonMsg("prio.linked", nil, p.PriorityReasonMsg)
 			}
 			if p.StartedAt > 0 && (items[i].StartedAt == 0 || p.StartedAt < items[i].StartedAt) {
 				items[i].StartedAt = p.StartedAt

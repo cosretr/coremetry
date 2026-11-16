@@ -7,7 +7,7 @@
 // adım) olduğu gibi geçer; burada yalnız zaman, güven ve kaynak etiketleri
 // kurulur. Hiçbir işlev ölçülmemiş bir şeyi iddia etmez: çağıran yoksa
 // "çağıran" yazılmaz, dakikalık hata ölçülmediyse ikinci satır boş kalır.
-import type { ProblemStandard, SignalGate, StdConfidenceLevel, StdMsg } from './types';
+import type { ProblemStandard, SignalGate, StdConfidenceLevel, StdMsg, StdMsgArg } from './types';
 import { isSafeAppPath } from './safeAppPath';
 import { t, tf, type Lang } from './i18n'; // v0.10.2283 — metinler arayüz dilinde (varsayılan 'tr')
 
@@ -185,7 +185,27 @@ function enNum(v: number): string {
   return s.includes('.') ? s.replace(/0+$/, '').replace(/\.$/, '') : s;
 }
 
-function stdArg(name: string, v: string | number | boolean, lang: Lang): string | null {
+// v0.10.2300 (S3) — Go %.0f ile aynı yuvarlama (tam eşitlikte çifte).
+function roundHalfEven(x: number): number {
+  const f = Math.floor(x);
+  const d = x - f;
+  return d > 0.5 ? f + 1 : d < 0.5 ? f : (f % 2 === 0 ? f : f + 1);
+}
+
+/** Süre (saniye) — Go api shortDur'un dalları, EN birimle ("45s", "12m", "2h 5m"). */
+export function enDur(sec: number): string {
+  const s = Math.max(0, sec);
+  if (s < 60) return `${roundHalfEven(s)}s`;
+  if (s < 3600) return `${roundHalfEven(s / 60)}m`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor(s / 60) - h * 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+function stdArg(name: string, v: StdMsgArg, lang: Lang): string | null {
+  // v0.10.2300 (S3) — …M iç içe mesaj ("gerekçe · iç gerekçe"); çizilemezse bütün cümle düşer.
+  if (typeof v === 'object') return name.endsWith('M') ? stdMsgText(v, lang) : null;
+  if (name.endsWith('Sec') && typeof v === 'number') return enDur(v);
   if (name.endsWith('K')) {
     const k = `std.m.${String(v)}`;
     const r = t(k, lang);
@@ -248,6 +268,49 @@ export function stdContextView(std: ProblemStandard, lang: Lang = 'tr'): { text:
   if (lang === 'tr' || msgs.length !== ctx.length) return stdMsgView(null, ctx.join(' · '), lang);
   const parts = ctx.map((c, i) => stdMsgView(msgs[i], c, lang));
   return { text: parts.map(p => p.text).join(' · '), orig: parts.some(p => p.orig) };
+}
+
+/** v0.10.2300 (S3) — öncelik gerekçesi: TR sunucu metni aynen; EN anahtardan, yoksa metin + orig. */
+export function prioReasonView(reason: string | undefined | null, msg: StdMsg | undefined | null, lang: Lang = 'tr'): { text: string; orig: boolean } {
+  return stdMsgView(msg, reason ?? '', lang);
+}
+
+/** Detay sayfası: başlık ucunun gerekçe anahtarı YALNIZ aynı gerekçe metnine aitse (satır ile başlık farklı anda okunmuş olabilir). */
+export function detailPrioReasonMsg(reason: string | undefined | null, std: ProblemStandard | null | undefined): StdMsg | undefined {
+  return reason && std?.priorityReason === reason ? std.priorityReasonMsg : undefined;
+}
+
+// v0.10.2300 (S3) — yerleşik kural / problem adı yalnız GÖRÜNÜMDE İngilizce;
+// kalıcı ruleName değişmez (arama, sınıflama, bildirim onu okur). Ad std.kind'dan
+// türer; "{t}" = adın ilk " · "ten sonraki ham kuyruğu (tip, kaynak adı),
+// "{m}" = ikinci parça (metrik adı, Go'da zaten İngilizce). Operatör adı
+// (rule.user, monitor, incident), Oracle branding etiketi ve zaten İngilizce
+// yerleşik adlar (Anomaly · …, DB health · …) aynen; ML / grup terfi adı
+// serbest metin → orig.
+const TITLE_KINDS = new Set(['exception_storm', 'exception_shared', 'exception_fatal', 'exception_group.http',
+  'anomaly.ext_down', 'anomaly.ext_cap', 'anomaly_cluster.ext', 'svc_slowdown', 'svc_slowdown.collapse']);
+const SELF_TITLE: [string, string][] = [['self-ingest-stall', 'ingest'], ['self-spool-depth', 'spool'], ['self-disk-eta', 'disk'], ['self-channel-broken', 'channel']];
+
+export function problemTitleView(p: { ruleName: string; ruleId?: string; metric?: string }, kind: string | undefined, lang: Lang = 'tr'): { text: string; orig: boolean } {
+  const name = p.ruleName ?? '';
+  if (lang === 'tr' || !name || !kind) return { text: name, orig: false };
+  const segs = name.split(' · ');
+  const fill = (k: string): string | null => {
+    const tpl = t(`std.title.${k}`, lang);
+    if (tpl === `std.title.${k}`) return null;
+    if (tpl.includes('{t}') && segs.length < 2) return null;
+    if (tpl.includes('{m}') && segs.length < 3) return null;
+    return tpl.replace('{t}', segs.slice(1).join(' · ')).replace('{m}', segs[1] ?? '');
+  };
+  let r: string | null = null;
+  if (TITLE_KINDS.has(kind)) r = fill(kind);
+  else if (kind === 'runtime.gc') return p.metric === 'runtime.jvm_gc_share' ? { text: fill('runtime.gc.share') ?? name, orig: false } : { text: name, orig: false };
+  else if (kind === 'self') {
+    const hit = SELF_TITLE.find(([pre]) => (p.ruleId ?? '').startsWith(pre));
+    r = hit ? fill(`self.${hit[1]}`) : null;
+  } else if (kind === 'anomaly_auto') r = null;
+  else return { text: name, orig: false };
+  return r != null ? { text: r, orig: false } : { text: name, orig: true };
 }
 
 /** Kapı notu arayüz dilinde (TR sunucu notu aynen). */

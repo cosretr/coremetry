@@ -329,6 +329,12 @@ type Problem struct {
 	// Driven by the same logic that sets Priority; surfaces in
 	// the UI tooltip so the rule is auditable, not magic.
 	PriorityReason string `json:"priorityReason,omitempty"`
+	// PriorityReasonMsg — v0.10.2300 (sunucu metinleri S3): PriorityReason'ın
+	// metin anahtarı. JSON'a ÇIKMAZ: Problem MCP kaynağına / aracına ve
+	// webhook gövdesine BÜTÜN olarak serileşiyor, onların baytı değişmesin.
+	// Ekrana yalnız kendi yapısını kuran uçlar taşır (InboxItem, detay
+	// başlığının ProblemStandard'ı).
+	PriorityReasonMsg *StdMsg `json:"-"`
 	// Category / DisplayID (v0.10.706, Dynatrace paritesi #5) — okuma-anı,
 	// EnrichProblemsWithPriority doldurur (problem_category.go). Saklanmaz.
 	Category  string `json:"category,omitempty"`
@@ -414,7 +420,7 @@ func EnrichProblemsWithPriority(problems []Problem) []Problem {
 	now := time.Now().UnixNano()
 	for i := range problems {
 		p := &problems[i]
-		p.Priority, p.PriorityReason = computePriority(*p, now, cfg)
+		p.Priority, p.PriorityReason, p.PriorityReasonMsg = computePriorityMsg(*p, now, cfg)
 		// v0.10.706 — aynı döngü: kategori + görüntü kimliği (okuma-anı).
 		p.Category = ProblemCategory(*p)
 		p.DisplayID = ProblemDisplayID(p.ID)
@@ -455,13 +461,21 @@ func (s *Store) GetProblemByDisplayID(ctx context.Context, disp string) (*Proble
 // ile okuma hattı aynı fonksiyonu aynı girdilerle çağırıyor, yani
 // e-postadaki P1 ile ekrandaki P1 aynı hesabın sonucu.
 func computePriority(p Problem, nowNs int64, cfg ProblemPriorityConfig) (string, string) {
+	prio, reason, _ := computePriorityMsg(p, nowNs, cfg)
+	return prio, reason
+}
+
+// computePriorityMsg — computePriority'nin çekirdeği; gerekçenin YANINDA
+// metin anahtarı (v0.10.2300, sunucu metinleri S3). Gerekçe metni aynı
+// ifadelerle üretilir (altın: testdata/priority_reason_tr.golden.json).
+func computePriorityMsg(p Problem, nowNs int64, cfg ProblemPriorityConfig) (string, string, *StdMsg) {
 	// Kelepçe BURADA da uygulanıyor: elle kurulmuş bir config ile
 	// çağıran bir test/çağıran, BigBreachRatio 0'da `ratio >= 0`
 	// yüzünden HER problemi büyük ihlal yapardı.
 	cfg = normalizeProblemPriorityKnobs(cfg) // v0.10.1072 — liste merdivene girmez
 	sev := p.Severity
 	if sev == "info" {
-		return "P3", "info"
+		return "P3", "info", stdM("prio.info")
 	}
 
 	// v0.9.1194 — FIRTINA tanım gereği P1 (operatör-bildirimli + spec
@@ -473,7 +487,8 @@ func computePriority(p Problem, nowNs int64, cfg ProblemPriorityConfig) (string,
 	// aynı eşiği iki kez, ikincisinde daha katı sormak olurdu. Gerekçe
 	// sayıları taşır ki operatör vidayı (exception_triage) görebilsin.
 	if p.RuleID == "exception-storm" {
-		return "P1", fmt.Sprintf("fırtına: %.0f servis (eşik %.0f)", p.Value, p.Threshold)
+		return "P1", fmt.Sprintf("fırtına: %.0f servis (eşik %.0f)", p.Value, p.Threshold),
+			stdM("prio.storm", "n", fmt.Sprintf("%.0f", p.Value), "thr", fmt.Sprintf("%.0f", p.Threshold))
 	}
 	// v0.10.748 — incident bildirimi (notify.incidentAsProblem, RuleID
 	// "incident:<id>"): critical incident = şimdi (P1), warning = bugün
@@ -481,15 +496,15 @@ func computePriority(p Problem, nowNs int64, cfg ProblemPriorityConfig) (string,
 	// Problem olarak saklanmaz, bu dal yalnız bildirim anında koşar.
 	if strings.HasPrefix(p.RuleID, "incident:") {
 		if sev == "critical" {
-			return "P1", "critical incident"
+			return "P1", "critical incident", stdM("prio.incCritical")
 		}
-		return "P2", "incident"
+		return "P2", "incident", stdM("prio.incident")
 	}
 	if strings.HasPrefix(p.RuleID, ExceptionGroupRulePrefix) && (p.Priority == "P1" || p.Priority == "P2" || p.Priority == "P3") {
 		// v0.10.782 — exception grubunun önceliği inbox merdiveninden
 		// (api/inbox.go exceptionPriorityAt) ÖNCEDEN hesaplanır ve gerekçesiyle
 		// gelir; kural oranı/eşiği yok, ezme.
-		return p.Priority, p.PriorityReason
+		return p.Priority, p.PriorityReason, p.PriorityReasonMsg
 	}
 
 	// Breach magnitude. If threshold is 0 we can't compute a
@@ -589,30 +604,36 @@ func computePriority(p Problem, nowNs int64, cfg ProblemPriorityConfig) (string,
 	// breachReason — ihlal büyüklüğünün operatöre görünen hâli. Tam
 	// kayıpta oran yazmak yanlış olurdu (0.0x ya da +Inf); "tamamen
 	// kayıp" ihlalin ne olduğunu doğrudan söylüyor.
-	breachReason := func(prefix string) string {
-		if totalLoss {
-			return prefix + " + tamamen kayıp (0/" + trimFloat(p.Threshold) + ")"
+	breachReason := func(prefix string) (string, string, *StdMsg) {
+		prio := "P1"
+		if prefix != "critical" {
+			prio = "P2"
 		}
-		return fmt.Sprintf("%s + %.1fx threshold", prefix, ratio)
+		if totalLoss {
+			return prio, prefix + " + tamamen kayıp (0/" + trimFloat(p.Threshold) + ")",
+				stdM("prio.totalLoss."+prefix, "thr", trimFloat(p.Threshold))
+		}
+		return prio, fmt.Sprintf("%s + %.1fx threshold", prefix, ratio),
+			stdM("prio.breach."+prefix, "r", fmt.Sprintf("%.1f", ratio))
 	}
 
 	if sev == "critical" {
 		switch {
 		case bigBreach:
-			return "P1", breachReason("critical")
+			return breachReason("critical")
 		case staleCritical:
-			return "P1", fmt.Sprintf("critical open %.1fh", openHours)
+			return "P1", fmt.Sprintf("critical open %.1fh", openHours), stdM("prio.stale", "h", fmt.Sprintf("%.1f", openHours))
 		default:
-			return "P2", "critical"
+			return "P2", "critical", stdM("prio.critical")
 		}
 	}
 
 	// severity = warning
 	switch {
 	case bigBreach:
-		return "P2", breachReason("warning")
+		return breachReason("warning")
 	default:
-		return "P3", "warning steady"
+		return "P3", "warning steady", stdM("prio.warnSteady")
 	}
 }
 

@@ -14,20 +14,32 @@ package chstore
 // ÇALIŞILIYORDUR: kuyruktan düşmez ama bir basamak iner (P1→P2, P2→P3);
 // resolved için öncelik yine ilan edilen (tarihçe okunurken anlamlı kalsın).
 func IncidentPriority(inc Incident) (prio, reason string) {
-	prio, reason = "P3", "Declared incident"
+	prio, reason, _ = incidentPriorityMsg(inc)
+	return prio, reason
+}
+
+// IncidentPriorityMsg — v0.10.2300 (sunucu metinleri S3): IncidentPriority
+// gerekçesinin metin anahtarı (aynı dallar, tek çekirdek).
+func IncidentPriorityMsg(inc Incident) *StdMsg {
+	_, _, m := incidentPriorityMsg(inc)
+	return m
+}
+
+func incidentPriorityMsg(inc Incident) (prio, reason string, msg *StdMsg) {
+	prio, reason, msg = "P3", "Declared incident", stdM("prio.inc.declared")
 	switch inc.Severity {
 	case "critical":
-		prio, reason = "P1", "Declared incident, critical"
+		prio, reason, msg = "P1", "Declared incident, critical", stdM("prio.inc.critical")
 	case "warning":
-		prio, reason = "P2", "Declared incident, warning"
+		prio, reason, msg = "P2", "Declared incident, warning", stdM("prio.inc.warning")
 	}
 	if inc.Status == "acknowledged" {
 		switch prio {
 		case "P1":
-			prio, reason = "P2", "Declared incident, critical — acknowledged"
+			prio, reason, msg = "P2", "Declared incident, critical — acknowledged", stdM("prio.inc.criticalAck")
 		case "P2":
-			prio, reason = "P3", "Declared incident, warning — acknowledged"
+			prio, reason, msg = "P3", "Declared incident, warning — acknowledged", stdM("prio.inc.warningAck")
 		}
 	}
-	return prio, reason
+	return prio, reason, msg
 }

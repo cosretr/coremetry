@@ -34,8 +34,12 @@ type InboxItem struct {
 	Source         string `json:"source"`   // human label: "Alert rule" / "Exception" / "Anomaly"
 	Priority       string `json:"priority"` // P1 | P2 | P3
 	PriorityReason string `json:"priorityReason"`
-	Severity       string `json:"severity"` // critical | warning | info
-	Service        string `json:"service"`
+	// PriorityReasonMsg — v0.10.2300 (sunucu metinleri S3): PriorityReason'ın
+	// metin anahtarı + ham argümanları (ek alan; metin aynen). MCP InboxRow
+	// alan alan kopyalar ve bunu ALMAZ; bildirim / CoSRE yalnız metni okur.
+	PriorityReasonMsg *chstore.StdMsg `json:"priorityReasonMsg,omitempty"`
+	Severity          string          `json:"severity"` // critical | warning | info
+	Service           string          `json:"service"`
 	// SubjectKind (v0.9.1339) — Service alanının NE OLDUĞU: service | db.
 	// ⚠️ Yukarıdaki `Kind` ile KARIŞTIRMA: o satırın KAYNAĞINI söylüyor
 	// (problem | exception | anomaly), bu ise ÖZNENİN TÜRÜNÜ. İkisi de
@@ -1310,7 +1314,8 @@ func inboxListKey(status, service, search, ownerTeam, sreTeam, team, env string,
 	// kırıcısı en eski önce oldu ve gövdeye oldestFirstSeen eklendi (:v6: emsali).
 	// :v13: — v0.10.2299 (sunucu metinleri S2) std gövdesine metin anahtarları
 	// eklendi (headlineMsg, msg, noteMsg, contextMsgs); dil anahtara GİRMEZ.
-	return fmt.Sprintf("inbox:v13:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
+	// :v14: — v0.10.2300 (S3) satır gövdesine priorityReasonMsg eklendi.
+	return fmt.Sprintf("inbox:v14:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
 		status, service, search, ownerTeam, sreTeam, chstore.NormTeamName(team), env, limit, sortID, sortDir, minOcc,
 		strings.Join(sortedCopyOf(kinds), "+"), strings.Join(sortedCopyOf(prios), "+"), subject)
 }
@@ -1992,22 +1997,23 @@ func incidentToInbox(inc chstore.Incident) InboxItem {
 		last = inc.StartedAt
 	}
 	return InboxItem{
-		ID:             "incident:" + inc.ID,
-		Kind:           "incident",
-		Source:         "Incident",
-		Priority:       prio,
-		PriorityReason: reason,
-		Severity:       inc.Severity,
-		Service:        inc.Service,
-		Title:          inc.Title,
-		Description:    inc.Summary,
-		StartedAt:      inc.StartedAt,
-		LastSeen:       last,
-		Assignee:       inc.Assignee,
-		Status:         inc.Status,
-		Clusters:       inc.Clusters,
-		Incident:       &InboxIncidentRef{ID: inc.ID, Severity: inc.Severity, Status: inc.Status},
-		stdSrc:         &inboxStdSrc{incident: &inc}, // v0.10.1529
+		ID:                "incident:" + inc.ID,
+		Kind:              "incident",
+		Source:            "Incident",
+		Priority:          prio,
+		PriorityReason:    reason,
+		PriorityReasonMsg: chstore.IncidentPriorityMsg(inc), // v0.10.2300 S3 — aynı dallar
+		Severity:          inc.Severity,
+		Service:           inc.Service,
+		Title:             inc.Title,
+		Description:       inc.Summary,
+		StartedAt:         inc.StartedAt,
+		LastSeen:          last,
+		Assignee:          inc.Assignee,
+		Status:            inc.Status,
+		Clusters:          inc.Clusters,
+		Incident:          &InboxIncidentRef{ID: inc.ID, Severity: inc.Severity, Status: inc.Status},
+		stdSrc:            &inboxStdSrc{incident: &inc}, // v0.10.1529
 	}
 }
 
@@ -2105,23 +2111,24 @@ func problemToInbox(p chstore.Problem) InboxItem {
 	// (Resolved-row filtering happens at the call site via inboxKeepsProblem —
 	// v0.8.287; this normaliser assumes the row already passed that gate.)
 	return InboxItem{
-		ID:             "problem:" + p.ID,
-		Kind:           "problem",
-		Source:         "Alert rule",
-		Priority:       p.Priority,
-		PriorityReason: p.PriorityReason,
-		Severity:       p.Severity,
-		Service:        p.Service,
-		SubjectKind:    p.Kind, // v0.9.1339 — özne TÜRÜ, Kind (kaynak) DEĞİL
-		Title:          p.RuleName,
-		Description:    p.Description,
-		StartedAt:      p.StartedAt,
-		LastSeen:       p.StartedAt,
-		Assignee:       p.Assignee,
-		Status:         p.Status,
-		Clusters:       p.Clusters,
-		Category:       p.Category,  // v0.10.706 — EnrichProblemsWithPriority doldurdu
-		DisplayID:      p.DisplayID, // v0.10.706
+		ID:                "problem:" + p.ID,
+		Kind:              "problem",
+		Source:            "Alert rule",
+		Priority:          p.Priority,
+		PriorityReason:    p.PriorityReason,
+		PriorityReasonMsg: p.PriorityReasonMsg,
+		Severity:          p.Severity,
+		Service:           p.Service,
+		SubjectKind:       p.Kind, // v0.9.1339 — özne TÜRÜ, Kind (kaynak) DEĞİL
+		Title:             p.RuleName,
+		Description:       p.Description,
+		StartedAt:         p.StartedAt,
+		LastSeen:          p.StartedAt,
+		Assignee:          p.Assignee,
+		Status:            p.Status,
+		Clusters:          p.Clusters,
+		Category:          p.Category,  // v0.10.706 — EnrichProblemsWithPriority doldurdu
+		DisplayID:         p.DisplayID, // v0.10.706
 		// v0.9.255 — see the field comments: these were computed by the
 		// enrichment chain in listInbox and then discarded here.
 		RunbookURL:   p.RunbookURL,
@@ -2155,7 +2162,7 @@ func problemToInbox(p chstore.Problem) InboxItem {
 // oncall most wants to see; everything else is review-able
 // later.
 func exceptionToInbox(g chstore.ExceptionGroup) InboxItem {
-	prio, reason := exceptionPriority(g)
+	prio, reason, reasonMsg := exceptionPriorityMsg(g)
 	// We don't currently carry severity on the exception_groups
 	// row; surface "—" so the column doesn't lie. Downstream UI
 	// renders this as text not a badge.
@@ -2172,19 +2179,20 @@ func exceptionToInbox(g chstore.ExceptionGroup) InboxItem {
 		kind, source = "exception", "Oracle"
 	}
 	return InboxItem{
-		ID:             "exception:" + g.Fingerprint,
-		Kind:           kind,
-		Source:         source,
-		Priority:       prio,
-		PriorityReason: reason,
-		Severity:       "warning", // best fit until exception rows carry one
-		Service:        g.Service,
-		Title:          g.Type,
-		Description:    inboxTruncate(g.Message, 240),
-		StartedAt:      g.FirstSeen,
-		LastSeen:       g.LastSeen,
-		Assignee:       g.Assignee,
-		Status:         g.State,
+		ID:                "exception:" + g.Fingerprint,
+		Kind:              kind,
+		Source:            source,
+		Priority:          prio,
+		PriorityReason:    reason,
+		PriorityReasonMsg: reasonMsg,
+		Severity:          "warning", // best fit until exception rows carry one
+		Service:           g.Service,
+		Title:             g.Type,
+		Description:       inboxTruncate(g.Message, 240),
+		StartedAt:         g.FirstSeen,
+		LastSeen:          g.LastSeen,
+		Assignee:          g.Assignee,
+		Status:            g.State,
 		// v0.9.530 — ExceptionExplainer'ın özeti. Varsayılan Inbox
 		// görünümünde (P1 + kind=exception) operatörün gördüğü TEK
 		// AI cümlesi bu; problem satırları P3 kovasında kalıyor.
@@ -2279,6 +2287,13 @@ var inboxSinceRungs = []string{"30m", "1h", "2h", "24h", "7d"}
 // okuması YOK, aksi hâlde 200 satırlık bir inbox listesi 200 ayar
 // sorgusu demek olurdu.
 func exceptionPriority(g chstore.ExceptionGroup) (string, string) {
+	prio, reason, _ := exceptionPriorityMsg(g)
+	return prio, reason
+}
+
+// exceptionPriorityMsg — exceptionPriority + gerekçenin metin anahtarı
+// (v0.10.2300, sunucu metinleri S3; aynı merdiven, aynı ayar).
+func exceptionPriorityMsg(g chstore.ExceptionGroup) (string, string, *chstore.StdMsg) {
 	if chstore.IsOracleGroup(g.Fingerprint) {
 		// v0.10.1092 — Oracle grubu kendi kuralıyla (exception_oracle.go
 		// oraclePriorityAt): saatlik toplamlar enjekte edilen önbellekten; tazelik
@@ -2287,9 +2302,9 @@ func exceptionPriority(g chstore.ExceptionGroup) (string, string) {
 		// bildirimci aynı yoldan.
 		st, _ := oracleGroupStats(g)
 		// v0.10.1108 — gerekçedeki ad branding etiketi (chstore atomik, CH okuması yok).
-		return oraclePriorityAt(g, currentExceptionTriage(), time.Now().Add(-st.Lag), st.LastHour, st.PrevHour, chstore.CurrentOracleGroupLabel())
+		return oraclePriorityAtMsg(g, currentExceptionTriage(), time.Now().Add(-st.Lag), st.LastHour, st.PrevHour, chstore.CurrentOracleGroupLabel())
 	}
-	return exceptionPriorityAt(g, currentExceptionTriage(), time.Now())
+	return exceptionPriorityAtMsg(g, currentExceptionTriage(), time.Now())
 }
 
 // ExceptionPriority — v0.10.782: notify.ExceptionNotifier'a main.go'dan enjekte
@@ -2300,6 +2315,14 @@ func ExceptionPriority(g chstore.ExceptionGroup) (string, string) { return excep
 // Tablo testleri buradan geçer; sarmalayıcı yalnız zamanı ve ayarı
 // bağlar.
 func exceptionPriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageConfig, now time.Time) (string, string) {
+	prio, reason, _ := exceptionPriorityAtMsg(g, cfg, now)
+	return prio, reason
+}
+
+// exceptionPriorityAtMsg — exceptionPriorityAt'ın çekirdeği; gerekçenin
+// YANINDA metin anahtarı (v0.10.2300 S3). Sayılar sunucunun dilden bağımsız
+// biçimiyle ham metin ("11,260", "938"); süreler saniye (…Sec).
+func exceptionPriorityAtMsg(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageConfig, now time.Time) (string, string, *chstore.StdMsg) {
 	// v0.9.1188 — kelepçe BURADA. Pencereler kendi P1Window()/P2Window()
 	// çağrılarında normalize oluyordu ama patlama eşikleri HAM alandan
 	// okunuyor: sıfır-değerli bir config (elle kurulmuş bir test, hidrate
@@ -2392,16 +2415,20 @@ func exceptionPriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageCo
 	burst := exceptionIsBurst(g.Occurrences, g.FirstSeen, g.LastSeen, cfg)
 	burstDesc := ""
 	if burst {
+		span := time.Duration(g.LastSeen - g.FirstSeen)
+		rate := exceptionBurstRate(g.Occurrences, g.FirstSeen, g.LastSeen)
 		burstDesc = fmt.Sprintf("%s olay / %s (~%.0f/dk)",
 			fmtThousands(g.Occurrences),
-			shortDur(time.Duration(g.LastSeen-g.FirstSeen)),
-			exceptionBurstRate(g.Occurrences, g.FirstSeen, g.LastSeen))
+			shortDur(span),
+			rate)
+		occ, rateS := fmtThousands(g.Occurrences), fmt.Sprintf("%.0f", rate)
 		if fresh {
-			return "P1", burstDesc
+			return "P1", burstDesc, chstore.NewStdMsg("prio.ex.burst", "occ", occ, "durSec", span.Seconds(), "rate", rateS)
 		}
 		// Bitiş yaşı gerekçede: satıra bakan operatör "devam ediyor mu"
 		// sorusunun cevabını da görsün.
-		return "P1", burstDesc + " · " + shortDur(time.Duration(age)) + " önce bitti"
+		return "P1", burstDesc + " · " + shortDur(time.Duration(age)) + " önce bitti",
+			chstore.NewStdMsg("prio.ex.burstEnded", "occ", occ, "durSec", span.Seconds(), "rate", rateS, "agoSec", time.Duration(age).Seconds())
 	}
 
 	// v0.10.949 — "regressed" olgusu tek yerden (exceptionIsRegressed):
@@ -2418,9 +2445,10 @@ func exceptionPriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageCo
 	if exceptionIsRegressed(g.State) {
 		if since, ok := chstore.ExceptionOccurrencesSinceResolve(g); ok && since >= uint64(cfg.P1MinOccurrences) {
 			return "P1", fmt.Sprintf("yeniden açıldıktan sonra ≥%s oluşum (%s yeni · %s toplam)",
-				fmtThousands(uint64(cfg.P1MinOccurrences)), fmtThousands(since), fmtThousands(g.Occurrences))
+					fmtThousands(uint64(cfg.P1MinOccurrences)), fmtThousands(since), fmtThousands(g.Occurrences)),
+				chstore.NewStdMsg("prio.ex.regP1", "min", fmtThousands(uint64(cfg.P1MinOccurrences)), "since", fmtThousands(since), "total", fmtThousands(g.Occurrences))
 		}
-		return "P2", "regressed"
+		return "P2", "regressed", chstore.NewStdMsg("prio.ex.regressed")
 	}
 	// v0.9.524 — operatör-bildirimli: "28 Haziran'daki problemde bile
 	// aynı sayı yazıyor". Cümle YANLIŞTI: freshMin grubun SON GÖRÜLME
@@ -2473,13 +2501,15 @@ func exceptionPriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageCo
 		if freshMin {
 			// v0.9.524'ün sözleşmesi BİREBİR korunuyor (inbox_test.go bu
 			// metni çiviliyor): tazelik ayrı, toplamın TOPLAM olduğu ayrı.
-			return "P1", fmt.Sprintf("active in last 5min · %s total", fmtThousands(g.Occurrences))
+			return "P1", fmt.Sprintf("active in last 5min · %s total", fmtThousands(g.Occurrences)),
+				chstore.NewStdMsg("prio.ex.active", "total", fmtThousands(g.Occurrences))
 		}
 		// Durmuş hâli: aynı iki gerçek, artı ne zaman durduğu — "şu an
 		// devam ediyor" ile "iki saat önce bitti" operatör için farklı
 		// şeyler ve cümle bunu söylemeli.
 		return "P1", fmt.Sprintf("%s total · stopped %s ago",
-			fmtThousands(g.Occurrences), shortDur(time.Duration(age)))
+				fmtThousands(g.Occurrences), shortDur(time.Duration(age))),
+			chstore.NewStdMsg("prio.ex.stopped", "total", fmtThousands(g.Occurrences), "agoSec", time.Duration(age).Seconds())
 	}
 	// v0.9.775 — bu kapı da AYNI pencereye bağlandı. Operatörün ikinci
 	// şikâyeti tam buydu: 191 olaylık SQLTimeout grubu 1sa50dk'da
@@ -2493,7 +2523,8 @@ func exceptionPriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageCo
 	// yalan olamaz (v0.9.524, v0.9.699).
 	if fresh && g.Occurrences >= 100 {
 		return "P2", fmt.Sprintf("seen in last %s · %s total",
-			shortDur(p1Window), fmtThousands(g.Occurrences))
+				shortDur(p1Window), fmtThousands(g.Occurrences)),
+			chstore.NewStdMsg("prio.ex.seen", "winSec", p1Window.Seconds(), "total", fmtThousands(g.Occurrences))
 	}
 	// (v0.9.1205 — buradaki "24 saati geçmiş patlama → P3" dalı öldü:
 	// patlama artık yukarıda koşulsuz P1 dönüyor. burstDesc yalnız o
@@ -2514,11 +2545,14 @@ func exceptionPriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageCo
 	// kaçıranlar (kronik, düşük hızlı gruplar) eskisi gibi "steady".
 	if rate := exceptionBurstRate(g.Occurrences, g.FirstSeen, g.LastSeen); rate >= cfg.BurstMinRate/2 {
 		return "P3", fmt.Sprintf("%s olay / %s (~%.0f/dk · patlama eşiği %.0f/dk)",
-			fmtThousands(g.Occurrences),
-			shortDur(time.Duration(g.LastSeen-g.FirstSeen)),
-			rate, cfg.BurstMinRate)
+				fmtThousands(g.Occurrences),
+				shortDur(time.Duration(g.LastSeen-g.FirstSeen)),
+				rate, cfg.BurstMinRate),
+			chstore.NewStdMsg("prio.ex.nearBurst", "occ", fmtThousands(g.Occurrences),
+				"durSec", time.Duration(g.LastSeen-g.FirstSeen).Seconds(),
+				"rate", fmt.Sprintf("%.0f", rate), "thr", fmt.Sprintf("%.0f", cfg.BurstMinRate))
 	}
-	return "P3", "steady"
+	return "P3", "steady", chstore.NewStdMsg("prio.ex.steady")
 }
 
 // anomalyToInbox maps a detection score into a priority bucket.
@@ -2538,7 +2572,7 @@ func exceptionPriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageCo
 // derive one from the ratio bucket and surface it for visual
 // consistency only.
 func anomalyToInbox(e chstore.AnomalyEvent) InboxItem {
-	prio, reason := anomalyPriority(e)
+	prio, reason, reasonMsg := anomalyPriorityMsg(e)
 	sev := "info"
 	if prio == "P1" {
 		sev = "critical"
@@ -2546,19 +2580,20 @@ func anomalyToInbox(e chstore.AnomalyEvent) InboxItem {
 		sev = "warning"
 	}
 	return InboxItem{
-		ID:             "anomaly:" + e.ID,
-		Kind:           "anomaly",
-		Source:         "Anomaly",
-		Priority:       prio,
-		PriorityReason: reason,
-		Severity:       sev,
-		Service:        e.Service,
-		Title:          fmt.Sprintf("%s · %s", e.Kind, e.Pattern),
-		Description:    inboxTruncate(e.Sample, 240),
-		StartedAt:      e.StartedAt,
-		LastSeen:       e.LastSeen,
-		Status:         e.Status,
-		Clusters:       e.Clusters,
+		ID:                "anomaly:" + e.ID,
+		Kind:              "anomaly",
+		Source:            "Anomaly",
+		Priority:          prio,
+		PriorityReason:    reason,
+		PriorityReasonMsg: reasonMsg,
+		Severity:          sev,
+		Service:           e.Service,
+		Title:             fmt.Sprintf("%s · %s", e.Kind, e.Pattern),
+		Description:       inboxTruncate(e.Sample, 240),
+		StartedAt:         e.StartedAt,
+		LastSeen:          e.LastSeen,
+		Status:            e.Status,
+		Clusters:          e.Clusters,
 		Anomaly: &InboxAnomalyRef{
 			ID: e.ID, Kind: e.Kind, Pattern: e.Pattern,
 			PeakRatio: e.PeakRatio, CurrentRatio: e.CurrentRatio,
@@ -2580,22 +2615,28 @@ func anomalyToInbox(e chstore.AnomalyEvent) InboxItem {
 // olay satırının istisna kimliği yok); bu değişiklik kaynak önceliğini,
 // gerekçe metnini ve ciddiyet eşlemesini ortak merdivene hizalar.
 func anomalyPriority(e chstore.AnomalyEvent) (string, string) {
+	prio, reason, _ := anomalyPriorityMsg(e)
+	return prio, reason
+}
+
+// anomalyPriorityMsg — anomalyPriority + gerekçenin metin anahtarı (v0.10.2300 S3).
+func anomalyPriorityMsg(e chstore.AnomalyEvent) (string, string, *chstore.StdMsg) {
 	if e.Status == "cleared" {
-		return "P3", "cleared"
+		return "P3", "cleared", chstore.NewStdMsg("prio.an.cleared")
 	}
 	// v0.10.1792 (Davis F1.4) — tabansız olay baseline_kind'den okunur (eski
 	// satır: ratio=0); "sinyal yok" değil "taban yok" — sayım-yalnız olayın
 	// kendi kapısı terfide (IsCountOnlyAnomaly).
 	if chstore.AnomalyBaselineless(e) {
-		return "P3", "no baseline"
+		return "P3", "no baseline", chstore.NewStdMsg("prio.an.noBaseline")
 	}
 	if math.IsNaN(e.PeakRatio) || e.PeakRatio <= 0 {
-		return "P3", "no signal"
+		return "P3", "no signal", chstore.NewStdMsg("prio.an.noSignal")
 	}
 	if e.PeakRatio >= anomalyBigBreach() {
-		return "P2", fmt.Sprintf("%.1fx baseline", e.PeakRatio)
+		return "P2", fmt.Sprintf("%.1fx baseline", e.PeakRatio), chstore.NewStdMsg("prio.an.peak", "r", fmt.Sprintf("%.1f", e.PeakRatio))
 	}
-	return "P3", "mild"
+	return "P3", "mild", chstore.NewStdMsg("prio.an.mild")
 }
 
 // anomalyBigBreach — ortak merdivenin büyük ihlal oranı (problem_priority

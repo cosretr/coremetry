@@ -80,6 +80,13 @@ func oracleGroupStats(g chstore.ExceptionGroup) (oracle.GroupStats, bool) {
 // oracleGroupLabel, varsayılan "Teknik hata"; operatör: "Oracle yazıyor onun
 // yerine … Teknik Hata"). Gerekçe metni Exceptions/Inbox P rozetinin ipucu.
 func oraclePriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageConfig, now time.Time, lastHour, prevHour uint64, label string) (string, string) {
+	prio, reason, _ := oraclePriorityAtMsg(g, cfg, now, lastHour, prevHour, label)
+	return prio, reason
+}
+
+// oraclePriorityAtMsg — oraclePriorityAt'ın çekirdeği; gerekçenin YANINDA
+// metin anahtarı (v0.10.2300 S3). label branding metni → ham argüman.
+func oraclePriorityAtMsg(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageConfig, now time.Time, lastHour, prevHour uint64, label string) (string, string, *chstore.StdMsg) {
 	cfg = chstore.NormalizeExceptionTriage(cfg)
 	thr := uint64(cfg.OracleP1MinOccurrences)
 	win := cfg.P1Window()
@@ -89,19 +96,22 @@ func oraclePriorityAt(g chstore.ExceptionGroup, cfg chstore.ExceptionTriageConfi
 	if lastHour > thr {
 		switch {
 		case lastHour >= oracleBurstFactor*prevHour:
-			return "P1", fmt.Sprintf("%s patlaması: son 1 sa %s > eşik %s (önceki 1 sa %s, ≥%d×)", label, last, fmtThousands(thr), prev, oracleBurstFactor)
+			return "P1", fmt.Sprintf("%s patlaması: son 1 sa %s > eşik %s (önceki 1 sa %s, ≥%d×)", label, last, fmtThousands(thr), prev, oracleBurstFactor),
+				chstore.NewStdMsg("prio.ora.burst", "label", label, "last", last, "thr", fmtThousands(thr), "prev", prev, "f", fmt.Sprintf("%d", oracleBurstFactor))
 		case isNew:
-			return "P1", fmt.Sprintf("yeni %s grubu: son 1 sa %s > eşik %s", label, last, fmtThousands(thr))
+			return "P1", fmt.Sprintf("yeni %s grubu: son 1 sa %s > eşik %s", label, last, fmtThousands(thr)),
+				chstore.NewStdMsg("prio.ora.new", "label", label, "last", last, "thr", fmtThousands(thr))
 		}
-		return "P1", fmt.Sprintf("%s: son 1 sa %s > eşik %s (önceki 1 sa %s)", label, last, fmtThousands(thr), prev)
+		return "P1", fmt.Sprintf("%s: son 1 sa %s > eşik %s (önceki 1 sa %s)", label, last, fmtThousands(thr), prev),
+			chstore.NewStdMsg("prio.ora.p1", "label", label, "last", last, "thr", fmtThousands(thr), "prev", prev)
 	}
 	if lastHour >= oracleP2MinLastHour && (fresh || exceptionIsRegressed(g.State)) {
 		if exceptionIsRegressed(g.State) {
-			return "P2", fmt.Sprintf("regressed · son 1 sa %s", last)
+			return "P2", fmt.Sprintf("regressed · son 1 sa %s", last), chstore.NewStdMsg("prio.ora.regressed", "last", last)
 		}
-		return "P2", fmt.Sprintf("son 1 sa %s (önceki 1 sa %s)", last, prev)
+		return "P2", fmt.Sprintf("son 1 sa %s (önceki 1 sa %s)", last, prev), chstore.NewStdMsg("prio.ora.p2", "last", last, "prev", prev)
 	}
-	return "P3", fmt.Sprintf("sürekli akış (%s) · son 1 sa %s", label, last)
+	return "P3", fmt.Sprintf("sürekli akış (%s) · son 1 sa %s", label, last), chstore.NewStdMsg("prio.ora.steady", "label", label, "last", last)
 }
 
 // normalizeOracleFacet — SAF: yalnız "only" / "exclude"; gerisi "" (ikisi de).

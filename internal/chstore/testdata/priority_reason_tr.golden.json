@@ -1,0 +1,107 @@
+[
+ {
+  "name": "info",
+  "prio": "P3",
+  "reason": "info"
+ },
+ {
+  "name": "storm",
+  "prio": "P1",
+  "reason": "fırtına: 9 servis (eşik 5)"
+ },
+ {
+  "name": "incident-critical",
+  "prio": "P1",
+  "reason": "critical incident"
+ },
+ {
+  "name": "incident-warning",
+  "prio": "P2",
+  "reason": "incident"
+ },
+ {
+  "name": "exception-passthrough",
+  "prio": "P1",
+  "reason": "önceden hesaplanmış gerekçe"
+ },
+ {
+  "name": "critical-breach",
+  "prio": "P1",
+  "reason": "critical + 2.5x threshold"
+ },
+ {
+  "name": "critical-breach-below",
+  "prio": "P1",
+  "reason": "critical + 2.5x threshold"
+ },
+ {
+  "name": "critical-total-loss",
+  "prio": "P1",
+  "reason": "critical + tamamen kayıp (0/1)"
+ },
+ {
+  "name": "critical-total-loss-frac",
+  "prio": "P1",
+  "reason": "critical + tamamen kayıp (0/99.5)"
+ },
+ {
+  "name": "critical-stale",
+  "prio": "P1",
+  "reason": "critical open 5.2h"
+ },
+ {
+  "name": "critical-plain",
+  "prio": "P2",
+  "reason": "critical"
+ },
+ {
+  "name": "warning-breach",
+  "prio": "P2",
+  "reason": "warning + 3.1x threshold"
+ },
+ {
+  "name": "warning-total-loss",
+  "prio": "P2",
+  "reason": "warning + tamamen kayıp (0/3)"
+ },
+ {
+  "name": "warning-steady",
+  "prio": "P3",
+  "reason": "warning steady"
+ },
+ {
+  "name": "warning-zero-threshold",
+  "prio": "P3",
+  "reason": "warning steady"
+ },
+ {
+  "name": "inc-critical",
+  "prio": "P1",
+  "reason": "Declared incident, critical"
+ },
+ {
+  "name": "inc-warning",
+  "prio": "P2",
+  "reason": "Declared incident, warning"
+ },
+ {
+  "name": "inc-info",
+  "prio": "P3",
+  "reason": "Declared incident"
+ },
+ {
+  "name": "inc-critical-ack",
+  "prio": "P2",
+  "reason": "Declared incident, critical — acknowledged"
+ },
+ {
+  "name": "inc-warning-ack",
+  "prio": "P3",
+  "reason": "Declared incident, warning — acknowledged"
+ },
+ {
+  "name": "inc-info-ack",
+  "prio": "P3",
+  "reason": "Declared incident"
+ }
+]

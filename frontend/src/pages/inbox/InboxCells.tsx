@@ -14,6 +14,8 @@ import { promotedRecurrence } from '@/features/anomalies/detailSummary'; // v0.1
 import { Badge } from '@/components/ui/Badge';
 import type { InboxItem } from '@/lib/types';
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2283 — hücre metinleri arayüz dilinde (TR aynı)
+import { prioReasonView } from '@/lib/problemStandardView'; // v0.10.2300 (S3) — gerekçe EN anahtardan
+import { OrigLang } from '@/features/anomalies/OrigLang';
 import { graphRowSubText, type ProblemGraphRowSummary } from '@/lib/problemGraph';
 import { FrequentChip } from '@/components/coremetry/problems/ProblemRepeatBlock';
 
@@ -151,11 +153,14 @@ export function RowChips({ it, real, oraLabel }: { it: InboxItem; real: boolean;
 // P rozetinin ipucunda); diğer türlerde kaynak · (kural / incident adı) ·
 // türe özel ölçü.
 export function DetailLine({ it }: { it: InboxItem }) {
+  const lang = useLang();
   if (isExcFamily(it)) {
     return <>{it.exception!.message || '—'}</>;
   }
   const label = inboxRowLabel(it);
   const lead = <>{it.source}{label && <> · {label}</>}</>;
+  const pr = prioReasonView(it.priorityReason, it.priorityReasonMsg, lang);
+  const prNode = pr.orig ? <OrigLang>{pr.text}</OrigLang> : pr.text;
   if (it.kind === 'problem' && it.problem) {
     return (
       <>
@@ -166,7 +171,7 @@ export function DetailLine({ it }: { it: InboxItem }) {
             Problems satırıyla aynı: aciliyet rengi P rozetinde. */}
         <span className="mono"><b style={{ color: 'var(--text)', fontWeight: 600 }}>{fmtFixed(it.problem.value, 2)}</b></span>
         <span className="mono" style={{ color: 'var(--text3)' }}> / {fmtFixed(it.problem.threshold, 2)}</span>
-        {it.priorityReason && <span> · {it.priorityReason}</span>}
+        {it.priorityReason && <span> · {prNode}</span>}
       </>
     );
   }
@@ -184,11 +189,11 @@ export function DetailLine({ it }: { it: InboxItem }) {
         {lead}{' · '}
         peak <span className="mono">{fmtFixed(it.anomaly.peakRatio, 1)}x</span>
         {' · '}now <span className="mono">{fmtFixed(it.anomaly.currentRatio, 1)}x</span>
-        {it.priorityReason && <span> · {it.priorityReason}</span>}
+        {it.priorityReason && <span> · {prNode}</span>}
       </>
     );
   }
-  const rest = it.priorityReason || it.description;
+  const rest = it.priorityReason ? prNode : it.description;
   return <>{lead}{rest && <> · {rest}</>}</>;
 }
 

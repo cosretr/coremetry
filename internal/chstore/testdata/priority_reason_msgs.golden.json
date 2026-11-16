@@ -1,0 +1,167 @@
+[
+ {
+  "name": "info",
+  "tr": "info",
+  "msg": {
+   "k": "prio.info"
+  }
+ },
+ {
+  "name": "storm",
+  "tr": "fırtına: 9 servis (eşik 5)",
+  "msg": {
+   "k": "prio.storm",
+   "a": {
+    "n": "9",
+    "thr": "5"
+   }
+  }
+ },
+ {
+  "name": "incident-critical",
+  "tr": "critical incident",
+  "msg": {
+   "k": "prio.incCritical"
+  }
+ },
+ {
+  "name": "incident-warning",
+  "tr": "incident",
+  "msg": {
+   "k": "prio.incident"
+  }
+ },
+ {
+  "name": "critical-breach",
+  "tr": "critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.breach.critical",
+   "a": {
+    "r": "2.5"
+   }
+  }
+ },
+ {
+  "name": "critical-breach-below",
+  "tr": "critical + 2.5x threshold",
+  "msg": {
+   "k": "prio.breach.critical",
+   "a": {
+    "r": "2.5"
+   }
+  }
+ },
+ {
+  "name": "critical-total-loss",
+  "tr": "critical + tamamen kayıp (0/1)",
+  "msg": {
+   "k": "prio.totalLoss.critical",
+   "a": {
+    "thr": "1"
+   }
+  }
+ },
+ {
+  "name": "critical-total-loss-frac",
+  "tr": "critical + tamamen kayıp (0/99.5)",
+  "msg": {
+   "k": "prio.totalLoss.critical",
+   "a": {
+    "thr": "99.5"
+   }
+  }
+ },
+ {
+  "name": "critical-stale",
+  "tr": "critical open 5.2h",
+  "msg": {
+   "k": "prio.stale",
+   "a": {
+    "h": "5.2"
+   }
+  }
+ },
+ {
+  "name": "critical-plain",
+  "tr": "critical",
+  "msg": {
+   "k": "prio.critical"
+  }
+ },
+ {
+  "name": "warning-breach",
+  "tr": "warning + 3.1x threshold",
+  "msg": {
+   "k": "prio.breach.warning",
+   "a": {
+    "r": "3.1"
+   }
+  }
+ },
+ {
+  "name": "warning-total-loss",
+  "tr": "warning + tamamen kayıp (0/3)",
+  "msg": {
+   "k": "prio.totalLoss.warning",
+   "a": {
+    "thr": "3"
+   }
+  }
+ },
+ {
+  "name": "warning-steady",
+  "tr": "warning steady",
+  "msg": {
+   "k": "prio.warnSteady"
+  }
+ },
+ {
+  "name": "warning-zero-threshold",
+  "tr": "warning steady",
+  "msg": {
+   "k": "prio.warnSteady"
+  }
+ },
+ {
+  "name": "inc-critical",
+  "tr": "Declared incident, critical",
+  "msg": {
+   "k": "prio.inc.critical"
+  }
+ },
+ {
+  "name": "inc-warning",
+  "tr": "Declared incident, warning",
+  "msg": {
+   "k": "prio.inc.warning"
+  }
+ },
+ {
+  "name": "inc-info",
+  "tr": "Declared incident",
+  "msg": {
+   "k": "prio.inc.declared"
+  }
+ },
+ {
+  "name": "inc-critical-ack",
+  "tr": "Declared incident, critical — acknowledged",
+  "msg": {
+   "k": "prio.inc.criticalAck"
+  }
+ },
+ {
+  "name": "inc-warning-ack",
+  "tr": "Declared incident, warning — acknowledged",
+  "msg": {
+   "k": "prio.inc.warningAck"
+  }
+ },
+ {
+  "name": "inc-info-ack",
+  "tr": "Declared incident",
+  "msg": {
+   "k": "prio.inc.declared"
+  }
+ }
+]

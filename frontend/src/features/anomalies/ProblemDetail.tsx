@@ -21,7 +21,7 @@ import { AffectedEntitiesList } from '@/components/AffectedEntitiesList'; // v0.
 import { ProblemRunbookPanel } from '@/components/ProblemRunbookPanel';
 import { ProblemNotifyPanel } from './ProblemNotifyPanel';
 import { OrigLang } from './OrigLang'; // v0.10.2298 — LLM özeti EN arayüzde özgün dil etiketiyle
-import { stdHeadlineView } from '@/lib/problemStandardView'; // v0.10.2299 — manşet EN anahtardan
+import { stdHeadlineView, prioReasonView, detailPrioReasonMsg, problemTitleView } from '@/lib/problemStandardView'; // v0.10.2299 — manşet EN anahtardan; v0.10.2300 gerekçe + yerleşik kural adı
 import { IconSparkles } from '@/components/icons';
 import { TimeChart } from '@/components/charts/TimeChart';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
@@ -957,10 +957,13 @@ function claimIdentity(user: { email?: string; username?: string } | null | unde
 // yerde; sağ sütunun "Kısa geçmiş"i ilk `limit` satırı (en çok 5), Teknik
 // kanıttaki tam liste hepsini çizer. Rollout satırları kök neden panelinin
 // okumasından gelir (panel Teknik kanıtta; açılmadan boş — ikinci istek yok).
-function ProblemTimelineList({ problem, rollouts, limit }: {
+function ProblemTimelineList({ problem, rollouts, limit, kind }: {
   problem: Problem; rollouts: RolloutEvidence[]; limit?: number;
+  /** v0.10.2300 (S3) — std.kind: yerleşik kural adının EN görünümü. */
+  kind?: string;
 }) {
   const lang = useLang(); // v0.10.2284
+  const titleV = problemTitleView(problem, kind, lang);
   const items: ReactElement[] = [
     ...rollouts.map(ev => (
       <li key={`${ev.clusterId}/${ev.namespace}/${ev.workload}@${ev.revision}`} className={ev.band === 'high' ? 'warn' : ''}>
@@ -993,7 +996,7 @@ function ProblemTimelineList({ problem, rollouts, limit }: {
   }
   items.push(
     <li key="detected" className="err">
-      <b>Detected</b> — {problem.ruleName}
+      <b>Detected</b> — {titleV.orig ? <OrigLang>{titleV.text}</OrigLang> : titleV.text}
       <span className="mono pd-tl-ts">{fmtStartedTs(problem.startedAt)}</span>
     </li>,
   );
@@ -1093,6 +1096,9 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
   const endNs = problem.resolvedAt || Date.now() * 1e6;
   // v0.10.2126 (S6) — başlık cümlesi; ProblemStandardHeader ile AYNI anahtar.
   const std = useProblemStandard(`problem:${problem.id}`).data;
+  // v0.10.2300 (S3) — öncelik gerekçesi ve yerleşik kural adı EN'de anahtardan / std.kind'dan (TR aynen).
+  const prV = prioReasonView(problem.priorityReason, detailPrioReasonMsg(problem.priorityReason, std), lang);
+  const titleV = problemTitleView(problem, std?.kind, lang);
 
   // v0.9.860 (UX denetimi K1) — problem penceresi, servis/pod pivotları için
   // (logs/traces linkleriyle AYNI sınırlar; ns cinsinden).
@@ -1190,7 +1196,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
           alertProblemSummary. LLM yok. Eski "ne zaman" satırı (v0.10.1054
           yineleme eki dahil) bayt bayt "Ne zamandır" öğesinde. */}
       <DetailTitle prefix={problem.priority
-        ? <PriorityBadge p={problem.priority} reason={problem.priorityReason} />
+        ? <PriorityBadge p={problem.priority} reason={prV.text} />
         : undefined}>
         {/* v0.10.2299 (S2) — EN'de manşet anahtardan; serbest metin özgün dil işaretiyle. */}
         {std?.headline ? <StdHeadlineText std={std} lang={lang} /> : alertProblemSummary(problem, lang)}
@@ -1227,7 +1233,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
           {hasAlertMetricChart(problem) && <AlertMetricChartSection problem={problem} />}
           <PromotedLogPatternCount problem={problem} />
           <Sect title={tl('pd.recent', lang)}>
-            <ProblemTimelineList problem={problem} rollouts={rcRollouts} limit={5} />
+            <ProblemTimelineList problem={problem} rollouts={rcRollouts} limit={5} kind={std?.kind} />
           </Sect>
         </div>
       </div>
@@ -1249,7 +1255,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         <ProblemEventEvidence problemId={problem.id} />
         <Sect title={tl('pd.rule', lang)}>
           <dl className="pd-rule">
-            <dt>{tl('pd.rule.name', lang)}</dt><dd>{problem.ruleName || '—'}</dd>
+            <dt>{tl('pd.rule.name', lang)}</dt><dd>{titleV.text ? (titleV.orig ? <OrigLang>{titleV.text}</OrigLang> : titleV.text) : '—'}</dd>
             <dt>{tl('pd.rule.id', lang)}</dt><dd className="mono">{problem.ruleId || '—'}</dd>
             <dt>{tl('pd.rule.severity', lang)}</dt><dd>{problem.severity}</dd>
           </dl>
@@ -1329,7 +1335,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                   </span>
                 </div>
                 {problem.priorityReason && (
-                  <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 6 }}>{problem.priorityReason}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 6 }}>{prV.orig ? <OrigLang>{prV.text}</OrigLang> : prV.text}</div>
                 )}
               </Sect>
 
@@ -1340,7 +1346,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
               {/* v0.10.1032 — ikincil: kapalı gelir (istek atmaz — rollout
                   işaretleri RootCausePanel'in zaten yaptığı okumadan gelir). */}
               <Sect title="Problem timeline" collapsible>
-                <ProblemTimelineList problem={problem} rollouts={rcRollouts} />
+                <ProblemTimelineList problem={problem} rollouts={rcRollouts} kind={std?.kind} />
               </Sect>
           </div>
           <div className="pd-col">

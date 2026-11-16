@@ -2860,6 +2860,8 @@ export interface InboxItem {
   source: string;         // "Alert rule" | "Exception" | "Anomaly" | "Incident"
   priority: 'P1' | 'P2' | 'P3';
   priorityReason: string;
+  /** v0.10.2300 (S3) — gerekçenin metin anahtarı (Go chstore.StdMsg); TR arayüz metni aynen çizer. */
+  priorityReasonMsg?: StdMsg;
   severity: string;
   // Öznenin TÜRÜ (v0.9.1339): 'service' | 'db' | 'external' (v0.10.1017). Boş/yok = service.
   // lib/problemSubject.ts subjectKind() ile sınıflandır.
@@ -2944,7 +2946,9 @@ export type StdConfidenceLevel = 'high' | 'medium' | 'low';
 /** pass | fail | unknown | na | context | flag */
 export type SignalGateStatus = 'pass' | 'fail' | 'unknown' | 'na' | 'context' | 'flag';
 // v0.10.2299 (sunucu metinleri S2) — Türkçe metnin YANINDAKİ anahtar + ham argümanlar (Go chstore.StdMsg).
-export interface StdMsg { k: string; a?: Record<string, string | number | boolean> }
+// v0.10.2300 (S3) — …M argümanı iç içe mesaj taşır.
+export type StdMsgArg = string | number | boolean | StdMsg;
+export interface StdMsg { k: string; a?: Record<string, StdMsgArg> }
 export interface SignalGate { id: string; name: string; status: SignalGateStatus; note?: string; noteMsg?: StdMsg }
 export interface StdMeasure { text: string; value: number; normal: number; unit?: string; ratio?: number; msg?: StdMsg }
 export interface StdImpact {
@@ -2974,6 +2978,9 @@ export interface ProblemStandard {
   context?: string[];
   /** Context ile aynı sıra / uzunluk. */
   contextMsgs?: StdMsg[];
+  /** v0.10.2300 (S3) — yalnız detay ucu (problem ref'i): satırdaki gerekçe + anahtarı. */
+  priorityReason?: string;
+  priorityReasonMsg?: StdMsg;
 }
 
 // Role hierarchy used everywhere. `editor` was introduced for the

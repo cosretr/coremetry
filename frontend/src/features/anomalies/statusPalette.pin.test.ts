@@ -129,7 +129,9 @@ describe('v0.10.922 — bir olgu = bir sinyal (renk yalnız öncelikte)', () => 
     expect(d).toContain('<span className="badge b-gray">{problem.severity.toUpperCase()}</span>');
     // v0.10.2126 (Problems S6) — öncelik şeritten başlığa ("P1 · düz cümle")
     // taşındı; hâlâ paylaşılan atomdan.
-    expect(d).toContain('? <PriorityBadge p={problem.priority} reason={problem.priorityReason} />');
+    // v0.10.2300 (S3) — gerekçe arayüz dilinde (TR aynen): prioReasonView üzerinden.
+    expect(d).toContain('? <PriorityBadge p={problem.priority} reason={prV.text} />');
+    expect(d).toContain('const prV = prioReasonView(problem.priorityReason, ');
     expect(d).not.toContain('sevCls');
   });
 

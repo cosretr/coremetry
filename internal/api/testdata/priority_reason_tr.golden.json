@@ -1,0 +1,242 @@
+[
+ {
+  "name": "ex-burst-fresh",
+  "prio": "P1",
+  "reason": "11,260 olay / 11dk (~1024/dk)"
+ },
+ {
+  "name": "ex-burst-secs",
+  "prio": "P1",
+  "reason": "1,200 olay / 30sn (~1200/dk)"
+ },
+ {
+  "name": "ex-burst-ended",
+  "prio": "P1",
+  "reason": "11,260 olay / 12dk (~938/dk) · 5sa önce bitti"
+ },
+ {
+  "name": "ex-burst-ended-hours",
+  "prio": "P1",
+  "reason": "2,500 olay / 10dk (~250/dk) · 26sa önce bitti"
+ },
+ {
+  "name": "ex-regressed-p1",
+  "prio": "P1",
+  "reason": "yeniden açıldıktan sonra ≥500 oluşum (900 yeni · 1,900 toplam)"
+ },
+ {
+  "name": "ex-regressed-p2",
+  "prio": "P2",
+  "reason": "regressed"
+ },
+ {
+  "name": "ex-active",
+  "prio": "P1",
+  "reason": "active in last 5min · 18,217 total"
+ },
+ {
+  "name": "ex-stopped",
+  "prio": "P1",
+  "reason": "600 total · stopped 2sa 5dk ago"
+ },
+ {
+  "name": "ex-seen",
+  "prio": "P2",
+  "reason": "seen in last 4sa · 150 total"
+ },
+ {
+  "name": "ex-near-burst",
+  "prio": "P3",
+  "reason": "450 olay / 6dk (~75/dk · patlama eşiği 100/dk)"
+ },
+ {
+  "name": "ex-steady",
+  "prio": "P3",
+  "reason": "steady"
+ },
+ {
+  "name": "ora-burst",
+  "prio": "P1",
+  "reason": "lbl-1 patlaması: son 1 sa 1,200 > eşik 30 (önceki 1 sa 10, ≥3×)"
+ },
+ {
+  "name": "ora-new",
+  "prio": "P1",
+  "reason": "yeni lbl-1 grubu: son 1 sa 120 > eşik 30"
+ },
+ {
+  "name": "ora-p1",
+  "prio": "P1",
+  "reason": "lbl-1: son 1 sa 120 > eşik 30 (önceki 1 sa 100)"
+ },
+ {
+  "name": "ora-regressed",
+  "prio": "P2",
+  "reason": "regressed · son 1 sa 150"
+ },
+ {
+  "name": "ora-p2",
+  "prio": "P2",
+  "reason": "son 1 sa 150 (önceki 1 sa 90)"
+ },
+ {
+  "name": "ora-steady",
+  "prio": "P3",
+  "reason": "sürekli akış (lbl-1) · son 1 sa 5"
+ },
+ {
+  "name": "an-cleared",
+  "prio": "P3",
+  "reason": "cleared"
+ },
+ {
+  "name": "an-no-baseline",
+  "prio": "P3",
+  "reason": "no baseline"
+ },
+ {
+  "name": "an-no-signal",
+  "prio": "P3",
+  "reason": "no signal"
+ },
+ {
+  "name": "an-peak",
+  "prio": "P2",
+  "reason": "3.2x baseline"
+ },
+ {
+  "name": "an-mild",
+  "prio": "P3",
+  "reason": "mild"
+ },
+ {
+  "name": "keep:anomaly:*:error_rate:critical",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (kritik hata oranı) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:anomaly:*:error_rate:warning",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (hata oranı anomalisi) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:builtin-*:critical",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (yerleşik kural) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:builtin-*:warning",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (yerleşik kural) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:db-health:*:critical",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (DB sağlık kuralı) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:db-health:*:warning",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (DB sağlık kuralı) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:incident:critical",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (kritik incident) · Declared incident, critical"
+ },
+ {
+  "name": "keep:anomaly:ext:*:ext:error_count:critical",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (dış kaynak hata serisi) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:anomaly:ext:*:ext:error_count:warning",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (dış kaynak hata serisi) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:anomaly-cluster:ext:*:critical",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (dış kaynak hata kümesi) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:anomaly-cluster:ext:*:warning",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (dış kaynak hata kümesi) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:anomaly:ext-cap:*:critical",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (dış kaynak tavan özeti) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:anomaly:ext-cap:*:warning",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (dış kaynak tavan özeti) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:svc-slowdown:*:critical",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (yaygın yavaşlama) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:svc-slowdown:*:warning",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (yaygın yavaşlama) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:anomaly-auto:group:*:critical",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (anomali grubu: birden çok sinyal) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:anomaly-auto:group:*:warning",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (anomali grubu: birden çok sinyal) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:anomaly-auto:svc:*:critical",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (ML servis düzeyi anomali) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:anomaly-auto:svc:*:warning",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (ML servis düzeyi anomali) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:custom-*:critical",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (istisna listesi: custom-*) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:custom-*:warning",
+  "prio": "P1",
+  "reason": "kaynak önceliği korundu (istisna listesi: custom-*) · critical + 2.5x threshold"
+ },
+ {
+  "name": "keep:no-reason",
+  "prio": "P2",
+  "reason": "kaynak önceliği korundu (yerleşik kural)"
+ },
+ {
+  "name": "force:problem",
+  "prio": "P3",
+  "reason": "tür kuralı: exception/HTTP error dışı kalemler inbox'ta P3 (kaynak önceliği P1)"
+ },
+ {
+  "name": "force:anomaly",
+  "prio": "P3",
+  "reason": "tür kuralı: exception/HTTP error dışı kalemler inbox'ta P3 (kaynak önceliği P2)"
+ },
+ {
+  "name": "skip:p3",
+  "prio": "P3",
+  "reason": "warning steady"
+ },
+ {
+  "name": "fold:incident:i-1",
+  "prio": "P1",
+  "reason": "bağlı problem: critical + 2.5x threshold"
+ }
+]
