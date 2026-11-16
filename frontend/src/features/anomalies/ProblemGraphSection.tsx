@@ -10,12 +10,13 @@
 // bugünkü gibi kalır. Cümleler kural kimliğinden kurulur (EN/TR, i18n).
 // Viewer görür.
 import { lazy, Suspense, useMemo } from 'react';
-import { fmtClock } from '@/lib/utils';
+import { fmtClock, fmtDateTime } from '@/lib/utils';
 import { tf, useLang } from '@/lib/i18n';
 import { useProblemGraph } from '@/lib/queries/problems';
 import { graphCounts, graphSectionMode, type GraphT } from '@/lib/problemGraph';
 import { ProblemGraphMembers, ProblemGraphNearMisses } from '@/components/coremetry/problems/ProblemGraphTable';
 import { BlastTable, OriginEvidence, OriginLine } from '@/components/coremetry/problems/ProblemOriginBlocks';
+import { FrequentChip, RepeatBlock } from '@/components/coremetry/problems/ProblemRepeatBlock';
 import { Sect } from './detailSections';
 
 const clockHM = (ns: number) => fmtClock(ns / 1e6).slice(0, 5);
@@ -26,6 +27,30 @@ const ProblemGraphDiagram = lazy(() => import('@/components/coremetry/problems/P
 function useGraphT(): GraphT {
   const lang = useLang();
   return useMemo(() => (key, vars) => tf(key, lang, vars), [lang]);
+}
+
+const whenDT = (ns: number) => fmtDateTime(new Date(ns / 1e6));
+
+/** v0.10.2281 (S3) — başlıktaki nötr "sık tekrar eden" çipi (gölge). */
+export function ProblemFrequentChip({ problemId }: { problemId: string }) {
+  const q = useProblemGraph(problemId);
+  const t = useGraphT();
+  const f = q.data?.frequent;
+  if (!f?.frequent) return null;
+  return <span style={{ marginLeft: 6, verticalAlign: 'middle' }}><FrequentChip f={f} t={t} /></span>;
+}
+
+/** v0.10.2281 (S3) — "Tekrar" bölümü; sık değilse hiçbir şey çizmez. */
+export function ProblemRepeatSection({ problemId }: { problemId: string }) {
+  const q = useProblemGraph(problemId);
+  const t = useGraphT();
+  const f = q.data?.frequent;
+  if (!f?.frequent) return null;
+  return (
+    <Sect title={t('pg.rep.title')} sub={t('pg.rep.sub')}>
+      <RepeatBlock v={f} t={t} when={whenDT} />
+    </Sect>
+  );
 }
 
 /** v0.10.2279 (S2) — manşetin altındaki "Olası köken" satırı. Aynı sorgu

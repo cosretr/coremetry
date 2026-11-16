@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/Badge';
 import type { InboxItem } from '@/lib/types';
 import { tf, useLang } from '@/lib/i18n';
 import { graphRowSubText, type ProblemGraphRowSummary } from '@/lib/problemGraph';
+import { FrequentChip } from '@/components/coremetry/problems/ProblemRepeatBlock';
 
 const isExcFamily = isInboxExcFamily;
 
@@ -197,4 +198,13 @@ export function GraphRowSub({ row }: { row?: ProblemGraphRowSummary }) {
   const text = graphRowSubText(row, (k, v) => tf(k, lang, v));
   if (!text) return null;
   return <div className="triage-sub" data-testid="pg-row-sub" title={tf('pg.row.title', lang)}>{text}</div>;
+}
+
+// GraphFrequentChip — v0.10.2281 (entity grafı S3): nötr "sık tekrar eden"
+// gölge çipi (renk yok; ipucu: gölge ölçüm, bildirim değişmedi). Mevcut
+// "yinelenen" çipi yerinde kalır.
+export function GraphFrequentChip({ row }: { row?: ProblemGraphRowSummary }) {
+  const lang = useLang();
+  if (!row?.frequent) return null;
+  return <FrequentChip f={row.frequent} t={(k, v) => tf(k, lang, v)} />;
 }

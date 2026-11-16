@@ -58,6 +58,7 @@ export interface ProblemGraphShadowReport {
   originConf?: Record<string, number>;
   reads: ProblemGraphReads;
   truncated?: boolean;
+  frequentReport?: FrequentReport; // v0.10.2280 (S3)
 }
 
 export interface ProblemGraphTopGroup {
@@ -97,6 +98,7 @@ export function graphShadowLines(r: ProblemGraphShadowReport): string[] {
     `Küme boyu, düz M-CALL: ${kv(r.sizes, SIZE_ORDER, k => `${k} varlık`)} · katı M-CALL: ${kv(r.sizesStrict, SIZE_ORDER, k => `${k} varlık`)}`,
     `Bağlanırken sahibin yaşı (servisler arası): ${kv(r.age, AGE_ORDER, k => `${k} dk`)}`,
     `Graf verisi yok: ${r.graphMissing} Problem · kural ailesi kapalı geçen okuma turu: ${off}`,
+    ...frequentReportLines(r.frequentReport),
     `Olası köken (farklı küme): kazanan kural ${kv(r.originWins, ORIGIN_RULES)} · belirsiz ${r.originUnclear ?? 0} · güven ${kv(r.originConf, ['strong', 'weak', 'unclear'], k => CONF_TR[k] ?? k)}`,
     `Okuma: ${rd.passes} tik, ${rd.skippedFew} tik aday < 2 (okuma yok), ${rd.refreshes} okuma turu · entity_relations ${rd.relations} (tur başına en çok ${rd.maxRelPerPass}) · tazelik ${rd.runs} · bağımlılık olayı ${rd.evidence} · rollout ${rd.rollouts ?? 0} · called_by ${rd.blast ?? 0} · hata ${rd.errors}`,
   ];
@@ -148,6 +150,7 @@ export interface ProblemGraphResponse {
   nearMisses: ProblemGraphNearMiss[];
   truncated?: boolean;
   origin?: ProblemGraphOrigin; // v0.10.2278 (S2)
+  frequent?: FrequentVerdict;  // v0.10.2280 (S3) — yalnız sık ise
 }
 
 /** Çeviri işlevi (tf'nin dil bağlanmış hali) — saf yardımcılar dile bağlı değil. */
@@ -256,6 +259,7 @@ export function namesPlus(names: string[] | undefined, total: number): string {
 
 export interface ProblemGraphRowSummary {
   origin?: string; confidence: string; earliest?: string; entities: number; events: number;
+  frequent?: { kind: string; prior24h: number; days7d: number }; // v0.10.2280 (S3)
 }
 export interface ProblemGraphSummaryResponse {
   shadow: boolean; at?: number; rows: Record<string, ProblemGraphRowSummary>;
@@ -362,4 +366,72 @@ export function graphDiagramLayout(members: ProblemGraphMember[], origin?: Probl
     width: DIA.pad * 2 + (cols - 1) * DIA.colW + DIA.nodeW,
     height: DIA.top + maxRows * DIA.rowH,
   };
+}
+
+// ── v0.10.2281 (S3) — "sık tekrar eden" (gölge) ─────────────────────────
+
+export interface FrequentEpisode { id: string; startedAt: number; resolvedAt?: number; priority?: string; magnitude?: number }
+
+export interface FrequentVerdict {
+  signature: string; entity: string; name: string; family: string; direction?: string; viaOrigin?: boolean;
+  prior24h: number; prior7d: number; days7d: number; frequent: boolean;
+  kind?: 'hold' | 'severity' | string; bypass?: string;
+  priority?: string; maxPriority?: string; magnitude?: number; maxMagnitude?: number;
+  episodes?: FrequentEpisode[]; partial?: boolean;
+}
+
+export interface FrequentReport {
+  frequent: number; wouldHold: number; severityUp: number; heldBecameP1: number;
+  becameP1?: { id: string; name: string; family: string }[];
+  atThreshold?: Record<string, number>;
+  topSignatures?: { signature: string; name: string; family: string; direction?: string; held: number }[];
+  reads: { passes: number; reads: number; rows: number; maxRows: number; capped: number; errors: number };
+}
+
+/** SAF: admin raporunun S3 satırları (rapor yoksa boş). */
+export function frequentReportLines(f: FrequentReport | undefined): string[] {
+  if (!f) return [];
+  const top = (f.topSignatures ?? []).slice(0, 5).map(s => `${s.name} · ${s.family}${s.direction ? ` ${s.direction}` : ''} ${s.held}`).join(' · ') || 'yok';
+  const p1 = (f.becameP1 ?? []).map(x => `${x.name} (${x.id.slice(0, 12)})`).join(', ');
+  return [
+    `Sık tekrar eden (gölge, farklı Problem): ${f.frequent} · kural uygulansaydı tutulurdu ${f.wouldHold} · şiddet arttığı için yine giderdi ${f.severityUp} · eşik 24 sa 2/3/5: ${f.atThreshold?.['2'] ?? 0}/${f.atThreshold?.['3'] ?? 0}/${f.atThreshold?.['5'] ?? 0}`,
+    `Tutulacakken sonradan P1'e çıkan (hedef 0): ${f.heldBecameP1}${p1 ? ` — ${p1}` : ''}`,
+    `En çok tutulacak imzalar: ${top}`,
+    `Geçmiş okuması: ${f.reads.reads} okuma · ${f.reads.rows} satır (okuma başına en çok ${f.reads.maxRows}) · LIMIT'e değen ${f.reads.capped} · hata ${f.reads.errors}`,
+  ];
+}
+
+/** SAF: aile (+ yön) etiketi. */
+export function familyLabel(family: string, direction: string | undefined, t: GraphT): string {
+  const known = ['error', 'latency', 'traffic', 'availability', 'exception', 'db', 'external', 'runtime', 'cluster', 'rule'];
+  const f = known.includes(family) ? t(`pg.fam.${family}`) : family;
+  return direction ? `${f} ${t(`pg.dir.${direction}`)}` : f;
+}
+
+/** SAF: çip ipucu — gölge ölçümü olduğunu ve bildirimin değişmediğini söyler. */
+export function frequentChipTitle(f: { prior24h: number; days7d: number }, t: GraphT): string {
+  return t('pg.freq.tip', { p: f.prior24h, d: f.days7d });
+}
+
+/** SAF: "Tekrar" bloğunun satırları (anahtar → değer). */
+export function repeatRows(v: FrequentVerdict, t: GraphT): { k: string; v: string }[] {
+  const mag = (n?: number) => (n === undefined ? '—' : String(Math.round(n * 100) / 100));
+  const sev = v.kind === 'severity'
+    ? t('pg.rep.sevUp', { why: t(`pg.rep.bypass.${v.bypass ?? 'priority_up'}`), p: v.priority ?? '—', pm: v.maxPriority || '—', m: mag(v.magnitude), mm: mag(v.maxMagnitude) })
+    : t('pg.rep.sevSame', { p: v.priority ?? '—', pm: v.maxPriority || '—', m: mag(v.magnitude), mm: mag(v.maxMagnitude) });
+  return [
+    { k: t('pg.rep.kind'), v: `${v.name} · ${familyLabel(v.family, v.direction, t)}${v.viaOrigin ? ` · ${t('pg.rep.viaOrigin')}` : ''}` },
+    { k: t('pg.rep.d1'), v: t('pg.rep.d1v', { n: v.prior24h + 1, min: 3 }) },
+    { k: t('pg.rep.d7'), v: t('pg.rep.d7v', { d: v.days7d }) },
+    { k: t('pg.rep.sev'), v: sev },
+    { k: t('pg.rep.rule'), v: v.kind === 'hold' ? t('pg.rep.ruleHold') : t('pg.rep.ruleSend') },
+  ];
+}
+
+/** SAF: önceki bölüm satırı. */
+export function episodeText(e: FrequentEpisode, t: GraphT, when: (ns: number) => string): string {
+  const parts = [when(e.startedAt)];
+  if (e.resolvedAt && e.resolvedAt > e.startedAt) parts.push(t('pg.rep.lasted', { m: Math.max(1, Math.round((e.resolvedAt - e.startedAt) / 6e10)) }));
+  if (e.priority) parts.push(e.priority);
+  return parts.join(' · ');
 }

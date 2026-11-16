@@ -62,7 +62,7 @@ import {
   KIND_LABEL, SUBJECT_LANES, SUBJECT_LABEL, SUBJECT_TITLE, STATUS_PIVOTS, DEFAULT_MIN_OCC, type InboxStatus,
 } from './inbox/inboxFilters';
 import { INBOX_COLS, capSortLabel, occLine } from './inbox/inboxColumns';
-import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub } from './inbox/InboxCells';
+import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub, GraphFrequentChip } from './inbox/InboxCells';
 
 
 // exception ailesi — httperror satırları da exception payload'u taşır
@@ -1180,7 +1180,8 @@ export default function InboxPage() {
                             ? <Link to={link.to} replace={link.replace} state={link.state} onClick={stopRowClick} className="cell-link">{titleInner}</Link>
                             : (head ? titleInner : undefined)}
                           code={!it.std && isExcFamily(it)}
-                          chips={<RowChips it={it} real={verdictOf(it, verdicts) === 'real'} oraLabel={ora ? oraLabel : undefined} />}
+                          chips={<><RowChips it={it} real={verdictOf(it, verdicts) === 'real'} oraLabel={ora ? oraLabel : undefined} />
+                            {it.problem && <GraphFrequentChip row={graphSum.data?.rows?.[it.problem.id]} />}</>}
                           detail={detail}
                           detailMono={!it.std && isExcFamily(it)}
                           detailTitle={isExcFamily(it) ? it.exception?.message : (it.std?.evidence.sentence ?? inboxRowLabel(it) ?? undefined)}
