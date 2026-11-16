@@ -1023,7 +1023,7 @@ func TestResolveTraceLinkIdentity_StrictBeatsLoose(t *testing.T) {
 // ARAMA ad-bağımsız (şekil tanınır); bu yalnız ETİKET: token'ı taşıyan JSON
 // alanının gerçek adı okunur, çözülemezse ad UYDURULMAZ.
 func TestJSONKeyForToken(t *testing.T) {
-	const tok = "BKRM032060203MGie0018328324206090816550266120"
+	const tok = "DQTX032060203WHoa0018328324206090816550266120"
 	cases := []struct{ name, body, want string }{
 		{"bitişik", `{"AcmRequestId":"` + tok + `","CustomerNumber":"1"}`, "AcmRequestId"},
 		{"boşluklu", `{ "AcmRequestId" : "` + tok + `" }`, "AcmRequestId"},

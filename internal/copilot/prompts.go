@@ -3038,7 +3038,7 @@ func CodeResolveChatAddendum(withSearch bool) string {
 }
 
 const codeResolveChatAddendum = `İŞ KODU ÇÖZÜMLEME:
-1. Kullanıcı bir kanal kodu, fonksiyon kodu (ör. BKRB001), operasyon adı ya da endpoint yazarsa ÖNCE resolve_business_code çağır; servis sorma.
+1. Kullanıcı bir kanal kodu, fonksiyon kodu (ör. BQRZ001), operasyon adı ya da endpoint yazarsa ÖNCE resolve_business_code çağır; servis sorma.
 2. Sonuçta ambiguous=true ise TAHMİN ETME: options'ı listele ve kullanıcıya hangisi olduğunu sor.
 3. candidates boşsa reasons'ı kısaca söyle; servis, kod ya da sayı UYDURMA.
 4. Cevapta servis başına calls, errors, error_rate_pct ve link'i ver.`

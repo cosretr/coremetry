@@ -106,7 +106,7 @@ func TestShortCorrValue(t *testing.T) {
 	if shortCorrValue("kisa") != "kisa" {
 		t.Error("kısa değer kırpılmamalı")
 	}
-	long := "SPE02500302010lfv00306137532026080508"
+	long := "QXC02500302010rbw00306137532026080508"
 	got := shortCorrValue(long)
 	if len([]rune(got)) > 15 {
 		t.Errorf("çip etiketi çok uzun: %q", got)

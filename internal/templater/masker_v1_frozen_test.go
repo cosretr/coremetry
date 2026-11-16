@@ -55,7 +55,7 @@ func maskIDTokensV1(s, repl string) string {
 //   - yalnız hex, ≥8, en az bir rakam (`1a2b3c4d`; `deadbeef` sözcük sayılır)
 //   - rakam baskın: ≥5 rakam ve rakam > yarısı (`ab12345`; `sha256`, `iso8601` kalır)
 //   - uzun karışık: ≥10 ve ≥3 rakam, ya da ≥16 ve ≥2 rakam
-//     (`SPE1015060201ZTod…`, ULID, base64 parçaları)
+//     (`QXC1015060201WKue…`, ULID, base64 parçaları)
 //   - base64-benzeri: ≥16, büyük ve küçük harf her biri ≥¼ ve harf durumu
 //     değişimi ≥⅓ (camelCase sınıf adları — `NullPointerException` — kalır)
 func isIDLikeTokenV1(tok string) bool {

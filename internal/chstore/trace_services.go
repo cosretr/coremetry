@@ -6,7 +6,7 @@ package chstore
 //
 // v0.10.892 (operatör, prod 2026-09-23: "hep aynı servisler geliyor") — SEÇİM
 // KURALI DEĞİŞTİ. Eski kural kök span'ın servisiydi; kök hemen her trace'te
-// GİRİŞ NOKTASIDIR (apigateway-*, yarp, onlineintegration, loginivr) → Oracle
+// GİRİŞ NOKTASIDIR (edge-gateway-*, proxy, channel-integration, ivr-login) → Oracle
 // hatası hangi serviste doğmuş olursa olsun hep aynı birkaç kanal servisi
 // listeleniyordu. Yeni sıra: (1) trace'te HATA veren span'lardan EN GEÇ
 // başlayanının servisi (zincirde en derin hata = hatanın doğduğu yer;

@@ -12,7 +12,7 @@ import (
 
 func TestNormalizeSignature_IDTokens(t *testing.T) {
 	cases := []struct{ name, in, want string }{
-		{"glued id + timestamp", "request SPE1015060201ZTod000000000000202610240340413867 00 accepted",
+		{"glued id + timestamp", "request QXC1015060201WKue000000000000202610240340413867 00 accepted",
 			"request <x> <x> accepted"},
 		{"mixed alnum ≥10", "session K7QX2M9PLA4 opened", "session <x> opened"},
 		{"ulid", "job 01HF3ZK8Q4N6V2W9X7Y5R3T1PB done", "job <x> done"},
@@ -21,7 +21,7 @@ func TestNormalizeSignature_IDTokens(t *testing.T) {
 		{"underscore digits", "order_123456 created", "order_<x> created"},
 		{"prefixed compound collapses", "ord-8f3k2j1m9x-7q2w4e6r8t sent", "ord-<x> sent"},
 		{"base64 no digits", "token dGhpcyBpcyBhIHRlc3Q= expired", "token <x>= expired"},
-		{"quoted json value", `{"request_id":"SPE1015060201ZTod0000000000002026102403404138", "status":"OK"`,
+		{"quoted json value", `{"request_id":"QXC1015060201WKue0000000000002026102403404138", "status":"OK"`,
 			`{"request_id":"<x>", "status":"OK"`},
 		{"natural language kept", "Payment authorization failed for customer account, retrying later",
 			"Payment authorization failed for customer account, retrying later"},
@@ -43,7 +43,7 @@ func TestNormalizeSignature_IDTokens(t *testing.T) {
 func TestNormalizeSignature_JSONBody(t *testing.T) {
 	cases := []struct{ name, in, want string }{
 		{"keys sorted, ids out, message masked",
-			`{"request_id":"SPE1015060201ZTod000000000000202610240340413867","msg":"payment failed for K7QX2M9PLA4 after 1500ms","status":"FAILED"}`,
+			`{"request_id":"QXC1015060201WKue000000000000202610240340413867","msg":"payment failed for K7QX2M9PLA4 after 1500ms","status":"FAILED"}`,
 			`{"msg":"payment failed for <x> after <x>ms","request_id":<x>,"status":<x>}`},
 		{"message key case-insensitive + priority", `{"Message":"boot ok","error":"x","b":1}`,
 			`{"Message":"boot ok","b":<x>,"error":<x>}`},
@@ -51,7 +51,7 @@ func TestNormalizeSignature_JSONBody(t *testing.T) {
 			`{"amount":<x>,"request_id":<x>}`},
 		{"non-string message skipped", `{"error":{"code":5},"event":"retry scheduled"}`,
 			`{"error":<x>,"event":"retry scheduled"}`},
-		{"truncated json falls back to masked text", `{"request_id":"SPE1015060201ZTod0000000000002026", "msg":"tim`,
+		{"truncated json falls back to masked text", `{"request_id":"QXC1015060201WKue0000000000002026", "msg":"tim`,
 			`{"request_id":"<x>", "msg":"tim`},
 		// Dizi JSON nesnesi değil → düz metin yolu; v0.10.1829'dan beri
 		// sayılar tek haneli de maskelenir ve virgüllü koşu tek yer tutucu.
@@ -79,7 +79,7 @@ func TestNormalizeSignature_JSONBody(t *testing.T) {
 func TestGroupBySignature_RequestIDBodiesCollapse(t *testing.T) {
 	rows := make([]*LogRecord, 0, 256)
 	for i := 0; i < 256; i++ {
-		body := fmt.Sprintf(`{"request_id":"SPE%013dZTod%024d %02d","channel":"MOB","msg":"inquiry completed in %dms"}`,
+		body := fmt.Sprintf(`{"request_id":"QXC%013dWKue%024d %02d","channel":"MOB","msg":"inquiry completed in %dms"}`,
 			1015060201+i*7919, 202610240340413867+int64(i)*104729, i%100, 10+i)
 		rows = append(rows, &LogRecord{Timestamp: int64(1000 + i), Body: body, SeverityText: "DEBUG"})
 	}
@@ -105,7 +105,7 @@ func TestGroupBySignature_RequestIDBodiesCollapse(t *testing.T) {
 func TestNormalizeSignature_PerfBudget(t *testing.T) {
 	bodies := make([]string, 2000)
 	for i := range bodies {
-		bodies[i] = fmt.Sprintf(`{"request_id":"SPE%013dZTod%024d","msg":"inquiry %d completed for K7QX%07d","f1":"a","f2":"b","f3":{"x":1}}`,
+		bodies[i] = fmt.Sprintf(`{"request_id":"QXC%013dWKue%024d","msg":"inquiry %d completed for K7QX%07d","f1":"a","f2":"b","f3":{"x":1}}`,
 			i, int64(i)*31, i, i)
 	}
 	start := time.Now()

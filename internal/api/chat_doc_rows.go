@@ -51,11 +51,11 @@ type docRowMatch struct {
 
 // v0.10.1183 — Operator-reported: sunucu / fonksiyon envanteri Excel'lerinde
 // bilgi hâlâ bulunamıyordu. Ölçüm: hostname'lerin çoğu rakam / tire taşımaz
-// (CCFWKAPP, MCCREPORT) → 1176'nın "kimlik biçimli terim" kapısı onları hiç
+// (HQZXSAPP, QZXREPORT) → 1176'nın "kimlik biçimli terim" kapısı onları hiç
 // aramıyordu; ayrıca soru terimleri katlanmış (çağrı → cagri), hücre metni
 // değil. Yeni kural: sorudaki kelime / ifade bir HÜCRE DEĞERİNE (katlanmış,
 // kelime sınırlı) birebir eşitse satır eşleşir; kimlik biçimli terim hücrede
-// alt-dize olarak da eşleşir (srvappl01 ↔ srvappl01.corp.local). 50'den çok
+// alt-dize olarak da eşleşir (hstqzwx01 ↔ hstqzwx01.corp.local). 50'den çok
 // satırda geçen değer (PROD, Hayır, Şube) yaygın sayılıp atlanır.
 //
 // strict (guided'dan ÖNCE çalışan erken kademe): yalnız güçlü işaret —
@@ -82,7 +82,7 @@ func rowNeedles(question string) []rowNeedle {
 		return !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '.' || r == '_' || r == '\'')
 	}) {
 		if i := strings.IndexRune(w, '\''); i >= 0 {
-			w = w[:i] // CCFWKAPP'in → CCFWKAPP
+			w = w[:i] // HQZXSAPP'in → HQZXSAPP
 		}
 		w = strings.Trim(w, ".-_")
 		f := wiki.Fold(w)

@@ -36,7 +36,7 @@ func TestSubjectResolverPodFallback(t *testing.T) {
 		{OperationCode: "LOGIN", InstanceID: "acme-mobile-login-prod-5459c84bd9-qnfgc"}, // aynı pod tek oy
 		{OperationCode: "PUSH", InstanceID: "acme-digital-mobile-pushconfirm-prod-5b57d5c754-6c2n9"},
 		{OperationCode: "TRACED", TraceID: "t1", InstanceID: "acme-mobile-login-prod-7b9949bb74-l4bg5"},
-		{OperationCode: "HOSTONLY", InstanceID: "WMOBAPPP84"},
+		{OperationCode: "HOSTONLY", InstanceID: "XQHZSRVR84"},
 	}
 	r.Observe(context.Background(), src, rows, now.Add(-15*time.Minute), now)
 	ctx := context.Background()

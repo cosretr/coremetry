@@ -22,7 +22,7 @@ var (
 // tekrarsız. acme-mobile-login-prod-7b9949bb74-l4bg5 →
 // [acme-mobile-login-prod, acme-mobile-login]; …-prod-oneagent-55675dfc-xxxxx →
 // [...-prod-oneagent, ...-prod, ...]. Pod biçimine uymayan değer (host adı:
-// WMOBAPPP84) aday üretmez.
+// XQHZSRVR84) aday üretmez.
 func podServiceCandidates(pod string) []string {
 	p := strings.ToLower(strings.TrimSpace(pod))
 	if p == "" {

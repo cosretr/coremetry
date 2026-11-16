@@ -15,7 +15,7 @@ func TestPodServiceCandidates(t *testing.T) {
 		{"acme-digital-mobile-pushconfirm-prod-oneagent-55675dfc9-ab12c", []string{"acme-digital-mobile-pushconfirm-prod-oneagent", "acme-digital-mobile-pushconfirm-prod", "acme-digital-mobile-pushconfirm"}},
 		{"ACME-Cards-SwitchIntegration-NonTx-Prod-B4c5c97cb-CGQXZ", []string{"acme-cards-switchintegration-nontx-prod", "acme-cards-switchintegration-nontx"}},
 		{"kafka-broker-2", []string{"kafka-broker"}},
-		{"WMOBAPPP84", nil},
+		{"XQHZSRVR84", nil},
 		{"", nil},
 		{"shop-7f9c", nil},
 	}

@@ -16,11 +16,11 @@ func docRowsFixture(t *testing.T) []docRowChunk {
 	t.Helper()
 	var b strings.Builder
 	b.WriteString("HOSTNAME;DOMAIN;ENVIRONMENT;PRIMARY IP;USAGE PURPOSE;Not\n")
-	b.WriteString("CCFWKAPP;AKNET;PROD;10.215.4.120;IIS SERVER;a|b\n")
-	b.WriteString("srvappl01.corp.local;AKNET;PROD;10.1.1.1;kredi-onay-api;\n")
-	b.WriteString("ABMVDICON1;AKNET;PROD;10.215.14.194;APPLICATION SERVER;\n")
-	for i := 0; i < 60; i++ { // PROD / AKNET yaygın değerler
-		b.WriteString("FILLER;AKNET;PROD;10.0.0.1;APPLICATION SERVER;\n")
+	b.WriteString("HQZXSAPP;QXNET;PROD;10.117.4.120;IIS SERVER;a|b\n")
+	b.WriteString("hstqzwx01.corp.local;QXNET;PROD;10.1.1.1;kredi-onay-api;\n")
+	b.WriteString("QXZVHWSRV1;QXNET;PROD;10.117.14.194;APPLICATION SERVER;\n")
+	for i := 0; i < 60; i++ { // PROD / QXNET yaygın değerler
+		b.WriteString("FILLER;QXNET;PROD;10.0.0.1;APPLICATION SERVER;\n")
 	}
 	text, err := rag.TableToText("envanter.csv", []byte(b.String()))
 	if err != nil {
@@ -37,9 +37,9 @@ func TestDocRowsCellValueMatch(t *testing.T) {
 		strict bool
 		want   []string // beklenen satırların ilk hücreleri
 	}{
-		{"CCFWKAPP sunucusunun ip adresi nedir", true, []string{"CCFWKAPP"}},  // rakamsız hostname (1183 kök neden)
-		{"ccfwkapp hangi ortamda", false, []string{"CCFWKAPP"}},               // küçük harf: gevşek kipte
-		{"srvappl01 hangi uygulama", true, []string{"srvappl01.corp.local"}},  // kimlik alt-dize
+		{"HQZXSAPP sunucusunun ip adresi nedir", true, []string{"HQZXSAPP"}},  // rakamsız hostname (1183 kök neden)
+		{"hqzxsapp hangi ortamda", false, []string{"HQZXSAPP"}},               // küçük harf: gevşek kipte
+		{"hstqzwx01 hangi uygulama", true, []string{"hstqzwx01.corp.local"}},  // kimlik alt-dize
 		{"ATM ürününün sorumlusu kim", true, []string{"ATM"}},                 // tek kelimelik ürün
 		{"çağrı merkezi ivr sorumlusu", false, []string{"Çağrı Merkezi IVR"}}, // katlanmış çok kelime
 		{"prod ortamındaki sunucular", false, nil},                            // yaygın değer satır seçmez
@@ -55,12 +55,12 @@ func TestDocRowsCellValueMatch(t *testing.T) {
 		}
 	}
 	// erken (strict) kip küçük harfli düz kelimeyi almaz → genel soru kaçmaz
-	if rows, _ := matchDocRows(chunks, "ccfwkapp hangi ortamda", true); len(rows) != 0 {
+	if rows, _ := matchDocRows(chunks, "hqzxsapp hangi ortamda", true); len(rows) != 0 {
 		t.Fatalf("strict kip küçük harfli düz kelimeyle satır seçmemeli: %+v", rows)
 	}
-	rows, vals := matchDocRows(chunks, "CCFWKAPP ip", true)
+	rows, vals := matchDocRows(chunks, "HQZXSAPP ip", true)
 	md := docRowsMarkdown(vals, rows)
-	if !strings.Contains(md, "| 2 | CCFWKAPP | AKNET | PROD | 10.215.4.120 | IIS SERVER | a\\|b |") {
+	if !strings.Contains(md, "| 2 | HQZXSAPP | QXNET | PROD | 10.117.4.120 | IIS SERVER | a\\|b |") {
 		t.Fatalf("tablo:\n%s", md)
 	}
 }

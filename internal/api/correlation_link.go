@@ -6,7 +6,7 @@
 // adreslere yönlendirsin."
 //
 // v0.9.580 zaten örnek request_id'leri buluyor ve cevaba yazıyor
-// ("Örnek request_id: SPE0250…"). Ama operatör o değeri KOPYALAYIP
+// ("Örnek request_id: QXC0250…"). Ama operatör o değeri KOPYALAYIP
 // kurumun log arayüzüne elle yapıştırıyor. Cevap bir başlangıç noktası
 // veriyordu; tık verilebilirdi.
 //

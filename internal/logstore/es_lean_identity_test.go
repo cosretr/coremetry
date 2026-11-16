@@ -55,7 +55,7 @@ func TestLeanSourceKeepsRowIdentity(t *testing.T) {
 		wantSev string
 	}{
 		{"openshift cluster-logging", map[string]any{
-			"@timestamp": "2026-10-24T03:40:41Z", "message": `{"request_id":"SPE1015060201ZTod0000"}`,
+			"@timestamp": "2026-10-24T03:40:41Z", "message": `{"request_id":"QXC1015060201WKue0000"}`,
 			"level":      "debug",
 			"kubernetes": map[string]any{"container_name": "orders-api", "namespace_name": "kxzone-prod"},
 		}, "orders-api", "debug"},

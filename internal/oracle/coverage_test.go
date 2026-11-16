@@ -24,8 +24,8 @@ func TestBuildCoverage(t *testing.T) {
 	obs := []chstore.OracleOpObs{
 		{Operation: "OP_OK", Rows: 400, WithTrace: 400},
 		{Operation: "OP_POD", Rows: 300, WithTrace: 0, TopInstance: "acme-mobile-login-prod-7b9949bb74-l4bg5"},
-		{Operation: "OP_HOST", Rows: 120, WithTrace: 0, TopInstance: "WMOBAPPP84", TopHost: "WMOBAPPP84"},
-		{Operation: "OP_NOTFOUND", Rows: 80, WithTrace: 75, TopInstance: "WMOBAPPP85"},
+		{Operation: "OP_HOST", Rows: 120, WithTrace: 0, TopInstance: "XQHZSRVR84", TopHost: "XQHZSRVR84"},
+		{Operation: "OP_NOTFOUND", Rows: 80, WithTrace: 75, TopInstance: "XQHZSRVR85"},
 		{Operation: "OP_MULTI", Rows: 50, WithTrace: 50},
 		{Operation: "OP_DEAD", Rows: 30, WithTrace: 30},
 		{Operation: "OP_FEW", Rows: 12, WithTrace: 12},
@@ -62,7 +62,7 @@ func TestBuildCoverage(t *testing.T) {
 		t.Errorf("çözülmeyen sırası: %v", ops)
 	}
 	host := rep.Unresolved[0]
-	if host.Reason != ReasonNoTraceID || host.PodLike || host.Instance != "WMOBAPPP84" || host.Host != "WMOBAPPP84" {
+	if host.Reason != ReasonNoTraceID || host.PodLike || host.Instance != "XQHZSRVR84" || host.Host != "XQHZSRVR84" {
 		t.Errorf("host adlı instance pod sayılmaz: %+v", host)
 	}
 	if m := rep.Unresolved[2]; m.Reason != ReasonMultiService || m.Service != "acme-a-prod" || m.Votes != "4/10" {

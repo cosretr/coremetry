@@ -10927,7 +10927,7 @@ eski FE yeni cevabı okur (alanlar ek), yeni FE eski cevabı metrikten türetere
 ## 2026-10-24 — v0.10.1496 — Desenler: kimlik belirteci maskesi + JSON gövde imzası; ES desen satırında servis/seviye
 
 **Bağlam (operatör, prod ES).** /logs tek servis seçiliyken "Desenler" 256 örnek satırdan 164 desen veriyordu. Gövdeler
-`{"request_id":"SPE1015…202610240340413867 00", …}` biçiminde JSON; harf+rakam karışık uzun kimlikler maskelenmiyordu
+`{"request_id":"QXC1015…202610240340413867 00", …}` biçiminde JSON; harf+rakam karışık uzun kimlikler maskelenmiyordu
 (`\b\d{2,}` kelime içine giremez, hex kuralı harf karışımını tutmaz) → her request_id ayrı desen, sayı 1. Ayrıca
 satırlarda Servisler "–", Seviye 0 (hacim çubuğu DEBUG 260).
 

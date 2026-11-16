@@ -98,7 +98,7 @@ var maskRules = []maskRule{
 //
 // v0.10.1496 — son geçiş logstore.MaskIDTokens (Desenler imzasıyla ORTAK
 // yüklem): `\b` sınırı olmadığı için bare-number kuralının giremediği
-// harf+rakam karışık uzun kimlikler (`SPE1015060201ZTod…`, ULID, kısa hex,
+// harf+rakam karışık uzun kimlikler (`QXC1015060201WKue…`, ULID, kısa hex,
 // `ab12345`) her satırı ayrı şablona bölüyordu. Kurallardan SONRA koşar:
 // `ord_12345` gibi önekli kimlikler önce bütün olarak `<*>` olur.
 //

@@ -177,10 +177,10 @@ describe('oracleProbe — özne kapsamı', () => {
     opsTotal: 12, opsListed: 9, opsResolved: 3,
     byReason: { no_trace_id: 120, trace_not_found: 80, multi_service: 50, dead_service: 30, unconfirmed: 12, no_operation: 5 },
     unresolved: [
-      { operation: 'OP_HOST', rows: 120, withTrace: 0, status: 'unresolved', reason: 'no_trace_id', instance: 'WMOBAPPP84', host: 'WMOBAPPP84' },
+      { operation: 'OP_HOST', rows: 120, withTrace: 0, status: 'unresolved', reason: 'no_trace_id', instance: 'XQHZSRVR84', host: 'XQHZSRVR84' },
       { operation: 'OP_MULTI', rows: 50, withTrace: 50, status: 'unresolved', reason: 'multi_service', service: 'acme-a-prod', votes: '4/10' },
       { operation: 'OP_PODX', rows: 9, withTrace: 0, status: 'unresolved', reason: 'no_trace_id', instance: 'legacy-batch-7b9949bb74-l4bg5', podLike: true },
-      { operation: '', rows: 5, withTrace: 0, status: 'unresolved', reason: 'no_operation', host: 'WMOBAPPP90' },
+      { operation: '', rows: 5, withTrace: 0, status: 'unresolved', reason: 'no_operation', host: 'XQHZSRVR90' },
     ],
     aliveKnown: true, fnChecked: false, fnEnabled: false, rowsFunctionCode: 0, fnCodes: 0, learnedEntries: 5, generatedAt: 0,
   };
@@ -193,10 +193,10 @@ describe('oracleProbe — özne kapsamı', () => {
       "Bağlanmayan 297 satır — neden: satırlarda trace kimliği yok 120 · trace Coremetry'de yok 80 · çok servisli operasyon 50 · öğrenilmiş servis canlı değil 30 · eşleme henüz onaysız 12 · operasyon kodu boş 5.",
     ]);
     expect(t.ops).toEqual([
-      'OP_HOST · 120 satır · satırlarda trace kimliği yok · instance WMOBAPPP84 (pod adı değil)',
+      'OP_HOST · 120 satır · satırlarda trace kimliği yok · instance XQHZSRVR84 (pod adı değil)',
       'OP_MULTI · 50 satır · çok servisli operasyon · aday acme-a-prod (4/10)',
       'OP_PODX · 9 satır · satırlarda trace kimliği yok · pod legacy-batch-7b9949bb74-l4bg5 (canlı bir servise çözülmedi)',
-      '(boş) · 5 satır · operasyon kodu boş · host WMOBAPPP90',
+      '(boş) · 5 satır · operasyon kodu boş · host XQHZSRVR90',
     ]);
   });
   it('yarıdan azı bağlanıyorsa uyarı; canlı liste okunamadıysa alt sınır notu; satır yoksa tek cümle', () => {

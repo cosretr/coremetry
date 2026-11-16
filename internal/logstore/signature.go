@@ -8,7 +8,7 @@ package logstore
 // verbatim saklanır (feedback-no-redaction). Drain şablonlamasından ayrı:
 // burada örnek tabanı yok, tek mesaj → tek imza, deterministik.
 //
-// v0.10.1496 (operatör, prod ES): `{"request_id":"SPE1015…202610240340413867 00", …}`
+// v0.10.1496 (operatör, prod ES): `{"request_id":"QXC1015…202610240340413867 00", …}`
 // gövdeli 256 satır 164 desene dağılıyordu — harf+rakam karışık uzun
 // kimlikler (`\b` sınırı olmadığı için sayı kuralı içlerine giremez)
 // maskelenmiyordu. İki ek: (1) KİMLİK BELİRTECİ geçişi (MaskIDTokens —
@@ -305,7 +305,7 @@ func MaskIDTokens(s, repl string) string {
 //     serpiştirilmiş) ve en uzun harf koşusu ≤3 (`TX9F3K2`, `QZ7M4P1`;
 //     `Log4j2Plugins` — 7 harflik koşu — sınıf adı olarak kalır)
 //   - uzun karışık: ≥10 ve ≥3 rakam, ya da ≥16 ve ≥2 rakam
-//     (`SPE1015060201ZTod…`, ULID, base64 parçaları)
+//     (`QXC1015060201WKue…`, ULID, base64 parçaları)
 //   - base64-benzeri: ≥16, büyük ve küçük harf her biri ≥¼ ve harf durumu
 //     değişimi ≥⅓ (camelCase sınıf adları — `NullPointerException` — kalır)
 func IsIDLikeToken(tok string) bool {

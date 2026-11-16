@@ -11,7 +11,7 @@ import (
 func perfFixtureBodies() []string {
 	bodies := make([]string, 2000)
 	for i := range bodies {
-		bodies[i] = fmt.Sprintf(`{"request_id":"SPE%013dZTod%024d","msg":"inquiry %d completed for K7QX%07d","f1":"a","f2":"b","f3":{"x":1}}`,
+		bodies[i] = fmt.Sprintf(`{"request_id":"QXC%013dWKue%024d","msg":"inquiry %d completed for K7QX%07d","f1":"a","f2":"b","f3":{"x":1}}`,
 			i, int64(i)*31, i, i)
 	}
 	return bodies

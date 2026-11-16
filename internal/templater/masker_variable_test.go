@@ -77,7 +77,7 @@ func remaskFixtures() []string {
 		"User usr_54347 initiated transfer request of $1000.50 to account acc_1523",
 		"Order ord_12345 from cust_67 via txn_8888888",
 		"Starting agent v1.2.3", "Returned 200 OK", "Encountered ORA-12345 fault",
-		`{"request_id":"SPE1015060201ZTod000000000000202610240340413867","msg":"inquiry completed in 15ms"}`,
+		`{"request_id":"QXC1015060201WKue000000000000202610240340413867","msg":"inquiry completed in 15ms"}`,
 		"[http-nio-8080-exec-7] GET https://acme.example/api/orders/54015241?x=1 from 10.0.0.1:443",
 		"reading /var/log/orders-api/app-7d9f6-x2k4p.log at 2026-09-02T10:15:30.123Z",
 		"bean com.acme.OrderService@7f9e2d4c ready, pool-3-thread-7 took 18.45MB in 1,500ms",

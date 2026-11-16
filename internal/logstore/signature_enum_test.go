@@ -25,7 +25,7 @@ func TestSigCategorical(t *testing.T) {
 		{`false`, `false`},
 		{`"three word value"`, ""},
 		{`"a very long categorical value!"`, ""}, // > 24 rune
-		{`"SPE1015060201ZTod"`, ""},              // kimlik
+		{`"QXC1015060201WKue"`, ""},              // kimlik
 		{`"ord-123456"`, ""},                     // kimlik parçası
 		{`"12.5"`, ""},                           // sayısal dizge
 		{`42`, ""},                               // sayı
@@ -77,7 +77,7 @@ func TestGroupBySignature_CategoricalSplit(t *testing.T) {
 	}{
 		{"status OK vs FAILED → 2 patterns, request_id 256 distinct stays <x>",
 			enumRows(256, func(i int) string {
-				return fmt.Sprintf(`{"request_id":"SPE%013dZTod","msg":"inquiry completed in %dms","status":%q}`, 1015060201+i*7919, 10+i, statuses[i%2])
+				return fmt.Sprintf(`{"request_id":"QXC%013dWKue","msg":"inquiry completed in %dms","status":%q}`, 1015060201+i*7919, 10+i, statuses[i%2])
 			}),
 			[]string{
 				`{"msg":"inquiry completed in <x>ms","request_id":<x>,"status":"FAILED"}`,
@@ -233,7 +233,7 @@ func TestAlignPatternBaseline_SplitKeysDiffer(t *testing.T) {
 // gruplar + birleşim) desen ucunun 2 sn bütçesinin çok altında kalmalı.
 func TestGroupBySignature_EnumPerfBudget(t *testing.T) {
 	rows := enumRows(PatternsSampleCap, func(i int) string {
-		return fmt.Sprintf(`{"request_id":"SPE%013dZTod%024d","msg":"inquiry completed for K7QX%07d","status":%q,"user":"u%c%c","f3":{"x":1},"ok":%v}`,
+		return fmt.Sprintf(`{"request_id":"QXC%013dWKue%024d","msg":"inquiry completed for K7QX%07d","status":%q,"user":"u%c%c","f3":{"x":1},"ok":%v}`,
 			i, int64(i)*31, i, []string{"OK", "FAILED", "TIMEOUT"}[i%3], 'a'+rune(i%26), 'a'+rune(i/26%26), i%2 == 0)
 	})
 	start := time.Now()

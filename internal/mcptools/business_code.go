@@ -267,7 +267,7 @@ func resolveBusinessCodeTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             "resolve_business_code",
 		ShortDescription: "Kanal/fonksiyon kodu, operasyon ya da endpoint hangi serviste — kapsamsız çözüm.",
-		Description: "Resolve a business identifier the user typed — a CHANNEL_CODE, a FUNCTION_CODE (e.g. BKRB001), an operation (span) name or an HTTP endpoint route — to the services that carry it, WITHOUT needing a service scope. " +
+		Description: "Resolve a business identifier the user typed — a CHANNEL_CODE, a FUNCTION_CODE (e.g. BQRZ001), an operation (span) name or an HTTP endpoint route — to the services that carry it, WITHOUT needing a service scope. " +
 			"Each candidate has kind, value, match (exact|prefix|substring|tokens|fuzzy), per-service calls / errors / error_rate_pct, the window, and a link to the filtered Traces page. " +
 			"ambiguous=true means several candidates or several services matched: ASK the user which one, never guess. An empty result is not an error — read reasons. " +
 			"kind narrows the axis (default any). range_s applies to channel/function codes (default 1 day, max 7 days); operations/endpoints use the last 24 h catalog. Read-only.",

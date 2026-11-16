@@ -129,8 +129,8 @@ func (s *Server) ragWikiHits(ctx context.Context, question string) []wiki.Hit {
 }
 
 // v0.10.1175 — Operator-reported: RAG'e yüklenen Excel'den "hostname ↔
-// appname" soruları bulunamıyordu. Kök neden (yerel ölçüm): "srvappl01 hangi
-// uygulama" sorgusunun terimleri [srvappl01 uygulama]; satırda kolon adı
+// appname" soruları bulunamıyordu. Kök neden (yerel ölçüm): "hstqzwx01 hangi
+// uygulama" sorgusunun terimleri [hstqzwx01 uygulama]; satırda kolon adı
 // "AppName" olduğu için "uygulama" geçmez, terim kapsamı ~yarıda kalır ve
 // skor ragWikiFloor (0.5) altına düşer — satır hostname'i birebir taşısa da
 // atılır. Ayrıca genel arama sayfa başına 2 parça aldığından bir envanter

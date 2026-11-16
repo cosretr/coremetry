@@ -11,7 +11,7 @@ import (
 
 func TestMask_MixedAlnumIDs(t *testing.T) {
 	cases := []struct{ in, want string }{
-		{`{"request_id":"SPE1015060201ZTod000000000000202610240340413867","msg":"ok"}`,
+		{`{"request_id":"QXC1015060201WKue000000000000202610240340413867","msg":"ok"}`,
 			`{"request_id":"<*>","msg":"ok"}`},
 		{"job 01HF3ZK8Q4N6V2W9X7Y5R3T1PB done", "job <*> done"},
 		{"cache key 1a2b3c4d miss", "cache key <*> miss"},
@@ -30,7 +30,7 @@ func TestMask_MixedAlnumIDs(t *testing.T) {
 func TestDrain_RequestIDBodiesOneTemplate(t *testing.T) {
 	d := NewDrain()
 	for i := 0; i < 50; i++ {
-		line := fmt.Sprintf(`{"request_id":"SPE%013dZTod%024d","channel":"MOB","msg":"inquiry completed in %dms"}`,
+		line := fmt.Sprintf(`{"request_id":"QXC%013dWKue%024d","channel":"MOB","msg":"inquiry completed in %dms"}`,
 			1015060201+i*7919, 202610240340413867+int64(i)*104729, 10+i)
 		d.Add(line, "orders-api", int64(i))
 	}
