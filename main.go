@@ -1165,6 +1165,15 @@ func main() {
 		log.Printf("[thanos] label checks load: %v", err)
 	}
 	go thanosSvc.StartLabelCheckRefresh(ctx, store, 30*time.Second)
+	// v0.10.2274 (entity grafı S1) — gölge bağ pasının canlı dizini (pod → node,
+	// host → servis): Redis, süreç başına tek okuyucu; etkin cluster'lar registry'den.
+	evalr.SetProblemGraphLive(evaluator.NewGraphLive(entity.LiveIndexFor(cacheImpl), func() []string {
+		var ids []string
+		for _, c := range (rolloutClusterSource{thanosSvc}).Clusters() {
+			ids = append(ids, c.ID)
+		}
+		return ids
+	}))
 	// v0.10.580 — Oracle hata tablosu datasource'ları (audit:
 	// docs/audit/oracle-error-log-2026-09-09.md, AŞAMA 1). Ayar blobu HER
 	// rolde: api pod'u Settings'i ve bağlantı testini servis ediyor.

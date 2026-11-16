@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
 import type { MLEvent, MLScorecard, MLBaselineBackfillView, MLServiceProfilePage, MLSvcShadowCompare } from '@/lib/types';
+import type { ProblemGraphShadowResponse } from '@/lib/problemGraph';
 
 export function useMLEvents(signal: '' | 'log' | 'trace' | 'metric' = '', enabled = true) {
   return useQuery<{ items: MLEvent[]; truncated: boolean }>({
@@ -54,5 +55,14 @@ export function useMLSvcShadowCompare(enabled: boolean) {
     queryKey: keys.anomalies.mlSvcShadow,
     queryFn: async () => (await api.mlSvcShadowCompare()) ?? { days: 14, rows: [], counts: {}, truncated: false },
     enabled, staleTime: 60_000,
+  });
+}
+
+/** v0.10.2274 — entity grafı Problem birleştirme gölge raporu; yalnız bölüm açılınca, staleTime = sunucu TTL'i. */
+export function useProblemGraphShadow(enabled: boolean) {
+  return useQuery<ProblemGraphShadowResponse | null>({
+    queryKey: keys.anomalies.graphShadow,
+    queryFn: async () => (await api.problemGraphShadow()) ?? null,
+    enabled, staleTime: 15_000,
   });
 }

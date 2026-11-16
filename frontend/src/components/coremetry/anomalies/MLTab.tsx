@@ -9,6 +9,7 @@ import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { useMLScorecard } from '@/lib/queries';
 import type { MLEvent, MLDetectorScore, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus, MLThanosTick } from '@/lib/types';
 import { MLSvcShadowCompareSection } from './MLSvcShadowCompare';
+import { ProblemGraphShadowSection } from './ProblemGraphShadow';
 import { SIGNAL_KINDS } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
 import { ML_DETECTOR_TR } from '@/lib/mlDetectorLabels';
@@ -355,6 +356,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
                   }
                 }} />
               <MLSvcShadowCompareSection />
+              <ProblemGraphShadowSection />
             </div>
           </details>
         </>

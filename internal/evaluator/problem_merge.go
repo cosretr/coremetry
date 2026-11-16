@@ -78,6 +78,9 @@ func (e *Evaluator) mergeServiceTwins(ctx context.Context) {
 		log.Printf("[evaluator] problem merge: açık problem anlık görüntüsü alınamadı, tik atlanıyor: %v", err)
 		return
 	}
+	// v0.10.2274 (entity grafı S1) — salt gölge: aynı anlık görüntüyle graf
+	// bağlarını ölçer, yalnız gölge blobunu yazar (problem_graph_shadow.go).
+	e.problemGraphShadow(ctx, snap.All())
 	now := time.Now()
 	prio := chstore.CurrentProblemPriority()
 	pol := chstore.OwnerPolicy{Keep: prio.InboxKeepSourcePriorityList(), Priority: prio, NowNs: now.UnixNano()}

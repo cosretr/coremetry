@@ -61,6 +61,9 @@ type Evaluator struct {
 	// breachMu — the evaluator runs single-leader per tick but
 	// the seed call + tests can touch it concurrently.
 	breachSince map[breachKey]time.Time
+	// graphShadow — v0.10.2274 (entity grafı S1): gölge bağ pası durumu
+	// (problem_graph_shadow.go); sıfır değer kullanılabilir.
+	graphShadow graphShadow
 	// lastResolved stamps when a problem on (rule, service) last
 	// auto-resolved. Used by the v0.5.129 cooldown gate
 	// (AlertRule.CooldownSec): re-opens within the cooldown
