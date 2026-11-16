@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEscLayer } from '@/lib/escLayer';
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2287 — özet ve düğme metni arayüz dilinde (TR aynı)
 
 // FacetMultiSelect — v0.9.357 (operator-approved mockup C).
 //
@@ -26,11 +27,12 @@ export type FacetOption = { value: string; label: string; count: number; countLa
 //   all selected  → "tümü"
 //   ≤2 selected   → labels joined " + ", then "+N kapalı" if any are off
 //   ≥3 selected   → "N seçili +M kapalı"
-export function facetSummary(selected: string[], total: number): string {
+// v0.10.2287 — isteğe bağlı lang (varsayılan 'tr'); EN "all" / "N selected" / "+N off".
+export function facetSummary(selected: string[], total: number, lang: Lang = 'tr'): string {
   const off = total - selected.length;
-  if (off <= 0) return 'tümü';
-  const head = selected.length <= 2 ? selected.join(' + ') : `${selected.length} seçili`;
-  return `${head} +${off} kapalı`;
+  if (off <= 0) return t('facet.all', lang);
+  const head = selected.length <= 2 ? selected.join(' + ') : tf('facet.selected', lang, { c: selected.length });
+  return tf('facet.off', lang, { head, n: off });
 }
 
 export function FacetMultiSelect({ label, options, selected, onToggle, onSolo, onAll }: {
@@ -42,6 +44,7 @@ export function FacetMultiSelect({ label, options, selected, onToggle, onSolo, o
   onAll: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const lang = useLang();
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Click-outside + Esc close. Listener only while open, so a page full of
@@ -65,7 +68,7 @@ export function FacetMultiSelect({ label, options, selected, onToggle, onSolo, o
     <div className="fsel" ref={rootRef}>
       <button type="button" className="fsel-btn" aria-expanded={open}
         onClick={() => setOpen(o => !o)}>
-        <span className="fsel-l">{label}:</span> <b>{facetSummary(selLabels, options.length)}</b> ▾
+        <span className="fsel-l">{label}:</span> <b>{facetSummary(selLabels, options.length, lang)}</b> ▾
       </button>
       {open && (
         <div className="fsel-panel" role="listbox" aria-label={label}>
@@ -89,9 +92,9 @@ export function FacetMultiSelect({ label, options, selected, onToggle, onSolo, o
                 <input type="checkbox" readOnly checked={on} tabIndex={-1} />
                 {o.label}
                 {!lastOn && (
-                  <button type="button" className="fsel-solo" title={`Yalnız ${o.label}`}
+                  <button type="button" className="fsel-solo" title={tf('facet.only', lang, { v: o.label })}
                     onClick={e => { e.stopPropagation(); onSolo(o.value); setOpen(false); }}>
-                    sadece
+                    {t('facet.solo', lang)}
                   </button>
                 )}
                 <span className="fsel-n">{o.countLabel ?? o.count}</span>
@@ -102,7 +105,7 @@ export function FacetMultiSelect({ label, options, selected, onToggle, onSolo, o
             <>
               <div className="fsel-sep" />
               <button type="button" className="fsel-all" onClick={() => { onAll(); }}>
-                tümünü seç
+                {t('facet.selectAll', lang)}
               </button>
             </>
           )}

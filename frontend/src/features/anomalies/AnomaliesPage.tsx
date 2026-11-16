@@ -4,7 +4,7 @@ import { useTablePrefs } from '@/lib/queries/prefs';
 import { isDefaultExcOrder, parseStoredExcOrder, resolveExcOrder } from './exceptionColumns';
 import { ColumnFilterShell } from '@/pages/traces/ColumnFilter';
 import { usePickerSearch } from '@/components/usePickerSearch';
-import { useT } from '@/lib/i18n';
+import { useT, useLang, t as tl } from '@/lib/i18n'; // v0.10.2287 — exception bulunamadı metni arayüz dilinde
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
@@ -295,6 +295,7 @@ export default function ProblemsPage() {
   // even when the group isn't on the requester's current tab/filter/page.
   const excParam = searchParams.get('exc');
   const [excNotFound, setExcNotFound] = useState(false);
+  const lang = useLang();
   useEffect(() => {
     if (!excParam) { setDetail(null); setExcNotFound(false); return; }
     if (detail?.fingerprint === excParam) return;
@@ -603,7 +604,7 @@ export default function ProblemsPage() {
         <Topbar title="Exceptions" showEnv envApplies />
         <PageShell>
           <Empty icon="❓" title="Exception not found">
-            Bu exception grubu artık mevcut değil.{' '}
+            {tl('exc.notFound', lang)}{' '}
             <Button variant="secondary" size="sm" onClick={closeExcDetail}>← Exceptions</Button>
           </Empty>
         </PageShell>

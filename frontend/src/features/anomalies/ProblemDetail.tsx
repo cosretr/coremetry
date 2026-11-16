@@ -354,19 +354,20 @@ function ExceptionMeta({ group, state, oraLabel }: {
 }) {
   const synthetic = !!oraLabel && isSyntheticOracleService(group.service);
   const { ug, sy } = useServiceTeams(synthetic ? '' : group.service);
+  const lang = useLang(); // v0.10.2287 — etiketler pd.meta.* (alarm detayıyla aynı anahtarlar; TR aynı)
   const items: DetailMetaItem[] = [];
   if (group.service) {
-    items.push({ k: 'Servis', v: synthetic
+    items.push({ k: tl('pd.meta.service', lang), v: synthetic
       ? <span className="mono">{group.service}</span>
       : <Link to={serviceHref(group.service, { range: { fromNs: group.firstSeen, toNs: group.lastSeen } })} className="mono">{group.service}</Link> });
   }
-  if (ug) items.push({ k: 'Ekip', v: <TeamLink team={ug} derived={false} /> });
-  if (sy && sy !== ug) items.push({ k: ug ? 'SRE' : 'Ekip', v: <TeamLink team={sy} derived={false} /> });
-  items.push({ k: 'Tür', v: oraLabel ? `Exception · ${oraLabel}` : 'Exception' });
-  items.push({ k: 'Ne zamandır', v: exceptionOpenForLine({ state, firstSeen: group.firstSeen, resolvedAt: group.resolvedAt }, Date.now() * 1e6) });
-  items.push({ k: 'İlgilenen', v: group.assignee
+  if (ug) items.push({ k: tl('pd.meta.team', lang), v: <TeamLink team={ug} derived={false} /> });
+  if (sy && sy !== ug) items.push({ k: tl(ug ? 'pd.meta.sre' : 'pd.meta.team', lang), v: <TeamLink team={sy} derived={false} /> });
+  items.push({ k: tl('pd.meta.kind', lang), v: oraLabel ? `Exception · ${oraLabel}` : 'Exception' });
+  items.push({ k: tl('pd.meta.since', lang), v: exceptionOpenForLine({ state, firstSeen: group.firstSeen, resolvedAt: group.resolvedAt }, Date.now() * 1e6, undefined, lang) });
+  items.push({ k: tl('pd.meta.assignee', lang), v: group.assignee
     ? <span className="mono">{group.assignee}</span>
-    : <span className="pd-meta__none">kimse</span> });
+    : <span className="pd-meta__none">{tl('pd.meta.nobody', lang)}</span> });
   return <DetailMeta items={items} />;
 }
 
@@ -380,6 +381,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
   const [copied, setCopied] = useState(false);
   const ora = isOracleGroup(group); // v0.10.1092
   const oraLabel = useBranding().oracleGroupLabel; // v0.10.1108 — rozet "Teknik hata" (title Oracle'ı açıklar)
+  const lang = useLang(); // v0.10.2287 — Türkçe kalan metinler lib/i18n exc.* (TR aynı)
   // v0.9.414 — Explain'in deterministik kanıt trace'leri: örnek-trace
   // satırları kutulanır (Explain trace'in waterfall kutulaması gibi).
   const [evTraces, setEvTraces] = useState<string[]>([]);
@@ -411,7 +413,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
   // v0.9.463 (dürüstlük A11) — sahte-boş ayrımı: liste boş kalabilir ama bu
   // "örnek yok" demek değildir. v0.9.795: tarama partili, üç ayrı son var
   // (tavan / pencere bitti / gerçekten yok) ve üçü ayrı cümle.
-  const emptyNote = emptySamplesNote(samplesQ.data, 'No sample traces.');
+  const emptyNote = emptySamplesNote(samplesQ.data, 'No sample traces.', lang);
   // v0.10.977 — statik tablo durumu (T12, P-2): örnek tablosunun elle yazılmış
   // yükleniyor / boş satırları tek `<DataTableState colSpan>`; yüklem eskisiyle
   // aynı (isLoading → iskelet, boşken emptyNote). Tarama tavanı (warn)
@@ -507,10 +509,10 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
       firstSeenNs: group.firstSeen, lastSeenNs: group.lastSeen,
       resolvedAtNs: group.resolvedAt || undefined,
       stateLabel: STATE_LABEL[state] ?? 'OPEN',
-      occTimes, nowSec: Date.now() / 1000,
+      occTimes, nowSec: Date.now() / 1000, lang,
     });
     return r ? [r] : undefined;
-  }, [occTimes, group.firstSeen, group.lastSeen, group.resolvedAt, state]);
+  }, [occTimes, group.firstSeen, group.lastSeen, group.resolvedAt, state, lang]);
 
   // Representative stack = the first sample that carries one.
   // v0.10.1048 (operatör: "Exception sayfasındaki dosya bağlantıları hâlâ
@@ -587,7 +589,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
           Problems
         </Button>
         <TriageStatusBadge s={state} label={STATE_LABEL[state]} />
-        {ora && <Badge tone="info" title="Oracle hata tablosu satırlarından oluşan grup (kaynak · hata kodu · operasyon)">{oraLabel}</Badge>}
+        {ora && <Badge tone="info" title={tl('exc.ora.title', lang)}>{oraLabel}</Badge>}
         <span className="badge b-gray">{group.occurrences.toLocaleString()} occurrences</span>
         <span className="spacer" />
         <ShareButton copiedLabel="Copied" />
@@ -630,7 +632,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
         {msgOpen ? group.message : (headline.text || '—')}
         {headline.cut && (
           <Button variant="ghost" size="xs" onClick={() => setMsgOpen(o => !o)} style={{ marginLeft: 6 }}>
-            {msgOpen ? 'Kısalt' : 'Tamamı'}
+            {tl(msgOpen ? 'exc.msg.less' : 'exc.msg.more', lang)}
           </Button>
         )}
       </div>
@@ -647,18 +649,18 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
             açılır ve exception'ın izi görünmez. */}
         {ora && isSyntheticOracleService(group.service) ? (
           // v0.10.1092 — servisi çözülemeyen Oracle grubu: sentetik ad, link yok.
-          <span className="chip" title="Trace → servis çözümü bu operasyon için servis bulamadı">
+          <span className="chip" title={tl('exc.svc.unresolved', lang)}>
             <span className="k">service</span><b className="mono">{group.service}</b>
           </span>
         ) : (
           <Link to={serviceHref(group.service, { range: { fromNs: group.firstSeen, toNs: group.lastSeen } })}
             className="chip" style={{ textDecoration: 'none' }}
-            title="Servis sayfasını aç">
+            title={tl('exc.svc.open', lang)}>
             <span className="k">service</span><b className="mono" style={{ color: 'var(--accent2)' }}>{group.service}</b>
           </Link>
         )}
         {ora && group.message && (
-          <span className="chip" title="Oracle operasyon kodu"><span className="k">operasyon</span><b className="mono">{group.message}</b></span>
+          <span className="chip" title={tl('exc.ora.op.title', lang)}><span className="k">{tl('exc.ora.op', lang)}</span><b className="mono">{group.message}</b></span>
         )}
         {!(ora && isSyntheticOracleService(group.service)) && <TeamChips service={group.service} />}
         {/* v0.10.734 (operatör: "pencere boyu yazmasına gerek var mı, open/closed
@@ -757,7 +759,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
         <div className="card" style={{ minWidth: 0 }}>
           <div className="ov-card-h">
             <h3>Stack trace</h3>
-            <span className="ov-sub">representative sample{stackLines.length > 0 ? ` · ${stackLines.length} satır` : ''}{linkRef}</span>
+            <span className="ov-sub">representative sample{stackLines.length > 0 ? ` · ${tf('exc.stack.lines', lang, { n: stackLines.length })}` : ''}{linkRef}</span>
             <span className="ov-right">
               <Button variant="secondary" size="sm" onClick={copyStack} disabled={!stack}>
                 {copied ? 'Copied' : 'Copy'}
@@ -797,10 +799,10 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
             <div className="ex-fold">
               <Button variant="secondary" size="sm" onClick={() => setStackOpen(o => !o)}
                 aria-expanded={!stackFolded}
-                title={stackFolded ? 'Tüm stack trace\'i yerinde aç' : 'İlk satırlara katla'}>
-                {stackFolded ? `▾ ${stackLines.length - STACK_FOLD_SHOW} satır daha` : '▴ daha az'}
+                title={tl(stackFolded ? 'exc.fold.open.title' : 'exc.fold.close.title', lang)}>
+                {stackFolded ? `▾ ${tf('exc.fold.more', lang, { n: stackLines.length - STACK_FOLD_SHOW })}` : `▴ ${tl('exc.fold.less', lang)}`}
               </Button>
-              <span className="ex-fold__note">{stackFolded ? `ilk ${STACK_FOLD_SHOW} satır gösteriliyor` : `${stackLines.length} satır`} · Copy tamamını kopyalar</span>
+              <span className="ex-fold__note">{stackFolded ? tf('exc.fold.first', lang, { n: STACK_FOLD_SHOW }) : tf('exc.stack.lines', lang, { n: stackLines.length })}{tl('exc.fold.copy', lang)}</span>
             </div>
           )}
         </div>
@@ -846,7 +848,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
             çıkarır → listeye dönülür (çekmecenin kendini kapatmasının ikizi).
             Kompakt biçim (inceleme: tek satır, tek kısa cümle). */}
         <div className="card" style={{ minWidth: 0 }}>
-          <div className="ov-card-h"><h3>Triyaj</h3></div>
+          <div className="ov-card-h"><h3>{tl('exc.triage', lang)}</h3></div>
           <div className="ov-card-b">
             <ProblemVerdictActions subject={exceptionVerdictSubject(group)} compact
               onDone={next => { if (next === 'noise') onBack(); }} />

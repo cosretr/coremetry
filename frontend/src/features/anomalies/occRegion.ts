@@ -15,6 +15,7 @@
 // (noChronicLabel). SAF — occRegion.test.ts.
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import { fmtOccTick } from './occTick';
+import { t as tk, tf, type Lang } from '@/lib/i18n'; // v0.10.2287 — bant etiketi dile göre (varsayılan 'tr')
 
 export interface OccRegionInput {
   firstSeenNs: number;
@@ -25,6 +26,7 @@ export interface OccRegionInput {
   /** Grafiğin bucket başları (sn), artan. */
   occTimes: number[];
   nowSec: number;
+  lang?: Lang;
 }
 
 /** Son görülme bu kadar bucket içindeyse grup "sürüyor" sayılır. */
@@ -51,12 +53,12 @@ export function occRegion(o: OccRegionInput): ChartTimeRegion | undefined {
   } else if (o.nowSec - lastSec <= OCC_ACTIVE_BUCKETS * step) {
     toSec = chartEnd;
     endSec = o.nowSec;
-    label = `${o.stateLabel} · sürüyor`;
+    label = `${o.stateLabel} · ${tk('exc.occ.ongoing', o.lang ?? 'tr')}`;
   } else {
     // Bucket sonu: tek bucket'lık patlamada da bant görünür genişlikte kalır.
     toSec = Math.min(chartEnd, lastSec + step);
     endSec = lastSec;
-    label = `${o.stateLabel} · son görülme ${hhmm(lastSec, o.nowSec)}`;
+    label = `${o.stateLabel} · ${tf('exc.occ.lastSeen', o.lang ?? 'tr', { ts: hhmm(lastSec, o.nowSec) })}`;
   }
   if (!(toSec > fromSec)) return undefined;
   return { fromSec, toSec, endSec, color: 'var(--err)', label, noChronicLabel: true };

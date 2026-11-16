@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { t } from '@/lib/i18n'; // v0.10.2287 — TR katalog değeri
 
 const read = (rel: string) => readFileSync(resolve(__dirname, rel), 'utf8');
 
@@ -28,7 +29,9 @@ describe('exception detayı Pods · nodes (v0.10.173 → v0.10.734)', () => {
     const src = read('./ExceptionPodsPanel.tsx');
     expect(src).toContain('const PODS_SHOW = 8;');
     expect(src).toContain('rows.slice(0, PODS_SHOW)');
-    expect(src).toContain('tümü (${rows.length}) ▸');
+    // v0.10.2287 — metin katalogda; kaynak anahtarı okur, TR değeri katalogda aynen.
+    expect(src).toContain("tf('pods.all', lang, { n: rows.length })");
+    expect(t('pods.all', 'tr')).toBe('tümü ({n}) ▸');
     expect(src).toContain('<div className="exc-share">');
     expect(src).toContain('<span className="ov-sub" title={scanNote}>');
     expect(src).not.toContain('scanned occurrences with pod context');
@@ -48,7 +51,8 @@ describe('exception detayı Pods · nodes (v0.10.173 → v0.10.734)', () => {
     // yüzdeler toplam 100 → taşma yok (v0.10.174); 734: beş sütun (Traces düğmesi kalır — operatör)
     const pct = [...css.matchAll(/\.exc-pods-c-[a-z]+ \{ width: (\d+)%; \}/g)].map(m => Number(m[1]));
     expect(pct.length).toBe(5);
-    expect(src).toContain('<td className="exc-pods-act"><Link to={tracesHref} className="sec" title="Bu pod\'un hatalı trace\'leri">Traces</Link></td>');
+    expect(src).toContain('<td className="exc-pods-act"><Link to={tracesHref} className="sec" title={t(\'pods.traces.title\', lang)}>Traces</Link></td>');
+    expect(t('pods.traces.title', 'tr')).toBe("Bu pod'un hatalı trace'leri");
     expect(pct.reduce((a, b) => a + b, 0)).toBe(100);
   });
   it('uzun stack katlı: eşik 20, ilk 12; Copy tamamını kopyalar; first/last seen çipleri yok', () => {

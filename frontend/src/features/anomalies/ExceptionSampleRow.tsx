@@ -36,10 +36,8 @@ import { traceHref } from '@/lib/traceHref';
 import { rowClickHandlers, tsLong } from '@/lib/utils';
 import type { ExceptionSample } from '@/lib/types';
 import { CopyButton } from '@/components/CopyButton';
-import {
-  TRACE_COPIED_TITLE, TRACE_MISSING_LABEL, TRACE_MISSING_TITLE, TRACE_TEMPO_LABEL, TRACE_TEMPO_TITLE,
-  sampleTraceFromTempo, sampleTraceLinkable,
-} from './sampleTrace';
+import { sampleTraceFromTempo, sampleTraceLinkable } from './sampleTrace';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2287 — metinler arayüz dilinde (TR aynı)
 
 /** v0.10.1369 — tam id DOM'da; görünen ~`chars` karakter + "…" CSS ile (mono ch). */
 const idClip = (chars: number): CSSProperties => ({
@@ -56,6 +54,7 @@ export function SampleTraceId({ s, chars = 16, accent = false, linkTitle }: {
   accent?: boolean;
   linkTitle?: string;
 }) {
+  const lang = useLang();
   if (!s.traceId) return null;
   const linkable = sampleTraceLinkable(s);
   return (
@@ -69,15 +68,16 @@ export function SampleTraceId({ s, chars = 16, accent = false, linkTitle }: {
       ) : (
         <span className="mono cell-faint" title={s.traceId} style={idClip(chars)}>{s.traceId}</span>
       )}
-      <CopyButton value={s.traceId} title="Trace id'yi kopyala (tam)" copiedTitle={TRACE_COPIED_TITLE} />
-      {linkable && sampleTraceFromTempo(s) && <span className="badge b-gray" title={TRACE_TEMPO_TITLE}>{TRACE_TEMPO_LABEL}</span>}
-      {!linkable && <span className="badge b-gray" title={TRACE_MISSING_TITLE}>{TRACE_MISSING_LABEL}</span>}
+      <CopyButton value={s.traceId} title={t('exc.trace.copy', lang)} copiedTitle={t('exc.trace.copied', lang)} />
+      {linkable && sampleTraceFromTempo(s) && <span className="badge b-gray" title={t('exc.trace.tempoTitle', lang)}>Tempo</span>}
+      {!linkable && <span className="badge b-gray" title={t('exc.trace.missingTitle', lang)}>{t('exc.trace.missing', lang)}</span>}
     </span>
   );
 }
 
 export function ExceptionSampleRow({ s, isEv }: { s: ExceptionSample; isEv: boolean }) {
   const navigate = useNavigate();
+  const lang = useLang();
   const linkable = sampleTraceLinkable(s);
   return (
     // data-trace-id (v0.9.477): AI çekmecesindeki kanıt satırı
@@ -99,8 +99,8 @@ export function ExceptionSampleRow({ s, isEv }: { s: ExceptionSample; isEv: bool
           listeliyor, sabit rozet bilgi taşımıyordu. "kanıt"
           kelimesi kalır ama nötr — satırın rengini zaten
           .wf-evidence veriyor (bir olgu = bir sinyal). */}
-      <td title={isEv ? 'Explain kanıtı — kök neden bu trace üzerinden soruşturuldu' : undefined}>
-        {isEv && <span className="badge b-gray">kanıt</span>}
+      <td title={isEv ? t('exc.ev.title', lang) : undefined}>
+        {isEv && <span className="badge b-gray">{t('exc.ev', lang)}</span>}
       </td>
       <td className="mono cell-faint" style={{ textAlign: 'right', paddingRight: 14 }}>{tsLong(s.time)}</td>
     </tr>

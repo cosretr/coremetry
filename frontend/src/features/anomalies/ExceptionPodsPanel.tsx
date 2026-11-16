@@ -23,6 +23,7 @@ import { useEntityEnabled } from '@/lib/queries';
 import { entityHref } from '@/lib/entityHref';
 import { fmtDateTime, fmtAgoNs } from '@/lib/utils';
 import { windowRangeParam } from '@/lib/urlState';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2287 — metinler arayüz dilinde (TR aynı)
 
 // v0.10.734 (operatör onaylı mockup a42a0b31) — panel sağ kolona (stack
 // trace adası) çıktı: dört sütun (pod · node · oluşum çubuğu · son), pay
@@ -42,6 +43,7 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
   });
   // Hook sırası: erken dönüşten ÖNCE (rules-of-hooks).
   const [all, setAll] = useState(false);
+  const lang = useLang();
   if (!enabled) return null;
   const d = q.data;
   const rows = d?.rows ?? [];
@@ -55,7 +57,7 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
   const rangeParam = range ? windowRangeParam(range) : '';
   const shown = all ? rows : rows.slice(0, PODS_SHOW);
   const scanNote = d
-    ? `${withContext.toLocaleString()} / ${d.total.toLocaleString()} taranan oluşum pod bağlamlı${d.sampled ? ` · örneklem: en yeni ${d.scanned.toLocaleString()} satır / ${groupOccurrences.toLocaleString()}` : ''}`
+    ? `${tf('pods.scan', lang, { a: withContext.toLocaleString(), b: d.total.toLocaleString() })}${d.sampled ? tf('pods.scan.sampled', lang, { n: d.scanned.toLocaleString(), g: groupOccurrences.toLocaleString() }) : ''}`
     : '';
   return (
     // v0.10.737 — dış boşluk çağıranın (sağ kolon flex sütunu, gap 14); kart
@@ -63,18 +65,18 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
     <div className="card">
       <div className="ov-card-h">
         <h3>Pods · nodes</h3>
-        <span className="ov-sub" title={scanNote}>{d ? `${rows.length}${d.truncated ? '+' : ''} pod · ${withContext.toLocaleString()} oluşum` : ''}</span>
+        <span className="ov-sub" title={scanNote}>{d ? `${rows.length}${d.truncated ? '+' : ''} pod · ${tf('pods.occ', lang, { n: withContext.toLocaleString() })}` : ''}</span>
       </div>
       <div className="ov-card-b">
         {q.isPending ? <Spinner /> : q.error ? (
-          <div style={{ color: 'var(--text3)', fontSize: 12 }}>Dağılım yüklenemedi — {String(q.error)}</div>
+          <div style={{ color: 'var(--text3)', fontSize: 12 }}>{tf('pods.err', lang, { e: String(q.error) })}</div>
         ) : d?.schemaMissing ? (
-          <div style={{ color: 'var(--text3)', fontSize: 12 }}>Entity şeması (0011) bu ClickHouse'a uygulanmamış — k8s kolonları yok; dağılım hesaplanamaz.</div>
+          <div style={{ color: 'var(--text3)', fontSize: 12 }}>{t('pods.schema', lang)}</div>
         ) : rows.length === 0 ? (
           <div style={{ color: 'var(--text3)', fontSize: 12 }}>
             {d && d.noContext > 0
-              ? `${d.noContext.toLocaleString()} oluşum Kubernetes bağlamsız — span'ler k8s.pod.name taşımıyor ya da entity şeması (0011) öncesi ingest edildi; pod pivotu yok.`
-              : 'Tarama penceresinde oluşum bulunamadı (grup penceresi ile spans retention örtüşmüyor olabilir).'}
+              ? tf('pods.noCtx', lang, { n: d.noContext.toLocaleString() })
+              : t('pods.none', lang)}
           </div>
         ) : (
           <>
@@ -85,7 +87,7 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
                 <col className="exc-pods-c-pod" /><col className="exc-pods-c-node" /><col className="exc-pods-c-n" /><col className="exc-pods-c-t" /><col className="exc-pods-c-a" />
               </colgroup>
               <thead>
-                <tr><th>Pod · cluster › namespace</th><th>Node</th><th>Occurrences · share</th><th>Son</th><th></th></tr>
+                <tr><th>Pod · cluster › namespace</th><th>Node</th><th>Occurrences · share</th><th>{t('pods.col.last', lang)}</th><th></th></tr>
               </thead>
               <tbody>
                 {shown.map(r => {
@@ -98,22 +100,22 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
                   const share = (100 * r.occurrences) / denom;
                   return (
                     <tr key={`${r.cluster}/${r.namespace}/${r.pod}`}>
-                      <td className="mono exc-pods-cell" title={`${r.clusterName ?? r.cluster} › ${r.namespace} › ${r.pod}${cid ? '' : ' (cluster eşlenmemiş)'}`}>
+                      <td className="mono exc-pods-cell" title={`${r.clusterName ?? r.cluster} › ${r.namespace} › ${r.pod}${cid ? '' : t('pods.unmapped.suffix', lang)}`}>
                         <div className="exc-pods-pod">
                           {podHref
                             ? <Link to={podHref} className="sec">{r.pod}</Link>
-                            : <span title={r.hostOnly ? 'k8s.namespace.name yok — pod adı host.name yedeğinden; Kubernetes pod\'u değil, link yok' : 'Cluster eşlenmemiş — entity kaydı yok, link yok'}>{r.pod}</span>}
-                          {r.hostOnly && <Badge tone="neutral" style={{ marginLeft: 6 }} title="host.name yedeği (k8s bağlamı yok)">host</Badge>}
+                            : <span title={t(r.hostOnly ? 'pods.hostOnly.title' : 'pods.unmapped.title', lang)}>{r.pod}</span>}
+                          {r.hostOnly && <Badge tone="neutral" style={{ marginLeft: 6 }} title={t('pods.host.title', lang)}>host</Badge>}
                         </div>
                         <div className="exc-pods-sub">{r.clusterName ?? r.cluster} › {r.namespace}</div>
                       </td>
                       <td className="mono exc-pods-cell" title={r.node ?? ''}>{nodeHref ? <Link to={nodeHref} className="sec">{r.node}</Link> : (r.node ?? '')}</td>
-                      <td title={`${r.occurrences.toLocaleString()} oluşum · %${share.toFixed(1)} (payda: taranan grup toplamı)`}>
+                      <td title={tf('pods.share.title', lang, { n: r.occurrences.toLocaleString(), p: share.toFixed(1) })}>
                         <div className="exc-share"><i style={{ width: `${Math.max(2, Math.min(100, share))}%` }} /><b>{r.occurrences.toLocaleString()} · {share.toFixed(share >= 10 ? 0 : 1)}%</b></div>
                       </td>
                       <td className="mono exc-pods-cell" title={fmtDateTime(new Date(r.lastSeen))}>{fmtAgoNs(Date.parse(r.lastSeen) * 1e6)}</td>
                       {/* Operatör (2026-09-16): Traces düğmesi KALIR — pod'un hatalı trace'lerine tek tık. */}
-                      <td className="exc-pods-act"><Link to={tracesHref} className="sec" title="Bu pod'un hatalı trace'leri">Traces</Link></td>
+                      <td className="exc-pods-act"><Link to={tracesHref} className="sec" title={t('pods.traces.title', lang)}>Traces</Link></td>
                     </tr>
                   );
                 })}
@@ -121,14 +123,14 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
             </table>
             <Row gap={2} wrap>
               {rows.length > PODS_SHOW && (
-                <LinkButton onClick={() => setAll(v => !v)} title={all ? `İlk ${PODS_SHOW} pod` : `${rows.length - PODS_SHOW} pod daha`}>
-                  {all ? '▴ daha az' : `tümü (${rows.length}) ▸`}
+                <LinkButton onClick={() => setAll(v => !v)} title={all ? tf('pods.first', lang, { n: PODS_SHOW }) : tf('pods.more', lang, { n: rows.length - PODS_SHOW })}>
+                  {all ? t('pods.less', lang) : tf('pods.all', lang, { n: rows.length })}
                 </LinkButton>
               )}
-              {d && d.noContext > 0 && <span className="field-hint">{d.noContext.toLocaleString()} oluşum Kubernetes bağlamsız (k8s.pod.name yok ya da 0011 öncesi) — pivot yok</span>}
-              {d?.truncated && <Badge tone="warning" title="Daha fazla pod var; yalnız en yoğun 50 gösteriliyor">ilk 50 pod</Badge>}
+              {d && d.noContext > 0 && <span className="field-hint">{tf('pods.noCtx.hint', lang, { n: d.noContext.toLocaleString() })}</span>}
+              {d?.truncated && <Badge tone="warning" title={t('pods.trunc.title', lang)}>{t('pods.trunc', lang)}</Badge>}
               {d?.unmappedClusters && d.unmappedClusters.length > 0 && (
-                <Badge tone="warning" title={`Remote Cluster kaydı olmayan cluster değerleri: ${d.unmappedClusters.join(', ')}`}>unmapped: {d.unmappedClusters.join(', ')}</Badge>
+                <Badge tone="warning" title={tf('pods.unmappedClusters.title', lang, { v: d.unmappedClusters.join(', ') })}>unmapped: {d.unmappedClusters.join(', ')}</Badge>
               )}
             </Row>
           </>

@@ -112,8 +112,8 @@ afterEach(() => {
   host = null; root = null;
 });
 
-// Bu ekranda bugün Türkçe çizilen etiketler (sunucu verisi değil). FacetMultiSelect
-// özet metni (components/ui, donmuş) bilerek listede yok.
+// Bu ekranda bugün Türkçe çizilen etiketler (sunucu verisi değil). v0.10.2287 —
+// FacetMultiSelect özeti de çevrildi ("seçili" artık muaf değil).
 const TR_LABELS = [
   'Ekip', 'Öncelik', 'Tür', 'Durum', 'Öğrenilen', 'Özne', 'Kategori', 'Servisler', 'Veritabanları', 'Dış kaynak',
   'takım', 'Takım süzgeci', 'tüm öncelikler', 'Problem değil', 'Diğer süzgeçler', 'etkin', 'varsayılan', 'İlk görülme',
@@ -172,8 +172,8 @@ describe('Problems listesi — İngilizce arayüz (v0.10.2283)', () => {
 
   it('boş kuyruk ve "Problem değil" görünümü İngilizce', async () => {
     m.items = [];
-    // Varsayılan tür seçimi FacetMultiSelect özetinde "N seçili" çizer (components/ui, kapsam dışı).
-    const leakedHere = (r: { text: string; html: string }) => leaked(r).filter(l => l !== 'seçili');
+    // v0.10.2287 — FacetMultiSelect özeti de arayüz dilinde ("N selected"); muafiyet kalktı.
+    const leakedHere = leaked;
     let el = await mount('/inbox');
     expect(snap(el).text).toContain('The queue is empty');
     expect(leakedHere(snap(el))).toEqual([]);

@@ -9,6 +9,8 @@
 // "En yeni 500 aday tarandı" forever — technically true, practically a
 // dead end, and the stack-trace box went blank with it.
 
+import { tf, type Lang } from '@/lib/i18n'; // v0.10.2287 — isteğe bağlı lang (varsayılan 'tr')
+
 export type SampleScanEnvelope = {
   scanned?: number;
   scanCapped?: boolean;
@@ -20,24 +22,21 @@ export type EmptySamplesNote = { text: string; warn: boolean };
 // emptySamplesNote — `fallback` is the plain "there is nothing here" line of
 // the calling surface, used when the envelope says the scan ended for no
 // interesting reason (or an old server sent no envelope at all).
-export function emptySamplesNote(env: SampleScanEnvelope, fallback: string): EmptySamplesNote {
+export function emptySamplesNote(env: SampleScanEnvelope, fallback: string, lang: Lang = 'tr'): EmptySamplesNote {
   const n = (env?.scanned ?? 0).toLocaleString();
   if (env?.scanCapped) {
     // Warn: this one IS a scan limit, and the operator can act on it
     // (narrow the group, look at the occurrences chart instead).
     return {
       warn: true,
-      text: `⚠ En yeni ${n} aday tarandı (tavan), bu grubun örneği çıkmadı — grup ` +
-        `aynı servis+tip altındaki kardeş gruplara göre çok seyrek ateşliyor; ` +
-        `occurrences grafiği gerçek dağılımı gösterir.`,
+      text: tf('exc.samples.capped', lang, { n }),
     };
   }
   if (env?.windowExhausted) {
     // Not a warning: we really did read everything the group could be in.
     return {
       warn: false,
-      text: `Grubun zaman aralığı baştan sona tarandı (${n} aday) — örnek span'ler ` +
-        `retansiyon dışı kalmış olabilir; occurrences sayısı grup kaydından gelir.`,
+      text: tf('exc.samples.exhausted', lang, { n }),
     };
   }
   return { warn: false, text: fallback };

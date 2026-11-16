@@ -15,6 +15,7 @@
 // Settings › Branding). Kod adları, `?oracle=` ve `ora:` parmak izi değişmez;
 // AI istemleri Oracle bilmeye devam eder (yalnız görünen metin).
 import type { ExceptionGroup, OracleGroupInfo } from '@/lib/types';
+import { fmtPctLang, type Lang } from '@/lib/i18n'; // v0.10.2287
 
 export const ORACLE_GROUP_PREFIX = 'ora:';
 export const ORACLE_SERVICE_PREFIX = 'oracle:';
@@ -61,11 +62,12 @@ export function oracleRowDetail(g: Pick<ExceptionGroup, 'service' | 'oracle'>, l
 }
 
 /** Kanal kırılımı kısa metni ("MOB %60 · WEB %40"), en çok n kanal. */
-export function oracleChannelsText(info: Pick<OracleGroupInfo, 'channels'> | undefined, n = 3): string {
+// v0.10.2287 — isteğe bağlı lang (varsayılan 'tr'): yüzde TR "%60", EN "60%".
+export function oracleChannelsText(info: Pick<OracleGroupInfo, 'channels'> | undefined, n = 3, lang: Lang = 'tr'): string {
   const ch = info?.channels ?? [];
   const total = ch.reduce((s, c) => s + c.count, 0);
   if (total <= 0) return '';
-  const parts = ch.slice(0, n).map(c => `${c.name} %${Math.round((c.count * 100) / total)}`);
+  const parts = ch.slice(0, n).map(c => `${c.name} ${fmtPctLang(Math.round((c.count * 100) / total), lang)}`);
   if (ch.length > n) parts.push(`+${ch.length - n}`);
   return parts.join(' · ');
 }
