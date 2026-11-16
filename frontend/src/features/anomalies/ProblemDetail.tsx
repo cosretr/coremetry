@@ -72,7 +72,7 @@ import { Badge } from '@/components/ui/Badge';
 import { OracleGroupPanel } from './OracleGroupPanel';
 import { isOracleGroup, isSyntheticOracleService } from './oracleGroup';
 import { useBranding } from '@/lib/branding'; // v0.10.1108 — Oracle grubu görünen adı
-import { useT } from '@/lib/i18n'; // v0.10.1326 — "Ask CoSRE" etiketi
+import { t as tl, tf, useLang, useT } from '@/lib/i18n'; // v0.10.1326 — "Ask CoSRE" etiketi; v0.10.2284 Problem detayı (pd.*)
 // v0.10.1032 — triyaj eylemleri tam sayfaya taşındı (çekmece atlanınca
 // "Gerçek problem / Problem değil" ve Assign… kaybolmasın).
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
@@ -282,11 +282,12 @@ function TeamChips({ service }: { service: string }) {
 // üstüne gelmeyen operatör için kesin bir atıftan farksız olurdu.
 function ProblemTeamChips({ problem }: { problem: Problem }) {
   const fallback = useServiceTeams(problem.service);
+  const lang = useLang();
   const via = problem.teamsVia || '';
   const ug = problem.ownerTeam || (via ? '' : fallback.ug) || '';
   const sy = problem.sreTeam || (via ? '' : fallback.sy) || '';
   if (!ug && !sy) return null;
-  const title = via ? derivedTeamTitle(via, problem.service) : undefined;
+  const title = via ? derivedTeamTitle(via, problem.service, lang) : undefined;
   const mark = via ? '≈ ' : '';
   return (
     <>
@@ -323,24 +324,25 @@ function AlertProblemMeta({ problem, window: win, endNs }: {
   problem: Problem; window: { fromNs: number; toNs: number }; endNs: number;
 }) {
   const fallback = useServiceTeams(problem.service);
+  const lang = useLang(); // v0.10.2284 — üst veri etiketleri lib/i18n pd.meta.* (TR aynı)
   const via = problem.teamsVia || '';
   const owner = problem.ownerTeam || (via ? '' : fallback.ug) || '';
   const sre = problem.sreTeam || (via ? '' : fallback.sy) || '';
-  const teamTitle = via ? derivedTeamTitle(via, problem.service) : undefined;
+  const teamTitle = via ? derivedTeamTitle(via, problem.service, lang) : undefined;
   const items: DetailMetaItem[] = [];
   if (problem.service) {
-    items.push({ k: 'Servis', v: (
+    items.push({ k: tl('pd.meta.service', lang), v: (
       <SubjectLink service={problem.service} subjectKind={problem.kind}
         href={serviceHref(problem.service, { range: win })} className="mono" />
     ) });
   }
-  if (owner) items.push({ k: 'Ekip', v: <TeamLink team={owner} derived={!!via} title={teamTitle} /> });
-  if (sre && sre !== owner) items.push({ k: owner ? 'SRE' : 'Ekip', v: <TeamLink team={sre} derived={!!via} title={teamTitle} /> });
-  items.push({ k: 'Tür', v: isAnomalyProblem(problem.ruleId) ? 'Anomali' : 'Alarm' });
-  items.push({ k: 'Ne zamandır', v: <span className="pd-meta__when">{problemWhenLine(problem, endNs)}</span> });
-  items.push({ k: 'İlgilenen', v: problem.assignee
+  if (owner) items.push({ k: tl('pd.meta.team', lang), v: <TeamLink team={owner} derived={!!via} title={teamTitle} /> });
+  if (sre && sre !== owner) items.push({ k: tl(owner ? 'pd.meta.sre' : 'pd.meta.team', lang), v: <TeamLink team={sre} derived={!!via} title={teamTitle} /> });
+  items.push({ k: tl('pd.meta.kind', lang), v: tl(isAnomalyProblem(problem.ruleId) ? 'pd.meta.anomaly' : 'pd.meta.alert', lang) });
+  items.push({ k: tl('pd.meta.since', lang), v: <span className="pd-meta__when">{problemWhenLine(problem, endNs, undefined, undefined, lang)}</span> });
+  items.push({ k: tl('pd.meta.assignee', lang), v: problem.assignee
     ? <span className="mono">{problem.assignee}</span>
-    : <span className="pd-meta__none">kimse</span> });
+    : <span className="pd-meta__none">{tl('pd.meta.nobody', lang)}</span> });
   return <DetailMeta items={items} />;
 }
 
@@ -880,6 +882,7 @@ function ProblemTriage({ problem, isAdmin, onBack, onChanged }: {
 }) {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const lang = useLang(); // v0.10.2284
   const [busy, setBusy] = useState<'claim' | 'assign' | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const assignee = problem.assignee ?? '';
@@ -904,28 +907,28 @@ function ProblemTriage({ problem, isAdmin, onBack, onChanged }: {
     if (assignee !== me) await api.setProblemAssignee(problem.id, me);
   });
   const onAssign = () => {
-    const v = window.prompt('Kime atansın? (e-posta ya da ekip adı; boş = atamayı kaldır)', assignee);
+    const v = window.prompt(tl('pd.triage.prompt', lang), assignee);
     if (v === null) return;
     const next = v.trim();
     if (next === assignee) return;
     void run('assign', () => api.setProblemAssignee(problem.id, next));
   };
   return (
-    <div className="pd-triage" role="group" aria-label="Triyaj">
+    <div className="pd-triage" role="group" aria-label={tl('pd.triage.aria', lang)}>
       {canClaim && (
         <Button variant="primary" size="sm" loading={busy === 'claim'} disabled={busy !== null}
           onClick={() => { void onClaim(); }}>
-          Ben ilgileniyorum
+          {tl('pd.triage.claim', lang)}
         </Button>
       )}
-      {claimed && <span className="pd-triage__k">Sende</span>}
+      {claimed && <span className="pd-triage__k">{tl('pd.triage.mine', lang)}</span>}
       {isAdmin && (
         <Button variant="secondary" size="sm" loading={busy === 'assign'} disabled={busy !== null}
           onClick={onAssign}>
-          Başkasına ata…
+          {tl('pd.triage.assign', lang)}
         </Button>
       )}
-      {err && <span role="alert" className="field-error">Yazılamadı — {err}</span>}
+      {err && <span role="alert" className="field-error">{tf('pd.triage.err', lang, { err })}</span>}
       <span className="pd-triage__sep" aria-hidden="true">·</span>
       <ProblemVerdictActions subject={problemVerdictSubject(problem)} compact
         onDone={next => { if (next === 'noise') onBack(); }} />
@@ -946,6 +949,7 @@ function claimIdentity(user: { email?: string; username?: string } | null | unde
 function ProblemTimelineList({ problem, rollouts, limit }: {
   problem: Problem; rollouts: RolloutEvidence[]; limit?: number;
 }) {
+  const lang = useLang(); // v0.10.2284
   const items: ReactElement[] = [
     ...rollouts.map(ev => (
       <li key={`${ev.clusterId}/${ev.namespace}/${ev.workload}@${ev.revision}`} className={ev.band === 'high' ? 'warn' : ''}>
@@ -970,7 +974,7 @@ function ProblemTimelineList({ problem, rollouts, limit }: {
   } else if (problem.priorDeploy) {
     // v0.10.1054 — yinelenen kuralın "olası neden" saymadığı deploy NÖTR kalır.
     items.push(
-      <li key="prior-deploy" data-prior-deploy title="Yinelenen anomali: deploy'dan önce de görülüyordu — olası neden sayılmadı">
+      <li key="prior-deploy" data-prior-deploy title={tl('pd.tl.priorDeploy', lang)}>
         <b>Deploy</b> <code className="mono">{problem.priorDeploy.version}</code>
         <span className="mono pd-tl-ts">{fmtStartedTs(problem.startedAt - problem.priorDeploy.ageSeconds * 1e9)}</span>
       </li>,
@@ -1007,47 +1011,46 @@ function AlertDetailBoxes({ problem, std, window: win, dbHealthLinks, svcSlowLin
   svcSlowLinks: ReturnType<typeof svcSlowdownPivots>;
 }) {
   const tr = useT();
-  const who = alertWhoText(problem, std);
-  const cause = alertCause(problem);
+  const lang = useLang(); // v0.10.2284 — kutu metinleri lib/i18n pd.box.* / pd.text.* (TR aynı)
+  const who = alertWhoText(problem, std, lang);
+  const cause = alertCause(problem, lang);
   const kind = subjectKind(problem.service, problem.kind);
   const thr = latencyThresholdMs(problem);
   return (
     <>
-      <Sect title="Ne oluyor">
-        <p className="pd-box-text" data-testid="box-what">{alertWhatText(problem, std)}</p>
+      <Sect title={tl('pd.box.what', lang)}>
+        <p className="pd-box-text" data-testid="box-what">{alertWhatText(problem, std, lang)}</p>
         {/* v0.10.2163 (Davis tarzı tek Problem D4) — bu Problem'e birleşen
             olayların kısa çizelgesi (≤5 satır); üyesi yoksa hiçbir şey çizmez. */}
         <ProblemEventTimeline problemId={problem.id} />
       </Sect>
       {who && (
-        <Sect title="Kimi etkiliyor">
+        <Sect title={tl('pd.box.who', lang)}>
           <p className="pd-box-text" data-testid="box-who">{who}</p>
         </Sect>
       )}
       {cause && (
-        <Sect title="Olası neden" sub={cause.confidence}>
+        <Sect title={tl('pd.box.cause', lang)} sub={cause.confidence}>
           <p className="pd-box-text" data-testid="box-cause">{cause.text}</p>
         </Sect>
       )}
-      <Sect title="Ne yapılabilir">
+      <Sect title={tl('pd.box.do', lang)}>
         {dbHealthLinks ? (<>
-          <SignalLink to={dbHealthLinks.databaseHref} label="Veritabanı sayfası" sub="problem penceresi" />
-          <SignalLink to={dbHealthLinks.errorTracesHref} label="Hatalı trace'ler" sub="bu veritabanı, problem penceresi" />
+          <SignalLink to={dbHealthLinks.databaseHref} label={tl('pd.box.dbPage', lang)} sub={tl('pd.box.window', lang)} />
+          <SignalLink to={dbHealthLinks.errorTracesHref} label={tl('pd.box.dbErrTraces', lang)} sub={tl('pd.box.dbErrTraces.sub', lang)} />
         </>) : kind === 'service' ? (<>
           {svcSlowLinks
-            ? <SignalLink to={svcSlowLinks.slowTracesHref} label="Yavaş trace'ler" sub={`≥ ${Math.round(svcSlowLinks.slowMinMs)} ms, problem penceresi`} />
+            ? <SignalLink to={svcSlowLinks.slowTracesHref} label={tl('pd.box.slow', lang)} sub={tf('pd.box.slow.sub', lang, { ms: Math.round(svcSlowLinks.slowMinMs) })} />
             : thr !== null
-              ? <SignalLink to={slowTracesHref(problem.service, thr, win)} label="Yavaş trace'ler" sub={`≥ ${Math.round(thr)} ms (eşik), problem penceresi`} />
+              ? <SignalLink to={slowTracesHref(problem.service, thr, win)} label={tl('pd.box.slow', lang)} sub={tf('pd.box.slowThr.sub', lang, { ms: Math.round(thr) })} />
               : <SignalLink to={tracesPivotHref({ window: win, service: problem.service, hasError: true, rootOnly: false })}
-                  label="Hatalı trace'ler" sub="servis, problem penceresi" />}
+                  label={tl('pd.box.errTraces', lang)} sub={tl('pd.box.svcWindow', lang)} />}
           <SignalLink to={logsHref({ window: win, service: problem.service, severity: 17 })}
-            label="Loglar (yalnız hatalar)" sub="servis, problem penceresi" />
-          <SignalLink to={serviceHref(problem.service, { range: win })} label="Servis sayfası" sub="problem penceresiyle" />
+            label={tl('pd.box.logsErr', lang)} sub={tl('pd.box.svcWindow', lang)} />
+          <SignalLink to={serviceHref(problem.service, { range: win })} label={tl('pd.box.svcPage', lang)} sub={tl('pd.box.svcPage.sub', lang)} />
         </>) : (
           <div className="pd-pivot-note">
-            {kind === 'external'
-              ? 'Bu alarmın öznesi bir dış metrik kaynağı serisi — kanıt zinciri Teknik kanıtta.'
-              : 'Bu alarmın öznesi bir veritabanı örneği — log/trace pivotları bir servis adı gerektiriyor.'}
+            {tl(kind === 'external' ? 'pd.box.extNote' : 'pd.box.dbNote', lang)}
           </div>
         )}
         {problem.runbookUrl && (
@@ -1071,6 +1074,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
   onChanged: () => void;
 }) {
   useEscBack(onBack);
+  const lang = useLang(); // v0.10.2284 — Türkçe metinler lib/i18n pd.* (TR aynı)
   // v0.10.1055 (operatör: "Okdir") — terfi ("anomaly-auto:") ve küme
   // ("anomaly-cluster:") Problem'leri de ANOMALY rozeti taşır; tek yüklem.
   const isAnomaly = isAnomalyProblem(problem.ruleId);
@@ -1156,7 +1160,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
             yazınca bu problem açılır. */}
         {problem.displayId && (
           <span className="badge b-gray mono" style={{ cursor: 'copy' }}
-            title="Görüntü kimliği — kopyalamak için tıkla; palete yazınca bu problem açılır"
+            title={tl('pd.displayId.title', lang)}
             onClick={() => { void copyToClipboard(problem.displayId!); }}>
             {problem.displayId}
           </span>
@@ -1177,7 +1181,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
       <DetailTitle prefix={problem.priority
         ? <PriorityBadge p={problem.priority} reason={problem.priorityReason} />
         : undefined}>
-        {std?.headline || alertProblemSummary(problem)}
+        {std?.headline || alertProblemSummary(problem, lang)}
         {/* v0.10.2281 (S3) — nötr "sık tekrar eden" gölge çipi; sık değilse yok. */}
         <ProblemFrequentChip problemId={problem.id} />
       </DetailTitle>
@@ -1210,7 +1214,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
               Problem'inin log deseni sayısı. Diğerlerinde ikisi de null. */}
           {hasAlertMetricChart(problem) && <AlertMetricChartSection problem={problem} />}
           <PromotedLogPatternCount problem={problem} />
-          <Sect title="Kısa geçmiş">
+          <Sect title={tl('pd.recent', lang)}>
             <ProblemTimelineList problem={problem} rollouts={rcRollouts} limit={5} />
           </Sect>
         </div>
@@ -1222,7 +1226,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
       {/* v0.10.2281 (S3) — "Tekrar" (gölge; bildirim değişmedi). */}
       <ProblemRepeatSection problemId={problem.id} />
 
-      <Sect title="Teknik kanıt" collapsible>
+      <Sect title={tl('pd.tech', lang)} collapsible>
         {/* v0.10.1529 — standart kartlar (Etki · Ne zamandan beri · Güven ·
             Kaynak + neden/bağlam/sonraki adım); başlık yukarıda. */}
         <ProblemStandardHeader stdRef={`problem:${problem.id}`} showTitle={false} />
@@ -1231,11 +1235,11 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         <ProblemCoSRESection problemId={problem.id} />
         {/* v0.10.2163 — birleşen olayların tam listesi + ham değerler (üyesi yoksa bölüm yok). */}
         <ProblemEventEvidence problemId={problem.id} />
-        <Sect title="Kural">
+        <Sect title={tl('pd.rule', lang)}>
           <dl className="pd-rule">
-            <dt>Ad</dt><dd>{problem.ruleName || '—'}</dd>
-            <dt>Kimlik</dt><dd className="mono">{problem.ruleId || '—'}</dd>
-            <dt>Şiddet</dt><dd>{problem.severity}</dd>
+            <dt>{tl('pd.rule.name', lang)}</dt><dd>{problem.ruleName || '—'}</dd>
+            <dt>{tl('pd.rule.id', lang)}</dt><dd className="mono">{problem.ruleId || '—'}</dd>
+            <dt>{tl('pd.rule.severity', lang)}</dt><dd>{problem.severity}</dd>
           </dl>
         </Sect>
         <div className="pd-cols pd-cols-15">
@@ -1252,7 +1256,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                     <span className="badge b-gray">ANOMALY</span>
                     {/* v0.10.2053 (D4) — ML grubunun açtığı Problem: gruba geri bağlantı. */}
                     {mlGroupHref && (
-                      <Link to={mlGroupHref} style={{ marginLeft: 8 }} data-testid="pd-ml-group">Anomali grubunu aç ↗</Link>
+                      <Link to={mlGroupHref} style={{ marginLeft: 8 }} data-testid="pd-ml-group">{tl('pd.mlGroup', lang)}</Link>
                     )}
                   </div>
                 )}
@@ -1370,7 +1374,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                       <Link to={serviceHref(problem.service, { range: probWindow, tab: 'infra', params: { jpod: pod } })}
                         className="pb-pill"
                         style={{ textDecoration: 'none', color: 'var(--accent2)' }}
-                        title="Bu podun JMX/runtime grafikleri (Pods sekmesi, pod daraltmalı)">
+                        title={tl('pd.pod.title', lang)}>
                         <span className="dot" /> pod <span className="mono">{pod}</span> →
                       </Link>
                     );
@@ -1404,30 +1408,28 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                     Databases detayı ve o veritabanının trace'leri boş açılmaz
                     (dbHealthPivots.ts). Diğer db öznelerinde aşağıdaki cümle sürer. */}
                 {dbHealthLinks ? (<>
-                  <SignalLink to={dbHealthLinks.databaseHref} label="◫ Veritabanı sayfası" sub="db detayı, problem penceresi" />
-                  <SignalLink to={dbHealthLinks.tracesHref} label="⋮ Trace'ler" sub="bu veritabanı, problem penceresi" />
-                  <SignalLink to={dbHealthLinks.errorTracesHref} label="⋮ Hatalı trace'ler" sub="bu veritabanı, problem penceresi, yalnız hatalar" />
+                  <SignalLink to={dbHealthLinks.databaseHref} label={tl('pd.sig.dbPage', lang)} sub={tl('pd.sig.dbPage.sub', lang)} />
+                  <SignalLink to={dbHealthLinks.tracesHref} label={tl('pd.sig.dbTraces', lang)} sub={tl('pd.sig.dbTraces.sub', lang)} />
+                  <SignalLink to={dbHealthLinks.errorTracesHref} label={tl('pd.sig.dbErrTraces', lang)} sub={tl('pd.sig.dbErrTraces.sub', lang)} />
                   {/* v0.10.1083 — hata sayısı kolu (ORA patlaması): hangi hata kodu,
                       hangi çağıran — Databases detayının hata kartı. */}
-                  <SignalLink to={dbHealthLinks.errorsHref} label="⚠ Hata kırılımı" sub="hata kodu → exception tipi → mesaj, problem penceresi" />
+                  <SignalLink to={dbHealthLinks.errorsHref} label={tl('pd.sig.dbErrors', lang)} sub={tl('pd.sig.dbErrors.sub', lang)} />
                 </>) : subjectKind(problem.service, problem.kind) !== 'service' ? (
                   <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                    {isExternal
-                      ? 'Bu alarmın öznesi bir dış metrik kaynağı serisi, bir servis değil — ilgili trace/pod/log kanıtı yukarıdaki kanıt zincirinde.'
-                      : 'Bu alarmın öznesi bir veritabanı örneği, bir servis değil — log/trace/servis-haritası pivotları bir servis adı gerektiriyor.'}
+                    {tl(isExternal ? 'pd.sig.extNote' : 'pd.sig.dbNote', lang)}
                   </div>
                 ) : (<>
                 {/* v0.10.1091 — yaygın yavaşlama (svc-slowdown): önce hangi
                     operasyonların yavaşladığı ve yavaş trace'ler (svcSlowdownPivots.ts). */}
                 {svcSlowLinks && (<>
-                  <SignalLink to={svcSlowLinks.serviceHref} label="◫ Servis sayfası" sub="problem penceresi" />
-                  <SignalLink to={svcSlowLinks.operationsHref} label="☰ Operasyonlar" sub="Operations sekmesi, problem penceresi" />
-                  <SignalLink to={svcSlowLinks.slowTracesHref} label="◷ Yavaş trace'ler"
-                    sub={`≥ ${Math.round(svcSlowLinks.slowMinMs)} ms, problem penceresi`} />
+                  <SignalLink to={svcSlowLinks.serviceHref} label={tl('pd.sig.svcPage', lang)} sub={tl('pd.sig.svcPage.sub', lang)} />
+                  <SignalLink to={svcSlowLinks.operationsHref} label={tl('pd.sig.ops', lang)} sub={tl('pd.sig.ops.sub', lang)} />
+                  <SignalLink to={svcSlowLinks.slowTracesHref} label={tl('pd.sig.slow', lang)}
+                    sub={tf('pd.sig.slow.sub', lang, { ms: Math.round(svcSlowLinks.slowMinMs) })} />
                 </>)}
                 <SignalLink to={logsLink} label="≡ Logs" sub="service, problem window" />
-                <SignalLink to={logsErrorLink} label="≡ Logs (yalnız hatalar)" sub="service, problem window, severity ≥ ERROR" />
-                <SignalLink to={logsPatternsLink} label="≡ Loglar (desenler)" sub="service, problem window, Desenler paneli açık" />
+                <SignalLink to={logsErrorLink} label={tl('pd.sig.logsErr', lang)} sub="service, problem window, severity ≥ ERROR" />
+                <SignalLink to={logsPatternsLink} label={tl('pd.sig.logsPat', lang)} sub={tl('pd.sig.logsPat.sub', lang)} />
                 {/* v0.8.512 (perf raporu #12) — pivot problem penceresini
                     taşır: logs ile aynı custom range, yoksa /traces global
                     range'iyle açılıp problemle ilgisiz trace gösteriyordu. */}
@@ -1464,7 +1466,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                     <SignalLink
                       to={slowTracesHref(problem.service, thr, probWindow)}
                       label="◷ Slow traces"
-                      sub={`≥ ${Math.round(thr)} ms (eşik), problem window`} />
+                      sub={tf('pd.sig.slowThr.sub', lang, { ms: Math.round(thr) })} />
                   );
                 })()}
                 <SignalLink to={`/service-map?focus=${encodeURIComponent(problem.service)}`}
@@ -1479,7 +1481,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                   tek satırlık kapalı bir disclosure ve isteği o açılınca atıyor;
                   üstüne ikinci bir kapak, kanıta ulaşmayı iki tıka çıkarırdı. */}
               {subjectKind(problem.service, problem.kind) === 'service' && (
-                <Sect title="Log kanıtı" sub="ERROR+ desenler, problem penceresi · açılınca yüklenir">
+                <Sect title={tl('pd.logEvidence', lang)} sub={tl('pd.logEvidence.sub', lang)}>
                   <ProblemLogEvidence service={problem.service} startedAt={problem.startedAt} resolvedAt={problem.resolvedAt} linkWindow={probWindow} />
                 </Sect>
               )}
@@ -1491,14 +1493,14 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
               {/* v0.10.1032 — ikincil, KAPALI gelir. Panel kendi sorgusunu mount
                   anında atıyor (yoklama yok); kapalı Sect gövdeyi mount etmediği
                   için bildirim geçmişi artık ancak bölüm açılınca çekilir. */}
-              <Sect title="Bildirim" collapsible>
+              <Sect title={tl('pd.notify', lang)} collapsible>
                 <ProblemNotifyPanel problemId={problem.id} />
               </Sect>
 
               {/* v0.10.1032 — ikincil, KAPALI gelir; runbook koşuları
                   (useRunbookExecutions) bölüm açılınca çekilir. */}
               <Sect title="Runbook" collapsible
-                sub={problem.runbookUrl ? 'runbook bağlantısı var' : undefined}>
+                sub={problem.runbookUrl ? tl('pd.runbook.sub', lang) : undefined}>
                 {problem.runbookUrl && (
                   <SafeHref href={problem.runbookUrl}
                     style={{

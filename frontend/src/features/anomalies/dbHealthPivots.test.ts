@@ -80,10 +80,11 @@ describe('dbHealthPivots — Problem detayı pivotları', () => {
   it('ProblemDetail pivotları db-health için çiziyor (kaynak pini)', () => {
     const src = readFileSync(resolve(__dirname, 'ProblemDetail.tsx'), 'utf8');
     expect(src).toContain('dbHealthPivots(problem.ruleId, probWindow)');
-    expect(src).toContain('label="◫ Veritabanı sayfası"');
-    expect(src).toContain(`label="⋮ Trace'ler"`);
+    // v0.10.2284 — etiketler lib/i18n pd.sig.* (TR "◫ Veritabanı sayfası", "⋮ Trace'ler", "⚠ Hata kırılımı").
+    expect(src).toContain("label={tl('pd.sig.dbPage', lang)}");
+    expect(src).toContain("label={tl('pd.sig.dbTraces', lang)}");
     // v0.10.1083 — "Hata kırılımı" pivotu (ORA kodu → exception → mesaj kartı).
-    expect(src).toContain('to={dbHealthLinks.errorsHref} label="⚠ Hata kırılımı"');
+    expect(src).toContain("to={dbHealthLinks.errorsHref} label={tl('pd.sig.dbErrors', lang)}");
   });
   // v0.10.1083 — operatör: "Oracle hataları da problemse hâlâ düşmüyor". Hata
   // sayısı kolunun açtığı Problem'den Databases detayının "Errors on this

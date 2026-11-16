@@ -111,14 +111,20 @@ export function stdDurationLine(std: ProblemStandard, lang: Lang = 'tr'): string
 }
 
 /** Etkinin ikinci satırı: ölçülmüş dakikalık hata + doğrulanmış çağıranlar. Boş = çizme. */
-export function stdImpactSecondary(std: ProblemStandard): string {
+export function stdImpactSecondary(std: ProblemStandard, lang: Lang = 'tr'): string {
   const parts: string[] = [];
   const fpm = std.impact.failedPerMin ?? 0;
-  if (fpm > 0) parts.push(`~${fmtCount(fpm)} hatalı istek/dk`);
+  if (fpm > 0) parts.push(tf('pd.std.failed', lang, { n: lang === 'tr' ? fmtCount(fpm) : fmtCountEn(fpm) }));
   const n = std.impact.callers?.length ?? 0;
-  if (n > 0) parts.push(`${n} çağıran (doğrulanmış)`);
-  if (!std.impact.known && parts.length === 0) parts.push('etki bilinmiyor');
+  if (n > 0) parts.push(tf('pd.std.callers', lang, { n }));
+  if (!std.impact.known && parts.length === 0) parts.push(t('pd.std.impactUnknown', lang));
   return parts.join(' · ');
+}
+
+function fmtCountEn(v: number): string {
+  if (v >= 100) return Math.round(v).toLocaleString('en-US');
+  if (v >= 10) return String(Math.round(v));
+  return v.toFixed(1);
 }
 
 function fmtCount(v: number): string {
@@ -138,11 +144,16 @@ export function stdGateSummary(gates: SignalGate[]): string {
 }
 
 /** Güven rozetinin title'ı: kapı başına "G1 trafik: ✓ — not" satırları. */
-export function stdGateTitle(std: ProblemStandard): string {
+/** v0.10.2284 — güven rozet metni arayüz dilinde (TR = STD_CONFIDENCE_LABEL). */
+export function stdConfidenceLabel(level: StdConfidenceLevel, lang: Lang = 'tr'): string {
+  return lang === 'tr' ? STD_CONFIDENCE_LABEL[level] : t(`pd.std.conf.${level}`, lang);
+}
+
+export function stdGateTitle(std: ProblemStandard, lang: Lang = 'tr'): string {
   const lines = std.confidence.gates
     .filter(g => g.status !== 'na')
     .map(g => `${g.id} ${g.name}: ${GATE_MARK[g.status] ?? g.status}${g.note ? ` — ${g.note}` : ''}`);
-  return [`Güven: ${STD_CONFIDENCE_LABEL[std.confidence.level]} (yalnız ölçülmüş kapılardan)`, ...lines].join('\n');
+  return [tf('pd.std.confTitle', lang, { l: stdConfidenceLabel(std.confidence.level, lang) }), ...lines].join('\n');
 }
 
 /** Manşeti özne + gövde olarak böler ("svc: X" → ["svc", "X"]); önek yoksa özne boş. */

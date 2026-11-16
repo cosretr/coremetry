@@ -166,7 +166,7 @@ describe('kablolama', () => {
     const actions = readFileSync(resolve(__dirname, '../components/ProblemVerdictActions.tsx'), 'utf8');
     expect(actions).toContain("const isEditor = user?.role === 'admin' || user?.role === 'editor';");
     // v0.10.1016 — açıklama artık politikaya göre değişir (sabit "susturmaz" değil).
-    expect(actions).toContain('{verdictNotifyHint(sig, q.data?.policy)}');
+    expect(actions).toContain('{verdictNotifyHint(sig, q.data?.policy, lang)}'); // v0.10.2284 — arayüz dilinde
   });
   it('v0.10.1016 — "Problem değil" görünümü politika satırını taşır; anahtar yalnız admin, açmak onay ister', () => {
     const inbox = readFileSync(resolve(__dirname, '../pages/Inbox.tsx'), 'utf8');

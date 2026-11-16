@@ -12,7 +12,7 @@ describe('ProblemInsightStrip', () => {
   // kanıt altta KAPALI) — şerit ilk ekrandan "Teknik kanıt" bölümüne indi.
   it('yerleşim: kapalı "Teknik kanıt" içinde', () => {
     const s = detail.indexOf('<ProblemInsightStrip problemId={problem.id} />');
-    const tech = detail.indexOf('<Sect title="Teknik kanıt" collapsible>');
+    const tech = detail.indexOf("<Sect title={tl('pd.tech', lang)} collapsible>"); // v0.10.2284 — TR "Teknik kanıt"
     expect(s).toBeGreaterThan(0);
     expect(tech).toBeGreaterThan(0);
     expect(s).toBeGreaterThan(tech);

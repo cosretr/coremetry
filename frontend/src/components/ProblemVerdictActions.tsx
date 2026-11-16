@@ -43,6 +43,7 @@ type Props = {
 
 export function ProblemVerdictActions({ item, subject, onDone, flush, compact }: Props) {
   const { user } = useAuth();
+  const lang = useLang(); // v0.10.2284 — detay triyajı arayüz dilinde (TR aynı)
   const isEditor = user?.role === 'admin' || user?.role === 'editor';
   const isAdmin = user?.role === 'admin';
   const q = useProblemVerdicts();
@@ -58,21 +59,21 @@ export function ProblemVerdictActions({ item, subject, onDone, flush, compact }:
     set.mutate(verdictInput(subj, verdict, noise), { onSuccess: () => onDone?.(verdict) });
   };
   const noiseDetail = current?.verdict === 'noise'
-    ? [noiseReasonLabel(current.reason), current.permanent ? 'kalıcı' : ''].filter(Boolean).join(' · ')
+    ? [noiseReasonLabel(current.reason, lang), current.permanent ? t('verdict.permanent', lang) : ''].filter(Boolean).join(' · ')
     : '';
-  const stateText = current?.verdict === 'real' ? 'Gerçek problem olarak işaretli'
-    : current?.verdict === 'noise' ? `Problem değil olarak işaretli${noiseDetail ? ` (${noiseDetail})` : ''}${current.note ? ` — ${current.note}` : ''}`
-    : 'Henüz işaretlenmedi';
+  const stateText = current?.verdict === 'real' ? t('pd.v.realMarked', lang)
+    : current?.verdict === 'noise' ? tf('pd.v.noiseMarked', lang, { detail: noiseDetail ? ` (${noiseDetail})` : '', note: current.note ? ` — ${current.note}` : '' })
+    : t('pd.v.unmarked', lang);
 
   if (compact) {
     // Durum kısa: düğmenin kendisi seçili görünür; metin yalnız kim/ne
     // olduğunu söyler (viewer düğme görmediği için durumu buradan okur).
-    const shortState = current?.verdict === 'real' ? 'gerçek problem'
-      : current?.verdict === 'noise' ? `problem değil${noiseDetail ? ` · ${noiseDetail}` : ''}`
-      : 'işaretlenmedi';
+    const shortState = current?.verdict === 'real' ? t('verdict.realState', lang)
+      : current?.verdict === 'noise' ? `${t('verdict.noiseState', lang)}${noiseDetail ? ` · ${noiseDetail}` : ''}`
+      : t('pd.v.unmarkedShort', lang);
     return (
       <span className="pv-compact">
-        <span className="pv-compact__q">Gerçek problem mi?</span>
+        <span className="pv-compact__q">{t('pd.v.q', lang)}</span>
         {(!isEditor || current) && (
           <span className="pv-compact__state">{shortState}{current?.by ? ` · ${current.by}` : ''}</span>
         )}
@@ -80,20 +81,20 @@ export function ProblemVerdictActions({ item, subject, onDone, flush, compact }:
           <>
             <Button size="sm" variant="secondary" active={current?.verdict === 'real'}
               loading={set.isPending} disabled={current?.verdict === 'real'} onClick={() => write('real')}>
-              Gerçek problem
+              {t('verdict.real', lang)}
             </Button>
-            <NoiseReasonButton label="Problem değil" isAdmin={isAdmin}
+            <NoiseReasonButton label={t('verdict.noise', lang)} isAdmin={isAdmin}
               active={current?.verdict === 'noise'} loading={set.isPending} disabled={current?.verdict === 'noise'}
               onConfirm={c => write('noise', c)} />
             {current && (
               <Button size="sm" variant="ghost" loading={set.isPending} onClick={() => write('')}>
-                İşareti kaldır
+                {t('pd.v.clear', lang)}
               </Button>
             )}
           </>
         )}
-        <span className="pv-compact__hint">{verdictCompactHint(sig, q.data?.policy)}</span>
-        {set.isError && <span role="alert" className="field-error">Karar yazılamadı — yeniden deneyin.</span>}
+        <span className="pv-compact__hint">{verdictCompactHint(sig, q.data?.policy, lang)}</span>
+        {set.isError && <span role="alert" className="field-error">{t('pd.v.err', lang)}</span>}
       </span>
     );
   }
@@ -101,7 +102,7 @@ export function ProblemVerdictActions({ item, subject, onDone, flush, compact }:
   return (
     <div className="stack gap-2" style={{ marginTop: flush ? 0 : 14 }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--text3)' }}>
-        Bu gerçek bir problem mi?
+        {t('pd.v.qLong', lang)}
       </div>
       <div style={{ fontSize: 12, color: 'var(--text2)' }}>
         {stateText}{current?.by ? ` · ${current.by}` : ''}
@@ -110,24 +111,22 @@ export function ProblemVerdictActions({ item, subject, onDone, flush, compact }:
         <div className="row gap-2 row-wrap">
           <Button size="sm" variant="secondary" active={current?.verdict === 'real'}
             loading={set.isPending} disabled={current?.verdict === 'real'} onClick={() => write('real')}>
-            Gerçek problem
+            {t('verdict.real', lang)}
           </Button>
-          <NoiseReasonButton label="Problem değil" isAdmin={isAdmin}
+          <NoiseReasonButton label={t('verdict.noise', lang)} isAdmin={isAdmin}
             active={current?.verdict === 'noise'} loading={set.isPending} disabled={current?.verdict === 'noise'}
             onConfirm={c => write('noise', c)} />
           {current && (
             <Button size="sm" variant="ghost" loading={set.isPending} onClick={() => write('')}>
-              İşareti kaldır
+              {t('pd.v.clear', lang)}
             </Button>
           )}
         </div>
       )}
       <div className="field-hint">
-        Karar bu satırın imzasına yazılır: aynı kural + servis (ya da aynı exception grubu) yeniden geldiğinde
-        kendiliğinden aynı sınıfa düşer. “Problem değil” satırı varsayılan listeden çıkarır ve “Problem değil”
-        görünümünde toplar; {verdictNotifyHint(sig, q.data?.policy)}
+        {t('pd.v.longHint', lang)}{verdictNotifyHint(sig, q.data?.policy, lang)}
       </div>
-      {set.isError && <div role="alert" className="field-error">Karar yazılamadı — yeniden deneyin.</div>}
+      {set.isError && <div role="alert" className="field-error">{t('pd.v.err', lang)}</div>}
     </div>
   );
 }

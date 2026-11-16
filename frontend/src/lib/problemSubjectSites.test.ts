@@ -40,7 +40,7 @@ const ALLOWED: { file: string; needle: string; why: string }[] = [
   },
   {
     file: 'features/anomalies/ProblemDetail.tsx',
-    needle: 'serviceHref(problem.service, { range: win })} label="Servis sayfası"',
+    needle: "serviceHref(problem.service, { range: win })} label={tl('pd.box.svcPage', lang)}", // v0.10.2284 — TR "Servis sayfası"
     why: 'v0.10.2127 (S7) "Ne yapılabilir" kutusu — bağlantı yalnız ' +
       "subjectKind(...) === 'service' dalında çizilir; db/dış öznede o dal " +
       'koşmaz, yerine neden olmadığını söyleyen cümle basılır.',

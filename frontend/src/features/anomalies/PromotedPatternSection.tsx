@@ -4,6 +4,7 @@ import { PROMOTED_ANOMALY_RULE_PREFIX } from '@/lib/problemSubject';
 import type { Problem } from '@/lib/types';
 import { anomalyChartWindow } from './anomalyDetail';
 import { SignalLink } from './detailSections';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2284
 import { LogPatternCountSection } from './LogPatternCountSection';
 import {
   logPatternSeriesArgs, patternLogsPivot, promotedPatternChartEvent, type LogPatternChartEvent,
@@ -47,6 +48,7 @@ export function PromotedPatternLogsLink({ problem }: { problem: Problem }) {
 }
 
 function PatternLogsPivotRow({ ev }: { ev: LogPatternChartEvent }) {
+  const lang = useLang();
   const win = useMemo(
     () => anomalyChartWindow({ startedAt: ev.startedAt, lastSeen: ev.lastSeen }),
     [ev.startedAt, ev.lastSeen]);
@@ -61,9 +63,9 @@ function PatternLogsPivotRow({ ev }: { ev: LogPatternChartEvent }) {
   if (!pivot) return null;
   return (
     <>
-      <SignalLink to={pivot.href} label="≡ Logları aç (desen)" sub="desene uyan satırlar, olay penceresi" />
+      <SignalLink to={pivot.href} label={t('pd.sig.patternLogs', lang)} sub={t('pd.sig.patternLogs.sub', lang)} />
       {pivot.topServices.length > 0 && (
-        <div className="pd-pivot-note">En çok: {pivot.topServices.join(', ')}</div>
+        <div className="pd-pivot-note">{t('pd.sig.top', lang)}{pivot.topServices.join(', ')}</div>
       )}
     </>
   );

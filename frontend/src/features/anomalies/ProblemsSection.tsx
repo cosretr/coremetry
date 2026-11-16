@@ -27,6 +27,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AlertProblemDetail } from './ProblemDetail';
 import { findProblemInCaches } from './problemResolve';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2284 — boş / hata metinleri arayüz dilinde (TR aynı)
 
 // AlertProblemHost — resolves ?problem=<id> to a row and renders the
 // Variant-B full-page detail.
@@ -56,6 +57,7 @@ export function AlertProblemHost({ id, isAdmin, onBack, backLabel = '← Excepti
   backLabel?: string;
 }) {
   const qc = useQueryClient();
+  const lang = useLang();
   const q = useProblems({ limit: 200 });
   const cached = useMemo(() => findProblemInCaches(qc.getQueriesData({ queryKey: keys.problems.all }), id),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -94,8 +96,8 @@ export function AlertProblemHost({ id, isAdmin, onBack, backLabel = '← Excepti
   if (failed) {
     return (
       <PageShell>
-        <Empty icon="⚠" title="Problem yüklenemedi">
-          <Button variant="secondary" size="sm" onClick={() => { void q.refetch(); void byID.refetch(); }}>Tekrar dene</Button>{' '}
+        <Empty icon="⚠" title={t('pd.host.failed', lang)}>
+          <Button variant="secondary" size="sm" onClick={() => { void q.refetch(); void byID.refetch(); }}>{t('pd.host.retry', lang)}</Button>{' '}
           <Button variant="secondary" size="sm" onClick={onBack}>{backLabel}</Button>
         </Empty>
       </PageShell>
@@ -103,9 +105,8 @@ export function AlertProblemHost({ id, isAdmin, onBack, backLabel = '← Excepti
   }
   return (
     <PageShell>
-      <Empty icon="❓" title="Problem kaydı yok">
-        Bu kimlikle bir problem bulunamadı — kayıt 90 günlük saklama
-        penceresini aşmış ya da bağlantı eksik kopyalanmış olabilir.{' '}
+      <Empty icon="❓" title={t('pd.host.missing', lang)}>
+        {t('pd.host.missingBody', lang)}{' '}
         <Button variant="secondary" size="sm" onClick={onBack}>{backLabel}</Button>
       </Empty>
     </PageShell>

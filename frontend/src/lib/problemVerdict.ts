@@ -153,22 +153,18 @@ export function verdictCoversNotifications(sig: string | null | undefined): bool
 }
 
 /** Çekmecedeki açıklamanın bildirimle ilgili son cümlesi. */
-export function verdictNotifyHint(sig: string | null | undefined, policy: ProblemVerdictPolicy | null | undefined): string {
-  if (!verdictMutesNotifications(policy)) return 'bildirimleri susturmaz, geri alınabilir.';
-  return verdictCoversNotifications(sig)
-    ? 'bu imzanın mail / kanal bildirimlerini de susturur (yönetici ayarı açık) — v0.10.1531: süreli (varsayılan 7 gün; öncelik yükselir ya da etki 2 katına çıkarsa yine gelir), yönetici kalıcı gizleyebilir; geri alınabilir.'
-    : 'anomali satırlarının bildirimi bu işaretten etkilenmez, geri alınabilir.';
+export function verdictNotifyHint(sig: string | null | undefined, policy: ProblemVerdictPolicy | null | undefined, lang: Lang = 'tr'): string {
+  if (!verdictMutesNotifications(policy)) return t('pd.v.notifyNone', lang);
+  return t(verdictCoversNotifications(sig) ? 'pd.v.notifyMute' : 'pd.v.notifyAnomaly', lang);
 }
 
 /** v0.10.1032 (operatör: "Çok detay verince daha anlaşılır olmuyor") — detay
  *  sayfalarının TEK kısa cümlesi (çekmece uzun açıklamayı korur). Her tür için
  *  doğru olan çekirdek + yalnız yönetici politikası AÇIKKEN tek bildirim cümleciği. */
-export function verdictCompactHint(sig: string | null | undefined, policy: ProblemVerdictPolicy | null | undefined): string {
-  const core = 'Aynısı yeniden gelirse aynı sınıfa düşer; geri alınabilir.';
+export function verdictCompactHint(sig: string | null | undefined, policy: ProblemVerdictPolicy | null | undefined, lang: Lang = 'tr'): string {
+  const core = t('pd.v.compact', lang);
   if (!verdictMutesNotifications(policy)) return core;
-  return verdictCoversNotifications(sig)
-    ? `${core} “Problem değil” bildirimini de susturur (süreli; öncelik yükselirse yine gelir).`
-    : `${core} Anomali bildirimini etkilemez.`;
+  return core + t(verdictCoversNotifications(sig) ? 'pd.v.compactMute' : 'pd.v.compactAnomaly', lang);
 }
 
 export type VerdictIndex = Map<string, ProblemVerdict>;

@@ -14,6 +14,7 @@ import { fmtFixed, fmtNum, tsMinute } from '@/lib/utils';
 import { subjectLabel, isAnomalyDetectorRule, PROMOTED_ANOMALY_RULE_PREFIX } from '@/lib/problemSubject';
 import { fmtDurationNs } from './problemTime';
 import { anomalyDurationNs } from './anomalyDetail';
+import { t, tf, type Lang } from '@/lib/i18n'; // v0.10.2284 — Problem detayı metinleri lang alır (varsayılan 'tr')
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
@@ -146,25 +147,29 @@ const EXT_SERIES_RULE_PREFIX = 'anomaly:ext:';
 // yazardı). Kelime "eşik"; gerçek medyan açıklama cümlesinde.
 export function alertProblemSummary(
   p: Pick<Problem, 'ruleName' | 'metric' | 'value' | 'threshold' | 'service'> & { ruleId?: string },
+  lang: Lang = 'tr',
 ): string {
   const metric = (p.metric ?? '').trim();
-  const name = (p.ruleName ?? '').trim() || metric || 'Alarm';
+  const name = (p.ruleName ?? '').trim() || metric || t('pd.sum.alert', lang);
   const svc = p.service ? ` — ${subjectLabel(p.service)}` : '';
   const head = `${name}${svc}`;
   const hasV = finite(p.value);
   const hasT = finite(p.threshold);
   const anomalyRule = isAnomalyDetectorRule(p.ruleId) && !(p.ruleId ?? '').startsWith(EXT_SERIES_RULE_PREFIX);
-  if (!metric) return `${head}: alarm tetiklendi.`;
+  const v = hasV ? fmtFixed(p.value, 2) : '';
+  const tv = hasT ? fmtFixed(p.threshold, 2) : '';
+  const s = (k: string) => tf(k, lang, { head, metric, v, t: tv });
+  if (!metric) return s('pd.sum.fired');
   if (anomalyRule) {
-    if (hasV && hasT) return `${head}: ${metric} değeri ${fmtFixed(p.value, 2)}, olağan değer ${fmtFixed(p.threshold, 2)}.`;
-    if (hasV) return `${head}: ${metric} değeri ${fmtFixed(p.value, 2)}.`;
-    if (hasT) return `${head}: ${metric} olağan dışı (olağan değer ${fmtFixed(p.threshold, 2)}).`;
-    return `${head}: ${metric} olağan dışı.`;
+    if (hasV && hasT) return s('pd.sum.anVT');
+    if (hasV) return s('pd.sum.anV');
+    if (hasT) return s('pd.sum.anT');
+    return s('pd.sum.an');
   }
-  if (hasV && hasT) return `${head}: ${metric} değeri ${fmtFixed(p.value, 2)}, eşik ${fmtFixed(p.threshold, 2)}.`;
-  if (hasV) return `${head}: ${metric} değeri ${fmtFixed(p.value, 2)}.`;
-  if (hasT) return `${head}: ${metric} eşiği ${fmtFixed(p.threshold, 2)} aşıldı.`;
-  return `${head}: alarm tetiklendi.`;
+  if (hasV && hasT) return s('pd.sum.VT');
+  if (hasV) return s('pd.sum.V');
+  if (hasT) return s('pd.sum.T');
+  return s('pd.sum.fired');
 }
 
 // Saat:dakika (tsMinute'ın saat yarısı) — bitiş başlangıçla aynı gündeyse
@@ -184,20 +189,21 @@ export function detailWhenLine(
   w: { startedAt: number; durationNs: number; ongoing: boolean; endedAt?: number },
   fmtTs: (ns: number) => string = tsMinute,
   fmtClock: (ns: number) => string = clockMinute,
+  lang: Lang = 'tr',
 ): string {
   const parts: string[] = [];
   const hasStart = finite(w.startedAt) && w.startedAt > 0;
   if (hasStart) {
-    parts.push(`${fmtTs(w.startedAt)} başladı`);
+    parts.push(tf('pd.when.started', lang, { ts: fmtTs(w.startedAt) }));
     if (finite(w.durationNs) && w.durationNs >= 1e9) parts.push(fmtDurationNs(w.durationNs));
   }
   if (w.ongoing) {
-    parts.push('sürüyor');
+    parts.push(t('pd.when.ongoing', lang));
   } else if (finite(w.endedAt) && w.endedAt > 0 && (!hasStart || w.endedAt >= w.startedAt)) {
     const end = hasStart && sameLocalDay(w.startedAt, w.endedAt) ? fmtClock(w.endedAt) : fmtTs(w.endedAt);
-    parts.push(`${end} bitti`);
+    parts.push(tf('pd.when.endedAt', lang, { ts: end }));
   } else {
-    parts.push('bitti');
+    parts.push(t('pd.when.ended', lang));
   }
   return parts.join(' · ');
 }
@@ -225,9 +231,9 @@ export function anomalyRecurrence(e: { episodeCount?: number; firstStartedAt?: n
 /** v0.10.1054 — "hiçbir şey kaybolmaz": kuralın "olası neden" saymadığı deploy
  *  (priorDeploy) nötr metin olarak: "deploy <sürüm> <N> dk önce". Sürüm ya da
  *  yaş taşımayan (bozuk) girdi → boş dize (hiçbir şey basılmaz). */
-export function priorDeployText(d: PriorDeploy | null | undefined): string {
+export function priorDeployText(d: PriorDeploy | null | undefined, lang: Lang = 'tr'): string {
   if (!d || typeof d.version !== 'string' || d.version.trim() === '' || !finite(d.ageSeconds)) return '';
-  return `deploy ${d.version} ${Math.max(1, Math.round(d.ageSeconds / 60))} dk önce`;
+  return tf('pd.when.priorDeploy', lang, { v: d.version, m: Math.max(1, Math.round(d.ageSeconds / 60)) });
 }
 
 /** "yinelenen · bu N. kez · ilk kez <tarih>"; ilk görülme bilinmiyorsa son
@@ -238,12 +244,13 @@ export function recurrenceClause(
   r: AnomalyRecurrence | null,
   fmtTs: (ns: number) => string = tsMinute,
   prior?: PriorDeploy | null,
+  lang: Lang = 'tr',
 ): string {
   if (!r) return '';
-  const parts = ['yinelenen', `bu ${r.count}. kez`];
-  if (r.firstNs !== null) parts.push(`ilk kez ${fmtTs(r.firstNs)}`);
-  const dep = priorDeployText(prior);
-  if (dep) parts.push(`${dep} (öncesinde de görülüyordu)`);
+  const parts = [t('pd.when.recurring', lang), tf('pd.when.nth', lang, { c: r.count })];
+  if (r.firstNs !== null) parts.push(tf('pd.when.first', lang, { ts: fmtTs(r.firstNs) }));
+  const dep = priorDeployText(prior, lang);
+  if (dep) parts.push(tf('pd.when.seenBefore', lang, { dep }));
   return parts.join(' · ');
 }
 
@@ -291,12 +298,13 @@ export function problemWhenLine(
   endNs: number,
   fmtTs: (ns: number) => string = tsMinute,
   fmtClock: (ns: number) => string = clockMinute,
+  lang: Lang = 'tr',
 ): string {
   const base = detailWhenLine({
     startedAt: p.startedAt, durationNs: endNs - p.startedAt,
     ongoing: p.status !== 'resolved', endedAt: p.resolvedAt,
-  }, fmtTs, fmtClock);
-  const clause = recurrenceClause(promotedRecurrence(p), fmtTs, p.priorDeploy);
+  }, fmtTs, fmtClock, lang);
+  const clause = recurrenceClause(promotedRecurrence(p), fmtTs, p.priorDeploy, lang);
   return clause ? `${base} · ${clause}` : base;
 }
 

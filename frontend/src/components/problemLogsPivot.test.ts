@@ -12,10 +12,10 @@ describe('Problem → Logs error pivot (C2)', () => {
     const src = read('../features/anomalies/ProblemDetail.tsx');
     expect(src).toContain('logsHref({ window: probWindow, service: problem.service })');
     expect(src).toContain('logsHref({ window: probWindow, service: problem.service, severity: 17 })');
-    expect(src).toContain('label="≡ Logs (yalnız hatalar)"');
+    expect(src).toContain("label={tl('pd.sig.logsErr', lang)}"); // v0.10.2284 — TR "≡ Logs (yalnız hatalar)"
     // v0.10.449 — üçüncü link: desen paneli açık iner; ilk ikisi aynen.
     expect(src).toContain("logsHref({ window: probWindow, service: problem.service, panel: 'patterns' })");
-    expect(src).toContain('label="≡ Loglar (desenler)"');
+    expect(src).toContain("label={tl('pd.sig.logsPat', lang)}"); // v0.10.2284 — TR "≡ Loglar (desenler)"
   });
   it('ProblemDetail: log kanıtı paneli servis kapısının içinde, pencere problemWindowNs (v0.10.452)', () => {
     const src = read('../features/anomalies/ProblemDetail.tsx');

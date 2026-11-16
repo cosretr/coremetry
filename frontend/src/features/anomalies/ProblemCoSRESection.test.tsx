@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 // ProblemCoSRESection.test.tsx — v0.10.1168: probleme bağlı sohbetler listesi.
 import { describe, it, expect, vi, afterEach } from 'vitest';
+
+// v0.10.2284 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';

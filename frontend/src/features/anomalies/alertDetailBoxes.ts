@@ -17,36 +17,37 @@ import type { Problem, ProblemStandard } from '@/lib/types';
 import { subjectLabel } from '@/lib/problemSubject';
 import { alertProblemSummary } from './detailSummary';
 import { showRootCauseInSummary } from './anomalyDetail';
+import { tf, type Lang } from '@/lib/i18n'; // v0.10.2284 — metinler arayüz dilinde (varsayılan 'tr')
 
 type BoxProblem = Pick<Problem, 'ruleName' | 'metric' | 'value' | 'threshold' | 'service' | 'ruleId'
   | 'priorityReason' | 'pod' | 'clusters' | 'rootCause' | 'recentDeploy'>;
 
 /** "Ne oluyor" — her zaman dolu (alertProblemSummary her girdide cümle verir). */
-export function alertWhatText(p: BoxProblem, std?: ProblemStandard | null): string {
-  const parts = [alertProblemSummary(p)];
+export function alertWhatText(p: BoxProblem, std?: ProblemStandard | null, lang: Lang = 'tr'): string {
+  const parts = [alertProblemSummary(p, lang)];
   const ev = std?.evidence?.sentence?.trim();
   if (ev) parts.push(ev);
   const why = p.priorityReason?.trim();
-  if (why) parts.push(`Öncelik gerekçesi: ${why}.`);
+  if (why) parts.push(tf('pd.text.prioWhy', lang, { why }));
   return parts.join(' ');
 }
 
 const CALLERS_SHOWN = 3;
 
 /** "Kimi etkiliyor" — özne yoksa null (kutu yok). */
-export function alertWhoText(p: BoxProblem, std?: ProblemStandard | null): string | null {
+export function alertWhoText(p: BoxProblem, std?: ProblemStandard | null, lang: Lang = 'tr'): string | null {
   const subject = p.service ? subjectLabel(p.service) : '';
   if (!subject) return null;
   const impact = std?.impact?.known ? std.impact.primary?.text?.trim() : '';
-  const parts = [impact ? `${subject} etkileniyor (${impact})` : `${subject} etkileniyor`];
+  const parts = [impact ? tf('pd.text.affectedImpact', lang, { s: subject, impact }) : tf('pd.text.affected', lang, { s: subject })];
   const callers = std?.impact?.callers ?? [];
   if (callers.length > 0) {
     const more = callers.length - CALLERS_SHOWN;
-    parts.push(`çağıran ${callers.length} servis: ${callers.slice(0, CALLERS_SHOWN).join(', ')}${more > 0 ? ` ve ${more} diğeri` : ''}`);
+    parts.push(tf('pd.text.callers', lang, { n: callers.length, c: callers.length, names: callers.slice(0, CALLERS_SHOWN).join(', '), more: more > 0 ? tf('pd.text.callersMore', lang, { c: more }) : '' }));
   }
-  if (p.pod && p.pod !== p.service) parts.push(`pod ${p.pod}`);
+  if (p.pod && p.pod !== p.service) parts.push(tf('pd.text.pod', lang, { pod: p.pod }));
   const cl = p.clusters ?? [];
-  if (cl.length > 0) parts.push(`küme: ${cl.join(', ')}`);
+  if (cl.length > 0) parts.push(tf('pd.text.cluster', lang, { list: cl.join(', ') }));
   return `${parts.join(' · ')}.`;
 }
 
@@ -57,16 +58,16 @@ export interface AlertCause {
 }
 
 /** "Olası neden" — hipotez yoksa ya da güven eşiğin altındaysa null (kutu yok). */
-export function alertCause(p: BoxProblem): AlertCause | null {
+export function alertCause(p: BoxProblem, lang: Lang = 'tr'): AlertCause | null {
   const rc = p.rootCause;
   const suspect = rc?.topSuspect?.trim() ?? '';
   if (!rc || !suspect || !showRootCauseInSummary(rc.confidence)) return null;
   let text = p.service && suspect === p.service
-    ? `Sorun büyük olasılıkla ${subjectLabel(suspect)} servisinin kendisinde.`
-    : `En olası kaynak: ${subjectLabel(suspect)}.`;
+    ? tf('pd.text.causeSelf', lang, { s: subjectLabel(suspect) })
+    : tf('pd.text.causeOther', lang, { s: subjectLabel(suspect) });
   const d = p.recentDeploy;
   if (d?.version) {
-    text += ` Başlangıçtan ${Math.max(1, Math.round(d.ageSeconds / 60))} dk önce ${d.version} deploy edildi.`;
+    text += tf('pd.text.causeDeploy', lang, { m: Math.max(1, Math.round(d.ageSeconds / 60)), v: d.version });
   }
-  return { text, confidence: `%${Math.round(rc.confidence * 100)} güven` };
+  return { text, confidence: tf('pd.text.conf', lang, { p: Math.round(rc.confidence * 100) }) };
 }
