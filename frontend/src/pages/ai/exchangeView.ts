@@ -219,11 +219,26 @@ export function exchangeConversationHref(ex: Pick<AIExchange, 'conversationId'>)
   return ex.conversationId ? `/cosre?chat=${encodeURIComponent(ex.conversationId)}` : null;
 }
 
+/** v0.10.2295 — serbest döngü alışverişi TEK ai_calls satırı yazar ve token'ı
+ *  döngü turlarının TOPLAMIDIR (copilot_chat.go totalIn): satır sayısı model
+ *  çağrısı sayısı değil, değer de tek prompt boyutu değil. */
+export function exchangeIsLoopSum(ex: Pick<AIExchange, 'tier'>): boolean {
+  return ex.tier === 'loop';
+}
+
+/** Token satırının anahtarı — döngüde "turların toplamı" olduğunu söyler. */
+export function exchangeTokensKey(ex: Pick<AIExchange, 'tier'>): string {
+  return exchangeIsLoopSum(ex) ? 'Token (turların toplamı, gir / çık)' : 'Token (gir / çık)';
+}
+
 /** Model çağrısı sayısı metni (alt çağrı tablosunun başlığı). */
-export function exchangeCallsSummary(ex: Pick<AIExchange, 'llmCalls' | 'calls'>): string {
+export function exchangeCallsSummary(ex: Pick<AIExchange, 'llmCalls' | 'calls'> & Partial<Pick<AIExchange, 'tier'>>): string {
   const markers = (ex.calls ?? []).filter(c => !c.llm).length;
   if (!exchangeUsedLLM(ex)) return markers ? `${NO_LLM_LABEL} · ${markers} işaret satırı` : NO_LLM_LABEL;
-  return markers ? `${ex.llmCalls} model çağrısı · ${markers} işaret satırı` : `${ex.llmCalls} model çağrısı`;
+  const calls = ex.tier === 'loop'
+    ? `${ex.llmCalls} çağrı kaydı (döngü turlarının toplamı)`
+    : `${ex.llmCalls} model çağrısı`;
+  return markers ? `${calls} · ${markers} işaret satırı` : calls;
 }
 
 // ── v0.10.1645 — açıklanan öznenin TAM kimliği ─────────────────────────────

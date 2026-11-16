@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AIExchange } from '@/lib/types';
 import {
-  NO_LLM_LABEL, exchangeCallsSummary, exchangeFeedbackLabel, exchangeModelLabel,
+  NO_LLM_LABEL, exchangeCallsSummary, exchangeFeedbackLabel, exchangeModelLabel, exchangeTokensKey,
   exchangeTierLabel, exchangeTokensLabel, exchangeUsedLLM,
   AI_EXCHANGES_QUERY_FIELDS, aiExchangesQueryKey, aiExchangesRequestParams,
   exchangeConversationHref, exchangeFeedbackCounts, exchangeStatusBadge,
@@ -44,6 +44,18 @@ describe('exchangeView', () => {
       ],
     };
     expect(exchangeCallsSummary(ex)).toBe('1 model çağrısı · 1 işaret satırı');
+  });
+
+  it('v0.10.2295 — serbest döngü: satır sayısı model çağrısı diye okunmaz, token turların toplamıdır', () => {
+    const ex: AIExchange = {
+      ...base, tier: 'loop', llmCalls: 1, models: ['gemma4'],
+      calls: [
+        { id: '1', createdAt: 1, surface: 'chat', provider: 'openai', model: 'gemma4', durationMs: 1, inputTokens: 90000, outputTokens: 400, status: 'ok', llm: true },
+      ],
+    };
+    expect(exchangeCallsSummary(ex)).toBe('1 çağrı kaydı (döngü turlarının toplamı)');
+    expect(exchangeTokensKey(ex)).toBe('Token (turların toplamı, gir / çık)');
+    expect(exchangeTokensKey({ tier: 'intent' })).toBe('Token (gir / çık)');
   });
 
   it('kademe + rota etiketi; bilinmeyen kademe adıyla kalır', () => {

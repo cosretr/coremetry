@@ -22,7 +22,7 @@ import {
 import {
   NO_LLM_LABEL, EXCHANGE_FEEDBACK_FILTERS, EXCHANGE_TIER_OPTIONS, EXCHANGES_CSV_MAX_ROWS, EXCHANGES_MAX_OFFSET, EXCHANGES_PAGE_SIZE,
   aiExchangesCSVParams, aiExchangesQueryKey, aiExchangesRequestParams,
-  exchangeCallsSummary, exchangeConversationHref, exchangeFeedbackCounts, exchangeFeedbackLabel,
+  exchangeCallsSummary, exchangeTokensKey, exchangeConversationHref, exchangeFeedbackCounts, exchangeFeedbackLabel,
   exchangeModelLabel, exchangeStatusBadge, exchangeTierLabel, exchangeTokensLabel, exchangeUsedLLM,
   exchangesQueryParams, exchangesUrlSig, readExchangesUrlState, writeExchangesUrlState,
   type ExchangesUrlState,
@@ -279,7 +279,7 @@ function ExchangeDrawer({ ex, onClose, onOpenCall }: { ex: AIExchange; onClose: 
           { k: 'Derin düşün', v: ex.deep ? 'açık' : 'kapalı' },
           { k: 'Model', v: exchangeModelLabel(ex) },
           { k: 'Süre', v: `${fmtNum(ex.durationMs)} ms` },
-          { k: 'Token (gir / çık)', v: exchangeTokensLabel(ex) },
+          { k: exchangeTokensKey(ex), v: exchangeTokensLabel(ex) },
           { k: 'Geri bildirim', v: ex.feedbackComment ? `${exchangeFeedbackLabel(ex)} — ${ex.feedbackComment}` : exchangeFeedbackLabel(ex) },
           // v0.10.1280 — oyun bağlandığı ai_calls satırı (boş = exchange düzeyinde oy).
           { k: 'Oylanan çağrı', v: ex.feedbackCallId || null, mono: true },
