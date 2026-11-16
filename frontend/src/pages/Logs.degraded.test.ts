@@ -24,10 +24,12 @@ describe('degraded log backend surfaces (B1)', () => {
     // Sıra aynı: degraded (hata satırı, "hiçbir sayı gerçek değil") → partial
     // notu (degraded değilken) → boş (en son dal); satırlar degraded'da çizilmez.
     expect(src).toMatch(/d\?\.degraded \? \{\s*kind: 'error'/);
-    expect(src).toContain('hiçbir sayı gerçek değil');
+    // v0.10.2286 — metin katalogda: kaynak anahtarı okur, TR değeri katalogda aynen.
+    expect(src).toContain("message: tf('plog.degraded', lang");
+    expect(read('../lib/i18n.ts')).toContain("'plog.degraded': 'Log kanıtı alınamadı: log arka ucu yavaş ya da ulaşılamıyor, hiçbir sayı gerçek değil ({r})'");
     expect(src).toContain('d?.partial && !d.degraded && !q.isError &&');
     expect(src).toContain('!d.degraded && rows.length > 0');
-    expect(src).toMatch(/: \{ kind: 'empty', message: `Bu pencerede/);
+    expect(src).toMatch(/: \{ kind: 'empty', message: tf\('plog\.empty'/);
   });
   it('FieldSidebar: degraded ve partial "değer yok" ile karışmaz', () => {
     const src = read('../components/coremetry/logs/FieldSidebar.tsx'); // v0.10.1853

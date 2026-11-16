@@ -31,6 +31,7 @@ import { IconButton } from '@/components/ui/IconButton'; // v0.10.502 (B6)
 import { sevClass, sevName, tsLong, tsShort } from '@/lib/utils';
 import type { LogPatternsResult } from '@/lib/types';
 import { getRaw, setRaw } from '@/lib/storage';
+import { tf, type Lang } from '@/lib/i18n'; // v0.10.2286 — coveredLabel lang alır (varsayılan 'tr')
 
 export function agoLabel(ns: number, nowMs = Date.now()): string {
   const s = Math.max(0, Math.round((nowMs - ns / 1e6) / 1000));
@@ -46,11 +47,12 @@ export function agoLabel(ns: number, nowMs = Date.now()): string {
 // false bırakır). Tavan dolmadıysa null: aralık yalnız veri yayılımıdır,
 // "daraltılmış tarama" diye göstermek yeni bir yalan olurdu. Eski
 // önbellek gövdesinde alanlar yok → null.
-export function coveredLabel(d: Pick<LogPatternsResult, 'sampled' | 'cap' | 'coveredFromNs' | 'coveredToNs'> | null | undefined): string | null {
+// v0.10.2286 — isteğe bağlı lang (varsayılan 'tr'; /logs paneli değişmedi).
+export function coveredLabel(d: Pick<LogPatternsResult, 'sampled' | 'cap' | 'coveredFromNs' | 'coveredToNs'> | null | undefined, lang: Lang = 'tr'): string | null {
   if (!d || !d.coveredFromNs || !d.coveredToNs || d.cap <= 0 || d.sampled < d.cap) return null;
   const spanS = Math.max(0, Math.round((d.coveredToNs - d.coveredFromNs) / 1e9));
-  const span = spanS < 60 ? `${spanS} sn` : spanS < 3600 ? `${Math.round(spanS / 60)} dk` : `${(spanS / 3600).toFixed(1)} sa`;
-  return `kapsanan: ${tsShort(d.coveredFromNs).slice(0, 8)}–${tsShort(d.coveredToNs).slice(0, 8)} (${span}, en yeni uç)`;
+  const span = spanS < 60 ? tf('plog.cov.s', lang, { n: spanS }) : spanS < 3600 ? tf('plog.cov.m', lang, { n: Math.round(spanS / 60) }) : tf('plog.cov.h', lang, { n: (spanS / 3600).toFixed(1) });
+  return tf('plog.cov', lang, { from: tsShort(d.coveredFromNs).slice(0, 8), to: tsShort(d.coveredToNs).slice(0, 8), span });
 }
 
 // templatesSinceRung — v0.10.310: /api/logs/templates `since` sunucu cache

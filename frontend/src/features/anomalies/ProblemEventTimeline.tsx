@@ -13,13 +13,15 @@ import { fmtClock } from '@/lib/utils';
 import { useProblemEvents } from '@/lib/queries/problems';
 import { Sect } from './detailSections';
 import { problemEventLines, splitEventLines, type ProblemEventLine } from './problemEvents';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2286 — metinler arayüz dilinde (TR aynı)
 
 // Saat operatörün tarayıcı diliminde, "14:02" (fmtClock = sayfanın tek saat biçimi).
 const clockHM = (ns: number) => fmtClock(ns / 1e6).slice(0, 5);
 
 function useEventLines(problemId: string): ProblemEventLine[] {
   const q = useProblemEvents(problemId);
-  return useMemo(() => problemEventLines(q.data?.items, clockHM), [q.data]);
+  const lang = useLang();
+  return useMemo(() => problemEventLines(q.data?.items, clockHM, lang), [q.data, lang]);
 }
 
 function EventLine({ line, raw }: { line: ProblemEventLine; raw?: boolean }) {
@@ -34,12 +36,13 @@ function EventLine({ line, raw }: { line: ProblemEventLine; raw?: boolean }) {
 /** "Ne oluyor" altındaki kısa çizelge (≤ EVENT_LINES_SHOWN satır). */
 export function ProblemEventTimeline({ problemId }: { problemId: string }) {
   const lines = useEventLines(problemId);
+  const lang = useLang();
   if (lines.length === 0) return null;
   const { head, rest } = splitEventLines(lines);
   return (
-    <ul className="pd-events" data-testid="pd-events" aria-label="Bu probleme birleşen olaylar">
+    <ul className="pd-events" data-testid="pd-events" aria-label={t('pev.aria', lang)}>
       {head.map(l => <EventLine key={l.key} line={l} />)}
-      {rest > 0 && <li className="pd-events__more">ve {rest} olay daha (Teknik kanıt)</li>}
+      {rest > 0 && <li className="pd-events__more">{tf('pev.more', lang, { n: rest })}</li>}
     </ul>
   );
 }
@@ -47,9 +50,10 @@ export function ProblemEventTimeline({ problemId }: { problemId: string }) {
 /** "Teknik kanıt" içindeki tam liste (ham değerlerle). Üye yoksa bölüm yok. */
 export function ProblemEventEvidence({ problemId }: { problemId: string }) {
   const lines = useEventLines(problemId);
+  const lang = useLang();
   if (lines.length === 0) return null;
   return (
-    <Sect title="Birleşen olaylar" sub={`${lines.length} olay`}>
+    <Sect title={t('pev.title', lang)} sub={tf('pev.count', lang, { n: lines.length })}>
       <ul className="pd-events" data-testid="pd-events-full">
         {lines.map(l => <EventLine key={l.key} line={l} raw />)}
       </ul>

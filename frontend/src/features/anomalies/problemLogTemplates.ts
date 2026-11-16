@@ -6,30 +6,31 @@
 
 import { logsHref } from '@/lib/logsUrl';
 import type { ProblemLogTemplateEvidence } from '@/lib/types';
+import { t, tf, type Lang } from '@/lib/i18n'; // v0.10.2286 — etiketler lang alır (varsayılan 'tr')
 
 const MINUS = '−'; // "−" — tire değil, eksi işareti
 
-function durTR(abs: number): string {
-  if (abs < 60) return `${abs} sn`;
+function durTR(abs: number, lang: Lang): string {
+  if (abs < 60) return tf('pnt.dur.s', lang, { s: abs });
   const m = Math.floor(abs / 60);
   const s = abs % 60;
-  return s ? `${m} dk ${s} sn` : `${m} dk`;
+  return s ? tf('pnt.dur.ms', lang, { m, s }) : tf('pnt.dur.m', lang, { m });
 }
 
 /** Başlangıca göre kısa etiket: "+40 sn", "−2 dk", "−2 dk 30 sn"; 0 → "başlangıçta". */
-export function startOffsetLabel(offsetSec: number): string {
+export function startOffsetLabel(offsetSec: number, lang: Lang = 'tr'): string {
   if (!Number.isFinite(offsetSec)) return '—';
   const sec = Math.round(offsetSec);
-  if (sec === 0) return 'başlangıçta';
-  return `${sec < 0 ? MINUS : '+'}${durTR(Math.abs(sec))}`;
+  if (sec === 0) return t('pnt.atStart', lang);
+  return `${sec < 0 ? MINUS : '+'}${durTR(Math.abs(sec), lang)}`;
 }
 
 /** Uzun cümle (title): "başlangıçtan 40 sn önce" / "… sonra" / "başlangıç anında". */
-export function startOffsetTitle(offsetSec: number): string {
+export function startOffsetTitle(offsetSec: number, lang: Lang = 'tr'): string {
   if (!Number.isFinite(offsetSec)) return '';
   const sec = Math.round(offsetSec);
-  if (sec === 0) return 'başlangıç anında doğdu';
-  return `başlangıçtan ${durTR(Math.abs(sec))} ${sec < 0 ? 'önce' : 'sonra'} doğdu`;
+  if (sec === 0) return t('pnt.bornAtStart', lang);
+  return tf(sec < 0 ? 'pnt.bornBefore' : 'pnt.bornAfter', lang, { d: durTR(Math.abs(sec), lang) });
 }
 
 /** Satırın /logs pivotu: şablonun servisi + arama metni (sunucunun KESİLMEMİŞ

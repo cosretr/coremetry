@@ -4,6 +4,7 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { QueryErrorInline } from '@/components/QueryError';
 import { tsLong } from '@/lib/utils';
 import { summarizeNotifyRouting } from '@/lib/notifyRouting';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2286 — metinler arayüz dilinde (TR aynı)
 
 // ProblemNotifyPanel — v0.9.1344. "Bu problemden kimin haberi var?"
 //
@@ -23,6 +24,7 @@ import { summarizeNotifyRouting } from '@/lib/notifyRouting';
 // Talep üzerine çekilir (problem sayfası açılışı), POLLING YOK: bildirim
 // geçmişi bir problemin ömrü boyunca birkaç satır değişir.
 export function ProblemNotifyPanel({ problemId }: { problemId: string }) {
+  const lang = useLang();
   const q = useQuery({
     queryKey: ['problem-notifications', problemId],
     queryFn: () => api.problemNotifications(problemId),
@@ -35,7 +37,7 @@ export function ProblemNotifyPanel({ problemId }: { problemId: string }) {
   // Hata BOŞ SONUÇ DEĞİL: sessizce "bildirim yok" çizmek, tam da bu
   // sürümün kapattığı sessiz-kayıp sınıfını geri açardı.
   if (q.isError) {
-    return <QueryErrorInline text="Bildirim geçmişi okunamadı — bu bir hata, boş sonuç değil."
+    return <QueryErrorInline text={t('pnotify.err', lang)}
       onRetry={() => void q.refetch()} />;
   }
 
@@ -43,10 +45,8 @@ export function ProblemNotifyPanel({ problemId }: { problemId: string }) {
 
   if (!s.unmatched && s.sends.length === 0) {
     return (
-      <Empty icon="✉" title="Bu problem için bildirim kaydı yok">
-        Ya henüz gönderim olmadı, ya da bu kurulumda bildirim
-        yapılandırılmamış. Kanalları Ayarlar → Bildirimler altında
-        tanımlayabilirsiniz.
+      <Empty icon="✉" title={t('pnotify.empty', lang)}>
+        {t('pnotify.empty.body', lang)}
       </Empty>
     );
   }
@@ -61,7 +61,7 @@ export function ProblemNotifyPanel({ problemId }: { problemId: string }) {
           border: '1px solid var(--err, var(--border))',
         }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-            <span className="badge b-err">KİMSEYE GİTMEDİ</span>
+            <span className="badge b-err">{t('pnotify.unmatched', lang)}</span>
             <span style={{ fontSize: 11, color: 'var(--text3)' }}>
               {tsLong(s.unmatched.sentAt)}
             </span>
@@ -75,27 +75,25 @@ export function ProblemNotifyPanel({ problemId }: { problemId: string }) {
             </div>
           )}
           <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
-            Kanalın eşleşme kuralını (servis/küme kapsamı) ya da servis
-            kataloğundaki ekip alanını Ayarlar → Bildirimler altından
-            genişletin.
+            {t('pnotify.unmatched.hint', lang)}
           </div>
         </div>
       )}
       {s.sends.length > 0 && (
         <div style={{ fontSize: 11.5, lineHeight: 1.8 }}>
           <div style={{ color: 'var(--text3)', marginBottom: 4 }}>
-            {s.okCount > 0 && <>{s.okCount} gönderim başarılı</>}
+            {s.okCount > 0 && <>{tf('pnotify.ok', lang, { n: s.okCount })}</>}
             {s.okCount > 0 && s.failCount > 0 && ' · '}
             {/* Teslimat arızası AYRI bir sinyal: kanal doğru eşleşti ama
                 hedef kabul etmedi. Yönlendirme kusuruyla aynı kovaya
                 koymak ikisinin de düzeltmesini gizlerdi. */}
-            {s.failCount > 0 && <span className="err">{s.failCount} gönderim başarısız</span>}
+            {s.failCount > 0 && <span className="err">{tf('pnotify.fail', lang, { n: s.failCount })}</span>}
           </div>
           {s.sends.map(n => (
             <div key={n.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
               {/* v0.10.929 (K5) — sistemin gönderimi normal sonuç (kullanıcı eylemi değil): nötr. */}
               <span className={n.ok ? 'badge b-gray' : 'badge b-err'} title={n.error || undefined}>
-                {n.ok ? 'gitti' : 'hata'}
+                {t(n.ok ? 'pnotify.sent' : 'pnotify.failed', lang)}
               </span>
               <span style={{ color: 'var(--text2)' }}>{n.channelName}</span>
               <span className="mono" style={{

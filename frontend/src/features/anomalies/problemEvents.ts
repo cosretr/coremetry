@@ -12,38 +12,37 @@
 // Kısa liste "Ne oluyor" kutusunun altında (≤ EVENT_LINES_SHOWN); fazlası ve
 // ham değerler kapalı "Teknik kanıt"ta.
 import type { ProblemEvent } from '@/lib/types';
-import { ML_DETECTOR_TR } from '@/lib/mlDetectorLabels';
+import { mlDetectorLabel } from '@/lib/mlDetectorLabels';
+import { t, tf, type Lang } from '@/lib/i18n'; // v0.10.2286 — satır metni lang alır (varsayılan 'tr')
 
 /** "Ne oluyor" altında gösterilen en çok satır (spec: ≤ 5). */
 export const EVENT_LINES_SHOWN = 5;
 
 // Eski dedektörlerin metrik anomalisi: kural kimliğinin son parçası metrik.
-const METRIC_ANOMALY_TR: Record<string, string> = {
-  error_rate: 'Hata oranı anomalisi',
-  p99_ms: 'Gecikme (p99) anomalisi',
-  request_rate: 'İstek hızı anomalisi',
-};
+// v0.10.2286 — adlar katalogda (pev.metric.<metrik>).
+const METRIC_ANOMALY = new Set(['error_rate', 'p99_ms', 'request_rate']);
+const LOCALE: Record<Lang, string> = { tr: 'tr-TR', en: 'en-US' };
 
 /** SAF: satırın Türkçe adı. Üye dedektörleri (eski aileler) kendi adlarıyla;
  *  ML dedektörleri ML adı + "(ML)"; bilinmeyen dedektör kimliğiyle. */
-export function problemEventName(e: Pick<ProblemEvent, 'detector' | 'ruleId'>): string {
+export function problemEventName(e: Pick<ProblemEvent, 'detector' | 'ruleId'>, lang: Lang = 'tr'): string {
   switch (e.detector) {
     case 'svc_slowdown':
-      return 'Yaygın yavaşlama';
+      return t('pev.svcSlowdown', lang);
     case 'anomaly_promotion':
-      return 'Anomali terfisi';
+      return t('pev.promotion', lang);
     case 'metric_anomaly': {
       const rule = e.ruleId ?? '';
       const metric = rule.slice(rule.lastIndexOf(':') + 1);
-      return METRIC_ANOMALY_TR[metric] ?? 'Metrik anomalisi';
+      return t(METRIC_ANOMALY.has(metric) ? `pev.metric.${metric}` : 'pev.metric', lang);
     }
   }
-  const ml = ML_DETECTOR_TR[e.detector];
-  return ml ? `${ml} (ML)` : e.detector;
+  const ml = mlDetectorLabel(e.detector, lang);
+  return ml !== e.detector ? `${ml} (ML)` : e.detector;
 }
 
 /** SAF: sapma oranı ("3,1×"); olağan değer yoksa / oran anlamsızsa null. */
-export function problemEventRatio(e: Pick<ProblemEvent, 'observed' | 'baseline' | 'direction'>): string | null {
+export function problemEventRatio(e: Pick<ProblemEvent, 'observed' | 'baseline' | 'direction'>, lang: Lang = 'tr'): string | null {
   if (!(e.baseline > 0) || !(e.observed >= 0)) return null;
   let r = e.observed / e.baseline;
   if (e.direction === 'down') {
@@ -51,7 +50,7 @@ export function problemEventRatio(e: Pick<ProblemEvent, 'observed' | 'baseline' 
     r = e.baseline / e.observed;
   }
   if (!Number.isFinite(r) || r <= 0) return null;
-  const s = r >= 100 ? Math.round(r).toLocaleString('tr-TR') : r.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+  const s = r >= 100 ? Math.round(r).toLocaleString(LOCALE[lang]) : r.toLocaleString(LOCALE[lang], { maximumFractionDigits: 1 });
   return `${s}×`;
 }
 
@@ -66,28 +65,30 @@ export interface ProblemEventLine {
   raw: string | null;
 }
 
-const rawNum = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 3 });
+const rawNum = (v: number, lang: Lang) => v.toLocaleString(LOCALE[lang], { maximumFractionDigits: 3 });
 
 /** SAF: ham değer metni; ikisi de 0 ise (sahibin ölçüsü üyeden) null. */
-export function problemEventRaw(e: Pick<ProblemEvent, 'observed' | 'baseline'>): string | null {
+export function problemEventRaw(e: Pick<ProblemEvent, 'observed' | 'baseline'>, lang: Lang = 'tr'): string | null {
   if (!(e.observed > 0) && !(e.baseline > 0)) return null;
-  return e.baseline > 0 ? `gözlenen ${rawNum(e.observed)} · olağan ${rawNum(e.baseline)}` : `gözlenen ${rawNum(e.observed)} · olağan değer yok`;
+  return e.baseline > 0
+    ? tf('pev.raw', lang, { o: rawNum(e.observed, lang), b: rawNum(e.baseline, lang) })
+    : tf('pev.rawNoBase', lang, { o: rawNum(e.observed, lang) });
 }
 
 /** SAF: çizelge satırları (sunucu sırası = zaman sırası korunur). `clock`
  *  unix-ns → saat metni (çağıranın dilimi). */
-export function problemEventLines(events: ProblemEvent[] | undefined, clock: (ns: number) => string): ProblemEventLine[] {
+export function problemEventLines(events: ProblemEvent[] | undefined, clock: (ns: number) => string, lang: Lang = 'tr'): ProblemEventLine[] {
   return (events ?? []).map((e, i) => {
-    const parts = [clock(e.startedAt), problemEventName(e) + (e.own ? ' (açan)' : '')];
-    const ratio = problemEventRatio(e);
+    const parts = [clock(e.startedAt), problemEventName(e, lang) + (e.own ? t('pev.own', lang) : '')];
+    const ratio = problemEventRatio(e, lang);
     if (ratio) parts.push(ratio);
-    if (!e.live) parts.push('(bitti)');
+    if (!e.live) parts.push(t('pev.ended', lang));
     return {
       key: `${e.detector}:${e.ruleId ?? e.eventId ?? ''}:${e.startedAt}:${i}`,
       text: parts.join(' '),
       live: e.live,
       href: e.eventId ? `/anomalies/ml/${encodeURIComponent(e.eventId)}` : null,
-      raw: problemEventRaw(e),
+      raw: problemEventRaw(e, lang),
     };
   });
 }

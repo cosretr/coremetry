@@ -5,6 +5,7 @@ import type { Problem, ProblemLogTemplateEvidence } from '@/lib/types';
 import { Sect } from './detailSections';
 import { isProblemLive } from './alertMetricSeries';
 import { newTemplateLogsHref, startOffsetLabel, startOffsetTitle } from './problemLogTemplates';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2286 — metinler arayüz dilinde (TR aynı)
 
 // ProblemNewLogTemplates — v0.10.1113 (operatör onaylı kuyruk maddesi "Log
 // şablonu kök neden bağlantısı"). "Başlangıçta doğan log şablonları": problem
@@ -25,6 +26,7 @@ export function ProblemNewLogTemplates({ problem, window: win }: {
   /** Problem penceresi (probWindow) — pivotun bitişi. */
   window: { fromNs: number; toNs: number };
 }) {
+  const lang = useLang();
   const q = useProblemLogTemplates(problem.id, { startedAt: problem.startedAt, open: isProblemLive(problem) });
   // Veriden çizilir, hata bayrağından DEĞİL: yoklamadaki başarısız bir arka
   // plan tazelemesi eldeki satırları silmesin. Hiç veri yoksa (ilk okuma
@@ -33,9 +35,9 @@ export function ProblemNewLogTemplates({ problem, window: win }: {
   if (rows.length === 0) return null;
   const services = q.data?.services ?? [];
   return (
-    <Sect title="Başlangıçta doğan log şablonları"
-      sub={<span title="Templater defteri (5 dk'da ≤1000 satır örneklenir); bilinen bir şablonun varyantı sayılmaz">
-        {services.length > 0 ? `${services.join(', ')} · ` : ''}başlangıç −10 dk … +5 dk
+    <Sect title={t('pnt.title', lang)}
+      sub={<span title={t('pnt.sub.title', lang)}>
+        {services.length > 0 ? `${services.join(', ')} · ` : ''}{t('pnt.sub', lang)}
       </span>}>
       <ul className="pd-newtpl">
         {rows.map(r => <NewTemplateRow key={r.templateId} row={r} win={win} />)}
@@ -45,21 +47,22 @@ export function ProblemNewLogTemplates({ problem, window: win }: {
 }
 
 function NewTemplateRow({ row: r, win }: { row: ProblemLogTemplateEvidence; win: { fromNs: number; toNs: number } }) {
-  const full = r.sample ? `${r.template}\n\nÖrnek satır:\n${r.sample}` : r.template;
+  const lang = useLang();
+  const full = r.sample ? `${r.template}\n\n${t('pnt.sample', lang)}\n${r.sample}` : r.template;
   return (
     <li className="pd-newtpl-row" data-template-id={r.templateId}>
       <div className="pd-newtpl-tpl" title={full}>{r.template}</div>
       <div className="pd-newtpl-meta">
-        <span className="pd-newtpl-svc" title="Şablonun bağlandığı servis">{r.service}</span>
-        <span className="pd-newtpl-off" title={`${startOffsetTitle(r.offsetSec)} · ${tsLong(r.firstSeen)}`}>
-          {startOffsetLabel(r.offsetSec)}
+        <span className="pd-newtpl-svc" title={t('pnt.svc.title', lang)}>{r.service}</span>
+        <span className="pd-newtpl-off" title={`${startOffsetTitle(r.offsetSec, lang)} · ${tsLong(r.firstSeen)}`}>
+          {startOffsetLabel(r.offsetSec, lang)}
         </span>
-        <span title="Son templater örnekleminde görülen satır (5 dk'da ≤1000 satır örneklenir) — gerçek log sayısı değil">
-          {r.totalCount.toLocaleString()} örnek
+        <span title={t('pnt.count.title', lang)}>
+          {tf('pnt.count', lang, { n: r.totalCount.toLocaleString() })}
         </span>
         <Link to={newTemplateLogsHref(r, win)}
-          title={r.query ? `Ara: ${r.query}` : 'Bu servisin logları, şablonun doğumundan itibaren'}>
-          Logları aç
+          title={r.query ? tf('pnt.open.q', lang, { q: r.query }) : t('pnt.open.title', lang)}>
+          {t('pnt.open', lang)}
         </Link>
       </div>
     </li>

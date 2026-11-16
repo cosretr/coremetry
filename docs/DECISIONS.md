@@ -14502,3 +14502,11 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Saf yardımcılar isteğe bağlı `lang` alır, varsayılan `'tr'`: `localizedNote`, `externalSummaryNote`, `caseSignalLines`, `categoryLabel`, `correctnessLabel`, `independenceNote`, `stepStateView`, `fmtStepDuration`, `findingKindLabel`, yeni `stepLabel` (`STEP_LABEL` haritasının yerine). `agoLang` (`lib/i18n`) `agoTR`'nin dile göre eşi; TR çıktısı aynı.
 - Bu sürümde çevrilmeyenler: `ProblemInvestigationCards` / `ProblemInvestigationRecommendations` (InvestigationResult'ın altı, ayrı dilim); "Sohbette sor" CoSRE'ye giden soru metni (istem, arayüz metni değil). Sunucu metni çevrilmez: adım özeti, bulgu gerekçesi, kanıt notları, kalıcı şablon, "What changed" gerekçeleri, AI özeti.
 - Pin: `features/anomalies/ProblemDetailPanels.lang.test.tsx`. Türkçe metni pinleyen render testleri dili `'tr'`ye sabitler; `ExternalEvidencePanel.summary.pin` kaynak pini yeni anahtarı okur.
+
+## 2026-11-16 — v0.10.2286 — Problem detayı alt panelleri İngilizce arayüzde (2)
+
+- Arayüz dili İngilizceyken Problem detayının kalan dört alt panelindeki Türkçe metinler `lib/i18n`'e taşındı (66 anahtar: `plog.*`, `pnt.*`, `pnotify.*`, `pev.*`); TR değerler bugünkü metnin birebir aynısı. Mekanizma 2283–2285 ile aynı.
+- Kapsam: `ProblemLogEvidence` (kolonlar `cols(lang)`, açma düğmesi, durum satırları, kısmi sonuç rozeti, sayım satırı), `ProblemNewLogTemplates` (başlık, alt başlık, satır ipuçları, göreli zaman), `ProblemNotifyPanel` (boş / hata / kimseye gitmedi / gönderim sayıları), `ProblemEventTimeline` + `ProblemEventEvidence` ve `problemEvents` satır metni (ad, "(açan)", "(bitti)", ham değerler; sayı biçimi TR `tr-TR`, EN `en-US`; ML adları 2282'nin `mlDetectorLabel`'ından).
+- Saf yardımcılar isteğe bağlı `lang` alır, varsayılan `'tr'`: `patternsTotalLabel`, `coveredLabel` (`LogPatternsPanel`; /logs paneli dil vermez, değişmedi), `startOffsetLabel`, `startOffsetTitle`, `problemEventName`, `problemEventRatio`, `problemEventRaw`, `problemEventLines`.
+- Sunucu metni çevrilmez: desen / şablon / örnek satır, gönderim hatası ve kimseye-gitmedi gerekçesi, kanal adı, hedef.
+- Pin: `features/anomalies/ProblemDetailPanels2.lang.test.tsx`. Türkçe metni pinleyen render testleri (`ProblemLogEvidence.tableStates`, `ProblemNewLogTemplates.render`) dili `'tr'`ye sabitler.

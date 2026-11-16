@@ -8,6 +8,7 @@ import { sevClass, sevName } from '@/lib/utils';
 import type { LogPatternGroup, LogPatternsResult } from '@/lib/types';
 import { problemWindowNs } from './problemOffenders';
 import { coveredLabel } from '@/components/LogPatternsPanel';
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2286 — metinler arayüz dilinde (TR aynı)
 
 // ProblemLogEvidence — v0.10.452 (log arama denetimi C1): Problem
 // detayında "Log kanıtı" — problem penceresinde servisin ERROR+ log
@@ -30,16 +31,18 @@ import { coveredLabel } from '@/components/LogPatternsPanel';
 export const PROBLEM_LOG_SAMPLE = 500;
 export const PROBLEM_LOG_SEVERITY = 17;
 
-export function patternsTotalLabel(d: Pick<LogPatternsResult, 'total' | 'totalIsLowerBound' | 'sampled' | 'cap' | 'distinct'>): string {
+export function patternsTotalLabel(d: Pick<LogPatternsResult, 'total' | 'totalIsLowerBound' | 'sampled' | 'cap' | 'distinct'>, lang: Lang = 'tr'): string {
   const tot = `${d.totalIsLowerBound ? '≥ ' : ''}${d.total.toLocaleString()} ERROR+ log`;
-  return `${tot} · ${d.sampled.toLocaleString()} örnek satır${d.sampled >= d.cap ? ` (tavan ${d.cap.toLocaleString()})` : ''} · ${d.distinct} desen`;
+  const cap = d.sampled >= d.cap ? tf('plog.total.cap', lang, { n: d.cap.toLocaleString() }) : '';
+  return `${tot} · ${tf('plog.total.sampled', lang, { n: d.sampled.toLocaleString(), cap })} · ${tf('plog.total.distinct', lang, { n: d.distinct })}`;
 }
 
-const COLS: DataTableColumn<LogPatternGroup>[] = [
-  { id: 'sev', label: 'Şiddet', width: 84, sortValue: r => r.severity },
-  { id: 'tpl', label: 'Desen (örnek satır başlıkta)', width: 460, sortValue: r => r.template, naturalDir: 'asc', flex: true },
-  { id: 'count', label: 'Kayıt', width: 76, numeric: true, sortValue: r => r.count },
-  { id: 'svc', label: 'Servis', width: 70, numeric: true, sortValue: r => r.serviceCount },
+// v0.10.2286 — kolon etiketleri arayüz dilinde (plog.col.*); id / genişlik / sıralama aynı.
+const cols = (lang: Lang): DataTableColumn<LogPatternGroup>[] => [
+  { id: 'sev', label: t('plog.col.sev', lang), width: 84, sortValue: r => r.severity },
+  { id: 'tpl', label: t('plog.col.tpl', lang), width: 460, sortValue: r => r.template, naturalDir: 'asc', flex: true },
+  { id: 'count', label: t('plog.col.count', lang), width: 76, numeric: true, sortValue: r => r.count },
+  { id: 'svc', label: t('plog.col.svc', lang), width: 70, numeric: true, sortValue: r => r.serviceCount },
 ];
 
 export function ProblemLogEvidence({ service, startedAt, resolvedAt, linkWindow }: {
@@ -50,32 +53,34 @@ export function ProblemLogEvidence({ service, startedAt, resolvedAt, linkWindow 
   linkWindow: LogsPivot['window'];
 }) {
   const [open, setOpen] = useState(false);
+  const lang = useLang();
+  const columns = useMemo(() => cols(lang), [lang]);
   const win = useMemo(() => problemWindowNs(startedAt, resolvedAt ?? undefined, Date.now()), [startedAt, resolvedAt]);
   const q = useLogsPatterns({ service, from: win.fromNs, to: win.toNs, severity: PROBLEM_LOG_SEVERITY, limit: 20, sample: PROBLEM_LOG_SAMPLE }, open);
   const d = q.data;
   const rows = d?.groups ?? [];
-  const dt = useDataTable<LogPatternGroup>({ storageKey: 'problem-log-evidence', columns: COLS, rows });
+  const dt = useDataTable<LogPatternGroup>({ storageKey: 'problem-log-evidence', columns, rows });
   const showRows = !!d && !q.isError && !d.degraded && rows.length > 0;
   const tableState: Omit<DataTableStateProps<LogPatternGroup>, 'dt'> =
     q.isPending ? { kind: 'loading' }
     : q.isError ? (q.error instanceof Error && q.error.message
-      ? { kind: 'error', message: `Log kanıtı alınamadı: ${q.error.message}` }
+      ? { kind: 'error', message: tf('plog.err', lang, { e: q.error.message }) }
       : { kind: 'error' })
     : d?.degraded ? {
       kind: 'error',
-      message: `Log kanıtı alınamadı: log arka ucu yavaş ya da ulaşılamıyor, hiçbir sayı gerçek değil (${d.reason ?? 'degraded'})`,
+      message: tf('plog.degraded', lang, { r: d.reason ?? 'degraded' }),
     }
-    : { kind: 'empty', message: `Bu pencerede ${service} için ERROR+ log deseni yok` };
+    : { kind: 'empty', message: tf('plog.empty', lang, { svc: service }) };
   return (
     <div>
       <DisclosureButton expanded={open} onClick={() => setOpen(v => !v)}
-        title="Problem penceresinde servisin ERROR+ log desenleri — açılınca bir istek (500 satır örneği)">
-        Log desenleri (ERROR+, problem penceresi)
+        title={t('plog.toggle.title', lang)}>
+        {t('plog.toggle', lang)}
       </DisclosureButton>
       {open && (
         <div style={{ marginTop: 8 }}>
           {d?.partial && !d.degraded && !q.isError && (
-            <div className="badge b-warn" title="Kısmi sonuç: zaman aşımı ya da shard hatası">kısmi sonuç{d.shardsFailed ? ` · ${d.shardsFailed} shard` : ''}</div>
+            <div className="badge b-warn" title={t('plog.partial.title', lang)}>{t('plog.partial', lang)}{d.shardsFailed ? ` · ${d.shardsFailed} shard` : ''}</div>
           )}
           <div className="table-wrap">
             <table>
@@ -89,7 +94,7 @@ export function ProblemLogEvidence({ service, startedAt, resolvedAt, linkWindow 
                       {/* v0.10.945 — örnek satır Link başlığında: hücre title'ı iç bağlantının kendi title'ıyla gölgeleniyordu (T7 göçü). */}
                       {r.query
                         ? <Link to={logsHref({ window: linkWindow, service, severity: PROBLEM_LOG_SEVERITY, q: r.query, panel: 'patterns' })}
-                            title={`${r.sample}\n— Bu desenin satırları (/logs, aynı pencere, Desenler paneli açık)`}>{r.template}</Link>
+                            title={`${r.sample}\n${t('plog.row.title', lang)}`}>{r.template}</Link>
                         : r.template}
                     </td>
                     <td className="num">{r.count.toLocaleString()}</td>
@@ -101,7 +106,7 @@ export function ProblemLogEvidence({ service, startedAt, resolvedAt, linkWindow 
           </div>
           {showRows && d && (
             <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
-              {patternsTotalLabel(d)}{coveredLabel(d) ? ` · ${coveredLabel(d)}` : ''} · en yeni örnek satırlara göre; desen sorgusu yaklaşıktır
+              {patternsTotalLabel(d, lang)}{coveredLabel(d, lang) ? ` · ${coveredLabel(d, lang)}` : ''}{t('plog.foot', lang)}
             </div>
           )}
         </div>
