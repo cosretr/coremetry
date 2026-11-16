@@ -14527,3 +14527,11 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Saf yardımcılar isteğe bağlı `lang` alır, varsayılan `'tr'`: `outcomeView`, `humanLabel`, `recHumanLabel`; yeni `bandLabel` (bant belirteci sunucudan gelir, yalnız gösterimi dilde) ve `timelineKindLabel` (`TIMELINE_KIND` artık bilinen türlerin listesi). `REC_PENDING` durum belirteci olarak kalır (kıyas değeri); rozet metni `rec.pending`.
 - Çevrilmeyenler: sunucu metni (hipotez adı, kategori, kontrol gerekçesi, olay etiketi, öneri metni / gerekçesi, kuyruk nedeni, Argo durumu).
 - Pin: `features/anomalies/InvestigationCards.lang.test.tsx`. Türkçe metni pinleyen `ProblemInvestigationCards` / `ProblemInvestigationRecommendations` render testleri dili `'tr'`ye sabitler; kaynak pini etkilenmedi.
+
+## 2026-11-16 — v0.10.2289 — Exceptions listesi İngilizce arayüzde
+
+- Arayüz dili İngilizceyken Exceptions listesinde (`/problems`, `AnomaliesPage`) kalan Türkçe metinler `lib/i18n`'e taşındı (26 yeni anahtar: `excl.*`); TR değerler bugünkü metnin birebir aynısı. Aynı metni taşıyan mevcut anahtarlar yeniden kullanıldı: `inbox.minOcc.title` / `inbox.minOcc.default` (taban şeridi), `inbox.spread` (yayılım işareti), `exc.svc.unresolved`, `exc.ora.title`.
+- Kapsam: boş durum cümleleri (`excEmptyMessage(tab, lang)`), hata ve eşleşme yok satırları, sekme şeridi aria etiketi ve Inbox ipucu (`exceptionTabHint` — diğer ipuçları zaten İngilizce), Oracle çipi (aria / title / Tümü / seçenek ipuçları), Oracle satırı soluk metni ve ipucu, `+N servis`, Service hunisi (eşleşme yok / ilk N), satır altı örnek panelinin boş cümlesi (`emptySamplesNote` `lang`).
+- Saf yardımcılar isteğe bağlı `lang` alır, varsayılan `'tr'`: `oracleRowDetail`, `oracleRowTooltip` (kanal yüzdesi `fmtPctLang`), `oracleFacetLabels`, `exceptionTabHint`. Listenin zaten İngilizce olan metni (kolonlar, şerit cümleleri, örnek kartı) iki dilde de bugünkü gibi.
+- Çevrilmeyenler: Oracle grup etiketi (branding `oracleGroupLabel`), sunucu metni (tip, mesaj, AI özeti, stack), ortak `Topbar` arama yer tutucusu (sayfa ailesi dışı).
+- Pin: `features/anomalies/ExceptionsList.lang.test.tsx`. `AnomaliesPage.oracleRow` / `AnomaliesPage.tableStates` render testleri dili `'tr'`ye sabitler; `minOccDefault` kaynak pini Exceptions düğmesinde de `inbox.minOcc.default` anahtarını ve TR katalog değerini okur.

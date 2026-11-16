@@ -15,7 +15,7 @@
 // Settings › Branding). Kod adları, `?oracle=` ve `ora:` parmak izi değişmez;
 // AI istemleri Oracle bilmeye devam eder (yalnız görünen metin).
 import type { ExceptionGroup, OracleGroupInfo } from '@/lib/types';
-import { fmtPctLang, type Lang } from '@/lib/i18n'; // v0.10.2287
+import { fmtPctLang, t, tf, type Lang } from '@/lib/i18n'; // v0.10.2287; v0.10.2289 — satır metni isteğe bağlı lang (varsayılan 'tr')
 
 export const ORACLE_GROUP_PREFIX = 'ora:';
 export const ORACLE_SERVICE_PREFIX = 'oracle:';
@@ -55,9 +55,9 @@ export function oracleSourceName(g: Pick<ExceptionGroup, 'service' | 'oracle'>):
 }
 
 /** Soluk satır: "<etiket> · <kaynak> · N servis" (servis bilinmiyorsa "servis bilinmiyor"). */
-export function oracleRowDetail(g: Pick<ExceptionGroup, 'service' | 'oracle'>, label: string): string {
+export function oracleRowDetail(g: Pick<ExceptionGroup, 'service' | 'oracle'>, label: string, lang: Lang = 'tr'): string {
   const n = g.oracle?.serviceCount ?? 0;
-  const svc = n > 0 ? `${n} servis` : 'servis bilinmiyor';
+  const svc = n > 0 ? tf('excl.ora.svcCount', lang, { n }) : t('excl.ora.svcUnknown', lang);
   return `${label} · ${oracleSourceName(g)} · ${svc}`;
 }
 
@@ -73,20 +73,20 @@ export function oracleChannelsText(info: Pick<OracleGroupInfo, 'channels'> | und
 }
 
 /** Satır başlığının title metni: kırılım + gecikme notu. */
-export function oracleRowTooltip(g: Pick<ExceptionGroup, 'type' | 'message' | 'service' | 'oracle'>, label: string): string {
-  const lines = [oracleRowTitle(g), oracleRowDetail(g, label)];
-  const ch = oracleChannelsText(g.oracle, 6);
-  if (ch) lines.push(`Kanal: ${ch}`);
+export function oracleRowTooltip(g: Pick<ExceptionGroup, 'type' | 'message' | 'service' | 'oracle'>, label: string, lang: Lang = 'tr'): string {
+  const lines = [oracleRowTitle(g), oracleRowDetail(g, label, lang)];
+  const ch = oracleChannelsText(g.oracle, 6, lang);
+  if (ch) lines.push(tf('excl.ora.tip.channel', lang, { v: ch }));
   const svcs = (g.oracle?.services ?? []).map(s => s.name);
-  if (svcs.length) lines.push(`Servisler: ${svcs.join(', ')}`);
-  if (g.oracle?.known) lines.push(`Son 1 sa: ${g.oracle.lastHour ?? 0} (önceki saat ${g.oracle.prevHour ?? 0})`);
-  lines.push('Yalnız KAPANMIŞ dakikalar sayılır (özel SQL penceresinden çıkan dakika) — son görülme duvar saatinin birkaç dakika gerisindedir.');
+  if (svcs.length) lines.push(tf('excl.ora.tip.services', lang, { v: svcs.join(', ') }));
+  if (g.oracle?.known) lines.push(tf('excl.ora.tip.lastHour', lang, { a: g.oracle.lastHour ?? 0, b: g.oracle.prevHour ?? 0 }));
+  lines.push(t('excl.ora.tip.foot', lang));
   return lines.join('\n');
 }
 
 /** Exceptions çipinin görünen etiketleri (v0.10.1108): "<etiket> N" / "<etiket> hariç". */
-export function oracleFacetLabels(label: string, count: number, fmt: (n: number) => string): { only: string; exclude: string } {
-  return { only: count >= 0 ? `${label} ${fmt(count)}` : label, exclude: `${label} hariç` };
+export function oracleFacetLabels(label: string, count: number, fmt: (n: number) => string, lang: Lang = 'tr'): { only: string; exclude: string } {
+  return { only: count >= 0 ? `${label} ${fmt(count)}` : label, exclude: tf('excl.ora.exclude', lang, { label }) };
 }
 
 /** Exceptions "Oracle" çipi — URL ?oracle= değeri. Yok = Oracle grupları DAHİL. */

@@ -8,6 +8,8 @@
  * ayrıştırıcı onu inbox'a çevirir ki kayıtlı görünüm / paylaşılan link
  * bir sekmeye düşmeye devam etsin.
  */
+import { t, type Lang } from '@/lib/i18n';
+
 export interface ExceptionTab {
   key: string;
   label: string;
@@ -24,6 +26,13 @@ export const EXCEPTION_TABS: ExceptionTab[] = [
 ];
 
 export const EXCEPTION_TAB_DEFAULT = 'inbox';
+
+/** v0.10.2289 — sekme ipucu arayüz dilinde: Türkçe olan tek ipucu (inbox)
+ *  katalogda (TR değeri `hint` alanıyla birebir aynı); diğerleri zaten
+ *  İngilizce, iki dilde de bugünkü gibi. */
+export function exceptionTabHint(tab: ExceptionTab, lang: Lang = 'tr'): string {
+  return tab.key === 'inbox' ? t('excl.tab.inbox.hint', lang) : tab.hint;
+}
 
 /** URL `?tab=` → sekme anahtarı. Boş/bilinmeyen → inbox; eski `open` → inbox. */
 export function resolveExceptionTab(raw: string | null | undefined): string {

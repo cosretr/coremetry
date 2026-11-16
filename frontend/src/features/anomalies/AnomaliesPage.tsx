@@ -4,7 +4,7 @@ import { useTablePrefs } from '@/lib/queries/prefs';
 import { isDefaultExcOrder, parseStoredExcOrder, resolveExcOrder } from './exceptionColumns';
 import { ColumnFilterShell } from '@/pages/traces/ColumnFilter';
 import { usePickerSearch } from '@/components/usePickerSearch';
-import { useT, useLang, t as tl } from '@/lib/i18n'; // v0.10.2287 — exception bulunamadı metni arayüz dilinde
+import { useT, useLang, t as tl, tf, type Lang } from '@/lib/i18n'; // v0.10.2287 — exception bulunamadı metni arayüz dilinde; v0.10.2289 — liste de
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
@@ -55,7 +55,7 @@ import { useBranding } from '@/lib/branding'; // v0.10.1108 — Oracle grubu gö
 
 // v0.10.751 — sekmeler tek kaynaktan (tabs.ts): Inbox = ignored hariç her
 // durum; eski `?tab=open` adresi ayrıştırıcıda inbox'a çevrilir.
-import { EXCEPTION_TABS as TABS, EXCEPTION_TAB_DEFAULT, resolveExceptionTab } from './tabs';
+import { EXCEPTION_TABS as TABS, EXCEPTION_TAB_DEFAULT, exceptionTabHint, resolveExceptionTab } from './tabs';
 import { spreadOf, spreadTitle, defaultFloorTitle, spreadOffFloorTitle, readFloorMeta, type FloorMeta } from './spread'; // v0.10.949
 
 // Exception-inbox sort keys the SERVER understands (v0.8.318 — the
@@ -125,15 +125,10 @@ type ExceptionGroupsParams = Parameters<typeof api.exceptionGroups>[0]; // v0.10
 // Eski Empty'nin başlığı + gövdesi tek cümle (Türkçe, anlam aynı): her
 // sekmenin NEDEN boş olabileceğini söyler ki operatör "sayfa bozuk" sanmasın
 // (v0.6.24).
-function excEmptyMessage(tab: string): string {
-  const head = tab === 'inbox' ? 'Inbox boş, ignored dışında hiç grup yok' : `"${tab}" sekmesinde grup yok`;
-  const why = tab === 'resolved'
-    ? "bir grubun detayında Resolve'a basınca ya da 14 gün yeni oluşum gelmeyince gruplar buraya düşer"
-    : tab === 'ignored'
-      ? "bir grubun detayında Ignore'a basınca gruplar buraya düşer; ignored grup yeniden tetiklense de sessiz kalır"
-      : tab === 'acknowledged'
-        ? "bir grubu detayında Acknowledge'layınca (gördün ama henüz düzeltmedin) gruplar buraya düşer; ack'ten çıkarmak için Resolve'a bas"
-        : 'detayı açmak için bir satıra tıkla; durumu orada Acknowledge / Resolve / Ignore ile yönet';
+// v0.10.2289 — metin katalogda (excl.empty.*), isteğe bağlı lang (varsayılan 'tr').
+function excEmptyMessage(tab: string, lang: Lang = 'tr'): string {
+  const head = tab === 'inbox' ? tl('excl.empty.inbox', lang) : tf('excl.empty.tab', lang, { tab });
+  const why = tl(tab === 'resolved' || tab === 'ignored' || tab === 'acknowledged' ? `excl.empty.why.${tab}` : 'excl.empty.why.default', lang);
   return `${head} — ${why}`;
 }
 
@@ -525,7 +520,7 @@ export default function ProblemsPage() {
           {close => (
             <div className="tcf-list" role="radiogroup" aria-label={c.label}>
               {TABS.map(t => (
-                <label key={t.key} className="tcf-row tcf-row--check" title={t.hint}>
+                <label key={t.key} className="tcf-row tcf-row--check" title={exceptionTabHint(t, lang)}>
                   <input type="radio" name="exc-state-filter" checked={tab === t.key}
                     onChange={() => { setTab(t.key); close(); }} />
                   <span>{t.label}</span>
@@ -556,10 +551,10 @@ export default function ProblemsPage() {
     data === undefined ? { kind: 'loading' }
     : data === null ? {
       kind: 'error', onRetry: refreshExceptionGroups,
-      ...(loadErr ? { message: `Exception listesi okunamadı: ${loadErr}` } : {}),
+      ...(loadErr ? { message: tf('excl.err', lang, { e: loadErr }) } : {}),
     }
-    : excFiltered ? { kind: 'no-match', message: `"${tab}" sekmesinde süzgeçle eşleşen grup yok` }
-    : { kind: 'empty', message: excEmptyMessage(tab) };
+    : excFiltered ? { kind: 'no-match', message: tf('excl.noMatch', lang, { tab }) }
+    : { kind: 'empty', message: excEmptyMessage(tab, lang) };
 
   const userById = useMemo(() => {
     const m = new Map<string, UserRow>();
@@ -650,8 +645,8 @@ export default function ProblemsPage() {
             Ack → Resolved/Ignored. Sits at the very top because
             it's the most actionable signal in the product —
             this is the assignable queue an SRE works through. */}
-        <TabStrip ariaLabel="Anomali sekmeleri" value={tab} onChange={setTab}
-          tabs={TABS.map(t => ({ key: t.key, label: t.label, title: t.hint }))} />
+        <TabStrip ariaLabel={tl('excl.tabs.aria', lang)} value={tab} onChange={setTab}
+          tabs={TABS.map(t => ({ key: t.key, label: t.label, title: exceptionTabHint(t, lang) }))} />
 
         <PageControls sticky>
           <ServicePicker value={service} onChange={setService}
@@ -682,13 +677,13 @@ export default function ProblemsPage() {
           {/* v0.10.1092 — Oracle hata tablosu grupları: varsayılan DAHİL; tek tıkla
               yalnız onlar ya da onlarsız. Oracle kaynağı tanımlı değilse gizli. */}
           {(oracleCount >= 0 || oracleFacet !== 'all') && (
-            <SegmentedControl<OracleFacet> size="sm" aria-label="Oracle hata grupları"
+            <SegmentedControl<OracleFacet> size="sm" aria-label={tl('excl.ora.aria', lang)}
               value={oracleFacet} onChange={setOracleFacet}
-              title="Oracle hata tablosu satırlarından oluşan gruplar (kod × operasyon)"
+              title={tl('excl.ora.title', lang)}
               options={[
-                { value: 'all', label: 'Tümü', title: 'Span exception\'ları + Oracle grupları (varsayılan)' },
-                { value: 'only', label: oracleFacetLabels(oraLabel, oracleCount, fmtNum).only, title: 'Yalnız Oracle hata tablosu grupları' },
-                { value: 'exclude', label: oracleFacetLabels(oraLabel, oracleCount, fmtNum).exclude, title: 'Oracle gruplarını gizle' },
+                { value: 'all', label: tl('excl.ora.all', lang), title: tl('excl.ora.all.title', lang) },
+                { value: 'only', label: oracleFacetLabels(oraLabel, oracleCount, fmtNum, lang).only, title: tl('excl.ora.only.title', lang) },
+                { value: 'exclude', label: oracleFacetLabels(oraLabel, oracleCount, fmtNum, lang).exclude, title: tl('excl.ora.exclude.title', lang) },
               ]} />
           )}
           <span style={{ color: 'var(--text3)', fontSize: 12, marginLeft: 'auto' }}>
@@ -726,7 +721,7 @@ export default function ProblemsPage() {
               </>
             ) : minOcc > 0 ? (
               <>
-                <span title="Bir kez düşen bir exception bu pencere hakkında bir olgudur, triage edilecek bir problem değil. Eşiğin altındakiler gizli — hepsini görmek için tıkla.">
+                <span title={tl('inbox.minOcc.title', lang)}>
                   Showing groups with <b style={{ color: 'var(--text2)' }}>{minOcc}+</b> occurrences
                   {/* v0.10.949 — /problems da gizlenen sayıyı alıyor (yeni, ek alan). */}
                   {(floorMeta.hiddenByMinOcc ?? 0) > 0 && <> — <b style={{ color: 'var(--text2)' }}>{floorMeta.hiddenByMinOcc}</b> hidden</>}
@@ -739,7 +734,7 @@ export default function ProblemsPage() {
             ) : (
               <>
                 <span>Showing <b style={{ color: 'var(--text2)' }}>every</b> group, including one-off exceptions</span>
-                <Button variant="ghost" size="sm" onClick={() => setMinOcc(DEFAULT_MIN_OCC)}>{DEFAULT_MIN_OCC}+ (varsayılan)</Button>
+                <Button variant="ghost" size="sm" onClick={() => setMinOcc(DEFAULT_MIN_OCC)}>{tf('inbox.minOcc.default', lang, { n: DEFAULT_MIN_OCC })}</Button>
               </>
             )}
           </div>
@@ -774,7 +769,7 @@ export default function ProblemsPage() {
                         bakmalı. */}
                     {ora && isSyntheticOracleService(g.service) ? (
                       // v0.10.1092 — servisi çözülemeyen Oracle grubu: sentetik ad, link yok.
-                      <span className="mono cell-faint" title="Trace → servis çözümü bu operasyon için servis bulamadı">{g.service}</span>
+                      <span className="mono cell-faint" title={tl('exc.svc.unresolved', lang)}>{g.service}</span>
                     ) : (
                       <Link to={serviceHref(g.service, { range: { fromNs: g.firstSeen, toNs: g.lastSeen } })}
                         onClick={e => e.stopPropagation()}
@@ -786,7 +781,7 @@ export default function ProblemsPage() {
                     {ora && (g.oracle?.serviceCount ?? 0) > 1 && (
                       <div className="cell-faint" title={(g.oracle?.services ?? []).map(sv => sv.name).join(', ')}
                         style={{ marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        +{(g.oracle?.serviceCount ?? 1) - 1} servis
+                        {tf('excl.moreSvc', lang, { n: (g.oracle?.serviceCount ?? 1) - 1 })}
                       </div>
                     )}
                     {/* v0.10.949 — aynı exception aynı anda N serviste (Inbox ile aynı işaret). */}
@@ -795,7 +790,7 @@ export default function ProblemsPage() {
                         style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, fontSize: 10.5, whiteSpace: 'nowrap' }}>
                         <span className="dot" aria-hidden="true"
                           style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', flex: 'none' }} />
-                        {spread.n} servis
+                        {tf('inbox.spread', lang, { n: spread.n })}
                       </div>
                     )}
                   </td>,
@@ -815,7 +810,7 @@ export default function ProblemsPage() {
                         {/* v0.10.1092 — Oracle hata tablosu grubu rozeti. */}
                         {ora && (
                           <Badge tone="info" style={{ fontSize: 9, padding: '0 5px' }}
-                            title="Oracle hata tablosu satırlarından oluşan grup (kaynak · hata kodu · operasyon)">
+                            title={tl('exc.ora.title', lang)}>
                             {oraLabel}
                           </Badge>
                         )}
@@ -830,8 +825,8 @@ export default function ProblemsPage() {
                           </span>
                         )}
                       </>}
-                      detail={ora ? oracleRowDetail(g, oraLabel) : (g.message || '—')}
-                      detailTitle={ora ? oracleRowTooltip(g, oraLabel) : g.message}
+                      detail={ora ? oracleRowDetail(g, oraLabel, lang) : (g.message || '—')}
+                      detailTitle={ora ? oracleRowTooltip(g, oraLabel, lang) : g.message}
                       detailMono={!ora}
                       ai={g.aiSummary ? stripMarkdown(g.aiSummary) : undefined} />
                     </Link>
@@ -936,6 +931,7 @@ export default function ProblemsPage() {
 // ve huni popover'ının dış-tık kapanışı seçimden önce onu söküyor.
 function ExcServiceFilterBody({ value, onPick }: { value: string; onPick: (v: string) => void }) {
   const tr = useT();
+  const lang = useLang();
   const [q, setQ] = useState('');
   const res = usePickerSearch(q.trim(), '', s => api.serviceNames(s, 50).then(r => ({ items: r.names, total: r.total })));
   const rows = value && !res.items.includes(value) && (!q || value.includes(q.trim())) ? [value, ...res.items] : res.items;
@@ -947,7 +943,7 @@ function ExcServiceFilterBody({ value, onPick }: { value: string; onPick: (v: st
       <div className="tcf-list" role="radiogroup" aria-label="Service" aria-busy={res.status === 'loading'}>
         {res.status === 'loading' && res.items.length === 0 && <div className="tcf-state"><Spinner /></div>}
         {res.status === 'error' && <div className="tcf-state tcf-err">{tr('traces.colFilter.error')}</div>}
-        {res.status === undefined && rows.length === 0 && <div className="tcf-state">Eşleşen servis yok</div>}
+        {res.status === undefined && rows.length === 0 && <div className="tcf-state">{tl('excl.svc.none', lang)}</div>}
         {rows.map(name => (
           <label key={name} className="tcf-row tcf-row--check" title={name}>
             <input type="radio" name="exc-service-filter" checked={name === value} onChange={() => onPick(name)} />
@@ -956,7 +952,7 @@ function ExcServiceFilterBody({ value, onPick }: { value: string; onPick: (v: st
         ))}
       </div>
       {res.total > res.items.length && (
-        <p className="tcf-hint">{fmtNum(res.total)} servisten ilk {res.items.length} — aramayı daralt</p>
+        <p className="tcf-hint">{tf('excl.svc.more', lang, { total: fmtNum(res.total), n: res.items.length })}</p>
       )}
     </>
   );
@@ -966,6 +962,7 @@ function ExcServiceFilterBody({ value, onPick }: { value: string; onPick: (v: st
 // as collapsible cards. Stacktraces are folded by default; trace/span IDs
 // link out to the waterfall.
 function SamplesPanel({ fingerprint, occurrences }: { fingerprint: string; occurrences?: number }) {
+  const lang = useLang(); // v0.10.2289 — boş örnek cümlesi arayüz dilinde
   const [samples, setSamples] = useState<ExceptionSample[] | null | undefined>(undefined);
   // v0.9.795 — boş listenin nedenini zarf söyler (tavan / pencere bitti /
   // gerçekten yok); tek bir "capped" bayrağı üçünü aynı cümleye sıkıştırıyordu.
@@ -996,7 +993,7 @@ function SamplesPanel({ fingerprint, occurrences }: { fingerprint: string; occur
   // birebir yazım şekli olduğu için okuyanı yanıltıyor ve hata dalı bir gün
   // yer değiştirirse sınıfı sessizce geri getirir.
   if (samples.length === 0) {
-    const note = emptySamplesNote(scan, 'No sample occurrences found.');
+    const note = emptySamplesNote(scan, 'No sample occurrences found.', lang);
     return (
       <div style={{ color: note.warn ? 'var(--warn)' : 'var(--text3)', fontSize: 12 }}>
         {note.text}
