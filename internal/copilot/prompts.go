@@ -2971,6 +2971,23 @@ adım; linki sunucu ekler.
 // loopPrompt'unun başına gider; systemChat'i yeniden yazmaz).
 func SystemPromptChatAgentLoop() string { return systemChatAgentLoop }
 
+// chatAgentLoopContextToolRule — çekirdeğin set_context / get_context
+// cümlesi (BAĞLAM KURALLARI). v0.10.2326: v2'de durum sunucuda (api
+// chat_state.go) — bu cümle v2 varyantından çıkar; v1 aynen.
+const chatAgentLoopContextToolRule = `- Her başarılı çözüm ya da aramadan sonra set_context ile değişeni yaz; bir tool
+  argümanı boşsa get_context'e bak. Önceki turları hafızandan hatırlamaya güvenme.
+`
+
+// systemChatAgentLoopV2 — v0.10.2326 (conversation-audit karar 3): bağlam
+// araçları v2 kataloğundan çıktığında çekirdek; tek fark yukarıdaki cümle.
+var systemChatAgentLoopV2 = strings.Replace(systemChatAgentLoop, chatAgentLoopContextToolRule, "", 1)
+
+// SystemPromptChatAgentLoopV2For — v0.10.2326: v2 + konuşma durumu açık
+// yolunun çekirdeği (araç setine göre); v1 SystemPromptChatAgentLoopFor aynen.
+func SystemPromptChatAgentLoopV2For(simple bool) string {
+	return ToolsetText(systemChatAgentLoopV2, simple)
+}
+
 // SystemPromptChatAgentLoopFor — v0.10.1302 (CoSRE: modele göre araç seti):
 // simple katalogda adım 4'ün serbest-sorgu araçları yapısal karşılıklarıyla
 // anılır; full = SystemPromptChatAgentLoop() bayt bayt.

@@ -48,12 +48,14 @@ var traceFollowUpDropTools = map[string]bool{
 // sunulan bir prompt onları ADIYLA çağırtıyor (çekirdek ya da koşulsuz ek).
 // Değer = adı anan metin (rapor ve test mesajı için).
 var traceFollowUpPromptPinned = map[string]string{
-	"resolve_entity":   "SystemPromptChatAgentLoop ÇÖZ adımı",
-	"list_slo_status":  "SystemPromptChatAgentLoop SORGULA adımı",
-	"build_link":       "SystemPromptChatAgentLoop CEVAPLA adımı",
-	"product_guide":    "SystemPromptChatAgentLoop CEVAPLA adımı",
-	"set_context":      "SystemPromptChatAgentLoop BAĞLAM KURALLARI",
-	"get_context":      "SystemPromptChatAgentLoop BAĞLAM KURALLARI",
+	"resolve_entity":  "SystemPromptChatAgentLoop ÇÖZ adımı",
+	"list_slo_status": "SystemPromptChatAgentLoop SORGULA adımı",
+	"build_link":      "SystemPromptChatAgentLoop CEVAPLA adımı",
+	"product_guide":   "SystemPromptChatAgentLoop CEVAPLA adımı",
+	// v0.10.2326 — yalnız v1 ve v2 durum KAPALI çekirdeği anar; v2 durum açıkken
+	// iki araç katalogdan zaten düşer (chat_state_tools.go) ve çekirdek anmaz.
+	"set_context":      "SystemPromptChatAgentLoop BAĞLAM KURALLARI (v1 / v2 durum kapalı)",
+	"get_context":      "SystemPromptChatAgentLoop BAĞLAM KURALLARI (v1 / v2 durum kapalı)",
 	"list_my_services": "ChatUserScopeAddendum (v2, kapsamlı kullanıcı)",
 	"open_problems":    "ChatUserScopeAddendum (v2, kapsamlı kullanıcı)",
 }

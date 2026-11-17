@@ -816,6 +816,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// dilim 3 — aynı adlı v2 aracı (search_logs) v1'inkinin yerini alır.
 			tools = mcptools.V2MergeTools(tools, toolsForRole(mcptools.V2OnlyTools(s.mcpDeps()), role))
 		}
+		if chatStateOn(ctx) {
+			tools = dropChatContextTools(tools) // v0.10.2326 — karar 3: durum sunucuda (chat_state_tools.go)
+		}
 		if evm.singleTurn() {
 			tools = evalAgentTools(tools) // v0.10.1316 — sohbet bağlamı araçları düşer (v0.10.2322: konuşma kipinde kalır)
 		}
@@ -1109,10 +1112,10 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	if label := cosreRulesStepLabel(rulesN); label != "" {
 		emit("step", map[string]string{"label": label})
 	}
-	loopPrompt := copilot.SystemPromptChatAgentLoopFor(simpleTools) + // v0.10.482 — telemetri ajanı çekirdek döngüsü (Ek A); v0.10.1302 — araç setine göre
+	loopPrompt := chatAgentLoopCore(ctx, simpleTools) + // v0.10.482 — telemetri ajanı çekirdek döngüsü (Ek A); v0.10.1302 — araç setine göre; v0.10.2326 — v2 durum açıkken bağlam aracı cümlesiz
 		screenContextPreambleTR(screenCtx) +
 		agentctx.PreambleTR(pageCtx, pinnedCtx) + // v0.10.539 — sayfa bağlamı (pin önce)
-		chatContextPreambleTR(cst.ctx) + // v0.10.478 — aktif sohbet bağlamı (Ek A ACTIVE_CONTEXT)
+		chatContextPreambleFor(ctx, cst.ctx) + // v0.10.478 — aktif sohbet bağlamı (Ek A ACTIVE_CONTEXT)
 		cosreRulesLoopPromptTR(rulesBlock) + // v0.10.1289 — kural yoksa ""
 		traceFollowUpPromptTR(traceFU, req.Context.Explain) + // v0.10.948 — boşsa ""
 		chatSourceCodePromptTR(tools) + // v0.10.1050 — read_source_code sunulmuyorsa ""

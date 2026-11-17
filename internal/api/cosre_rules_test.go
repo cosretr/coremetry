@@ -206,7 +206,7 @@ func TestRulesPromptSitesPinned(t *testing.T) {
 	}
 	chat, _ := os.ReadFile("copilot_chat.go")
 	src := stripGoCommentsAPI(string(chat))
-	pre, rules, core := strings.Index(src, "chatContextPreambleTR(cst.ctx) +"), strings.Index(src, "cosreRulesLoopPromptTR(rulesBlock) +"),
+	pre, rules, core := strings.Index(src, "chatContextPreambleFor(ctx, cst.ctx) +"), strings.Index(src, "cosreRulesLoopPromptTR(rulesBlock) +"),
 		strings.Index(src, "withAddressee(addressee, copilot.SystemPromptChat())")
 	if pre < 0 || rules < 0 || core < 0 || !(pre < rules && rules < core) || strings.Count(src, "s.cosreRulesBlock(") != 1 {
 		t.Errorf("döngü: kural bloğu sohbet bağlamı önsözünün ARKASINDA, çekirdeğin (DataNotInstruction) ÖNÜNDE olmalı (%d %d %d)", pre, rules, core)

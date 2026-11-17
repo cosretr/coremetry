@@ -14729,3 +14729,9 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Aynı şekil istemcinin `context.state` yankısıdır (Redis'siz, karar 2). `context.statePatch` {service?, env?, window?, clear[]} sözleşmesi: servis/ortam kataloğa, pencere sınırlara doğrulanır; geçersiz alan varsa yama bütünüyle reddedilir.
 - Altın: yeni `testdata/cosre/ui-stream-v1-state.{events.jsonl,sse}` (Go `TestGoldenFixtures` + frontend `uiStreamFixture.test.ts`). `v2_loop.sse` / `v2_help.sse` değişmedi: ikisinde de katalogdaki bir servis ya da pencere çözülmüyor → parça yok; v1 altınları aynı.
 - Arayüz (karar 4): v2 sohbette composer'ın kapsam satırında tek salt okunur Badge ("Konuşma bağlamı: servis · pencere · ortam"); düzenleme yok. Metinler `conversation/strings.ts`, yeni CSS yok.
+
+## 2026-11-18 — v0.10.2326 — CoSRE v2: bağlam araçları katalogdan çıktı
+
+- Karar 3: v2 + `cosre_conversation.state` açıkken `set_context` / `get_context` / `clear_context` yerli katalogdan düşer (`api/chat_state_tools.go`), çekirdekten yalnız onları anan BAĞLAM KURALLARI cümlesi çıkar (`copilot.SystemPromptChatAgentLoopV2For`; sabit `chatAgentLoopContextToolRule` sürüm kaydında), AKTİF SOHBET BAĞLAMI başlığındaki "(set_context ile güncellenir)" düşer. Kuralın diğer üç maddesi kalır (audit 640 B'lik bloğun tamamını öneriyordu; görev yalnız aracı anan cümleyi istedi).
+- v1 ve durum kapalı v2: katalog ve çekirdek bayt bayt aynı (test: v1 kataloğu üç adı taşır; v1 çekirdeği `systemChatAgentLoop` ile eşit; v2 = v1 eksi o cümle). Trace takibi: yalnız bu üç ad düşer, log/trace yorum araçları değişmez; `traceFollowUpPromptPinned` gerekçesi "v1 / v2 durum kapalı" diye düzeltildi.
+- Ölçüm (v2 döngü çağrısı başına, 3 B ≈ 1 token): istem −211 B ≈ −70 token (çekirdek −180, önsöz başlığı −31); araç kataloğu 65.221 → 63.627 B, −1.594 B ≈ −531 token. Karşı yönde: v0.10.2324'ün durum bloğu dolu turda eklenir (yalnız pencere ≈ 170 B ≈ 57 token; defter en çok 5 satır).
