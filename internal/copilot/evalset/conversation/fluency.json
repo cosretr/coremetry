@@ -4648,7 +4648,7 @@
     {
       "id": "conv-greeting-status-chain",
       "surface": "ChatConversation",
-      "why": "Selamla başlayan durum sorusu; ardından iki tek alanlı takip.",
+      "why": "Selamla başlayan sabah durum sorusu; çıplak 'peki dün?' sabah penceresini bir gün geri kaydırır (dün sabah), ardından deploy.",
       "stubs": {
         "service_health": {
           "$byService": {
@@ -4808,7 +4808,7 @@
       },
       "turns": [
         {
-          "user": "selam, checkout nasıl gidiyor?",
+          "user": "selam, checkout bu sabah nasıl gidiyor?",
           "expect": {
             "class": "status",
             "anyOfCalls": [
@@ -4820,7 +4820,8 @@
               "open_problems"
             ],
             "entity": "checkout",
-            "maxSentences": 3
+            "maxSentences": 3,
+            "window": "morning"
           }
         },
         {
@@ -4836,7 +4837,7 @@
               "open_problems"
             ],
             "entity": "checkout",
-            "window": "yesterday"
+            "window": "yesterday_morning"
           },
           "stubs": {
             "service_health": {
@@ -4901,6 +4902,510 @@
             ],
             "entity": "checkout",
             "maxSentences": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "conv-verifier-numbers",
+      "surface": "ChatConversation",
+      "why": "Doğrulayıcı yoklaması (E1): yuvarlanmış sayı ve büyüklük sözcüğü ('74 bin'), birim dönüşümü ('1,2 sn') geçmeli; sahtede olmayan p99.9 söylenirse uyuşmazlık sayılmalı.",
+      "stubs": {
+        "service_health": {
+          "$byService": {
+            "checkout": "checkout (son 1 saat): toplam istek 74.167, istek hızı 20,6/s, hata oranı %0,8, p95 1234 ms, p99 2180 ms, açık problem 0.",
+            "orders": "orders (son 1 saat): istek hızı 18,2/s, hata oranı %0,3, p95 220 ms, p99 410 ms, açık problem 0.",
+            "payments": "payments (son 1 saat): istek hızı 11,4/s, hata oranı %2,6, p95 870 ms, p99 1430 ms, açık problem 1.",
+            "inventory": "inventory (son 1 saat): istek hızı 27,9/s, hata oranı %0,1, p95 95 ms, p99 180 ms, açık problem 0."
+          }
+        },
+        "get_service_health": {
+          "$byService": {
+            "checkout": {
+              "service": "checkout",
+              "found": true,
+              "requests": 74167,
+              "rps": 20.6,
+              "error_rate_pct": 0.8,
+              "p95_ms": 1234,
+              "p99_ms": 2180,
+              "open_problems": 0
+            },
+            "orders": {
+              "service": "orders",
+              "found": true,
+              "rps": 18.2,
+              "error_rate_pct": 0.3,
+              "p95_ms": 220,
+              "p99_ms": 410,
+              "open_problems": 0
+            },
+            "payments": {
+              "service": "payments",
+              "found": true,
+              "rps": 11.4,
+              "error_rate_pct": 2.6,
+              "p95_ms": 870,
+              "p99_ms": 1430,
+              "open_problems": 1
+            },
+            "inventory": {
+              "service": "inventory",
+              "found": true,
+              "rps": 27.9,
+              "error_rate_pct": 0.1,
+              "p95_ms": 95,
+              "p99_ms": 180,
+              "open_problems": 0
+            }
+          }
+        },
+        "service_health_sweep": {
+          "services": [
+            {
+              "service": "checkout",
+              "found": true,
+              "requests": 74167,
+              "rps": 20.6,
+              "error_rate_pct": 0.8,
+              "p95_ms": 1234,
+              "p99_ms": 2180,
+              "open_problems": 0
+            },
+            {
+              "service": "orders",
+              "found": true,
+              "rps": 18.2,
+              "error_rate_pct": 0.3,
+              "p95_ms": 220,
+              "p99_ms": 410,
+              "open_problems": 0
+            },
+            {
+              "service": "payments",
+              "found": true,
+              "rps": 11.4,
+              "error_rate_pct": 2.6,
+              "p95_ms": 870,
+              "p99_ms": 1430,
+              "open_problems": 1
+            },
+            {
+              "service": "inventory",
+              "found": true,
+              "rps": 27.9,
+              "error_rate_pct": 0.1,
+              "p95_ms": 95,
+              "p99_ms": 180,
+              "open_problems": 0
+            }
+          ]
+        },
+        "resolve_entity": {
+          "$byService": {
+            "checkout": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "checkout",
+                  "score": 1.0
+                }
+              ]
+            },
+            "orders": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "orders",
+                  "score": 1.0
+                }
+              ]
+            },
+            "payments": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "payments",
+                  "score": 1.0
+                }
+              ]
+            },
+            "inventory": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "inventory",
+                  "score": 1.0
+                }
+              ]
+            }
+          }
+        },
+        "list_services": {
+          "services": [
+            "checkout",
+            "orders",
+            "payments",
+            "inventory"
+          ]
+        },
+        "list_my_services": {
+          "team": "takim-a",
+          "services": [
+            "checkout",
+            "orders",
+            "payments",
+            "inventory"
+          ]
+        },
+        "deploy_impact": "Pencerede deploy kaydı yok.",
+        "list_deploys": {
+          "deploys": []
+        },
+        "list_deployments": {
+          "rollouts": []
+        },
+        "get_correlated_changes": {
+          "changes": []
+        },
+        "problems": "Açık problem yok.",
+        "list_problems": {
+          "problems": []
+        },
+        "open_problems": {
+          "problems": []
+        }
+      },
+      "turns": [
+        {
+          "user": "checkout'ta son 1 saatte kaç istek geldi?",
+          "expect": {
+            "class": "status",
+            "anyOfCalls": [
+              "service_health",
+              "get_service_health",
+              "service_health_sweep",
+              "problems",
+              "list_problems",
+              "open_problems"
+            ],
+            "entity": "checkout",
+            "window": "1h",
+            "maxSentences": 3,
+            "verifier": "pass"
+          }
+        },
+        {
+          "user": "p95 kaç saniye?",
+          "expect": {
+            "class": "followup",
+            "entity": "checkout",
+            "maxCalls": 1,
+            "maxSentences": 2,
+            "verifier": "pass"
+          }
+        },
+        {
+          "user": "p99.9 değeri ne?",
+          "expect": {
+            "class": "followup",
+            "entity": "checkout",
+            "maxCalls": 1,
+            "maxSentences": 3,
+            "verifier": "flag"
+          }
+        }
+      ]
+    },
+    {
+      "id": "conv-verifier-time-derived",
+      "surface": "ChatConversation",
+      "why": "Doğrulayıcı yoklaması (E1): kanıttaki UTC damgası kullanıcı diliminde saat olarak söylenmeli (14:32); önceki saate göre artış türetilen değer sayılır, uyuşmazlık değil; genel bilgi cevabı canlı veri sayısı taşımaz.",
+      "stubs": {
+        "service_health": {
+          "$byService": {
+            "checkout": "checkout (son 1 saat): istek hızı 42,5/s, hata oranı %0,8, p95 310 ms, p99 540 ms, açık problem 0.",
+            "orders": "orders (son 1 saat): istek hızı 18,2/s, hata oranı %0,3, p95 220 ms, p99 410 ms, açık problem 0.",
+            "payments": "payments (son 1 saat): istek hızı 11,4/s, hata oranı %2,6, p95 870 ms, p99 1430 ms, açık problem 1.",
+            "inventory": "inventory (son 1 saat): istek hızı 27,9/s, hata oranı %0,1, p95 95 ms, p99 180 ms, açık problem 0."
+          }
+        },
+        "get_service_health": {
+          "$byService": {
+            "checkout": {
+              "service": "checkout",
+              "found": true,
+              "rps": 42.5,
+              "error_rate_pct": 0.8,
+              "p95_ms": 310,
+              "p99_ms": 540,
+              "open_problems": 0
+            },
+            "orders": {
+              "service": "orders",
+              "found": true,
+              "rps": 18.2,
+              "error_rate_pct": 0.3,
+              "p95_ms": 220,
+              "p99_ms": 410,
+              "open_problems": 0
+            },
+            "payments": {
+              "service": "payments",
+              "found": true,
+              "rps": 11.4,
+              "error_rate_pct": 2.6,
+              "p95_ms": 870,
+              "p99_ms": 1430,
+              "open_problems": 1
+            },
+            "inventory": {
+              "service": "inventory",
+              "found": true,
+              "rps": 27.9,
+              "error_rate_pct": 0.1,
+              "p95_ms": 95,
+              "p99_ms": 180,
+              "open_problems": 0
+            }
+          }
+        },
+        "service_health_sweep": {
+          "services": [
+            {
+              "service": "checkout",
+              "found": true,
+              "rps": 42.5,
+              "error_rate_pct": 0.8,
+              "p95_ms": 310,
+              "p99_ms": 540,
+              "open_problems": 0
+            },
+            {
+              "service": "orders",
+              "found": true,
+              "rps": 18.2,
+              "error_rate_pct": 0.3,
+              "p95_ms": 220,
+              "p99_ms": 410,
+              "open_problems": 0
+            },
+            {
+              "service": "payments",
+              "found": true,
+              "rps": 11.4,
+              "error_rate_pct": 2.6,
+              "p95_ms": 870,
+              "p99_ms": 1430,
+              "open_problems": 1
+            },
+            {
+              "service": "inventory",
+              "found": true,
+              "rps": 27.9,
+              "error_rate_pct": 0.1,
+              "p95_ms": 95,
+              "p99_ms": 180,
+              "open_problems": 0
+            }
+          ]
+        },
+        "resolve_entity": {
+          "$byService": {
+            "checkout": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "checkout",
+                  "score": 1.0
+                }
+              ]
+            },
+            "orders": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "orders",
+                  "score": 1.0
+                }
+              ]
+            },
+            "payments": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "payments",
+                  "score": 1.0
+                }
+              ]
+            },
+            "inventory": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "inventory",
+                  "score": 1.0
+                }
+              ]
+            }
+          }
+        },
+        "list_services": {
+          "services": [
+            "checkout",
+            "orders",
+            "payments",
+            "inventory"
+          ]
+        },
+        "list_my_services": {
+          "team": "takim-a",
+          "services": [
+            "checkout",
+            "orders",
+            "payments",
+            "inventory"
+          ]
+        },
+        "service_exceptions": {
+          "$byService": {
+            "orders": "orders son 1 saat: 1 exception grubu — SocketTimeoutException 180 kez (önceki saat 60); ilk görülme 2026-11-18T11:32:00Z.",
+            "checkout": "checkout son 1 saat: exception yok.",
+            "payments": "payments son 1 saat: exception yok.",
+            "inventory": "inventory son 1 saat: exception yok."
+          }
+        },
+        "list_exception_groups": {
+          "$byService": {
+            "orders": {
+              "service": "orders",
+              "groups": [
+                {
+                  "type": "SocketTimeoutException",
+                  "count": 180,
+                  "previous_count": 60,
+                  "first_seen": "2026-11-18T11:32:00Z"
+                }
+              ]
+            },
+            "checkout": {
+              "service": "checkout",
+              "groups": []
+            },
+            "payments": {
+              "service": "payments",
+              "groups": []
+            },
+            "inventory": {
+              "service": "inventory",
+              "groups": []
+            }
+          }
+        },
+        "get_exception_samples": {
+          "type": "SocketTimeoutException",
+          "samples": [
+            {
+              "message": "read timed out after 3000 ms",
+              "operation": "reserveOrder",
+              "at": "2026-11-18T11:32:00Z"
+            }
+          ]
+        },
+        "query_logs": {
+          "$byService": {
+            "orders": {
+              "service": "orders",
+              "total": 180,
+              "first_at": "2026-11-18T11:32:00Z",
+              "top": [
+                {
+                  "message": "read timed out after 3000 ms",
+                  "count": 180
+                }
+              ]
+            },
+            "checkout": {
+              "service": "checkout",
+              "total": 0,
+              "top": []
+            },
+            "payments": {
+              "service": "payments",
+              "total": 0,
+              "top": []
+            },
+            "inventory": {
+              "service": "inventory",
+              "total": 0,
+              "top": []
+            }
+          }
+        },
+        "search_logs": {
+          "$byService": {
+            "orders": {
+              "service": "orders",
+              "total": 180,
+              "first_at": "2026-11-18T11:32:00Z",
+              "top": [
+                {
+                  "message": "read timed out after 3000 ms",
+                  "count": 180
+                }
+              ]
+            },
+            "checkout": {
+              "service": "checkout",
+              "total": 0,
+              "top": []
+            },
+            "payments": {
+              "service": "payments",
+              "total": 0,
+              "top": []
+            },
+            "inventory": {
+              "service": "inventory",
+              "total": 0,
+              "top": []
+            }
+          }
+        }
+      },
+      "turns": [
+        {
+          "user": "orders'ta hatalar ne zaman başladı?",
+          "expect": {
+            "class": "error_hunt",
+            "anyOfCalls": [
+              "service_exceptions",
+              "list_exception_groups",
+              "get_exception_samples",
+              "query_logs",
+              "search_logs"
+            ],
+            "entity": "orders",
+            "maxSentences": 3,
+            "verifier": "pass"
+          }
+        },
+        {
+          "user": "önceki saate göre ne kadar arttı?",
+          "expect": {
+            "class": "compare",
+            "maxCalls": 2,
+            "maxSentences": 3,
+            "verifier": "pass"
+          }
+        },
+        {
+          "user": "hata bütçesi ne demek?",
+          "expect": {
+            "class": "knowledge",
+            "noCalls": true,
+            "maxSentences": 5,
+            "verifier": "pass"
           }
         }
       ]

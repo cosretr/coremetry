@@ -2,8 +2,8 @@ package api
 
 // ai_evalset_conversation_test.go — v0.10.2322 (H1): konuşma kipi.
 //
-// Pinlenenler: gömülü 20 vakalık küme (kapsam, nötr adlar, bilinen okuma
-// adları); dikişlerin üretimde ve tek turlu vakada etkisizliği; SAF
+// Pinlenenler: gömülü 22 vakalık küme (v0.10.2328: + iki doğrulayıcı
+// yoklaması; kapsam, nötr adlar, bilinen okuma adları); dikişlerin üretimde ve tek turlu vakada etkisizliği; SAF
 // yardımcılar (sahte seçimi, pencere, puanlama, profil açılımı); uçtan uca
 // iki profilli çok turlu koşu sahte modelle (geçmiş, bellek içi bağlam, Redis'e
 // yazılmaması, sayı denetimi, "tümü" koşusunun konuşma kümesini içermemesi).
@@ -33,8 +33,8 @@ func TestEvalConvFixtureValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cases) != 20 {
-		t.Fatalf("konuşma kümesi 20 vaka olmalı, %d", len(cases))
+	if len(cases) != 22 { // v0.10.2328 — + iki doğrulayıcı yoklaması
+		t.Fatalf("konuşma kümesi 22 vaka olmalı, %d", len(cases))
 	}
 	known := evalFixtureToolNames(t)
 	for _, n := range mcptools.V2OnlyTools(mcptools.Deps{}) {
@@ -49,7 +49,7 @@ func TestEvalConvFixtureValid(t *testing.T) {
 	seen := map[string]bool{}
 	gotClass := map[string]int{}
 	users := map[string]bool{}
-	turns := 0
+	turns, verifierTurns := 0, 0
 	for _, c := range cases {
 		if c.ID == "" || seen[c.ID] || strings.Contains(c.ID, "@") {
 			t.Errorf("%s: id boş, tekrar ya da '@' içeriyor", c.ID)
@@ -89,7 +89,13 @@ func TestEvalConvFixtureValid(t *testing.T) {
 					t.Errorf("%s/t%d: nötr olmayan varlık %q", c.ID, i+1, n)
 				}
 			}
-			if e.Window != "" && e.Window != "yesterday" {
+			if e.Verifier != "" && e.Verifier != evalConvVerifyPass && e.Verifier != evalConvVerifyFlag {
+				t.Errorf("%s/t%d: verifier %q", c.ID, i+1, e.Verifier)
+			}
+			if e.Verifier != "" {
+				verifierTurns++
+			}
+			if _, _, cal := evalConvCalendarWindow(e.Window, time.Now(), time.UTC); e.Window != "" && !cal {
 				if _, ok := evalParseLookback(e.Window); !ok {
 					t.Errorf("%s/t%d: pencere %q", c.ID, i+1, e.Window)
 				}
@@ -125,6 +131,9 @@ func TestEvalConvFixtureValid(t *testing.T) {
 		if gotClass[cls] == 0 {
 			t.Errorf("kapsam: %q sınıfı yok", cls)
 		}
+	}
+	if verifierTurns < 4 || verifierTurns > 6 { // v0.10.2328 — doğrulayıcı odaklı turlar
+		t.Errorf("doğrulayıcı turu %d, 4–6 bekleniyor", verifierTurns)
 	}
 	if turns < 45 || turns > 55 {
 		t.Errorf("tur sayısı %d — profil başına ≈ 50 (iki profil ≈ 100 sohbet turu)", turns)
@@ -282,10 +291,18 @@ func TestEvalStubFor(t *testing.T) {
 }
 
 func TestEvalConvWindowOK(t *testing.T) {
+	// v0.10.2328 — takvim pencereleri koşunun sabit diliminde (İstanbul, UTC+3):
+	// yerel 13:30; dün = 16 Kasım 00:00–17 Kasım 00:00 yerel = 15 Kasım 21:00Z–16 Kasım 21:00Z.
+	loc := istanbul(t)
 	now := time.Date(2026, 11, 17, 10, 30, 0, 0, time.UTC)
 	call := func(args string) []evalConvCall { return []evalConvCall{{Name: "x", Args: json.RawMessage(args)}} }
-	mid := time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)
+	mid := time.Date(2026, 11, 17, 0, 0, 0, 0, loc)
 	yFrom, yTo := mid.Add(-24*time.Hour).UnixMilli(), mid.UnixMilli()
+	utcMid := time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)
+	ms := func(a, b time.Time) []evalConvCall {
+		return call(`{"from_ms":` + itoa64(a.UnixMilli()) + `,"to_ms":` + itoa64(b.UnixMilli()) + `}`)
+	}
+	morningFrom, morningTo := mid.Add(6*time.Hour), mid.Add(12*time.Hour) // yerel 13:30 > 12:00 → kırpılmaz
 	for _, tc := range []struct {
 		want  string
 		calls []evalConvCall
@@ -300,12 +317,52 @@ func TestEvalConvWindowOK(t *testing.T) {
 		{"6h", call(`{"range_s":3600}`), 21600, false}, // okuma varsa okuma kazanır
 		{"1h", call(`{"from_ms":` + itoa64(now.Add(-time.Hour).UnixMilli()) + `,"to_ms":` + itoa64(now.UnixMilli()) + `}`), 0, true},
 		{"yesterday", call(`{"from_ms":` + itoa64(yFrom) + `,"to_ms":` + itoa64(yTo) + `}`), 0, true},
-		{"yesterday", call(`{"from_iso":"2026-11-16T00:00:00Z","to_iso":"2026-11-17T00:00:00Z"}`), 0, true},
+		{"yesterday", call(`{"from_iso":"2026-11-15T21:00:00Z","to_iso":"2026-11-16T21:00:00Z"}`), 0, true},
+		{"yesterday", ms(utcMid.Add(-24*time.Hour), utcMid), 0, false}, // H1'in UTC günü: çözücü yerel günü kullanır
 		{"yesterday", call(`{"range_s":86400}`), 0, false},
 		{"yesterday", nil, 86400, false},
+		{"morning", ms(morningFrom, morningTo), 0, true},
+		{"morning", ms(morningFrom.Add(-24*time.Hour), morningTo.Add(-24*time.Hour)), 0, false},
+		{"yesterday_morning", ms(morningFrom.Add(-24*time.Hour), morningTo.Add(-24*time.Hour)), 0, true},
+		{"yesterday_morning", ms(mid.Add(-24*time.Hour), mid), 0, false}, // sabahtan sonra çıplak "dün" dünün tamamı DEĞİL
 	} {
-		if got := evalConvWindowOK(tc.want, tc.calls, tc.state, now); got != tc.ok {
+		if got := evalConvWindowOK(tc.want, tc.calls, tc.state, 0, now, loc); got != tc.ok {
 			t.Errorf("%s %v state=%d → %v, want %v", tc.want, tc.calls, tc.state, got, tc.ok)
+		}
+	}
+	// Durumun mutlak penceresi (okuma uçsuzsa): çözücünün yazdığı RangeS + WinToMs.
+	if !evalConvWindowOK("yesterday", call(`{"range_s":86400}`), 86400, yTo, now, loc) {
+		t.Error("durum penceresi dünü taşıyor ama kabul edilmedi")
+	}
+	// Yerel 06:00'dan önce: "bu sabah" dünün sabahı, ardından çıplak "dün" dünün tamamı (çözücü kuralı).
+	early := time.Date(2026, 11, 17, 1, 0, 0, 0, time.UTC) // yerel 04:00
+	if !evalConvWindowOK("yesterday_morning", ms(mid.Add(-24*time.Hour), mid), 0, 0, early, loc) {
+		t.Error("06:00 öncesi yesterday_morning dünün tamamına düşmeli")
+	}
+	if !evalConvWindowOK("morning", ms(mid.Add(-18*time.Hour), mid.Add(-12*time.Hour)), 0, 0, early, loc) {
+		t.Error("06:00 öncesi morning dünün sabahı olmalı")
+	}
+}
+
+// TestEvalConvMatchesResolver — v0.10.2328: takvim beklentisi çözücünün
+// GERÇEK çıktısıyla aynı pencereyi kabul eder ("bu sabah" → "peki dün?").
+func TestEvalConvMatchesResolver(t *testing.T) {
+	loc := evalConvLoc()
+	for _, h := range []int{4, 9, 15} { // yerel 07:00, 12:00, 18:00 (UTC+3)
+		now := time.Date(2026, 11, 17, h, 0, 0, 0, time.UTC)
+		svcs := []string{"checkout"}
+		r1 := resolveChatState(stateResolveIn{Question: "selam, checkout bu sabah nasıl gidiyor?", Now: now, Loc: loc, Services: svcs})
+		w1 := r1.Next
+		if !evalConvWindowOK("morning", nil, w1.RangeS, w1.WinToMs, now, loc) {
+			t.Errorf("%02d:00Z morning: çözücü %d sn → %d", h, w1.RangeS, w1.WinToMs)
+		}
+		r2 := resolveChatState(stateResolveIn{Question: "peki dün?", Prev: w1, Now: now, Loc: loc, Services: svcs, HasPrior: true})
+		if !evalConvWindowOK("yesterday_morning", nil, r2.Next.RangeS, r2.Next.WinToMs, now, loc) {
+			t.Errorf("%02d:00Z yesterday_morning: çözücü %d sn → %d (%s)", h, r2.Next.RangeS, r2.Next.WinToMs, r2.Next.WinLabel)
+		}
+		r3 := resolveChatState(stateResolveIn{Question: "peki dün?", Prev: ChatContext{Service: "checkout", UpdatedAt: now.UnixMilli()}, Now: now, Loc: loc, Services: svcs, HasPrior: true})
+		if !evalConvWindowOK("yesterday", nil, r3.Next.RangeS, r3.Next.WinToMs, now, loc) {
+			t.Errorf("%02d:00Z yesterday: çözücü %d sn → %d", h, r3.Next.RangeS, r3.Next.WinToMs)
 		}
 	}
 }
@@ -319,10 +376,10 @@ func TestScoreEvalConvTurn(t *testing.T) {
 	}
 	tr.Services, tr.Windows = evalConvResolved(tr.Calls, now)
 	ev := `service_health checkout: p95 310 ms, hata oranı %0,8`
-	if f := scoreEvalConvTurn(evalConvExpect{Class: "status", AnyOfCalls: []string{"service_health"}, Entity: "checkout", MaxSentences: 3, MaxCalls: &two}, tr, ev, now); len(f) != 0 {
+	if f := scoreEvalConvTurn(evalConvExpect{Class: "status", AnyOfCalls: []string{"service_health"}, Entity: "checkout", MaxSentences: 3, MaxCalls: &two}, tr, ev, now, time.UTC); len(f) != 0 {
 		t.Errorf("temiz tur ihlal üretti: %v", f)
 	}
-	f := scoreEvalConvTurn(evalConvExpect{Class: "status", AnyOfCalls: []string{"list_deploys"}, Entity: "payments", NotEntity: []string{"checkout"}, MaxSentences: 2, NoCalls: true, Window: "1h"}, tr, `p95 310 ms`, now)
+	f := scoreEvalConvTurn(evalConvExpect{Class: "status", AnyOfCalls: []string{"list_deploys"}, Entity: "payments", NotEntity: []string{"checkout"}, MaxSentences: 2, NoCalls: true, Window: "1h"}, tr, `p95 310 ms`, now, time.UTC)
 	joined := strings.Join(f, "\n")
 	for _, want := range []string{"veri okunmamalıydı", "beklenen okumalardan", "varlık \"payments\"", "düzeltilen varlık", "pencere \"1h\"", "cümle 3 > 2", "sahte sonuçlarda olmayan sayı"} {
 		if !strings.Contains(joined, want) {
@@ -330,8 +387,24 @@ func TestScoreEvalConvTurn(t *testing.T) {
 		}
 	}
 	// Bağlamdan taşınan varlık okumasız turda da sayılır.
-	if f := scoreEvalConvTurn(evalConvExpect{Class: "followup", Entity: "checkout"}, evalConvTurnResult{Answer: "Evet.", StateService: "checkout"}, "", now); len(f) != 0 {
+	if f := scoreEvalConvTurn(evalConvExpect{Class: "followup", Entity: "checkout"}, evalConvTurnResult{Answer: "Evet.", StateService: "checkout"}, "", now, time.UTC); len(f) != 0 {
 		t.Errorf("bağlam varlığı: %v", f)
+	}
+	// v0.10.2328 — doğrulayıcı beklentisi: pass uyuşmazlıkta, flag kaçırmada ihlal.
+	vtr := evalConvTurnResult{Answer: "p99.9 1.900 ms.", Verify: &evalConvVerify{Checked: 1, Mismatch: 1, Mismatches: []string{"duration:1.900 ms"}}}
+	if f := scoreEvalConvTurn(evalConvExpect{Class: "followup", Verifier: "pass"}, vtr, "p95 1234 ms", now, time.UTC); !strings.Contains(strings.Join(f, " "), "doğrulayıcı uyuşmazlığı") {
+		t.Errorf("pass: %v", f)
+	}
+	if f := scoreEvalConvTurn(evalConvExpect{Class: "followup", Verifier: "flag"}, vtr, "p95 1234 ms", now, time.UTC); strings.Contains(strings.Join(f, " "), "doğrulayıcı") {
+		t.Errorf("flag yakalandı ama ihlal: %v", f)
+	}
+	vtr.Verify = &evalConvVerify{Checked: 1, Verified: 1}
+	if f := scoreEvalConvTurn(evalConvExpect{Class: "followup", Verifier: "flag"}, vtr, "p95 1234 ms", now, time.UTC); !strings.Contains(strings.Join(f, " "), "kaçırdı") {
+		t.Errorf("flag kaçırma: %v", f)
+	}
+	vtr.Verify = nil // doğrulama koşmadı → denetlenmez
+	if f := scoreEvalConvTurn(evalConvExpect{Class: "followup", Verifier: "pass"}, vtr, "p95 1234 ms", now, time.UTC); strings.Contains(strings.Join(f, " "), "doğrulayıcı") {
+		t.Errorf("ölçülmeyen tur: %v", f)
 	}
 }
 
@@ -456,6 +529,13 @@ func TestEvalConversationRunEndToEnd(t *testing.T) {
 	// Sayı denetimi: B profili sahtede olmayan 999'u yazdı.
 	if !strings.Contains(strings.Join(b.Turns[0].Fails, " "), "999") || b.OK {
 		t.Errorf("B profili sayı ihlali yok: %v", b.Turns[0].Fails)
+	}
+	// v0.10.2328 — gölge doğrulayıcı koşu ayarından bağımsız ölçer: A geçer, B'nin 999'u uyuşmaz.
+	if v := t1.Verify; v == nil || v.Mismatch != 0 || v.Verified == 0 {
+		t.Errorf("A tur 1 doğrulayıcı: %+v", v)
+	}
+	if v := b.Turns[0].Verify; v == nil || v.Mismatch == 0 || !strings.Contains(strings.Join(v.Mismatches, " "), "999") {
+		t.Errorf("B tur 1 doğrulayıcı: %+v", v)
 	}
 	// v0.10.2323 — döngüye düşen turda v0.10.2318 telemetrisi okunur; rapor ucu.
 	for _, tr := range a.Turns {

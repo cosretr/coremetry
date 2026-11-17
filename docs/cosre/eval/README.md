@@ -7,8 +7,9 @@ dizine hiçbir şey yazmaz.
 
 ## Set ne ölçüyor
 
-- 20 çok turlu Türkçe konuşma (`internal/copilot/evalset/conversation/fluency.json`,
-  toplam 49 tur). Yalnız nötr adlar: checkout, orders, payments, inventory.
+- 22 çok turlu Türkçe konuşma (`internal/copilot/evalset/conversation/fluency.json`,
+  toplam 55 tur; ikisi v0.10.2328'in doğrulayıcı yoklamaları). Yalnız nötr
+  adlar: checkout, orders, payments, inventory.
 - Kapsam: tek alanı değiştiren takip soruları ("peki dün?", "ya ödeme tarafı?"),
   durum cevabından sonra "deploy mu vardı", asistan bir sonraki adımı
   önerdikten sonra çıplak "bak", kısa olması beklenen durum soruları, hata
@@ -32,7 +33,7 @@ dizine hiçbir şey yazmaz.
    Ekran yalnız admin rolüne açıktır.
 2. "Akıcılık seti (konuşma)" satırında iki profili seç: Profil A ve Profil B
    (ör. varsayılan yerel model ile denemek istediğin ikinci aile).
-3. "İki profille koş" düğmesine bas. Önce A profilinin 20 konuşması, sonra B
+3. "İki profille koş" düğmesine bas. Önce A profilinin 22 konuşması, sonra B
    profilininki koşar; koşu arka planda sürer, sayfadan ayrılmak durdurmaz.
 4. Koşu bitince koşu geçmişinde seç ve "Akıcılık raporunu indir (.md)"
    düğmesine bas. İnen dosyayı `docs/cosre/eval/fluency-<YYYY-MM-DD>.md`
@@ -70,7 +71,12 @@ Tek profil de verilebilir (`"profiles":["<profil>"]`); profil verilmezse
   `internal/ai/evalrubric/fluency.go`), ortalama cümle ve karakter, madde
   listeli cevap payı, soruyla biten cevap payı, cevaba kadar model turu ve
   araç çağrısı, tur başına giriş/çıkış token'ı, ilk token süresi, ve
-  "doğrulayıcıdan geçen pay" (E1 dilimi gelene dek "henüz yok").
+  "doğrulayıcıdan geçen pay": gölge cevap doğrulayıcısının (E1) sıfır
+  uyuşmazlık saydığı turların payı; payda yalnız model anlatımı olan turlar.
+  Türetilen değer (kanıttaki iki değerin toplamı / farkı / oranı) geçmeyi
+  bozmaz, ayrı satırda sayılır. Tur başına sayaçlar ve uyuşmayan değerler
+  "Doğrulayıcı" satırında. Koşu bu sayımı ayardan bağımsız yapar (yalnız
+  sayaç; cevap değişmez).
 - Puanlamayı sen yaparsın; tablo yalnız otomatik sayımdır.
 
 ## Sınırlar
@@ -82,4 +88,12 @@ Tek profil de verilebilir (`"profiles":["<profil>"]`); profil verilmezse
   canlıda aynı adla bir servis ya da operasyon varsa o turun kademesi farklı
   olabilir — raporda her turun kademesi yazılıdır. Uç nokta seçici kartının
   satırları sahteden gelir (vakada yoksa kart çıkmaz).
-- "Dün" penceresi beklentisi dünün UTC takvim günüdür.
+- Koşu isteği saat dilimini sabitler (`Europe/Istanbul`); takvim
+  beklentileri çözücünün kuralıyla bu dilimdedir: "dün" dünün yerel takvim
+  günü, "bu sabah" 06:00–12:00 (şimdiye kırpılır; 06:00'dan önce dünün
+  sabahı), sabah penceresinden sonra çıplak "dün" dün sabah. Bağlam araçları
+  (`set_context` vb.) v2'de durum açıkken katalogda yoktur; hiçbir beklenti
+  onları anmaz.
+- Doğrulayıcı yoklamaları (`verifier: pass | flag`): "pass" turunda gölge
+  doğrulayıcı uyuşmazlık saymamalı; "flag" turu sahtede olmayan bir değeri
+  sorar — model bir sayı uydurursa doğrulayıcı onu yakalamalı.

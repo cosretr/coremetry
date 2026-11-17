@@ -105,7 +105,10 @@ func evalConvCatalog(ctx context.Context) []string {
 
 // stubLoopHandlers — konuşma kipinde döngü handler'larını sahteye bağlar.
 // Sohbet bağlamı araçları (set/get/clear_context) gerçek kalır: bellek içi
-// durumu okur/yazar, yani konuşma durumunun parçasıdır. nil işaret ya da
+// durumu okur/yazar, yani konuşma durumunun parçasıdır. v0.10.2328 notu: v2'de
+// cosre_conversation.state açıkken (varsayılan) bu üç araç katalogda HİÇ yok
+// (v0.10.2326, chat_state_tools.go) — durum çözücüden ve döngünün kendi
+// yazımından gelir; hiçbir vaka beklentisi bu araçları anmaz. nil işaret ya da
 // tek turlu vaka → dokunmaz.
 func (em *chatEvalMode) stubLoopHandlers(byName map[string]mcp.ToolHandler) {
 	if em == nil || em.Conversation == nil {

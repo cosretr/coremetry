@@ -10,8 +10,9 @@ package api
 // Rapor yalnız OKUR: koşunun saklı vaka sonuçları (bu sürecin defteri ya da
 // ai_eval_runs, nokta okuma). Ölçütler SAF ve deterministiktir
 // (evalrubric.FluencyOf — audit §4 S2'nin Go karşılığı, kalıp listesi tek
-// yerde). Oy / geri bildirim girdi değildir. Doğrulayıcı payı E1 dilimine
-// kadar "henüz yok" yazılır (evalVerifierPassHook nil).
+// yerde). Oy / geri bildirim girdi değildir. Doğrulayıcı payı v0.10.2328'den
+// beri turun gölge doğrulama sonucundan (evalVerifierPass); doğrulama
+// koşmayan turlar (anlatımsız kademe) paydaya girmez.
 
 import (
 	"fmt"
@@ -27,10 +28,19 @@ func (s *Server) registerAIEvalsetFluencyRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/ai/evalset/runs/{id}/fluency-report", auth.RequireRole(auth.RoleAdmin, s.getAIEvalsetFluencyReport))
 }
 
-// evalVerifierPassHook — E1 dilimi (cevap doğrulayıcısı, gölge) bu kancayı
-// doldurur: tur → (geçti mi, ölçüldü mü). nil = doğrulayıcı yok; rapor
-// "henüz yok" yazar, değer UYDURULMAZ.
-var evalVerifierPassHook func(t evalConvTurnResult) (pass, measured bool)
+// evalVerifierPassHook — tur → (geçti mi, ölçüldü mü). v0.10.2328 (E1):
+// evalVerifierPass. nil ya da hiç ölçülmemiş tur = rapor "ölçülmedi" yazar,
+// değer UYDURULMAZ.
+var evalVerifierPassHook = evalVerifierPass
+
+// evalVerifierPass — SAF: tur doğrulayıcıdan geçti mi (sıfır uyuşmazlık;
+// türetilen değer geçmeyi bozmaz, ayrı sayılır). Doğrulama koşmadıysa ölçülmedi.
+func evalVerifierPass(t evalConvTurnResult) (pass, measured bool) {
+	if t.Verify == nil {
+		return false, false
+	}
+	return t.Verify.Mismatch == 0, true
+}
 
 // evalFluencyAgg — profil başına toplam.
 type evalFluencyAgg struct {
@@ -44,6 +54,7 @@ type evalFluencyAgg struct {
 	TTFTSum, TTFTN, ModelMsSum, ToolMsSum int64
 	LoopN                                 int
 	VerifierPass, VerifierN               int
+	DerivedTurns, DerivedClaims           int // v0.10.2328 — türetilen değer (ayrı; geçmeyi bozmaz)
 }
 
 // evalFluencyRounds — SAF: cevaba kadar döngü turu: v0.10.2318 telemetrisi
@@ -114,6 +125,10 @@ func (a *evalFluencyAgg) add(t evalConvTurnResult) {
 			}
 		}
 	}
+	if t.Verify != nil && t.Verify.Derived > 0 {
+		a.DerivedTurns++
+		a.DerivedClaims += t.Verify.Derived
+	}
 }
 
 // evalFluencyProfiles — SAF: sonuçlardaki profiller, ilk görülme sırasıyla.
@@ -178,6 +193,19 @@ func evalAvg(sum int64, n int) string {
 		return "—"
 	}
 	return fmt.Sprintf("%.1f", float64(sum)/float64(n))
+}
+
+// evalFluencyVerifyCell — SAF: turun gölge doğrulama sayaçları ve uyuşmayan jetonlar.
+func evalFluencyVerifyCell(t evalConvTurnResult) string {
+	v := t.Verify
+	if v == nil {
+		return "ölçülmedi"
+	}
+	s := fmt.Sprintf("%d / %d / %d / %d", v.Checked, v.Verified, v.Derived, v.Mismatch)
+	if len(v.Mismatches) > 0 {
+		s += " — " + strings.Join(v.Mismatches, ", ")
+	}
+	return evalMdCell(s)
 }
 
 // evalFluencyCallsCell — SAF: turun veri okumaları (ad, servis, pencere).
@@ -286,6 +314,7 @@ func evalFluencyReport(run evalRunSummary, cases []evalCaseResult) string {
 					return fmt.Sprintf("%d · %d · %d", evalFluencyRounds(t), evalFluencyToolCalls(t), t.ModelCalls)
 				}},
 				{"Token giriş / çıkış", func(t evalConvTurnResult) string { return fmt.Sprintf("%d / %d", t.InputTokens, t.OutputTokens) }},
+				{"Doğrulayıcı (denetlenen / doğrulanan / türetilen / uyuşmayan)", evalFluencyVerifyCell},
 				{"Yapısal ihlal", func(t evalConvTurnResult) string {
 					if len(t.Fails) == 0 {
 						return "—"
@@ -349,11 +378,17 @@ func evalFluencyReport(run evalRunSummary, cases []evalCaseResult) string {
 	})
 	metric("Doğrulayıcıdan geçen", func(a *evalFluencyAgg) string {
 		if a.VerifierN == 0 {
-			return "henüz yok (E1)"
+			return "ölçülmedi"
 		}
-		return evalPct(a.VerifierPass, a.VerifierN)
+		return evalPct(a.VerifierPass, a.VerifierN) + fmt.Sprintf(" (%d / %d)", a.VerifierPass, a.VerifierN)
 	})
-	b.WriteString("\nTanımlar: kalıp açılış/kapanış, cümle, karakter, madde listesi ve soruyla bitiş audit §4 S2 sorgusunun tanımlarıdır (`internal/ai/evalrubric/fluency.go`; sondaki \"Kaynak:\" satırı gövdeye girmez). Yüzdeler cevaplanan turlara göredir. Döngü turu ve araç çağrısı v0.10.2318 döngü telemetrisinden (yoksa tur kancası); \"—\" = ölçülmedi.\n")
+	metric("Türetilen değer içeren tur (değer)", func(a *evalFluencyAgg) string {
+		if a.VerifierN == 0 {
+			return "—"
+		}
+		return fmt.Sprintf("%d (%d)", a.DerivedTurns, a.DerivedClaims)
+	})
+	b.WriteString("\nTanımlar: kalıp açılış/kapanış, cümle, karakter, madde listesi ve soruyla bitiş audit §4 S2 sorgusunun tanımlarıdır (`internal/ai/evalrubric/fluency.go`; sondaki \"Kaynak:\" satırı gövdeye girmez). Yüzdeler cevaplanan turlara göredir. Döngü turu ve araç çağrısı v0.10.2318 döngü telemetrisinden (yoksa tur kancası); \"—\" = ölçülmedi. Doğrulayıcı (E1, gölge): bir tur cevaptaki sayı/saat/ad iddialarının hiçbiri uyuşmazsa geçer; türetilen değer (kanıttaki iki değerin toplamı, farkı, oranı) geçmeyi bozmaz, ayrı sayılır; payda yalnız model anlatımı olan turlardır.\n")
 	return b.String()
 }
 

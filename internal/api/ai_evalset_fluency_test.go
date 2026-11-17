@@ -1,7 +1,8 @@
 package api
 
 // ai_evalset_fluency_test.go — v0.10.2323 (H1): akıcılık ölçütleri ve yan
-// yana rapor. SAF toplam + Markdown düzeni + doğrulayıcı kancası "henüz yok".
+// yana rapor. SAF toplam + Markdown düzeni + doğrulayıcı payı (v0.10.2328:
+// turun gölge doğrulama sonucundan; ölçülmeyen tur paydaya girmez).
 
 import (
 	"strings"
@@ -53,7 +54,8 @@ func TestEvalFluencyAggregateAndReport(t *testing.T) {
 		"| Kalıp açılış | %50 | %0 |",
 		"| Kalıp kapanış | %0 | %100 |",
 		"| Soruyla biten cevap | %0 | %100 |",
-		"| Doğrulayıcıdan geçen | henüz yok (E1) | henüz yok (E1) |",
+		"| Doğrulayıcıdan geçen | ölçülmedi | ölçülmedi |",
+		"| Doğrulayıcı (denetlenen / doğrulanan / türetilen / uyuşmayan) | ölçülmedi | ölçülmedi |",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("raporda yok: %q\n---\n%s", want, md)
@@ -69,7 +71,28 @@ func TestEvalFluencyAggregateAndReport(t *testing.T) {
 	prev := evalVerifierPassHook
 	evalVerifierPassHook = func(t evalConvTurnResult) (bool, bool) { return t.I == 1, true }
 	t.Cleanup(func() { evalVerifierPassHook = prev })
-	if md := evalFluencyReport(evalRunSummary{ID: "ev-1"}, cases); !strings.Contains(md, "| Doğrulayıcıdan geçen | %50 | %100 |") {
+	if md := evalFluencyReport(evalRunSummary{ID: "ev-1"}, cases); !strings.Contains(md, "| Doğrulayıcıdan geçen | %50 (1 / 2) | %100 (1 / 1) |") {
 		t.Errorf("kanca değeri raporlanmadı:\n%s", md)
+	}
+}
+
+// v0.10.2328 — varsayılan kanca (evalVerifierPass): sıfır uyuşmazlık geçer,
+// türetilen değer geçmeyi bozmaz ve ayrı satırda sayılır.
+func TestEvalFluencyVerifierPass(t *testing.T) {
+	if evalVerifierPassHook == nil {
+		t.Fatal("E1 kancası doldurulmadı")
+	}
+	a1 := evalConvTurnResult{I: 1, User: "checkout nasıl?", Answer: "p95 310 ms, artış 40 ms.", Verify: &evalConvVerify{Checked: 2, Verified: 1, Derived: 1}}
+	a2 := evalConvTurnResult{I: 2, User: "peki dün?", Answer: "p95 999 ms.", Verify: &evalConvVerify{Checked: 1, Mismatch: 1, Mismatches: []string{"duration:999 ms"}}}
+	a3 := evalConvTurnResult{I: 3, User: "teşekkürler", Answer: "Rica ederim."} // anlatım yok sayılmaz → ölçülmedi
+	md := evalFluencyReport(evalRunSummary{ID: "ev-2"}, []evalCaseResult{fluencyCase("conv-v", "pa", "m", a1, a2, a3)})
+	for _, want := range []string{
+		"| Doğrulayıcıdan geçen | %50 (1 / 2) |",
+		"| Türetilen değer içeren tur (değer) | 1 (1) |",
+		"| Doğrulayıcı (denetlenen / doğrulanan / türetilen / uyuşmayan) | 1 / 0 / 0 / 1 — duration:999 ms |",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("raporda yok: %q\n%s", want, md)
+		}
 	}
 }

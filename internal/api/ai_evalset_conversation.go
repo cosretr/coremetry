@@ -105,10 +105,54 @@ type evalConvExpect struct {
 	// NotEntity — okumalar bu servislere gitmemeli (düzeltme turu).
 	NotEntity []string `json:"notEntity,omitempty"`
 	// Window — turun çözmesi gereken pencere: 15m | 1h | 6h | 24h | 7d
-	// (şimdiden geriye) ya da yesterday (dünün takvim günü, UTC).
+	// (şimdiden geriye); yesterday (dünün takvim günü), morning ("bu sabah"
+	// 06:00–12:00) ya da yesterday_morning (sabah penceresinden sonra çıplak
+	// "dün" = dün sabah). v0.10.2328: takvim pencereleri koşunun SABİT saat
+	// diliminde (evalConvTZ) ve çözücünün kuralıyla (chat_state_resolve.go).
 	Window string `json:"window,omitempty"`
 	// MaxSentences — en çok cümle (durum soruları kısa); 0 = sınırsız.
 	MaxSentences int `json:"maxSentences,omitempty"`
+	// Verifier — v0.10.2328 (E1): "pass" = gölge doğrulayıcı sıfır uyuşmazlık
+	// saymalı (türetilen serbest); "flag" = sahtede olmayan değeri soran
+	// yoklama: cevap sahtede olmayan bir sayı söylerse doğrulayıcı onu
+	// uyuşmazlık saymalı (kaçırırsa ihlal). Doğrulama koşmadıysa denetlenmez.
+	Verifier string `json:"verifier,omitempty"`
+}
+
+// Doğrulayıcı beklentileri.
+const (
+	evalConvVerifyPass = "pass"
+	evalConvVerifyFlag = "flag"
+)
+
+// evalConvTZ — v0.10.2328: konuşma kipi isteklerinin SABİT saat dilimi
+// (context.tz). Çözücü dilimsiz istekte kurulum varsayılanını kullanır;
+// sabitlenince "dün" / "bu sabah" beklentisi koşulan makineden bağımsızdır.
+const evalConvTZ = "Europe/Istanbul"
+
+// evalConvVerify — turun gölge doğrulama özeti (ai_eval_runs.cases'te sınırlı).
+type evalConvVerify struct {
+	Checked    int      `json:"checked"`
+	Verified   int      `json:"verified"`
+	Derived    int      `json:"derived"`
+	Mismatch   int      `json:"mismatch"`
+	Mismatches []string `json:"mismatches,omitempty"`
+}
+
+// evalConvVerifyOf — SAF: doğrulama sonucu → özet (uyuşmayan jeton ≤8).
+func evalConvVerifyOf(r *verifyResult) *evalConvVerify {
+	if r == nil {
+		return nil
+	}
+	t, _ := r.totals()
+	v := &evalConvVerify{Checked: t.Checked, Verified: t.Verified, Derived: t.Derived, Mismatch: t.Mismatch}
+	for _, c := range r.mismatches() {
+		if len(v.Mismatches) >= verifySignalMaxTokens {
+			break
+		}
+		v.Mismatches = append(v.Mismatches, c.Kind+":"+clipBytes(c.Text, verifySignalTokenMax))
+	}
+	return v
 }
 
 // evalConvTurnResult — bir turun saklanan sonucu (ai_eval_runs.cases).
@@ -145,6 +189,10 @@ type evalConvTurnResult struct {
 	LoopModelMs   uint32 `json:"loopModelMs,omitempty"`
 	LoopToolMs    uint32 `json:"loopToolMs,omitempty"`
 	TTFTMs        uint32 `json:"ttftMs,omitempty"`
+	// StateToMs — v0.10.2328: tur sonu durum penceresinin bitişi (mutlak pencere; 0 = göreli).
+	StateToMs int64 `json:"stateToMs,omitempty"`
+	// Verify — v0.10.2328 (E1): gölge doğrulayıcının sayaçları; nil = koşmadı.
+	Verify *evalConvVerify `json:"verify,omitempty"`
 }
 
 // evalConvCase — SAF: vaka konuşma kipinde mi.
@@ -305,7 +353,7 @@ func (s *Server) runEvalConvCase(ctx context.Context, job *evalJob, c evalCase) 
 			evidence.WriteString(k + " " + evalStubText(v) + "\n")
 		}
 		tr, err := s.runEvalConvTurn(ctx, job, c, i, ft, hist, &state, convID, catalog)
-		tr.Fails = append(tr.Fails, scoreEvalConvTurn(ft.Expect, tr, evidence.String(), time.Now())...)
+		tr.Fails = append(tr.Fails, scoreEvalConvTurn(ft.Expect, tr, evidence.String(), time.Now(), evalConvLoc())...)
 		tr.OK = len(tr.Fails) == 0
 		if err != nil && firstErr == nil {
 			firstErr = err
@@ -362,6 +410,7 @@ func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, 
 	req.Messages = append(append([]copilot.ChatMessage{}, hist...), copilot.ChatMessage{Role: "user", Text: ft.User})
 	req.Context.Conversation = convID
 	req.Context.Profile = c.profile
+	req.Context.Tz = evalConvTZ // v0.10.2328 — "dün" / "bu sabah" deterministik
 	body, err := json.Marshal(req)
 	if err != nil {
 		return tr, err
@@ -378,7 +427,8 @@ func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, 
 	*state = ct.State.ctx
 	tr.Calls = evalBoundConvCalls(ct.snapshot())
 	tr.Services, tr.Windows = evalConvResolved(tr.Calls, time.Now())
-	tr.StateService, tr.StateRangeS = state.Service, state.RangeS
+	tr.StateService, tr.StateRangeS, tr.StateToMs = state.Service, state.RangeS, state.WinToMs
+	tr.Verify = evalConvVerifyOf(o.Verify) // v0.10.2328
 	tr.Answer, tr.Tier, tr.Route, tr.Status, tr.Toolset = o.Answer, o.Tier, o.Route, o.Status, o.Toolset
 	tr.Rounds, tr.ToolCalls, tr.ModelCalls = st.Rounds, st.Executed, int(o.ModelCalls)
 	tr.InputTokens, tr.OutputTokens = o.InputTokens, o.OutputTokens
@@ -452,10 +502,13 @@ func evalConvTranscript(c evalCase, answers []string) string {
 
 // ── Yapısal puanlama (SAF) ──────────────────────────────────────────────
 
+// evalConvLoc — koşunun sabit dilimi (çözülemezse kurulum varsayılanı; chatLocationNamed).
+func evalConvLoc() *time.Location { return chatLocationNamed(evalConvTZ, 0) }
+
 // scoreEvalConvTurn — SAF: turun yapısal ihlalleri. evidence = vakanın o
 // tura dek sahte sonuçları + kullanıcı metinleri; now = pencere denetiminin
-// "şimdi"si.
-func scoreEvalConvTurn(e evalConvExpect, tr evalConvTurnResult, evidence string, now time.Time) []string {
+// "şimdi"si, loc = koşunun sabit dilimi.
+func scoreEvalConvTurn(e evalConvExpect, tr evalConvTurnResult, evidence string, now time.Time, loc *time.Location) []string {
 	var fails []string
 	names := map[string]bool{}
 	for _, c := range tr.Calls {
@@ -489,7 +542,7 @@ func scoreEvalConvTurn(e evalConvExpect, tr evalConvTurnResult, evidence string,
 			fails = append(fails, fmt.Sprintf("düzeltilen varlık yine okundu: %q", n))
 		}
 	}
-	if e.Window != "" && !evalConvWindowOK(e.Window, tr.Calls, tr.StateRangeS, now) {
+	if e.Window != "" && !evalConvWindowOK(e.Window, tr.Calls, tr.StateRangeS, tr.StateToMs, now, loc) {
 		fails = append(fails, fmt.Sprintf("pencere %q çözülmedi (okumalar %v, bağlam %d sn)", e.Window, tr.Windows, tr.StateRangeS))
 	}
 	answer := strings.TrimSpace(tr.Answer)
@@ -501,8 +554,21 @@ func scoreEvalConvTurn(e evalConvExpect, tr evalConvTurnResult, evidence string,
 			fails = append(fails, fmt.Sprintf("cümle %d > %d", n, e.MaxSentences))
 		}
 	}
-	if extra := ungroundedNumbers(evalrubric.StripSourceLine(answer), evidence); len(extra) > 0 {
+	extra := ungroundedNumbers(evalrubric.StripSourceLine(answer), evidence)
+	if len(extra) > 0 {
 		fails = append(fails, fmt.Sprintf("sahte sonuçlarda olmayan sayı: %v", extra))
+	}
+	if v := tr.Verify; v != nil {
+		switch e.Verifier {
+		case evalConvVerifyPass:
+			if v.Mismatch > 0 {
+				fails = append(fails, fmt.Sprintf("doğrulayıcı uyuşmazlığı: %v", v.Mismatches))
+			}
+		case evalConvVerifyFlag:
+			if len(extra) > 0 && v.Mismatch == 0 {
+				fails = append(fails, fmt.Sprintf("doğrulayıcı sahtede olmayan sayıyı kaçırdı: %v", extra))
+			}
+		}
 	}
 	return fails
 }
@@ -642,22 +708,57 @@ func evalConvAbsWindow(m map[string]any) (from, to time.Time, ok bool) {
 	return time.Time{}, time.Time{}, false
 }
 
+// evalConvCalendarWindow — SAF: takvim penceresi beklentisinin [from, to)'su,
+// çözücünün kuralıyla (chat_state_resolve.go resolveTurnWindow) koşunun
+// diliminde: yesterday = dünün tamamı; morning = bugün 06–12 (06'dan önce
+// dünün sabahı), şimdiye kırpılır; yesterday_morning = sabah penceresinin bir
+// gün gerisi — ama sabah penceresi zaten dündeyse (yerel 06'dan önce) çıplak
+// "dün" dünün tamamıdır. ok=false: takvim beklentisi değil.
+func evalConvCalendarWindow(want string, now time.Time, loc *time.Location) (from, to time.Time, ok bool) {
+	today := dayStart(now, loc)
+	morning := func() (time.Time, time.Time) {
+		f, t := today.Add(6*time.Hour), today.Add(12*time.Hour)
+		if f.After(now) {
+			f, t = f.AddDate(0, 0, -1), t.AddDate(0, 0, -1)
+		}
+		if t.After(now) {
+			t = now
+		}
+		return f, t
+	}
+	switch want {
+	case "yesterday":
+		return today.AddDate(0, 0, -1), today, true
+	case "morning":
+		f, t := morning()
+		return f, t, true
+	case "yesterday_morning":
+		f, t := morning()
+		if f.Before(today) {
+			return today.AddDate(0, 0, -1), today, true
+		}
+		return f.Add(-24 * time.Hour), t.Add(-24 * time.Hour), true
+	}
+	return time.Time{}, time.Time{}, false
+}
+
 // evalConvWindowOK — SAF: beklenen pencere okumalardan ya da sohbet
-// bağlamının RangeS'inden çözüldü mü. Geriye bakış ±%10; "yesterday":
-// bitişi bugünün UTC gece yarısına ±2 sa, süresi 20–28 sa.
-func evalConvWindowOK(want string, calls []evalConvCall, stateRangeS int64, now time.Time) bool {
+// bağlamından çözüldü mü. Geriye bakış ±%10. Takvim pencereleri
+// (evalConvCalendarWindow) mutlak uçlarla, ±15 dk: okumaların from/to'su ya
+// da durumun mutlak penceresi (StateToMs − RangeS … StateToMs).
+func evalConvWindowOK(want string, calls []evalConvCall, stateRangeS, stateToMs int64, now time.Time, loc *time.Location) bool {
 	var ws []evalConvWindow
 	for _, c := range calls {
 		ws = append(ws, evalConvWindowsOf(evalConvArgs(c), now)...)
 	}
-	if want == "yesterday" {
-		midnight := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day(), 0, 0, 0, 0, time.UTC)
+	if from, to, ok := evalConvCalendarWindow(want, now, loc); ok {
+		if stateToMs > 0 && stateRangeS > 0 {
+			st := time.UnixMilli(stateToMs)
+			ws = append(ws, evalConvWindow{from: st.Add(-time.Duration(stateRangeS) * time.Second), to: st})
+		}
+		const tol = 15 * time.Minute
 		for _, w := range ws {
-			if w.to.IsZero() {
-				continue
-			}
-			span := w.to.Sub(w.from)
-			if w.to.Sub(midnight).Abs() <= 2*time.Hour && span >= 20*time.Hour && span <= 28*time.Hour {
+			if !w.to.IsZero() && w.from.Sub(from).Abs() <= tol && w.to.Sub(to).Abs() <= tol {
 				return true
 			}
 		}

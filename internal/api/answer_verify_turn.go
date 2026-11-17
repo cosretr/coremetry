@@ -71,8 +71,10 @@ func verifyShadowOn(ctx context.Context) bool {
 }
 
 // newAnswerVerifyTurn — kapalıyken nil. Saat dilimi çözücüyle aynı kural.
+// v0.10.2328: değerlendirme konuşma kipinde ayardan bağımsız açık (yalnız
+// sayaç; koşu çevrimdışıdır, "doğrulayıcıdan geçen pay" her koşuda ölçülür).
 func (s *Server) newAnswerVerifyTurn(ctx context.Context, req *chatRequest) *answerVerifyTurn {
-	if !verifyShadowOn(ctx) {
+	if !verifyShadowOn(ctx) && (evalConvFrom(ctx) == nil || !cosreV2Marked(ctx)) {
 		return nil
 	}
 	v := &answerVerifyTurn{loc: chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin), catalog: s.verifyCatalog(ctx)}
