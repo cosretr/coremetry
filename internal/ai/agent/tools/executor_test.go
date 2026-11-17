@@ -53,7 +53,7 @@ func TestExecutorContract(t *testing.T) {
 	x := NewExecutor(byName, map[string]bool{"boom": true}, hooks).WithScope(denyScope{}).WithBudget(20 * time.Millisecond)
 	ctx := context.Background()
 
-	if oc := x.Call(ctx, "nope", nil); oc.Executed || !oc.IsError || oc.Kind != "unknown" || !strings.Contains(oc.Content, `unknown tool "nope"`) {
+	if oc := x.Call(ctx, "nope", nil); oc.Executed || !oc.IsError || oc.Kind != "unknown" || !strings.Contains(oc.Content, `unknown tool \"nope\"`) || !strings.Contains(oc.Content, `"error":"not_found"`) {
 		t.Fatalf("bilinmeyen: %+v", oc)
 	}
 	oc := x.Call(ctx, "list_problems", json.RawMessage(`{"a":1,"b":2}`))
@@ -173,5 +173,51 @@ func TestExecutorCoercesNumericStrings(t *testing.T) {
 	}
 	if len(got) != 1 || got[0] != `{"range_s":3600}` {
 		t.Fatalf("handler argümanı %v", got)
+	}
+}
+
+// v0.10.2320 — bilinmeyen ad: öneri YALNIZ yürütücünün kataloğundan (daraltılmış
+// katalogdan düşen ad önerilmez); çağrı yürütülmez, span/audit yok ve tekrar
+// muhafızına "görüldü" yazılmaz (aynı bilinmeyen ad yine unknown, bütçe sayımı
+// çağıranda aynen).
+func TestExecutorUnknownSuggestsFromOfferedCatalog(t *testing.T) {
+	var spans, audits int
+	hooks := Hooks{
+		Span: func(ctx context.Context, _ string, _ bool) (context.Context, func(int, bool)) {
+			spans++
+			return ctx, func(int, bool) {}
+		},
+		Audit: func(string, json.RawMessage, time.Duration, error, int) { audits++ },
+	}
+	ok := func(_ context.Context, _ json.RawMessage) (any, error) { return "x", nil }
+	// "list_problems" daraltılmış katalogdan düştü: haritada yok.
+	x := NewExecutor(map[string]Handler{"get_trace": ok, "get_logs_for_trace": ok, "search_traces": ok}, nil, hooks)
+	ctx := context.Background()
+	for i := 0; i < 2; i++ {
+		oc := x.Call(ctx, "get_trac", json.RawMessage(`{}`))
+		if oc.Executed || !oc.IsError || oc.Kind != KindUnknown {
+			t.Fatalf("deneme %d: %+v", i, oc)
+		}
+		var te struct {
+			Error   string   `json:"error"`
+			Suggest []string `json:"did_you_mean"`
+		}
+		if err := json.Unmarshal([]byte(oc.Content), &te); err != nil || te.Error != "not_found" || len(te.Suggest) != 1 || te.Suggest[0] != "get_trace" {
+			t.Fatalf("deneme %d öneri: %s", i, oc.Content)
+		}
+	}
+	oc := x.Call(ctx, "list_problem", json.RawMessage(`{}`))
+	if oc.Kind != KindUnknown || strings.Contains(oc.Content, "list_problems") {
+		t.Fatalf("düşen araç önerildi: %s", oc.Content)
+	}
+	if strings.Contains(x.Call(ctx, "get_weather", nil).Content, "did_you_mean") {
+		t.Fatal("yakın ad yokken öneri olmamalı")
+	}
+	if spans != 0 || audits != 0 {
+		t.Fatalf("bilinmeyen çağrı span/audit açtı: %d/%d", spans, audits)
+	}
+	// Muhafız etkilenmedi: aynı argümanla geçerli çağrı ilk kez yürür.
+	if oc := x.Call(ctx, "get_trace", json.RawMessage(`{}`)); !oc.Executed || oc.Kind != KindOK {
+		t.Fatalf("geçerli çağrı: %+v", oc)
 	}
 }

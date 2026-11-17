@@ -121,6 +121,9 @@ type ToolError struct {
 	Retryable bool   `json:"retryable"`
 	Hint      string `json:"hint"`
 	Detail    string `json:"detail,omitempty"`
+	// Suggest — v0.10.2320: yalnız bilinmeyen araç adında, bu alışverişte
+	// sunulan katalogdan en yakın en çok üç ad (toolerr_unknown.go).
+	Suggest []string `json:"did_you_mean,omitempty"`
 }
 
 // toolErrPolicy — sınıf → {tekrar denenebilir mi, ne yapmalı}.

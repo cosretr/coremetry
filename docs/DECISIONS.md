@@ -14683,3 +14683,9 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Şema (yalnız ek kolon): `loop_model_ms UInt32`, `loop_tool_ms UInt32`, `loop_tool_calls UInt16`, `loop_max_round_tool_calls UInt16` — hepsi `ADD COLUMN IF NOT EXISTS … DEFAULT 0`, mevcut ai_calls ALTER dizisinde (küme kipinde `adaptDDL`). Probe `probeAICallsTimingColumns` beş adı (ttft_ms dahil) birden ister + `ddl_defer.go` yeniden probe; bayrak false iken INSERT/SELECT kolonları anmaz.
 - Ölçüm noktası: model süresi `ai.chat.turn`, araç süresi `ai.tool` span'ının açılış/kapanışı (chatSpan); araç çağrısı = modelin normal turda döndürdüğü çağrı sayısı (atlanan dahil), en çok = tek turun en büyüğü.
 - API: `/api/ai/calls/{id}` ve exchanges alt satırı `ttftMs`, `loopModelMs`, `loopToolMs`, `loopToolCalls`, `loopMaxRoundToolCalls` (omitempty). UI: etkileşim çekmecesinde "Döngü süreleri" satırı yalnız bilinen değerlerle; i18n yok (operatör ekranı).
+
+## 2026-11-17 — v0.10.2320 — CoSRE: bilinmeyen araçta yakın araç adları önerilir
+
+- Yürütücünün bilinmeyen-ad sonucu çıplak `unknown tool "x"` yerine diğer araç hatalarıyla aynı `ToolError` biçimi: `not_found`, `retryable:false`, Türkçe ipucu, `detail` = eski metin; yakın ad varsa `did_you_mean` (en çok 3). Yeni hata sınıfı yok.
+- Adaylar YALNIZ yürütücünün kataloğundan (alışverişte sunulan adlar; trace takibinin daraltılmış kataloğundan düşen araç önerilmez). Kural (`mcp.NearestToolNames`, saf): normalize (küçük harf, camelCase→snake, `-`/`.`/boşluk→`_`); Levenshtein ≤ max(1, len/4) yakın; yoksa genel fiiller atılınca bir tarafın sözcükleri öbüründe (çoğul "s" yok sayılır). Mesafe eşleşmesi varsa yalnız onlar; sıra mesafe, sonra ad. Yakın yoksa öneri yok.
+- Tekrar muhafızı, tur/çağrı bütçesi ve span/audit davranışı aynı (çağrı yürütülmez, "görüldü" yazılmaz). prompts.go değişmedi.

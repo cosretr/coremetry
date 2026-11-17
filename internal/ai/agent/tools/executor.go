@@ -15,7 +15,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -90,7 +89,7 @@ const (
 
 // Outcome — bir çağrının sonucu.
 type Outcome struct {
-	// Content — modele giden metin: JSON sonuç, ToolErrorJSON, RepeatedCallJSON ya da "unknown tool".
+	// Content — modele giden metin: JSON sonuç, ToolErrorJSON, RepeatedCallJSON ya da UnknownToolJSON.
 	Content string
 	IsError bool
 	// Executed — handler gerçekten koştu (bilinmeyen ad, tekrar, kapsam reddi,
@@ -145,6 +144,16 @@ func (x *Executor) WithBudget(d time.Duration) *Executor {
 	return x
 }
 
+// catalog — yürütme haritasının adları (öneri adayları; sıra önemsiz,
+// NearestToolNames deterministik sıralar).
+func (x *Executor) catalog() []string {
+	out := make([]string, 0, len(x.byName))
+	for n := range x.byName {
+		out = append(out, n)
+	}
+	return out
+}
+
 // Known — ad katalogda mı.
 func (x *Executor) Known(name string) bool { _, ok := x.byName[name]; return ok }
 
@@ -161,8 +170,11 @@ func (x *Executor) Call(ctx context.Context, name string, args json.RawMessage) 
 	}
 	h, found := x.byName[name]
 	if !found {
-		msg := fmt.Sprintf("unknown tool %q", name)
-		return Outcome{Content: msg, IsError: true, Kind: KindUnknown}
+		// v0.10.2320 — diğer araç hatalarıyla aynı ToolError biçimi + en yakın
+		// adlar YALNIZ bu yürütücünün kataloğundan (alışverişte sunulan adlar;
+		// daraltılmış katalogdan düşen araç önerilmez). Tekrar muhafızı ve
+		// bütçe sayımı değişmedi: çağrı yine yürütülmez, "görüldü" yazılmaz.
+		return Outcome{Content: mcp.UnknownToolJSON(name, mcp.NearestToolNames(name, x.catalog())), IsError: true, Kind: KindUnknown}
 	}
 	// v0.10.2201 — şema integer/number derken metin gelen sayı ("3600")
 	// doğrulamadan ve tekrar muhafızından ÖNCE sayıya çevrilir: yerel
