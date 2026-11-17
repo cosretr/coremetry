@@ -17,12 +17,14 @@ import (
 // v0.10.1444 — blocks kolonu: sekiz bayrak bileşimi; açıkken EN SON arg turun
 // blok zarfı (toolset ondan bir önce).
 func TestCosreInteractionArgsAlignWithColumns(t *testing.T) {
-	r := CosreInteraction{Toolset: "simple", Blocks: `{"v":1}`, Tools: []CosreTool{{Name: "a", OK: true, Evidence: "metrics:12"}, {Name: "b", Error: "x"}}}
+	r := CosreInteraction{Toolset: "simple", Blocks: `{"v":1}`, Verify: "v1 tier=loop", Tools: []CosreTool{{Name: "a", OK: true, Evidence: "metrics:12"}, {Name: "b", Error: "x"}}}
 	var combos []cosreInteractionCols
 	for _, ev := range []bool{false, true} {
 		for _, ts := range []bool{false, true} {
 			for _, bl := range []bool{false, true} {
-				combos = append(combos, cosreInteractionCols{Evidence: ev, Toolset: ts, Blocks: bl})
+				for _, vf := range []bool{false, true} { // v0.10.2327
+					combos = append(combos, cosreInteractionCols{Evidence: ev, Toolset: ts, Blocks: bl, Verify: vf})
+				}
 			}
 		}
 	}
@@ -39,7 +41,10 @@ func TestCosreInteractionArgsAlignWithColumns(t *testing.T) {
 		if strings.Contains(sql, ", toolset") != c.Toolset {
 			t.Errorf("%+v: toolset kolonu beklenmedik durumda", c)
 		}
-		if strings.HasSuffix(strings.TrimSuffix(sql, ")"), ", blocks") != c.Blocks {
+		if strings.HasSuffix(strings.TrimSuffix(sql, ")"), ", verify") != c.Verify {
+			t.Errorf("%+v: verify kolonu SON sırada değil / beklenmedik: %s", c, sql)
+		}
+		if strings.Contains(sql, ", blocks") != c.Blocks {
 			t.Errorf("%+v: blocks kolonu SON sırada değil / beklenmedik: %s", c, sql)
 		}
 		for k := 16; k < 24; k++ {
@@ -51,6 +56,12 @@ func TestCosreInteractionArgsAlignWithColumns(t *testing.T) {
 			t.Errorf("boş status varsayılanı: %v", args[30])
 		}
 		at := len(args) - 1
+		if c.Verify {
+			if args[at] != "v1 tier=loop" {
+				t.Errorf("%+v: verify son arg olmalı: %v", c, args[at])
+			}
+			at--
+		}
 		if c.Blocks {
 			if args[at] != `{"v":1}` {
 				t.Errorf("%+v: blocks son arg olmalı: %v", c, args[at])

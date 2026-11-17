@@ -108,6 +108,9 @@ type evalAgentOutcome struct {
 	// BoundTo — v0.10.1476: koşucunun vakayı bağladığı canlı servis (handler
 	// doldurmaz; evalsetServerAgent yazar).
 	BoundTo string
+	// Verify — v0.10.2327 (E1): turun gölge doğrulama sonucu; nil = anlatım
+	// yok ya da doğrulama kapalı.
+	Verify *verifyResult
 }
 
 type chatEvalModeKey struct{}

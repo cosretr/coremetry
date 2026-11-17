@@ -4,13 +4,13 @@ package api
 // CoSRE konuşma kalitesi blobunun operatör yüzeyi.
 //
 //   GET /api/ai/cosre-conversation → {state, style, verification, updatedBy, updatedAt}  her rol (viewer GÖRÜR)
-//   PUT /api/ai/cosre-conversation {state?}                                               admin · audit settings.cosre_conversation.update
+//   PUT /api/ai/cosre-conversation {state?, verification?}                                admin · audit settings.cosre_conversation.update
 //
 // Depo system_settings `cosre_conversation` (chstore/cosre_conversation_settings.go;
-// boot + 30 s cfgRefresh). Bu sürümde YALNIZ `state` bağlı (A dilimi,
-// chat_state.go); `style` ve `verification` ayrılmış alanlardır: PUT onları
-// kapalı / off dışında bir değere çekmeye çalışırsa 400 — bağlı olmayan bir
-// anahtarı "açtım" yanılsaması olmasın. ai_general_questions.go ile aynı duruş:
+// boot + 30 s cfgRefresh). Bağlı olanlar: `state` (A dilimi, chat_state.go) ve
+// v0.10.2327'den beri `verification` off | shadow (E1, answer_verify_turn.go);
+// `style` ayrılmış ve `enforce` E2'ye kadar reddedilir: PUT onları açmaya
+// çalışırsa 400 — bağlı olmayan bir anahtarı "açtım" yanılsaması olmasın. ai_general_questions.go ile aynı duruş:
 // requireCopilot'suz kurulum ayarı, GET atomic okuma.
 
 import (
@@ -60,7 +60,7 @@ type cosreConversationPut struct {
 // alanlar bu sürümde yalnız kapalı değerlerini alabilir.
 func mergeCosreConversationPut(cur chstore.CosreConversation, in cosreConversationPut) (chstore.CosreConversation, error) {
 	if in.State == nil && in.Style == nil && in.Verification == nil {
-		return cur, fmt.Errorf("state alanı zorunlu (true | false)")
+		return cur, fmt.Errorf("state ya da verification alanı zorunlu")
 	}
 	out := cur
 	if in.State != nil {
@@ -76,10 +76,10 @@ func mergeCosreConversationPut(cur chstore.CosreConversation, in cosreConversati
 		if !chstore.ValidCosreVerification(*in.Verification) {
 			return cur, fmt.Errorf("verification: off | shadow | enforce")
 		}
-		if *in.Verification != chstore.CosreVerifyOff {
-			return cur, fmt.Errorf("verification henüz bağlı değil (ayrılmış alan, off kalır)")
+		if *in.Verification == chstore.CosreVerifyEnforce {
+			return cur, fmt.Errorf("verification=enforce henüz bağlı değil (E2); off | shadow")
 		}
-		out.Verification = chstore.CosreVerifyOff
+		out.Verification = *in.Verification
 	}
 	return out, nil
 }

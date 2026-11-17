@@ -8997,7 +8997,8 @@ export interface CosreBriefingResponse {
 }
 
 /** v0.10.2324 — system_settings `cosre_conversation` (Go chstore.CosreConversation):
- *  state = konuşma durumu (A); style / verification ayrılmış, bu sürümde kapalı / off. */
+ *  state = konuşma durumu (A); style ayrılmış (kapalı); verification off | shadow
+ *  (v0.10.2327, E1 gölge doğrulayıcı, varsayılan shadow; enforce E2'ye kadar reddedilir). */
 export interface CosreConversationSettings {
   state: boolean;
   style: boolean;

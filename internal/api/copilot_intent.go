@@ -506,6 +506,7 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 		}
 		ans := map[string]any{"text": text, "suggestions": intentNoneSuggestions(ctxService)}
 		if general {
+			verifyTurnFrom(ctx).setAnswer(verifyTierGeneral, graw) // v0.10.2327 — E1 gölge: canlı veri beklenmez
 			// Model metni oylanabilir (exchangeId = sohbetin kendi alışverişi;
 			// sınıflandırma çağrısı exchange'siz kalmaya devam eder, #2).
 			ans["exchangeId"] = copilot.MetaFromContext(ctx).ExchangeID

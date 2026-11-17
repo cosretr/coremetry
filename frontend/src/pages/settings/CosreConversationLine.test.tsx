@@ -9,11 +9,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const m = vi.hoisted(() => ({
   role: 'admin' as string | undefined,
-  get: (() => Promise.resolve({ state: true, style: false, verification: 'off' })) as () => Promise<unknown>,
-  put: vi.fn((state: boolean) => Promise.resolve({ state, style: false, verification: 'off' })),
+  get: (() => Promise.resolve({ state: true, style: false, verification: 'shadow' })) as () => Promise<unknown>,
+  put: vi.fn((state: boolean) => Promise.resolve({ state, style: false, verification: 'shadow' })),
+  putVerify: vi.fn((verification: string) => Promise.resolve({ state: true, style: false, verification })),
 }));
 vi.mock('@/lib/api', () => ({
-  api: { cosreConversationSettings: () => m.get(), putCosreConversationState: (s: boolean) => m.put(s) },
+  api: {
+    cosreConversationSettings: () => m.get(),
+    putCosreConversationState: (s: boolean) => m.put(s),
+    putCosreConversationVerification: (v: string) => m.putVerify(v),
+  },
 }));
 vi.mock('@/components/AuthProvider', () => ({ useAuthRole: () => m.role }));
 
@@ -27,8 +32,8 @@ let host: HTMLDivElement | null = null;
 let root: Root | null = null;
 afterEach(() => {
   act(() => root?.unmount()); host?.remove(); host = null; root = null;
-  m.put.mockClear(); m.role = 'admin';
-  m.get = () => Promise.resolve({ state: true, style: false, verification: 'off' });
+  m.put.mockClear(); m.putVerify.mockClear(); m.role = 'admin';
+  m.get = () => Promise.resolve({ state: true, style: false, verification: 'shadow' });
 });
 const tick = () => act(async () => { await new Promise(r => setTimeout(r, 0)); });
 
@@ -42,6 +47,7 @@ async function render(): Promise<HTMLElement> {
   return host;
 }
 const box = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('[role="checkbox"]');
+const verifyBox = (el: HTMLElement) => el.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')[1];
 
 describe('CosreConversationLine', () => {
   it('sunucu değeri görünür (varsayılan açık); tık state:false yazar', async () => {
@@ -52,10 +58,28 @@ describe('CosreConversationLine', () => {
     await tick();
     expect(m.put).toHaveBeenCalledWith(false);
   });
+  it('v0.10.2327 — doğrulayıcı varsayılan gölge (açık); tık verification:off yazar', async () => {
+    const el = await render();
+    expect(el.textContent).toContain('Cevap doğrulayıcısı');
+    expect(verifyBox(el)?.getAttribute('aria-checked')).toBe('true');
+    await act(async () => { verifyBox(el)!.click(); });
+    await tick();
+    expect(m.putVerify).toHaveBeenCalledWith('off');
+    expect(m.put).not.toHaveBeenCalled();
+  });
+  it('doğrulayıcı kapalıyken tık shadow yazar (enforce hiç gönderilmez)', async () => {
+    m.get = () => Promise.resolve({ state: true, style: false, verification: 'off' });
+    const el = await render();
+    expect(verifyBox(el)?.getAttribute('aria-checked')).toBe('false');
+    await act(async () => { verifyBox(el)!.click(); });
+    await tick();
+    expect(m.putVerify).toHaveBeenCalledWith('shadow');
+  });
   it('viewer salt okunur', async () => {
     m.role = 'viewer';
     const el = await render();
     expect(box(el)?.disabled).toBe(true);
+    expect(verifyBox(el)?.disabled).toBe(true);
     expect(el.textContent).toContain('Yalnız admin');
   });
   it('okuma hatası boş değil', async () => {

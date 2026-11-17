@@ -6,11 +6,12 @@ import { api } from '@/lib/api';
 import type { CosreConversationSettings } from '@/lib/types';
 
 // v0.10.2324 (docs/cosre/conversation-audit.md §7 karar 5) — CoSRE konuşma
-// durumu anahtarı: Settings › CoSRE'de CosreBriefingLine'ın altında TEK aç/kapa
-// (operatör ekranı, yalnız Türkçe). Blob `cosre_conversation` üç alan taşır;
-// bu sürümde yalnız `state` bağlı, `style` / `verification` ayrılmış ve
-// gösterilmez. Varsayılan AÇIK (sunucu varsayılanı); kapatmak geri alma
-// anahtarıdır. Audit sunucuda (`settings.cosre_conversation.update`).
+// kalitesi anahtarları: Settings › CoSRE'de CosreBriefingLine'ın altında
+// (operatör ekranı, yalnız Türkçe). Blob `cosre_conversation` üç alan taşır:
+// `state` (A) ve v0.10.2327'den beri `verification` off | shadow (E1) bağlı;
+// `style` ayrılmış ve gösterilmez. İkisinin varsayılanı açık (sunucu
+// varsayılanı); kapatmak geri alma anahtarıdır. Audit sunucuda
+// (`settings.cosre_conversation.update`).
 const KEY = ['ai', 'cosre-conversation'] as const;
 
 export const CONVERSATION_STATE_HINT =
@@ -18,13 +19,22 @@ export const CONVERSATION_STATE_HINT =
   + '"dün", "bu sabah", "geçen hafta" gibi ifadeleri pencereye çevirir ve önerdiği sonraki adımı '
   + '"bak" / "evet" ile yürütür. Kapalıyken v2 bu özellikten önceki gibi davranır.';
 
+export const CONVERSATION_VERIFY_HINT =
+  'Gölge kip: CoSRE v2 her cevaptaki sayıları, saatleri ve servis adlarını o turda okunan veriyle '
+  + 'karşılaştırır ve yalnız sayar; cevap değişmez, gecikmez, işaretlenmez. Uyuşmayan tur kalite '
+  + 'sinyali olarak kaydedilir. Kapalıyken hiçbir denetim koşmaz.';
+
+type Change = { state: boolean } | { verification: 'off' | 'shadow' };
+
 export function CosreConversationLine() {
   const qc = useQueryClient();
   const role = useAuthRole(); // sağlayıcısız ağaç (Settings zaten admin kapılı) → düzenlenebilir
   const canEdit = role === undefined || role === 'admin';
   const q = useQuery({ queryKey: KEY, queryFn: () => api.cosreConversationSettings(), staleTime: 30_000 });
   const m = useMutation({
-    mutationFn: (state: boolean) => api.putCosreConversationState(state),
+    mutationFn: (c: Change) => ('state' in c
+      ? api.putCosreConversationState(c.state)
+      : api.putCosreConversationVerification(c.verification)),
     onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
   });
   if (q.isPending) return <div className="mb-2"><Spinner label="Konuşma durumu ayarı okunuyor…" /></div>;
@@ -35,7 +45,9 @@ export function CosreConversationLine() {
       </div>
     );
   }
-  const on = m.isPending ? m.variables === true : q.data.state;
+  const pending = m.isPending ? m.variables : undefined;
+  const on = pending && 'state' in pending ? pending.state : q.data.state;
+  const verifyOn = pending && 'verification' in pending ? pending.verification !== 'off' : q.data.verification !== 'off';
   return (
     <div className="mb-2 flex flex-wrap items-center gap-3" data-testid="cosre-conversation-line">
       <CheckboxField
@@ -43,7 +55,13 @@ export function CosreConversationLine() {
         hint={CONVERSATION_STATE_HINT}
         checked={on}
         disabled={!canEdit || m.isPending}
-        onCheckedChange={v => m.mutate(v)} />
+        onCheckedChange={v => m.mutate({ state: v })} />
+      <CheckboxField
+        label="Cevap doğrulayıcısı (gölge, yalnız ölçer)"
+        hint={CONVERSATION_VERIFY_HINT}
+        checked={verifyOn}
+        disabled={!canEdit || m.isPending}
+        onCheckedChange={v => m.mutate({ verification: v ? 'shadow' : 'off' })} />
       {!canEdit && <span className="field-hint">Yalnız admin değiştirebilir.</span>}
       {m.isPending && <Spinner label="Kaydediliyor…" />}
       {m.isError && (

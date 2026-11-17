@@ -64,6 +64,11 @@ type CosreInteraction struct {
 	// chat_turn_blocks.go compactTurnBlocks, ≤256 KiB). "" = blok yok (eski
 	// satır, eval, bütçe aşımı). Kolon iki-boot sözleşmesiyle (probe).
 	Blocks string
+	// Verify — v0.10.2327 (CoSRE E1, gölge doğrulayıcı): turun sayaçları
+	// "v1 tier=… tür=denetlenen/doğrulanan/türetilen/uyuşmayan" (≤ ~200 B);
+	// "" = doğrulama koşmadı (v1, kapalı, anlatımsız kademe). Kolon iki-boot
+	// sözleşmesiyle (probe).
+	Verify string
 }
 
 const cosreInteractionsBaseCols = `exchange_id, conversation_id, turn, created_at, user_id, user_email,
@@ -86,6 +91,9 @@ var cosreInteractionsToolsetCol atomic.Bool
 // kipinde ilk boot kolonsuz yazar, okuma hiç denenmez.
 var cosreInteractionsBlocksCol atomic.Bool
 
+// cosreInteractionsVerifyCol — v0.10.2327 verify kolonu (aynı sözleşme; yalnız INSERT).
+var cosreInteractionsVerifyCol atomic.Bool
+
 // CosreInteractionsEvidenceCol — kolon bayrağı (test/teşhis).
 func CosreInteractionsEvidenceCol() bool { return cosreInteractionsEvidenceCol.Load() }
 
@@ -95,8 +103,11 @@ func CosreInteractionsToolsetCol() bool { return cosreInteractionsToolsetCol.Loa
 // CosreInteractionsBlocksCol — v0.10.1444 kolon bayrağı (yazım + Geçmiş okuması).
 func CosreInteractionsBlocksCol() bool { return cosreInteractionsBlocksCol.Load() }
 
+// CosreInteractionsVerifyCol — v0.10.2327 kolon bayrağı (test/teşhis).
+func CosreInteractionsVerifyCol() bool { return cosreInteractionsVerifyCol.Load() }
+
 // cosreInteractionsOptionalCols — iki-boot sözleşmeli kolonlar (probe sırası).
-var cosreInteractionsOptionalCols = []string{"tool_evidence", "toolset", "blocks"}
+var cosreInteractionsOptionalCols = []string{"tool_evidence", "toolset", "blocks", "verify"}
 
 // probeCosreInteractionsColumns — INSERT hedefi cosre_interactions'ta (küme
 // kipinde Distributed) iki-boot kolonları var mı; v0.10.1302'den beri TEK
@@ -106,7 +117,7 @@ func (s *Store) probeCosreInteractionsColumns(ctx context.Context) {
 	have := map[string]bool{}
 	rows, err := s.conn.Query(ctx,
 		`SELECT name FROM system.columns
-		 WHERE database = currentDatabase() AND table = 'cosre_interactions' AND name IN ('tool_evidence', 'toolset', 'blocks')`)
+		 WHERE database = currentDatabase() AND table = 'cosre_interactions' AND name IN ('tool_evidence', 'toolset', 'blocks', 'verify')`)
 	if err == nil {
 		for rows.Next() {
 			var name string
@@ -122,6 +133,7 @@ func (s *Store) probeCosreInteractionsColumns(ctx context.Context) {
 	cosreInteractionsEvidenceCol.Store(have["tool_evidence"])
 	cosreInteractionsToolsetCol.Store(have["toolset"])
 	cosreInteractionsBlocksCol.Store(have["blocks"]) // v0.10.1444
+	cosreInteractionsVerifyCol.Store(have["verify"]) // v0.10.2327
 }
 
 // cosreInteractionCols — INSERT'in iki-boot kolon bayrakları.
@@ -129,15 +141,16 @@ type cosreInteractionCols struct {
 	Evidence bool // v0.10.1280 tool_evidence
 	Toolset  bool // v0.10.1302 toolset
 	Blocks   bool // v0.10.1444 blocks
+	Verify   bool // v0.10.2327 verify
 }
 
 func loadCosreInteractionCols() cosreInteractionCols {
 	return cosreInteractionCols{Evidence: cosreInteractionsEvidenceCol.Load(), Toolset: cosreInteractionsToolsetCol.Load(),
-		Blocks: cosreInteractionsBlocksCol.Load()}
+		Blocks: cosreInteractionsBlocksCol.Load(), Verify: cosreInteractionsVerifyCol.Load()}
 }
 
 // cosreInteractionsInsertSQL — SAF: kolon listesi bayraklara göre (sıra:
-// tool_evidence, toolset, blocks — cosreInteractionArgs ile aynı).
+// tool_evidence, toolset, blocks, verify — cosreInteractionArgs ile aynı).
 func cosreInteractionsInsertSQL(c cosreInteractionCols) string {
 	cols := cosreInteractionsBaseCols
 	if c.Evidence {
@@ -148,6 +161,9 @@ func cosreInteractionsInsertSQL(c cosreInteractionCols) string {
 	}
 	if c.Blocks {
 		cols += ", blocks"
+	}
+	if c.Verify {
+		cols += ", verify"
 	}
 	return "INSERT INTO cosre_interactions (\n\t" + cols + ")"
 }
@@ -198,6 +214,9 @@ func cosreInteractionArgs(r CosreInteraction, c cosreInteractionCols) []any {
 	}
 	if c.Blocks {
 		out = append(out, r.Blocks)
+	}
+	if c.Verify {
+		out = append(out, r.Verify)
 	}
 	return out
 }

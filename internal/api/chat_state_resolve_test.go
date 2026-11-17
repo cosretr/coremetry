@@ -233,7 +233,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if w := rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"state":false}`, auth.RoleEditor, ""); w.Code != http.StatusForbidden {
 		t.Fatalf("editor PUT %d", w.Code)
 	}
-	for _, bad := range []string{`{}`, `{"style":true}`, `{"verification":"shadow"}`, `{"verification":"x"}`, `{bozuk`} {
+	for _, bad := range []string{`{}`, `{"style":true}`, `{"verification":"enforce"}`, `{"verification":"x"}`, `{bozuk`} {
 		if w := rulesDo(mux, "PUT", "/api/ai/cosre-conversation", bad, auth.RoleAdmin, ""); w.Code != http.StatusBadRequest {
 			t.Fatalf("%s → %d", bad, w.Code)
 		}
@@ -247,7 +247,15 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	}
 	a := nextAudit(t, s)
 	if a.Action != "settings.cosre_conversation.update" || a.TargetID != chstore.CosreConversationKey ||
-		a.Details != `{"before":{"state":true,"style":false,"verification":"off"},"after":{"state":false,"style":false,"verification":"off"}}` {
+		a.Details != `{"before":{"state":true,"style":false,"verification":"shadow"},"after":{"state":false,"style":false,"verification":"shadow"}}` {
+		t.Fatalf("audit = %+v", a)
+	}
+	// v0.10.2327 — verification bağlı: off (kill switch) ↔ shadow; state korunur.
+	w = rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"verification":"off"}`, auth.RoleAdmin, "")
+	if w.Code != http.StatusOK || chstore.CurrentCosreConversation().Verification != chstore.CosreVerifyOff || chstore.CurrentCosreConversation().State {
+		t.Fatalf("verification off PUT %d: %s", w.Code, w.Body)
+	}
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":false,"verification":"off"}`) {
 		t.Fatalf("audit = %+v", a)
 	}
 }

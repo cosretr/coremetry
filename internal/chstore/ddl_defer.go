@@ -167,7 +167,7 @@ func (s *Store) reprobePromotedAttrs() {
 		if !AIFeedbackCallCols() { // v0.10.1280
 			s.probeAIFeedbackCallColumns(ctx)
 		}
-		if !CosreInteractionsEvidenceCol() || !CosreInteractionsToolsetCol() || !CosreInteractionsBlocksCol() { // v0.10.1280; v0.10.1302 + toolset; v0.10.1444 + blocks
+		if !CosreInteractionsEvidenceCol() || !CosreInteractionsToolsetCol() || !CosreInteractionsBlocksCol() || !CosreInteractionsVerifyCol() { // v0.10.1280; v0.10.1302 + toolset; v0.10.1444 + blocks; v0.10.2327 + verify
 			s.probeCosreInteractionsColumns(ctx)
 		}
 		// v0.10.1049 — anomaly_events bölüm kolonları (episode_count,

@@ -91,6 +91,10 @@ type chatExchange struct {
 	// son cevabın answer.explain.code künyesi (son cevap kazanır).
 	blockCap *turnBlockCapture
 	code     *codeContextPayload
+
+	// verify — v0.10.2327 (E1, answer_verify_turn.go): doğrulayıcı toplayıcısı;
+	// nil = kapalı (v1 ya da verification=off). Kurulumdan sonra değişmez.
+	verify *answerVerifyTurn
 }
 
 // setBlockCapture — v0.10.1444: copilotChat'in yakalayıcısını bağlar.
@@ -544,11 +548,16 @@ func (s *Server) recordChatExchange(ctx context.Context, x *chatExchange, cs *ch
 	x.mu.Unlock()
 	status, msg := chatExchangeOutcome(tierErr, emittedErr, answer != "", ctx.Err())
 	status = chatExchangeStatusWithOutcome(status, outcome)
+	vo, verified := x.verify.finish() // v0.10.2327 — E1 gölge: akış bitti, yalnız sayılır
 	if evm := chatEvalModeFrom(ctx); evm != nil {
 		// v0.10.1316 — ajan kipi evalset vakası: etkileşim satırı (cosre-turn)
 		// ve cosre_interactions YOK; sonuç değerlendirme koşucusuna.
 		if evm.Sink != nil {
-			evm.Sink(evalOutcomeFromExchange(x, tier, status, msg))
+			o := evalOutcomeFromExchange(x, tier, status, msg)
+			if verified {
+				o.Verify = &vo.Result
+			}
+			evm.Sink(o)
 		}
 		return
 	}
@@ -557,7 +566,12 @@ func (s *Server) recordChatExchange(ctx context.Context, x *chatExchange, cs *ch
 	m.ExchangeID = aisurface.TurnExchangeID(x.root)
 	m.Observe, m.Shield, m.PromptLogOverride = nil, nil, ""
 	s.copilot.RecordExchange(copilot.WithMeta(ctx, m), x.started, status, msg, x.question, answer)
-	s.enqueueCosreInteraction(buildCosreInteraction(x, tier, m, status, msg, time.Now()))
+	row := buildCosreInteraction(x, tier, m, status, msg, time.Now())
+	if verified {
+		row.Verify = vo.Compact
+		s.writeSystemSignals(ctx, x.root, verifySignals(x.root, vo.Result, vo.Truncated))
+	}
+	s.enqueueCosreInteraction(row)
 }
 
 // buildCosreInteraction — SAF (x kilidi altında okur): turun etkileşim satırı.

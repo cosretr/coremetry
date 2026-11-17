@@ -2531,6 +2531,7 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		emit("error", map[string]string{"error": exErr.Error()})
 		return true, false
 	}
+	noteGuidedNarration(ctx, string(route.Intent), raw, evidence+cosreRulesDataSuffix(rulesBlock), explain, facts, from, to, rangeS) // v0.10.2327 — E1 gölge + defter
 	// Deterministic provenance footer — appended server-side, never
 	// trusted to the model.
 	// exchangeId (v0.8.399): the id the chat handler minted rides in

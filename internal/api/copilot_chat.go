@@ -365,6 +365,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	xch.setInteraction(req.Context.Conversation, chatUserTurns(req.Messages), req.Context.Attempt,
 		agentctx.Sanitize(req.Context.Page), req.Context.Service, req.Context.Trace) // Faz 1 — cosre_interactions
 	xch.setBlockCapture(blockCap) // v0.10.1444
+	// v0.10.2327 — E1 gölge doğrulayıcı (answer_verify_turn.go); kapalıyken nil.
+	xch.verify = s.newAnswerVerifyTurn(r.Context(), &req)
 	ctx = withChatExchange(ctx, xch)
 	ctx = copilot.WithCallSink(ctx, xch.noteModelCall)
 	emit = xch.tap(emit)
@@ -425,7 +427,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	if !apCont.on {
 		stt = s.beginChatStateTurn(ctx, &req, cst, emit)
 		emit = stt.wrapEmit(emit)
+		ctx = withChatStateTurn(ctx, stt) // v0.10.2327 — guided olguları deftere
 	}
+	xch.verify.noteState(cst) // v0.10.2327 — durum adları + önceki defter (istemci yankısı hariç)
 	// v0.10.1465 — yapışkan kod konuşması (chat_code_sticky.go): kod okunmuş
 	// konuşmanın HER turu her kademeden önce yerel profile sabitlenir; yerel
 	// profil yoksa dürüst kapalı cevap, sağlayıcı çağrısı yok.
@@ -436,6 +440,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		return
 	}
 	anchorTo, anchored := chatAnchorTime(req.Context.ToMs, time.Now())
+	xch.verify.addWindow(anchorTo.Add(-time.Duration(req.Context.RangeS)*time.Second), anchorTo, int64(req.Context.RangeS)) // v0.10.2327
 	if anchored {
 		// Çıpa sessizce uygulanmamalı: operatör cevabın GEÇMİŞ bir
 		// pencereden geldiğini görebilmeli.
@@ -1169,10 +1174,13 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				copilot.ChatRoundCapAddendum(), copilot.ChatDegenRetryAddendum(), v2p.Addendum)...)
 		}
 		ctx = withV2LoopPlan(ctx, v2p)
+		xch.verify.addText(v2p.Addendum) // v0.10.2327 — kapsam eki (takım servisleri) kanıta
 	}
 	if line := stt.promptLine(); line != "" { // v0.10.2324 — durum bloğunun yankısı da süzülür
 		echoPhrases = append(echoPhrases, chatEchoPhrases(line)...)
 	}
+	xch.verify.addLoopContext(cst, []string{screenContextPreambleTR(screenCtx), agentctx.PreambleTR(pageCtx, pinnedCtx), // v0.10.2327 — döngü önsözleri kanıta
+		cosreRulesLoopPromptTR(rulesBlock), traceFollowUpPromptTR(traceFU, "")}, chatContextPreambleFor(ctx, cst.ctx), stt.promptLine())
 	if isTraceFollowUp {
 		// v0.10.948 — sayı denetiminin tohumu: açıklamasız AKTİF BAĞLAM + ekran ve
 		// sayfa önsözleri + operatör turları. Önceki açıklama YOK (ilk cevabın sayı uyarısı
@@ -1393,6 +1401,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// v0.10.1297 — model metnindeki uydurma host / araç yankısı süzgeci (chat_answer_links.go).
 			// v0.10.1324 — yineleme/yankı süzgeci + düşüş, sanitizeAnswerLinks'ten ÖNCE.
 			answerText := finalAnswerText(turn, loopPrompt, round)
+			xch.verify.noteLoopAnswer(answerText, conv)                                                                                                     // v0.10.2327 — gölge: yalnız kayıt
 			srcNote, srcStep := splitSourceNoteV2(loopSourceNoteTR(fuHadExplain, opPre.seededTools(), calledTools, executedN+skippedN), cosreV2Marked(ctx)) // v0.10.2213
 			if srcStep != "" {
 				emit("step", map[string]string{"label": srcStep}) // araçsız etiket adımı (pencere çıpası emsali)
@@ -1506,6 +1515,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			toolDur := oc.Duration
 			executedN++
 			stt.noteTool(tc.Name, cargs, oc.Content, oc.IsError) // v0.10.2324 — döngü durumu kendisi yazar
+			if !oc.IsError {
+				xch.verify.addTool(tc.Name, cargs, oc.Content) // v0.10.2327 — TAM çıktı (kırpılmamış)
+			}
 			if isTraceFollowUp {
 				// v0.10.948 — sayı denetiminin kanıtı: YALNIZ yürüyen çağrı, argümanı
 				// ve TAM çıktısı (modele giden kırpık kopya değil).
@@ -1779,6 +1791,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				// v0.10.948 — iki çıkış tek sözleşme: sayı denetimi ve takip künyesi burada da.
 				// v0.10.1324 — iki çıkış tek sözleşme: süzgeç + düşüş burada da (tavan prompt'uyla).
 				answerText := finalAnswerText(turn2, capPrompt, round)
+				xch.verify.noteLoopAnswer(answerText, conv)                                                                                                     // v0.10.2327
 				srcNote, srcStep := splitSourceNoteV2(loopSourceNoteTR(fuHadExplain, opPre.seededTools(), calledTools, executedN+skippedN), cosreV2Marked(ctx)) // v0.10.2213
 				if srcStep != "" {
 					emit("step", map[string]string{"label": srcStep})

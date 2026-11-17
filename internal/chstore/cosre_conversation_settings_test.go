@@ -8,11 +8,12 @@ func TestParseCosreConversation(t *testing.T) {
 		ok, state bool
 		verify    string
 	}{
-		{"", true, true, CosreVerifyOff},
-		{`{}`, true, true, CosreVerifyOff},
-		{`{"state":false}`, true, false, CosreVerifyOff},
+		{"", true, true, CosreVerifyShadow},
+		{`{}`, true, true, CosreVerifyShadow},
+		{`{"state":false}`, true, false, CosreVerifyShadow},
+		{`{"verification":"off"}`, true, true, CosreVerifyOff},
 		{`{"state":true,"verification":"shadow"}`, true, true, CosreVerifyShadow},
-		{`{"verification":"loud"}`, true, true, CosreVerifyOff},
+		{`{"verification":"loud"}`, true, true, CosreVerifyShadow},
 		{`{bozuk`, false, false, ""},
 	}
 	for _, c := range cases {
@@ -30,7 +31,7 @@ func TestParseCosreConversation(t *testing.T) {
 }
 
 func TestCosreConversationDefaultStateOn(t *testing.T) {
-	if d := DefaultCosreConversation(); !d.State || d.Style || d.Verification != CosreVerifyOff {
+	if d := DefaultCosreConversation(); !d.State || d.Style || d.Verification != CosreVerifyShadow {
 		t.Fatalf("varsayılan %+v", d)
 	}
 }

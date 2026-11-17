@@ -71,10 +71,16 @@ const (
 	// alışverişi> line=<n> item=<kalem> matched=0|1" — sohbetin kendi
 	// sinyalleri (👍/👎, link) alışveriş kimliğiyle o satıra bağlanır.
 	SigBriefingAsk = "briefing_ask"
+	// SigVerifyMismatch — v0.10.2327 (conversation-audit E1, gölge): cevap
+	// doğrulayıcısı turun anlatımında kanıtta bulunmayan en az bir sayı / saat /
+	// tarih / ad saydı. Tur başına en çok bir satır; ayrıntı "tier=… kinds=…
+	// tokens=…" (cevap metni yok). Cevap DEĞİŞMEZ; yalnız ölçüm (E2 eşiği).
+	SigVerifyMismatch = "verify_mismatch"
 )
 
 // SystemSignalKinds — sunucunun yazabileceği kapalı küme.
-var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrected: true, SigBriefingAsk: true}
+var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrected: true, SigBriefingAsk: true,
+	SigVerifyMismatch: true} // v0.10.2327
 
 // SystemSignalActor — sistem sinyallerinin user_email değeri (kullanıcı değil).
 const SystemSignalActor = "system:cosre"

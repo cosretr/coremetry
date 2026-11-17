@@ -4,15 +4,17 @@ package chstore
 // §7 karar 5, seçenek b): CoSRE konuşma kalitesi programının TEK ayar blobu,
 // system_settings `cosre_conversation`:
 //
-//	{"state":true,"style":false,"verification":"off","updatedBy":"…","updatedAt":"…"}
+//	{"state":true,"style":false,"verification":"shadow","updatedBy":"…","updatedAt":"…"}
 //
 //   - state — A/G dilimleri (konuşma durumu: çözücü, döngünün kendi yazdığı
 //     bağlam, data-state). Varsayılan AÇIK (operatör davranışı istedi; anahtar
 //     geri alma anahtarıdır). Blob yok ya da alan yok = açık; yalnız açık false
 //     kapatır.
 //   - style — B/C/D/F1 için AYRILMIŞ, kapalı; bu sürümde hiçbir yol okumaz.
-//   - verification — E için AYRILMIŞ: off | shadow | enforce, varsayılan off;
-//     bu sürümde hiçbir yol okumaz.
+//   - verification — E dilimi: off | shadow | enforce. v0.10.2327 (E1) gölge
+//     kipi bağlı ve VARSAYILAN shadow: cevap doğrulayıcısı yalnız sayar,
+//     kullanıcıya görünen hiçbir şey değişmez; off kill switch'tir. enforce
+//     E2'ye kadar PUT'ta reddedilir (okunursa gölge gibi davranır).
 //
 // Her şey ayrıca `cosre_v2` bayrağının arkasındadır (genel kapı). Şablon
 // ai_general_questions.go: boot'ta yükle + 30 s cfgRefresh, süreç-içi atomic;
@@ -46,10 +48,10 @@ type CosreConversation struct {
 	UpdatedAt    time.Time `json:"updatedAt,omitzero"`
 }
 
-// DefaultCosreConversation — blob yokken geçerli ayar: durum AÇIK, ayrılmış
-// iki alan kapalı.
+// DefaultCosreConversation — blob yokken geçerli ayar: durum AÇIK, üslup
+// kapalı, doğrulama gölge (v0.10.2327).
 func DefaultCosreConversation() CosreConversation {
-	return CosreConversation{State: true, Verification: CosreVerifyOff}
+	return CosreConversation{State: true, Verification: CosreVerifyShadow}
 }
 
 // ValidCosreVerification — SAF: kapalı küme.
@@ -71,13 +73,14 @@ func CurrentCosreConversation() CosreConversation {
 func SetCosreConversation(c CosreConversation) {
 	c.UpdatedBy = strings.TrimSpace(c.UpdatedBy)
 	if !ValidCosreVerification(c.Verification) {
-		c.Verification = CosreVerifyOff
+		c.Verification = CosreVerifyShadow
 	}
 	cosreConversationCur.Store(&c)
 }
 
 // parseCosreConversation — SAF: boş blob varsayılan; "state" alanı olmayan
-// blob da açık. Bozuk blob ok=false; bilinmeyen doğrulama kipi off.
+// blob da açık. Bozuk blob ok=false; bilinmeyen ya da boş doğrulama kipi
+// varsayılan (shadow; v0.10.2327).
 func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 	if len(raw) == 0 {
 		return DefaultCosreConversation(), true

@@ -290,6 +290,36 @@ func (t *chatStateTurn) noteTool(name string, args json.RawMessage, content stri
 	}
 }
 
+// noteFacts — v0.10.2327 (E1): kademenin sunucu olguları (guided özet sayıları)
+// deftere; döngü olgularıyla aynı tavan.
+func (t *chatStateTurn) noteFacts(facts []chatFact) {
+	if t == nil {
+		return
+	}
+	for _, f := range facts {
+		if len(t.facts) >= chatLedgerMax {
+			break
+		}
+		t.facts = append(t.facts, f)
+	}
+}
+
+type chatStateTurnKey struct{}
+
+// withChatStateTurn — v0.10.2327: turun durum işlemi ctx'e (guided kademesi defter yazar); nil → ctx aynen.
+func withChatStateTurn(ctx context.Context, t *chatStateTurn) context.Context {
+	if t == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, chatStateTurnKey{}, t)
+}
+
+// stateTurnFrom — ctx'teki durum işlemi (kapalıyken nil; yöntemler nil-güvenli).
+func stateTurnFrom(ctx context.Context) *chatStateTurn {
+	t, _ := ctx.Value(chatStateTurnKey{}).(*chatStateTurn)
+	return t
+}
+
 func containsFold(list []string, v string) bool {
 	for _, s := range list {
 		if strings.EqualFold(s, v) {

@@ -4676,6 +4676,10 @@ func (s *Store) migrate(ctx context.Context) error {
 		// Aynı iki-boot sözleşmesi (probeCosreInteractionsColumns). Geri alma:
 		// DROP COLUMN (okuyucu bayrağa bağlı).
 		`ALTER TABLE cosre_interactions ADD COLUMN IF NOT EXISTS blocks String DEFAULT '' CODEC(ZSTD(3))`,
+		// v0.10.2327 — CoSRE E1 gölge doğrulayıcı: turun sayaçları (kısa dizge,
+		// ≤ ~200 B; "" = koşmadı). Append-only MergeTree; aynı iki-boot sözleşmesi
+		// (probeCosreInteractionsColumns). Geri alma: DROP COLUMN.
+		`ALTER TABLE cosre_interactions ADD COLUMN IF NOT EXISTS verify String DEFAULT ''`,
 		// v0.8.20 — drop the dead topology-mute setting. The
 		// "Mute on topology" chip was removed from the service detail
 		// page in v0.8.19; this migration removes the now-orphaned
