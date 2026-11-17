@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AIExchange } from '@/lib/types';
 import {
   NO_LLM_LABEL, exchangeCallsSummary, exchangeFeedbackLabel, exchangeModelLabel, exchangeTokensKey,
-  exchangeTierLabel, exchangeTokensLabel, exchangeUsedLLM, exchangeLoopRounds, fmtTokenK,
+  exchangeTierLabel, exchangeTokensLabel, exchangeUsedLLM, exchangeLoopRounds, exchangeLoopTiming, fmtTokenK,
   AI_EXCHANGES_QUERY_FIELDS, aiExchangesQueryKey, aiExchangesRequestParams,
   exchangeConversationHref, exchangeFeedbackCounts, exchangeStatusBadge,
   parseExchangeFeedbackFilter, type AIExchangesQueryParams,
@@ -79,6 +79,28 @@ describe('exchangeView', () => {
     const intent: AIExchange = { ...old, tier: 'intent', calls: [{ ...call, modelRounds: 3, peakInputTokens: 34100 }] };
     expect(exchangeCallsSummary(intent)).toBe('1 model çağrısı');
     expect(fmtTokenK(950)).toBe('950');
+  });
+
+  it('v0.10.2318 — döngü süreleri satırı: bilinen değerler tek satırda', () => {
+    const call = { id: '1', createdAt: 1, surface: 'chat', provider: 'openai', model: 'gemma4', durationMs: 1, inputTokens: 9000, outputTokens: 400, status: 'ok', llm: true, modelRounds: 3, peakInputTokens: 3400 };
+    const ex: AIExchange = {
+      ...base, tier: 'loop', llmCalls: 1, models: ['gemma4'],
+      calls: [{ ...call, ttftMs: 2100, loopModelMs: 9400, loopToolMs: 1800, loopToolCalls: 4, loopMaxRoundToolCalls: 2 }],
+    };
+    expect(exchangeLoopTiming(ex)).toBe('ilk token 2.1 sn · model 9.4 sn · araç 1.8 sn · 4 araç çağrısı (bir turda en çok 2)');
+    // Bilinmeyen parça yazılmaz (buffered uç: TTFT 0; araçsız tur).
+    const partial: AIExchange = { ...ex, calls: [{ ...call, loopModelMs: 3200 }] };
+    expect(exchangeLoopTiming(partial)).toBe('model 3.2 sn');
+  });
+
+  it('v0.10.2318 — döngü süreleri bilinmiyorsa satır yok (eski satır, 0, döngü dışı kademe)', () => {
+    const call = { id: '1', createdAt: 1, surface: 'chat', provider: 'openai', model: 'gemma4', durationMs: 1, inputTokens: 9000, outputTokens: 400, status: 'ok', llm: true };
+    const old: AIExchange = { ...base, tier: 'loop', llmCalls: 1, models: ['gemma4'], calls: [call] };
+    expect(exchangeLoopTiming(old)).toBeNull();
+    const zero: AIExchange = { ...old, calls: [{ ...call, modelRounds: 3, ttftMs: 0, loopModelMs: 0, loopToolMs: 0, loopToolCalls: 0, loopMaxRoundToolCalls: 0 }] };
+    expect(exchangeLoopTiming(zero)).toBeNull();
+    const intent: AIExchange = { ...old, tier: 'intent', calls: [{ ...call, modelRounds: 3, ttftMs: 900, loopModelMs: 900 }] };
+    expect(exchangeLoopTiming(intent)).toBeNull();
   });
 
   it('kademe + rota etiketi; bilinmeyen kademe adıyla kalır', () => {

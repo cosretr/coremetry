@@ -2589,6 +2589,11 @@ func (r aiCallRecorder) RecordCall(ctx context.Context, c copilot.CallRecord) {
 		// v0.10.2297 — serbest döngü: tur sayısı + en büyük tek prompt (0 = bilinmiyor)
 		ModelRounds:     c.ModelRounds,
 		PeakInputTokens: c.PeakInputTokens,
+		// v0.10.2318 — döngü kırılımı (0 = bilinmiyor)
+		LoopModelMs:           c.LoopModelMs,
+		LoopToolMs:            c.LoopToolMs,
+		LoopToolCalls:         c.LoopToolCalls,
+		LoopMaxRoundToolCalls: c.LoopMaxRoundToolCalls,
 	}
 	if err := r.store.InsertAICall(ctx, row); err != nil {
 		log.Printf("[ai-obs] insert call: %v", err)

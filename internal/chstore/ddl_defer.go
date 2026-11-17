@@ -158,6 +158,9 @@ func (s *Store) reprobePromotedAttrs() {
 		if !AICallsRoundsCol() { // v0.10.2297
 			s.probeAICallsRoundsColumns(ctx)
 		}
+		if !AICallsTimingCol() { // v0.10.2318
+			s.probeAICallsTimingColumns(ctx)
+		}
 		if !AIFeedbackCallCols() { // v0.10.1280
 			s.probeAIFeedbackCallColumns(ctx)
 		}

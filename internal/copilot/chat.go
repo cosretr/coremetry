@@ -65,6 +65,10 @@ type ChatTurn struct {
 	// RawContent — Anthropic asistan turunun ham content'i; döngü onu
 	// ChatMessage.RawContent olarak geri besler (thinking blokları imzalı kalır).
 	RawContent json.RawMessage
+	// TTFTMs — v0.10.2318: akan turun ilk metin parçasına dek geçen süre
+	// (streamStats, StreamText'in TTFT ölçüsü). Buffered yolda (düşüş,
+	// bilinen-desteklemez uç, github) 0 = bilinmiyor.
+	TTFTMs uint32
 }
 
 type noToolCallsKey struct{}
@@ -179,6 +183,12 @@ func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, out
 		// v0.10.2297 — 0 = bilinmiyor (döngü dışı satır ya da eski kayıt)
 		ModelRounds:     lu.Rounds,
 		PeakInputTokens: lu.PeakInputTokens,
+		// v0.10.2318 — cevap turunun TTFT'si mevcut ttft_ms'e; döngü kırılımı (0 = bilinmiyor)
+		TTFTMs:                lu.AnswerTTFTMs,
+		LoopModelMs:           lu.ModelMs,
+		LoopToolMs:            lu.ToolMs,
+		LoopToolCalls:         lu.ToolCalls,
+		LoopMaxRoundToolCalls: lu.MaxRoundToolCalls,
 	}
 	if status == "error" {
 		rec.ErrorMsg = truncErr(errMsg)

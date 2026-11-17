@@ -47,6 +47,13 @@ type AIExchangeCall struct {
 	// büyük tek tur giriş token'ı (AICall aynı adlı alanlar); 0 = bilinmiyor.
 	ModelRounds     uint16 `json:"modelRounds,omitempty"`
 	PeakInputTokens uint32 `json:"peakInputTokens,omitempty"`
+	// v0.10.2318 — döngü satırının cevap turu TTFT'si, toplam model/araç
+	// süresi ve araç çağrısı sayıları (AICall aynı adlı alanlar); 0 = bilinmiyor.
+	TTFTMs                uint32 `json:"ttftMs,omitempty"`
+	LoopModelMs           uint32 `json:"loopModelMs,omitempty"`
+	LoopToolMs            uint32 `json:"loopToolMs,omitempty"`
+	LoopToolCalls         uint16 `json:"loopToolCalls,omitempty"`
+	LoopMaxRoundToolCalls uint16 `json:"loopMaxRoundToolCalls,omitempty"`
 }
 
 // AIExchange — bir CoSRE kullanıcı turu.
@@ -327,10 +334,14 @@ func aiExchangeUsersArgs(from, to time.Time, q string, limit int) []any {
 // aiExchangeCallsSQL — SAF: verilen köklerin model çağrıları. Üretim kaynak
 // koşulu (evalset ve etkileşim satırları dışarıda). Bind: from, to, roots, limit.
 // v0.10.2297 — rounds: model_rounds + peak_input_tokens yalnız kolonlar varken.
-func aiExchangeCallsSQL(rounds bool) string {
+// v0.10.2318 — timing: ttft_ms + döngü süre kolonları aynı kuralla.
+func aiExchangeCallsSQL(rounds, timing bool) string {
 	cols := ``
 	if rounds {
 		cols = `, model_rounds, peak_input_tokens`
+	}
+	if timing {
+		cols += `, ` + aiCallsTimingSel
 	}
 	return `SELECT ` + aiExchangeRootExpr + `, id, toUnixTimestamp64Nano(created_at), surface,
 		       provider, model, duration_ms, input_tokens, output_tokens, status` + cols + `
@@ -505,8 +516,8 @@ func (s *Store) ListAIExchanges(ctx context.Context, p ListAIExchangesParams) ([
 	}
 	cFrom, cTo := aiExchangeCallWindow(turns)
 	var calls []aiExchangeChild
-	rounds := aiCallsRoundsCol.Load() // v0.10.2297
-	cRows, err := s.conn.Query(ctx, aiExchangeCallsSQL(rounds), chDateTime64Arg(cFrom), chDateTime64Arg(cTo),
+	rounds, timing := aiCallsRoundsCol.Load(), aiCallsTimingCol.Load() // v0.10.2297; v0.10.2318
+	cRows, err := s.conn.Query(ctx, aiExchangeCallsSQL(rounds, timing), chDateTime64Arg(cFrom), chDateTime64Arg(cTo),
 		roots, len(roots)*aiExchangeCallsPerTurn)
 	if err != nil {
 		return nil, err
@@ -517,6 +528,9 @@ func (s *Store) ListAIExchanges(ctx context.Context, p ListAIExchangesParams) ([
 			&c.Call.Model, &c.Call.DurationMs, &c.Call.InputTokens, &c.Call.OutputTokens, &c.Call.Status}
 		if rounds {
 			dest = append(dest, &c.Call.ModelRounds, &c.Call.PeakInputTokens)
+		}
+		if timing {
+			dest = append(dest, &c.Call.TTFTMs, &c.Call.LoopModelMs, &c.Call.LoopToolMs, &c.Call.LoopToolCalls, &c.Call.LoopMaxRoundToolCalls)
 		}
 		if err := cRows.Scan(dest...); err != nil {
 			cRows.Close()

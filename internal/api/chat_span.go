@@ -24,6 +24,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -44,6 +45,27 @@ type chatSpan struct {
 	cached uint32 // v0.10.807
 	out    uint32
 	err    error
+	// v0.10.2318 — turların ve yürüyen araçların toplam süresi; span'ın
+	// açılış/kapanış noktalarında ölçülür (ai_calls loop_model_ms / loop_tool_ms).
+	modelDur time.Duration
+	toolDur  time.Duration
+}
+
+// withLoopTimes — döngü satırına model / araç süre toplamı (ms, uint32 tavanlı).
+func (c *chatSpan) withLoopTimes(lu copilot.LoopUsage) copilot.LoopUsage {
+	lu.ModelMs, lu.ToolMs = durMsU32(c.modelDur), durMsU32(c.toolDur)
+	return lu
+}
+
+func durMsU32(d time.Duration) uint32 {
+	ms := d.Milliseconds()
+	switch {
+	case ms <= 0:
+		return 0
+	case ms > int64(^uint32(0)):
+		return ^uint32(0)
+	}
+	return uint32(ms)
 }
 
 // beginChatSpan — alışverişin kök span'ı. Dönen ctx'i KULLAN: kademeler,
@@ -107,7 +129,9 @@ func (c *chatSpan) turn(ctx context.Context, round int, retry bool) (context.Con
 			attribute.Int("coremetry.ai.turn.round", round),
 			attribute.Bool("coremetry.ai.turn.retry", retry),
 		))
+	t0 := time.Now()
 	return ctx, func(in, out, cached uint32, err error) {
+		c.modelDur += time.Since(t0) // v0.10.2318
 		span.SetAttributes(
 			attribute.Int("gen_ai.usage.input_tokens", int(in)),
 			attribute.Int("gen_ai.usage.output_tokens", int(out)),
@@ -137,7 +161,9 @@ func (c *chatSpan) tool(ctx context.Context, name string, external bool) (contex
 			attribute.String("coremetry.ai.tool.name", name),
 			attribute.String("coremetry.ai.tool.origin", origin),
 		))
+	t0 := time.Now()
 	return ctx, func(bytes int, isErr bool) {
+		c.toolDur += time.Since(t0) // v0.10.2318
 		span.SetAttributes(
 			attribute.Int("coremetry.ai.tool.bytes", bytes),
 			attribute.Bool("coremetry.ai.tool.ok", !isErr),

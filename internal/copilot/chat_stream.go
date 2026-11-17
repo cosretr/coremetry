@@ -3,6 +3,7 @@ package copilot
 import (
 	"context"
 	"errors"
+	"time"
 
 	aiprov "github.com/cilcenk/coremetry/internal/ai/provider"
 )
@@ -45,15 +46,34 @@ func (s *Service) ChatWithToolsStream(ctx context.Context, system string, msgs [
 	if onDelta == nil {
 		onDelta = func(TextDelta) {}
 	}
+	// v0.10.2318 — ilk token damgası (StreamText'in streamStats'ı): ilk metinli
+	// delta. Buffered yolda metin tek delta olarak SONDA gelir → düşüş işaretli,
+	// TTFT 0 (bilinmiyor) kalır.
+	st := &streamStats{started: time.Now()}
+	ctx = withStreamStats(ctx, st)
+	inner := onDelta
+	onDelta = func(d TextDelta) {
+		if d.Text != "" {
+			st.markFirst()
+		}
+		inner(d)
+	}
+	var turn ChatTurn
+	var err error
 	provider, _, _ := s.profileIdentity(ctx)
 	switch provider {
 	case ProviderOpenAI:
-		return s.streamToolsOpenAI(ctx, system, msgs, tools, onDelta)
+		turn, err = s.streamToolsOpenAI(ctx, system, msgs, tools, onDelta)
 	case ProviderGitHub:
-		return bufferedTurnAsDelta(s.chatGitHubWithTools(ctx, system, msgs, tools))(onDelta)
+		markStreamFallback(ctx)
+		turn, err = bufferedTurnAsDelta(s.chatGitHubWithTools(ctx, system, msgs, tools))(onDelta)
 	default:
-		return s.streamToolsAnthropic(ctx, system, msgs, tools, onDelta)
+		turn, err = s.streamToolsAnthropic(ctx, system, msgs, tools, onDelta)
 	}
+	if !st.fallbackSet() {
+		turn.TTFTMs = st.ttftMs()
+	}
+	return turn, err
 }
 
 // bufferedTurnAsDelta — akmayan yolun sonucu: final turda metin tek delta.
@@ -77,11 +97,13 @@ func (s *Service) streamToolsOpenAI(ctx context.Context, system string, msgs []C
 	creq := chatRequest(ctx, req, system, msgs, tools)
 	key := ProviderOpenAI + toolsVerdictSuffix
 	if s.streamKnownUnsupported(key, base, model) {
+		markStreamFallback(ctx) // v0.10.2318 — TTFT bilinmiyor
 		return bufferedTurnAsDelta(s.chatOpenAIWithTools(ctx, system, msgs, tools))(onDelta)
 	}
 	resp, err := aiprov.StreamOpenAITools(ctx, cfg, creq, onDelta)
 	var fe *aiprov.StreamFallbackError
 	if errors.As(err, &fe) {
+		markStreamFallback(ctx)
 		turn, ferr := streamFallbackPolicy(s, fe, key, base, model,
 			func(b []byte) (ChatTurn, error) {
 				r, e := aiprov.ParseOpenAIToolsOneShot(b, creq)
@@ -101,11 +123,13 @@ func (s *Service) streamToolsAnthropic(ctx context.Context, system string, msgs 
 	creq := chatRequest(ctx, req, system, msgs, tools)
 	key := ProviderAnthropic + toolsVerdictSuffix
 	if s.streamKnownUnsupported(key, "", model) {
+		markStreamFallback(ctx) // v0.10.2318 — TTFT bilinmiyor
 		return bufferedTurnAsDelta(s.chatAnthropicWithTools(ctx, system, msgs, tools))(onDelta)
 	}
 	resp, err := aiprov.StreamAnthropicTools(ctx, cfg, creq, onDelta)
 	var fe *aiprov.StreamFallbackError
 	if errors.As(err, &fe) {
+		markStreamFallback(ctx)
 		turn, ferr := streamFallbackPolicy(s, fe, key, "", model,
 			func(b []byte) (ChatTurn, error) {
 				r, e := aiprov.ParseAnthropicToolsOneShot(b)

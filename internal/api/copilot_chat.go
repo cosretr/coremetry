@@ -1243,6 +1243,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// error_msg'ine yazılır, status ok kalır (degradedReason).
 	var degradedReason string
 	finalAnswerText := func(turn copilot.ChatTurn, prompt string, round int) string {
+		loopRounds.answer(turn.TTFTMs) // v0.10.2318 — cevap turunun ilk token'ı
 		ca := cleanChatAnswer(turn.Text, echoPhrases)
 		hadEvidence := len(calledTools) > 0 || opPre != nil
 		v := chatDegenDecide(turn.Degenerated || ca.Repeated, ca.Dropped, ca.Text, hadEvidence, dm.On, false)
@@ -1263,6 +1264,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			if rerr == nil {
 				rca := cleanChatAnswer(rt.Text, echoPhrases)
 				if chatDegenDecide(rt.Degenerated || rca.Repeated, rca.Dropped, rca.Text, hadEvidence, dm.On, true) == degenUsable {
+					loopRounds.answer(rt.TTFTMs) // v0.10.2318 — cevabı yeniden deneme verdi
 					degradedReason = chatDegenReasonRetry
 					return rca.Text
 				}
@@ -1320,6 +1322,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		}
 		totalIn += turn.InputTokens
 		loopRounds.add(turn.InputTokens)
+		loopRounds.addCalls(len(turn.ToolCalls)) // v0.10.2318
 		totalCached += turn.CachedTokens
 		totalOut += turn.OutputTokens
 		// v0.10.26 — BAĞLAM TAŞMASI. isContextOverflowErr yazılı ve
@@ -1788,7 +1791,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// eklenir (explain yolunun sözleşmesi); okunmadıysa bayt bayt eski örnek.
 	// v0.10.2134 (router boşlukları D1) — ön-getirme / rota planı tohumlu döngü
 	// "chat-prefetch" yazar (boşluk sayılmaz); profil sabit, yalnız etiket.
-	s.copilot.RecordUsage(copilot.WithLoopUsage(copilot.WithCallID(s.loopRecordCtx(ctx, opPre != nil || rtPlan != nil), loopCallID), loopRounds.usage()), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
+	s.copilot.RecordUsage(copilot.WithLoopUsage(copilot.WithCallID(s.loopRecordCtx(ctx, opPre != nil || rtPlan != nil), loopCallID), cspan.withLoopTimes(loopRounds.usage())), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
 
 	if exitReason == stopNone {
 		exitReason = stopRoundCap // savunma: döngü break'siz yalnız turlar bitince biter

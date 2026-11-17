@@ -18,6 +18,15 @@ type loopUsageKey struct{}
 type LoopUsage struct {
 	Rounds          uint16
 	PeakInputTokens uint32
+	// v0.10.2318 — cevap turunun ilk token'ı (ttft_ms kolonuna yazılır),
+	// turların / yürüyen araçların toplam süresi (ai.chat.turn / ai.tool span
+	// sınırları), modelin istediği araç çağrısı ve tek turdaki en çok çağrı.
+	// 0 = bilinmiyor.
+	AnswerTTFTMs      uint32
+	ModelMs           uint32
+	ToolMs            uint32
+	ToolCalls         uint16
+	MaxRoundToolCalls uint16
 }
 
 // WithLoopUsage — sonraki RecordUsage'ın satırına tur bilgisini bağlar.

@@ -22,7 +22,7 @@ import {
 import {
   NO_LLM_LABEL, EXCHANGE_FEEDBACK_FILTERS, EXCHANGE_TIER_OPTIONS, EXCHANGES_CSV_MAX_ROWS, EXCHANGES_MAX_OFFSET, EXCHANGES_PAGE_SIZE,
   aiExchangesCSVParams, aiExchangesQueryKey, aiExchangesRequestParams,
-  exchangeCallsSummary, exchangeTokensKey, exchangeConversationHref, exchangeFeedbackCounts, exchangeFeedbackLabel,
+  exchangeCallsSummary, exchangeLoopTiming, exchangeTokensKey, exchangeConversationHref, exchangeFeedbackCounts, exchangeFeedbackLabel,
   exchangeModelLabel, exchangeStatusBadge, exchangeTierLabel, exchangeTokensLabel, exchangeUsedLLM,
   exchangesQueryParams, exchangesUrlSig, readExchangesUrlState, writeExchangesUrlState,
   type ExchangesUrlState,
@@ -263,6 +263,7 @@ function ExchangeDrawer({ ex, onClose, onOpenCall }: { ex: AIExchange; onClose: 
   const convHref = exchangeConversationHref(ex);
   // v0.10.1645 — açıklanan öznenin tam kimliği (eski satırda bağlam kimliğinden).
   const subj = exchangeSubjectRef(ex);
+  const loopTiming = exchangeLoopTiming(ex); // v0.10.2318
   return (
     <DetailSheet open onOpenChange={o => { if (!o) onClose(); }} width={680} resizeKey="coremetry-ai-exchange-drawer-w"
       title={exchangeTierLabel(ex)}
@@ -279,6 +280,8 @@ function ExchangeDrawer({ ex, onClose, onOpenCall }: { ex: AIExchange; onClose: 
           { k: 'Derin düşün', v: ex.deep ? 'açık' : 'kapalı' },
           { k: 'Model', v: exchangeModelLabel(ex) },
           { k: 'Süre', v: `${fmtNum(ex.durationMs)} ms` },
+          // v0.10.2318 — döngü kırılımı yalnız biliniyorsa (eski satır: satır yok).
+          ...(loopTiming ? [{ k: 'Döngü süreleri', v: loopTiming }] : []),
           { k: exchangeTokensKey(ex), v: exchangeTokensLabel(ex) },
           { k: 'Geri bildirim', v: ex.feedbackComment ? `${exchangeFeedbackLabel(ex)} — ${ex.feedbackComment}` : exchangeFeedbackLabel(ex) },
           // v0.10.1280 — oyun bağlandığı ai_calls satırı (boş = exchange düzeyinde oy).

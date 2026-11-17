@@ -3149,6 +3149,11 @@ export interface AICall {
   /** v0.10.2297 — serbest döngü: tur sayısı ve en büyük tek tur giriş token'ı (0/yok = bilinmiyor). Go: chstore.AICall. */
   modelRounds?: number;
   peakInputTokens?: number;
+  /** v0.10.2318 — döngü kırılımı (TTFT ttftMs alanında); 0/yok = bilinmiyor. Go: chstore.AICall Loop*. */
+  loopModelMs?: number;
+  loopToolMs?: number;
+  loopToolCalls?: number;
+  loopMaxRoundToolCalls?: number;
 }
 
 export interface AIStats {
@@ -3278,6 +3283,14 @@ export interface AIExchangeCall {
   modelRounds?: number;
   /** v0.10.2297 — en büyük tek tur giriş token'ı; yok/0 = bilinmiyor. */
   peakInputTokens?: number;
+  /** v0.10.2318 — döngü satırı: cevap turunun ilk token'ı (ms); yok/0 = bilinmiyor. */
+  ttftMs?: number;
+  /** v0.10.2318 — döngü satırı: turların / yürüyen araçların toplam süresi (ms); yok/0 = bilinmiyor. */
+  loopModelMs?: number;
+  loopToolMs?: number;
+  /** v0.10.2318 — modelin istediği araç çağrısı ve tek turda en çok çağrı; yok/0 = bilinmiyor. */
+  loopToolCalls?: number;
+  loopMaxRoundToolCalls?: number;
 }
 
 /** v0.10.1153 — /api/ai/exchanges: bir CoSRE kullanıcı turu (LLM'siz

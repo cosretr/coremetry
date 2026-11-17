@@ -65,6 +65,16 @@ type AICall struct {
 	// satır ya da kolon henüz yok) — asla "1 tur" diye okunmaz.
 	ModelRounds     uint16 `json:"modelRounds,omitempty"`
 	PeakInputTokens uint32 `json:"peakInputTokens,omitempty"`
+	// v0.10.2318 — serbest döngünün süre ve araç çağrısı kırılımı (TTFT
+	// mevcut ttft_ms kolonunda: döngü satırında CEVAP turunun ilk token'ı).
+	// LoopModelMs / LoopToolMs — turların ve yürüyen araç çağrılarının
+	// toplam süresi (ai.chat.turn / ai.tool span sınırları); LoopToolCalls —
+	// modelin istediği toplam araç çağrısı; LoopMaxRoundToolCalls — tek
+	// turda en çok çağrı (model çağrıları topluyor mu). 0 = bilinmiyor.
+	LoopModelMs           uint32 `json:"loopModelMs,omitempty"`
+	LoopToolMs            uint32 `json:"loopToolMs,omitempty"`
+	LoopToolCalls         uint16 `json:"loopToolCalls,omitempty"`
+	LoopMaxRoundToolCalls uint16 `json:"loopMaxRoundToolCalls,omitempty"`
 }
 
 // aiCallsExtended — v0.10.409 kolonları bu kurulumda var mı (boot probe;
@@ -133,6 +143,27 @@ func (s *Store) probeAICallsRoundsColumns(ctx context.Context) bool {
 	return ok
 }
 
+// aiCallsTimingCol — v0.10.2318 döngü süre kolonları (loop_model_ms,
+// loop_tool_ms, loop_tool_calls, loop_max_round_tool_calls) VE okunan
+// ttft_ms INSERT hedefinde var mı (beşi birden).
+var aiCallsTimingCol atomic.Bool
+
+// AICallsTimingCol — okuma yolları için.
+func AICallsTimingCol() bool { return aiCallsTimingCol.Load() }
+
+// probeAICallsTimingColumns — v0.10.2318; rounds probe'uyla aynı sözleşme.
+// ttft_ms (v0.10.409) da sayılır: SELECT onu bu bayrakla okur.
+func (s *Store) probeAICallsTimingColumns(ctx context.Context) bool {
+	var n uint64
+	err := s.conn.QueryRow(ctx,
+		`SELECT count() FROM system.columns
+		 WHERE database = currentDatabase() AND table = 'ai_calls'
+		   AND name IN ('ttft_ms', 'loop_model_ms', 'loop_tool_ms', 'loop_tool_calls', 'loop_max_round_tool_calls')`).Scan(&n)
+	ok := err == nil && n == 5
+	aiCallsTimingCol.Store(ok)
+	return ok
+}
+
 // probeAICallsColumns — INSERT hedefi olan ai_calls'ta (küme kipinde
 // Distributed) error_class var mı. Yalnız INSERT hedefine bakılır: yerel
 // parçada olup Distributed'da henüz olmayan kolon INSERT'i kırar.
@@ -176,8 +207,15 @@ const aiCallsTraceCols = `trace_id`
 // aiCallsRoundsCols — v0.10.2297; kendi bayrağıyla (aiCallsRoundsCol).
 const aiCallsRoundsCols = `model_rounds, peak_input_tokens`
 
+// aiCallsTimingCols — v0.10.2318; kendi bayrağıyla (aiCallsTimingCol).
+// INSERT'te ttft_ms YOK (aiCallsExtCols yazar); SELECT'te var (aiCallsTimingSel).
+const aiCallsTimingCols = `loop_model_ms, loop_tool_ms, loop_tool_calls, loop_max_round_tool_calls`
+
+// aiCallsTimingSel — okuma: TTFT + döngü kırılımı.
+const aiCallsTimingSel = `ttft_ms, ` + aiCallsTimingCols
+
 // aiCallsInsertSQL — saf: kolon listesi bayraklara göre (ai_calls_insert_test).
-func aiCallsInsertSQL(extended, cached, traced, rounds bool) string {
+func aiCallsInsertSQL(extended, cached, traced, rounds, timing bool) string {
 	cols := aiCallsBaseCols
 	if extended {
 		cols += ",\n\t\t " + aiCallsExtCols
@@ -191,11 +229,14 @@ func aiCallsInsertSQL(extended, cached, traced, rounds bool) string {
 	if rounds {
 		cols += ",\n\t\t " + aiCallsRoundsCols
 	}
+	if timing {
+		cols += ",\n\t\t " + aiCallsTimingCols
+	}
 	return "INSERT INTO ai_calls (" + cols + ")"
 }
 
 // aiCallsInsertArgs — saf: aiCallsInsertSQL kolon sırasıyla birebir.
-func aiCallsInsertArgs(c AICall, created time.Time, extended, cached, traced, rounds bool) []any {
+func aiCallsInsertArgs(c AICall, created time.Time, extended, cached, traced, rounds, timing bool) []any {
 	args := []any{c.ID, created, c.Surface, c.ExchangeID, c.Provider, c.Model, c.BaseURL,
 		c.DurationMs, c.InputTokens, c.OutputTokens, c.Status,
 		c.ErrorMsg, c.PromptChars, c.ResponseChars,
@@ -212,6 +253,9 @@ func aiCallsInsertArgs(c AICall, created time.Time, extended, cached, traced, ro
 	if rounds {
 		args = append(args, c.ModelRounds, c.PeakInputTokens)
 	}
+	if timing {
+		args = append(args, c.LoopModelMs, c.LoopToolMs, c.LoopToolCalls, c.LoopMaxRoundToolCalls)
+	}
 	return args
 }
 
@@ -219,7 +263,8 @@ func aiCallsInsertArgs(c AICall, created time.Time, extended, cached, traced, ro
 // cached_tokens'ı yalnız kolon varsa seçer (SQL kolon sayısı == Scan hedefi).
 // v0.10.1463 — trace_id aynı kuralla (kendi bayrağı).
 // v0.10.2297 — model_rounds / peak_input_tokens aynı kuralla (kendi bayrağı).
-func aiCallsRowSelect(cached, traced, rounds bool) string {
+// v0.10.2318 — ttft_ms + döngü süre kolonları aynı kuralla (kendi bayrağı).
+func aiCallsRowSelect(cached, traced, rounds, timing bool) string {
 	q := `SELECT id, toUnixTimestamp64Nano(created_at), surface, exchange_id, provider, model, base_url,
 		       duration_ms, input_tokens, output_tokens, status, error_msg,
 		       prompt_chars, response_chars, user_id, user_email,
@@ -233,10 +278,13 @@ func aiCallsRowSelect(cached, traced, rounds bool) string {
 	if rounds {
 		q += `, model_rounds, peak_input_tokens`
 	}
+	if timing {
+		q += `, ` + aiCallsTimingSel
+	}
 	return q
 }
 
-func aiCallsRowScan(c *AICall, cached, traced, rounds bool) []any {
+func aiCallsRowScan(c *AICall, cached, traced, rounds, timing bool) []any {
 	dest := []any{
 		&c.ID, &c.CreatedAt, &c.Surface, &c.ExchangeID, &c.Provider, &c.Model, &c.BaseURL,
 		&c.DurationMs, &c.InputTokens, &c.OutputTokens, &c.Status, &c.ErrorMsg,
@@ -251,6 +299,9 @@ func aiCallsRowScan(c *AICall, cached, traced, rounds bool) []any {
 	}
 	if rounds {
 		dest = append(dest, &c.ModelRounds, &c.PeakInputTokens)
+	}
+	if timing {
+		dest = append(dest, &c.TTFTMs, &c.LoopModelMs, &c.LoopToolMs, &c.LoopToolCalls, &c.LoopMaxRoundToolCalls)
 	}
 	return dest
 }
@@ -270,12 +321,12 @@ func (s *Store) InsertAICall(ctx context.Context, c AICall) error {
 		c.ResponseSample = c.ResponseSample[:SamplePromptCap]
 	}
 	// v0.10.409 — tek dal, bayraklar yalnız kolon listesini seçer.
-	ext, cached, traced, rounds := aiCallsExtended.Load(), aiCallsCachedCol.Load(), aiCallsTraceCol.Load(), aiCallsRoundsCol.Load()
-	batch, err := s.conn.PrepareBatch(ctx, aiCallsInsertSQL(ext, cached, traced, rounds))
+	ext, cached, traced, rounds, timing := aiCallsExtended.Load(), aiCallsCachedCol.Load(), aiCallsTraceCol.Load(), aiCallsRoundsCol.Load(), aiCallsTimingCol.Load()
+	batch, err := s.conn.PrepareBatch(ctx, aiCallsInsertSQL(ext, cached, traced, rounds, timing))
 	if err != nil {
 		return err
 	}
-	if err := batch.Append(aiCallsInsertArgs(c, created, ext, cached, traced, rounds)...); err != nil {
+	if err := batch.Append(aiCallsInsertArgs(c, created, ext, cached, traced, rounds, timing)...); err != nil {
 		return err
 	}
 	return batch.Send()
@@ -355,7 +406,7 @@ type ListAICallsParams struct {
 // rağmen: üretim görünümünde açıkça surface=evalset-X istemek boş döner.
 // Kaynak yüzeyden önce gelir — yoksa tek bir süzgeç üretim listesine
 // evalset satırı sızdırırdı.
-func aiCallsListSQL(p ListAICallsParams, cached, traced, rounds bool) (string, []any) {
+func aiCallsListSQL(p ListAICallsParams, cached, traced, rounds, timing bool) (string, []any) {
 	var wc whereClause
 	if !p.From.IsZero() {
 		wc.add("created_at >= toDateTime64(?, 9, 'UTC')", chDateTime64Arg(p.From))
@@ -371,7 +422,7 @@ func aiCallsListSQL(p ListAICallsParams, cached, traced, rounds bool) (string, [
 	if p.Status != "" {
 		wc.add("status = ?", p.Status)
 	}
-	q := aiCallsRowSelect(cached, traced, rounds) + `
+	q := aiCallsRowSelect(cached, traced, rounds, timing) + `
 		FROM ai_calls ` + wc.sql() + `
 		ORDER BY created_at DESC
 		LIMIT ?`
@@ -385,8 +436,8 @@ func (s *Store) ListAICalls(ctx context.Context, p ListAICallsParams) ([]AICall,
 	if p.To.IsZero() {
 		p.To = time.Now().UTC()
 	}
-	cached, traced, rounds := aiCallsCachedCol.Load(), aiCallsTraceCol.Load(), aiCallsRoundsCol.Load() // v0.10.807; v0.10.1463; v0.10.2297
-	q, args := aiCallsListSQL(p, cached, traced, rounds)
+	cached, traced, rounds, timing := aiCallsCachedCol.Load(), aiCallsTraceCol.Load(), aiCallsRoundsCol.Load(), aiCallsTimingCol.Load() // v0.10.807; v0.10.1463; v0.10.2297; v0.10.2318
+	q, args := aiCallsListSQL(p, cached, traced, rounds, timing)
 	rows, err := s.conn.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -395,7 +446,7 @@ func (s *Store) ListAICalls(ctx context.Context, p ListAICallsParams) ([]AICall,
 	out := make([]AICall, 0, p.Limit)
 	for rows.Next() {
 		var c AICall
-		if err := rows.Scan(aiCallsRowScan(&c, cached, traced, rounds)...); err != nil {
+		if err := rows.Scan(aiCallsRowScan(&c, cached, traced, rounds, timing)...); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -409,12 +460,12 @@ func (s *Store) GetAICall(ctx context.Context, id string) (*AICall, error) {
 	if id == "" {
 		return nil, nil
 	}
-	cached, traced, rounds := aiCallsCachedCol.Load(), aiCallsTraceCol.Load(), aiCallsRoundsCol.Load() // v0.10.807; v0.10.1463; v0.10.2297
-	row := s.conn.QueryRow(ctx, aiCallsRowSelect(cached, traced, rounds)+`
+	cached, traced, rounds, timing := aiCallsCachedCol.Load(), aiCallsTraceCol.Load(), aiCallsRoundsCol.Load(), aiCallsTimingCol.Load() // v0.10.807; v0.10.1463; v0.10.2297; v0.10.2318
+	row := s.conn.QueryRow(ctx, aiCallsRowSelect(cached, traced, rounds, timing)+`
 		FROM ai_calls
 		WHERE id = ? LIMIT 1`, id)
 	var c AICall
-	if err := row.Scan(aiCallsRowScan(&c, cached, traced, rounds)...); err != nil {
+	if err := row.Scan(aiCallsRowScan(&c, cached, traced, rounds, timing)...); err != nil {
 		if strings.Contains(err.Error(), "no rows") {
 			return nil, nil
 		}

@@ -2,7 +2,7 @@
 // göstermiyor"). /ai "CoSRE etkileşimleri" panelinin SAF görünüm modeli:
 // kademe etiketi, LLM yok işareti, model/token/geri bildirim metinleri.
 
-import type { AIExchange, AIExchangeFeedbackFilter } from '@/lib/types';
+import type { AIExchange, AIExchangeCall, AIExchangeFeedbackFilter } from '@/lib/types';
 import { feedbackReasonLabel } from '@/lib/aiFeedbackReasons';
 
 /** Sunucunun kademe adları (Go: aisurface.Tier*) → ekran etiketi. */
@@ -247,6 +247,33 @@ export function exchangeLoopRounds(ex: Pick<AIExchange, 'calls'> & Partial<Pick<
 /** Token sayısı kısa biçim: 34100 → "34.1K", 950 → "950". */
 export function fmtTokenK(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
+}
+
+/** v0.10.2318 — ms → "2.1 sn". */
+function fmtSec(ms: number): string {
+  return `${(ms / 1000).toFixed(1)} sn`;
+}
+
+/** v0.10.2318 — döngü satırının süre/araç kırılımı tek satır:
+ *  "ilk token 2.1 sn · model 9.4 sn · araç 1.8 sn · 4 araç çağrısı (bir turda en çok 2)".
+ *  Yalnız kademe loop; bilinmeyen (alan yok / 0) parça yazılmaz, hiçbiri
+ *  bilinmiyorsa null (satır gösterilmez). */
+export function exchangeLoopTiming(ex: Pick<AIExchange, 'calls'> & Partial<Pick<AIExchange, 'tier'>>): string | null {
+  if (ex.tier !== 'loop') return null;
+  const rows = (ex.calls ?? []).filter(c => c.llm && c.modelRounds);
+  if (!rows.length) return null;
+  const sum = (f: (c: AIExchangeCall) => number | undefined) => rows.reduce((n, c) => n + (f(c) ?? 0), 0);
+  const ttft = rows[rows.length - 1].ttftMs ?? 0;
+  const model = sum(c => c.loopModelMs);
+  const tool = sum(c => c.loopToolMs);
+  const calls = sum(c => c.loopToolCalls);
+  const maxRound = Math.max(...rows.map(c => c.loopMaxRoundToolCalls ?? 0));
+  const parts: string[] = [];
+  if (ttft > 0) parts.push(`ilk token ${fmtSec(ttft)}`);
+  if (model > 0) parts.push(`model ${fmtSec(model)}`);
+  if (tool > 0) parts.push(`araç ${fmtSec(tool)}`);
+  if (calls > 0) parts.push(maxRound > 0 ? `${calls} araç çağrısı (bir turda en çok ${maxRound})` : `${calls} araç çağrısı`);
+  return parts.length ? parts.join(' · ') : null;
 }
 
 /** Model çağrısı sayısı metni (alt çağrı tablosunun başlığı). */

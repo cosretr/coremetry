@@ -241,6 +241,11 @@ type CallRecord struct {
 	// (WithLoopUsage); 0 = bilinmiyor.
 	ModelRounds     uint16
 	PeakInputTokens uint32
+	// v0.10.2318 — döngü kırılımı (chstore.AICall Loop* alanları; TTFT TTFTMs'te).
+	LoopModelMs           uint32
+	LoopToolMs            uint32
+	LoopToolCalls         uint16
+	LoopMaxRoundToolCalls uint16
 }
 
 // metaKey is the unexported type for ctx.WithValue lookups so other
