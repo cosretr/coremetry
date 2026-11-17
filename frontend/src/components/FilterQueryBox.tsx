@@ -30,7 +30,8 @@ import { useAttributeKeys } from '@/lib/useAttributeKeys';
 import { useUrlRange } from '@/lib/useUrlRange';
 import { timeRangeToNs, fmtNum } from '@/lib/utils';
 import type { FilterExpr, FilterOp } from '@/lib/types';
-import { isHttpStatusKey, NO_HTTP_STATUS_TITLE } from '@/lib/httpStatusDisplay'; // v0.10.1519
+import { isHttpStatusKey } from '@/lib/httpStatusDisplay'; // v0.10.1519
+import { t as tl, tf, useLang } from '@/lib/i18n'; // v0.10.2317 — kutu metni arayüz dilinde (fq.*; TR aynı)
 import {
   FILTER_OPS, OP_NEEDS_VALUE, OP_SHORT, isListOp, opFromShorthand, parseInlineFilter, splitListValues,
   chipValueLabel, chipDisplay, filterKey, upsertFilter, pushRecent, parseRecent, rankKeys, withExtraKeys,
@@ -87,6 +88,7 @@ function loadRecent(key?: string): FilterExpr[] {
 }
 
 export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], recentKey, keyOptions, placeholder, metricName, metricService, extraKeys, tourBar, tourQuick }: FilterQueryBoxProps) {
+  const lang = useLang();
   const metricMode = !!metricName?.trim();
   const [metricKeys, setMetricKeys] = useState<string[]>([]);
   useEffect(() => {
@@ -311,9 +313,9 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
   };
 
   const editing = draft?.editing !== undefined;
-  const inputPlaceholder = !draft ? (placeholder ?? 'Filtre: anahtar yaz ya da http.route=/x')
-    : draft.step === 'key' ? 'anahtar…' : draft.step === 'op' ? 'op (= ≠ ~ IN > < ∃)…'
-      : isListOp(draft.op) ? 'değerler, virgülle…' : 'değer…';
+  const inputPlaceholder = !draft ? (placeholder ?? tl('fq.ph', lang))
+    : draft.step === 'key' ? tl('fq.phKey', lang) : draft.step === 'op' ? 'op (= ≠ ~ IN > < ∃)…'
+      : tl(isListOp(draft.op) ? 'fq.phVals' : 'fq.phVal', lang);
 
   // v0.10.2203 — TEK girdi: düzenleme yokken çip barının sonunda, bir çip
   // düzenlenirken o çipin içinde (aynı combobox; ikinci girdi yok). Odak
@@ -321,7 +323,7 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
   const editingAt = draft?.editing;
   const inputEl = (
     <input ref={inputRef} className={editing ? 'fq-input fq-edit' : 'fq-input'} value={draft?.text ?? ''} placeholder={inputPlaceholder}
-      aria-label={editing ? `Filtreyi düzenle: ${value[editingAt ?? -1]?.k ?? ''}` : 'Filtre'} aria-autocomplete="list"
+      aria-label={editing ? tf('fq.editAria', lang, { k: value[editingAt ?? -1]?.k ?? '' }) : tl('fq.aria', lang)} aria-autocomplete="list"
       aria-controls={draft ? listId : undefined} aria-activedescendant={draft ? `${listId}-${hi}` : undefined}
       size={editing ? Math.max(4, (draft?.text.length ?? 0) + 1) : undefined}
       onChange={e => onText(e.target.value)} onKeyDown={onKeyDown}
@@ -343,11 +345,11 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
           </span>
         ); return (
           <span key={`${filterKey(f)}#${i}`} className="fq-chip"
-            title={`${f.k} ${f.op} ${chipValueLabel(f)} — tık: düzenle`}>
+            title={tf('fq.chipTip', lang, { k: f.k, op: f.op, v: chipValueLabel(f) })}>
             {/* v0.10.1093 — görünen metin chipDisplay'den (db_stmt_hash →
                 "statement #…"); title ve düzenleme ham değeri taşır. */}
             <span className="fq-k" onClick={e => { e.stopPropagation(); editChipKey(i); }}>{d.key}</span>
-            {d.op && <span className="fq-o mono" title="Operatörü değiştir" onClick={e => { e.stopPropagation(); editChipOp(i); }}>{d.op}</span>}
+            {d.op && <span className="fq-o mono" title={tl('fq.opTip', lang)} onClick={e => { e.stopPropagation(); editChipOp(i); }}>{d.op}</span>}
             {OP_NEEDS_VALUE[f.op] && (
               <span className="fq-v" onClick={e => { e.stopPropagation(); editChip(i); }}>
                 {d.value}
@@ -359,7 +361,7 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
                 gerer (`.fq-chip` align-items: stretch — sabit 20px kare
                 ayraçta 2px çentik bırakırdı). */}
             <IconButton variant="ghost" size="xs" className="fq-x" style={{ height: 'auto' }}
-              aria-label={`Filtreyi kaldır: ${f.k}`} onClick={e => { e.stopPropagation(); removeAt(i); }}
+              aria-label={tf('fq.removeAria', lang, { k: f.k })} onClick={e => { e.stopPropagation(); removeAt(i); }}
               icon="✕" />
           </span>
         ); })}
@@ -371,20 +373,20 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
         )}
         {!editing && inputEl}
         <span className="fq-hint" aria-hidden>
-          <kbd>↑</kbd><kbd>↓</kbd> seç · <kbd>Tab</kbd> adım · <kbd>Enter</kbd> ekle · <kbd>Esc</kbd> vazgeç
+          <kbd>↑</kbd><kbd>↓</kbd>{tl('fq.h.pick', lang)}<kbd>Tab</kbd>{tl('fq.h.step', lang)}<kbd>Enter</kbd>{tl('fq.h.add', lang)}<kbd>Esc</kbd>{tl('fq.h.cancel', lang)}
         </span>
       </div>
       {draft && (
         <div className="fq-pop" style={editing && popLeft > 0 ? { left: popLeft } : undefined}>
           <div className="fq-steps">
-            <div className={draft.step === 'key' ? 'on' : 'done'}>1 · Anahtar{draft.step !== 'key' && <span className="mono">{draft.k}</span>}</div>
+            <div className={draft.step === 'key' ? 'on' : 'done'}>{tl('fq.s1', lang)}{draft.step !== 'key' && <span className="mono">{draft.k}</span>}</div>
             <div className={draft.step === 'op' ? 'on' : draft.step === 'value' ? 'done' : ''}>2 · Op{draft.step === 'value' && <span className="mono">{OP_SHORT[draft.op]}</span>}</div>
-            <div className={draft.step === 'value' ? 'on' : ''}>3 · Değer</div>
+            <div className={draft.step === 'value' ? 'on' : ''}>{tl('fq.s3', lang)}</div>
           </div>
           <div className="fq-list" role="listbox" id={listId}>
             {draft.step === 'key' && (
               keyMatches.length === 0
-                ? <div className="fq-empty">{draft.text ? 'Eşleşen anahtar yok — Enter ile olduğu gibi kullan' : 'Anahtar yazmaya başla'}</div>
+                ? <div className="fq-empty">{tl(draft.text ? 'fq.noKey' : 'fq.typeKey', lang)}</div>
                 : keyMatches.map((k, i) => (
                   <div key={k} id={`${listId}-${i}`} role="option" aria-selected={i === hi} className={i === hi ? 'fq-opt sel' : 'fq-opt'}
                     onMouseEnter={() => setHi(i)} onMouseDown={e => {
@@ -414,15 +416,15 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
             )}
             {draft.step === 'value' && (
               <>
-                <div className="fq-grp">{liveLoading ? 'değerler yükleniyor…' : valueOptions.length ? `bu pencerede görülen değerler${typed ? ` — "${typed}" ile eşleşen` : ''}` : (typed ? 'öneri yok — Enter ile yazdığını ekle' : 'değer yaz')}</div>
+                <div className="fq-grp">{liveLoading ? tl('fq.v.loading', lang) : valueOptions.length ? tl('fq.v.seen', lang) + (typed ? tf('fq.v.match', lang, { t: typed }) : '') : tl(typed ? 'fq.v.none' : 'fq.v.type', lang)}</div>
                 {valueOptions.map((r, i) => (
                   <div key={r.value} id={`${listId}-${i}`} role="option" aria-selected={i === hi} className={i === hi ? 'fq-opt sel' : 'fq-opt'}
                     onMouseEnter={() => setHi(i)}
                     onMouseDown={e => { e.preventDefault(); const isList = isListOp(draft.op); commit({ k: draft.k, op: draft.op, v: isList ? splitListValues(r.value) : [r.value] }, draft.editing); }}>
                     {/* v0.10.1519 — http.status_code = 0: durumsuz span'ler (değer "0" aynen işlenir). */}
                     {isHttpStatusKey(draft.k) && r.value === '0'
-                      ? <span className="name mono" title={NO_HTTP_STATUS_TITLE}>0 — {NO_HTTP_STATUS_TITLE}</span>
-                      : <span className="name mono">{r.value || '(boş)'}</span>}
+                      ? <span className="name mono" title={tl('trc.noHttpStatus', lang)}>0 — {tl('trc.noHttpStatus', lang)}</span>
+                      : <span className="name mono">{r.value || tl('hm.empty', lang)}</span>}
                     {r.count > 0 && (
                       <span className="cnt bar">
                         <i style={{ width: `${Math.max(2, Math.round((r.count / (maxCount || 1)) * 72))}px` }} />
@@ -435,21 +437,21 @@ export function FilterQueryBox({ value, onChange, suggestedValues, quick = [], r
             )}
           </div>
           <div className="fq-foot">
-            <span><b>Backspace</b> boş kutuda son çip / önceki adım</span>
-            <span><b>Satır içi</b> anahtar=değer · anahtar in a,b · anahtar exists</span>
+            <span><b>Backspace</b>{tl('fq.f.bs', lang)}</span>
+            <span><b>{tl('fq.f.inline', lang)}</b>{tl('fq.f.inlineB', lang)}</span>
           </div>
         </div>
       )}
       {(quick.length > 0 || recent.length > 0) && !draft && (
         <div className="fq-quick" data-tour={tourQuick}>
-          <span className="fq-quick-label">Hızlı:</span>
+          <span className="fq-quick-label">{tl('fq.quick', lang)}</span>
           {quick.map(f => (
-            <Chip key={`q:${filterKey(f)}`} size="xs" className="mono" onClick={() => commit(f)} title="Filtre olarak ekle">
+            <Chip key={`q:${filterKey(f)}`} size="xs" className="mono" onClick={() => commit(f)} title={tl('fq.addTip', lang)}>
               {f.k} {OP_SHORT[f.op]} {chipValueLabel(f)}
             </Chip>
           ))}
           {recent.filter(r => !quick.some(q => filterKey(q) === filterKey(r))).map(f => (
-            <Chip key={`r:${filterKey(f)}`} size="xs" className="mono" onClick={() => commit(f)} title="Son kullanılan (bu tarayıcı)">
+            <Chip key={`r:${filterKey(f)}`} size="xs" className="mono" onClick={() => commit(f)} title={tl('fq.recentTip', lang)}>
               ⟲ {f.k} {OP_SHORT[f.op]} {chipValueLabel(f)}
             </Chip>
           ))}

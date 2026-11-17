@@ -12,6 +12,8 @@
 //
 // İleri kipte metin YOK (null) — şerit numara kutusunu çizer.
 
+import { t, tf, type Lang } from './i18n';
+
 /**
  * pagePositionLabel — 0 tabanlı `page` → operatörün okuduğu konum.
  *
@@ -24,8 +26,9 @@
  * SAF — tablo testli (lib/pagerPosition.test.ts), her iki kip ve kipin
  * döndüğü sınır dahil.
  */
-export function pagePositionLabel(page: number, reverse: boolean): string | null {
+// v0.10.2317 — metin arayüz dilinde (pg.*; `lang` varsayılanı 'tr', TR aynı).
+export function pagePositionLabel(page: number, reverse: boolean, lang: Lang = 'tr'): string | null {
   if (!reverse) return null;
   const pos = Math.max(0, Math.floor(page)) + 1;
-  return pos === 1 ? 'Son sayfa' : `Sondan ${pos}.`;
+  return pos === 1 ? t('pg.last', lang) : tf('pg.fromEnd', lang, { n: pos });
 }

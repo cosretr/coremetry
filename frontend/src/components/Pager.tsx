@@ -4,6 +4,7 @@ import { Button } from './ui/Button';
 // modülünden export etmek uyarı tabanını büyütürdü, ve kural zaten sayfadan
 // bağımsız.
 import { pagePositionLabel } from '@/lib/pagerPosition';
+import { t as tl, tf, useLang } from '@/lib/i18n'; // v0.10.2317 — şerit metni arayüz dilinde (pg.*; TR aynı)
 
 // Pager — depodaki TEK "daha fazla satır nasıl gelir" yüzeyi.
 //
@@ -163,6 +164,7 @@ export function cursorProgress(
 }
 
 export function Pager(props: PagerProps) {
+  const lang = useLang();
   const { count, total, extras } = props;
   const cls = 'pager';
   const label = countLabel(count, total);
@@ -184,8 +186,8 @@ export function Pager(props: PagerProps) {
           // sayıyı zaten taşıyor.
           <span style={{ color: 'var(--text3)' }}>
             {doneLabel ?? (loaded !== undefined
-              ? `penceredeki tüm eşleşmeler yüklendi (${loaded.toLocaleString()} satır)`
-              : 'tümü yüklendi')}
+              ? tf('pg.allLoadedN', lang, { n: loaded.toLocaleString() })
+              : tl('pg.allLoaded', lang))}
           </span>
         )}
         {extras && <span style={{ color: 'var(--text2)' }}>· {extras}</span>}
@@ -200,6 +202,7 @@ function OffsetPager({
   page, pageSize, hasMore, onPage, lastReachablePage, onEnd, endLabel, endTitle, reverse, reverseTitle, count, total, extras, cls, label,
 }: PagerCommon & CountDecl & OffsetOnly & { cls: string; label: string | null }) {
   const [draft, setDraft] = useState(String(page + 1));
+  const lang = useLang();
 
   // Prev/Next ile sayfa değişince girdi senkron kalsın.
   useEffect(() => { setDraft(String(page + 1)); }, [page]);
@@ -207,7 +210,7 @@ function OffsetPager({
   const lastPage = derivedLastPage(count, total, pageSize);
   const atEnd = lastPage !== null ? page >= lastPage : !hasMore;
   // v0.10.831 — ters kipte konum metni; ileri kipte null (kutu çizilir).
-  const position = pagePositionLabel(page, reverse === true);
+  const position = pagePositionLabel(page, reverse === true, lang);
   // v0.10.831 (inceleme, 2026-09-20) — BİTİŞ YUVASI ters kipte `onEnd`e bağlı.
   //
   // Ölçülen tuzak: ters kipte kesin bir `lastReachablePage` varken o düğme
@@ -244,7 +247,7 @@ function OffsetPager({
           bilerek sıra-nötr). Davranış aynı kaldı, söylenen değişti. */}
       <Button variant="secondary" size="sm"
         onClick={() => onPage(Math.max(0, page - 1))} disabled={page === 0}
-        title={reverse ? '"Son sayfa" yönünde bir konum geri' : undefined}>
+        title={reverse ? tl('pg.prevRevTip', lang) : undefined}>
         ← Prev
       </Button>
 
@@ -276,7 +279,7 @@ function OffsetPager({
             onBlur={() => setDraft(String(page + 1))}
             inputMode="numeric"
             aria-label="Go to page"
-            title="Enter ile git"
+            title={tl('pg.enterTip', lang)}
             style={{
               width: 56, textAlign: 'center', fontFamily: 'var(--font-mono)',
               fontVariantNumeric: 'tabular-nums', padding: '3px 6px',
@@ -296,20 +299,20 @@ function OffsetPager({
 
       {/* Gutenberg: ileri eylemi SAĞDA ve şeritteki TEK vurgulu kontrol. */}
       <Button variant="primary" size="sm" onClick={() => onPage(page + 1)} disabled={atEnd}
-        title={reverse ? 'Sondan bir sonraki sayfa (listenin başına doğru)' : undefined}>
+        title={reverse ? tl('pg.nextRevTip', lang) : undefined}>
         Next →
       </Button>
       {/* v0.10.711 — kesin son sayfa yoksa "sona git" (sıra tersi) düğmesi;
           kesin sayfa varsa o kazanır (aynı yerde tek düğme). */}
       {endAction && (
         <Button variant="secondary" size="sm" onClick={onEnd}
-          title={endTitle ?? 'Listenin sonuna git'}>
+          title={endTitle ?? tl('pg.endTip', lang)}>
           {endLabel ?? 'Last ⇥'}
         </Button>
       )}
       {showJump && (
         <Button variant="secondary" size="sm" onClick={() => onPage(lastReachablePage)}
-          title={`Son sayfaya git (${lastReachablePage + 1})`}>
+          title={tf('pg.lastTip', lang, { n: lastReachablePage + 1 })}>
           Last ⇥
         </Button>
       )}

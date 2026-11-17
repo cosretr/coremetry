@@ -4,8 +4,7 @@
 // ipuçları, liste / toplu / şekil durum satırları, sayım ve kimlik rozetleri,
 // boş-sonuç teşhisleri) bilinen Türkçe metin ÇİZMEZ (metin + title /
 // aria-label / placeholder); Türkçe arayüzde metin aynen. Ortak bileşenler
-// (Pager, FilterQueryBox, tablo başlık menüsü, dil düğmesi) bu dilimde değil:
-// muaf listesinde.
+// (tablo başlık menüsü, dil düğmesi) bu dilimde değil: muaf listesinde.
 import '@/test/pageJsdom';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createRoot } from 'react-dom/client';
@@ -86,8 +85,9 @@ async function all(): Promise<string> {
 afterEach(() => { m.lang = 'en'; m.cfg = {}; });
 
 const TR_CHARS = /[çğıöşüÇĞİÖŞÜ]/;
-// Bu dilimin dışındaki ortak bileşenler (Pager, FilterQueryBox, DataTable başlık menüsü, dil düğmesi).
-const EXEMPT = /Türkçe'ye geç|Tablo seçenekleri|Hızlı:|vazgeç|Son sayfa|Sondan bir sonraki/;
+// Ortak DataTable başlık menüsü ve dil düğmesi bu dilimlerde değil (v0.10.2317:
+// Pager ve FilterQueryBox muafiyeti kalktı).
+const EXEMPT = /Türkçe'ye geç|Tablo seçenekleri/;
 
 describe('Traces sayfası — İngilizce arayüz (v0.10.2314)', () => {
   it('Türkçe metin yok', async () => {
@@ -107,6 +107,8 @@ describe('Traces sayfası — İngilizce arayüz (v0.10.2314)', () => {
       'is not present on any span in this window.', 'There is a key that differs only in letter case:', '— attribute keys are case-sensitive.',
       'No groups in this window — the aggregated view needs at least one trace',
       'The aggregate query timed out', 'No shapes in this window', 'm bucket · drag = select time',
+      // v0.10.2317 — Pager + FilterQueryBox
+      'Quick:', ' select · ', ' cancel', 'Press Enter to go', 'Filter: type a key or http.route=/x',
     ]) expect(text, en).toContain(en);
   }, 30000);
 

@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type { SavedView } from '@/lib/types';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { t as tl, useLang } from '@/lib/i18n'; // v0.10.2317 — silme onayı arayüz dilinde (TR aynı)
 
 // Normalise a URL query string so two semantically-equal forms
 // compare equal: strip leading `?`, parse → sort by key → re-emit.
@@ -52,6 +53,7 @@ export function SavedViewsBar({ page, right, variant = 'bar', size }: {
   // CSV ile aynı `sm` rung'u; verilmezse atomun varsayılanı (/logs md, aynen).
   size?: 'sm';
 }) {
+  const lang = useLang();
   const confirm = useConfirm();
   const navigate = useNavigate();
   const location = useLocation();
@@ -160,10 +162,9 @@ export function SavedViewsBar({ page, right, variant = 'bar', size }: {
 
   const remove = async (v: SavedView) => {
     if (!await confirm({
-      title: 'Kayıtlı görünüm silinsin mi?',
-      body: <><b>{v.name}</b> görünümü silinecek. Yalnız kayıtlı filtre
-        bileşimi kaybolur — verinin kendisine dokunulmaz.</>,
-      confirmLabel: 'Görünümü sil',
+      title: tl('svb.delTitle', lang),
+      body: <><b>{v.name}</b>{tl('svb.delBody', lang)}</>,
+      confirmLabel: tl('svb.delConfirm', lang),
       danger: true,
     })) return;
     try {

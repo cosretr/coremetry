@@ -2005,6 +2005,7 @@ function AggregateTable({ agg, groupBy, dt, onDrill, state }: {
   // yokken tablonun İÇİNDE çizilecek durum (sayfanın aggState'i).
   state: Omit<DataTableStateProps<AggregateRow>, 'dt'>;
 }) {
+  const lang = useLang(); // v0.10.2317 — durumsuz grup ipucu arayüz dilinde
   return (
     <>
       <div className="table-wrap">
@@ -2022,7 +2023,7 @@ function AggregateTable({ agg, groupBy, dt, onDrill, state }: {
                 <tr key={`${a.groupKey}|${a.groupExtra}`} {...rowActivation(() => onDrill(a))}>
                   {/* v0.10.1519 — HTTP status grubunda '0' = durumsuz span'ler: "—" + ipucu (drill yine = 0). */}
                   {groupBy === 'http_status'
-                    ? (() => { const l = httpStatusGroupLabel(a.groupKey); return <td title={l.title}><b>{l.text}</b></td>; })()
+                    ? (() => { const l = httpStatusGroupLabel(a.groupKey, lang); return <td title={l.title}><b>{l.text}</b></td>; })()
                     : <td><b>{a.groupKey || '—'}</b></td>}
                   {groupBy !== 'service' && <td><SvcBadge name={a.groupExtra ?? ''} /></td>}
                   <td className="num">

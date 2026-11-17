@@ -34,6 +34,6 @@ export function httpStatusCell(key: string, v: string | null | undefined, lang: 
 }
 
 /** Aggregated "group by HTTP status" anahtarı ('0' = durumsuz span'ler). */
-export function httpStatusGroupLabel(groupKey: string): { text: string; title?: string } {
-  return isMissingHttpStatus(groupKey) ? { text: '—', title: `${NO_HTTP_STATUS_TITLE} (http.status_code = 0)` } : { text: groupKey };
+export function httpStatusGroupLabel(groupKey: string, lang: Lang = 'tr'): { text: string; title?: string } {
+  return isMissingHttpStatus(groupKey) ? { text: '—', title: `${t('trc.noHttpStatus', lang)} (http.status_code = 0)` } : { text: groupKey };
 }

@@ -37,7 +37,7 @@ describe('httpStatusDisplay — saf', () => {
     const traces = readFileSync(resolve(__dirname, '../pages/Traces.tsx'), 'utf8');
     expect(traces).toContain('const c = httpStatusCell(id, t.extras?.[id], lang);');
     expect(traces).toContain("groupBy === 'http_status'");
-    expect(traces).toContain('httpStatusGroupLabel(a.groupKey)');
+    expect(traces).toContain('httpStatusGroupLabel(a.groupKey, lang)');
     const fq = readFileSync(resolve(__dirname, '../components/FilterQueryBox.tsx'), 'utf8');
     expect(fq).toContain("isHttpStatusKey(draft.k) && r.value === '0'");
     // commit yolu değişmedi: seçilen değer r.value (yani "0").

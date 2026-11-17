@@ -18,6 +18,8 @@ import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 // testin 5 s bütçesinden ödeniyordu — tam paket yükünde zaman aşımı +
 // sızan mount ile ardışık düşüş. Toplama aşamasının süre tavanı yok.
 import Traces from './Traces';
+// v0.10.2317 — Türkçe metin pinleri: arayüz dili 'tr'.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 
 const m = vi.hoisted(() => ({
   listParams: [] as Record<string, unknown>[],

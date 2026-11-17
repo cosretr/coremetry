@@ -25,6 +25,8 @@ vi.mock('@/lib/useAttributeKeys', () => ({
 import { FilterQueryBox } from './FilterQueryBox';
 import { topEscLayer } from '@/lib/escLayer';
 import type { FilterExpr } from '@/lib/types';
+// v0.10.2317 — Türkçe metin pinleri: arayüz dili 'tr'.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;

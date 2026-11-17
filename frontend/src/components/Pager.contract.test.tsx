@@ -17,6 +17,8 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { Pager, countLabel, cursorProgress, derivedLastPage, type PagerCount } from './Pager';
+// v0.10.2317 — Türkçe metin pinleri: arayüz dili 'tr'.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
