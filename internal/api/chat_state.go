@@ -169,6 +169,9 @@ type chatStateTurn struct {
 	offer     *chatOffer
 	answered  bool
 	finalized bool
+	// assumedSvc / assumedWin — v0.10.2332 (B): bu turda önceki turdan
+	// devralınıp isteğe UYGULANAN servis ve pencere etiketi (varsay ve söyle).
+	assumedSvc, assumedWin string
 }
 
 // beginChatStateTurn — çözücüyü koşar ve isteği kapsamla günceller. Kapalıyken nil.
@@ -208,6 +211,7 @@ func (s *Server) beginChatStateTurn(ctx context.Context, req *chatRequest, st *c
 	if res.InheritService && !screenDeixis(req.Messages[last].Text) && req.Context.Service != c.Service {
 		req.Context.Service = c.Service
 		inherited = append(inherited, c.Service)
+		stt.assumedSvc = c.Service // v0.10.2332
 	}
 	if res.EnvSet || (res.InheritEnv && concreteEnv(req.Context.Env) != c.Env) {
 		req.Context.Env = c.Env
@@ -219,6 +223,7 @@ func (s *Server) beginChatStateTurn(ctx context.Context, req *chatRequest, st *c
 		req.Context.RangeS, req.Context.ToMs = c.RangeS, c.WinToMs
 		if res.InheritWindow {
 			inherited = append(inherited, stateWindowLabel(c))
+			stt.assumedWin = assumedWindowPhrase(c) // v0.10.2332
 		}
 	}
 	if len(inherited) > 0 {

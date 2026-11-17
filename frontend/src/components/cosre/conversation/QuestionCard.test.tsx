@@ -30,6 +30,10 @@ describe('parseDataQuestion', () => {
     // v0.10.2139 (router boşlukları D6) — yazım hatalı çıplak ad: en yakın ≤3 servis.
     [{ type: 'data-question', data: { ...Q, kind: 'entity_pick', options: [opt('svc-a'), opt('svc-b')] } },
       { ...Q, kind: 'entity_pick', options: [opt('svc-a'), opt('svc-b')] }],
+    // v0.10.2332 (conversation-audit B) — eksik tek alan: ≤4 seçenek.
+    [{ type: 'data-question', data: { ...Q, kind: 'slot', options: ['checkout', 'orders', 'payments', 'inventory'].map(opt) } },
+      { ...Q, kind: 'slot', options: ['checkout', 'orders', 'payments', 'inventory'].map(opt) }],
+    [{ type: 'data-question', data: { ...Q, kind: 'slot', options: ['a', 'b', 'c', 'd', 'e'].map(opt) } }, null],
     [{ type: 'data-question', data: { ...Q, kind: 'later' } }, null],
     [{ type: 'data-question', data: { ...Q, text: '' } }, null],
     [{ type: 'data-question', data: { ...Q, options: [] } }, null],
@@ -46,6 +50,7 @@ describe('parseDataQuestion', () => {
     const m = /QuestionKinds = \[\]string\{([^}]*)\}/.exec(part);
     expect(m?.[1].split(',').map(s => s.trim().replace(/"/g, ''))).toEqual([...QUESTION_KINDS]);
     expect(part).toMatch(/QuestionMaxOptions = 3\b/);
+    expect(part).toMatch(/QuestionSlotMaxOptions = 4\b/); // v0.10.2332
   });
 });
 

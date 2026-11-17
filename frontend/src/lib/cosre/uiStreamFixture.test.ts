@@ -8,12 +8,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   DATA_PART_NAMES, MESSAGE_ID_RE, SCOPE_REASONS, STOP_REASONS, TOOL_RESULT_KINDS, TOOL_RESULT_MAX_BYTES, UI_STREAM_PART_TYPES,
-  dataPartName, isDataPart, parseDataApproval, parseDataReset, parseDataScope, parseDataState, parseDataStop, parseDataToolResult,
+  dataPartName, isDataPart, parseDataApproval, parseDataQuestion, parseDataReset, parseDataScope, parseDataState, parseDataStop, parseDataToolResult,
 } from './protocol';
 import { parseUIStreamSSE } from './uiStreamFixture';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state', 'ui-stream-v1-slot'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
 
@@ -316,5 +316,18 @@ describe('data-state (konuşma durumu)', () => {
     [{ type: 'data-scope', data: { updatedAt: 5 } }, null],
   ])('parseDataState %#', (p, want) => {
     expect(parseDataState(p)).toEqual(want);
+  });
+});
+
+// v0.10.2332 (conversation-audit §6.1 B) — eksik tek alan: tek data-question (slot, 4 seçenek).
+describe('data-question slot', () => {
+  it('slot fixture: tek kart, 4 seçenek, ayrıştırılır', () => {
+    const parts = parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', 'ui-stream-v1-slot.sse'), 'utf8')).parts;
+    const qs = parts.filter(p => p.type === 'data-question');
+    expect(qs).toHaveLength(1);
+    const q = parseDataQuestion(qs[0]);
+    expect(q?.kind).toBe('slot');
+    expect(q?.options.map(o => o.id)).toEqual(['checkout', 'orders', 'payments', 'inventory']);
+    expect(q?.allowFree).toBe(true);
   });
 });

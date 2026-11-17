@@ -2278,6 +2278,8 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	// v0.10.1138 — yapısal kapsam (chat_scope.go): verilen boyutta netleştirme
 	// sorulmaz, env/takım/servis süzgeci rotaya yazılır. Kapsamsız ctx → aynen.
 	route = applyChatScopeRoute(chatScopeFromCtx(ctx), route)
+	// v0.10.2332 — B: durum cevaplıyorsa sorma (chat_answer_slot.go); üslup kapalıyken aynen.
+	route = slotFromState(ctx, route)
 	chatExchangeFrom(ctx).noteRoute(guidedRouteLabel(route)) // v0.10.1153 — /ai etkileşim satırının rotası; v0.10.2135 alt rota
 	// v0.10.2324 — konuşma durumu kabul testinin dikişi (prod'da nil).
 	if guidedWindowSeam != nil {
@@ -2483,11 +2485,13 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		return false, false
 	}
 	if route.DirectAnswer != "" { // netleştirme: girdi çıktıyı tam belirliyor
+		route = slotTrimAsk(ctx, route) // v0.10.2332 — üslup açıkken ≤4 aday (metin = çip = kart)
 		if route.Intent == guidedAskService && disambigAskRescuable(route.AskIntent) {
 			markDisambiguation(ctx) // v0.10.1126 — wiki kurtarması (chat_disambig_rescue.go)
 		}
 		emit("answer", withGuidedFollowups(map[string]any{"text": route.DirectAnswer, "suggestions": guidedSuggestions(route)},
 			guidedFollowups(route, chatUserTexts(msgs)))) // v0.10.1383 — netleştirme turunda nil (aday çipleri kalır)
+		s.slotAsk(ctx, emit, route, question) // v0.10.2332 — tek seçenekli soru kartı (data-question slot); üslup kapalıyken yok
 		return true, true
 	}
 
@@ -2525,6 +2529,7 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	// v0.9.528 Faz 2 — kiminle konuşulduğu prompt'un başına girer
 	// (ctx'ten; ön-söz boşsa metin bayt-bayt eskisi).
 	// v0.10.2331 — B: cevap sınıfı (chat_answer_class.go); üslup kapalıyken nctx = ctx, classLine "".
+	answerStyleNoteWindow(ctx, rangeS) // v0.10.2332 — varsay ve söyle: anlatımın penceresi
 	nctx, classLine := answerStyleNarration(ctx, answerClassOfIntent(route.Intent))
 	raw, exErr := s.copilotStreamSurface(nctx, "chat-guided", withAddressee(addresseeFromCtx(ctx), cosreRulesSystemPrefix(rulesBlock)+guidedNarrationPrompt(route.Intent))+classLine, user, func(delta string) {
 		emit("delta", map[string]string{"text": delta})
@@ -4775,6 +4780,9 @@ func serviceIntentFor(msg string, toks []string) guidedIntent {
 // ilk adları. Çipler guidedSuggestions'ta tam kılavuz cümle olur.
 func (s *Server) guidedAskServiceEvidence(ctx context.Context, route *guidedRoute, question string) (string, string, error) {
 	src := "canlı servis kataloğu (ad eşleşmedi)"
+	if len(route.ServiceOptions) == 0 && evalConvFrom(ctx) != nil { // v0.10.2332 — değerlendirme: canlı problem okunmaz, vakanın kataloğu
+		route.ServiceOptions = evalConvCatalog(ctx)
+	}
 	if len(route.ServiceOptions) == 0 {
 		src = "açık problemli servisler"
 		seen := map[string]bool{}

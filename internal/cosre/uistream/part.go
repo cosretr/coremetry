@@ -27,11 +27,23 @@ var KnownKinds = map[string]bool{
 // QuestionKinds — data-question `kind` kapalı kümesi (api chat_question.go;
 // ilk üçü chat_clarify Pending türleriyle aynı adlar; entity_pick bekleyen
 // soru yazmaz — seçenek etiketi kendi başına yönlenen servis adıdır).
-var QuestionKinds = []string{"source", "doc_or_entity", "trace_synth", "entity_pick"} // v0.10.2139 entity_pick (api chat_bare_entity.go)
+var QuestionKinds = []string{"source", "doc_or_entity", "trace_synth", "entity_pick", "slot"} // v0.10.2139 entity_pick (api chat_bare_entity.go); v0.10.2332 slot (api chat_answer_slot.go)
 
 // QuestionMaxOptions — data-question seçenek tavanı (kapalı küçük soru;
 // katalogdan çok öğeli seçim data-pick'tir).
 const QuestionMaxOptions = 3
+
+// QuestionSlotMaxOptions — v0.10.2332 (conversation-audit §6.1 B): `slot`
+// sorusunun (eksik tek alan, ör. hangi servis) seçenek tavanı.
+const QuestionSlotMaxOptions = 4
+
+// QuestionMaxOptionsFor — türün seçenek tavanı.
+func QuestionMaxOptionsFor(kind string) int {
+	if kind == "slot" {
+		return QuestionSlotMaxOptions
+	}
+	return QuestionMaxOptions
+}
 
 // StopReasons — data-stop `reason` kapalı kümesi (api chat_stop_event.go
 // üretir; protocol.ts STOP_REASONS ile eşit, test pinler).

@@ -178,7 +178,7 @@ func sanitizeChatQuestion(in *aiChatQuestion) *aiChatQuestion {
 		return nil
 	}
 	text := clampChatRunes(in.Text, chatPendingQuestionMax)
-	if text == "" || len(in.Options) == 0 || len(in.Options) > uistream.QuestionMaxOptions {
+	if text == "" || len(in.Options) == 0 || len(in.Options) > uistream.QuestionMaxOptionsFor(in.Kind) { // v0.10.2332 — slot ≤4
 		return nil
 	}
 	out := &aiChatQuestion{Kind: in.Kind, Text: text, AllowFree: in.AllowFree}

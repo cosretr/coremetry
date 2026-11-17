@@ -131,7 +131,7 @@ func TestAnswerStyleSwitch(t *testing.T) {
 	if !answerStyleOn(v2) {
 		t.Fatal("v2 + style açık")
 	}
-	if withAnswerStyle(context.Background()) != context.Background() || answerStyleFrom(withAnswerStyle(context.Background())) != nil {
+	if withAnswerStyle(context.Background(), nil) != context.Background() || answerStyleFrom(withAnswerStyle(context.Background(), nil)) != nil {
 		t.Fatal("v1 ctx değişti")
 	}
 }
@@ -167,7 +167,7 @@ func TestAnswerStyleEvalOverrideInertInProduction(t *testing.T) {
 
 func TestAnswerStyleNarrationOffIsIdentity(t *testing.T) {
 	setConversationStyle(t, false)
-	ctx := withAnswerStyle(withCosreV2Loop(context.Background()))
+	ctx := withAnswerStyle(withCosreV2Loop(context.Background()), nil)
 	nctx, line := answerStyleNarration(ctx, classStatus)
 	if nctx != ctx || line != "" || copilot.AnswerCapOf(nctx) != 0 {
 		t.Fatal("üslup kapalıyken anlatım ctx/istem değişti")
@@ -179,7 +179,7 @@ func TestAnswerStyleNarrationOffIsIdentity(t *testing.T) {
 		t.Fatal("kapalıyken döngü planı değişti")
 	}
 	setConversationStyle(t, true)
-	ctx = withAnswerStyle(withCosreV2Loop(context.Background()))
+	ctx = withAnswerStyle(withCosreV2Loop(context.Background()), nil)
 	nctx, line = answerStyleNarration(ctx, classStatus)
 	if line != answerClassLines[classStatus] || copilot.AnswerCapOf(nctx) != 384 {
 		t.Fatalf("açıkken satır %q tavan %d", line, copilot.AnswerCapOf(nctx))

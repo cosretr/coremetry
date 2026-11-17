@@ -429,7 +429,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		emit = stt.wrapEmit(emit)
 		ctx = withChatStateTurn(ctx, stt) // v0.10.2327 — guided olguları deftere
 	}
-	ctx = withAnswerStyle(ctx)                      // v0.10.2331 — B: cevap sınıfı (chat_answer_class.go); v1'de ctx aynen
+	ctx = withAnswerStyle(ctx, stt)                 // v0.10.2331 — B: cevap sınıfı (chat_answer_class.go); v1'de ctx aynen
 	emit = answerStyleFrom(ctx).wrapEmit(ctx, emit) // v0.10.2331 — üslup kapalıyken emit aynen
 	xch.verify.noteState(cst)                       // v0.10.2327 — durum adları + önceki defter (istemci yankısı hariç)
 	// v0.10.1465 — yapışkan kod konuşması (chat_code_sticky.go): kod okunmuş

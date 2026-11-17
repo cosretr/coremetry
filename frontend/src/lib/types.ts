@@ -8874,7 +8874,7 @@ export interface CosreEndpointPick {
 }
 
 /** v0.10.2102 — data-question kind kapalı kümesi (Go uistream.QuestionKinds). */
-export type CosreQuestionKind = 'source' | 'doc_or_entity' | 'trace_synth' | 'entity_pick'; // v0.10.2139 entity_pick
+export type CosreQuestionKind = 'source' | 'doc_or_entity' | 'trace_synth' | 'entity_pick' | 'slot'; // v0.10.2139 entity_pick; v0.10.2332 slot
 
 /** v0.10.2102 — CoSRE v2 kapalı netleştirme sorusu (data-question; api chat_question.go).
  *  text = akıştaki düz metin sorunun aynısı; options ≤3, id = sunucunun cevap sınıfı. */

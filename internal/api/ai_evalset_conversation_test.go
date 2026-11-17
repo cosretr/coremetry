@@ -2,8 +2,8 @@ package api
 
 // ai_evalset_conversation_test.go — v0.10.2322 (H1): konuşma kipi.
 //
-// Pinlenenler: gömülü 22 vakalık küme (v0.10.2328: + iki doğrulayıcı
-// yoklaması; kapsam, nötr adlar, bilinen okuma adları); dikişlerin üretimde ve tek turlu vakada etkisizliği; SAF
+// Pinlenenler: gömülü 24 vakalık küme (v0.10.2328: + iki doğrulayıcı
+// yoklaması; v0.10.2332: + iki üslup vakası; kapsam, nötr adlar, bilinen okuma adları); dikişlerin üretimde ve tek turlu vakada etkisizliği; SAF
 // yardımcılar (sahte seçimi, pencere, puanlama, profil açılımı); uçtan uca
 // iki profilli çok turlu koşu sahte modelle (geçmiş, bellek içi bağlam, Redis'e
 // yazılmaması, sayı denetimi, "tümü" koşusunun konuşma kümesini içermemesi).
@@ -33,8 +33,8 @@ func TestEvalConvFixtureValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cases) != 22 { // v0.10.2328 — + iki doğrulayıcı yoklaması
-		t.Fatalf("konuşma kümesi 22 vaka olmalı, %d", len(cases))
+	if len(cases) != 24 { // 20 akıcılık + 2 doğrulayıcı yoklaması (v0.10.2328) + 2 üslup (style.json, v0.10.2332)
+		t.Fatalf("konuşma kümesi 24 vaka olmalı, %d", len(cases))
 	}
 	known := evalFixtureToolNames(t)
 	for _, n := range mcptools.V2OnlyTools(mcptools.Deps{}) {
@@ -135,8 +135,8 @@ func TestEvalConvFixtureValid(t *testing.T) {
 	if verifierTurns < 4 || verifierTurns > 6 { // v0.10.2328 — doğrulayıcı odaklı turlar
 		t.Errorf("doğrulayıcı turu %d, 4–6 bekleniyor", verifierTurns)
 	}
-	if turns < 45 || turns > 55 {
-		t.Errorf("tur sayısı %d — profil başına ≈ 50 (iki profil ≈ 100 sohbet turu)", turns)
+	if turns < 50 || turns > 60 { // v0.10.2332 — + 5 üslup turu (style.json)
+		t.Errorf("tur sayısı %d — profil başına ≈ 55 (iki profil ≈ 110 sohbet turu)", turns)
 	}
 }
 

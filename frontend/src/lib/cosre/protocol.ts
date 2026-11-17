@@ -190,9 +190,11 @@ export function parseDataReset(p: UIStreamPart): DataResetPart | null {
 }
 
 /** v0.10.2102 — data-question kind kapalı kümesi (Go uistream.QuestionKinds). */
-export const QUESTION_KINDS = ['source', 'doc_or_entity', 'trace_synth', 'entity_pick'] as const satisfies readonly CosreQuestionKind[];
+export const QUESTION_KINDS = ['source', 'doc_or_entity', 'trace_synth', 'entity_pick', 'slot'] as const satisfies readonly CosreQuestionKind[];
 /** v0.10.2102 — seçenek tavanı (Go uistream.QuestionMaxOptions). */
 export const QUESTION_MAX_OPTIONS = 3;
+/** v0.10.2332 — `slot` (eksik tek alan) seçenek tavanı (Go uistream.QuestionSlotMaxOptions). */
+export const QUESTION_SLOT_MAX_OPTIONS = 4;
 
 /** v0.10.2102 — data-question → CosreQuestion; bilinmeyen kind, boş metin,
  *  0 ya da >3 seçenek, biçimsiz / yinelenen seçenek null (kart çizilmez; düz
@@ -201,7 +203,7 @@ export function parseDataQuestion(p: { type: string; data?: unknown }): CosreQue
   if (p.type !== 'data-question' || !isRecord(p.data)) return null;
   const { kind, text, options, allowFree } = p.data;
   if (!(QUESTION_KINDS as readonly unknown[]).includes(kind) || typeof text !== 'string' || !text || !Array.isArray(options)) return null;
-  if (options.length === 0 || options.length > QUESTION_MAX_OPTIONS) return null;
+  if (options.length === 0 || options.length > (kind === 'slot' ? QUESTION_SLOT_MAX_OPTIONS : QUESTION_MAX_OPTIONS)) return null;
   const out: CosreQuestion['options'] = [];
   for (const o of options) {
     if (!isRecord(o) || typeof o.id !== 'string' || !o.id || typeof o.label !== 'string' || !o.label) return null;

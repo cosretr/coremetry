@@ -359,6 +359,7 @@ func (s *Server) runEvalConvCase(ctx context.Context, job *evalJob, c evalCase) 
 			evidence.WriteString(k + " " + evalStubText(v) + "\n")
 		}
 		tr, err := s.runEvalConvTurn(ctx, job, c, i, ft, hist, &state, convID, catalog)
+		evidence.WriteString(evalAssumeEvidence(tr.Answer)) // v0.10.2332 — sunucunun varsayım cümlesi kanıttır (model sayısı değil)
 		tr.Fails = append(tr.Fails, scoreEvalConvTurn(ft.Expect, tr, evidence.String(), time.Now(), evalConvLoc())...)
 		tr.OK = len(tr.Fails) == 0
 		if err != nil && firstErr == nil {

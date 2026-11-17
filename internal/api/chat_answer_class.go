@@ -202,11 +202,14 @@ func answerClassGeneral(question string) answerClass {
 // answerStyleTurn — bir v2 turunun sınıf durumu. nil = v1 (her metot nil-güvenli).
 type answerStyleTurn struct {
 	on   bool
-	conv *evalConvTurn // değerlendirme koşucusu (konuşma kipi); üretimde nil
+	conv *evalConvTurn  // değerlendirme koşucusu (konuşma kipi); üretimde nil
+	stt  *chatStateTurn // v0.10.2332 — durumun bu turdaki varsayımları (nil = durum kapalı)
 
-	mu    sync.Mutex
-	class answerClass
-	cap   int // son uygulanan tavan (0 = yok)
+	mu      sync.Mutex
+	class   answerClass
+	cap     int    // son uygulanan tavan (0 = yok)
+	rangeS  int64  // v0.10.2332 — guided anlatımın penceresi (0 = bilinmiyor)
+	slotSvc string // v0.10.2332 — durumun cevapladığı servis sorusu
 }
 
 type answerStyleKey struct{}
@@ -225,11 +228,11 @@ func answerStyleOn(ctx context.Context) bool {
 }
 
 // withAnswerStyle — turun başında (copilotChatWith) bir kez. v1'de ctx aynen.
-func withAnswerStyle(ctx context.Context) context.Context {
+func withAnswerStyle(ctx context.Context, stt *chatStateTurn) context.Context {
 	if !cosreV2Marked(ctx) {
 		return ctx
 	}
-	return context.WithValue(ctx, answerStyleKey{}, &answerStyleTurn{on: answerStyleOn(ctx), conv: evalConvFrom(ctx)})
+	return context.WithValue(ctx, answerStyleKey{}, &answerStyleTurn{on: answerStyleOn(ctx), conv: evalConvFrom(ctx), stt: stt})
 }
 
 func answerStyleFrom(ctx context.Context) *answerStyleTurn {
@@ -282,6 +285,9 @@ func answerStyleLoop(ctx context.Context, question string, st ChatContext, repor
 		return
 	}
 	c := answerClassHint(question, st, report)
+	t.mu.Lock()
+	t.rangeS = 0 // döngü penceresi model seçer; guided'ın penceresi bu cevabın değil
+	t.mu.Unlock()
 	capTok := 0
 	if t.on && answerClassLines[c] != "" {
 		capTok = max(answerClassCaps[c], answerLoopToolFloor)
@@ -375,12 +381,18 @@ func lastSentenceEnd(t string) int {
 const answerClassTool = "answer_class"
 
 // wrapEmit — "done"dan önce sınıf, anahtar açıksa turun etkileşim satırına
-// yazılır. Kapalıyken emit aynen.
+// yazılır; v0.10.2332 — "answer" metninin başına varsayım cümlesi
+// (chat_answer_slot.go). Kapalıyken emit aynen.
 func (t *answerStyleTurn) wrapEmit(ctx context.Context, emit func(string, any)) func(string, any) {
 	if t == nil || !t.on {
 		return emit
 	}
 	return func(kind string, payload any) {
+		if kind == "answer" {
+			clause := t.assumeClause()
+			t.noteAssumeEvidence(verifyTurnFrom(ctx), clause)
+			payload = withAssumeClause(payload, clause)
+		}
 		if kind == "done" {
 			if c, _ := t.snapshot(); c != classNone {
 				if x := chatExchangeFrom(ctx); x != nil {

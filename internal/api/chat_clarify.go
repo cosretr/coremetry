@@ -64,6 +64,8 @@ type chatPendingAsk struct {
 	Operation   string `json:"operation,omitempty"`
 	// Entity — v0.10.1576 doc_or_entity sorusunun varlık türü (team | service).
 	Entity string `json:"entity,omitempty"`
+	// Options — v0.10.2332 slot sorusunun seçenekleri (≤4; cevap bunlara doğrulanır).
+	Options []string `json:"options,omitempty"`
 }
 
 // pendingAskValid — SAF: soru tanınan türde, öznesi dolu ve TTL içinde mi.
@@ -79,6 +81,10 @@ func pendingAskValid(p *chatPendingAsk, now time.Time) bool {
 		}
 	case pendingKindTraceSynth:
 		if strings.TrimSpace(p.TraceID) == "" || strings.TrimSpace(p.Fingerprint) == "" {
+			return false
+		}
+	case pendingKindSlot: // v0.10.2332 (chat_answer_slot.go)
+		if strings.TrimSpace(p.Question) == "" || len(p.Options) < 2 || len(p.Options) > 4 {
 			return false
 		}
 	default:
@@ -263,6 +269,9 @@ func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any
 	if !picked {
 		class = clarifyReplyClass(p, reply)
 	}
+	if p.Kind == pendingKindSlot { // v0.10.2332 — seçenek kümesine doğrulanır (kart tıkı ya da serbest metin)
+		class = slotReplyClass(p, option, reply)
+	}
 	args, _ := json.Marshal(map[string]string{"kind": p.Kind, "reply": class})
 	if class == clarifyReplyDropped {
 		// v0.10.1575 — düşen soru EKRANDA adım çizmez ("Nasıl cevapladım"da
@@ -298,6 +307,8 @@ func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any
 	case p.Kind == pendingKindDocOrEntity && class == entityReplyEntity:
 		out.msgs = replaceLastUserText(msgs, p.Question)
 		out.ctx = withForcedChatSource(ctx, srcTelemetry)
+	case p.Kind == pendingKindSlot && class != clarifyReplyDropped: // v0.10.2332 — özgün soru seçilen servisle
+		out.msgs = replaceLastUserText(msgs, slotRewriteQuestion(p.Question, class))
 	case p.Kind == pendingKindTraceSynth && class == synthReplyNo:
 		chatExchangeFrom(ctx).noteRoute("trace_declined")
 		emit("answer", map[string]any{"text": synthDeclinedTR, "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
@@ -348,6 +359,9 @@ func clarifyReplyEvidenceTR(p *chatPendingAsk, class string) string {
 		if p.Entity == "" { // v0.10.1942 — çıplak olmayan envanter sorusu
 			what = "özgün soru canlı telemetriden cevaplanıyor"
 		}
+	}
+	if p.Kind == pendingKindSlot && class != clarifyReplyDropped { // v0.10.2332
+		what = "seçilen servisle (" + class + ") özgün soru yeniden cevaplanıyor"
 	}
 	return "bekleyen soru (" + p.Kind + "): " + clipRunes(q, 200) + "\ncevap: " + class + " — " + what
 }

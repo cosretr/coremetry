@@ -71,7 +71,7 @@ func (t *Translator) Translate(kind string, payload any) []Part {
 		out = append(out, Part{"type": "data-pick", "id": "pick", "data": m})
 	case "question":
 		// v0.10.2100 (experience-audit D1) — kapalı netleştirme sorusu (api
-		// chat_question.go): {kind, text, options[{id,label}] ≤3, allowFree}; tek parça.
+		// chat_question.go): {kind, text, options[{id,label}] ≤3 (slot ≤4), allowFree}; tek parça.
 		out = append(out, Part{"type": "data-question", "id": "question", "data": m})
 	case "state":
 		// v0.10.2325 — konuşma durumu (api chat_state.go chatStateWire): {service?,
