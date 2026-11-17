@@ -226,6 +226,9 @@ describe('↓ En alta', () => {
     const scrollTo = vi.fn();
     log.scrollTo = scrollTo as unknown as typeof log.scrollTo;
     expect(button(document.body, 'En alta in')).toBeUndefined();
+    // v0.10.2319 — yapışmayı yalnız YUKARI hareket kapatır: önce dipte, sonra yukarı.
+    await act(async () => { log.scrollTop = 1600; log.dispatchEvent(new Event('scroll')); });
+    expect(button(document.body, 'En alta in')).toBeUndefined();
     await act(async () => { log.scrollTop = 100; log.dispatchEvent(new Event('scroll')); });
     const jump = button(document.body, 'En alta in')!;
     expect(jump).toBeTruthy();

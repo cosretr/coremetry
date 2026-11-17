@@ -116,6 +116,10 @@ async function face() {
   // (8) yukarı kaydır: dipte değil → "↓ En alta" çizilir.
   Object.defineProperty(thread, 'scrollHeight', { configurable: true, value: 2000 });
   Object.defineProperty(thread, 'clientHeight', { configurable: true, value: 400 });
+  // v0.10.2319 — yapışmayı yalnız YUKARI hareket kapatır: önce dipte ol, sonra yukarı kaydır
+  // (jsdom'da scrollHeight sonradan tanımlandığı için "0'da kalmak" yukarı kaydırma değildir).
+  thread.scrollTop = 2000;
+  await act(async () => { thread.dispatchEvent(new Event('scroll')); });
   thread.scrollTop = 0;
   await act(async () => { thread.dispatchEvent(new Event('scroll')); });
   const buttons = [...document.body.querySelectorAll('button')].map(b => b.textContent?.trim() ?? '');

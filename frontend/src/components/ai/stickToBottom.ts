@@ -9,6 +9,16 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 // Delta yapışması ANLIK (scrollTop ataması): smooth kaydırma sırasında ara
 // konumlar "dipte değil" okunur ve yapışma kendi kendini kapatırdı. Smooth
 // yalnız pin'de.
+//
+// v0.10.2319 — yapışmayı yalnız YUKARI hareket kapatır. Eskiden her scroll
+// olayı "dipte mi?" diye okunuyordu; olay eşzamansız geldiği için kendi
+// programatik kaydırmamızın olayı, içerik o arada büyüdüyse (çekmece yeniden
+// açılınca eski mesajlar yeniden çizilir, yükseklik sonradan oturur) "dipte
+// değil" okunup yapışmayı kapatıyordu: sohbet üstte kalıyor, cevap aksa da
+// dibe inmiyordu. İçerik büyümesi scrollTop'u DEĞİŞTİRMEZ; kullanıcının
+// yukarı kaydırması AZALTIR — ayrım bu. Ayrıca: yeni bağlanan kap (çekmece
+// yeniden açıldı) konumunu zaten yitirmiştir, dipten başlar; yapışıkken
+// içerik boyu değişirse (ResizeObserver) dibe yeniden inilir.
 
 /** Dibe bu kadar px yakınsa "dipte" sayılır (son satırın yarısı payı). */
 export const STICK_THRESHOLD_PX = 48;
@@ -18,6 +28,22 @@ export function isNearBottom(
   threshold = STICK_THRESHOLD_PX,
 ): boolean {
   return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+}
+
+/**
+ * nextStuck — SAF: bir scroll olayından sonra yapışma durumu. Dibe yakınsa
+ * yapışık; değilse yalnız YUKARI hareket (scrollTop azaldı) yapışmayı kapatır.
+ * scrollTop aynı kaldıysa ya da arttıysa (içerik büyüdü, programatik/smooth
+ * iniş sürüyor) önceki durum korunur.
+ */
+export function nextStuck(
+  prev: boolean,
+  lastTop: number,
+  el: { scrollTop: number; scrollHeight: number; clientHeight: number },
+): boolean {
+  if (isNearBottom(el)) return true;
+  if (el.scrollTop < lastTop - 1) return false;
+  return prev;
 }
 
 /**
@@ -58,15 +84,35 @@ export function useStickToBottomState(ref: RefObject<HTMLElement | null>, deps: 
   // kap henüz yoktu, dinleyici hiç kurulmuyor ve "dipte değil" hiç
   // öğrenilmiyordu (yukarı kaydıran operatör yine dibe fırlatılırdı).
   const unbindRef = useRef<(() => void) | null>(null);
+  const lastTop = useRef(0);
   const bind = useCallback((el: HTMLElement | null) => {
     if (el === elRef.current) return;
     unbindRef.current?.();
     unbindRef.current = null;
     elRef.current = el;
     if (!el) return;
-    const onScroll = () => { stuck.current = isNearBottom(el); setAtBottom(stuck.current); };
+    // Yeni kap: eski konum yok (DOM düğümü yeniden kuruldu) → dipten başla.
+    stuck.current = true;
+    setAtBottom(true);
+    lastTop.current = el.scrollTop;
+    const onScroll = () => {
+      stuck.current = nextStuck(stuck.current, lastTop.current, el);
+      lastTop.current = el.scrollTop;
+      setAtBottom(stuck.current);
+    };
     el.addEventListener('scroll', onScroll, { passive: true });
-    unbindRef.current = () => el.removeEventListener('scroll', onScroll);
+    // Yapışıkken içerik boyu değişirse (geç oturan yükseklik, akan cevap) dibe in.
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver === 'function') {
+      ro = new ResizeObserver(() => {
+        if (!stuck.current) return;
+        el.scrollTop = el.scrollHeight;
+        lastTop.current = el.scrollTop;
+      });
+      ro.observe(el);
+      for (const c of Array.from(el.children)) ro.observe(c);
+    }
+    unbindRef.current = () => { el.removeEventListener('scroll', onScroll); ro?.disconnect(); };
   }, []);
   useEffect(() => () => { unbindRef.current?.(); unbindRef.current = null; elRef.current = null; }, []);
 
@@ -75,6 +121,7 @@ export function useStickToBottomState(ref: RefObject<HTMLElement | null>, deps: 
     const el = elRef.current;
     if (!el || !stuck.current) return;
     el.scrollTop = el.scrollHeight;
+    lastTop.current = el.scrollTop;
     // deps çağıranın listesi (turns/open): kuralın statik doğrulaması bilerek atlanır.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
