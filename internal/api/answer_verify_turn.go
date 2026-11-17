@@ -171,7 +171,7 @@ func (v *answerVerifyTurn) noteState(st *chatContextState) {
 	c := st.ctx
 	v.mu.Lock()
 	for _, n := range append([]string{c.Cluster, c.Namespace, c.Workload, c.Service, c.Pod, c.Trace, c.Operation, c.Env, c.Problem}, c.Services...) {
-		if n != "" {
+		if n != "" && n != st.aliasService { // v0.10.2334 — eş addan çözülen servis kanıt değil
 			v.names = append(v.names, n)
 		}
 	}

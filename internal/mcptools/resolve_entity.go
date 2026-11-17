@@ -411,7 +411,10 @@ func ResolveEntityText(ctx context.Context, d Deps, text, cluster, namespace str
 		}
 		idx.Namespaces, idx.Workloads, idx.Pods = filt(idx.Namespaces), filt(idx.Workloads), filt(idx.Pods)
 	}
-	return ResolveEntities(text, idx, 12), idx, nil
+	// v0.10.2334 (G) — kullanıcının eş adları katalog sıralamasından ÖNCE
+	// (entity_alias.go; bağlamda yalnız o kullanıcının turunda bulunur).
+	cands, _ := ApplyEntityAliases(text, idx, EntityAliasesFrom(ctx), ResolveEntities(text, idx, 12))
+	return cands, idx, nil
 }
 
 // ─── resolve_entity tool ───────────────────────────────────────

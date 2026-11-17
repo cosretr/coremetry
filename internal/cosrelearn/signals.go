@@ -76,11 +76,16 @@ const (
 	// tarih / ad saydı. Tur başına en çok bir satır; ayrıntı "tier=… kinds=…
 	// tokens=…" (cevap metni yok). Cevap DEĞİŞMEZ; yalnız ölçüm (E2 eşiği).
 	SigVerifyMismatch = "verify_mismatch"
+	// SigAliasSaved — v0.10.2334 (conversation-audit G): kullanıcı eş ad
+	// önerisini Kaydet'le onayladı (kendi sözlüğü hakkında açık talimat, kalite
+	// oyu DEĞİL). Ayrıntı yalnız "kind=service" — deyim ve kullanıcı yok; puana
+	// ve değerlendirme etiketlerine girmez.
+	SigAliasSaved = "alias_saved"
 )
 
 // SystemSignalKinds — sunucunun yazabileceği kapalı küme.
 var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrected: true, SigBriefingAsk: true,
-	SigVerifyMismatch: true} // v0.10.2327
+	SigVerifyMismatch: true, SigAliasSaved: true} // v0.10.2327, v0.10.2334
 
 // SystemSignalActor — sistem sinyallerinin user_email değeri (kullanıcı değil).
 const SystemSignalActor = "system:cosre"

@@ -44,6 +44,8 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/cache"
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/copilot"
+	"github.com/cilcenk/coremetry/internal/mcptools"
 )
 
 // chatOffer — sunucunun/asistanın önerdiği sonraki adım. Kind kapalı küme
@@ -172,6 +174,14 @@ type chatStateTurn struct {
 	// assumedSvc / assumedWin — v0.10.2332 (B): bu turda önceki turdan
 	// devralınıp isteğe UYGULANAN servis ve pencere etiketi (varsay ve söyle).
 	assumedSvc, assumedWin string
+	// v0.10.2334 (G, chat_state_correction.go) — düzeltme ve eş adlar.
+	s          *Server
+	uid        string                 // kullanıcı deposunun sahibi ("" = okunmadı / değerlendirme)
+	aliases    []mcptools.EntityAlias // konuşma düzeltmeleri + kullanıcının eş adları (öncelik sırası)
+	corr       *chatCorrection        // bu turda algılanan düzeltme (Right boşsa tur sonunda belirlenir)
+	learned    *chatCorrection        // kesinleşen düzeltme (finalize)
+	avoid      string                 // bu turda seçilmeyecek servis (düzeltilen ya da eş adın yanlış adayı)
+	addrMarked string                 // bu turun açık hitap işareti
 }
 
 // beginChatStateTurn — çözücüyü koşar ve isteği kapsamla günceller. Kapalıyken nil.
@@ -192,10 +202,20 @@ func (s *Server) beginChatStateTurn(ctx context.Context, req *chatRequest, st *c
 			st.ctx, st.dirty = next, true
 		}
 	}
-	stt := &chatStateTurn{st: st, svcNames: svcs, loc: loc}
+	stt := &chatStateTurn{st: st, svcNames: svcs, loc: loc, s: s}
+	// v0.10.2334 (G) — kullanıcının kaydı (önbellekli tek nokta okuma; değerlendirmede yok).
+	uid, prefs := s.cosreUserTurnPrefs(ctx)
+	stt.uid = uid
+	if st.ctx.Address == "" && prefs.Addr != "" { // karar 13 — yeni konuşma kullanıcının hitabıyla başlar
+		st.ctx.Address = prefs.Addr
+	}
+	stt.aliases = append(conversationAliases(st.ctx), cosreUserEntityAliases(prefs)...)
 	last := len(req.Messages) - 1
+	hasPrior := chatUserTurns(req.Messages) > 1
+	prevState, _ := freshChatState(st.ctx, now)
 	res := resolveChatState(stateResolveIn{Question: req.Messages[last].Text, Prev: st.ctx, Now: now, Loc: loc, Services: svcs, Envs: envs,
-		HasPrior: chatUserTurns(req.Messages) > 1})
+		HasPrior: hasPrior, Aliases: stt.aliases})
+	stt.noteCorrection(&res, prevState, req.Messages, svcs, envs, hasPrior)
 	stt.res = res
 	if !chatContextEqual(st.ctx, res.Next) {
 		st.ctx, st.dirty = res.Next, true
@@ -206,6 +226,10 @@ func (s *Server) beginChatStateTurn(ctx context.Context, req *chatRequest, st *c
 			req.Messages[last].Text = p
 			emit("step", map[string]string{"label": "öneri yürütülüyor: " + res.Offer.Label})
 		}
+	}
+	if res.Alias != nil { // v0.10.2334 — eş addan çözülen servis bütün kademelere ekran servisi gibi iner
+		req.Context.Service = c.Service
+		emit("step", map[string]string{"label": "eş adın: «" + res.Alias.Phrase + "» → " + c.Service})
 	}
 	var inherited []string
 	if res.InheritService && !screenDeixis(req.Messages[last].Text) && req.Context.Service != c.Service {
@@ -267,7 +291,7 @@ func (t *chatStateTurn) noteTool(name string, args json.RawMessage, content stri
 		return
 	}
 	c := t.st.ctx
-	if v := argStr(m, "service"); v != "" && c.Service == "" && containsFold(t.svcNames, v) {
+	if v := argStr(m, "service"); v != "" && c.Service == "" && containsFold(t.svcNames, v) && !strings.EqualFold(v, t.avoid) {
 		c.Service = v
 	}
 	if v := concreteEnv(argStr(m, "env")); v != "" && c.Env == "" {
@@ -309,6 +333,16 @@ func (t *chatStateTurn) noteFacts(facts []chatFact) {
 	}
 }
 
+// toolAvoid — v0.10.2334 (G): bu turda araç argümanında seçilmeyecek servis;
+// yalnız yerine konacak durum servisi varken (toolService) — model düzeltilen
+// ya da eş adın yanlış adayını açıkça yazarsa argüman durum servisine çevrilir.
+func (t *chatStateTurn) toolAvoid() string {
+	if t == nil || t.toolService() == "" || strings.EqualFold(t.avoid, t.toolService()) {
+		return ""
+	}
+	return t.avoid
+}
+
 type chatStateTurnKey struct{}
 
 // withChatStateTurn — v0.10.2327: turun durum işlemi ctx'e (guided kademesi defter yazar); nil → ctx aynen.
@@ -316,6 +350,7 @@ func withChatStateTurn(ctx context.Context, t *chatStateTurn) context.Context {
 	if t == nil {
 		return ctx
 	}
+	ctx = mcptools.WithEntityAliases(ctx, t.aliases) // v0.10.2334 — resolve_entity aynı eş adları görür
 	return context.WithValue(ctx, chatStateTurnKey{}, t)
 }
 
@@ -414,6 +449,11 @@ func (t *chatStateTurn) wrapEmit(emit func(string, any)) func(string, any) {
 			if w := chatStateWireOf(t.st.ctx, chatStateNow()); !stateWireEmpty(w) {
 				emit(chatStateEventKind, w)
 			}
+			emit(kind, payload)
+			if job := t.s.cosreUserAddressJob(t.uid, t.addrMarked); job != nil { // karar 13 — açık hitap kullanıcı deposuna (yalnız değişince; akışı beklemez)
+				go job()
+			}
+			return
 		}
 		emit(kind, payload)
 	}
@@ -454,6 +494,16 @@ func (t *chatStateTurn) finalize() {
 	}
 	if t.answered {
 		c.Offer = t.offer
+	}
+	if k := t.corr; k != nil { // v0.10.2334 — düzeltme kesinleşir: yeni varlık eskisinden farklı
+		if k.Right == "" {
+			k.Right = c.Service
+		}
+		if k.Right != "" && !strings.EqualFold(k.Right, k.Wrong) {
+			c.Corrections = withCorrection(c.Corrections, *k)
+			learned := c.Corrections[len(c.Corrections)-1]
+			t.learned = &learned
+		}
 	}
 	c.Ledger = append([]chatFact(nil), t.facts...)
 	if len(c.Ledger) == 0 {
@@ -750,4 +800,32 @@ func applyStatePatch(c ChatContext, p chatStatePatch, svcs, envs []string, now t
 		c.RangeS, c.WinToMs, c.WinLabel, c.RangeExplicit = w.RangeS, w.ToMs, label, true
 	}
 	return c, true
+}
+
+// noteCorrection — v0.10.2334 (G): düzeltme ipucu + önceki turun servisi →
+// bu turun durumu. Yeni açık ad (ya da eş ad) eskisinden farklıysa düzeltme
+// hemen bilinir; ad yoksa eski servis DEVRALINMAZ ve tur sonunda okunan
+// servis yeni varlık olur (finalize). prev: TTL süzülmüş önceki durum.
+func (t *chatStateTurn) noteCorrection(res *stateResolveOut, prev ChatContext, msgs []copilot.ChatMessage, svcs, envs []string, hasPrior bool) {
+	t.addrMarked = res.AddressMarked
+	if hasPrior && prev.Service != "" && len(msgs) > 0 && correctionCue(msgs[len(msgs)-1].Text) {
+		phrase := aliasPhraseOf(previousUserText(msgs), svcs, envs)
+		switch {
+		case res.ServiceSet && !strings.EqualFold(res.Next.Service, prev.Service):
+			t.corr = &chatCorrection{Phrase: phrase, Wrong: prev.Service, Right: res.Next.Service}
+		case !res.ServiceSet:
+			res.InheritService = false
+			res.Next.Service, res.Next.Services, res.Next.Operation, res.Next.Trace = "", nil, "", ""
+			t.corr = &chatCorrection{Phrase: phrase, Wrong: prev.Service}
+		}
+		if t.corr != nil {
+			t.avoid = prev.Service
+		}
+	}
+	if a := res.Alias; a != nil {
+		t.st.aliasService = res.Next.Service
+		if t.avoid == "" {
+			t.avoid = svcIDName(a.Not)
+		}
+	}
 }

@@ -67,6 +67,10 @@ type toolScreenScope struct {
 	// konur — devam sorusu ("deploy mu vardı") önceki turun servisinde kalır.
 	// Yalnız v2 + cosre_conversation.state; kapalıyken "".
 	StateService string
+	// StateAvoid — v0.10.2334 (G): bu turda seçilmeyecek servis (kullanıcının
+	// düzelttiği ya da eş adının yanlış adayı). Model onu açıkça yazarsa
+	// argüman StateService'e çevrilir; StateService boşken etkisiz.
+	StateAvoid string
 }
 
 // serviceDetailPages — servis enjeksiyonunun izinli olduğu sayfalar.
@@ -198,6 +202,11 @@ func applyScreenContext(tool string, args json.RawMessage, schema map[string]any
 		}
 	}
 
+	if sc.StateService != "" && sc.StateAvoid != "" && !hasTrace && strings.EqualFold(argStr(m, "service"), sc.StateAvoid) {
+		m["service"] = sc.StateService // v0.10.2334 — aynı yanlış eşleme ikinci kez okunmaz
+		applied.Service = sc.StateService
+		changed = true
+	}
 	if sc.StateService != "" && !hasTrace && has("service") && argStr(m, "service") == "" {
 		m["service"] = sc.StateService
 		applied.Service = sc.StateService

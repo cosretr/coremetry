@@ -81,6 +81,10 @@ type ChatContext struct {
 	Address      string     `json:"address,omitempty"` // sen | siz
 	Offer        *chatOffer `json:"offer,omitempty"`   // sunucunun/asistanın önerdiği sonraki adım
 	Ledger       []chatFact `json:"ledger,omitempty"`  // son turun ≤5 olgusu (kanıt defteri)
+	// Corrections — v0.10.2334 (G, chat_state_correction.go): bu konuşmanın
+	// varlık düzeltmeleri (≤5); aynı deyim konuşmada doğrudan yeni varlığa
+	// çözülür, öneri kartı bir kez çıkar. Yalnız v2 + durum açıkken yazılır.
+	Corrections []chatCorrection `json:"corrections,omitempty"`
 }
 
 func (c ChatContext) Empty() bool {
@@ -117,6 +121,9 @@ type chatContextState struct {
 	// fromClient — v0.10.2324 (chat_state.go, karar 2): durum Redis'siz
 	// kurulumda istemcinin yankısından geldi; doğrulayıcı kanıtı OLAMAZ.
 	fromClient bool
+	// aliasService — v0.10.2334 (G): bu turda servis kullanıcının eş adından
+	// çözüldü; o ad doğrulayıcı kanıtı DEĞİLDİR (eşleme kanıta dokunmaz).
+	aliasService string
 }
 
 type chatCtxKey struct{}

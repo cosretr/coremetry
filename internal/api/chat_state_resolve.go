@@ -76,6 +76,9 @@ type stateResolveIn struct {
 	Envs     []string
 	// HasPrior — konuşmada önceki kullanıcı turu var (ilk tur devralmaz; D5).
 	HasPrior bool
+	// Aliases — v0.10.2334 (G): konuşmanın düzeltmeleri + kullanıcının eş
+	// adları (öncelik sırasıyla); açık ad yoksa katalogdan ÖNCE uygulanır.
+	Aliases []mcptools.EntityAlias
 }
 
 // stateResolveOut — çözücü çıktısı. Next = bu turun durumu (kalıcı alanlar
@@ -90,6 +93,10 @@ type stateResolveOut struct {
 	InheritEnv     bool
 	InheritWindow  bool
 	Offer          *chatOffer // kabul edilen öneri (nil = yok)
+	// Alias — v0.10.2334: servis bu turda bir eş addan çözüldü (nil = hayır).
+	Alias *mcptools.EntityAlias
+	// AddressMarked — bu turun yazımında açık hitap işareti ("" = yok).
+	AddressMarked string
 }
 
 // freshChatState — SAF: TTL'i geçmiş durumun kapsamı düşer (kalıcı işaretler
@@ -110,6 +117,7 @@ func resolveChatState(in stateResolveIn) stateResolveOut {
 	out := stateResolveOut{Next: prev, Stale: stale}
 	norm := normalizeGuidedMsg(strings.TrimSpace(in.Question))
 	toks := guidedTokens(norm)
+	out.AddressMarked = addressMarker(toks)
 	out.Next.Address = resolveAddress(toks, prev.Address)
 
 	// Öneri: çıplak kabul + taze öneri → yürüt; başka her soru öneriyi siler.
@@ -142,6 +150,12 @@ func resolveChatState(in stateResolveIn) stateResolveOut {
 			out.Next.Services = svcs
 		}
 		out.ServiceSet = true
+	} else if svc, a := aliasStateService(in.Question, in.Services, in.Aliases); a != nil {
+		if svc != prev.Service {
+			out.Next.Operation, out.Next.Trace = "", ""
+		}
+		out.Next.Service, out.Next.Services = svc, nil
+		out.ServiceSet, out.Alias = true, a
 	}
 	if v := codeAfter(chanCodeRe, in.Question); v != "" {
 		out.Next.ChannelCode = v
@@ -348,6 +362,20 @@ func explicitStateServices(question string, services []string) []string {
 	return out
 }
 
+// aliasStateService — v0.10.2334 (G): eş ad → servis; iki çözücü yolunun
+// ORTAK fonksiyonu (mcptools.ApplyEntityAliases) servis kataloğuyla. Bayat
+// hedef (katalogda yok) yok sayılır.
+func aliasStateService(question string, services []string, aliases []mcptools.EntityAlias) (string, *mcptools.EntityAlias) {
+	if len(aliases) == 0 || len(services) == 0 {
+		return "", nil
+	}
+	c, a := mcptools.ApplyEntityAliases(question, mcptools.EntityCatalogIndex{Services: services}, aliases, nil)
+	if a == nil || len(c) != 1 || c[0].Kind != "service" {
+		return "", nil
+	}
+	return c[0].Name, a
+}
+
 var (
 	chanCodeRe   = regexp.MustCompile(`(?i)\bkanal(?:\s+kodu)?\s*[:=]?\s*([A-Za-z0-9_-]{1,16})`)
 	funcCodeRe   = regexp.MustCompile(`(?i)\bfonksiyon(?:\s+kodu)?\s*[:=]?\s*([A-Za-z0-9_-]{1,16})`)
@@ -385,6 +413,17 @@ var senSuffixes = []string{"mısın", "misin", "musun", "müsün"}
 // resolveAddress — SAF: kullanıcının yazımından hitap. Siz işareti sen
 // işaretinden önce okunur; işaret yoksa önceki, o da yoksa "sen".
 func resolveAddress(toks []string, prev string) string {
+	if m := addressMarker(toks); m != "" {
+		return m
+	}
+	if prev != "" {
+		return prev
+	}
+	return addressSen
+}
+
+// addressMarker — SAF: yazımdaki açık hitap işareti ("" = yok).
+func addressMarker(toks []string) string {
 	siz, sen := false, false
 	for _, t := range toks {
 		switch t {
@@ -413,8 +452,6 @@ func resolveAddress(toks []string, prev string) string {
 		return addressSiz
 	case sen:
 		return addressSen
-	case prev != "":
-		return prev
 	}
-	return addressSen
+	return ""
 }

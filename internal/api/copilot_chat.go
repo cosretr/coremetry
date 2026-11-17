@@ -1107,7 +1107,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		scopeTrace = traceFU.TraceID
 	}
 	toolScope := buildToolScreenScope(screenCtx, pageCtx, pinnedCtx, scopeTrace, lastUserText(req.Messages))
-	toolScope.StateService = stt.toolService() // v0.10.2324 — durum servisi (chat_state.go); kapalıyken ""
+	toolScope.StateService, toolScope.StateAvoid = stt.toolService(), stt.toolAvoid() // v0.10.2324 durum servisi; v0.10.2334 düzeltilen servis (kapalıyken "")
 	// v0.10.1289 — operatör kuralları (cosre_rules_prompt.go): bağlama uyan ≤5
 	// kural çitli veri bloğu + ek olarak sohbet bağlamı önsözünün ARKASINA;
 	// araç argümanlarına / router'a girmez. Kural yoksa prompt bayt bayt eski.

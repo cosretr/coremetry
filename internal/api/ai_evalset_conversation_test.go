@@ -33,8 +33,8 @@ func TestEvalConvFixtureValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cases) != 24 { // 20 akıcılık + 2 doğrulayıcı yoklaması (v0.10.2328) + 2 üslup (style.json, v0.10.2332)
-		t.Fatalf("konuşma kümesi 24 vaka olmalı, %d", len(cases))
+	if len(cases) != 26 { // 20 akıcılık + 2 doğrulayıcı yoklaması (v0.10.2328) + 2 üslup (style.json, v0.10.2332) + 2 düzeltmeden öğrenme (learning.json, v0.10.2334)
+		t.Fatalf("konuşma kümesi 26 vaka olmalı, %d", len(cases))
 	}
 	known := evalFixtureToolNames(t)
 	for _, n := range mcptools.V2OnlyTools(mcptools.Deps{}) {
@@ -135,8 +135,8 @@ func TestEvalConvFixtureValid(t *testing.T) {
 	if verifierTurns < 4 || verifierTurns > 6 { // v0.10.2328 — doğrulayıcı odaklı turlar
 		t.Errorf("doğrulayıcı turu %d, 4–6 bekleniyor", verifierTurns)
 	}
-	if turns < 50 || turns > 60 { // v0.10.2332 — + 5 üslup turu (style.json)
-		t.Errorf("tur sayısı %d — profil başına ≈ 55 (iki profil ≈ 110 sohbet turu)", turns)
+	if turns < 55 || turns > 70 { // v0.10.2332 — + 5 üslup turu (style.json); v0.10.2334 — + 5 düzeltme turu (learning.json)
+		t.Errorf("tur sayısı %d — profil başına ≈ 65 (iki profil ≈ 130 sohbet turu)", turns)
 	}
 }
 
