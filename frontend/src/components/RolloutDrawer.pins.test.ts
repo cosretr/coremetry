@@ -10,13 +10,17 @@ import { resolve } from 'node:path';
 // v0.10.943 — tablo standardı T1: Geçiş paneli `<th>` satırlı tablodan
 // KeyValue'ya geçti; sarma artık `.keyval__val` kuralından (`.td-full` değil).
 
+import { t } from '@/lib/i18n';
+
 describe('RolloutDrawer (v0.10.338)', () => {
   const src = readFileSync(resolve(__dirname, 'RolloutDrawer.tsx'), 'utf8');
   const css = readFileSync(resolve(__dirname, '../styles/globals.css'), 'utf8');
 
   it('revizyon, imaj ve küme değerleri sarar (KeyValue), kırpılmaz', () => {
-    for (const label of ['revizyon', 'imaj', 'küme']) {
-      const re = new RegExp(`<KeyValueRow k="${label}" mono\\b`);
+    // v0.10.2304 — etiketler katalogdan (TR değerleri aynı).
+    for (const [key, label] of [['rod.kv.revision', 'revizyon'], ['rod.kv.image', 'imaj'], ['rod.kv.cluster', 'küme']]) {
+      expect(t(key, 'tr')).toBe(label);
+      const re = new RegExp(`<KeyValueRow k=\\{t\\('${key.replace(/\./g, '\\.')}', lang\\)\\} mono\\b`);
       expect(src, `${label} satırı KeyValue kimlik değeri değil`).toMatch(re);
     }
     const rule = css.match(/\n\.keyval__val \{([^}]*)\}/);
@@ -41,9 +45,10 @@ describe('RolloutDrawer (v0.10.338)', () => {
     // v0.10.1262 — imaj iki satır (önceki / yeni), her biri kendi kopyalama düğmesiyle; aynıysa "aynı" rozeti.
     expect(src).toMatch(/<CopyButton value=\{im\.prev\}/);
     expect(src).toMatch(/<CopyButton value=\{im\.next\}/);
-    expect(src).toContain('önceki: ');
-    expect(src).toContain('yeni: ');
-    expect(src).toMatch(/im\.same && .*>aynı<\/Badge>/);
+    expect(src).toContain("{t('rod.img.prev', lang)}");
+    expect(src).toContain("{t('rod.img.next', lang)}");
+    expect(src).toMatch(/im\.same && .*>\{t\('rod\.img\.same', lang\)\}<\/Badge>/);
+    expect([t('rod.img.prev', 'tr'), t('rod.img.next', 'tr'), t('rod.img.same', 'tr')]).toEqual(['önceki: ', 'yeni: ', 'aynı']);
   });
 
   it('çekmece küme adını çözer ve başlıkta + Geçiş panelinde gösterir', () => {

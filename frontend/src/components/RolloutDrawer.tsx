@@ -25,8 +25,11 @@ import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTabl
 import { statusTone, statusLabel, statusTitle, shortRevision, imageDiff, rolloutChangeKind, changeKindLabel, changeKindTitle, changeKindTone, rolloutPlaceLabel, isV2Rollout, replicaSummary, rolloutTimeline, imageLines, originLabel, originTitle, originAppLine } from '@/lib/rolloutRow';
 import type { RolloutIdParam } from '@/lib/rolloutRow';
 import type { ServiceReportSection } from '@/lib/types';
+import { useMemo } from 'react';
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2304 — çekmece metinleri arayüz dilinde (TR aynı)
+import { OrigLang } from '@/features/anomalies/OrigLang';
 
-function pct(n: number) { return `%${n.toFixed(1)}`; }
+function pct(n: number, lang: Lang = 'tr') { return lang === 'tr' ? `%${n.toFixed(1)}` : `${n.toFixed(1)}%`; } // v0.10.2304 — EN "12.5%"
 function ms(n: number) { return `${n.toFixed(0)}ms`; }
 function rps(n: number) { return `${n.toFixed(2)}/s`; }
 const CAP = 20;
@@ -36,15 +39,17 @@ const CAP = 20;
 // genişlikte (ve dar ekranda fit küçültünce) "…" sonraki değeri keserdi —
 // hücre ok'tan sarar (truncate 'wrap').
 const HEALTH_RANK: Record<ServiceReportSection['health'], number> = { red: 3, yellow: 2, green: 1, '': 0 };
-const SVC_COLS: ColumnDef<ServiceReportSection>[] = [
-  { id: 'service', label: 'Servis',    sortValue: s => s.service,             naturalDir: 'asc',  flex: true, mono: true },
-  { id: 'health',  label: 'Sağlık',    sortValue: s => HEALTH_RANK[s.health], naturalDir: 'desc', width: 90 },
-  { id: 'err',     label: 'Hata% ö/s', numeric: true, width: 130, truncate: 'wrap' },
-  { id: 'p99',     label: 'p99 ö/s',   numeric: true, width: 140, truncate: 'wrap' },
-  { id: 'rps',     label: 'İstek ö/s', numeric: true, width: 160, truncate: 'wrap' },
+const SVC_COLS = (lang: Lang): ColumnDef<ServiceReportSection>[] => [
+  { id: 'service', label: t('search.facet.service', lang), sortValue: s => s.service,             naturalDir: 'asc',  flex: true, mono: true },
+  { id: 'health',  label: t('aiToolsets.col.health', lang), sortValue: s => HEALTH_RANK[s.health], naturalDir: 'desc', width: 90 },
+  { id: 'err',     label: t('rod.col.err', lang), numeric: true, width: 130, truncate: 'wrap' },
+  { id: 'p99',     label: t('rod.col.p99', lang), numeric: true, width: 140, truncate: 'wrap' },
+  { id: 'rps',     label: t('rod.col.rps', lang), numeric: true, width: 160, truncate: 'wrap' },
 ];
 
 export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: () => void }) {
+  const lang = useLang();
+  const svcCols = useMemo(() => SVC_COLS(lang), [lang]);
   const q = useRolloutDetail(id);
   const d = q.data;
   // v0.10.338 — Operator-reported: aynı workload birden çok cluster'a çıkıyor,
@@ -52,20 +57,20 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
   // (Rollouts sayfasıyla aynı çözüm); liste yoksa/bayrak kapalıysa ID.
   const clustersQ = useEntityClusters();
   const clusterName = clustersQ.data?.clusters?.find(c => c.id === id.clusterId)?.name;
-  const dt = useDataTable<ServiceReportSection>({ storageKey: 'rollout-drawer-services', columns: SVC_COLS, rows: d?.services ?? [] });
+  const dt = useDataTable<ServiceReportSection>({ storageKey: 'rollout-drawer-services', columns: svcCols, rows: d?.services ?? [] });
   return (
     <Drawer onClose={onClose} width={760} header={
       <>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600 }}>{id.workload}</span>
-        <span className="field-hint" title={`küme ${clusterName || id.clusterId} · namespace ${id.namespace}`}>{clusterName || id.clusterId} · {id.namespace}</span>
+        <span className="field-hint" title={tf('rod.headTitle', lang, { c: clusterName || id.clusterId, ns: id.namespace })}>{clusterName || id.clusterId} · {id.namespace}</span>
         {d && <Badge tone={statusTone(d.rollout.status)}>{statusLabel(d.rollout.status)}</Badge>}
         {d && <span className="field-hint">{shortRevision(d.rollout.revision, d.rollout.workload)} · {imageDiff(d.rollout)} · {fmtDateTime(new Date(d.rollout.startedAt))}</span>}
       </>
     }>
       {q.isPending && <Spinner />}
-      {q.isError && <Empty icon="!" title="Çekmece yüklenemedi">{(q.error as Error).message}</Empty>}
+      {q.isError && <Empty icon="!" title={t('rod.err', lang)}>{(q.error as Error).message}</Empty>}
       {d && (d.rollout.note || d.note) && (
-        <div className="field-hint" style={{ marginBottom: 8 }}>{[d.rollout.note, d.note].filter(Boolean).join(' · ')}</div>
+        <div className="field-hint" style={{ marginBottom: 8 }}><OrigLang>{[d.rollout.note, d.note].filter(Boolean).join(' · ')}</OrigLang></div>
       )}
       {d && (() => {
         // v0.10.234 — Operator-reported: "hangi versiyondan hangisine geçti
@@ -80,42 +85,42 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
         const v2 = isV2Rollout(r);
         const replicas = replicaSummary(r);
         return (
-          <DrawerSection title="Geçiş">
+          <DrawerSection title={t('rod.sec.transition', lang)}>
             <KeyValue>
-              <KeyValueRow k="tür" v={<><Badge tone={changeKindTone(k)}>{changeKindLabel(k)}</Badge> <span className="field-hint">{changeKindTitle(k)}</span></>} />
+              <KeyValueRow k={t('rod.kv.kind', lang)} v={<><Badge tone={changeKindTone(k)}>{changeKindLabel(k)}</Badge> <span className="field-hint">{changeKindTitle(k, lang)}</span></>} />
               {/* v0.10.1445 — git kaynağı (Argo CD senkron webhook'u): forward / unknown dahil hepsi burada; tabloda yalnız sapma. */}
-              {r.origin && <KeyValueRow k="kaynak" v={<><Badge tone={r.origin.kind === 'rollback' ? 'danger' : r.origin.kind === 'redeploy_older' ? 'warning' : 'neutral'}>{originLabel(r.origin.kind)}</Badge> <span className="field-hint">{originTitle(r.origin)}{originAppLine(r.origin) ? ` · ${originAppLine(r.origin)}` : ''}</span></>} />}
-              <KeyValueRow k="durum" v={<><Badge tone={statusTone(r.status)}>{statusLabel(r.status)}</Badge> <span className="field-hint">{statusTitle(r.status, v2)}{r.stuckReason ? ` · neden ${r.stuckReason}` : ''}</span></>} />
-              <KeyValueRow k="küme" mono title={`cluster id ${r.clusterId}`} v={rolloutPlaceLabel(r, clusterName)} />
-              <KeyValueRow k="revizyon" mono v={<>{r.prevRevision || '—'} → <b>{r.revision || '—'}</b> {r.revision && <CopyButton value={r.revision} title="Revizyonu kopyala" />}</>} />
-              {v2 && <KeyValueRow k="nesil" mono v={<>{r.generation}{r.observedGeneration ? <span className="field-hint"> · gözlenen {r.observedGeneration}</span> : null}</>} />}
-              {replicas && <KeyValueRow k="replika" mono title="güncel şablonda / hazır / istenen (KSM)" v={replicas} />}
+              {r.origin && <KeyValueRow k={t('rod.kv.source', lang)} v={<><Badge tone={r.origin.kind === 'rollback' ? 'danger' : r.origin.kind === 'redeploy_older' ? 'warning' : 'neutral'}>{originLabel(r.origin.kind)}</Badge> <span className="field-hint">{originTitle(r.origin, lang)}{originAppLine(r.origin, lang) ? ` · ${originAppLine(r.origin, lang)}` : ''}</span></>} />}
+              <KeyValueRow k={t('rod.kv.status', lang)} v={<><Badge tone={statusTone(r.status)}>{statusLabel(r.status)}</Badge> <span className="field-hint">{statusTitle(r.status, v2, lang)}{r.stuckReason ? tf('rod.stuck', lang, { r: r.stuckReason }) : ''}</span></>} />
+              <KeyValueRow k={t('rod.kv.cluster', lang)} mono title={`cluster id ${r.clusterId}`} v={rolloutPlaceLabel(r, clusterName)} />
+              <KeyValueRow k={t('rod.kv.revision', lang)} mono v={<>{r.prevRevision || '—'} → <b>{r.revision || '—'}</b> {r.revision && <CopyButton value={r.revision} title={t('rod.copyRev', lang)} />}</>} />
+              {v2 && <KeyValueRow k={t('rod.kv.gen', lang)} mono v={<>{r.generation}{r.observedGeneration ? <span className="field-hint">{tf('rod.observed', lang, { n: r.observedGeneration })}</span> : null}</>} />}
+              {replicas && <KeyValueRow k={t('rod.kv.replicas', lang)} mono title={t('rod.replicasTitle', lang)} v={replicas} />}
               {/* v0.10.1262 (operatör 2026-10-17: "imaj eski/yeni aynı ya da farklı olduğunda iki satır yaz") —
                   `önceki → yeni` tek blob yerine iki etiketli satır, her biri kendi kopyalama düğmesiyle;
                   aynıysa "aynı" rozeti (config rollout'u: şablon değişti, imaj değişmedi). */}
-              <KeyValueRow k="imaj" mono v={(() => {
+              <KeyValueRow k={t('rod.kv.image', lang)} mono v={(() => {
                 const im = imageLines(r);
                 return (
                   <div style={{ display: 'grid', gap: 2 }}>
-                    <div><span className="field-hint">önceki: </span>{im.prev}{im.hasPrev && <> <CopyButton value={im.prev} title="Önceki imajı (repo:tag) kopyala" /></>}</div>
+                    <div><span className="field-hint">{t('rod.img.prev', lang)}</span>{im.prev}{im.hasPrev && <> <CopyButton value={im.prev} title={t('rod.img.copyPrev', lang)} /></>}</div>
                     {/* v0.10.1421 — yeni imaj okunamadıysa "—" yerine açıkça "bilinmiyor". */}
-                    <div><span className="field-hint">yeni: </span>{im.hasNext ? <b>{im.next}</b> : <span className="field-hint" title="KSM pod imajı bu revizyon için okunamadı">yeni imaj bilinmiyor</span>}{im.hasNext && <> <CopyButton value={im.next} title="Yeni imajı (repo:tag) kopyala" /></>}
-                      {im.same && <> <Badge tone="neutral" title="önceki ve yeni imaj birebir aynı — değişen pod şablonu (config)">aynı</Badge></>}</div>
+                    <div><span className="field-hint">{t('rod.img.next', lang)}</span>{im.hasNext ? <b>{im.next}</b> : <span className="field-hint" title={t('rod.img.unknownTitle', lang)}>{t('rod.img.unknown', lang)}</span>}{im.hasNext && <> <CopyButton value={im.next} title={t('rod.img.copyNext', lang)} /></>}
+                      {im.same && <> <Badge tone="neutral" title={t('rod.img.sameTitle', lang)}>{t('rod.img.same', lang)}</Badge></>}</div>
                   </div>
                 );
               })()} />
-              {(r.images?.length ?? 0) > 1 && <KeyValueRow k="tüm imajlar" mono v={(r.images ?? []).join(', ')} />}
-              <KeyValueRow k="zaman" v={<span className="field-hint">başladı {fmtDateTime(new Date(r.startedAt))}{r.completedAt > 0 ? ` · tamamlandı ${fmtDateTime(new Date(r.completedAt))}` : ''}{r.detectedBy ? ` · kaynak ${r.detectedBy}` : ''}</span>} />
+              {(r.images?.length ?? 0) > 1 && <KeyValueRow k={t('rod.kv.images', lang)} mono v={(r.images ?? []).join(', ')} />}
+              <KeyValueRow k={t('rod.kv.time', lang)} v={<span className="field-hint">{tf('rod.time.start', lang, { t: fmtDateTime(new Date(r.startedAt)) })}{r.completedAt > 0 ? ` · ${tf('ro.completedAt', lang, { t: fmtDateTime(new Date(r.completedAt)) })}` : ''}{r.detectedBy ? ` · ${tf('rod.time.by', lang, { v: r.detectedBy })}` : ''}</span>} />
             </KeyValue>
           </DrawerSection>
         );
       })()}
       {d && (() => {
         // v0.10.1223 — zaman çizelgesi: RS → pod'lar hazır → ilk span → bitiş.
-        const steps = rolloutTimeline(d.rollout);
+        const steps = rolloutTimeline(d.rollout, lang);
         if (steps.length < 2) return null;
         return (
-          <DrawerSection title="Zaman çizelgesi">
+          <DrawerSection title={t('rod.sec.timeline', lang)}>
             <KeyValue>
               {steps.map(st => (
                 <KeyValueRow key={st.key} k={st.label} v={<>
@@ -132,7 +137,7 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
           {/* v0.10.954 — tablo standardı T12: servis çözülemeyince bölüm + başlık
               durur, açıklama tablonun İÇİNDE boş satır. Çekmece düzeyindeki
               yükleniyor / hata yukarıda kalır (yanıt çekmecenin yapısını kurar). */}
-          <DrawerSection title={`Servis sağlığı — deploy öncesi/sonrası (${d.services.length})`}>
+          <DrawerSection title={tf('rod.sec.health', lang, { n: d.services.length })}>
             <div className="table-wrap">
               <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} />
@@ -140,7 +145,7 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
                 <tbody>
                   {dt.sortedRows.length === 0 ? (
                     <DataTableState dt={dt} kind="empty"
-                      message={`Bu revizyonun servisi çözülemedi — ${d.note || 'MV bu revizyon için servis kaydı taşımıyor (etkinlik penceresi geçmiş olabilir).'}`} />
+                      message={tf('rod.noSvc', lang, { why: d.note || t('rod.noSvc.mv', lang) })} />
                   ) : dt.sortedRows.map(s => (
                     <tr key={s.service}>
                       <DataTableCell dt={dt} col="service" row={s} value={s.service}>
@@ -152,13 +157,13 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
                       {s.after.throughput === 0 ? (
                         <>
                           {/* deploy'dan sonra hiç span yok: sahte %0.0/0ms basma */}
-                          <DataTableCell dt={dt} col="err" row={s}>{pct(s.before.errorRate)} → <span style={{ color: 'var(--warn)' }}>—</span></DataTableCell>
+                          <DataTableCell dt={dt} col="err" row={s}>{pct(s.before.errorRate, lang)} → <span style={{ color: 'var(--warn)' }}>—</span></DataTableCell>
                           <DataTableCell dt={dt} col="p99" row={s}>{ms(s.before.p99Ms)} → <span style={{ color: 'var(--warn)' }}>—</span></DataTableCell>
-                          <DataTableCell dt={dt} col="rps" row={s}>{rps(s.before.throughput)} → <span style={{ color: 'var(--warn)' }} title="deploy'dan sonra span görülmedi">yok</span></DataTableCell>
+                          <DataTableCell dt={dt} col="rps" row={s}>{rps(s.before.throughput)} → <span style={{ color: 'var(--warn)' }} title={t('rod.noSpans', lang)}>{t('mlTab.none', lang)}</span></DataTableCell>
                         </>
                       ) : (
                         <>
-                          <DataTableCell dt={dt} col="err" row={s}>{pct(s.before.errorRate)} → <span style={s.after.errorRate > s.before.errorRate ? { color: 'var(--err)' } : undefined}>{pct(s.after.errorRate)}</span></DataTableCell>
+                          <DataTableCell dt={dt} col="err" row={s}>{pct(s.before.errorRate, lang)} → <span style={s.after.errorRate > s.before.errorRate ? { color: 'var(--err)' } : undefined}>{pct(s.after.errorRate, lang)}</span></DataTableCell>
                           <DataTableCell dt={dt} col="p99" row={s}>{ms(s.before.p99Ms)} → <span style={s.after.p99Ms > s.before.p99Ms ? { color: 'var(--err)' } : undefined}>{ms(s.after.p99Ms)}</span></DataTableCell>
                           <DataTableCell dt={dt} col="rps" row={s}>{rps(s.before.throughput)} → {rps(s.after.throughput)}</DataTableCell>
                         </>
@@ -176,18 +181,18 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
                   kaynak olayı rollout'tan önce de düzenli görülüyorsa listede
                   KALIR, anomali satırıyla aynı nötr "yinelenen" işaretini taşır
                   (sunucu kararı: predatesDeploy — problemsSinceDeploy). */}
-              <SignalSection title="Deploy'dan beri açık problemler" rows={d.services.flatMap(s => s.problems.map(p => ({
+              <SignalSection title={t('rod.sig.problems', lang)} rows={d.services.flatMap(s => s.problems.map(p => ({
                 key: p.id, svc: s.service, a: p.severity, b: p.ruleName, at: p.startedAt,
                 mark: p.predatesDeploy ? <RecurringMarker episodeCount={p.episodeCount} firstStartedAt={p.firstStartedAt} /> : undefined,
               })))} moreHref="/problems" />
               {/* v0.10.1049 — rollout'tan önce de DÜZENLİ görülen anomali listede
                   KALIR, yalnız nötr "yinelenen" işareti taşır (sunucu kararı:
                   predatesDeploy — anomaliesSinceDeploy). Liste hiçbir satırı gizlemez. */}
-              <SignalSection title="Aktif anomaliler" rows={d.services.flatMap(s => s.anomalies.map(a => ({
+              <SignalSection title={t('rod.sig.anomalies', lang)} rows={d.services.flatMap(s => s.anomalies.map(a => ({
                 key: `${s.service}/${a.id}`, svc: s.service, a: a.kind, b: a.pattern, at: a.startedAt,
                 mark: a.predatesDeploy ? <RecurringMarker episodeCount={a.episodeCount} firstStartedAt={a.firstStartedAt} /> : undefined,
               })))} moreHref="/anomalies" />
-              <SignalSection title="Yeni hatalar" rows={d.services.flatMap(s => s.newErrors.map(e => ({ key: `${s.service}/${e.fingerprint}`, svc: s.service, a: e.type, b: e.message, at: e.firstSeen })))} moreHref="/problems" />
+              <SignalSection title={t('rod.sig.errors', lang)} rows={d.services.flatMap(s => s.newErrors.map(e => ({ key: `${s.service}/${e.fingerprint}`, svc: s.service, a: e.type, b: e.message, at: e.firstSeen })))} moreHref="/problems" />
             </>
           )}
         </>
@@ -197,10 +202,11 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
 }
 
 function SignalSection({ title, rows, moreHref }: { title: string; rows: { key: string | number; svc: string; a: string; b: string; at: number; mark?: ReactNode }[]; moreHref: string }) {
+  const lang = useLang();
   return (
     <DrawerSection title={`${title} (${rows.length})`}>
       {rows.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--text3)' }}>yok</div>
+        <div style={{ fontSize: 12, color: 'var(--text3)' }}>{t('mlTab.none', lang)}</div>
       ) : (
         <div className="table-wrap">
           {/* v0.10.943 — statik tablo (T1): başlıksız çekmece önizlemesi, en çok
@@ -218,7 +224,7 @@ function SignalSection({ title, rows, moreHref }: { title: string; rows: { key: 
               ))}
             </tbody>
           </table>
-          {rows.length > CAP && <div className="field-hint">{fmtNum(rows.length - CAP)} satır daha — <Link to={moreHref} className="sec">tam liste</Link></div>}
+          {rows.length > CAP && <div className="field-hint">{tf('rod.more', lang, { n: fmtNum(rows.length - CAP) })}<Link to={moreHref} className="sec">{t('rod.fullList', lang)}</Link></div>}
         </div>
       )}
     </DrawerSection>

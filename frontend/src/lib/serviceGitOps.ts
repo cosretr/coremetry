@@ -3,6 +3,7 @@
 // 24 saatlik senkron özeti ve rollout ↔ uygulama eşlemesi. serviceGitOps.test.ts pinler.
 import type { ArgoServiceApp } from './types';
 import type { RolloutTone } from './rolloutRow';
+import { t, type Lang } from './i18n'; // v0.10.2304 — sekmenin etiketleri isteğe bağlı lang (varsayılan 'tr')
 
 type WorkloadRef = { clusterId: string; namespace: string; workload: string };
 
@@ -73,22 +74,22 @@ export function repoShort(repo?: string): string {
 }
 
 /** Autosync etiketi; etiket yoksa (Argo < 2.9) "—". */
-export function autoSyncLabel(v?: boolean): string {
-  return v === undefined ? '—' : v ? 'açık' : 'kapalı';
+export function autoSyncLabel(v?: boolean, lang: Lang = 'tr'): string {
+  return v === undefined ? '—' : t(v ? 'aiGeneralQ.on' : 'aiGeneralQ.off', lang);
 }
 
 /** v0.10.985 — Argo bölümü başlığındaki kaynak rozeti: eşleyici tablosu ya da canlı Thanos. */
-export function argoSourceBadge(source?: string): string {
-  return source === 'mapper' ? 'eşleyici · argocd_app_mapping' : 'Thanos · argocd_app_info';
+export function argoSourceBadge(source?: string, lang: Lang = 'tr'): string {
+  return source === 'mapper' ? t('gitops.src.mapper', lang) : 'Thanos · argocd_app_info';
 }
 
 /** v0.10.985 — bölüm meta'sındaki sessiz kaynak notu; kaynak yoksa (Argo aranmadı) boş.
  *  İnceleme: sabit "≤10 dk" ayarlanmış aralıklarda yanlıştı; sunucu tabloyu yalnız son
  *  argocd-metrics koşusu taze ve 'ok' iken kullanır (gecikme = metricsS / mapperMin). */
-export function argoSourceMeta(source?: string): string {
+export function argoSourceMeta(source?: string, lang: Lang = 'tr'): string {
   switch (source) {
-    case 'mapper': return 'eşleyici tablosundan (işçi aralıkları kadar gecikmeli)';
-    case 'live': return 'canlı sorgu';
+    case 'mapper': return t('gitops.meta.mapper', lang);
+    case 'live': return t('gitops.meta.live', lang);
     default: return '';
   }
 }

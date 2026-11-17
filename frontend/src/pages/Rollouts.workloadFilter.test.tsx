@@ -29,6 +29,8 @@ const h = vi.hoisted(() => ({
   })),
 }));
 
+// v0.10.2304 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/queries', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
   return {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { Combobox } from '@/components/Combobox';
 import { usePickerSearch } from '@/components/usePickerSearch';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2304 — seçici metinleri arayüz dilinde (TR aynı)
 
 // RolloutWorkloadPicker — v0.10.1420 (operatör, /rollouts Canlı sekmesi:
 // "Workload seçilerek filtrelenebilsin").
@@ -28,6 +29,7 @@ export function RolloutWorkloadPicker({ value, onCommit, from, to, cluster, name
   cluster?: string; namespace?: string;
   width?: number | string;
 }) {
+  const lang = useLang();
   const [draft, setDraft] = useState(value);
   useEffect(() => { setDraft(value); }, [value]);
   const winRef = useRef({ from, to });
@@ -53,11 +55,11 @@ export function RolloutWorkloadPicker({ value, onCommit, from, to, cluster, name
       resultCount={search.total}
       status={search.status}
       recentKey={ROLLOUT_WORKLOAD_RECENT_KEY}
-      placeholder="tümü"
+      placeholder={t('facet.all', lang)}
       ariaLabel="Workload"
       width={width}
-      footer={cappedRef.current ? '… daha fazlası var — aramayı daralt' : undefined}
-      title="Workload adı yaz ve listeden seç (joker: orders*, *-api). Enter yazılanı birebir uygular."
+      footer={cappedRef.current ? t('ro.pick.more', lang) : undefined}
+      title={t('ro.pick.title', lang)}
     />
   );
 }

@@ -56,6 +56,7 @@ import { RolloutWorkloadPicker } from '@/components/RolloutWorkloadPicker'; // v
 import { IconButton } from '@/components/ui/IconButton';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { Filter } from 'lucide-react';
+import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2304 — sunucu notu EN arayüzde "TR" işaretli
 import { serviceHref } from '@/lib/serviceHref';
 import { SvcBadge } from '@/components/traces/shared'; // v0.10.1328 — Traces Service kolonuyla aynı hap
 import { tracesPivotHref } from '@/lib/pivotHref';
@@ -63,6 +64,7 @@ import { entityHref } from '@/lib/entityHref';
 import { rolloutKey, statusTone, statusLabel, statusTitle, rolloutDurationSec, shortRevision, imageDiff, encodeRolloutParam, decodeRolloutParam, rolloutTracesFilters, rolloutChangeKind, changeKindLabel, changeKindTitle, changeKindTone, originBadge, replicaSummary, parseNamespacePatterns, invalidNamespacePatterns, namespaceExcluded } from '@/lib/rolloutRow';
 import { ROLLOUT_SORT_DEFAULT, ROLLOUT_SORT_IDS, ROLLOUT_SORT_URL_KEY, parseRolloutSort, rolloutSortApiParams } from '@/lib/rolloutSort';
 import type { RolloutStats, WorkloadRollout } from '@/lib/types';
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2304 — sayfa metinleri arayüz dilinde (TR aynı)
 
 const STATUSES = ['', 'in_progress', 'completed', 'rolled_back', 'superseded', 'stalled'] as const;
 
@@ -80,9 +82,9 @@ const STATUSES = ['', 'in_progress', 'completed', 'rolled_back', 'superseded', '
 // (1464 px) 1366'lık laptopta kabı aşıyor ve tablo yatay kayıyordu. Artık
 // öncelikle gizlenir ("+N sütun"): önce Not / Kaynak / Span / Tür, sonra Süre
 // ve Revizyon; Workload esneyen kimlik kolonu.
-const COLS: ColumnDef<WorkloadRollout>[] = [
+const COLS = (lang: Lang): ColumnDef<WorkloadRollout>[] => [
   // v0.10.1205 (operatör) — zaman EN BAŞTA, durum onun eski yerinde.
-  { id: 'started', label: 'Başladı', width: 136, minWidth: 128, numeric: true, priority: 1, sortValue: r => r.startedAt, naturalDir: 'desc' }, // v0.10.1068 — yılsız damga (tsCompact), tam damga title'da
+  { id: 'started', label: t('aed.fact.started', lang), width: 136, minWidth: 128, numeric: true, priority: 1, sortValue: r => r.startedAt, naturalDir: 'desc' }, // v0.10.1068 — yılsız damga (tsCompact), tam damga title'da
   { id: 'workload', label: 'Workload', flex: true, minWidth: 180, priority: 1, sortValue: r => r.workload, naturalDir: 'asc' },
   // v0.10.1262 (operatör 2026-10-17: "workload ve namespace ayrı kolonlarda
   // yazılabilir") — namespace Workload hücresinin soluk eki değil, kendi
@@ -95,30 +97,33 @@ const COLS: ColumnDef<WorkloadRollout>[] = [
   // genişletilebilir, üstteki Cluster süzgeciyle aynı adı gösterir.
   // v0.10.1267 — sunucu cluster_id'ye (EffectiveID) göre sıralar; ad çoğunlukla id'dir.
   { id: 'cluster', label: 'Cluster', width: 150, minWidth: 110, priority: 2, sortValue: r => r.clusterId, naturalDir: 'asc' },
-  { id: 'kind', label: 'Tür', width: 100, minWidth: 64, priority: 4 },
-  { id: 'change', label: 'Değişiklik', width: 130, minWidth: 100, priority: 2 }, // v0.10.234 — imaj değişti mi (Deployment) / aynı mı (config)
-  { id: 'revision', label: 'Revizyon', width: 150, minWidth: 120, mono: true, priority: 3 },
-  { id: 'image', label: 'İmaj (eski → yeni)', width: 300, minWidth: 170, mono: true, priority: 2 },
-  { id: 'status', label: 'Durum', width: 120, minWidth: 96, priority: 2 },
-  { id: 'dur', label: 'Süre', width: 90, minWidth: 64, numeric: true, priority: 3 },
+  { id: 'kind', label: t('anomalyWindow.col.kind', lang), width: 100, minWidth: 64, priority: 4 },
+  { id: 'change', label: t('ro.col.change', lang), width: 130, minWidth: 100, priority: 2 }, // v0.10.234 — imaj değişti mi (Deployment) / aynı mı (config)
+  { id: 'revision', label: t('ro.col.revision', lang), width: 150, minWidth: 120, mono: true, priority: 3 },
+  { id: 'image', label: t('ro.col.image', lang), width: 300, minWidth: 170, mono: true, priority: 2 },
+  { id: 'status', label: t('podpage.col.status', lang), width: 120, minWidth: 96, priority: 2 },
+  { id: 'dur', label: t('podpage.col.dur', lang), width: 90, minWidth: 64, numeric: true, priority: 3 },
   { id: 'spans', label: 'Span', width: 90, minWidth: 64, numeric: true, priority: 4 },
   { id: 'problems', label: 'Problem', width: 90, minWidth: 64, numeric: true, priority: 2 }, // v0.10.244 — D4: başlangıçtan beri açık problemler (çekmece sayımı)
-  { id: 'by', label: 'Kaynak', width: 90, minWidth: 76, priority: 4 },
-  { id: 'note', label: 'Not', width: 260, minWidth: 120, priority: 4 },
+  { id: 'by', label: t('aiToolsets.col.source', lang), width: 90, minWidth: 76, priority: 4 },
+  { id: 'note', label: t('ro.col.note', lang), width: 260, minWidth: 120, priority: 4 },
   { id: 'links', label: '', width: 120, minWidth: 96, priority: 2 },
 ];
 
 // v0.10.984 — v2 kolon seti (rollout_events): span / Kaynak yok (karar 4 —
 // P3.4'ün tetikleyici kolonu "Kaynak" adını YENİ kimlikle alacak), revizyondan
 // sonra Nesil (+ güncel/hazır/istenen replika).
-const COLS_V2: ColumnDef<WorkloadRollout>[] = COLS.flatMap(c =>
+const COLS_V2 = (lang: Lang): ColumnDef<WorkloadRollout>[] => COLS(lang).flatMap(c =>
   c.id === 'spans' || c.id === 'by' ? []
-  : c.id === 'revision' ? [c, { id: 'gen', label: 'Nesil', width: 130, minWidth: 96, numeric: true, priority: 3 }]
+  : c.id === 'revision' ? [c, { id: 'gen', label: t('ro.col.gen', lang), width: 130, minWidth: 96, numeric: true, priority: 3 }]
   : [c]);
 
 const ROLLOUTS_PAGE_TITLE = 'Deployment/Rollouts';
 
 export default function RolloutsPage() {
+  const lang = useLang();
+  const cols = useMemo(() => COLS(lang), [lang]);
+  const colsV2 = useMemo(() => COLS_V2(lang), [lang]);
   const [range, setRange] = useUrlRange('24h');
   const [sp, setSp] = useSearchParams();
   const tab = sp.get('tab') === 'stats' ? 'stats' : 'live';
@@ -166,8 +171,8 @@ export default function RolloutsPage() {
   // (persistSort:false — varsayılan "en yeni önce"), varsayılan URL'de yok.
   const sortOpts = { serverSort: true, initialSort: ROLLOUT_SORT_DEFAULT, persistSort: false, sortIds: ROLLOUT_SORT_IDS,
     sortUrlKey: ROLLOUT_SORT_URL_KEY, sortUrlOmitInitial: true } as const;
-  const dtV1 = useDataTable<WorkloadRollout>({ storageKey: 'rollouts-live-t1', columns: COLS, rows: v2 ? [] : rows, ...sortOpts });
-  const dtV2 = useDataTable<WorkloadRollout>({ storageKey: 'rollouts-live-v2-t1', columns: COLS_V2, rows: v2 ? rows : [], ...sortOpts });
+  const dtV1 = useDataTable<WorkloadRollout>({ storageKey: 'rollouts-live-t1', columns: cols, rows: v2 ? [] : rows, ...sortOpts });
+  const dtV2 = useDataTable<WorkloadRollout>({ storageKey: 'rollouts-live-v2-t1', columns: colsV2, rows: v2 ? rows : [], ...sortOpts });
   const dt = v2 ? dtV2 : dtV1;
   const [enabling, setEnabling] = useState(false);
   const [enableErr, setEnableErr] = useState('');
@@ -184,11 +189,9 @@ export default function RolloutsPage() {
   const showLiveRows = !listQ.isPending && !err && rows.length > 0;
   const liveState: Omit<DataTableStateProps<WorkloadRollout>, 'dt'> =
     listQ.isPending ? { kind: 'loading' }
-    : err ? { kind: 'error', message: `Rollout listesi yüklenemedi: ${err.message}` }
-    : liveFiltered ? { kind: 'no-match', ...(listQ.data?.note ? { message: `Eşleşme yok — ${listQ.data.note}` } : {}) }
-    : { kind: 'empty', message: `Bu pencerede rollout yok — ${listQ.data?.note ?? (v2
-      ? 'KSM dedektörü bu pencerede nesil artışı görmedi (ölçek ve yalnız-annotation değişiklikleri rollout sayılmaz).'
-      : 'Reconciler aktif kümeye giren yeni revizyon görmedi (giriş: ≥2 karar kovası + gözlenmiş yokluk).')}` };
+    : err ? { kind: 'error', message: tf('ro.listErr', lang, { e: err.message }) }
+    : liveFiltered ? { kind: 'no-match', ...(listQ.data?.note ? { message: tf('ro.noMatchNote', lang, { note: listQ.data.note }) } : {}) }
+    : { kind: 'empty', message: tf('ro.emptyLive', lang, { why: listQ.data?.note ?? t(v2 ? 'ro.emptyLive.v2' : 'ro.emptyLive.v1', lang) }) };
   const enable = async () => {
     setEnabling(true);
     setEnableErr('');
@@ -207,25 +210,25 @@ export default function RolloutsPage() {
     <>
       <Topbar title={ROLLOUTS_PAGE_TITLE} range={range} onRangeChange={setRange} />
       <PageShell>
-        <TabStrip ariaLabel="Rollout görünümü" value={tab} onChange={k => setParam('tab', k === 'live' ? '' : k)} style={{ marginBottom: 10 }}
-          tabs={[{ key: 'live', label: 'Canlı' }, { key: 'stats', label: 'Toplu' }]} />
+        <TabStrip ariaLabel={t('ro.tabs', lang)} value={tab} onChange={k => setParam('tab', k === 'live' ? '' : k)} style={{ marginBottom: 10 }}
+          tabs={[{ key: 'live', label: t('ro.tab.live', lang) }, { key: 'stats', label: t('ro.tab.stats', lang) }]} />
         <div className="controls" style={{ marginBottom: 12, gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <label style={{ display: 'grid', gap: 4, fontSize: 11, color: 'var(--text3)' }}>
             Cluster
             <select value={cluster} onChange={e => setParam('cluster', e.target.value)}>
-              <option value="">tümü</option>
+              <option value="">{t('facet.all', lang)}</option>
               {clusters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 11, color: 'var(--text3)' }}>
-            Durum
+            {t('podpage.col.status', lang)}
             <select value={status} onChange={e => setParam('status', e.target.value)}>
-              {STATUSES.map(s => <option key={s} value={s}>{s ? statusLabel(s) : 'tümü'}</option>)}
+              {STATUSES.map(s => <option key={s} value={s}>{s ? statusLabel(s) : t('facet.all', lang)}</option>)}
             </select>
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 11, color: 'var(--text3)' }}>
             Namespace
-            <input value={nsDraft} placeholder="tümü" onChange={e => setNsDraft(e.target.value)} style={{ width: 160 }} />
+            <input value={nsDraft} placeholder={t('facet.all', lang)} onChange={e => setNsDraft(e.target.value)} style={{ width: 160 }} />
           </label>
           {/* v0.10.1420 — sunucu aramalı seçici; seçim ?workload= (replace) → liste/Toplu SUNUCUDA daralır. */}
           <div style={{ display: 'grid', gap: 4, fontSize: 11, color: 'var(--text3)' }}>
@@ -241,8 +244,8 @@ export default function RolloutsPage() {
                   Sapma yalnız partial (uyarı) ve failed/bilinmeyen (hata). */}
               {/* v0.10.984 — v2'de koşular KSM dedektörünün (rollout_worker_runs, worker alanı dolu). */}
               {lastRun
-                ? <>{lastRun.worker ? 'dedektör' : 'reconciler'} son koşu {fmtDateTime(new Date(lastRun.startedAt))} · <span className={`badge ${lastRun.status === 'ok' || lastRun.status === 'skipped' ? 'b-gray' : lastRun.status === 'partial' ? 'b-warn' : 'b-err'}`}>{lastRun.status}</span></>
-                : runsQ.isPending ? null : `${v2 ? 'dedektör' : 'reconciler'} henüz koşmadı`}
+                ? <>{tf('ro.lastRun', lang, { who: t(lastRun.worker ? 'ro.who.detector' : 'ro.who.reconciler', lang), t: fmtDateTime(new Date(lastRun.startedAt)) })} · <span className={`badge ${lastRun.status === 'ok' || lastRun.status === 'skipped' ? 'b-gray' : lastRun.status === 'partial' ? 'b-warn' : 'b-err'}`}>{lastRun.status}</span></>
+                : runsQ.isPending ? null : tf('ro.notRun', lang, { who: t(v2 ? 'ro.who.detector' : 'ro.who.reconciler', lang) })}
             </span>
           )}
         </div>
@@ -254,14 +257,14 @@ export default function RolloutsPage() {
             onSaved={() => qc.invalidateQueries({ queryKey: keys.rollouts.all })} />
         )}
         {disabled ? (
-          <Empty icon="—" title={`${ROLLOUTS_PAGE_TITLE} kapalı`}
-            action={isAdmin ? <Button variant="primary" size="sm" loading={enabling} onClick={() => void enable()}>Etkinleştir</Button> : undefined}>
+          <Empty icon="—" title={tf('ro.off.title', lang, { t: ROLLOUTS_PAGE_TITLE })}
+            action={isAdmin ? <Button variant="primary" size="sm" loading={enabling} onClick={() => void enable()}>{t('ro.enable', lang)}</Button> : undefined}>
             {/* v0.10.984 — Ayarlar'da Rollouts sekmesi yok (v2-audit §2.6 madde 5): gerçek yol bu sayfadaki düğme. */}
-            Olay tablosu yazılmıyor. {isAdmin ? (enableErr ? `Açılamadı: ${enableErr}` : 'Mevcut ayarlar korunarak açılır.') : 'Bir admin bu sayfadaki «Etkinleştir» ile açar.'}
+            {t('ro.off.body', lang)} {isAdmin ? (enableErr ? tf('ro.off.err', lang, { e: enableErr }) : t('ro.off.keep', lang)) : t('ro.off.viewer', lang)}
           </Empty>
         ) : tab === 'live' ? (
           <>
-            {showLiveRows && listQ.data?.capped && <div className="pod-cap">Liste sunucuda kesildi (limit 200) — pencereyi daralt.</div>}
+            {showLiveRows && listQ.data?.capped && <div className="pod-cap">{t('ro.capped', lang)}</div>}
             <div className="table-wrap">
               <table {...dt.tableProps}>
                 <DataTableColgroup dt={dt} />
@@ -281,7 +284,7 @@ export default function RolloutsPage() {
                         onClick={e => { if ((e.target as HTMLElement).closest('a, button')) return; setParam('rollout', encodeRolloutParam(r)); }}>
                         {/* v0.10.945 — zaman damgası mono kalır (S2 yalnız sayıyı kapsar); kolon
                             `numeric` olduğundan DataTableCell `num` basar ve mono'yu nötrlerdi. */}
-                        <td className="mono" title={rolloutTimingTitle(r)}>
+                        <td className="mono" title={rolloutTimingTitle(r, lang)}>
                           {tsCompact(r.startedAt * 1e6)}
                           {/* v0.10.1366 (operatör: "hazır +3 yazıyor, gerek yok") — alt satır kalktı;
                               hazır/trafik gecikmesi hücrenin title'ında ve çekmecenin zaman çizelgesinde. */}
@@ -293,35 +296,35 @@ export default function RolloutsPage() {
                             entity sayfası (wl: yedeği). İkincil: küçük süzgeç düğmesi (?workload=). */}
                         <DataTableCell dt={dt} col="workload" row={r} title={`${cname} / ${r.namespace} / ${r.workload}`}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: '100%' }}>
-                            <SvcBadge name={r.workload} to={r.service ? serviceHref(r.service, { range }) : wlHref} title={workloadLinkTitle(r, cname)} />
-                            <IconButton variant="bare" size="xs" aria-label="Bu workload'a süz" tooltip={`Bu workload'a süz: ${r.workload}`}
+                            <SvcBadge name={r.workload} to={r.service ? serviceHref(r.service, { range }) : wlHref} title={workloadLinkTitle(r, cname, lang)} />
+                            <IconButton variant="bare" size="xs" aria-label={t('ro.filterWl', lang)} tooltip={tf('ro.filterWlTip', lang, { w: r.workload })}
                               active={wl === r.workload} onClick={() => setParam('workload', wl === r.workload ? '' : r.workload)}
                               icon={<Filter size={11} aria-hidden />} />
                           </span>
                         </DataTableCell>
                         {/* v0.10.1262 — namespace kendi kolonunda. v0.10.1420 — tık = bu namespace'e süz. */}
                         <DataTableCell dt={dt} col="namespace" row={r} title={r.namespace}>
-                          <LinkButton tone="muted" underline="dotted" title={`Bu namespace'e süz: ${r.namespace}`}
+                          <LinkButton tone="muted" underline="dotted" title={tf('ro.filterNs', lang, { ns: r.namespace })}
                             onClick={() => setParam('namespace', r.namespace)}>{r.namespace}</LinkButton>
                         </DataTableCell>
                         {/* v0.10.565 — cluster kendi kolonunda; ad çözülemezse ham id (clusterName). */}
                         <DataTableCell dt={dt} col="cluster" row={r} value={cname} />
                         <DataTableCell dt={dt} col="kind" row={r} className="field-hint">{r.kind || '—'}</DataTableCell>
-                        <DataTableCell dt={dt} col="change" row={r}>{(() => { const k = rolloutChangeKind(r); const ob = originBadge(r); /* v0.10.1445 — git kaynağı rozeti yalnız sapmada */ return <><Badge tone={changeKindTone(k)} title={changeKindTitle(k)}>{changeKindLabel(k)}</Badge>{ob && <> <Badge tone={ob.tone} title={ob.title}>{ob.label}</Badge></>}</>; })()}</DataTableCell>
+                        <DataTableCell dt={dt} col="change" row={r}>{(() => { const k = rolloutChangeKind(r); const ob = originBadge(r, lang); /* v0.10.1445 — git kaynağı rozeti yalnız sapmada */ return <><Badge tone={changeKindTone(k)} title={changeKindTitle(k, lang)}>{changeKindLabel(k)}</Badge>{ob && <> <Badge tone={ob.tone} title={ob.title}>{ob.label}</Badge></>}</>; })()}</DataTableCell>
                         <DataTableCell dt={dt} col="revision" row={r} title={r.revision || undefined}>{r.revision ? shortRevision(r.revision, r.workload) : '—'}{r.prevRevision ? <span className="field-hint"> ← {shortRevision(r.prevRevision, r.workload)}</span> : null}</DataTableCell>
-                        {v2 && <DataTableCell dt={dt} col="gen" row={r} title="nesil · güncel/hazır/istenen replika (KSM)">{fmtNum(r.generation ?? 0)}<span className="field-hint"> · {replicaSummary(r)}</span></DataTableCell>}
+                        {v2 && <DataTableCell dt={dt} col="gen" row={r} title={t('ro.genTitle', lang)}>{fmtNum(r.generation ?? 0)}<span className="field-hint"> · {replicaSummary(r)}</span></DataTableCell>}
                         <DataTableCell dt={dt} col="image" row={r} title={r.image || undefined}>{imageDiff(r)}</DataTableCell>
-                        <DataTableCell dt={dt} col="status" row={r}><Badge tone={statusTone(r.status)} title={[statusTitle(r.status, v2), r.completedAt ? `tamamlandı ${fmtDateTime(new Date(r.completedAt))}` : ''].filter(Boolean).join(' · ') || undefined}>{statusLabel(r.status)}</Badge></DataTableCell>
+                        <DataTableCell dt={dt} col="status" row={r}><Badge tone={statusTone(r.status)} title={[statusTitle(r.status, v2, lang), r.completedAt ? tf('ro.completedAt', lang, { t: fmtDateTime(new Date(r.completedAt)) }) : ''].filter(Boolean).join(' · ') || undefined}>{statusLabel(r.status)}</Badge></DataTableCell>
                         <DataTableCell dt={dt} col="dur" row={r} value={fmtDurShort(rolloutDurationSec(r, Date.now()))} />
                         {!v2 && <DataTableCell dt={dt} col="spans" row={r} value={fmtNum(r.spanCount)} />}
                         <DataTableCell dt={dt} col="problems" row={r}>{r.problemsCaused
                           ? <Link to={`?${(() => { const p = new URLSearchParams(sp); p.set('rollout', encodeRolloutParam(r)); return p.toString(); })()}`}
-                                  title="rollout başladığından beri açık problemler (servisleri) — çekmeceyi açar" style={{ textDecoration: 'none' }}>
+                                  title={t('ro.problemsTitle', lang)} style={{ textDecoration: 'none' }}>
                               <Badge tone="danger">{fmtNum(r.problemsCaused)}</Badge>
                             </Link>
                           : <span className="field-hint">—</span>}</DataTableCell>
                         {!v2 && <DataTableCell dt={dt} col="by" row={r} className="field-hint">{r.detectedBy}</DataTableCell>}
-                        <DataTableCell dt={dt} col="note" row={r} className="field-hint" title={r.note || undefined}>{r.note || ''}</DataTableCell>
+                        <DataTableCell dt={dt} col="note" row={r} className="field-hint" title={r.note || undefined}>{r.note ? <OrigLang>{r.note}</OrigLang> : ''}</DataTableCell>
                         <DataTableCell dt={dt} col="links" row={r}><Link to={tracesHref} className="sec">Traces →</Link></DataTableCell>
                       </tr>
                     );
@@ -331,8 +334,8 @@ export default function RolloutsPage() {
             </div>
           </>
         ) : (
-          statsQ.isPending ? <Spinner /> : err ? <Empty icon="!" title="İstatistik yüklenemedi">{err.message}</Empty> : !statsQ.data || statsQ.data.total === 0 ? (
-            <Empty icon="∅" title="Bu pencerede rollout yok" />
+          statsQ.isPending ? <Spinner /> : err ? <Empty icon="!" title={t('ro.statsErr', lang)}>{err.message}</Empty> : !statsQ.data || statsQ.data.total === 0 ? (
+            <Empty icon="∅" title={t('ro.emptyWindow', lang)} />
           ) : (
             <StatsPanel st={statsQ.data} clusterName={clusterName} />
           )
@@ -347,32 +350,34 @@ export default function RolloutsPage() {
 // (sunucu LIMIT 400 gün): kayıt listesi, useDataTable. initialSort yok —
 // satırlar sunucunun gün sırasında kalır.
 type DayRow = RolloutStats['byDay'][number];
-const DAY_COLS: ColumnDef<DayRow>[] = [
-  { id: 'day', label: 'Gün', sortValue: d => d.day, naturalDir: 'asc', flex: true },
+const DAY_COLS = (lang: Lang): ColumnDef<DayRow>[] => [
+  { id: 'day', label: t('ro.col.day', lang), sortValue: d => d.day, naturalDir: 'asc', flex: true },
   { id: 'total', label: 'Rollout', sortValue: d => d.total, naturalDir: 'desc', numeric: true, width: 90 },
   { id: 'rolledBack', label: statusLabel('rolled_back'), sortValue: d => d.rolledBack, naturalDir: 'desc', numeric: true, width: 110,
     tone: d => (d.rolledBack > 0 ? 'err' : undefined) },
 ];
 
 function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof useRolloutStats>['data']>; clusterName: (id: string) => string }) {
-  const dayDt = useDataTable<DayRow>({ storageKey: 'rollouts-by-day', columns: DAY_COLS, rows: st.byDay });
+  const lang = useLang();
+  const dayCols = useMemo(() => DAY_COLS(lang), [lang]);
+  const dayDt = useDataTable<DayRow>({ storageKey: 'rollouts-by-day', columns: dayCols, rows: st.byDay });
   // v0.10.1436 — Toplu sayaç kutuları da durum rozetiyle aynı İngilizce
   // sözlükten (statusLabel, v0.10.1421); 1421 Canlı rozetlerini çevirmiş,
   // buradaki Türkçe başlıkları (Tamamlanan / Geri alınan / …) bırakmıştı.
   return (
     <>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-        <StatTile label="Rollout"><span className="mono">{fmtNum(st.total)}</span> <span className="field-hint">{st.perDay.toFixed(1)} / gün</span></StatTile>
+        <StatTile label="Rollout"><span className="mono">{fmtNum(st.total)}</span> <span className="field-hint">{tf('ro.perDay', lang, { n: st.perDay.toFixed(1) })}</span></StatTile>
         <StatTile label={statusLabel('completed')}><span className="mono">{fmtNum(st.completed)}</span></StatTile>
-        <StatTile label={statusLabel('rolled_back')} tone={st.rolledBack > 0 ? 'err' : undefined}><span className="mono">{fmtNum(st.rolledBack)}</span> <span className="field-hint">oran %{(st.rollbackRate * 100).toFixed(1)}</span></StatTile>
+        <StatTile label={statusLabel('rolled_back')} tone={st.rolledBack > 0 ? 'err' : undefined}><span className="mono">{fmtNum(st.rolledBack)}</span> <span className="field-hint">{tf('ro.rate', lang, { v: (st.rollbackRate * 100).toFixed(1) })}</span></StatTile>
         <StatTile label={statusLabel('superseded')}><span className="mono">{fmtNum(st.superseded)}</span></StatTile>
         <StatTile label={statusLabel('in_progress')}><span className="mono">{fmtNum(st.inProgress)}</span></StatTile>
         <StatTile label={statusLabel('stalled')} tone={st.stalled > 0 ? 'warn' : undefined}><span className="mono">{fmtNum(st.stalled)}</span></StatTile>
-        <StatTile label="Ort. süre"><span className="mono">{fmtDurShort(Math.round(st.meanDurationSec))}</span> <span className="field-hint">p95 {fmtDurShort(Math.round(st.p95DurationSec))}</span></StatTile>
+        <StatTile label={t('ro.meanDur', lang)}><span className="mono">{fmtDurShort(Math.round(st.meanDurationSec))}</span> <span className="field-hint">p95 {fmtDurShort(Math.round(st.p95DurationSec))}</span></StatTile>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
         <div>
-          <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>En çok rollback alan workload'lar</h3>
+          <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{t('ro.topRb', lang)}</h3>
           {/* v0.10.945 — statik tablo (T1): sunucunun sıraladığı topN=10 özeti, sıralanmaz. */}
           <table>
             <thead><tr><th>Workload</th><th className="num">Rollback</th></tr></thead>
@@ -380,33 +385,33 @@ function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof use
               {/* v0.10.967 (tablo standardı dilim 5, P-2) — statik tablonun durum satırı; colSpan = thead'deki 2 <th>.
                   Yükleniyor / hata bölümün (istatistik yanıtı KPI'ları da belirliyor) — dışarıda kalır. */}
               {st.topRollback.length === 0
-                ? <DataTableState colSpan={2} kind="empty" message="Bu pencerede rollback alan workload yok" />
+                ? <DataTableState colSpan={2} kind="empty" message={t('ro.topRb.empty', lang)} />
                 : st.topRollback.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td><SvcBadge name={w.workload} title={`${clusterName(w.clusterId)} / ${w.namespace} / ${w.workload}`} /> <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num">{w.n}</td></tr>)}
             </tbody>
           </table>
         </div>
         <div>
-          <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>En çok deploy alan workload'lar</h3>
+          <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{t('ro.topDeploy', lang)}</h3>
           {/* v0.10.945 — statik tablo (T1): sunucunun sıraladığı topN=10 özeti, sıralanmaz. */}
           <table>
             <thead><tr><th>Workload</th><th className="num">Rollout</th></tr></thead>
             <tbody>
               {/* v0.10.967 (P-2) — statik tablonun durum satırı; colSpan = thead'deki 2 <th>. */}
               {st.topDeploy.length === 0
-                ? <DataTableState colSpan={2} kind="empty" message="Bu pencerede deploy alan workload yok" />
+                ? <DataTableState colSpan={2} kind="empty" message={t('ro.topDeploy.empty', lang)} />
                 : st.topDeploy.map(w => <tr key={`${w.clusterId}/${w.namespace}/${w.workload}`}><td><SvcBadge name={w.workload} title={`${clusterName(w.clusterId)} / ${w.namespace} / ${w.workload}`} /> <span className="field-hint">· {w.namespace} · {clusterName(w.clusterId)}</span></td><td className="num">{w.n}</td></tr>)}
             </tbody>
           </table>
         </div>
         <div>
-          <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Gün kırılımı</h3>
+          <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{t('ro.byDay', lang)}</h3>
           <table {...dayDt.tableProps}>
             <DataTableColgroup dt={dayDt} />
             <DataTableHead dt={dayDt} />
             <tbody>
               {/* v0.10.954 — tablo standardı T12: elle yazılmış "yok" satırı yerine
                   standart durum satırı; colSpan görünür kolonlardan. */}
-              {dayDt.sortedRows.length === 0 ? <DataTableState dt={dayDt} kind="empty" message="Bu pencerede rollout yok" /> : dayDt.sortedRows.map(d => (
+              {dayDt.sortedRows.length === 0 ? <DataTableState dt={dayDt} kind="empty" message={t('ro.emptyWindow', lang)} /> : dayDt.sortedRows.map(d => (
                 <tr key={d.day}>
                   {/* v0.10.945 — tarih damgası mono kalır (S2 yalnız sayıyı kapsar). */}
                   <DataTableCell dt={dayDt} col="day" row={d} value={d.day} className="mono" />
@@ -431,6 +436,7 @@ function StatsPanel({ st, clusterName }: { st: NonNullable<ReturnType<typeof use
 function PlatformNsBar({ patterns, applied, explicitNs, isAdmin, onSaved }: {
   patterns: string[] | undefined; applied: boolean; explicitNs: string; isAdmin: boolean; onSaved: () => Promise<unknown>;
 }) {
+  const lang = useLang();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -439,7 +445,7 @@ function PlatformNsBar({ patterns, applied, explicitNs, isAdmin, onSaved }: {
   const save = async () => {
     const list = parseNamespacePatterns(draft);
     const bad = invalidNamespacePatterns(list);
-    if (bad.length) { setErr(`Geçersiz desen: ${bad.join(', ')} (küçük harf, rakam, '-', '.', '*', '?')`); return; }
+    if (bad.length) { setErr(tf('ro.ns.bad', lang, { v: bad.join(', ') })); return; }
     setSaving(true);
     setErr('');
     try {
@@ -457,12 +463,12 @@ function PlatformNsBar({ patterns, applied, explicitNs, isAdmin, onSaved }: {
     return (
       <div className="controls" style={{ marginBottom: 12, gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 360px', maxWidth: 560 }}>
-          <Field label="Gizlenen platform namespace'leri (glob)" value={draft} onChange={e => setDraft(e.target.value)}
+          <Field label={t('ro.ns.label', lang)} value={draft} onChange={e => setDraft(e.target.value)}
             placeholder="openshift, openshift-*, kube-*" className="mono" error={err || undefined}
-            hint="Virgül ya da boşlukla ayır; * = herhangi dizi, ? = tek karakter, tam ad eşleşir. Boş = hiçbirini gizleme." />
+            hint={t('ro.ns.hint', lang)} />
         </div>
-        <Button variant="primary" size="sm" loading={saving} onClick={() => void save()}>Kaydet</Button>
-        <Button variant="secondary" size="sm" disabled={saving} onClick={() => { setEditing(false); setErr(''); }}>Vazgeç</Button>
+        <Button variant="primary" size="sm" loading={saving} onClick={() => void save()}>{t('mlRecord.reason.save', lang)}</Button>
+        <Button variant="secondary" size="sm" disabled={saving} onClick={() => { setEditing(false); setErr(''); }}>{t('mlRecord.reason.cancel', lang)}</Button>
       </div>
     );
   }
@@ -470,26 +476,26 @@ function PlatformNsBar({ patterns, applied, explicitNs, isAdmin, onSaved }: {
   return (
     <div className="field-hint" style={{ marginBottom: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
       {patterns.length === 0
-        ? <span>Platform namespace gizleme kapalı — tüm namespace'ler listelenir.</span>
-        : <span>Gizlenen platform namespace'leri: <span className="mono">{patterns.join(', ')}</span>
-            {overridden && <> — açık namespace süzgeci «{explicitNs}» bu gizlemeyi geçersiz kılıyor</>}</span>}
-      {isAdmin && <Button variant="ghost" size="sm" onClick={() => { setDraft(patterns.join(', ')); setEditing(true); }}>Düzenle</Button>}
+        ? <span>{t('ro.ns.off', lang)}</span>
+        : <span>{t('ro.ns.on', lang)}<span className="mono">{patterns.join(', ')}</span>
+            {overridden && <>{tf('ro.ns.override', lang, { ns: explicitNs })}</>}</span>}
+      {isAdmin && <Button variant="ghost" size="sm" onClick={() => { setDraft(patterns.join(', ')); setEditing(true); }}>{t('ro.edit', lang)}</Button>}
     </div>
   );
 }
 
 // v0.10.1420 — Workload hapının title'ı: nereye gidiyor (servis / entity yedeği).
-function workloadLinkTitle(r: WorkloadRollout, cname: string): string {
+function workloadLinkTitle(r: WorkloadRollout, cname: string, lang: Lang = 'tr'): string {
   const where = `${cname} / ${r.namespace} / ${r.workload}`;
-  if (!r.service) return `${where}\nServis eşleşmedi — envanter kaydını açar`;
+  if (!r.service) return `${where}\n${t('ro.wl.noSvc', lang)}`;
   const others = (r.services ?? []).filter(s => s !== r.service);
-  return `${where}\nServis sayfasını açar: ${r.service}` + (others.length ? `\nDiğer servisler: ${others.join(', ')}` : '');
+  return `${where}\n${tf('ro.wl.svc', lang, { s: r.service })}` + (others.length ? `\n${tf('ro.wl.others', lang, { s: others.join(', ') })}` : '');
 }
 
 // v0.10.1212 — başladı / hazır / trafik tam zamanları (hücre title'ı).
-function rolloutTimingTitle(r: WorkloadRollout): string {
-  const ln = [`Başladı: ${fmtDateTime(new Date(r.startedAt))}`];
-  if (r.podsReadyAt) ln.push(`Pod'lar hazır: ${fmtDateTime(new Date(r.podsReadyAt))}`);
-  if (r.firstSpanAt) ln.push(`Trafik yeni sürüme geçti (ilk span): ${fmtDateTime(new Date(r.firstSpanAt))}`);
+function rolloutTimingTitle(r: WorkloadRollout, lang: Lang = 'tr'): string {
+  const ln = [tf('ro.tm.start', lang, { t: fmtDateTime(new Date(r.startedAt)) })];
+  if (r.podsReadyAt) ln.push(tf('ro.tm.ready', lang, { t: fmtDateTime(new Date(r.podsReadyAt)) }));
+  if (r.firstSpanAt) ln.push(tf('ro.tm.traffic', lang, { t: fmtDateTime(new Date(r.firstSpanAt)) }));
   return ln.join('\n');
 }

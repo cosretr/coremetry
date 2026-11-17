@@ -6,13 +6,18 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { t } from '@/lib/i18n';
 const src = readFileSync(resolve(__dirname, 'Rollouts.tsx'), 'utf8');
 
 describe('Rollouts cluster kolonu', () => {
+  it('v0.10.2304 — Tür etiketinin TR değeri aynı', () => {
+    expect(t('anomalyWindow.col.kind', 'tr')).toBe('Tür');
+  });
   it('COLS: cluster, workload ile kind arasında', () => {
     const w = src.indexOf("{ id: 'workload', label: 'Workload'");
     const c = src.indexOf("{ id: 'cluster', label: 'Cluster'");
-    const k = src.indexOf("{ id: 'kind', label: 'Tür'");
+    // v0.10.2304 — Tür etiketi katalogdan (TR değeri aynı: i18n pini aşağıda).
+    const k = src.indexOf("{ id: 'kind', label: t('anomalyWindow.col.kind', lang)");
     expect(w).toBeGreaterThan(0);
     expect(c).toBeGreaterThan(w);
     expect(k).toBeGreaterThan(c);
@@ -21,7 +26,7 @@ describe('Rollouts cluster kolonu', () => {
   // `title`a koyar (cellProps), "…" tabandan (`tbody td`); satır içi stil yok.
   it('hücre: çözülmüş ad + title, ellipsis', () => {
     expect(src).toContain('<DataTableCell dt={dt} col="cluster" row={r} value={cname} />');
-    const col = src.slice(src.indexOf("{ id: 'cluster', label: 'Cluster'"), src.indexOf("{ id: 'kind', label: 'Tür'"));
+    const col = src.slice(src.indexOf("{ id: 'cluster', label: 'Cluster'"), src.indexOf("{ id: 'kind', label: t('anomalyWindow.col.kind', lang)"));
     // title yalnız sayısal olmayan, sarmayan kolonda basılır; kolon kırpar.
     expect(col).not.toMatch(/numeric|truncate/);
   });
@@ -50,7 +55,7 @@ describe('Rollouts cluster kolonu', () => {
   // (started/workload/namespace/cluster); öteki kolonlarda sortValue yok ve
   // tablo serverSort (kesik sayfayı istemcide sıralamak yalan söyler — T3).
   it('yalnız sunucu-sıralanabilir kolonlar sortValue taşır', () => {
-    const cols = src.slice(src.indexOf('const COLS: ColumnDef'), src.indexOf('const COLS_V2'));
+    const cols = src.slice(src.indexOf('const COLS = (lang: Lang): ColumnDef'), src.indexOf('const COLS_V2'));
     const sortable = [...cols.matchAll(/\{ id: '([a-z]+)'[^\n]*sortValue/g)].map(m => m[1]).sort();
     expect(sortable).toEqual(['cluster', 'namespace', 'started', 'workload']);
     expect(src).toMatch(/serverSort: true, initialSort: ROLLOUT_SORT_DEFAULT, persistSort: false, sortIds: ROLLOUT_SORT_IDS/);
@@ -59,6 +64,6 @@ describe('Rollouts cluster kolonu', () => {
   // hücresinin altında hazır/trafik satırı YOK; bilgi title'da (rolloutTimingTitle).
   it('Başladı hücresi tek satır: hazır/trafik alt satırı yok, title kalır', () => {
     expect(src).not.toContain('rolloutTimingHint');
-    expect(src).toContain('title={rolloutTimingTitle(r)}');
+    expect(src).toContain('title={rolloutTimingTitle(r, lang)}'); // v0.10.2304 — arayüz dili
   });
 });

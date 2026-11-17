@@ -10,6 +10,7 @@
 // TTL'e dek çalışır), 6 → rollout_events.
 import type { WorkloadRollout, RolloutOrigin } from './types';
 import { fmtDateTime } from './utils';
+import { t, tf, fmtPctLang, type Lang } from './i18n'; // v0.10.2304 — ipuçları isteğe bağlı lang (varsayılan 'tr')
 
 /** v0.10.984 — satır rollout_events'ten mi (6 parçalı kimlik taşıyor mu). */
 export function isV2Rollout(r: { generation?: number; incarnationAt?: number }): boolean {
@@ -55,7 +56,7 @@ export function statusTone(status: string): RolloutTone {
 /** v0.10.1421 — Operator-reported: "Türkçe 'ilk gözlem' ve 'tamamlandı' vs
  * yerine İngilizce yazsın." Durum rozeti İngilizce (tablo, çekmece, Servis
  * GitOps sekmesi, kök neden paneli, olay işaretçisi aynı sözlükten okur);
- * açıklayıcı ipuçları (statusTitle) Türkçe kalır. */
+ * açıklayıcı ipuçları (statusTitle) v0.10.2304'ten beri arayüz dilinde. */
 export function statusLabel(status: string): string {
   switch (status) {
     case 'in_progress': return 'In progress';
@@ -71,25 +72,10 @@ export function statusLabel(status: string): string {
  * söylemiyordu. Durumun anlamı (reconcile.go §DURUM) ipucu olarak.
  * v0.10.984 — v2 satırında (KSM dedektörü) aynı v1 durumunun anlamı farklı
  * kanıttan gelir: v2 = true KSM ipucunu verir. */
-export function statusTitle(status: string, v2 = false): string {
-  if (v2) {
-    switch (status) {
-      case 'in_progress': return 'Yeni nesil yayılıyor: güncel şablondaki replikalar henüz hepsi hazır değil (KSM)';
-      case 'completed': return 'Tüm replikalar yeni şablonda ve hazır (KSM: gözlenen nesil yetişti, güncel = hazır = istenen)';
-      case 'rolled_back': return 'Sonraki rollout bu revizyondan önceki bir revizyona geri döndü';
-      case 'superseded': return 'Yerini daha yeni bir nesil aldı (bitmeden ya da iş yükü silindi)';
-      case 'stalled': return 'İlerlemiyor: progress deadline aşıldı ya da takılma süresi (stuckAfter) doldu';
-      default: return '';
-    }
-  }
-  switch (status) {
-    case 'in_progress': return 'Yeni revizyon trafik alıyor; eski revizyon henüz tamamen çekilmedi';
-    case 'completed': return 'Yeni revizyon tek aktif revizyon; eskileri çekildi';
-    case 'rolled_back': return 'Bu revizyon çekildi ve yerine ÖNCEKİ revizyon geri döndü';
-    case 'superseded': return 'Bu revizyon çekildi; yerini önceki değil BAŞKA bir revizyon aldı (devralındı)';
-    case 'stalled': return 'Yeni revizyon ilerlemiyor: pod\'lar hazır değil ya da trafik teyit edilmedi';
-    default: return '';
-  }
+export function statusTitle(status: string, v2 = false, lang: Lang = 'tr'): string {
+  const known = ['in_progress', 'completed', 'rolled_back', 'superseded', 'stalled'];
+  if (!known.includes(status)) return '';
+  return t(`ro.st${v2 ? '.v2' : ''}.${status}`, lang);
 }
 
 /** v0.10.234 — Operator-reported: "imaj değiştiyse deployment, değişmediyse
@@ -122,14 +108,8 @@ export function changeKindLabel(k: RolloutChangeKind): string {
     default: return 'Unknown';
   }
 }
-export function changeKindTitle(k: RolloutChangeKind): string {
-  switch (k) {
-    case 'deployment': return 'İmaj değişti (eski → yeni tag): yeni sürüm yayını';
-    case 'config': return 'İmaj aynı, yalnız revizyon değişti: config/env/secret/replica değişikliği ya da yeniden başlatma';
-    case 'initial': return 'Önceki revizyon bilinmiyor — Coremetry bu iş yükünü ilk kez gördü, kıyas yok';
-    case 'rollback': return 'Daha önce görülmüş bir revizyona dönüldü (KSM dedektörü)';
-    default: return 'İmaj bilgisi eksik (span\'ler container.image taşımıyor) — tür belirlenemedi';
-  }
+export function changeKindTitle(k: RolloutChangeKind, lang: Lang = 'tr'): string {
+  return t(`ro.ck.${k === 'deployment' || k === 'config' || k === 'initial' || k === 'rollback' ? k : 'unknown'}`, lang);
 }
 export function changeKindTone(k: RolloutChangeKind): RolloutTone {
   switch (k) {
@@ -162,41 +142,41 @@ export function originLabel(kind: string): string {
 }
 
 /** Satır ipucu / çekmece açıklaması: prev → new revizyon + güven + sunucunun (EN) gerekçesi. */
-export function originTitle(o: RolloutOrigin): string {
+export function originTitle(o: RolloutOrigin, lang: Lang = 'tr'): string {
   const revs = `${shortGitRevision(o.prevRevision)} → ${shortGitRevision(o.newRevision)}`;
-  const conf = o.confidence > 0 ? `güven %${o.confidence}` : '';
+  const conf = o.confidence > 0 ? tf('ro.or.conf', lang, { p: fmtPctLang(o.confidence, lang) }) : '';
   let head: string;
   switch (o.kind) {
     case 'rollback':
-      head = `Argo daha önce senkronlanmış bir revizyona döndü: ${revs}${o.firstSyncedAt ? ` (ilk senkron ${fmtDateTime(new Date(o.firstSyncedAt))})` : ''}`;
+      head = tf('ro.or.rollback', lang, { revs, first: o.firstSyncedAt ? tf('ro.or.firstSync', lang, { t: fmtDateTime(new Date(o.firstSyncedAt)) }) : '' });
       break;
     case 'redeploy_older':
-      head = `Yeni git revizyonu (daha önce senkronlanmamış): ${revs}${o.prevTag || o.newTag ? `, imaj ${o.prevTag || '?'} → ${o.newTag || '?'}` : ''} — eski bir yapının ileri commit'le yeniden deploy'u`;
+      head = tf('ro.or.redeploy', lang, { revs, img: o.prevTag || o.newTag ? tf('ro.or.img', lang, { a: o.prevTag || '?', b: o.newTag || '?' }) : '' });
       break;
     case 'forward':
-      head = `Yeni git revizyonu: ${revs}`;
+      head = tf('ro.or.forward', lang, { revs });
       break;
     default:
-      head = o.basis === 'argocd_webhook' ? `Argo senkronu bulundu ama kaynak belirsiz: ${revs}` : 'Git kaynağı bilinmiyor';
+      head = o.basis === 'argocd_webhook' ? tf('ro.or.unclear', lang, { revs }) : t('ro.or.unknown', lang);
   }
   return [head, conf, o.reason].filter(Boolean).join(' · ');
 }
 
 /** Tablodaki ikinci rozet: yalnız rollback / redeploy_older. */
-export function originBadge(r: Pick<WorkloadRollout, 'origin'>): OriginBadge | null {
+export function originBadge(r: Pick<WorkloadRollout, 'origin'>, lang: Lang = 'tr'): OriginBadge | null {
   const o = r.origin;
   if (!o) return null;
-  if (o.kind === 'rollback') return { label: originLabel(o.kind), tone: 'danger', title: originTitle(o) };
-  if (o.kind === 'redeploy_older') return { label: originLabel(o.kind), tone: 'warning', title: originTitle(o) };
+  if (o.kind === 'rollback') return { label: originLabel(o.kind), tone: 'danger', title: originTitle(o, lang) };
+  if (o.kind === 'redeploy_older') return { label: originLabel(o.kind), tone: 'warning', title: originTitle(o, lang) };
   return null;
 }
 
 /** Çekmece "kaynak" satırının ek bilgisi: app · başlatan. */
-export function originAppLine(o: RolloutOrigin): string {
+export function originAppLine(o: RolloutOrigin, lang: Lang = 'tr'): string {
   const parts: string[] = [];
   if (o.app) parts.push(`${o.app.appNamespace}/${o.app.appName}${o.app.matchClass ? ` (${o.app.matchClass})` : ''}`);
-  if (o.automated !== undefined) parts.push(o.automated ? 'auto-sync' : `elle sync${o.initiator ? ` · ${o.initiator}` : ''}`);
-  if (o.historyDepth) parts.push(`geçmiş ${o.historyDepth} senkron`);
+  if (o.automated !== undefined) parts.push(o.automated ? 'auto-sync' : `${t('ro.or.manualSync', lang)}${o.initiator ? ` · ${o.initiator}` : ''}`);
+  if (o.historyDepth) parts.push(tf('ro.or.history', lang, { n: o.historyDepth }));
   return parts.join(' · ');
 }
 
@@ -351,17 +331,17 @@ export function replicaSummary(r: Pick<WorkloadRollout, 'updatedReplicas' | 'ava
 export interface RolloutTimelineStep { key: string; label: string; at: number; offsetSec: number }
 
 export function rolloutTimeline(r: Pick<WorkloadRollout, 'startedAt' | 'status'> & Partial<Pick<WorkloadRollout,
-  'podsReadyAt' | 'firstSpanAt' | 'completedAt' | 'succeededAt' | 'stuckAt' | 'finishedAt' | 'v2Status'>>): RolloutTimelineStep[] {
+  'podsReadyAt' | 'firstSpanAt' | 'completedAt' | 'succeededAt' | 'stuckAt' | 'finishedAt' | 'v2Status'>>, lang: Lang = 'tr'): RolloutTimelineStep[] {
   if (!r.startedAt) return [];
   const raw: Array<[string, string, number | undefined]> = [
-    ['start', 'Başladı (yeni ReplicaSet)', r.startedAt],
-    ['ready', "Pod'lar hazır", r.podsReadyAt],
-    ['traffic', 'Trafik yeni sürümde (ilk span)', r.firstSpanAt],
+    ['start', t('ro.tl.start', lang), r.startedAt],
+    ['ready', t('ro.tl.ready', lang), r.podsReadyAt],
+    ['traffic', t('ro.tl.traffic', lang), r.firstSpanAt],
   ];
   if (r.stuckAt) raw.push(['stuck', statusLabel('stalled'), r.stuckAt]);
   const rolledBack = r.status === 'rolled_back' || r.v2Status === 'rolled_back';
   const superseded = r.status === 'superseded' || r.v2Status === 'superseded';
-  const done = `${statusLabel('completed')} (eski sürüm devreden çıktı)`;
+  const done = tf('ro.tl.done', lang, { c: statusLabel('completed') });
   const succ = r.succeededAt ?? 0;
   if (rolledBack) {
     if (succ) raw.push(['end', done, succ]);
