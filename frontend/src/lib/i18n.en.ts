@@ -2494,6 +2494,8 @@ export const EN: Record<string, string> = {
   'mlx.notFound.body': 'Event records are kept for 30 days and event-moment snapshots for 120 days; older events also drop from the list.',
   'mlx.snap.sub': '{n}-minute buckets · normal range in thin lines',
   'mlx.snap.none': 'No chart record for this event (opened before the event-moment snapshot was written, or it expired).',
+  'mlx.panelPeak': 'Peak on the chart: {v}',
+  'mlx.panelDip': 'Lowest on the chart: {v}',
   'mlx.chronic': 'Chronic: repeated {n} times in the last 7 days; track it as a persistent pattern rather than individual events.',
   'mlx.contrib.src': 'Messaging panel · VictoriaMetrics',
   'mlx.tech.detectors': 'Detectors',

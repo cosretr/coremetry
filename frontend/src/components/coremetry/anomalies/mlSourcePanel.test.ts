@@ -2,7 +2,7 @@
 // çevreler; suçlu seri adıyla. Fikstür nötr.
 import { describe, it, expect } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { contributorLine, highlightColors, liveGapLine, serviceRedAggFor, thanosSourceText, leadFromSnapshot, panelWindow, sourcePanelFor, topContributors } from './mlSourcePanel';
+import { contributorLine, highlightColors, liveGapLine, serviceRedAggFor, thanosSourceText, leadFromSnapshot, panelWindow, panelPeakLine, peakValueText, sourcePanelFor, topContributors } from './mlSourcePanel';
 
 describe('contributorLine / leadFromSnapshot', () => {
   it('tek suçlu adıyla, diğerleri tek ifadeyle; ad kırpılmaz', () => {
@@ -144,5 +144,34 @@ describe('topContributors', () => {
   it('veri yok / sıfır → none', () => {
     expect(topContributors([])).toEqual({ kind: 'none' });
     expect(topContributors([ser('a', [0, 0])])).toEqual({ kind: 'none' });
+  });
+});
+
+// v0.10.2329 (audit B8) — panel tepesi başlığa yazılmaz; ayrı satır, eski
+// kartın birim biçimiyle (mlValueText.test.ts 'birim' durumları buraya taşındı).
+describe('panelPeakLine / peakValueText', () => {
+  it.each<[number, string | undefined, string]>([
+    [2800, undefined, '2.800'],
+    [1340.5, undefined, '1.340,5'],
+    [1.3399, undefined, '1,34'],
+    [12345678, undefined, '12.345.678'],
+    [1.5 * 2 ** 30, 'bytes', '1,5 GB'],
+    [512 * 2 ** 20, 'bytes', '512 MB'],
+    [0.25, 's', '250 ms'],
+    [2.5, 's', '2,5 sn'],
+    [1250, 'ms', '1,3 sn'],
+    [0.42, 's/s', '0,42 sn/sn'],
+    [3.2, 'core', '3,2 çekirdek'],
+  ])('%d %s → %s', (v, u, text) => { expect(peakValueText(v, u)).toBe(text); });
+  it('etiketli satır; düşüşte en düşük değer; tepe yoksa boş', () => {
+    expect(panelPeakLine(2800, undefined, 'up')).toBe('Grafikteki tepe: 2.800');
+    expect(panelPeakLine(9, '', 'down')).toBe('Grafikteki en düşük değer: 9');
+    expect(panelPeakLine(null, 'bytes', 'up')).toBe('');
+    expect(panelPeakLine(Number.NaN, 'bytes', 'up')).toBe('');
+  });
+  it('İngilizce arayüz', () => {
+    expect(panelPeakLine(2800, undefined, 'up', 'en')).toBe('Peak on the chart: 2,800');
+    expect(panelPeakLine(2.5, 's', 'down', 'en')).toBe('Lowest on the chart: 2.5 s');
+    expect(peakValueText(3.2, 'core', 'en')).toBe('3.2 cores');
   });
 });

@@ -165,6 +165,42 @@ export function peakInRange(series: SpanMetricSeries[], fromNs: number, toNs: nu
   return direction === 'down' ? Math.min(...vals) : Math.max(...vals);
 }
 
+// v0.10.2329 (audit B8) — panel tepesi başlığa YAZILMAZ (başlık dedektörün
+// kaydettiği değer); ayrı, etiketli satırda gösterilir. Birim biçimi eski
+// kartın değer parçasıyla aynı (sunucu valueFmt.one aynası; eski mlValueText).
+const BYTE_UNITS: [number, string][] = [[2 ** 30, 'GB'], [2 ** 20, 'MB'], [2 ** 10, 'KB']];
+
+/** SAF: en çok `dec` ondalık, sondaki sıfırlar atılır; TR "2.800" / "1,34", EN "2,800" / "1.34". */
+function peakNum(v: number, dec: number, lang: Lang): string {
+  return new Intl.NumberFormat(lang === 'tr' ? 'tr-TR' : 'en-US', { maximumFractionDigits: dec, minimumFractionDigits: 0, useGrouping: 'always' }).format(v);
+}
+
+/** SAF: panel tepesinin birimli metni (dedektör birimi: bytes, s, ms, s/s, core; diğerleri birimsiz). */
+export function peakValueText(v: number, unit: string | undefined, lang: Lang = 'tr'): string {
+  const sec = lang === 'tr' ? 'sn' : 's';
+  const big = (x: number) => (x < 10 ? peakNum(x, 1, lang) : peakNum(x, 0, lang));
+  switch (unit) {
+    case 'bytes': {
+      const [sc, u] = BYTE_UNITS.find(([s]) => v >= s) ?? [1, 'B'];
+      return `${peakNum(v / sc, 1, lang)} ${u}`;
+    }
+    case 's':
+    case 'ms': {
+      const ms = unit === 's' ? v * 1000 : v;
+      return ms >= 1000 ? `${big(ms / 1000)} ${sec}` : `${peakNum(ms, 0, lang)} ms`;
+    }
+    case 's/s': return `${peakNum(v, 2, lang)} ${sec}/${sec}`;
+    case 'core': return `${peakNum(v, 2, lang)} ${lang === 'tr' ? 'çekirdek' : 'cores'}`;
+  }
+  return peakNum(v, 2, lang);
+}
+
+/** SAF: "Grafikteki tepe: 2.800" (düşüşte en düşük değer); tepe yoksa ''. */
+export function panelPeakLine(peak: number | null, unit: string | undefined, direction: string | undefined, lang: Lang = 'tr'): string {
+  if (peak == null || !Number.isFinite(peak)) return '';
+  return tf(direction === 'down' ? 'mlx.panelDip' : 'mlx.panelPeak', lang, { v: peakValueText(peak, unit, lang) });
+}
+
 /** SAF: panel penceresi (ns) — olayı çevreler. */
 export function panelWindow(startNs: number, endNs: number, open: boolean, nowNs: number): { fromNs: number; toNs: number } {
   const fromNs = startNs - 30 * MIN;

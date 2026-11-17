@@ -251,4 +251,19 @@ describe('Olayın seyri: canlı seri → kayıtlı görüntü → boş durum', (
     expect(kind(el)).toMatch(/kayıtlı görüntü|stored snapshot/);
     expect(el.querySelector('[data-testid="ml-course"]')!.textContent).not.toContain('grafik kaydı yok');
   });
+  // v0.10.2329 (audit B8) — metrik olayında başlık sayısı dedektörün kaydettiği
+  // değer (sunucu cümlesi aynen); canlı panel tepesi ayrı, etiketli satır.
+  it('metrik olayı: başlık kayıttan, panel tepesi ayrı satırda', async () => {
+    const mSnap: MLSnapshot = { ...snap, detector: 'metric_jvm', signal: 'metric', service: 'checkout', part: 'metric_jvm|heap_used', evidence: '{"source":"vm"}' };
+    const summary = "checkout: Heap kullanımı 512 MB seviyesine çıktı (5 dakikalık ölçüm); normalde yaklaşık 300 MB. 14:31'den beri sürüyor (13 dakika).";
+    const mCard: ExplainCard = { ...card, summary, header: { ...card.header, kind: 'metric', detector: 'metric_jvm', service: 'checkout' },
+      value: { text: '512 MB seviyesine çıktı (5 dakikalık ölçüm)', measured: '512 MB (5 dakikalık ölçüm)', unit: 'bytes', direction: 'up' } };
+    m.sourceSeries = { query: { expr: 'x', label: 'Heap' }, stepSec: 60, series: [{ groupKey: [''], points: [{ time: 1_800_000_300e9, value: 1.5 * 2 ** 30 }] }] };
+    const el = await render({ snapshot: mSnap, related: [], card: mCard });
+    expect(el.querySelector('[data-testid="ml-summary"]')!.textContent).toBe(summary.slice('checkout: '.length));
+    expect(el.querySelector('[data-testid="ml-panel-peak"]')!.textContent).toBe('Grafikteki tepe: 1,5 GB');
+    m.sourceSeries = { query: { expr: 'x', label: 'Heap' }, stepSec: 60, series: [] };
+    const el2 = await render({ snapshot: mSnap, related: [], card: mCard });
+    expect(el2.querySelector('[data-testid="ml-panel-peak"]')).toBeNull();
+  });
 });

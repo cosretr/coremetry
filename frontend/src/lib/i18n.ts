@@ -2875,6 +2875,8 @@ const TR: Catalog = {
   'mlx.notFound.body': 'Olay kaydı 30, olay anı kaydı 120 gün saklanır; daha eski olaylar listeden de düşer.',
   'mlx.snap.sub': '{n} dakikalık kova · normal aralık ince çizgilerle',
   'mlx.snap.none': 'Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).',
+  'mlx.panelPeak': 'Grafikteki tepe: {v}',
+  'mlx.panelDip': 'Grafikteki en düşük değer: {v}',
   'mlx.chronic': 'Kronik: son 7 günde {n} kez tekrarladı; tek tek olay yerine kalıcı bir desen olarak izleyin.',
   'mlx.contrib.src': 'Messaging paneli · VictoriaMetrics',
   'mlx.tech.detectors': 'Dedektörler',

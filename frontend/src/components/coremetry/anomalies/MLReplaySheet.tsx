@@ -51,9 +51,8 @@ import { MLVerdictReasonForm } from './MLVerdictReasonForm';
 import { isVerdictReason, type VerdictReason } from './mlVerdictReason';
 import { recordUsable } from './mlRecord';
 import { fmtPctLang, t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; // v0.10.2291 — sayfa kromu arayüz dilinde (sunucu metni aynen)
-import { contributorLine, leadFromSnapshot, parseLogsLink, type Contributors } from './mlSourcePanel';
+import { contributorLine, leadFromSnapshot, panelPeakLine, parseLogsLink, type Contributors } from './mlSourcePanel';
 import { evidenceRows, evidenceSub } from './mlEvidenceRows';
-import { withPanelPeak } from './mlValueText';
 import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2302 — EN arayüzde sunucu cümlesi işaretli
 import { stripServicePrefix } from './unifiedRows';
 
@@ -157,7 +156,8 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   const rec = recordUsable(q.data?.record) ? q.data!.record! : null;
   // v0.10.2033 — panel verisinden suçlu seri(ler) (ek sorgu yok).
   const [contrib, setContrib] = useState<Contributors>({ kind: 'none' });
-  // v0.10.2044 — panelin olay aralığındaki tepesi: cümle panelin ölçüsünü söyler.
+  // v0.10.2044 — panelin olay aralığındaki tepesi. v0.10.2329 (audit B8): başlığa
+  // yazılmaz; ayrı, etiketli satır (başlık dedektörün kaydettiği değer).
   const [peak, setPeak] = useState<number | null>(null);
   if (q.isLoading) return <Spinner />;
   if (q.error || !card) {
@@ -195,8 +195,10 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   const problemChip = groupProblemChip(shadow, lang);
   const chartLead = lead ?? (snap ? leadFromSnapshot(snap) : null);
   const contribLine = contributorLine(contrib, tl('mlx.contrib.noun', lang), lang, tl('mlx.contrib.nouns', lang));
-  // v0.10.2044 — servis başlıkta; cümle değer parçası panel tepesiyle (varsa).
-  const headline = withPanelPeak(stripServicePrefix(card.summary, h.service), card.value, peak);
+  // v0.10.2044 — servis başlıkta. v0.10.2329 — başlık sunucu cümlesi aynen (dedektörün
+  // kaydettiği değer); canlı panel tepesi yalnız metrik olayında ayrı satır.
+  const headline = stripServicePrefix(card.summary, h.service);
+  const peakLine = h.kind === 'metric' ? panelPeakLine(peak, card.value?.unit, card.value?.direction, lang) : '';
   const rows = members.length
     ? evidenceRows(members, stripServicePrefix(card.summary, h.service), card.howMuch, h.service)
     : [{ key: 'lead', kind: signalKindOf(h.detector, h.kind), detector: h.detector, text: card.howMuch, ids: [] as string[] }];
@@ -219,6 +221,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
         {problemChip && <span data-testid="ml-group-problem"><Chip link={problemChip} /></span>}
       </div>
       <p className="mb-2.5 text-sm font-semibold leading-normal" data-testid="ml-summary"><OrigLang>{headline}</OrigLang></p>
+      {peakLine && <p className="mb-2.5 text-sm text-muted-foreground" data-testid="ml-panel-peak">{peakLine}</p>}
       {snap?.detector === 'op_latency' && episodes >= 5 && (
         <p className="mb-2 text-sm text-muted-foreground" data-testid="ml-chronic">{tf('mlx.chronic', lang, { n: episodes })}</p>
       )}
