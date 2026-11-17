@@ -36,3 +36,64 @@ func Sentences(answer string) int {
 	}
 	return n
 }
+
+// ── v0.10.2323 — akıcılık ölçütleri ─────────────────────────────────────
+
+// BoilerplateOpenings / BoilerplateClosings — kalıp açılış ve kapanış
+// listesi. TEK YER: audit §4 S2 sorgusundaki `acilis_kaliplari` /
+// `kapanis_kaliplari` dizileriyle birebir (TestBoilerplateListsMatchAuditS2
+// belgeyle eşitliği pinler); değerlendirme raporu ve ileride D dilimi
+// süzgeci bu listeyi okur. Küçük harf, Türkçe İ → i katlanmış metne karşı.
+var (
+	BoilerplateOpenings = []string{"tabii", "elbette", "merhaba", "selam", "harika bir soru", "güzel soru", "anladım", "hemen bakıyorum",
+		"size yardımcı", "yardımcı olayım", "aşağıda", "işte ", "öncelikle", "verilen veriye göre",
+		"sağlanan verilere göre", "verilere göre", "elimdeki verilere göre", "incelediğimde", "analiz sonucunda"}
+	BoilerplateClosings = []string{"başka bir sorunuz", "başka sorunuz", "başka bir konuda", "yardımcı olabileceğim başka", "umarım yardımcı",
+		"umarım faydalı", "sormaktan çekinme", "bana bildirin", "haber verin", "iyi çalışmalar", "kolay gelsin",
+		"daha fazla bilgi isterseniz", "detay isterseniz", "ister misiniz"}
+)
+
+var (
+	leadingMarkupRe = regexp.MustCompile(`^[\s*_>#-]+`)
+	bulletLineRe    = regexp.MustCompile(`(?m)^\s*([-*•]|\d+[.)])\s`)
+)
+
+// foldTR — S2 ile aynı katlama: 'İ' → 'i', sonra küçük harf.
+func foldTR(s string) string { return strings.ToLower(strings.ReplaceAll(s, "İ", "i")) }
+
+// Fluency — tek cevabın otomatik akıcılık ölçütleri (S2 tanımları).
+type Fluency struct {
+	BoilerplateOpening bool `json:"boilerplateOpening"`
+	BoilerplateClosing bool `json:"boilerplateClosing"`
+	Sentences          int  `json:"sentences"`
+	Chars              int  `json:"chars"`
+	Bullets            bool `json:"bullets"`
+	EndsWithQuestion   bool `json:"endsWithQuestion"`
+}
+
+// FluencyOf — SAF: cevabın ölçütleri. Açılış: gövdenin baştaki biçim
+// işaretleri atılmış ilk 80 karakterinde önek; kapanış: son 200 karakterde
+// içerme; soru: gövde "?" ile biter; madde listesi: "-", "*", "•" ya da
+// "1." / "1)" ile başlayan satır.
+func FluencyOf(answer string) Fluency {
+	body := StripSourceLine(answer)
+	rs := []rune(leadingMarkupRe.ReplaceAllString(body, ""))
+	head := foldTR(string(rs[:min(len(rs), 80)]))
+	br := []rune(body)
+	tail := foldTR(string(br[max(0, len(br)-200):]))
+	f := Fluency{Sentences: Sentences(answer), Chars: len(br), Bullets: bulletLineRe.MatchString(answer),
+		EndsWithQuestion: strings.HasSuffix(strings.TrimRight(body, " \t\r\n"), "?")}
+	for _, p := range BoilerplateOpenings {
+		if strings.HasPrefix(head, p) {
+			f.BoilerplateOpening = true
+			break
+		}
+	}
+	for _, p := range BoilerplateClosings {
+		if strings.Contains(tail, p) {
+			f.BoilerplateClosing = true
+			break
+		}
+	}
+	return f
+}

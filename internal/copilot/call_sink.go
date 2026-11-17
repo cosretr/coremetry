@@ -33,6 +33,12 @@ type CallNote struct {
 	// Rounds — v0.10.2297: bu notun temsil ettiği model gidiş-dönüşü sayısı
 	// (serbest döngünün tek satırı N tur). 0 = tek çağrı.
 	Rounds uint16
+	// Loop / TTFTMs — v0.10.2323 (CoSRE H1): serbest döngü notunda
+	// v0.10.2318 döngü telemetrisi (RecordUsage'ın ai_calls satırına yazdığı
+	// değerlerin aynısı); anlatım notunda akışın ilk token süresi. Sıfır =
+	// bilinmiyor. Yalnız okunur (değerlendirme koşucusu); yazım yolu değişmez.
+	Loop   LoopUsage
+	TTFTMs uint32
 }
 
 // CallSink — bir model çağrısı bittiğinde çağrılır (başarılı ya da değil).

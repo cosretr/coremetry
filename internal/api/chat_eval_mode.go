@@ -101,6 +101,10 @@ type evalAgentOutcome struct {
 	// (niyet, guided anlatımı, döngü) — copilot.CallSink toplamı.
 	ModelCalls                uint16
 	InputTokens, OutputTokens uint32
+	// Loop / TTFTMs — v0.10.2323 (H1): turun v0.10.2318 döngü telemetrisi
+	// (ai_calls'a yazılanın aynısı) ve son model çağrısının ilk token'ı.
+	Loop   copilot.LoopUsage
+	TTFTMs uint32
 	// BoundTo — v0.10.1476: koşucunun vakayı bağladığı canlı servis (handler
 	// doldurmaz; evalsetServerAgent yazar).
 	BoundTo string
@@ -157,5 +161,6 @@ func evalOutcomeFromExchange(x *chatExchange, tier, status, msg string) evalAgen
 		Tier: tier, Route: x.route, Status: status, ErrMsg: msg, Answer: x.answer, Model: x.model,
 		Tools: append([]chstore.CosreTool(nil), x.tools...), Deep: x.deep, Toolset: x.toolset,
 		ModelCalls: x.modelCalls, InputTokens: x.inTok, OutputTokens: x.outTok,
+		Loop: x.loop, TTFTMs: x.callTTFT, // v0.10.2323
 	}
 }

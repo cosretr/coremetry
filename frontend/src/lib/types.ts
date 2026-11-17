@@ -3409,6 +3409,17 @@ export interface EvalsetCatalog {
   agentCases?: number;
   /** v0.10.2110 — rubrik eşiği (Go evalrubric.Threshold); günlük koşu "eşik altı" rozeti. */
   rubricThreshold?: number;
+  /** v0.10.2322 — konuşma kipi (akıcılık) kümesi; yalnız açık seçimle koşar,
+   *  total / surfaces'e girmez. Yok = küme yok ya da eski sunucu. */
+  conversation?: EvalsetConversation;
+}
+
+/** v0.10.2322/2323 — akıcılık kümesi + seçilebilir profiller (Go evalCatalogConversation). */
+export interface EvalsetConversation {
+  surface: string;
+  cases: number;
+  turns: number;
+  profiles?: { id: string; label: string; model: string }[];
 }
 
 /** Koşunun yüzey başına özeti (koşu sürerken her vakadan sonra güncellenir). */
@@ -3593,7 +3604,7 @@ export interface EvalCaseResult {
   /** v0.10.1311 — vakanın araç seti; döngü dışı yüzey ''. */
   toolset?: AIToolset;
   /** v0.10.1316 — 'agent' = canlı ajan döngüsünde koştu (iz `agent`'ta); yok = tek çağrı. */
-  mode?: 'agent';
+  mode?: 'agent' | 'conversation';
   agent?: EvalAgentTrail;
   /** v0.10.1476 — altyapı hatası sınıfı (skipped ile; vaka puanlanmadı). */
   infraError?: string;

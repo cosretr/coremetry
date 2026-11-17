@@ -159,7 +159,7 @@ func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, out
 	callID := callIDFor(ctx)
 	lu := loopUsageFrom(ctx) // v0.10.2297 — serbest döngü: tur sayısı + en büyük prompt (yoksa 0)
 	notifyCallSink(ctx, CallNote{CallID: callID, ExchangeID: meta.ExchangeID, Model: model,
-		InputTokens: inTok, OutputTokens: outTok, Rounds: lu.Rounds}) // Faz 1 — cosre_interactions
+		InputTokens: inTok, OutputTokens: outTok, Rounds: lu.Rounds, Loop: lu}) // Faz 1 — cosre_interactions; v0.10.2323 döngü telemetrisi
 	if s.recorder == nil {
 		return
 	}

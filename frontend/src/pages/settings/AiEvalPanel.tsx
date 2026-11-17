@@ -36,7 +36,8 @@ import { DataTable, type ColumnDef, type DataTableStateInput } from '@/component
 import { Sparkline } from '@/components/Sparkline';
 import { AiEvalCandidates } from './AiEvalCandidates';
 import { useEvalsetCatalog, useEvalRuns, useEvalRun, useEvalCompare, useStartEvalRun, useCancelEvalRun } from '@/lib/queries';
-import type { AIToolset, EvalCaseResult, EvalCompare, EvalRunSummary, EvalSurfaceSummary } from '@/lib/types';
+import type { AIToolset, EvalCaseResult, EvalCompare, EvalRunSummary, EvalSurfaceSummary, EvalsetConversation } from '@/lib/types';
+import { api } from '@/lib/api';
 import { FlashBox, humanize } from './shared';
 import {
   activeRun, agentMetaLine, dailyEvalView, caseBadgeLabel, caseReason, compareCandidates, compareGroups, compareSummary, evalHref, expectLines, failingCases,
@@ -341,6 +342,18 @@ export function AiEvalPanel() {
         {/* v0.10.940 — süre son yoklamanın saatine göre (dataUpdatedAt): ayrı
             bir saniye sayacı (setInterval) yok; 10 s'lik yoklama zaten
             yeniden çiziyor ve gizli sekmede RQ ile birlikte durur. */}
+        {/* v0.10.2323 (H1) — akıcılık seti: iki profil sırayla, konuşma kipi. */}
+        {catalog?.conversation && (
+          <FluencyRunControls conv={catalog.conversation} defaultProfile={catalog.defaultProfileId}
+            disabledReason={!catalog.ready || active ? blockReason : ''} pending={startM.isPending}
+            onStart={profiles => {
+              setFlash(null);
+              startM.mutate({ surfaces: [catalog.conversation?.surface ?? 'ChatConversation'], toolset, profiles }, {
+                onSuccess: () => setParams({ run: null, case: null, cmp: null }),
+                onError: e => setFlash({ kind: 'err', text: humanize(e) }),
+              });
+            }} />
+        )}
         {active && <RunProgress run={active} nowMs={runsQ.dataUpdatedAt || Date.now()} />}
         {flash && <FlashBox kind={flash.kind}>{flash.text}</FlashBox>}
         <div className="mt-2.5 border-t border-(--divider) pt-2 text-[length:var(--fs-xs)] text-(--text3)">
@@ -369,6 +382,18 @@ export function AiEvalPanel() {
 
       <SectionHead title={`${runParam ? 'Seçili koşu' : 'Son koşu'} · yüzey özeti`}
         meta={selectedRun ? runMeta(selectedRun) : undefined} />
+      {/* v0.10.2323 — konuşma koşusunun yan yana raporu (operatör docs/cosre/eval/ altına kaydeder). */}
+      {selectedRun && detail && (detail.cases ?? []).some(c => c.mode === 'conversation') && (
+        <div className={ROW}>
+          <Button variant="outline" size="sm" disabled={selectedRun.status === 'running'}
+            onClick={() => { api.aiEvalsetFluencyReport(selectedRun.id).catch(e => setFlash({ kind: 'err', text: humanize(e) })); }}>
+            Akıcılık raporunu indir (.md)
+          </Button>
+          <span className="field-hint mt-0">
+            {selectedRun.status === 'running' ? 'Koşu bitince indirilebilir.' : 'docs/cosre/eval/fluency-<tarih>.md olarak kaydet.'}
+          </span>
+        </div>
+      )}
       {selectedRun?.status === 'failed' && selectedRun.error && (
         <div className={`is-err ${NOTE}`}>Koşu başarısız: {selectedRun.error}</div>
       )}
@@ -439,6 +464,47 @@ export function AiEvalPanel() {
           </div>
         </SheetContent>
       </Sheet>
+    </div>
+  );
+}
+
+/** v0.10.2323 (H1) — akıcılık seti satırı: iki profil seç, sırayla koş.
+ *  Aynı profil iki kez seçilemez; ikinci boş bırakılırsa tek profil koşar. */
+function FluencyRunControls({ conv, defaultProfile, disabledReason, pending, onStart }: {
+  conv: EvalsetConversation; defaultProfile: string; disabledReason: string; pending: boolean;
+  onStart: (profiles: string[]) => void;
+}) {
+  const profiles = conv.profiles ?? [];
+  const [a, setA] = useState(defaultProfile);
+  const [b, setB] = useState('');
+  const picked = [a, b].filter((p, i, all) => p !== '' && all.indexOf(p) === i);
+  const label = (p: { id: string; label: string; model: string }) => `${p.label || p.id}${p.model ? ` · ${p.model}` : ''}`;
+  const reason = disabledReason || (picked.length === 0 ? 'En az bir profil seç.' : '');
+  return (
+    <div data-evs-fluency="" className="mt-3 border-t border-(--divider) pt-3">
+      <div className="text-[length:var(--fs-sm)] font-semibold">Akıcılık seti (konuşma)</div>
+      <p className="mb-2 mt-1 text-[length:var(--fs-xs)] text-(--text2)">
+        {conv.cases} çok turlu konuşma, profil başına {conv.turns} sohbet turu; veri sahte, model gerçek.
+        Profiller sırayla koşar. Tümü ve günlük koşuya girmez.
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[220px]">
+          <SelectField label="Profil A" value={a} onChange={e => setA(e.target.value)}>
+            <option value="">— seç —</option>
+            {profiles.map(p => <option key={p.id} value={p.id}>{label(p)}</option>)}
+          </SelectField>
+        </div>
+        <div className="min-w-[220px]">
+          <SelectField label="Profil B" value={b} onChange={e => setB(e.target.value)}>
+            <option value="">— yok —</option>
+            {profiles.filter(p => p.id !== a).map(p => <option key={p.id} value={p.id}>{label(p)}</option>)}
+          </SelectField>
+        </div>
+        <Button variant="outline" disabled={!!reason} loading={pending} onClick={() => onStart(picked)}>
+          {picked.length > 1 ? 'İki profille koş' : 'Tek profille koş'}
+        </Button>
+      </div>
+      <span className="field-hint mt-1 block">{reason || `${conv.turns * picked.length} sohbet turu · sırayla koşar`}</span>
     </div>
   );
 }

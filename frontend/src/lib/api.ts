@@ -1354,11 +1354,15 @@ export const api = {
   // çağıran humanize ile `error`u gösterir ve listeyi tazeler.
   // v0.10.1311 — toolset '' = otomatik (üretim profilinin araç seti) |
   // simple | full (açık seçim; yalnız serbest döngü yüzeylerine uygulanır).
-  aiEvalsetStartRun: (surfaces: string[], toolset: import('./types').AIToolset = '') =>
+  // v0.10.2323 — profiles: en çok iki profil, sırayla (akıcılık koşusu); boş = gövdeye girmez.
+  aiEvalsetStartRun: (surfaces: string[], toolset: import('./types').AIToolset = '', profiles: string[] = []) =>
     request<{ run: import('./types').EvalRunSummary }>(`/api/ai/evalset/runs`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ surfaces, toolset }), timeoutMs: 30_000,
+      body: JSON.stringify(profiles.length ? { surfaces, toolset, profiles } : { surfaces, toolset }), timeoutMs: 30_000,
     }),
+  // v0.10.2323 — konuşma koşusunun yan yana Markdown raporu (ek dosya).
+  aiEvalsetFluencyReport: (id: string) =>
+    downloadFile(`/api/ai/evalset/runs/${encodeURIComponent(id)}/fluency-report`, 'fluency.md'),
   aiEvalsetCancelRun: (id: string) =>
     request<{ ok: boolean }>(`/api/ai/evalset/runs/${encodeURIComponent(id)}/cancel`, { method: 'POST', timeoutMs: 15_000 }),
   aiEvalsetCompare: (base: string, head: string, signal?: AbortSignal) =>

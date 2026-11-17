@@ -841,8 +841,12 @@ func (s *Service) recordNarration(ctx context.Context, started time.Time,
 	// sabitlenmişse (WithCallID: AI SRE anlatımı kimliği çağrıdan önce basar ki
 	// özetin 👍/👎'ı bu satıra bağlansın) o kimlik; yoksa taze (eski davranış).
 	callID := callIDFor(ctx)
+	var ttft uint32 // v0.10.2323 — notta akışın ilk token'ı (kayıttaki TTFTMs'in aynısı)
+	if st := streamStatsFromContext(ctx); st != nil {
+		ttft = st.ttftMs()
+	}
 	notifyCallSink(ctx, CallNote{CallID: callID, ExchangeID: meta.ExchangeID, Model: model,
-		InputTokens: inputTokens, OutputTokens: outputTokens}) // Faz 1 — cosre_interactions
+		InputTokens: inputTokens, OutputTokens: outputTokens, TTFTMs: ttft}) // Faz 1 — cosre_interactions
 	if meta.Observe != nil {
 		u := Usage{Provider: provider, Model: model, Status: "ok",
 			InputTokens: inputTokens, OutputTokens: outputTokens, CachedTokens: cachedTokens,

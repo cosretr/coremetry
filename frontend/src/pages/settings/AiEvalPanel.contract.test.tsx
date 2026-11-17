@@ -65,6 +65,7 @@ const api = vi.hoisted(() => ({
   aiEvalsetStartRun: vi.fn(async (..._a: unknown[]) => ({}) as unknown),
   aiEvalsetCancelRun: vi.fn(async (..._a: unknown[]) => ({ ok: true })),
   aiEvalsetCompare: vi.fn(async (..._a: unknown[]) => ({}) as unknown),
+  aiEvalsetFluencyReport: vi.fn(async (..._a: unknown[]) => undefined),
 }));
 vi.mock('@/lib/api', () => ({ api }));
 
@@ -108,6 +109,31 @@ function idle() {
 }
 
 describe('AiEvalPanel', () => {
+  // v0.10.2323 (H1) — akıcılık seti: iki profil sırayla; rapor düğmesi konuşma koşusunda.
+  it('akıcılık seti: iki profil seçimi Koş gövdesine profiles olarak; konuşma koşusunda rapor indirilir', async () => {
+    api.aiEvalsetCatalog.mockResolvedValue({ ...CATALOG, conversation: { surface: 'ChatConversation', cases: 20, turns: 49,
+      profiles: [{ id: 'yerel', label: 'Yerel gemma', model: 'gemma4-31b' }, { id: 'kucuk', label: 'Küçük', model: 'qwen3.5-2b' }] } });
+    api.aiEvalsetRuns.mockResolvedValue({ runs: IDLE_RUNS });
+    api.aiEvalsetRun.mockResolvedValue({ ...DETAIL, cases: [kase('conv-x@yerel', { mode: 'conversation', ok: false, fails: ['tur 1: x'] })] });
+    api.aiEvalsetStartRun.mockResolvedValue({ run: run('ev-3', { status: 'running', done: 0, finishedAt: '' }) });
+    const el = render(<AiEvalPanel />);
+    await tick();
+    const box = el.querySelector('[data-evs-fluency]')!;
+    expect(box.textContent).toContain('20 çok turlu konuşma, profil başına 49 sohbet turu');
+    const selects = box.querySelectorAll('select');
+    act(() => {
+      selects[1].value = 'kucuk';
+      selects[1].dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(box.textContent).toContain('98 sohbet turu');
+    act(() => { button(box, 'İki profille koş')!.click(); });
+    await tick();
+    expect(api.aiEvalsetStartRun).toHaveBeenCalledWith(['ChatConversation'], '', ['yerel', 'kucuk']);
+    const dl = button(el, 'Akıcılık raporunu indir (.md)')!;
+    act(() => { dl.click(); });
+    expect(api.aiEvalsetFluencyReport).toHaveBeenCalledWith(IDLE_RUNS[0].id);
+  });
+
   it('başlık: varsayılan profil kataloğun defaultProfileId\'sinden; ayrılan yüzey tek satırda; /ai linki kaynaklı', async () => {
     idle();
     const el = render(<AiEvalPanel />);

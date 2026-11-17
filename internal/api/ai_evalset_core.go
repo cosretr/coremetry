@@ -839,6 +839,16 @@ type evalCatalogConversation struct {
 	Surface string `json:"surface"`
 	Cases   int    `json:"cases"`
 	Turns   int    `json:"turns"`
+	// Profiles — v0.10.2323: panelin iki profil seçicisi (kimlik, ad, model;
+	// anahtar asla). Koşu isteği yine rol erişimiyle doğrulanır.
+	Profiles []evalCatalogProfile `json:"profiles"`
+}
+
+// evalCatalogProfile — v0.10.2323: seçilebilir profil.
+type evalCatalogProfile struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Model string `json:"model"`
 }
 
 type evalSurfaceSummary struct {
@@ -1440,9 +1450,15 @@ func (s *Server) evalsetCatalog() (evalCatalog, error) {
 		})
 	}
 	if conv, cerr := evalConversationLoader(); cerr == nil && len(conv) > 0 { // v0.10.2322
-		cc := &evalCatalogConversation{Surface: evalConversationSurface, Cases: len(conv)}
+		cc := &evalCatalogConversation{Surface: evalConversationSurface, Cases: len(conv), Profiles: []evalCatalogProfile{}}
 		for _, c := range conv {
 			cc.Turns += len(c.Turns)
+		}
+		if s.copilot != nil { // v0.10.2323 — AI yapılandırılmamış sunucuda liste boş
+			profiles, _, _ := s.copilot.ProfilesSnapshot()
+			for _, p := range profiles {
+				cc.Profiles = append(cc.Profiles, evalCatalogProfile{ID: p.ID, Label: p.Label, Model: p.Model})
+			}
 		}
 		cat.Conversation = cc
 	}

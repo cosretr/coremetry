@@ -90,7 +90,9 @@ export function useStartEvalRun() {
   const qc = useQueryClient();
   return useMutation({
     // v0.10.1311 — araç seti seçimi ('' = otomatik) gövdeye.
-    mutationFn: ({ surfaces, toolset }: { surfaces: string[]; toolset: AIToolset }) => api.aiEvalsetStartRun(surfaces, toolset),
+    // v0.10.2323 — profiles yalnız akıcılık koşusunda (en çok iki, sırayla).
+    mutationFn: ({ surfaces, toolset, profiles }: { surfaces: string[]; toolset: AIToolset; profiles?: string[] }) =>
+      profiles?.length ? api.aiEvalsetStartRun(surfaces, toolset, profiles) : api.aiEvalsetStartRun(surfaces, toolset),
     onSuccess: res => {
       if (!res?.run) return;
       qc.setQueryData<EvalRunSummary[]>(aiEvalKeys.runs(), old => [res.run, ...(old ?? []).filter(r => r.id !== res.run.id)]);

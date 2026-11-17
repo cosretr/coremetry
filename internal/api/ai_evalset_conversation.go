@@ -137,6 +137,14 @@ type evalConvTurnResult struct {
 	OutputTokens    uint32         `json:"outputTokens"`
 	LatencyMs       int64          `json:"latencyMs"`
 	Toolset         string         `json:"toolset,omitempty"`
+	// v0.10.2323 — v0.10.2318 döngü telemetrisi (ai_calls: ttft_ms,
+	// loop_model_ms, loop_tool_ms, loop_tool_calls; tur sayısı model_rounds).
+	// 0 = bilinmiyor (döngü koşmadı ya da akış yok).
+	LoopRounds    int    `json:"loopRounds,omitempty"`
+	LoopToolCalls int    `json:"loopToolCalls,omitempty"`
+	LoopModelMs   uint32 `json:"loopModelMs,omitempty"`
+	LoopToolMs    uint32 `json:"loopToolMs,omitempty"`
+	TTFTMs        uint32 `json:"ttftMs,omitempty"`
 }
 
 // evalConvCase — SAF: vaka konuşma kipinde mi.
@@ -374,6 +382,8 @@ func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, 
 	tr.Answer, tr.Tier, tr.Route, tr.Status, tr.Toolset = o.Answer, o.Tier, o.Route, o.Status, o.Toolset
 	tr.Rounds, tr.ToolCalls, tr.ModelCalls = st.Rounds, st.Executed, int(o.ModelCalls)
 	tr.InputTokens, tr.OutputTokens = o.InputTokens, o.OutputTokens
+	tr.LoopRounds, tr.LoopToolCalls = int(o.Loop.Rounds), int(o.Loop.ToolCalls) // v0.10.2323
+	tr.LoopModelMs, tr.LoopToolMs, tr.TTFTMs = o.Loop.ModelMs, o.Loop.ToolMs, o.TTFTMs
 	if !ok {
 		err = fmt.Errorf("sohbet handler'ı sonuç bildirmedi (HTTP %d)", w.status())
 		tr.Error = err.Error()

@@ -70,6 +70,11 @@ type chatExchange struct {
 	modelCalls   uint16
 	inTok        uint32
 	outTok       uint32
+	// loop / callTTFT — v0.10.2323 (H1): turun döngü telemetrisi (CallNote.Loop
+	// toplamı) ve son anlatım/döngü notunun ilk token'ı. YALNIZ değerlendirme
+	// koşucusu okur (evalOutcomeFromExchange); hiçbir satıra yazılmaz.
+	loop     copilot.LoopUsage
+	callTTFT uint32
 
 	// v0.10.1280 (CoSRE adım 8) — cevabı ÜRETEN ai_calls satırı: kökle
 	// (alt-rol değil) kaydedilen SON model çağrısı ya da döngülerin cevaptan
@@ -166,6 +171,13 @@ func (x *chatExchange) noteModelCall(n copilot.CallNote) {
 	}
 	x.inTok += n.InputTokens
 	x.outTok += n.OutputTokens
+	x.loop.Rounds += n.Loop.Rounds // v0.10.2323 — değerlendirme izi
+	x.loop.ModelMs += n.Loop.ModelMs
+	x.loop.ToolMs += n.Loop.ToolMs
+	x.loop.ToolCalls += n.Loop.ToolCalls
+	if t := max(n.Loop.AnswerTTFTMs, n.TTFTMs); t > 0 {
+		x.callTTFT = t
+	}
 	if n.CallID != "" && n.ExchangeID != "" && n.ExchangeID == x.root {
 		x.finalCallID = n.CallID
 	}

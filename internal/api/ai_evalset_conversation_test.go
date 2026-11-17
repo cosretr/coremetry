@@ -457,6 +457,21 @@ func TestEvalConversationRunEndToEnd(t *testing.T) {
 	if !strings.Contains(strings.Join(b.Turns[0].Fails, " "), "999") || b.OK {
 		t.Errorf("B profili sayı ihlali yok: %v", b.Turns[0].Fails)
 	}
+	// v0.10.2323 — döngüye düşen turda v0.10.2318 telemetrisi okunur; rapor ucu.
+	for _, tr := range a.Turns {
+		if tr.Tier == "loop" && tr.LoopRounds == 0 {
+			t.Errorf("döngü turunda loopRounds okunmadı: %+v", tr)
+		}
+	}
+	h.s.registerAIEvalsetFluencyRoutes(h.mux)
+	w := h.do(t, http.MethodGet, "/api/ai/evalset/runs/"+run.ID+"/fluency-report", "", auth.RoleAdmin)
+	if w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/markdown") ||
+		!strings.Contains(w.Header().Get("Content-Disposition"), "fluency-") || !strings.Contains(w.Body.String(), "| | pa (`model-a`) | pb (`model-b`) |") {
+		t.Errorf("rapor ucu %d %q:\n%s", w.Code, w.Header(), w.Body.String())
+	}
+	if w := h.do(t, http.MethodGet, "/api/ai/evalset/runs/"+run.ID+"/fluency-report", "", auth.RoleViewer); w.Code != http.StatusForbidden {
+		t.Errorf("viewer rapor %d", w.Code)
+	}
 	// Redis (sahte önbellek) — koşu kullanıcının sohbet bağlamına yazmadı.
 	mc.mu.Lock()
 	for k := range mc.m {
