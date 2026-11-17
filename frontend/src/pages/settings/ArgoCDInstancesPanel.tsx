@@ -1,3 +1,4 @@
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2313 — metinler arayüz dilinde (TR aynı)
 import { useCallback, useMemo, type ReactNode } from 'react';
 import { Badge } from '@/components/shadcn/badge';
 import { Button } from '@/components/shadcn/button';
@@ -49,15 +50,15 @@ const FIELD_COL: Record<string, string> = {
 
 interface TokenCell { text: string; title: string; state: TokenState }
 
-function tokenCell(i: InstanceDraft, tokens: Record<string, ArgoCDTokenStatus>): TokenCell {
+function tokenCell(i: InstanceDraft, tokens: Record<string, ArgoCDTokenStatus>, lang: Lang = 'tr'): TokenCell {
   const state = tokenState(i, tokens);
   const ref = i.tokenInput.trim() || i.storedRef;
   switch (state) {
-    case 'none': return { state, text: 'yok · yalnız metrik', title: "tokenRef yok: API işçisi bu instance'ı atlar; durum yalnız metriklerden okunur." };
+    case 'none': return { state, text: t('acd.tok.none', lang), title: t('acd.tok.noneTitle', lang) };
     case 'pending': return { state, text: 'yeni · kaydedince denetlenir', title: ref };
-    case 'unresolved': return { state, text: 'çözülemedi', title: tokens[i.savedId]?.error || `${ref} çözülemedi` };
-    case 'resolved': return { state, text: 'kayıtlı', title: `${ref} · çözüldü` };
-    default: return { state, text: 'kayıtlı', title: ref };
+    case 'unresolved': return { state, text: t('acd.tok.unresolved', lang), title: tokens[i.savedId]?.error || tf('acd.tok.unresolvedTitle', lang, { ref }) };
+    case 'resolved': return { state, text: t('acd.saved', lang), title: tf('acd.tok.resolvedTitle', lang, { ref }) };
+    default: return { state, text: t('acd.saved', lang), title: ref };
   }
 }
 
@@ -86,6 +87,7 @@ export function ArgoCDInstancesPanel({
   onCancel: () => void;
   onRemoveBuffer: () => void;
 }) {
+  const lang = useLang();
   const hn = useCallback((id: string) => hubName(id, clusters), [clusters]);
   // (satır anahtarı, hatalı kolon) çiftleri — Kaydet'in istemci/sunucu
   // sorunlarından. İmza dizgesiyle memo: `issues` her çizimde yeni dizi, kolon
@@ -107,8 +109,8 @@ export function ArgoCDInstancesPanel({
     { id: 'token', label: 'Token', width: 120, naturalDir: 'asc',
       sortValue: r => `${tokenRank(tokenState(r, tokens))} ${r.id}`,
       tone: r => { if (bad(r, 'token')) return 'err'; const s = tokenState(r, tokens); return s === 'unresolved' ? 'err' : s === 'none' ? 'faint' : 'muted'; } },
-    { id: 'status', label: 'Durum', width: 70, naturalDir: 'asc', sortValue: r => `${r.enabled ? 0 : 1} ${r.id}`, tone: r => (bad(r, 'status') ? 'err' : r.enabled ? 'muted' : 'faint') },
-  ], [hn, tokens, bad]);
+    { id: 'status', label: t('acd.inst.col.status', lang), width: 70, naturalDir: 'asc', sortValue: r => `${r.enabled ? 0 : 1} ${r.id}`, tone: r => (bad(r, 'status') ? 'err' : r.enabled ? 'muted' : 'faint') },
+  ], [hn, tokens, bad, lang]);
 
   const blank = buffer?.isNew ? applyBuffer(buffer) : null;
   const isBlank = (r: InstanceDraft) => !!blank && r.key === blank.key;
@@ -127,8 +129,8 @@ export function ArgoCDInstancesPanel({
         const k = domKey(r.key);
         const open = isOpen(r);
         const nb = isBlank(r);
-        const label = r.id || 'yeni instance';
-        const tag = nb || r.origin === 'new' ? 'yeni' : instanceChanged(r, base) ? 'değişti' : '';
+        const label = r.id || t('acd.inst.newLabel', lang);
+        const tag = nb || r.origin === 'new' ? t('acd.inst.tagNew', lang) : instanceChanged(r, base) ? t('acd.inst.tagChanged', lang) : '';
         return (
           <span className="inline-flex items-center gap-3">
             <Button variant="link" size="xs" className="h-auto gap-1.5 p-0 text-(--text2) no-underline hover:no-underline"
@@ -144,9 +146,9 @@ export function ArgoCDInstancesPanel({
       case 'hub': return text(hn(r.hubClusterId));
       case 'ns': return text(r.hubNamespace);
       case 'job': return text(r.metricsJob);
-      case 'url': return text(r.apiUrl ? r.apiUrl.replace(/^https?:\/\//, '') : 'yok', r.apiUrl || '');
-      case 'token': { const tok = tokenCell(r, tokens); return text(tok.text, tok.title); }
-      case 'status': return text(r.enabled ? 'açık' : 'kapalı');
+      case 'url': return text(r.apiUrl ? r.apiUrl.replace(/^https?:\/\//, '') : t('acd.none', lang), r.apiUrl || '');
+      case 'token': { const tok = tokenCell(r, tokens, lang); return text(tok.text, tok.title); }
+      case 'status': return text(t(r.enabled ? 'acd.on' : 'acd.off', lang));
       default: return null;
     }
   };
@@ -176,9 +178,9 @@ export function ArgoCDInstancesPanel({
   };
 
   const items = (r: InstanceDraft): MenuItemSpec[] => [
-    { id: 'edit', label: 'Düzenle', onSelect: () => onEdit(r.key) },
-    { id: 'toggle', label: r.enabled ? 'Devre dışı bırak' : 'Etkinleştir', onSelect: () => onToggle(r.key) },
-    { id: 'remove', label: 'Tablodan kaldır', danger: true,
+    { id: 'edit', label: t('acd.inst.edit', lang), onSelect: () => onEdit(r.key) },
+    { id: 'toggle', label: t(r.enabled ? 'acd.inst.disable' : 'acd.inst.enable', lang), onSelect: () => onToggle(r.key) },
+    { id: 'remove', label: t('acd.removeFromTable', lang), danger: true,
       onSelect: () => onRemove(r.key, { ok: 'acd-inst-add', blocked: `acd-inst-menu-${domKey(r.key)}` }) },
   ];
 
@@ -186,18 +188,18 @@ export function ArgoCDInstancesPanel({
     <>
       <div className="table-wrap">
         <DataTable<InstanceDraft> storageKey="settings.argocd.instances" columns={columns} rows={instances}
-          ariaLabel="Argo CD instance'ları" sort={{ initial: { id: 'hub', dir: 'asc' } }}
+          ariaLabel={t('acd.inst.aria', lang)} sort={{ initial: { id: 'hub', dir: 'asc' } }}
           getRowKey={r => r.key} renderCell={cell}
           pinnedRows={blank ? [blank] : undefined}
           openRow={{ isOpen, onActivate: r => onOpen(r.key) }}
           detail={{ isOpen: r => isOpen(r) || !!errIdOf(r), render: detail, cellClassName: r => (isOpen(r) ? 'row-detail' : 'td-full') }}
           rowActions={{
-            label: 'Instance eylemleri', items,
-            triggerLabel: r => `${r.id || 'yeni instance'} eylemleri`,
+            label: t('acd.inst.actions', lang), items,
+            triggerLabel: r => tf('acd.inst.rowActions', lang, { id: r.id || t('acd.inst.newLabel', lang) }),
             triggerId: r => `acd-inst-menu-${domKey(r.key)}`,
             isDisabled: isBlank,
           }}
-          state={{ kind: 'empty', message: 'Instance yok — keşifle ya da elle ekleyin.' }} />
+          state={{ kind: 'empty', message: t('acd.inst.empty', lang) }} />
       </div>
       {msg && <div role="alert" className="text-[length:var(--fs-xs)] text-status-critical">{msg}</div>}
     </>

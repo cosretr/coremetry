@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/shadcn/badge';
 import { Button } from '@/components/shadcn/button';
@@ -8,6 +8,7 @@ import { DataTable, type ColumnDef } from '@/components/coremetry/DataTable';
 import type { ArgoCDPin } from '@/lib/types';
 import { domKey, type HubDraft, type InstanceDraft, type Issue, type RemoteCluster } from './argocdForm';
 import { ArgoCDNote, ArgoCDSectionPanel } from './ArgoCDSectionPanel';
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2313
 
 // ArgoCDHubsPanel — v0.10.974 — Ayarlar › Argo CD "Hub'lar" tablosu (mockup
 // Main + States (c)). Hub = Argo CD'nin çalıştığı kümenin Thanos'unu gösteren
@@ -38,11 +39,12 @@ import { ArgoCDNote, ArgoCDSectionPanel } from './ArgoCDSectionPanel';
 
 interface HubRow { hub: HubDraft; rc: RemoteCluster | undefined; count: number; name: string }
 
-const COLS: ColumnDef<HubRow>[] = [
+// v0.10.2313 — kolon başlıkları arayüz dilinde (çizimde, dile göre memo).
+const cols = (lang: Lang): ColumnDef<HubRow>[] => [
   { id: 'cluster', label: 'Remote Cluster', width: 240 },
-  { id: 'label', label: 'Argo sorgularına eklenen küme etiketi', flex: true },
+  { id: 'label', label: t('acd.hubs.col.label', lang), flex: true },
   { id: 'count', label: 'Instance', numeric: true, width: 96 },
-  { id: 'act', label: 'Eylemler', kind: 'actions', width: 120 },
+  { id: 'act', label: t('acd.hubs.col.act', lang), kind: 'actions', width: 120 },
 ];
 
 export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, issues, msg, onMsg, onAdd, onRemove, onRemoveWithInstances, onInject, announce, focus }: {
@@ -63,6 +65,8 @@ export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, issues, msg, 
   announce: (text: string) => void;
   focus: (id: string) => void;
 }) {
+  const lang = useLang();
+  const COLS = useMemo(() => cols(lang), [lang]);
   const [pick, setPick] = useState('');
   // Onay bekleyen hub (anahtar). İleti (`msg`) silinince — ör. "Değişiklikleri
   // geri al" — onay düğmeleri de gizlenir; başka bir ileti yazılırken sıfırlanır.
@@ -70,18 +74,18 @@ export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, issues, msg, 
 
   const rows: HubRow[] = hubs.map(h => {
     const rc = clusters.find(c => c.id === h.clusterId);
-    return { hub: h, rc, name: rc ? rc.name : 'bilinmeyen kayıt', count: instances.filter(i => i.hubClusterId === h.clusterId).length };
+    return { hub: h, rc, name: rc ? rc.name : t('acd.hubs.unknownRec', lang), count: instances.filter(i => i.hubClusterId === h.clusterId).length };
   });
   const isHub = (id: string) => hubs.some(h => h.clusterId === id);
 
   const add = () => {
     setConfirm(null);
-    if (!pick) { onMsg('Önce listeden bir Remote Cluster seçin.'); return; }
+    if (!pick) { onMsg(t('acd.hubs.pickFirst', lang)); return; }
     const rc = clusters.find(c => c.id === pick);
-    if (isHub(pick)) { onMsg(`${rc?.name ?? pick} zaten hub.`); return; }
+    if (isHub(pick)) { onMsg(tf('acd.hubs.already', lang, { name: rc?.name ?? pick })); return; }
     onAdd(pick);
     setPick(''); onMsg('');
-    announce(`${rc?.name ?? pick} hub olarak eklendi — kaydedilmedi.`);
+    announce(tf('acd.hubs.added', lang, { name: rc?.name ?? pick }));
   };
   const remove = (r: HubRow) => {
     if (r.count > 0) {
@@ -89,18 +93,18 @@ export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, issues, msg, 
       const pinned = pins.filter(p => ids.has(p.instanceId)).length;
       if (pinned > 0) {
         setConfirm(null);
-        onMsg(`${r.name} kaldırılamaz: bu hub'a bağlı instance'larda ${pinned} pin var; önce API'den pin'leri kaldırın (PUT /api/settings/argocd, pins[]).`);
+        onMsg(tf('acd.hubs.pinned', lang, { name: r.name, n: pinned }));
         return;
       }
       setConfirm(r.hub.key);
-      onMsg(`${r.name} hub'ına ${r.count} instance bağlı. Hub'ı kaldırmak bu instance'ları da tablodan çıkarır; Kaydet'e basana kadar hiçbir şey yazılmaz.`);
+      onMsg(tf('acd.hubs.confirm', lang, { name: r.name, n: r.count }));
       focus(`acd-hub-rmall-${domKey(r.hub.key)}`);
       return;
     }
     setConfirm(null);
     onRemove(r.hub.key);
     onMsg('');
-    announce(`${r.name} hub listesinden çıkarıldı — kaydedilmedi.`);
+    announce(tf('acd.hubs.removed', lang, { name: r.name }));
     focus('acd-hub-add');
   };
   const pending = msg ? rows.find(r => r.hub.key === confirm && r.count > 0) : undefined;
@@ -108,7 +112,7 @@ export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, issues, msg, 
     setConfirm(null);
     onRemoveWithInstances(r.hub.key);
     onMsg('');
-    announce(`${r.name} hub'ı ve ${r.count} instance tablodan çıkarıldı — kaydedilmedi.`);
+    announce(tf('acd.hubs.removedAll', lang, { name: r.name, n: r.count }));
     focus('acd-hub-add');
   };
   const cancel = (r: HubRow) => {
@@ -133,9 +137,9 @@ export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, issues, msg, 
           {issue ? (
             <><span className="font-mono">{issue.path}:</span> {issue.message}</>
           ) : deleted ? (
-            <>“{r.hub.clusterId}” artık bir Remote Cluster kaydı değil (silinmiş). Bu hub satırını kaldırın; Argo bu kümede çalışıyorsa kaydı <Link to="/settings/clusters">Ayarlar › Remote clusters</Link>'ta yeniden ekleyip hub olarak seçin.</>
+            <>{tf('acd.hubs.deleted.a', lang, { id: r.hub.clusterId })}<Link to="/settings/clusters">{t('acd.rcLink', lang)}</Link>{t('acd.hubs.deleted.b', lang)}</>
           ) : (
-            <>{r.name} Remote Cluster kaydı devre dışı — pasif hub: instance'ları taranmaz, kaydı engellemez. Etkinleştirmek için kaydı <Link to="/settings/clusters">Ayarlar › Remote clusters</Link>'ta açın.</>
+            <>{tf('acd.hubs.disabled.a', lang, { name: r.name })}<Link to="/settings/clusters">{t('acd.rcLink', lang)}</Link>{t('acd.hubs.disabled.b', lang)}</>
           )}
         </div>
       ),
@@ -150,28 +154,28 @@ export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, issues, msg, 
           <span aria-describedby={errId} title={r.name}>
             <span className={!r.rc ? 'font-mono text-status-critical' : 'font-mono'}>{r.name}</span>{' '}
             <span className="font-mono text-(--text3)">{r.hub.clusterId}</span>
-            {!!r.rc && !r.rc.enabled && <>{' '}<Badge variant="secondary">pasif</Badge></>}
+            {!!r.rc && !r.rc.enabled && <>{' '}<Badge variant="secondary">{t('acd.hubs.passive', lang)}</Badge></>}
           </span>
         );
       case 'label':
         return r.rc?.label ? (
           <span className="inline-flex items-center gap-2">
             <Checkbox checked={r.hub.inject} aria-describedby="acd-hub-inj-h"
-              aria-label={`${r.rc.label} — ${r.name} Argo sorgularına eklensin`}
+              aria-label={tf('acd.hubs.injectAria', lang, { label: r.rc.label, name: r.name })}
               onCheckedChange={v => onInject(r.hub.key, v === true)} />
             <span className={r.hub.inject ? 'font-mono' : 'font-mono text-(--text3)'}>{r.rc.label}</span>
-            <span className="text-(--text3)" aria-hidden="true">{r.hub.inject ? 'ekleniyor' : 'eklenmiyor'}</span>
+            <span className="text-(--text3)" aria-hidden="true">{t(r.hub.inject ? 'acd.hubs.injecting' : 'acd.hubs.notInjecting', lang)}</span>
           </span>
         ) : r.rc ? (
-          <span className="text-(--text3)">etiket yok — kayıt kendi Thanos URL'sini kullanıyor</span>
+          <span className="text-(--text3)">{t('acd.hubs.noLabel', lang)}</span>
         ) : <span className="cell-empty">—</span>;
       case 'count':
         return String(r.count);
       case 'act':
         return (
           <Button variant="ghost" size="xs" id={`acd-hub-rm-${k}`} aria-describedby={errId}
-            aria-label={`${r.name} hub listesinden kaldır`} onClick={() => remove(r)}>
-            Kaldır
+            aria-label={tf('acd.hubs.removeAria', lang, { name: r.name })} onClick={() => remove(r)}>
+            {t('acd.hubs.remove', lang)}
           </Button>
         );
       default:
@@ -180,39 +184,37 @@ export function ArgoCDHubsPanel({ hubs, instances, pins, clusters, issues, msg, 
   };
 
   return (
-    <ArgoCDSectionPanel id="acd-hubs-h" title="Hub'lar" meta={`${hubs.length} hub`}
-      desc="Argo CD'nin çalıştığı kümeler. Her hub ayrı bir Remote Cluster kaydıdır ve kendi Thanos'unu gösterir; /clusters'ta normal küme olarak da görünür. Keşif ve sorgular hub başına ayrı koşar.">
+    <ArgoCDSectionPanel id="acd-hubs-h" title={t('acd.hubs.title', lang)} meta={`${hubs.length} hub`}
+      desc={t('acd.hubs.desc', lang)}>
       <div className="table-wrap">
-        <DataTable<HubRow> storageKey="settings.argocd.hubs" columns={COLS} rows={rows} ariaLabel="Hub'lar"
+        <DataTable<HubRow> storageKey="settings.argocd.hubs" columns={COLS} rows={rows} ariaLabel={t('acd.hubs.title', lang)}
           getRowKey={r => r.hub.key} renderCell={cell}
-          state={{ kind: 'empty', message: 'Hub yok — aşağıdan bir Remote Cluster seçin.' }}
+          state={{ kind: 'empty', message: t('acd.hubs.empty', lang) }}
           detail={{ isOpen: r => !!note(r), render: r => note(r)?.node, cellClassName: () => 'td-full' }} />
       </div>
       {msg && <div role="alert" className="text-[length:var(--fs-xs)] text-status-critical">{msg}</div>}
       {pending && (
         <div className="flex flex-wrap items-center gap-4">
           <Button variant="destructive" size="sm" id={`acd-hub-rmall-${domKey(pending.hub.key)}`} onClick={() => removeAll(pending)}>
-            Hub'ı {pending.count} instance ile birlikte kaldır
+            {tf('acd.hubs.removeWith', lang, { n: pending.count })}
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => cancel(pending)}>Vazgeç</Button>
+          <Button variant="ghost" size="sm" onClick={() => cancel(pending)}>{t('acd.cancel', lang)}</Button>
         </div>
       )}
       <div className="flex flex-wrap items-center gap-4">
-        <label htmlFor="acd-hub-add" className="sr-only">Hub olarak eklenecek Remote Cluster</label>
+        <label htmlFor="acd-hub-add" className="sr-only">{t('acd.hubs.addLabel', lang)}</label>
         <NativeSelect id="acd-hub-add" size="sm" className="bg-field dark:bg-field text-[length:var(--fs-sm)]" value={pick}
           onChange={e => { setPick(e.target.value); setConfirm(null); onMsg(''); }}>
-          <NativeSelectOption value="">Remote Cluster seç…</NativeSelectOption>
+          <NativeSelectOption value="">{t('acd.pickRc', lang)}</NativeSelectOption>
           {clusters.map(c => (
-            <NativeSelectOption key={c.id} value={c.id} disabled={isHub(c.id)}>{c.name}{c.enabled ? '' : ' (devre dışı)'}</NativeSelectOption>
+            <NativeSelectOption key={c.id} value={c.id} disabled={isHub(c.id)}>{c.name}{c.enabled ? '' : t('acd.disabledSuffix', lang)}</NativeSelectOption>
           ))}
         </NativeSelect>
-        <Button variant="outline" size="sm" onClick={add}>Hub ekle</Button>
-        <span className="text-[length:var(--fs-xs)] text-(--text3)">Listede yoksa önce <Link to="/settings/clusters">Ayarlar › Remote clusters</Link> kaydını ekleyin.</span>
+        <Button variant="outline" size="sm" onClick={add}>{t('acd.hubs.add', lang)}</Button>
+        <span className="text-[length:var(--fs-xs)] text-(--text3)">{t('acd.hubs.notListed.a', lang)}<Link to="/settings/clusters">{t('acd.rcLink', lang)}</Link>{t('acd.hubs.notListed.b', lang)}</span>
       </div>
       <ArgoCDNote id="acd-hub-inj-h">
-        Remote Cluster kaydı bir Thanos küme etiketi taşıyorsa Coremetry onu her sorguya ekler. Argo serileri farklı dış
-        etiketlerle geliyorsa (ör. user-workload monitoring) bu eşleştirici 0 seri döndürür — o hub için işareti kaldırın.
-        Karar hub başınadır; keşif 0 seri dönen hub'da aynı ipucunu gösterir.
+        {t('acd.hubs.note', lang)}
       </ArgoCDNote>
     </ArgoCDSectionPanel>
   );

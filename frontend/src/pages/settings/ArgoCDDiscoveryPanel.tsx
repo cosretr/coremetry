@@ -13,6 +13,7 @@ import {
   type CandRow, type HubRun, type HubView,
 } from './argocdDiscovery';
 import { ArgoCDNote } from './ArgoCDSectionPanel';
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2313
 
 // ArgoCDDiscoveryPanel — v0.10.974 — "Hub'larda instance ara" (mockup Main
 // "Keşif sonucu" + States (b)). Salt okunur: hiçbir şey kaydedilmez; her
@@ -63,16 +64,17 @@ const HINT = 'text-[length:var(--fs-xs)] text-(--text3)';
 const orDash = (v: string | undefined): ReactNode => v || <span className="cell-empty">—</span>;
 const BADGE: Record<'neutral' | 'warning' | 'danger', Status> = { neutral: 'unknown', warning: 'warn', danger: 'critical' };
 
-const CAND_COLS: ColumnDef<CandRow>[] = [
+// v0.10.2313 — başlıklar arayüz dilinde (çizimde, dile göre memo).
+const candCols = (lang: Lang): ColumnDef<CandRow>[] => [
   { id: 'ns', label: 'Namespace', width: 150, mono: true },
   { id: 'job', label: 'metricsJob', width: 190, mono: true },
-  { id: 'id', label: 'Kimlik (id)', width: 150, mono: true },
-  { id: 'apps', label: 'Uygulama', numeric: true, width: 84 },
+  { id: 'id', label: t('acd.disc.col.id', lang), width: 150, mono: true },
+  { id: 'apps', label: t('acd.disc.col.apps', lang), numeric: true, width: 84 },
   { id: 'shards', label: 'Shard', numeric: true, width: 64 },
-  { id: 'note', label: 'Not', flex: true },
+  { id: 'note', label: t('acd.disc.col.note', lang), flex: true },
   // v0.10.974 — "Durum" durum metni de taşır (kayıtlı / eklendi / —): başlığı
   // görünür, sola yaslı (mockup Main); yalnız-eylem kolonu değil.
-  { id: 'act', label: 'Durum', width: 140 },
+  { id: 'act', label: t('acd.inst.col.status', lang), width: 140 },
 ];
 
 function HubCandidates({ name, rows, onAdd, onUndo }: {
@@ -81,6 +83,8 @@ function HubCandidates({ name, rows, onAdd, onUndo }: {
   onAdd: (r: CandRow) => void;
   onUndo: (r: CandRow) => void;
 }) {
+  const lang = useLang();
+  const CAND_COLS = useMemo(() => candCols(lang), [lang]);
   const scroll = rows.length > 10;
   const cell = (r: CandRow, col: ColumnDef<CandRow>): ReactNode => {
     const k = domKey(r.key);
@@ -101,31 +105,31 @@ function HubCandidates({ name, rows, onAdd, onUndo }: {
         if (r.status === 'new') {
           return (
             <Button variant="outline" size="xs" id={`acd-cand-add-${k}`}
-              aria-label={`${name} · ${r.cand.hubNamespace || r.cand.metricsJob} adayını ekle`}
-              onClick={() => onAdd(r)}>+ Ekle</Button>
+              aria-label={tf('acd.disc.addAria', lang, { name, c: r.cand.hubNamespace || r.cand.metricsJob })}
+              onClick={() => onAdd(r)}>{t('acd.disc.add', lang)}</Button>
           );
         }
         if (r.status === 'added') {
           return (
             <span className="inline-flex items-center gap-3">
-              <span className="text-(--text2)">eklendi</span>
-              <Button variant="ghost" size="xs" id={`acd-cand-undo-${k}`} aria-label={`${r.id} eklemesini geri al`}
-                onClick={() => onUndo(r)}>Geri al</Button>
+              <span className="text-(--text2)">{t('acd.disc.added', lang)}</span>
+              <Button variant="ghost" size="xs" id={`acd-cand-undo-${k}`} aria-label={tf('acd.disc.undoAria', lang, { id: r.id })}
+                onClick={() => onUndo(r)}>{t('acd.undo', lang)}</Button>
             </span>
           );
         }
-        if (r.status === 'saved') return <span className="text-(--text3)">kayıtlı</span>;
+        if (r.status === 'saved') return <span className="text-(--text3)">{t('acd.saved', lang)}</span>;
         return <span className="cell-empty">—</span>;
       default:
         return null;
     }
   };
   const table = (
-    <DataTable<CandRow> storageKey="settings.argocd.candidates" columns={CAND_COLS} rows={rows} ariaLabel={`${name} keşif adayları`}
-      getRowKey={r => r.key} renderCell={cell} state={{ kind: 'empty', message: 'Aday yok.' }} />
+    <DataTable<CandRow> storageKey="settings.argocd.candidates" columns={CAND_COLS} rows={rows} ariaLabel={tf('acd.disc.tableAria', lang, { name })}
+      getRowKey={r => r.key} renderCell={cell} state={{ kind: 'empty', message: t('acd.disc.none', lang) }} />
   );
   return scroll ? (
-    <div className="table-wrap is-scroll max-h-[360px]" tabIndex={0} role="region" aria-label={`${name} adayları (kaydırılabilir)`}>
+    <div className="table-wrap is-scroll max-h-[360px]" tabIndex={0} role="region" aria-label={tf('acd.disc.scrollAria', lang, { name })}>
       {table}
     </div>
   ) : <div className="table-wrap">{table}</div>;
@@ -144,6 +148,7 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
   announce: (text: string) => void;
   focus: (id: string) => void;
 }) {
+  const lang = useLang();
   const [runs, setRuns] = useState<Record<string, HubRun>>({});
   const [open, setOpen] = useState(false);
   const [busyHub, setBusyHub] = useState<string | null>(null);
@@ -231,38 +236,35 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
   };
 
   const views = shown.map(viewOf);
-  const label = busy ? progress : open ? 'Keşif sonucunu gizle' : "Hub'larda instance ara";
+  const label = busy ? progress : open ? t('acd.disc.hide', lang) : t('acd.disc.search', lang);
 
   return (
     <>
       <div className="flex flex-wrap items-center gap-4">
         {leading}
         <Button variant="outline" size="sm" id="acd-disc-btn" aria-expanded={open} aria-controls="acd-disc-panel"
-          disabled={hubs.length === 0} aria-disabled={busy || undefined} title={hubs.length === 0 ? 'Önce bir hub ekleyin' : undefined}
+          disabled={hubs.length === 0} aria-disabled={busy || undefined} title={hubs.length === 0 ? t('acd.addHubFirst', lang) : undefined}
           onClick={toggle}>
           {label}
         </Button>
         <span className={HINT}>
-          Keşif salt okunur ve hub başına ayrı bir istektir: hiçbir şey kaydedilmez; denetim kaydına hub başına bir <code>settings.argocd.discover</code> yazılır.
+          {t('acd.disc.hint.a', lang)}<code>settings.argocd.discover</code>{t('acd.disc.hint.b', lang)}
         </span>
       </div>
       {open && (
-        <section id="acd-disc-panel" className="card p-0" aria-label="Keşif sonucu" aria-busy={busy}>
+        <section id="acd-disc-panel" className="card p-0" aria-label={t('acd.disc.result', lang)} aria-busy={busy}>
           <div className="flex items-center gap-2.5 border-b border-(--divider) py-2 pr-2 pl-4">
-            <h4 className="m-0 text-[length:var(--fs-md)] font-semibold text-(--text)">Keşif sonucu</h4>
-            <span className={HINT}>{at ? panelMeta(at, views) : 'aranıyor…'}</span>
+            <h4 className="m-0 text-[length:var(--fs-md)] font-semibold text-(--text)">{t('acd.disc.result', lang)}</h4>
+            <span className={HINT}>{at ? panelMeta(at, views) : t('acd.disc.searching', lang)}</span>
             <span className="flex-1" />
             <Button variant="ghost" size="sm" className={DIM} aria-disabled={busy || undefined}
-              onClick={() => { if (!busy) void run(all()); }}>Yeniden ara</Button>
-            <Button variant="ghost" size="icon-sm" aria-label="Keşif sonucunu kapat" onClick={() => { setOpen(false); focus('acd-disc-btn'); }}>
+              onClick={() => { if (!busy) void run(all()); }}>{t('acd.disc.again', lang)}</Button>
+            <Button variant="ghost" size="icon-sm" aria-label={t('acd.disc.close', lang)} onClick={() => { setOpen(false); focus('acd-disc-btn'); }}>
               <X />
             </Button>
           </div>
           <p className={`m-0 max-w-[900px] px-4 py-2.5 ${TEXT}`}>
-            Her hub'da <code>argocd_app_info</code> serilerinin <code>job</code>, <code>namespace</code> ve <code>exported_namespace</code> değerleri
-            label-values API'siyle okunur (≤500 iş, iş başına ≤500 değer, çağrı başına 15 sn); ayrıca iş başına bir count sorgusu (uygulama) ile
-            pod değerleri (shard) — hub başına ≤2.000 çağrı ve 60 sn. “Ekle” adayı, “Tümünü ekle” hub'ın namespace'i belli tüm yeni adaylarını
-            tabloya kaydedilmemiş satır olarak koyar; Kaydet'e basmadan hiçbir şey yazılmaz.
+            {t('acd.disc.p.a', lang)}<code>argocd_app_info</code>{t('acd.disc.p.b', lang)}<code>job</code>, <code>namespace</code>{t('acd.disc.p.c', lang)}<code>exported_namespace</code>{t('acd.disc.p.d', lang)}
           </p>
           {shown.map((h, ix) => {
             const v = views[ix];
@@ -280,51 +282,51 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
                   <span className="flex-1" />
                   {nAdd > 0 && (
                     <Button variant="outline" size="xs" id={`acd-disc-addall-${domKey(h.clusterId)}`}
-                      aria-label={`${name} · ${nAdd} yeni adayın tümünü ekle`}
-                      title="Namespace'i belli tüm yeni adayları tabloya kaydedilmemiş satır olarak ekler; Kaydet'e basmadan hiçbir şey yazılmaz."
+                      aria-label={tf('acd.disc.addAllAria', lang, { name, n: nAdd })}
+                      title={t('acd.disc.addAllTitle', lang)}
                       onClick={() => addAll(h, rows)}>
-                      Tümünü ekle ({nAdd})
+                      {tf('acd.disc.addAll', lang, { n: nAdd })}
                     </Button>
                   )}
                   <Button variant="ghost" size="xs" className={DIM} aria-disabled={busy || undefined}
                     onClick={() => { if (!busy) void run(one(h)); }}>
-                    {running ? `${name} aranıyor…` : `${name}${trLocative(name)} yeniden ara`}
+                    {running ? tf('acd.disc.running', lang, { name }) : tf('acd.disc.rerun', lang, { name, loc: trLocative(name) })}
                   </Button>
                 </div>
                 {v.detail.map((line, i) => <p key={i} className={`m-0 px-4 pb-1.5 ${TEXT}`}>{line}</p>)}
                 {v.notice?.kind === 'unauthorized' && (
                   <div role="alert" className={NOTICE}>
-                    <div className="text-(--text)">{name} Thanos'u isteği reddetti: kayıttaki token (ya da tokenRef) bu Thanos'ta okuma yetkisi taşımıyor. Aday listesi boş, ama bu “Argo CD yok” demek değil.</div>
-                    <div>Yapılacak: <Link to="/settings/clusters">Ayarlar › Remote clusters › {name}</Link> kaydında token'ı ya da tokenRef'i <code>cluster-monitoring-view</code> yetkili bir ServiceAccount token'ıyla yenileyin, kaydedin, sonra yeniden arayın.</div>
+                    <div className="text-(--text)">{tf('acd.disc.unauth.a', lang, { name })}</div>
+                    <div>{t('acd.disc.todo', lang)}<Link to="/settings/clusters">{tf('acd.disc.unauth.link', lang, { name })}</Link>{t('acd.disc.unauth.b', lang)}<code>cluster-monitoring-view</code>{t('acd.disc.unauth.c', lang)}</div>
                     <div className="flex flex-wrap items-center gap-4">
                       <Button variant="outline" size="xs" id={`acd-disc-retry-${domKey(h.clusterId)}`} className={DIM} aria-disabled={busy || undefined}
                         onClick={() => { if (!busy) void run(one(h)); }}>
-                        {name}{trLocative(name)} yeniden ara
+                        {tf('acd.disc.rerun', lang, { name, loc: trLocative(name) })}
                       </Button>
                     </div>
                   </div>
                 )}
                 {v.notice?.kind === 'emptyLabel' && (
                   <div className={NOTICE}>
-                    <div className="text-(--text)"><code>argocd_app_info</code> için 0 seri döndü. Sorgu hatasız; ama {name} kaydı her sorguya <code>{v.notice.label}</code> ekliyor. Argo serileri farklı dış etiketlerle geliyorsa (ör. user-workload monitoring) bu eşleştirici hepsini dışarıda bırakır.</div>
-                    <div>Yapılacak: etiketsiz bir kez daha arayın. Aday çıkarsa Hub'lar tablosunda {name} için “Argo sorgularına eklenen küme etiketi” işaretini kaldırıp kaydedin. Etiketsiz arama da boşsa {name}{trLocative(name)} Argo metrikleri toplanmıyordur (ServiceMonitor).</div>
+                    <div className="text-(--text)"><code>argocd_app_info</code>{t('acd.disc.zero', lang)}{tf('acd.disc.lbl.a', lang, { name })}<code>{v.notice.label}</code>{t('acd.disc.lbl.b', lang)}</div>
+                    <div>{t('acd.disc.todo', lang)}{tf('acd.disc.lbl.c', lang, { name, loc: trLocative(name) })}</div>
                     <div className="flex flex-wrap items-center gap-4">
                       <Button variant="outline" size="xs" className={DIM} aria-disabled={busy || undefined}
                         onClick={() => { if (!busy) void run(one(h, true)); }}>
-                        {name}{trLocative(name)} etiketsiz yeniden ara
+                        {tf('acd.disc.rerunNoLabel', lang, { name, loc: trLocative(name) })}
                       </Button>
-                      <span className={HINT}>Tek seferlik; ayarı değiştirmez.</span>
+                      <span className={HINT}>{t('acd.disc.oneShot', lang)}</span>
                     </div>
                   </div>
                 )}
                 {v.notice?.kind === 'emptyNoLabel' && (
                   <div className={NOTICE}>
-                    <code>argocd_app_info</code> için 0 seri döndü{v.notice.afterOneShot ? ' (etiketsiz arama)' : ''}. Sorgu hatasız ve küme etiketi eklenmedi: {name}{trLocative(name)} Argo metrikleri toplanmıyordur (ServiceMonitor) ya da hub'ın Thanos'u bu kümeyi görmüyor.
+                    <code>argocd_app_info</code>{t('acd.disc.zero', lang)}{v.notice.afterOneShot ? t('acd.disc.unlabelled', lang) : ''}{tf('acd.disc.nolbl', lang, { name, loc: trLocative(name) })}
                   </div>
                 )}
                 {v.notice?.kind === 'oneShotFound' && (
                   <div className={NOTICE}>
-                    Etiketsiz aramada aday çıktı: Hub'lar tablosunda {name} için “Argo sorgularına eklenen küme etiketi” işaretini kaldırıp kaydedin; yoksa işçiler bu hub'da 0 seri görür.
+                    {tf('acd.disc.found', lang, { name })}
                   </div>
                 )}
                 {shownResult(r) && <HubCandidates name={name} rows={rows} onAdd={cr => add(h, cr)} onUndo={undo} />}
@@ -333,7 +335,7 @@ export function ArgoCDDiscoveryPanel({ hubs, clusters, instances, leading, onAdd
           })}
           <div className="border-t border-(--divider) px-4 py-2.5">
             <ArgoCDNote>
-              Uygulama: iş başına tek anlık <code>{'count by (namespace) (group by (namespace, exported_namespace, name) (argocd_app_info{job="…"}))'}</code> · Shard: iş başına <code>pod</code> değerleri (≤100). Aynı namespace iki hub'da iki ayrı instance'tır; “kayıtlı” eşleşmesi yalnız o hub'daki kayıtlarla (namespace, metricsJob) yapılır.
+              {t('acd.disc.note.a', lang)}<code>{'count by (namespace) (group by (namespace, exported_namespace, name) (argocd_app_info{job="…"}))'}</code>{t('acd.disc.note.b', lang)}<code>pod</code>{t('acd.disc.note.c', lang)}
             </ArgoCDNote>
           </div>
         </section>

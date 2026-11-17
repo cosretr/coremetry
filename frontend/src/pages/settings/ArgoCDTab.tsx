@@ -1,3 +1,4 @@
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2313 — metinler arayüz dilinde (TR aynı)
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/shadcn/button';
@@ -86,8 +87,8 @@ function Toggle({ id, label, checked, disabled, onChange, hint }: {
 }
 
 const EMPTY_SETTINGS: ArgoCDSettings = { enabled: false, apiWorker: {}, classification: {}, reader: {}, intervals: {}, mapping: {} };
-const PENDING_TEXT = 'Açık düzenleme formunda uygulanmamış değişiklik var: önce “Tabloya uygula” ya da “Vazgeç”.';
-const PENDING_ISSUE: Issue = { path: '', message: PENDING_TEXT, short: PENDING_TEXT, target: { kind: 'form' } };
+// v0.10.2313 — metin arayüz dilinde (acd.pending); TR aynı.
+const pendingIssue = (lang: Lang): Issue => ({ path: '', message: t('acd.pending', lang), short: t('acd.pending', lang), target: { kind: 'form' } });
 
 interface Snap {
   settings: ArgoCDSettings;
@@ -97,6 +98,7 @@ interface Snap {
 }
 
 export function ArgoCDTab() {
+  const lang = useLang();
   const [snap, setSnap] = useState<Snap>({ settings: EMPTY_SETTINGS, tokens: {}, bounds: {}, pins: [] });
   const [clusters, setClusters] = useState<RemoteCluster[]>([]);
   const [base, setBase] = useState<Draft>(() => draftFromSettings(EMPTY_SETTINGS));
@@ -159,7 +161,7 @@ export function ArgoCDTab() {
   // ── Satır içi form ──────────────────────────────────────────────────────
   const blockPending = () => {
     setPending(true);
-    announce('Açık formda tabloya uygulanmamış değişiklik var: önce “Tabloya uygula” ya da “Vazgeç”.');
+    announce(t('acd.pendingForm', lang));
     focus('acd-ed-apply');
   };
   const closeEdit = () => {
@@ -186,7 +188,7 @@ export function ArgoCDTab() {
     if (bufferDirty(buffer, draft.instances)) { blockPending(); return; }
     if (draft.hubs.length === 0) return;
     setBuffer(blankBuffer(draft.hubs[0].clusterId)); setBufErr({}); setPending(false); setInstMsg('');
-    announce('Yeni instance satırı açıldı.');
+    announce(t('acd.tab.newRow', lang));
     focus('acd-ed-id');
   };
   const changeBuffer = (next: InstanceBuffer) => {
@@ -197,12 +199,12 @@ export function ArgoCDTab() {
     if (!buffer) return;
     const err = validateBuffer(buffer, draft.instances, draft.hubs, clusters);
     const n = Object.keys(err).length;
-    if (n) { setBufErr(err); announce(`${n} alan düzeltilmeli.`); return; }
+    if (n) { setBufErr(err); announce(tf('acd.tab.nFix', lang, { n })); return; }
     const row = applyBuffer(buffer);
     const isNew = buffer.isNew;
     change(d => ({ ...d, instances: isNew ? [...d.instances, row] : d.instances.map(i => (i.key === row.key ? row : i)) }));
     setBuffer(null); setBufErr({}); setPending(false);
-    announce(`${row.id} tabloya uygulandı — kaydedilmedi.`);
+    announce(tf('acd.tab.applied', lang, { id: row.id }));
     focus(`acd-inst-btn-${domKey(row.key)}`);
   };
   const removeInstance = (key: string, f: { ok: string; blocked?: string }) => {
@@ -210,22 +212,22 @@ export function ArgoCDTab() {
     if (!row) return;
     const n = snap.pins.filter(p => p.instanceId === row.id).length;
     if (n) {
-      setInstMsg(`${row.id} kaldırılamaz: bu instance'a ${n} pin bağlı; önce API'den pin'leri kaldırın (PUT /api/settings/argocd, pins[]).`);
-      announce(`${row.id} kaldırılamadı: ${n} pin bağlı.`);
+      setInstMsg(tf('acd.tab.pinBlocked', lang, { id: row.id, n }));
+      announce(tf('acd.tab.pinBlockedLive', lang, { id: row.id, n }));
       if (f.blocked) focus(f.blocked);
       return;
     }
     change(d => ({ ...d, instances: d.instances.filter(i => i.key !== key) }));
     if (buffer?.key === key) { setBuffer(null); setBufErr({}); setPending(false); }
     setInstMsg('');
-    announce(`${row.id} tablodan kaldırıldı — kaydedilmedi.`);
+    announce(tf('acd.tab.removed', lang, { id: row.id }));
     focus(f.ok);
   };
   const removeBuffer = () => {
     if (!buffer) return;
     if (buffer.isNew) {
       setBuffer(null); setBufErr({}); setPending(false);
-      announce('Yeni instance tablodan kaldırıldı — kaydedilmedi.');
+      announce(t('acd.tab.newRemoved', lang));
       focus('acd-inst-add');
       return;
     }
@@ -236,7 +238,7 @@ export function ArgoCDTab() {
     if (!row) return;
     change(d => ({ ...d, instances: d.instances.map(i => (i.key === key ? { ...i, enabled: !i.enabled } : i)) }));
     if (buffer?.key === key) setBuffer({ ...buffer, enabled: !row.enabled });
-    announce(`${row.id} ${row.enabled ? 'devre dışı bırakıldı' : 'etkinleştirildi'} — kaydedilmedi.`);
+    announce(tf(row.enabled ? 'acd.tab.disabled' : 'acd.tab.enabled', lang, { id: row.id }));
     focus(`acd-inst-menu-${domKey(key)}`);
   };
   const candidateRow = (hubClusterId: string, c: ArgoCDCandidate, id: string): InstanceDraft => ({
@@ -247,7 +249,7 @@ export function ArgoCDTab() {
   const addCandidate = (hubClusterId: string, c: ArgoCDCandidate, id: string) => {
     const row = candidateRow(hubClusterId, c, id);
     change(d => ({ ...d, instances: [...d.instances, row] }));
-    announce(`${id} tabloya eklendi — kaydedilmedi. API URL, tokenRef ya da kimlik için satırı açın.`);
+    announce(tf('acd.tab.candAdded', lang, { id }));
   };
   // v0.10.990 (operatör: "tek tek ekle diyorum") — keşif panelinin "Tümünü
   // ekle"si: N aday TEK taslak güncellemesiyle (tek "kaydedilmedi" geçişi).
@@ -255,7 +257,7 @@ export function ArgoCDTab() {
     if (items.length === 0) return;
     const rows = items.map(it => candidateRow(hubClusterId, it.cand, it.id));
     change(d => ({ ...d, instances: [...d.instances, ...rows] }));
-    announce(`${rows.length} instance tabloya eklendi — kaydedilmedi. Kaydet'e basınca yazılır.`);
+    announce(tf('acd.tab.candsAdded', lang, { n: rows.length }));
   };
 
   // ── Hub'lar ─────────────────────────────────────────────────────────────
@@ -281,7 +283,7 @@ export function ArgoCDTab() {
   const vctx = { clusters, bounds: snap.bounds, saved: base.instances };
   const formDirty = bufferDirty(buffer, draft.instances);
   const clientIssues: Issue[] = validated
-    ? [...(formDirty ? [PENDING_ISSUE] : []), ...validateDraft(draft, vctx)]
+    ? [...(formDirty ? [pendingIssue(lang)] : []), ...validateDraft(draft, vctx)]
     : [];
   const issues: Issue[] = serverIssue ? [...clientIssues, serverIssue] : clientIssues;
 
@@ -292,9 +294,9 @@ export function ArgoCDTab() {
     const found = validateDraft(draft, vctx);
     if (formDirty || found.length) {
       setValidated(true);
-      setShownIssues([...(formDirty ? [PENDING_ISSUE] : []), ...found]);
+      setShownIssues([...(formDirty ? [pendingIssue(lang)] : []), ...found]);
       if (formDirty) { setPending(true); focus('acd-ed-apply'); }
-      announce('Kaydedilmedi.');
+      announce(t('acd.tab.notSaved', lang));
       return;
     }
     setBusy(true);
@@ -305,18 +307,19 @@ export function ArgoCDTab() {
       applyResponse(r);
       setBuffer(null); setBufErr({}); setPending(false); setValidated(false); setShownIssues([]); setSavedNow(true); setInstMsg(''); setHubMsg(''); setStale(null);
       const s = r.settings;
-      setOkText(`Kaydedildi — ${s.hubs?.length ?? 0} hub, ${s.instances?.length ?? 0} instance; ${s.pins?.length ?? 0} pin olduğu gibi geri gönderildi. Denetim kaydı yazıldı (settings.argocd.update); ${s.enabled && s.metricsWorker?.enabled ? 'metrik işçisi açık — worker lideri en geç 30 sn içinde okumaya başlar.' : 'metrik işçisi kapalı — hub sorgusu atılmaz.'}`);
-      announce('Kaydedildi.');
+      setOkText(tf('acd.tab.ok', lang, { hubs: s.hubs?.length ?? 0, inst: s.instances?.length ?? 0, pins: s.pins?.length ?? 0,
+        tail: t(s.enabled && s.metricsWorker?.enabled ? 'acd.tab.okWorkerOn' : 'acd.tab.okWorkerOff', lang) }));
+      announce(t('acd.tab.savedLive', lang));
     } catch (e) {
       const p = parseArgoHttpError(e);
       if (p.status === 409 && p.errorType === 'stale') {
         setStale({ updatedAt: p.updatedAt });
-        announce('Kaydedilmedi — ayarlar başka biri tarafından değiştirildi.');
+        announce(t('acd.tab.staleLive', lang));
         return;
       }
       if (p.status === 400) setServerIssue(issueFromServer(p, draft));
       else setSaveError(p.status ? `HTTP ${p.status}: ${p.error}` : humanize(e));
-      announce('Kaydedilmedi.');
+      announce(t('acd.tab.notSaved', lang));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -330,7 +333,7 @@ export function ArgoCDTab() {
     // v0.10.978 — Kaydet'teki kural burada da geçerli: açık formdaki uygulanmamış
     // düzenleme birleştirmeye GİRMEZ (yalnız taslak birleşir) ve sessizce silinirdi;
     // sonuç kutusu bile "düzenleme yoktu" derdi. Önce "Tabloya uygula" ya da "Vazgeç".
-    if (formDirty) { setNote({ kind: 'err', text: PENDING_TEXT }); blockPending(); return; }
+    if (formDirty) { setNote({ kind: 'err', text: t('acd.pending', lang) }); blockPending(); return; }
     setBusy(true); setReloading(true);
     busyRef.current = true;
     setNote(null);
@@ -343,12 +346,12 @@ export function ArgoCDTab() {
       setBuffer(null); setBufErr({}); setPending(false); setValidated(false); setShownIssues([]);
       setServerIssue(null); setSaveError(''); setOkText(''); setStale(null); setSavedNow(false); setInstMsg(''); setHubMsg('');
       setNote({ kind: m.dropped ? 'err' : 'ok', text: reloadText(m) });
-      announce('Yeniden yüklendi.');
+      announce(t('acd.tab.reloaded', lang));
       setFocusAfter('acd-save');
     } catch (e) {
       const p = parseArgoHttpError(e);
-      setNote({ kind: 'err', text: `Yeniden yüklenemedi — ${p.status ? `HTTP ${p.status}: ${p.error}` : humanize(e)}` });
-      announce('Yeniden yüklenemedi.');
+      setNote({ kind: 'err', text: tf('acd.tab.reloadFail', lang, { e: p.status ? `HTTP ${p.status}: ${p.error}` : humanize(e) }) });
+      announce(t('acd.tab.reloadFailLive', lang));
     } finally {
       busyRef.current = false;
       setBusy(false); setReloading(false);
@@ -358,7 +361,7 @@ export function ArgoCDTab() {
     setDraft(base);
     setBuffer(null); setBufErr({}); setPending(false); setValidated(false); setShownIssues([]);
     setServerIssue(null); setSaveError(''); setOkText(''); setInstMsg(''); setHubMsg(''); setNote(null);
-    announce('Değişiklikler geri alındı.');
+    announce(t('acd.tab.reverted', lang));
   };
   const goTo = (is: Issue) => {
     const t = is.target;
@@ -380,33 +383,35 @@ export function ArgoCDTab() {
 
   const savedEnabled = !!snap.settings.enabled;
   const savedWorker = savedEnabled && !!snap.settings.metricsWorker?.enabled;
-  const at = savedNow ? 'son kayıt şimdi' : savedAtText(snap.settings.updatedAt);
+  const at = savedNow ? t('acd.tab.savedNow', lang) : savedAtText(snap.settings.updatedAt);
   const emptyMode = base.hubs.length === 0 && base.instances.length === 0 && draft.hubs.length === 0 && draft.instances.length === 0;
   const liveRegion = <div role="status" aria-live="polite" className="sr-only">{live}</div>;
   const banner = (text: string) => (
-    <ConfigStatusBanner label={savedEnabled ? 'Açık' : 'Kapalı'} aside={at ? <span className="ml-auto text-[length:var(--fs-xs)] text-(--text3)">{at}</span> : undefined}>{text}</ConfigStatusBanner>
+    <ConfigStatusBanner label={t(savedEnabled ? 'acd.tab.on' : 'acd.tab.off', lang)} aside={at ? <span className="ml-auto text-[length:var(--fs-xs)] text-(--text3)">{at}</span> : undefined}>{text}</ConfigStatusBanner>
   );
   const workerOn = !emptyMode && draft.enabled && draft.metricsWorker;
   const enabledBox = (
     <div className="flex flex-col gap-3">
-      <Toggle id="acd-enabled" label="Argo CD entegrasyonu açık" checked={emptyMode ? false : draft.enabled} disabled={emptyMode}
+      <Toggle id="acd-enabled" label={t('acd.tab.enable', lang)} checked={emptyMode ? false : draft.enabled} disabled={emptyMode}
         onChange={v => change(d => ({ ...d, enabled: v, metricsWorker: v ? d.metricsWorker : false, autoRegister: v ? d.autoRegister : false }))}
         hint={emptyMode
-          ? 'Açmak için önce bir hub ekleyin: açıkken en az bir etkin hub zorunlu.'
-          : 'Açıkken en az bir etkin hub zorunlu. Tek başına hiçbir işçi başlatmaz: metrik işçisi aşağıdaki ayrı anahtarla açılır, Argo CD API bağlantısı askıda.'} />
-      <Toggle id="acd-metrics" label="Metrik işçisini çalıştır (argocd-metrics)" checked={workerOn} disabled={emptyMode || !draft.enabled}
+          ? t('acd.tab.enableHintEmpty', lang)
+          : t('acd.tab.enableHint', lang)} />
+      <Toggle id="acd-metrics" label={t('acd.tab.worker', lang)} checked={workerOn} disabled={emptyMode || !draft.enabled}
         onChange={v => change(d => ({ ...d, metricsWorker: v }))}
         hint={!emptyMode && !draft.enabled
-          ? 'Önce Argo CD entegrasyonunu açın.'
-          : <>Açıkken worker lideri her tik aralığında (Gelişmiş › <code>intervals.metricsS</code>, varsayılan 60 sn) hub Thanos'undaki <code>argocd_*</code> metriklerini okur ve Application durum değişimleriyle tamamlanan senkronları kaydeder. Argo CD API'sine bağlanılmaz; kapalıyken hiçbir hub sorgusu atılmaz.</>} />
+          ? t('acd.tab.enableFirst', lang)
+          : lang === 'tr'
+            ? <>{t('acd.tab.workerHint.a', lang)}<code>intervals.metricsS</code>{t('acd.tab.workerHint.b', lang)}<code>argocd_*</code>{t('acd.tab.workerHint.c', lang)}</>
+            : <>{t('acd.tab.workerHint.a', lang)}<code>argocd_*</code>{t('acd.tab.workerHint.b', lang)}<code>intervals.metricsS</code>{t('acd.tab.workerHint.c', lang)}</>} />
       {/* v0.10.1013 (operatör: "autodiscover etse daha iyi olacak, tek tek ekle
           diyorum") — keşfedilen instance'ların kendiliğinden kaydı. Varsayılan
           kapalı; yalnız EKLER. Silinen instance'ın geri geleceği açıkça yazılır. */}
-      <Toggle id="acd-autoreg" label="Keşfedilen instance'ları kendiliğinden kaydet" checked={!emptyMode && draft.enabled && draft.autoRegister}
+      <Toggle id="acd-autoreg" label={t('acd.tab.autoreg', lang)} checked={!emptyMode && draft.enabled && draft.autoRegister}
         disabled={emptyMode || !draft.enabled} onChange={v => change(d => ({ ...d, autoRegister: v }))}
         hint={!emptyMode && !draft.enabled
-          ? 'Önce Argo CD entegrasyonunu açın.'
-          : <>Açıkken 30 dakikada bir her etkin hub keşfedilir ve yeni, namespace'i belli adaylar instance tablosuna eklenir (elle “Tümünü ekle” ile aynı kural). Yalnız ekler: mevcut instance'lara dokunmaz, pasif hub'ı taramaz. Sildiğiniz bir instance Argo'da hâlâ varsa <b>geri eklenir</b> — istemediğiniz instance'ı silmeyin, devre dışı bırakın. Her ekleme denetim kaydına <code>settings.argocd.autoregister</code> olarak düşer.</>} />
+          ? t('acd.tab.enableFirst', lang)
+          : <>{t('acd.tab.autoregHint.a', lang)}<b>{t('acd.tab.autoregHint.b', lang)}</b>{t('acd.tab.autoregHint.c', lang)}<code>settings.argocd.autoregister</code>{t('acd.tab.autoregHint.d', lang)}</>} />
     </div>
   );
 
@@ -416,13 +421,13 @@ export function ArgoCDTab() {
         {liveRegion}
         <div className="flex flex-col gap-2">
           <h2 className={H2}>Argo CD</h2>
-          <p className={DESC}>Hub kümelerindeki Argo CD instance'larını tanımlar. Metrik işçisi açıkken Application durumu hub Thanos'undaki <code>argocd_*</code> metriklerinden izlenir; Argo CD API'sine bağlanılmaz.</p>
+          <p className={DESC}>{t('acd.tab.descEmpty.a', lang)}<code>argocd_*</code>{t('acd.tab.descEmpty.b', lang)}</p>
         </div>
-        {banner(clusters.length ? 'Ayarlanmadı — hub ve instance yok' : 'Ayarlanmadı — Remote Cluster kaydı yok')}
+        {banner(t(clusters.length ? 'acd.tab.bannerNoHub' : 'acd.tab.bannerNoRc', lang))}
         {enabledBox}
         <ArgoCDEmptyPanel clusters={clusters} onAddHub={id => {
           addHub(id);
-          announce(`${hubName(id, clusters)} hub olarak eklendi — kaydedilmedi.`);
+          announce(tf('acd.hubs.added', lang, { name: hubName(id, clusters) }));
           focus('acd-enabled');
         }} />
       </div>
@@ -434,11 +439,12 @@ export function ArgoCDTab() {
   const boxIssues: Issue[] = serverIssue ? [...shownIssues, serverIssue] : shownIssues;
   const allPaths = boxIssues.every(i => i.path);
   const header = serverIssue && shownIssues.length === 0
-    ? 'Kaydedilmedi — sunucu reddetti. Hiçbir değişiklik yazılmadı; kayıtlı ayar olduğu gibi duruyor.'
-    : `Kaydedilmedi — ${boxIssues.length} ${allPaths ? 'alan' : 'sorun'} düzeltilmeli. Hiçbir değişiklik yazılmadı; kayıtlı ayar olduğu gibi duruyor.`;
+    ? t('acd.tab.hdrServer', lang)
+    : tf(allPaths ? 'acd.tab.hdrFields' : 'acd.tab.hdrIssues', lang, { n: boxIssues.length });
   // States (c): "4 instance · 2'si hatalı" — sorunlu satır sayısı (canlı).
   const badRows = new Set(issues.flatMap(i => (i.target.kind === 'instance' ? [i.target.key] : []))).size;
-  const instMeta = `${draft.instances.length} instance · ${draft.hubs.length} hub${badRows ? ` · ${badRows}${trPossessive3(badRows)} hatalı` : ''}`;
+  const instMeta = tf('acd.tab.instMeta', lang, { n: draft.instances.length, h: draft.hubs.length })
+    + (badRows ? tf('acd.tab.instBad', lang, { n: badRows, poss: trPossessive3(badRows) }) : '');
 
   return (
     <div className="flex flex-col gap-6">
@@ -446,13 +452,10 @@ export function ArgoCDTab() {
       <div className="flex flex-col gap-2">
         <h2 className={H2}>Argo CD</h2>
         <p className={DESC}>
-          Hub kümelerindeki Argo CD instance'larını tanımlar. Metrik işçisi açıkken Application durum değişimleri ve tamamlanan senkronlar
-          hub'ın <code>argocd_*</code> metriklerinden kaydedilir; rollout'larla eşleme sonraki adımda. Hub, o kümenin <code>argocd_*</code>
-          serilerini tutan Thanos'u gösteren sıradan bir Remote Cluster kaydıdır. Salt okuma: Coremetry Argo CD'ye yazmaz, refresh tetiklemez;
-          Argo CD API bağlantısı şimdilik askıda.
+          {t('acd.tab.desc.a', lang)}<code>argocd_*</code>{t('acd.tab.desc.b', lang)}<code>argocd_*</code>{t('acd.tab.desc.c', lang)}
         </p>
       </div>
-      {banner(`${savedWorker ? 'Metrik işçisi açık — hub metrikleri okunuyor' : savedEnabled ? 'Ayarlar saklanıyor ve doğrulanıyor — metrik işçisi kapalı' : 'Kapalı — ayarlar saklanıyor, metrik işçisi çalışmıyor'} · Argo CD API bağlantısı askıda`)}
+      {banner(t(savedWorker ? 'acd.tab.bannerWorker' : savedEnabled ? 'acd.tab.bannerStored' : 'acd.tab.bannerOff', lang) + t('acd.tab.bannerApi', lang))}
       <fieldset disabled={busy} aria-busy={busy || undefined} className="m-0 flex min-w-0 flex-col gap-6 border-0 p-0">
         {enabledBox}
 
@@ -464,8 +467,8 @@ export function ArgoCDTab() {
           onInject={(key, v) => change(d => ({ ...d, hubs: d.hubs.map(h => (h.key === key ? { ...h, inject: v } : h)) }))}
           announce={announce} focus={focus} />
 
-        <ArgoCDSectionPanel id="acd-inst-h" title="Instance'lar" meta={instMeta}
-          desc={<>Her instance, bir hub üzerindeki bir Argo CD namespace'idir. Kimlik (id) hub'lar arasında da tekil olmalı (ClickHouse <code>argocd_app_status.instance_id</code>). Argo CD API erişimi yalnız token referansıyla (<code>tokenRef</code>) verilir; referansı olmayan instance yalnız metriklerle izlenir.</>}>
+        <ArgoCDSectionPanel id="acd-inst-h" title={t('acd.tab.instTitle', lang)} meta={instMeta}
+          desc={<>{t('acd.tab.instDesc.a', lang)}<code>argocd_app_status.instance_id</code>{t('acd.tab.instDesc.b', lang)}<code>tokenRef</code>{t('acd.tab.instDesc.c', lang)}</>}>
           <ArgoCDInstancesPanel instances={draft.instances} base={base} hubs={draft.hubs} clusters={clusters} tokens={snap.tokens}
             buffer={buffer} bufErr={bufErr} pending={pending} issues={issues} msg={instMsg}
             onOpen={openEdit} onEdit={editInstance} onToggle={toggleInstance} onRemove={removeInstance} onBufferChange={changeBuffer}
@@ -473,8 +476,8 @@ export function ArgoCDTab() {
           <ArgoCDDiscoveryPanel hubs={draft.hubs} clusters={clusters} instances={draft.instances}
             leading={(
               <Button variant="outline" size="sm" id="acd-inst-add" disabled={draft.hubs.length === 0}
-                title={draft.hubs.length === 0 ? 'Önce bir hub ekleyin' : undefined} onClick={newInstance}>
-                + Instance ekle
+                title={draft.hubs.length === 0 ? t('acd.addHubFirst', lang) : undefined} onClick={newInstance}>
+                {t('acd.tab.addInst', lang)}
               </Button>
             )}
             onAdd={addCandidate} onAddAll={addCandidates} onUndo={key => removeInstance(key, { ok: '' })} announce={announce} focus={focus} />
@@ -503,30 +506,29 @@ export function ArgoCDTab() {
             ))}
           </FlashBox>
         )}
-        {saveError && <FlashBox kind="err">Kaydedilmedi — {saveError}. Hiçbir değişiklik yazılmadı; kayıtlı ayar olduğu gibi duruyor.</FlashBox>}
+        {saveError && <FlashBox kind="err">{tf('acd.tab.saveErr', lang, { e: saveError })}</FlashBox>}
         {stale && (
           <FlashBox kind="err">
             <div className="font-semibold">
-              Kaydedilmedi — ayarlar başka biri tarafından değiştirildi ({savedAtText(stale.updatedAt) || 'kayıt zamanı bilinmiyor'}) — yeniden yükle.
+              {tf('acd.tab.stale', lang, { at: savedAtText(stale.updatedAt) || t('acd.tab.staleUnknown', lang) })}
             </div>
             <div>
-              Sunucuda değişmemiş alan ya da satırlardaki düzenlemeleriniz korunur; sunucuda da değişen alanlar ve satırlar bütünüyle sunucunun değeriyle gelir.
-              Hiçbir değişiklik yazılmadı; kayıtlı ayar olduğu gibi duruyor.
+              {t('acd.tab.staleBody', lang)}
             </div>
             <div className="mt-1.5">
-              <Button variant="outline" size="sm" loading={reloading} onClick={() => { void reload(); }}>Yeniden yükle</Button>
+              <Button variant="outline" size="sm" loading={reloading} onClick={() => { void reload(); }}>{t('acd.tab.reload', lang)}</Button>
             </div>
           </FlashBox>
         )}
         {note && <FlashBox kind={note.kind}>{note.text}</FlashBox>}
         {okText && <FlashBox kind="ok">{okText}</FlashBox>}
         <div className="flex flex-wrap items-center gap-4">
-          <Button variant="outline" disabled={busy || (phrases.length === 0 && !formDirty)} onClick={revert}>Değişiklikleri geri al</Button>
-          <Button id="acd-save" loading={busy && !reloading} disabled={reloading} onClick={() => { void save(); }}>Kaydet</Button>
+          <Button variant="outline" disabled={busy || (phrases.length === 0 && !formDirty)} onClick={revert}>{t('acd.tab.revert', lang)}</Button>
+          <Button id="acd-save" loading={busy && !reloading} disabled={reloading} onClick={() => { void save(); }}>{t('acd.tab.save', lang)}</Button>
           <span className="text-[length:var(--fs-sm)] text-(--text2)">{dirtyText(phrases, formDirty)}</span>
         </div>
         <ArgoCDNote>
-          Kaydet önce doğrular, sonra <code>settings.argocd.update</code> denetim kaydını yazar; tüm pod'lar 30 sn içinde yeni ayarı alır.
+          {t('acd.tab.note.a', lang)}<code>settings.argocd.update</code>{t('acd.tab.note.b', lang)}
         </ArgoCDNote>
       </div>
     </div>

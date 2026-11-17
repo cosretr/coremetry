@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/shadcn/button';
 import { SelectField } from '@/components/coremetry/Field';
 import type { RemoteCluster } from './argocdForm';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2313
 
 // ArgoCDEmptyPanel — v0.10.974 — hiçbir şey ayarlanmamışken TEK sonraki adım
 // (mockup States (a)):
@@ -20,38 +21,37 @@ export function ArgoCDEmptyPanel({ clusters, onAddHub }: {
   clusters: RemoteCluster[];
   onAddHub: (clusterId: string) => void;
 }) {
+  const lang = useLang();
   const [pick, setPick] = useState('');
   if (clusters.length === 0) {
     return (
       <div className={PANEL}>
-        <h3 className={TITLE}>Önce bir Remote Cluster kaydı gerekli</h3>
+        <h3 className={TITLE}>{t('acd.empty.needRc', lang)}</h3>
         <p className={TEXT}>
-          Hub, Argo CD'nin çalıştığı kümenin <code>argocd_*</code> serilerini tutan Thanos'u gösteren bir Remote Cluster kaydıdır
-          (URL + token). Argo iki kümede çalışıyorsa iki kayıt ekleyin; sonra buraya dönüp ikisini de hub olarak seçin.
+          {t('acd.empty.needRc.a', lang)}<code>argocd_*</code>{t('acd.empty.needRc.b', lang)}
         </p>
         <div className="flex items-center">
-          <Link to="/settings/clusters" className="accent">Ayarlar › Remote clusters'a git ↗</Link>
+          <Link to="/settings/clusters" className="accent">{t('acd.empty.goRc', lang)}</Link>
         </div>
-        <span className="text-[length:var(--fs-xs)] text-(--text3)">Instance eklemek için bu sayfada yapılacak başka bir şey yok; hub seçilmeden keşif ve elle ekleme kapalıdır.</span>
+        <span className="text-[length:var(--fs-xs)] text-(--text3)">{t('acd.empty.nothing', lang)}</span>
       </div>
     );
   }
   return (
     <div className={PANEL}>
-      <h3 className={TITLE}>Henüz hub yok</h3>
+      <h3 className={TITLE}>{t('acd.empty.noHub', lang)}</h3>
       <p className={TEXT}>
-        Argo CD metrikleri (<code>argocd_app_info</code>) Argo'nun çalıştığı kümenin Thanos'unda durur. İlk adım o kümeyi hub olarak
-        seçmek; instance'ları ardından keşifle bulursunuz.
+        {t('acd.empty.noHub.a', lang)}<code>argocd_app_info</code>{t('acd.empty.noHub.b', lang)}
       </p>
       <div className="flex flex-wrap items-center gap-4">
-        <SelectField id="acd-a1-sel" label="Hub olarak seçilecek Remote Cluster" className="w-auto min-w-[240px] max-w-[480px]" controlClassName="font-mono" value={pick}
-          hint={`Önce listeden bir Remote Cluster seçin (${clusters.length} kayıt var); düğme ancak seçimden sonra açılır. Seçilen kayıt /clusters'ta normal küme olarak görünmeye devam eder; hub, Kaydet'e kadar yazılmaz.`}
+        <SelectField id="acd-a1-sel" label={t('acd.empty.selLabel', lang)} className="w-auto min-w-[240px] max-w-[480px]" controlClassName="font-mono" value={pick}
+          hint={tf('acd.empty.selHint', lang, { n: clusters.length })}
           onChange={e => setPick(e.target.value)}>
-          <option value="">Remote Cluster seç…</option>
-          {clusters.map(c => <option key={c.id} value={c.id}>{c.name}{c.enabled ? '' : ' (devre dışı)'}</option>)}
+          <option value="">{t('acd.pickRc', lang)}</option>
+          {clusters.map(c => <option key={c.id} value={c.id}>{c.name}{c.enabled ? '' : t('acd.disabledSuffix', lang)}</option>)}
         </SelectField>
         <Button disabled={!pick} aria-describedby="acd-a1-sel-hint" onClick={() => { if (pick) onAddHub(pick); }}>
-          Hub olarak ekle
+          {t('acd.empty.addAsHub', lang)}
         </Button>
       </div>
     </div>

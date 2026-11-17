@@ -1,3 +1,4 @@
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2313 — metinler arayüz dilinde (TR aynı)
 import { useRef } from 'react';
 import { Button } from '@/components/shadcn/button';
 import { Input } from '@/components/shadcn/input';
@@ -52,6 +53,7 @@ export function ArgoCDInstanceForm({ buffer: b, errors, pending, hubs, clusters,
 }) {
   const set = (p: Partial<InstanceBuffer>) => onChange({ ...b, ...p });
   const refInput = useRef<HTMLInputElement>(null);
+  const lang = useLang();
   const hn = hubName(b.hubClusterId, clusters);
   const idEditable = b.isNew || b.unsaved;
   const url = normalizeApiUrl(b.apiUrl);
@@ -61,116 +63,116 @@ export function ArgoCDInstanceForm({ buffer: b, errors, pending, hubs, clusters,
   const stored = !!b.storedRef && !b.clearToken;
   const st = b.savedId ? tokens[b.savedId] : undefined;
   const resText = !st || st.tokenRef !== b.storedRef ? ''
-    : st.resolved ? '· çözüldü' : `· çözülemedi: ${(st.error ?? '').replace(/^tokenRef \S+: /, '')}`;
+    : st.resolved ? t('acd.ed.resolved', lang) : tf('acd.ed.unresolved', lang, { e: (st.error ?? '').replace(/^tokenRef \S+: /, '') });
   const nField = Object.values(errors).filter(Boolean).length;
   const summary = [
-    pending ? 'Açık formda tabloya uygulanmamış değişiklik var: önce “Tabloya uygula” ya da “Vazgeç”.' : '',
-    nField ? `${nField} alan düzeltilmeli; ayrıntı alanların altında.` : '',
+    pending ? t('acd.pendingForm', lang) : '',
+    nField ? tf('acd.ed.nField', lang, { n: nField }) : '',
   ].filter(Boolean).join(' ');
   const hubMissing = !hubs.some(h => h.clusterId === b.hubClusterId);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-4">
-        <h4 className="m-0 text-[length:var(--fs-md)] font-semibold text-(--text)">{b.isNew ? 'Yeni instance' : `${b.origId} düzenleniyor`}</h4>
+        <h4 className="m-0 text-[length:var(--fs-md)] font-semibold text-(--text)">{b.isNew ? t('acd.ed.newTitle', lang) : tf('acd.ed.editing', lang, { id: b.origId })}</h4>
         <span className={HINT}>
-          {b.isNew ? 'elle ekleniyor · Kaydet’e kadar yazılmaz'
-            : `${hn} · ${b.discovered ? 'keşiften eklendi' : 'elle eklendi'}${b.unsaved ? ' · kaydedilmedi' : ''}`}
+          {b.isNew ? t('acd.ed.newSub', lang)
+            : `${hn} · ${t(b.discovered ? 'acd.ed.fromDisc' : 'acd.ed.byHand', lang)}${b.unsaved ? t('acd.ed.unsavedSuffix', lang) : ''}`}
         </span>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <Field id="acd-ed-id" label="Kimlik (id)" controlClassName="font-mono" value={b.id} readOnly={!idEditable}
+        <Field id="acd-ed-id" label={t('acd.ed.id', lang)} controlClassName="font-mono" value={b.id} readOnly={!idEditable}
           autoComplete="off" spellCheck={false} error={errors.id}
-          hint={b.isNew ? "Küçük harf, rakam, tire (≤63). Hub'lar arasında da tekil."
-            : b.unsaved ? `Kaydedilmemiş satır: kimlik şimdi değiştirilebilir (ör. ${b.origId}-${hn}); Kaydet'ten sonra değişmez.`
-              : "Kayıttan sonra değişmez: ClickHouse instance_id (durum ve eşleme satırları bu kimliğe bağlı)."}
+          hint={b.isNew ? t('acd.ed.idHintNew', lang)
+            : b.unsaved ? tf('acd.ed.idHintUnsaved', lang, { ex: `${b.origId}-${hn}` })
+              : t('acd.ed.idHintSaved', lang)}
           onChange={e => set({ id: e.target.value })} />
-        <Field id="acd-ed-name" label="Görünen ad" value={b.name} autoComplete="off" placeholder="boşsa id gösterilir"
-          error={errors.name} hint="Yalnız ekranda; eşlemeye katılmaz." onChange={e => set({ name: e.target.value })} />
+        <Field id="acd-ed-name" label={t('acd.ed.name', lang)} value={b.name} autoComplete="off" placeholder={t('acd.ed.namePh', lang)}
+          error={errors.name} hint={t('acd.ed.nameHint', lang)} onChange={e => set({ name: e.target.value })} />
         <SelectField id="acd-ed-hub" label="Hub" controlClassName="font-mono" value={b.hubClusterId} error={errors.hub}
-          hint={`Küme-içi hedef (kubernetes.default.svc) → ${hn}`}
+          hint={tf('acd.ed.hubHint', lang, { hub: hn })}
           onChange={e => set({ hubClusterId: e.target.value })}>
-          {hubMissing && <option value={b.hubClusterId} disabled>{hn} — listede değil</option>}
+          {hubMissing && <option value={b.hubClusterId} disabled>{tf('acd.ed.notListed', lang, { hub: hn })}</option>}
           {hubs.map(h => <option key={h.key} value={h.clusterId}>{hubName(h.clusterId, clusters)}</option>)}
         </SelectField>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <Field id="acd-ed-ns" label="Hub namespace" controlClassName="font-mono" value={b.hubNamespace} autoComplete="off" spellCheck={false}
-          error={errors.ns} hint="Argo CD'nin çalıştığı namespace (zorunlu). Aynı hub'da namespace başına tek instance."
+          error={errors.ns} hint={t('acd.ed.nsHint', lang)}
           onChange={e => set({ hubNamespace: e.target.value })} />
-        <Field id="acd-ed-job" label={<>metricsJob <span className={FAINT}>(opsiyonel)</span></>} controlClassName="font-mono"
+        <Field id="acd-ed-job" label={<>metricsJob <span className={FAINT}>{t('acd.ed.optional', lang)}</span></>} controlClassName="font-mono"
           value={b.metricsJob} autoComplete="off" spellCheck={false} placeholder="team-a-prod-metrics" error={errors.job}
-          hint={<>Serilerdeki <code>job</code> etiketi. Boşsa yalnız namespace ile eşlenir.</>}
+          hint={<>{t('acd.ed.jobHint.a', lang)}<code>job</code>{t('acd.ed.jobHint.b', lang)}</>}
           onChange={e => set({ metricsJob: e.target.value })} />
       </div>
 
-      <Field id="acd-ed-url" label={<>API URL <span className={FAINT}>(Argo CD sunucusu)</span></>} controlClassName="font-mono"
+      <Field id="acd-ed-url" label={<>API URL <span className={FAINT}>{t('acd.ed.urlSub', lang)}</span></>} controlClassName="font-mono"
         value={b.apiUrl} autoComplete="off" spellCheck={false} placeholder="https://argocd.team-a.example.invalid"
         error={urlErr || undefined}
         hint={url.value
-          ? <>Asla türetilmez. Kaydedilecek biçim (küçük harf, sondaki / atılır; yol korunur, port eklenmez): <span className="font-mono">{url.value}</span></>
-          : "Asla türetilmez. Boşsa API işçisi bu instance'ı atlar."}
+          ? <>{t('acd.ed.urlHintFmt', lang)}<span className="font-mono">{url.value}</span></>
+          : t('acd.ed.urlHintEmpty', lang)}
         onChange={e => set({ apiUrl: e.target.value })} />
 
       <div data-cm-field="" className="flex min-w-0 flex-col gap-1">
         <Label htmlFor="acd-ed-ref" className="text-[length:var(--fs-sm)] font-normal leading-tight text-(--text2)">
-          Token referansı <span className="font-mono">tokenRef</span>
-          {stored && <span className="ml-2 text-(--text3)">· kayıtlı</span>}
+          {t('acd.ed.tokenRef', lang)}<span className="font-mono">tokenRef</span>
+          {stored && <span className="ml-2 text-(--text3)">{t('acd.ed.savedSuffix', lang)}</span>}
         </Label>
         <Input id="acd-ed-ref" ref={refInput} value={b.tokenInput} autoComplete="off" spellCheck={false}
           className="h-8 border-(--border-control) bg-field font-mono text-[length:var(--fs-sm)] md:text-[length:var(--fs-sm)] dark:bg-field"
           aria-invalid={refErr ? 'true' : undefined} aria-describedby="acd-ed-ref-s acd-ed-ref-h"
-          placeholder={stored ? 'boş bırak = kayıtlı referans korunur' : 'env:ARGOCD_TEAM_C_TOKEN  ·  file:/etc/coremetry/secrets/argocd-team-c'}
+          placeholder={stored ? t('acd.ed.refKeepPh', lang) : 'env:ARGOCD_TEAM_C_TOKEN  ·  file:/etc/coremetry/secrets/argocd-team-c'}
           onChange={e => set({ tokenInput: e.target.value })} />
         <div id="acd-ed-ref-s" className={`flex flex-wrap items-center gap-3 ${HINT}`}>
           {b.storedRef ? (
             <>
               {b.clearToken
-                ? <span>Kaydedince referans silinir; instance yalnız metriklerle izlenir.</span>
+                ? <span>{t('acd.ed.refCleared', lang)}</span>
                 : (
                   <>
-                    <span>Kayıtlı referans:</span>
+                    <span>{t('acd.ed.savedRef', lang)}</span>
                     <span className="font-mono">{b.storedRef}</span>
                     {resText && <span className={st && !st.resolved ? 'text-status-critical' : undefined}>{resText}</span>}
                   </>
                 )}
               <Button variant="link" size="xs" className={LINK} id="acd-ed-ref-toggle"
                 onClick={() => set(b.clearToken ? { clearToken: false } : { clearToken: true, tokenInput: '' })}>
-                {b.clearToken ? 'Geri al' : 'Referansı kaldır'}
+                {b.clearToken ? t('acd.undo', lang) : t('acd.ed.removeRef', lang)}
               </Button>
             </>
           ) : typed && validTokenRef(typed) ? (
             <>
-              <span>Kayıtlı referans:</span>
+              <span>{t('acd.ed.savedRef', lang)}</span>
               <span className="font-mono">{typed}</span>
-              <span>· yeni, kaydedince denetlenir</span>
+              <span>{t('acd.ed.newRef', lang)}</span>
               <Button variant="link" size="xs" className={LINK} id="acd-ed-ref-toggle" onClick={() => { set({ tokenInput: '' }); refInput.current?.focus(); }}>
-                Referansı kaldır
+                {t('acd.ed.removeRef', lang)}
               </Button>
             </>
-          ) : <span>Kayıtlı referans yok — instance yalnız metriklerle izlenir (API işçisi atlar).</span>}
+          ) : <span>{t('acd.ed.noRef', lang)}</span>}
         </div>
         <span id="acd-ed-ref-h" className={refErr ? ERR : HINT}>
-          {refErr || 'env:NAME → Helm extraEnv + existingSecret · file:/mutlak/yol → mount edilmiş Secret. Düz token alanı yok; çözülemeyen referansta instance atlanır (fail-closed).'}
+          {refErr || t('acd.ed.refHint', lang)}
         </span>
       </div>
 
       <div className="flex flex-wrap items-center gap-6">
-        <CheckboxField id="acd-ed-enabled" label="Etkin" checked={b.enabled} onCheckedChange={v => set({ enabled: v })} />
-        <CheckboxField id="acd-ed-insecure" label={<>TLS doğrulamasını atla <span className={FAINT}>(iç CA / POC)</span></>}
+        <CheckboxField id="acd-ed-enabled" label={t('acd.ed.enabled', lang)} checked={b.enabled} onCheckedChange={v => set({ enabled: v })} />
+        <CheckboxField id="acd-ed-insecure" label={<>{t('acd.ed.insecure', lang)}<span className={FAINT}>{t('acd.ed.insecureSub', lang)}</span></>}
           checked={b.insecureSkipVerify} onCheckedChange={v => set({ insecureSkipVerify: v })} />
-        <CheckboxField id="acd-ed-anyns" label={<>Application'lar her namespace'te <span className={`font-mono ${FAINT}`}>exported_namespace ≠ namespace</span></>}
+        <CheckboxField id="acd-ed-anyns" label={<>{t('acd.ed.anyNs', lang)}<span className={`font-mono ${FAINT}`}>exported_namespace ≠ namespace</span></>}
           checked={b.appsAnyNamespace} onCheckedChange={v => set({ appsAnyNamespace: v })} />
       </div>
 
       <div className="flex flex-wrap items-center gap-4">
-        <Button size="sm" id="acd-ed-apply" onClick={onApply}>Tabloya uygula</Button>
-        <Button variant="ghost" size="sm" onClick={onCancel}>Vazgeç</Button>
-        {!b.isNew && <span className={HINT}>Değişiklik Kaydet’e kadar yazılmaz.</span>}
+        <Button size="sm" id="acd-ed-apply" onClick={onApply}>{t('acd.ed.apply', lang)}</Button>
+        <Button variant="ghost" size="sm" onClick={onCancel}>{t('acd.cancel', lang)}</Button>
+        {!b.isNew && <span className={HINT}>{t('acd.ed.untilSave', lang)}</span>}
         <span className="flex-1" />
-        <Button variant="ghost-danger" size="sm" onClick={onRemove}>Tablodan kaldır</Button>
+        <Button variant="ghost-danger" size="sm" onClick={onRemove}>{t('acd.removeFromTable', lang)}</Button>
       </div>
       {summary && <div role="alert" className={ERR}>{summary}</div>}
     </div>

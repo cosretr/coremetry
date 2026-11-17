@@ -50,6 +50,8 @@ const { getArgoCDSettings, putArgoCDSettings, discoverArgoCD, getThanosSettings,
     getThanosSettings: vi.fn(),
   };
 });
+// v0.10.2313 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/api', () => ({
   api: { getArgoCDSettings, putArgoCDSettings, discoverArgoCD, getThanosSettings },
   isCanceled: (e: unknown) => (e as Error)?.name === 'CanceledError',
