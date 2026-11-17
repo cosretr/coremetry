@@ -269,6 +269,9 @@ func (s *Server) endpointPickRows(ctx context.Context, service, env string, from
 	if t := evalConvFrom(ctx); t != nil { // v0.10.2322 — konuşma kipi: sahte satırlar (üretimde nil)
 		return evalConvEndpointRows(t, service), nil
 	}
+	if s.store == nil { // v0.10.2324 — store'suz sunucu (test kurgusu): okunamadı → servis özeti yolu
+		return nil, fmt.Errorf("endpoint deposu yok")
+	}
 	from, to = from.Truncate(time.Minute), to.Truncate(time.Minute)
 	key := endpointPickKey(service, env, from.Unix()/60, to.Unix()/60)
 	body, _, err := s.cachedJSON(ctx, key, endpointPickTTL, false, func(ctx context.Context) (any, error) {

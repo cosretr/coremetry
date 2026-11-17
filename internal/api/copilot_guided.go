@@ -2255,6 +2255,11 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 // koşmaz (store'suz test sunucusu prefetch yapamaz) ve tur guided olarak biter.
 var guidedDispatchSeam func(route guidedRoute) bool
 
+// guidedWindowSeam — v0.10.2324 TEST DİKİŞİ (prod'da nil): runGuidedRoute'un
+// gördüğü rota + pencere (chat_state_flow_test.go — devralınan pencere guided
+// demetine iner mi).
+var guidedWindowSeam func(route guidedRoute, rangeS int64, to time.Time, emit func(string, any))
+
 // runGuidedRoute — v0.10.172: ÇÖZÜLMÜŞ bir rota için prefetch → anlatım →
 // answer. copilotChatGuided'dan ayrıldı ki LLM niyet sınıflandırıcısı
 // (copilot_intent.go) deterministik router'ı atlayıp aynı paketleri ve aynı
@@ -2274,6 +2279,10 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	// sorulmaz, env/takım/servis süzgeci rotaya yazılır. Kapsamsız ctx → aynen.
 	route = applyChatScopeRoute(chatScopeFromCtx(ctx), route)
 	chatExchangeFrom(ctx).noteRoute(guidedRouteLabel(route)) // v0.10.1153 — /ai etkileşim satırının rotası; v0.10.2135 alt rota
+	// v0.10.2324 — konuşma durumu kabul testinin dikişi (prod'da nil).
+	if guidedWindowSeam != nil {
+		guidedWindowSeam(route, rangeS, to, emit)
+	}
 	// v0.10.1464 — yönlendirme regresyon kümesinin dikişi (prod'da nil).
 	if guidedDispatchSeam != nil && guidedDispatchSeam(route) {
 		return true, true

@@ -515,12 +515,22 @@ var routingRegressionRows = []routingRow{
 	{release: "komşu v0.10.2138", name: "v2 filo sözcüğü bağlam servisini devralmaz → ask_service",
 		q: "tüm servislerde neden gecikme var?", v2: true, prior: []string{rrSvc + " sağlığı nasıl?"}, chatCtx: &ChatContext{Service: rrSvc},
 		wantTier: aisurface.TierGuided, wantRoute: string(guidedAskService)},
-	{release: "komşu v0.10.2138", name: "v2 'peki bu ne demek?' (öznesiz) eski yolunda → intent",
+	// v0.10.2324 — karar 14: durum açıkken özneli "none" döngüye gider
+	// (chat_state_flow_test.go pinler); bu satır durum anahtarı KAPALI iken
+	// eski yolu pinler.
+	{release: "komşu v0.10.2138", name: "v2 'peki bu ne demek?' (öznesiz, durum kapalı) eski yolunda → intent",
 		q: "peki bu ne demek?", v2: true, prior: []string{rrSvc + " sağlığı nasıl?"}, chatCtx: &ChatContext{Service: rrSvc},
-		wantTier: aisurface.TierIntent, wantRoute: ""},
+		setup: withConversationStateOff, wantTier: aisurface.TierIntent, wantRoute: ""},
 	{release: "komşu v0.10.2138", name: "v2 açık servis bağlamı ezer: 'billing-api neden gecikmiş olabilir?' → root_cause",
 		q: "billing-api neden gecikmiş olabilir?", v2: true, prior: []string{rrSvc + " sağlığı nasıl?"}, chatCtx: &ChatContext{Service: rrSvc},
 		wantTier: aisurface.TierGuided, wantRoute: string(guidedRootCause)},
+}
+
+// withConversationStateOff — v0.10.2324: cosre_conversation.state kapalı
+// (chat_state.go); satır bu dilimden önceki v2 davranışını pinler.
+func withConversationStateOff(t *testing.T, _ *routingRig) {
+	t.Helper()
+	setConversationState(t, false)
 }
 
 // withRoutingDocTeam — v0.10.1576: wiki kurulu + takım kataloğunda

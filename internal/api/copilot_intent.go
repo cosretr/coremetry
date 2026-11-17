@@ -417,7 +417,13 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 	m := copilot.MetaFromContext(ctx)
 	m.ExchangeID = aisurface.ChildExchangeID(m.ExchangeID, aisurface.ChatIntent)
 	cctx, cancel := context.WithTimeout(copilot.WithMeta(ctx, m), intentClassifyTimeout(s.copilot.ClientTimeout()))
-	raw, err := s.copilotExplainJSONSurface(cctx, "chat-intent", copilot.SystemPromptIntentClassify(), q, intentClassifySchema())
+	cq := q
+	if chatStateOn(ctx) { // v0.10.2324 — sınıflandırıcı konuşma durumunu görür (D5 notu; chat_state.go)
+		if st := chatContextFromCtx(ctx); st != nil {
+			cq += chatStateIntentLine(st.ctx)
+		}
+	}
+	raw, err := s.copilotExplainJSONSurface(cctx, "chat-intent", copilot.SystemPromptIntentClassify(), cq, intentClassifySchema())
 	cancel()
 	if err != nil {
 		emitStepEvidence(emit, i, tool, "", err) // panelde görünür; cevap kesilmez
@@ -457,6 +463,14 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 			0, 0, 0, "ok", "", question, strings.TrimSpace(raw))
 		if mode != copilot.IntentOnNoLoop {
 			return false, false
+		}
+		// v0.10.2324 — karar 14 (yalnız v2 + durum açık): durumda özne varken
+		// "none" araçsız genel cevaba değil serbest döngüye gider ("bak", "peki dün?").
+		if chatStateOn(ctx) {
+			if st := chatContextFromCtx(ctx); st != nil && stateHasSubject(st.ctx) {
+				emit("step", map[string]string{"label": "niyet eşleşmedi — konuşmanın öznesiyle araç döngüsüne"})
+				return false, false
+			}
 		}
 		// v0.10.194 — Operator-reported ("türkiyenin başkenti neresi" → çipli
 		// red): "eşleştiremese de cevap versin, LLM'e sorup ama söylesin".

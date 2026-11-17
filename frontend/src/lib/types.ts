@@ -8977,6 +8977,16 @@ export interface CosreBriefingResponse {
   briefing?: CosreBriefing;
 }
 
+/** v0.10.2324 — system_settings `cosre_conversation` (Go chstore.CosreConversation):
+ *  state = konuşma durumu (A); style / verification ayrılmış, bu sürümde kapalı / off. */
+export interface CosreConversationSettings {
+  state: boolean;
+  style: boolean;
+  verification: 'off' | 'shadow' | 'enforce';
+  updatedBy?: string;
+  updatedAt?: string;
+}
+
 /** system_settings `cosre.briefing` (GET /api/ai/briefing her rol; PUT admin + audit). */
 export interface CosreBriefingSettings {
   enabled: boolean;

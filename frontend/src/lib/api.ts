@@ -1403,6 +1403,12 @@ export const api = {
     get<import('./types').CosreBriefingResponse>(`/api/cosre/v2/briefing?env=${encodeURIComponent(env)}`, signal),
   refreshCosreBriefing: (env: string) =>
     request<import('./types').CosreBriefingResponse>(`/api/cosre/v2/briefing/refresh?env=${encodeURIComponent(env)}`, { method: 'POST', timeoutMs: 65_000 }),
+  // v0.10.2324 — CoSRE konuşma kalitesi blobu (GET her rol; PUT admin + audit). Yalnız `state` bağlı.
+  cosreConversationSettings: () => get<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`),
+  putCosreConversationState: (state: boolean) =>
+    request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state }),
+    }),
   cosreBriefingSettings: () => get<import('./types').CosreBriefingSettings>(`/api/ai/briefing`),
   putCosreBriefingSettings: (body: import('./types').CosreBriefingSettings) =>
     request<import('./types').CosreBriefingSettings>(`/api/ai/briefing`, {

@@ -19,6 +19,7 @@ import { AiToolsetsPanel } from './AiToolsetsPanel'; // v0.10.1434
 import { AiGeneralQuestionsPanel } from './AiGeneralQuestionsPanel'; // v0.10.1458
 import { CosreV2StatusLine } from './CosreV2StatusLine'; // v0.10.1604
 import { CosreBriefingLine } from './CosreBriefingLine'; // v0.10.2105
+import { CosreConversationLine } from './CosreConversationLine'; // v0.10.2324
 import { useT } from '@/lib/i18n'; // v0.10.1434
 import { tuningToForm, tuningToWire } from './aiTuning';
 import { IconSparkles } from '@/components/icons';
@@ -74,6 +75,7 @@ export function AITab() {
     <>
       <CosreV2StatusLine />
       <CosreBriefingLine />
+      <CosreConversationLine />
       <Tabs value={tab} onValueChange={v => setTab(aiTabFromParam(v))}>
         <TabsList variant="line" aria-label="CoSRE ayar sekmeleri" className="mb-3">
           {tabs.map(x => <TabsTrigger key={x.key} value={x.key}>{x.label}</TabsTrigger>)}

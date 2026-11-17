@@ -61,6 +61,12 @@ type toolScreenScope struct {
 	// AnchorTo onun). Yalnız mutlak from_ms/to_ms alan araçlara iner; göreli
 	// range_s şimdiye çapalanırdı (geçmiş bir tepeyi ıskalar) → enjekte edilmez.
 	Brush bool
+	// StateService — v0.10.2324 (chat_state.go): konuşma durumunun servisi (bu
+	// turda açık anılan ya da devralınan). Ekran servisinden farklı olarak
+	// `service` alanı olan HER yerli araca (zorunlu olmasa da) model vermediyse
+	// konur — devam sorusu ("deploy mu vardı") önceki turun servisinde kalır.
+	// Yalnız v2 + cosre_conversation.state; kapalıyken "".
+	StateService string
 }
 
 // serviceDetailPages — servis enjeksiyonunun izinli olduğu sayfalar.
@@ -190,6 +196,12 @@ func applyScreenContext(tool string, args json.RawMessage, schema map[string]any
 		case got != sc.Service:
 			applied.ServiceKept = got
 		}
+	}
+
+	if sc.StateService != "" && !hasTrace && has("service") && argStr(m, "service") == "" {
+		m["service"] = sc.StateService
+		applied.Service = sc.StateService
+		changed = true
 	}
 
 	if sc.Brush && !hasTrace && !argsHaveWindow(m) {

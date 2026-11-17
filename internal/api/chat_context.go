@@ -67,6 +67,20 @@ type ChatContext struct {
 	// özne yoksa bunları devralır. v1'de hiç yazılmaz → JSON bayt bayt eski.
 	Trace     string `json:"trace,omitempty"`
 	Operation string `json:"operation,omitempty"`
+	// v0.10.2324 (conversation-audit §6.0/§6.1 A, chat_state.go) — konuşma
+	// durumu: YALNIZ v2 + cosre_conversation.state açıkken yazılır; v1'de hep
+	// boş → JSON bayt bayt eski (D5 emsali). Pencere = RangeS + WinToMs (0 =
+	// şimdiye göreli) + WinLabel + RangeExplicit.
+	Services     []string   `json:"services,omitempty"`
+	Env          string     `json:"env,omitempty"`
+	WinToMs      int64      `json:"winToMs,omitempty"`
+	WinLabel     string     `json:"winLabel,omitempty"`
+	ChannelCode  string     `json:"channelCode,omitempty"`
+	FunctionCode string     `json:"functionCode,omitempty"`
+	Problem      string     `json:"problem,omitempty"`
+	Address      string     `json:"address,omitempty"` // sen | siz
+	Offer        *chatOffer `json:"offer,omitempty"`   // sunucunun/asistanın önerdiği sonraki adım
+	Ledger       []chatFact `json:"ledger,omitempty"`  // son turun ≤5 olgusu (kanıt defteri)
 }
 
 func (c ChatContext) Empty() bool {
@@ -100,6 +114,9 @@ type chatContextState struct {
 	// araç handler'ından konur.
 	codeRead     atomic.Bool
 	codeLockSent atomic.Bool
+	// fromClient — v0.10.2324 (chat_state.go, karar 2): durum Redis'siz
+	// kurulumda istemcinin yankısından geldi; doğrulayıcı kanıtı OLAMAZ.
+	fromClient bool
 }
 
 type chatCtxKey struct{}
@@ -478,5 +495,10 @@ func (s *Server) noteChatContextRoute(ctx context.Context, route guidedRoute, ra
 	}
 	if cosreV2Marked(ctx) { // v0.10.2138 — özne (trace) yalnız v2 (chat_context_subject.go)
 		st.noteContextSubject(v2SubjectPatch(st.ctx, route))
+	}
+	if chatStateOn(ctx) && route.Env != "" && !route.EnvInherited { // v0.10.2324 — rotanın açık ortamı durumda (chat_state.go)
+		next := st.ctx
+		next.Env = route.Env
+		st.noteContextSubject(next)
 	}
 }

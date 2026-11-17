@@ -201,6 +201,10 @@ type chatRequest struct {
 		// ClarifyOption (v0.10.2102, chat_question.go) — v2 soru kartının tıkı:
 		// bekleyen netleştirme sorusuna birebir eşlenir; yoksa metin yolu.
 		ClarifyOption string `json:"clarifyOption,omitempty"`
+		// State (v0.10.2324, chat_state.go; conversation-audit karar 2) — Redis'siz
+		// kurulumda istemcinin geri yolladığı son data-state; doğrulanır, yalnız
+		// v2 + cosre_conversation.state açıkken okunur.
+		State *chatStateWire `json:"state,omitempty"`
 	} `json:"context,omitempty"`
 	// Approvals — agent-core S5 (chat_approval_resume.go): v2 onay kartının
 	// cevabı; dolu istek onay bekleyen alışverişin DEVAMIDIR (kademeler atlanır,
@@ -412,6 +416,13 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}()
 	if chip := chatContextChipTR(cst.ctx); chip != "" {
 		emit("step", map[string]string{"label": chip})
+	}
+	// v0.10.2324 — konuşma durumu (chat_state.go): yalnız v2 + cosre_conversation.state;
+	// kapalıyken nil ve aşağıdaki her kanca no-op (bayt aynı).
+	var stt *chatStateTurn
+	if !apCont.on {
+		stt = s.beginChatStateTurn(ctx, &req, cst, emit)
+		emit = stt.wrapEmit(emit)
 	}
 	// v0.10.1465 — yapışkan kod konuşması (chat_code_sticky.go): kod okunmuş
 	// konuşmanın HER turu her kademeden önce yerel profile sabitlenir; yerel
@@ -1084,6 +1095,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		scopeTrace = traceFU.TraceID
 	}
 	toolScope := buildToolScreenScope(screenCtx, pageCtx, pinnedCtx, scopeTrace, lastUserText(req.Messages))
+	toolScope.StateService = stt.toolService() // v0.10.2324 — durum servisi (chat_state.go); kapalıyken ""
 	// v0.10.1289 — operatör kuralları (cosre_rules_prompt.go): bağlama uyan ≤5
 	// kural çitli veri bloğu + ek olarak sohbet bağlamı önsözünün ARKASINA;
 	// araç argümanlarına / router'a girmez. Kural yoksa prompt bayt bayt eski.
@@ -1108,7 +1120,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		opPre.exceptionsPromptTR() + // v0.10.1331 — operasyonun Exceptions grubu yoksa ""
 		opPre.clusterPromptTR() + // v0.10.1374 — küme kıyası yoksa ""
 		dm.loopPrefix() + // v0.10.1150 — Derin kapalıyken ""
-		withAddressee(addressee, copilot.SystemPromptChat())
+		withAddressee(addressee, copilot.SystemPromptChat()) +
+		stt.promptLine() // v0.10.2324 — konuşma durumu SONDA (değişken blok; kapalıyken "")
 	// v0.10.1324 — yankı süzgecinin cümleleri loopPrompt'a giren AYNI önsöz
 	// kurucularından, aynı girdilerle (chatLoopPreambles) + tavan / yeniden
 	// deneme ekleri (chat_answer_degen.go).
@@ -1151,6 +1164,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				copilot.ChatRoundCapAddendum(), copilot.ChatDegenRetryAddendum(), v2p.Addendum)...)
 		}
 		ctx = withV2LoopPlan(ctx, v2p)
+	}
+	if line := stt.promptLine(); line != "" { // v0.10.2324 — durum bloğunun yankısı da süzülür
+		echoPhrases = append(echoPhrases, chatEchoPhrases(line)...)
 	}
 	if isTraceFollowUp {
 		// v0.10.948 — sayı denetiminin tohumu: açıklamasız AKTİF BAĞLAM + ekran ve
@@ -1484,6 +1500,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			}
 			toolDur := oc.Duration
 			executedN++
+			stt.noteTool(tc.Name, cargs, oc.Content, oc.IsError) // v0.10.2324 — döngü durumu kendisi yazar
 			if isTraceFollowUp {
 				// v0.10.948 — sayı denetiminin kanıtı: YALNIZ yürüyen çağrı, argümanı
 				// ve TAM çıktısı (modele giden kırpık kopya değil).

@@ -1082,6 +1082,13 @@ func main() {
 		log.Printf("[general-questions] load persisted settings: %v", err)
 	}
 	cfgRefresh.Add("ai-general-questions", store.LoadAIGeneralQuestions)
+	// v0.10.2324 — CoSRE konuşma kalitesi blobu (system_settings
+	// cosre_conversation; state / style / verification). Yüklenemezse
+	// varsayılan: state AÇIK, diğer ikisi kapalı.
+	if err := store.LoadCosreConversation(ctx); err != nil {
+		log.Printf("[cosre-conversation] load persisted settings: %v", err)
+	}
+	cfgRefresh.Add("cosre-conversation", store.LoadCosreConversation)
 	// CoSRE öğrenme Faz 2+4 gece kalite işi: v0.10.2111'den beri api.Server
 	// kurulduktan SONRA başlar (aşağıda, StartEvalsetDaily'nin yanında) —
 	// gün sonu kancası aday vakaları srv üzerinden yazar.
