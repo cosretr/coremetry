@@ -1,8 +1,8 @@
 package chstore
 
 // v0.10.1790 — Davis paritesi FAZ 1.2: anomaly_sensitivity.subjects +
-// seasonalTimezone. Varsayılan: üç özne türü KAPALI (F1.5 eval kapısı), dilim
-// Europe/Istanbul (karar 3). Eski blob (alanlar yok) varsayılanı alır; PUT
+// seasonalTimezone. Varsayılan (v0.10.2308): endpoint + queue AÇIK, db
+// kapalı, terfi gölge; dilim Europe/Istanbul (karar 3). Eski blob (alanlar yok) varsayılanı alır; PUT
 // yolunda Normalize alanları KOPYALAMAZSA açılan özne her kayıtta kapanırdı.
 
 import (
@@ -14,15 +14,15 @@ import (
 func TestAnomalySubjectsDefaults(t *testing.T) {
 	d := DefaultAnomalySensitivity()
 	for name, k := range map[string]AnomalySubjectKindConfig{"endpoint": d.Subjects.Endpoint, "db": d.Subjects.DB, "queue": d.Subjects.Queue} {
-		if k.Enabled {
-			t.Errorf("%s varsayılan AÇIK — eval kapısı geçmeden açılmaz", name)
+		if want := name != "db"; k.Enabled != want {
+			t.Errorf("%s varsayılan enabled=%v, want %v (v0.10.2308: endpoint + queue açık, db kapalı)", name, k.Enabled, want)
 		}
 		if k.TopN != 20 || k.MaxSeriesPerTick != 2000 {
 			t.Errorf("%s tavanları = %+v, want topN 20 / maxSeries 2000", name, k)
 		}
 	}
-	if d.Subjects.AnyEnabled() {
-		t.Error("AnyEnabled varsayılanda true")
+	if d.Subjects.PromotionMode != SubjectPromotionShadow {
+		t.Errorf("varsayılan terfi kipi %q, want shadow (live ASLA varsayılan değil)", d.Subjects.PromotionMode)
 	}
 	if d.SeasonalTimezone != "Europe/Istanbul" {
 		t.Errorf("SeasonalTimezone = %q, want Europe/Istanbul", d.SeasonalTimezone)
@@ -38,9 +38,12 @@ func TestAnomalySubjectsOldBlobGetsDefaults(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"dwellBuckets":3,"criticalZ":6}`), &c); err != nil {
 		t.Fatal(err)
 	}
+	// Eksik bölüm Normalize'da sıfır değerdir = üçü kapalı, kip off; yeni
+	// varsayılana yalnız tek seferlik geçiş taşır (MigrateSubjectsDefaultFlip).
 	n := NormalizeAnomalySensitivity(c)
-	if n.Subjects != DefaultAnomalySubjects() {
-		t.Errorf("eski blob subjects = %+v, want varsayılan", n.Subjects)
+	want := NormalizeAnomalySubjects(AnomalySubjectsConfig{})
+	if n.Subjects != want || n.Subjects.AnyEnabled() || n.Subjects.PromotionMode != SubjectPromotionOff {
+		t.Errorf("eski blob subjects = %+v, want %+v", n.Subjects, want)
 	}
 	if n.SeasonalTimezone != DefaultSeasonalTimezone {
 		t.Errorf("eski blob seasonalTimezone = %q, want %q", n.SeasonalTimezone, DefaultSeasonalTimezone)
@@ -117,8 +120,8 @@ func TestSeasonalTimezoneValidateNormalize(t *testing.T) {
 // v0.10.1797 (Davis FAZ 3 dilim 1) — özne terfi kipi: varsayılan off,
 // bilinmeyen/boş → off (normalize), PUT kapısı bilinmeyeni reddeder.
 func TestSubjectPromotionMode(t *testing.T) {
-	if got := DefaultAnomalySubjects().PromotionMode; got != SubjectPromotionOff {
-		t.Errorf("varsayılan kip %q, want off", got)
+	if got := DefaultAnomalySubjects().PromotionMode; got != SubjectPromotionShadow {
+		t.Errorf("varsayılan kip %q, want shadow (v0.10.2308)", got)
 	}
 	cases := []struct {
 		in, norm string
@@ -192,7 +195,7 @@ func TestQueueLagMinRecords(t *testing.T) {
 		}
 	}
 	raw, _ := json.Marshal(DefaultAnomalySubjects())
-	if s := string(raw); !strings.Contains(s, `"queue":{"enabled":false,"topN":20,"maxSeriesPerTick":2000,"lagMinRecords":1000}`) || strings.Count(s, "lagMinRecords") != 1 {
+	if s := string(raw); !strings.Contains(s, `"queue":{"enabled":true,"topN":20,"maxSeriesPerTick":2000,"lagMinRecords":1000}`) || strings.Count(s, "lagMinRecords") != 1 {
 		t.Errorf("JSON şekli: %s", s)
 	}
 }

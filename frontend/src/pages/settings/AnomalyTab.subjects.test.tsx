@@ -3,7 +3,8 @@
 // AnomalyTab.subjects — v0.10.1790 Davis paritesi FAZ 1.2: Settings › Anomaly ›
 // "Özneler" (anomaly_sensitivity.subjects + seasonalTimezone, aynı Kaydet).
 //
-// NE ÇİVİLİYOR: bölümü taşımayan blob → üç tür kapalı (eval kapısı) ve dilim
+// NE ÇİVİLİYOR: bölümü taşımayan blob → üç tür kapalı (sunucu Normalize'ı;
+// v0.10.2308 varsayılanı endpoint + kuyruk açık, gölge — sunucuda) ve dilim
 // Europe/Istanbul (karar 3); kayıtlı değerlerin gidiş-dönüşü; tek tür açma ve
 // dilim değişikliği gövdeye tam bölümle gider.
 import '@/test/radixJsdom'; // Faz 2 dilim 1 R17 — Radix Checkbox
@@ -118,6 +119,8 @@ describe('Özneler bölümü (v0.10.1790 Davis F1.2)', () => {
     }
     expect(tzSelect(el).value).toBe('Europe/Istanbul');
     expect(el.textContent).toContain('Özneler');
+    // v0.10.2308 — not yeni sunucu varsayılanını söyler.
+    expect(el.textContent).toContain('Varsayılan: endpoint ve kuyruk açık, veritabanı kapalı; terfi gölgede (Problem açılmaz).');
   });
 
   it('kayıtlı değerler gidiş-dönüş: açılan tür, tavanlar ve UTC dilimi aynen gider', async () => {

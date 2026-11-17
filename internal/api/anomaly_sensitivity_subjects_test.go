@@ -40,11 +40,11 @@ func TestAnomalySubjectsAuditDetail(t *testing.T) {
 		t.Error("ilgisiz alan değişikliği anomaly.subjects satırı yazdı")
 	}
 	for name, mut := range map[string]func(*chstore.AnomalySensitivityConfig){
-		"endpoint açıldı": func(c *chstore.AnomalySensitivityConfig) { c.Subjects.Endpoint.Enabled = true },
-		"db topN":         func(c *chstore.AnomalySensitivityConfig) { c.Subjects.DB.TopN = 3 },
-		"queue tavanı":    func(c *chstore.AnomalySensitivityConfig) { c.Subjects.Queue.MaxSeriesPerTick = 10 },
-		"dilim":           func(c *chstore.AnomalySensitivityConfig) { c.SeasonalTimezone = "UTC" },
-		"terfi kipi":      func(c *chstore.AnomalySensitivityConfig) { c.Subjects.PromotionMode = chstore.SubjectPromotionShadow },
+		"endpoint kapandı": func(c *chstore.AnomalySensitivityConfig) { c.Subjects.Endpoint.Enabled = false },
+		"db topN":          func(c *chstore.AnomalySensitivityConfig) { c.Subjects.DB.TopN = 3 },
+		"queue tavanı":     func(c *chstore.AnomalySensitivityConfig) { c.Subjects.Queue.MaxSeriesPerTick = 10 },
+		"dilim":            func(c *chstore.AnomalySensitivityConfig) { c.SeasonalTimezone = "UTC" },
+		"terfi kipi":       func(c *chstore.AnomalySensitivityConfig) { c.Subjects.PromotionMode = chstore.SubjectPromotionOff },
 	} {
 		next := prev
 		mut(&next)

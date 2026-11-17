@@ -5,8 +5,12 @@ package chstore
 // sınıfının saat dilimi, anomaly_sensitivity blob'unun iki yeni bölümü.
 //
 // Varsayılanlar bilinçli:
-//   - Subjects: üç tür de KAPALI. Özneler FAZ 1.5 eval kapısını geçmeden
-//     varsayılan açılmaz (spec F1.5). Eski blob (bölüm yok) = kapalı.
+//   - Subjects: v0.10.2308'e dek üç tür de KAPALIYDI (spec F1.5 eval
+//     kapısı). v0.10.2308 (operatör: Davis özneleri ile ML bir hafta yan
+//     yana koşsun) — endpoint + queue AÇIK, db kapalı, terfi kipi GÖLGE
+//     (Problem açmaz). Eski blob (bölüm yok) Normalize'da sıfır değerdir =
+//     kapalı; mevcut kurulumlara yeni varsayılan tek seferlik geçişle
+//     ulaşır (anomaly_sensitivity_subjects_flip.go).
 //   - SeasonalTimezone: "Europe/Istanbul" (karar 3, operatör 2026-10-29).
 //     Eski blob (alan yok) bu varsayılanı alır; mevsimsel gün sınıfı bir
 //     kez kayar (UTC 21:00-24:00 kovaları ertesi yerel güne geçer — TR'de
@@ -87,18 +91,24 @@ const (
 // v0.10.2066 — DefaultSeasonalTimezone / ValidateSeasonalTimezone /
 // normalizeSeasonalTimezone seasonal_timezone.go'ya taşındı (ML ile ortak).
 
-// DefaultAnomalySubjects — üç tür kapalı, tavanlar varsayılan.
+// DefaultAnomalySubjects — v0.10.2308: endpoint + queue açık, db kapalı,
+// terfi kipi gölge (Problem açmaz, bildirim yok); tavanlar varsayılan.
+// "live" ASLA varsayılan değildir.
 func DefaultAnomalySubjects() AnomalySubjectsConfig {
 	k := AnomalySubjectKindConfig{TopN: anomalySubjectTopNDefault, MaxSeriesPerTick: anomalySubjectMaxSeriesDefault}
+	e := k
+	e.Enabled = true
 	q := k
+	q.Enabled = true
 	q.LagMinRecords = subjectLagMinRecordsDefault
-	return AnomalySubjectsConfig{Endpoint: k, DB: k, Queue: q, PromotionMode: SubjectPromotionOff,
+	return AnomalySubjectsConfig{Endpoint: e, DB: k, Queue: q, PromotionMode: SubjectPromotionShadow,
 		PromotionMinSustainedSec: subjectPromotionMinSustainedDefault, PromotionMinRatio: subjectPromotionMinRatioDefault}
 }
 
 // NormalizeAnomalySubjects — SAF: aralık dışı / eksik (0) tavan varsayılana
 // döner; Enabled aynen. Eski blob (bölüm yok) sıfır değerdir → üçü kapalı +
-// varsayılan tavanlar.
+// varsayılan tavanlar (yeni varsayılana tek seferlik geçiş ayrı:
+// MigrateSubjectsDefaultFlip).
 func NormalizeAnomalySubjects(c AnomalySubjectsConfig) AnomalySubjectsConfig {
 	q := normalizeSubjectKind(c.Queue)
 	// v0.10.1802 — lag tabanı yalnız queue'da; 0 / aralık dışı → 1000.

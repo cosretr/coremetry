@@ -6,8 +6,10 @@ import { cn } from '@/lib/cn';
 // özne türleri (anomaly_sensitivity.subjects) + mevsimsel gün sınıfının saat
 // dilimi (seasonalTimezone). Dedektör hassasiyeti bölümü, aynı Kaydet.
 //
-// Üç tür de varsayılan KAPALI: özneler FAZ 1.5 eval kapısını geçmeden
-// açılmaz. Servis düzeyi her zaman açık ve burada yok. Dilim seçimi kapalı
+// v0.10.2308 — sunucu varsayılanı endpoint + kuyruk AÇIK, veritabanı kapalı,
+// terfi gölge (ML ile yan yana ölçüm; mevcut kurulumlara tek seferlik geçiş
+// sunucuda). Bölümü taşımayan blob burada da sunucu Normalize'ı gibi KAPALI
+// okunur (SUBJECT_DEFAULT). Servis düzeyi her zaman açık ve burada yok. Dilim seçimi kapalı
 // küme (İstanbul / UTC + kayıtlı başka bir ad); sunucu bilinmeyen adı reddeder.
 
 const SEP = 'mt-1 border-t border-(--border) pt-4';
@@ -68,7 +70,7 @@ export function SubjectsSubsection({ value, timezone, onChange, onTimezoneChange
       <div className="text-[length:var(--fs-md)] text-(--text)">Özneler</div>
       <div className={NOTE}>
         Anomali tabanı servisin yanında endpoint, veritabanı ve kuyruk düzeyinde de kurulabilir.
-        Üçü de varsayılan kapalı: değerlendirme seti geçmeden açılmaları önerilmez.
+        Varsayılan: endpoint ve kuyruk açık, veritabanı kapalı; terfi gölgede (Problem açılmaz).
       </div>
       <div className="mt-2.5 flex flex-col gap-3">
         {KINDS.map(({ k, label, help }) => {

@@ -12,7 +12,8 @@ package anomaly
 //     seçimiyle süzülür; servis kipinde ifade eskisi.
 //   - db/queue CH sorguları MV'den, sınırlı (LIMIT + max_execution_time +
 //     zaman WHERE), demet IN bağlı değer listesi.
-//   - Özneler kapalıyken scanSubjects hiçbir okuma yapmaz.
+//   - Özneler kapalıyken scanSubjects hiçbir okuma yapmaz (v0.10.2308'den
+//     beri varsayılan endpoint + queue açık).
 
 import (
 	"context"
@@ -264,10 +265,10 @@ func TestPlanSubjectBudget(t *testing.T) {
 			t.Errorf("%s: %+v", c.name, p)
 		}
 	}
-	// Varsayılan ayarda üç tür de kapalı.
+	// v0.10.2308 — varsayılan: endpoint + queue açık, db kapalı; hiçbiri atlanmaz.
 	for _, r := range subjectKindsOrdered(chstore.DefaultAnomalySubjects()) {
-		if p := planSubjectBudget([]subjectKindReq{r}, 24)[0]; p.Enabled || p.Skipped {
-			t.Errorf("%s varsayılanda açık/atlanmış: %+v", r.Kind, p)
+		if p := planSubjectBudget([]subjectKindReq{r}, 24)[0]; p.Enabled != (r.Kind != "db") || p.Skipped {
+			t.Errorf("%s varsayılan planı: %+v", r.Kind, p)
 		}
 	}
 }
@@ -348,11 +349,14 @@ func TestSubjectCHQueries(t *testing.T) {
 	}
 }
 
-// TestScanSubjectsOffIsNoop — özneler kapalıyken (varsayılan) okuma yok:
-// mağazasız Detector'da çağrı panik etmez, nil döner.
+// TestScanSubjectsOffIsNoop — özneler kapalıyken (eski blob; v0.10.2308'den
+// beri varsayılan açık) okuma yok: mağazasız Detector'da çağrı panik etmez,
+// nil döner.
 func TestScanSubjectsOffIsNoop(t *testing.T) {
 	d := &Detector{}
-	if got := d.scanSubjects(context.Background(), time.Now(), chstore.DefaultAnomalySensitivity(), []string{"error_rate"}, 14, 3, 0); got != nil {
+	sens := chstore.DefaultAnomalySensitivity()
+	sens.Subjects = chstore.NormalizeAnomalySubjects(chstore.AnomalySubjectsConfig{})
+	if got := d.scanSubjects(context.Background(), time.Now(), sens, []string{"error_rate"}, 14, 3, 0); got != nil {
 		t.Fatalf("kapalıyken tik %v", got)
 	}
 }

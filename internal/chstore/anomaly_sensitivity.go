@@ -272,7 +272,8 @@ func DefaultAnomalySensitivity() AnomalySensitivityConfig {
 		Calendar: NormalizeAnomalyCalendar(AnomalyCalendarConfig{}),
 		// v0.10.1489 — alarm kuralları da VM varsa örneklenmemiş pencereden (auto).
 		AlertSource: AnomalyREDSourceAuto,
-		// v0.10.1790 — özneler kapalı (F1.5 eval kapısı), dilim İstanbul (karar 3).
+		// v0.10.1790 — dilim İstanbul (karar 3). v0.10.2308 — özneler endpoint +
+		// queue açık, terfi gölge (DefaultAnomalySubjects).
 		Subjects:         DefaultAnomalySubjects(),
 		SeasonalTimezone: DefaultSeasonalTimezone,
 	}

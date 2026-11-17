@@ -1664,6 +1664,8 @@ func main() {
 		go srv.StartOperationCatalog(ctx, lockImpl)   // CoSRE operasyon tespiti Faz 1 — operasyon kataloğu
 		go srv.StartTopologyHiddenSeed(ctx, lockImpl) // v0.10.2268 — gizli topoloji deseni: tek seferlik lider göçü
 		go srv.StartBriefingProducer(ctx, lockImpl)   // CoSRE Login Briefing Faz 1 — takım kartları (varsayılan kapalı)
+		// v0.10.2308 — Davis özneleri açık (gölge): tek seferlik lider geçişi.
+		go srv.StartSubjectsDefaultFlip(ctx, lockImpl)
 		// v0.10.1282 — AI SRE üreticisi: YALNIZ worker (lider kilidi
 		// coremetry:lock:sre-enqueue); kuyruğa yazar, Problem'e dokunmaz.
 		go sre.StartEnqueuer(ctx, store, cacheImpl, lockImpl, srv.PublishSRE)
