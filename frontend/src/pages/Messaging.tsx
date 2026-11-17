@@ -22,6 +22,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs';
 import { HttpStat } from '@/pages/service/httpMetricsViz';
 import { fmtSmart } from '@/lib/chartFmt';
 import { fmtNum } from '@/lib/utils';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2306 — sayfa metinleri arayüz dilinde (TR aynı)
 
 // /messaging — top-level queue / topic technologies overview.
 // Kafka brokers, RabbitMQ vhosts, IBM MQ queues, NATS subjects,
@@ -125,6 +126,7 @@ export default function MessagingPage() {
   // v0.10.1961 (Kafka UI düzeni) — aynı anlık okumaya Partitions / Producers / Consumers / Produce/s /
   // Consume/s / gönderim hatası eklendi (topic etiketli seriler; sorgular kafkaOverview'da testli).
   const win = useMemo(() => ({ from, to }), [from, to]);
+  const lang = useLang();
   const kq = useHttpPromql(KAFKA_LIST_ITEMS, win);
   const lagMap = useMemo(() => topicLagMap(kq.data.lag), [kq.data.lag]);
   const kStats = useMemo(() => kafkaTopicStats(kq.data),
@@ -219,12 +221,11 @@ export default function MessagingPage() {
     q.isPending ? { kind: 'loading', skeletonRows: 8 }
     : q.isError ? {
         kind: 'error',
-        message: 'Mesajlaşma özeti okunamadı — ClickHouse bağlantısını kontrol edip yeniden dene; üstteki aralık seçici sorguyu yeniden çalıştırır.',
+        message: t('msg.err', lang),
       }
     : {
         kind: 'empty',
-        message: "Bu pencerede mesajlaşma etkinliği yok — seçili aralıkta messaging.system özniteliği taşıyan span gelmedi. "
-          + "Zaman aralığını genişlet ya da bir üretici / tüketiciyi OTel messaging semconv ile enstrümante et; kuyruklar ve topic'ler burada görünür.",
+        message: t('msg.empty', lang),
       };
 
   return (
@@ -238,11 +239,10 @@ export default function MessagingPage() {
           "Click a row to drill into matching traces" diyordu; satır DRAWER
           açıyor, trace'e gitmiyor. Yanlış vaat, operatörün "trace'e
           erişemiyorum" şikayetinin bir parçasıydı. */}
-          Satıra tıkla → yayıncılar, tüketiciler ve uçtan uca gecikme;
-          trace'ler için satırdaki destination bağlantısını kullan.
+          {t('msg.clickHint', lang)}
           {/* v0.9.405 — çakışan yüzey artık birbirine bağlı: consumer
               span'leri endpoint (giriş) perspektifiyle de listelenir. */}
-          {' '}Consumer'ları giriş-noktası görünümünde incelemek için{' '}
+          {' '}{t('msg.consumersHint', lang)}{' '}
           <Link to="/endpoints?entry=rpc">Endpoints · RPC →</Link>
         </div>
         {/* v0.9.405 — URL-state taşıyan sayfa görünüm kaydedebilmeli
@@ -268,15 +268,13 @@ export default function MessagingPage() {
             display: 'block', marginBottom: 10, padding: '7px 11px',
             fontSize: 11.5, lineHeight: 1.45, textTransform: 'none', letterSpacing: 0,
           }}>
-            ⚠ Yalnız en yoğun {rowLimit} destination gösteriliyor — bu pencerede
-            daha fazlası var. Liste çağrı hacmine göre kesildi; aradığın topic
-            listede yoksa aramayı daralt ya da pencereyi kısalt.
+            {tf('msg.capped', lang, { n: rowLimit })}
           </div>
         )}
         {kSummary && <KafkaStrip s={kSummary} />}
         {kSummary && (
           <Tabs value={view} onValueChange={v => setView(v as MsgView)} className="msg-kafka-tabs">
-            <TabsList variant="line" aria-label="Messaging görünümü">
+            <TabsList variant="line" aria-label={t('msg.tabs', lang)}>
               <TabsTrigger value="topics">Topics<span className="tab-count">{fmtNum(rows.length)}</span></TabsTrigger>
               <TabsTrigger value="consumers">Consumers<span className="tab-count">{fmtNum(kSummary.consumerServices)}</span></TabsTrigger>
             </TabsList>
@@ -296,7 +294,7 @@ export default function MessagingPage() {
             // v0.10.1025 (R1) — /databases ile aynı ipucu: süren pencerede
             // prior sayaçları (çağrı, hata, üretim/tüketim) dolu kısma oranlı.
             <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
-              title="Bu pencereyi bir önceki pencereyle karşılaştırır. Süren pencerede önceki pencerenin sayıları (çağrı, hata, üretim/tüketim), süren pencerenin dolu kısmına oranlanır. İkinci bir sunucu okuması ekler; varsayılan kapalı.">
+              title={t('msg.compareTitle', lang)}>
               <input type="checkbox"
                 checked={compare}
                 onChange={e => setCompare(e.target.checked)} />
@@ -311,15 +309,16 @@ export default function MessagingPage() {
 // v0.10.1961 — Kafka UI'deki özet şeridi: yalnız topic etiketli Kafka metriği varsa, anlık (pencere sonu).
 // Karo topic sayfasının karosuyla aynı (HttpStat, .mtp-kafka-stats ızgarası).
 function KafkaStrip({ s }: { s: KafkaListSummary }) {
-  const hint = 'Kafka istemci metrikleri (VictoriaMetrics, topic etiketli), pencere sonundaki değer';
+  const lang = useLang();
+  const hint = t('msg.k.hint', lang);
   return (
     <div className="mtp-kafka-stats msg-kafka-strip">
       <HttpStat label="Topics" title={hint} value={fmtNum(s.topics)} />
-      <HttpStat label="Lag ≥ 1.000" title={`${hint}. kafka_consumer_records_lag_max, topic başına en kötü partition`} value={fmtNum(s.lagged)} tone={s.lagged > 0 ? 'warn' : undefined} />
+      <HttpStat label={t('msg.k.lagLabel', lang)} title={`${hint}${t('msg.k.lagTitle', lang)}`} value={fmtNum(s.lagged)} tone={s.lagged > 0 ? 'warn' : undefined} />
       <HttpStat label="Produce/s" title={`${hint}. kafka_producer_record_send_rate`} value={fmtSmart(s.produce, 'reqps')} />
       <HttpStat label="Consume/s" title={`${hint}. kafka_consumer_records_consumed_rate`} value={fmtSmart(s.consume, 'reqps')} />
       <HttpStat label="Send errors/s" title={`${hint}. kafka_producer_record_error_rate`} value={fmtSmart(s.sendErr, 'reqps')} tone={s.sendErr > 0 ? 'err' : undefined} />
-      <HttpStat label="Consumers" title={`${hint}. Tüketen tekil servis`} value={fmtNum(s.consumerServices)} />
+      <HttpStat label="Consumers" title={`${hint}${t('msg.k.consTitle', lang)}`} value={fmtNum(s.consumerServices)} />
     </div>
   );
 }

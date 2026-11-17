@@ -18,6 +18,7 @@
 // SAF: sorgu kurucu + lejant + eşik tonları; tablo testli. Sorgular VM'e
 // /api/metrics/promql üzerinden gider (useHttpPromql, 30 sn sunucu önbelleği).
 import { promStr } from './httpMetrics';
+import { t, type Lang } from './i18n'; // v0.10.2306 — panel metinleri isteğe bağlı lang (varsayılan 'tr')
 
 export interface KafkaScope {
   service: string;
@@ -73,7 +74,33 @@ const ge = (warn: number, err: number) => (v: number | null): KafkaTone =>
   v == null ? undefined : v >= err ? 'err' : v >= warn ? 'warn' : undefined;
 const zeroIsBad = (v: number | null): KafkaTone => (v != null && v < 1 ? 'err' : undefined);
 
-export function kafkaPanels(s: KafkaScope): KafkaPanel[] {
+/** v0.10.2306 — bölüm başlığı arayüz dilinde (TR: KAFKA_SECTIONS aynen). */
+export function kafkaSectionTitle(id: KafkaSection, lang: Lang = 'tr'): string {
+  return lang === 'tr' ? (KAFKA_SECTIONS.find(x => x.id === id)?.title ?? id) : t(`kafka.sec.${id}`, lang);
+}
+
+// v0.10.2306 — Türkçe lejant önekleri → katalog (EN). Sorgu / id / birim aynı.
+const LEGEND_KEYS: [string, string][] = [
+  ['gönderim hatası - ', 'kafka.lg.sendErr'], ['başarısız rebalance - ', 'kafka.lg.failedRebalance'],
+  ['auth hatası (consumer) - ', 'kafka.lg.authCons'], ['auth hatası (producer) - ', 'kafka.lg.authProd'],
+  ['gelen - ', 'kafka.lg.in'], ['giden - ', 'kafka.lg.out'], ['açılan - ', 'kafka.lg.opened'], ['kapanan - ', 'kafka.lg.closed'],
+];
+function legendIn(legend: string, lang: Lang): string {
+  const hit = LEGEND_KEYS.find(([pre]) => legend.startsWith(pre));
+  return hit ? t(hit[1], lang) + legend.slice(hit[0].length) : legend;
+}
+
+/** Panolar; lang ≠ 'tr' iken başlık / ipucu / Türkçe lejant öneki katalogdan (kafka.p.<id>). */
+export function kafkaPanels(s: KafkaScope, lang: Lang = 'tr'): KafkaPanel[] {
+  const ps = kafkaPanelsTR(s);
+  if (lang === 'tr') return ps;
+  return ps.map(p => ({
+    ...p, title: t(`kafka.p.${p.id}`, lang), hint: t(`kafka.p.${p.id}.hint`, lang),
+    queries: p.queries.map(q => ({ ...q, legend: legendIn(q.legend, lang) })),
+  }));
+}
+
+function kafkaPanelsTR(s: KafkaScope): KafkaPanel[] {
   const c = kafkaSel(s, 'consumer');
   const p = kafkaSel(s, 'producer');
   // İstemci (client_id) kırılımı — pod'lar toplanır; pod için üstteki süzgeç.

@@ -34,7 +34,7 @@ import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTabl
 import { CallerSection } from '@/features/dependencies/CallerSection';
 import { KafkaTopicMetrics } from '@/features/dependencies/KafkaTopicMetrics'; // v0.10.1539
 import { kindSeries } from '@/features/dependencies/msgSeries';
-import { opLabelTR, isOpMissing, msgOperationRows, OP_MISSING_TITLE } from '@/features/dependencies/msgOperations';
+import { opLabelTR, isOpMissing, msgOperationRows, opMissingTitle } from '@/features/dependencies/msgOperations';
 import { useMessagingTopicDetail } from '@/lib/queries/messaging';
 import { messagingTracesHref } from '@/lib/pivotHref';
 import { traceHref } from '@/lib/traceHref';
@@ -44,6 +44,7 @@ import { fmtNum, fmtNs, timeRangeToNs } from '@/lib/utils';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { parseTopicRef, parseTopicTab, MSG_TOPIC_DEFAULT_TAB, type MsgTopicTab } from './messaging/topicHref';
 import type { DBOpStat, MsgOperationStat, TimeRange } from '@/lib/types';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2306 — sayfa metinleri arayüz dilinde (TR aynı)
 
 // Çekmecedeki gerekçenin aynısı (v0.9.814): @grafana paketleri statik bağlanırsa bu
 // rotanın chunk'ı ~1 MB büyür ve grafik GÖRÜNMESE de ödenir.
@@ -51,6 +52,7 @@ const CorePanelMultiLazy = lazy(() =>
   import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
 
 export default function MessagingTopicPage() {
+  const lang = useLang();
   const [params, setParams] = useSearchParams();
   const [range, setRange] = useUrlRange(DEFAULT_RANGE_PRESET);
   // `search` bir STRING: memo kimliği ancak URL gerçekten değişince değişir
@@ -88,12 +90,9 @@ export default function MessagingTopicPage() {
       <>
         <Topbar title="Topic" range={range} onRangeChange={setRange} />
         <PageShell>
-          <Empty icon="⚠" title="Bu linkte topic yok">
-            Adres <code>system</code>, <code>cluster</code> ya da{' '}
-            <code>destination</code> taşımıyor. Cluster BİLEREK zorunlu:
-            varsayılan bir cluster, çok-cluster bir kurulumda canlı bir topic
-            için sıfır gösterir.
-            {' '}<Link to={navHref('/messaging', search)}>Messaging listesine dön →</Link>
+          <Empty icon="⚠" title={t('mt.noRef', lang)}>
+            {t('mt.noRef.a', lang)}<code>system</code>, <code>cluster</code>{t('mt.noRef.or', lang)}<code>destination</code>{t('mt.noRef.b', lang)}
+            {' '}<Link to={navHref('/messaging', search)}>{t('mt.backToList', lang)}</Link>
           </Empty>
         </PageShell>
       </>
@@ -122,7 +121,7 @@ export default function MessagingTopicPage() {
         <div className="mtp-crumb">
           {/* Geri linki PENCEREYİ TAŞIR (navHref): bağlam değiştiren bir geri
               linki, geri linki olmaktan çıkar (Pod.tsx:206-209, v0.9.965). */}
-          <Link to={navHref('/messaging', search)}>Messaging</Link> › topic detayı
+          <Link to={navHref('/messaging', search)}>Messaging</Link>{t('mt.crumb', lang)}
         </div>
 
         {/* KİMLİK: sistem ve cluster soluk, destination vurgulu — operatörün
@@ -135,7 +134,7 @@ export default function MessagingTopicPage() {
           <span className="mtp-id-name mono">{destination}</span>
           <Link className="ud-pill mtp-id-act"
             to={messagingTracesHref({ window: range, system, destination })}
-            title="Bu topic'in trace'leri — aynı pencere, süzgeçler düzenlenebilir çip olarak">
+            title={t('mt.tracesTitle', lang)}>
             Traces →
           </Link>
         </div>
@@ -147,7 +146,7 @@ export default function MessagingTopicPage() {
             (Overview · Consumers · Producers · Traces); span tarafı ilgili sekmenin altında. */}
         <KafkaTopicMetrics system={system} cluster={cluster} topic={destination} range={range} win={win}
           tab={tab} tabs={
-            <TabStrip ariaLabel="Topic sekmeleri" value={tab} onChange={setTab} tabs={[
+            <TabStrip ariaLabel={t('mt.tabs', lang)} value={tab} onChange={setTab} tabs={[
               { key: 'overview', label: 'Overview' },
               { key: 'consumers', label: 'Consumers' },
               { key: 'producers', label: 'Producers' },
@@ -157,11 +156,11 @@ export default function MessagingTopicPage() {
 
         {tab !== 'overview' && (
           <>
-            <h3 className="mtp-kafka-h mtp-span-h">Trace tarafı (span)</h3>
-            {detailQ.isPending && <Spinner label="Span detayı yükleniyor…" />}
+            <h3 className="mtp-kafka-h mtp-span-h">{t('mt.spanSide', lang)}</h3>
+            {detailQ.isPending && <Spinner label={t('mt.spanLoading', lang)} />}
             {d === null && (
-              <Empty icon="⚠" title="Span detayı alınamadı">
-                /api/messaging/detail isteği hata döndü; metrikler yukarıda.
+              <Empty icon="⚠" title={t('mt.spanErr', lang)}>
+                {t('mt.spanErr.body', lang)}
               </Empty>
             )}
           </>
@@ -169,17 +168,17 @@ export default function MessagingTopicPage() {
 
         {d && tab === 'consumers' && (
           <CallerSection
-            title={`Consumers · span · ${consumers.length} satır`}
+            title={tf('mt.callers', lang, { r: 'Consumers', n: consumers.length })}
             rows={consumers}
-            emptyMessage="Bu pencerede bu destination'a consumer span'i yok."
+            emptyMessage={t('mt.noConsumers', lang)}
             tone="consumer" range={range}
             storageKey="msg-topic-consumers" />
         )}
         {d && tab === 'producers' && (
           <CallerSection
-            title={`Producers · span · ${producers.length} satır`}
+            title={tf('mt.callers', lang, { r: 'Producers', n: producers.length })}
             rows={producers}
-            emptyMessage="Bu pencerede bu destination'a producer span'i yok."
+            emptyMessage={t('mt.noProducers', lang)}
             tone="producer" range={range}
             storageKey="msg-topic-producers" />
         )}
@@ -187,8 +186,8 @@ export default function MessagingTopicPage() {
           <>
             <div className="mtp-cap">
               span producer / consumer <b>{producers.length}</b> / <b>{consumers.length}</b>
-              {others.length > 0 && <> · diğer istemci <b>{others.length}</b></>}
-              {' '}· {fmtNum(d.spanCount)} span · hata {d.errorRate.toFixed(2)} %
+              {others.length > 0 && <>{t('mt.cap.others', lang)}<b>{others.length}</b></>}
+              {tf('mt.cap.tail', lang, { n: fmtNum(d.spanCount), r: d.errorRate.toFixed(2) })}
             </div>
             <div className="mtp-card">
               <E2EPanel e2e={e2e} range={range} xRange={xRange} syncKey={syncKey} />
@@ -210,14 +209,14 @@ function E2EPanel({ e2e, range, xRange, syncKey }: {
   xRange: { from: number; to: number };
   syncKey?: string;
 }) {
+  const lang = useLang();
   const series = e2e?.series ?? [];
   // linkless = HİÇ çift korele olmadı. Bu 0 ms DEĞİL: SDK'lar messaging span
   // link'i yaymıyor demek, ve ikisini aynı ekrana yazmak yanlış teşhis üretir.
   if (!e2e || e2e.linkless) {
     return (
       <div className="kc-line">
-        ◌ Bu pencerede üretici→tüketici span link&#39;i yok — SDK&#39;lar messaging
-        span link&#39;i yaymıyor, uçtan uca gecikme korele edilemiyor.
+        {t('mt.e2e.linkless', lang)}
       </div>
     );
   }
@@ -227,28 +226,28 @@ function E2EPanel({ e2e, range, xRange, syncKey }: {
         <LazyMount minHeight={190}>
           <Suspense fallback={<div className="kc-fallback"><Spinner /></div>}>
             <CorePanelMultiLazy
-              title="Uçtan uca gecikme · kova ortalaması"
+              title={t('mt.e2e.title', lang)}
               storageKey="msg-topic-e2e"
               height={170} unit="ms" xRange={xRange} syncKey={syncKey}
-              note="produce→consume, span_links korelasyonu; kova başına ORTALAMA (p50/p95 aşağıda, pencere geneli)"
+              note={t('mt.e2e.note', lang)}
               items={[{ name: 'E2E lag', role: 'data', series: kindSeries(series, p => p.avgMs, 'E2E lag') }]} />
           </Suspense>
         </LazyMount>
       ) : (
-        <div className="kc-line">◌ Seri tek kovada — eğri çizilemiyor, aşağıdaki pencere değerleri geçerli.</div>
+        <div className="kc-line">{t('mt.e2e.single', lang)}</div>
       )}
       <div className="mtp-e2e">
         <span className="badge b-gray mono">p50 {fmtNs(e2e.p50Ms * 1e6)}</span>
         <span className="badge b-gray mono">p95 {fmtNs(e2e.p95Ms * 1e6)}</span>
         <span className="badge b-gray mono">p99 {fmtNs(e2e.p99Ms * 1e6)}</span>
-        <span className="mtp-e2e-count">{fmtNum(e2e.count)} korele çift</span>
+        <span className="mtp-e2e-count">{tf('mt.e2e.count', lang, { n: fmtNum(e2e.count) })}</span>
         {e2e.slowestConsumerTraceId && (
           <Link to={traceHref(e2e.slowestConsumerTraceId, { pageRange: range })}
             title={e2e.slowestProducerTraceId
-              ? `En yavaş korele çift — tüketicinin trace'ini açar (üretici trace ${e2e.slowestProducerTraceId})`
-              : "En yavaş korele çift — tüketicinin trace'ini açar"}
+              ? tf('mt.e2e.slowestP', lang, { id: e2e.slowestProducerTraceId })
+              : t('mt.e2e.slowest', lang)}
             className="mtp-e2e-link">
-            en yavaş {fmtNs((e2e.slowestLagMs ?? 0) * 1e6)} → trace
+            {tf('mt.e2e.slowLink', lang, { d: fmtNs((e2e.slowestLagMs ?? 0) * 1e6) })}
           </Link>
         )}
       </div>
@@ -261,15 +260,16 @@ function E2EPanel({ e2e, range, xRange, syncKey }: {
 function OperationsTable({ rows }: { rows: MsgOperationStat[] }) {
   // v0.10.943 — tablo standardı dilim 3: kimlik kolonu `mono` bayrağında;
   // sayılar arayüz fontunda (S2), >100 satır `cv-row`.
+  const lang = useLang();
   const cols = useMemo<ColumnDef<MsgOperationStat>[]>(() => [
-    { id: 'operation', label: 'Operasyon', sortValue: o => o.operation, naturalDir: 'asc', flex: true, minWidth: 140, mono: true },
+    { id: 'operation', label: t('mt.col.op', lang), sortValue: o => o.operation, naturalDir: 'asc', flex: true, minWidth: 140, mono: true },
     { id: 'count',   label: 'Calls', sortValue: o => o.spanCount,     numeric: true, naturalDir: 'desc', width: 90 },
     { id: 'errRate', label: 'Err %', sortValue: o => o.errorRate,     numeric: true, naturalDir: 'desc', width: 90 },
     { id: 'avg',     label: 'Avg',   sortValue: o => o.avgDurationMs, numeric: true, naturalDir: 'desc', width: 84 },
     { id: 'p50',     label: 'P50',   sortValue: o => o.p50DurationMs, numeric: true, naturalDir: 'desc', width: 84 },
     { id: 'p95',     label: 'P95',   sortValue: o => o.p95DurationMs, numeric: true, naturalDir: 'desc', width: 84 },
     { id: 'p99',     label: 'P99',   sortValue: o => o.p99DurationMs, numeric: true, naturalDir: 'desc', width: 84 },
-  ], []);
+  ], [lang]);
   const dt = useDataTable<MsgOperationStat>({
     storageKey: 'msg-topic-ops', columns: cols, rows,
     initialSort: { id: 'count', dir: 'desc' },
@@ -278,7 +278,7 @@ function OperationsTable({ rows }: { rows: MsgOperationStat[] }) {
     <div className="mtp-sec">
       <div className="mtp-sec-head">
         <span aria-hidden className="mtp-dot mtp-dot--op" />
-        Operasyonlar · MV · {rows.length} satır
+        {tf('mt.ops.head', lang, { n: rows.length })}
       </div>
       {/* TRACE PİVOTU YOK — bilerek (çekmecedeki gerekçenin aynısı):
           messagingTracesHref'in `operation` parametresi span ADINA çevriliyor,
@@ -293,7 +293,7 @@ function OperationsTable({ rows }: { rows: MsgOperationStat[] }) {
           <DataTableHead dt={dt} />
           <tbody>
             {dt.sortedRows.length === 0 ? (
-              <DataTableState dt={dt} kind="empty" message="Bu pencerede MV'de operasyon satırı yok" />
+              <DataTableState dt={dt} kind="empty" message={t('mt.ops.empty', lang)} />
             ) : dt.sortedRows.map((o, i) => {
               // v0.10.929 (K5) — %0 hata sağlıklı durum: nötr rozet, eşikler aynı.
               const errCls = o.errorRate > 5 ? 'err' : o.errorRate > 0 ? 'warn' : 'gray';
@@ -302,13 +302,13 @@ function OperationsTable({ rows }: { rows: MsgOperationStat[] }) {
                 <tr key={`${o.operation}|${i}`} className="cv-row">
                   <DataTableCell dt={dt} col="operation" row={o}
                       className={missing ? 'mtp-op-missing' : 'mtp-op'}
-                      title={missing ? OP_MISSING_TITLE : o.operation}>
-                    {opLabelTR(o.operation)}
+                      title={missing ? opMissingTitle(lang) : o.operation}>
+                    {opLabelTR(o.operation, lang)}
                   </DataTableCell>
                   <DataTableCell dt={dt} col="count" row={o} value={fmtNum(o.spanCount)} />
                   <DataTableCell dt={dt} col="errRate" row={o}>
                     <span className={`badge b-${errCls}`} style={{ fontSize: 9 }}
-                          title={`${fmtNum(o.errorCount)} hatalı span`}>
+                          title={tf('mt.errSpans', lang, { n: fmtNum(o.errorCount) })}>
                       {o.errorRate.toFixed(2)}%
                     </span>
                   </DataTableCell>
@@ -338,12 +338,13 @@ function OperationsTable({ rows }: { rows: MsgOperationStat[] }) {
 function SpanNamesTable({ rows, range, system, destination }: {
   rows: DBOpStat[]; range: TimeRange; system: string; destination: string;
 }) {
+  const lang = useLang();
   const cols = useMemo<ColumnDef<DBOpStat>[]>(() => [
-    { id: 'statement', label: 'Span adı', sortValue: o => o.statement, naturalDir: 'asc', flex: true, minWidth: 200, mono: true },
+    { id: 'statement', label: t('mt.col.spanName', lang), sortValue: o => o.statement, naturalDir: 'asc', flex: true, minWidth: 200, mono: true },
     { id: 'op', label: 'Type', sortValue: o => o.operation ?? '', naturalDir: 'asc', width: 96, mono: true },
     { id: 'count', label: 'Count', sortValue: o => o.count, numeric: true, naturalDir: 'desc', width: 110 },
     { id: 'avg', label: 'Avg', sortValue: o => o.avgDurationMs, numeric: true, naturalDir: 'desc', width: 110 },
-  ], []);
+  ], [lang]);
   const dt = useDataTable<DBOpStat>({
     storageKey: 'msg-topic-spannames', columns: cols, rows,
     initialSort: { id: 'count', dir: 'desc' },
@@ -352,7 +353,7 @@ function SpanNamesTable({ rows, range, system, destination }: {
     <div className="mtp-sec">
       <div className="mtp-sec-head">
         <span aria-hidden className="mtp-dot mtp-dot--span" />
-        Span adları · {rows.length} satır
+        {tf('mt.names.head', lang, { n: rows.length })}
       </div>
       {/* v0.10.954 — tablo standardı T12: boş durum tablonun İÇİNDE, başlık durur. */}
       <div className="table-wrap">
@@ -361,7 +362,7 @@ function SpanNamesTable({ rows, range, system, destination }: {
           <DataTableHead dt={dt} />
           <tbody>
             {dt.sortedRows.length === 0 ? (
-              <DataTableState dt={dt} kind="empty" message="Bu pencerede span adı satırı yok" />
+              <DataTableState dt={dt} kind="empty" message={t('mt.names.empty', lang)} />
             ) : dt.sortedRows.map((o, i) => (
               <tr key={`${o.statement}|${i}`} className="cv-row">
                 <DataTableCell dt={dt} col="statement" row={o} className="mtp-span-name">
@@ -374,13 +375,13 @@ function SpanNamesTable({ rows, range, system, destination }: {
                         <Link to={messagingTracesHref({
                           window: range, system, destination, operation: o.statement,
                         })}
-                          title="Bu span adının trace'lerini aç"
+                          title={t('mt.names.link', lang)}
                           className="mtp-row-link">
                           → traces
                         </Link>
                       </>
                     )
-                    : <span className="mtp-op-missing">(boş)</span>}
+                    : <span className="mtp-op-missing">{t('hm.empty', lang)}</span>}
                 </DataTableCell>
                 <DataTableCell dt={dt} col="op" row={o} className="mtp-op">{o.operation ?? '—'}</DataTableCell>
                 <DataTableCell dt={dt} col="count" row={o} value={fmtNum(o.count)} />

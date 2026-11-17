@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { t } from '@/lib/i18n';
 
 const drawer = readFileSync(resolve(__dirname, 'DetailDrawer.tsx'), 'utf8');
 
@@ -45,8 +46,11 @@ describe('Operasyonlar · MV bölümü (v0.10.563)', () => {
     expect(drawer).toContain('opLabelTR(o.operation)');
     expect(drawer).toContain('OP_MISSING_TITLE');
     const helper = readFileSync(resolve(__dirname, 'msgOperations.ts'), 'utf8');
-    expect(helper).toContain("'(yaymıyor)'");
-    expect(helper).toContain('SDK messaging.operation.type/.name/.operation yaymıyor');
+    // v0.10.2306 — metinler katalogda (TR değerleri aynı).
+    expect(helper).toContain("t('mt.opMissing', 'tr')");
+    expect(helper).toContain("t('mt.opMissingTitle', 'tr')");
+    expect(t('mt.opMissing', 'tr')).toBe('(yaymıyor)');
+    expect(t('mt.opMissingTitle', 'tr')).toBe('SDK messaging.operation.type/.name/.operation yaymıyor');
   });
 
   it('boş dilimde bölüm GİZLENMEZ — soluk satır yazar', () => {

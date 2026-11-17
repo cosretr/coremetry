@@ -25,6 +25,7 @@ import type { MsgTopicTab } from '@/pages/messaging/topicHref';
 import { useThemeTick } from '@/lib/useThemeTick';
 import { PartitionLagTable } from './PartitionLagTable';
 import type { TimeRange } from '@/lib/types';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2306 — metrik bölümü arayüz dilinde (TR aynı)
 
 const itemsOf = (ps: KafkaTopicPanel[]): HttpPromqlItem[] =>
   ps.flatMap(p => p.queries.map((q, i) => ({ id: `${p.id}#${i}`, expr: q.expr, instant: false })));
@@ -46,9 +47,10 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
   compact?: boolean;
 }) {
   useThemeTick();
+  const lang = useLang();
   const [alertOpen, setAlertOpen] = useState(false);
   const step = stepSeconds(Math.max(60, Math.round((win.to - win.from) / 1e9)));
-  const panels = useMemo(() => kafkaTopicPanels(topic), [topic]);
+  const panels = useMemo(() => kafkaTopicPanels(topic, undefined, lang), [topic, lang]);
   const stats = panels.filter(p => p.kind === 'stat');
   const charts = panels.filter(p => p.kind === 'chart');
   const cq = useMemo(() => kafkaTopicClientQueries(topic), [topic]);
@@ -77,19 +79,19 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
   const ch = useHttpPromql(itemsOf(charts), win, !none);
 
   // v0.10.1962 — sekmeler yüklenirken / VM hatasında da durur: span sekmelerine erişim VM'e bağlı değil.
-  if (pending) return <>{!compact && tabs}<Spinner label="Topic metrikleri (VictoriaMetrics)…" /></>;
+  if (pending) return <>{!compact && tabs}<Spinner label={t('kmsg.topicLoading', lang)} /></>;
   if (clientsQ.error('prod') && clientsQ.error('cons')) {
-    return <>{!compact && tabs}<Empty icon="⚠" title="VictoriaMetrics okunamadı">{clientsQ.error('prod')?.message}</Empty></>;
+    return <>{!compact && tabs}<Empty icon="⚠" title={t('kmsg.vmErrTitle', lang)}>{clientsQ.error('prod')?.message}</Empty></>;
   }
   if (none) {
     return (
       <>
       {!compact && tabs}
-      <Empty icon="∅" title="Bu topic için Kafka istemci metriği yok">
-        VictoriaMetrics&apos;te <span className="mono">topic=&quot;{topic}&quot;</span> etiketli
+      <Empty icon="∅" title={t('kmsg.noTopicMetric', lang)}>
+        {t('kmsg.noTopic.a', lang)}<span className="mono">topic=&quot;{topic}&quot;</span>{t('kmsg.noTopic.b', lang)}
         {' '}<span className="mono">kafka_producer_record_send_rate</span> /{' '}
-        <span className="mono">kafka_consumer_records_consumed_rate</span> serisi bulunamadı.
-        {compact ? ' Span tarafı yukarıda.' : ' Span tarafı Consumers, Producers ve Traces sekmelerinde.'}
+        <span className="mono">kafka_consumer_records_consumed_rate</span>{t('kmsg.noTopic.c', lang)}
+        {t(compact ? 'kmsg.noTopic.spanAbove' : 'kmsg.noTopic.spanTabs', lang)}
       </Empty>
       </>
     );
@@ -121,9 +123,9 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
       {!compact && (
         <>
           <HttpStat label="Partitions" value={parts == null ? '—' : fmtNum(parts)}
-            title="Tüketicilerin okuduğu partition sayısı (kafka_consumer_records_lag, partition etiketi). Kimsenin tüketmediği partition sayılmaz." />
-          <HttpStat label="Producers" value={fmtNum(producerServices.size)} title="Bu topic'e yazan servis sayısı (kafka_producer_record_send_rate)" />
-          <HttpStat label="Consumers" value={fmtNum(consumerServices.length)} title="Bu topic'i okuyan servis sayısı (kafka_consumer_records_consumed_rate)" />
+            title={t('kmsg.partsTitle', lang)} />
+          <HttpStat label="Producers" value={fmtNum(producerServices.size)} title={t('kmsg.prodTitle', lang)} />
+          <HttpStat label="Consumers" value={fmtNum(consumerServices.length)} title={t('kmsg.consTitle', lang)} />
         </>
       )}
       {stats.map(p => {
@@ -139,16 +141,16 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
 
   if (compact) {
     return (
-      <section className="mtp-kafka mtp-kafka--compact" aria-label="Kafka topic metrikleri">
+      <section className="mtp-kafka mtp-kafka--compact" aria-label={t('kmsg.sectionAria', lang)}>
         <div className="mtp-kafka-compact-head">
           <h3 className="mtp-kafka-h">
             Kafka · VictoriaMetrics
-            {lagAlarm && <span className="badge b-warn" style={{ marginLeft: 8 }}>lag eşiği aşıldı</span>}
+            {lagAlarm && <span className="badge b-warn" style={{ marginLeft: 8 }}>{t('kmsg.lagOver', lang)}</span>}
           </h3>
           {consumerServices.length > 0 && (
             <Button variant="secondary" size="sm" onClick={() => setAlertOpen(true)}
-              title="Bu topic için tüketici lag alarmı (istemcinin gördüğü lag)">
-              Lag alarmı
+              title={t('kmsg.lagAlarmTitle', lang)}>
+              {t('kmsg.lagAlarm', lang)}
             </Button>
           )}
         </div>
@@ -159,8 +161,8 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
         {statRow}
         <div className="mtp-kafka-grid">{chart(byId('flow'))}{chart(byId('errors_by_client'))}{chart(byId('lag_by_client'))}</div>
         <div className="field-hint">
-          Partition lag&apos;i ve producer / consumer istemci tablosu:{' '}
-          <Link to={messagingTopicHref({ system, cluster, destination: topic, range })}>topic sayfasında tüm metrikler →</Link>
+          {t('kmsg.compactFoot', lang)}{' '}
+          <Link to={messagingTopicHref({ system, cluster, destination: topic, range })}>{t('kmsg.compactLink', lang)}</Link>
         </div>
       </section>
     );
@@ -171,7 +173,7 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
   const lagSection = (
     <section aria-label="Lag" data-testid="mtp-kafka-lag" className={lagAlarm ? 'mtp-kafka-lag mtp-kafka-lag--alarm' : 'mtp-kafka-lag'}>
       <h3 className="mtp-kafka-h">
-        Lag{lagAlarm && <span className="badge b-warn" style={{ marginLeft: 8 }}>eşik aşıldı</span>}
+        Lag{lagAlarm && <span className="badge b-warn" style={{ marginLeft: 8 }}>{t('kmsg.overThr', lang)}</span>}
       </h3>
       <div className="mtp-kafka-grid">{chart(byId('lag_by_client'))}</div>
       <PartitionLagTable system={system} cluster={cluster} destination={topic} range={range} />
@@ -187,9 +189,8 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
       {tab === 'producers' && <TopicProducersTable topic={topic} range={range} win={win} pods={pods.producer} />}
       {tab !== 'traces' && (
         <div className="field-hint">
-          Kaynak: VictoriaMetrics, <span className="mono">topic=&quot;{topic}&quot;</span> etiketli Kafka istemci metrikleri.
-          Bağlantı, broker gecikmesi ve rebalance topic&apos;e değil istemciye aittir — servis satırından
-          {' '}Service → Messaging sekmesinde.
+          {t('kmsg.foot.a', lang)}<span className="mono">topic=&quot;{topic}&quot;</span>{t('kmsg.foot.b', lang)}
+          {' '}{t('kmsg.foot.c', lang)}
         </div>
       )}
     </div>

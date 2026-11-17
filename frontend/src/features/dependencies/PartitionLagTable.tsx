@@ -12,14 +12,15 @@ import {
 } from '@/components/ui/DataTable';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
 import { worstPartitions, PARTITION_LAG_ROWS, type PartitionLagRow } from './partitionLag';
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2306 — tablo metinleri arayüz dilinde (TR aynı)
 
 // v0.10.943 (tablo standardı dilim 3) — hücre görünümü kolon bayraklarında:
 // partition numarası sayı hücresi (num, S2 — başlık zaten sağa yaslıydı),
 // eşik rengi `tone` ile (T9).
-const COLS: ColumnDef<PartitionLagRow>[] = [
+const COLS = (lang: Lang): ColumnDef<PartitionLagRow>[] => [
   { id: 'partition', label: 'Partition', width: 100, sortValue: r => Number(r.partition), numeric: true },
-  { id: 'service', label: 'Servis', width: 220, sortValue: r => r.service },
-  { id: 'client', label: 'İstemci', width: 260, sortValue: r => r.client, mono: true },
+  { id: 'service', label: t('search.facet.service', lang), width: 220, sortValue: r => r.service },
+  { id: 'client', label: t('kmsg.client', lang), width: 260, sortValue: r => r.client, mono: true },
   { id: 'lag', label: 'Lag', width: 110, sortValue: r => r.lag ?? -1, numeric: true,
     tone: r => (r.lag !== null && r.lag > 1000 ? 'warn' : undefined) },
   { id: 'lead', label: 'Lead', width: 110, sortValue: r => r.lead ?? -1, numeric: true,
@@ -29,10 +30,12 @@ const COLS: ColumnDef<PartitionLagRow>[] = [
 export function PartitionLagTable({ system, cluster, destination, range }: {
   system: string; cluster: string; destination: string; range: TimeRange;
 }) {
+  const lang = useLang();
+  const cols = useMemo(() => COLS(lang), [lang]);
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
   const q = useMessagingClients({ system, cluster, destination, fromNs: from, toNs: to, set: 'partitions', enabled: true });
   const { rows, total } = useMemo(() => worstPartitions(q.data?.blocks, PARTITION_LAG_ROWS), [q.data]);
-  const dt = useDataTable<PartitionLagRow>({ storageKey: 'msg-topic-partitions', columns: COLS, rows, initialSort: { id: 'lag', dir: 'desc' } });
+  const dt = useDataTable<PartitionLagRow>({ storageKey: 'msg-topic-partitions', columns: cols, rows, initialSort: { id: 'lag', dir: 'desc' } });
 
   // v0.10.954 — tablo standardı T12: erken dönüşler (Spinner / Empty)
   // kalktı; yükleniyor / hata / boş tablonun İÇİNDE, başlık durur. Sıra ve
@@ -42,15 +45,15 @@ export function PartitionLagTable({ system, cluster, destination, range }: {
   const state: Omit<DataTableStateProps<PartitionLagRow>, 'dt'> =
     q.isPending ? { kind: 'loading' }
     : q.isError ? { kind: 'error' }
-    : { kind: 'empty', message: `Partition lag verisi yok — ${q.data?.note ?? 'kafka.consumer.records_lag bu topic için VM\'de bulunamadı.'}` };
+    : { kind: 'empty', message: tf('kmsg.pl.empty', lang, { why: q.data?.note ?? t('kmsg.pl.notFound', lang) }) };
   const hidden = total - rows.length;
   return (
     <div className="sec">
       {showRows && (
         <div className="kc-line">
-          <span>Partition'lar · en kötü {rows.length} / {total}</span>
-          <span style={{ color: 'var(--text3)', marginLeft: 8 }}>son 10 dk · son değer</span>
-          {hidden > 0 && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>({hidden} partition daha)</span>}
+          <span>{tf('kmsg.pl.head', lang, { n: rows.length, total })}</span>
+          <span style={{ color: 'var(--text3)', marginLeft: 8 }}>{t('kmsg.pl.window', lang)}</span>
+          {hidden > 0 && <span style={{ color: 'var(--text3)', marginLeft: 8 }}>{tf('kmsg.pl.more', lang, { n: hidden })}</span>}
         </div>
       )}
       <div className="table-wrap">

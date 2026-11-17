@@ -17,7 +17,8 @@ import { Empty, Spinner } from '@/components/Spinner';
 import { HttpStat, HttpChartPanel } from './httpMetricsViz';
 import { useHttpPromql, type HttpPromqlItem } from '@/lib/queries/httpMetrics';
 import { relabel, scalarOf, sparkValues, seriesLabels, stepSeconds } from '@/lib/httpMetrics';
-import { kafkaPanels, kafkaOptionQueries, kafkaOptionValues, KAFKA_SECTIONS, type KafkaPanel, type KafkaSection } from '@/lib/kafkaMetrics';
+import { kafkaPanels, kafkaOptionQueries, kafkaOptionValues, kafkaSectionTitle, KAFKA_SECTIONS, type KafkaPanel, type KafkaSection } from '@/lib/kafkaMetrics';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2306 — sekme metinleri arayüz dilinde (TR aynı)
 import { fmtSmart } from '@/lib/chartFmt';
 import { timeRangeToNs } from '@/lib/utils';
 import { useUrlParams, strParam } from '@/lib/urlParams';
@@ -38,6 +39,7 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
   const win = useMemo(() => timeRangeToNs(range), [range]);
   const windowSec = Math.max(60, Math.round((win.to - win.from) / 1e9));
   const step = stepSeconds(windowSec);
+  const lang = useLang();
   const [f, setF] = useUrlParams(FILTER_SPEC);
   const [open, setOpen] = useState<Set<KafkaSection>>(new Set(OPEN_BY_DEFAULT));
 
@@ -54,8 +56,8 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
   const producers = kafkaOptionValues(prodRows, 'client_id');
   const noKafka = !opts.pending('cons') && !opts.pending('prod') && consRows.length === 0 && prodRows.length === 0;
 
-  const panels = useMemo(() => kafkaPanels({ service, host: f.khost, consumer: f.kcons, producer: f.kprod }),
-    [service, f.khost, f.kcons, f.kprod]);
+  const panels = useMemo(() => kafkaPanels({ service, host: f.khost, consumer: f.kcons, producer: f.kprod }, lang),
+    [service, f.khost, f.kcons, f.kprod, lang]);
   const bySection = (s: KafkaSection) => panels.filter(p => p.section === s);
   // Bölüm başına ayrı kanca: kapalı bölüm sorgu atmaz (enabled=false).
   const ov = useHttpPromql(itemsOf(bySection('overview')), win, !noKafka);
@@ -66,14 +68,13 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
 
   if (opts.pending('cons') && opts.pending('prod')) return <Spinner />;
   if (opts.error('cons') && opts.error('prod')) {
-    return <Empty icon="⚠" title="VictoriaMetrics okunamadı">{opts.error('cons')?.message}</Empty>;
+    return <Empty icon="⚠" title={t('kmsg.vmErrTitle', lang)}>{opts.error('cons')?.message}</Empty>;
   }
   if (noKafka) {
     return (
-      <Empty icon="∅" title="Bu servis için Kafka istemci metriği yok">
-        VictoriaMetrics&apos;te <span className="mono">service_name=&quot;{service}&quot;</span> için
-        {' '}<span className="mono">kafka_consumer_*</span> / <span className="mono">kafka_producer_*</span> serisi bulunamadı
-        (OTel Java ajanının Kafka istemci metrikleri açık olmalı).
+      <Empty icon="∅" title={t('kmsg.noSvcMetric', lang)}>
+        {t('kmsg.noTopic.a', lang)}<span className="mono">service_name=&quot;{service}&quot;</span>{t('kmsg.noSvc.b', lang)}
+        {' '}<span className="mono">kafka_consumer_*</span> / <span className="mono">kafka_producer_*</span>{t('kmsg.noSvc.c', lang)}
       </Empty>
     );
   }
@@ -110,19 +111,20 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
     <div>
       <div className="svc-kafka-filters">
         <SelectField label="Pod (host_name)" value={f.khost} onChange={e => setF({ khost: e.target.value })}>
-          <option value="">Hepsi</option>
+          <option value="">{t('anomalies.signal.all', lang)}</option>
           {hosts.map(h => <option key={h} value={h}>{h}</option>)}
         </SelectField>
         <SelectField label="Consumer client_id" value={f.kcons} onChange={e => setF({ kcons: e.target.value })}>
-          <option value="">Hepsi</option>
+          <option value="">{t('anomalies.signal.all', lang)}</option>
           {consumers.map(c => <option key={c} value={c}>{c}</option>)}
         </SelectField>
         <SelectField label="Producer client_id" value={f.kprod} onChange={e => setF({ kprod: e.target.value })}>
-          <option value="">Hepsi</option>
+          <option value="">{t('anomalies.signal.all', lang)}</option>
           {producers.map(c => <option key={c} value={c}>{c}</option>)}
         </SelectField>
       </div>
-      {KAFKA_SECTIONS.map(sec => {
+      {KAFKA_SECTIONS.map(s0 => {
+        const sec = { ...s0, title: kafkaSectionTitle(s0.id, lang) };
         const ps = bySection(sec.id);
         const isOpen = sec.id === 'overview' || open.has(sec.id);
         return (
@@ -137,8 +139,7 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
         );
       })}
       <div className="field-hint">
-        Kaynak: VictoriaMetrics, “OTel Java - Kafka Client Metrics” panosundan sadeleştirilmiş sorgular (service_name=&quot;{service}&quot;).
-        Grafikler istemci (client_id) başınadır, pod'lar toplanır; topic başına görünüm Messaging → topic sayfasında.
+        {tf('kmsg.svcFoot', lang, { s: service })}
       </div>
     </div>
   );

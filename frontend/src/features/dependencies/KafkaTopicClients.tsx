@@ -15,6 +15,7 @@ import {
   type KafkaConsumerRow, type KafkaProducerRow,
 } from '@/pages/messaging/kafkaOverview';
 import type { TimeRange } from '@/lib/types';
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2306 — tablo metinleri arayüz dilinde (TR aynı)
 
 type Win = { from: number; to: number };
 /** v0.10.1963 — `${servis}|${client_id}` → pod sayısı (host_name), KafkaTopicMetrics'in istemci okumasından. */
@@ -29,18 +30,18 @@ const podsText = (pods: PodCounts, service: string, clientId: string) => {
 const none = (v: number | null, f: (v: number) => string) => (v == null ? '—' : f(v));
 const rate = (v: number) => fmtSmart(v, 'reqps');
 
-const svcLink = (service: string, clientId: string, side: 'kcons' | 'kprod', range: TimeRange) => (service
+const svcLink = (service: string, clientId: string, side: 'kcons' | 'kprod', range: TimeRange, lang: Lang = 'tr') => (service
   ? <Link to={serviceHref(service, { tab: 'messaging', range, params: { [side]: clientId } })}
-      title="Bu istemcinin sağlığı (bağlantı, gecikme, rebalance) — Service → Messaging">{service}</Link>
+      title={t('kmsg.clientHealth', lang)}>{service}</Link>
   : '—');
 
-const vmState = <T,>(pending: boolean, err: Error | null, empty: string): DataTableStateInput<T> =>
+const vmState = <T,>(pending: boolean, err: Error | null, empty: string, lang: Lang = 'tr'): DataTableStateInput<T> =>
   pending ? { kind: 'loading' }
-  : err ? { kind: 'error', message: `VictoriaMetrics okunamadı — ${err.message}` }
+  : err ? { kind: 'error', message: tf('kmsg.vmErr', lang, { e: err.message }) }
   : { kind: 'empty', message: empty };
 
-const consCols = (pods: PodCounts): ColumnDef<KafkaConsumerRow>[] => [
-  { id: 'service', label: 'Servis', sortValue: r => r.service, naturalDir: 'asc', flex: true, minWidth: 160, mono: true },
+const consCols = (pods: PodCounts, lang: Lang = 'tr'): ColumnDef<KafkaConsumerRow>[] => [
+  { id: 'service', label: t('search.facet.service', lang), sortValue: r => r.service, naturalDir: 'asc', flex: true, minWidth: 160, mono: true },
   { id: 'client', label: 'client_id', sortValue: r => r.clientId, naturalDir: 'asc', width: 220, minWidth: 130, mono: true },
   podsCol<KafkaConsumerRow>(pods),
   { id: 'lag', label: 'Lag', sortValue: r => r.lag ?? -1, numeric: true, naturalDir: 'desc', width: 100,
@@ -48,11 +49,12 @@ const consCols = (pods: PodCounts): ColumnDef<KafkaConsumerRow>[] => [
   { id: 'lead', label: 'Lead (min)', sortValue: r => r.lead ?? Number.MAX_SAFE_INTEGER, numeric: true, naturalDir: 'asc', width: 104,
     tone: r => (r.lead == null ? undefined : r.lead <= 100 ? 'err' : r.lead <= 1000 ? 'warn' : undefined) },
   { id: 'rate', label: 'Consume/s', sortValue: r => r.rate ?? -1, numeric: true, naturalDir: 'desc', width: 110 },
-  { id: 'poll', label: 'Son poll', sortValue: r => r.pollSec ?? -1, numeric: true, naturalDir: 'desc', width: 96 },
+  { id: 'poll', label: t('kmsg.lastPoll', lang), sortValue: r => r.pollSec ?? -1, numeric: true, naturalDir: 'desc', width: 96 },
 ];
 
 export function TopicConsumersTable({ topic, range, win, pods }: { topic: string; range: TimeRange; win: Win; pods: PodCounts }) {
-  const cols = useMemo(() => consCols(pods), [pods]);
+  const lang = useLang();
+  const cols = useMemo(() => consCols(pods, lang), [pods, lang]);
   const items = useMemo(() => kafkaConsumerItems(kafkaTopicSel(topic)), [topic]);
   const q = useHttpPromql(items, win);
   const { rows } = useMemo(() => kafkaConsumerRows(q.data),
@@ -62,10 +64,10 @@ export function TopicConsumersTable({ topic, range, win, pods }: { topic: string
   return (
     <DataTable<KafkaConsumerRow> storageKey="msg-topic-kafka-consumers" columns={cols} rows={rows} ariaLabel="Consumers"
       getRowKey={r => r.key} sort={{ initial: { id: 'lag', dir: 'desc' } }}
-      state={vmState(q.pending('lag') || q.pending('rate'), err, 'Bu topic için VM\'de consumer metriği yok.')}
+      state={vmState(q.pending('lag') || q.pending('rate'), err, t('kmsg.noConsMetric', lang), lang)}
       renderCell={(r, c) => {
         switch (c.id) {
-          case 'service': return svcLink(r.service, r.clientId, 'kcons', range);
+          case 'service': return svcLink(r.service, r.clientId, 'kcons', range, lang);
           case 'client': return r.clientId ? <span title={r.clientId}>{r.clientId}</span> : '—';
           case 'pods': return podsText(pods, r.service, r.clientId);
           case 'lag': return none(r.lag, fmtNum);
@@ -78,8 +80,8 @@ export function TopicConsumersTable({ topic, range, win, pods }: { topic: string
   );
 }
 
-const prodCols = (pods: PodCounts): ColumnDef<KafkaProducerRow>[] => [
-  { id: 'service', label: 'Servis', sortValue: r => r.service, naturalDir: 'asc', flex: true, minWidth: 160, mono: true },
+const prodCols = (pods: PodCounts, lang: Lang = 'tr'): ColumnDef<KafkaProducerRow>[] => [
+  { id: 'service', label: t('search.facet.service', lang), sortValue: r => r.service, naturalDir: 'asc', flex: true, minWidth: 160, mono: true },
   { id: 'client', label: 'client_id', sortValue: r => r.clientId, naturalDir: 'asc', width: 220, minWidth: 130, mono: true },
   podsCol<KafkaProducerRow>(pods),
   { id: 'send', label: 'Produce/s', sortValue: r => r.send ?? -1, numeric: true, naturalDir: 'desc', width: 110 },
@@ -90,7 +92,8 @@ const prodCols = (pods: PodCounts): ColumnDef<KafkaProducerRow>[] => [
 ];
 
 export function TopicProducersTable({ topic, range, win, pods }: { topic: string; range: TimeRange; win: Win; pods: PodCounts }) {
-  const cols = useMemo(() => prodCols(pods), [pods]);
+  const lang = useLang();
+  const cols = useMemo(() => prodCols(pods, lang), [pods, lang]);
   const items = useMemo(() => kafkaProducerItems(kafkaTopicSel(topic)), [topic]);
   const q = useHttpPromql(items, win);
   const rows = useMemo(() => kafkaProducerRows(q.data),
@@ -99,10 +102,10 @@ export function TopicProducersTable({ topic, range, win, pods }: { topic: string
   return (
     <DataTable<KafkaProducerRow> storageKey="msg-topic-kafka-producers" columns={cols} rows={rows} ariaLabel="Producers"
       getRowKey={r => r.key} sort={{ initial: { id: 'send', dir: 'desc' } }}
-      state={vmState(q.pending('send'), q.error('send'), 'Bu topic için VM\'de producer metriği yok.')}
+      state={vmState(q.pending('send'), q.error('send'), t('kmsg.noProdMetric', lang), lang)}
       renderCell={(r, c) => {
         switch (c.id) {
-          case 'service': return svcLink(r.service, r.clientId, 'kprod', range);
+          case 'service': return svcLink(r.service, r.clientId, 'kprod', range, lang);
           case 'client': return r.clientId ? <span title={r.clientId}>{r.clientId}</span> : '—';
           case 'pods': return podsText(pods, r.service, r.clientId);
           case 'send': return none(r.send, rate);

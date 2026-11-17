@@ -10,6 +10,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const m = vi.hoisted(() => ({ kafka: true, queries: [] as string[] }));
+// v0.10.2306 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/api', () => ({
   api: {
     httpMetricsPromql: async (p: { query: string }) => {

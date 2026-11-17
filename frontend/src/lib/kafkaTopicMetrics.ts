@@ -16,6 +16,7 @@
 //
 // SAF: sorgu kurucu + eşik tonları + istemci satırları; tablo testli.
 import { promStr } from './httpMetrics';
+import { t, type Lang } from './i18n'; // v0.10.2306 — panel metinleri isteğe bağlı lang (varsayılan 'tr')
 
 export type KafkaTopicTone = 'err' | 'warn' | undefined;
 export interface KafkaTopicQuery { expr: string; legend: string }
@@ -49,7 +50,18 @@ const anyIsBad = (v: number | null): KafkaTopicTone => (v != null && v > 0 ? 'er
 const lowIsBad = (warn: number, err: number) => (v: number | null): KafkaTopicTone =>
   v == null ? undefined : v <= err ? 'err' : v <= warn ? 'warn' : undefined;
 
-export function kafkaTopicPanels(topic: string, service?: string): KafkaTopicPanel[] {
+/** lang ≠ 'tr' iken başlık / ipucu / "hata" lejantı katalogdan (ktopic.p.<id>); sorgu / id aynı. */
+export function kafkaTopicPanels(topic: string, service?: string, lang: Lang = 'tr'): KafkaTopicPanel[] {
+  const ps = kafkaTopicPanelsTR(topic, service);
+  if (lang === 'tr') return ps;
+  const lg = (l: string) => (l === 'hata' ? t('ktopic.lg.err', lang) : l.startsWith('hata - ') ? t('ktopic.lg.err', lang) + l.slice(4) : l);
+  return ps.map(p => ({
+    ...p, title: t(`ktopic.p.${p.id}`, lang), hint: t(`ktopic.p.${p.id}.hint`, lang),
+    queries: p.queries.map(q => ({ ...q, legend: lg(q.legend) })),
+  }));
+}
+
+function kafkaTopicPanelsTR(topic: string, service?: string): KafkaTopicPanel[] {
   const s = kafkaTopicSel(topic, service);
   const by = (agg: string, m: string, legend: string): KafkaTopicQuery =>
     ({ expr: `${agg} by (service_name, client_id) (${m}${s})`, legend });
