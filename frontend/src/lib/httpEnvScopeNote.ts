@@ -13,6 +13,7 @@
 //   error      — etiket okuması / uç başarısız: süzgeçsiz çizilir, bant söyler.
 // Sessizce düşen süzgeç yok: uygulanmayan her hâlde "TÜM ortamları kapsıyor".
 import type { HttpEnvScope, HttpEnvTerm } from './types';
+import { t, tf, type Lang } from './i18n'; // v0.10.2305 — bant metni isteğe bağlı lang (varsayılan 'tr')
 
 export type HttpEnvScopeState = 'off' | 'pending' | 'applied' | 'unresolved' | 'error';
 
@@ -44,14 +45,11 @@ export function httpEnvScopeReady(v: HttpEnvScopeView): boolean {
   return v.state !== 'pending';
 }
 
-const TIER_TEXT: Record<string, string> = {
-  exact: 'birebir', ci: 'harf duyarsız eşleşme', prefix: 'önek eşleşmesi',
-  entity: 'cluster varlığının span ortamları', // v0.10.2211
-};
-
-const SOURCE_TEXT: Record<string, string> = {
-  configured: 'Ayarlar → Metrik backend\'i → Ortam', default: 'varsayılan', discovered: 'keşif (varsayılan etiketin değeri yok)',
-};
+// v0.10.2305 — katalogdan (hm.env.tier.* / hm.env.src.*); bilinmeyen değer ham.
+const TIERS = new Set(['exact', 'ci', 'prefix', 'entity']); // entity: v0.10.2211
+const SOURCES = new Set(['configured', 'default', 'discovered']);
+const tierText = (k: string, lang: Lang) => (TIERS.has(k) ? t(`hm.env.tier.${k}`, lang) : k);
+const sourceText = (k: string, lang: Lang) => (SOURCES.has(k) ? t(`hm.env.src.${k}`, lang) : k);
 
 /** Etiket başına uygulanan değerler (aynı etikette iki terim → kesişim; Go httpEnvScopeFilters ile aynı). */
 function appliedSelectors(terms: HttpEnvTerm[]): string {
@@ -64,10 +62,10 @@ function appliedSelectors(terms: HttpEnvTerm[]): string {
   return [...byLabel.entries()].map(([l, vs]) => `${l}=${vs.join('|')}`).join(', ');
 }
 
-function termText(t: HttpEnvTerm): string {
-  const vals = t.values ?? [];
-  const same = vals.length === 1 && vals[0] === t.want;
-  return `${t.role} ${t.want}${same ? '' : ` → ${vals.join(' | ')}`}, ${TIER_TEXT[t.tier] ?? t.tier}`;
+function termText(tm: HttpEnvTerm, lang: Lang): string {
+  const vals = tm.values ?? [];
+  const same = vals.length === 1 && vals[0] === tm.want;
+  return `${tm.role} ${tm.want}${same ? '' : ` → ${vals.join(' | ')}`}, ${tierText(tm.tier, lang)}`;
 }
 
 export interface HttpEnvScopeNote {
@@ -76,38 +74,37 @@ export interface HttpEnvScopeNote {
   title: string;
 }
 
-const ALL_ENVS = 'seriler TÜM ortamları kapsıyor';
-
 /** Bant metni (null = bant yok). */
-export function httpEnvScopeNote(v: HttpEnvScopeView): HttpEnvScopeNote | null {
+export function httpEnvScopeNote(v: HttpEnvScopeView, lang: Lang = 'tr'): HttpEnvScopeNote | null {
+  const ALL_ENVS = t('hm.env.all', lang);
   const sc = v.scope;
   const terms = sc?.terms ?? [];
   const how = sc?.label
-    ? `Ortam etiketi ${sc.label} (${SOURCE_TEXT[sc.source] ?? sc.source}); istenen ad canlı değerlere karşı çözülür: birebir → harf duyarsız → tek önek (eu-a ↔ prod-eu-a). Birden çok değer eşleşirse hepsi uygulanır.`
-      + (sc.partial ? ' VM değer listesi kısmi döndü.' : '')
-    : 'Ortam adı VictoriaMetrics HTTP histogramının ortam etiketine çözülür.';
+    ? tf('hm.env.how', lang, { l: sc.label, src: sourceText(sc.source, lang) })
+      + (sc.partial ? t('hm.env.partial', lang) : '')
+    : t('hm.env.howDefault', lang);
   switch (v.state) {
     case 'off':
       return null;
     case 'pending':
-      return { tone: 'neutral', text: 'Ortam süzgeci çözülüyor…', title: how };
+      return { tone: 'neutral', text: t('hm.env.pending', lang), title: how };
     case 'applied':
       return {
         tone: 'info',
-        text: `Ortam süzgeci metrikte uygulandı: ${appliedSelectors(terms)} (${terms.map(termText).join('; ')})`,
+        text: tf('hm.env.applied', lang, { sel: appliedSelectors(terms), terms: terms.map(tm => termText(tm, lang)).join('; ') }),
         title: `${how} PromQL: ${v.envSel}`,
       };
     case 'unresolved': {
       const miss = terms.find(t => t.tier === 'none');
       const why = miss
-        ? `metrikte bu ortam yok: ${miss.label || sc?.label || '?'} değerleri arasında "${miss.want}" eşleşmedi`
-        : sc?.reason || 'eşleşme yok';
-      return { tone: 'warning', text: `Ortam süzgeci uygulanamadı (${why}) — ${ALL_ENVS}`, title: how };
+        ? tf('hm.env.miss', lang, { l: miss.label || sc?.label || '?', w: miss.want })
+        : sc?.reason || t('hm.env.noMatch', lang);
+      return { tone: 'warning', text: tf('hm.env.unresolved', lang, { why, all: ALL_ENVS }), title: how };
     }
     case 'error':
       return {
         tone: 'warning',
-        text: `Ortam süzgeci çözülemedi (${v.reason ?? 'bilinmeyen hata'}) — süzgeç uygulanmadı, ${ALL_ENVS}`,
+        text: tf('hm.env.error', lang, { r: v.reason ?? t('hm.env.unknownErr', lang), all: ALL_ENVS }),
         title: how,
       };
   }

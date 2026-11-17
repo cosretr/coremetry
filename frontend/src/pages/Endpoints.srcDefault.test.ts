@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { t } from '@/lib/i18n';
 
 // v0.10.454 (operatör 2026-09-06) — /endpoints listesi VARSAYILAN SPAN;
 // ?src=metric zorlar; kendiliğinden span'a düşme (v0.10.361) kalktı.
@@ -30,12 +31,15 @@ describe('endpoints source defaults (v0.10.454 + v0.10.788)', () => {
     expect(detail).toContain("useEndpoints(refObj && detailSrc === 'span' ? {");
     expect(detail).toContain("}, detailSrc === 'span');");
     expect(detail).toContain("useHttpPromql(httpItems, { from, to }, detailSrc === 'metric' && !!refObj && fam.ready && httpEnvScopeReady(envScope))"); // v0.10.1429 aile
-    expect(detail).toContain('<option value="metric">Kaynak: metrik</option>');
+    // v0.10.2305 — metinler katalogda (TR değeri aynı).
+    expect(detail).toContain("<option value=\"metric\">{t('ep.src.metric', lang)}</option>");
+    expect(t('ep.src.metric', 'tr')).toBe('Kaynak: metrik');
     // v0.10.1350 → v0.10.1352 (operatör bildirimi) — metrik kipinde TÜM RED
     // karoları ve grafikler VM'den (sekmenin sorguları); alt bölümler span.
     // v0.10.2210 — görünür kaynak notu kalktı; açıklama Kaynak seçicisinin title'ında.
     expect(detail).not.toContain('Tüm RED karoları ve grafikler: VictoriaMetrics');
-    expect(detail).toContain('histogram, durum kırılımı, çağıranlar ve trace bölümleri span türevli');
+    expect(detail).toContain("title={t(detailSrc === 'metric' ? 'ep.srcMetricTitle' : 'ep.srcSpanTitle', lang)}");
+    expect(t('ep.srcMetricTitle', 'tr')).toContain('histogram, durum kırılımı, çağıranlar ve trace bölümleri span türevli');
     expect(detail).not.toContain('RED şeridi ve Calls/Errors/latency grafikleri: metrik');
     // tdigest iddiası yalnız span kipinde.
     expect(detail).toContain("' P50/P95/P99 are true window quantiles (tdigest).'}");

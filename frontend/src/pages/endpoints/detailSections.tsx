@@ -25,6 +25,7 @@ import { serviceHref } from '@/lib/serviceHref';
 import { traceHref } from '@/lib/traceHref';
 import { seriesPalette } from '@/lib/chartFmt';
 import { useThemeTick } from '@/lib/useThemeTick';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2305 — kalan Türkçe metinler arayüz dilinde (TR aynı)
 
 // v0.10.929 (K5) — "Where the time goes" içinde `db` bir KATEGORİ, sapma
 // değil: --warn (uyarı) yerine seri paletinden sabit yuva (mor — mavi
@@ -251,6 +252,7 @@ export function ExceptionsSection({ detail }: { detail: EndpointDetail }) {
 // FailingTracesSection — direct /trace pivots, worst first, plus the
 // slow/error exemplars off the metrics rollup.
 export function FailingTracesSection({ detail }: { detail: EndpointDetail }) {
+  const lang = useLang();
   const traces = detail.failingTraces;
   const ex = detail.exemplars;
   const dt = useDataTable<EndpointFailingTrace>({
@@ -262,7 +264,7 @@ export function FailingTracesSection({ detail }: { detail: EndpointDetail }) {
   // Eski "unavailable for this window" genel bir hata cümlesiydi.
   const tableState: Omit<DataTableStateProps<EndpointFailingTrace>, 'dt'> = !traces
     ? { kind: 'error' }
-    : { kind: 'empty', message: 'Bu pencerede bu endpoint\'te hata span\'i yok' };
+    : { kind: 'empty', message: t('ep.noErrSpans', lang) };
   return (
     <Card header={
       <PanelTitle sub="worst first" right={
@@ -363,6 +365,7 @@ const SPLIT_COLS: DataTableColumn<EndpointSplitValue>[] = [
 export function SplitSection({ refObj, from, to, env, cluster }: {
   refObj: EndpointRef; from: number; to: number; env?: string; cluster?: string;
 }) {
+  const lang = useLang();
   const loc = useLocation();
   // v0.9.1085 (operatör isteği): "break down by kısmında
   // deployment.environment varsa default o kalsın" — boyut listede
@@ -398,7 +401,7 @@ export function SplitSection({ refObj, from, to, env, cluster }: {
   const tableState: Omit<DataTableStateProps<EndpointSplitValue>, 'dt'> =
     splitQ.isPending ? { kind: 'loading' }
     : splitQ.isError ? { kind: 'error' }
-    : { kind: 'empty', message: `Bu pencerede bu endpoint'te ${by} için değer yok` };
+    : { kind: 'empty', message: tf('ep.splitEmpty', lang, { by }) };
   return (
     <Card header={
       <PanelTitle sub="top 10 values, whitelisted dimensions">Break down by</PanelTitle>
@@ -433,7 +436,7 @@ export function SplitSection({ refObj, from, to, env, cluster }: {
                       {/* v0.10.1201 (operatör: deployment ile süz) — env değeri sayfayı
                           o ortama daraltır (?env=, Topbar ortam seçicisiyle aynı süzgeç). */}
                       {by === 'deployment.environment' && r.value
-                        ? <Link to={withEnvParam(loc.search, r.value)} title={`Sayfayı ${r.value} ortamına daralt`}>{r.value}</Link>
+                        ? <Link to={withEnvParam(loc.search, r.value)} title={tf('ep.narrowEnv', lang, { v: r.value })}>{r.value}</Link>
                         : functionCodeLabel(r.value, fnDict)}
                     </td>
                     <td className="num">{fmtNum(r.calls)}</td>
@@ -482,6 +485,7 @@ export function WhereTheTimeGoesSection({ refObj, from, to, env, cluster }: {
 }) {
   // v0.10.1228 — örneklem: en yavaş (kuyruk, varsayılan) | rastgele (tipik).
   // URL'de (?wtg=random), paylaşılan link aynı örneği açar.
+  const lang = useLang();
   const [sp, setSp] = useSearchParams();
   const random = sp.get('wtg') === 'random';
   const setRandom = (v: boolean) => setSp(prev => {
@@ -513,8 +517,8 @@ export function WhereTheTimeGoesSection({ refObj, from, to, env, cluster }: {
           : `sample of the ${d.sampledFrom} slowest traces — tail p99s, not the route's window p99`) : undefined}
         right={
           <SegmentedControl size="sm" value={random ? 'random' : 'slow'} onChange={v => setRandom(v === 'random')}
-            options={[{ value: 'slow', label: 'En yavaş' }, { value: 'random', label: 'Rastgele' }]}
-            aria-label="Örneklem türü" />
+            options={[{ value: 'slow', label: t('ep.wtg.slow', lang) }, { value: 'random', label: t('ep.wtg.random', lang) }]}
+            aria-label={t('ep.wtg.aria', lang)} />
         }>
         Where the time goes
       </PanelTitle>
@@ -631,6 +635,7 @@ const CALLER_COLS: DataTableColumn<EndpointCaller>[] = [
 export function CallersSection({ refObj, from, to, env, cluster }: {
   refObj: EndpointRef; from: number; to: number; env?: string; cluster?: string;
 }) {
+  const lang = useLang();
   const q = useEndpointCallers({
     service: refObj.service, path: refObj.path, from, to,
     ...(refObj.sig ? { sig: '1' as const } : {}),
@@ -653,12 +658,12 @@ export function CallersSection({ refObj, from, to, env, cluster }: {
   const showRows = !q.isError && rows.length > 0;
   const tableState: Omit<DataTableStateProps<EndpointCaller>, 'dt'> =
     q.isPending ? { kind: 'loading' }
-    : q.isError ? { kind: 'error', message: 'Çağıran sorgusu başarısız — üstteki bölümler hâlâ geçerli.' }
+    : q.isError ? { kind: 'error', message: t('ep.callers.err', lang) }
     : {
       kind: 'empty',
       message: (d?.directEntries ?? 0) > 0
-        ? 'Bu pencerede çağıran görülmedi — örneklenen her çağrı parent span\'siz geldi: bu rota izlenen sisteme bir giriş noktası.'
-        : 'Bu pencerede çağıran görülmedi — çağrıların parent\'ı var ama eşleşen parent span depoda yok: çağıran enstrümante değil, örneklemede düştü ya da saklama süresini aştı.',
+        ? t('ep.callers.entry', lang)
+        : t('ep.callers.unresolved', lang),
     };
   return (
     <Card header={
@@ -694,7 +699,7 @@ export function CallersSection({ refObj, from, to, env, cluster }: {
                   </td>
                   <td className="num">{r.p95Ms.toFixed(1)} ms</td>
                   <td className="num"
-                    title="Bu çağıranın bu rotanın toplam süresinden aldığı pay. Sunucudan geliyor; payda rotanın kendi toplamı (databases tarafındaki kardeşinin paydası yüklenmiş satırlar).">
+                    title={t('ep.callers.shareTitle', lang)}>
                     {r.sharePct.toFixed(1)}%</td>
                 </tr>
               );

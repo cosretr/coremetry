@@ -15,6 +15,7 @@
 //      (v0.8.253 sınıfı).
 //   4. Kaynak değişimi — env/cluster seçiliyken okuma MV'den HAM spans'e
 //      düşüyor ve popülasyon değişiyor; sayfa bunu söylemiyordu.
+import { t, tf, type Lang } from './i18n'; // v0.10.2305
 
 /** EndpointKey — satır kimliği. MV (service_name, http_route) grenine
  *  birebir oturur; method/kind satırın içinde toplanıyor. */
@@ -28,13 +29,10 @@ export interface EndpointKey {
 /** LIST_NEW_TITLE — "listede yeni" rozetinin TEK açıklaması. Hem tablo
  *  hücresi hem paylaşılan TrendDelta çipi bunu kullanır ki aynı rozet iki
  *  farklı şey vaat etmesin. */
-export const LIST_NEW_TITLE =
-  'Önceki pencerenin LİSTESİNDE yoktu. Prior okuma da top-N ile sınırlı: ' +
-  'bu endpoint önceki pencerede pekâlâ var olmuş, sadece listeye girmemiş ' +
-  'olabilir. Yani "yeni endpoint" değil, "bu listede yeni".';
+export const LIST_NEW_TITLE = t('ep.listNewTitle', 'tr'); // v0.10.2305 — metin katalogda; EN: Endpoints satırı t('ep.listNewTitle', lang)
 
 /** LIST_NEW_LABEL — rozetin metni. "YENİ" iddialıydı; bu değil. */
-export const LIST_NEW_LABEL = 'listede yeni';
+export const LIST_NEW_LABEL = t('ep.listNew', 'tr');
 
 export type EndpointDelta =
   | { kind: 'listNew' }
@@ -187,16 +185,11 @@ export function toggleExpanded(cur: Set<string>, key: string): Set<string> {
  *   (v0.10.946 — liste sayfasındaki ⚡/✖ exemplar kısayolları kaldırıldı;
  *   notun onlarla ilgili cümlesi de gitti.)
  */
-export function endpointsSourceNote(cluster?: string, env?: string): string | null {
+export function endpointsSourceNote(cluster?: string, env?: string, lang: Lang = 'tr'): string | null {
   const dims: string[] = [];
   if (env) dims.push('env');
   if (cluster) dims.push('cluster');
   if (dims.length === 0) return null;
   const which = dims.join(' + ');
-  return (
-    `Kaynak: HAM spans — ${which} filtresi spanmetrics rollup'ında olmayan ` +
-    'bir boyut, okuma ham span\'lere düşüyor. Bu liste MV yolunun birebir ' +
-    'aynısı DEĞİL: rotasız client span\'leri (url.path / http.target) buraya ' +
-    'dahil olur.'
-  );
+  return tf('ep.rawNote', lang, { which }); // v0.10.2305 — arayüz dilinde (TR aynı)
 }

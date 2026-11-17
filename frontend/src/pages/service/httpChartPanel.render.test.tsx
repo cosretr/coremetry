@@ -18,6 +18,8 @@ import type { HttpPromqlResult } from '@/lib/queries/httpMetrics';
 // MultiLineChart'a hangi seçenekle ve hangi (dolgu) seriyle girdiği.
 
 const calls: { unit?: string; zeroBase?: boolean; series: SpanMetricSeries[] }[] = [];
+// v0.10.2305 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/components/MultiLineChart', () => ({
   MultiLineChart: (p: { unit?: string; zeroBase?: boolean; series: SpanMetricSeries[] }) => {
     calls.push({ unit: p.unit, zeroBase: p.zeroBase, series: p.series });
@@ -107,7 +109,7 @@ describe('kaynak pinleri (v0.10.1355)', () => {
   it('Service sekmesi adımı ve notu paylaşılan panele geçirir', () => {
     const tab = read('ServiceHttpMetricsTab.tsx');
     expect(tab).toContain('stepSec={step}');
-    expect(tab).toContain("[{ id: 'p90', tpl: 'p90' }, { id: 'p95', tpl: 'p95' }, { id: 'p99', tpl: 'p99' }], HTTP_QUANTILE_NOTE)");
+    expect(tab).toContain("[{ id: 'p90', tpl: 'p90' }, { id: 'p95', tpl: 'p95' }, { id: 'p99', tpl: 'p99' }], httpQuantileNote(lang))"); // v0.10.2305 — arayüz dili
   });
   it('panel politikası tek yerde: zeroBase + fillStepGaps', () => {
     const viz = read('httpMetricsViz.tsx');

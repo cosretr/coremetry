@@ -25,6 +25,8 @@ interface FakeQuery<T> { data: T | undefined; isPending: boolean; isError: boole
 let callersQ: FakeQuery<EndpointCallersResponse> = { data: undefined, isPending: true, isError: false };
 let splitQ: FakeQuery<EndpointSplitResponse> = { data: undefined, isPending: true, isError: false };
 
+// v0.10.2305 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/queries', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
   return {

@@ -3,11 +3,13 @@
 // v0.10.1377 — metrik kipi ortam süzgeci bandı (adlar SENTETİK): uygulandı →
 // b-info, uygulanamadı / çözülemedi → b-warn, bekliyor → b-gray; env/cluster
 // seçili değilse hiçbir şey çizilmez (bayt bayt eski sayfa).
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { HttpEnvScopeBand } from './httpMetricsViz';
 import type { HttpEnvScopeView } from '@/lib/httpEnvScopeNote';
+// v0.10.2305 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

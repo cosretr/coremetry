@@ -17,6 +17,7 @@ import {
 } from '@/lib/httpMetrics';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import type { SpanMetricSeries } from '@/lib/types';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2305 — panel metinleri arayüz dilinde (TR aynı)
 
 const TONE_VAR: Record<'ok' | 'warn' | 'err', string> = { ok: 'var(--ok)', warn: 'var(--warn)', err: 'var(--err)' };
 const TONE_TOKEN: Record<'ok' | 'warn' | 'err', string> = { ok: '--ok', warn: '--warn', err: '--err' };
@@ -99,6 +100,7 @@ export function HttpDonut({ slices, fmt, colorOf, onSelect }: {
   slices: DonutSlice[]; fmt: (v: number) => string; colorOf?: (label: string, i: number) => string | undefined;
   onSelect?: (label: string) => void;
 }) {
+  const lang = useLang();
   const [hover, setHover] = useState<number | null>(null);
   const pal = seriesPalette();
   const color = (l: string, i: number) => colorOf?.(l, i) || pal[i % pal.length];
@@ -107,7 +109,7 @@ export function HttpDonut({ slices, fmt, colorOf, onSelect }: {
   let acc = 0;
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 180px) minmax(0, 1fr)', gap: 12, alignItems: 'center' }}>
-      <svg viewBox="0 0 120 120" style={{ width: '100%', display: 'block' }} role="img" aria-label="Dağılım"
+      <svg viewBox="0 0 120 120" style={{ width: '100%', display: 'block' }} role="img" aria-label={t('hm.dist', lang)}
         onMouseLeave={() => setHover(null)}>
         <g transform="rotate(-90 60 60)">
           {slices.map((s, i) => {
@@ -119,7 +121,7 @@ export function HttpDonut({ slices, fmt, colorOf, onSelect }: {
                 style={{ cursor: onSelect ? 'pointer' : 'default', transition: 'stroke-width .12s, opacity .12s' }}
                 onMouseEnter={() => setHover(i)}
                 onClick={onSelect ? () => onSelect(s.label) : undefined}>
-                <title>{`${s.label}: ${fmt(s.value)} (${fmtShare(s.pct)})`}</title>
+                <title>{`${s.label}: ${fmt(s.value)} (${fmtShare(s.pct, lang)})`}</title>
               </circle>
             );
             acc += len;
@@ -128,11 +130,11 @@ export function HttpDonut({ slices, fmt, colorOf, onSelect }: {
         </g>
         {active ? (
           <>
-            <text x={60} y={56} textAnchor="middle" fontSize={11} fontWeight={600} fill="var(--text)">{fmtShare(active.pct)}</text>
+            <text x={60} y={56} textAnchor="middle" fontSize={11} fontWeight={600} fill="var(--text)">{fmtShare(active.pct, lang)}</text>
             <text x={60} y={70} textAnchor="middle" fontSize={8} fill="var(--text2)">{fmt(active.value)}</text>
           </>
         ) : slices[0] && slices[0].pct >= 8 && (
-          <text x={60} y={64} textAnchor="middle" fontSize={12} fontWeight={600} fill="var(--text)">{fmtShare(slices[0].pct)}</text>
+          <text x={60} y={64} textAnchor="middle" fontSize={12} fontWeight={600} fill="var(--text)">{fmtShare(slices[0].pct, lang)}</text>
         )}
       </svg>
       <div style={{ display: 'grid', gap: 2, fontSize: 12, minWidth: 0 }}>
@@ -149,14 +151,14 @@ export function HttpDonut({ slices, fmt, colorOf, onSelect }: {
                 <span className="dt-trunc">{s.label}</span>
               </span>
               <span style={{ fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>{fmt(s.value)}</span>
-              <span style={{ fontVariantNumeric: 'tabular-nums', textAlign: 'right', color: 'var(--text2)' }}>{fmtShare(s.pct)}</span>
+              <span style={{ fontVariantNumeric: 'tabular-nums', textAlign: 'right', color: 'var(--text2)' }}>{fmtShare(s.pct, lang)}</span>
             </span>
           );
           return onSelect ? (
             <Button key={s.label} variant="ghost" size="xs" onClick={() => onSelect(s.label)}
               onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
               onFocus={() => setHover(i)} onBlur={() => setHover(null)}
-              title={`${s.label} — süzgeç olarak uygula`}
+              title={`${s.label}${t('hm.applyFilter', lang)}`}
               style={{ justifyContent: 'stretch', textAlign: 'left', background: hover === i ? 'var(--bg2)' : undefined }}>
               {row}
             </Button>
@@ -205,11 +207,12 @@ export function HttpChartPanel({
   /** v0.10.1547 — seri lejantı varsayılan açık mı (Kafka panelleri kapalı ister). */
   legendOpen?: boolean;
 }) {
+  const lang = useLang();
   const drawn = fillStepGaps(series, stepSec);
   return (
     <Card header={<PanelTitle right={right}>{title}</PanelTitle>}>
       {loading ? <Spinner /> : series.length === 0
-        ? <div className="field-hint">Bu pencerede veri yok.</div>
+        ? <div className="field-hint">{t('hm.noData', lang)}</div>
         : <MultiLineChart series={drawn} unit={unit} height={220} syncKey={syncKey} legendStorageKey={legendKey}
             maxSeries={60} legendDefaultOpen={legendOpen} regions={regions} onZoom={onZoom} onZoomReset={onZoomReset}
             zeroBase={httpPanelZeroBase(unit)}
@@ -224,9 +227,10 @@ export function HttpDonutPanel({ title, rows, loading, fmt, colorOf, onSelect }:
   title: string; rows: BarRow[]; loading?: boolean; fmt: (v: number) => string;
   colorOf?: (label: string) => string | undefined; onSelect?: (label: string) => void;
 }) {
+  const lang = useLang();
   return (
     <Card header={<PanelTitle>{title}</PanelTitle>}>
-      {loading ? <Spinner /> : rows.length === 0 ? <div className="field-hint">Bu pencerede veri yok.</div>
+      {loading ? <Spinner /> : rows.length === 0 ? <div className="field-hint">{t('hm.noData', lang)}</div>
         : <HttpDonut slices={donutSlices(rows)} fmt={fmt} colorOf={colorOf} onSelect={onSelect} />}
     </Card>
   );
@@ -239,7 +243,8 @@ export function HttpDonutPanel({ title, rows, loading, fmt, colorOf, onSelect }:
  * SAF httpEnvScopeNote'tan; env/cluster seçili değilse hiçbir şey çizmez.
  */
 export function HttpEnvScopeBand({ view, style }: { view: HttpEnvScopeView; style?: CSSProperties }) {
-  const n = httpEnvScopeNote(view);
+  const lang = useLang();
+  const n = httpEnvScopeNote(view, lang);
   // v0.10.2211 (operatör) — uygulanmış süzgeç satırı hata ayıklama gibi
   // okunuyordu; yalnız uygulanamadı / çözülemedi / bekliyor hâli çizilir.
   if (!n || view.state === 'applied') return null;

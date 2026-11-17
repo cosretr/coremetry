@@ -4,6 +4,7 @@ import { bucketsToSeries } from './series';
 import type { EndpointRow } from '@/lib/types';
 
 // v0.10.1199 (operatör) — Endpoint "Avg latency" kartında p50/p95/p99 seçimi.
+import { t } from '@/lib/i18n';
 describe('endpoint gecikme seçicisi', () => {
   it('seri p50/p95/p99 aynı kovalardan', () => {
     const row = { sparkline: [1, 2], errorsSparkline: [0, 0], p99Sparkline: [90, 99], p50Sparkline: [10, 11], p95Sparkline: [50, 55] } as unknown as EndpointRow;
@@ -20,7 +21,8 @@ describe('endpoint gecikme seçicisi', () => {
     const src = readFileSync(new URL('../EndpointDetail.tsx', import.meta.url), 'utf8');
     expect(src).toContain("params.get('lat')");
     expect(src).toContain('series={series[latQ]}');
-    expect(src).toContain("aria-label=\"Gecikme yüzdeliği\"");
+    expect(src).toContain("aria-label={t('hm.latQ', lang)}"); // v0.10.2305 — katalogda
+    expect(t('hm.latQ', 'tr')).toBe('Gecikme yüzdeliği');
   });
 });
 

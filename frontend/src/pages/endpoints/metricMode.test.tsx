@@ -38,6 +38,8 @@ const one = (v: number, labels: Record<string, string> = {}): SpanMetricSeries[]
   points: [{ time: 1e9, value: v }],
 }];
 
+// v0.10.2305 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/api', () => {
   const row: EndpointRow = {
     service: 'acm-order-quote-allocation-prod', path: '/ACMWEB/decision/service/rest',

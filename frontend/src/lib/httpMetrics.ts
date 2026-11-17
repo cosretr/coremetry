@@ -11,6 +11,7 @@
 //   $__range        → pencere saniyesi (range sorgusunun SON noktası okunur)
 import type { SpanMetricSeries } from './types';
 import { HTTP_FAMILY, statusClassOf, statusClassToken, statusCodeLabel, type RedFamilySpec } from './redFamily';
+import { t, type Lang } from './i18n'; // v0.10.2305 — görünen etiket / biçim isteğe bağlı lang (varsayılan 'tr')
 
 export interface HttpScope {
   app: string; route?: string; method?: string;
@@ -278,12 +279,12 @@ export function scalarOf(series: SpanMetricSeries[] | null | undefined): number 
 export interface BarRow { label: string; value: number }
 
 /** Çok serili sorgunun son değerleri → azalan çubuk satırları (pasta yerine). */
-export function barsOf(series: SpanMetricSeries[] | null | undefined, labelKey: string, max = 10): BarRow[] {
+export function barsOf(series: SpanMetricSeries[] | null | undefined, labelKey: string, max = 10, lang: Lang = 'tr'): BarRow[] {
   const rows: BarRow[] = [];
   for (const s of series ?? []) {
     const v = lastValue(s);
     if (v === null || v <= 0) continue;
-    rows.push({ label: seriesLabels(s)[labelKey] || '(boş)', value: v });
+    rows.push({ label: seriesLabels(s)[labelKey] || t('hm.empty', lang), value: v });
   }
   return rows.sort((a, b) => b.value - a.value).slice(0, max);
 }
@@ -330,11 +331,13 @@ export function filterOptions(series: SpanMetricSeries[] | null | undefined, fam
 type MaybeNum = number | string | null | undefined;
 const finite = (v: MaybeNum): v is number => typeof v === 'number' && Number.isFinite(v);
 
-export function fmtCount(v: MaybeNum, digits = 0): string {
-  return finite(v) ? v.toLocaleString('tr-TR', { maximumFractionDigits: digits }) : '—';
+export function fmtCount(v: MaybeNum, digits = 0, lang: Lang = 'tr'): string {
+  return finite(v) ? v.toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US', { maximumFractionDigits: digits }) : '—';
 }
-export function fmtRatio(v: MaybeNum): string {
-  return finite(v) ? `%${(v * 100).toFixed(2)}` : '—';
+export function fmtRatio(v: MaybeNum, lang: Lang = 'tr'): string {
+  if (!finite(v)) return '—';
+  const x = (v * 100).toFixed(2);
+  return lang === 'tr' ? `%${x}` : `${x}%`; // v0.10.2305 — EN "12.50%"
 }
 export function fmtSeconds(v: MaybeNum, fmt: (n: number) => string): string {
   return finite(v) ? fmt(v) : '—';
@@ -399,16 +402,19 @@ export function donutSlices(rows: BarRow[]): DonutSlice[] {
 //   ≥ 0,01        → 2 ondalık (%0,33)
 //   (0, 0,01)     → "<%0,01"   · tam 0 → "%0"
 const SHARE_FMT = [0, 1, 2].map(d => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: d, useGrouping: false }));
-/** Yüzde payı (0–100) → "%0,33" biçimi; null/NaN → "—". */
-export function fmtShare(pct: MaybeNum): string {
+const SHARE_FMT_EN = [0, 1, 2].map(d => new Intl.NumberFormat('en-US', { maximumFractionDigits: d, useGrouping: false }));
+/** Yüzde payı (0–100) → "%0,33" biçimi (EN "0.33%"; v0.10.2305); null/NaN → "—". */
+export function fmtShare(pct: MaybeNum, lang: Lang = 'tr'): string {
   if (!finite(pct)) return '—';
-  if (pct <= 0) return '%0';
-  if (pct >= 100) return '%100';
-  if (pct >= 99) return `%${SHARE_FMT[2].format(Math.min(Math.round(pct * 100) / 100, 99.99))}`;
-  if (pct >= 10) return `%${SHARE_FMT[0].format(pct)}`;
-  if (pct >= 1) return `%${SHARE_FMT[1].format(pct)}`;
-  if (pct >= 0.01) return `%${SHARE_FMT[2].format(pct)}`;
-  return '<%0,01';
+  const F = lang === 'tr' ? SHARE_FMT : SHARE_FMT_EN;
+  const p = (s: string) => (lang === 'tr' ? `%${s}` : `${s}%`);
+  if (pct <= 0) return p('0');
+  if (pct >= 100) return p('100');
+  if (pct >= 99) return p(F[2].format(Math.min(Math.round(pct * 100) / 100, 99.99)));
+  if (pct >= 10) return p(F[0].format(pct));
+  if (pct >= 1) return p(F[1].format(pct));
+  if (pct >= 0.01) return p(F[2].format(pct));
+  return lang === 'tr' ? '<%0,01' : '<0.01%';
 }
 
 /** Stat kartı trend çizgisi: ilk serinin değerleri (yoksa boş). */
@@ -466,15 +472,15 @@ export function totalRequestsQuery(app: string, windowSec: number, envSel?: stri
 // tutmuyordu.
 
 /** Lejant: "GET /a"; route etiketi yoksa "GET (route yok)" (çıplak "GET" değil). gRPC (v0.10.1429): "pkg.Service/Method". */
-export function methodRouteLegend(labels: Record<string, string>, withStatus = false, family: RedFamilySpec = HTTP_FAMILY): string {
+export function methodRouteLegend(labels: Record<string, string>, withStatus = false, family: RedFamilySpec = HTTP_FAMILY, lang: Lang = 'tr'): string {
   const FL = family.labels;
   if (family.kind === 'grpc') {
     const svc = labels[FL.method] ?? '';
-    const m = labels[FL.route] ? labels[FL.route] : '(method yok)';
+    const m = labels[FL.route] ? labels[FL.route] : t('hm.noMethod', lang);
     const call = svc ? `${svc}/${m}` : m;
     return [withStatus ? statusCodeLabel(family, labels[FL.status] ?? '') : '', call].filter(Boolean).join(' ');
   }
-  const route = labels[FL.route] ? labels[FL.route] : '(route yok)';
+  const route = labels[FL.route] ? labels[FL.route] : t('hm.noRoute', lang);
   return [withStatus ? labels[FL.status] : '', labels[FL.method] ?? '', route]
     .filter(Boolean).join(' ');
 }
@@ -604,8 +610,8 @@ export function endpointRed(
 // olmadığı için iki örnek KOMŞU indeks oldu ve çizgi aradaki boşluğu kapattı.
 
 /** Yüzdelik panelinin dürüstlük notu: hassasiyet kova düzeyinde. */
-export const HTTP_QUANTILE_NOTE =
-  'Yüzdelikler histogram kovalarından hesaplanır; kova içi değerler yaklaşıktır (OTel varsayılan sınırları 0/5/10/25… ms).';
+export function httpQuantileNote(lang: Lang = 'tr'): string { return t('hm.qNote', lang); } // v0.10.2305
+export const HTTP_QUANTILE_NOTE = httpQuantileNote('tr');
 
 // Negatif olamayan miktar birimleri — gecikme (s), hız (req/s), oran (%).
 const ZERO_BASE_UNITS: ReadonlySet<string> = new Set(['s', 'ms', 'req/s', '%']);

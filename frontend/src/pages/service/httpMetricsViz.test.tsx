@@ -4,6 +4,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { HttpDonut } from './httpMetricsViz';
 import { donutSlices } from '@/lib/httpMetrics';
+// v0.10.2305 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 
 // v0.10.1258 — operatör: "pasta dilimleri tıklanamıyor, tooltip yok".
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

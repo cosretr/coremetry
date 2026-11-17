@@ -39,7 +39,7 @@ import { endpointHttpQueries, type LatQ } from '@/lib/httpMetrics';
 import { MetricREDStrip, MetricCharts } from '@/pages/endpoints/MetricModeSections'; // v0.10.1352
 import { AIExplainButton } from '@/components/ai/AIExplainButton'; // v0.10.1367 — tek tık "CoSRE'ye sor"
 import { IconSparkles } from '@/components/icons';
-import { useT } from '@/lib/i18n';
+import { useT, useLang, t, tf } from '@/lib/i18n'; // v0.10.2305 — kalan Türkçe metinler arayüz dilinde (TR aynı)
 import { endpointAiMethod, type AISubject } from '@/lib/aiSubject';
 
 // /endpoint — the full-page endpoint detail (v0.9.839).
@@ -171,6 +171,7 @@ export default function EndpointDetailPage() {
   // girişinde (entry=rpc, `/`-yolu olmayan span adı) sunucu endpoint olarak
   // çözemez → düğme gizli.
   const tr = useT();
+  const lang = useLang();
   const aiSubject = useMemo<AISubject | null>(() => {
     if (!refObj || entry) return null;
     const method = endpointAiMethod((row?.method || refObj.method || '').toUpperCase());
@@ -273,8 +274,8 @@ export default function EndpointDetailPage() {
               the same class of lie in the opposite direction. */}
           {(clusterOptions.length > 1 || cluster) && (
             <select aria-label="Cluster" value={cluster} onChange={e => setCluster(e.target.value)}
-              style={{ fontSize: 11 }} title="Bu endpoint'in görüldüğü cluster'lar — sayfanın tüm bölümleri daralır">
-              <option value="">Tüm cluster'lar</option>
+              style={{ fontSize: 11 }} title={t('ep.clusterTitle', lang)}>
+              <option value="">{t('ep.allClusters', lang)}</option>
               {[...new Set([...(cluster ? [cluster] : []), ...clusterOptions])].map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
@@ -293,18 +294,16 @@ export default function EndpointDetailPage() {
             {/* v0.10.705 — route hedefli alarm (editör/admin; HTTP route, imza kipi değil). */}
             {canEditRules && !entry && !refObj.sig && (
               <Button variant="secondary" size="sm" onClick={() => setAlertOpen(true)}
-                title="Bu route için eşik alarmı: p95/p99/hata oranı/hız eşiği geçince Problem">
-                ⚠ Alarm oluştur
+                title={t('ep.alertTitle', lang)}>
+                {t('ep.alertBtn', lang)}
               </Button>
             )}
             {!entry && (
               <select value={detailSrc} onChange={e => setDetailSrc(e.target.value as 'span' | 'metric')}
-                aria-label="RED şeridinin kaynağı"
-                title={detailSrc === 'metric'
-                  ? 'Kaynak: metrik — RED karoları ve grafikler VictoriaMetrics\'ten (HTTP/GRPC sekmesiyle aynı sorgular, bu route\'a süzülü), örneklemeden bağımsız; histogram, durum kırılımı, çağıranlar ve trace bölümleri span türevli'
-                  : 'Kaynak: span — spanmetrics (izlerden türetilmiş); collector örnekliyorsa eksik sayar'}>
-                <option value="span">Kaynak: span</option>
-                <option value="metric">Kaynak: metrik</option>
+                aria-label={t('ep.srcAria', lang)}
+                title={t(detailSrc === 'metric' ? 'ep.srcMetricTitle' : 'ep.srcSpanTitle', lang)}>
+                <option value="span">{t('ep.src.span', lang)}</option>
+                <option value="metric">{t('ep.src.metric', lang)}</option>
               </select>
             )}
             {/* v0.10.1367 — sayfanın TEK dolu birincil eylemi (ProblemDetail'deki
@@ -377,7 +376,7 @@ export default function EndpointDetailPage() {
             big={row ? `${row.avgMs.toFixed(0)} ms` : '—'}
             sub={row ? `${latQ} ${((latQ === 'p50' ? row.p50Ms : latQ === 'p95' ? row.p95Ms : row.p99Ms) ?? 0).toFixed(0)} ms` : 'no row in window'}
             chartPicker={
-              <SegmentedControl size="sm" aria-label="Gecikme yüzdeliği" value={latQ} onChange={setLatQ}
+              <SegmentedControl size="sm" aria-label={t('hm.latQ', lang)} value={latQ} onChange={setLatQ}
                 options={[{ value: 'p50', label: 'p50' }, { value: 'p95', label: 'p95' }, { value: 'p99', label: 'p99' }]} />
             }
             series={series[latQ]} unit="ms"
@@ -432,7 +431,7 @@ export default function EndpointDetailPage() {
           table's own path fallbacks — never the span name. Server / consumer
           spans only; outbound client spans count under the callee.
           {detailSrc === 'metric'
-            ? ` Metrik kipi: RED karoları ve grafikler VictoriaMetrics ${family.names.count.replace(/_count$/, '_*')} (HTTP/GRPC sekmesiyle aynı PromQL, bu ${family.kind === 'grpc' ? 'rpc method\'una' : 'route\'a'} süzülü); P50/P95/P99 karoları penceredeki kova artışlarından (histogram_quantile over increase[pencere])${family.kind === 'grpc' ? `; hata = gRPC sunucu-hatası kodları (${family.serverErr})` : ''}.`
+            ? tf(family.kind === 'grpc' ? 'ep.metricFoot.grpc' : 'ep.metricFoot.http', lang, { m: family.names.count.replace(/_count$/, '_*'), s: family.serverErr })
             : ' P50/P95/P99 are true window quantiles (tdigest).'}
         </div>
         {alertOpen && (

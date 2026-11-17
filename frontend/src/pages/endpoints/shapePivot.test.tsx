@@ -23,6 +23,8 @@ import type { EndpointRow } from '@/lib/types';
 
 const m = vi.hoisted(() => ({ rowPath: '/users/:id' }));
 
+// v0.10.2305 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/api', () => {
   const row = (path: string): EndpointRow => ({
     service: 'svc-orders', path, calls: 120, errors: 3, errorRate: 2.5, avgMs: 14, p99Ms: 80,

@@ -4,6 +4,7 @@ import { Spinner } from '@/components/Spinner';
 import { timeRangeToNs } from '@/lib/utils';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import type { SpanMetricSeries, TimeRange } from '@/lib/types';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2305 — boş durum arayüz dilinde
 
 // MetricTile — one of the /endpoint page's three RED series cards
 // (v0.9.839; promoted verbatim from the retired sparkline modal in
@@ -46,6 +47,7 @@ export function MetricTile({
   /** v0.10.1199 — grafik üstünde seçici (gecikme kartı: p50/p95/p99). */
   chartPicker?: ReactNode;
 }) {
+  const lang = useLang();
   const bounds = useMemo(() => {
     if (!range) return null;
     return timeRangeToNs(range);
@@ -80,7 +82,7 @@ export function MetricTile({
             xRange={xRange}
             // The '-ms' suffix is the ENGINE NAMESPACE (v0.9.789).
             syncKey={msSyncKey('endpoint-detail')}
-            emptyReason={hasData ? undefined : (emptyLabel ?? 'Bu pencerede veri yok')}
+            emptyReason={hasData ? undefined : (emptyLabel ?? t('ep.tileEmpty', lang))}
             items={[{ name: chartLabel ?? label, role: role ?? 'data', series }]}
             regions={regions}
             onZoom={onZoom}

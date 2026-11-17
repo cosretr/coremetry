@@ -22,7 +22,7 @@ import { parseColsParam, formatColsParam } from '@/pages/endpoints/endpointCols'
 import { ColumnToggle } from '@/pages/endpoints/ColumnToggle';
 import { useTablePrefs } from '@/lib/queries/prefs';
 import {
-  EXP_PARAM, LIST_NEW_LABEL, LIST_NEW_TITLE,
+  EXP_PARAM,
   decodeExpandedParam, decodeEndpointRowKey, encodeExpandedParam,
   endpointP99Delta, endpointRowKey, endpointsSourceNote, listedTotals,
   toggleExpanded,
@@ -50,6 +50,7 @@ import { useHttpPromql, useRedFamily, sectionEnvScope } from '@/lib/queries/http
 import { HTTP_FAMILY, familyUnknownNote } from '@/lib/redFamily';
 import { httpEnvScopeNote, httpEnvScopeReady } from '@/lib/httpEnvScopeNote';
 import { ENDPOINT_LIST_POOL_MAX, endpointListRows, endpointListScope, listQueries } from '@/lib/httpMetrics';
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2305 — kalan Türkçe metinler arayüz dilinde (TR aynı)
 
 // /endpoints — operator-asked v0.5.365. Cross-service inbound
 // RED rollup keyed on http.route (templated) with url.path /
@@ -204,6 +205,7 @@ const DEFAULT_COL_IDS = ALL_COL_IDS.filter(
   id => !(DEFAULT_HIDDEN_COL_IDS as readonly string[]).includes(id));
 
 export default function EndpointsPage() {
+  const lang = useLang();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   // Global time window (UX#2) — URL-persisted + carried across pages.
@@ -674,7 +676,7 @@ export default function EndpointsPage() {
   const listed = useMemo(() => listedTotals(rows ?? []), [rows]);
   // Kaynak notu: env/cluster seçiliyken okuma MV'den ham spans'e düşer
   // ve POPÜLASYON değişir (endpointHonesty.endpointsSourceNote).
-  const sourceNote = useMemo(() => endpointsSourceNote(cluster, env), [cluster, env]);
+  const sourceNote = useMemo(() => endpointsSourceNote(cluster, env, lang), [cluster, env, lang]);
   // v0.10.336 — metrik kipinde not SUNUCUDAN gelir (hata tanımı, birim,
   // adım, env/cluster daraltması, eksik alt sorgular): istemci tahmin etmez.
   // v0.10.454 — metrik kipi yalnız açık seçimle; not sunucudan (metrik
@@ -683,12 +685,12 @@ export default function EndpointsPage() {
   // v0.10.1377 — env/cluster VM ortam etiketine çözülüp UYGULANIR; not hangi
   // değerle uygulandığını ya da neden uygulanamadığını söyler.
   const metricNote = metricMode && (env || cluster) && envScope.state !== 'applied' // v0.10.2211: uygulanmış süzgeç satırı yok
-    ? httpEnvScopeNote(envScope)?.text ?? 'Metrik kipi: servis seçilince env/cluster süzgeci VictoriaMetrics ortam etiketine çözülüp uygulanır.'
+    ? httpEnvScopeNote(envScope, lang)?.text ?? t('ep.metricEnvHint', lang)
     : null;
   // v0.10.1429 — aile notu: yalnız gRPC / ikisi / çözüm bilinemedi.
   const familyNote = !metricMode || !service ? null
-    : familyUnknownNote(fam) ?? (fam.primary === 'grpc' ? `gRPC RED: servis HTTP sunucu histogramı yazmıyor; satırlar ${grpcFamily?.names.count.replace(/_count$/, '_*') ?? 'rpc_server_duration_*'} ailesinden — Method sütunu = rpc_service, Path = rpc_method; hata = sunucu-hatası kodları (${grpcFamily?.serverErr ?? ''}), 2xx/4xx/5xx sütunları ok / istemci / sunucu kodları`
-      : fam.both ? 'HTTP satırlarının altında gRPC satırları (rpc_service + rpc_method; HTTP ile toplanmaz) — detayı ?family=grpc ile açılır'
+    : familyUnknownNote(fam, lang) ?? (fam.primary === 'grpc' ? tf('ep.fam.grpc', lang, { m: grpcFamily?.names.count.replace(/_count$/, '_*') ?? 'rpc_server_duration_*', s: grpcFamily?.serverErr ?? '' })
+      : fam.both ? t('ep.fam.both', lang)
         : null);
 
   // v0.10.954 — tablo standardı T12: yükleniyor / hata / eşleşme yok / boş
@@ -704,24 +706,24 @@ export default function EndpointsPage() {
     cluster ? () => setCluster('') : null,
   ].filter((f): f is () => void => f !== null);
   const rpcNeedsMv = entry === 'rpc' && (cluster || env)
-    ? `RPC & Messaging sekmesi spanmetrics rollup'larını gerektirir; ${cluster && env ? 'cluster ve env' : cluster ? 'cluster' : 'env'} süzgeci bunları devre dışı bırakır. HTTP dışı giriş noktalarını listelemek için süzgeci temizleyin ya da HTTP'ye dönün.`
+    ? tf('ep.rpcNeedsMv', lang, { f: cluster && env ? t('ep.clusterAndEnv', lang) : cluster ? 'cluster' : 'env' })
     : null;
   // v0.10.1359 — metrik kipinde hata metni PromQL okumasından (VM yapılandırılmamışsa
   // sunucunun 400 cümlesi: "metricsrc=vm — VictoriaMetrics yapılandırılmamış …").
   const errDetail = metricMode
-    ? (metricErr?.message ? `${metricErr.message} — metrik kipi VictoriaMetrics'ten okur` : '')
+    ? (metricErr?.message ? tf('ep.metricErr', lang, { e: metricErr.message }) : '')
     : rowsQ.error instanceof Error && rowsQ.error.message ? rowsQ.error.message : '';
   const tableState: Omit<DataTableStateProps<EndpointRow>, 'dt' | 'leading'> =
     // v0.10.1359 — metrik kipi servis ister (filo geneli PromQL yok).
     metricMode && !service ? {
       kind: 'empty',
-      message: 'Metrik kipinde servis seçin — liste, seçili servisin HTTP/GRPC sekmesiyle aynı PromQL\'i okur (VictoriaMetrics, method + route başına).',
+      message: t('ep.pickService', lang),
     }
     : rows === undefined ? { kind: 'loading' }
     : rows === null ? {
       kind: 'error',
       message: errDetail || rpcNeedsMv
-        ? [`Endpoint listesi okunamadı${errDetail ? `: ${errDetail}` : ''}`, rpcNeedsMv].filter(Boolean).join(' — ')
+        ? [`${t('ep.listErr', lang)}${errDetail ? `: ${errDetail}` : ''}`, rpcNeedsMv].filter(Boolean).join(' — ')
         : undefined,
     }
     : filterClears.length > 0 ? {
@@ -732,11 +734,11 @@ export default function EndpointsPage() {
     : metricMode ? {
       // v0.10.1359
       kind: 'empty',
-      message: `Bu pencerede VictoriaMetrics'te service_name="${service}" etiketli ${fam.primary === 'grpc' ? (grpcFamily?.names.count.replace(/_count$/, '') ?? 'rpc_server_duration_milliseconds') : 'http_server_request_duration_seconds'} metriği yok${fam.tried.length ? ` (denenen aileler: ${fam.tried.join('; ')})` : ''}. Zaman aralığını genişletin ya da Kaynak: span'e dönün.`,
+      message: tf('ep.noMetric', lang, { s: service, m: fam.primary === 'grpc' ? (grpcFamily?.names.count.replace(/_count$/, '') ?? 'rpc_server_duration_milliseconds') : 'http_server_request_duration_seconds', tried: fam.tried.length ? tf('ep.tried', lang, { v: fam.tried.join('; ') }) : '' }),
     }
     : {
       kind: 'empty',
-      message: "Bu pencerede endpoint yok — http.route / url.path / http.target özniteliği taşıyan span gelmedi. Zaman aralığını genişletin ya da servislerinizin server-kind span'lerde bu özniteliklerden birini yaydığını kontrol edin.",
+      message: t('ep.empty', lang),
     };
 
   return (
@@ -761,7 +763,7 @@ export default function EndpointsPage() {
             projection. */}
         <TabStrip ariaLabel="Inbound surface" value={entry} onChange={setEntry} style={{ marginBottom: 10, fontSize: 12 }} tabs={[
           { key: 'http', label: 'HTTP', title: 'Inbound requests carrying an http.route — the table as it has always been.' },
-          { key: 'rpc', label: 'RPC & Messaging', title: 'Inbound spans WITHOUT an http.route: gRPC servers and message consumers, keyed on the span name. Bu sekme span türevlidir (metrikte http_route dışı giriş yok); kaynak kendiliğinden span olur.' },
+          { key: 'rpc', label: 'RPC & Messaging', title: t('ep.tab.rpcTitle', lang) },
         ]} />
         <PageControls sticky>
           <ServicePicker value={service} onChange={setService}
@@ -794,13 +796,10 @@ export default function EndpointsPage() {
           <select value={src}
             onChange={e => setSrc(e.target.value === 'metric' ? 'metric' : 'span')}
             style={{ fontSize: 12 }}
-            aria-label="Veri kaynağı"
-            title={src === 'metric'
-              // v0.10.1359
-              ? 'Kaynak: metrik — HTTP/GRPC sekmesinin PromQL\'i (VictoriaMetrics, pencere increase[W]); servis seçimi gerekir, satır = method + route; örneklemeden bağımsız tam sayım; p90 yok'
-              : 'Kaynak: span — spanmetrics_1m (izlerden türetilmiş); collector örnekliyorsa eksik sayar'}>
-            <option value="span">Kaynak: span</option>
-            <option value="metric">Kaynak: metrik</option>
+            aria-label={t('ep.srcSelect', lang)}
+            title={t(src === 'metric' ? 'ep.list.srcMetricTitle' : 'ep.list.srcSpanTitle', lang)}>
+            <option value="span">{t('ep.src.span', lang)}</option>
+            <option value="metric">{t('ep.src.metric', lang)}</option>
           </select>
           <span style={{ color: 'var(--text3)', fontSize: 12, marginLeft: 'auto' }}>
             {rows && (
@@ -812,16 +811,16 @@ export default function EndpointsPage() {
                     ile birlikte büyüyor. */}
                 {sortBy === 'p99Delta' && pool > 0 && (
                   <span style={{ color: 'var(--text3)', marginLeft: 6 }}
-                        title={`Kötüleşme sıralaması, çağrıya göre ilk ${pool} endpoint içinde hesaplanır — düşük hacimli uç noktalar havuz dışında kalabilir`}>
-                    (aday havuzu: en çok çağrılan {fmtNum(pool)})
+                        title={tf('ep.pool.title', lang, { n: pool })}>
+                    {tf('ep.pool.hint', lang, { n: fmtNum(pool) })}
                   </span>
                 )}
                 {(rows.length >= limit || poolCapped) && (
                   <span style={{ color: 'var(--warn)', marginLeft: 6 }}
                         title={metricMode // v0.10.1359
-                          ? `Metrik kipi en çok çağrılan ilk ${metricN} (method, route) satırını okur — havuz doldu, dışında kalan route'lar var`
+                          ? tf('ep.cap.metric', lang, { n: metricN })
                           : poolCapped
-                          ? `Sıralama havuzu ${pool} aday ile sınırlı — havuz doldu, dışında kalan endpoint'ler var`
+                          ? tf('ep.cap.pool', lang, { n: pool })
                           : 'Result hit the limit — long-tail endpoints may be hidden'}>
                     (capped)
                   </span>
@@ -853,7 +852,7 @@ export default function EndpointsPage() {
           {/* v0.10.1359 — metrik kipinde devre dışı: satır greni sekmeyle aynı (method, route). */}
           <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, cursor: metricMode ? 'not-allowed' : 'pointer', opacity: metricMode ? 0.6 : undefined }}
             title={metricMode
-              ? 'Metrik kipinde şekle göre gruplama yok: satırlar HTTP/GRPC sekmesi gibi method + route (http_route zaten şablonlu). Gruplamak için Kaynak: span.'
+              ? t('ep.shapeMetric', lang)
               : 'Group endpoints by normalized shape: paths carrying IDs (/orders/8421) collapse into one stable group (/orders/:id). p99/error-rate stay exact.'}>
             <input type="checkbox"
               checked={bySignature}
@@ -894,19 +893,8 @@ export default function EndpointsPage() {
           }}>
             {metricMode ? (
               // v0.10.1359 — metrik kipinde HER sıralama havuz içinde (istemci).
-              <>
-                Metrik kipi pencerede en çok çağrılan ilk <b>{fmtNum(pool)}</b>{' '}
-                (method, route) satırını okur ve her sıralamayı bu havuz içinde
-                yapar; havuz doldu — daha düşük hacimli route'lar listede yok.
-                Yol filtresiyle daraltın.
-              </>
-            ) : (<>
-            Sıralama havuzu <b>{fmtNum(pool)}</b> aday ile sınırlı — liste eksik
-            olabilir. Kötüleşme sıralaması, pencerede en çok çağrılan ilk{' '}
-            {fmtNum(pool)} endpoint içinde hesaplanır; daha düşük hacimli bir uç
-            nokta kötüleşse bile bu tabloya giremez. Daralt (servis / yol filtresi)
-            ya da başka bir kolona göre sırala.
-            </>)}
+              (() => { const [a, b] = t('ep.band.metric', lang).split('{n}'); return <>{a}<b>{fmtNum(pool)}</b>{b}</>; })()
+            ) : (() => { const [a, b] = tf('ep.band.pool', lang, { n: fmtNum(pool) }).split('{b}'); return <>{a}<b>{fmtNum(pool)}</b>{b}</>; })()}
           </div>
         )}
 
@@ -930,13 +918,13 @@ export default function EndpointsPage() {
                 kapattığımız kapsam yalanı, tam da bu sayıyı filo geneli
                 gibi okutmaktı. */}
             <div style={{ marginBottom: 12, fontSize: 11.5, color: 'var(--text3)' }}
-              title={`Oran pencere TOPLAMLARINDAN: ${fmtNum(listed.errors)} hata / ${fmtNum(listed.calls)} çağrı. Satır oranlarının ortalaması DEĞİL.`}>
-              Listelenen {fmtNum(listed.rows)} satırın toplamı:{' '}
-              <b style={{ color: 'var(--text2)' }}>{fmtNum(listed.calls)}</b> çağrı ·{' '}
+              title={tf('ep.listed.title', lang, { e: fmtNum(listed.errors), c: fmtNum(listed.calls) })}>
+              {tf('ep.listed.a', lang, { n: fmtNum(listed.rows) })}
+              <b style={{ color: 'var(--text2)' }}>{fmtNum(listed.calls)}</b>{t('ep.listed.calls', lang)}
               <b style={{
                 color: listed.errorRate >= 5 ? 'var(--err)'
                   : listed.errorRate >= 1 ? 'var(--warn)' : 'var(--text2)',
-              }}>{fmtNum(listed.errors)}</b> hata ({listed.errorRate.toFixed(2)}%)
+              }}>{fmtNum(listed.errors)}</b>{tf('ep.listed.errors', lang, { r: listed.errorRate.toFixed(2) })}
             </div>
           </>
         )}
@@ -1023,7 +1011,7 @@ export default function EndpointsPage() {
                         case 'path': return (
                           <td className="mono sticky-left" style={{ left: leftOffs['path'] }} title={r.path}>
                       {/* v0.10.1359 — metrik: http_route etiketsiz seriler (sekmedeki "(route yok)"). */}
-                      {r.path || (metricMode ? <span className="cell-muted">(route yok)</span> : r.path)}
+                      {r.path || (metricMode ? <span className="cell-muted">{t('hm.noRoute', lang)}</span> : r.path)}
                     </td>
                         );
                         /* v0.10.1348 — Method rozet (tek nötr ton: renk yalnız
@@ -1111,7 +1099,7 @@ export default function EndpointsPage() {
                         const d = endpointP99Delta(r.p99Ms, r.priorP99Ms);
                         if (d.kind === 'listNew') {
                           return <span style={{ color: 'var(--text3)' }}
-                            title={LIST_NEW_TITLE}>{LIST_NEW_LABEL}</span>;
+                            title={t('ep.listNewTitle', lang)}>{t('ep.listNew', lang)}</span>;
                         }
                         // v0.10.929 (K5) — iyileşme nötr --text2 (Sparkline emsali), kötüleşme kırmızı kalır.
                         const cls = d.pct > 5 ? 'var(--err)' : d.pct < -5 ? 'var(--text2)' : 'var(--text3)';
@@ -1169,9 +1157,9 @@ export default function EndpointsPage() {
                             `!refObj.sig` kuralı): kural `http_route = <şekil>`
                             eşler, ham id taşıyan route'ta hiç tetiklenmezdi. */}
                         {canEditRules && entry === 'http' && !bySignature && (
-                          <IconButton size="sm" icon={<span aria-hidden="true">⚠</span>} aria-label="Bu route için alarm kuralı"
+                          <IconButton size="sm" icon={<span aria-hidden="true">⚠</span>} aria-label={t('ep.alertAria', lang)}
                             // v0.10.926 — Tooltip; ata <tr> title'ı sızmaz (boş title).
-                            tooltip="Bu route için eşik alarmı: p95/p99/hata oranı/hız eşiği geçince Problem"
+                            tooltip={t('ep.alertTitle', lang)}
                             onClick={e => { e.stopPropagation(); setAlertRow(r); }} />
                         )}
                       </span>
@@ -1226,11 +1214,7 @@ export default function EndpointsPage() {
             {src === 'metric' ? (
               <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text3)' }}>
                 {/* v0.10.1359 — sayılar HTTP Metrics sekmesinin AYNI PromQL'i. */}
-                Path = <code>http_route</code>, Method = <code>http_request_method</code> etiketi
-                (VictoriaMetrics, OTel HTTP server histogramı). Sayılar Service → HTTP/GRPC
-                sekmesinin "Endpoint Detayları" tablosu ve endpoint detay karolarıyla aynı
-                PromQL: pencere <code>increase[W]</code>; yüzdelikler penceredeki kova artışlarından
-                (<code>histogram_quantile</code>). En çok çağrılan ilk {fmtNum(metricN)} satır.
+                Path = <code>http_route</code>, Method = <code>http_request_method</code>{t('ep.mfoot.a', lang)}<code>increase[W]</code>{t('ep.mfoot.b', lang)}<code>histogram_quantile</code>{tf('ep.mfoot.c', lang, { n: fmtNum(metricN) })}
               </div>
             ) : (
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text3)' }}>

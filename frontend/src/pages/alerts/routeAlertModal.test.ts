@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { t } from '@/lib/i18n';
 import { defaultRouteRuleName, defaultRouteThreshold } from './routeAlert';
 import { HTTP_ROUTE_METRICS, targetMetrics, httpRouteUnit, isHttpRouteMetric } from './constants';
 
@@ -40,6 +41,7 @@ describe('RouteAlertModal', () => {
     expect(eps).toContain("entry === 'http'"); // RPC satırında route yok
     const det = read('EndpointDetail.tsx');
     expect(det).toContain('<RouteAlertModal open onClose={() => setAlertOpen(false)}');
-    expect(det).toContain('⚠ Alarm oluştur');
+    expect(det).toContain("{t('ep.alertBtn', lang)}"); // v0.10.2305 — katalogda
+    expect(t('ep.alertBtn', 'tr')).toBe('⚠ Alarm oluştur');
   });
 });

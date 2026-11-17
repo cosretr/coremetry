@@ -22,6 +22,7 @@
 // sayılmaz. Route eşdeğeri (rpc_service, rpc_method): sütunlar "Service /
 // Method", lejant "pkg.Service/Method".
 import type { RedFamilyId, RedFamilyKind, RedFamilyPresence, RedFamilyResolution } from './types';
+import { t, tf, type Lang } from './i18n'; // v0.10.2305 — notlar isteğe bağlı lang (varsayılan 'tr')
 export type { RedFamilyId, RedFamilyKind, RedFamilyPresence, RedFamilyResolution } from './types';
 
 export interface RedFamilyLabels { service: string; route: string; method: string; status: string }
@@ -211,8 +212,8 @@ export function familyPartialNote(v: RedFamilyView): string | null {
 }
 
 /** Çözüm bilinmiyor / okunamadı notu (null = not yok). */
-export function familyUnknownNote(v: RedFamilyView): string | null {
-  if (v.state === 'unknown') return `Metrik ailesi BİLİNEMEDİ (${v.reason ?? 'okunamadı'}) — HTTP sorguları koşuyor; gRPC yok DEĞİL`;
-  if (v.state === 'error') return `Metrik ailesi çözülemedi (${v.reason ?? 'uç hatası'}) — HTTP sorguları koşuyor`;
+export function familyUnknownNote(v: RedFamilyView, lang: Lang = 'tr'): string | null {
+  if (v.state === 'unknown') return tf('hm.fam.unknown', lang, { r: v.reason ?? t('hm.fam.unread', lang) });
+  if (v.state === 'error') return tf('hm.fam.error', lang, { r: v.reason ?? t('hm.fam.endpointErr', lang) });
   return null;
 }

@@ -34,6 +34,8 @@ const ser = (labels: Record<string, string>, v: number): SpanMetricSeries => ({
   points: [{ time: 1e9, value: v }],
 });
 
+// v0.10.2305 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/api', () => {
   const MR = (method: string, extra: Record<string, string> = {}) => ({ http_request_method: method, http_route: '/orders', ...extra });
   // İfadenin ŞEKLİNDEN cevap: aynı route iki method (GET 1200, POST 300).

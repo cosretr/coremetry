@@ -32,11 +32,12 @@ import { fmtSmart } from '@/lib/chartFmt';
 import { useUrlParams, strParam } from '@/lib/urlParams';
 import {
   httpQueries, relabel, scalarOf, barsOf, mergeTable, filterOptions,
-  HTTP_INSTANT_IDS, HTTP_QUANTILE_NOTE, stepSeconds, fmtCount, fmtRatio, fmtSeconds, fmtCompact, type BarRow, type LegendTpl,
+  HTTP_INSTANT_IDS, httpQuantileNote, stepSeconds, fmtCount, fmtRatio, fmtSeconds, fmtCompact, type BarRow, type LegendTpl,
   latencyTone, errorRatioTone, clientErrorTone, sliTone, sparkValues, statusCodeColorVar, methodRouteLegend,
 } from '@/lib/httpMetrics';
 import type { TimeRange, SpanMetricSeries } from '@/lib/types';
 import { useThemeTick } from '@/lib/useThemeTick';
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2305 — sekme metinleri arayüz dilinde (TR aynı)
 
 // v0.10.1247 — sabit seri renkleri tema token'ından (tema değişince yeniden).
 // v0.10.1247 — Grafana tablo hücreleri: gradient arka plan (eşik rengi) ve
@@ -73,51 +74,51 @@ type Row = Record<string, string | number | null>;
 
 // v0.10.1245 — eksik hücre (undefined) / NaN güvenli (lib/httpMetrics fmt*).
 type Cell = number | string | null | undefined;
-const pct = (v: Cell) => fmtRatio(v);
 const sec = (v: Cell) => fmtSeconds(v, n => fmtSmart(n, 's'));
-const num = (v: Cell, d = 0) => fmtCount(v, d);
 
-function cols(keyCols: Array<{ id: string; label: string }>, prefix: string, errLabels: [string, string]): ColumnDef<Row>[] {
+function cols(keyCols: Array<{ id: string; label: string }>, prefix: string, errLabels: [string, string], lang: Lang = 'tr'): ColumnDef<Row>[] {
   const n = (r: Row, k: string) => (typeof r[k] === 'number' ? (r[k] as number) : -1);
   return [
     ...keyCols.map((c, i) => ({
       id: c.id, label: c.label, sortValue: (r: Row) => String(r[c.id] ?? ''), naturalDir: 'asc' as const,
       mono: true, minWidth: i === 0 ? 70 : 180, priority: 1, ...(i === keyCols.length - 1 ? { flex: true } : { width: 160 }),
     })),
-    { id: `${prefix}Total`, label: 'Toplam İstek', numeric: true, width: 120, minWidth: 90, priority: 2, sortValue: r => n(r, `${prefix}Total`) },
+    { id: `${prefix}Total`, label: t('hm.total', lang), numeric: true, width: 120, minWidth: 90, priority: 2, sortValue: r => n(r, `${prefix}Total`) },
     { id: `${prefix}Rps`, label: 'RPS', numeric: true, width: 90, minWidth: 70, priority: 2, sortValue: r => n(r, `${prefix}Rps`) },
-    { id: `${prefix}Avg`, label: 'Ortalama', numeric: true, width: 100, minWidth: 80, priority: 2, sortValue: r => n(r, `${prefix}Avg`) },
+    { id: `${prefix}Avg`, label: t('hm.avg', lang), numeric: true, width: 100, minWidth: 80, priority: 2, sortValue: r => n(r, `${prefix}Avg`) },
     { id: `${prefix}P95`, label: 'P95', numeric: true, width: 90, minWidth: 70, priority: 2, sortValue: r => n(r, `${prefix}P95`) },
     { id: `${prefix}P99`, label: 'P99', numeric: true, width: 90, minWidth: 70, priority: 3, sortValue: r => n(r, `${prefix}P99`) },
     { id: `${prefix}Err5`, label: errLabels[0], numeric: true, width: 90, minWidth: 70, priority: 2, sortValue: r => n(r, `${prefix}Err5`) },
     { id: `${prefix}Err4`, label: errLabels[1], numeric: true, width: 90, minWidth: 70, priority: 3, sortValue: r => n(r, `${prefix}Err4`) },
   ];
 }
-const OUT_COLS = cols([{ id: 'http_request_method', label: 'Method' }, { id: 'server_address', label: 'Downstream' }], 'dt', ['5xx %', '4xx %']);
+const OUT_COLS = (lang: Lang) => cols([{ id: 'http_request_method', label: 'Method' }, { id: 'server_address', label: 'Downstream' }], 'dt', ['5xx %', '4xx %'], lang);
 
 /** v0.10.1429 — aile başına metin/sütun sözlüğü (HTTP metinleri bayt bayt eski). */
-function famText(F: RedFamilySpec) {
+function famText(F: RedFamilySpec, lang: Lang = 'tr') {
   const grpc = F.kind === 'grpc';
+  const k = (x: string) => t(`hm.${grpc ? 'grpc' : 'http'}.${x}`, lang); // v0.10.2305 — katalogdan
   return {
     RT: F.routeTitle,                                  // "Route" | "Method"
-    err5: grpc ? 'Sunucu hatası oranı' : '5xx Hata Oranı',
-    err4: grpc ? 'İstemci hatası oranı' : '4xx Oranı',
-    errCols: (grpc ? ['Sunucu hata %', 'İstemci hata %'] : ['5xx %', '4xx %']) as [string, string],
-    cls: grpc ? 'gRPC Durum Sınıfları' : 'HTTP Status Sınıfları',
-    err5Chart: grpc ? 'Sunucu Hataları' : '5xx Hataları',
-    err4Chart: grpc ? 'İstemci Hataları' : '4xx Hataları',
-    source: grpc ? 'Kaynak: VictoriaMetrics · OpenTelemetry RPC semconv metrikleri' : 'Kaynak: VictoriaMetrics · OpenTelemetry HTTP semconv metrikleri',
-    detail: grpc ? 'RPC Detayları' : 'Endpoint Detayları',
+    err5: k('err5'),
+    err4: k('err4'),
+    errCols: (grpc ? [t('hm.grpc.col5', lang), t('hm.grpc.col4', lang)] : ['5xx %', '4xx %']) as [string, string],
+    cls: k('cls'),
+    err5Chart: k('err5Chart'),
+    err4Chart: k('err4Chart'),
+    source: k('source'),
+    detail: k('detail'),
   };
 }
 
 export function ServiceHttpMetricsTab({ service, range, env = '', cluster = '' }: { service: string; range: TimeRange; env?: string; cluster?: string }) {
   const win = useMemo(() => timeRangeToNs(range), [range]);
   // v0.10.1429 — aile çözümü (HTTP / gRPC) + aile başına ortam eşleyicisi; çözüm gelene dek sorgu yok.
+  const lang = useLang();
   const fam = useRedFamily(service, env, cluster, win.to);
   if (!fam.ready) return <Spinner />;
   const sections = familySections(fam);
-  const note = familyUnknownNote(fam) ?? familyPartialNote(fam); // v0.10.1559 — kısmi okuma da söylenir
+  const note = familyUnknownNote(fam, lang) ?? familyPartialNote(fam); // v0.10.1559 — kısmi okuma da söylenir
   return (
     <div>
       {note && <div className="field-hint" style={{ marginBottom: 10 }}>{note}</div>}
@@ -136,8 +137,11 @@ function FamilySection({ service, win, family, envScope, head, tried }: {
 }) {
   const [f, setF] = useUrlParams(FILTER_SPEC);
   useThemeTick();
+  const lang = useLang();
+  const pct = (v: Cell) => fmtRatio(v, lang);
+  const num = (v: Cell, d = 0) => fmtCount(v, d, lang);
   const grpc = family.kind === 'grpc';
-  const T = famText(family);
+  const T = famText(family, lang);
   const FL = family.labels;
   const fRoute = grpc ? f.groute : f.hroute;
   const fMethod = grpc ? f.gmethod : f.hmethod;
@@ -159,11 +163,12 @@ function FamilySection({ service, win, family, envScope, head, tried }: {
   const optsErr = res.error('opts');
   const opts = filterOptions(data.opts, family);
   // v0.10.1352 — route etiketsiz seri "GET (route yok)", çıplak "GET" değil; gRPC "pkg.Service/Method" (v0.10.1429).
-  const MR: LegendTpl = l => methodRouteLegend(l, false, family);
-  const SMR: LegendTpl = l => methodRouteLegend(l, true, family);
+  const MR: LegendTpl = l => methodRouteLegend(l, false, family, lang);
+  const SMR: LegendTpl = l => methodRouteLegend(l, true, family, lang);
   const statusCodeColor = (code: string) => statusCodeColorVar(code, family);
-  const IN_COLS = useMemo(() => cols([{ id: FL.method, label: family.methodTitle }, { id: FL.route, label: family.routeTitle }], 't', T.errCols),
-    [FL.method, FL.route, family.methodTitle, family.routeTitle, T.errCols[0], T.errCols[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+  const IN_COLS = useMemo(() => cols([{ id: FL.method, label: family.methodTitle }, { id: FL.route, label: family.routeTitle }], 't', T.errCols, lang),
+    [FL.method, FL.route, family.methodTitle, family.routeTitle, T.errCols[0], T.errCols[1], lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  const outCols = useMemo(() => OUT_COLS(lang), [lang]);
 
   const inRows = useMemo(() => mergeTable({
     tTotal: data.tTotal, tRps: data.tRps, tAvg: data.tAvg, tP95: data.tP95, tP99: data.tP99, tErr5: data.tErr5, tErr4: data.tErr4,
@@ -172,19 +177,18 @@ function FamilySection({ service, win, family, envScope, head, tried }: {
     dtTotal: data.dtTotal, dtRps: data.dtRps, dtAvg: data.dtAvg, dtP95: data.dtP95, dtP99: data.dtP99, dtErr5: data.dtErr5, dtErr4: data.dtErr4,
   }, ['server_address', 'http_request_method']), [data.dtTotal, data.dtRps, data.dtAvg, data.dtP95, data.dtP99, data.dtErr5, data.dtErr4]);
   const inDt = useDataTable<Row>({ storageKey: grpc ? 'svc-grpc-methods' : 'svc-http-endpoints', columns: IN_COLS, rows: inRows, initialSort: { id: 'tTotal', dir: 'desc' } });
-  const outDt = useDataTable<Row>({ storageKey: 'svc-http-downstream', columns: OUT_COLS, rows: outRows, initialSort: { id: 'dtTotal', dir: 'desc' } });
+  const outDt = useDataTable<Row>({ storageKey: 'svc-http-downstream', columns: outCols, rows: outRows, initialSort: { id: 'dtTotal', dir: 'desc' } });
 
   const header = head ? (
-    <SectionHead title={`${family.label} metrikleri`} meta={family.names.count.replace(/_count$/, '_*')} />
+    <SectionHead title={tf('hm.famMetrics', lang, { f: family.label })} meta={family.names.count.replace(/_count$/, '_*')} />
   ) : null;
   if (res.pending('opts')) return <>{header}<Spinner /></>; // v0.10.1377 — ortam çözülürken de (sorgu bekler)
   if (optsErr) {
     return (
       <>
         {header}
-        <Empty icon="!" title={`${family.label} metrikleri okunamadı`}>
-          {optsErr.message} — bu sekme VictoriaMetrics'ten okur
-          ({family.names.count.replace(/_count$/, '_*')}{grpc ? '' : ' / http_client_request_duration_seconds_*'}).
+        <Empty icon="!" title={tf('hm.famErr', lang, { f: family.label })}>
+          {tf('hm.famErr.tab', lang, { e: optsErr.message, m: `${family.names.count.replace(/_count$/, '_*')}${grpc ? '' : ' / http_client_request_duration_seconds_*'}` })}
         </Empty>
       </>
     );
@@ -193,9 +197,9 @@ function FamilySection({ service, win, family, envScope, head, tried }: {
     return (
       <>
         {header}
-        <Empty icon="∿" title={`Bu servis için ${family.label} metriği yok`}>
-          VictoriaMetrics'te service_name="{service}"{envSel ? `, ${envSel}` : ''} etiketli {family.names.count.replace(/_count$/, '')} metriği bu pencerede bulunamadı.
-          {tried.length > 0 && <> Denenen aileler: {tried.join('; ')}.</>}
+        <Empty icon="∿" title={tf('hm.noFam', lang, { f: family.label })}>
+          {tf('hm.noFam.body', lang, { s: service, env: envSel ? `, ${envSel}` : '', m: family.names.count.replace(/_count$/, '') })}
+          {tried.length > 0 && <>{tf('hm.tried', lang, { v: tried.join('; ') })}</>}
         </Empty>
       </>
     );
@@ -217,7 +221,7 @@ function FamilySection({ service, win, family, envScope, head, tried }: {
     const top = Math.max(...rows.map(r => r.value), 0);
     return (
       <Card header={<PanelTitle>{title}</PanelTitle>}>
-        {loading ? <Spinner /> : rows.length === 0 ? <div className="field-hint">Bu pencerede veri yok.</div> : (
+        {loading ? <Spinner /> : rows.length === 0 ? <div className="field-hint">{t('hm.noData', lang)}</div> : (
           <div style={{ display: 'grid', gap: 4 }}>
             {rows.map(r => (
               <div key={r.label} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8, fontSize: 12 }}>
@@ -242,7 +246,7 @@ function FamilySection({ service, win, family, envScope, head, tried }: {
         <DataTableHead dt={dt} />
         <tbody>
           {dt.sortedRows.length === 0
-            ? <DataTableState dt={dt} {...(pending(loadingId) ? { kind: 'loading' as const } : { kind: 'empty' as const, message: 'Bu pencerede veri yok.' })} />
+            ? <DataTableState dt={dt} {...(pending(loadingId) ? { kind: 'loading' as const } : { kind: 'empty' as const, message: t('hm.noData', lang) })} />
             : dt.sortedRows.map(r => (
               <tr key={keys.map(k => r[k]).join('|')}>
                 {/* v0.10.1425 — method hücresi atomdan (renk method'a göre); boş → soluk "—". gRPC: rpc_service düz mono (HTTP fiili değil). */}
@@ -272,28 +276,28 @@ function FamilySection({ service, win, family, envScope, head, tried }: {
   );
   const grid = (min: number) => ({ display: 'grid', gap: 12, gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`, marginBottom: 14 });
   // gRPC durum kodu dilimleri "14 UNAVAILABLE" adıyla (renk sınıftan).
-  const statusRows = barsOf(data.statusCodes, FL.status, 20).map(r => (grpc ? { ...r, label: statusCodeLabel(family, r.label) } : r));
+  const statusRows = barsOf(data.statusCodes, FL.status, 20, lang).map(r => (grpc ? { ...r, label: statusCodeLabel(family, r.label) } : r));
 
   return (
     <div>
       {header}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12 }}>
         <SelectField label={family.routeTitle} value={fRoute} onChange={e => setRoute(e.target.value)}>
-          <option value="">Tümü</option>
+          <option value="">{t('podpage.all', lang)}</option>
           {opts.routes.map(r => <option key={r} value={r}>{r}</option>)}
         </SelectField>
         <SelectField label={family.methodTitle} value={fMethod} onChange={e => setMethod(e.target.value)}>
-          <option value="">Tümü</option>
+          <option value="">{t('podpage.all', lang)}</option>
           {opts.methods.map(m => <option key={m} value={m}>{m}</option>)}
         </SelectField>
         <span className="field-hint">{T.source}</span>
-        {grpc && <Badge tone="info" title={`gRPC sunucu histogramı ${family.names.count.replace(/_count$/, '_*')} (${family.probe}, ${family.unit}); hata = sunucu-hatası kodları ${family.serverErr}, istemci kodları ${family.clientErr} ayrı oranda`}>gRPC</Badge>}
+        {grpc && <Badge tone="info" title={tf('hm.grpcTitle', lang, { m: family.names.count.replace(/_count$/, '_*'), p: family.probe, u: family.unit, s: family.serverErr, c: family.clientErr })}>gRPC</Badge>}
         <HttpEnvScopeBand view={envScope} />
       </div>
 
-      <SectionHead title="Genel Bakış" />
+      <SectionHead title={t('hm.sec.overview', lang)} />
       <div style={grid(150)}>
-        <HttpStat label="Toplam İstek" value={compact(scalarOf(data.total))} title={num(scalarOf(data.total))} accent="var(--info)" />
+        <HttpStat label={t('hm.total', lang)} value={compact(scalarOf(data.total))} title={num(scalarOf(data.total))} accent="var(--info)" />
         <HttpStat label="Throughput" value={`${num(scalarOf(data.rps), 2)} req/s`} accent="var(--purple)" spark={sparkValues(data.rps)} />
         <HttpStat label={T.err5} value={pct(scalarOf(data.err5))} tone={errorRatioTone(scalarOf(data.err5)) ?? 'ok'} spark={sparkValues(data.err5)} />
         <HttpStat label={T.err4} value={pct(scalarOf(data.err4))} tone={clientErrorTone(scalarOf(data.err4)) ?? 'ok'} spark={sparkValues(data.err4)} />
@@ -301,48 +305,48 @@ function FamilySection({ service, win, family, envScope, head, tried }: {
         <HttpGauge label="SLI: < 500ms" ratio={scalarOf(data.sli)} text={pct(scalarOf(data.sli))} tone={sliTone(scalarOf(data.sli)) ?? 'ok'} />
       </div>
 
-      <SectionHead title="Trafik" />
+      <SectionHead title={t('hm.sec.traffic', lang)} />
       <div style={grid(420)}>
-        {chart(`Request Rate (${T.RT} bazında)`, 'rateByRoute', MR, 'req/s')}
-        {donut(`İstek Dağılımı (${T.RT}, Top 10)`, barsOf(data.topRoutes, FL.route), 'topRoutes', undefined,
+        {chart(tf('hm.chartBy', lang, { c: 'Request Rate', rt: T.RT }), 'rateByRoute', MR, 'req/s')}
+        {donut(tf('hm.reqDist', lang, { rt: T.RT }), barsOf(data.topRoutes, FL.route, 10, lang), 'topRoutes', undefined,
           r => setRoute(fRoute === r ? '' : r))}
         {chart(T.cls, 'statusClass', '{{cls}}', 'req/s')}
-        {donut('Status Code Dağılımı', statusRows, 'statusCodes', statusCodeColor)}
+        {donut(t('hm.statusDist', lang), statusRows, 'statusCodes', statusCodeColor)}
       </div>
 
-      <SectionHead title="Gecikme (Latency)" />
+      <SectionHead title={t('hm.sec.latency', lang)} />
       <div style={grid(420)}>
-        {chart('Latency Yüzdelikleri (p50 / p90 / p95 / p99)', 'p50', 'p50', 's', 1,
-          [{ id: 'p90', tpl: 'p90' }, { id: 'p95', tpl: 'p95' }, { id: 'p99', tpl: 'p99' }], HTTP_QUANTILE_NOTE)}
-        {chart(`P95 gecikme (${T.RT.toLowerCase()})`, 'p95ByRoute', MR, 's')}
+        {chart(t('hm.latPct', lang), 'p50', 'p50', 's', 1,
+          [{ id: 'p90', tpl: 'p90' }, { id: 'p95', tpl: 'p95' }, { id: 'p99', tpl: 'p99' }], httpQuantileNote(lang))}
+        {chart(tf('hm.latBy', lang, { q: 'P95', rt: T.RT.toLowerCase() }), 'p95ByRoute', MR, 's')}
       </div>
 
-      <SectionHead title="Hatalar" />
+      <SectionHead title={t('hm.sec.errors', lang)} />
       <div style={grid(420)}>
-        {chart(`${T.err5Chart} (${T.RT} bazında)`, 'err5ByRoute', SMR, 'req/s')}
-        {chart(`${T.err4Chart} (${T.RT} bazında)`, 'err4ByRoute', SMR, 'req/s')}
+        {chart(tf('hm.chartBy', lang, { c: T.err5Chart, rt: T.RT }), 'err5ByRoute', SMR, 'req/s')}
+        {chart(tf('hm.chartBy', lang, { c: T.err4Chart, rt: T.RT }), 'err4ByRoute', SMR, 'req/s')}
       </div>
 
-      <SectionHead title={T.detail} meta="seçili zaman aralığı" />
+      <SectionHead title={T.detail} meta={t('hm.selRange', lang)} />
       <div style={{ marginBottom: 14 }}>{table(inDt, 't', [FL.method, FL.route], 'tTotal')}</div>
 
       {!grpc && (<>
-        <SectionHead title={`Downstream Bağımlılıkları (${service} →)`} />
+        <SectionHead title={tf('hm.downDeps', lang, { s: service })} />
         <div style={grid(150)}>
           <HttpStat label="Downstream RPS" value={`${num(scalarOf(data.dRps), 2)} req/s`} accent="var(--purple)" spark={sparkValues(data.dRps)} />
-          <HttpStat label="Downstream Hata Oranı" value={pct(scalarOf(data.dErr))} tone={errorRatioTone(scalarOf(data.dErr)) ?? 'ok'} spark={sparkValues(data.dErr)} />
+          <HttpStat label={t('hm.downErr', lang)} value={pct(scalarOf(data.dErr))} tone={errorRatioTone(scalarOf(data.dErr)) ?? 'ok'} spark={sparkValues(data.dErr)} />
           <HttpStat label="Downstream P95" value={sec(scalarOf(data.dP95))} tone={latencyTone(scalarOf(data.dP95)) ?? 'ok'} spark={sparkValues(data.dP95)} />
-          <HttpStat label="Bağlantı Hataları" value={num(scalarOf(data.dConnErr))} tone={(scalarOf(data.dConnErr) ?? 0) > 0 ? 'err' : 'ok'} />
+          <HttpStat label={t('hm.connErr', lang)} value={num(scalarOf(data.dConnErr))} tone={(scalarOf(data.dConnErr) ?? 0) > 0 ? 'err' : 'ok'} />
         </div>
         <div style={grid(420)}>
-          {bars('Downstream Servisler (RPS)', barsOf(data.dBars, 'server_address', 30).map(r => ({ ...r, label: `→ ${r.label}` })), v => `${num(v, 2)} req/s`, pending('dBars'), true)}
-          {chart('Request Rate (Downstream bazında)', 'dRateByAddr', '→ {{server_address}}', 'req/s')}
-          {chart('P95 Latency (Downstream bazında)', 'dP95ByAddr', '→ {{server_address}}', 's')}
+          {bars(t('hm.downSvcs', lang), barsOf(data.dBars, 'server_address', 30, lang).map(r => ({ ...r, label: `→ ${r.label}` })), v => `${num(v, 2)} req/s`, pending('dBars'), true)}
+          {chart(tf('hm.chartBy', lang, { c: 'Request Rate', rt: 'Downstream' }), 'dRateByAddr', '→ {{server_address}}', 'req/s')}
+          {chart(tf('hm.chartBy', lang, { c: 'P95 Latency', rt: 'Downstream' }), 'dP95ByAddr', '→ {{server_address}}', 's')}
           {chart('Inbound P95 vs Downstream P95', 'p95', `Inbound (${service})`, 's', 1, [{ id: 'dP95ByAddr', tpl: '→ {{server_address}}' }])}
-          {chart('Hata Oranı (Downstream bazında)', 'dErrByAddr', '→ {{server_address}}', '%', 100)}
-          {chart('Hata Tipleri (error_type)', 'dErrTypes', '{{server_address}} · {{error_type}}', 'req/s')}
+          {chart(tf('hm.chartBy', lang, { c: t('hm.errRate', lang), rt: 'Downstream' }), 'dErrByAddr', '→ {{server_address}}', '%', 100)}
+          {chart(t('hm.errTypes', lang), 'dErrTypes', '{{server_address}} · {{error_type}}', 'req/s')}
         </div>
-        <SectionHead title="Downstream Özeti" meta="seçili zaman aralığı" />
+        <SectionHead title={t('hm.downSum', lang)} meta={t('hm.selRange', lang)} />
         {table(outDt, 'dt', ['http_request_method', 'server_address'], 'dtTotal')}
       </>)}
     </div>

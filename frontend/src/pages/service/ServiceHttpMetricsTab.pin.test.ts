@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 // v0.10.1244 — HTTP Metrics sekmesi: Service'te kayıtlı, kaynak VM'e sabit.
 const read = (p: string) => readFileSync(resolve(__dirname, p), 'utf8');
 
+import { t, tf } from '@/lib/i18n';
 describe('HTTP Metrics sekmesi', () => {
   it('Service sekme şeridinde ve render ediliyor', () => {
     const svc = read('../Service.tsx');
@@ -31,8 +32,11 @@ describe('HTTP Metrics Grafana paritesi', () => {
   it('stat / gauge / donut / tablo hücreleri; heatmap yok (v0.10.1258)', () => {
     expect(tab).toContain('<HttpStat label="P95 Latency"');
     expect(tab).toContain('<HttpGauge label="SLI: < 500ms"');
-    expect(tab).toContain("donut(`İstek Dağılımı (${T.RT}, Top 10)`"); // v0.10.1429 — RT: Route | Method (gRPC)
-    expect(tab).toContain("donut('Status Code Dağılımı'");
+    // v0.10.2305 — başlıklar katalogda (TR değerleri aynı).
+    expect(tab).toContain("donut(tf('hm.reqDist', lang, { rt: T.RT })"); // v0.10.1429 — RT: Route | Method (gRPC)
+    expect(tab).toContain("donut(t('hm.statusDist', lang)");
+    expect(tf('hm.reqDist', 'tr', { rt: 'Route' })).toBe('İstek Dağılımı (Route, Top 10)');
+    expect(t('hm.statusDist', 'tr')).toBe('Status Code Dağılımı');
     expect(tab).not.toContain('LatencyHeatmap');
     expect(tab).toContain('<GaugeCell');
     expect(tab).toContain('<ToneCell');
@@ -52,13 +56,15 @@ describe('HTTP Metrics Grafana paritesi', () => {
 describe('HTTP Metrics etiketleri (v0.10.1352)', () => {
   const tab = read('ServiceHttpMetricsTab.tsx');
   it('route gecikme başlığı', () => {
-    expect(tab).toContain("chart(`P95 gecikme (${T.RT.toLowerCase()})`, 'p95ByRoute', MR, 's')"); // v0.10.1429 aile
+    expect(tab).toContain("chart(tf('hm.latBy', lang, { q: 'P95', rt: T.RT.toLowerCase() }), 'p95ByRoute', MR, 's')"); // v0.10.1429 aile; v0.10.2305 katalog
+    expect(tf('hm.latBy', 'tr', { q: 'P95', rt: 'route' })).toBe('P95 gecikme (route)');
     expect(tab).not.toContain('P95 Latency (Route bazında)');
   });
   it('route lejantları methodRouteLegend', () => {
-    expect(tab).toContain('const MR: LegendTpl = l => methodRouteLegend(l, false, family);'); // v0.10.1429 — gRPC "pkg.Service/Method"
-    expect(tab).toContain("chart(`Request Rate (${T.RT} bazında)`, 'rateByRoute', MR, 'req/s')");
-    expect(tab).toContain("chart(`${T.err5Chart} (${T.RT} bazında)`, 'err5ByRoute', SMR, 'req/s')");
+    expect(tab).toContain('const MR: LegendTpl = l => methodRouteLegend(l, false, family, lang);'); // v0.10.1429 — gRPC "pkg.Service/Method"; v0.10.2305 lang
+    expect(tab).toContain("chart(tf('hm.chartBy', lang, { c: 'Request Rate', rt: T.RT }), 'rateByRoute', MR, 'req/s')");
+    expect(tab).toContain("chart(tf('hm.chartBy', lang, { c: T.err5Chart, rt: T.RT }), 'err5ByRoute', SMR, 'req/s')");
+    expect(tf('hm.chartBy', 'tr', { c: 'Request Rate', rt: 'Route' })).toBe('Request Rate (Route bazında)');
     expect(tab).not.toContain("'{{http_request_method}} {{http_route}}'");
   });
 });
