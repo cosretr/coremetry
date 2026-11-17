@@ -213,3 +213,43 @@ describe('useCosreChat (useChat kablosu)', () => {
     expect(seen.at(-1)).toEqual(['Son tam metin.']);
   });
 });
+
+// v0.10.2333 (conversation-audit §6.1 F1) — data-status: transient ara durum
+// cümlesi. Yalnız status deposunda yaşar; mesaj parçalarına ve kayda girmez;
+// sonraki cümle yerine geçer, alışveriş bitince ya da durdurulunca silinir.
+describe('data-status (ara durum cümlesi)', () => {
+  const STATUS = 'ui-stream-v1-status';
+  it('ilk tur cümlesi → ikinci tur cümlesi → bitince null; parçalarda ve kayıtta yok', async () => {
+    let at = '';
+    const f = sseFetch(sse(STATUS), fr => {
+      if (fr.includes('"type":"data-status"') && !at) { at = fr; return true; }
+      return false;
+    });
+    const persisted: ChatMessage[][] = [];
+    const core = createCosreChat({ fetch: f.fetch, onPersist: m => persisted.push(m) });
+    const seen: Array<string | null> = [];
+    const off = core.status.subscribe(() => seen.push(core.status.get()));
+    const p = core.chat.sendMessage({ text: 'q' });
+    await vi.waitFor(() => expect(core.status.get()).toBe('Loglara bakıyorum…'));
+    f.release();
+    await p;
+    off();
+    expect(seen).toEqual(['Loglara bakıyorum…', "Trace'i açıyorum…", null]);
+    const last = core.chat.messages.at(-1)!;
+    expect(last.parts.some(x => x.type === 'data-status')).toBe(false);
+    expect(JSON.stringify(core.chat.messages)).not.toContain('bakıyorum');
+    expect(JSON.stringify(persisted)).not.toContain('bakıyorum');
+    expect(persisted.at(-1)!.at(-1)!.text).toContain('3 hata logu');
+  });
+
+  it('durdurma: cümle silinir, başka bir şey değişmez', async () => {
+    const f = sseFetch(sse(STATUS), fr => fr.includes('"toolCallId":"s1","type":"tool-output-available"'));
+    const core = createCosreChat({ fetch: f.fetch });
+    const p = core.chat.sendMessage({ text: 'q' });
+    await vi.waitFor(() => expect(core.status.get()).toBe('Loglara bakıyorum…'));
+    await core.chat.stop();
+    await p;
+    expect(core.status.get()).toBeNull();
+    expect(core.chat.messages.at(-1)!.metadata?.partial).toBe(true);
+  });
+});

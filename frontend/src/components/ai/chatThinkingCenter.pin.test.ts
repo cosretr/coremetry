@@ -16,7 +16,7 @@ describe('sohbet bekleyişi: logosuz + ortalı', () => {
     expect(src).toContain('const thinkingOnly = !isUser && turn.pending && !turn.text && !turn.error;');
   });
   it('gösterge ortalı kapta', () => {
-    expect(src).toContain('{thinkingOnly && <div className="cm-wait-center"><AiThinking variant="row" /></div>}');
+    expect(src).toContain('{thinkingOnly && <div className="cm-wait-center"><AiThinking variant="row" label={turn.statusLine} /></div>}');
     expect(css).toMatch(/\.cm-wait-center\s*\{[^}]*justify-content:\s*center/);
   });
 });

@@ -1,0 +1,10 @@
+{"kind":"status","payload":{"text":"Loglara bakıyorum…"}}
+{"kind":"step","payload":{"i":1,"tool":"search_logs","args":"{\"service\":\"checkout\"}","argsJson":{"service":"checkout"},"phase":"Log"}}
+{"kind":"step-result","payload":{"i":1,"tool":"search_logs","ok":true,"preview":"{\"errors\":3}","truncated":false,"bytes":12,"durationMs":40}}
+{"kind":"status","payload":{"text":"Trace'i açıyorum…"}}
+{"kind":"step","payload":{"i":2,"tool":"find_traces","args":"{\"service\":\"checkout\"}","argsJson":{"service":"checkout"},"phase":"Trace"}}
+{"kind":"step","payload":{"i":3,"tool":"get_service_health","args":"{\"service\":\"orders\"}","argsJson":{"service":"orders"},"phase":"Sağlık"}}
+{"kind":"step-result","payload":{"i":2,"tool":"find_traces","ok":true,"preview":"{\"traces\":2}","truncated":false,"bytes":12,"durationMs":55}}
+{"kind":"step-result","payload":{"i":3,"tool":"get_service_health","ok":true,"preview":"{\"p95_ms\":310}","truncated":false,"bytes":14,"durationMs":30}}
+{"kind":"answer","payload":{"text":"checkout'ta son bir saatte 3 hata logu var; ikisi orders çağrısında zaman aşımı."}}
+{"kind":"done","payload":{"ok":true}}

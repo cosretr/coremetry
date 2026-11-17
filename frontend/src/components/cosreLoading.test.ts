@@ -13,7 +13,7 @@ describe('CoSRE explain loading state (v0.10.152)', () => {
   it('uses AiThinking centered while waiting for the first token (sohbet balonu)', () => {
     const src = readFileSync(join(__dirname, 'ai/ChatBubble.tsx'), 'utf8').replace(/^\s*\/\/.*$/gm, '');
     expect(src).toContain('const thinkingOnly = !isUser && turn.pending && !turn.text && !turn.error;');
-    expect(src).toContain('{thinkingOnly && <div className="cm-wait-center"><AiThinking variant="row" /></div>}');
+    expect(src).toContain('{thinkingOnly && <div className="cm-wait-center"><AiThinking variant="row" label={turn.statusLine} /></div>}');
     expect(src).not.toMatch(/<LoaderMark/);
   });
   it('PageLoader reuses LoaderMark (single mark, no drift)', () => {

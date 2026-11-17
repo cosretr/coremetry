@@ -80,6 +80,13 @@ func (t *Translator) Translate(kind string, payload any) []Part {
 		// offer?{kind,label?,at?}, updatedAt}; tek parça (id sabit). İstemci
 		// Redis'siz kurulumda bunu context.state ile geri yollar.
 		out = append(out, Part{"type": "data-state", "id": "state", "data": m})
+	case "status":
+		// v0.10.2333 (conversation-audit §6.1 F1) — araç turunun ara durum
+		// cümlesi (api chat_status_line.go): {text}. transient (data-reset
+		// emsali): AI SDK yalnız onData'ya iletir, message.parts'a eklemez —
+		// mesaja ve arşive girmez; istemci sonuncuyu gösterir, cevap metni
+		// başlayınca ya da alışveriş bitince siler.
+		out = append(out, Part{"type": "data-status", "id": "status", "data": m, "transient": true})
 	case "code-lock":
 		out = append(out, Part{"type": "data-code-lock", "id": "code-lock", "data": m})
 	case "error":

@@ -234,7 +234,9 @@ func TestAnswerStyleLoopPrompt(t *testing.T) {
 		t.Fatalf("max_tokens kapalı %v açık %v", offMax, onMax)
 	}
 	compareChatGolden(t, "v2_loop.sse", offBody)
-	compareChatGolden(t, "v2_loop.sse", onBody)
+	// v0.10.2333 — F1 aynı anahtarla tur başına bir data-status ekler; onun
+	// dışında akış altınla aynı (chat_status_line_test.go withoutStatus).
+	compareChatGolden(t, "v2_loop.sse", withoutStatus(onBody))
 	t.Logf("istem farkı: +%d B ≈ +%d token (3 B/token)", len(line), len(line)/3)
 }
 

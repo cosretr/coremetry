@@ -75,9 +75,11 @@ export interface MessageListProps {
   compactSteps?: boolean;
   /** v0.10.2102 — netleştirme sorusu kartının tıkı (son cevap, akış yokken). Yoksa kart pasif. */
   onQuestion?: (option: CosreQuestion['options'][number]) => void;
+  /** v0.10.2333 (F1) — geçerli ara durum cümlesi (transient data-status); yalnız akan son cevapta. */
+  statusLine?: string | null;
 }
 
-export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps, onQuestion }: MessageListProps) {
+export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps, onQuestion, statusLine }: MessageListProps) {
   const busy = status === 'submitted' || status === 'streaming';
   const last = messages.at(-1);
   const errText = status === 'error' && error ? error.message : undefined;
@@ -96,7 +98,8 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
           followups={isLast && status === 'ready' ? onAsk : undefined} onRetry={isLast && errText ? onRetry : undefined}
           onApproval={isLast && !busy ? onApproval : undefined} teamPick={isLast && !busy ? teamPick : undefined}
           endpointPick={isLast && !busy ? endpointPick : undefined} compactSteps={compactSteps}
-          onQuestion={isLast && !busy ? onQuestion : undefined} next={next} />;
+          onQuestion={isLast && !busy ? onQuestion : undefined} next={next}
+          statusLine={isLast && busy ? statusLine : undefined} />;
       })}
       {/* İlk parça gelmeden (yalnız soru gitti): v1 bekleyiş göstergesi. */}
       {busy && last?.role !== 'assistant' && (last?.metadata?.explainAsk
@@ -115,7 +118,7 @@ function UserMessage({ m }: { m: CosreUIMessage }) {
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, next }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, next, statusLine }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
   /** araç seti dilim 5 — kapsam değişimi notu (önceki cevaptan farklıysa). */
   scopeNote?: string;
@@ -132,6 +135,8 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   onQuestion?: MessageListProps['onQuestion'];
   /** v0.10.2102 — sonraki mesaj (pasif soru kartının seçimi; v0.10.2104 tık kimliği önce). */
   next?: CosreUIMessage;
+  /** v0.10.2333 (F1) — ara durum cümlesi; "Düşünüyor…" yerine, metin gelince kaybolur. */
+  statusLine?: string | null;
 }) {
   const approvals = useMemo(() => approvalViews(m), [m]);
   const epPick = useMemo(() => pickOf(m.parts), [m.parts]); // v0.10.1737
@@ -141,7 +146,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   const steps = useMemo(() => stepsView(visibleParts(m)), [m, visibleParts]);
   // SDK akışta son mesajı her parçada yeni nesneyle değiştirir; bitmiş
   // mesajlar kimliğini korur → ChatBubble (memo) yalnız akan balonu çizer.
-  const turn = useMemo(() => toChatTurn(m, visibleParts(m), { pending: live, error, explainAsk }), [m, visibleParts, live, error, explainAsk]);
+  const turn = useMemo(() => toChatTurn(m, visibleParts(m), { pending: live, error, explainAsk, statusLine }), [m, visibleParts, live, error, explainAsk, statusLine]);
   const showCard = !!linkCard && !live && !turn.error;
   const bubbleTurn = useMemo(() => (showCard ? bubbleTurnForCard(turn, linkCard) : turn), [showCard, turn, linkCard]);
   const xid = live ? undefined : turn.exchangeId;
@@ -154,7 +159,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   const showFu = !!followups && !turn.error && !!turn.text;
   // Açıklama turu baştan ExplainBody çizer (v1: bekleyen künye, kendi yükleniyor'u).
   if (live && !turn.text && !turn.steps?.length && !turn.explain) {
-    return <div className="cm-msg cm-msg--ai cm-wait-row" data-cosre-thinking=""><AiThinking /></div>;
+    return <div className="cm-msg cm-msg--ai cm-wait-row" data-cosre-thinking=""><AiThinking label={turn.statusLine} /></div>;
   }
   return (
     <div data-cosre-message={m.id} className="contents">

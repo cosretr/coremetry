@@ -347,3 +347,35 @@ describe('MessageList × D5 fixture (gerçek SDK)', () => {
     expect(btns.map(b => b.textContent)).toEqual(['Coremetry verisi', 'Wiki dokümanları']);
   });
 });
+
+// v0.10.2333 (conversation-audit §6.1 F1) — ara durum cümlesi "Düşünüyor…"
+// göstergesinin yerinde tek sessiz satır (aria-live polite); cevap metni
+// başlayınca yok.
+describe('ara durum cümlesi (data-status)', () => {
+  it('araç turunda gösterge cümleyi taşır; cevap gelince kaybolur', async () => {
+    const f = sseFetch(cosreFixture('ui-stream-v1-status'), fr => fr.includes('"toolCallId":"s1","type":"tool-output-available"'));
+    const core = createCosreChat({ fetch: f.fetch });
+    const p = core.chat.sendMessage({ text: 'q' });
+    await vi.waitFor(() => expect(core.status.get()).toBe('Loglara bakıyorum…'));
+    const drawWith = async (st: CosreChatStatus) => {
+      await act(async () => {
+        root!.render(<MemoryRouter><MessageList messages={core.chat.messages} visibleParts={core.visibleParts} status={st}
+          statusLine={core.status.get()} /></MemoryRouter>);
+      });
+      return host!;
+    };
+    await draw(core, 'streaming');
+    let el = await drawWith('streaming');
+    const live = el.querySelector('.ai-thinking');
+    expect(live?.textContent).toContain('Loglara bakıyorum…');
+    expect(live?.getAttribute('aria-live')).toBe('polite');
+    expect(el.textContent).not.toContain('Düşünüyor');
+    f.release();
+    await p;
+    el = await drawWith('ready');
+    expect(el.textContent).not.toContain('bakıyorum');
+    expect(el.textContent).not.toContain("açıyorum");
+    expect(el.querySelector('.ai-thinking')).toBeNull();
+    expect(el.textContent).toContain('3 hata logu');
+  });
+});

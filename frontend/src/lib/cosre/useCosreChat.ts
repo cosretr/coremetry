@@ -6,17 +6,19 @@
 //
 // Akış: DefaultChatTransport → POST /api/cosre/v2/chat (bayrak cosre_v2,
 // kapalıyken 404) → textIdMap sarmalayıcısı → Chat.
-//   onData   : yalnız data-reset → resets kümesine (messageId, sıra). Mesaj
-//              DEĞİŞMEZ.
-//   onError  : temizlik (idempotent; onFinish ardından yine koşar).
+//   onData   : data-reset → resets kümesine (messageId, sıra); v0.10.2333
+//              data-status → geçerli ara durum cümlesi (status deposu). Mesaj
+//              DEĞİŞMEZ — ikisi de transient, mesaja ve arşive girmez.
+//   onError  : temizlik (idempotent; onFinish ardından yine koşar); ara
+//              cümle silinir (onFinish de siler — durdurma isAbort dahil).
 //   onFinish : temizlik → isAbort ise partial, isError ise error → kayıt.
 //              Kayıt chat.messages'tan (temizlik SONRASI) okunur; onFinish'in
 //              `message` argümanı SDK'nın iç kopyası (taslak dahil) — kullanılmaz.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Chat, useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, type ChatTransport, type UIMessageChunk } from 'ai';
 import type { ChatMessage, CosreApprovalAnswer } from '@/lib/types';
-import { parseDataReset } from './protocol';
+import { parseDataReset, parseDataStatus } from './protocol';
 import { createTextIdMap } from './textIdMap';
 import { applyResets, markFinished, recordReset, visibleParts, type CosreUIMessage, type ResetSet } from './resetReducer';
 import { hasCompletedExchange, toPersistMessages, toRequestMessages } from './cosrePersist';
@@ -39,6 +41,14 @@ export interface CosreChatCore {
    *  aynı sohbet approvals[] ile yeniden gönderilir (sunucu kararı verir;
    *  istemci hiçbir şeyi kendisi yürütmez). `context` normal gönderimle aynı. */
   answerApproval: (a: CosreApprovalAnswer, context?: unknown) => Promise<void>;
+  /** v0.10.2333 (F1) — son data-status cümlesi; alışveriş bitince/durunca null. */
+  status: CosreStatusStore;
+}
+
+/** v0.10.2333 — ara durum cümlesinin deposu (useSyncExternalStore şekli). */
+export interface CosreStatusStore {
+  get: () => string | null;
+  subscribe: (fn: () => void) => () => void;
 }
 
 /** Gövde onay devamı mı (approvals[] dolu). */
@@ -88,13 +98,27 @@ export function createCosreChat(opts: CosreChatOptions = {}): CosreChatCore {
   };
   // `settle` ve geri çağrılar `chat`e yalnız istek sırasında (kuruluştan
   // sonra) dokunur — TDZ'ye düşmez.
+  let statusText: string | null = null;
+  const statusSubs = new Set<() => void>();
+  const setStatus = (v: string | null) => {
+    if (v === statusText) return;
+    statusText = v;
+    statusSubs.forEach(f => f());
+  };
+  const status: CosreStatusStore = {
+    get: () => statusText,
+    subscribe: fn => { statusSubs.add(fn); return () => { statusSubs.delete(fn); }; },
+  };
   const settle = () => {
+    setStatus(null);
     const next = applyResets(chat.messages, resets);
     if (next !== chat.messages) chat.messages = next;
   };
   const chat: Chat<CosreUIMessage> = new Chat<CosreUIMessage>({
     transport,
     onData: part => {
+      const st = parseDataStatus(part);
+      if (st) { setStatus(st.text); return; }
       const r = parseDataReset(part);
       if (!r) return;
       const at = map.resolve(r.data.textId);
@@ -114,7 +138,7 @@ export function createCosreChat(opts: CosreChatOptions = {}): CosreChatCore {
     await chat.addToolOutput({ tool: a.tool, toolCallId: a.stepId, output: { approved: a.approved } });
     await chat.sendMessage(undefined, { body: { ...(context ? { context } : {}), approvals: [a] } });
   };
-  return { chat, visibleParts: m => visibleParts(m, resets), answerApproval };
+  return { chat, visibleParts: m => visibleParts(m, resets), answerApproval, status };
 }
 
 /** React kancası — Chat örneği bileşen ömrü boyunca tek; onPersist güncel
@@ -124,5 +148,6 @@ export function useCosreChat(opts: CosreChatOptions = {}) {
   useEffect(() => { persistRef.current = opts.onPersist; });
   const [core] = useState(() => createCosreChat({ fetch: opts.fetch, onPersist: m => persistRef.current?.(m) }));
   const helpers = useChat<CosreUIMessage>({ chat: core.chat });
-  return { ...helpers, visibleParts: core.visibleParts, answerApproval: core.answerApproval };
+  const statusLine = useSyncExternalStore(core.status.subscribe, core.status.get);
+  return { ...helpers, visibleParts: core.visibleParts, answerApproval: core.answerApproval, statusLine };
 }

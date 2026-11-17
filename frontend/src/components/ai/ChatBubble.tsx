@@ -1237,7 +1237,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
           <div style={{ marginTop: 6 }}><Button variant="secondary" size="sm" onClick={onRetry}>↺ Yeniden dene</Button></div>
         )}
         {/* v0.10.1137 — ilk token gelene dek "Düşünüyor…"; v0.10.1384 — tek tip gösterge (AiThinking). */}
-        {thinkingOnly && <div className="cm-wait-center"><AiThinking variant="row" /></div>}
+        {thinkingOnly && <div className="cm-wait-center"><AiThinking variant="row" label={turn.statusLine} /></div>}
       </div>
 
       {/* v0.10.1137 — Kaynaklar: numaralı liste ([n] atıflarıyla aynı numara). */}

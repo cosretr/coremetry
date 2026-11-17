@@ -63,7 +63,11 @@ var update = flag.Bool("update", false, "rewrite testdata/cosre/*.sse")
 //
 // ui-stream-v1-slot (v0.10.2332, conversation-audit §6.1 B) — eksik tek alan:
 // düz metin soru (answer) + data-question kind slot, 4 seçenek.
-var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-approval-resume", "ui-stream-v1-stops", "ui-stream-v1-scope", "ui-stream-v1-question", "ui-stream-v1-linkcard", "ui-stream-v1-state", "ui-stream-v1-slot"}
+//
+// ui-stream-v1-status (v0.10.2333, conversation-audit §6.1 F1) — araç
+// turlarının ara durum cümlesi: tur başına bir transient data-status (ikinci
+// turda iki çağrı, tek cümle), ardından cevap.
+var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-approval-resume", "ui-stream-v1-stops", "ui-stream-v1-scope", "ui-stream-v1-question", "ui-stream-v1-linkcard", "ui-stream-v1-state", "ui-stream-v1-slot", "ui-stream-v1-status"}
 
 func fixtureDir() string { return filepath.Join("..", "..", "..", "testdata", "cosre") }
 

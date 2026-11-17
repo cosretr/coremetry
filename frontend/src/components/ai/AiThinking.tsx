@@ -7,7 +7,9 @@
 //   • ikon: kıvılcım (IconSparkles) NABIZ atar — dönmez. Dönen halka "sayfa
 //     yükleniyor" demek; AI'ın bekleyişi yükleme değil, düşünme.
 //   • etiket: soldan sağa parıltı (eski .cm-thinking'in dili).
-//   • role="status": ekran okuyucu bekleyişi duyar.
+//   • role="status" + aria-live="polite": ekran okuyucu bekleyişi duyar;
+//     v0.10.2333 — CoSRE v2 etiketi ara durum cümlesine dönünce (F1) değişen
+//     cümle de sessizce okunur.
 //   • prefers-reduced-motion: nabız ve parıltı durur, düz metin kalır (CSS).
 // Varyantlar: `inline` (düğme / satır içi), `row` (sohbet balonu, kart satırı),
 // `block` (boş gövdenin ortası — Explain çekmecesi, AI özet gövdeleri).
@@ -48,14 +50,14 @@ export function AiThinking({ label = AI_THINKING_LABEL, hint, variant = 'row', c
   );
   if (variant === 'block') {
     return (
-      <div className={ROOT_CLASS.block} role="status">
+      <div className={ROOT_CLASS.block} role="status" aria-live="polite">
         {body}
         {children}
       </div>
     );
   }
   return (
-    <span className={ROOT_CLASS[variant]} role="status">
+    <span className={ROOT_CLASS[variant]} role="status" aria-live="polite">
       {body}
       {children}
     </span>

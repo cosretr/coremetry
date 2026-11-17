@@ -63,6 +63,11 @@ var stepPhaseByTool = map[string]string{
 	// Bilgi
 	"search_knowledge": "Bilgi", "get_runbook": "Bilgi", "suggest_runbook": "Bilgi", "product_guide": "Bilgi",
 	"resolve_business_code": "Bilgi",
+	// v0.10.2333 (conversation-audit §3.8) — v2'ye özel araçlar (mcptools
+	// registerV2Subset); search_logs ve explain_trace yukarıda zaten var.
+	"list_my_services": "Sağlık", "endpoint_metrics": "Sağlık",
+	"open_problems": "Problem", "find_traces": "Trace",
+	"get_log_anomalies": "Anomali", "explain_ml_event": "Anomali",
 }
 
 // stepPhaseTR — aracın evresi; bilinmeyen ad "".

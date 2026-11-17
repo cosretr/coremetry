@@ -54,6 +54,9 @@ export const DATA_PART_NAMES = [
   'question',
   // v0.10.2325 (conversation-audit §6.1 A) — konuşma durumu (kapsam; defter yok).
   'state',
+  // v0.10.2333 (conversation-audit §6.1 F1) — araç turunun ara durum cümlesi;
+  // transient (yalnız onData, mesaja/arşive girmez).
+  'status',
   ...BLOCK_TYPES.map(t => `block-${t}` as const),
 ] as const;
 
@@ -187,6 +190,19 @@ export function parseDataReset(p: UIStreamPart): DataResetPart | null {
   const textId = (d as { textId?: unknown }).textId;
   if (keys.length !== 1 || typeof textId !== 'string' || textId === '') return null;
   return { type: 'data-reset', data: { textId }, transient: true };
+}
+
+/** v0.10.2333 (conversation-audit §6.1 F1) — ara durum cümlesi, TAM OLARAK
+ *  `{"type":"data-status","id":"status","data":{"text":"…"},"transient":true}`.
+ *  transient ZORUNLU (data-reset emsali): AI SDK yalnız onData'ya iletir, mesaja
+ *  ve arşive girmez. Şekil dışıysa (transient eksik, boş metin, fazladan alan) null. */
+export function parseDataStatus(p: UIStreamPart): { text: string } | null {
+  if (p.type !== 'data-status' || p.transient !== true || p.id !== 'status') return null;
+  if (Object.keys(p).some(k => k !== 'type' && k !== 'id' && k !== 'data' && k !== 'transient')) return null;
+  const d = p.data;
+  if (!isRecord(d) || Object.keys(d).length !== 1 || typeof d.text !== 'string') return null;
+  const text = d.text.trim();
+  return text ? { text } : null;
 }
 
 /** v0.10.2102 — data-question kind kapalı kümesi (Go uistream.QuestionKinds). */

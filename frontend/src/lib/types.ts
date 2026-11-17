@@ -8704,6 +8704,9 @@ export interface ChatTurn extends ChatMessage {
   // kalırdı — ölü affordance (v0.9.592 dersi).
   stepDetails?: ChatStepDetail[];
   pending?: boolean;
+  /** v0.10.2333 (CoSRE v2, F1) — akan turun geçici ara durum cümlesi
+   *  (transient data-status); yalnız metin gelmeden "Düşünüyor…" yerine. */
+  statusLine?: string;
   error?: string;
   /**
    * v0.10.23 — kullanıcı akışı DURDURDU. `error` DEĞİL, bilerek: bu bir

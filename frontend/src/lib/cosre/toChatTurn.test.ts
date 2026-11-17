@@ -118,3 +118,18 @@ describe('toChatTurn (B3: adımlar + bütçe)', () => {
     expect(splitSourceId(id)).toEqual({ doc, chunk });
   });
 });
+
+// v0.10.2333 (F1) — ara durum cümlesi parçada değil seçenekte gelir; yalnız
+// akarken ve cevap metni yokken tura geçer.
+describe('toChatTurn statusLine (F1)', () => {
+  it('akarken metinsiz → statusLine; metin varsa ya da bitmişse yok', async () => {
+    const core = createCosreChat({ fetch: sseFetch(cosreFixture('ui-stream-v1-status')).fetch });
+    await core.chat.sendMessage({ text: 'q' });
+    const m = core.chat.messages.at(-1)!;
+    const noText = core.visibleParts(m).filter(p => p.type !== 'text');
+    expect(toChatTurn(m, noText, { pending: true, statusLine: 'Loglara bakıyorum…' }).statusLine).toBe('Loglara bakıyorum…');
+    expect(toChatTurn(m, core.visibleParts(m), { pending: true, statusLine: 'Loglara bakıyorum…' }).statusLine).toBeUndefined();
+    expect(toChatTurn(m, noText, { statusLine: 'Loglara bakıyorum…' }).statusLine).toBeUndefined();
+    expect(toChatTurn(m, noText, { pending: true, statusLine: null }).statusLine).toBeUndefined();
+  });
+});

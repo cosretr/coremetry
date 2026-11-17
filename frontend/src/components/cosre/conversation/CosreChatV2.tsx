@@ -112,7 +112,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
   // v1 ile ORTAK kancalar (ai/cosreAsk): bağlam, composer girdisi, karşılama.
   const ask = useCosreAskContext();
   const conv = useConversation();
-  const { messages, status, error, sendMessage, stop, setMessages, regenerate, visibleParts, answerApproval } = useCosreChat({ onPersist: conv.persist });
+  const { messages, status, error, sendMessage, stop, setMessages, regenerate, visibleParts, answerApproval, statusLine } = useCosreChat({ onPersist: conv.persist });
   const busy = status === 'submitted' || status === 'streaming';
   const busyRef = useRef(busy);
   busyRef.current = busy;
@@ -431,7 +431,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
             ) : (
               <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
                 onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} endpointPick={endpointPick}
-                compactSteps={isPage || undefined} onQuestion={answerQuestion} />
+                compactSteps={isPage || undefined} onQuestion={answerQuestion} statusLine={statusLine} />
             )}
           </div>
         </div>

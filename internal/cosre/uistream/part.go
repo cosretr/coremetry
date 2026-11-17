@@ -22,6 +22,10 @@ var KnownKinds = map[string]bool{
 	// v0.10.2325 (conversation-audit §6.1 A) — konuşma durumu (data-state):
 	// turun çözülmüş kapsamı, defter değerleri yok; v1 yazıcısı düşürür.
 	"state": true,
+	// v0.10.2333 (conversation-audit §6.1 F1, karar 11) — araç turunun ara
+	// durum cümlesi (data-status, transient): mesaja ve arşive girmez; v1
+	// yazıcısı düşürür.
+	"status": true,
 }
 
 // QuestionKinds — data-question `kind` kapalı kümesi (api chat_question.go;

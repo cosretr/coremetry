@@ -1,0 +1,44 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"data":{"text":"Loglara bakıyorum…"},"id":"status","transient":true,"type":"data-status"}
+
+data: {"dynamic":true,"toolCallId":"s1","toolName":"search_logs","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"args":{"service":"checkout"},"argsText":"{\"service\":\"checkout\"}"},"toolCallId":"s1","toolName":"search_logs","type":"tool-input-available"}
+
+data: {"dynamic":true,"output":{"bytes":12,"durationMs":40,"ok":true,"preview":"{\"errors\":3}","truncated":false},"toolCallId":"s1","type":"tool-output-available"}
+
+data: {"data":{"bytes":12,"duration_ms":40,"kind":"text","ok":true,"text":"{\"errors\":3}","tool":"search_logs"},"id":"s1","type":"data-tool-result"}
+
+data: {"data":{"text":"Trace'i açıyorum…"},"id":"status","transient":true,"type":"data-status"}
+
+data: {"dynamic":true,"toolCallId":"s2","toolName":"find_traces","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"args":{"service":"checkout"},"argsText":"{\"service\":\"checkout\"}"},"toolCallId":"s2","toolName":"find_traces","type":"tool-input-available"}
+
+data: {"dynamic":true,"toolCallId":"s3","toolName":"get_service_health","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"args":{"service":"orders"},"argsText":"{\"service\":\"orders\"}"},"toolCallId":"s3","toolName":"get_service_health","type":"tool-input-available"}
+
+data: {"dynamic":true,"output":{"bytes":12,"durationMs":55,"ok":true,"preview":"{\"traces\":2}","truncated":false},"toolCallId":"s2","type":"tool-output-available"}
+
+data: {"data":{"bytes":12,"duration_ms":55,"kind":"text","ok":true,"text":"{\"traces\":2}","tool":"find_traces"},"id":"s2","type":"data-tool-result"}
+
+data: {"dynamic":true,"output":{"bytes":14,"durationMs":30,"ok":true,"preview":"{\"p95_ms\":310}","truncated":false},"toolCallId":"s3","type":"tool-output-available"}
+
+data: {"data":{"bytes":14,"duration_ms":30,"kind":"text","ok":true,"text":"{\"p95_ms\":310}","tool":"get_service_health"},"id":"s3","type":"data-tool-result"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"checkout'ta son bir saatte 3 hata logu var; ikisi orders çağrısında zaman aşımı.","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

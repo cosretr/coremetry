@@ -8,12 +8,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   DATA_PART_NAMES, MESSAGE_ID_RE, SCOPE_REASONS, STOP_REASONS, TOOL_RESULT_KINDS, TOOL_RESULT_MAX_BYTES, UI_STREAM_PART_TYPES,
-  dataPartName, isDataPart, parseDataApproval, parseDataQuestion, parseDataReset, parseDataScope, parseDataState, parseDataStop, parseDataToolResult,
+  dataPartName, isDataPart, parseDataApproval, parseDataQuestion, parseDataReset, parseDataScope, parseDataState, parseDataStatus, parseDataStop, parseDataToolResult,
 } from './protocol';
 import { parseUIStreamSSE } from './uiStreamFixture';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state', 'ui-stream-v1-slot'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state', 'ui-stream-v1-slot', 'ui-stream-v1-status'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
 
@@ -329,5 +329,29 @@ describe('data-question slot', () => {
     expect(q?.kind).toBe('slot');
     expect(q?.options.map(o => o.id)).toEqual(['checkout', 'orders', 'payments', 'inventory']);
     expect(q?.allowFree).toBe(true);
+  });
+});
+
+// v0.10.2333 (conversation-audit §6.1 F1) — data-status: araç turunun ara
+// durum cümlesi, transient; tur başına bir parça.
+describe('data-status (ara durum cümlesi)', () => {
+  const read = (n: string) => parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', `${n}.sse`), 'utf8')).parts;
+  it('status fixture: iki tur, iki transient parça, ikinci tur iki çağrılı; ayrıştırılır', () => {
+    const parts = read('ui-stream-v1-status');
+    const st = parts.filter(p => p.type === 'data-status');
+    expect(st.map(p => parseDataStatus(p))).toEqual([{ text: 'Loglara bakıyorum…' }, { text: "Trace'i açıyorum…" }]);
+    expect(st.every(p => p.transient === true && p.id === 'status')).toBe(true);
+    const iSecond = parts.indexOf(st[1]);
+    expect(parts.slice(iSecond).filter(p => p.type === 'tool-input-start')).toHaveLength(2);
+  });
+  it.each([
+    [{ type: 'data-status', id: 'status', transient: true, data: { text: ' Loglara bakıyorum… ' } }, { text: 'Loglara bakıyorum…' }],
+    [{ type: 'data-status', id: 'status', data: { text: 'x' } }, null],
+    [{ type: 'data-status', id: 'status', transient: true, data: { text: '' } }, null],
+    [{ type: 'data-status', id: 'status', transient: true, data: { text: 'x', extra: 1 } }, null],
+    [{ type: 'data-status', transient: true, data: { text: 'x' } }, null],
+    [{ type: 'data-state', id: 'status', transient: true, data: { text: 'x' } }, null],
+  ])('parseDataStatus %#', (p, want) => {
+    expect(parseDataStatus(p)).toEqual(want);
   });
 });

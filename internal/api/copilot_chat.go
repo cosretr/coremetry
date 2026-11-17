@@ -1335,6 +1335,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		}
 	}
 	var apPending *pendingApproval // bu turda onay isteyen çağrı (tur sonunda jeton basılır)
+	var statusLine chatStatusLine  // v0.10.2333 — F1 ara durum cümlesi (chat_status_line.go)
 	for round := 0; round < maxRounds; round++ {
 		if round < apStartRound {
 			continue // S5 — devam önceki turların bütçesini harcamış sayılır
@@ -1438,6 +1439,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		results := make([]copilot.ToolResult, 0, len(turn.ToolCalls))
 		run, over := splitByCallBudget(turn.ToolCalls, callsLeft)
 		callsLeft -= len(run)
+		// v0.10.2333 — F1: tur başına en çok bir data-status (yalnız v2 + style).
+		statusLine.round(ctx, emit, round, run)
 		cancelled := false // v0.10.948 — tur ortasında ctx bitti mi
 		for _, tc := range run {
 			if apPending != nil {

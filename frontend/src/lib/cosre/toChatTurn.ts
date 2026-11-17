@@ -26,6 +26,8 @@ export interface ToChatTurnOpts {
   error?: string;
   /** v0.10.1672 (B7) — önceki kullanıcı turunun açıklama niyeti (geçici künye). */
   explainAsk?: ChatExplainAsk;
+  /** v0.10.2333 (F1) — geçerli ara durum cümlesi (transient data-status; parçalarda yok). */
+  statusLine?: string | null;
 }
 
 type Rec = Record<string, unknown>;
@@ -187,6 +189,8 @@ export function toChatTurn(m: CosreUIMessage, parts: readonly Part[], opts: ToCh
     text,
     ...stepsOf(parts),
     ...(opts.pending ? { pending: true } : {}),
+    // v0.10.2333 (F1) — yalnız akarken ve cevap metni başlamadan.
+    ...(opts.pending && !text && opts.statusLine ? { statusLine: opts.statusLine } : {}),
     ...(opts.error ? { error: opts.error } : {}),
     ...(meta?.partial ? { stopped: true } : {}),
     ...(meta?.allowedLinks ? { allowedLinks: meta.allowedLinks } : {}),

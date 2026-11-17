@@ -15,6 +15,9 @@ package api
 //     korunmalı (1–3 kök-göreli link + özet — FE parseDataLinksCard kuralı);
 //   - data-question: sanitizeChatQuestion nil dönmemeli (kapalı kind, dolu
 //     metin, 1–3 tekil seçenek);
+//   - data-status (v0.10.2333, F1): transient olmalı (mesaja/arşive girmez)
+//     ve dolu tek `text` taşımalı; cevap metni değildir, akıcılık ölçütleri
+//     onu görmez (cevap kayıttaki answer'dan okunur);
 //   - araç çağrısı ↔ sonucu: her tool-input-available'ın aynı toolCallId'li
 //     tool-output-available'ı ya da data-approval'ı olmalı. İstisna: akış
 //     hatayla bittiyse (finish error) yarıda kalan çağrı model hatası değil
@@ -65,6 +68,10 @@ func evalStreamContract(parts []uistream.Part) (bool, string) {
 			if !decodePartData(p, &in) || sanitizeChatQuestion(&in) == nil {
 				return false, "data-question: kart kuralı tutmadı (bilinen kind, metin, 1–3 tekil seçenek)"
 			}
+		case "data-status":
+			if txt, _ := evalPartText(p); p["transient"] != true || txt == "" {
+				return false, "data-status: transient değil ya da metin boş"
+			}
 		case "tool-input-available":
 			if id, _ := p["toolCallId"].(string); id != "" {
 				inputs = append(inputs, id)
@@ -92,6 +99,16 @@ func evalStreamContract(parts []uistream.Part) (bool, string) {
 		}
 	}
 	return true, ""
+}
+
+// evalPartText — parçanın data.text alanı (yoksa "").
+func evalPartText(p uistream.Part) (string, bool) {
+	d, ok := p["data"].(map[string]any)
+	if !ok {
+		return "", false
+	}
+	s, ok := d["text"].(string)
+	return s, ok
 }
 
 // decodePartData — parçanın data alanını hedef yapıya çevirir (JSON gidiş-
