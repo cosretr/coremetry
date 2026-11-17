@@ -120,10 +120,10 @@ func TestAICallsListSQLSourced(t *testing.T) {
 		for _, cached := range []bool{false, true} {
 			prodP, evalP := p, p
 			prodP.Source, evalP.Source = AICallSourceProduction, AICallSourceEvalset
-			prod, args := aiCallsListSQL(prodP, cached, cached, cached, cached)
-			eval, _ := aiCallsListSQL(evalP, cached, !cached, cached, !cached)
+			prod, args := aiCallsListSQL(prodP, cached, cached, cached, cached, false)
+			eval, _ := aiCallsListSQL(evalP, cached, !cached, cached, !cached, false)
 			assertSourced(t, "aiCallsListSQL", prod, eval)
-			if zero, _ := aiCallsListSQL(p, cached, cached, cached, cached); zero != prod {
+			if zero, _ := aiCallsListSQL(p, cached, cached, cached, cached, false); zero != prod {
 				t.Errorf("sıfır Source üretimle aynı SQL'i üretmeli:\n%s", zero)
 			}
 			if n := strings.Count(prod, "?"); n != len(args) {

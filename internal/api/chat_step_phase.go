@@ -96,8 +96,12 @@ func chatDeltaPayload(d copilot.TextDelta) map[string]any {
 // emit, handler'ın paylaşılan kilitli emit'idir (blocks.Emitter): heartbeat
 // ile delta aynı kilitten geçer. ctx iptali (istemci koptu / alışveriş
 // tavanı) üst akış HTTP isteğini keser.
+// v0.10.2321 — geçici ağ geçidi hatasında alışveriş başına bir yeniden deneme
+// (chat_round_retry.go).
 func (s *Server) chatLoopTurn(ctx context.Context, system string, conv []copilot.ChatMessage, specs []copilot.ToolSpec, emit func(string, any)) (copilot.ChatTurn, error) {
-	return s.copilot.ChatWithToolsStream(ctx, system, conv, specs, func(d copilot.TextDelta) {
+	return callWithRoundRetry(ctx, emit, func(d copilot.TextDelta) {
 		emit("delta", chatDeltaPayload(d))
+	}, func(cctx context.Context, onDelta func(copilot.TextDelta)) (copilot.ChatTurn, error) {
+		return s.copilot.ChatWithToolsStream(cctx, system, conv, specs, onDelta)
 	})
 }

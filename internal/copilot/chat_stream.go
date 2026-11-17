@@ -66,6 +66,7 @@ func (s *Service) ChatWithToolsStream(ctx context.Context, system string, msgs [
 		turn, err = s.streamToolsOpenAI(ctx, system, msgs, tools, onDelta)
 	case ProviderGitHub:
 		markStreamFallback(ctx)
+		noteProviderRequests(ctx, 1)
 		turn, err = bufferedTurnAsDelta(s.chatGitHubWithTools(ctx, system, msgs, tools))(onDelta)
 	default:
 		turn, err = s.streamToolsAnthropic(ctx, system, msgs, tools, onDelta)
@@ -73,6 +74,7 @@ func (s *Service) ChatWithToolsStream(ctx context.Context, system string, msgs [
 	if !st.fallbackSet() {
 		turn.TTFTMs = st.ttftMs()
 	}
+	turn.ProviderRequests = st.providerRequests() // v0.10.2321
 	return turn, err
 }
 
@@ -96,14 +98,20 @@ func (s *Service) streamToolsOpenAI(ctx context.Context, system string, msgs []C
 	}
 	creq := chatRequest(ctx, req, system, msgs, tools)
 	key := ProviderOpenAI + toolsVerdictSuffix
-	if s.streamKnownUnsupported(key, base, model) {
+	if bufferedOnlyFrom(ctx) || s.streamKnownUnsupported(key, base, model) { // v0.10.2321 — döngünün yeniden denemesi tek istek
 		markStreamFallback(ctx) // v0.10.2318 — TTFT bilinmiyor
+		noteProviderRequests(ctx, 1)
 		return bufferedTurnAsDelta(s.chatOpenAIWithTools(ctx, system, msgs, tools))(onDelta)
 	}
 	resp, err := aiprov.StreamOpenAITools(ctx, cfg, creq, onDelta)
+	noteProviderRequests(ctx, 1)
 	var fe *aiprov.StreamFallbackError
 	if errors.As(err, &fe) {
+		if deferTransientFrom(ctx) && transientStreamFailure(fe) {
+			return ChatTurn{}, fe // v0.10.2321 — düşüş yerine döngünün tek yeniden denemesi
+		}
 		markStreamFallback(ctx)
+		noteProviderRequests(ctx, fallbackRequests(fe))
 		turn, ferr := streamFallbackPolicy(s, fe, key, base, model,
 			func(b []byte) (ChatTurn, error) {
 				r, e := aiprov.ParseOpenAIToolsOneShot(b, creq)
@@ -122,14 +130,20 @@ func (s *Service) streamToolsAnthropic(ctx context.Context, system string, msgs 
 	}
 	creq := chatRequest(ctx, req, system, msgs, tools)
 	key := ProviderAnthropic + toolsVerdictSuffix
-	if s.streamKnownUnsupported(key, "", model) {
+	if bufferedOnlyFrom(ctx) || s.streamKnownUnsupported(key, "", model) { // v0.10.2321
 		markStreamFallback(ctx) // v0.10.2318 — TTFT bilinmiyor
+		noteProviderRequests(ctx, 1)
 		return bufferedTurnAsDelta(s.chatAnthropicWithTools(ctx, system, msgs, tools))(onDelta)
 	}
 	resp, err := aiprov.StreamAnthropicTools(ctx, cfg, creq, onDelta)
+	noteProviderRequests(ctx, 1)
 	var fe *aiprov.StreamFallbackError
 	if errors.As(err, &fe) {
+		if deferTransientFrom(ctx) && transientStreamFailure(fe) {
+			return ChatTurn{}, fe // v0.10.2321 — düşüş yerine döngünün tek yeniden denemesi
+		}
 		markStreamFallback(ctx)
+		noteProviderRequests(ctx, fallbackRequests(fe))
 		turn, ferr := streamFallbackPolicy(s, fe, key, "", model,
 			func(b []byte) (ChatTurn, error) {
 				r, e := aiprov.ParseAnthropicToolsOneShot(b)

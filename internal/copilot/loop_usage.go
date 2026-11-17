@@ -27,6 +27,9 @@ type LoopUsage struct {
 	ToolMs            uint32
 	ToolCalls         uint16
 	MaxRoundToolCalls uint16
+	// GatewayRetry — v0.10.2321: bir tur geçici ağ geçidi hatasında bir kez
+	// yeniden denendi (alışveriş başına en çok bir).
+	GatewayRetry bool
 }
 
 // WithLoopUsage — sonraki RecordUsage'ın satırına tur bilgisini bağlar.

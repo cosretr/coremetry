@@ -69,6 +69,9 @@ type ChatTurn struct {
 	// (streamStats, StreamText'in TTFT ölçüsü). Buffered yolda (düşüş,
 	// bilinen-desteklemez uç, github) 0 = bilinmiyor.
 	TTFTMs uint32
+	// ProviderRequests — v0.10.2321: bu tur için sağlayıcıya giden istek
+	// sayısı (1; akış→buffered düşüşü ikinci isteği yaptıysa 2). 0 = istek yok.
+	ProviderRequests uint8
 }
 
 type noToolCallsKey struct{}
@@ -189,6 +192,7 @@ func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, out
 		LoopToolMs:            lu.ToolMs,
 		LoopToolCalls:         lu.ToolCalls,
 		LoopMaxRoundToolCalls: lu.MaxRoundToolCalls,
+		LoopGatewayRetry:      lu.GatewayRetry, // v0.10.2321
 	}
 	if status == "error" {
 		rec.ErrorMsg = truncErr(errMsg)

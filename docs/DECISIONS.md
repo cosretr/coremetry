@@ -14689,3 +14689,11 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Yürütücünün bilinmeyen-ad sonucu çıplak `unknown tool "x"` yerine diğer araç hatalarıyla aynı `ToolError` biçimi: `not_found`, `retryable:false`, Türkçe ipucu, `detail` = eski metin; yakın ad varsa `did_you_mean` (en çok 3). Yeni hata sınıfı yok.
 - Adaylar YALNIZ yürütücünün kataloğundan (alışverişte sunulan adlar; trace takibinin daraltılmış kataloğundan düşen araç önerilmez). Kural (`mcp.NearestToolNames`, saf): normalize (küçük harf, camelCase→snake, `-`/`.`/boşluk→`_`); Levenshtein ≤ max(1, len/4) yakın; yoksa genel fiiller atılınca bir tarafın sözcükleri öbüründe (çoğul "s" yok sayılır). Mesafe eşleşmesi varsa yalnız onlar; sıra mesafe, sonra ad. Yakın yoksa öneri yok.
 - Tekrar muhafızı, tur/çağrı bütçesi ve span/audit davranışı aynı (çağrı yürütülmez, "görüldü" yazılmaz). prompts.go değişmedi.
+
+## 2026-11-17 — v0.10.2321 — CoSRE: geçici ağ geçidi hatasında tur bir kez yeniden denenir
+
+- Tek yer: `chatLoopTurn` (döngünün tek sağlayıcı çağrısı; normal tur, tavan turu, bozuk-cevap yeniden denemesi). Bağlam taşması yolu (`chat_overflow.go`) değişmedi.
+- Geçici = buffered `HTTPError` ya da akış başı 502/503/504; bağlantı sıfırlanması / beklenmeyen EOF (akış bağlanırken, boş akışta ya da veri aktıktan sonra ama istemciye delta İLETİLMEDEN). 4xx (taşma dahil), 429, 500, zaman aşımı, iptal, istemcinin gitmesi: asla. Bu turdan bir delta iletildiyse yeniden deneme yok.
+- Alışveriş başına en çok BİR; sabit 1.5 sn duraklama (`chatRoundRetryPause`, ayar yok); duraklamada ctx biterse ilk hata döner.
+- Tur başına en çok İKİ sağlayıcı isteği: hak varken akışın geçici hatası buffered'a düşmez (`copilot.WithDeferTransientFallback`, hata tek istekle döner); yeniden deneme tek buffered istek (`copilot.WithBufferedOnly`); düşüş ikinci isteği zaten yaptıysa (`ChatTurn.ProviderRequests` = 2) yeniden deneme yok. Hak bitince akış→buffered düşüşü bugünkü gibi.
+- Kayıt: `ai_calls.loop_gateway_retry UInt8 DEFAULT 0` (ADD COLUMN IF NOT EXISTS, ayrı probe `probeAICallsRetryColumn`, iki-boot), API `loopGatewayRetry`; tur span'ı `coremetry.ai.turn.gateway_retry=true`; operatöre adım satırı. Başarısız denemenin token'ı sayılmaz, tur bir kez sayılır (span süresi denemeleri ve duraklamayı bir kez kapsar).

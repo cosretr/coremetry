@@ -262,6 +262,9 @@ type streamStats struct {
 	// buffered çağrının değeri). Tuple imzaları (metin, in, out, err)
 	// değişmesin diye v0.10.409'un TTFT taşıyıcısıyla aynı kanal.
 	cached uint32
+	// requests — v0.10.2321: bu turun sağlayıcıya giden istek sayısı (akış +
+	// varsa buffered düşüşü); döngünün yeniden deneme kararı okur.
+	requests uint8
 }
 
 // noteCachedTokens — sağlayıcı cevabı geldiği yerde çağrılır; taşıyıcı

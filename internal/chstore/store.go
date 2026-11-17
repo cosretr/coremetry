@@ -3360,6 +3360,9 @@ func canonicalTables(sd, ld, md int) []string {
 		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_tool_ms UInt32 DEFAULT 0`,
 		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_tool_calls UInt16 DEFAULT 0`,
 		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_max_round_tool_calls UInt16 DEFAULT 0`,
+		// v0.10.2321 — döngünün model turu geçici ağ geçidi hatasında bir kez
+		// yeniden denendi mi (0/1); aynı iki-boot sözleşmesi, AYRI probe.
+		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_gateway_retry UInt8 DEFAULT 0`,
 
 		// rca_verdicts — kök-neden hakem kararının KALICI kaydı
 		// (v0.9.591). Öncesinde verdict istek başına üretilip
@@ -5271,6 +5274,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.probeAICallsTraceColumn(ctx)       // v0.10.1463
 	s.probeAICallsRoundsColumns(ctx)     // v0.10.2297
 	s.probeAICallsTimingColumns(ctx)     // v0.10.2318
+	s.probeAICallsRetryColumn(ctx)       // v0.10.2321
 	s.probeAIFeedbackCallColumns(ctx)    // v0.10.1280
 	s.probeCosreInteractionsColumns(ctx) // v0.10.1280 tool_evidence; v0.10.1302 + toolset
 
