@@ -11,9 +11,11 @@ import {
   dataPartName, isDataPart, parseDataApproval, parseDataQuestion, parseDataReset, parseDataScope, parseDataState, parseDataStatus, parseDataStop, parseDataToolResult,
 } from './protocol';
 import { parseUIStreamSSE } from './uiStreamFixture';
+import { channelsOf } from './toChatTurn';
+import { parseCosreAliasAction } from '@/lib/pageActions';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state', 'ui-stream-v1-slot', 'ui-stream-v1-status'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state', 'ui-stream-v1-slot', 'ui-stream-v1-status', 'ui-stream-v1-alias'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
 
@@ -353,5 +355,32 @@ describe('data-status (ara durum cümlesi)', () => {
     [{ type: 'data-state', id: 'status', transient: true, data: { text: 'x' } }, null],
   ])('parseDataStatus %#', (p, want) => {
     expect(parseDataStatus(p)).toEqual(want);
+  });
+});
+
+// v0.10.2335 (conversation-audit §6.1 G) — eş ad önerisi: mevcut action bloğu
+// (data-block-action), kind cosre_alias; v1 ChatBubble kartı bu yükten çizer.
+describe('data-block-action cosre_alias (eş ad önerisi)', () => {
+  const read = (n: string) => parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', `${n}.sse`), 'utf8')).parts;
+  it('alias fixture: tek action bloğu, cevaptan sonra; ayrıştırılır', () => {
+    const parts = read('ui-stream-v1-alias');
+    const types = parts.map(p => p.type);
+    expect(types.indexOf('data-block-action')).toBeGreaterThan(types.indexOf('text-end'));
+    const { blocks } = channelsOf(parts as never);
+    const actions = (blocks ?? []).filter(b => b.type === 'action');
+    expect(actions).toHaveLength(1);
+    expect(parseCosreAliasAction(actions[0].payload)).toEqual({
+      kind: 'cosre_alias', phrase: 'kart tarafı', entityId: 'svc:payments', name: 'payments',
+      notId: 'svc:orders', notName: 'orders', label: 'Kaydet', dismissLabel: 'Hayır',
+      text: '«kart tarafı» dediğinde payments servisini kastettiğini hatırlayayım mı?',
+    });
+  });
+  it.each([
+    [{ kind: 'cosre_alias', phrase: 'kart', entityId: 'ns:x', text: 't' }],
+    [{ kind: 'cosre_alias', phrase: ' ', entityId: 'svc:payments', text: 't' }],
+    [{ kind: 'cosre_rule', phrase: 'kart', entityId: 'svc:payments', text: 't' }],
+    [{ kind: 'cosre_alias', phrase: 'kart', entityId: 'svc:payments', text: '' }],
+  ])('bozuk yük reddedilir %#', p => {
+    expect(parseCosreAliasAction(p)).toBeNull();
   });
 });

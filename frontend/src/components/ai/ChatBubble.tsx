@@ -5,11 +5,12 @@ import { chartBlocks, mergeBlockLinks, traceListBlocks, operationBlocks, operati
 import { ChatTraceList } from './ChatTraceList'; // v0.10.688 — trace_list bloğu
 import { evidenceBlocks } from '@/lib/chatEvidence'; // v0.10.558
 import { EvidenceCard } from './EvidenceCard';
-import { parseAction, actionVisible, applyActionHref, parseProblemNoteAction, parseSREHypothesisAction, parseCosreRuleAction } from '@/lib/pageActions';
+import { parseAction, actionVisible, applyActionHref, parseProblemNoteAction, parseSREHypothesisAction, parseCosreRuleAction, parseCosreAliasAction } from '@/lib/pageActions';
 import { ProblemNoteButton } from './ProblemNoteButton';
 import { SREHypothesisButton } from './SREHypothesisButton';
 import { showSREHypothesisButton } from './sreHypothesisDedup'; // v0.10.1300
 import { CosreRuleConfirm } from './CosreRuleConfirm';
+import { CosreAliasConfirm } from './CosreAliasConfirm'; // v0.10.2335 — eş ad önerisi
 import { OperationCard } from './OperationCard';
 import { opTraceListPayload } from './chatTraceListView'; // v0.10.2213
 import { ServiceReportCard } from './ServiceReportCard';
@@ -1209,6 +1210,9 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
               // v0.10.1289 — "bunu hatırla" onay kartı (sunucu hafıza kademesi; tık-only kayıt).
               const rule = parseCosreRuleAction(b.payload);
               if (rule) return <CosreRuleConfirm key={b.id} action={rule} />;
+              // v0.10.2335 — eş ad önerisi (düzeltmeden sonra; tık-only kayıt, kişisel).
+              const alias = parseCosreAliasAction(b.payload);
+              if (alias) return <CosreAliasConfirm key={b.id} action={alias} exchangeId={turn.exchangeId} />;
               const a = parseAction(b.payload);
               if (!a || !actionVisible(a, loc.pathname)) return null;
               return (

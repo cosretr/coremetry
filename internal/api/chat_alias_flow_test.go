@@ -98,7 +98,7 @@ func newAliasRig(t *testing.T) *aliasRig {
 		}
 		return toolCallMsg([2]string{"get_service_health", `{}`})
 	})
-	rg.s, rg.mc = newLoopTestServer(t, llm, "u-a", "u-b")
+	rg.s, rg.mc = newLoopTestServer(t, llm, "u-a", "u-b", "u-c")
 	rg.s.l1, rg.s.stats = newL1Cache(64), newCacheStats()
 	rg.mc.m["copilot:guided:svcnames"] = []byte(`["checkout","orders","payments","inventory"]`)
 	setCosreV2(t, rg.s, true)

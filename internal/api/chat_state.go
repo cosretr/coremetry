@@ -177,6 +177,7 @@ type chatStateTurn struct {
 	// v0.10.2334 (G, chat_state_correction.go) — düzeltme ve eş adlar.
 	s          *Server
 	uid        string                 // kullanıcı deposunun sahibi ("" = okunmadı / değerlendirme)
+	prefs      cosreUserPrefs         // kullanıcının kaydı (önbellekten)
 	aliases    []mcptools.EntityAlias // konuşma düzeltmeleri + kullanıcının eş adları (öncelik sırası)
 	corr       *chatCorrection        // bu turda algılanan düzeltme (Right boşsa tur sonunda belirlenir)
 	learned    *chatCorrection        // kesinleşen düzeltme (finalize)
@@ -205,7 +206,7 @@ func (s *Server) beginChatStateTurn(ctx context.Context, req *chatRequest, st *c
 	stt := &chatStateTurn{st: st, svcNames: svcs, loc: loc, s: s}
 	// v0.10.2334 (G) — kullanıcının kaydı (önbellekli tek nokta okuma; değerlendirmede yok).
 	uid, prefs := s.cosreUserTurnPrefs(ctx)
-	stt.uid = uid
+	stt.uid, stt.prefs = uid, prefs
 	if st.ctx.Address == "" && prefs.Addr != "" { // karar 13 — yeni konuşma kullanıcının hitabıyla başlar
 		st.ctx.Address = prefs.Addr
 	}
@@ -445,6 +446,9 @@ func (t *chatStateTurn) wrapEmit(emit func(string, any)) func(string, any) {
 			}
 		case "done":
 			t.finalize()
+			if act := t.aliasProposal(); act != nil { // v0.10.2335 — eş ad önerisi (action bloğu; kayıt yalnız Kaydet tıkıyla)
+				emit(cosreAliasActionEvent, act)
+			}
 			// v0.10.2325 — data-state: turun çözülmüş kapsamı (defter değerleri yok), "done"dan hemen önce.
 			if w := chatStateWireOf(t.st.ctx, chatStateNow()); !stateWireEmpty(w) {
 				emit(chatStateEventKind, w)

@@ -1,0 +1,28 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"dynamic":true,"toolCallId":"s1","toolName":"get_service_health","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"args":{"service":"payments"},"argsText":"{\"service\":\"payments\"}"},"toolCallId":"s1","toolName":"get_service_health","type":"tool-input-available"}
+
+data: {"dynamic":true,"output":{"bytes":14,"durationMs":30,"ok":true,"preview":"{\"p95_ms\":870}","truncated":false},"toolCallId":"s1","type":"tool-output-available"}
+
+data: {"data":{"bytes":14,"duration_ms":30,"kind":"text","ok":true,"text":"{\"p95_ms\":870}","tool":"get_service_health"},"id":"s1","type":"data-tool-result"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"payments son bir saatte yavaş: p95 870 ms, hata oranı %2,6.","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"data":{"final":true,"payload":{"dismissLabel":"Hayır","entityId":"svc:payments","kind":"cosre_alias","label":"Kaydet","name":"payments","notId":"svc:orders","notName":"orders","phrase":"kart tarafı","text":"«kart tarafı» dediğinde payments servisini kastettiğini hatırlayayım mı?"},"seq":1},"id":"b1","type":"data-block-action"}
+
+data: {"data":{"address":"sen","service":"payments","updatedAt":1794910000000},"id":"state","type":"data-state"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

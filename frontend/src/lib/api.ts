@@ -1559,6 +1559,12 @@ export const api = {
     request<import('./types').CosreRuleMutation>(`/api/ai/rules/${encodeURIComponent(id)}`, {
       method: 'DELETE', headers: cosreRuleHeaders(rev),
     }),
+  // v0.10.2335 — CoSRE kullanıcı deposu: kendi eş adları (cosre_user_prefs.go).
+  getCosreUserPrefs: () => request<import('./types').CosreUserPrefs>('/api/cosre/user-prefs'),
+  saveCosreAlias: (body: import('./types').CosreAliasInput) =>
+    request<import('./types').CosreUserPrefs>('/api/cosre/user-prefs/aliases', { method: 'POST', body: JSON.stringify(body) }),
+  deleteCosreAlias: (phrase: string) =>
+    request<import('./types').CosreUserPrefs>(`/api/cosre/user-prefs/aliases?phrase=${encodeURIComponent(phrase)}`, { method: 'DELETE' }),
   // v0.10.1169 — CoSRE bulgusu probleme not (editör+; jeton sunucudan, metni imzalar).
   saveProblemNote: (problemId: string, body: { token: string; text: string; tool: string }) =>
     request<import('./types').ProblemNote>(`/api/problems/${encodeURIComponent(problemId)}/notes`, {

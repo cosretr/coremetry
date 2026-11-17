@@ -20,7 +20,7 @@ import (
 // eksi withBlockSeq'in `block`a katladığı türler (yazıcıya hiç ulaşmaz).
 
 // blockSeqFolded — withBlockSeq'in (chat_step_ids.go) block'a katladığı türler.
-var blockSeqFolded = []string{"evidence", "trace_list", "ev_block", "service_report", "topology", "charts_signals", "log_spike", "metric_panel"}
+var blockSeqFolded = []string{"evidence", "trace_list", "ev_block", "service_report", "topology", "charts_signals", "log_spike", "metric_panel", "alias_action"}
 
 func TestUIStreamCoversEmittedKinds(t *testing.T) {
 	files, err := filepath.Glob("*.go")
@@ -59,6 +59,7 @@ func TestUIStreamCoversEmittedKinds(t *testing.T) {
 		"evidence": `kind == "evidence"`, "trace_list": `kind == "trace_list"`, "ev_block": `kind == "ev_block"`,
 		"service_report": "blocks.TypeServiceReport", "topology": "blocks.TypeTopology",
 		"charts_signals": "blocks.TypeChartsSignals", "log_spike": "blocks.TypeLogSpike", "metric_panel": "blocks.TypeMetricPanel",
+		"alias_action": "kind == cosreAliasActionEvent", // v0.10.2335
 	}
 	for _, k := range blockSeqFolded {
 		if !strings.Contains(fn, folds[k]) {

@@ -131,3 +131,34 @@ export function parseCosreRuleAction(payload: unknown): CosreRuleAction | null {
     label: typeof p.label === 'string' && p.label ? p.label : 'Kuralı kaydet',
   };
 }
+
+// v0.10.2335 (conversation-audit §6.1 G) — eş ad önerisi kartı: sunucu
+// kullanıcının varlık düzeltmesinden sonra üretir (chat_alias_proposal.go).
+// HİÇBİR ŞEY kaydedilmez; yalnız "Kaydet" tıkı POST
+// /api/cosre/user-prefs/aliases çağırır (kullanıcının kendi kaydı, viewer
+// dahil). "Hayır" yalnız kartı kapatır.
+export interface CosreAliasAction {
+  kind: 'cosre_alias';
+  phrase: string;
+  entityId: string;
+  name: string;
+  notId?: string;
+  notName?: string;
+  text: string;
+  label: string;
+  dismissLabel: string;
+}
+
+export function parseCosreAliasAction(payload: unknown): CosreAliasAction | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const p = payload as Record<string, unknown>;
+  if (p.kind !== 'cosre_alias' || typeof p.phrase !== 'string' || !p.phrase.trim()
+    || typeof p.entityId !== 'string' || !p.entityId.startsWith('svc:') || typeof p.text !== 'string' || !p.text) return null;
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+  return {
+    kind: 'cosre_alias', phrase: p.phrase, entityId: p.entityId,
+    name: str(p.name) ?? p.entityId.slice(4),
+    notId: str(p.notId), notName: str(p.notName), text: p.text,
+    label: str(p.label) ?? 'Kaydet', dismissLabel: str(p.dismissLabel) ?? 'Hayır',
+  };
+}

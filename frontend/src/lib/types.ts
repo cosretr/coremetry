@@ -12715,3 +12715,29 @@ export interface EntityPathsResponse { paths: EntityPath[] }
 // v0.10.2232 (Entity S2) — /api/services/{name}/workloads.
 export interface ServiceWorkload { id: string; clusterId: string; cluster?: string; namespace: string; kind: string; name: string }
 export interface ServiceWorkloads { workloads: ServiceWorkload[]; source: 'serves' | 'pods' | 'none' }
+
+// v0.10.2335 (conversation-audit §6.1 G) — CoSRE kullanıcı deposu
+// (internal/api/cosre_user_prefs.go cosreUserPrefsView). Eş adlar en yeni
+// önce; stale = hedef servis artık katalogda yok (çözücü yok sayar).
+export interface CosreUserAlias {
+  phrase: string;
+  entityId: string;
+  name: string;
+  notId?: string;
+  notName?: string;
+  at: number;
+  stale: boolean;
+}
+export interface CosreUserPrefs {
+  address: '' | 'sen' | 'siz';
+  aliases: CosreUserAlias[];
+  maxAliases: number;
+  bytes: number;
+  maxBytes: number;
+}
+export interface CosreAliasInput {
+  phrase: string;
+  entityId: string;
+  notId?: string;
+  exchangeId?: string;
+}

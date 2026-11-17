@@ -82,6 +82,7 @@ import { Button } from '@/components/shadcn/button';
 import { Badge } from '@/components/shadcn/badge';
 import { convStateLine, latestConvState, withStateEcho } from './convState';
 import { CosreSheet } from './CosreSheet';
+import { CosreAliasPanel } from './CosreAliasPanel';
 import { CosrePageLayout } from '../page/CosrePageLayout';
 import { MessageList } from './MessageList';
 import { ScopeBadge, latestScope } from '../evidence';
@@ -306,6 +307,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
 
   // ── Geçmiş (v1 paneli + kancası; liste yalnız açılışta) ──
   const [showHistory, setShowHistory] = useState(false);
+  const [showAliases, setShowAliases] = useState(false); // v0.10.2335 — «Eş adlarım»
   // v0.10.1785 — sayfada liste hep görünür (kenar çubuğu): v1 sayfa kipi gibi
   // konuşma kimliği değişince bir kez yenilenir, yenilerken eski liste kalır.
   const history = useChatHistory(open && (isPage || showHistory), isPage ? (conv.conversationId ?? '') : '', isPage);
@@ -417,6 +419,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
       {explainCtx.activeExplain?.meta.kind === 'trace' && explainCtx.liveTraceCtx && (
         <TraceContextStrip traceId={explainCtx.activeExplain.meta.id} ctx={explainCtx.liveTraceCtx} />
       )}
+      {showAliases && <CosreAliasPanel />}
       {showHistory && (
         <ChatHistoryPanel history={history} activeId={conv.conversationId}
           onNew={() => { clear(); setShowHistory(false); }}
@@ -479,6 +482,8 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
             title={busy ? T.fullPageBusyTitle : T.fullPageTitle} onClick={openFullPage}>{T.fullPage}</Link>
           <Button variant="ghost" size="sm" className="cm-head-btn" onClick={() => setShowHistory(h => !h)}
             aria-expanded={showHistory} title={T.historyTitle}>{T.history}</Button>
+          <Button variant="ghost" size="sm" className="cm-head-btn" onClick={() => setShowAliases(v => !v)}
+            aria-expanded={showAliases} title={T.aliasesButtonTitle}>{T.aliases}</Button>
           {messages.length > 0 && (
             <Button variant="ghost" size="sm" className="cm-head-btn" onClick={clear} title={T.clearTitle}>{T.clear}</Button>
           )}
