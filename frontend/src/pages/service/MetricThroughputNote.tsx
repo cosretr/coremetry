@@ -1,6 +1,7 @@
 import type { MetricSourceKind, ServiceMetricThroughput } from '@/lib/types';
 import { Badge } from '@/components/ui';
 import { METRIC_SOURCE_LABELS } from '@/lib/metricSource';
+import { t as tl, tf, useLang } from '@/lib/i18n'; // v0.10.2315 — not metni arayüz dilinde (mtn.*; TR aynı)
 
 // v0.9.665 — metrik türevli throughput ÇİZİLEMEDİĞİNDE nedenini söyler.
 //
@@ -35,21 +36,21 @@ import { METRIC_SOURCE_LABELS } from '@/lib/metricSource';
 // (rolling deploy) "ClickHouse'ta arandı" diye VARSAYMAMALI — varsayılanı
 // basmak, düzeltmenin yalan söyleyebildiği tek yol olurdu.
 function SearchedIn({ source }: { source?: MetricSourceKind }) {
+  const lang = useLang();
   if (!source) return null;
   const label = METRIC_SOURCE_LABELS[source] ?? source;
   return (
     <Badge
       tone={source === 'vm' ? 'info' : 'neutral'}
-      title={`Bu panel metriği ${label} üzerinde aradı (Settings → Metrik backend'i). ` +
-        `Metrik başka bir depoda yaşıyorsa burada "eşleşme yok" görünür — ` +
-        `soldaki panel çiziyorsa iki panel farklı depoya bakıyor demektir.`}
+      title={tf('mtn.searchedTip', lang, { label })}
     >
-      {label}'de arandı
+      {tf('mtn.searched', lang, { label })}
     </Badge>
   );
 }
 
 export function MetricThroughputNote({ d }: { d: ServiceMetricThroughput }) {
+  const lang = useLang();
   const box: React.CSSProperties = {
     marginTop: 8, padding: '8px 10px', borderRadius: 6,
     background: 'var(--bg2)', border: '1px solid var(--border)',
@@ -60,13 +61,12 @@ export function MetricThroughputNote({ d }: { d: ServiceMetricThroughput }) {
   if (d.unsupportedInstrument) {
     return (
       <div style={box}>
-        <b>Bu metrikten throughput türetilemiyor.</b> {searched}
+        <b>{tl('mtn.unsup', lang)}</b> {searched}
         <div style={{ marginTop: 4 }}>
           <code>{d.metric}</code> · instrument <code>{d.instrument || '?'}</code>
         </div>
         <div style={{ color: 'var(--text3)', marginTop: 4 }}>
-          Rate yalnız sayaç (sum) ve histogram için anlamlı; gauge anlık
-          bir değer, oranı istek sayısı vermez.
+          {tl('mtn.unsupWhy', lang)}
         </div>
       </div>
     );
@@ -75,24 +75,22 @@ export function MetricThroughputNote({ d }: { d: ServiceMetricThroughput }) {
   if (!d.metricExists) {
     return (
       <div style={box}>
-        <b>Metrik bu kurulumda yok.</b> {searched}
+        <b>{tl('mtn.absent', lang)}</b> {searched}
         {(d.tried?.length ?? 0) > 0 && (
           <div style={{ marginTop: 4 }}>
-            Denenen adlar:{' '}
+            {tl('mtn.tried', lang)}{' '}
             {d.tried!.map((t, i) => (
               <span key={t}>{i > 0 && ', '}<code>{t}</code></span>
             ))}
           </div>
         )}
         <div style={{ color: 'var(--text3)', marginTop: 4 }}>
-          Grafana bunu Prometheus'tan okuyor; Coremetry'ye OTLP ile
-          iletilmiyor ya da adı çeviride değişmiş olabilir. Farklı bir ad
-          denemek için uca <code>?metric=</code> parametresi geçilebilir.
+          {tl('mtn.absentA', lang)}<code>?metric=</code>{tl('mtn.absentB', lang)}
         </div>
         {(d.suggestions?.length ?? 0) > 0 && (
           <div style={{ marginTop: 6 }}>
             <div style={{ color: 'var(--text3)' }}>
-              Katalogda benzer adlar — ölçüm başka bir adla içeride olabilir:
+              {tl('mtn.similar', lang)}
             </div>
             <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
               {d.suggestions!.map(n => (
@@ -108,15 +106,15 @@ export function MetricThroughputNote({ d }: { d: ServiceMetricThroughput }) {
   const hasJobs = (d.sampleJobs?.length ?? 0) > 0;
   return (
     <div style={box}>
-      <b>Metrik var ama bu servise eşleşen seri yok.</b> {searched}
+      <b>{tl('mtn.noMatch', lang)}</b> {searched}
       <div style={{ marginTop: 4 }}>
         <code>{d.metric}</code>
         {d.instrument && <> · instrument <code>{d.instrument}</code></>}
-        {' '}· desen <code>{d.pattern}</code>
+        {' '}{tl('mtn.pattern', lang)}<code>{d.pattern}</code>
       </div>
       {(d.triedLabels?.length ?? 0) > 0 && (
         <div style={{ marginTop: 4, color: 'var(--text3)' }}>
-          Denenen kimlik etiketleri:{' '}
+          {tl('mtn.triedLabels', lang)}{' '}
           {d.triedLabels!.map((l, i) => (
             <span key={l}>{i > 0 && ', '}<code>{l}</code></span>
           ))}
@@ -127,7 +125,7 @@ export function MetricThroughputNote({ d }: { d: ServiceMetricThroughput }) {
           tutmadı" ise deseni. Boş grafik ikisini de aynı gösterirdi. */}
       {(d.candidateErrors?.length ?? 0) > 0 && (
         <div style={{ marginTop: 6, color: 'var(--err)' }}>
-          <b>Bazı adaylar HATA verdi</b> (eşleşme yokluğu değil, teknik hata):
+          <b>{tl('mtn.candErr', lang)}</b>{tl('mtn.candErrB', lang)}
           <ul style={{ margin: '2px 0 0 16px', padding: 0 }}>
             {d.candidateErrors!.map(e => (
               <li key={e} style={{ fontSize: 11 }}>{e}</li>
@@ -142,11 +140,11 @@ export function MetricThroughputNote({ d }: { d: ServiceMetricThroughput }) {
       <div style={{ marginTop: 4 }}>
         {d.presentKeysState === 'unknown' ? (
           <span style={{ color: 'var(--warn)' }}>
-            Anahtar varlığı <b>BİLİNEMEDİ</b>
-            {d.presentKeysReason ? <> ({d.presentKeysReason})</> : null} — etiket yok DEĞİL.
+            {tl('mtn.unkA', lang)}<b>{tl('mtn.unkB', lang)}</b>
+            {d.presentKeysReason ? <> ({d.presentKeysReason})</> : null}{tl('mtn.unkC', lang)}
             {(d.presentKeys?.length ?? 0) > 0 && (
               <>
-                {' '}Görülen anahtarlar:{' '}
+                {' '}{tl('mtn.seen', lang)}{' '}
                 {d.presentKeys!.map((k, i) => (
                   <span key={k}>{i > 0 && ', '}<code>{k}</code></span>
                 ))}
@@ -155,28 +153,26 @@ export function MetricThroughputNote({ d }: { d: ServiceMetricThroughput }) {
           </span>
         ) : (d.presentKeys?.length ?? 0) > 0 ? (
           <>
-            <span style={{ color: 'var(--text3)' }}>Bu metrikte VAR OLAN anahtarlar
-              {d.presentKeysScope === 'fleet' && ' (filo geneli)'}:</span>{' '}
+            <span style={{ color: 'var(--text3)' }}>{tl('mtn.present', lang)}
+              {d.presentKeysScope === 'fleet' && tl('mtn.fleet', lang)}:</span>{' '}
             {d.presentKeys!.map((k, i) => (
               <span key={k}>{i > 0 && ', '}<code>{k}</code></span>
             ))}
             <div style={{ color: 'var(--text3)', marginTop: 2 }}>
-              Anahtar var ama eşleşme yok → değer beklenenden farklı.
+              {tl('mtn.keyNoMatch', lang)}
             </div>
           </>
         ) : (
           <span style={{ color: 'var(--text3)' }}>
-            Denenen kimlik anahtarlarının <b>hiçbiri</b> bu metrikte yok
-            {d.presentKeysScope === 'fleet' && ' (filo geneli)' /* v0.10.1358 */} —
-            collector servis kimliğini başka bir alanda gönderiyor.
+            {tl('mtn.noneA', lang)}<b>{tl('mtn.noneB', lang)}</b>{tl('mtn.noneC', lang)}
+            {d.presentKeysScope === 'fleet' && tl('mtn.fleet', lang) /* v0.10.1358 */}{tl('mtn.noneD', lang)}
           </span>
         )}
       </div>
       {hasJobs ? (
         <div style={{ marginTop: 6 }}>
           <div style={{ color: 'var(--text3)' }}>
-            Kurulumda bulunan <code>{d.jobLabel}</code> değerleri ve
-            bunlardan çözülen servis adları:
+            {tl('mtn.jobsA', lang)}<code>{d.jobLabel}</code>{tl('mtn.jobsB', lang)}
           </div>
           <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
             {d.sampleJobs!.map((j, i) => (
@@ -191,8 +187,7 @@ export function MetricThroughputNote({ d }: { d: ServiceMetricThroughput }) {
         </div>
       ) : (
         <div style={{ color: 'var(--text3)', marginTop: 6 }}>
-          Metrik hiç <code>{d.jobLabel}</code> etiketi taşımıyor — servis
-          kimliği başka bir etikette olabilir.
+          {tl('mtn.noJobA', lang)}<code>{d.jobLabel}</code>{tl('mtn.noJobB', lang)}
         </div>
       )}
     </div>

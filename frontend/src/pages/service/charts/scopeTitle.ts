@@ -11,18 +11,20 @@
 //
 // Türkçe tipografik apostrof (’) bilinçli — sayfanın geri kalanıyla aynı.
 
+import { t, type Lang } from '@/lib/i18n';
+
 export const ALL_SPANS_SUFFIX = ' · tüm span’ler';
 
+// v0.10.2315 — metinler katalogda (ov.scope.*; TR = ALL_SPANS_SUFFIX ve
+// aşağıdaki iki ipucu, birebir); `lang` varsayılanı 'tr'.
 // scopedChartTitle — taban başlık + kapsam → ekranda görünen başlık.
-export function scopedChartTitle(base: string, usingAllSpans: boolean): string {
-  return usingAllSpans ? base + ALL_SPANS_SUFFIX : base;
+export function scopedChartTitle(base: string, usingAllSpans: boolean, lang: Lang = 'tr'): string {
+  return usingAllSpans ? base + t('ov.scope.allSuffix', lang) : base;
 }
 
 // scopeTitleTip — başlığın (ve KPI karolarının / kapsam rozetinin) hover
 // açıklaması. Giriş durumunda popülasyonu ANLATIR, fallback durumunda
 // NEDEN düşüldüğünü söyler.
-export function scopeTitleTip(usingAllSpans: boolean): string {
-  return usingAllSpans
-    ? 'Tüm span’ler — bu serviste giriş span’i (server/consumer) yok'
-    : 'Giriş span’leri: server + consumer — servisin kendi istekleri';
+export function scopeTitleTip(usingAllSpans: boolean, lang: Lang = 'tr'): string {
+  return t(usingAllSpans ? 'ov.scope.allTip' : 'ov.scope.entryTip', lang);
 }

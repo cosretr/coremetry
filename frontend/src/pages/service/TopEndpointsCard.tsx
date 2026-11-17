@@ -8,6 +8,7 @@ import { encodeRange } from '@/lib/urlState';
 import { useDataTable, DataTableHead, DataTableColgroup } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { EndpointRow, TimeRange } from '@/lib/types';
+import { t as tl, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2315 — kart metni arayüz dilinde (TR aynı)
 
 // TopEndpointsCard — v0.9.377, redesign D1 (operatör şartı; mockup
 // af7419e5). Overview'un sol geniş hücresinde OpsCard'ın yerini alır:
@@ -26,13 +27,14 @@ function errBadge(rate: number): string {
 
 const totalTimeOf = (r: EndpointRow) => r.calls * r.avgMs;
 
-const EP_COLS: DataTableColumn<EndpointRow>[] = [
+// v0.10.2315 — kolon etiketleri dile göre, render anında (EN katalog tembel).
+const epCols = (lang: Lang): DataTableColumn<EndpointRow>[] => [
   { id: 'path', label: 'Endpoint', sortValue: r => r.path, naturalDir: 'asc', width: 250 },
   { id: 'calls', label: 'Calls', sortValue: r => r.calls, numeric: true, width: 74 },
   { id: 'err', label: 'Err %', sortValue: r => r.errorRate, numeric: true, width: 72 },
   { id: 'p50', label: 'P50', sortValue: r => r.p50Ms ?? 0, numeric: true, width: 70 },
   { id: 'p99', label: 'P99', sortValue: r => r.p99Ms, numeric: true, width: 74 },
-  { id: 'share', label: 'Süre payı', sortValue: totalTimeOf, numeric: true, width: 110 },
+  { id: 'share', label: tl('ov.ep.share', lang), sortValue: totalTimeOf, numeric: true, width: 110 },
 ];
 
 // v0.10.1424 — Calls column uses the shared fmtNum (K/M/B/T); the local K/M
@@ -41,6 +43,8 @@ const EP_COLS: DataTableColumn<EndpointRow>[] = [
 export function TopEndpointsCard({ service, range, endpoints }: {
   service: string; range: TimeRange; endpoints: EndpointRow[];
 }) {
+  const lang = useLang();
+  const cols = useMemo(() => epCols(lang), [lang]);
   const rangeParam = encodeRange(range);
   // v0.9.1086 (operatör isteği): satır tıkı artık DOĞRUDAN /endpoint
   // detay sayfasına gider — v0.9.379'un peek drawer'ı ("drawer açılıp
@@ -71,7 +75,7 @@ export function TopEndpointsCard({ service, range, endpoints }: {
   }, [epParam]);
   const dt = useDataTable<EndpointRow>({
     storageKey: 'svc-ov-endpoints',
-    columns: EP_COLS,
+    columns: cols,
     rows: endpoints,
     initialSort: { id: 'share', dir: 'desc' },
     onOpen: (r) => gotoEp(r.path),
@@ -85,8 +89,8 @@ export function TopEndpointsCard({ service, range, endpoints }: {
       <div className="ov-card-h">
         <h3>Top endpoints</h3>
         <span className="badge b-gray" style={{ marginLeft: 8 }}
-          title="Yalnız giriş span'leri (server + consumer) — servisin dışarı yaptığı client çağrıları bu listede değildir. Sıralama: pencere içi toplam süre (calls × avg).">
-          giriş span&#39;leri
+          title={tl('ov.ep.badgeTip', lang)}>
+          {tl('ov.ep.badge', lang)}
         </span>
         <span className="ov-right">
           <Link className="ov-sub" to={`/endpoints?service=${encodeURIComponent(service)}&range=${rangeParam}`}>
@@ -114,7 +118,7 @@ export function TopEndpointsCard({ service, range, endpoints }: {
                   <td className="num">{r.p50Ms != null ? `${r.p50Ms.toFixed(0)} ms` : '—'}</td>
                   <td className="num">{r.p99Ms.toFixed(0)} ms</td>
                   <td>
-                    <div title={`pencere içi toplam süre ≈ ${(totalTimeOf(r) / 60000).toFixed(1)} dk`}
+                    <div title={tf('ov.ep.shareTip', lang, { m: (totalTimeOf(r) / 60000).toFixed(1) })}
                       style={{
                         height: 7, borderRadius: 2,
                         width: `${Math.max(4, share * 100)}%`,

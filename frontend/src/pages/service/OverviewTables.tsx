@@ -13,6 +13,7 @@ import { operationTracesHref } from '@/lib/pivotHref';
 import { tracesURL } from '@/components/DBQueriesPanel';
 import { databasesFilterHref } from '@/pages/databases/databaseParam';
 import { serviceHref } from '@/lib/serviceHref';
+import { tf, useLang } from '@/lib/i18n'; // v0.10.2315 — DbCard boş satırı arayüz dilinde (TR aynı)
 
 // Service Overview tables (v0.7.96) — the compact Operations + Top DB
 // statements pair from the design handoff. Both use the shared
@@ -121,6 +122,7 @@ const DB_COLS: DataTableColumn<DBQueryStat>[] = [
 ];
 
 export function DbCard({ service, range, from, to }: { service: string; range: TimeRange; from: number; to: number }) {
+  const lang = useLang();
   const dbQ = useQuery({
     queryKey: ['service-overview-db', service, from, to],
     queryFn: () => api.serviceDBQueries(service, { from, to, limit: 50 }),
@@ -158,7 +160,7 @@ export function DbCard({ service, range, from, to }: { service: string; range: T
   const tableState: Omit<DataTableStateProps<DBQueryStat>, 'dt'> =
     dbQ.isLoading ? { kind: 'loading' }
     : dbQ.isError ? { kind: 'error' }
-    : { kind: 'empty', message: `Bu pencerede ${service} için db.statement span'i yok` };
+    : { kind: 'empty', message: tf('ov.db.empty', lang, { svc: service }) };
   return (
     <div className="card">
       <div className="ov-card-h">

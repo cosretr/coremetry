@@ -20,9 +20,9 @@ import { SUBJECT_METRIC_TR, subjectMetricOf } from '@/lib/anomalySubjectMetric';
 
 /** v0.10.1804 — Kafka consumer lag özne olayının bandı "consumer lag" (ham "özne"
  *  yerine; operatörün aradığı ad). Diğer özne metrikleri bugünkü gibi "özne". */
-function regionKindLabel(e: Pick<AnomalyEvent, 'kind' | 'pattern'>): string {
+function regionKindLabel(e: Pick<AnomalyEvent, 'kind' | 'pattern'>, lang: Lang = 'tr'): string {
   if (subjectMetricOf(e) === 'consumer_lag') return SUBJECT_METRIC_TR.consumer_lag.label;
-  return anomalyKindLabel(e.kind);
+  return anomalyKindLabel(e.kind, lang);
 }
 
 /** Tür etiketi: eski türler sözlükten, ML olayı "ML · <dedektör>".
@@ -79,7 +79,8 @@ export function isSilenced(e: AnomalyEvent, silenced: Set<string>): boolean {
   return silenced.has(e.id) || silenced.has(silenceKey(e));
 }
 
-export function anomalyRegions(events: AnomalyEvent[], silenced: Set<string>, fromNs: number, toNs: number): ChartTimeRegion[] {
+// v0.10.2315 — bant etiketi arayüz dilinde (lang varsayılanı 'tr'; TR aynı).
+export function anomalyRegions(events: AnomalyEvent[], silenced: Set<string>, fromNs: number, toNs: number, lang: Lang = 'tr'): ChartTimeRegion[] {
   const minWidthNs = Math.max(1e9, (toNs - fromNs) * 0.004);
   return events.map(e => {
     // v0.10.181 — «değil» kararı da soluk: karar susturma değildir ama bant
@@ -95,7 +96,7 @@ export function anomalyRegions(events: AnomalyEvent[], silenced: Set<string>, fr
       endSec: e.lastSeen / 1e9, // v0.10.182 — tooltip «son/süre» GERÇEK bitişten (toSec şişirilmiş olabilir)
       color: muted ? 'var(--text3)' : ANOMALY_KIND_COLOR[e.kind] ?? 'var(--warn)',
       // ▮ öneki YOK: drawTimeRegions kendisi ekler (overlays.ts fitLabel('▮ ' + label)).
-      label: sil ? 'sessiz' : notAnomaly ? 'değil' : `${regionKindLabel(e)} ${anomalyRatioLabel(e)}`, // v0.10.1792 — tabansızda "taban yok"
+      label: sil ? t('anomalyWindow.muted', lang) : notAnomaly ? t('ov.region.not', lang) : `${regionKindLabel(e, lang)} ${anomalyRatioLabel(e, e.peakRatio, lang)}`, // v0.10.1792 — tabansızda "taban yok"
     };
   });
 }

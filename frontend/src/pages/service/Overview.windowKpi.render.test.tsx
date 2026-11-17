@@ -66,6 +66,8 @@ vi.mock('@/lib/api', async (orig) => {
   };
 });
 
+// v0.10.2315 — Türkçe metin pinleri: arayüz dili 'tr'.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/queries', () => ({
   useServiceDeploys: () => ({ data: [] }),
   useAnomalyEvents: () => ({ data: { items: [] } }),

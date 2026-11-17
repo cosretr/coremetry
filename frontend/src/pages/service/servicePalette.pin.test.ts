@@ -96,7 +96,7 @@ describe('/service sade palet — K5 artıkları (v0.10.929)', () => {
       ['tputLabel', 'var(--accent)'],
       // v0.10.1259 — hata oranı yokken (metrik modu) aynı yuvada Toplam istek.
       // v0.10.1264 — --info → --ok (operatör: mavi Throughput ile karışıyordu).
-      ['Toplam', 'var(--ok)'],
+      ["tl('ov.totalReq',", 'var(--ok)'], // v0.10.2315 — etiket katalogda ('Toplam istek')
       ['Failure', 'var(--err)'],
     ]);
     // Gerekçe yorumu kaynakta durur (yorum soyulmadan okunur).

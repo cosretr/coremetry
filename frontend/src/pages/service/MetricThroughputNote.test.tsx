@@ -18,10 +18,13 @@
 // yani rozetin göründüğü her an tam olarak teşhisin gerektiği an; bir dalda
 // düşerse tam o dalda aynı körlük geri gelir.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MetricThroughputNote } from './MetricThroughputNote';
+
+// v0.10.2315 — Türkçe metin pinleri: arayüz dili 'tr'.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 import type { ServiceMetricThroughput } from '@/lib/types';
 
 let host: HTMLDivElement;

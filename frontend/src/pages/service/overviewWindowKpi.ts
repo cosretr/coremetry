@@ -16,6 +16,7 @@
 import { windowQueries, scalarOf } from '@/lib/httpMetrics';
 import { HTTP_FAMILY, type RedFamilySpec } from '@/lib/redFamily';
 import type { HttpPromqlItem, HttpPromqlResult } from '@/lib/queries/httpMetrics';
+import { tf, type Lang } from '@/lib/i18n';
 
 /** Karo kimlikleri: w* = bu pencere, pAvg = önceki pencere (yalnız compare açıkken). */
 export type OverviewWindowId = 'wAvg' | 'wP50' | 'wP95' | 'wP99' | 'pAvg';
@@ -69,7 +70,7 @@ export interface OverviewWindowKpi {
 const toMs = (v: number | null): number | null => (v !== null && Number.isFinite(v) && v >= 0 ? v * 1000 : null);
 
 /** Kanca sonucu → karo değerleri (saniye → ms). Hatalı kimlik = değer yok. */
-export function overviewWindowKpi(res: Pick<HttpPromqlResult, 'data' | 'pending' | 'error'>, family: RedFamilySpec = HTTP_FAMILY): OverviewWindowKpi {
+export function overviewWindowKpi(res: Pick<HttpPromqlResult, 'data' | 'pending' | 'error'>, family: RedFamilySpec = HTTP_FAMILY, lang: Lang = 'tr'): OverviewWindowKpi {
   const pick = (id: OverviewWindowId) => (res.error(id) ? null : toMs(scalarOf(res.data[id])));
   const avgMs = pick('wAvg');
   const err = res.error('wAvg');
@@ -77,8 +78,8 @@ export function overviewWindowKpi(res: Pick<HttpPromqlResult, 'data' | 'pending'
     avgMs, p50Ms: pick('wP50'), p95Ms: pick('wP95'), p99Ms: pick('wP99'), prevAvgMs: pick('pAvg'),
     avgPending: res.pending('wAvg'),
     avgMissingReason: avgMs !== null ? null
-      : err ? `pencere sorgusu başarısız: ${err.message}`
-        : `${family.label} histogram ailesi (${family.names.count.replace(/_count$/, '')}) bu pencerede yok`,
+      : err ? tf('ov.win.failed', lang, { e: err.message }) // v0.10.2315 — arayüz dilinde (TR aynı)
+        : tf('ov.win.absent', lang, { fam: family.label, names: family.names.count.replace(/_count$/, '') }),
   };
 }
 

@@ -35,6 +35,9 @@ vi.mock('@/lib/api', () => {
     getTraceRootDef: () => Promise.resolve({ def: 'entry' }),
     servicesPage: () => Promise.resolve({ services: [{ name: 'svc-a', spanCount: 50 }] }),
     savedViews: () => Promise.resolve([]),
+    serviceNames: () => Promise.resolve({ names: [], total: 0 }),
+    operationNames: () => Promise.resolve({ names: [], total: 0 }),
+    putPreference: () => Promise.resolve({}),
     getPreference: () => Promise.resolve(null),
   };
   return { api: new Proxy({}, { get: (_t, k: string) => stub[k] ?? (() => Promise.resolve({})) }), isCanceled: () => false };

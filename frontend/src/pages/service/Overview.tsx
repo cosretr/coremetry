@@ -24,6 +24,7 @@ import { isMLAnomaly, mlEventHref } from '@/lib/anomalyHref';
 import { anomalyEventSilenceBody } from '@/lib/inboxDrawer';
 import { readBandsParam, writeBandsParam } from '@/lib/bandsParam';
 import { toast } from '@/lib/toast';
+import { t as tl, tf, useLang } from '@/lib/i18n'; // v0.10.2315 — genel bakış metni arayüz dilinde (ov.*; TR aynı)
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
 import { LinkButton } from '@/components/ui';
 import { AnomalyWindowTable } from '@/features/anomalies/AnomalyWindowTable';
@@ -51,7 +52,7 @@ import { Spinner } from '@/components/Spinner';
 const CorePanelMultiLazy = lazy(() =>
   import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
 import {
-  topRoutesByArea, metricUnitToGrafana, ROUTE_TOP_N, metricAvgToMs, ROUTE_UNLABELLED,
+  topRoutesByArea, metricUnitToGrafana, ROUTE_TOP_N, metricAvgToMs,
 } from './charts/routeSeries';
 import { OpsCard, DbCard } from './OverviewTables';
 import type { DataTableStateProps } from '@/components/ui/DataTable';
@@ -208,6 +209,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   // v0.8.480 — üst sayfa pencereyi çözdüyse AYNISI kullanılır: RED
   // prefetch'in RQ anahtarı ancak böyle tutar (timeRangeToNs göreli
   // aralıkta Date.now()'a bağlı, iki ayrı hesap anahtar kaçırır).
+  const lang = useLang();
   const computed = useMemo(() => timeRangeToNs(range), [range]);
   const { from, to } = windowNs ?? computed;
   // Neighbours window — clock-free, but hoisted so the two props read one
@@ -314,7 +316,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   const ovWinSec = overviewWindowSec(from, to);
   const ovWinOffsetSec = overviewWindowOffsetSec(compareOff);
   const ovWinItems = useMemo(() => overviewWindowItems(service, ovWinSec, ovWinOffsetSec, envSel, family), [service, ovWinSec, ovWinOffsetSec, envSel, family]);
-  const ovWin = overviewWindowKpi(useHttpPromql(ovWinItems, { from, to }, metricMode && !!service && envReady), family);
+  const ovWin = overviewWindowKpi(useHttpPromql(ovWinItems, { from, to }, metricMode && !!service && envReady), family, lang);
   const metricAutoFellBack = explicitSrc === null && !!metricRedQ.data && !metricRedQ.data.metricExists;
   const metricRedGhostQ = useQuery({
     queryKey: ['service-metric-red', service, from - compareOff, to - compareOff, redMdp, env, family.kind],
@@ -485,8 +487,8 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   // başlık eki ve açıklama tek yerden gelsin (ikisi ayrı yazılınca biri
   // güncellenip diğeri bayatlıyordu).
   const latScopeNote = metricMode
-    ? (metricRedQ.data?.note ?? (metricRedQ.isError ? 'Kaynak: METRİK — okunamadı' : 'Kaynak: METRİK — yükleniyor'))
-    : scopeTitleTip(usingAllSpans);
+    ? (metricRedQ.data?.note ?? tl(metricRedQ.isError ? 'ov.src.metricErr' : 'ov.src.metricLoading', lang))
+    : scopeTitleTip(usingAllSpans, lang);
 
   // v0.9.844 — v0.9.484'ün "Response time · operasyon kırılımı" görünümü ve
   // onu taşıyan ?rtops URL parametresi SİLİNDİ (v0.9.736 operatör düzeninin
@@ -576,10 +578,10 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   const bandsOn = readBandsParam(searchParams);
   const toggleBands = () => setSearchParams(prev => writeBandsParam(prev, !bandsOn, window.location.search), { replace: true });
   const chartRegions = useMemo(() => {
-    const a = bandsOn ? anomalyRegions(windowEvents, silenced, from, to) : [];
+    const a = bandsOn ? anomalyRegions(windowEvents, silenced, from, to, lang) : [];
     if (!deployRegions && a.length === 0) return undefined;
     return [...(deployRegions ?? []), ...a];
-  }, [deployRegions, windowEvents, silenced, from, to, bandsOn]);
+  }, [deployRegions, windowEvents, silenced, from, to, bandsOn, lang]);
   const anomalyParam = searchParams.get('anomaly') ?? '';
   const inList = useMemo(() => (anomalyParam ? (anomaliesQ.data?.items ?? []).find(e => e.id === anomalyParam) ?? null : null), [anomalyParam, anomaliesQ.data]);
   // v0.9.465 deseni (streams.tsx rescueQ): ?anomaly= hedefi 24 s/200'lük zarfın
@@ -620,12 +622,12 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
         : Promise.reject(new Error('anomaly id missing')),
       putVerdict.mutateAsync({ id: e.id, verdict: 'not_anomaly', kind: e.kind, pattern: e.pattern, service: e.service }),
     ]);
-    const failed = results.map((r, i) => (r.status === 'rejected' ? (i === 0 ? 'susturma' : 'karar') : null)).filter(Boolean);
-    if (failed.length) toast.error(`«Değil» yazılamadı: ${failed.join(' + ')} — ${String((results.find(r => r.status === 'rejected') as PromiseRejectedResult).reason)}`);
+    const failed = results.map((r, i) => (r.status === 'rejected' ? tl(i === 0 ? 'ov.toast.partSilence' : 'ov.toast.partVerdict', lang) : null)).filter(Boolean);
+    if (failed.length) toast.error(tf('ov.toast.notFail', lang, { what: failed.join(' + '), err: String((results.find(r => r.status === 'rejected') as PromiseRejectedResult).reason) }));
   };
   const setVerdict = async (e: AnomalyEvent, verdict: 'anomaly' | 'not_anomaly') => {
     try { await putVerdict.mutateAsync({ id: e.id, verdict, kind: e.kind, pattern: e.pattern, service: e.service }); }
-    catch (err) { toast.error(`Karar yazılamadı: ${err instanceof Error ? err.message : String(err)}`); }
+    catch (err) { toast.error(tf('ov.toast.verdictFail', lang, { err: err instanceof Error ? err.message : String(err) })); }
   };
 
   // v0.10.180 — banda tık → ?anomaly=<id> çekmecesi (deploy ▼ id taşımaz, no-op).
@@ -760,8 +762,8 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   // Sunucu top-N YOK bu yolda (grup başına seri, 50k satır tavanına dek):
   // kırpma istemcide, ve SÖYLENİYOR.
   const rtView = useMemo(
-    () => topRoutesByArea(rtAvgQ.data?.series, ROUTE_TOP_N, rtAvgQ.data?.rowsCapped),
-    [rtAvgQ.data]);
+    () => topRoutesByArea(rtAvgQ.data?.series, ROUTE_TOP_N, rtAvgQ.data?.rowsCapped, lang),
+    [rtAvgQ.data, lang]);
 
   // ── Grupsuz (servis geneli) ortalama — KPI KAROSU için (v0.9.798) ────
   //
@@ -806,7 +808,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
     rtView.note,
     // v1 dürüstlük deseni: tanınmayan birimde eksen ham sayı çizer ve
     // bunu SÖYLER — sessizce "ms" yazmak yanlış sayıya güven üretir.
-    rtUnit ? null : 'birim tanınmadı',
+    rtUnit ? null : tl('ov.rt.unitUnknown', lang),
   ].filter(Boolean).join(' · ') || null;
 
   // v0.9.170 (operatör-bildirimi: cluster çözülemeyen / metrik-yoğun
@@ -893,7 +895,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   // önce son adım, sonra pencere değeri = iki sayı arasında zıplama).
   const rtTilePending = metricTilesPending || (metricMode && ovWin.avgPending);
   const rtLabel = rtFromMetric || rtTilePending
-    ? (rtLastStep && !rtTilePending ? 'Response time · avg · son adım' : 'Response time · avg')
+    ? (rtLastStep && !rtTilePending ? tl('ov.rt.labelLast', lang) : 'Response time · avg')
     : 'Response time · P99 (span)';
   const rtValMs = rtFromWindow ? (rtWinAvgMs as number) : rtFromMetric ? (rtAvgMsNow as number) : p99Ms;
   // Delta: pencere vs önceki pencere (compare açıkken); aksi hâlde bugünkü
@@ -904,24 +906,24 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   // "P99 (metrik)" alt satırı: pencere p99; yoksa /metric-red son noktası, "son adım" etiketiyle.
   const rtSub = rtTilePending || !rtFromMetric ? undefined
     : !metricMode ? (p99Now != null ? `P99 (span) · ${p99Ms.toFixed(0)} ms` : undefined)
-      : ovWin.p99Ms != null ? `P99 (metrik) · ${ovWin.p99Ms.toFixed(0)} ms`
-        : p99Now != null ? `P99 (metrik · son adım) · ${p99Ms.toFixed(0)} ms` : undefined;
+      : ovWin.p99Ms != null ? tf('ov.rt.subMetric', lang, { v: ovWin.p99Ms.toFixed(0) })
+        : p99Now != null ? tf('ov.rt.subMetricLast', lang, { v: p99Ms.toFixed(0) }) : undefined;
   const tputLabel = tputFromMetric || metricTilesPending ? 'Throughput' : 'Throughput (span)';
   // Karo tooltip'i kaynağı TAM yazar — kapsam rozeti span kapsamını
   // anlatıyor ve metrik karosunda o rozet geçerli DEĞİL.
   // v0.10.1360 — pencere karosu kaynağını, pencereyi ve dört pencere değerini yazar.
   const fmtMs = (v: number | null) => (v == null ? '—' : `${v.toFixed(v < 10 ? 1 : 0)} ms`);
   const rtTileNote = rtFromWindow
-    ? `Kaynak: ${family.names.count.replace(/_count$/, '')} · karolar pencere değeri (increase[${windowRange(ovWinSec)}], HTTP/GRPC ile aynı), service_name = ${service}`
+    ? tf('ov.rt.noteWin', lang, { name: family.names.count.replace(/_count$/, ''), w: windowRange(ovWinSec), svc: service })
       + ` · avg ${fmtMs(ovWin.avgMs)} · P50 ${fmtMs(ovWin.p50Ms)} · P95 ${fmtMs(ovWin.p95Ms)} · P99 ${fmtMs(ovWin.p99Ms)}`
-      + (env ? ` · ${httpEnvScopeNote(envScope)?.text ?? 'env süzgeci yok'}` : '') // v0.10.1377
-      + '; sparkline ve grafikler adım başına seri'
+      + (env ? ` · ${httpEnvScopeNote(envScope, lang)?.text ?? tl('ov.rt.noEnvFilter', lang)}` : '') // v0.10.1377
+      + tl('ov.rt.noteTail', lang)
     : rtFromMetric
-      ? `Kaynak: ${metricName} · gözlem-ağırlıklı ortalama (grupsuz), service.name = ${service}`
-        + (rtLastStep ? ` · son adım (adım serisinin son noktası) — ${ovWin.avgMissingReason ?? 'pencere değeri yok'}` : '')
+      ? tf('ov.rt.noteMetric', lang, { name: metricName, svc: service })
+        + (rtLastStep ? tf('ov.rt.noteLast', lang, { why: ovWin.avgMissingReason ?? tl('ov.rt.noWin', lang) }) : '')
       : latScopeNote;
   const tputTileNote = tputFromMetric
-    ? `Kaynak: ${metricTputQ.data?.metric ?? '?'} · rate toplamı (route'ların toplamı), eşleşme ${metricTputQ.data?.matchedBy ?? '?'}`
+    ? tf('ov.tput.note', lang, { name: metricTputQ.data?.metric ?? '?', by: metricTputQ.data?.matchedBy ?? '?' })
     : latScopeNote;
 
   // "Every metric is a doorway" (Phase C) — canonical descriptors for each KPI
@@ -970,12 +972,12 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
           Bağlam. Kapsam tanımı tooltip folklorundan çıkıp TEK görünür
           rozete indi — beş karo ve üç grafik aynı rozete bakar; fallback
           amber'e döner. */}
-      <div className="dtl-sech">Altın sinyaller
+      <div className="dtl-sech">{tl('ov.sech.golden', lang)}
         <span className={`badge ${metricMode ? 'b-info' : usingAllSpans ? 'b-warn' : 'b-gray'}`}
           style={{ textTransform: 'none', letterSpacing: 0 }} title={latScopeNote}>
           {metricMode
-            ? `kaynak: metrik (${metricRedQ.data?.source ?? '…'})${familyBadgeSuffix(fam)}` /* v0.10.1429 — " · gRPC" | " · +gRPC" */
-            : usingAllSpans ? 'kapsam: tüm span\u2019ler' : 'kapsam: giriş span\u2019leri'}
+            ? tf('ov.badge.metric', lang, { src: metricRedQ.data?.source ?? '…' }) + familyBadgeSuffix(fam) /* v0.10.1429 — " · gRPC" | " · +gRPC" */
+            : tl(usingAllSpans ? 'ov.badge.all' : 'ov.badge.entry', lang)}
         </span>
       </div>
       {/* KPI row — golden signals + full-bleed trend sparklines. Each tile is
@@ -1027,8 +1029,8 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
           {metricErrorsUnknown && totalReq !== null
             // v0.10.1264 (operatör 2026-10-17: "Toplam istek yeşil olsun, mavi
             // olunca throughput ile karışıyor") — seri kimliği --ok.
-            ? <KpiTile lab="Toplam istek" val={new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumFractionDigits: 1 }).format(totalReq)}
-                accent="var(--ok)" spark={metricRpsSeries} note={`Seçili pencerede toplam istek: ${totalReq.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} (HTTP metrikleri)`} />
+            ? <KpiTile lab={tl('ov.totalReq', lang)} val={new Intl.NumberFormat(lang === 'tr' ? 'tr-TR' : 'en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(totalReq)}
+                accent="var(--ok)" spark={metricRpsSeries} note={tf('ov.totalReqNote', lang, { n: totalReq.toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 0 }) })} />
             : <KpiTile lab="Failure rate" val={metricErrorsUnknown ? '—' : `${errorRatePct.toFixed(2)}%`} accent="var(--err)" spark={vals(lat?.error_rate)} delta={computeDelta(vals(lat?.error_rate))} goodWhenUp={false} note={latScopeNote} />}
         </MetricPanel>
         {/* v0.9.483 (operatör: "bence response time mediana da gerek yok") —
@@ -1054,40 +1056,38 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 11, color: 'var(--text2)', flexWrap: 'wrap', rowGap: 6 }}>
         <select value={metricMode ? 'metric' : 'span'}
           onChange={e => setMetricMode(e.target.value === 'metric')}
-          style={{ fontSize: 11 }} aria-label="RED kaynağı"
-          title={metricMode
-            // v0.10.1360 — grafik = adım serisi, karo = pencere değeri.
-            ? 'Kaynak: metrik — OTel HTTP server histogramı (VM ya da ClickHouse): grafik serileri adım başına histogram_quantile(rate[180s]); karolar pencere değeri (increase[W], HTTP/GRPC ile aynı); Failure rate 5xx; örneklemeden bağımsız'
-            : 'Kaynak: span — giriş span\u2019lerinden (server/consumer) türetilmiş RED; collector örnekliyorsa eksik sayar'}>
-          <option value="span">Kaynak: span</option>
-          <option value="metric">Kaynak: metrik</option>
+          style={{ fontSize: 11 }} aria-label={tl('ov.redSrc.aria', lang)}
+          // v0.10.1360 — grafik = adım serisi, karo = pencere değeri.
+          title={tl(metricMode ? 'ov.redSrc.metricTip' : 'ov.redSrc.spanTip', lang)}>
+          <option value="span">{tl('ep.src.span', lang)}</option>
+          <option value="metric">{tl('ep.src.metric', lang)}</option>
         </select>
         <CompareToggle value={compare} onChange={setCompare} />
-        {ghostEnabled && <span style={{ color: 'var(--text3)' }}>· hayalet yalnız Failure rate panelinde</span>}
-        {metricMode && metricRedQ.isError && <span className="badge b-err" title={metricRedQ.error instanceof Error ? metricRedQ.error.message : ''}>metrik RED okunamadı</span>}
-        {(metricMode || metricAutoFellBack) && metricRedQ.data && !metricRedQ.data.metricExists && <span className="badge b-warn" title={metricRedQ.data.note}>metrik bulunamadı — span gösteriliyor</span>}
+        {ghostEnabled && <span style={{ color: 'var(--text3)' }}>{tl('ov.ghostNote', lang)}</span>}
+        {metricMode && metricRedQ.isError && <span className="badge b-err" title={metricRedQ.error instanceof Error ? metricRedQ.error.message : ''}>{tl('ov.redErr', lang)}</span>}
+        {(metricMode || metricAutoFellBack) && metricRedQ.data && !metricRedQ.data.metricExists && <span className="badge b-warn" title={metricRedQ.data.note}>{tl('ov.noMetric', lang)}</span>}
         {metricMode && metricRedQ.data?.metricExists && (metricRedQ.data.errorsUnknown || !metricRedQ.data.latencyUnitKnown || metricRedQ.data.envAmbiguous) && (
-          <span className="badge b-warn" title={metricRedQ.data.note}>eksik: {[
+          <span className="badge b-warn" title={metricRedQ.data.note}>{tl('ov.missing', lang)}{[
             // v0.10.1350 — sorgu hatası "etiket yok" diye okunmaz.
-            metricRedQ.data.errorsUnknown ? (metricRedQ.data.statusState === 'unknown' ? 'failure rate (durum sorgusu başarısız)' : 'failure rate (durum etiketi yok)') : null,
-            !metricRedQ.data.latencyUnitKnown ? 'P50/P95/P99 (birim bilinmiyor)' : null,
+            metricRedQ.data.errorsUnknown ? tl(metricRedQ.data.statusState === 'unknown' ? 'ov.miss.statusFail' : 'ov.miss.noStatus', lang) : null,
+            !metricRedQ.data.latencyUnitKnown ? tl('ov.miss.unit', lang) : null,
             // v0.10.1377 — VM'de env artık süzülür; eksikse NEDEN (yok / çözülemedi).
-            metricRedQ.data.envAmbiguous ? (metricRedQ.data.envScope?.failed ? 'env daraltması (çözülemedi)' : metricRedQ.data.envScope ? 'env daraltması (metrikte bu ortam yok)' : 'env daraltması') : null,
+            metricRedQ.data.envAmbiguous ? tl(metricRedQ.data.envScope?.failed ? 'ov.miss.envFail' : metricRedQ.data.envScope ? 'ov.miss.envAbsent' : 'ov.miss.env', lang) : null,
           ].filter(Boolean).join(', ')}</span>
         )}
-        {ghostEnabled && (seriesGhostQ.isError || latencyGhostQ.isError) && <span className="badge b-warn">önceki dönem yüklenemedi</span>}
+        {ghostEnabled && (seriesGhostQ.isError || latencyGhostQ.isError) && <span className="badge b-warn">{tl('ov.prevFail', lang)}</span>}
         {/* v0.10.1429 — aile: yalnız gRPC → rozet; ikisi → HTTP birincil + gRPC notu (toplanmadı); çözüm okunamadı → dürüst not. */}
         {metricMode && famGrpc && (
-          <span className="badge b-info" title={`Servis HTTP sunucu histogramı yazmıyor; karolar ve grafikler gRPC sunucu histogramından (${family.names.count.replace(/_count$/, '_*')}, ${family.probe}). Failure rate = sunucu-hatası kodları ${family.serverErr}; route kırılımı rpc.method`}>
+          <span className="badge b-info" title={tf('ov.grpcTip', lang, { names: family.names.count.replace(/_count$/, '_*'), probe: family.probe, codes: family.serverErr })}>
             gRPC RED — {family.names.count.replace(/_count$/, '')}
           </span>
         )}
         {metricMode && fam.both && (
-          <span className="badge b-gray" title="Servis hem HTTP hem gRPC sunucu histogramı yazıyor. Bu karolar HTTP; gRPC RED'i HTTP/GRPC sekmesinin gRPC bölümünde (ikisi toplanmaz)">
-            gRPC de var → HTTP/GRPC
+          <span className="badge b-gray" title={tl('ov.bothTip', lang)}>
+            {tl('ov.bothBadge', lang)}
           </span>
         )}
-        {metricMode && familyUnknownNote(fam) && <span className="badge b-warn" title={familyUnknownNote(fam) ?? ''}>metrik ailesi bilinemedi</span>}
+        {metricMode && familyUnknownNote(fam, lang) && <span className="badge b-warn" title={familyUnknownNote(fam, lang) ?? ''}>{tl('ov.famUnknown', lang)}</span>}
         {/* v0.10.1377 — env süzgecinin metrikteki hâli (karolar + grafikler aynı eşleyici). */}
         {metricMode && <HttpEnvScopeBand view={envScope} />}
       </div>
@@ -1150,17 +1150,17 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
                 // sorgu çalıştı ama bu filtrede veri yok. Aynı ekranı
                 // göstermek yanlış eyleme yönlendirir.
                 error={rtAvgQ.isError
-                  ? (rtAvgQ.error instanceof Error ? rtAvgQ.error.message : 'Metrik sorgusu başarısız')
+                  ? (rtAvgQ.error instanceof Error ? rtAvgQ.error.message : tl('ov.metricQueryFail', lang))
                   : undefined}
                 emptyReason={!rtAvgQ.isError && !rtAvgQ.isLoading && rtView.items.length === 0
-                  ? (metricName ? 'Bu filtrede veri yok' : 'Servise bağlı metrik bulunamadı')
+                  ? tl(metricName ? 'ov.noData' : 'ov.noSvcMetric', lang)
                   : undefined}
                 emptyHint={metricName ? `${metricName} · service.name = ${service}` : undefined}
                 // Geliştirici detayı — mevcut ⋯ → "Sorguyu göster". Grupsuz
                 // sorgu burada YAZILMAZ (v0.9.799): panel onu çizmiyor,
                 // yalnız üstteki karo okuyor.
                 queryText={`avg(${metricName || '?'}) by (${routeDim}), service.name="${service}", step=${rtStep}s`
-                  + (rtAvgQ.isError ? `\n\nHATA: ${String(rtAvgQ.error)}` : '')}
+                  + (rtAvgQ.isError ? tf('ov.qErr', lang, { e: String(rtAvgQ.error) }) : '')}
                 regions={chartRegions} onRegionClick={onRegionClick}
                 onZoom={onZoom} onZoomReset={onZoomReset} syncKey={chartSync}
               />
@@ -1191,7 +1191,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
                 // karar). Çözülen seri ⋯ → "Sorguyu göster" metninde: orada
                 // instrument ve eşleşme etiketiyle BİRLİKTE duruyor, yani
                 // tanılama için daha iyi bir yer.
-                title="Throughput · metrik"
+                title={tl('login.http.throughput', lang)}
                 menuExtra={doorway}
                 storageKey="ov-throughput-metric-v2"
                 loading={metricTputQ.isLoading}
@@ -1207,14 +1207,14 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
                   // etiketsiz gözlemler) Response time grafiğiyle aynı adı
                   // alır; eskiden '' basıp lejantta görünmez satır bırakıyordu.
                   name: s0.groupKey?.some(k => k) ? s0.groupKey.filter(k => k).join(' · ')
-                    : s0.groupKey?.length ? ROUTE_UNLABELLED
-                    : `metrik (${metricTputQ.data?.matchedBy ?? 'job'})`,
+                    : s0.groupKey?.length ? tl('ov.route.unlabelled', lang)
+                    : tf('ov.tputSeries', lang, { by: metricTputQ.data?.matchedBy ?? 'job' }),
                   role: 'data' as const,
                 }))}
                 regions={chartRegions} onRegionClick={onRegionClick}
                 onZoom={onZoom} onZoomReset={onZoomReset}
                 syncKey={chartSync}
-                queryText={`metric=${metricTputQ.data?.metric ?? '?'} · instrument=${metricTputQ.data?.instrument ?? '?'} · eşleşme=${metricTputQ.data?.matchedBy ?? '?'} · mdp=${redMdp}`}
+                queryText={`metric=${metricTputQ.data?.metric ?? '?'} · instrument=${metricTputQ.data?.instrument ?? '?'} · ${tl('ov.match', lang)}=${metricTputQ.data?.matchedBy ?? '?'} · mdp=${redMdp}`}
               />
             </Suspense>
           )}
@@ -1237,10 +1237,10 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
               background: 'var(--bg2)', border: '1px solid var(--border)',
               fontSize: 11.5, lineHeight: 1.5, color: 'var(--text2)',
             }}>
-              <b>Metrik throughput okunamadı.</b>
+              <b>{tl('ov.tputErr', lang)}</b>
               <div style={{ color: 'var(--text3)', marginTop: 4 }}>
                 {metricTputQ.error instanceof Error
-                  ? metricTputQ.error.message : 'Bilinmeyen hata'}
+                  ? metricTputQ.error.message : tl('ov.unknownErr', lang)}
               </div>
             </div>
           )}
@@ -1261,7 +1261,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
                eşiğini geri isteyen operatör için ayrı bir dilim. */
             <Suspense key="failure-rate-v2" fallback={<Spinner />}>
               <CorePanelMultiLazy
-                title={showHttpStatus ? 'HTTP Status · metrik' : metricMode ? 'Failure rate · metrik' : scopedChartTitle('Failure rate · trace', usingAllSpans)}
+                title={showHttpStatus ? tl('ov.httpStatusTitle', lang) : metricMode ? tl('ov.failTitleMetric', lang) : scopedChartTitle('Failure rate · trace', usingAllSpans, lang)}
                 menuExtra={doorway}
                 storageKey={showHttpStatus ? 'ov-http-status-v1' : 'ov-throughput-failure-v2'} height={200} unit="reqps" xRange={xRange}
                 loading={latStatus === 'loading' || (metricMode && httpStatusQ.isPending)}
@@ -1289,7 +1289,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
           çizilir ve çakışan bantları satır satır ayırır. */}
       {windowEvents.length > 0 && (
         <div className="anom-win">
-          <PanelTitle sub={<>{windowEvents.length} anomali · bantlar grafiklerde: {bandsOn ? 'açık' : 'kapalı'} · <LinkButton onClick={toggleBands} aria-pressed={bandsOn} title="Anomali bantlarını grafiklerde göster/gizle (?bands=1)" className="bands-toggle">{bandsOn ? 'kapat' : 'aç'}</LinkButton> · satır → çekmece</>}>Anomaliler · bu pencere</PanelTitle>
+          <PanelTitle sub={<>{tf('ov.anom.count', lang, { n: windowEvents.length })}{tl(bandsOn ? 'acd.on' : 'acd.off', lang)} · <LinkButton onClick={toggleBands} aria-pressed={bandsOn} title={tl('ov.anom.tip', lang)} className="bands-toggle">{tl(bandsOn ? 'ov.anom.off' : 'ov.anom.on', lang)}</LinkButton>{tl('ov.anom.row', lang)}</>}>{tl('ov.anom.title', lang)}</PanelTitle>
           <AnomalyWindowTable events={windowEvents} silences={silencesQ.data} canEdit={canEditAnomaly}
             onOpen={openAnomaly} onMute={muteAnomaly} onVerdict={setVerdict} truncated={!!anomaliesQ.data?.truncated} />
         </div>
@@ -1315,7 +1315,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
           AI/Neighbors açılınca altındaki tabloların zıplaması sorunu,
           rezerv yükseklik yerine SIRAYLA çözülür — genişleyen paneller
           artık sayfanın sonunda, altlarında itilecek içerik yok. */}
-      <div className="dtl-sech">Giriş noktaları</div>
+      <div className="dtl-sech">{tl('ov.sech.entry', lang)}</div>
       {/* Top endpoints (giriş span'leri, v0.9.377 D1) + Top DB statements.
           endpoints boşsa (giriş span'i olmayan servis / eski backend) eski
           Operations kartına düş — görünmez-düşme yerine zarif fallback;
@@ -1327,7 +1327,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
         <DbCard service={service} range={range} from={from} to={to} />
       </div>
 
-      <div className="dtl-sech">Bağlam</div>
+      <div className="dtl-sech">{tl('pd.std.ctx', lang)}</div>
       {/* Upstream / downstream neighbours — the richer panel that used
           to open the Details tab, moved here v0.8.366 (operator: the
           Details version "daha güzel gösteriyor"); the flat two-column

@@ -20,7 +20,9 @@ describe('Overview KPI tiles wait for the metric query in metric mode', () => {
   it('labels stay metric-flavoured while pending (no "(span)" flash)', () => {
     // v0.10.1360 — Response time karosu pencere sorgusunu da bekler.
     expect(src).toContain('const rtTilePending = metricTilesPending || (metricMode && ovWin.avgPending);');
-    expect(src).toContain("const rtLabel = rtFromMetric || rtTilePending\n    ? (rtLastStep && !rtTilePending ? 'Response time · avg · son adım' : 'Response time · avg')");
+    // v0.10.2315 — "son adım" etiketi katalogda (ov.rt.labelLast); TR değeri aynen.
+    expect(src).toContain("const rtLabel = rtFromMetric || rtTilePending\n    ? (rtLastStep && !rtTilePending ? tl('ov.rt.labelLast', lang) : 'Response time · avg')");
+    expect(readFileSync(fileURLToPath(new URL('../../lib/i18n.ts', import.meta.url)), 'utf8')).toContain("'ov.rt.labelLast': 'Response time · avg · son adım',");
     expect(src).toContain("tputFromMetric || metricTilesPending ? 'Throughput'");
   });
 

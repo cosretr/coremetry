@@ -25,6 +25,7 @@
 import type { SpanMetricSeries } from '@/lib/types';
 import { durationUnitToGrafana } from '@/lib/chart/metricUnit';
 import { rankRootOps, rootOpName } from './rootOpSeries';
+import { t, tf, type Lang } from '@/lib/i18n';
 
 /** Kaç route çizilir. 10: panel 200px ve lejant varsayılan kapalı;
  *  daha fazlası okunmuyor. rootOpSeries'in 5'inden yüksek çünkü burada
@@ -50,13 +51,14 @@ export interface RouteItems {
 // more=0 iken taban not YOK: lejant zaten "Series (N)" yazıyor, tekrarı
 // gürültü. (v0.9.845 — bu desenin ikizi rootOpMoreNote'tu; o panel gidince
 // silindi, sözleşme ARTIK YALNIZ BURADA yaşıyor ve testi de burada.)
-export function routeMoreNote(total: number, shown: number, cap: number, rowsCapped = false): string | null {
+// v0.10.2315 — metin arayüz dilinde (ov.route.*; `lang` varsayılanı 'tr', TR aynı).
+export function routeMoreNote(total: number, shown: number, cap: number, rowsCapped = false, lang: Lang = 'tr'): string | null {
   const more = Math.max(0, total - shown);
   const base = more > 0
-    ? `${shown} seri · +${more} daha (alan bazlı: Σ|değer| en yüksek ${cap})`
+    ? tf('ov.route.more', lang, { shown, more, cap })
     : null;
   if (!rowsCapped) return base;
-  const capped = '⚠ satır tavanı doldu — liste eksik olabilir';
+  const capped = t('ov.route.capped', lang);
   return base ? `${base} · ${capped}` : capped;
 }
 
@@ -80,12 +82,13 @@ export function topRoutesByArea(
   series: readonly SpanMetricSeries[] | null | undefined,
   cap = ROUTE_TOP_N,
   rowsCapped = false,
+  lang: Lang = 'tr',
 ): RouteItems {
   const all = series ?? [];
   const top = rankRootOps(all, cap);
   return {
-    items: top.map(s => ({ name: rootOpName(s.groupKey, ROUTE_UNLABELLED), role: 'data' as const, series: [s] })),
-    note: routeMoreNote(all.length, top.length, cap, rowsCapped),
+    items: top.map(s => ({ name: rootOpName(s.groupKey, t('ov.route.unlabelled', lang)), role: 'data' as const, series: [s] })),
+    note: routeMoreNote(all.length, top.length, cap, rowsCapped, lang),
   };
 }
 
