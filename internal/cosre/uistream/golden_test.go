@@ -57,7 +57,10 @@ var update = flag.Bool("update", false, "rewrite testdata/cosre/*.sse")
 //
 // ui-stream-v1-linkcard (v0.10.2104, D5) — guided problems cevabı: data-links
 // title/summary (deterministik özet kartı), linkCard message-metadata'ya sızmaz.
-var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-approval-resume", "ui-stream-v1-stops", "ui-stream-v1-scope", "ui-stream-v1-question", "ui-stream-v1-linkcard"}
+// ui-stream-v1-state (v0.10.2325, conversation-audit §6.1 A) — konuşma
+// durumu: tur başında kapsamlı data-state, cevap, aynı id'li ikinci data-state
+// (öneri eklenmiş) — istemci sonuncuyu okur.
+var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-approval-resume", "ui-stream-v1-stops", "ui-stream-v1-scope", "ui-stream-v1-question", "ui-stream-v1-linkcard", "ui-stream-v1-state"}
 
 func fixtureDir() string { return filepath.Join("..", "..", "..", "testdata", "cosre") }
 

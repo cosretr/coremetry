@@ -14722,3 +14722,10 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Döngü durumu kendisi yazar (araç argümanından boş alanlar, sonuçtan defter); cevaptan öneri okunur (son paragraf, tek tür). Durum bloğu döngü isteminin SONUNA, sınıflandırıcıya tek satır. Karar 14: v2 + durumda özne varken `none` → döngü.
 - Redis yok: istemci `context.state` yankısı; servis/ortam kataloğa, biçimler kapalı kümeye doğrulanır, defter asla alınmaz (`fromClient` → doğrulayıcı kanıtı olamaz).
 - Ayar: `system_settings` `cosre_conversation` {`state` (varsayılan açık, bağlı), `style`, `verification` off|shadow|enforce (ayrılmış; PUT kapalı dışı değeri 400)}; `GET/PUT /api/ai/cosre-conversation` (admin + audit `settings.cosre_conversation.update`), Settings › CoSRE'de tek satır. Kapalı = v2 bu sürümden önceki hâli.
+
+## 2026-11-18 — v0.10.2325 — CoSRE konuşma durumu: data-state parçası ve salt okunur bağlam satırı
+
+- Yeni UI Message Stream parçası `data-state` (id sabit `state`, v1 yazıcısı düşürür): turun çözülmüş kapsamı {service, services, env, cluster, window{rangeS, toMs, label, explicit}, channelCode, functionCode, problem, trace, operation, address, offer{kind, label, at}, updatedAt}; defter değerleri YOK. Kapsam boşsa yayınlanmaz; "done"dan hemen önce, durum kesinleştikten sonra. Kapı aynı: v2 + `cosre_conversation.state`.
+- Aynı şekil istemcinin `context.state` yankısıdır (Redis'siz, karar 2). `context.statePatch` {service?, env?, window?, clear[]} sözleşmesi: servis/ortam kataloğa, pencere sınırlara doğrulanır; geçersiz alan varsa yama bütünüyle reddedilir.
+- Altın: yeni `testdata/cosre/ui-stream-v1-state.{events.jsonl,sse}` (Go `TestGoldenFixtures` + frontend `uiStreamFixture.test.ts`). `v2_loop.sse` / `v2_help.sse` değişmedi: ikisinde de katalogdaki bir servis ya da pencere çözülmüyor → parça yok; v1 altınları aynı.
+- Arayüz (karar 4): v2 sohbette composer'ın kapsam satırında tek salt okunur Badge ("Konuşma bağlamı: servis · pencere · ortam"); düzenleme yok. Metinler `conversation/strings.ts`, yeni CSS yok.

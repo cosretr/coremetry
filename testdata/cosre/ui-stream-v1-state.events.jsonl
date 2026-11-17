@@ -1,0 +1,4 @@
+{"kind": "step", "payload": {"label": "pencere: bu sabah (06:00–12:00)"}}
+{"kind": "answer", "payload": {"text": "Hayır, bu sabah checkout'ta deploy görünmüyor.\n\nİstersen checkout loglarına bakayım."}}
+{"kind": "state", "payload": {"service": "checkout", "env": "prod", "window": {"rangeS": 21600, "toMs": 1794906000000, "label": "bu sabah (06:00–12:00)", "explicit": true}, "address": "sen", "offer": {"kind": "logs", "label": "checkout logları", "at": 1794910000000}, "updatedAt": 1794910000000}}
+{"kind": "done", "payload": {"ok": true}}

@@ -49,6 +49,22 @@ type stateRig struct {
 	mu     sync.Mutex
 	guided []guidedCall
 	msgs   []map[string]any
+	now    time.Time // çözücünün saati (chatStateNow dikişi)
+}
+
+// stateFlowNow — günün saatinden bağımsız deterministik "şimdi": yerel 14:30
+// (henüz gelmediyse dünün 14:30'u) — çıpalar gerçek saatten ileri olmaz.
+func stateFlowNow() time.Time {
+	loc, err := time.LoadLocation("Europe/Istanbul")
+	if err != nil {
+		loc = time.FixedZone("TRT", 3*3600)
+	}
+	n := time.Now().In(loc)
+	at := time.Date(n.Year(), n.Month(), n.Day(), 14, 30, 0, 0, loc)
+	if at.After(n) {
+		at = at.AddDate(0, 0, -1)
+	}
+	return at
 }
 
 // newStateRig — loop: döngünün n. turunda (araç sunulan çağrı) modelin
@@ -56,7 +72,10 @@ type stateRig struct {
 // guided rotasının cevap metni (dikiş "answer" yayınlar; "" = cevapsız).
 func newStateRig(t *testing.T, loop func(last string, n int) map[string]any, guidedAns func(guidedRoute) string) *stateRig {
 	t.Helper()
-	rg := &stateRig{t: t}
+	rg := &stateRig{t: t, now: stateFlowNow()}
+	prevNow := chatStateNow
+	chatStateNow = func() time.Time { return rg.now }
+	t.Cleanup(func() { chatStateNow = prevNow })
 	perQ := map[string]int{}
 	var mu sync.Mutex
 	rg.llm = newLoopLLM(t, func(_ int, body map[string]any) map[string]any {
@@ -362,8 +381,8 @@ func TestChatStateOlderThanTTLIgnored(t *testing.T) {
 	setConversationState(t, true)
 	rg := newStateRig(t, referansLoop, referansGuided)
 	old := ChatContext{Service: "checkout", RangeS: 21600, RangeExplicit: true, WinLabel: "bu sabah (06:00–12:00)",
-		WinToMs: time.Now().Add(-4 * time.Hour).UnixMilli(), Offer: &chatOffer{Kind: "logs", Service: "checkout", At: time.Now().Add(-3 * time.Hour).UnixMilli()},
-		UpdatedAt: time.Now().Add(-chatStateTTL - time.Minute).UnixNano()}
+		WinToMs: rg.now.Add(-4 * time.Hour).UnixMilli(), Offer: &chatOffer{Kind: "logs", Service: "checkout", At: rg.now.Add(-3 * time.Hour).UnixMilli()},
+		UpdatedAt: rg.now.Add(-chatStateTTL - time.Minute).UnixNano()}
 	raw, _ := json.Marshal(old)
 	rg.mc.m[chatContextKey("u-state", stateConv)] = raw
 	rg.msgs = []map[string]any{{"role": "user", "text": "checkout'ta sabah bir şey mi oldu"}, {"role": "assistant", "text": "sakin"}}
@@ -417,7 +436,7 @@ func TestChatStateNoRedisClientEcho(t *testing.T) {
 	prevR := chatStateRedisless
 	chatStateRedisless = func(s *Server) bool { return cache.IsNoop(s.cache.(*catalogOnlyCache).Cache) }
 	t.Cleanup(func() { chatStateRedisless = prevR })
-	now := time.Now()
+	now := rg.now
 	echo := map[string]any{"service": "checkout", "window": map[string]any{"rangeS": 3600, "toMs": now.Add(-time.Hour).UnixMilli(), "label": "dün aynı saatte", "explicit": true},
 		"offer": map[string]any{"kind": "logs", "at": now.UnixMilli()}, "updatedAt": now.UnixMilli()}
 	rg.msgs = []map[string]any{{"role": "user", "text": "checkout'ta sabah bir şey mi oldu"}, {"role": "assistant", "text": "sakin. İstersen loglara bakayım."}}
@@ -477,5 +496,57 @@ func TestChatStateV1Untouched(t *testing.T) {
 		if strings.Contains(llmSystem(c), "KONUŞMA DURUMU") {
 			t.Fatal("v1 isteminde durum bloğu")
 		}
+	}
+}
+
+// v2StateParts — akıştaki data-state yükleri.
+func v2StateParts(t *testing.T, sse string) []chatStateWire {
+	t.Helper()
+	var out []chatStateWire
+	for _, line := range strings.Split(sse, "\n") {
+		if !strings.HasPrefix(line, "data: {") || !strings.Contains(line, `"type":"data-state"`) {
+			continue
+		}
+		var p struct {
+			ID   string        `json:"id"`
+			Data chatStateWire `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &p); err != nil || p.ID != "state" {
+			t.Fatalf("data-state biçimi: %s", line)
+		}
+		out = append(out, p.Data)
+	}
+	return out
+}
+
+// TestChatStateDataPartAndPatch — v0.10.2325: data-state turun çözülmüş
+// kapsamını taşır (defter yok); context.statePatch doğrulanıp uygulanır,
+// geçersiz yama bütünüyle reddedilir; anahtar kapalıyken parça yok.
+func TestChatStateDataPartAndPatch(t *testing.T) {
+	setConversationState(t, true)
+	rg := newStateRig(t, referansLoop, referansGuided)
+	body := rg.ask("checkout'ta sabah bir şey mi oldu", nil)
+	parts := v2StateParts(t, body)
+	if len(parts) != 1 || parts[0].Service != "checkout" || parts[0].Window == nil || !strings.HasPrefix(parts[0].Window.Label, "bu sabah") || parts[0].UpdatedAt == 0 {
+		t.Fatalf("data-state: %+v", parts)
+	}
+	if strings.Contains(body, `"ledger"`) || strings.Contains(body, "p99_ms") {
+		t.Fatal("data-state defter değeri taşımamalı")
+	}
+	body = rg.ask("deploy mu vardı", map[string]any{"statePatch": map[string]any{"service": "payments"}})
+	if g, _ := rg.lastGuided(); g.route.Service != "payments" {
+		t.Fatalf("yama servisi uygulanmadı: %+v", g.route)
+	}
+	if p := v2StateParts(t, body); len(p) != 1 || p[0].Service != "payments" || p[0].Offer == nil {
+		t.Fatalf("yamalı data-state: %+v", p)
+	}
+	rg.ask("deploy mu vardı", map[string]any{"statePatch": map[string]any{"service": "uydurma", "env": "prod"}})
+	if st := rg.state(); st.Service != "payments" || st.Env != "" {
+		t.Fatalf("geçersiz yama kısmen uygulandı: %+v", st)
+	}
+
+	setConversationState(t, false)
+	if p := v2StateParts(t, rg.ask("checkout'ta sabah bir şey mi oldu", nil)); len(p) != 0 {
+		t.Fatalf("anahtar kapalıyken data-state: %+v", p)
 	}
 }

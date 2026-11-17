@@ -1,0 +1,20 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"data":{"label":"pencere: bu sabah (06:00–12:00)"},"type":"data-step"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"Hayır, bu sabah checkout'ta deploy görünmüyor.\n\nİstersen checkout loglarına bakayım.","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"data":{"address":"sen","env":"prod","offer":{"at":1794910000000,"kind":"logs","label":"checkout logları"},"service":"checkout","updatedAt":1794910000000,"window":{"explicit":true,"label":"bu sabah (06:00–12:00)","rangeS":21600,"toMs":1794906000000}},"id":"state","type":"data-state"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

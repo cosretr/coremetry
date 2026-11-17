@@ -19,6 +19,9 @@ var KnownKinds = map[string]bool{
 	// v0.10.2100 (experience-audit D1) — kapalı netleştirme sorusu
 	// (data-question); v1 yazıcısı düşürür, v1 bugünkü düz metni alır.
 	"question": true,
+	// v0.10.2325 (conversation-audit §6.1 A) — konuşma durumu (data-state):
+	// turun çözülmüş kapsamı, defter değerleri yok; v1 yazıcısı düşürür.
+	"state": true,
 }
 
 // QuestionKinds — data-question `kind` kapalı kümesi (api chat_question.go;

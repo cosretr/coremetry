@@ -8819,6 +8819,25 @@ export type CosreScopeReason =
 
 /** CoSRE v2 araç seti dilim 2 — `data-scope`: alışverişin kullanıcı kapsamı
  *  (users.team → ownerTeam VEYA sreTeam servisleri). services ≤ 20 ad; count tamamı. */
+/** v0.10.2325 — `data-state` (Go api chatStateWire): CoSRE v2 konuşma durumunun
+ *  kapsamı; defter değerleri yok. İstemci Redis'siz kurulum için context.state
+ *  olarak geri yollar. */
+export interface CosreConvState {
+  service?: string;
+  services?: string[];
+  env?: string;
+  cluster?: string;
+  window?: { rangeS: number; toMs?: number; label?: string; explicit?: boolean };
+  channelCode?: string;
+  functionCode?: string;
+  problem?: string;
+  trace?: string;
+  operation?: string;
+  address?: 'sen' | 'siz';
+  offer?: { kind: string; label?: string; at?: number };
+  updatedAt: number;
+}
+
 export interface CosreScope {
   unscoped: boolean;
   reason: CosreScopeReason;

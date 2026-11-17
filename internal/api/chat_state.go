@@ -184,6 +184,11 @@ func (s *Server) beginChatStateTurn(ctx context.Context, req *chatRequest, st *c
 			st.ctx, st.fromClient = mergeStateEcho(st.ctx, echo), true
 		}
 	}
+	if p := req.Context.StatePatch; p != nil { // v0.10.2325 — istemcinin alan değişikliği (doğrulanır)
+		if next, ok := applyStatePatch(st.ctx, *p, svcs, envs, now); ok && !chatContextEqual(st.ctx, next) {
+			st.ctx, st.dirty = next, true
+		}
+	}
 	stt := &chatStateTurn{st: st, svcNames: svcs, loc: loc}
 	last := len(req.Messages) - 1
 	res := resolveChatState(stateResolveIn{Question: req.Messages[last].Text, Prev: st.ctx, Now: now, Loc: loc, Services: svcs, Envs: envs,
@@ -370,6 +375,10 @@ func (t *chatStateTurn) wrapEmit(emit func(string, any)) func(string, any) {
 			}
 		case "done":
 			t.finalize()
+			// v0.10.2325 — data-state: turun çözülmüş kapsamı (defter değerleri yok), "done"dan hemen önce.
+			if w := chatStateWireOf(t.st.ctx, chatStateNow()); !stateWireEmpty(w) {
+				emit(chatStateEventKind, w)
+			}
 		}
 		emit(kind, payload)
 	}
@@ -622,4 +631,88 @@ func mergeStateEcho(c ChatContext, e chatStateWire) ChatContext {
 	c.UpdatedAt = e.UpdatedAt * int64(time.Millisecond)
 	c.Ledger = nil
 	return c
+}
+
+// chatStateWireOf — SAF: durumun tel görünümü (data-state; defter yok).
+func chatStateWireOf(c ChatContext, now time.Time) chatStateWire {
+	w := chatStateWire{Service: c.Service, Services: c.Services, Env: c.Env, Cluster: c.Cluster,
+		ChannelCode: c.ChannelCode, FunctionCode: c.FunctionCode, Problem: c.Problem, Trace: c.Trace,
+		Operation: c.Operation, Address: c.Address, UpdatedAt: now.UnixMilli()}
+	if c.RangeS > 0 {
+		w.Window = &chatStateWireWin{RangeS: c.RangeS, ToMs: c.WinToMs, Label: stateWindowLabel(c), Explicit: c.RangeExplicit}
+	}
+	if o := c.Offer; o != nil {
+		w.Offer = &chatStateWireOff{Kind: o.Kind, Label: o.Label, At: o.At}
+	}
+	return w
+}
+
+// stateWireEmpty — data-state yayınlanmaz (kapsam yok).
+func stateWireEmpty(w chatStateWire) bool {
+	return w.Service == "" && w.Env == "" && w.Cluster == "" && w.Window == nil && w.ChannelCode == "" &&
+		w.FunctionCode == "" && w.Problem == "" && w.Trace == "" && w.Operation == "" && w.Offer == nil
+}
+
+// chatStateEventKind — v0.10.2325: data-state olayı (yalnız v2 yazıcısına
+// ulaşır; v1OnlySink düşürür — chat_stop_event.go v2OnlyEventKinds).
+const chatStateEventKind = "state"
+
+// chatStatePatch — istemcinin `context.statePatch`i (v0.10.2325, karar 4
+// sözleşmesi; arayüzde düzenleme henüz yok). nil alan dokunmaz; Clear
+// listedeki alanları siler. Doğrulama yankı ile aynı kurallar.
+type chatStatePatch struct {
+	Service *string           `json:"service,omitempty"`
+	Env     *string           `json:"env,omitempty"`
+	Window  *chatStateWireWin `json:"window,omitempty"`
+	Clear   []string          `json:"clear,omitempty"`
+}
+
+// applyStatePatch — SAF: geçersiz alan varsa yama BÜTÜNÜYLE reddedilir
+// (ok=false) — yarım uygulanmış düzenleme yok.
+func applyStatePatch(c ChatContext, p chatStatePatch, svcs, envs []string, now time.Time) (ChatContext, bool) {
+	for _, f := range p.Clear {
+		switch f {
+		case "service":
+			c.Service, c.Services, c.Operation, c.Trace = "", nil, "", ""
+		case "env":
+			c.Env = ""
+		case "window":
+			c.RangeS, c.WinToMs, c.WinLabel, c.RangeExplicit = 0, 0, "", false
+		case "offer":
+			c.Offer = nil
+		default:
+			return c, false
+		}
+	}
+	if p.Service != nil {
+		v := canonicalIn(svcs, *p.Service)
+		if v == "" {
+			return c, false
+		}
+		if v != c.Service {
+			c.Operation, c.Trace = "", ""
+		}
+		c.Service, c.Services = v, nil
+	}
+	if p.Env != nil {
+		v := canonicalIn(envs, *p.Env)
+		if v == "" {
+			return c, false
+		}
+		c.Env = v
+	}
+	if w := p.Window; w != nil {
+		if w.RangeS < 60 || w.RangeS > 30*86400 {
+			return c, false
+		}
+		if _, anchored := chatAnchorTime(w.ToMs, now); w.ToMs != 0 && !anchored {
+			return c, false
+		}
+		label := clipRunes(strings.TrimSpace(w.Label), 60)
+		if label == "" {
+			label = fmtRangeTR(w.RangeS)
+		}
+		c.RangeS, c.WinToMs, c.WinLabel, c.RangeExplicit = w.RangeS, w.ToMs, label, true
+	}
+	return c, true
 }

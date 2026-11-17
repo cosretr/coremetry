@@ -56,6 +56,9 @@ export const COSRE_V2_STRINGS = {
   endpointPickSummarize: 'Hepsini özetle',
   endpointPickSubmit: 'İncele',
   endpointPickSelected: '(seçili)',
+  // v0.10.2325 — konuşma bağlamı satırı (data-state; salt okunur).
+  stateLineLabel: 'Konuşma bağlamı',
+  stateLineTitle: 'CoSRE devam sorularında bu kapsamı kullanır; soruda başka servis ya da zaman yazarsan o geçerli olur.',
 } as const;
 
 /** agent-core S5 — onay-kapılı araçların operatör dilindeki adı (yoksa ham ad). */

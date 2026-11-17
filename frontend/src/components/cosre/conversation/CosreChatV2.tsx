@@ -79,6 +79,8 @@ import { withClarifyOption } from './question';
 import { briefingView } from './briefingView';
 import type { BriefingLineRef } from './BriefingFeed';
 import { Button } from '@/components/shadcn/button';
+import { Badge } from '@/components/shadcn/badge';
+import { convStateLine, latestConvState, withStateEcho } from './convState';
 import { CosreSheet } from './CosreSheet';
 import { CosrePageLayout } from '../page/CosrePageLayout';
 import { MessageList } from './MessageList';
@@ -117,6 +119,9 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
   const codeLocked = useMemo(() => messages.some(hasCodeLock), [messages]);
   // araç seti dilim 5 — başlık rozeti: son cevabın data-scope'u (yoksa rozet yok).
   const scope = useMemo(() => latestScope(messages), [messages]);
+  // v0.10.2325 — konuşma durumu (data-state): salt okunur tek satır + Redis'siz yankı.
+  const convState = useMemo(() => latestConvState(messages), [messages]);
+  const stateLine = convStateLine(convState);
   // v0.10.1664 (B6) — taslak konuşmanın yuvasında (v1 ile aynı anahtar).
   const composer = useCosreComposerInput(conv.conversationId, ask.page, ask.chipTrace);
   // v2 karşılaması (mockup B, 2026-10-31): hata hapı yok → selam isteği de yok; takım tek kapsam.
@@ -139,16 +144,16 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
     turns, ctxExcluded: ask.ctxExcluded, setCtxExcluded: ask.setCtxExcluded,
     baseCtxItems: ask.baseCtxItems, conversationId: conv.conversationId,
   });
-  const live = useRef({ ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill, turns, explainCtx, conv, teamScope });
-  live.current = { ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill, turns, explainCtx, conv, teamScope };
+  const live = useRef({ ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill, turns, explainCtx, conv, teamScope, convState });
+  live.current = { ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill, turns, explainCtx, conv, teamScope, convState };
   /** Gönderimin `context`i — v1 useChatThread.send ile aynı katmanlar. */
   const contextFor = (q: string, so: ChatSendOpts | undefined, base: readonly ChatTurn[]) => {
     const c = live.current;
     const { explain, subject, ...scope } = c.explainCtx.resolve(base);
     // v0.10.1725 — bu tarayıcıda seçilen takım (karşılama / "Takımını seç" deposu) sunucu kapsamını çözer.
     const picked = c.teamScope.picked;
-    return withTeamPick(cosreRequestContext({ ...c.ask.reqCtx, ...scope }, { profile: c.ask.profile, deep: c.ask.deep, code: c.ask.code }, q, so, c.codeLocked,
-      { conversation: c.conv.idRef.current, wikiRefs: prevWikiRefs(base), explain, subject }), picked ? { userTeam: picked } : undefined);
+    return withStateEcho(withTeamPick(cosreRequestContext({ ...c.ask.reqCtx, ...scope }, { profile: c.ask.profile, deep: c.ask.deep, code: c.ask.code }, q, so, c.codeLocked,
+      { conversation: c.conv.idRef.current, wikiRefs: prevWikiRefs(base), explain, subject }), picked ? { userTeam: picked } : undefined), c.convState);
   };
   // v0.10.1716 (brifing dilim 7) — "Sor" satırının ref'i; YALNIZ sonraki
   // gönderim taşır (context.briefingId + briefingLine), sonra düşer.
@@ -438,7 +443,13 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
       </div>
       <CosreComposerForm input={composer} ask={ask} busy={busy} stop={() => void stop()} codeLocked={codeLocked}
         ctxItems={explainCtx.ctxItems} onRemoveCtx={explainCtx.removeCtx} submit={submit} segmented
-        scopeRow={messages.length === 0 ? <CosreTeamScopeChip scope={teamScope} /> : undefined} />
+        scopeRow={messages.length === 0 ? <CosreTeamScopeChip scope={teamScope} />
+          : stateLine ? (
+            <Badge variant="secondary" className="h-6 max-w-full gap-1 px-2 font-normal" data-cosre-state="" title={T.stateLineTitle}>
+              <span className="text-muted-foreground">{T.stateLineLabel}:</span>
+              <span className="truncate">{stateLine}</span>
+            </Badge>
+          ) : undefined} />
   </>);
 
   if (isPage) {

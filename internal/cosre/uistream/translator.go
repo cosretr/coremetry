@@ -73,6 +73,13 @@ func (t *Translator) Translate(kind string, payload any) []Part {
 		// v0.10.2100 (experience-audit D1) — kapalı netleştirme sorusu (api
 		// chat_question.go): {kind, text, options[{id,label}] ≤3, allowFree}; tek parça.
 		out = append(out, Part{"type": "data-question", "id": "question", "data": m})
+	case "state":
+		// v0.10.2325 — konuşma durumu (api chat_state.go chatStateWire): {service?,
+		// services?, env?, cluster?, window?{rangeS,toMs?,label?,explicit?},
+		// channelCode?, functionCode?, problem?, trace?, operation?, address?,
+		// offer?{kind,label?,at?}, updatedAt}; tek parça (id sabit). İstemci
+		// Redis'siz kurulumda bunu context.state ile geri yollar.
+		out = append(out, Part{"type": "data-state", "id": "state", "data": m})
 	case "code-lock":
 		out = append(out, Part{"type": "data-code-lock", "id": "code-lock", "data": m})
 	case "error":

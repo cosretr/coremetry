@@ -205,6 +205,8 @@ type chatRequest struct {
 		// kurulumda istemcinin geri yolladığı son data-state; doğrulanır, yalnız
 		// v2 + cosre_conversation.state açıkken okunur.
 		State *chatStateWire `json:"state,omitempty"`
+		// StatePatch (v0.10.2325) — istemcinin durum alanı değişikliği; doğrulanır.
+		StatePatch *chatStatePatch `json:"statePatch,omitempty"`
 	} `json:"context,omitempty"`
 	// Approvals — agent-core S5 (chat_approval_resume.go): v2 onay kartının
 	// cevabı; dolu istek onay bekleyen alışverişin DEVAMIDIR (kademeler atlanır,

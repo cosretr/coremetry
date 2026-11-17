@@ -11,7 +11,7 @@
 // uiStreamFixture.test.ts (paylaşılan testdata/cosre/*.sse) kırmızıya döner;
 // fixture yenilendiği commit'te bu dosya da güncellenir.
 
-import type { CosreApproval, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreQuestion, CosreQuestionKind, CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { CosreApproval, CosreConvState, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreQuestion, CosreQuestionKind, CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
 
 export const PROTOCOL_VERSION = 'v1';
 export const PROTOCOL_HEADER = 'x-vercel-ai-ui-message-stream';
@@ -52,6 +52,8 @@ export const DATA_PART_NAMES = [
   'pick',
   // v0.10.2100 (experience-audit D1) — kapalı netleştirme sorusu; ayrıştırıcı + kart D2.
   'question',
+  // v0.10.2325 (conversation-audit §6.1 A) — konuşma durumu (kapsam; defter yok).
+  'state',
   ...BLOCK_TYPES.map(t => `block-${t}` as const),
 ] as const;
 
@@ -246,4 +248,38 @@ export function parseDataPick(p: { type: string; data?: unknown }): CosreEndpoin
   }
   return { kind, service, rangeS: rs, total: tot, items: rows,
     ...(typeof env === 'string' && env ? { env } : {}), ...(capped === true ? { capped: true } : {}) };
+}
+
+const optStr = (v: unknown): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined);
+
+/** v0.10.2325 — data-state → CosreConvState; updatedAt sayı değilse ya da
+ *  pencere biçimsizse null (bağlam satırı çizilmez). Bilinmeyen alan düşer. */
+export function parseDataState(p: { type: string; data?: unknown }): CosreConvState | null {
+  if (p.type !== 'data-state' || !isRecord(p.data)) return null;
+  const d = p.data;
+  const at = finiteNum(d.updatedAt);
+  if (at === undefined) return null;
+  const out: CosreConvState = { updatedAt: at };
+  for (const k of ['service', 'env', 'cluster', 'channelCode', 'functionCode', 'problem', 'trace', 'operation'] as const) {
+    const v = optStr(d[k]);
+    if (v) out[k] = v;
+  }
+  if (Array.isArray(d.services)) {
+    const s = d.services.filter((x): x is string => typeof x === 'string' && x !== '');
+    if (s.length) out.services = s;
+  }
+  if (d.address === 'sen' || d.address === 'siz') out.address = d.address;
+  if (d.window !== undefined) {
+    if (!isRecord(d.window)) return null;
+    const rs = finiteNum(d.window.rangeS);
+    if (rs === undefined || rs <= 0) return null;
+    const to = finiteNum(d.window.toMs);
+    out.window = { rangeS: rs, ...(to ? { toMs: to } : {}), ...(optStr(d.window.label) ? { label: d.window.label as string } : {}),
+      ...(d.window.explicit === true ? { explicit: true } : {}) };
+  }
+  if (isRecord(d.offer) && optStr(d.offer.kind)) {
+    const at2 = finiteNum(d.offer.at);
+    out.offer = { kind: d.offer.kind as string, ...(optStr(d.offer.label) ? { label: d.offer.label as string } : {}), ...(at2 ? { at: at2 } : {}) };
+  }
+  return out;
 }

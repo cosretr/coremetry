@@ -8,12 +8,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   DATA_PART_NAMES, MESSAGE_ID_RE, SCOPE_REASONS, STOP_REASONS, TOOL_RESULT_KINDS, TOOL_RESULT_MAX_BYTES, UI_STREAM_PART_TYPES,
-  dataPartName, isDataPart, parseDataApproval, parseDataReset, parseDataScope, parseDataStop, parseDataToolResult,
+  dataPartName, isDataPart, parseDataApproval, parseDataReset, parseDataScope, parseDataState, parseDataStop, parseDataToolResult,
 } from './protocol';
 import { parseUIStreamSSE } from './uiStreamFixture';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
 
@@ -291,5 +291,30 @@ describe('data-scope (araç seti dilim 2)', () => {
     const part = readFileSync(join(ROOT, 'internal', 'cosre', 'uistream', 'part.go'), 'utf8');
     const m = /ScopeReasons = \[\]string\{([^}]*)\}/.exec(part);
     expect(m?.[1].split(',').map(s => s.trim().replace(/"/g, ''))).toEqual([...SCOPE_REASONS]);
+  });
+});
+
+// v0.10.2325 (conversation-audit §6.1 A) — data-state: konuşma durumunun kapsamı.
+describe('data-state (konuşma durumu)', () => {
+  const read = (n: string) => parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', `${n}.sse`), 'utf8')).parts;
+  it('state fixture: tek parça, id sabit, ayrıştırılır; defter alanı yok', () => {
+    const states = read('ui-stream-v1-state').filter(p => p.type === 'data-state');
+    expect(states).toHaveLength(1);
+    expect(states[0].id).toBe('state');
+    expect(parseDataState(states[0])).toEqual({
+      service: 'checkout', env: 'prod', address: 'sen', updatedAt: 1794910000000,
+      window: { rangeS: 21600, toMs: 1794906000000, label: 'bu sabah (06:00–12:00)', explicit: true },
+      offer: { kind: 'logs', label: 'checkout logları', at: 1794910000000 },
+    });
+    expect(JSON.stringify(states[0])).not.toContain('ledger');
+  });
+  it.each([
+    [{ type: 'data-state', data: { service: 'orders', updatedAt: 5 } }, { service: 'orders', updatedAt: 5 }],
+    [{ type: 'data-state', data: { service: 'orders' } }, null],
+    [{ type: 'data-state', data: { updatedAt: 5, window: { rangeS: 0 } } }, null],
+    [{ type: 'data-state', data: { updatedAt: 5, address: 'biz', services: ['a', 7] } }, { updatedAt: 5, services: ['a'] }],
+    [{ type: 'data-scope', data: { updatedAt: 5 } }, null],
+  ])('parseDataState %#', (p, want) => {
+    expect(parseDataState(p)).toEqual(want);
   });
 });
