@@ -9,3 +9,10 @@
 # açık" duruşu); bir sonraki prod-doğrulanmış OTel SDK v1.43.0 bump'ında
 # yeniden değerlendir. 2026-07-19.
 CVE-2026-39883
+
+# GHSA-fc5q-39xc-vjpf — picomatch ReDoS (tek dallı yinelenen extglob).
+# Yayındaki TÜM sürümleri kapsıyor, düzeltilmiş sürüm yok; desen girdisi
+# derleme araçlarından geliyor, kullanıcı girdisinden değil. npm audit
+# adımındaki süreli istisnanın ikizi (ci.yml, operatör onayı 2026-11-17);
+# tarih geçince Trivy yeniden işaretler.
+GHSA-fc5q-39xc-vjpf exp:2026-12-01

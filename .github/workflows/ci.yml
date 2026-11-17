@@ -292,8 +292,25 @@ jobs:
           raw=$(npm audit --json 2>/tmp/npm-audit.err)
           set -e
           if printf '%s' "$raw" | jq -e '.metadata.vulnerabilities' >/dev/null 2>&1; then
-            hi=$(printf '%s' "$raw" | jq '.metadata.vulnerabilities.high + .metadata.vulnerabilities.critical')
-            echo "npm audit: $hi high/critical advisories"
+            # Süreli istisna (operatör onayı 2026-11-17): GHSA-fc5q-39xc-vjpf
+            # (picomatch ReDoS) yayındaki TÜM sürümleri kapsıyor, düzeltilmiş
+            # sürüm yok — yükseltilecek bir şey olmadığı için kapı her sürümü
+            # düşürüyordu. Yalnız BU duyuru, yalnız EXEMPT_UNTIL gününe kadar
+            # sayılmaz; tarih geçince istisna kendiliğinden düşer ve adım
+            # yeniden kırmızıya döner. Sayım paket değil yaprak duyuru üzerinden:
+            # bir paketin "high" olması için zincirinde high/critical bir duyuru
+            # nesnesi olmak zorunda, yani istisna dışı duyuru kalmadıysa kalan
+            # high paket de yoktur. Düzeltilmiş picomatch çıkınca bu blok silinir.
+            EXEMPT_ID="GHSA-fc5q-39xc-vjpf"
+            EXEMPT_UNTIL="2026-12-01"
+            exempt=""
+            if [[ ! "$(date -u +%F)" > "$EXEMPT_UNTIL" ]]; then exempt="$EXEMPT_ID"; fi
+            all=$(printf '%s' "$raw" | jq '[.vulnerabilities[] | .via[] | select(type=="object") | select(.severity=="high" or .severity=="critical") | .url] | unique | length')
+            hi=$(printf '%s' "$raw" | jq --arg ex "$exempt" '[.vulnerabilities[] | .via[] | select(type=="object") | select(.severity=="high" or .severity=="critical") | .url] | unique | map(select($ex == "" or (endswith("/" + $ex) | not))) | length')
+            echo "npm audit: $hi high/critical advisories ($all before exemption)"
+            if [ "$all" -gt "$hi" ]; then
+              echo "::warning::npm audit: $EXEMPT_ID is exempt until $EXEMPT_UNTIL (no patched picomatch release exists)"
+            fi
             if [ "$hi" -gt 0 ]; then
               printf '%s' "$raw" | jq '.vulnerabilities | to_entries[] | select(.value.severity=="high" or .value.severity=="critical") | {name: .key, severity: .value.severity, via: .value.via, fixAvailable: .value.fixAvailable}'
               echo "::error::npm audit found $hi high/critical advisories"
