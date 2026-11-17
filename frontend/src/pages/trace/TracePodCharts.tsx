@@ -18,11 +18,13 @@ import { Skeleton } from '@/components/Skeleton';
 import { msSyncKey } from '@/lib/chart/syncNamespace';
 import { useThemeTick } from '@/lib/useThemeTick';
 import type { ChartBuild } from './tracePodPanelModel';
+import { t as tl, useLang } from '@/lib/i18n';
 
 const CoreMultiLazy = lazy(() =>
   import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
 
-const CHART_TITLE: Record<ChartBuild['kind'], string> = { mem: 'Bellek (working set)', cpu: 'CPU (çekirdek)' };
+// v0.10.2316 — başlıklar katalogda (tpp.chart.*); dile göre render anında.
+const CHART_TITLE: Record<ChartBuild['kind'], string> = { mem: 'mlRecord.metric.memory', cpu: 'tpp.chart.cpu' };
 const UNIT: Record<ChartBuild['kind'], string> = { mem: 'bytes', cpu: 'cores' };
 
 /** v0.10.968 — tek grafik kabı (başlık + CorePanelMulti). */
@@ -35,13 +37,15 @@ export function PodChart({ build, height, syncKey, xRange, head }: {
   head?: ReactNode;
 }) {
   useThemeTick();
+  const lang = useLang();
   const k = build.kind;
+  const title = tl(CHART_TITLE[k], lang);
   return (
     // v0.10.976 — grafik kabı adlandırılmış grup: CorePanel'e title="" gidiyor
     // (görsel başlık .tpp-sec-title'da), bu yüzden erişilebilir ad BURADAN;
     // CHART_TITLE[k] tek kaynak, görünen metinle ayrışamaz.
-    <div className="tpp-chart" data-chart={k} role="group" aria-label={CHART_TITLE[k]}>
-      <div className="tpp-sec-title">{head ?? <span>{CHART_TITLE[k]}</span>}</div>
+    <div className="tpp-chart" data-chart={k} role="group" aria-label={title}>
+      <div className="tpp-sec-title">{head ?? <span>{title}</span>}</div>
       <Suspense fallback={<Skeleton height={height} />}>
         <CoreMultiLazy
           title=""

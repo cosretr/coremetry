@@ -28,6 +28,11 @@ import {
 } from './traceMetricsModel';
 import { fmtBytesTr, fmtClockNs, fmtClockSec, fmtCores, fmtCoresShort, fmtDurNs, fmtPct, fmtRatio } from './traceMetricsFmt';
 import { trPossessive } from './trSuffix';
+import { t, tf, type Lang } from '@/lib/i18n';
+
+// v0.10.2316 — metinler katalogda (tpp.*); her metin üreten yardımcı `lang`
+// alır (varsayılan 'tr' — TR çıktısı birebir aynı). Bileşenler useLang()
+// değerini geçirir.
 
 // ── Ortak ─────────────────────────────────────────────────────────────────
 
@@ -43,14 +48,14 @@ export function trNum(v: number, maxDec = 2): string {
 
 /** v0.10.968 — çekirdek sayısı birimsiz ("1", "0,5"): "1 / 0,5 çekirdek" çifti
  *  için; biçim traceMetricsFmt.fmtCoresShort ile aynı kaynaktan. */
-export function coreNum(v: number): string {
-  return fmtCoresShort(v).replace(/ c$/, '');
+export function coreNum(v: number, lang: Lang = 'tr'): string {
+  return fmtCoresShort(v, lang).replace(/ c$/, '');
 }
 
 /** v0.10.968 — "limitin %97'si" / "isteğin %124'ü" (Türkçe iyelik eki sayının
  *  okunuşundan, trSuffix). */
-export function pctOf(ratio: number): string {
-  return `${fmtPct(ratio)}${trPossessive(Math.round(ratio * 100))}`;
+export function pctOf(ratio: number, lang: Lang = 'tr'): string {
+  return lang === 'tr' ? `${fmtPct(ratio)}${trPossessive(Math.round(ratio * 100))}` : fmtPct(ratio, lang);
 }
 
 /** v0.10.968 — seçili pod'un servisinin BU TRACE'teki pod'ları, model sırasıyla. */
@@ -113,24 +118,24 @@ export interface CopySeg { t: string; tone?: 'warn' | 'faint' | 'err'; strong?: 
 
 /** v0.10.968 — "Kardeşlere göre" metni, parça parça (≥1,5 kat uyarı + 600).
  *  Servis adı ek almaz (§7); kardeş kapsamı hep "bu trace'teki diğer N pod". */
-export function siblingCopy(st: SiblingStats): CopySeg[] {
-  if (st.total === 0) return [{ t: "Bu trace'te servisin tek pod'u — kıyaslanacak kardeş yok", tone: 'faint' }];
+export function siblingCopy(st: SiblingStats, lang: Lang = 'tr'): CopySeg[] {
+  if (st.total === 0) return [{ t: t('tpp.sib.alone', lang), tone: 'faint' }];
   if (!st.cpu && !st.mem) {
     // v0.10.968 — okunamayan kardeşler "metriği yok" DEĞİL: hata boş sonuç
     // gibi yazılmaz (v0.10.962 hata 3), hata tonunda söylenir.
     if (st.withMetrics === 0 && st.failed > 0) {
-      return [{ t: `Bu trace'teki diğer ${st.failed} pod'un metrikleri okunamadı — kıyaslanacak kardeş yok`, tone: 'err', strong: true }];
+      return [{ t: tf('tpp.sib.failed', lang, { n: st.failed }), tone: 'err', strong: true }];
     }
     return [{ t: st.withMetrics === 0
-      ? `Bu trace'teki diğer ${st.total} pod'un metriği yok — kıyaslanacak kardeş yok`
-      : 'Trace anında kıyaslanacak değer yok', tone: 'faint' }];
+      ? tf('tpp.sib.noMetrics', lang, { n: st.total })
+      : t('tpp.sib.noValue', lang), tone: 'faint' }];
   }
   const n = (st.cpu ?? st.mem)!.n;
-  const seg = (r: SiblingRatio): CopySeg => ({ t: fmtRatio(r.ratio), tone: r.warn ? 'warn' : undefined, strong: r.warn });
+  const seg = (r: SiblingRatio): CopySeg => ({ t: fmtRatio(r.ratio, lang), tone: r.warn ? 'warn' : undefined, strong: r.warn });
   const out: CopySeg[] = [];
-  if (st.cpu) out.push({ t: `CPU, bu trace'teki diğer ${n} pod'un medyanının ` }, seg(st.cpu));
+  if (st.cpu) out.push({ t: tf('tpp.sib.cpu', lang, { n }) }, seg(st.cpu));
   if (st.mem) {
-    out.push({ t: st.cpu ? ' · Bellek ' : `Bellek, bu trace'teki diğer ${n} pod'un medyanının ` }, seg(st.mem));
+    out.push({ t: st.cpu ? t('tpp.sib.memAnd', lang) : tf('tpp.sib.mem', lang, { n }) }, seg(st.mem));
   }
   return out;
 }
@@ -140,7 +145,7 @@ export function siblingCopy(st: SiblingStats): CopySeg[] {
 export const THROTTLE_NOTE = 'Limite dayandı: CPU kısıtlaması (throttling) olası. Kısıtlama oranı bu sürümde ölçülmüyor.';
 
 export interface MomentRow {
-  k: 'CPU' | 'Bellek';
+  k: string;           // 'CPU' | 'Bellek' (dile göre)
   main: string;        // değer + limit oranı (seviye renginde, 600)
   level: MetricLevel;
   rest: string;        // soluk ek ("limit 1 çekirdek (şu an)")
@@ -150,46 +155,46 @@ export interface MomentRow {
 
 /** v0.10.968 — "Trace anında" CPU/Bellek satırı. Limit bilinmiyorsa renk YOK
  *  (renk yalnız limite göre sapmada). Envanter yok/okunamadı → dürüst neden. */
-export function momentRow(kind: 'cpu' | 'mem', d: PodMetricSeries): MomentRow {
-  const k = kind === 'cpu' ? 'CPU' : 'Bellek';
+export function momentRow(kind: 'cpu' | 'mem', d: PodMetricSeries, lang: Lang = 'tr'): MomentRow {
+  const k = kind === 'cpu' ? 'CPU' : t('tpp.mem', lang);
   const v = kind === 'cpu' ? d.cpuAt : d.memAt;
   const lim = kind === 'cpu' ? d.cpuLimit : d.memLimit;
   const req = kind === 'cpu' ? d.cpuRequest : d.memRequest;
-  const val = (x: number) => (kind === 'cpu' ? fmtCores(x) : fmtBytesTr(x));
-  const amount = (x: number) => (kind === 'cpu' ? fmtCores(x) : fmtBytesTr(x));
-  if (!isNum(v)) return { k, main: '—', level: 'none', rest: ' trace anında örnek yok' };
+  const val = (x: number) => (kind === 'cpu' ? fmtCores(x, lang) : fmtBytesTr(x, lang));
+  const amount = val;
+  if (!isNum(v)) return { k, main: '—', level: 'none', rest: t('tpp.m.noSample', lang) };
   if (isNum(lim) && lim > 0) {
     const r = v / lim;
     return {
-      k, main: `${val(v)} · limitin ${pctOf(r)}`,
+      k, main: tf('tpp.m.ofLimit', lang, { v: val(v), p: pctOf(r, lang) }),
       level: kind === 'cpu' ? d.cpuLevel : d.memLevel,
-      rest: ` limit ${amount(lim)} (şu an)`,
-      cap: kind === 'cpu' && r >= LEVEL_ERR ? THROTTLE_NOTE : undefined,
+      rest: tf('tpp.m.limitNow', lang, { a: amount(lim) }),
+      cap: kind === 'cpu' && r >= LEVEL_ERR ? t('tpp.throttle', lang) : undefined,
     };
   }
-  if (d.inventory === 'absent') return { k, main: val(v), level: 'none', rest: ' · Pod şu anki envanterde yok — limit bilinmiyor' };
-  if (d.inventory === 'unknown') return { k, main: val(v), level: 'none', rest: ' · limit okunamadı (kube-state-metrics sorgusu başarısız)' };
+  if (d.inventory === 'absent') return { k, main: val(v), level: 'none', rest: t('tpp.m.absent', lang) };
+  if (d.inventory === 'unknown') return { k, main: val(v), level: 'none', rest: t('tpp.m.unknown', lang) };
   if (d.instantPartial) {
     // v0.10.968 — kube-state-metrics kısmen düştü: eksik limit "tanımsız" değil "bilinmiyor".
     if (isNum(req) && req > 0) {
       const r = v / req;
       return {
-        k, main: `${val(v)} · limit bilinmiyor`, level: 'none',
-        rest: ` · kube-state-metrics kısmen okunamadı · isteğin ${pctOf(r)}`,
-        title: `İsteğin ${pctOf(r)} (istek ${amount(req)}, şu an)`,
+        k, main: tf('tpp.m.limitUnknown', lang, { v: val(v) }), level: 'none',
+        rest: tf('tpp.m.partialReq', lang, { p: pctOf(r, lang) }),
+        title: tf('tpp.m.reqTitle', lang, { p: pctOf(r, lang), a: amount(req) }),
       };
     }
-    return { k, main: `${val(v)} · limit bilinmiyor`, level: 'none', rest: ' · kube-state-metrics kısmen okunamadı' };
+    return { k, main: tf('tpp.m.limitUnknown', lang, { v: val(v) }), level: 'none', rest: t('tpp.m.partial', lang) };
   }
   if (isNum(req) && req > 0) {
     const r = v / req;
     return {
-      k, main: `${val(v)} · limit tanımsız`, level: 'none',
-      rest: ` isteğin ${pctOf(r)}`,
-      title: `İsteğin ${pctOf(r)} (istek ${amount(req)}, şu an)`,
+      k, main: tf('tpp.m.limitUnset', lang, { v: val(v) }), level: 'none',
+      rest: tf('tpp.m.ofReq', lang, { p: pctOf(r, lang) }),
+      title: tf('tpp.m.reqTitle', lang, { p: pctOf(r, lang), a: amount(req) }),
     };
   }
-  return { k, main: `${val(v)} · limit tanımsız`, level: 'none', rest: ' · istek de tanımsız' };
+  return { k, main: tf('tpp.m.limitUnset', lang, { v: val(v) }), level: 'none', rest: t('tpp.m.reqUnset', lang) };
 }
 
 /** v0.10.968 — seçili pod'un çizgi rengi (etiket → renk; seriesColorsFor,
@@ -235,6 +240,8 @@ export function buildChartItems(kind: 'mem' | 'cpu', inp: {
   stepSec: number;
   /** podColors (etiket → renk); verilmezse renk addan (CorePanel). */
   colors?: ReadonlyMap<string, string>;
+  /** v0.10.2316 — limit çizgisi etiketinin dili (varsayılan 'tr'). */
+  lang?: Lang;
 }): ChartBuild {
   const sel = inp.pod?.data;
   const rawLimit = sel ? (kind === 'cpu' ? sel.cpuLimit : sel.memLimit) : undefined;
@@ -249,7 +256,7 @@ export function buildChartItems(kind: 'mem' | 'cpu', inp: {
     kind,
     items,
     regions: [{ fromSec, toSec: Math.max(endSec, fromSec + step), endSec, color: 'var(--accent2)', label: 'trace' }],
-    thresholds: limit != null ? [{ value: limit, label: 'limit (şu an)', color: 'var(--warn)' }] : [],
+    thresholds: limit != null ? [{ value: limit, label: t('tpp.limitNowLabel', inp.lang ?? 'tr'), color: 'var(--warn)' }] : [],
     limit,
     noLimit: kind === 'cpu' && limit == null,
   };
@@ -263,12 +270,12 @@ export function chartPod(selected: TracePodInfo, metrics: (pod: string) => PodMe
 }
 
 /** v0.10.968 — grafik altı açıklama (gerçek adımla). */
-export function chartCaption(o: { durNs: number; stepSec: number | null; cpuNoLimit: boolean }): string {
-  const step = o.stepSec != null ? `${o.stepSec} sn` : 'bir';
-  const parts = [`Mavi bant: trace (${fmtDurNs(o.durNs)}; en az bir ${step} adım genişliğinde çizilir).`];
-  if (o.cpuNoLimit) parts.push('CPU limiti tanımsız: limit çizgisi yok.');
-  parts.push('CPU rate[5m] ile yumuşatılmıştır; saniyelik sıçramalar görünmez.');
-  parts.push('Grafikler eşzamanlılığı gösterir, nedenselliği değil.');
+export function chartCaption(o: { durNs: number; stepSec: number | null; cpuNoLimit: boolean }, lang: Lang = 'tr'): string {
+  const step = o.stepSec != null ? tf('aed.unit.s', lang, { n: o.stepSec }) : t('tpp.cap.one', lang);
+  const parts = [tf('tpp.cap.band', lang, { d: fmtDurNs(o.durNs, lang), step })];
+  if (o.cpuNoLimit) parts.push(t('tpp.cap.noLimit', lang));
+  parts.push(t('tpp.cap.rate', lang));
+  parts.push(t('tpp.cap.corr', lang));
   return parts.join(' ');
 }
 
@@ -278,23 +285,24 @@ export interface NowRow { k: string; v: string; tone?: 'warn' | 'faint'; badge?:
 
 /** v0.10.968 — trace'e göre olay zamanı: "trace'ten 12 dk sonra" / "… önce";
  *  saat/gün ölçeğine taşar. */
-export function relToTrace(eventSec: number, traceStartNs: number): string {
+export function relToTrace(eventSec: number, traceStartNs: number, lang: Lang = 'tr'): string {
   const diff = eventSec - traceStartNs / 1e9;
   const a = Math.abs(diff);
-  const dir = diff >= 0 ? 'sonra' : 'önce';
-  if (a < 60) return "trace'le aynı dakikada";
-  if (a < 120 * 60) return `trace'ten ${Math.round(a / 60)} dk ${dir}`;
-  if (a < 48 * 3600) return `trace'ten ${Math.round(a / 3600)} sa ${dir}`;
-  return `trace'ten ${Math.round(a / 86400)} gün ${dir}`;
+  const dir = t(diff >= 0 ? 'tpp.rel.after' : 'tpp.rel.before', lang);
+  if (a < 60) return t('tpp.rel.same', lang);
+  if (a < 120 * 60) return tf('tpp.rel.m', lang, { n: Math.round(a / 60), dir });
+  if (a < 48 * 3600) return tf('tpp.rel.h', lang, { n: Math.round(a / 3600), dir });
+  return tf('tpp.rel.d', lang, { n: Math.round(a / 86400), dir });
 }
 
 /** v0.10.968 — "N dk önce" (Date.now() ÇAĞIRAN tarafında, useMemo içinde). */
-export function agoText(nowMs: number, thenMs: number): string {
+// v0.10.2316 — metin ago.* katalog anahtarlarından (TR değerleri aynı); eşikler bu dosyanınki.
+export function agoText(nowMs: number, thenMs: number, lang: Lang = 'tr'): string {
   const a = Math.max(0, nowMs - thenMs) / 1000;
-  if (a < 60) return 'az önce';
-  if (a < 120 * 60) return `${Math.round(a / 60)} dk önce`;
-  if (a < 48 * 3600) return `${Math.round(a / 3600)} sa önce`;
-  return `${Math.round(a / 86400)} gün önce`;
+  if (a < 60) return t('ago.now', lang);
+  if (a < 120 * 60) return tf('ago.m', lang, { n: Math.round(a / 60) });
+  if (a < 48 * 3600) return tf('ago.h', lang, { n: Math.round(a / 3600) });
+  return tf('ago.d', lang, { n: Math.round(a / 86400) });
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -306,43 +314,40 @@ export function hhmm(ms: number): string {
 /** v0.10.968 — "Şu an" satırları (kube-state-metrics, ŞİMDİKİ değer — trace
  *  anı değil): restart >0 uyarı; OOMKilled tehlike rozeti (diğer nedenler
  *  nötr) + zaman ya da "zaman bilinmiyor"; limit/istek "tanımsız / 0,5". */
-export function nowSection(d: PodMetricSeries, traceStartNs: number): { rows: NowRow[]; note: string | null } {
+export function nowSection(d: PodMetricSeries, traceStartNs: number, lang: Lang = 'tr'): { rows: NowRow[]; note: string | null } {
   const n = d.now;
-  const note = d.inventory === 'absent' ? 'Pod şu anki envanterde yok: faz, restart ve limitler bilinmiyor.'
-    : d.inventory === 'unknown' ? 'kube-state-metrics okunamadı: faz, restart ve limitler bilinmiyor.'
-    : d.instantPartial ? 'kube-state-metrics kısmen okunamadı: eksik alanlar bilinmiyor.'
+  const note = d.inventory === 'absent' ? t('tpp.now.absent', lang)
+    : d.inventory === 'unknown' ? t('tpp.now.unknown', lang)
+    : d.instantPartial ? t('tpp.now.partial', lang)
     : null;
   const rows: NowRow[] = [];
-  rows.push(n.phase ? { k: 'Faz', v: n.phase } : { k: 'Faz', v: '—', tone: 'faint' });
+  const phase = t('podpage.col.phase', lang);
+  rows.push(n.phase ? { k: phase, v: n.phase } : { k: phase, v: '—', tone: 'faint' });
   rows.push(isNum(n.restarts)
     ? { k: 'Restart', v: String(n.restarts), tone: n.restarts > 0 ? 'warn' : undefined }
     : { k: 'Restart', v: '—', tone: 'faint' });
   if (n.lastTermReason) {
-    const when = isNum(n.lastTermAtSec) ? ` ${fmtClockSec(n.lastTermAtSec)} · ${relToTrace(n.lastTermAtSec, traceStartNs)}` : ' · zaman bilinmiyor';
-    rows.push({ k: 'Son sonlanma', v: when, badge: { t: n.lastTermReason, tone: n.lastTermReason === 'OOMKilled' ? 'danger' : 'neutral' } });
+    const when = isNum(n.lastTermAtSec) ? ` ${fmtClockSec(n.lastTermAtSec)} · ${relToTrace(n.lastTermAtSec, traceStartNs, lang)}` : t('tpp.now.whenUnknown', lang);
+    rows.push({ k: t('podpage.ctr.lastTerm', lang), v: when, badge: { t: n.lastTermReason, tone: n.lastTermReason === 'OOMKilled' ? 'danger' : 'neutral' } });
   } else {
-    rows.push({ k: 'Son sonlanma', v: '—', tone: 'faint' });
+    rows.push({ k: t('podpage.ctr.lastTerm', lang), v: '—', tone: 'faint' });
   }
   // v0.10.968 — sorgu kısmen düştüyse eksik alan "tanımsız" (okundu, yok) değil "bilinmiyor".
-  const missing = d.instantPartial ? 'bilinmiyor' : 'tanımsız';
+  const missing = t(d.instantPartial ? 'aed.unknown' : 'tpp.now.unset', lang);
   const pair = (lim: number | undefined, req: number | undefined, f: (x: number) => string) =>
     `${isNum(lim) ? f(lim) : missing} / ${isNum(req) ? f(req) : missing}`;
-  rows.push({ k: 'CPU limit / istek', v: `${pair(d.cpuLimit, d.cpuRequest, coreNum)} çekirdek` });
-  rows.push({ k: 'Bellek limit / istek', v: pair(d.memLimit, d.memRequest, fmtBytesTr) });
+  rows.push({ k: t('tpp.now.cpuLimReq', lang), v: tf('tpp.cores', lang, { n: pair(d.cpuLimit, d.cpuRequest, x => coreNum(x, lang)) }) });
+  rows.push({ k: t('tpp.now.memLimReq', lang), v: pair(d.memLimit, d.memRequest, x => fmtBytesTr(x, lang)) });
   return { rows, note };
 }
 
 /** v0.10.968 — metriği ok OLMAYAN pod'un "Şu an" notu (Thanos cevabı yok →
  *  anlık bilgi de yok; neden söylenir). */
-export function nowNote(s: PodMetricState): { t: string; err?: boolean } | null {
+export function nowNote(s: PodMetricState, lang: Lang = 'tr'): { t: string; err?: boolean } | null {
   switch (s.kind) {
     case 'ok': case 'loading': return null;
-    case 'unmapped': return { t: 'Cluster eşlenmemiş: faz, restart ve limitler okunamıyor.' };
-    case 'off': return { t: 'Thanos Remote Cluster tanımlı değil: faz, restart ve limitler okunamıyor.' };
-    case 'error': return { t: 'Veri okunamadı: faz, restart ve limitler bilinmiyor.', err: true };
-    case 'idle': return { t: 'Metrik yüklenmedi: faz, restart ve limitler bilinmiyor.' };
-    case 'ambiguous': return { t: 'Namespace belirsiz: faz, restart ve limitler okunamıyor.' };
-    case 'no_samples': return { t: 'Bu pencerede Thanos örneği yok: faz, restart ve limitler gösterilmiyor.' };
+    case 'error': return { t: t('tpp.nowNote.error', lang), err: true };
+    default: return { t: t(`tpp.nowNote.${s.kind}`, lang) };
   }
 }
 
@@ -361,49 +366,50 @@ export interface StateMsg {
 
 /** v0.10.968 — hata nedeni: /zaman aşımı/ → "10 sn zaman aşımı"; değilse kırpılmış
  *  ileti (≤80). Sondaki nokta atılır ("<neden>. Diğer…" çift nokta olmasın). */
-export function errorReason(s: { message: string; timeout: boolean }): string {
-  if (s.timeout || /zaman aşımı/.test(s.message)) return '10 sn zaman aşımı';
+export function errorReason(s: { message: string; timeout: boolean }, lang: Lang = 'tr'): string {
+  if (s.timeout || /zaman aşımı/.test(s.message)) return t('tpp.err.timeout', lang);
   const m = s.message.trim().replace(/\.+$/, '');
-  if (!m) return 'bilinmeyen hata';
+  if (!m) return t('hm.env.unknownErr', lang);
   return m.length > 80 ? `${m.slice(0, 79)}…` : m;
 }
 
 /** v0.10.968 — seçili pod'un metrik durumu → panel mesajı; ok → null.
  *  error ASLA boş sonuç gibi yazılmaz (v0.10.962 hata 3). */
-export function stateMessage(s: PodMetricState): StateMsg | null {
+export function stateMessage(s: PodMetricState, lang: Lang = 'tr'): StateMsg | null {
+  const intact = t('tpp.st.intact', lang);
   switch (s.kind) {
     case 'ok': return null;
-    case 'loading': return { title: 'Yükleniyor', tone: 'none', loading: true };
-    case 'idle': return { title: 'Metrik henüz yüklenmedi.', tone: 'none', action: 'load' };
+    case 'loading': return { title: t('dataTable.state.loading', lang), tone: 'none', loading: true };
+    case 'idle': return { title: t('tpp.st.idle', lang), tone: 'none', action: 'load' };
     case 'off': return {
-      title: 'Thanos Remote Cluster tanımlı değil.',
-      sub: "Pod CPU ve bellek metrikleri Thanos'tan okunur; bu trace'teki bilgiler (span, hata, kritik yol) tam.",
+      title: t('tpp.st.off', lang),
+      sub: t('tpp.st.offSub', lang),
       tone: 'none', settings: true,
     };
     case 'unmapped': return s.reason === 'no_cluster_value'
       ? {
-          title: "Bu pod'un span'lerinde cluster özniteliği yok — metrik gösterilemiyor.",
-          sub: "Bu trace'teki bilgiler (span, hata, kritik yol) tam; yalnız Thanos grafikleri yok.",
+          title: t('tpp.st.noCluster', lang),
+          sub: intact,
           tone: 'none',
         }
       : {
-          title: `Bu pod'un cluster'ı (${s.clusterValue}) bir Remote Cluster kaydına eşlenmemiş — metrik gösterilemiyor.`,
-          sub: "Bu trace'teki bilgiler (span, hata, kritik yol) tam; yalnız Thanos grafikleri yok.",
+          title: tf('tpp.st.unmapped', lang, { c: s.clusterValue }),
+          sub: intact,
           tone: 'none', settings: true,
         };
     case 'no_samples': return {
-      title: 'Bu pencerede Thanos örneği yok.',
-      sub: 'Cluster eşli ve sorgu başarılı, ama bu pod için CPU / bellek serisi dönmedi.',
+      title: t('tpp.st.noSamples', lang),
+      sub: t('tpp.st.noSamplesSub', lang),
       tone: 'none',
     };
     case 'ambiguous': return {
-      title: `${AMBIGUOUS_COPY}.`,
-      sub: "Bu trace'teki bilgiler (span, hata, kritik yol) tam; yalnız Thanos grafikleri yok.",
+      title: `${t('tpp.ambiguous', lang)}.`,
+      sub: intact,
       tone: 'none',
     };
     case 'error': return {
-      title: 'Veri okunamadı — bu bir hata, boş sonuç değil.',
-      sub: `${errorReason(s)}. Diğer cluster'ların metrikleri etkilenmedi.`,
+      title: t('dataTable.state.error', lang),
+      sub: tf('tpp.st.errorSub', lang, { r: errorReason(s, lang) }),
       tone: 'err', action: 'retry',
     };
   }
@@ -431,12 +437,12 @@ export interface PodBadge { t: string; tone: 'danger' | 'neutral' }
 /** v0.10.968 — rozetler: kök hata (tehlike) · giriş · N hata (tehlike) ·
  *  kritik yol %X · Y (nötr, ≥%3). v0.10.2207 — "en büyük öz süre" rozeti
  *  kalktı (alt özet satırında bağlantı olarak duruyor). */
-export function podBadges(p: TracePodInfo, critShareMin: number): PodBadge[] {
+export function podBadges(p: TracePodInfo, critShareMin: number, lang: Lang = 'tr'): PodBadge[] {
   const out: PodBadge[] = [];
-  if (p.rootCause) out.push({ t: 'kök hata', tone: 'danger' });
-  if (p.entry) out.push({ t: 'giriş', tone: 'neutral' });
-  if (p.errors > 0) out.push({ t: `${p.errors} hata`, tone: 'danger' });
-  if (p.critShare >= critShareMin) out.push({ t: `kritik yol ${fmtPct(p.critShare)} · ${fmtDurNs(p.critNs)}`, tone: 'neutral' });
+  if (p.rootCause) out.push({ t: t('tpp.b.root', lang), tone: 'danger' });
+  if (p.entry) out.push({ t: t('tpp.b.entry', lang), tone: 'neutral' });
+  if (p.errors > 0) out.push({ t: tf('tpp.b.errors', lang, { n: p.errors }), tone: 'danger' });
+  if (p.critShare >= critShareMin) out.push({ t: tf('tpp.b.crit', lang, { p: fmtPct(p.critShare, lang), d: fmtDurNs(p.critNs, lang) }), tone: 'neutral' });
   return out;
 }
 
@@ -448,7 +454,7 @@ export function podBadges(p: TracePodInfo, critShareMin: number): PodBadge[] {
 // Trace anında / Şu an, açıklama) kapalı "Teknik ayrıntı"da — silinmedi.
 
 export interface ChartHeadline {
-  k: 'Bellek' | 'CPU';
+  k: string;            // 'Bellek' | 'CPU' (dile göre)
   value: string;        // trace anı değeri ("9,03 GiB" / "0,053 çekirdek")
   limit: string | null; // "limit 16 GiB" / "limit 1,6" / "limit tanımsız" / "limit bilinmiyor"
   level: MetricLevel;   // renk YALNIZ limit bilinirken ve sapmada (momentRow kararı)
@@ -458,17 +464,17 @@ export interface ChartHeadline {
 /** v0.10.1096 — grafik başlığı: "Bellek 9,03 GiB · limit 16 GiB" / "CPU 0,053
  *  çekirdek · limit 1,6". Limitin "şu an" olduğu ve kısıtlama notu ipucunda
  *  (momentRow ile tek kaynak). Örnek yoksa değer "—", limit yazılmaz. */
-export function chartHeadline(kind: 'cpu' | 'mem', d: PodMetricSeries): ChartHeadline {
-  const row = momentRow(kind, d);
+export function chartHeadline(kind: 'cpu' | 'mem', d: PodMetricSeries, lang: Lang = 'tr'): ChartHeadline {
+  const row = momentRow(kind, d, lang);
   const v = kind === 'cpu' ? d.cpuAt : d.memAt;
   const lim = kind === 'cpu' ? d.cpuLimit : d.memLimit;
-  const title = [`Trace anında: ${row.main}${row.rest}`.replace(/\s+/g, ' ').trim(), row.title, row.cap].filter(Boolean).join(' — ');
+  const title = [tf('tpp.h.title', lang, { v: `${row.main}${row.rest}` }).replace(/\s+/g, ' ').trim(), row.title, row.cap].filter(Boolean).join(' — ');
   if (!isNum(v)) return { k: row.k, value: '—', limit: null, level: 'none', title };
   let limit: string;
-  if (isNum(lim) && lim > 0) limit = `limit ${kind === 'cpu' ? coreNum(lim) : fmtBytesTr(lim)}`;
-  else if (d.inventory !== 'present' || d.instantPartial) limit = 'limit bilinmiyor';
-  else limit = 'limit tanımsız';
-  return { k: row.k, value: kind === 'cpu' ? fmtCores(v) : fmtBytesTr(v), limit, level: row.level, title };
+  if (isNum(lim) && lim > 0) limit = `limit ${kind === 'cpu' ? coreNum(lim, lang) : fmtBytesTr(lim, lang)}`;
+  else if (d.inventory !== 'present' || d.instantPartial) limit = t('tpp.h.limUnknown', lang);
+  else limit = t('tpp.h.limUnset', lang);
+  return { k: row.k, value: kind === 'cpu' ? fmtCores(v, lang) : fmtBytesTr(v, lang), limit, level: row.level, title };
 }
 
 export interface FactSeg {
@@ -491,29 +497,29 @@ export interface FactSeg {
  *  (faz/restart "şu an"dır — ipucu söyler). */
 export function podFacts(p: TracePodInfo, o: {
   selfKnown: boolean; selfName: string; now: PodMetricSeries['now'] | null; traceStartNs: number;
-}): FactSeg[] {
+}, lang: Lang = 'tr'): FactSeg[] {
   const out: FactSeg[] = [{ id: 'spans', t: `${p.spans} span` }];
   const fe = p.firstError;
   if (p.errors > 0) {
     out.push(fe
-      ? { id: 'errors', t: `${p.errors} hata ↗`, tone: 'err', spanId: fe.spanId, title: `İlk hatalı span'i aç: ${fe.name} · ${fe.status} · ${fmtClockNs(fe.timeNs)}` }
-      : { id: 'errors', t: `${p.errors} hata`, tone: 'err' });
+      ? { id: 'errors', t: tf('tpp.f.errorsLink', lang, { n: p.errors }), tone: 'err', spanId: fe.spanId, title: tf('tpp.f.firstErr', lang, { name: fe.name, status: fe.status, at: fmtClockNs(fe.timeNs) }) }
+      : { id: 'errors', t: tf('tpp.b.errors', lang, { n: p.errors }), tone: 'err' });
   } else {
-    out.push({ id: 'errors', t: '0 hata', tone: 'faint' });
+    out.push({ id: 'errors', t: tf('tpp.b.errors', lang, { n: 0 }), tone: 'faint' });
   }
   out.push(p.critNs > 0
-    ? { id: 'crit', t: `kritik yol ${fmtPct(p.critShare)} · ${fmtDurNs(p.critNs)}` }
-    : { id: 'crit', t: 'kritik yolda değil', tone: 'faint' });
+    ? { id: 'crit', t: tf('tpp.b.crit', lang, { p: fmtPct(p.critShare, lang), d: fmtDurNs(p.critNs, lang) }) }
+    : { id: 'crit', t: t('tpp.f.notCrit', lang), tone: 'faint' });
   if (o.selfKnown && p.maxSelfSpanId) {
-    out.push({ id: 'self', label: 'en büyük öz süre:', t: `${o.selfName || p.maxSelfSpanId} · ${fmtDurNs(p.maxSelfNs)} ↗`, spanId: p.maxSelfSpanId });
+    out.push({ id: 'self', label: t('tpp.f.selfLabel', lang), t: `${o.selfName || p.maxSelfSpanId} · ${fmtDurNs(p.maxSelfNs, lang)} ↗`, spanId: p.maxSelfSpanId });
   }
   const n = o.now;
   if (n) {
-    if (n.phase) out.push({ id: 'phase', t: n.phase, title: 'Faz — şu an (trace anı değil)' });
-    if (isNum(n.restarts)) out.push({ id: 'restarts', t: `restart ${n.restarts}`, tone: n.restarts > 0 ? 'warn' : undefined, title: 'Restart — şu an (trace anı değil)' });
+    if (n.phase) out.push({ id: 'phase', t: n.phase, title: t('tpp.f.phaseTip', lang) });
+    if (isNum(n.restarts)) out.push({ id: 'restarts', t: `restart ${n.restarts}`, tone: n.restarts > 0 ? 'warn' : undefined, title: t('tpp.f.restartTip', lang) });
     if (n.lastTermReason) {
-      const when = isNum(n.lastTermAtSec) ? `${fmtClockSec(n.lastTermAtSec)} · ${relToTrace(n.lastTermAtSec, o.traceStartNs)}` : 'zaman bilinmiyor';
-      out.push({ id: 'term', t: n.lastTermReason, badge: n.lastTermReason === 'OOMKilled' ? 'danger' : 'neutral', title: `Son sonlanma: ${n.lastTermReason} · ${when}` });
+      const when = isNum(n.lastTermAtSec) ? `${fmtClockSec(n.lastTermAtSec)} · ${relToTrace(n.lastTermAtSec, o.traceStartNs, lang)}` : t('tpp.f.whenUnknown', lang);
+      out.push({ id: 'term', t: n.lastTermReason, badge: n.lastTermReason === 'OOMKilled' ? 'danger' : 'neutral', title: tf('tpp.f.lastTerm', lang, { r: n.lastTermReason, when }) });
     }
   }
   return out;

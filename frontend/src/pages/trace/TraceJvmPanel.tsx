@@ -7,6 +7,7 @@ import { MultiLineChart, type DeployMarker } from '@/components/MultiLineChart';
 import { Skeleton } from '@/components/Skeleton';
 import { familyOf } from '@/pages/service/RuntimeCharts';
 import { jvmPodSeries } from './traceMetrics';
+import { t as tl, useLang } from '@/lib/i18n'; // v0.10.2316 — başlık ve not arayüz dilinde (TR aynı)
 
 // TraceJvmPanel — v0.10.923 (operatör, v0.10.913 sonrası: "sonra jvm gc
 // metriğine bakarız"). Trace'teki seçili pod'ların JVM heap'i ve GC
@@ -66,6 +67,7 @@ export function TraceJvmPanel({
   chartHeight?: number;
   onNote: (n: { text: string; err: boolean } | null) => void;
 }) {
+  const lang = useLang();
   const runtimeQ = useQuery({
     queryKey: ['svc-runtime', service],
     queryFn: () => api.serviceRuntime(service),
@@ -98,14 +100,14 @@ export function TraceJvmPanel({
   const only = (s: SpanMetricSeries[] | null | undefined) => (s ?? []).filter(x => shown.has(x.groupKey[0] ?? ''));
   const postGc = jvmPodSeries(only(postGcQ.data), 1);
   const heap = postGc.length > 0 ? postGc : jvmPodSeries(only(usedQ.data), 1);
-  const heapTitle = postGc.length > 0 ? 'JVM heap, GC sonrası (bytes)' : 'JVM heap, anlık kullanım (bytes)';
+  const heapTitle = tl(postGc.length > 0 ? 'tpp.jvm.heapPostGc' : 'tpp.jvm.heapUsed', lang);
   const gc = jvmPodSeries(only(gcQ.data), 1000);
   const pending = postGcQ.isLoading || usedQ.isLoading || gcQ.isLoading;
   const empty = isJvm && !pending && heap.length === 0 && gc.length === 0;
   const note = !empty ? null
     : postGcQ.isError || usedQ.isError || gcQ.isError
-      ? { text: 'JVM runtime metrikleri okunamadı — sorgu hata verdi.', err: true }
-      : { text: "JVM runtime metrikleri bu pod'lar için gelmiyor (OTel jvm.* yok).", err: false };
+      ? { text: tl('tpp.jvm.err', lang), err: true }
+      : { text: tl('tpp.jvm.none', lang), err: false };
   const noteKey = note ? `${note.err}:${note.text}` : '';
   useEffect(() => {
     onNote(note);
@@ -125,7 +127,7 @@ export function TraceJvmPanel({
       )}
       {gc.length > 0 && (
         <div className="tpp-chart">
-          <div className="tpp-sec-title"><span>GC duraklaması, ortalama (ms)</span></div>
+          <div className="tpp-sec-title"><span>{tl('tpp.jvm.gc', lang)}</span></div>
           <MultiLineChart series={gc} height={chartHeight ?? 160} syncKey={syncKey} unit="ms" deploys={deploys} xRange={xRange} zeroBase
             seriesColors={seriesColors} />
         </div>

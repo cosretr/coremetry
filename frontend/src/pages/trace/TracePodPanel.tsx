@@ -92,6 +92,7 @@ import { fmtClockNs, fmtDurNs, fmtPct } from './traceMetricsFmt';
 import { traceMetricsPodHref } from './traceMetrics';
 import { TraceJvmPanel } from './TraceJvmPanel';
 import { PodChart } from './TracePodCharts';
+import { t as tl, tf, useLang } from '@/lib/i18n'; // v0.10.2316 — panel metni arayüz dilinde (tpp.*; TR aynı)
 import { podChartsCaption, usePodChartBuilds } from './usePodChartBuilds';
 import {
   agoText, chartHeadline, clusterNameOf, hhmm, momentRow, nowNote, nowSection,
@@ -108,15 +109,18 @@ const DETAIL_CHART_H = 168;
  *  yedeği); "kopyalandı" YALNIZ kopya gerçekten yapıldıysa, değilse
  *  "kopyalanamadı" duyurulur (tablonun ⋯ menüsüyle aynı). */
 export function CopyPodButton({ pod, announce }: { pod: string; announce: (m: string) => void }) {
+  const lang = useLang();
   const copy = () => {
-    void copyToClipboard(pod).then(ok => announce(ok ? `Pod adı kopyalandı: ${pod}` : `Pod adı kopyalanamadı: ${pod}`));
+    void copyToClipboard(pod).then(ok => announce(tf(ok ? 'tpp.copied' : 'tpp.copyFail', lang, { pod })));
   };
-  return <IconButton aria-label="Pod adını kopyala" tooltip="Pod adını kopyala" icon={<Copy size={14} />} onClick={copy} />;
+  const label = tl('tpp.copy', lang);
+  return <IconButton aria-label={label} tooltip={label} icon={<Copy size={14} />} onClick={copy} />;
 }
 
 /** v0.10.968 — "Pod sayfasında aç ↗" (range + at, v0.10.962 hata 2); cluster
  *  bilinmiyorsa çizilmez. */
 export function PodPageLink({ p, state, window: w }: { p: TracePodInfo; state: PodMetricState; window: TraceMetricsWindowInfo }) {
+  const lang = useLang();
   const cluster = clusterNameOf(state);
   if (!cluster) return null;
   const namespace = (state.kind === 'ok' ? state.data.namespace : '') || p.namespace;
@@ -124,11 +128,12 @@ export function PodPageLink({ p, state, window: w }: { p: TracePodInfo; state: P
     { pod: p.pod, cluster, namespace, service: p.service },
     { from: w.fromNs, to: w.toNs, startNs: w.startNs },
   );
-  return <Link className="sec" to={href}>Pod sayfasında aç ↗</Link>;
+  return <Link className="sec" to={href}>{tl('tpp.podPage', lang)}</Link>;
 }
 
 export function PodBadges({ p }: { p: TracePodInfo }) {
-  const badges = podBadges(p, CRIT_FLAG_SHARE);
+  const lang = useLang();
+  const badges = podBadges(p, CRIT_FLAG_SHARE, lang);
   if (badges.length === 0) return null;
   return (
     <div className="tpp-badges">
@@ -140,33 +145,35 @@ export function PodBadges({ p }: { p: TracePodInfo }) {
 /** v0.10.968 — "Bu trace'te" (KeyValue): hata zamanı ve en büyük öz süreli
  *  span, Trace sekmesinde o span'i açan LinkButton'lar. */
 export function TraceFacts({ model, p, onOpenSpan }: { model: TraceMetricsModel; p: TracePodInfo; onOpenSpan: (id: string) => void }) {
+  const lang = useLang();
   const selfName = useMemo(
     () => model.podSpans.get(p.pod)?.find(s => s.spanId === p.maxSelfSpanId)?.name ?? '',
     [model, p.pod, p.maxSelfSpanId]);
   const fe = p.firstError;
   const items: KeyValueItem[] = [
-    { id: 'spans', k: 'Span', v: String(p.spans) },
+    { id: 'spans', k: tl('podpage.col.spans', lang), v: String(p.spans) },
     {
-      id: 'errors', k: 'Hata',
+      id: 'errors', k: tl('podpage.col.errors', lang),
       v: fe
-        ? <>{`${p.errors} · ilk: ${fe.name} · ${fe.status} · `}<LinkButton onClick={() => onOpenSpan(fe.spanId)}>{fmtClockNs(fe.timeNs)}</LinkButton></>
+        ? <>{tf('tpp.tf.firstErr', lang, { n: p.errors, name: fe.name, status: fe.status })}<LinkButton onClick={() => onOpenSpan(fe.spanId)}>{fmtClockNs(fe.timeNs)}</LinkButton></>
         : p.errors > 0 ? String(p.errors) : <span className="cell-faint">0</span>,
     },
     {
-      id: 'self', k: 'En büyük öz süre',
+      id: 'self', k: tl('tpp.tf.self', lang),
       v: model.selfKnown && p.maxSelfSpanId
-        ? <LinkButton onClick={() => onOpenSpan(p.maxSelfSpanId)}>{`${selfName || p.maxSelfSpanId} · ${fmtDurNs(p.maxSelfNs)} ↗`}</LinkButton>
+        ? <LinkButton onClick={() => onOpenSpan(p.maxSelfSpanId)}>{`${selfName || p.maxSelfSpanId} · ${fmtDurNs(p.maxSelfNs, lang)} ↗`}</LinkButton>
         : null,
     },
     {
-      id: 'crit', k: 'Kritik yol payı',
-      v: p.critNs > 0 ? `${fmtPct(p.critShare)} · ${fmtDurNs(p.critNs)}` : <span className="cell-faint">— · kritik yolda değil</span>,
+      id: 'crit', k: tl('tpp.tf.crit', lang),
+      v: p.critNs > 0 ? `${fmtPct(p.critShare, lang)} · ${fmtDurNs(p.critNs, lang)}` : <span className="cell-faint">{tl('tpp.tf.notCrit', lang)}</span>,
     },
-    { id: 'active', k: 'Etkin aralık', v: `${fmtClockNs(p.activeFromNs)} → ${fmtClockNs(p.activeToNs)} · ${fmtDurNs(p.activeToNs - p.activeFromNs)}` },
+    { id: 'active', k: tl('tpp.tf.active', lang), v: `${fmtClockNs(p.activeFromNs)} → ${fmtClockNs(p.activeToNs)} · ${fmtDurNs(p.activeToNs - p.activeFromNs, lang)}` },
   ];
+  const secTitle = tl('tpp.sec.trace', lang);
   return (
-    <section className="tpp-sec" aria-label="Bu trace'te">
-      <div className="tpp-sec-title"><span>Bu trace'te</span></div>
+    <section className="tpp-sec" aria-label={secTitle}>
+      <div className="tpp-sec-title"><span>{secTitle}</span></div>
       <KeyValue items={items} />
     </section>
   );
@@ -187,23 +194,24 @@ function MomentValue({ row }: { row: MomentRow }) {
 /** v0.10.968 — "Trace anında · Thanos, ±1 adım ({step} sn)": seviye rengi
  *  (cell-warn / cell-err) YALNIZ limite göre sapmada; kardeş oranı ≥1,5 uyarı. */
 export function MomentSection({ model, p, data, metrics }: { model: TraceMetricsModel; p: TracePodInfo; data: PodMetricSeries; metrics: (pod: string) => PodMetricState }) {
+  const lang = useLang();
   const stats = useMemo(() => siblingStats(model, p, metrics), [model, p, metrics]);
-  const cpu = momentRow('cpu', data);
-  const mem = momentRow('mem', data);
-  const sib = stats ? siblingCopy(stats) : [];
+  const cpu = momentRow('cpu', data, lang);
+  const mem = momentRow('mem', data, lang);
+  const sib = stats ? siblingCopy(stats, lang) : [];
   const items: KeyValueItem[] = [
     { id: 'cpu', k: 'CPU', v: <MomentValue row={cpu} />, title: cpu.title },
-    { id: 'mem', k: 'Bellek', v: <MomentValue row={mem} />, title: mem.title },
+    { id: 'mem', k: mem.k, v: <MomentValue row={mem} />, title: mem.title },
     {
-      id: 'sib', k: 'Kardeşlere göre', title: 'Eşik: 1,5 kat ve üstü uyarı rengi alır',
+      id: 'sib', k: tl('tpp.sib.k', lang), title: tl('tpp.sib.tip', lang),
       v: <>{sib.map((s, i) => (
         <span key={i} className={s.tone === 'warn' ? 'cell-warn cell-strong' : s.tone === 'err' ? 'cell-err cell-strong' : s.tone === 'faint' ? 'cell-faint' : undefined}>{s.t}</span>
       ))}</>,
     },
   ];
   return (
-    <section className="tpp-sec" aria-label="Trace anında">
-      <div className="tpp-sec-title"><span>Trace anında · Thanos, ±1 adım ({data.stepSec} sn)</span></div>
+    <section className="tpp-sec" aria-label={tl('tpp.sec.moment', lang)}>
+      <div className="tpp-sec-title"><span>{tf('tpp.sec.momentHead', lang, { s: data.stepSec })}</span></div>
       <KeyValue items={items} />
     </section>
   );
@@ -215,11 +223,12 @@ export function MomentSection({ model, p, data, metrics }: { model: TraceMetrics
  *  yeniden kullanır, tabIndex -1) ve düğme kendini tutan odağı ona devreder. */
 export function StateBlock({ state, pod, onRetry, height = 140 }: { state: PodMetricState; pod: string; onRetry: (pod: string) => void; height?: number }) {
   const boxRef = useRef<HTMLDivElement>(null);
-  const msg = stateMessage(state);
+  const lang = useLang();
+  const msg = stateMessage(state, lang);
   if (!msg) return null;
   if (msg.loading) {
     return (
-      <div ref={boxRef} tabIndex={-1} className="tpp-chart" role="img" aria-label="Yükleniyor" aria-busy="true">
+      <div ref={boxRef} tabIndex={-1} className="tpp-chart" role="img" aria-label={tl('dataTable.state.loading', lang)} aria-busy="true">
         <Skeleton height={height} />
         <Skeleton height={height} />
       </div>
@@ -231,13 +240,13 @@ export function StateBlock({ state, pod, onRetry, height = 140 }: { state: PodMe
       {msg.sub && <div>{msg.sub}</div>}
       {(msg.settings || msg.action) && (
         <div className="tpp-actions">
-          {msg.settings && <Link to="/settings/clusters">Ayarlar › Remote Cluster ↗</Link>}
+          {msg.settings && <Link to="/settings/clusters">{tl('tpp.settingsLink', lang)}</Link>}
           {msg.action && (
             <Button variant="secondary" size="sm" onClick={e => {
               if (document.activeElement === e.currentTarget) boxRef.current?.focus();
               onRetry(pod);
             }}>
-              {msg.action === 'retry' ? 'Yeniden dene' : 'Yükle'}
+              {tl(msg.action === 'retry' ? 'tpp.retry' : 'tpp.load', lang)}
             </Button>
           )}
         </div>
@@ -273,8 +282,9 @@ export function JvmSection({ model, p, window: w, onNote }: {
 
 /** v0.10.968 — JVM olmayan runtime'ın tek satır notu; runtime bilinmiyorsa hiç. */
 function JvmNote({ runtime }: { runtime: string }) {
+  const lang = useLang();
   if (!runtime || familyOf(runtime) === 'jvm') return null;
-  return <div className="tpp-note">JVM paneli yok · runtime: {runtime}</div>;
+  return <div className="tpp-note">{tl('tpp.jvmNone', lang)}{runtime}</div>;
 }
 
 function NowValue({ r }: { r: NowRow }) {
@@ -291,17 +301,18 @@ function NowValue({ r }: { r: NowRow }) {
 export function NowSection({ state, traceStartNs }: { state: PodMetricState; traceStartNs: number }) {
   const data = state.kind === 'ok' ? state.data : null;
   const fetchedAtMs = data?.fetchedAtMs ?? 0;
+  const lang = useLang();
   const head = useMemo(() => {
-    const ago = agoText(Date.now(), traceStartNs / 1e6);
-    return fetchedAtMs ? ` · ${hhmm(fetchedAtMs)} itibarıyla · trace ${ago}` : ` · trace ${ago}`;
-  }, [fetchedAtMs, traceStartNs]);
+    const ago = agoText(Date.now(), traceStartNs / 1e6, lang);
+    return fetchedAtMs ? tf('tpp.now.headAt', lang, { at: hhmm(fetchedAtMs), ago }) : ` · trace ${ago}`;
+  }, [fetchedAtMs, traceStartNs, lang]);
   let body: ReactNode;
   if (state.kind === 'loading') body = <Skeleton height={60} />;
   else if (!data) {
-    const n = nowNote(state);
+    const n = nowNote(state, lang);
     body = n ? <div className={n.err ? 'tpp-note is-err' : 'tpp-note'}>{n.t}</div> : null;
   } else {
-    const { rows, note } = nowSection(data, traceStartNs);
+    const { rows, note } = nowSection(data, traceStartNs, lang);
     const kv = (rs: NowRow[]) => <KeyValue items={rs.map(r => ({ id: r.k, k: r.k, v: <NowValue r={r} /> }))} />;
     body = (
       <>
@@ -311,8 +322,8 @@ export function NowSection({ state, traceStartNs }: { state: PodMetricState; tra
     );
   }
   return (
-    <section className="tpp-sec" aria-label="Şu an">
-      <div className="tpp-sec-title"><span>Şu an (trace anı değil){head}</span></div>
+    <section className="tpp-sec" aria-label={tl('login.sum.now', lang)}>
+      <div className="tpp-sec-title"><span>{tl('tpp.sec.nowHead', lang)}{head}</span></div>
       {body}
     </section>
   );
@@ -342,10 +353,11 @@ function PodFactsRow({ model, p, state, onOpenSpan }: {
   const selfName = useMemo(
     () => model.podSpans.get(p.pod)?.find(s => s.spanId === p.maxSelfSpanId)?.name ?? '',
     [model, p.pod, p.maxSelfSpanId]);
+  const lang = useLang();
   const now = state.kind === 'ok' ? state.data.now : null;
-  const segs = podFacts(p, { selfKnown: model.selfKnown, selfName, now, traceStartNs: model.traceStartNs });
+  const segs = podFacts(p, { selfKnown: model.selfKnown, selfName, now, traceStartNs: model.traceStartNs }, lang);
   return (
-    <ul className="tpp-facts" aria-label="Özet">
+    <ul className="tpp-facts" aria-label={tl('inv.res.summary', lang)}>
       {segs.map(s => {
         const tone = s.tone === 'err' ? 'cell-err' : s.tone === 'warn' ? 'cell-warn' : s.tone === 'faint' ? 'cell-faint' : undefined;
         let body: ReactNode;
@@ -370,10 +382,12 @@ function PodFactsRow({ model, p, state, onOpenSpan }: {
  *  Açıklık yerel durum — paylaşılan link bölüm durumunu taşımaz. */
 function TechFold({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const lang = useLang();
+  const label = tl('mlRecord.card.technical', lang);
   return (
-    <section className="tpp-sec" aria-label="Teknik ayrıntı">
+    <section className="tpp-sec" aria-label={label}>
       <div className="tpp-sec-title">
-        <DisclosureButton anatomy="row" expanded={open} onClick={() => setOpen(o => !o)}>Teknik ayrıntı</DisclosureButton>
+        <DisclosureButton anatomy="row" expanded={open} onClick={() => setOpen(o => !o)}>{label}</DisclosureButton>
       </div>
       {open && <div className="tpp-fold-body">{children}</div>}
     </section>
@@ -385,6 +399,7 @@ function TechFold({ children }: { children: ReactNode }) {
  *  burası içerik. */
 export function TracePodPanel(props: TracePodPanelProps) {
   const { model, selected: p, metrics, window: w, onClose, onShowSpans, onOpenSpan, onRetry, announce } = props;
+  const lang = useLang();
   const state = metrics(p.pod);
   const sub = subLine(p, state);
   const builds = usePodChartBuilds({ model, selected: p, metrics, window: w });
@@ -397,8 +412,8 @@ export function TracePodPanel(props: TracePodPanelProps) {
         <span className="tpp-name"><MiddleEllipsis text={p.pod} /></span>
         <CopyPodButton pod={p.pod} announce={announce} />
         <PodPageLink p={p} state={state} window={w} />
-        <Button variant="ghost" size="xs" onClick={() => onShowSpans(p.pod)}>Span'ları Trace'te göster ({p.spans})</Button>
-        <IconButton aria-label="Ayrıntıyı kapat" tooltip="Kapat (Esc)" icon={<X size={14} />} onClick={onClose} />
+        <Button variant="ghost" size="xs" onClick={() => onShowSpans(p.pod)}>{tf('tpp.showSpans', lang, { n: p.spans })}</Button>
+        <IconButton aria-label={tl('tpp.closeAria', lang)} tooltip={tl('tpp.closeTip', lang)} icon={<X size={14} />} onClick={onClose} />
       </div>
       <div className="tpp-sub">
         {sub.map((s, i) => <span key={i}>{i > 0 ? '· ' : ''}{s}</span>)}
@@ -409,9 +424,9 @@ export function TracePodPanel(props: TracePodPanelProps) {
         {state.kind === 'ok' ? (
           <>
             <PodChart build={builds.mem} height={DETAIL_CHART_H} syncKey={builds.syncKey} xRange={builds.xRange}
-              head={<ChartHead h={chartHeadline('mem', state.data)} />} />
+              head={<ChartHead h={chartHeadline('mem', state.data, lang)} />} />
             <PodChart build={builds.cpu} height={DETAIL_CHART_H} syncKey={builds.syncKey} xRange={builds.xRange}
-              head={<ChartHead h={chartHeadline('cpu', state.data)} />} />
+              head={<ChartHead h={chartHeadline('cpu', state.data, lang)} />} />
           </>
         ) : (
           <StateBlock state={state} pod={p.pod} onRetry={onRetry} height={80} />
@@ -425,7 +440,7 @@ export function TracePodPanel(props: TracePodPanelProps) {
           {state.kind === 'ok' && <MomentSection model={model} p={p} data={state.data} metrics={metrics} />}
           <NowSection state={state} traceStartNs={model.traceStartNs} />
         </div>
-        {ok && <p className="tpp-caption">{podChartsCaption(builds, w)}</p>}
+        {ok && <p className="tpp-caption">{podChartsCaption(builds, w, lang)}</p>}
         <JvmNote runtime={p.runtime} />
         {jvmNote && <div className={jvmNote.err ? 'tpp-note is-err' : 'tpp-note'}>{jvmNote.text}</div>}
       </TechFold>

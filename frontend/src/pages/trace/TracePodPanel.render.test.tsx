@@ -65,6 +65,8 @@ const m = vi.hoisted(() => ({
   copyOk: true,
 }));
 // v0.10.968 — kopyalama lib/clipboard'dan (düz HTTP yedeği); sonuç test kontrolünde.
+// v0.10.2316 — Türkçe metin pinleri: arayüz dili 'tr'.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/clipboard', () => ({ copyToClipboard: vi.fn(async () => m.copyOk) }));
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
