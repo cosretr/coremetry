@@ -26,16 +26,16 @@ import { verdictIndex, filterByVerdictView } from '@/lib/problemVerdict';
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import { useIncidentsEnabled } from '@/components/AuthProvider'; // v0.10.1827
 import type { InboxItem, Problem } from '@/lib/types';
-import { useLang } from '@/lib/i18n';
+import { t, tf, useLang, type Lang } from '@/lib/i18n';
 import { prioReasonTitle } from '@/lib/problemStandardView'; // v0.10.2303 — öncelik ipucu EN anahtardan
 
-const KIND_LABEL: Record<InboxItem['kind'], string> = {
-  problem: 'Kural',
-  exception: 'Exception',
-  httperror: 'HTTP hatası',
-  anomaly: 'Anomali',
-  incident: 'Incident',
-};
+// v0.10.2312 — tür etiketi arayüz dilinde, çizimde çözülür (EN katalog modül
+// yüklenirken yok). Exception / Incident ürün terimi, çevrilmez.
+const kindLabel = (k: InboxItem['kind'], lang: Lang): string => (
+  k === 'problem' ? t('pd.rule', lang)
+  : k === 'httperror' ? t('inbox.kind.httperror', lang)
+  : k === 'anomaly' ? t('inbox.kind.anomaly', lang)
+  : k === 'exception' ? 'Exception' : 'Incident');
 
 const fmtVal = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2));
 
@@ -53,11 +53,12 @@ function problemToItem(p: Problem): InboxItem {
 }
 
 function RowMeta({ it }: { it: InboxItem }) {
+  const lang = useLang();
   if (it.kind === 'problem' && it.problem) {
     return (
       <span className="svc-att-meta">
         <span className="mono">{it.problem.metric}</span>
-        {' = '}<b>{fmtVal(it.problem.value)}</b>{` (eşik ${fmtVal(it.problem.threshold)})`}
+        {' = '}<b>{fmtVal(it.problem.value)}</b>{tf('svcAtt.thr', lang, { v: fmtVal(it.problem.threshold) })}
         {it.startedAt > 0 && ` · ${fmtAgoNs(it.startedAt)}`}
       </span>
     );
@@ -66,7 +67,7 @@ function RowMeta({ it }: { it: InboxItem }) {
     return (
       <span className="svc-att-meta">
         {`×${it.exception.occurrences.toLocaleString()}`}
-        {it.lastSeen > 0 && ` · son görülme ${fmtAgoNs(it.lastSeen)}`}
+        {it.lastSeen > 0 && ` · ${tf('podpage.id.lastSeen', lang, { t: fmtAgoNs(it.lastSeen) })}`}
       </span>
     );
   }
@@ -86,7 +87,7 @@ function Row({ it }: { it: InboxItem }) {
   return (
     <Link to={href} className="svc-att-row" title={reason || it.description || undefined}>
       <PriorityBadge p={it.priority} reason={reason} />
-      <span className="svc-att-kind">{KIND_LABEL[it.kind]}</span>
+      <span className="svc-att-kind">{kindLabel(it.kind, lang)}</span>
       <span className="svc-att-name">
         {name}
         {sub && <span className="svc-att-sub"> · {sub}</span>}
@@ -102,6 +103,7 @@ export function ServiceAttentionStrip({ service, fallbackProblems }: {
   // Bundle'ın problem dilimi — yalnız Inbox okuması başarısız olunca.
   fallbackProblems: Problem[];
 }) {
+  const lang = useLang();
   const q = useQuery({
     queryKey: ['service-attention', service],
     queryFn: () => api.inbox({ service, status: 'open', limit: 20 }),
@@ -128,8 +130,8 @@ export function ServiceAttentionStrip({ service, fallbackProblems }: {
   const sloNote = sloCount > 0 && (
     <span className="svc-att-slo">
       <span className="svc-att-slo-ico">◉</span>
-      {`SLO burn-rate ${sloCount} uyarı`}
-      <a href="#svc-slos" title="Sayfanın altındaki SLO bloğuna in">↓</a>
+      {tf('svcAtt.slo', lang, { n: sloCount })}
+      <a href="#svc-slos" title={t('svcAtt.sloJump', lang)}>↓</a>
     </span>
   );
 
@@ -140,22 +142,22 @@ export function ServiceAttentionStrip({ service, fallbackProblems }: {
   return (
     <div className="svc-att" data-degraded={degraded || undefined}>
       <div className="svc-att-head">
-        <span className="svc-att-title">{`! ${rows.length + hidden} açık konu`}</span>
+        <span className="svc-att-title">{tf('svcAtt.open', lang, { n: rows.length + hidden })}</span>
         {sloNote && <span className="svc-att-sep">·</span>}
         {sloNote}
         {degraded && (
-          <span className="svc-att-warn" title="Inbox okunamadı; yalnız alert-kuralı problemleri gösteriliyor">
-            exception'lar yüklenemedi
+          <span className="svc-att-warn" title={t('svcAtt.degradedTip', lang)}>
+            {t('svcAtt.degraded', lang)}
           </span>
         )}
         <span className="svc-att-sp" />
-        <Link to={inboxHref}>Inbox'ta gör →</Link>
+        <Link to={inboxHref}>{t('svcAtt.toInbox', lang)}</Link>
       </div>
       <div className="svc-att-rows">
         {rows.map(it => <Row key={it.id} it={it} />)}
         {hidden > 0 && (
           <div className="svc-att-more">
-            {`+${hidden} daha → `}<Link to={inboxHref}>Inbox</Link>
+            {tf('svcAtt.more', lang, { n: hidden })}<Link to={inboxHref}>Inbox</Link>
           </div>
         )}
       </div>

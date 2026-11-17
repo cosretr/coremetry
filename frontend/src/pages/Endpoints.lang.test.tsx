@@ -119,7 +119,7 @@ afterEach(() => { close(); m.lang = 'en'; });
 const TR_CHARS = /[çğıöşüÇĞİÖŞÜ]/;
 const TR_WORDS = /\b(Kaynak|metrik|yok|okunamadı|pencere|süzgeç|Tümü|Trafik|Hatalar|Ortalama|bazında|gecikme|seçin|satır|çağrı|hata|listede|yeni|Rastgele)\b/;
 // Paylaşılan bileşenlerin kendi etiketleri bu dilimin kapsamı dışında (raporlandı).
-const SHARED = ['Tablo seçenekleri', 'Bu bölümün okuduğu kaynak', 'Ara — komut paletini açar (⌘K)', "Türkçe'ye geç"];
+const SHARED = ['Tablo seçenekleri', 'Bu bölümün okuduğu kaynak', "Türkçe'ye geç"];
 
 describe('Endpoints / endpoint detayı / HTTP metrikleri — İngilizce arayüz (v0.10.2305)', () => {
   it('Türkçe metin yok', async () => {

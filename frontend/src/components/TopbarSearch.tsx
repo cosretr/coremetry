@@ -1,5 +1,6 @@
 import { Search } from 'lucide-react';
 import { openCommandPalette } from './CommandPalette';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2312
 
 // TopbarSearch — komut paletinin GÖRÜNÜR kapısı (v0.9.1019, G1/G2).
 //
@@ -24,16 +25,17 @@ import { openCommandPalette } from './CommandPalette';
 //
 // Mockup: artifact 665d2658 (operatör onayı 2026-08-14).
 export function TopbarSearch() {
+  const lang = useLang();
   return (
     // eslint-disable-next-line ui/no-raw-element -- arama-alanı görünümlü palet tetiği (mockup 665d2658): .tb-search input yüzeyini (bg2 + kenarlık + metin imleci) her atom varyantı yeniden boyar, Button'ın iç .row sarmalayıcısı da flex-1 yer tutucu + sağa yaslı kbd yerleşimini kırar
     <button type="button" className="tb-search" onClick={() => openCommandPalette()}
       // Erişilebilir ad görünen metinden DAHA fazlasını söylüyor: görme
       // engelli bir kullanıcı için "Servis, trace ID… ara" bir yer
       // tutucu değil, düğmenin ne yaptığı.
-      aria-label="Ara — komut paletini açar (⌘K)"
+      aria-label={t('tb.search.aria', lang)}
       aria-keyshortcuts="Meta+K Control+K">
       <Search size={13} strokeWidth={2.2} className="tb-search-icon" aria-hidden="true" />
-      <span className="tb-search-ph">Servis, trace ID, sayfa veya ayar ara…</span>
+      <span className="tb-search-ph">{t('tb.search.ph', lang)}</span>
       {/* İki ipucu da soluk ve KUTUNUN İÇİNDE — mockup'taki gibi.
           `/` sayfanın asıl arama kutusuna odaklanıyor (M1, v0.9.1003),
           ⌘K paleti açıyor; ikisi de zaten çalışan kısayollar, burada

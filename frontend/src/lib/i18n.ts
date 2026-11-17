@@ -3359,6 +3359,21 @@ const TR: Catalog = {
   'dd.group.d': ' normalize edilmiş ifadenin hash\'ine',
   'dd.group.e': ' göre gruplar — aynı SQL iki tabloda farklı sayıda satıra düşebilir; sayılar birebir tutmayabilir.',
   'dd.opTraces': 'Bu operasyonun trace\'lerini aç',
+  // v0.10.2312 — servis dikkat şeridi (ServiceAttentionStrip), üst çubuk (TopbarSearch, TopbarShare), TrendDelta rozeti. TR değerler birebir aynı.
+  'svcAtt.thr': ' (eşik {v})',
+  'svcAtt.slo': 'SLO burn-rate {n} uyarı',
+  'svcAtt.sloJump': 'Sayfanın altındaki SLO bloğuna in',
+  'svcAtt.open': '! {n} açık konu',
+  'svcAtt.degradedTip': 'Inbox okunamadı; yalnız alert-kuralı problemleri gösteriliyor',
+  'svcAtt.degraded': 'exception\'lar yüklenemedi',
+  'svcAtt.toInbox': 'Inbox\'ta gör →',
+  'svcAtt.more': '+{n} daha → ',
+  'tb.search.aria': 'Ara — komut paletini açar (⌘K)',
+  'tb.search.ph': 'Servis, trace ID, sayfa veya ayar ara…',
+  'tb.share': 'Linki kopyala',
+  'tb.shareTip': 'Linki kopyala — filtreler dahil, zaman aralığı sabitlenir',
+  'td.wasZero': 'önce 0',
+  'td.wasZeroTitle': 'Önceki pencerede 0\'dı.',
 };
 
 // v0.10.2307 — İngilizce katalog tembel. EN null iken etkin dil HER ZAMAN

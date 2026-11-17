@@ -8,8 +8,10 @@ import { IconButton } from './ui';
 import { IconLink, IconCheck } from './icons';
 import { copyToClipboard } from '@/lib/clipboard';
 import { absoluteShareHref } from '@/lib/shareUrl';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2312
 
 export function TopbarShare() {
+  const lang = useLang();
   const [copied, setCopied] = useState(false);
   const onClick = async () => {
     if (await copyToClipboard(absoluteShareHref(window.location.href, Date.now()))) {
@@ -18,8 +20,8 @@ export function TopbarShare() {
     }
   };
   return (
-    <IconButton size="sm" aria-label="Linki kopyala"
-      tooltip={copied ? 'Kopyalandı' : 'Linki kopyala — filtreler dahil, zaman aralığı sabitlenir'}
+    <IconButton size="sm" aria-label={t('tb.share', lang)}
+      tooltip={t(copied ? 'exc.trace.copied' : 'tb.shareTip', lang)}
       icon={copied ? <IconCheck size={13} /> : <IconLink size={13} />}
       onClick={onClick} />
   );

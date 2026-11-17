@@ -13,6 +13,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import type { TimeRange } from '@/lib/types';
 import { DependenciesTable, type DepRow } from './DependenciesTable';
+// v0.10.2312 — rozet metni arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 
 // Trend sütunu ayrı bir uçtan (/api/databases/trends) gelir; bu test onu
 // ölçmüyor. Ağ yok, React Query sağlayıcısı yok: kanca sabit döner.

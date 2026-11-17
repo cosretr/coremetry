@@ -1,5 +1,5 @@
 import { ArrowUp, ArrowDown } from 'lucide-react';
-import { LIST_NEW_LABEL, LIST_NEW_TITLE } from '@/lib/endpointHonesty';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2312 — rozet metni arayüz dilinde (TR aynı)
 
 // TrendDelta — small arrow + % change next to a metric value.
 // kind='lowerBetter' → red when current > prior (regression),
@@ -35,12 +35,13 @@ import { LIST_NEW_LABEL, LIST_NEW_TITLE } from '@/lib/endpointHonesty';
 // Varsayılan 'new-in-list' — mevcut çağıranların çıktısı birebir aynı.
 // 'was-zero' rozeti ok'la aynı renk kuralını izler: 0'dan artış
 // lowerBetter'da KÖTÜLEŞME (--err), neutral'da yön tonu (--accent2).
-const WAS_ZERO_LABEL = 'önce 0';
-const WAS_ZERO_TITLE = "Önceki pencerede 0'dı.";
+// v0.10.2312 — metinler katalogda: td.wasZero / td.wasZeroTitle; "listede yeni"
+// ep.listNew / ep.listNewTitle (lib/endpointHonesty LIST_NEW_* ile aynı TR değer).
 export function TrendDelta({ cur, prior, kind, zeroPrior = 'new-in-list' }: {
   cur: number; prior?: number; kind: 'lowerBetter' | 'neutral';
   zeroPrior?: 'new-in-list' | 'was-zero';
 }) {
+  const lang = useLang();
   if (prior === undefined || prior === null) return null;
   if (prior === 0) {
     if (cur === 0) return null;
@@ -54,16 +55,16 @@ export function TrendDelta({ cur, prior, kind, zeroPrior = 'new-in-list' }: {
           // dar karoda "önce" ile "0" ayrı satırlara düşmesin
           whiteSpace: 'nowrap',
         }}
-          title={WAS_ZERO_TITLE}>
+          title={t('td.wasZeroTitle', lang)}>
           <ArrowUp size={9} strokeWidth={2.5} />
-          {WAS_ZERO_LABEL}
+          {t('td.wasZero', lang)}
         </span>
       );
     }
     return (
-      <span className="badge b-info" title={LIST_NEW_TITLE}
+      <span className="badge b-info" title={t('ep.listNewTitle', lang)}
         style={{ marginLeft: 4, fontSize: 9, textTransform: 'none', letterSpacing: 0 }}>
-        {LIST_NEW_LABEL}
+        {t('ep.listNew', lang)}
       </span>
     );
   }

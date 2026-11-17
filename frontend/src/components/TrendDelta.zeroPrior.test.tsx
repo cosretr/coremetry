@@ -7,10 +7,12 @@
 //   · 'was-zero': tek varlık detayında (/database) kıyaslanan liste yok;
 //     doğru cümle "önceki pencerede 0'dı". Renk oktaki kuralla aynı:
 //     lowerBetter'da 0'dan artış kötüleşme (--err), neutral'da yön tonu.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { TrendDelta } from './TrendDelta';
 import { LIST_NEW_LABEL, LIST_NEW_TITLE } from '@/lib/endpointHonesty';
+// v0.10.2312 — rozet metni arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 
 const html = (el: React.ReactElement) => renderToStaticMarkup(el);
 const escapeAttr = (s: string) => s.replace(/&/g, '&amp;').replace(/'/g, '&#x27;').replace(/"/g, '&quot;');

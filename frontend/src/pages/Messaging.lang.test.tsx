@@ -110,7 +110,7 @@ const TR_CHARS = /[çğıöşüÇĞİÖŞÜ]/;
 const TR_WORDS = /\b(satır|yok|metrik|pencere|sekme|servis|Kaynak|istemci|Hepsi|alarmı|aşıldı|korele|adları|Operasyon)\b/;
 // Paylaşılan bileşenlerin kendi etiketleri bu dilimin kapsamı dışında (raporlandı).
 // v0.10.2311 — DependenciesTable ipuçları ve 'Pod detayı' artık İngilizce (muafiyet kalktı).
-const SHARED = ['Tablo seçenekleri', 'Ara — komut paletini açar (⌘K)', "Türkçe'ye geç", 'Servis', 'Linki kopyala'];
+const SHARED = ['Tablo seçenekleri', "Türkçe'ye geç", 'Servis'];
 
 describe('Messaging / topic / servis Messaging sekmesi — İngilizce arayüz (v0.10.2306)', () => {
   it('Türkçe metin yok', async () => {

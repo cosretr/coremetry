@@ -7,11 +7,13 @@
 // Sıfır prior'lı hata karosu "listede yeni" DEĞİL "önce 0" der (detay
 // sayfasında kıyaslanan bir liste yok). İyileşme renk ALMAZ, yalnız
 // kötüleşme alır (K5/T9). Err rate farkı yüzde PUAN.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { DatabaseSignalStrip } from './detailSections';
 import type { DBDetail } from '@/lib/types';
+// v0.10.2312 — rozet metni arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 
 const BASE: DBDetail = {
   system: 'oracle', instance: 'db-a', dbName: 'LEDGER',
