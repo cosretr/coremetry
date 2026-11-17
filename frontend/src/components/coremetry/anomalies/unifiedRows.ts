@@ -10,7 +10,7 @@
 // kaç satır görüldüğüyle.
 import type { AnomalyEvent, MLEvent, MLRecordView, UnifiedAnomalyRow } from '@/lib/types';
 import { t, tf, type Lang } from '@/lib/i18n';
-import { measureKey, recordUsable } from './mlRecord';
+import { KNOWN_METRIC_IDS, measureKey, recordUsable } from './mlRecord';
 import { recordHeadline } from './mlRecordText';
 import { anomalyPlainHeadline } from '@/lib/anomalyNarrative';
 import { anomalyEventHref, mlEventHref } from '@/lib/anomalyHref';
@@ -22,7 +22,19 @@ import { mlRowText } from './MLTab';
 // taşır, yeni sorgu yok) okunur ve bilinen bir ölçüsü varsa "Ne oldu" yeni
 // kartın başlığıyla (mlRecordText.recordHeadline) arayüz dilinde kurulur.
 // Kayıt yok / bozuk / invalid / ölçü bilinmiyor → sunucu cümlesi (mlRowText).
+// v0.10.2330 — bilinen metrik ifadeleri (KNOWN_METRIC_IDS) de kayıttan.
 const recordCache = new WeakMap<MLEvent, MLRecordView | null>();
+
+/** SAF (v0.10.2330): metrik olayının ifade kimliği — Go splitThanosPart
+ *  ("aile|kimlik@cluster", "#topic" eki kimliği değiştirmez). Kart bu kimliği
+ *  replay ucunda RecordView.metricId olarak alır; liste satırı aynı kimliği
+ *  `code`'dan çıkarır (yeni alan yok). Bilinmeyen kimlik → '' (bugünkü yedek). */
+export function knownMetricId(e: Pick<MLEvent, 'signal' | 'code'>): string {
+  if (e.signal !== 'metric' || !e.code) return '';
+  const bar = e.code.indexOf('|');
+  const id = bar < 0 ? '' : e.code.slice(bar + 1).split('@')[0].split('#')[0];
+  return (KNOWN_METRIC_IDS as readonly string[]).includes(id) ? id : '';
+}
 
 /** SAF: liderin kart başlığına yeten kaydı; yetmiyorsa null. */
 export function leadRecord(e: MLEvent): MLRecordView | null {
@@ -32,7 +44,8 @@ export function leadRecord(e: MLEvent): MLRecordView | null {
   if (e.record && e.publishState !== 'invalid') {
     try {
       const raw = JSON.parse(e.record) as Partial<MLRecordView>;
-      const cand = { ...raw, detector: e.detector } as MLRecordView;
+      const metricId = knownMetricId(e); // v0.10.2330 — bilinen metrik ölçüleri kartla aynı adla
+      const cand = { ...raw, detector: e.detector, ...(metricId ? { metricId } : {}) } as MLRecordView;
       if (raw && raw.v === 1 && raw.series && raw.subject && typeof raw.expectedValue === 'number' && recordUsable(cand)) {
         const k = measureKey(cand);
         if (k && k !== 'mlRecord.measure.value') rec = cand;

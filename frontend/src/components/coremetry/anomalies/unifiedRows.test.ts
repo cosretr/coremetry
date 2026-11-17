@@ -1,7 +1,7 @@
 // v0.10.2027 — /anomalies tek liste: ML grupları + eski anomaly_events aynı
 // satır modelinde. Fikstür nötr.
 import { describe, it, expect } from 'vitest';
-import type { AnomalyEvent, MLEvent, UnifiedAnomalyRow } from '@/lib/types';
+import type { AnomalyEvent, MLEvent, MLRecordView, UnifiedAnomalyRow } from '@/lib/types';
 import { legacyEvidenceGroups, legacyHeadline, legacySignal, listHeadline, rowHeadline, rowHref } from './unifiedRows';
 
 const T = 1_800_000_000e9;
@@ -62,5 +62,34 @@ describe('legacyEvidenceGroups', () => {
     expect(g.map(x => x.ids)).toEqual([['a1'], ['a2'], ['t']]);
     expect(g[2].pattern).toBeUndefined();
     expect(g[2].text.length).toBeGreaterThan(0);
+  });
+});
+
+// v0.10.2330 — bilinen metrik ifadeleri (KNOWN_METRIC_IDS) listede de kayıttan:
+// kimlik `code`'dan (Go splitThanosPart), "Ne oldu" = kartın başlığı (aynı sayı).
+describe('bilinen metrik ölçüleri kayıttan (v0.10.2330)', () => {
+  const v = Array.from({ length: 20 }, (_, i) => (i >= 10 ? 9 : 4));
+  const rec = (unit: string) => ({ v: 1, subject: { service: 'checkout', resolved: true },
+    series: { source: 'vm', query: 'q', aggregation: 'max', unit, stepSec: 60 },
+    baseline: { expected: 4, lo: 3, hi: 5, method: 'm', stepSec: 60 }, direction: 'up',
+    onsetAt: T - 12 * 60e9, detectedAt: T - 10 * 60e9, endedAt: T, peakValue: 9, valueAtDetection: 8, expectedValue: 4,
+    evidence: [], class: 'service_anomaly', title: '',
+    snapshot: { t0: T / 1e9 - 1200, step: 60, aggregation: 'max', v, lo: v.map(() => 3), hi: v.map(() => 5) } });
+  const mrow = (code: string, unit = 'value') => row({ service: 'checkout', mlCount: 1, mlLead: me({ id: 'mm', detector: 'metric_x', signal: 'metric', service: 'checkout', code,
+    summary: "checkout: Ölçü 8'e çıktı (5 dakikalık ölçüm); normalde yaklaşık 4.", record: JSON.stringify(rec(unit)) }) });
+  it.each(['cpu', 'memory', 'restarts', 'heap_used', 'gc_time', 'threads', 'pool_used', 'pool_wait', 'consumer_lag', 'fetch_throttle', 'client_p95', 'client_5xx'])('%s', async id => {
+    const { t } = await import('@/lib/i18n');
+    const { recordHeadline } = await import('./mlRecordText');
+    const r = mrow(`metric_x|${id}@cluster-a#orders`);
+    const card = recordHeadline({ ...(rec('value') as unknown as MLRecordView), detector: 'metric_x', metricId: id }, t(`mlRecord.metric.${id}`, 'tr'), 'tr');
+    expect(rowHeadline(r)).toBe(card);
+    expect(rowHeadline(r)).toBe(`${t(`mlRecord.metric.${id}`, 'tr')} tespit anında 8; beklenen ≈ 4.`);
+  });
+  it('bilinmeyen kimlik / metrik olmayan sinyal → bugünkü yedek', async () => {
+    const { knownMetricId } = await import('./unifiedRows');
+    expect(rowHeadline(mrow('metric_x|custom_q'))).toBe("checkout: Ölçü 8'e çıktı (5 dakikalık ölçüm); normalde yaklaşık 4.");
+    expect(knownMetricId({ signal: 'trace', code: 'metric_x|cpu' })).toBe('');
+    expect(knownMetricId({ signal: 'metric', code: 'cpu' })).toBe('');
+    expect(knownMetricId({ signal: 'metric', code: 'metric_k8s|memory@cluster-a' })).toBe('memory');
   });
 });
