@@ -402,7 +402,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	if evm != nil {
 		// v0.10.1316 — değerlendirme vakası konuşmasız: koşuyu başlatanın Redis
 		// sohbet bağlamı ne okunur ne yazılır (kullanıcısız durum = flush no-op).
-		cst = &chatContextState{}
+		cst = evm.evalChatContext() // v0.10.2322 — konuşma kipi: koşucunun bellek içi durumu
 	}
 	ctx = ctxWithChatContext(ctx, cst)
 	defer func() {
@@ -490,7 +490,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// CoSRE bir soru sorduysa ("Coremetry verisinde mi, wikide mi?") bu turun
 	// metni cevap olarak yorumlanır; özgün soru seçilen kaynakta yeniden koşar.
 	// Bekleyen soru yoksa / cevap tanınmazsa ctx ve mesajlar AYNEN.
-	if evm == nil && !apCont.on {
+	if !evm.singleTurn() && !apCont.on { // v0.10.2322 — konuşma kipinde açık (chat_eval_mode.go)
 		cr := s.chatClarifyReplyTier(ctx, emit, req.Messages, cst, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin), req.Context.ClarifyOption)
 		ctx, req.Messages = cr.ctx, cr.msgs
 		if cr.handled {
@@ -537,7 +537,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.1739 (operator-reported) — v2 endpoint kartına aday tur ("<servis>
 	// endpointleri") doküman / keşif / wiki kademelerine girmez: kart aşağıda
 	// (opPre / rota planından sonra) çıkar, belge kaynağı eklenmez.
-	if !skipDocs && !ct.On && evm == nil && cosreV2Marked(ctx) {
+	if !skipDocs && !ct.On && !evm.singleTurn() && cosreV2Marked(ctx) {
 		early := endpointPickCtx{Service: req.Context.Service, Operation: req.Context.Operation, Trace: req.Context.Trace,
 			Explain: req.Context.Explain != "" || req.Context.Subject != "", Skip: req.Context.SkipEndpointPick}
 		if early.Service == "" && req.Context.Page != nil {
@@ -551,7 +551,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.1576 (operator-reported) — çıplak takım / servis adı yüklü tabloda da
 	// eşleşiyorsa doküman kademeleri kendiliğinden cevaplamaz: düz metin soru
 	// (chat_clarify_entity.go). Çıplak varlık değil / eşleşme yok → akış aynen.
-	if !skipDocs && evm == nil && s.chatDocOrEntityAskTier(ctx, emit, req.Messages, wikiTC, cst) {
+	if !skipDocs && !evm.singleTurn() && s.chatDocOrEntityAskTier(ctx, emit, req.Messages, wikiTC, cst) {
 		cspan.tier("clarify", true)
 		emit("done", map[string]bool{"ok": true})
 		return
@@ -625,7 +625,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// İncele turu) servis + route taşıyorsa cevap serbest döngüden, iki rota
 	// grafiği + rota eki + çiplerle; guided / orta kademeler bu turu almaz.
 	var rtPlan *routeTurnPlan
-	if !ct.On && !apCont.on && evm == nil && cosreV2Marked(ctx) {
+	if !ct.On && !apCont.on && !evm.singleTurn() && cosreV2Marked(ctx) {
 		rtSvc := req.Context.Service
 		if rtSvc == "" && req.Context.Page != nil {
 			rtSvc = req.Context.Page.Service
@@ -639,14 +639,14 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// döngüyü tohumlamaz; paket + kırılım + deploy TEK anlatım (chat-guided,
 	// chat_operation_why.go). Hata-neden ve rota incelemesi hariç; kademe
 	// cevaplamazsa akış aşağıda aynen.
-	if !ct.On && !apCont.on && evm == nil && opWhyTierWanted(cosreV2Marked(ctx), opPre, rtPlan != nil, lastUserText(req.Messages)) {
+	if !ct.On && !apCont.on && !evm.singleTurn() && opWhyTierWanted(cosreV2Marked(ctx), opPre, rtPlan != nil, lastUserText(req.Messages)) {
 		if handled, wok := s.chatOperationWhyTier(ctx, emit, opPre, req.Messages, req.Context.Explain, req.Context.Service, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin)); handled {
 			cspan.tier("guided", wok)
 			emit("done", map[string]bool{"ok": wok})
 			return
 		}
 	}
-	if rtPlan == nil && opPre == nil && !ct.On && !apCont.on && evm == nil && cosreV2Marked(ctx) {
+	if rtPlan == nil && opPre == nil && !ct.On && !apCont.on && !evm.singleTurn() && cosreV2Marked(ctx) {
 		pick := endpointPickCtx{Service: req.Context.Service, Operation: req.Context.Operation, Trace: req.Context.Trace,
 			Explain: req.Context.Explain != "" || req.Context.Subject != "", Skip: req.Context.SkipEndpointPick}
 		if pick.Service == "" && req.Context.Page != nil {
@@ -710,7 +710,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// guided'a oturmadı ve wiki gerçek bir alternatif → yalnız "Coremetry
 			// verisinde mi, wikide mi?" sorulur (düz metin, LLM'siz). Kapı kapalıysa
 			// zincir bayt bayt eski.
-			if evm == nil && s.chatSourceAskTier(ctx, emit, req.Messages, wikiTC, cst) {
+			if !evm.singleTurn() && s.chatSourceAskTier(ctx, emit, req.Messages, wikiTC, cst) {
 				cspan.tier("clarify", true)
 				emit("done", map[string]bool{"ok": true})
 				return
@@ -803,8 +803,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// dilim 3 — aynı adlı v2 aracı (search_logs) v1'inkinin yerini alır.
 			tools = mcptools.V2MergeTools(tools, toolsForRole(mcptools.V2OnlyTools(s.mcpDeps()), role))
 		}
-		if evm != nil {
-			tools = evalAgentTools(tools) // v0.10.1316 — sohbet bağlamı araçları düşer
+		if evm.singleTurn() {
+			tools = evalAgentTools(tools) // v0.10.1316 — sohbet bağlamı araçları düşer (v0.10.2322: konuşma kipinde kalır)
 		}
 		// v0.10.1050 — read_source_code YALNIZ panel trace takibinde ve oturum
 		// kullanıcısına (API token'ı değil) (chat_source_code.go). Katalog/spec/prompt
@@ -1187,6 +1187,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			byName[n] = chatLoopHandlerSeam(n, h)
 		}
 	}
+	// v0.10.2322 — konuşma kipi sahte araç sonuçları; nil işarette dokunmaz.
+	evm.stubLoopHandlers(byName)
 	wrapTraceSearchScope(ctx, byName) // v0.10.2294 — trace takibi: YALNIZ search_code besler (dikişin üstünde: testin sahte sonucu da)
 	// v0.10.1465 — başarılı kod okuması konuşmayı yapışkan yapar (trace takibi dahil).
 	wrapCodeReadHandlers(byName, func() { noteCodeRead(cst, emit) })

@@ -317,6 +317,10 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 		// Toolset — v0.10.1311: "" otomatik (üretim profilinin araç seti,
 		// canlı serbest döngüyle aynı çözüm) | simple | full (açık seçim).
 		Toolset string `json:"toolset"`
+		// Profiles — v0.10.2322 (H1): en çok iki profil; seçilen vakalar
+		// profil başına bir kez, profiller SIRAYLA koşar ("" liste = üretimin
+		// yüzey eşlemesi, eski davranış). Rol koşuyu başlatanın rolüdür.
+		Profiles []string `json:"profiles"`
 	}
 	// Boş gövde = tümü (FE düğmesi seçim yokken gövdesiz gönderebilir).
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
@@ -331,6 +335,17 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 	uid, email, role := "", "", ""
 	if c := auth.FromContext(r.Context()); c != nil {
 		uid, email, role = c.UserID, c.Email, c.Role // v0.10.1316 — rol ajan vakası için
+	}
+	profiles, perr := evalNormProfiles(in.Profiles) // v0.10.2322
+	if perr != nil {
+		writeJSONError(w, http.StatusBadRequest, perr.Error())
+		return
+	}
+	for _, p := range profiles {
+		if err := s.copilot.CheckProfileAccess(p, role); err != nil {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("profil %q kullanılamıyor: %v", p, err))
+			return
+		}
 	}
 	startedBy := email
 	if startedBy == "" {
@@ -356,11 +371,20 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 		writeEvalJSONStatus(w, http.StatusAccepted, map[string]any{"run": evalSummaryFromRow(row, now, true)})
 		return
 	}
+	if evalWantsConversation(in.Surfaces) { // v0.10.2322 — konuşma kümesi yalnız açık seçimle
+		conv, cerr := evalConversationLoader()
+		if cerr != nil {
+			writeJSONError(w, http.StatusInternalServerError, "konuşma kümesi yüklenemedi: "+cerr.Error())
+			return
+		}
+		all = append(append([]evalCase{}, all...), conv...)
+	}
 	cases, surfaces, err := evalSelectCases(all, in.Surfaces)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	cases = evalExpandProfiles(cases, profiles) // v0.10.2322 — profil × vaka, profiller sırayla
 	row.Surfaces, row.Total = surfaces, uint32(len(cases))
 
 	// Süreç-içi kapı ÖNCE: kendi koşumuz varsa 409 gövdesi bellekteki taze
@@ -408,6 +432,12 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 	details := fmt.Sprintf("surfaces=%s cases=%d", scope, len(cases))
 	if n := evalAgentCaseCount(cases); n > 0 { // v0.10.1316 — koşu düzeyi audit (D4: araç başına yok)
 		details += fmt.Sprintf(" agent=%d", n)
+	}
+	if n := evalConvCaseCount(cases); n > 0 { // v0.10.2322
+		details += fmt.Sprintf(" conversation=%d", n)
+	}
+	if len(profiles) > 0 {
+		details += " profiles=" + strings.Join(profiles, ",")
 	}
 	if job.toolset != "" { // v0.10.1311 — araç setinin uygulandığı koşu
 		mode := "auto"
@@ -572,6 +602,10 @@ func (s *Server) runEvalJob(ctx context.Context, release func(), job *evalJob, s
 			break
 		}
 		pid, _, _, model, _ := s.evalProfileFor(c.Surface)
+		if c.profile != "" { // v0.10.2322 — koşu isteğinin profili
+			pid = c.profile
+			_, _, model, _, _ = s.copilot.ProfileView(pid)
+		}
 		cctx := copilot.WithMeta(ctx, copilot.CallMeta{
 			Surface: evalsetSurfacePrefix + c.Surface, UserID: job.userID, UserEmail: job.userEmail,
 			ExchangeID: job.row.ID + "/" + c.ID, Shield: aiShield,
@@ -586,11 +620,16 @@ func (s *Server) runEvalJob(ctx context.Context, release func(), job *evalJob, s
 		if ts := s.evalToolsetFor(cctx, c.Surface, job.toolsetOverride); ts != "" {
 			cctx = mcptools.WithToolset(cctx, ts)
 		}
-		out := runEvalsetCase(cctx, s.evalsetServerCall, agent, c)
+		var out evalCaseOutcome
+		if evalConvCase(c) { // v0.10.2322 — konuşma kipi (ai_evalset_conversation.go)
+			out = s.runEvalConvCase(cctx, job, c)
+		} else {
+			out = runEvalsetCase(cctx, s.evalsetServerCall, agent, c)
+		}
 		// iptal/tavanla YARIDA kesilen vaka modelin sonucu değil — sayılmaz.
 		// v0.10.1316 — ajan vakası hata dönmeden de yarıda kalabilir (handler
 		// iptali "aborted" diye bitirir): koşu bağlamı bittiyse hiç sayılmaz.
-		if ctx.Err() != nil && (out.Err != nil || out.Mode == evalModeAgent) {
+		if ctx.Err() != nil && (out.Err != nil || out.Mode == evalModeAgent || out.Mode == evalModeConversation) {
 			break
 		}
 		row := evalJobs.record(job, evalCaseResultFrom(c, out, pid, model), out.Rubric)

@@ -98,6 +98,9 @@ func evalRunDeadlineFor(plan []evalCase) time.Duration {
 		if evalAgentCase(c) {
 			n++
 		}
+		if evalConvCase(c) { // v0.10.2322 — konuşma kipi: tur başına bir ajan payı
+			n += len(c.Turns)
+		}
 	}
 	if n == 0 {
 		return base

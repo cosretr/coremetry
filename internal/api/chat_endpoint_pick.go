@@ -266,6 +266,9 @@ func endpointPickKey(service, env string, fromMin, toMin int64) string {
 
 // endpointPickRows — servisin trafikli endpoint'leri (önbellekli, dakika kovası).
 func (s *Server) endpointPickRows(ctx context.Context, service, env string, from, to time.Time) ([]chstore.EndpointRow, error) {
+	if t := evalConvFrom(ctx); t != nil { // v0.10.2322 — konuşma kipi: sahte satırlar (üretimde nil)
+		return evalConvEndpointRows(t, service), nil
+	}
 	from, to = from.Truncate(time.Minute), to.Truncate(time.Minute)
 	key := endpointPickKey(service, env, from.Unix()/60, to.Unix()/60)
 	body, _, err := s.cachedJSON(ctx, key, endpointPickTTL, false, func(ctx context.Context) (any, error) {

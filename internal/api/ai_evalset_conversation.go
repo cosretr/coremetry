@@ -1,0 +1,669 @@
+package api
+
+// ai_evalset_conversation.go — v0.10.2322 (H1 ölçüm tabanı;
+// docs/cosre/conversation-audit.md §6.1, DECISIONS "CoSRE değerlendirme:
+// konuşma kipi"): değerlendirme setinin KONUŞMA KİPİ.
+//
+// Ajan kipi (ai_evalset_agent.go) tek turu ölçer ve guided dışındaki
+// konuşma kademelerini (netleştirme cevabı, kaynak sorusu, uç nokta kartı,
+// rota turu, niyet, sohbet bağlamı) bilerek kapatır. Konuşma kipi vakası
+// `turns[]` taşır; turlar SIRAYLA aynı konuşmada, gerçek v2 handler'ından
+// ve üretimin TAM kademe zinciriyle koşar. Turlar arası durum gerçek bir
+// istemcinin taşıdığı gibidir:
+//
+//   - konuşma kimliği: vaka × profil başına sabit (context.conversation);
+//   - istemci geçmişi: önceki turların kullanıcı metni + cevap metni (düz
+//     metin; istemci de araç çağrısı göndermez — sanitizeClientHistory);
+//   - sunucu sohbet bağlamı (ChatContext): Redis yerine koşucunun BELLEK İÇİ
+//     kopyası — her tur önceki turun bağlamıyla tohumlanır, tur bitince geri
+//     okunur. Koşuyu başlatanın Redis bağlamına hiçbir şey yazılmaz
+//     (kullanıcısız durum: flushChatContext yazmaz).
+//
+// Veri tarafı deterministiktir: döngü araçları ve guided kanıt paketleri
+// vakanın sahte sonuçlarından gelir (ai_evalset_conv_seam.go). Model
+// çağrıları GERÇEKTİR (koşunun profil(ler)i). Puanlama yapısaldır, metin
+// eşleşmesi yoktur: hangi veri okumaları yapılabilir/yapılmalı, tur hangi
+// varlığa ve pencereye çözülmeli, durum turunda en çok kaç cümle, cevapta
+// sahte sonuçlarda olmayan sayı var mı. Oy / geri bildirim hiçbir aşamada
+// girdi değildir (TestEvalNeverReadsVotes bu dosyayı da tarar).
+//
+// Küme gömülüdür (internal/copilot/evalset/conversation/*.json) ve YALNIZ
+// açıkça seçilince koşar (yüzey ChatConversation): "tümü" koşusu ve günlük
+// koşu bu turları içermez — ≈ 100 sohbet turu model yükü elle tetiklenir.
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"math"
+	"net/http"
+	"path"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/cilcenk/coremetry/internal/ai/evalrubric"
+	"github.com/cilcenk/coremetry/internal/auth"
+	"github.com/cilcenk/coremetry/internal/copilot"
+	"github.com/cilcenk/coremetry/internal/copilot/evalset"
+)
+
+// evalModeConversation — fikstürün `mode` değeri: konuşma kipi.
+const evalModeConversation = "conversation"
+
+// evalConversationSurface — konuşma kipi vakalarının yüzeyi (panel seçimi).
+const evalConversationSurface = "ChatConversation"
+
+// evalConvSchema — konuşma kümesi dosyalarının şeması.
+const evalConvSchema = "coremetry.evalset.conversation/1"
+
+// evalConvProfilesMax — koşu isteğinde en çok profil (yan yana iki aile).
+const evalConvProfilesMax = 2
+
+// Tavanlar (bayt) — vaka sonucu ai_eval_runs.cases JSON'unda sınırlı kalsın.
+const (
+	evalConvAnswerMax = 6 << 10
+	evalConvArgsMax   = 256
+	evalConvCallsMax  = 8
+)
+
+// evalConvDefaultCatalog — vaka catalog vermezse guided router'ın gördüğü
+// nötr servis adları.
+var evalConvDefaultCatalog = []string{"checkout", "orders", "payments", "inventory"}
+
+// evalConvFixtureTurn — fikstürde bir kullanıcı turu.
+type evalConvFixtureTurn struct {
+	User string `json:"user"`
+	// Stubs — bu turun sahte veri dünyası (vakanınkini ad bazında ezer).
+	Stubs  map[string]json.RawMessage `json:"stubs,omitempty"`
+	Expect evalConvExpect             `json:"expect"`
+}
+
+// evalConvExpect — turun YAPISAL beklentisi (asla metin eşleşmesi değil).
+// Adlar veri okumasıdır: döngü aracı ("get_service_health") ya da guided
+// rota niyeti ("service_health").
+type evalConvExpect struct {
+	// Class — sorunun sınıfı (rapor gruplaması; puanlamaz): status |
+	// followup | deploy | next_step | error_hunt | explain | compare |
+	// knowledge | smalltalk | no_finding | correction.
+	Class string `json:"class"`
+	// AnyOfCalls — bu adlardan en az biri okunmalı.
+	AnyOfCalls []string `json:"anyOfCalls,omitempty"`
+	// ForbiddenCalls — bu adlar okunmamalı.
+	ForbiddenCalls []string `json:"forbiddenCalls,omitempty"`
+	// NoCalls — tur hiç veri okumamalı (sohbet, bilgi).
+	NoCalls bool `json:"noCalls,omitempty"`
+	// MaxCalls — en çok veri okuması (nil = sınırsız).
+	MaxCalls *int `json:"maxCalls,omitempty"`
+	// Entity — turun okumaları bu servise çözülmeli.
+	Entity string `json:"entity,omitempty"`
+	// NotEntity — okumalar bu servislere gitmemeli (düzeltme turu).
+	NotEntity []string `json:"notEntity,omitempty"`
+	// Window — turun çözmesi gereken pencere: 15m | 1h | 6h | 24h | 7d
+	// (şimdiden geriye) ya da yesterday (dünün takvim günü, UTC).
+	Window string `json:"window,omitempty"`
+	// MaxSentences — en çok cümle (durum soruları kısa); 0 = sınırsız.
+	MaxSentences int `json:"maxSentences,omitempty"`
+}
+
+// evalConvTurnResult — bir turun saklanan sonucu (ai_eval_runs.cases).
+type evalConvTurnResult struct {
+	I               int            `json:"i"`
+	User            string         `json:"user"`
+	Class           string         `json:"class"`
+	Answer          string         `json:"answer"`
+	AnswerTruncated bool           `json:"answerTruncated,omitempty"`
+	Tier            string         `json:"tier"`
+	Route           string         `json:"route,omitempty"`
+	Status          string         `json:"status,omitempty"`
+	Error           string         `json:"error,omitempty"`
+	OK              bool           `json:"ok"`
+	Fails           []string       `json:"fails"`
+	Calls           []evalConvCall `json:"calls"`
+	Services        []string       `json:"services,omitempty"`
+	Windows         []string       `json:"windows,omitempty"`
+	StateService    string         `json:"stateService,omitempty"`
+	StateRangeS     int64          `json:"stateRangeS,omitempty"`
+	MaxSentences    int            `json:"maxSentences,omitempty"`
+	Rounds          int            `json:"rounds"`
+	ToolCalls       int            `json:"toolCalls"`
+	ModelCalls      int            `json:"modelCalls"`
+	InputTokens     uint32         `json:"inputTokens"`
+	OutputTokens    uint32         `json:"outputTokens"`
+	LatencyMs       int64          `json:"latencyMs"`
+	Toolset         string         `json:"toolset,omitempty"`
+}
+
+// evalConvCase — SAF: vaka konuşma kipinde mi.
+func evalConvCase(c evalCase) bool { return c.Mode == evalModeConversation }
+
+// evalConvCaseCount — SAF: plandaki konuşma vakası sayısı.
+func evalConvCaseCount(cases []evalCase) int {
+	n := 0
+	for _, c := range cases {
+		if evalConvCase(c) {
+			n++
+		}
+	}
+	return n
+}
+
+// ── Yükleyici ───────────────────────────────────────────────────────────
+
+// evalConversationLoader — test dikişi.
+var evalConversationLoader = func() ([]evalCase, error) { return loadEvalConversationFS(evalset.ConversationFS) }
+
+// loadEvalConversationFS — konuşma kümesi (conversation/*.json, ad sıralı).
+func loadEvalConversationFS(fsys fs.FS) ([]evalCase, error) {
+	files, err := fs.Glob(fsys, "conversation/*.json")
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	var out []evalCase
+	for _, f := range files {
+		b, err := fs.ReadFile(fsys, f)
+		if err != nil {
+			return nil, err
+		}
+		var ef evalFile
+		if err := json.Unmarshal(b, &ef); err != nil {
+			return nil, fmt.Errorf("%s: %v", f, err)
+		}
+		if ef.Schema != evalConvSchema {
+			return nil, fmt.Errorf("%s: schema %q, want %q", f, ef.Schema, evalConvSchema)
+		}
+		for i := range ef.Cases {
+			c := ef.Cases[i]
+			c.file = path.Base(f)
+			c.Mode = evalModeConversation
+			if c.Surface == "" {
+				c.Surface = evalConversationSurface
+			}
+			if c.Surface != evalConversationSurface {
+				return nil, fmt.Errorf("%s/%s: surface %q, want %q", f, c.ID, c.Surface, evalConversationSurface)
+			}
+			if len(c.Turns) == 0 {
+				return nil, fmt.Errorf("%s/%s: turns boş", f, c.ID)
+			}
+			exp := make([]evalConvExpect, len(c.Turns))
+			for j, t := range c.Turns {
+				exp[j] = t.Expect
+			}
+			c.expectRaw, _ = json.Marshal(map[string]any{"turns": exp})
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+// evalWantsConversation — SAF: koşu isteği konuşma yüzeyini açıkça seçti mi
+// (boş seçim = "tümü" konuşma kümesini İÇERMEZ).
+func evalWantsConversation(surfaces []string) bool {
+	for _, s := range surfaces {
+		if strings.TrimSpace(s) == evalConversationSurface {
+			return true
+		}
+	}
+	return false
+}
+
+// evalNormProfiles — SAF: istekteki profil listesi (kırpılmış, tekil, sıra
+// korunur). Tavan aşılırsa hata.
+func evalNormProfiles(in []string) ([]string, error) {
+	var out []string
+	seen := map[string]bool{}
+	for _, p := range in {
+		p = strings.TrimSpace(p)
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	if len(out) > evalConvProfilesMax {
+		return nil, fmt.Errorf("en çok %d profil seçilebilir", evalConvProfilesMax)
+	}
+	return out, nil
+}
+
+// evalExpandProfiles — SAF: plan × profil. Profiller SIRAYLA (önce birincinin
+// bütün vakaları, sonra ikincinin); iki profilde öğe kimliği "<vaka>@<profil>".
+// Profil yoksa plan aynen.
+func evalExpandProfiles(plan []evalCase, profiles []string) []evalCase {
+	if len(profiles) == 0 {
+		return plan
+	}
+	out := make([]evalCase, 0, len(plan)*len(profiles))
+	for _, p := range profiles {
+		for _, c := range plan {
+			c.profile = p
+			if len(profiles) > 1 {
+				c.ID = c.ID + "@" + p
+			}
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// evalCaseBaseID — SAF: "<vaka>@<profil>" → "<vaka>".
+func evalCaseBaseID(id string) string {
+	if i := strings.LastIndex(id, "@"); i > 0 {
+		return id[:i]
+	}
+	return id
+}
+
+// ── Koşucu ──────────────────────────────────────────────────────────────
+
+// runEvalConvCase — konuşma vakasını tur tur koşar. Profil c.profile (yoksa
+// üretimin "chat" eşlemesi — ctx'te WithProfile). Koşu bağlamı biterse kalan
+// turlar koşmaz (runEvalJob vakayı saymaz).
+func (s *Server) runEvalConvCase(ctx context.Context, job *evalJob, c evalCase) evalCaseOutcome {
+	out := evalCaseOutcome{User: evalConvTranscriptUsers(c), Mode: evalModeConversation}
+	if s == nil || s.copilot == nil {
+		out.Skipped, out.SkipReason = true, "CoSRE yapılandırılmamış"
+		return out
+	}
+	t0 := time.Now()
+	catalog := c.Catalog
+	if len(catalog) == 0 {
+		catalog = evalConvDefaultCatalog
+	}
+	convID := "eval-" + job.row.ID + "-" + c.ID
+	var (
+		hist     []copilot.ChatMessage
+		state    ChatContext
+		evidence strings.Builder // sahte sonuçlar + kullanıcı metinleri (sayı denetimi)
+		answers  []string
+		firstErr error
+		fails    []string
+	)
+	for k, v := range c.Stubs {
+		evidence.WriteString(k + " " + evalStubText(v) + "\n")
+	}
+	for i, ft := range c.Turns {
+		if ctx.Err() != nil {
+			break
+		}
+		evidence.WriteString(ft.User + "\n")
+		for k, v := range ft.Stubs {
+			evidence.WriteString(k + " " + evalStubText(v) + "\n")
+		}
+		tr, err := s.runEvalConvTurn(ctx, job, c, i, ft, hist, &state, convID, catalog)
+		tr.Fails = append(tr.Fails, scoreEvalConvTurn(ft.Expect, tr, evidence.String(), time.Now())...)
+		tr.OK = len(tr.Fails) == 0
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+		for _, f := range tr.Fails {
+			fails = append(fails, fmt.Sprintf("tur %d: %s", i+1, f))
+		}
+		if out.Toolset == "" {
+			out.Toolset = tr.Toolset
+		}
+		answers = append(answers, tr.Answer)
+		hist = append(hist, copilot.ChatMessage{Role: "user", Text: ft.User})
+		if a := strings.TrimSpace(tr.Answer); a != "" {
+			hist = append(hist, copilot.ChatMessage{Role: "assistant", Text: tr.Answer})
+		}
+		tr.Answer, tr.AnswerTruncated = evalTruncate(tr.Answer, evalConvAnswerMax)
+		out.Turns = append(out.Turns, tr)
+	}
+	out.LatencyMs = time.Since(t0).Milliseconds()
+	out.Answer = evalConvTranscript(c, answers)
+	out.Err = firstErr
+	out.Fails = fails
+	in := evalrubric.Input{Answer: strings.Join(answers, "\n\n"), Err: firstErr, ExpectTurkish: true}
+	if len(answers) == 0 {
+		in.Err = errors.New("hiçbir tur koşmadı")
+	}
+	out.Rubric = evalrubric.Score(in)
+	return out
+}
+
+// runEvalConvTurn — tek tur: gerçek handler, bellek içi bağlam, sahte veri.
+func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, i int, ft evalConvFixtureTurn,
+	hist []copilot.ChatMessage, state *ChatContext, convID string, catalog []string) (evalConvTurnResult, error) {
+	tr := evalConvTurnResult{I: i + 1, User: ft.User, Class: ft.Expect.Class, MaxSentences: ft.Expect.MaxSentences, Fails: []string{}, Calls: []evalConvCall{}}
+	ct := &evalConvTurn{
+		State:   &chatContextState{ctx: *state},
+		Stubs:   evalMergeStubs(c.Stubs, ft.Stubs),
+		Catalog: catalog,
+	}
+	col := &evalAgentCollector{parts: newEvalPartSink()}
+	em := &chatEvalMode{
+		Surface: evalsetSurfacePrefix + c.Surface, ExchangeID: fmt.Sprintf("%s/%s/t%d", job.row.ID, c.ID, i+1),
+		Toolset: job.toolsetOverride, // "" = canlı çözüm (profilin araç seti)
+		OnTurn:  col.onTurn, OnTool: col.onTool, Sink: col.sink, OnCatalog: col.onCatalog,
+		Conversation: ct,
+	}
+	cctx := copilot.WithRecordSurfacePrefix(ctx, evalsetSurfacePrefix)
+	cctx = auth.ContextWithClaims(cctx, &auth.Claims{UserID: job.userID, Email: job.userEmail, Role: job.userRole})
+	cctx = withChatEvalMode(cctx, em)
+	cctx = withCosreV2Loop(cctx)
+	cctx, cancel := context.WithTimeout(cctx, evalAgentCaseMax(s.copilot.ClientTimeout()))
+	defer cancel()
+	var req chatRequest
+	req.Messages = append(append([]copilot.ChatMessage{}, hist...), copilot.ChatMessage{Role: "user", Text: ft.User})
+	req.Context.Conversation = convID
+	req.Context.Profile = c.profile
+	body, err := json.Marshal(req)
+	if err != nil {
+		return tr, err
+	}
+	hreq, err := http.NewRequestWithContext(cctx, http.MethodPost, "/api/copilot/chat", bytes.NewReader(body))
+	if err != nil {
+		return tr, err
+	}
+	t0 := time.Now()
+	w := newEvalDiscardResponse()
+	s.copilotChatWith(w, hreq, evalV2SinkFactory(col.parts))
+	tr.LatencyMs = time.Since(t0).Milliseconds()
+	o, st, ok := col.result()
+	*state = ct.State.ctx
+	tr.Calls = evalBoundConvCalls(ct.snapshot())
+	tr.Services, tr.Windows = evalConvResolved(tr.Calls, time.Now())
+	tr.StateService, tr.StateRangeS = state.Service, state.RangeS
+	tr.Answer, tr.Tier, tr.Route, tr.Status, tr.Toolset = o.Answer, o.Tier, o.Route, o.Status, o.Toolset
+	tr.Rounds, tr.ToolCalls, tr.ModelCalls = st.Rounds, st.Executed, int(o.ModelCalls)
+	tr.InputTokens, tr.OutputTokens = o.InputTokens, o.OutputTokens
+	if !ok {
+		err = fmt.Errorf("sohbet handler'ı sonuç bildirmedi (HTTP %d)", w.status())
+		tr.Error = err.Error()
+		tr.Fails = append(tr.Fails, "error: "+tr.Error)
+		return tr, err
+	}
+	if strings.TrimSpace(o.Answer) == "" {
+		why := o.Status
+		if o.ErrMsg != "" {
+			why += ": " + o.ErrMsg
+			tr.Error = o.ErrMsg
+		}
+		tr.Fails = append(tr.Fails, "no answer ("+why+")")
+	}
+	return tr, nil
+}
+
+// evalMergeStubs — SAF: vaka + tur sahteleri (tur ezer).
+func evalMergeStubs(base, over map[string]json.RawMessage) map[string]json.RawMessage {
+	out := make(map[string]json.RawMessage, len(base)+len(over))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range over {
+		out[k] = v
+	}
+	return out
+}
+
+// evalBoundConvCalls — SAF: okumalar listesi tavanlı (argümanlar kırpılır).
+func evalBoundConvCalls(calls []evalConvCall) []evalConvCall {
+	out := make([]evalConvCall, 0, min(len(calls), evalConvCallsMax))
+	for i, c := range calls {
+		if i >= evalConvCallsMax {
+			break
+		}
+		if len(c.Args) > evalConvArgsMax || !json.Valid(c.Args) {
+			b, _ := json.Marshal(clipBytes(string(c.Args), evalConvArgsMax))
+			c.Args = b
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// evalConvTranscriptUsers — SAF: vakanın kullanıcı turları (panel "girdi").
+func evalConvTranscriptUsers(c evalCase) string {
+	var b strings.Builder
+	for i, t := range c.Turns {
+		fmt.Fprintf(&b, "K%d: %s\n", i+1, t.User)
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// evalConvTranscript — SAF: kullanıcı + cevap dökümü (panel "cevap").
+func evalConvTranscript(c evalCase, answers []string) string {
+	var b strings.Builder
+	for i, a := range answers {
+		if i < len(c.Turns) {
+			fmt.Fprintf(&b, "K%d: %s\n", i+1, c.Turns[i].User)
+		}
+		fmt.Fprintf(&b, "C%d: %s\n\n", i+1, strings.TrimSpace(a))
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// ── Yapısal puanlama (SAF) ──────────────────────────────────────────────
+
+// scoreEvalConvTurn — SAF: turun yapısal ihlalleri. evidence = vakanın o
+// tura dek sahte sonuçları + kullanıcı metinleri; now = pencere denetiminin
+// "şimdi"si.
+func scoreEvalConvTurn(e evalConvExpect, tr evalConvTurnResult, evidence string, now time.Time) []string {
+	var fails []string
+	names := map[string]bool{}
+	for _, c := range tr.Calls {
+		names[c.Name] = true
+	}
+	if e.NoCalls && len(tr.Calls) > 0 {
+		fails = append(fails, fmt.Sprintf("veri okunmamalıydı: %v", evalConvCallNames(tr.Calls)))
+	}
+	if len(e.AnyOfCalls) > 0 {
+		hit := false
+		for _, n := range e.AnyOfCalls {
+			hit = hit || names[n]
+		}
+		if !hit {
+			fails = append(fails, fmt.Sprintf("beklenen okumalardan hiçbiri yok: %v (okunan %v)", e.AnyOfCalls, evalConvCallNames(tr.Calls)))
+		}
+	}
+	for _, n := range e.ForbiddenCalls {
+		if names[n] {
+			fails = append(fails, "yasak okuma: "+n)
+		}
+	}
+	if e.MaxCalls != nil && len(tr.Calls) > *e.MaxCalls {
+		fails = append(fails, fmt.Sprintf("okuma %d > %d", len(tr.Calls), *e.MaxCalls))
+	}
+	if e.Entity != "" && !evalNameIn(e.Entity, tr.Services) && !strings.EqualFold(e.Entity, tr.StateService) {
+		fails = append(fails, fmt.Sprintf("varlık %q çözülmedi (okumalar %v, bağlam %q)", e.Entity, tr.Services, tr.StateService))
+	}
+	for _, n := range e.NotEntity {
+		if evalNameIn(n, tr.Services) {
+			fails = append(fails, fmt.Sprintf("düzeltilen varlık yine okundu: %q", n))
+		}
+	}
+	if e.Window != "" && !evalConvWindowOK(e.Window, tr.Calls, tr.StateRangeS, now) {
+		fails = append(fails, fmt.Sprintf("pencere %q çözülmedi (okumalar %v, bağlam %d sn)", e.Window, tr.Windows, tr.StateRangeS))
+	}
+	answer := strings.TrimSpace(tr.Answer)
+	if answer == "" {
+		return fails
+	}
+	if e.MaxSentences > 0 {
+		if n := evalrubric.Sentences(answer); n > e.MaxSentences {
+			fails = append(fails, fmt.Sprintf("cümle %d > %d", n, e.MaxSentences))
+		}
+	}
+	if extra := ungroundedNumbers(evalrubric.StripSourceLine(answer), evidence); len(extra) > 0 {
+		fails = append(fails, fmt.Sprintf("sahte sonuçlarda olmayan sayı: %v", extra))
+	}
+	return fails
+}
+
+func evalConvCallNames(calls []evalConvCall) []string {
+	out := make([]string, 0, len(calls))
+	for _, c := range calls {
+		out = append(out, c.Name)
+	}
+	return out
+}
+
+// evalConvArgs — SAF: okuma argümanları (bozuksa boş).
+func evalConvArgs(c evalConvCall) map[string]any {
+	var m map[string]any
+	_ = json.Unmarshal(c.Args, &m)
+	return m
+}
+
+// evalConvResolved — SAF: okumaların servisleri ve pencereleri (insan
+// okur: "1h", "from..to").
+func evalConvResolved(calls []evalConvCall, now time.Time) (services, windows []string) {
+	seenS, seenW := map[string]bool{}, map[string]bool{}
+	for _, c := range calls {
+		m := evalConvArgs(c)
+		for _, svc := range evalConvServicesOf(m) {
+			if k := strings.ToLower(svc); !seenS[k] {
+				seenS[k] = true
+				services = append(services, svc)
+			}
+		}
+		for _, w := range evalConvWindowsOf(m, now) {
+			if !seenW[w.label] {
+				seenW[w.label] = true
+				windows = append(windows, w.label)
+			}
+		}
+	}
+	return services, windows
+}
+
+func evalConvServicesOf(m map[string]any) []string {
+	var out []string
+	for _, k := range []string{"service", "service_name", "serviceName"} {
+		if v, ok := m[k].(string); ok && strings.TrimSpace(v) != "" {
+			out = append(out, strings.TrimSpace(v))
+		}
+	}
+	if arr, ok := m["services"].([]any); ok {
+		for _, v := range arr {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, strings.TrimSpace(s))
+			}
+		}
+	}
+	return out
+}
+
+// evalConvWindow — çözülmüş bir pencere: geriye bakış (lookback) ya da
+// mutlak [from, to].
+type evalConvWindow struct {
+	lookback time.Duration
+	from, to time.Time
+	label    string
+}
+
+var evalConvDurRe = regexp.MustCompile(`^(\d+)\s*(m|min|h|d|g|sa|dk|saat|gün|dakika)$`)
+
+// evalParseLookback — SAF: "15m" | "1h" | "24h" | "7d" (Türkçe kısaltmalar da).
+func evalParseLookback(s string) (time.Duration, bool) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if d, err := time.ParseDuration(s); err == nil && d > 0 {
+		return d, true
+	}
+	m := evalConvDurRe.FindStringSubmatch(s)
+	if m == nil {
+		return 0, false
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	switch m[2] {
+	case "m", "min", "dk", "dakika":
+		return time.Duration(n) * time.Minute, true
+	case "h", "sa", "saat":
+		return time.Duration(n) * time.Hour, true
+	default:
+		return time.Duration(n) * 24 * time.Hour, true
+	}
+}
+
+// evalConvWindowsOf — SAF: tek okumanın pencereleri.
+func evalConvWindowsOf(m map[string]any, now time.Time) []evalConvWindow {
+	var out []evalConvWindow
+	for _, k := range []string{"window", "range", "lookback", "since", "duration"} {
+		if v, ok := m[k].(string); ok {
+			if d, ok := evalParseLookback(v); ok {
+				out = append(out, evalConvWindow{lookback: d, label: d.String()})
+			}
+		}
+	}
+	for k, unit := range map[string]time.Duration{"minutes": time.Minute, "hours": time.Hour, "rangeS": time.Second, "range_s": time.Second, "window_s": time.Second} {
+		if v, ok := m[k].(float64); ok && v > 0 {
+			d := time.Duration(v) * unit
+			out = append(out, evalConvWindow{lookback: d, label: d.String()})
+		}
+	}
+	from, to, okAbs := evalConvAbsWindow(m)
+	if okAbs {
+		w := evalConvWindow{from: from, to: to, label: from.Format("2006-01-02T15:04") + ".." + to.Format("2006-01-02T15:04")}
+		if now.Sub(to).Abs() <= 10*time.Minute {
+			w.lookback = to.Sub(from)
+		}
+		out = append(out, w)
+	}
+	return out
+}
+
+// evalConvAbsWindow — SAF: mutlak pencere (from_ms/to_ms ya da
+// from_iso/to_iso); yoksa ok=false.
+func evalConvAbsWindow(m map[string]any) (from, to time.Time, ok bool) {
+	fromV, okF := m["from_ms"].(float64)
+	toV, okT := m["to_ms"].(float64)
+	if okF && okT && toV > fromV {
+		return time.UnixMilli(int64(fromV)).UTC(), time.UnixMilli(int64(toV)).UTC(), true
+	}
+	fs, okF := m["from_iso"].(string)
+	ts, okT := m["to_iso"].(string)
+	if okF && okT {
+		f, err1 := time.Parse(time.RFC3339, fs)
+		t, err2 := time.Parse(time.RFC3339, ts)
+		if err1 == nil && err2 == nil && t.After(f) {
+			return f.UTC(), t.UTC(), true
+		}
+	}
+	return time.Time{}, time.Time{}, false
+}
+
+// evalConvWindowOK — SAF: beklenen pencere okumalardan ya da sohbet
+// bağlamının RangeS'inden çözüldü mü. Geriye bakış ±%10; "yesterday":
+// bitişi bugünün UTC gece yarısına ±2 sa, süresi 20–28 sa.
+func evalConvWindowOK(want string, calls []evalConvCall, stateRangeS int64, now time.Time) bool {
+	var ws []evalConvWindow
+	for _, c := range calls {
+		ws = append(ws, evalConvWindowsOf(evalConvArgs(c), now)...)
+	}
+	if want == "yesterday" {
+		midnight := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day(), 0, 0, 0, 0, time.UTC)
+		for _, w := range ws {
+			if w.to.IsZero() {
+				continue
+			}
+			span := w.to.Sub(w.from)
+			if w.to.Sub(midnight).Abs() <= 2*time.Hour && span >= 20*time.Hour && span <= 28*time.Hour {
+				return true
+			}
+		}
+		return false
+	}
+	d, ok := evalParseLookback(want)
+	if !ok {
+		return false
+	}
+	near := func(got time.Duration) bool {
+		return got > 0 && math.Abs(float64(got-d)) <= 0.1*float64(d)
+	}
+	for _, w := range ws {
+		if near(w.lookback) {
+			return true
+		}
+	}
+	return len(calls) == 0 && near(time.Duration(stateRangeS)*time.Second)
+}

@@ -2354,7 +2354,10 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	var evidence, sources string
 	var err error
 	var facts guidedSummaryFacts // v0.10.2101 — özet kartı (chat_summary_card.go); yalnız 3 rota doldurur
-	switch route.Intent {
+	// v0.10.2322 — konuşma kipinde sahte paket (ai_evalset_conv_seam.go); üretimde route.Intent.
+	switch evalGuidedBundleIntent(ctx, route.Intent) {
+	case guidedEvalStub:
+		evidence, sources, err = evalGuidedStubBundle(ctx, emit, route, from, to)
 	case guidedRootCause:
 		if route.opWhy != nil { // v0.10.2137 — v2 operasyon/endpoint neden sorusu (chat_operation_why.go)
 			evidence, sources, err = s.guidedOpWhyBundle(ctx, emit, route, rangeS, anchorTo)
@@ -2578,6 +2581,9 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 // catalogue read per minute per replica. Soft-fails to nil — the
 // router still handles the entity-free intents.
 func (s *Server) guidedServiceNames(ctx context.Context) []string {
+	if names := evalConvCatalog(ctx); names != nil { // v0.10.2322 — konuşma kipi: vakanın kataloğu (üretimde nil)
+		return names
+	}
 	const key = "copilot:guided:svcnames"
 	if b, ok, _ := s.cache.Get(ctx, key); ok && len(b) > 0 {
 		var names []string

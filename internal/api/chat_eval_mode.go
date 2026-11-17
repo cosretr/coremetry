@@ -78,6 +78,13 @@ type chatEvalMode struct {
 	// OnScope — v2 döngüsünün çözdüğü kullanıcı kapsamı (puanlama: her çağrının
 	// services ⊆ kapsam). nil = bildirim yok.
 	OnScope func(userScope)
+	// Conversation — v0.10.2322 (H1, conversation-audit.md §6.1): konuşma
+	// kipi turu (chat_eval_conversation.go). nil = tek turlu ajan vakası,
+	// yukarıdaki bütün anahtarlar eskisi gibi. Doluyken handler ÜRETİM
+	// kademe zincirini koşar (singleTurn false), sohbet bağlamı Redis yerine
+	// koşucunun bellek içi durumundan okunur ve ona yazılır, döngü ve guided
+	// veri okumaları vakanın sahte sonuçlarından gelir.
+	Conversation *evalConvTurn
 }
 
 // evalAgentOutcome — ajan kipi turun sonucu (chatExchange'den, kilit altında
@@ -125,6 +132,22 @@ func (em *chatEvalMode) skipIntent() bool { return em != nil && (em.SkipIntent |
 // skipGuided — v0.10.1476: döngü sondasında guided ve RAG kademeleri
 // atlanır. nil (üretim) → false, kademe sırası bayt bayt eski.
 func (em *chatEvalMode) skipGuided() bool { return em != nil && em.LoopProbe }
+
+// singleTurn — v0.10.2322: tek turlu ajan vakası mı (konuşmasız kademe
+// kapıları kapalı). nil (üretim) → false; handler'daki `!evm.singleTurn()`
+// kapıları üretimde eski `evm == nil` ile birebir aynıdır. Konuşma kipi
+// (Conversation dolu) → false: kademe zinciri üretimdeki gibi açık.
+func (em *chatEvalMode) singleTurn() bool { return em != nil && em.Conversation == nil }
+
+// evalChatContext — v0.10.2322: değerlendirme vakasının sohbet bağlamı.
+// Tek turlu vaka boş durum (eski davranış); konuşma kipi koşucunun bellek
+// içi durumu (kullanıcısız → flushChatContext Redis'e yazmaz).
+func (em *chatEvalMode) evalChatContext() *chatContextState {
+	if em != nil && em.Conversation != nil && em.Conversation.State != nil {
+		return em.Conversation.State
+	}
+	return &chatContextState{}
+}
 
 // evalOutcomeFromExchange — SAF (x kilidi altında okur): Sink yükü.
 func evalOutcomeFromExchange(x *chatExchange, tier, status, msg string) evalAgentOutcome {

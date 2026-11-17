@@ -133,7 +133,17 @@ type evalCase struct {
 	// Note — v0.10.1476: beklenti değişikliğinin yazılı gerekçesi (insan
 	// okur; koşucu kullanmaz). Bir beklenti gevşetildiyse neden burada.
 	Note string `json:"note,omitempty"`
-	file string
+	// Turns / Stubs / Catalog — v0.10.2322 (H1): KONUŞMA KİPİ vakası
+	// (mode "conversation", ai_evalset_conversation.go). Turlar sırayla aynı
+	// konuşmada koşar; Stubs vakanın sahte veri dünyası (turun stubs'ı ezer),
+	// Catalog guided router'ın servis kataloğu. Tek çağrılı / ajan vakasında boş.
+	Turns   []evalConvFixtureTurn      `json:"turns,omitempty"`
+	Stubs   map[string]json.RawMessage `json:"stubs,omitempty"`
+	Catalog []string                   `json:"catalog,omitempty"`
+	file    string
+	// profile — v0.10.2322: koşu isteğinin profil listesinden bu plan öğesine
+	// sabitlenen profil (evalExpandProfiles); "" = üretimin yüzey eşlemesi.
+	profile string
 	// expectRaw — v0.10.940: fikstürdeki expect nesnesi HARFİYEN (panel
 	// çekmecesi "Beklenti"yi gösterir; struct gidiş-dönüşü bilinmeyen
 	// anahtarı düşürürdü). Yükleyici doldurur; elle kurulan vakada boş.
@@ -595,7 +605,7 @@ func evalProductionLabel(surface string) string { return evalProductionLabels[su
 // serbest sohbet döngüsünün ("chat") ekidir, aynı profille koşar. Etiket
 // tablosunda DEĞİL (👎 export geri dönüşümü Chat'e düşmeli).
 func evalProfileLabel(surface string) string {
-	if surface == "ChatCodeResolve" || surface == evalAgentLoopSurface || surface == evalOpExceptionsSurface || surface == evalOpClusterCompareSurface { // v0.10.1316 — ChatLoop da serbest döngü; v0.10.1331; v0.10.1374
+	if surface == "ChatCodeResolve" || surface == evalAgentLoopSurface || surface == evalConversationSurface || surface == evalOpExceptionsSurface || surface == evalOpClusterCompareSurface { // v0.10.1316 — ChatLoop da serbest döngü; v0.10.1331; v0.10.1374
 		return evalProductionLabel("Chat")
 	}
 	return evalProductionLabel(surface)
@@ -649,6 +659,8 @@ type evalCaseOutcome struct {
 	// unavailable | quota); doluysa vaka PUANLANMAZ (Skipped) — kalite
 	// başarısızlığı değil, geçme oranını kirletmez. Yeniden deneme YOK.
 	Infra string
+	// Turns — v0.10.2322 (H1): konuşma kipi vakasının tur sonuçları.
+	Turns []evalConvTurnResult
 }
 
 // evalInfraClass — SAF, v0.10.1476: hata modelin değil altyapının mı
@@ -817,6 +829,16 @@ type evalCatalog struct {
 	// RubricThreshold — v0.10.2110 (kalite döngüsü D5): evalrubric.Threshold;
 	// panelin "eşik altı" rozeti sabiti kopyalamasın.
 	RubricThreshold float64 `json:"rubricThreshold"`
+	// Conversation — v0.10.2322 (H1): konuşma kipi kümesi (yalnız açık
+	// seçimle koşar; Total ve Surfaces'e girmez). nil = küme yok.
+	Conversation *evalCatalogConversation `json:"conversation,omitempty"`
+}
+
+// evalCatalogConversation — v0.10.2322: panelin akıcılık koşusu satırı.
+type evalCatalogConversation struct {
+	Surface string `json:"surface"`
+	Cases   int    `json:"cases"`
+	Turns   int    `json:"turns"`
 }
 
 type evalSurfaceSummary struct {
@@ -903,6 +925,8 @@ type evalCaseResult struct {
 	// Mode / Agent — v0.10.1316: ajan kipi ("agent") ve izi; tek çağrıda yok.
 	Mode  string          `json:"mode,omitempty"`
 	Agent *evalAgentTrail `json:"agent,omitempty"`
+	// Turns — v0.10.2322 (H1): konuşma kipi vakasının turları (sınırlı).
+	Turns []evalConvTurnResult `json:"turns,omitempty"`
 }
 
 type evalCompareSide struct {
@@ -1017,6 +1041,7 @@ func evalCaseResultFrom(c evalCase, o evalCaseOutcome, profileID, model string) 
 		Expect: evalExpectJSON(c), Toolset: o.Toolset,
 		Mode: o.Mode, Agent: o.Agent, // v0.10.1316
 		InfraError: o.Infra, // v0.10.1476
+		Turns:      o.Turns, // v0.10.2322
 	}
 	if o.Err != nil {
 		res.Error = o.Err.Error()
@@ -1413,6 +1438,13 @@ func (s *Server) evalsetCatalog() (evalCatalog, error) {
 			Surface: sc.Surface, Cases: sc.Cases,
 			ProfileID: id, ProfileLabel: label, Provider: provider, Model: model, BaseURL: base,
 		})
+	}
+	if conv, cerr := evalConversationLoader(); cerr == nil && len(conv) > 0 { // v0.10.2322
+		cc := &evalCatalogConversation{Surface: evalConversationSurface, Cases: len(conv)}
+		for _, c := range conv {
+			cc.Turns += len(c.Turns)
+		}
+		cat.Conversation = cc
 	}
 	return cat, nil
 }

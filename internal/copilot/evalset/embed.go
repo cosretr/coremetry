@@ -20,3 +20,11 @@ import "embed"
 //
 //go:embed *.json
 var FS embed.FS
+
+// ConversationFS — v0.10.2322 (H1): konuşma kipi kümesi (conversation/*.json,
+// şema coremetry.evalset.conversation/1). FS'ten AYRI: "tümü" koşusu ve
+// günlük koşu bu turları içermez; yalnız ChatConversation yüzeyi açıkça
+// seçilince yüklenir (api ai_evalset_conversation.go).
+//
+//go:embed conversation/*.json
+var ConversationFS embed.FS
