@@ -2,8 +2,8 @@
 //
 // v0.10.2282 — pin: arayüz dili İngilizceyken /anomalies ekranı (AnomalyStreamsPage:
 // birleşik liste + kapalı "Teknik ayrıntı" altındaki ML dedektör durumu, eski
-// dedektör kartları, servis düzeyi karşılaştırma ve Problem birleştirme gölge
-// raporu; ayrıca streams.tsx olay geçmişi tablosu) bilinen Türkçe etiket ÇİZMEZ;
+// dedektör kartları, servis düzeyi karşılaştırma, Davis özneleri ↔ ML
+// karşılaştırması (v0.10.2310) ve Problem birleştirme gölge raporu; ayrıca streams.tsx olay geçmişi tablosu) bilinen Türkçe etiket ÇİZMEZ;
 // Türkçe arayüzde metin aynen kalır. UnifiedAnomalies.lang.test şeklinde.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
@@ -56,6 +56,14 @@ const svcCompare = { days: 14, truncated: true, counts: { matched: 1, missed: 1 
   { service: SVC, oldRule: 'svc-slowdown:x', oldStart: NOW_NS, oldPriority: 'P2', newDetector: 'svc_breadth', newStart: NOW_NS, newPriority: 'P2', diff: 'matched' },
   { service: SVC, oldRule: 'anomaly:x:error_rate', oldStart: NOW_NS, diff: 'missed' },
 ] };
+// v0.10.2310 — Davis özneleri ↔ ML karşılaştırması (EngineCompare).
+const zs = { series: 1, episodes: 1, episodesExact: true, matched: 1, only: 0, noCounterpart: 0, wouldOpen: 1, withProblem: 0, medianSec: 900, short: 0, perDay: 0.1 };
+const zm = { events: 1, matched: 1, only: 0, indeterminate: 0, wouldOpen: 1, liveOpened: 1, withProblem: 0, medianSec: 900, short: 0, perDay: 0.1 };
+const engCompare = { days: 7, fromNs: 1, toNs: 2, toleranceSec: 900, shortSec: 600,
+  config: { subjects: { endpoint: true, queue: true, promotionMode: 'shadow' }, ml: { enabled: true, groupProblems: true, detectorsOff: [] } },
+  refProblems: 1, totals: { subject: zs, ml: zm },
+  rows: [{ service: SVC, family: 'latency', source: 'metric', biased: false, subject: zs, ml: zm, examples: { onlySubject: [], onlyMl: [] } }],
+  caveats: ['subject_last_episode_only', 'ml_group_problems_live'], truncated: { subject: false, ml: false, problems: false, rows: false } };
 const graphShadow = { available: true,
   report: { at: NOW_S, since: NOW_S - 3600, windowH: 24, units: 4, callStrict: 1, graphMissing: 2, links: { 'M-CALL': 2 }, sizes: { '2': 1 }, age: { '0-30': 1 },
     originConf: { strong: 1 }, reads: { passes: 3, skippedFew: 1, refreshes: 1, relations: 5, maxRelPerPass: 3, runs: 1, evidence: 1, errors: 0 },
@@ -79,6 +87,7 @@ vi.mock('@/lib/queries', () => {
     useAnomalySilences: () => ({ data: [] }),
     useCreateAnomalySilence: () => mut, useDeleteAnomalySilence: () => mut, useBulkDeleteAnomalySilences: () => mut,
     useMLSvcShadowCompare: () => ({ data: svcCompare, isLoading: false, error: null }),
+    useAnomalyEngineCompare: () => ({ data: engCompare, isLoading: false, error: null }),
     useProblemGraphShadow: () => ({ data: graphShadow, isLoading: false, error: null }),
   };
 });
@@ -137,7 +146,7 @@ describe('/anomalies ekranı — İngilizce arayüz (v0.10.2282)', () => {
       'Widespread slowdown (legacy)', 'Error rate (legacy)', 'Widespread slowdown', 'Matched', 'Missed',
       'Problem merge (entity graph): shadow report', 'Would link (distinct links): M-CALL 2', 'Cluster size, plain M-CALL: 2 entities 1',
       'confidence strong 1', 'Frequent (shadow, distinct Problems): 2', 'Largest clusters (now, at most 20)', '3 entities', 'origin unclear (weak)',
-      'What happened?',
+      'What happened?', 'Davis subjects ↔ ML: shadow comparison', 'A Davis row keeps only its last episode; earlier episodes cannot be matched.',
     ]) expect(r.text, en).toContain(en);
     expect(r.html).toContain('Gather related signals for this pattern and explain what happened (AI)');
   });
@@ -176,6 +185,7 @@ describe('/anomalies ekranı — Türkçe arayüzde metin aynen (v0.10.2282)', (
       'Servis düzeyi: eski Problem ↔ yeni gölge (14 gün)', 'Son 14 gün: 1 eşleşti, 1 kaçırdı, 0 fazladan, 0 geç. Okuma tavanına değdi',
       'Yaygın yavaşlama (eski)', 'Eşleşti', 'Problem birleştirme (entity grafı): gölge raporu', 'Kurulurdu (farklı bağ): M-CALL 2',
       'güven güçlü 1', 'En büyük kümeler (şu an, en çok 20)', '3 varlık', 'köken belirsiz (weak)', 'Ne oldu?',
+      'Davis özneleri ↔ ML: gölge karşılaştırma', 'Son 7 gün (örneklenmiş satırlar hariç): Davis 1 olay',
     ]) expect(r.text, tr).toContain(tr);
     expect(r.html).toContain('Bu desen için ilişkili sinyalleri topla ve ne olduğunu anlat (AI)');
   });

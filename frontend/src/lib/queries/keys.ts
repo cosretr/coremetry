@@ -115,6 +115,7 @@ export const keys = {
     mlBackfill: ['anomalies', 'ml', 'baseline-backfill'] as const, // v0.10.1815
     mlProfiles: ['anomalies', 'ml', 'profiles'] as const, // v0.10.1816
     mlSvcShadow: ['anomalies', 'ml', 'svc-shadow'] as const, // v0.10.2089
+    engineCompare: ['anomalies', 'ml', 'engine-compare'] as const, // v0.10.2310
     graphShadow: ['anomalies', 'ml', 'problem-graph-shadow'] as const, // v0.10.2274
     logPatterns: ['anomalies', 'log-patterns'] as const,
     metrics:     ['anomalies', 'metrics'] as const,

@@ -12295,6 +12295,32 @@ export interface MLSvcCompareRow {
 }
 /** v0.10.2089 — GET /api/ml/svc-shadow-compare (api/ml_svc_shadow.go svcShadowCompareResponse). */
 export interface MLSvcShadowCompare { days: number; rows: MLSvcCompareRow[]; counts: Record<string, number>; truncated: boolean }
+/** v0.10.2310 — ml.EngineSubjectStats aynası (Davis özne kolu). */
+export interface EngineCompareSubjectStats {
+  series: number; episodes: number; episodesExact: boolean; matched: number; only: number; noCounterpart: number;
+  wouldOpen: number; withProblem: number; medianSec: number; short: number; perDay: number;
+}
+/** v0.10.2310 — ml.EngineMLStats aynası (ML kolu). */
+export interface EngineCompareMLStats {
+  events: number; matched: number; only: number; indeterminate: number; wouldOpen: number; liveOpened: number;
+  withProblem: number; medianSec: number; short: number; perDay: number;
+}
+/** v0.10.2310 — ml.EngineCompareRow aynası. family: latency | errors | throughput | consumer_lag. */
+export interface EngineCompareRow {
+  service: string; family: string; source: 'metric' | 'sampled_trace' | string; biased: boolean;
+  subject: EngineCompareSubjectStats; ml: EngineCompareMLStats;
+  examples: { onlySubject: string[]; onlyMl: string[] };
+}
+/** v0.10.2310 — GET /api/anomalies/engine-compare (api/anomaly_engine_compare.go engineCompareResponse). */
+export interface AnomalyEngineCompare {
+  days: number; fromNs: number; toNs: number; toleranceSec: number; shortSec: number;
+  config: { subjects: { endpoint: boolean; queue: boolean; promotionMode: string }; ml: { enabled: boolean; groupProblems: boolean; detectorsOff: string[] } };
+  refProblems: number;
+  totals: { subject: EngineCompareSubjectStats; ml: EngineCompareMLStats };
+  rows: EngineCompareRow[];
+  caveats: string[];
+  truncated: { subject: boolean; ml: boolean; problems: boolean; rows: boolean };
+}
 /** v0.10.2051 — /api/anomalies/unified satırı (internal/api/anomalies_unified.go
  *  unifiedAnomalyRow): ML grupları + eski dedektör olayları sunucuda birleşir.
  *  Liste kipinde yalnız lider (mlLead YA DA legacyLead; ML liderinde kanıt yok),

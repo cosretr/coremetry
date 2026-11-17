@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
-import type { MLEvent, MLScorecard, MLBaselineBackfillView, MLServiceProfilePage, MLSvcShadowCompare } from '@/lib/types';
+import type { MLEvent, MLScorecard, MLBaselineBackfillView, MLServiceProfilePage, MLSvcShadowCompare, AnomalyEngineCompare } from '@/lib/types';
 import type { ProblemGraphShadowResponse } from '@/lib/problemGraph';
 
 export function useMLEvents(signal: '' | 'log' | 'trace' | 'metric' = '', enabled = true) {
@@ -55,6 +55,15 @@ export function useMLSvcShadowCompare(enabled: boolean) {
     queryKey: keys.anomalies.mlSvcShadow,
     queryFn: async () => (await api.mlSvcShadowCompare()) ?? { days: 14, rows: [], counts: {}, truncated: false },
     enabled, staleTime: 60_000,
+  });
+}
+
+/** v0.10.2310 — Davis özneleri ↔ ML karşılaştırması; yalnız bölüm açılınca, yoklama yok, staleTime = sunucu TTL'i (5 dk). */
+export function useAnomalyEngineCompare(enabled: boolean) {
+  return useQuery<AnomalyEngineCompare | null>({
+    queryKey: keys.anomalies.engineCompare,
+    queryFn: async () => (await api.anomalyEngineCompare()) ?? null,
+    enabled, staleTime: 5 * 60_000,
   });
 }
 

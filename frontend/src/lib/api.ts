@@ -1686,6 +1686,8 @@ export const api = {
   mlScorecard: () => get<import('./types').MLScorecard>(`/api/ml/scorecard`),
   // v0.10.2089 — servis düzeyi gölge ↔ eski Problem karşılaştırması (salt-okunur, 60 sn önbellek).
   mlSvcShadowCompare: (days = 14) => get<import('./types').MLSvcShadowCompare>(`/api/ml/svc-shadow-compare?days=${days}`),
+  /** v0.10.2310 — Davis özneleri ↔ ML gölge karşılaştırması (api/anomaly_engine_compare.go). */
+  anomalyEngineCompare: (days = 7) => get<import('./types').AnomalyEngineCompare>(`/api/anomalies/engine-compare?days=${days}`),
   // v0.10.2274 — entity grafı Problem birleştirme gölge raporu (yalnız admin, 15 sn önbellek).
   problemGraphShadow: () => get<import('./problemGraph').ProblemGraphShadowResponse>(`/api/admin/problem-graph-shadow`),
   putMlVerdict: (id: string, body: { verdict: 'anomaly' | 'not_anomaly'; note?: string; reason?: string; detector: string; service: string }) =>
