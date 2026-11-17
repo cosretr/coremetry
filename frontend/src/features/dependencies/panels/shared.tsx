@@ -4,6 +4,7 @@ import { Empty, Spinner } from '@/components/Spinner';
 import { MultiLineChart } from '@/components/MultiLineChart';
 import { api } from '@/lib/api';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
+import { t, useLang } from '@/lib/i18n';
 import { encodeFilters } from '@/lib/urlState';
 import type { DBForecast, FilterExpr } from '@/lib/types';
 import { dbEtaChip } from '@/lib/fmtEtaHours';
@@ -627,6 +628,7 @@ export function WaitClassesBar({ waits, onClickClass }: {
  * (chstore/engine_degraded.go sözleşmesi).
  */
 export function DegradedBand({ reason }: { reason?: string }) {
+  const lang = useLang(); // v0.10.2311
   if (!reason) return null;
   return (
     <div style={{
@@ -635,8 +637,8 @@ export function DegradedBand({ reason }: { reason?: string }) {
       borderRadius: 6, padding: '7px 11px', marginBottom: 10,
       fontSize: 12, color: 'var(--text)', lineHeight: 1.45,
     }}>
-      <strong>⚠ Bu paneldeki sayılar eksik.</strong>{' '}{reason}.{' '}
-      Sıfır görünen alanlar “veri yok” anlamına GELMEZ — okunamadılar.
+      <strong>{t('deps.degraded.a', lang)}</strong>{' '}{reason}.{' '}
+      {t('deps.degraded.b', lang)}
     </div>
   );
 }

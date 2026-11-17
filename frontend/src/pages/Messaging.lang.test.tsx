@@ -109,16 +109,13 @@ afterEach(() => { close(); m.lang = 'en'; });
 const TR_CHARS = /[çğıöşüÇĞİÖŞÜ]/;
 const TR_WORDS = /\b(satır|yok|metrik|pencere|sekme|servis|Kaynak|istemci|Hepsi|alarmı|aşıldı|korele|adları|Operasyon)\b/;
 // Paylaşılan bileşenlerin kendi etiketleri bu dilimin kapsamı dışında (raporlandı).
-const SHARED = ['Tablo seçenekleri', 'Ara — komut paletini açar (⌘K)', "Türkçe'ye geç", 'Pod detayı', 'Servis', 'Linki kopyala'];
-// Paylaşılan DependenciesTable (Messaging + Databases listesi) ipuçları — ayrı dilim (raporlandı).
-const SHARED_DEPS = ['Topic detay sayfasını aç', 'Tüketicilerin okuduğu partition sayısı', 'kafka_producer_record_send_rate · topic toplamı',
-  'kafka_consumer_records_consumed_rate · topic toplamı', 'kafka_consumer_records_lag_max · topic başına', 'Karşılaştırma kapalı',
-  'Bu pencerede produce (publish)', 'Bu pencerede consume (process)'];
+// v0.10.2311 — DependenciesTable ipuçları ve 'Pod detayı' artık İngilizce (muafiyet kalktı).
+const SHARED = ['Tablo seçenekleri', 'Ara — komut paletini açar (⌘K)', "Türkçe'ye geç", 'Servis', 'Linki kopyala'];
 
 describe('Messaging / topic / servis Messaging sekmesi — İngilizce arayüz (v0.10.2306)', () => {
   it('Türkçe metin yok', async () => {
     const r = await all();
-    const bad = r.text.split('\n').filter(l => !SHARED.includes(l) && !SHARED_DEPS.some(p => l.startsWith(p)) && (TR_CHARS.test(l) || TR_WORDS.test(l)));
+    const bad = r.text.split('\n').filter(l => !SHARED.includes(l) && (TR_CHARS.test(l) || TR_WORDS.test(l)));
     expect(bad).toEqual([]);
     for (const en of ['Click a row → publishers', 'To inspect consumers from the entry-point view', '⚠ Only the 200 busiest destinations',
       'Lag ≥ 1,000', 'behind', 'Last poll', 'VictoriaMetrics · end of window', 'Could not read the messaging overview',

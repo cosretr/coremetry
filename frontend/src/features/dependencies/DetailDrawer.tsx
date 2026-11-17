@@ -21,7 +21,8 @@ import { KafkaTopicMetrics } from './KafkaTopicMetrics'; // v0.10.1557 (v0.10.55
 import { CallerSection } from './CallerSection';
 import { kindSeries } from './msgSeries'; // v0.10.575 — saniye→ns tek yerde
 import { messagingTopicHref } from '@/pages/messaging/topicHref'; // v0.10.575
-import { opLabelTR, isOpMissing, msgOperationRows, OP_MISSING_TITLE } from './msgOperations'; // v0.10.563
+import { opLabelTR, isOpMissing, msgOperationRows, opMissingTitle } from './msgOperations'; // v0.10.563
+import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2311 — çekmece metinleri arayüz dilinde (TR aynı)
 
 // v0.9.814 — drawer'ın mini panelleri de CorePanel. LAZY: @grafana/*
 // statik import edilseydi /messaging + /databases vendor chunk'ı ~1 MB
@@ -76,6 +77,7 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
   range: TimeRange;
 }) {
   type D = DBDetail | MessagingDetail;
+  const lang = useLang();
   // v0.10.576 — React Query. Eskisi çıplak useEffect + then/catch idi ve
   // iptal YOKTU: operatör çekmeceyi kapatınca ya da başka satıra geçince
   // sunucudaki okuma sonuna kadar koşuyordu. Artık signal iletiliyor.
@@ -148,7 +150,7 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
   // render ediliyor, o yüzden storageKey'i türetmeye gerek yok — tek
   // kolon kümesi, tek anahtar.
   const msgOpsCols = useMemo<ColumnDef<MsgOperationStat>[]>(() => [
-    { id: 'operation', label: 'Operasyon', sortValue: o => o.operation, naturalDir: 'asc', flex: true, minWidth: 140,
+    { id: 'operation', label: t('mt.col.op', lang), sortValue: o => o.operation, naturalDir: 'asc', flex: true, minWidth: 140,
       mono: true, tone: o => (isOpMissing(o.operation) ? 'faint' : 'muted') },
     { id: 'count',   label: 'Calls', sortValue: o => o.spanCount,      numeric: true, naturalDir: 'desc', width: 90 },
     { id: 'errRate', label: 'Err %', sortValue: o => o.errorRate,      numeric: true, naturalDir: 'desc', width: 90 },
@@ -156,7 +158,7 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
     { id: 'p50',     label: 'P50',   sortValue: o => o.p50DurationMs,  numeric: true, naturalDir: 'desc', width: 84 },
     { id: 'p95',     label: 'P95',   sortValue: o => o.p95DurationMs,  numeric: true, naturalDir: 'desc', width: 84 },
     { id: 'p99',     label: 'P99',   sortValue: o => o.p99DurationMs,  numeric: true, naturalDir: 'desc', width: 84 },
-  ], []);
+  ], [lang]);
   const msgOpsDt = useDataTable<MsgOperationStat>({
     storageKey: 'deps-msg-ops', columns: msgOpsCols, rows: msgOps,
     initialSort: { id: 'count', dir: 'desc' },
@@ -232,9 +234,7 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
           color: 'var(--text2)', background: 'var(--bg2)',
           border: '1px solid var(--border)', borderRadius: 4,
         }}>
-          Cluster belirtilmedi — <span className="mono">(default)</span> varsayıldı.
-          Çok-cluster bir kurulumda bu topic başka bir cluster'da yaşıyorsa
-          aşağıdaki sayılar boş görünür.
+          {t('dd.cluster.a', lang)}<span className="mono">(default)</span>{t('dd.cluster.b', lang)}
         </div>
       )}
       {/* v0.9.257 (operator-reported, second round: "messaging
@@ -256,8 +256,8 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
               çekmeceyi EMEKLİ ETMEDEN — operatör kararı. */}
           <Link className="ud-pill"
                 to={messagingTopicHref({ system, cluster, destination: name, range })}
-                title="Bu topic'in tam sayfa detayı — üreticiler, tüketiciler, operasyonlar, Kafka istemcileri">
-            Detay sayfası →
+                title={t('dd.detailPageTip', lang)}>
+            {t('dd.detailPage', lang)}
           </Link>
           <Link className="ud-pill"
                 to={messagingTracesHref({ window: range, system, destination: name })}
@@ -287,13 +287,13 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
           olmasın. */}
       {kind === 'db' && (
         <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>
-          Kapsam:{' '}
+          {t('dd.scope', lang)}{' '}
           <span className="mono" style={{ color: 'var(--text2)' }}>
             {system} / {instance ?? name}
           </span>
           {dbName
-            ? <> · veritabanı <span className="mono" style={{ color: 'var(--text2)' }}>{dbName}</span></>
-            : <> · <b>tüm veritabanları</b> (bu instance üzerindeki her db.name)</>}
+            ? <>{t('dd.scope.db', lang)}<span className="mono" style={{ color: 'var(--text2)' }}>{dbName}</span></>
+            : <> · <b>{t('dd.scope.all', lang)}</b>{t('dd.scope.allNote', lang)}</>}
         </div>
       )}
 
@@ -343,10 +343,10 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
                   // korelasyonu) — sayfa üstündeki "span gecikmesi"
                   // panelinden FARKLI bir büyüklük. Başlık ikisini
                   // karıştırmasın diye kaynağını söylüyor.
-                  title="Uçtan uca gecikme · kova ortalaması"
+                  title={t('dd.e2eTitle', lang)}
                   storageKey="msg-drawer-e2e"
                   height={150} unit="ms" xRange={drawerXRange} syncKey={drawerSync}
-                  note="produce→consume, span_links korelasyonu; kova başına ORTALAMA (p50/p95 aşağıdaki blokta, pencere geneli)"
+                  note={t('dd.e2eNote', lang)}
                   items={[
                     { name: 'E2E lag', role: 'data', series: e2eLagSeries },
                   ]} />
@@ -436,12 +436,12 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
           <CallerSection
             title={`Publishers · ${producers.length} ${producers.length === 1 ? 'row' : 'rows'}`}
             rows={producers}
-            emptyMessage="Bu pencerede bu destination'a üretici span'i yok."
+            emptyMessage={t('dd.noProducers', lang)}
             tone="producer" range={range} />
           <CallerSection
             title={`Consumers · ${consumers.length} ${consumers.length === 1 ? 'row' : 'rows'}`}
             rows={consumers}
-            emptyMessage="Bu pencerede bu destination'a tüketici span'i yok."
+            emptyMessage={t('dd.noConsumers', lang)}
             tone="consumer" range={range} />
           {otherClients.length > 0 && (
             <CallerSection
@@ -471,7 +471,7 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
               <span aria-hidden style={{
                 width: 8, height: 8, borderRadius: 2, background: 'var(--purple)',
               }} />
-              Operasyonlar · MV · {msgOps.length} satır
+              {tf('dd.opsHead', lang, { n: msgOps.length })}
             </div>
             {/* Bölüm GİZLENMİYOR: yokluğu söylemek, bakılmamış gibi
                 görünmekten iyidir (boş küme kaybolur, sıfır olmaz).
@@ -483,7 +483,7 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
                 <DataTableHead dt={msgOpsDt} />
                 <tbody>
                   {msgOpsDt.sortedRows.length === 0 ? (
-                    <DataTableState dt={msgOpsDt} kind="empty" message="Bu pencerede MV'de operasyon satırı yok" />
+                    <DataTableState dt={msgOpsDt} kind="empty" message={t('dd.opsEmpty', lang)} />
                   ) : msgOpsDt.sortedRows.map((o, i) => {
                     // v0.10.929 (K5) — %0 hata sağlıklı: nötr rozet.
                     const errCls = o.errorRate > 5 ? 'err' : o.errorRate > 0 ? 'warn' : 'gray';
@@ -491,13 +491,13 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
                     return (
                       <tr key={`${o.operation}|${i}`}>
                         <DataTableCell dt={msgOpsDt} col="operation" row={o}
-                          title={missing ? OP_MISSING_TITLE : o.operation}>
-                          {opLabelTR(o.operation)}
+                          title={missing ? opMissingTitle(lang) : o.operation}>
+                          {opLabelTR(o.operation, lang)}
                         </DataTableCell>
                         <DataTableCell dt={msgOpsDt} col="count" row={o} value={fmtNum(o.spanCount)} />
                         <DataTableCell dt={msgOpsDt} col="errRate" row={o}>
                           <span className={`badge b-${errCls}`} style={{ fontSize: 9 }}
-                                title={`${fmtNum(o.errorCount)} hatalı span`}>
+                                title={tf('dd.errSpans', lang, { n: fmtNum(o.errorCount) })}>
                             {o.errorRate.toFixed(2)}%
                           </span>
                         </DataTableCell>
@@ -521,7 +521,7 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
         <CallerSection
           title={`By client (service + pod) · ${callers.length} ${callers.length === 1 ? 'row' : 'rows'}`}
           rows={callers}
-          emptyMessage="Bu pencerede çağıran yok."
+          emptyMessage={t('dd.noCallers', lang)}
           tone="db" range={range} />
       )}
 
@@ -551,11 +551,7 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
               tutmayabilir ve bu bir hata DEĞİL. */}
           {kind === 'db' && (
             <div style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 6, lineHeight: 1.45 }}>
-              Gruplama <b>ham ifadenin ilk 80 karakteri</b>. Sayfadaki
-              &quot;En pahalı ifadeler&quot; ve Slow queries katalogu
-              <b> normalize edilmiş ifadenin hash&#39;ine</b> göre gruplar —
-              aynı SQL iki tabloda farklı sayıda satıra düşebilir; sayılar
-              birebir tutmayabilir.
+              {t('dd.group.a', lang)}<b>{t('dd.group.b', lang)}</b>{t('dd.group.c', lang)}<b>{t('dd.group.d', lang)}</b>{t('dd.group.e', lang)}
             </div>
           )}
           {/* v0.9.873 (tutarlılık denetimi BT8) — yapışkanlık `is-scroll`
@@ -599,7 +595,7 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
                               })}
                               title={kind === 'db'
                                 ? 'Find traces running this statement (LIKE-prefix, best-effort)'
-                                : 'Bu operasyonun trace\'lerini aç'}
+                                : t('dd.opTraces', lang)}
                               style={{
                                 marginLeft: 8, fontSize: 10, whiteSpace: 'nowrap',
                                 color: 'var(--accent2)', fontWeight: 500,

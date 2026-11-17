@@ -23,6 +23,7 @@ import { serviceHref } from '@/lib/serviceHref';
 import { podDetailPath } from '@/pages/service/podDetailPath';
 import { encodeRange } from '@/lib/urlState';
 import { fmtNum } from '@/lib/utils';
+import { t, useLang } from '@/lib/i18n'; // v0.10.2311
 
 // CallerSection renders one labelled table of (service, pod) rows
 // with their RED metrics. Tone colours the header so producers /
@@ -76,6 +77,7 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
     tone === 'consumer' ? 'var(--text3)' :
     tone === 'other'    ? 'var(--text3)' :
                           'var(--accent2)';
+  const lang = useLang();
   const hasRole = rows.some(r => r.role);
   // Client-side search across service / pod / role so an
   // operator with hundreds of pods hitting one DB can pinpoint
@@ -183,7 +185,7 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
                         bilinmeyen/boş pod düz metin kalır. */}
                     {c.pod && c.pod !== '(unknown)' ? (
                       <Link to={podDetailPath({ pod: c.pod, service: c.service, range: encodeRange(range) || null })}
-                            style={{ color: 'inherit' }} title="Pod detayı">
+                            style={{ color: 'inherit' }} title={t('deps.podDetail', lang)}>
                         {c.pod}
                       </Link>
                     ) : c.pod}

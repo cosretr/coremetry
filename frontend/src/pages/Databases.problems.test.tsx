@@ -22,6 +22,8 @@ const m = vi.hoisted(() => ({
   resolveProblems: null as null | ((v: unknown) => void),
   rejectProblems: null as null | ((e: unknown) => void),
 }));
+// v0.10.2311 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/api', () => {
   const stub: Record<string, (...a: unknown[]) => Promise<unknown>> = {
     databases: () => Promise.resolve(m.overview),

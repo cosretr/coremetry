@@ -25,6 +25,7 @@ import { serviceHref } from '@/lib/serviceHref';
 import { fmtSmart } from '@/lib/chartFmt';
 import { svcListLabel, type KafkaTopicStat } from '@/pages/messaging/kafkaOverview'; // v0.10.1961
 import type { TimeRange, DBTrend } from '@/lib/types';
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2311 — tablo + çekmece metinleri arayüz dilinde (TR aynı)
 
 // Row is the shape both /databases and /messaging hand to this
 // component. We type-erase the row-specific labelling (Instance
@@ -38,24 +39,24 @@ export function lagTone(lag: number | undefined): string {
 
 /** v0.10.1961 — Kafka UI kolon hücreleri (Partitions · Producers · Consumers · Produce/s · Consume/s);
  *  v0.10.2205: kolon kimliğiyle tek hücre (kullanıcı kolon sırası). */
-function kafkaCell(id: string, k: KafkaTopicStat | undefined): ReactNode {
+function kafkaCell(id: string, k: KafkaTopicStat | undefined, lang: Lang = 'tr'): ReactNode {
   const none = <span className="cell-muted">—</span>;
   const rate = (v: number | undefined) => (v == null ? none : fmtSmart(v, 'reqps'));
   // v0.10.1974 — adlar yalnız görünen sayfa için okunur; gelmeden ya da adsız topic'te servis SAYISI.
   const svcs = (list: string[] | undefined, n: number | undefined, what: string) => (list?.length
     ? <td title={`${what}: ${list.join(', ')}`}><span className="cell-ellipsis mono">{svcListLabel(list)}</span></td>
-    : n ? <td title={`${n} ${what} servis (adlar yükleniyor)`}>{n} servis</td>
-    : <td title={`Bu topic için VM'de ${what} metriği yok`}>{none}</td>);
+    : n ? <td title={tf('deps.svcLoading', lang, { n, what })}>{tf('deps.svcCount', lang, { n })}</td>
+    : <td title={tf('deps.noVmMetric', lang, { what })}>{none}</td>);
   switch (id) {
     case 'partitions': return (
-      <td className="num" title="Tüketicilerin okuduğu partition sayısı (kafka_consumer_records_lag, partition etiketi). Kimsenin tüketmediği partition sayılmaz.">
+      <td className="num" title={t('deps.partitionsTip', lang)}>
         {k?.partitions != null ? fmtNum(k.partitions) : none}
       </td>
     );
     case 'producers': return svcs(k?.producers, k?.producerCount, 'producer');
     case 'consumers': return svcs(k?.consumers, k?.consumerCount, 'consumer');
-    case 'kproduce': return <td className="num" title="kafka_producer_record_send_rate · topic toplamı, kayıt/sn (VictoriaMetrics, pencere sonu)">{rate(k?.produce)}</td>;
-    case 'kconsume': return <td className="num" title="kafka_consumer_records_consumed_rate · topic toplamı, kayıt/sn (VictoriaMetrics, pencere sonu)">{rate(k?.consume)}</td>;
+    case 'kproduce': return <td className="num" title={t('deps.kproduceTip', lang)}>{rate(k?.produce)}</td>;
+    case 'kconsume': return <td className="num" title={t('deps.kconsumeTip', lang)}>{rate(k?.consume)}</td>;
   }
   return <td />;
 }
@@ -213,6 +214,7 @@ export function DependenciesTable({
   // konusu URL→state kopyalayan desendi): tek doğruluk kaynağı URL,
   // okuma doğrudan oradan. replace:true — her tuş vuruşu geçmişe
   // girmemeli.
+  const lang = useLang();
   const [tparams, setTparams] = useSearchParams();
   const systemFilter = tparams.get('msys') ?? '';
   const search = tparams.get('q') ?? '';
@@ -541,9 +543,7 @@ export function DependenciesTable({
     rows.length > 0 ? { kind: 'no-match' }
     : state ?? {
       kind: 'empty',
-      message: kind === 'db'
-        ? 'Bu pencerede veritabanı çağrısı yok — bu görünüm db.system özniteliği dolu span\'lerden türetilir.'
-        : 'Bu pencerede mesajlaşma etkinliği yok — messaging.system özniteliği dolu span\'lerden türetilir.',
+      message: t(kind === 'db' ? 'deps.empty.db' : 'deps.empty.queue', lang),
     };
 
   return (
@@ -679,10 +679,10 @@ export function DependenciesTable({
                           detay SAYFASINI açar; Traces pivotu detay sayfasında. */}
                       <Link to={kind === 'db' && href ? href : exploreHref(r)} className="mono"
                             style={{ fontWeight: 500 }} onClick={kind === 'db' && href ? stopRowClick : undefined}
-                            title={kind === 'db' && href ? 'Veritabanı detay sayfasını aç' : r.instance === 'unknown'
+                            title={kind === 'db' && href ? t('deps.openDbDetail', lang) : r.instance === 'unknown'
                               ? `peer.service was empty on these spans — label sourced from ${r.dbName && r.dbName !== 'default' ? 'db.name' : 'fallback'}`
                               : kind === 'queue'
-                                ? 'Topic detay sayfasını aç (aynı pencere)'
+                                ? t('deps.openTopicDetail', lang)
                                 : 'Open in Explore (spans pre-filtered)'}>
                         {nameOf(r) || <span style={{ color: 'var(--text3)' }}>(anonymous)</span>}
                       </Link>
@@ -718,13 +718,13 @@ export function DependenciesTable({
                       )}
                     </td>
                         );
-                        case 'partitions': return kafkaCell('partitions', r.kafka);
-                        case 'producers': return kafkaCell('producers', r.kafka);
-                        case 'consumers': return kafkaCell('consumers', r.kafka);
-                        case 'kproduce': return kafkaCell('kproduce', r.kafka);
-                        case 'kconsume': return kafkaCell('kconsume', r.kafka);
+                        case 'partitions': return kafkaCell('partitions', r.kafka, lang);
+                        case 'producers': return kafkaCell('producers', r.kafka, lang);
+                        case 'consumers': return kafkaCell('consumers', r.kafka, lang);
+                        case 'kproduce': return kafkaCell('kproduce', r.kafka, lang);
+                        case 'kconsume': return kafkaCell('kconsume', r.kafka, lang);
                         case 'lag': return (
-                      <td className={`num ${lagTone(r.lag)}`} title={r.lag != null ? 'kafka_consumer_records_lag_max · topic başına en kötü partition (VictoriaMetrics; topic sayfasındaki Max lag ile aynı)' : 'Bu destination için VM lag metriği yok'}>
+                      <td className={`num ${lagTone(r.lag)}`} title={t(r.lag != null ? 'deps.lagTip' : 'deps.noLag', lang)}>
                         {r.lag != null ? fmtNum(r.lag) : <span className="cell-muted">—</span>}
                       </td>
                         );
@@ -787,7 +787,7 @@ export function DependenciesTable({
                             yokluğu, başkasının ölçümüyle doldurulmaz. */}
                         {r.source === 'receiver'
                           ? <span style={{ color: 'var(--text3)', fontSize: 11 }}
-                              title="Receiver ile keşfedildi — uygulama span'i yok, dolayısıyla RED trendi de yok. Motor metrikleri için satırı açın.">—</span>
+                              title={t('deps.receiverNoTrend', lang)}>—</span>
                           : <TrendCell trend={trendFor(r)} loading={trends === undefined} />}
                       </td>
                         );
@@ -916,17 +916,18 @@ function KindRateCell({ perMin, count, errors, priorPerMin, compare, what }: {
 // ikisi de "anında tamamlandı" demek değil — LatencyCell'in v0.9.262'de
 // öğrendiği ders, yeni kolonlarda tekrarlanmasın.
 function KindP95Cell({ v, what }: { v?: number; what: string }) {
+  const lang = useLang();
   if (v === undefined || v === null || !(v > 0)) {
     return (
       <td className="num">
         <span style={{ color: 'var(--text3)' }}
-          title={`Bu pencerede ${what} span'i ölçülmedi.`}>—</span>
+          title={tf('deps.p95None', lang, { what })}>—</span>
       </td>
     );
   }
   return (
     <td className="num"
-      title={`${what} span süresi, p95`}>
+      title={tf('deps.p95Tip', lang, { what })}>
       {v.toFixed(1)}ms
     </td>
   );
@@ -938,14 +939,13 @@ function KindP95Cell({ v, what }: { v?: number; what: string }) {
 function P99DeltaCell({ cur, prior, compare }: {
   cur: number; prior?: number; compare?: boolean;
 }) {
+  const lang = useLang();
   const d = msgP99Delta(cur, prior);
   if (d === null) {
     return (
       <td className="num">
         <span style={{ color: 'var(--text3)' }}
-          title={compare
-            ? 'Önceki pencerede bu destination yok — karşılaştırılacak taban değeri de yok.'
-            : 'Karşılaştırma kapalı. "Compare vs prior" ile önceki eşit pencereye göre kötüleşme gelir.'}>—</span>
+          title={t(compare ? 'deps.p99d.noPrior' : 'deps.p99d.off', lang)}>—</span>
       </td>
     );
   }
@@ -953,7 +953,7 @@ function P99DeltaCell({ cur, prior, compare }: {
   // v0.10.929 (K5) — iyileşme nötr --text2 (Sparkline emsali); kötüleşme renkli kalır.
   return (
     <td className={`num ${pct >= 20 ? 'cell-err' : pct >= 5 ? 'cell-warn' : 'cell-muted'}`}
-      title={`p99 ${cur.toFixed(1)}ms · önceki ${(prior ?? 0).toFixed(1)}ms`}>
+      title={tf('deps.p99d.tip', lang, { cur: cur.toFixed(1), prior: (prior ?? 0).toFixed(1) })}>
       {pct > 0 ? '+' : ''}{Math.abs(pct) < 10 ? pct.toFixed(1) : pct.toFixed(0)}%
     </td>
   );
@@ -1003,6 +1003,7 @@ function TrendCell({ trend, loading }: {
   trend: DBTrend | undefined;
   loading: boolean;
 }) {
+  const lang = useLang();
   if (!trend) {
     return (
       <span title={loading ? 'loading trend…' : 'no trend in this window'}
@@ -1039,9 +1040,7 @@ function TrendCell({ trend, loading }: {
   // curFromPartial: pencerede TEK bir tam kova bile yoktu (çok dar
   // aralık) — o zaman rozet dolmakta olandan okunuyor ve bunu ilan
   // ediyor. Yanlış bir sayıyı sessizce basmaktansa "henüz oturmadı".
-  const bucketNote = trend.curFromPartial
-    ? 'Bu pencerede kapanmış bir 5 dk kovası yok — değer HÂLÂ DOLAN kovadan, düşük görünür.'
-    : 'Son TAM 5 dk kovası (dolmakta olan kova bilerek atlanır: sayısı düşük gelir ve sahte bir düzelme gibi okunur).';
+  const bucketNote = t(trend.curFromPartial ? 'deps.bucket.partial' : 'deps.bucket.full', lang);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Sparkline
@@ -1050,7 +1049,7 @@ function TrendCell({ trend, loading }: {
         height={20}
         color={sparkColor}
         unit="/s"
-        title={`çağrı hızı · son tam kova ${trend.curRps.toFixed(1)}/s\n${bucketNote}`} />
+        title={tf('deps.spark', lang, { rps: trend.curRps.toFixed(1), note: bucketNote })} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span className={`badge b-${p99Tone}`} style={{ fontSize: 9 }}
           title={`p99 · ${bucketNote}`}>
@@ -1058,7 +1057,7 @@ function TrendCell({ trend, loading }: {
         </span>
         {trend.curErrorRate > 0 && (
           <span className={`badge b-${errTone}`} style={{ fontSize: 9 }}
-            title={`hata oranı · ${bucketNote}`}>
+            title={tf('deps.errRate', lang, { note: bucketNote })}>
             {trend.curErrorRate.toFixed(1)}%
           </span>
         )}
@@ -1074,14 +1073,15 @@ function TrendCell({ trend, loading }: {
 // Bağlantı satırın kendi tıkını tetiklemesin diye yayılımı keser — hücre de
 // keser, ama işaret kendi başına doğru davranmalı (testi hücresiz çizer).
 export function OpenProblemsMark({ row, href }: { row: DepRow; href?: string }) {
+  const lang = useLang();
   const open = row.openProblems ?? 0;
-  const text = `${open} problem`;
-  const tip = `Şu an açık ${open} problem (“problem değil” işaretliler hariç).`
-    + (href ? ' Tıklayınca veritabanı detayı açılır.' : '');
+  const text = tf('deps.prob.count', lang, { n: open });
+  const tip = tf('deps.prob.tip', lang, { n: open })
+    + (href ? t('deps.prob.click', lang) : '');
   const badge = <span className={dbSeverityBadgeClass(row.topSeverity)}>{text}</span>;
   return href
     ? <Link to={href} className="dep-prob-mark" title={tip}
-        aria-label={`${text} — şu an açık, “problem değil” işaretliler hariç; tıklayınca veritabanı detayı açılır`}
+        aria-label={tf('deps.prob.aria', lang, { text })}
         onClick={e => e.stopPropagation()}>{badge}</Link>
     : <span className="dep-prob-mark" title={tip}>{badge}</span>;
 }

@@ -15,6 +15,8 @@ import type { TimeRange } from '@/lib/types';
 import { DependenciesTable, OpenProblemsMark, type DepRow } from './DependenciesTable';
 
 // Trend sütunu ayrı bir uçtan gelir; bu test onu ölçmüyor.
+// v0.10.2311 — metinler arayüz dilinde; bu test bugünkü Türkçe metni pinler.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/queries/dependencies', () => ({
   useDepTrends: () => ({ isPending: false, data: [] }),
   useDepDetail: () => ({ isPending: false, data: null }),

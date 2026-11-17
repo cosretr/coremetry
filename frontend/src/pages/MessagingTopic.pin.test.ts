@@ -15,6 +15,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { t } from '@/lib/i18n';
 
 // Yorumları at: pinlenen metinlerin çoğu bu dosyaların KENDİ açıklama
 // cümlelerinde de geçiyor ("set=clients yalnız sekme seçilince…"), yorum
@@ -135,9 +136,11 @@ describe('çekmeceden sayfaya kapı', () => {
   it('"Detay sayfası →" bağlantısı queue dalında ve pencereyi taşıyor', () => {
     expect(drawer).toContain("import { messagingTopicHref } from '@/pages/messaging/topicHref';");
     expect(drawer).toContain('to={messagingTopicHref({ system, cluster, destination: name, range })}');
-    expect(drawer).toContain('Detay sayfası →');
+    // v0.10.2311 — metin katalogda (dd.detailPage; TR değeri aynı).
+    expect(drawer).toContain("{t('dd.detailPage', lang)}");
+    expect(t('dd.detailPage', 'tr')).toBe('Detay sayfası →');
     // Çekmecenin kendisi KALIYOR — link ikinci bir kapı, yerine geçen değil.
-    const link = drawer.indexOf('Detay sayfası →');
+    const link = drawer.indexOf("{t('dd.detailPage', lang)}");
     const kindQueue = drawer.indexOf("{kind === 'queue' && (");
     expect(kindQueue).toBeGreaterThan(-1);
     expect(link).toBeGreaterThan(kindQueue);
