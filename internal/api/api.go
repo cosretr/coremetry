@@ -6611,7 +6611,7 @@ func (s *Server) listExceptionGroups(w http.ResponseWriter, r *http.Request) {
 	// service/assignee/q/sort/dir/limit/offset/ownerTeam/sreTeam); TTL
 	// kardeş /api/problems ile aynı 5s, state/assign mutasyonları
 	// prefix'i anında düşürür — bayatlık operatörce görülmez.
-	key := "exc-groups:" + cacheRawQuery(r)
+	key := "exc-groups:v2:" + cacheRawQuery(r) // v0.10.2303 — satırda gerekçe anahtarı (gövde şekli)
 	s.serveCached(w, r, key, 5*time.Second, func(ctx context.Context) (any, error) {
 		// Ortam kısıtı ÖNCE çözülür ki takım süzgeciyle KESİŞEBİLSİN;
 		// ikisi birden seçiliyse cevap "bu takımın BU ortamdaki
@@ -6684,7 +6684,7 @@ func (s *Server) listExceptionGroups(w http.ResponseWriter, r *http.Request) {
 		// v0.10.364 — öncelik (P1/P2/P3) + gerekçe satır başına: Triage
 		// Inbox ile AYNI kural (exceptionPriorityAt), kural ekranda görünür.
 		for i := range items {
-			items[i].Priority, items[i].PriorityReason = exceptionPriority(items[i])
+			items[i].Priority, items[i].PriorityReason, items[i].PriorityReasonMsg = exceptionPriorityMsg(items[i])
 		}
 		items = pg.apply(items, total) // öncelik hesabından SONRA: sırala + dilimle (yalnız sort=priority)
 		return pg.body(items, total), nil

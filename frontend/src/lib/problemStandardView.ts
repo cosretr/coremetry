@@ -275,6 +275,15 @@ export function prioReasonView(reason: string | undefined | null, msg: StdMsg | 
   return stdMsgView(msg, reason ?? '', lang);
 }
 
+/**
+ * v0.10.2303 — öncelik rozeti ipucu (düz metin, title): prioReasonView; çizilemeyen
+ * sunucu metninin sonuna " (TR)" (OrigLang'in ipucu karşılığı). TR'de metin aynen.
+ */
+export function prioReasonTitle(reason: string | undefined | null, msg: StdMsg | undefined | null, lang: Lang = 'tr'): string {
+  const v = prioReasonView(reason, msg, lang);
+  return v.orig && v.text ? `${v.text} (${t('orig.tr', lang)})` : v.text;
+}
+
 /** Detay sayfası: başlık ucunun gerekçe anahtarı YALNIZ aynı gerekçe metnine aitse (satır ile başlık farklı anda okunmuş olabilir). */
 export function detailPrioReasonMsg(reason: string | undefined | null, std: ProblemStandard | null | undefined): StdMsg | undefined {
   return reason && std?.priorityReason === reason ? std.priorityReasonMsg : undefined;

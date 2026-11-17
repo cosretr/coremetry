@@ -58,7 +58,12 @@ type ExceptionGroup struct {
 	// Boş = hesaplanmadı (tekil GET, eski istemci).
 	Priority       string `json:"priority,omitempty"`
 	PriorityReason string `json:"priorityReason,omitempty"`
-	AISummary      string `json:"aiSummary,omitempty"`
+	// PriorityReasonMsg — v0.10.2303 (sunucu metinleri, S3'ün devamı):
+	// PriorityReason'ın metin anahtarı. JSON'a ÇIKMAZ: grup deploy raporuna,
+	// tekil GET'e ve araç / istem yollarına BÜTÜN serileşiyor, onların baytı
+	// değişmesin. Ekrana yalnız liste ucu taşır (api exceptionListRow).
+	PriorityReasonMsg *StdMsg `json:"-"`
+	AISummary         string  `json:"aiSummary,omitempty"`
 	// AISummaryAt (v0.9.530) — özetin ÜRETİLDİĞİ an, unix-ns.
 	// problems.AISummaryAt'in ikizi. Özet tek yazımlıktır ama grubun
 	// gövdesi (mesaj, occurrences) altından değişmeye devam eder; yaş

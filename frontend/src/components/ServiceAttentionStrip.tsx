@@ -26,6 +26,8 @@ import { verdictIndex, filterByVerdictView } from '@/lib/problemVerdict';
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import { useIncidentsEnabled } from '@/components/AuthProvider'; // v0.10.1827
 import type { InboxItem, Problem } from '@/lib/types';
+import { useLang } from '@/lib/i18n';
+import { prioReasonTitle } from '@/lib/problemStandardView'; // v0.10.2303 — öncelik ipucu EN anahtardan
 
 const KIND_LABEL: Record<InboxItem['kind'], string> = {
   problem: 'Kural',
@@ -75,13 +77,15 @@ function RowMeta({ it }: { it: InboxItem }) {
 }
 
 function Row({ it }: { it: InboxItem }) {
+  const lang = useLang();
   const href = inboxItemHref(it);
   if (!href) return null;
   const name = it.exception ? it.exception.type : it.title;
   const sub = it.exception ? it.exception.message : it.displayId;
+  const reason = prioReasonTitle(it.priorityReason, it.priorityReasonMsg, lang);
   return (
-    <Link to={href} className="svc-att-row" title={it.priorityReason || it.description || undefined}>
-      <PriorityBadge p={it.priority} reason={it.priorityReason} />
+    <Link to={href} className="svc-att-row" title={reason || it.description || undefined}>
+      <PriorityBadge p={it.priority} reason={reason} />
       <span className="svc-att-kind">{KIND_LABEL[it.kind]}</span>
       <span className="svc-att-name">
         {name}

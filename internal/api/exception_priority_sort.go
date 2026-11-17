@@ -190,7 +190,7 @@ func floorHidden(noFloor, total int64) int64 {
 // okur). apply'dan SONRA çağrılır (Capped orada belirlenir).
 func (pg *exceptionPage) body(items []chstore.ExceptionGroup, total int64) map[string]any {
 	return map[string]any{
-		"items":           items,
+		"items":           exceptionListRows(items),
 		"total":           total,
 		"limit":           pg.Limit,
 		"offset":          pg.Offset,
@@ -212,4 +212,22 @@ func (pg *exceptionPage) apply(items []chstore.ExceptionGroup, total int64) []ch
 	pg.Capped = total > exceptionPrioritySortCap
 	sortExceptionGroupsByPriority(items, pg.dir)
 	return pageExceptionGroups(items, pg.Offset, pg.Limit)
+}
+
+// exceptionListRow — v0.10.2303: /api/exception-groups satırı = grup +
+// gerekçenin metin anahtarı. ExceptionGroup.PriorityReasonMsg `json:"-"`
+// (grup başka yollarda BÜTÜN serileşir); anahtar yalnız bu uçta, gömülü
+// grubun alanları aynı adlarla. EN arayüz prioReasonView ile çizer.
+type exceptionListRow struct {
+	chstore.ExceptionGroup
+	PriorityReasonMsg *chstore.StdMsg `json:"priorityReasonMsg,omitempty"`
+}
+
+// exceptionListRows — SAF: sıra ve uzunluk aynı; nil girdi boş dizi ([]).
+func exceptionListRows(items []chstore.ExceptionGroup) []exceptionListRow {
+	out := make([]exceptionListRow, len(items))
+	for i, g := range items {
+		out[i] = exceptionListRow{ExceptionGroup: g, PriorityReasonMsg: g.PriorityReasonMsg}
+	}
+	return out
 }

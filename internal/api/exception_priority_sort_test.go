@@ -80,7 +80,7 @@ func TestListExceptionGroupsPrioritySortWiring(t *testing.T) {
 			t.Errorf("listExceptionGroups %q içermeli", want)
 		}
 	}
-	prio := strings.Index(body, "exceptionPriority(items[i])")
+	prio := strings.Index(body, "exceptionPriorityMsg(items[i])") // v0.10.2303 — gerekçe + anahtar
 	sortAt := strings.Index(body, "pg.apply(items, total)")
 	if prio < 0 || sortAt < 0 || prio > sortAt {
 		t.Error("öncelik satır başına hesaplandıktan SONRA sıralanmalı")

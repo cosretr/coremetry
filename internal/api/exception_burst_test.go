@@ -447,7 +447,8 @@ func TestListExceptionGroupsAttachesPriority(t *testing.T) {
 	if j := strings.Index(body, "\nfunc "); j > 0 {
 		body = body[:j]
 	}
-	if !strings.Contains(body, "exceptionPriority(items[i])") {
-		t.Fatal("listExceptionGroups satır başına exceptionPriority(items[i]) çağırmalı (v0.10.364)")
+	// v0.10.2303 — aynı merdiven, gerekçe anahtarıyla (exceptionPriorityMsg).
+	if !strings.Contains(body, "items[i].Priority, items[i].PriorityReason, items[i].PriorityReasonMsg = exceptionPriorityMsg(items[i])") {
+		t.Fatal("listExceptionGroups satır başına exceptionPriorityMsg(items[i]) çağırmalı (v0.10.364, v0.10.2303)")
 	}
 }

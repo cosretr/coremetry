@@ -17,6 +17,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
+import { prioReasonTitle } from '@/lib/problemStandardView'; // v0.10.2303 — öncelik ipucu EN anahtardan
 import { Pager } from '@/components/Pager';
 import { useServicesMetadata, keys } from '@/lib/queries';
 import { useQueryClient } from '@tanstack/react-query';
@@ -759,7 +760,7 @@ export default function ProblemsPage() {
                 // v0.10.2023 — hücreler kullanıcı kolon sırasıyla (dt.visibleColumns,
                 // başlıkla aynı liste; hideCss konumu da buna dayanır).
                 const cells: Record<string, ReactNode> = {
-                  priority: <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{g.priority ? <PriorityBadge p={g.priority} reason={g.priorityReason} /> : <span style={{ color: 'var(--text3)' }}>—</span>}</Link></td>,
+                  priority: <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}>{g.priority ? <PriorityBadge p={g.priority} reason={prioReasonTitle(g.priorityReason, g.priorityReasonMsg, lang)} /> : <span style={{ color: 'var(--text3)' }}>—</span>}</Link></td>,
                   state: <td className="row-cell"><Link to={excHref} replace className="row-link" onClick={e => e.stopPropagation()}><StateBadge s={g.state} /></Link></td>,
                   service: <td>
                     {/* v0.9.966 — grubun KENDİ ömrü (firstSeen→

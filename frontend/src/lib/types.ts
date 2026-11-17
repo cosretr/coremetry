@@ -5839,6 +5839,8 @@ export interface ExceptionGroup {
   /** v0.10.364 — liste ucu doldurur (Triage Inbox kuralı); tekil GET'te yok. */
   priority?: 'P1' | 'P2' | 'P3';
   priorityReason?: string;
+  /** v0.10.2303 — gerekçenin metin anahtarı (yalnız liste ucu); TR arayüz metni aynen çizer. */
+  priorityReasonMsg?: StdMsg;
   state: ExceptionGroupState;
   assignee: string;       // user id; '' = unassigned
   firstSeen: number;      // unix ns
