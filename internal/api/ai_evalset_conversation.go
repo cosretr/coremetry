@@ -193,6 +193,12 @@ type evalConvTurnResult struct {
 	StateToMs int64 `json:"stateToMs,omitempty"`
 	// Verify — v0.10.2328 (E1): gölge doğrulayıcının sayaçları; nil = koşmadı.
 	Verify *evalConvVerify `json:"verify,omitempty"`
+	// v0.10.2331 (B) — turun cevap sınıfı (sunucunun saf eşlemesi; "" =
+	// anlatımsız kademe) ve turun koştuğu üslup anahtarı (on | off; forced =
+	// koşu isteği zorladı).
+	AnswerClass string `json:"answerClass,omitempty"`
+	Style       string `json:"style,omitempty"`
+	StyleForced bool   `json:"styleForced,omitempty"`
 }
 
 // evalConvCase — SAF: vaka konuşma kipinde mi.
@@ -392,7 +398,9 @@ func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, 
 		State:   &chatContextState{ctx: *state},
 		Stubs:   evalMergeStubs(c.Stubs, ft.Stubs),
 		Catalog: catalog,
+		Style:   job.styleOverride, // v0.10.2331 — yalnız bu koşu (nil = canlı ayar)
 	}
+	tr.Style, tr.StyleForced = evalStyleLabel(job.styleOverride)
 	col := &evalAgentCollector{parts: newEvalPartSink()}
 	em := &chatEvalMode{
 		Surface: evalsetSurfacePrefix + c.Surface, ExchangeID: fmt.Sprintf("%s/%s/t%d", job.row.ID, c.ID, i+1),
@@ -434,6 +442,7 @@ func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, 
 	tr.InputTokens, tr.OutputTokens = o.InputTokens, o.OutputTokens
 	tr.LoopRounds, tr.LoopToolCalls = int(o.Loop.Rounds), int(o.Loop.ToolCalls) // v0.10.2323
 	tr.LoopModelMs, tr.LoopToolMs, tr.TTFTMs = o.Loop.ModelMs, o.Loop.ToolMs, o.TTFTMs
+	tr.AnswerClass = ct.answerClass() // v0.10.2331
 	if !ok {
 		err = fmt.Errorf("sohbet handler'ı sonuç bildirmedi (HTTP %d)", w.status())
 		tr.Error = err.Error()

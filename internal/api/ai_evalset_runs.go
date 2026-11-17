@@ -127,6 +127,8 @@ type evalJob struct {
 	// toolset = koşu düzeyi çözüm (evalRunToolset; döngü yüzeyi yoksa "").
 	toolsetOverride string
 	toolset         string
+	// styleOverride — v0.10.2331 (B): koşunun üslup zorlaması (nil = canlı ayar).
+	styleOverride *bool
 }
 
 type evalJobBook struct {
@@ -321,6 +323,10 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 		// profil başına bir kez, profiller SIRAYLA koşar ("" liste = üretimin
 		// yüzey eşlemesi, eski davranış). Rol koşuyu başlatanın rolüdür.
 		Profiles []string `json:"profiles"`
+		// Style — v0.10.2331 (B): konuşma kipi turlarında üslup anahtarını
+		// YALNIZ bu koşu için zorlar (true açık, false kapalı; yok = canlı
+		// ayar). Canlı ayara ve kullanıcılara dokunmaz; tek turlu vakalar okumaz.
+		Style *bool `json:"style"`
 	}
 	// Boş gövde = tümü (FE düğmesi seçim yokken gövdesiz gönderebilir).
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
@@ -419,6 +425,7 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 	runCtx, release := context.WithTimeout(runCtx, deadline)
 	job := &evalJob{row: row, plan: cases, cancel: cancel, deadline: deadline, userID: uid, userEmail: email, userRole: role,
 		toolsetOverride: in.Toolset, toolset: s.evalRunToolset(cases, in.Toolset)} // v0.10.1311
+	job.styleOverride = in.Style // v0.10.2331
 	evalJobs.running = job
 	sum := job.summaryLocked()
 	first := job.rowLocked(false)
@@ -438,6 +445,9 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(profiles) > 0 {
 		details += " profiles=" + strings.Join(profiles, ",")
+	}
+	if in.Style != nil { // v0.10.2331 — koşuya özel üslup zorlaması
+		details += fmt.Sprintf(" style=%v", *in.Style)
 	}
 	if job.toolset != "" { // v0.10.1311 — araç setinin uygulandığı koşu
 		mode := "auto"

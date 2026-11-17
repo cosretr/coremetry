@@ -65,6 +65,7 @@ func (s *Service) callSnapshot(ctx context.Context) (cfg provider.Config, req pr
 	// v0.10.1699 — WithMaxTokensCap Explain yolunda da tavan (briefing başlığı
 	// ~300 tok). Tavan yoksa aynen; sohbet yolu ayrıca uygular (min, idempotent).
 	maxTok = cappedMaxTokens(ctx, maxTok)
+	maxTok = answerCappedMaxTokens(ctx, maxTok, model, p.Thinking) // v0.10.2331 — cevap sınıfı tavanı (answer_cap.go)
 	req = provider.Request{
 		Model:     model,
 		MaxTokens: maxTok,

@@ -429,7 +429,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		emit = stt.wrapEmit(emit)
 		ctx = withChatStateTurn(ctx, stt) // v0.10.2327 — guided olguları deftere
 	}
-	xch.verify.noteState(cst) // v0.10.2327 — durum adları + önceki defter (istemci yankısı hariç)
+	ctx = withAnswerStyle(ctx)                      // v0.10.2331 — B: cevap sınıfı (chat_answer_class.go); v1'de ctx aynen
+	emit = answerStyleFrom(ctx).wrapEmit(ctx, emit) // v0.10.2331 — üslup kapalıyken emit aynen
+	xch.verify.noteState(cst)                       // v0.10.2327 — durum adları + önceki defter (istemci yankısı hariç)
 	// v0.10.1465 — yapışkan kod konuşması (chat_code_sticky.go): kod okunmuş
 	// konuşmanın HER turu her kademeden önce yerel profile sabitlenir; yerel
 	// profil yoksa dürüst kapalı cevap, sağlayıcı çağrısı yok.
@@ -1176,6 +1178,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		ctx = withV2LoopPlan(ctx, v2p)
 		xch.verify.addText(v2p.Addendum) // v0.10.2327 — kapsam eki (takım servisleri) kanıta
 	}
+	// v0.10.2331 — B: döngü sınıfı (rapor türleri ölçüsüz; chat_answer_class.go).
+	answerStyleLoop(ctx, lastUserText(req.Messages), cst.ctx, rtPlan != nil || isTraceFollowUp || req.Context.Explain != "" || dm.On)
 	if line := stt.promptLine(); line != "" { // v0.10.2324 — durum bloğunun yankısı da süzülür
 		echoPhrases = append(echoPhrases, chatEchoPhrases(line)...)
 	}
@@ -1401,6 +1405,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// v0.10.1297 — model metnindeki uydurma host / araç yankısı süzgeci (chat_answer_links.go).
 			// v0.10.1324 — yineleme/yankı süzgeci + düşüş, sanitizeAnswerLinks'ten ÖNCE.
 			answerText := finalAnswerText(turn, loopPrompt, round)
+			// v0.10.2331 — B: sınıf tavanı dolduysa son tam cümlede biter (üslup kapalıyken aynen).
+			answerText = answerEndClean(ctx, answerText)
 			xch.verify.noteLoopAnswer(answerText, conv)                                                                                                     // v0.10.2327 — gölge: yalnız kayıt
 			srcNote, srcStep := splitSourceNoteV2(loopSourceNoteTR(fuHadExplain, opPre.seededTools(), calledTools, executedN+skippedN), cosreV2Marked(ctx)) // v0.10.2213
 			if srcStep != "" {
@@ -1791,6 +1797,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				// v0.10.948 — iki çıkış tek sözleşme: sayı denetimi ve takip künyesi burada da.
 				// v0.10.1324 — iki çıkış tek sözleşme: süzgeç + düşüş burada da (tavan prompt'uyla).
 				answerText := finalAnswerText(turn2, capPrompt, round)
+				// v0.10.2331 — B: sınıf tavanı (üslup kapalıyken aynen).
+				answerText = answerEndClean(ctx, answerText)
 				xch.verify.noteLoopAnswer(answerText, conv)                                                                                                     // v0.10.2327
 				srcNote, srcStep := splitSourceNoteV2(loopSourceNoteTR(fuHadExplain, opPre.seededTools(), calledTools, executedN+skippedN), cosreV2Marked(ctx)) // v0.10.2213
 				if srcStep != "" {

@@ -10,7 +10,8 @@ package chstore
 //     bağlam, data-state). Varsayılan AÇIK (operatör davranışı istedi; anahtar
 //     geri alma anahtarıdır). Blob yok ya da alan yok = açık; yalnız açık false
 //     kapatır.
-//   - style — B/C/D/F1 için AYRILMIŞ, kapalı; bu sürümde hiçbir yol okumaz.
+//   - style — B/C/D/F1 üslup anahtarı, varsayılan KAPALI; v0.10.2331'den beri
+//     B (cevap sınıfı ölçüsü) okur (api/chat_answer_class.go). Tek aç/kapa.
 //   - verification — E dilimi: off | shadow | enforce. v0.10.2327 (E1) gölge
 //     kipi bağlı ve VARSAYILAN shadow: cevap doğrulayıcısı yalnız sayar,
 //     kullanıcıya görünen hiçbir şey değişmez; off kill switch'tir. enforce

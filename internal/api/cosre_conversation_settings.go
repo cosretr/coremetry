@@ -4,14 +4,16 @@ package api
 // CoSRE konuşma kalitesi blobunun operatör yüzeyi.
 //
 //   GET /api/ai/cosre-conversation → {state, style, verification, updatedBy, updatedAt}  her rol (viewer GÖRÜR)
-//   PUT /api/ai/cosre-conversation {state?, verification?}                                admin · audit settings.cosre_conversation.update
+//   PUT /api/ai/cosre-conversation {state?, style?, verification?}                        admin · audit settings.cosre_conversation.update
 //
 // Depo system_settings `cosre_conversation` (chstore/cosre_conversation_settings.go;
 // boot + 30 s cfgRefresh). Bağlı olanlar: `state` (A dilimi, chat_state.go) ve
 // v0.10.2327'den beri `verification` off | shadow (E1, answer_verify_turn.go);
-// `style` ayrılmış ve `enforce` E2'ye kadar reddedilir: PUT onları açmaya
-// çalışırsa 400 — bağlı olmayan bir anahtarı "açtım" yanılsaması olmasın. ai_general_questions.go ile aynı duruş:
+// `enforce` E2'ye kadar reddedilir: PUT onu açmaya çalışırsa 400 — bağlı
+// olmayan bir anahtarı "açtım" yanılsaması olmasın. ai_general_questions.go ile aynı duruş:
 // requireCopilot'suz kurulum ayarı, GET atomic okuma.
+//
+// v0.10.2331 — `style` artık bağlı (B dilimi, chat_answer_class.go; varsayılan kapalı).
 
 import (
 	"context"
@@ -67,10 +69,7 @@ func mergeCosreConversationPut(cur chstore.CosreConversation, in cosreConversati
 		out.State = *in.State
 	}
 	if in.Style != nil {
-		if *in.Style {
-			return cur, fmt.Errorf("style henüz bağlı değil (ayrılmış alan, kapalı kalır)")
-		}
-		out.Style = false
+		out.Style = *in.Style // v0.10.2331 — B dilimi bağlı (chat_answer_class.go); varsayılan kapalı
 	}
 	if in.Verification != nil {
 		if !chstore.ValidCosreVerification(*in.Verification) {

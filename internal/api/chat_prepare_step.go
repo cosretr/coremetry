@@ -161,6 +161,7 @@ func (s *Server) loopTurn(ctx context.Context, prompt string, in stepInput, emit
 		prep = v2Prepare // araç seti dilim 2 — v2 alt kümesi + kapsam eki
 	}
 	plan := prep(in)
+	plan = answerClassLoopPlan(ctx, plan) // v0.10.2331 — B: sınıf satırı EN SONA + tavan (üslup kapalıyken aynen)
 	sys := prompt + plan.SystemAddendum
 	turn, err := s.chatLoopTurn(plan.planCtx(ctx), sys, in.Conv, plan.planSpecs(in), emit)
 	return turn, sys, err

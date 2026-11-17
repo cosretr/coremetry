@@ -129,6 +129,14 @@ describe('AiEvalPanel', () => {
     act(() => { button(box, 'İki profille koş')!.click(); });
     await tick();
     expect(api.aiEvalsetStartRun).toHaveBeenCalledWith(['ChatConversation'], '', ['yerel', 'kucuk']);
+    // v0.10.2331 — üslup yalnız bu koşu için zorlanır (canlı ayar = gövdede yok).
+    act(() => {
+      selects[2].value = 'on';
+      selects[2].dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    act(() => { button(box, 'İki profille koş')!.click(); });
+    await tick();
+    expect(api.aiEvalsetStartRun).toHaveBeenLastCalledWith(['ChatConversation'], '', ['yerel', 'kucuk'], true);
     const dl = button(el, 'Akıcılık raporunu indir (.md)')!;
     act(() => { dl.click(); });
     expect(api.aiEvalsetFluencyReport).toHaveBeenCalledWith(IDLE_RUNS[0].id);

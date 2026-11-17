@@ -50,6 +50,13 @@ GET  /api/ai/evalset/runs/<koşu-id>/fluency-report      → text/markdown
 Tek profil de verilebilir (`"profiles":["<profil>"]`); profil verilmezse
 üretimin sohbet profili kullanılır. En çok iki profil kabul edilir.
 
+Üslup karşılaştırması (v0.10.2331): `"style":true` ya da `"style":false`
+konuşma turlarında `cosre_conversation.style` anahtarını YALNIZ o koşu için
+zorlar (panelde "Üslup (yalnız bu koşu)"); alan yoksa canlı ayar geçerlidir.
+Canlı kullanıcılar etkilenmez. Raporun künyesi hangisinin kullanıldığını yazar;
+"durum turları ort. cümle" ölçütü sunucunun cevap sınıfını kullanır. Önce/sonra
+için aynı profil(ler)le iki koşu (kapalı, açık) yapıp iki raporu yan yana koy.
+
 ## Beklenen model yükü
 
 - Profil başına 49 sohbet turu, iki profilde yaklaşık 100 tur. Her tur gerçek

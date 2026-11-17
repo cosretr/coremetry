@@ -22,6 +22,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/ai/evalrubric"
 	"github.com/cilcenk/coremetry/internal/auth"
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 func (s *Server) registerAIEvalsetFluencyRoutes(mux *http.ServeMux) {
@@ -98,7 +99,7 @@ func (a *evalFluencyAgg) add(t evalConvTurnResult) {
 	}
 	a.Sentences += f.Sentences
 	a.Chars += f.Chars
-	if t.Class == "status" {
+	if evalTurnClass(t) == "status" { // v0.10.2331 — sunucunun cevap sınıfı (yoksa fikstür sınıfı)
 		a.StatusTurns++
 		a.StatusSentences += f.Sentences
 	}
@@ -253,6 +254,7 @@ func evalFluencyReport(run evalRunSummary, cases []evalCaseResult) string {
 	for i, p := range profiles {
 		fmt.Fprintf(&b, "- Profil %c: %s\n", 'A'+rune(i), head(p))
 	}
+	b.WriteString(evalFluencyStyleLine(cases)) // v0.10.2331
 	b.WriteString("- Küme: `internal/copilot/evalset/conversation/fluency.json`; veri sahte, model çağrıları gerçek. Puanlama operatörün; aşağıdaki ölçütler otomatik sayımdır.\n\n")
 
 	// Vakalar: taban kimliğe göre, kümedeki sıra (ilk görülme).
@@ -421,4 +423,59 @@ func (s *Server) getAIEvalsetFluencyReport(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="fluency-%s.md"`, date))
 	_, _ = w.Write([]byte(evalFluencyReport(run, cases)))
+}
+
+// evalTurnClass — SAF (v0.10.2331): turun sınıfı — sunucunun cevap sınıfı
+// (chat_answer_class.go) varsa o, yoksa fikstürün sınıfı (eski koşu).
+func evalTurnClass(t evalConvTurnResult) string {
+	if t.AnswerClass != "" {
+		return t.AnswerClass
+	}
+	return t.Class
+}
+
+// evalStyleLabel — SAF (v0.10.2331): koşu zorlaması → (on|off, forced). nil
+// = canlı ayar (koşu anındaki değer).
+func evalStyleLabel(override *bool) (string, bool) {
+	on, forced := chstore.CurrentCosreConversation().Style, false
+	if override != nil {
+		on, forced = *override, true
+	}
+	if on {
+		return "on", forced
+	}
+	return "off", forced
+}
+
+// evalFluencyStyleLine — SAF (v0.10.2331): künyenin üslup satırı; turların
+// kaydından (eski koşu: alan yok → satır "bilinmiyor").
+func evalFluencyStyleLine(cases []evalCaseResult) string {
+	seen := map[string]bool{}
+	var vals []string
+	for _, c := range cases {
+		if c.Mode != evalModeConversation {
+			continue
+		}
+		for _, t := range c.Turns {
+			v := "bilinmiyor (bu sürümden eski koşu)"
+			switch {
+			case t.Style == "on" && t.StyleForced:
+				v = "AÇIK (bu koşu için zorlandı)"
+			case t.Style == "off" && t.StyleForced:
+				v = "KAPALI (bu koşu için zorlandı)"
+			case t.Style == "on":
+				v = "açık (canlı ayar)"
+			case t.Style == "off":
+				v = "kapalı (canlı ayar)"
+			}
+			if !seen[v] {
+				seen[v] = true
+				vals = append(vals, v)
+			}
+		}
+	}
+	if len(vals) == 0 {
+		return ""
+	}
+	return "- Üslup anahtarı (`cosre_conversation.style`): " + strings.Join(vals, ", ") + "\n"
 }

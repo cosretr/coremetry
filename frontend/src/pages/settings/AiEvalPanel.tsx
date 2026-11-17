@@ -346,9 +346,9 @@ export function AiEvalPanel() {
         {catalog?.conversation && (
           <FluencyRunControls conv={catalog.conversation} defaultProfile={catalog.defaultProfileId}
             disabledReason={!catalog.ready || active ? blockReason : ''} pending={startM.isPending}
-            onStart={profiles => {
+            onStart={(profiles, style) => {
               setFlash(null);
-              startM.mutate({ surfaces: [catalog.conversation?.surface ?? 'ChatConversation'], toolset, profiles }, {
+              startM.mutate({ surfaces: [catalog.conversation?.surface ?? 'ChatConversation'], toolset, profiles, style }, {
                 onSuccess: () => setParams({ run: null, case: null, cmp: null }),
                 onError: e => setFlash({ kind: 'err', text: humanize(e) }),
               });
@@ -472,11 +472,12 @@ export function AiEvalPanel() {
  *  Aynı profil iki kez seçilemez; ikinci boş bırakılırsa tek profil koşar. */
 function FluencyRunControls({ conv, defaultProfile, disabledReason, pending, onStart }: {
   conv: EvalsetConversation; defaultProfile: string; disabledReason: string; pending: boolean;
-  onStart: (profiles: string[]) => void;
+  onStart: (profiles: string[], style?: boolean) => void;
 }) {
   const profiles = conv.profiles ?? [];
   const [a, setA] = useState(defaultProfile);
   const [b, setB] = useState('');
+  const [style, setStyle] = useState<'' | 'on' | 'off'>(''); // v0.10.2331 — yalnız bu koşu; canlı kullanıcılara dokunmaz
   const picked = [a, b].filter((p, i, all) => p !== '' && all.indexOf(p) === i);
   const label = (p: { id: string; label: string; model: string }) => `${p.label || p.id}${p.model ? ` · ${p.model}` : ''}`;
   const reason = disabledReason || (picked.length === 0 ? 'En az bir profil seç.' : '');
@@ -500,7 +501,14 @@ function FluencyRunControls({ conv, defaultProfile, disabledReason, pending, onS
             {profiles.filter(p => p.id !== a).map(p => <option key={p.id} value={p.id}>{label(p)}</option>)}
           </SelectField>
         </div>
-        <Button variant="outline" disabled={!!reason} loading={pending} onClick={() => onStart(picked)}>
+        <div className="min-w-[180px]">
+          <SelectField label="Üslup (yalnız bu koşu)" value={style} onChange={e => setStyle(e.target.value as '' | 'on' | 'off')}>
+            <option value="">Canlı ayar</option>
+            <option value="on">Açık</option>
+            <option value="off">Kapalı</option>
+          </SelectField>
+        </div>
+        <Button variant="outline" disabled={!!reason} loading={pending} onClick={() => onStart(picked, style === '' ? undefined : style === 'on')}>
           {picked.length > 1 ? 'İki profille koş' : 'Tek profille koş'}
         </Button>
       </div>

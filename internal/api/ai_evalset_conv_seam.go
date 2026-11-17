@@ -59,9 +59,30 @@ type evalConvTurn struct {
 	Stubs map[string]json.RawMessage
 	// Catalog — guided router'ın servis kataloğu (nötr adlar).
 	Catalog []string
+	// Style — v0.10.2331 (B): koşunun üslup anahtarı zorlaması (nil = canlı
+	// ayar). Yalnız bu konuşma kipi turunda okunur (answerStyleOn).
+	Style *bool
 
 	mu    sync.Mutex
 	calls []evalConvCall
+	class string // v0.10.2331 — turun cevap sınıfı (answerStyleTurn.note)
+}
+
+// noteAnswerClass — v0.10.2331: turun cevap sınıfı (son kademe kazanır). nil-güvenli.
+func (t *evalConvTurn) noteAnswerClass(c string) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.class = c
+	t.mu.Unlock()
+}
+
+// answerClass — v0.10.2331: turun cevap sınıfı.
+func (t *evalConvTurn) answerClass() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.class
 }
 
 // evalConvCall — turda sahteden karşılanan bir veri okuması (puanlama:

@@ -485,8 +485,11 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 		gi := emitStepChipOrigin(emit, gtool, intentStepArgs(q), "intent")
 		gt0 := time.Now()
 		emit("delta", map[string]string{"text": intentGeneralNoteTR + "\n\n"})
-		graw, gerr := s.copilotStreamSurface(ctx, "chat-general", copilot.SystemPromptGeneralChat(), q,
+		var classLine string
+		ctx, classLine = answerStyleNarration(ctx, answerClassGeneral(q)) // v0.10.2331 — B; üslup kapalıyken ctx aynen, satır ""
+		graw, gerr := s.copilotStreamSurface(ctx, "chat-general", copilot.SystemPromptGeneralChat()+classLine, q,
 			func(d string) { emit("delta", map[string]string{"text": d}) })
+		graw = answerEndClean(ctx, graw)
 		text, general := intentGeneralAnswer(graw)
 		// Akış ORTASINDA kopan çağrı (yerel model, kesik stream) metni TAŞIR
 		// (stream.go: "mid-stream hatası token sayılarını taşır"); operatörün

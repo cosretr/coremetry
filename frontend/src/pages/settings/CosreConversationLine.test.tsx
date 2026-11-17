@@ -12,12 +12,14 @@ const m = vi.hoisted(() => ({
   get: (() => Promise.resolve({ state: true, style: false, verification: 'shadow' })) as () => Promise<unknown>,
   put: vi.fn((state: boolean) => Promise.resolve({ state, style: false, verification: 'shadow' })),
   putVerify: vi.fn((verification: string) => Promise.resolve({ state: true, style: false, verification })),
+  putStyle: vi.fn((style: boolean) => Promise.resolve({ state: true, style, verification: 'shadow' })),
 }));
 vi.mock('@/lib/api', () => ({
   api: {
     cosreConversationSettings: () => m.get(),
     putCosreConversationState: (s: boolean) => m.put(s),
     putCosreConversationVerification: (v: string) => m.putVerify(v),
+    putCosreConversationStyle: (s: boolean) => m.putStyle(s),
   },
 }));
 vi.mock('@/components/AuthProvider', () => ({ useAuthRole: () => m.role }));
@@ -32,7 +34,7 @@ let host: HTMLDivElement | null = null;
 let root: Root | null = null;
 afterEach(() => {
   act(() => root?.unmount()); host?.remove(); host = null; root = null;
-  m.put.mockClear(); m.putVerify.mockClear(); m.role = 'admin';
+  m.put.mockClear(); m.putVerify.mockClear(); m.putStyle.mockClear(); m.role = 'admin';
   m.get = () => Promise.resolve({ state: true, style: false, verification: 'shadow' });
 });
 const tick = () => act(async () => { await new Promise(r => setTimeout(r, 0)); });
@@ -75,11 +77,23 @@ describe('CosreConversationLine', () => {
     await tick();
     expect(m.putVerify).toHaveBeenCalledWith('shadow');
   });
+  it('üslup (v0.10.2331): varsayılan kapalı; tık style:true yazar', async () => {
+    const el = await render();
+    const boxes = el.querySelectorAll<HTMLButtonElement>('[role="checkbox"]');
+    expect(el.textContent).toContain('Üslup');
+    expect(boxes[2]?.getAttribute('aria-checked')).toBe('false');
+    await act(async () => { boxes[2]!.click(); });
+    await tick();
+    expect(m.putStyle).toHaveBeenCalledWith(true);
+    expect(m.put).not.toHaveBeenCalled();
+    expect(m.putVerify).not.toHaveBeenCalled();
+  });
   it('viewer salt okunur', async () => {
     m.role = 'viewer';
     const el = await render();
     expect(box(el)?.disabled).toBe(true);
     expect(verifyBox(el)?.disabled).toBe(true);
+    expect(el.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')[2]?.disabled).toBe(true);
     expect(el.textContent).toContain('Yalnız admin');
   });
   it('okuma hatası boş değil', async () => {

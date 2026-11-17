@@ -1355,10 +1355,11 @@ export const api = {
   // v0.10.1311 — toolset '' = otomatik (üretim profilinin araç seti) |
   // simple | full (açık seçim; yalnız serbest döngü yüzeylerine uygulanır).
   // v0.10.2323 — profiles: en çok iki profil, sırayla (akıcılık koşusu); boş = gövdeye girmez.
-  aiEvalsetStartRun: (surfaces: string[], toolset: import('./types').AIToolset = '', profiles: string[] = []) =>
+  // v0.10.2331 — style: konuşma turlarında üslup anahtarını yalnız bu koşu için zorlar (undefined = canlı ayar).
+  aiEvalsetStartRun: (surfaces: string[], toolset: import('./types').AIToolset = '', profiles: string[] = [], style?: boolean) =>
     request<{ run: import('./types').EvalRunSummary }>(`/api/ai/evalset/runs`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(profiles.length ? { surfaces, toolset, profiles } : { surfaces, toolset }), timeoutMs: 30_000,
+      body: JSON.stringify({ surfaces, toolset, ...(profiles.length ? { profiles } : {}), ...(style === undefined ? {} : { style }) }), timeoutMs: 30_000,
     }),
   // v0.10.2323 — konuşma koşusunun yan yana Markdown raporu (ek dosya).
   aiEvalsetFluencyReport: (id: string) =>
@@ -1403,8 +1404,8 @@ export const api = {
     get<import('./types').CosreBriefingResponse>(`/api/cosre/v2/briefing?env=${encodeURIComponent(env)}`, signal),
   refreshCosreBriefing: (env: string) =>
     request<import('./types').CosreBriefingResponse>(`/api/cosre/v2/briefing/refresh?env=${encodeURIComponent(env)}`, { method: 'POST', timeoutMs: 65_000 }),
-  // v0.10.2324 — CoSRE konuşma kalitesi blobu (GET her rol; PUT admin + audit). `state` ve
-  // v0.10.2327'den beri `verification` (off | shadow) bağlı.
+  // v0.10.2324 — CoSRE konuşma kalitesi blobu (GET her rol; PUT admin + audit). `state`,
+  // v0.10.2327'den beri `verification` (off | shadow) ve v0.10.2331'den beri `style` bağlı.
   cosreConversationSettings: () => get<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`),
   putCosreConversationState: (state: boolean) =>
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
@@ -1413,6 +1414,11 @@ export const api = {
   putCosreConversationVerification: (verification: 'off' | 'shadow') =>
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ verification }),
+    }),
+  // v0.10.2331 — üslup anahtarı (B: cevap sınıfı ölçüsü; varsayılan kapalı).
+  putCosreConversationStyle: (style: boolean) =>
+    request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style }),
     }),
   cosreBriefingSettings: () => get<import('./types').CosreBriefingSettings>(`/api/ai/briefing`),
   putCosreBriefingSettings: (body: import('./types').CosreBriefingSettings) =>

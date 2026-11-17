@@ -233,7 +233,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if w := rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"state":false}`, auth.RoleEditor, ""); w.Code != http.StatusForbidden {
 		t.Fatalf("editor PUT %d", w.Code)
 	}
-	for _, bad := range []string{`{}`, `{"style":true}`, `{"verification":"enforce"}`, `{"verification":"x"}`, `{bozuk`} {
+	for _, bad := range []string{`{}`, `{"verification":"enforce"}`, `{"verification":"x"}`, `{bozuk`} {
 		if w := rulesDo(mux, "PUT", "/api/ai/cosre-conversation", bad, auth.RoleAdmin, ""); w.Code != http.StatusBadRequest {
 			t.Fatalf("%s → %d", bad, w.Code)
 		}
@@ -256,6 +256,14 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 		t.Fatalf("verification off PUT %d: %s", w.Code, w.Body)
 	}
 	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":false,"verification":"off"}`) {
+		t.Fatalf("audit = %+v", a)
+	}
+	// v0.10.2331 — style bağlı (B): aç/kapa kabul; state ve verification korunur.
+	w = rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"style":true}`, auth.RoleAdmin, "")
+	if cur := chstore.CurrentCosreConversation(); w.Code != http.StatusOK || !cur.Style || cur.State || cur.Verification != chstore.CosreVerifyOff {
+		t.Fatalf("style on PUT %d: %s", w.Code, w.Body)
+	}
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"off"}`) {
 		t.Fatalf("audit = %+v", a)
 	}
 }

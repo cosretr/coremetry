@@ -537,11 +537,12 @@ func evalAgentToolCallsValid(st evalAgentStats) *bool {
 }
 
 // evalAgentSteps — SAF: turun araç çipleri, niyet sınıflandırıcısının
-// sözde-çipi hariç (araç değil; kademesi trail.tier'da).
+// sözde-çipi hariç (araç değil; kademesi trail.tier'da). v0.10.2331 — cevap
+// sınıfının gizli ölçüm adımı (answer_class) da araç değildir.
 func evalAgentSteps(tools []chstore.CosreTool) []chstore.CosreTool {
 	out := make([]chstore.CosreTool, 0, len(tools))
 	for _, t := range tools {
-		if t.Origin != "intent" {
+		if t.Origin != "intent" && t.Name != answerClassTool {
 			out = append(out, t)
 		}
 	}

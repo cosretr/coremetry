@@ -2524,13 +2524,17 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	user := guidedNarrationUser(question, evidence+cosreRulesDataSuffix(rulesBlock), explain, msgs)
 	// v0.9.528 Faz 2 — kiminle konuşulduğu prompt'un başına girer
 	// (ctx'ten; ön-söz boşsa metin bayt-bayt eskisi).
-	raw, exErr := s.copilotStreamSurface(ctx, "chat-guided", withAddressee(addresseeFromCtx(ctx), cosreRulesSystemPrefix(rulesBlock)+guidedNarrationPrompt(route.Intent)), user, func(delta string) {
+	// v0.10.2331 — B: cevap sınıfı (chat_answer_class.go); üslup kapalıyken nctx = ctx, classLine "".
+	nctx, classLine := answerStyleNarration(ctx, answerClassOfIntent(route.Intent))
+	raw, exErr := s.copilotStreamSurface(nctx, "chat-guided", withAddressee(addresseeFromCtx(ctx), cosreRulesSystemPrefix(rulesBlock)+guidedNarrationPrompt(route.Intent))+classLine, user, func(delta string) {
 		emit("delta", map[string]string{"text": delta})
 	})
 	if exErr != nil {
 		emit("error", map[string]string{"error": exErr.Error()})
 		return true, false
 	}
+	// v0.10.2331 — tavan dolduysa son tam cümle (doğrulayıcı kesilmiş metni görür).
+	raw = answerEndClean(nctx, raw)
 	noteGuidedNarration(ctx, string(route.Intent), raw, evidence+cosreRulesDataSuffix(rulesBlock), explain, facts, from, to, rangeS) // v0.10.2327 — E1 gölge + defter
 	// Deterministic provenance footer — appended server-side, never
 	// trusted to the model.
