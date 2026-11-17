@@ -56,7 +56,9 @@ describe('kök tanımı (v0.10.733)', () => {
     const idx = readFileSync(resolve(__dirname, '../lib/queries/index.ts'), 'utf8');
     expect(idx).toContain("export { useTraceRootDef, useSaveTraceRootDef } from './traceRootDef';");
     const traces = readFileSync(resolve(__dirname, 'Traces.tsx'), 'utf8');
-    expect(traces).toContain('Kök tanımı: ${rootDefLabel}');
+    // v0.10.2314 — başlık katalogda (trc.f.rootTip); TR değeri aynen.
+    expect(traces).toContain("tf('trc.f.rootTip', lang, { def: rootDefLabel })");
+    expect(readFileSync(resolve(__dirname, '../lib/i18n.ts'), 'utf8')).toContain('SUNUCU filtresi. Kök tanımı: {def} (Admin → ClickHouse → kök kapsaması).');
     expect(traces).toContain("rootDefQ.data?.def === 'entry'");
   });
 });

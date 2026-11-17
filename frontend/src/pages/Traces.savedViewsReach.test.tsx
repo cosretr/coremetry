@@ -29,6 +29,8 @@ const m = vi.hoisted(() => ({
   batchAggs: [] as string[],
 }));
 
+// v0.10.2314 — Türkçe metin pinleri: arayüz dili 'tr'.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/api', () => {
   const traces = Array.from({ length: 2 }, (_, i) => ({
     traceId: String(i).padStart(32, '0'), serviceName: 'checkout', rootName: `GET /cart/${i}`,

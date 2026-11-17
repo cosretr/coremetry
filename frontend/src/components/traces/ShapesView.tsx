@@ -24,6 +24,7 @@ import { rowClickHandlers, timeRangeToNs } from '@/lib/utils';
 import type { TimeRange, TraceRow } from '@/lib/types';
 import { traceHref } from '@/lib/traceHref';
 import { SvcBadge, fmtDur } from './shared';
+import { t as tl, useLang } from '@/lib/i18n'; // v0.10.2314 — durum satırı arayüz dilinde (TR aynı)
 
 interface ShapeRow {
   signature: string;
@@ -42,6 +43,7 @@ const SAMPLE_LIMIT = 1000;
 
 export function ShapesView({ range, service }: { range: TimeRange; service?: string }) {
   const navigate = useNavigate();
+  const lang = useLang();
   const [rows, setRows] = useState<TraceRow[] | null | undefined>(undefined);
 
   useEffect(() => {
@@ -114,9 +116,9 @@ export function ShapesView({ range, service }: { range: TimeRange; service?: str
   // yükleniyor / hata / boş tablonun İÇİNDE, başlık durur. Sıra ve koşullar
   // eskisiyle aynı; boş durumun açıklaması + önerisi aynı satırda.
   const tableState: Omit<DataTableStateProps<ShapeRow>, 'dt'> =
-    rows === undefined ? { kind: 'loading', message: 'İzler şekle göre kümelenmek için örnekleniyor' }
+    rows === undefined ? { kind: 'loading', message: tl('trc.shapes.loading', lang) }
     : rows === null ? { kind: 'error' }
-    : { kind: 'empty', message: 'Bu pencerede şekil yok — şekil görünümü örneklenen izleri (servis · operasyon) imzasına göre kümeler; zaman aralığını genişlet ya da servis filtresini kaldır.' };
+    : { kind: 'empty', message: tl('trc.shapes.empty', lang) };
 
   return (
     <>

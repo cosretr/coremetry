@@ -34,6 +34,8 @@ const m = vi.hoisted(() => ({
   prefetch: [] as string[],
 }));
 
+// v0.10.2314 — Türkçe metin pinleri: arayüz dili 'tr'.
+vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 vi.mock('@/lib/api', () => {
   const traces = Array.from({ length: 14 }, (_, i) => ({
     traceId: String(i + 1).padStart(32, '0'),

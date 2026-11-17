@@ -31,7 +31,7 @@ describe('aggResult — saf', () => {
   it('Traces.tsx cevabı aggRowsOf ile alır ve başlığı aggErrorHeadline ile kurar', () => {
     const src = readFileSync(resolve(__dirname, '../Traces.tsx'), 'utf8');
     expect(src).toContain('setAgg(aggRowsOf(a))');
-    expect(src).toContain('message: aggErrorHeadline(aggErr)');
+    expect(src).toContain('message: aggErrorHeadline(aggErr, lang)'); // v0.10.2314 — arayüz dili
     expect(src).not.toContain('Toplu sorgu hata verdi ya da zaman aşımına uğradı');
   });
 });

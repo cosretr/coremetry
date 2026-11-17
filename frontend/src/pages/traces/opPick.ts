@@ -14,6 +14,7 @@
  * yazılan metin eskisi gibi `search=`.
  */
 import type { FilterExpr } from '@/lib/types';
+import { t, type Lang } from '@/lib/i18n';
 
 /** `?op=` → sunucu çipi; boş → yok. */
 export function opChipFor(op: string): FilterExpr[] {
@@ -32,8 +33,8 @@ export function opCellText(op: string, rootName: string | undefined): string {
  * yok) sunucu rootName'e o servisin GİRİŞ span'ini yazar, kökü değil;
  * etiket buna göre.
  */
-export function opCellTitle(op: string, rootName: string | undefined, serviceScoped = false): string {
-  const label = serviceScoped ? "Servis giriş span'i" : 'Kök';
+export function opCellTitle(op: string, rootName: string | undefined, serviceScoped = false, lang: Lang = 'tr'): string {
+  const label = t(serviceScoped ? 'trc.op.entry' : 'trc.op.root', lang); // v0.10.2314 (TR aynı)
   if (op) return rootName && rootName !== op ? `${label}: ${rootName}` : op;
   return rootName ?? '';
 }

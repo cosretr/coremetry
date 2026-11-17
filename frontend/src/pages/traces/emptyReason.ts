@@ -5,6 +5,7 @@
 // boş" iki nedeni ayıramaz; ayıran, sunucunun yüklemsiz ham sayımı
 // (emptyDiag.serviceSpans). Saf ve tablo-testli: yanlış dal yanlış tavsiye
 // verir (Aggregate'e geç vs. aramayı değiştir) ve bunu hiçbir tip görmez.
+import { tf, type Lang } from '@/lib/i18n';
 
 export type TracesEmptyReason =
   | 'narrowed'    // arka uç pencereyi kaynak bütçesiyle daralttı — "bakılamadı"
@@ -41,14 +42,15 @@ export function traceIdIdentityText(
   identity: { traceId?: boolean; hits: number; windowFromNs?: number; windowToNs?: number } | undefined,
   traceId: string,
   fmt: (ns: number) => string,
+  lang: Lang = 'tr', // v0.10.2314 — metin arayüz dilinde (trc.id.*; TR aynı)
 ): string | null {
   if (!identity?.traceId) return null;
   const id = traceId.trim() || '(id)';
   if (identity.hits <= 0) {
-    return `Trace ${id} son 90 günün trace özetinde (trace_summary_5m) bulunamadı — id'yi ve saklama süresini kontrol et; trace detay sayfası (id'yi Trace ID kutusuna yazıp Enter) 31 günlük ham taramayı da dener.`;
+    return tf('trc.id.notFound', lang, { id });
   }
   const win = identity.windowFromNs && identity.windowToNs
-    ? ` Pencere trace zamanına çıpalandı: ${fmt(identity.windowFromNs)} → ${fmt(identity.windowToNs)}.`
+    ? tf('trc.id.win', lang, { from: fmt(identity.windowFromNs), to: fmt(identity.windowToNs) })
     : '';
-  return `Trace ${id} bulundu ama listeye girmedi: servis / süzgeç / Root / yalnız-hata seçimi onu eledi.${win}`;
+  return tf('trc.id.filtered', lang, { id }) + win;
 }

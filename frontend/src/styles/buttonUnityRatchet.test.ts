@@ -120,7 +120,7 @@ describe('buton bütünlüğü mandalı', () => {
   });
   it('Traces toggle\'ları SegmentedControl üzerinden', () => {
     const s = stripTsComments(readFileSync(resolve(SRC, 'pages', 'Traces.tsx'), 'utf8'));
-    expect(s).toMatch(/<SegmentedControl[^>]*aria-label="Grafik türü"/);
+    expect(s).toMatch(/<SegmentedControl[^>]*aria-label=\{tl\('trc\.strip\.vizAria', lang\)\}/); // v0.10.2314 — katalog anahtarı ('Grafik türü')
     for (const v of ['list', 'aggregate', 'shapes', 'volume', 'latency']) expect(s).toContain(`value: '${v}'`);
     expect(s).not.toMatch(/tl-go|tl-clear/);
   });

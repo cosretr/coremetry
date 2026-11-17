@@ -41,7 +41,7 @@ describe('opPick — kablolama', () => {
     expect((traces.match(/filtersEff: advFiltersEff/g) ?? []).length).toBe(2);
     expect(traces).toContain('[...advFiltersEff]');
     expect(traces).toContain('opCellText(op, opDisplayName(t.rootName, t.rootRoute))'); // v0.10.756 gösterim adı
-    expect(traces).toContain(', filter.op, serviceScoped);');
+    expect(traces).toContain(', filter.op, serviceScoped, lang);'); // v0.10.2314 — + arayüz dili
     expect(traces).toContain('const serviceScoped = !!filter.service && filter.requireServices.length === 0;'); // çağrı yeri seçili operasyonu + servis kapsamını geçirir (1807)
   });
   it('Service kolonu varsayılanı genişledi (operatör: "alan dar")', () => {

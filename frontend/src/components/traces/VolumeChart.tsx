@@ -10,6 +10,7 @@
 // sözleşmesi volumeSeries.ts'te, tablo-testli.
 
 import { useMemo } from 'react';
+import { t as tl, useLang } from '@/lib/i18n'; // v0.10.2314 — bucket ipucu arayüz dilinde (TR aynı)
 import type { SpanMetricSeries } from '@/lib/types';
 import { TimeChart } from '@/components/charts/TimeChart';
 import { volumeHint, buildVolumeSeries, fmtVolumeDuration, VOLUME_EMPTY_DEFAULT } from './volumeSeries';
@@ -52,6 +53,7 @@ export function VolumeChart({
   // verilmezse birimden (volumeHint).
   hint?: string;
 }) {
+  const lang = useLang();
   const { times, series, bucketMin } = useMemo(
     () => buildVolumeSeries(count, errors, latency, unit, stat),
     [count, errors, latency, unit, stat],
@@ -72,8 +74,8 @@ export function VolumeChart({
         {header}
         {!collapsed && (
           <span style={{ fontFamily: 'var(--font-mono)' }}
-            title={hint ?? volumeHint(unit ?? 'traces')}>
-            {unit} / {bucketMin}m bucket · sürükle = zaman seç</span>
+            title={hint ?? volumeHint(unit ?? 'traces', lang)}>
+            {unit} / {bucketMin}{tl('trc.vol.bucket', lang)}</span>
         )}
         {headerRight && (
           <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>

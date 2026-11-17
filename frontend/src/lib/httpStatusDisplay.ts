@@ -6,6 +6,7 @@
 // 0 saklar. Gösterim "—" + ipucu; süzgeç değeri "0" AYNEN kalır
 // (`http.status_code = 0` = "durumu olmayan span'ler", anlamı değişmez).
 // Saf ve tablo-testli.
+import { t, type Lang } from './i18n';
 
 /** http_status kolonuna düşen anahtarlar (filterexpr.go wellKnown ile aynı). */
 export const HTTP_STATUS_KEYS: readonly string[] = ['http.status_code', 'http.response.status_code'];
@@ -23,10 +24,11 @@ export function isMissingHttpStatus(v: string | null | undefined): boolean {
 }
 
 /** Hücre metni + ipucu. HTTP durumu anahtarı değilse değer aynen (boş → "—"). */
-export function httpStatusCell(key: string, v: string | null | undefined): { text: string; title: string; missing: boolean } {
+export function httpStatusCell(key: string, v: string | null | undefined, lang: Lang = 'tr'): { text: string; title: string; missing: boolean } {
   const raw = v ?? '';
   if (isHttpStatusKey(key) && isMissingHttpStatus(raw)) {
-    return { text: '—', title: NO_HTTP_STATUS_TITLE, missing: true };
+    // v0.10.2314 — ipucu arayüz dilinde (trc.noHttpStatus; TR = NO_HTTP_STATUS_TITLE)
+    return { text: '—', title: t('trc.noHttpStatus', lang), missing: true };
   }
   return { text: raw || '—', title: raw, missing: !raw };
 }

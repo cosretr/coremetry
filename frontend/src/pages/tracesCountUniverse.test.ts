@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const src = readFileSync(resolve(__dirname, './Traces.tsx'), 'utf8');
+const cat = readFileSync(resolve(__dirname, '../lib/i18n.ts'), 'utf8'); // v0.10.2314
 
 describe('/traces sayımı listeyle aynı evren', () => {
   it('sayım isteği search taşır ve effect search değişince yeniden koşar', () => {
@@ -26,7 +27,9 @@ describe('/traces sayımı listeyle aynı evren', () => {
   it('liste bitmişse (hasMore=false) kesin toplam listeden; sayılamıyor metni yalnız devam eden listede', () => {
     expect(src).toContain("{countRes?.reason && !hasMore ? (");
     expect(src).toContain('{(page * 50 + traces.length).toLocaleString()} total');
-    expect(src).toContain("showing {traces.length}{hasMore ? '+' : ''} · toplam sayılamıyor");
+    // v0.10.2314 — metin katalogda (trc.count.noTotal); TR değeri aynen.
+    expect(src).toContain("showing {traces.length}{hasMore ? '+' : ''}{tl('trc.count.noTotal', lang)}");
+    expect(cat).toContain("'trc.count.noTotal': ' · toplam sayılamıyor',");
   });
 });
 
@@ -46,7 +49,10 @@ describe('/traces teşhis linki', () => {
     expect(close, 'Pager elemanının kapanışı bulunamadı').toBeGreaterThan(i);
     const extras = src.slice(i, close);
     expect(extras).toContain('{explainHref && (');
-    expect(extras).toContain('>teşhis</a>');
-    expect(src).toContain('Teşhis (explain) →');
+    // v0.10.2314 — link metinleri katalogda (trc.explain / trc.explainLink); TR değerleri aynen.
+    expect(extras).toContain(">{tl('trc.explain', lang)}</a>");
+    expect(src).toContain("{tl('trc.explainLink', lang)}");
+    expect(cat).toContain("'trc.explain': 'teşhis',");
+    expect(cat).toContain("'trc.explainLink': 'Teşhis (explain) →',");
   });
 });

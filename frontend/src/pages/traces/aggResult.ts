@@ -5,6 +5,7 @@
 // oldu ve sayfa `null`u hata dalına soktu (v0.9.858 "null = hata"). Saf ve
 // tablo-testli: boş cevap boş tablo, gerçek hata ise sınıfıyla söylenir.
 import type { AggregateRow } from '@/lib/types';
+import { t, type Lang } from '@/lib/i18n';
 
 /** Sunucu cevabı → satırlar. `null` (eski sunucu / boş gövde) = sıfır grup, hata DEĞİL. */
 export function aggRowsOf(a: AggregateRow[] | null | undefined): AggregateRow[] {
@@ -22,14 +23,8 @@ export function aggErrorClass(msg: string | null | undefined): AggErrorClass {
   return 'generic';
 }
 
-const HEADLINE: Record<AggErrorClass, string> = {
-  timeout: 'Toplu sorgu zaman aşımına uğradı — daha dar bir zaman aralığı ya da daha az grup deneyip yeniden dene.',
-  memory: 'Toplu sorgu ClickHouse bellek sınırına takıldı — daha dar bir zaman aralığı ya da daha az grup deneyip yeniden dene.',
-  invalid: 'Toplu sorgu geçersiz — süzgeç / HAVING ifadesini kontrol et.',
-  generic: 'Toplu sorgu hata verdi — ayrıntı aşağıda; yeniden dene.',
-};
-
+// v0.10.2314 — başlıklar katalogda (trc.agg.err.*); TR değerler birebir aynı.
 /** Hata satırının başlığı (ayrıntı = sunucu metni, ayrıca gösterilir). */
-export function aggErrorHeadline(msg: string | null | undefined): string {
-  return HEADLINE[aggErrorClass(msg)];
+export function aggErrorHeadline(msg: string | null | undefined, lang: Lang = 'tr'): string {
+  return t(`trc.agg.err.${aggErrorClass(msg)}`, lang);
 }

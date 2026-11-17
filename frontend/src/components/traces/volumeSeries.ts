@@ -16,6 +16,7 @@
 import type { SpanMetricSeries } from '@/lib/types';
 import type { TimeChartSeries } from '@/components/charts/TimeChart';
 import { statusColor } from '@/lib/statusColor';
+import { t, type Lang } from '@/lib/i18n';
 import { STRIP_STAT_DEFAULT, stripStatLabel, type StripStat } from './stripStat';
 
 /** Süre ekseni formatı (v0.9.73; v0.9.843'e dek SAĞ eksendeydi, artık SOL):
@@ -209,9 +210,10 @@ export function stripRootOnly(scope: StripScope, rootOnly: boolean): boolean {
  * "spans", Errors açık VE liste dolu. Liste boşken neden "başka span" olsun.
  */
 export const VOLUME_EMPTY_DEFAULT = 'No traces in view to bucket.';
-export function volumeEmptyNote(unit: string, hasError: boolean, listNonEmpty: boolean, errorStrip: boolean): string {
+// v0.10.2314 — Türkçe metinler katalogda (trc.vol.*); `lang` varsayılanı 'tr' (TR aynı).
+export function volumeEmptyNote(unit: string, hasError: boolean, listNonEmpty: boolean, errorStrip: boolean, lang: Lang = 'tr'): string {
   if (!errorStrip && listNonEmpty && unit === 'spans' && hasError) {
-    return "Süzgece uyan span'lerin hiçbiri hatalı değil — hata aynı trace'in başka bir span'inde. Liste trace düzeyinde eşleşir; grafiği görmek için Errors'u kaldırın.";
+    return t('trc.vol.errElsewhere', lang);
   }
   return VOLUME_EMPTY_DEFAULT;
 }
@@ -223,16 +225,13 @@ export function errorStripUnit(mode: 'span' | 'trace' | 'chip'): string {
 
 /** errorStripHint — v0.10.1082: Errors şeridinin neyi saydığı (başlık ipucu). SAF.
  *  v0.10.1101 — scopeOnly: çipsiz Errors (yalnız servis / ortam / küme). */
-export function errorStripHint(mode: 'span' | 'trace' | 'chip', capped: boolean, scopeOnly = false): string {
+export function errorStripHint(mode: 'span' | 'trace' | 'chip', capped: boolean, scopeOnly = false, lang: Lang = 'tr'): string {
   // v0.10.1801 — ④: Errors kapalı, servis + ≥2 çip.
-  const base = mode === 'chip'
-    ? "Liste ile aynı küme (çipler trace düzeyinde): çipler aynı trace'in farklı span'lerinde olabilir; şerit listenin trace'lerini başlangıç zamanına göre sayar."
-    : scopeOnly
-    ? "Errors: kapsamdaki TÜM hatalı span'ler sayılır (giriş, istemci, iç) — listenin yüklemiyle aynı (liste bu span'leri taşıyan trace'leri gösterir; liste tavanlıysa yalnız en yeni trace'leri)."
-    : mode === 'trace'
-      ? "Errors + çip: çipe uyan span'ler hatasız, hata aynı trace'in başka span'inde — liste trace düzeyinde eşleşir; şerit listenin trace'lerini başlangıç zamanına göre sayar."
-      : "Errors + çip: çipe uyan hatalı span'ler sayılır — listeyle aynı küme (liste bu span'leri taşıyan trace'leri gösterir).";
-  return capped ? base + ' Aday kümesi tavana çarptı: en yeni trace\'ler sayıldı.' : base;
+  const base = t(mode === 'chip' ? 'trc.vol.hint.chip'
+    : scopeOnly ? 'trc.vol.hint.scope'
+    : mode === 'trace' ? 'trc.vol.hint.trace'
+    : 'trc.vol.hint.span', lang);
+  return capped ? base + t('trc.vol.hint.capped', lang) : base;
 }
 
 /** Şerit başlığı sayıları (TOTAL · ERRORS · ERR RATE · <stat> AVG). */
@@ -261,10 +260,8 @@ export function volumeUnitFor(serviceScoped: boolean, scope: StripScope): string
 }
 
 /** volumeHint — başlık ipucu (title); kapsam neyi saydığını söyler. */
-export function volumeHint(unit: string): string {
-  return unit === 'spans'
-    ? 'Filtre ya da arama giriş span\'ı dışındaki bir alanı hedefliyor (ör. db.statement): eşleşen SPAN\'ler sayılır, medyan o span\'lerin süresi. Tablo yine trace düzeyinde eşleşir.'
-    : 'Giriş span\'leri (server/consumer) sayılır: servis seçiliyken istek = trace; servissiz pencerede her hop bir kez sayılır.';
+export function volumeHint(unit: string, lang: Lang = 'tr'): string {
+  return t(unit === 'spans' ? 'trc.vol.unitSpans' : 'trc.vol.unitEntry', lang);
 }
 
 /**

@@ -92,7 +92,7 @@ describe('v0.10.1332 — Traces', () => {
     const iRoot = at(seg, '>Root</span>');
     const iSearch = at(seg, '>Search</Button>');
     const iSpacer = at(seg, "<span style={{ marginLeft: 'auto' }} />");
-    const iSeg = at(seg, 'aria-label="Trace görünümü"');
+    const iSeg = at(seg, "aria-label={tl('trc.viewAria', lang)}"); // v0.10.2314 — katalog anahtarı ('Trace görünümü')
     expect(iRoot).toBeLessThan(iSearch);
     expect(iSearch).toBeLessThan(iSpacer);
     expect(iSpacer).toBeLessThan(iSeg);

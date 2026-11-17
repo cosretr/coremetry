@@ -54,6 +54,7 @@ import { tsDateTime, tsLong, timeRangeToNs, fmtNum, fmtFixed } from '@/lib/utils
 import { alignTraceWindow } from '@/lib/traceWindow';
 import { suggestAttrKey, type AttrKeySuggestion } from '@/lib/attrKeySuggest';
 import { traceCountReasonHint } from '@/lib/traceCountReason';
+import { t as tl, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2314 — sayfa metni arayüz dilinde (trc.*; TR aynı)
 import { effectiveTraceSearch } from '@/lib/traceSearchTerm';
 import { lastReachablePage, reverseEndSort } from '@/lib/traceReach';
 import type { TraceCountResponse } from '@/lib/types';
@@ -244,6 +245,7 @@ function HeaderStat({ label, value, tone, title }: { label: string; value: strin
 
 function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => void }) {
   const navigate = useNavigate();
+  const lang = useLang();
   // v0.10.219 — satır Link'i listenin O ANKİ URL'sini state olarak taşır;
   // /trace breadcrumb'ı onunla geri döner (lib/traceBackHref.ts).
   const loc = useLocation();
@@ -296,9 +298,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   // v0.10.733 — Root kutusunun başlığı hangi kök tanımının geçerli olduğunu
   // yazar (strict | entry; Settings'te, viewer görür değiştiremez).
   const rootDefQ = useTraceRootDef();
-  const rootDefLabel = rootDefQ.data?.def === 'entry'
-    ? "giriş kökü (tam kök ya da server/consumer giriş span'i)"
-    : 'tam kök (parent boş + ad + servis)';
+  const rootDefLabel = tl(rootDefQ.data?.def === 'entry' ? 'trc.root.entry' : 'trc.root.strict', lang);
   // v0.10.724 (operatör onayı "A", 2026-09-13) — üst şerit katlanabilir;
   // durum tarayıcıya özel (localStorage), URL'e YAZILMAZ: paylaşılan link
   // görünümü değil, kişisel yer tasarrufu. v0.10.513 expand/shrink'i
@@ -1261,13 +1261,13 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
     data === undefined ? { kind: 'loading', skeletonRows: 10 }
     : data === null || listErr ? {
       kind: 'error',
-      message: 'Trace sorgusu hata verdi ya da zaman aşımına uğradı — daha dar bir zaman aralığı deneyip yeniden dene.',
+      message: tl('trc.list.err', lang),
       onRetry: retry,
       detail: serverErrorText(listErr),
     }
     : {
       kind: 'empty',
-      message: data.narrowedFromNs ? 'Kısaltılmış pencerede trace yok' : 'Trace bulunamadı',
+      message: tl(data.narrowedFromNs ? 'trc.list.emptyNarrowed' : 'trc.list.empty', lang),
       detail: (
         <TracesEmptyDetail service={filter.service} search={filter.search} range={range} onSwitchView={() => setView('aggregate')}
           explainHref={explainHref ?? undefined}
@@ -1282,40 +1282,38 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   const aggState: Omit<DataTableStateProps<AggregateRow>, 'dt'> =
     agg === undefined ? {
       kind: 'loading',
-      message: "Trace'ler trace_id'ye göre toplanıyor — pencere ≥5 dk ise trace_summary MV'den, değilse ham span'lerden okunur",
+      message: tl('trc.agg.loading', lang),
     }
     : agg === null ? {
       kind: 'error',
       // v0.10.1505 — başlık hatanın sınıfını söyler (zaman aşımı / bellek / geçersiz / genel).
-      message: aggErrorHeadline(aggErr),
+      message: aggErrorHeadline(aggErr, lang),
       onRetry: retry,
       detail: serverErrorText(aggErr),
     }
     : attrSuggestion ? {
       kind: 'empty',
-      message: 'Bu pencerede grup yok',
+      message: tl('trc.agg.noGroups', lang),
       detail: (
         <>
           {/* v0.9.637 — yanlış yazılmış anahtar SESSİZCE boş tablo
               veriyordu: "bu attribute yok" ile "yazımı yanlış" ayırt
               edilemiyordu. Sorgu harf DUYARLI kalıyor (bilinçli, bkz.
               lib/attrKeySuggest.ts); açıklanan yalnız boşluk. */}
-          <b>{groupAttr}</b> bu pencerede hiçbir span'de yok.{' '}
-          {attrSuggestion.reason === 'case'
-            ? 'Yalnız harf düzeni farklı olan bir anahtar var:'
-            : 'Şuna benzer bir anahtar var:'}{' '}
+          <b>{groupAttr}</b>{tl('trc.agg.attrMissing', lang)}{' '}
+          {tl(attrSuggestion.reason === 'case' ? 'trc.agg.sugCase' : 'trc.agg.sugNear', lang)}{' '}
           <Button
             variant="ghost"
             size="xs"
             onClick={() => setGroupAttr(attrSuggestion.key)}
           >{attrSuggestion.key}</Button>
-          {' '}— attribute anahtarları harf duyarlıdır.
+          {' '}{tl('trc.agg.caseSensitive', lang)}
         </>
       ),
     }
     : {
       kind: 'empty',
-      message: 'Bu pencerede grup yok — toplu görünüm gruplayacak en az bir trace ister; eşleşen satır olduğunu Traces sekmesinde doğrula ya da zaman aralığını genişlet.',
+      message: tl('trc.agg.emptyFull', lang),
     };
 
   // v0.9.304 (operatör) — "Errors N / Slow >1s / servis pill'leri" şeridi
@@ -1387,14 +1385,14 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                   (tek tip focus-visible halkası); 24 px, glif kabuğu aynı. */}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-xs" aria-label={stripCollapsed ? 'Grafiği aç' : 'Grafiği katla'}
+                  <Button variant="ghost" size="icon-xs" aria-label={tl(stripCollapsed ? 'trc.strip.expandAria' : 'trc.strip.collapseAria', lang)}
                     aria-expanded={!stripCollapsed} onClick={toggleStrip}>
                     <span className="btn-icon-glyph" aria-hidden="true"><span aria-hidden="true">{stripCollapsed ? '▸' : '▾'}</span></span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>{stripCollapsed ? 'Grafiği göster' : 'Grafiği katla — yalnız istatistik şeridi kalır (tarayıcıda hatırlanır)'}</TooltipContent>
+                <TooltipContent>{tl(stripCollapsed ? 'trc.strip.showTip' : 'trc.strip.collapseTip', lang)}</TooltipContent>
               </Tooltip>
-              <SegmentedControl aria-label="Grafik türü" value={viz} onChange={setViz} options={[
+              <SegmentedControl aria-label={tl('trc.strip.vizAria', lang)} value={viz} onChange={setViz} options={[
                 { value: 'volume', label: 'Volume' }, { value: 'latency', label: 'Latency' },
               ]} />
               {zoomDepth > 0 && (
@@ -1411,8 +1409,8 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
               {/* v0.10.268 — giriş span'ı sayımı: servisli pencerede trace, servissiz istek. */}
               {/* v0.10.1101 — Errors şeridinde başlık giriş span'i SAYMAZ; ipucu şeridin kendi tanımı. */}
               <HeaderStat label={volumeUnit.toUpperCase()} value={fmtNum(headerStats.total)}
-                title={errStrip ? errorStripHint(errStrip.mode, errStrip.capped, errStrip.scopeOnly)
-                  : "Giriş span'leri (server/consumer): servis seçiliyken istek = trace; servissiz pencerede her hop sayılır."} />
+                title={errStrip ? errorStripHint(errStrip.mode, errStrip.capped, errStrip.scopeOnly, lang)
+                  : tl('trc.strip.totalTip', lang)} />
               {/* v0.9.222 — scope spelled out. This counts error SPANS
                   across the whole window; the "Errors N" quick-chip below
                   counts error TRACES on the loaded page. Both were right
@@ -1420,11 +1418,11 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                   pixels above 3 read as a broken number. */}
               <HeaderStat label={'ERROR ' + volumeUnit.toUpperCase()} value={fmtNum(headerStats.err)}
                 tone={headerStats.err > 0 ? 'err' : undefined}
-                title={errStrip ? errorStripHint(errStrip.mode, errStrip.capped, errStrip.scopeOnly)
-                  : "Seçili pencerenin tamamındaki hatalı giriş span'ı sayısı — yüklü satırlardan bağımsız, gerçek trafiği tarif eder."} />
+                title={errStrip ? errorStripHint(errStrip.mode, errStrip.capped, errStrip.scopeOnly, lang)
+                  : tl('trc.strip.errTip', lang)} />
               <HeaderStat label="ERR RATE" value={`${headerStats.errRate.toFixed(2)}%`} tone={headerStats.errRate > 0 ? 'err' : undefined} />
               <HeaderStat label={stripStatHeaderLabel(stripStat)} value={headerStats.rtAvg ? fmtDur(headerStats.rtAvg) : '—'}
-                title={`Giriş span'ı ${stripStat} yanıt süresinin penceredeki en yüksek kovası.`} />
+                title={tf('trc.strip.rtTip', lang, { stat: stripStat })} />
             </>
           );
           return data === undefined ? (
@@ -1447,8 +1445,8 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
               // v0.10.1082 — "hata başka span'de" cümlesi yalnız DOĞRU olduğunda:
               // metric-batch yolu (span düzeyi) + liste dolu. Errors şeridi listeyle
               // aynı kümeyi saydığı için orada boş şerit = boş liste.
-              height={130} unit={volumeUnit} emptyNote={volumeEmptyNote(volumeUnit, filter.hasError, traces.length > 0, !!errStrip)}
-              hint={errStrip ? errorStripHint(errStrip.mode, errStrip.capped, errStrip.scopeOnly) : undefined} onBrush={applyBrush} onZoomReset={clearBrush}
+              height={130} unit={volumeUnit} emptyNote={volumeEmptyNote(volumeUnit, filter.hasError, traces.length > 0, !!errStrip, lang)}
+              hint={errStrip ? errorStripHint(errStrip.mode, errStrip.capped, errStrip.scopeOnly, lang) : undefined} onBrush={applyBrush} onZoomReset={clearBrush}
               collapsed={stripCollapsed}
               xRange={{ from: listRangeNs.from / 1e9, to: listRangeNs.to / 1e9 }}
               header={vizToggle}
@@ -1456,8 +1454,8 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 {/* v0.10.513 (operatör: "seçilebilir olsun, çok yer kaplamasın,
                     expand yerinde") — yanıt-süresi istatistiği seçici, eski
                     expand düğmesinin yerinde; `.segmented.sg-sm` yoğun rung. */}
-                <SegmentedControl size="sm" aria-label="Yanıt süresi istatistiği" value={stripStat} onChange={setStripStat}
-                  title="Çizgi ve başlıktaki MAX bu istatistiği gösterir (URL ?rt=)"
+                <SegmentedControl size="sm" aria-label={tl('trc.strip.statAria', lang)} value={stripStat} onChange={setStripStat}
+                  title={tl('trc.strip.statTip', lang)}
                   options={STRIP_STATS.map(st => ({ value: st, label: st }))} />
                 {pageActions}
               </>} />
@@ -1517,13 +1515,13 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                   kısayollarla aynı görsel dile sokuyordu ve bir satır
                   yüksekliği yiyordu. */}
               <label className="trl-check"
-                title="Yalnız hatalı trace'ler. SUNUCU filtresi — seçili pencerenin tamamına uygulanır ve sorguyu yeniden çalıştırır.">
+                title={tl('trc.f.errorsTip', lang)}>
                 <input type="checkbox" checked={draft.hasError}
                   onChange={() => setDraft({ ...draft, hasError: !draft.hasError })} />
                 <span className={draft.hasError ? 'trl-check-l is-err' : 'trl-check-l'}>Errors</span>
               </label>
               <label className="trl-check"
-                title={`Kök span'i depoya düşmüş trace'ler — yarım trace'leri gizler. SUNUCU filtresi. Kök tanımı: ${rootDefLabel} (Admin → ClickHouse → kök kapsaması).`}>
+                title={tf('trc.f.rootTip', lang, { def: rootDefLabel })}>
                 <input type="checkbox" checked={draft.rootOnly}
                   onChange={() => setDraft({ ...draft, rootOnly: !draft.rootOnly })} />
                 <span className={draft.rootOnly ? 'trl-check-l is-on' : 'trl-check-l'}>Root</span>
@@ -1540,7 +1538,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
               Aggregated'ın grup alanları şeridin SONUNA; servis seçici Services
               sayfasındaki gibi en solda. */}
           <span style={{ marginLeft: 'auto' }} />
-          <SegmentedControl aria-label="Trace görünümü" value={view} onChange={setView} options={[
+          <SegmentedControl aria-label={tl('trc.viewAria', lang)} value={view} onChange={setView} options={[
             { value: 'list', label: 'Traces' },
             { value: 'aggregate', label: 'Aggregated' },
             { value: 'shapes', label: 'Shapes', title: 'Cluster traces by their (service, operation) signature — find dominant call patterns at a glance' },
@@ -1587,13 +1585,13 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                     onChange={e => setHaving(p => p.map((x, j) =>
                       j === i ? { ...x, value: Number(e.target.value) } : x))}
                     className="trl-fs12 trl-w76" />
-                  <Button variant="outline" size="xs" aria-label="Koşulu kaldır"
+                  <Button variant="outline" size="xs" aria-label={tl('trc.having.removeAria', lang)}
                     onClick={() => setHaving(p => p.filter((_, j) => j !== i))}>✕</Button>
                 </span>
               ))}
               {having.length < 8 && (
                 <Button variant="outline" size="xs"
-                  title='Grup metriği eşiği ekle — ör. "Error % > 1 AND P95 ms > 500"'
+                  title={tl('trc.having.addTip', lang)}
                   onClick={() => setHaving(p => [...p, { metric: 'errorRate', op: '>', value: 1 }])}>
                   {having.length === 0 ? '＋ Having' : '＋'}
                 </Button>
@@ -1671,8 +1669,8 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 ölçtü ve haritayı askıya aldı); host = onarım hedefi. */}
             {data && traces.length > 0 && data.emptyDiag?.promotedFallback && (
               <div className="trl-promoted">
-                <b>Terfi kolonu uyuşmazlığı:</b> {(data.emptyDiag.promotedKeys ?? []).join(', ')} filtresi kolon yolunda 0 span buldu, dizi yolunda{' '}
-                {(data.emptyDiag.promotedHosts ?? []).map(h => `${h.host}: ${h.arr.toLocaleString()}`).join(' · ')}. Liste dizi yoluyla cevaplandı (doğru, yavaş); sunucu haritayı askıya aldı — ilgili replikada kolon şemasını / takılı mutasyonu kontrol et.
+                <b>{tl('trc.promoted.head', lang)}</b> {(data.emptyDiag.promotedKeys ?? []).join(', ')}{tl('trc.promoted.a', lang)}{' '}
+                {(data.emptyDiag.promotedHosts ?? []).map(h => `${h.host}: ${h.arr.toLocaleString()}`).join(' · ')}{tl('trc.promoted.b', lang)}
               </div>
             )}
             {/* Column toolbar — attribute columns are added via "+ Column"
@@ -1688,7 +1686,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
               {/* v0.10.143 (DETAY SAYFALARI adım 6) — Kubernetes kolon seti tek tıkla;
                   yalnız entity katmanı açıkken (hücreler entity sayfalarına link olur). */}
               {k8sOn && canAddK8sColumns(extraCols) && (
-                <Button type="button" variant="ghost" size="xs" title="k8s.namespace.name · k8s.pod.name · k8s.node.name · cluster kolonlarını ekle (8 kolon tavanı)"
+                <Button type="button" variant="ghost" size="xs" title={tl('trc.k8sColsTip', lang)}
                   onClick={() => setExtraCols(withK8sColumns(extraCols))}>+ K8s columns</Button>
               )}
               {/* v0.10.924 — buton bütünlüğü Faz 2: elle kurulmuş kolon
@@ -1760,7 +1758,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                       // v0.10.330 — K8s hücreleri artık düz metin (kendi <a>'sı yok) → satır
                       // linkine diğer hücreler gibi sarılır; ölü hücre kalmaz.
                       const ownLink = false;
-                      const cell = renderTraceCell(id, t, visibleMax, k8sOn, filter.op, serviceScoped);
+                      const cell = renderTraceCell(id, t, visibleMax, k8sOn, filter.op, serviceScoped, lang);
                       // v0.10.723 — sola sabit hücre: sınıf + kümülatif left (Endpoints deseni).
                       const stickyL = leftOffs[id];
                       return (
@@ -1839,45 +1837,43 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                 // Metin SIRA-NÖTR: ters kip artan sıralamanın her türünde
                 // (zaman, süre, ad…) geçerli — "en eski önce" yalnız zamana
                 // göre sıralarken doğru olurdu.
-                reverseTitle="Liste ters sıralı (artan sıra): konum SONDAN sayılıyor — 1 = son sayfa, 2 = sondan ikinci. Kesin sayfa NUMARASI gösterilemez çünkü sayım tavanlı (10.000+) ve aşama-1 kimlik bütçesi sınırlı — ⇤ First listenin başına döner."
-                endTitle={order === 'desc'
-                  ? 'Listenin sonuna git: sıralama tersine döner (en eski önce), sayfa 1'
-                  : 'Listenin başına dön: sıralama yeniden en yeni önce, sayfa 1'}
+                reverseTitle={tl('trc.pager.reverseTip', lang)}
+                endTitle={tl(order === 'desc' ? 'trc.pager.endTip' : 'trc.pager.startTip', lang)}
                 extras={
                   <>
                     {countRes?.reason && !hasMore ? (
                       /* v0.10.520 — liste bitti: kesin toplam listenin kendisinden
                          (sayfa × 50 + bu sayfa); sunucu sayımı gerekmez. */
-                      <span title="Liste son sayfada; toplam listeden kesin.">
+                      <span title={tl('trc.count.exactTip', lang)}>
                         {(page * 50 + traces.length).toLocaleString()} total
                       </span>
                     ) : countRes?.reason ? (
-                      <span title={traceCountReasonHint(countRes.reason)}>
-                        showing {traces.length}{hasMore ? '+' : ''} · toplam sayılamıyor
+                      <span title={traceCountReasonHint(countRes.reason, lang)}>
+                        showing {traces.length}{hasMore ? '+' : ''}{tl('trc.count.noTotal', lang)}
                       </span>
                     ) : countRes ? (
                       <span title={countRes.atLeast
-                        ? `Sayım ${countRes.value.toLocaleString()} trace'te durduruldu — gerçek sayı daha büyük.`
-                        : 'Bu pencerede eşleşen trace sayısı.'}>
+                        ? tf('trc.count.capTip', lang, { n: countRes.value.toLocaleString() })
+                        : tl('trc.count.matchTip', lang)}>
                         {countRes.value.toLocaleString()}{countRes.atLeast ? '+' : ''} total
                       </span>
                     ) : (
                       /* v0.10.654 — sayım yolda (otomatik); link yok. */
-                      <span title="Toplam sayılıyor…">showing {traces.length}{hasMore ? '+' : ''}</span>
+                      <span title={tl('trc.count.pending', lang)}>showing {traces.length}{hasMore ? '+' : ''}</span>
                     )}
                     {/* v0.10.522 (operatör: "steps rows göremedim") — teşhis linki
                         yalnız boş sonuçta vardı; dolu listede de admin'e (aynı
                         lastListParams, yeni sekme). */}
                     {explainHref && (
                       <>{' · '}<a href={explainHref} target="_blank" rel="noreferrer"
-                        title="Aynı sorgunun teşhisi: seçilen yol, her ClickHouse adımı, süre, satır (yalnız admin)">teşhis</a></>
+                        title={tl('trc.explainTip', lang)}>{tl('trc.explain', lang)}</a></>
                     )}
                     {' · '}sorted by <b>{sort}</b> {order}
                     {/* v0.10.124 — MV boşluğu: ham yoldan okundu, dürüstçe söyle. */}
                     {data?.mvGap && (
                       <span className="trl-mvgap"
-                        title="Bu pencerede özet tablo (trace_summary_5m) boş bir güne değiyor — liste ham span'lerden okundu (daha yavaş). Sistem → ClickHouse → tarihçe geri doldurma o günü doldurunca hızlı yola dönülür.">
-                        · MV boşluğu: ham yol
+                        title={tl('trc.mvGapTip', lang)}>
+                        {tl('trc.mvGap', lang)}
                       </span>
                     )}
                     {/* v0.8.369 — Dynatrace-style honesty hint: non-time
@@ -1895,11 +1891,11 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                     {/* v0.10.342 — kimlik-önce arama tuttu: liste o trace'ler. */}
                     {data?.identity?.hits ? (
                       <span className="badge b-info trl-ident"
-                        title={`Arama terimi kimlik olarak eşleşti: ${data.identity.matchedKey ?? '?'} = ${filter.search} · ${data.identity.hits.toLocaleString()} trace${data.identity.bounded ? ' (tavan)' : ''}. Denenen anahtarlar: ${data.identity.keys.join(', ')}`}>
-                        kimlik: {data.identity.matchedKey ?? '?'}{data.identity.traceId ? '' : ` (${data.identity.hits.toLocaleString()})`}
-                        {data.identity.anchorMs ? ` · kimlikteki zaman ${tsLong(data.identity.anchorMs * 1e6)} ±12 s` : ''}
+                        title={tf('trc.ident.tip', lang, { key: data.identity.matchedKey ?? '?', search: filter.search, hits: data.identity.hits.toLocaleString(), cap: data.identity.bounded ? tl('trc.ident.cap', lang) : '', keys: data.identity.keys.join(', ') })}>
+                        {tl('trc.ident.label', lang)}{data.identity.matchedKey ?? '?'}{data.identity.traceId ? '' : ` (${data.identity.hits.toLocaleString()})`}
+                        {data.identity.anchorMs ? tf('trc.ident.anchor', lang, { t: tsLong(data.identity.anchorMs * 1e6) }) : ''}
                         {/* v0.10.753 — trace id: pencere trace zamanına çıpalandı (1 saat varsayılanı değil). */}
-                        {data.identity.traceId && data.identity.windowFromNs ? ` · pencere trace zamanına çıpalandı (${tsLong(data.identity.windowFromNs)} → ${tsLong(data.identity.windowToNs ?? data.identity.windowFromNs)})` : ''}
+                        {data.identity.traceId && data.identity.windowFromNs ? tf('trc.ident.win', lang, { from: tsLong(data.identity.windowFromNs), to: tsLong(data.identity.windowToNs ?? data.identity.windowFromNs) }) : ''}
                       </span>
                     ) : null}
                     {data?.rankedWithinRecent ? (
@@ -1954,7 +1950,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
 // Per-column cell content for a trace row. k8s: v0.10.143 — entity katmanı
 // açıkken Kubernetes kolonları entity sayfalarına link (traceK8sLinks).
 // op (v0.10.752) — seçili operasyon; Name hücresi onu yazar (opPick.ts).
-function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s = false, op = '', serviceScoped = false) {
+function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s = false, op = '', serviceScoped = false, lang: Lang = 'tr') {
   if (k8s && isTraceK8sCol(id)) {
     const v = t.extras?.[id] ?? '';
     if (!v) return <span className="mono trl-c3">—</span>;
@@ -1971,7 +1967,7 @@ function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s = fals
     case 'time':      return <span className="mono">{tsDateTime(t.startTime)}</span>;
     case 'service':   return <SvcBadge name={t.serviceName} />;
     // v0.10.658 (operatör): diğer hücrelerle AYNI yazı tipi (.mono 12 px) — sınıfsız span orantılı yazıyla büyük görünüyordu.
-    case 'operation': return <span className="mono cell-ellipsis" title={opCellTitle(op, opDisplayName(t.rootName, t.rootRoute), serviceScoped)}>{opCellText(op, opDisplayName(t.rootName, t.rootRoute))}</span>;
+    case 'operation': return <span className="mono cell-ellipsis" title={opCellTitle(op, opDisplayName(t.rootName, t.rootRoute), serviceScoped, lang)}>{opCellText(op, opDisplayName(t.rootName, t.rootRoute))}</span>;
     case 'duration':  return <DurationBar ms={t.durationMs} err={t.hasError} max={visibleMax} />;
     case 'spans':     return <>{t.spanCount}</>;
     // v0.10.218 (D3) — hata rozetinin yanında hatalı span SAYISI (Dynatrace
@@ -1988,7 +1984,7 @@ function renderTraceCell(id: string, t: TraceRow, visibleMax: number, k8s = fals
       // smaller than OPERATION). `.mono` and `table` are both 12px; the old
       // inline fontSize:11 was the only thing making these cells odd.
       // v0.10.1519 — http.status_code: durumsuz span (0 / boş) "—" + ipucu.
-      const c = httpStatusCell(id, t.extras?.[id]);
+      const c = httpStatusCell(id, t.extras?.[id], lang);
       return <span className={c.missing ? 'mono trl-c3' : 'mono trl-c2'} title={c.title}>{c.text}</span>;
     }
   }
@@ -2142,6 +2138,7 @@ function TracesEmptyDetail({ service, search, range, onSwitchView, narrowedFromN
   // v0.10.530 — servisin YÜKLEMSİZ ham span sayısı; "TTL" ile "yüklem"i ayırır.
   serviceSpans?: number;
 }) {
+  const lang = useLang();
   const [mvSpans, setMvSpans] = useState<number | null | undefined>(undefined);
   const rangeNs = useMemo(() => timeRangeToNs(range), [range]);
   useEffect(() => {
@@ -2192,30 +2189,30 @@ function TracesEmptyDetail({ service, search, range, onSwitchView, narrowedFromN
       {identity?.traceId && (
         <div className="trl-diag">
           {/* v0.10.753 kimlik çıpası; v0.10.1423 — 32-hex terim artık `search`te. */}
-          {traceIdIdentityText(identity, search, ns => tsLong(ns))}
+          {traceIdIdentityText(identity, search, ns => tsLong(ns), lang)}
         </div>
       )}
       {identity && !identity.traceId && (
         <div className="trl-diag">
-          Kimlik araması: <span className="mono">{search}</span> şu anahtarlarda eşitlikle denendi — {identity.keys.join(', ') || '—'}:{' '}
+          {tl('trc.idq.a', lang)}<span className="mono">{search}</span>{tl('trc.idq.b', lang)}{identity.keys.join(', ') || '—'}:{' '}
           {identity.error
-            ? <span className="trl-cerr">hata: {identity.error}</span>
-            : identity.hits > 0 ? `${identity.hits} trace (${identity.matchedKey})` : 'eşleşme yok; alt-dize araması da boş döndü'}.
-          {(identity.skipped?.length ?? 0) > 0 && <> Derlenemeyen yazımlar: {identity.skipped!.join(', ')}.</>}
+            ? <span className="trl-cerr">{tl('trc.idq.err', lang)}{identity.error}</span>
+            : identity.hits > 0 ? `${identity.hits} trace (${identity.matchedKey})` : tl('trc.idq.none', lang)}.
+          {(identity.skipped?.length ?? 0) > 0 && <>{tl('trc.idq.skipped', lang)}{identity.skipped!.join(', ')}.</>}
           {identity.anchorMs
-            ? <> Kimliğin içindeki zaman <b>{tsLong(identity.anchorMs * 1e6)}</b> (UTC okundu) çapa alındı: ±12 saat penceresinde arandı, seçili aralık kullanılmadı; bulunamadığı için alt-dize taraması yapılmadı. Değerin doğru olduğundan ve verinin saklama süresi içinde olduğundan emin ol.</>
-            : <> Çapa yok (değer yyyyMMddHHmmss taşımıyor): seçili aralıkta arandı.</>}
+            ? <>{tl('trc.idq.anchorA', lang)}<b>{tsLong(identity.anchorMs * 1e6)}</b>{tl('trc.idq.anchorB', lang)}</>
+            : <>{tl('trc.idq.noAnchor', lang)}</>}
         </div>
       )}
       {promotedDiag?.promotedKeys && (
         <div className="trl-diag">
-          Terfi kolonu probu ({promotedDiag.promotedKeys.join(', ')}):{' '}
+          {tl('trc.probe.a', lang)}{promotedDiag.promotedKeys.join(', ')}):{' '}
           {promotedDiag.promotedProbeError
             ? <span className="trl-cerr">{promotedDiag.promotedProbeError}</span>
             : (promotedDiag.promotedHosts ?? []).length === 0
-              ? 'hiçbir host satır döndürmedi'
-              : (promotedDiag.promotedHosts ?? []).map(h => `${h.host}: kolon ${h.col.toLocaleString()} / dizi ${h.arr.toLocaleString()}`).join(' · ')}
-          {promotedDiag.promotedFallbackError && <> · dizi yolu da başarısız: <span className="trl-cerr">{promotedDiag.promotedFallbackError}</span></>}
+              ? tl('trc.probe.none', lang)
+              : (promotedDiag.promotedHosts ?? []).map(h => tf('trc.probe.host', lang, { host: h.host, col: h.col.toLocaleString(), arr: h.arr.toLocaleString() })).join(' · ')}
+          {promotedDiag.promotedFallbackError && <>{tl('trc.probe.fbErr', lang)}<span className="trl-cerr">{promotedDiag.promotedFallbackError}</span></>}
         </div>
       )}
       {matchingSpans !== undefined && (
@@ -2227,8 +2224,8 @@ function TracesEmptyDetail({ service, search, range, onSwitchView, narrowedFromN
       )}
       {explainHref && (
         <div className="trl-diag-plain">
-          <a href={explainHref} target="_blank" rel="noreferrer" title="Aynı sorgunun teşhisi: seçilen yol, her ClickHouse adımı, süre, satır (yalnız admin)">
-            Teşhis (explain) →
+          <a href={explainHref} target="_blank" rel="noreferrer" title={tl('trc.explainTip', lang)}>
+            {tl('trc.explainLink', lang)}
           </a>
         </div>
       )}

@@ -9,33 +9,27 @@
 // bilmezse filtreyi gevşetmeyi denemez.
 
 import type { TraceCountResponse } from './types';
+import { t, type Lang } from './i18n';
 
 type Reason = NonNullable<TraceCountResponse['reason']>;
 
+// v0.10.2314 — metinler katalogda (trc.count.why.*); TR değerler birebir aynı.
 const HINTS: Record<Reason, string> = {
   // Filtre MV hızlı yolunu zaten kapatıyor; sayım ham spans üzerinde
   // olurdu ve tam da kaçındığımız pahalı tarama bu.
-  'raw-path-filter':
-    'Bu filtre kombinasyonu özet tablosundan karşılanamıyor (arama, trace id, env ya da attribute filtresi). ' +
-    'Sayım ham span taraması gerektirir; listeyi yavaşlatmamak için atlandı.',
+  'raw-path-filter': 'trc.count.why.raw',
   // Süre trace_summary_5m'de iki merge state'in farkı — her satır için
   // finalize gerekir, LIMIT erken duramaz.
-  'duration-filter':
-    'Süre filtresi (min/max ms) açıkken toplam ucuza sayılamıyor: süre özet tablosunda hesaplanmış bir alan değil. ' +
-    'Süre filtresini kaldırınca toplam görünür.',
+  'duration-filter': 'trc.count.why.duration',
   // Liste bunu iki tabloyu bağlayan bir alt-sorguyla karşılıyor; aynısı
   // sayımda DISTINCT'in erken durmasını öldürüyor.
-  'service+filter':
-    'Servis filtresi ile hata/kök filtresi birlikteyken toplam ucuza sayılamıyor. ' +
-    'İkisinden birini kaldırınca toplam görünür.',
+  'service+filter': 'trc.count.why.svc',
   // NOT HAS: liste MV yolunda adayları sınırlı bir probla eler; pencere
   // geneli sayım tam pencere anti-join'i ister.
-  'trace-exclude':
-    'Trace düzeyi hariç tutma (NOT HAS) açıkken toplam ucuza sayılamıyor: sayım tüm penceredeki eşleşen span\'leri tarar. ' +
-    'Hariç tutmayı kaldırınca toplam görünür.',
+  'trace-exclude': 'trc.count.why.exclude',
 };
 
 /** traceCountReasonHint — ret sebebini operatör diline çevirir. */
-export function traceCountReasonHint(reason: string): string {
-  return HINTS[reason as Reason] ?? 'Bu sorgu için toplam sayı hesaplanamıyor.';
+export function traceCountReasonHint(reason: string, lang: Lang = 'tr'): string {
+  return t(HINTS[reason as Reason] ?? 'trc.count.why.other', lang);
 }
