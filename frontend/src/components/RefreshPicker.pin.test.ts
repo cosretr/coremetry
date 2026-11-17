@@ -70,7 +70,8 @@ describe('kayma mekanizması ve saat', () => {
   it('i18n: rp.* anahtarları EN ve TR\'de eşit', () => {
     const src = read('../lib/i18n.ts');
     const keys = (s: string) => Array.from(s.matchAll(/'(rp\.[a-zA-Z.]+)':/g)).map(m => m[1]);
-    const en = keys(src.slice(0, src.indexOf('const TR: Catalog')));
+    // v0.10.2307 — EN gövdesi lib/i18n.en.ts'te (+ ilk yükte kalan EN_EAGER).
+    const en = keys(read('../lib/i18n.en.ts') + src.slice(0, src.indexOf('const TR: Catalog')));
     const tr = keys(src.slice(src.indexOf('const TR: Catalog')));
     expect(en.length).toBeGreaterThan(10);
     expect(tr).toEqual(en);

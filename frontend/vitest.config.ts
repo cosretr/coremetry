@@ -32,6 +32,8 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     // Surface slow tests early; pure helpers should be sub-millisecond.
     slowTestThreshold: 50,
+    // v0.10.2307 — İngilizce katalog üretimde tembel import(); testler eşzamanlı kaydeder.
+    setupFiles: ['src/test/i18nEnSetup.ts'],
     // v0.9.700 — @grafana/data (FAZ 1 DataFrame köprüsü) moment-timezone'u
     // CJS'ten named-import ediyor; vitest'in node ESM yolunda bu "does not
     // provide an export named 'tz'" ile patlıyor. Paketi inline etmek

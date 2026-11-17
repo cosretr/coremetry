@@ -10,14 +10,18 @@ import { resolve } from 'node:path';
 import { t } from '@/lib/i18n';
 import { TOUR_CHROME_KEYS, TOUR_STEPS, stepFrames } from './steps';
 
+// v0.10.2307 — EN gövdesi lib/i18n.en.ts'te (tembel chunk); i18n.ts'te TR'den
+// önce yalnız EN_EAGER kalır — EN kümesi ikisinin birleşimi.
 const SRC = readFileSync(resolve(__dirname, '../../lib/i18n.ts'), 'utf8');
-const enStart = SRC.indexOf('const EN: Catalog = {');
+const EN_SRC = readFileSync(resolve(__dirname, '../../lib/i18n.en.ts'), 'utf8');
+const enStart = EN_SRC.indexOf('export const EN: Record<string, string> = {');
+const eagerStart = SRC.indexOf('const EN_EAGER: Catalog = {');
 const trStart = SRC.indexOf('const TR: Catalog = {');
-const end = SRC.indexOf('const CATALOGS');
+const end = SRC.indexOf('let EN: Catalog | null');
 const block = (a: number, b: number) => SRC.slice(a, b);
 const tourKeys = (s: string) => new Set([...s.matchAll(/^\s*'(tour\.[\w.]+)'\s*:/gm)].map(m => m[1]));
 
-const EN = tourKeys(block(enStart, trStart));
+const EN = tourKeys(EN_SRC.slice(enStart) + block(eagerStart, trStart));
 const TR = tourKeys(block(trStart, end));
 
 const USED = [
@@ -30,7 +34,8 @@ const USED = [
 describe('tour i18n (v0.10.1334)', () => {
   it('katalog blokları bulundu', () => {
     expect(enStart).toBeGreaterThan(-1);
-    expect(trStart).toBeGreaterThan(enStart);
+    expect(eagerStart).toBeGreaterThan(-1);
+    expect(trStart).toBeGreaterThan(eagerStart);
     expect(end).toBeGreaterThan(trStart);
     expect(EN.size).toBeGreaterThan(0);
   });

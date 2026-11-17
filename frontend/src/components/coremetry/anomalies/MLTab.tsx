@@ -258,7 +258,10 @@ const dcolsFor = (lang: Lang): ColumnDef<DetectorRow>[] => [
   { id: 'events', label: M('col.events', lang), width: 150, minWidth: 110, priority: 1, numeric: true, sortValue: r => r.events },
   { id: 'hit', label: M('col.hit', lang), width: 200, minWidth: 130, priority: 2, sortValue: r => (r.samples > 0 ? r.hitRate : -1) },
 ];
-const DCOLS = { tr: dcolsFor('tr'), en: dcolsFor('en') } as const;
+// v0.10.2307 — İngilizce katalog tembel (lib/i18n.ts): EN kolonları modül
+// yüklenirken değil ilk kullanımda (etkin dil 'en' = katalog yüklü) kurulur.
+const DCOLS_BY_LANG: Partial<Record<Lang, ColumnDef<DetectorRow>[]>> = {};
+const dcolsOf = (lang: Lang): ColumnDef<DetectorRow>[] => (DCOLS_BY_LANG[lang] ??= dcolsFor(lang));
 
 // Teknik detay tablosu: son kontrolün dedektör başına ölçümü.
 const dtechFor = (lang: Lang): ColumnDef<DetectorRow>[] => [
@@ -268,7 +271,10 @@ const dtechFor = (lang: Lang): ColumnDef<DetectorRow>[] => [
   { id: 'candidates', label: M('col.candidates', lang), width: 70, numeric: true, priority: 3, sortValue: r => r.tick?.candidates ?? -1 },
   { id: 'written', label: M('col.written', lang), width: 90, numeric: true, priority: 3, sortValue: r => r.tick?.written ?? -1 },
 ];
-const DTECH = { tr: dtechFor('tr'), en: dtechFor('en') } as const;
+// v0.10.2307 — İngilizce katalog tembel (lib/i18n.ts): EN kolonları modül
+// yüklenirken değil ilk kullanımda (etkin dil 'en' = katalog yüklü) kurulur.
+const DTECH_BY_LANG: Partial<Record<Lang, ColumnDef<DetectorRow>[]>> = {};
+const dtechOf = (lang: Lang): ColumnDef<DetectorRow>[] => (DTECH_BY_LANG[lang] ??= dtechFor(lang));
 
 /** SAF (test): seyrin tepe değeri (sıralama); seyir yoksa -1. */
 export function sparkPeak(e: MLEvent): number {
@@ -307,7 +313,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
         <>
           <h3 className="mt-1 mb-0 font-semibold">{M('detectors', lang)}</h3>
           <DataTable<DetectorRow>
-            storageKey="anomalies-ml-detectors-v2" columns={DCOLS[lang]} rows={detectorRows(sc.data, signal)}
+            storageKey="anomalies-ml-detectors-v2" columns={dcolsOf(lang)} rows={detectorRows(sc.data, signal)}
             state={{ kind: 'empty', message: M('noDetectors', lang) }} sort={{ initial: { id: 'state', dir: 'desc' } }}
             getRowKey={r => r.detector} ariaLabel={M('detectors', lang)}
             renderCell={(r, c) => {
@@ -353,7 +359,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
                 </div>
               )}
               <DataTable<DetectorRow>
-                storageKey="anomalies-ml-detectors-tech" columns={DTECH[lang]} rows={detectorRows(sc.data, signal)}
+                storageKey="anomalies-ml-detectors-tech" columns={dtechOf(lang)} rows={detectorRows(sc.data, signal)}
                 state={{ kind: 'empty', message: M('noDetectors', lang) }} sort={{ initial: { id: 'detector', dir: 'asc' } }}
                 getRowKey={r => r.detector} ariaLabel={M('techAria', lang)}
                 renderCell={(r, c) => {

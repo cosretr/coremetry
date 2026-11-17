@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/re
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import App from './App';
 import { getRaw, STORAGE_KEYS } from './lib/storage';
+import { loadEnCatalog } from './lib/i18n';
 // v0.10.1611 (shadcn Faz 1 R4) — TEK CSS girişi: katman sırası + globals.css
 // + uPlot.min.css + chart.css + Tailwind theme/utilities + tokens.css.
 // uPlot temel CSS'i hâlâ TEK yerden (v0.9.708): dört preset ayrı ayrı import
@@ -162,7 +163,12 @@ const queryClient = new QueryClient({
   },
 });
 
-createRoot(document.getElementById('root')!).render(
+// v0.10.2307 — İngilizce katalog tembel (lib/i18n.ts). Kaydedilmiş kullanıcı
+// seçimi 'en' ise ilk çizimden ÖNCE yüklenir (Türkçe flaş yok);
+// loadEnCatalog asla reddetmez — hata = uygulama Türkçe açılır. Türkçe yol
+// eşzamanlı mount eder; marka varsayılanı İngilizce ise useLang yükler (kısa
+// Türkçe ilk boyama kabul).
+const mount = () => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -178,3 +184,5 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>
 );
+if (getRaw(STORAGE_KEYS.lang) === 'en') void loadEnCatalog().then(mount);
+else mount();

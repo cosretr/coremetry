@@ -33,7 +33,10 @@ const colsFor = (lang: Lang): ColumnDef<Row>[] => {
     { id: 'act', label: t('actions'), kind: 'actions', width: 260 },
   ];
 };
-const COLS = { tr: colsFor('tr'), en: colsFor('en') } as const;
+// v0.10.2307 — İngilizce katalog tembel (lib/i18n.ts): EN kolonları modül
+// yüklenirken değil ilk kullanımda (etkin dil 'en' = katalog yüklü) kurulur.
+const COLS_BY_LANG: Partial<Record<Lang, ColumnDef<Row>[]>> = {};
+const colsOf = (lang: Lang): ColumnDef<Row>[] => (COLS_BY_LANG[lang] ??= colsFor(lang));
 
 export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, onVerdict, truncated }: {
   events: AnomalyEvent[];
@@ -51,7 +54,7 @@ export function AnomalyWindowTable({ events, silences, canEdit, onOpen, onMute, 
   const byFp = new Map<string, AnomalySilence>();
   for (const s of silences ?? []) if (s.active) byFp.set(s.fingerprint, s);
   const rows: Row[] = events.map(e => ({ e, silence: byFp.get(e.id) ?? byFp.get(silenceKey(e)) }));
-  const dt = useDataTable<Row>({ storageKey: 'svc-anomaly-window', columns: COLS[lang], rows, initialSort: { id: 'started', dir: 'desc' } });
+  const dt = useDataTable<Row>({ storageKey: 'svc-anomaly-window', columns: colsOf(lang), rows, initialSort: { id: 'started', dir: 'desc' } });
   // v0.10.973 — tablo standardı T12 muafı (tarif §2 bilinçli kendini gizleme): durum satırı
   // yok, çünkü tablo boş olamaz — Overview onu yalnız pencerede anomali varken çizer (operatör kararı).
   if (rows.length === 0) return null;

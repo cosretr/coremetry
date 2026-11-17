@@ -31,7 +31,10 @@ const colsFor = (lang: Lang): ColumnDef<MLSvcCompareRow>[] => { const c = (k: st
   { id: 'newPrio', label: c('newPrio'), width: 90, priority: 2, sortValue: r => r.newPriority ?? '' },
   { id: 'diff', label: c('diff'), width: 110, priority: 1, sortValue: r => r.diff },
 ]; };
-const COLS = { tr: colsFor('tr'), en: colsFor('en') } as const;
+// v0.10.2307 — İngilizce katalog tembel (lib/i18n.ts): EN kolonları modül
+// yüklenirken değil ilk kullanımda (etkin dil 'en' = katalog yüklü) kurulur.
+const COLS_BY_LANG: Partial<Record<Lang, ColumnDef<MLSvcCompareRow>[]>> = {};
+const colsOf = (lang: Lang): ColumnDef<MLSvcCompareRow>[] => (COLS_BY_LANG[lang] ??= colsFor(lang));
 
 export function MLSvcShadowCompareSection() {
   const [open, setOpen] = useState(false);
@@ -53,7 +56,7 @@ export function MLSvcShadowCompareSection() {
           <>
             <p className="m-0 text-sm" data-testid="ml-svc-shadow-summary">{svcCompareSummary(q.data.counts, q.data.days, q.data.truncated, lang)}</p>
             <DataTable<MLSvcCompareRow>
-              storageKey="anomalies-ml-svc-shadow" columns={COLS[lang]} rows={q.data.rows}
+              storageKey="anomalies-ml-svc-shadow" columns={colsOf(lang)} rows={q.data.rows}
               state={{ kind: 'empty', message: t('empty') }} sort={{ initial: { id: 'oldStart', dir: 'desc' } }}
               getRowKey={r => `${r.service}|${r.oldRule ?? ''}|${r.oldStart ?? 0}|${r.newDetector ?? ''}|${r.newStart ?? 0}`} ariaLabel={t('aria')}
               renderCell={(r, c) => {
