@@ -32,7 +32,7 @@ export const isTelemetryVolume = (r: MLRecordView) => r.class === 'telemetry_vol
 export function recordStatus(r: MLRecordView, nowNs: number, lang: Lang): string {
   return recordOpen(r)
     ? tf('mlRecord.card.statusOpen', lang, { d: durText(nowNs - r.onsetAt, lang) })
-    : tf('mlRecord.card.statusEnded', lang, { d: durText(r.endedAt! - r.onsetAt, lang) });
+    : tf(r.endReason === 'no_data' ? 'mlRecord.card.statusNoData' : 'mlRecord.card.statusEnded', lang, { d: durText(r.endedAt! - r.onsetAt, lang) });
 }
 
 /** SAF: kartta gösterilen "şu an" değeri — sürerken son nokta, bitince tespit anı. */
@@ -118,7 +118,7 @@ export function recordTimeline(r: MLRecordView, lang: Lang): string {
     { v: fmtRecordValue(r.peakValue, r.series.unit, lang), t: at != null ? hmSec(at) : '—' });
   const times = recordOpen(r)
     ? tf('mlRecord.card.timesOpen', lang, { onset: hm(r.onsetAt), det: hm(r.detectedAt) })
-    : tf('mlRecord.card.timesEnded', lang, { onset: hm(r.onsetAt), det: hm(r.detectedAt), end: hm(r.endedAt!) });
+    : tf(r.endReason === 'no_data' ? 'mlRecord.card.timesNoData' : 'mlRecord.card.timesEnded', lang, { onset: hm(r.onsetAt), det: hm(r.detectedAt), end: hm(r.endedAt!) });
   return `${times} · ${peak}`;
 }
 

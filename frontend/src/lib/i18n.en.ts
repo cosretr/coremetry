@@ -384,6 +384,7 @@ export const EN: Record<string, string> = {
   'mlRecord.chart.onset':           'onset',
   'mlRecord.chart.detected':        'detected',
   'mlRecord.chart.ended':           'back in band',
+  'mlRecord.chart.noData':          'no data',
   'mlRecord.chart.volume':          'calls/min',
   'mlRecord.chart.spansPerMin':     'spans/min',
   'mlRecord.chart.rightAxis':       'right axis',
@@ -420,6 +421,7 @@ export const EN: Record<string, string> = {
   // v0.10.2248 — ML olay kaydı kartı (anomali kartı Dilim D)
   'mlRecord.card.statusOpen': 'Ongoing · {d}',
   'mlRecord.card.statusEnded': 'Ended · lasted {d}',
+  'mlRecord.card.statusNoData': 'No data, could not be tracked · tracked {d}',
   'mlRecord.card.headAtDetection': '{who} at detection {value}{calls}; expected ≈ {expected}.',
   'mlRecord.card.headNow': '{who} now {value}{calls}; expected ≈ {expected}.',
   'mlRecord.card.headPeakBack': '{who} rose to {peak}, above the expected band ({t}){calls}; expected ≈ {expected}, band {band}. Back in band at {value} by detection.',
@@ -431,6 +433,7 @@ export const EN: Record<string, string> = {
   'mlRecord.card.volNoImpact': 'No service impact; ingest volume {k}×.',
   'mlRecord.card.volIngest': 'Ingest volume {k}×.',
   'mlRecord.card.timesEnded': 'Started {onset}, detected {det}, back in band {end}',
+  'mlRecord.card.timesNoData': 'Started {onset}, detected {det}, no data after {end}, could not be tracked',
   'mlRecord.card.timesOpen': 'Ongoing since {onset}, detected {det}',
   'mlRecord.card.peak': 'peak {v} ({t})',
   'mlRecord.card.dip': 'low {v} ({t})',
@@ -518,6 +521,7 @@ export const EN: Record<string, string> = {
   'anomalies.status.rejected': 'Marked not an issue',
   'anomalies.status.doneSingle': 'Ended {end} · single measurement',
   'anomalies.status.done': 'Ended {end} · lasted {d}',
+  'anomalies.status.noData': 'No data, could not be tracked · {end}',
   'anomalies.dur.m': '{m} min',
   'anomalies.dur.hm': '{h} h {m} min',
   // v0.10.2272 — Service Overview «Anomalies · this window» table (AnomalyWindowTable).

@@ -114,14 +114,16 @@ type RecordSnapshot struct {
 // EventRecord — tek olay-kaydı sözleşmesi (audit §9 alan tablosu). Zamanlar
 // unix ns; EndedAt 0 = sürüyor.
 type EventRecord struct {
-	V                int              `json:"v"`
-	Subject          RecordSubject    `json:"subject"`
-	Series           RecordSeries     `json:"series"`
-	Baseline         RecordBaseline   `json:"baseline"`
-	Direction        string           `json:"direction"` // up | down
-	OnsetAt          int64            `json:"onsetAt"`
-	DetectedAt       int64            `json:"detectedAt"`
-	EndedAt          int64            `json:"endedAt,omitempty"`
+	V          int            `json:"v"`
+	Subject    RecordSubject  `json:"subject"`
+	Series     RecordSeries   `json:"series"`
+	Baseline   RecordBaseline `json:"baseline"`
+	Direction  string         `json:"direction"` // up | down
+	OnsetAt    int64          `json:"onsetAt"`
+	DetectedAt int64          `json:"detectedAt"`
+	EndedAt    int64          `json:"endedAt,omitempty"`
+	// EndReason — v0.10.2359: "" = banda döndü; no_data = veri gelmedi, izlenemedi.
+	EndReason        string           `json:"endReason,omitempty"`
 	PeakValue        float64          `json:"peakValue"`
 	ValueAtDetection float64          `json:"valueAtDetection"`
 	ExpectedValue    float64          `json:"expectedValue"`

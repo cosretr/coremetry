@@ -107,3 +107,14 @@ describe('kayıtlı kart metinleri', () => {
     expect(evidenceTag('rollout', true)).toBe('independent');
   });
 });
+
+// v0.10.2359 — veri gelmeyen kayıt "banda döndü" / "Bitti" yazmaz.
+describe('kayıt: veri gelmedi', () => {
+  it('endReason=no_data → durum ve zaman satırı', () => {
+    const r = lat({ endReason: 'no_data' });
+    expect(recordStatus(r, 0, 'tr')).toMatch(/^Veri gelmedi, izlenemedi/);
+    expect(recordTimeline(r, 'tr')).toContain('sonrası veri gelmedi, izlenemedi');
+    expect(recordTimeline(r, 'tr')).not.toContain('banda döndü');
+    expect(recordTimeline(lat(), 'tr')).toContain('banda döndü');
+  });
+});

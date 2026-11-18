@@ -39,7 +39,7 @@ func TestKafkaLagEventStaysOpenWhileRising(t *testing.T) {
 				evs = append(evs, cand(now, 190_000+float64(i)*2_000))
 			}
 			qualityFilter(evs, cfg, tr, now)
-			if len(tr.closeStale(now)) > 0 {
+			if len(tr.closeStaleInBand(now)) > 0 {
 				return i
 			}
 		}

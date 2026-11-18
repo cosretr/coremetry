@@ -62,6 +62,7 @@ func CardInputFromEvent(ev chstore.MLEvent, now time.Time, loc *time.Location) C
 		in.Signal = chstore.MLDetectorSignal(ev.Detector)
 	}
 	in.RecordTitle = recordTitle(ev)
+	in.NoDataSince, in.EndNoData = NoDataOf(ev.Evidence) // v0.10.2359
 	if v, ok := evNum(m, "slowSec"); ok {
 		in.SlowSec = v
 	}

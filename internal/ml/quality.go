@@ -89,6 +89,18 @@ type runInfo struct {
 	snap        snapshotState
 	misses      int
 	closedAt    time.Time // sıfır = açık
+	// v0.10.2359 — veri-yok tutması: heldSince tutmanın başı (sıfır = yok),
+	// heldLast son tutulan tik; noData = koşu "veri gelmedi" ile kapandı.
+	heldSince, heldLast time.Time
+	noData              bool
+}
+
+// ref — koşunun son canlılık anı: son görülme ya da son veri-yok tutması.
+func (r *runInfo) ref() time.Time {
+	if r.heldLast.After(r.last) {
+		return r.heldLast
+	}
+	return r.last
 }
 
 // tracker — süreç-içi koşu durumu (rejim + teyit + epizot). Lider değişince
@@ -109,7 +121,7 @@ func (t *tracker) observe(ev chstore.MLEvent, now time.Time, tick time.Duration)
 	r := t.runs[ev.ID]
 	fresh := r == nil ||
 		(!r.closedAt.IsZero() && now.Sub(r.closedAt) > episodeReopenWindow) ||
-		(r.closedAt.IsZero() && now.Sub(r.last) > time.Duration(episodeCloseMisses)*tick+episodeReopenWindow)
+		(r.closedAt.IsZero() && now.Sub(r.ref()) > time.Duration(episodeCloseMisses)*tick+episodeReopenWindow)
 	if fresh {
 		if r != nil {
 			delete(t.byEp, r.epID)
@@ -118,7 +130,7 @@ func (t *tracker) observe(ev chstore.MLEvent, now time.Time, tick time.Duration)
 		t.runs[ev.ID] = r
 		t.byEp[r.epID] = ev.ID
 	}
-	r.closedAt = time.Time{}
+	r.closedAt, r.heldSince, r.heldLast, r.noData = time.Time{}, time.Time{}, time.Time{}, false
 	r.last, r.misses, r.service, r.detector, r.signal = now, 0, ev.Service, ev.Detector, ev.Signal
 	return r.first, r.epID
 }
@@ -130,26 +142,65 @@ func (t *tracker) byEpisode(epID string) *runInfo {
 	return nil
 }
 
-// closeStale — bu tikte görülmeyen açık koşuların kaçırma sayısı artar;
-// episodeCloseMisses'e ulaşan kapanır ve kapanış satırı (stage=closed,
-// last_seen = son görülme) döner.
-func (t *tracker) closeStale(now time.Time) []chstore.MLEvent {
+// closeStale — bu tikte görülmeyen açık koşular. Ailesi bu tik veri
+// değerlendiremeyen koşu (cov.noData) kaçırma saymaz, açık tutulur (held:
+// tutmanın ilk tiki, kanıtı noDataSince ile yazılır); noDataHoldMax dolunca
+// "veri gelmedi" (endReason) kapanır. Değerlendirilip görülmeyen koşunun
+// kaçırması artar; episodeCloseMisses'e ulaşan "banda döndü" kapanır.
+// closing: kapanış satırları (stage=closed, last_seen = son görülme).
+func (t *tracker) closeStale(now time.Time, cov tickCoverage) (closing, held []chstore.MLEvent) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	var out []chstore.MLEvent
 	for _, r := range t.runs {
 		if !r.closedAt.IsZero() || !r.last.Before(now) || r.ev.ID == "" {
 			continue
 		}
-		r.misses++
-		if r.misses >= episodeCloseMisses {
-			r.closedAt = now
-			ev := r.ev
-			ev.Stage = chstore.MLStageClosed
-			out = append(out, ev)
+		if cov.noData(r.detector) {
+			if r.heldSince.IsZero() {
+				r.heldSince = now
+				r.ev.Evidence = mergeEvidence(r.ev.Evidence, map[string]any{"noDataSince": now.Unix()})
+				held = append(held, r.ev)
+			}
+			r.heldLast = now
+		} else {
+			r.misses++
+		}
+		switch {
+		case r.misses >= episodeCloseMisses:
+		case !r.heldSince.IsZero() && now.Sub(r.last) >= noDataHoldMax:
+			r.noData = true
+		default:
+			continue
+		}
+		r.closedAt = now
+		ev := r.ev
+		ev.Stage = chstore.MLStageClosed
+		if r.noData {
+			ev.Evidence = mergeEvidence(ev.Evidence, map[string]any{"endReason": EndReasonNoData})
+		}
+		closing = append(closing, ev)
+	}
+	sort.Slice(closing, func(i, j int) bool { return closing[i].ID < closing[j].ID })
+	sort.Slice(held, func(i, j int) bool { return held[i].ID < held[j].ID })
+	return closing, held
+}
+
+// noDataServices — "veri gelmedi" ile kapanmış koşusu olan ve açık koşusu
+// olmayan servisler (ML Problem'i "bitti" diye kapatılmaz).
+func (t *tracker) noDataServices() map[string]bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out, open := map[string]bool{}, map[string]bool{}
+	for _, r := range t.runs {
+		if r.closedAt.IsZero() {
+			open[r.service] = true
+		} else if r.noData {
+			out[r.service] = true
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	for s := range open {
+		delete(out, s)
+	}
 	return out
 }
 
@@ -198,7 +249,7 @@ func (t *tracker) openRun(baseID string, now time.Time, tick time.Duration) bool
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	r := t.runs[baseID]
-	return r != nil && r.closedAt.IsZero() && now.Sub(r.last) <= time.Duration(episodeCloseMisses)*tick
+	return r != nil && r.closedAt.IsZero() && now.Sub(r.ref()) <= time.Duration(episodeCloseMisses)*tick
 }
 
 // prevEvent — v0.10.2037: epizodun önceki tikte yazılan hali (contrib kapısı).

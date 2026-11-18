@@ -1,7 +1,7 @@
 // v0.10.2021 — ML listesi: satır = grup (mockup "Liste: tek sayfa").
 import { describe, it, expect } from 'vitest';
 import type { MLEvent } from '@/lib/types';
-import { groupRows, groupStatus, groupStatusText, leadMember } from './mlGroupRows';
+import { groupRows, groupStatus, groupStatusText, leadMember, memberOpen } from './mlGroupRows';
 
 const min = 60e9;
 const ev = (o: Partial<MLEvent>): MLEvent => ({
@@ -44,5 +44,26 @@ describe('groupStatus / metin', () => {
     expect(groupStatusText({ status: 'watching', start: 0, end: 0 }, 8 * min)).toBe('İzleniyor · 8 dk');
     expect(groupStatusText({ status: 'done', start: 0, end: 18 * min }, 99 * min)).toBe('Bitti 00:18 · 18 dk sürdü');
     expect(groupStatusText({ status: 'rejected', start: 0, end: 0 }, 1)).toBe('Değil dendi');
+  });
+});
+
+// v0.10.2359 — veri gelmeyen olay "Bitti" yazılmaz; tutma süresince açık sayılır.
+describe('veri gelmedi', () => {
+  const now = 200 * min;
+  it('kapanmamış + noDataSince sınır içinde → açık (son görülme donmuş olsa da)', () => {
+    expect(memberOpen(ev({ lastSeen: 10 * min, evidence: JSON.stringify({ noDataSince: (150 * min) / 1e9 }) }), now)).toBe(true);
+    expect(memberOpen(ev({ lastSeen: 10 * min }), now)).toBe(false);
+  });
+  it('endReason=no_data ile biten grup "Veri gelmedi, izlenemedi" yazar, "Bitti" yazmaz', () => {
+    const [r] = groupRows([ev({ stage: 'closed', evidence: '{"endReason":"no_data"}' })], now);
+    expect(r.status).toBe('done');
+    expect(r.noData).toBe(true);
+    const tr = groupStatusText(r, now);
+    expect(tr).toContain('Veri gelmedi, izlenemedi');
+    expect(tr).not.toContain('Bitti');
+    expect(groupStatusText(r, now, 'en')).toContain('No data');
+    const [b] = groupRows([ev({ stage: 'closed' })], now);
+    expect(b.noData).toBe(false);
+    expect(groupStatusText(b, now)).toContain('Bitti');
   });
 });

@@ -337,6 +337,11 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 		return nil, err
 	}
 	global.series.Store(int64(len(series)))
+	if deps.meter != nil { // v0.10.2359: çağrı ölçümü (sayaç burada gösterge)
+		deps.meter.mu.Lock()
+		deps.meter.judged += int64(len(series))
+		deps.meter.mu.Unlock()
+	}
 	d.mu.Lock()
 	if d.backfill == nil {
 		d.backfill = newBackfillRunner(chstore.MLSignalLog, backfillDays)

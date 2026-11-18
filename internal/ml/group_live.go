@@ -465,6 +465,9 @@ func (r *Recorder) liveGroupProblems(ctx context.Context, groups []decidedGroup,
 	// v0.10.2157 (D3) — kapanış = üyeden ayrılma: ML sinyali biten Problem'in
 	// canlı üyesi (eski dedektörün üye olayı) varsa satır açık kalır ve aynen
 	// tazelenir; ML her tik yeniden dener, son üye de bitince kapanır.
+	// v0.10.2359 — "veri gelmedi" ile biten servisin Problem'i "bitti"
+	// kapanmaz; tazelenmez, bayat süpürme kapatır (no_data.go).
+	plan.Resolve = dropNoDataResolves(plan.Resolve, merged, r.runs.noDataServices())
 	closeNow, held := splitHeldResolves(plan.Resolve, merged, func(p chstore.Problem) bool { return r.holdResolve(ctx, p, now) })
 	for _, p := range held {
 		if o := snap.ByID(p.ID); o != nil {

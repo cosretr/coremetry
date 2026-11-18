@@ -93,6 +93,9 @@ func metricSummary(in CardInput, sp detSpec, open bool, end time.Time) string {
 	if open {
 		return fmt.Sprintf("%s; %s. %s%s beri sürüyor (%s).", head, normal, day, clockSfx(st, sfxAbl), plain)
 	}
+	if in.EndNoData { // v0.10.2359: banda dönmedi, veri kesildi
+		return fmt.Sprintf("%s; %s. %s%s başladı, %s sonra veri gelmedi, izlenemedi (%s izlendi).", head, normal, day, clockSfx(st, sfxLoc), clockSfx(end.In(loc), sfxAbl), plain)
+	}
 	return fmt.Sprintf("%s; %s. %s%s başladı, %s bitti (%s sürdü).", head, normal, day, clockSfx(st, sfxLoc), clockSfx(end.In(loc), sfxLoc), plain) // v0.10.2034
 }
 

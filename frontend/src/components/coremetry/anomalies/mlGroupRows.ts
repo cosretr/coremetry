@@ -28,6 +28,8 @@ export interface MLGroupRow {
   end: number;   // unix ns
   signals: SignalKind[];
   status: MLGroupStatus;
+  /** v0.10.2359: bitti çünkü veri gelmedi (banda dönmedi) — durum metni ayrı. */
+  noData?: boolean;
 }
 
 const SIGNAL_ORDER: SignalKind[] = ['trace', 'log', 'metric'];
@@ -54,7 +56,7 @@ export function groupRows(events: MLEvent[], nowNs = Date.now() * 1e6): MLGroupR
     for (const s of lead.groupSignals ?? []) sig.add(s === 'trace' || s === 'log' || s === 'metric' ? s : 'log');
     for (const d of lead.groupDetectors ?? []) sig.add(signalKindOf(d));
     for (const m of members) sig.add(signalKindOf(m.detector, m.signal));
-    out.push({ key, lead, members, service: lead.service, start, end, signals: SIGNAL_ORDER.filter(s => sig.has(s)), status: groupStatus(members, nowNs) });
+    out.push({ key, lead, members, service: lead.service, start, end, signals: SIGNAL_ORDER.filter(s => sig.has(s)), status: groupStatus(members, nowNs), noData: groupNoData(members, nowNs) });
   }
   return out;
 }
@@ -65,10 +67,33 @@ export function groupRows(events: MLEvent[], nowNs = Date.now() * 1e6): MLGroupR
  *  kuralı: kapalı damgası yoksa VE son görülme 4 kovadan taze. Kapanış
  *  satırı süreç içi koşu durumuna bağlı (yeniden başlatmada yazılmaz);
  *  yalnız damgaya bakmak bitmiş olayı saatlerce "açık" gösteriyordu. */
-export function memberOpen(m: Pick<MLEvent, 'stage' | 'lastSeen' | 'windowSec'>, nowNs: number): boolean {
+export function memberOpen(m: Pick<MLEvent, 'stage' | 'lastSeen' | 'windowSec' | 'evidence'>, nowNs: number): boolean {
   if (m.stage === 'closed') return false;
+  const { since } = memberNoData(m);
+  if (since > 0 && nowNs - since * 1e9 <= NO_DATA_HOLD_NS) return true;
   const bucketNs = (m.windowSec > 0 ? m.windowSec : 300) * 1e9;
   return nowNs - m.lastSeen <= 4 * bucketNs;
+}
+
+/** v0.10.2359 — sunucunun noDataHoldMax'ı (ml/no_data.go): veri yokken açık tutma sınırı. */
+const NO_DATA_HOLD_NS = 3 * 3600 * 1e9;
+
+/** SAF (v0.10.2359): kanıttaki veri-yok durumu — since: tutma başı (unix sn), ended: "veri gelmedi" ile kapandı. */
+export function memberNoData(m: Pick<MLEvent, 'evidence'>): { since: number; ended: boolean } {
+  if (!m.evidence || !m.evidence.includes('noData') && !m.evidence.includes('endReason')) return { since: 0, ended: false };
+  try {
+    const e = JSON.parse(m.evidence) as { noDataSince?: number; endReason?: string };
+    return { since: Number(e.noDataSince) || 0, ended: e.endReason === 'no_data' };
+  } catch {
+    return { since: 0, ended: false };
+  }
+}
+
+/** SAF (v0.10.2359): grup bitti VE en son biten üyesi "veri gelmedi" ile kapandı. */
+export function groupNoData(members: MLEvent[], nowNs: number): boolean {
+  if (members.some(m => memberOpen(m, nowNs))) return false;
+  const last = [...members].sort((a, b) => b.lastSeen - a.lastSeen)[0];
+  return !!last && memberNoData(last).ended;
 }
 
 export function groupStatus(members: MLEvent[], nowNs = Date.now() * 1e6): MLGroupStatus {
@@ -90,7 +115,7 @@ function dur(ns: number, lang: Lang = 'tr'): string {
 
 /** SAF (test): durum metni. nowNs: şimdi. */
 // v0.10.2258 — lang (varsayılan 'tr'; TR metin aynı).
-export function groupStatusText(r: Pick<MLGroupRow, 'status' | 'start' | 'end'>, nowNs: number, lang: Lang = 'tr'): string {
+export function groupStatusText(r: Pick<MLGroupRow, 'status' | 'start' | 'end' | 'noData'>, nowNs: number, lang: Lang = 'tr'): string {
   switch (r.status) {
     case 'running': return tf('anomalies.status.running', lang, { d: dur(nowNs - r.start, lang) });
     case 'watching': return tf('anomalies.status.watching', lang, { d: dur(nowNs - r.start, lang) });
@@ -99,6 +124,7 @@ export function groupStatusText(r: Pick<MLGroupRow, 'status' | 'start' | 'end'>,
       // v0.10.2034 (operatör: "Bittiyse bitişini de göstersin") — bitiş SAATİ
       // açıkça; başka güne taşıyorsa tarihle. Bitiş = son anormal kovanın sonu
       // (olayın last_seen'i; kapanış kararının verildiği an DEĞİL).
+      if (r.noData) return tf('anomalies.status.noData', lang, { end: endClock(r.end, nowNs) });
       if (!(r.end > r.start)) return tf('anomalies.status.doneSingle', lang, { end: endClock(r.end, nowNs) });
       return tf('anomalies.status.done', lang, { end: endClock(r.end, nowNs), d: dur(r.end - r.start, lang) });
     }

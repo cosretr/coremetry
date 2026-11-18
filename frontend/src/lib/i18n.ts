@@ -823,6 +823,7 @@ const TR: Catalog = {
   'mlRecord.chart.onset':           'başlangıç',
   'mlRecord.chart.detected':        'tespit',
   'mlRecord.chart.ended':           'banda dönüş',
+  'mlRecord.chart.noData':          'veri gelmedi',
   'mlRecord.chart.volume':          'çağrı/dk',
   'mlRecord.chart.spansPerMin':     'span/dk',
   'mlRecord.chart.rightAxis':       'sağ eksen',
@@ -859,6 +860,7 @@ const TR: Catalog = {
   // v0.10.2248 — ML olay kaydı kartı (anomali kartı Dilim D)
   'mlRecord.card.statusOpen': 'Sürüyor · {d}',
   'mlRecord.card.statusEnded': 'Bitti · {d} sürdü',
+  'mlRecord.card.statusNoData': 'Veri gelmedi, izlenemedi · {d} izlendi',
   'mlRecord.card.headAtDetection': '{who} tespit anında {value}{calls}; beklenen ≈ {expected}.',
   'mlRecord.card.headNow': '{who} şu an {value}{calls}; beklenen ≈ {expected}.',
   'mlRecord.card.headPeakBack': '{who} {peak} ile beklenen bandın üstüne çıktı ({t}){calls}; beklenen ≈ {expected}, bant {band}. Tespit anında {value} ile banda dönmüştü.',
@@ -870,6 +872,7 @@ const TR: Catalog = {
   'mlRecord.card.volNoImpact': 'Servis etkisi yok; ingest hacmi {k} kat.',
   'mlRecord.card.volIngest': 'İngest hacmi {k} kat.',
   'mlRecord.card.timesEnded': '{onset} başladı, {det} tespit edildi, {end} banda döndü',
+  'mlRecord.card.timesNoData': '{onset} başladı, {det} tespit edildi, {end} sonrası veri gelmedi, izlenemedi',
   'mlRecord.card.timesOpen': '{onset} itibarıyla sürüyor, {det} tespit edildi',
   'mlRecord.card.peak': 'tepe {v} ({t})',
   'mlRecord.card.dip': 'dip {v} ({t})',
@@ -957,6 +960,7 @@ const TR: Catalog = {
   'anomalies.status.rejected': 'Değil dendi',
   'anomalies.status.doneSingle': 'Bitti {end} · tek ölçüm',
   'anomalies.status.done': 'Bitti {end} · {d} sürdü',
+  'anomalies.status.noData': 'Veri gelmedi, izlenemedi · {end}',
   'anomalies.dur.m': '{m} dk',
   'anomalies.dur.hm': '{h} sa {m} dk',
   // v0.10.2272 — AnomalyWindowTable (metin v0.10.2269'daki ile aynı).

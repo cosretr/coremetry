@@ -12556,6 +12556,8 @@ export interface MLRecordView {
   series: { source: string; query: string; aggregation: string; unit: string; stepSec: number; kind?: string };
   baseline: { expected: number; lo: number; hi: number; method: string; stepSec: number };
   direction: string; onsetAt: number; detectedAt: number; endedAt?: number;
+  /** v0.10.2359: '' = banda döndü; 'no_data' = veri gelmedi, izlenemedi. */
+  endReason?: string;
   peakValue: number; valueAtDetection: number; expectedValue: number;
   volume: number | null; volumeReason?: string;
   evidence: MLRecordEvidence[] | null; class: string; gates?: MLRecordGate[];

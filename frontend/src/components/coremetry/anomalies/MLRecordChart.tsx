@@ -59,7 +59,7 @@ export function MLRecordChart({ rec, height = 200 }: { rec: MLRecordView; height
   const events = useMemo(() => [
     { timeUnixNs: rec.onsetAt, kind: 'maintenance', label: t('mlRecord.chart.onset') },
     { timeUnixNs: rec.detectedAt, kind: 'incident', label: t('mlRecord.chart.detected') },
-    ...(rec.endedAt ? [{ timeUnixNs: rec.endedAt, kind: 'end', label: t('mlRecord.chart.ended') }] : []),
+    ...(rec.endedAt ? [{ timeUnixNs: rec.endedAt, kind: 'end', label: t(rec.endReason === 'no_data' ? 'mlRecord.chart.noData' : 'mlRecord.chart.ended') }] : []),
   ], [rec.onsetAt, rec.detectedAt, rec.endedAt, t]);
   const fmt = (v: number) => fmtRecordValue(v, rec.series.unit, lang);
   const band = `${fmt(rec.baseline.lo)}–${fmt(rec.baseline.hi)}`;
@@ -78,7 +78,7 @@ export function MLRecordChart({ rec, height = 200 }: { rec: MLRecordView; height
         <span>▒ {tf('mlRecord.chart.band', lang, { band })}</span>
         <span>┄ {t('mlRecord.chart.expected')} {fmt(rec.expectedValue)}</span>
         {regions.length > 0 && <span className="text-[color:var(--err)]">▮ {t('mlRecord.chart.outside')}</span>}
-        <span>{t('mlRecord.chart.onset')} {hm(rec.onsetAt / 1e9)} · {t('mlRecord.chart.detected')} {hm(rec.detectedAt / 1e9)}{rec.endedAt ? ` · ${t('mlRecord.chart.ended')} ${hm(rec.endedAt / 1e9)}` : ''}</span>
+        <span>{t('mlRecord.chart.onset')} {hm(rec.onsetAt / 1e9)} · {t('mlRecord.chart.detected')} {hm(rec.detectedAt / 1e9)}{rec.endedAt ? ` · ${t(rec.endReason === 'no_data' ? 'mlRecord.chart.noData' : 'mlRecord.chart.ended')} ${hm(rec.endedAt / 1e9)}` : ''}</span>
         {b.n && <span>┃ {volLabel} ({t('mlRecord.chart.rightAxis')})</span>}
         <Link to={serviceHref(rec.subject.service)} className="ml-auto">{t('mlRecord.chart.servicePanel')} ↗</Link>
       </p>

@@ -131,6 +131,7 @@ func (b *vmBackoff) snapshot(now time.Time) []chstore.MLBackoffEntry {
 // gidilmedi. Ağır hata → aile beklemeye; başarı → bekleme sıfırlanır.
 func vmInstant(ctx context.Context, deps Deps, family, expr string, at, now time.Time) (rows []chstore.SpanMetricSeries, skipped bool, err error) {
 	if deps.Backoff.skipping(family, now) {
+		deps.meter.markSkipped()
 		return nil, true, nil
 	}
 	t0 := time.Now()

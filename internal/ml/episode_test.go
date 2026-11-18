@@ -21,26 +21,26 @@ func TestEpisodeLifecycle(t *testing.T) {
 	if _, ep := tr.observe(chstore.MLEvent{ID: "base"}, t0.Add(tick), tick); ep != ep1 || !first.Equal(t0) {
 		t.Fatal("sürerken aynı epizot")
 	}
-	if len(tr.closeStale(t0.Add(tick))) != 0 {
+	if len(tr.closeStaleInBand(t0.Add(tick))) != 0 {
 		t.Fatal("bu tikte görülen koşu kapanmaz")
 	}
 	// 2 tik görülmedi → açık; 3. tik → kapandı
-	tr.closeStale(t0.Add(2 * tick))
-	tr.closeStale(t0.Add(3 * tick))
-	closed := tr.closeStale(t0.Add(4 * tick))
+	tr.closeStaleInBand(t0.Add(2 * tick))
+	tr.closeStaleInBand(t0.Add(3 * tick))
+	closed := tr.closeStaleInBand(t0.Add(4 * tick))
 	if len(closed) != 1 || closed[0].ID != ep1 || closed[0].Stage != chstore.MLStageClosed {
 		t.Fatalf("kapanış: %+v", closed)
 	}
-	if len(tr.closeStale(t0.Add(5*tick))) != 0 {
+	if len(tr.closeStaleInBand(t0.Add(5*tick))) != 0 {
 		t.Fatal("kapanış bir kez")
 	}
 	// 30 dk içinde tekrar → aynı epizot yeniden açılır
 	if f, ep := tr.observe(chstore.MLEvent{ID: "base"}, t0.Add(4*tick+20*time.Minute), tick); ep != ep1 || !f.Equal(t0) {
 		t.Fatal("30 dk içinde tekrar aynı epizot")
 	}
-	tr.closeStale(t0.Add(8 * tick))
-	tr.closeStale(t0.Add(9 * tick))
-	tr.closeStale(t0.Add(10 * tick))
+	tr.closeStaleInBand(t0.Add(8 * tick))
+	tr.closeStaleInBand(t0.Add(9 * tick))
+	tr.closeStaleInBand(t0.Add(10 * tick))
 	// 30 dk sonra → yeni epizot, yeni kimlik
 	if f, ep := tr.observe(chstore.MLEvent{ID: "base"}, t0.Add(10*tick+time.Hour), tick); ep == ep1 || f.Equal(t0) {
 		t.Fatal("30 dk sonra yeni epizot")

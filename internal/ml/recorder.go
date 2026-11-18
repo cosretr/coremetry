@@ -95,6 +95,10 @@ type Recorder struct {
 	breadth map[string]breadthRun
 	// breadthH — v0.10.2237 (H12): svc_breadth kaydının sayım geçmişi (süreç-içi).
 	breadthH breadthHist
+	// v0.10.2359 — veri-yok ayrımı (no_data.go): olay dedektörü → aile ve
+	// seri sayan aileler (süreç-içi; tik goroutine'i tek kullanıcı).
+	classOf      map[string]string
+	countsSeries map[string]bool
 }
 
 // WithNotifier — v0.10.2052: grup Problem'i bildirimi için mevcut Problem
@@ -205,6 +209,10 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	isBatch, loadParts := sens.IsBatchService, metricLoadParts(cfg)
 	batchCut := 0
 	var samples []kindSample
+	if r.classOf == nil {
+		r.classOf, r.countsSeries = map[string]string{}, map[string]bool{}
+	}
+	cov := tickCoverage{classOf: r.classOf, fam: map[string]famCoverage{}}
 	for _, det := range r.detectors {
 		if !det.Enabled(cfg) {
 			continue
@@ -235,6 +243,15 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		}
 		if derr != nil {
 			st.Error = truncRunes(derr.Error(), 200)
+		}
+		// v0.10.2359: aile bu tik veri değerlendirebildi mi (no_data.go).
+		judged := deps.meter.judgedSeries()
+		cov.fam[det.Name()] = famCoverage{blind: familyBlind(derr, deps.meter.wasSkipped(), r.countsSeries[det.Name()], judged)}
+		if judged > 0 {
+			r.countsSeries[det.Name()] = true
+		}
+		for _, ev := range evs {
+			r.classOf[ev.Detector] = det.Name()
 		}
 		// v0.10.2063: kaynağı olmayan dedektör "ölçülemedi" (dependency_error_rate).
 		if u, ok := det.(interface{ Unmeasured() map[string]string }); ok {
@@ -282,7 +299,15 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	// epizot kapanışı: 3 tik görülmeyen koşu stage=closed yazılır (B3)
 	// v0.10.2215 (H2) — consumer lag olay kaydı: kapanış satırı ended_at ile.
 	lagBudget := lagRecordMaxPerTick
-	closing := r.runs.closeStale(start)
+	if cls, ok := r.classOf[detOpLatency]; ok { // yaygın yavaşlama op_latency'den türer
+		r.classOf[detSvcBreadth] = cls
+	}
+	closing, held := r.runs.closeStale(start, cov)
+	for _, ev := range held { // v0.10.2359: veri-yok tutması kanıta (kart/liste "açık")
+		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {
+			firstErr = werr
+		}
+	}
 	attachLagRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &lagBudget, start)
 	latBudget := latRecordMaxPerTick // v0.10.2219 (H3): op_latency kaydı
 	attachLatencyRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &latBudget, start)
@@ -312,6 +337,9 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	vol, volBudget, volVM := r.volume(), volRecordMaxPerTick, volVMMaxPerTick // v0.10.2242 (B): hacim kaydı
 	vol.attachVolumeRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &volBudget, &volVM, start)
 	for _, ev := range closing {
+		if _, nd := NoDataOf(ev.Evidence); nd { // v0.10.2359: kayıt üstüne (attach* sonrası)
+			ev = stampRecordEnd(ev)
+		}
 		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
 		r.observePublish(ev, start)
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {

@@ -29,6 +29,49 @@ type tickMeter struct {
 	services map[string]struct{}
 	series   map[string]struct{}
 	dropped  int
+	skipped  bool  // v0.10.2359: VM backoff atlaması (aile bu tik kör)
+	judged   int64 // v0.10.2359: bu çağrıda değerlendirilen seri sayısı
+}
+
+// markSkipped — kaynak bu çağrıda atlandı (backoff); nil güvenli.
+func (m *tickMeter) markSkipped() {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.skipped = true
+	m.mu.Unlock()
+}
+
+// countSeries — v0.10.2359: değerlendirilen seri sayısı (self-obs sayacı +
+// çağrı ölçümü; 0 = boş kova → aile kör).
+func (d Deps) countSeries(n int) {
+	global.series.Add(int64(n))
+	if d.meter != nil {
+		d.meter.mu.Lock()
+		d.meter.judged += int64(n)
+		d.meter.mu.Unlock()
+	}
+}
+
+// judgedSeries — nil güvenli.
+func (m *tickMeter) judgedSeries() int64 {
+	if m == nil {
+		return 0
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.judged
+}
+
+// wasSkipped — nil güvenli.
+func (m *tickMeter) wasSkipped() bool {
+	if m == nil {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.skipped
 }
 
 func newTickMeter() *tickMeter {

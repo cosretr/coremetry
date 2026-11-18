@@ -199,7 +199,7 @@ func (d *TraceErrors) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig,
 	if err := deps.insertSeries(ctx, srows); err != nil {
 		return nil, err
 	}
-	global.series.Add(int64(len(series)))
+	deps.countSeries(len(series))
 	if len(series) == 0 {
 		return nil, nil
 	}

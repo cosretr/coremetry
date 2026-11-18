@@ -285,7 +285,7 @@ func (d *Volume) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 		}
 		bySvc[r.Service][r.Bucket] = r
 	}
-	global.series.Add(int64(len(bySvc)))
+	deps.countSeries(len(bySvc))
 	if len(bySvc) == 0 {
 		return nil, nil
 	}

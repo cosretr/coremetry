@@ -320,7 +320,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	if err := deps.insertSeries(ctx, srows); err != nil {
 		return nil, err
 	}
-	global.series.Add(int64(len(series)))
+	deps.countSeries(len(series))
 	// dwell geçmişi CH'den (instant sorgu yalnız son kovayı verir)
 	// v0.10.2077: servis hata oranı 3 kova ister; geçmiş penceresi ikisinin büyüğü.
 	if dwellFrom := last.Add(-time.Duration(max(cfg.DwellBuckets, svcErrDwell)-1) * bucket); true {

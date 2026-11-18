@@ -436,7 +436,7 @@ func evalMetricSeries(ctx context.Context, deps Deps, cfg chstore.MLConfig, last
 	if err := deps.insertSeries(ctx, srows); err != nil {
 		return nil, err
 	}
-	global.series.Add(int64(len(series)))
+	deps.countSeries(len(series))
 	sens := deps.Store.AnomalySensitivityForDetectors()
 	_, loc := calendarFor(sens) // v0.10.2066: mevsimsel dilim (Davis ile ortak)
 	dates, class := baselineDates(last, cfg.BaselineDays, sens.Calendar, loc)

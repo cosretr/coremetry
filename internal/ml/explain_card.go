@@ -162,6 +162,8 @@ type CardInput struct {
 	LogQuery                                                              string      // v0.10.2069 — new_template: kalıbın /logs araması (logstore.PatternSearchQuery)
 	BreadthOps                                                            []BreadthOp // v0.10.2086 — svc_breadth: yavaş operasyonlar (kanıt slowOps)
 	BreadthTotal                                                          int         // v0.10.2086 — svc_breadth: yavaş operasyon toplamı
+	NoDataSince                                                           int64       // v0.10.2359 — evidence.noDataSince (unix sn; veri-yok tutması)
+	EndNoData                                                             bool        // v0.10.2359 — evidence.endReason=no_data (veri gelmedi, izlenemedi)
 	RecordTitle                                                           string      // v0.10.2215 (H2) — geçerli olay kaydının başlığı; doluysa kart başlığı yalnız kayıttan
 }
 
@@ -268,6 +270,9 @@ func (in CardInput) bucket() time.Duration {
 func cardOpen(in CardInput) bool {
 	if in.Stage == chstore.MLStageClosed {
 		return false
+	}
+	if noDataOpen(in.Stage, in.NoDataSince, in.Now) { // v0.10.2359: veri yok, banda dönmedi
+		return true
 	}
 	return in.Now.Sub(in.LastSeen) <= 4*in.bucket()
 }
@@ -497,6 +502,9 @@ func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
 	plain, since := durationTR(end.Sub(in.StartedAt))
 	if open {
 		return fmt.Sprintf("%s, %s (%s%s beri).", head, since, day, clockSfx(st, sfxAbl))
+	}
+	if in.EndNoData { // v0.10.2359: banda dönmedi, veri kesildi
+		return fmt.Sprintf("%s; %s%s başladı, %s sonra veri gelmedi, izlenemedi (%s izlendi).", head, day, clockSfx(st, sfxLoc), clockSfx(end.In(loc), sfxAbl), plain)
 	}
 	return fmt.Sprintf("%s; %s%s başladı, %s bitti (%s sürdü).", head, day, clockSfx(st, sfxLoc), clockSfx(end.In(loc), sfxLoc), plain) // v0.10.2034 bitiş saati açık
 }
@@ -860,6 +868,8 @@ func statusOf(in CardInput, open bool, end time.Time) string {
 		return "Problem'e taşındı · " + d
 	case open:
 		return "Sürüyor · " + d
+	case in.EndNoData: // v0.10.2359
+		return "Veri gelmedi, izlenemedi · " + d + " izlendi"
 	}
 	return "Bitti · " + d + " sürdü"
 }
