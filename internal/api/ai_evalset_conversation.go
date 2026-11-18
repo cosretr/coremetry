@@ -125,6 +125,16 @@ type evalConvExpect struct {
 	// argümanı bu parçaların HEPSİNİ içermeli (ör. `"client_ip":"192.0.2.10"`);
 	// sunucunun devralıp eklediği argüman dahil.
 	ArgsContain []string `json:"argsContain,omitempty"`
+	// Evidence — v0.10.2360 (S3): kanıt bloğu beklentisi; yalnız kanıt kipi
+	// on koşan turda denetlenir (evalrubric.EvidenceOf üç ölçütü).
+	Evidence *evalConvEvidenceExpect `json:"evidence,omitempty"`
+}
+
+// evalConvEvidenceExpect — v0.10.2360: cevapta olması gereken blok tipleri
+// ve en çok blok (bilgi / sohbet turunda 0).
+type evalConvEvidenceExpect struct {
+	Require []string `json:"require,omitempty"`
+	Max     *int     `json:"max,omitempty"`
 }
 
 // Doğrulayıcı beklentileri.
@@ -219,6 +229,10 @@ type evalConvTurnResult struct {
 	Verification       string `json:"verification,omitempty"`
 	VerificationForced bool   `json:"verificationForced,omitempty"`
 	Enforce            string `json:"enforce,omitempty"`
+	// EvidenceMode / EvidenceBlocks — v0.10.2360 (S3): turun kanıt kipi ve
+	// cevaba eklenen blok tipleri ("" = karar koşmadı).
+	EvidenceMode   string   `json:"evidenceMode,omitempty"`
+	EvidenceBlocks []string `json:"evidenceBlocks,omitempty"`
 }
 
 // evalConvCase — SAF: vaka konuşma kipinde mi.
@@ -426,8 +440,9 @@ func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, 
 		State:        &chatContextState{ctx: *state},
 		Stubs:        evalMergeStubs(c.Stubs, ft.Stubs),
 		Catalog:      catalog,
-		Style:        style, // v0.10.2331 — yalnız bu koşu (nil = canlı ayar)
-		Verification: verif, // v0.10.2339
+		Style:        style,      // v0.10.2331 — yalnız bu koşu (nil = canlı ayar)
+		Verification: verif,      // v0.10.2339
+		Evidence:     c.Evidence, // v0.10.2360
 	}
 	tr.Style, tr.StyleForced = evalStyleLabel(style)
 	tr.Verification, tr.VerificationForced = evalVerifyLabel(verif)
@@ -472,9 +487,10 @@ func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, 
 	tr.InputTokens, tr.OutputTokens = o.InputTokens, o.OutputTokens
 	tr.LoopRounds, tr.LoopToolCalls = int(o.Loop.Rounds), int(o.Loop.ToolCalls) // v0.10.2323
 	tr.LoopModelMs, tr.LoopToolMs, tr.TTFTMs = o.Loop.ModelMs, o.Loop.ToolMs, o.TTFTMs
-	tr.AnswerClass = ct.answerClass() // v0.10.2331
-	tr.SeamDropped = ct.seamDropped() // v0.10.2338
-	tr.Enforce = ct.enforceMode()     // v0.10.2339
+	tr.AnswerClass = ct.answerClass()                  // v0.10.2331
+	tr.SeamDropped = ct.seamDropped()                  // v0.10.2338
+	tr.Enforce = ct.enforceMode()                      // v0.10.2339
+	tr.EvidenceMode, tr.EvidenceBlocks = ct.evidence() // v0.10.2360
 	if !ok {
 		err = fmt.Errorf("sohbet handler'ı sonuç bildirmedi (HTTP %d)", w.status())
 		tr.Error = err.Error()
@@ -637,6 +653,14 @@ func scoreEvalConvTurn(e evalConvExpect, tr evalConvTurnResult, evidence string,
 	if e.Verifier == evalConvVerifyAnnotate && len(extra) > 0 && tr.Verification == chstore.CosreVerifyEnforce &&
 		!strings.Contains(answer, verifyUnverifiedNote) {
 		fails = append(fails, fmt.Sprintf("zorla kipinde sahtede olmayan değer işaretlenmedi: %v", extra))
+	}
+	// v0.10.2360 (S3) — kanıt ölçütleri (yalnız kanıt kipi on koşan turda).
+	if e.Evidence != nil && tr.EvidenceMode == chstore.CosreEvidenceOn {
+		sc := evalrubric.EvidenceOf(evalrubric.EvidenceInput{Answer: answer, Calls: len(tr.Calls), Attached: tr.EvidenceBlocks,
+			Ungrounded: len(extra), Require: e.Evidence.Require, Max: e.Evidence.Max})
+		if (sc.ClaimsHaveEvidence != nil && !*sc.ClaimsHaveEvidence) || !sc.NoPile || !sc.NoGuessAsData {
+			fails = append(fails, fmt.Sprintf("kanıt ölçütü: %v", sc.Notes))
+		}
 	}
 	// v0.10.2338 (D) — üslup açıkken kalıp açılış/kapanış kalmamalı.
 	if e.NoBoilerplate && tr.Style == "on" {

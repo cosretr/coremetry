@@ -832,6 +832,7 @@ type etStep struct {
 }
 
 type etErr struct {
+	SpanID  string `json:"span_id,omitempty"` // v0.10.2360 — S3: yalnız kanıt ek alanları açıkken (EvidencePartsOn)
 	Service string `json:"service"`
 	Name    string `json:"name"`
 	Status  string `json:"status_message,omitempty"`
@@ -840,7 +841,8 @@ type etErr struct {
 }
 
 // explainTracePayload — SAF: analiz → ≤ 2 KB özet (span listesi YOK).
-func explainTracePayload(id string, an traceToolAnalysis, scope []string) map[string]any {
+// v0.10.2360 — ev (S3): hatalı span kimliği + start_ms ek alanları.
+func explainTracePayload(id string, an traceToolAnalysis, scope []string, ev bool) map[string]any {
 	steps := make([]etStep, 0, etMaxPathSteps)
 	for _, s := range ttTrimPathSteps(an.CriticalPath, etMaxPathSteps) {
 		steps = append(steps, etStep{s.Service, truncateRunes(s.Name, 80), s.Kind, s.SelfOnPathMs, s.SharePct, truncateRunes(s.Target, 80), s.Top})
@@ -850,7 +852,11 @@ func explainTracePayload(id string, an traceToolAnalysis, scope []string) map[st
 		if i >= etMaxErrorSpans {
 			break
 		}
-		errs = append(errs, etErr{e.Service, truncateRunes(e.Name, 80), truncateRunes(e.StatusMessage, etMsgRunes), e.ExceptionType, truncateRunes(e.ExceptionMessage, etMsgRunes)})
+		er := etErr{"", e.Service, truncateRunes(e.Name, 80), truncateRunes(e.StatusMessage, etMsgRunes), e.ExceptionType, truncateRunes(e.ExceptionMessage, etMsgRunes)}
+		if ev {
+			er.SpanID = e.SpanID
+		}
+		errs = append(errs, er)
 	}
 	out := map[string]any{
 		"trace_id": id, "found": true,
@@ -860,6 +866,9 @@ func explainTracePayload(id string, an traceToolAnalysis, scope []string) map[st
 		"top_external_wait": an.CriticalPathTopExternalWait,
 		"source":            "ClickHouse spans (trace_id point read); analysis over all spans read",
 		"page_url":          ExplainTracePageURL(id),
+	}
+	if ev && an.StartUnixNs > 0 {
+		out["start_ms"] = an.StartUnixNs / int64(time.Millisecond)
 	}
 	if len(scope) > 0 {
 		in := map[string]bool{}
@@ -927,7 +936,12 @@ func explainTraceTool(d Deps) mcp.Tool {
 				return nil, errors.New("ClickHouse trace reader not configured")
 			}
 			scope, _ := normalizeMyServices(a.Services)
-			return v2Memo(ctx, d, explainTraceCacheKey(id, scope), etCacheTTL, func(c context.Context) (map[string]any, error) {
+			ev := EvidencePartsOn(ctx)
+			key := explainTraceCacheKey(id, scope)
+			if ev {
+				key += ":ev" // ek alanlı gövde ayrı anahtarda (kapalıyken gövde bayt aynı)
+			}
+			return v2Memo(ctx, d, key, etCacheTTL, func(c context.Context) (map[string]any, error) {
 				spans, err := d.Store.GetTrace(c, id)
 				if err != nil {
 					return nil, err
@@ -936,7 +950,7 @@ func explainTraceTool(d Deps) mcp.Tool {
 					return map[string]any{"trace_id": id, "found": false, "page_url": ExplainTracePageURL(id),
 						"reasons": []string{"no span in ClickHouse for this id (retention, sampling or not yet written) — get_trace diagnoses the miss"}}, nil
 				}
-				return explainTracePayload(id, buildTraceToolAnalysis(spans, len(spans) >= traceStoreSpanCap), scope), nil
+				return explainTracePayload(id, buildTraceToolAnalysis(spans, len(spans) >= traceStoreSpanCap), scope, ev), nil
 			})
 		},
 	}

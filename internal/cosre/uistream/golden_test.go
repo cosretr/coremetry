@@ -77,7 +77,11 @@ var update = flag.Bool("update", false, "rewrite testdata/cosre/*.sse")
 // ui-stream-v1-action-result (v0.10.2353) — onayın sonucu data-action-result
 // (share_link, done, link). Gerçekte onay ucunun cevabıdır (ActionResultPart);
 // fixture parça biçimini iki tarafta pinler.
-var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-approval-resume", "ui-stream-v1-stops", "ui-stream-v1-scope", "ui-stream-v1-question", "ui-stream-v1-linkcard", "ui-stream-v1-state", "ui-stream-v1-slot", "ui-stream-v1-status", "ui-stream-v1-alias", "ui-stream-v1-action", "ui-stream-v1-action-result"}
+//
+// ui-stream-v1-evidence (v0.10.2360, investigation-design S3) — kanıt
+// blokları: iki araç adımı, data-block-{exception,trace,logs,anomaly}
+// ("göster" turu tavanı 4), cevap. Yalnız evidence = on iken akar.
+var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-approval-resume", "ui-stream-v1-stops", "ui-stream-v1-scope", "ui-stream-v1-question", "ui-stream-v1-linkcard", "ui-stream-v1-state", "ui-stream-v1-slot", "ui-stream-v1-status", "ui-stream-v1-alias", "ui-stream-v1-action", "ui-stream-v1-action-result", "ui-stream-v1-evidence"}
 
 func fixtureDir() string { return filepath.Join("..", "..", "..", "testdata", "cosre") }
 

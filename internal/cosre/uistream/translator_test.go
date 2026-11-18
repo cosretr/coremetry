@@ -318,8 +318,9 @@ func TestTranslateBlockNamesAllTypes(t *testing.T) {
 		blocks.TypeText, blocks.TypeTable, blocks.TypeChart, blocks.TypeTraceList, blocks.TypeLink,
 		blocks.TypeAction, blocks.TypeEvidence, blocks.TypeOperation, blocks.TypeServiceReport,
 		blocks.TypeTopology, blocks.TypeChartsSignals, blocks.TypeLogSpike, blocks.TypeMetricPanel,
+		blocks.TypeException, blocks.TypeTrace, blocks.TypeLogs, blocks.TypeAnomaly, // v0.10.2360 — S3
 	}
-	if len(types) != 13 {
+	if len(types) != 17 {
 		t.Fatalf("blok tipi sayısı %d", len(types))
 	}
 	for _, typ := range types {

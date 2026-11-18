@@ -8470,7 +8470,8 @@ export interface ExplainAnswerBase {
 // (AIDrawer) — bu yüzden bileşen dosyasında değil burada yaşar.
 export type ChatBlockType = 'text' | 'table' | 'chart' | 'trace_list' | 'link' | 'action' | 'evidence' | 'operation' | 'service_report' | 'topology' // v0.10.1388 — topology
   | 'charts_signals' | 'log_spike' // v0.10.1407 — açıklama turunun kanıt kartları (ChartsSignalsCard / LogSpikeCard)
-  | 'metric_panel'; // v0.10.1435 — panel açıklaması (MetricPanelCard)
+  | 'metric_panel' // v0.10.1435 — panel açıklaması (MetricPanelCard)
+  | 'exception' | 'trace' | 'logs' | 'anomaly'; // v0.10.2360 — S3 kanıt blokları (çizici S5)
 // ChatOperationPayload — operasyon adı ön-getirmesinin kartı (internal/api/
 // chat_operation_prefetch.go opPrefetch). measured=false → RED ölçülemedi.
 export interface ChatOperationRED { calls: number; errors: number; p99Ms: number; measured: boolean }

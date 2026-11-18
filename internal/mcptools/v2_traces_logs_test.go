@@ -216,7 +216,7 @@ func TestExplainTracePayload(t *testing.T) {
 		an.ErrorSpans = append(an.ErrorSpans, traceToolErrorSpan{Service: "payments-api", Name: "charge", StatusMessage: strings.Repeat("declined ", 40), ExceptionMessage: strings.Repeat("e", 300)})
 	}
 	id := strings.Repeat("d", 32)
-	out := explainTracePayload(id, an, []string{"orders-api", "payments-api", "billing-api"})
+	out := explainTracePayload(id, an, []string{"orders-api", "payments-api", "billing-api"}, false)
 	b, _ := json.Marshal(out)
 	if len(b) > V2ToolMaxBytes {
 		t.Fatalf("gövde %d B", len(b))

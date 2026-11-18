@@ -146,7 +146,9 @@ type evalCase struct {
 	// her koşuda kendi kipini sınar.
 	ConvStyle    *bool  `json:"style,omitempty"`
 	Verification string `json:"verification,omitempty"`
-	file         string
+	// Evidence — v0.10.2360 (S3): vakanın kanıt kipi (off | shadow | on).
+	Evidence string `json:"evidence,omitempty"`
+	file     string
 	// profile — v0.10.2322: koşu isteğinin profil listesinden bu plan öğesine
 	// sabitlenen profil (evalExpandProfiles); "" = üretimin yüzey eşlemesi.
 	profile string

@@ -168,6 +168,9 @@ func cosreEvidenceMode(ctx context.Context) string {
 	if !cosreV2Marked(ctx) {
 		return chstore.CosreEvidenceOff
 	}
+	if t := evalConvFrom(ctx); t != nil && chstore.ValidCosreEvidence(t.Evidence) { // v0.10.2360 — vaka zorlaması
+		return t.Evidence
+	}
 	return chstore.CurrentCosreConversation().Evidence
 }
 

@@ -261,7 +261,23 @@ func getExceptionSamplesTool(d Deps) mcp.Tool {
 			if len(rows) == 0 {
 				out["reasons"] = exSamplesReasons(true, res, dropped, windowS)
 			}
+			if EvidencePartsOn(ctx) { // v0.10.2360 — S3: grup satırı + ilk çerçeveler (yalnız ek alan)
+				exSamplesEvidenceFields(out, g, rows)
+			}
 			return out, nil
 		},
+	}
+}
+
+// exSamplesEvidenceFields — SAF (v0.10.2360, S3): kanıt bloğunun istediği grup
+// satırı {message, state, first_seen_ms, last_seen_ms} ve ilk örneğin ≤5
+// çerçevesi. Yalnız EvidencePartsOn iken; kapalıyken gövde bayt aynı.
+func exSamplesEvidenceFields(out map[string]any, g *chstore.ExceptionGroup, rows []ExceptionSampleRow) {
+	out["group"] = map[string]any{"message": truncateRunes(g.Message, evPartMsgRunes), "state": g.State,
+		"first_seen_ms": g.FirstSeen / int64(time.Millisecond), "last_seen_ms": g.LastSeen / int64(time.Millisecond)}
+	if len(rows) > 0 {
+		if fr := StackFirstFrames(rows[0].Stacktrace, evPartFrames); len(fr) > 0 {
+			out["frames"] = fr
+		}
 	}
 }

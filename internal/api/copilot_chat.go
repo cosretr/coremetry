@@ -1185,6 +1185,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				copilot.ChatRoundCapAddendum(), copilot.ChatDegenRetryAddendum(), v2p.Addendum)...)
 		}
 		v2p.Gate = s.newScopeGate(ctx, us, lastUserText(req.Messages), []string{req.Context.Service, toolScope.Service}, cst.ctx, isTraceFollowUp, exchangeID) // v0.10.2355 — S1 kapsam kararı (evidence off: nil)
+		v2p.Evidence = newEvidenceTurn(ctx, lastUserText(req.Messages))                                                                                        // v0.10.2360 — S3 kanıt blokları (off: nil)
 		ctx = withV2LoopPlan(ctx, v2p)
 		xch.verify.addText(v2p.Addendum) // v0.10.2327 — kapsam eki (takım servisleri) kanıta
 	}
@@ -1432,7 +1433,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			for _, l := range s.answerRequestIDLinks(ctx, finalText, req.Context.Service) {
 				links = mergeToolLinks(links, l)
 			}
-			xch.noteFinalCall(loopCallID) // v0.10.1280 — answer.callId
+			xch.noteFinalCall(loopCallID)                                             // v0.10.1280 — answer.callId
+			v2LoopPlanFrom(ctx).evidenceOf().attach(ctx, emit, &blockSeq, answerText) // v0.10.2360 — S3 ekleme kararı
 			emit("answer", withAnswerFollowups(withAnswerEvidence(chatAnswerEvent(finalText, exchangeID, links,
 				answerOpenHref(lastUserText(req.Messages), loopOpen)), loopEvidence), withRouteChips(routeChips, s.chatLoopFollowups(ctx, fuFacts, req.Messages, pageCtx)))) // v0.10.1291
 			exitReason = stopAnswered
@@ -1691,7 +1693,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// turu ile onun ToolResults turu ikizdir, birini düşürmek
 			// sağlayıcıda sahipsiz tool sonucu bırakır. Kaynağı burada
 			// kesmek doğru yer.
-			tr.Content, _ = clampToolResultForLoop(v2Plan, tr.Content) // dilim 4 — v2 bayt tavanı
+			tr.Content = v2LoopPlanFrom(ctx).evidenceOf().collect(tc.Name, tr.Content, tr.IsError) // v0.10.2360 — S3: aday blok; on → model görünümü
+			tr.Content, _ = clampToolResultForLoop(v2Plan, tr.Content)                             // dilim 4 — v2 bayt tavanı
 			results = append(results, tr)
 		}
 		if len(over) > 0 {
@@ -1828,7 +1831,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				for _, l := range s.answerRequestIDLinks(ctx, finalText, req.Context.Service) {
 					links = mergeToolLinks(links, l)
 				}
-				xch.noteFinalCall(loopCallID) // v0.10.1280 — answer.callId
+				xch.noteFinalCall(loopCallID)                                             // v0.10.1280 — answer.callId
+				v2LoopPlanFrom(ctx).evidenceOf().attach(ctx, emit, &blockSeq, answerText) // v0.10.2360 — S3 ekleme kararı
 				emit("answer", withAnswerFollowups(withAnswerEvidence(chatAnswerEvent(finalText, exchangeID, links,
 					answerOpenHref(lastUserText(req.Messages), loopOpen)), loopEvidence), withRouteChips(routeChips, s.chatLoopFollowups(ctx, fuFacts, req.Messages, pageCtx)))) // v0.10.1291
 			}

@@ -65,8 +65,13 @@ type evalConvTurn struct {
 	// Verification — v0.10.2339 (E2): koşunun / vakanın doğrulama zorlaması
 	// (off | shadow | enforce; "" = canlı ayar). Yalnız bu turda (verifyEnforceOn).
 	Verification string
+	// Evidence — v0.10.2360 (S3): vakanın kanıt kipi zorlaması (off | shadow |
+	// on; "" = canlı ayar). cosreEvidenceMode okur.
+	Evidence string
 
 	mu      sync.Mutex
+	evMode  string   // v0.10.2360 — turun koştuğu kanıt kipi ("" = karar koşmadı)
+	evShown []string // v0.10.2360 — eklenen blok tipleri
 	calls   []evalConvCall
 	class   string // v0.10.2331 — turun cevap sınıfı (answerStyleTurn.note)
 	dropped int    // v0.10.2338 — cevap dikişinin sildiği model kalıp cümlesi
@@ -114,6 +119,23 @@ func (t *evalConvTurn) noteAnswerClass(c string) {
 	t.mu.Lock()
 	t.class = c
 	t.mu.Unlock()
+}
+
+// noteEvidence — v0.10.2360 (S3): turun kanıt kararı. nil-güvenli.
+func (t *evalConvTurn) noteEvidence(mode string, shown []string) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.evMode, t.evShown = mode, append([]string(nil), shown...)
+	t.mu.Unlock()
+}
+
+// evidence — v0.10.2360: turun kanıt kipi ve eklenen blok tipleri.
+func (t *evalConvTurn) evidence() (string, []string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.evMode, append([]string(nil), t.evShown...)
 }
 
 // answerClass — v0.10.2331: turun cevap sınıfı.

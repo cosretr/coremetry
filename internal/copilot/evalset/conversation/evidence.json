@@ -1,0 +1,332 @@
+{
+  "schema": "coremetry.evalset.conversation/1",
+  "cases": [
+    {
+      "id": "conv-evidence-show-me",
+      "surface": "ChatConversation",
+      "why": "S3 (v0.10.2360): kanıt blokları ve ekleme kuralı; vaka kanıt kipini kendisi açar (evidence on). Ölçütler hakemsiz: canlı veri iddiasının bloğu, blok yığını yok, tahmin veri gibi değil. 'Göster' turunda tavan 4; istisna ve trace kartı beklenir.",
+      "evidence": "on",
+      "stubs": {
+        "list_exception_groups": {
+          "service": "payments",
+          "groups": [
+            {
+              "fingerprint": "fp-pay-timeout",
+              "type": "java.net.SocketTimeoutException",
+              "message": "Read timed out",
+              "service": "payments",
+              "occurrences": 412,
+              "state": "open",
+              "first_seen_iso": "2026-11-18T09:05:00Z",
+              "last_seen_iso": "2026-11-18T10:00:00Z"
+            }
+          ],
+          "count": 1
+        },
+        "get_exception_samples": {
+          "fingerprint": "fp-pay-timeout",
+          "window_s": 3600,
+          "service": "payments",
+          "ex_type": "java.net.SocketTimeoutException",
+          "last_seen_iso": "2026-11-18T10:00:00Z",
+          "occurrences": 412,
+          "samples": [
+            {
+              "service": "payments",
+              "ex_type": "java.net.SocketTimeoutException",
+              "message": "Read timed out",
+              "stacktrace": "java.net.SocketTimeoutException: Read timed out\n\tat com.example.pay.BankClient.call(BankClient.java:42)\n\tat com.example.pay.ChargeService.run(ChargeService.java:17)\n\tat com.example.pay.PaymentsApi.post(PaymentsApi.java:9)",
+              "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "span_id": "00f067aa0ba902b7",
+              "span_name": "POST /api/payments",
+              "time_iso": "2026-11-18T10:00:00Z"
+            }
+          ],
+          "count": 1,
+          "truncated": false,
+          "group": {
+            "message": "Read timed out",
+            "state": "open",
+            "first_seen_ms": 1794992700000,
+            "last_seen_ms": 1794996000000
+          },
+          "frames": [
+            "com.example.pay.BankClient.call(BankClient.java:42)",
+            "com.example.pay.ChargeService.run(ChargeService.java:17)",
+            "com.example.pay.PaymentsApi.post(PaymentsApi.java:9)"
+          ]
+        },
+        "explain_trace": {
+          "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+          "found": true,
+          "wall_ms": 1240,
+          "extent_ms": 1260,
+          "start_ms": 1794996000000,
+          "root": {
+            "service": "checkout",
+            "name": "POST /api/checkout",
+            "duration_ms": 1240
+          },
+          "span_count": 38,
+          "error_span_count": 2,
+          "top_external_wait": false,
+          "critical_path": [
+            {
+              "service": "payments",
+              "name": "POST /api/payments",
+              "self_on_path_ms": 880,
+              "share_pct": 71,
+              "top": true
+            }
+          ],
+          "error_spans": [
+            {
+              "span_id": "00f067aa0ba902b7",
+              "service": "payments",
+              "name": "POST /api/payments",
+              "exception_type": "java.net.SocketTimeoutException",
+              "exception_message": "Read timed out"
+            }
+          ],
+          "page_url": "/trace/4bf92f3577b34da6a3ce929d0e0e4736"
+        },
+        "get_service_health": {
+          "$byService": {
+            "checkout": {
+              "service": "checkout",
+              "found": true,
+              "rps": 42.5,
+              "error_rate_pct": 4.8,
+              "p95_ms": 910,
+              "p99_ms": 1340,
+              "open_problems": 1
+            },
+            "payments": {
+              "service": "payments",
+              "found": true,
+              "rps": 11.4,
+              "error_rate_pct": 6.2,
+              "p95_ms": 870,
+              "p99_ms": 1430,
+              "open_problems": 1
+            }
+          }
+        }
+      },
+      "turns": [
+        {
+          "user": "payments'ta son bir saatte hangi istisna patlıyor?",
+          "expect": {
+            "class": "error_hunt",
+            "anyOfCalls": [
+              "list_exception_groups",
+              "get_exception_samples"
+            ],
+            "entity": "payments",
+            "evidence": {
+              "require": [
+                "exception"
+              ],
+              "max": 2
+            }
+          }
+        },
+        {
+          "user": "örnek trace'i göster",
+          "expect": {
+            "class": "followup",
+            "anyOfCalls": [
+              "explain_trace"
+            ],
+            "evidence": {
+              "require": [
+                "trace"
+              ],
+              "max": 4
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "conv-evidence-none-on-knowledge",
+      "surface": "ChatConversation",
+      "why": "S3 (v0.10.2360): kanıt blokları ve ekleme kuralı; vaka kanıt kipini kendisi açar (evidence on). Ölçütler hakemsiz: canlı veri iddiasının bloğu, blok yığını yok, tahmin veri gibi değil. Bilgi sorusunda veri okunmaz, blok eklenmez (tavan 0).",
+      "evidence": "on",
+      "stubs": {
+        "get_service_health": {
+          "$byService": {
+            "checkout": {
+              "service": "checkout",
+              "found": true,
+              "rps": 42.5,
+              "error_rate_pct": 4.8,
+              "p95_ms": 910,
+              "p99_ms": 1340,
+              "open_problems": 1
+            },
+            "payments": {
+              "service": "payments",
+              "found": true,
+              "rps": 11.4,
+              "error_rate_pct": 6.2,
+              "p95_ms": 870,
+              "p99_ms": 1430,
+              "open_problems": 1
+            }
+          }
+        }
+      },
+      "turns": [
+        {
+          "user": "rollback ile roll forward arasındaki fark nedir?",
+          "expect": {
+            "class": "knowledge",
+            "noCalls": true,
+            "evidence": {
+              "max": 0
+            }
+          }
+        },
+        {
+          "user": "canary deploy ne demek, kısaca anlatır mısın?",
+          "expect": {
+            "class": "knowledge",
+            "noCalls": true,
+            "evidence": {
+              "max": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "conv-evidence-action-needs-proof",
+      "surface": "ChatConversation",
+      "why": "S3 (v0.10.2360): kanıt blokları ve ekleme kuralı; vaka kanıt kipini kendisi açar (evidence on). Ölçütler hakemsiz: canlı veri iddiasının bloğu, blok yığını yok, tahmin veri gibi değil. Eylem öneren cevap (rollback) dayandığı kanıtı taşır.",
+      "evidence": "on",
+      "stubs": {
+        "find_traces": {
+          "window_s": 3600,
+          "has_more": false,
+          "query": "GetTraces service=checkout status=error last 3600s",
+          "page_url": "/traces?service=checkout&status=error",
+          "window": {
+            "from_ms": 1794992400000,
+            "to_ms": 1794996000000
+          },
+          "entity": {
+            "service": "checkout"
+          },
+          "traces": [
+            {
+              "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "root_op": "POST /api/checkout",
+              "entry_svc": "checkout",
+              "start_ms": 1794996000000,
+              "ms": 1240,
+              "spans": 38,
+              "error": true
+            },
+            {
+              "id": "4bf92f3577b34da6a3ce929d0e0e4737",
+              "root_op": "POST /api/checkout",
+              "entry_svc": "checkout",
+              "start_ms": 1794995940000,
+              "ms": 1180,
+              "spans": 36,
+              "error": true
+            }
+          ],
+          "count": 2
+        },
+        "explain_trace": {
+          "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+          "found": true,
+          "wall_ms": 1240,
+          "extent_ms": 1260,
+          "start_ms": 1794996000000,
+          "root": {
+            "service": "checkout",
+            "name": "POST /api/checkout",
+            "duration_ms": 1240
+          },
+          "span_count": 38,
+          "error_span_count": 2,
+          "top_external_wait": false,
+          "critical_path": [
+            {
+              "service": "payments",
+              "name": "POST /api/payments",
+              "self_on_path_ms": 880,
+              "share_pct": 71,
+              "top": true
+            }
+          ],
+          "error_spans": [
+            {
+              "span_id": "00f067aa0ba902b7",
+              "service": "payments",
+              "name": "POST /api/payments",
+              "exception_type": "java.net.SocketTimeoutException",
+              "exception_message": "Read timed out"
+            }
+          ],
+          "page_url": "/trace/4bf92f3577b34da6a3ce929d0e0e4736"
+        },
+        "get_service_health": {
+          "$byService": {
+            "checkout": {
+              "service": "checkout",
+              "found": true,
+              "rps": 42.5,
+              "error_rate_pct": 4.8,
+              "p95_ms": 910,
+              "p99_ms": 1340,
+              "open_problems": 1
+            },
+            "payments": {
+              "service": "payments",
+              "found": true,
+              "rps": 11.4,
+              "error_rate_pct": 6.2,
+              "p95_ms": 870,
+              "p99_ms": 1430,
+              "open_problems": 1
+            }
+          }
+        }
+      },
+      "turns": [
+        {
+          "user": "checkout'ta hatalar arttı, rollback yapalım mı?",
+          "expect": {
+            "class": "next_step",
+            "anyOfCalls": [
+              "find_traces",
+              "get_service_health",
+              "explain_trace"
+            ],
+            "entity": "checkout",
+            "evidence": {
+              "max": 2
+            }
+          }
+        },
+        {
+          "user": "hangi trace'e bakarak söylüyorsun?",
+          "expect": {
+            "class": "followup",
+            "anyOfCalls": [
+              "find_traces",
+              "explain_trace"
+            ],
+            "evidence": {
+              "max": 2
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

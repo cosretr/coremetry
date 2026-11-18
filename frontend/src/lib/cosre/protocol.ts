@@ -34,6 +34,8 @@ export const UI_STREAM_PART_TYPES = [
 export const BLOCK_TYPES = [
   'text', 'table', 'chart', 'trace_list', 'link', 'action', 'evidence', 'operation',
   'service_report', 'topology', 'charts_signals', 'log_spike', 'metric_panel',
+  // v0.10.2360 — S3 kanıt blokları (çizici S5'te; o gelene dek bilinen ama çizilmeyen tip).
+  'exception', 'trace', 'logs', 'anomaly',
 ] as const;
 
 /** `data-<ad>` parçalarının adları (önek olmadan). */

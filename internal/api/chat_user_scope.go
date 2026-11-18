@@ -214,9 +214,15 @@ type v2LoopPlan struct {
 	// Gate — v0.10.2355 (investigation-design S1): kapsam kararı
 	// (chat_scope_decision.go); nil = değerlendirilmez (evidence off vb.).
 	Gate *scopeGate
+	// Evidence — v0.10.2360 (S3): kanıt adayları ve ekleme kararı
+	// (chat_evidence_policy.go); nil = kanıt kapalı.
+	Evidence *evidenceTurn
 }
 
 func withV2LoopPlan(ctx context.Context, p *v2LoopPlan) context.Context {
+	if p.evidenceOf().on() {
+		ctx = mcptools.WithEvidenceParts(ctx) // S3: araçlar kanıt ek alanlarını yazar
+	}
 	return context.WithValue(ctx, v2LoopPlanKey{}, p)
 }
 

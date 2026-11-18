@@ -23,6 +23,9 @@ package api
 //     hatayla bittiyse (finish error) yarıda kalan çağrı model hatası değil
 //     akış kesintisidir. Ters yön (girdisiz çıktı) ihlal DEĞİL: onay devam
 //     akışı önceki akışın çağrısına sonuç yazar (ui-stream-v1-approval-resume).
+//   - kanıt blokları (v0.10.2360, S3): data-block-{exception,trace,logs,anomaly}
+//     yükü dolu `href` taşımalı; akışta en çok evalrubric.EvidenceCapShowMe
+//     tane (ekleme kuralının üst tavanı).
 //
 // Paket evalrubric kural taşımaz; yalnız sonucu (StreamContract *bool + not)
 // alır. v1 koşusunda parça yoktur → boyut n/a.
@@ -30,6 +33,10 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+
+	"github.com/cilcenk/coremetry/internal/ai/agent/blocks"
+	"github.com/cilcenk/coremetry/internal/ai/evalrubric"
 
 	"github.com/cilcenk/coremetry/internal/cosre/uistream"
 )
@@ -40,8 +47,23 @@ func evalStreamContract(parts []uistream.Part) (bool, string) {
 	resolved := map[string]bool{}
 	var inputs []string
 	finishErr := false
+	evN := 0
 	for _, p := range parts {
 		typ, _ := p["type"].(string)
+		if bt, ok := strings.CutPrefix(typ, "data-block-"); ok && evidenceBlockTypes[bt] {
+			evN++
+			if evN > evalrubric.EvidenceCapShowMe {
+				return false, fmt.Sprintf("kanıt bloğu %d > %d", evN, evalrubric.EvidenceCapShowMe)
+			}
+			var in struct {
+				Payload struct {
+					Href string `json:"href"`
+				} `json:"payload"`
+			}
+			if !decodePartData(p, &in) || in.Payload.Href == "" {
+				return false, typ + ": href yok"
+			}
+		}
 		switch typ {
 		case "data-unknown":
 			kind := ""
@@ -100,6 +122,9 @@ func evalStreamContract(parts []uistream.Part) (bool, string) {
 	}
 	return true, ""
 }
+
+// evidenceBlockTypes — v0.10.2360: S3 kanıt blok tipleri.
+var evidenceBlockTypes = map[string]bool{blocks.TypeException: true, blocks.TypeTrace: true, blocks.TypeLogs: true, blocks.TypeAnomaly: true}
 
 // evalPartText — parçanın data.text alanı (yoksa "").
 func evalPartText(p uistream.Part) (string, bool) {

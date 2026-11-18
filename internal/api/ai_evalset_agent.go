@@ -542,7 +542,7 @@ func evalAgentToolCallsValid(st evalAgentStats) *bool {
 func evalAgentSteps(tools []chstore.CosreTool) []chstore.CosreTool {
 	out := make([]chstore.CosreTool, 0, len(tools))
 	for _, t := range tools {
-		if t.Origin != "intent" && t.Name != answerClassTool {
+		if t.Origin != "intent" && t.Name != answerClassTool && t.Name != evidencePolicyTool { // v0.10.2360 — kanıt kararı da ölçüm adımı
 			out = append(out, t)
 		}
 	}

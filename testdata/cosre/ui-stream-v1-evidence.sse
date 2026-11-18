@@ -1,0 +1,42 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"dynamic":true,"toolCallId":"s1","toolName":"get_exception_samples","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"args":{"fingerprint":"fp-pay-timeout"},"argsText":"{\"fingerprint\":\"fp-pay-timeout\"}"},"toolCallId":"s1","toolName":"get_exception_samples","type":"tool-input-available"}
+
+data: {"dynamic":true,"output":{"bytes":61,"durationMs":40,"ok":true,"preview":"{\"ex_type\":\"java.net.SocketTimeoutException\",\"occurrences\":412}","truncated":false},"toolCallId":"s1","type":"tool-output-available"}
+
+data: {"data":{"bytes":61,"duration_ms":40,"kind":"text","ok":true,"text":"{\"ex_type\":\"java.net.SocketTimeoutException\",\"occurrences\":412}","tool":"get_exception_samples"},"id":"s1","type":"data-tool-result"}
+
+data: {"dynamic":true,"toolCallId":"s2","toolName":"explain_trace","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"args":{"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"},"argsText":"{\"trace_id\":\"4bf92f3577b34da6a3ce929d0e0e4736\"}"},"toolCallId":"s2","toolName":"explain_trace","type":"tool-input-available"}
+
+data: {"dynamic":true,"output":{"bytes":16,"durationMs":25,"ok":true,"preview":"{\"wall_ms\":1240}","truncated":false},"toolCallId":"s2","type":"tool-output-available"}
+
+data: {"data":{"bytes":16,"duration_ms":25,"kind":"text","ok":true,"text":"{\"wall_ms\":1240}","tool":"explain_trace"},"id":"s2","type":"data-tool-result"}
+
+data: {"data":{"final":true,"payload":{"count":412,"entity":{"service":"payments"},"fingerprint":"fp-pay-timeout","firstSeenMs":1794992700000,"frames":["com.example.pay.BankClient.call(BankClient.java:42)","com.example.pay.ChargeService.run(ChargeService.java:17)"],"href":"/problems?exc=fp-pay-timeout","lastSeenMs":1794996000000,"message":"Read timed out","ref":"exception:fp-pay-timeout","sampleSpanId":"00f067aa0ba902b7","sampleTraceId":"4bf92f3577b34da6a3ce929d0e0e4736","state":"open","type":"java.net.SocketTimeoutException","window":{"fromMs":1794992700000,"toMs":1794996000000}},"seq":1},"id":"b1","type":"data-block-exception"}
+
+data: {"data":{"final":true,"payload":{"durationMs":1240,"entity":{"service":"checkout"},"errorSpan":{"exceptionType":"java.net.SocketTimeoutException","message":"Read timed out","name":"POST /api/payments","service":"payments","spanId":"00f067aa0ba902b7"},"href":"/trace/4bf92f3577b34da6a3ce929d0e0e4736","operation":"POST /api/checkout","ref":"trace:4bf92f3577b34da6a3ce929d0e0e4736","service":"checkout","spanCount":38,"startMs":1794996000000,"traceId":"4bf92f3577b34da6a3ce929d0e0e4736"},"seq":2},"id":"b2","type":"data-block-trace"}
+
+data: {"data":{"final":true,"payload":{"href":"/logs?service=payments","query":"severity\u003e=ERROR service=payments","ref":"logs:1a2b","rows":[{"body":"timeout calling bank","service":"payments","sev":"ERROR","traceId":"4bf92f3577b34da6a3ce929d0e0e4736","ts":1794996000000}],"total":37,"truncated":true,"window":{"fromMs":1794992400000,"toMs":1794996000000}},"seq":3},"id":"b3","type":"data-block-logs"}
+
+data: {"data":{"final":true,"payload":{"baseline":120,"detector":"mad","href":"/anomalies/ml/ml-1","id":"ml-1","lastSeenMs":1794996000000,"observed":870,"part":"POST /api/payments","ref":"anomaly:ml-1","sampleTraceIds":["4bf92f3577b34da6a3ce929d0e0e4736"],"service":"payments","signal":"latency","startedMs":1794992700000},"seq":4},"id":"b4","type":"data-block-anomaly"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"payments'ta hatalar 14:05'te başladı; neredeyse hepsi SocketTimeoutException, son bir saatte 412 kez. Örnek trace'te hatalı span POST /api/payments.","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"data":{"calls":2,"elapsed_ms":2100,"reason":"stop","rounds":3},"id":"stop","type":"data-stop"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+
