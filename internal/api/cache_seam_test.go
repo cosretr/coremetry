@@ -8,6 +8,7 @@ package api
 
 import (
 	"context"
+	"errors"
 
 	"github.com/cilcenk/coremetry/internal/cache"
 	"sync"
@@ -141,7 +142,12 @@ func TestCachedJSON_ErrorIsNotCached(t *testing.T) {
 	var calls atomic.Int32
 	fn := func(ctx context.Context) (any, error) {
 		if calls.Add(1) == 1 {
-			return nil, context.DeadlineExceeded
+			// Zaman aşımı SINIFI olmayan bir hata: zaman aşımları bilerek kısa
+			// süre olumsuz önbelleğe girer (R4, cache_dsf.go isTimeoutClass) ve
+			// o yazım eşzamansızdır — eskiden burada context.DeadlineExceeded
+			// dönülüyordu, yüklü makinede ikinci çağrı o olumsuz girdiyi okuyup
+			// rastgele düşüyordu. Sözleşme: SIRADAN hata önbelleğe girmez.
+			return nil, errors.New("upstream boom")
 		}
 		return map[string]any{"ok": true}, nil
 	}
