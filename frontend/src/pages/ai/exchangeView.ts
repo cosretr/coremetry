@@ -234,14 +234,18 @@ export function exchangeTokensKey(ex: Pick<AIExchange, 'tier'>): string {
 /** v0.10.2297 — döngü satır(lar)ının kaydettiği tur sayısı + en büyük tek
  *  prompt. Yalnız kademe loop ve HER model satırı turu bildiriyorsa; eski
  *  satır (alan yok / 0) "bilinmiyor" → null (asla "1 tur" sayılmaz). */
-export function exchangeLoopRounds(ex: Pick<AIExchange, 'calls'> & Partial<Pick<AIExchange, 'tier'>>): { rounds: number; peakInputTokens: number } | null {
+export function exchangeLoopRounds(ex: Pick<AIExchange, 'calls'> & Partial<Pick<AIExchange, 'tier'>>): { rounds: number; peakInputTokens: number; compactedResults?: number } | null {
   if (ex.tier !== 'loop') return null;
   const llm = (ex.calls ?? []).filter(c => c.llm);
   if (!llm.length || llm.some(c => !c.modelRounds)) return null;
-  return {
+  const out: { rounds: number; peakInputTokens: number; compactedResults?: number } = {
     rounds: llm.reduce((n, c) => n + (c.modelRounds ?? 0), 0),
     peakInputTokens: Math.max(...llm.map(c => c.peakInputTokens ?? 0)),
   };
+  // v0.10.2340 — bağlam daraltması yalnız olduysa (0/yok = alan yazılmaz).
+  const compacted = Math.max(...llm.map(c => c.loopCompactedResults ?? 0));
+  if (compacted > 0) out.compactedResults = compacted;
+  return out;
 }
 
 /** Token sayısı kısa biçim: 34100 → "34.1K", 950 → "950". */
@@ -282,7 +286,8 @@ export function exchangeCallsSummary(ex: Pick<AIExchange, 'llmCalls' | 'calls'> 
   if (!exchangeUsedLLM(ex)) return markers ? `${NO_LLM_LABEL} · ${markers} işaret satırı` : NO_LLM_LABEL;
   const lr = exchangeLoopRounds(ex);
   const calls = lr
-    ? `${lr.rounds} tur · en büyük prompt ${fmtTokenK(lr.peakInputTokens)} token`
+    ? `${lr.rounds} tur · en büyük prompt ${fmtTokenK(lr.peakInputTokens)} token` +
+      (lr.compactedResults ? ` · bağlam daraltıldı: ${lr.compactedResults} araç sonucu kısaltıldı` : '')
     : ex.tier === 'loop'
       ? `${ex.llmCalls} çağrı kaydı (döngü turlarının toplamı)`
       : `${ex.llmCalls} model çağrısı`;

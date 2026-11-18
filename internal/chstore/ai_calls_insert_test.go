@@ -23,11 +23,11 @@ func TestAICallsInsertBranches(t *testing.T) {
 	for _, ext := range []bool{false, true} {
 		for _, cached := range []bool{false, true} {
 			for _, traced := range []bool{false, true} {
-				sql := aiCallsInsertSQL(ext, cached, traced, false, false, false)
+				sql := aiCallsInsertSQL(ext, cached, traced, false, false, false, false)
 				sqls[sql] = true
 				inner := sql[strings.Index(sql, "(")+1 : strings.LastIndex(sql, ")")]
 				n := len(strings.Split(inner, ","))
-				args := aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), ext, cached, traced, false, false, false)
+				args := aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), ext, cached, traced, false, false, false, false)
 				if n != len(args) {
 					t.Fatalf("ext=%v cached=%v traced=%v: SQL %d kolon, %d arg", ext, cached, traced, n, len(args))
 				}
@@ -66,10 +66,10 @@ func TestAICallsInsertBranches(t *testing.T) {
 	// Satır okuması da bayrağa uyar: SELECT kolon sayısı == Scan hedefi.
 	for _, cached := range []bool{false, true} {
 		for _, traced := range []bool{false, true} {
-			sel := aiCallsRowSelect(cached, traced, false, false, false)
+			sel := aiCallsRowSelect(cached, traced, false, false, false, false)
 			n := len(strings.Split(strings.TrimPrefix(sel, "SELECT "), ","))
 			var row AICall
-			if got := len(aiCallsRowScan(&row, cached, traced, false, false, false)); got != n {
+			if got := len(aiCallsRowScan(&row, cached, traced, false, false, false, false)); got != n {
 				t.Errorf("cached=%v traced=%v: SELECT %d kolon, Scan %d hedef", cached, traced, n, got)
 			}
 			if strings.Contains(sel, "trace_id") != traced {
@@ -126,9 +126,9 @@ func TestAICallEvalSelectBranches(t *testing.T) {
 func TestAICallsRoundsColumnGate(t *testing.T) {
 	c := AICall{ID: "x", TraceID: "t", ModelRounds: 3, PeakInputTokens: 34100}
 	for _, rounds := range []bool{false, true} {
-		sql := aiCallsInsertSQL(true, true, true, rounds, false, false)
+		sql := aiCallsInsertSQL(true, true, true, rounds, false, false, false)
 		inner := sql[strings.Index(sql, "(")+1 : strings.LastIndex(sql, ")")]
-		args := aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), true, true, true, rounds, false, false)
+		args := aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), true, true, true, rounds, false, false, false)
 		if n := len(strings.Split(inner, ",")); n != len(args) {
 			t.Fatalf("rounds=%v: SQL %d kolon, %d arg", rounds, n, len(args))
 		}
@@ -138,23 +138,23 @@ func TestAICallsRoundsColumnGate(t *testing.T) {
 		if rounds && (args[len(args)-2] != uint16(3) || args[len(args)-1] != uint32(34100)) {
 			t.Fatalf("son iki arg tur/peak olmalı: %v", args[len(args)-2:])
 		}
-		sel := aiCallsRowSelect(true, true, rounds, false, false)
+		sel := aiCallsRowSelect(true, true, rounds, false, false, false)
 		var row AICall
-		dest := aiCallsRowScan(&row, true, true, rounds, false, false)
+		dest := aiCallsRowScan(&row, true, true, rounds, false, false, false)
 		if n := len(strings.Split(strings.TrimPrefix(sel, "SELECT "), ",")); n != len(dest) {
 			t.Fatalf("rounds=%v: SELECT %d kolon, Scan %d hedef", rounds, n, len(dest))
 		}
 		if strings.Contains(sel, "model_rounds") != rounds {
 			t.Fatalf("rounds=%v: SELECT model_rounds beklenmedik", rounds)
 		}
-		ex := aiExchangeCallsSQL(rounds, false)
+		ex := aiExchangeCallsSQL(rounds, false, false)
 		if strings.Contains(ex, "model_rounds, peak_input_tokens") != rounds || strings.Count(ex, "?") != 4 {
 			t.Fatalf("rounds=%v: etkileşim çağrı okuması: %s", rounds, ex)
 		}
 	}
 	// Kolon yokken okunan satır: alanlar 0 = bilinmiyor (asla "1 tur" değil).
 	var old AICall
-	_ = aiCallsRowScan(&old, true, true, false, false, false)
+	_ = aiCallsRowScan(&old, true, true, false, false, false, false)
 	if old.ModelRounds != 0 || old.PeakInputTokens != 0 {
 		t.Fatal("eski satır 0 (bilinmiyor) okunmalı")
 	}
@@ -190,9 +190,9 @@ func TestAICallsRoundsDDL(t *testing.T) {
 func TestAICallsTimingColumnGate(t *testing.T) {
 	c := AICall{ID: "x", TTFTMs: 2100, LoopModelMs: 9400, LoopToolMs: 1800, LoopToolCalls: 4, LoopMaxRoundToolCalls: 2}
 	for _, timing := range []bool{false, true} {
-		sql := aiCallsInsertSQL(true, true, true, true, timing, false)
+		sql := aiCallsInsertSQL(true, true, true, true, timing, false, false)
 		inner := sql[strings.Index(sql, "(")+1 : strings.LastIndex(sql, ")")]
-		args := aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), true, true, true, true, timing, false)
+		args := aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), true, true, true, true, timing, false, false)
 		if n := len(strings.Split(inner, ",")); n != len(args) {
 			t.Fatalf("timing=%v: SQL %d kolon, %d arg", timing, n, len(args))
 		}
@@ -209,14 +209,14 @@ func TestAICallsTimingColumnGate(t *testing.T) {
 			}
 		}
 		// Eski şema (yalnız base kolonlar) da yazılabilir kalır.
-		old := aiCallsInsertSQL(false, false, false, false, timing, false)
+		old := aiCallsInsertSQL(false, false, false, false, timing, false, false)
 		oldInner := old[strings.Index(old, "(")+1 : strings.LastIndex(old, ")")]
-		if n, a := len(strings.Split(oldInner, ",")), len(aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), false, false, false, false, timing, false)); n != a {
+		if n, a := len(strings.Split(oldInner, ",")), len(aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), false, false, false, false, timing, false, false)); n != a {
 			t.Fatalf("eski şema timing=%v: %d kolon, %d arg", timing, n, a)
 		}
-		sel := aiCallsRowSelect(true, true, true, timing, false)
+		sel := aiCallsRowSelect(true, true, true, timing, false, false)
 		var row AICall
-		dest := aiCallsRowScan(&row, true, true, true, timing, false)
+		dest := aiCallsRowScan(&row, true, true, true, timing, false, false)
 		if n := len(strings.Split(strings.TrimPrefix(sel, "SELECT "), ",")); n != len(dest) {
 			t.Fatalf("timing=%v: SELECT %d kolon, Scan %d hedef", timing, n, len(dest))
 		}
@@ -224,14 +224,14 @@ func TestAICallsTimingColumnGate(t *testing.T) {
 			t.Fatalf("timing=%v: SELECT kolonları beklenmedik: %s", timing, sel)
 		}
 		for _, rounds := range []bool{false, true} {
-			ex := aiExchangeCallsSQL(rounds, timing)
+			ex := aiExchangeCallsSQL(rounds, timing, false)
 			if strings.Contains(ex, "loop_tool_calls") != timing || strings.Contains(ex, "ttft_ms") != timing || strings.Count(ex, "?") != 4 {
 				t.Fatalf("rounds=%v timing=%v: etkileşim çağrı okuması: %s", rounds, timing, ex)
 			}
 		}
 	}
 	var old AICall
-	_ = aiCallsRowScan(&old, true, true, true, false, false)
+	_ = aiCallsRowScan(&old, true, true, true, false, false, false)
 	if old.TTFTMs != 0 || old.LoopModelMs != 0 || old.LoopToolCalls != 0 {
 		t.Fatal("kolon yokken alanlar 0 (bilinmiyor) okunmalı")
 	}
@@ -277,9 +277,9 @@ func TestAICallsTimingDDL(t *testing.T) {
 func TestAICallsRetryColumnGate(t *testing.T) {
 	c := AICall{ID: "x", LoopGatewayRetry: true}
 	for _, retry := range []bool{false, true} {
-		sql := aiCallsInsertSQL(true, true, true, true, true, retry)
+		sql := aiCallsInsertSQL(true, true, true, true, true, retry, false)
 		inner := sql[strings.Index(sql, "(")+1 : strings.LastIndex(sql, ")")]
-		args := aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), true, true, true, true, true, retry)
+		args := aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), true, true, true, true, true, retry, false)
 		if n := len(strings.Split(inner, ",")); n != len(args) {
 			t.Fatalf("retry=%v: SQL %d kolon, %d arg", retry, n, len(args))
 		}
@@ -289,9 +289,9 @@ func TestAICallsRetryColumnGate(t *testing.T) {
 		if retry && args[len(args)-1] != uint8(1) {
 			t.Fatalf("son arg UInt8(1) olmalı: %v", args[len(args)-1])
 		}
-		sel := aiCallsRowSelect(true, true, true, true, retry)
+		sel := aiCallsRowSelect(true, true, true, true, retry, false)
 		var row AICall
-		if n, d := len(strings.Split(strings.TrimPrefix(sel, "SELECT "), ",")), len(aiCallsRowScan(&row, true, true, true, true, retry)); n != d {
+		if n, d := len(strings.Split(strings.TrimPrefix(sel, "SELECT "), ",")), len(aiCallsRowScan(&row, true, true, true, true, retry, false)); n != d {
 			t.Fatalf("retry=%v: SELECT %d kolon, Scan %d hedef", retry, n, d)
 		}
 	}
@@ -307,5 +307,46 @@ func TestAICallsRetryColumnGate(t *testing.T) {
 	dd, _ := os.ReadFile("ddl_defer.go")
 	if !strings.Contains(string(dd), "s.probeAICallsRetryColumn(ctx)") {
 		t.Error("ertelenen DDL yeniden probe'u retry kolonunu yoklamıyor")
+	}
+}
+
+// v0.10.2340 — loop_compacted_results kendi bayrağıyla: kolon yokken INSERT
+// ve SELECT onu anmaz (eski şemada satır yine yazılır); varken son arg UInt16.
+func TestAICallsCompactColumnGate(t *testing.T) {
+	c := AICall{ID: "x", LoopGatewayRetry: true, LoopCompactedResults: 3}
+	for _, compact := range []bool{false, true} {
+		sql := aiCallsInsertSQL(true, true, true, true, true, true, compact)
+		inner := sql[strings.Index(sql, "(")+1 : strings.LastIndex(sql, ")")]
+		args := aiCallsInsertArgs(c, time.Unix(0, 0).UTC(), true, true, true, true, true, true, compact)
+		if n := len(strings.Split(inner, ",")); n != len(args) {
+			t.Fatalf("compact=%v: SQL %d kolon, %d arg", compact, n, len(args))
+		}
+		if strings.Contains(inner, "loop_compacted_results") != compact {
+			t.Fatalf("compact=%v: INSERT: %s", compact, inner)
+		}
+		if compact && args[len(args)-1] != uint16(3) {
+			t.Fatalf("son arg UInt16(3) olmalı: %v", args[len(args)-1])
+		}
+		sel := aiCallsRowSelect(true, true, true, true, true, compact)
+		var row AICall
+		if n, d := len(strings.Split(strings.TrimPrefix(sel, "SELECT "), ",")), len(aiCallsRowScan(&row, true, true, true, true, true, compact)); n != d {
+			t.Fatalf("compact=%v: SELECT %d kolon, Scan %d hedef", compact, n, d)
+		}
+		if ex := aiExchangeCallsSQL(true, true, compact); strings.Contains(ex, "loop_compacted_results") != compact {
+			t.Fatalf("compact=%v: alışveriş okuması: %s", compact, ex)
+		}
+	}
+	src, err := os.ReadFile("store.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_compacted_results UInt16 DEFAULT 0", "s.probeAICallsCompactColumn(ctx)"} {
+		if !strings.Contains(string(src), want) {
+			t.Errorf("store.go %q içermiyor", want)
+		}
+	}
+	dd, _ := os.ReadFile("ddl_defer.go")
+	if !strings.Contains(string(dd), "s.probeAICallsCompactColumn(ctx)") {
+		t.Error("ertelenen DDL yeniden probe'u compact kolonunu yoklamıyor")
 	}
 }

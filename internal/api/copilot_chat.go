@@ -1007,6 +1007,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	var loopRounds loopUsage                  // v0.10.2297 — tur sayısı + en büyük tek prompt (chat_loop_usage.go)
 	rretry := &roundRetry{}                   // v0.10.2321 — geçici ağ geçidi hatasında tek yeniden deneme (chat_round_retry.go)
 	ctx = withRoundRetry(ctx, rretry)
+	rbudget := &roundBudget{traceFollowUp: isTraceFollowUp} // v0.10.2340 — bağlam penceresinden tur bütçesi (chat_round_budget.go)
+	ctx = withRoundBudget(ctx, rbudget)
 	var lastErr error
 	var finalText string
 	// v0.9.1181 (Faz 4.3) — ⚙ çipi ile onun "veriyi göster" bloğunu eşleyen
@@ -1841,7 +1843,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// eklenir (explain yolunun sözleşmesi); okunmadıysa bayt bayt eski örnek.
 	// v0.10.2134 (router boşlukları D1) — ön-getirme / rota planı tohumlu döngü
 	// "chat-prefetch" yazar (boşluk sayılmaz); profil sabit, yalnız etiket.
-	s.copilot.RecordUsage(copilot.WithLoopUsage(copilot.WithCallID(s.loopRecordCtx(ctx, opPre != nil || rtPlan != nil), loopCallID), rretry.mark(cspan.withLoopTimes(loopRounds.usage()))), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
+	s.copilot.RecordUsage(copilot.WithLoopUsage(copilot.WithCallID(s.loopRecordCtx(ctx, opPre != nil || rtPlan != nil), loopCallID), rbudget.mark(rretry.mark(cspan.withLoopTimes(loopRounds.usage())))), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
 
 	if exitReason == stopNone {
 		exitReason = stopRoundCap // savunma: döngü break'siz yalnız turlar bitince biter

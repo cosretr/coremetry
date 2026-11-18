@@ -30,6 +30,9 @@ type LoopUsage struct {
 	// GatewayRetry — v0.10.2321: bir tur geçici ağ geçidi hatasında bir kez
 	// yeniden denendi (alışveriş başına en çok bir).
 	GatewayRetry bool
+	// CompactedResults — v0.10.2340: proaktif tur bütçesi tek bir model
+	// çağrısında kaç araç sonucunu tam göstermedi (alışverişin en büyüğü).
+	CompactedResults uint16
 }
 
 // WithLoopUsage — sonraki RecordUsage'ın satırına tur bilgisini bağlar.

@@ -3154,6 +3154,8 @@ export interface AICall {
   loopToolMs?: number;
   loopToolCalls?: number;
   loopMaxRoundToolCalls?: number;
+  /** v0.10.2340 — proaktif tur bütçesinin tek çağrıda tam göstermediği araç sonucu; 0/yok = daraltma yok. Go: chstore.AICall. */
+  loopCompactedResults?: number;
 }
 
 export interface AIStats {
@@ -3291,6 +3293,8 @@ export interface AIExchangeCall {
   /** v0.10.2318 — modelin istediği araç çağrısı ve tek turda en çok çağrı; yok/0 = bilinmiyor. */
   loopToolCalls?: number;
   loopMaxRoundToolCalls?: number;
+  /** v0.10.2340 — proaktif tur bütçesinin tek çağrıda tam göstermediği araç sonucu; yok/0 = daraltma yok. */
+  loopCompactedResults?: number;
 }
 
 /** v0.10.1153 — /api/ai/exchanges: bir CoSRE kullanıcı turu (LLM'siz

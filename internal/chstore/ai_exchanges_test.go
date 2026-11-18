@@ -28,7 +28,7 @@ func TestAIExchangeSQLShapes(t *testing.T) {
 			t.Errorf("turns: LIMIT / max_execution_time eksik")
 		}
 	}
-	c := aiExchangeCallsSQL(true, true)
+	c := aiExchangeCallsSQL(true, true, false)
 	for _, want := range []string{wantProdCond, "exchange_id != ''", "splitByChar(':', exchange_id)[1] IN (?)", "LIMIT ?", "max_execution_time"} {
 		if !strings.Contains(c, want) {
 			t.Errorf("çağrı okuması %q içermiyor:\n%s", want, c)

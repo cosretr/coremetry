@@ -192,7 +192,8 @@ func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, out
 		LoopToolMs:            lu.ToolMs,
 		LoopToolCalls:         lu.ToolCalls,
 		LoopMaxRoundToolCalls: lu.MaxRoundToolCalls,
-		LoopGatewayRetry:      lu.GatewayRetry, // v0.10.2321
+		LoopGatewayRetry:      lu.GatewayRetry,     // v0.10.2321
+		LoopCompactedResults:  lu.CompactedResults, // v0.10.2340
 	}
 	if status == "error" {
 		rec.ErrorMsg = truncErr(errMsg)

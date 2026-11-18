@@ -32,6 +32,10 @@ func newSSELoopLLM(t *testing.T, write func(n int, w http.ResponseWriter, r *htt
 	t.Helper()
 	l := &sseLoopLLM{write: write}
 	l.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || strings.HasSuffix(r.URL.Path, "/api/show") {
+			http.NotFound(w, r) // v0.10.2340 — bağlam penceresi yoklaması model çağrısı değil
+			return
+		}
 		_, _ = io.ReadAll(r.Body)
 		l.mu.Lock()
 		n := l.n

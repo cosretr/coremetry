@@ -3363,6 +3363,9 @@ func canonicalTables(sd, ld, md int) []string {
 		// v0.10.2321 — döngünün model turu geçici ağ geçidi hatasında bir kez
 		// yeniden denendi mi (0/1); aynı iki-boot sözleşmesi, AYRI probe.
 		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_gateway_retry UInt8 DEFAULT 0`,
+		// v0.10.2340 — proaktif tur bütçesinin tam göstermediği araç sonucu
+		// sayısı (tek çağrıda en çok); aynı iki-boot sözleşmesi, AYRI probe.
+		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_compacted_results UInt16 DEFAULT 0`,
 
 		// rca_verdicts — kök-neden hakem kararının KALICI kaydı
 		// (v0.9.591). Öncesinde verdict istek başına üretilip
@@ -5279,6 +5282,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.probeAICallsRoundsColumns(ctx)     // v0.10.2297
 	s.probeAICallsTimingColumns(ctx)     // v0.10.2318
 	s.probeAICallsRetryColumn(ctx)       // v0.10.2321
+	s.probeAICallsCompactColumn(ctx)     // v0.10.2340
 	s.probeAIFeedbackCallColumns(ctx)    // v0.10.1280
 	s.probeCosreInteractionsColumns(ctx) // v0.10.1280 tool_evidence; v0.10.1302 + toolset
 

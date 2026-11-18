@@ -78,6 +78,10 @@ type AICall struct {
 	// LoopGatewayRetry — v0.10.2321: döngünün bir model turu geçici ağ geçidi
 	// hatasında (502/503/504, bağlantı sıfırlanması) bir kez yeniden denendi.
 	LoopGatewayRetry bool `json:"loopGatewayRetry,omitempty"`
+	// LoopCompactedResults — v0.10.2340: proaktif tur bütçesi tek bir model
+	// çağrısında kaç araç sonucunu tam göstermedi (saplama ya da çıkarılan
+	// tur; alışverişin en büyüğü). 0 = daraltma yok ya da bilinmiyor.
+	LoopCompactedResults uint16 `json:"loopCompactedResults,omitempty"`
 }
 
 // aiCallsExtended — v0.10.409 kolonları bu kurulumda var mı (boot probe;
@@ -184,6 +188,23 @@ func (s *Store) probeAICallsRetryColumn(ctx context.Context) bool {
 	return ok
 }
 
+// aiCallsCompactCol — v0.10.2340 loop_compacted_results INSERT hedefinde var mı.
+var aiCallsCompactCol atomic.Bool
+
+// AICallsCompactCol — okuma yolları için.
+func AICallsCompactCol() bool { return aiCallsCompactCol.Load() }
+
+// probeAICallsCompactColumn — v0.10.2340; loop_gateway_retry probe'uyla aynı sözleşme.
+func (s *Store) probeAICallsCompactColumn(ctx context.Context) bool {
+	var n uint64
+	err := s.conn.QueryRow(ctx,
+		`SELECT count() FROM system.columns
+		 WHERE database = currentDatabase() AND table = 'ai_calls' AND name = 'loop_compacted_results'`).Scan(&n)
+	ok := err == nil && n > 0
+	aiCallsCompactCol.Store(ok)
+	return ok
+}
+
 // probeAICallsColumns — INSERT hedefi olan ai_calls'ta (küme kipinde
 // Distributed) error_class var mı. Yalnız INSERT hedefine bakılır: yerel
 // parçada olup Distributed'da henüz olmayan kolon INSERT'i kırar.
@@ -234,11 +255,14 @@ const aiCallsTimingCols = `loop_model_ms, loop_tool_ms, loop_tool_calls, loop_ma
 // aiCallsRetryCols — v0.10.2321; kendi bayrağıyla (aiCallsRetryCol).
 const aiCallsRetryCols = `loop_gateway_retry`
 
+// aiCallsCompactCols — v0.10.2340; kendi bayrağıyla (aiCallsCompactCol).
+const aiCallsCompactCols = `loop_compacted_results`
+
 // aiCallsTimingSel — okuma: TTFT + döngü kırılımı.
 const aiCallsTimingSel = `ttft_ms, ` + aiCallsTimingCols
 
 // aiCallsInsertSQL — saf: kolon listesi bayraklara göre (ai_calls_insert_test).
-func aiCallsInsertSQL(extended, cached, traced, rounds, timing, retry bool) string {
+func aiCallsInsertSQL(extended, cached, traced, rounds, timing, retry, compact bool) string {
 	cols := aiCallsBaseCols
 	if extended {
 		cols += ",\n\t\t " + aiCallsExtCols
@@ -258,11 +282,14 @@ func aiCallsInsertSQL(extended, cached, traced, rounds, timing, retry bool) stri
 	if retry {
 		cols += ",\n\t\t " + aiCallsRetryCols
 	}
+	if compact {
+		cols += ",\n\t\t " + aiCallsCompactCols
+	}
 	return "INSERT INTO ai_calls (" + cols + ")"
 }
 
 // aiCallsInsertArgs — saf: aiCallsInsertSQL kolon sırasıyla birebir.
-func aiCallsInsertArgs(c AICall, created time.Time, extended, cached, traced, rounds, timing, retry bool) []any {
+func aiCallsInsertArgs(c AICall, created time.Time, extended, cached, traced, rounds, timing, retry, compact bool) []any {
 	args := []any{c.ID, created, c.Surface, c.ExchangeID, c.Provider, c.Model, c.BaseURL,
 		c.DurationMs, c.InputTokens, c.OutputTokens, c.Status,
 		c.ErrorMsg, c.PromptChars, c.ResponseChars,
@@ -285,6 +312,9 @@ func aiCallsInsertArgs(c AICall, created time.Time, extended, cached, traced, ro
 	if retry {
 		args = append(args, boolU8(c.LoopGatewayRetry))
 	}
+	if compact {
+		args = append(args, c.LoopCompactedResults)
+	}
 	return args
 }
 
@@ -294,7 +324,8 @@ func aiCallsInsertArgs(c AICall, created time.Time, extended, cached, traced, ro
 // v0.10.2297 — model_rounds / peak_input_tokens aynı kuralla (kendi bayrağı).
 // v0.10.2318 — ttft_ms + döngü süre kolonları aynı kuralla (kendi bayrağı).
 // v0.10.2321 — loop_gateway_retry aynı kuralla (kendi bayrağı).
-func aiCallsRowSelect(cached, traced, rounds, timing, retry bool) string {
+// v0.10.2340 — loop_compacted_results aynı kuralla (kendi bayrağı).
+func aiCallsRowSelect(cached, traced, rounds, timing, retry, compact bool) string {
 	q := `SELECT id, toUnixTimestamp64Nano(created_at), surface, exchange_id, provider, model, base_url,
 		       duration_ms, input_tokens, output_tokens, status, error_msg,
 		       prompt_chars, response_chars, user_id, user_email,
@@ -314,10 +345,13 @@ func aiCallsRowSelect(cached, traced, rounds, timing, retry bool) string {
 	if retry {
 		q += `, ` + aiCallsRetryCols
 	}
+	if compact {
+		q += `, ` + aiCallsCompactCols
+	}
 	return q
 }
 
-func aiCallsRowScan(c *AICall, cached, traced, rounds, timing, retry bool) []any {
+func aiCallsRowScan(c *AICall, cached, traced, rounds, timing, retry, compact bool) []any {
 	dest := []any{
 		&c.ID, &c.CreatedAt, &c.Surface, &c.ExchangeID, &c.Provider, &c.Model, &c.BaseURL,
 		&c.DurationMs, &c.InputTokens, &c.OutputTokens, &c.Status, &c.ErrorMsg,
@@ -339,6 +373,9 @@ func aiCallsRowScan(c *AICall, cached, traced, rounds, timing, retry bool) []any
 	if retry {
 		dest = append(dest, &c.LoopGatewayRetry)
 	}
+	if compact {
+		dest = append(dest, &c.LoopCompactedResults)
+	}
 	return dest
 }
 
@@ -358,11 +395,13 @@ func (s *Store) InsertAICall(ctx context.Context, c AICall) error {
 	}
 	// v0.10.409 — tek dal, bayraklar yalnız kolon listesini seçer.
 	ext, cached, traced, rounds, timing, retry := aiCallsExtended.Load(), aiCallsCachedCol.Load(), aiCallsTraceCol.Load(), aiCallsRoundsCol.Load(), aiCallsTimingCol.Load(), aiCallsRetryCol.Load()
-	batch, err := s.conn.PrepareBatch(ctx, aiCallsInsertSQL(ext, cached, traced, rounds, timing, retry))
+	// v0.10.2340 — loop_compacted_results kendi bayrağıyla.
+	compact := aiCallsCompactCol.Load()
+	batch, err := s.conn.PrepareBatch(ctx, aiCallsInsertSQL(ext, cached, traced, rounds, timing, retry, compact))
 	if err != nil {
 		return err
 	}
-	if err := batch.Append(aiCallsInsertArgs(c, created, ext, cached, traced, rounds, timing, retry)...); err != nil {
+	if err := batch.Append(aiCallsInsertArgs(c, created, ext, cached, traced, rounds, timing, retry, compact)...); err != nil {
 		return err
 	}
 	return batch.Send()
@@ -442,7 +481,7 @@ type ListAICallsParams struct {
 // rağmen: üretim görünümünde açıkça surface=evalset-X istemek boş döner.
 // Kaynak yüzeyden önce gelir — yoksa tek bir süzgeç üretim listesine
 // evalset satırı sızdırırdı.
-func aiCallsListSQL(p ListAICallsParams, cached, traced, rounds, timing, retry bool) (string, []any) {
+func aiCallsListSQL(p ListAICallsParams, cached, traced, rounds, timing, retry, compact bool) (string, []any) {
 	var wc whereClause
 	if !p.From.IsZero() {
 		wc.add("created_at >= toDateTime64(?, 9, 'UTC')", chDateTime64Arg(p.From))
@@ -458,7 +497,7 @@ func aiCallsListSQL(p ListAICallsParams, cached, traced, rounds, timing, retry b
 	if p.Status != "" {
 		wc.add("status = ?", p.Status)
 	}
-	q := aiCallsRowSelect(cached, traced, rounds, timing, retry) + `
+	q := aiCallsRowSelect(cached, traced, rounds, timing, retry, compact) + `
 		FROM ai_calls ` + wc.sql() + `
 		ORDER BY created_at DESC
 		LIMIT ?`
@@ -473,7 +512,9 @@ func (s *Store) ListAICalls(ctx context.Context, p ListAICallsParams) ([]AICall,
 		p.To = time.Now().UTC()
 	}
 	cached, traced, rounds, timing, retry := aiCallsCachedCol.Load(), aiCallsTraceCol.Load(), aiCallsRoundsCol.Load(), aiCallsTimingCol.Load(), aiCallsRetryCol.Load() // v0.10.807; v0.10.1463; v0.10.2297; v0.10.2318; v0.10.2321
-	q, args := aiCallsListSQL(p, cached, traced, rounds, timing, retry)
+	// v0.10.2340 — loop_compacted_results kendi bayrağıyla.
+	compact := aiCallsCompactCol.Load()
+	q, args := aiCallsListSQL(p, cached, traced, rounds, timing, retry, compact)
 	rows, err := s.conn.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -482,7 +523,7 @@ func (s *Store) ListAICalls(ctx context.Context, p ListAICallsParams) ([]AICall,
 	out := make([]AICall, 0, p.Limit)
 	for rows.Next() {
 		var c AICall
-		if err := rows.Scan(aiCallsRowScan(&c, cached, traced, rounds, timing, retry)...); err != nil {
+		if err := rows.Scan(aiCallsRowScan(&c, cached, traced, rounds, timing, retry, compact)...); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -497,11 +538,13 @@ func (s *Store) GetAICall(ctx context.Context, id string) (*AICall, error) {
 		return nil, nil
 	}
 	cached, traced, rounds, timing, retry := aiCallsCachedCol.Load(), aiCallsTraceCol.Load(), aiCallsRoundsCol.Load(), aiCallsTimingCol.Load(), aiCallsRetryCol.Load() // v0.10.807; v0.10.1463; v0.10.2297; v0.10.2318; v0.10.2321
-	row := s.conn.QueryRow(ctx, aiCallsRowSelect(cached, traced, rounds, timing, retry)+`
+	// v0.10.2340 — loop_compacted_results kendi bayrağıyla.
+	compact := aiCallsCompactCol.Load()
+	row := s.conn.QueryRow(ctx, aiCallsRowSelect(cached, traced, rounds, timing, retry, compact)+`
 		FROM ai_calls
 		WHERE id = ? LIMIT 1`, id)
 	var c AICall
-	if err := row.Scan(aiCallsRowScan(&c, cached, traced, rounds, timing, retry)...); err != nil {
+	if err := row.Scan(aiCallsRowScan(&c, cached, traced, rounds, timing, retry, compact)...); err != nil {
 		if strings.Contains(err.Error(), "no rows") {
 			return nil, nil
 		}

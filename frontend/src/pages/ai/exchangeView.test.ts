@@ -69,6 +69,14 @@ describe('exchangeView', () => {
     expect(exchangeLoopRounds(ex)).toEqual({ rounds: 3, peakInputTokens: 34100 });
   });
 
+  it('v0.10.2340 — bağlam daraltması olduysa tur satırı kısaltılan sonuç sayısını söyler', () => {
+    const call = { id: '1', createdAt: 1, surface: 'chat', provider: 'openai', model: 'gemma4', durationMs: 1, inputTokens: 92100, outputTokens: 400, status: 'ok', llm: true, modelRounds: 5, peakInputTokens: 26100 };
+    const ex: AIExchange = { ...base, tier: 'loop', llmCalls: 1, models: ['gemma4'], calls: [{ ...call, loopCompactedResults: 3 }] };
+    expect(exchangeCallsSummary(ex)).toBe('5 tur · en büyük prompt 26.1K token · bağlam daraltıldı: 3 araç sonucu kısaltıldı');
+    const none: AIExchange = { ...ex, calls: [{ ...call, loopCompactedResults: 0 }] };
+    expect(exchangeCallsSummary(none)).toBe('5 tur · en büyük prompt 26.1K token');
+  });
+
   it('v0.10.2297 — tur bilinmiyorsa (eski satır / 0) v0.10.2295 metni aynen; döngü dışı kademe tur göstermez', () => {
     const call = { id: '1', createdAt: 1, surface: 'chat', provider: 'openai', model: 'gemma4', durationMs: 1, inputTokens: 90000, outputTokens: 400, status: 'ok', llm: true };
     const old: AIExchange = { ...base, tier: 'loop', llmCalls: 1, models: ['gemma4'], calls: [call] };

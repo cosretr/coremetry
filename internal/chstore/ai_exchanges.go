@@ -54,6 +54,8 @@ type AIExchangeCall struct {
 	LoopToolMs            uint32 `json:"loopToolMs,omitempty"`
 	LoopToolCalls         uint16 `json:"loopToolCalls,omitempty"`
 	LoopMaxRoundToolCalls uint16 `json:"loopMaxRoundToolCalls,omitempty"`
+	// v0.10.2340 — proaktif tur bütçesinin tam göstermediği araç sonucu (AICall aynı adlı alan).
+	LoopCompactedResults uint16 `json:"loopCompactedResults,omitempty"`
 }
 
 // AIExchange — bir CoSRE kullanıcı turu.
@@ -335,13 +337,17 @@ func aiExchangeUsersArgs(from, to time.Time, q string, limit int) []any {
 // koşulu (evalset ve etkileşim satırları dışarıda). Bind: from, to, roots, limit.
 // v0.10.2297 — rounds: model_rounds + peak_input_tokens yalnız kolonlar varken.
 // v0.10.2318 — timing: ttft_ms + döngü süre kolonları aynı kuralla.
-func aiExchangeCallsSQL(rounds, timing bool) string {
+// v0.10.2340 — compact: loop_compacted_results aynı kuralla.
+func aiExchangeCallsSQL(rounds, timing, compact bool) string {
 	cols := ``
 	if rounds {
 		cols = `, model_rounds, peak_input_tokens`
 	}
 	if timing {
 		cols += `, ` + aiCallsTimingSel
+	}
+	if compact {
+		cols += `, ` + aiCallsCompactCols
 	}
 	return `SELECT ` + aiExchangeRootExpr + `, id, toUnixTimestamp64Nano(created_at), surface,
 		       provider, model, duration_ms, input_tokens, output_tokens, status` + cols + `
@@ -516,8 +522,8 @@ func (s *Store) ListAIExchanges(ctx context.Context, p ListAIExchangesParams) ([
 	}
 	cFrom, cTo := aiExchangeCallWindow(turns)
 	var calls []aiExchangeChild
-	rounds, timing := aiCallsRoundsCol.Load(), aiCallsTimingCol.Load() // v0.10.2297; v0.10.2318
-	cRows, err := s.conn.Query(ctx, aiExchangeCallsSQL(rounds, timing), chDateTime64Arg(cFrom), chDateTime64Arg(cTo),
+	rounds, timing, compact := aiCallsRoundsCol.Load(), aiCallsTimingCol.Load(), aiCallsCompactCol.Load() // v0.10.2297; v0.10.2318; v0.10.2340
+	cRows, err := s.conn.Query(ctx, aiExchangeCallsSQL(rounds, timing, compact), chDateTime64Arg(cFrom), chDateTime64Arg(cTo),
 		roots, len(roots)*aiExchangeCallsPerTurn)
 	if err != nil {
 		return nil, err
@@ -531,6 +537,9 @@ func (s *Store) ListAIExchanges(ctx context.Context, p ListAIExchangesParams) ([
 		}
 		if timing {
 			dest = append(dest, &c.Call.TTFTMs, &c.Call.LoopModelMs, &c.Call.LoopToolMs, &c.Call.LoopToolCalls, &c.Call.LoopMaxRoundToolCalls)
+		}
+		if compact {
+			dest = append(dest, &c.Call.LoopCompactedResults)
 		}
 		if err := cRows.Scan(dest...); err != nil {
 			cRows.Close()

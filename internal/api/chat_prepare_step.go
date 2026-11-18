@@ -163,9 +163,14 @@ func (s *Server) loopTurn(ctx context.Context, prompt string, in stepInput, emit
 	plan := prep(in)
 	plan = answerClassLoopPlan(ctx, plan) // v0.10.2331 — B: sınıf satırı EN SONA + tavan (üslup kapalıyken aynen)
 	sys := prompt + plan.SystemAddendum
-	turn, err := s.chatLoopTurn(plan.planCtx(ctx), sys, in.Conv, plan.planSpecs(in), emit)
+	cctx, specs := plan.planCtx(ctx), plan.planSpecs(in)
+	// v0.10.2340 — bağlam penceresinden tur bütçesi (chat_round_budget.go): spec'ler
+	// tam konuşmadan çözüldükten SONRA; sınırın altında in.Conv aynen gider.
+	conv := s.fitRoundBudget(cctx, emit, sys, in.Conv, specs)
+	turn, err := s.chatLoopTurn(cctx, sys, conv, specs, emit)
+	roundBudgetFrom(ctx).observe(turn, err)
 	if err == nil && len(turn.ToolCalls) == 0 && in.Kind != stepDegenRetry { // v0.10.2339 — E2: cevap turu → Derin + zorla kipinde tek yeniden üretim kapısı
-		seamNoteLoopCall(ctx, s, plan.planCtx(ctx), sys, in.Conv, plan.planSpecs(in), turn.Text)
+		seamNoteLoopCall(ctx, s, cctx, sys, conv, specs, turn.Text) // v0.10.2340 — yeniden üretim de pencereye sığan (daraltılmış) konuşmayla
 	}
 	return turn, sys, err
 }

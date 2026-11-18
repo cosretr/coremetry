@@ -246,7 +246,8 @@ type CallRecord struct {
 	LoopToolMs            uint32
 	LoopToolCalls         uint16
 	LoopMaxRoundToolCalls uint16
-	LoopGatewayRetry      bool // v0.10.2321
+	LoopGatewayRetry      bool   // v0.10.2321
+	LoopCompactedResults  uint16 // v0.10.2340 — proaktif tur bütçesi
 }
 
 // metaKey is the unexported type for ctx.WithValue lookups so other

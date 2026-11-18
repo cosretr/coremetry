@@ -164,6 +164,9 @@ func (s *Store) reprobePromotedAttrs() {
 		if !AICallsRetryCol() { // v0.10.2321
 			s.probeAICallsRetryColumn(ctx)
 		}
+		if !AICallsCompactCol() { // v0.10.2340
+			s.probeAICallsCompactColumn(ctx)
+		}
 		if !AIFeedbackCallCols() { // v0.10.1280
 			s.probeAIFeedbackCallColumns(ctx)
 		}
