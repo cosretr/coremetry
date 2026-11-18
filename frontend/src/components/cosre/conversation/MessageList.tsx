@@ -161,7 +161,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   const epPick = useMemo(() => pickOf(m.parts), [m.parts]); // v0.10.1737
   const linkCard = useMemo(() => linkCardOf(m.parts), [m.parts]); // v0.10.2101
   const question = useMemo(() => questionOf(m.parts), [m.parts]); // v0.10.2102
-  const evParts = useMemo(() => evidencePartsOf(m.parts as readonly { type: string; id?: string; data?: unknown }[]), [m.parts]); // v0.10.2363
+  const evParts = useMemo(() => evidencePartsOf(m.parts as readonly { type: string; id?: string; data?: unknown }[]), [m.parts]); // v0.10.2362
   // araç seti dilim 5 (G4) — adım kartları cevabın ÜSTÜNDE (data-tool-result / data-stop).
   const steps = useMemo(() => stepsView(visibleParts(m)), [m, visibleParts]);
   // SDK akışta son mesajı her parçada yeni nesneyle değiştirir; bitmiş

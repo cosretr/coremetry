@@ -85,7 +85,12 @@ var update = flag.Bool("update", false, "rewrite testdata/cosre/*.sse")
 // ui-stream-v1-investigate (v0.10.2361, investigation-design S4) — kanıt
 // paketi: ara cümle (data-status), paket adımı başına çip (biri "atlandı"),
 // paketin trace kartı, araçsız tek turda cevap. Yalnız evidence = on iken.
-var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-approval-resume", "ui-stream-v1-stops", "ui-stream-v1-scope", "ui-stream-v1-question", "ui-stream-v1-linkcard", "ui-stream-v1-state", "ui-stream-v1-slot", "ui-stream-v1-status", "ui-stream-v1-alias", "ui-stream-v1-action", "ui-stream-v1-action-result", "ui-stream-v1-evidence", "ui-stream-v1-investigate"}
+//
+// ui-stream-v1-steps (v0.10.2363, interaction-audit §6 I1) — adım sözleşmesi:
+// iki paket adımı (etiket parçası aynı id'li data-step sözleşmesiyle yer
+// değiştirir), araçlı adım (tool parçası + eşli data-step running → done),
+// S3 bloğu sonrası evidenceRef'li son hâl. Yalnız interaction = on iken.
+var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-approval-resume", "ui-stream-v1-stops", "ui-stream-v1-scope", "ui-stream-v1-question", "ui-stream-v1-linkcard", "ui-stream-v1-state", "ui-stream-v1-slot", "ui-stream-v1-status", "ui-stream-v1-alias", "ui-stream-v1-action", "ui-stream-v1-action-result", "ui-stream-v1-evidence", "ui-stream-v1-investigate", "ui-stream-v1-steps"}
 
 func fixtureDir() string { return filepath.Join("..", "..", "..", "testdata", "cosre") }
 

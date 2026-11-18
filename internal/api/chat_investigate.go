@@ -133,7 +133,9 @@ func (s *Server) chatInvestigate(ctx context.Context, emit func(string, any), in
 		rd = sre.ChatPackReadersFrom(s.mcpDeps())
 	}
 	pack := sre.RunChatPack(ctx, rd, sre.ChatPackRequest{Service: in.Service, From: from, To: to}, func(st sre.ChatPackStep) {
-		emit("step", map[string]string{"label": st.Label})
+		m := map[string]any{"label": st.Label} // any: withStepIDs `i`yi yerinde damgalar (JSON aynı)
+		emit("step", m)
+		stepTurnOf(ctx).notePack(ctx, m, st) // v0.10.2363 — I1: paket adımı aynı sözleşmeyle
 	})
 	digest := pack.DigestJSON()
 	args, _ := json.Marshal(map[string]any{"service": in.Service, "range_s": int64(to.Sub(from).Seconds())})

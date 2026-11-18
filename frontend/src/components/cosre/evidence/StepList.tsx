@@ -4,6 +4,8 @@
 // altında tek satır.
 // v0.10.1710 — v1 panelinin rozetleri (ön-yükleme / niyet / bütçe aşıldı) data-stop
 // satırında; kartlar İlgili / İlgisiz için cevabın exchangeId'sini alır.
+// v0.10.2363 (I1) — sözleşmeli adımlar (data-step) sıra + tek satır sonuçla; çalışan
+// adımın başlığı katlı başlıkta canlı.
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/shadcn/badge';
@@ -50,6 +52,7 @@ export function StepList({ view, live, exchangeId, badges = [], compact = false 
           <Button variant="ghost" size="xs" aria-expanded={open}
             className="h-auto gap-1 self-start px-1 font-normal text-muted-foreground tabular-nums">
             <span>{T.stepsLine(view.steps.length, elapsed > 0 ? fmtMsTR(elapsed) : '')}</span>
+            {live && view.running && <span className="truncate" data-cosre-step-running="">· {T.runningStep(view.running)}</span>}
             <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} aria-hidden />
           </Button>
         </CollapsibleTrigger>
@@ -67,7 +70,8 @@ export function StepList({ view, live, exchangeId, badges = [], compact = false 
           <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
             {T.stepsTitle} · {T.calls(view.steps.length)}
           </span>
-          {!open && view.stop && <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{T.stopPrefix} {STOP_LABELS[view.stop.reason]}</span>}
+          {!open && live && view.running && <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" data-cosre-step-running="">{T.runningStep(view.running)}</span>}
+          {!open && !(live && view.running) && view.stop && <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{T.stopPrefix} {STOP_LABELS[view.stop.reason]}</span>}
           <span className="ml-auto text-xs text-muted-foreground tabular-nums">{elapsed > 0 ? fmtMsTR(elapsed) : ''}</span>
         </Button>
       </CollapsibleTrigger>

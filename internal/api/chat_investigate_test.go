@@ -105,8 +105,8 @@ func TestChatInvestigateOffShadowInertOnSeeds(t *testing.T) {
 	ctx, ct, plan := investigateCtx(chstore.CosreEvidenceOn)
 	var labels []string
 	got, tools := s.chatInvestigate(ctx, func(kind string, p any) {
-		if m, ok := p.(map[string]string); ok && kind == "step" {
-			labels = append(labels, m["label"])
+		if m, ok := p.(map[string]any); ok && kind == "step" { // v0.10.2363 — any (withStepIDs yerinde damgalar)
+			labels = append(labels, m["label"].(string))
 		}
 	}, in, conv, nil)
 	if len(got) != 3 || got[1].ToolCalls[0].Name != evidencePackTool || got[2].ToolResults[0].CallID != evidencePackToolID {

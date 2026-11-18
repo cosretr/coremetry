@@ -31,6 +31,22 @@ var KnownKinds = map[string]bool{
 	// akışta değil, POST /api/cosre/actions/confirm cevabı ActionResultPart ile
 	// aynı biçimde döner). v1 yazıcısı düşürür.
 	"action": true, "action-result": true,
+	// v0.10.2363 (interaction-audit §6 I1) — adım sözleşmesi: araçlı adımın tool
+	// parçasının YANINDA eşli data-step (id s<i>; aynı id öncekinin yerine
+	// geçer: running → done | failed | skipped). v1 yazıcısı düşürür.
+	"step-state": true,
+}
+
+// StepStates / StepSignals — data-step sözleşmesinin kapalı kümeleri (api chat_step_contract.go).
+var (
+	StepStates  = []string{"running", "done", "failed", "skipped"}
+	StepSignals = []string{"metric", "trace", "log", "knowledge"}
+)
+
+// StepStatePart — sözleşme parçası: data-step, id = adımın kimliği (s<i>).
+func StepStatePart(m map[string]any) Part {
+	id, _ := m["id"].(string)
+	return Part{"type": "data-step", "id": id, "data": m}
 }
 
 // ActionKinds — data-action `kind` kapalı kümesi (api cosre_actions.go; prod'a

@@ -8,14 +8,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   ACTION_KINDS, ACTION_RESULT_STATUSES, DATA_PART_NAMES, MESSAGE_ID_RE, SCOPE_REASONS, STOP_REASONS, TOOL_RESULT_KINDS, TOOL_RESULT_MAX_BYTES, UI_STREAM_PART_TYPES,
-  dataPartName, isDataPart, parseDataAction, parseDataActionResult, parseDataApproval, parseDataQuestion, parseDataReset, parseDataScope, parseDataState, parseDataStatus, parseDataStop, parseDataToolResult,
+  dataPartName, isDataPart, parseDataAction, parseDataStepState, parseDataActionResult, parseDataApproval, parseDataQuestion, parseDataReset, parseDataScope, parseDataState, parseDataStatus, parseDataStop, parseDataToolResult,
 } from './protocol';
 import { parseUIStreamSSE } from './uiStreamFixture';
-import { channelsOf } from './toChatTurn';
+import { channelsOf, stepsOf } from './toChatTurn';
 import { parseCosreAliasAction } from '@/lib/pageActions';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state', 'ui-stream-v1-slot', 'ui-stream-v1-status', 'ui-stream-v1-alias', 'ui-stream-v1-action', 'ui-stream-v1-action-result', 'ui-stream-v1-evidence', 'ui-stream-v1-investigate'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state', 'ui-stream-v1-slot', 'ui-stream-v1-status', 'ui-stream-v1-alias', 'ui-stream-v1-action', 'ui-stream-v1-action-result', 'ui-stream-v1-evidence', 'ui-stream-v1-investigate', 'ui-stream-v1-steps'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
 
@@ -432,5 +432,21 @@ describe('data-action + data-action-result (I5)', () => {
     expect(k?.[1].split(',').map(x => x.trim().replace(/"/g, ''))).toEqual([...ACTION_KINDS]);
     const st = /ActionResultStatuses = \[\]string\{([^}]*)\}/.exec(part);
     expect(st?.[1].split(',').map(x => x.trim().replace(/"/g, ''))).toEqual([...ACTION_RESULT_STATUSES]);
+  });
+});
+
+// v0.10.2363 (interaction-audit §6 I1) — adım sözleşmesi: araçlı adımın eşli
+// data-step'i (etiketsiz, çip değil), paket adımı etiket parçasının yerine geçer.
+describe('data-step sözleşmesi (I1)', () => {
+  const parts = parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', 'ui-stream-v1-steps.sse'), 'utf8')).parts;
+  const contracts = parts.filter(p => p.type === 'data-step').map(p => parseDataStepState(p)).filter(c => c !== null);
+  it('her sözleşme ayrıştırılır; s3 running → done → evidenceRef', () => {
+    expect(contracts.map(c => [c.id, c.state])).toEqual([['s1', 'done'], ['s2', 'skipped'], ['s3', 'running'], ['s3', 'done'], ['s3', 'done']]);
+    expect(contracts[4]).toMatchObject({ evidenceRef: 'b1', signal: 'trace', token: 'stp.sig3', spent: { calls: 1, rounds: 1 } });
+    expect(parseDataStepState({ type: 'data-step', id: 's1', data: { label: 'x', i: 1 } })).toBeNull();
+  });
+  it('v1 çip şeridi: etiketsiz sözleşme parçası çip eklemez', () => {
+    const labels = stepsOf(parts as never).steps ?? [];
+    expect(labels.filter(l => l === '')).toHaveLength(0);
   });
 });

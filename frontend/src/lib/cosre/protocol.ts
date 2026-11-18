@@ -11,7 +11,7 @@
 // uiStreamFixture.test.ts (paylaşılan testdata/cosre/*.sse) kırmızıya döner;
 // fixture yenilendiği commit'te bu dosya da güncellenir.
 
-import type { CosreActionCard, CosreActionFields, CosreActionKind, CosreActionResult, CosreApproval, CosreConvState, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreQuestion, CosreQuestionKind, CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { CosreActionCard, CosreActionFields, CosreActionKind, CosreActionResult, CosreApproval, CosreConvState, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreQuestion, CosreQuestionKind, CosreScope, CosreScopeReason, CosreStepContract, CosreStepSignal, CosreStepState, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
 
 export const PROTOCOL_VERSION = 'v1';
 export const PROTOCOL_HEADER = 'x-vercel-ai-ui-message-stream';
@@ -349,5 +349,27 @@ export function parseDataActionResult(p: { type: string; data?: unknown }): Cosr
     ...(innerPath(d.link) ? { link: d.link } : {}),
     ...(optStr(d.noteId) ? { noteId: d.noteId as string } : {}),
     ...(optStr(d.exchangeId) ? { exchangeId: d.exchangeId as string } : {}),
+  };
+}
+
+/** v0.10.2363 (I1) — data-step sözleşmesinin kapalı kümeleri (Go uistream.StepStates / StepSignals). */
+export const STEP_STATES = ['running', 'done', 'failed', 'skipped'] as const satisfies readonly CosreStepState[];
+export const STEP_SIGNALS = ['metric', 'trace', 'log', 'knowledge'] as const satisfies readonly CosreStepSignal[];
+
+/** v0.10.2363 (I1) — sözleşmeli data-step → CosreStepContract; etiket-yalnız data-step ya da bozuk yük → null. */
+export function parseDataStepState(p: { type: string; id?: unknown; data?: unknown }): CosreStepContract | null {
+  if (p.type !== 'data-step' || !isRecord(p.data)) return null;
+  const d = p.data;
+  const order = finiteNum(d.order);
+  if (!optStr(d.id) || d.id !== p.id || !optStr(d.title) || order === undefined || !(STEP_STATES as readonly unknown[]).includes(d.state)) return null;
+  const spent = isRecord(d.spent) ? d.spent : {};
+  return {
+    id: d.id as string, order, title: d.title as string, state: d.state as CosreStepState,
+    spent: { calls: finiteNum(spent.calls) ?? 0, rounds: finiteNum(spent.rounds) ?? 0 },
+    ...((STEP_SIGNALS as readonly unknown[]).includes(d.signal) ? { signal: d.signal as CosreStepSignal } : {}),
+    ...(optStr(d.result) ? { result: d.result as string } : {}),
+    ...(optStr(d.evidenceRef) ? { evidenceRef: d.evidenceRef as string } : {}),
+    ...(optStr(d.tool) ? { tool: d.tool as string } : {}),
+    ...(optStr(d.token) ? { token: d.token as string } : {}),
   };
 }

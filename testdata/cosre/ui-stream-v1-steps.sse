@@ -1,0 +1,42 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"data":{"i":1,"label":"belirti: hata %5.97 (önceki %0.28), p95 2100 ms"},"id":"s1","type":"data-step"}
+
+data: {"data":{"i":1,"id":"s1","label":"belirti: hata %5.97 (önceki %0.28), p95 2100 ms","order":1,"result":"hata %5.97 (önceki %0.28), p95 2100 ms","signal":"metric","spent":{"calls":0,"rounds":0},"state":"done","title":"belirti","token":"stp.sig1"},"id":"s1","type":"data-step"}
+
+data: {"data":{"i":2,"label":"atlandı: anomali (zaman aşımı)"},"id":"s2","type":"data-step"}
+
+data: {"data":{"i":2,"id":"s2","label":"atlandı: anomali (zaman aşımı)","order":2,"result":"atlandı: zaman aşımı","signal":"metric","spent":{"calls":0,"rounds":0},"state":"skipped","title":"anomali","token":"stp.sig2"},"id":"s2","type":"data-step"}
+
+data: {"dynamic":true,"toolCallId":"s3","toolName":"explain_trace","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"args":{"trace_id":"5ce0e4736a3ce929d0e0e47364bf92f3"},"argsText":"{\"trace_id\":\"5ce0e4736a3ce929d0e0e47364bf92f3\"}"},"toolCallId":"s3","toolName":"explain_trace","type":"tool-input-available"}
+
+data: {"data":{"id":"s3","order":3,"signal":"trace","spent":{"calls":1,"rounds":1},"state":"running","title":"Trace · explain trace","tool":"explain_trace"},"id":"s3","type":"data-step"}
+
+data: {"dynamic":true,"output":{"bytes":34,"durationMs":120,"ok":true,"preview":"{\"spans\":[{\"service\":\"payments\"}]}","truncated":false},"toolCallId":"s3","type":"tool-output-available"}
+
+data: {"data":{"bytes":34,"duration_ms":120,"kind":"text","ok":true,"text":"{\"spans\":[{\"service\":\"payments\"}]}","tool":"explain_trace"},"id":"s3","type":"data-tool-result"}
+
+data: {"data":{"id":"s3","order":3,"result":"1 satır · 120 ms","signal":"trace","spent":{"calls":1,"rounds":1},"state":"done","title":"Trace · explain trace","token":"stp.sig3","tool":"explain_trace"},"id":"s3","type":"data-step"}
+
+data: {"data":{"final":true,"payload":{"href":"/trace/5ce0e4736a3ce929d0e0e47364bf92f3","ref":"trace:5ce0e4736a3ce929d0e0e47364bf92f3","service":"orders","spanCount":9,"traceId":"5ce0e4736a3ce929d0e0e47364bf92f3"},"seq":1},"id":"b1","type":"data-block-trace"}
+
+data: {"data":{"evidenceRef":"b1","id":"s3","order":3,"result":"1 satır · 120 ms","signal":"trace","spent":{"calls":1,"rounds":1},"state":"done","title":"Trace · explain trace","token":"stp.sig3","tool":"explain_trace"},"id":"s3","type":"data-step"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"orders'ta hatalar payments çağrısında zaman aşımından.","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"data":{"calls":1,"elapsed_ms":3400,"reason":"stop","rounds":2},"id":"stop","type":"data-stop"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

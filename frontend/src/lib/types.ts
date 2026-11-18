@@ -9068,6 +9068,23 @@ export interface CosreActionResult {
   exchangeId?: string;
 }
 
+/** v0.10.2363 (interaction-audit I1) — data-step adım sözleşmesi (Go api chat_step_contract.go). */
+export type CosreStepState = 'running' | 'done' | 'failed' | 'skipped';
+export type CosreStepSignal = 'metric' | 'trace' | 'log' | 'knowledge';
+export interface CosreStepContract {
+  id: string;
+  order: number;
+  title: string;
+  state: CosreStepState;
+  signal?: CosreStepSignal;
+  result?: string;
+  evidenceRef?: string;
+  spent: { calls: number; rounds: number };
+  tool?: string;
+  /** I2 yönlendirmesinin adımı adlandırdığı imzalı jeton (Redis yoksa yok). */
+  token?: string;
+}
+
 /** system_settings `cosre.briefing` (GET /api/ai/briefing her rol; PUT admin + audit). */
 export interface CosreBriefingSettings {
   enabled: boolean;

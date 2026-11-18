@@ -223,3 +223,24 @@ describe('stepView 1710: girdiler / ham çıktı / durdurma rozetleri', () => {
     expect(stopBadges({ stepDetails: [d(1)] }, stop).map(b => b.label)).toEqual(want);
   });
 });
+
+// v0.10.2363 (I1) — adım sözleşmesi: eşli data-step tool kartını zenginleştirir,
+// araçsız paket adımı tek satır olur, sıra sözleşmeden; çalışan adım başlıkta.
+describe('stepsView — adım sözleşmesi (I1)', () => {
+  const st = (id: string, data: Record<string, unknown>) => P({ type: 'data-step', id, data: { id, spent: { calls: 0, rounds: 0 }, ...data } });
+  it('paket adımı + araçlı adım sözleşme sırasıyla; sonuç ve sinyal kartta', () => {
+    const v = stepsView([
+      tool(3, 'find_traces', { service: 'payments' }),
+      st('s3', { order: 2, title: 'Trace · find traces', tool: 'find_traces', signal: 'trace', state: 'running' }),
+      st('s1', { i: 1, label: 'belirti: hata %5', order: 1, title: 'belirti', signal: 'metric', state: 'done', result: 'hata %5' }),
+    ]);
+    expect(v.steps.map(s => [s.id, s.kind, s.plain ?? false])).toEqual([['s1', 'text', true], ['s3', 'running', false]]);
+    expect(v.steps[0]).toMatchObject({ title: 'belirti', result: 'hata %5', signal: 'metric' });
+    expect(v.running).toBe('Trace · find traces');
+  });
+  it('sözleşmesiz akış aynen (running yok, plain yok)', () => {
+    const v = stepsView([tool(1, 'find_traces', {}, { ok: true, preview: '{}' })]);
+    expect(v.running).toBeUndefined();
+    expect(v.steps[0].plain).toBeUndefined();
+  });
+});

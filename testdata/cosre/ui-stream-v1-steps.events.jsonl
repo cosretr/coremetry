@@ -1,0 +1,13 @@
+{"kind": "step", "payload": {"label": "belirti: hata %5.97 (önceki %0.28), p95 2100 ms", "i": 1}}
+{"kind": "step-state", "payload": {"id": "s1", "i": 1, "order": 1, "title": "belirti", "label": "belirti: hata %5.97 (önceki %0.28), p95 2100 ms", "signal": "metric", "state": "done", "result": "hata %5.97 (önceki %0.28), p95 2100 ms", "spent": {"calls": 0, "rounds": 0}, "token": "stp.sig1"}}
+{"kind": "step", "payload": {"label": "atlandı: anomali (zaman aşımı)", "i": 2}}
+{"kind": "step-state", "payload": {"id": "s2", "i": 2, "order": 2, "title": "anomali", "label": "atlandı: anomali (zaman aşımı)", "signal": "metric", "state": "skipped", "result": "atlandı: zaman aşımı", "spent": {"calls": 0, "rounds": 0}, "token": "stp.sig2"}}
+{"kind": "step", "payload": {"i": 3, "tool": "explain_trace", "args": "{\"trace_id\":\"5ce0e4736a3ce929d0e0e47364bf92f3\"}", "argsJson": {"trace_id": "5ce0e4736a3ce929d0e0e47364bf92f3"}, "phase": "Trace"}}
+{"kind": "step-state", "payload": {"id": "s3", "order": 3, "title": "Trace · explain trace", "tool": "explain_trace", "signal": "trace", "state": "running", "spent": {"calls": 1, "rounds": 1}}}
+{"kind": "step-result", "payload": {"i": 3, "tool": "explain_trace", "ok": true, "preview": "{\"spans\":[{\"service\":\"payments\"}]}", "truncated": false, "bytes": 34, "durationMs": 120}}
+{"kind": "step-state", "payload": {"id": "s3", "order": 3, "title": "Trace · explain trace", "tool": "explain_trace", "signal": "trace", "state": "done", "result": "1 satır · 120 ms", "spent": {"calls": 1, "rounds": 1}, "token": "stp.sig3"}}
+{"kind": "block", "payload": {"id": "b1", "type": "trace", "seq": 1, "final": true, "payload": {"ref": "trace:5ce0e4736a3ce929d0e0e47364bf92f3", "traceId": "5ce0e4736a3ce929d0e0e47364bf92f3", "service": "orders", "spanCount": 9, "href": "/trace/5ce0e4736a3ce929d0e0e47364bf92f3"}}}
+{"kind": "step-state", "payload": {"id": "s3", "order": 3, "title": "Trace · explain trace", "tool": "explain_trace", "signal": "trace", "state": "done", "result": "1 satır · 120 ms", "evidenceRef": "b1", "spent": {"calls": 1, "rounds": 1}, "token": "stp.sig3"}}
+{"kind": "answer", "payload": {"text": "orders'ta hatalar payments çağrısında zaman aşımından."}}
+{"kind": "stop", "payload": {"reason": "stop", "calls": 1, "rounds": 2, "elapsed_ms": 3400}}
+{"kind": "done", "payload": {"ok": true}}

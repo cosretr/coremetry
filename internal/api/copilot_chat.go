@@ -433,6 +433,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	emit = answerStyleFrom(ctx).wrapEmit(ctx, emit) // v0.10.2331 — üslup kapalıyken emit aynen
 	// v0.10.2353 — I5 onaylı aksiyon kartı (chat_action_card.go); interaction kapalıyken emit aynen.
 	emit = s.beginChatActionTurn(ctx, exchangeID, agentctx.Sanitize(req.Context.Page)).wrapEmit(ctx, emit)
+	stepT := s.beginChatStepTurn(ctx, exchangeID, req.Context.Conversation, evm != nil) // v0.10.2363 — I1 adım sözleşmesi; kapalıyken nil, emit aynen
+	emit, ctx = stepT.wrapEmit(ctx, emit), withChatStepTurn(ctx, stepT)
 	xch.verify.noteState(cst) // v0.10.2327 — durum adları + önceki defter (istemci yankısı hariç)
 	// v0.10.1465 — yapışkan kod konuşması (chat_code_sticky.go): kod okunmuş
 	// konuşmanın HER turu her kademeden önce yerel profile sabitlenir; yerel
@@ -1354,6 +1356,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			continue // S5 — devam önceki turların bütçesini harcamış sayılır
 		}
 		exitRounds = round + 1
+		// v0.10.2363 — I1 harcanan tur (chat_step_contract.go); kapalıyken nil alıcı no-op.
+		stepTurnOf(ctx).setRound(exitRounds)
 		tctx, endTurn := cspan.turn(ctx, round, overflowRetried) // v0.10.425 — ai.chat.turn
 		// v0.10.1273 — final turun metni canlı akar (chat_step_phase.go chatLoopTurn).
 		turn, _, err := s.loopTurn(tctx, loopPrompt, stepInput{

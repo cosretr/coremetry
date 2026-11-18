@@ -8,9 +8,9 @@
 // v1 ChatBubble / toChatTurn'e dokunmaz; parçalar protocol.ts ayrıştırıcılarından.
 // Önizleme satırları yalnız bilinen v2 araçlarının JSON gövdesinden (≤3);
 // page_url yoksa satırın href'i YOK (tıklanmaz görünür).
-import type { ChatTurn, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { ChatTurn, CosreStepContract, CosreStepSignal, CosreStepState, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
 import { isDeadlineError, summarizeSteps } from '@/components/ai/toolSteps';
-import { parseDataStop, parseDataToolResult } from '@/lib/cosre/protocol';
+import { parseDataStepState, parseDataStop, parseDataToolResult } from '@/lib/cosre/protocol';
 import { stepIndex } from '@/lib/cosre/toChatTurn';
 import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
 import { serviceHref } from '@/lib/serviceHref';
@@ -55,12 +55,21 @@ export interface StepView {
   inputs?: string;
   /** v0.10.1710 — sunucunun ham önizlemesi ("Ham çıktı", kapalı, salt okunur). */
   raw?: string;
+  /** v0.10.2363 (I1) — adım sözleşmesi: sıra, sinyal, tek satır sonuç, kanıt bloğu. */
+  order?: number;
+  signal?: CosreStepSignal;
+  result?: string;
+  evidenceRef?: string;
+  /** Araçsız sözleşme adımı (S4 paketi): tek satır, açılmaz. */
+  plain?: boolean;
 }
 
 export interface StepsView {
   steps: StepView[];
   stop?: CosreStop;
   totalMs: number;
+  /** v0.10.2363 (I1) — çalışan sözleşme adımının başlığı (katlı başlıkta canlı). */
+  running?: string;
 }
 
 export const PREVIEW_MAX_ROWS = 3;
@@ -291,8 +300,12 @@ export function stepsView(parts: readonly Part[]): StepsView {
   const results = new Map<string, CosreToolResult>();
   let stop: CosreStop | undefined;
   const tools: ToolPartLike[] = [];
+  const contract = new Map<string, CosreStepContract>();
   for (const p of parts) {
-    if (p.type === 'data-tool-result') {
+    if (p.type === 'data-step') {
+      const c = parseDataStepState(p as { type: string; id?: unknown; data?: unknown });
+      if (c) contract.set(c.id, c);
+    } else if (p.type === 'data-tool-result') {
       const tr = parseDataToolResult(p as { type: string; id?: unknown; data?: unknown });
       if (tr) results.set(tr.id, tr);
     } else if (p.type === 'data-stop') {
@@ -340,7 +353,29 @@ export function stepsView(parts: readonly Part[]): StepsView {
       const pv = previewFor(t.toolName, body, pageUrl);
       if (pv) view.preview = pv;
     }
+    const c = contract.get(t.toolCallId);
+    if (c) Object.assign(view, contractFields(c));
     steps.push(view);
   }
-  return { steps, ...(stop ? { stop } : {}), totalMs };
+  if (contract.size === 0) return { steps, ...(stop ? { stop } : {}), totalMs };
+  // v0.10.2363 (I1) — araçsız sözleşme adımları (S4 paketi) + sözleşme sırası.
+  const seen = new Set(steps.map(s => s.id));
+  for (const c of contract.values()) {
+    if (seen.has(c.id)) continue;
+    steps.push({ id: c.id, i: stepIndex(c.id) ?? 0, tool: '', kind: CONTRACT_KIND[c.state], title: c.title, tags: [], plain: true, ...contractFields(c) });
+  }
+  steps.sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
+  const running = [...contract.values()].filter(c => c.state === 'running').pop();
+  return { steps, ...(stop ? { stop } : {}), totalMs, ...(running ? { running: running.title } : {}) };
+}
+
+const CONTRACT_KIND: Record<CosreStepState, StepKind> = { running: 'running', done: 'text', failed: 'error', skipped: 'skipped' };
+
+function contractFields(c: CosreStepContract): Pick<StepView, 'order' | 'signal' | 'result' | 'evidenceRef'> {
+  return {
+    order: c.order,
+    ...(c.signal ? { signal: c.signal } : {}),
+    ...(c.result ? { result: c.result } : {}),
+    ...(c.evidenceRef ? { evidenceRef: c.evidenceRef } : {}),
+  };
 }

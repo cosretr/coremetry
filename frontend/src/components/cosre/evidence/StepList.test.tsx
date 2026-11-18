@@ -155,3 +155,23 @@ describe('ScopeBadge', () => {
     expect(el.textContent).toContain('Kapsam okunamadı');
   });
 });
+
+// v0.10.2363 (I1) — sözleşmeli adımlar: paket adımı açılmayan tek satır (başlık · sonuç),
+// araçlı adımın başlık satırında sonuç; akarken açık liste, çalışan adım canlı.
+describe('StepList — adım sözleşmesi (I1)', () => {
+  const view: StepsView = {
+    totalMs: 0, running: 'Trace · find traces',
+    steps: [
+      { id: 's1', i: 1, tool: '', kind: 'text', title: 'belirti', tags: [], plain: true, order: 1, signal: 'metric', result: 'hata %5' },
+      { id: 's3', i: 3, tool: 'find_traces', kind: 'running', title: 'Trace bul', tags: [{ label: 'find_traces' }], order: 2, signal: 'trace' },
+    ],
+  };
+  it('paket satırı tek satır; araçlı kart düğmeli', async () => {
+    await draw(<StepList view={view} live />);
+    const plain = host!.querySelector('[data-cosre-step="s1"]')!;
+    expect(plain.tagName).toBe('DIV');
+    expect(plain.querySelector('button')).toBeNull();
+    expect(plain.textContent).toContain('belirti · hata %5');
+    expect(host!.querySelector('[data-cosre-step="s3"] button')).not.toBeNull();
+  });
+});

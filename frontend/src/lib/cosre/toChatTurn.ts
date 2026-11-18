@@ -80,6 +80,9 @@ export function stepsOf(parts: readonly Part[]): Pick<ChatTurn, 'steps' | 'stepD
   for (const p of parts) {
     if (p.type === 'data-step') {
       const d = rec(p.data);
+      // v0.10.2363 (I1) — araçlı adımın eşli sözleşme parçası (etiketsiz) çip değildir;
+      // paket adımının sözleşmesi etiketi taşır, çip aynen kalır.
+      if (typeof d.state === 'string' && d.label === undefined) continue;
       const label = str(d.label) ?? '';
       steps.push(label);
       const i = num(d.i) ?? stepIndex(p.id);

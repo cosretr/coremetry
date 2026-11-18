@@ -87,20 +87,46 @@ function Preview({ p }: { p: StepPreview }) {
   );
 }
 
+// v0.10.2363 (I1) — sözleşme sinyali → mevcut sinyal rozeti (knowledge rozetsiz).
+function StepSignal({ v }: { v: StepView }) {
+  return v.signal && v.signal !== 'knowledge' ? <SignalKindBadge kind={v.signal} /> : null;
+}
+
+/** Başlık satırının ikinci parçası: sözleşme sonucu (tek satır) ya da araç alt başlığı. */
+function lineOf(v: StepView): string | undefined {
+  return v.result ?? v.subtitle;
+}
+
 export function StepCard({ v, exchangeId }: { v: StepView; exchangeId?: string }) {
   const [open, setOpen] = useState(false);
   const muted = v.kind === 'skipped';
+  const line = lineOf(v);
+  if (v.plain) {
+    // v0.10.2363 (I1) — araçsız sözleşme adımı (S4 paketi): açılmayan tek satır, aynı sınıflar.
+    return (
+      <div role="listitem" data-cosre-step={v.id} data-kind={v.kind} data-evidence-ref={v.evidenceRef}
+        className={cn('flex items-center gap-2 border-t border-border px-3 py-2 text-sm first:border-t-0', muted && 'text-muted-foreground')}>
+        <StatusIcon kind={v.kind} />
+        <span className="min-w-0 flex-1 truncate" title={line}>
+          <span className="font-medium">{v.title}</span>
+          {line && <span className="text-muted-foreground"> · {line}</span>}
+        </span>
+        <StepSignal v={v} />
+      </div>
+    );
+  }
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border-t border-border first:border-t-0"
-      data-cosre-step={v.id} data-kind={v.kind} role="listitem">
+      data-cosre-step={v.id} data-kind={v.kind} data-evidence-ref={v.evidenceRef} role="listitem">
       <CollapsibleTrigger asChild>
         <Button variant="ghost" size="sm" aria-expanded={open}
           className={cn('h-auto w-full justify-start gap-2 rounded-none px-3 py-2 text-left font-normal', muted && 'text-muted-foreground')}>
           <StatusIcon kind={v.kind} />
           <span className="min-w-0 flex-1 truncate">
             <span className="font-medium">{v.title}</span>
-            {v.subtitle && <span className="text-muted-foreground"> · {v.subtitle}</span>}
+            {line && <span className="text-muted-foreground"> · {line}</span>}
           </span>
+          <StepSignal v={v} />
           <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">{meta(v)}</span>
           <ChevronRight className={cn('size-3 text-muted-foreground transition-transform', open && 'rotate-90')} aria-hidden />
         </Button>

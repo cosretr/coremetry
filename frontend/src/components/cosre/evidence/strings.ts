@@ -42,6 +42,8 @@ export const EVIDENCE_STRINGS = {
   skipAria: 'atlandı',
   errAria: 'hata',
   runAria: 'çalışıyor',
+  /** v0.10.2363 (I1) — katlı başlıkta çalışan adım. */
+  runningStep: (title: string) => `şimdi: ${title}`,
 } as const;
 
 /** data-stop `reason` → tek satırlık etiket (8 neden). */
