@@ -47,19 +47,31 @@ const importers: Record<string, () => Promise<unknown>> = {
 
 const warmed = new Set<string>();
 
-// prefetchRoute warms one route's chunk, once, during idle. Safe to spam — the
-// `warmed` guard makes repeats a no-op, and a failed prefetch is forgotten so a
-// later real navigation still retries.
-export function prefetchRoute(path: string): void {
-  const key = path.split('?')[0].split('#')[0];
+// v0.10.2350 — grafik parçası (corePanelEntry → @grafana/data + uPlot). Sıcak
+// rotaların grafikleri bunu React.lazy ile ayrıca ister; sayfa parçası gelip
+// ilk grafik çizilene dek SERİ bir ikinci indirme bekleniyordu. Bilinen bir
+// rotanın hover'ı onu da (bir kez) ısıtır; specifier lazy() ile birebir.
+const CHART_KEY = '#chart';
+const chartImporter = () => import('@/components/chart/corePanelEntry');
+
+function warm(key: string, imp: () => Promise<unknown>): void {
   if (warmed.has(key)) return;
-  const imp = importers[key];
-  if (!imp) return;
   warmed.add(key);
   const run = () => { imp().catch(() => warmed.delete(key)); };
   const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => void }).requestIdleCallback;
   if (ric) ric(run, { timeout: 1000 });
   else window.setTimeout(run, 0);
+}
+
+// prefetchRoute warms one route's chunk (and the shared chart chunk), once,
+// during idle. Safe to spam — the `warmed` guard makes repeats a no-op, and a
+// failed prefetch is forgotten so a later real navigation still retries.
+export function prefetchRoute(path: string): void {
+  const key = path.split('?')[0].split('#')[0];
+  const imp = importers[key];
+  if (!imp) return;
+  warm(key, imp);
+  warm(CHART_KEY, chartImporter);
 }
 
 // usePrefetchOnHover installs ONE delegated mouseover/focus listener that warms
