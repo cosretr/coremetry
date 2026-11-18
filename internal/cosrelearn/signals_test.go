@@ -242,7 +242,7 @@ func (f *fakeStore) UngroundedExchanges(context.Context, time.Time, time.Time) (
 }
 
 // v0.10.1291 — takip çipinden gelen benzer soru "yeniden sorma" cezası almaz;
-// çipsiz aynı akış hâlâ rephrase sayılır.
+// çipsiz aynı akış hâlâ rephrase sayılır. v0.10.2354: tık gerekçeye girmez.
 func TestFollowupClickSuppressesRephrase(t *testing.T) {
 	a := turn("a", "c1", 0, "checkout servisi neden yavaş")
 	b := turn("b", "c1", time.Minute, "checkout servisi neden bu kadar yavaş")
@@ -252,7 +252,7 @@ func TestFollowupClickSuppressesRephrase(t *testing.T) {
 	}
 	chip := DeriveSignals(Inputs{Interactions: []chstore.CosreInteraction{a, b},
 		Signals: []chstore.CosreSignal{{ExchangeID: "a", Kind: SigFollowupClick, Detail: "slow"}}})
-	if !reflect.DeepEqual(chip["a"], []string{SigFollowupClick}) {
-		t.Fatalf("çipli: %v, want [followup_click]", chip["a"])
+	if len(chip["a"]) != 0 {
+		t.Fatalf("çipli: %v, want []", chip["a"])
 	}
 }

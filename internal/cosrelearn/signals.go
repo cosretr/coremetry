@@ -95,6 +95,10 @@ var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrect
 	SigVerifyMismatch: true, SigAliasSaved: true, // v0.10.2327, v0.10.2334
 	SigActionConfirm: true, SigActionCancel: true} // v0.10.2353
 
+// nonLabelKinds — v0.10.2354: istemcinin POST edebildiği ama cevaba etiket
+// (gerekçe / puan) olarak bağlanmayan örtük sinyaller.
+var nonLabelKinds = map[string]bool{SigFollowupClick: true}
+
 // SystemSignalActor — sistem sinyallerinin user_email değeri (kullanıcı değil).
 const SystemSignalActor = "system:cosre"
 
@@ -108,14 +112,14 @@ var Weight = map[string]float64{
 	// v0.10.1281 (operatör 2026-10-17: "oylara çok güvenmeyelim") — 👍/👎
 	// seyrek ve öznel; gözlenen davranış sinyallerinin ALTINDA tartılır.
 	SigThumbsUp: 0.10,
-	// v0.10.1291 — takip çipi tıkı: gözlenen davranış ama ÇİFT anlamlı
-	// (cevap ilerlemeye değer bulundu YA DA cevap yetmedi, bir sonraki adım
-	// arandı). Bu yüzden en zayıf olumlu sinyal: link/kanıt tıkının (0.10)
-	// yarısı ve 👍'nin (0.10) altında. Oy testi (TestVotesWeighLessThan-
-	// ObservedSignals) onu "güçlü gözlenen" listesine KATMAZ — eşiği oyları
-	// aşağı çekmeye zorlamasın; kendi pini TestFollowupClickIsWeakObserved.
-	// Çalışma zamanı kararına okunmaz (yalnız gece kalite puanı).
-	SigFollowupClick: 0.05,
+	// v0.10.2354 (interaction-audit açık soru 8, operatör onayı) — takip
+	// çipi tıkı ÖRTÜK sinyaldir; kalıcı kural "örtük sinyal ne çalışma zamanı
+	// kararı ne değerlendirme etiketi": ağırlık 0 (eskiden 0.05) ve
+	// DeriveSignals onu cevabın gerekçelerine yazmaz (nonLabelKinds) → gece
+	// puanı ve aday vaka seçimi onu görmez. Ham satır cosre_signals'ta kalır;
+	// tek etkisi çip metninden gelen sonraki sorunun "yeniden sorma" cezası
+	// almaması (cevabın kusuru değil, bizim çipimiz).
+	SigFollowupClick: 0,
 	// v0.10.1597 — kart ilgili/ilgisiz bir OY'dur (öznel yargı), gözlenen
 	// davranış değil: 👍/👎 mertebesinde (±0.10), "güçlü gözlenen" listesine
 	// girmez (TestEvidenceRelevanceSignalsAreVoteWeight). Serbest not nötr
@@ -188,7 +192,7 @@ func DeriveSignals(in Inputs) map[string][]string {
 		}
 	}
 	for _, g := range in.Signals {
-		if known[g.ExchangeID] && ClientSignalKinds[g.Kind] {
+		if known[g.ExchangeID] && ClientSignalKinds[g.Kind] && !nonLabelKinds[g.Kind] {
 			add(g.ExchangeID, g.Kind)
 		}
 	}

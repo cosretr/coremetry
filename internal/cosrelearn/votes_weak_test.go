@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 func TestVotesWeighLessThanObservedSignals(t *testing.T) {
@@ -73,24 +75,23 @@ func TestVotesNeverReachRuntimeDecisions(t *testing.T) {
 	}
 }
 
-// v0.10.1291 — takip çipi tıkı (followup_click) gözlenen davranıştır ama çift
-// anlamlıdır (cevap yetti → ilerle / yetmedi → başka yere bak). Pin: olumlu,
-// ≤0.10, link/kanıt tıkından büyük değil ve 👍'den büyük değil — oy testinin
-// "gözlenen" listesine girmez ki oy ağırlıklarını aşağı çekmeye zorlamasın.
-func TestFollowupClickIsWeakObserved(t *testing.T) {
-	w := Weight[SigFollowupClick]
-	switch {
-	case w <= 0:
-		t.Fatalf("followup_click ağırlığı %.2f — olumlu olmalı", w)
-	case w > 0.10:
-		t.Errorf("followup_click ağırlığı %.2f > 0.10", w)
-	case w > Weight[SigLinkClick] || w > Weight[SigEvidenceClick]:
-		t.Errorf("followup_click (%.2f) link/kanıt tıkından ağır olamaz", w)
-	case w > Weight[SigThumbsUp]:
-		t.Errorf("followup_click (%.2f) 👍'den ağır olamaz", w)
+// v0.10.2354 (interaction-audit açık soru 8) — takip çipi tıkı örtük
+// sinyaldir, etiket değil: ağırlık 0, istemci yine gönderebilir (ham satır
+// gözlem için kalır) ama DeriveSignals onu cevabın gerekçelerine yazmaz →
+// gece puanı ve aday vaka seçimi onu görmez.
+func TestFollowupClickIsNotALabel(t *testing.T) {
+	if w, ok := Weight[SigFollowupClick]; !ok || w != 0 {
+		t.Fatalf("followup_click ağırlığı %.2f — 0 olmalı", w)
 	}
 	if !ClientSignalKinds[SigFollowupClick] {
 		t.Error("followup_click istemci sinyali olarak kabul edilmeli")
+	}
+	in := Inputs{
+		Interactions: []chstore.CosreInteraction{{ExchangeID: "x"}},
+		Signals:      []chstore.CosreSignal{{ExchangeID: "x", Kind: SigFollowupClick, Detail: "slow"}},
+	}
+	if got := DeriveSignals(in)["x"]; len(got) != 0 {
+		t.Fatalf("followup_click gerekçeye girdi: %v", got)
 	}
 }
 
