@@ -25,6 +25,8 @@
 //     cevapta etkin, sonraki turdan sonra pasif + seçilen işaretli.
 //   • v0.10.2353 (interaction-audit I5): data-action → balonun altında ActionCard
 //     (Onayla / İptal; bitmiş cevapta); onayın data-action-result'ı mesaja eklenir.
+//   • v0.10.2363 (investigation-design S5): data-block-{exception,trace,logs,
+//     anomaly} → balonun altında tembel kanıt kartları (evidence/parts).
 //   • Bilinmeyen parça çizilmez (çökmez).
 // Sunumsal: Chat örneği yok (katalog ve testler statik mesajla da çizer).
 import { useMemo } from 'react';
@@ -53,6 +55,8 @@ import { questionChoice } from '@/lib/cosre/cosrePersist';
 import { bubbleTurnForCard, linkCardOf } from './linkCard';
 import { ActionCard } from './ActionCard';
 import { parseDataAction, parseDataActionResult } from '@/lib/cosre/protocol';
+import { evidencePartsOf } from '@/lib/cosre/evidenceParts';
+import { EvidenceParts } from '../evidence/parts/EvidenceParts';
 
 /** useChat durumu (ai ChatStatus ile aynı küme; tip importu katalogdan bağımsız). */
 export type CosreChatStatus = 'submitted' | 'streaming' | 'ready' | 'error';
@@ -157,6 +161,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   const epPick = useMemo(() => pickOf(m.parts), [m.parts]); // v0.10.1737
   const linkCard = useMemo(() => linkCardOf(m.parts), [m.parts]); // v0.10.2101
   const question = useMemo(() => questionOf(m.parts), [m.parts]); // v0.10.2102
+  const evParts = useMemo(() => evidencePartsOf(m.parts as readonly { type: string; id?: string; data?: unknown }[]), [m.parts]); // v0.10.2363
   // araç seti dilim 5 (G4) — adım kartları cevabın ÜSTÜNDE (data-tool-result / data-stop).
   const steps = useMemo(() => stepsView(visibleParts(m)), [m, visibleParts]);
   // SDK akışta son mesajı her parçada yeni nesneyle değiştirir; bitmiş
@@ -183,6 +188,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
       <ChatBubbleSlotsContext.Provider value={slots}>
         <ChatBubble turn={bubbleTurn} onRetry={onRetry} shownFollowups={showFu ? turn.followups : undefined} />
       </ChatBubbleSlotsContext.Provider>
+      <EvidenceParts parts={evParts} />
       {showCard && linkCard && <SummaryLinkCard card={linkCard} />}
       {question && !live && !turn.error && (
         <QuestionCard question={question} onAnswer={onQuestion} chosen={questionChoice(question, next)} />
