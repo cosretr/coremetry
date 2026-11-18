@@ -21,6 +21,10 @@ import { resolve } from 'node:path';
 
 const src = readFileSync(resolve(__dirname, './Overview.tsx'), 'utf8')
   .replace(/\/\/.*$/gm, '');
+// v0.10.2346 — URL yazımı paylaşılan üreticiye taşındı (lib/metricsLink.ts);
+// URL satırlarının pinleri oraya bakar, çağrı yeri pinleri Overview'da kalır.
+const linkSrc = readFileSync(resolve(__dirname, '../../lib/metricsLink.ts'), 'utf8')
+  .replace(/\/\/.*$/gm, '');
 
 describe('Overview → Metrics tık hedefi (v0.9.794 + v0.10.370)', () => {
   it('🔴 hiçbir onExpandClick çıplak metricsHref() çağırmaz', () => {
@@ -55,7 +59,7 @@ describe('Overview → Metrics tık hedefi (v0.9.794 + v0.10.370)', () => {
   // olmayan `avg(taban)` sorar. Kapı türü de yazar (`mtype=histogram`).
   it('🔴 Response time kapısı metriğin türünü taşır (mtype=histogram)', () => {
     expect(src).toMatch(/metricName, agg: 'avg', mtype: 'histogram'/);
-    expect(src).toMatch(/opts\.mtype \? `&mtype=\$\{opts\.mtype\}` : ''/);
+    expect(linkSrc).toMatch(/q\.mtype \? `&mtype=\$\{q\.mtype\}` : ''/);
   });
 
   it('iki panel AYNI kırılımı taşır', () => {
@@ -65,8 +69,10 @@ describe('Overview → Metrics tık hedefi (v0.9.794 + v0.10.370)', () => {
   });
 
   it('metricsHref `by` ve `agg` parametrelerini gerçekten URL\'e yazar', () => {
-    expect(src).toMatch(/opts\.by \? `&by=\$\{encodeURIComponent\(opts\.by\)\}` : ''/);
-    expect(src).toMatch(/`&agg=\$\{opts\.agg\}`/);
+    expect(linkSrc).toMatch(/by \? `&by=\$\{encodeURIComponent\(by\)\}` : ''/);
+    expect(linkSrc).toMatch(/`&agg=\$\{q\.agg\}`/);
+    // Overview'un metricsHref'i paylaşılan üreticiye by/agg dahil TÜM seçenekleri geçirir.
+    expect(src).toMatch(/sharedMetricsHref\(\{ service, rangeParam: searchParams\.get\('range'\), range \}, opts\)/);
     // agg'siz bir kapı = Metrics sayfasının varsayılanı (avg) = sayaç için yanlış.
     expect(src).not.toMatch(/metricsHref\(\{ by: 'http\.route' \}\)/);
   });

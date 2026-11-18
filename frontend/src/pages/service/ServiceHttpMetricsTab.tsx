@@ -17,6 +17,7 @@
 // İkisi de varsa iki BÖLÜM: önce HTTP, altta gRPC — asla toplanmaz; gRPC
 // bölümünün süzgeçleri ?groute/?gmethod. Downstream (http_client_*) yalnız HTTP.
 import { useMemo, type ReactNode } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Badge, Card, MethodBadge, PanelTitle, SelectField } from '@/components/ui';
 import { SectionHead } from '@/components/coremetry/SectionHead';
 import { HttpStat, HttpGauge, HttpChartPanel, HttpDonutPanel, HttpEnvScopeBand } from './httpMetricsViz';
@@ -37,6 +38,8 @@ import {
 } from '@/lib/httpMetrics';
 import type { TimeRange, SpanMetricSeries } from '@/lib/types';
 import { useThemeTick } from '@/lib/useThemeTick';
+import { metricsLinkHref } from '@/lib/metricsLink';
+import { httpPanelLinks } from '@/lib/httpMetricsLinks';
 import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2305 — sekme metinleri arayüz dilinde (TR aynı)
 
 // v0.10.1247 — sabit seri renkleri tema token'ından (tema değişince yeniden).
@@ -123,7 +126,7 @@ export function ServiceHttpMetricsTab({ service, range, env = '', cluster = '' }
     <div>
       {note && <div className="field-hint" style={{ marginBottom: 10 }}>{note}</div>}
       {sections.map(sec => (
-        <FamilySection key={sec.family.id} service={service} win={win} family={sec.family}
+        <FamilySection key={sec.family.id} service={service} win={win} range={range} family={sec.family}
           envScope={sectionEnvScope(sec, fam, env, cluster)}
           head={sections.length > 1 || sec.family.kind === 'grpc'} tried={fam.tried} />
       ))}
@@ -132,8 +135,8 @@ export function ServiceHttpMetricsTab({ service, range, env = '', cluster = '' }
 }
 
 /** Bir ailenin panoları — HTTP için v0.10.1244'ün gövdesi aynen; gRPC aynı paneller rpc ailesinden (downstream yok). */
-function FamilySection({ service, win, family, envScope, head, tried }: {
-  service: string; win: { from: number; to: number }; family: RedFamilySpec; envScope: HttpEnvScopeView; head: boolean; tried: string[];
+function FamilySection({ service, win, range, family, envScope, head, tried }: {
+  service: string; win: { from: number; to: number }; range: TimeRange; family: RedFamilySpec; envScope: HttpEnvScopeView; head: boolean; tried: string[];
 }) {
   const [f, setF] = useUrlParams(FILTER_SPEC);
   useThemeTick();
@@ -159,6 +162,18 @@ function FamilySection({ service, win, family, envScope, head, tried }: {
   const ids = Object.keys(queries).filter(id => !grpc || !id.startsWith('d'));
   const all = [...ids.map(id => ({ id, expr: queries[id], instant: HTTP_INSTANT_IDS.has(id) })), { id: 'opts', expr: optsExpr, instant: false }];
   const res = useHttpPromql(all, win, httpEnvScopeReady(envScope));
+  // v0.10.2346 (operatör: "grafiğe tıklayınca Overview'daki gibi tam grafiğe
+  // gitsin") — panel id → Metrics açılışı; panelin çizdiği aile / kırılım /
+  // süzgeçlerle (lib/httpMetricsLinks). Tık Overview'la aynı yol: navigate.
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const links = useMemo(() => httpPanelLinks(scope, queries), [queries]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rangeParam = searchParams.get('range');
+  const expandOf = (id: string) => {
+    const spec = links[id];
+    const href = spec ? metricsLinkHref({ service, rangeParam, range, src: 'vm' }, spec) : null;
+    return href ? () => navigate(href) : undefined;
+  };
   const data: Record<string, SpanMetricSeries[] | null | undefined> = res.data;
   const optsErr = res.error('opts');
   const opts = filterOptions(data.opts, family);
@@ -213,7 +228,7 @@ function FamilySection({ service, win, family, envScope, head, tried }: {
       ...relabel(data[id], tpl, scale),
       ...(extra ?? []).flatMap(e => relabel(data[e.id], e.tpl, scale)),
     ];
-    return <HttpChartPanel title={title} series={series} unit={unit} stepSec={step} loading={pending(id)} syncKey="svc-http" legendKey={`svc-http:${family.kind}:${id}`} note={note} />;
+    return <HttpChartPanel title={title} series={series} unit={unit} stepSec={step} loading={pending(id)} syncKey="svc-http" legendKey={`svc-http:${family.kind}:${id}`} note={note} onExpandClick={expandOf(id)} />;
   };
   // v0.10.1248 — gradient=true: Grafana bargauge (gradient mod, değer renkli).
   const bars = (title: string, rows: BarRow[], fmt: (v: number) => string, loading?: boolean, gradient = false) => {

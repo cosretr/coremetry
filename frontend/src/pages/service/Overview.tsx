@@ -8,7 +8,7 @@ import { pickFamilySection, familyBadgeSuffix, familyUnknownNote } from '@/lib/r
 import { httpEnvScopeNote, httpEnvScopeReady } from '@/lib/httpEnvScopeNote';
 import { HttpEnvScopeBand } from './httpMetricsViz';
 import { overviewWindowItems, overviewWindowKpi, overviewWindowOffsetSec, overviewWindowSec, windowDelta } from './overviewWindowKpi';
-import { encodeRange } from '@/lib/urlState';
+import { metricsHref as sharedMetricsHref } from '@/lib/metricsLink';
 import { useEffect, useId, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -516,15 +516,10 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   // taşır (`mtype=histogram`). Response time `rtMetric` histogram ailesinin
   // TABAN adıdır; tür olmadan yeni Metrics onu "gösterge" sanıp VM'de
   // karşılığı olmayan `avg(taban)` soruyordu.
-  const metricsHref = (opts: { by?: string; metric: string; agg: 'rate' | 'avg'; unit?: string; mtype?: 'histogram' }) => {
-    const r = searchParams.get('range');
-    return `/metrics?metric=${encodeURIComponent(opts.metric)}&service=${encodeURIComponent(service)}`
-      + `&agg=${opts.agg}`
-      + (opts.by ? `&by=${encodeURIComponent(opts.by)}` : '')
-      + (opts.unit ? `&unit=${encodeURIComponent(opts.unit)}` : '')
-      + (opts.mtype ? `&mtype=${opts.mtype}` : '')
-      + `&range=${encodeURIComponent(r || encodeRange(range))}`; // v0.10.1233 — sayfa aralığı (URL'de yoksa da)
-  };
+  // v0.10.2346 — URL üretimi lib/metricsLink'e taşındı (HTTP / gRPC /
+  // Messaging sekmeleri aynı üreticiyi kullanır; çıktı bayt bayt aynı).
+  const metricsHref = (opts: { by?: string; metric: string; agg: 'rate' | 'avg'; unit?: string; mtype?: 'histogram' }) =>
+    sharedMetricsHref({ service, rangeParam: searchParams.get('range'), range }, opts);
   const rtExploreHref = () => metricsHref({
     by: routeDim, metric: metricName, agg: 'avg', mtype: 'histogram',
     unit: metricRedQ.data?.latencyUnitKnown && metricRedQ.data.latencyUnit ? metricRedQ.data.latencyUnit : undefined,

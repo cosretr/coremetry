@@ -171,7 +171,10 @@ describe('unitFromMetricName', () => {
     const mu = readFileSync(resolve(__dirname, './metricUnits.ts'), 'utf8');
     expect(mu).toContain('unitFromCatalog(names[i], d.names) || unitFromMetricName(names[i])');
     const ov = readFileSync(resolve(__dirname, '../service/Overview.tsx'), 'utf8');
-    expect(ov).toContain("&unit=${encodeURIComponent(opts.unit)}");
+    // v0.10.2346 — URL yazımı paylaşılan üreticide (lib/metricsLink.ts); Overview tüm seçenekleri ona geçirir.
+    const link = readFileSync(resolve(__dirname, '../../lib/metricsLink.ts'), 'utf8');
+    expect(link).toContain("&unit=${encodeURIComponent(q.unit)}");
+    expect(ov).toContain("sharedMetricsHref({ service, rangeParam: searchParams.get('range'), range }, opts)");
     expect(ov).toContain('metricRedQ.data?.latencyUnitKnown && metricRedQ.data.latencyUnit');
     // v0.10.1863 — eski `/metrics?metric=&unit=` linki artık Metrics Explorer'ın
     // tek-model içe aktarımında (lib/metricsExplorer/legacy.ts) okunuyor.

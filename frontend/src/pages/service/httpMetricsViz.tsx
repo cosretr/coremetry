@@ -191,7 +191,7 @@ const cssToken = (t: string) => getComputedStyle(document.documentElement).getPr
  * altında tek satır soluk açıklama (field-hint).
  */
 export function HttpChartPanel({
-  title, series, unit, stepSec, loading, syncKey, legendKey, right, note, regions, onZoom, onZoomReset, legendOpen = true, seriesColors,
+  title, series, unit, stepSec, loading, syncKey, legendKey, right, note, regions, onZoom, onZoomReset, legendOpen = true, seriesColors, onExpandClick,
 }: {
   /** v0.10.2055 — seri renkleri (ad → çözülmüş renk); verilirse panelin kod paletinin yerine (anomali detayı: sapan pod). */
   seriesColors?: ReadonlyMap<string, string>;
@@ -206,6 +206,8 @@ export function HttpChartPanel({
   onZoomReset?: () => void;
   /** v0.10.1547 — seri lejantı varsayılan açık mı (Kafka panelleri kapalı ister). */
   legendOpen?: boolean;
+  /** v0.10.2346 — grafiğe tık: Metrics'te tam grafik (Overview gibi); MultiLineChart → CorePanel onExpandClick. */
+  onExpandClick?: () => void;
 }) {
   const lang = useLang();
   const drawn = fillStepGaps(series, stepSec);
@@ -215,7 +217,7 @@ export function HttpChartPanel({
         ? <div className="field-hint">{t('hm.noData', lang)}</div>
         : <MultiLineChart series={drawn} unit={unit} height={220} syncKey={syncKey} legendStorageKey={legendKey}
             maxSeries={60} legendDefaultOpen={legendOpen} regions={regions} onZoom={onZoom} onZoomReset={onZoomReset}
-            zeroBase={httpPanelZeroBase(unit)}
+            zeroBase={httpPanelZeroBase(unit)} onExpandClick={onExpandClick}
             seriesColors={seriesColors?.size ? seriesColors : httpSeriesColors(series.map(x => x.groupKey[0] ?? ''), cssToken)} />}
       {note && <div className="field-hint">{note}</div>}
     </Card>

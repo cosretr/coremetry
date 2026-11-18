@@ -16,7 +16,9 @@ describe('servis sekmesi pivotları', () => {
   it('ServicePodsTable traces linki env taşır', () => {
     expect(read('ServicePodsTable.tsx').match(/pctx, \{ carry: \['env'\] \}\)/g)?.length).toBe(1);
   });
+  // v0.10.2346 — URL yazımı paylaşılan üreticiye taşındı (lib/metricsLink.ts); Overview URL aralığını + geçerli aralığı verir.
   it('Overview metrics linki aralığı hep taşır', () => {
-    expect(read('Overview.tsx')).toContain('`&range=${encodeURIComponent(r || encodeRange(range))}`');
+    expect(read('../../lib/metricsLink.ts')).toContain('`&range=${encodeURIComponent(ctx.rangeParam || encodeRange(ctx.range))}`');
+    expect(read('Overview.tsx')).toContain("sharedMetricsHref({ service, rangeParam: searchParams.get('range'), range }, opts)");
   });
 });

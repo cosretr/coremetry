@@ -18,6 +18,8 @@
 // SAF: sorgu kurucu + lejant + eşik tonları; tablo testli. Sorgular VM'e
 // /api/metrics/promql üzerinden gider (useHttpPromql, 30 sn sunucu önbelleği).
 import { promStr } from './httpMetrics';
+import type { MxFilter } from './metricsExplorer/model';
+import type { MetricsLinkQuery, MetricsLinkSpec } from './metricsLink';
 import { t, type Lang } from './i18n'; // v0.10.2306 — panel metinleri isteğe bağlı lang (varsayılan 'tr')
 
 export interface KafkaScope {
@@ -34,8 +36,14 @@ export interface KafkaScope {
 // paneller de olsun ama kapalı gelsin"), kapalı + aç-üzerine-getir.
 export type KafkaSection = 'overview' | 'health' | 'detail' | 'more';
 export type KafkaTone = 'err' | 'warn' | undefined;
+type KafkaAgg = 'sum' | 'max' | 'avg';
 
-export interface KafkaQuery { expr: string; legend: string }
+/**
+ * v0.10.2346 — `open`: ifadenin Metrics builder karşılığı (aynı ad, toplama,
+ * kırılım, süzgeç). Yalnız birebir ifade edilebilen sorguda; `or` yedekli
+ * istemci düzeyi (topic=""/node_id="" yoksa tümü) builder'da yok → open yok.
+ */
+export interface KafkaQuery { expr: string; legend: string; open?: MetricsLinkQuery }
 
 export interface KafkaPanel {
   id: string;
@@ -49,6 +57,8 @@ export interface KafkaPanel {
   queries: KafkaQuery[];
   /** Yalnız stat: panonun eşik basamakları. */
   tone?: (v: number | null) => KafkaTone;
+  /** v0.10.2346 — sorguların `open`'ından türemeyen açılış (formül / birebir PromQL). */
+  link?: MetricsLinkSpec;
 }
 
 export const KAFKA_SECTIONS: { id: KafkaSection; title: string }[] = [
@@ -65,6 +75,26 @@ export function kafkaSel(s: KafkaScope, side: 'consumer' | 'producer'): string {
   const client = side === 'consumer' ? s.consumer : s.producer;
   if (client) parts.push(`client_id=${promStr(client)}`);
   return `{${parts.join(', ')}}`;
+}
+
+/** v0.10.2346 — kafkaSel'in service_name SONRASI eşleyicileri (Metrics açılışı). */
+export function kafkaFilters(s: KafkaScope, side: 'consumer' | 'producer'): MxFilter[] {
+  const out: MxFilter[] = [];
+  if (s.host) out.push({ k: 'host_name', op: '=', v: s.host });
+  const client = side === 'consumer' ? s.consumer : s.producer;
+  if (client) out.push({ k: 'client_id', op: '=', v: client });
+  return out;
+}
+
+/**
+ * v0.10.2346 — grafik panelinin Metrics açılışı: `link` ya da HER sorgunun
+ * `open`'ı; biri eksikse null (panel link almaz — eksik seriyle açılış
+ * başka veri olurdu).
+ */
+export function kafkaPanelLink(p: KafkaPanel): MetricsLinkSpec | null {
+  if (p.link) return p.link;
+  const qs = p.queries.map(q => q.open);
+  return qs.length > 0 && qs.every((q): q is MetricsLinkQuery => !!q) ? { queries: qs } : null;
 }
 
 const CL = '{{client_id}}';
@@ -113,8 +143,19 @@ function kafkaPanelsTR(s: KafkaScope): KafkaPanel[] {
   const withM = (sel: string, extra?: string) => (extra ? sel.replace(/}$/, `, ${extra}}`) : sel);
   const pref = (aggBy: string, m: string, sel: string, extra?: string) =>
     (extra ? `${aggBy} (${m}${withM(sel, extra)}) or ${aggBy} (${m}${sel})` : `${aggBy} (${m}${sel})`);
-  const byC = (agg: string, m: string, legend: string, extra?: string): KafkaQuery => ({ expr: pref(`${agg} by (client_id)`, m, c, extra), legend });
-  const byP = (agg: string, m: string, legend: string, extra?: string): KafkaQuery => ({ expr: pref(`${agg} by (client_id)`, m, p, extra), legend });
+  // v0.10.2346 — `open` yalnız yedeksiz (extra'sız) sorguda: builder `or` ifade edemez.
+  const cf = kafkaFilters(s, 'consumer');
+  const pf = kafkaFilters(s, 'producer');
+  const open = (agg: KafkaAgg, m: string, filters: MxFilter[], by: string[] = ['client_id']): MetricsLinkQuery =>
+    ({ metric: m, agg, by, ...(filters.length ? { filters } : {}) });
+  const byC = (agg: KafkaAgg, m: string, legend: string, extra?: string): KafkaQuery =>
+    ({ expr: pref(`${agg} by (client_id)`, m, c, extra), legend, ...(extra ? {} : { open: open(agg, m, cf) }) });
+  const byP = (agg: KafkaAgg, m: string, legend: string, extra?: string): KafkaQuery =>
+    ({ expr: pref(`${agg} by (client_id)`, m, p, extra), legend, ...(extra ? {} : { open: open(agg, m, pf) }) });
+  const bufferAvail = `sum by (client_id) (kafka_producer_buffer_available_bytes${p})`;
+  const bufferTotal = `sum by (client_id) (kafka_producer_buffer_total_bytes${p})`;
+  const fetchSize = pref('avg by (client_id)', 'kafka_consumer_fetch_size_avg', c, 'topic=""');
+  const batchSize = pref('avg by (client_id)', 'kafka_producer_batch_size_avg', p, 'topic=""');
   return [
     // ── Genel bakış (stat) ──
     { id: 'consumer_conns', section: 'overview', kind: 'stat', title: 'Consumer bağlantıları', unit: '',
@@ -164,14 +205,17 @@ function kafkaPanelsTR(s: KafkaScope): KafkaPanel[] {
       queries: [byC('max', 'kafka_consumer_rebalance_rate_per_hour', CL)] },
     { id: 'buffer', section: 'detail', kind: 'chart', title: 'Producer buffer doluluğu %', unit: '%',
       hint: '1 − buffer_available_bytes / buffer_total_bytes. %100\'e yaklaşınca send() bloklanır.',
-      queries: [{ expr: `100 * (1 - sum by (client_id) (kafka_producer_buffer_available_bytes${p}) / sum by (client_id) (kafka_producer_buffer_total_bytes${p}))`, legend: CL }] },
+      queries: [{ expr: `100 * (1 - ${bufferAvail} / ${bufferTotal})`, legend: CL }],
+      link: { queries: [{ ...open('sum', 'kafka_producer_buffer_available_bytes', pf), hidden: true }, { ...open('sum', 'kafka_producer_buffer_total_bytes', pf), hidden: true }],
+        formula: { expr: '100 * (1 - A / B)', unit: '%' } } },
     { id: 'bytes', section: 'detail', kind: 'chart', title: 'Ağ trafiği (gelen / giden)', unit: 'bytes',
       hint: 'İstemci düzeyi kafka_consumer_incoming_byte_rate / kafka_producer_outgoing_byte_rate (bayt/sn; broker-node serileri hariç).',
       queries: [byC('sum', 'kafka_consumer_incoming_byte_rate', `gelen - ${CL}`, 'node_id=""'),
         byP('sum', 'kafka_producer_outgoing_byte_rate', `giden - ${CL}`, 'node_id=""')] },
     { id: 'partition_lag', section: 'detail', kind: 'chart', title: 'Partition başına lag (en yüksek 10)', unit: '',
       hint: 'kafka_consumer_records_lag, topic-partition başına (pod\'lar arasında maks.).',
-      queries: [{ expr: `topk(10, max by (topic, partition) (kafka_consumer_records_lag${c}))`, legend: '{{topic}}-{{partition}}' }] },
+      queries: [{ expr: `topk(10, max by (topic, partition) (kafka_consumer_records_lag${c}))`, legend: '{{topic}}-{{partition}}',
+        open: open('max', 'kafka_consumer_records_lag', cf, ['topic', 'partition']) }] },
 
     // ── Diğer pano panelleri (kapalı) — "OTel Java - Kafka Client Metrics"in
     // Sağlık/Ayrıntı'da olmayan panelleri; client_id kırılımı, istemci + node
@@ -187,7 +231,7 @@ function kafkaPanelsTR(s: KafkaScope): KafkaPanel[] {
       queries: [byC('sum', 'kafka_consumer_fetch_rate', CL)] },
     { id: 'fetch_size', section: 'more', kind: 'chart', title: 'Fetch başına ortalama boyut', unit: 'bytes',
       hint: 'kafka_consumer_fetch_size_avg — fetch başına ortalama byte.',
-      queries: [byC('avg', 'kafka_consumer_fetch_size_avg', CL, 'topic=""')] },
+      queries: [{ expr: fetchSize, legend: CL }], link: { code: fetchSize } },
     { id: 'fetch_throttle', section: 'more', kind: 'chart', title: 'Fetch kota kısıtı (throttle)', unit: 'ms',
       hint: 'kafka_consumer_fetch_throttle_time_avg / _max. > 0 ise broker quota throttling uyguluyor.',
       queries: [byC('avg', 'kafka_consumer_fetch_throttle_time_avg', `avg - ${CL}`), byC('max', 'kafka_consumer_fetch_throttle_time_max', `max - ${CL}`)] },
@@ -211,7 +255,7 @@ function kafkaPanelsTR(s: KafkaScope): KafkaPanel[] {
       queries: [byP('sum', 'kafka_producer_bufferpool_wait_time_total', CL)] },
     { id: 'batch_size', section: 'more', kind: 'chart', title: 'Producer ortalama batch boyutu', unit: 'bytes',
       hint: 'kafka_producer_batch_size_avg.',
-      queries: [byP('avg', 'kafka_producer_batch_size_avg', CL, 'topic=""')] },
+      queries: [{ expr: batchSize, legend: CL }], link: { code: batchSize } },
     { id: 'records_per_request', section: 'more', kind: 'chart', title: 'Producer istek başına kayıt (ort.)', unit: '',
       hint: 'kafka_producer_records_per_request_avg.',
       queries: [byP('avg', 'kafka_producer_records_per_request_avg', CL)] },

@@ -12,14 +12,16 @@
 // Servis VM'de hiç Kafka istemci metriği yazmıyorsa sekme bunu söyler
 // (boş grafik ızgarası yerine).
 import { useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DisclosureButton, SelectField } from '@/components/ui';
 import { Empty, Spinner } from '@/components/Spinner';
 import { HttpStat, HttpChartPanel } from './httpMetricsViz';
 import { useHttpPromql, type HttpPromqlItem } from '@/lib/queries/httpMetrics';
 import { relabel, scalarOf, sparkValues, seriesLabels, stepSeconds } from '@/lib/httpMetrics';
-import { kafkaPanels, kafkaOptionQueries, kafkaOptionValues, kafkaSectionTitle, KAFKA_SECTIONS, type KafkaPanel, type KafkaSection } from '@/lib/kafkaMetrics';
+import { kafkaPanelLink, kafkaPanels, kafkaOptionQueries, kafkaOptionValues, kafkaSectionTitle, KAFKA_SECTIONS, type KafkaPanel, type KafkaSection } from '@/lib/kafkaMetrics';
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2306 — sekme metinleri arayüz dilinde (TR aynı)
 import { fmtSmart } from '@/lib/chartFmt';
+import { metricsLinkHref } from '@/lib/metricsLink';
 import { timeRangeToNs } from '@/lib/utils';
 import { useUrlParams, strParam } from '@/lib/urlParams';
 import { useThemeTick } from '@/lib/useThemeTick';
@@ -42,6 +44,10 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
   const lang = useLang();
   const [f, setF] = useUrlParams(FILTER_SPEC);
   const [open, setOpen] = useState<Set<KafkaSection>>(new Set(OPEN_BY_DEFAULT));
+  // v0.10.2346 — grafiğe tık: Metrics'te tam grafik (Overview gibi; lib/metricsLink).
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const rangeParam = searchParams.get('range');
 
   // Süzgeç seçenekleri (anlık, süzgeçsiz).
   const optQ = useMemo(() => kafkaOptionQueries(service), [service]);
@@ -88,10 +94,13 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
   const renderChart = (p: KafkaPanel, r: typeof ov) => {
     const series = p.queries.flatMap((q, i) => relabel(r.data[`${p.id}#${i}`], q.legend));
     const pending = p.queries.some((_, i) => r.pending(`${p.id}#${i}`));
+    const spec = kafkaPanelLink(p);
+    const href = spec ? metricsLinkHref({ service, rangeParam, range, src: 'vm' }, spec) : null;
     return (
       <div key={p.id} title={p.hint}>
         <HttpChartPanel title={p.title} series={series} unit={p.unit} stepSec={step} loading={pending}
-          syncKey="svc-kafka" legendKey={`svc-kafka:${p.id}`} legendOpen={false} />
+          syncKey="svc-kafka" legendKey={`svc-kafka:${p.id}`} legendOpen={false}
+          onExpandClick={href ? () => navigate(href) : undefined} />
       </div>
     );
   };

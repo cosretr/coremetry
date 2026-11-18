@@ -109,6 +109,11 @@ export interface MultiLineChartProps {
   seriesColors?: ReadonlyMap<string, string>;
   /** v0.10.1247 — lejant (Ortalama/Maks/Son tablosu) varsayılan açık. */
   legendDefaultOpen?: boolean;
+  // v0.10.2346 — panele düz tık çağıranın eylemine gider (Servis sekmeleri:
+  // Metrics'te tam grafik). CorePanel'in mevcut onExpandClick'ine AYNEN
+  // geçer; jest önceliği (◆ > bant > bucket > bu) ve 250 ms çift-tık
+  // koruması orada. Verilmezse grafik tık affordance'ı kazanmaz.
+  onExpandClick?: () => void;
 }
 
 // v0.9.760 (operatör: "Endpoint/Database sayfalarındaki chartlar da yeni
@@ -122,7 +127,7 @@ export function MultiLineChart(props: MultiLineChartProps) {
   const {
     series, unit, height = 320, deploys, thresholds, regions, syncKey,
     onZoom, onZoomReset, onCursorTime, xRange, legendStorageKey, defaultHidden,
-    compareSeries, onBucketClick, logScale, zeroBase, maxSeries, seriesColors, legendDefaultOpen,
+    compareSeries, onBucketClick, logScale, zeroBase, maxSeries, seriesColors, legendDefaultOpen, onExpandClick,
   } = props;
   // v0.9.807 — "others" katlaması. v0.9.789'da v2 kapısı açılırken bu adım
   // atlanmıştı: v1 gövdesi >N seriyi katlarken v2 yolu HEPSİNİ çiziyordu
@@ -186,6 +191,7 @@ export function MultiLineChart(props: MultiLineChartProps) {
         syncKey={msSyncKey(syncKey)} // v0.10.289 — ad alanı tek yerden (lib/chart/syncNamespace)
         onZoom={onZoom} onZoomReset={onZoomReset} onCursorTime={onCursorTime}
         onBucketClick={onBucketClick}
+        onExpandClick={onExpandClick}
       />
     </Suspense>
   );
