@@ -60,6 +60,9 @@ type policyShadow struct {
 	// freq — v0.10.2280 (S3): "sık tekrar eden" gölge kararı kaynağı
 	// (evaluator); nil = ölçülmez. Yalnız AYRI bir gölge satırı yazar.
 	freq atomic.Value // FrequentShadowSource
+	// merge — v0.10.2341 (S4): küme üyeliği kaynağı (merge_hold.go); yalnız
+	// S4 açıkken sorulur.
+	merge atomic.Value // MergeHoldSource
 }
 
 // FrequentShadowSource — v0.10.2280 (entity grafı S3): Problem için "sık
@@ -243,6 +246,7 @@ func (n *Notifier) recordShadowDecision(ctx context.Context, p chstore.Problem, 
 		hist.LastSend = &rr
 	}
 	n.shadow.mu.Unlock()
+	n.mergeHistory(ctx, p, &hist, false) // v0.10.2341 (S4): kapalıyken no-op
 	dec := chstore.NotifiableAt(std, prio, hist, pol, now.In(sens.Calendar.Location()))
 	if dec.Notifiable && sig != "" {
 		n.shadow.mu.Lock()

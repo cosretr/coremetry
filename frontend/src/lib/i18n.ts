@@ -1870,6 +1870,11 @@ const TR: Catalog = {
   'pg.row.origin': 'köken {name} · {n} varlık · {e} olay',
   'pg.row.unclear': 'köken belirsiz · en erken başlayan {name} · {n} varlık · {e} olay',
   'pg.row.title': 'Entity grafından gölge önizleme. Satırlar birleştirilmez, yeniden sıralanmaz, süzülmez; bildirimler değişmedi.',
+  // v0.10.2341 — S4 (yalnız açıkken görünür)
+  'pg.row.titleOn': 'Entity grafından bağlı Problem\'ler bu satırda katlandı. Hiçbir Problem kapatılmadı; her üye kendi sayfasında açık.',
+  'pg.cluster.summary': 'küme · {n} varlık · {m} Problem',
+  'pg.late': 'geç katıldı',
+  'pg.lateNote': 'Aynı servis, kümenin ilk başlangıcından 90 dk sonra başladı; ikinci Problem açılmadı.',
   // v0.10.2281 — S3: "sık tekrar eden" (gölge)
   'pg.freq.chip': 'sık tekrar eden',
   'pg.freq.tip': 'Gölge ölçüm: bu tür önceki 24 saatte {p} kez açıldı, son 7 günde {d} ayrı günde görüldü. Bildirimler değişmedi.',

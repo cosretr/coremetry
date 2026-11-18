@@ -117,6 +117,7 @@ type graphShadow struct {
 	st       *graphShadowState
 	freqOnce sync.Once
 	freq     *frequentState // S3: ayrı kilit (bildirim gölgesi de okur)
+	hold     mergeHoldState // S4: bildirim anı küme kararı (problem_graph_merge.go)
 }
 
 // frequent — S3 durumu (tembel; pas ve bildirim gölgesi paylaşır).
@@ -166,8 +167,10 @@ type graphShadowState struct {
 	memo        *graphFacts
 	omemo       *originFacts // S2: S1 turuyla aynı anda tazelenir
 	omemoAt     time.Time
-	origins     map[string]graphSeen // sahip → "kural|güven" (S2)
-	freq        *frequentState       // S3
+	origins     map[string]graphSeen       // sahip → "kural|güven" (S2)
+	freq        *frequentState             // S3
+	absorb      map[string]int64           // S4 (yalnız açıkken): birim temsilcisi → küme başlangıcı
+	mergeSeen   map[string]*mergeSeenEntry // S4 gölge sayacı (her iki kip): sonradan bağlanan üye
 	lastWrite   time.Time
 	lastHash    uint64
 }
@@ -213,7 +216,15 @@ func runGraphShadow(ctx context.Context, st graphShadowStore, live GraphLiveSour
 		}
 		facts = s.factsFor(ctx, st, live, units, now)
 	}
-	plan := planGraph(units, kinds, facts)
+	// v0.10.2341 (S4): kapalıyken sıfır seçenek = bugünkü plan, bayt bayt.
+	var opt graphEnforceOpts
+	if chstore.ProblemGraphMergeEnforced() {
+		opt = graphEnforceOpts{On: true, Onset: s.absorb}
+	}
+	plan := planGraphOpts(units, kinds, facts, opt)
+	if opt.On {
+		s.rememberAbsorb(plan)
+	}
 	if len(units) >= 2 {
 		// S2: köken + etki alanı; okumalar yalnız S1 turu tazelendiğinde.
 		if s.omemo == nil || !s.omemoAt.Equal(s.memoAt) {
@@ -222,6 +233,7 @@ func runGraphShadow(ctx context.Context, st graphShadowStore, live GraphLiveSour
 		attachOrigins(&plan, facts, s.omemo)
 	}
 	s.observe(plan, now)
+	s.observeMerge(plan, pol.Keep, now) // S4 geçiş ölçütü sayaçları (her iki kip)
 	// S3: sık tekrar gölgesi (tek Problem'ler dahil; köken varsa imza kökenden).
 	var freq map[string]chstore.FrequentVerdict
 	if s.freq != nil {
@@ -229,6 +241,7 @@ func runGraphShadow(ctx context.Context, st graphShadowStore, live GraphLiveSour
 	}
 	rep := s.report(now, len(units))
 	rep.Groups = plan.Groups
+	rep.MergeReport = s.mergeReport()
 	if s.freq != nil {
 		rep.Frequent = capFrequentBlob(freq)
 		fr := s.freq.report()

@@ -71,6 +71,9 @@ type ProblemGraphMember struct {
 	Strict bool     `json:"strict,omitempty"` // M-CALL: çağıranda hedefe ait bağımlılık olayı var
 	// GraphMissing — varlığın graf verisi yok: yalnız aynı servis kuralı.
 	GraphMissing bool `json:"graphMissing,omitempty"`
+	// Late — v0.10.2341 (S4, yalnız açıkken): aynı servisin emme sınırından
+	// (90 dk) sonra başlayan satırı — "geç katıldı"; ikinci Problem yok.
+	Late bool `json:"late,omitempty"`
 }
 
 // ProblemGraphNearMiss — aynı pencerede açık olup bağlanmayan Problem.
@@ -159,6 +162,9 @@ type ProblemGraphGroup struct {
 	Truncated  bool                   `json:"truncated,omitempty"` // üye satırı tavanı (25)
 	// Origin — S2: olası köken + etki alanı (yalnız ≥ 2 varlıklı kümede).
 	Origin *ProblemGraphOrigin `json:"origin,omitempty"`
+	// Onset — v0.10.2341 (S4, yalnız açıkken): kümenin hatırlanan en erken
+	// başlangıcı (unix ns); emme sınırı bundan ölçülür.
+	Onset int64 `json:"onset,omitempty"`
 }
 
 // ProblemGraphReads — okuma ölçümü (lider başlangıcından beri).
@@ -207,8 +213,11 @@ type ProblemGraphShadow struct {
 	// kararı (Problem kimliği → karar; ≤ 200). FrequentReport — 24 sa sayaçları.
 	Frequent       map[string]FrequentVerdict `json:"frequent,omitempty"`
 	FrequentReport *FrequentReport            `json:"frequentReport,omitempty"`
-	Groups         []ProblemGraphGroup        `json:"groups,omitempty"`
-	Truncated      bool                       `json:"truncated,omitempty"` // blob tavanı
+	// MergeReport — v0.10.2341 (S4): sonradan bağlanan üyelerin 24 sa
+	// sayaçları (geçiş ölçütü); her iki kipte dolar.
+	MergeReport *ProblemGraphMergeReport `json:"mergeReport,omitempty"`
+	Groups      []ProblemGraphGroup      `json:"groups,omitempty"`
+	Truncated   bool                     `json:"truncated,omitempty"` // blob tavanı
 }
 
 // GetProblemGraphShadow — son blob (yoksa ok=false).

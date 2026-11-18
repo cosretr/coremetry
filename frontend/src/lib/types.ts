@@ -2851,6 +2851,14 @@ export interface InboxCountResponse {
   exceptions: number;
   httpErrors: number;
 }
+/** v0.10.2341 (entity grafı S4) — katlanan küme (inbox_graph_fold.go). */
+export interface InboxCluster {
+  ownerId: string;
+  entities: number;
+  origin?: string;
+  members: { problemId: string; name: string; title?: string; priority?: string; startedAt: number; owner?: boolean; link?: string; late?: boolean }[];
+}
+
 export interface InboxItem {
   id: string;             // composite "<kind>:<nativeId>"
   // Satırın KAYNAĞI: problem | exception | anomaly.
@@ -2930,6 +2938,9 @@ export interface InboxItem {
    *  problemlerin satırları sunucuda bu satıra katlanır (inbox_incident_fold.go).
    *  Yok = bilinmiyor / bağlı problem yok. */
   incident?: { id: string; severity: string; status: string; problemCount?: number };
+  /** v0.10.2341 (entity grafı S4) — bağlı kümenin üyeleri bu satıra katlandı
+   *  (Go api.InboxClusterRef). Yalnız S4 açıkken gelir; yoksa bugünkü satır. */
+  cluster?: InboxCluster;
   /** v0.10.2163 (Davis tarzı tek Problem D4) — bu Problem'e birleşen olay
    *  sayısı (Go api.InboxItem.EventCount; sahibin kendi sinyali dahil). Yalnız
    *  kind=problem ve üyesi varsa; satır "N olay"ı N ≥ 2'de gösterir. */

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { graphShadowLines, type ProblemGraphShadowReport } from './problemGraph';
+import { graphShadowLines, graphCriterionLines, type ProblemGraphShadowReport } from './problemGraph';
 
 const base: ProblemGraphShadowReport = {
   at: 1, since: 0, windowH: 24, units: 4, callStrict: 1, graphMissing: 2,
@@ -117,5 +117,24 @@ describe('graphDiagramLayout', () => {
     const l = graphDiagramLayout(many, undefined);
     expect(l.nodes).toHaveLength(DIAGRAM_MAX_NODES);
     expect(l.truncated).toBe(true);
+  });
+});
+
+// v0.10.2341 — admin raporunda S4/S5 kipi ve geçiş ölçütü (yalnız Türkçe).
+
+describe('graphCriterionLines', () => {
+  it('says both slices are off and states the criterion with the counts', () => {
+    const l = graphCriterionLines({ s4: false, s5: false }, {
+      windowStart: 0, mergeJoined: 4, mergeWouldHold: 3, mergeHeldP1: 0, frequentWouldHold: 2, frequentHeldP1: 0, late: 1,
+    }, '16.11 14:00');
+    expect(l[0]).toBe('S4: kapalı / S5: kapalı');
+    expect(l[1]).toContain('en az 7 gün gölge');
+    expect(l.join('\n')).toContain('açılış bildirimi tutulacak 3; bunlardan sonradan P1\'e çıkan 0 (hedef 0)');
+    expect(l.join('\n')).toContain('Sık tekrar (S5): açılış bildirimi tutulacak 2');
+  });
+  it('reports an enabled slice and works without counters (old blob)', () => {
+    expect(graphCriterionLines({ s4: true, s5: false }, undefined, '')).toEqual([
+      'S4: açık / S5: kapalı', expect.stringContaining('Açma ölçütü'),
+    ]);
   });
 });

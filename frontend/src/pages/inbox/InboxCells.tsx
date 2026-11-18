@@ -12,7 +12,8 @@ import { TriageStatusBadge } from '@/features/anomalies/ProblemDetail';
 import { RecurringMarker } from '@/features/anomalies/RecurringMarker'; // v0.10.1049
 import { promotedRecurrence } from '@/features/anomalies/detailSummary'; // v0.10.1054
 import { Badge } from '@/components/ui/Badge';
-import type { InboxItem } from '@/lib/types';
+import type { InboxItem, InboxCluster } from '@/lib/types';
+import { Link } from 'react-router-dom';
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2283 — hücre metinleri arayüz dilinde (TR aynı)
 import { prioReasonView } from '@/lib/problemStandardView'; // v0.10.2300 (S3) — gerekçe EN anahtardan
 import { OrigLang } from '@/features/anomalies/OrigLang';
@@ -201,11 +202,40 @@ export function DetailLine({ it }: { it: InboxItem }) {
 // hücresinin alt satırı — "köken orders-db · 4 varlık · 5 olay" ya da
 // "köken belirsiz · en erken başlayan …"; tek servisli Problem'de hiçbir
 // şey. Gölge önizleme: satır katlanmaz, sıralanmaz, süzülmez.
-export function GraphRowSub({ row }: { row?: ProblemGraphRowSummary }) {
+// v0.10.2341 (S4) — folded: satır kümeyi katlıyor (yalnız S4 açıkken); ipucu buna göre.
+export function GraphRowSub({ row, folded }: { row?: ProblemGraphRowSummary; folded?: boolean }) {
   const lang = useLang();
   const text = graphRowSubText(row, (k, v) => tf(k, lang, v));
   if (!text) return null;
-  return <div className="triage-sub" data-testid="pg-row-sub" title={tf('pg.row.title', lang)}>{text}</div>;
+  return <div className="triage-sub" data-testid="pg-row-sub" title={tf(folded ? 'pg.row.titleOn' : 'pg.row.title', lang)}>{text}</div>;
+}
+
+// GraphClusterMembers — v0.10.2341 (entity grafı S4): katlanan kümenin üyeleri.
+// Yalnız sunucu katladıysa (S4 açık) gelir; kapalıyken satırda hiçbir şey
+// çizilmez. Her üye kendi Problem detayına açılır (katlanan satır erişilebilir
+// kalır). Kapalı <details>: satır yüksekliği değişmez.
+export function GraphClusterMembers({ cluster, hrefOf }: { cluster?: InboxCluster; hrefOf: (problemId: string) => { to: string; replace?: boolean } | null }) {
+  const lang = useLang();
+  if (!cluster || cluster.members.length < 2) return null;
+  return (
+    <details className="triage-sub" data-testid="pg-cluster" onClick={e => e.stopPropagation()}>
+      <summary style={{ cursor: 'pointer' }}>{tf('pg.cluster.summary', lang, { n: cluster.entities, m: cluster.members.length })}</summary>
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+        {cluster.members.map(m => {
+          const l = hrefOf(m.problemId);
+          const label = `${m.name}${m.title ? ` · ${m.title}` : ''}`;
+          return (
+            <li key={m.problemId} data-testid="pg-cluster-member">
+              {l ? <Link to={l.to} replace={l.replace} className="cell-link">{label}</Link> : label}
+              {m.priority ? ` · ${m.priority}` : ''}
+              {m.owner ? ` · ${tf('pg.owner', lang)}` : m.link ? ` · ${m.link}` : ''}
+              {m.late ? ` · ${tf('pg.late', lang)}` : ''}
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
 }
 
 // GraphFrequentChip — v0.10.2281 (entity grafı S3): nötr "sık tekrar eden"

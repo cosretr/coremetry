@@ -21,6 +21,11 @@ function ReasonCell({ m, t }: { m: ProblemGraphMember; t: GraphT }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span>{graphLinkText(m, t)}{m.owner ? <RuleChip id={t('pg.owner')} /> : m.link && <RuleChip id={m.link} />}</span>
+      {m.late && (
+        <span className="text-xs text-muted-foreground" data-testid="pg-late" title={t('pg.lateNote')}>
+          <Badge variant="secondary" className="mr-1 text-[11px]">{t('pg.late')}</Badge>
+        </span>
+      )}
       {m.graphMissing && (
         <span className="text-xs text-muted-foreground" data-testid="pg-graph-missing">
           <Badge variant="secondary" className="mr-1 text-[11px]">{t('pg.graphMissing')}</Badge>

@@ -37,6 +37,7 @@ type enforceBook struct {
 	mu   sync.Mutex
 	last map[string]chstore.NotifyRecord // imza → son GERÇEK gönderim (D3 tekrar penceresi)
 	sent map[string]bool                 // imza → açılışı gönderildi (çözülme kapısı; legacy şablonda konu yok)
+	held map[string]string               // v0.10.2341 (S4): Problem → tutulduğu görünüm önceliği (merge_hold.go)
 }
 
 // enforceGate — true = fan-out devam. hold = tutma kodu (log / test).
@@ -78,6 +79,7 @@ func (n *Notifier) enforceGate(ctx context.Context, p chstore.Problem) (bool, st
 		hist.LastSend = &rr
 	}
 	n.enf.mu.Unlock()
+	n.mergeHistory(rctx, p, &hist, true) // v0.10.2341 (S4): kapalıyken no-op
 	dec := chstore.NotifiableAt(std, prio, hist, pol, now.In(sens.Calendar.Location()))
 	if dec.Notifiable {
 		n.enf.mu.Lock()
@@ -100,6 +102,7 @@ func (n *Notifier) enforceGate(ctx context.Context, p chstore.Problem) (bool, st
 		}
 		return false, chstore.NotifyHoldP3Digest
 	}
+	n.rememberHeld(p.ID, dec.Hold, prio)
 	return false, dec.Hold
 }
 

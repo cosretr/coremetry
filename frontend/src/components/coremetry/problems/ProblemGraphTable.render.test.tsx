@@ -55,3 +55,12 @@ describe('ProblemGraphNearMisses', () => {
     expect(t).toContain('4 varlık');
   });
 });
+
+// v0.10.2341 (S4) — "geç katıldı" yalnız sunucu işaretlediyse (S4 açık) görünür.
+describe('ProblemGraphMembers late mark', () => {
+  it('shows the late chip only for marked members', () => {
+    const late: ProblemGraphMember[] = [members[1], { ...members[2], late: true }];
+    expect(mount(<ProblemGraphMembers members={late} near={[]} t={tr} clock={clock} />).all('pg-late')).toHaveLength(1);
+    expect(mount(<ProblemGraphMembers members={members} near={[]} t={tr} clock={clock} />).all('pg-late')).toHaveLength(0);
+  });
+});

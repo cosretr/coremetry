@@ -65,7 +65,7 @@ import {
 } from './inbox/inboxFilters';
 import { inboxCols, capSortLabel, occLine } from './inbox/inboxColumns';
 import { t as tl, tf, useLang } from '@/lib/i18n'; // v0.10.2283 — Türkçe metinler lib/i18n inbox.* (TR aynı)
-import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub, GraphFrequentChip } from './inbox/InboxCells';
+import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub, GraphFrequentChip, GraphClusterMembers } from './inbox/InboxCells';
 
 
 // exception ailesi — httperror satırları da exception payload'u taşır
@@ -1195,7 +1195,8 @@ export default function InboxPage() {
                           aiAge={it.aiSummaryAt ? fmtAgoNs(it.aiSummaryAt) : undefined} />
                       );
                     })()}
-                    {it.problem && <GraphRowSub row={graphSum.data?.rows?.[it.problem.id]} />}
+                    {it.problem && <GraphRowSub row={graphSum.data?.rows?.[it.problem.id]} folded={!!it.cluster} />}
+                    {it.cluster && <GraphClusterMembers cluster={it.cluster} hrefOf={id => inboxRowLink({ to: 'detail', param: 'problem', id }, location.pathname, location.search)} />}
                     <div className="std-ctx">
                       {/* v0.10.2121 — özne Servis, ekip Ekip kolonunda; oluşum sayısı burada. */}
                       {occLine(it, lang) && <span className="ib-occ">{occLine(it, lang)}</span>}

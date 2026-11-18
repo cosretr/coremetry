@@ -127,6 +127,9 @@ type InboxItem struct {
 	Exception *InboxExceptionRef `json:"exception,omitempty"`
 	Anomaly   *InboxAnomalyRef   `json:"anomaly,omitempty"`
 	Incident  *InboxIncidentRef  `json:"incident,omitempty"`
+	// Cluster — v0.10.2341 (entity grafı S4): katlanan kümenin üyeleri;
+	// yalnız S4 açıkken dolar (inbox_graph_fold.go).
+	Cluster *InboxClusterRef `json:"cluster,omitempty"`
 
 	// Std — v0.10.1529 (Problem standardı R2): satırın standart biçimi
 	// (chstore.ProblemStandard; problem_standard.go attachInboxStandards).
@@ -309,6 +312,7 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 	// sözlüğü, incident kaynağı, katlama ve önbellek anahtarı aynı değeri
 	// kullanır (inbox_incidents_retired.go).
 	incidentsOn := chstore.IncidentsEnabled()
+	graphMerge := chstore.ProblemGraphMergeEnforced() // v0.10.2341 (S4); kapalıyken hiçbir şey değişmez
 	kinds := inboxKindsFromQuery(q.Get("kind"), incidentsOn)
 	prios := normalizeInboxSet(q.Get("prio"), inboxPriosAll)
 	cats := normalizeInboxSet(q.Get("cat"), chstore.ProblemCategories) // v0.10.706
@@ -356,7 +360,7 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 	// empty page.
 	// v0.10.949 — floorDefault anahtarda: varsayılan 5 (istisnalı) ile açık
 	// ?minOcc=5 (istisnasız) AYNI minOcc'u taşır ama farklı satırlar döner.
-	cacheKey := inboxListKey(statusFilter, service, search, ownerTeam, sreTeam, team, env, limit, sortID, sortDir, minOcc, kinds, prios, subject) + ":since=" + since + ":cat=" + strings.Join(cats, ",") + ":floorDefault=" + strconv.FormatBool(floorDefault) + ":inc=" + strconv.FormatBool(incidentsOn)
+	cacheKey := inboxListKey(statusFilter, service, search, ownerTeam, sreTeam, team, env, limit, sortID, sortDir, minOcc, kinds, prios, subject) + ":since=" + since + ":cat=" + strings.Join(cats, ",") + ":floorDefault=" + strconv.FormatBool(floorDefault) + ":inc=" + strconv.FormatBool(incidentsOn) + inboxGraphKeySuffix(graphMerge)
 	// v0.9.228 — 10s → 15s. v0.9.220 gave the inbox list a 30s poll; at a 10s
 	// TTL the SWR window is ttl×staleFactor = 30s and the Redis entry expires
 	// at 30s too, so each poll arrived at age = 30s + previous latency —
@@ -982,6 +986,10 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 		if incidentsOn {
 			items = s.foldInboxIncidents(ctx, items)
 		}
+		// v0.10.2341 (entity grafı S4) — bağlı küme tek satır; yalnız açıkken.
+		if graphMerge {
+			items = s.foldInboxGraphClusters(ctx, items)
+		}
 
 		// v0.9.330 — facet counts are computed HERE, over everything that
 		// survived the row-level narrows and BEFORE the kind/priority facets
@@ -1027,7 +1035,7 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 		// Rank the WHOLE candidate set before the cap (v0.9.318 scan fix +
 		// v0.9.319 server sort) — inboxSortAndCap.
 		items, total := inboxSortAndCap(items, sortID, sortDir, limit)
-		return map[string]any{
+		return withInboxGraphMode(map[string]any{
 			"items":     items,
 			"total":     total,
 			"limit":     limit,
@@ -1071,7 +1079,7 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 			// üçüncü kovası; db ile aynı gerekçeyle TAM).
 			"externalSubjectCount": subjectCounts[inboxSubjectExternal],
 			"subject":              subject,
-		}, nil
+		}, graphMerge), nil
 	}
 }
 

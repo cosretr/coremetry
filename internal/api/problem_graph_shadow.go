@@ -44,18 +44,58 @@ type problemGraphTopGroup struct {
 	Confidence string `json:"confidence,omitempty"`
 }
 
+// problemGraphModes — v0.10.2341: uygulama dilimlerinin kod sabitleri
+// (S4 birleşme, S5 sık tekrar). Ayar değil; rapor yalnız söyler.
+type problemGraphModes struct {
+	S4 bool `json:"s4"`
+	S5 bool `json:"s5"`
+}
+
+// problemGraphCriterion — v0.10.2341: tasarım §9 geçiş ölçütünün ürün içi
+// sayıları (24 sa pencere, lider belleği). Hedef: tutulacaklardan P1'e çıkan 0.
+type problemGraphCriterion struct {
+	WindowStart       int64 `json:"windowStart"` // sayaçların başladığı an (unix sn; lider değişince sıfırlanır)
+	MergeJoined       int64 `json:"mergeJoined"`
+	MergeWouldHold    int64 `json:"mergeWouldHold"`
+	MergeHeldP1       int64 `json:"mergeHeldP1"`
+	FrequentWouldHold int64 `json:"frequentWouldHold"`
+	FrequentHeldP1    int64 `json:"frequentHeldP1"`
+	Late              int64 `json:"late"`
+}
+
 type problemGraphShadowResponse struct {
 	Available bool                       `json:"available"`
 	Report    chstore.ProblemGraphShadow `json:"report"`
 	Largest   []problemGraphTopGroup     `json:"largest"`
+	// Modes / Criterion — v0.10.2341: hangi dilim açık, geçiş ölçütü.
+	Modes     problemGraphModes     `json:"modes"`
+	Criterion problemGraphCriterion `json:"criterion"`
+}
+
+// currentProblemGraphModes — sabitlerin o anki değeri.
+func currentProblemGraphModes() problemGraphModes {
+	return problemGraphModes{S4: chstore.ProblemGraphMergeEnforced()}
+}
+
+// problemGraphCriterionOf — SAF: blob raporu → ölçüt sayıları.
+func problemGraphCriterionOf(r chstore.ProblemGraphShadow) problemGraphCriterion {
+	c := problemGraphCriterion{WindowStart: r.Since}
+	if m := r.MergeReport; m != nil {
+		c.MergeJoined, c.MergeWouldHold, c.MergeHeldP1, c.Late = m.Joined, m.WouldHold, m.HeldBecameP1, m.Late
+	}
+	if f := r.FrequentReport; f != nil {
+		c.FrequentWouldHold, c.FrequentHeldP1 = f.WouldHold, f.HeldBecameP1
+	}
+	return c
 }
 
 // buildProblemGraphShadowResponse — SAF: blob → rapor + en büyük 20 küme.
 func buildProblemGraphShadowResponse(r chstore.ProblemGraphShadow, ok bool) problemGraphShadowResponse {
-	out := problemGraphShadowResponse{Available: ok, Largest: []problemGraphTopGroup{}}
+	out := problemGraphShadowResponse{Available: ok, Largest: []problemGraphTopGroup{}, Modes: currentProblemGraphModes()}
 	if !ok {
 		return out
 	}
+	out.Criterion = problemGraphCriterionOf(r)
 	for _, g := range r.Groups {
 		if g.Entities < 2 || len(g.Members) == 0 {
 			continue
@@ -84,7 +124,7 @@ func buildProblemGraphShadowResponse(r chstore.ProblemGraphShadow, ok bool) prob
 }
 
 func (s *Server) getProblemGraphShadow(w http.ResponseWriter, r *http.Request) {
-	s.serveCached(w, r, "problem-graph-shadow:v3:report", 15*time.Second, func(ctx context.Context) (any, error) {
+	s.serveCached(w, r, "problem-graph-shadow:v4:report", 15*time.Second, func(ctx context.Context) (any, error) {
 		rep, ok, err := s.store.GetProblemGraphShadow(ctx)
 		if err != nil {
 			return nil, err

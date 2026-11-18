@@ -26,3 +26,25 @@ func TestBuildProblemGraphShadowResponse(t *testing.T) {
 		t.Fatalf("report must carry counters, not groups: %+v", r.Report)
 	}
 }
+
+// v0.10.2341 — rapor kipi (S4/S5) ve geçiş ölçütü sayılarını taşır.
+func TestProblemGraphShadowModesAndCriterion(t *testing.T) {
+	rep := chstore.ProblemGraphShadow{Since: 1700000000,
+		MergeReport:    &chstore.ProblemGraphMergeReport{Joined: 4, WouldHold: 3, HeldBecameP1: 1, Late: 1},
+		FrequentReport: &chstore.FrequentReport{WouldHold: 2}}
+	for _, on := range []bool{false, true} {
+		restore := chstore.SetProblemGraphMergeEnforceForTest(on)
+		r := buildProblemGraphShadowResponse(rep, true)
+		restore()
+		if r.Modes.S4 != on || r.Modes.S5 {
+			t.Fatalf("kip: %+v (S4 %v)", r.Modes, on)
+		}
+		c := r.Criterion
+		if c.WindowStart != 1700000000 || c.MergeJoined != 4 || c.MergeWouldHold != 3 || c.MergeHeldP1 != 1 || c.FrequentWouldHold != 2 || c.Late != 1 {
+			t.Fatalf("ölçüt: %+v", c)
+		}
+	}
+	if r := buildProblemGraphShadowResponse(chstore.ProblemGraphShadow{}, false); r.Modes.S4 {
+		t.Fatalf("blob yokken de kip söylenir (kapalı): %+v", r.Modes)
+	}
+}

@@ -1485,6 +1485,11 @@ export const EN: Record<string, string> = {
   'pg.row.origin': 'origin {name} · {n} entities · {e} events',
   'pg.row.unclear': 'origin unclear · earliest {name} · {n} entities · {e} events',
   'pg.row.title': 'Shadow preview from the entity graph. Rows are not merged, reordered or filtered; notifications did not change.',
+  // v0.10.2341 — S4 (visible only when on)
+  'pg.row.titleOn': 'Related Problems from the entity graph are folded into this row. No Problem was closed; every member stays open on its own page.',
+  'pg.cluster.summary': 'cluster · {n} entities · {m} Problems',
+  'pg.late': 'joined late',
+  'pg.lateNote': 'Same service, started more than 90 min after the cluster\'s first onset; no second Problem was opened.',
   // v0.10.2281 — S3: "sık tekrar eden" (gölge)
   'pg.freq.chip': 'frequent',
   'pg.freq.tip': 'Shadow measurement: this kind opened {p} times in the previous 24 h and on {d} days in the last 7. Notifications did not change.',

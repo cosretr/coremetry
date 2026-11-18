@@ -24,6 +24,7 @@ export interface ProblemGraphMember {
   path?: string[];
   strict?: boolean;
   graphMissing?: boolean;
+  late?: boolean; // v0.10.2341 (S4, yalnız açıkken): aynı servis, emme sınırından sonra
 }
 
 export interface ProblemGraphNearMiss {
@@ -61,6 +62,20 @@ export interface ProblemGraphShadowReport {
   reads: ProblemGraphReads;
   truncated?: boolean;
   frequentReport?: FrequentReport; // v0.10.2280 (S3)
+  mergeReport?: ProblemGraphMergeReport; // v0.10.2341 (S4)
+}
+
+/** v0.10.2341 (S4) — sonradan bağlanan üyelerin 24 sa sayaçları. */
+export interface ProblemGraphMergeReport {
+  enforce: boolean; joined: number; wouldHold: number; heldBecameP1: number;
+  becameP1?: { id: string; name: string; family?: string }[]; late: number;
+}
+
+/** v0.10.2341 — uygulama dilimlerinin kod sabitleri ve geçiş ölçütü sayıları. */
+export interface ProblemGraphModes { s4: boolean; s5: boolean }
+export interface ProblemGraphCriterion {
+  windowStart: number; mergeJoined: number; mergeWouldHold: number; mergeHeldP1: number;
+  frequentWouldHold: number; frequentHeldP1: number; late: number;
 }
 
 export interface ProblemGraphTopGroup {
@@ -72,6 +87,8 @@ export interface ProblemGraphShadowResponse {
   available: boolean;
   report: ProblemGraphShadowReport;
   largest: ProblemGraphTopGroup[];
+  modes?: ProblemGraphModes; // v0.10.2341
+  criterion?: ProblemGraphCriterion;
 }
 
 export const ORIGIN_RULES = ['K-ROLLOUT', 'K-SHARED', 'K-DEEP', 'K-FIRST'] as const;
@@ -440,4 +457,23 @@ export function episodeText(e: FrequentEpisode, t: GraphT, when: (ns: number) =>
   if (e.resolvedAt && e.resolvedAt > e.startedAt) parts.push(t('pg.rep.lasted', { m: Math.max(1, Math.round((e.resolvedAt - e.startedAt) / 6e10)) }));
   if (e.priority) parts.push(e.priority);
   return parts.join(' · ');
+}
+
+/** v0.10.2341 — SAF: admin raporunun geçiş ölçütü satırları (tasarım §9).
+ *  Operatör ekranı: yalnız Türkçe, i18n anahtarı yok. since = sayaç penceresi
+ *  başlangıcının biçimlenmiş hâli (çağıran biçimler). */
+export function graphCriterionLines(modes: ProblemGraphModes | undefined, c: ProblemGraphCriterion | undefined, since: string): string[] {
+  const on = (b?: boolean) => (b ? 'açık' : 'kapalı');
+  const out = [
+    `S4: ${on(modes?.s4)} / S5: ${on(modes?.s5)}`,
+    'Açma ölçütü (tasarım §9): en az 7 gün gölge; tutulacak bildirimler arasında sonradan P1\'e çıkan ya da onaylı vakaya dönen SIFIR; yanlış bağ örnekleri (aşağıdaki en büyük 20 küme) operatörce gözden geçirilmiş.',
+  ];
+  if (!c) return out;
+  out.push(
+    `Sayaç penceresi: ${since} başından, en çok 24 saat (lider değişince sıfırlanır; 7 günlük süreyi operatör sayar).`,
+    `Birleşme (S4): sonradan bağlanan ${c.mergeJoined} üye; açılış bildirimi tutulacak ${c.mergeWouldHold}; bunlardan sonradan P1'e çıkan ${c.mergeHeldP1} (hedef 0); geç katılan ${c.late}.`,
+    `Sık tekrar (S5): açılış bildirimi tutulacak ${c.frequentWouldHold}; bunlardan sonradan P1'e çıkan ${c.frequentHeldP1} (hedef 0).`,
+    'Onaylı vakaya dönüş ürün içinde sayılmıyor: tutulacak üyeler listesi operatörce gözden geçirilir.',
+  );
+  return out;
 }

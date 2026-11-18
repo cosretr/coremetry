@@ -372,6 +372,12 @@ type NoiseMark struct {
 type NotifyHistory struct {
 	Noise    *NoiseMark
 	LastSend *NotifyRecord
+	// Merged — v0.10.2341 (entity grafı S4): sonradan bağlanan küme üyesi;
+	// yalnız S4 açıkken dolar (nil = bugünkü karar, bayt bayt).
+	Merged *MergeHold
+	// HeldPriority — bu Problem'in açılışı S4/S5 kuralıyla tutulduğunda
+	// görünüm önceliği (süreç içi defter); yükselirse baypas. "" = yok.
+	HeldPriority string
 }
 
 // NotifyDecision — karar.
@@ -490,7 +496,8 @@ func inQuietHours(q *NotifyQuietHours, now time.Time) bool {
 // Sıra (ilk tutan kazanır, replay bu kodu sayar):
 //
 //	kalıcı gizleme → P3 (özet / kapalı) → ölçülmüş kapı başarısızlığı (low)
-//	→ etki tabanı → "problem değil" penceresi → tekrar penceresi → sessiz saat
+//	→ etki tabanı → küme üyesi (S4, yalnız açıkken) → "problem değil"
+//	penceresi → tekrar penceresi → sessiz saat
 func NotifiableAt(std ProblemStandard, prio string, hist NotifyHistory, pol NotifyPolicy, now time.Time) NotifyDecision {
 	pol = NormalizeNotifyPolicy(pol)
 	d := NotifyDecision{Priority: prio, Confidence: std.Confidence.Level, Magnitude: StdMagnitude(std)}
@@ -520,6 +527,14 @@ func NotifiableAt(std ProblemStandard, prio string, hist NotifyHistory, pol Noti
 	}
 	if h := impactFloorHold(std, pol.ImpactFloors); h != "" {
 		return hold(h)
+	}
+	// v0.10.2341 (S4) — sonradan bağlanan küme üyesi; Merged nil = adım yok.
+	if m := hist.Merged; m != nil {
+		if b := mergeBypass(std, prio, hist.HeldPriority, *m); b != "" {
+			d.Bypass = b
+		} else {
+			return hold(NotifyHoldMerged)
+		}
 	}
 	nowNs := now.UnixNano()
 	muteWin := int64(pol.NoiseMuteHours * float64(time.Hour)) // v0.10.1531 (R3)

@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { Empty, Spinner } from '@/components/Spinner';
 import { useProblemGraphShadow } from '@/lib/queries';
-import { graphShadowLines } from '@/lib/problemGraph';
+import { graphShadowLines, graphCriterionLines } from '@/lib/problemGraph';
 import { fmtDateTime } from '@/lib/utils';
 import { SearchX } from 'lucide-react';
 import { t as tr, tf, useLang } from '@/lib/i18n';
@@ -34,6 +34,13 @@ export function ProblemGraphShadowSection() {
         {q.data && !q.data.available && <p className="m-0 text-sm">{t('none')}</p>}
         {q.data?.available && (
           <>
+            {/* v0.10.2341 — S4/S5 kipi ve geçiş ölçütü (yalnız Türkçe, operatör ekranı). */}
+            <div className="flex flex-col gap-0.5 text-sm" data-testid="problem-graph-criterion">
+              {graphCriterionLines(q.data.modes, q.data.criterion, fmtDateTime(new Date((q.data.criterion?.windowStart ?? 0) * 1000))).map(l => <div key={l}>{l}</div>)}
+              {(q.data.report.mergeReport?.becameP1?.length ?? 0) > 0 && (
+                <div data-testid="problem-graph-merge-p1">Tutulacakken P1'e çıkan üyeler: {q.data.report.mergeReport!.becameP1!.map(p => `${p.name} (${p.id})`).join(', ')}</div>
+              )}
+            </div>
             <div className="flex flex-col gap-0.5 text-sm" data-testid="problem-graph-shadow-lines">
               {graphShadowLines(q.data.report, lang).map(l => <div key={l}>{l}</div>)}
             </div>

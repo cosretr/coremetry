@@ -22,13 +22,13 @@ import (
 
 // Sabitler (tasarım §2, operatör kararı 4; ayar YOK).
 const (
-	graphWindowNs   = int64(30 * 60 * 1e9) // komşunun başlangıcına en çok 30 dk
-	graphHubMax     = 20                   // N-HUB: ortak noktayı kullanan servis
-	graphSizeMax    = 25                   // N-SIZE: birleşik Problem en çok 25 varlık
-	graphMaxHops    = 3                    // sahipten en çok 3 bağ
-	graphAbsorbNs   = int64(90 * 60 * 1e9) // emme sınırı: S1'de yalnız ölçülür
-	graphNearMax    = 3                    // bağlanmayanlar bloğu en çok 3 satır
-	graphMemberRows = 25                   // üyeler tablosu en çok 25 satır
+	graphWindowNs   = int64(30 * 60 * 1e9)                   // komşunun başlangıcına en çok 30 dk
+	graphHubMax     = 20                                     // N-HUB: ortak noktayı kullanan servis
+	graphSizeMax    = 25                                     // N-SIZE: birleşik Problem en çok 25 varlık
+	graphMaxHops    = 3                                      // sahipten en çok 3 bağ
+	graphAbsorbNs   = int64(chstore.ProblemGraphAbsorbLimit) // emme sınırı: S4 açıkken uygulanır, kapalıyken yalnız ölçülür
+	graphNearMax    = 3                                      // bağlanmayanlar bloğu en çok 3 satır
+	graphMemberRows = 25                                     // üyeler tablosu en çok 25 satır
 )
 
 // graphUnit — bir varlığın açık Problem'leri.
@@ -370,12 +370,33 @@ type graphCluster struct {
 	Units []int
 	Links map[int]graphLink // birim → katılış (sahipte yok)
 	Cut   []int             // tavan / uzaklık yüzünden alınmayan bağlı birimler
+	// Capped — v0.10.2341 (S4): emme sınırı yüzünden alınmayan bağlı birimler
+	// (N-CAP); Onset — kümenin hatırlanan en erken başlangıcı. İkisi de yalnız
+	// S4 açıkken dolar.
+	Capped []int
+	Onset  int64
+}
+
+// graphEnforceOpts — v0.10.2341 (S4): kapalıyken sıfır değer (bugünkü plan).
+// Onset — önceki tiklerde kümeye alınmış Problem'in (birim temsilcisi)
+// kümesinin en erken başlangıcı: sahip kapanıp küme yeniden kurulsa da emme
+// sınırı ilk başlangıçtan ölçülür.
+type graphEnforceOpts struct {
+	On    bool
+	Onset map[string]int64
 }
 
 // clusterUnits — SAF: birimler başlangıç sırasıyla; atanmamış en erken birim
 // sahip olur, bağlar üzerinden genişlik öncelikli (≤ 3 bağ, ≤ 25 varlık).
 // strict: M-CALL bağı katı sürümü de sağlamalı.
 func clusterUnits(us []graphUnit, pairs [][]pairResult, strict bool) []graphCluster {
+	return clusterUnitsOpt(us, pairs, strict, graphEnforceOpts{})
+}
+
+// clusterUnitsOpt — clusterUnits + S4 emme sınırı (opt.On): kümenin en erken
+// başlangıcından 90 dk sonra başlayan, daha önce kümeye alınmamış birim
+// bağlanmaz (servisler arası; birim = varlık, aynı servis zaten tek birim).
+func clusterUnitsOpt(us []graphUnit, pairs [][]pairResult, strict bool, opt graphEnforceOpts) []graphCluster {
 	assigned := make([]bool, len(us))
 	ok := func(i, j int) (pairResult, bool) {
 		r := pairs[i][j]
@@ -397,6 +418,13 @@ func clusterUnits(us []graphUnit, pairs [][]pairResult, strict bool) []graphClus
 		type qe struct{ i, hops int }
 		q := []qe{{s, 0}}
 		cut := map[int]bool{}
+		capped := map[int]bool{}
+		if opt.On {
+			c.Onset = us[s].Onset
+			if r := opt.Onset[us[s].Rep.ID]; r > 0 && r < c.Onset {
+				c.Onset = r
+			}
+		}
 		for len(q) > 0 {
 			cur := q[0]
 			q = q[1:]
@@ -412,8 +440,16 @@ func clusterUnits(us []graphUnit, pairs [][]pairResult, strict bool) []graphClus
 					cut[j] = true
 					continue
 				}
+				if opt.On && opt.Onset[us[j].Rep.ID] == 0 && us[j].Onset-c.Onset > graphAbsorbNs {
+					capped[j] = true
+					continue
+				}
 				assigned[j] = true
 				delete(cut, j)
+				delete(capped, j)
+				if r := opt.Onset[us[j].Rep.ID]; opt.On && r > 0 && r < c.Onset {
+					c.Onset = r
+				}
 				c.Units = append(c.Units, j)
 				c.Links[j] = graphLink{Unit: j, Peer: cur.i, pairResult: r, Hops: cur.hops + 1}
 				q = append(q, qe{j, cur.hops + 1})
@@ -425,6 +461,12 @@ func clusterUnits(us []graphUnit, pairs [][]pairResult, strict bool) []graphClus
 			}
 		}
 		sort.Ints(c.Cut)
+		for j := range capped {
+			if !assigned[j] {
+				c.Capped = append(c.Capped, j)
+			}
+		}
+		sort.Ints(c.Capped)
 		out = append(out, c)
 	}
 	return out
@@ -464,8 +506,14 @@ func reasonRank(r pairResult) int {
 	return 7
 }
 
-// planGraph — SAF: birimler + gerçekler → plan.
+// planGraph — SAF: birimler + gerçekler → plan (S4 kapalı: bugünkü plan).
 func planGraph(us []graphUnit, kinds []graphKindRow, f *graphFacts) graphPlan {
+	return planGraphOpts(us, kinds, f, graphEnforceOpts{})
+}
+
+// planGraphOpts — planGraph + S4 seçenekleri (emme sınırı, "geç katıldı",
+// küme başlangıcı). opt sıfır değerde çıktı planGraph'ınkiyle aynıdır.
+func planGraphOpts(us []graphUnit, kinds []graphKindRow, f *graphFacts, opt graphEnforceOpts) graphPlan {
 	plan := graphPlan{Units: us, NoLink: map[string]string{}}
 	if f == nil {
 		f = &graphFacts{}
@@ -485,7 +533,7 @@ func planGraph(us []graphUnit, kinds []graphKindRow, f *graphFacts) graphPlan {
 			pairs[i][j], pairs[j][i] = r, r
 		}
 	}
-	plan.Clusters = clusterUnits(us, pairs, false)
+	plan.Clusters = clusterUnitsOpt(us, pairs, false, opt)
 	plan.Strict = clusterUnits(us, pairs, true)
 	clusterOf := make([]int, len(us))
 	for ci, c := range plan.Clusters {
@@ -510,10 +558,15 @@ func planGraph(us []graphUnit, kinds []graphKindRow, f *graphFacts) graphPlan {
 		for _, j := range c.Cut {
 			plan.NoLink[us[j].Rep.ID] = chstore.GraphNoSize
 		}
+		for _, j := range c.Capped {
+			if _, done := plan.NoLink[us[j].Rep.ID]; !done {
+				plan.NoLink[us[j].Rep.ID] = chstore.GraphNoCap
+			}
+		}
 		if len(c.Units) == 1 && len(near) == 0 {
 			continue
 		}
-		plan.Groups = append(plan.Groups, groupView(us, c, near, f))
+		plan.Groups = append(plan.Groups, groupView(us, c, near, f, opt.On))
 	}
 	for _, k := range kinds {
 		if k.Svc != "" && keys[entity.ServiceID(k.Svc)] {
@@ -612,9 +665,15 @@ func nearMisses(us []graphUnit, pairs [][]pairResult, c graphCluster, clusterOf 
 
 // groupView — SAF: küme → sayfa / blob görünümü. Satırlar başlangıç
 // sırasıyla; birimin bütün satırları (M-SVC) üye satırıdır. ≤ 25 satır.
-func groupView(us []graphUnit, c graphCluster, near []chstore.ProblemGraphNearMiss, f *graphFacts) chstore.ProblemGraphGroup {
+//
+// v0.10.2341 (S4, yalnız enforce): küme başlangıcı (Onset) ve aynı servisin
+// emme sınırından sonra başlayan satırına "geç katıldı" (Late) işareti.
+func groupView(us []graphUnit, c graphCluster, near []chstore.ProblemGraphNearMiss, f *graphFacts, enforce bool) chstore.ProblemGraphGroup {
 	owner := us[c.Units[0]]
 	g := chstore.ProblemGraphGroup{OwnerID: owner.Rep.ID, Entities: len(c.Units), NearMisses: near}
+	if enforce && len(c.Units) > 1 {
+		g.Onset = c.Onset
+	}
 	var rows []chstore.ProblemGraphMember
 	for _, ui := range c.Units {
 		u := us[ui]
@@ -628,6 +687,7 @@ func groupView(us []graphUnit, c graphCluster, near []chstore.ProblemGraphNearMi
 				m.Owner = true
 			case p.ID != u.Rep.ID:
 				m.Link, m.Peer = chstore.GraphRuleSvc, u.Name
+				m.Late = enforce && len(c.Units) > 1 && p.StartedAt-c.Onset > graphAbsorbNs
 			case linked:
 				m.Link, m.Peer, m.Via, m.Path, m.Strict = l.Rule, us[l.Peer].Name, l.Via, l.Path, l.Strict
 			}

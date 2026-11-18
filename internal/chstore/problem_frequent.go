@@ -184,7 +184,7 @@ func FrequentShadowCode(dec NotifyDecision, v FrequentVerdict) string {
 	}
 	if !dec.Notifiable {
 		switch dec.Hold {
-		case NotifyHoldNoise, NotifyHoldDedupe, NotifyHoldQuiet:
+		case NotifyHoldNoise, NotifyHoldDedupe, NotifyHoldQuiet, NotifyHoldMerged:
 		default:
 			return FrequentShadowEarlier
 		}
