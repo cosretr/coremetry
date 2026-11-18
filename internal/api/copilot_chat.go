@@ -591,7 +591,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// 16 satırdan 1'ini okudu) — wiki kademesinden de ÖNCE: güçlü bir değer bir
 	// hücreyle birebir eşleşiyorsa TÜM satırlar deterministik gelir; eşleşme yoksa
 	// olay basılmaz, wiki kademesi aynen sürer.
-	if wikiTierAllowed(wikiTC) && !skipDocs {
+	// v0.10.2345 — soru wiki'yi adıyla anıyorsa (wikiNamedCue) tablo kademesi de çekilir.
+	if wikiTierAllowed(wikiTC) && !skipDocs && !wikiNamedCue(lastUserText(req.Messages)) {
 		if handled, dok := s.docRowsAnswer(ctx, emit, req.Messages, true); handled {
 			cspan.tier("doc-rows", dok)
 			emit("done", map[string]bool{"ok": dok})

@@ -375,3 +375,73 @@ func TestWikiTierBeforeGuided(t *testing.T) {
 		t.Error("wiki kademesi handled olduğunda dönmeli")
 	}
 }
+
+// v0.10.2345 — operatör bulgusu ("wiki'de dediğimde anlamıyor"): wiki'yi adıyla
+// anan soru kaynak keşfine ve yüklü tablo kademesine takılmaz.
+func TestWikiNamedCue(t *testing.T) {
+	yes := []string{
+		"BFF'ler nasıl tanımlayacağım. Atlas wikisi ne bak", // yazım hatasıyla ("wikisine bak")
+		"Atlas wikisine bak",
+		"wikide ödeme akışı nasıl anlatılıyor",
+		"wiki'de circuit breaker ayarı",
+		"Wiki'ye göre deploy adımları",
+		"vikide var mı",
+		"bunu WIKI den getir",
+	}
+	for _, q := range yes {
+		if !wikiNamedCue(q) {
+			t.Errorf("wiki adıyla anılıyor ama tanınmadı: %q", q)
+		}
+	}
+	no := []string{
+		"svc-orders runbook'u nedir", // güçlü işaret ama wiki'nin ADI değil: keşif sürer
+		"restart prosedürü",
+		"kafka kılavuzu",
+		"rollback nasıl yapılır",
+		"checkout hata oranı nedir",
+		"",
+	}
+	for _, q := range no {
+		if wikiNamedCue(q) {
+			t.Errorf("wiki anılmıyor ama tanındı: %q", q)
+		}
+	}
+	// Dar küme, güçlü kümenin ALT kümesi: adıyla anılan soru her zaman güçlü işarettir
+	// (wiki bulamazsa "bulunamadı" der, soru başka kademeye kaçmaz).
+	for _, q := range yes {
+		if strong, _ := wikiQuestionCue(q); !strong {
+			t.Errorf("adıyla anılan soru güçlü işaret olmalı: %q", q)
+		}
+	}
+}
+
+// Kaynak pini: keşif kademesi ve sıkı tablo kademesi wiki adıyla anılınca çekilir.
+func TestWikiNamedCueBypassesDiscoveryAndDocRows(t *testing.T) {
+	disc, err := os.ReadFile("chat_source_discovery.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := strings.Index(string(disc), "func (s *Server) chatSourceDiscoveryTier(")
+	j := strings.Index(string(disc), "s.discoverChatSources(ctx, q)")
+	k := strings.Index(string(disc), "if wikiNamedCue(q) {")
+	if i < 0 || j < 0 || k < i || k > j {
+		t.Fatalf("keşif kademesi wikiNamedCue'yu yoklamalardan ÖNCE sormalı (i=%d k=%d j=%d)", i, k, j)
+	}
+	ask, err := os.ReadFile("chat_clarify_entity.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := strings.Index(string(ask), "func (s *Server) chatDocOrEntityAskTier(")
+	b := strings.Index(string(ask), "rows, vals := s.docRowsFind(ctx, q, true)")
+	c := strings.Index(string(ask), "if wikiNamedCue(q) {")
+	if a < 0 || b < 0 || c < a || c > b {
+		t.Fatalf("tablo sorusu kademesi wikiNamedCue'yu tablo aramasından ÖNCE sormalı (a=%d c=%d b=%d)", a, c, b)
+	}
+	chat, err := os.ReadFile("copilot_chat.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(chat), "if wikiTierAllowed(wikiTC) && !skipDocs && !wikiNamedCue(lastUserText(req.Messages)) {\n\t\tif handled, dok := s.docRowsAnswer(ctx, emit, req.Messages, true); handled {") {
+		t.Fatal("sıkı tablo kademesi wiki adıyla anılan soruda çekilmeli")
+	}
+}

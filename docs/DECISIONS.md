@@ -14872,3 +14872,10 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Başlık: biten olayda tespit anı değeri banda dönmüşse (tespit, bant dışı kovalar onaylandıktan sonra gelir) başlık bant dışına çıkan uç değerle başlar: "… 16,6 ile beklenen bandın üstüne çıktı (09:05); beklenen ≈ 5,78, bant 0,15–8,91. Tespit anında 4,94 ile banda dönmüştü." Düşüş yönünde "altına indi". Tespit anı değeri bant dışındaysa ve süren olayda eski başlık aynen. Liste satırı aynı cümleyi kullanır (v0.10.2330).
 - Eksen: uzun birim ("spans/request", "spans/min") eksen etiketlerine yazılmaz; ölçü adı grafik başlığında.
 - Doğrulanmadı: tarayıcıda görülmedi; prod'daki marka renginin yazımı görülmeden kök neden koddan çıkarıldı (bant tek dolguyla basılıyor, opaklığın koddaki tek yolu alfa eklenememesi).
+## 2026-11-18 — v0.10.2345 — CoSRE: wiki adıyla anılınca envanter sorusu araya girmez
+
+- Operatör bulgusu (prod, "wiki'de dediğimde anlamıyor"): "… nasıl tanımlarım, X wikisine bak" sorusu, sözcükleri yüklü bir envanter tablosuyla eşleştiği için "Bu soru yüklü envanter tablosunda N satırla eşleşiyor. Envanterden mi göstereyim, yoksa canlı telemetriden mi bakayım?" sorusunu aldı; wiki seçenek olarak bile sunulmadı.
+- Neden: tablo sorusu kademesi (`chatDocOrEntityAskTier`), kaynak keşfi ve sıkı tablo kademesi wiki kademesinden ÖNCE çalışır ve sorudaki açık wiki işaretine bakmaz.
+- Değişen: `wikiNamedCue` — soru wiki'nin kendisini adıyla anıyorsa ("wikide", "wiki'ye bak", "X wikisine bak", "vikide"; katlanmış sözcük öneki) bu üç kademe çekilir, soru wiki kademesine gider. Wiki bulamazsa mevcut "bulunamadı" cevabı verilir (soru başka kaynağa kaçmaz). "viki" güçlü işaret listesine eklendi.
+- Dar tutuldu: runbook / prosedür / kılavuz gibi diğer güçlü işaretler ve işaretsiz sorular eskisi gibi; "envanterde direkt cevap dönmesin, önce sorsun" (v0.10.1942) davranışı wiki anılmayan sorularda aynen.
+- Doğrulanmadı: gerçek wiki dizinine karşı denenmedi; kademe sırası testle sabit.

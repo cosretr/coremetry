@@ -222,6 +222,9 @@ func (s *Server) chatDocOrEntityAskTier(ctx context.Context, emit func(string, a
 	if q == "" {
 		return false
 	}
+	if wikiNamedCue(q) {
+		return false // v0.10.2345 — kullanıcı wiki'yi adıyla istedi: tablo sorusu sorulmaz (chat_wiki_tier.go)
+	}
 	rows, vals := s.docRowsFind(ctx, q, true)
 	if len(rows) == 0 {
 		return false // doküman kademeleri zaten cevaplamazdı

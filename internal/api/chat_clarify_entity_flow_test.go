@@ -188,6 +188,32 @@ func TestDocQuestionNotBareEntityUnchanged(t *testing.T) {
 }
 
 // TestBareEntityOf — SAF: çıplak varlık tanıma.
+// TestWikiNamedQuestionSkipsInventoryAsk — v0.10.2345 (operatör bulgusu: "wiki'de
+// dediğimde anlamıyor"): sözcükleri envanter tablosuyla eşleşen ama wiki'yi
+// ADIYLA anan soru "Envanterden mi göstereyim…" sorusuna ve tablo satırlarına
+// takılmaz; aynı sorunun wiki'siz hâli eskisi gibi önce sorar.
+func TestWikiNamedQuestionSkipsInventoryAsk(t *testing.T) {
+	for _, q := range []string{
+		"Payments-Core sunucuları nasıl tanımlanır, Atlas wikisine bak",
+		"Payments-Core sunucuları nasıl tanımlanır. Atlas wikisi ne bak", // operatörün yazımı
+		"wikide Payments-Core sunucuları nasıl tanımlanıyor",
+	} {
+		rg := newEntityDocRig(t)
+		fr := rg.post(t, q)
+		ans := lastAnswerText(fr)
+		if strings.Contains(ans, "Envanterden mi göstereyim") || strings.Contains(ans, "srvpay02") {
+			t.Fatalf("%q: wiki adıyla anılan soru envanter sorusuna / satırlarına gitmemeli: %q", q, ans)
+		}
+		if p := rg.pending(t); p != nil && p.Kind == pendingKindDocOrEntity {
+			t.Fatalf("%q: bekleyen envanter sorusu olmamalı: %+v", q, p)
+		}
+	}
+	rg := newEntityDocRig(t)
+	if fr := rg.post(t, "Payments-Core sunucuları hangi ortamda"); !strings.Contains(lastAnswerText(fr), "Envanterden mi göstereyim") {
+		t.Fatalf("wiki anılmayan doküman sorusu eskisi gibi önce sormalı: %q", lastAnswerText(fr))
+	}
+}
+
 func TestBareEntityOf(t *testing.T) {
 	teams := []string{"Payments-Core", "Ledger"}
 	svcs := []string{"checkout", "order-api"}

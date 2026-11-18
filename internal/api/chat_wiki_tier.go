@@ -57,7 +57,7 @@ const (
 // (ragWikiFloor, 0.5) geçerse kademe cevaplar; değilse akış guided/RAG'a
 // DOKUNULMADAN sürer (v0.10.1124 inceleme F2).
 var (
-	wikiStrongCues = []string{"wiki", "runbook", "playbook", "prosedur", "procedure", "kilavuz", "howto", "how-to", "dokumantasyon"}
+	wikiStrongCues = []string{"wiki", "viki" /* v0.10.2345 — Türkçe yazım; wikiNamedCue ile aynı küme */, "runbook", "playbook", "prosedur", "procedure", "kilavuz", "howto", "how-to", "dokumantasyon"}
 	wikiWeakCues   = []string{"dokuman", "docs"}
 	// wikiNasilVerbs — "nasıl" + yap- fiili ("nasıl yapılır/yaparız/yaparım…");
 	// v0.10.1126'ten beri sonek kuralının (wikiNasilVerb) açık listesi.
@@ -94,6 +94,29 @@ func wikiQuestionCue(q string) (strong, weak bool) {
 		weak = false
 	}
 	return strong, weak
+}
+
+// wikiNamedCue — SAF: soru wiki'nin KENDİSİNİ adıyla anıyor mu ("wikide",
+// "wiki'ye bak", "Atlas wikisine bak", "vikide"). wikiQuestionCue'nun güçlü
+// kümesinden DAR: yalnız "wiki" / "viki" önekli sözcük (runbook, prosedür,
+// kılavuz buraya girmez).
+//
+// v0.10.2345 (operatör bulgusu: "wiki'de dediğimde anlamıyor") — "… nasıl
+// tanımlarım, X wikisine bak" sorusunda wiki kademesinden ÖNCE çalışan kaynak
+// keşfi ve yüklü tablo kademeleri sorudaki sözcükler bir envanter tablosuyla
+// eşleşince araya giriyor ("envanterden mi, canlı telemetriden mi?"), wiki
+// seçenek olarak bile sunulmuyordu. Kullanıcı kaynağı adıyla söylediyse o
+// kademeler çekilir; wiki bulamazsa bunu dürüstçe söyler.
+func wikiNamedCue(q string) bool {
+	words := strings.FieldsFunc(wiki.Fold(q), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	for _, w := range words {
+		if strings.HasPrefix(w, "wiki") || strings.HasPrefix(w, "viki") {
+			return true
+		}
+	}
+	return false
 }
 
 // wikiTierContext — sohbet isteğinin panel/çekmece bağlamı (kademe kapısı).

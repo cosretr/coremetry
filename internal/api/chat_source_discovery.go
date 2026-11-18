@@ -248,6 +248,9 @@ func (s *Server) chatSourceDiscoveryTier(ctx context.Context, emit func(string, 
 	if q == "" {
 		return
 	}
+	if wikiNamedCue(q) {
+		return // v0.10.2345 — kullanıcı wiki'yi adıyla istedi: keşif araya girmez (chat_wiki_tier.go)
+	}
 	cands := s.discoverChatSources(ctx, q)
 	if len(cands) == 0 {
 		return
