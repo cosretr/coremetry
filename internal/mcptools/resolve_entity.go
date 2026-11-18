@@ -254,6 +254,10 @@ func podShaped(text string) bool {
 }
 
 // ── katalog indeksi (60 s süreç içi cache) ─────────────────────
+//
+// Dışarıdan sıfırlayan yok (v0.10.2352: Settings → Entities PUT'unun çağırdığı
+// sanılan ResetEntityIndexCache hiç bağlanmamıştı, silindi). Ayar değişimi
+// anahtardan (bayrak + cluster kümesi) anında, gerisi TTL ile düşer.
 
 const entityIndexTTL = 60 * time.Second
 
@@ -349,14 +353,6 @@ func loadEntityIndex(ctx context.Context, d Deps) (EntityCatalogIndex, error) {
 	}
 	entityIndexCache.at, entityIndexCache.key, entityIndexCache.idx = cacheNow(), key, idx
 	return idx, nil
-}
-
-// ResetEntityIndexCache — v0.10.490: Settings → Entities PUT (api/entity_routes.go)
-// ve testler çağırır; anahtar da sıfırlanır.
-func ResetEntityIndexCache() {
-	entityIndexCache.Lock()
-	entityIndexCache.at, entityIndexCache.key = time.Time{}, ""
-	entityIndexCache.Unlock()
 }
 
 // loadPodCandidates — yalnız pod-şekilli metin; alt-dize (ILIKE), cluster başına ≤50.

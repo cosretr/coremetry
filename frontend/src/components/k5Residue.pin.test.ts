@@ -39,7 +39,7 @@ describe('v0.10.929 — sağlıklı durum nötr (yeşil yok)', () => {
     // v0.10.1853 — components/LogFieldsPanel.tsx silindi (coremetry/logs/FieldSidebar, StatusBadge).
     'components/dashboard/PanelRenderer.tsx',
     'components/viz/TimeSeriesPanel.tsx',
-    'features/anomalies/EvaluatorStatus.tsx',
+    // v0.10.2352 — features/anomalies/EvaluatorStatus.tsx silindi (tüketicisiz).
     'features/anomalies/ProblemNotifyPanel.tsx',
     'features/anomalies/ExternalEvidencePanel.tsx',
     'features/dependencies/CallerSection.tsx',

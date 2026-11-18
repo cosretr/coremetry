@@ -20,7 +20,7 @@ export const PAGE_FILES: Record<Page, readonly string[]> = {
   ],
   Trace: [
     'pages/Trace.tsx', 'pages/trace/', 'components/TraceWaterfall.tsx', 'components/SpanDetail.tsx',
-    'components/SpanK8sSection.tsx', 'components/TracePeekDrawer.tsx', 'components/FlameGraph.tsx',
+    'components/SpanK8sSection.tsx', 'components/FlameGraph.tsx', // v0.10.2352 — TracePeekDrawer silindi (tüketicisiz)
   ],
   // Traces shadcn S6 (operatör 2026-11-13: grafik sarmalayıcıları "sıfır
   // inline" kuralının DIŞINDA, ayrı grup) — components/traces/ dizin öneki

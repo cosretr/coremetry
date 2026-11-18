@@ -102,7 +102,6 @@ export default defineConfig({
             // aynı mekanizmanın çözümüydü.
             { name: 'charts', test: /node_modules\/uplot/, priority: 95 },
             { name: 'otel', test: /node_modules\/(@opentelemetry|zone\.js)/, priority: 80 },
-            { name: 'graph', test: /node_modules\/(dagre|graphlib|lodash)/, priority: 80 },
             // v0.10.1609 — shadcn Faz 1 R2 (plan §1.1): Radix/shadcn çalışma
             // zamanı eager vendor catch-all'ına (aşağıda) DÜŞMESİN — orası
             // lucide + virtual-core ile index.html'de preload ediliyor. Geçişli

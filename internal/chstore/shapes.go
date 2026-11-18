@@ -3,7 +3,6 @@ package chstore
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -156,10 +155,4 @@ func (s *Store) GetTraceShapes(ctx context.Context, f TraceShapesFilter) ([]Trac
 		})
 	}
 	return out, rows.Err()
-}
-
-// shapeSignatureString joins a shape's signature into a single
-// string for cache keys. Used by the API layer.
-func ShapeSignatureKey(sig []string) string {
-	return strings.Join(sig, ",")
 }

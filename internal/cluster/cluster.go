@@ -26,7 +26,6 @@ import (
 	"log"
 	"os"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -231,15 +230,4 @@ func (s *Service) Members(ctx context.Context) ([]Member, error) {
 		return out[i].StartedAt < out[j].StartedAt
 	})
 	return out, nil
-}
-
-// PodIDFromHostname extracts the short label most operators expect
-// from a pod hostname — strips the random suffix so two replicas
-// of the same Deployment cluster together visually. Used by the
-// frontend's group-by-hostname rendering.
-func PodIDFromHostname(id string) string {
-	if i := strings.LastIndex(id, "-"); i > 0 {
-		return id[:i]
-	}
-	return id
 }

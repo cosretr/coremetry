@@ -452,14 +452,6 @@ func (d *V2Detector) WaitActive(ctx context.Context, poll time.Duration) bool {
 // dokunmaz (bayrak), tik goroutine'i uygular.
 func (d *V2Detector) OnAcquire() { d.resetPending.Store(true) }
 
-// LastRun — son tikin KOPYASI.
-func (d *V2Detector) LastRun() (WorkerRun, bool) {
-	if p := d.lastRun.Load(); p != nil {
-		return *p, true
-	}
-	return WorkerRun{}, false
-}
-
 // V2DetectorActive — v0.10.982 — SAF bayrak kapısı: enabled VE source=v2.
 func V2DetectorActive(s Settings) bool { return s.Enabled && s.ResolvedV2().Source == SourceV2 }
 

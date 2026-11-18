@@ -168,14 +168,6 @@ func (r *SubjectResolver) ExTypeFor(sourceID string) func(traceID string) string
 	}
 }
 
-// LastResolution — v0.10.898: (kaynak, op) için son çözüm (kanıt cümlesi).
-func (r *SubjectResolver) LastResolution(sourceID, op string) (anomaly.ExternalSubjectResolution, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	res, ok := r.lastRes[sourceID+"\x00"+op]
-	return res, ok
-}
-
 // LastResolutionFor — v0.10.1000: SERİNİN (op, kod) son çözümü; yoksa op'unki.
 // Fonksiyon kodu basamağında aynı operasyonun farklı kodları farklı servise
 // çözülebilir — kanıt notu başka serinin cümlesini taşımasın.

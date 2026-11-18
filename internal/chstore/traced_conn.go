@@ -39,7 +39,7 @@ import (
 //
 //   - When selfobs is disabled (noop tracer), each Start call
 //     allocates a noop span which is essentially free; we don't
-//     branch on selfobs.Enabled() at the per-call level. The hot
+//     branch on whether selfobs is enabled at the per-call level. The hot
 //     path overhead is one map-free no-op span allocation +
 //     attribute slice — well under 1µs at the rates we run.
 //

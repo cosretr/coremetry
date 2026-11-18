@@ -122,9 +122,6 @@ var v2DroppedArgs = map[string][]string{
 // V2Hidden — araç v2 model alt kümesinin dışında mı (SAF).
 func V2Hidden(name string) bool { return v2HiddenTools[name] }
 
-// V2DroppedArgs — aracın v2'de düşen argümanları (SAF; nil = yok).
-func V2DroppedArgs(name string) []string { return v2DroppedArgs[name] }
-
 // V2NarrowSchema — SAF: v2'de düşen argümanlar şemadan çıkar (properties +
 // required). Girdi DEĞİŞMEZ (sığ kopya); düşecek argüman yoksa girdi aynen.
 func V2NarrowSchema(name string, schema map[string]any) map[string]any {

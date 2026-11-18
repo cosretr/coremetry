@@ -374,14 +374,6 @@ func (w *MetricsWorker) SetDegradedCheck(f func() bool) { w.degraded = f }
 // OnAcquire — liderlik edinimi: bellek bir sonraki tikte düşer, durum CH'den kurulur.
 func (w *MetricsWorker) OnAcquire() { w.resetPending.Store(true) }
 
-// LastRun — son tikin KOPYASI.
-func (w *MetricsWorker) LastRun() (rollout.WorkerRun, bool) {
-	if p := w.lastRun.Load(); p != nil {
-		return *p, true
-	}
-	return rollout.WorkerRun{}, false
-}
-
 // nextVersion — tekdüze açık istemci version'ı (ns; eşitlikte +1).
 func (w *MetricsWorker) nextVersion() uint64 {
 	w.verMu.Lock()

@@ -261,15 +261,6 @@ func ToolsetStates(ctx context.Context, d Deps, raw map[string]bool, probe bool)
 	return out
 }
 
-// ToolsetNames — sabit sırayla adlar (api doğrulaması + testler).
-func ToolsetNames() []string {
-	out := make([]string, 0, len(Toolsets))
-	for _, ts := range Toolsets {
-		out = append(out, ts.Name)
-	}
-	return out
-}
-
 // SortedDisabledNames — SAF: etkin kapalı adların sıralı listesi (cache
 // anahtarı / audit metni için).
 func SortedDisabledNames(raw map[string]bool) []string {

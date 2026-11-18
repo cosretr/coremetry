@@ -138,9 +138,6 @@ func (g *toolTurnGate) Finish(final string, toolTurn bool) {
 	g.wsHold = ""
 }
 
-// Emitted — son Reset'ten beri yayınlanan metin (test + teşhis).
-func (g *toolTurnGate) Emitted() string { return g.emitted.String() }
-
 // Degenerated — v0.10.1324: yineleme muhafızı turu kesti mi.
 func (g *toolTurnGate) Degenerated() bool { return g.degenerated }
 

@@ -227,12 +227,6 @@ func Tracer() trace.Tracer { return tracerSink }
 // Meter returns the package-wide meter. Noop when disabled.
 func Meter() metric.Meter { return meterSink }
 
-// Enabled reports whether real OTel pipelines are running. Hot paths
-// can fast-skip span work when this is false (the noop tracer already
-// does so internally; this is just for the rare case where building
-// expensive attribute values would itself be wasteful).
-func Enabled() bool { return enabled }
-
 func buildResource(mode, version string) (*resource.Resource, error) {
 	host, _ := os.Hostname()
 	if version == "" {

@@ -438,11 +438,6 @@ func buildTraceToolAnalysis(spans []chstore.SpanRow, storeCapped bool) traceTool
 // mcptools'u import edemez); burası ince sarmalayıcı, davranış aynı.
 func ttSpanException(events any) (exType, exMsg string) { return tracechain.SpanException(events) }
 
-// SpanException — SAF (v0.10.1327): ttSpanException'ın dışa açık adı; sohbet
-// trace drill'i (api/chat_trace_drill.go) baskın span'in exception'ını aynı
-// çözücüyle okur — ikinci bir event ayrıştırıcısı yok.
-func SpanException(events any) (exType, exMsg string) { return ttSpanException(events) }
-
 // ttCapRunes — rune sınırında keser, kesildiğini "…" ile söyler.
 func ttCapRunes(s string, max int) string {
 	n := 0

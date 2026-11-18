@@ -149,7 +149,7 @@ const CONVERTED = [
   // /logs — v0.9.1348-1349
   'components/CorrelationContextDrawer.tsx',
   'components/ServiceMapNodeDrawer.tsx',
-  'components/TracePeekDrawer.tsx',
+  // v0.10.2352 — components/TracePeekDrawer.tsx silindi (tüketicisiz).
   'components/SpanDetail.tsx',
   'components/ai/ServiceChartsExplainBody.tsx',
   'features/anomalies/AnomalyDetailDrawer.tsx',

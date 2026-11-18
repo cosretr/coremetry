@@ -15,7 +15,6 @@ package secretref
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 )
@@ -28,11 +27,6 @@ var (
 // Valid — `env:NAME` (POSIX env adı) ya da `file:/mutlak/yol`.
 func Valid(ref string) bool {
 	return envRefRe.MatchString(ref) || fileRefRe.MatchString(ref)
-}
-
-// Resolve — os üzerinden çözer (üretim yolu).
-func Resolve(ref string) (string, error) {
-	return ResolveWith(ref, os.Getenv, os.ReadFile)
 }
 
 // ResolveWith — enjekte edilebilir getenv/readFile ile çözer (testler).

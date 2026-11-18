@@ -180,7 +180,7 @@ type TracePodReader interface {
 }
 
 // PivotRequest — normalize edilmiş argümanlar. From/To sıfırsa pencere ctx
-// çıpasından kurulur (RunTracePivot).
+// çıpasından kurulur (runTracePivot).
 type PivotRequest struct {
 	TraceID   string
 	Service   string
@@ -719,12 +719,6 @@ type pivotCtx struct {
 	topOpName     string
 	topOpSpanMs   float64
 	topOpHasValue bool
-}
-
-// RunTracePivot — zincirin tamamı. Hata yalnız çağıran iptal ettiğinde döner;
-// her okuma arızası halka durumuna çevrilir.
-func RunTracePivot(ctx context.Context, d Deps, req PivotRequest) (PivotResult, error) {
-	return runTracePivot(ctx, pivotReadersFrom(d), req, nil)
 }
 
 func runTracePivot(ctx context.Context, r pivotReaders, req PivotRequest, warnings []string) (PivotResult, error) {
@@ -1860,7 +1854,7 @@ func pivotMemo(ctx context.Context, d Deps, r pivotReaders, req PivotRequest, cl
 	})
 }
 
-// RunTracePivotCached — v0.10.1287 (AI SRE Faz 1b): RunTracePivot'un
+// RunTracePivotCached — v0.10.1287 (AI SRE Faz 1b): runTracePivot'un
 // Deps.Memo'lu eşi (Memo yoksa doğrudan); sohbet aracıyla aynı anahtar.
 func RunTracePivotCached(ctx context.Context, d Deps, req PivotRequest) (PivotResult, error) {
 	r := pivotReadersFrom(d)

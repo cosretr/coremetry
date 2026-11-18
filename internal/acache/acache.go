@@ -102,8 +102,6 @@ type Policy interface {
 // PolicyFunc adapts a plain function to Policy.
 type PolicyFunc func(string) Card
 
-func (f PolicyFunc) Classify(k string) Card { return f(k) }
-
 // StaticPolicy resolves keys against an allowlist (Track) and a denylist
 // (HLL); everything else falls to Default. Build it from config (splitCSV
 // env vars) or from a system_settings JSON blob so new attributes are a
