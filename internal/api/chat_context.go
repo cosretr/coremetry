@@ -90,6 +90,10 @@ type ChatContext struct {
 	// Operation, attribute süzgeçleri mevcut Filters yuvasında durur. Yalnız
 	// v2 + durum açıkken yazılır; v1'de boş → JSON bayt bayt eski.
 	ClientIP string `json:"clientIp,omitempty"`
+	// Suggested — v0.10.2364 (interaction-audit I3, chat_suggestions.go): bu
+	// konuşmada gösterilen / cevaplanan çip niyeti anahtarları (≤32); bir daha
+	// önerilmez. Yalnız v2 + interaction açıkken yazılır.
+	Suggested []string `json:"suggested,omitempty"`
 }
 
 func (c ChatContext) Empty() bool {

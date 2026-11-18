@@ -212,6 +212,8 @@ type chatRequest struct {
 	// cevabı; dolu istek onay bekleyen alışverişin DEVAMIDIR (kademeler atlanır,
 	// döngü jetonun bütçesiyle sürer). v1 handler'ı okumaz.
 	Approvals []approvalAnswer `json:"approvals,omitempty"`
+	// Suggestion — v0.10.2364 (I3, chat_suggestions.go): öneri çipinin tıkı {id, token}; niyet jetondan.
+	Suggestion *suggestionPick `json:"suggestion,omitempty"`
 }
 
 // copilotChatWith — sohbet gövdesi (v1 ve v2 taşıma ortak; chat_sink.go).
@@ -290,7 +292,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// agent-core S5 — onay devamı (yalnız v2): kimlikler aynı asistan mesajında
 	// önceki akışın üstünden sayar; kademeler aşağıda atlanır.
 	isV2 := isV2Sink(em)
-	apCont := newChatApprovalCont(isV2, req.Approvals)
+	apCont := newChatApprovalCont(isV2, req.Approvals).withSuggestion(s.newChatSuggestionCont(r.Context(), isV2, req.Suggestion, req.Context.Conversation)) // v0.10.2364 — I3 çip tıkı kademeleri atlar
 	if apCont.on {
 		emit = withStepIDsFrom(em.Emit, apCont.base)
 		req.Context.ExplainAsk = nil
@@ -424,7 +426,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.2324 — konuşma durumu (chat_state.go): yalnız v2 + cosre_conversation.state;
 	// kapalıyken nil ve aşağıdaki her kanca no-op (bayt aynı).
 	var stt *chatStateTurn
-	if !apCont.on {
+	if !apCont.resume() { // v0.10.2364 — çip tıkı durumu yazar
 		stt = s.beginChatStateTurn(ctx, &req, cst, emit)
 		emit = stt.wrapEmit(emit)
 		ctx = withChatStateTurn(ctx, stt) // v0.10.2327 — guided olguları deftere
@@ -435,6 +437,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	emit = s.beginChatActionTurn(ctx, exchangeID, agentctx.Sanitize(req.Context.Page)).wrapEmit(ctx, emit)
 	stepT := s.beginChatStepTurn(ctx, exchangeID, req.Context.Conversation, evm != nil) // v0.10.2363 — I1 adım sözleşmesi; kapalıyken nil, emit aynen
 	emit, ctx = stepT.wrapEmit(ctx, emit), withChatStepTurn(ctx, stepT)
+	// v0.10.2364 — I3 data-suggestions (chat_suggestions.go); kapalıyken emit/ctx aynen.
+	emit, ctx = s.beginChatSuggestTurn(ctx, emit, exchangeID, req.Context.Conversation, cst)
 	xch.verify.noteState(cst) // v0.10.2327 — durum adları + önceki defter (istemci yankısı hariç)
 	// v0.10.1465 — yapışkan kod konuşması (chat_code_sticky.go): kod okunmuş
 	// konuşmanın HER turu her kademeden önce yerel profile sabitlenir; yerel
@@ -1335,7 +1339,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// agent-core S5 — onay devamı: karar + (onaylıysa) tek yürütme + konuşma
 	// çifti; döngü jetonun taşıdığı kalan bütçeyle ve turdan sürer.
 	apStartRound := 0
-	if apCont.on {
+	if apCont.resume() {
 		rr := s.resumeApprovalTurn(ctx, r, emit, exec, apPre, apCont, resumeApprovalIn{
 			Answer: apCont.ans, Who: approvalCaller{UserID: uid, Role: role}, Cfg: apCfg, Offered: apGated, Now: time.Now(),
 		}, conv, maxCalls, maxRounds)
@@ -1346,6 +1350,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		if rr.skipped {
 			skippedN++
 		}
+	} else if sr := s.runSuggestionIntent(ctx, emit, exec, apCont.sg, conv); sr.ran { // v0.10.2364 — I3 niyet router'sız (chat_suggestions.go)
+		conv, calledTools, callsLeft = sr.conv, append(calledTools, sr.tools...), callsLeft-1
+		executedN, skippedN = executedN+sr.executed, skippedN+sr.skipped
 	}
 	conv, calledTools = s.chatInvestigate(ctx, emit, investigateTurn{Question: lastUserText(req.Messages), State: cst.ctx, Service: investigateService(stt, req.Context.Service), // v0.10.2361 — S4 kanıt paketi
 		Blocked: rtPlan != nil || isTraceFollowUp || req.Context.Explain != "" || dm.On || ct.On || apCont.on || opPre != nil, RangeS: int64(req.Context.RangeS), To: anchorTo}, conv, calledTools)

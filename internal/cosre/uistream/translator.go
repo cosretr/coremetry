@@ -96,6 +96,9 @@ func (t *Translator) Translate(kind string, payload any) []Part {
 		// v0.10.2363 (I1) — adım sözleşmesi {id, order, title, signal?, state,
 		// result?, evidenceRef?, spent{calls,rounds}, tool?, label?, i?, token?}.
 		out = append(out, StepStatePart(m))
+	case "suggestions":
+		// v0.10.2364 (I3) — sonraki adım çipleri {exchangeId, chips[]}.
+		out = append(out, SuggestionsPart(m))
 	case "action-result":
 		// v0.10.2353 (I5) — onayın sonucu {kind, status, link?, noteId?, exchangeId?}.
 		out = append(out, ActionResultPart(m))

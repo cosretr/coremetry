@@ -138,6 +138,7 @@ func (s *Server) chatInvestigate(ctx context.Context, emit func(string, any), in
 		stepTurnOf(ctx).notePack(ctx, m, st) // v0.10.2363 — I1: paket adımı aynı sözleşmeyle
 	})
 	digest := pack.DigestJSON()
+	suggestTurnOf(ctx).notePack(pack.Digest) // v0.10.2364 — I3 çip olguları (chat_suggestions.go)
 	args, _ := json.Marshal(map[string]any{"service": in.Service, "range_s": int64(to.Sub(from).Seconds())})
 	conv = append(append([]copilot.ChatMessage{}, conv...),
 		copilot.ChatMessage{Role: "assistant", ToolCalls: []copilot.ToolCall{{ID: evidencePackToolID, Name: evidencePackTool, Input: args}}},

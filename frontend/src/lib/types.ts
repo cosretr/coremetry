@@ -9273,7 +9273,30 @@ export interface CosreRuleInput {
 // CoSRE öğrenme Faz 2 — istemcinin örtük sinyalleri (POST /api/ai/signal;
 // internal/cosrelearn ClientSignalKinds). Türetilenler sunucuda hesaplanır.
 export type CosreSignalKind = 'copy' | 'link_click' | 'evidence_click' | 'problem_note' | 'followup_click' // v0.10.1291 — takip çipi
-  | 'evidence_relevant' | 'evidence_irrelevant' | 'note'; // v0.10.1659 (CoSRE v2 B4) — kanıt başına ilgili/ilgisiz + mesaj notu (Go cosrelearn ClientSignalKinds)
+  | 'evidence_relevant' | 'evidence_irrelevant' | 'note' // v0.10.1659 (CoSRE v2 B4) — kanıt başına ilgili/ilgisiz + mesaj notu (Go cosrelearn ClientSignalKinds)
+  | 'suggestion_click' | 'suggestion_ignored'; // v0.10.2364 (interaction-audit §5, I4) — öneri çipi; ağırlık 0, etiket değil
+
+/** v0.10.2364 (interaction-audit §6 I3) — data-suggestions çipi (Go api chatSuggestion).
+ *  Niyet yalnız gösterim/sinyal içindir: tık sunucuya {id, token} yollar, sunucu niyeti jetondan yürütür. */
+export interface CosreSuggestion {
+  id: string;
+  label: string;
+  rule: string;
+  intent: { tool: string; args: Record<string, string> };
+  token: string;
+}
+
+/** v0.10.2364 — data-suggestions yükü. */
+export interface CosreSuggestions {
+  exchangeId?: string;
+  chips: CosreSuggestion[];
+}
+
+/** v0.10.2364 — çip tıkının istek gövdesi alanı (`suggestion`). */
+export interface CosreSuggestionPick {
+  id: string;
+  token: string;
+}
 
 // GET /api/ai/quality — gece kalite puanı (internal/chstore/cosre_quality.go).
 export interface CosreWorstAnswer {

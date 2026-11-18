@@ -59,3 +59,32 @@ func TestActionSignalsAreNotLabels(t *testing.T) {
 		t.Fatalf("taban puan değişti: %v", sc)
 	}
 }
+
+// v0.10.2364 (interaction-audit §5, I4) — öneri çipi ve adım sinyalleri:
+// ağırlık AÇIKÇA 0, gerekçeye (aday seçimi) girmez; çip tıkı "yeniden sorma"
+// cezasını kaldırır (followup_click emsali).
+func TestSuggestionAndStepSignalsAreNotLabels(t *testing.T) {
+	for _, k := range []string{SigSuggestionClick, SigSuggestionIgnored, SigStepRedirect, SigStepSummarize} {
+		if w, ok := Weight[k]; !ok || w != 0 {
+			t.Errorf("%s ağırlığı açık 0 olmalı (%v, %v)", k, w, ok)
+		}
+	}
+	for _, k := range []string{SigSuggestionClick, SigSuggestionIgnored} {
+		if !ClientSignalKinds[k] || SystemSignalKinds[k] || !nonLabelKinds[k] {
+			t.Errorf("%s istemci + etiketsiz olmalı", k)
+		}
+	}
+	for _, k := range []string{SigStepRedirect, SigStepSummarize} {
+		if !SystemSignalKinds[k] || ClientSignalKinds[k] {
+			t.Errorf("%s yalnız sistem kümesinde olmalı", k)
+		}
+	}
+	in := Inputs{
+		Interactions: []chstore.CosreInteraction{{ExchangeID: "x"}},
+		Signals: []chstore.CosreSignal{{ExchangeID: "x", Kind: SigSuggestionClick}, {ExchangeID: "x", Kind: SigSuggestionIgnored},
+			{ExchangeID: "x", Kind: SigStepRedirect}, {ExchangeID: "x", Kind: SigStepSummarize}},
+	}
+	if got := DeriveSignals(in)["x"]; len(got) != 0 {
+		t.Fatalf("sinyal gerekçeye girdi: %v", got)
+	}
+}

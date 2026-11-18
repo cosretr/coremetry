@@ -51,7 +51,8 @@ import { prevWikiRefs } from '@/components/ai/chatWikiRefs';
 import { TraceContextStrip } from '@/components/ai/TraceContextStrip';
 import { getRaw } from '@/lib/storage';
 import { syncChatParam } from '@/lib/chatUrl';
-import type { AiConversationSummary, ChatTurn, CosreApprovalAnswer, CosreEndpointPick } from '@/lib/types';
+import type { AiConversationSummary, ChatTurn, CosreApprovalAnswer, CosreEndpointPick, CosreSuggestion, CosreSuggestionPick } from '@/lib/types';
+import { noteSuggestionsIgnored } from './SuggestionChips';
 import { useChatHistory } from '@/components/ai/useChatHistory';
 import { cosreFullPageHref } from '@/components/ai/drawerFullPage';
 import { useConversation } from './useConversation';
@@ -145,6 +146,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
     turns, ctxExcluded: ask.ctxExcluded, setCtxExcluded: ask.setCtxExcluded,
     baseCtxItems: ask.baseCtxItems, conversationId: conv.conversationId,
   });
+  const ignoredSent = useRef(new Set<string>()); // v0.10.2364 (I4) — suggestion_ignored alışveriş başına bir kez
   const live = useRef({ ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill, turns, explainCtx, conv, teamScope, convState });
   live.current = { ask, codeLocked, busy, sendMessage, stop, pinBottom, prefill: composer.prefill, turns, explainCtx, conv, teamScope, convState };
   /** Gönderimin `context`i — v1 useChatThread.send ile aynı katmanlar. */
@@ -161,7 +163,8 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
   const briefingAsk = useRef<BriefingLineRef | null>(null);
   // v0.10.1737 — `decorate`: kart gönderimi bağlamı (ör. "Endpoint seç" İncele) son katman olarak ekler.
   // v0.10.2104 (D5) — `meta`: kullanıcı turunun ek künyesi (soru kartı tıkının clarifyOption'ı).
-  const send = (text: string, so?: ChatSendOpts, decorate?: (c: Record<string, unknown> | undefined) => Record<string, unknown> | undefined, meta?: { clarifyOption?: string }) => {
+  // v0.10.2364 (I3) — `meta.suggestion`: öneri çipi tıkı gövdeye (context'in yanına) gider.
+  const send = (text: string, so?: ChatSendOpts, decorate?: (c: Record<string, unknown> | undefined) => Record<string, unknown> | undefined, meta?: { clarifyOption?: string; suggestion?: CosreSuggestionPick }) => {
     const c = live.current;
     const q = text.trim();
     if (!q) return;
@@ -176,7 +179,8 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
       ...(so?.window ? { window: so.window } : {}),
       ...(meta?.clarifyOption ? { clarifyOption: meta.clarifyOption } : {}),
     };
-    const go = () => c.sendMessage({ text: q, ...(Object.keys(metadata).length ? { metadata } : {}) }, context ? { body: { context } } : undefined);
+    const body = { ...(context ? { context } : {}), ...(meta?.suggestion ? { suggestion: meta.suggestion } : {}) };
+    const go = () => c.sendMessage({ text: q, ...(Object.keys(metadata).length ? { metadata } : {}) }, Object.keys(body).length ? { body } : undefined);
     if (c.busy) void c.stop().then(go);
     else void go();
   };
@@ -260,6 +264,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
   sendRef.current = send;
 
   const submit = (text: string) => {
+    noteSuggestionsIgnored(messages, ignoredSent.current); // v0.10.2364 (I4) — çipler görünürken kullanıcı yazdı
     const picked = composer.chosen;
     composer.setInput(''); composer.setChosen([]); pinBottom();
     send(text, { chosen: picked });
@@ -268,6 +273,11 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
   const askChip = (text: string, so?: ChatSendOpts) => {
     composer.setInput(''); composer.setChosen([]); pinBottom();
     send(text, so);
+  };
+  // v0.10.2364 (I3) — öneri çipi: etiket kullanıcı mesajı, niyet sunucuda jetondan.
+  const askSuggestion = (chip: CosreSuggestion) => {
+    composer.setInput(''); composer.setChosen([]); pinBottom();
+    send(chip.label, undefined, undefined, { suggestion: { id: chip.id, token: chip.token } });
   };
   // "Bu trace'i açıkla" (bağlam çipi): v1 ile aynı niyet (context.explainAsk).
   const askExplain = (a: ChatExplainAsk) => {
@@ -441,7 +451,8 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
             ) : (
               <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
                 onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} endpointPick={endpointPick}
-                compactSteps={isPage || undefined} onQuestion={answerQuestion} statusLine={statusLine} action={actionHooks} />
+                compactSteps={isPage || undefined} onQuestion={answerQuestion} statusLine={statusLine} action={actionHooks}
+                onSuggest={askSuggestion} />
             )}
           </div>
         </div>

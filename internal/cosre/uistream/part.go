@@ -35,6 +35,15 @@ var KnownKinds = map[string]bool{
 	// parçasının YANINDA eşli data-step (id s<i>; aynı id öncekinin yerine
 	// geçer: running → done | failed | skipped). v1 yazıcısı düşürür.
 	"step-state": true,
+	// v0.10.2364 (interaction-audit §6 I3) — sonraki adım çipleri
+	// (data-suggestions {exchangeId, chips[{id, label, rule, intent{tool,args},
+	// token}]}); açıkken data-followups'ın yerine geçer. v1 yazıcısı düşürür.
+	"suggestions": true,
+}
+
+// SuggestionsPart — data-suggestions parçası (alışveriş başına bir).
+func SuggestionsPart(m map[string]any) Part {
+	return Part{"type": "data-suggestions", "id": "suggestions", "data": m}
 }
 
 // StepStates / StepSignals — data-step sözleşmesinin kapalı kümeleri (api chat_step_contract.go).

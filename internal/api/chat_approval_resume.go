@@ -381,6 +381,9 @@ type chatApprovalCont struct {
 	on   bool
 	ans  approvalAnswer
 	base int // adım sayacı tabanı
+	// sg — v0.10.2364 (I3): öneri çipi tıkı; doluysa `on` kademeleri atlatır
+	// ama onay devamı yürümez (resume() false; chat_suggestions.go).
+	sg *chatSuggestionCont
 }
 
 // newChatApprovalCont — SAF: yalnız v2 ve en az bir cevap; ilk cevap işlenir

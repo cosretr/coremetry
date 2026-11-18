@@ -82,6 +82,8 @@ export function createCosreChat(opts: CosreChatOptions = {}): CosreChatCore {
         messages: toRequestMessages(messages),
         ...(body?.context ? { context: body.context } : {}),
         ...(Array.isArray(body?.approvals) && body.approvals.length ? { approvals: body.approvals } : {}),
+        // v0.10.2364 (I3) — öneri çipi tıkı {id, token}; niyet sunucuda jetondan yürür.
+        ...(body?.suggestion ? { suggestion: body.suggestion } : {}),
       },
     }),
   });

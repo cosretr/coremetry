@@ -40,7 +40,7 @@ import { Button } from '@/components/shadcn/button';
 import { chatErrorText } from '@/components/ai/chatErrorText';
 import { toChatTurn, userTurn } from '@/lib/cosre/toChatTurn';
 import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
-import type { ChatExplainAsk, ChatTurn, CosreApprovalAnswer, CosreEndpointPick, CosreQuestion } from '@/lib/types';
+import type { ChatExplainAsk, ChatTurn, CosreApprovalAnswer, CosreEndpointPick, CosreQuestion, CosreSuggestion } from '@/lib/types';
 import { approvalAnswer, approvalViews } from '@/lib/cosre/approval';
 import { ApprovalCard } from './ApprovalCard';
 import { StepList, scopeChangeNotes, scopeOf, stepsView, stopBadges } from '../evidence';
@@ -54,7 +54,8 @@ import { questionOf } from './question';
 import { questionChoice } from '@/lib/cosre/cosrePersist';
 import { bubbleTurnForCard, linkCardOf } from './linkCard';
 import { ActionCard } from './ActionCard';
-import { parseDataAction, parseDataActionResult } from '@/lib/cosre/protocol';
+import { parseDataAction, parseDataActionResult, parseDataSuggestions } from '@/lib/cosre/protocol';
+import { SuggestionChips } from './SuggestionChips';
 import { evidencePartsOf } from '@/lib/cosre/evidenceParts';
 import { EvidenceParts } from '../evidence/parts/EvidenceParts';
 
@@ -87,9 +88,11 @@ export interface MessageListProps {
   statusLine?: string | null;
   /** v0.10.2353 — onaylı aksiyon kartı: onayın sonucu mesaja eklenir; yoksa kart salt okur. */
   action?: { conversationId(): string | null; onResult(messageId: string, part: { type: string; id?: string; data?: unknown }): void };
+  /** v0.10.2364 (I3) — öneri çipi tıkı (son, bitmiş cevap); yoksa çip çizilmez. */
+  onSuggest?: (chip: CosreSuggestion) => void;
 }
 
-export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps, onQuestion, statusLine, action }: MessageListProps) {
+export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps, onQuestion, statusLine, action, onSuggest }: MessageListProps) {
   const busy = status === 'submitted' || status === 'streaming';
   const last = messages.at(-1);
   const errText = status === 'error' && error ? error.message : undefined;
@@ -109,7 +112,8 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
           onApproval={isLast && !busy ? onApproval : undefined} teamPick={isLast && !busy ? teamPick : undefined}
           endpointPick={isLast && !busy ? endpointPick : undefined} compactSteps={compactSteps}
           onQuestion={isLast && !busy ? onQuestion : undefined} next={next}
-          statusLine={isLast && busy ? statusLine : undefined} action={action} />;
+          statusLine={isLast && busy ? statusLine : undefined} action={action}
+          onSuggest={isLast && status === 'ready' ? onSuggest : undefined} />;
       })}
       {/* İlk parça gelmeden (yalnız soru gitti): v1 bekleyiş göstergesi. */}
       {busy && last?.role !== 'assistant' && (last?.metadata?.explainAsk
@@ -128,7 +132,7 @@ function UserMessage({ m }: { m: CosreUIMessage }) {
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, next, statusLine, action }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, next, statusLine, action, onSuggest }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
   /** araç seti dilim 5 — kapsam değişimi notu (önceki cevaptan farklıysa). */
   scopeNote?: string;
@@ -148,6 +152,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   /** v0.10.2333 (F1) — ara durum cümlesi; "Düşünüyor…" yerine, metin gelince kaybolur. */
   statusLine?: string | null;
   action?: MessageListProps['action'];
+  onSuggest?: MessageListProps['onSuggest'];
 }) {
   const actionCard = useMemo(() => { // v0.10.2353
     const p = m.parts.findLast(x => x.type === 'data-action');
@@ -156,6 +161,10 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   const actionResult = useMemo(() => {
     const p = m.parts.findLast(x => x.type === 'data-action-result');
     return p ? parseDataActionResult(p as { type: string; data?: unknown }) : null;
+  }, [m.parts]);
+  const suggestions = useMemo(() => { // v0.10.2364 — I3
+    const p = m.parts.findLast(x => x.type === 'data-suggestions');
+    return p ? parseDataSuggestions(p as { type: string; data?: unknown }) : null;
   }, [m.parts]);
   const approvals = useMemo(() => approvalViews(m), [m]);
   const epPick = useMemo(() => pickOf(m.parts), [m.parts]); // v0.10.1737
@@ -177,6 +186,8 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   const badges = useMemo(() => stopBadges(turn, steps.stop), [turn, steps.stop]);
   // v1 showFollowups: bitmiş, hatasız, metinli son cevap.
   const showFu = !!followups && !turn.error && !!turn.text;
+  // v0.10.2364 (I3) — sunucunun öneri çipleri varsa takip çiplerinin yerine geçer.
+  const showSg = !!suggestions && !!onSuggest && !turn.error && !!turn.text;
   // Açıklama turu baştan ExplainBody çizer (v1: bekleyen künye, kendi yükleniyor'u).
   if (live && !turn.text && !turn.steps?.length && !turn.explain) {
     return <div className="cm-msg cm-msg--ai cm-wait-row" data-cosre-thinking=""><AiThinking label={turn.statusLine} /></div>;
@@ -207,7 +218,8 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
       {endpointPick && showEndpointPick(epPick) && (
         <EndpointPickCard pick={epPick} onInspect={route => endpointPick.onInspect(epPick, route)} onSummarize={endpointPick.onSummarize} />
       )}
-      {showFu && (
+      {showSg && suggestions && <SuggestionChips suggestions={suggestions} onSuggest={onSuggest} />}
+      {showFu && !showSg && (
         <div className="cm-followups" data-cosre-followups="">
           <FollowupChips followups={turn.followups} suggestions={turn.suggestions} fallback={FOLLOWUPS}
             exchangeId={turn.exchangeId} onAsk={followups} />

@@ -594,6 +594,9 @@ func loopFollowups(c *auth.Claims, facts []followupFact, asked []string, pagePro
 // chatLoopFollowups — döngünün iki cevap çıkışının ortak çağrısı (normal tur +
 // tur tavanı). Sayfa problemi pageCtx'ten (sanitize edilmiş istemci bağlamı).
 func (s *Server) chatLoopFollowups(ctx context.Context, facts []followupFact, msgs []copilot.ChatMessage, page *agentctx.PageContext) []chatFollowup {
+	if suggestTurnOf(ctx).noteLoop(facts) {
+		return nil // v0.10.2364 — I3: interaction açıkken olgular data-suggestions'a (chat_suggestions.go)
+	}
 	problemID := ""
 	if page != nil {
 		problemID = page.ProblemID

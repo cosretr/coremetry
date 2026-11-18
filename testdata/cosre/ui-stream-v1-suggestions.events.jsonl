@@ -1,0 +1,5 @@
+{"kind": "step", "payload": {"i": 1, "tool": "find_traces", "args": "{\"service\":\"checkout\",\"status\":\"error\"}", "argsJson": {"service": "checkout", "status": "error"}, "phase": "İz"}}
+{"kind": "step-result", "payload": {"i": 1, "tool": "find_traces", "ok": true, "preview": "{\"traces\":[{\"id\":\"4bf92f3577b34da6a3ce929d0e0e4736\"}]}", "truncated": false, "bytes": 52, "durationMs": 40}}
+{"kind": "answer", "payload": {"text": "checkout son bir saatte hata veriyor: %6,1.", "exchangeId": "x-sg-1"}}
+{"kind": "suggestions", "payload": {"exchangeId": "x-sg-1", "chips": [{"id": "g1", "label": "Trace 4bf92f35 açıkla", "rule": "trace", "intent": {"tool": "explain_trace", "args": {"trace_id": "4bf92f3577b34da6a3ce929d0e0e4736"}}, "token": "tok1.sig"}, {"id": "g2", "label": "Hata logları — checkout", "rule": "errors", "intent": {"tool": "search_logs", "args": {"service": "checkout", "severity": "error"}}, "token": "tok2.sig"}]}}
+{"kind": "done", "payload": {"ok": true}}

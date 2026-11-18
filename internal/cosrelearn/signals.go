@@ -28,6 +28,12 @@ const (
 	// SigFollowupClick — v0.10.1291: operatör cevabın KURAL-türevli takip
 	// çipine tıkladı (chat_followup_chips.go). Gözlenen davranış, oy değil.
 	SigFollowupClick = "followup_click"
+	// SigSuggestionClick / SigSuggestionIgnored — v0.10.2364 (interaction-audit
+	// §5, I4): öneri çipine (data-suggestions) tıklandı / çipler görünürken
+	// kullanıcı kendisi yazdı (exchange başına bir kez). Örtük sinyal: Weight 0,
+	// nonLabelKinds → gerekçeye, gece puanına ve aday seçimine girmez.
+	SigSuggestionClick   = "suggestion_click"
+	SigSuggestionIgnored = "suggestion_ignored"
 	// v0.10.1597 (CoSRE v2 Faz 1, R7) — operatör kararı §0-2: 👍/👎 yerine
 	// kart başına "ilgili / ilgisiz" (ayrıntı = kartın adım kimliği s<i>) ve
 	// mesaj düzeyinde serbest not.
@@ -52,7 +58,8 @@ const (
 // ClientSignalKinds — istemcinin POST edebileceği kapalı küme.
 var ClientSignalKinds = map[string]bool{
 	SigCopy: true, SigLinkClick: true, SigEvidenceClick: true, SigProblemNote: true,
-	SigFollowupClick:    true,
+	SigFollowupClick:   true,
+	SigSuggestionClick: true, SigSuggestionIgnored: true, // v0.10.2364
 	SigEvidenceRelevant: true, SigEvidenceIrrelevant: true, SigNote: true, // v0.10.1597
 }
 
@@ -88,6 +95,11 @@ const (
 	// kümesi dışı) → gece puanına ve değerlendirme adayı seçimine girmez.
 	SigActionConfirm = "action_confirm"
 	SigActionCancel  = "action_cancel"
+	// SigStepRedirect / SigStepSummarize — v0.10.2364 (interaction-audit §5,
+	// I4): adım yönlendirme / durdur-özetle isteği (sunucu yazar; I2 ucu).
+	// Açık talimat, kalite oyu DEĞİL: Weight 0, istemci kümesi dışı.
+	SigStepRedirect  = "step_redirect"
+	SigStepSummarize = "step_summarize"
 	// SigScopeWouldRefuse — v0.10.2355 (investigation-design S1, karar 10):
 	// cosre_conversation.evidence = shadow iken modelin çıkardığı servis
 	// kullanıcının kapsamı, bu turda andığı, ekranın ya da konuşma durumunun
@@ -100,11 +112,12 @@ const (
 var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrected: true, SigBriefingAsk: true,
 	SigVerifyMismatch: true, SigAliasSaved: true, // v0.10.2327, v0.10.2334
 	SigActionConfirm: true, SigActionCancel: true, // v0.10.2353
-	SigScopeWouldRefuse: true} // v0.10.2355
+	SigScopeWouldRefuse: true,                         // v0.10.2355
+	SigStepRedirect:     true, SigStepSummarize: true} // v0.10.2364
 
 // nonLabelKinds — v0.10.2354: istemcinin POST edebildiği ama cevaba etiket
 // (gerekçe / puan) olarak bağlanmayan örtük sinyaller.
-var nonLabelKinds = map[string]bool{SigFollowupClick: true}
+var nonLabelKinds = map[string]bool{SigFollowupClick: true, SigSuggestionClick: true, SigSuggestionIgnored: true}
 
 // SystemSignalActor — sistem sinyallerinin user_email değeri (kullanıcı değil).
 const SystemSignalActor = "system:cosre"
@@ -156,6 +169,12 @@ var Weight = map[string]float64{
 	// v0.10.2353 — aksiyon kartı sinyalleri etiket değil (ağırlık 0, pin).
 	SigActionConfirm: 0,
 	SigActionCancel:  0,
+
+	// v0.10.2364 — öneri çipi ve adım sinyalleri etiket değil (ağırlık 0, pin).
+	SigSuggestionClick:   0,
+	SigSuggestionIgnored: 0,
+	SigStepRedirect:      0,
+	SigStepSummarize:     0,
 }
 
 const (
@@ -223,7 +242,7 @@ func DeriveSignals(in Inputs) map[string][]string {
 	// metni bizim kuralımız üretti, benzerliği cevabın kusuru sayılmaz.
 	chipped := map[string]bool{}
 	for _, g := range in.Signals {
-		if g.Kind == SigFollowupClick {
+		if g.Kind == SigFollowupClick || g.Kind == SigSuggestionClick { // v0.10.2364 — çip tıkı da
 			chipped[g.ExchangeID] = true
 		}
 	}

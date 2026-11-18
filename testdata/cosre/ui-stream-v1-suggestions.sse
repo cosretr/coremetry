@@ -1,0 +1,28 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"dynamic":true,"toolCallId":"s1","toolName":"find_traces","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"args":{"service":"checkout","status":"error"},"argsText":"{\"service\":\"checkout\",\"status\":\"error\"}"},"toolCallId":"s1","toolName":"find_traces","type":"tool-input-available"}
+
+data: {"dynamic":true,"output":{"bytes":52,"durationMs":40,"ok":true,"preview":"{\"traces\":[{\"id\":\"4bf92f3577b34da6a3ce929d0e0e4736\"}]}","truncated":false},"toolCallId":"s1","type":"tool-output-available"}
+
+data: {"data":{"bytes":52,"duration_ms":40,"kind":"text","ok":true,"text":"{\"traces\":[{\"id\":\"4bf92f3577b34da6a3ce929d0e0e4736\"}]}","tool":"find_traces"},"id":"s1","type":"data-tool-result"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"checkout son bir saatte hata veriyor: %6,1.","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"messageMetadata":{"exchangeId":"x-sg-1"},"type":"message-metadata"}
+
+data: {"data":{"chips":[{"id":"g1","intent":{"args":{"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"},"tool":"explain_trace"},"label":"Trace 4bf92f35 açıkla","rule":"trace","token":"tok1.sig"},{"id":"g2","intent":{"args":{"service":"checkout","severity":"error"},"tool":"search_logs"},"label":"Hata logları — checkout","rule":"errors","token":"tok2.sig"}],"exchangeId":"x-sg-1"},"id":"suggestions","type":"data-suggestions"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

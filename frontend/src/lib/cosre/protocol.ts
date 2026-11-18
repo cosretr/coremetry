@@ -11,7 +11,7 @@
 // uiStreamFixture.test.ts (paylaşılan testdata/cosre/*.sse) kırmızıya döner;
 // fixture yenilendiği commit'te bu dosya da güncellenir.
 
-import type { CosreActionCard, CosreActionFields, CosreActionKind, CosreActionResult, CosreApproval, CosreConvState, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreQuestion, CosreQuestionKind, CosreScope, CosreScopeReason, CosreStepContract, CosreStepSignal, CosreStepState, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { CosreActionCard, CosreActionFields, CosreActionKind, CosreActionResult, CosreApproval, CosreConvState, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreQuestion, CosreQuestionKind, CosreScope, CosreScopeReason, CosreStepContract, CosreStepSignal, CosreStepState, CosreStop, CosreStopReason, CosreSuggestion, CosreSuggestions, CosreToolResult, CosreToolResultKind } from '@/lib/types';
 
 export const PROTOCOL_VERSION = 'v1';
 export const PROTOCOL_HEADER = 'x-vercel-ai-ui-message-stream';
@@ -62,6 +62,8 @@ export const DATA_PART_NAMES = [
   // v0.10.2353 (interaction-audit §6 I5) — onaylı aksiyon kartı (yalnız sunucu
   // kuralı önerir) + onay ucunun sonucu (istemci mesaja ekler).
   'action', 'action-result',
+  // v0.10.2364 (interaction-audit §6 I3) — sonraki adım çipleri; açıkken data-followups yerine.
+  'suggestions',
   ...BLOCK_TYPES.map(t => `block-${t}` as const),
 ] as const;
 
@@ -372,4 +374,28 @@ export function parseDataStepState(p: { type: string; id?: unknown; data?: unkno
     ...(optStr(d.tool) ? { tool: d.tool as string } : {}),
     ...(optStr(d.token) ? { token: d.token as string } : {}),
   };
+}
+
+/** v0.10.2364 (I3) — çip etiketi tavanı (Go suggestionLabelMaxRunes) ve sayısı (suggestionMax). */
+export const SUGGESTION_LABEL_MAX = 40;
+export const SUGGESTION_MAX = 3;
+
+/** v0.10.2364 (I3) — data-suggestions → CosreSuggestions; jetonsuz / etiketsiz /
+ *  niyetsiz çip düşer, en çok 3; geçerli çip yoksa null. */
+export function parseDataSuggestions(p: { type: string; data?: unknown }): CosreSuggestions | null {
+  if (p.type !== 'data-suggestions' || !isRecord(p.data) || !Array.isArray(p.data.chips)) return null;
+  const chips: CosreSuggestion[] = [];
+  for (const c of p.data.chips) {
+    if (!isRecord(c) || !optStr(c.id) || !optStr(c.label) || !optStr(c.token) || !isRecord(c.intent) || !optStr(c.intent.tool)) continue;
+    if ([...(c.label as string)].length > SUGGESTION_LABEL_MAX) continue;
+    const args: Record<string, string> = {};
+    if (isRecord(c.intent.args)) {
+      for (const [k, v] of Object.entries(c.intent.args)) if (typeof v === 'string') args[k] = v;
+    }
+    chips.push({ id: c.id as string, label: c.label as string, rule: optStr(c.rule) ?? '', token: c.token as string,
+      intent: { tool: c.intent.tool as string, args } });
+    if (chips.length === SUGGESTION_MAX) break;
+  }
+  if (!chips.length) return null;
+  return { chips, ...(optStr(p.data.exchangeId) ? { exchangeId: p.data.exchangeId as string } : {}) };
 }

@@ -8,14 +8,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   ACTION_KINDS, ACTION_RESULT_STATUSES, DATA_PART_NAMES, MESSAGE_ID_RE, SCOPE_REASONS, STOP_REASONS, TOOL_RESULT_KINDS, TOOL_RESULT_MAX_BYTES, UI_STREAM_PART_TYPES,
-  dataPartName, isDataPart, parseDataAction, parseDataStepState, parseDataActionResult, parseDataApproval, parseDataQuestion, parseDataReset, parseDataScope, parseDataState, parseDataStatus, parseDataStop, parseDataToolResult,
+  dataPartName, isDataPart, parseDataAction, parseDataStepState, parseDataSuggestions, parseDataActionResult, parseDataApproval, parseDataQuestion, parseDataReset, parseDataScope, parseDataState, parseDataStatus, parseDataStop, parseDataToolResult,
 } from './protocol';
 import { parseUIStreamSSE } from './uiStreamFixture';
 import { channelsOf, stepsOf } from './toChatTurn';
 import { parseCosreAliasAction } from '@/lib/pageActions';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state', 'ui-stream-v1-slot', 'ui-stream-v1-status', 'ui-stream-v1-alias', 'ui-stream-v1-action', 'ui-stream-v1-action-result', 'ui-stream-v1-evidence', 'ui-stream-v1-investigate', 'ui-stream-v1-steps'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state', 'ui-stream-v1-slot', 'ui-stream-v1-status', 'ui-stream-v1-alias', 'ui-stream-v1-action', 'ui-stream-v1-action-result', 'ui-stream-v1-evidence', 'ui-stream-v1-investigate', 'ui-stream-v1-steps', 'ui-stream-v1-suggestions'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
 
@@ -448,5 +448,25 @@ describe('data-step sözleşmesi (I1)', () => {
   it('v1 çip şeridi: etiketsiz sözleşme parçası çip eklemez', () => {
     const labels = stepsOf(parts as never).steps ?? [];
     expect(labels.filter(l => l === '')).toHaveLength(0);
+  });
+});
+
+// v0.10.2364 (interaction-audit §6 I3) — öneri çipleri: data-followups yok,
+// data-suggestions ayrıştırılır; biçimsiz / tavan aşan çip düşer.
+describe('data-suggestions (I3)', () => {
+  const parts = parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', 'ui-stream-v1-suggestions.sse'), 'utf8')).parts;
+  it('iki çip, imzalı niyet; followups yok', () => {
+    expect(parts.some(p => p.type === 'data-followups')).toBe(false);
+    const sg = parseDataSuggestions(parts.find(p => p.type === 'data-suggestions')!);
+    expect(sg?.exchangeId).toBe('x-sg-1');
+    expect(sg?.chips.map(c => [c.id, c.rule, c.intent.tool])).toEqual([['g1', 'trace', 'explain_trace'], ['g2', 'errors', 'search_logs']]);
+    expect(sg?.chips[1].intent.args).toEqual({ service: 'checkout', severity: 'error' });
+  });
+  it('jetonsuz / uzun etiketli çip düşer; boşsa null', () => {
+    const bad = { type: 'data-suggestions', data: { chips: [
+      { id: 'g1', label: 'x'.repeat(41), rule: 'slow', intent: { tool: 'find_traces', args: {} }, token: 't' },
+      { id: 'g2', label: 'Hata logları', rule: 'errors', intent: { tool: 'search_logs', args: {} } },
+    ] } };
+    expect(parseDataSuggestions(bad)).toBeNull();
   });
 });
