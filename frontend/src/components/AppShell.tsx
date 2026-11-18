@@ -10,7 +10,7 @@ import { GlobalShortcuts } from './GlobalShortcuts';
 import { Toaster } from './Toaster';
 import { useAuth } from './AuthProvider';
 import { SessionEndedCard } from './SessionEndedCard';
-import { useEventStream } from '@/lib/queries';
+import { useEventStream } from '@/lib/queries/eventStream';
 import { useAutoRefresh } from '@/lib/useAutoRefresh';
 import { isPublicPath } from '@/lib/auth-paths';
 import { isKioskBare } from '@/lib/kioskMode';

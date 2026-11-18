@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { useHealth, useInboxCount, usePresenceOnline } from '@/lib/queries';
+import { useHealth } from '@/lib/queries/health';
+import { useInboxCount } from '@/lib/queries/inbox';
+import { usePresenceOnline } from '@/lib/queries/users';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import { useT } from '@/lib/i18n';
 import { getRaw, setRaw, getItem, setItem, STORAGE_KEYS } from '@/lib/storage';

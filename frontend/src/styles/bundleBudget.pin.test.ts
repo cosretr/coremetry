@@ -50,11 +50,11 @@ describe('bundle bütçe kapısı kablolu', () => {
     for (const p of ['node_modules/zod/v4/index.js', 'node_modules/aria-hidden/dist/index.js', 'node_modules/json-schema-traverse/index.js', 'node_modules/@opentelemetry/api/build/index.js']) expect(re.test(p), p).toBe(false);
   });
 
-  it('scripts/bundle-budget.mjs: yasak kaynak regex\'i, 347 KB, zlib, index.html kümesi', () => {
+  it('scripts/bundle-budget.mjs: yasak kaynak regex\'i, 278 KB, zlib, index.html kümesi', () => {
     const s = read('scripts/bundle-budget.mjs');
     expect(s).toContain('/node_modules\\/(radix-ui|@radix-ui|cmdk|sonner|@floating-ui|react-remove-scroll|aria-hidden|use-sidecar|use-callback-ref|react-style-singleton|get-nonce|detect-node-es)\\//');
     expect(s).toContain('/src\\/components\\/shadcn\\//');
-    expect(s).toContain('process.env.BUNDLE_BUDGET_KB || 347');
+    expect(s).toContain('process.env.BUNDLE_BUDGET_KB || 278');
     expect(s).toContain('gzipSync(buf)');
     expect(s).toContain("'modulepreload'");
     expect(s).toContain("'bundle-budget.txt'");
@@ -123,6 +123,14 @@ describe('bundle bütçe kapısı kablolu', () => {
       // v0.10.1647 (Faz 2b B1): v2 sohbet ağacı + AI SDK kabukta statik yasak.
       "'**/components/cosre/**'", "'./cosre/**'", "'**/components/ai-elements/**'", "'@ai-sdk/*'", "regex: '^ai(/.*)?$'"]) {
       expect(block).toContain(p);
+    }
+  });
+
+  // v0.10.2348: kabuk dosyaları `@/lib/queries` barrel'ını içe aktarırsa 39
+  // sorgu modülü + sayfa modelleri giriş chunk'ına düşer (ölçülen 291 → 271 KB gz).
+  it('kabuk dosyaları sorgu barrel\'ını içe aktarmaz', () => {
+    for (const f of ['src/components/Sidebar.tsx', 'src/components/CopilotChatGate.tsx', 'src/components/AppShell.tsx']) {
+      expect(read(f), f).not.toMatch(/from '@\/lib\/queries'/);
     }
   });
 });

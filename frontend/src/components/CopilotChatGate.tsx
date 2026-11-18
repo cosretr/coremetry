@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useOpenCriticalCount } from '@/lib/queries';
+import { useOpenCriticalCount } from '@/lib/queries/problems';
 import { AI_PARAM } from '@/lib/aiSubject';
 import { pickChatImpl, type ChatImpl } from '@/lib/cosre/pickChatImpl';
 import { useCopilotConfig } from './ai/useCopilotEnabled';

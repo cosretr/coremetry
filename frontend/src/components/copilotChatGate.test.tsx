@@ -58,7 +58,7 @@ vi.mock('./cosre/conversation/CosreChatV2', () => {
   return { CosreChatV2 };
 });
 vi.mock('./ai/useCopilotEnabled', () => ({ useCopilotConfig: () => cfgBox.cfg }));
-vi.mock('@/lib/queries', () => ({ useOpenCriticalCount: () => ({ data: 0 }) }));
+vi.mock('@/lib/queries/problems', () => ({ useOpenCriticalCount: () => ({ data: 0 }) }));
 vi.mock('./ai/TraceExplainNudge', () => ({ TraceExplainNudge: () => null }));
 
 import { CopilotChatGate, urlWantsChat } from './CopilotChatGate';

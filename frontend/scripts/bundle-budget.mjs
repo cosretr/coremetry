@@ -4,7 +4,8 @@
 // Ölçülen şey TARAYICININ ilk yükü: dist/index.html'deki
 // <script type="module" src> + her <link rel="modulepreload" href>.
 // Kural (audit §11 "Bütçe"): ilk yükün JS gz toplamı ≤ BUNDLE_BUDGET_KB
-// (varsayılan 347) ve bu kümedeki HİÇBİR chunk'ın sourcemap'inde
+// (varsayılan 278; v0.10.2348 kabuk derin import'larıyla 291 → 271 KB,
+// +7 KB pay) ve bu kümedeki HİÇBİR chunk'ın sourcemap'inde
 // Radix / cmdk / sonner / floating-ui / components/shadcn kaynağı yok.
 // Neden sourcemap: Vite/rolldown manifest'i chunk'ları listeler, içindeki
 // modülleri değil; zaten üretilen .map dosyalarının sources[]'ı listeler
@@ -22,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
-const BUDGET_KB = Number(process.env.BUNDLE_BUDGET_KB || 347);
+const BUDGET_KB = Number(process.env.BUNDLE_BUDGET_KB || 278);
 // Yazı tipi bütçesi (v0.10.1620, audit §13; operatör): JS bütçesine SAYILMAZ,
 // ayrı satır. YÖNTEM (çivili, bundleBudget.pin): giriş sayfasının
 // <link rel="stylesheet"> CSS'lerinin url(…woff2) ile başvurduğu dosyaların

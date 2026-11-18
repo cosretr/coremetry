@@ -14895,3 +14895,7 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
   - envanter eşleşmesinde soru üç seçenekli olur (envanter / wiki / genel bilgi; çipler `/excel · N satır`, `/wiki`, `/genel`). Kimlik biçimli değer (rakam, ayraç, BÜYÜK harf, PascalCase) taşıyan soru eskisi gibi.
 - `/wiki` çipi kaynak komutu olarak eklendi: önceki soruyu wiki kademesinden cevaplar (bulunamazsa "bulunamadı").
 - Telemetri işareti taşıyan sorular, tam servis adı geçen sorular ve v1 davranışı değişmedi.
+## 2026-11-18 — v0.10.2348 — İlk yükleme: kabuk dosyaları sorgu modüllerini doğrudan içe aktarır
+
+- Ölçüm (audit): `Sidebar.tsx`, `CopilotChatGate.tsx`, `AppShell.tsx` `@/lib/queries` barrel'ından içe aktarıyordu; barrel 39 sorgu modülünü ve sayfa modellerini giriş chunk'ına çekiyordu. Kabuk artık `health` / `inbox` / `users` / `problems` / `eventStream` modüllerinden doğrudan alır.
+- İlk yük JS gz 291.1 → 270.9 KB (`npm run bundle:check`). Bütçe 347 → 278 KB (ölçüm + 7 KB pay); `bundleBudget.pin` kabuğun barrel'ı içe aktarmadığını çiviler. Davranış değişmedi.
