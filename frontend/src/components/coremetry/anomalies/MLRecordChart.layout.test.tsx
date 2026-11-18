@@ -78,7 +78,7 @@ describe('kayıtlı olayda tek grafik', () => {
     expect(m.calls).not.toContain('mlSourceSeries');
     const p = m.panels[m.panels.length - 1] as { series: { points: unknown[]; stepped?: boolean }[]; regions: unknown[] };
     expect(p.series[0].points.length).toBe(6); // 5 dk kova: 30 dk = 6 nokta
-    expect(p.series[0].stepped).toBe(true);
+    expect(p.series[0].stepped).toBeFalsy(); // v0.10.2357 — merdiven değil, düz zaman serisi çizgisi
     expect(p.regions.length).toBe(1);
   });
   it('kayıt yoksa eski yol (kayıt grafiği yok)', async () => {

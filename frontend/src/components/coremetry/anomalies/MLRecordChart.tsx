@@ -43,10 +43,11 @@ export function MLRecordChart({ rec, height = 200 }: { rec: MLRecordView; height
   const series = useMemo<TSSeries[]>(() => {
     const pts = (xs: number[]) => xs.map((v, i) => ({ time: b.t[i] * 1e9, value: v }));
     const out: TSSeries[] = [
-      { label: measure, points: pts(b.v), unit: chartUnit, stepped: true },
+      // v0.10.2357 (operatör: "merdiven gibi") — sayfalardaki zaman serisi grafikleri gibi düz çizgi; kova noktaları ayrıca işaretli.
+      { label: measure, points: pts(b.v), unit: chartUnit },
       { label: t('mlRecord.chart.expected'), points: pts(b.t.map(() => rec.expectedValue)), unit: chartUnit, dash: [4, 4], width: 1 },
     ];
-    if (b.n) out.push({ label: volLabel, points: pts(b.n), axis: 'right', unit: '', width: 1, stepped: true });
+    if (b.n) out.push({ label: volLabel, points: pts(b.n), axis: 'right', unit: '', width: 1 });
     return out;
   }, [b, measure, chartUnit, rec.expectedValue, t, volLabel]);
   const envelope = useMemo(() => (b.lo && b.hi ? {
