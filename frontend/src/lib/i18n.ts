@@ -1878,6 +1878,7 @@ const TR: Catalog = {
   // v0.10.2281 — S3: "sık tekrar eden" (gölge)
   'pg.freq.chip': 'sık tekrar eden',
   'pg.freq.tip': 'Gölge ölçüm: bu tür önceki 24 saatte {p} kez açıldı, son 7 günde {d} ayrı günde görüldü. Bildirimler değişmedi.',
+  'pg.freq.tipOn': 'Bu tür önceki 24 saatte {p} kez açıldı, son 7 günde {d} ayrı günde görüldü. Açılış bildirimi tutulur; şiddet artarsa bir kez gider.', // v0.10.2342 (S5 açıkken)
   'pg.rep.title': 'Tekrar',
   'pg.rep.sub': 'sık tekrar eden · gölge · bildirim değişmedi',
   'pg.rep.kind': 'Tür',

@@ -127,3 +127,89 @@ func TestMergeHoldShadowRow(t *testing.T) {
 		t.Fatal("gölge kipinde gönderim değişmemeli")
 	}
 }
+
+// ── v0.10.2342 (S5) ─────────────────────────────────────────────────────
+
+type fakeFreqSrc struct {
+	calls int
+	v     chstore.FrequentVerdict
+}
+
+func (f *fakeFreqSrc) FrequentShadowVerdict(context.Context, chstore.Problem) (chstore.FrequentVerdict, bool) {
+	f.calls++
+	return f.v, true
+}
+
+func freqNotifier(src *fakeFreqSrc) *Notifier {
+	n := enforceNotifier()
+	src.v = chstore.FrequentVerdict{Signature: "svc:checkout-api|error|", Frequent: true, Kind: chstore.FrequentKindHold, Prior24h: 3, MaxPriority: "P2"}
+	n.SetFrequentShadow(src)
+	return n
+}
+
+func TestFrequentHoldOffIsByteIdentical(t *testing.T) {
+	defer chstore.SetProblemGraphFrequentEnforceForTest(false)()
+	ctx := context.Background()
+	for _, mode := range []string{chstore.NotifyModeEnforce, chstore.NotifyModeShadow} {
+		withPolicyMode(t, mode)
+		src := &fakeFreqSrc{}
+		withSrc, without := freqNotifier(src), enforceNotifier()
+		for _, prio := range []string{"P1", "P2"} {
+			p := excProblem("fp-freq-"+prio, prio)
+			ok1, h1 := withSrc.enforceGate(ctx, p)
+			ok2, h2 := without.enforceGate(ctx, p)
+			if ok1 != ok2 || h1 != h2 {
+				t.Fatalf("%s %s: kapalı S5 kararı değiştirdi: %v %q vs %v %q", mode, prio, ok1, h1, ok2, h2)
+			}
+			var rows [2][]chstore.NotificationLog
+			for i, n := range []*Notifier{withSrc, without} {
+				i := i
+				n.shadow.sink = func(_ context.Context, e chstore.NotificationLog) error { rows[i] = append(rows[i], e); return nil }
+				n.recordShadowDecision(ctx, p, chstore.CurrentNotifyPolicy(), time.Now())
+			}
+			// Politika satırı aynı; S3 ayrı gölge satırı yalnız kaynaklıda (bugünkü gibi).
+			if len(rows[0]) != 2 || len(rows[1]) != 1 || !reflect.DeepEqual(rows[0][0], rows[1][0]) || rows[0][1].Error != chstore.FrequentShadowHold {
+				t.Fatalf("kapalıyken politika satırı aynı, S3 satırı yerinde olmalı: %+v vs %+v", rows[0], rows[1])
+			}
+		}
+		if src.calls != 2 { // yalnız S3 gölge satırı için (her öncelikte bir)
+			t.Fatalf("S5 kapalıyken enforce yolu kaynağı sormamalı (çağrı %d)", src.calls)
+		}
+	}
+}
+
+func TestFrequentHoldEnforce(t *testing.T) {
+	defer chstore.SetProblemGraphFrequentEnforceForTest(true)()
+	withPolicyMode(t, chstore.NotifyModeEnforce)
+	ctx := context.Background()
+	n := freqNotifier(&fakeFreqSrc{})
+	if ok, hold := n.enforceGate(ctx, excProblem("fp-freq", "P2")); ok || hold != chstore.NotifyHoldFrequent {
+		t.Fatalf("sık tekrar eden açılış tutulmalı: %v %q", ok, hold)
+	}
+	// Aynı Problem P1'e çıkar (penceredeki en yüksek P2): şiddet arttı, gider.
+	if ok, hold := n.enforceGate(ctx, excProblem("fp-freq", "P1")); !ok {
+		t.Fatalf("yükselen bildirilmeli: %q", hold)
+	}
+	// Penceresinde P1 olan imza: tutulduktan sonra yükselen yine gider (defter).
+	src := &fakeFreqSrc{}
+	n2 := freqNotifier(src)
+	src.v.MaxPriority = "P1"
+	if ok, _ := n2.enforceGate(ctx, excProblem("fp-freq2", "P2")); ok {
+		t.Fatal("P2 tutulmalı")
+	}
+	if ok, hold := n2.enforceGate(ctx, excProblem("fp-freq2", "P1")); !ok {
+		t.Fatalf("tutulmuş açılışın P1'e yükselişi gider: %q", hold)
+	}
+	// Gölge kipte: S3 satırı "frequent:hold", politika satırı "hold:frequent", gönderim aynen.
+	withPolicyMode(t, chstore.NotifyModeShadow)
+	n3 := freqNotifier(&fakeFreqSrc{})
+	var rows []chstore.NotificationLog
+	n3.shadow.sink = func(_ context.Context, e chstore.NotificationLog) error { rows = append(rows, e); return nil }
+	n3.recordShadowDecision(ctx, excProblem("fp-freq3", "P2"), chstore.CurrentNotifyPolicy(), time.Now())
+	if len(rows) != 2 || rows[0].Error != "hold:"+chstore.NotifyHoldFrequent || rows[1].Error != chstore.FrequentShadowHold {
+		t.Fatalf("gölge satırları: %+v", rows)
+	}
+	if ok, _ := n3.enforceGate(ctx, excProblem("fp-freq3", "P2")); !ok {
+		t.Fatal("gölge kipte gönderim değişmemeli")
+	}
+}

@@ -375,6 +375,9 @@ type NotifyHistory struct {
 	// Merged — v0.10.2341 (entity grafı S4): sonradan bağlanan küme üyesi;
 	// yalnız S4 açıkken dolar (nil = bugünkü karar, bayt bayt).
 	Merged *MergeHold
+	// Frequent — v0.10.2342 (entity grafı S5): "sık tekrar eden" kararı;
+	// yalnız S5 açıkken dolar (nil = bugünkü karar).
+	Frequent *FrequentVerdict
 	// HeldPriority — bu Problem'in açılışı S4/S5 kuralıyla tutulduğunda
 	// görünüm önceliği (süreç içi defter); yükselirse baypas. "" = yok.
 	HeldPriority string
@@ -496,7 +499,7 @@ func inQuietHours(q *NotifyQuietHours, now time.Time) bool {
 // Sıra (ilk tutan kazanır, replay bu kodu sayar):
 //
 //	kalıcı gizleme → P3 (özet / kapalı) → ölçülmüş kapı başarısızlığı (low)
-//	→ etki tabanı → küme üyesi (S4, yalnız açıkken) → "problem değil"
+//	→ etki tabanı → sık tekrar (S5) → küme üyesi (S4; ikisi yalnız açıkken) → "problem değil"
 //	penceresi → tekrar penceresi → sessiz saat
 func NotifiableAt(std ProblemStandard, prio string, hist NotifyHistory, pol NotifyPolicy, now time.Time) NotifyDecision {
 	pol = NormalizeNotifyPolicy(pol)
@@ -527,6 +530,16 @@ func NotifiableAt(std ProblemStandard, prio string, hist NotifyHistory, pol Noti
 	}
 	if h := impactFloorHold(std, pol.ImpactFloors); h != "" {
 		return hold(h)
+	}
+	// v0.10.2342 (S5, tasarım §6) — sık tekrar eden açılış; Frequent nil = adım
+	// yok. Yalnız açılış: imzanın tekrar penceresinde gönderimi varsa tekrar
+	// penceresi (D3) karar verir.
+	if v := hist.Frequent; v != nil && v.Frequent && hist.LastSend == nil {
+		if b := frequentBypass(std, prio, hist.HeldPriority, *v); b != "" {
+			d.Bypass = b
+		} else {
+			return hold(NotifyHoldFrequent)
+		}
 	}
 	// v0.10.2341 (S4) — sonradan bağlanan küme üyesi; Merged nil = adım yok.
 	if m := hist.Merged; m != nil {

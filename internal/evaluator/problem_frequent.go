@@ -359,7 +359,9 @@ func capFrequentBlob(m map[string]chstore.FrequentVerdict) map[string]chstore.Fr
 // sorusu (notify.FrequentShadowSource). Kararı hatırlamadan verir; yoksa
 // tek özne için sınırlı okuma yapar (5 sn). Köken yalnız bu süreç evaluator
 // lideriyse bilinir; değilse Problem'in kendi öznesi. ok=false = karar yok
-// (okunamadı / aile dışı) → gölge satırı yazılmaz. Gönderimi ETKİLEMEZ.
+// (okunamadı / aile dışı) → gölge satırı yazılmaz. S5 kapalıyken gönderimi
+// ETKİLEMEZ; v0.10.2342 (S5) açıkken notify enforce yolu da sorar
+// (frequent_hold.go, NotifiableAt `frequent` adımı).
 func (e *Evaluator) FrequentShadowVerdict(ctx context.Context, p chstore.Problem) (chstore.FrequentVerdict, bool) {
 	if e == nil || p.ID == "" {
 		return chstore.FrequentVerdict{}, false

@@ -51,14 +51,17 @@ type problemGraphRowFrequent struct {
 }
 
 type problemGraphSummaryResponse struct {
-	Shadow bool                              `json:"shadow"`
-	At     int64                             `json:"at,omitempty"`
-	Rows   map[string]problemGraphRowSummary `json:"rows"`
+	Shadow bool `json:"shadow"`
+	// FrequentEnforce — v0.10.2342 (S5): "sık tekrar eden" tutması uygulanıyor;
+	// liste satırında "yinelenen" çipinin yerini alır (karar 5). Yalnız açıkken.
+	FrequentEnforce bool                              `json:"frequentEnforce,omitempty"`
+	At              int64                             `json:"at,omitempty"`
+	Rows            map[string]problemGraphRowSummary `json:"rows"`
 }
 
 // buildProblemGraphSummary — SAF: blob → Problem kimliği başına özet.
 func buildProblemGraphSummary(r chstore.ProblemGraphShadow, ok bool) problemGraphSummaryResponse {
-	out := problemGraphSummaryResponse{Shadow: true, Rows: map[string]problemGraphRowSummary{}}
+	out := problemGraphSummaryResponse{Shadow: true, Rows: map[string]problemGraphRowSummary{}, FrequentEnforce: chstore.ProblemGraphFrequentEnforced()}
 	if !ok {
 		return out
 	}
@@ -82,7 +85,11 @@ func buildProblemGraphSummary(r chstore.ProblemGraphShadow, ok bool) problemGrap
 }
 
 func (s *Server) getProblemGraphSummary(w http.ResponseWriter, r *http.Request) {
-	s.serveCached(w, r, "problem:graph-summary:v2", 15*time.Second, func(ctx context.Context) (any, error) {
+	key := "problem:graph-summary:v2"
+	if chstore.ProblemGraphFrequentEnforced() {
+		key += ":s5" // v0.10.2342 — kapalıyken anahtar aynı
+	}
+	s.serveCached(w, r, key, 15*time.Second, func(ctx context.Context) (any, error) {
 		rep, ok, err := s.store.GetProblemGraphShadow(ctx)
 		if err != nil {
 			return nil, err

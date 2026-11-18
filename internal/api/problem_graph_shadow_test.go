@@ -1,6 +1,8 @@
 package api
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -46,5 +48,21 @@ func TestProblemGraphShadowModesAndCriterion(t *testing.T) {
 	}
 	if r := buildProblemGraphShadowResponse(chstore.ProblemGraphShadow{}, false); r.Modes.S4 {
 		t.Fatalf("blob yokken de kip söylenir (kapalı): %+v", r.Modes)
+	}
+}
+
+// v0.10.2342 (S5): rapor ve liste özeti kipi söyler; kapalıyken özet gövdesi aynı.
+func TestProblemGraphS5Mode(t *testing.T) {
+	rep := chstore.ProblemGraphShadow{At: 9, Frequent: map[string]chstore.FrequentVerdict{"p-1": {Frequent: true, Kind: chstore.FrequentKindHold}}}
+	off, _ := json.Marshal(buildProblemGraphSummary(rep, true))
+	if strings.Contains(string(off), "frequentEnforce") || buildProblemGraphShadowResponse(rep, true).Modes.S5 {
+		t.Fatalf("kapalı: %s", off)
+	}
+	defer chstore.SetProblemGraphFrequentEnforceForTest(true)()
+	if !buildProblemGraphSummary(rep, true).FrequentEnforce || !buildProblemGraphShadowResponse(rep, true).Modes.S5 {
+		t.Fatal("açık: kip özet ve raporda")
+	}
+	if c := buildProblemGraphShadowResponse(chstore.ProblemGraphShadow{FrequentReport: &chstore.FrequentReport{WouldHold: 2, HeldBecameP1: 0}}, true).Criterion; c.FrequentWouldHold != 2 {
+		t.Fatalf("S5 ölçüt sayısı: %+v", c)
 	}
 }

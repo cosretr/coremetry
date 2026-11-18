@@ -79,7 +79,8 @@ func (n *Notifier) enforceGate(ctx context.Context, p chstore.Problem) (bool, st
 		hist.LastSend = &rr
 	}
 	n.enf.mu.Unlock()
-	n.mergeHistory(rctx, p, &hist, true) // v0.10.2341 (S4): kapalıyken no-op
+	n.mergeHistory(rctx, p, &hist, true)    // v0.10.2341 (S4): kapalıyken no-op
+	n.frequentHistory(rctx, p, &hist, true) // v0.10.2342 (S5): kapalıyken no-op
 	dec := chstore.NotifiableAt(std, prio, hist, pol, now.In(sens.Calendar.Location()))
 	if dec.Notifiable {
 		n.enf.mu.Lock()

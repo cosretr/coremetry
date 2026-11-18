@@ -29,6 +29,49 @@ import (
 // problemGraphMergeEnforce — S4 anahtarı. Açmak = bu satırı true yapmak.
 const problemGraphMergeEnforce = false
 
+// problemGraphFrequentEnforce — v0.10.2342 (S5, tasarım §6): "sık tekrar
+// eden" tutma kodu `frequent` gölgeden enforce yoluna geçer. KAPALI GELİR;
+// açmak = bu satırı true yapmak. Kapalıyken bildirim kararı, politika satırı,
+// S3 gölge satırı ve liste çipleri bugünküyle aynı. Açma ölçütü S4 ile aynı
+// (tasarım §9): 7 gün gölge, tutulacaklardan P1'e çıkan / onaylı vakaya
+// dönen sıfır.
+const problemGraphFrequentEnforce = false
+
+var graphFrequentOverride atomic.Int32
+
+// ProblemGraphFrequentEnforced — S5 açık mı (sabit; testte kapı).
+func ProblemGraphFrequentEnforced() bool {
+	switch graphFrequentOverride.Load() {
+	case 1:
+		return true
+	case 2:
+		return false
+	}
+	return problemGraphFrequentEnforce
+}
+
+// SetProblemGraphFrequentEnforceForTest — TEST KAPISI (S5); üretim çağırmaz.
+func SetProblemGraphFrequentEnforceForTest(on bool) (restore func()) {
+	prev := graphFrequentOverride.Load()
+	v := int32(2)
+	if on {
+		v = 1
+	}
+	graphFrequentOverride.Store(v)
+	return func() { graphFrequentOverride.Store(prev) }
+}
+
+// frequentBypass — SAF (S5): sık tekrar eden açılış yine de bildirilir mi.
+// Tutulduktan sonra önceliği yükselen (D5 yükseliş) geçer; şiddet arttı =
+// penceredeki en yüksek önceliği / en büyük büyüklüğün 2 katını aşan ya da
+// yüksek güvenli P1 (notifyBypass — gölgedekiyle aynı ölçü, şimdiki değerle).
+func frequentBypass(std ProblemStandard, prio, heldPrio string, v FrequentVerdict) string {
+	if heldPrio != "" && prioRank(prio) > prioRank(heldPrio) {
+		return "escalated"
+	}
+	return notifyBypass(std, prio, v.MaxPriority, v.MaxMagnitude)
+}
+
 // Emme sınırı (tasarım §7, operatör kararı 3).
 const ProblemGraphAbsorbLimit = 90 * time.Minute
 

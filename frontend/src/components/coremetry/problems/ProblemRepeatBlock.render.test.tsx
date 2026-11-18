@@ -34,6 +34,12 @@ describe('ProblemRepeatBlock', () => {
     expect(chip.className.split(' ').filter(c => !c.includes(':'))).not.toContainEqual(expect.stringMatching(/err|warn|destructive|red|amber|bg-/));
     expect(mount(<FrequentChip f={v} t={en} />).textContent).toBe('frequent');
   });
+  it('v0.10.2342 (S5 on): same word, tooltip says the opening is held', () => {
+    const chip = mount(<FrequentChip f={v} t={tr} enforce />).querySelector('[data-testid="pg-frequent-chip"]')!;
+    expect(chip.textContent).toBe('sık tekrar eden');
+    expect(chip.getAttribute('title')).toContain('Açılış bildirimi tutulur');
+    expect(chip.getAttribute('title')).not.toContain('Gölge');
+  });
   it('repeat block: kind, windows, severity, rule line, at most 5 episodes', () => {
     const d = mount(<RepeatBlock v={v} t={tr} when={ns => `d${ns / H}`} />);
     const txt = d.textContent ?? '';

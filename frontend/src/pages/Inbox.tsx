@@ -1186,8 +1186,8 @@ export default function InboxPage() {
                             ? <Link to={link.to} replace={link.replace} state={link.state} onClick={stopRowClick} className="cell-link">{titleInner}</Link>
                             : (head ? titleInner : undefined)}
                           code={!it.std && isExcFamily(it)}
-                          chips={<><RowChips it={it} real={verdictOf(it, verdicts) === 'real'} oraLabel={ora ? oraLabel : undefined} />
-                            {it.problem && <GraphFrequentChip row={graphSum.data?.rows?.[it.problem.id]} />}</>}
+                          chips={<><RowChips it={it} real={verdictOf(it, verdicts) === 'real'} oraLabel={ora ? oraLabel : undefined} frequentEnforce={graphSum.data?.frequentEnforce} />
+                            {it.problem && <GraphFrequentChip row={graphSum.data?.rows?.[it.problem.id]} enforce={graphSum.data?.frequentEnforce} />}</>}
                           detail={detail}
                           detailMono={!it.std && isExcFamily(it)}
                           detailTitle={isExcFamily(it) ? it.exception?.message : (evV?.text ?? inboxRowLabel(it) ?? undefined)}

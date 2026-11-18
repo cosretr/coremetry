@@ -285,6 +285,7 @@ export interface ProblemGraphRowSummary {
 }
 export interface ProblemGraphSummaryResponse {
   shadow: boolean; at?: number; rows: Record<string, ProblemGraphRowSummary>;
+  frequentEnforce?: boolean; // v0.10.2342 (S5): yalnız açıkken gelir
 }
 
 /** SAF: Problems listesi "Ne bozuk" alt satırı; tek servisli Problem'de null. */
@@ -432,8 +433,8 @@ export function familyLabel(family: string, direction: string | undefined, t: Gr
 }
 
 /** SAF: çip ipucu — gölge ölçümü olduğunu ve bildirimin değişmediğini söyler. */
-export function frequentChipTitle(f: { prior24h: number; days7d: number }, t: GraphT): string {
-  return t('pg.freq.tip', { p: f.prior24h, d: f.days7d });
+export function frequentChipTitle(f: { prior24h: number; days7d: number }, t: GraphT, enforce?: boolean): string {
+  return t(enforce ? 'pg.freq.tipOn' : 'pg.freq.tip', { p: f.prior24h, d: f.days7d });
 }
 
 /** SAF: "Tekrar" bloğunun satırları (anahtar → değer). */

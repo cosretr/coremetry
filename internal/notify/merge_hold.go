@@ -96,7 +96,7 @@ func (n *Notifier) heldPriority(id string) string {
 }
 
 func (n *Notifier) rememberHeld(id, hold, prio string) {
-	if hold != chstore.NotifyHoldMerged {
+	if hold != chstore.NotifyHoldMerged && hold != chstore.NotifyHoldFrequent {
 		return
 	}
 	n.enf.mu.Lock()

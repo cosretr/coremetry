@@ -71,9 +71,10 @@ type FrequentShadowSource interface {
 	FrequentShadowVerdict(ctx context.Context, p chstore.Problem) (chstore.FrequentVerdict, bool)
 }
 
-// SetFrequentShadow — main bağlar (evaluator). Gönderimi ETKİLEMEZ: kaynak
-// yalnız recordShadowDecision'ın goroutine'inde, politika satırı yazıldıktan
-// SONRA sorulur; NotifiableAt ve enforceGate onu hiç görmez.
+// SetFrequentShadow — main bağlar (evaluator). S5 kapalıyken gönderimi
+// ETKİLEMEZ: kaynak yalnız recordShadowDecision'ın goroutine'inde, politika
+// satırı yazıldıktan SONRA sorulur. v0.10.2342 (S5) açıkken aynı kaynak
+// enforce yolunda da sorulur (frequent_hold.go).
 func (n *Notifier) SetFrequentShadow(src FrequentShadowSource) {
 	if n != nil && src != nil {
 		n.shadow.freq.Store(src)
@@ -246,7 +247,8 @@ func (n *Notifier) recordShadowDecision(ctx context.Context, p chstore.Problem, 
 		hist.LastSend = &rr
 	}
 	n.shadow.mu.Unlock()
-	n.mergeHistory(ctx, p, &hist, false) // v0.10.2341 (S4): kapalıyken no-op
+	n.mergeHistory(ctx, p, &hist, false)    // v0.10.2341 (S4): kapalıyken no-op
+	n.frequentHistory(ctx, p, &hist, false) // v0.10.2342 (S5): kapalıyken no-op
 	dec := chstore.NotifiableAt(std, prio, hist, pol, now.In(sens.Calendar.Location()))
 	if dec.Notifiable && sig != "" {
 		n.shadow.mu.Lock()

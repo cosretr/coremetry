@@ -1493,6 +1493,7 @@ export const EN: Record<string, string> = {
   // v0.10.2281 — S3: "sık tekrar eden" (gölge)
   'pg.freq.chip': 'frequent',
   'pg.freq.tip': 'Shadow measurement: this kind opened {p} times in the previous 24 h and on {d} days in the last 7. Notifications did not change.',
+  'pg.freq.tipOn': 'This kind opened {p} times in the previous 24 h and on {d} days in the last 7. The opening notification is held; it is sent once if severity rises.', // v0.10.2342 (S5 on)
   'pg.rep.title': 'Repeat',
   'pg.rep.sub': 'frequent · shadow · notifications unchanged',
   'pg.rep.kind': 'Kind',

@@ -89,7 +89,10 @@ export function AssigneePill({ v }: { v: string }) {
 // satırının "<1h" çipiyle aynı yer). Sıra: durum, ilk görülme < 1 sa, öğretme
 // işareti, yinelenen, runbook, deploy. AI özeti artık TriageTitleCell'de
 // (köken ✨ + yaş damgası korunur; v0.9.530 gerekçesi orada).
-export function RowChips({ it, real, oraLabel }: { it: InboxItem; real: boolean; oraLabel?: string }) {
+// v0.10.2342 (entity grafı S5, karar 5) — frequentEnforce: "sık tekrar eden"
+// tutması uygulanıyor; Problem satırındaki "yinelenen" çipi yerini ona bırakır.
+// Yalnız sunucu söylerse (S5 açık); kapalıyken satır bugünkü.
+export function RowChips({ it, real, oraLabel, frequentEnforce }: { it: InboxItem; real: boolean; oraLabel?: string; frequentEnforce?: boolean }) {
   const lang = useLang();
   return (
     <>
@@ -124,7 +127,7 @@ export function RowChips({ it, real, oraLabel }: { it: InboxItem; real: boolean;
       {/* v0.10.1054 — anomaliden terfi etmiş Problem satırı da aynı işareti
           taşır (sunucu yalnız terfi Problem'ine kaynak olayın sayacını
           iliştirir; diğer satırlarda hiçbir şey). */}
-      {it.problem && promotedRecurrence(it.problem) && (
+      {it.problem && !frequentEnforce && promotedRecurrence(it.problem) && (
         <RecurringMarker episodeCount={it.problem.episodeCount} firstStartedAt={it.problem.firstStartedAt} priorDeploy={it.priorDeploy} />
       )}
       {/* Backend'in ZATEN hesaplayıp attığı iki bilgi (v0.9.255): "runbook
@@ -241,8 +244,8 @@ export function GraphClusterMembers({ cluster, hrefOf }: { cluster?: InboxCluste
 // GraphFrequentChip — v0.10.2281 (entity grafı S3): nötr "sık tekrar eden"
 // gölge çipi (renk yok; ipucu: gölge ölçüm, bildirim değişmedi). Mevcut
 // "yinelenen" çipi yerinde kalır.
-export function GraphFrequentChip({ row }: { row?: ProblemGraphRowSummary }) {
+export function GraphFrequentChip({ row, enforce }: { row?: ProblemGraphRowSummary; enforce?: boolean }) {
   const lang = useLang();
   if (!row?.frequent) return null;
-  return <FrequentChip f={row.frequent} t={(k, v) => tf(k, lang, v)} />;
+  return <FrequentChip f={row.frequent} t={(k, v) => tf(k, lang, v)} enforce={enforce} />;
 }

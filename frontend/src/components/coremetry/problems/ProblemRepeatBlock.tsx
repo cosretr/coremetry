@@ -7,9 +7,10 @@
 import { Badge } from '@/components/shadcn/badge';
 import { episodeText, frequentChipTitle, repeatRows, type FrequentVerdict, type GraphT } from '@/lib/problemGraph';
 
-export function FrequentChip({ f, t }: { f: { prior24h: number; days7d: number }; t: GraphT }) {
+// v0.10.2342 (S5) — enforce: tutma uygulanıyor; ipucu gölge yerine bunu söyler.
+export function FrequentChip({ f, t, enforce }: { f: { prior24h: number; days7d: number }; t: GraphT; enforce?: boolean }) {
   return (
-    <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground" title={frequentChipTitle(f, t)} data-testid="pg-frequent-chip">
+    <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground" title={frequentChipTitle(f, t, enforce)} data-testid="pg-frequent-chip">
       {t('pg.freq.chip')}
     </Badge>
   );

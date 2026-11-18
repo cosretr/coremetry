@@ -50,7 +50,8 @@ const (
 	frequentHistoryMaxBack  = 14 * 24 * time.Hour
 	frequentEpisodesShown   = 5
 
-	// NotifyHoldFrequent — tasarımın tutma kodu; S3'te YALNIZ gölge.
+	// NotifyHoldFrequent — tasarımın tutma kodu; S3'te YALNIZ gölge, v0.10.2342
+	// (S5) açıkken NotifiableAt enforce yolunda.
 	NotifyHoldFrequent = "frequent"
 	// Gölge satırının `error` kodları (politika satırının yanında, ayrı satır).
 	FrequentShadowHold     = "frequent:hold"        // kural uygulansaydı açılış bildirimi gitmezdi
@@ -184,7 +185,7 @@ func FrequentShadowCode(dec NotifyDecision, v FrequentVerdict) string {
 	}
 	if !dec.Notifiable {
 		switch dec.Hold {
-		case NotifyHoldNoise, NotifyHoldDedupe, NotifyHoldQuiet, NotifyHoldMerged:
+		case NotifyHoldNoise, NotifyHoldDedupe, NotifyHoldQuiet, NotifyHoldMerged, NotifyHoldFrequent:
 		default:
 			return FrequentShadowEarlier
 		}

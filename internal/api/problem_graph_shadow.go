@@ -74,7 +74,7 @@ type problemGraphShadowResponse struct {
 
 // currentProblemGraphModes — sabitlerin o anki değeri.
 func currentProblemGraphModes() problemGraphModes {
-	return problemGraphModes{S4: chstore.ProblemGraphMergeEnforced()}
+	return problemGraphModes{S4: chstore.ProblemGraphMergeEnforced(), S5: chstore.ProblemGraphFrequentEnforced()}
 }
 
 // problemGraphCriterionOf — SAF: blob raporu → ölçüt sayıları.
