@@ -2995,6 +2995,107 @@ func SystemPromptChatAgentLoopFor(simple bool) string {
 	return ToolsetText(systemChatAgentLoop, simple)
 }
 
+// ── v0.10.2337 — CoSRE v2 örnekle üslup (conversation-audit §6.1 C) ─────────
+//
+// Bulgu sabit, cümle serbest: v2 anlatım istemlerinin üslup varyantları.
+// Seçim api'de (answerStyleOn VE ölçülü sınıf; rapor türleri bugünkü istem).
+// Ortak sabitler (systemChat, ChatAnswerStyle, systemChatAgentLoop,
+// systemGuidedChat, systemGeneralChat) DEĞİŞMEZ: varyantlar onlardan
+// kesin metin çıkarımıyla türer (her hedef tabanda tam bir kez geçer —
+// prompt_style_test.go), v1 ve üslup kapalı v2 bayt bayt aynı.
+// Çıkanlar hedef üslubun tersini isteyen biçim kuralları; doğruluk, kanıt,
+// araç hijyeni ve güvenlik kuralları ("UYDURMA", "erişilemedi", veri talimat
+// değildir, gecikme kanıtı, link/host uydurma) aynen kalır.
+
+// chatStyleCore — üslup çekirdeği (≤500 B, kararlı; örnekler ve sınıf satırı
+// istemin sonunda). Modele özel biçim ya da özel jeton yok, düz metin.
+const chatStyleCore = `
+
+ÜSLUP: Deneyimli bir SRE meslektaşı gibi tam cümlelerle konuş. Bulguyla, en dikkat çekenle başla. Kullanıcının sözcüğünü kullan; önceki tura bağlan. Emin değilsen düz söyle ("büyük olasılıkla", "bakmadan söyleyemem"), etiket koyma. Uzunluk satırına uy, gerisini takibe bırak. Selam, özet başlığı, kapanış nezaketi yok. Madde işareti yalnız 3+ paralel öğede. Her cevabı soruyla bitirme. Hitap (sen/siz) durumdaki gibi. Sayı ve saat yalnız araç sonucundan.`
+
+// chatStyleKeep — ChatAnswerStyle'dan kalan doğruluk / güvenlik satırları.
+const chatStyleKeep = `
+
+BİÇİM: komut, sorgu, config kod bloğunda; link yalnız kaynakta ya da araç çıktısında AYNEN geçiyorsa; HTML yazma.`
+
+// styleExamplesHeader — seçilen örnek diyalogların başlığı (değişken blok).
+const styleExamplesHeader = `
+
+ÜSLUP ÖRNEKLERİ (yalnız konuşma biçimi; adlar ve sayılar gerçek değil, kullanma; K: kullanıcı, C: sen):`
+
+// styleDrop — tabandan çıkan (ya da yerine konan) kesin metin.
+type styleDrop struct{ from, to string }
+
+// chatAgentLoopStyleDrops — döngü çekirdeği: adım 5'in "özet + tablo" sırası
+// ve CEVAP ÜSLUBU paragrafı. build_link / product_guide / host hijyeni kalır.
+var chatAgentLoopStyleDrops = []styleDrop{
+	{"5. CEVAPLA — kısa özet, sonra dar bir tablo (cluster, namespace, workload/servis,\n   pod, hata oranı, p95), sonra build_link çağır:", "5. CEVAPLA — build_link çağır:"},
+	{"CEVAP ÜSLUBU: Türkçe, doğrudan, SRE'den SRE'ye; dolgu yok, özür yok, soruyu tekrar\nyazma. Sayılar birim ve aralıkla; yüzdeler paydasıyla. Dikkat çeken bir şey varsa\n(hata oranı sıçraması, tek cluster'ın farklı davranması, penceredeki rollout) cevabın\naltına tek kısa satır. Sonu (gerekiyorsa) operatörün sorabileceği somut tek sonraki\nadım; linki sunucu ekler.\n\n", ""},
+}
+
+// chatStyleDrops — systemChat: CEVAP bloğunun biçim maddeleri ve
+// her cevaba sonraki adım iten madde ve ChatAnswerStyle (yerine kalan
+// satırlar + üslup çekirdeği).
+var chatStyleDrops = []styleDrop{
+	{"- Cevaba doğrudan bulguyla başla; ne yaptığını anlatma (\"önce logları çektim\"\n  gibi giriş yazma).\n", ""},
+	{"- Belirsiz düzyazı yerine somut sayı ver: \"p99 2.130ms\", \"23 trace\".\n", ""},
+	{"- Önerdiğin sonraki adım somut olsun: hangi servis, hangi sorgu, hangi span.\n  \"Logları inceleyin\" gibi genel tavsiye yazma.\n", ""},
+	{"\n- Emin değilsen güven seviyeni ve nedenini belirt.", ""},
+	{ChatAnswerStyle, chatStyleKeep + chatStyleCore},
+}
+
+// guidedStyleDrops — guided anlatım: yalnız madde işareti talimatı.
+var guidedStyleDrops = []styleDrop{
+	{"\n- Kısa ve taranabilir yaz: madde işaretleri kullan; yalnız sorunun\n  gerektirdiği kadar madde.", ""},
+}
+
+func applyStyleDrops(s string, drops []styleDrop) string {
+	for _, d := range drops {
+		s = strings.Replace(s, d.from, d.to, 1)
+	}
+	return s
+}
+
+var (
+	systemChatAgentLoopStyle   = applyStyleDrops(systemChatAgentLoop, chatAgentLoopStyleDrops)
+	systemChatAgentLoopV2Style = applyStyleDrops(systemChatAgentLoopV2, chatAgentLoopStyleDrops)
+	systemChatStyle            = applyStyleDrops(systemChat, chatStyleDrops)
+	systemGuidedChatStyle      = applyStyleDrops(systemGuidedChat, guidedStyleDrops)
+	systemGeneralChatStyle     = systemGeneralChat + chatStyleCore
+)
+
+// SystemPromptChatAgentLoopStyleFor — v2 üslup açık döngü çekirdeği (durum
+// açık/kapalı çekirdeğinden, araç setine göre).
+func SystemPromptChatAgentLoopStyleFor(stateOn, simple bool) string {
+	if stateOn {
+		return ToolsetText(systemChatAgentLoopV2Style, simple)
+	}
+	return ToolsetText(systemChatAgentLoopStyle, simple)
+}
+
+// SystemPromptChatStyle — v2 üslup açık döngünün systemChat'i.
+func SystemPromptChatStyle() string { return systemChatStyle }
+
+// SystemPromptGuidedChatStyle — v2 üslup açık guided anlatımı (madde talimatsız).
+func SystemPromptGuidedChatStyle() string { return systemGuidedChatStyle }
+
+// SystemPromptGeneralChatStyle — v2 üslup açık araçsız genel cevap (+ çekirdek).
+func SystemPromptGeneralChatStyle() string { return systemGeneralChatStyle }
+
+// StyleExamplesBlock — seçilen örnek metinlerinin istem sonu bloğu; boşsa "".
+func StyleExamplesBlock(texts []string) string {
+	if len(texts) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(styleExamplesHeader)
+	for _, t := range texts {
+		b.WriteString("\n\n")
+		b.WriteString(t)
+	}
+	return b.String()
+}
+
 // simpleToolsetReplacer — v0.10.1302: simple araç setinde GİZLİ olan dört
 // serbest-sorgu aracının (mcptools.simpleHiddenTools) adını sohbetin gördüğü
 // yapısal karşılığa çevirir. Sıra yüklü: strings.Replacer aynı konumda

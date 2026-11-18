@@ -24,7 +24,7 @@ vi.mock('@/lib/api', () => ({
 }));
 vi.mock('@/components/AuthProvider', () => ({ useAuthRole: () => m.role }));
 
-import { CosreConversationLine } from './CosreConversationLine';
+import { CosreConversationLine, CONVERSATION_STYLE_HINT } from './CosreConversationLine';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 beforeAll(() => {
@@ -87,6 +87,9 @@ describe('CosreConversationLine', () => {
     expect(m.putStyle).toHaveBeenCalledWith(true);
     expect(m.put).not.toHaveBeenCalled();
     expect(m.putVerify).not.toHaveBeenCalled();
+  });
+  it('üslup metni (v0.10.2337): ölçü, örnekle üslup ve ara cümleyi söyler', () => {
+    for (const w of ['uzunluğu', 'örnek diyalog', 'ara durum cümlesi', 'Raporlar']) expect(CONVERSATION_STYLE_HINT).toContain(w);
   });
   it('viewer salt okunur', async () => {
     m.role = 'viewer';

@@ -20,7 +20,7 @@ import (
 
 // SetVersion — setin sürümü; bir diyalog eklenince, çıkınca ya da metni
 // değişince artar (değerlendirme raporu ve istem sürümü bunu okur).
-const SetVersion = "2026-11-18.1"
+const SetVersion = "2026-11-18.2"
 
 // MaxDialogBytes — tek diyaloğun modele giden metninin tavanı (audit C satırı).
 const MaxDialogBytes = 450

@@ -1119,6 +1119,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	if label := cosreRulesStepLabel(rulesN); label != "" {
 		emit("step", map[string]string{"label": label})
 	}
+	// v0.10.2331 — B: döngü sınıfı (rapor türleri ölçüsüz; chat_answer_class.go); v0.10.2337 — istemden önce: C varyantı sınıfa bakar.
+	answerStyleLoop(ctx, lastUserText(req.Messages), cst.ctx, rtPlan != nil || isTraceFollowUp || req.Context.Explain != "" || dm.On)
 	loopPrompt := chatAgentLoopCore(ctx, simpleTools) + // v0.10.482 — telemetri ajanı çekirdek döngüsü (Ek A); v0.10.1302 — araç setine göre; v0.10.2326 — v2 durum açıkken bağlam aracı cümlesiz
 		screenContextPreambleTR(screenCtx) +
 		agentctx.PreambleTR(pageCtx, pinnedCtx) + // v0.10.539 — sayfa bağlamı (pin önce)
@@ -1132,7 +1134,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		opPre.exceptionsPromptTR() + // v0.10.1331 — operasyonun Exceptions grubu yoksa ""
 		opPre.clusterPromptTR() + // v0.10.1374 — küme kıyası yoksa ""
 		dm.loopPrefix() + // v0.10.1150 — Derin kapalıyken ""
-		withAddressee(addressee, copilot.SystemPromptChat()) +
+		withAddressee(addressee, loopChatPromptFor(ctx)) + // v0.10.2337 — C: üslup açıkken biçim kuralsız varyant
 		stt.promptLine() // v0.10.2324 — konuşma durumu SONDA (değişken blok; kapalıyken "")
 	// v0.10.1324 — yankı süzgecinin cümleleri loopPrompt'a giren AYNI önsöz
 	// kurucularından, aynı girdilerle (chatLoopPreambles) + tavan / yeniden
@@ -1178,8 +1180,6 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		ctx = withV2LoopPlan(ctx, v2p)
 		xch.verify.addText(v2p.Addendum) // v0.10.2327 — kapsam eki (takım servisleri) kanıta
 	}
-	// v0.10.2331 — B: döngü sınıfı (rapor türleri ölçüsüz; chat_answer_class.go).
-	answerStyleLoop(ctx, lastUserText(req.Messages), cst.ctx, rtPlan != nil || isTraceFollowUp || req.Context.Explain != "" || dm.On)
 	if line := stt.promptLine(); line != "" { // v0.10.2324 — durum bloğunun yankısı da süzülür
 		echoPhrases = append(echoPhrases, chatEchoPhrases(line)...)
 	}

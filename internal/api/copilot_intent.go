@@ -487,7 +487,7 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 		emit("delta", map[string]string{"text": intentGeneralNoteTR + "\n\n"})
 		var classLine string
 		ctx, classLine = answerStyleNarration(ctx, answerClassGeneral(q)) // v0.10.2331 — B; üslup kapalıyken ctx aynen, satır ""
-		graw, gerr := s.copilotStreamSurface(ctx, "chat-general", copilot.SystemPromptGeneralChat()+classLine, q,
+		graw, gerr := s.copilotStreamSurface(ctx, "chat-general", answerStyleGeneralPrompt(ctx, answerClassGeneral(q))+classLine, q,
 			func(d string) { emit("delta", map[string]string{"text": d}) })
 		graw = answerEndClean(ctx, graw)
 		text, general := intentGeneralAnswer(graw)

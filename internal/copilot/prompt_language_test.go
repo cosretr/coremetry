@@ -97,18 +97,22 @@ func promptRegistry() map[string]promptClass {
 		"ChatAgentLoop":   classTurkishNative, // v0.10.482 — telemetri ajanı çekirdek döngüsü (Ek A, Türkçe/kısa)
 		// v0.10.1302 — simple araç seti varyantı (SystemPromptChatAgentLoopFor(true)).
 		"ChatAgentLoop.simple": classTurkishNative,
-		"ShiftSummary":         classTurkishNative,
-		"AlertNoise":           classTurkishNative,
-		"LogPatterns":          classTurkishNative,
-		"LogSpike":             classTurkishNative, // v0.10.1284 — AI SRE Faz 1a, sabit dört bölüm + tek örnek
-		"LogLine":              classTurkishNative, // v0.10.1291 — ✨ log satırı, sabit dört bölüm + tek örnek
-		"ExplainLogs":          classTurkishNative, // Log Search 6.3 — "Bu logları açıkla", sabit beş bölüm + tek örnek
-		"LogsNLQuery":          classTurkishNative, // Log Search 6.6 — JSON çıktı, Türkçe talimat (WikiSelect emsali)
-		"ServiceLogSummary":    classTurkishNative, // Log Search 6.7 — servis log özeti, sabit üç bölüm + tek örnek
-		"SREInvestigation":     classTurkishNative, // v0.10.1287 — AI SRE Faz 1b, sabit dört bölüm + tek örnek + veri çerçevesi
-		"RuleProposal":         classTurkishNative, // v0.10.1289 — "bunu hatırla" tek cümlelik kural önerisi + tek örnek + veri çerçevesi
-		"Postmortem":           classTurkishNative, // Faz 5.4 — markdown taslak, Türkçe talimat
-		"RunbookUpdate":        classTurkishNative, // Faz 5.5 — güncelleme önerisi bloğu
+		// v0.10.2337 — v2 üslup varyantları (örnekle üslup).
+		"ChatStyle":         classTurkishNative,
+		"GuidedChatStyle":   classDirective,
+		"GeneralChatStyle":  classTurkishNative,
+		"ShiftSummary":      classTurkishNative,
+		"AlertNoise":        classTurkishNative,
+		"LogPatterns":       classTurkishNative,
+		"LogSpike":          classTurkishNative, // v0.10.1284 — AI SRE Faz 1a, sabit dört bölüm + tek örnek
+		"LogLine":           classTurkishNative, // v0.10.1291 — ✨ log satırı, sabit dört bölüm + tek örnek
+		"ExplainLogs":       classTurkishNative, // Log Search 6.3 — "Bu logları açıkla", sabit beş bölüm + tek örnek
+		"LogsNLQuery":       classTurkishNative, // Log Search 6.6 — JSON çıktı, Türkçe talimat (WikiSelect emsali)
+		"ServiceLogSummary": classTurkishNative, // Log Search 6.7 — servis log özeti, sabit üç bölüm + tek örnek
+		"SREInvestigation":  classTurkishNative, // v0.10.1287 — AI SRE Faz 1b, sabit dört bölüm + tek örnek + veri çerçevesi
+		"RuleProposal":      classTurkishNative, // v0.10.1289 — "bunu hatırla" tek cümlelik kural önerisi + tek örnek + veri çerçevesi
+		"Postmortem":        classTurkishNative, // Faz 5.4 — markdown taslak, Türkçe talimat
+		"RunbookUpdate":     classTurkishNative, // Faz 5.5 — güncelleme önerisi bloğu
 		// v0.10.1431 — guided kaynak incelemesi, sabit üç bölüm (kendi hizalama grubu).
 		"ResourceInvestigation": classTurkishNative,
 		// v0.10.1442 — kaynak sorusu ön-sınıflandırıcısı (JSON çıktı, Türkçe talimat; IntentClassify emsali).
@@ -141,10 +145,11 @@ func promptTexts() map[string]string {
 		"OffTopicGeneral": SystemPromptOffTopicGeneral(), // v0.10.1458
 		"DrawerChat":      SystemPromptDrawerChat(), "Chat": SystemPromptChat(),
 		"ChatRoundCap": SystemPromptChatRoundCap(), "ChatAgentLoop": SystemPromptChatAgentLoop(),
-		"ChatAgentLoop.simple": SystemPromptChatAgentLoopFor(true), // v0.10.1302
-		"RCAVerdict":           SystemPromptRCAVerdict(),
-		"ServiceReport":        SystemPromptServiceReport(), // v0.10.1337
-		"RAGChat":              SystemPromptRAGChat(), "ShiftSummary": SystemPromptShiftSummary(),
+		"ChatAgentLoop.simple": SystemPromptChatAgentLoopFor(true),                                                                                            // v0.10.1302
+		"ChatStyle":            SystemPromptChatStyle(), "GuidedChatStyle": SystemPromptGuidedChatStyle(), "GeneralChatStyle": SystemPromptGeneralChatStyle(), // v0.10.2337
+		"RCAVerdict":    SystemPromptRCAVerdict(),
+		"ServiceReport": SystemPromptServiceReport(), // v0.10.1337
+		"RAGChat":       SystemPromptRAGChat(), "ShiftSummary": SystemPromptShiftSummary(),
 		"WikiChat":     SystemPromptWikiChat(),
 		"WikiFollowUp": SystemPromptWikiFollowUp(),
 		"WikiSelect":   SystemPromptWikiSelect(), "RAGChatWiki": SystemPromptRAGChatWiki(),

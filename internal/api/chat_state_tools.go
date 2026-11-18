@@ -29,8 +29,12 @@ func dropChatContextTools(tools []mcp.Tool) []mcp.Tool {
 	return out
 }
 
-// chatAgentLoopCore — döngü çekirdeği: v2 + durum açıkken bağlam aracı cümlesiz.
+// chatAgentLoopCore — döngü çekirdeği: v2 + durum açıkken bağlam aracı cümlesiz;
+// v0.10.2337 — üslup açık + ölçülü sınıfta biçim kuralsız varyant.
 func chatAgentLoopCore(ctx context.Context, simple bool) string {
+	if answerStyleFrom(ctx).styled() { // v0.10.2337 — C: örnekle üslup varyantı (chat_style_prompt.go)
+		return copilot.SystemPromptChatAgentLoopStyleFor(chatStateOn(ctx), simple)
+	}
 	if chatStateOn(ctx) {
 		return copilot.SystemPromptChatAgentLoopV2For(simple)
 	}

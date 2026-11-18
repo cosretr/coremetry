@@ -8,6 +8,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
+	"github.com/cilcenk/coremetry/internal/copilot/styledialogs"
 )
 
 // chat_answer_class_test.go — v0.10.2331 (conversation-audit §6.1 B): sınıf
@@ -227,8 +228,17 @@ func TestAnswerStyleLoopPrompt(t *testing.T) {
 	if !strings.HasSuffix(onSys, line) {
 		t.Fatalf("açıkken satır istemin sonunda değil: …%q", onSys[max(0, len(onSys)-120):])
 	}
-	if strings.TrimSuffix(onSys, line) != offSys {
-		t.Fatal("açıkken istem yalnız sınıf satırı kadar büyümeli")
+	// v0.10.2337 — C: açıkken biçim kuralsız varyant; örnekler sınıf satırından
+	// hemen önce; istem (satır hariç) kapalıdakinden büyük değil.
+	ex := copilot.StyleExamplesBlock(styledialogs.Texts(styledialogs.Select(string(classErrorHunt), "", styledialogs.ModeLoop)))
+	if !strings.HasSuffix(onSys, ex+line) {
+		t.Fatalf("açıkken örnek bloğu sınıf satırından önce değil: …%q", onSys[max(0, len(onSys)-200):])
+	}
+	if !strings.Contains(offSys, copilot.ChatAnswerStyle) || strings.Contains(onSys, "**Özet:**") || strings.Contains(onSys, "CEVAP ÜSLUBU") {
+		t.Fatal("kapalı istem bugünkü biçimi, açık istem üslup varyantını taşımalı")
+	}
+	if len(onSys)-len(line) > len(offSys) {
+		t.Fatalf("üslup açık istem %d B > kapalı %d B", len(onSys)-len(line), len(offSys))
 	}
 	if onMax != float64(answerClassCaps[classErrorHunt]) || (offMax != 0 && offMax <= onMax) {
 		t.Fatalf("max_tokens kapalı %v açık %v", offMax, onMax)
@@ -237,7 +247,7 @@ func TestAnswerStyleLoopPrompt(t *testing.T) {
 	// v0.10.2333 — F1 aynı anahtarla tur başına bir data-status ekler; onun
 	// dışında akış altınla aynı (chat_status_line_test.go withoutStatus).
 	compareChatGolden(t, "v2_loop.sse", withoutStatus(onBody))
-	t.Logf("istem farkı: +%d B ≈ +%d token (3 B/token)", len(line), len(line)/3)
+	t.Logf("istem: kapalı %d B, açık %d B (satır dahil) ≈ %+d token (3 B/token)", len(offSys), len(onSys), (len(onSys)-len(offSys))/3)
 }
 
 func TestMergeCosreConversationPutStyle(t *testing.T) {

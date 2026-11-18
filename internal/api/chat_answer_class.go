@@ -34,6 +34,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
+	"github.com/cilcenk/coremetry/internal/copilot/styledialogs"
 )
 
 // answerClass — cevap sınıfı.
@@ -307,7 +308,7 @@ func answerClassLoopPlan(ctx context.Context, p stepPlan) stepPlan {
 	if line == "" || capTok <= 0 {
 		return p
 	}
-	p.SystemAddendum += line
+	p.SystemAddendum += t.styleExamples(c, styledialogs.ModeLoop) + line // v0.10.2337 — C: örnekler sınıf satırından hemen önce
 	p.Ctx = withCtx(p.Ctx, func(ctx context.Context) context.Context { return copilot.WithAnswerCap(ctx, capTok) })
 	return p
 }

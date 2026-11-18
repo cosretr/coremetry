@@ -207,14 +207,14 @@ func TestRulesPromptSitesPinned(t *testing.T) {
 	chat, _ := os.ReadFile("copilot_chat.go")
 	src := stripGoCommentsAPI(string(chat))
 	pre, rules, core := strings.Index(src, "chatContextPreambleFor(ctx, cst.ctx) +"), strings.Index(src, "cosreRulesLoopPromptTR(rulesBlock) +"),
-		strings.Index(src, "withAddressee(addressee, copilot.SystemPromptChat())")
+		strings.Index(src, "withAddressee(addressee, loopChatPromptFor(ctx))") // v0.10.2337 — üslup varyantı seçicisi
 	if pre < 0 || rules < 0 || core < 0 || !(pre < rules && rules < core) || strings.Count(src, "s.cosreRulesBlock(") != 1 {
 		t.Errorf("döngü: kural bloğu sohbet bağlamı önsözünün ARKASINDA, çekirdeğin (DataNotInstruction) ÖNÜNDE olmalı (%d %d %d)", pre, rules, core)
 	}
 	guided, _ := os.ReadFile("copilot_guided.go")
 	gsrc := stripGoCommentsAPI(string(guided))
 	if strings.Count(gsrc, "s.cosreRulesBlock(") != 1 || !strings.Contains(gsrc, "guidedNarrationUser(question, evidence+cosreRulesDataSuffix(rulesBlock), explain, msgs)") ||
-		!strings.Contains(gsrc, "cosreRulesSystemPrefix(rulesBlock)+guidedNarrationPrompt(route.Intent)") {
+		!strings.Contains(gsrc, "cosreRulesSystemPrefix(rulesBlock)+answerStyleGuidedPrompt(nctx, route.Intent)") {
 		t.Error("guided: blok VERİ bölümüne, ek sistem mesajının önüne")
 	}
 	for _, f := range []string{"copilot_intent.go", "chat_tool_scope.go", "chat_scope.go"} {

@@ -28,9 +28,12 @@ type Change = { state: boolean } | { verification: 'off' | 'shadow' };
 
 // v0.10.2331 (audit §6.1 B) — üslup anahtarı: varsayılan KAPALI; operatör
 // incelemeden kullanıcılar görmez. Sonraki dilimler (C, D, F1) aynı anahtarın arkasında.
+// v0.10.2337 — C (örnekle üslup) ve F1 (ara cümle) da bu anahtarın arkasında; metin üçünü söyler.
 export const CONVERSATION_STYLE_HINT =
-  'Açıkken CoSRE v2 cevabın uzunluğunu soru türüne göre ayarlar (durum sorusuna 1-2 cümle, hata avına 3-5 cümle; '
-  + 'raporlar hariç). Kapalıyken cevaplar bugünkü gibidir. Değerlendirme koşusunda kullanıcılara dokunmadan açık / kapalı denenebilir.';
+  'Açıkken CoSRE v2 üç şeyi birlikte açar: cevap uzunluğu soru türüne göre (durum sorusuna 1-2 cümle, hata avına 3-5 cümle); '
+  + 'örnek diyaloglarla meslektaş üslubu (özet kutusu, tablo ve kalıp madde yerine tam cümleler; sayılar yine yalnız araçlardan); '
+  + 'araç çalışırken kısa ara durum cümlesi. Raporlar (servis raporu, kaynak incelemesi, trace açıklaması, rota incelemesi) bugünkü gibi kalır. '
+  + 'Kapalıyken cevaplar bugünkü gibidir. Değerlendirme koşusunda kullanıcılara dokunmadan açık / kapalı denenebilir.';
 
 export function CosreConversationLine() {
   const qc = useQueryClient();
@@ -75,7 +78,7 @@ export function CosreConversationLine() {
         disabled={!canEdit || m.isPending}
         onCheckedChange={v => m.mutate({ verification: v ? 'shadow' : 'off' })} />
       <CheckboxField
-        label="Üslup (CoSRE v2 cevap ölçüsü)"
+        label="Üslup (CoSRE v2: ölçü, örnekle üslup, ara cümle)"
         hint={CONVERSATION_STYLE_HINT}
         checked={styleOn}
         disabled={!canEdit || sm.isPending}

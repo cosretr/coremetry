@@ -128,6 +128,11 @@ var promptVersionRegistry = map[string]string{
 
 	// v0.10.1442 — kaynak sorusu ön-sınıflandırıcısı (niyet kademesi içi, JSON).
 	"systemResourceClassify": systemResourceClassify,
+
+	// v0.10.2337 — v2 örnekle üslup (çekirdek, kalan biçim satırları, örnek başlığı).
+	"chatStyleCore":       chatStyleCore,
+	"chatStyleKeep":       chatStyleKeep,
+	"styleExamplesHeader": styleExamplesHeader,
 }
 
 var (
