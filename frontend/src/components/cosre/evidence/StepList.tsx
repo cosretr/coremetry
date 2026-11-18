@@ -13,10 +13,11 @@ import { Button } from '@/components/shadcn/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/shadcn/collapsible';
 import { cn } from '@/lib/cn';
 import { EVIDENCE_STRINGS as T, STOP_LABELS } from './strings';
-import { fmtMsTR, stopLine, type StepsView, type StopBadge } from './stepView';
+import { fmtMsTR, stopLine, type StepView, type StepsView, type StopBadge } from './stepView';
 import { StepCard } from './StepCard';
+import type { CosreStepDirective } from '@/lib/types';
 
-export function StepList({ view, live, exchangeId, badges = [], compact = false }: {
+export function StepList({ view, live, exchangeId, badges = [], compact = false, onRedirect }: {
   view: StepsView; live: boolean;
   /** Bitmiş cevabın kimliği; yoksa (akış / arşiv) İlgili / İlgisiz devre dışı. */
   exchangeId?: string;
@@ -24,6 +25,8 @@ export function StepList({ view, live, exchangeId, badges = [], compact = false 
   /** v0.10.1787 — /cosre v2 tam sayfası (mockup A): çerçevesiz tek satır
    *  "<N> adım · <T> ▸"; tık aynı kartları açar. Sheet vermez (görünüm aynen). */
   compact?: boolean;
+  /** v0.10.2368 (I2) — adım menüsü (bitmiş cevap, akış yokken); yoksa menü çizilmez. */
+  onRedirect?: (step: StepView, d: CosreStepDirective) => void;
 }) {
   // null = kullanıcı dokunmadı: akarken açık, bitince kapalı.
   const [touched, setTouched] = useState<boolean | null>(null);
@@ -32,7 +35,7 @@ export function StepList({ view, live, exchangeId, badges = [], compact = false 
   const elapsed = view.stop?.elapsed_ms ?? view.totalMs;
   const cards = (<>
     <div role="list" aria-label={T.stepsListLabel}>
-      {view.steps.map(s => <StepCard key={s.id} v={s} exchangeId={exchangeId} />)}
+      {view.steps.map(s => <StepCard key={s.id} v={s} exchangeId={exchangeId} onRedirect={live ? undefined : onRedirect} />)}
     </div>
     {(view.stop || badges.length > 0) && (
       <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-3 py-2 text-xs text-muted-foreground" role="status" data-cosre-stop={view.stop?.reason ?? ''}>

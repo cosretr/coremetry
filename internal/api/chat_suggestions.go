@@ -560,7 +560,7 @@ func (a chatApprovalCont) withSuggestion(sc *chatSuggestionCont) chatApprovalCon
 }
 
 // resume — onay devamı mı (çip tıkı değil).
-func (a chatApprovalCont) resume() bool { return a.on && a.sg == nil }
+func (a chatApprovalCont) resume() bool { return a.on && a.sg == nil && a.rd == nil }
 
 // suggestionRun — tık adımının döngüye etkisi.
 type suggestionRun struct {

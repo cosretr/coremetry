@@ -243,13 +243,15 @@ const (
 	// TierClarify — v0.10.1571: düz metin netleştirme sorusu ("Coremetry verisinde
 	// mi, wikide mi?") ya da cevabının LLM'siz kapanışı (api/chat_clarify.go).
 	TierClarify = "clarify"
-	TierLoop    = "loop"
-	TierOther   = "other"
+	// TierStepRedirect — v0.10.2368: adım yönlendirmesi reddi / durdur-özetle (api/chat_step_redirect.go).
+	TierStepRedirect = "step-redirect"
+	TierLoop         = "loop"
+	TierOther        = "other"
 )
 
 var tiers = map[string]bool{TierScope: true, TierWiki: true, TierGuided: true, TierDrawer: true,
 	TierRAG: true, TierIntent: true, TierLoop: true, TierOther: true, TierDocRows: true, TierDiscovery: true, TierOperation: true,
-	TierMemory: true, TierExplain: true, TierCodeSticky: true, TierClarify: true}
+	TierMemory: true, TierExplain: true, TierCodeSticky: true, TierClarify: true, TierStepRedirect: true}
 
 // KnownTier — kademe adı kayıtlı mı (api kaynak testi copilotChat'in
 // cspan.tier(...) adlarını buna karşı denetler).

@@ -214,6 +214,8 @@ type chatRequest struct {
 	Approvals []approvalAnswer `json:"approvals,omitempty"`
 	// Suggestion — v0.10.2364 (I3, chat_suggestions.go): öneri çipinin tıkı {id, token}; niyet jetondan.
 	Suggestion *suggestionPick `json:"suggestion,omitempty"`
+	// StepRedirect — v0.10.2368 (I2, chat_step_redirect.go): adım jetonu + yönerge.
+	StepRedirect *stepRedirectReq `json:"stepRedirect,omitempty"`
 }
 
 // copilotChatWith — sohbet gövdesi (v1 ve v2 taşıma ortak; chat_sink.go).
@@ -292,7 +294,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// agent-core S5 — onay devamı (yalnız v2): kimlikler aynı asistan mesajında
 	// önceki akışın üstünden sayar; kademeler aşağıda atlanır.
 	isV2 := isV2Sink(em)
-	apCont := newChatApprovalCont(isV2, req.Approvals).withSuggestion(s.newChatSuggestionCont(r.Context(), isV2, req.Suggestion, req.Context.Conversation)) // v0.10.2364 — I3 çip tıkı kademeleri atlar
+	apCont := newChatApprovalCont(isV2, req.Approvals).withSuggestion(s.newChatSuggestionCont(r.Context(), isV2, req.Suggestion, req.Context.Conversation)).withRedirect(s.newChatRedirectCont(r.Context(), isV2, req.StepRedirect, req.Context.Conversation)) // v0.10.2364 I3 çip tıkı, v0.10.2368 I2 yönlendirme kademeleri atlar
+	req.Messages = apCont.rd.trimHistory(req.Messages)                                                                                                                                                                                                         // v0.10.2368 — I2: hedef cevabı (sonraki adımlar) hiçbir istemde yok
 	if apCont.on {
 		emit = withStepIDsFrom(em.Emit, apCont.base)
 		req.Context.ExplainAsk = nil
@@ -447,6 +450,11 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	if stickyClosed {
 		cspan.tier("code-sticky", true)
 		emit("done", map[string]bool{"ok": true})
+		return
+	}
+	if handled, rok := s.chatStepRedirectTier(ctx, emit, apCont.rd, req.Messages, exchangeID); handled { // v0.10.2368 — I2 geçersiz yönlendirme / durdur-özetle
+		cspan.tier("step-redirect", rok)
+		emit("done", map[string]bool{"ok": rok})
 		return
 	}
 	anchorTo, anchored := chatAnchorTime(req.Context.ToMs, time.Now())
@@ -1360,6 +1368,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	} else if sr := s.runSuggestionIntent(ctx, emit, exec, apCont.sg, conv); sr.ran { // v0.10.2364 — I3 niyet router'sız (chat_suggestions.go)
 		conv, calledTools, callsLeft = sr.conv, append(calledTools, sr.tools...), callsLeft-1
 		executedN, skippedN = executedN+sr.executed, skippedN+sr.skipped
+	} else {
+		conv = s.applyRedirect(ctx, emit, apCont.rd, conv, exchangeID) // v0.10.2368 — I2 (nil → aynen)
 	}
 	conv, calledTools = s.chatInvestigate(ctx, emit, investigateTurn{Question: lastUserText(req.Messages), State: cst.ctx, Service: investigateService(stt, req.Context.Service), // v0.10.2361 — S4 kanıt paketi
 		Blocked: rtPlan != nil || isTraceFollowUp || req.Context.Explain != "" || dm.On || ct.On || apCont.on || opPre != nil, RangeS: int64(req.Context.RangeS), To: anchorTo}, conv, calledTools)

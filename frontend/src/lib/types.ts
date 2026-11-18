@@ -9293,6 +9293,15 @@ export interface CosreSuggestions {
   chips: CosreSuggestion[];
 }
 
+/** v0.10.2368 (I2) — adım yönlendirmesinin yönergesi (Go redirectDirectives). */
+export type CosreStepDirective = 'continue' | 'metric' | 'trace' | 'log' | 'skip' | 'summarize';
+
+/** v0.10.2368 (I2) — istek gövdesi alanı `stepRedirect`: data-step jetonu + yönerge. */
+export interface CosreStepRedirect {
+  stepToken: string;
+  directive: CosreStepDirective;
+}
+
 /** v0.10.2364 — çip tıkının istek gövdesi alanı (`suggestion`). */
 export interface CosreSuggestionPick {
   id: string;

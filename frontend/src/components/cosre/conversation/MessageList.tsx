@@ -43,7 +43,9 @@ import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
 import type { ChatExplainAsk, ChatTurn, CosreApprovalAnswer, CosreEndpointPick, CosreQuestion, CosreSuggestion } from '@/lib/types';
 import { approvalAnswer, approvalViews } from '@/lib/cosre/approval';
 import { ApprovalCard } from './ApprovalCard';
-import { StepList, scopeChangeNotes, scopeOf, stepsView, stopBadges } from '../evidence';
+import { StepList, scopeChangeNotes, scopeOf, stepsView, stopBadges, summarizeToken, type StepView } from '../evidence';
+import { EVIDENCE_STRINGS as ET } from '../evidence/strings';
+import type { CosreStepDirective } from '@/lib/types';
 import { TeamPickCard } from './TeamPickCard';
 import { showTeamPick } from './teamPick';
 import { EndpointPickCard } from './EndpointPickCard';
@@ -90,9 +92,13 @@ export interface MessageListProps {
   action?: { conversationId(): string | null; onResult(messageId: string, part: { type: string; id?: string; data?: unknown }): void };
   /** v0.10.2364 (I3) — öneri çipi tıkı (son, bitmiş cevap); yoksa çip çizilmez. */
   onSuggest?: (chip: CosreSuggestion) => void;
+  /** v0.10.2368 (I2) — adım menüsü (akış yokken); yoksa menü çizilmez. */
+  onStepRedirect?: (messageId: string, step: StepView, d: CosreStepDirective) => void;
+  /** v0.10.2368 (I2) — akan cevabı durdurup özet ister (son jetonlu adımın jetonu). */
+  onStopSummarize?: (token: string) => void;
 }
 
-export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps, onQuestion, statusLine, action, onSuggest }: MessageListProps) {
+export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps, onQuestion, statusLine, action, onSuggest, onStepRedirect, onStopSummarize }: MessageListProps) {
   const busy = status === 'submitted' || status === 'streaming';
   const last = messages.at(-1);
   const errText = status === 'error' && error ? error.message : undefined;
@@ -113,7 +119,8 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
           endpointPick={isLast && !busy ? endpointPick : undefined} compactSteps={compactSteps}
           onQuestion={isLast && !busy ? onQuestion : undefined} next={next}
           statusLine={isLast && busy ? statusLine : undefined} action={action}
-          onSuggest={isLast && status === 'ready' ? onSuggest : undefined} />;
+          onSuggest={isLast && status === 'ready' ? onSuggest : undefined}
+          onStepRedirect={!busy ? onStepRedirect : undefined} onStopSummarize={isLast && busy ? onStopSummarize : undefined} />;
       })}
       {/* İlk parça gelmeden (yalnız soru gitti): v1 bekleyiş göstergesi. */}
       {busy && last?.role !== 'assistant' && (last?.metadata?.explainAsk
@@ -132,7 +139,7 @@ function UserMessage({ m }: { m: CosreUIMessage }) {
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, next, statusLine, action, onSuggest }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, next, statusLine, action, onSuggest, onStepRedirect, onStopSummarize }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
   /** araç seti dilim 5 — kapsam değişimi notu (önceki cevaptan farklıysa). */
   scopeNote?: string;
@@ -153,6 +160,8 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   statusLine?: string | null;
   action?: MessageListProps['action'];
   onSuggest?: MessageListProps['onSuggest'];
+  onStepRedirect?: MessageListProps['onStepRedirect'];
+  onStopSummarize?: MessageListProps['onStopSummarize'];
 }) {
   const actionCard = useMemo(() => { // v0.10.2353
     const p = m.parts.findLast(x => x.type === 'data-action');
@@ -184,6 +193,7 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
     actionsExtra: <MessageNote exchangeId={xid} />,
   }), [xid]);
   const badges = useMemo(() => stopBadges(turn, steps.stop), [turn, steps.stop]);
+  const sumToken = live && onStopSummarize ? summarizeToken(steps) : undefined; // v0.10.2368 — I2
   // v1 showFollowups: bitmiş, hatasız, metinli son cevap.
   const showFu = !!followups && !turn.error && !!turn.text;
   // v0.10.2364 (I3) — sunucunun öneri çipleri varsa takip çiplerinin yerine geçer.
@@ -195,7 +205,12 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   return (
     <div data-cosre-message={m.id} className="contents">
       {scopeNote && <div className="cm-msg-note text-muted-foreground" data-cosre-scope-note="">{scopeNote}</div>}
-      <StepList view={steps} live={live} exchangeId={xid} badges={badges} compact={compactSteps} />
+      <StepList view={steps} live={live} exchangeId={xid} badges={badges} compact={compactSteps}
+        onRedirect={onStepRedirect ? (s, d) => onStepRedirect(m.id, s, d) : undefined} />
+      {live && onStopSummarize && sumToken && (
+        <Button variant="outline" size="xs" className="cm-msg cm-msg--ai self-start" data-cosre-stop-summarize=""
+          onClick={() => onStopSummarize(sumToken)}>{ET.stopSummarize}</Button>
+      )}
       <ChatBubbleSlotsContext.Provider value={slots}>
         <ChatBubble turn={bubbleTurn} onRetry={onRetry} shownFollowups={showFu ? turn.followups : undefined} />
       </ChatBubbleSlotsContext.Provider>

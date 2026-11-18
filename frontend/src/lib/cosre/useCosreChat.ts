@@ -84,6 +84,8 @@ export function createCosreChat(opts: CosreChatOptions = {}): CosreChatCore {
         ...(Array.isArray(body?.approvals) && body.approvals.length ? { approvals: body.approvals } : {}),
         // v0.10.2364 (I3) — öneri çipi tıkı {id, token}; niyet sunucuda jetondan yürür.
         ...(body?.suggestion ? { suggestion: body.suggestion } : {}),
+        // v0.10.2368 (I2) — adım yönlendirmesi / durdur-özetle {stepToken, directive}.
+        ...(body?.stepRedirect ? { stepRedirect: body.stepRedirect } : {}),
       },
     }),
   });

@@ -1,0 +1,32 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"data":{"i":1,"label":"yönlendirme: Trace · find traces — checkout yerine log"},"id":"s1","type":"data-step"}
+
+data: {"dynamic":true,"toolCallId":"s2","toolName":"search_logs","type":"tool-input-start"}
+
+data: {"dynamic":true,"input":{"args":{"service":"checkout","severity":"error"},"argsText":"{\"service\":\"checkout\",\"severity\":\"error\"}"},"toolCallId":"s2","toolName":"search_logs","type":"tool-input-available"}
+
+data: {"data":{"id":"s2","order":3,"signal":"log","spent":{"calls":1,"rounds":1},"state":"running","title":"Log · search logs — checkout","tool":"search_logs"},"id":"s2","type":"data-step"}
+
+data: {"dynamic":true,"output":{"bytes":48,"durationMs":80,"ok":true,"preview":"{\"logs\":[{\"body\":\"timeout\"},{\"body\":\"timeout\"}]}","truncated":false},"toolCallId":"s2","type":"tool-output-available"}
+
+data: {"data":{"bytes":48,"duration_ms":80,"kind":"text","ok":true,"text":"{\"logs\":[{\"body\":\"timeout\"},{\"body\":\"timeout\"}]}","tool":"search_logs"},"id":"s2","type":"data-tool-result"}
+
+data: {"data":{"id":"s2","order":3,"result":"2 satır · 80 ms","signal":"log","spent":{"calls":1,"rounds":1},"state":"done","title":"Log · search logs — checkout","token":"stp.sig4","tool":"search_logs"},"id":"s2","type":"data-step"}
+
+data: {"id":"t1","type":"text-start"}
+
+data: {"delta":"checkout loglarında iki zaman aşımı satırı var.","id":"t1","type":"text-delta"}
+
+data: {"id":"t1","type":"text-end"}
+
+data: {"messageMetadata":{"exchangeId":"x-rd-1"},"type":"message-metadata"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

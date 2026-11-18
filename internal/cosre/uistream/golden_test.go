@@ -94,7 +94,11 @@ var update = flag.Bool("update", false, "rewrite testdata/cosre/*.sse")
 // ui-stream-v1-suggestions (v0.10.2364, interaction-audit §6 I3) — araçlı
 // tur, followups'sız cevap, done'dan önce data-suggestions (iki çip, imzalı
 // niyet). Yalnız interaction = on iken.
-var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-approval-resume", "ui-stream-v1-stops", "ui-stream-v1-scope", "ui-stream-v1-question", "ui-stream-v1-linkcard", "ui-stream-v1-state", "ui-stream-v1-slot", "ui-stream-v1-status", "ui-stream-v1-alias", "ui-stream-v1-action", "ui-stream-v1-action-result", "ui-stream-v1-evidence", "ui-stream-v1-investigate", "ui-stream-v1-steps", "ui-stream-v1-suggestions"}
+//
+// ui-stream-v1-redirect (v0.10.2368, I2) — adımdan yönlendirme alışverişi:
+// yönlendirme etiket adımı, korunan iki adımdan süren sırayla (order 3) log
+// adımı, cevap. Yeni parça türü yok; yalnız interaction = on iken.
+var goldenFixtures = []string{"ui-stream-v1", "ui-stream-v1-error", "ui-stream-v1-closed", "ui-stream-v1-reset", "ui-stream-v1-reset2", "ui-stream-v1-approval", "ui-stream-v1-approval-resume", "ui-stream-v1-stops", "ui-stream-v1-scope", "ui-stream-v1-question", "ui-stream-v1-linkcard", "ui-stream-v1-state", "ui-stream-v1-slot", "ui-stream-v1-status", "ui-stream-v1-alias", "ui-stream-v1-action", "ui-stream-v1-action-result", "ui-stream-v1-evidence", "ui-stream-v1-investigate", "ui-stream-v1-steps", "ui-stream-v1-suggestions", "ui-stream-v1-redirect"}
 
 func fixtureDir() string { return filepath.Join("..", "..", "..", "testdata", "cosre") }
 

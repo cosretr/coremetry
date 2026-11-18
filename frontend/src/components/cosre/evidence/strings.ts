@@ -44,6 +44,23 @@ export const EVIDENCE_STRINGS = {
   runAria: 'çalışıyor',
   /** v0.10.2363 (I1) — katlı başlıkta çalışan adım. */
   runningStep: (title: string) => `şimdi: ${title}`,
+  /** v0.10.2368 (I2) — adım menüsü ve durdur-özetle. */
+  stepMenuAria: (title: string) => `Adım seçenekleri: ${title}`,
+  redirectContinue: 'Buradan devam et',
+  redirectMetric: 'Bunun yerine metriğe bak',
+  redirectTrace: "Bunun yerine trace'e bak",
+  redirectLog: "Bunun yerine log'a bak",
+  redirectSkip: 'Bu adımı atla',
+  stopSummarize: 'Durdur ve özetle',
+  /** Yönerge kullanıcı mesajı olarak görünür (karar 7). */
+  redirectAsk: {
+    continue: (t: string) => `${t} adımından devam et`,
+    metric: (t: string) => `${t} yerine metriklere bak`,
+    trace: (t: string) => `${t} yerine trace'lere bak`,
+    log: (t: string) => `${t} yerine loglara bak`,
+    skip: (t: string) => `${t} adımını atla`,
+    summarize: () => 'Durdur ve özetle',
+  },
 } as const;
 
 /** data-stop `reason` → tek satırlık etiket (8 neden). */

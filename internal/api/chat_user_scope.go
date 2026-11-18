@@ -220,6 +220,9 @@ type v2LoopPlan struct {
 	// Investigate — v0.10.2361 (S4): bu turda kanıt paketi koştu; istem
 	// bölümü (chat_investigate.go) yalnız o zaman eklenir.
 	Investigate bool
+	// Redirect — v0.10.2368 (I2, chat_step_redirect.go): yönlendirmenin araç
+	// ailesi; ilk normal tur yalnız onu görür. "" = yok.
+	Redirect string
 }
 
 func withV2LoopPlan(ctx context.Context, p *v2LoopPlan) context.Context {
@@ -254,7 +257,7 @@ func v2SubsetPlan(in stepInput, p stepPlan) stepPlan {
 }
 
 // v2Prepare — v2 zinciri: alt küme + ek önce, sonra tavan / yineleme ayarları.
-var v2Prepare = prepareChain(v2SubsetPlan, capTurnPlan, degenRetryPlan)
+var v2Prepare = prepareChain(v2SubsetPlan, redirectFamilyPlan, capTurnPlan, degenRetryPlan) // v0.10.2368 — I2 aile daraltması
 
 // applyUserScope — SAF: v2 çağrı argümanı. (1) v2'de düşen argümanlar
 // silinir; (2) kapsamlıysa ve şema `services` (dizi) alıyorsa ve model boş

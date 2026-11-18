@@ -13,7 +13,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { StepList } from './StepList';
 import { ScopeBadge } from './ScopeBadge';
-import type { StepsView } from './stepView';
+import { summarizeToken, type StepsView } from './stepView';
+import { canRedirect } from './StepCard';
 
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -173,5 +174,38 @@ describe('StepList — adım sözleşmesi (I1)', () => {
     expect(plain.querySelector('button')).toBeNull();
     expect(plain.textContent).toContain('belirti · hata %5');
     expect(host!.querySelector('[data-cosre-step="s3"] button')).not.toBeNull();
+  });
+});
+
+// v0.10.2368 (I2) — adım menüsü yalnız jetonlu, bitmiş adımda ve akış yokken;
+// durdur-özetle jetonu en son biten jetonlu adımınki.
+describe('StepList — yönlendirme menüsü (I2)', () => {
+  const view: StepsView = {
+    totalMs: 0,
+    steps: [
+      { id: 's1', i: 1, tool: '', kind: 'text', title: 'belirti', tags: [], plain: true, order: 1, token: 'tok1' },
+      { id: 's2', i: 2, tool: 'find_traces', kind: 'text', title: 'Trace bul', tags: [], order: 2, token: 'tok2' },
+      { id: 's3', i: 3, tool: 'search_logs', kind: 'text', title: 'Log', tags: [], order: 3 },
+      { id: 's4', i: 4, tool: 'query_metrics', kind: 'running', title: 'Metrik', tags: [], order: 4, token: 'tok4' },
+    ],
+  };
+  const noop = () => {};
+  it('jetonlu bitmiş adımda menü; jetonsuz / çalışan / akışta yok', async () => {
+    await draw(<StepList view={view} live={false} onRedirect={noop} />);
+    await click(host!.querySelector('[data-cosre-steps] > button'));
+    const menus = [...host!.querySelectorAll('[data-cosre-step-menu]')].map(b => b.closest('[data-cosre-step]')!.getAttribute('data-cosre-step'));
+    expect(menus).toEqual(['s1', 's2']);
+    await draw(<StepList view={view} live onRedirect={noop} />);
+    expect(host!.querySelector('[data-cosre-step-menu]')).toBeNull();
+  });
+  it('kanca yokken menü yok (kapalı = aynı işaretleme)', async () => {
+    await draw(<StepList view={view} live />);
+    expect(host!.querySelector('[data-cosre-step-menu]')).toBeNull();
+    expect(canRedirect(view.steps[1], false)).toBe(false);
+    expect(canRedirect(view.steps[3], true)).toBe(false);
+  });
+  it('summarizeToken: en son biten jetonlu adım', () => {
+    expect(summarizeToken(view)).toBe('tok2');
+    expect(summarizeToken({ totalMs: 0, steps: [] })).toBeUndefined();
   });
 });

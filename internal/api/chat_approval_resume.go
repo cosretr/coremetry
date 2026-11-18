@@ -384,6 +384,9 @@ type chatApprovalCont struct {
 	// sg — v0.10.2364 (I3): öneri çipi tıkı; doluysa `on` kademeleri atlatır
 	// ama onay devamı yürümez (resume() false; chat_suggestions.go).
 	sg *chatSuggestionCont
+	// rd — v0.10.2368 (I2): adım yönlendirmesi; doluysa kademeler atlanır,
+	// onay devamı yürümez (chat_step_redirect.go).
+	rd *chatRedirectCont
 }
 
 // newChatApprovalCont — SAF: yalnız v2 ve en az bir cevap; ilk cevap işlenir

@@ -1,0 +1,7 @@
+{"kind": "step", "payload": {"label": "yönlendirme: Trace · find traces — checkout yerine log", "i": 1}}
+{"kind": "step", "payload": {"i": 2, "tool": "search_logs", "args": "{\"service\":\"checkout\",\"severity\":\"error\"}", "argsJson": {"service": "checkout", "severity": "error"}, "phase": "Log"}}
+{"kind": "step-state", "payload": {"id": "s2", "order": 3, "title": "Log · search logs — checkout", "tool": "search_logs", "signal": "log", "state": "running", "spent": {"calls": 1, "rounds": 1}}}
+{"kind": "step-result", "payload": {"i": 2, "tool": "search_logs", "ok": true, "preview": "{\"logs\":[{\"body\":\"timeout\"},{\"body\":\"timeout\"}]}", "truncated": false, "bytes": 48, "durationMs": 80}}
+{"kind": "step-state", "payload": {"id": "s2", "order": 3, "title": "Log · search logs — checkout", "tool": "search_logs", "signal": "log", "state": "done", "result": "2 satır · 80 ms", "spent": {"calls": 1, "rounds": 1}, "token": "stp.sig4"}}
+{"kind": "answer", "payload": {"text": "checkout loglarında iki zaman aşımı satırı var.", "exchangeId": "x-rd-1"}}
+{"kind": "done", "payload": {"ok": true}}

@@ -10,10 +10,12 @@
 //     (aynı cosre_signals kaydı: detail "s<i>", cevabın exchangeId'si).
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, Loader2, Minus, X } from 'lucide-react';
+import { Check, ChevronRight, Loader2, Minus, MoreHorizontal, X } from 'lucide-react';
 import { Badge } from '@/components/shadcn/badge';
 import { Button } from '@/components/shadcn/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/shadcn/collapsible';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/coremetry/overlay';
+import type { CosreStepDirective } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
 import { cn } from '@/lib/cn';
 import { isPlainLeftClick } from '@/lib/a11y';
@@ -97,10 +99,45 @@ function lineOf(v: StepView): string | undefined {
   return v.result ?? v.subtitle;
 }
 
-export function StepCard({ v, exchangeId }: { v: StepView; exchangeId?: string }) {
+/** v0.10.2368 (I2) — menünün yönergeleri (sıra = görünüm). */
+const REDIRECT_ITEMS: readonly { d: Exclude<CosreStepDirective, 'summarize'>; label: string }[] = [
+  { d: 'continue', label: T.redirectContinue },
+  { d: 'metric', label: T.redirectMetric },
+  { d: 'trace', label: T.redirectTrace },
+  { d: 'log', label: T.redirectLog },
+  { d: 'skip', label: T.redirectSkip },
+];
+
+/** SAF: menü çizilir mi — jetonlu (Redis var), bitmiş adım ve yönlendirme kancası. */
+export function canRedirect(v: StepView, on: boolean): boolean {
+  return on && !!v.token && v.kind !== 'running';
+}
+
+/** v0.10.2368 (I2) — adım menüsü: buradan devam / aile değiştir / atla. */
+function StepMenu({ v, onRedirect }: { v: StepView; onRedirect: (v: StepView, d: CosreStepDirective) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-xs" className="mr-2 shrink-0 text-muted-foreground" aria-label={T.stepMenuAria(v.title)} data-cosre-step-menu="">
+          <MoreHorizontal aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {REDIRECT_ITEMS.map(({ d, label }, i) => (<span key={d} className="contents">
+          {i === REDIRECT_ITEMS.length - 1 && <DropdownMenuSeparator />}
+          <DropdownMenuItem data-directive={d} onSelect={() => onRedirect(v, d)}>{label}</DropdownMenuItem>
+        </span>))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function StepCard({ v, exchangeId, onRedirect }: { v: StepView; exchangeId?: string; onRedirect?: (v: StepView, d: CosreStepDirective) => void }) {
   const [open, setOpen] = useState(false);
   const muted = v.kind === 'skipped';
   const line = lineOf(v);
+  const menu = onRedirect && canRedirect(v, true) ? <StepMenu v={v} onRedirect={onRedirect} /> : null;
   if (v.plain) {
     // v0.10.2363 (I1) — araçsız sözleşme adımı (S4 paketi): açılmayan tek satır, aynı sınıflar.
     return (
@@ -112,25 +149,29 @@ export function StepCard({ v, exchangeId }: { v: StepView; exchangeId?: string }
           {line && <span className="text-muted-foreground"> · {line}</span>}
         </span>
         <StepSignal v={v} />
+        {menu}
       </div>
     );
   }
+  const trigger = (
+    <CollapsibleTrigger asChild>
+      <Button variant="ghost" size="sm" aria-expanded={open}
+        className={cn('h-auto w-full justify-start gap-2 rounded-none px-3 py-2 text-left font-normal', muted && 'text-muted-foreground', menu && 'min-w-0 flex-1')}>
+        <StatusIcon kind={v.kind} />
+        <span className="min-w-0 flex-1 truncate">
+          <span className="font-medium">{v.title}</span>
+          {line && <span className="text-muted-foreground"> · {line}</span>}
+        </span>
+        <StepSignal v={v} />
+        <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">{meta(v)}</span>
+        <ChevronRight className={cn('size-3 text-muted-foreground transition-transform', open && 'rotate-90')} aria-hidden />
+      </Button>
+    </CollapsibleTrigger>
+  );
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border-t border-border first:border-t-0"
       data-cosre-step={v.id} data-kind={v.kind} data-evidence-ref={v.evidenceRef} role="listitem">
-      <CollapsibleTrigger asChild>
-        <Button variant="ghost" size="sm" aria-expanded={open}
-          className={cn('h-auto w-full justify-start gap-2 rounded-none px-3 py-2 text-left font-normal', muted && 'text-muted-foreground')}>
-          <StatusIcon kind={v.kind} />
-          <span className="min-w-0 flex-1 truncate">
-            <span className="font-medium">{v.title}</span>
-            {line && <span className="text-muted-foreground"> · {line}</span>}
-          </span>
-          <StepSignal v={v} />
-          <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">{meta(v)}</span>
-          <ChevronRight className={cn('size-3 text-muted-foreground transition-transform', open && 'rotate-90')} aria-hidden />
-        </Button>
-      </CollapsibleTrigger>
+      {menu ? <div className="flex items-center">{trigger}{menu}</div> : trigger}
       <CollapsibleContent>
         <div className="flex min-w-0 flex-col gap-2 pr-3 pb-3 pl-9 text-sm">
           <div className="flex flex-wrap gap-1">

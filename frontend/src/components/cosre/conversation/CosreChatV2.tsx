@@ -51,7 +51,7 @@ import { prevWikiRefs } from '@/components/ai/chatWikiRefs';
 import { TraceContextStrip } from '@/components/ai/TraceContextStrip';
 import { getRaw } from '@/lib/storage';
 import { syncChatParam } from '@/lib/chatUrl';
-import type { AiConversationSummary, ChatTurn, CosreApprovalAnswer, CosreEndpointPick, CosreSuggestion, CosreSuggestionPick } from '@/lib/types';
+import type { AiConversationSummary, ChatTurn, CosreApprovalAnswer, CosreEndpointPick, CosreStepDirective, CosreStepRedirect, CosreSuggestion, CosreSuggestionPick } from '@/lib/types';
 import { noteSuggestionsIgnored } from './SuggestionChips';
 import { useChatHistory } from '@/components/ai/useChatHistory';
 import { cosreFullPageHref } from '@/components/ai/drawerFullPage';
@@ -86,7 +86,8 @@ import { CosreSheet } from './CosreSheet';
 import { CosreAliasPanel } from './CosreAliasPanel';
 import { CosrePageLayout } from '../page/CosrePageLayout';
 import { MessageList } from './MessageList';
-import { ScopeBadge, latestScope } from '../evidence';
+import { ScopeBadge, latestScope, type StepView } from '../evidence';
+import { EVIDENCE_STRINGS as ET } from '../evidence/strings';
 import { cosreRequestContext } from './requestContext';
 import { COSRE_V2_STRINGS as T } from './strings';
 
@@ -164,7 +165,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
   // v0.10.1737 — `decorate`: kart gönderimi bağlamı (ör. "Endpoint seç" İncele) son katman olarak ekler.
   // v0.10.2104 (D5) — `meta`: kullanıcı turunun ek künyesi (soru kartı tıkının clarifyOption'ı).
   // v0.10.2364 (I3) — `meta.suggestion`: öneri çipi tıkı gövdeye (context'in yanına) gider.
-  const send = (text: string, so?: ChatSendOpts, decorate?: (c: Record<string, unknown> | undefined) => Record<string, unknown> | undefined, meta?: { clarifyOption?: string; suggestion?: CosreSuggestionPick }) => {
+  const send = (text: string, so?: ChatSendOpts, decorate?: (c: Record<string, unknown> | undefined) => Record<string, unknown> | undefined, meta?: { clarifyOption?: string; suggestion?: CosreSuggestionPick; stepRedirect?: CosreStepRedirect }) => {
     const c = live.current;
     const q = text.trim();
     if (!q) return;
@@ -179,7 +180,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
       ...(so?.window ? { window: so.window } : {}),
       ...(meta?.clarifyOption ? { clarifyOption: meta.clarifyOption } : {}),
     };
-    const body = { ...(context ? { context } : {}), ...(meta?.suggestion ? { suggestion: meta.suggestion } : {}) };
+    const body = { ...(context ? { context } : {}), ...(meta?.suggestion ? { suggestion: meta.suggestion } : {}), ...(meta?.stepRedirect ? { stepRedirect: meta.stepRedirect } : {}) };
     const go = () => c.sendMessage({ text: q, ...(Object.keys(metadata).length ? { metadata } : {}) }, Object.keys(body).length ? { body } : undefined);
     if (c.busy) void c.stop().then(go);
     else void go();
@@ -278,6 +279,19 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
   const askSuggestion = (chip: CosreSuggestion) => {
     composer.setInput(''); composer.setChosen([]); pinBottom();
     send(chip.label, undefined, undefined, { suggestion: { id: chip.id, token: chip.token } });
+  };
+  // v0.10.2368 (I2) — adım menüsü: hedef cevaptan sonraki mesajlar düşer (yeni dal;
+  // hedefin adımları görünür kalır), yönerge kullanıcı mesajı + stepRedirect gövdesi.
+  const redirectStep = (messageId: string, step: StepView, d: CosreStepDirective) => {
+    if (!step.token || live.current.busy) return;
+    setMessages(ms => { const i = ms.findIndex(x => x.id === messageId); return i < 0 ? ms : ms.slice(0, i + 1); });
+    pinBottom();
+    send(ET.redirectAsk[d](step.title), undefined, undefined, { stepRedirect: { stepToken: step.token, directive: d } });
+  };
+  // v0.10.2368 (I2) — "Durdur ve özetle": akış durur, sunucu saklı adım özetlerinden kısa özet yazar.
+  const stopSummarize = (token: string) => {
+    pinBottom();
+    send(ET.redirectAsk.summarize(), undefined, undefined, { stepRedirect: { stepToken: token, directive: 'summarize' } });
   };
   // "Bu trace'i açıkla" (bağlam çipi): v1 ile aynı niyet (context.explainAsk).
   const askExplain = (a: ChatExplainAsk) => {
@@ -452,7 +466,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
               <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
                 onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} endpointPick={endpointPick}
                 compactSteps={isPage || undefined} onQuestion={answerQuestion} statusLine={statusLine} action={actionHooks}
-                onSuggest={askSuggestion} />
+                onSuggest={askSuggestion} onStepRedirect={redirectStep} onStopSummarize={stopSummarize} />
             )}
           </div>
         </div>

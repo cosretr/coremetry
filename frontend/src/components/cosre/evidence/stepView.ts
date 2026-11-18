@@ -60,6 +60,8 @@ export interface StepView {
   signal?: CosreStepSignal;
   result?: string;
   evidenceRef?: string;
+  /** v0.10.2368 (I2) — yönlendirme jetonu (Redis yoksa yok → menü çizilmez). */
+  token?: string;
   /** Araçsız sözleşme adımı (S4 paketi): tek satır, açılmaz. */
   plain?: boolean;
 }
@@ -371,11 +373,21 @@ export function stepsView(parts: readonly Part[]): StepsView {
 
 const CONTRACT_KIND: Record<CosreStepState, StepKind> = { running: 'running', done: 'text', failed: 'error', skipped: 'skipped' };
 
-function contractFields(c: CosreStepContract): Pick<StepView, 'order' | 'signal' | 'result' | 'evidenceRef'> {
+function contractFields(c: CosreStepContract): Pick<StepView, 'order' | 'signal' | 'result' | 'evidenceRef' | 'token'> {
   return {
     order: c.order,
     ...(c.signal ? { signal: c.signal } : {}),
     ...(c.result ? { result: c.result } : {}),
     ...(c.evidenceRef ? { evidenceRef: c.evidenceRef } : {}),
+    ...(c.token ? { token: c.token } : {}),
   };
+}
+
+/** v0.10.2368 (I2) — durdur-özetle jetonu: en son biten jetonlu adımınki (yoksa undefined → kontrol çizilmez). */
+export function summarizeToken(v: StepsView): string | undefined {
+  let best: StepView | undefined;
+  for (const s of v.steps) {
+    if (s.token && s.kind !== 'running' && (!best || (s.order ?? 0) >= (best.order ?? 0))) best = s;
+  }
+  return best?.token;
 }
