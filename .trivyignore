@@ -16,3 +16,6 @@ CVE-2026-39883
 # adımındaki süreli istisnanın ikizi (ci.yml, operatör onayı 2026-11-17);
 # tarih geçince Trivy yeniden işaretler.
 GHSA-fc5q-39xc-vjpf exp:2026-12-01
+# CVE-2026-112366 — aynı picomatch ReDoS duyurusunun CVE kimliği (GHSA-fc5q-39xc-vjpf
+# ile aynı istisna, aynı süre; operatör onayı 2026-11-17).
+CVE-2026-112366 exp:2026-12-01
