@@ -397,9 +397,9 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 			if !j.Fire {
 				continue
 			}
-			if j.Silent && cfg.DetectorOn(detServiceSilent) && !off && d.dayCap(detServiceSilent, cfg, now) {
+			if j.Silent && cfg.DetectorOn(detServiceSilent) && !off && (deps.extends(detServiceSilent, svc, part) || d.dayCap(detServiceSilent, cfg, now)) {
 				evs = append(evs, d.event(detServiceSilent, svc, part, j, last, cfg, class, ingestLagMs, nil))
-			} else if !j.Silent && cfg.DetectorOn(detLogVolume) && (j.Direction == "up" || !off) && logVolumeImpact(j) && d.dayCap(detLogVolume, cfg, now) {
+			} else if !j.Silent && cfg.DetectorOn(detLogVolume) && (j.Direction == "up" || !off) && logVolumeImpact(j) && (deps.extends(detLogVolume, svc, part) || d.dayCap(detLogVolume, cfg, now)) {
 				evs = append(evs, d.event(detLogVolume, svc, part, j, last, cfg, class, ingestLagMs, nil))
 			}
 		case partError:
@@ -407,7 +407,7 @@ func (d *LogRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 				continue
 			}
 			j := judge(curOf(k), base[k], cfg, true)
-			if !j.Fire || !d.dayCap(detErrorRate, cfg, now) {
+			if !j.Fire || !(deps.extends(detErrorRate, svc, part) || d.dayCap(detErrorRate, cfg, now)) {
 				continue
 			}
 			ev := d.event(detErrorRate, svc, part, j, last, cfg, class, ingestLagMs, infBySvc[svc])

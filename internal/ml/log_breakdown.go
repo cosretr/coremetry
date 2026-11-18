@@ -167,7 +167,7 @@ func (d *LogBreakdown) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 		}
 		for svc, rows := range bySvc {
 			for _, p := range podOutliers(rows, cfg) {
-				if !d.dayCap(detPodOutlier, cfg, now) {
+				if !deps.extends(detPodOutlier, svc, "pod|"+p.Pod) && !d.dayCap(detPodOutlier, cfg, now) {
 					break
 				}
 				evs = append(evs, d.podEvent(svc, p, last, to, cfg))
@@ -207,7 +207,7 @@ func (d *LogBreakdown) codes(ctx context.Context, deps Deps, cfg chstore.MLConfi
 	var srows []chstore.MLSeriesRow
 	for _, r := range rows {
 		srows = append(srows, chstore.MLSeriesRow{Signal: chstore.MLSignalLog, Service: r.Service, Part: codePartPrefix + r.Code, Bucket: last, BucketSec: uint32(cfg.BucketSec), Count: float64(r.Count)})
-		if rareCode(r.Service, r.Code, r.Count, first, svcOldest, now, cfg) && d.dayCap(detRareErrorCode, cfg, now) {
+		if rareCode(r.Service, r.Code, r.Count, first, svcOldest, now, cfg) && (deps.extends(detRareErrorCode, r.Service, codePartPrefix+r.Code) || d.dayCap(detRareErrorCode, cfg, now)) {
 			ev := mergeEvidence("", map[string]any{"field": d.codeField, "lookbackDays": 14, "count": r.Count, "dwell": cfg.DwellBuckets, "bucketSec": cfg.BucketSec})
 			evs = append(evs, chstore.MLEvent{ID: chstore.MLEventID(detRareErrorCode, r.Service, codePartPrefix+r.Code), Detector: detRareErrorCode,
 				Signal: chstore.MLSignalLog, Stage: chstore.MLStageShadow, Service: r.Service, Level: "error", Code: r.Code,

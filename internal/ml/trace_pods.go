@@ -181,7 +181,7 @@ func (d *TracePods) pods(ctx context.Context, deps Deps, cfg chstore.MLConfig, n
 			}
 		}
 		emit := func(svc, measure string, p podJudgement) {
-			if !d.take(detTracePodOutlier, cfg, now) {
+			if !deps.extends(detTracePodOutlier, svc, "pod|"+p.Pod+"|"+measure) && !d.take(detTracePodOutlier, cfg, now) {
 				return
 			}
 			evs = append(evs, chstore.MLEvent{ID: chstore.MLEventID(detTracePodOutlier, svc, "pod|"+p.Pod+"|"+measure), Detector: detTracePodOutlier,

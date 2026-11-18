@@ -358,7 +358,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	}
 	var evs []chstore.MLEvent
 	if cfg.DetectorOn(detSvcErrorRate) {
-		for _, ev := range d.svcErrorEvents(series, base, last, cfg, class, now) {
+		for _, ev := range d.svcErrorEvents(deps, series, base, last, cfg, class, now) {
 			if fi, ok := svcFam[ev.Service]; ok && famOf[fi] != nil {
 				ev.Evidence = mergeEvidence(ev.Evidence, famOf[fi]) // v0.10.2221 (H5)
 			}
@@ -377,7 +377,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 			continue
 		}
 		if cfg.DetectorOn(detThroughputDrop) && !off {
-			if j := judge(curOf(k), cntBase, cfg, false); j.Fire && j.Direction == "down" && d.dayCap(detThroughputDrop, cfg, now) {
+			if j := judge(curOf(k), cntBase, cfg, false); j.Fire && j.Direction == "down" && (deps.extends(detThroughputDrop, svc, route) || d.dayCap(detThroughputDrop, cfg, now)) {
 				ev := d.event(detThroughputDrop, svc, route, j, last, cfg, class)
 				if src := cntOf[chstore.MLSeriesKey(svc, route)]; src != nil {
 					ev.Evidence = mergeEvidence(ev.Evidence, src) // v0.10.2222 (H6)
@@ -397,7 +397,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 			rate := series[k][last.Unix()]
 			affected := slowAffected(j.Observed, rate, cfg.BucketSec)
 			jp := judge(curOf(pk), base[pk], c2, true)
-			if m := opLatencyMeasure(j, affected, jp, rate, cfg); m != "" && d.dayCap(detOpLatency, cfg, now) {
+			if m := opLatencyMeasure(j, affected, jp, rate, cfg); m != "" && (deps.extends(detOpLatency, svc, route) || d.dayCap(detOpLatency, cfg, now)) {
 				var ev chstore.MLEvent
 				if m == "p95" {
 					ev = d.event(detOpLatency, svc, route, jp, last, cfg, class)
@@ -422,7 +422,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 			// oran serisi: taban hacmi eşiği oran için anlamsız → geçici olarak sıfırla
 			c2 := cfg
 			c2.MinBaselineRate = 0
-			if j := judge(curOf(ek), base[ek], c2, true); j.Fire && j.Observed >= 0.01 && d.dayCap(detOpErrorRate, cfg, now) {
+			if j := judge(curOf(ek), base[ek], c2, true); j.Fire && j.Observed >= 0.01 && (deps.extends(detOpErrorRate, svc, route) || d.dayCap(detOpErrorRate, cfg, now)) {
 				ev := d.event(detOpErrorRate, svc, route, j, last, cfg, class)
 				if src := errOf[chstore.MLSeriesKey(svc, route)]; src != nil {
 					ev.Evidence = mergeEvidence(ev.Evidence, src) // v0.10.2221 (H5)

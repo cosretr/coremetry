@@ -168,10 +168,10 @@ func runChangePoint(ctx context.Context, deps Deps, cfg chstore.MLConfig, now ti
 			continue
 		}
 		r := cusum(pts, ref, slotOf, step, h)
-		if !r.Fire || (r.Direction == "down" && off) || !capOK() {
+		svc, part := splitKey(k)
+		if !r.Fire || (r.Direction == "down" && off) || !(deps.extends(tg.detector, svc, part) || capOK()) {
 			continue
 		}
-		svc, part := splitKey(k)
 		level, code := tg.fields(part)
 		evm := map[string]any{"changeAt": r.At, "cusum": r.S, "afterMean": r.After, "refMean": r.Ref, "dayClass": class,
 			"windowHours": int(cpWindow.Hours()), "part": part, "bucketSec": cfg.BucketSec}

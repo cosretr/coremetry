@@ -352,7 +352,7 @@ func (d *Dependency) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, 
 		if wantLat {
 			pk := chstore.MLSeriesKey(svc, stem+"|p95")
 			if cur, ok := dwellWindow(series[pk], dwellStart, last.Unix(), int64(cfg.BucketSec), false); ok {
-				if j := judge(cur, base[pk], cfg, true); j.Fire && d.take(detDependencyLatency, cfg, now) {
+				if j := judge(cur, base[pk], cfg, true); j.Fire && (deps.extends(detDependencyLatency, svc, target) || d.take(detDependencyLatency, cfg, now)) {
 					evs = append(evs, ev(detDependencyLatency, j, "ms", nil))
 				}
 			}
@@ -360,7 +360,7 @@ func (d *Dependency) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, 
 		ek := chstore.MLSeriesKey(svc, stem+"|err_ratio")
 		if en, measured := errNow[ek]; wantErr && measured {
 			if cur, ok := dwellWindow(series[ek], dwellStart, last.Unix(), int64(cfg.BucketSec), false); ok {
-				if j := judge(cur, base[ek], c2, true); depErrFire(j, en, cfg.BucketSec) && d.take(detDependencyErrorRate, cfg, now) {
+				if j := judge(cur, base[ek], c2, true); depErrFire(j, en, cfg.BucketSec) && (deps.extends(detDependencyErrorRate, svc, target) || d.take(detDependencyErrorRate, cfg, now)) {
 					evs = append(evs, ev(detDependencyErrorRate, j, "ratio", map[string]any{"errors": math.Round(en * float64(cfg.BucketSec)),
 						"calls": math.Round(series[k][last.Unix()] * float64(cfg.BucketSec))}))
 				}

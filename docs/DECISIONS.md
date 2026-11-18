@@ -14946,3 +14946,8 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 ## 2026-11-18 — v0.10.2357 — ML olay kartı: grafik merdiven değil, düz zaman serisi
 
 - Operatör: "anomali grafiklerinde neden merdiven gibi; normal timeseries chart gibi bekliyorum (hata oranı, süre, metrik, log artışı)". Kayıt grafiği (`MLRecordChart`) ölçülen ve hacim serilerini `stepped` çiziyordu; artık sayfalardaki zaman serisi grafikleri gibi düz çizgi (kova noktaları işaretli, beklenen bant ve bant dışı bölge aynen). Veri ve kova adımı değişmedi.
+## 2026-11-18 — v0.10.2358 — ML olayı: koşul sürerken kapanmaz (consumer lag)
+
+- Operator-reported: `metric_kafka|consumer_lag#<topic>` olayı "Bitti · 3 sa 2 dk" dedi, lag hâlâ tekdüze artıyordu. Kök neden: dedektörlerin günlük tavanı (`DailyEventCap`, "günlük YENİ olay") her tetiklenen TİKTE harcanıyordu; topic başına seri ile tavan öğleden sonra doluyor, açık olayın adayı da düşüyor, koşu 3 tik görülmeyince (`closeStale`) kapanıyordu.
+- Kural: açık koşuyu (taban kimlik `MLEventID`, `tracker.openRun`) uzatan aday tavan harcamaz (`Deps.extends`, recorder verir); tavan yalnız yeni olay sayar. Aynı hata tüm tavanlı dedektörlerde vardı (log/trace RED, svc/op hata oranı, şablon, hacim, bağımlılık, pod aykırısı, change point, yeni şablon) — hepsi aynı kapıdan geçer. Batch iadesi uzatmayı iade etmez.
+- Bilinçli sınırlar: rejim kuralı (`RegimeHours`, varsayılan 6 sa) ve lider değişimi koşu sıfırlaması aynen; eksik veri (kova yok / VM hata) bugün de 3 tik sonra kapatır — ayrı iş.

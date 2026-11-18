@@ -194,7 +194,7 @@ func svcErrScore(z, criticalZ float64) float64 { return math.Max(math.Abs(z), cr
 
 // svcErrorEvents — TraceRED tikinin servis düzeyi adımı: series'teki
 // `*|svc_err_ratio` serileri + taban → olaylar (günlük tavan dahil).
-func (d *TraceRED) svcErrorEvents(series map[string]map[int64]float64, base map[string][]float64, last time.Time, cfg chstore.MLConfig, class string, now time.Time) []chstore.MLEvent {
+func (d *TraceRED) svcErrorEvents(deps Deps, series map[string]map[int64]float64, base map[string][]float64, last time.Time, cfg chstore.MLConfig, class string, now time.Time) []chstore.MLEvent {
 	step := int64(cfg.BucketSec)
 	from := last.Unix() - int64(svcErrDwell-1)*step
 	var out []chstore.MLEvent
@@ -208,7 +208,7 @@ func (d *TraceRED) svcErrorEvents(series map[string]map[int64]float64, base map[
 			continue // eksik kova (scrape boşluğu / err sorgusu atlandı) ≠ 0
 		}
 		v := svcErrorRateVerdict(cur, base[k], base[chstore.MLSeriesKey(svc, tracePart(svcRoute, svcMeasureCount))], cfg.MinBaselineSamples)
-		if !v.Fire || !d.dayCap(detSvcErrorRate, cfg, now) {
+		if !v.Fire || !(deps.extends(detSvcErrorRate, svc, "") || d.dayCap(detSvcErrorRate, cfg, now)) {
 			continue
 		}
 		j := Judgement{Fire: true, Direction: "up", Z: svcErrScore(v.Z, cfg.CriticalZ), Median: v.Median, MAD: v.MAD, Observed: v.Observed}

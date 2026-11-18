@@ -319,7 +319,7 @@ func (d *Volume) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, now 
 		}
 		j := judgeVolume(volInput{Spans: spans[n-volDwell:], Entries: entries[n-volDwell:], HourSpans: hour,
 			BaseRatio: base[chstore.MLSeriesKey(svc, volPartRatio)], BaseSpan: base[chstore.MLSeriesKey(svc, volPartSpans)], Z: cfg.CriticalZ})
-		if !j.Fire || !d.dayCap(cfg, now) {
+		if !j.Fire || !(deps.extends(detTelemetryVolume, svc, "") || d.dayCap(cfg, now)) {
 			continue
 		}
 		vals := spans

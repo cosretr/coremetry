@@ -65,7 +65,7 @@ func (d *NewTemplates) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 	}
 	var evs []chstore.MLEvent
 	for _, a := range found {
-		if a.Service == "" || !d.take(detNewTemplate, cfg, now) {
+		if a.Service == "" || !(deps.extends(detNewTemplate, a.Service, newTplPartPrefix+a.TemplateID) || d.take(detNewTemplate, cfg, now)) {
 			continue
 		}
 		evs = append(evs, newTemplateMLEvent(a, cfg, now))

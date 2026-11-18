@@ -48,6 +48,16 @@ type Deps struct {
 	ESLeft func() int
 	// meter — v0.10.1812 tik ölçümü (tick_meter.go); nil güvenli.
 	meter *tickMeter
+	// openRun — v0.10.2358: taban kimliğin (MLEventID) açık koşusu var mı;
+	// nil güvenli (= yok). Günlük tavan (DailyEventCap) YENİ olay sayar.
+	openRun func(baseID string) bool
+}
+
+// extends — v0.10.2358: aday açık bir olayı mı uzatıyor? Uzatma günlük
+// tavanı harcamaz: tavan tik başına tüketilince (200 tik ≈ 16 sa / 5 dk)
+// koşul sürerken aday düşüyor, koşu 3 tik sonra "bitti" kapanıyordu.
+func (d Deps) extends(det, svc, part string) bool {
+	return d.openRun != nil && d.openRun(chstore.MLEventID(det, svc, part))
 }
 
 // observeDropped — ES servis terms tavanı dışında kalan servis (tik ölçümü).
@@ -183,7 +193,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	vmAtStart := global.vmQueries.Load()
 	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Background: ctx, Backoff: r.backoff, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) },
 		ObserveVM: func(d time.Duration) { global.observeVM(d.Milliseconds()) },
-		ESLeft:    func() int { return cfg.MaxESQueriesPerTick - int(global.esQueries.Load()-esAtStart) }}
+		ESLeft:    func() int { return cfg.MaxESQueriesPerTick - int(global.esQueries.Load()-esAtStart) },
+		openRun:   func(id string) bool { return r.runs.openRun(id, start, time.Duration(cfg.TickSec)*time.Second) }}
 	var firstErr error
 	var written int64
 	var all []chstore.MLEvent
@@ -209,6 +220,9 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		evs, cut := batchFilter(evs, isBatch, loadParts)
 		if rf, ok := det.(capRefunder); ok {
 			for _, c := range cut {
+				if deps.openRun(c.ID) { // uzatma tavan harcamadı (extends)
+					continue
+				}
 				rf.refundCap(c.Detector)
 			}
 		}

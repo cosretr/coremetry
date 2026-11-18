@@ -411,6 +411,12 @@ func vmFamilyCheck(ctx context.Context, deps Deps, cfg chstore.MLConfig, fam str
 	return chk
 }
 
+// admitMetric — v0.10.2358: tetiklenen metrik adayı yazılır mı? Açık olayı
+// uzatan aday günlük tavanı harcamaz; tavan yalnız YENİ olay sayar.
+func admitMetric(deps Deps, fam, svc, part string, dayCap func(fam string) bool) bool {
+	return deps.extends(fam, svc, part) || dayCap(fam)
+}
+
 // evalMetricSeries — VM ve Thanos metrik yollarının ortak sonu: seri yazımı,
 // dwell geçmişi (CH), taban, karar, olay. evidence: anahtar → ek kanıt.
 func evalMetricSeries(ctx context.Context, deps Deps, cfg chstore.MLConfig, last, now time.Time, series map[string]map[int64]float64,
@@ -458,7 +464,7 @@ func evalMetricSeries(ctx context.Context, deps Deps, cfg chstore.MLConfig, last
 		if !j.Fire || (dir == "down" && j.Direction != "down") || (j.Direction == "down" && off) {
 			continue
 		}
-		if !dayCap(fam) {
+		if !admitMetric(deps, fam, svc, part, dayCap) {
 			continue
 		}
 		ev := map[string]any{"source": "vm", "expr": part, "dayClass": class, "mad": j.MAD, "dwell": cfg.DwellBuckets, "bucketSec": cfg.BucketSec}

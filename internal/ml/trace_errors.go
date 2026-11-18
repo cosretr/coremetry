@@ -220,7 +220,7 @@ func (d *TraceErrors) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig,
 		// MV eksiksiz: pencerede satırı olmayan kova = 0 hata
 		cur, _ := dwellWindow(byB, from.Unix(), last.Unix(), int64(cfg.BucketSec), true)
 		j := judgeErrCount(cur, padErrBaseline(base[k], measured), cfg)
-		if j.Fire && d.dayCap(cfg, now) {
+		if j.Fire && (deps.extends(detTraceErrorCount, svc, op) || d.dayCap(cfg, now)) {
 			s := samples[k]
 			if len(s) > traceErrSampleCap {
 				s = s[:traceErrSampleCap]

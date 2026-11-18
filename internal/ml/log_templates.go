@@ -298,7 +298,7 @@ func (d *LogTemplates) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 		if !ok {
 			continue
 		}
-		if !rareQuiet && cfg.DetectorOn(detRareTemplate) && rareJudge(cur, base[k], cfg) && d.dayCap(detRareTemplate, cfg, now) {
+		if !rareQuiet && cfg.DetectorOn(detRareTemplate) && rareJudge(cur, base[k], cfg) && (deps.extends(detRareTemplate, f.service, f.part()) || d.dayCap(detRareTemplate, cfg, now)) {
 			evs = append(evs, tplEvent(detRareTemplate, f, Judgement{Observed: cur[len(cur)-1], Z: cfg.CriticalZ, Direction: "up"}, last, cfg, class))
 			continue
 		}
@@ -306,7 +306,7 @@ func (d *LogTemplates) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 			continue
 		}
 		j := judge(cur, base[k], c2, true)
-		if j.Fire && j.Median >= 1 && d.dayCap(detTemplateSpike, cfg, now) {
+		if j.Fire && j.Median >= 1 && (deps.extends(detTemplateSpike, f.service, f.part()) || d.dayCap(detTemplateSpike, cfg, now)) {
 			evs = append(evs, tplEvent(detTemplateSpike, f, j, last, cfg, class))
 		}
 	}
