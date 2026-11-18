@@ -32,6 +32,7 @@ vi.mock('@/components/viz/TimeSeriesPanel', () => ({
 }));
 
 import { MLReplayContent } from './MLReplaySheet';
+import { MLRecordChart } from './MLRecordChart';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -85,5 +86,64 @@ describe('kayıtlı olayda tek grafik', () => {
     const el = await render({ snapshot: null, related: [], card, record: null });
     expect(el.querySelector('[data-testid="ml-record-chart"]')).toBeNull();
     expect(el.querySelector('[data-testid="ml-course"]')!.textContent).toContain('grafik kaydı yok');
+  });
+});
+
+// v0.10.2366 (operatör: "anomali grafiklerinin anlaşılması zor") — sade grafik.
+type Panel = { series: { label: string; dash?: number[]; points: { time: number }[] }[]; regions: unknown[]; events?: unknown[]; hiddenLabels?: Set<string> };
+async function renderChart(r: MLRecordView = rec): Promise<HTMLElement> {
+  host = document.createElement('div');
+  document.body.appendChild(host);
+  root = createRoot(host);
+  await act(async () => { root!.render(<MemoryRouter><MLRecordChart rec={r} /></MemoryRouter>); });
+  for (let i = 0; i < 3; i++) await act(async () => { await new Promise(res => setTimeout(res, 0)); });
+  return host;
+}
+const lastPanel = () => m.panels[m.panels.length - 1] as Panel;
+
+describe('sade kayıt grafiği', () => {
+  it('1: hacim serisi gizli başlar, açıklamadaki tek tıkla görünür', async () => {
+    const el = await renderChart();
+    const vol = lastPanel().series[1].label;
+    expect(vol).toBe('calls/min'); // t() test ortamında EN; tf() dili (tr) alır
+    expect(lastPanel().hiddenLabels?.has(vol)).toBe(true);
+    expect(lastPanel().hiddenLabels?.has(lastPanel().series[0].label)).toBe(false);
+    const btn = el.querySelector<HTMLButtonElement>('[data-testid="ml-record-chart-volume"]')!;
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+    await act(async () => { btn.click(); });
+    expect(lastPanel().hiddenLabels?.has(vol)).toBe(false);
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+  });
+  it('2: dikey işaret çizgisi yok; zamanlar başlık altında metin', async () => {
+    const el = await renderChart();
+    expect(lastPanel().events ?? []).toEqual([]);
+    expect(lastPanel().regions.length).toBe(1);
+    const times = el.querySelector('[data-testid="ml-record-chart-times"]')!.textContent!;
+    expect(times).toContain('onset 08:10');
+    expect(times).toContain('detected 08:10');
+    expect(times).toContain('Peak 08:10');
+    expect(times).toContain('back in band 08:15');
+  });
+  it('3: sade açıklama — Normal aralık, Normalin dışında, ölçü adı', async () => {
+    const el = await renderChart();
+    const legend = el.querySelector('[data-testid="ml-record-chart-legend"]')!.textContent!;
+    expect(legend).toContain('Normal aralık');
+    expect(legend).toContain('Outside normal');
+    expect(legend).toContain(lastPanel().series[0].label);
+    expect(legend).not.toMatch(/beklenen|expected/);
+  });
+  it('4: ayrı kesikli beklenen çizgisi yok (bant normali gösterir)', async () => {
+    await renderChart();
+    expect(lastPanel().series.some(s => s.dash)).toBe(false);
+    expect(lastPanel().series.length).toBe(2); // ölçü + (gizli) hacim
+  });
+  it('5: olay öncesi bağlam — snapshot\'ın tamamı, olay süresinden kısa değil', async () => {
+    await renderChart();
+    const pts = lastPanel().series[0].points;
+    const first = pts[0].time / 1e9;
+    const before = rec.onsetAt / 1e9 - first;
+    const during = (rec.endedAt! - rec.onsetAt) / 1e9;
+    expect(first).toBe(rec.snapshot.t0); // kırpma yok: elde olan tüm geçmiş
+    expect(before).toBeGreaterThanOrEqual(during);
   });
 });

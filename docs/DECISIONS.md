@@ -15004,3 +15004,9 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Geri düşüşler: araştırma hatası (alışverişin tek ağ geçidi denemesinden sonra) → kalan turlar sohbet profilinde, çip + `research_fallback`; ilk araştırma turu araçsız → bugünkü araçlı tur, `research_no_tools`; anlatım hatası → not cevap, `narrate_fallback`. Profil değişiminde sağlayıcıya özgü yeniden oynatma yükleri (`RawContent`, çağrı `Raw`) konuşmadan düşer. Sinyaller etkileşim satırına `profile_split` ölçüm adımı (i=-1).
 - Tur bütçesi pencere + kalibrasyonu profil başına (`roundBudget.useProfile`); araç seti araştırma profilinden. Kayıt: tek `ai_calls` satırı, `model` = anlatım profili, yeni `loop_research_model String DEFAULT ''`, `loop_research_tokens UInt32 DEFAULT 0` (ayrı probe). Evalset: koşu alanı `researchProfile` (yalnız değerlendirmede okunur; canlı eşleme değerlendirmede okunmaz), tur sonucu `researchProfile` + `split`.
 - interaction-audit karar 3: `chipModelRankingAllowed` kancası yalnız; model sıralaması YOK. Ertelenen: `ui-stream-v1-split` fikstür çifti, üç sütunlu rapor görünümü, evalset panelinde seçici.
+## 2026-11-18 — v0.10.2366 — ML olay kartı: sade grafik (normal aralık, normalin dışı)
+
+- Operatör: "anomali grafiklerinin anlaşılması zor". Grafikte yalnız ölçü çizgisi, gölgeli "Normal aralık" ve kırmızı "Normalin dışında" bölgesi kalır.
+- Kesikli beklenen çizgisi ve dikey başlangıç/tespit/bitiş işaretleri kaldırıldı; zamanlar (tepe dahil) başlık altında metin satırında.
+- Hacim serisi (sağ eksen) gizli başlar; açıklamadaki girdiye tıklanınca panelin kontrollü `hiddenLabels` yolu ile görünür.
+- Bağlam: kaydın snapshot'ının tamamı çizilir (kırpma yok, yeni sorgu yok); snapshot olay öncesinde olay süresi kadar veri tutuyorsa o da görünür.

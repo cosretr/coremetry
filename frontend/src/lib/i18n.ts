@@ -817,9 +817,8 @@ const TR: Catalog = {
   'mlCourse.live':                  'canlı seri',
   'mlCourse.snapshot':              'kayıtlı görüntü',
   // v0.10.2247 — ML olay kaydı grafiği (anomali kartı Dilim G)
-  'mlRecord.chart.expected':        'beklenen',
-  'mlRecord.chart.band':            'beklenen bant {band}',
-  'mlRecord.chart.outside':         'bant dışı',
+  'mlRecord.chart.band':            'Normal aralık {band}',
+  'mlRecord.chart.outside':         'Normalin dışında',
   'mlRecord.chart.onset':           'başlangıç',
   'mlRecord.chart.detected':        'tespit',
   'mlRecord.chart.ended':           'banda dönüş',

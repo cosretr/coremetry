@@ -378,9 +378,8 @@ export const EN: Record<string, string> = {
   'mlCourse.live':                  'live series',
   'mlCourse.snapshot':              'stored snapshot',
   // v0.10.2247 — ML olay kaydı grafiği (anomali kartı Dilim G)
-  'mlRecord.chart.expected':        'expected',
-  'mlRecord.chart.band':            'expected band {band}',
-  'mlRecord.chart.outside':         'out of band',
+  'mlRecord.chart.band':            'Normal range {band}',
+  'mlRecord.chart.outside':         'Outside normal',
   'mlRecord.chart.onset':           'onset',
   'mlRecord.chart.detected':        'detected',
   'mlRecord.chart.ended':           'back in band',
