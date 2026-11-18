@@ -52,3 +52,18 @@ func TestRunSettingsLoadersIsolatesErrors(t *testing.T) {
 	}
 	r.RunOnce(context.Background()) // store nil → düz ctx ile koşar, panic yok
 }
+
+// v0.10.2349 — göç yolları anlık görüntüyü gölgeler (yazdığını okuyabilsin).
+func TestWithoutSettingsSnapshot(t *testing.T) {
+	bg := context.Background()
+	if WithoutSettingsSnapshot(bg) != bg {
+		t.Error("anlık görüntüsüz ctx değişmemeli")
+	}
+	ctx := WithSettingsSnapshot(bg, NewSettingsSnapshot(map[string][]byte{"k": []byte("v")}))
+	if settingsSnapshotFrom(WithoutSettingsSnapshot(ctx)) != nil {
+		t.Error("gölgelenmiş ctx anlık görüntü döndürmemeli (GetSetting CH'ye gitmeli)")
+	}
+	if settingsSnapshotFrom(ctx) == nil {
+		t.Error("orijinal ctx anlık görüntüyü korumalı")
+	}
+}

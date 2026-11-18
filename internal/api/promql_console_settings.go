@@ -212,21 +212,6 @@ func (s *Server) LoadPromQLConsoleSettings(ctx context.Context) {
 	setPromQLConsoleSettings(decodePromQLConsoleSettings(raw))
 }
 
-// StartPromQLConsoleSettingsRefresh — çok-pod yakınsaması (pub/sub
-// kaçırılırsa ≤30 s). Leader gerekmez: bu bir OKUMA.
-func (s *Server) StartPromQLConsoleSettingsRefresh(ctx context.Context, interval time.Duration) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.LoadPromQLConsoleSettings(ctx)
-		}
-	}
-}
-
 // promqlSettingBound — GET `bounds` girdisi (UI input min/max).
 type promqlSettingBound struct {
 	Min int `json:"min"`

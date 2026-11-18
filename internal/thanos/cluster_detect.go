@@ -242,28 +242,6 @@ func (s *Service) LoadLabelChecks(ctx context.Context, store labelCheckStore) er
 	return nil
 }
 
-// StartLabelCheckRefresh — 30 s'de bir blob'u yükle (StartConfigRefresh emsali).
-func (s *Service) StartLabelCheckRefresh(ctx context.Context, store labelCheckStore, interval time.Duration) {
-	if s == nil || store == nil {
-		return
-	}
-	if interval <= 0 {
-		interval = 30 * time.Second
-	}
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			if err := s.LoadLabelChecks(ctx, store); err != nil {
-				log.Printf("[thanos] label check refresh: %v", err)
-			}
-		}
-	}
-}
-
 func (s *Service) LabelCheckTick(ctx context.Context) {
 	if s == nil {
 		return

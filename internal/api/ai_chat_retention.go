@@ -13,26 +13,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 func (s *Server) LoadAIChatRetention(ctx context.Context) {
 	chstore.SetAIChatRetention(s.store.GetAIChatRetention(ctx))
-}
-
-func (s *Server) StartAIChatRetentionRefresh(ctx context.Context, interval time.Duration) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.LoadAIChatRetention(ctx)
-		}
-	}
 }
 
 func (s *Server) getAIChatRetention(w http.ResponseWriter, r *http.Request) {

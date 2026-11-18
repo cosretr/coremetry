@@ -65,6 +65,16 @@ func WithSettingsSnapshot(ctx context.Context, snap *SettingsSnapshot) context.C
 	return context.WithValue(ctx, settingsSnapshotKey{}, snap)
 }
 
+// WithoutSettingsSnapshot — v0.10.2349: ctx'teki anlık görüntüyü gölgeler;
+// GetSetting yine CH'ye gider. Okuyup YAZAN tek seferlik göçler için: bir
+// adımın yazdığını sonraki adım (ve aynı turdaki okuma) görmeli.
+func WithoutSettingsSnapshot(ctx context.Context) context.Context {
+	if settingsSnapshotFrom(ctx) == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, settingsSnapshotKey{}, (*SettingsSnapshot)(nil))
+}
+
 func settingsSnapshotFrom(ctx context.Context) *SettingsSnapshot {
 	s, _ := ctx.Value(settingsSnapshotKey{}).(*SettingsSnapshot)
 	return s

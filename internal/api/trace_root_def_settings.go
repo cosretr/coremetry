@@ -27,7 +27,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -45,19 +44,6 @@ func (s *Server) registerTraceRootDefRoutes(mux *http.ServeMux) {
 // düşürmez: strict (dar tanım) ile devam edilir ve loglanır.
 func (s *Server) LoadTraceRootDef(ctx context.Context) {
 	s.store.SetTraceRootDef(s.store.GetTraceRootDefSetting(ctx))
-}
-
-func (s *Server) StartTraceRootDefRefresh(ctx context.Context, interval time.Duration) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.LoadTraceRootDef(ctx)
-		}
-	}
 }
 
 // tracesRootDefKeySuffix — SAF: traces listesi anahtarı yalnız Root süzgeci

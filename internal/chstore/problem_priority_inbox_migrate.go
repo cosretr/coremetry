@@ -276,6 +276,9 @@ func migrateInboxKeepStep(ctx context.Context, st inboxKeepMigrateStore, now tim
 // inboxKeepMigrated — süreç başına göç bitti mi (başarılı tur sonrası true).
 var inboxKeepMigrated atomic.Bool
 
+// InboxKeepMigrationPending — göç bu süreçte henüz başarıyla bitmedi mi.
+func InboxKeepMigrationPending() bool { return !inboxKeepMigrated.Load() }
+
 // MigrateInboxKeepDefaultsOnce — ayar tazeleyicisinin adımı: süreç başına bir
 // kez BAŞARIYLA biter; hata hâlinde sonraki tur (30 sn) yeniden dener.
 func MigrateInboxKeepDefaultsOnce(ctx context.Context, st inboxKeepMigrateStore) {

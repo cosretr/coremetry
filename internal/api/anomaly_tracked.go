@@ -29,7 +29,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -39,22 +38,6 @@ import (
 // varsayılanlar), yani boot bir ayar okumasına bağlanmıyor.
 func (s *Server) LoadAnomalyTracked(ctx context.Context) {
 	s.store.LoadAnomalyTracked(ctx)
-}
-
-// StartAnomalyTrackedRefresh — çok-pod yakınsaması. PUT'u alan pod
-// anında takas eder; diğer podlar (dedektörün lideri başka bir pod
-// olabilir) bir sonraki tikte görür. Leader gerekmiyor: bu bir OKUMA.
-func (s *Server) StartAnomalyTrackedRefresh(ctx context.Context, interval time.Duration) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.LoadAnomalyTracked(ctx)
-		}
-	}
 }
 
 // getAnomalyTracked — GET /api/settings/anomaly-tracked.

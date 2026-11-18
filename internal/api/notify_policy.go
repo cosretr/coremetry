@@ -60,20 +60,6 @@ func (s *Server) LoadNotifyPolicy(ctx context.Context) {
 	})
 }
 
-// StartNotifyPolicyRefresh — çok-pod yakınsaması (okuma; lider gerekmez).
-func (s *Server) StartNotifyPolicyRefresh(ctx context.Context, interval time.Duration) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.LoadNotifyPolicy(ctx)
-		}
-	}
-}
-
 func (s *Server) getNotifyPolicy(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.ReadNotifyPolicy(r.Context())
 	if err != nil {

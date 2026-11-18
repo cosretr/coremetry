@@ -347,7 +347,7 @@ func TestPromQLConsoleSettingsWiring(t *testing.T) {
 	mainGo := read("../../main.go")
 	for _, want := range []string{
 		"srv.LoadPromQLConsoleSettings(ctx)",
-		"go srv.StartPromQLConsoleSettingsRefresh(ctx, 30*time.Second)",
+		`cfgRefresh.Add("promql-console", func(ctx context.Context) error { srv.LoadPromQLConsoleSettings(ctx); return nil })`,
 	} {
 		if !strings.Contains(mainGo, want) {
 			t.Errorf("main.go %q içermiyor (boot hidrasyonu / 30 s yenileme)", want)

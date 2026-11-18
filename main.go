@@ -818,7 +818,7 @@ func main() {
 	// v0.5.318 — multi-pod cluster: a role created on pod A
 	// wasn't visible on pod B until restart. Background poll
 	// closes the gap to ~30s without pub/sub infra.
-	go authSvc.StartCustomRoleRefresh(ctx, store, 30*time.Second)
+	cfgRefresh.Add("custom-roles", func(ctx context.Context) error { return authSvc.LoadPersistedCustomRoles(ctx, store) })
 	// ── Trusted-header auth (oauth2-proxy / IAP / Cloudflare Access)
 	// When enabled, identity headers from an upstream proxy take
 	// the place of OIDC. Refuses to boot if trusted_proxies is
@@ -1177,7 +1177,7 @@ func main() {
 	if err := thanosSvc.LoadLabelChecks(ctx, store); err != nil {
 		log.Printf("[thanos] label checks load: %v", err)
 	}
-	go thanosSvc.StartLabelCheckRefresh(ctx, store, 30*time.Second)
+	cfgRefresh.Add("thanos-label-checks", func(ctx context.Context) error { return thanosSvc.LoadLabelChecks(ctx, store) })
 	// v0.10.2274 (entity grafı S1) — gölge bağ pasının canlı dizini (pod → node,
 	// host → servis): Redis, süreç başına tek okuyucu; etkin cluster'lar registry'den.
 	evalr.SetProblemGraphLive(evaluator.NewGraphLive(entity.LiveIndexFor(cacheImpl), func() []string {
@@ -1569,7 +1569,6 @@ func main() {
 			}
 		}
 	}
-	go cfgRefresh.Start(chstore.WithQueryTag(ctx, "worker:settings-refresh")) // v0.10.259 — kayıtlar tamam, tek döngü
 	if tempoSvc.Configured() {
 		t := tempoSvc.Snapshot()
 		log.Printf("[tempo] external backend enabled (baseUrl=%s authType=%s orgId=%s)",
@@ -1693,18 +1692,18 @@ func main() {
 	// çok-pod kurulumda bir podda yapılan PUT diğerlerine bu döngüyle
 	// ulaşır (tempo/copilot/ldap StartConfigRefresh deseni).
 	srv.LoadExceptionTriage(ctx)
-	go srv.StartExceptionTriageRefresh(ctx, 30*time.Second)
+	cfgRefresh.Add("exception-triage", func(ctx context.Context) error { srv.LoadExceptionTriage(ctx); return nil })
 	// v0.9.838 — alert-problem öncelik merdiveninin vidaları (ihlal katı /
 	// bayat-critical saati), AYNI kablo. Config chstore'da paket-global
 	// bir atomic pointer'da yaşıyor çünkü EnrichProblemsWithPriority
 	// notify ve anomaly paketlerinden de çağrılıyor; bu satır olmadan
 	// varsayılanlarda kalır (yani v0.9.838 öncesi davranış).
 	srv.LoadProblemPriority(ctx)
-	go srv.StartProblemPriorityRefresh(ctx, 30*time.Second)
+	cfgRefresh.Add("problem-priority", func(ctx context.Context) error { srv.LoadProblemPriority(ctx); return nil })
 	srv.LoadNotifyPolicy(ctx) // v0.10.1523 — notify_policy (Problem standardı R1, gölge kip)
-	go srv.StartNotifyPolicyRefresh(ctx, 30*time.Second)
+	cfgRefresh.Add("notify-policy", func(ctx context.Context) error { srv.LoadNotifyPolicy(ctx); return nil })
 	srv.LoadAIChatRetention(ctx) // v0.10.561 — sohbet arşivi saklama (ai_chat_retention)
-	go srv.StartAIChatRetentionRefresh(ctx, 30*time.Second)
+	cfgRefresh.Add("ai-chat-retention", func(ctx context.Context) error { srv.LoadAIChatRetention(ctx); return nil })
 	// v0.9.797 — metrik route dışlama kuralları, AYNI kablo. Derlenmiş set
 	// Store'a yayınlanır; okuma yolları (metricquery / metricrate /
 	// metrichist / route-tier) her sorguda oradan okur, yani ayar sıcak
@@ -1712,26 +1711,29 @@ func main() {
 	// kuralların ingest ikizi pipeline motorunda yaşıyor (tek drop motoru)
 	// ve oraya pipeline'ın kendi StartConfigRefresh'iyle yayılır.
 	srv.LoadMetricExclusions(ctx)
-	go srv.StartMetricExclusionsRefresh(ctx, 30*time.Second)
+	cfgRefresh.Add("metric-exclusions", func(ctx context.Context) error { srv.LoadMetricExclusions(ctx); return nil })
 	// v0.10.733 — kök tanımı (strict | entry), aynı kablo.
 	srv.LoadTraceRootDef(ctx)
-	go srv.StartTraceRootDefRefresh(ctx, 30*time.Second)
+	cfgRefresh.Add("trace-root-def", func(ctx context.Context) error { srv.LoadTraceRootDef(ctx); return nil })
 	// v0.10.952 — PromQL konsolu korkulukları (promql_console), aynı kablo.
 	srv.LoadPromQLConsoleSettings(ctx)
-	go srv.StartPromQLConsoleSettingsRefresh(ctx, 30*time.Second)
+	cfgRefresh.Add("promql-console", func(ctx context.Context) error { srv.LoadPromQLConsoleSettings(ctx); return nil })
 	// v0.10.1831 — /logs örnek boyu üst sınırı (logs_search), aynı kablo.
 	srv.LoadLogsSearchSettings(ctx)
-	go srv.StartLogsSearchSettingsRefresh(ctx, 30*time.Second)
+	cfgRefresh.Add("logs-search", func(ctx context.Context) error { srv.LoadLogsSearchSettings(ctx); return nil })
 	// v0.9.800 — anomali dedektörünün izlediği metrik seti, AYNI kablo.
 	// request_rate varsayılan KAPALI (operatör: false-pozitif). Dedektör
 	// bu satırdan ÖNCE başlıyor ve kendi Start'ında bir kez hidrate
 	// ediyor; buradaki yenileme döngüsü çok-pod yakınsaması için (PUT
 	// başka bir pod'a düşse de lider pod 30 sn içinde görür).
 	srv.LoadAnomalyTracked(ctx)
-	go srv.StartAnomalyTrackedRefresh(ctx, 30*time.Second)
+	cfgRefresh.Add("anomaly-tracked", func(ctx context.Context) error { srv.LoadAnomalyTracked(ctx); return nil })
 	// v0.9.826 — dedektörün EŞİKLERİ, aynı kablo ve aynı gerekçe.
 	srv.LoadAnomalySensitivity(ctx)
-	go srv.StartAnomalySensitivityRefresh(ctx, 30*time.Second)
+	cfgRefresh.Add("anomaly-sensitivity", func(ctx context.Context) error { srv.LoadAnomalySensitivity(ctx); return nil })
+	// v0.10.259 — kayıtlar tamam, tek döngü. v0.10.2349: srv'nin 10 okuyucusu da
+	// bu döngüde (eskiden ayrı 30 sn tikleri, her biri kendi FINAL okuması).
+	go cfgRefresh.Start(chstore.WithQueryTag(ctx, "worker:settings-refresh"))
 	srv.SetLdapGroupSync(ldapGroupSync) // v0.8.526 — LDAP group-sync admin surface + snapshot reads
 	// v0.8.444 — cmk_ servis token'ları: cache'i bağla (GenAI Studio →
 	// MCP kimliği). Adapter chstore→auth tip köprüsü.

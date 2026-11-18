@@ -14899,3 +14899,8 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 
 - Ölçüm (audit): `Sidebar.tsx`, `CopilotChatGate.tsx`, `AppShell.tsx` `@/lib/queries` barrel'ından içe aktarıyordu; barrel 39 sorgu modülünü ve sayfa modellerini giriş chunk'ına çekiyordu. Kabuk artık `health` / `inbox` / `users` / `problems` / `eventStream` modüllerinden doğrudan alır.
 - İlk yük JS gz 291.1 → 270.9 KB (`npm run bundle:check`). Bütçe 347 → 278 KB (ölçüm + 7 KB pay); `bundleBudget.pin` kabuğun barrel'ı içe aktarmadığını çiviler. Davranış değişmedi.
+## 2026-11-18 — v0.10.2349 — Ayar okuyucuları tek anlık görüntü sorgusuna bağlandı
+
+- Ölçüm (audit): `main.go`'da 10 `srv` ayar okuyucusu (exception triage, problem priority, notify policy, AI sohbet saklama, metrik dışlama, trace kök tanımı, PromQL konsolu, logs search, anomali izlenen + duyarlılık) kendi 30 s tikerinde, pod başına ayrı `SELECT … system_settings FINAL WHERE key=?` atıyordu; v0.10.259 anlık görüntü yenileyicisini (`cfgRefresh`) atlıyordu.
+- Hepsi `cfgRefresh.Add` ile yenileyicide; `cfgRefresh.Start` kayıtlardan sonraya alındı. Aynı desendeki iki ticker daha taşındı: özel roller (`authSvc.LoadPersistedCustomRoles`) ve Thanos etiket denetimleri (`LoadLabelChecks`). LDAP grup hidrasyonu taşınmadı (`ldap_groups` tablosu, ayar anahtarı değil). Eski `Start…Refresh` fonksiyonları silindi.
+- Yakınsama 30 s, boot hidrasyonu aynı. Okuyup yazan tek seferlik göçler (inbox istisna listesi, minBaselineRate) bitene dek tur anlık görüntüyü gölgeler (`WithoutSettingsSnapshot`): adımlar birbirinin ve okuma göçün yazdığını görür — davranış değişmez.

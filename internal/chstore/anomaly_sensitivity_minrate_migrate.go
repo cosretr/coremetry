@@ -162,6 +162,9 @@ func MigrateMinRateDefault(ctx context.Context, st inboxKeepMigrateStore, now ti
 
 var minRateMigrated atomic.Bool
 
+// MinRateMigrationPending — göç bu süreçte henüz başarıyla bitmedi mi.
+func MinRateMigrationPending() bool { return !minRateMigrated.Load() }
+
 // MigrateMinRateDefaultOnce — ayar tazeleyicisinin adımı: süreç başına bir
 // kez BAŞARIYLA biter; hata hâlinde sonraki tur (30 sn) yeniden dener.
 func MigrateMinRateDefaultOnce(ctx context.Context, st inboxKeepMigrateStore) {

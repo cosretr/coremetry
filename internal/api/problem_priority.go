@@ -25,7 +25,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -47,27 +46,16 @@ func (s *Server) LoadProblemPriority(ctx context.Context) {
 	// varsayılan → yeni varsayılan), okumadan ÖNCE: aynı tur yeni listeyi yayınlar.
 	// İşaretli; başarana dek her 30 sn'lik turda yeniden dener.
 	if s.store != nil {
+		// v0.10.2349 — göç bitene dek tur anlık görüntüyü kullanmaz: göç
+		// adımları birbirinin yazdığını, okuma da göçün yazdığını görür.
+		if chstore.InboxKeepMigrationPending() {
+			ctx = chstore.WithoutSettingsSnapshot(ctx)
+		}
 		chstore.MigrateInboxKeepDefaultsOnce(ctx, s.store)
 	}
 	chstore.LoadProblemPriorityWith(func() (chstore.ProblemPriorityConfig, error) {
 		return s.store.ReadProblemPriority(ctx)
 	})
-}
-
-// StartProblemPriorityRefresh — çok-pod yakınsaması. PUT'u alan pod
-// anında günceller; diğerleri bir sonraki tikte. Leader gerekmiyor: bu
-// bir OKUMA, yan etkisi yok.
-func (s *Server) StartProblemPriorityRefresh(ctx context.Context, interval time.Duration) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.LoadProblemPriority(ctx)
-		}
-	}
 }
 
 // getProblemPriority — GET /api/settings/problem-priority.

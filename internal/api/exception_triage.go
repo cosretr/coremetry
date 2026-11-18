@@ -26,7 +26,6 @@ import (
 	"log"
 	"net/http"
 	"sync/atomic"
-	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -66,22 +65,6 @@ func (s *Server) LoadExceptionTriage(ctx context.Context) {
 	// hidrate: GetBranding başarılı okumada chstore atomiğini yayınlar; öncelik
 	// gerekçesi satır başına oradan okur. Çok-pod: başka podun PUT'u ≤30 sn.
 	_, _ = s.store.GetBranding(ctx)
-}
-
-// StartExceptionTriageRefresh — çok-pod yakınsaması. Pod A'daki PUT
-// kendi global'ini anında günceller; diğer podlar bir sonraki tikte
-// görür. Leader gerektirmiyor: bu bir OKUMA, yan etkisi yok.
-func (s *Server) StartExceptionTriageRefresh(ctx context.Context, interval time.Duration) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.LoadExceptionTriage(ctx)
-		}
-	}
 }
 
 // getExceptionTriage returns the live triage windows. Hiç kaydedilmemiş

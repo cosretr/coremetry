@@ -46,7 +46,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"time"
 	"unicode/utf8"
 
 	"github.com/cilcenk/coremetry/internal/auth"
@@ -230,19 +229,6 @@ func (s *Server) LoadLogsSearchSettings(ctx context.Context) {
 		return
 	}
 	setLogsSearchSettings(decodeLogsSearchSettings(raw))
-}
-
-func (s *Server) StartLogsSearchSettingsRefresh(ctx context.Context, interval time.Duration) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.LoadLogsSearchSettings(ctx)
-		}
-	}
 }
 
 type logsSearchSettingsResponse struct {

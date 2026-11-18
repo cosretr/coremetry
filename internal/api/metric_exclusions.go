@@ -31,7 +31,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/pipeline"
@@ -49,22 +48,6 @@ func (s *Server) LoadMetricExclusions(ctx context.Context) {
 		compiled, _ = chstore.CompileMetricExclusions(chstore.MetricExclusions{})
 	}
 	s.store.SetMetricExclusions(compiled)
-}
-
-// StartMetricExclusionsRefresh — çok-pod yakınsaması (exception_triage
-// kablosunun aynısı). PUT'u alan pod anında günceller; diğerleri bir
-// sonraki tikte. Leader gerekmiyor: bu bir OKUMA.
-func (s *Server) StartMetricExclusionsRefresh(ctx context.Context, interval time.Duration) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.LoadMetricExclusions(ctx)
-		}
-	}
 }
 
 // getMetricExclusions — GET /api/settings/metric-exclusions.

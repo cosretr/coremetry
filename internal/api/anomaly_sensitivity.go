@@ -25,7 +25,6 @@ import (
 	"log"
 	"net/http"
 	"reflect"
-	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -38,26 +37,14 @@ func (s *Server) LoadAnomalySensitivity(ctx context.Context) {
 	// İşaretli; başarana dek her 30 sn'lik turda yeniden dener. (v0.10.1085
 	// opLatency göçü v0.10.2087'de dedektörle birlikte silindi.)
 	if s.store != nil {
+		// v0.10.2349 — göç bitene dek anlık görüntü yok (problem_priority ile aynı).
+		if chstore.MinRateMigrationPending() {
+			ctx = chstore.WithoutSettingsSnapshot(ctx)
+		}
 		// v0.10.1585 — minBaselineRate 0 (eski varsayılan) → metrik başına taban.
 		chstore.MigrateMinRateDefaultOnce(ctx, s.store)
 	}
 	s.store.LoadAnomalySensitivity(ctx)
-}
-
-// StartAnomalySensitivityRefresh — çok-pod yakınsaması. PUT'u alan pod
-// anında takas eder; diğer podlar (dedektörün lideri başka bir pod
-// olabilir) bir sonraki tikte görür. Leader gerekmiyor: bu bir OKUMA.
-func (s *Server) StartAnomalySensitivityRefresh(ctx context.Context, interval time.Duration) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.LoadAnomalySensitivity(ctx)
-		}
-	}
 }
 
 // getAnomalySensitivity — GET /api/settings/anomaly-sensitivity.
