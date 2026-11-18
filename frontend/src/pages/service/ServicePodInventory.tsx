@@ -120,9 +120,19 @@ export function ServicePodInventory({ service, range, cluster }: {
     }
     : { kind: 'empty', message: 'Eşleşen pod yok', detail: podsDiag };
 
+  // v0.10.2367 — iş yükü ucu bu cluster için hata verdiyse kırmızı durum yok:
+  // sessiz tek satır not, tablo ve sayfanın geri kalanı çizilir.
+  const depFailed = (th.depErrors ?? []).includes(cluster);
   return (
-    <ServicePodsTable dt={dt} service={service} range={range}
-      effNs={th.effNs} effDeploy={th.effDeploy} cFrom={th.cFrom} cTo={th.cTo} rangeParam={rangeParam}
-      state={podsState} />
+    <>
+      {depFailed && (
+        <p className="field-hint" data-testid="workload-info-note">
+          Bu kümenin iş yükü bilgisi şu an alınamadı
+        </p>
+      )}
+      <ServicePodsTable dt={dt} service={service} range={range}
+        effNs={th.effNs} effDeploy={th.effDeploy} cFrom={th.cFrom} cTo={th.cTo} rangeParam={rangeParam}
+        state={podsState} />
+    </>
   );
 }

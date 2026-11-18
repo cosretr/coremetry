@@ -269,7 +269,9 @@ func (s *Server) getClusterDeployments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := fmt.Sprintf("cluster-deployments:%s:%s:%s", name, namespace, clusterCfgDigest(cfg))
-	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
+	// v0.10.2367 — Thanos hatası 504/502 + kısa neden, 15 sn olumsuz önbellek
+	// (cluster_deployments_errors.go); başarı yine 60 sn cache.
+	s.serveClusterDeployments(w, r, key, name, namespace, func(ctx context.Context) (any, error) {
 		qctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		rows, err := s.thanos.DeploymentMetrics(qctx, cfg, namespace)

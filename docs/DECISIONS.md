@@ -15010,3 +15010,10 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Kesikli beklenen çizgisi ve dikey başlangıç/tespit/bitiş işaretleri kaldırıldı; zamanlar (tepe dahil) başlık altında metin satırında.
 - Hacim serisi (sağ eksen) gizli başlar; açıklamadaki girdiye tıklanınca panelin kontrollü `hiddenLabels` yolu ile görünür.
 - Bağlam: kaydın snapshot'ının tamamı çizilir (kırpma yok, yeni sorgu yok); snapshot olay öncesinde olay süresi kadar veri tutuyorsa o da görünür.
+
+## 2026-11-18 — v0.10.2367 — Küme iş yükü ucu: hata sayfayı kırmızıya boyamaz
+
+- Operatör: servis sayfasında `GET /api/clusters/deployments` tek kümede 500 (~49 bayt gövde, neden yakalanmamış). Uç yalnız o kümenin Thanos'unu sorgular; hata Coremetry arızası değildir.
+- Sınıf (`cluster_deployments_errors.go`): zaman aşımı sınıfı (`isTimeoutClass`) → 504 `{"reason":"timeout"}`; diğer Thanos hataları → 502 `{"reason":"upstream"}`; istemci iptali 499. Ham hata gövdeye değil loga: küme+namespace başına dakikada bir satır.
+- Başarı 60 sn cache (cachedJSON, değişmedi); hata süreç içi 15 sn olumsuz önbellek — yavaş küme her sayfa yüklemesinde 10 sn yorulmaz; `?refresh=1` atlar.
+- İstemci: `useServicePods` `depErrors` döner; `ServicePodInventory` o küme için sessiz tek satır "Bu kümenin iş yükü bilgisi şu an alınamadı" gösterir, tablo ve sayfa çizilir. `/clusters` sayfasının kendi durumu değişmedi (servis sayfası dışı).

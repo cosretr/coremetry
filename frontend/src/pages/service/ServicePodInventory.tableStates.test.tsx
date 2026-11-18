@@ -52,7 +52,7 @@ function thStub(over: Record<string, unknown> = {}): Record<string, unknown> {
     metaQ: { isPending: false }, ns: '', deploy: '', matched: ['c1'], rows: [] as ClusterPodRow[],
     clustersWithPods: [], effNs: '', effDeploy: '', from: 0, to: 1, cFrom: 0, cTo: 1, clamped: false,
     sourcesPending: false, noClusters: false, podsPending: false, podsBlocking: false, podsSettled: 1, podsTotal: 1,
-    sourcesError: '', podErrors: [] as string[], truncatedClusters: [] as string[],
+    sourcesError: '', podErrors: [] as string[], depErrors: [] as string[], truncatedClusters: [] as string[],
     ...over,
   };
 }
@@ -266,5 +266,20 @@ describe('ServicePodInventory — durumlar pod tablosunun içinde (v0.10.973)', 
     const el = await mount();
     expect(stateRow(el)).toBeNull();
     expect(el.querySelector('[id="pod-row-orders-1"]')).not.toBeNull();
+  });
+
+  // v0.10.2367 — /clusters/deployments hatası bu cluster'da: kırmızı durum yok,
+  // sessiz tek satır not; tablo ve satırlar çizilir.
+  it('iş yükü ucu hatası: sessiz not, hata durumu yok, tablo durur', async () => {
+    m.th = thStub({ depErrors: ['c1'], rows: [thanosPod('orders-1')] });
+    const el = await mount();
+    expect(el.querySelector('[data-testid="workload-info-note"]')?.textContent).toContain('Bu kümenin iş yükü bilgisi şu an alınamadı');
+    expect(podsTable(el)).not.toBeNull();
+    expect(el.querySelector('[data-dt-state="error"]')).toBeNull();
+  });
+  it('başka cluster\'ın iş yükü hatası bu envantere not düşmez', async () => {
+    m.th = thStub({ depErrors: ['c2'] });
+    const el = await mount();
+    expect(el.querySelector('[data-testid="workload-info-note"]')).toBeNull();
   });
 });

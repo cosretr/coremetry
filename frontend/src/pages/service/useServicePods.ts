@@ -163,6 +163,9 @@ export function useServicePods(service: string, range: TimeRange) {
   // v0.9.369 — sunucu topk(500) tavanına dayanan cluster'lar: istemci
   // süzmesi o cluster'da "yok" sonucunu KANITLAYAMAZ (sakin pod'lar
   // topk dışında). Boş durum ve başlık bunu söylemek zorunda.
+  // v0.10.2367 — iş yükü (/clusters/deployments) okunamayan cluster'lar: sayfa
+  // kırmızıya boyanmaz; envanter o cluster için sessiz tek satır not gösterir.
+  const depErrors = [...new Set(depPairs.filter((_, j) => depQs[j]?.isError).map(p => p.c))];
   const truncatedClusters = podQs
     .map((q, i) => (q.data?.truncated ? (matched[i] ?? `cluster ${i + 1}`) : null))
     .filter((x): x is string => !!x);
@@ -178,7 +181,7 @@ export function useServicePods(service: string, range: TimeRange) {
     metaQ, ns, deploy, matched, rows, clustersWithPods, workloads,
     effNs, effDeploy, from, to, cFrom, cTo, clamped,
     sourcesPending, noClusters, podsPending, podsBlocking, podsSettled, podsTotal,
-    sourcesError, podErrors,
+    sourcesError, podErrors, depErrors,
     truncatedClusters,
   };
 }
