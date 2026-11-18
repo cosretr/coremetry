@@ -569,7 +569,7 @@ func (s *Server) recordChatExchange(ctx context.Context, x *chatExchange, cs *ch
 	row := buildCosreInteraction(x, tier, m, status, msg, time.Now())
 	if verified {
 		row.Verify = vo.Compact
-		s.writeSystemSignals(ctx, x.root, verifySignals(x.root, vo.Result, vo.Truncated))
+		s.writeSystemSignals(ctx, x.root, verifySignals(x.root, vo.signalResult(), vo.Truncated)) // v0.10.2339 — yeniden üretilen uydurma da sinyal
 	}
 	s.enqueueCosreInteraction(row)
 }

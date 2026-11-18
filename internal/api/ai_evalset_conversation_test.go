@@ -33,8 +33,22 @@ func TestEvalConvFixtureValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cases) != 26 { // 20 akıcılık + 2 doğrulayıcı yoklaması (v0.10.2328) + 2 üslup (style.json, v0.10.2332) + 2 düzeltmeden öğrenme (learning.json, v0.10.2334)
-		t.Fatalf("konuşma kümesi 26 vaka olmalı, %d", len(cases))
+	// 20 akıcılık + 2 doğrulayıcı yoklaması (v0.10.2328) + 2 üslup (style.json, v0.10.2332) + 2 düzeltmeden
+	// öğrenme (learning.json, v0.10.2334) + 2 cevap dikişi (seam.json, v0.10.2339). Toplam yalnız alt
+	// sınırla pinlenir (paralel dilimler dosya ekleyebilir); her dosyanın vakaları kimlikle aranır.
+	if len(cases) < 28 {
+		t.Fatalf("konuşma kümesi en az 28 vaka olmalı, %d", len(cases))
+	}
+	seamIDs := map[string]bool{"conv-seam-boilerplate": false, "conv-seam-enforce": false}
+	for _, c := range cases {
+		if _, ok := seamIDs[c.ID]; ok {
+			seamIDs[c.ID] = c.file == "seam.json"
+		}
+	}
+	for id, ok := range seamIDs {
+		if !ok {
+			t.Errorf("seam.json vakası %q yok", id)
+		}
 	}
 	known := evalFixtureToolNames(t)
 	for _, n := range mcptools.V2OnlyTools(mcptools.Deps{}) {
@@ -89,7 +103,7 @@ func TestEvalConvFixtureValid(t *testing.T) {
 					t.Errorf("%s/t%d: nötr olmayan varlık %q", c.ID, i+1, n)
 				}
 			}
-			if e.Verifier != "" && e.Verifier != evalConvVerifyPass && e.Verifier != evalConvVerifyFlag {
+			if e.Verifier != "" && e.Verifier != evalConvVerifyPass && e.Verifier != evalConvVerifyFlag && e.Verifier != evalConvVerifyAnnotate {
 				t.Errorf("%s/t%d: verifier %q", c.ID, i+1, e.Verifier)
 			}
 			if e.Verifier != "" {
@@ -132,11 +146,11 @@ func TestEvalConvFixtureValid(t *testing.T) {
 			t.Errorf("kapsam: %q sınıfı yok", cls)
 		}
 	}
-	if verifierTurns < 4 || verifierTurns > 6 { // v0.10.2328 — doğrulayıcı odaklı turlar
-		t.Errorf("doğrulayıcı turu %d, 4–6 bekleniyor", verifierTurns)
+	if verifierTurns < 6 || verifierTurns > 12 { // v0.10.2328 — doğrulayıcı odaklı turlar; v0.10.2339 — + 2 (seam.json)
+		t.Errorf("doğrulayıcı turu %d, 6–12 bekleniyor", verifierTurns)
 	}
-	if turns < 55 || turns > 70 { // v0.10.2332 — + 5 üslup turu (style.json); v0.10.2334 — + 5 düzeltme turu (learning.json)
-		t.Errorf("tur sayısı %d — profil başına ≈ 65 (iki profil ≈ 130 sohbet turu)", turns)
+	if turns < 69 || turns > 100 { // v0.10.2332 — + 5 üslup turu (style.json); v0.10.2334 — + 5 düzeltme turu (learning.json); v0.10.2339 — + 4 dikiş turu (seam.json)
+		t.Errorf("tur sayısı %d — profil başına ≈ 69 (iki profil ≈ 140 sohbet turu)", turns)
 	}
 }
 

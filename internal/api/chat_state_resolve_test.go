@@ -234,7 +234,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if w := rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"state":false}`, auth.RoleEditor, ""); w.Code != http.StatusForbidden {
 		t.Fatalf("editor PUT %d", w.Code)
 	}
-	for _, bad := range []string{`{}`, `{"verification":"enforce"}`, `{"verification":"x"}`, `{bozuk`} {
+	for _, bad := range []string{`{}`, `{"verification":"x"}`, `{bozuk`} { // v0.10.2339 — enforce artık geçerli
 		if w := rulesDo(mux, "PUT", "/api/ai/cosre-conversation", bad, auth.RoleAdmin, ""); w.Code != http.StatusBadRequest {
 			t.Fatalf("%s → %d", bad, w.Code)
 		}
@@ -282,6 +282,17 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	}
 	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"off","bannedPhrases":1}`) {
 		t.Fatalf("audit = %+v", a)
+	}
+	// v0.10.2339 — E2: enforce kabul edilir; varsayılan yine shadow.
+	w = rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"verification":"enforce"}`, auth.RoleAdmin, "")
+	if w.Code != http.StatusOK || chstore.CurrentCosreConversation().Verification != chstore.CosreVerifyEnforce {
+		t.Fatalf("enforce PUT %d: %s", w.Code, w.Body)
+	}
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"verification":"enforce"`) {
+		t.Fatalf("audit = %+v", a)
+	}
+	if chstore.DefaultCosreConversation().Verification != chstore.CosreVerifyShadow {
+		t.Fatal("varsayılan shadow kalmalı")
 	}
 }
 

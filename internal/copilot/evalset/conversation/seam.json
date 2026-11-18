@@ -1,0 +1,308 @@
+{
+  "schema": "coremetry.evalset.conversation/1",
+  "cases": [
+    {
+      "id": "conv-seam-boilerplate",
+      "surface": "ChatConversation",
+      "why": "D (v0.10.2338): üslup açıkken cevabın ilk ve son cümlesindeki kalıp (selam, \"Tabii ki\", \"Umarım yardımcı olmuştur\") cevap dikişinde silinir; bulgu taşıyan cümle kalır. Vaka koşunun üslup zorlaması yoksa üslubu kendisi açar.",
+      "style": true,
+      "stubs": {
+        "service_health": {
+          "$byService": {
+            "checkout": "checkout (son 1 saat): istek hızı 42,5/s, hata oranı %0,8, p95 310 ms, p99 540 ms, açık problem 0.",
+            "orders": "orders (son 1 saat): istek hızı 18,2/s, hata oranı %0,3, p95 220 ms, p99 410 ms, açık problem 0.",
+            "payments": "payments (son 1 saat): istek hızı 11,4/s, hata oranı %2,6, p95 870 ms, p99 1430 ms, açık problem 1.",
+            "inventory": "inventory (son 1 saat): istek hızı 27,9/s, hata oranı %0,1, p95 95 ms, p99 180 ms, açık problem 0."
+          }
+        },
+        "get_service_health": {
+          "$byService": {
+            "checkout": {
+              "service": "checkout",
+              "found": true,
+              "rps": 42.5,
+              "error_rate_pct": 0.8,
+              "p95_ms": 310,
+              "p99_ms": 540,
+              "open_problems": 0
+            },
+            "orders": {
+              "service": "orders",
+              "found": true,
+              "rps": 18.2,
+              "error_rate_pct": 0.3,
+              "p95_ms": 220,
+              "p99_ms": 410,
+              "open_problems": 0
+            },
+            "payments": {
+              "service": "payments",
+              "found": true,
+              "rps": 11.4,
+              "error_rate_pct": 2.6,
+              "p95_ms": 870,
+              "p99_ms": 1430,
+              "open_problems": 1
+            },
+            "inventory": {
+              "service": "inventory",
+              "found": true,
+              "rps": 27.9,
+              "error_rate_pct": 0.1,
+              "p95_ms": 95,
+              "p99_ms": 180,
+              "open_problems": 0
+            }
+          }
+        },
+        "resolve_entity": {
+          "$byService": {
+            "checkout": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "checkout",
+                  "score": 1.0
+                }
+              ]
+            },
+            "orders": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "orders",
+                  "score": 1.0
+                }
+              ]
+            },
+            "payments": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "payments",
+                  "score": 1.0
+                }
+              ]
+            },
+            "inventory": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "inventory",
+                  "score": 1.0
+                }
+              ]
+            }
+          }
+        },
+        "list_services": {
+          "services": [
+            "checkout",
+            "orders",
+            "payments",
+            "inventory"
+          ]
+        },
+        "list_my_services": {
+          "team": "takim-a",
+          "services": [
+            "checkout",
+            "orders",
+            "payments",
+            "inventory"
+          ]
+        },
+        "problems": "Açık problem yok.",
+        "list_problems": {
+          "problems": []
+        },
+        "open_problems": {
+          "problems": []
+        }
+      },
+      "turns": [
+        {
+          "user": "selam, checkout son 1 saatte nasıl gidiyor?",
+          "expect": {
+            "class": "status",
+            "anyOfCalls": [
+              "service_health",
+              "get_service_health",
+              "problems",
+              "list_problems",
+              "open_problems"
+            ],
+            "entity": "checkout",
+            "window": "1h",
+            "maxSentences": 3,
+            "noBoilerplate": true
+          }
+        },
+        {
+          "user": "peki orders?",
+          "expect": {
+            "class": "followup",
+            "anyOfCalls": [
+              "service_health",
+              "get_service_health",
+              "problems",
+              "list_problems",
+              "open_problems"
+            ],
+            "entity": "orders",
+            "maxSentences": 3,
+            "noBoilerplate": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "conv-seam-enforce",
+      "surface": "ChatConversation",
+      "why": "E2 (v0.10.2339): doğrulayıcı zorla kipinde (koşu zorlamıyorsa vaka kendisi açar) sahtede olmayan bir değer cevaba girerse \"(doğrulanmamış değer)\" notuyla işaretlenir; sahtedeki yuvarlanmış değer işaretlenmez.",
+      "verification": "enforce",
+      "stubs": {
+        "service_health": {
+          "$byService": {
+            "checkout": "checkout (son 1 saat): istek hızı 42,5/s, hata oranı %0,8, p95 310 ms, p99 540 ms, açık problem 0.",
+            "orders": "orders (son 1 saat): istek hızı 18,2/s, hata oranı %0,3, p95 220 ms, p99 410 ms, açık problem 0.",
+            "payments": "payments (son 1 saat): istek hızı 11,4/s, hata oranı %2,6, p95 870 ms, p99 1430 ms, açık problem 1.",
+            "inventory": "inventory (son 1 saat): istek hızı 27,9/s, hata oranı %0,1, p95 95 ms, p99 180 ms, açık problem 0."
+          }
+        },
+        "get_service_health": {
+          "$byService": {
+            "checkout": {
+              "service": "checkout",
+              "found": true,
+              "rps": 42.5,
+              "error_rate_pct": 0.8,
+              "p95_ms": 310,
+              "p99_ms": 540,
+              "open_problems": 0
+            },
+            "orders": {
+              "service": "orders",
+              "found": true,
+              "rps": 18.2,
+              "error_rate_pct": 0.3,
+              "p95_ms": 220,
+              "p99_ms": 410,
+              "open_problems": 0
+            },
+            "payments": {
+              "service": "payments",
+              "found": true,
+              "rps": 11.4,
+              "error_rate_pct": 2.6,
+              "p95_ms": 870,
+              "p99_ms": 1430,
+              "open_problems": 1
+            },
+            "inventory": {
+              "service": "inventory",
+              "found": true,
+              "rps": 27.9,
+              "error_rate_pct": 0.1,
+              "p95_ms": 95,
+              "p99_ms": 180,
+              "open_problems": 0
+            }
+          }
+        },
+        "resolve_entity": {
+          "$byService": {
+            "checkout": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "checkout",
+                  "score": 1.0
+                }
+              ]
+            },
+            "orders": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "orders",
+                  "score": 1.0
+                }
+              ]
+            },
+            "payments": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "payments",
+                  "score": 1.0
+                }
+              ]
+            },
+            "inventory": {
+              "matches": [
+                {
+                  "kind": "service",
+                  "name": "inventory",
+                  "score": 1.0
+                }
+              ]
+            }
+          }
+        },
+        "list_services": {
+          "services": [
+            "checkout",
+            "orders",
+            "payments",
+            "inventory"
+          ]
+        },
+        "list_my_services": {
+          "team": "takim-a",
+          "services": [
+            "checkout",
+            "orders",
+            "payments",
+            "inventory"
+          ]
+        },
+        "problems": "Açık problem yok.",
+        "list_problems": {
+          "problems": []
+        },
+        "open_problems": {
+          "problems": []
+        }
+      },
+      "turns": [
+        {
+          "user": "payments son 1 saatte p95 kaç?",
+          "expect": {
+            "class": "status",
+            "anyOfCalls": [
+              "service_health",
+              "get_service_health"
+            ],
+            "entity": "payments",
+            "window": "1h",
+            "maxSentences": 3,
+            "verifier": "pass"
+          }
+        },
+        {
+          "user": "p99.9 değeri ne?",
+          "expect": {
+            "class": "followup",
+            "anyOfCalls": [
+              "service_health",
+              "get_service_health"
+            ],
+            "entity": "payments",
+            "verifier": "annotate"
+          }
+        }
+      ]
+    }
+  ]
+}

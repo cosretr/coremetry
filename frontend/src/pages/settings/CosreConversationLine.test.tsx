@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // CosreConversationLine.test.tsx — v0.10.2324 (conversation-audit karar 5):
-// konuşma durumu aç/kapa. Pinler: sunucu değeri (varsayılan açık) görünür,
+// konuşma durumu aç/kapa; v0.10.2339 doğrulayıcı üç seçenek. Pinler: sunucu değeri (varsayılan açık) görünür,
 // tık PUT {state} gönderir, viewer salt okunur, okuma hatası boş değil.
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import { act } from 'react';
@@ -51,7 +51,8 @@ async function render(): Promise<HTMLElement> {
   return host;
 }
 const box = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('[role="checkbox"]');
-const verifyBox = (el: HTMLElement) => el.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')[1];
+const verifyRadio = (el: HTMLElement, label: string) =>
+  [...el.querySelectorAll<HTMLButtonElement>('[data-testid="cosre-verify-mode"] [role="radio"]')].find(b => b.textContent === label)!;
 
 describe('CosreConversationLine', () => {
   it('sunucu değeri görünür (varsayılan açık); tık state:false yazar', async () => {
@@ -62,29 +63,33 @@ describe('CosreConversationLine', () => {
     await tick();
     expect(m.put).toHaveBeenCalledWith(false);
   });
-  it('v0.10.2327 — doğrulayıcı varsayılan gölge (açık); tık verification:off yazar', async () => {
+  it('v0.10.2339 — doğrulayıcı üç seçenek (kapalı / gölge / zorla); varsayılan gölge; seçim yazar', async () => {
     const el = await render();
     expect(el.textContent).toContain('Cevap doğrulayıcısı');
-    expect(verifyBox(el)?.getAttribute('aria-checked')).toBe('true');
-    await act(async () => { verifyBox(el)!.click(); });
+    expect(el.textContent).toContain('(doğrulanmamış değer)');
+    expect(verifyRadio(el, 'gölge').getAttribute('aria-checked')).toBe('true');
+    await act(async () => { verifyRadio(el, 'zorla').click(); });
     await tick();
-    expect(m.putVerify).toHaveBeenCalledWith('off');
+    expect(m.putVerify).toHaveBeenCalledWith('enforce');
+    await act(async () => { verifyRadio(el, 'kapalı').click(); });
+    await tick();
+    expect(m.putVerify).toHaveBeenLastCalledWith('off');
     expect(m.put).not.toHaveBeenCalled();
   });
-  it('doğrulayıcı kapalıyken tık shadow yazar (enforce hiç gönderilmez)', async () => {
-    m.get = () => Promise.resolve({ state: true, style: false, verification: 'off' });
+  it('seçili kipe tık yazmaz', async () => {
+    m.get = () => Promise.resolve({ state: true, style: false, verification: 'enforce' });
     const el = await render();
-    expect(verifyBox(el)?.getAttribute('aria-checked')).toBe('false');
-    await act(async () => { verifyBox(el)!.click(); });
+    expect(verifyRadio(el, 'zorla').getAttribute('aria-checked')).toBe('true');
+    await act(async () => { verifyRadio(el, 'zorla').click(); });
     await tick();
-    expect(m.putVerify).toHaveBeenCalledWith('shadow');
+    expect(m.putVerify).not.toHaveBeenCalled();
   });
   it('üslup (v0.10.2331): varsayılan kapalı; tık style:true yazar', async () => {
     const el = await render();
     const boxes = el.querySelectorAll<HTMLButtonElement>('[role="checkbox"]');
     expect(el.textContent).toContain('Üslup');
-    expect(boxes[2]?.getAttribute('aria-checked')).toBe('false');
-    await act(async () => { boxes[2]!.click(); });
+    expect(boxes[1]?.getAttribute('aria-checked')).toBe('false');
+    await act(async () => { boxes[1]!.click(); });
     await tick();
     expect(m.putStyle).toHaveBeenCalledWith(true);
     expect(m.put).not.toHaveBeenCalled();
@@ -97,8 +102,8 @@ describe('CosreConversationLine', () => {
     m.role = 'viewer';
     const el = await render();
     expect(box(el)?.disabled).toBe(true);
-    expect(verifyBox(el)?.disabled).toBe(true);
-    expect(el.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')[2]?.disabled).toBe(true);
+    expect(verifyRadio(el, 'zorla').disabled).toBe(true);
+    expect(el.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')[1]?.disabled).toBe(true);
     expect(el.textContent).toContain('Yalnız admin');
   });
   it('okuma hatası boş değil', async () => {

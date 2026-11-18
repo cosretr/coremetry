@@ -164,5 +164,8 @@ func (s *Server) loopTurn(ctx context.Context, prompt string, in stepInput, emit
 	plan = answerClassLoopPlan(ctx, plan) // v0.10.2331 — B: sınıf satırı EN SONA + tavan (üslup kapalıyken aynen)
 	sys := prompt + plan.SystemAddendum
 	turn, err := s.chatLoopTurn(plan.planCtx(ctx), sys, in.Conv, plan.planSpecs(in), emit)
+	if err == nil && len(turn.ToolCalls) == 0 && in.Kind != stepDegenRetry { // v0.10.2339 — E2: cevap turu → Derin + zorla kipinde tek yeniden üretim kapısı
+		seamNoteLoopCall(ctx, s, plan.planCtx(ctx), sys, in.Conv, plan.planSpecs(in), turn.Text)
+	}
 	return turn, sys, err
 }

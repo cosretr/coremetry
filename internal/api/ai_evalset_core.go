@@ -140,7 +140,13 @@ type evalCase struct {
 	Turns   []evalConvFixtureTurn      `json:"turns,omitempty"`
 	Stubs   map[string]json.RawMessage `json:"stubs,omitempty"`
 	Catalog []string                   `json:"catalog,omitempty"`
-	file    string
+	// ConvStyle / Verification — v0.10.2339 (konuşma kipi): vakanın kendi
+	// üslup / doğrulama zorlaması; koşu isteği zorluyorsa koşununki kazanır,
+	// ikisi de yoksa canlı ayar. Seam vakaları (conversation/seam.json) bununla
+	// her koşuda kendi kipini sınar.
+	ConvStyle    *bool  `json:"style,omitempty"`
+	Verification string `json:"verification,omitempty"`
+	file         string
 	// profile — v0.10.2322: koşu isteğinin profil listesinden bu plan öğesine
 	// sabitlenen profil (evalExpandProfiles); "" = üretimin yüzey eşlemesi.
 	profile string

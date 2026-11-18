@@ -215,16 +215,60 @@ type answerStyleTurn struct {
 	// kademesi akarken; süzgeç yalnız modelin metnine (sunucu ekleri hariç).
 	narrating bool
 	modelText string
+	// v0.10.2339 (E2) — akan anlatımın kademesi (taslak denetimi) ve Derin
+	// kipin tek yeniden üretim kapısı (anlatım çağrısını yapan yazar).
+	tier      string
+	regenTier string
+	regen     func(note string) (string, error)
 }
 
-// markNarrating — anlatım kademesi (guided, genel cevap, döngü) başlıyor.
-func (t *answerStyleTurn) markNarrating() {
+// markNarrating — anlatım kademesi (guided, genel cevap, döngü) başlıyor;
+// tier yalnız henüz yazılmamışsa (genel cevap kendisi önce yazar).
+func (t *answerStyleTurn) markNarrating(tier string) {
 	if t == nil {
 		return
 	}
 	t.mu.Lock()
 	t.narrating = true
+	if t.tier == "" {
+		t.tier = tier
+	}
 	t.mu.Unlock()
+}
+
+// setTier — v0.10.2339: akan anlatımın kademesi (kesin).
+func (t *answerStyleTurn) setTier(tier string) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.tier = tier
+	t.mu.Unlock()
+}
+
+func (t *answerStyleTurn) streamTier() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.tier == "" {
+		return verifyTierLoop
+	}
+	return t.tier
+}
+
+// setRegen — v0.10.2339: kademenin yeniden üretim çağrısı (son yazan kazanır).
+func (t *answerStyleTurn) setRegen(tier string, fn func(note string) (string, error)) {
+	t.mu.Lock()
+	t.regenTier, t.regen = tier, fn
+	t.mu.Unlock()
+}
+
+func (t *answerStyleTurn) regenFor(tier string) func(note string) (string, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.regenTier != tier {
+		return nil
+	}
+	return t.regen
 }
 
 func (t *answerStyleTurn) isNarrating() bool {
@@ -298,7 +342,7 @@ func answerStyleNarration(ctx context.Context, c answerClass) (context.Context, 
 	if t == nil {
 		return ctx, ""
 	}
-	t.markNarrating() // v0.10.2338 — cevap dikişi
+	t.markNarrating(verifyTierGuided) // v0.10.2338 — cevap dikişi (genel cevap kademesini önce kendisi yazar)
 	line, capTok := answerClassLines[c], answerClassCaps[c]
 	if !t.on || line == "" {
 		t.note(c, 0)
@@ -319,7 +363,9 @@ func answerStyleLoop(ctx context.Context, question string, st ChatContext, repor
 	t.mu.Lock()
 	t.rangeS = 0       // döngü penceresi model seçer; guided'ın penceresi bu cevabın değil
 	t.narrating = true // v0.10.2338 — cevap dikişi
+	t.tier = verifyTierLoop
 	t.mu.Unlock()
+	verifyTurnFrom(ctx).clearDraftEvidence() // v0.10.2339 — düşen guided'ın taslak kanıtı döngüye sızmaz
 	capTok := 0
 	if t.on && answerClassLines[c] != "" {
 		capTok = max(answerClassCaps[c], answerLoopToolFloor)

@@ -49,6 +49,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/ai/evalrubric"
 	"github.com/cilcenk/coremetry/internal/auth"
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/copilot/evalset"
 )
@@ -117,12 +118,18 @@ type evalConvExpect struct {
 	// yoklama: cevap sahtede olmayan bir sayı söylerse doğrulayıcı onu
 	// uyuşmazlık saymalı (kaçırırsa ihlal). Doğrulama koşmadıysa denetlenmez.
 	Verifier string `json:"verifier,omitempty"`
+	// NoBoilerplate — v0.10.2338 (D): üslup açık koşulan turda cevap kalıp
+	// açılış/kapanış taşımamalı (evalrubric.FluencyOf). Üslup kapalıysa denetlenmez.
+	NoBoilerplate bool `json:"noBoilerplate,omitempty"`
 }
 
 // Doğrulayıcı beklentileri.
 const (
 	evalConvVerifyPass = "pass"
 	evalConvVerifyFlag = "flag"
+	// evalConvVerifyAnnotate — v0.10.2339 (E2): "flag" + zorla kipinde koşan
+	// turda sahtede olmayan sayı cevapta "(doğrulanmamış değer)" ile işaretli olmalı.
+	evalConvVerifyAnnotate = "annotate"
 )
 
 // evalConvTZ — v0.10.2328: konuşma kipi isteklerinin SABİT saat dilimi
@@ -202,6 +209,12 @@ type evalConvTurnResult struct {
 	// SeamDropped — v0.10.2338 (D): cevap dikişinin sildiği model kalıp cümlesi
 	// (ilk / son); akıcılık raporunun "model yazdı" oranı bunu da sayar.
 	SeamDropped int `json:"seamDropped,omitempty"`
+	// Verification / Enforce — v0.10.2339 (E2): turun koştuğu doğrulama kipi
+	// (off | shadow | enforce; forced = koşu ya da vaka zorladı) ve zorla
+	// kipinin kararı (pass | annotated | regenerated…; "" = koşmadı).
+	Verification       string `json:"verification,omitempty"`
+	VerificationForced bool   `json:"verificationForced,omitempty"`
+	Enforce            string `json:"enforce,omitempty"`
 }
 
 // evalConvCase — SAF: vaka konuşma kipinde mi.
@@ -398,13 +411,22 @@ func (s *Server) runEvalConvCase(ctx context.Context, job *evalJob, c evalCase) 
 func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, i int, ft evalConvFixtureTurn,
 	hist []copilot.ChatMessage, state *ChatContext, convID string, catalog []string) (evalConvTurnResult, error) {
 	tr := evalConvTurnResult{I: i + 1, User: ft.User, Class: ft.Expect.Class, MaxSentences: ft.Expect.MaxSentences, Fails: []string{}, Calls: []evalConvCall{}}
-	ct := &evalConvTurn{
-		State:   &chatContextState{ctx: *state},
-		Stubs:   evalMergeStubs(c.Stubs, ft.Stubs),
-		Catalog: catalog,
-		Style:   job.styleOverride, // v0.10.2331 — yalnız bu koşu (nil = canlı ayar)
+	style, verif := job.styleOverride, job.verifyOverride // v0.10.2339 — koşu > vaka > canlı ayar
+	if style == nil {
+		style = c.ConvStyle
 	}
-	tr.Style, tr.StyleForced = evalStyleLabel(job.styleOverride)
+	if verif == "" {
+		verif = c.Verification
+	}
+	ct := &evalConvTurn{
+		State:        &chatContextState{ctx: *state},
+		Stubs:        evalMergeStubs(c.Stubs, ft.Stubs),
+		Catalog:      catalog,
+		Style:        style, // v0.10.2331 — yalnız bu koşu (nil = canlı ayar)
+		Verification: verif, // v0.10.2339
+	}
+	tr.Style, tr.StyleForced = evalStyleLabel(style)
+	tr.Verification, tr.VerificationForced = evalVerifyLabel(verif)
 	col := &evalAgentCollector{parts: newEvalPartSink()}
 	em := &chatEvalMode{
 		Surface: evalsetSurfacePrefix + c.Surface, ExchangeID: fmt.Sprintf("%s/%s/t%d", job.row.ID, c.ID, i+1),
@@ -448,6 +470,7 @@ func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, 
 	tr.LoopModelMs, tr.LoopToolMs, tr.TTFTMs = o.Loop.ModelMs, o.Loop.ToolMs, o.TTFTMs
 	tr.AnswerClass = ct.answerClass() // v0.10.2331
 	tr.SeamDropped = ct.seamDropped() // v0.10.2338
+	tr.Enforce = ct.enforceMode()     // v0.10.2339
 	if !ok {
 		err = fmt.Errorf("sohbet handler'ı sonuç bildirmedi (HTTP %d)", w.status())
 		tr.Error = err.Error()
@@ -578,10 +601,21 @@ func scoreEvalConvTurn(e evalConvExpect, tr evalConvTurnResult, evidence string,
 			if v.Mismatch > 0 {
 				fails = append(fails, fmt.Sprintf("doğrulayıcı uyuşmazlığı: %v", v.Mismatches))
 			}
-		case evalConvVerifyFlag:
+		case evalConvVerifyFlag, evalConvVerifyAnnotate:
 			if len(extra) > 0 && v.Mismatch == 0 {
 				fails = append(fails, fmt.Sprintf("doğrulayıcı sahtede olmayan sayıyı kaçırdı: %v", extra))
 			}
+		}
+	}
+	// v0.10.2339 (E2) — zorla kipinde uydurulan değer işaretsiz kalmamalı.
+	if e.Verifier == evalConvVerifyAnnotate && len(extra) > 0 && tr.Verification == chstore.CosreVerifyEnforce &&
+		!strings.Contains(answer, verifyUnverifiedNote) {
+		fails = append(fails, fmt.Sprintf("zorla kipinde sahtede olmayan değer işaretlenmedi: %v", extra))
+	}
+	// v0.10.2338 (D) — üslup açıkken kalıp açılış/kapanış kalmamalı.
+	if e.NoBoilerplate && tr.Style == "on" {
+		if f := evalrubric.FluencyOf(answer); f.BoilerplateOpening || f.BoilerplateClosing {
+			fails = append(fails, "üslup açıkken kalıp açılış/kapanış kaldı")
 		}
 	}
 	return fails

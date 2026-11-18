@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Spinner } from '@/components/Spinner';
 import { CheckboxField, TextareaField } from '@/components/coremetry/Field';
 import { Button } from '@/components/shadcn/button';
+import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { useAuthRole } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
 import type { CosreConversationSettings } from '@/lib/types';
@@ -10,7 +11,8 @@ import type { CosreConversationSettings } from '@/lib/types';
 // v0.10.2324 (docs/cosre/conversation-audit.md §7 karar 5) — CoSRE konuşma
 // kalitesi anahtarları: Settings › CoSRE'de CosreBriefingLine'ın altında
 // (operatör ekranı, yalnız Türkçe). Blob `cosre_conversation` üç alan taşır:
-// `state` (A), v0.10.2327'den beri `verification` off | shadow (E1) ve
+// `state` (A), v0.10.2327'den beri `verification` off | shadow (E1; v0.10.2339'dan
+// beri enforce da — üç seçenekli denetim, varsayılan gölge) ve
 // v0.10.2331'den beri `style` (B) bağlı. state ve verification varsayılanı
 // açık, style varsayılanı kapalı (sunucu varsayılanı); kapatmak geri alma
 // anahtarıdır. Audit sunucuda (`settings.cosre_conversation.update`).
@@ -26,7 +28,19 @@ export const CONVERSATION_VERIFY_HINT =
   + 'karşılaştırır ve yalnız sayar; cevap değişmez, gecikmez, işaretlenmez. Uyuşmayan tur kalite '
   + 'sinyali olarak kaydedilir. Kapalıyken hiçbir denetim koşmaz.';
 
-type Change = { state: boolean } | { verification: 'off' | 'shadow' };
+// v0.10.2339 (audit §6.1 E2, karar 6–7) — üç kip; varsayılan gölge. "zorla"nın tek satırlık açıklaması.
+export const CONVERSATION_ENFORCE_HINT =
+  'Zorla: o turda okunan veride bulunmayan sayı, saat ya da adın hemen ardına “(doğrulanmamış değer)” yazılır '
+  + 've cümle doğrulanana dek taslakta görünmez; Derin kipte model önce bir kez yeniden yazar.';
+
+type VerifyMode = CosreConversationSettings['verification'];
+const VERIFY_OPTIONS: ReadonlyArray<{ value: VerifyMode; label: string }> = [
+  { value: 'off', label: 'kapalı' },
+  { value: 'shadow', label: 'gölge' },
+  { value: 'enforce', label: 'zorla' },
+];
+
+type Change = { state: boolean } | { verification: VerifyMode };
 
 // v0.10.2331 (audit §6.1 B) — üslup anahtarı: varsayılan KAPALI; operatör
 // incelemeden kullanıcılar görmez. Sonraki dilimler (C, D, F1) aynı anahtarın arkasında.
@@ -128,7 +142,7 @@ export function CosreConversationLine() {
   }
   const pending = m.isPending ? m.variables : undefined;
   const on = pending && 'state' in pending ? pending.state : q.data.state;
-  const verifyOn = pending && 'verification' in pending ? pending.verification !== 'off' : q.data.verification !== 'off';
+  const verify: VerifyMode = pending && 'verification' in pending ? pending.verification : q.data.verification;
   const styleOn = sm.isPending ? sm.variables === true : q.data.style;
   const saveErr = m.error ?? sm.error;
   return (
@@ -140,12 +154,17 @@ export function CosreConversationLine() {
           checked={on}
           disabled={!canEdit || m.isPending}
           onCheckedChange={v => m.mutate({ state: v })} />
-        <CheckboxField
-          label="Cevap doğrulayıcısı (gölge, yalnız ölçer)"
-          hint={CONVERSATION_VERIFY_HINT}
-          checked={verifyOn}
-          disabled={!canEdit || m.isPending}
-          onCheckedChange={v => m.mutate({ verification: v ? 'shadow' : 'off' })} />
+        <div className="flex flex-col gap-1" data-testid="cosre-verify-mode" title={CONVERSATION_VERIFY_HINT}>
+          <span className="text-[length:var(--fs-sm)] leading-tight text-(--text2)">Cevap doğrulayıcısı</span>
+          <SegmentedControl
+            aria-label="Cevap doğrulayıcısı"
+            size="sm"
+            activation="manual"
+            value={verify}
+            options={VERIFY_OPTIONS.map(o => ({ ...o, disabled: !canEdit || m.isPending }))}
+            onChange={v => { if (v !== verify) m.mutate({ verification: v }); }} />
+          <span className="field-hint">{CONVERSATION_ENFORCE_HINT}</span>
+        </div>
         <CheckboxField
           label="Üslup (CoSRE v2: ölçü, örnekle üslup, ara cümle)"
           hint={CONVERSATION_STYLE_HINT}

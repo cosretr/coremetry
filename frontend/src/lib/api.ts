@@ -1411,7 +1411,7 @@ export const api = {
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state }),
     }),
-  putCosreConversationVerification: (verification: 'off' | 'shadow') =>
+  putCosreConversationVerification: (verification: 'off' | 'shadow' | 'enforce') => // v0.10.2339 — E2 zorla
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ verification }),
     }),

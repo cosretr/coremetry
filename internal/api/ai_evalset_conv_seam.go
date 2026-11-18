@@ -62,11 +62,31 @@ type evalConvTurn struct {
 	// Style — v0.10.2331 (B): koşunun üslup anahtarı zorlaması (nil = canlı
 	// ayar). Yalnız bu konuşma kipi turunda okunur (answerStyleOn).
 	Style *bool
+	// Verification — v0.10.2339 (E2): koşunun / vakanın doğrulama zorlaması
+	// (off | shadow | enforce; "" = canlı ayar). Yalnız bu turda (verifyEnforceOn).
+	Verification string
 
 	mu      sync.Mutex
 	calls   []evalConvCall
 	class   string // v0.10.2331 — turun cevap sınıfı (answerStyleTurn.note)
 	dropped int    // v0.10.2338 — cevap dikişinin sildiği model kalıp cümlesi
+	enforce string // v0.10.2339 — zorla kipinin kararı (pass | annotated | regenerated…)
+}
+
+// noteEnforce — v0.10.2339 (E2): dikişin zorla kararı. nil-güvenli.
+func (t *evalConvTurn) noteEnforce(mode string) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.enforce = mode
+	t.mu.Unlock()
+}
+
+func (t *evalConvTurn) enforceMode() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.enforce
 }
 
 // noteSeamDropped — v0.10.2338 (D): dikişin sildiği kalıp cümle sayısı. nil-güvenli.

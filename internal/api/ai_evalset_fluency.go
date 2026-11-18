@@ -267,7 +267,8 @@ func evalFluencyReport(run evalRunSummary, cases []evalCaseResult) string {
 	for i, p := range profiles {
 		fmt.Fprintf(&b, "- Profil %c: %s\n", 'A'+rune(i), head(p))
 	}
-	b.WriteString(evalFluencyStyleLine(cases)) // v0.10.2331
+	b.WriteString(evalFluencyStyleLine(cases))  // v0.10.2331
+	b.WriteString(evalFluencyVerifyLine(cases)) // v0.10.2339
 	b.WriteString("- Küme: `internal/copilot/evalset/conversation/fluency.json`; veri sahte, model çağrıları gerçek. Puanlama operatörün; aşağıdaki ölçütler otomatik sayımdır.\n\n")
 
 	// Vakalar: taban kimliğe göre, kümedeki sıra (ilk görülme).
@@ -460,6 +461,53 @@ func evalStyleLabel(override *bool) (string, bool) {
 		return "on", forced
 	}
 	return "off", forced
+}
+
+// evalVerifyLabel — SAF (v0.10.2339): koşu / vaka zorlaması → (kip, forced).
+// "" = canlı ayar (koşu anındaki değer).
+func evalVerifyLabel(override string) (string, bool) {
+	if override != "" {
+		return override, true
+	}
+	return chstore.CurrentCosreConversation().Verification, false
+}
+
+// evalFluencyVerifyLine — SAF (v0.10.2339): künyenin doğrulama kipi satırı
+// (turların kaydından; zorla kipinde işaretlenen / yeniden üretilen tur sayısı).
+// "Doğrulayıcıdan geçen" payı işaretten ÖNCEKİ model metniyle ölçülür.
+func evalFluencyVerifyLine(cases []evalCaseResult) string {
+	seen := map[string]bool{}
+	var vals []string
+	annotated, regenerated := 0, 0
+	for _, c := range cases {
+		if c.Mode != evalModeConversation {
+			continue
+		}
+		for _, t := range c.Turns {
+			if t.Verification == "" {
+				continue
+			}
+			v := t.Verification + " (canlı ayar)"
+			if t.VerificationForced {
+				v = t.Verification + " (zorlandı)"
+			}
+			if !seen[v] {
+				seen[v] = true
+				vals = append(vals, v)
+			}
+			if strings.Contains(t.Enforce, verifyEnforceAnnotated) {
+				annotated++
+			}
+			if strings.HasPrefix(t.Enforce, verifyEnforceRegenerated) {
+				regenerated++
+			}
+		}
+	}
+	if len(vals) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("- Doğrulama kipi (`cosre_conversation.verification`): %s · zorla kipinde işaretlenen tur %d, yeniden üretilen tur %d\n",
+		strings.Join(vals, ", "), annotated, regenerated)
 }
 
 // evalFluencyStyleLine — SAF (v0.10.2331): künyenin üslup satırı; turların

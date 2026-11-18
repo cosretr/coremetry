@@ -9,8 +9,8 @@ package api
 // Depo system_settings `cosre_conversation` (chstore/cosre_conversation_settings.go;
 // boot + 30 s cfgRefresh). Bağlı olanlar: `state` (A dilimi, chat_state.go) ve
 // v0.10.2327'den beri `verification` off | shadow (E1, answer_verify_turn.go);
-// `enforce` E2'ye kadar reddedilir: PUT onu açmaya çalışırsa 400 — bağlı
-// olmayan bir anahtarı "açtım" yanılsaması olmasın. ai_general_questions.go ile aynı duruş:
+// v0.10.2339'dan beri `enforce` de (E2, answer_seam.go — varsayılan yine shadow;
+// operatör bir haftalık gölge verisinden sonra açar, karar 7). ai_general_questions.go ile aynı duruş:
 // requireCopilot'suz kurulum ayarı, GET atomic okuma.
 //
 // v0.10.2331 — `style` artık bağlı (B dilimi, chat_answer_class.go; varsayılan kapalı).
@@ -77,9 +77,6 @@ func mergeCosreConversationPut(cur chstore.CosreConversation, in cosreConversati
 	if in.Verification != nil {
 		if !chstore.ValidCosreVerification(*in.Verification) {
 			return cur, fmt.Errorf("verification: off | shadow | enforce")
-		}
-		if *in.Verification == chstore.CosreVerifyEnforce {
-			return cur, fmt.Errorf("verification=enforce henüz bağlı değil (E2); off | shadow")
 		}
 		out.Verification = *in.Verification
 	}

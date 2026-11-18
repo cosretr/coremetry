@@ -129,6 +129,8 @@ type evalJob struct {
 	toolset         string
 	// styleOverride — v0.10.2331 (B): koşunun üslup zorlaması (nil = canlı ayar).
 	styleOverride *bool
+	// verifyOverride — v0.10.2339 (E2): koşunun doğrulama zorlaması ("" = vaka / canlı ayar).
+	verifyOverride string
 }
 
 type evalJobBook struct {
@@ -327,10 +329,19 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 		// YALNIZ bu koşu için zorlar (true açık, false kapalı; yok = canlı
 		// ayar). Canlı ayara ve kullanıcılara dokunmaz; tek turlu vakalar okumaz.
 		Style *bool `json:"style"`
+		// Verification — v0.10.2339 (E2): konuşma kipi turlarında doğrulama
+		// kipini (off | shadow | enforce) YALNIZ bu koşu için zorlar; yok =
+		// vakanın kendi zorlaması ya da canlı ayar.
+		Verification string `json:"verification"`
 	}
 	// Boş gövde = tümü (FE düğmesi seçim yokken gövdesiz gönderebilir).
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
 		writeJSONError(w, http.StatusBadRequest, "geçersiz JSON: "+err.Error())
+		return
+	}
+	in.Verification = strings.TrimSpace(in.Verification)
+	if in.Verification != "" && !chstore.ValidCosreVerification(in.Verification) {
+		writeJSONError(w, http.StatusBadRequest, "verification boş, 'off', 'shadow' ya da 'enforce' olmalı")
 		return
 	}
 	in.Toolset = strings.TrimSpace(in.Toolset)
@@ -425,7 +436,8 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 	runCtx, release := context.WithTimeout(runCtx, deadline)
 	job := &evalJob{row: row, plan: cases, cancel: cancel, deadline: deadline, userID: uid, userEmail: email, userRole: role,
 		toolsetOverride: in.Toolset, toolset: s.evalRunToolset(cases, in.Toolset)} // v0.10.1311
-	job.styleOverride = in.Style // v0.10.2331
+	job.styleOverride = in.Style         // v0.10.2331
+	job.verifyOverride = in.Verification // v0.10.2339
 	evalJobs.running = job
 	sum := job.summaryLocked()
 	first := job.rowLocked(false)
@@ -448,6 +460,9 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Style != nil { // v0.10.2331 — koşuya özel üslup zorlaması
 		details += fmt.Sprintf(" style=%v", *in.Style)
+	}
+	if in.Verification != "" { // v0.10.2339 — koşuya özel doğrulama zorlaması
+		details += " verification=" + in.Verification
 	}
 	if job.toolset != "" { // v0.10.1311 — araç setinin uygulandığı koşu
 		mode := "auto"

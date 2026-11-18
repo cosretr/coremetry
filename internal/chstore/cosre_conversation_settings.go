@@ -15,7 +15,8 @@ package chstore
 //   - verification — E dilimi: off | shadow | enforce. v0.10.2327 (E1) gölge
 //     kipi bağlı ve VARSAYILAN shadow: cevap doğrulayıcısı yalnız sayar,
 //     kullanıcıya görünen hiçbir şey değişmez; off kill switch'tir. enforce
-//     E2'ye kadar PUT'ta reddedilir (okunursa gölge gibi davranır).
+//     v0.10.2339 (E2) ile bağlı: uyuşmayan değer cevapta "(doğrulanmamış
+//     değer)" notuyla işaretlenir (api/answer_seam.go). Varsayılan shadow kalır.
 //   - bannedPhrases — v0.10.2338 (D): cevap dikişinin kalıp açılış/kapanış
 //     listesini GENİŞLETEN operatör ifadeleri (varsayılan liste
 //     evalrubric.BoilerplateOpenings/Closings, tek kaynak). En çok 40 ifade,
@@ -38,7 +39,7 @@ import (
 // CosreConversationKey — system_settings anahtarı.
 const CosreConversationKey = "cosre_conversation"
 
-// Doğrulama kipleri (karar 5; E dilimi bağlayacak).
+// Doğrulama kipleri (karar 5): off | shadow (E1) | enforce (E2, v0.10.2339).
 const (
 	CosreVerifyOff     = "off"
 	CosreVerifyShadow  = "shadow"

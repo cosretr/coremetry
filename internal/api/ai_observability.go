@@ -122,6 +122,9 @@ type aiCallOpts struct {
 
 func (s *Server) aiCall(ctx context.Context, r *http.Request, system, user string, o aiCallOpts) (string, error) {
 	surface := o.surface
+	if o.onDelta != nil && r == nil { // v0.10.2339 — E2: Derin + zorla kipinde anlatımın tek yeniden üretimi (answer_seam.go); aksi hâlde no-op
+		s.seamNoteNarration(ctx, surface, system, user)
+	}
 	if r != nil {
 		ctx = s.explainCallCtx(r)
 	}

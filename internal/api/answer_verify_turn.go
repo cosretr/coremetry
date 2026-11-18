@@ -12,8 +12,9 @@ package api
 //   - değerlendirme koşusunda sonuç koşucuya (evalAgentOutcome.Verify).
 //
 // Kapı: v2 (cosreV2Marked) VE cosre_conversation.verification ≠ off. "off"
-// kill switch'tir; "enforce" bu dilimde PUT'ta reddedilir, okunursa da gölge
-// gibi davranır (E2'ye kadar hiçbir cevap değişmez).
+// kill switch'tir. v0.10.2339 (E2): "enforce" kipinde aynı toplayıcı cevap
+// dikişinde (answer_seam.go) `answer`dan ÖNCE de koşar ve uyuşmayan değeri
+// işaretler; kayıt (verify kolonu, sinyal) aynen burada, sonuna "enforce=…".
 //
 // Kanıt (kademe başına):
 //   - döngü: yürüyen her aracın argümanı + TAM çıktısı (modele giden 2.048
@@ -63,6 +64,32 @@ type answerVerifyTurn struct {
 	times     []time.Time
 	tier      string
 	answer    string
+	// v0.10.2339 (E2) — zorla kipi: taslak cümlesinin ek kanıtı (guided kanıt
+	// bloğu anlatımdan ÖNCE; kayıt kanıtına girmez), dikişin kararı ve
+	// yeniden üretim öncesi sonuç (sinyal için).
+	draft   []string
+	enforce string
+	first   *verifyResult
+}
+
+// Zorla kipinin kayıt değerleri (verify kolonu "enforce=…").
+const (
+	verifyEnforcePass        = "pass"
+	verifyEnforceAnnotated   = "annotated"
+	verifyEnforceRegenerated = "regenerated"
+)
+
+// verifyEnforceOn — v0.10.2339 (E2): v2 VE verification=enforce. Değerlendirme
+// konuşma kipinde koşunun / vakanın zorlaması (evalConvTurn.Verification) canlı
+// ayarın yerine geçer; üretimde evalConvFrom nil → yalnız canlı ayar.
+func verifyEnforceOn(ctx context.Context) bool {
+	if !cosreV2Marked(ctx) {
+		return false
+	}
+	if t := evalConvFrom(ctx); t != nil && t.Verification != "" {
+		return t.Verification == chstore.CosreVerifyEnforce
+	}
+	return chstore.CurrentCosreConversation().Verification == chstore.CosreVerifyEnforce
 }
 
 // verifyShadowOn — kapı: v2 ve doğrulama kapalı değil.
@@ -238,6 +265,72 @@ func (v *answerVerifyTurn) setAnswer(tier, text string) {
 	v.mu.Unlock()
 }
 
+// addDraftEvidence — v0.10.2339: taslak denetiminin ek kanıtı (yalnız zorla
+// kipinde çağrılır; run/finish bunu GÖRMEZ — gölge sayaçları aynen).
+func (v *answerVerifyTurn) addDraftEvidence(texts ...string) {
+	if v == nil {
+		return
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	for _, t := range texts {
+		if strings.TrimSpace(t) != "" && v.size+len(t) <= verifyEvidenceMaxBytes {
+			v.draft = append(v.draft, t)
+		}
+	}
+}
+
+// clearDraftEvidence — döngü başlarken: başarısız guided'ın kanıtı döngü taslağına sızmaz.
+func (v *answerVerifyTurn) clearDraftEvidence() {
+	if v == nil {
+		return
+	}
+	v.mu.Lock()
+	v.draft = nil
+	v.mu.Unlock()
+}
+
+// draftPasses — v0.10.2339: taslak cümlesi O ANA DEK toplanan kanıtla
+// denetlenir; her iddia "doğrulandı" olmalı (türetilen ve uyuşmayan cümle
+// tutulur — son kanıtta sonucu değişebilir). İddiasız cümle geçer.
+func (v *answerVerifyTurn) draftPasses(tier, sentence string) bool {
+	if v == nil {
+		return false
+	}
+	v.mu.Lock()
+	ev := verifyEvidence{Texts: append(append([]string(nil), v.texts...), v.draft...),
+		Numbers: append([]float64(nil), v.numbers...), Names: append([]string(nil), v.names...),
+		Times: append([]time.Time(nil), v.times...), Loc: v.loc}
+	catalog := v.catalog
+	v.mu.Unlock()
+	for _, c := range verifyAnswer(tier, sentence, ev, catalog).Claims {
+		if c.Status != verifyVerified {
+			return false
+		}
+	}
+	return true
+}
+
+// answerText — anlatımın doğrulanan model metni.
+func (v *answerVerifyTurn) answerText() string {
+	if v == nil {
+		return ""
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.answer
+}
+
+// noteEnforce — dikişin kararı; first = yeniden üretim öncesi sonuç (yoksa nil).
+func (v *answerVerifyTurn) noteEnforce(mode string, first *verifyResult) {
+	if v == nil {
+		return
+	}
+	v.mu.Lock()
+	v.enforce, v.first = mode, first
+	v.mu.Unlock()
+}
+
 // entityNames — v0.10.2338: cevap dikişinin bulgu denetimi için turun ad
 // kanıtı + katalog (kopya; kanıtı değiştirmez).
 func (v *answerVerifyTurn) entityNames() []string {
@@ -341,6 +434,17 @@ type verifyOutcome struct {
 	Compact   string
 	Result    verifyResult
 	Truncated bool
+	// First — v0.10.2339: Derin kipte yeniden üretildiyse ilk cevabın sonucu.
+	First *verifyResult
+}
+
+// signalResult — sinyalin dayandığı sonuç: son cevap uyuşmuyorsa o; yeniden
+// üretim uyuşmazlığı giderdiyse ilk cevabınki (uydurma yine kayda geçer).
+func (o verifyOutcome) signalResult() verifyResult {
+	if len(o.Result.mismatches()) == 0 && o.First != nil {
+		return *o.First
+	}
+	return o.Result
 }
 
 // finish — doğrulamayı koşar (kayıt defer'i); ok=false → anlatım yok ya da kapalı.
@@ -350,11 +454,14 @@ func (v *answerVerifyTurn) finish() (verifyOutcome, bool) {
 		return verifyOutcome{}, false
 	}
 	v.mu.Lock()
-	tr := v.truncated
+	tr, mode, first := v.truncated, v.enforce, v.first
 	v.mu.Unlock()
 	c := r.compact()
 	if tr {
 		c += " truncated"
 	}
-	return verifyOutcome{Compact: c, Result: r, Truncated: tr}, true
+	if mode != "" { // v0.10.2339 — zorla kipi: işaretlendi / yeniden üretildi
+		c += " enforce=" + mode
+	}
+	return verifyOutcome{Compact: c, Result: r, Truncated: tr, First: first}, true
 }
