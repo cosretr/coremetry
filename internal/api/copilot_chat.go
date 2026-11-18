@@ -445,6 +445,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	anchorTo, anchored := chatAnchorTime(req.Context.ToMs, time.Now())
 	xch.verify.addWindow(anchorTo.Add(-time.Duration(req.Context.RangeS)*time.Second), anchorTo, int64(req.Context.RangeS)) // v0.10.2327
+	// v0.10.2361 — S4: açık araştırma ipucu guided orta kademeleri atlar (chat_investigate.go)
+	invSkip := investigateSkipTiers(ctx, lastUserText(req.Messages), cst.ctx, investigateService(stt, req.Context.Service), dm.On || ct.On || apCont.on || req.Context.Explain != "" || req.Context.Subject != "")
 	if anchored {
 		// Çıpa sessizce uygulanmamalı: operatör cevabın GEÇMİŞ bir
 		// pencereden geldiğini görebilmeli.
@@ -669,7 +671,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			return
 		}
 	}
-	if rtPlan == nil && opPre == nil && !ct.On && !apCont.on && !evm.singleTurn() && cosreV2Marked(ctx) {
+	if rtPlan == nil && opPre == nil && !ct.On && !apCont.on && !evm.singleTurn() && !invSkip && cosreV2Marked(ctx) {
 		pick := endpointPickCtx{Service: req.Context.Service, Operation: req.Context.Operation, Trace: req.Context.Trace,
 			Explain: req.Context.Explain != "" || req.Context.Subject != "", Skip: req.Context.SkipEndpointPick}
 		if pick.Service == "" && req.Context.Page != nil {
@@ -686,7 +688,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	if opPre == nil && !ct.On { // v0.10.1461 — kod turu guided'ı atlar (chat_code_turn.go)
 		handled, gok := false, false
-		if !evm.skipGuided() && !apCont.on && rtPlan == nil && !stt.searchFollowUp() { // v0.10.1738 rota turu da; v0.10.1476 — değerlendirme döngü sondası da atlar (chat_eval_mode.go); S5 onay devamı da; v0.10.2356 arama devamı da
+		if !evm.skipGuided() && !apCont.on && rtPlan == nil && !stt.searchFollowUp() && !invSkip { // v0.10.1738 rota turu da; v0.10.1476 — değerlendirme döngü sondası da atlar (chat_eval_mode.go); S5 onay devamı da; v0.10.2356 arama devamı da
 			handled, gok = s.copilotChatGuided(ctx, emit, req.Messages, req.Context.Service, req.Context.Operation, req.Context.Explain, req.Context.RangeS, req.Context.Trace, req.Context.Env, anchorTo, req.Context.TzOffsetMin, req.Context.Tz)
 		}
 		if handled {
@@ -728,7 +730,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	traceSubj, isTraceFollowUp := drawerTraceFollowUp(req.Context.Explain, req.Context.Subject, pageTraceID)
 	if !isTraceFollowUp && !ct.On && opPre == nil { // v0.10.1461 — kod turu da orta kademeleri atlar
-		if !apCont.on && rtPlan == nil { // agent-core S5 — onay devamı orta kademeleri de atlar; v0.10.1738 rota turu da
+		if !invSkip && !apCont.on && rtPlan == nil { // agent-core S5 — onay devamı orta kademeleri de atlar; v0.10.1738 rota turu da
 			// v0.10.1571 — kaynak sorusu (chat_clarify.go): telemetri şekilli soru
 			// guided'a oturmadı ve wiki gerçek bir alternatif → yalnız "Coremetry
 			// verisinde mi, wikide mi?" sorulur (düz metin, LLM'siz). Kapı kapalıysa
@@ -1343,6 +1345,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			skippedN++
 		}
 	}
+	conv, calledTools = s.chatInvestigate(ctx, emit, investigateTurn{Question: lastUserText(req.Messages), State: cst.ctx, Service: investigateService(stt, req.Context.Service), // v0.10.2361 — S4 kanıt paketi
+		Blocked: rtPlan != nil || isTraceFollowUp || req.Context.Explain != "" || dm.On || ct.On || apCont.on || opPre != nil, RangeS: int64(req.Context.RangeS), To: anchorTo}, conv, calledTools)
 	var apPending *pendingApproval // bu turda onay isteyen çağrı (tur sonunda jeton basılır)
 	var statusLine chatStatusLine  // v0.10.2333 — F1 ara durum cümlesi (chat_status_line.go)
 	for round := 0; round < maxRounds; round++ {

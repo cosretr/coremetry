@@ -217,6 +217,9 @@ type v2LoopPlan struct {
 	// Evidence — v0.10.2360 (S3): kanıt adayları ve ekleme kararı
 	// (chat_evidence_policy.go); nil = kanıt kapalı.
 	Evidence *evidenceTurn
+	// Investigate — v0.10.2361 (S4): bu turda kanıt paketi koştu; istem
+	// bölümü (chat_investigate.go) yalnız o zaman eklenir.
+	Investigate bool
 }
 
 func withV2LoopPlan(ctx context.Context, p *v2LoopPlan) context.Context {
@@ -246,7 +249,7 @@ func v2SubsetPlan(in stepInput, p stepPlan) stepPlan {
 		sub = append(sub, sp)
 	}
 	p.Specs = sub
-	p.SystemAddendum += in.V2.Addendum
+	p.SystemAddendum += in.V2.Addendum + in.V2.investigateAddendum() // v0.10.2361 — S4 araştırma bölümü
 	return p
 }
 

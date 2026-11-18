@@ -128,6 +128,10 @@ type evalConvExpect struct {
 	// Evidence — v0.10.2360 (S3): kanıt bloğu beklentisi; yalnız kanıt kipi
 	// on koşan turda denetlenir (evalrubric.EvidenceOf üç ölçütü).
 	Evidence *evalConvEvidenceExpect `json:"evidence,omitempty"`
+	// Pack — v0.10.2361 (S4): true = kanıt paketi koşmalı (en az bir adım
+	// tamamlanmış), false = koşmamalı. MaxRounds — döngü model turu tavanı.
+	Pack      *bool `json:"pack,omitempty"`
+	MaxRounds *int  `json:"maxRounds,omitempty"`
 }
 
 // evalConvEvidenceExpect — v0.10.2360: cevapta olması gereken blok tipleri
@@ -233,6 +237,12 @@ type evalConvTurnResult struct {
 	// cevaba eklenen blok tipleri ("" = karar koşmadı).
 	EvidenceMode   string   `json:"evidenceMode,omitempty"`
 	EvidenceBlocks []string `json:"evidenceBlocks,omitempty"`
+	// Pack / PackOK / PackUnchecked — v0.10.2361 (S4): kanıt paketi koştu mu,
+	// tamamlanan ve bakılamayan adım sayısı.
+	Pack          bool   `json:"pack,omitempty"`
+	PackOK        int    `json:"packOk,omitempty"`
+	PackUnchecked int    `json:"packUnchecked,omitempty"`
+	packDigest    string // kanıt metnine (sunucu türevi sayılar)
 }
 
 // evalConvCase — SAF: vaka konuşma kipinde mi.
@@ -393,6 +403,7 @@ func (s *Server) runEvalConvCase(ctx context.Context, job *evalJob, c evalCase) 
 			evidence.WriteString(k + " " + evalStubText(v) + "\n")
 		}
 		tr, err := s.runEvalConvTurn(ctx, job, c, i, ft, hist, &state, convID, catalog)
+		evidence.WriteString(tr.packDigest + "\n")          // v0.10.2361 — paket özeti sunucu kanıtıdır
 		evidence.WriteString(evalAssumeEvidence(tr.Answer)) // v0.10.2332 — sunucunun varsayım cümlesi kanıttır (model sayısı değil)
 		tr.Fails = append(tr.Fails, scoreEvalConvTurn(ft.Expect, tr, evidence.String(), time.Now(), evalConvLoc())...)
 		tr.OK = len(tr.Fails) == 0
@@ -487,10 +498,11 @@ func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, 
 	tr.InputTokens, tr.OutputTokens = o.InputTokens, o.OutputTokens
 	tr.LoopRounds, tr.LoopToolCalls = int(o.Loop.Rounds), int(o.Loop.ToolCalls) // v0.10.2323
 	tr.LoopModelMs, tr.LoopToolMs, tr.TTFTMs = o.Loop.ModelMs, o.Loop.ToolMs, o.TTFTMs
-	tr.AnswerClass = ct.answerClass()                  // v0.10.2331
-	tr.SeamDropped = ct.seamDropped()                  // v0.10.2338
-	tr.Enforce = ct.enforceMode()                      // v0.10.2339
-	tr.EvidenceMode, tr.EvidenceBlocks = ct.evidence() // v0.10.2360
+	tr.AnswerClass = ct.answerClass()                               // v0.10.2331
+	tr.SeamDropped = ct.seamDropped()                               // v0.10.2338
+	tr.Enforce = ct.enforceMode()                                   // v0.10.2339
+	tr.EvidenceMode, tr.EvidenceBlocks = ct.evidence()              // v0.10.2360
+	tr.Pack, tr.PackOK, tr.PackUnchecked, tr.packDigest = ct.pack() // v0.10.2361
 	if !ok {
 		err = fmt.Errorf("sohbet handler'ı sonuç bildirmedi (HTTP %d)", w.status())
 		tr.Error = err.Error()
@@ -623,6 +635,12 @@ func scoreEvalConvTurn(e evalConvExpect, tr evalConvTurnResult, evidence string,
 	}
 	if e.Window != "" && !evalConvWindowOK(e.Window, tr.Calls, tr.StateRangeS, tr.StateToMs, now, loc) {
 		fails = append(fails, fmt.Sprintf("pencere %q çözülmedi (okumalar %v, bağlam %d sn)", e.Window, tr.Windows, tr.StateRangeS))
+	}
+	if e.Pack != nil && *e.Pack != (tr.Pack && tr.PackOK > 0) { // v0.10.2361 — S4
+		fails = append(fails, fmt.Sprintf("kanıt paketi beklentisi %v, koştu %v (%d adım)", *e.Pack, tr.Pack, tr.PackOK))
+	}
+	if e.MaxRounds != nil && tr.LoopRounds > *e.MaxRounds {
+		fails = append(fails, fmt.Sprintf("döngü turu %d > %d", tr.LoopRounds, *e.MaxRounds))
 	}
 	answer := strings.TrimSpace(tr.Answer)
 	if answer == "" {

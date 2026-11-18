@@ -34,6 +34,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcp"
 	"github.com/cilcenk/coremetry/internal/mcptools"
+	"github.com/cilcenk/coremetry/internal/sre"
 )
 
 // guidedEvalStub — konuşma kipinde guided veri paketinin yerine geçen sahte
@@ -76,6 +77,34 @@ type evalConvTurn struct {
 	class   string // v0.10.2331 — turun cevap sınıfı (answerStyleTurn.note)
 	dropped int    // v0.10.2338 — cevap dikişinin sildiği model kalıp cümlesi
 	enforce string // v0.10.2339 — zorla kipinin kararı (pass | annotated | regenerated…)
+	packOK  int    // v0.10.2361 — S4: kanıt paketinin tamamlanan adımı (-1 = koşmadı)
+	packUn  int    // v0.10.2361 — unchecked adım
+	packRan bool
+	packDig string // v0.10.2361 — modele giden özet (sunucu türevi sayılar kanıttır)
+}
+
+// notePack — v0.10.2361 (S4): turun kanıt paketi adımları. nil-güvenli.
+func (t *evalConvTurn) notePack(steps []sre.ChatPackStep, digest string) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.packRan, t.packOK, t.packUn, t.packDig = true, 0, 0, digest
+	for _, s := range steps {
+		if s.OK {
+			t.packOK++
+		} else {
+			t.packUn++
+		}
+	}
+}
+
+// pack — v0.10.2361: paket koştu mu, tamamlanan ve bakılamayan adım.
+func (t *evalConvTurn) pack() (ran bool, ok, unchecked int, digest string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.packRan, t.packOK, t.packUn, t.packDig
 }
 
 // noteEnforce — v0.10.2339 (E2): dikişin zorla kararı. nil-güvenli.

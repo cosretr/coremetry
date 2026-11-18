@@ -2348,6 +2348,20 @@ topladığın veriyle şimdi cevap ver. Toplayamadığın kısmı açıkça beli
 // ChatRoundCapAddendum — yalnız tavan eki (systemChat'siz).
 func ChatRoundCapAddendum() string { return systemChatRoundCapAddendum }
 
+// systemChatInvestigateAddendum — v0.10.2361 (investigation-design S4 §4.3):
+// YALNIZ kanıt paketi koşan araştırma turunun istemine, sona (≤650 B; test
+// pinler). Taban istem ve üslup bütçeleri değişmez.
+const systemChatInvestigateAddendum = `
+
+ARAŞTIRMA: evidence_pack bu servisin bu penceredeki ölçülmüş hâlidir; aynı okumayı yeniden çağırma.
+Belirtiyi söyle, pakete uyan en olası tek nedeni seç, onu doğrulayacak ya da çürütecek TEK okumayı çağır;
+kanıt iki bağımsız kaynakta tutuyorsa dur ve cevapla.
+Cevap: ilk cümle bulgu (istisna ya da operasyon, sayı, saat, örnek trace); emin değilsen "muhtemelen" de;
+elenen nedeni tek yan cümleyle an; unchecked'tekini tek cümleyle "bakamadım" de; tek sonraki adım.`
+
+// ChatInvestigateAddendum — araştırma turu eki.
+func ChatInvestigateAddendum() string { return systemChatInvestigateAddendum }
+
 // chatDegenRetryAddendum — v0.10.1324 (operatör-bildirimi): model cevabı
 // yinelenen metne düştüğünde (gemma4 31b sistem prompt cümlesini onlarca kez
 // yazdı) Derin kipte BİR kez araçsız yeniden deneme, ~700 token tavanla.

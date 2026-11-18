@@ -1,0 +1,115 @@
+{
+  "schema": "coremetry.evalset.conversation/1",
+  "cases": [
+    {
+      "id": "conv-investigate-5xx-after-deploy",
+      "surface": "ChatConversation",
+      "why": "S4 (v0.10.2361): teknik hata girişi (5xx artışı). Açık ipucu orta kademeleri atlar, kanıt paketi koşar (pencere + önceki pencere, hata özeti, deploy, bağımlılık, örnek trace ve logları). Beklenen: paket koştu, ≤3 model turu, trace kartı eklendi, sayılar paketten ya da sahteden.",
+      "evidence": "on",
+      "stubs": {
+        "evidence_pack": {
+          "red": {"spans": 36000, "errors": 1800, "p95_ms": 840},
+          "prev_red": {"spans": 35000, "errors": 140, "p95_ms": 310},
+          "error_ops": [{"name": "POST /api/checkout", "spans": 12000, "errors": 1650}],
+          "exceptions": [{"type": "org.springframework.web.client.HttpServerErrorException", "message": "503 Service Unavailable", "service": "checkout", "count": 1650, "lastSeen": 1794996000000000000, "sampleTraceId": "4bf92f3577b34da6a3ce929d0e0e4736"}],
+          "deploys": [{"source": "rollout", "time_iso": "2026-11-18T09:00:00Z", "time_unix_ns": 1794992400000000000, "service": "checkout", "version": "2.7.0", "prev_version": "2.6.3"}],
+          "edges": [{"source": "checkout", "target": "payments", "callCount": 11800, "errorRate": 0.4, "avgMs": 120}],
+          "anomalies": []
+        },
+        "explain_trace": {
+          "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736", "found": true, "wall_ms": 1240, "extent_ms": 1240,
+          "root": {"service": "checkout", "name": "POST /api/checkout", "duration_ms": 1240},
+          "span_count": 14, "error_span_count": 1, "start_ms": 1794996000000,
+          "critical_path": [{"service": "checkout", "name": "POST /api/checkout", "self_on_path_ms": 1100, "share_pct": 88.7, "top": true}],
+          "error_spans": [{"span_id": "00f067aa0ba902b7", "service": "checkout", "name": "POST /api/checkout", "status_message": "503", "exception_type": "org.springframework.web.client.HttpServerErrorException"}],
+          "page_url": "/trace/4bf92f3577b34da6a3ce929d0e0e4736"
+        },
+        "search_logs": {
+          "window_s": 3600, "total": 2, "query": "trace_id = 4bf92f3577b34da6a3ce929d0e0e4736", "page_url": "/logs?traceId=4bf92f3577b34da6a3ce929d0e0e4736",
+          "rows": [{"ts": 1794996000000, "sev": "ERROR", "svc": "checkout", "body": "CheckoutController: upstream returned 503", "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736"}],
+          "count": 1
+        }
+      },
+      "turns": [
+        {
+          "user": "checkout'ta 5xx hataları arttı, kök nedeni araştır",
+          "expect": {"class": "error_hunt", "pack": true, "maxRounds": 3, "entity": "checkout", "evidence": {"require": ["trace"], "max": 2}}
+        },
+        {
+          "user": "örnek trace'i göster",
+          "expect": {"class": "followup", "anyOfCalls": ["explain_trace"], "pack": false, "evidence": {"require": ["trace"], "max": 4}}
+        }
+      ]
+    },
+    {
+      "id": "conv-investigate-exception-downstream",
+      "surface": "ChatConversation",
+      "why": "S4 (v0.10.2361): istisna girişi. orders'ta SocketTimeoutException; örnek trace'te hatalı span payments çağrısında. Beklenen: paket koştu, ≤3 model turu, bulgu payments'ı adlandırır; ikinci turda payments durumu (paket koşmaz: durum sınıfı).",
+      "evidence": "on",
+      "stubs": {
+        "evidence_pack": {
+          "red": {"spans": 7200, "errors": 430, "p95_ms": 2100},
+          "prev_red": {"spans": 7100, "errors": 20, "p95_ms": 390},
+          "error_ops": [{"name": "POST /api/orders", "spans": 2400, "errors": 412}],
+          "exceptions": [{"type": "java.net.SocketTimeoutException", "message": "Read timed out", "service": "orders", "count": 412, "lastSeen": 1794996000000000000, "sampleTraceId": "5ce0e4736a3ce929d0e0e47364bf92f3"}],
+          "deploys": [],
+          "edges": [{"source": "orders", "target": "payments", "callCount": 2400, "errorRate": 17.2, "avgMs": 1900}, {"source": "orders", "target": "db:orders-pg", "callCount": 4800, "errorRate": 0, "avgMs": 4}],
+          "anomalies": []
+        },
+        "explain_trace": {
+          "trace_id": "5ce0e4736a3ce929d0e0e47364bf92f3", "found": true, "wall_ms": 3010, "extent_ms": 3010,
+          "root": {"service": "orders", "name": "POST /api/orders", "duration_ms": 3010},
+          "span_count": 9, "error_span_count": 2, "start_ms": 1794996000000,
+          "critical_path": [{"service": "orders", "name": "POST /api/orders", "self_on_path_ms": 20, "share_pct": 0.7}, {"service": "payments", "name": "POST /api/payments", "self_on_path_ms": 2980, "share_pct": 99, "top": true}],
+          "error_spans": [{"span_id": "00f067aa0ba902b8", "service": "payments", "name": "POST /api/payments", "status_message": "timeout", "exception_type": "java.net.SocketTimeoutException", "exception_message": "Read timed out"}],
+          "page_url": "/trace/5ce0e4736a3ce929d0e0e47364bf92f3"
+        },
+        "search_logs": {
+          "window_s": 3600, "total": 1, "query": "trace_id = 5ce0e4736a3ce929d0e0e47364bf92f3", "page_url": "/logs?traceId=5ce0e4736a3ce929d0e0e47364bf92f3",
+          "rows": [{"ts": 1794996000000, "sev": "ERROR", "svc": "orders", "body": "payment call failed: Read timed out", "trace_id": "5ce0e4736a3ce929d0e0e47364bf92f3"}],
+          "count": 1
+        },
+        "get_service_health": {
+          "$byService": {
+            "payments": {"service": "payments", "window_s": 3600, "rps": 0.67, "error_rate_pct": 17.2, "p95_ms": 2900, "p99_ms": 3000}
+          }
+        }
+      },
+      "turns": [
+        {
+          "user": "orders'ta SocketTimeoutException hataları patlıyor, incele",
+          "expect": {"class": "error_hunt", "pack": true, "maxRounds": 3, "entity": "orders", "evidence": {"require": ["trace"], "max": 2}}
+        },
+        {
+          "user": "payments tarafı nasıl?",
+          "expect": {"class": "status", "pack": false, "anyOfCalls": ["get_service_health"], "entity": "payments", "maxSentences": 5}
+        }
+      ]
+    },
+    {
+      "id": "conv-investigate-partial-pack",
+      "surface": "ChatConversation",
+      "why": "S4 (v0.10.2361): kısmi paket. Topoloji ve anomali okunamaz, istisna grubu yok → örnek trace ve logları atlanır; cevap bakamadığını tek cümleyle söyler, uydurma sayı yok. Teşekkür turunda okuma yok.",
+      "evidence": "on",
+      "stubs": {
+        "evidence_pack": {
+          "red": {"spans": 1800, "errors": 54, "p95_ms": 95},
+          "prev_red": {"spans": 1790, "errors": 50, "p95_ms": 92},
+          "error_ops": [{"name": "GET /api/stock", "spans": 1800, "errors": 54}],
+          "exceptions": [],
+          "deploys": []
+        }
+      },
+      "turns": [
+        {
+          "user": "inventory'deki hataların kök nedenini bul",
+          "expect": {"class": "error_hunt", "pack": true, "maxRounds": 3, "entity": "inventory", "evidence": {"max": 2}}
+        },
+        {
+          "user": "teşekkürler",
+          "expect": {"class": "smalltalk", "noCalls": true, "pack": false, "evidence": {"max": 0}}
+        }
+      ]
+    }
+  ]
+}

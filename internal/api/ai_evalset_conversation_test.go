@@ -54,6 +54,7 @@ func TestEvalConvFixtureValid(t *testing.T) {
 	for _, n := range mcptools.V2OnlyTools(mcptools.Deps{}) {
 		known[n.Name] = true
 	}
+	known[evidencePackTool] = true // v0.10.2361 — S4 kanıt paketi sahtesi
 	for _, in := range []guidedIntent{guidedServiceHealth, guidedProblems, guidedDeployImpact, guidedLogErrors, guidedRootCause,
 		guidedWindowCompare, guidedServiceExceptions, guidedSlowTraces, guidedTopErrorOps} {
 		known[string(in)] = true
