@@ -471,6 +471,12 @@ func (s *Server) sourceForcedAnswer(ctx context.Context, emit func(string, any),
 		ev := s.exceptionGroupsEvidence(ctx, exScope{Search: term, From: now.Add(-discoverExLookback), To: now, Max: exGroupTeamRenderMax})
 		s.exceptionsSourceAnswer(ctx, emit, term, ev, nil)
 		return ctx, true, true
+	case srcWiki: // v0.10.2347 — "/wiki" çipi: aynı soru wiki kademesinden (adıyla anılmış gibi)
+		wm := append(append([]copilot.ChatMessage(nil), msgs...), copilot.ChatMessage{Role: "user", Text: question + " (wiki)"})
+		if h, _ := s.wikiChatAnswer(ctx, emit, wm, wikiTierContext{}); h {
+			return ctx, true, true
+		}
+		return plain("Wiki şu an aranamıyor (wiki bağlı değil ya da yerel model profili yok).")
 	case srcGeneral:
 		ans := map[string]any{"text": "", "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}}
 		if !s.generalSourceAnswer(ctx, question, ans, emit) {

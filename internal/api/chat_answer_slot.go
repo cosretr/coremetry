@@ -206,7 +206,7 @@ func slotTrimAsk(ctx context.Context, route guidedRoute) guidedRoute {
 		return route
 	}
 	route.ServiceOptions = append([]string(nil), route.ServiceOptions[:uistream.QuestionSlotMaxOptions]...)
-	route.DirectAnswer = askServiceAnswerTR(route.ServiceOptions)
+	route.DirectAnswer = askServiceRouteTR(route)
 	return route
 }
 

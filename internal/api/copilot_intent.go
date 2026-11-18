@@ -435,6 +435,16 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 	// (mevcut yol: on_no_loop'ta genel cevap, on'da serbest döngü). Yanlış
 	// off_topic gerçek telemetri sorusunu reddederdi; yanlış veto eski cevap.
 	vetoNote := ""
+	// v0.10.2347 (operatör bulgusu: "java 25 kod örneği virtual thread kullansın"
+	// → "Hangi servisi kastettin? Adaylar: …virtualpos…") — sınıflandırıcı servis
+	// isteyen bir niyet seçip servis slotunu sorudaki sıradan bir kelimeyle
+	// doldurunca yakın ad eşleşmesi alakasız servisleri soruyordu. Soruda tam
+	// servis adı da, telemetri işareti de yoksa bu "hangi servis" sorusu
+	// tek başına sorulmaz: soruya "genel bilgi" seçeneği eklenir (kullanıcı seçer).
+	if matched && route.Intent == guidedAskService && len(route.ServiceOptions) > 0 && generalKnowledgeShape(question, svcNames, s.guidedEnvNames(ctx)) {
+		route.GeneralAlt = true
+		vetoNote = " · genel bilgi seçeneği: telemetri işareti yok"
+	}
 	if matched && route.Intent == guidedOffTopic {
 		if why, vetoed := offTopicVetoFor(question, svcNames, s.guidedEnvNames(ctx), s.guidedTeamNames(ctx), cosreV2Marked(ctx)); vetoed {
 			route, matched = guidedRoute{}, false
@@ -598,4 +608,22 @@ func matchLiveTeam(v string, teams []string) string {
 		}
 	}
 	return extractTeamEntity(v, teams)
+}
+
+// generalKnowledgeShape — SAF (v0.10.2347): soru canlı bir servisi TAM adıyla
+// anmıyor ve hiçbir telemetri işareti (hata, yavaşlık, log, deploy, pod,
+// kuyruk, DB, sağlık, problem, "neden") taşımıyor mu. Böyle bir soruda karar
+// kullanıcıya bırakılır: "hangi servis" ve "envanterden mi" sorularına
+// "genel bilgi" (ve envanterde "wiki") seçeneği eklenir.
+func generalKnowledgeShape(question string, services, envs []string) bool {
+	msg := normalizeGuidedMsg(question)
+	toks := guidedTokens(msg)
+	if len(toks) == 0 || extractServiceEntity(msg, services, envs) != "" {
+		return false
+	}
+	if serviceIntentFor(msg, toks) != guidedNone || hasLogSignal(toks) || hasErrorSignal(toks) ||
+		hasHealthSignal(toks) || hasProblemSignal(toks) || hasSlowTraceSignal(msg) {
+		return false
+	}
+	return extractTraceID(msg) == "" && extractSpanID(msg) == "" && !hasStructuredRequestID(msg)
 }

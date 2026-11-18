@@ -161,3 +161,56 @@ func TestIntentNoneSuggestions(t *testing.T) {
 		t.Fatalf("servis kapsamlı çipler beklendi: %v", got)
 	}
 }
+
+// v0.10.2347 — operatör bulguları: genel bilgi sorusu "hangi servis" ya da
+// "envanterden mi" sorusunu tetiklemez; telemetri ya da kimlik taşıyan soru eskisi gibi.
+func TestGeneralKnowledgeShape(t *testing.T) {
+	svcs := []string{"checkout", "payments-virtualpos-prod", "orders-api"}
+	gen := []string{
+		"java 25 kod örneği virtual thread kullansın",
+		"opentelemetry java instrumentation",
+		"circuit breaker nedir",
+	}
+	for _, q := range gen {
+		if !generalKnowledgeShape(q, svcs, nil) {
+			t.Errorf("genel bilgi sayılmalı: %q", q)
+		}
+	}
+	tele := []string{
+		"checkout hata oranı nedir",
+		"virtualpos neden yavaş",
+		"orders-api loglarında hata var mı",
+		"son deploy ne zaman",
+	}
+	for _, q := range tele {
+		if generalKnowledgeShape(q, svcs, nil) {
+			t.Errorf("telemetri sorusu genel sayılmamalı: %q", q)
+		}
+	}
+	if hasStrongRowNeedle("opentelemetry java instrumentation") || !hasStrongRowNeedle("srvpay01 hangi ortamda") {
+		t.Fatal("kimlik biçimi ayrımı bozuk")
+	}
+}
+
+// v0.10.2347 — belirsiz durumda kullanıcıya sorulur: servis sorusuna "genel
+// bilgi", envanter sorusuna "wiki" ve "genel bilgi" seçenekleri eklenir.
+func TestGeneralAltAsk(t *testing.T) {
+	r := guidedRoute{Intent: guidedAskService, ServiceOptions: []string{"payments-virtualpos-prod"}, GeneralAlt: true}
+	if txt := askServiceRouteTR(r); !strings.Contains(txt, "genel bilgi") || !strings.Contains(txt, "payments-virtualpos-prod") {
+		t.Fatalf("metin: %q", txt)
+	}
+	chips := guidedSuggestions(r)
+	if len(chips) == 0 || chips[len(chips)-1] != "/genel" {
+		t.Fatalf("son çip /genel olmalı: %v", chips)
+	}
+	r.GeneralAlt = false
+	if txt := askServiceRouteTR(r); strings.Contains(txt, "genel bilgi") {
+		t.Fatalf("bayraksız eski metin beklenir: %q", txt)
+	}
+	var got map[string]any
+	docRowsAskGeneral(func(_ string, v any) { got = v.(map[string]any) }, 45, []string{"opentelemetry"})
+	c := got["suggestions"].([]string)
+	if len(c) != 3 || c[1] != "/wiki" || c[2] != "/genel" || !strings.Contains(got["text"].(string), "wiki'de mi arayayım") {
+		t.Fatalf("envanter sorusu üç seçenek: %v %q", c, got["text"])
+	}
+}

@@ -143,6 +143,34 @@ func docRowsAsk(emit func(string, any), n int, vals []string, alts []string) {
 		"sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
 }
 
+// docRowsAskGeneral — v0.10.2347: genel bilgi biçimindeki soru tabloyla
+// eşleşince üç seçenek (çip komutları önceki soruyu alır): envanter, wiki, genel.
+func docRowsAskGeneral(emit func(string, any), n int, vals []string) {
+	what := ""
+	if len(vals) > 0 {
+		v := vals
+		if len(v) > 2 {
+			v = v[:2]
+		}
+		what = " (" + strings.Join(v, ", ") + ")"
+	}
+	text := fmt.Sprintf("Bu soru yüklü envanter tablosunda %d satırla eşleşiyor%s. Envanterden mi göstereyim, wiki'de mi arayayım, yoksa genel bilgi olarak mı cevaplayayım?", n, what)
+	chips := []string{sourceChip(srcCand{Kind: srcExcel, Label: fmt.Sprintf("%d satır", n)}), "/" + srcWiki, "/" + srcGeneral}
+	emit("answer", map[string]any{"text": text, "suggestions": chips,
+		"sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
+}
+
+// hasStrongRowNeedle — SAF (v0.10.2347): soruda kimlik biçimli değer (rakam /
+// ayraç taşıyan, tümü büyük harf ya da PascalCase) var mı.
+func hasStrongRowNeedle(q string) bool {
+	for _, n := range rowNeedles(q) {
+		if n.strong {
+			return true
+		}
+	}
+	return false
+}
+
 // docOrEntityAskTR — SAF: sorunun deterministik metni (LLM yok).
 func docOrEntityAskTR(kind, name string) string {
 	if kind == bareEntityService {
@@ -228,6 +256,13 @@ func (s *Server) chatDocOrEntityAskTier(ctx context.Context, emit func(string, a
 	rows, vals := s.docRowsFind(ctx, q, true)
 	if len(rows) == 0 {
 		return false // doküman kademeleri zaten cevaplamazdı
+	}
+	// v0.10.2347 (operatör: "opentelemetry java instrumentation" genel bilgi
+	// sorusuydu) — genel bilgi biçimindeki soruda üç seçenek: envanter, wiki, genel.
+	if generalKnowledgeShape(q, s.guidedServiceNames(ctx), s.guidedEnvNames(ctx)) && !hasStrongRowNeedle(q) {
+		chatExchangeFrom(ctx).noteRoute("doc_or_general_ask")
+		docRowsAskGeneral(emit, len(rows), vals)
+		return true
 	}
 	// Çıplak varlık adı (≤3 sözcük; katalog yalnız o zaman okunur) eski metinle;
 	// v0.10.1942'den beri diğer her tablo eşleşmesi de önce sorulur.
