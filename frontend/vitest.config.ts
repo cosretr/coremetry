@@ -25,6 +25,8 @@ export default defineConfig({
     alias: [
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       { find: /^cn$/, replacement: fileURLToPath(new URL('./src/lib/cn.ts', import.meta.url)) },
+      // v0.10.2351 — vite.config.ts'teki kırpılmış saat dilimi verisinin ikizi.
+      { find: /^moment-timezone$/, replacement: fileURLToPath(new URL('./node_modules/moment-timezone/builds/moment-timezone-with-data-10-year-range.js', import.meta.url)) },
     ],
   },
   test: {

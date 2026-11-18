@@ -14908,3 +14908,8 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 
 - `lib/perf/routePrefetch.ts` hover'da yalnız sayfa parçasını ısıtıyordu; sıcak rotaların grafikleri `corePanelEntry`'yi ayrıca `React.lazy` ile istediğinden ilk grafik sayfa parçasından SONRA seri bir indirme bekliyordu.
 - Bilinen bir rotanın hover'ı artık grafik parçasını da bir kez (boşta, aynı `warmed` koruması) ısıtır; specifier lazy() ile birebir, yeni statik kenar yok (ilk yük 270.9 → 271.1 KB gz, yalnız dinamik import eşlemesi). Yeni `routePrefetch.test.ts`. Davranış değişmedi.
+## 2026-11-18 — v0.10.2351 — Grafik parçası: saat dilimi verisi kırpıldı
+
+- Ölçüm (audit): `grafana` chunk'ı 1,076 KB; bunun 726 KB'ı `moment-timezone`'un tam bölge veritabanı (@grafana/data getiriyor). Grafik katmanı hiçbir bölgeyi adıyla anmaz (browser/utc).
+- `vite.config.ts` takma adı (uPlot CSS takma adıyla aynı desen) → paketin kendi `moment-timezone-with-data-10-year-range.js` derlemesi (2020–2030, 596 bölge); ikizi `vitest.config.ts`'te. Boş taslak değil: veri yoksa moment-timezone konsola hata basar. Aralık dışı tarihler adı verilen bölgede standart ofsete düşer — grafik yolunda bölge adı yok.
+- `grafana` chunk'ı 1,075.9 → 386.7 KB (gz 155.4 → 127.5 KB); ilk yük değişmedi (271.1 KB gz). Kanıt: `CorePanel.smoke.test.tsx`, yeni `lib/chart/timezoneData.test.ts` (adı verilen bölgede DST dahil biçimleme, konsol hatası yok, verinin 10 yıllık derleme olduğu), `npm run bundle:check`. uPlot sarmalayıcıları ve `components/ui` değişmedi.

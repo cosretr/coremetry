@@ -46,6 +46,12 @@ export default defineConfig({
       // `layer(legacy)` içinde. @grafana/ui'nin aynı importu boş dosyaya düşer
       // (ayrıntı: src/styles/uplotGrafanaImport.css).
       { find: /^uplot\/dist\/uPlot\.min\.css$/, replacement: path.resolve(__dirname, 'src/styles/uplotGrafanaImport.css') },
+      // v0.10.2351 — @grafana/data'nın `moment-timezone`'u tam bölge veritabanını
+      // (726 KB, grafana chunk'ının 2/3'ü) getiriyordu; grafik katmanı hiçbir
+      // bölgeyi adıyla anmaz (browser/utc). Paketin kendi 10 yıllık veri
+      // derlemesi (2020–2030, 596 bölge). Boş taslak DEĞİL: tz verisi yoksa
+      // moment-timezone konsola hata basar. İkizi vitest.config.ts'te.
+      { find: /^moment-timezone$/, replacement: path.resolve(__dirname, 'node_modules/moment-timezone/builds/moment-timezone-with-data-10-year-range.js') },
     ],
   },
   server: {
