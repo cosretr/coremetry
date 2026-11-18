@@ -861,6 +861,8 @@ const TR: Catalog = {
   'mlRecord.card.statusEnded': 'Bitti · {d} sürdü',
   'mlRecord.card.headAtDetection': '{who} tespit anında {value}{calls}; beklenen ≈ {expected}.',
   'mlRecord.card.headNow': '{who} şu an {value}{calls}; beklenen ≈ {expected}.',
+  'mlRecord.card.headPeakBack': '{who} {peak} ile beklenen bandın üstüne çıktı ({t}){calls}; beklenen ≈ {expected}, bant {band}. Tespit anında {value} ile banda dönmüştü.',
+  'mlRecord.card.headDipBack': '{who} {peak} ile beklenen bandın altına indi ({t}){calls}; beklenen ≈ {expected}, bant {band}. Tespit anında {value} ile banda dönmüştü.',
   'mlRecord.card.calls': ' ({n} çağrı)',
   'mlRecord.card.volHeadUp': '{svc} {measure} {a} değerinden {b} değerine çıktı ({since} itibarıyla).',
   'mlRecord.card.volHeadDown': '{svc} {measure} {a} değerinden {b} değerine düştü ({since} itibarıyla).',

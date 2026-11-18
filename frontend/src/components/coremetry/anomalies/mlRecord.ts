@@ -192,3 +192,13 @@ export function sourceLabel(src: string): string {
   if (src === 'ml' || src.startsWith('ml:')) return 'Coremetry ML';
   return src;
 }
+
+/**
+ * SAF: eksen etiketlerine yazılacak birim — uzun birim ("spans/request",
+ * "spans/min") boş döner. v0.10.2344: her etikete yazılınca etiket kırpılıyordu
+ * (operatör ekranında "…est"); ölçü adı zaten grafik başlığında.
+ */
+export function axisUnit(unit: string): string {
+  const u = unit === 'percent' ? '%' : unit;
+  return u && u.length > 6 ? '' : u;
+}

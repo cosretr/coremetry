@@ -86,8 +86,29 @@ export function recordHeadline(r: MLRecordView, measure: string, lang: Lang): st
   const who = r.subject.operation ? `${r.subject.operation} ${measure}` : measure.charAt(0).toUpperCase() + measure.slice(1);
   const calls = r.volume != null && r.detector !== 'svc_telemetry_volume'
     ? tf('mlRecord.card.calls', lang, { n: fmtRecordNum(r.volume, lang, 0) }) : '';
+  // v0.10.2344 (operatör bulgusu: "bu gösterim anlaşılmıyor") — biten olayda
+  // tespit anı değeri çoğu kez banda DÖNMÜŞ olur (tespit, bant dışı kovalar
+  // onaylandıktan sonra gelir): "tespit anında 4,94; beklenen ≈ 5,78" sorun
+  // yokmuş gibi okunuyordu. O durumda başlık bant dışına çıkan uç değerle
+  // (tepe / dip ve saati) başlar; tespit anı değeri ikinci cümleye iner.
+  if (!open && backInBandAtDetection(r)) {
+    const at = peakAtSec(r);
+    return tf(r.direction === 'down' ? 'mlRecord.card.headDipBack' : 'mlRecord.card.headPeakBack', lang, {
+      who, peak: f(r.peakValue), t: at != null ? hmSec(at) : '—', calls, expected: f(r.expectedValue),
+      band: `${f(r.baseline.lo)}–${f(r.baseline.hi)}`, value: f(r.valueAtDetection),
+    });
+  }
   return tf(open ? 'mlRecord.card.headNow' : 'mlRecord.card.headAtDetection', lang,
     { who, value: f(headlineValue(r)), calls, expected: f(r.expectedValue) });
+}
+
+/** SAF: tespit anı değeri bandın içinde VE kayıtlı uç değer bandın dışında mı. */
+export function backInBandAtDetection(r: MLRecordView): boolean {
+  const { lo, hi } = r.baseline;
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || !(hi > lo)) return false;
+  const v = r.valueAtDetection, p = r.peakValue;
+  if (!Number.isFinite(v) || !Number.isFinite(p)) return false;
+  return v >= lo && v <= hi && (p > hi || p < lo);
 }
 
 /** SAF: ikinci satır — başlangıç, tespit, bitiş + adlandırılmış tepe/dip. */

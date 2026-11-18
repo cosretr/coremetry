@@ -4,7 +4,7 @@
 // EN İngilizce / TR Türkçe. Kritik yol yüzdesi cümlesi yok.
 import { describe, it, expect } from 'vitest';
 import type { MLRecordView } from '@/lib/types';
-import { durText, evidenceTag, evidenceText, ingestFactor, recordHeadline, recordStatus, recordTimeline } from './mlRecordText';
+import { durText, evidenceTag, evidenceText, ingestFactor, recordHeadline, recordStatus, recordTimeline, backInBandAtDetection } from './mlRecordText';
 
 const T0 = 1_800_000_000;
 function lat(over: Partial<MLRecordView> = {}): MLRecordView {
@@ -46,6 +46,27 @@ describe('kayıtlı kart metinleri', () => {
   it('biten gecikme olayı: tespit anı değeri, çağrı, beklenen (EN + TR)', () => {
     expect(recordHeadline(lat(), 'p95 latency', 'en')).toBe('GET /cart p95 latency at detection 107 ms (1,240 calls); expected ≈ 43 ms.');
     expect(recordHeadline(lat(), 'p95 gecikmesi', 'tr')).toBe('GET /cart p95 gecikmesi tespit anında 107 ms (1.240 çağrı); beklenen ≈ 43 ms.');
+  });
+  // v0.10.2344 — operatör bulgusu: tespit anında değer banda dönmüşken başlık
+  // "tespit anında 4,94; beklenen ≈ 5,78" diyordu; asıl olay (tepe) görünmüyordu.
+  it('biten olayda tespit anı değeri banda dönmüşse başlık bant dışı uç değerle başlar (EN + TR)', () => {
+    const r = lat({ valueAtDetection: 47 });
+    expect(backInBandAtDetection(r)).toBe(true);
+    const en = recordHeadline(r, 'p95 latency', 'en');
+    expect(en).toBe(`GET /cart p95 latency rose to 135 ms, above the expected band (${en.match(/\((\d\d:\d\d)\)/)![1]}) (1,240 calls); expected ≈ 43 ms, band 31 ms–58 ms. Back in band at 47 ms by detection.`);
+    const tr = recordHeadline(r, 'p95 gecikmesi', 'tr');
+    expect(tr).toContain('GET /cart p95 gecikmesi 135 ms ile beklenen bandın üstüne çıktı (');
+    expect(tr).toContain('(1.240 çağrı); beklenen ≈ 43 ms, bant 31 ms–58 ms. Tespit anında 47 ms ile banda dönmüştü.');
+    expect(tr).not.toContain('tespit anında 47');
+  });
+  it('düşüş yönünde "altına indi"; tespit anı bant dışındaysa ya da olay sürüyorsa eski başlık', () => {
+    const down = lat({ direction: 'down', peakValue: 12, valueAtDetection: 40 });
+    expect(recordHeadline(down, 'p95 gecikmesi', 'tr')).toContain('12 ms ile beklenen bandın altına indi (');
+    expect(recordHeadline(down, 'p95 latency', 'en')).toContain('fell to 12 ms, below the expected band (');
+    expect(backInBandAtDetection(lat())).toBe(false); // 107 ms bandın dışında
+    expect(recordHeadline(lat({ valueAtDetection: 47, endedAt: 0 }), 'p95 latency', 'en')).toContain(' now '); // süren olay
+    // uç değer de bandın içindeyse (kayıt tutarsız) eski başlık kalır
+    expect(backInBandAtDetection(lat({ valueAtDetection: 47, peakValue: 50 }))).toBe(false);
   });
   it('süren olay "şu an" son noktayı yazar', () => {
     const r = lat({ endedAt: undefined });

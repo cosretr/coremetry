@@ -422,6 +422,8 @@ export const EN: Record<string, string> = {
   'mlRecord.card.statusEnded': 'Ended · lasted {d}',
   'mlRecord.card.headAtDetection': '{who} at detection {value}{calls}; expected ≈ {expected}.',
   'mlRecord.card.headNow': '{who} now {value}{calls}; expected ≈ {expected}.',
+  'mlRecord.card.headPeakBack': '{who} rose to {peak}, above the expected band ({t}){calls}; expected ≈ {expected}, band {band}. Back in band at {value} by detection.',
+  'mlRecord.card.headDipBack': '{who} fell to {peak}, below the expected band ({t}){calls}; expected ≈ {expected}, band {band}. Back in band at {value} by detection.',
   'mlRecord.card.calls': ' ({n} calls)',
   'mlRecord.card.volHeadUp': '{svc} {measure} went from {a} to {b} (since {since}).',
   'mlRecord.card.volHeadDown': '{svc} {measure} dropped from {a} to {b} (since {since}).',

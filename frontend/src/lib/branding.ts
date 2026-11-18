@@ -179,8 +179,43 @@ function applyBranding(b: Required<BrandingSettings>) {
     if (b.browserTitle) writeTitle(b.browserTitle);
   }
   if (typeof document !== 'undefined' && b.primaryColor) {
-    document.documentElement.style.setProperty('--accent', b.primaryColor);
+    // v0.10.2344 — grafik dolguları (beklenen bant, alan, çubuk) saydamlığı
+    // `#rrggbb` + alfa baytı ile kurar; marka rengi `rgb(…)`, `#rgb` ya da ad
+    // olarak girilmişse alfa eklenemiyor ve dolgu OPAK çiziliyordu (operatör
+    // bulgusu: ML kartında beklenen bant koyu blok, ölçülen çizgi görünmüyor).
+    // Renk aynı; yalnız yazımı `#rrggbb`e çevrilir.
+    document.documentElement.style.setProperty('--accent', normalizeCssColor(b.primaryColor));
   }
+}
+
+/**
+ * normalizeCssColor — SAF çekirdek + tarayıcı yedeği: opak bir CSS rengini
+ * `#rrggbb` yazımına çevirir. Tanınmayan / yarı saydam renk AYNEN döner.
+ */
+export function normalizeCssColor(c: string): string {
+  const v = c.trim();
+  const h2 = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+  let m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(v);
+  if (m) return `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}`.toLowerCase();
+  if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase();
+  if (/^#[0-9a-f]{6}ff$/i.test(v)) return v.slice(0, 7).toLowerCase();
+  m = /^rgba?\(\s*([\d.]+%?)\s*[,\s]\s*([\d.]+%?)\s*[,\s]\s*([\d.]+%?)\s*(?:[,/]\s*([\d.]+%?)\s*)?\)$/i.exec(v);
+  if (m) {
+    const ch = (x: string) => (x.endsWith('%') ? (parseFloat(x) * 255) / 100 : parseFloat(x));
+    const a = m[4] == null ? 1 : m[4].endsWith('%') ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+    return a >= 1 ? `#${h2(ch(m[1]))}${h2(ch(m[2]))}${h2(ch(m[3]))}` : v;
+  }
+  // Ad / hsl() / oklch() …: tarayıcının kendi ayrıştırıcısı (canvas opak rengi `#rrggbb` döner).
+  try {
+    const ctx = typeof document !== 'undefined' ? document.createElement('canvas').getContext('2d') : null;
+    if (ctx) {
+      ctx.fillStyle = '#000000';
+      ctx.fillStyle = v;
+      const out = String(ctx.fillStyle);
+      if (/^#[0-9a-f]{6}$/i.test(out) && (out !== '#000000' || /^(black|#000|#000000)$/i.test(v))) return out.toLowerCase();
+    }
+  } catch { /* canvas yok (jsdom) — aynen */ }
+  return v;
 }
 
 // invalidateBranding drops the cache + re-fetches. Called from

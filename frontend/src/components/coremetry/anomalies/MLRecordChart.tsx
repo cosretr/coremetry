@@ -12,7 +12,7 @@ import { tf, useLang, useT } from '@/lib/i18n';
 import { fmtClock } from '@/lib/utils';
 import { serviceHref } from '@/lib/serviceHref';
 import type { MLRecordView } from '@/lib/types';
-import { fmtRecordValue, measureKey, outsideRegions, recordBuckets } from './mlRecord';
+import { fmtRecordValue, measureKey, outsideRegions, recordBuckets, axisUnit } from './mlRecord';
 
 // Ağır uPlot bileşeni ayrı parça (MetricArea ile aynı yol; sayfa bütçesi).
 const TimeSeriesPanel = lazy(() => import('@/components/viz/TimeSeriesPanel').then(m => ({ default: m.TimeSeriesPanel })));
@@ -36,7 +36,9 @@ export function MLRecordChart({ rec, height = 200 }: { rec: MLRecordView; height
   const lang = useLang();
   const measure = measureLabel(rec, t);
   const b = useMemo(() => recordBuckets(rec), [rec]);
-  const chartUnit = rec.series.unit === 'percent' ? '%' : rec.series.unit;
+  // v0.10.2344 — uzun birim (ör. "spans/request") her eksen etiketine yazılınca
+  // etiket kırpılıyordu ("…est"); ölçü adı zaten başlıkta, eksen yalın sayı gösterir.
+  const chartUnit = axisUnit(rec.series.unit);
   const volLabel = t(rec.detector === 'svc_telemetry_volume' ? 'mlRecord.chart.spansPerMin' : 'mlRecord.chart.volume');
   const series = useMemo<TSSeries[]>(() => {
     const pts = (xs: number[]) => xs.map((v, i) => ({ time: b.t[i] * 1e9, value: v }));
