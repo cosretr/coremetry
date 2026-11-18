@@ -42,6 +42,7 @@ package api
 import (
 	"fmt"
 	"math"
+	"net/netip"
 	"regexp"
 	"sort"
 	"strconv"
@@ -179,6 +180,7 @@ func verifyAnswer(tier, answer string, ev verifyEvidence, catalog []string) veri
 		res.Claims = append(res.Claims, verifyClaim{Kind: verifyKindName, Text: n, Status: st})
 	}
 	text = verifyMaskLinks(text)
+	text = verifyMaskIPs(text) // v0.10.2356 — istemci IP'si sayı / saat iddiası değildir
 	dates, text := verifyDateClaims(text)
 	for _, d := range dates {
 		st := verifyMismatch
@@ -1027,6 +1029,21 @@ func verifyStripFences(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// verifyIPRe — IPv4 dörtlüsü ya da iki+ iki noktalı onaltılık grup (IPv6 adayı).
+var verifyIPRe = regexp.MustCompile(`(?i)\b\d{1,3}(?:\.\d{1,3}){3}\b|[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}`)
+
+// verifyMaskIPs — SAF (v0.10.2356, investigation-design S2): geçerli IPv4 /
+// IPv6 adresi boşluğa çevrilir — "2001:db8::1" 2001 sayısı, "198.51.100.7"
+// ondalık sayı iddiası sayılmaz. Saat ("14:05:30") adres olarak ayrışmaz, kalır.
+func verifyMaskIPs(s string) string {
+	return verifyIPRe.ReplaceAllStringFunc(s, func(m string) string {
+		if a, err := netip.ParseAddr(m); err == nil && (a.Is4() || strings.Count(m, ":") >= 2) {
+			return " "
+		}
+		return m
+	})
 }
 
 // verifyMaskLinks — numericClaims ile aynı bağlantı maskesi.

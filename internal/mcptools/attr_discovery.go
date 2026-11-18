@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"sort"
 	"strings"
 
@@ -65,12 +66,19 @@ var valueKeyDictionary = []struct {
 }{
 	{"host", []string{"server.address", "http.host", "net.peer.name", "net.host.name", "url.full", "http.url", "peer.hostname", "server.socket.address"}},
 	{"path", []string{"http.route", "url.path", "http.target", "url.full", "http.url"}},
+	// v0.10.2356 (investigation-design S2) — IP değeri ayrı şekil: istemci
+	// adresi anahtarları (ClientIPKeys, kapalı liste) önce, sonra sunucu adresi.
+	// Eskiden "host" sayılırdı ve host sözlüğünde client.address yoktu.
+	{"ip", append(append([]string(nil), ClientIPKeys...), "server.address", "server.socket.address")},
 }
 
-// valueShape — "host" (nokta içeren ad, boşluksuz, / yok), "path" ("/" ile
-// başlar), "other". Saf.
+// valueShape — "ip" (tam IPv4 / IPv6 adresi; v0.10.2356), "host" (nokta
+// içeren ad, boşluksuz, / yok), "path" ("/" ile başlar), "other". Saf.
 func valueShape(v string) string {
 	v = strings.TrimSpace(v)
+	if a, err := netip.ParseAddr(v); err == nil && a.Zone() == "" {
+		return "ip"
+	}
 	switch {
 	case strings.HasPrefix(v, "/"):
 		return "path"

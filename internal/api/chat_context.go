@@ -85,6 +85,11 @@ type ChatContext struct {
 	// varlık düzeltmeleri (≤5); aynı deyim konuşmada doğrudan yeni varlığa
 	// çözülür, öneri kartı bir kez çıkar. Yalnız v2 + durum açıkken yazılır.
 	Corrections []chatCorrection `json:"corrections,omitempty"`
+	// ClientIP — v0.10.2356 (investigation-design S2, karar 12): aramanın
+	// istemci IP'si (tam adres ya da IPv4 öneki "192.0.2."). Uç nokta mevcut
+	// Operation, attribute süzgeçleri mevcut Filters yuvasında durur. Yalnız
+	// v2 + durum açıkken yazılır; v1'de boş → JSON bayt bayt eski.
+	ClientIP string `json:"clientIp,omitempty"`
 }
 
 func (c ChatContext) Empty() bool {

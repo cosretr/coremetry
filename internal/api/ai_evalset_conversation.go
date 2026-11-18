@@ -121,6 +121,10 @@ type evalConvExpect struct {
 	// NoBoilerplate — v0.10.2338 (D): üslup açık koşulan turda cevap kalıp
 	// açılış/kapanış taşımamalı (evalrubric.FluencyOf). Üslup kapalıysa denetlenmez.
 	NoBoilerplate bool `json:"noBoilerplate,omitempty"`
+	// ArgsContain — v0.10.2356 (S2 arama): turun en az bir okumasının ham
+	// argümanı bu parçaların HEPSİNİ içermeli (ör. `"client_ip":"192.0.2.10"`);
+	// sunucunun devralıp eklediği argüman dahil.
+	ArgsContain []string `json:"argsContain,omitempty"`
 }
 
 // Doğrulayıcı beklentileri.
@@ -539,6 +543,25 @@ func evalConvTranscript(c evalCase, answers []string) string {
 
 // ── Yapısal puanlama (SAF) ──────────────────────────────────────────────
 
+// evalConvArgsContain — SAF (v0.10.2356): bir okumanın ham argümanı bütün parçaları içeriyor mu.
+func evalConvArgsContain(calls []evalConvCall, parts []string) bool {
+	for _, c := range calls {
+		var buf bytes.Buffer
+		args := string(c.Args)
+		if json.Compact(&buf, c.Args) == nil {
+			args = buf.String()
+		}
+		ok := true
+		for _, p := range parts {
+			ok = ok && strings.Contains(args, p)
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
+}
+
 // evalConvLoc — koşunun sabit dilimi (çözülemezse kurulum varsayılanı; chatLocationNamed).
 func evalConvLoc() *time.Location { return chatLocationNamed(evalConvTZ, 0) }
 
@@ -567,6 +590,9 @@ func scoreEvalConvTurn(e evalConvExpect, tr evalConvTurnResult, evidence string,
 		if names[n] {
 			fails = append(fails, "yasak okuma: "+n)
 		}
+	}
+	if len(e.ArgsContain) > 0 && !evalConvArgsContain(tr.Calls, e.ArgsContain) {
+		fails = append(fails, fmt.Sprintf("argüman beklentisi tutmadı: %q", e.ArgsContain))
 	}
 	if e.MaxCalls != nil && len(tr.Calls) > *e.MaxCalls {
 		fails = append(fails, fmt.Sprintf("okuma %d > %d", len(tr.Calls), *e.MaxCalls))

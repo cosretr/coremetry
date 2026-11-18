@@ -23,4 +23,7 @@ describe('convState', () => {
     expect(withStateEcho({ a: 1 }, null)).toEqual({ a: 1 });
     expect(withStateEcho(undefined, { service: 'payments', updatedAt: 9 })).toEqual({ state: { service: 'payments', updatedAt: 9 } });
   });
+  it('v0.10.2356 — istemci IP yuvası satırda', () => {
+    expect(convStateLine({ service: 'orders', clientIp: '198.51.100.7', updatedAt: 1 })).toBe('orders · istemci 198.51.100.7');
+  });
 });

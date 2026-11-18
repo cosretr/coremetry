@@ -22,7 +22,7 @@ func TestStyleV1PromptsUnchanged(t *testing.T) {
 		"ChatRoundCap":  {SystemPromptChatRoundCap(), "939cf8dcddbc4f38d4e51107749ff0c4e72bdc3b0f429600460bc72341836763"},
 		"AgentLoop":     {SystemPromptChatAgentLoopFor(false), "393ea3047801b42a005580f458f81ffb2ebb3ee8d22fb21f421d6dc144c45dde"},
 		"AgentLoop.s":   {SystemPromptChatAgentLoopFor(true), "d249daf8bb67f6914853a7b11d7b6059c2623806249280d03aa9a60923b3bd62"},
-		"AgentLoopV2":   {SystemPromptChatAgentLoopV2For(false), "188e35cb23fe918f7b914bfe0bf9dbca4d1d0c09306c407766b4a606dcc5e863"},
+		"AgentLoopV2":   {SystemPromptChatAgentLoopV2For(false), "4e30fae662e4c426246251c42ad3428bfa4e62256bce27ccd022d1d0babdff42"}, // v0.10.2356 — S2: adım 4 find_traces (bilerek yenilendi)
 		"AgentLoopV2.s": {SystemPromptChatAgentLoopV2For(true), "b68c0acaa65f50c15eb0d9a12ca89efc5c30b89f018c9990ab76e38f7c3b04e0"},
 		"GuidedChat":    {SystemPromptGuidedChat(), "7d6eb7ff63fc2f51398a250d1cb4e3a59528b860182c4181d96e80112003006f"},
 		"GeneralChat":   {SystemPromptGeneralChat(), "01c948112dcad381a131c8d4aeed73e9a3c349b981e3daf0ad8ae32bdbc8ad5c"},
@@ -98,5 +98,21 @@ func TestStyleVariantsContent(t *testing.T) {
 	}
 	if StyleExamplesBlock(nil) != "" || !strings.HasPrefix(StyleExamplesBlock([]string{"K: a\nC: b"}), styleExamplesHeader+"\n\nK: a") {
 		t.Error("örnek bloğu")
+	}
+}
+
+// TestV2LoopNamesFindTraces — v0.10.2356 (investigation-design S2): v2
+// accessor'ları gizli search_traces'i anmaz, find_traces'i anar; v1 aynen.
+func TestV2LoopNamesFindTraces(t *testing.T) {
+	for name, p := range map[string]string{
+		"V2":      SystemPromptChatAgentLoopV2For(false),
+		"V2Style": SystemPromptChatAgentLoopStyleFor(true, false),
+	} {
+		if strings.Contains(p, "search_traces") || !strings.Contains(p, "trace listesi find_traces'tir") {
+			t.Errorf("%s: v2 çekirdeği search_traces yerine find_traces anmalı", name)
+		}
+	}
+	if !strings.Contains(SystemPromptChatAgentLoopFor(false), "search_traces / trace_stats") {
+		t.Error("v1 çekirdeği değişmemeli")
 	}
 }

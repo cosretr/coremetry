@@ -38,6 +38,7 @@ export function convStateLine(s: CosreConvState | null): string {
   if (s.channelCode) parts.push(`kanal ${s.channelCode}`);
   if (s.functionCode) parts.push(`fonksiyon ${s.functionCode}`);
   if (s.problem) parts.push(`problem ${s.problem}`);
+  if (s.clientIp) parts.push(`istemci ${s.clientIp}`); // v0.10.2356 — S2
   return parts.join(' · ');
 }
 

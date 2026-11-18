@@ -8,6 +8,7 @@ import (
 	"time"
 
 	agentctx "github.com/cilcenk/coremetry/internal/ai/agent/context"
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcptools"
 )
 
@@ -71,6 +72,13 @@ type toolScreenScope struct {
 	// düzelttiği ya da eş adının yanlış adayı). Model onu açıkça yazarsa
 	// argüman StateService'e çevrilir; StateService boşken etkisiz.
 	StateAvoid string
+	// v0.10.2356 (investigation-design S2, §4.2) — konuşma durumunun arama
+	// yuvaları (bu turda yazılan ya da devralınan): istemci IP'si, uç nokta
+	// operasyonu, kapalı süzgeçler. Yalnız find_traces / v2 search_logs'a ve
+	// yalnız model o argümanı boş bıraktıysa eklenir. Kapalıyken boş.
+	StateClientIP  string
+	StateOperation string
+	StateFilters   []chstore.FilterExpr
 }
 
 // serviceDetailPages — servis enjeksiyonunun izinli olduğu sayfalar.
@@ -213,6 +221,10 @@ func applyScreenContext(tool string, args json.RawMessage, schema map[string]any
 		changed = true
 	}
 
+	if searchSlotTools[tool] && !hasTrace && injectSearchSlots(m, has, tool, sc) {
+		changed = true
+	}
+
 	if sc.Brush && !hasTrace && !argsHaveWindow(m) {
 		// v0.10.1435 — brush: yalnız mutlak uçlar (enum / range_s yok).
 		if has("from_ms") && has("to_ms") {
@@ -257,6 +269,33 @@ func applyScreenContext(tool string, args json.RawMessage, schema map[string]any
 		return args, mcptools.ScopeApplied{}
 	}
 	return b, applied
+}
+
+// searchSlotTools — v0.10.2356: durum arama yuvalarının eklendiği araçlar.
+var searchSlotTools = map[string]bool{mcptools.FindTracesName: true, mcptools.SearchLogsV2Name: true}
+
+// injectSearchSlots — SAF (v0.10.2356): model boş bıraktıysa durumun IP'si
+// (search_logs'ta yalnız tam adres), operasyonu (operation / endpoint yoksa) ve
+// süzgeçleri; şema o argümanı almıyorsa (v1 search_logs) dokunmaz.
+func injectSearchSlots(m map[string]any, has func(string) bool, tool string, sc toolScreenScope) bool {
+	changed := false
+	if sc.StateClientIP != "" && has("client_ip") && argStr(m, "client_ip") == "" {
+		if _, _, ok := mcptools.ParseClientIP(sc.StateClientIP, tool == mcptools.FindTracesName); ok {
+			m["client_ip"] = sc.StateClientIP
+			changed = true
+		}
+	}
+	if sc.StateOperation != "" && has("operation") && has("endpoint") && argStr(m, "operation") == "" && argStr(m, "endpoint") == "" {
+		m["operation"] = sc.StateOperation
+		changed = true
+	}
+	if list, _ := m["filters"].([]any); len(sc.StateFilters) > 0 && has("filters") && len(list) == 0 {
+		if fs := mcptools.V2SearchFiltersFrom(sc.StateFilters); len(fs) > 0 {
+			m["filters"] = fs
+			changed = true
+		}
+	}
+	return changed
 }
 
 // argStr — argümanın dize değeri (yoksa / dize değilse ""). Saf.

@@ -163,6 +163,12 @@ type findTracesArgs struct {
 	Env          string   `json:"env,omitempty"`
 	RangeS       int      `json:"range_s,omitempty"`
 	Limit        int      `json:"limit,omitempty"`
+	// v0.10.2356 (investigation-design S2, §4.1) — uç nokta, istemci IP'si, kapalı süzgeçler.
+	Endpoint string         `json:"endpoint,omitempty"`
+	ClientIP string         `json:"client_ip,omitempty"`
+	Filters  []SearchFilter `json:"filters,omitempty"`
+	// endpointRes — handler'ın Deps.ResolveEndpoint sonucu (plan saf kalsın diye).
+	endpointRes *EndpointResolution
 }
 
 var errFindTracesNoScope = errors.New("no scope: pass service (exact name), a channel_code / function_code, or let the server inject the user's services; if the user has no team ask which service they mean — never guess one")
@@ -179,14 +185,50 @@ type findTracesPlan struct {
 	WindowS  int
 	Limit    int
 	Narrowed string
+	// v0.10.2356 — S2: çözülen uç nokta, istemci IP'si ve modelin süzgeçleri (applied).
+	Endpoint    *EndpointResolution
+	EndpointArg string
+	ClientIP    clientIPMatch
+	UserFilters []chstore.FilterExpr
+	// Entity — v0.10.2356: tek servisin kimliği (S1 ServiceRef; handler koyar).
+	Entity *ServiceRef
 }
+
+// ftPrefixMaxRangeS — IPv4 öneki: tek servis, ≤1 sa (karar 7).
+const ftPrefixMaxRangeS = 3600
 
 // planFindTraces — SAF: argüman → plan (pencere kapısı dahil).
 func planFindTraces(a findTracesArgs, kvh bool) (findTracesPlan, error) {
 	p := findTracesPlan{Env: strings.TrimSpace(a.Env), Limit: clampLimit(a.Limit, ftMaxRows, ftMaxRows)}
 	p.Service, p.Services = v2Scope(a.Service, a.Services)
 	if op := truncateRunes(strings.TrimSpace(a.Operation), qtMaxNameRunes); op != "" {
+		if strings.TrimSpace(a.Endpoint) != "" {
+			return p, badSearchArgs("endpoint ve operation birlikte verilmez: birini ver")
+		}
 		p.Filters = append(p.Filters, chstore.FilterExpr{Key: "name", Op: "=", Values: []string{op}})
+	}
+	if ep := strings.TrimSpace(a.Endpoint); ep != "" { // v0.10.2356 — sunucu çözer (karar 5)
+		if a.endpointRes == nil {
+			return p, &SearchError{Class: ErrEndpointNotFound, Key: ep, Hint: "uç nokta çözücüsü yok — operation ile tam span adını ver"}
+		}
+		if err := endpointError(ep, *a.endpointRes); err != nil {
+			return p, err
+		}
+		r := *a.endpointRes
+		p.Endpoint, p.EndpointArg = &r, ep
+		if p.Service == "" && r.Service != "" && containsStr(p.Services, r.Service) {
+			p.Service, p.Services = r.Service, nil // uç nokta kapsamın tek servisine çözüldü; kapsamsız aramaya kapsam vermez (karar 9)
+		}
+		p.Filters = append(p.Filters, endpointFilter(r))
+	}
+	uf, err := planSearchFilters(a.Filters)
+	if err != nil {
+		return p, err
+	}
+	p.UserFilters = uf
+	p.Filters = append(p.Filters, uf...)
+	if p.ClientIP, err = parseClientIP(a.ClientIP, true); err != nil {
+		return p, err
 	}
 	for _, c := range []struct{ key, raw string }{{"channel_code", a.ChannelCode}, {"function_code", a.FunctionCode}} {
 		code, err := v2Code(c.key, c.raw)
@@ -213,13 +255,23 @@ func planFindTraces(a findTracesArgs, kvh bool) (findTracesPlan, error) {
 	if a.MinMs > 0 && a.MinMs <= qtMaxMinDurationMs {
 		p.MinMs = a.MinMs
 	}
+	if p.ClientIP.Prefix && p.Service == "" {
+		return p, &SearchError{Class: ErrBadClientIP, Key: p.ClientIP.Value, Hint: "IP öneki tek servis ister: service ver ya da tam adres kullan"}
+	}
 	p.WindowS = v2Window(a.RangeS, ftDefaultRangeS, ftMaxRangeS)
-	gate, err := applySearchGate(p.WindowS, p.Limit, p.Filters, true, p.Slowest, kvh)
+	gateFilters := p.Filters
+	if p.ClientIP.Value != "" {
+		gateFilters = append(append([]chstore.FilterExpr(nil), p.Filters...), clientIPGroup(p.ClientIP).Filters...)
+	}
+	gate, err := applySearchGate(p.WindowS, p.Limit, gateFilters, true, p.Slowest, kvh)
 	if err != nil {
 		return p, err
 	}
 	if gate.Reason != "" {
 		p.WindowS, p.Narrowed = gate.RangeS, gate.Reason
+	}
+	if p.ClientIP.Prefix && p.WindowS > ftPrefixMaxRangeS {
+		p.WindowS, p.Narrowed = ftPrefixMaxRangeS, "istemci IP öneki: pencere ≤ 1 saat"
 	}
 	p.Limit = clampLimit(gate.Limit, ftMaxRows, ftMaxRows)
 	return p, nil
@@ -228,9 +280,9 @@ func planFindTraces(a findTracesArgs, kvh bool) (findTracesPlan, error) {
 // findTracesCacheKey — SAF: TÜM plan girdileri (sıralı küme FNV, süzgeçler JSON FNV, pencere sonu dakika).
 func findTracesCacheKey(p findTracesPlan, to time.Time) string {
 	fj, _ := json.Marshal(p.Filters)
-	return fmt.Sprintf("mcp:find_traces:v1:%s:%s:%s:%t:%t:%g:%s:%d:%d:%d",
+	return fmt.Sprintf("mcp:find_traces:v2:%s:%s:%s:%t:%t:%g:%s:%d:%d:%s:%t:%d",
 		fnvHex(p.Service), fnvHex(p.Services...), fnvHex(string(fj)), p.Errors, p.Slowest, p.MinMs,
-		fnvHex(p.Env), p.WindowS, p.Limit, to.Unix()/60)
+		fnvHex(p.Env), p.WindowS, p.Limit, fnvHex(p.ClientIP.Value), p.ClientIP.Prefix, to.Unix()/60)
 }
 
 // traceFilter — plan → okuyucu süzgeci (SAF).
@@ -239,11 +291,16 @@ func (p findTracesPlan) traceFilter(from, to time.Time) chstore.TraceFilter {
 	if p.Slowest {
 		sort = "duration"
 	}
-	return chstore.TraceFilter{
+	f := chstore.TraceFilter{
 		Service: p.Service, Services: p.Services, From: from, To: to, HasError: p.Errors,
 		Sort: sort, Order: "desc", Limit: p.Limit, CountMode: "skip",
 		Filters: p.Filters, Env: p.Env, MinMs: p.MinMs,
 	}
+	if p.ClientIP.Value != "" { // v0.10.2356 — süzgeçler AND + aday anahtarlarda tek OR grubu
+		f.FilterRoot = &chstore.FilterGroup{Join: "AND", Filters: append([]chstore.FilterExpr(nil), p.Filters...),
+			Groups: []chstore.FilterGroup{clientIPGroup(p.ClientIP)}}
+	}
+	return f
 }
 
 // FindTracesPageURL — SAF: /traces derin bağlantısı. Küme ≤ ftLinkMaxSvcs ise
@@ -276,6 +333,13 @@ func findTracesQuery(p findTracesPlan, f chstore.TraceFilter) string {
 	if fs := filtersSummary(f.Filters); fs != "" {
 		w = append(w, fs)
 	}
+	if p.ClientIP.Value != "" {
+		op := "="
+		if p.ClientIP.Prefix {
+			op = "^"
+		}
+		w = append(w, fmt.Sprintf("client_ip %s %s (%d keys, OR)", op, p.ClientIP.Value, len(ClientIPKeys)))
+	}
 	if p.Env != "" {
 		w = append(w, "deploy_env = "+sqlQuote(p.Env))
 	}
@@ -294,16 +358,53 @@ type ftRow struct {
 	ID       string  `json:"id"`
 	RootOp   string  `json:"root_op"`
 	EntrySvc string  `json:"entry_svc"`
+	StartMs  int64   `json:"start_ms,omitempty"` // v0.10.2356 — S2
 	Ms       float64 `json:"ms"`
 	Spans    uint64  `json:"spans"`
 	Error    bool    `json:"error"`
+}
+
+// traceStartMs — SAF: TraceRow.StartTime (ns) → ms.
+func traceStartMs(ns int64) int64 {
+	if ns <= 0 {
+		return 0
+	}
+	return ns / int64(time.Millisecond)
+}
+
+// findTracesApplied — SAF (v0.10.2356): modelin S2 argümanlarının uygulanan
+// hâli {endpoint {operation, route}, client_ip {value, match, keys}, filters};
+// hiçbiri yoksa nil (gövde eski şekilde).
+func findTracesApplied(p findTracesPlan) map[string]any {
+	ap := map[string]any{}
+	if r := p.Endpoint; r != nil {
+		ep := map[string]string{"operation": r.Operation}
+		if r.Route != "" {
+			ep["route"] = r.Route
+		}
+		ap["endpoint"] = ep
+	}
+	if p.ClientIP.Value != "" {
+		match := "exact"
+		if p.ClientIP.Prefix {
+			match = "prefix"
+		}
+		ap["client_ip"] = map[string]any{"value": p.ClientIP.Value, "match": match, "keys": ClientIPKeys}
+	}
+	if len(p.UserFilters) > 0 {
+		ap["filters"] = p.UserFilters
+	}
+	if len(ap) == 0 {
+		return nil
+	}
+	return ap
 }
 
 // findTracesPayload — SAF: ≤ 2 KB gövde.
 func findTracesPayload(p findTracesPlan, f chstore.TraceFilter, rows []chstore.TraceRow, hasMore bool, from, to time.Time) map[string]any {
 	all := make([]ftRow, 0, len(rows))
 	for _, t := range rows {
-		all = append(all, ftRow{t.TraceID, truncateRunes(t.RootName, 80), t.ServiceName, round4(t.DurationMs), t.SpanCount, t.HasError})
+		all = append(all, ftRow{t.TraceID, truncateRunes(t.RootName, 80), t.ServiceName, traceStartMs(t.StartTime), round4(t.DurationMs), t.SpanCount, t.HasError})
 	}
 	if len(all) > p.Limit {
 		all, hasMore = all[:p.Limit], true
@@ -323,6 +424,13 @@ func findTracesPayload(p findTracesPlan, f chstore.TraceFilter, rows []chstore.T
 	if p.Narrowed != "" {
 		out["narrowed"] = p.Narrowed
 	}
+	out["window"] = map[string]int64{"from_ms": from.UnixMilli(), "to_ms": to.UnixMilli()} // v0.10.2356 — S2
+	if p.Entity != nil {
+		out["entity"] = *p.Entity
+	}
+	if ap := findTracesApplied(p); ap != nil {
+		out["applied"] = ap
+	}
 	if len(all) == 0 {
 		out["reasons"] = []string{"no trace matched in the window — empty is not 'no errors anywhere'; widen range_s or drop a filter"}
 	}
@@ -332,18 +440,28 @@ func findTracesPayload(p findTracesPlan, f chstore.TraceFilter, rows []chstore.T
 func findTracesTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             FindTracesName,
-		ShortDescription: "Trace ara: kullanıcının servisleri (sunucu koyar) ya da servis / channel_code / function_code; status error, sort_by slowest, ≤10 satır + page_url.",
+		ShortDescription: "Trace ara: kullanıcının servisleri (sunucu koyar) ya da servis / channel_code / function_code; endpoint, client_ip, filters (≤3 attribute, anahtarı sunucu doğrular); status error, sort_by slowest, ≤10 satır + page_url. Sayım trace_stats.",
 		Description: "Find traces with CLOSED filters only — no query syntax. Scope: `services` is injected by the server with the user's own services (any of them); an explicit `service` overrides it; a channel_code / function_code equality works fleet-wide. " +
-			"Filters: operation (exact span name), channel_code, function_code (business codes, exact), status any|error, min_duration_ms, sort_by recent|slowest, env, range_s (default 1h, max 6h; filtered or slowest searches narrow automatically and say so in `narrowed`). " +
-			"Returns ≤10 traces {id, root_op, entry_svc, ms, spans, error}, has_more, the reader summary in `query` and `page_url` (the same search on the Traces page). " +
+			"Filters: operation (exact span name) OR endpoint (\"POST /api/orders\"; the server resolves it), client_ip (exact IPv4/IPv6, or IPv4 prefix \"192.0.2.\" / CIDR /8 /16 /24 with one service), filters (≤3 attribute conditions, AND; keys are checked server-side), channel_code, function_code (business codes, exact), status any|error, min_duration_ms, sort_by recent|slowest, env, range_s (default 1h, max 6h; filtered or slowest searches narrow automatically and say so in `narrowed`). " +
+			"Returns ≤10 traces {id, root_op, entry_svc, start_ms, ms, spans, error}, has_more, `applied`, `entity`, the reader summary in `query` and `page_url` (the same search on the Traces page). " +
+			"Errors unknown_attribute (use a `near` key), endpoint_ambiguous (ask which `candidates`), endpoint_not_found, bad_client_ip. Counts per group stay in trace_stats. " +
 			"Next step: explain_trace with a returned id. Empty traces = nothing matched in that window, not proof of health.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"services":        servicesSchema(""),
-				"team":            map[string]any{"type": "string", "description": "Team label, filled by the server; used only for the page link. Omit."},
-				"service":         map[string]any{"type": "string", "description": "Exact service name; overrides `services`."},
-				"operation":       map[string]any{"type": "string", "description": "Exact operation/span name (optional)."},
+				"services":  servicesSchema(""),
+				"team":      map[string]any{"type": "string", "description": "Team label, filled by the server; used only for the page link. Omit."},
+				"service":   map[string]any{"type": "string", "description": "Exact service name; overrides `services`."},
+				"operation": map[string]any{"type": "string", "description": "Exact operation/span name (optional)."},
+				"endpoint":  map[string]any{"type": "string", "description": "HTTP endpoint as the user wrote it (\"POST /api/orders\", \"/api/orders/{id}\"); not with operation."},
+				"client_ip": map[string]any{"type": "string", "description": "Client address: exact IPv4/IPv6, or IPv4 prefix (\"192.0.2.\", /8 /16 /24; one service, ≤1h)."},
+				"filters": map[string]any{"type": "array", "maxItems": sfMaxFilters, "description": "Attribute conditions, AND.",
+					"items": map[string]any{"type": "object", "required": []string{"key"}, "properties": map[string]any{
+						"key":    map[string]any{"type": "string", "description": "Attribute key (e.g. tenant.tier)."},
+						"op":     map[string]any{"type": "string", "enum": []string{"eq", "ne", "in", "exists"}, "description": "Default eq."},
+						"value":  map[string]any{"type": "string"},
+						"values": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "maxItems": sfMaxValues, "description": "For in."},
+					}}},
 				"channel_code":    map[string]any{"type": "string", "description": "CHANNEL_CODE equality (e.g. KQL123)."},
 				"function_code":   map[string]any{"type": "string", "description": "FUNCTION_CODE equality (e.g. BQRZ001)."},
 				"status":          map[string]any{"type": "string", "enum": qtStatusEnum, "description": "error = only traces with an error span. Default any."},
@@ -362,6 +480,14 @@ func findTracesTool(d Deps) mcp.Tool {
 					return nil, fmt.Errorf("decode args: %w", err)
 				}
 			}
+			if ep := strings.TrimSpace(a.Endpoint); ep != "" && strings.TrimSpace(a.Operation) == "" && d.ResolveEndpoint != nil {
+				svc, _ := v2Scope(a.Service, a.Services) // v0.10.2356 — uç nokta sunucuda çözülür (karar 5)
+				r, err := d.ResolveEndpoint(ctx, svc, ep)
+				if err != nil {
+					return nil, err
+				}
+				a.endpointRes = &r
+			}
 			p, err := planFindTraces(a, chstore.AttrIndexAvailable())
 			if err != nil {
 				return nil, err
@@ -370,6 +496,15 @@ func findTracesTool(d Deps) mcp.Tool {
 				return nil, errors.New("ClickHouse trace reader not configured")
 			}
 			from, to := rangeWindow(ctx, p.WindowS)
+			if len(p.UserFilters) > 0 { // v0.10.2356 — anahtar sunucuda doğrulanır (karar 4)
+				if err := validateFilterKeys(ctx, p.UserFilters, scopedAttrLookup(d, p, to)); err != nil {
+					return nil, err
+				}
+			}
+			if p.Service != "" {
+				ref := ResolveServiceRef(ctx, d, p.Service)
+				p.Entity = &ref
+			}
 			return v2Memo(ctx, d, findTracesCacheKey(p, to), ftCacheTTL, func(c context.Context) (map[string]any, error) {
 				rctx, cancel := context.WithTimeout(c, cosreBudget)
 				defer cancel()
@@ -396,6 +531,7 @@ type cosreSearchLogsArgs struct {
 	Env      string   `json:"env,omitempty"`
 	RangeS   int      `json:"range_s,omitempty"`
 	Limit    int      `json:"limit,omitempty"`
+	ClientIP string   `json:"client_ip,omitempty"` // v0.10.2356 — S2: yalnız tam adres
 }
 
 var errSearchLogsNoScope = errors.New("no scope: pass service, trace_id, or let the server inject the user's services; if the user has no team ask which service they mean — never guess one")
@@ -412,6 +548,9 @@ type searchLogsPlan struct {
 	Env      string
 	WindowS  int
 	Limit    int
+	// v0.10.2356 — S2: istemci IP'si (tam adres) ve tek servisin kimliği.
+	ClientIP string
+	Entity   *ServiceRef
 }
 
 // planSearchLogs — SAF.
@@ -431,6 +570,20 @@ func planSearchLogs(a cosreSearchLogsArgs) (searchLogsPlan, error) {
 		return p, errSearchLogsNoScope
 	}
 	p.Search, p.Words = sanitizeLogText(a.Words)
+	// v0.10.2356 — istemci IP'si YENİ SORGU ŞEKLİ ÜRETMEZ: words'ün aynı tek
+	// gövde ifadesine tırnaklı ikinci ifade (ES query_string, default_operator
+	// AND; joker / toplama / yeni alan yok). Yalnız tam adres (karar 7).
+	ip, err := parseClientIP(a.ClientIP, false)
+	if err != nil {
+		return p, err
+	}
+	if p.ClientIP = ip.Value; p.ClientIP != "" {
+		if p.Search == "" {
+			p.Search = `"` + p.ClientIP + `"`
+		} else {
+			p.Search += ` AND "` + p.ClientIP + `"`
+		}
+	}
 	p.Severity, _ = coerceEnum("severity", a.Severity, qlSeverityEnum, qlSeveritySynonyms, qlSeverityAny)
 	switch p.Severity {
 	case qlSeverityWarn:
@@ -459,8 +612,12 @@ func (p searchLogsPlan) filter(from, to time.Time) logstore.Filter {
 
 // SearchLogsPageURL — SAF: /logs bağlantısı (kök-göreli). Küme: takım varsa `team=`.
 func SearchLogsPageURL(p searchLogsPlan, from, to time.Time) string {
+	q := p.Words
+	if p.ClientIP != "" { // v0.10.2356 — sayfa aynı gövde ifadesini arar
+		q = p.Search
+	}
 	href := evidenceBuildLink(buildLinkArgs{
-		Page: "logs", Query: p.Words, Service: p.Service, Severity: int(p.SevMin), TraceID: p.TraceID, Env: p.Env,
+		Page: "logs", Query: q, Service: p.Service, Severity: int(p.SevMin), TraceID: p.TraceID, Env: p.Env,
 	}, "", fmt.Sprintf("custom:%d-%d", from.UnixMilli(), to.UnixMilli()))
 	if href == "" {
 		href = "/logs"
@@ -565,6 +722,13 @@ func searchLogsPayload(backend string, p searchLogsPlan, page *logstore.Page, hi
 	if len(unapplied) > 0 {
 		out["unapplied"] = unapplied
 	}
+	if p.ClientIP != "" { // v0.10.2356 — S2
+		out["window"] = map[string]int64{"from_ms": from.UnixMilli(), "to_ms": to.UnixMilli()}
+		out["applied"] = map[string]any{"client_ip": map[string]string{"value": p.ClientIP, "match": "body"}}
+		if p.Entity != nil {
+			out["entity"] = *p.Entity
+		}
+	}
 	if page.Partial || page.ShardsFailed > 0 {
 		out["partial"] = true
 	}
@@ -577,7 +741,7 @@ func searchLogsPayload(backend string, p searchLogsPlan, page *logstore.Page, hi
 func cosreSearchLogsTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             SearchLogsV2Name,
-		ShortDescription: "Log ara: kullanıcının servisleri (sunucu koyar) ya da servis / trace_id; words düz kelimeler (sorgu dili YOK), severity, ≤10 satır + histogram + page_url.",
+		ShortDescription: "Log ara: kullanıcının servisleri (sunucu koyar) ya da servis / trace_id; words düz kelimeler (sorgu dili YOK), client_ip (tam adres, gövdede), severity, ≤10 satır + histogram + page_url.",
 		Description: "Search log lines with plain words — NOT a query language (quotes, operators and field syntax are stripped). Scope: `services` is injected by the server with the user's own services (any of them); an explicit `service` overrides it; `trace_id` makes the trace the scope (services are not applied). " +
 			"Args: words, severity any|warn|error, env, range_s (default 1h, max 24h), limit (≤10). " +
 			"Returns ≤10 rows {ts (unix ms), sev, svc, body ≤160 chars, trace_id}, total, a ≤12-bucket count histogram, the applied reader summary in `query` and `page_url` (the same search on the Logs page). " +
@@ -585,15 +749,16 @@ func cosreSearchLogsTool(d Deps) mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"words":    map[string]any{"type": "string", "description": "Plain words that must appear in the log body (no query syntax)."},
-				"services": servicesSchema(""),
-				"team":     map[string]any{"type": "string", "description": "Team label, filled by the server; used only for the page link. Omit."},
-				"service":  map[string]any{"type": "string", "description": "Exact service name; overrides `services`."},
-				"severity": map[string]any{"type": "string", "enum": qlSeverityEnum, "description": "Minimum severity. Default any."},
-				"trace_id": map[string]any{"type": "string", "description": "32-hex trace id: the logs of that trace (services ignored)."},
-				"env":      map[string]any{"type": "string", "description": "Deployment environment (e.g. prod)."},
-				"range_s":  rangeSchema(slDefaultRangeS, slMaxRangeS),
-				"limit":    map[string]any{"type": "integer", "minimum": 1, "maximum": slMaxRows, "description": "Max rows, default and max 10."},
+				"words":     map[string]any{"type": "string", "description": "Plain words that must appear in the log body (no query syntax)."},
+				"services":  servicesSchema(""),
+				"team":      map[string]any{"type": "string", "description": "Team label, filled by the server; used only for the page link. Omit."},
+				"service":   map[string]any{"type": "string", "description": "Exact service name; overrides `services`."},
+				"severity":  map[string]any{"type": "string", "enum": qlSeverityEnum, "description": "Minimum severity. Default any."},
+				"trace_id":  map[string]any{"type": "string", "description": "32-hex trace id: the logs of that trace (services ignored)."},
+				"client_ip": map[string]any{"type": "string", "description": "Exact client IPv4/IPv6 written in the log body (no prefix)."},
+				"env":       map[string]any{"type": "string", "description": "Deployment environment (e.g. prod)."},
+				"range_s":   rangeSchema(slDefaultRangeS, slMaxRangeS),
+				"limit":     map[string]any{"type": "integer", "minimum": 1, "maximum": slMaxRows, "description": "Max rows, default and max 10."},
 			},
 		},
 		MinRole: "",
@@ -607,6 +772,10 @@ func cosreSearchLogsTool(d Deps) mcp.Tool {
 			p, err := planSearchLogs(a)
 			if err != nil {
 				return nil, err
+			}
+			if p.ClientIP != "" && p.Service != "" {
+				ref := ResolveServiceRef(ctx, d, p.Service)
+				p.Entity = &ref
 			}
 			st := d.LogStore
 			if st == nil {

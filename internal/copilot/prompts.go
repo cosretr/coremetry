@@ -2984,8 +2984,25 @@ var systemChatAgentLoopV2 = strings.Replace(systemChatAgentLoop, chatAgentLoopCo
 
 // SystemPromptChatAgentLoopV2For — v0.10.2326: v2 + konuşma durumu açık
 // yolunun çekirdeği (araç setine göre); v1 SystemPromptChatAgentLoopFor aynen.
+// v0.10.2356 (investigation-design S2): adım 4 v2'de gizli search_traces
+// yerine find_traces'i anar (chatAgentLoopV2Search).
 func SystemPromptChatAgentLoopV2For(simple bool) string {
-	return ToolsetText(systemChatAgentLoopV2, simple)
+	return chatAgentLoopV2Search(ToolsetText(systemChatAgentLoopV2, simple))
+}
+
+// v0.10.2356 (docs/cosre/investigation-design.md S2): döngü çekirdeğinin adım
+// 4'ü v2'de GİZLİ search_traces'i anıyordu. Yalnız v2 accessor'ları (bu dosya:
+// V2For ve durum açık üslup çekirdeği) cümleyi find_traces'e çevirir; ortak
+// sabitler ve v1 accessor'ları bayt bayt aynı. simple katalogda cümle
+// ToolsetText ile zaten query_traces'tir — dönüşüm orada boşa düşer.
+const (
+	chatAgentLoopSearchFrom = "search_traces / trace_stats / search_logs'u açık zaman sınırı ve limitle\n   çağır."
+	chatAgentLoopSearchTo   = "find_traces / trace_stats / search_logs'u açık zaman sınırı ve limitle\n   çağır; trace listesi find_traces'tir (endpoint, client_ip, filters alır; anahtarı sunucu doğrular)."
+)
+
+// chatAgentLoopV2Search — SAF: gizli aracın adı yerine v2 aracı (cümle yoksa metin aynen).
+func chatAgentLoopV2Search(s string) string {
+	return strings.Replace(s, chatAgentLoopSearchFrom, chatAgentLoopSearchTo, 1)
 }
 
 // SystemPromptChatAgentLoopFor — v0.10.1302 (CoSRE: modele göre araç seti):
@@ -3068,7 +3085,7 @@ var (
 // açık/kapalı çekirdeğinden, araç setine göre).
 func SystemPromptChatAgentLoopStyleFor(stateOn, simple bool) string {
 	if stateOn {
-		return ToolsetText(systemChatAgentLoopV2Style, simple)
+		return chatAgentLoopV2Search(ToolsetText(systemChatAgentLoopV2Style, simple)) // v0.10.2356 — S2
 	}
 	return ToolsetText(systemChatAgentLoopStyle, simple)
 }

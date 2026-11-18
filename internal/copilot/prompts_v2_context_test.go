@@ -15,8 +15,9 @@ func TestAgentLoopV2DropsOnlyContextToolRule(t *testing.T) {
 		if strings.Contains(v2, "set_context") || strings.Contains(v2, "get_context") || strings.Contains(v2, "clear_context") {
 			t.Fatal("v2 çekirdeği bağlam aracını anıyor")
 		}
-		if strings.Replace(v1, ToolsetText(chatAgentLoopContextToolRule, simple), "", 1) != v2 {
-			t.Fatal("v2 çekirdeği v1'den yalnız o cümleyle ayrışmalı")
+		// v0.10.2356 — S2: + adım 4'ün find_traces cümlesi (chatAgentLoopV2Search).
+		if chatAgentLoopV2Search(strings.Replace(v1, ToolsetText(chatAgentLoopContextToolRule, simple), "", 1)) != v2 {
+			t.Fatal("v2 çekirdeği v1'den yalnız o cümleyle (ve find_traces cümlesiyle) ayrışmalı")
 		}
 	}
 	if SystemPromptChatAgentLoopFor(false) != systemChatAgentLoop {

@@ -8851,6 +8851,8 @@ export interface CosreConvState {
   problem?: string;
   trace?: string;
   operation?: string;
+  /** v0.10.2356 (investigation-design S2, karar 12) — aramanın istemci IP'si (tam adres ya da IPv4 öneki). */
+  clientIp?: string;
   address?: 'sen' | 'siz';
   offer?: { kind: string; label?: string; at?: number };
   updatedAt: number;

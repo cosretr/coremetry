@@ -97,6 +97,14 @@ type stateResolveOut struct {
 	Alias *mcptools.EntityAlias
 	// AddressMarked — bu turun yazımında açık hitap işareti ("" = yok).
 	AddressMarked string
+	// v0.10.2356 (S2, karar 12) — arama yuvaları: istemci IP'si bu turda
+	// yazıldı / devralınır; uç nokta (Operation) ve süzgeçler devralınır;
+	// SearchCleared "hepsi / tümü / filtresiz" ile IP + süzgeç silindi.
+	ClientIPSet      bool
+	InheritClientIP  bool
+	InheritOperation bool
+	InheritFilters   bool
+	SearchCleared    bool
 }
 
 // freshChatState — SAF: TTL'i geçmiş durumun kapsamı düşer (kalıcı işaretler
@@ -144,6 +152,9 @@ func resolveChatState(in stateResolveIn) stateResolveOut {
 		if svcs[0] != prev.Service {
 			out.Next.Operation, out.Next.Trace = "", "" // eski servisin öznesi yeni servise taşınmaz
 		}
+		if svcs[0] != prev.Service {
+			out.Next.Filters = nil // v0.10.2356 — süzgeçler eski servise aitti
+		}
 		out.Next.Service = svcs[0]
 		out.Next.Services = nil
 		if len(svcs) > 1 {
@@ -170,7 +181,48 @@ func resolveChatState(in stateResolveIn) stateResolveOut {
 	out.InheritService = follow && !out.ServiceSet && prev.Service != ""
 	out.InheritEnv = follow && !out.EnvSet && prev.Env != ""
 	out.InheritWindow = follow && !out.WindowSet && prev.RangeExplicit && prev.RangeS > 0
+	resolveSearchSlots(&out, in.Question, norm, toks, follow, in.HasPrior)
 	return out
+}
+
+// searchClearWords — v0.10.2356: arama yuvalarını (IP + süzgeç) silen çıplak sözcükler.
+var searchClearWords = map[string]bool{"hepsi": true, "hepsini": true, "tümü": true, "tümünü": true, "filtresiz": true}
+
+// clientIPMentionRe — soruda tam IPv4 (/8 /16 /24 CIDR olabilir), üç sekizli
+// önek ("192.0.2.") ya da IPv6 adayı; Türkçe ek kesme işaretinden önce biter
+// ("198.51.100.7'den"). Tarih ("18.11.2026") ve sürüm ("1.5") eşleşmez.
+var clientIPMentionRe = regexp.MustCompile(`(?i)(?:^|[^0-9a-z.:])((?:\d{1,3}\.){3}\d{1,3}(?:/(?:8|16|24))?|(?:\d{1,3}\.){3}|[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7})(?:[^0-9a-z.:/]|$)`)
+
+// clientIPMention — SAF: sorudaki ilk geçerli istemci IP'si (tam adres ya da
+// sekizli öneki); "" = yok.
+func clientIPMention(q string) string {
+	for _, m := range clientIPMentionRe.FindAllStringSubmatch(q, 4) {
+		if v, _, ok := mcptools.ParseClientIP(m[1], true); ok {
+			return v
+		}
+	}
+	return ""
+}
+
+// resolveSearchSlots — SAF (karar 12, §4.2): istemci IP'si açık anmada
+// yazılır (yenisi eskinin yerine), kısa devam sorusunda devralınır; uç nokta
+// (Operation) ve süzgeçler aynı kuralla — "aynı endpoint" / "bu endpoint"
+// uzun soruda da devralır. "hepsi" / "tümü" / "filtresiz" IP ve süzgeci siler.
+func resolveSearchSlots(out *stateResolveOut, q, norm string, toks []string, follow, hasPrior bool) {
+	for _, t := range toks {
+		if searchClearWords[t] {
+			out.Next.ClientIP, out.Next.Filters, out.SearchCleared = "", nil, true
+			break
+		}
+	}
+	if ip := clientIPMention(q); ip != "" {
+		out.Next.ClientIP, out.ClientIPSet = ip, true
+	}
+	out.InheritClientIP = follow && !out.ClientIPSet && out.Next.ClientIP != ""
+	sameEndpoint := hasPrior && utf8.RuneCountInString(norm) <= followUpMaxRunes*2 &&
+		(pronounSubject(norm) == "operation" || containsPhrase(norm, "aynı endpoint") || containsPhrase(norm, "ayni endpoint") || containsPhrase(norm, "aynı uç nokta"))
+	out.InheritOperation = (follow || sameEndpoint) && out.Next.Operation != ""
+	out.InheritFilters = (follow || sameEndpoint) && len(out.Next.Filters) > 0
 }
 
 // ── öneri ─────────────────────────────────────────────────────────────────

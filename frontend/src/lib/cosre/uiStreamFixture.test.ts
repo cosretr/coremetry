@@ -316,6 +316,8 @@ describe('data-state (konuşma durumu)', () => {
     [{ type: 'data-state', data: { updatedAt: 5, window: { rangeS: 0 } } }, null],
     [{ type: 'data-state', data: { updatedAt: 5, address: 'biz', services: ['a', 7] } }, { updatedAt: 5, services: ['a'] }],
     [{ type: 'data-scope', data: { updatedAt: 5 } }, null],
+    // v0.10.2356 (S2) — istemci IP'si yuvası taşınır.
+    [{ type: 'data-state', data: { updatedAt: 5, clientIp: '198.51.100.7', operation: 'POST /api/orders' } }, { updatedAt: 5, clientIp: '198.51.100.7', operation: 'POST /api/orders' }],
   ])('parseDataState %#', (p, want) => {
     expect(parseDataState(p)).toEqual(want);
   });

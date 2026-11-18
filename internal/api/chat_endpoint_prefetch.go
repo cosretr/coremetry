@@ -23,6 +23,7 @@ package api
 //      korunur.
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -31,6 +32,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/mcptools"
 )
 
 const (
@@ -675,6 +677,69 @@ func opAlternativesFrom(gs []endpointGroup, method string) []opAlternative {
 	out := make([]opAlternative, len(gs))
 	for i, g := range gs {
 		out[i] = opAlternative{Service: g.Service, Op: endpointLabel(g, method), Calls: g.Calls}
+	}
+	return out
+}
+
+// ── v0.10.2356 (investigation-design S2, karar 5): find_traces `endpoint` ──
+
+// mcpResolveEndpoint — Deps.ResolveEndpoint: modelin yazdığı uç nokta → tam
+// operasyon, guided ön-getirmeyle AYNI kural (endpointMention + katalog
+// adayları + matchEndpoint). Okuma yalnız operasyon kataloğu (opCatalogCandidates).
+func (s *Server) mcpResolveEndpoint(ctx context.Context, service, endpoint string) (mcptools.EndpointResolution, error) {
+	method, path, ok := endpointMention(endpoint)
+	if !ok {
+		return mcptools.EndpointResolution{Kind: mcptools.EndpointNotFound}, nil
+	}
+	if s == nil || (s.store == nil && opCatalogSeam == nil) {
+		return mcptools.EndpointResolution{}, fmt.Errorf("operation catalog not configured")
+	}
+	cands, err := s.opCatalogCandidates(ctx, endpointCatalogTokens(path), opCandidateLimit)
+	if err != nil {
+		return mcptools.EndpointResolution{}, err
+	}
+	return resolveEndpointCore(method, path, service, cands), nil
+}
+
+// resolveEndpointCore — SAF (tablo testli): servis verildiyse adaylar o
+// servise daraltılır (kapsam dışına çözülmez); tek / baskın grup → ok;
+// baskınsız birden çok grup → ambiguous (≤4 "servis FİİL yol"); eşleşme yok →
+// not_found + ≤3 yakın operasyon.
+func resolveEndpointCore(method, path, service string, cands []chstore.CatalogOperation) mcptools.EndpointResolution {
+	pool := cands
+	if service != "" {
+		pool = nil
+		for _, c := range cands {
+			if strings.EqualFold(c.Service, service) {
+				pool = append(pool, c)
+			}
+		}
+	}
+	m := matchEndpoint(method, path, pool, service)
+	switch {
+	case m.Pick != nil:
+		g := *m.Pick
+		return mcptools.EndpointResolution{Kind: mcptools.EndpointResolved, Service: g.Service, Operation: g.SpanOp, Route: g.RouteOp}
+	case len(m.Choices) > 1:
+		out := mcptools.EndpointResolution{Kind: mcptools.EndpointAmbiguous}
+		for _, g := range m.Choices {
+			if len(out.Candidates) == 4 {
+				break
+			}
+			out.Candidates = append(out.Candidates, g.Service+" "+endpointLabel(g, method))
+		}
+		return out
+	}
+	out := mcptools.EndpointResolution{Kind: mcptools.EndpointNotFound}
+	seen := map[string]bool{}
+	for _, c := range pool {
+		if len(out.Near) == 3 {
+			break
+		}
+		if !seen[c.Operation] {
+			seen[c.Operation] = true
+			out.Near = append(out.Near, c.Operation)
+		}
 	}
 	return out
 }

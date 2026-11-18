@@ -1,0 +1,30 @@
+{
+  "schema": "coremetry.evalset/1",
+  "cases": [
+    {
+      "id": "agent-search-client-ip",
+      "surface": "ChatLoop",
+      "mode": "agent",
+      "bindService": "orders",
+      "why": "v0.10.2356 (docs/cosre/investigation-design.md S2): istemci IP'si + uç nokta sorusu tek find_traces çağrısıyla (client_ip + endpoint argümanı) cevaplanmalı; anahtar keşfi (find_attribute_by_value / describe_attributes) ve sayım turu gerekmez. IP belge aralığından; veri yoksa da araç SEÇİMİ ölçülür.",
+      "note": "DÖNGÜ SONDASI (expectTier loop): guided / RAG / niyet kademeleri atlanır, sentetik ad koşunun en yoğun canlı servisine bağlanır (bindService).",
+      "user": "orders'a son 1 saatte 192.0.2.10'dan /api/orders'a gelen istekleri göster.",
+      "expect": {
+        "anyOfTools": [
+          "find_traces"
+        ],
+        "forbiddenTools": [
+          "read_source_code",
+          "search_code"
+        ],
+        "maxToolCalls": 3,
+        "mustNotContain": [
+          "kubectl delete"
+        ],
+        "maxTokens": 60000,
+        "maxLatencyMs": 180000,
+        "expectTier": "loop"
+      }
+    }
+  ]
+}

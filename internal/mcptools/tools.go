@@ -342,6 +342,12 @@ type Deps struct {
 	// mcpServiceRef: entity.Resolver.ServiceWorkloads + ServiceRefFromWorkloads,
 	// süreç içi 60 sn memo). nil = yalnız ad (ResolveServiceRef).
 	ServiceRef func(ctx context.Context, service string) ServiceRef
+	// ResolveEndpoint — v0.10.2356 (investigation-design S2, karar 5):
+	// find_traces `endpoint` argümanı → tam operasyon, api'nin mevcut
+	// matchEndpoint kuralıyla (api/chat_endpoint_prefetch.go mcpResolveEndpoint;
+	// mcptools api'yi göremez). service "" = ipucu yok. nil = endpoint argümanı
+	// adlandırılmış hata döner.
+	ResolveEndpoint func(ctx context.Context, service, endpoint string) (EndpointResolution, error)
 }
 
 // ArgoAppStatus — v0.10.1293: Deps.ArgoApps satırı (uygulama + durum + iş

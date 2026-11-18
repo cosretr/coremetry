@@ -1,0 +1,455 @@
+{
+  "schema": "coremetry.evalset.conversation/1",
+  "cases": [
+    {
+      "id": "conv-search-ip-endpoint",
+      "surface": "ChatConversation",
+      "why": "S2 (v0.10.2349): istemci IP'si + uç nokta tek find_traces turunda; devam sorusu yeni IP ile uç noktayı ve pencereyi devralır; 'aynı endpoint için dün' uç noktayı ve IP'yi devralır, pencere dün. IP'ler belge aralıklarından.",
+      "stubs": {
+        "service_health": {
+          "$byService": {
+            "checkout": "checkout (son 1 saat): istek hızı 42,5/s, hata oranı %0,8, p95 310 ms, p99 540 ms, açık problem 0.",
+            "orders": "orders (son 1 saat): istek hızı 18,2/s, hata oranı %0,3, p95 220 ms, p99 410 ms, açık problem 0.",
+            "payments": "payments (son 1 saat): istek hızı 11,4/s, hata oranı %2,6, p95 870 ms, p99 1430 ms, açık problem 1."
+          }
+        },
+        "find_traces": {
+          "$byArg": {
+            "198.51.100.7": {
+              "window": {
+                "from_ms": 1794900000000,
+                "to_ms": 1794903600000
+              },
+              "entity": {
+                "service": "orders"
+              },
+              "traces": [
+                {
+                  "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+                  "root_op": "POST /api/orders",
+                  "entry_svc": "orders",
+                  "start_ms": 1794900000000,
+                  "ms": 182.4,
+                  "spans": 14,
+                  "error": false
+                },
+                {
+                  "id": "4bf92f3577b34da6a3ce929d0e0e4737",
+                  "root_op": "POST /api/orders",
+                  "entry_svc": "orders",
+                  "start_ms": 1794900060000,
+                  "ms": 240.1,
+                  "spans": 9,
+                  "error": false
+                }
+              ],
+              "count": 2,
+              "has_more": false,
+              "page_url": "/traces?service=orders",
+              "applied": {
+                "endpoint": {
+                  "operation": "POST /api/orders",
+                  "route": "/api/orders"
+                },
+                "client_ip": {
+                  "value": "198.51.100.7",
+                  "match": "exact",
+                  "keys": [
+                    "client.address",
+                    "http.client_ip",
+                    "net.sock.peer.addr",
+                    "network.peer.address",
+                    "net.peer.ip"
+                  ]
+                }
+              }
+            },
+            "192.0.2.10": {
+              "window": {
+                "from_ms": 1794900000000,
+                "to_ms": 1794903600000
+              },
+              "entity": {
+                "service": "orders"
+              },
+              "traces": [
+                {
+                  "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+                  "root_op": "POST /api/orders",
+                  "entry_svc": "orders",
+                  "start_ms": 1794900000000,
+                  "ms": 182.4,
+                  "spans": 14,
+                  "error": false
+                },
+                {
+                  "id": "4bf92f3577b34da6a3ce929d0e0e4737",
+                  "root_op": "POST /api/orders",
+                  "entry_svc": "orders",
+                  "start_ms": 1794900060000,
+                  "ms": 240.1,
+                  "spans": 9,
+                  "error": false
+                },
+                {
+                  "id": "4bf92f3577b34da6a3ce929d0e0e4738",
+                  "root_op": "POST /api/orders",
+                  "entry_svc": "orders",
+                  "start_ms": 1794900120000,
+                  "ms": 96.7,
+                  "spans": 11,
+                  "error": false
+                }
+              ],
+              "count": 3,
+              "has_more": false,
+              "page_url": "/traces?service=orders",
+              "applied": {
+                "endpoint": {
+                  "operation": "POST /api/orders",
+                  "route": "/api/orders"
+                },
+                "client_ip": {
+                  "value": "192.0.2.10",
+                  "match": "exact",
+                  "keys": [
+                    "client.address",
+                    "http.client_ip",
+                    "net.sock.peer.addr",
+                    "network.peer.address",
+                    "net.peer.ip"
+                  ]
+                }
+              }
+            },
+            "*": {
+              "window": {
+                "from_ms": 1794900000000,
+                "to_ms": 1794903600000
+              },
+              "entity": {
+                "service": "orders"
+              },
+              "traces": [
+                {
+                  "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+                  "root_op": "POST /api/orders",
+                  "entry_svc": "orders",
+                  "start_ms": 1794900000000,
+                  "ms": 182.4,
+                  "spans": 14,
+                  "error": false
+                },
+                {
+                  "id": "4bf92f3577b34da6a3ce929d0e0e4737",
+                  "root_op": "POST /api/orders",
+                  "entry_svc": "orders",
+                  "start_ms": 1794900060000,
+                  "ms": 240.1,
+                  "spans": 9,
+                  "error": false
+                },
+                {
+                  "id": "4bf92f3577b34da6a3ce929d0e0e4738",
+                  "root_op": "POST /api/orders",
+                  "entry_svc": "orders",
+                  "start_ms": 1794900120000,
+                  "ms": 96.7,
+                  "spans": 11,
+                  "error": false
+                }
+              ],
+              "count": 3,
+              "has_more": false,
+              "page_url": "/traces?service=orders",
+              "applied": {
+                "endpoint": {
+                  "operation": "POST /api/orders",
+                  "route": "/api/orders"
+                }
+              }
+            }
+          }
+        }
+      },
+      "turns": [
+        {
+          "user": "orders'a son 1 saatte 192.0.2.10'dan /api/orders'a gelen istekleri göster",
+          "expect": {
+            "class": "explain",
+            "anyOfCalls": [
+              "find_traces"
+            ],
+            "maxCalls": 1,
+            "entity": "orders",
+            "window": "1h",
+            "argsContain": [
+              "\"client_ip\":\"192.0.2.10\""
+            ],
+            "verifier": "pass"
+          }
+        },
+        {
+          "user": "ve 198.51.100.7'den gelenler?",
+          "expect": {
+            "class": "followup",
+            "anyOfCalls": [
+              "find_traces"
+            ],
+            "entity": "orders",
+            "argsContain": [
+              "\"client_ip\":\"198.51.100.7\""
+            ]
+          }
+        },
+        {
+          "user": "aynı endpoint için dün",
+          "expect": {
+            "class": "followup",
+            "anyOfCalls": [
+              "find_traces"
+            ],
+            "entity": "orders",
+            "window": "yesterday",
+            "argsContain": [
+              "\"client_ip\":\"198.51.100.7\""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "conv-search-attr-failed",
+      "surface": "ChatConversation",
+      "why": "S2 (v0.10.2349): attribute eşitlik süzgeci + hatalı durum tek find_traces çağrısında (filters + status error); trace_stats sayım içindir, liste değil. Devamda ilk trace'in logları.",
+      "stubs": {
+        "service_health": {
+          "$byService": {
+            "checkout": "checkout (son 1 saat): istek hızı 42,5/s, hata oranı %0,8, p95 310 ms, p99 540 ms, açık problem 0.",
+            "orders": "orders (son 1 saat): istek hızı 18,2/s, hata oranı %0,3, p95 220 ms, p99 410 ms, açık problem 0.",
+            "payments": "payments (son 1 saat): istek hızı 11,4/s, hata oranı %2,6, p95 870 ms, p99 1430 ms, açık problem 1."
+          }
+        },
+        "find_traces": {
+          "window": {
+            "from_ms": 1794900000000,
+            "to_ms": 1794903600000
+          },
+          "entity": {
+            "service": "payments"
+          },
+          "traces": [
+            {
+              "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "root_op": "POST /api/payments",
+              "entry_svc": "payments",
+              "start_ms": 1794900000000,
+              "ms": 182.4,
+              "spans": 14,
+              "error": true
+            },
+            {
+              "id": "4bf92f3577b34da6a3ce929d0e0e4737",
+              "root_op": "POST /api/payments",
+              "entry_svc": "payments",
+              "start_ms": 1794900060000,
+              "ms": 240.1,
+              "spans": 9,
+              "error": true
+            },
+            {
+              "id": "4bf92f3577b34da6a3ce929d0e0e4738",
+              "root_op": "POST /api/payments",
+              "entry_svc": "payments",
+              "start_ms": 1794900120000,
+              "ms": 96.7,
+              "spans": 11,
+              "error": true
+            }
+          ],
+          "count": 3,
+          "has_more": false,
+          "page_url": "/traces?service=payments",
+          "applied": {
+            "filters": [
+              {
+                "k": "tenant.tier",
+                "op": "=",
+                "v": [
+                  "gold"
+                ]
+              }
+            ]
+          }
+        },
+        "search_logs": {
+          "window_s": 3600,
+          "total": 2,
+          "rows": [
+            {
+              "ts": 1794900060000,
+              "sev": "ERROR",
+              "svc": "payments",
+              "body": "card authorization timeout after 3000 ms",
+              "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736"
+            }
+          ],
+          "count": 1,
+          "has_more": false,
+          "page_url": "/logs?service=payments"
+        },
+        "get_logs_for_trace": {
+          "logs": [
+            {
+              "severity": "ERROR",
+              "service": "payments",
+              "body": "card authorization timeout after 3000 ms"
+            }
+          ]
+        }
+      },
+      "turns": [
+        {
+          "user": "payments'ta tenant.tier = gold olan ve hata alan trace'leri göster",
+          "expect": {
+            "class": "error_hunt",
+            "anyOfCalls": [
+              "find_traces"
+            ],
+            "entity": "payments",
+            "argsContain": [
+              "\"key\":\"tenant.tier\"",
+              "\"status\":\"error\""
+            ],
+            "forbiddenCalls": [
+              "describe_attributes"
+            ]
+          }
+        },
+        {
+          "user": "ilkinin loglarına bak",
+          "expect": {
+            "class": "next_step",
+            "anyOfCalls": [
+              "search_logs",
+              "get_logs_for_trace",
+              "query_logs"
+            ],
+            "argsContain": [
+              "4bf92f3577b34da6a3ce929d0e0e4736"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "conv-search-unknown-key",
+      "surface": "ChatConversation",
+      "why": "S2 (v0.10.2349): uydurma/yanlış yazılmış anahtar sunucuda reddedilir (unknown_attribute + yakın anahtarlar); model yakın anahtarla yeniden arar, anahtar uydurmaz. Devamda süzgeç devralınır.",
+      "stubs": {
+        "service_health": {
+          "$byService": {
+            "checkout": "checkout (son 1 saat): istek hızı 42,5/s, hata oranı %0,8, p95 310 ms, p99 540 ms, açık problem 0.",
+            "orders": "orders (son 1 saat): istek hızı 18,2/s, hata oranı %0,3, p95 220 ms, p99 410 ms, açık problem 0.",
+            "payments": "payments (son 1 saat): istek hızı 11,4/s, hata oranı %2,6, p95 870 ms, p99 1430 ms, açık problem 1."
+          }
+        },
+        "find_traces": {
+          "$byArg": {
+            "tenant.teir": {
+              "error": "unknown_attribute",
+              "retryable": false,
+              "hint": "bu anahtar kapsamın örnekleminde ve tipli kolonlarda yok — `near`daki anahtarlardan birini kullan ya da describe_attributes ile doğrula; anahtar UYDURMA",
+              "key": "tenant.teir",
+              "near": [
+                "tenant.tier",
+                "tenant.id"
+              ]
+            },
+            "*": {
+              "window": {
+                "from_ms": 1794900000000,
+                "to_ms": 1794903600000
+              },
+              "entity": {
+                "service": "checkout"
+              },
+              "traces": [
+                {
+                  "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+                  "root_op": "POST /api/checkout",
+                  "entry_svc": "checkout",
+                  "start_ms": 1794900000000,
+                  "ms": 182.4,
+                  "spans": 14,
+                  "error": false
+                },
+                {
+                  "id": "4bf92f3577b34da6a3ce929d0e0e4737",
+                  "root_op": "POST /api/checkout",
+                  "entry_svc": "checkout",
+                  "start_ms": 1794900060000,
+                  "ms": 240.1,
+                  "spans": 9,
+                  "error": false
+                },
+                {
+                  "id": "4bf92f3577b34da6a3ce929d0e0e4738",
+                  "root_op": "POST /api/checkout",
+                  "entry_svc": "checkout",
+                  "start_ms": 1794900120000,
+                  "ms": 96.7,
+                  "spans": 11,
+                  "error": false
+                }
+              ],
+              "count": 3,
+              "has_more": false,
+              "page_url": "/traces?service=checkout",
+              "applied": {
+                "filters": [
+                  {
+                    "k": "tenant.tier",
+                    "op": "=",
+                    "v": [
+                      "gold"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "turns": [
+        {
+          "user": "checkout'ta tenant.teir = gold olan trace'leri göster",
+          "expect": {
+            "class": "explain",
+            "anyOfCalls": [
+              "find_traces"
+            ],
+            "entity": "checkout",
+            "argsContain": [
+              "\"key\":\"tenant.tier\""
+            ]
+          }
+        },
+        {
+          "user": "hatalı olanlar?",
+          "expect": {
+            "class": "followup",
+            "anyOfCalls": [
+              "find_traces"
+            ],
+            "entity": "checkout",
+            "argsContain": [
+              "\"key\":\"tenant.tier\"",
+              "\"status\":\"error\""
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

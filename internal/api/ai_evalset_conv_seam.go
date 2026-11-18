@@ -256,6 +256,9 @@ func evalStubFor(raw json.RawMessage, args json.RawMessage) (json.RawMessage, bo
 		return nil, false
 	}
 	var wrap map[string]map[string]json.RawMessage
+	if json.Unmarshal(raw, &wrap) == nil && len(wrap) == 1 && wrap[evalStubByArgKey] != nil {
+		return evalStubByArg(wrap[evalStubByArgKey], args)
+	}
 	if json.Unmarshal(raw, &wrap) != nil || len(wrap) != 1 || wrap[evalStubByServiceKey] == nil {
 		return raw, true
 	}
@@ -286,6 +289,26 @@ func evalStubFor(raw json.RawMessage, args json.RawMessage) (json.RawMessage, bo
 			if k != "*" && strings.Contains(c, strings.ToLower(k)) {
 				return by[k], true
 			}
+		}
+	}
+	if v, ok := by["*"]; ok {
+		return v, true
+	}
+	return nil, false
+}
+
+// evalStubByArgKey — v0.10.2356 (S2 arama vakaları): sahtenin argüman
+// metnine göre seçilen biçimi {"$byArg": {"tenant.teir": …, "*": …}} —
+// ham argüman JSON'u anahtarı içeriyorsa o (uzun anahtar önce), yoksa "*".
+// Yanlış anahtarla çağrının adlandırılmış hatası, düzeltilmişinin satırları.
+const evalStubByArgKey = "$byArg"
+
+func evalStubByArg(by map[string]json.RawMessage, args json.RawMessage) (json.RawMessage, bool) {
+	keys := evalStubNames(by)
+	sort.SliceStable(keys, func(i, j int) bool { return len(keys[i]) > len(keys[j]) })
+	for _, k := range keys {
+		if k != "*" && strings.Contains(string(args), k) {
+			return by[k], true
 		}
 	}
 	if v, ok := by["*"]; ok {

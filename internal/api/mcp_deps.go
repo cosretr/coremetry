@@ -115,6 +115,8 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		ToolsetsDisabled: currentToolsetsDisabled,
 		// v0.10.2355 (investigation-design S1, karar 11) — servis kimliği varlık modelinden.
 		ServiceRef: s.mcpServiceRef,
+		// v0.10.2356 (S2, karar 5) — find_traces `endpoint`: guided ile aynı matchEndpoint.
+		ResolveEndpoint: s.mcpResolveEndpoint,
 		CopilotModel: func() string {
 			if s.copilot == nil || !s.copilot.Configured() {
 				return ""

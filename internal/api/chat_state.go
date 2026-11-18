@@ -251,6 +251,7 @@ func (s *Server) beginChatStateTurn(ctx context.Context, req *chatRequest, st *c
 			stt.assumedWin = assumedWindowPhrase(c) // v0.10.2332
 		}
 	}
+	inherited = append(inherited, searchSlotLabels(res, c)...) // v0.10.2356 — S2 arama yuvaları
 	if len(inherited) > 0 {
 		emit("step", map[string]string{"label": "bağlam (önceki turdan): " + strings.Join(inherited, " · ")})
 	}
@@ -281,6 +282,89 @@ func (t *chatStateTurn) toolService() string {
 	return t.st.ctx.Service
 }
 
+// searchSlotLabels — SAF (v0.10.2356): devralınan arama yuvalarının çip etiketleri.
+func searchSlotLabels(res stateResolveOut, c ChatContext) []string {
+	var out []string
+	if res.InheritOperation {
+		out = append(out, "uç nokta "+c.Operation)
+	}
+	if res.InheritClientIP {
+		out = append(out, "istemci IP "+c.ClientIP)
+	}
+	if res.InheritFilters {
+		out = append(out, fmt.Sprintf("%d süzgeç", len(c.Filters)))
+	}
+	return out
+}
+
+// searchSlots — v0.10.2356 (S2, §4.2): araç argümanına sunucuda eklenecek
+// arama yuvaları (bu turda yazılan ya da devralınan); kapalıyken boş.
+func (t *chatStateTurn) searchSlots() (clientIP, operation string, filters []chstore.FilterExpr) {
+	if t == nil {
+		return "", "", nil
+	}
+	c := t.st.ctx
+	if t.res.ClientIPSet || t.res.InheritClientIP {
+		clientIP = c.ClientIP
+	}
+	if t.res.InheritOperation {
+		operation = c.Operation
+	}
+	if t.res.InheritFilters {
+		filters = c.Filters
+	}
+	return clientIP, operation, filters
+}
+
+// searchFollowUp — v0.10.2356 (S2, §4.2): tur, devam eden bir aramanın
+// devamı mı (IP ya da süzgeç devralınıyor, ya da yeni IP önceki uç noktayla).
+// Öyleyse guided kademesi atlanır ("aynı endpoint için dün" uç nokta listesine
+// değil aramaya gider); döngü yuvaları argümana ekler. nil-güvenli.
+func (t *chatStateTurn) searchFollowUp() bool {
+	if t == nil {
+		return false
+	}
+	r := t.res
+	return r.InheritClientIP || r.InheritFilters || (r.ClientIPSet && r.InheritOperation)
+}
+
+// noteSearchTool — SAF (v0.10.2356): başarılı find_traces / search_logs
+// çağrısının arama yuvaları: istemci IP'si, çözülen uç nokta operasyonu
+// (sonucun applied.endpoint'i), kapalı süzgeçler.
+func noteSearchTool(c ChatContext, name string, m map[string]any, content string) ChatContext {
+	if name != mcptools.FindTracesName && name != mcptools.SearchLogsV2Name {
+		return c
+	}
+	if v, _, ok := mcptools.ParseClientIP(argStr(m, "client_ip"), name == mcptools.FindTracesName); ok {
+		c.ClientIP = v
+	}
+	if name != mcptools.FindTracesName {
+		return c
+	}
+	var r struct {
+		Applied struct {
+			Endpoint struct {
+				Operation string `json:"operation"`
+			} `json:"endpoint"`
+		} `json:"applied"`
+	}
+	if op := argStr(m, "operation"); op != "" {
+		c.Operation = clipRunes(op, chatContextOperationMax)
+	} else if json.Unmarshal([]byte(content), &r) == nil && r.Applied.Endpoint.Operation != "" {
+		c.Operation = clipRunes(r.Applied.Endpoint.Operation, chatContextOperationMax)
+	}
+	if raw, ok := m["filters"]; ok {
+		b, _ := json.Marshal(raw)
+		var sf []mcptools.SearchFilter
+		if json.Unmarshal(b, &sf) == nil {
+			if fs := mcptools.V2SearchFilterExprs(sf); fs != nil {
+				c.Filters = fs
+			}
+		}
+	}
+	return c
+}
+
 // noteTool — döngünün başarılı araç çağrısı: argümandan kapsam (boş alana),
 // sonuçtan defter olguları.
 func (t *chatStateTurn) noteTool(name string, args json.RawMessage, content string, isErr bool) {
@@ -308,6 +392,7 @@ func (t *chatStateTurn) noteTool(name string, args json.RawMessage, content stri
 		c.RangeS = int64(f)
 		c.WinLabel = fmtRangeTR(c.RangeS)
 	}
+	c = noteSearchTool(c, name, m, content) // v0.10.2356 — S2
 	if !chatContextEqual(t.st.ctx, c) {
 		t.st.ctx, t.st.dirty = c, true
 	}
@@ -552,6 +637,9 @@ func chatStateLineTR(c ChatContext) string {
 	if c.Problem != "" {
 		lines = append(lines, "- problem: "+c.Problem)
 	}
+	if c.ClientIP != "" { // v0.10.2356 — S2
+		lines = append(lines, "- istemci IP: "+c.ClientIP)
+	}
 	if c.Address == addressSiz {
 		lines = append(lines, "- hitap: siz (kullanıcı siz diye yazıyor; cevapta siz kullan)")
 	}
@@ -631,6 +719,7 @@ type chatStateWire struct {
 	Address      string            `json:"address,omitempty"`
 	Offer        *chatStateWireOff `json:"offer,omitempty"`
 	UpdatedAt    int64             `json:"updatedAt,omitempty"` // unix ms
+	ClientIP     string            `json:"clientIp,omitempty"`  // v0.10.2356 — S2 (yankı IP biçimine doğrulanır)
 }
 
 type chatStateWireWin struct {
@@ -688,6 +777,9 @@ func validateStateEcho(in chatStateWire, svcs, envs []string, now time.Time) (ch
 	if in.Address == addressSen || in.Address == addressSiz {
 		out.Address = in.Address
 	}
+	if v, _, ok := mcptools.ParseClientIP(in.ClientIP, true); ok { // v0.10.2356
+		out.ClientIP = v
+	}
 	if o := in.Offer; o != nil && offerKinds[o.Kind] != "" && out.Service != "" {
 		out.Offer = &chatStateWireOff{Kind: o.Kind, At: o.At}
 	}
@@ -714,6 +806,7 @@ func mergeStateEcho(c ChatContext, e chatStateWire) ChatContext {
 		c.RangeS, c.WinToMs, c.WinLabel, c.RangeExplicit = w.RangeS, w.ToMs, w.Label, w.Explicit
 	}
 	c.ChannelCode, c.FunctionCode, c.Problem, c.Trace, c.Address = e.ChannelCode, e.FunctionCode, e.Problem, e.Trace, e.Address
+	c.ClientIP = e.ClientIP // v0.10.2356
 	if o := e.Offer; o != nil {
 		c.Offer = &chatOffer{Kind: o.Kind, Service: e.Service, Label: e.Service + " " + offerKinds[o.Kind], At: o.At}
 	}
@@ -726,7 +819,7 @@ func mergeStateEcho(c ChatContext, e chatStateWire) ChatContext {
 func chatStateWireOf(c ChatContext, now time.Time) chatStateWire {
 	w := chatStateWire{Service: c.Service, Services: c.Services, Env: c.Env, Cluster: c.Cluster,
 		ChannelCode: c.ChannelCode, FunctionCode: c.FunctionCode, Problem: c.Problem, Trace: c.Trace,
-		Operation: c.Operation, Address: c.Address, UpdatedAt: now.UnixMilli()}
+		Operation: c.Operation, Address: c.Address, UpdatedAt: now.UnixMilli(), ClientIP: c.ClientIP}
 	if c.RangeS > 0 {
 		w.Window = &chatStateWireWin{RangeS: c.RangeS, ToMs: c.WinToMs, Label: stateWindowLabel(c), Explicit: c.RangeExplicit}
 	}
@@ -739,7 +832,7 @@ func chatStateWireOf(c ChatContext, now time.Time) chatStateWire {
 // stateWireEmpty — data-state yayınlanmaz (kapsam yok).
 func stateWireEmpty(w chatStateWire) bool {
 	return w.Service == "" && w.Env == "" && w.Cluster == "" && w.Window == nil && w.ChannelCode == "" &&
-		w.FunctionCode == "" && w.Problem == "" && w.Trace == "" && w.Operation == "" && w.Offer == nil
+		w.FunctionCode == "" && w.Problem == "" && w.Trace == "" && w.Operation == "" && w.Offer == nil && w.ClientIP == ""
 }
 
 // chatStateEventKind — v0.10.2325: data-state olayı (yalnız v2 yazıcısına

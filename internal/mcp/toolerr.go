@@ -127,6 +127,19 @@ type ToolError struct {
 	// Service — v0.10.2355 (CoSRE kapsam kararı, api/chat_scope_decision.go):
 	// yalnız `out_of_scope` sınıfında, kapsam dışı servis(ler).
 	Service string `json:"service,omitempty"`
+	// v0.10.2356 (CoSRE arama, mcptools/v2_search_filter.go) — adlandırılmış
+	// arama hataları: unknown_attribute {key, near ≤5}, endpoint_ambiguous
+	// {candidates ≤4}, endpoint_not_found {near ≤3}. Diğer sınıflarda boş.
+	Key        string   `json:"key,omitempty"`
+	Near       []string `json:"near,omitempty"`
+	Candidates []string `json:"candidates,omitempty"`
+}
+
+// ToolErrorer — v0.10.2356: kendi sözleşme nesnesini taşıyan hata (şema
+// doğrulayıcısının ArgIssuesErr'i ve mcptools'un adlandırılmış arama
+// hataları). ClassifyToolError metin sinyallerine düşmeden bunu döner.
+type ToolErrorer interface {
+	ToolError() ToolError
 }
 
 // toolErrPolicy — sınıf → {tekrar denenebilir mi, ne yapmalı}.
@@ -175,9 +188,10 @@ var toolErrPolicy = map[string]struct {
 func ClassifyToolError(err error) ToolError {
 	// v0.10.1456 (C1) — şema doğrulayıcının reddi kendi alan-adlı ipucunu
 	// taşır (schema_validate.go); metin sinyallerine düşmez.
-	var ae *ArgIssuesErr
-	if errors.As(err, &ae) {
-		return ae.ToolError()
+	// v0.10.2356 — aynı yol her ToolErrorer için (mcptools arama hataları).
+	var own ToolErrorer
+	if errors.As(err, &own) {
+		return own.ToolError()
 	}
 	class := classifyToolErrorClass(err)
 	p := toolErrPolicy[class]

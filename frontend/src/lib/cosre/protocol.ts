@@ -281,7 +281,7 @@ export function parseDataState(p: { type: string; data?: unknown }): CosreConvSt
   const at = finiteNum(d.updatedAt);
   if (at === undefined) return null;
   const out: CosreConvState = { updatedAt: at };
-  for (const k of ['service', 'env', 'cluster', 'channelCode', 'functionCode', 'problem', 'trace', 'operation'] as const) {
+  for (const k of ['service', 'env', 'cluster', 'channelCode', 'functionCode', 'problem', 'trace', 'operation', 'clientIp'] as const) { // v0.10.2356 — clientIp
     const v = optStr(d[k]);
     if (v) out[k] = v;
   }

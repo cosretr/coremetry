@@ -163,7 +163,15 @@ func TracesDeepLink(f chstore.TraceFilter, from, to time.Time) string {
 	if f.Search != "" {
 		q.Set("search", f.Search)
 	}
-	if len(f.Filters) > 0 {
+	if g := f.FilterRoot; g != nil && !g.IsFlatAnd() {
+		// v0.10.2356 — gruplu süzgeç (find_traces client_ip OR grubu): Traces
+		// sayfasının `filterGroup` parametresi; düz yapraklar grubun AND kökünde
+		// (sayfa filterGroup varken filters'ı okumaz — tek doğruluk kaynağı).
+		root := *g
+		root.Filters = f.Filters
+		b, _ := json.Marshal(root)
+		q.Set("filterGroup", string(b))
+	} else if len(f.Filters) > 0 {
 		b, _ := json.Marshal(f.Filters)
 		q.Set("filters", string(b))
 	}

@@ -686,7 +686,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	if opPre == nil && !ct.On { // v0.10.1461 — kod turu guided'ı atlar (chat_code_turn.go)
 		handled, gok := false, false
-		if !evm.skipGuided() && !apCont.on && rtPlan == nil { // v0.10.1738 rota turu da; v0.10.1476 — değerlendirme döngü sondası da atlar (chat_eval_mode.go); S5 onay devamı da
+		if !evm.skipGuided() && !apCont.on && rtPlan == nil && !stt.searchFollowUp() { // v0.10.1738 rota turu da; v0.10.1476 — değerlendirme döngü sondası da atlar (chat_eval_mode.go); S5 onay devamı da; v0.10.2356 arama devamı da
 			handled, gok = s.copilotChatGuided(ctx, emit, req.Messages, req.Context.Service, req.Context.Operation, req.Context.Explain, req.Context.RangeS, req.Context.Trace, req.Context.Env, anchorTo, req.Context.TzOffsetMin, req.Context.Tz)
 		}
 		if handled {
@@ -1113,6 +1113,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	toolScope := buildToolScreenScope(screenCtx, pageCtx, pinnedCtx, scopeTrace, lastUserText(req.Messages))
 	toolScope.StateService, toolScope.StateAvoid = stt.toolService(), stt.toolAvoid() // v0.10.2324 durum servisi; v0.10.2334 düzeltilen servis (kapalıyken "")
+	// v0.10.2356 — S2 arama yuvaları (istemci IP'si, uç nokta, süzgeçler; kapalıyken boş)
+	toolScope.StateClientIP, toolScope.StateOperation, toolScope.StateFilters = stt.searchSlots()
 	// v0.10.1289 — operatör kuralları (cosre_rules_prompt.go): bağlama uyan ≤5
 	// kural çitli veri bloğu + ek olarak sohbet bağlamı önsözünün ARKASINA;
 	// araç argümanlarına / router'a girmez. Kural yoksa prompt bayt bayt eski.
