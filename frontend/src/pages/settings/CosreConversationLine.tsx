@@ -42,6 +42,23 @@ const VERIFY_OPTIONS: ReadonlyArray<{ value: VerifyMode; label: string }> = [
 
 type Change = { state: boolean } | { verification: VerifyMode };
 
+// v0.10.2355 (docs/cosre/investigation-design.md S1, karar 25) — kanıt alanı:
+// varsayılan kapalı. Bu sürümde yalnız kapsam kararını açar; sonraki sürümler
+// (kanıt kartları, araştırma paketi) aynı seçimin arkasına gelir.
+type EvidenceMode = NonNullable<CosreConversationSettings['evidence']>;
+const EVIDENCE_OPTIONS: ReadonlyArray<{ value: EvidenceMode; label: string }> = [
+  { value: 'off', label: 'kapalı' },
+  { value: 'shadow', label: 'gölge' },
+  { value: 'on', label: 'açık' },
+];
+
+export const CONVERSATION_EVIDENCE_HINT =
+  'Kanıt: CoSRE v2 modelin kendi tahmin ettiği, kullanıcının kapsamında olmayan ve kullanıcının anmadığı bir servise '
+  + 'gitmesini denetler. Gölge kip yalnız sayar (scope_would_refuse sinyali), cevap değişmez; açıkken o araç çağrısı '
+  + 'koşmaz ve model kapsam dışı olduğunu söyler. Kullanıcının adını verdiği servis, ekrandaki servis ve konuşmanın '
+  + 'servisi her zaman çalışır. Sonraki sürümlerde cevabın altındaki kanıt kartları ve hata araştırması da bu seçime bağlanır. '
+  + 'Kapalıyken hiçbiri değerlendirilmez.';
+
 // v0.10.2331 (audit §6.1 B) — üslup anahtarı: varsayılan KAPALI; operatör
 // incelemeden kullanıcılar görmez. Sonraki dilimler (C, D, F1) aynı anahtarın arkasında.
 // v0.10.2337 — C (örnekle üslup) ve F1 (ara cümle) da bu anahtarın arkasında; metin üçünü söyler.
@@ -135,6 +152,10 @@ export function CosreConversationLine() {
       : api.putCosreConversationVerification(c.verification)),
     onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
   });
+  const em = useMutation({ // v0.10.2355 — kanıt alanı
+    mutationFn: (e: EvidenceMode) => api.putCosreConversationEvidence(e),
+    onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
+  });
   const sm = useMutation({ // v0.10.2331 — üslup
     mutationFn: (style: boolean) => api.putCosreConversationStyle(style),
     onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
@@ -156,7 +177,8 @@ export function CosreConversationLine() {
   const verify: VerifyMode = pending && 'verification' in pending ? pending.verification : q.data.verification;
   const styleOn = sm.isPending ? sm.variables === true : q.data.style;
   const interactionOn = im.isPending ? im.variables === true : q.data.interaction === 'on';
-  const saveErr = m.error ?? sm.error ?? im.error;
+  const evidence: EvidenceMode = em.isPending && em.variables ? em.variables : (q.data.evidence ?? 'off');
+  const saveErr = m.error ?? sm.error ?? im.error ?? em.error;
   return (
     <div className="mb-2 flex flex-col gap-2" data-testid="cosre-conversation-line">
       <div className="flex flex-wrap items-center gap-3">
@@ -189,9 +211,20 @@ export function CosreConversationLine() {
           checked={interactionOn}
           disabled={!canEdit || im.isPending}
           onCheckedChange={v => im.mutate(v)} />
+        <div className="flex flex-col gap-1" data-testid="cosre-evidence-mode" title={CONVERSATION_EVIDENCE_HINT}>
+          <span className="text-[length:var(--fs-sm)] leading-tight text-(--text2)">Kanıt (kapsam kararı)</span>
+          <SegmentedControl
+            aria-label="Kanıt"
+            size="sm"
+            activation="manual"
+            value={evidence}
+            options={EVIDENCE_OPTIONS.map(o => ({ ...o, disabled: !canEdit || em.isPending }))}
+            onChange={v => { if (v !== evidence) em.mutate(v); }} />
+          <span className="field-hint">{CONVERSATION_EVIDENCE_HINT}</span>
+        </div>
         {!canEdit && <span className="field-hint">Yalnız admin değiştirebilir.</span>}
-        {(m.isPending || sm.isPending || im.isPending) && <Spinner label="Kaydediliyor…" />}
-        {(m.isError || sm.isError || im.isError) && (
+        {(m.isPending || sm.isPending || im.isPending || em.isPending) && <Spinner label="Kaydediliyor…" />}
+        {(m.isError || sm.isError || im.isError || em.isError) && (
           <span role="alert" className="text-[length:var(--fs-sm)] text-(--err)">
             Kaydedilemedi{saveErr instanceof Error && saveErr.message ? `: ${saveErr.message}` : ''}
           </span>

@@ -1182,6 +1182,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			echoPhrases = chatEchoPhrases(append(chatLoopPreambles(screenCtx, pageCtx, pinnedCtx, cst.ctx),
 				copilot.ChatRoundCapAddendum(), copilot.ChatDegenRetryAddendum(), v2p.Addendum)...)
 		}
+		v2p.Gate = s.newScopeGate(ctx, us, lastUserText(req.Messages), []string{req.Context.Service, toolScope.Service}, cst.ctx, isTraceFollowUp, exchangeID) // v0.10.2355 — S1 kapsam kararı (evidence off: nil)
 		ctx = withV2LoopPlan(ctx, v2p)
 		xch.verify.addText(v2p.Addendum) // v0.10.2327 — kapsam eki (takım servisleri) kanıta
 	}
@@ -1500,7 +1501,10 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 					emit("step", chatProgressStep(phase, label))
 				})
 			}
-			oc := exec.Call(ctx, tc.Name, cargs)
+			oc, gated := v2LoopPlanFrom(ctx).scopeCheck(tc.Name, cargs) // v0.10.2355 — S1: on → out_of_scope (yürütülmez); shadow yalnız sayar
+			if !gated {
+				oc = exec.Call(ctx, tc.Name, cargs)
+			}
 			if evm != nil && evm.OnTool != nil {
 				evm.OnTool(tc.Name, cargs, oc) // v0.10.1316
 			}

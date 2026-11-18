@@ -88,3 +88,31 @@ func TestCosreBannedPhrases(t *testing.T) {
 		t.Fatal("varsayılan liste boş olmalı")
 	}
 }
+
+// v0.10.2355 (S1, karar 25) — evidence: off | shadow | on, varsayılan off;
+// bilinmeyen kip okuma yolunda off'a düşer, yazımda da off'a normalleşir.
+func TestCosreConversationEvidence(t *testing.T) {
+	if d := DefaultCosreConversation(); d.Evidence != CosreEvidenceOff {
+		t.Fatalf("varsayılan kanıt %q", d.Evidence)
+	}
+	for raw, want := range map[string]string{
+		"":                                CosreEvidenceOff,
+		`{}`:                              CosreEvidenceOff,
+		`{"evidence":"shadow"}`:           CosreEvidenceShadow,
+		`{"evidence":"on"}`:               CosreEvidenceOn,
+		`{"evidence":"enforce"}`:          CosreEvidenceOff,
+		`{"evidence":"off"}`:              CosreEvidenceOff,
+		`{"state":false,"evidence":"on"}`: CosreEvidenceOn,
+	} {
+		got, ok := parseCosreConversation([]byte(raw))
+		if !ok || got.Evidence != want {
+			t.Fatalf("%q → %q (ok=%v), beklenen %q", raw, got.Evidence, ok, want)
+		}
+	}
+	prev := CurrentCosreConversation()
+	defer SetCosreConversation(prev)
+	SetCosreConversation(CosreConversation{State: true, Verification: CosreVerifyShadow, Evidence: "loud"})
+	if c := CurrentCosreConversation(); c.Evidence != CosreEvidenceOff {
+		t.Fatalf("geçersiz kip yayınlandı: %q", c.Evidence)
+	}
+}

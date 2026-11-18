@@ -61,6 +61,18 @@ func ValidCosreInteraction(v string) bool {
 	return v == CosreInteractionOff || v == CosreInteractionOn
 }
 
+// Kanıt kipleri (v0.10.2355, karar 25): off | shadow | on.
+const (
+	CosreEvidenceOff    = "off"
+	CosreEvidenceShadow = "shadow"
+	CosreEvidenceOn     = "on"
+)
+
+// ValidCosreEvidence — SAF: kapalı küme.
+func ValidCosreEvidence(v string) bool {
+	return v == CosreEvidenceOff || v == CosreEvidenceShadow || v == CosreEvidenceOn
+}
+
 // CosreConversation — blob.
 type CosreConversation struct {
 	State         bool      `json:"state"`
@@ -68,6 +80,7 @@ type CosreConversation struct {
 	Verification  string    `json:"verification"`
 	BannedPhrases []string  `json:"bannedPhrases,omitempty"` // v0.10.2338 — D: varsayılan kalıp listesine ek
 	Interaction   string    `json:"interaction"`             // v0.10.2353 — I5: off | on
+	Evidence      string    `json:"evidence"`                // v0.10.2355 — S1: off | shadow | on
 	UpdatedBy     string    `json:"updatedBy,omitempty"`
 	UpdatedAt     time.Time `json:"updatedAt,omitzero"`
 }
@@ -122,9 +135,9 @@ func clipCosreBannedPhrases(in []string) []string {
 }
 
 // DefaultCosreConversation — blob yokken geçerli ayar: durum AÇIK, üslup
-// kapalı, doğrulama gölge (v0.10.2327).
+// kapalı, doğrulama gölge (v0.10.2327), kanıt kapalı (v0.10.2355).
 func DefaultCosreConversation() CosreConversation {
-	return CosreConversation{State: true, Verification: CosreVerifyShadow, Interaction: CosreInteractionOff}
+	return CosreConversation{State: true, Verification: CosreVerifyShadow, Interaction: CosreInteractionOff, Evidence: CosreEvidenceOff}
 }
 
 // ValidCosreVerification — SAF: kapalı küme.
@@ -151,6 +164,9 @@ func SetCosreConversation(c CosreConversation) {
 	if !ValidCosreInteraction(c.Interaction) {
 		c.Interaction = CosreInteractionOff
 	}
+	if !ValidCosreEvidence(c.Evidence) {
+		c.Evidence = CosreEvidenceOff
+	}
 	cosreConversationCur.Store(&c)
 }
 
@@ -167,6 +183,7 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 		Verification  string    `json:"verification"`
 		BannedPhrases []string  `json:"bannedPhrases"`
 		Interaction   string    `json:"interaction"`
+		Evidence      string    `json:"evidence"`
 		UpdatedBy     string    `json:"updatedBy"`
 		UpdatedAt     time.Time `json:"updatedAt"`
 	}
@@ -184,6 +201,9 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 	out.BannedPhrases = clipCosreBannedPhrases(in.BannedPhrases)
 	if ValidCosreInteraction(in.Interaction) {
 		out.Interaction = in.Interaction
+	}
+	if ValidCosreEvidence(in.Evidence) { // v0.10.2355 — bilinmeyen / boş kip varsayılan (off)
+		out.Evidence = in.Evidence
 	}
 	out.UpdatedBy = strings.TrimSpace(in.UpdatedBy)
 	out.UpdatedAt = in.UpdatedAt

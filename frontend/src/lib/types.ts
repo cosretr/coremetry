@@ -9025,6 +9025,8 @@ export interface CosreConversationSettings {
   bannedPhrases?: string[];
   /** v0.10.2353 (interaction-audit I5) — onaylı aksiyon kartı; varsayılan off. */
   interaction: 'off' | 'on';
+  /** v0.10.2355 (investigation-design S1, karar 25) — kanıt alanı: off | shadow | on (varsayılan off). */
+  evidence?: 'off' | 'shadow' | 'on';
   updatedBy?: string;
   updatedAt?: string;
 }

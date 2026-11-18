@@ -88,12 +88,19 @@ const (
 	// kümesi dışı) → gece puanına ve değerlendirme adayı seçimine girmez.
 	SigActionConfirm = "action_confirm"
 	SigActionCancel  = "action_cancel"
+	// SigScopeWouldRefuse — v0.10.2355 (investigation-design S1, karar 10):
+	// cosre_conversation.evidence = shadow iken modelin çıkardığı servis
+	// kullanıcının kapsamı, bu turda andığı, ekranın ya da konuşma durumunun
+	// varlığı değildi — `on` kipinde araç `out_of_scope` dönerdi. Çağrı başına
+	// bir satır; ayrıntı "tool=… services=…". Çağrı yine koşar; yalnız ölçüm.
+	SigScopeWouldRefuse = "scope_would_refuse"
 )
 
 // SystemSignalKinds — sunucunun yazabileceği kapalı küme.
 var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrected: true, SigBriefingAsk: true,
 	SigVerifyMismatch: true, SigAliasSaved: true, // v0.10.2327, v0.10.2334
-	SigActionConfirm: true, SigActionCancel: true} // v0.10.2353
+	SigActionConfirm: true, SigActionCancel: true, // v0.10.2353
+	SigScopeWouldRefuse: true} // v0.10.2355
 
 // nonLabelKinds — v0.10.2354: istemcinin POST edebildiği ama cevaba etiket
 // (gerekçe / puan) olarak bağlanmayan örtük sinyaller.

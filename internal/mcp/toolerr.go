@@ -124,6 +124,9 @@ type ToolError struct {
 	// Suggest — v0.10.2320: yalnız bilinmeyen araç adında, bu alışverişte
 	// sunulan katalogdan en yakın en çok üç ad (toolerr_unknown.go).
 	Suggest []string `json:"did_you_mean,omitempty"`
+	// Service — v0.10.2355 (CoSRE kapsam kararı, api/chat_scope_decision.go):
+	// yalnız `out_of_scope` sınıfında, kapsam dışı servis(ler).
+	Service string `json:"service,omitempty"`
 }
 
 // toolErrPolicy — sınıf → {tekrar denenebilir mi, ne yapmalı}.

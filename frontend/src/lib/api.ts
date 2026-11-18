@@ -1439,6 +1439,11 @@ export const api = {
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bannedPhrases }),
     }),
+  // v0.10.2355 — S1: kanıt alanı (off | shadow | on; varsayılan off).
+  putCosreConversationEvidence: (evidence: 'off' | 'shadow' | 'on') =>
+    request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ evidence }),
+    }),
   cosreBriefingSettings: () => get<import('./types').CosreBriefingSettings>(`/api/ai/briefing`),
   putCosreBriefingSettings: (body: import('./types').CosreBriefingSettings) =>
     request<import('./types').CosreBriefingSettings>(`/api/ai/briefing`, {

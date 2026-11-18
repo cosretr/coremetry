@@ -357,7 +357,7 @@ func TestChatWiresToolScreenScope(t *testing.T) {
 		"toolSchemas[t.Name] = t.InputSchema",
 		"toolScope := buildToolScreenScope(screenCtx, pageCtx, pinnedCtx, scopeTrace, lastUserText(req.Messages))",
 		"cargs, scopeApplied := applyScreenContext(tc.Name, tc.Input, toolSchemas[tc.Name], toolScope, time.Now())",
-		"oc := exec.Call(ctx, tc.Name, cargs)",
+		"oc = exec.Call(ctx, tc.Name, cargs)", // v0.10.2355 — S1 kapsam kararından sonra (chat_scope_decision.go)
 		`stepEv["ctxApplied"] = scopeApplied`,
 		"annotateEnvBlind(tr.Content, scopeApplied.EnvNotApplied, scopeApplied.ScreenEnv)",
 		"withEvidenceListScope(stepEv, evs, scopeApplied)", // v0.10.1275 — çok-kanıtlı zarf
@@ -366,7 +366,7 @@ func TestChatWiresToolScreenScope(t *testing.T) {
 			t.Errorf("kablolama eksik: %s", must)
 		}
 	}
-	if strings.Index(src, "cargs, scopeApplied := applyScreenContext(") > strings.Index(src, "oc := exec.Call(ctx, tc.Name, cargs)") {
+	if strings.Index(src, "cargs, scopeApplied := applyScreenContext(") > strings.Index(src, "oc = exec.Call(ctx, tc.Name, cargs)") {
 		t.Error("enjeksiyon yürütmeden SONRA")
 	}
 }

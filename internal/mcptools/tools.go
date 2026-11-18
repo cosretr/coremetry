@@ -337,6 +337,11 @@ type Deps struct {
 	// list_metric_names süzer; query_metric SÜZMEZ (açık sorgu çalışır).
 	// nil = süzgeç yok.
 	MetricNameHidden func(name string) bool
+	// ServiceRef — v0.10.2355 (investigation-design S1, karar 11): servis →
+	// {service, cluster, namespace, ambiguous} VARLIK MODELİNDEN (api
+	// mcpServiceRef: entity.Resolver.ServiceWorkloads + ServiceRefFromWorkloads,
+	// süreç içi 60 sn memo). nil = yalnız ad (ResolveServiceRef).
+	ServiceRef func(ctx context.Context, service string) ServiceRef
 }
 
 // ArgoAppStatus — v0.10.1293: Deps.ArgoApps satırı (uygulama + durum + iş

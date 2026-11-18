@@ -21,6 +21,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -112,6 +113,8 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		// (mcp_gate.go) AYNI okumayı yapar; AI SRE drain bu kurucuyu aynen aldığı
 		// için (main.go srv.MCPDeps) arka plan da aynı kümeyi görür.
 		ToolsetsDisabled: currentToolsetsDisabled,
+		// v0.10.2355 (investigation-design S1, karar 11) — servis kimliği varlık modelinden.
+		ServiceRef: s.mcpServiceRef,
 		CopilotModel: func() string {
 			if s.copilot == nil || !s.copilot.Configured() {
 				return ""
@@ -119,6 +122,27 @@ func (s *Server) mcpDeps() mcptools.Deps {
 			return s.copilot.ActiveModel()
 		},
 	}
+}
+
+// serviceRefTTL — kimlik memo'su (karar 11: alışveriş başına bir çözüm; süreç içi 60 sn).
+const serviceRefTTL = 60 * time.Second
+
+// mcpServiceRef — v0.10.2355: servis → ServiceRef. `svc:<ad>` → `serves`
+// kenarları → iş yükü kimlikleri (entity.Resolver.ServiceWorkloads); ad eşlemesi
+// yok. Okuma hatası / boş depo → yalnız ad (etiket eksik, sorgu değişmez).
+func (s *Server) mcpServiceRef(ctx context.Context, service string) mcptools.ServiceRef {
+	if service == "" || s.store == nil {
+		return mcptools.ServiceRef{Service: service}
+	}
+	body, err := s.mcpMemo(ctx, "mcp:service_ref:v1:"+service, serviceRefTTL, func(c context.Context) (any, bool, error) {
+		ids, rerr := s.entityResolver().ServiceWorkloads(c, service, time.Time{}, 200)
+		return mcptools.ServiceRefFromWorkloads(service, ids), rerr == nil, nil
+	})
+	var ref mcptools.ServiceRef
+	if err != nil || json.Unmarshal(body, &ref) != nil || ref.Service == "" {
+		return mcptools.ServiceRef{Service: service}
+	}
+	return ref
 }
 
 // MCPDeps — TEK Deps kurucusu, dışa açık: main.go'nun dış MCP sunucusu

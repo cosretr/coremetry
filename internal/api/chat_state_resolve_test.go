@@ -248,7 +248,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	}
 	a := nextAudit(t, s)
 	if a.Action != "settings.cosre_conversation.update" || a.TargetID != chstore.CosreConversationKey ||
-		a.Details != `{"before":{"state":true,"style":false,"verification":"shadow","bannedPhrases":0,"interaction":"off"},"after":{"state":false,"style":false,"verification":"shadow","bannedPhrases":0,"interaction":"off"}}` {
+		a.Details != `{"before":{"state":true,"style":false,"verification":"shadow","bannedPhrases":0,"interaction":"off","evidence":"off"},"after":{"state":false,"style":false,"verification":"shadow","bannedPhrases":0,"interaction":"off","evidence":"off"}}` {
 		t.Fatalf("audit = %+v", a)
 	}
 	// v0.10.2327 — verification bağlı: off (kill switch) ↔ shadow; state korunur.
@@ -280,7 +280,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if cur := chstore.CurrentCosreConversation(); w.Code != http.StatusOK || len(cur.BannedPhrases) != 1 || !cur.Style || cur.Verification != chstore.CosreVerifyOff {
 		t.Fatalf("bannedPhrases PUT %d: %s", w.Code, w.Body)
 	}
-	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"off","bannedPhrases":1,"interaction":"off"}`) {
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"off","bannedPhrases":1,"interaction":"off","evidence":"off"}`) {
 		t.Fatalf("audit = %+v", a)
 	}
 	// v0.10.2339 — E2: enforce kabul edilir; varsayılan yine shadow.
@@ -299,7 +299,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if cur := chstore.CurrentCosreConversation(); w.Code != http.StatusOK || cur.Interaction != chstore.CosreInteractionOn || cur.Verification != chstore.CosreVerifyEnforce {
 		t.Fatalf("interaction on PUT %d: %s", w.Code, w.Body)
 	}
-	if a := nextAudit(t, s); !strings.Contains(a.Details, `"bannedPhrases":1,"interaction":"off"},"after":`) || !strings.HasSuffix(a.Details, `"interaction":"on"}}`) {
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"bannedPhrases":1,"interaction":"off","evidence":"off"},"after":`) || !strings.HasSuffix(a.Details, `"interaction":"on","evidence":"off"}}`) {
 		t.Fatalf("audit = %+v", a)
 	}
 	if chstore.DefaultCosreConversation().Interaction != chstore.CosreInteractionOff {
