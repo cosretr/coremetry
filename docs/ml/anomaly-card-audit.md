@@ -567,6 +567,9 @@ invalid) / invalid / failedByGate / notEvaluableByGate) + tik satırı `[ml] tic
 `class=info` (Problem adayı değil, tek sinyal kolu kapanır — K10); bildirim yalnız yayımlanan `service_anomaly`'den.
 **A2 — kapılar yürürlükte.** Gölge raporu operatörce okunduktan sonra: `publish_state=held` listeden ve Problem kapısından düşer.
 *Risk:* **yüksek** — gerçek olay gizlenebilir; B16 çelişkisi çözülmeden açılmaz. *Göç:* yok. *Test:* liste SQL süzgeci pini, grup kapısı pini.
+🔧 **uygulama yolu gemilendi v0.10.2343, KAPALI** (`internal/ml/publish_gate_enforce.go`, `mlPublishGatesEnforce = false`). K16 onayı
+gelince tek satırla açılır; kapalıyken davranış A2 öncesiyle bayt bayt aynı (pin testleri). K10: tek sinyal kolu `evidence[]` bağımsız ≥ 2.
+Gölge raporu K16 incelemesi için: tutulacak olaylardan Problem'le çakışan / Problem'e dönüşen + örnek kimlikler (Teknik detay › "Yayın kapıları").
 
 **F — "hızlı şerit".** Tanım alınamadı; plan yazılamadı (§12-K12).
 

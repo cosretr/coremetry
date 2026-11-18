@@ -12417,6 +12417,8 @@ export interface UnifiedAnomaliesPage {
   items: UnifiedAnomalyRow[]; total: number; openTotal: number; doneTotal: number;
   offset: number; limit: number; truncated: boolean; partial?: 'ml' | 'legacy';
   row?: UnifiedAnomalyRow;
+  /** v0.10.2343 (A2): held görünümünde yayın kapıları yürürlükte (kapalıyken alan yok). */
+  gatesEnforced?: boolean;
 }
 /** v0.10.2015 — ml.GroupDecision aynası (internal/ml/group_gate.go). */
 export interface MLGroupDecision {
@@ -12586,6 +12588,19 @@ export interface MLTickStatus {
   /** v0.10.2019: metrik ailesi başına otomatik seçilen kaynak (ayar değil) + tikin Thanos ölçümü. */
   metricSources?: Record<string, MLMetricSource>;
   thanos?: MLThanosTick;
+  /** v0.10.2241 (A1) + v0.10.2343 (K16): yayın kapısı gölge raporu (dedektör başına, son publishGatesWindowH sa). */
+  publishGates?: Record<string, MLGateShadow>;
+  publishGatesWindowH?: number;
+  /** v0.10.2343: rapor kipi ("A2: kapalı" | "A2: açık"), anahtar ve K16 ölçüt metni (sunucu, TR). */
+  publishGatesMode?: string; publishGatesEnforced?: boolean; publishGatesCriterion?: string;
+}
+/** chstore.MLGateShadow aynası (internal/chstore/ml_status.go). */
+export interface MLGateShadow {
+  evaluated: number; wouldPublish: number; wouldDrop: number; wouldInfo: number; wouldTelemetryVolume: number;
+  notEvaluated: number; invalid: number;
+  failedByGate?: Record<string, number>; notEvaluableByGate?: Record<string, number>;
+  /** v0.10.2343: tutulacak olaylardan açık Problem'le çakışan / ML Problem kararına giren; örnek kimlikler (≤ 3). */
+  wouldDropProblem: number; wouldDropEscalated: number; dropExamples?: string[];
 }
 /** v0.10.2019 — chstore.MLMetricSource aynası. source: vm | thanos | none | '' (ölçülemedi). */
 export interface MLMetricSource { source: string; clusters?: string[]; checkedAt?: number; note?: string }

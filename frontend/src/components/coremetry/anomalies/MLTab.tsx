@@ -8,6 +8,7 @@ import type { ColumnDef } from '@/components/coremetry/DataTable';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { useMLScorecard } from '@/lib/queries';
 import type { MLEvent, MLDetectorScore, MLBackfillProgress, MLTickStatus, MLSignalTick, MLScorecard, MLKindTick, MLBaselineStatus, MLThanosTick } from '@/lib/types';
+import { MLPublishGatesSection } from './MLPublishGates';
 import { MLSvcShadowCompareSection } from './MLSvcShadowCompare';
 import { EngineCompareSection } from './EngineCompare';
 import { ProblemGraphShadowSection } from './ProblemGraphShadow';
@@ -373,6 +374,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
                     default: return null;
                   }
                 }} />
+              <MLPublishGatesSection tick={sc.data.tick} />
               <MLSvcShadowCompareSection />
               <EngineCompareSection />
               <ProblemGraphShadowSection />

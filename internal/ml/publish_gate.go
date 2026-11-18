@@ -5,7 +5,8 @@ package ml
 // katmanı. Doğrulayıcıdan geçen her sözleşme kaydı yazımdan önce burada
 // değerlendirilir; sonuç YALNIZ kaydın gates[]'ine ve gölge sayacına yazılır.
 // GÖLGE: hiçbir şey gizlenmez, sınıf/publish_state değişmez, bildirim, Problem
-// terfisi ve kart bugünkü gibi (A2 bunları yürürlüğe koyar).
+// terfisi ve kart bugünkü gibi (A2 bunları yürürlüğe koyar). v0.10.2343: A2
+// uygulama yolu publish_gate_enforce.go'da, KAPALI (mlPublishGatesEnforce).
 //
 // Kapılar yalnız KAYDI okur (ek VM/CH/ES sorgusu yok); kayıtta gereken veri
 // yoksa satır NotEvaluable + neden yazılır (Passed=true: değerlendirilemeyen
@@ -357,6 +358,9 @@ func ShadowHeld(ev chstore.MLEvent) bool {
 	if ev.Record == "" || ev.PublishState == PublishInvalid {
 		return false
 	}
+	if ev.PublishState == PublishHeld { // v0.10.2343 (A2 açık): yazılmış karar
+		return true
+	}
 	var rec EventRecord
 	if json.Unmarshal([]byte(ev.Record), &rec) != nil || len(rec.Gates) == 0 {
 		return false
@@ -423,10 +427,18 @@ type gateEntry struct {
 	detector string
 	o        gateOutcome
 	at       int64 // unix sn
+	// v0.10.2343 (K16 incelemesi) — kalıcı (olay pencerede kaldıkça) işaretler:
+	// service olayın servisi; problem: olay gözlenirken servisinde açık bir
+	// Problem vardı; escalated: olay bir ML Problem kararına (grup / servis
+	// düzeyi "açardı" ya da canlı) girdi.
+	service   string
+	problem   bool
+	escalated bool
 }
 
 // observeGate — bir olayın kapı sonucunu kaydeder (id yoksa yok sayar).
-func (s *stats) observeGate(id, detector string, o gateOutcome) {
+// Önceki tiklerin problem / escalated işaretleri korunur.
+func (s *stats) observeGate(id, detector, service string, o gateOutcome) {
 	if id == "" {
 		return
 	}
@@ -435,11 +447,70 @@ func (s *stats) observeGate(id, detector string, o gateOutcome) {
 	if s.gateShadow == nil {
 		s.gateShadow = map[string]gateEntry{}
 	}
-	if _, ok := s.gateShadow[id]; !ok && len(s.gateShadow) >= gateShadowCap {
+	prev, ok := s.gateShadow[id]
+	if !ok && len(s.gateShadow) >= gateShadowCap {
 		return
 	}
-	s.gateShadow[id] = gateEntry{detector: detector, o: o, at: time.Now().Unix()}
+	s.gateShadow[id] = gateEntry{detector: detector, o: o, at: time.Now().Unix(), service: service, problem: prev.problem, escalated: prev.escalated}
 }
+
+// gateShadowHasDrop — gölgede tutulacak olay var mı (Problem okumasını yalnız
+// gerekince yapmak için).
+func (s *stats) gateShadowHasDrop() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, e := range s.gateShadow {
+		if e.o.Drop {
+			return true
+		}
+	}
+	return false
+}
+
+// markGateLinks — v0.10.2343: tutulacak olaylara ucuz, dürüst birleşim:
+// escalated = bu tikte bir ML Problem kararına girdi; problemSvcs = açık
+// Problem'i olan servisler. Oy / karar etiketi KULLANILMAZ (kalıcı kural).
+func (s *stats) markGateLinks(escalated, problemSvcs map[string]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, e := range s.gateShadow {
+		if !e.o.Drop {
+			continue
+		}
+		ch := false
+		if escalated[id] && !e.escalated {
+			e.escalated, ch = true, true
+		}
+		if e.service != "" && problemSvcs[e.service] && !e.problem {
+			e.problem, ch = true, true
+		}
+		if ch {
+			s.gateShadow[id] = e
+		}
+	}
+}
+
+// escalatedIDs — SAF: bu tikte bir ML Problem kararına giren olay kimlikleri
+// (bitmemiş "açardı"/canlı grup üyeleri + servis düzeyi "açardı" kararları).
+func escalatedIDs(groups []decidedGroup, svc map[string]SvcShadow) map[string]bool {
+	out := map[string]bool{}
+	for _, g := range groups {
+		if (g.D.WouldOpen || g.D.Live) && !g.D.Finished {
+			for _, id := range g.G.Members {
+				out[id] = true
+			}
+		}
+	}
+	for id, d := range svc {
+		if d.WouldOpen {
+			out[id] = true
+		}
+	}
+	return out
+}
+
+// gateDropExamples — tutulacak olay örneği sayısı (dedektör başına).
+const gateDropExamples = 3
 
 // gateShadowReport — pencere dışını budar, dedektör başına raporu döner.
 func (s *stats) gateShadowReport(now time.Time) map[string]chstore.MLGateShadow {
@@ -460,13 +531,19 @@ func foldGateShadow(es map[string]gateEntry) map[string]chstore.MLGateShadow {
 		return nil
 	}
 	out := map[string]chstore.MLGateShadow{}
+	type ex struct {
+		id   string
+		rank int
+		at   int64
+	}
+	drops := map[string][]ex{}
 	inc := func(m *map[string]int64, k string) {
 		if *m == nil {
 			*m = map[string]int64{}
 		}
 		(*m)[k]++
 	}
-	for _, e := range es {
+	for id, e := range es {
 		r := out[e.detector]
 		switch o := e.o; {
 		case !o.Evaluated:
@@ -479,6 +556,16 @@ func foldGateShadow(es map[string]gateEntry) map[string]chstore.MLGateShadow {
 			switch {
 			case o.Drop:
 				r.WouldDrop++
+				rank := 0
+				if e.problem {
+					r.WouldDropProblem++
+					rank++
+				}
+				if e.escalated {
+					r.WouldDropEscalated++
+					rank++
+				}
+				drops[e.detector] = append(drops[e.detector], ex{id, rank, e.at})
 			case o.WouldClass == ClassInfo:
 				r.WouldInfo++
 			case o.WouldClass == ClassTelemetryVolume:
@@ -495,6 +582,23 @@ func foldGateShadow(es map[string]gateEntry) map[string]chstore.MLGateShadow {
 		}
 		out[e.detector] = r
 	}
+	// örnekler: Problem'le çakışan / dönüşen önce, sonra en yeni, sonra id
+	for det, xs := range drops {
+		sort.Slice(xs, func(i, j int) bool {
+			if xs[i].rank != xs[j].rank {
+				return xs[i].rank > xs[j].rank
+			}
+			if xs[i].at != xs[j].at {
+				return xs[i].at > xs[j].at
+			}
+			return xs[i].id < xs[j].id
+		})
+		r := out[det]
+		for _, x := range xs[:min(len(xs), gateDropExamples)] {
+			r.DropExamples = append(r.DropExamples, x.id)
+		}
+		out[det] = r
+	}
 	return out
 }
 
@@ -510,6 +614,8 @@ func gateShadowLine(m map[string]chstore.MLGateShadow) string {
 		t.WouldTelemetryVolume += r.WouldTelemetryVolume
 		t.NotEvaluated += r.NotEvaluated
 		t.Invalid += r.Invalid
+		t.WouldDropProblem += r.WouldDropProblem
+		t.WouldDropEscalated += r.WouldDropEscalated
 		for k, v := range r.FailedByGate {
 			failed[k] += v
 		}
@@ -517,8 +623,9 @@ func gateShadowLine(m map[string]chstore.MLGateShadow) string {
 			notEval[k] += v
 		}
 	}
-	return fmt.Sprintf("[ml] tick publish_gates_shadow window=24h evaluated=%d would_publish=%d would_drop=%d would_info=%d would_telemetry_volume=%d not_evaluated=%d invalid=%d failed_by_gate=%s not_evaluable_by_gate=%s",
-		t.Evaluated, t.WouldPublish, t.WouldDrop, t.WouldInfo, t.WouldTelemetryVolume, t.NotEvaluated, t.Invalid, kvLine(failed), kvLine(notEval))
+	return fmt.Sprintf("[ml] tick publish_gates_shadow window=24h evaluated=%d would_publish=%d would_drop=%d would_info=%d would_telemetry_volume=%d not_evaluated=%d invalid=%d failed_by_gate=%s not_evaluable_by_gate=%s would_drop_problem=%d would_drop_escalated=%d enforce=%v",
+		t.Evaluated, t.WouldPublish, t.WouldDrop, t.WouldInfo, t.WouldTelemetryVolume, t.NotEvaluated, t.Invalid, kvLine(failed), kvLine(notEval),
+		t.WouldDropProblem, t.WouldDropEscalated, publishGatesEnforce)
 }
 
 func kvLine(m map[string]int64) string {

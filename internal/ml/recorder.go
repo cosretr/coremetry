@@ -71,6 +71,9 @@ type Recorder struct {
 	bf backfillJob
 	// notifier — v0.10.2052 (D4): grup Problem'inin açılış bildirimi (mevcut hat).
 	notifier ProblemNotifier
+	// pub — v0.10.2343 (A2): olay id → son yazımın yayın kararı; yalnız A2
+	// açıkken dolar (publish_gate_enforce.go). Tik goroutine'i tek kullanıcı.
+	pub pubVerdicts
 	// dedup — v0.10.2173: paylaşılan önbellek; D5 yükseliş bildiriminin
 	// süreçler arası tekilleştirmesi (anomaly.EscalationAlert). nil = yok.
 	dedup cache.Cache
@@ -296,6 +299,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	vol.attachVolumeRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &volBudget, &volVM, start)
 	for _, ev := range closing {
 		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
+		r.observePublish(ev, start)
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {
 			firstErr = werr
 		}
@@ -315,13 +319,16 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	// Girdi süreç-içi koşu durumu; canlıda tek ek okuma açık Problem
 	// anlık görüntüsü. Kapanış satırı (closeStale) koşunun son halini
 	// yazdığı için damgalı hal koşuya da geri verilir.
+	// v0.10.2343 (A2, kapalı gelir): A2 açıkken terfi kapısı yalnız son
+	// yazımda yayımlanan service_anomaly olayını sayar (publish_gate_enforce.go).
+	pub := r.publishVerdicts(start)
 	groups, shadow := decideGroups(kept, r.runs.events(), GroupSlack(cfg),
-		GroupGateInput{IsBatch: isBatch, LoadParts: loadParts, Open: r.runs.openIDs(kept)}, start)
+		GroupGateInput{IsBatch: isBatch, LoadParts: loadParts, Open: r.runs.openIDs(kept), Published: pub}, start)
 	// v0.10.2089 — servis düzeyi kapı (spec dilim 3): karar kanıta, sayaç
 	// tik durumuna. v0.10.2130 (dilim 4, operatör kararı 2026-11-14) — aynı
 	// karar canlı yola girer: grup kararlarıyla TEK planda, servis başına tek
 	// ML Problem'i (anahtar kapalıyken yalnız gölge kaydı).
-	svcDec := decideSvcShadow(kept, r.runs.openIDs(kept), groups, chstore.CurrentProblemPriority(), start)
+	svcDec := decideSvcShadow(publishedCandidates(kept, pub), r.runs.openIDs(kept), groups, chstore.CurrentProblemPriority(), start)
 	var live liveCounts
 	if cfg.GroupProblemsOn() {
 		loc := OperatorLocation(sens)
@@ -342,6 +349,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	}
 	stampGroupDecisions(kept, groups)
 	stampSvcShadow(kept, svcDec)
+	r.markGateLinks(tctx, groups, svcDec) // v0.10.2343: K16 raporu (yalnız bellek + memo'lu anlık görüntü)
 	svcOpen, svcP1 := svcShadowCounts(svcDec)
 	confirmWin := time.Duration(cfg.Quality.ConfirmWindowMin) * time.Minute
 	attachLagRecords(tctx, deps, cfg, kept, false, r.runs.firstOf, func(ev chstore.MLEvent) []string {
@@ -408,6 +416,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	}
 	for _, ev := range kept {
 		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
+		r.observePublish(ev, start)
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil {
 			if firstErr == nil {
 				firstErr = werr
@@ -444,6 +453,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		LogSvcUnmatched: int64(logSvc.Unmatched), LogSvcViaPod: int64(logSvc.ViaPod), ShadowSvcWouldOpen: svcOpen, ShadowSvcP1: svcP1}
 	// v0.10.2241 (A1) — yayın kapısı gölge raporu: /api/ml/scorecard tick.publishGates
 	status.PublishGates, status.PublishGatesWindowH = global.gateShadowReport(start), int(gateShadowWindow/time.Hour)
+	status.PublishGatesMode, status.PublishGatesEnforced, status.PublishGatesCriterion = PublishGatesMode(), PublishGatesEnforced(), PublishGatesCriterion
 	// v0.10.2019 — metrik aile kaynakları + Thanos ölçümü (MetricThanos)
 	for _, det := range r.detectors {
 		if ts, ok := det.(interface {

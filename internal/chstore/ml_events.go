@@ -228,6 +228,11 @@ type MLEventsFilter struct {
 	// MLViewHeld kapı satırında kalan olan kayıtlar (gölge ön süzgeci; kesin
 	// karar ml.ShadowHeld).
 	View string
+	// HideHeld — v0.10.2343 (anomali kartı A2): servis / platform görünümünde
+	// publish_state='held' satırı düşer. Yalnız A2 açıkken (ml.PublishGates
+	// Enforced) api doldurur; false = SQL bugünküyle aynı. ID okuması ve held
+	// görünümü etkilenmez (tutulan olay erişilebilir kalır).
+	HideHeld bool
 	// recCols — ListMLEvents doldurur (hasMLRecordCols); kolon yoksa sınıf
 	// süzgeci yalnız dedektör adına düşer.
 	recCols bool
@@ -247,6 +252,15 @@ func mlPlatformCond(recCols bool) string {
 		return "detector = '" + MLDetSvcVolumeSpike + "'"
 	}
 	return "(class = 'telemetry_volume' OR detector = '" + MLDetSvcVolumeSpike + "')"
+}
+
+// mlHeldCond — SAF (v0.10.2343): A2'nin liste süzgeci; kolon yoksa held
+// satırı da yoktur (süzgeç eklenmez).
+func mlHeldCond(f MLEventsFilter) []string {
+	if !f.HideHeld || !f.recCols {
+		return nil
+	}
+	return []string{"publish_state != 'held'"}
 }
 
 // mlEventsWhere — SAF: ListMLEvents süzgeci → WHERE gövdesi + argümanlar
@@ -284,8 +298,10 @@ func mlEventsWhere(f MLEventsFilter) (string, []any) {
 	switch f.View {
 	case MLViewService:
 		where = append(where, "NOT "+mlPlatformCond(f.recCols))
+		where = append(where, mlHeldCond(f)...)
 	case MLViewPlatform:
 		where = append(where, mlPlatformCond(f.recCols))
+		where = append(where, mlHeldCond(f)...)
 	case MLViewHeld:
 		if f.recCols {
 			where = append(where, `record != '' AND publish_state != 'invalid' AND position(record, '"passed":false') > 0`)

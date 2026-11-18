@@ -126,7 +126,10 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
           options={[{ value: '', label: t('anomalies.signal.all') }, { value: 'trace', label: 'Trace' }, { value: 'log', label: 'Log' }, { value: 'metric', label: t('signalKind.metric') }]} />
       )}
       {hint && (
-        <p data-testid="anomalies-view-hint" className={view === 'held' ? 'm-0 text-sm text-[color:var(--warn)]' : 'm-0 text-sm text-muted-foreground'}>{hint}</p>
+        <p data-testid="anomalies-view-hint" className={view === 'held' ? 'm-0 text-sm text-[color:var(--warn)]' : 'm-0 text-sm text-muted-foreground'}>
+          {/* v0.10.2343 (A2): kapılar yürürlükteyse held açıklaması gölge değil */}
+          {view === 'held' && openQ.data?.gatesEnforced ? t('anomalies.view.heldHintEnforced') : hint}
+        </p>
       )}
       {partial && <p className="m-0 text-sm text-[color:var(--warn)]">{tf('anomalies.list.partial', lang, { src: partial })}</p>}
       {/* v0.10.2030 — sayfada DOĞRUDAN duran tablo, diğer liste sayfaları gibi

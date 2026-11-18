@@ -91,6 +91,11 @@ type MLTickStatus struct {
 	// (son değerlendirme geçerli; recorder pod belleği, lider değişince sıfır).
 	PublishGates        map[string]MLGateShadow `json:"publishGates,omitempty"`
 	PublishGatesWindowH int                     `json:"publishGatesWindowH,omitempty"`
+	// v0.10.2343 (A2 kapalı gelir, K16): raporun kipi ("A2: kapalı" | "A2:
+	// açık"), uygulama anahtarı ve inceleme ölçütü metni.
+	PublishGatesMode      string `json:"publishGatesMode,omitempty"`
+	PublishGatesEnforced  bool   `json:"publishGatesEnforced,omitempty"`
+	PublishGatesCriterion string `json:"publishGatesCriterion,omitempty"`
 	// v0.10.2052 (D4) — canlı kip: anahtar açık mı (izleyici de görür) ve
 	// bu tikte açılan / tazelenen / kapanan grup Problem'i sayısı.
 	GroupLive bool `json:"groupLive,omitempty"`
@@ -166,4 +171,12 @@ type MLGateShadow struct {
 	Invalid              int64            `json:"invalid"`
 	FailedByGate         map[string]int64 `json:"failedByGate,omitempty"`
 	NotEvaluableByGate   map[string]int64 `json:"notEvaluableByGate,omitempty"`
+	// v0.10.2343 (K16 incelemesi) — tutulacak (WouldDrop) olaylardan: olay
+	// gözlenirken servisinde açık bir Problem olan (WouldDropProblem) ve bir
+	// ML Problem kararına giren (WouldDropEscalated; grup / servis düzeyi
+	// "açardı" ya da canlı). DropExamples: en çok 3 olay kimliği, çakışan /
+	// dönüşen önce. Oy ya da karar etiketi kullanılmaz.
+	WouldDropProblem   int64    `json:"wouldDropProblem"`
+	WouldDropEscalated int64    `json:"wouldDropEscalated"`
+	DropExamples       []string `json:"dropExamples,omitempty"`
 }

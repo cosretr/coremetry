@@ -32,6 +32,9 @@ func CardRecordView(ev *chstore.MLEvent, in CardInput) *RecordView {
 		return nil
 	}
 	v := &RecordView{EventRecord: rec, Detector: ev.Detector, PublishState: ev.PublishState}
+	if ev.Class == ClassInfo { // v0.10.2343 (A2 açık): satıra yazılan sınıf; kapalıyken hiç info yazılmaz
+		v.Class = ClassInfo
+	}
 	if in.Signal == chstore.MLSignalMetric {
 		_, v.MetricID, _ = splitThanosPart(in.Part)
 		v.MetricLabel = in.MetricLabel

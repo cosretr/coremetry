@@ -417,7 +417,7 @@ func parseTRNumber(tok string) (v float64, decimals int, ok bool) {
 // olay gölgede "değerlendirilmedi" sayılır.
 func applyRecordContract(ev chstore.MLEvent) chstore.MLEvent {
 	if ev.Record == "" {
-		global.observeGate(ev.ID, ev.Detector, gateOutcome{})
+		global.observeGate(ev.ID, ev.Detector, ev.Service, gateOutcome{})
 		return ev
 	}
 	rec, vs, o := contractVerdict(ev.Record)
@@ -425,11 +425,14 @@ func applyRecordContract(ev chstore.MLEvent) chstore.MLEvent {
 		if b, err := json.Marshal(rec); err == nil {
 			ev.Record = string(b)
 		}
-		global.observeGate(ev.ID, ev.Detector, o)
+		if publishGatesEnforce { // v0.10.2343 (A2, kapalı gelir): karar satıra
+			ev = enforceVerdict(ev, rec.Class, o)
+		}
+		global.observeGate(ev.ID, ev.Detector, ev.Service, o)
 		return ev
 	}
 	ev.PublishState = PublishInvalid
-	global.observeGate(ev.ID, ev.Detector, gateOutcome{Invalid: true})
+	global.observeGate(ev.ID, ev.Detector, ev.Service, gateOutcome{Invalid: true})
 	global.observeRecordInvalid(ev.Detector)
 	log.Printf("[ml] record invalid %s %s: %s — %s (+%d kural)", ev.Detector, ev.ID, vs[0].Rule, vs[0].Reason, len(vs)-1)
 	return ev

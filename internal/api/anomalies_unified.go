@@ -144,6 +144,18 @@ type unifiedAnomaliesResponse struct {
 	Truncated bool                `json:"truncated"`         // bir kaynak okuma tavanına değdi
 	Partial   string              `json:"partial,omitempty"` // "ml" | "legacy": o kaynak okunamadı
 	Row       *unifiedAnomalyRow  `json:"row,omitempty"`     // olay kipi
+	// GatesEnforced — v0.10.2343 (A2): yayın kapıları yürürlükte; yalnız held
+	// görünümünde ve A2 açıkken true (kapalıyken alan yazılmaz — yanıt aynı).
+	GatesEnforced bool `json:"gatesEnforced,omitempty"`
+}
+
+// publishGatesEnforced — A2 anahtarı (ml); testlerin dikiş yeri.
+var publishGatesEnforced = ml.PublishGatesEnforced
+
+// unifiedMLFilter — SAF: listenin ml_events süzgeci. A2 açıkken servis /
+// platform görünümü held satırı düşürür; olay ve held görünümü düşürmez.
+func unifiedMLFilter(view string, since time.Time) chstore.MLEventsFilter {
+	return chstore.MLEventsFilter{Since: since, Limit: chstore.MLUnifiedCap, View: view, HideHeld: publishGatesEnforced()}
 }
 
 // pageUnified — SAF: süzgeç → bölüm → sıra (tüm bölüm, sayfadan ÖNCE) → sayfa.
@@ -205,7 +217,7 @@ func (s *Server) buildAnomaliesUnified(ctx context.Context, p unifiedParams, loc
 	if view == "" && p.Event == "" {
 		view = chstore.MLViewService
 	}
-	items, mlErr := s.store.ListMLEvents(ctx, chstore.MLEventsFilter{Since: since, Limit: chstore.MLUnifiedCap, View: view})
+	items, mlErr := s.store.ListMLEvents(ctx, unifiedMLFilter(view, since))
 	var legacy []chstore.AnomalyEvent
 	var legErr error
 	if p.View == "" { // platform / held: yalnız ML olayları
@@ -214,6 +226,7 @@ func (s *Server) buildAnomaliesUnified(ctx context.Context, p unifiedParams, loc
 	}
 	if p.View == chstore.MLViewHeld {
 		items = heldOnly(items)
+		resp.GatesEnforced = publishGatesEnforced()
 	}
 	switch {
 	case mlErr != nil && legErr != nil:
