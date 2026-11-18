@@ -2557,7 +2557,7 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	// İzin listesi KANITTAN türüyor ve kanıt sunucu-yazımı; yani model
 	// listeye üye EKLEYEMEZ. İmzaya gerek yok: sunucu ne yazdığını zaten
 	// biliyor (guided_chart_allowlist.go).
-	answer := strings.TrimSpace(raw) + route.AnswerTail + "\n\nKaynak: " + sources // v0.10.1397 — sunucu eki (takım servis listesi)
+	answer := strings.TrimSpace(raw) + route.AnswerTail + guidedSourceNote(ctx, emit, sources) // v0.10.1397 — sunucu eki; v0.10.2338 — v2+üslup: Kaynak satırı adım çipine (answer_seam.go)
 	answer, _ = filterModelChartFences(answer, serverChartScopes(evidence))
 	// v0.9.419 — rotadan türetilen deterministik derin linkler; frontend
 	// çip olarak çizer (eski frontend'ler yok sayar).

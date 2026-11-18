@@ -56,6 +56,13 @@ type evalFluencyAgg struct {
 	LoopN                                 int
 	VerifierPass, VerifierN               int
 	DerivedTurns, DerivedClaims           int // v0.10.2328 — türetilen değer (ayrı; geçmeyi bozmaz)
+	ModelBoiler, ServerBoiler             int // v0.10.2338 — kalıp: modelin yazdığı (süzgeç öncesi) / sunucunun satırı
+}
+
+// evalServerBoilerplate — SAF (v0.10.2338, karar 9): cevap sunucunun kalıp
+// satırını taşıyor mu — düz "Kaynak:" künyesi ya da genel cevap notu.
+func evalServerBoilerplate(answer string) bool {
+	return evalrubric.HasServerSourceLine(answer) || strings.HasPrefix(strings.TrimSpace(answer), intentGeneralNoteTR)
 }
 
 // evalFluencyRounds — SAF: cevaba kadar döngü turu: v0.10.2318 telemetrisi
@@ -90,6 +97,12 @@ func (a *evalFluencyAgg) add(t evalConvTurnResult) {
 	}
 	if f.BoilerplateClosing {
 		a.Closing++
+	}
+	if f.BoilerplateOpening || f.BoilerplateClosing || t.SeamDropped > 0 { // v0.10.2338 — dikişin sildiği de modelin yazdığıdır
+		a.ModelBoiler++
+	}
+	if evalServerBoilerplate(t.Answer) {
+		a.ServerBoiler++
 	}
 	if f.Bullets {
 		a.Bullets++
@@ -360,6 +373,8 @@ func evalFluencyReport(run evalRunSummary, cases []evalCaseResult) string {
 	metric("Yapısal ihlalsiz tur", func(a *evalFluencyAgg) string { return evalPct(a.Clean, a.Answered) })
 	metric("Kalıp açılış", func(a *evalFluencyAgg) string { return evalPct(a.Opening, a.Answered) })
 	metric("Kalıp kapanış", func(a *evalFluencyAgg) string { return evalPct(a.Closing, a.Answered) })
+	metric("Kalıp — model yazdı (dikiş süzgecinden önce)", func(a *evalFluencyAgg) string { return evalPct(a.ModelBoiler, a.Answered) })
+	metric("Kalıp — sunucu satırı (Kaynak / genel cevap notu)", func(a *evalFluencyAgg) string { return evalPct(a.ServerBoiler, a.Answered) })
 	metric("Ort. cümle", func(a *evalFluencyAgg) string { return evalAvg(int64(a.Sentences), a.Answered) })
 	metric("Ort. cümle (durum turları)", func(a *evalFluencyAgg) string { return evalAvg(int64(a.StatusSentences), a.StatusTurns) })
 	metric("Ort. karakter", func(a *evalFluencyAgg) string { return evalAvg(int64(a.Chars), a.Answered) })
@@ -390,7 +405,7 @@ func evalFluencyReport(run evalRunSummary, cases []evalCaseResult) string {
 		}
 		return fmt.Sprintf("%d (%d)", a.DerivedTurns, a.DerivedClaims)
 	})
-	b.WriteString("\nTanımlar: kalıp açılış/kapanış, cümle, karakter, madde listesi ve soruyla bitiş audit §4 S2 sorgusunun tanımlarıdır (`internal/ai/evalrubric/fluency.go`; sondaki \"Kaynak:\" satırı gövdeye girmez). Yüzdeler cevaplanan turlara göredir. Döngü turu ve araç çağrısı v0.10.2318 döngü telemetrisinden (yoksa tur kancası); \"—\" = ölçülmedi. Doğrulayıcı (E1, gölge): bir tur cevaptaki sayı/saat/ad iddialarının hiçbiri uyuşmazsa geçer; türetilen değer (kanıttaki iki değerin toplamı, farkı, oranı) geçmeyi bozmaz, ayrı sayılır; payda yalnız model anlatımı olan turlardır.\n")
+	b.WriteString("\nTanımlar: kalıp açılış/kapanış, cümle, karakter, madde listesi ve soruyla bitiş audit §4 S2 sorgusunun tanımlarıdır (`internal/ai/evalrubric/fluency.go`; sondaki \"Kaynak:\" satırı gövdeye girmez). Yüzdeler cevaplanan turlara göredir. Döngü turu ve araç çağrısı v0.10.2318 döngü telemetrisinden (yoksa tur kancası); \"—\" = ölçülmedi. Doğrulayıcı (E1, gölge): bir tur cevaptaki sayı/saat/ad iddialarının hiçbiri uyuşmazsa geçer; türetilen değer (kanıttaki iki değerin toplamı, farkı, oranı) geçmeyi bozmaz, ayrı sayılır; payda yalnız model anlatımı olan turlardır. Kalıp (v0.10.2338): \"model yazdı\" = modelin metninde kalıp açılış/kapanış vardı (ekrana ulaşan ya da cevap dikişinin sildiği); \"sunucu satırı\" = cevap metninde sunucunun düz Kaynak satırı ya da genel cevap notu (v2'de üslup açıkken ikisi de adım çipine taşınır).\n")
 	return b.String()
 }
 

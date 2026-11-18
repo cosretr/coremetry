@@ -9006,6 +9006,8 @@ export interface CosreConversationSettings {
   state: boolean;
   style: boolean;
   verification: 'off' | 'shadow' | 'enforce';
+  /** v0.10.2338 (D) — varsayılan kalıp açılış/kapanış listesine ek ifadeler (≤40, her biri ≤80 bayt). */
+  bannedPhrases?: string[];
   updatedBy?: string;
   updatedAt?: string;
 }

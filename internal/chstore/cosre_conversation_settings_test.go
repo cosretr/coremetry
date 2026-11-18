@@ -1,6 +1,11 @@
 package chstore
 
-import "testing"
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+)
 
 func TestParseCosreConversation(t *testing.T) {
 	cases := []struct {
@@ -33,5 +38,36 @@ func TestParseCosreConversation(t *testing.T) {
 func TestCosreConversationDefaultStateOn(t *testing.T) {
 	if d := DefaultCosreConversation(); !d.State || d.Style || d.Verification != CosreVerifyShadow {
 		t.Fatalf("varsayılan %+v", d)
+	}
+}
+
+// v0.10.2338 (D) — operatörün kalıp ifadeleri: kırpma, tekilleştirme, tavanlar.
+func TestCosreBannedPhrases(t *testing.T) {
+	got, err := NormalizeCosreBannedPhrases([]string{"  Sorunuzu   inceledim ", "", "sorunuzu inceledim", "Kolay gelsin"})
+	if err != nil || len(got) != 2 || got[0] != "Sorunuzu inceledim" || got[1] != "Kolay gelsin" {
+		t.Fatalf("normalize: %q %v", got, err)
+	}
+	long := strings.Repeat("a", CosreBannedPhraseMaxBytes+1)
+	if _, err := NormalizeCosreBannedPhrases([]string{long}); err == nil {
+		t.Fatal("80 bayttan uzun ifade kabul edildi")
+	}
+	many := make([]string, CosreBannedPhrasesMax+1)
+	for i := range many {
+		many[i] = fmt.Sprintf("ifade %d", i)
+	}
+	if _, err := NormalizeCosreBannedPhrases(many); err == nil {
+		t.Fatal("41 ifade kabul edildi")
+	}
+	if out, err := NormalizeCosreBannedPhrases(many[:CosreBannedPhrasesMax]); err != nil || len(out) != CosreBannedPhrasesMax {
+		t.Fatalf("40 ifade: %d %v", len(out), err)
+	}
+	// Okuma yolu bozuk listeyi bloğu düşürmeden kırpar.
+	raw, _ := json.Marshal(map[string]any{"bannedPhrases": append(append([]string{long}, many...), "x")})
+	c, ok := parseCosreConversation(raw)
+	if !ok || len(c.BannedPhrases) != CosreBannedPhrasesMax || c.BannedPhrases[0] != "ifade 0" {
+		t.Fatalf("okuma kırpması: ok=%v n=%d", ok, len(c.BannedPhrases))
+	}
+	if d, _ := parseCosreConversation(nil); d.BannedPhrases != nil {
+		t.Fatal("varsayılan liste boş olmalı")
 	}
 }

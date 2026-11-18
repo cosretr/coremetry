@@ -13,6 +13,7 @@ const m = vi.hoisted(() => ({
   put: vi.fn((state: boolean) => Promise.resolve({ state, style: false, verification: 'shadow' })),
   putVerify: vi.fn((verification: string) => Promise.resolve({ state: true, style: false, verification })),
   putStyle: vi.fn((style: boolean) => Promise.resolve({ state: true, style, verification: 'shadow' })),
+  putBanned: vi.fn((bannedPhrases: string[]) => Promise.resolve({ state: true, style: true, verification: 'shadow', bannedPhrases })),
 }));
 vi.mock('@/lib/api', () => ({
   api: {
@@ -20,11 +21,12 @@ vi.mock('@/lib/api', () => ({
     putCosreConversationState: (s: boolean) => m.put(s),
     putCosreConversationVerification: (v: string) => m.putVerify(v),
     putCosreConversationStyle: (s: boolean) => m.putStyle(s),
+    putCosreConversationBannedPhrases: (p: string[]) => m.putBanned(p),
   },
 }));
 vi.mock('@/components/AuthProvider', () => ({ useAuthRole: () => m.role }));
 
-import { CosreConversationLine, CONVERSATION_STYLE_HINT } from './CosreConversationLine';
+import { CosreConversationLine, CONVERSATION_STYLE_HINT, parseBannedPhrases, bannedPhrasesError } from './CosreConversationLine';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 beforeAll(() => {
@@ -34,7 +36,7 @@ let host: HTMLDivElement | null = null;
 let root: Root | null = null;
 afterEach(() => {
   act(() => root?.unmount()); host?.remove(); host = null; root = null;
-  m.put.mockClear(); m.putVerify.mockClear(); m.putStyle.mockClear(); m.role = 'admin';
+  m.put.mockClear(); m.putVerify.mockClear(); m.putStyle.mockClear(); m.putBanned.mockClear(); m.role = 'admin';
   m.get = () => Promise.resolve({ state: true, style: false, verification: 'shadow' });
 });
 const tick = () => act(async () => { await new Promise(r => setTimeout(r, 0)); });
@@ -103,5 +105,33 @@ describe('CosreConversationLine', () => {
     m.get = () => Promise.reject(new Error('503'));
     const el = await render();
     expect(el.textContent).toContain('ayar okunamadı');
+  });
+  // v0.10.2338 (D) — ek kalıp ifadeleri: düzenlenebilir liste, tam liste yazılır, tavanlar istemcide de.
+  it('ek kalıp ifadeleri: sunucu listesi görünür; düzenleyip Kaydet tam listeyi yazar', async () => {
+    m.get = () => Promise.resolve({ state: true, style: true, verification: 'shadow', bannedPhrases: ['Sorunuzu inceledim'] });
+    const el = await render();
+    const ta = el.querySelector<HTMLTextAreaElement>('[data-testid="cosre-banned-phrases"] textarea')!;
+    expect(ta.value).toBe('Sorunuzu inceledim');
+    const save = [...el.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.includes('Kaydet'))!;
+    expect(save.disabled).toBe(true);
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setter.call(ta, 'Sorunuzu inceledim\n  kolay   gelsin \n\nsorunuzu inceledim');
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(save.disabled).toBe(false);
+    await act(async () => { save.click(); });
+    await tick();
+    expect(m.putBanned).toHaveBeenCalledWith(['Sorunuzu inceledim', 'kolay gelsin']);
+  });
+  it('ek kalıp ifadeleri: tavanlar ve viewer', async () => {
+    expect(parseBannedPhrases(' a \n\nA\nb  c')).toEqual(['a', 'b c']);
+    expect(bannedPhrasesError(Array.from({ length: 41 }, (_, i) => `ifade ${i}`))).toContain('40');
+    expect(bannedPhrasesError(['ş'.repeat(41)])).toContain('80 bayt');
+    expect(bannedPhrasesError(['ş'.repeat(40)])).toBeUndefined();
+    m.role = 'viewer';
+    const el = await render();
+    expect(el.querySelector<HTMLTextAreaElement>('[data-testid="cosre-banned-phrases"] textarea')?.disabled).toBe(true);
+    expect([...el.querySelectorAll('button')].some(b => b.textContent?.includes('Kaydet'))).toBe(false);
   });
 });

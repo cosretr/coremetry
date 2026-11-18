@@ -1420,6 +1420,11 @@ export const api = {
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style }),
     }),
+  // v0.10.2338 — D: kalıp açılış/kapanış listesine ek ifadeler (tam liste yazılır).
+  putCosreConversationBannedPhrases: (bannedPhrases: string[]) =>
+    request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bannedPhrases }),
+    }),
   cosreBriefingSettings: () => get<import('./types').CosreBriefingSettings>(`/api/ai/briefing`),
   putCosreBriefingSettings: (body: import('./types').CosreBriefingSettings) =>
     request<import('./types').CosreBriefingSettings>(`/api/ai/briefing`, {

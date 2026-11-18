@@ -238,6 +238,17 @@ func (v *answerVerifyTurn) setAnswer(tier, text string) {
 	v.mu.Unlock()
 }
 
+// entityNames — v0.10.2338: cevap dikişinin bulgu denetimi için turun ad
+// kanıtı + katalog (kopya; kanıtı değiştirmez).
+func (v *answerVerifyTurn) entityNames() []string {
+	if v == nil {
+		return nil
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return append(append([]string(nil), v.names...), v.catalog...)
+}
+
 // run — turun doğrulaması (anlatım yoksa ok=false: rapor, şablon, LLM'siz cevap).
 func (v *answerVerifyTurn) run() (verifyResult, bool) {
 	if v == nil {

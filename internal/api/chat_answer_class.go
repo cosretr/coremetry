@@ -211,6 +211,35 @@ type answerStyleTurn struct {
 	cap     int    // son uygulanan tavan (0 = yok)
 	rangeS  int64  // v0.10.2332 — guided anlatımın penceresi (0 = bilinmiyor)
 	slotSvc string // v0.10.2332 — durumun cevapladığı servis sorusu
+	// v0.10.2338 — cevap dikişi (answer_seam.go): taslak kapısı yalnız anlatım
+	// kademesi akarken; süzgeç yalnız modelin metnine (sunucu ekleri hariç).
+	narrating bool
+	modelText string
+}
+
+// markNarrating — anlatım kademesi (guided, genel cevap, döngü) başlıyor.
+func (t *answerStyleTurn) markNarrating() {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.narrating = true
+	t.mu.Unlock()
+}
+
+func (t *answerStyleTurn) isNarrating() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.narrating
+}
+
+// takeModelText — son anlatımın model metni (okununca sıfırlanır).
+func (t *answerStyleTurn) takeModelText() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	m := t.modelText
+	t.modelText = ""
+	return m
 }
 
 type answerStyleKey struct{}
@@ -269,6 +298,7 @@ func answerStyleNarration(ctx context.Context, c answerClass) (context.Context, 
 	if t == nil {
 		return ctx, ""
 	}
+	t.markNarrating() // v0.10.2338 — cevap dikişi
 	line, capTok := answerClassLines[c], answerClassCaps[c]
 	if !t.on || line == "" {
 		t.note(c, 0)
@@ -287,7 +317,8 @@ func answerStyleLoop(ctx context.Context, question string, st ChatContext, repor
 	}
 	c := answerClassHint(question, st, report)
 	t.mu.Lock()
-	t.rangeS = 0 // döngü penceresi model seçer; guided'ın penceresi bu cevabın değil
+	t.rangeS = 0       // döngü penceresi model seçer; guided'ın penceresi bu cevabın değil
+	t.narrating = true // v0.10.2338 — cevap dikişi
 	t.mu.Unlock()
 	capTok := 0
 	if t.on && answerClassLines[c] != "" {
@@ -316,13 +347,21 @@ func answerClassLoopPlan(ctx context.Context, p stepPlan) stepPlan {
 // answerEndClean — tavan uygulanmış turda modelin metni yarım cümleyle
 // bitiyorsa son tam cümlede keser (sunucu ekleri bundan SONRA gelir).
 // Tavansız turda metin aynen.
+// v0.10.2338 — dönen metin anlatım kademesinin MODEL metnidir; cevap dikişi
+// süzgeci yalnız onu görür (answer_seam.go).
 func answerEndClean(ctx context.Context, text string) string {
 	t := answerStyleFrom(ctx)
-	if t == nil || !t.on {
+	if t == nil {
 		return text
 	}
-	_, capTok := t.snapshot()
-	return endAtSentence(text, capTok)
+	if t.on {
+		_, capTok := t.snapshot()
+		text = endAtSentence(text, capTok)
+	}
+	t.mu.Lock()
+	t.modelText = text
+	t.mu.Unlock()
+	return text
 }
 
 // endAtSentence — SAF: metin tavana yakınsa (bayt ≥ tavan × 1,6 — 2 B/token'lık
@@ -381,27 +420,27 @@ func lastSentenceEnd(t string) int {
 // arrayFirst(t -> t.1 = 'answer_class', tools).
 const answerClassTool = "answer_class"
 
-// wrapEmit — "done"dan önce sınıf, anahtar açıksa turun etkileşim satırına
-// yazılır; v0.10.2332 — "answer" metninin başına varsayım cümlesi
-// (chat_answer_slot.go). Kapalıyken emit aynen.
+// wrapEmit — v0.10.2338: cevap dikişi (answer_seam.go) — v2 emit zincirinin en
+// dış sarıcısı. "done"dan önce sınıf, anahtar açıksa turun etkileşim satırına
+// yazılır (recordClass); "answer" metni süzülür ve başına varsayım cümlesi
+// gelir (chat_answer_slot.go). Kapalıyken emit aynen.
 func (t *answerStyleTurn) wrapEmit(ctx context.Context, emit func(string, any)) func(string, any) {
-	if t == nil || !t.on {
+	g := newAnswerSeam(ctx, t, emit)
+	if g == nil {
 		return emit
 	}
-	return func(kind string, payload any) {
-		if kind == "answer" {
-			clause := t.assumeClause()
-			t.noteAssumeEvidence(verifyTurnFrom(ctx), clause)
-			payload = withAssumeClause(payload, clause)
+	return g.emitFn
+}
+
+// recordClass — "done"dan önce sınıf adımı (anahtar açıkken).
+func (t *answerStyleTurn) recordClass(ctx context.Context) {
+	if t == nil || !t.on {
+		return
+	}
+	if c, _ := t.snapshot(); c != classNone {
+		if x := chatExchangeFrom(ctx); x != nil {
+			args, _ := json.Marshal(map[string]string{"class": string(c)})
+			x.noteStep(map[string]any{"tool": answerClassTool, "args": string(args), "i": -1}, time.Now())
 		}
-		if kind == "done" {
-			if c, _ := t.snapshot(); c != classNone {
-				if x := chatExchangeFrom(ctx); x != nil {
-					args, _ := json.Marshal(map[string]string{"class": string(c)})
-					x.noteStep(map[string]any{"tool": answerClassTool, "args": string(args), "i": -1}, time.Now())
-				}
-			}
-		}
-		emit(kind, payload)
 	}
 }

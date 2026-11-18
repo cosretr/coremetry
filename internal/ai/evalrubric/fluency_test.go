@@ -56,3 +56,19 @@ func TestBoilerplateListsMatchAuditS2(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.2338 (karar 9) — sunucu kalıbı: düz "Kaynak:" satırı sayılır, uyarılı
+// dürüstlük notu ve gövdedeki "Kaynak:" sözcüğü sayılmaz.
+func TestHasServerSourceLine(t *testing.T) {
+	for in, want := range map[string]bool{
+		"checkout sağlıklı.\n\nKaynak: servis RED özeti":                    true,
+		"Kaynak: get_service_health (1 araç)":                               true,
+		"checkout sağlıklı.\n\n⚠ Kaynak: hiçbir telemetri aracı çağrılmadı": false,
+		"Kaynak: satırı yok ama\nikinci satır var":                          false,
+		"checkout sağlıklı.":                                                false,
+	} {
+		if got := HasServerSourceLine(in); got != want {
+			t.Errorf("%q → %v", in, got)
+		}
+	}
+}

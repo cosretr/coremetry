@@ -63,9 +63,27 @@ type evalConvTurn struct {
 	// ayar). Yalnız bu konuşma kipi turunda okunur (answerStyleOn).
 	Style *bool
 
-	mu    sync.Mutex
-	calls []evalConvCall
-	class string // v0.10.2331 — turun cevap sınıfı (answerStyleTurn.note)
+	mu      sync.Mutex
+	calls   []evalConvCall
+	class   string // v0.10.2331 — turun cevap sınıfı (answerStyleTurn.note)
+	dropped int    // v0.10.2338 — cevap dikişinin sildiği model kalıp cümlesi
+}
+
+// noteSeamDropped — v0.10.2338 (D): dikişin sildiği kalıp cümle sayısı. nil-güvenli.
+func (t *evalConvTurn) noteSeamDropped(n int) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.dropped += n
+	t.mu.Unlock()
+}
+
+// seamDropped — v0.10.2338: turda silinen kalıp cümle.
+func (t *evalConvTurn) seamDropped() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.dropped
 }
 
 // noteAnswerClass — v0.10.2331: turun cevap sınıfı (son kademe kazanır). nil-güvenli.

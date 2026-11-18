@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -247,7 +248,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	}
 	a := nextAudit(t, s)
 	if a.Action != "settings.cosre_conversation.update" || a.TargetID != chstore.CosreConversationKey ||
-		a.Details != `{"before":{"state":true,"style":false,"verification":"shadow"},"after":{"state":false,"style":false,"verification":"shadow"}}` {
+		a.Details != `{"before":{"state":true,"style":false,"verification":"shadow","bannedPhrases":0},"after":{"state":false,"style":false,"verification":"shadow","bannedPhrases":0}}` {
 		t.Fatalf("audit = %+v", a)
 	}
 	// v0.10.2327 — verification bağlı: off (kill switch) ↔ shadow; state korunur.
@@ -255,7 +256,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if w.Code != http.StatusOK || chstore.CurrentCosreConversation().Verification != chstore.CosreVerifyOff || chstore.CurrentCosreConversation().State {
 		t.Fatalf("verification off PUT %d: %s", w.Code, w.Body)
 	}
-	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":false,"verification":"off"}`) {
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":false,"verification":"off",`) {
 		t.Fatalf("audit = %+v", a)
 	}
 	// v0.10.2331 — style bağlı (B): aç/kapa kabul; state ve verification korunur.
@@ -263,7 +264,23 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if cur := chstore.CurrentCosreConversation(); w.Code != http.StatusOK || !cur.Style || cur.State || cur.Verification != chstore.CosreVerifyOff {
 		t.Fatalf("style on PUT %d: %s", w.Code, w.Body)
 	}
-	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"off"}`) {
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"off",`) {
+		t.Fatalf("audit = %+v", a)
+	}
+	// v0.10.2338 — bannedPhrases (D): tam liste yazılır, tavan aşımı 400, diğer alanlar korunur.
+	many := make([]string, chstore.CosreBannedPhrasesMax+1)
+	for i := range many {
+		many[i] = fmt.Sprintf("ifade %d", i)
+	}
+	raw, _ := json.Marshal(map[string]any{"bannedPhrases": many})
+	if w := rulesDo(mux, "PUT", "/api/ai/cosre-conversation", string(raw), auth.RoleAdmin, ""); w.Code != http.StatusBadRequest {
+		t.Fatalf("41 ifade → %d", w.Code)
+	}
+	w = rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"bannedPhrases":["Sorunuzu inceledim"," "]}`, auth.RoleAdmin, "")
+	if cur := chstore.CurrentCosreConversation(); w.Code != http.StatusOK || len(cur.BannedPhrases) != 1 || !cur.Style || cur.Verification != chstore.CosreVerifyOff {
+		t.Fatalf("bannedPhrases PUT %d: %s", w.Code, w.Body)
+	}
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"off","bannedPhrases":1}`) {
 		t.Fatalf("audit = %+v", a)
 	}
 }

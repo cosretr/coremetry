@@ -199,6 +199,9 @@ type evalConvTurnResult struct {
 	AnswerClass string `json:"answerClass,omitempty"`
 	Style       string `json:"style,omitempty"`
 	StyleForced bool   `json:"styleForced,omitempty"`
+	// SeamDropped — v0.10.2338 (D): cevap dikişinin sildiği model kalıp cümlesi
+	// (ilk / son); akıcılık raporunun "model yazdı" oranı bunu da sayar.
+	SeamDropped int `json:"seamDropped,omitempty"`
 }
 
 // evalConvCase — SAF: vaka konuşma kipinde mi.
@@ -444,6 +447,7 @@ func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, 
 	tr.LoopRounds, tr.LoopToolCalls = int(o.Loop.Rounds), int(o.Loop.ToolCalls) // v0.10.2323
 	tr.LoopModelMs, tr.LoopToolMs, tr.TTFTMs = o.Loop.ModelMs, o.Loop.ToolMs, o.TTFTMs
 	tr.AnswerClass = ct.answerClass() // v0.10.2331
+	tr.SeamDropped = ct.seamDropped() // v0.10.2338
 	if !ok {
 		err = fmt.Errorf("sohbet handler'ı sonuç bildirmedi (HTTP %d)", w.status())
 		tr.Error = err.Error()

@@ -300,7 +300,7 @@ func TestAskTeamChipRoutesToTeamServices(t *testing.T) {
 // gövdeden geçer; team_services gövdesi eki kurar.
 func TestTeamOverviewWiring(t *testing.T) {
 	src := guidedSharedSource(t, "copilot_guided.go")
-	if !strings.Contains(src, `strings.TrimSpace(raw) + route.AnswerTail + "\n\nKaynak: "`) {
+	if !strings.Contains(src, `strings.TrimSpace(raw) + route.AnswerTail + guidedSourceNote(ctx, emit, sources)`) { // v0.10.2338 — künye guidedSourceNote'ta (üslup kapalıyken "\n\nKaynak: " aynen)
 		t.Error("route.AnswerTail anlatım ile Kaynak künyesi arasına girmiyor — ek cevaba ulaşmaz")
 	}
 	body := func(sig string) string {

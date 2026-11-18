@@ -14,6 +14,15 @@ import (
 // sourceLineRe — sunucunun eklediği son "Kaynak: …" satırı (S2: govde).
 var sourceLineRe = regexp.MustCompile(`\n+(\S+ )?Kaynak: [^\n]*$`)
 
+// serverSourceLineRe — v0.10.2338 (karar 9): sunucunun DÜZ "Kaynak: …" satırı
+// (uyarılı "⚠ Kaynak:" dürüstlük notu hariç) — sunucu kalıbı sayımı.
+var serverSourceLineRe = regexp.MustCompile(`(^|\n)Kaynak: [^\n]*$`)
+
+// HasServerSourceLine — v0.10.2338: cevap sunucunun düz "Kaynak:" satırıyla bitiyor.
+func HasServerSourceLine(answer string) bool {
+	return serverSourceLineRe.MatchString(strings.TrimSpace(answer))
+}
+
 // sentenceEndRe — S2 ort_cumle: `[.!?…](\s|$)`.
 var sentenceEndRe = regexp.MustCompile(`[.!?…](\s|$)`)
 

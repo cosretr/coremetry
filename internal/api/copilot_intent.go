@@ -484,13 +484,13 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 		const gtool = "general_answer"
 		gi := emitStepChipOrigin(emit, gtool, intentStepArgs(q), "intent")
 		gt0 := time.Now()
-		emit("delta", map[string]string{"text": intentGeneralNoteTR + "\n\n"})
+		emitGeneralNote(ctx, emit) // v0.10.2338 — D: v2+üslup açıkken not adım çipine (answer_seam.go)
 		var classLine string
 		ctx, classLine = answerStyleNarration(ctx, answerClassGeneral(q)) // v0.10.2331 — B; üslup kapalıyken ctx aynen, satır ""
 		graw, gerr := s.copilotStreamSurface(ctx, "chat-general", answerStyleGeneralPrompt(ctx, answerClassGeneral(q))+classLine, q,
 			func(d string) { emit("delta", map[string]string{"text": d}) })
 		graw = answerEndClean(ctx, graw)
-		text, general := intentGeneralAnswer(graw)
+		text, general := generalAnswerText(ctx, graw) // v0.10.2338 — üslup açıkken not metne girmez
 		// Akış ORTASINDA kopan çağrı (yerel model, kesik stream) metni TAŞIR
 		// (stream.go: "mid-stream hatası token sayılarını taşır"); operatörün
 		// ekranda gördüğü kısmi cevap redde çevrilmez — yalnız hiç metin
