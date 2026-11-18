@@ -1494,7 +1494,8 @@ export interface CopilotCodeRead { available: boolean; reason?: string; profileL
 /** v0.10.1138 — /api/copilot/config profil seçeneği (sırsız: id/label/model/açıklama). */
 export interface CopilotProfileOption { id: string; label?: string; model?: string; description?: string }
 /** Yüzey grubu → profil kimliği ('' = varsayılan). intent = chat-intent; background = *-auto-explain. */
-export interface AISurfaceMap { intent?: string; background?: string }
+/** v0.10.2365 (S6) — research: sohbetin araçlı araştırma turları (chat-research); boş = tek profil. */
+export interface AISurfaceMap { intent?: string; background?: string; research?: string }
 export interface AIModelProfileInput {
   label?: string;
   provider: AIProvider;

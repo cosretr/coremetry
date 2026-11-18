@@ -62,9 +62,9 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const defaultWarn = defaultRolesWarning(payload.profiles); // v0.10.1139
   const [tests, setTests] = useState<Record<string, AIProfileTestResult | 'pending'>>({});
-  const [surface, setSurface] = useState({ intent: payload.surfaceMap.intent ?? '', background: payload.surfaceMap.background ?? '' });
+  const [surface, setSurface] = useState({ intent: payload.surfaceMap.intent ?? '', background: payload.surfaceMap.background ?? '', research: payload.surfaceMap.research ?? '' });
   // silme/varsayılan sonrası sunucunun haritası yeniden yüklenir (bayat kimlik 400 verirdi, inceleme #4)
-  useEffect(() => { setSurface({ intent: payload.surfaceMap.intent ?? '', background: payload.surfaceMap.background ?? '' }); }, [payload.surfaceMap.intent, payload.surfaceMap.background]);
+  useEffect(() => { setSurface({ intent: payload.surfaceMap.intent ?? '', background: payload.surfaceMap.background ?? '', research: payload.surfaceMap.research ?? '' }); }, [payload.surfaceMap.intent, payload.surfaceMap.background, payload.surfaceMap.research]);
   const set = (patch: Partial<Draft>) => setDraft(d => (d ? { ...d, ...patch } : d));
 
   const run = async (fn: () => Promise<AIProfilesPayload>, ok: string) => {
@@ -102,7 +102,7 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
     try { const r = await api.testAIProfile(id); setTests(t => ({ ...t, [id]: r })); }
     catch (e) { setTests(t => ({ ...t, [id]: { ok: false, ms: 0, profile: id, error: e instanceof Error ? e.message : String(e) } })); }
   };
-  const saveSurface = () => run(() => api.putAISurfaceMap({ intent: surface.intent, background: surface.background }), 'Yüzey eşlemesi kaydedildi');
+  const saveSurface = () => run(() => api.putAISurfaceMap({ intent: surface.intent, background: surface.background, research: surface.research }), 'Yüzey eşlemesi kaydedildi');
   const options = payload.profiles.map(p => <option key={p.id} value={p.id}>{p.label || p.id}</option>);
 
   // Faz 2 dilim 1 R11 — hücreler coremetry DataTable'ın renderCell'inde (kolonlar,
@@ -182,6 +182,10 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
         </SelectField>
         <SelectField className="w-auto min-w-[200px] flex-1" label="Arka plan açıklayıcılar (auto-explain)" value={surface.background} onChange={e => setSurface(s => ({ ...s, background: e.target.value }))} hint="Problem/exception otomatik özetleri için profil; boş = varsayılan.">
           <option value="">varsayılan</option>{options}
+        </SelectField>
+        {/* v0.10.2365 (S6) — boş = sohbet tek profille koşar (bugünkü davranış). */}
+        <SelectField className="w-auto min-w-[200px] flex-1" label="Sohbet araştırması (chat-research)" value={surface.research} onChange={e => setSurface(s => ({ ...s, research: e.target.value }))} hint="Sohbetin araçlı araştırma turları bu profille koşar; cevabı sohbet profili yazar. Boş = ayrım yok, sohbet tek profille koşar.">
+          <option value="">eşleme yok</option>{options}
         </SelectField>
         <Button variant="outline" size="sm" disabled={busy} onClick={saveSurface}>Eşlemeyi kaydet</Button>
       </div>

@@ -33,6 +33,11 @@ type LoopUsage struct {
 	// CompactedResults — v0.10.2340: proaktif tur bütçesi tek bir model
 	// çağrısında kaç araç sonucunu tam göstermedi (alışverişin en büyüğü).
 	CompactedResults uint16
+	// ResearchModel / ResearchTokens — v0.10.2365 (S6): profil ayrımı eşliyken
+	// araştırma turlarının modeli ve giriş+çıkış token'ı (satırın model'i
+	// anlatım profilidir). "" / 0 = ayrım koşmadı.
+	ResearchModel  string
+	ResearchTokens uint32
 }
 
 // WithLoopUsage — sonraki RecordUsage'ın satırına tur bilgisini bağlar.

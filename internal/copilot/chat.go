@@ -87,6 +87,21 @@ func noToolCallsFrom(ctx context.Context) bool {
 	return v
 }
 
+type toollessKey struct{}
+
+// WithToolless — v0.10.2365 (S6): bu çağrı hiç araç sunmaz ve geçmişinde araç
+// mesajı yoktur (profil ayrımının anlatım çağrısı); boş araç listesinde gövde
+// "tools" alanını HİÇ taşımaz (bazı uçlar boş diziyi reddeder). İşaretsiz
+// ctx'te gövde bugünkü gibi.
+func WithToolless(ctx context.Context) context.Context {
+	return context.WithValue(ctx, toollessKey{}, true)
+}
+
+func toollessFrom(ctx context.Context) bool {
+	v, _ := ctx.Value(toollessKey{}).(bool)
+	return v
+}
+
 // NoToolCallsSet — agent-core S3: ctx WithNoToolCalls taşıyor mu (döngü
 // adım planının kimlik testleri; sağlayıcı yolu noToolCallsFrom'u okur).
 func NoToolCallsSet(ctx context.Context) bool { return noToolCallsFrom(ctx) }
@@ -194,6 +209,8 @@ func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, out
 		LoopMaxRoundToolCalls: lu.MaxRoundToolCalls,
 		LoopGatewayRetry:      lu.GatewayRetry,     // v0.10.2321
 		LoopCompactedResults:  lu.CompactedResults, // v0.10.2340
+		LoopResearchModel:     lu.ResearchModel,    // v0.10.2365
+		LoopResearchTokens:    lu.ResearchTokens,   // v0.10.2365
 	}
 	if status == "error" {
 		rec.ErrorMsg = truncErr(errMsg)
@@ -280,7 +297,8 @@ func chatRequest(ctx context.Context, req aiprov.Request, system string, msgs []
 		Messages:    msgs,
 		Tools:       tools,
 		NoToolCalls: noToolCallsFrom(ctx),
-		StrictTools: req.StrictTools, // v0.10.1456 (C1) — profil StrictToolArgs
+		StrictTools: req.StrictTools,   // v0.10.1456 (C1) — profil StrictToolArgs
+		OmitTools:   toollessFrom(ctx), // v0.10.2365 — S6 anlatım çağrısı
 	}
 }
 

@@ -2348,6 +2348,34 @@ topladığın veriyle şimdi cevap ver. Toplayamadığın kısmı açıkça beli
 // ChatRoundCapAddendum — yalnız tavan eki (systemChat'siz).
 func ChatRoundCapAddendum() string { return systemChatRoundCapAddendum }
 
+// systemChatNarrateAddendum — v0.10.2365 (investigation-design S6 §4.5):
+// profil ayrımında anlatım çağrısının istemine, sona (≤400 B; test pinler).
+// Anlatıcı araç görmez; girdisi kullanıcı mesajındaki bölümlerdir.
+const systemChatNarrateAddendum = `
+
+ANLATIM: araştırma tamamlandı; araç çağırmazsın. Cevabı kullanıcı mesajındaki bölümlerden yaz.
+Sayı, saat ve ad yalnız ÖZETLER'den gelir; BULGU NOTU araştırmacının taslağıdır, kanıt değildir.
+ÖZETLER'de olmayanı "bakamadım" diye söyle; SON KONUŞMA hitap ve devam içindir.`
+
+// ChatNarrateAddendum — anlatım çağrısının sistem eki.
+func ChatNarrateAddendum() string { return systemChatNarrateAddendum }
+
+// ChatNarrateUser — v0.10.2365: anlatım çağrısının TEK kullanıcı mesajı
+// (bölüm başlıkları ChatNarrateAddendum'la aynı adlar). Boş bölüm yazılmaz.
+func ChatNarrateUser(history, question, digests, note string) string {
+	var b strings.Builder
+	for _, sec := range [][2]string{{"SON KONUŞMA", history}, {"SORU", question}, {"ÖZETLER", digests}, {"BULGU NOTU", note}} {
+		if strings.TrimSpace(sec[1]) == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(sec[0] + ":\n" + strings.TrimSpace(sec[1]))
+	}
+	return b.String()
+}
+
 // systemChatInvestigateAddendum — v0.10.2361 (investigation-design S4 §4.3):
 // YALNIZ kanıt paketi koşan araştırma turunun istemine, sona (≤650 B; test
 // pinler). Taban istem ve üslup bütçeleri değişmez.

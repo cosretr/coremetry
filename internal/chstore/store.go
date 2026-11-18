@@ -3366,6 +3366,11 @@ func canonicalTables(sd, ld, md int) []string {
 		// v0.10.2340 — proaktif tur bütçesinin tam göstermediği araç sonucu
 		// sayısı (tek çağrıda en çok); aynı iki-boot sözleşmesi, AYRI probe.
 		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_compacted_results UInt16 DEFAULT 0`,
+		// v0.10.2365 (S6) — profil ayrımı: araştırma turlarının modeli ve
+		// token'ı (satırın model'i anlatım profili); aynı iki-boot sözleşmesi,
+		// AYRI probe (ikinci kolona bakar).
+		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_research_model String DEFAULT ''`,
+		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_research_tokens UInt32 DEFAULT 0`,
 
 		// rca_verdicts — kök-neden hakem kararının KALICI kaydı
 		// (v0.9.591). Öncesinde verdict istek başına üretilip
@@ -5283,6 +5288,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.probeAICallsTimingColumns(ctx)     // v0.10.2318
 	s.probeAICallsRetryColumn(ctx)       // v0.10.2321
 	s.probeAICallsCompactColumn(ctx)     // v0.10.2340
+	s.probeAICallsResearchColumn(ctx)    // v0.10.2365
 	s.probeAIFeedbackCallColumns(ctx)    // v0.10.1280
 	s.probeCosreInteractionsColumns(ctx) // v0.10.1280 tool_evidence; v0.10.1302 + toolset
 

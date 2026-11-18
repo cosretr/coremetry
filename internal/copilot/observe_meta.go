@@ -79,6 +79,7 @@ var promptVersionRegistry = map[string]string{
 	"chatDegenRetryAddendum":        chatDegenRetryAddendum,        // v0.10.1324 — yineleme sonrası araçsız deneme
 	"chatGeneralQuestionAddendum":   chatGeneralQuestionAddendum,   // v0.10.2123 — v2 döngüsü genel soru eki
 	"systemChatInvestigateAddendum": systemChatInvestigateAddendum, // v0.10.2361 — S4 araştırma turu bölümü
+	"systemChatNarrateAddendum":     systemChatNarrateAddendum,     // v0.10.2365 — S6 anlatım çağrısı
 	// CoSRE v2 araç seti dilim 2 — kullanıcı kapsamı ekleri (yalnız v2 döngüsü).
 	"chatUserScopeAddendumTmpl":          chatUserScopeAddendumTmpl,
 	"chatUserScopeAskTeamAddendum":       chatUserScopeAskTeamAddendum,

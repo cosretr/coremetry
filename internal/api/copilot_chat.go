@@ -815,7 +815,10 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			noteCodeRead(cst, emit) // v0.10.1465 — kod turu konuşmayı yapışkan yapar
 		}
 	}
+	psplit := s.planProfileSplit(ctx, &req, evm, cst.ctx, dm.On, isTraceFollowUp, ct.On, rtPlan != nil || req.Context.Explain != "") // v0.10.2365 — S6 (chat_profile_split.go); eşleme yoksa nil
+	ctx = withProfileSplit(ctx, psplit)
 	toolset := s.copilot.ToolsetFor(ctx)
+	toolset = psplit.toolsetFor(ctx, s, toolset) // S6 — ayrımda kataloğu araştırma profili görür
 	if evm != nil && evm.Toolset != "" {
 		toolset = evm.Toolset // v0.10.1316 — koşunun araç seti (çözüm ya da açık seçim)
 	}
@@ -893,6 +896,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// düşer — katalog ve döngü prompt'u o özellikler kapalıymış gibi bayt bayt.
 	var lo localOnlyChatDecision
 	ctx, lo = s.chatLocalOnly(ctx, tools)
+	splitDropped := psplit.dropForLocal(lo == localOnlyKeep || lo == localOnlySwitch) // v0.10.2365 — yerel profile sabit alışveriş ayrımsız
 	switch lo {
 	case localOnlyDrop:
 		tools = dropSensitiveChatTools(tools)
@@ -901,6 +905,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		// v0.10.1467 — geçiş görünür (kod turu kendi step'inde söyler; orada
 		// profil zaten yerel → buraya localOnlyKeep ile gelir, çift step yok).
 		emit("step", map[string]string{"label": localOnlySwitchLabel(s.chatProfileLabel(ctx))})
+	}
+	if lo == localOnlySwitch || splitDropped {
 		if evm == nil || evm.Toolset == "" {
 			if ts := s.copilot.ToolsetFor(ctx); ts != toolset {
 				toolset = ts
@@ -1151,6 +1157,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		dm.loopPrefix() + // v0.10.1150 — Derin kapalıyken ""
 		withAddressee(addressee, loopChatPromptFor(ctx)) + // v0.10.2337 — C: üslup açıkken biçim kuralsız varyant
 		stt.promptLine() // v0.10.2324 — konuşma durumu SONDA (değişken blok; kapalıyken "")
+	psplit.setNarrator(withAddressee(addressee, loopChatPromptFor(ctx)) + stt.promptLine()) // v0.10.2365 — anlatıcı: üslup çekirdeği + durum bloğu
 	// v0.10.1324 — yankı süzgecinin cümleleri loopPrompt'a giren AYNI önsöz
 	// kurucularından, aynı girdilerle (chatLoopPreambles) + tavan / yeniden
 	// deneme ekleri (chat_answer_degen.go).
@@ -1872,7 +1879,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// eklenir (explain yolunun sözleşmesi); okunmadıysa bayt bayt eski örnek.
 	// v0.10.2134 (router boşlukları D1) — ön-getirme / rota planı tohumlu döngü
 	// "chat-prefetch" yazar (boşluk sayılmaz); profil sabit, yalnız etiket.
-	s.copilot.RecordUsage(copilot.WithLoopUsage(copilot.WithCallID(s.loopRecordCtx(ctx, opPre != nil || rtPlan != nil), loopCallID), rbudget.mark(rretry.mark(cspan.withLoopTimes(loopRounds.usage())))), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
+	s.copilot.RecordUsage(copilot.WithLoopUsage(copilot.WithCallID(s.loopRecordCtx(ctx, opPre != nil || rtPlan != nil), loopCallID), psplit.mark(rbudget.mark(rretry.mark(cspan.withLoopTimes(loopRounds.usage()))))), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
 
 	if exitReason == stopNone {
 		exitReason = stopRoundCap // savunma: döngü break'siz yalnız turlar bitince biter

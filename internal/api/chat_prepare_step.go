@@ -156,6 +156,14 @@ func narrowSpecs(full, subset []copilot.ToolSpec, conv []copilot.ChatMessage) []
 // loopTurn — döngünün TEK model-çağrı kapısı: plan → ctx, prompt eki, spec.
 // Turun gerçek sistem prompt'u da döner (cevap süzgeci/düşüş onu yeniden kullanır).
 func (s *Server) loopTurn(ctx context.Context, prompt string, in stepInput, emit func(string, any)) (copilot.ChatTurn, string, error) {
+	if turn, sys, err, done := s.splitLoopTurn(ctx, prompt, in, emit); done { // v0.10.2365 — S6 profil ayrımı (chat_profile_split.go); eşleme yoksa geçer
+		return turn, sys, err
+	}
+	return s.loopTurnOne(ctx, prompt, in, emit)
+}
+
+// loopTurnOne — tek profilli model turu (bugünkü yol).
+func (s *Server) loopTurnOne(ctx context.Context, prompt string, in stepInput, emit func(string, any)) (copilot.ChatTurn, string, error) {
 	prep := defaultPrepare
 	if in.V2 = v2LoopPlanFrom(ctx); in.V2 != nil {
 		prep = v2Prepare // araç seti dilim 2 — v2 alt kümesi + kapsam eki

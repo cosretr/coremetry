@@ -780,6 +780,10 @@ func (s *Service) ProfileIDs() []string {
 const (
 	SurfaceGroupIntent     = "intent"
 	SurfaceGroupBackground = "background"
+	// SurfaceGroupResearch — v0.10.2365 (S6, karar 21): sohbet döngüsünün
+	// araçlı araştırma turları; anlatım "chat"te kalır. Eşlenmemişse tek profil.
+	SurfaceGroupResearch = "research"
+	SurfaceChatResearch  = "chat-research"
 )
 
 var surfaceGroups = map[string][]string{
@@ -787,6 +791,22 @@ var surfaceGroups = map[string][]string{
 	// v0.10.1287 — AI SRE araştırma anlatımı da arka plan çağrısı: Ayarlar'daki
 	// "arka plan" profili onu da taşır (kayıtlı eski haritada kardeş geri düşüşü).
 	SurfaceGroupBackground: {"problem-auto-explain", "exception-auto-explain", "sre-investigation"},
+	SurfaceGroupResearch:   {SurfaceChatResearch},
+}
+
+// MappedSurfaceProfile — v0.10.2365 (S6): yüzeyin haritada AÇIKÇA eşlendiği
+// ve hâlâ kayıtlı profil; eşleme yoksa "" (varsayılana / kardeşe düşmez —
+// SurfaceProfileID'nin aksine). Profil ayrımı yalnız açık eşlemeyle açılır.
+func (s *Service) MappedSurfaceProfile(surface string) string {
+	if s == nil {
+		return ""
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if id := s.surfaceProfiles[surface]; id != "" && s.profiles[id] != nil {
+		return id
+	}
+	return ""
 }
 
 // ProbeProfile — bağlantı yoklaması: ana anahtar KAPALIYKEN ve varsayılan

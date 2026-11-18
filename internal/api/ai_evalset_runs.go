@@ -131,6 +131,9 @@ type evalJob struct {
 	styleOverride *bool
 	// verifyOverride — v0.10.2339 (E2): koşunun doğrulama zorlaması ("" = vaka / canlı ayar).
 	verifyOverride string
+	// researchProfile — v0.10.2365 (S6): konuşma kipi turlarında profil ayrımının
+	// araştırma profili ("" = ayrım yok). Yalnız değerlendirmede okunur.
+	researchProfile string
 }
 
 type evalJobBook struct {
@@ -333,6 +336,9 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 		// kipini (off | shadow | enforce) YALNIZ bu koşu için zorlar; yok =
 		// vakanın kendi zorlaması ya da canlı ayar.
 		Verification string `json:"verification"`
+		// ResearchProfile — v0.10.2365 (S6): konuşma kipi turları "bu profil
+		// araştırır → koşunun profili anlatır" düzeninde koşar; yok = tek profil.
+		ResearchProfile string `json:"researchProfile"`
 	}
 	// Boş gövde = tümü (FE düğmesi seçim yokken gövdesiz gönderebilir).
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
@@ -361,6 +367,13 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 	for _, p := range profiles {
 		if err := s.copilot.CheckProfileAccess(p, role); err != nil {
 			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("profil %q kullanılamıyor: %v", p, err))
+			return
+		}
+	}
+	in.ResearchProfile = strings.TrimSpace(in.ResearchProfile)
+	if in.ResearchProfile != "" {
+		if err := s.copilot.CheckProfileAccess(in.ResearchProfile, role); err != nil {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("araştırma profili %q kullanılamıyor: %v", in.ResearchProfile, err))
 			return
 		}
 	}
@@ -436,8 +449,9 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 	runCtx, release := context.WithTimeout(runCtx, deadline)
 	job := &evalJob{row: row, plan: cases, cancel: cancel, deadline: deadline, userID: uid, userEmail: email, userRole: role,
 		toolsetOverride: in.Toolset, toolset: s.evalRunToolset(cases, in.Toolset)} // v0.10.1311
-	job.styleOverride = in.Style         // v0.10.2331
-	job.verifyOverride = in.Verification // v0.10.2339
+	job.styleOverride = in.Style             // v0.10.2331
+	job.verifyOverride = in.Verification     // v0.10.2339
+	job.researchProfile = in.ResearchProfile // v0.10.2365
 	evalJobs.running = job
 	sum := job.summaryLocked()
 	first := job.rowLocked(false)

@@ -112,6 +112,41 @@ type roundBudget struct {
 
 	peakTrimmed           uint16 // tek çağrıda tam görülmeyen sonuç sayısının en büyüğü
 	chipStubbed, chipDrop int    // son yayınlanan adım satırı
+
+	// v0.10.2365 (S6) — pencere ve kalibrasyon PROFİL BAŞINA: profil ayrımı
+	// eşliyken araştırma ve sohbet profili aynı alışverişte farklı pencerede
+	// koşar. profile = şu anki çözüm; others = öteki profillerin saklı hâli.
+	// Tek profilli alışverişte others hep boş (davranış bayt aynı).
+	profile string
+	others  map[string]roundBudgetCal
+}
+
+// roundBudgetCal — bir profilin pencere + kalibrasyon durumu.
+type roundBudgetCal struct {
+	resolved          bool
+	window            int
+	prevIn, prevBytes int
+	bpt               float64
+	lastOverflow      bool
+}
+
+// useProfile — v0.10.2365: çözülen profil değiştiyse öncekinin durumu saklanır,
+// yenininki (yoksa sıfır = yeniden çözülür) yüklenir. İlk çağrı yalnız adı yazar.
+func (b *roundBudget) useProfile(id string) {
+	if id == b.profile {
+		return
+	}
+	if b.profile == "" && !b.resolved {
+		b.profile = id
+		return
+	}
+	if b.others == nil {
+		b.others = map[string]roundBudgetCal{}
+	}
+	b.others[b.profile] = roundBudgetCal{b.resolved, b.window, b.prevIn, b.prevBytes, b.bpt, b.lastOverflow}
+	c := b.others[id]
+	b.profile = id
+	b.resolved, b.window, b.prevIn, b.prevBytes, b.bpt, b.lastOverflow = c.resolved, c.window, c.prevIn, c.prevBytes, c.bpt, c.lastOverflow
 }
 
 type roundBudgetKey struct{}
@@ -130,6 +165,9 @@ func (s *Server) fitRoundBudget(ctx context.Context, emit func(string, any), sys
 	b := roundBudgetFrom(ctx)
 	if b == nil {
 		return conv
+	}
+	if s != nil && s.copilot != nil {
+		b.useProfile(s.copilot.ProfileIDFor(ctx)) // v0.10.2365 — profil başına pencere
 	}
 	if !b.resolved {
 		b.resolved = true

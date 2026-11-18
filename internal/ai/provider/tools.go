@@ -106,6 +106,10 @@ type ChatRequest struct {
 	NoToolCalls bool
 	// StrictTools — v0.10.1456: bkz. Request.StrictTools (yalnız openai-uyumlu gövde).
 	StrictTools bool
+	// OmitTools — v0.10.2365 (S6 anlatımı): Tools boşken gövde "tools" alanını
+	// hiç taşımaz. Yalnız araç geçmişi olmayan araçsız çağrı kurar; false =
+	// bugünkü şekil (boş dizi).
+	OmitTools bool
 }
 
 // ChatResponse — çözümlenmiş tur. ToolCalls doluysa çağıran onları
@@ -240,6 +244,9 @@ func buildAnthropicToolsBody(cfg Config, req ChatRequest) map[string]any {
 		"system":        []map[string]any{{"type": "text", "text": req.System, "cache_control": map[string]any{"type": "ephemeral"}}},
 		"cache_control": map[string]any{"type": "ephemeral"},
 		"messages":      apiMsgs, "tools": apiTools,
+	}
+	if req.OmitTools && len(req.Tools) == 0 {
+		delete(body, "tools") // v0.10.2365
 	}
 	if req.NoToolCalls && len(apiTools) > 0 {
 		// Tur tavanı: tanımlar kalır (geçmişteki tool_use/tool_result bloklarının
@@ -454,6 +461,9 @@ func buildOpenAIToolsBody(cfg Config, req ChatRequest, fallbackModel string, too
 		// v0.9.1120 — iki sabit de getter'a döndü.
 		"max_tokens": req.resolvedMaxTokens(),
 		"messages":   apiMsgs, "tools": apiTools,
+	}
+	if req.OmitTools && len(req.Tools) == 0 {
+		delete(body, "tools") // v0.10.2365
 	}
 	if req.NoToolCalls && len(apiTools) > 0 {
 		// Tur tavanı, barındırılan uç: boş tools dizisi burada 400 alır;

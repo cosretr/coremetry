@@ -206,6 +206,10 @@ type evalConvTurnResult struct {
 	OutputTokens    uint32         `json:"outputTokens"`
 	LatencyMs       int64          `json:"latencyMs"`
 	Toolset         string         `json:"toolset,omitempty"`
+	// v0.10.2365 (S6) — koşunun araştırma profili ve ayrımın sinyalleri
+	// (research_no_tools / research_fallback / narrate_fallback).
+	ResearchProfile string   `json:"researchProfile,omitempty"`
+	Split           []string `json:"split,omitempty"`
 	// v0.10.2323 — v0.10.2318 döngü telemetrisi (ai_calls: ttft_ms,
 	// loop_model_ms, loop_tool_ms, loop_tool_calls; tur sayısı model_rounds).
 	// 0 = bilinmiyor (döngü koşmadı ya da akış yok).
@@ -463,7 +467,11 @@ func (s *Server) runEvalConvTurn(ctx context.Context, job *evalJob, c evalCase, 
 		Toolset: job.toolsetOverride, // "" = canlı çözüm (profilin araç seti)
 		OnTurn:  col.onTurn, OnTool: col.onTool, Sink: col.sink, OnCatalog: col.onCatalog,
 		Conversation: ct,
+		// v0.10.2365 (S6) — "B araştırır → A anlatır" sütunu; sinyaller tura yazılır.
+		ResearchProfile: job.researchProfile,
+		OnSplit:         func(sig string) { tr.Split = append(tr.Split, sig) },
 	}
+	tr.ResearchProfile = job.researchProfile
 	cctx := copilot.WithRecordSurfacePrefix(ctx, evalsetSurfacePrefix)
 	cctx = auth.ContextWithClaims(cctx, &auth.Claims{UserID: job.userID, Email: job.userEmail, Role: job.userRole})
 	cctx = withChatEvalMode(cctx, em)

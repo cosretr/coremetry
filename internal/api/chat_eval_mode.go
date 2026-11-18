@@ -75,6 +75,13 @@ type chatEvalMode struct {
 	// bu takımdan çözülür. "" = üretim yolu (koşuyu başlatanın takımı).
 	// v0.10.2106 — v2 işareti artık buna bağlı değil (her ajan vakası v2).
 	UserTeam string
+	// ResearchProfile — v0.10.2365 (S6): koşunun researchProfile alanı; doluysa
+	// profil ayrımı bu profille araştırır (canlı chat-research eşlemesi
+	// değerlendirmede okunmaz). "" = ayrım yok.
+	ResearchProfile string
+	// OnSplit — ayrımın sinyalleri (research_no_tools / research_fallback /
+	// narrate_fallback). nil = bildirim yok.
+	OnSplit func(signal string)
 	// OnScope — v2 döngüsünün çözdüğü kullanıcı kapsamı (puanlama: her çağrının
 	// services ⊆ kapsam). nil = bildirim yok.
 	OnScope func(userScope)

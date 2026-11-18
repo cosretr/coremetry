@@ -603,3 +603,19 @@ func TestChatToolsNilHTTPClientRejected(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.2365 (S6) — OmitTools: araçsız anlatım çağrısında alan hiç yok; bayrak
+// yokken boş dizi sözleşmesi (yukarıdaki test) aynen.
+func TestChatToolsOmitToolsDropsField(t *testing.T) {
+	req := ChatRequest{System: "sys", Messages: []ChatMessage{{Role: "user", Text: "q"}}, OmitTools: true}
+	if _, ok := buildOpenAIToolsBody(Config{}, req, "m", false)["tools"]; ok {
+		t.Fatal("openai: tools alanı düşmeli")
+	}
+	if _, ok := buildAnthropicToolsBody(Config{}, req)["tools"]; ok {
+		t.Fatal("anthropic: tools alanı düşmeli")
+	}
+	req.Tools = []ToolSpec{{Name: "x"}}
+	if _, ok := buildOpenAIToolsBody(Config{}, req, "m", false)["tools"]; !ok {
+		t.Fatal("araç varken alan kalmalı")
+	}
+}
