@@ -35,6 +35,23 @@ func TestParseCosreConversation(t *testing.T) {
 	}
 }
 
+// v0.10.2353 (I5) — interaction: off | on, varsayılan ve bilinmeyen değer off.
+func TestParseCosreConversationInteraction(t *testing.T) {
+	for raw, want := range map[string]string{
+		"": CosreInteractionOff, `{}`: CosreInteractionOff, `{"interaction":"on"}`: CosreInteractionOn,
+		`{"interaction":"off"}`: CosreInteractionOff, `{"interaction":"shadow"}`: CosreInteractionOff,
+	} {
+		if got, ok := parseCosreConversation([]byte(raw)); !ok || got.Interaction != want {
+			t.Fatalf("%q → %+v", raw, got)
+		}
+	}
+	SetCosreConversation(CosreConversation{State: true, Verification: CosreVerifyShadow, Interaction: "x"})
+	t.Cleanup(func() { SetCosreConversation(DefaultCosreConversation()) })
+	if CurrentCosreConversation().Interaction != CosreInteractionOff {
+		t.Fatal("geçersiz interaction off'a düşmeli")
+	}
+}
+
 func TestCosreConversationDefaultStateOn(t *testing.T) {
 	if d := DefaultCosreConversation(); !d.State || d.Style || d.Verification != CosreVerifyShadow {
 		t.Fatalf("varsayılan %+v", d)

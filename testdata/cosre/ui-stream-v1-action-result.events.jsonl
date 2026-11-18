@@ -1,0 +1,2 @@
+{"kind": "action-result", "payload": {"kind": "share_link", "status": "done", "exchangeId": "x-action-2", "link": "/cosre/shared/c-1?t=sek"}}
+{"kind": "done", "payload": {"ok": true}}

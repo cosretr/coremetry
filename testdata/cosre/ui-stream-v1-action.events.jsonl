@@ -1,0 +1,5 @@
+{"kind": "step", "payload": {"i": 1, "tool": "get_service_health", "args": "{\"service\":\"checkout\"}", "argsJson": {"service": "checkout"}, "phase": "Sağlık"}}
+{"kind": "step-result", "payload": {"i": 1, "tool": "get_service_health", "ok": true, "preview": "{\"p95_ms\":870}", "truncated": false, "bytes": 14, "durationMs": 30}}
+{"kind": "answer", "payload": {"text": "checkout son bir saatte yavaş: p95 870 ms. Hata oranı %2,6."}}
+{"kind": "action", "payload": {"kind": "problem_note", "exchangeId": "x-action-1", "token": "tok.sig", "label": "Probleme not olarak ekle", "expiresAt": 1794917200000, "problemId": "P-42", "cluster": "c-east", "namespace": "shop", "fields": {"title": "CoSRE bulgusu — checkout", "service": "checkout", "window": "son 1 saat", "summary": "checkout son bir saatte yavaş: p95 870 ms. Hata oranı %2,6.", "evidence": ["s1 get_service_health"]}}}
+{"kind": "done", "payload": {"ok": true}}

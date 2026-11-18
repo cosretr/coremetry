@@ -1,0 +1,12 @@
+data: {"messageId":"01M62F9N000000000000000000","type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"data":{"exchangeId":"x-action-2","kind":"share_link","link":"/cosre/shared/c-1?t=sek","status":"done"},"id":"act-share_link-result","type":"data-action-result"}
+
+data: {"type":"finish-step"}
+
+data: {"finishReason":"stop","type":"finish"}
+
+data: [DONE]
+

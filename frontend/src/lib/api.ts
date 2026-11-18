@@ -1420,6 +1420,20 @@ export const api = {
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style }),
     }),
+  // v0.10.2353 — I5: onaylı aksiyon kartı anahtarı (off | on; varsayılan off).
+  putCosreConversationInteraction: (interaction: 'off' | 'on') =>
+    request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interaction }),
+    }),
+  // v0.10.2353 — onaylı aksiyon kartı: onay (data-action-result parçası döner) ve iptal (yalnız sinyal).
+  confirmCosreAction: (body: { token: string; kind: import('./types').CosreActionKind; idemKey: string; conversationId?: string; fields: import('./types').CosreActionFields }) =>
+    request<{ type: string; id?: string; data?: unknown }>('/api/cosre/actions/confirm', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }),
+  cancelCosreAction: (body: { token: string; kind: import('./types').CosreActionKind }) =>
+    request<{ ok: boolean }>('/api/cosre/actions/cancel', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }),
   // v0.10.2338 — D: kalıp açılış/kapanış listesine ek ifadeler (tam liste yazılır).
   putCosreConversationBannedPhrases: (bannedPhrases: string[]) =>
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {

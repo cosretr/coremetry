@@ -11,7 +11,7 @@
 // uiStreamFixture.test.ts (paylaşılan testdata/cosre/*.sse) kırmızıya döner;
 // fixture yenilendiği commit'te bu dosya da güncellenir.
 
-import type { CosreApproval, CosreConvState, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreQuestion, CosreQuestionKind, CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { CosreActionCard, CosreActionFields, CosreActionKind, CosreActionResult, CosreApproval, CosreConvState, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreQuestion, CosreQuestionKind, CosreScope, CosreScopeReason, CosreStop, CosreStopReason, CosreToolResult, CosreToolResultKind } from '@/lib/types';
 
 export const PROTOCOL_VERSION = 'v1';
 export const PROTOCOL_HEADER = 'x-vercel-ai-ui-message-stream';
@@ -57,6 +57,9 @@ export const DATA_PART_NAMES = [
   // v0.10.2333 (conversation-audit §6.1 F1) — araç turunun ara durum cümlesi;
   // transient (yalnız onData, mesaja/arşive girmez).
   'status',
+  // v0.10.2353 (interaction-audit §6 I5) — onaylı aksiyon kartı (yalnız sunucu
+  // kuralı önerir) + onay ucunun sonucu (istemci mesaja ekler).
+  'action', 'action-result',
   ...BLOCK_TYPES.map(t => `block-${t}` as const),
 ] as const;
 
@@ -300,4 +303,49 @@ export function parseDataState(p: { type: string; data?: unknown }): CosreConvSt
     out.offer = { kind: d.offer.kind as string, ...(optStr(d.offer.label) ? { label: d.offer.label as string } : {}), ...(at2 ? { at: at2 } : {}) };
   }
   return out;
+}
+
+/** v0.10.2353 — data-action kind kapalı kümesi (Go uistream.ActionKinds; prod'a dokunan tür yok). */
+export const ACTION_KINDS = ['share_link', 'problem_note'] as const satisfies readonly CosreActionKind[];
+/** v0.10.2353 — data-action-result status kapalı kümesi (Go uistream.ActionResultStatuses). */
+export const ACTION_RESULT_STATUSES = ['done', 'needs_save'] as const satisfies readonly CosreActionResult['status'][];
+
+const isActionKind = (v: unknown): v is CosreActionKind => (ACTION_KINDS as readonly unknown[]).includes(v);
+const innerPath = (v: unknown): v is string => typeof v === 'string' && v.startsWith('/') && !v.startsWith('//') && !v.startsWith('/\\');
+
+/** v0.10.2353 — data-action → CosreActionCard; bilinmeyen kind, boş jeton /
+ *  alışveriş, sayı olmayan expiresAt ya da başlıksız alanlar null (kart çizilmez). */
+export function parseDataAction(p: { type: string; data?: unknown }): CosreActionCard | null {
+  if (p.type !== 'data-action' || !isRecord(p.data)) return null;
+  const d = p.data;
+  const exp = finiteNum(d.expiresAt);
+  if (!isActionKind(d.kind) || !optStr(d.token) || !optStr(d.exchangeId) || exp === undefined || !isRecord(d.fields)) return null;
+  const f = d.fields;
+  if (!optStr(f.title)) return null;
+  const fields: CosreActionFields = {
+    title: f.title as string, summary: typeof f.summary === 'string' ? f.summary : '',
+    ...(optStr(f.service) ? { service: f.service as string } : {}), ...(optStr(f.window) ? { window: f.window as string } : {}),
+    ...(Array.isArray(f.evidence) ? { evidence: f.evidence.filter((x): x is string => typeof x === 'string' && x !== '') } : {}),
+  };
+  if (d.kind === 'problem_note' && !optStr(d.problemId)) return null;
+  return {
+    kind: d.kind, token: d.token as string, exchangeId: d.exchangeId as string, expiresAt: exp, fields,
+    label: optStr(d.label) ?? '',
+    ...(optStr(d.problemId) ? { problemId: d.problemId as string } : {}),
+    ...(optStr(d.cluster) ? { cluster: d.cluster as string } : {}),
+    ...(optStr(d.namespace) ? { namespace: d.namespace as string } : {}),
+  };
+}
+
+/** v0.10.2353 — data-action-result → CosreActionResult; dış / biçimsiz link düşer. */
+export function parseDataActionResult(p: { type: string; data?: unknown }): CosreActionResult | null {
+  if (p.type !== 'data-action-result' || !isRecord(p.data)) return null;
+  const d = p.data;
+  if (!isActionKind(d.kind) || !(ACTION_RESULT_STATUSES as readonly unknown[]).includes(d.status)) return null;
+  return {
+    kind: d.kind, status: d.status as CosreActionResult['status'],
+    ...(innerPath(d.link) ? { link: d.link } : {}),
+    ...(optStr(d.noteId) ? { noteId: d.noteId as string } : {}),
+    ...(optStr(d.exchangeId) ? { exchangeId: d.exchangeId as string } : {}),
+  };
 }

@@ -81,11 +81,19 @@ const (
 	// oyu DEĞİL). Ayrıntı yalnız "kind=service" — deyim ve kullanıcı yok; puana
 	// ve değerlendirme etiketlerine girmez.
 	SigAliasSaved = "alias_saved"
+	// SigActionConfirm / SigActionCancel — v0.10.2353 (interaction-audit §5,
+	// I4 eylem kısmı): kullanıcı onaylı aksiyon kartını onayladı / iptal etti
+	// (api/cosre_actions.go yazar; ayrıntı {"kind","result"} JSON). Açık
+	// talimat, kalite oyu DEĞİL: Weight 0 ve DeriveSignals okumaz (istemci
+	// kümesi dışı) → gece puanına ve değerlendirme adayı seçimine girmez.
+	SigActionConfirm = "action_confirm"
+	SigActionCancel  = "action_cancel"
 )
 
 // SystemSignalKinds — sunucunun yazabileceği kapalı küme.
 var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrected: true, SigBriefingAsk: true,
-	SigVerifyMismatch: true, SigAliasSaved: true} // v0.10.2327, v0.10.2334
+	SigVerifyMismatch: true, SigAliasSaved: true, // v0.10.2327, v0.10.2334
+	SigActionConfirm: true, SigActionCancel: true} // v0.10.2353
 
 // SystemSignalActor — sistem sinyallerinin user_email değeri (kullanıcı değil).
 const SystemSignalActor = "system:cosre"
@@ -133,6 +141,10 @@ var Weight = map[string]float64{
 	SigNoEvidence: -0.25,
 	SigThumbsDown: -0.15, // v0.10.1281 — bkz. SigThumbsUp notu
 	SigUngrounded: -0.30,
+
+	// v0.10.2353 — aksiyon kartı sinyalleri etiket değil (ağırlık 0, pin).
+	SigActionConfirm: 0,
+	SigActionCancel:  0,
 }
 
 const (

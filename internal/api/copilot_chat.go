@@ -431,7 +431,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	ctx = withAnswerStyle(ctx, stt)                 // v0.10.2331 — B: cevap sınıfı (chat_answer_class.go); v1'de ctx aynen
 	emit = answerStyleFrom(ctx).wrapEmit(ctx, emit) // v0.10.2331 — üslup kapalıyken emit aynen
-	xch.verify.noteState(cst)                       // v0.10.2327 — durum adları + önceki defter (istemci yankısı hariç)
+	// v0.10.2353 — I5 onaylı aksiyon kartı (chat_action_card.go); interaction kapalıyken emit aynen.
+	emit = s.beginChatActionTurn(ctx, exchangeID, agentctx.Sanitize(req.Context.Page)).wrapEmit(ctx, emit)
+	xch.verify.noteState(cst) // v0.10.2327 — durum adları + önceki defter (istemci yankısı hariç)
 	// v0.10.1465 — yapışkan kod konuşması (chat_code_sticky.go): kod okunmuş
 	// konuşmanın HER turu her kademeden önce yerel profile sabitlenir; yerel
 	// profil yoksa dürüst kapalı cevap, sağlayıcı çağrısı yok.
@@ -1564,7 +1566,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			srcs := stepSourceStatuses(tr.Content)
 			// v0.10.1169 — problem sayfasında başarılı tool sonucu → "probleme not" aksiyonu
 			// (yalnız sunucu tarafı türetim; chat_actions.go problemNoteAction).
-			if !tr.IsError && !noteOffered && pageCtx != nil && !stepSourcesAllFailed(srcs) {
+			// v0.10.2353 — interaction açıkken yerini onaylı aksiyon kartı alır (chat_action_card.go).
+			if !tr.IsError && !noteOffered && pageCtx != nil && !stepSourcesAllFailed(srcs) && !cosreInteractionOn(ctx) {
 				if noteAct, ok := s.problemNoteAction(ctx, pageCtx.ProblemID, tc.Name, tr.Content); ok {
 					noteOffered = true
 					emit("block", blockSeq.Next(blocks.TypeAction, noteAct))

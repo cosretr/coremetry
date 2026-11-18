@@ -51,6 +51,13 @@ export const CONVERSATION_STYLE_HINT =
   + 'araç çalışırken kısa ara durum cümlesi. Raporlar (servis raporu, kaynak incelemesi, trace açıklaması, rota incelemesi) bugünkü gibi kalır. '
   + 'Kapalıyken cevaplar bugünkü gibidir. Değerlendirme koşusunda kullanıcılara dokunmadan açık / kapalı denenebilir.';
 
+// v0.10.2353 (interaction-audit §6 I5) — etkileşim anahtarı: varsayılan KAPALI.
+export const CONVERSATION_INTERACTION_HINT =
+  'Açıkken CoSRE v2, araçla doğrulanmış bir cevabın altına onaylı aksiyon kartı ekler: problem sayfasında '
+  + '(editör ve admin) "probleme not", diğer durumlarda "paylaşım bağlantısı". Kart alanları doldurulmuş gelir, '
+  + 'düzenlenebilir; Onayla\'ya basmadan hiçbir şey yazılmaz. Model aksiyon öneremez, kartı yalnız sunucu kuralı ekler. '
+  + 'Kapalıyken kart çıkmaz ve onay ucu kapalıdır.';
+
 // v0.10.2338 (audit §6.1 D) — cevap dikişinin kalıp listesi: varsayılan liste
 // sunucuda (evalrubric, tek kaynak); buradaki ifadeler onu GENİŞLETİR. Sunucu
 // tavanları: en çok 40 ifade, her biri ≤80 bayt (chstore.NormalizeCosreBannedPhrases).
@@ -132,6 +139,10 @@ export function CosreConversationLine() {
     mutationFn: (style: boolean) => api.putCosreConversationStyle(style),
     onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
   });
+  const im = useMutation({ // v0.10.2353 — I5 onaylı aksiyon kartı
+    mutationFn: (on: boolean) => api.putCosreConversationInteraction(on ? 'on' : 'off'),
+    onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
+  });
   if (q.isPending) return <div className="mb-2"><Spinner label="Konuşma durumu ayarı okunuyor…" /></div>;
   if (q.isError) {
     return (
@@ -144,7 +155,8 @@ export function CosreConversationLine() {
   const on = pending && 'state' in pending ? pending.state : q.data.state;
   const verify: VerifyMode = pending && 'verification' in pending ? pending.verification : q.data.verification;
   const styleOn = sm.isPending ? sm.variables === true : q.data.style;
-  const saveErr = m.error ?? sm.error;
+  const interactionOn = im.isPending ? im.variables === true : q.data.interaction === 'on';
+  const saveErr = m.error ?? sm.error ?? im.error;
   return (
     <div className="mb-2 flex flex-col gap-2" data-testid="cosre-conversation-line">
       <div className="flex flex-wrap items-center gap-3">
@@ -171,9 +183,15 @@ export function CosreConversationLine() {
           checked={styleOn}
           disabled={!canEdit || sm.isPending}
           onCheckedChange={v => sm.mutate(v)} />
+        <CheckboxField
+          label="Etkileşim (CoSRE v2: onaylı aksiyon kartı)"
+          hint={CONVERSATION_INTERACTION_HINT}
+          checked={interactionOn}
+          disabled={!canEdit || im.isPending}
+          onCheckedChange={v => im.mutate(v)} />
         {!canEdit && <span className="field-hint">Yalnız admin değiştirebilir.</span>}
-        {(m.isPending || sm.isPending) && <Spinner label="Kaydediliyor…" />}
-        {(m.isError || sm.isError) && (
+        {(m.isPending || sm.isPending || im.isPending) && <Spinner label="Kaydediliyor…" />}
+        {(m.isError || sm.isError || im.isError) && (
           <span role="alert" className="text-[length:var(--fs-sm)] text-(--err)">
             Kaydedilemedi{saveErr instanceof Error && saveErr.message ? `: ${saveErr.message}` : ''}
           </span>

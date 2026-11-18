@@ -14,6 +14,7 @@ const m = vi.hoisted(() => ({
   putVerify: vi.fn((verification: string) => Promise.resolve({ state: true, style: false, verification })),
   putStyle: vi.fn((style: boolean) => Promise.resolve({ state: true, style, verification: 'shadow' })),
   putBanned: vi.fn((bannedPhrases: string[]) => Promise.resolve({ state: true, style: true, verification: 'shadow', bannedPhrases })),
+  putInteraction: vi.fn((interaction: string) => Promise.resolve({ state: true, style: false, verification: 'shadow', interaction })),
 }));
 vi.mock('@/lib/api', () => ({
   api: {
@@ -22,6 +23,7 @@ vi.mock('@/lib/api', () => ({
     putCosreConversationVerification: (v: string) => m.putVerify(v),
     putCosreConversationStyle: (s: boolean) => m.putStyle(s),
     putCosreConversationBannedPhrases: (p: string[]) => m.putBanned(p),
+    putCosreConversationInteraction: (v: string) => m.putInteraction(v),
   },
 }));
 vi.mock('@/components/AuthProvider', () => ({ useAuthRole: () => m.role }));
@@ -36,7 +38,7 @@ let host: HTMLDivElement | null = null;
 let root: Root | null = null;
 afterEach(() => {
   act(() => root?.unmount()); host?.remove(); host = null; root = null;
-  m.put.mockClear(); m.putVerify.mockClear(); m.putStyle.mockClear(); m.putBanned.mockClear(); m.role = 'admin';
+  m.put.mockClear(); m.putVerify.mockClear(); m.putStyle.mockClear(); m.putBanned.mockClear(); m.putInteraction.mockClear(); m.role = 'admin';
   m.get = () => Promise.resolve({ state: true, style: false, verification: 'shadow' });
 });
 const tick = () => act(async () => { await new Promise(r => setTimeout(r, 0)); });
@@ -94,6 +96,17 @@ describe('CosreConversationLine', () => {
     expect(m.putStyle).toHaveBeenCalledWith(true);
     expect(m.put).not.toHaveBeenCalled();
     expect(m.putVerify).not.toHaveBeenCalled();
+  });
+  it('etkileşim (v0.10.2353): varsayılan kapalı; tık interaction:on yazar, diğerlerini yazmaz', async () => {
+    const el = await render();
+    const boxes = el.querySelectorAll<HTMLButtonElement>('[role="checkbox"]');
+    expect(el.textContent).toContain('Etkileşim');
+    expect(boxes[2]?.getAttribute('aria-checked')).toBe('false');
+    await act(async () => { boxes[2]!.click(); });
+    await tick();
+    expect(m.putInteraction).toHaveBeenCalledWith('on');
+    expect(m.put).not.toHaveBeenCalled();
+    expect(m.putStyle).not.toHaveBeenCalled();
   });
   it('üslup metni (v0.10.2337): ölçü, örnekle üslup ve ara cümleyi söyler', () => {
     for (const w of ['uzunluğu', 'örnek diyalog', 'ara durum cümlesi', 'Raporlar']) expect(CONVERSATION_STYLE_HINT).toContain(w);

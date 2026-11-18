@@ -234,7 +234,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if w := rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"state":false}`, auth.RoleEditor, ""); w.Code != http.StatusForbidden {
 		t.Fatalf("editor PUT %d", w.Code)
 	}
-	for _, bad := range []string{`{}`, `{"verification":"x"}`, `{bozuk`} { // v0.10.2339 — enforce artık geçerli
+	for _, bad := range []string{`{}`, `{"verification":"x"}`, `{bozuk`, `{"interaction":"shadow"}`} { // v0.10.2339 — enforce artık geçerli
 		if w := rulesDo(mux, "PUT", "/api/ai/cosre-conversation", bad, auth.RoleAdmin, ""); w.Code != http.StatusBadRequest {
 			t.Fatalf("%s → %d", bad, w.Code)
 		}
@@ -248,7 +248,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	}
 	a := nextAudit(t, s)
 	if a.Action != "settings.cosre_conversation.update" || a.TargetID != chstore.CosreConversationKey ||
-		a.Details != `{"before":{"state":true,"style":false,"verification":"shadow","bannedPhrases":0},"after":{"state":false,"style":false,"verification":"shadow","bannedPhrases":0}}` {
+		a.Details != `{"before":{"state":true,"style":false,"verification":"shadow","bannedPhrases":0,"interaction":"off"},"after":{"state":false,"style":false,"verification":"shadow","bannedPhrases":0,"interaction":"off"}}` {
 		t.Fatalf("audit = %+v", a)
 	}
 	// v0.10.2327 — verification bağlı: off (kill switch) ↔ shadow; state korunur.
@@ -280,7 +280,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if cur := chstore.CurrentCosreConversation(); w.Code != http.StatusOK || len(cur.BannedPhrases) != 1 || !cur.Style || cur.Verification != chstore.CosreVerifyOff {
 		t.Fatalf("bannedPhrases PUT %d: %s", w.Code, w.Body)
 	}
-	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"off","bannedPhrases":1}`) {
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"off","bannedPhrases":1,"interaction":"off"}`) {
 		t.Fatalf("audit = %+v", a)
 	}
 	// v0.10.2339 — E2: enforce kabul edilir; varsayılan yine shadow.
@@ -293,6 +293,17 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	}
 	if chstore.DefaultCosreConversation().Verification != chstore.CosreVerifyShadow {
 		t.Fatal("varsayılan shadow kalmalı")
+	}
+	// v0.10.2353 — I5: interaction off | on; diğer alanlar korunur, varsayılan off.
+	w = rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"interaction":"on"}`, auth.RoleAdmin, "")
+	if cur := chstore.CurrentCosreConversation(); w.Code != http.StatusOK || cur.Interaction != chstore.CosreInteractionOn || cur.Verification != chstore.CosreVerifyEnforce {
+		t.Fatalf("interaction on PUT %d: %s", w.Code, w.Body)
+	}
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"bannedPhrases":1,"interaction":"off"},"after":`) || !strings.HasSuffix(a.Details, `"interaction":"on"}}`) {
+		t.Fatalf("audit = %+v", a)
+	}
+	if chstore.DefaultCosreConversation().Interaction != chstore.CosreInteractionOff {
+		t.Fatal("interaction varsayılanı off kalmalı")
 	}
 }
 

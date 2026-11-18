@@ -192,6 +192,13 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
     pinBottom();
     void regenerate(context ? { body: { context } } : undefined);
   };
+  // v0.10.2353 (interaction-audit I5) — onaylı aksiyon kartı: onayın sonucu
+  // (data-action-result) aynı asistan mesajına eklenir; paylaşım konuşma kimliğini okur.
+  const actionHooks = useMemo(() => ({
+    conversationId: () => conv.idRef.current,
+    onResult: (id: string, part: { type: string; id?: string; data?: unknown }) => setMessages(ms => ms.map(m => (m.id === id
+      ? { ...m, parts: [...m.parts.filter(p => p.type !== 'data-action-result'), part as (typeof m.parts)[number]] } : m))),
+  }), [conv.idRef, setMessages]);
   // agent-core S5 — onay kartı: son kullanıcı turunun bağlamıyla aynı sohbet
   // approvals[] ile devam eder (karar ve yürütme sunucuda).
   const approve = (a: CosreApprovalAnswer) => {
@@ -434,7 +441,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
             ) : (
               <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
                 onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} endpointPick={endpointPick}
-                compactSteps={isPage || undefined} onQuestion={answerQuestion} statusLine={statusLine} />
+                compactSteps={isPage || undefined} onQuestion={answerQuestion} statusLine={statusLine} action={actionHooks} />
             )}
           </div>
         </div>

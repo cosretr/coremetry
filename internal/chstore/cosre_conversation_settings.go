@@ -21,6 +21,10 @@ package chstore
 //     listesini GENİŞLETEN operatör ifadeleri (varsayılan liste
 //     evalrubric.BoilerplateOpenings/Closings, tek kaynak). En çok 40 ifade,
 //     her biri ≤80 bayt; yalnız style açıkken okunur.
+//   - interaction — v0.10.2353 (interaction-audit §6, I5): off | on, varsayılan
+//     off. Açıkken v2 sohbeti sunucu kuralıyla onaylı aksiyon kartı
+//     (data-action) önerir ve POST /api/cosre/actions/confirm yazar
+//     (api/cosre_actions.go). Kapalıyken akış bayt aynı, uç 404.
 //
 // Her şey ayrıca `cosre_v2` bayrağının arkasındadır (genel kapı). Şablon
 // ai_general_questions.go: boot'ta yükle + 30 s cfgRefresh, süreç-içi atomic;
@@ -46,12 +50,24 @@ const (
 	CosreVerifyEnforce = "enforce"
 )
 
+// Etkileşim kipleri (v0.10.2353, interaction-audit §6 / açık soru 11): tek alan.
+const (
+	CosreInteractionOff = "off"
+	CosreInteractionOn  = "on"
+)
+
+// ValidCosreInteraction — SAF: kapalı küme.
+func ValidCosreInteraction(v string) bool {
+	return v == CosreInteractionOff || v == CosreInteractionOn
+}
+
 // CosreConversation — blob.
 type CosreConversation struct {
 	State         bool      `json:"state"`
 	Style         bool      `json:"style"`
 	Verification  string    `json:"verification"`
 	BannedPhrases []string  `json:"bannedPhrases,omitempty"` // v0.10.2338 — D: varsayılan kalıp listesine ek
+	Interaction   string    `json:"interaction"`             // v0.10.2353 — I5: off | on
 	UpdatedBy     string    `json:"updatedBy,omitempty"`
 	UpdatedAt     time.Time `json:"updatedAt,omitzero"`
 }
@@ -108,7 +124,7 @@ func clipCosreBannedPhrases(in []string) []string {
 // DefaultCosreConversation — blob yokken geçerli ayar: durum AÇIK, üslup
 // kapalı, doğrulama gölge (v0.10.2327).
 func DefaultCosreConversation() CosreConversation {
-	return CosreConversation{State: true, Verification: CosreVerifyShadow}
+	return CosreConversation{State: true, Verification: CosreVerifyShadow, Interaction: CosreInteractionOff}
 }
 
 // ValidCosreVerification — SAF: kapalı küme.
@@ -132,6 +148,9 @@ func SetCosreConversation(c CosreConversation) {
 	if !ValidCosreVerification(c.Verification) {
 		c.Verification = CosreVerifyShadow
 	}
+	if !ValidCosreInteraction(c.Interaction) {
+		c.Interaction = CosreInteractionOff
+	}
 	cosreConversationCur.Store(&c)
 }
 
@@ -147,6 +166,7 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 		Style         bool      `json:"style"`
 		Verification  string    `json:"verification"`
 		BannedPhrases []string  `json:"bannedPhrases"`
+		Interaction   string    `json:"interaction"`
 		UpdatedBy     string    `json:"updatedBy"`
 		UpdatedAt     time.Time `json:"updatedAt"`
 	}
@@ -162,6 +182,9 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 		out.Verification = in.Verification
 	}
 	out.BannedPhrases = clipCosreBannedPhrases(in.BannedPhrases)
+	if ValidCosreInteraction(in.Interaction) {
+		out.Interaction = in.Interaction
+	}
 	out.UpdatedBy = strings.TrimSpace(in.UpdatedBy)
 	out.UpdatedAt = in.UpdatedAt
 	return out, true

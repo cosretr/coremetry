@@ -26,6 +26,30 @@ var KnownKinds = map[string]bool{
 	// durum cümlesi (data-status, transient): mesaja ve arşive girmez; v1
 	// yazıcısı düşürür.
 	"status": true,
+	// v0.10.2353 (interaction-audit §6 I5) — onaylı aksiyon kartı (data-action,
+	// yalnız sunucu kuralı önerir) ve onay ucunun sonucu (data-action-result;
+	// akışta değil, POST /api/cosre/actions/confirm cevabı ActionResultPart ile
+	// aynı biçimde döner). v1 yazıcısı düşürür.
+	"action": true, "action-result": true,
+}
+
+// ActionKinds — data-action `kind` kapalı kümesi (api cosre_actions.go; prod'a
+// dokunan tür — restart / rollback / scale — YOK, test pinler).
+var ActionKinds = []string{"share_link", "problem_note"}
+
+// ActionResultStatuses — data-action-result `status` kapalı kümesi.
+var ActionResultStatuses = []string{"done", "needs_save"}
+
+// ActionPart — data-action parçası: kart başına kararlı id (act-<kind>).
+func ActionPart(m map[string]any) Part {
+	kind, _ := m["kind"].(string)
+	return Part{"type": "data-action", "id": "act-" + kind, "data": m}
+}
+
+// ActionResultPart — data-action-result parçası (id = kartın id'si + "-result").
+func ActionResultPart(m map[string]any) Part {
+	kind, _ := m["kind"].(string)
+	return Part{"type": "data-action-result", "id": "act-" + kind + "-result", "data": m}
 }
 
 // QuestionKinds — data-question `kind` kapalı kümesi (api chat_question.go;

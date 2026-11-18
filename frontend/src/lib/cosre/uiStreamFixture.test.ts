@@ -7,15 +7,15 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
-  DATA_PART_NAMES, MESSAGE_ID_RE, SCOPE_REASONS, STOP_REASONS, TOOL_RESULT_KINDS, TOOL_RESULT_MAX_BYTES, UI_STREAM_PART_TYPES,
-  dataPartName, isDataPart, parseDataApproval, parseDataQuestion, parseDataReset, parseDataScope, parseDataState, parseDataStatus, parseDataStop, parseDataToolResult,
+  ACTION_KINDS, ACTION_RESULT_STATUSES, DATA_PART_NAMES, MESSAGE_ID_RE, SCOPE_REASONS, STOP_REASONS, TOOL_RESULT_KINDS, TOOL_RESULT_MAX_BYTES, UI_STREAM_PART_TYPES,
+  dataPartName, isDataPart, parseDataAction, parseDataActionResult, parseDataApproval, parseDataQuestion, parseDataReset, parseDataScope, parseDataState, parseDataStatus, parseDataStop, parseDataToolResult,
 } from './protocol';
 import { parseUIStreamSSE } from './uiStreamFixture';
 import { channelsOf } from './toChatTurn';
 import { parseCosreAliasAction } from '@/lib/pageActions';
 
 const ROOT = resolve(__dirname, '../../../..');
-const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state', 'ui-stream-v1-slot', 'ui-stream-v1-status', 'ui-stream-v1-alias'];
+const FIXTURES = ['ui-stream-v1', 'ui-stream-v1-error', 'ui-stream-v1-closed', 'ui-stream-v1-reset', 'ui-stream-v1-reset2', 'ui-stream-v1-approval', 'ui-stream-v1-approval-resume', 'ui-stream-v1-stops', 'ui-stream-v1-scope', 'ui-stream-v1-question', 'ui-stream-v1-linkcard', 'ui-stream-v1-state', 'ui-stream-v1-slot', 'ui-stream-v1-status', 'ui-stream-v1-alias', 'ui-stream-v1-action', 'ui-stream-v1-action-result'];
 const PART_TYPES = new Set<string>(UI_STREAM_PART_TYPES);
 const DATA_NAMES = new Set<string>(DATA_PART_NAMES);
 
@@ -382,5 +382,53 @@ describe('data-block-action cosre_alias (eş ad önerisi)', () => {
     [{ kind: 'cosre_alias', phrase: 'kart', entityId: 'svc:payments', text: '' }],
   ])('bozuk yük reddedilir %#', p => {
     expect(parseCosreAliasAction(p)).toBeNull();
+  });
+});
+
+// v0.10.2353 (interaction-audit §6 I5) — onaylı aksiyon kartı: data-action
+// (yalnız sunucu kuralı) ve onay ucunun sonucu data-action-result.
+describe('data-action + data-action-result (I5)', () => {
+  const read = (n: string) => parseUIStreamSSE(readFileSync(join(ROOT, 'testdata', 'cosre', `${n}.sse`), 'utf8')).parts;
+  it('action fixture: tek kart, cevaptan sonra, ayrıştırılır', () => {
+    const parts = read('ui-stream-v1-action');
+    const types = parts.map(p => p.type);
+    const acts = parts.filter(p => p.type === 'data-action');
+    expect(acts).toHaveLength(1);
+    expect(acts[0].id).toBe('act-problem_note');
+    expect(types.indexOf('data-action')).toBeGreaterThan(types.indexOf('text-end'));
+    expect(parseDataAction(acts[0])).toEqual({
+      kind: 'problem_note', token: 'tok.sig', exchangeId: 'x-action-1', expiresAt: 1794917200000,
+      label: 'Probleme not olarak ekle', problemId: 'P-42', cluster: 'c-east', namespace: 'shop',
+      fields: { title: 'CoSRE bulgusu — checkout', service: 'checkout', window: 'son 1 saat',
+        summary: 'checkout son bir saatte yavaş: p95 870 ms. Hata oranı %2,6.', evidence: ['s1 get_service_health'] },
+    });
+  });
+  it('action-result fixture: tek sonuç, ayrıştırılır', () => {
+    const res = read('ui-stream-v1-action-result').filter(p => p.type === 'data-action-result');
+    expect(res).toHaveLength(1);
+    expect(res[0].id).toBe('act-share_link-result');
+    expect(parseDataActionResult(res[0])).toEqual({ kind: 'share_link', status: 'done', exchangeId: 'x-action-2', link: '/cosre/shared/c-1?t=sek' });
+  });
+  const card = { kind: 'share_link', token: 't', exchangeId: 'x', expiresAt: 1, fields: { title: 'a', summary: '' } };
+  it.each([
+    [{ ...card, kind: 'restart' }],
+    [{ ...card, token: '' }],
+    [{ ...card, expiresAt: '1' }],
+    [{ ...card, fields: { summary: 'x' } }],
+    [{ ...card, kind: 'problem_note' }],
+  ])('bozuk kart reddedilir %#', d => {
+    expect(parseDataAction({ type: 'data-action', data: d })).toBeNull();
+  });
+  it('sonuç: bilinmeyen durum null, dış link düşer', () => {
+    expect(parseDataActionResult({ type: 'data-action-result', data: { kind: 'share_link', status: 'queued' } })).toBeNull();
+    expect(parseDataActionResult({ type: 'data-action-result', data: { kind: 'share_link', status: 'done', link: '//evil.example' } }))
+      .toEqual({ kind: 'share_link', status: 'done' });
+  });
+  it('kapalı kümeler Go kaynağıyla eşit', () => {
+    const part = readFileSync(join(ROOT, 'internal', 'cosre', 'uistream', 'part.go'), 'utf8');
+    const k = /ActionKinds = \[\]string\{([^}]*)\}/.exec(part);
+    expect(k?.[1].split(',').map(x => x.trim().replace(/"/g, ''))).toEqual([...ACTION_KINDS]);
+    const st = /ActionResultStatuses = \[\]string\{([^}]*)\}/.exec(part);
+    expect(st?.[1].split(',').map(x => x.trim().replace(/"/g, ''))).toEqual([...ACTION_RESULT_STATUSES]);
   });
 });

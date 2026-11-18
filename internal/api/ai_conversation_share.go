@@ -18,6 +18,8 @@ package api
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -69,6 +71,9 @@ func shareTokenMatches(stored, given string) bool {
 	return subtle.ConstantTimeCompare([]byte(stored), []byte(given)) == 1
 }
 
+// errAIChatNotFound — konuşma yok / sahibi başkası / page ai-chat değil.
+var errAIChatNotFound = errors.New("conversation not found")
+
 // setAIChatShare — sahibin satırında sırrı yazar / siler; satır ve blob'un
 // geri kalanı aynen (created_at dahil).
 func (s *Server) setAIChatShare(w http.ResponseWriter, r *http.Request, enable bool) (*chstore.SavedView, string, bool) {
@@ -76,20 +81,36 @@ func (s *Server) setAIChatShare(w http.ResponseWriter, r *http.Request, enable b
 	if !ok {
 		return nil, "", false
 	}
-	id := strings.TrimSpace(r.PathValue("id"))
-	cur, err := s.aiChatRow(r, id, ownerID)
-	if err != nil {
+	cur, token, err := s.applyAIChatShare(r, ownerID, strings.TrimSpace(r.PathValue("id")), enable)
+	switch {
+	case errors.Is(err, errAIChatNotFound):
+		writeJSONError(w, http.StatusNotFound, "conversation not found")
+		return nil, "", false
+	case errors.Is(err, errAIChatUnreadable):
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return nil, "", false
+	case err != nil:
 		writeErr(w, err)
 		return nil, "", false
 	}
+	return cur, token, true
+}
+
+var errAIChatUnreadable = errors.New("stored conversation is unreadable")
+
+// applyAIChatShare — paylaşımın TEK yazma yolu (bu uç + v0.10.2353 onaylı
+// aksiyon kartı, cosre_actions.go): var olan sır korunur (idempotent).
+func (s *Server) applyAIChatShare(r *http.Request, ownerID, id string, enable bool) (*chstore.SavedView, string, error) {
+	cur, err := s.aiChatRow(r, id, ownerID)
+	if err != nil {
+		return nil, "", err
+	}
 	if cur == nil {
-		writeJSONError(w, http.StatusNotFound, "conversation not found")
-		return nil, "", false
+		return nil, "", errAIChatNotFound
 	}
 	var blob map[string]any
 	if err := json.Unmarshal([]byte(cur.QueryString), &blob); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "stored conversation is unreadable: "+err.Error())
-		return nil, "", false
+		return nil, "", fmt.Errorf("%w: %v", errAIChatUnreadable, err)
 	}
 	token, _ := blob["shareToken"].(string)
 	switch {
@@ -102,16 +123,14 @@ func (s *Server) setAIChatShare(w http.ResponseWriter, r *http.Request, enable b
 	}
 	raw, err := json.Marshal(blob)
 	if err != nil {
-		writeErr(w, err)
-		return nil, "", false
+		return nil, "", err
 	}
 	next := *cur
 	next.QueryString = string(raw)
 	if err := s.store.UpsertSavedView(r.Context(), next); err != nil {
-		writeErr(w, err)
-		return nil, "", false
+		return nil, "", err
 	}
-	return cur, token, true
+	return cur, token, nil
 }
 
 func (s *Server) shareAIConversation(w http.ResponseWriter, r *http.Request) {

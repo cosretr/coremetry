@@ -73,6 +73,26 @@ export const COSRE_V2_STRINGS = {
   aliasesDelete: 'Sil',
   aliasesDeleteError: 'Silinemedi',
   aliasesDeleteTitle: 'Eş ad silinsin mi?',
+  // v0.10.2353 — onaylı aksiyon kartı (ActionCard; interaction-audit I5).
+  actionNoteTitle: 'Probleme not ekle',
+  actionShareTitle: 'Paylaşım bağlantısı',
+  actionFieldTitle: 'Başlık',
+  actionFieldService: 'Servis',
+  actionFieldWindow: 'Pencere',
+  actionFieldSummary: 'Özet',
+  actionEvidence: 'Kanıt',
+  actionConfirm: 'Onayla',
+  actionCancel: 'İptal',
+  actionCopy: 'Metni kopyala',
+  actionCancelled: 'Tamam, hiçbir şey yazılmadı.',
+  actionHint: 'Onayla\'ya basmadan hiçbir şey yazılmaz.',
+  actionDone: 'Tamamlandı.',
+  actionExpired: 'Kartın süresi doldu — soruyu yeniden sor.',
+  actionNeedsSave: 'Önce konuşma kaydedilmeli; kaydedildikten sonra yeniden onayla.',
+  actionFailed: 'Yapılamadı',
+  actionBadResult: 'beklenmeyen cevap',
+  actionOpenLink: 'Bağlantıyı aç',
+  actionOpenProblem: 'Problemi aç',
 } as const;
 
 /** agent-core S5 — onay-kapılı araçların operatör dilindeki adı (yoksa ham ad). */

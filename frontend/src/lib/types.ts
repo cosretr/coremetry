@@ -9023,8 +9023,44 @@ export interface CosreConversationSettings {
   verification: 'off' | 'shadow' | 'enforce';
   /** v0.10.2338 (D) — varsayılan kalıp açılış/kapanış listesine ek ifadeler (≤40, her biri ≤80 bayt). */
   bannedPhrases?: string[];
+  /** v0.10.2353 (interaction-audit I5) — onaylı aksiyon kartı; varsayılan off. */
+  interaction: 'off' | 'on';
   updatedBy?: string;
   updatedAt?: string;
+}
+
+/** v0.10.2353 — onaylı aksiyon kartı türleri (Go uistream.ActionKinds). */
+export type CosreActionKind = 'share_link' | 'problem_note';
+
+/** v0.10.2353 — kartın düzenlenebilir alanları (sunucu doldurur). */
+export interface CosreActionFields {
+  title: string;
+  service?: string;
+  window?: string;
+  summary: string;
+  evidence?: string[];
+}
+
+/** v0.10.2353 — data-action (api chat_action_card.go). */
+export interface CosreActionCard {
+  kind: CosreActionKind;
+  token: string;
+  exchangeId: string;
+  expiresAt: number;
+  label: string;
+  fields: CosreActionFields;
+  problemId?: string;
+  cluster?: string;
+  namespace?: string;
+}
+
+/** v0.10.2353 — data-action-result (POST /api/cosre/actions/confirm cevabı). */
+export interface CosreActionResult {
+  kind: CosreActionKind;
+  status: 'done' | 'needs_save';
+  link?: string;
+  noteId?: string;
+  exchangeId?: string;
 }
 
 /** system_settings `cosre.briefing` (GET /api/ai/briefing her rol; PUT admin + audit). */

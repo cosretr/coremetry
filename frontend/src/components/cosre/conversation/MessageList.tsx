@@ -23,6 +23,8 @@
 //     balonun altında SummaryLinkCard; o linkler balonda çip olarak çizilmez.
 //   • v0.10.2102 (D2): data-question → balonun altında QuestionCard; son, bitmiş
 //     cevapta etkin, sonraki turdan sonra pasif + seçilen işaretli.
+//   • v0.10.2353 (interaction-audit I5): data-action → balonun altında ActionCard
+//     (Onayla / İptal; bitmiş cevapta); onayın data-action-result'ı mesaja eklenir.
 //   • Bilinmeyen parça çizilmez (çökmez).
 // Sunumsal: Chat örneği yok (katalog ve testler statik mesajla da çizer).
 import { useMemo } from 'react';
@@ -49,6 +51,8 @@ import { QuestionCard } from './QuestionCard';
 import { questionOf } from './question';
 import { questionChoice } from '@/lib/cosre/cosrePersist';
 import { bubbleTurnForCard, linkCardOf } from './linkCard';
+import { ActionCard } from './ActionCard';
+import { parseDataAction, parseDataActionResult } from '@/lib/cosre/protocol';
 
 /** useChat durumu (ai ChatStatus ile aynı küme; tip importu katalogdan bağımsız). */
 export type CosreChatStatus = 'submitted' | 'streaming' | 'ready' | 'error';
@@ -77,9 +81,11 @@ export interface MessageListProps {
   onQuestion?: (option: CosreQuestion['options'][number]) => void;
   /** v0.10.2333 (F1) — geçerli ara durum cümlesi (transient data-status); yalnız akan son cevapta. */
   statusLine?: string | null;
+  /** v0.10.2353 — onaylı aksiyon kartı: onayın sonucu mesaja eklenir; yoksa kart salt okur. */
+  action?: { conversationId(): string | null; onResult(messageId: string, part: { type: string; id?: string; data?: unknown }): void };
 }
 
-export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps, onQuestion, statusLine }: MessageListProps) {
+export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps, onQuestion, statusLine, action }: MessageListProps) {
   const busy = status === 'submitted' || status === 'streaming';
   const last = messages.at(-1);
   const errText = status === 'error' && error ? error.message : undefined;
@@ -99,7 +105,7 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
           onApproval={isLast && !busy ? onApproval : undefined} teamPick={isLast && !busy ? teamPick : undefined}
           endpointPick={isLast && !busy ? endpointPick : undefined} compactSteps={compactSteps}
           onQuestion={isLast && !busy ? onQuestion : undefined} next={next}
-          statusLine={isLast && busy ? statusLine : undefined} />;
+          statusLine={isLast && busy ? statusLine : undefined} action={action} />;
       })}
       {/* İlk parça gelmeden (yalnız soru gitti): v1 bekleyiş göstergesi. */}
       {busy && last?.role !== 'assistant' && (last?.metadata?.explainAsk
@@ -118,7 +124,7 @@ function UserMessage({ m }: { m: CosreUIMessage }) {
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, next, statusLine }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, next, statusLine, action }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
   /** araç seti dilim 5 — kapsam değişimi notu (önceki cevaptan farklıysa). */
   scopeNote?: string;
@@ -137,7 +143,16 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   next?: CosreUIMessage;
   /** v0.10.2333 (F1) — ara durum cümlesi; "Düşünüyor…" yerine, metin gelince kaybolur. */
   statusLine?: string | null;
+  action?: MessageListProps['action'];
 }) {
+  const actionCard = useMemo(() => { // v0.10.2353
+    const p = m.parts.findLast(x => x.type === 'data-action');
+    return p ? parseDataAction(p as { type: string; data?: unknown }) : null;
+  }, [m.parts]);
+  const actionResult = useMemo(() => {
+    const p = m.parts.findLast(x => x.type === 'data-action-result');
+    return p ? parseDataActionResult(p as { type: string; data?: unknown }) : null;
+  }, [m.parts]);
   const approvals = useMemo(() => approvalViews(m), [m]);
   const epPick = useMemo(() => pickOf(m.parts), [m.parts]); // v0.10.1737
   const linkCard = useMemo(() => linkCardOf(m.parts), [m.parts]); // v0.10.2101
@@ -176,6 +191,10 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
         <ApprovalCard key={v.approval.toolCallId} view={v} disabled={!onApproval}
           onAnswer={onApproval ? ok => onApproval(approvalAnswer(v, ok)) : undefined} />
       ))}
+      {actionCard && !live && (
+        <ActionCard card={actionCard} result={actionResult} conversationId={action?.conversationId}
+          onResult={action ? part => action.onResult(m.id, part) : undefined} />
+      )}
       {teamPick && showTeamPick(scopeOf(m.parts)) && (
         <TeamPickCard initial={teamPick.initial} onPick={teamPick.onPick} onUnscoped={teamPick.onUnscoped} />
       )}

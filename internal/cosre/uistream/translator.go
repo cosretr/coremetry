@@ -87,6 +87,14 @@ func (t *Translator) Translate(kind string, payload any) []Part {
 		// mesaja ve arşive girmez; istemci sonuncuyu gösterir, cevap metni
 		// başlayınca ya da alışveriş bitince siler.
 		out = append(out, Part{"type": "data-status", "id": "status", "data": m, "transient": true})
+	case "action":
+		// v0.10.2353 (I5) — onaylı aksiyon kartı (api cosre_actions.go):
+		// {kind, exchangeId, token, expiresAt, label, fields{title, service,
+		// window, summary, evidence[]}, problemId?, cluster?, namespace?}.
+		out = append(out, ActionPart(m))
+	case "action-result":
+		// v0.10.2353 (I5) — onayın sonucu {kind, status, link?, noteId?, exchangeId?}.
+		out = append(out, ActionResultPart(m))
 	case "code-lock":
 		out = append(out, Part{"type": "data-code-lock", "id": "code-lock", "data": m})
 	case "error":
