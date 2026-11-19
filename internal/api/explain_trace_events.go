@@ -243,14 +243,6 @@ func buildTraceEventDigest(spans []chstore.SpanRow) traceEventDigest {
 	return buildTraceEventDigestLim(spans, traceEventLimitsFor(1))
 }
 
-// buildTraceEventDigestN — bütçe parametreli gövde (v0.10.1149: span
-// explain'in trace bağlamı daha küçük bütçeyle çağırır).
-func buildTraceEventDigestN(spans []chstore.SpanRow, maxRunes int) traceEventDigest {
-	lim := traceEventLimitsFor(1)
-	lim.block = maxRunes
-	return buildTraceEventDigestLim(spans, lim)
-}
-
 // buildTraceEventDigestLim — v0.10.2378: tavanlar parametreli gövde
 // (traceEventLimitsFor; ölçek 1 = bayt bayt eski).
 func buildTraceEventDigestLim(spans []chstore.SpanRow, lim traceEventLimits) traceEventDigest {
