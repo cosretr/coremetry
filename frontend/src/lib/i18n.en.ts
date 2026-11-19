@@ -456,7 +456,6 @@ export const EN: Record<string, string> = {
   'mlRecord.card.evidence': 'Evidence',
   'mlRecord.card.independentOne': '1 independent piece of evidence',
   'mlRecord.card.independentN': '{n} independent pieces of evidence',
-  'mlRecord.card.notCandidate': 'not a Problem candidate',
   'mlRecord.card.noEvidence': 'No evidence rows in the record.',
   'mlRecord.card.open': 'Open',
   'mlRecord.vote.real': 'Real anomaly',

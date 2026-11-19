@@ -44,7 +44,7 @@ import { MLTraceDots } from './MLTraceDots';
 import { MLLogPlayer } from './MLLogPlayer';
 import { MLSignalEvidence } from './MLSignalEvidence';
 import { groupStatusText, type MLGroupRow } from './mlGroupRows';
-import { evidenceSource, groupGateLine, groupProblemChip, headerOperation, latestGroupDecision, latestSvcShadow, svcGateLine } from './mlGroupDetail';
+import { evidenceSource, groupGateLine, groupProblemChip, headerOperation, latestGroupDecision, latestSvcShadow, recordDecision, svcGateLine } from './mlGroupDetail';
 import { MLSourceChart } from './MLSourceChart';
 import { MLRecordCard } from './MLRecordCard';
 import { MLVerdictReasonForm } from './MLVerdictReasonForm';
@@ -183,9 +183,11 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   // MLRecordChart, metin kayıttan); kayıtsız olay aşağıdaki eski kartı çizer.
   if (rec) {
     const recSample = snap ? replaySamples(snap).find(x => x.traceId) : undefined;
+    const dec = recordDecision(group, lang); // v0.10.2371 — Problem kapısının gerçek kararı
     return (
       <div data-testid="ml-replay" className="flex flex-col">
-        <MLRecordCard rec={rec} groupMembers={group?.members} leadId={id}
+        <MLRecordCard rec={rec} groupMembers={group?.members} leadId={id} decision={dec}
+          decisionChip={dec.chip && <span data-testid="ml-group-problem"><Chip link={dec.chip} /></span>}
           chart={<RecordCourse rec={rec} lead={group?.lead ?? null} snap={snap}
             open={group ? group.status === 'running' || group.status === 'watching' : card.header.open}
             logsLink={card.whereToLook.find(l => parseLogsLink(l.href))?.href} direction={card.value?.direction} />}

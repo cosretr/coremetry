@@ -71,6 +71,28 @@ export function groupGateLine(d: MLGroupDecision | undefined, lang: Lang = 'tr')
   return `${verb}${d.priority ? ` · ${d.priority}` : ''} — ${d.reason}`;
 }
 
+/** v0.10.2371 — Problem kapısının GERÇEK kararı, kayıtlı olay kartı için:
+ *  çip başlıkta, satırlar kanıt bölümünde. Kaynak grubun en son grup kararı ve
+ *  servis düzeyi kararı (olay kanıtındaki damgalar; ek istek yok). Grup ya da
+ *  damga yoksa boş döner — kart o zaman karar hakkında bir şey söylemez. */
+export interface RecordDecision { chip: { label: string; href?: string } | null; lines: { k: string; v: string }[] }
+export function recordDecision(
+  group: { members: Pick<MLEvent, 'groupShadow' | 'svcShadow'>[]; lead?: Pick<MLEvent, 'groupShadow' | 'svcShadow'> | null } | null | undefined,
+  lang: Lang = 'tr',
+): RecordDecision {
+  const members = group?.members ?? [];
+  const all = group?.lead ? [...members, group.lead] : members;
+  const gd = latestGroupDecision(all);
+  const sd = latestSvcShadow(all);
+  return {
+    chip: groupProblemChip(gd, lang),
+    lines: [
+      ...(gd ? [{ k: t('mlx.tech.gate', lang), v: groupGateLine(gd, lang) }] : []),
+      ...(sd ? [{ k: t('mlx.tech.svcGate', lang), v: svcGateLine(sd, lang) }] : []),
+    ],
+  };
+}
+
 /** SAF: trace olayında başlığın operasyonu (Code = endpoint / operasyon); diğerlerinde boş. */
 export function headerOperation(e: Pick<MLEvent, 'signal' | 'code'> | null | undefined): string {
   return e && e.signal === 'trace' && e.code ? e.code : '';

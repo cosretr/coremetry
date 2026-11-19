@@ -90,7 +90,9 @@ describe('kayıtlı ML kartı (Dilim D)', () => {
     expect(el.querySelector('[data-testid="ml-record-headline"]')!.textContent).toBe('GET /cart p95 latency at detection 135 ms (1,240 calls); expected ≈ 43 ms.');
     expect(el.querySelector('[data-testid="ml-record-class"]')!.textContent).toBe('Service anomaly');
     expect(el.querySelector('[data-testid="ml-record-status"]')!.textContent).toBe('Ended · lasted 5 min');
-    expect(el.querySelector('[data-testid="ml-evidence"]')!.textContent).toContain('1 independent piece of evidence · not a Problem candidate');
+    expect(el.querySelector('[data-testid="ml-evidence"]')!.textContent).toContain('1 independent piece of evidence');
+    // v0.10.2371 — kart kanıt sayısından Problem kararı çıkarmaz (karar kapıdan gelir).
+    expect(el.querySelector('[data-testid="ml-evidence"]')!.textContent).not.toContain('Problem candidate');
     expect(el.querySelector('[data-testid="ml-measured"]')!.textContent).toContain('1,240 calls');
     const tech = el.querySelector('[data-testid="ml-technical"]') as HTMLDetailsElement;
     expect(tech.open).toBe(false);

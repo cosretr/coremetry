@@ -895,7 +895,6 @@ const TR: Catalog = {
   'mlRecord.card.evidence': 'Kanıt',
   'mlRecord.card.independentOne': '1 bağımsız kanıt',
   'mlRecord.card.independentN': '{n} bağımsız kanıt',
-  'mlRecord.card.notCandidate': 'Problem adayı değil',
   'mlRecord.card.noEvidence': 'Kayıtta kanıt satırı yok.',
   'mlRecord.card.open': 'Aç',
   'mlRecord.vote.real': 'Gerçek anomali',

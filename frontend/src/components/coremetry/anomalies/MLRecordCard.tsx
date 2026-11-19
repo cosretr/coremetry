@@ -13,6 +13,8 @@ import { serviceHref } from '@/lib/serviceHref';
 import { tf, useLang, useT } from '@/lib/i18n';
 import { fmtClock } from '@/lib/utils';
 import type { MLEvent, MLRecordView } from '@/lib/types';
+import { OrigLang } from '@/features/anomalies/OrigLang';
+import type { RecordDecision } from './mlGroupDetail';
 import { mlEventHref } from '@/lib/anomalyHref';
 import { ML_DETECTOR_TR } from '@/lib/mlDetectorLabels';
 import { GROUP_MEMBERS_OPEN_MAX, groupMemberRows } from './mlGroupMembers';
@@ -77,7 +79,9 @@ function GroupMembers({ members, leadId }: { members: MLEvent[]; leadId: string 
   );
 }
 
-export function MLRecordCard({ rec, actions, groupMembers, leadId = '', chart }: { rec: MLRecordView; actions: ReactNode; groupMembers?: MLEvent[]; leadId?: string; chart?: ReactNode }) {
+// v0.10.2371 — `decision`: Problem kapısının gerçek kararı (mlGroupDetail.recordDecision).
+// Kart kanıt sayısından Problem kararı çıkarmaz; karar yalnız kapı damgasından gelir.
+export function MLRecordCard({ rec, actions, groupMembers, leadId = '', chart, decision, decisionChip }: { rec: MLRecordView; actions: ReactNode; groupMembers?: MLEvent[]; leadId?: string; chart?: ReactNode; decision?: RecordDecision; decisionChip?: ReactNode }) {
   const t = useT();
   const lang = useLang();
   const measure = measureLabel(rec, t);
@@ -114,6 +118,7 @@ export function MLRecordCard({ rec, actions, groupMembers, leadId = '', chart }:
           {recordStatus(rec, Date.now() * 1e6, lang)}
         </Badge>
         <Badge variant="outline" data-testid="ml-record-class">{t(CLASS_KEY[rec.class] ?? 'mlRecord.class.info')}</Badge>
+        {decisionChip}
       </div>
       <div className="mb-2.5" data-testid="ml-summary">
         <p className="m-0 text-sm font-semibold leading-normal" data-testid="ml-record-headline">{recordHeadline(rec, measure, lang)}</p>
@@ -127,7 +132,12 @@ export function MLRecordCard({ rec, actions, groupMembers, leadId = '', chart }:
         <div className="rounded-md border border-border bg-card"><KeyValue labelWidth="wide" items={measured} /></div>
       </Section>
       <Section id="ml-evidence" title={t('mlRecord.card.evidence')}
-        sub={tf(nInd === 1 ? 'mlRecord.card.independentOne' : 'mlRecord.card.independentN', lang, { n: nInd }) + (rec.class === 'service_anomaly' && nInd < 2 ? ` · ${t('mlRecord.card.notCandidate')}` : '')}>
+        sub={tf(nInd === 1 ? 'mlRecord.card.independentOne' : 'mlRecord.card.independentN', lang, { n: nInd })}>
+        {decision?.lines.map(l => (
+          <p key={l.k} className="m-0 mb-2 text-sm" data-testid="ml-record-gate">
+            <span className="text-muted-foreground">{l.k}: </span><OrigLang>{l.v}</OrigLang>
+          </p>
+        ))}
         {ev.length === 0 ? <p className="m-0 text-sm text-muted-foreground">{t('mlRecord.card.noEvidence')}</p> : (
           <ul className="m-0 flex list-none flex-col gap-2 p-0" data-testid="ml-evidence-rows">
             {ev.map((e, i) => { const x = evidenceText(e, rec, measure, lang); return (

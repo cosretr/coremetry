@@ -1,7 +1,7 @@
 // v0.10.2022 — grup detay sayfası saf yardımcıları.
 import { describe, it, expect } from 'vitest';
 import type { MLEvent } from '@/lib/types';
-import { evidenceSource, findGroup, headerOperation } from './mlGroupDetail';
+import { evidenceSource, findGroup, headerOperation , recordDecision } from './mlGroupDetail';
 
 const ev = (o: Partial<MLEvent>): MLEvent => ({
   id: 'e', detector: 'op_latency', signal: 'trace', stage: 'shadow', service: 'payment-api',
@@ -38,5 +38,25 @@ describe('evidenceSource', () => {
     expect(headerOperation(ev({ code: 'POST /pay' }))).toBe('POST /pay');
     expect(headerOperation(ev({ signal: 'log', code: 'x' }))).toBe('');
     expect(headerOperation(null)).toBe('');
+  });
+});
+
+// v0.10.2371 — kayıtlı olay kartı Problem kapısının gerçek kararını gösterir.
+describe('recordDecision', () => {
+  const gd = { group: 'g1', wouldOpen: true, rule: 'anomaly-auto:group:e1', priority: 'P2', reason: 'tek güçlü sinyal (metric)', detectors: ['metric_kafka'], at: 20, live: true, problemId: 'p1', singleWouldOpen: true };
+  it('grup yok / damga yok → boş (kart iddia etmez)', () => {
+    expect(recordDecision(null)).toEqual({ chip: null, lines: [] });
+    expect(recordDecision({ members: [{}], lead: {} })).toEqual({ chip: null, lines: [] });
+  });
+  it('canlı karar → Problem çipi (bağlantılı) + kapı satırı', () => {
+    const d = recordDecision({ members: [{ groupShadow: { ...gd, at: 10, live: false, wouldOpen: false, reason: 'eski' } }], lead: { groupShadow: gd } }, 'tr');
+    expect(d.chip?.href).toBe('/inbox?problem=p1');
+    expect(d.lines).toHaveLength(1);
+    expect(d.lines[0].v).toContain('tek güçlü sinyal (metric)');
+  });
+  it('açmazdı kararı → çip yok, gerekçe satırı var', () => {
+    const d = recordDecision({ members: [{ groupShadow: { ...gd, live: false, wouldOpen: false, singleWouldOpen: false, problemId: undefined, reason: 'tek sinyal, 10 dk dolmadı' } }] }, 'tr');
+    expect(d.chip).toBeNull();
+    expect(d.lines[0].v).toContain('10 dk dolmadı');
   });
 });
