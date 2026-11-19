@@ -51,6 +51,17 @@ type Deps struct {
 	// openRun — v0.10.2358: taban kimliğin (MLEventID) açık koşusu var mı;
 	// nil güvenli (= yok). Günlük tavan (DailyEventCap) YENİ olay sayar.
 	openRun func(baseID string) bool
+	// runStart — v0.10.2373 (I3): taban kimliğin süren epizodunun yazılmış
+	// başlangıcı (unix ns; 0 = yok); nil güvenli.
+	runStart func(baseID string) int64
+}
+
+// startedAt — v0.10.2373: adayın süren epizodunun yazılmış başlangıcı (0 = yok).
+func (d Deps) startedAt(det, svc, part string) int64 {
+	if d.runStart == nil {
+		return 0
+	}
+	return d.runStart(chstore.MLEventID(det, svc, part))
 }
 
 // extends — v0.10.2358: aday açık bir olayı mı uzatıyor? Uzatma günlük
@@ -198,7 +209,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	deps := Deps{Store: r.store, Logs: r.logs, VM: r.vm, Background: ctx, Backoff: r.backoff, ObserveES: func(d time.Duration) { global.observeES(d.Milliseconds()) },
 		ObserveVM: func(d time.Duration) { global.observeVM(d.Milliseconds()) },
 		ESLeft:    func() int { return cfg.MaxESQueriesPerTick - int(global.esQueries.Load()-esAtStart) },
-		openRun:   func(id string) bool { return r.runs.openRun(id, start, time.Duration(cfg.TickSec)*time.Second) }}
+		openRun:   func(id string) bool { return r.runs.openRun(id, start, time.Duration(cfg.TickSec)*time.Second) },
+		runStart:  func(id string) int64 { return r.runs.startedOf(id, start, time.Duration(cfg.TickSec)*time.Second) }}
 	var firstErr error
 	var written int64
 	var all []chstore.MLEvent

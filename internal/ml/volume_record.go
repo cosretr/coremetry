@@ -13,7 +13,8 @@ package ml
 // Yan seriler (record.context): aynı pencere ve ızgarada servis düzeyi hata
 // oranı (%) ve p95 (ms), VM RED (tail sampling: oran/gecikme CH'den
 // hesaplanmaz). Bant olay öncesi referanstan: hata oranı üst sınır
-// max(2 × medyan, %1) (svc_error_rate kuralı), p95 üst sınır
+// max(2 × medyan, %1) (ctxErrMinRatio / ctxErrFloorPct; svc_error_rate'in
+// v0.10.2373 öncesi kuralı — yan seri bandı etki kuralına GEÇMEDİ), p95 üst sınır
 // max(medyan + z·effMAD, 1,5 × medyan) (pod p95 kuralı), alt 0. Sınıf:
 // giriş span'i yoksa telemetry_volume; oran kaydında iki yan seri bant içinde
 // → telemetry_volume; biri üst bandı aşıyor ya da yan seri yok →
@@ -46,6 +47,8 @@ const (
 	ctxLatency          = "latency"
 	volCtxMinPre        = 10 // olay öncesi referans: en az 10 nokta (dk)
 	ctxErrMethod        = "pre_onset_median_x2_floor_1pct"
+	ctxErrMinRatio      = 2.0 // yan seri hata oranı bandı: olay öncesi medyanın katı
+	ctxErrFloorPct      = 1.0 // … ve mutlak taban (yüzde)
 	ctxLatMethod        = "pre_onset_max(median+z·mad,1.5×median)"
 )
 
@@ -110,7 +113,7 @@ func ctxSeries(measure, query string, pts []chstore.SpanMetricPoint, from, to ti
 	c := RecordContext{Measure: measure, Source: "vm", Query: query}
 	switch measure {
 	case ctxErrorRate:
-		hi = math.Max(svcErrMinRatio*med, svcErrFloor*100)
+		hi = math.Max(ctxErrMinRatio*med, ctxErrFloorPct)
 		c.Unit, c.Method = "percent", ctxErrMethod
 		c.Snapshot.Aggregation = "err_ratio"
 	default:

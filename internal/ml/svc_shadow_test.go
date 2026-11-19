@@ -38,6 +38,17 @@ func TestDecideSvcShadow(t *testing.T) {
 				t.Fatalf("%+v", x)
 			}
 		}},
+		// v0.10.2373 (I3): etki kuralı taban × 1,5'te açar → 2 katın altı P2 doğar
+		{"hata oranı 1,6× (etki kuralının açtığı, 2 katın altı) → açardı P2", []chstore.MLEvent{svcEv("e1", detSvcErrorRate, "orders-api", 0, 0.05, 0.08)}, nil, func(t *testing.T, d map[string]SvcShadow) {
+			if x := d["e1"]; !x.WouldOpen || x.Priority != "P2" || x.Threshold != 0.05 {
+				t.Fatalf("%+v", x)
+			}
+		}},
+		{"taban %0,4 hata oranı %1,4 (kuralın eşiği) → eşik %0,5, P1", []chstore.MLEvent{svcEv("e1", detSvcErrorRate, "orders-api", 0, 0.004, 0.014)}, nil, func(t *testing.T, d map[string]SvcShadow) {
+			if x := d["e1"]; x.Threshold != 0.005 || x.Priority != "P1" {
+				t.Fatalf("%+v", x)
+			}
+		}},
 		{"yavaşlama oranı 1,5 (P2'ye düşen sınır) → P2", []chstore.MLEvent{svcEv("b1", detSvcBreadth, "orders-api", 0, 1000, 1500)}, nil, func(t *testing.T, d map[string]SvcShadow) {
 			if x := d["b1"]; !x.WouldOpen || x.Priority != "P2" {
 				t.Fatalf("%+v", x)

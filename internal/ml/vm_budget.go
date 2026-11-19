@@ -130,12 +130,29 @@ func (b *vmBackoff) snapshot(now time.Time) []chstore.MLBackoffEntry {
 // vmInstant — backoff'lu anlık sorgu. skipped=true: aile beklemede, VM'e
 // gidilmedi. Ağır hata → aile beklemeye; başarı → bekleme sıfırlanır.
 func vmInstant(ctx context.Context, deps Deps, family, expr string, at, now time.Time) (rows []chstore.SpanMetricSeries, skipped bool, err error) {
+	return vmGuarded(deps, family, now, func() ([]chstore.SpanMetricSeries, error) {
+		return deps.VM.QueryPromQLInstant(ctx, expr, at)
+	})
+}
+
+// vmRange — v0.10.2373 (I3): vmInstant'ın aralık karşılığı; AYNI aile
+// backoff'u, VM sayacı (ObserveVM) ve atlama işareti. Yalnız dar pencereli,
+// bucket'sız toplam için (etki kuralının 1 dk'lık servis sayımı: 5 nokta);
+// ham bucket'ın aralık sorgusu YASAK (başlıktaki 422 dersi).
+func vmRange(ctx context.Context, deps Deps, family, expr string, from, to time.Time, stepSec int, now time.Time) (rows []chstore.SpanMetricSeries, skipped bool, err error) {
+	return vmGuarded(deps, family, now, func() ([]chstore.SpanMetricSeries, error) {
+		return deps.VM.QueryPromQLRange(ctx, expr, from, to, stepSec, 0)
+	})
+}
+
+// vmGuarded — vmInstant / vmRange ortak gövdesi (backoff + ölçüm).
+func vmGuarded(deps Deps, family string, now time.Time, query func() ([]chstore.SpanMetricSeries, error)) (rows []chstore.SpanMetricSeries, skipped bool, err error) {
 	if deps.Backoff.skipping(family, now) {
 		deps.meter.markSkipped()
 		return nil, true, nil
 	}
 	t0 := time.Now()
-	rows, err = deps.VM.QueryPromQLInstant(ctx, expr, at)
+	rows, err = query()
 	if deps.ObserveVM != nil {
 		deps.ObserveVM(time.Since(t0))
 	}

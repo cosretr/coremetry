@@ -15,9 +15,15 @@ package ml
 // yeni aile `anomaly-auto:svc:<svc>`, şiddet critical, Value = gözlenen,
 // Threshold = mevsimsel taban → öncelik MEVCUT computePriority'den
 // (chstore.PreviewProblemPriority; oran ≥ BigBreachRatio (2) → P1, değilse
-// P2; 4 sa açık critical → P1). svc_error_rate'te taban 0 ise Threshold =
-// %0,5 (= %1 tabanı / 2 kat): "normalde hiç yokken ≥ %1" büyük sapmadır
-// (eventRatio'nun taban-0 kuralıyla aynı yön).
+// P2; 4 sa açık critical → P1). svc_error_rate'te Threshold en az %0,5
+// (svcErrThresholdFloor = etki kuralının %1 mutlak tabanı / 2): "normalde
+// hiç yokken ≥ %1" büyük sapmadır (eventRatio'nun taban-0 kuralıyla aynı yön).
+//
+// TETİK (v0.10.2373, etki olayı programı I3): svc_error_rate olayı artık etki
+// kuralıyla (1 dk örnek, 5'te 3, eşik max(%1, taban × 1,5, taban + 1 puan))
+// açılır ve TEK BAŞINA Problem açar. Eski kural ≥ 2 × taban istediği için
+// olay hep P1 doğardı; yeni kuralda taban × 1,5 – 2 arası olay P2 doğar,
+// ≥ 2 × taban (ya da taban < %0,5 iken ≥ %1) yine P1. Öncelik mantığı aynı.
 //
 // DEDUPE (spec Karar 4): servis başına TEK ML Problem'i. Aynı servisin iki
 // svc olayından en erken başlayan sahip, diğeri üye; öncelik en yükseği.
@@ -66,11 +72,16 @@ type SvcShadow struct {
 // isSvcDetector — SAF.
 func isSvcDetector(d string) bool { return d == detSvcErrorRate || d == detSvcBreadth }
 
+// svcErrThresholdFloor — hata oranı Problem'inin Threshold tabanı: etki
+// kuralının mutlak tabanının yarısı (%1 / 2 = %0,5). Taban bunun altındayken
+// kuralın açabildiği en küçük oran (%1) BigBreachRatio'yu (2) karşılar.
+var svcErrThresholdFloor = impactRules[impactFailureRate].Floor / 2
+
 // svcValueThreshold — SAF: Problem'in Value / Threshold'u.
 func svcValueThreshold(e chstore.MLEvent) (float64, float64) {
 	th := e.Baseline
-	if e.Detector == detSvcErrorRate && th < svcErrFloor/svcErrMinRatio {
-		th = svcErrFloor / svcErrMinRatio
+	if e.Detector == detSvcErrorRate && th < svcErrThresholdFloor {
+		th = svcErrThresholdFloor
 	}
 	return e.Observed, th
 }

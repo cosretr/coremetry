@@ -2,11 +2,11 @@ package ml
 
 // impact_rule.go — v0.10.2372 (etki olayı programı, dilim I1; operatör kararı
 // 2026-11-19: "tek etki olayı Problem açsın", emsal Dynatrace Davis): ETKİ
-// OLAYI kuralının SAF çekirdeği. Bu dilimde BAĞLANTI YOK — hiçbir dedektör bu
-// işlevi çağırmaz, davranış değişmez; I2 (hızlı tik) ve I3 (hata oranı) bağlar.
+// OLAYI kuralının SAF çekirdeği. I1'de bağlantı yoktu; v0.10.2373 (I3) servis
+// hata oranını (svc_error_rate.go svcImpactDecide) bağladı.
 //
-// NEDEN: bugünkü servis kuralı 5 dakikalık 3 ardışık kova ister (svcErrDwell),
-// üstüne veri gecikmesi ve tik hizası → Problem en erken ~20 dk. Etki kuralı
+// NEDEN: eski servis kuralı 5 dakikalık 3 ardışık kova isterdi (v0.10.2373'te
+// silindi), üstüne veri gecikmesi ve tik hizası → Problem en erken ~20 dk. Etki kuralı
 // 1 DAKİKALIK örneklerle karar verir: son 5 örneğin en az 3'ü eşiği aşmış ve
 // en son ölçülen örnek de aşıyorsa olay. Eşik hem GÖRELİ hem MUTLAK artışı
 // birlikte ister (Dynatrace otomatik kipinin ilkesi: ikisi de aşılmalı) ve

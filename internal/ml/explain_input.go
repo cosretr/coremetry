@@ -72,6 +72,13 @@ func CardInputFromEvent(ev chstore.MLEvent, now time.Time, loc *time.Location) C
 	if v, ok := evNum(m, "baselineDays"); ok {
 		in.BaselineDays = int(v)
 	}
+	if evStr(m, "rule") == "impact" { // v0.10.2373 (I3)
+		th, _ := evNum(m, "threshold")
+		win, _ := evNum(m, "window")
+		minV, _ := evNum(m, "minViolations")
+		load, _ := evNum(m, "minLoad")
+		in.ImpactRule = &CardImpactRule{Threshold: th, Window: int(win), MinViol: int(minV), MinLoadPerMinute: load}
+	}
 	var im CardImpact
 	if v, ok := evNum(m, "affected"); ok && v > 0 {
 		im.Affected = v

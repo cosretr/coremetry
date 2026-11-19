@@ -5,17 +5,22 @@ package ml
 // (svc_error_rate — servis düzeyi, op_error_rate — servis × route; ikisi de
 // TraceRED tikinde) olay kaydını doldurur.
 //
-// Seri: dedektörün err/count oranının VM RED ifadesi (yüzde; bant da × 100),
-// dedektörün kova penceresiyle. Aile ve etiket adları tik anında kanıta
-// yazılır (redFamily/svcLabel/routeLabel/statusLabel; servis düzeyinde
-// kovada seçilen ilk aile), burada yeniden keşif yok. Snapshot aynı ifadenin
-// 1 dk adımlı aralık sorgusu (olay ±30 dk); hacim aynı ailenin _count'u
-// (dakika başına çağrı). Tepe, tespit anı değeri, onset ve bitiş YALNIZ bu
-// seriden. Bant alarmı veren bant: op_error_rate medyan ± criticalZ·effMAD
-// (judgeMM); svc_error_rate üst sınır max(2 × medyan, %1), alt sınır 0
-// (svcErrorRateVerdict). Tespit mantığı, eşikler ve started_at değişmez;
-// gates[] boş, sınıf service_anomaly. Maliyet: açık olay başına tik başına 2
-// aralık sorgusu, tik başına en çok errRecordMaxPerTick olay.
+// Seri: dedektörün err/count oranının VM RED ifadesi (yüzde; bant da × 100).
+// op_error_rate: dedektörün kova penceresiyle (kayan 5 dk oran, 1 dk adım).
+// svc_error_rate (v0.10.2373, etki kuralı I3): dedektörün YARGILADIĞI seri,
+// yani 1 dakikalık oran (pencere = adım = 60 sn); seri adımı 60 sn yazılır,
+// 15 dakikalık sürdürme iddiası yok. Aile ve etiket adları tik anında kanıta
+// yazılır (redFamily/svcLabel/routeLabel/statusLabel; servis düzeyinde en
+// yeni dakikada seçilen ilk aile), burada yeniden keşif yok. Snapshot aynı
+// ifadenin 1 dk adımlı aralık sorgusu (olay ±30 dk); hacim aynı ailenin
+// _count'u (dakika başına çağrı). Tepe, tespit anı değeri, onset ve bitiş
+// YALNIZ bu seriden (svc_error_rate'te yük kapısı kayda girmez: az istekli
+// yüksek oranlı dakika seride bant dışı görünür). Bant alarmı veren bant:
+// op_error_rate medyan ± criticalZ·effMAD (judgeMM); svc_error_rate üst sınır
+// etki kuralının eşiği max(%1, medyan × 1,5, medyan + 1 puan), alt sınır 0
+// (impactRules[impactFailureRate]). gates[] boş, sınıf service_anomaly.
+// Maliyet: açık olay başına tik başına 2 aralık sorgusu, tik başına en çok
+// errRecordMaxPerTick olay.
 
 import (
 	"context"
@@ -32,7 +37,7 @@ import (
 
 const (
 	errRecordMaxPerTick = 10
-	svcErrBandMethod    = "class_days_hour±1_median_x2_floor_1pct"
+	svcErrBandMethod    = "class_days_hour±1_median_impact_x1.5_plus_1pp_floor_1pct"
 )
 
 // redScope — SAF: seçiciye servis (ve route boş değilse route) eşleyicisi.
@@ -160,7 +165,7 @@ func pctFmt(x float64) string { return "%" + trDec(x, 1) }
 // errRecordBand — SAF: dedektörün alarm bandı, seri biriminde (yüzde).
 func errRecordBand(ev chstore.MLEvent, mad, criticalZ float64) (expected, lo, hi float64, method string) {
 	if ev.Detector == detSvcErrorRate {
-		return ev.Baseline * 100, 0, math.Max(svcErrMinRatio*ev.Baseline, svcErrFloor) * 100, svcErrBandMethod
+		return ev.Baseline * 100, 0, impactRules[impactFailureRate].threshold(ev.Baseline) * 100, svcErrBandMethod
 	}
 	lo, hi = lagBand(ev.Baseline, mad, criticalZ)
 	return ev.Baseline * 100, lo * 100, hi * 100, lagBandMethod
@@ -192,11 +197,13 @@ func attachErrorRateRecords(ctx context.Context, deps Deps, cfg chstore.MLConfig
 		if !ok {
 			continue // tik kanıtı yok (eski olay): kayıt yazılmaz
 		}
-		route := ev.Code
-		if ev.Detector == detSvcErrorRate {
-			route = ""
+		// seri penceresi = seri adımı; lead = tespit öncesi karar penceresi
+		route, stepSec := ev.Code, cfg.BucketSec
+		lead := time.Duration(cfg.DwellBuckets*cfg.BucketSec) * time.Second
+		if ev.Detector == detSvcErrorRate { // v0.10.2373 (I3): yargılanan 1 dk'lık seri
+			route, stepSec, lead = "", svcImpactStepSec, impactWindow*svcImpactStepSec*time.Second
 		}
-		s, ok := errSeriesQuery(pin, svcL, routeL, statusL, ev.Service, route, cfg.BucketSec)
+		s, ok := errSeriesQuery(pin, svcL, routeL, statusL, ev.Service, route, stepSec)
 		if !ok {
 			continue
 		}
@@ -204,12 +211,7 @@ func attachErrorRateRecords(ctx context.Context, deps Deps, cfg chstore.MLConfig
 		if det.IsZero() || det.After(now) {
 			det = now
 		}
-		bucket := time.Duration(cfg.BucketSec) * time.Second
-		dwell := cfg.DwellBuckets
-		if ev.Detector == detSvcErrorRate {
-			dwell = svcErrDwell
-		}
-		from := det.Add(-time.Duration(dwell)*bucket - lagRecordPad)
+		from := det.Add(-lead - lagRecordPad)
 		to := now
 		if closed {
 			to = time.Unix(0, ev.LastSeen).Add(lagRecordPad)
@@ -233,7 +235,7 @@ func attachErrorRateRecords(ctx context.Context, deps Deps, cfg chstore.MLConfig
 			conf = confirmers(ev)
 		}
 		rec, ok := BuildREDRecord(REDRecordInput{Detector: ev.Detector, Service: ev.Service, Route: route, Family: fam, Series: s,
-			Direction: "up", BucketSec: cfg.BucketSec, Expected: exp, Lo: lo, Hi: hi, Method: method, DetectedAt: det, Closed: closed,
+			Direction: "up", BucketSec: stepSec, Expected: exp, Lo: lo, Hi: hi, Method: method, DetectedAt: det, Closed: closed,
 			Points: rows[0].Points, Calls: calls, From: from, To: to, Confirmers: conf, Head: "Hata oranı", Label: "hata oranı", Fmt: pctFmt})
 		if !ok {
 			continue

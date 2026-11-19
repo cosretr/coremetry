@@ -8,7 +8,9 @@ package ml
 // rollup yedeği YOK, VM yoksa dedektör sessiz ve bunu self-obs'a yazar).
 // Aile pinleri anomaly.REDFamilyPins (HTTP / gRPC); etiket adları metrikten
 // keşfedilir (saatte bir). Tik başına aile başına 3 gruplu sorgu (count,
-// err, p95), topk yok. Seri ml_series'e (signal=trace), taban CH'den takvim
+// err, p95), topk yok; v0.10.2373: servis hata oranı için aile başına 2
+// aralık sorgusu daha (1 dk'lık servis count/err, svc_error_rate.go). Seri
+// ml_series'e (signal=trace), taban CH'den takvim
 // sınıfı günler × ±1 saat, medyan+MAD (log ile aynı judge). Trafik tabanı
 // (minBaselineRate) altındaki endpoint değerlendirilmez.
 //
@@ -19,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"strconv"
 	"strings"
@@ -57,6 +60,31 @@ type TraceRED struct {
 	labels map[string]traceFamilyLabels // family id → keşfedilen etiketler
 	daily  map[string]int
 	day    string
+	// impactNote — v0.10.2373: son tikte servis hata oranının 1 dk'lık sorgusu
+	// düştüyse gerekçe (tik durumunda "ölçülemedi"); başarıda boş.
+	impactNote string
+}
+
+// Unmeasured — v0.10.2373 (unmeasuredReporter, dependency.go emsali): 1 dk'lık
+// servis sorgusu düştüğünde YALNIZ svc_error_rate "ölçülemedi" görünür.
+func (d *TraceRED) Unmeasured() map[string]string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.impactNote == "" {
+		return nil
+	}
+	return map[string]string{detSvcErrorRate: d.impactNote}
+}
+
+// setImpactNote — son tikin 1 dk'lık sorgu hatası (nil = temiz).
+func (d *TraceRED) setImpactNote(err error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if err == nil {
+		d.impactNote = ""
+		return
+	}
+	d.impactNote = "ölçülemedi: " + truncRunes(err.Error(), 160)
 }
 
 func NewTraceRED() *TraceRED {
@@ -231,7 +259,15 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	errOf := map[string]map[string]any{}
 	famOf := map[int]map[string]any{}
 	cntOf := map[string]map[string]any{}
-	agg := newSvcAgg() // v0.10.2077: servis düzeyi count/err (ek sorgu yok)
+	agg := newSvcAgg() // v0.10.2077: servis düzeyi count/err (ek sorgu yok; 5 dk taban serisi)
+	// v0.10.2373 (I3): servis hata oranının 1 dk'lık örnekleri (aile başına 2
+	// aralık sorgusu). Hatası YALITILIR: tik düşmez, hata tik hatası olarak
+	// DÖNMEZ (dönseydi aile "kör" sayılır, işlem düzeyi dedektörlerin kapanması
+	// gereken açık koşuları da tutulurdu). Yalnız svc_error_rate o tik sessiz
+	// kalır ve "ölçülemedi" görünür (Unmeasured); kendi backoff anahtarı
+	// (impact:<aile>) işlem düzeyi sorguları da bekletmez.
+	impAgg, impEnd := newSvcAgg(), svcImpactEnd(now, cfg.IngestLagSec)
+	var impErr error
 	for fi, pin := range anomaly.REDFamilyPins() {
 		fl := d.familyLabels(ctx, deps.VM, pin, from, to)
 		if !fl.ok {
@@ -285,13 +321,20 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 				}
 			}
 		}
+		if cfg.DetectorOn(detSvcErrorRate) {
+			if ierr := svcImpactFetch(ctx, deps, pin, fl, fi, impAgg, impEnd, now); ierr != nil && impErr == nil {
+				impErr = ierr
+			}
+		}
 	}
 	if families == 0 {
 		return nil, fmt.Errorf("VM'de RED ailesi/etiketi bulunamadı (servis, route, durum)")
 	}
-	svcFam := map[string]int{}
+	minute := map[string]map[int64]float64{} // servis × dakika başı (I3)
+	svcFam := map[string]int{}               // servis → en yeni dakikanın ailesi (olay kaydı)
 	if cfg.DetectorOn(detSvcErrorRate) {
-		svcFam = agg.emit(series)
+		agg.emit(series) // 5 dk taban serisi (ml_series)
+		svcFam = impAgg.emit(minute)
 	}
 	// hata ORANI serisi: err/count (count>0)
 	for k, byB := range series {
@@ -322,8 +365,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	}
 	deps.countSeries(len(series))
 	// dwell geçmişi CH'den (instant sorgu yalnız son kovayı verir)
-	// v0.10.2077: servis hata oranı 3 kova ister; geçmiş penceresi ikisinin büyüğü.
-	if dwellFrom := last.Add(-time.Duration(max(cfg.DwellBuckets, svcErrDwell)-1) * bucket); true {
+	if dwellFrom := last.Add(-time.Duration(cfg.DwellBuckets-1) * bucket); true {
 		if hist, herr := deps.Store.MLSeriesRecent(ctx, chstore.MLSignalTrace, nil, "", "", dwellFrom, cfg.BucketSec); herr == nil {
 			mergeHistory(series, hist, dwellFrom.Unix(), last.Unix())
 		}
@@ -358,7 +400,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	}
 	var evs []chstore.MLEvent
 	if cfg.DetectorOn(detSvcErrorRate) {
-		for _, ev := range d.svcErrorEvents(deps, series, base, last, cfg, class, now) {
+		for _, ev := range d.svcImpactEvents(deps, minute, base, impEnd, cfg, class, now) {
 			if fi, ok := svcFam[ev.Service]; ok && famOf[fi] != nil {
 				ev.Evidence = mergeEvidence(ev.Evidence, famOf[fi]) // v0.10.2221 (H5)
 			}
@@ -430,6 +472,10 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 				evs = append(evs, ev)
 			}
 		}
+	}
+	d.setImpactNote(impErr)
+	if impErr != nil {
+		log.Printf("[ml] svc_error_rate 1 dk sorgusu düştü (dedektör bu tik sessiz): %v", impErr)
 	}
 	return evs, nil
 }

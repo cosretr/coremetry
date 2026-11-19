@@ -1,7 +1,8 @@
 package ml
 
 // svc_error_rate_test.go — v0.10.2077 (spec-ml-service-level dilim 1):
-// servis düzeyi hata oranı kararı + toplayıcı + cümle.
+// servis düzeyi hata oranı toplayıcısı + cümle. Karar (v0.10.2373, etki
+// kuralı) svc_error_rate_impact_test.go'da.
 
 import (
 	"strings"
@@ -17,38 +18,6 @@ func repeat(v float64, n int) []float64 {
 		out[i] = v
 	}
 	return out
-}
-
-func TestSvcErrorRateVerdict(t *testing.T) {
-	base := repeat(0.004, 30)  // %0,4
-	rate := repeat(5, 30)      // 5 istek/sn
-	lowRate := repeat(0.1, 30) // 0,1 istek/sn
-	cases := []struct {
-		name      string
-		cur       []float64
-		baseRatio []float64
-		baseCount []float64
-		fire      bool
-	}{
-		{"3 kova ≥2× ve ≥%1 → açar", []float64{0.02, 0.03, 0.03}, base, rate, true},
-		{"2 kova (10 dk) → açmaz", []float64{0.03, 0.03}, base, rate, false},
-		{"bir kova eşik altı → açmaz", []float64{0.03, 0.005, 0.03}, base, rate, false},
-		{"%1 tabanı: 2× ama %0,9 → açmaz", []float64{0.009, 0.009, 0.009}, base, rate, false},
-		{"taban 0: %1 ve üstü → açar", []float64{0.012, 0.012, 0.012}, repeat(0, 30), rate, true},
-		{"taban 0: %0,5 → açmaz", []float64{0.005, 0.005, 0.005}, repeat(0, 30), rate, false},
-		{"taban trafiği 0,2 istek/sn altı → açmaz", []float64{0.5, 0.5, 0.5}, base, lowRate, false},
-		{"taban örneği az → açmaz", []float64{0.5, 0.5, 0.5}, base[:5], rate, false},
-		{"tam 2× ve %1 sınırı → açar", []float64{0.01, 0.01, 0.01}, repeat(0.005, 30), rate, true},
-		{"2× altı (1,9×) → açmaz", []float64{0.019, 0.019, 0.019}, repeat(0.01, 30), rate, false},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			v := svcErrorRateVerdict(c.cur, c.baseRatio, c.baseCount, 20)
-			if v.Fire != c.fire {
-				t.Fatalf("fire=%v want %v (%s)", v.Fire, c.fire, v.Reason)
-			}
-		})
-	}
 }
 
 // -batch servis MUAF DEĞİL: batch kuralı hata oranını yük saymaz.

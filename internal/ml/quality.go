@@ -103,6 +103,15 @@ func (r *runInfo) ref() time.Time {
 	return r.last
 }
 
+// fresh — koşu artık sürmüyor: yeniden görülürse YENİ epizot açılır (kapanıştan
+// ya da son canlılıktan beri yeniden açma penceresi geçti).
+func (r *runInfo) fresh(now time.Time, tick time.Duration) bool {
+	if !r.closedAt.IsZero() {
+		return now.Sub(r.closedAt) > episodeReopenWindow
+	}
+	return now.Sub(r.ref()) > time.Duration(episodeCloseMisses)*tick+episodeReopenWindow
+}
+
 // tracker — süreç-içi koşu durumu (rejim + teyit + epizot). Lider değişince
 // sıfırlanır: koşu yeni pod'da baştan sayılır (kabul edilen sapma).
 type tracker struct {
@@ -119,10 +128,7 @@ func (t *tracker) observe(ev chstore.MLEvent, now time.Time, tick time.Duration)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	r := t.runs[ev.ID]
-	fresh := r == nil ||
-		(!r.closedAt.IsZero() && now.Sub(r.closedAt) > episodeReopenWindow) ||
-		(r.closedAt.IsZero() && now.Sub(r.ref()) > time.Duration(episodeCloseMisses)*tick+episodeReopenWindow)
-	if fresh {
+	if r == nil || r.fresh(now, tick) {
 		if r != nil {
 			delete(t.byEp, r.epID)
 		}
@@ -252,6 +258,19 @@ func (t *tracker) openRun(baseID string, now time.Time, tick time.Duration) bool
 	return r != nil && r.closedAt.IsZero() && now.Sub(r.ref()) <= time.Duration(episodeCloseMisses)*tick
 }
 
+// startedOf — v0.10.2373 (I3): taban kimliğin SÜREN epizodunun (açık ya da
+// yeniden açılabilir; observe yeni epizot açmayacak) yazılmış başlangıcı,
+// yoksa 0. Kayan pencereyle karar veren dedektör başlangıcı buradan taşır.
+func (t *tracker) startedOf(baseID string, now time.Time, tick time.Duration) int64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	r := t.runs[baseID]
+	if r == nil || r.ev.ID == "" || r.fresh(now, tick) {
+		return 0
+	}
+	return r.ev.StartedAt
+}
+
 // prevEvent — v0.10.2037: epizodun önceki tikte yazılan hali (contrib kapısı).
 func (t *tracker) prevEvent(epID string) (chstore.MLEvent, bool) {
 	t.mu.Lock()
@@ -360,7 +379,10 @@ func qualityFilter(evs []chstore.MLEvent, cfg chstore.MLConfig, tr *tracker, now
 			kept = append(kept, ev)
 			continue
 		}
-		if !impactOK(ev.Baseline, ev.Observed, q) {
+		// v0.10.2373 (I3): açık servis hata oranı koşusu, en yeni dakika tabana
+		// dönse de etki kuralı "temiz" diyene dek sürer (dedektör uzatır); etki
+		// eşiği yalnız YENİ olayı süzer (aşağıdaki lag tabanıyla aynı ilke).
+		if !impactOK(ev.Baseline, ev.Observed, q) && !(ev.Detector == detSvcErrorRate && tr.openRun(ev.ID, now, tick)) {
 			sup.Impact++
 			continue
 		}

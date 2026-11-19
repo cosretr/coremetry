@@ -130,8 +130,17 @@ type CardLowTraffic struct {
 	LimitMs float64
 }
 
+// CardImpactRule — v0.10.2373 (I3): olay etki kuralıyla (1 dk örnek) açıldı;
+// teknik satır kova sürekliliği yerine bu kuralı söyler (kanıt rule=impact).
+type CardImpactRule struct {
+	Threshold        float64 // uygulanan eşik (ölçünün biriminde)
+	Window, MinViol  int     // son Window dakikanın en az MinViol'ü
+	MinLoadPerMinute float64 // 0 = yük kapısı yok
+}
+
 // CardInput — üreticinin tek girdisi (adaptörler explain_input.go).
 type CardInput struct {
+	ImpactRule                                                            *CardImpactRule
 	EventID, Detector, Signal, Service, Part, Code, Pod, Stage, Direction string
 	StartedAt, LastSeen                                                   time.Time
 	BucketSec                                                             int
@@ -831,7 +840,12 @@ func technicalOf(in CardInput, sp detSpec) ExplainTechnical {
 		sig += " | " + in.Part
 	}
 	thr := "—"
-	if in.DwellBuckets > 0 {
+	if r := in.ImpactRule; r != nil { // v0.10.2373: 1 dk örnek; kova sürekliliği yok
+		thr = fmt.Sprintf("Etki kuralı: son %d dakikalık örnekte en az %d ihlal · eşik %s", r.Window, r.MinViol, newValueFmt(sp, in, r.Threshold).one(r.Threshold, false))
+		if r.MinLoadPerMinute > 0 {
+			thr += " · dakikada en az " + trInt(r.MinLoadPerMinute) + " istek"
+		}
+	} else if in.DwellBuckets > 0 {
 		thr = fmt.Sprintf("Süreklilik %d kova (%d dk)", in.DwellBuckets, in.DwellBuckets*int(in.bucket().Minutes()))
 		if in.ImpactMinRel > 0 {
 			thr += fmt.Sprintf(" · etki ≥ %%%s göreli", trDec(in.ImpactMinRel*100, 1))
