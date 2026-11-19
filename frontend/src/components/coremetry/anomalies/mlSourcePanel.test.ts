@@ -2,7 +2,7 @@
 // çevreler; suçlu seri adıyla. Fikstür nötr.
 import { describe, it, expect } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { contributorLine, highlightColors, liveGapLine, serviceRedAggFor, thanosSourceText, leadFromSnapshot, panelWindow, panelPeakLine, peakValueText, sourcePanelFor, topContributors } from './mlSourcePanel';
+import { contributorLine, highlightColors, liveGapLine, serviceRedAggFor, thanosSourceText, leadFromSnapshot, panelWindow, recordLead, panelPeakLine, peakValueText, sourcePanelFor, topContributors } from './mlSourcePanel';
 
 describe('contributorLine / leadFromSnapshot', () => {
   it('tek suçlu adıyla, diğerleri tek ifadeyle; ad kırpılmaz', () => {
@@ -173,5 +173,18 @@ describe('panelPeakLine / peakValueText', () => {
     expect(panelPeakLine(2800, undefined, 'up', 'en')).toBe('Peak on the chart: 2,800');
     expect(panelPeakLine(2.5, 's', 'down', 'en')).toBe('Lowest on the chart: 2.5 s');
     expect(peakValueText(3.2, 'core', 'en')).toBe('3.2 cores');
+  });
+});
+
+// v0.10.2370 — kayıtlı olayda panel penceresi başlangıçtan açılır (geç algılama).
+describe('recordLead', () => {
+  const base = { startedAt: 2_000, lastSeen: 3_000, service: 'orders' };
+  it('başlangıç algılamadan önceyse pencere başlangıca çekilir', () => {
+    expect(recordLead(base, 1_000)).toEqual({ ...base, startedAt: 1_000 });
+  });
+  it('başlangıç yok / sonra ise girdi aynen', () => {
+    expect(recordLead(base, 0)).toBe(base);
+    expect(recordLead(base, undefined)).toBe(base);
+    expect(recordLead(base, 2_500)).toBe(base);
   });
 });

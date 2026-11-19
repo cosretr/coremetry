@@ -36,7 +36,7 @@ import {
   dayClassLabel, exceptionGroupHref, parseObj,
   replayChart, replayContext, replayDeploys, replayMarkers, replaySamples, whatIfWindow,
 } from '@/lib/mlReplay';
-import type { TraceCourse, ExplainCard, ExplainLink, MLBacktestResult, MLReplayVerdict, MLSample, MLSnapshot, RecentDeployEntry } from '@/lib/types';
+import type { TraceCourse, ExplainCard, ExplainLink, MLBacktestResult, MLEvent, MLRecordView, MLReplayVerdict, MLSample, MLSnapshot, RecentDeployEntry } from '@/lib/types';
 import { mlDetectorLabel } from '@/lib/mlDetectorLabels';
 import { MLEventPlayer } from './MLEventPlayer';
 import { MLTraceHeatmap } from './MLTraceHeatmap';
@@ -51,7 +51,8 @@ import { MLVerdictReasonForm } from './MLVerdictReasonForm';
 import { isVerdictReason, type VerdictReason } from './mlVerdictReason';
 import { recordUsable } from './mlRecord';
 import { fmtPctLang, t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; // v0.10.2291 — sayfa kromu arayüz dilinde (sunucu metni aynen)
-import { contributorLine, leadFromSnapshot, panelPeakLine, parseLogsLink, type Contributors } from './mlSourcePanel';
+import { contributorLine, leadFromSnapshot, panelPeakLine, parseLogsLink, recordLead, type Contributors } from './mlSourcePanel';
+import { MLRecordChart } from './MLRecordChart';
 import { evidenceRows, evidenceSub } from './mlEvidenceRows';
 import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2302 — EN arayüzde sunucu cümlesi işaretli
 import { stripServicePrefix } from './unifiedRows';
@@ -147,6 +148,21 @@ function Section({ id, title, sub, children }: { id: string; title: string; sub?
   );
 }
 
+/** v0.10.2370 (operatör: "eskiden direkt Kafka tabındaki grafik gelirdi") — kayıtlı
+ *  olayda da ilk grafik servis sayfasındaki panelin aynısı (canlı kaynak, olayın
+ *  başlangıcından 30 dk önce açılan pencere). Panel yoksa / veri gelmezse / hata
+ *  olursa kayıtlı görüntü (MLRecordChart) çizilir. */
+function RecordCourse({ rec, lead, snap, open, logsLink, direction }: {
+  rec: MLRecordView; lead: MLEvent | null; snap: MLSnapshot | null; open: boolean; logsLink?: string; direction?: string;
+}) {
+  const l = useMemo(() => {
+    const base = lead ?? (snap ? leadFromSnapshot(snap) : null);
+    return base ? recordLead(base, rec.onsetAt) : null;
+  }, [lead, snap, rec.onsetAt]);
+  const stored = <MLRecordChart rec={rec} />;
+  return l ? <MLSourceChart lead={l} open={open} fallback={stored} logsLink={logsLink} direction={direction} /> : stored;
+}
+
 export function MLReplayContent({ id, autoPlay = false, group = null }: { id: string; autoPlay?: boolean; group?: MLGroupRow | null }) {
   const t = useT();
   const lang = useLang();
@@ -169,7 +185,11 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
     const recSample = snap ? replaySamples(snap).find(x => x.traceId) : undefined;
     return (
       <div data-testid="ml-replay" className="flex flex-col">
-        <MLRecordCard rec={rec} groupMembers={group?.members} leadId={id} actions={<>
+        <MLRecordCard rec={rec} groupMembers={group?.members} leadId={id}
+          chart={<RecordCourse rec={rec} lead={group?.lead ?? null} snap={snap}
+            open={group ? group.status === 'running' || group.status === 'watching' : card.header.open}
+            logsLink={card.whereToLook.find(l => parseLogsLink(l.href))?.href} direction={card.value?.direction} />}
+          actions={<>
           <div className="mb-2 flex flex-wrap gap-2" data-testid="ml-where">
             {card.header.kind !== 'metric' && recSample?.traceId && <Chip link={{ label: t('mlRecord.card.sampleTrace'), href: traceHref(recSample.traceId) }} />}
             <Chip link={{ label: t('mlRecord.card.serviceLink'), href: serviceHref(rec.subject.service) }} />

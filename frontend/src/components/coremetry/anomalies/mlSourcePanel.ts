@@ -215,6 +215,13 @@ export function leadFromSnapshot(s: Pick<MLSnapshot, 'detector' | 'signal' | 'se
   return { detector: s.detector, signal: s.signal, code, service: s.service, startedAt: s.detectedAt, lastSeen: s.lastSeen, evidence: s.evidence };
 }
 
+/** SAF (v0.10.2370): kayıtlı olayın panel girdisi — pencere ve işaretli bölge
+ *  olayın BAŞLANGICINDAN (onset) açılır; algılama geç gelmişse (ör. gecikme 40 dk
+ *  sonra algılandı) panel yükselişi de gösterir. Başlangıç yoksa girdi aynen. */
+export function recordLead<T extends { startedAt: number }>(base: T, onsetAt?: number): T {
+  return onsetAt && onsetAt > 0 && onsetAt < base.startedAt ? { ...base, startedAt: onsetAt } : base;
+}
+
 /** SAF (v0.10.2055): seri adı → renk. Vurgu varsa YALNIZ o seri sapma rengi
  *  (--err), diğerleri soluk (--text3) — renk yalnız sapan değerde. Vurgu yok
  *  ya da serilerde değilse boş harita (panelin kendi paleti). */

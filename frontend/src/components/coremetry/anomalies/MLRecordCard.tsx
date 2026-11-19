@@ -77,7 +77,7 @@ function GroupMembers({ members, leadId }: { members: MLEvent[]; leadId: string 
   );
 }
 
-export function MLRecordCard({ rec, actions, groupMembers, leadId = '' }: { rec: MLRecordView; actions: ReactNode; groupMembers?: MLEvent[]; leadId?: string }) {
+export function MLRecordCard({ rec, actions, groupMembers, leadId = '', chart }: { rec: MLRecordView; actions: ReactNode; groupMembers?: MLEvent[]; leadId?: string; chart?: ReactNode }) {
   const t = useT();
   const lang = useLang();
   const measure = measureLabel(rec, t);
@@ -120,7 +120,8 @@ export function MLRecordCard({ rec, actions, groupMembers, leadId = '' }: { rec:
         <p className="m-0 mt-0.5 text-xs text-muted-foreground" data-testid="ml-record-timeline">{recordTimeline(rec, lang)}</p>
       </div>
       <Section id="ml-course" title={t('mlRecord.card.course')}>
-        <MLRecordChart rec={rec} />
+        {/* v0.10.2370 — çağıran canlı kaynak panelini verebilir; yoksa kayıtlı görüntü. */}
+        {chart ?? <MLRecordChart rec={rec} />}
       </Section>
       <Section id="ml-measured" title={t('mlRecord.card.measuredTitle')}>
         <div className="rounded-md border border-border bg-card"><KeyValue labelWidth="wide" items={measured} /></div>
