@@ -45,7 +45,8 @@ import { turnToPanels } from '@/lib/chatPanelSpec'; // v0.10.1443
 import { ctxAppliedLabel, stepEvidenceItems } from './evidenceChip'; // v0.10.1274 — ekran kapsamı künyesi; v0.10.1275 — hop listesi
 import { phaseTrail } from './phaseTrail'; // v0.10.1273 — Metrik → Log → Trace kırıntısı
 import { MdTable } from './MdTable'; // v0.10.1357 — paylaşılan markdown tablosu (RenderedMarkdown da çizer)
-import { highlightParts } from './autoHighlight'; // v0.10.1567
+import { HlText, ChainFlow } from './HlText'; // v0.10.1567 otomatik vurgu; v0.10.2374 ortak çizim + çağrı zinciri
+import { splitChain, type Chain } from './callChain'; // v0.10.2374
 import { splitListLabel } from './listLabel'; // v0.10.1720
 import { AiThinking } from './AiThinking'; // v0.10.1384 — tek tip "düşünüyor" göstergesi
 import { useTypewriter } from './useTypewriter'; // v0.10.1384 — büyük parçada hızlı yazma efekti
@@ -114,13 +115,7 @@ function renderNodes(nodes: readonly InlineNode[], ctx: MdCtx, kp: string): Reac
     switch (n.t) {
       case 'text':
         if (!ctx.hl) return <Fragment key={k}>{n.v}</Fragment>;
-        return (
-          <Fragment key={k}>
-            {highlightParts(n.v).map((p, j) => p.kind
-              ? <code key={j} className={p.kind === 'err' ? 'cm-hl-err' : undefined}>{p.v}</code>
-              : <Fragment key={j}>{p.v}</Fragment>)}
-          </Fragment>
-        );
+        return <HlText key={k} text={n.v} />;
       case 'code': return <code key={k}>{n.v}</code>;
       case 'strong': return <b key={k}>{renderNodes(n.c, ctx, k + '.')}</b>;
       case 'em': return <em key={k}>{renderNodes(n.c, ctx, k + '.')}</em>;
@@ -216,11 +211,54 @@ function MdInline({ text }: { text: string }) {
 // MdListText — v0.10.1720: liste maddesinin baştaki "Etiket:" kısmı
 // (listLabel.ts) ayrı span'de; yalnız vurgu açık (asistan cevabı) bağlamda.
 // Stil .cosre-root altında — başka yüzeylerde görünüm değişmez.
-function MdListText({ text }: { text: string }) {
+// v0.10.2374 — madde bir çağrı zinciriyse (≥2 ok, callChain.ts) etiket üstte
+// kalır, adımlar alt alta akar. `live` = akışta hâlâ yazılan son madde:
+// düzen tamamlanınca seçilir (her delta'da satır ↔ akış arası gidip gelmesin).
+function MdListText({ text, live }: { text: string; live?: boolean }) {
   const ctx = useContext(ChatMdContext);
-  const split = ctx.hl ? splitListLabel(text) : null;
+  if (!ctx.hl) return <MdInline text={text} />;
+  const chain = live ? null : splitChain(text);
+  if (chain) return <MdChain chain={chain} />;
+  const split = splitListLabel(text);
   if (!split) return <MdInline text={text} />;
   return <><span className="cm-li-label"><MdInline text={split.label} /></span><MdInline text={split.rest} /></>;
+}
+
+const mdChainStep = (s: string) => <MdInline text={s} />;
+function MdChain({ chain }: { chain: Chain }) {
+  return (
+    <>
+      {chain.label && <span className="cm-li-label"><MdInline text={chain.label} /></span>}
+      {chain.lead}
+      <ChainFlow chain={chain} render={mdChainStep} />
+    </>
+  );
+}
+
+// MdPara — v0.10.2374: paragrafın çizimi. Asistan cevabında (hl) bir satır
+// çağrı zinciriyse o satır akış olarak, kalan satırlar eskisi gibi <p> basılır;
+// zincir yoksa çıktı birebir eski <p>. İmleçli (akan) paragraf bölünmez.
+function MdPara({ text, caret }: { text: string; caret: boolean }) {
+  const ctx = useContext(ChatMdContext);
+  const plain = <p className="cm-md-p"><MdInline text={text} />{caret && <Caret />}</p>;
+  if (!ctx.hl || caret) return plain;
+  const lines = text.split('\n');
+  const chains = lines.map(l => splitChain(l));
+  if (!chains.some(Boolean)) return plain;
+  const out: ReactNode[] = [];
+  let buf: string[] = [];
+  const flush = () => {
+    if (buf.length) out.push(<p key={out.length} className="cm-md-p"><MdInline text={buf.join('\n')} /></p>);
+    buf = [];
+  };
+  lines.forEach((l, i) => {
+    const c = chains[i];
+    if (!c) { buf.push(l); return; }
+    flush();
+    out.push(<div key={out.length} className="cm-md-p"><MdChain chain={c} /></div>);
+  });
+  flush();
+  return <>{out}</>;
 }
 
 // CodeBlock (v0.9.1148; v0.10.1137 dosya bloğu) — ``` fence'inin çizimi.
@@ -339,12 +377,7 @@ function renderText(text: string, key: string, caret: boolean): ReactNode {
             </dl>
           );
         }
-        return (
-        <p key={i} className="cm-md-p">
-          <MdInline text={p} />
-          {caret && i === paras.length - 1 && <Caret />}
-        </p>
-        );
+        return <MdPara key={i} text={p} caret={caret && i === paras.length - 1} />;
       })}
     </Fragment>
   );
@@ -405,7 +438,7 @@ function renderBlocks(blocks: readonly ChatBlock[], streaming: boolean, typedCha
                   <input type="checkbox" className="cm-task" checked={!!b.tasks[k]} readOnly disabled
                     aria-label={b.tasks[k] ? 'tamamlandı' : 'yapılacak'} />
                 )}
-                <MdListText text={it} />
+                <MdListText text={it} live={streaming && last && k === b.items.length - 1} />
                 {b.nested?.[k] && renderBlocks(b.nested[k] as ChatBlock[], streaming, typedCharts, false, `${i}.${k}.`)}
               </li>
             ))}

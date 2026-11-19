@@ -584,10 +584,11 @@ describe('otomatik vurgu', () => {
     await mount(asst(ANS));
     const codes = qa('.cm-msg-ai code').map(e => `${e.className || '-'}:${e.textContent}`);
     expect(codes).toEqual([
-      '-:CreditCardDetailsService.java:151',
-      'cm-hl-err:NullPointerException',
-      'cm-hl-err:HTTP 500',
-      'cm-hl-err:MCA-00029',
+      // v0.10.2374 — çipler ortak HlText'ten: temel sınıf cm-hl (✨ Explain gövdesiyle aynı)
+      'cm-hl:CreditCardDetailsService.java:151',
+      'cm-hl cm-hl-err:NullPointerException',
+      'cm-hl cm-hl-err:HTTP 500',
+      'cm-hl cm-hl-err:MCA-00029',
       '-:zaten kod',
     ]);
     expect(text()).toContain("CreditCardDetailsService.java:151'de NullPointerException");

@@ -21,6 +21,8 @@ import { RenderedMarkdown, CodeBlock } from '@/components/Markdown';
 import type { IdLink } from '@/components/ai/inlineIdLinks';
 import { verdictLine, hoistCodeQuotes, dropVerdictSentence } from './explainAnatomy';
 import { normalizeMathEscapes } from '@/components/mathEscapes'; // v0.10.1396
+import { HlText, ChainFlow } from './HlText'; // v0.10.2374 — Karar şeridi: otomatik vurgu + çağrı zinciri
+import { splitChain } from './callChain';
 import { useTypewriter } from './useTypewriter'; // v0.10.1384 — tüm cevap tek seferde gelince hızlı yazma
 import { traceLogEvidence } from '@/lib/explainLogEvidence'; // v0.10.1742
 import type { TraceLogOutcome } from '@/lib/types';
@@ -44,6 +46,8 @@ function evidenceHint(ev: ExplainEvidence): string {
   return '';
 }
 
+const verdictStep = (s: string) => <HlText text={s} />;
+
 export function ExplainBody({ text: rawText, busy, links, evidence, verdict: wantVerdict = true, revealAt }: {
   text: string;
   busy: boolean;
@@ -66,6 +70,8 @@ export function ExplainBody({ text: rawText, busy, links, evidence, verdict: wan
   // gövdeden düşürülmesi de böylece birebir eşleşir).
   const text = useMemo(() => normalizeMathEscapes(rawText ?? '', { streaming: busy }), [rawText, busy]);
   const verdict = useMemo(() => (busy || !wantVerdict ? null : verdictLine(text)), [busy, text, wantVerdict]);
+  // v0.10.2374 — Karar cümlesi ≥2 oklu bir çağrı zinciriyse adımlar alt alta.
+  const verdictChain = useMemo(() => (verdict ? splitChain(verdict) : null), [verdict]);
   const hoisted = useMemo(() => {
     if (busy) return { quotes: [], rest: text };
     const h = hoistCodeQuotes(text);
@@ -78,7 +84,12 @@ export function ExplainBody({ text: rawText, busy, links, evidence, verdict: wan
   return (
     <>
       {verdict && (
-        <div className="cx-verdict"><span className="cx-verdict-k">Karar</span>{verdict}</div>
+        <div className="cx-verdict">
+          <span className="cx-verdict-k">Karar</span>
+          {verdictChain
+            ? <>{verdictChain.label}{verdictChain.lead}<ChainFlow chain={verdictChain} render={verdictStep} /></>
+            : <HlText text={verdict} />}
+        </div>
       )}
       {!busy && ev && (
         <div className="cx-evidence">
@@ -94,7 +105,7 @@ export function ExplainBody({ text: rawText, busy, links, evidence, verdict: wan
       {hoisted.quotes.map((q, i) => <CodeBlock key={`q${i}`} lang={q.lang} lines={q.lines} anatomy />)}
       {/* v0.10.1384 — açılırken akış kuralları (yarım satır/çit/tablo) + imleç; tıkla-bitir. */}
       <div className="ai-reveal" onClick={tw.revealing ? tw.finish : undefined}>
-        <RenderedMarkdown text={tw.text} idLinks={links} anatomy streaming={busy || tw.revealing} />
+        <RenderedMarkdown text={tw.text} idLinks={links} anatomy rich streaming={busy || tw.revealing} />
         {tw.revealing && <span className="cm-ai-cursor" />}
       </div>
     </>

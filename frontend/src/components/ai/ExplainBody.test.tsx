@@ -35,9 +35,10 @@ describe('ExplainBody (v0.10.165)', () => {
   const html = renderToStaticMarkup(<ExplainBody text={TEXT} busy={false} evidence={{ spans: 3, traces: 2 }} />);
   it('Karar + Kanıt satırları en üstte; Karar cümlesi gövdede TEKRARLANMAZ, madde kalanı durur', () => {
     expect(html).toContain('cx-verdict');
-    expect(html).toContain('LedgerEntryDao.insertBatch 246. satırda eski kolona yazıyor.');
+    // v0.10.2374 — Karar şeridi otomatik vurgulu (LedgerEntryDao.insertBatch çip): METİN karşılaştırılır.
+    expect(html.replace(/<[^>]+>/g, '')).toContain('LedgerEntryDao.insertBatch 246. satırda eski kolona yazıyor.');
     expect(html.split('246. satırda eski kolona yazıyor.').length - 1).toBe(1);
-    expect(html).toContain('Kontrol: mapper.');
+    expect(html.replace(/<[^>]+>/g, '')).toContain('Kontrol: mapper.'); // madde etiketi ayrı span (v0.10.2374)
     expect(html).toContain('↑ kod alıntısı yukarıda');
     expect(html).toContain('Kanıt: 3 span · 2 trace');
     expect(html.indexOf('cx-verdict')).toBeLessThan(html.indexOf('cx-evidence'));
@@ -120,12 +121,16 @@ describe('ExplainBody Karar şeridi LaTeX oku (v0.10.1396)', () => {
     '- Sonraki adım: kısıtı kontrol et.',
   ].join('\n');
   const html = renderToStaticMarkup(<ExplainBody text={T} busy={false} />);
+  // v0.10.2374 — iki oklu Karar artık adım akışı (ol.cm-chain); ok metni DOM'da
+  // durur, karşılaştırma etiketsiz METİN üzerinde.
+  const plain = html.replace(/<[^>]+>/g, '');
   it('Karar → içerir, ham LaTeX yok', () => {
     const verdict = html.slice(html.indexOf('cx-verdict'), html.indexOf('</div>', html.indexOf('cx-verdict')));
-    expect(verdict).toContain('orders-api → db.example.test');
+    expect(verdict.replace(/<[^>]+>/g, '')).toContain('orders-api → db.example.test (UPDATE) → ORA-00001.');
+    expect(verdict).toContain('cm-chain__s cm-chain__s--err');
     expect(html).not.toContain('rightarrow');
   });
   it('Karar cümlesi gövdede tekrarlanmaz', () => {
-    expect(html.split('orders-api → db.example.test').length - 1).toBe(1);
+    expect(plain.split('orders-api → db.example.test').length - 1).toBe(1);
   });
 });

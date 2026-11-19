@@ -6056,6 +6056,29 @@ tbody td.tpm-more-cell { color: var(--text2); }
 .cosre-root .cm-msg-ai code { font-size: .87em; }
 /* v0.10.1567 — otomatik vurgu (autoHighlight.ts): hata parçaları (HTTP 5xx, …Exception, MCA-00029) kırmızı çip; kod konumları olağan mavi çip. */
 .cm-msg-ai code.cm-hl-err { background: var(--err-bg); color: var(--err); }
+/* v0.10.2374 (operatör: trace açıklaması "hepsi düz siyah"; "servisler arası çağrı, mesaj highlight, çift tırnak daha güzel olabilir") —
+   otomatik vurgu artık ✨ Explain gövdesinde de (Markdown.tsx rich + ExplainBody Karar şeridi; ai/HlText.tsx) çiziliyor. O yüzey
+   .cm-msg-ai dışında da basılır: çip görünümü .cm-hl'in KENDİSİNDE (balondaki .cm-msg-ai code ile aynı mavi çip). Türler:
+   err kırmızı · ent (servis-benzeri ad) nötr, kenarlıklı, link değil · kv anahtarı soluk · msg (tırnaklı mesaj) yumuşak zemin, çip değil ·
+   dur (süre) tabular yarı-kalın. Tümü token; her temada --*-bg zeminleri üstünde okunur. */
+code.cm-hl { font-family: var(--font-mono); font-size: .88em; padding: 1px 6px; border-radius: var(--radius-xs); background: var(--accent-bg); color: var(--accent2); border: 0; font-weight: 500; overflow-wrap: anywhere; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+code.cm-hl.cm-hl-err { background: var(--err-bg); color: var(--err); }
+code.cm-hl.cm-hl-ent { background: var(--bg2); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
+code.cm-hl-kv .cm-hl-k { color: var(--text2); font-weight: 400; }
+.cm-hl-msg { padding: 1px var(--sp-2); border-radius: var(--radius-xs); background: var(--warn-bg); color: var(--text); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.cm-hl-dur { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+/* Çağrı zinciri (ai/callChain.ts): ≥2 oklu satır sıralı adımlar; solda ray + nokta, hata işaretli adımın noktası kırmızı.
+   Ok metni DOM'da durur (.cm-chain__sep görsel gizli) — seçip kopyalayınca özgün "a → b → c". */
+.cm-chain { list-style: none; margin: var(--sp-2) 0; padding: 0; }
+.cm-chain-p { margin: var(--sp-2) 0; }
+.cm-md-list li > .cm-chain, .cm-msg-ai .cm-md-list li > .cm-chain { margin: var(--sp-1) 0 var(--sp-2); }
+/* Liste içindeki zincirde .cm-md-list li kenar boşluğu adıma sızmasın (ray hizası boşluksuz ölçülü). */
+.cm-chain > .cm-chain__s, .cm-msg-ai .cm-md-list .cm-chain > .cm-chain__s, .cosre-root .cm-msg-ai .cm-md-list .cm-chain > .cm-chain__s { position: relative; margin: 0; padding: var(--sp-1) 0 var(--sp-1) var(--sp-8); list-style: none; }
+.cm-chain__s::before { content: ''; position: absolute; left: 5px; top: calc(.8em - 1px); width: 7px; height: 7px; border-radius: 50%; background: var(--text3); }
+.cm-chain__s:not(:last-child)::after { content: ''; position: absolute; left: 8px; top: calc(.8em + 9px); bottom: calc(4px - .8em); width: 1px; background: var(--border-strong); }
+.cm-chain__s--err::before { background: var(--err); box-shadow: 0 0 0 3px var(--err-bg); }
+.cm-chain__sep { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: pre; }
+.cm-md-wrap .cm-li-label { font-weight: 600; }
 .cosre-root .cm-msg-ai pre code { font-size: inherit; }
 /* Tablolar 14px, kod/dosya blokları 13px mono */
 .cosre-root .cm-msg-ai .cm-md-table { font-size: var(--cosre-fs-ui); line-height: var(--cosre-lh-ui); }

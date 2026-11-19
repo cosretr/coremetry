@@ -9,6 +9,9 @@ import { MdTable } from '@/components/ai/MdTable'; // v0.10.1357 — sohbetle or
 import { isRowLine, parseTableAt } from '@/components/ai/mdTableParse';
 import { plainCell } from '@/components/ai/mdTableCell';
 import { CopyButton } from './CopyButton';
+import { HlText, ChainFlow } from '@/components/ai/HlText'; // v0.10.2374
+import { splitChain } from '@/components/ai/callChain';
+import { splitListLabel } from '@/components/ai/listLabel';
 // RenderedMarkdown — a deliberately small markdown renderer extracted
 // from the old Notebook page (v0.7.0, when Notebook was replaced by
 // Runbooks). Handles the subset operators actually use in incident
@@ -41,8 +44,15 @@ import { CopyButton } from './CopyButton';
 // gelir, çizgileri literal tüketir). Akış: ayraç satırı TAM gelene dek
 // başlık düz metin; tablonun altındaki yarım gövde satırı gizlenir (bir
 // sonraki delta'da satır olarak gelir — ham çubuklar yanıp sönmez).
-export function RenderedMarkdown({ text, idLinks, anatomy, streaming }: {
+// v0.10.2374 (operatör: trace açıklaması "hepsi düz siyah geliyor") — `rich`:
+// CoSRE cevabının düz metninde sohbet balonuyla AYNI deterministik geçiş
+// (ai/autoHighlight.ts çipleri, tırnaklı mesaj, süre; ≥2 oklu satır çağrı
+// akışı; madde başı "Etiket:"). Yalnız ExplainBody açar: runbook / not gibi
+// operatör metni ve diğer çağıranlar birebir eskisi gibi. Kod, çit, bağlantı
+// ve kimlik linki içine girmez; akışta YARIM satır akışa bölünmez.
+export function RenderedMarkdown({ text, idLinks, anatomy, streaming, rich }: {
   text: string;
+  rich?: boolean;
   /** v0.10.1345 — metin hâlâ akıyor (normalizeMathEscapes kural 6) */
   streaming?: boolean;
   /** v0.10.165 — kod çitlerinde oluk/dosya başlığı/stack katlama (yalnız CoSRE kartı; runbook vb. operatör metni dokunulmaz) */
@@ -64,17 +74,37 @@ export function RenderedMarkdown({ text, idLinks, anatomy, streaming }: {
   const ids = idPat ? [...idPat.byId.keys()] : [];
   const cellPlain = (raw: string) => (ids.some(id => raw.includes(id)) ? null : plainCell(raw));
   // <span> sarması sohbetin MdInline çizimiyle aynı iskelet (th/td içeriği birebir).
-  const cellInline = (c: string) => <span>{renderInline(c, idPat)}</span>;
+  const cellInline = (c: string) => <span>{renderInline(c, idPat, rich)}</span>;
   let i = 0;
   let bulletBuf: string[] = [];
+  let bulletLive = false; // son madde akışta hâlâ yazılıyor
+  // rich: zincir satırı → etiket + akış; değilse madde başı etiketi ayrılır.
+  const chainOf = (s: string, live: boolean) => (rich && !live ? splitChain(s) : null);
+  const richLine = (s: string, live: boolean): React.ReactNode => {
+    const chain = chainOf(s, live);
+    if (chain) {
+      return (
+        <>
+          {chain.label && <span className="cm-li-label">{renderInline(chain.label, idPat, rich)}</span>}
+          {chain.lead}
+          <ChainFlow chain={chain} render={step => renderInline(step, idPat, rich)} />
+        </>
+      );
+    }
+    const split = rich ? splitListLabel(s) : null;
+    if (!split) return renderInline(s, idPat, rich);
+    return <><span className="cm-li-label">{renderInline(split.label, idPat, rich)}</span>{renderInline(split.rest, idPat, rich)}</>;
+  };
   const flushBullets = () => {
     if (bulletBuf.length === 0) return;
+    const live = bulletLive;
     blocks.push(
       <ul key={blocks.length} style={{ paddingLeft: 20, margin: '6px 0' }}>
-        {bulletBuf.map((b, k) => <li key={k}>{renderInline(b, idPat)}</li>)}
+        {bulletBuf.map((b, k) => <li key={k}>{richLine(b, live && k === bulletBuf.length - 1)}</li>)}
       </ul>
     );
     bulletBuf = [];
+    bulletLive = false;
   };
   while (i < lines.length) {
     const line = lines[i];
@@ -107,21 +137,25 @@ export function RenderedMarkdown({ text, idLinks, anatomy, streaming }: {
     }
     if (line.startsWith('### ')) {
       flushBullets();
-      blocks.push(<h3 key={blocks.length} style={{ margin: '8px 0 4px' }}>{renderInline(line.slice(4))}</h3>);
+      blocks.push(<h3 key={blocks.length} style={{ margin: '8px 0 4px' }}>{renderInline(line.slice(4), null, rich)}</h3>);
     } else if (line.startsWith('## ')) {
       flushBullets();
-      blocks.push(<h2 key={blocks.length} style={{ margin: '10px 0 4px' }}>{renderInline(line.slice(3))}</h2>);
+      blocks.push(<h2 key={blocks.length} style={{ margin: '10px 0 4px' }}>{renderInline(line.slice(3), null, rich)}</h2>);
     } else if (line.startsWith('# ')) {
       flushBullets();
-      blocks.push(<h1 key={blocks.length} style={{ margin: '12px 0 6px', fontSize: 18 }}>{renderInline(line.slice(2))}</h1>);
+      blocks.push(<h1 key={blocks.length} style={{ margin: '12px 0 6px', fontSize: 18 }}>{renderInline(line.slice(2), null, rich)}</h1>);
     } else if (line.match(/^[-*] /)) {
       bulletBuf.push(line.slice(2));
+      bulletLive = i === partial;
     } else if (line.trim() === '') {
       flushBullets();
       blocks.push(<div key={blocks.length} style={{ height: 6 }} />);
     } else {
       flushBullets();
-      blocks.push(<p key={blocks.length} style={{ margin: '4px 0' }}>{renderInline(line, idPat)}</p>);
+      const chain = chainOf(line, i === partial);
+      blocks.push(chain
+        ? <div key={blocks.length} className="cm-chain-p">{richLine(line, false)}</div>
+        : <p key={blocks.length} style={{ margin: '4px 0' }}>{renderInline(line, idPat, rich)}</p>);
     }
     i++;
   }
@@ -257,10 +291,19 @@ export function stripMarkdown(s: string): string {
 // string once, emitting React fragments. The regex is anchored to
 // each delimiter so unmatched ones (** without closing **) pass
 // through unchanged rather than swallowing the rest of the line.
-function renderInline(s: string, idPat?: IdLinkPattern | null): React.ReactNode[] {
+// v0.10.2374 — `rich`: desenlere uymayan DÜZ koşular ve kalın/italik içi
+// HlText'ten geçer (çip, tırnaklı mesaj, süre); `kod`, bağlantı ve kimlik
+// linki dokunulmaz. rich yokken çıktı birebir eskisi.
+function renderInline(s: string, idPat?: IdLinkPattern | null, rich?: boolean): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   let rest = s;
   let key = 0;
+  let buf = '';
+  const flush = () => {
+    if (buf) out.push(<HlText key={key++} text={buf} />);
+    buf = '';
+  };
+  const hl = (t: string): React.ReactNode => (rich ? <HlText text={t} /> : t);
   // Order matters: link regex before bold/italic so [**bold**](url)
   // doesn't get consumed by the bold pass first.
   const patterns: { re: RegExp; render: (m: RegExpMatchArray) => React.ReactNode }[] = [
@@ -298,9 +341,9 @@ function renderInline(s: string, idPat?: IdLinkPattern | null): React.ReactNode[
           : <span key={key++}>{m[1]}</span>;
       } },
     { re: /^\*\*([^*]+)\*\*/,
-      render: m => <b key={key++}>{m[1]}</b> },
+      render: m => <b key={key++}>{hl(m[1])}</b> },
     { re: /^\*([^*]+)\*/,
-      render: m => <i key={key++}>{m[1]}</i> },
+      render: m => <i key={key++}>{hl(m[1])}</i> },
     { re: /^`([^`]+)`/,
       render: m => <code key={key++} style={{
         background: 'var(--bg)', padding: '0 4px', borderRadius: 3,
@@ -311,6 +354,7 @@ function renderInline(s: string, idPat?: IdLinkPattern | null): React.ReactNode[
     for (const p of patterns) {
       const m = rest.match(p.re);
       if (m) {
+        flush();
         out.push(p.render(m));
         rest = rest.slice(m[0].length);
         matched = true;
@@ -318,9 +362,10 @@ function renderInline(s: string, idPat?: IdLinkPattern | null): React.ReactNode[
       }
     }
     if (!matched) {
-      out.push(rest[0]);
+      if (rich) buf += rest[0]; else out.push(rest[0]);
       rest = rest.slice(1);
     }
   }
+  flush();
   return out;
 }
