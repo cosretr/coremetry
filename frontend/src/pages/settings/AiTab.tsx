@@ -421,13 +421,13 @@ function AiProviderSettings() {
         </div>
 
         <Field label="Max tokens (optional)" type="number" inputMode="numeric" min={256} max={32768} step={256}
-          value={maxTokens} onChange={e => setMaxTokens(e.target.value)} placeholder="4096 (default)"
+          value={maxTokens} onChange={e => setMaxTokens(e.target.value)} placeholder="blank = model default (4096 for most)"
           hint={<>Completion budget per call. Range <b>256–32768</b>. Too low and
             explanations get truncated mid-sentence; too high and a chatty
             model burns quota on every ✨ button.</>} />
 
         <Field label="Temperature (optional)" type="number" inputMode="decimal" min={0} max={2} step={0.1}
-          value={temperature} onChange={e => setTemperature(e.target.value)} placeholder="0.2 (default)"
+          value={temperature} onChange={e => setTemperature(e.target.value)} placeholder="blank = model default (0.2 for most)"
           hint={<>Range <b>0–2</b>. Applies to OpenAI-compatible and GitHub
             endpoints; strict-JSON surfaces on OpenAI-compatible endpoints
             always run at 0. Anthropic requests never carry temperature

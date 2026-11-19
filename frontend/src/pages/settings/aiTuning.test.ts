@@ -115,8 +115,15 @@ describe('AiTab bağlanması (v0.9.1120 Faz 0.5)', () => {
   it('varsayılanlar PLACEHOLDER, value DEĞİL', () => {
     // Yerleşik varsayılanlar (4096 / 0.2 / 180) yalnız placeholder
     // metninde geçmeli. `value={4096}` ya da useState('4096') = kusur.
+    // v0.10.2376 — max tokens / temperature boşken MODELE göre seçilir
+    // (v0.10.2375); yer tutucu bunu söyler, yerleşik değer "çoğu model" notu.
+    const PH: Record<string, string> = {
+      '4096': 'placeholder="blank = model default (4096 for most)"',
+      '0.2': 'placeholder="blank = model default (0.2 for most)"',
+      '180': 'placeholder="180 (default)"',
+    };
     for (const d of ['4096', '0.2', '180']) {
-      expect(src, `${d} placeholder'da`).toContain(`placeholder="${d} (default)"`);
+      expect(src, `${d} placeholder'da`).toContain(PH[d]);
       expect(src, `${d} state'e yazılmış`).not.toContain(`useState('${d}')`);
       expect(src, `${d} value'ya yazılmış`).not.toContain(`value={${d}}`);
     }
