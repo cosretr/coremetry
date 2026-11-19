@@ -38,7 +38,7 @@ import (
 // Bütçeler (§4.5 "Anlatıcının girdisi").
 const (
 	splitNoteMax      = 600
-	splitDigestEach   = 900
+	splitDigestEach   = 900 // v0.10.2378 — özet ve geçmiş tavanları TABAN: kanıt ölçeğiyle çarpılır
 	splitDigestTotal  = 6 * 1024
 	splitHistoryMax   = 1536
 	splitHistoryTurns = 4
@@ -129,7 +129,7 @@ func (s *Server) planProfileSplit(ctx context.Context, req *chatRequest, evm *ch
 		return nil
 	}
 	sp := &profileSplit{research: in.Research, on: true, question: lastUserText(req.Messages),
-		history: splitHistory(req.Messages)}
+		history: splitHistoryScaled(req.Messages, s.evidenceScale(ctx))} // v0.10.2378 — anlatım profilinin kanıt ölçeği
 	sp.researchModel = s.copilot.ModelFor(copilot.WithProfile(ctx, in.Research))
 	if evm != nil {
 		sp.onSignal = evm.OnSplit
@@ -236,7 +236,7 @@ func (s *Server) splitNarrate(ctx context.Context, conv []copilot.ChatMessage, e
 	plan := answerClassLoopPlan(ctx, stepPlan{}) // örnekler + sınıf satırı EN SONA, tavan ctx'e
 	sys := sp.narrator + copilot.ChatNarrateAddendum() + plan.SystemAddendum
 	nctx := copilot.WithToolless(plan.planCtx(ctx))
-	msgs := []copilot.ChatMessage{{Role: "user", Text: copilot.ChatNarrateUser(sp.history, sp.question, splitDigests(conv), note)}}
+	msgs := []copilot.ChatMessage{{Role: "user", Text: copilot.ChatNarrateUser(sp.history, sp.question, splitDigestsScaled(conv, s.evidenceScale(ctx)), note)}} // v0.10.2378 — anlatım profilinin kanıt ölçeği
 	turn, err := s.chatLoopTurn(nctx, sys, msgs, nil, emit)
 	turn.ToolCalls = nil // araçsız çağrı; metinden ayrışan çağrı da yürümez
 	if err == nil {
@@ -284,11 +284,17 @@ func splitAddTokens(t, prev copilot.ChatTurn) copilot.ChatTurn {
 // splitHistory — SAF: soru hariç son dört turun metni, yeniden eskiye
 // sığdırılır, eskiden yeniye yazılır (≤1,5 KB).
 func splitHistory(msgs []copilot.ChatMessage) string {
+	return splitHistoryScaled(msgs, 1)
+}
+
+// splitHistoryScaled — v0.10.2378: bayt bütçesi anlatım (sohbet) profilinin
+// kanıt ölçeğiyle (evidence_scale.go); tur tavanı aynı. Ölçek 1 bayt bayt eski.
+func splitHistoryScaled(msgs []copilot.ChatMessage, scale int) string {
 	if len(msgs) > 0 {
 		msgs = msgs[:len(msgs)-1]
 	}
 	var lines []string
-	left := splitHistoryMax
+	left := scaleCap(splitHistoryMax, scale)
 	for i := len(msgs) - 1; i >= 0 && len(lines) < splitHistoryTurns && left > 0; i-- {
 		t := strings.TrimSpace(msgs[i].Text)
 		if t == "" {
@@ -311,12 +317,19 @@ func splitHistory(msgs []copilot.ChatMessage) string {
 // splitDigests — SAF: konuşmadaki araç sonuçlarının modelin gördüğü hâli,
 // yeniden eskiye, sonuç başına ≤900 B, toplam ≤6 KB.
 func splitDigests(conv []copilot.ChatMessage) string {
+	return splitDigestsScaled(conv, 1)
+}
+
+// splitDigestsScaled — v0.10.2378: sonuç başı ve toplam özet tavanı anlatım
+// profilinin kanıt ölçeğiyle (evidence_scale.go). Ölçek 1 bayt bayt eski.
+func splitDigestsScaled(conv []copilot.ChatMessage, scale int) string {
+	each, total := scaleCap(splitDigestEach, scale), scaleCap(splitDigestTotal, scale)
 	var b strings.Builder
 	for i := len(conv) - 1; i >= 0; i-- {
 		rs := conv[i].ToolResults
 		for j := len(rs) - 1; j >= 0; j-- {
-			d := splitClip(rs[j].Name+": "+strings.TrimSpace(rs[j].Content), splitDigestEach)
-			if b.Len()+len(d)+1 > splitDigestTotal {
+			d := splitClip(rs[j].Name+": "+strings.TrimSpace(rs[j].Content), each)
+			if b.Len()+len(d)+1 > total {
 				return b.String()
 			}
 			if b.Len() > 0 {

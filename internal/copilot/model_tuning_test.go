@@ -379,3 +379,105 @@ func TestMaxTokensForMatchesSnapshot(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.2378 — kanıt bütçesi ölçeği: çağrının profili + yürürlükteki pencere
+// (geçitten okunmuşsa o, AĞSIZ). Yeteneksiz model pencere ne olursa olsun 1.
+func TestEvidenceBudgetFor(t *testing.T) {
+	const base = "http://evidence-scale.invalid/v1"
+	seed := func(model string, tokens int) {
+		key := base + "|" + model
+		ctxProbeMu.Lock()
+		if tokens > 0 {
+			ctxProbeCache[key] = ctxProbeEntry{info: ContextWindowInfo{Tokens: tokens, Source: "server"}, at: time.Time{}}
+		} else {
+			delete(ctxProbeCache, key)
+		}
+		ctxProbeMu.Unlock()
+	}
+	t.Cleanup(func() {
+		for _, m := range []string{tuneQwen, tuneGemma, "qwen3-30b", "my-model"} {
+			seed(m, 0)
+		}
+	})
+	cases := []struct {
+		name   string
+		model  string
+		probed int // 0 = geçit okunmadı (ad tablosu)
+		scale  int
+		window int
+	}{
+		{"yetenek + ad tablosu 262144", tuneQwen, 0, 8, 262144},
+		{"yetenek + geçit 262144", tuneQwen, 262144, 8, 262144},
+		{"yetenek + geçit 65536", tuneQwen, 65536, 2, 65536},
+		{"yetenek + geçit 16384", tuneQwen, 16384, 1, 16384},
+		{"gemma + geçit 262144", tuneGemma, 262144, 1, 262144},
+		{"gemma + ad tablosu", tuneGemma, 0, 1, 131072},
+		{"düz qwen3 + geçit 262144", "qwen3-30b", 262144, 1, 262144},
+		{"bilinmeyen + geçit 1M", "my-model", 1 << 20, 1, 1 << 20},
+		{"bilinmeyen + pencere yok", "my-model", 0, 1, 0},
+	}
+	for _, c := range cases {
+		seed(c.model, c.probed)
+		s := New(ProviderOpenAI, "k", c.model)
+		s.Configure(ProviderOpenAI, "k", c.model, base, false, true)
+		got := s.EvidenceBudgetFor(context.Background())
+		if got.Scale != c.scale || got.Window != c.window || got.MaxScale != c.scale {
+			t.Errorf("%s: %+v, want scale=%d window=%d", c.name, got, c.scale, c.window)
+		}
+		if n := s.EvidenceScaleFor(context.Background()); n != c.scale {
+			t.Errorf("%s: EvidenceScaleFor=%d", c.name, n)
+		}
+		seed(c.model, 0)
+	}
+	var nilSvc *Service
+	if got := nilSvc.EvidenceBudgetFor(context.Background()); got.Scale != 1 || got.MaxScale != 1 {
+		t.Errorf("nil servis: %+v", got)
+	}
+}
+
+// Karma kurulum: çağrının profili gemma (ölçek 1), başka profil ölçekli →
+// MaxScale bütün-istem korumasına "ölçekli istem olabilir" der; açık profil
+// seçimi ölçeği o profilden çözer.
+func TestEvidenceBudgetForMixedProfiles(t *testing.T) {
+	s := New(ProviderOpenAI, "k", tuneGemma)
+	s.SetProfiles([]ModelProfile{
+		{ID: "small", Provider: ProviderOpenAI, APIKey: "k", Model: tuneGemma},
+		{ID: "wide", Provider: ProviderOpenAI, APIKey: "k", Model: tuneQwen},
+	}, "small", nil)
+	if got := s.EvidenceBudgetFor(context.Background()); got.Scale != 1 || got.MaxScale != 8 {
+		t.Fatalf("varsayılan gemma: %+v, want scale=1 maxScale=8", got)
+	}
+	if got := s.EvidenceBudgetFor(WithProfile(context.Background(), "wide")); got.Scale != 8 || got.MaxScale != 8 || got.Window != 262144 {
+		t.Fatalf("açık profil qwen3.8: %+v", got)
+	}
+	only := New(ProviderOpenAI, "k", tuneGemma)
+	only.SetProfiles([]ModelProfile{{ID: "a", Provider: ProviderOpenAI, APIKey: "k", Model: tuneGemma}, {ID: "b", Provider: ProviderOpenAI, APIKey: "k", Model: "qwen3-30b"}}, "a", nil)
+	if got := only.EvidenceBudgetFor(context.Background()); got.Scale != 1 || got.MaxScale != 1 {
+		t.Fatalf("yeteneksiz kurulum: %+v, want 1/1", got)
+	}
+}
+
+// Pencere kaynağı: geçitten okunmuş kayıt probed=true; ad tablosu ve önbelleğe
+// düşmüş ad tahmini probed=false.
+func TestEvidenceBudgetWindowProbed(t *testing.T) {
+	const base = "http://evidence-probed.invalid/v1"
+	key := base + "|" + tuneGemma
+	t.Cleanup(func() {
+		ctxProbeMu.Lock()
+		delete(ctxProbeCache, key)
+		ctxProbeMu.Unlock()
+	})
+	s := New(ProviderOpenAI, "k", tuneGemma)
+	s.Configure(ProviderOpenAI, "k", tuneGemma, base, false, true)
+	if got := s.EvidenceBudgetFor(context.Background()); got.WindowProbed || got.Window != 131072 {
+		t.Fatalf("ad tablosu: %+v", got)
+	}
+	for src, want := range map[string]bool{"server": true, "name": false} {
+		ctxProbeMu.Lock()
+		ctxProbeCache[key] = ctxProbeEntry{info: ContextWindowInfo{Tokens: 16384, Source: src}}
+		ctxProbeMu.Unlock()
+		if got := s.EvidenceBudgetFor(context.Background()); got.WindowProbed != want || got.Window != 16384 {
+			t.Fatalf("kaynak %q: %+v", src, got)
+		}
+	}
+}

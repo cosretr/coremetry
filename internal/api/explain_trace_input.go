@@ -67,6 +67,12 @@ type traceLite struct {
 // traceLiteOf — SAF: span → kompakt satır (v0.10.1149'da döngüden
 // çıkarıldı; trace explain + span explain'in trace bağlamı aynı biçim).
 func traceLiteOf(sp chstore.SpanRow) traceLite {
+	return traceLiteOfScaled(sp, 1)
+}
+
+// traceLiteOfScaled — v0.10.2378: hata span'inin SQL ifadesi tavanı kanıt
+// ölçeğiyle (evidence_scale.go); ölçek 1 = 600, bayt bayt eski.
+func traceLiteOfScaled(sp chstore.SpanRow, scale int) traceLite {
 	l := traceLite{Name: sp.Name, Service: sp.ServiceName, Kind: sp.Kind,
 		ParentSpan: sp.ParentSpanID, SpanID: sp.SpanID, DurationMs: float64(sp.EndTime-sp.StartTime) / 1e6}
 	if sp.StatusCode == "error" {
@@ -74,11 +80,33 @@ func traceLiteOf(sp chstore.SpanRow) traceLite {
 		l.StatusMsg = sp.StatusMessage
 		if sp.DBStatement != "" {
 			l.DBSystem = sp.DBSystem
-			l.DBStatement = truncRunesN(sp.DBStatement, 600)
+			l.DBStatement = truncRunesN(sp.DBStatement, scaleCap(traceLiteDBStatementRunes, scale))
 		}
 	}
 	return l
 }
+
+// Trace explain girdisinin taban tavanları (v0.10.2378'de adlandırıldı;
+// değerler aynı). Kanıt ölçeğiyle çarpılır (evidence_scale.go).
+const (
+	traceLiteDBStatementRunes = 600  // hata span'inin SQL ifadesi
+	traceExplainLogFetch      = 30   // log deposundan okunan satır
+	traceExplainLogLines      = 15   // prompt'a giren log satırı (yüksek severity önce)
+	traceExplainLogBodyBytes  = 600  // log gövdesi
+	traceExplainLogStackFirst = 1500 // ilk stack'li logun stack'i
+	traceExplainLogStackRest  = 900  // sonraki logların stack'i
+	// traceExplainLogsBlockBytes — log bloğunun TOPLAM gövde + stack baytı.
+	// Taban tavanlarda toplam zaten bunun altında kalır (15 × (600 + 900) +
+	// 600 ≈ 23 KB), o yüzden ölçek 1'de UYGULANMAZ. Ölçek > 1'de satır sayısı
+	// VE satır boyu birlikte büyür (çarpım ölçeğin karesi); toplam bununla
+	// doğrusal tutulur. Sıra severity-öncelikli olduğundan en ciddi satırlar
+	// kalır ve yazılmayan satır sayısı modele söylenir.
+	traceExplainLogsBlockBytes = 24000
+)
+
+// traceExplainLogsOmittedFmt — ölçekli yolda yazılmayan log satırlarının notu
+// (%d: okunan satır, verilen satır).
+const traceExplainLogsOmittedFmt = "\n(Okunan %d log satırının en ciddi %d tanesi verildi; kalanı bütçe nedeniyle yazılmadı — eksik satırlara dayanarak sayım yapma.)"
 
 // traceRootSpan — kök: parent'ı olmayan span; yoksa en erken başlayan
 // (kırık/eksik parent zincirinde de bir cevap üretmeli). spans boş olmamalı.
@@ -252,12 +280,17 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 	// v0.10.1627 — KRİTİK YOL da TÜM span'lerden (en büyük paylı adım 100'lük
 	// kesimin dışında kalabilir). Ek okuma yok.
 	crit := traceCriticalPathOf(allSpans)
-	spans = pickExplainSpans(spans, traceExplainSpanCap)
+	// v0.10.2378 — kanıt ölçeği (evidence_scale.go): geniş pencereli modelde
+	// span tavanı, event/stack tavanları, log satırı sayısı ve gövde/stack
+	// bütçeleri çarpılır; ölçek 1'de her sayı aşağıdaki sabit, prompt bayt bayt
+	// eski.
+	evScale := s.evidenceScale(ctx)
+	spans = pickExplainSpans(spans, scaleCap(traceExplainSpanCap, evScale))
 	compact := make([]traceLite, 0, len(spans))
 	var dbStmts, errTexts []string
 	seenStmt := map[string]bool{}
 	for _, sp := range spans {
-		l := traceLiteOf(sp)
+		l := traceLiteOfScaled(sp, evScale)
 		if l.Status == "error" {
 			if l.DBStatement != "" && len(dbStmts) < 3 && !seenStmt[l.DBStatement] {
 				seenStmt[l.DBStatement] = true
@@ -275,7 +308,7 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 	// (exception.type/message/stacktrace) modele hiç ulaşmıyordu. Ek okuma yok
 	// — aynı span'lerin events alanı (explain_trace_events.go). Hata span'inin
 	// exception'ı şema kanıtının hata metnine de girer.
-	evd := buildTraceEventDigest(spans)
+	evd := buildTraceEventDigestLim(spans, traceEventLimitsFor(evScale))
 	errTexts = append(errTexts, evd.ErrTexts...)
 
 	// Trace'in LOGLARI — SADECE kullanıcı bu explain'i tetiklediğinde, log
@@ -313,8 +346,8 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 			defer oracleWG.Done()
 			octx, ocancel := context.WithTimeout(ctx, oracleExplainFetchTimeout)
 			defer ocancel()
-			if rows, oerr := s.store.OracleErrorsByTrace(octx, strings.ToLower(id), ofrom, oto, oracleExplainMaxRows*5); oerr == nil {
-				oracleBlock, oracleRows = oracleExplainBlock(rows, s.oracleSourceNames())
+			if rows, oerr := s.store.OracleErrorsByTrace(octx, strings.ToLower(id), ofrom, oto, scaleCap(oracleExplainMaxRows, evScale)*5); oerr == nil {
+				oracleBlock, oracleRows = oracleExplainBlockScaled(rows, s.oracleSourceNames(), evScale)
 				oracleRowsRead = rows
 			}
 		}()
@@ -346,7 +379,7 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 		from := time.Unix(0, minT).Add(-time.Minute)
 		to := time.Unix(0, maxT).Add(time.Minute)
 		lctx, cancel := context.WithTimeout(ctx, 6*time.Second)
-		page, lerr := logstore.LogsForTrace(lctx, s.logs, id, from, to, 30)
+		page, lerr := logstore.LogsForTrace(lctx, s.logs, id, from, to, scaleCap(traceExplainLogFetch, evScale))
 		logOutcome = classifyTraceLogRead(true, page, lerr)
 		if lerr == nil && page != nil && len(page.Logs) > 0 {
 			type liteLog struct {
@@ -359,9 +392,11 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 			logs := page.Logs
 			logsRead = logs
 			sort.SliceStable(logs, func(i, j int) bool { return logs[i].Severity > logs[j].Severity })
-			ll := make([]liteLog, 0, 15)
+			logLines := scaleCap(traceExplainLogLines, evScale)
+			logBytes, logBudget := 0, scaleCap(traceExplainLogsBlockBytes, evScale)
+			ll := make([]liteLog, 0, min(logLines, len(logs)))
 			for _, lg := range logs {
-				if len(ll) >= 15 {
+				if len(ll) >= logLines || (evScale > 1 && logBytes >= logBudget) {
 					break
 				}
 				// v0.9.1182 (operatör-bildirimli) — stack ARANIR, tek bir
@@ -379,7 +414,7 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 					// ödemeyelim.
 					bodyForPrompt = stackparse.MessageHead(lg.Body)
 				}
-				e := liteLog{Sev: lg.SeverityText, Svc: lg.ServiceName, Body: truncate(bodyForPrompt, 600)}
+				e := liteLog{Sev: lg.SeverityText, Svc: lg.ServiceName, Body: truncate(bodyForPrompt, scaleCap(traceExplainLogBodyBytes, evScale))}
 				e.ExType = lg.Attributes["exception.type"] // nil map okuması güvenli
 				// v0.9.1182 — stack ataması artık `lg.Attributes != nil`
 				// koşulunun DIŞINDA. Gövdeden gelen bir stack, özniteliksiz bir
@@ -397,11 +432,11 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 					// did not. Only the first: the remaining stacks stay at
 					// 900 so the prompt budget does not grow with every
 					// duplicate of the same failure.
-					stackLimit := 900
+					stackLimit := traceExplainLogStackRest
 					if rawStack == "" {
-						stackLimit = 1500
+						stackLimit = traceExplainLogStackFirst
 					}
-					e.Stack = truncate(stackText, stackLimit)
+					e.Stack = truncate(stackText, scaleCap(stackLimit, evScale))
 					// v0.9.831 — kod çekici için HAM stack (prompt'a giren
 					// 900-byte kesilmiş kopya değil): frame'ler dosya+satır
 					// taşıyor ve kesik bir satır konumlandırılamaz. İlk
@@ -413,10 +448,15 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 						chainLogEx = traceChainLogException(lg, stackText) // v0.10.1371
 					}
 				}
+				logBytes += len(e.Body) + len(e.Stack)
 				ll = append(ll, e)
 			}
+			logsNote := ""
+			if evScale > 1 && len(ll) < len(logs) { // ölçek 1'de not yok (bayt bayt eski)
+				logsNote = fmt.Sprintf(traceExplainLogsOmittedFmt, len(logs), len(ll))
+			}
 			if lp, e := json.Marshal(ll); e == nil {
-				logsBlock = fmt.Sprintf("\n\nBu trace'in ilişkili LOGLARI (log store; stacktrace burada span event'lerinden zengin olabilir), yüksek severity önce:\n```json\n%s\n```\n\nTrace waterfall'ı VE logları BİRLİKTE yorumla — hata/stacktrace varsa kök nedeni logdaki stacktrace + exception.type'a dayandır ve ilgili span'ın StatusMsg'ıyla eşleştir.", promptfmt.FenceSafe(string(lp)))
+				logsBlock = fmt.Sprintf("\n\nBu trace'in ilişkili LOGLARI (log store; stacktrace burada span event'lerinden zengin olabilir), yüksek severity önce:\n```json\n%s\n```%s\n\nTrace waterfall'ı VE logları BİRLİKTE yorumla — hata/stacktrace varsa kök nedeni logdaki stacktrace + exception.type'a dayandır ve ilgili span'ın StatusMsg'ıyla eşleştir.", promptfmt.FenceSafe(string(lp)), logsNote)
 			}
 		}
 		cancel()

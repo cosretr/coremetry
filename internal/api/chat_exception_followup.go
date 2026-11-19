@@ -303,7 +303,9 @@ func (s *Server) exceptionCodeLoop(ctx context.Context, emit func(string, any), 
 
 	// Ek ÖNDE, çekmece çekirdeği arkada: DataNotInstruction sonda kalır.
 	system := chatSourceCodePromptTR(tools) + copilot.SystemPromptDrawerChat()
-	conv := []copilot.ChatMessage{{Role: "user", Text: drawerNarrationUser(question, ex, msgs, evidence)}}
+	// v0.10.2378 — açıklama tavanı döngünün (yerel) profilinin kanıt ölçeğiyle; araç
+	// sonucu tabanda kalır (read_source_code kendi 5800 tavanlı; bu döngü tur bütçesinden geçmez).
+	conv := []copilot.ChatMessage{{Role: "user", Text: drawerNarrationUserScaled(question, ex, msgs, evidence, s.evidenceScale(ctx))}}
 
 	var calledTools, codeReads []string
 	var totalIn, totalOut, totalCached uint32

@@ -40,6 +40,7 @@ var qwen38FlashNext = Caps{
 	MaxOutputTokens:     131072,
 	DefaultMaxTokens:    32768,
 	RecommendedSampling: true,
+	EvidenceScaling:     true, // v0.10.2378 — kanıt bütçeleri pencereyle ölçeklenir
 	SamplingThinking:    Sampling{Temperature: 1.0, TopP: 0.95, TopK: 20, PresencePenalty: 0},
 	SamplingDirect:      Sampling{Temperature: 0.7, TopP: 0.8, TopK: 20, PresencePenalty: 1.5},
 }
@@ -127,4 +128,39 @@ func MaxTokensCeiling(c Caps, window, general int) int {
 		ceiling = window / 2
 	}
 	return ceiling
+}
+
+// ── v0.10.2378 — KANIT BÜTÇESİ ÖLÇEĞİ ──────────────────────────────────────
+//
+// CoSRE'nin modele gösterdiği kanıtın (span listesi, exception mesajı ve
+// stack'i, log satırları, araç sonuçları, konuşma geçmişi) tavanları 8k–32k
+// pencereli küçük model için seçilmiş sabitlerdi. 262144 pencereli modelde
+// aynı sabitler kanıtı keser, pencerenin çoğu boş kalır (operatör
+// 2026-11-19: "Modelin limitlerini kullanalım").
+//
+// Ölçek = yürürlükteki pencere / EvidenceBaselineWindow, [1, EvidenceScaleMax].
+// YALNIZ EvidenceScaling yeteneği olan kayıtlı modelde; yeteneksiz her model
+// (gemma, düz qwen3, bilinmeyen) pencere ne olursa olsun 1 alır — istem bayt
+// bayt bugünkü. Geçit modeli daha küçük pencereyle açmışsa ölçek onunla iner.
+
+// EvidenceBaselineWindow — bugünkü kanıt sabitlerinin tasarlandığı pencere
+// (jeton): 6000 rune'luk araç sonucu / geçmiş / çekmece kanıtı 32k sınıfı
+// yerel model içindi.
+const EvidenceBaselineWindow = 32768
+
+// EvidenceScaleMax — ölçeğin tavanı. 8 = kayıtlı tek modelin yerel penceresi
+// (262144) / taban (32768). Üstü bilinçli kapalı: (a) tavanlar ve bütün-istem
+// koruması (api/evidence_scale.go) 8'de doğrulandı; (b) geçit modelin yerel
+// penceresinden büyük bir sayı bildirirse (yanlış yapılandırma) bütçe onu
+// izlemez; (c) geçmiş her turda yeniden gönderilir, doğrusal büyüyen girdi
+// işleme süresi 8 katın ötesinde ölçülmeden açılmaz.
+const EvidenceScaleMax = 8
+
+// EvidenceScale — SAF: kanıt bütçesi çarpanı (≥1). window = çağrının
+// yürürlükteki penceresi (jeton; 0 = bilinmiyor → 1).
+func EvidenceScale(c Caps, window int) int {
+	if !c.EvidenceScaling || window <= 0 {
+		return 1
+	}
+	return max(1, min(window/EvidenceBaselineWindow, EvidenceScaleMax))
 }

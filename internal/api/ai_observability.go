@@ -162,6 +162,11 @@ func (s *Server) aiCall(ctx context.Context, r *http.Request, system, user strin
 	} else {
 		ctx, done = s.beginExplainSpanCtx(ctx) // v0.10.425 (O2)
 	}
+	// v0.10.2378 — bütün-istem koruması (evidence_scale.go): ölçekli kanıtla
+	// kurulmuş istem çağrının GERÇEK profilinin penceresine sığdırılır (yüzey /
+	// yerel profil yönlendirmesi yukarıda çözüldü). Ölçekli istem olamayan
+	// kurulumda ve sınırın altında user aynen.
+	user = s.fitSingleShot(ctx, system, user)
 	var out string
 	var err error
 	if o.onDelta != nil {

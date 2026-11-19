@@ -636,7 +636,7 @@ func (s *Server) runSuggestionIntent(ctx context.Context, emit func(string, any)
 			emit("step-result", skippedStepResult(stepN, tool, content, oc.Kind))
 		}
 	}
-	content, _ = clampToolResultForLoop(v2LoopPlanFrom(ctx), content)
+	content, _ = clampToolResultForLoopScaled(v2LoopPlanFrom(ctx), content, s.evidenceScale(ctx)) // v0.10.2378 — kanıt ölçeği
 	callID := "suggestion-" + firstNonEmpty(sc.pick.ID, "g")
 	out.conv = append(append([]copilot.ChatMessage(nil), conv...),
 		copilot.ChatMessage{Role: "assistant", ToolCalls: []copilot.ToolCall{{ID: callID, Name: tool, Input: args}}},

@@ -213,7 +213,7 @@ func TestRulesPromptSitesPinned(t *testing.T) {
 	}
 	guided, _ := os.ReadFile("copilot_guided.go")
 	gsrc := stripGoCommentsAPI(string(guided))
-	if strings.Count(gsrc, "s.cosreRulesBlock(") != 1 || !strings.Contains(gsrc, "guidedNarrationUser(question, evidence+cosreRulesDataSuffix(rulesBlock), explain, msgs)") ||
+	if strings.Count(gsrc, "s.cosreRulesBlock(") != 1 || !strings.Contains(gsrc, "guidedNarrationUserScaled(question, evidence+cosreRulesDataSuffix(rulesBlock), explain, msgs, ") ||
 		!strings.Contains(gsrc, "cosreRulesSystemPrefix(rulesBlock)+answerStyleGuidedPrompt(nctx, route.Intent)") {
 		t.Error("guided: blok VERİ bölümüne, ek sistem mesajının önüne")
 	}

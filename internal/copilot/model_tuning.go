@@ -85,14 +85,73 @@ func resolveTemperature(profileTemp, globalTemp *float64, rec modelcaps.Sampling
 // çağrıda koşar; burada ağ çağrısı YAPILMAZ. Bayat kayıt da kullanılır:
 // sunucunun eski okuması ad tahmininden iyidir.
 func cachedContextWindow(cfg ModelProfile) int {
+	n, _ := cachedContextWindowInfo(cfg)
+	return n
+}
+
+// cachedContextWindowInfo — v0.10.2378: cachedContextWindow + pencere
+// SUNUCUDAN mı okundu (önbellekteki kayıt "server" kaynaklı). Ad tahmini ve
+// önbelleğe düşmüş ad tahmini probed=false.
+func cachedContextWindowInfo(cfg ModelProfile) (tokens int, probed bool) {
 	base := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
 	if cfg.Provider == ProviderOpenAI && base != "" && cfg.Model != "" {
 		ctxProbeMu.Lock()
 		e, ok := ctxProbeCache[base+"|"+cfg.Model]
 		ctxProbeMu.Unlock()
 		if ok && e.info.Tokens > 0 {
-			return e.info.Tokens
+			return e.info.Tokens, e.info.Source == "server"
 		}
 	}
-	return modelcaps.ContextWindow(cfg.Model)
+	return modelcaps.ContextWindow(cfg.Model), false
+}
+
+// ── v0.10.2378 — kanıt bütçesi ölçeği ──────────────────────────────────────
+
+// EvidenceBudget — çağrının çözülen profilinde kanıt bütçesinin girdileri.
+type EvidenceBudget struct {
+	// Scale — kanıt tavanlarının çarpanı (≥1; modelcaps.EvidenceScale).
+	Scale int
+	// Window — ölçeğin hesaplandığı yürürlükteki pencere (jeton; 0 = bilinmiyor).
+	Window int
+	// WindowProbed — pencere geçitten okundu (ad tahmini değil). Ölçeği 1 olan
+	// profilde bütün-istem koruması yalnız bu doğruyken pencereye güvenir: ad
+	// tablosu belirsiz adlarda bilinçli küçüktür (8192) ve bugün çalışan
+	// istemi kesmemeli.
+	WindowProbed bool
+	// MaxScale — yapılandırılmış profillerin en büyük ölçeği. >1 ise bu
+	// kurulumda ölçekli kanıtla kurulmuş istem OLABİLİR; bütün-istem koruması
+	// (api/evidence_scale.go) yalnız o zaman devreye girer. Yeteneksiz
+	// kurulumda (yalnız gemma vb.) hep 1 — hiçbir istem değişmez.
+	MaxScale int
+}
+
+// EvidenceBudgetFor — AĞSIZ (cachedContextWindow): çağrının profili için
+// kanıt ölçeği. Pencere geçitten daha önce okunduysa o (küçük açılmışsa ölçek
+// iner), yoksa ad tablosu. nil servis → ölçek 1.
+func (s *Service) EvidenceBudgetFor(ctx context.Context) EvidenceBudget {
+	out := EvidenceBudget{Scale: 1, MaxScale: 1}
+	if s == nil {
+		return out
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p := s.resolveProfileLocked(ctx).cfg
+	out.Window, out.WindowProbed = cachedContextWindowInfo(p)
+	out.Scale = modelcaps.EvidenceScale(modelcaps.For(p.Model), out.Window)
+	out.MaxScale = out.Scale
+	for _, rt := range s.profiles {
+		if rt == nil {
+			continue
+		}
+		if n := modelcaps.EvidenceScale(modelcaps.For(rt.cfg.Model), cachedContextWindow(rt.cfg)); n > out.MaxScale {
+			out.MaxScale = n
+		}
+	}
+	return out
+}
+
+// EvidenceScaleFor — çağrının profilinde kanıt bütçesi çarpanı (≥1).
+// ContextWindowFor / MaxTokensFor'un kardeşi; model adı çağıranda ARANMAZ.
+func (s *Service) EvidenceScaleFor(ctx context.Context) int {
+	return s.EvidenceBudgetFor(ctx).Scale
 }

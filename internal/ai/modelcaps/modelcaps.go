@@ -77,6 +77,10 @@ type Caps struct {
 	RecommendedSampling bool
 	SamplingThinking    Sampling // düşünme açık (varsayılan-açık dâhil)
 	SamplingDirect      Sampling // düşünme kapalı
+	// EvidenceScaling — v0.10.2378: KANIT bütçeleri (trace span'leri, stack,
+	// log, araç sonucu, geçmiş) yürürlükteki pencereyle ölçeklenir
+	// (EvidenceScale, tuning.go). false = bütçeler bugünkü sabitler.
+	EvidenceScaling bool
 }
 
 // For — model adından yetenek. Bilinmeyen ad: Unknown, Reasoning=false.

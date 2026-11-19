@@ -166,3 +166,30 @@ func TestChatPackDigestCap(t *testing.T) {
 		t.Fatal("bütçe sabitleri tasarımdan saptı")
 	}
 }
+
+// v0.10.2378 — özet eşiği parametreli: varsayılan eşik DigestJSON ile bayt
+// bayt aynı; geniş eşikte (modelin kanıt ölçeği) hiçbir alan kırpılmaz.
+func TestChatPackDigestWithin(t *testing.T) {
+	long := strings.Repeat("ş", 400)
+	mk := func() ChatPack { // her çağrıya taze paket: kırpma işaretçili alanları (Logs/Trace) yerinde kısaltır
+		d := ChatPackDigest{Service: "checkout", RED: &PackRED{ErrPct: 1}}
+		for i := 0; i < 3; i++ {
+			d.ErrorOps = append(d.ErrorOps, PackErrorOp{Name: truncRunes(long, 100)})
+			d.Exceptions = append(d.Exceptions, PackException{Type: truncRunes(long, 120), Message: truncRunes(long, 120), SampleTrace: packTraceID})
+			d.Deps = append(d.Deps, PackDep{Target: truncRunes(long, 80)})
+		}
+		d.Logs = &PackLogs{Samples: []string{truncRunes(long, 100), truncRunes(long, 100), truncRunes(long, 100)}}
+		return ChatPack{Digest: d}
+	}
+	full, _ := json.Marshal(mk().Digest)
+	if len(full) <= ChatPackDigestMax {
+		t.Fatalf("fikstür eşiği aşmalı: %d", len(full))
+	}
+	base := mk().DigestJSON()
+	if base != mk().DigestJSONWithin(ChatPackDigestMax) || len(base) > ChatPackDigestMax || base == string(full) {
+		t.Fatalf("varsayılan eşik: %d bayt", len(base))
+	}
+	if wide := mk().DigestJSONWithin(8 * ChatPackDigestMax); wide != string(full) {
+		t.Fatalf("geniş eşik: özet kırpılmadan dönmeli (%d / %d bayt)", len(wide), len(full))
+	}
+}

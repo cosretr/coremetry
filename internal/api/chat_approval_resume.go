@@ -485,7 +485,7 @@ func (s *Server) resumeApprovalTurn(ctx context.Context, r *http.Request, emit f
 			emit("step-result", skippedStepResult(stepI, ans.Tool, content, "approval_"+string(ro.Decision)))
 		}
 	}
-	content, _ = clampToolResultForLoop(v2LoopPlanFrom(ctx), content) // dilim 4 — v2 bayt tavanı
+	content, _ = clampToolResultForLoopScaled(v2LoopPlanFrom(ctx), content, s.evidenceScale(ctx)) // dilim 4 — v2 bayt tavanı; v0.10.2378 — kanıt ölçeği
 	out.conv = approvalResumeConv(conv, ans, content, isErr)
 	if ro.Claims.Kind == auth.ApprovalKind {
 		out.callsLeft, out.startRound = approvalResumeBudget(ro.Claims.Budget, maxCalls, maxRounds)

@@ -513,6 +513,7 @@ func (s *Server) generalSourceAnswer(ctx context.Context, question string, ans m
 
 // recordsMaxRunes — modele giden kayıt bloğunun tavanı (200 satır × 12 kolon
 // çoğu tabloda sığar; aşarsa kesilir ve modele söylenir).
+// v0.10.2378 — TABAN: kanıt ölçeğiyle çarpılır (evidence_scale.go).
 const recordsMaxRunes = 24000
 
 type recordsQuestionKey struct{}
@@ -531,10 +532,16 @@ func lastQuestionOr(ctx context.Context, fallback string) string {
 
 // recordsUserPrompt — SAF: soru + kaynak + (kesilmişse notlu) kayıt bloğu.
 func recordsUserPrompt(question, kindTR, data string) string {
+	return recordsUserPromptScaled(question, kindTR, data, 1)
+}
+
+// recordsUserPromptScaled — v0.10.2378: kayıt bloğu tavanı kanıt ölçeğiyle
+// (evidence_scale.go); ölçek 1 bayt bayt eski.
+func recordsUserPromptScaled(question, kindTR, data string, scale int) string {
 	r := []rune(data)
 	note := ""
-	if len(r) > recordsMaxRunes {
-		data = string(r[:recordsMaxRunes])
+	if maxRunes := scaleCap(recordsMaxRunes, scale); len(r) > maxRunes {
+		data = string(r[:maxRunes])
 		note = " (liste uzun olduğu için KESİLDİ — cevapta kesildiğini söyle)"
 	}
 	return "SORU: " + strings.TrimSpace(question) + "\n\nKAYNAK: " + kindTR + note +
@@ -555,6 +562,6 @@ func (s *Server) narrateRecords(ctx context.Context, emit func(string, any), que
 		return ""
 	}
 	raw, _ := s.copilotStreamSurface(ctx, aisurface.ChatRecords, copilot.SystemPromptRecordsAnswer(),
-		recordsUserPrompt(question, kindTR, data), func(d string) { emit("delta", map[string]string{"text": d}) })
+		recordsUserPromptScaled(question, kindTR, data, s.evidenceScaleSurface(ctx, aisurface.ChatRecords)), func(d string) { emit("delta", map[string]string{"text": d}) })
 	return strings.TrimSpace(raw)
 }

@@ -38,6 +38,9 @@ import (
 // get_topology cevabı bunun altında TAMAMEN sığar; sığmayan şey zaten
 // modelin okuyamayacağı kadar geniş bir listedir ve doğru cevabı onu
 // daraltmaktır, göndermek değil.
+//
+// v0.10.2378 — TABAN değer: geniş pencereli modelde kanıt ölçeğiyle çarpılır
+// (evidence_scale.go, clampToolResultScaled); ölçek 1'de 6000 aynen.
 const chatToolResultMaxRunes = 6000
 
 // chatToolResultTruncNote — kırpmanın modele söylenen hâli. %d'ler:
@@ -56,12 +59,19 @@ const chatToolResultTruncNote = "\n\n[kırpıldı: sonucun ilk %d karakteri veri
 //
 // SAF, tablo-testli.
 func clampToolResultForModel(s string) (out string, truncated bool) {
+	return clampToolResultScaled(s, 1)
+}
+
+// clampToolResultScaled — v0.10.2378: tavan kanıt ölçeğiyle çarpılır
+// (evidence_scale.go). Ölçek 1 = chatToolResultMaxRunes, bayt bayt eski.
+// Not aynı; sayıları gerçek tavana göre.
+func clampToolResultScaled(s string, scale int) (out string, truncated bool) {
+	kept := scaleCap(chatToolResultMaxRunes, scale)
 	n := utf8.RuneCountInString(s)
-	if n <= chatToolResultMaxRunes {
+	if n <= kept {
 		return s, false
 	}
 	r := []rune(s)
-	kept := chatToolResultMaxRunes
 	return string(r[:kept]) + sprintfTruncNote(kept, n-kept), true
 }
 

@@ -696,7 +696,7 @@ func TestOutboundTierSourcePins(t *testing.T) {
 	gb := g[strings.Index(g, "func (s *Server) copilotChatGuided("):]
 	before(gb, "outboundSlotFrom(ctx).get()", "if !hasGuidedSignal(norm)", "guided yuva sinyal kapısından önce")
 	rg := g[strings.Index(g, "func (s *Server) runGuidedRoute("):]
-	before(rg, "route.Intent == guidedOutboundCall", "guidedNarrationUser(", "LLM'siz dal anlatımdan önce")
+	before(rg, "route.Intent == guidedOutboundCall", "guidedNarrationUserScaled(", "LLM'siz dal anlatımdan önce") // v0.10.2378 — ölçekli kurucu
 	if strings.Contains(read("copilot_intent.go"), "guidedOutboundCall") {
 		t.Error("R1: outbound_call sınıflandırıcı listesine girmez")
 	}

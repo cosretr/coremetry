@@ -121,6 +121,9 @@ type traceFollowUp struct {
 	// ("\n\n" ile başlar; "" = tek adımlı yol). "Neden yavaş / nerede
 	// bekliyor" takibi en büyük paylı adımı ve hedefini görsün.
 	Critical string
+	// Scale — v0.10.2378: kanıt ölçeği (evidence_scale.go; 0/1 = taban). Önceki
+	// açıklamanın tavanı bununla çarpılır.
+	Scale int
 	// Simple — v0.10.1302: serbest döngü simple araç setinde (küçük model;
 	// serbest-sorgu araçları gizli). Takip talimatı ve pencere satırı gizli
 	// araçların yerine yapısal karşılıklarını anar (copilot.ToolsetText).
@@ -245,7 +248,7 @@ func traceFollowUpPromptTR(tf *traceFollowUp, explain string) string {
 	// önceki açıklamadan önce. Sayı denetiminin tohumuna da girer (açıklamasız
 	// çağrı) — mesajdaki değerler temellenir.
 	out += tf.Chain + tf.Critical + tf.Events // v0.10.1371 — zincir event bloğundan önce; v0.10.1627 — kritik yol zincirden sonra
-	if ex := clampDrawerExplain(explain); ex != "" {
+	if ex := clampDrawerExplainScaled(explain, tf.Scale); ex != "" {
 		out += "\n\n" + traceFollowUpExplainHeader + "```text\n" + promptfmt.FenceSafe(ex) + "\n```"
 	}
 	return out + "\n\n"

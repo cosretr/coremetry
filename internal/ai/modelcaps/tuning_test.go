@@ -16,6 +16,7 @@ func TestQwen38FlashNextCaps(t *testing.T) {
 		RecommendedSampling: true,
 		SamplingThinking:    Sampling{Temperature: 1.0, TopP: 0.95, TopK: 20, PresencePenalty: 0},
 		SamplingDirect:      Sampling{Temperature: 0.7, TopP: 0.8, TopK: 20, PresencePenalty: 1.5},
+		EvidenceScaling:     true, // v0.10.2378
 	}
 	for _, m := range []string{
 		"Qwen/Qwen3.8-Flash-Next-FP8", "qwen38-flash-next-fp8", "QWEN38-FLASH", "qwen3.8-flash", "  qwen38_flash_next  ",
@@ -158,6 +159,51 @@ func TestMaxTokensCeiling(t *testing.T) {
 	for _, c := range cases {
 		if got := MaxTokensCeiling(c.caps, c.window, c.generalCeilng); got != c.want {
 			t.Errorf("%s: %d, want %d", c.name, got, c.want)
+		}
+	}
+}
+
+// v0.10.2378 — kanıt bütçesi ölçeği: yetenek + pencere / 32768, [1, 8];
+// yeteneksiz model pencere ne olursa olsun 1.
+func TestEvidenceScale(t *testing.T) {
+	q := For("qwen38-flash-next-fp8")
+	if !q.EvidenceScaling {
+		t.Fatal("kayıtlı model kanıt ölçeği yeteneğini taşımalı")
+	}
+	cases := []struct {
+		name   string
+		caps   Caps
+		window int
+		want   int
+	}{
+		{"yetenek + yerel pencere 262144", q, 262144, 8},
+		{"yetenek + geçit 131072", q, 131072, 4},
+		{"yetenek + geçit 65536", q, 65536, 2},
+		{"yetenek + geçit 100000 (aşağı yuvarlanır)", q, 100000, 3},
+		{"yetenek + taban pencere", q, 32768, 1},
+		{"yetenek + geçit 16384 → 1'in altına inmez", q, 16384, 1},
+		{"yetenek + pencere bilinmiyor", q, 0, 1},
+		{"yetenek + geçit yerel pencereden büyük sayı bildirdi → tavan 8", q, 1 << 20, EvidenceScaleMax},
+		{"gemma 131072", For("gemma-4-31b-it"), 131072, 1},
+		{"gemma 262144", For("gemma-4-31b-it"), 262144, 1},
+		{"düz qwen3 262144", For("qwen3-30b"), 262144, 1},
+		{"qwen3.8 flash'sız 262144", For("qwen3.8-plus"), 262144, 1},
+		{"claude 200000", For("claude-sonnet-5"), 200000, 1},
+		{"bilinmeyen 1M", For("my-model"), 1 << 20, 1},
+		{"boş ad", For(""), 262144, 1},
+	}
+	for _, c := range cases {
+		if got := EvidenceScale(c.caps, c.window); got != c.want {
+			t.Errorf("%s: %d, want %d", c.name, got, c.want)
+		}
+	}
+	if EvidenceBaselineWindow*EvidenceScaleMax != q.ContextWindow {
+		t.Errorf("tavan gerekçesi bozuldu: %d × %d ≠ yerel pencere %d", EvidenceBaselineWindow, EvidenceScaleMax, q.ContextWindow)
+	}
+	// Yetenek yalnız kayıtlı satırda: başka hiçbir ad desenine sızmamalı.
+	for _, m := range []string{"qwen3-30b", "qwq-32b", "deepseek-r1", "gemma-4-31b", "llama-4", "mistral-large", "gpt-5", "o3", "claude-fable-5", "x"} {
+		if For(m).EvidenceScaling {
+			t.Errorf("%q kanıt ölçeği yeteneği taşımamalı", m)
 		}
 	}
 }

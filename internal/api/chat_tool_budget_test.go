@@ -110,7 +110,7 @@ func TestChatLoopWiresCatalogAndResultBudget(t *testing.T) {
 	}
 	// araç seti dilim 4 — kapı clampToolResultForLoop: v1 sabit rune yolu
 	// (clampToolResultForModel), v2 `ai.loopBudget` bayt tavanı.
-	const clampCall = "clampToolResultForLoop(v2Plan, tr.Content)"
+	const clampCall = "clampToolResultForLoopScaled(v2Plan, tr.Content, evScale)" // v0.10.2378 — kanıt ölçeği
 	if !strings.Contains(src, clampCall) {
 		t.Fatal("tool sonucu MODEL bütçesine indirilmiyor — " + clampCall + " bekleniyor")
 	}

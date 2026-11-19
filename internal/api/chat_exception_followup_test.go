@@ -807,7 +807,7 @@ func TestExceptionFollowUpWiring(t *testing.T) {
 	for _, want := range []string{
 		"preview, truncated := chatStepPreview(tc.Name, tr.Content, tr.IsError)",
 		"chatSourceCodePromptTR(tools) + copilot.SystemPromptDrawerChat()",
-		"Text: drawerNarrationUser(question, ex, msgs, evidence)",
+		"Text: drawerNarrationUserScaled(question, ex, msgs, evidence, s.evidenceScale(ctx))", // v0.10.2378 — kanıt ölçeği
 		"chatPromptSample(lastUserText(msgs), codeReads)",
 		"splitByCallBudget(turn.ToolCalls, callsLeft)",
 		"round == chatMaxToolRounds-1 || callsLeft <= 0",

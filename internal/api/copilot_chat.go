@@ -265,9 +265,12 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// Sayı tavanı KALDI (kısa turlarda bile 40 tur küçük modelde odak
 	// kaybettirir); rune bütçesi onun üstüne bindi. Karar saf ve
 	// deterministik: assemble.ClampHistory.
+	// v0.10.2378 — rune bütçesi kanıt ölçeğiyle (evidence_scale.go): geniş
+	// pencereli modelde geçmiş kesilmeden taşınır; ölçek 1'de 6000 aynen.
+	// Profil ctx'i henüz kurulmadı: sohbet yüzeyi + açık profil seçimi.
 	keep, trimmed := assemble.ClampHistory(
 		assemble.RuneLens(chatMessageTexts(req.Messages)),
-		chatMaxMessages, assemble.HistoryMaxRunes)
+		chatMaxMessages, scaleCap(assemble.HistoryMaxRunes, s.chatEntryEvidenceScale(r.Context(), req.Context.Profile)))
 	req.Messages = req.Messages[len(req.Messages)-keep:]
 	// Kırpma modele SÖYLENİR. Sessiz kırpma, modelin olmayan bir konuşmayı
 	// hatırlıyormuş gibi davranmasına yol açar ("az önce dediğin gibi…") ve
@@ -1010,7 +1013,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		return strings.TrimRight(text, "\n") + "\n" + strings.Join(chartBlocks, "")
 	}
 
-	conv := opPre.seed(req.Messages) // operasyon ön-getirmesi varsa tool kaydı (nil → aynen)
+	// v0.10.2378 — döngü profilinin kanıt ölçeği (evidence_scale.go).
+	evScale := s.evidenceScale(ctx)
+	conv := opPre.seedScaled(req.Messages, evScale) // operasyon ön-getirmesi varsa tool kaydı (nil → aynen)
 	// Taşma yeniden denemesi TEK sefer: ikinci bir deneme aynı duvara
 	// bir çağrı daha yakar (kod-explain'in `hb == block` kontrolüyle
 	// aynı gerekçe).
@@ -1117,6 +1122,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	if isTraceFollowUp {
 		tf := buildTraceFollowUp(traceSubj, pageCtx, loopEnv, req.Context.RangeS, anchorTo, time.Now())
 		tf.Simple = simpleTools // v0.10.1302 — takip talimatı araç setine göre
+		tf.Scale = evScale      // v0.10.2378 — önceki açıklamanın tavanı kanıt ölçeğiyle
 		// v0.10.1147 — ilk cevabın span exception özeti takibe de (aynı okuma,
 		// aynı blok; explain_trace_events.go). Okunamazsa "" ve takip aynen.
 		tf.Events, tf.Chain, tf.Critical = s.traceFollowUpEvents(ctx, tf.TraceID) // v0.10.1371 — + hata zinciri; v0.10.1627 — + kritik yol (aynı okuma)
@@ -1195,7 +1201,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		v2p := &v2LoopPlan{Scope: us, Addendum: scopeAddendumFor(us, req.Messages, need, req.Context.Unscoped) +
 			s.briefingAskAddendum(ctx, us, req.Context.Env, req.Context.BriefingID, req.Context.BriefingLine) +
 			generalQuestionLoopAddendum(chstore.CurrentAIGeneralQuestions().Allow, lastUserText(req.Messages)), // v0.10.2123
-			Budget: narrowLoopBudget(chstore.CurrentAILoopBudget(), v2LoopCeilings(dm, exchangeMax))} // dilim 4
+			Budget: narrowLoopBudget(chstore.CurrentAILoopBudget(), v2LoopCeilings(dm, exchangeMax, s.evidenceScale(ctx)))} // dilim 4; v0.10.2378 — araç metni tavanı ölçekli
 		if rtPlan != nil { // v0.10.1738 — rota grafikleri (CosreChart source=route) + ek + çipler
 			for _, sp := range rtPlan.Specs {
 				emit("block", blockSeq.Next(blocks.TypeChart, sp))
@@ -1726,7 +1732,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// sağlayıcıda sahipsiz tool sonucu bırakır. Kaynağı burada
 			// kesmek doğru yer.
 			tr.Content = v2LoopPlanFrom(ctx).evidenceOf().collect(tc.Name, tr.Content, tr.IsError) // v0.10.2360 — S3: aday blok; on → model görünümü
-			tr.Content, _ = clampToolResultForLoop(v2Plan, tr.Content)                             // dilim 4 — v2 bayt tavanı
+			tr.Content, _ = clampToolResultForLoopScaled(v2Plan, tr.Content, evScale)              // dilim 4 — v2 bayt tavanı; v0.10.2378 — kanıt ölçeği
 			results = append(results, tr)
 		}
 		if len(over) > 0 {

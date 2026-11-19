@@ -48,6 +48,9 @@ import (
 // kurulur. Sınıflandırıcı beyaz listesinde DEĞİL (prompt değişmedi).
 const guidedTraceDrill guidedIntent = "trace_drill"
 
+// v0.10.2378 — traceDrillLogsLimit / LogsPerTrace / LogBodyRunes sohbet kanıtında
+// TABAN: kanıt ölçeğiyle çarpılır (traceDrillEvidenceBody, evidence_scale.go).
+// Servis raporu kartı tabanda kalır.
 const (
 	traceDrillBudget       = 10 * time.Second // tüm kırılım (trace'ler + taban + loglar)
 	traceDrillLogsTimeout  = 5 * time.Second
@@ -460,6 +463,14 @@ func traceRecordsPerLog(recordsTotal, n int) int {
 
 // renderTraceDrillLogsBudgetTR — renderTraceDrillLogsBodyTR + traceRecords toplam bütçesi.
 func renderTraceDrillLogsBudgetTR(noStore bool, page *logstore.Page, err error, traceIDs []string, bodyRunes, recordsTotal int) string {
+	return renderTraceDrillLogsScaledTR(noStore, page, err, traceIDs, bodyRunes, recordsTotal, 1)
+}
+
+// renderTraceDrillLogsScaledTR — v0.10.2378: trace başına satır ve okuma tavanı
+// kanıt ölçeğiyle (evidence_scale.go; bodyRunes'u çağıran ölçekler). Ölçek 1
+// bayt bayt eski; tavan notu gerçek sayıları basar.
+func renderTraceDrillLogsScaledTR(noStore bool, page *logstore.Page, err error, traceIDs []string, bodyRunes, recordsTotal, scale int) string {
+	perTrace, limit := scaleCap(traceDrillLogsPerTrace, scale), scaleCap(traceDrillLogsLimit, scale)
 	switch {
 	case len(traceIDs) == 0:
 		return ""
@@ -474,7 +485,7 @@ func renderTraceDrillLogsBudgetTR(noStore bool, page *logstore.Page, err error, 
 	}
 	var b strings.Builder
 	b.WriteString("O TRACE'LERİN LOGLARI (yalnız bu trace id'leri, trace zarfı ±1 dk):\n")
-	groups := groupTraceLogs(logs, traceIDs, traceDrillLogsPerTrace)
+	groups := groupTraceLogs(logs, traceIDs, perTrace)
 	nRec := 0
 	for _, g := range groups {
 		for _, lg := range g {
@@ -493,8 +504,8 @@ func renderTraceDrillLogsBudgetTR(noStore bool, page *logstore.Page, err error, 
 			b.WriteString(renderTraceLogLineBudgetTR(lg, bodyRunes, recRunes) + "\n")
 		}
 	}
-	if len(logs) >= traceDrillLogsLimit {
-		fmt.Fprintf(&b, "Not: log okuması %d kayıt tavanına ulaştı; trace başına en çok %d satır gösterildi.\n", traceDrillLogsLimit, traceDrillLogsPerTrace)
+	if len(logs) >= limit {
+		fmt.Fprintf(&b, "Not: log okuması %d kayıt tavanına ulaştı; trace başına en çok %d satır gösterildi.\n", limit, perTrace)
 	}
 	return b.String()
 }
@@ -714,6 +725,11 @@ func (s *Server) traceDrillEvidenceBody(ctx context.Context, emit func(string, a
 	}
 	dctx, cancel := context.WithTimeout(ctx, traceDrillBudget)
 	defer cancel()
+	// v0.10.2378 — kanıt ölçeği (evidence_scale.go): log gövdesi, trace başına
+	// satır ve okuma tavanı; ölçek 1'de sabitler aynen.
+	evScale := s.evidenceScale(ctx)
+	bodyRunes = scaleCap(bodyRunes, evScale)
+	logsLimit := scaleCap(traceDrillLogsLimit, evScale)
 	steps := make([]int, len(cands))
 	for i, c := range cands {
 		args, _ := json.Marshal(map[string]any{"trace_id": c.Row.TraceID, "pick": c.Label})
@@ -746,10 +762,10 @@ func (s *Server) traceDrillEvidenceBody(ctx context.Context, emit func(string, a
 			maxNs = hi
 		}
 	}
-	largs, _ := json.Marshal(map[string]any{"trace_ids": ids, "limit": traceDrillLogsLimit})
+	largs, _ := json.Marshal(map[string]any{"trace_ids": ids, "limit": logsLimit})
 	nLog := emitGuidedStep(emit, "trace_drill_logs", string(largs))
-	page, lerr := s.readDrillLogs(dctx, ids, minNs, maxNs, from, to)
-	logText := renderTraceDrillLogsBudgetTR(s.logs == nil, page, lerr, ids, bodyRunes, s.traceRecordsBudget(ctx))
+	page, lerr := s.readDrillLogsLimit(dctx, ids, minNs, maxNs, from, to, logsLimit)
+	logText := renderTraceDrillLogsScaledTR(s.logs == nil, page, lerr, ids, bodyRunes, s.traceRecordsBudget(ctx), evScale)
 	emitGuidedStepResult(emit, nLog, "trace_drill_logs", logText, lerr)
 	rows := make([]chstore.TraceRow, 0, len(cands))
 	for _, c := range cands {
@@ -796,6 +812,11 @@ func drillsHaveSidePublish(res []traceDrill) bool {
 // ES ise ES); depo yoksa (nil, nil) — çağıran "depo yok" cümlesini kurar.
 // v0.10.1337 — servis raporu da AYNI yolu kullanır (ikinci log okuyucu yok).
 func (s *Server) readDrillLogs(dctx context.Context, ids []string, minNs, maxNs int64, from, to time.Time) (*logstore.Page, error) {
+	return s.readDrillLogsLimit(dctx, ids, minNs, maxNs, from, to, traceDrillLogsLimit)
+}
+
+// readDrillLogsLimit — v0.10.2378: okuma tavanı parametreli (kanıt ölçeği).
+func (s *Server) readDrillLogsLimit(dctx context.Context, ids []string, minNs, maxNs int64, from, to time.Time, limit int) (*logstore.Page, error) {
 	if s.logs == nil || len(ids) == 0 {
 		return nil, nil
 	}
@@ -803,7 +824,7 @@ func (s *Server) readDrillLogs(dctx context.Context, ids []string, minNs, maxNs 
 	if minNs > 0 {
 		lf, lt = time.Unix(0, minNs).Add(-time.Minute), time.Unix(0, maxNs).Add(time.Minute)
 	}
-	return logstore.SearchWithTimeout(dctx, s.logs, logstore.Filter{TraceIDs: ids, From: lf, To: lt, Limit: traceDrillLogsLimit}, traceDrillLogsTimeout)
+	return logstore.SearchWithTimeout(dctx, s.logs, logstore.Filter{TraceIDs: ids, From: lf, To: lt, Limit: limit}, traceDrillLogsTimeout)
 }
 
 // slowTraceDrill — en yavaş trace listesi (guidedTraceFilter) + kırılım.

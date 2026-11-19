@@ -56,6 +56,15 @@ type oracleLite struct {
 // Satır yoksa "" döner ve prompt bayt-bayt eskisi gibi kalır. Sıralama
 // zamana göre (deterministik: aynı girdi aynı önbellek anahtarı).
 func oracleExplainBlock(rows []chstore.OracleErrorRow, sourceNames map[string]string) (string, int) {
+	return oracleExplainBlockScaled(rows, sourceNames, 1)
+}
+
+// oracleExplainBlockScaled — v0.10.2378: satır ve değer tavanları kanıt
+// ölçeğiyle (evidence_scale.go); ölçek 1 bayt bayt eski. Ek kolon SAYISI
+// (oracleExplainAttrMax) ölçeklenmez: satır × kolon × değer çarpımı ölçeğin
+// küpüyle büyürdü.
+func oracleExplainBlockScaled(rows []chstore.OracleErrorRow, sourceNames map[string]string, scale int) (string, int) {
+	maxRows, valRunes := scaleCap(oracleExplainMaxRows, scale), scaleCap(oracleExplainValueRunes, scale)
 	if len(rows) == 0 {
 		return "", 0
 	}
@@ -67,8 +76,8 @@ func oracleExplainBlock(rows []chstore.OracleErrorRow, sourceNames map[string]st
 		return sorted[i].RowID < sorted[j].RowID
 	})
 	total := len(sorted)
-	if len(sorted) > oracleExplainMaxRows {
-		sorted = sorted[:oracleExplainMaxRows]
+	if len(sorted) > maxRows {
+		sorted = sorted[:maxRows]
 	}
 	grouped := false
 	lite := make([]oracleLite, 0, len(sorted))
@@ -87,13 +96,13 @@ func oracleExplainBlock(rows []chstore.OracleErrorRow, sourceNames map[string]st
 			RequestID: r.RequestID,
 			Customer:  r.CustomerID,
 			Teller:    r.TellerID,
-			Message:   truncRunesN(strings.TrimSpace(r.Body), oracleExplainValueRunes),
+			Message:   truncRunesN(strings.TrimSpace(r.Body), valRunes),
 		}
 		if w := r.EffectiveWeight(); w > 1 {
 			e.Count = w
 			grouped = true
 		}
-		e.Extra = oracleExtraAttrs(r)
+		e.Extra = oracleExtraAttrsScaled(r, scale)
 		lite = append(lite, e)
 	}
 	payload, err := json.Marshal(lite)
@@ -117,6 +126,12 @@ func oracleExplainBlock(rows []chstore.OracleErrorRow, sourceNames map[string]st
 // oracleExtraAttrs — eşlemede tüketilmeyen kolonlar (attr_keys/values), ad
 // sırasıyla, tavanlı. Ağırlık attribute'u zaten `count` olarak gidiyor.
 func oracleExtraAttrs(r chstore.OracleErrorRow) map[string]string {
+	return oracleExtraAttrsScaled(r, 1)
+}
+
+// oracleExtraAttrsScaled — v0.10.2378: değer tavanı ölçekli (kolon sayısı sabit).
+func oracleExtraAttrsScaled(r chstore.OracleErrorRow, scale int) map[string]string {
+	attrMax, valRunes := oracleExplainAttrMax, scaleCap(oracleExplainValueRunes, scale)
 	if len(r.AttrKeys) == 0 {
 		return nil
 	}
@@ -130,14 +145,14 @@ func oracleExtraAttrs(r chstore.OracleErrorRow) map[string]string {
 		if v == "" {
 			continue
 		}
-		kvs = append(kvs, kv{k, truncRunesN(v, oracleExplainValueRunes)})
+		kvs = append(kvs, kv{k, truncRunesN(v, valRunes)})
 	}
 	if len(kvs) == 0 {
 		return nil
 	}
 	sort.Slice(kvs, func(i, j int) bool { return kvs[i].k < kvs[j].k })
-	if len(kvs) > oracleExplainAttrMax {
-		kvs = kvs[:oracleExplainAttrMax]
+	if len(kvs) > attrMax {
+		kvs = kvs[:attrMax]
 	}
 	out := make(map[string]string, len(kvs))
 	for _, e := range kvs {

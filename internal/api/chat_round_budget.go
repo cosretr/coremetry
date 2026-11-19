@@ -112,6 +112,7 @@ type roundBudget struct {
 
 	peakTrimmed           uint16 // tek çağrıda tam görülmeyen sonuç sayısının en büyüğü
 	chipStubbed, chipDrop int    // son yayınlanan adım satırı
+	chipBase              bool   // v0.10.2378 — "taban bütçeye indirildi" satırı yayınlandı
 
 	// v0.10.2365 (S6) — pencere ve kalibrasyon PROFİL BAŞINA: profil ayrımı
 	// eşliyken araştırma ve sohbet profili aynı alışverişte farklı pencerede
@@ -169,6 +170,14 @@ func (s *Server) fitRoundBudget(ctx context.Context, emit func(string, any), sys
 	if s != nil && s.copilot != nil {
 		b.useProfile(s.copilot.ProfileIDFor(ctx)) // v0.10.2365 — profil başına pencere
 	}
+	// v0.10.2378 — karma kurulum (evidence_scale.go): çağrının profili en geniş
+	// profilden dar ölçekliyse konuşma ÖNCE bu profilin ölçeğine iner (geçmiş
+	// giriş profilinin, sonuçlar sohbet profilinin ölçeğiyle kırpıldı). Tek
+	// ölçekli kurulumda (MaxScale == Scale; yalnız gemma dâhil) bu dal yok.
+	eb := s.evidenceBudgetOf(ctx)
+	if eb.Scale < eb.MaxScale {
+		conv, _ = evidenceConvAt(conv, loopToolBytesAt(v2LoopPlanFrom(ctx), eb.Scale), max(1, eb.Scale))
+	}
 	if !b.resolved {
 		b.resolved = true
 		b.window = s.roundBudgetWindow(ctx)
@@ -182,10 +191,29 @@ func (s *Server) fitRoundBudget(ctx context.Context, emit func(string, any), sys
 		b.sentBytes = fixed + chatConvBytes(conv)
 		return conv
 	}
-	plan := planRoundCompaction(roundCompactIn{
+	in := roundCompactIn{
 		Conv: conv, FixedBytes: fixed, Window: b.window, MaxTokens: s.roundBudgetMaxTokens(ctx),
 		PrevIn: b.prevIn, PrevBytes: b.prevBytes, BPT: b.bpt, TraceFollowUp: b.traceFollowUp,
-	})
+	}
+	plan := planRoundCompaction(in)
+	// v0.10.2378 — ölçekli kanıt (evidence_scale.go) tam daraltmayla da
+	// sığmıyorsa konuşma TABAN bütçeye iner: araç sonuçları ve geçmiş ölçek 1
+	// tavanına (notlarıyla), sonra aynı plan bir kez daha. Böylece bu dilim
+	// yüzünden bugünkünden büyük istek gitmez. Ölçek 1'de bu dal yok.
+	if !plan.Fits && eb.Scale > 1 {
+		if base, changed := evidenceConvAt(conv, loopToolBytesAt(v2LoopPlanFrom(ctx), 1), 1); changed {
+			in.Conv = base
+			plan = planRoundCompaction(in) // sığmasa da Conv = taban hâli
+			b.sentBytes = plan.Bytes
+			if !b.chipBase {
+				b.chipBase = true
+				emit("step", map[string]string{"label": roundBudgetBaseChip})
+			}
+			if plan.Stubbed+plan.DroppedPairs == 0 {
+				return plan.Conv
+			}
+		}
+	}
 	b.sentBytes = plan.Bytes
 	if plan.Stubbed+plan.DroppedPairs == 0 {
 		return conv
@@ -228,7 +256,13 @@ func (s *Server) roundBudgetWindow(ctx context.Context) int {
 	case s != nil && s.copilot != nil:
 		info = s.copilot.ContextWindowInfoFor(ctx)
 	}
-	if info.Source != "server" || info.Tokens <= 0 {
+	if info.Tokens <= 0 {
+		return 0
+	}
+	// v0.10.2378 — kanıt bütçesi bu profilde ölçekliyse (evidence_scale.go)
+	// tur bütçesi ad tahminiyle de devrede: ölçek o pencereden hesaplandı,
+	// ölçekli tavanlarla aynı sayıya bakmalı. Ölçek 1'de bugünkü kural aynen.
+	if info.Source != "server" && s.evidenceBudgetOf(ctx).Scale <= 1 {
 		return 0 // ad tahmini düşük güven: proaktif adım yok
 	}
 	return info.Tokens

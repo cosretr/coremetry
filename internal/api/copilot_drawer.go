@@ -80,6 +80,8 @@ import (
 // bağlam penceresi dar; tipik açıklama 1-3 KB, runbook çıktıları
 // taşabilir. Rune bazlı kesilir (Türkçe metin: byte kesmesi karakter
 // bölerdi) ve kesildiği modele SÖYLENİR.
+// v0.10.2378 — TABAN: kanıt ölçeğiyle çarpılır (evidence_scale.go); kanıt,
+// asgari baş payı ve guided geçmiş bütçesi de (aşağıda) aynı ölçekle.
 const drawerExplainMaxRunes = 3000
 
 // drawerHistoryTurns — narration bloğuna sığdırılan önceki tur sayısı
@@ -108,12 +110,19 @@ const (
 
 // clampDrawerExplain — açıklamayı buda + kırp. Saf; tablo-testli.
 func clampDrawerExplain(s string) string {
+	return clampDrawerExplainScaled(s, 1)
+}
+
+// clampDrawerExplainScaled — v0.10.2378: tavan kanıt ölçeğiyle
+// (evidence_scale.go); ölçek 1 = drawerExplainMaxRunes, bayt bayt eski.
+func clampDrawerExplainScaled(s string, scale int) string {
+	maxRunes := scaleCap(drawerExplainMaxRunes, scale)
 	s = strings.TrimSpace(s)
-	if utf8.RuneCountInString(s) <= drawerExplainMaxRunes {
+	if utf8.RuneCountInString(s) <= maxRunes {
 		return s
 	}
 	r := []rune(s)
-	return strings.TrimSpace(string(r[:drawerExplainMaxRunes])) + drawerTruncSuffix
+	return strings.TrimSpace(string(r[:maxRunes])) + drawerTruncSuffix
 }
 
 // drawerSubject — çekmecenin öznesi (`?ai=<kind>:<id>[:<extra>]`); v0.10.1405
@@ -150,21 +159,29 @@ func parseDrawerSubject(raw string) (drawerSubject, bool) {
 // v0.9.482 raporunun ta kendisi. Kesme rune bazlı (Türkçe metin: byte
 // kesmesi karakter bölerdi) ve modele AÇIKÇA söylenir. Saf; tablo-testli.
 func clampDrawerEvidence(full, logs string) string {
+	return clampDrawerEvidenceScaled(full, logs, 1)
+}
+
+// clampDrawerEvidenceScaled — v0.10.2378: kanıt tavanı ve asgari baş payı
+// kanıt ölçeğiyle (evidence_scale.go); ölçek 1 bayt bayt eski. Budama sırası
+// ve notlar aynı.
+func clampDrawerEvidenceScaled(full, logs string, scale int) string {
+	maxRunes, minHead := scaleCap(drawerEvidenceMaxRunes, scale), scaleCap(drawerEvidenceMinHead, scale)
 	if strings.TrimSpace(full) == "" {
 		return ""
 	}
-	if utf8.RuneCountInString(full) <= drawerEvidenceMaxRunes {
+	if utf8.RuneCountInString(full) <= maxRunes {
 		return full
 	}
 	if logs == "" || !strings.Contains(full, logs) {
 		// Log yok (ya da paketin parçası değil): tek parça, kuyruktan kes.
-		return cutRunes(full, drawerEvidenceMaxRunes) + drawerEvidenceCutNote
+		return cutRunes(full, maxRunes) + drawerEvidenceCutNote
 	}
-	keep := drawerEvidenceMaxRunes - utf8.RuneCountInString(logs)
-	if keep < drawerEvidenceMinHead {
+	keep := maxRunes - utf8.RuneCountInString(logs)
+	if keep < minHead {
 		// Loglar tek başına bütçeyi doldurdu: span listesini tümüyle bırak,
 		// logların YÜKSEK SEVERITY başını taşı (LogsForTrace sıralaması).
-		return drawerEvidenceLogsOnlyNote + cutRunes(logs, drawerEvidenceMaxRunes)
+		return drawerEvidenceLogsOnlyNote + cutRunes(logs, maxRunes)
 	}
 	head := strings.Replace(full, logs, "", 1)
 	return cutRunes(head, keep) + drawerEvidenceTruncNote + logs
@@ -269,6 +286,14 @@ const guidedHistoryHeader = "ÖNCEKİ KONUŞMA (K: operatör, C: sen — yalnız
 //
 // Saf; tablo-testli.
 func guidedHistorySection(msgs []copilot.ChatMessage) string {
+	return guidedHistorySectionScaled(msgs, 1)
+}
+
+// guidedHistorySectionScaled — v0.10.2378: rune bütçesi kanıt ölçeğiyle
+// (evidence_scale.go); tur tavanı (guidedHistoryTurns) aynı. Ölçek 1 bayt
+// bayt eski.
+func guidedHistorySectionScaled(msgs []copilot.ChatMessage, scale int) string {
+	maxRunes := scaleCap(guidedHistoryMaxRunes, scale)
 	// Aktif soru = son, metni dolu kullanıcı turu (lastUserText ve
 	// drawerHistoryBlock ile aynı kural). O tur SORU: satırında zaten
 	// var; geçmişe de girerse modele iki kez sorulmuş olur.
@@ -304,15 +329,15 @@ func guidedHistorySection(msgs []copilot.ChatMessage) string {
 		return ""
 	}
 	keep, trimmed := assemble.ClampHistory(
-		assemble.RuneLens(rows), guidedHistoryTurns, guidedHistoryMaxRunes)
+		assemble.RuneLens(rows), guidedHistoryTurns, maxRunes)
 	rows = rows[len(rows)-keep:]
 	body := strings.Join(rows, "\n")
-	if utf8.RuneCountInString(body) > guidedHistoryMaxRunes {
+	if utf8.RuneCountInString(body) > maxRunes {
 		// ClampHistory'nin "EN AZ BİR tur" köşesi: tek bir dev tur
 		// (yapıştırılmış log yığını) bütçeyi tek başına aşabilir. O
 		// sözleşme SORUNUN kendisini korumak için var; burada tur zaten
 		// geçmiştir, kanıttan önce gelemez → kuyruktan kes.
-		body = cutRunes(body, guidedHistoryMaxRunes)
+		body = cutRunes(body, maxRunes)
 		trimmed++
 	}
 	if upstreamTrim {
@@ -337,11 +362,17 @@ func guidedHistorySection(msgs []copilot.ChatMessage) string {
 // başlığı) ve bloğun başı küçük modelde en ağır okunan yerdir.
 // Saf; tablo-testli.
 func guidedNarrationUser(question, evidence, explain string, msgs []copilot.ChatMessage) string {
+	return guidedNarrationUserScaled(question, evidence, explain, msgs, 1)
+}
+
+// guidedNarrationUserScaled — v0.10.2378: açıklama ve geçmiş tavanları kanıt
+// ölçeğiyle (evidence_scale.go); ölçek 1 bayt bayt eski.
+func guidedNarrationUserScaled(question, evidence, explain string, msgs []copilot.ChatMessage, scale int) string {
 	out := "SORU: " + question + "\n\nVERİ:\n" + evidence
-	if ex := clampDrawerExplain(explain); ex != "" {
+	if ex := clampDrawerExplainScaled(explain, scale); ex != "" {
 		out += "\n\nEKRANDAKİ AÇIKLAMA (operatör bu cevabı az önce okudu; soru buna dair olabilir):\n" + ex
 	}
-	if h := guidedHistorySection(msgs); h != "" {
+	if h := guidedHistorySectionScaled(msgs, scale); h != "" {
 		out += "\n\n" + h
 	}
 	// v0.10.398 (CoSRE denetimi P6) — talimat EN SONDA: küçük model son
@@ -376,6 +407,7 @@ const drawerEvidenceHeader = "HAM KANIT (bu açıklamanın dayandığı veri —
 func (s *Server) drawerSubjectEvidence(ctx context.Context, subj drawerSubject, loc *time.Location) (string, *sourceExceptionScope) {
 	ectx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
+	evScale := s.evidenceScaleSurface(ctx, "chat-drawer") // v0.10.2378 — anlatım yüzeyinin kanıt ölçeği
 	switch subj.Kind {
 	case "trace", "span":
 		// span öznesinde de TRACE paketi kurulur: takip soruları
@@ -385,7 +417,7 @@ func (s *Server) drawerSubjectEvidence(ctx context.Context, subj drawerSubject, 
 		if err != nil {
 			return "", nil
 		}
-		body := clampDrawerEvidence(in.User, in.LogsBlock)
+		body := clampDrawerEvidenceScaled(in.User, in.LogsBlock, evScale)
 		if body == "" {
 			return "", nil
 		}
@@ -402,7 +434,7 @@ func (s *Server) drawerSubjectEvidence(ctx context.Context, subj drawerSubject, 
 		// (onaylı önce; onaysız "olgu değil" işaretli). Kanıt tavanının DIŞINDA
 		// eklenir: kırpma vakaları yemesin, blok kendi tavanlı (≤3 vaka).
 		// v0.10.1401 — UYGULAMA KODU bloğu DevOps önekleri + depo linkleriyle.
-		ev := clampDrawerEvidence(s.drawerExceptionUser(ectx, g, in), in.LogsBlock)
+		ev := clampDrawerEvidenceScaled(s.drawerExceptionUser(ectx, g, in), in.LogsBlock, evScale)
 		if ev != "" && g != nil {
 			ev += s.pastCasesBlock(ectx, g.Service, []string{g.Type}, chstore.CaseIDFor("exception", g.Fingerprint))
 		}
@@ -437,7 +469,7 @@ func (s *Server) drawerEndpointEvidence(ctx context.Context, subj drawerSubject)
 	if p == nil {
 		return ""
 	}
-	return clampDrawerEvidence(strings.TrimSpace(p.summary()+"\n"+p.Drill), "")
+	return clampDrawerEvidenceScaled(strings.TrimSpace(p.summary()+"\n"+p.Drill), "", s.evidenceScaleSurface(ctx, "chat-drawer")) // v0.10.2378
 }
 
 // drawerEndpointWindow — SAF (v0.10.1367): çekmecenin sohbete gönderdiği
@@ -523,9 +555,15 @@ func drawerHistoryBlock(msgs []copilot.ChatMessage) string {
 // Sıra bilinçli: açıklama → ham kanıt → konuşma → SORU en sonda (küçük
 // model son talimatı en iyi izler). Saf; tablo-testli.
 func drawerNarrationUser(question, explain string, msgs []copilot.ChatMessage, evidence string) string {
+	return drawerNarrationUserScaled(question, explain, msgs, evidence, 1)
+}
+
+// drawerNarrationUserScaled — v0.10.2378: açıklama tavanı kanıt ölçeğiyle
+// (evidence_scale.go); ölçek 1 bayt bayt eski.
+func drawerNarrationUserScaled(question, explain string, msgs []copilot.ChatMessage, evidence string, scale int) string {
 	var b strings.Builder
 	b.WriteString("EKRANDAKİ AÇIKLAMA (operatörün az önce okuduğu CoSRE cevabı):\n")
-	b.WriteString(clampDrawerExplain(explain))
+	b.WriteString(clampDrawerExplainScaled(explain, scale))
 	if ev := strings.TrimSpace(evidence); ev != "" {
 		b.WriteString("\n\n")
 		b.WriteString(drawerEvidenceHeader)
@@ -555,7 +593,8 @@ func drawerNarrationUser(question, explain string, msgs []copilot.ChatMessage, e
 // döngü koşar (chat_exception_followup.go); sunulamıyorsa aşağıdaki tek çağrı
 // bayt bayt eski. Döngü cevap üretemezse bir düz çiple aynı tek çağrıya düşer.
 func (s *Server) copilotChatDrawer(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, explain, subject, ctxService string, loc *time.Location, env drawerLoopEnv) (handled, ok bool) {
-	ex := clampDrawerExplain(explain)
+	evScale := s.evidenceScaleSurface(ctx, "chat-drawer") // v0.10.2378 — anlatım yüzeyinin kanıt ölçeği
+	ex := clampDrawerExplainScaled(explain, evScale)
 	question := strings.TrimSpace(lastUserText(msgs))
 	if ex == "" || question == "" {
 		return false, false
@@ -587,7 +626,13 @@ func (s *Server) copilotChatDrawer(ctx context.Context, emit func(string, any), 
 			if lctx, lok := s.routeSensitive(ctx, copilot.SensitiveCode); !lok {
 				emitGuidedContextStep(emit, "Kod okuma "+localOnlyClosedReason)
 			} else {
-				lok, fallback := s.exceptionCodeLoop(lctx, emit, env, tools, msgs, question, ex, evidence, evidenceKind, exScope, ctxService)
+				// v0.10.2378 — yerel profil daha dar pencereliyse kanıt onun ölçeğine iner
+				// (bu döngü tur bütçesinden geçmez); aynı ölçekte kanıt aynen.
+				lev := evidence
+				if ls := s.evidenceBudgetOf(lctx).Scale; ls < evScale {
+					lev = clampDrawerEvidenceScaled(evidence, "", ls)
+				}
+				lok, fallback := s.exceptionCodeLoop(lctx, emit, env, tools, msgs, question, ex, lev, evidenceKind, exScope, ctxService)
 				if !fallback {
 					return true, lok
 				}
@@ -599,7 +644,7 @@ func (s *Server) copilotChatDrawer(ctx context.Context, emit func(string, any), 
 	}
 
 	raw, err := s.copilotStreamSurface(ctx, "chat-drawer", copilot.SystemPromptDrawerChat(),
-		drawerNarrationUser(question, ex, msgs, evidence), func(delta string) {
+		drawerNarrationUserScaled(question, ex, msgs, evidence, evScale), func(delta string) {
 			emit("delta", map[string]string{"text": delta})
 		})
 	if err != nil {

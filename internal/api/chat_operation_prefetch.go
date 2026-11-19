@@ -306,11 +306,16 @@ type opTraceRow struct {
 // seed — serbest döngünün konuşmasına sentetik tool çağrısı + sonucu
 // (nil → mesajlar aynen).
 func (p *opPrefetch) seed(msgs []copilot.ChatMessage) []copilot.ChatMessage {
+	return p.seedScaled(msgs, 1)
+}
+
+// seedScaled — v0.10.2378: sonuç tavanları kanıt ölçeğiyle (ölçek 1 = seed).
+func (p *opPrefetch) seedScaled(msgs []copilot.ChatMessage, scale int) []copilot.ChatMessage {
 	if p == nil {
 		return msgs
 	}
 	out := append([]copilot.ChatMessage{}, msgs...)
-	sum, _ := clampToolResultForModel(p.summary())
+	sum, _ := clampToolResultScaled(p.summary(), scale)
 	out = append(out,
 		copilot.ChatMessage{Role: "assistant", ToolCalls: []copilot.ToolCall{{ID: opPrefetchToolID, Name: opPrefetchTool, Input: json.RawMessage(p.argsJSON)}}},
 		copilot.ChatMessage{Role: "user", ToolResults: []copilot.ToolResult{{CallID: opPrefetchToolID, Name: opPrefetchTool, Content: sum}}},
@@ -320,7 +325,7 @@ func (p *opPrefetch) seed(msgs []copilot.ChatMessage) []copilot.ChatMessage {
 		if args == "" {
 			args = "{}"
 		}
-		drill, _ := clampToolResultForModel(p.Drill)
+		drill, _ := clampToolResultScaled(p.Drill, scale)
 		out = append(out,
 			copilot.ChatMessage{Role: "assistant", ToolCalls: []copilot.ToolCall{{ID: opDrillToolID, Name: opDrillTool, Input: json.RawMessage(args)}}},
 			copilot.ChatMessage{Role: "user", ToolResults: []copilot.ToolResult{{CallID: opDrillToolID, Name: opDrillTool, Content: drill}}},
@@ -331,7 +336,7 @@ func (p *opPrefetch) seed(msgs []copilot.ChatMessage) []copilot.ChatMessage {
 		if args == "" {
 			args = "{}"
 		}
-		cc, _ := clampToolResultForModel(p.clusterText)
+		cc, _ := clampToolResultScaled(p.clusterText, scale)
 		out = append(out,
 			copilot.ChatMessage{Role: "assistant", ToolCalls: []copilot.ToolCall{{ID: opClusterToolID, Name: opClusterTool, Input: json.RawMessage(args)}}},
 			copilot.ChatMessage{Role: "user", ToolResults: []copilot.ToolResult{{CallID: opClusterToolID, Name: opClusterTool, Content: cc}}},

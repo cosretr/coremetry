@@ -36,6 +36,7 @@ func (s *Server) registerAILoopBudgetRoutes(mux *http.ServeMux) {
 
 // chatV2ToolTextMaxBytes — v2'de modele giden tek tool sonucunun bayt
 // tavanı ve varsayılanı (G3: "text ≤ 2 KB"). v1 chatToolResultMaxRunes'ta kalır.
+// v0.10.2378 — TABAN: kanıt ölçeğiyle çarpılır (v2LoopCeilings, evidence_scale.go).
 const chatV2ToolTextMaxBytes = 2048
 
 // loopBudget — bir v2 alışverişinin etkin bütçesi. MaxTokens 0 = kapalı.
@@ -89,15 +90,24 @@ func clampToolResultBytes(s string, maxBytes int) (string, bool) {
 // clampToolResultForLoop — döngünün tool-sonucu kapısı: v2 planı bayt
 // bütçesi taşıyorsa o, değilse (v1) sabit rune yolu.
 func clampToolResultForLoop(v2 *v2LoopPlan, s string) (string, bool) {
+	return clampToolResultForLoopScaled(v2, s, 1)
+}
+
+// clampToolResultForLoopScaled — v0.10.2378: scale = kanıt ölçeği
+// (evidence_scale.go). v1 rune tavanını çarpar; v2 bayt tavanı planın
+// kendisinde ölçekli (v2LoopCeilings).
+func clampToolResultForLoopScaled(v2 *v2LoopPlan, s string, scale int) (string, bool) {
 	if v2 != nil && v2.Budget.ToolTextBytes > 0 {
 		return clampToolResultBytes(s, v2.Budget.ToolTextBytes)
 	}
-	return clampToolResultForModel(s)
+	return clampToolResultScaled(s, scale)
 }
 
 // v2LoopCeilings — v2 alışverişinin tavanları (deepMode + alışveriş süresi).
-func v2LoopCeilings(dm deepMode, exchangeMax time.Duration) loopBudget {
-	return loopBudget{MaxCalls: dm.toolCalls(), MaxRounds: dm.toolRounds(), MaxTime: exchangeMax, ToolTextBytes: chatV2ToolTextMaxBytes}
+// v0.10.2378 — araç metni tavanı kanıt ölçeğiyle çarpılır (ölçek 1 = 2 KB,
+// aynen); operatörün `toolTextBytes` ayarı yine yalnız daraltır.
+func v2LoopCeilings(dm deepMode, exchangeMax time.Duration, scale int) loopBudget {
+	return loopBudget{MaxCalls: dm.toolCalls(), MaxRounds: dm.toolRounds(), MaxTime: exchangeMax, ToolTextBytes: scaleCap(chatV2ToolTextMaxBytes, scale)}
 }
 
 // aiLoopBudgetCeilings — GET'in gösterdiği tavanlar (Derin kapalı).
@@ -122,8 +132,9 @@ func (s *Server) chatExchangeMax() time.Duration {
 	return chatExchangeTimeout(per)
 }
 
-func (s *Server) getAILoopBudget(w http.ResponseWriter, _ *http.Request) {
-	c := v2LoopCeilings(deepMode{}, s.chatExchangeMax())
+func (s *Server) getAILoopBudget(w http.ResponseWriter, r *http.Request) {
+	// v0.10.2378 — gösterilen araç metni tavanı sohbet profilinin gerçek (ölçekli) tavanı.
+	c := v2LoopCeilings(deepMode{}, s.chatExchangeMax(), s.evidenceScaleSurface(r.Context(), "chat"))
 	writeJSON(w, aiLoopBudgetResponse{
 		Setting: chstore.CurrentAILoopBudget(),
 		Ceilings: aiLoopBudgetCeilings{

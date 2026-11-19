@@ -202,6 +202,13 @@ type ChatPack struct {
 // DigestJSON — SAF: ≤ ChatPackDigestMax bayt özet (sığmazsa en az değerli
 // alanlar sırayla kırpılır: log örnekleri, anomaliler, yol, bağımlılıklar…).
 func (p ChatPack) DigestJSON() string {
+	return p.DigestJSONWithin(ChatPackDigestMax)
+}
+
+// DigestJSONWithin — v0.10.2378: bayt tavanı parametreli (sohbet, modelin
+// kanıt ölçeğiyle çağırır; ChatPackDigestMax = DigestJSON, bayt bayt eski).
+// Paketin kendi liste tavanları değişmez; yalnız kırpma eşiği büyür.
+func (p ChatPack) DigestJSONWithin(maxBytes int) string {
 	d := p.Digest
 	trims := []func() bool{
 		func() bool { return d.Logs != nil && shrink(&d.Logs.Samples) },
@@ -215,7 +222,7 @@ func (p ChatPack) DigestJSON() string {
 	}
 	for {
 		b, _ := json.Marshal(d)
-		if len(b) <= ChatPackDigestMax {
+		if len(b) <= maxBytes {
 			return string(b)
 		}
 		cut := false
