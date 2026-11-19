@@ -125,6 +125,7 @@ describe('TimeSeriesPanel envelope (S7)', () => {
 
   it('dolgu saydam: hex renge alfa eklenir, token çözülemezse gerçek --text3 yedeği', () => {
     expect(envelopeFill('#112233')).toBe('#11223322');
+    expect(envelopeFill('#06c')).toBe('#0066cc22'); // v0.10.2369 — küçültülmüş token opak kalmaz
     expect(envelopeFill()).toMatch(/^#[0-9a-f]{6}22$/i);
   });
 });

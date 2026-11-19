@@ -9,7 +9,7 @@ import { placeTooltip } from '@/lib/chartTooltip';
 import { DisclosureButton } from '@/components/ui';
 import { useThemeTick } from '@/lib/useThemeTick';
 import { timeSeriesPanelBuildSignature } from '@/lib/chartBuildSig';
-import { resolveVar as resolveColor, chartMonoFont } from '@/lib/chart/resolveVar';
+import { resolveVar as resolveColor, chartMonoFont, expandHex } from '@/lib/chart/resolveVar';
 import { legendMode } from '@/lib/chart/legendMode';
 import { xRangePinned, type XPin } from '@/lib/chart/xRange';
 import { stepGapsRefiner, nearestFilledIdx } from '@/lib/chart/gapPolicy';
@@ -171,7 +171,8 @@ interface TimeSeriesPanelProps {
 // Append an alpha byte to a #rrggbb colour for fills. Non-hex colours pass
 // through unchanged (uPlot still strokes/fills, just opaque-ish — acceptable).
 function withAlpha(hex: string, aa: string): string {
-  return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex + aa : hex;
+  const h = expandHex(hex); // v0.10.2369 — küçültülmüş `#rgb` de alfa alır
+  return /^#[0-9a-fA-F]{6}$/.test(h) ? h + aa : hex;
 }
 
 // envelopeFill — zarf dolgusu: token çözülür, hex ise ~%13 alfa eklenir.

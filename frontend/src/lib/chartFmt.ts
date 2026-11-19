@@ -6,6 +6,7 @@
 // look home-rolled; "12.5k rps" with a curated 10-colour
 // palette looks like a product.
 import { currentTheme } from '@/lib/theme';
+import { expandHex } from '@/lib/chart/resolveVar';
 import { SERIES_PALETTE_SETS, byTheme, type Theme } from '@/lib/themeRegistry';
 
 // fmtSmart — turns a raw value into a human-readable label,
@@ -176,7 +177,7 @@ function relLum(hex6: string): number {
   return 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4);
 }
 export function inkOn(fill: string): '#ffffff' | '#15171a' {
-  const m = /^#([0-9a-f]{6})$/i.exec(fill.trim());
+  const m = /^#([0-9a-f]{6})$/i.exec(expandHex(fill.trim())); // v0.10.2369 — küçültülmüş `#rgb`
   if (!m) return '#ffffff';
   const L = relLum(m[1]);
   const onWhite = 1.05 / (L + 0.05);

@@ -10,7 +10,20 @@
 export function resolveVar(c: string): string {
   const m = /^var\((--[\w-]+)\)$/.exec(c.trim());
   if (!m) return c;
-  return getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() || c;
+  const v = getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim();
+  return v ? expandHex(v) : c;
+}
+
+// expandHex — v0.10.2369: kısa hex (`#rgb` / `#rgba`) uzun yazıma açılır.
+// Üretim derlemesinde CSS küçültücü token değerlerini kısaltır (`#0066cc` →
+// `#06c`); dolgu saydamlığı `#rrggbb` + alfa baytı ile kurulduğu için kısa
+// yazımda alfa eklenemiyor ve dolgu OPAK çiziliyordu (operatör bulgusu: açık
+// temada anomali grafiğinde normal aralık koyu mavi şerit). Renk aynı; yalnız
+// yazımı değişir. Kısa hex değilse girdi aynen döner.
+export function expandHex(c: string): string {
+  const m = /^#([0-9a-f])([0-9a-f])([0-9a-f])([0-9a-f])?$/i.exec(c.trim());
+  if (!m) return c;
+  return '#' + m.slice(1).filter(Boolean).map(x => x + x).join('');
 }
 
 // chartMonoFont — canvas `font` dizgisi, aile TEK yığından (`--font-mono`,
