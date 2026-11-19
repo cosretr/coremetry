@@ -231,7 +231,9 @@ func ValidateProfile(p ModelProfile) error {
 		}
 		seen[r] = true
 	}
-	return ValidateTuning(p.MaxTokens, p.Temperature, p.TimeoutS)
+	// v0.10.2375 — maxTokens üst sınırı model-farkında (çıktı tavanı bilinen
+	// modelde o; bilinmeyende 32768 aynen).
+	return validateTuningWithin(p.MaxTokens, p.Temperature, p.TimeoutS, profileMaxTokensLimit(p.Model))
 }
 
 // ── küme yönetimi (s.mu altında) ───────────────────────────────────────
@@ -555,7 +557,7 @@ func (s *Service) ModelFor(ctx context.Context) string {
 
 // MaxTokensFor — v0.10.1136: çağrının ÇÖZÜLEN profilinde yürürlükteki
 // completion bütçesi (callSnapshot'ın AYNI kuralı: profil > küresel >
-// defaultMaxTokens). Wiki bağlam bütçesi pencereden bunu düşer.
+// modelin varsayılanı > defaultMaxTokens). Wiki bağlam bütçesi pencereden bunu düşer.
 func (s *Service) MaxTokensFor(ctx context.Context) int {
 	if s == nil {
 		return defaultMaxTokens
@@ -563,11 +565,9 @@ func (s *Service) MaxTokensFor(ctx context.Context) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	p := s.resolveProfileLocked(ctx).cfg
-	maxTok := s.tuneMaxTokensLocked()
-	if p.MaxTokens > 0 {
-		maxTok = p.MaxTokens
-	}
-	return deepMaxTokensFor(ctx, maxTok, p.Model) // v0.10.1150 — Derin kapalıyken aynen
+	window := cachedContextWindow(p) // v0.10.2375 — callSnapshot ile aynı çözüm (model_tuning.go)
+	maxTok := resolveMaxTokens(p.MaxTokens, s.maxTokens, modelcaps.For(p.Model), p.Thinking, window)
+	return deepMaxTokensFor(ctx, maxTok, p.Model, window) // v0.10.1150 — Derin kapalıyken aynen
 }
 
 // ToolsetFor — v0.10.1302: çağrının ÇÖZÜLEN profilinde (WithProfile —

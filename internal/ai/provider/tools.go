@@ -334,7 +334,7 @@ func openAIToolsEndpoint(cfg Config) (url string, hdrs map[string]string, toolCh
 	}
 	// tool_choice "none" yalnız barındırılan OpenAI'de (boş tools dizisini
 	// reddediyor); yerel uçların tool_choice desteği doğrulanmadı → bugünkü şekil.
-	return strings.TrimRight(base, "/") + "/chat/completions", hdrs,
+	return chatCompletionsURL(base), hdrs,
 		strings.TrimRight(base, "/") == defaultBaseURL
 }
 

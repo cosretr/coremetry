@@ -8,6 +8,10 @@
 // aile + düşünme anahtarı. Varsayılanlar BUGÜNKÜ davranışı korur (bütçe ve
 // temperature değişmez); yalnız operatör profilde `thinking: off|on` derse
 // gövdeye ailenin anahtarı iner.
+//
+// v0.10.2375 — tek istisna kayıtlı model satırıdır (tuning.go, Qwen3.8 Flash
+// Next): model kartının sınırları ve önerilen örneklemesi varsayılan olur.
+// Kaydı olmayan her model için yukarıdaki söz aynen geçerli.
 package modelcaps
 
 import "strings"
@@ -58,6 +62,21 @@ type Caps struct {
 	// ThinkingSwitch — düşünmeyi açıp kapatan gövde anahtarı; "" = bilinmiyor
 	// (operatör "off" dese de gövdeye bir şey inmez, çağıran loglar).
 	ThinkingSwitch string
+	// v0.10.2375 — model kartından gelen sınırlar ve öneriler (tuning.go).
+	// Sıfır değer = bilinmiyor: çağıranın bugünkü varsayılanı aynen geçerli.
+	//
+	// ContextWindow — modelin YEREL bağlam penceresi (jeton). Sunucunun
+	// bildirdiği pencere (copilot/context_probe.go) varsa o kazanır.
+	ContextWindow int
+	// MaxOutputTokens — nihai cevap için belgelenmiş çıktı tavanı (jeton).
+	MaxOutputTokens int
+	// DefaultMaxTokens — operatör bütçe vermediyse ve düşünme kapalı değilse
+	// completion bütçesi (düşünme + cevap aynı bütçeden yer).
+	DefaultMaxTokens int
+	// RecommendedSampling — true ise aşağıdaki iki kip değeri dolu.
+	RecommendedSampling bool
+	SamplingThinking    Sampling // düşünme açık (varsayılan-açık dâhil)
+	SamplingDirect      Sampling // düşünme kapalı
 }
 
 // For — model adından yetenek. Bilinmeyen ad: Unknown, Reasoning=false.
@@ -66,6 +85,8 @@ func For(model string) Caps {
 	switch {
 	case m == "":
 		return Caps{Family: FamilyUnknown}
+	case isQwen38FlashNext(m):
+		return qwen38FlashNext
 	case strings.Contains(m, "qwen3"):
 		return Caps{Family: FamilyQwen3, Reasoning: true, ThinkingSwitch: SwitchChatTemplate}
 	case strings.Contains(m, "qwq"):

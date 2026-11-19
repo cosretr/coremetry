@@ -41,6 +41,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/cilcenk/coremetry/internal/ai/modelcaps"
 )
 
 const (
@@ -470,8 +472,16 @@ const (
 // that is how an older client (and the Reset button) says "unset".
 // Pure so the settings handler stays a thin shell over a tested rule.
 func ValidateTuning(maxTokens int, temperature *float64, timeoutS int) error {
-	if maxTokens != 0 && (maxTokens < minMaxTokens || maxTokens > maxMaxTokens) {
-		return fmt.Errorf("maxTokens must be 0 (default) or between %d and %d", minMaxTokens, maxMaxTokens)
+	return validateTuningWithin(maxTokens, temperature, timeoutS, maxMaxTokens)
+}
+
+// validateTuningWithin — ValidateTuning with a caller-supplied maxTokens
+// ceiling. v0.10.2375: a profile whose model documents a larger output
+// limit (modelcaps.Caps.MaxOutputTokens) may store up to that; the global
+// knob and every other model keep maxMaxTokens.
+func validateTuningWithin(maxTokens int, temperature *float64, timeoutS, maxTokensLimit int) error {
+	if maxTokens != 0 && (maxTokens < minMaxTokens || maxTokens > maxTokensLimit) {
+		return fmt.Errorf("maxTokens must be 0 (default) or between %d and %d", minMaxTokens, maxTokensLimit)
 	}
 	if temperature != nil && (*temperature < minTemperature || *temperature > maxTemperature) {
 		return fmt.Errorf("temperature must be omitted (default) or between %g and %g", minTemperature, maxTemperature)
@@ -524,10 +534,9 @@ func (s *Service) tuneMaxTokens() int {
 // — a second copy of "override or default" is exactly how the 1024
 // budget drifted for ~1000 releases (v0.9.1120).
 func (s *Service) tuneMaxTokensLocked() int {
-	if s.maxTokens > 0 {
-		return s.maxTokens
-	}
-	return defaultMaxTokens
+	// v0.10.2375 — the ONE defaulting rule lives in resolveMaxTokens
+	// (model_tuning.go); this is its "no profile, no model" reading.
+	return resolveMaxTokens(0, s.maxTokens, modelcaps.Caps{}, "", 0)
 }
 
 // tuneTemperature — (value, include). The bool exists so a future
@@ -541,10 +550,8 @@ func (s *Service) tuneTemperature() (float64, bool) {
 }
 
 func (s *Service) tuneTemperatureLocked() (float64, bool) {
-	if s.temperature != nil {
-		return *s.temperature, true
-	}
-	return defaultTemperature, true
+	// v0.10.2375 — same single rule as callSnapshot (resolveTemperature).
+	return resolveTemperature(nil, s.temperature, modelcaps.Sampling{}, false), true
 }
 
 // clientTimeout — http.Client timeout. Override or 180s.

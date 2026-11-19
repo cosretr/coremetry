@@ -437,7 +437,7 @@ func StreamOpenAI(ctx context.Context, cfg Config, req Request, onDelta func(str
 	if err != nil {
 		return Response{}, err
 	}
-	url := strings.TrimRight(base, "/") + "/chat/completions"
+	url := chatCompletionsURL(base)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(raw))
 	if err != nil {
 		return Response{}, err

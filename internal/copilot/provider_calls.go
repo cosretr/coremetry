@@ -57,11 +57,12 @@ func (s *Service) callSnapshot(ctx context.Context) (cfg provider.Config, req pr
 		HTTPClient: s.clientForLocked(rt),
 		Headers:    p.Headers, // v0.10.1238 — salt okunur; SetProfiles bütün haritayı değiştirir
 	}
-	maxTok := s.tuneMaxTokensLocked()
-	if p.MaxTokens > 0 {
-		maxTok = p.MaxTokens
-	}
-	maxTok = deepMaxTokensFor(ctx, maxTok, model) // v0.10.1150 — Derin kapalıyken aynen
+	// v0.10.2375 — model-farkında taban bütçe ve tavan (model_tuning.go);
+	// yetenek kaydı olmayan modelde profil > küresel > 4096 aynen.
+	caps := modelcaps.For(model)
+	window := cachedContextWindow(p)
+	maxTok := resolveMaxTokens(p.MaxTokens, s.maxTokens, caps, p.Thinking, window)
+	maxTok = deepMaxTokensFor(ctx, maxTok, model, window) // v0.10.1150 — Derin kapalıyken aynen
 	// v0.10.1699 — WithMaxTokensCap Explain yolunda da tavan (briefing başlığı
 	// ~300 tok). Tavan yoksa aynen; sohbet yolu ayrıca uygular (min, idempotent).
 	maxTok = cappedMaxTokens(ctx, maxTok)
@@ -72,17 +73,20 @@ func (s *Service) callSnapshot(ctx context.Context) (cfg provider.Config, req pr
 		System:    "", // çağıran dolduruyor
 		User:      "",
 	}
-	if p.Temperature != nil {
-		temp := *p.Temperature
-		req.Temperature = &temp
-	} else if t, ok := s.tuneTemperatureLocked(); ok {
-		temp := t
-		req.Temperature = &temp
-	}
+	// v0.10.2375 — sıcaklık: profil > küresel (operatör) > modelin önerisi >
+	// 0.2. Öneri yoksa (gemma, bilinmeyen, katı JSON çağrısı) eski değer aynen.
+	rec, hasRec := recommendedSampling(ctx, caps, p.Thinking)
+	temp := resolveTemperature(p.Temperature, s.temperature, rec, hasRec)
+	req.Temperature = &temp
 	// v0.10.534 — model-farkında yetenekler (modelcaps): profilin thinking
 	// ayarı ailenin gövde anahtarına çevrilir; aile anahtar bilmiyorsa ya da
 	// düşünen model küçük bütçeyle koşuyorsa modele göre BİR kez uyarılır.
 	req.ExtraBody = s.thinkingBody(model, p.Thinking, maxTok)
+	// v0.10.2375 — önerilen top_p / top_k / presence_penalty; uç bunları
+	// reddettiyse softFieldTTL boyunca eklenmez (sampling_fallback.go).
+	if hasRec && !softFields.blocked(softFieldKey(base, model)) {
+		req.ExtraBody = modelcaps.WithSampling(req.ExtraBody, rec)
+	}
 	req.StrictTools = p.StrictToolArgs // v0.10.1456 (C1) — yalnız openai-uyumlu tool gövdesi okur
 	return cfg, req, prov, base, model
 }

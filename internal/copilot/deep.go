@@ -4,8 +4,9 @@ package copilot
 // açıkken alışverişin completion bütçesi %50 büyür (daha uzun cevap). Kapalıyken
 // ctx'te işaret yoktur ve her çağrı gövdesi bayt bayt eskisidir.
 //
-// Tavanlar: maxMaxTokens (tuning aralığının üstü) ve model penceresi biliniyorsa
-// pencerenin yarısı — girdiye yer kalsın. Hiçbir zaman tabanın altına inmez.
+// Tavanlar: maxMaxTokens (tuning aralığının üstü; modelin belgelenmiş çıktı
+// tavanı daha büyükse o — v0.10.2375) ve model penceresi biliniyorsa pencerenin
+// yarısı — girdiye yer kalsın. Hiçbir zaman tabanın altına inmez.
 
 import (
 	"context"
@@ -58,21 +59,25 @@ func DeepAnswerFrom(ctx context.Context) bool {
 // DeepMaxTokens — SAF: Derin kipte completion bütçesi = taban × 1.5, en çok
 // maxMaxTokens ve (pencere biliniyorsa) pencerenin yarısı; tabanın altına inmez.
 func DeepMaxTokens(base, windowTokens int) int {
+	return deepMaxTokensWithin(base, modelcaps.MaxTokensCeiling(modelcaps.Caps{}, windowTokens, maxMaxTokens))
+}
+
+// deepMaxTokensWithin — SAF: taban × 1.5, en çok ceiling; tabanın altına inmez.
+func deepMaxTokensWithin(base, ceiling int) int {
 	if base <= 0 {
 		return base
 	}
 	scaled := int(float64(base) * DeepAnswerFactor)
-	ceiling := maxMaxTokens
-	if windowTokens > 0 && windowTokens/2 < ceiling {
-		ceiling = windowTokens / 2
-	}
 	return max(base, min(scaled, ceiling))
 }
 
-// deepMaxTokensFor — ctx Derin değilse base aynen döner.
-func deepMaxTokensFor(ctx context.Context, base int, model string) int {
+// deepMaxTokensFor — ctx Derin değilse base aynen döner. v0.10.2375: tavan
+// model-farkında (çıktı tavanı bilinen modelde 32768 yerine o) ve pencere
+// çağıranın YÜRÜRLÜKTEKİ penceresi (cachedContextWindow: sunucudan okunmuşsa
+// o, yoksa ad tablosu) — eskiden yalnız ad tablosuydu.
+func deepMaxTokensFor(ctx context.Context, base int, model string, window int) int {
 	if ctx == nil || !DeepAnswerFrom(ctx) {
 		return base
 	}
-	return DeepMaxTokens(base, modelcaps.ContextWindow(model))
+	return deepMaxTokensWithin(base, modelcaps.MaxTokensCeiling(modelcaps.For(model), window, maxMaxTokens))
 }

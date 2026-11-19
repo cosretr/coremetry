@@ -69,7 +69,7 @@ func DoOpenAI(ctx context.Context, cfg Config, req Request) (Response, error) {
 		maxTokens = defaultMaxTokens
 	}
 
-	url := strings.TrimRight(base, "/") + "/chat/completions"
+	url := chatCompletionsURL(base)
 	body := map[string]any{
 		"model":      model,
 		"max_tokens": maxTokens,

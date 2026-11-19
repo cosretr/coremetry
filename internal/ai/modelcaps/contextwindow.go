@@ -29,6 +29,10 @@ func ContextWindow(model string) int {
 		return 131072
 	case has("32k"):
 		return 32768
+	case For(m).ContextWindow > 0:
+		// v0.10.2375 — yetenek kaydı pencereyi biliyor (Qwen3.8 Flash Next:
+		// 262144). Addaki açık "32k"/"128k" eki yukarıda yine kazanır.
+		return For(m).ContextWindow
 	case has("gemma"):
 		// Gemma 3+ büyük varyantları 128k; gemma-2/gemma-1 ve küçük/belirsiz 8k.
 		if !has("gemma-2", "gemma2", "gemma-1") && has("27b", "31b") {

@@ -37,10 +37,10 @@ func TestDeepMaxTokensForOnlyWithFlag(t *testing.T) {
 	if DeepAnswerFrom(ctx) {
 		t.Fatal("işaretsiz ctx Derin sayıldı")
 	}
-	if got := deepMaxTokensFor(ctx, 4096, "unknown-model"); got != 4096 {
+	if got := deepMaxTokensFor(ctx, 4096, "unknown-model", 0); got != 4096 {
 		t.Fatalf("Derin kapalıyken bütçe değişti: %d", got)
 	}
-	if got := deepMaxTokensFor(WithDeepAnswer(ctx), 4096, "unknown-model"); got != 6144 {
+	if got := deepMaxTokensFor(WithDeepAnswer(ctx), 4096, "unknown-model", 0); got != 6144 {
 		t.Fatalf("Derin açıkken bütçe %d, want 6144", got)
 	}
 }
@@ -55,7 +55,7 @@ func TestWithoutDeepAnswerRestoresBase(t *testing.T) {
 	if DeepAnswerFrom(off) {
 		t.Fatal("WithoutDeepAnswer sonrası Derin sayıldı")
 	}
-	if got := deepMaxTokensFor(off, 4096, "unknown-model"); got != 4096 {
+	if got := deepMaxTokensFor(off, 4096, "unknown-model", 0); got != 4096 {
 		t.Fatalf("bütçe tabana dönmedi: %d", got)
 	}
 }
