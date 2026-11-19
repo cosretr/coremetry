@@ -157,6 +157,21 @@ func breadthEvents(kept []chstore.MLEvent, isBatch func(string) bool, prev map[s
 	return out, next
 }
 
+// breadthHoldEvents — v0.10.2377 (I2), ERKEN tik: ardışıklık sayacı TİK sayar
+// (2 tik = 10 dk), erken tik fazladan tiktir ve sayacı İLERLETMEZ (durum
+// değişmez; koşul düşse de sıfırlanmaz). Yalnız koşulu zaten dolmuş
+// (ateşlemiş) servisin olayı, koşul bu tikte de sağlanıyorsa aynen sürer.
+func breadthHoldEvents(kept []chstore.MLEvent, isBatch func(string) bool, prev map[string]breadthRun, now time.Time, cfg chstore.MLConfig) []chstore.MLEvent {
+	var out []chstore.MLEvent
+	for svc, list := range breadthOpsBySvc(kept, isBatch) {
+		if run, ok := prev[svc]; ok && run.ticks >= breadthMinTicks && len(list) >= breadthMinOps {
+			out = append(out, breadthEvent(svc, list, run, now, cfg))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Service < out[j].Service })
+	return out
+}
+
 // breadthOpsOf — SAF: kanıttan operasyonlar + toplam (kart / cümle).
 func breadthOpsOf(evidence string) ([]BreadthOp, int) {
 	var m struct {

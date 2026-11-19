@@ -267,18 +267,40 @@ type svcImpactVerdict struct {
 	BaseRate    float64 // taban trafiği, istek/sn (count medyanı; bilgi, kapı değil)
 }
 
+// svcBase — servisin mevsimsel taban özeti: karar için gereken her şey
+// (örnek sayısı, oran medyanı / MAD, taban trafiği). v0.10.2377 (I2): tik bunu
+// servis başına saklar, dakikalık yoklama CH okumadan aynı kararı verir.
+type svcBase struct {
+	N           int     // taban oran örneği sayısı
+	Median, MAD float64 // taban oran medyanı / MAD
+	Rate        float64 // taban trafiği (count medyanı)
+}
+
+// svcBaseOf — SAF: taban örnekleri → özet.
+func svcBaseOf(baseRatio, baseCount []float64) svcBase {
+	b := svcBase{N: len(baseRatio)}
+	b.Median, b.MAD = medianMAD(baseRatio)
+	b.Rate, _ = medianMAD(baseCount)
+	return b
+}
+
 // svcImpactDecide — SAF: samples = son impactWindow dakikanın örnekleri,
 // baseRatio / baseCount = mevsimsel taban örnekleri, open = olayın açık koşusu
 // var. Taban örneği azsa sessiz (açık olay da uzamaz; kapanış koşu sayacında).
 // Uzatma: açıkken kural "temiz" demiyor ve pencerede en az bir ihlal var.
 func svcImpactDecide(samples []impactSample, baseRatio, baseCount []float64, minSamples int, open bool) svcImpactVerdict {
+	return svcImpactDecideBase(samples, svcBaseOf(baseRatio, baseCount), minSamples, open)
+}
+
+// svcImpactDecideBase — SAF: svcImpactDecide'ın taban özetiyle çalışan gövdesi
+// (tik ve yoklama AYNI kararı verir).
+func svcImpactDecideBase(samples []impactSample, b svcBase, minSamples int, open bool) svcImpactVerdict {
 	v := svcImpactVerdict{impactVerdict: impactVerdict{Onset: -1}}
-	if len(baseRatio) < minSamples {
+	if b.N < minSamples {
 		v.Reason = "eksik veri: taban örneği az"
 		return v
 	}
-	v.Median, v.MAD = medianMAD(baseRatio)
-	v.BaseRate, _ = medianMAD(baseCount)
+	v.Median, v.MAD, v.BaseRate = b.Median, b.MAD, b.Rate
 	v.impactVerdict = impactDecide(impactFailureRate, samples, v.Median)
 	v.Z = (v.Observed - v.Median) / effMAD(v.Median, v.MAD)
 	v.Emit = v.Fire || (open && !v.Clear && v.Violations > 0)
@@ -343,6 +365,130 @@ func (d *TraceRED) svcImpactEvents(deps Deps, minute map[string]map[int64]float6
 		out = append(out, svcImpactEvent(svc, samples, v, end, deps.startedAt(detSvcErrorRate, svc, ""), cfg, class))
 	}
 	return out
+}
+
+// ── v0.10.2377 (I2): dakikalık yoklama ───────────────────────────────────
+// Zamanlı tikler arasında recorder dakikada bir sorar (impact_probe.go):
+// "kural ateşleyen servis var mı?". Yoklama tikin 1 dk'lık sorgusunun AYNISIDIR
+// (aile başına 2 aralık sorgusu, aynı backoff ailesi ve VM sayacı); taban son
+// tikin sakladığı özetten gelir (CH okuması yok), etiket keşfi yapılmaz (son
+// tikin keşfettiği etiketler). Satırlar pencere bitişiyle saklanır: hemen
+// ardından koşan erken tik aynı pencere bitişi için yeniden sormaz.
+
+// impFam — etiketleri keşfedilmiş RED ailesi (sıra = pin sırası).
+type impFam struct {
+	idx int
+	pin anomaly.REDFamilyPin
+	fl  traceFamilyLabels
+}
+
+// cachedFamilies — son tikin keşfettiği etiketlerle aileler; keşif sorgusu YOK.
+func (d *TraceRED) cachedFamilies() []impFam {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var out []impFam
+	for fi, pin := range anomaly.REDFamilyPins() {
+		if fl, ok := d.labels[pin.ID]; ok && fl.ok {
+			out = append(out, impFam{idx: fi, pin: pin, fl: fl})
+		}
+	}
+	return out
+}
+
+// impactMinutes — ailelerin 1 dk'lık servis count + err satırları → toplayıcı.
+// Yoklama aynı pencere bitişi için satırları zaten aldıysa VM'e gidilmez.
+// Hata ilk ailenin hatasıdır; toplayıcı yine döner (svcImpactFetch kuralı:
+// err sorgusu düşen aile dakikayı sahiplenir, oranı bilinmez).
+func (d *TraceRED) impactMinutes(ctx context.Context, deps Deps, fams []impFam, end, now time.Time) (*svcAgg, error) {
+	if agg := d.probeRows(end); agg != nil {
+		return agg, nil
+	}
+	agg := newSvcAgg()
+	var first error
+	for _, f := range fams {
+		if err := svcImpactFetch(ctx, deps, f.pin, f.fl, f.idx, agg, end, now); err != nil && first == nil {
+			first = err
+		}
+	}
+	return agg, first
+}
+
+// probeRows — yoklamanın bu pencere bitişi için sakladığı satırlar (yoksa nil).
+// Toplayıcı saklandıktan sonra yalnız OKUNUR (emit).
+func (d *TraceRED) probeRows(end time.Time) *svcAgg {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.probeAgg != nil && d.probeEnd == end.Unix() {
+		return d.probeAgg
+	}
+	return nil
+}
+
+// cacheImpactBase — tik sonunda: servis başına taban özeti (yoklamanın girdisi).
+func (d *TraceRED) cacheImpactBase(base map[string][]float64, at time.Time) {
+	countPart, ratioPart := tracePart(svcRoute, svcMeasureCount), tracePart(svcRoute, svcMeasureRatio)
+	out := map[string]svcBase{}
+	for k, xs := range base {
+		if svc, part, _ := strings.Cut(k, "\x00"); part == ratioPart {
+			out[svc] = svcBaseOf(xs, base[chstore.MLSeriesKey(svc, countPart)])
+		}
+	}
+	d.mu.Lock()
+	d.impBase, d.impBaseAt = out, at
+	d.mu.Unlock()
+}
+
+// impactBase — saklı taban özeti; hiç yoksa ya da impactBaseMaxTicks tikten
+// eskiyse ok=false (bayat tabanla erken tik açılmaz; zamanlı tik yeniler).
+func (d *TraceRED) impactBase(now time.Time, tick time.Duration) (map[string]svcBase, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.impBase == nil || now.Sub(d.impBaseAt) > impactBaseMaxTicks*tick {
+		return nil, false
+	}
+	return d.impBase, true
+}
+
+// probeOn — impactProber: yoklama yalnız svc_error_rate açıkken.
+func (d *TraceRED) probeOn(cfg chstore.MLConfig) bool { return cfg.DetectorOn(detSvcErrorRate) }
+
+// probeImpact — impactProber: etki kuralı ŞU AN ateşleyen servisler (ad
+// sırasıyla). Açık koşu / bekleme süzgeci çağırandadır (probeTriggers). Taban
+// özeti ya da keşfedilmiş aile yoksa sessiz ve SORGUSUZ. Sorgu hatası döner
+// (çağıran yalıtır: log, erken tik yok); hatalı yoklamanın satırları saklanmaz.
+func (d *TraceRED) probeImpact(ctx context.Context, deps Deps, cfg chstore.MLConfig, now time.Time) ([]impactCandidate, error) {
+	if deps.VM == nil || !deps.VM.Configured() {
+		return nil, nil
+	}
+	base, ok := d.impactBase(now, time.Duration(cfg.TickSec)*time.Second)
+	fams := d.cachedFamilies()
+	if !ok || len(fams) == 0 {
+		return nil, nil
+	}
+	end := svcImpactEnd(now, cfg.IngestLagSec)
+	agg, err := d.impactMinutes(ctx, deps, fams, end, now)
+	if err != nil {
+		return nil, err
+	}
+	d.mu.Lock()
+	d.probeAgg, d.probeEnd = agg, end.Unix()
+	d.mu.Unlock()
+	minute := map[string]map[int64]float64{}
+	agg.emit(minute)
+	var svcs []string
+	for svc, b := range base {
+		if b.N >= cfg.MinBaselineSamples {
+			svcs = append(svcs, svc)
+		}
+	}
+	sort.Strings(svcs)
+	var out []impactCandidate
+	for _, svc := range svcs {
+		if v := svcImpactDecideBase(svcImpactSamples(minute, svc, end.Unix()), base[svc], cfg.MinBaselineSamples, false); v.Fire {
+			out = append(out, impactCandidate{BaseID: chstore.MLEventID(detSvcErrorRate, svc, ""), Service: svc})
+		}
+	}
+	return out, nil
 }
 
 // svcErrHead — SAF: "/anomalies" cümlesi, değer + normal:

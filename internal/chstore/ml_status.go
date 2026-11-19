@@ -55,7 +55,15 @@ type MLKindTick struct {
 type MLTickStatus struct {
 	At         int64 `json:"at"` // unix sn
 	DurationMs int64 `json:"durationMs"`
-	Events     int64 `json:"events"`
+	// v0.10.2377 (etki olayı I2) — Early: bu tik dakikalık etki yoklamasının
+	// açtığı ERKEN tik (zamanlı ritim değişmedi); ScheduledAt: son ZAMANLI tikin
+	// başlangıcı (unix sn); EarlyTicks / Probes: lider sürecin kümülatif erken
+	// tik ve yoklama sayısı.
+	Early       bool  `json:"early,omitempty"`
+	ScheduledAt int64 `json:"scheduledAt,omitempty"`
+	EarlyTicks  int64 `json:"earlyTicks,omitempty"`
+	Probes      int64 `json:"probes,omitempty"`
+	Events      int64 `json:"events"`
 	// ContribQueries — v0.10.2037: bu tikte suçlu seri için atılan kırılım
 	// sorgusu (yalnız yeni açılan / tepesi büyüyen metrik olayları).
 	ContribQueries int64 `json:"contribQueries,omitempty"`

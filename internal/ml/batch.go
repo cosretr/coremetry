@@ -175,3 +175,30 @@ func (d *MetricML) refundCap(det string) {
 	refundDaily(d.daily, det)
 	d.mu.Unlock()
 }
+
+// v0.10.2377 (I2) — batch kuralı bu iki dedektörün adayını kesmez
+// (batchMeasureOther); iade yolu erken tikin tavan iadesi için (refundEarlyCaps).
+func (d *LogBreakdown) refundCap(det string) { refundDaily(d.daily, det) }
+
+func (d *LogTemplates) refundCap(det string) { refundDaily(d.daily, det) }
+
+// capSpend — erken tikte günlük tavandan hak harcamış aday (açık koşuyu
+// uzatmayan her aday harcar: `deps.extends(...) || dayCap(...)`).
+type capSpend struct {
+	rf  capRefunder
+	det string
+	id  string // taban kimlik
+}
+
+// refundEarlyCaps — v0.10.2377 (I2): günlük tavan YENİ olay sayar ama aday
+// başına TİK başına harcanır (kalite süzgecinin her tik düşürdüğü aday her
+// tik bir hak yer). Erken tik fazladan bir tiktir: bu tikte yazılmayan
+// (görülmeyen) adayın hakkı geri verilir, yoksa erken tikler tavanı
+// hızlandırırdı. Bu tikte görülen aday (yeni olay) hakkını harcamış kalır.
+func refundEarlyCaps(spends []capSpend, seen func(baseID string) bool) {
+	for _, s := range spends {
+		if !seen(s.id) {
+			s.rf.refundCap(s.det)
+		}
+	}
+}

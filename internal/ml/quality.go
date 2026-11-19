@@ -258,6 +258,15 @@ func (t *tracker) openRun(baseID string, now time.Time, tick time.Duration) bool
 	return r != nil && r.closedAt.IsZero() && now.Sub(r.ref()) <= time.Duration(episodeCloseMisses)*tick
 }
 
+// seenAt — v0.10.2377 (I2): taban kimlik TAM bu tikte görüldü mü (observe
+// now ile çağrıldı). Erken tikin günlük tavan iadesi buna bakar.
+func (t *tracker) seenAt(baseID string, now time.Time) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	r := t.runs[baseID]
+	return r != nil && r.last.Equal(now)
+}
+
 // startedOf — v0.10.2373 (I3): taban kimliğin SÜREN epizodunun (açık ya da
 // yeniden açılabilir; observe yeni epizot açmayacak) yazılmış başlangıcı,
 // yoksa 0. Kayan pencereyle karar veren dedektör başlangıcı buradan taşır.

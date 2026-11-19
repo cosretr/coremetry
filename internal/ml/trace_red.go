@@ -63,6 +63,13 @@ type TraceRED struct {
 	// impactNote — v0.10.2373: son tikte servis hata oranının 1 dk'lık sorgusu
 	// düştüyse gerekçe (tik durumunda "ölçülemedi"); başarıda boş.
 	impactNote string
+	// v0.10.2377 (I2) — dakikalık yoklamanın durumu (svc_error_rate.go):
+	// impBase = son tikin servis başına taban özeti (impBaseAt = o tikin anı);
+	// probeAgg = yoklamanın 1 dk'lık satırları, probeEnd pencere bitişi (unix sn).
+	impBase   map[string]svcBase
+	impBaseAt time.Time
+	probeAgg  *svcAgg
+	probeEnd  int64
 }
 
 // Unmeasured — v0.10.2373 (unmeasuredReporter, dependency.go emsali): 1 dk'lık
@@ -266,8 +273,11 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	// gereken açık koşuları da tutulurdu). Yalnız svc_error_rate o tik sessiz
 	// kalır ve "ölçülemedi" görünür (Unmeasured); kendi backoff anahtarı
 	// (impact:<aile>) işlem düzeyi sorguları da bekletmez.
+	// v0.10.2377 (I2): sorgu aile döngüsünden sonra TEK yerde (impactMinutes);
+	// yoklama aynı pencere bitişi için satırları aldıysa yeniden sorulmaz.
 	impAgg, impEnd := newSvcAgg(), svcImpactEnd(now, cfg.IngestLagSec)
 	var impErr error
+	var impFams []impFam
 	for fi, pin := range anomaly.REDFamilyPins() {
 		fl := d.familyLabels(ctx, deps.VM, pin, from, to)
 		if !fl.ok {
@@ -321,14 +331,13 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 				}
 			}
 		}
-		if cfg.DetectorOn(detSvcErrorRate) {
-			if ierr := svcImpactFetch(ctx, deps, pin, fl, fi, impAgg, impEnd, now); ierr != nil && impErr == nil {
-				impErr = ierr
-			}
-		}
+		impFams = append(impFams, impFam{idx: fi, pin: pin, fl: fl})
 	}
 	if families == 0 {
 		return nil, fmt.Errorf("VM'de RED ailesi/etiketi bulunamadı (servis, route, durum)")
+	}
+	if cfg.DetectorOn(detSvcErrorRate) {
+		impAgg, impErr = d.impactMinutes(ctx, deps, impFams, impEnd, now)
 	}
 	minute := map[string]map[int64]float64{} // servis × dakika başı (I3)
 	svcFam := map[string]int{}               // servis → en yeni dakikanın ailesi (olay kaydı)
@@ -400,6 +409,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	}
 	var evs []chstore.MLEvent
 	if cfg.DetectorOn(detSvcErrorRate) {
+		d.cacheImpactBase(base, now) // v0.10.2377 (I2): yoklamanın tabanı
 		for _, ev := range d.svcImpactEvents(deps, minute, base, impEnd, cfg, class, now) {
 			if fi, ok := svcFam[ev.Service]; ok && famOf[fi] != nil {
 				ev.Evidence = mergeEvidence(ev.Evidence, famOf[fi]) // v0.10.2221 (H5)

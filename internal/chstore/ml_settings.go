@@ -430,6 +430,11 @@ type MLStats struct {
 	SuppressedImpact int64 `json:"suppressedImpact"`
 	SuppressedRegime int64 `json:"suppressedRegime"`
 	SuppressedBatch  int64 `json:"suppressedBatch"` // v0.10.1811: batch kuralının kestiği aday (kümülatif)
+	// EarlyTicks / Probes — v0.10.2377 (etki olayı I2): dakikalık etki
+	// yoklaması ve yoklamanın açtığı erken tam tik (kümülatif, süreç-içi).
+	// Ticks yalnız ZAMANLI tiki sayar.
+	EarlyTicks int64 `json:"earlyTicks"`
+	Probes     int64 `json:"probes"`
 	// LastKinds — v0.10.1812: son tikin sinyal türü ölçümü (lider pod belleği).
 	LastKinds map[string]MLKindTick `json:"lastKinds,omitempty"`
 	// RecordInvalid — v0.10.2199 (anomali kartı H1, ölçüt 11): olay-kaydı

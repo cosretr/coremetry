@@ -98,9 +98,17 @@ type Recorder struct {
 	// dedup — v0.10.2173: paylaşılan önbellek; D5 yükseliş bildiriminin
 	// süreçler arası tekilleştirmesi (anomaly.EscalationAlert). nil = yok.
 	dedup cache.Cache
-	// leaderTicks — art arda lider tik sayısı; grup Problem'i kapanışı
-	// yalnız > episodeCloseMisses sonra (yeni liderin boş koşu durumu).
+	// leaderTicks — art arda lider ZAMANLI tik sayısı (erken tik saymaz,
+	// v0.10.2377); grup Problem'i kapanışı yalnız > episodeCloseMisses sonra
+	// (yeni liderin boş koşu durumu).
 	leaderTicks int
+	// v0.10.2377 (I2, impact_probe.go) — ready: son tikin tablo yoklaması
+	// (yoklama CH'ye sormaz); probeCool: erken tik açan aday → an (bekleme);
+	// lastScheduled: son zamanlı tikin başlangıcı (tik durumunda görünür).
+	// Döngü goroutine'i tek kullanıcı.
+	ready         bool
+	probeCool     map[string]time.Time
+	lastScheduled time.Time
 	// breadth — v0.10.2086: yaygın yavaşlamanın servis başına ardışık koşul
 	// durumu (svc_breadth.go; süreç-içi, lider değişince sıfır).
 	breadth map[string]breadthRun
@@ -151,49 +159,57 @@ func (r *Recorder) run(ctx context.Context) {
 	// tikten önce bir kez burada (anomaly recorder emsali).
 	r.store.LoadAnomalySensitivity(ctx)
 	go r.baselineLoop(ctx) // v0.10.1814: günlük baseline (kapalı gelir; lider + anahtar kapısı içeride)
-	for {
-		// v0.10.2074 — op_latency + metric_kafka kayıtlı ayarda bir kez açılır
-		// (işaretli göç; yalnız lider, başarıya dek her tur dener).
-		if r.leader.IsLeader() {
-			chstore.MigrateMLForceOnOnce(ctx, r.store)
-		}
-		cfg := r.store.GetMLConfig(ctx)
-		r.tick(ctx, cfg)
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(time.Duration(cfg.TickSec) * time.Second):
-		}
-	}
+	// v0.10.2377 (I2) — zamanlı tikler arasında dakikalık etki yoklaması ve
+	// gerekirse erken tam tik (impact_probe.go tickLoop). Zamanlı takvim aynı.
+	tickLoop{
+		now: time.Now,
+		wait: func(d time.Duration) bool {
+			select {
+			case <-ctx.Done():
+				return false
+			case <-time.After(d):
+				return true
+			}
+		},
+		cfg: func() chstore.MLConfig {
+			// v0.10.2074 — op_latency + metric_kafka kayıtlı ayarda bir kez açılır
+			// (işaretli göç; yalnız lider, başarıya dek her tur dener).
+			if r.leader.IsLeader() {
+				chstore.MigrateMLForceOnOnce(ctx, r.store)
+			}
+			return r.store.GetMLConfig(ctx)
+		},
+		tick: func(cfg chstore.MLConfig, early bool) { r.tick(ctx, cfg, early) },
+		probe: func(cfg chstore.MLConfig, now time.Time) bool {
+			return r.probeImpact(ctx, cfg, r.leader.IsLeader(), now)
+		},
+	}.run()
 }
 
-func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
+// tick — tam tik. early=true: yoklamanın istediği ERKEN tik (v0.10.2377, I2).
+// Erken tik zamanlı tikle AYNI hattı koşar; tek fark TİK sayan durumları
+// ilerletmemesidir (fazladan tik "bir tik geçti" anlamına gelmez):
+//   - lider tik sayacı artmaz (admit);
+//   - koşu kaçırma sayacı işlemez: closeStale atlanır (kapanış, veri-yok
+//     tutması ve kapsam kararı zamanlı tikin işidir);
+//   - yaygın yavaşlamanın ardışıklık sayacı ilerlemez (breadthHoldEvents);
+//   - yazılmayan adayın günlük tavan hakkı geri verilir (refundEarlyCaps).
+//
+// Koşu izleyicisinin geri kalanı (openRun, fresh, rejim, teyit) duvar saati
+// ve AYARLI tik süresiyle çalışır; erken tikten etkilenmez.
+func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 	leader := r.leader.IsLeader()
 	probe, cancel := context.WithTimeout(ctx, 5*time.Second)
 	ready, err := r.store.MLTableReady(probe)
 	cancel()
 	setMeta(r.placement, cfg.Enabled, leader, ready)
-	if !cfg.Enabled { // ana anahtar kapalı: ES'e HİÇ sorgu yok
-		global.skipped.Add(1)
+	if !r.admit(cfg, leader, ready, err, early) {
 		return
 	}
-	if err != nil || !ready {
-		global.skipped.Add(1)
-		if err != nil {
-			global.setError(err)
-			log.Printf("[ml] table probe failed: %v (tik atlandı)", err)
-		} else {
-			log.Printf("[ml] ml_events tablosu yok — api/worker boot'u DDL'i indirene dek bekleniyor")
-		}
-		return
-	}
-	if !leader {
-		r.leaderTicks = 0
-		global.skipped.Add(1)
-		return
-	}
-	r.leaderTicks++
 	start := time.Now()
+	if !early {
+		r.lastScheduled = start
+	}
 	budget := time.Duration(cfg.TimeoutMs)*time.Millisecond*time.Duration(1+len(r.detectors)) + 10*time.Second
 	tctx, tcancel := context.WithTimeout(ctx, budget)
 	defer tcancel()
@@ -225,6 +241,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		r.classOf, r.countsSeries = map[string]string{}, map[string]bool{}
 	}
 	cov := tickCoverage{classOf: r.classOf, fam: map[string]famCoverage{}}
+	var spends []capSpend // erken tik: tavandan hak harcayan adaylar (refundEarlyCaps)
 	for _, det := range r.detectors {
 		if !det.Enabled(cfg) {
 			continue
@@ -244,6 +261,13 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 					continue
 				}
 				rf.refundCap(c.Detector)
+			}
+		}
+		if rf, ok := det.(capRefunder); ok && early {
+			for _, ev := range evs {
+				if !deps.openRun(ev.ID) { // uzatma tavan harcamadı
+					spends = append(spends, capSpend{rf: rf, det: ev.Detector, id: ev.ID})
+				}
 			}
 		}
 		st.BatchCut = len(cut)
@@ -289,11 +313,16 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	all, logSvc := resolveLogServices(tctx, deps, all, start, 2*time.Duration(cfg.BucketSec)*time.Second)
 	steps["detectorsMs"] = time.Since(start).Milliseconds()
 	kept, sup := qualityFilter(all, cfg, r.runs, start)
+	refundEarlyCaps(spends, func(id string) bool { return r.runs.seenAt(id, start) })
 	// v0.10.2086 — yaygın yavaşlama: bu tikin op_latency olaylarından
 	// türetilir (sorgu yok); aynı kalite süzgecinden (epizot / teyit) geçer.
 	if cfg.DetectorOn(detSvcBreadth) {
-		bevs, next := breadthEvents(kept, isBatch, r.breadth, start, cfg)
-		r.breadth = next
+		var bevs []chstore.MLEvent
+		if early { // ardışıklık sayacı tik sayar: erken tik ilerletmez
+			bevs = breadthHoldEvents(kept, isBatch, r.breadth, start, cfg)
+		} else {
+			bevs, r.breadth = breadthEvents(kept, isBatch, r.breadth, start, cfg)
+		}
 		r.breadthH.observe(breadthOpsBySvc(kept, isBatch), start) // v0.10.2237 (H12)
 		st := chstore.MLSignalTick{Ran: true, Candidates: len(bevs), Services: distinctServices(bevs)}
 		bk, bsup := qualityFilter(bevs, cfg, r.runs, start)
@@ -314,7 +343,13 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	if cls, ok := r.classOf[detOpLatency]; ok { // yaygın yavaşlama op_latency'den türer
 		r.classOf[detSvcBreadth] = cls
 	}
-	closing, held := r.runs.closeStale(start, cov)
+	// v0.10.2377 (I2): kaçırma sayacı TİK sayar (episodeCloseMisses tik
+	// görülmeyen koşu kapanır). Erken tik fazladan tiktir: kaçırma saymaz,
+	// koşu kapatmaz, veri-yok tutması başlatmaz; hepsi zamanlı tikte.
+	var closing, held []chstore.MLEvent
+	if !early {
+		closing, held = r.runs.closeStale(start, cov)
+	}
 	for _, ev := range held { // v0.10.2359: veri-yok tutması kanıta (kart/liste "açık")
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {
 			firstErr = werr
@@ -497,14 +532,16 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	steps["snapshotMs"] = time.Since(s0).Milliseconds()
 	global.events.Add(written)
 	global.setError(firstErr)
-	global.tickDone(start)
+	global.tickDone(start, early)
 	// tik durumu: api pod'u karnede okur (süreç-içi sayaç bu pod'da kalır)
 	status := chstore.MLTickStatus{At: start.Unix(), DurationMs: time.Since(start).Milliseconds(), Events: written, Backoff: r.backoff.snapshot(start),
 		Partial: int64(partialN), Docs: global.docs.Load(), Steps: steps, Signals: signals, BatchCut: int64(batchCut),
 		Kinds: foldKindTicks(samples), ES: global.esQueries.Load() - esAtStart, VM: global.vmQueries.Load() - vmAtStart, CH: chQueries.Load(),
 		ShadowGroups: shadow.Groups, ShadowWouldOpen: shadow.WouldOpen, ShadowSingleWouldOpen: shadow.SingleWouldOpen, ContribQueries: int64(contribQ),
 		GroupLive: cfg.GroupProblemsOn(), GroupOpened: live.Opened, GroupRefreshed: live.Refreshed, GroupResolved: live.Resolved, GroupSingleOpened: live.SingleOpened, SvcOpened: live.SvcOpened,
-		LogSvcUnmatched: int64(logSvc.Unmatched), LogSvcViaPod: int64(logSvc.ViaPod), ShadowSvcWouldOpen: svcOpen, ShadowSvcP1: svcP1}
+		LogSvcUnmatched: int64(logSvc.Unmatched), LogSvcViaPod: int64(logSvc.ViaPod), ShadowSvcWouldOpen: svcOpen, ShadowSvcP1: svcP1,
+		// v0.10.2377 (I2): bu tik erken mi, son ZAMANLI tik ne zamandı, kaç erken tik / yoklama koştu
+		Early: early, ScheduledAt: unixOrZero(r.lastScheduled), EarlyTicks: global.earlyTicks.Load(), Probes: global.probes.Load()}
 	// v0.10.2241 (A1) — yayın kapısı gölge raporu: /api/ml/scorecard tick.publishGates
 	status.PublishGates, status.PublishGatesWindowH = global.gateShadowReport(start), int(gateShadowWindow/time.Hour)
 	status.PublishGatesMode, status.PublishGatesEnforced, status.PublishGatesCriterion = PublishGatesMode(), PublishGatesEnforced(), PublishGatesCriterion
@@ -525,8 +562,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 		log.Printf("[ml] tik durumu yazılamadı: %v", serr)
 	}
 	scancel()
-	log.Printf("[ml] tick placement=%s detectors=%d events=%d suppressed=impact:%d,regime:%d,batch:%d dur=%dms es_p95=%dms err=%v",
-		r.placement, active, written, sup.Impact, sup.Regime, batchCut, time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
+	log.Printf("[ml] tick placement=%s early=%v detectors=%d events=%d suppressed=impact:%d,regime:%d,batch:%d dur=%dms es_p95=%dms err=%v",
+		r.placement, early, active, written, sup.Impact, sup.Regime, batchCut, time.Since(start).Milliseconds(), Observability().ESP95Ms, firstErr)
 	log.Printf("[ml] tick group_problems live=%v opened=%d refreshed=%d resolved=%d", cfg.GroupProblemsOn(), live.Opened, live.Refreshed, live.Resolved)
 	log.Printf("[ml] tick group_shadow groups=%d would_open=%d single_would_open=%d svc_would_open=%d svc_p1=%d contrib_queries=%d log_svc_unmatched=%d log_svc_via_pod=%d", shadow.Groups, shadow.WouldOpen, shadow.SingleWouldOpen, svcOpen, svcP1, contribQ, logSvc.Unmatched, logSvc.ViaPod)
 	log.Printf("[ml] tick steps detectors=%dms write=%dms snapshot=%dms es_queries=%d vm_queries=%d partial=%d docs=%d",
@@ -539,6 +576,14 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig) {
 	for name, st := range signals {
 		log.Printf("[ml] tick %s ran=%v services=%d source=%dms candidates=%d batch_cut=%d written=%d partial=%d err=%s", name, st.Ran, st.Services, st.SourceMs, st.Candidates, st.BatchCut, st.Written, st.Partial, st.Error)
 	}
+}
+
+// unixOrZero — SAF: sıfır an → 0 (JSON'da omitempty).
+func unixOrZero(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
 }
 
 // volume — v0.10.2242 (B): kayıtlı hacim dedektörü (yoksa nil; attach nil güvenli).

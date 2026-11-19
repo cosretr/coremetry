@@ -16,6 +16,7 @@ import (
 type stats struct {
 	ticks, skipped, lastUnix, lastMs, lastESMs, esQueries, events, series, lastCHMs atomic.Int64
 	supImpact, supRegime, supBatch, vmQueries, partial, docs                        atomic.Int64
+	earlyTicks, probes                                                              atomic.Int64 // v0.10.2377 (I2): erken tik / etki yoklaması (kümülatif)
 	mu                                                                              sync.Mutex
 	esSamples                                                                       []int64
 	lastKinds                                                                       map[string]chstore.MLKindTick // v0.10.1812: son tik ölçümü
@@ -112,8 +113,14 @@ func (s *stats) setLastKinds(k map[string]chstore.MLKindTick) {
 	s.mu.Unlock()
 }
 
-func (s *stats) tickDone(start time.Time) {
-	s.ticks.Add(1)
+// tickDone — ticks yalnız ZAMANLI tiki sayar (v0.10.2377): erken tik ayrı
+// sayaçta, tik ritmi değişmiş gibi görünmez.
+func (s *stats) tickDone(start time.Time, early bool) {
+	if early {
+		s.earlyTicks.Add(1)
+	} else {
+		s.ticks.Add(1)
+	}
 	s.lastUnix.Store(start.Unix())
 	s.lastMs.Store(time.Since(start).Milliseconds())
 }
@@ -134,7 +141,7 @@ func (s *stats) snapshot(placement string, enabled, leader, tableReady bool) chs
 	recInvalid := s.recordInvalidCopy()
 	return chstore.MLStats{
 		Placement: placement, Enabled: enabled, Leader: leader, TableReady: tableReady,
-		Ticks: s.ticks.Load(), Skipped: s.skipped.Load(), LastUnix: s.lastUnix.Load(),
+		Ticks: s.ticks.Load(), EarlyTicks: s.earlyTicks.Load(), Probes: s.probes.Load(), Skipped: s.skipped.Load(), LastUnix: s.lastUnix.Load(),
 		LastDurationMs: s.lastMs.Load(), LastESMs: s.lastESMs.Load(), ESP95Ms: p95,
 		ESQueries: s.esQueries.Load(), Events: s.events.Load(), SeriesInMemory: s.series.Load(), LastCHMs: s.lastCHMs.Load(),
 		VMQueries: s.vmQueries.Load(), Partial: s.partial.Load(), LastDocs: s.docs.Load(), SuppressedImpact: s.supImpact.Load(), SuppressedRegime: s.supRegime.Load(), SuppressedBatch: s.supBatch.Load(),
