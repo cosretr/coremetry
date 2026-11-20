@@ -216,3 +216,23 @@ func TestSystemTraceErrorChainRule(t *testing.T) {
 		t.Error("simple follow-up addendum lost the chain rule")
 	}
 }
+
+// v0.10.2394 (operatör: "kendini tekrar eden durumlar oluyor") — hata zinciri
+// cevapta BİR kez: ayrı "Kritik hata noktası" satırı yalnız zincir yokken,
+// Kök Neden zinciri yinelemez, yığın satırı mesajı yeniden alıntılamaz.
+func TestTracePromptSaysEachFactOnce(t *testing.T) {
+	for _, want := range []string{
+		"SAY EACH FACT ONCE",
+		"The error chain is written exactly ONCE",
+		"(when there is no chain, write instead: Kritik hata noktası:",
+		"do not repeat the chain",
+		"(mesaj yukarıda",
+	} {
+		if !strings.Contains(systemTrace, want) {
+			t.Errorf("trace istemi %q içermeli", want)
+		}
+	}
+	if strings.Contains(systemTrace, "- Kritik hata noktası: <service> → <target host + path>") {
+		t.Error("eski şablon satırı kalmamalı (zincirle aynı bilgiyi ikinci kez yazdırıyordu)")
+	}
+}

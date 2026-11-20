@@ -159,6 +159,19 @@ add a separate correlation-ID bullet: an ID already shown under one
 label (request_id, channel, …) must never repeat under another — one
 value, one line.
 
+SAY EACH FACT ONCE (v0.10.2394, operator: "kendini tekrar eden durumlar
+oluyor, sadeleşebilir"). The error chain is written exactly ONCE, in the
+"Hata zinciri" bullet. When that bullet exists, there is NO separate
+"Kritik hata noktası" bullet (the chain's first hop already is the failure
+point). Stacktrace Detayı names the frame and layer; it does not re-quote
+an exception message that is already quoted above — write "(mesaj
+yukarıda)" instead. Kök Neden does not restate the chain: it says in one
+short sentence WHY (the consequence that turned the dependency failure into
+the error) and refers to the chain, then the next steps. Additional error
+traces (other failing calls in the same trace) go in ONE bullet "Ek
+hatalar" as "service → code/exception" pairs, at most 3, without
+repeating messages already quoted.
+
 **Stacktrace Detayı** — only when a stacktrace exists in the logs or in
 a span exception event: the throwing class and method, the exception
 type, the deployment unit if visible (e.g. a .war or module prefix), the
@@ -166,8 +179,9 @@ layer it belongs to (BFF / backend / integration), and the exact error
 message.
 
 **Kök Neden ve Sonraki Adım** — 1-3 bullets: when the HATA ZİNCİRİ
-block exists, the first bullet is the chain sentence (origin call →
-status → consequence → exception); otherwise the most plausible root
+block exists, the first bullet is ONE short sentence on why the chain
+produced the error (the consequence), not a second copy of the chain;
+otherwise the most plausible root
 cause synthesis — led by the exception type and message when an
 exception event exists. Next steps: when a downstream CLIENT/PRODUCER
 call failed, give TWO — (a) investigate the dependency's failure (the
@@ -195,16 +209,16 @@ dış bağımlılık bekleme: <hedef> <süre>   (only when the KRİTİK YOL clos
 
 **İşlem Akışı ve Veri Özeti**
 - Operasyon: <initiating service> · <METHOD route>
-- Kritik hata noktası: <service> → <target host + path> → <HTTP code or exception type>: "<exact message>"
+- Hata zinciri: <origin> → <next hop> → … → <root span and its status>: "<exact message>"   (when there is no chain, write instead: Kritik hata noktası: <service> → <HTTP code or exception type>: "<exact message>")
 - İş verisi: <field>=<value> (from log bodies)
 - En yavaş bileşen: <KRİTİK YOL "En büyük pay" step> <duration> (kök süresinin %<share>'ı)
-- Hata zinciri: <origin> → <next hop> → … → <root span and its status>
+- Ek hatalar: <service> → <code or exception>; … (only other failing calls, at most 3; omit if none)
 
 **Stacktrace Detayı**
-- <class.method> (<file:line>) · <layer> · <exception type>: "<message>"
+- <class.method> (<file:line>) · <layer> · <exception type> (mesaj yukarıda, unless it was not quoted above)
 
 **Kök Neden ve Sonraki Adım**
-- <one sentence: origin call → status → consequence → exception>
+- <one short sentence: why the chain above produced the error — the consequence; do not repeat the chain>
 - Sonraki adım: <(a) dependency owner/service/path to investigate> · <(b) local fix at the throwing frame>`
 
 // systemTrace — v0.10.1036: "CoSRE'ye sor" (explain-trace, kodsuz) varsayılanı
