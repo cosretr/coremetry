@@ -104,6 +104,21 @@ TTL toDate(time)        + INTERVAL %d DAY    -- raw spans / logs / metrics
 TTL toDate(time_bucket) + INTERVAL 90 DAY    -- summary MVs
 ```
 
+**Exception — trace MVs follow `retention.spans`.** `trace_summary_5m`
+and `trace_service_index_5m` hold per-trace rows (`trace_id` is in the
+key), not service aggregates: a row whose trace is gone is a dead link
+in `/traces`, not history. Their TTL therefore equals the spans
+retention (`retention.spans`, default 30d), with
+`ttl_only_drop_parts = 1`. No reader needs them past spans retention:
+the hourly retention enforcer has dropped their partitions at
+spans + 1 day since v0.10.263 (`retention_mv.go`), so nothing could see
+older rows anyway. The CREATE carries the 30-day default; on every boot
+`ApplyPersistedRetention` runs `MODIFY TTL … SETTINGS
+materialize_ttl_after_modify = 0` on the combined MV's inner table
+(cluster-wide, skipped when already current), and an admin retention
+change applies it immediately (`retention_trace_mv.go`). Same reasoning
+as `exemplars` / `span_links` riding `retention.spans`.
+
 ## 6. ID columns
 
 `trace_id` / `span_id` are stored as hex `String`, NOT `UUID` or

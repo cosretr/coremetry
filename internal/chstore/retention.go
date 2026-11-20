@@ -190,6 +190,11 @@ func (s *Store) setRetention(ctx context.Context, sp RetentionSpec, actor string
 		sk, ap := s.applyExemplarColTTL(ctx, sp.Spans, probe)
 		skipped += sk
 		applied += ap
+		// trace_summary_5m / trace_service_index_5m satır TTL'i spans'i izler
+		// (retention_trace_mv.go).
+		sk, ap = s.applyTraceMVTTL(ctx, sp.Spans, skipCurrent)
+		skipped += sk
+		applied += ap
 	}
 	if skipCurrent {
 		log.Printf("[chstore] saklama süresi açılış denetimi: %d ALTER atlandı (TTL zaten güncel), %d uygulandı", skipped, applied)
@@ -369,6 +374,13 @@ func (s *Store) ApplyPersistedRetention(ctx context.Context) error {
 	sp, err := s.GetRetention(ctx)
 	if err != nil {
 		return err
+	}
+	// Kayıtlı retention.spans yoksa trace MV'leri config varsayılanını izler:
+	// CREATE'teki literal sabittir, gerçek spans saklamasını bilemez.
+	if sp.Spans == "" {
+		if v := spansRetentionValue("", s.ret.SpansDays); v != "" {
+			s.applyTraceMVTTL(ctx, v, true)
+		}
 	}
 	if sp == (RetentionSpec{}) {
 		return nil // nothing persisted yet — config defaults stay in effect

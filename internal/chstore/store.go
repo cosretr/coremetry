@@ -1851,8 +1851,8 @@ func canonicalMVs() []string {
 		 ENGINE = AggregatingMergeTree
 		 PARTITION BY toDate(time_bucket)
 		 ORDER BY (time_bucket, trace_id)
-		 TTL toDate(time_bucket) + INTERVAL 90 DAY
-		 SETTINGS index_granularity = 8192
+		 TTL toDate(time_bucket) + INTERVAL 30 DAY
+		 SETTINGS index_granularity = 8192, ttl_only_drop_parts = 1
 		 AS SELECT
 		   trace_id,
 		   toStartOfInterval(time, INTERVAL 5 MINUTE) AS time_bucket,
@@ -1879,6 +1879,11 @@ func canonicalMVs() []string {
 		 FROM spans
 		 GROUP BY trace_id, time_bucket`,
 
+		// TTL (trace_summary_5m + trace_service_index_5m): 30 = spans
+		// varsayılanı; açılışta ApplyPersistedRetention inner tabloya
+		// retention.spans'i yazar (retention_trace_mv.go). 90g idi — 60 gün
+		// silinmiş trace'e işaret eden satır. docs/SCHEMA.md §5 istisnası.
+		//
 		// trace_service_index_5m — sparse (service_name,
 		// trace_id) mapping. Lets a service-filtered /traces
 		// query find the relevant trace_ids without scanning
@@ -1899,8 +1904,8 @@ func canonicalMVs() []string {
 		 ENGINE = AggregatingMergeTree
 		 PARTITION BY toDate(time_bucket)
 		 ORDER BY (service_name, time_bucket, trace_id)
-		 TTL toDate(time_bucket) + INTERVAL 90 DAY
-		 SETTINGS index_granularity = 8192
+		 TTL toDate(time_bucket) + INTERVAL 30 DAY
+		 SETTINGS index_granularity = 8192, ttl_only_drop_parts = 1
 		 AS SELECT
 		   service_name,
 		   toStartOfInterval(time, INTERVAL 5 MINUTE) AS time_bucket,
@@ -3553,7 +3558,7 @@ func canonicalTables(sd, ld, md int) []string {
 			profile_type  LowCardinality(String),
 			start_time    DateTime64(9) CODEC(Delta, ZSTD(3)),
 			duration_ns   Int64        CODEC(T64, ZSTD(3)),
-			pprof_data    String       CODEC(ZSTD(6)),
+			pprof_data    String       CODEC(ZSTD(1)),
 			sample_count  UInt32       DEFAULT 0,
 			labels_keys   Array(LowCardinality(String)),
 			labels_values Array(String),
@@ -3562,7 +3567,7 @@ func canonicalTables(sd, ld, md int) []string {
 		PARTITION BY toDate(start_time)
 		ORDER BY (service_name, profile_type, start_time)
 		TTL toDate(start_time) + INTERVAL %d DAY
-		SETTINGS index_granularity = 8192`, md),
+		SETTINGS index_granularity = 8192, ttl_only_drop_parts = 1`, md),
 
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS metric_points (
 			metric        LowCardinality(String),
@@ -4600,6 +4605,12 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE spans MODIFY SETTING ttl_only_drop_parts = 1`,
 		`ALTER TABLE logs MODIFY SETTING ttl_only_drop_parts = 1`,
 		`ALTER TABLE metric_points MODIFY SETTING ttl_only_drop_parts = 1`,
+		// profiles: aynı günlük partition / TTL hizası. pprof_data zaten
+		// gzip'li pprof — ZSTD(6) 1.4× ile CPU harcıyordu; ZSTD(1) aynı oranı
+		// ucuza alır. Yalnız-codec MODIFY COLUMN metadata; eski part'lar
+		// merge'de yeniden sıkışır, mutasyon yok.
+		`ALTER TABLE profiles MODIFY SETTING ttl_only_drop_parts = 1`,
+		`ALTER TABLE profiles MODIFY COLUMN pprof_data String CODEC(ZSTD(1))`,
 		// Apply the trace_snapshots TTL to installs that created
 		// the table before v0.5.91. MODIFY TTL is metadata-only;
 		// repeated applies are idempotent.

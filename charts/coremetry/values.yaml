@@ -467,6 +467,11 @@ clickhouse:
     size: 20Gi
     storageClassName: ""   # empty = cluster default
     accessModes: ["ReadWriteOnce"]
+  # System-log retention for the bundled CH: mounts files/clickhouse-system-logs.xml
+  # into config.d (query_log / query_views_log 7d, other system logs 3d,
+  # text_log level=warning). Without it CH's own logs outgrow app data.
+  # External CH ignores this — see docs/clickhouse-cluster.md.
+  systemLogTTL: true
   # ClickHouse pod resources. The defaults handle ~100-500 spans/
   # sec with the bundled MergeTree schema. At banking scale
   # (>5k spans/sec) bump to cpu="16", memory=32Gi and provision

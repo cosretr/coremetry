@@ -1,0 +1,63 @@
+<!--
+  Coremetry — ClickHouse system-log retention (config.d override).
+
+  ClickHouse keeps its own system.*_log tables forever by default. On a
+  busy Coremetry install they outgrow the application data (measured
+  locally on CH 26.2: text_log 7.9 GiB, trace_log 1.6, processors_profile_log
+  1.6, part_log 1.5, query_log 1.2 GiB).
+
+  query_log / query_views_log keep 7 days (slow-query triage reads them);
+  every other log keeps 3 days. text_log is cut to `warning` — the
+  information-level server chatter was the single biggest table.
+
+  Only logs the stock image ALREADY enables are listed: for several logs
+  (session_log, zookeeper_log, opentelemetry_span_log, ...) the mere
+  presence of a section turns the log ON.
+
+  ONE BODY: docker-compose.yml mounts this file and the Helm chart ships
+  it via .Files.Get (templates/clickhouse.yaml). External ClickHouse:
+  docs/clickhouse-cluster.md "System-log retention".
+
+  Existing tables: on restart ClickHouse sees the changed TTL, renames the
+  old table to <name>_0 (_1, ...) and creates a fresh one. The renamed
+  copy keeps its old data until it is dropped by hand.
+-->
+<clickhouse>
+    <query_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </query_log>
+    <query_views_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </query_views_log>
+    <text_log>
+        <level>warning</level>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </text_log>
+    <trace_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </trace_log>
+    <processors_profile_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </processors_profile_log>
+    <part_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </part_log>
+    <metric_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </metric_log>
+    <asynchronous_metric_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </asynchronous_metric_log>
+    <asynchronous_insert_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </asynchronous_insert_log>
+    <background_schedule_pool_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </background_schedule_pool_log>
+    <query_metric_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </query_metric_log>
+    <error_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </error_log>
+</clickhouse>

@@ -308,6 +308,42 @@ happens once, single-writer.
 - Cache (Redis) is keyed by request shape, not data shape, so
   there's no migration concern on that side.
 
+## System-log retention
+
+ClickHouse keeps its own `system.*_log` tables without a TTL. On a busy
+Coremetry install they grow larger than the telemetry itself (measured
+on a local CH 26.2: `text_log` ~8 GiB, `trace_log`,
+`processors_profile_log`, `part_log` and `query_log` 1.2–1.6 GiB each).
+
+The bundled ClickHouse (docker-compose and the Helm chart with
+`clickhouse.systemLogTTL: true`, the default) mounts
+`charts/coremetry/files/clickhouse-system-logs.xml` into
+`/etc/clickhouse-server/config.d/`:
+
+| Log | TTL |
+|---|---|
+| `query_log`, `query_views_log` | 7 days |
+| `text_log` (also `<level>warning</level>`), `trace_log`, `processors_profile_log`, `part_log`, `metric_log`, `asynchronous_metric_log`, `asynchronous_insert_log`, `background_schedule_pool_log`, `query_metric_log`, `error_log` | 3 days |
+
+**External ClickHouse** (`clickhouse.external.addr`, Altinity operator,
+managed CH): Coremetry cannot change server config. Put the same file —
+or the equivalent `<ttl>event_date + INTERVAL N DAY DELETE</ttl>` per
+log section — into `config.d/` on **every** node and restart. List only
+logs your server already enables: for some logs (`session_log`,
+`zookeeper_log`, `opentelemetry_span_log`) adding a section turns the
+log on.
+
+**Existing data.** After the restart ClickHouse sees the changed table
+definition, renames the old table to `<name>_0` (`_1`, …) and creates a
+fresh one with the TTL. The renamed copies keep their old data until
+dropped by hand:
+
+```sql
+SELECT name, formatReadableSize(total_bytes) FROM system.tables
+WHERE database = 'system' AND match(name, '_log_[0-9]+$');
+DROP TABLE system.text_log_0;   -- repeat per renamed table (ON CLUSTER … on a cluster)
+```
+
 ## Verifying it's working
 
 After Coremetry's first run against the cluster:

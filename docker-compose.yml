@@ -18,6 +18,9 @@ services:
         hard: 262144
     volumes:
       - clickhouse-data:/var/lib/clickhouse
+      # System-log TTLs (query_log 7d, others 3d, text_log=warning) — same
+      # file the Helm chart ships; see the file header.
+      - ./charts/coremetry/files/clickhouse-system-logs.xml:/etc/clickhouse-server/config.d/coremetry-system-logs.xml:ro
     healthcheck:
       test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
       interval: 5s

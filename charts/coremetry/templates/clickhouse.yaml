@@ -23,6 +23,21 @@ spec:
       port: {{ .Values.clickhouse.service.httpPort }}
       targetPort: http
 ---
+{{- if .Values.clickhouse.systemLogTTL }}
+# System-log retention (config.d). Body = files/clickhouse-system-logs.xml,
+# the same file docker-compose.yml mounts.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "coremetry.fullname" . }}-clickhouse-config
+  labels:
+    {{- include "coremetry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+data:
+  coremetry-system-logs.xml: |
+    {{- .Files.Get "files/clickhouse-system-logs.xml" | nindent 4 }}
+---
+{{- end }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -42,6 +57,10 @@ spec:
       labels:
         {{- include "coremetry.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: clickhouse
+      {{- if .Values.clickhouse.systemLogTTL }}
+      annotations:
+        checksum/system-logs: {{ .Files.Get "files/clickhouse-system-logs.xml" | sha256sum }}
+      {{- end }}
     spec:
       {{- include "coremetry.imagePullSecrets" (dict "imageRoot" .Values.clickhouse.image "global" .Values.global) | nindent 6 }}
       {{- with .Values.clickhouse.podSecurityContext }}
@@ -83,6 +102,12 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/clickhouse
+            {{- if .Values.clickhouse.systemLogTTL }}
+            - name: system-logs
+              mountPath: /etc/clickhouse-server/config.d/coremetry-system-logs.xml
+              subPath: coremetry-system-logs.xml
+              readOnly: true
+            {{- end }}
           readinessProbe:
             tcpSocket: { port: native }
             initialDelaySeconds: 5
@@ -94,6 +119,12 @@ spec:
             periodSeconds: 15
             failureThreshold: 4
           resources: {{- toYaml .Values.clickhouse.resources | nindent 12 }}
+      {{- if .Values.clickhouse.systemLogTTL }}
+      volumes:
+        - name: system-logs
+          configMap:
+            name: {{ include "coremetry.fullname" . }}-clickhouse-config
+      {{- end }}
   volumeClaimTemplates:
     - metadata:
         name: data
