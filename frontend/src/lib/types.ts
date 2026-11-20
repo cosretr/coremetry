@@ -9222,6 +9222,33 @@ export interface IncidentCaseLookup {
   case: IncidentCase | null;
   categories: string[];
 }
+// Problem "Kök neden" etiketi (GET/PUT /api/problems/{id}/root-cause-label).
+// Go aynası: internal/api/problem_rootcause_label.go rootCauseLabel / rootCauseLabelResponse.
+export interface RootCauseLabel {
+  problemId: string;
+  caseId: string;
+  cause: string;
+  category: string;
+  culprit?: string;
+  link?: string;
+  resolution?: string;
+  by?: string;
+  /** unix ms — son yazım */
+  at: number;
+}
+export interface RootCauseLabelResponse {
+  label: RootCauseLabel | null;
+  /** Taslak vakanın CoSRE önerisi (olgu değil). */
+  suggested?: string;
+  categories: string[];
+}
+export interface RootCauseLabelInput {
+  cause: string;
+  category: string;
+  culprit: string;
+  link: string;
+  resolution: string;
+}
 // v0.10.1475 — /ai "Onay bekleyen vakalar" (GET /api/cases/pending). Go aynası:
 // internal/api/cosre_cases_pending.go pendingCasesResponse / pendingCaseCounts.
 export interface PendingCaseCounts {

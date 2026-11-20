@@ -15234,3 +15234,10 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Operatör onayı (2026-11-20, "hepsi onay"). İlk JS 272.7 → ~201 KB gz (bütçe 278 → 203; 2401–2402 ile birlikte ölçüm); giriş i18n parçası 77.1 → 2.4 KB. Katalog dosyaları: i18n.tr.ts, i18n.en.ts, ortak EN yedek i18n.common.ts; i18n.ts yalnız yükleyici. main.tsx ilk çizimden önce loadInitialCatalog() bekler (kullanıcı seçimi → son sunucu marka dili coremetry.brandLang → TR). Bedel: varsayılan TR'de ilk boyamadan önce bir tur fazladan istek (~78 KB gz).
 - Modül seviyesinde t() artık üretimde ham anahtar döner (katalog henüz yok); dev uyarı basar. Mevcut bu tür sabitler yalnız testte çiziliyor.
 - Giriş CSS'i bütçede (54 KB gz, yalnız azalır). globals.css'ten 40 yetim sınıf silindi (6891 → 6812 satır). main.tsx lib/api'yi statik içe aktarır (INEFFECTIVE_DYNAMIC_IMPORT uyarısı gitti). Skill sayıları güncellendi.
+
+## 2026-11-21 — v0.10.2404 — Problem detayına "Kök neden" etiketi
+
+- CoSRE doğruluk ölçümü Faz A, dilim A1 (operatör hedefi: CoSRE gerçek olaylara karşı ölçülsün). Doğruluk kaynağı ekibin elle girdiği "gerçekte ne oldu" etiketidir; 👍/👎 ve triage düğmeleri ("Gerçek problem / Problem değil", D4) etiket DEĞİLDİR.
+- Depo: mevcut onaylı incident_cases vakası (p:<problemId>) — SRE değerlendirmesi doğruluğu zaten yalnız buradan okur; ayrı etiket deposu açılmadı. Kolonu olmayan suçlu servis/bileşen + http(s) bağlantı saved_views sistem satırında (page='problem-rootcause'); yeni şema yok. Kategori kümesi cosrelearn.CaseCategories (code → code_bug, unknown → other).
+- GET/PUT /api/problems/{id}/root-cause-label: viewer okur, editor+ yazar, audit problem.rootcause.set. Vaka yoksa Problem satırından kurulur, taslak varsa alanları taşınır.
+- Kart Problem'in "Vaka kaydı" kartının yerini alır; dört kutunun (S7) altında, boşken çözümden sonra doldurmaya çağırır. Problem detayı TR/EN (rcl.*).

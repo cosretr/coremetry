@@ -56,6 +56,10 @@ var systemSavedViewPages = map[string]struct{}{
 	// gece kalite işi (yazım) ve POST /api/ai/evalset/candidates/{id}/accept
 	// (admin, denetimli) yazar.
 	EvalsetCandidatePage: {},
+	// Problem "Kök neden" etiketinin ekleri (suçlu bileşen +
+	// bağlantı); yalnız PUT /api/problems/{id}/root-cause-label (editor+,
+	// denetimli) yazar.
+	ProblemRootCausePage: {},
 }
 
 // EvalsetCandidatePage — v0.10.2111: aday vaka satırlarının page değeri.

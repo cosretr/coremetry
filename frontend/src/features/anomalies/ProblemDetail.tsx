@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider'; // v0.10.2126 — "Ben ilgileniyorum" kimliği
 import { ProblemCoSRESection } from './ProblemCoSRESection';
 import { IncidentCaseCard } from './IncidentCaseCard';
+import { RootCauseLabelCard } from './RootCauseLabelCard';
 import { keys, useServicesMetadata, useProblemStandard } from '@/lib/queries';
 import { fmtFixed, fmtNum } from '@/lib/utils';
 import { Spinner, Empty } from '@/components/Spinner';
@@ -1214,8 +1215,6 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
       <ProblemOriginLine problemId={problem.id} />
       <AlertProblemMeta problem={problem} window={probWindow} endNs={endNs} />
       <ProblemTriage problem={problem} isAdmin={isAdmin} onBack={onBack} onChanged={onChanged} />
-      {/* CoSRE öğrenme Faz 3 — kapanmış problemin vaka kaydı (taslak → tek tık onay). */}
-      <IncidentCaseCard source="problem" sourceId={problem.id} />
 
       {/* v0.10.2127 (Problems sadeleştirme S7; operatör kararı 2026-11-13) —
           sade detay: solda dört kısa kutu (Ne oluyor · Kimi etkiliyor · Olası
@@ -1261,6 +1260,12 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
       <ProblemGraphSection problemId={problem.id} />
       {/* v0.10.2281 (S3) — "Tekrar" (gölge; bildirim değişmedi). */}
       <ProblemRepeatSection problemId={problem.id} />
+      {/* "Kök neden" etiketi (CoSRE doğruluk ölçümünün doğruluk
+          kaynağı). Problem'in "Vaka kaydı" kartının yerini alır (aynı onaylı
+          incident_cases vakası); dört kutunun (S7) altında, Teknik kanıttaki
+          araştırmanın üstünde görünür kalır — boşken ekibi çözümden sonra
+          doldurmaya çağırır. */}
+      <RootCauseLabelCard problemId={problem.id} />
 
       <Sect title={tl('pd.tech', lang)} collapsible>
         {/* v0.10.1529 — standart kartlar (Etki · Ne zamandan beri · Güven ·

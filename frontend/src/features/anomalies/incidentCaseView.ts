@@ -68,3 +68,9 @@ export function caseHref(c: Pick<IncidentCase, 'source' | 'sourceId'>): string {
     ? `/problems?exception=${encodeURIComponent(c.sourceId)}`
     : `/problems?problem=${encodeURIComponent(c.sourceId)}`;
 }
+
+/** "Kök neden" etiketinin suçlusu servis adı mı (db:/ext:/q:
+ *  önekli bileşen değil) → servis sayfasına bağlanır; değilse düz metin. */
+export function culpritIsService(c: string): boolean {
+  return c !== '' && !/^(db|ext|q):/i.test(c);
+}

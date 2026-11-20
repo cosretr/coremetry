@@ -1298,6 +1298,14 @@ export const api = {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+  // Problem "Kök neden" etiketi (viewer okur, editor+ yazar).
+  rootCauseLabel: (problemId: string, signal?: AbortSignal) =>
+    get<import('./types').RootCauseLabelResponse>(`/api/problems/${encodeURIComponent(problemId)}/root-cause-label`, signal),
+  putRootCauseLabel: (problemId: string, body: import('./types').RootCauseLabelInput) =>
+    request<import('./types').RootCauseLabelResponse>(`/api/problems/${encodeURIComponent(problemId)}/root-cause-label`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
   // CoSRE öğrenme Faz 2 — örtük sinyal (kopya, link/kanıt tıkı, probleme not).
   // Ateşle-unut: keepalive (SPA gezinmesinde istek düşmesin), hata yutulur —
   // sinyal kaybı kullanıcı eylemini ASLA bozmaz.
