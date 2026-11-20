@@ -35,6 +35,8 @@ export const ML_TRACE_DETECTORS: { id: string; label: string; hint: string }[] =
   { id: 'dependency_error_rate', label: 'Bağımlılık hata oranı', hint: 'VM DB/messaging client histogramları: çağıran × hedef hata oranı (error_type etiketi); etiket yoksa "ölçülemedi"' },
   // v0.10.2077 — spec-ml-service-level dilim 1: eski "servis hata oranı" anomalisinin ML karşılığı; span'ler örneklendiği için yalnız VM.
   { id: 'svc_error_rate', label: 'Servis hata oranı', hint: 'VM sunucu RED (HTTP/gRPC), 1 dakikalık örnek: son 5 dakikanın en az 3\'ünde hata oranı en az %1, normalin en az 1,5 katı ve 1 puan üstü; dakikada en az 10 istek. Tek başına Problem açar. Tik başına aile başına 2 ek sorgu' },
+  // v0.10.2385 — etki olayı I4: servis düzeyi yanıt süresi (Davis "response time degradation"); varsayılan açık.
+  { id: 'svc_response_time', label: 'Servis yanıt süresi', hint: 'VM sunucu RED (HTTP/gRPC), 1 dakikalık örnek: son 5 dakikanın en az 3\'ünde medyan normalin en az 1,5 katı ve 100 ms üstü, ya da en yavaş %10 normalin en az 2 katı ve 1 sn üstü; dakikada en az 10 istek. Tek başına Problem açar. Dakikada aile başına 1, tik başına 1 ek bucket sorgusu; taban oluşana dek sessiz' },
   // v0.10.2086 — dilim 2: eski "yaygın yavaşlama" Problem'inin ML karşılığı; yeni sorgu yok.
   { id: 'svc_breadth', label: 'Yaygın yavaşlama', hint: 'Aynı serviste en az 3 endpoint birlikte yavaşladı (her biri p95 en az 1 sn ve normalin en az 2 katı), 10 dk sürdü; batch servisler hariç. Endpoint gecikmesi olaylarından türetilir' },
   { id: 'trace_pod_outlier', label: 'Aykırı pod (trace)', hint: 'VM server RED, pod etiketi varsa: pod\'lar arasında hata oranı / p95 sapması' },

@@ -31,6 +31,12 @@ package ml
 // varsa svc kararı ona ÜYE olurdu (JoinsRule dolu) — yine "Problem var"
 // sayılır (WouldOpen), sayaç yalnız sahip kararları sayar.
 //
+// YANIT SÜRESİ (v0.10.2385, etki olayı programı I4): svc_response_time olayı
+// aynı kapıdan TEK BAŞINA Problem açar (Value = ateşleyen ölçünün gözleneni,
+// Threshold = o ölçünün mevsimsel tabanı, ms). En yavaş %10 kuralı ≥ 2 × taban
+// istediği için o ölçüyle açılan olay P1 doğar; medyan kuralında taban × 1,5 –
+// 2 arası olay P2, ≥ 2 × taban (taban ≤ 100 ms iken her ateşleme) P1.
+//
 // GRUP KURALINA ETKİSİ: svc olayları grupta trace sinyali üyesidir (başka
 // değişiklik yok); tek-sinyal gölge kolu (v0.10.2058) svc olaylarını SAYMAZ
 // (singleWorsening) — canlı karşılıkları bu kapı olduğu için çift sayım olmaz.
@@ -70,7 +76,9 @@ type SvcShadow struct {
 }
 
 // isSvcDetector — SAF.
-func isSvcDetector(d string) bool { return d == detSvcErrorRate || d == detSvcBreadth }
+func isSvcDetector(d string) bool {
+	return d == detSvcErrorRate || d == detSvcBreadth || d == detSvcResponseTime // yanıt süresi: v0.10.2385 (I4)
+}
 
 // svcErrThresholdFloor — hata oranı Problem'inin Threshold tabanı: etki
 // kuralının mutlak tabanının yarısı (%1 / 2 = %0,5). Taban bunun altındayken
@@ -82,6 +90,9 @@ func svcValueThreshold(e chstore.MLEvent) (float64, float64) {
 	th := e.Baseline
 	if e.Detector == detSvcErrorRate && th < svcErrThresholdFloor {
 		th = svcErrThresholdFloor
+	}
+	if e.Detector == detSvcResponseTime && th < 1 { // ms; taban 0 olamaz ama oran sonsuza gitmesin
+		th = 1
 	}
 	return e.Observed, th
 }
@@ -212,6 +223,10 @@ func svcEventSentence(e chstore.MLEvent) string {
 			s += " " + chstore.RequestSplitSentence(*rs)
 		}
 		return s
+	case detSvcResponseTime:
+		// v0.10.2385 (I4) — "yanıt süresi (medyan) normalde X, şimdi Y (N kat)":
+		// cümlenin tek tanımı chstore; ölçü ve değerler olayın ateşleyen ölçüsü.
+		return chstore.MLResponseTimeSentence(e.Service, rtMeasureOfEvent(e).key, e.Observed, e.Baseline)
 	case detSvcBreadth:
 		_, n := breadthOpsOf(e.Evidence)
 		cnt := "birden çok"
@@ -228,12 +243,21 @@ func svcEventSentence(e chstore.MLEvent) string {
 }
 
 // svcMetric — SAF: Problem ölçüsü (problem standardı ailesi + kategori).
-func svcMetric(det string) string {
-	if det == detSvcBreadth {
+// Yanıt süresi (v0.10.2385): olayın ölçüsü — medyan p50_ms, en yavaş %10
+// p90_ms (ikisi de gecikme ailesi / SLOWDOWN).
+func svcMetric(e chstore.MLEvent) string {
+	switch e.Detector {
+	case detSvcBreadth:
 		return "p95_ms"
+	case detSvcResponseTime:
+		return rtMeasureOfEvent(e).agg + "_ms"
 	}
 	return "error_rate"
 }
+
+// svcSentenceRank — Problem açıklamasında cümle sırası: hata oranı, yanıt
+// süresi, yaygın yavaşlama.
+var svcSentenceRank = map[string]int{detSvcErrorRate: 0, detSvcResponseTime: 1, detSvcBreadth: 2}
 
 // mlProblemRatio — SAF: Value/Threshold (Threshold ≤ 0 → 1; grup satırı 1).
 func mlProblemRatio(v, th float64) float64 {
@@ -259,7 +283,7 @@ func svcProblemInputs(kept []chstore.MLEvent, ds map[string]SvcShadow) []svcProb
 		// cümle sırası sabit: hata oranı önce, sonra yavaşlama
 		sort.Slice(evs, func(i, j int) bool {
 			if evs[i].Detector != evs[j].Detector {
-				return evs[i].Detector == detSvcErrorRate
+				return svcSentenceRank[evs[i].Detector] < svcSentenceRank[evs[j].Detector]
 			}
 			return evs[i].ID < evs[j].ID
 		})
@@ -270,7 +294,7 @@ func svcProblemInputs(kept []chstore.MLEvent, ds map[string]SvcShadow) []svcProb
 		for _, e := range evs {
 			v, th := svcValueThreshold(e)
 			if r := mlProblemRatio(v, th); r > best {
-				best, in.Value, in.Threshold, in.Metric = r, v, th, svcMetric(e.Detector)
+				best, in.Value, in.Threshold, in.Metric = r, v, th, svcMetric(e)
 				lead = e
 			}
 			if in.StartedAt == 0 || e.StartedAt < in.StartedAt {

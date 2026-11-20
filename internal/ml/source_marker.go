@@ -15,7 +15,8 @@ package ml
 // Dedektör → kaynak (her biri dedektörün kendi dosya başlığındaki KAYNAK notu):
 //
 //	VM, örneklenmemiş   op_latency / op_error_rate / throughput_drop /
-//	                    svc_error_rate (sunucu RED histogramı), svc_breadth
+//	                    svc_error_rate / svc_response_time (sunucu RED
+//	                    histogramı; yanıt süresi v0.10.2385), svc_breadth
 //	                    (op_latency olaylarından türer), trace_pod_outlier,
 //	                    trace_change_point (aynı VM p95 serisi), dependency_*
 //	                    (client histogramı), metric_* YALNIZ kanıt "vm" diyorsa
@@ -46,7 +47,7 @@ const problemDescMax = 600
 // eventSourceMarker — SAF: olayın gerçek ölçü kaynağının işareti ("" = yok).
 func eventSourceMarker(e chstore.MLEvent) string {
 	switch e.Detector {
-	case detOpLatency, detOpErrorRate, detThroughputDrop, detSvcErrorRate, detSvcBreadth,
+	case detOpLatency, detOpErrorRate, detThroughputDrop, detSvcErrorRate, detSvcBreadth, detSvcResponseTime,
 		detTracePodOutlier, detTraceChangePoint, detDependencyLatency, detDependencyErrorRate:
 		return chstore.REDEvidenceVM
 	case detLogVolume, detErrorRate, detServiceSilent, detTemplateSpike, detRareTemplate,

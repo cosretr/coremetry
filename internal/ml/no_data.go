@@ -33,6 +33,10 @@ type famCoverage struct{ blind bool }
 type tickCoverage struct {
 	classOf map[string]string
 	fam     map[string]famCoverage
+	// runBlind — v0.10.2385 (I4): aile kör DEĞİLKEN tek bir koşunun bu tik
+	// ölçülemediğini söyleyen kanca (dedektörün kendi yalıtılmış sorgusu
+	// düştü / beklemede); nil = yok. Bugün yalnız svc_response_time.
+	runBlind func(ev chstore.MLEvent) bool
 }
 
 // noData — bu tikte bu dedektörün serisi değerlendirilemedi mi.

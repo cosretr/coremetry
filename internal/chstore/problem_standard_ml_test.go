@@ -389,3 +389,57 @@ func TestMLMarkerNotifyPolicyUnchanged(t *testing.T) {
 		t.Errorf("P2: %+v", s.Confidence)
 	}
 }
+
+// v0.10.2385 (etki olayı I4) — servis yanıt süresi Problem'i: cümle bir kez
+// tanımlanır, manşet açıklamadan okunur, İngilizce arayüz için anahtara geri
+// okunur; aile gecikme, kategori yavaşlama (medyan p50_ms, en yavaş %10 p90_ms).
+func TestMLResponseTimeSentenceAndHeadline(t *testing.T) {
+	cases := []struct {
+		name, measure  string
+		obs, base      float64
+		want, key      string
+		wantN, wantV   string
+		wantX, metric  string
+		wantHeadlineTR bool
+	}{
+		{"medyan, kat tek ondalık", MLRespMedian, 920, 180, "orders servisinde yanıt süresi (medyan) normalde 180 ms, şimdi 920 ms (5,1 kat).", "h.mlRtMed", "180 ms", "920 ms", "5.1", "p50_ms", true},
+		{"en yavaş %10, binlik ayırıcı", MLRespSlow, 2900, 800, "orders servisinde yanıt süresi (en yavaş %10) normalde 800 ms, şimdi 2.900 ms (3,6 kat).", "h.mlRtSlow", "800 ms", "2,900 ms", "3.6", "p90_ms", true},
+		{"kat tam sayı", MLRespMedian, 12400, 40, "orders servisinde yanıt süresi (medyan) normalde 40 ms, şimdi 12.400 ms (310 kat).", "h.mlRtMed", "40 ms", "12,400 ms", "310", "p50_ms", true},
+		{"gözlenen tabanın altında → kat yok (uzatma tiki)", MLRespMedian, 170, 180, "orders servisinde yanıt süresi (medyan) normalde 180 ms, şimdi 170 ms.", "h.mlRtMedFlat", "180 ms", "170 ms", "", "p50_ms", true},
+		{"en yavaş %10, kat yok", MLRespSlow, 800, 800, "orders servisinde yanıt süresi (en yavaş %10) normalde 800 ms, şimdi 800 ms.", "h.mlRtSlowFlat", "800 ms", "800 ms", "", "p90_ms", true},
+		{"taban 1 ms'nin altında → 1 ms, kat yok", MLRespMedian, 300, 0.2, "orders servisinde yanıt süresi (medyan) normalde 1 ms, şimdi 300 ms.", "h.mlRtMedFlat", "1 ms", "300 ms", "", "p50_ms", true},
+	}
+	for _, c := range cases {
+		got := MLResponseTimeSentence("orders", c.measure, c.obs, c.base)
+		if got != c.want {
+			t.Errorf("%s: cümle\n got %q\nwant %q", c.name, got, c.want)
+			continue
+		}
+		p := Problem{RuleID: MLSvcRulePrefix + "orders", RuleName: MLPromotedRuleNamePrefix + "servis anomalisi", Severity: "critical", Service: "orders",
+			Metric: c.metric, Comparator: ">=", Value: c.obs, Threshold: c.base, Status: "open", StartedAt: 1,
+			Description: got + " " + REDEvidenceVM + "."}
+		std := StandardizeProblem(p, StdFacts{Now: mlStdNow})
+		if std.Family != StdFamilyLatency || std.Headline != c.want || std.HeadlineMsg == nil || std.HeadlineMsg.K != c.key {
+			t.Errorf("%s: standart aile=%s manşet=%q anahtar=%+v", c.name, std.Family, std.Headline, std.HeadlineMsg)
+			continue
+		}
+		a := std.HeadlineMsg.A
+		if a["svc"] != "orders" || a["n"] != c.wantN || a["v"] != c.wantV || (c.wantX != "" && a["x"] != c.wantX) || (c.wantX == "" && a["x"] != nil) {
+			t.Errorf("%s: argümanlar %+v", c.name, a)
+		}
+		if std.Evidence.Source != StdSourceVM {
+			t.Errorf("%s: kaynak işareti VM okunmalı: %q", c.name, std.Evidence.Source)
+		}
+		if ProblemCategory(p) != CategorySlowdown {
+			t.Errorf("%s: kategori %s", c.name, ProblemCategory(p))
+		}
+	}
+	// serbest metin (ikinci cümle, başka cümle) anahtarsız kalır; hata oranı cümlesi kendi anahtarında
+	if mlRespTimeMsg("orders servisinde yanıt süresi (medyan) normalde 180 ms, şimdi 920 ms (5,1 kat). Ek cümle.") != nil ||
+		mlRespTimeMsg("orders servisinde yanıt süresi (p99) normalde 180 ms, şimdi 920 ms.") != nil {
+		t.Error("tam eşleşmeyen cümle anahtarlanmamalı")
+	}
+	if m := mlPromotedMsg(MLErrRateSentence("orders", 0.068, 0.004)); m == nil || m.K != "h.mlErr" {
+		t.Errorf("hata oranı cümlesi kendi anahtarında kalmalı: %+v", m)
+	}
+}

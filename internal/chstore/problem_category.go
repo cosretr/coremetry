@@ -75,7 +75,7 @@ func ProblemCategory(p Problem) string {
 	case metric == DBHealthMetricP99Ms:
 		return CategorySlowdown
 	// Yavaşlama ailesi.
-	case metric == "p50_ms" || metric == "p95_ms" || metric == "p99_ms" || metric == "avg_ms":
+	case metric == "p50_ms" || metric == "p90_ms" || metric == "p95_ms" || metric == "p99_ms" || metric == "avg_ms": // p90: v0.10.2385 ML servis yanıt süresi
 		return CategorySlowdown
 	case strings.HasPrefix(metric, "db_stmt_") || metric == "db.statement_p95_ms":
 		return CategorySlowdown

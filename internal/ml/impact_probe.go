@@ -9,8 +9,9 @@ package ml
 // ~5–10 dk sonra, 3–4 dakikalık olay iki tikin arasına düşüp hiç görülmeyebilir.
 //
 // NE: zamanlı tikler arasında lider impactProbeInterval'da bir UCUZ yoklama
-// yapar (impactProber; bugün yalnız svc_error_rate: aile başına 2 VM aralık
-// sorgusu + son tikin taban özeti, CH okuması yok). Yoklama tek soruyu
+// yapar (impactProber; svc_error_rate: aile başına 2 VM aralık sorgusu + son
+// tikin taban özeti, CH okuması yok; v0.10.2382 consumer lag, v0.10.2385
+// servis yanıt süresi aynı arayüzle). Yoklama tek soruyu
 // yanıtlar: etki kuralı ateşleyen VE açık koşusu olmayan bir özne var mı?
 // Varsa recorder TEK bir tam tik'i hemen koşar ("erken tik"). Olay, kayıt,
 // Problem ve bildirim mevcut TEK hattan çıkar: hat çatallanmaz, yoklama
@@ -72,6 +73,20 @@ type impactProber interface {
 	probeImpact(ctx context.Context, deps Deps, cfg chstore.MLConfig, now time.Time) ([]impactCandidate, error)
 }
 
+// impactProbersOf — dedektörün etki yoklamaları: kendisi (impactProber ise) +
+// ek ölçüleri (v0.10.2385, I4: TraceRED'in yanıt süresi yoklaması kendi
+// dedektör anahtarıyla ayrı sorulur; hata oranı yoklaması aynen).
+func impactProbersOf(det Detector) []impactProber {
+	var out []impactProber
+	if p, ok := det.(impactProber); ok {
+		out = append(out, p)
+	}
+	if m, ok := det.(interface{ moreProbers() []impactProber }); ok {
+		out = append(out, m.moreProbers()...)
+	}
+	return out
+}
+
 // probeTriggers — SAF: erken tik isteyen adaylar = ateşleyen − açık koşusu
 // olan − bekleme süresindeki. cool: taban kimlik → son erken tik anı.
 func probeTriggers(cands []impactCandidate, open func(baseID string) bool, cool map[string]time.Time, now time.Time) []impactCandidate {
@@ -107,17 +122,18 @@ func (r *Recorder) probeImpact(ctx context.Context, cfg chstore.MLConfig, leader
 	}
 	var hit []impactCandidate
 	for _, det := range r.detectors {
-		p, ok := det.(impactProber)
-		if !ok || !p.probeOn(cfg) {
-			continue
+		for _, p := range impactProbersOf(det) {
+			if !p.probeOn(cfg) {
+				continue
+			}
+			global.probes.Add(1)
+			cands, err := p.probeImpact(pctx, deps, cfg, now)
+			if err != nil {
+				log.Printf("[ml] etki yoklaması düştü (%s; erken tik yok): %v", det.Name(), err)
+				continue
+			}
+			hit = append(hit, probeTriggers(cands, open, r.probeCool, now)...)
 		}
-		global.probes.Add(1)
-		cands, err := p.probeImpact(pctx, deps, cfg, now)
-		if err != nil {
-			log.Printf("[ml] etki yoklaması düştü (%s; erken tik yok): %v", det.Name(), err)
-			continue
-		}
-		hit = append(hit, probeTriggers(cands, open, r.probeCool, now)...)
 	}
 	if len(hit) == 0 {
 		return false

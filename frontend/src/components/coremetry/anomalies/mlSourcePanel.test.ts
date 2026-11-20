@@ -69,6 +69,8 @@ describe('sourcePanelFor', () => {
   });
   it('v0.10.2086: yaygın yavaşlama servis Overview p99 serisini çizer', () => {
     expect(sourcePanelFor(ev('svc_breadth', 'trace', ''))).toEqual({ kind: 'service-red', service: 'orders-consumer', agg: 'p99', label: 'p99 yanıt süresi' });
+    // v0.10.2385 — servis yanıt süresi (etki olayı I4): aynı Overview p99 serisi.
+    expect(sourcePanelFor(ev('svc_response_time', 'trace', ''))).toEqual({ kind: 'service-red', service: 'orders-consumer', agg: 'p99', label: 'p99 yanıt süresi' });
     // v0.10.2128 (S8) — hacim sıçraması anlık görüntü yazmaz: istek hızı serisi, kayıtlı görüntü değil.
     expect(sourcePanelFor(ev('svc_volume_spike', 'trace', ''))).toEqual({ kind: 'service-red', service: 'orders-consumer', agg: 'rate', label: 'istek hızı' });
     expect(sourcePanelFor({ ...ev('svc_volume_spike', 'trace', ''), service: '' }).kind).toBe('snapshot');

@@ -64,7 +64,8 @@ export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' |
   if (e.signal === 'log') return logsPanelFromHref(logsHref) ?? snapshot('logNoLink');
   // v0.10.2077 — servis hata oranı: Overview'ın hata oranı serisi (v0.10.2062 deseni).
   // v0.10.2086 — yaygın yavaşlama: Overview'ın p99 serisi (yavaş işlemler cümlede adıyla).
-  if (e.detector === 'svc_breadth') return e.service ? { kind: 'service-red', service: e.service, agg: 'p99', label: t('mlx.p99rt', lang) } : noSvc;
+  // v0.10.2385 — servis yanıt süresi (medyan / en yavaş %10): aynı Overview p99 serisi (yargılanan seri olay kaydında).
+  if (e.detector === 'svc_breadth' || e.detector === 'svc_response_time') return e.service ? { kind: 'service-red', service: e.service, agg: 'p99', label: t('mlx.p99rt', lang) } : noSvc;
   if (e.detector === 'svc_error_rate') return e.service ? { kind: 'service-red', service: e.service, agg: 'error_rate', label: t('aed.metric.error_rate', lang) } : noSvc;
   // v0.10.2128 (Problems S8) — hacim sıçraması (evaluator yazar, anlık görüntü
   // YOK): kayıtlı görüntüye düşünce grafik alanı "grafik kaydı yok" diyordu.

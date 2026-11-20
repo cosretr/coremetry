@@ -112,6 +112,80 @@ func mlErrRateMsg(headline string) *StdMsg {
 	return stdM("h.mlErr", "svc", m[1], "n", swapNumSep.Replace(m[2])+"%", "v", v, "x", swapNumSep.Replace(m[4]))
 }
 
+// ── Manşet: servis yanıt süresi (v0.10.2385, etki olayı I4) ─────────────
+
+// Yanıt süresi ölçüleri (ML svc_response_time olayının ölçüsü).
+const (
+	MLRespMedian = "median" // medyan (p50)
+	MLRespSlow   = "slow"   // en yavaş %10 (p90)
+)
+
+const (
+	mlRespMedianTR = "medyan"
+	mlRespSlowTR   = "en yavaş %10"
+)
+
+// mlRespMs — SAF: ms → tam sayı metni (TR binlik ayırıcı; en az 1).
+func mlRespMs(v float64) string {
+	if !finiteNonNeg(v) || v < 1 {
+		v = 1
+	}
+	return groupInt(v, '.')
+}
+
+// MLResponseTimeSentence — SAF: ML servis yanıt süresi Problem'inin cümlesi
+// (manşet; TEK TANIM). measure MLRespMedian | MLRespSlow; observed / baseline
+// ms, olayın kendi değerleri (ateşleyen ölçünün gözleneni ve mevsimsel tabanı).
+//
+//	"<svc> servisinde yanıt süresi (medyan) normalde 180 ms, şimdi 920 ms (5,1 kat)."
+//	"<svc> servisinde yanıt süresi (en yavaş %10) normalde 800 ms, şimdi 2.900 ms (3,6 kat)."
+//	kat yoksa (taban yok / gözlenen tabanın üstünde değil): "… normalde 180 ms, şimdi 170 ms."
+func MLResponseTimeSentence(service, measure string, observed, baseline float64) string {
+	word := mlRespMedianTR
+	if measure == MLRespSlow {
+		word = mlRespSlowTR
+	}
+	s := service + " servisinde yanıt süresi (" + word + ") normalde " + mlRespMs(baseline) + " ms, şimdi " + mlRespMs(observed) + " ms"
+	if finiteNonNeg(baseline) && baseline >= 1 && finiteNonNeg(observed) {
+		if r := observed / baseline; r > 1 {
+			if x := mlFactorText(r); x != "1" {
+				s += " (" + swapNumSep.Replace(x) + " kat)"
+			}
+		}
+	}
+	return s + "."
+}
+
+var mlRespTimeRe = regexp.MustCompile(
+	`^(.+) servisinde yanıt süresi \((medyan|en yavaş %10)\) normalde ([0-9][0-9.]*) ms, şimdi ([0-9][0-9.]*) ms(?: \(([0-9][0-9.]*(?:,[0-9]+)?) kat\))?\.$`)
+
+// mlRespTimeMsg — SAF: manşet TAM olarak MLResponseTimeSentence cümlesiyse
+// metin anahtarı (İngilizce arayüz); değilse nil. mlErrRateMsg ile aynı desen.
+func mlRespTimeMsg(headline string) *StdMsg {
+	m := mlRespTimeRe.FindStringSubmatch(headline)
+	if m == nil {
+		return nil
+	}
+	key := "h.mlRtMed"
+	if m[2] == mlRespSlowTR {
+		key = "h.mlRtSlow"
+	}
+	n, v := swapNumSep.Replace(m[3])+" ms", swapNumSep.Replace(m[4])+" ms"
+	if m[5] == "" {
+		return stdM(key+"Flat", "svc", m[1], "n", n, "v", v)
+	}
+	return stdM(key, "svc", m[1], "n", n, "v", v, "x", swapNumSep.Replace(m[5]))
+}
+
+// mlPromotedMsg — SAF: ML servis Problem'i manşetinin metin anahtarı (hata
+// oranı ya da yanıt süresi cümlesi); serbest metinde nil.
+func mlPromotedMsg(headline string) *StdMsg {
+	if m := mlErrRateMsg(headline); m != nil {
+		return m
+	}
+	return mlRespTimeMsg(headline)
+}
+
 // ── Neden: etki kuralı gerçekleri ───────────────────────────────────────
 
 // StdImpactRule — etki kuralı olayının gerçekleri (ml.ImpactRuleFacts: olay

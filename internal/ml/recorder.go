@@ -302,7 +302,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 			all = append(all, ev)
 		}
 	}
-	deps.meter = nil // tik sonrası yazımlar dedektör ölçümüne girmez
+	deps.meter = nil                       // tik sonrası yazımlar dedektör ölçümüne girmez
+	cov.runBlind = runBlindOf(r.detectors) // v0.10.2385 (I4): koşu düzeyi "ölçülemedi"
 	// v0.10.2065 (Davis S5): evidence.baselineKind — tek yer, saf takvim hesabı, sorgu yok.
 	if cal, loc := calendarFor(sens); len(all) > 0 {
 		for i := range all {
@@ -362,6 +363,8 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 	attachMetricRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &metBudget, start)
 	errBudget := errRecordMaxPerTick // v0.10.2221 (H5): hata oranı kaydı
 	attachErrorRateRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &errBudget, start)
+	rtBudget := rtRecordMaxPerTick // v0.10.2385 (I4): servis yanıt süresi kaydı
+	attachSvcRTRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &rtBudget, start)
 	tpBudget := tpRecordMaxPerTick // v0.10.2222 (H6): throughput_drop kaydı
 	attachThroughputRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &tpBudget, start)
 	terrBudget := terrRecordMaxPerTick // v0.10.2223 (H7): trace_error_count kaydı
@@ -457,6 +460,10 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 		ids, _ := r.runs.confirmers(ev, start, confirmWin)
 		return ids
 	}, &errBudget, start)
+	attachSvcRTRecords(tctx, deps, cfg, kept, false, r.runs.firstOf, func(ev chstore.MLEvent) []string {
+		ids, _ := r.runs.confirmers(ev, start, confirmWin)
+		return ids
+	}, &rtBudget, start)
 	attachThroughputRecords(tctx, deps, cfg, kept, false, r.runs.firstOf, func(ev chstore.MLEvent) []string {
 		ids, _ := r.runs.confirmers(ev, start, confirmWin)
 		return ids
@@ -575,6 +582,28 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 	log.Print(gateShadowLine(status.PublishGates))
 	for name, st := range signals {
 		log.Printf("[ml] tick %s ran=%v services=%d source=%dms candidates=%d batch_cut=%d written=%d partial=%d err=%s", name, st.Ran, st.Services, st.SourceMs, st.Candidates, st.BatchCut, st.Written, st.Partial, st.Error)
+	}
+}
+
+// runBlindOf — dedektörlerin koşu düzeyi "ölçülemedi" kancaları tek yüklemde
+// (no_data.go tickCoverage.runBlind); kancası olan dedektör yoksa nil.
+func runBlindOf(dets []Detector) func(chstore.MLEvent) bool {
+	var fs []func(chstore.MLEvent) bool
+	for _, det := range dets {
+		if b, ok := det.(interface{ runBlind(chstore.MLEvent) bool }); ok {
+			fs = append(fs, b.runBlind)
+		}
+	}
+	if len(fs) == 0 {
+		return nil
+	}
+	return func(ev chstore.MLEvent) bool {
+		for _, f := range fs {
+			if f(ev) {
+				return true
+			}
+		}
+		return false
 	}
 }
 

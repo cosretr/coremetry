@@ -205,6 +205,8 @@ var mlDetSpecs = map[string]detSpec{
 	"dependency_latency":    {label: "Bağımlılık gecikmesi (p95)", fact: "{code} çağrı süresi", what: "{svc} servisinin {code} çağrıları yavaşladı.", past: "{code} çağrıları yavaşladı", unit: unitMs, measure: "Çağrı süresi (p95)"},
 	"dependency_error_rate": {label: "Bağımlılık hata oranı (VM client, error_type)", fact: "{code} çağrılarında hata oranı", what: "{svc} servisinin {code} çağrılarında hata oranı arttı.", past: "{code} çağrılarında hata arttı", unit: unitRatio},
 	"svc_error_rate":        {label: "Servis hata oranı (VM RED, sunucu istekleri)", fact: "servis hata oranı", what: "{svc} servisinde hata alan isteklerin oranı arttı.", past: "servis hata oranı arttı", unit: unitRatio},
+	// v0.10.2385 (I4) — ölçü olayın part'ında (svc_p50 | svc_p90; specFor).
+	"svc_response_time": {label: "Servis yanıt süresi (VM RED, sunucu istekleri; medyan ve en yavaş %10)", fact: "yanıt süresi", what: "{svc} servisinde isteklerin yanıt süresi uzadı.", past: "servis yanıt süresi uzadı", unit: unitMs, measure: "Yanıt süresi (medyan)"},
 	// v0.10.2118 — evaluator yazar (chstore.MLDetSvcVolumeSpike; MLDetectorNames'te yok).
 	// v0.10.2242 (Dilim B) — ML hacim dedektörü; kart başlığı olay kaydından (RecordTitle).
 	chstore.MLDetSvcTelemetryVolume: {label: "Telemetri hacmi (istek başına span)", fact: "istek başına span", what: "{svc} servisinin istek başına yazdığı span sayısı değişti.", past: "telemetri hacmi değişti", unit: unitCount, noun: "span"},
@@ -230,6 +232,9 @@ func specFor(in CardInput) detSpec {
 		if in.Detector == "op_latency" && strings.HasSuffix(in.Part, "|p95") {
 			sp.label, sp.fact, sp.what, sp.past, sp.unit, sp.measure = "Endpoint gecikmesi · p95", "{code} yanıt süresi (p95)",
 				"{svc} servisinin {code} endpoint'i yavaşladı.", "yanıt süresi arttı", unitMs, "Yanıt süresi (p95)"
+		}
+		if in.Detector == detSvcResponseTime && rtMeasureOfPart(in.Part) == 1 { // v0.10.2385 (I4)
+			sp.measure = "Yanıt süresi (en yavaş %10)"
 		}
 		if in.Detector == "trace_pod_outlier" && in.Code == "p95" {
 			sp.fact, sp.what, sp.unit, sp.measure = "{pod} pod'unda yanıt süresi", "{svc} servisinde {pod} pod'u diğerlerinden yavaş.", unitMs, "Bu pod'da yanıt süresi (p95)"
@@ -497,6 +502,8 @@ func summaryOf(in CardInput, sp detSpec, open bool, end time.Time) string {
 		head = breadthHead(in) // v0.10.2086 — operasyon adlarıyla, değer + normal
 	} else if in.Detector == detSvcErrorRate {
 		head = svcErrHead(in, sp) // v0.10.2077 — "normalde X, şimdi Y"
+	} else if in.Detector == detSvcResponseTime {
+		head = svcRTHead(in) // v0.10.2385 (I4) — ölçü adıyla, "normalde X, şimdi Y"
 	} else {
 		head = fmt.Sprintf("%s: %s %s", in.Service, fill(sp.fact, in), RatioPhrase(in.Observed, in.Baseline, in.Direction, RatioLong, ratioRef(in)))
 	}

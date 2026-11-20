@@ -43,6 +43,7 @@ var mlDetectorSources = map[string][]string{
 	"dependency_error_rate": {MLSourceDBClient, MLSourceMessagingClient},
 	// v0.10.2077: servis hata oranı TraceRED'in sunucu RED satırlarından.
 	"svc_error_rate":     {MLSourceHTTPServer, MLSourceGRPCServer},
+	"svc_response_time":  {MLSourceHTTPServer, MLSourceGRPCServer}, // v0.10.2385: aynı sunucu histogramı
 	"metric_jvm":         {"metric_jvm"},
 	"metric_pool":        {"metric_pool"},
 	"metric_kafka":       {"metric_kafka"},

@@ -794,8 +794,9 @@ func problemHeadline(p Problem, k stdKindInfo, im StdImpact) (string, *StdMsg) {
 		// AYNI cümle; özet servis adıyla başlar, önek eklenmez). Yeni metin
 		// üretici yok: evaluator açıklamaya özeti koyar.
 		if h, ok := MLPromotedHeadline(p); ok {
-			// v0.10.2383 — servis hata oranı cümlesi anahtarlıdır (EN arayüz).
-			return h, mlErrRateMsg(h)
+			// v0.10.2383 — servis hata oranı cümlesi anahtarlıdır (EN arayüz);
+			// v0.10.2385 — servis yanıt süresi cümlesi de.
+			return h, mlPromotedMsg(h)
 		}
 		r := stdBreachRatio(p)
 		ml, mv := metricLabelArgs(p.Metric)

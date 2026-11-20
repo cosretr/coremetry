@@ -55,10 +55,10 @@ func belowImpactFloor(ev chstore.MLEvent) bool {
 }
 
 // impactRuleRun — SAF: olayın koşusunu etki kuralı mı yönetiyor (dedektör
-// açık koşuyu kural "temiz" diyene dek uzatır): servis hata oranı (I3) ve
-// kanıtı rule=impact damgalı consumer lag (I5). Thanos ve eski yol lag olayı değil.
+// açık koşuyu kural "temiz" diyene dek uzatır): servis hata oranı (I3), servis
+// yanıt süresi (I4) ve kanıtı rule=impact damgalı consumer lag (I5). Thanos ve eski yol lag olayı değil.
 func impactRuleRun(ev chstore.MLEvent) bool {
-	if ev.Detector == detSvcErrorRate {
+	if ev.Detector == detSvcErrorRate || ev.Detector == detSvcResponseTime { // yanıt süresi: v0.10.2385 (I4)
 		return true
 	}
 	if !isConsumerLagEvent(ev) {
@@ -177,7 +177,7 @@ func (t *tracker) closeStale(now time.Time, cov tickCoverage) (closing, held []c
 		if !r.closedAt.IsZero() || !r.last.Before(now) || r.ev.ID == "" {
 			continue
 		}
-		if cov.noData(r.detector) {
+		if cov.noData(r.detector) || (cov.runBlind != nil && cov.runBlind(r.ev)) {
 			if r.heldSince.IsZero() {
 				r.heldSince = now
 				r.ev.Evidence = mergeEvidence(r.ev.Evidence, map[string]any{"noDataSince": now.Unix()})

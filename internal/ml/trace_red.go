@@ -9,7 +9,9 @@ package ml
 // Aile pinleri anomaly.REDFamilyPins (HTTP / gRPC); etiket adları metrikten
 // keşfedilir (saatte bir). Tik başına aile başına 3 gruplu sorgu (count,
 // err, p95), topk yok; v0.10.2373: servis hata oranı için aile başına 2
-// aralık sorgusu daha (1 dk'lık servis count/err, svc_error_rate.go). Seri
+// aralık sorgusu daha (1 dk'lık servis count/err, svc_error_rate.go);
+// v0.10.2385: servis yanıt süresi için aile başına 1 anlık bucket sorgusu (5 dk
+// taban) + dakika başına 1 anlık bucket sorgusu (svc_response_time.go). Seri
 // ml_series'e (signal=trace), taban CH'den takvim
 // sınıfı günler × ±1 saat, medyan+MAD (log ile aynı judge). Trafik tabanı
 // (minBaselineRate) altındaki endpoint değerlendirilmez.
@@ -70,6 +72,17 @@ type TraceRED struct {
 	impBaseAt time.Time
 	probeAgg  *svcAgg
 	probeEnd  int64
+	// v0.10.2385 (I4) — servis yanıt süresi (svc_response_time.go): rtMin =
+	// alınmış 1 dk'lık dakikalar (dakika başı → aile sırası → servis → nokta);
+	// rtBase = son tikin servis başına taban özeti (rtBaseAt = o tikin anı);
+	// rtNote = son tikin "ölçülemedi" notu; rtBlindFrom = son tikte
+	// ölçülemeyen ilk aile sırası (−1 = yok), rtRan = dedektör en az bir tik koştu.
+	rtMin       map[int64]map[int]map[string]rtPoint
+	rtBase      map[string]rtBase
+	rtBaseAt    time.Time
+	rtNote      string
+	rtBlindFrom int
+	rtRan       bool
 }
 
 // Unmeasured — v0.10.2373 (unmeasuredReporter, dependency.go emsali): 1 dk'lık
@@ -77,10 +90,17 @@ type TraceRED struct {
 func (d *TraceRED) Unmeasured() map[string]string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.impactNote == "" {
+	if d.impactNote == "" && d.rtNote == "" {
 		return nil
 	}
-	return map[string]string{detSvcErrorRate: d.impactNote}
+	out := map[string]string{}
+	if d.impactNote != "" {
+		out[detSvcErrorRate] = d.impactNote
+	}
+	if d.rtNote != "" { // v0.10.2385 (I4)
+		out[detSvcResponseTime] = d.rtNote
+	}
+	return out
 }
 
 // setImpactNote — son tikin 1 dk'lık sorgu hatası (nil = temiz).
@@ -102,7 +122,8 @@ func (d *TraceRED) Name() string { return "trace_red" }
 
 func (d *TraceRED) Enabled(cfg chstore.MLConfig) bool {
 	return cfg.DetectorOn(detOpLatency) || cfg.DetectorOn(detOpErrorRate) || cfg.DetectorOn(detThroughputDrop) ||
-		cfg.DetectorOn(detSvcErrorRate) // v0.10.2077: servis hata oranı aynı count/err satırlarından
+		cfg.DetectorOn(detSvcErrorRate) || // v0.10.2077: servis hata oranı aynı count/err satırlarından
+		cfg.DetectorOn(detSvcResponseTime) // v0.10.2385: servis yanıt süresi aynı aile pinlerinden
 }
 
 // ── saf parçalar ─────────────────────────────────────────────
@@ -339,6 +360,18 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	if cfg.DetectorOn(detSvcErrorRate) {
 		impAgg, impErr = d.impactMinutes(ctx, deps, impFams, impEnd, now)
 	}
+	// v0.10.2385 (I4): servis yanıt süresinin 5 dk taban serisi (aile başına 1
+	// anlık bucket sorgusu, kendi backoff ailesi). Hatası yalıtılır: tik düşmez,
+	// yalnız o kovanın taban örneği eksik kalır (svc_response_time.go). AYRI
+	// haritada: route serilerinin tavanını (put) ve sayımını etkilemez.
+	rtOn := cfg.DetectorOn(detSvcResponseTime)
+	rtSeries := map[string]map[int64]float64{}
+	var rtBaseErr error
+	if rtOn {
+		rtBaseErr = rtBaseSeries(ctx, deps, impFams, to, last.Unix(), cfg.BucketSec, rtSeries, now)
+	} else {
+		d.clearRT()
+	}
 	minute := map[string]map[int64]float64{} // servis × dakika başı (I3)
 	svcFam := map[string]int{}               // servis → en yeni dakikanın ailesi (olay kaydı)
 	if cfg.DetectorOn(detSvcErrorRate) {
@@ -365,6 +398,12 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		if _, m := splitTracePart(part); m == "err" {
 			continue
 		}
+		for b, v := range byB {
+			srows = append(srows, chstore.MLSeriesRow{Signal: chstore.MLSignalTrace, Service: svc, Part: part, Bucket: time.Unix(b, 0), BucketSec: uint32(cfg.BucketSec), Count: v})
+		}
+	}
+	for k, byB := range rtSeries { // v0.10.2385 (I4): `*|svc_p50` / `*|svc_p90`
+		svc, part, _ := strings.Cut(k, "\x00")
 		for b, v := range byB {
 			srows = append(srows, chstore.MLSeriesRow{Signal: chstore.MLSignalTrace, Service: svc, Part: part, Bucket: time.Unix(b, 0), BucketSec: uint32(cfg.BucketSec), Count: v})
 		}
@@ -416,6 +455,9 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 			}
 			evs = append(evs, ev)
 		}
+	}
+	if rtOn { // v0.10.2385 (I4): 1 dk örnek + etki kuralı; taban bu tikin okumasından
+		evs = append(evs, d.rtTick(ctx, deps, impFams, base, famOf, impEnd, cfg, class, now, rtBaseErr)...)
 	}
 	for k := range series {
 		svc, part, _ := strings.Cut(k, "\x00")

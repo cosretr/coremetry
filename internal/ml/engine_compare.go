@@ -8,7 +8,7 @@ package ml
 // ±engineCompareTolerance içinde kesişirse eşleşir (overlaps, svc_compare.go).
 //
 //	aile          özne tarafı                     ML dedektörleri
-//	latency       endpoint p99_ms / p95_ms        op_latency, svc_breadth
+//	latency       endpoint p99_ms / p95_ms        op_latency, svc_breadth, svc_response_time
 //	errors        endpoint error_rate             op_error_rate, svc_error_rate, trace_error_count
 //	throughput    endpoint request_rate (down)    throughput_drop
 //	consumer_lag  queue consumer_lag              metric_kafka (code metric_kafka|consumer_lag…)
@@ -175,7 +175,7 @@ func subjectSide(s EngineSubjectIn) (k engKey, biased, counterpart, ok bool) {
 // mlSide — SAF: ML olayının aile / kaynak / anahtarı.
 func mlSide(e EngineMLIn) (k engKey, biased, ok bool) {
 	switch e.Detector {
-	case "op_latency", "svc_breadth":
+	case "op_latency", "svc_breadth", "svc_response_time":
 		return engKey{e.Service, EngFamLatency, EngSrcMetric}, false, true
 	case "op_error_rate", "svc_error_rate", "trace_error_count":
 		return engKey{e.Service, EngFamErrors, EngSrcMetric}, false, true

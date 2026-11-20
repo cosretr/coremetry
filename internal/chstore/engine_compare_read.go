@@ -32,7 +32,7 @@ const (
 // EngineCompareMLDetectors — raporun eşlediği ML dedektörleri (ml/engine_compare.go
 // aile tablosu bununla aynı kümeyi kullanır).
 var EngineCompareMLDetectors = []string{
-	"op_latency", "svc_breadth",
+	"op_latency", "svc_breadth", "svc_response_time",
 	"op_error_rate", "svc_error_rate", "trace_error_count",
 	"throughput_drop",
 	"metric_kafka",
