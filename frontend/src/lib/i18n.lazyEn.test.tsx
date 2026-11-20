@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { EN } from './i18n.en';
-import { currentLang, registerEnCatalog, setUserLang, t, useLang } from './i18n';
+import { currentLang, loadInitialCatalog, registerEnCatalog, setUserLang, t, useLang } from './i18n';
 import { settleUntil } from '../test/actWait';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -76,5 +76,29 @@ describe('lazy English catalog', () => {
     // EN not registered: an explicit English lookup of a TR-covered key falls back.
     expect(t('nav.services', 'en')).not.toBe(EN['nav.services']);
     expect(currentLang()).toBe('tr');
+  });
+
+  // v0.10.2400 — açılış: kullanıcı seçimi yoksa son görülen marka dili
+  // (branding fetch'inin yazdığı ipucu) ilk çizimden önce yüklenir.
+  it('loadInitialCatalog: brand hint en → English before first render', async () => {
+    localStorage.setItem('coremetry.brandLang', 'en');
+    expect(t('nav.services', 'en')).not.toBe(EN['nav.services']);
+    await loadInitialCatalog();
+    expect(t('nav.services', 'en')).toBe(EN['nav.services']);
+  });
+});
+
+// v0.10.2400 — TR ve EN katalogları ilk yükte değil: i18n.ts onları yalnız
+// dinamik import() ile alır; main.tsx ilk çizimden önce loadInitialCatalog'u bekler.
+describe('catalogs are lazy (pin)', () => {
+  it('i18n.ts has no static catalog import; main.tsx awaits loadInitialCatalog', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const src = readFileSync(resolve(__dirname, 'i18n.ts'), 'utf8');
+    expect(src).not.toMatch(/from\s+'\.\/i18n\.(tr|en|common)'/);
+    expect(src).toContain("import('./i18n.tr')");
+    expect(src).toContain("import('./i18n.en')");
+    const main = readFileSync(resolve(__dirname, '..', 'main.tsx'), 'utf8');
+    expect(main).toContain('void loadInitialCatalog().then(mount);');
   });
 });

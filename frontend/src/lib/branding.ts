@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { setRaw } from './storage';
 
 // BrandingSettings mirrors chstore.BrandingSettings — admin-set
 // overlay applied to the login page + the browser tab title.
@@ -110,6 +111,8 @@ async function fetchBranding(): Promise<Required<BrandingSettings>> {
     .then((b: BrandingSettings | null) => {
       cached = resolveBranding(b);
       applyBranding(cached);
+      // v0.10.2400 — açılış kataloğu ipucu (lib/i18n.ts loadInitialCatalog).
+      if (b) try { setRaw('coremetry.brandLang', cached.language); } catch { /* storage mock'u */ }
       return cached;
     })
     .catch(() => {

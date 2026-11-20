@@ -50,11 +50,12 @@ describe('bundle bütçe kapısı kablolu', () => {
     for (const p of ['node_modules/zod/v4/index.js', 'node_modules/aria-hidden/dist/index.js', 'node_modules/json-schema-traverse/index.js', 'node_modules/@opentelemetry/api/build/index.js']) expect(re.test(p), p).toBe(false);
   });
 
-  it('scripts/bundle-budget.mjs: yasak kaynak regex\'i, 278 KB, zlib, index.html kümesi', () => {
+  it('scripts/bundle-budget.mjs: yasak kaynak regex\'i, 203 KB, zlib, index.html kümesi', () => {
     const s = read('scripts/bundle-budget.mjs');
     expect(s).toContain('/node_modules\\/(radix-ui|@radix-ui|cmdk|sonner|@floating-ui|react-remove-scroll|aria-hidden|use-sidecar|use-callback-ref|react-style-singleton|get-nonce|detect-node-es)\\//');
     expect(s).toContain('/src\\/components\\/shadcn\\//');
-    expect(s).toContain('process.env.BUNDLE_BUDGET_KB || 278');
+    expect(s).toContain('process.env.BUNDLE_BUDGET_KB || 203');
+    expect(s).toContain('process.env.CSS_BUDGET_KB || 54'); // v0.10.2400 — CSS cırcırı (yalnız aşağı)
     expect(s).toContain('gzipSync(buf)');
     expect(s).toContain("'modulepreload'");
     expect(s).toContain("'bundle-budget.txt'");

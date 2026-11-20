@@ -34,6 +34,8 @@ export const STORAGE_KEYS = {
   // `?refresh=` token mirrored for cross-page continuity (URL > this > 60 s).
   refresh:          'cm.refresh',
   lang:             'coremetry.lang',
+  // v0.10.2400 — son sunucu marka dili; açılış kataloğu ipucu (lib/i18n.ts).
+  brandLang:        'coremetry.brandLang',
   rum:              'coremetry-rum',
   recentServices:   'coremetry.recentServices',
   pinnedServices:   'coremetry.pinnedServices',

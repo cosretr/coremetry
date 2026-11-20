@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 // v0.10.1253 — Overview metrik kipinde Failure rate yerine HTTP status kodları
 // (VM); HTTP metriği yoksa eski OK/Errors paneline düşer.
 const src = readFileSync(resolve(__dirname, 'Overview.tsx'), 'utf8');
-const cat = readFileSync(resolve(__dirname, '../../lib/i18n.ts'), 'utf8'); // v0.10.2315
+const cat = readFileSync(resolve(__dirname, '../../lib/i18n.tr.ts'), 'utf8'); // v0.10.2315
 
 describe('Overview HTTP Status paneli', () => {
   it('metrik kipinde status kodu sorgusu, başlık ve geri düşüş', () => {

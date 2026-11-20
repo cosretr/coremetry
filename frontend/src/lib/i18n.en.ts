@@ -1,7 +1,8 @@
 // v0.10.2307 — İngilizce katalog gövdesi (i18n.ts'ten taşındı). Ana
 // chunk'a GİRMEZ: yalnız lib/i18n.ts loadEnCatalog()'un dinamik import()'u
 // yükler. Statik import etme (testler src/test/i18nEnSetup.ts üzerinden
-// kaydeder). TR'de karşılığı olmayan anahtarlar i18n.ts EN_EAGER'da.
+// kaydeder). TR'de karşılığı olmayan anahtarlar i18n.common.ts EN_EAGER'da.
+export { EN_EAGER } from './i18n.common';
 export const EN: Record<string, string> = {
   // Sidebar group headings
   'navGroup.triage':      'Triage',

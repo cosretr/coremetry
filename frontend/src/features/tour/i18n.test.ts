@@ -10,19 +10,19 @@ import { resolve } from 'node:path';
 import { t } from '@/lib/i18n';
 import { TOUR_CHROME_KEYS, TOUR_STEPS, stepFrames } from './steps';
 
-// v0.10.2307 — EN gövdesi lib/i18n.en.ts'te (tembel chunk); i18n.ts'te TR'den
-// önce yalnız EN_EAGER kalır — EN kümesi ikisinin birleşimi.
-const SRC = readFileSync(resolve(__dirname, '../../lib/i18n.ts'), 'utf8');
+// v0.10.2307/2400 — EN gövdesi lib/i18n.en.ts'te, TR gövdesi lib/i18n.tr.ts'te
+// (ikisi de tembel chunk); EN_EAGER i18n.common.ts'te — EN kümesi EN + EAGER.
+const SRC = readFileSync(resolve(__dirname, '../../lib/i18n.tr.ts'), 'utf8');
 const EN_SRC = readFileSync(resolve(__dirname, '../../lib/i18n.en.ts'), 'utf8');
+const EAGER_SRC = readFileSync(resolve(__dirname, '../../lib/i18n.common.ts'), 'utf8');
 const enStart = EN_SRC.indexOf('export const EN: Record<string, string> = {');
-const eagerStart = SRC.indexOf('const EN_EAGER: Catalog = {');
-const trStart = SRC.indexOf('const TR: Catalog = {');
-const end = SRC.indexOf('let EN: Catalog | null');
-const block = (a: number, b: number) => SRC.slice(a, b);
+const eagerStart = EAGER_SRC.indexOf('export const EN_EAGER: Record<string, string> = {');
+const trStart = SRC.indexOf('export const TR: Record<string, string> = {');
+const end = SRC.length;
 const tourKeys = (s: string) => new Set([...s.matchAll(/^\s*'(tour\.[\w.]+)'\s*:/gm)].map(m => m[1]));
 
-const EN = tourKeys(EN_SRC.slice(enStart) + block(eagerStart, trStart));
-const TR = tourKeys(block(trStart, end));
+const EN = tourKeys(EN_SRC.slice(enStart) + EAGER_SRC.slice(eagerStart));
+const TR = tourKeys(SRC.slice(trStart, end));
 
 const USED = [
   ...TOUR_STEPS.flatMap(s => [s.titleKey, s.bodyKey]),
@@ -35,7 +35,7 @@ describe('tour i18n (v0.10.1334)', () => {
   it('katalog blokları bulundu', () => {
     expect(enStart).toBeGreaterThan(-1);
     expect(eagerStart).toBeGreaterThan(-1);
-    expect(trStart).toBeGreaterThan(eagerStart);
+    expect(trStart).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(trStart);
     expect(EN.size).toBeGreaterThan(0);
   });

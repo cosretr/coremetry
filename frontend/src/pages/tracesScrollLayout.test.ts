@@ -80,7 +80,7 @@ describe('/traces ters sıra konum göstergesi (v0.10.831)', () => {
     // sıralamayı da "ters kip" sayıyor ve numara kutusunu kaldırıyordu.
     expect(traces).toContain("reverse={order === 'asc' && sort === 'time'}");
     expect(traces).toContain("reverseTitle={tl('trc.pager.reverseTip', lang)}"); // v0.10.2314 — katalog anahtarı
-    expect(readFileSync(resolve(__dirname, '../lib/i18n.ts'), 'utf8')).toContain("'trc.pager.reverseTip': 'Liste ters sıralı");
+    expect(readFileSync(resolve(__dirname, '../lib/i18n.tr.ts'), 'utf8')).toContain("'trc.pager.reverseTip': 'Liste ters sıralı");
     expect(traces).not.toContain('pageLabel=');
     // Konum ile bitiş düğmesi AYNI koşulu okur (ikisi de ters sırayı tarif eder).
     expect(traces).toContain("endLabel={order === 'desc' ? 'Last ⇥' : '⇤ First'}");

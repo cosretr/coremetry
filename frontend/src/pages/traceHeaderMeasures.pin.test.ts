@@ -160,7 +160,7 @@ describe('trace başlığı: ölçüler sağa dayalı kümede (v0.10.1347)', () 
     expect(css).not.toContain('.trace-tabrow > .tab-strip');
     expect(trace).toContain('<TabStrip ariaLabel="Trace görünümü" value={tab} onChange={setTab} style={{ marginBottom: 10 }} tabs={[');
     // i18n etiketi iki dilde.
-    const i18n = read('../lib/i18n.ts') + read('../lib/i18n.en.ts'); // v0.10.2307 — EN ayrı dosyada
+    const i18n = read('../lib/i18n.tr.ts') + read('../lib/i18n.en.ts'); // v0.10.2307 — EN ayrı dosyada
     expect(i18n.split("'trace.hdr.traceId':").length - 1).toBe(2);
     // CSS: gri satır sarar, id solda (margin-left:auto yok), düğmeler sağa dayalı;
     // ≤640px'te id kendi satırında önce.

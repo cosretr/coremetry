@@ -22,7 +22,7 @@ komutu koş; liste değişirse bu dosyayı güncelle. 2026-11-14 (v0.10.2170, Pr
 | `docs/DECISIONS.md` | 12145 | D |
 | `frontend/src/lib/types.ts` | 11721 | S |
 | `internal/api/api.go` | 10681 | A |
-| `frontend/src/styles/globals.css` | 6820 | S |
+| `frontend/src/styles/globals.css` | 6812 | S |
 | `internal/chstore/repo.go` | 6157 | S |
 | `internal/chstore/store.go` | 5677 | S |
 | `internal/api/copilot_guided.go` | 4721 | S |
@@ -82,7 +82,8 @@ komutu koş; liste değişirse bu dosyayı güncelle. 2026-11-14 (v0.10.2170, Pr
 | `frontend/src/pages/Inbox.tsx` | 1294 | S |
 | `internal/mcptools/log_spike.go` | 1281 | S |
 | `frontend/src/components/dashboard/PanelRenderer.tsx` | 1272 | S |
-| `frontend/src/lib/i18n.ts` | 1270 | S |
+| `frontend/src/lib/i18n.tr.ts` | 3619 | S |
+| `frontend/src/lib/i18n.en.ts` | 3668 | S |
 | `internal/chstore/deploys.go` | 1259 | S |
 | `internal/mcptools/guided_parity.go` | 1248 | S |
 | `internal/rollout/v2worker_test.go` | 1226 | T |

@@ -29,7 +29,7 @@ describe('stripStat', () => {
     expect(src).toContain("['rt',       stripStat !== STRIP_STAT_DEFAULT ? stripStat : '']");
     expect(src).toContain("{ name: 'rt', agg: stripStat, field: 'duration_ms' }");
     expect(src).toMatch(/<SegmentedControl size="sm" aria-label=\{tl\('trc\.strip\.statAria', lang\)\}/); // v0.10.914; v0.10.2314 katalog anahtarı
-    expect(readFileSync(resolve(__dirname, '../../lib/i18n.ts'), 'utf8')).toContain("'trc.strip.statAria': 'Yanıt süresi istatistiği',");
+    expect(readFileSync(resolve(__dirname, '../../lib/i18n.tr.ts'), 'utf8')).toContain("'trc.strip.statAria': 'Yanıt süresi istatistiği',");
     expect(src).not.toMatch(/chartTall|toggleChartTall|⌄ expand|⌃ shrink/);
     const storage = readFileSync(resolve(__dirname, '../../lib/storage.ts'), 'utf8');
     expect(storage).not.toContain('tracesChartTall');

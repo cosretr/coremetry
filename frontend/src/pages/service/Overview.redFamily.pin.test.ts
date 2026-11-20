@@ -15,11 +15,11 @@ describe('Overview RED ailesi (v0.10.1429)', () => {
     expect(src).toContain('enabled: !!service && wantMetric && fam.ready,');
     // v0.10.2315 — rozet metni katalogda (ov.badge.metric); TR değeri aynen.
     expect(src).toContain("tf('ov.badge.metric', lang, { src: metricRedQ.data?.source ?? '…' }) + familyBadgeSuffix(fam)");
-    expect(readFileSync(resolve(__dirname, '../../lib/i18n.ts'), 'utf8')).toContain("'ov.badge.metric': 'kaynak: metrik ({src})',");
+    expect(readFileSync(resolve(__dirname, '../../lib/i18n.tr.ts'), 'utf8')).toContain("'ov.badge.metric': 'kaynak: metrik ({src})',");
     expect(src).toContain('{metricMode && famGrpc && (');
     expect(src).toContain('{metricMode && fam.both && (');
     expect(src).toContain("{tl('ov.bothBadge', lang)}"); // v0.10.2315 — katalog anahtarı
-    expect(readFileSync(resolve(__dirname, '../../lib/i18n.ts'), 'utf8')).toContain("'ov.bothBadge': 'gRPC de var → HTTP/GRPC',");
+    expect(readFileSync(resolve(__dirname, '../../lib/i18n.tr.ts'), 'utf8')).toContain("'ov.bothBadge': 'gRPC de var → HTTP/GRPC',");
   });
   it('throughput kimliği ve kırılım aileden; Response time by rpc.method', () => {
     expect(src).toContain("{ breakdown: famGrpc ? 'rpc_method' : 'route', rateWindow: 180, env: env || undefined, ...famOpt }");

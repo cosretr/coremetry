@@ -1,14 +1,12 @@
-// v0.10.2307 — vitest kurulumu: İngilizce katalog üretimde tembel (lib/i18n.ts
-// loadEnCatalog); testler İngilizce çıktıyı bugünkü gibi eşzamanlı görsün diye
-// her test dosyasında testlerden önce kaydedilir. beforeAll + dinamik import:
-// kurulum dosyası i18n'i STATİK import etseydi modül, test dosyasının
-// vi.mock('@/lib/branding') kaydından önce gerçek branding ile önbelleğe
-// girerdi; beforeAll test dosyası toplandıktan sonra koşar, aynı (mock'lu)
-// örneği alır. Uygulama kodu i18n.en'i statik import etmez (ilk yük).
-import { beforeAll } from 'vitest';
+// v0.10.2307 / v0.10.2400 — vitest kurulumu: TR ve EN katalogları üretimde
+// tembel (lib/i18n.ts loadCatalog; main.tsx ilk çizimden önce bekler).
+// Testler ikisini de eşzamanlı görsün — modül düzeyindeki t() sabitleri
+// (NOISE_REASONS, ANOMALY_KIND_PLAIN…) dahil — diye kataloglar burada
+// globalThis'e bırakılır; lib/i18n.ts yalnız MODE==='test'te, kendi
+// değerlendirmesinde okur (üretimde ölü kod). i18n'i burada STATİK import
+// etmiyoruz: modül, test dosyasının vi.mock('@/lib/branding') kaydından önce
+// gerçek branding ile önbelleğe girerdi. Katalog dosyalarının bağımlılığı yok.
+import { EN, EN_EAGER } from '../lib/i18n.en';
+import { TR } from '../lib/i18n.tr';
 
-beforeAll(async () => {
-  const [{ EN }, i18n] = await Promise.all([import('../lib/i18n.en'), import('../lib/i18n')]);
-  // vi.mock('@/lib/i18n') ile kısmi mock'lanan dosyada fonksiyon olmayabilir.
-  if (typeof i18n.registerEnCatalog === 'function') i18n.registerEnCatalog(EN);
-});
+(globalThis as { __cmI18nPreload?: unknown }).__cmI18nPreload = { tr: TR, en: EN, eager: EN_EAGER };

@@ -1356,7 +1356,7 @@ func TestSvcResponseTimeRegistration(t *testing.T) {
 	for _, f := range []struct{ path, want string }{
 		{"../../frontend/src/pages/settings/MLSubsection.tsx", "id: 'svc_response_time'"},
 		{"../../frontend/src/lib/mlDetectorLabels.ts", "svc_response_time: 'Servis yanıt süresi'"},
-		{"../../frontend/src/lib/i18n.ts", "'mlDetector.svc_response_time'"},
+		{"../../frontend/src/lib/i18n.common.ts", "'mlDetector.svc_response_time'"}, // v0.10.2400 — EN_EAGER i18n.ts'ten taşındı
 		{"../../frontend/src/lib/signalKind.ts", "'svc_response_time'"},
 	} {
 		if raw, err := os.ReadFile(f.path); err != nil || !strings.Contains(string(raw), f.want) {

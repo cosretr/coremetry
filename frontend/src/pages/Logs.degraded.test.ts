@@ -26,7 +26,7 @@ describe('degraded log backend surfaces (B1)', () => {
     expect(src).toMatch(/d\?\.degraded \? \{\s*kind: 'error'/);
     // v0.10.2286 — metin katalogda: kaynak anahtarı okur, TR değeri katalogda aynen.
     expect(src).toContain("message: tf('plog.degraded', lang");
-    expect(read('../lib/i18n.ts')).toContain("'plog.degraded': 'Log kanıtı alınamadı: log arka ucu yavaş ya da ulaşılamıyor, hiçbir sayı gerçek değil ({r})'");
+    expect(read('../lib/i18n.tr.ts')).toContain("'plog.degraded': 'Log kanıtı alınamadı: log arka ucu yavaş ya da ulaşılamıyor, hiçbir sayı gerçek değil ({r})'");
     expect(src).toContain('d?.partial && !d.degraded && !q.isError &&');
     expect(src).toContain('!d.degraded && rows.length > 0');
     expect(src).toMatch(/: \{ kind: 'empty', message: tf\('plog\.empty'/);

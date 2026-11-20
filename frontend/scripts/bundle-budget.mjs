@@ -4,7 +4,8 @@
 // Ölçülen şey TARAYICININ ilk yükü: dist/index.html'deki
 // <script type="module" src> + her <link rel="modulepreload" href>.
 // Kural (audit §11 "Bütçe"): ilk yükün JS gz toplamı ≤ BUNDLE_BUDGET_KB
-// (varsayılan 278; v0.10.2348 kabuk derin import'larıyla 291 → 271 KB,
+// (varsayılan 203; v0.10.2403 TR kataloğu tembel: 272.7 → ~201 KB; önce 278 —
+// v0.10.2348 kabuk derin import'larıyla 291 → 271 KB,
 // +7 KB pay) ve bu kümedeki HİÇBİR chunk'ın sourcemap'inde
 // Radix / cmdk / sonner / floating-ui / components/shadcn kaynağı yok.
 // Neden sourcemap: Vite/rolldown manifest'i chunk'ları listeler, içindeki
@@ -23,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
-const BUDGET_KB = Number(process.env.BUNDLE_BUDGET_KB || 278);
+const BUDGET_KB = Number(process.env.BUNDLE_BUDGET_KB || 203);
 // Yazı tipi bütçesi (v0.10.1620, audit §13; operatör): JS bütçesine SAYILMAZ,
 // ayrı satır. YÖNTEM (çivili, bundleBudget.pin): giriş sayfasının
 // <link rel="stylesheet"> CSS'lerinin url(…woff2) ile başvurduğu dosyaların
@@ -36,6 +37,11 @@ const BUDGET_KB = Number(process.env.BUNDLE_BUDGET_KB || 278);
 // tutmadı — Inter latin + latin-ext tek başına 130.2 KB; Türkçe ğ/ş/İ
 // latin-ext'te. Ölçülen 184.5 KB. Daha büyük set = açık operatör artışı.
 const FONT_BUDGET_KB = Number(process.env.FONT_BUDGET_KB || 190);
+// CSS bütçesi (v0.10.2400, operatör onaylı bundle audit'i): giriş sayfasının
+// <link rel="stylesheet"> CSS'lerinin gz toplamı (JS'le aynı yöntem). Yalnız
+// AŞAĞI yönlü cırcır: ölçülen + küçük pay; artış = açık operatör kararı.
+// v0.10.2400: globals.css yetim sınıflar silindi → ölçülen 53.6 KB (önce ~54.3).
+const CSS_BUDGET_KB = Number(process.env.CSS_BUDGET_KB || 54);
 const FONT_SUBSET_OK = /-(latin|latin-ext)-wght-normal-[\w-]+\.woff2$/;
 
 // Yasak kaynaklar (plan §1.3 adım 3). v0.10.1613 (R5, §12 Q8): paketleme
@@ -174,8 +180,10 @@ for (const m of html.matchAll(/<link\b[^>]*>/g)) {
 }
 const fontFiles = new Map();
 const fontProblems = [];
+let cssGz = 0;
 for (const href of entryCss) {
   const css = readFileSync(path.join(DIST, href.replace(/^\//, '')), 'utf8');
+  cssGz += gzipSync(css).length;
   for (const face of css.match(/@font-face\s*{[^}]*}/g) || []) {
     const urls = [...face.matchAll(/url\(\s*["']?([^"')]+\.woff2)["']?\s*\)/g)].map((u) => u[1]);
     if (urls.length && !/font-display:\s*swap/.test(face)) fontProblems.push(`font-display≠swap: ${urls.join(' ')}`);
@@ -189,6 +197,7 @@ for (const href of entryCss) {
   }
 }
 if (/<link\b[^>]*rel=["']preload["'][^>]*as=["']font["']/.test(html) || /<link\b[^>]*as=["']font["'][^>]*rel=["']preload["']/.test(html)) fontProblems.push('index.html font preload içeriyor');
+const cssOver = cssGz > CSS_BUDGET_KB * 1024;
 const fontBytes = [...fontFiles.values()].reduce((a, b) => a + b, 0);
 const fontOver = fontBytes > FONT_BUDGET_KB * 1024;
 
@@ -232,6 +241,7 @@ out.push(`allowed in entry (cva/clsx/tailwind-merge): ${[...allowedHits].sort().
 out.push(`no sourcemap (virtual-only chunks, max ${MAX_MAPLESS}): ${mapless.join(', ') || 'none'}`);
 out.push(`fonts (woff2, not in JS budget): ${fontFiles.size} files ${[...fontFiles].map(([n, b]) => `${n.replace(/-[\w-]{8}\.woff2$/, '')} ${kb(b)}`).join(', ') || '—'}`);
 out.push(`| fonts ${kb(fontBytes)} KB woff2 | font budget ${FONT_BUDGET_KB} | files ${fontFiles.size} | ${fontOver || fontProblems.length ? 'FAIL' : 'OK'} |`);
+out.push(`| css ${kb(cssGz)} KB gz | css budget ${CSS_BUDGET_KB} | files ${entryCss.length} | ${cssOver ? 'FAIL' : 'OK'} |`);
 out.push(`| initial ${kb(initialGz)} KB gz | main ${kb(mainGz)} KB gz | budget ${BUDGET_KB} | radix-in-entry ${offenders.length} |`);
 
 const text = out.join('\n') + '\n';
@@ -244,4 +254,5 @@ if (badCollisions.length) fail(`Tailwind yardımcısı eski sınıf adıyla çak
 if (offenders.length) fail(`ilk yükte yasak kaynak: ${offenders.map((o) => o.base).join(', ')}`);
 if (fontProblems.length) fail(`yazı tipi kapısı: ${fontProblems.join('; ')}`);
 if (fontOver) fail(`yazı tipi ${kb(fontBytes)} KB woff2 > bütçe ${FONT_BUDGET_KB} KB`);
+if (cssOver) fail(`ilk yük CSS ${kb(cssGz)} KB gz > bütçe ${CSS_BUDGET_KB} KB`);
 if (over) fail(`ilk yük ${kb(initialGz)} KB gz > bütçe ${BUDGET_KB} KB`);

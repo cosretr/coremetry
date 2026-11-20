@@ -8,7 +8,7 @@ import { podSentence, podStatusWordText, siblingSentence } from './podSentence';
 import { podAgeText, podCosreQuestion } from './podMeta';
 
 // v0.10.2307 — EN gövdesi lib/i18n.en.ts'te: iki dosya birlikte = iki katalog.
-const src = readFileSync(new URL('../../lib/i18n.ts', import.meta.url), 'utf8')
+const src = readFileSync(new URL('../../lib/i18n.tr.ts', import.meta.url), 'utf8')
   + readFileSync(new URL('../../lib/i18n.en.ts', import.meta.url), 'utf8');
 const keys = [...new Set([...src.matchAll(/^ {2}'(podpage\.[\w.]+)':/gm)].map(m => m[1]))];
 

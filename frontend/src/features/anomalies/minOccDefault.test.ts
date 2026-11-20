@@ -16,7 +16,7 @@ const anom = readFileSync(resolve(__dirname, 'AnomaliesPage.tsx'), 'utf8');
 const inbox = ['Inbox.tsx', 'inbox/inboxFilters.ts']
   .map(f => readFileSync(resolve(__dirname, '../../pages', f), 'utf8')).join('\n');
 const go = readFileSync(resolve(__dirname, '../../../../internal/api/inbox.go'), 'utf8');
-const i18n = readFileSync(resolve(__dirname, '../../lib/i18n.ts'), 'utf8');
+const i18n = readFileSync(resolve(__dirname, '../../lib/i18n.tr.ts'), 'utf8');
 
 describe('varsayılan occurrence tabanı (v0.10.740 → v0.10.949)', () => {
   it('istemci ve sunucu aynı sayı: 5', () => {

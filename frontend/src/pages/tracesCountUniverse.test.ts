@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const src = readFileSync(resolve(__dirname, './Traces.tsx'), 'utf8');
-const cat = readFileSync(resolve(__dirname, '../lib/i18n.ts'), 'utf8'); // v0.10.2314
+const cat = readFileSync(resolve(__dirname, '../lib/i18n.tr.ts'), 'utf8'); // v0.10.2314
 
 describe('/traces sayımı listeyle aynı evren', () => {
   it('sayım isteği search taşır ve effect search değişince yeniden koşar', () => {

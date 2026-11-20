@@ -5,7 +5,10 @@ import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/re
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import App from './App';
 import { getRaw, STORAGE_KEYS } from './lib/storage';
-import { loadEnCatalog } from './lib/i18n';
+import { loadInitialCatalog } from './lib/i18n';
+// v0.10.2400 — statik: api.ts kabukta zaten statik (AuthProvider…); dinamik
+// import() onu ayrı chunk'a taşımıyordu (INEFFECTIVE_DYNAMIC_IMPORT).
+import { api } from './lib/api';
 // v0.10.1611 (shadcn Faz 1 R4) — TEK CSS girişi: katman sırası + globals.css
 // + uPlot.min.css + chart.css + Tailwind theme/utilities + tokens.css.
 // uPlot temel CSS'i hâlâ TEK yerden (v0.9.708): dört preset ayrı ayrı import
@@ -85,7 +88,6 @@ function rumEnabled(): boolean {
 // telemetry feature must not switch itself off because one probe failed.
 async function ingestReachable(): Promise<boolean> {
   try {
-    const { api } = await import('./lib/api');
     const roles = (await api.health())?.roles;
     return typeof roles?.ingest === 'boolean' ? roles.ingest : true;
   } catch {
@@ -163,11 +165,11 @@ const queryClient = new QueryClient({
   },
 });
 
-// v0.10.2307 — İngilizce katalog tembel (lib/i18n.ts). Kaydedilmiş kullanıcı
-// seçimi 'en' ise ilk çizimden ÖNCE yüklenir (Türkçe flaş yok);
-// loadEnCatalog asla reddetmez — hata = uygulama Türkçe açılır. Türkçe yol
-// eşzamanlı mount eder; marka varsayılanı İngilizce ise useLang yükler (kısa
-// Türkçe ilk boyama kabul).
+// v0.10.2400 — İKİ katalog da tembel (lib/i18n.ts). Etkin dilin kataloğu
+// ilk çizimden ÖNCE yüklenir: kullanıcı seçimi → son görülen marka dili →
+// Türkçe (ham anahtar / yanlış dil flaşı yok). loadInitialCatalog asla
+// reddetmez; istenen dil yüklenemezse diğeri denenir. Marka varsayılanı
+// İngilizce ve ipucu henüz yoksa (ilk ziyaret) useLang yükler.
 const mount = () => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
@@ -184,5 +186,4 @@ const mount = () => createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>
 );
-if (getRaw(STORAGE_KEYS.lang) === 'en') void loadEnCatalog().then(mount);
-else mount();
+void loadInitialCatalog().then(mount);

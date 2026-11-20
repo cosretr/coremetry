@@ -5,8 +5,8 @@ description: 'Coremetry UI contract + house rules (ex /frontend-conventions): pr
 
 # /frontend-design-system — önce ara, sonra yaz
 
-Ölçüm tabanı: **288 non-test `.tsx`**. Aşağıdaki sayılar bu skill yazılırken
-ölçüldü ve doğrulandı; bileşen adları + dosya yolları gerçek.
+Ölçüm tabanı: **679 non-test `.tsx`** (v0.10.2400; skill yazılırken 288). Aşağıdaki
+sayılar bu skill yazılırken ölçüldü ve doğrulandı; bileşen adları + dosya yolları gerçek.
 
 **Tek cümlelik teşhis:** atom disiplini iyi (`Button.variant` 451/451 sitede
 yazılı, 89 tabloda `storageKey` 0 çakışma), ama **atomların bir kısmı
@@ -242,7 +242,7 @@ köprüsüne ek; elle yazmak yasak (*"bizim yazdığımız her satır, oradaki
 davranışın kopyası ve gelecekteki uyumsuzluğudur"*). İhtiyaç
 *etkileşim/görsel davranış* ise → bizim saf çekirdek.
 
-**Bundle:** grafana ayrı chunk (1.15 MB raw / 173 KB gzip), **lazy**. Bir
+**Bundle:** grafana ayrı chunk (387 KB raw / 127 KB gzip, v0.10.2400), **lazy**. Bir
 sayfa `@grafana/data`'ya **statik bağlanamaz** — ölçüldü: vendor 35 KB →
 1 MB. Yalnız `import type` serbest.
 
@@ -294,7 +294,7 @@ sayfasında (yalnız `vite dev`; üretimde yok). Ham `<button>` /
 
 ## 8. Token disiplini
 
-**Envanter:** tek CSS dosyası, 3589 satır, **70 değişken**, 3 tema (dark
+**Envanter:** tek CSS dosyası (`globals.css`), 6812 satır (v0.10.2400, yetim sınıflar silindikten sonra), **70 değişken**, 3 tema (dark
 varsayılan, light, redhat). Merdivenler: `--sp-1..8` (2-24px),
 `--fs-3xs..xl` (9-18px), `--radius-xs..lg`, `--z-*` 18 katman.
 
