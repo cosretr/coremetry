@@ -67,6 +67,7 @@ const EN_EAGER: Catalog = {
   'inbox.openFor.d_one': '{n} day', 'inbox.openFor.h_one': '{n} hour', 'inbox.openFor.m_one': '{n} minute',
   'inbox.count_one': '{n} open problem: {p1} P1, {p2} P2, {p3} P3.',
   'inbox.occ.problems_one': '{n} problem',
+  'inbox.evidence_one': '{n} event', // v0.10.2395
   // v0.10.2299 (sunucu metinleri S2) — problem standardı metin anahtarları (Go
   // chstore std_msg.go). YALNIZ EN: TR arayüz sunucu metnini aynen çizer.
   // Argüman soneki biçimi seçer (…Pct/…Ms/…Num/…X/…K; problemStandardView.stdMsgText).
@@ -2036,6 +2037,7 @@ const TR: Catalog = {
   'inbox.capSort.priority': 'öncelik', 'inbox.capSort.firstSeen': 'ilk görülme', 'inbox.capSort.lastSeen': 'son görülme',
   'inbox.capSort.occurrences': 'oluşum sayısı', 'inbox.capSort.service': 'servis', 'inbox.capSort.source': 'kaynak',
   'inbox.capSort.detail': 'başlık', 'inbox.capSort.assignee': 'atanan', 'inbox.capSort.confidence': 'güven',
+  'inbox.capSort.evidence': 'kanıt', // v0.10.2395
   'inbox.empty.noise': 'Bu görünümde satır yok — şu an açık olanlar arasında “problem değil” olarak işaretlediğin bir imza yok',
   'inbox.empty.facet': 'Kuyruk boş — daha fazlasını görmek için öncelik / tür süzgecini genişlet',
   'inbox.empty.none': 'Kuyruk boş — şu an ilgini bekleyen bir şey yok',
@@ -2050,6 +2052,10 @@ const TR: Catalog = {
   'inbox.srcTitle': 'Kaynak: {name} · {note}',
   'inbox.col.priority': 'Öncelik', 'inbox.col.detail': 'Ne bozuk', 'inbox.col.service': 'Servis', 'inbox.col.team': 'Ekip',
   'inbox.col.kind': 'Tür', 'inbox.col.firstSeen': 'Ne zamandan beri', 'inbox.col.assignee': 'İlgilenen',
+  // v0.10.2395 — Etki / Güven / Kanıt kolonları geri (triage mockup liste dilimi).
+  'inbox.col.impact': 'Etki', 'inbox.col.confidence': 'Güven', 'inbox.col.evidence': 'Kanıt',
+  'inbox.evidence': '{n} kanıt',
+  'inbox.evidence.title': 'Bu Problem\'e bağlı olay sayısı (kendi sinyali dahil)',
   'inbox.occ': '{l} oluşum',
   'inbox.occ.problems': '{n} problem',
   'inbox.occ.events': '{n} olay',

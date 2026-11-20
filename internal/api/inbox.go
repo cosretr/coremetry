@@ -1704,7 +1704,10 @@ func normalizeInboxSort(id, dir string) (string, string) {
 		// actually sustained" is the question the number exists to answer.
 		"occurrences",
 		// v0.10.1529 — Güven kolonu (Problem standardı R2).
-		"confidence":
+		"confidence",
+		// v0.10.2395 — Kanıt kolonu (bağlı olay sayısı, InboxItem.EventCount;
+		// triage mockup liste dilimi). Satırda zaten olan sayı, ek okuma yok.
+		"evidence":
 	default:
 		id = inboxSortDefault
 	}
@@ -1757,6 +1760,10 @@ func sortInboxItems(items []InboxItem, id, dir string) {
 		case "confidence":
 			if ra, rb := inboxConfidenceRank(a), inboxConfidenceRank(b); ra != rb {
 				return ra < rb
+			}
+		case "evidence": // v0.10.2395 — Kanıt kolonu: bağlı olay sayısı
+			if a.EventCount != b.EventCount {
+				return a.EventCount < b.EventCount
 			}
 		default: // priority
 			ra, rb := priorityRank(a.Priority), priorityRank(b.Priority)
@@ -1868,6 +1875,8 @@ func inboxPrimaryEqual(a, b InboxItem, id string) bool {
 		return a.StartedAt == b.StartedAt
 	case "confidence":
 		return inboxConfidenceRank(a) == inboxConfidenceRank(b)
+	case "evidence": // v0.10.2395
+		return a.EventCount == b.EventCount
 	default:
 		return priorityRank(a.Priority) == priorityRank(b.Priority)
 	}

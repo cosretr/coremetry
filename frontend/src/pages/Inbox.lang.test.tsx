@@ -120,6 +120,7 @@ const TR_LABELS = [
   'Ne bozuk', 'Servis', 'Ne zamandan beri', 'İlgilenen', 'açık problem', 'En eskisi', 'gündür', 'kalemden', 'kırpıldı',
   'sırasına göre', 'taranan adaylar', 'Seç:', 'Görünen satırların', 'oluşum', 'servis', 'ekip', 'sahipsiz', 'Alarm',
   'beri', 'sürüyor', 'örneklenmemiş', 'Kaynak:', '. kez', 'Runbook aç', 'Aynı exception', 'Varsayılan kural', 'olay',
+  'Güven', 'Kanıt', 'kanıt', 'YÜKSEK', // v0.10.2395
   'Diğer görünümler', 'Çözülenler', 'Yok sayılanlar', 'Alarm kurallarını', 'Gerçek problem', 'seçili', 'onaylanabilir',
   'atlanacak', 'Onayla', 'Kapat', 'Kalıcı sil', 'Seçimi temizle', 'Durum:',
 ];
@@ -134,6 +135,7 @@ describe('Problems listesi — İngilizce arayüz (v0.10.2283)', () => {
     for (const en of [
       'Team: all', 'all priorities (3)', 'team: team-x', 'Status', 'Learned', 'Not a problem (0)', 'Subject', 'Services',
       'Databases', 'External sources', 'More filters', ' active)', 'What is broken', 'Since', 'Assignee',
+      'Impact', 'Confidence', 'Evidence', // v0.10.2395
       '3 open problems: 2 P1, 1 P2, 0 P3. The oldest has been open for 3 days.',
       '⚠ The filter ran over the scanned candidates — the queue may be larger than this',
       '⚠ Showing the first 3 of 43 items — cut by priority order',
@@ -196,11 +198,12 @@ describe('Problems listesi — Türkçe arayüzde metin aynen (v0.10.2283)', () 
     const r = snap(el);
     for (const tr of [
       'Ekip: hepsi', 'tüm öncelikler (3)', 'takım: team-x', 'Durum', 'Öğrenilen', 'Problem değil (0)', 'Özne', 'Servisler',
-      'Diğer süzgeçler', ' etkin)', 'Ne bozuk', 'Ne zamandan beri', 'İlgilenen',
+      'Diğer süzgeçler', ' etkin)', 'Ne bozuk', 'Ne zamandan beri', 'İlgilenen', 'Etki', 'Güven', 'Kanıt', 'YÜKSEK', // v0.10.2395
       '3 açık problem: 2 P1, 1 P2, 0 P3. En eskisi 3 gündür açık.',
       '⚠ Filtre taranan adaylar üzerinde çalıştı — kuyruk bundan büyük olabilir',
       "⚠ 43 kalemden ilk 3'i gösteriliyor — öncelik sırasına göre kırpıldı",
-      'VM · örneklenmemiş', '5 sa 40 dk · sürüyor · 3. kez', '3 olay', '42 oluşum', '3 servis', '2 ekip', 'sahipsiz', 'Alarm',
+      'VM · örneklenmemiş', '5 sa 40 dk · sürüyor · 3. kez', '3 kanıt', // v0.10.2395: "N olay" Kanıt kolonunda
+      '42 oluşum', '3 servis', '2 ekip', 'sahipsiz', 'Alarm',
       '1 seçili', '1 onaylanabilir', 'Onayla (1)', 'Gerçek problem (0)', 'Problem değil (0)', 'Kapat (1)', 'Kalıcı sil (1)',
       'Seçimi temizle', 'Çözülenler', 'Yok sayılanlar', 'Alarm kurallarını yönet',
     ]) expect(r.text, tr).toContain(tr);

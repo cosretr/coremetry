@@ -51,7 +51,7 @@ import { useVerdictRowContext } from '@/components/useVerdictRowContext'; // v0.
 import { NoiseReasonButton, type NoiseReasonChoice } from '@/components/NoiseReasonButton'; // v0.10.1531 — toplu triyaj
 import {
   splitStdHeadline, stdSourceChip, stdSourceName, stdSamplingNote, stdSinceLine, stdDurationLine,
-  stdHeadlineView, stdEvidenceView, prioReasonView, stdRequestImpact,
+  stdHeadlineView, stdEvidenceView, prioReasonView,
 } from '@/lib/problemStandardView'; // v0.10.1529 — Problem standardı R2; v0.10.2299 EN anahtardan
 import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2299 — çizilemeyen sunucu metni (EN)
 import { verdictOf, countNoise, filterByVerdictView, parseVerdictView, inboxVerdictSubject, type VerdictView } from '@/lib/problemVerdict';
@@ -65,7 +65,7 @@ import {
 } from './inbox/inboxFilters';
 import { inboxCols, capSortLabel, occLine } from './inbox/inboxColumns';
 import { t as tl, tf, useLang } from '@/lib/i18n'; // v0.10.2283 — Türkçe metinler lib/i18n inbox.* (TR aynı)
-import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub, GraphFrequentChip, GraphClusterMembers } from './inbox/InboxCells';
+import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub, GraphFrequentChip, GraphClusterMembers, ImpactCell, ConfidenceCell, EvidenceCell } from './inbox/InboxCells';
 
 
 // exception ailesi — httperror satırları da exception payload'u taşır
@@ -1136,7 +1136,6 @@ export default function InboxPage() {
                 const rp = dt.rowProps(i);
                 const link = rowLinkOf(it); // v0.10.1414 — null: satır açılmaz (işaret yok)
                 const spread = spreadOf(it.exception); // v0.10.949
-                const reqImpact = stdRequestImpact(it.std, lang); // v0.10.2380
                 // v0.10.1109 — Oracle hata tablosu grubu: Exceptions'taki etiket.
                 const ora = isExcFamily(it) && isOracleGroup(it.exception!.fingerprint);
                 return (
@@ -1201,10 +1200,7 @@ export default function InboxPage() {
                     <div className="std-ctx">
                       {/* v0.10.2121 — özne Servis, ekip Ekip kolonunda; oluşum sayısı burada. */}
                       {occLine(it, lang) && <span className="ib-occ">{occLine(it, lang)}</span>}
-                      {/* v0.10.2380 — hata oranı Problem'inde etki istek sayısıyla (kısa biçim; standardın etki cümlesi). */}
-                      {reqImpact && (reqImpact.orig
-                        ? <OrigLang><span data-testid="ib-req">{reqImpact.main}</span></OrigLang>
-                        : <span data-testid="ib-req">{reqImpact.main}</span>)}
+                      {/* v0.10.2395 — v0.10.2380'in istek bölümlü etki kısa biçimi buradan Etki kolonuna taşındı. */}
                       {it.std?.context?.map(c => <span key={c}>{c}</span>)}
                       {/* v0.10.949 — aynı exception aynı anda N serviste. */}
                       {spread && (
@@ -1217,6 +1213,10 @@ export default function InboxPage() {
                       )}
                     </div>
                   </td>
+                  {/* v0.10.2395 — Etki · Güven · Kanıt (triage mockup liste dilimi). */}
+                  <td><ImpactCell std={it.std} /></td>
+                  <td><ConfidenceCell std={it.std} /></td>
+                  <td className="num"><EvidenceCell it={it} /></td>
                   <td>
                     {ora && isSyntheticOracleService(it.service) ? (
                       <span className="mono cell-faint" title={tl('inbox.oraNoSvc', lang)}>{it.service}</span>

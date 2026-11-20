@@ -12,10 +12,12 @@ import { TriageStatusBadge } from '@/features/anomalies/ProblemDetail';
 import { RecurringMarker } from '@/features/anomalies/RecurringMarker'; // v0.10.1049
 import { promotedRecurrence } from '@/features/anomalies/detailSummary'; // v0.10.1054
 import { Badge } from '@/components/ui/Badge';
-import type { InboxItem, InboxCluster } from '@/lib/types';
+import type { InboxItem, InboxCluster, ProblemStandard } from '@/lib/types';
 import { Link } from 'react-router-dom';
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2283 — hücre metinleri arayüz dilinde (TR aynı)
-import { prioReasonView } from '@/lib/problemStandardView'; // v0.10.2300 (S3) — gerekçe EN anahtardan
+import {
+  prioReasonView, stdRequestImpact, stdImpactView, stdImpactSecondary, stdConfidenceTone, stdConfidenceLabel, stdGateTitle,
+} from '@/lib/problemStandardView'; // v0.10.2300 (S3) — gerekçe EN anahtardan; v0.10.2395 Etki / Güven
 import { OrigLang } from '@/features/anomalies/OrigLang';
 import { graphRowSubText, type ProblemGraphRowSummary } from '@/lib/problemGraph';
 import { FrequentChip } from '@/components/coremetry/problems/ProblemRepeatBlock';
@@ -248,4 +250,47 @@ export function GraphFrequentChip({ row, enforce }: { row?: ProblemGraphRowSumma
   const lang = useLang();
   if (!row?.frequent) return null;
   return <FrequentChip f={row.frequent} t={(k, v) => tf(k, lang, v)} enforce={enforce} />;
+}
+
+// ── v0.10.2395 — Etki / Güven / Kanıt hücreleri (triage mockup liste dilimi) ──
+// Veri satırda (std, eventCount); hücre başına istek yok. Eksik değer soluk "—".
+
+// ImpactCell — "Etki": detay kartının (ProblemStandardBlock) AYNI çekirdeği:
+// istek bölümlü etkide kısa biçim ("Dakikada 210 başarısız · 2.890 başarılı"),
+// pay ve ölçülmüş ek bilgi alt satırda; yoksa standardın etki cümlesi.
+export function ImpactCell({ std }: { std?: ProblemStandard }) {
+  const lang = useLang();
+  if (!std) return <span className="cell-faint">—</span>;
+  const req = stdRequestImpact(std, lang);
+  const main = req ? { text: req.main, orig: req.orig } : stdImpactView(std, lang);
+  if (!main.text) return <span className="cell-faint">—</span>;
+  const sub = stdImpactSecondary(std, lang);
+  return (
+    <div className="std-impact" title={sub ? `${main.text}\n${sub}` : main.text}>
+      <div className="std-impact__main" data-testid="ib-impact">{main.orig ? <OrigLang>{main.text}</OrigLang> : main.text}</div>
+      {sub && <div className="std-impact__sub">{sub}</div>}
+    </div>
+  );
+}
+
+// ConfidenceCell — "Güven": YÜKSEK yeşil / ORTA sarı / DÜŞÜK nötr (stdConfidenceTone);
+// kapı dökümü title'da (detay kartıyla aynı metin).
+export function ConfidenceCell({ std }: { std?: ProblemStandard }) {
+  const lang = useLang();
+  if (!std) return <span className="cell-faint">—</span>;
+  return (
+    <Badge tone={stdConfidenceTone(std.confidence.level)} title={stdGateTitle(std, lang)}>
+      {stdConfidenceLabel(std.confidence.level, lang)}
+    </Badge>
+  );
+}
+
+// EvidenceCell — "Kanıt": Problem'e bağlı olay sayısı (eventCount, sahibin
+// kendi sinyali dahil). Sayı gelmediyse (üyesi olamayan tür / sayım okunamadı)
+// "kanıt yok" DENMEZ: soluk "—". Tipli kanıt sayısı uydurulmaz.
+export function EvidenceCell({ it }: { it: InboxItem }) {
+  const lang = useLang();
+  const n = it.eventCount ?? 0;
+  if (n < 1) return <span className="cell-faint">—</span>;
+  return <span title={t('inbox.evidence.title', lang)}>{tf('inbox.evidence', lang, { n })}</span>;
 }

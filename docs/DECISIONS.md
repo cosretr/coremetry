@@ -15188,3 +15188,13 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Sınırlar: yalnız ml_series; aday sorgusu kuralın mutlak alt sınırıyla (kesin süzgeç, LIMIT 201, 5 sn), seri sorgusu 50 servislik parçalarla (LIMIT 5000, 8 sn); tavan 200 özne / 2000 epizot; bütçe 10 sn, aşılırsa kısmi cevap. Ayar, migration, LLM yok.
 - Doğrulama: üç sorgu yerel ClickHouse'ta hatasız çalıştı (yerelde ml_series boş, sonuç satırı yok); gerçek veriyle süre ölçülmedi.
 
+## 2026-11-20 — v0.10.2395 — Problems listesine Etki, Güven ve Kanıt kolonları geri (triage mockup liste dilimi)
+
+- Operatör 2026-11-20: onaylı triage mockup'ının liste dilimi; v0.10.2121'de listeden kalkan Etki ve Güven geri, yanına Kanıt. Kolonlar: Öncelik · Ne bozuk · Etki · Güven · Kanıt · Servis · Ekip · Tür · Ne zamandan beri · İlgilenen.
+- Etki: detay kartıyla aynı çekirdek (`stdRequestImpact` / `stdImpactView` + `stdImpactSecondary`); hata oranı Problem'inde "Dakikada 210 başarısız · 2.890 başarılı", pay ("isteklerin %6,8'i") alt satırda. v0.10.2380'in "Ne bozuk" bağlam satırındaki kısa biçimi kaldırıldı (tekrar). Ana satır arayüz fontunda (mono yalnız kimlik/kod).
+- Güven: `std.confidence` rozeti (YÜKSEK yeşil / ORTA sarı / DÜŞÜK nötr), kapı dökümü title'da; sıralama sunucuda (`confidence`).
+- Kanıt: bağlı olay sayısı (`InboxItem.eventCount`) "N kanıt"; sayı yoksa soluk "—". Problem satırının alt satırındaki "N olay" kalktı. Sunucu `sort=evidence` tanır (saf sıralama, ek okuma yok).
+- Karar kolonu GERİ GELMEDİ: satır triyajı İlgilenen hücresinde; ayrı kolon aynı düğmeleri ikinci kez çizerdi. Occurrences / Last seen listede yok (2121 aynen).
+- Genişlik / öncelik: Etki 260/150 (2), Güven 92/80 (2), Kanıt 84/72 (4); Tür 3→4, Servis 2→3, İlgilenen 3→2. 1366 px + 220 px kenar çubuğunda düşme sırası Tür → Kanıt → Servis ("+N sütun"). `storageKey` `inbox2` aynı.
+- Doğrulanmadı: gerçek sayfada 1366 px sığma ve düşme sırası (hesap; yalnız hücrelerin statik önizlemesi redhat + dark).
+

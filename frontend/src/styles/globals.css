@@ -4423,7 +4423,8 @@ tr:hover .pv-row, tr:focus-within .pv-row, .pv-row.is-set, .pv-row:focus-within 
 .std-ctx { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-top: 2px;
   font-size: 10.5px; color: var(--text3); min-width: 0; }
 .std-impact { font-size: 12px; min-width: 0; }
-.std-impact__main { font-family: var(--font-mono); font-weight: 500; color: var(--text);
+/* v0.10.2395 — Etki kolonu arayüz fontunda (mockup; mono yalnız kimlik/kod), sayılar tabular. */
+.std-impact__main { font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .std-impact__sub { color: var(--text3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .std-head { display: flex; flex-direction: column; gap: 12px; margin: 4px 0 14px; }

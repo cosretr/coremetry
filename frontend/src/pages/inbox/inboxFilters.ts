@@ -57,7 +57,8 @@ export const SORT_DEFAULT = { id: 'priority', dir: 'desc' as const };
 // `s_inbox=source` varsayılana düşer (sunucu kimliği hâlâ tanır).
 // v0.10.1529 — 'confidence' (Güven kolonu); 'service' kolonu kalktı ama kimlik
 // tanınmaya devam eder (bayat `s_inbox=service` linki sunucuda aynen sıralar).
-export const INBOX_SORT_IDS = ['priority', 'service', 'detail', 'occurrences', 'firstSeen', 'lastSeen', 'assignee', 'confidence'] as const;
+// v0.10.2395 — 'evidence' (Kanıt kolonu, sunucu sortInboxItems "evidence").
+export const INBOX_SORT_IDS = ['priority', 'service', 'detail', 'occurrences', 'firstSeen', 'lastSeen', 'assignee', 'confidence', 'evidence'] as const;
 export const KIND_ALL: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly', 'incident'];
 // v0.9.328 — operator: "Problems ilk açtığında exception görsün, kullanıcılar
 // ona göre tasarlar." Exceptions are the signal operators trust: a thrown

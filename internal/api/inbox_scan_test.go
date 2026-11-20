@@ -122,6 +122,27 @@ func inboxIDs(items []InboxItem) string {
 	return out
 }
 
+// v0.10.2395 — Kanıt kolonu: bağlı olay sayısına göre sıralanır (sunucu
+// tavanı da aynı sırayla keser); sayısız satır 0 sayılır, düşürülmez.
+func TestSortInboxItemsByEvidence(t *testing.T) {
+	items := []InboxItem{
+		{ID: "x", Kind: "problem", Priority: "P2", EventCount: 2},
+		{ID: "y", Kind: "problem", Priority: "P2", EventCount: 5},
+		{ID: "z", Kind: "exception", Priority: "P2"},
+	}
+	if id, _ := normalizeInboxSort("evidence", "desc"); id != "evidence" {
+		t.Fatalf("normalizeInboxSort(evidence) = %q, want evidence", id)
+	}
+	sortInboxItems(items, "evidence", "desc")
+	if got := inboxIDs(items); got != "yxz" {
+		t.Errorf("evidence desc = %q, want yxz", got)
+	}
+	sortInboxItems(items, "evidence", "asc")
+	if got := inboxIDs(items); got != "zxy" {
+		t.Errorf("evidence asc = %q, want zxy", got)
+	}
+}
+
 // Occurrences sorts on the exception count, and the kinds that don't have one
 // sort as 0 rather than being dropped or floated to the top — a triage list
 // that hides incidents because they lack a count is worse than one that

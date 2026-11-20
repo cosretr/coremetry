@@ -2,8 +2,9 @@
 //
 // Inbox.rowFormat — v0.10.1084 (operatör: "tekilleştir, Exceptions'taki format
 // güzel"). Problems kuyruğu satırı Exceptions listesinin biçiminde:
-//   • kolonlar (v0.10.2121, Problems sadeleştirme S1 — operatör onaylı mockup):
-//     Öncelik · Ne bozuk · Servis · Ekip · Tür · Ne zamandan beri · İlgilenen
+//   • kolonlar (v0.10.2121, Problems sadeleştirme S1 — operatör onaylı mockup;
+//     v0.10.2395 triage mockup'ı Etki · Güven · Kanıt'ı geri getirdi):
+//     Öncelik · Ne bozuk · Etki · Güven · Kanıt · Servis · Ekip · Tür · Ne zamandan beri · İlgilenen
 //     (ayrı Source kolonu yok; oluşum sayısı başlığın alt satırında);
 //   • başlık hücresi ORTAK bileşen (TriageTitleCell): 1. satır kalın başlık
 //     (incident/problem → olayın cümlesi, exception → tip; mono + hata rengi)
@@ -115,7 +116,9 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
     const heads = [...table(el).querySelectorAll('thead th')].map(th => th.textContent?.trim() ?? '');
     // v0.10.2121 (Problems sadeleştirme S1, operatör onaylı mockup) — Etki /
     // Güven / Karar / Occurrences / Last seen kalktı; Servis · Ekip · Tür geldi.
-    const labels = ['Öncelik', 'Ne bozuk', 'Servis', 'Ekip', 'Tür', 'Ne zamandan beri', 'İlgilenen'];
+    // v0.10.2395 (operatör 2026-11-20, triage mockup'ı) — Etki · Güven · Kanıt geri;
+    // Karar ayrı kolon olarak gelmedi (triyaj İlgilenen hücresinde).
+    const labels = ['Öncelik', 'Ne bozuk', 'Etki', 'Güven', 'Kanıt', 'Servis', 'Ekip', 'Tür', 'Ne zamandan beri', 'İlgilenen'];
     let at = -1;
     for (const l of labels) {
       // Sıralama oku başlığın başında ya da sonunda olabilir (sayısal kolon).
@@ -124,7 +127,7 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
       at = i;
     }
     expect(heads.some(h => h.includes('Source'))).toBe(false);
-    for (const gone of ['Etki', 'Güven', 'Karar', 'Occurrences', 'Last seen']) {
+    for (const gone of ['Karar', 'Occurrences', 'Last seen']) {
       expect(heads.some(h => h.includes(gone)), `${gone} listeden kalkmalı`).toBe(false);
     }
   });
@@ -140,9 +143,9 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
     expect(head.textContent).toContain('open'); // durum çipi başlık satırında
     expect(titleCell.querySelector('.triage-sub')?.textContent).toBe('Incident · db:couchbase@orders — DB health · couchbase');
     // v0.10.2121 — özne Servis kolonunda; katlanmış problem sayısı başlığın alt satırında.
-    expect(cells[3].textContent).toContain('orders');
+    expect(cells[6].textContent).toContain('orders');
     expect(titleCell.querySelector('.std-ctx .ib-occ')?.textContent).toBe('2 problem');
-    expect(cells[5].textContent).toBe('Incident');
+    expect(cells[8].textContent).toBe('Incident');
     expect(r.textContent).not.toContain('Declared incident');
     expect(r.textContent).not.toContain('kaynak önceliği korundu');
   });
@@ -158,10 +161,10 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
     expect(sub.classList.contains('mono')).toBe(true);
     expect(sub.textContent).toBe('Read timed out');
     expect(cells[2].querySelector('.std-ctx .ib-occ')?.textContent).toBe('42 oluşum'); // v0.10.2121
-    expect(cells[5].textContent).toBe('Exception');
+    expect(cells[8].textContent).toBe('Exception');
   });
 
-  it('v0.10.1529 — std satırı: özne mono · manşet, kaynak çipi + kanıt, etki, ne zamandan beri, güven, Karar', async () => {
+  it('v0.10.1529 — std satırı: özne mono · manşet, kaynak çipi + kanıt, etki, güven, ne zamandan beri, Karar', async () => {
     const started = Date.now() * 1e6 - (5 * 3600 + 40 * 60) * 1e9;
     m.items = [{
       ...EXC, id: 'problem:p1', kind: 'problem', source: 'Alert rule', title: 'r', exception: undefined,
@@ -185,15 +188,16 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
     expect(cells[2].querySelector('.triage-sub .std-src')?.textContent).toBe('VM · örneklenmemiş');
     expect(cells[2].querySelector('.triage-sub')?.textContent).toContain('eşiğin üstünde');
     expect(cells[2].querySelector('.std-ctx')?.textContent).toContain('yakın deploy: v2.3.1');
-    // v0.10.2121 (S1) — Etki ve Güven listeden kalktı (detayda); Servis · Ekip · Tür.
-    expect(r.querySelector('.std-impact')).toBeNull();
-    expect(cells[3].textContent).toContain('mobile-bff');
-    expect(cells[5].textContent).toBe('Alarm');
-    expect(cells[6].textContent).toContain('beri');
-    expect(cells[6].textContent).toContain('5 sa 40 dk · sürüyor');
+    // v0.10.2395 — Etki ve Güven listede yine (v0.10.2121'de kalkmıştı); Servis · Ekip · Tür kalır.
+    expect(cells[3].querySelector('.std-impact__main')?.textContent).toBe('%0,7 hata · normal %0,05 (14×)');
+    expect(cells[4].textContent).toBe('YÜKSEK');
+    expect(cells[6].textContent).toContain('mobile-bff');
+    expect(cells[8].textContent).toBe('Alarm');
+    expect(cells[9].textContent).toContain('beri');
+    expect(cells[9].textContent).toContain('5 sa 40 dk · sürüyor');
     // D1 — editor iki düğmeyi görür; satır hover/focus'ta görünür (pv-row) —
     // v0.10.2121: Karar kolonu kalktı, triyaj İlgilenen hücresinde.
-    const pv = cells[7].querySelector('.pv-row')!;
+    const pv = cells[10].querySelector('.pv-row')!;
     expect([...pv.querySelectorAll('button')].map(b => b.textContent)).toEqual(['Gerçek problem', 'Problem değil ▾']); // v0.10.1531 — gerekçe diyaloğu
     expect(pv.classList.contains('is-set')).toBe(false);
   });
@@ -207,12 +211,12 @@ describe('Problems satırı — Exceptions biçimi (v0.10.1084)', () => {
         exception: { fingerprint: 'fp3', type: 'java.lang.NullPointerException', message: 'm', occurrences: 7 } },
     ] as InboxItem[];
     const el = await mount();
-    const multi = rowOf(el, 'SocketTimeoutException').querySelectorAll('td')[4];
+    const multi = rowOf(el, 'SocketTimeoutException').querySelectorAll('td')[7];
     expect(multi.textContent).toBe('3 ekip');
     expect(multi.querySelector('[title]')?.getAttribute('title')).toBe('team-a, team-b, team-c');
-    const single = rowOf(el, 'IllegalStateException').querySelectorAll('td')[4];
+    const single = rowOf(el, 'IllegalStateException').querySelectorAll('td')[7];
     expect(single.querySelector('.btn-chip')?.textContent).toContain('team-a');
-    expect(rowOf(el, 'NullPointerException').querySelectorAll('td')[4].textContent).toBe('sahipsiz');
+    expect(rowOf(el, 'NullPointerException').querySelectorAll('td')[7].textContent).toBe('sahipsiz');
   });
 
   it('v0.10.2122 — üst sayım cümlesi tek satır, sunucu çip sayılarından; yapışkan değil', async () => {
