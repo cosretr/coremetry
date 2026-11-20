@@ -50,7 +50,8 @@ func TestServiceEnvSummaryMVShape(t *testing.T) {
 	// v0.10.1095 — kural "yeni MV dilimin sonuna": bu MV'den SONRA yalnız
 	// ondan daha yeni MV'ler durabilir (db_summary_1m, db_summary_1m_test.go
 	// kendi "son" pinini taşır).
-	newer := map[string]bool{"db_summary_1m": true, "db_statement_summary_1m": true}
+	newer := map[string]bool{"db_summary_1m": true, "db_statement_summary_1m": true,
+		"service_meta_combo_5m": true, "db_receiver_instance_5m": true} // v0.10.2402
 	idx := -1
 	for i, n := range names {
 		if n == name {

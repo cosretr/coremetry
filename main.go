@@ -640,6 +640,10 @@ func main() {
 		return st.Keys, st.EvictedKeys, err
 	})
 	cacheImpl, lockImpl = cacheSw, lockSw
+	// Kontrol düzlemi FINAL okumaları (saved_views / runbook_executions /
+	// monitors / system_settings) nesil sayaçlı önbellekte (chstore
+	// ctlcache.go). Redis tanımlı ama düşükse (Noop) okumalar CH'ye gider.
+	store.SetControlPlaneCache(cacheSw, cfg.Redis.URL != "")
 	// v0.8.212 — multi-pod HA hazard: Redis was configured (operator wants a
 	// distributed leader lock) but the connection failed, so this pod runs the
 	// always-leader Noop. In a multi-pod deployment EVERY pod becomes leader →

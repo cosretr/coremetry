@@ -34,7 +34,8 @@ func TestListSREInvestigationsSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), "s.conn.Query(ctx, listSREInvestigationsSQL, SREInvestigationPage, states, clampSREListLimit(limit))") {
+	if !strings.Contains(string(src), "lim := clampSREListLimit(limit)") ||
+		!strings.Contains(string(src), "s.conn.Query(ctx, listSREInvestigationsSQL, SREInvestigationPage, states, lim)") {
 		t.Error("ListSREInvestigations listSREInvestigationsSQL'i sayfa + kıskaçlı limitle kullanmalı")
 	}
 	for in, want := range map[int]int{0: 200, -1: 200, 1: 1, 50: 50, 200: 200, 201: 200, 10000: 200} {

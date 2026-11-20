@@ -50,7 +50,8 @@ func TestDBSummary1mInCatalogueLast(t *testing.T) {
 	// v0.10.1525 — "sonda" = yalnız kendisinden YENİ MV'ler ardında
 	// (db_statement_summary_1m, kendi testinde son-pinini taşır).
 	names := canonicalMVNames()
-	newer := map[string]bool{"db_statement_summary_1m": true}
+	newer := map[string]bool{"db_statement_summary_1m": true,
+		"service_meta_combo_5m": true, "db_receiver_instance_5m": true} // v0.10.2402
 	idx := -1
 	for i, n := range names {
 		if n == "db_summary_1m" {

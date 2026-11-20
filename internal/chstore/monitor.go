@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -64,7 +65,18 @@ type MonitorResult struct {
 	Detail    int64  `json:"detail"` // type-specific number (ssl-cert: days remaining; 0/negative are meaningful)
 }
 
+// ListMonitors — zamanlayıcının poll'u; nesil sayaçlı önbellekten
+// (ctlcache.go), miss FINAL ile CH'den. Yazım yolları: UpsertMonitor,
+// DeleteMonitor.
 func (s *Store) ListMonitors(ctx context.Context) ([]Monitor, error) {
+	v, err := ctlLoad(ctx, s, ctlMonitors, "list", s.listMonitorsCH)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Clone(v), nil
+}
+
+func (s *Store) listMonitorsCH(ctx context.Context) ([]Monitor, error) {
 	rows, err := s.conn.Query(ctx, `
 		SELECT id, name, type, url, method, expected_status, timeout_sec,
 		       interval_sec, enabled, heartbeat_token,
@@ -183,11 +195,19 @@ func (s *Store) UpsertMonitor(ctx context.Context, m *Monitor) error {
 		created, uint64(time.Now().UnixNano())); err != nil {
 		return err
 	}
-	return batch.Send()
+	if err := batch.Send(); err != nil {
+		return err
+	}
+	s.ctlBump(ctx, ctlMonitors)
+	return nil
 }
 
 func (s *Store) DeleteMonitor(ctx context.Context, id string) error {
-	return s.conn.Exec(ctx, `ALTER TABLE monitors DELETE WHERE id = ?`, id)
+	if err := s.conn.Exec(ctx, `ALTER TABLE monitors DELETE WHERE id = ?`, id); err != nil {
+		return err
+	}
+	s.ctlBump(ctx, ctlMonitors)
+	return nil
 }
 
 func (s *Store) InsertMonitorResult(ctx context.Context, r MonitorResult) error {

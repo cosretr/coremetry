@@ -110,7 +110,11 @@ func (s *Store) UpsertSavedView(ctx context.Context, v SavedView) error {
 	); err != nil {
 		return err
 	}
-	return batch.Send()
+	if err := batch.Send(); err != nil {
+		return err
+	}
+	s.ctlBump(ctx, ctlSavedViews) // ctlcache.go — önbellekli saved_views okumaları
+	return nil
 }
 
 // DeleteSavedView soft-removes by inserting a tombstone row at

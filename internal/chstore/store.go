@@ -413,6 +413,9 @@ type Store struct {
 	// priorCoverage — v0.10.1025: compare=prior okumalarının kaynak
 	// kapsama probları (prior_coverage.go; kaynak başına 60 s).
 	priorCoverage [priorSourceCount]coverageProbe
+	// ctl — kontrol düzlemi FINAL okumalarının nesil sayaçlı önbelleği
+	// (ctlcache.go). nil = önbellek yok, her okuma CH'ye.
+	ctl *ctlCache
 
 	// incidentLifecycle — v0.10.748 incident açılış/çözüm bildirimi kancası
 	// (incident_lifecycle.go); boot'ta SetIncidentLifecycleHook ile.
@@ -2159,6 +2162,32 @@ func canonicalMVs() []string {
 		 FROM spans
 		 WHERE db_stmt_hash != 0
 		 GROUP BY db_system, db_name, service_name, stmt_hash, time_bucket`,
+
+		// v0.10.2402 — service_meta_combo_5m: servis metadata türetmesinin
+		// (DeriveServiceMetadataAll) MV ikizi; ham spans taraması ~228 MiB/
+		// çağrıydı. Projeksiyon + guard deriveMetadataAllSQL'le TEK gövde
+		// (service_metadata.go). Geriye DOLMAZ: okuyucu sourceCovers ile
+		// kapılar, kapsamıyorsa ya da tablo yoksa ham yola düşer — iki boot
+		// gerekmez. Gün-bir üç küme kaydı; DİLİMİN SONUNDA (konumsal pinler).
+		fmt.Sprintf(`CREATE MATERIALIZED VIEW IF NOT EXISTS service_meta_combo_5m
+		 ENGINE = AggregatingMergeTree
+		 PARTITION BY toDate(time_bucket)
+		 ORDER BY (service_name, ug_val, sy_val, ns_val, dep_val, time_bucket)
+		 TTL toDate(time_bucket) + INTERVAL %d DAY
+		 SETTINGS index_granularity = 8192
+		 AS SELECT%s`, serviceMetaComboTTLDays, serviceMetaComboMVSelect()),
+
+		// v0.10.2402 — db_receiver_instance_5m: /databases receiver
+		// keşfinin (discoverReceiverInstances) MV ikizi; ham metric_points
+		// taraması ~26.8 MiB/çağrıydı. Zincir + önek listesi ham sorguyla
+		// TEK gövde (db_receiver_mv.go). Aynı kapı: sourceCovers, yoksa ham.
+		fmt.Sprintf(`CREATE MATERIALIZED VIEW IF NOT EXISTS db_receiver_instance_5m
+		 ENGINE = AggregatingMergeTree
+		 PARTITION BY toDate(time_bucket)
+		 ORDER BY (metric_prefix, inst, time_bucket)
+		 TTL toDate(time_bucket) + INTERVAL %d DAY
+		 SETTINGS index_granularity = 8192
+		 AS SELECT%s`, dbReceiverInstTTLDays, dbReceiverInstMVSelect()),
 	}
 	return mvs
 }

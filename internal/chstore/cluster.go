@@ -254,6 +254,8 @@ var tablesWithoutTraceID = map[string]bool{
 	// v0.8.375 — statement-identity MV projects stmt_hash, never trace_id.
 	"db_statement_summary_5m": true,
 	"db_statement_summary_1m": true, // v0.10.1525 — 1 dk trend ikizi, aynı projeksiyon (trace_id yok)
+	"service_meta_combo_5m":   true, // v0.10.2402 — (servis, metadata kombosu) sayımı, trace_id yok
+	"db_receiver_instance_5m": true, // v0.10.2402 — (önek, instance) sayımı, trace_id yok
 	// v0.8.396 — metric-name catalog: (service, metric) rows, no trace_id.
 	"metric_catalog": true,
 	// v0.9.249 — service/version rollup: (service_name, version,
@@ -387,6 +389,10 @@ var defaultShardPolicy = map[string]string{
 	"db_statement_summary_5m": "cityHash64(toString(stmt_hash))",
 	// v0.10.1525 — 1 dk ikiz: kardeşle aynı anahtar; ORDER BY stmt_hash ile başlar.
 	"db_statement_summary_1m": "cityHash64(toString(stmt_hash))",
+	// v0.10.2402 — ORDER BY'ın ilk kolonu (O5); yazımlar insert tetikleyicisiyle
+	// shard-yerel, okumalar wrapper'dan yayılır.
+	"service_meta_combo_5m":   "cityHash64(service_name)",
+	"db_receiver_instance_5m": "cityHash64(metric_prefix)",
 	// v0.9.249 — deploy/version rollup. Reads are always
 	// `WHERE service_name = ?` (GetServiceDeploys is per-service), so
 	// service_name is the honest key even though the MV's own writes
@@ -950,6 +956,9 @@ var highVolumeTables = map[string]bool{
 	// class). Creation is gated on hasDBStmtHashCol in migrate().
 	"db_statement_summary_5m": true,
 	"db_statement_summary_1m": true, // v0.10.1525 — gün-bir kayıt: _local + Distributed (tek-shard eksik-sayım sınıfı)
+	// v0.10.2402 — iki yeni MV gün-bir kayıt (spans / metric_points okur).
+	"service_meta_combo_5m":   true,
+	"db_receiver_instance_5m": true,
 	// v0.8.396 — metric-name catalog MV reading FROM metric_points
 	// (prod /api/metrics/names timeout fix): registered day one per
 	// the same D1 rule.

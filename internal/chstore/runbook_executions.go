@@ -202,7 +202,11 @@ func (s *Store) UpsertExecution(ctx context.Context, e RunbookExecution) error {
 		time.Now().UTC(), uint64(time.Now().UnixNano())); err != nil {
 		return err
 	}
-	return batch.Send()
+	if err := batch.Send(); err != nil {
+		return err
+	}
+	s.ctlBump(ctx, ctlRunbookExe) // ctlcache.go — ListExecutions önbelleği
+	return nil
 }
 
 func (s *Store) GetExecution(ctx context.Context, id string) (*RunbookExecution, error) {
@@ -261,12 +265,40 @@ func executionWhere(f ExecutionFilter) whereClause {
 	return wc
 }
 
+// execRow — önbellekte tutulan ham satır: StepStates JSON'u HER çağrıda
+// yeniden çözülür, böylece çağıranlar önbellekteki değeri asla paylaşmaz
+// (StepState harita taşır; sığ kopya yetmezdi).
+type execRow struct {
+	e      RunbookExecution
+	states string
+}
+
+// ListExecutions — agent poll'u (5 sn/pod) nesil sayaçlı önbellekten
+// (ctlcache.go; anahtar = süzgecin tamamı), miss FINAL ile CH'den. Tek
+// yazım yolu UpsertExecution (StartExecution dahil) nesli artırır.
 func (s *Store) ListExecutions(ctx context.Context, f ExecutionFilter) ([]RunbookExecution, error) {
 	wc := executionWhere(f)
 	limit := f.Limit
 	if limit <= 0 || limit > 500 {
 		limit = 200
 	}
+	key := fmt.Sprintf("%q|%q|%q|%d|%d", f.RunbookID, f.Status, f.ProblemID, f.SinceNs, limit)
+	raw, err := ctlLoad(ctx, s, ctlRunbookExe, key, func(ctx context.Context) ([]execRow, error) {
+		return s.listExecutionsCH(ctx, wc, limit)
+	})
+	if err != nil {
+		return nil, err
+	}
+	var out []RunbookExecution
+	for _, r := range raw {
+		e := r.e
+		_ = json.Unmarshal([]byte(r.states), &e.StepStates)
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+func (s *Store) listExecutionsCH(ctx context.Context, wc whereClause, limit int) ([]execRow, error) {
 	rows, err := s.conn.Query(ctx, `
 		SELECT id, runbook_id, title_snapshot, status, started_by,
 		       toUnixTimestamp64Nano(started_at), toUnixTimestamp64Nano(completed_at),
@@ -278,16 +310,15 @@ func (s *Store) ListExecutions(ctx context.Context, f ExecutionFilter) ([]Runboo
 		return nil, err
 	}
 	defer rows.Close()
-	var out []RunbookExecution
+	var out []execRow
 	for rows.Next() {
-		var e RunbookExecution
-		var statesJSON string
+		var r execRow
+		e := &r.e
 		if err := rows.Scan(&e.ID, &e.RunbookID, &e.TitleSnapshot, &e.Status,
-			&e.StartedBy, &e.StartedAt, &e.CompletedAt, &e.ProblemID, &statesJSON); err != nil {
+			&e.StartedBy, &e.StartedAt, &e.CompletedAt, &e.ProblemID, &r.states); err != nil {
 			return nil, err
 		}
-		_ = json.Unmarshal([]byte(statesJSON), &e.StepStates)
-		out = append(out, e)
+		out = append(out, r)
 	}
 	return out, rows.Err()
 }

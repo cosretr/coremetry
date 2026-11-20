@@ -22,6 +22,8 @@ package chstore
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -70,11 +72,27 @@ func clampSREListLimit(limit int) int {
 
 // ListSREInvestigations — verilen durumlardaki araştırma satırları, en eski
 // önce. Boş durum listesi = okuma yok.
+//
+// Drain poll'u: nesil sayaçlı önbellekten (ctlcache.go; anahtar = durum
+// kümesi + limit), miss FINAL ile CH'den. saved_views'ın her yazımı
+// (UpsertSavedView, iki süpürme) nesli artırır.
 func (s *Store) ListSREInvestigations(ctx context.Context, states []string, limit int) ([]SavedView, error) {
 	if len(states) == 0 {
 		return []SavedView{}, nil
 	}
-	rows, err := s.conn.Query(ctx, listSREInvestigationsSQL, SREInvestigationPage, states, clampSREListLimit(limit))
+	lim := clampSREListLimit(limit)
+	key := "sre-inv:" + strings.Join(states, "\x00") + ":" + strconv.Itoa(lim)
+	v, err := ctlLoad(ctx, s, ctlSavedViews, key, func(ctx context.Context) ([]SavedView, error) {
+		return s.listSREInvestigationsCH(ctx, states, lim)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return slices.Clone(v), nil
+}
+
+func (s *Store) listSREInvestigationsCH(ctx context.Context, states []string, lim int) ([]SavedView, error) {
+	rows, err := s.conn.Query(ctx, listSREInvestigationsSQL, SREInvestigationPage, states, lim)
 	if err != nil {
 		return nil, err
 	}
@@ -153,5 +171,6 @@ func (s *Store) SweepSREInvestigations(ctx context.Context, cutoff time.Time) (u
 	if err := s.conn.Exec(ctx, sreInvestigationSweepDeleteSQL, SREInvestigationPage, cutNs); err != nil {
 		return 0, err
 	}
+	s.ctlBump(ctx, ctlSavedViews)
 	return n, nil
 }

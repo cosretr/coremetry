@@ -32,8 +32,11 @@ const dbStmtSummary1mGolden = `CREATE MATERIALIZED VIEW IF NOT EXISTS db_stateme
 
 func TestDBStmtSummary1mCatalogue(t *testing.T) {
 	names := canonicalMVNames()
-	if names[len(names)-1] != "db_statement_summary_1m" {
-		t.Fatalf("db_statement_summary_1m katalogun SONUNDA olmalı, son: %s", names[len(names)-1])
+	// v0.10.2402 — ardında yalnız daha yeni iki MV durabilir (pinleri
+	// mv_raw_agg_test.go'da: service_meta_combo_5m, db_receiver_instance_5m).
+	if n := len(names); names[n-3] != "db_statement_summary_1m" ||
+		names[n-2] != "service_meta_combo_5m" || names[n-1] != "db_receiver_instance_5m" {
+		t.Fatalf("katalog sonu db_statement_summary_1m, service_meta_combo_5m, db_receiver_instance_5m olmalı: %v", names[n-3:])
 	}
 	got := sqlNormalize(canonicalMVDDL("db_statement_summary_1m"))
 	if got != dbStmtSummary1mGolden {

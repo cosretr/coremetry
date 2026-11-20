@@ -38,20 +38,18 @@ type RetentionSpec struct {
 // GetRetention reads the current overrides. Falls back to the
 // config-file defaults via the caller (we don't peek at config from
 // this layer; just return what's persisted in system_settings).
+//
+// Kaynak settingsAll (nesil sayaçlı, ctlcache.go): eski `key LIKE
+// 'retention.%'` FINAL okumasının yerine aynı tablonun önbellekli kopyası;
+// aşağıdaki switch zaten yalnız dört tam anahtarı okur.
 func (s *Store) GetRetention(ctx context.Context) (RetentionSpec, error) {
-	rows, err := s.conn.Query(ctx, `
-		SELECT key, value FROM system_settings FINAL
-		WHERE key LIKE 'retention.%'`)
+	all, err := s.settingsAll(ctx)
 	if err != nil {
 		return RetentionSpec{}, err
 	}
-	defer rows.Close()
 	var sp RetentionSpec
-	for rows.Next() {
-		var k, v string
-		if err := rows.Scan(&k, &v); err != nil {
-			return RetentionSpec{}, err
-		}
+	for k, b := range all {
+		v := string(b)
 		switch k {
 		case "retention.spans":
 			sp.Spans = v
@@ -63,7 +61,7 @@ func (s *Store) GetRetention(ctx context.Context) (RetentionSpec, error) {
 			sp.Profiles = v
 		}
 	}
-	return sp, rows.Err()
+	return sp, nil
 }
 
 // SetRetention persists the new retention values + applies them via
@@ -363,7 +361,11 @@ func (s *Store) upsertSetting(ctx context.Context, key, value, actor string) err
 	if err := batch.Append(key, value, now, actor, uint64(now.UnixNano())); err != nil {
 		return err
 	}
-	return batch.Send()
+	if err := batch.Send(); err != nil {
+		return err
+	}
+	s.ctlBump(ctx, ctlSettings)
+	return nil
 }
 
 // ApplyPersistedRetention re-runs the live ALTERs from whatever's

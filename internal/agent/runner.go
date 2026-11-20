@@ -57,9 +57,12 @@ func (r *Runner) tick(ctx context.Context) {
 	// SinceNs bounds the poll to runs started in the last 30 days so this
 	// 5s tick partition-prunes instead of FINAL-scanning the forever-growing
 	// audit table (v0.7.8). A run open longer than that is abandoned.
+	// Truncated to the hour so the bound is stable across ticks: the
+	// filter is the control-plane cache key (chstore/ctlcache.go); a
+	// per-tick nanosecond bound would miss on every poll. ≤ 1 h wider.
 	execs, err := r.store.ListExecutions(ctx, chstore.ExecutionFilter{
 		Status:  chstore.RunExecRunning,
-		SinceNs: time.Now().Add(-30 * 24 * time.Hour).UnixNano(),
+		SinceNs: time.Now().Add(-30 * 24 * time.Hour).Truncate(time.Hour).UnixNano(),
 		Limit:   200,
 	})
 	if err != nil {

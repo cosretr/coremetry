@@ -90,6 +90,8 @@ var telemetryPurgeTables = []string{
 	// preserve tarafında kalmaya devam ediyor.
 	"db_statement_summary_5m", "db_statement_summary_1m", "metric_catalog", "service_seen",
 	"service_version_5m", "rca_verdicts",
+	// v0.10.2402 — ham-agregat MV ikizleri (telemetriden yeniden doğar).
+	"service_meta_combo_5m", "db_receiver_instance_5m",
 }
 
 // configPreserveTables is NOT consulted at runtime. It exists so the regression

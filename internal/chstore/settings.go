@@ -1,6 +1,7 @@
 package chstore
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,10 +22,27 @@ import (
 // tazeleme) cevap oradan gelir: 14 yenileyici × 30 s tekil FINAL okuma
 // yerine tik başına tek sorgu. Anlık görüntüde olmayan anahtar = yok
 // (nil, nil) — tablo tek sorguyla bütün okunduğu için doğru.
+//
+// Kontrol düzlemi önbelleği bağlıysa (ctlcache.go) cevap nesil sayaçlı
+// tablo kopyasından gelir (settingsAll): anahtar başına FINAL nokta okuması
+// (ör. key='ml', ~5k/gün) yerine nesil başına tek tam okuma. Tablo küçük
+// (JSON blob başına bir satır). Yazımlar PutSetting/upsertSetting'te nesli
+// artırır — kendi yazımını okuyan göç (WithoutSettingsSnapshot) yerel
+// sayaç sayesinde anında yeni değeri görür.
 func (s *Store) GetSetting(ctx context.Context, key string) ([]byte, error) {
 	if snap := settingsSnapshotFrom(ctx); snap != nil {
 		v, _ := snap.get(key)
 		return v, nil
+	}
+	if s.ctl != nil {
+		m, err := s.settingsAll(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if v, ok := m[key]; ok {
+			return bytes.Clone(v), nil
+		}
+		return nil, nil
 	}
 	row := s.conn.QueryRow(ctx, `
 		SELECT value FROM system_settings FINAL WHERE key = ? LIMIT 1`, key)
@@ -61,7 +79,39 @@ func (s *Store) PutSetting(ctx context.Context, key string, value []byte) error 
 	if err := batch.Append(key, string(value), now, settingsVersion(now)); err != nil {
 		return fmt.Errorf("append setting: %w", err)
 	}
-	return batch.Send()
+	if err := batch.Send(); err != nil {
+		return err
+	}
+	s.ctlBump(ctx, ctlSettings)
+	return nil
+}
+
+// settingsAll — system_settings'in tamamı (FINAL), nesil sayaçlı önbellekten.
+// Dönen harita PAYLAŞILIR: çağıran değiştirmez, dışarı kopyasını verir.
+func (s *Store) settingsAll(ctx context.Context) (map[string][]byte, error) {
+	return ctlLoad(ctx, s, ctlSettings, "all", s.settingsAllCH)
+}
+
+func (s *Store) settingsAllCH(ctx context.Context) (map[string][]byte, error) {
+	rows, err := s.conn.Query(ctx, `
+		SELECT key, value FROM system_settings FINAL
+		ORDER BY key LIMIT 10000 SETTINGS max_execution_time = 10`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	m := map[string][]byte{}
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, err
+		}
+		m[k] = []byte(v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // ── notification_channels ───────────────────────────────────────────────────

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
 
 // DBInstance is one row of the /databases overview — Dynatrace's
@@ -1125,12 +1127,7 @@ func (s *Store) GetDatabases(ctx context.Context, q DatabasesQuery) (*DatabasesO
 	// katmıyorlar; dört katalog probu + dört metric_points taraması
 	// boşuna ödeniyordu.
 	if q.IncludeReceivers {
-		for _, prefix := range []struct{ metric, system string }{
-			{"oracledb.", "oracle"},
-			{"postgresql.", "postgresql"},
-			{"mysql.", "mysql"},
-			{"redis.", "redis"},
-		} {
+		for _, prefix := range dbReceiverPrefixes {
 			if !s.receiverPrefixActive(ctx, prefix.metric) {
 				continue
 			}
@@ -1313,24 +1310,20 @@ func (s *Store) discoverReceiverInstances(
 	// VERİ YAYANI atıyor — hâlâ bir kayıp, ama açıklanabilir bir kayıp,
 	// ve tavana dayanıldığı zarfta İLAN ediliyor.
 	// İkincil `inst` sıralaması: eşit hacimde sonuç deterministik kalsın.
-	q := `
-		SELECT coalesce(
-			nullIf(attr_values[indexOf(attr_keys, ?)], ''),
-			nullIf(attr_values[indexOf(attr_keys, 'instance')], ''),
-			nullIf(attr_values[indexOf(attr_keys, 'server.address')], ''),
-			nullIf(res_values[indexOf(res_keys, 'service.name')], ''),
-			''
-		) AS inst,
-		count() AS n
-		FROM metric_points
-		WHERE time >= ? AND time <= ?
-		  AND startsWith(metric, ?)
-		GROUP BY inst
-		HAVING inst != ''
-		ORDER BY n DESC, inst ASC
-		LIMIT ` + strconv.Itoa(dbReceiverLimit) + `
-		SETTINGS max_execution_time = 8`
-	rows, err := s.telemetryReadConn().Query(ctx, q, specificAttr, from, to, metricPrefix)
+	//
+	// v0.10.2402 — MV-first: db_receiver_instance_5m pencereyi baştan
+	// taşıyorsa (sourceCovers) oradan, aksi hâlde / MV okuması hata verirse
+	// ham metric_points (query_log: ~26.8 MiB/çağrı).
+	var rows driver.Rows
+	var err error
+	if s.sourceCovers(ctx, priorSrcDBReceiverInst, from) {
+		if rows, err = s.telemetryReadConn().Query(ctx, dbReceiverInstMVSQL, metricPrefix, from, to); err != nil {
+			rows = nil
+		}
+	}
+	if rows == nil {
+		rows, err = s.telemetryReadConn().Query(ctx, dbReceiverInstRawSQL, specificAttr, from, to, metricPrefix)
+	}
 	if err != nil {
 		return nil, false, err
 	}

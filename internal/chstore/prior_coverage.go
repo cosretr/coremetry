@@ -53,6 +53,10 @@ const (
 	// v0.10.1525 — Statement detay trendi db_statement_summary_1m'i yalnız ilk
 	// kovası pencere başından önceyse okur (dbstmt_detail.go).
 	priorSrcDBStmtSummary1m
+	// v0.10.2402 — ham-spans/metric_points agregatlarının MV ikizleri; ilk
+	// kova pencere başından önce değilse okuyucu ham yola düşer.
+	priorSrcSvcMetaCombo   // service_metadata.go DeriveServiceMetadataAll
+	priorSrcDBReceiverInst // dependencies.go discoverReceiverInstances
 	priorSourceCount
 )
 
@@ -64,6 +68,8 @@ var priorSourceProbeSQL = [priorSourceCount]string{
 	priorSrcMsgCallerSummary: "SELECT min(time_bucket), count() FROM messaging_caller_summary_5m SETTINGS max_execution_time = 5",
 	priorSrcDBSummary1m:      "SELECT min(time_bucket), count() FROM db_summary_1m SETTINGS max_execution_time = 5",
 	priorSrcDBStmtSummary1m:  "SELECT min(time_bucket), count() FROM db_statement_summary_1m SETTINGS max_execution_time = 5",
+	priorSrcSvcMetaCombo:     "SELECT min(time_bucket), count() FROM " + serviceMetaComboMV + " SETTINGS max_execution_time = 5",
+	priorSrcDBReceiverInst:   "SELECT min(time_bucket), count() FROM " + dbReceiverInstMV + " SETTINGS max_execution_time = 5",
 }
 
 // spansLiveBeforeSQL — ham yolun varlık probu: [pFrom − 24 sa, pFrom)

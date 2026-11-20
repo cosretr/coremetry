@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
+
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
 
 // CustomLink — one operator-bolted-on link per service. The
@@ -494,10 +496,27 @@ func (s *Store) populateNamespaces(ctx context.Context, derived map[string]strin
 // dolu bir `k8s.namespace.name` taşısa bile namespace'siz görünüyordu.
 // coalesce boşu atlar. ug/sy/dep bacakları multiIf kalıyor: onların
 // paylaşılan bir ikizi YOK, dolayısıyla ayrışma riski de yok.
+//
+// Ham sorgu artık YEDEK yol: okuma service_meta_combo_5m MV'sinden
+// (serviceMetaComboMVDDL, aynı projeksiyon + guard — TEK gövde, iki kopya
+// yok). MV geriye dolmaz; ilk kovası pencere başından önce değilse (taze
+// kurulum, küme kipinde ertelenmiş DDL, tablo yok) bu ham sorgu koşar.
 var deriveMetadataAllSQL = `
 SELECT service_name, ug_val, sy_val, ns_val, dep_val, count() AS c
 FROM (
-  SELECT service_name,
+  SELECT service_name,` + svcMetaProjection + `
+  FROM spans
+  WHERE time >= ? AND time <= ?
+    AND ` + svcMetaGuard + `
+  LIMIT 2000000
+)
+GROUP BY service_name, ug_val, sy_val, ns_val, dep_val
+LIMIT 50000
+SETTINGS max_execution_time = 25`
+
+// svcMetaProjection — dört değer ifadesi (ug_val, sy_val, ns_val, dep_val).
+// Ham yedek sorgu ve MV aynı metni gömer.
+var svcMetaProjection = `
     multiIf(
       has(res_keys, 'ug-team'),  res_values[indexOf(res_keys, 'ug-team')],
       has(res_keys, 'ug_team'),  res_values[indexOf(res_keys, 'ug_team')],
@@ -522,10 +541,10 @@ FROM (
       has(attr_keys, 'kubernetes.deployment.name'), attr_values[indexOf(attr_keys, 'kubernetes.deployment.name')],
       has(attr_keys, 'kubernetes.deployment_name'), attr_values[indexOf(attr_keys, 'kubernetes.deployment_name')],
       has(attr_keys, 'openshift.deployment.name'), attr_values[indexOf(attr_keys, 'openshift.deployment.name')],
-      '') AS dep_val
-  FROM spans
-  WHERE time >= ? AND time <= ?
-    AND ( has(res_keys, 'ug-team')  OR has(res_keys, 'ug_team')
+      '') AS dep_val`
+
+// svcMetaGuard — ön-eleme (en az bir anahtar taşıyan span). Parantezli.
+var svcMetaGuard = `( has(res_keys, 'ug-team')  OR has(res_keys, 'ug_team')
        OR has(res_keys, 'sy-team')  OR has(res_keys, 'sy_team')
        OR has(attr_keys, 'ug-team') OR has(attr_keys, 'ug_team')
        OR has(attr_keys, 'sy-team') OR has(attr_keys, 'sy_team')
@@ -534,9 +553,29 @@ FROM (
        OR has(res_keys, 'kubernetes.deployment.name') OR has(res_keys, 'kubernetes.deployment_name')
        OR has(res_keys, 'openshift.deployment.name')
        OR has(attr_keys, 'kubernetes.deployment.name') OR has(attr_keys, 'kubernetes.deployment_name')
-       OR has(attr_keys, 'openshift.deployment.name') )
-  LIMIT 2000000
-)
+       OR has(attr_keys, 'openshift.deployment.name') )`
+
+// serviceMetaComboMV — v0.10.2402: deriveMetadataAllSQL'in MV ikizi.
+// Ham sorgu her tikte 3 sa spans tarıyordu (query_log: ~228 MiB/çağrı,
+// max 3.3 sn; MV-first ihlali). MV aynı projeksiyonu ve guard'ı insert
+// anında 5 dk kovalara sayar; okuma (deriveMetadataMVSQL) kova sayılarını
+// toplar → (service, ug, sy, ns, dep) kombo sayıları ham sorguyla aynı
+// (pencere 5 dk kovaya hizalı; ham yolun LIMIT 2000000 örnekleme tavanı
+// MV'de yok — tavan altı pencerede birebir, svc_meta_combo_chsmoke_test).
+// Geriye DOLMAZ → okuyucu sourceCovers (ilk kova pencere başından önce)
+// ile kapılar, kapsamıyorsa ham yola düşer. Gün-bir üç küme kaydı
+// (highVolumeTables + defaultShardPolicy + tablesWithoutTraceID).
+const serviceMetaComboMV = "service_meta_combo_5m"
+
+// serviceMetaComboTTLDays — okuyucu pencere 3 sa; 2 gün bol pay.
+const serviceMetaComboTTLDays = 2
+
+// deriveMetadataMVSQL — MV okuması: kova sayıları toplanır; çıktı şekli
+// deriveMetadataAllSQL'inkiyle aynı (aynı Scan).
+const deriveMetadataMVSQL = `
+SELECT service_name, ug_val, sy_val, ns_val, dep_val, countMerge(c_state) AS c
+FROM ` + serviceMetaComboMV + `
+WHERE time_bucket >= toStartOfFiveMinute(?) AND time_bucket < ?
 GROUP BY service_name, ug_val, sy_val, ns_val, dep_val
 LIMIT 50000
 SETTINGS max_execution_time = 25`
@@ -602,7 +641,18 @@ func marginalModes(rows []metaComboRow) (teams map[string]ServiceTeams, ns, dep 
 func (s *Store) DeriveServiceMetadataAll(ctx context.Context, since time.Duration) (map[string]ServiceTeams, map[string]string, map[string]string, error) {
 	to := time.Now()
 	from := to.Add(-since)
-	rows, err := s.conn.Query(ctx, deriveMetadataAllSQL, from, to)
+	// MV-first: service_meta_combo_5m pencereyi baştan taşıyorsa oradan;
+	// MV okuması hata verirse (ör. küme kipinde wrapper henüz yok) ham yol.
+	var rows driver.Rows
+	var err error
+	if s.sourceCovers(ctx, priorSrcSvcMetaCombo, from) {
+		if rows, err = s.conn.Query(ctx, deriveMetadataMVSQL, from, to); err != nil {
+			rows = nil
+		}
+	}
+	if rows == nil {
+		rows, err = s.conn.Query(ctx, deriveMetadataAllSQL, from, to)
+	}
 	if err != nil {
 		return nil, nil, nil, err
 	}

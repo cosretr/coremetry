@@ -198,7 +198,8 @@ describe('biçim çakışması — liste ve detay aynı cevabı verir', () => {
 describe('Postgres takma adı — bugünkü davranış iki yüzeyde AYNI', () => {
   it('üretici "POSTGRES", satırlar "postgresql"', () => {
     expect(GO('internal/evaluator/db_capacity.go')).toContain('dbsys: "POSTGRES", probe: "postgresql.backends"');
-    expect(GO('internal/chstore/dependencies.go')).toContain('{"postgresql.", "postgresql"}');
+    // v0.10.2402 — receiver önek listesi db_receiver_mv.go'ya taşındı (MV ile tek gövde).
+    expect(GO('internal/chstore/db_receiver_mv.go')).toContain('{"postgresql.", "postgresql"}');
     expect(dbSubjectId('POSTGRES', 'pg-1')).toBe('db:postgres@pg-1');
   });
   it('liste işareti ve detay aday kümesi db:postgres@… öznesini sormaz', () => {

@@ -113,6 +113,7 @@ func (s *Store) SweepAIChatConversations(ctx context.Context, cutoff time.Time) 
 	if err := s.conn.Exec(ctx, aiChatSweepDeleteSQL, aiChatPage, cutNs); err != nil {
 		return 0, err
 	}
+	s.ctlBump(ctx, ctlSavedViews)
 	return n, nil
 }
 

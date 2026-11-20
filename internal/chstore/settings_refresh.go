@@ -19,6 +19,7 @@ package chstore
 // çağrıları main.go'da aynen kalır (yenileyici yalnız periyodik tazeleme).
 
 import (
+	"bytes"
 	"context"
 	"log"
 	"time"
@@ -81,24 +82,16 @@ func settingsSnapshotFrom(ctx context.Context) *SettingsSnapshot {
 }
 
 // SettingsSnapshot — tek FINAL okuma; state tablosu (in-order ana bağlantı).
+// Kontrol düzlemi önbelleği bağlıysa nesil değişmedikçe CH'ye gitmez
+// (settingsAll, ctlcache.go); dönen kopya önbellekten bağımsızdır.
 func (s *Store) SettingsSnapshot(ctx context.Context) (*SettingsSnapshot, error) {
-	rows, err := s.conn.Query(ctx, `
-		SELECT key, value FROM system_settings FINAL
-		ORDER BY key LIMIT 10000 SETTINGS max_execution_time = 10`)
+	all, err := s.settingsAll(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	m := map[string][]byte{}
-	for rows.Next() {
-		var k, v string
-		if err := rows.Scan(&k, &v); err != nil {
-			return nil, err
-		}
-		m[k] = []byte(v)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	m := make(map[string][]byte, len(all))
+	for k, v := range all {
+		m[k] = bytes.Clone(v)
 	}
 	return &SettingsSnapshot{values: m, taken: time.Now()}, nil
 }
