@@ -33,26 +33,8 @@ import (
 // tek çağrıda ≤6 hop çipi taşır; iki atomik + bir pivot sığsın.
 const chatEvidenceMax = 12
 
-// attachStepEvidence — araç sonucu kanıt zarfı taşıyorsa step-result gövdesine
-// `evidence` (ve boşsa `href`) yazar. Saf (yalnız stepEv'i değiştirir).
-func attachStepEvidence(stepEv map[string]any, tool, content string) (mcptools.ChatEvidence, bool) {
-	ev, ok := mcptools.ToolResultEvidence(tool, content)
-	if !ok {
-		return mcptools.ChatEvidence{}, false
-	}
-	// Çip ↔ sohbet içi blok bağı: adım kimliğinden (istek boyunca tekil).
-	if i, has := eventInt(stepEv["i"]); has && i > 0 {
-		ev.Ref = fmt.Sprintf("ev%d", i)
-	}
-	stepEv["evidence"] = ev
-	if _, set := stepEv["href"]; !set && ev.Href != "" {
-		stepEv["href"] = ev.Href
-	}
-	return ev, true
-}
-
 // attachStepEvidenceList — v0.10.1275 (CoSRE adım 6): çok-kanıtlı zarf.
-// Atomik araç → tek kalem (attachStepEvidence ile aynı gövde); bileşik araç →
+// Atomik araç → tek kalem (v0.10.2397 öncesi attachStepEvidence ile aynı gövde); bileşik araç →
 // hop başına kalem. Ref'ler adım kimliğinden: ilk "ev<i>", sonrakiler
 // "ev<i>.<k>". GERİYE UYUM: `evidence` hep İLK kalem (eski istemci tek çip
 // görür); `evidenceList` YALNIZ >1 kalemde yazılır. Saf (yalnız stepEv).
@@ -95,18 +77,6 @@ func withEvidenceListScope(stepEv map[string]any, evs []mcptools.ChatEvidence, s
 		stepEv["evidenceList"] = evs
 	}
 	return evs
-}
-
-// withEvidenceScope — v0.10.1274: kanıt çipine ekran-kapsamı künyesi (boşsa
-// dokunmaz); step-result.evidence de güncellenir. Saf.
-func withEvidenceScope(stepEv map[string]any, ev mcptools.ChatEvidence, sa mcptools.ScopeApplied) mcptools.ChatEvidence {
-	if sa.Empty() {
-		return ev
-	}
-	c := sa
-	ev.CtxApplied = &c
-	stepEv["evidence"] = ev
-	return ev
 }
 
 // mergeChatEvidence — çağrı sırasıyla biriken kanıt; tavan chatEvidenceMax. Saf.

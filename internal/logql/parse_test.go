@@ -137,20 +137,3 @@ func TestRoundTrip(t *testing.T) {
 		}
 	}
 }
-
-func TestHelpers(t *testing.T) {
-	e, _ := Parse(`a service.name:"x" AND (level:error OR pod:api-*) NOT service.name:"y"`)
-	if !HasFieldClause(e) {
-		t.Error("HasFieldClause false")
-	}
-	if got := strings.Join(Fields(e), ","); got != "service.name,level,pod" {
-		t.Errorf("Fields = %q", got)
-	}
-	free, _ := Parse(`just text "and phrase"`)
-	if HasFieldClause(free) {
-		t.Error("serbest metin alan yüklemi taşımıyor")
-	}
-	if Fields(nil) != nil || HasFieldClause(nil) {
-		t.Error("nil ifade")
-	}
-}

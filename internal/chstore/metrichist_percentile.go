@@ -70,24 +70,6 @@ func aggQuantile(agg string) (float64, bool) {
 	}
 }
 
-// pickPercentile — HistogramSeries'ten agg'e karşılık gelen percentile dizisini
-// seçer (saf, test'li). Bilinmeyen agg → nil, false.
-func pickPercentile(hs *HistogramSeries, agg string) ([]float64, bool) {
-	if hs == nil {
-		return nil, false
-	}
-	switch strings.ToLower(agg) {
-	case "p50":
-		return hs.P50, true
-	case "p95":
-		return hs.P95, true
-	case "p99":
-		return hs.P99, true
-	default:
-		return nil, false
-	}
-}
-
 // QueryMetricHistogramPercentile — the p50/p95/p99 agg-string entry (chart
 // picker). Maps to a quantile ratio and delegates to the float core.
 func (s *Store) QueryMetricHistogramPercentile(ctx context.Context, f MetricQueryFilter, agg string) ([]SpanMetricSeries, error) {

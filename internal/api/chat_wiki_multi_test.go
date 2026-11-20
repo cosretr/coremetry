@@ -332,30 +332,8 @@ func TestWikiPromptFitsWindow(t *testing.T) {
 }
 
 func TestWikiBudgetAllocation(t *testing.T) {
-	scores := []float64{0.9, 0.6, 0.5, 0.4, 0.3}
-	plan := wikiPlanBudgets(16000, scores, false, false)
-	sum := 0
-	for i, a := range plan {
-		sum += a
-		if a > int(0.45*16000) {
-			t.Errorf("sayfa %d tavanı aşıyor: %d", i, a)
-		}
-		if i > 0 && a > plan[0] {
-			t.Errorf("en iyi sayfa en büyük payı almalı: %v", plan)
-		}
-	}
-	if sum > 16000 {
-		t.Errorf("toplam bütçe aşıldı: %d", sum)
-	}
-	if d := wikiPlanBudgets(16000, []float64{0.9, 0.4}, true, false); d[0] != int(0.7*16000) {
-		t.Errorf("baskın sayfa payı: %v", d)
-	}
 	if wikiPageCapShare(2, false, true) <= wikiPageCapShare(2, false, false) || wikiPageCapShare(1, false, false) != 1 {
 		t.Error("seçimli okuma sayfa başı daha büyük pay; tek sayfa tamamı")
-	}
-	// Sayfa tabanı (600) bile toplamı aşmaz.
-	if p := wikiPlanBudgets(1000, []float64{0.9, 0.8, 0.7}, false, false); p[0]+p[1]+p[2] > 1000 {
-		t.Errorf("taban toplamı aşmamalı: %v", p)
 	}
 	// Kurucu: kullanılmayan pay sonraki sayfaya akar; ÇIKTININ TAMAMI (işaret,
 	// "Sayfa:", "## …" satırları dahil) bütçeyi aşmaz.

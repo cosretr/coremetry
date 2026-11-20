@@ -15205,3 +15205,8 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Tazeleme: lag ölçüsü yalnız daha yüksek oranla yazılır — öncelik yalnız yükselir. Detay "Neden" satırları `ml_group_lag` satırında da lider olaydan okunur (ImpactFactsLeadOf).
 - Değişmeyen: etki damgasız olaylar, Thanos lag, ≥ 2 sinyalli gruplar, 4 sa staleCrit kuralı. Geri oynatma ekranı (v0.10.2392) lag önceliğini hâlâ eski kuralla sayar (takip).
 
+## 2026-11-20 — v0.10.2397 — Kullanılmayan kod temizliği (2): chstore, logql, api yardımcıları
+
+- Operatör onayı: üretimden ulaşılmayan, yalnız testlerin canlı tuttuğu işlevler testleriyle silinir (deadcode, -test olmadan). Silinen: chstore pod adı → deployment yardımcıları, shouldAutoResolveStale, pickPercentile, isRateableInstrument (−335); logql Walk/HasFieldClause/Fields (−54); api eski kök neden düzyazı prompt'u (canlı ikizi anomaly/rootcause_prompt.go), AI-analiz kartı korelasyon bağlantıları, attachStepEvidence/withEvidenceScope (canlı *List), wikiPlanBudgets, logsKeyWindow V1, traceLogEvidenceTR, stopOnToolCall (−567). Karma testlerde yalnız ölü satırlar çıktı.
+- Bilerek kalan: canlı *With/*At işlevlerinin ince sarmalayıcıları (test giriş kapısı), test çiftleri/kurucular, SQL'i pinleyen test yardımcıları, korunmuş sözleşmeler (jvmHeapDecision, dbEntityID), aşamalı tohumlar (metricsrc.FamilyOf, ml.BaselineBand), anomaly eval koşumu, ValidRunbookStepKind. approvalGatePlan (sohbet onay kapısı) üretimde çağrılmıyor — bilinçli mi ayrıca incelenecek.
+

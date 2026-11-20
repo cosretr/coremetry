@@ -598,43 +598,6 @@ func (p *parser) parseFieldValue(f token) (*Expr, error) {
 
 // ── yardımcılar ──────────────────────────────────────────────────────────
 
-// Walk — her düğümü önce-kök sırasıyla ziyaret eder; fn false dönerse o
-// dalın altına inmez.
-func Walk(e *Expr, fn func(*Expr) bool) {
-	if e == nil || !fn(e) {
-		return
-	}
-	for _, k := range e.Kids {
-		Walk(k, fn)
-	}
-}
-
-// HasFieldClause — en az bir alan yüklemi var mı (serbest metin dışı)?
-func HasFieldClause(e *Expr) bool {
-	found := false
-	Walk(e, func(n *Expr) bool {
-		if n.Kind == KindClause && n.Field != "" {
-			found = true
-		}
-		return !found
-	})
-	return found
-}
-
-// Fields — sorgudaki farklı alan adları (görülme sırasıyla).
-func Fields(e *Expr) []string {
-	var out []string
-	seen := map[string]bool{}
-	Walk(e, func(n *Expr) bool {
-		if n.Kind == KindClause && n.Field != "" && !seen[n.Field] {
-			seen[n.Field] = true
-			out = append(out, n.Field)
-		}
-		return true
-	})
-	return out
-}
-
 // String — kanonik Lucene yazımı (testler + hata ayıklama). Parse(String(e))
 // aynı ağacı verir.
 func (e *Expr) String() string {

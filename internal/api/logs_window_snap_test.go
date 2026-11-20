@@ -43,23 +43,6 @@ func TestSnapLogsKeyWindow(t *testing.T) {
 	if _, _, ok := snapLogsKeyWindow(to, from, now, logsKeySnap); ok {
 		t.Fatal("ters pencere")
 	}
-	// Yardımcı: canlı → oturtulmuş ns dizeleri; mutlak → ham dizeler; boş ham + dolu pencere → pencere.
-	f1, t1 := logsKeyWindow(time.Now().Add(-time.Hour), time.Now(), "1", "2")
-	if f1 == "1" || t1 == "2" {
-		t.Fatalf("canlı pencere oturtulmalı: %s %s", f1, t1)
-	}
-	if n, _ := strconv.ParseInt(t1, 10, 64); n%int64(logsKeySnap) != 0 {
-		t.Fatalf("to sınıra oturmalı: %s", t1)
-	}
-	if f2, t2 := logsKeyWindow(oldFrom, oldTo, "1", "2"); f2 != "1" || t2 != "2" {
-		t.Fatalf("mutlak pencere ham dizeler: %s %s", f2, t2)
-	}
-	if f3, t3 := logsKeyWindow(oldFrom, oldTo, "", ""); f3 == "" || t3 == "" {
-		t.Fatal("sunucu varsayılan penceresi anahtara girmeli")
-	}
-	if f4, t4 := logsKeyWindow(time.Time{}, time.Time{}, "", ""); f4 != "" || t4 != "" {
-		t.Fatal("boş pencere boş kalır")
-	}
 }
 
 // v0.10.446 (A6-V2) — dört uç canlı pencereyi KENDİ TTL'ine oturtur ve

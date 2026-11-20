@@ -948,25 +948,6 @@ func (s *Store) AssignExceptionGroup(ctx context.Context, fingerprint, userID st
 	return s.writeExceptionGroup(ctx, *g)
 }
 
-// shouldAutoResolveStale is the pure-function decision behind
-// AutoResolveStaleExceptionGroups. Extracted for the v0.6.24
-// regression test — touches no I/O, only the (state, last_seen,
-// staleAfter, now) tuple. Re-regressing this would re-open the
-// "Resolved tab stays empty forever" bug.
-func shouldAutoResolveStale(state string, lastSeenNs int64, staleAfter time.Duration, now time.Time) bool {
-	if staleAfter <= 0 {
-		return false
-	}
-	switch state {
-	case ExStateNew, ExStateAcknowledged, ExStateRegressed:
-		// proceed
-	default:
-		return false
-	}
-	lastSeen := time.Unix(0, lastSeenNs)
-	return now.Sub(lastSeen) >= staleAfter
-}
-
 // AutoResolveStaleExceptionGroups transitions any open/acknowledged
 // group whose last occurrence is older than staleAfter into the
 // `resolved` state. Operator-reported (v0.6.24): without this, the

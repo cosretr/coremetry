@@ -23,27 +23,20 @@ func TestClassifyTraceLogReadAndRender(t *testing.T) {
 		page    *logstore.Page
 		err     error
 		want    traceLogOutcome
-		wantTR  string
 	}{
-		{"satır okundu", true, three, nil, traceLogOutcome{State: "rows", Rows: 3}, "3 log satırı"},
-		{"0 satır", true, &logstore.Page{}, nil, traceLogOutcome{State: "none"}, "log yok"},
-		{"nil sayfa", true, nil, nil, traceLogOutcome{State: "none"}, "log yok"},
-		{"zaman aşımı", true, nil, fmt.Errorf("es: %w", context.DeadlineExceeded), traceLogOutcome{State: "failed", Reason: "timeout"}, "log okunamadı (zaman aşımı)"},
-		{"hata", true, nil, errors.New("es: 500 internal"), traceLogOutcome{State: "failed", Reason: "error"}, "log okunamadı (hata)"},
-		{"yapılandırılmamış", true, nil, fmt.Errorf("x: %w", sourcestate.ErrNotConfigured), traceLogOutcome{State: "failed", Reason: "nostore"}, "log okunamadı (log deposu yok)"},
-		{"depo yok", false, nil, nil, traceLogOutcome{State: "failed", Reason: "nostore"}, "log okunamadı (log deposu yok)"},
+		{"satır okundu", true, three, nil, traceLogOutcome{State: "rows", Rows: 3}},
+		{"0 satır", true, &logstore.Page{}, nil, traceLogOutcome{State: "none"}},
+		{"nil sayfa", true, nil, nil, traceLogOutcome{State: "none"}},
+		{"zaman aşımı", true, nil, fmt.Errorf("es: %w", context.DeadlineExceeded), traceLogOutcome{State: "failed", Reason: "timeout"}},
+		{"hata", true, nil, errors.New("es: 500 internal"), traceLogOutcome{State: "failed", Reason: "error"}},
+		{"yapılandırılmamış", true, nil, fmt.Errorf("x: %w", sourcestate.ErrNotConfigured), traceLogOutcome{State: "failed", Reason: "nostore"}},
+		{"depo yok", false, nil, nil, traceLogOutcome{State: "failed", Reason: "nostore"}},
 	}
 	for _, c := range cases {
 		got := classifyTraceLogRead(c.storeOK, c.page, c.err)
 		if got != c.want {
 			t.Errorf("%s: classify = %+v, want %+v", c.name, got, c.want)
 		}
-		if tr := traceLogEvidenceTR(got); tr != c.wantTR {
-			t.Errorf("%s: render = %q, want %q", c.name, tr, c.wantTR)
-		}
-	}
-	if traceLogEvidenceTR(traceLogOutcome{}) != "" {
-		t.Error("boş hâl metin üretmemeli")
 	}
 }
 

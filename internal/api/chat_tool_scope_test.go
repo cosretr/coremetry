@@ -18,7 +18,6 @@ import (
 	agentctx "github.com/cilcenk/coremetry/internal/ai/agent/context"
 	agenttools "github.com/cilcenk/coremetry/internal/ai/agent/tools"
 	"github.com/cilcenk/coremetry/internal/chstore"
-	"github.com/cilcenk/coremetry/internal/mcptools"
 )
 
 func scopeSchema(required []string, props ...string) map[string]any {
@@ -302,32 +301,6 @@ func TestAnnotateEnvBlind(t *testing.T) {
 	}
 	if annotateEnvBlind(`[1]`, "s", "p") != `[1]` || annotateEnvBlind(`{"a":1}`, "", "p") != `{"a":1}` {
 		t.Fatal("nesne olmayan / sebepsiz içerik değişti")
-	}
-}
-
-// step-result.ctxApplied OPSİYONEL: boş künye alanı hiç yazılmaz.
-func TestStepEventCtxAppliedBackCompat(t *testing.T) {
-	stepEv := map[string]any{"i": 1, "tool": "list_anomalies"}
-	ev := withEvidenceScope(stepEv, mcptools.ChatEvidence{Tool: "query_logs"}, mcptools.ScopeApplied{})
-	if ev.CtxApplied != nil {
-		t.Fatal("boş künye kanıta yazıldı")
-	}
-	if _, has := stepEv["evidence"]; has {
-		t.Fatal("boş künye step-result'a kanıt yazdı")
-	}
-	ev = withEvidenceScope(stepEv, mcptools.ChatEvidence{Tool: "query_logs"}, mcptools.ScopeApplied{Env: "prod"})
-	if ev.CtxApplied == nil || ev.CtxApplied.Env != "prod" {
-		t.Fatal("künye kanıta yazılmadı")
-	}
-	b, _ := json.Marshal(stepEv["evidence"])
-	if !strings.Contains(string(b), `"ctxApplied":{"env":"prod"}`) {
-		t.Fatalf("step-result kanıtı künye taşımıyor: %s", b)
-	}
-	if sanitizeScopeApplied(&mcptools.ScopeApplied{}) != nil {
-		t.Fatal("arşivde boş künye kaldı")
-	}
-	if s := sanitizeScopeApplied(&mcptools.ScopeApplied{Env: strings.Repeat("x", 500)}); len([]rune(s.Env)) > aiChatEvidenceFieldMax {
-		t.Fatal("künye kırpılmadı")
 	}
 }
 

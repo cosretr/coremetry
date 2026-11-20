@@ -60,21 +60,3 @@ func snapLogsWindow(f *logstore.Filter, fromRaw, toRaw string, ttl time.Duration
 	}
 	return fromRaw, toRaw
 }
-
-// logsKeyWindow — V1 yardımcısı (yalnız anahtar); V2'de kullanılmıyor,
-// snapLogsKeyWindow'un test edilebilir kabuğu olarak kalır. Canlı pencere oturtulur; aksi hâlde istemcinin dizeleri
-// aynen (boş dahil — ama sunucu varsayılan pencere kurduysa o pencere
-// de anahtara girer; eskiden desenler ucu boş dizeyi anahtarlayıp
-// kayan pencereyi tek girdide paylaşıyordu).
-func logsKeyWindow(from, to time.Time, fromRaw, toRaw string) (string, string) {
-	if a, b, ok := snapLogsKeyWindow(from, to, time.Now(), logsKeySnap); ok {
-		return strconv.FormatInt(a.UnixNano(), 10), strconv.FormatInt(b.UnixNano(), 10)
-	}
-	if fromRaw == "" && !from.IsZero() {
-		fromRaw = strconv.FormatInt(from.UnixNano(), 10)
-	}
-	if toRaw == "" && !to.IsZero() {
-		toRaw = strconv.FormatInt(to.UnixNano(), 10)
-	}
-	return fromRaw, toRaw
-}

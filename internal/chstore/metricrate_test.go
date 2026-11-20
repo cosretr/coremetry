@@ -107,17 +107,6 @@ func TestSeriesRatePoints(t *testing.T) {
 	})
 }
 
-func TestIsRateableInstrument(t *testing.T) {
-	if !isRateableInstrument("sum") {
-		t.Error("sum (counter) rateable olmalı")
-	}
-	for _, i := range []string{"gauge", "histogram", ""} {
-		if isRateableInstrument(i) {
-			t.Errorf("%q rateable OLMAMALI", i)
-		}
-	}
-}
-
 // v0.9.714 (parite koşumu bulgusu) — is_monotonic=0 cumulative artık
 // SESSİZCE BOŞ değil: düz türev (reset-telafisiz). Negatif MEŞRU —
 // up-down counter'ın anlamı bu. Telafi yalnız monotonikte: telafi

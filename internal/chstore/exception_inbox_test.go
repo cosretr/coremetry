@@ -1,61 +1,12 @@
 package chstore
 
-// v0.6.24 regression test for the stale-auto-resolve decision.
-//
-// Operator-reported: /problems "Resolved" tab stayed empty
-// forever because nothing transitioned groups out of `new`
-// without a manual click. The fix introduced
-// AutoResolveStaleExceptionGroups, gated on a pure-function
-// decision (`shouldAutoResolveStale`). This test pins the
-// boundary so a future "tighten the eligible states" tweak
-// can't silently revert to "everything stays new forever".
+// İstisna grubu durum geçişi testleri (regress kararı + pencereler).
+// v0.10.2397: üretimde çağrılmayan shouldAutoResolveStale ve testi silindi.
 
 import (
 	"testing"
 	"time"
 )
-
-func TestShouldAutoResolveStale(t *testing.T) {
-	now := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
-	dayAgo := now.Add(-24 * time.Hour).UnixNano()
-	fifteenDaysAgo := now.Add(-15 * 24 * time.Hour).UnixNano()
-	oneDayThreshold := 1 * 24 * time.Hour
-	fourteenDayThreshold := 14 * 24 * time.Hour
-
-	cases := []struct {
-		name       string
-		state      string
-		lastSeenNs int64
-		staleAfter time.Duration
-		want       bool
-	}{
-		// Eligible-state × age combinations.
-		{"new & old enough", ExStateNew, fifteenDaysAgo, fourteenDayThreshold, true},
-		{"acknowledged & old enough", ExStateAcknowledged, fifteenDaysAgo, fourteenDayThreshold, true},
-		{"regressed & old enough", ExStateRegressed, fifteenDaysAgo, fourteenDayThreshold, true},
-		// State filter — already-resolved + ignored stay put.
-		{"already resolved → skip", ExStateResolved, fifteenDaysAgo, fourteenDayThreshold, false},
-		{"ignored → skip", ExStateIgnored, fifteenDaysAgo, fourteenDayThreshold, false},
-		// Age filter — recent groups stay open.
-		{"new but recent (1 day < 14 day)", ExStateNew, dayAgo, fourteenDayThreshold, false},
-		{"new at exactly threshold (1 day ≥ 1 day)", ExStateNew, dayAgo, oneDayThreshold, true},
-		// Pathological inputs.
-		{"zero threshold → never sweep", ExStateNew, fifteenDaysAgo, 0, false},
-		{"negative threshold → never sweep", ExStateNew, fifteenDaysAgo, -time.Hour, false},
-		{"empty state → never sweep", "", fifteenDaysAgo, fourteenDayThreshold, false},
-		{"garbage state → never sweep", "garbage", fifteenDaysAgo, fourteenDayThreshold, false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := shouldAutoResolveStale(tc.state, tc.lastSeenNs, tc.staleAfter, now)
-			if got != tc.want {
-				t.Errorf("shouldAutoResolveStale(state=%q, age=%v, threshold=%v) = %v, want %v",
-					tc.state, now.Sub(time.Unix(0, tc.lastSeenNs)), tc.staleAfter, got, tc.want)
-			}
-		})
-	}
-}
 
 // v0.8.99 regression test — operator-reported: a manually-resolved exception
 // group flipped back to "regressed" within the 60s refresh because the
@@ -111,15 +62,6 @@ func TestExceptionTransitionWindowsStayFast(t *testing.T) {
 	}
 
 	now := time.Now()
-	// Idle past the horizon → auto-resolves; a recent occurrence does not.
-	stale := now.Add(-DefaultExceptionStaleHorizon - time.Minute).UnixNano()
-	if !shouldAutoResolveStale(ExStateNew, stale, DefaultExceptionStaleHorizon, now) {
-		t.Error("a group idle past DefaultExceptionStaleHorizon should auto-resolve")
-	}
-	fresh := now.Add(-DefaultExceptionStaleHorizon + time.Hour).UnixNano()
-	if shouldAutoResolveStale(ExStateNew, fresh, DefaultExceptionStaleHorizon, now) {
-		t.Error("a group with a recent occurrence must NOT auto-resolve")
-	}
 	// Resolved group firing past the grace regresses; within the grace it sticks.
 	resolvedAt := now.Add(-time.Hour).UnixNano()
 	if !shouldRegress(ExStateResolved, &resolvedAt, resolvedAt+exResolveGrace.Nanoseconds()+int64(time.Minute), exResolveGrace) {

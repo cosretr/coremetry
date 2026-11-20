@@ -23,8 +23,6 @@ const (
 	stopCallCap     stopReason = "call_cap"
 	stopCancelled   stopReason = "cancelled"
 	stopTokenBudget stopReason = "token_budget"
-	// stopToolCalledPrefix — `tool_called:<ad>` (stopOnToolCall).
-	stopToolCalledPrefix = "tool_called:"
 )
 
 // loopState — tur sonunda (araç sonuçları toplandıktan sonra) döngünün
@@ -90,19 +88,6 @@ func stopWhenCallsExhausted() stopCond {
 	return func(s loopState) stopReason {
 		if s.CallsLeft <= 0 {
 			return stopCallCap
-		}
-		return stopNone
-	}
-}
-
-// stopOnToolCall — bu turda adı geçen araç çağrıldıysa dur (AI SDK
-// `hasToolCall`). Varsayılan zincirde YOK; ileriki planlar için.
-func stopOnToolCall(name string) stopCond {
-	return func(s loopState) stopReason {
-		for _, c := range s.LastCalls {
-			if c == name {
-				return stopReason(stopToolCalledPrefix + name)
-			}
 		}
 		return stopNone
 	}

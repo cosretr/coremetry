@@ -57,9 +57,6 @@ func TestStopConditions(t *testing.T) {
 		{"calls: hak var", stopWhenCallsExhausted(), loopState{CallsLeft: 1}, stopNone},
 		{"calls: sıfır", stopWhenCallsExhausted(), loopState{CallsLeft: 0}, stopCallCap},
 		{"calls: negatif", stopWhenCallsExhausted(), loopState{CallsLeft: -1}, stopCallCap},
-		{"tool: çağrılmadı", stopOnToolCall("render_chart"), loopState{LastCalls: []string{"list_services"}}, stopNone},
-		{"tool: çağrıldı", stopOnToolCall("render_chart"), loopState{LastCalls: []string{"list_services", "render_chart"}}, "tool_called:render_chart"},
-		{"tool: boş tur", stopOnToolCall("x"), loopState{}, stopNone},
 		{"tokens: altında", stopAtTokens(1000), loopState{TokensIn: 600, TokensOut: 399}, stopNone},
 		{"tokens: tam sınır", stopAtTokens(1000), loopState{TokensIn: 600, TokensOut: 400}, stopTokenBudget},
 		{"tokens: uint32 taşmaz", stopAtTokens(1 << 33), loopState{TokensIn: ^uint32(0), TokensOut: ^uint32(0)}, stopNone},
@@ -94,7 +91,7 @@ func TestStopAnyOrderAndNil(t *testing.T) {
 func TestIsCapStop(t *testing.T) {
 	for r, want := range map[stopReason]bool{
 		stopNone: false, stopCancelled: false, stopRoundCap: true, stopCallCap: true,
-		stopTokenBudget: true, "tool_called:x": true, stopApprovalPending: false,
+		stopTokenBudget: true, stopApprovalPending: false,
 	} {
 		if isCapStop(r) != want {
 			t.Errorf("isCapStop(%q) = %v", r, !want)

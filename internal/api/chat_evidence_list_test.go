@@ -51,21 +51,17 @@ func TestAttachStepEvidenceList(t *testing.T) {
 			t.Fatalf("blok pods kanıtına bağlanmalı: %+v", blks)
 		}
 	})
-	t.Run("atomik: tek kalem, evidenceList YOK, gövde attachStepEvidence ile aynı", func(t *testing.T) {
+	t.Run("atomik: tek kalem, evidenceList YOK", func(t *testing.T) {
 		a := map[string]any{"i": 3, "tool": "query_traces", "ok": true}
-		b := map[string]any{"i": 3, "tool": "query_traces", "ok": true}
 		evs := attachStepEvidenceList(a, "query_traces", evTracesResult)
-		attachStepEvidence(b, "query_traces", evTracesResult)
 		if len(evs) != 1 {
 			t.Fatalf("kalem %d", len(evs))
 		}
 		if _, has := a["evidenceList"]; has {
 			t.Fatal("tek kalemde evidenceList yazılmamalı")
 		}
-		ja, _ := json.Marshal(a)
-		jb, _ := json.Marshal(b)
-		if string(ja) != string(jb) {
-			t.Fatalf("atomik gövde değişti:\n%s\n%s", ja, jb)
+		if ce, _ := a["evidence"].(mcptools.ChatEvidence); ce.Ref != "ev3" || a["href"] != ce.Href {
+			t.Fatalf("atomik gövde: %v", a)
 		}
 	})
 	t.Run("kanıtsız araç dokunulmaz", func(t *testing.T) {

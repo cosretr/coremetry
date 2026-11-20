@@ -282,20 +282,6 @@ func wikiPageAllot(remaining int, scores []float64, i int, capShare float64, tot
 	return a
 }
 
-// wikiPlanBudgets — SAF: her sayfanın payı (her sayfa payının TAMAMINI
-// kullanırsa). Test ve belgeleme için; asıl kurucu kullanılmayan payı
-// sonraki sayfalara akıtır.
-func wikiPlanBudgets(total int, scores []float64, dominant, selected bool) []int {
-	capShare := wikiPageCapShare(len(scores), dominant, selected)
-	out := make([]int, len(scores))
-	rem := total
-	for i := range scores {
-		out[i] = wikiPageAllot(rem, scores, i, capShare, total, dominant)
-		rem -= out[i]
-	}
-	return out
-}
-
 // ── genişletme ──────────────────────────────────────────────────────────────
 
 // inWikiSection — SAF: parça bölümün (başlık yolu H) içinde mi (alt başlıklar dahil).

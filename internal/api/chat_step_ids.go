@@ -186,7 +186,7 @@ func emitStepEvidence(emit func(string, any), i int, tool, text string, err erro
 // taşımayan guided adımın KENDİ kurduğu kanıtı. emitStepEvidence'in aynası
 // (aynı step-result gövdesi), ama kanıt aracın JSON'undan çıkarılmaz — demet
 // sorguyu kendisi koştu ve ChatEvidence'i doğrudan verir. Ref = "ev<i>"
-// (attachStepEvidence kuralı); chart != nil ise aynı ref'le `ev_block`
+// (attachStepEvidenceList kuralı); chart != nil ise aynı ref'le `ev_block`
 // (withBlockSeq sıralayıcısı) yayınlanır: çip bloğu açar/kapatır. Kimlik yoksa
 // (sarmalanmamış emit) hiçbir şey yayınlanmaz; dönen kanıtın Ref'i boştur.
 func emitGuidedEvidenceResult(emit func(string, any), i int, tool, text string, ev mcptools.ChatEvidence, chart *mcptools.EvChartPayload) mcptools.ChatEvidence {

@@ -23,14 +23,12 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/reqid"
 )
 
@@ -206,55 +204,6 @@ func corrTemplateHasTime(tpl string) bool {
 		}
 	}
 	return false
-}
-
-// correlationLinks — örneklerden tıklanabilir köprüler.
-//
-// Cevap metnine DEĞİL, ayrı bir alana gidiyor: metin modelden geçiyor
-// ve bir URL'yi modele emanet etmek onu bozma riski demek. Bu alan
-// sunucuda deterministik üretiliyor ("Kaynak:" alt bilgisiyle aynı
-// ilke).
-//
-// Anahtar başına en fazla iki link: örnekler zaten 3 ile sınırlı
-// (corrSampleValuesPerKey) ve üç anahtar × üç değer bir çip yığını
-// olurdu.
-func correlationLinks(samples []chstore.CorrelationSample, service string, tpls correlationTemplates) []guidedAnswerLink {
-	tpl := templateForService(service, tpls)
-	if !validCorrelationTemplate(tpl) {
-		return nil
-	}
-	env := envFromServiceName(service)
-	var out []guidedAnswerLink
-	for _, s := range samples {
-		for i, v := range s.Values {
-			if i >= 2 {
-				break
-			}
-			href := buildCorrelationLink(tpl, v)
-			if href == "" {
-				continue
-			}
-			label := "Log: " + shortCorrValue(v)
-			if env != "" {
-				// Ortam etiketi GÖRÜNÜR olsun: operatör test ve prod
-				// sekmelerini yan yana açıyor, hangi linkin nereye
-				// gittiği çipten okunmalı.
-				label = fmt.Sprintf("Log (%s): %s", env, shortCorrValue(v))
-			}
-			out = append(out, guidedAnswerLink{Label: label, Href: href})
-		}
-	}
-	return out
-}
-
-// shortCorrValue — çip etiketinde kısaltılmış kimlik. Kurum request
-// id'leri 40+ karakter olabiliyor ve çip şeridini taşırıyor.
-func shortCorrValue(v string) string {
-	const max = 14
-	if len(v) <= max {
-		return v
-	}
-	return v[:max] + "…"
 }
 
 // ── Ayar okuma ──────────────────────────────────────────────────────────────

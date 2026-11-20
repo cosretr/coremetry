@@ -27,51 +27,6 @@ const evTracesResult = `{"tool":"query_traces","ok":true,` +
 	`"window":{"fromMs":1760600000000,"toMs":1760603600000},"env":"prod","rows":2,"durationMs":37},` +
 	`"data":{"hasMore":false,"traces":[{"traceId":"4bf92f3577b34da6a3ce929d0e0e4736","root":"POST /pay","service":"checkout","startMs":1760600100000,"durationMs":812.5,"spans":9,"error":true}]}}`
 
-func TestAttachStepEvidence(t *testing.T) {
-	base := func() map[string]any {
-		return map[string]any{"i": 3, "tool": "query_traces", "ok": true, "preview": "p", "truncated": false, "bytes": 10, "durationMs": int64(5)}
-	}
-	t.Run("kanıt zarflı araç", func(t *testing.T) {
-		ev := base()
-		got, ok := attachStepEvidence(ev, "query_traces", evTracesResult)
-		if !ok {
-			t.Fatal("kanıt eklenmedi")
-		}
-		ce, _ := ev["evidence"].(mcptools.ChatEvidence)
-		if ce.Source != "ClickHouse" || ce.Tool != "query_traces" || ce.Rows == nil || *ce.Rows != 2 || ce.DurationMs != 37 || ce.Env != "prod" {
-			t.Fatalf("kanıt alanları: %+v", ce)
-		}
-		if !strings.HasPrefix(ce.Href, "/traces?") || ev["href"] != ce.Href || got.Href != ce.Href {
-			t.Fatalf("href: evidence %q · step %v", ce.Href, ev["href"])
-		}
-		for k, v := range base() {
-			if ev[k] != v {
-				t.Errorf("eski alan %s değişti: %v → %v", k, v, ev[k])
-			}
-		}
-	})
-	t.Run("var olan href ezilmez", func(t *testing.T) {
-		ev := base()
-		ev["href"] = "/traces?service=x"
-		attachStepEvidence(ev, "query_traces", evTracesResult)
-		if ev["href"] != "/traces?service=x" {
-			t.Fatalf("href ezildi: %v", ev["href"])
-		}
-	})
-	t.Run("kanıtsız araç gövdeye dokunmaz", func(t *testing.T) {
-		ev := base()
-		if _, ok := attachStepEvidence(ev, "search_traces", evTracesResult); ok {
-			t.Fatal("search_traces kanıt zarfı taşımaz")
-		}
-		if _, has := ev["evidence"]; has {
-			t.Fatal("evidence alanı yazılmamalıydı")
-		}
-		if _, has := ev["href"]; has {
-			t.Fatal("href yazılmamalıydı")
-		}
-	})
-}
-
 func TestAnswerEvidenceOptional(t *testing.T) {
 	plain := withAnswerEvidence(chatAnswerEvent("t", "x1", nil, ""), nil)
 	if _, has := plain["evidence"]; has {

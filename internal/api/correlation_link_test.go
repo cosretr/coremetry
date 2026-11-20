@@ -3,8 +3,6 @@ package api
 import (
 	"strings"
 	"testing"
-
-	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 // v0.9.655 — operatör: "Request Id bulduğunda prod'ta log izleme
@@ -14,8 +12,6 @@ import (
 // KOPYALAYIP kurumun log arayüzüne elle yapıştırıyordu.
 
 const tpl = "https://logs.example.com/masterlog?requestId={value}"
-
-var tpls = correlationTemplates{"default": tpl}
 
 func TestValidCorrelationTemplate(t *testing.T) {
 	ok := []string{
@@ -72,47 +68,6 @@ func TestBuildCorrelationLinkRefusesBadInput(t *testing.T) {
 	}
 }
 
-func TestCorrelationLinksCapsPerKey(t *testing.T) {
-	samples := []chstore.CorrelationSample{
-		{Key: "request_id", Values: []string{"a1", "b2", "c3"}},
-		{Key: "correlation_id", Values: []string{"d4", "e5", "f6"}},
-	}
-	got := correlationLinks(samples, "checkout", tpls)
-	// Anahtar başına EN FAZLA iki: üç anahtar × üç değer bir çip yığını
-	// olurdu.
-	if len(got) != 4 {
-		t.Fatalf("anahtar başına 2 link beklenir (toplam 4), alınan %d: %+v", len(got), got)
-	}
-	for _, l := range got {
-		if !strings.HasPrefix(l.Href, "https://") {
-			t.Errorf("href şemasız: %+v", l)
-		}
-		if l.Label == "" {
-			t.Errorf("etiket boş: %+v", l)
-		}
-	}
-}
-
-// Şablon YAPILANDIRILMAMIŞSA hiçbir şey çizilmemeli — kırık bir link,
-// link yokluğundan kötüdür.
-func TestCorrelationLinksSilentWhenUnconfigured(t *testing.T) {
-	samples := []chstore.CorrelationSample{{Key: "request_id", Values: []string{"a1"}}}
-	if got := correlationLinks(samples, "checkout", nil); got != nil {
-		t.Errorf("şablonsuz link üretilmemeli: %+v", got)
-	}
-}
-
-func TestShortCorrValue(t *testing.T) {
-	if shortCorrValue("kisa") != "kisa" {
-		t.Error("kısa değer kırpılmamalı")
-	}
-	long := "QXC02500302010rbw00306137532026080508"
-	got := shortCorrValue(long)
-	if len([]rune(got)) > 15 {
-		t.Errorf("çip etiketi çok uzun: %q", got)
-	}
-}
-
 // v0.9.655 (operatör: test ortamlarının log adresleri ayrı; servis
 // adının sonunda -int/-uat/-prep görünce o adreslere yönlendir) —
 // ORTAM çözümlemesi.
@@ -159,29 +114,5 @@ func TestTemplateForServicePicksEnv(t *testing.T) {
 	// Soneksiz = prod = default.
 	if got := templateForService("svc-prod", m); got != m["default"] {
 		t.Errorf("soneksiz ad default almalı, alınan %q", got)
-	}
-}
-
-// Link ETİKETİ ortamı söylemeli: operatör test ve prod sekmelerini yan
-// yana açıyor, hangi linkin nereye gittiği çipten okunmalı.
-func TestCorrelationLinkLabelCarriesEnv(t *testing.T) {
-	m := correlationTemplates{"default": "https://prod/?id={value}", "int": "https://int/?id={value}"}
-	samples := []chstore.CorrelationSample{{Key: "request_id", Values: []string{"abc123"}}}
-
-	intLinks := correlationLinks(samples, "svc-int", m)
-	if len(intLinks) != 1 || !strings.Contains(intLinks[0].Label, "int") {
-		t.Fatalf("int etiketinde ortam yok: %+v", intLinks)
-	}
-	if !strings.HasPrefix(intLinks[0].Href, "https://int/") {
-		t.Errorf("int servisi prod adresine gitmiş: %s", intLinks[0].Href)
-	}
-
-	prodLinks := correlationLinks(samples, "svc-prod", m)
-	if len(prodLinks) != 1 || !strings.HasPrefix(prodLinks[0].Href, "https://prod/") {
-		t.Fatalf("prod servisi yanlış adrese gitmiş: %+v", prodLinks)
-	}
-	// Prod etiketinde ortam eki OLMAMALI — gürültü.
-	if strings.Contains(prodLinks[0].Label, "(") {
-		t.Errorf("prod etiketinde gereksiz ortam eki: %q", prodLinks[0].Label)
 	}
 }

@@ -8,8 +8,6 @@ package api
 // hata | log deposu yok)". Prompt DEĞİŞMEZ (yalnız UI künyesi).
 
 import (
-	"fmt"
-
 	"github.com/cilcenk/coremetry/internal/logstore"
 	"github.com/cilcenk/coremetry/internal/sourcestate"
 )
@@ -71,22 +69,4 @@ func sanitizeTraceLogOutcome(o *traceLogOutcome) *traceLogOutcome {
 		return &traceLogOutcome{State: traceLogFailed, Reason: r}
 	}
 	return nil
-}
-
-// traceLogEvidenceTR — SAF: Kanıt satırının log parçası (istemci
-// lib/explainLogEvidence.ts ile aynı metin; boş hâl → "").
-func traceLogEvidenceTR(o traceLogOutcome) string {
-	switch o.State {
-	case traceLogRows:
-		return fmt.Sprintf("%d log satırı", o.Rows)
-	case traceLogNone:
-		return "log yok"
-	case traceLogFailed:
-		reason := map[string]string{"timeout": "zaman aşımı", "nostore": "log deposu yok"}[o.Reason]
-		if reason == "" {
-			reason = "hata"
-		}
-		return "log okunamadı (" + reason + ")"
-	}
-	return ""
 }

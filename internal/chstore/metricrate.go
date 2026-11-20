@@ -151,12 +151,6 @@ func rollingRate(pts []ratePoint, stepSec, windowSec int, mode string) []ratePoi
 	return out
 }
 
-// isRateableInstrument — rate/increase yalnız MONOTONIC COUNTER'da (sum) anlamlı.
-// gauge (anlık) / histogram (dağılım) reddedilir.
-func isRateableInstrument(instrument string) bool {
-	return instrument == "sum"
-}
-
 // metricSeriesKeyExpr — per-seri PARTITION anahtarı SQL ifadesi. series_
 // fingerprint (xxhash64) birincil; 0 ise (prod-distributed cluster_name unset,
 // store.go:2029, ya da eski data) sıralı attr-set + service üzerinden
