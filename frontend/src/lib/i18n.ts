@@ -1135,7 +1135,7 @@ const TR: Catalog = {
   'mlTab.detectors': 'Dedektörler',
   'mlTab.noDetectors': 'Dedektör yok',
   'mlTab.techAria': 'Dedektörler, teknik detay',
-  'mlTab.explain': 'Dedektörler anomali kaydeder. Aynı serviste en az 2 farklı sinyalde (trace, log, metrik) anomali varsa ya da tek bir sinyal güçlü (tabanın en az iki misli) ve en az 10 dakika sürerse anomali grubu Problem açar (Settings › Anomaly). Ayrıntı “Teknik detay”da.',
+  'mlTab.explain': 'Dedektörler anomali kaydeder. Kullanıcıyı etkileyen bir ölçü (servis hata oranı, servis yanıt süresi, consumer lag) son 5 dakikanın en az 3\'ünde eşiğini aşarsa tek başına Problem açar. Diğer anomaliler, aynı serviste en az 2 farklı sinyalde (trace, log, metrik) birlikte görülürse ya da tek sinyal güçlü (tabanın en az iki misli) ve en az 10 dakika sürerse Problem açar (Settings › Anomaly). Ayrıntı “Teknik detay”da.',
   'mlTab.tech': 'Teknik detay',
   'anomalies.view.heldHintEnforced': 'Yayın kapıları yürürlükte (A2): bu olaylar servis listesinde görünmez, Problem açmaz, bildirim göndermez. Kimliğiyle açılır ve burada listelenir.',
   'mlGates.title': 'Yayın kapıları: gölge raporu (K16 incelemesi)',

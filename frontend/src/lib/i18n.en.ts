@@ -677,7 +677,7 @@ export const EN: Record<string, string> = {
   'mlTab.detectors': 'Detectors',
   'mlTab.noDetectors': 'No detectors',
   'mlTab.techAria': 'Detectors, technical detail',
-  'mlTab.explain': 'Detectors record anomalies. An anomaly group opens a Problem when the same service has anomalies on at least 2 different signals (trace, log, metric), or when a single signal is strong (at least twice the baseline) and lasts at least 10 minutes (Settings › Anomaly). Details under “Technical detail”.',
+  'mlTab.explain': 'Detectors record anomalies. A user-impact measure (service error rate, service response time, consumer lag) opens a Problem on its own when it exceeds its threshold in at least 3 of the last 5 minutes. Other anomalies open a Problem when the same service has anomalies on at least 2 different signals (trace, log, metric), or when a single signal is strong (at least twice the baseline) and lasts at least 10 minutes (Settings › Anomaly). Details under “Technical detail”.',
   'mlTab.tech': 'Technical detail',
   'anomalies.view.heldHintEnforced': 'Publish gates are enforced (A2): these events are hidden from the service list, open no Problems and send no notifications. They open by id and are listed here.',
   'mlGates.title': 'Publish gates: shadow report (K16 review)',

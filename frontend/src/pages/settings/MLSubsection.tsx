@@ -47,7 +47,7 @@ export const ML_TRACE_DETECTORS: { id: string; label: string; hint: string }[] =
 export const ML_METRIC_DETECTORS: { id: string; label: string; hint: string }[] = [
   { id: 'metric_jvm', label: 'JVM', hint: 'Heap, GC, thread (servis düzeyi; Thanos\'ta cluster başına)' },
   { id: 'metric_pool', label: 'Connection pool', hint: 'Havuz kullanımı, bekleme' },
-  { id: 'metric_kafka', label: 'Kafka', hint: 'Consumer lag servis × topic (servis başına en çok 20 topic; 1.000 kayıt altı olay değil), throttle' },
+  { id: 'metric_kafka', label: 'Kafka', hint: 'Consumer lag servis × topic (servis başına en çok 20 topic), 1 dakikalık örnek: son 5 dakikanın en az 3\'ünde lag en az 1.000 kayıt ve normalin en az 2 katı; tek başına Problem açar (Thanos kaynaklı lag eski 5 dakikalık kuralda). Throttle' },
   { id: 'metric_http_client', label: 'HTTP client', hint: 'Dış çağrı p95, 5xx oranı' },
   { id: 'metric_k8s', label: 'Kubernetes', hint: 'CPU, bellek, restart (pod → servis toplanır)' },
 ];
@@ -103,8 +103,10 @@ export function MLSubsection() {
       <p className="mb-[18px] text-[length:var(--fs-sm)] leading-[1.55] text-(--text2)">
         ML dedektörleri: log sinyali (Elasticsearch: hacim, hata oranı, şablon, nadir kod, pod, kırılma) ve
         trace sinyali (rollup: endpoint gecikmesi/hata/trafik, bağımlılık, exception, pod, kırılma). Olaylar
-        /anomalies listesine düşer. Aynı serviste en az 2 farklı sinyal birlikte bozulursa grup Problem açar
-        (aşağıdaki anahtar); tek sinyal yalnız güçlü (normalin en az 2 katı) ve en az 10 dakika sürerse Problem açar. Ana anahtar kapalıyken ES&apos;e hiç sorgu atılmaz.
+        /anomalies listesine düşer. Kullanıcıyı etkileyen ölçüler (servis hata oranı, servis yanıt süresi, consumer lag)
+        1 dakikalık örnekle yargılanır ve son 5 dakikanın en az 3&apos;ünde eşiği aşınca tek başına Problem açar. Diğerlerinde
+        aynı serviste en az 2 farklı sinyal birlikte bozulursa grup Problem açar (aşağıdaki anahtar); tek sinyal yalnız
+        güçlü (normalin en az 2 katı) ve en az 10 dakika sürerse Problem açar. Ana anahtar kapalıyken ES&apos;e hiç sorgu atılmaz.
       </p>
       {!cfg ? (
         flash ? <FlashBox kind={flash.kind}>{flash.text}</FlashBox> : <Spinner />
