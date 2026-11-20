@@ -54,7 +54,7 @@ func New(url string) (Cache, Lock, error) {
 		c, l := NewNoop()
 		return c, l, fmt.Errorf("redis ping: %w", err)
 	}
-	return &redisCache{cli: cli}, &redisLock{cli: cli, tokens: map[string]string{}}, nil
+	return &redisCache{cli: cli}, withLegacyLockKeys(&redisLock{cli: cli, tokens: map[string]string{}}), nil
 }
 
 // ── Cache ───────────────────────────────────────────────────────────────────

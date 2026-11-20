@@ -61,10 +61,11 @@ const (
 // selfHealthRules — tahliye (aile kapatıldığında / kural artık üretmiyorken)
 // hangi rule_id'lerin bu dosyaya ait olduğunu bilen tek liste.
 var selfHealthRules = map[string]bool{
-	selfIngestRuleID:  true,
-	selfSpoolRuleID:   true,
-	selfDiskRuleID:    true,
-	selfChannelRuleID: true,
+	selfIngestRuleID:     true,
+	selfSpoolRuleID:      true,
+	selfDiskRuleID:       true,
+	selfChannelRuleID:    true,
+	selfRedisEvictRuleID: true, // Redis R6 — selfhealth_redis.go
 }
 
 // ── Disk ETA serisi ─────────────────────────────────────────────────────
@@ -293,6 +294,10 @@ func (e *Evaluator) evaluateSelfHealth(ctx context.Context, snap *chstore.OpenPr
 	}
 	if p, ok := e.selfChannelHealth(ctx, cfg); ok {
 		covered[selfChannelRuleID] = true
+		want = append(want, p...)
+	}
+	if p, ok := e.selfRedisEvict(ctx, snap); ok {
+		covered[selfRedisEvictRuleID] = true
 		want = append(want, p...)
 	}
 	// v0.10.2242 (anomali kartı Dilim B) — hacim sıçraması kuralı

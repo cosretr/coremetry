@@ -178,10 +178,16 @@ services:
   # Hot cache (services list, metric names, sidebar problem count) +
   # distributed lock for the evaluator/anomaly workers. Lightweight —
   # appendonly disabled because all data here is rebuildable from CH.
+  # Valkey (BSD, Redis-protocol compatible; Redis 7.4+ is RSAL/SSPL) —
+  # same image + memory policy as the chart (charts/coremetry/templates/
+  # redis.yaml): maxmemory 768mb (= 75 % of the chart's 1Gi limit) +
+  # volatile-lru, so local runs evict like prod instead of growing
+  # unbounded. Leading "--" args let the image entrypoint pick its own
+  # server binary (valkey-server / redis-server).
   redis:
-    image: redis:7-alpine
+    image: valkey/valkey:8.1.11-alpine
     container_name: coremetry-redis
-    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    command: ["--appendonly", "no", "--save", "", "--maxmemory", "768mb", "--maxmemory-policy", "volatile-lru"]
     ports:
       - "6379:6379"
     restart: unless-stopped

@@ -257,9 +257,10 @@ type keyRecorderCache struct {
 
 func (c *keyRecorderCache) Get(_ context.Context, key string) ([]byte, bool, error) {
 	c.mu.Lock()
-	c.keys = append(c.keys, key)
+	c.keys = append(c.keys, strings.TrimSuffix(key, l2ValueSuffix)) // R6: logical key
 	c.mu.Unlock()
-	return []byte(`{"recorded":true}`), true, nil
+	env, _ := wrapEnvelope([]byte(`{"recorded":true}`), "")
+	return env, true, nil
 }
 
 func (c *keyRecorderCache) last() string {

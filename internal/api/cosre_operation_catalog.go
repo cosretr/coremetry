@@ -19,7 +19,7 @@ const operationCatalogInterval = 10 * time.Minute
 
 // StartOperationCatalog — main (worker kipi) çağırır.
 func (s *Server) StartOperationCatalog(ctx context.Context, lock cache.Lock) {
-	leader := cache.NewLeaderHolder(lock, "cosre-operation-catalog", cache.LeaderTTL(operationCatalogInterval))
+	leader := cache.NewLeaderHolder(lock, "coremetry:lock:cosre-operation-catalog", cache.LeaderTTL(operationCatalogInterval))
 	leader.Start(ctx)
 	tick := func() {
 		if !leader.IsLeader() || s.store == nil {

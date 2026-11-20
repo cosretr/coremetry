@@ -40,7 +40,7 @@ import (
 //     "x509: negative serial number" against the GitHub token
 //     endpoint) WITHOUT clearing the stored key. Re-enabling
 //     resumes the loop on the next tick.
-const explainerLockKey = "problem-explainer:lock"
+const explainerLockKey = "coremetry:lock:problem-explainer"
 const explainerBatch = 16
 
 type ProblemExplainer struct {

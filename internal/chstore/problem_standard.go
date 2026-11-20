@@ -918,6 +918,8 @@ func selfHeadlineTR(ruleID string) string {
 		return "bildirim kanalı çalışmıyor"
 	case strings.HasPrefix(ruleID, "self-volume-spike"):
 		return "telemetri hacmi sıçradı"
+	case strings.HasPrefix(ruleID, "self-redis-evict"):
+		return "Redis belleği doldu, anahtar tahliye ediyor"
 	}
 	return "iç sağlık uyarısı"
 }

@@ -81,7 +81,7 @@ func (s *RootCauseSynthesizer) anchorExemplar(ctx context.Context, service, metr
 // the anchor lists are capped (top-N by severity / recency); the fuser is pure.
 // Leader-gated so multi-pod runs don't duplicate-write. Worker/all modes only
 // (wired next to the explainer in main.go) — ingest/api pods don't run it.
-const synthesizerLockKey = "rootcause-synthesizer:lock"
+const synthesizerLockKey = "coremetry:lock:rootcause-synthesizer"
 
 const (
 	// synthesizerBatch caps how many anchors one tick synthesizes — like the

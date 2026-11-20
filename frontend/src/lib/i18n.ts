@@ -103,6 +103,7 @@ const EN_EAGER: Catalog = {
   'std.m.h.self.disk': 'Coremetry: disk about to fill',
   'std.m.h.self.channel': 'Coremetry: notification channel not working',
   'std.m.h.self.volume': 'Coremetry: telemetry volume spiked',
+  'std.m.h.self.redis': 'Coremetry: Redis memory full, evicting keys',
   'std.m.h.self.other': 'Coremetry: internal health warning',
   'std.m.h.storm': 'Exception storm — new errors in {cNum} services',
   'std.m.h.storm_one': 'Exception storm — new errors in {cNum} service',
@@ -250,6 +251,7 @@ const EN_EAGER: Catalog = {
   'std.title.svc_slowdown.collapse': 'Widespread slowdown · traffic collapse', 'std.title.runtime.gc.share': 'Runtime · JVM GC time share',
   'std.title.self.ingest': 'Coremetry · ingest stalled', 'std.title.self.spool': 'Coremetry · distributed spool backed up',
   'std.title.self.disk': 'Coremetry · disk will fill', 'std.title.self.channel': 'Coremetry · notification channel dead',
+  'std.title.self.redis': 'Coremetry · Redis evicting keys',
   // v0.10.2301 (sunucu metinleri S4) — inceleme kaydı anahtarları (Go sre recommend.go /
   // timeline.go / orchestrator.go / narrate.go / readers_*.go). YALNIZ EN; yalnız bu
   // sürümden sonra yazılan kayıtlar taşır (eski kayıt özgün + "TR" işareti).

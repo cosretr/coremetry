@@ -1248,7 +1248,7 @@ func main() {
 		entitySyncer.SetCallSource(entity.CallsFromCH(store))                    // v0.10.2240 (S5): db/queue/ext + calls, 15 dk'da bir
 		entitySyncer.SetHostProof(entity.HostProofFromCH(store))                 // v0.10.2260 (S6): host terfi kanıtı, 15 dk'da bir, yalnız yeni aday
 		entitySyncer.SetExplicitWorkloads(entity.ExplicitWorkloadsFromCH(store)) // v0.10.2262 (S6): açık iş yükü adı, 15 dk'da bir
-		entityLeader := cache.NewLeaderHolder(lockImpl, "entity-sync", cache.LeaderTTL(time.Minute))
+		entityLeader := cache.NewLeaderHolder(lockImpl, "coremetry:lock:entity-sync", cache.LeaderTTL(time.Minute))
 		entitySyncer.SetLeaderCheck(entityLeader.IsLeader) // v0.10.141 — API tetikli tick yalnız liderde
 		// v0.10.2225 (entity-storage-cost-note C + R1b): canlı dizin Redis'e
 		// (tek yazıcı = lider); kilit degraded iken tick atlanır — N yazıcı
@@ -1338,14 +1338,14 @@ func main() {
 		oracleWorker.SetHealthHook(func(ctx context.Context, src oracle.SourceConfig, lastErr string) {
 			extScanner.ReportSourceHealth(ctx, src.ID, src.Name, lastErr, time.Now())
 		})
-		oracleLeader := cache.NewLeaderHolder(lockImpl, "oracle-poller", cache.LeaderTTL(30*time.Second))
+		oracleLeader := cache.NewLeaderHolder(lockImpl, "coremetry:lock:oracle-poller", cache.LeaderTTL(30*time.Second))
 		oracleLeader.SetOnAcquire(func() { oracleWorker.Tick(ctx) })
 		oracleLeader.Start(chstore.WithQueryTag(ctx, "worker:oracle-poller"))
 		go oracleWorker.Run(ctx, oracleLeader.IsLeader)
 		// v0.10.140 — Thanos etiketi periyodik doğrulama (auto eşleme
 		// brief'i): 10 dk'da bir, yalnız lider; sonuç bellekte, Settings
 		// rozetinde ilan edilir. Entity bayrağından BAĞIMSIZ.
-		labelLeader := cache.NewLeaderHolder(lockImpl, "cluster-label-check", cache.LeaderTTL(time.Minute))
+		labelLeader := cache.NewLeaderHolder(lockImpl, "coremetry:lock:cluster-label-check", cache.LeaderTTL(time.Minute))
 		// Liderlik alınır alınmaz ilk denetim (entity-sync emsali) — yoksa ilk
 		// sonuç boot'tan 10 dk sonra görünür (lokal e2e: 100 s'de labelCheck yok).
 		labelLeader.SetOnAcquire(func() { thanosSvc.LabelCheckTickPersist(ctx, store) })
@@ -1374,7 +1374,7 @@ func main() {
 		// Lease = LeaderTTL(1 dk) = 3 dk (entity emsali): failover sınırı tik aralığından bağımsız;
 		// tutucu lease'i yenilediği için uzun tik (5×aralık) lease'i düşürmez,
 		// yazım öncesi liderlik yine yeniden doğrulanır (reconciler.go).
-		rolloutLeader := cache.NewLeaderHolder(lockImpl, "rollout-reconciler", cache.LeaderTTL(time.Minute))
+		rolloutLeader := cache.NewLeaderHolder(lockImpl, "coremetry:lock:rollout-reconciler", cache.LeaderTTL(time.Minute))
 		rolloutRec.SetLeaderCheck(rolloutLeader.IsLeader)
 		rolloutLeader.SetOnAcquire(func() { rolloutRec.Tick(ctx) })
 		rolloutLeader.Start(chstore.WithQueryTag(ctx, "worker:rollout-reconciler"))
@@ -1394,7 +1394,7 @@ func main() {
 			if !rolloutDet.WaitActive(ctx, 30*time.Second) {
 				return
 			}
-			rolloutDetLeader := cache.NewLeaderHolder(lockImpl, rollout.WorkerRolloutDetector, cache.LeaderTTL(time.Minute))
+			rolloutDetLeader := cache.NewLeaderHolder(lockImpl, "coremetry:lock:"+rollout.WorkerRolloutDetector, cache.LeaderTTL(time.Minute))
 			rolloutDet.SetLeaderCheck(rolloutDetLeader.IsLeader)
 			rolloutDetLeader.SetOnAcquire(func() { rolloutDet.OnAcquire(); rolloutDet.Tick(ctx) })
 			rolloutDetLeader.Start(chstore.WithQueryTag(ctx, "worker:rollout-detector"))
@@ -1418,7 +1418,7 @@ func main() {
 			if !argoMetrics.WaitActive(ctx, 30*time.Second) {
 				return
 			}
-			argoLeader := cache.NewLeaderHolder(lockImpl, rollout.WorkerArgoCDMetrics, cache.LeaderTTL(time.Minute))
+			argoLeader := cache.NewLeaderHolder(lockImpl, "coremetry:lock:"+rollout.WorkerArgoCDMetrics, cache.LeaderTTL(time.Minute))
 			argoMetrics.SetLeaderCheck(argoLeader.IsLeader)
 			argoLeader.SetOnAcquire(func() { argoMetrics.OnAcquire(); argoMetrics.Tick(ctx) })
 			argoLeader.Start(chstore.WithQueryTag(ctx, "worker:argocd-metrics"))
@@ -1461,7 +1461,7 @@ func main() {
 	if mode.worker {
 		// Anlık görüntüyü yalnız LİDER kurar (kendi kilidi, kalıp entity-sync);
 		// Redis'e yazar, tuz + halka lider değişiminde oradan devralınır.
-		lsLeader := cache.NewLeaderHolder(lockImpl, "login-summary", cache.LeaderTTL(time.Minute))
+		lsLeader := cache.NewLeaderHolder(lockImpl, "coremetry:lock:login-summary", cache.LeaderTTL(time.Minute))
 		lsLeader.Start(chstore.WithQueryTag(ctx, "worker:login-summary"))
 		lsBuilder := loginsummary.New(loginsummary.Deps{
 			Store: store,

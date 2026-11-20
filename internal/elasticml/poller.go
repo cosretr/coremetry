@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	lockKey            = "elasticml-poller-leader"
+	lockKey            = "coremetry:lock:elasticml-poller"
 	defaultInterval    = 5 * time.Minute
 	defaultMinScore    = 75.0
 	defaultStartupWait = 60 * time.Second

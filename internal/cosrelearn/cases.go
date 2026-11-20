@@ -36,7 +36,7 @@ type CaseStore interface {
 }
 
 const (
-	caseLockKey      = "cosre-case-builder"
+	caseLockKey      = "coremetry:lock:cosre-case-builder"
 	caseInterval     = 5 * time.Minute
 	caseLookback     = 6 * time.Hour // yeniden başlatma / lider değişimi örtüşmesi
 	casePerTick      = 25            // kaynak başına tik tavanı (vaka başına ~7 okuma)

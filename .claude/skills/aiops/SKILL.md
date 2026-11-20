@@ -296,7 +296,7 @@ kuralı + AI girdi kurucusu (ve gecikmesi varsa oto-özet aday yaşı) altılıs
 
 ## 8. Self-health (kendi kendini izleme)
 
-`self-ingest-stall` / `self-spool-depth` / `self-disk-eta` / `self-channel-broken`
+`self-ingest-stall` / `self-spool-depth` / `self-disk-eta` / `self-channel-broken` / `self-redis-evict` (Redis R6, `selfhealth_redis.go`)
 / `self-volume-spike` (`selfhealth.go:54-69`). v0.10.2118: hacim sıçraması Problem DEĞİL
 anomali — `ml_events` `svc_volume_spike` (bildirim yok, ML grup kapısı dışlar); `self-volume-spike`
 kuralı yalnız eski açık satırları kapatmak için `selfHealthRules`'ta. Kapı: ölçülen ↔ kapsanan ayrımı

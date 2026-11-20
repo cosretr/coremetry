@@ -102,6 +102,8 @@ func selfHeadlineKey(ruleID string) string {
 		return "h.self.channel"
 	case strings.HasPrefix(ruleID, "self-volume-spike"):
 		return "h.self.volume"
+	case strings.HasPrefix(ruleID, "self-redis-evict"):
+		return "h.self.redis"
 	}
 	return "h.self.other"
 }

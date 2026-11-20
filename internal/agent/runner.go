@@ -75,7 +75,7 @@ func (r *Runner) tick(ctx context.Context) {
 		if !agentKind[st.Kind] || st.Status == chstore.StepRunning {
 			continue // human-owned (manual/query) or already being executed
 		}
-		key := "rb:claim:" + e.ID
+		key := "coremetry:lock:rb-claim:" + e.ID
 		ok, err := r.lock.TryAcquire(ctx, key, 5*time.Minute)
 		if err != nil || !ok {
 			continue // another agent owns this execution

@@ -22,7 +22,7 @@ OpenTelemetry-native APM. Single Go binary + ClickHouse + Redis + optional exter
 - TTFI < 1.5s fresh tab; polling ≥ 10s (except `/api/health` 5s); every poller pauses on `document.hidden`. Global refresh clock (`lib/autoRefresh.ts`) + ONE SSE bus (`/api/events`) rules → `/frontend-design-system`.
 
 ## Tech stack
-- **Backend:** Go 1.22+, ClickHouse 24+, Redis 7+. `main.go` wires `chstore.Store`, `logstore.Store` (CH or ES via `COREMETRY_LOGS_BACKEND`), `tempo.Service`, `cache.Cache`, `auth.Service`, `notify.Notifier`, `copilot.Service`.
+- **Backend:** Go 1.22+, ClickHouse 24+, Redis 7+ / Valkey 7.2+ (bundled default Valkey 8.1). `main.go` wires `chstore.Store`, `logstore.Store` (CH or ES via `COREMETRY_LOGS_BACKEND`), `tempo.Service`, `cache.Cache`, `auth.Service`, `notify.Notifier`, `copilot.Service`.
 - **Frontend:** React + Vite, Tailwind v4 + shadcn (`components/shadcn`, generated; land in Phase 1 R4/R5) + `components/coremetry` composites; `components/ui` FROZEN (ratchet only down); tokens in `styles/globals.css` + `styles/tokens.css`. React Query, react-router v6. No state library — URL is source of truth for shareable views. Charts: `uPlot` only — never Chart.js or heavy chart libs. Global shadcn migration supersedes Option B; CoSRE v2 builds on it (DECISIONS 2026-10-30, `docs/frontend/shadcn-phase1-plan.md`).
 - **Versioning:** git tags `v0.10.X`; 1.0 deferred by operator ([docs/RELEASE-1.0.md](docs/RELEASE-1.0.md)). Build vs displayed version (ldflag / `COREMETRY_VERSION`) → `/release`.
 

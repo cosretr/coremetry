@@ -107,7 +107,7 @@ type l2Look struct {
 // TEK MGET'te (R3'ün okuma turu genişledi, tur sayısı aynı).
 func (s *Server) l2Lookup(ctx context.Context, key string, withClaim bool) l2Look {
 	gk := cacheGenKeys(key)
-	keys := []string{key, cacheNegKeyPrefix + key}
+	keys := []string{l2ValueKey(key), cacheNegKeyPrefix + key}
 	if withClaim {
 		keys = append(keys, cacheClaimKeyPrefix+key)
 	}

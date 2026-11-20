@@ -100,7 +100,7 @@ func TestCachedJSON_TierLadder(t *testing.T) {
 		t.Fatalf("warm: tier=%s body=%s calls=%d", tier, body, calls.Load())
 	}
 	// 3. L2 yazımı ayrık (v0.8.350) — gelmesini bekle, L1'i düşür → HIT (L2, taze).
-	waitFor(t, "async L2 set", func() bool { return mc.has(key) })
+	waitFor(t, "async L2 set", func() bool { return mc.has(l2ValueKey(key)) })
 	s.l1.del(key)
 	body, tier, _ = s.cachedJSON(ctx, key, ttl, false, fn)
 	if tier != "HIT" || string(body) != `{"n":1}` || calls.Load() != 1 {
@@ -116,7 +116,7 @@ func TestCachedJSON_TierLadder(t *testing.T) {
 	}
 	waitFor(t, "background refresh", func() bool { return calls.Load() == 2 })
 	waitFor(t, "refreshed L2 body", func() bool {
-		raw, ok, _ := mc.Get(ctx, key)
+		raw, ok, _ := mc.Get(ctx, l2ValueKey(key))
 		if !ok {
 			return false
 		}

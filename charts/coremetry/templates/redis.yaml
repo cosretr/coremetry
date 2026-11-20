@@ -40,8 +40,10 @@ spec:
           # OOMKill olmaz; tahliye /admin/stats evictedKeys + selfobs
           # redis.evicted_keys'te görünür.
           {{- $maxmem := include "coremetry.redisMaxmemory" . }}
+          # No server binary in args: the image entrypoint prepends its
+          # own (valkey-server for the default Valkey image, redis-server
+          # for a mirrored Redis image) when the first arg starts with "--".
           args:
-            - redis-server
             - --appendonly
             - "no"
             - --save

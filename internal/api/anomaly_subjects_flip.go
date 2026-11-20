@@ -28,7 +28,7 @@ func (s *Server) StartSubjectsDefaultFlip(ctx context.Context, lock cache.Lock) 
 	}
 	lctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	leader := cache.NewLeaderHolder(lock, "anomaly-subjects-flip", cache.LeaderTTL(subjectsFlipRetry))
+	leader := cache.NewLeaderHolder(lock, "coremetry:lock:anomaly-subjects-flip", cache.LeaderTTL(subjectsFlipRetry))
 	leader.Start(lctx)
 	t := time.NewTicker(subjectsFlipRetry)
 	defer t.Stop()

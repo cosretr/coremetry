@@ -105,7 +105,7 @@ func (s *Server) StartTopologyHiddenSeed(ctx context.Context, lock cache.Lock) {
 	// İş bitince kilit bırakılsın: holder lctx iptaliyle Release eder.
 	lctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	leader := cache.NewLeaderHolder(lock, "topology-hidden-seed", cache.LeaderTTL(topologyHiddenSeedRetry))
+	leader := cache.NewLeaderHolder(lock, "coremetry:lock:topology-hidden-seed", cache.LeaderTTL(topologyHiddenSeedRetry))
 	leader.Start(lctx)
 	t := time.NewTicker(topologyHiddenSeedRetry)
 	defer t.Stop()

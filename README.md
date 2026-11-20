@@ -260,7 +260,7 @@ flowchart LR
 | | Required? | Role |
 |---|---|---|
 | ClickHouse 24+ | **required** | Warm store for spans, logs, metrics, profiles and saved state. Reads go through materialized views first. A distributed cluster (`ON CLUSTER`, Replicated + Distributed tables) is supported, see [docs/clickhouse-cluster.md](docs/clickhouse-cluster.md). |
-| Redis 7+ | required for more than one replica or distributed mode | L2 cache, leader lock, cross-pod SSE bridge. Without it, Coremetry runs single-instance and always holds the lock. |
+| Redis 7+ or Valkey 7.2+ (bundled default: Valkey 8.1) | required for more than one replica or distributed mode | L2 cache, leader lock, cross-pod SSE bridge. Without it, Coremetry runs single-instance and always holds the lock. |
 | OTel Collector | recommended | Fan-in, batching, and optional head sampling (Coremetry stores 100% of what it receives). |
 | VictoriaMetrics / Prometheus-compatible store, Thanos | optional | PromQL metric reads, plus remote clusters through Thanos. |
 | Elasticsearch | optional | Log read backend. |

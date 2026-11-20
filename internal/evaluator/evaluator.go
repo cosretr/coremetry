@@ -75,6 +75,8 @@ type Evaluator struct {
 	// clocks survive leader failover + rolling deploys (v0.8.354 —
 	// HA audit 🟡#2; see stamps.go). nil or Noop = in-memory only.
 	stamps cache.Cache
+	// redisEvict — self-redis-evict baseline (Redis R6, selfhealth_redis.go).
+	redisEvict redisEvictState
 
 	// watcherLastRun paces imported ES watcher rules (v0.9.x) on
 	// their own schedule interval: a 5m-interval watch runs when

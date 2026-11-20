@@ -1226,7 +1226,7 @@ func TestPromQLMetadataChargeOnlyForegroundRequests(t *testing.T) {
 	mc.mu.Lock()
 	mc.m[key] = env
 	mc.mu.Unlock()
-	e.s.l1.del(key)
+	e.s.l1.del(strings.TrimSuffix(key, l2ValueSuffix)) // R6: L1 holds the logical key
 
 	// editor-1 bayat isabet alır; handler'ın GERÇEK kapanışı arka planda refreshKey ile koşar.
 	w := e.do(t, "GET", "/api/promql/labels", form, "editor-1", auth.RoleEditor)

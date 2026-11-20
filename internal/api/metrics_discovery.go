@@ -372,7 +372,7 @@ func (s *Server) peekCachedJSON(ctx context.Context, key string, ttl time.Durati
 	if s.cache == nil {
 		return nil, false
 	}
-	raw, ok, err := s.cache.Get(ctx, key)
+	raw, ok, err := s.cache.Get(ctx, l2ValueKey(key))
 	if err != nil || !ok {
 		return nil, false
 	}

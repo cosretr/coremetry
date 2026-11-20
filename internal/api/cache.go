@@ -143,48 +143,7 @@ func (l *l1Cache) set(key string, data []byte, ttl time.Duration) {
 	}
 }
 
-// cacheEnvelope wraps the JSON body with a write timestamp so
-// reads can compute age. Stored in Redis under the cache key;
-// L1 stores the unwrapped body (already age-checked at the
-// L1 set time).
-type cacheEnvelope struct {
-	Written int64           `json:"w"` // unix nanoseconds at write time
-	Body    json.RawMessage `json:"b"`
-	// Gen — v0.10.2229 (R3): hesaplamadan önce okunan nesil dizisi
-	// (cache_gen.go); kayıtlı aileye ait olmayan anahtarda boş.
-	Gen string `json:"g,omitempty"`
-}
-
-func wrapEnvelope(body []byte, gen string) ([]byte, error) {
-	return json.Marshal(cacheEnvelope{
-		Written: time.Now().UnixNano(),
-		Body:    body,
-		Gen:     gen,
-	})
-}
-
-// unwrapEnvelopeGen — unwrapEnvelope + zarfın nesil dizisi.
-func unwrapEnvelopeGen(raw []byte) (time.Time, []byte, string, bool) {
-	var env cacheEnvelope
-	if err := json.Unmarshal(raw, &env); err != nil ||
-		env.Written == 0 || len(env.Body) == 0 {
-		return time.Time{}, nil, "", false
-	}
-	return time.Unix(0, env.Written), env.Body, env.Gen, true
-}
-
-// unwrapEnvelope returns (written, body, true) when raw matches
-// the envelope shape, or (zero, nil, false) for legacy raw-body
-// entries written before the envelope was introduced. Legacy
-// entries age out naturally via the Redis TTL.
-func unwrapEnvelope(raw []byte) (time.Time, []byte, bool) {
-	var env cacheEnvelope
-	if err := json.Unmarshal(raw, &env); err != nil ||
-		env.Written == 0 || len(env.Body) == 0 {
-		return time.Time{}, nil, false
-	}
-	return time.Unix(0, env.Written), env.Body, true
-}
+// Envelope (JSON v1 / binary v2, R6) → cache_envelope.go.
 
 func minDur(a, b time.Duration) time.Duration {
 	if a < b {
@@ -315,11 +274,9 @@ func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, 
 				}
 				// Past hard window → fall through to miss.
 			default:
-				// Legacy entry (no envelope). Serve as-is and
-				// let Redis TTL evict it; new writes go
-				// through the envelope path.
-				s.stats.record("HIT-LEGACY", key)
-				return raw, "HIT-LEGACY", nil
+				// R6: the "|b2" key only ever holds our binary
+				// envelope — an undecodable value is a miss (pre-R6
+				// this served the raw bytes as HIT-LEGACY).
 			}
 		}
 
@@ -405,13 +362,20 @@ func (s *Server) storeL2(ctx context.Context, key string, body []byte, ttl time.
 		return // R3: nesil okunamadı — hiçbir okumayla eşleşmeyecek girdi yazılmaz
 	}
 	env, err := wrapEnvelope(body, gen)
-	if err != nil || !s.l2().allow() {
+	if !s.l2().allow() {
 		return
 	}
 	// v0.10.2230 (R4): gövde + olumsuz girdiyi ve claim'i silme tek turda.
+	// R6: tavanı aşan gövde L2'ye yazılmaz (L1'de kalır); claim/olumsuz
+	// girdi yine silinir, bekleyen replikalar beklemeden kendisi hesaplar.
+	valOp := cache.PipeOp{Key: l2ValueKey(key), Value: env, TTL: ttl * staleFactor}
+	if err != nil {
+		s.stats.oversize(key, len(body))
+		valOp = cache.PipeOp{Key: l2ValueKey(key), Del: true}
+	}
 	t0 := time.Now()
 	err = s.cache.Pipeline(ctx, []cache.PipeOp{
-		{Key: key, Value: env, TTL: ttl * staleFactor},
+		valOp,
 		{Key: cacheNegKeyPrefix + key, Del: true},
 		{Key: cacheClaimKeyPrefix + key, Del: true},
 	})
@@ -572,7 +536,8 @@ const invalidateCacheChannel = "coremetry:cache:invalidate"
 // (the soft TTL is the safety net); a failed publish at most
 // extends the staleness window by a few seconds.
 func (s *Server) cacheInvalidate(ctx context.Context, key string) {
-	if err := s.cache.Del(ctx, key); err != nil {
+	// R6: binary "|b2" value + the pre-R6 bare key (old pods mid-rollout).
+	if err := s.cache.Pipeline(ctx, []cache.PipeOp{{Key: l2ValueKey(key), Del: true}, {Key: key, Del: true}}); err != nil {
 		log.Printf("[cache] invalidate L2 del %s: %v", key, err)
 	}
 	s.l1.del(key)
@@ -849,6 +814,7 @@ func (s *Server) StartCacheInvalidation(ctx context.Context) {
 					continue
 				}
 				s.l1.del(key)
+				s.dropL2ValueOnPeerInvalidate(key)
 				s.stats.record("INVALIDATED", key)
 			}
 		}
@@ -873,6 +839,8 @@ type cacheStats struct {
 	mu      sync.Mutex
 	keyHits map[string]int64
 	started time.Time
+	// oversizeN — R6 (cache_envelope.go): tavan yüzünden yazılmayan L2 değeri.
+	oversizeN atomic.Int64
 }
 
 type cacheTierKey struct{ tier, family string }
@@ -952,6 +920,8 @@ type CacheStatsSnapshot struct {
 	TopKeys  []CacheKeyHit               `json:"topKeys"`
 	L1Size   int                         `json:"l1Size"`
 	L1Cap    int                         `json:"l1Cap"`
+	// L2Oversize — R6: L2 tavanını aşıp Redis'e yazılmayan gövde sayısı.
+	L2Oversize int64 `json:"l2Oversize"`
 }
 
 type CacheKeyHit struct {
@@ -962,6 +932,7 @@ type CacheKeyHit struct {
 func (cs *cacheStats) snapshot(l1 *l1Cache) CacheStatsSnapshot {
 	out := CacheStatsSnapshot{
 		SinceUnixNano: cs.started.UnixNano(),
+		L2Oversize:    cs.oversizeN.Load(),
 		Counts:        map[string]int64{},
 		Families:      map[string]map[string]int64{},
 	}
@@ -1012,7 +983,6 @@ func (s *Server) cachePeek(ctx context.Context, key string) ([]byte, bool) {
 		if isEnv {
 			return body, true
 		}
-		return raw, true
 	}
 	return nil, false
 }

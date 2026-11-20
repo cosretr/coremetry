@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	lockKey     = "topology-aggregator-leader"
+	lockKey     = "coremetry:lock:topology-aggregator"
 	bucketSize  = 5 * time.Minute
 	settleDelay = 30 * time.Second // wait this long past bucket end before processing
 	// v0.5.379 — "live" tick rewrites the in-progress current
@@ -28,7 +28,7 @@ const (
 	// ReplacingMergeTree(version) engine dedupes when newer
 	// writes overlap the same (bucket, parent, child) tuple.
 	liveTickInterval = 1 * time.Minute
-	liveLockKey      = "topology-aggregator-live-leader"
+	liveLockKey      = "coremetry:lock:topology-aggregator-live"
 )
 
 // Aggregator wakes up every `interval` (5m by default) and runs

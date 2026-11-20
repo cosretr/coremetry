@@ -14,7 +14,7 @@
 # Mirrors expected at:
 #   docker.artifacthub.registry.example.com/cosretr/coremetry:0.1.4
 #   docker.artifacthub.registry.example.com/clickhouse/clickhouse-server:26.2.4.23-alpine
-#   docker.artifacthub.registry.example.com/library/redis:7-alpine
+#   docker.artifacthub.registry.example.com/valkey/valkey:8.1.11-alpine
 #   docker.artifacthub.registry.example.com/otel/opentelemetry-collector-contrib:0.111.0
 #
 # Per-image overrides (.image.registry on each component) take priority
@@ -566,10 +566,15 @@ redis:
     seccompProfile: { type: RuntimeDefault }
   external:
     url: ""               # e.g. "redis://my-redis.svc:6379/0" — overrides in-cluster
+  # Valkey (BSD-3) is the default: Redis-protocol compatible, while Redis
+  # 7.4+ ships under RSAL/SSPL. Any Redis 7.x / Valkey 7.2+ image works —
+  # override registry/repository/tag to point at a mirror (e.g.
+  # repository: library/redis, tag: 7.2-alpine). The container args start
+  # with "--", so either image's entrypoint picks its own server binary.
   image:
     registry: ""          # empty = docker.io
-    repository: library/redis
-    tag: 7-alpine
+    repository: valkey/valkey
+    tag: 8.1.11-alpine
   # Redis sidecar (cache + distributed lock). Even a busy
   # Coremetry rarely pushes Redis past 50 MB resident — keys are
   # short and TTLs are seconds — but giving it room means a

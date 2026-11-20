@@ -23,7 +23,7 @@ type QualityStore interface {
 }
 
 const (
-	qualityLockKey = "cosre-quality-nightly"
+	qualityLockKey = "coremetry:lock:cosre-quality-nightly"
 	// qualitySettle — gün kapandıktan sonra geç sinyaller (kopya, çözülme)
 	// gelsin diye beklenen süre.
 	qualitySettle = 2 * time.Hour

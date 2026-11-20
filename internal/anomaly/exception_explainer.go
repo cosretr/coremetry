@@ -32,7 +32,7 @@ import (
 // "anons edilen" gruplar. Regressed gruplar da listelenir: regresyonda
 // UpsertExceptionGroup bayat özeti SIFIRLAR (yanıltıcıdır — v0.9.415),
 // taze+yoğun bir regresyon burada yeniden doldurulur.
-const exceptionExplainerLockKey = "exception-explainer:lock"
+const exceptionExplainerLockKey = "coremetry:lock:exception-explainer"
 const exceptionExplainerBatch = 4
 
 type ExceptionExplainer struct {

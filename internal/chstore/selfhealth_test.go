@@ -151,7 +151,7 @@ func TestDiskKey(t *testing.T) {
 func TestSelfHealthRunbooksCoverEveryRule(t *testing.T) {
 	for _, rule := range []string{
 		"self-ingest-stall", "self-spool-depth", "self-disk-eta",
-		"self-channel-broken", "self-volume-spike",
+		"self-channel-broken", "self-volume-spike", "self-redis-evict",
 	} {
 		u, ok := selfHealthRunbooks[rule]
 		if !ok || u == "" {
@@ -161,8 +161,8 @@ func TestSelfHealthRunbooksCoverEveryRule(t *testing.T) {
 			t.Fatalf("%s runbook'u ürün içi bir rota değil: %q", rule, u)
 		}
 	}
-	if len(selfHealthRunbooks) != 5 {
-		t.Fatalf("harita %d girdi taşıyor, 5 bekleniyordu (yeni kural eklendiyse runbook'u da ekleyin)", len(selfHealthRunbooks))
+	if len(selfHealthRunbooks) != 6 {
+		t.Fatalf("harita %d girdi taşıyor, 6 bekleniyordu (yeni kural eklendiyse runbook'u da ekleyin)", len(selfHealthRunbooks))
 	}
 }
 

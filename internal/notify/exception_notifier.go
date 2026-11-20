@@ -35,7 +35,7 @@ import (
 //     değer — gerekirse dedup anahtarına dönem eklenir).
 //   - Leader-lock'lu 60s tik; her şey soft-fail, evaluator/ingest
 //     yolunu asla bloklamaz.
-const exceptionNotifierLockKey = "exception-notifier:lock"
+const exceptionNotifierLockKey = "coremetry:lock:exception-notifier"
 
 // P1 eşiği — inbox.go exceptionPriority ile BİREBİR (oradaki formül
 // değişirse burası da değişmeli; pin: exception_notifier_test.go).

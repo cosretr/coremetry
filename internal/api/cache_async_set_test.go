@@ -99,8 +99,8 @@ func TestServeCachedMiss_ResponseDoesNotWaitOnL2Set(t *testing.T) {
 	// The detached L2 write must still happen — async, not dropped.
 	select {
 	case got := <-fc.setEntered:
-		if got != key {
-			t.Errorf("L2 Set key = %q, want %q", got, key)
+		if got != l2ValueKey(key) {
+			t.Errorf("L2 Set key = %q, want %q", got, l2ValueKey(key))
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("async L2 Set was never invoked — warm entries would stop reaching Redis")

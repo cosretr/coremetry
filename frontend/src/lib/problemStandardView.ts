@@ -327,7 +327,7 @@ export function detailPrioReasonMsg(reason: string | undefined | null, std: Prob
 // serbest metin → orig.
 const TITLE_KINDS = new Set(['exception_storm', 'exception_shared', 'exception_fatal', 'exception_group.http',
   'anomaly.ext_down', 'anomaly.ext_cap', 'anomaly_cluster.ext', 'svc_slowdown', 'svc_slowdown.collapse']);
-const SELF_TITLE: [string, string][] = [['self-ingest-stall', 'ingest'], ['self-spool-depth', 'spool'], ['self-disk-eta', 'disk'], ['self-channel-broken', 'channel']];
+const SELF_TITLE: [string, string][] = [['self-ingest-stall', 'ingest'], ['self-spool-depth', 'spool'], ['self-disk-eta', 'disk'], ['self-channel-broken', 'channel'], ['self-redis-evict', 'redis']];
 
 export function problemTitleView(p: { ruleName: string; ruleId?: string; metric?: string }, kind: string | undefined, lang: Lang = 'tr'): { text: string; orig: boolean } {
   const name = p.ruleName ?? '';

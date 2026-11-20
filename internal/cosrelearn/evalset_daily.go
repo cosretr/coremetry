@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	evalsetDailyLockKey = "cosre-evalset-daily"
+	evalsetDailyLockKey = "coremetry:lock:cosre-evalset-daily"
 	// EvalsetDailySettingKey — acil fren anahtarı (system_settings).
 	EvalsetDailySettingKey = "cosre_evalset_daily"
 	// EvalsetDailyStartedBy — günlük koşunun ai_eval_runs.started_by değeri

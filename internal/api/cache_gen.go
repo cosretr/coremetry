@@ -94,7 +94,7 @@ func genString(vals [][]byte) string {
 func (s *Server) l2GetGen(ctx context.Context, key string) (raw []byte, gen string, ok bool) {
 	gk := cacheGenKeys(key)
 	if len(gk) == 0 {
-		raw, ok = s.l2Get(ctx, key)
+		raw, ok = s.l2Get(ctx, l2ValueKey(key))
 		return raw, "", ok
 	}
 	b := s.l2()
@@ -102,7 +102,7 @@ func (s *Server) l2GetGen(ctx context.Context, key string) (raw []byte, gen stri
 		return nil, cacheGenUnknown, false
 	}
 	t0 := time.Now()
-	vals, err := s.cache.MGet(ctx, append([]string{key}, gk...))
+	vals, err := s.cache.MGet(ctx, append([]string{l2ValueKey(key)}, gk...))
 	selfobs.ObserveCacheL2("get", time.Since(t0), err)
 	b.done(ctx, err)
 	if err != nil || len(vals) != len(gk)+1 {

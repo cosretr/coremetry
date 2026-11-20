@@ -26,7 +26,7 @@ func waitL2(t *testing.T, c *cachetest.Mem, key string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, ok, _ := c.Get(context.Background(), key); ok {
+		if _, ok, _ := c.Get(context.Background(), l2ValueKey(key)); ok {
 			return
 		}
 		time.Sleep(2 * time.Millisecond)

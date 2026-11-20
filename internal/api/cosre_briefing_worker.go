@@ -442,7 +442,7 @@ func (s *Server) runBriefingTick(ctx context.Context, cfg briefing.Config, now t
 // StartBriefingProducer — main (worker kipi) çağırır. Taban tik 30 s; üretim
 // ayarın refresh_interval_s'inde bir (ayar değişimi bir sonraki tikte geçerli).
 func (s *Server) StartBriefingProducer(ctx context.Context, lock cache.Lock) {
-	leader := cache.NewLeaderHolder(lock, "cosre-briefing", cache.LeaderTTL(briefing.DefaultRefreshS*time.Second))
+	leader := cache.NewLeaderHolder(lock, "coremetry:lock:cosre-briefing", cache.LeaderTTL(briefing.DefaultRefreshS*time.Second))
 	leader.Start(ctx)
 	var last time.Time
 	tick := func() {
