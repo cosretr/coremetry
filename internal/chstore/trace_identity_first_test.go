@@ -47,9 +47,9 @@ func TestIdentityKeysIndexedOnlyAndDeduped(t *testing.T) {
 	// v0.10.343 — Operator-reported (prod 342): OR içindeki dizi-yolu yazımları
 	// indeksi öldürüp zaman aşımına düşürüyordu. Yalnız indeksli yüklemler
 	// kullanılır; aynı kolona derlenen yazımlar tek sorgu.
-	prevIdx := attrIndexReady.Load()
-	attrIndexReady.Store(false)
-	t.Cleanup(func() { attrIndexReady.Store(prevIdx) })
+	prevIdx := attrIndexMode.Load()
+	attrIndexMode.Store(attrIndexNone)
+	t.Cleanup(func() { attrIndexMode.Store(prevIdx) })
 	withPromoted(t, "function_id", "attr_function_id")
 	keys := identityKeys("060203AFD10049A1B2")
 	var indexed, skipped []string
@@ -86,7 +86,7 @@ func TestIdentityKeysIndexedOnlyAndDeduped(t *testing.T) {
 		t.Fatalf("aynı kolon tek sorgu olmalı, %d", n)
 	}
 	// kvh varken haritasız yazımlar da indeksli (bloom).
-	attrIndexReady.Store(true)
+	attrIndexMode.Store(attrIndexLegacy)
 	for _, k := range identityKeys("x") {
 		if !k.indexed {
 			t.Fatalf("kvh açıkken her yazım indeksli olmalı: %+v", k)
@@ -147,9 +147,9 @@ func TestIdentityAnchorAndWindow(t *testing.T) {
 }
 
 func TestIdentityQueryUsesAnchoredWindowAndArrayKeysLast(t *testing.T) {
-	prevIdx := attrIndexReady.Load()
-	attrIndexReady.Store(false)
-	t.Cleanup(func() { attrIndexReady.Store(prevIdx) })
+	prevIdx := attrIndexMode.Load()
+	attrIndexMode.Store(attrIndexNone)
+	t.Cleanup(func() { attrIndexMode.Store(prevIdx) })
 	withPromoted(t, "function_id", "attr_function_id")
 	token := "060203hb9Z0000389965120260904153319993000"
 	keys := identityKeys(token)

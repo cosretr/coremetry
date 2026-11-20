@@ -174,9 +174,11 @@ func qualArr(alias, expr string) string {
 	r := strings.NewReplacer(
 		"attr_values", alias+".attr_values",
 		"attr_keys", alias+".attr_keys",
+		"attr_kvh2", alias+".attr_kvh2",
 		"attr_kvh", alias+".attr_kvh", // v0.10.300
 		"res_values", alias+".res_values",
 		"res_keys", alias+".res_keys",
+		"res_kvh2", alias+".res_kvh2",
 		"res_kvh", alias+".res_kvh",
 	)
 	return r.Replace(expr)
@@ -261,7 +263,7 @@ func (f FilterExpr) sql(alias string, wellKnown, resourceWellKnown, promoted map
 		} else {
 			lhs = qualArr(alias, "res_values[indexOf(res_keys, ?)]")
 			args = append(args, name)
-			kvhCol, arrKey = qualArr(alias, "res_kvh"), name
+			kvhCol, arrKey = qualArr(alias, attrKVHCol("res")), name
 		}
 	case strings.HasPrefix(f.Key, "span."):
 		name := strings.TrimPrefix(f.Key, "span.")
@@ -277,7 +279,7 @@ func (f FilterExpr) sql(alias string, wellKnown, resourceWellKnown, promoted map
 		} else {
 			lhs = qualArr(alias, "attr_values[indexOf(attr_keys, ?)]")
 			args = append(args, name)
-			kvhCol, arrKey = qualArr(alias, "attr_kvh"), name
+			kvhCol, arrKey = qualArr(alias, attrKVHCol("attr")), name
 		}
 	default:
 		if col, ok := promoted[f.Key]; ok {
@@ -287,7 +289,7 @@ func (f FilterExpr) sql(alias string, wellKnown, resourceWellKnown, promoted map
 		} else {
 			lhs = qualArr(alias, "attr_values[indexOf(attr_keys, ?)]")
 			args = append(args, f.Key)
-			kvhCol, arrKey = qualArr(alias, "attr_kvh"), f.Key
+			kvhCol, arrKey = qualArr(alias, attrKVHCol("attr")), f.Key
 		}
 	}
 
@@ -346,7 +348,7 @@ func (f FilterExpr) sql(alias string, wellKnown, resourceWellKnown, promoted map
 			hashes := make([]string, len(f.Values))
 			pre := make([]any, 0, 2*len(f.Values))
 			for i, v := range f.Values {
-				hashes[i] = AttrKVHashSQL
+				hashes[i] = attrKVHashExpr()
 				pre = append(pre, arrKey, v)
 			}
 			all := append(pre, args...)
@@ -400,7 +402,7 @@ func (f FilterExpr) sql(alias string, wellKnown, resourceWellKnown, promoted map
 			all := append([]any{arrKey, f.Values[0]}, args...)
 			all = append(all, f.Values[0])
 			attrIndexUsed.Add(1)
-			return "(has(" + kvhCol + ", " + AttrKVHashSQL + ") AND " + lhs + " = ?)", all, nil
+			return "(has(" + kvhCol + ", " + attrKVHashExpr() + ") AND " + lhs + " = ?)", all, nil
 		}
 		args = append(args, f.Values[0])
 		return lhs + " " + op + " ?", args, nil

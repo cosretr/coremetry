@@ -218,7 +218,7 @@ func (s *Store) setRetention(ctx context.Context, sp RetentionSpec, actor string
 // operator drops spans retention below 2d.
 var exemplarStateMVs = []string{"spanmetrics_1m", "spanmetrics_10s", "spanmetrics_1s"}
 
-var exemplarStateCols = []string{"slow_exemplar_state", "error_exemplar_state"}
+var exemplarStateCols = []string{smSlowExemplarCol, smErrorExemplarCol}
 
 // exemplarColTTLStmt builds the column-TTL ALTER. Split out for a pure test:
 // the type is threaded through verbatim because CH REJECTS a type-less

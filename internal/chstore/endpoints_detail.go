@@ -387,9 +387,10 @@ func endpointExemplarArgs(q EndpointDetailQuery) (pathProj string, args []any) {
 // the caller renders the section without links.
 func (s *Store) EndpointExemplars(ctx context.Context, q EndpointDetailQuery) (slowTraceID, errorTraceID string, err error) {
 	pathProj, args := endpointExemplarArgs(q)
+	slowExpr, errExpr := smExemplarMerges("spanmetrics_1m")
 	row := s.telemetryReadConn().QueryRow(ctx, `
-		SELECT argMaxMerge(slow_exemplar_state)    AS slow_tid,
-		       argMaxIfMerge(error_exemplar_state) AS err_tid
+		SELECT `+slowExpr+` AS slow_tid,
+		       `+errExpr+` AS err_tid
 		FROM `+s.spanmetricsSourceFor("spanmetrics_1m")+`
 		WHERE time_bucket >= ? AND time_bucket < ?
 		  AND kind NOT IN ('client', 'producer')

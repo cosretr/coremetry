@@ -11,11 +11,46 @@ import (
 // (yanlış sıra hata vermez, YANLIŞ SATIR döndürür). Terfi/bilinen kolon,
 // negasyon, regex, aralık, metric_points ve indeks-yok hâli aynen.
 
+// withAttrIndex — true = eski (0014) kip: bu dosyanın pinleri concat hash'i
+// ve attr_kvh adını sabitler; v2 kipi withAttrIndexMode ile.
 func withAttrIndex(t *testing.T, on bool) {
 	t.Helper()
-	prev := AttrIndexAvailable()
-	registerAttrIndex(on)
+	m := attrIndexNone
+	if on {
+		m = attrIndexLegacy
+	}
+	withAttrIndexMode(t, m)
+}
+
+func withAttrIndexMode(t *testing.T, m int32) {
+	t.Helper()
+	prev := attrIndexMode.Load()
+	registerAttrIndex(m)
 	t.Cleanup(func() { registerAttrIndex(prev) })
+}
+
+// v2 (ALIAS attr_kvh2): ayırıcısız iki argümanlı hash, aynı bağlama sırası.
+func TestKVHEqualityPredicateV2(t *testing.T) {
+	withAttrIndexMode(t, attrIndexV2)
+	f := FilterExpr{Key: "banking.txn_ref", Op: "=", Values: []string{"TXN-1"}}
+	sql, args, err := f.SQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `(has(attr_kvh2, cityHash64(?, ?)) AND attr_values[indexOf(attr_keys, ?)] = ?)`; sql != want {
+		t.Errorf("sql:\n got %s\nwant %s", sql, want)
+	}
+	if len(args) != 4 || args[0] != "banking.txn_ref" || args[1] != "TXN-1" {
+		t.Errorf("args: %v", args)
+	}
+	r := FilterExpr{Key: "resource.region", Op: "IN", Values: []string{"a", "b"}}
+	sql, _, _ = r.SQL()
+	if !strings.HasPrefix(sql, "(hasAny(res_kvh2, [cityHash64(?, ?), cityHash64(?, ?)])") {
+		t.Errorf("res v2: %s", sql)
+	}
+	if q := qualArr("s", "has(attr_kvh2, ") + qualArr("s", "res_kvh2"); q != "has(s.attr_kvh2, s.res_kvh2" {
+		t.Errorf("qualArr v2: %s", q)
+	}
 }
 
 func TestKVHEqualityPredicate(t *testing.T) {

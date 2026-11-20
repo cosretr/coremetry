@@ -351,9 +351,10 @@ func spanmetricStateAgg(agg string, stepSec int) (string, error) {
 // runtime-gate catch ([[feedback-unit-mixing-needs-both-branches]] sibling:
 // a state's *Merge is part of its contract; a string test can't see the
 // mismatch, only CH can).
-func spanmetricExemplarCols() string {
-	return ",\n\t\t    argMaxMerge(slow_exemplar_state) AS slow_trace," +
-		"\n\t\t    argMaxIfMerge(error_exemplar_state) AS error_trace"
+func spanmetricExemplarCols(table string) string {
+	slow, errExpr := smExemplarMerges(table)
+	return ",\n\t\t    " + slow + " AS slow_trace," +
+		"\n\t\t    " + errExpr + " AS error_trace"
 }
 
 // ResolveMetricQuery turns a descriptor into a tier-selected metric read,
@@ -431,7 +432,7 @@ func (s *Store) ResolveMetricQuery(ctx context.Context, q MetricResolveQuery) (M
 
 	exemplarCols := ""
 	if q.IncludeExemplars {
-		exemplarCols = spanmetricExemplarCols()
+		exemplarCols = spanmetricExemplarCols(tier.table)
 	}
 
 	sql := fmt.Sprintf(`
@@ -620,7 +621,7 @@ func (s *Store) resolveBand(ctx context.Context, q MetricResolveQuery, step int)
 	}
 	exemplarCols := ""
 	if q.IncludeExemplars {
-		exemplarCols = spanmetricExemplarCols()
+		exemplarCols = spanmetricExemplarCols(tier.table)
 	}
 
 	sql := fmt.Sprintf(`

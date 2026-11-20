@@ -11,7 +11,7 @@ import (
 )
 
 func TestMLTraceErrorsSQLShape(t *testing.T) {
-	for _, want := range []string{"FROM %s", "countMerge(error_state)", "argMaxIfMerge(error_exemplar_state)", "status_code = 'error'",
+	for _, want := range []string{"FROM %s", "countMerge(error_state)", "%s AS tid", "status_code = 'error'",
 		EntrySpanKindsWhere, "time_bucket >= ? AND time_bucket < ?", "LIMIT ?", "max_execution_time", "arraySlice(groupArrayIf(tid, tid != ''), 1, 3)"} {
 		if !strings.Contains(mlTraceErrorsSQL, want) {
 			t.Errorf("SQL %q içermeli", want)

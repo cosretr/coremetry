@@ -314,6 +314,24 @@ func (s *Store) spansColumnExpr(ctx context.Context, col string) (string, bool) 
 	return expr, true
 }
 
+// spansColumnKind — spans/spans_local üzerindeki kolonun default_kind'ı
+// ("" = kolon yok, okunamadı ya da düz kolon — hash kolonları her zaman
+// MATERIALIZED ya da ALIAS'tır, o yüzden "" = yok sayılır). Yerel tablo
+// önce: küme kipinde ALIAS/MATERIALIZED dönüşümü önce `_local`e iner.
+func (s *Store) spansColumnKind(ctx context.Context, col string) string {
+	var kind string
+	if err := s.conn.QueryRow(ctx,
+		`SELECT default_kind FROM system.columns
+		 WHERE database = currentDatabase()
+		   AND table IN ('spans', 'spans_local')
+		   AND name = ?
+		 ORDER BY table = 'spans_local' DESC
+		 LIMIT 1`, col).Scan(&kind); err != nil {
+		return ""
+	}
+	return kind
+}
+
 // spansIndexExists — spans üzerinde bu adda bir skip index var mı?
 //
 // Hata hâlinde false döner: emin olamadığımızda `ADD INDEX IF NOT

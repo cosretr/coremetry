@@ -182,13 +182,13 @@ func attrValueProbeSQL(key, value string, scope AttrScope, kvh bool) (sql string
 		return "", nil, ProbeNone, false
 	}
 	k := strings.TrimPrefix(key, "span.")
-	keysCol, valsCol, kvhCol := "attr_keys", "attr_values", "attr_kvh"
+	keysCol, valsCol, kvhCol := "attr_keys", "attr_values", attrKVHCol("attr")
 	if strings.HasPrefix(key, "resource.") {
 		k = strings.TrimPrefix(key, "resource.")
-		keysCol, valsCol, kvhCol = "res_keys", "res_values", "res_kvh"
+		keysCol, valsCol, kvhCol = "res_keys", "res_values", attrKVHCol("res")
 	}
 	return `SELECT count() FROM spans WHERE time >= ? AND time <= ?` + w + `
-			AND has(` + kvhCol + `, ` + AttrKVHashSQL + `) AND ` + valsCol + `[indexOf(` + keysCol + `, ?)] = ?
+			AND has(` + kvhCol + `, ` + attrKVHashExpr() + `) AND ` + valsCol + `[indexOf(` + keysCol + `, ?)] = ?
 			SETTINGS max_execution_time = 3`, append(append([]any{}, sargs...), k, value, k, value), ProbeKVH, true
 }
 

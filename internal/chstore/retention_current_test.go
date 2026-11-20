@@ -23,7 +23,7 @@ import (
 
 const spansLocalCreate = "CREATE TABLE acme.spans_local (`time` DateTime64(9) CODEC(Delta(8), ZSTD(3)), `trace_id` String CODEC(ZSTD(3)), `service_name` LowCardinality(String)) ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/acme/spans_local', '{replica}') PARTITION BY toDate(time) ORDER BY (service_name, time) TTL toDate(time) + toIntervalDay(30) SETTINGS index_granularity = 8192, ttl_only_drop_parts = 1"
 
-const innerCreate = "CREATE TABLE acme.`.inner_id.6f1c2a34-0000-4000-8000-000000000001` (`time_bucket` DateTime, `service_name` LowCardinality(String), `span_count_state` AggregateFunction(count), `slow_exemplar_state` AggregateFunction(argMax, String, Int64) TTL toDate(time_bucket) + toIntervalDay(30), `error_exemplar_state` AggregateFunction(argMaxIf, String, Int64, UInt8) TTL toDate(time_bucket) + toIntervalDay(30)) ENGINE = AggregatingMergeTree PARTITION BY toDate(time_bucket) ORDER BY (service_name, time_bucket) TTL toDate(time_bucket) + toIntervalDay(90) SETTINGS index_granularity = 8192"
+const innerCreate = "CREATE TABLE acme.`.inner_id.6f1c2a34-0000-4000-8000-000000000001` (`time_bucket` DateTime, `service_name` LowCardinality(String), `span_count_state` AggregateFunction(count), `slow_exemplar_bin_state` AggregateFunction(argMax, String, Int64) CODEC(ZSTD(3)) TTL toDate(time_bucket) + toIntervalDay(30), `error_exemplar_bin_state` AggregateFunction(argMaxIf, String, Int64, UInt8) CODEC(ZSTD(3)) TTL toDate(time_bucket) + toIntervalDay(30)) ENGINE = AggregatingMergeTree PARTITION BY toDate(time_bucket) ORDER BY (service_name, time_bucket) TTL toDate(time_bucket) + toIntervalDay(90) SETTINGS index_granularity = 8192"
 
 func TestCanonicalTTL(t *testing.T) {
 	same := [][2]string{
@@ -76,7 +76,7 @@ func TestTableTTLFromCreate(t *testing.T) {
 }
 
 func TestColumnTTLFromCreate(t *testing.T) {
-	for _, col := range []string{"slow_exemplar_state", "error_exemplar_state"} {
+	for _, col := range exemplarStateCols {
 		if got := columnTTLFromCreate(innerCreate, col); got != "toDate(time_bucket) + toIntervalDay(30)" {
 			t.Errorf("%s kolon TTL'i = %q", col, got)
 		}
@@ -155,7 +155,7 @@ func TestRetentionProbeTableAndColumns(t *testing.T) {
 	if !p.columnsCurrent([]string{innerCreate, innerCreate}, exemplarStateCols, colWant) {
 		t.Error("exemplar kolonları iki host'ta güncel: atlanmalıydı")
 	}
-	stale := strings.Replace(innerCreate, "AggregateFunction(argMaxIf, String, Int64, UInt8) TTL toDate(time_bucket) + toIntervalDay(30)", "AggregateFunction(argMaxIf, String, Int64, UInt8)", 1)
+	stale := strings.Replace(innerCreate, "AggregateFunction(argMaxIf, String, Int64, UInt8) CODEC(ZSTD(3)) TTL toDate(time_bucket) + toIntervalDay(30)", "AggregateFunction(argMaxIf, String, Int64, UInt8) CODEC(ZSTD(3))", 1)
 	if p.columnsCurrent([]string{innerCreate, stale}, exemplarStateCols, colWant) {
 		t.Error("bir host'ta bir kolonun TTL'i yok: uygulanmalıydı")
 	}

@@ -39,7 +39,7 @@ const StmtHashFilterKey = "db_stmt_hash"
 
 // stmtHashColReady — spans.db_stmt_hash kolonu bu kurulumda var mı (migrate,
 // hasDBStmtHashCol probu). FilterExpr.SQL() saf ve Store'u görmez; bayrak
-// attrIndexReady emsali paket düzeyinde.
+// attrIndexMode emsali paket düzeyinde.
 var stmtHashColReady atomic.Bool
 
 // stmtHashLHS — SAF: süzgecin sol tarafı. Kolon varsa kolon; yoksa kolonun

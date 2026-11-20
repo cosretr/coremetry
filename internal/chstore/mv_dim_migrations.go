@@ -30,6 +30,14 @@ var mvDimMigrations = []mvDimMigration{
 	// topic başına operasyon düzeyi RED. messaging_caller_summary_5m
 	// DEĞİŞMEDİ — orada kırılım kind + service_name.
 	{Table: "messaging_summary_5m", Column: "operation", Dim: "operation"},
+	// Depolama sıkıştırması — spanmetrics exemplar'ları ham bayt
+	// (slow/error_exemplar_bin_state) + state kolonlarında ZSTD(3). Boyut
+	// değil ŞEKİL göçü, ama sözleşme aynı: yeni kolon yoksa drop + recreate
+	// (operatör onaylı; eski pencereler metricresolve'un kapsama
+	// düşüşüyle operation_summary_5m / ham spans'tan okunur).
+	{Table: "spanmetrics_1m", Column: smSlowExemplarCol, Dim: "compact exemplar"},
+	{Table: "spanmetrics_10s", Column: smSlowExemplarCol, Dim: "compact exemplar"},
+	{Table: "spanmetrics_1s", Column: smSlowExemplarCol, Dim: "compact exemplar"},
 }
 
 // mvDimNeedsMigration — geçiş KARARI (SAF çekirdek). hasColumn,

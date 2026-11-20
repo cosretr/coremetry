@@ -75,7 +75,7 @@ func attrSlicePredicates(f TraceFilter) (sql string, args []any, ok bool) {
 			continue
 		}
 		op := strings.ToUpper(strings.TrimSpace(leaf.Op))
-		indexed := strings.Contains(s, "_kvh, ") ||
+		indexed := strings.Contains(s, "_kvh, ") || strings.Contains(s, "_kvh2, ") ||
 			(op == "EXISTS" && (strings.HasPrefix(s, "has(attr_keys, ?)") || strings.HasPrefix(s, "has(res_keys, ?)")))
 		if !indexed {
 			continue

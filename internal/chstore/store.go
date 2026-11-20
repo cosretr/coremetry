@@ -1339,7 +1339,26 @@ func canonicalMVs() []string {
 		// filters fall to the 10s tier). 1s TTL is ROW-LEVEL
 		// (time_bucket + INTERVAL 6 HOUR) — never toDate()+INTERVAL hours, the
 		// v0.6.36 unit-mixing trap.
+		//
+		// Sıkıştırma (depolama audit'i, CH 26.2 / 10M span ölçümü): exemplar
+		// state'leri trace_id'yi HAM BAYT tutar (unhex; okuma lower(hex(…)),
+		// spanmetrics_exemplar.go) ve state kolonları ZSTD(3) taşır →
+		// spanmetrics_1m 190 → 113 MiB. Hex olmayan trace_id '' exemplar olur
+		// (yanlış kimlik üretmektense boş). Eski şekil (slow_exemplar_state)
+		// mvDimMigrations defteriyle drop + recreate edilir.
 		`CREATE MATERIALIZED VIEW IF NOT EXISTS spanmetrics_1m
+		 (
+		   service_name LowCardinality(String), name LowCardinality(String),
+		   kind LowCardinality(String), status_code LowCardinality(String),
+		   http_route LowCardinality(String),
+		   time_bucket DateTime,
+		   calls_state              AggregateFunction(count) CODEC(ZSTD(3)),
+		   error_state              AggregateFunction(countIf, UInt8) CODEC(ZSTD(3)),
+		   duration_sum_state       AggregateFunction(sum, Int64) CODEC(ZSTD(3)),
+		   duration_q_state         AggregateFunction(quantilesTDigest(0.5, 0.9, 0.95, 0.99), Int64) CODEC(ZSTD(3)),
+		   slow_exemplar_bin_state  AggregateFunction(argMax, String, Int64) CODEC(ZSTD(3)),
+		   error_exemplar_bin_state AggregateFunction(argMaxIf, String, Int64, UInt8) CODEC(ZSTD(3))
+		 )
 		 ENGINE = AggregatingMergeTree
 		 PARTITION BY toDate(time_bucket)
 		 ORDER BY (service_name, name, kind, status_code, http_route, time_bucket)
@@ -1352,12 +1371,24 @@ func canonicalMVs() []string {
 		   countIfState(status_code = 'error')             AS error_state,
 		   sumState(duration)                              AS duration_sum_state,
 		   quantilesTDigestState(0.5, 0.9, 0.95, 0.99)(duration)  AS duration_q_state,
-		   argMaxState(trace_id, duration)                 AS slow_exemplar_state,
-		   argMaxIfState(trace_id, duration, status_code = 'error') AS error_exemplar_state
+		   argMaxState(if(match(trace_id, '^([0-9a-f]{2})+$'), unhex(trace_id), ''), duration) AS slow_exemplar_bin_state,
+		   argMaxIfState(if(match(trace_id, '^([0-9a-f]{2})+$'), unhex(trace_id), ''), duration, status_code = 'error') AS error_exemplar_bin_state
 		 FROM spans
 		 GROUP BY service_name, name, kind, status_code, http_route, time_bucket`,
 
 		`CREATE MATERIALIZED VIEW IF NOT EXISTS spanmetrics_10s
+		 (
+		   service_name LowCardinality(String), name LowCardinality(String),
+		   kind LowCardinality(String), status_code LowCardinality(String),
+		   http_route LowCardinality(String),
+		   time_bucket DateTime,
+		   calls_state              AggregateFunction(count) CODEC(ZSTD(3)),
+		   error_state              AggregateFunction(countIf, UInt8) CODEC(ZSTD(3)),
+		   duration_sum_state       AggregateFunction(sum, Int64) CODEC(ZSTD(3)),
+		   duration_q_state         AggregateFunction(quantilesTDigest(0.5, 0.9, 0.95, 0.99), Int64) CODEC(ZSTD(3)),
+		   slow_exemplar_bin_state  AggregateFunction(argMax, String, Int64) CODEC(ZSTD(3)),
+		   error_exemplar_bin_state AggregateFunction(argMaxIf, String, Int64, UInt8) CODEC(ZSTD(3))
+		 )
 		 ENGINE = AggregatingMergeTree
 		 PARTITION BY toDate(time_bucket)
 		 ORDER BY (service_name, name, kind, status_code, http_route, time_bucket)
@@ -1370,12 +1401,23 @@ func canonicalMVs() []string {
 		   countIfState(status_code = 'error')             AS error_state,
 		   sumState(duration)                              AS duration_sum_state,
 		   quantilesTDigestState(0.5, 0.9, 0.95, 0.99)(duration)  AS duration_q_state,
-		   argMaxState(trace_id, duration)                 AS slow_exemplar_state,
-		   argMaxIfState(trace_id, duration, status_code = 'error') AS error_exemplar_state
+		   argMaxState(if(match(trace_id, '^([0-9a-f]{2})+$'), unhex(trace_id), ''), duration) AS slow_exemplar_bin_state,
+		   argMaxIfState(if(match(trace_id, '^([0-9a-f]{2})+$'), unhex(trace_id), ''), duration, status_code = 'error') AS error_exemplar_bin_state
 		 FROM spans
 		 GROUP BY service_name, name, kind, status_code, http_route, time_bucket`,
 
 		`CREATE MATERIALIZED VIEW IF NOT EXISTS spanmetrics_1s
+		 (
+		   service_name LowCardinality(String), name LowCardinality(String),
+		   kind LowCardinality(String), status_code LowCardinality(String),
+		   time_bucket DateTime,
+		   calls_state              AggregateFunction(count) CODEC(ZSTD(3)),
+		   error_state              AggregateFunction(countIf, UInt8) CODEC(ZSTD(3)),
+		   duration_sum_state       AggregateFunction(sum, Int64) CODEC(ZSTD(3)),
+		   duration_q_state         AggregateFunction(quantilesTDigest(0.5, 0.9, 0.95, 0.99), Int64) CODEC(ZSTD(3)),
+		   slow_exemplar_bin_state  AggregateFunction(argMax, String, Int64) CODEC(ZSTD(3)),
+		   error_exemplar_bin_state AggregateFunction(argMaxIf, String, Int64, UInt8) CODEC(ZSTD(3))
+		 )
 		 ENGINE = AggregatingMergeTree
 		 PARTITION BY toDate(time_bucket)
 		 ORDER BY (service_name, name, kind, status_code, time_bucket)
@@ -1388,8 +1430,8 @@ func canonicalMVs() []string {
 		   countIfState(status_code = 'error')             AS error_state,
 		   sumState(duration)                              AS duration_sum_state,
 		   quantilesTDigestState(0.5, 0.9, 0.95, 0.99)(duration)  AS duration_q_state,
-		   argMaxState(trace_id, duration)                 AS slow_exemplar_state,
-		   argMaxIfState(trace_id, duration, status_code = 'error') AS error_exemplar_state
+		   argMaxState(if(match(trace_id, '^([0-9a-f]{2})+$'), unhex(trace_id), ''), duration) AS slow_exemplar_bin_state,
+		   argMaxIfState(if(match(trace_id, '^([0-9a-f]{2})+$'), unhex(trace_id), ''), duration, status_code = 'error') AS error_exemplar_bin_state
 		 FROM spans
 		 GROUP BY service_name, name, kind, status_code, time_bucket`,
 
@@ -3608,10 +3650,10 @@ func canonicalTables(sd, ld, md int) []string {
 			time          DateTime64(9) CODEC(Delta, ZSTD(3)),
 			start_time    DateTime64(9) DEFAULT time CODEC(Delta, ZSTD(3)),
 			value         Float64      CODEC(Gorilla, ZSTD(3)),
-			count         UInt64       DEFAULT 0,
+			count         UInt64       DEFAULT 0 CODEC(T64, ZSTD(3)),
 			sum_value     Float64      DEFAULT 0 CODEC(Gorilla, ZSTD(3)),
-			min_value     Float64      DEFAULT 0,
-			max_value     Float64      DEFAULT 0,
+			min_value     Float64      DEFAULT 0 CODEC(Gorilla, ZSTD(3)),
+			max_value     Float64      DEFAULT 0 CODEC(Gorilla, ZSTD(3)),
 			attr_keys     Array(LowCardinality(String)),
 			attr_values   Array(String) CODEC(ZSTD(1)),
 			res_keys      Array(LowCardinality(String)),
@@ -3621,8 +3663,8 @@ func canonicalTables(sd, ld, md int) []string {
 			-- OTLP ingest path fills these for Histogram data points
 			-- (otlp/convert.go Metric_Histogram). Default [] keeps
 			-- old data + non-histogram instruments compatible.
-			bucket_bounds Array(Float64) DEFAULT [],
-			bucket_counts Array(UInt64)  DEFAULT [],
+			bucket_bounds Array(Float64) DEFAULT [] CODEC(ZSTD(3)),
+			bucket_counts Array(UInt64)  DEFAULT [] CODEC(T64, ZSTD(3)),
 			-- v0.6.56 — OTLP aggregation temporality ('delta' |
 			-- 'cumulative' | ''). Captured so the histogram read path
 			-- can delta cumulative series before bucketing; without it
@@ -5307,6 +5349,16 @@ func (s *Store) migrate(ctx context.Context) error {
 			}
 		}
 	}
+	// Depolama sıkıştırması — sayısal kolon kodekleri (metadata-only MODIFY,
+	// yalnız YENİ part'lar + merge; ORDER BY'a dokunmaz). Ölçüm (CH 26.2,
+	// 21M satır / 2 gün): bu altı kolon 44.1 → 16.5 MiB, tablo -%25 —
+	// series_fingerprint (LZ4, 33 → 9.8 MiB) en büyük kalem. Tipler sabit
+	// (0006 LC mutasyonu bunlara dokunmaz) → tip probe'u gerekmez.
+	for _, a := range metricPointsCodecAlters {
+		if err := s.execDDL(ctx, a); err != nil {
+			log.Printf("[chstore] metric_points codec ALTER (soft-fail): %v", err)
+		}
+	}
 
 	// v0.9.621 — kayıt artık VERİYLE kanıtlanıyor, varlıkla değil.
 	//
@@ -5552,6 +5604,8 @@ func (s *Store) migrate(ctx context.Context) error {
 			}
 		}
 	}
+	// Depolama sıkıştırması — spanmetrics exemplar okuma şekli (göçten SONRA).
+	s.probeSpanmetricsExemplarShape(ctx)
 
 	// v0.9.1097 (0.5 Alternatif-B, exemplar-pivot unification audit) —
 	// db_statement_summary_5m gained MV-embedded exemplar states

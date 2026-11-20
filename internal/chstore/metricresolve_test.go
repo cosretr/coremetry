@@ -206,14 +206,14 @@ func TestSpanmetricStateAgg(t *testing.T) {
 // string-match test alone wouldn't have caught the original bug, so this
 // asserts the corrected finalizers and the prior wrong form's ABSENCE.
 func TestSpanmetricExemplarCols(t *testing.T) {
-	got := spanmetricExemplarCols()
-	if !strings.Contains(got, "argMaxMerge(slow_exemplar_state)") {
-		t.Errorf("slow exemplar must finalize via argMaxMerge; got %q", got)
+	got := spanmetricExemplarCols("spanmetrics_1m")
+	if !strings.Contains(got, "lower(hex(argMaxMerge(slow_exemplar_bin_state))) AS slow_trace") {
+		t.Errorf("slow exemplar must finalize via argMaxMerge + hex; got %q", got)
 	}
-	if !strings.Contains(got, "argMaxIfMerge(error_exemplar_state)") {
+	if !strings.Contains(got, "lower(hex(argMaxIfMerge(error_exemplar_bin_state))) AS error_trace") {
 		t.Errorf("error exemplar must finalize via argMaxIfMerge (it is an argMaxIfState); got %q", got)
 	}
-	if strings.Contains(got, "argMaxMerge(error_exemplar_state)") {
+	if strings.Contains(got, "argMaxMerge(error_exemplar") {
 		t.Errorf("regression: error exemplar wrongly uses argMaxMerge (CH rejects the If-state); got %q", got)
 	}
 }

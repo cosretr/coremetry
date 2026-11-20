@@ -69,11 +69,11 @@ func TestTraceErrorHistogramEligible(t *testing.T) {
 func TestTraceErrHistSpanSQLGolden(t *testing.T) {
 	// Paket-genel durum (terfi haritası, kvh hazır bayrağı) başka testlerce
 	// değişebilir; altın metin dizi yolunu sabitler.
-	prevPM, prevKVH := promotedColsPtr.Load(), attrIndexReady.Load()
+	prevPM, prevKVH := promotedColsPtr.Load(), attrIndexMode.Load()
 	empty := map[string]string{}
 	promotedColsPtr.Store(&empty)
-	attrIndexReady.Store(false)
-	t.Cleanup(func() { promotedColsPtr.Store(prevPM); attrIndexReady.Store(prevKVH) })
+	attrIndexMode.Store(attrIndexNone)
+	t.Cleanup(func() { promotedColsPtr.Store(prevPM); attrIndexMode.Store(prevKVH) })
 	f := histFilter(chipFunctionCode)
 	f.Service, f.Env = "svc-a", "prod"
 	wc := traceErrBothWhere(f, "")

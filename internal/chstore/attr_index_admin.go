@@ -173,7 +173,7 @@ func (s *Store) AttrIndexStatus(ctx context.Context) (AttrIndexStatusResult, err
 		}
 		out.Objects = append(out.Objects, st)
 	}
-	if s.probeAttrIndex(ctx) {
+	if s.probeAttrIndex(ctx) != attrIndexNone {
 		if f, t, err := s.attrIndexFillProbe(ctx); err == nil {
 			out.Filled, out.Total = f, t
 		}
@@ -208,7 +208,7 @@ func (s *Store) AttrIndexPreflight(ctx context.Context) (AttrIndexPreflightResul
 	} else {
 		out.SpansLocal = ok
 	}
-	out.ColumnsExist = s.probeAttrIndex(ctx)
+	out.ColumnsExist = s.probeAttrIndex(ctx) != attrIndexNone
 	out.IndexesExist = true
 	for _, c := range attrIndexCols {
 		if !s.spansIndexExists(ctx, c.idx) || !s.spansIndexExists(ctx, c.keysIdx) {

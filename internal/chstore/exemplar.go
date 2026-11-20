@@ -103,11 +103,12 @@ func (s *Store) FindExemplarRollup(ctx context.Context, req ExemplarReq) (*Exemp
 	// representative span — the slow state is the most useful stand-in (the
 	// loudest trace in the window) but the caller labels that join weak.
 	var traceExpr string
+	slowExpr, errExpr := smExemplarMerges("spanmetrics_1m")
 	switch req.Kind {
 	case ExemplarError:
-		traceExpr = "argMaxIfMerge(error_exemplar_state)"
+		traceExpr = errExpr
 	case ExemplarSlow, ExemplarAny, "":
-		traceExpr = "argMaxMerge(slow_exemplar_state)"
+		traceExpr = slowExpr
 	default:
 		return nil, fmt.Errorf("unknown exemplar kind %q", req.Kind)
 	}

@@ -574,6 +574,7 @@ func (s *Store) GetEndpointsMV(ctx context.Context, q EndpointsQuery) ([]Endpoin
 	}
 	args = append(args, nBuckets, nBuckets, nBuckets, nBuckets, nBuckets, q.Limit)
 
+	exSlowCol, exErrCol := smExemplarStateCols(sourceMV)
 	sql := `
 		WITH per_bucket AS (
 		  SELECT service_name,
@@ -594,8 +595,8 @@ func (s *Store) GetEndpointsMV(ctx context.Context, q EndpointsQuery) ([]Endpoin
 		         -- endpointsSparkGrid can pick (1m / 10s) carry them and
 		         -- carry http_route; only the 1s tier drops the route,
 		         -- and this read never selects it.
-		         argMaxMergeState(slow_exemplar_state)    AS slow_ex_state,
-		         argMaxIfMergeState(error_exemplar_state) AS err_ex_state
+		         argMaxMergeState(` + exSlowCol + `)    AS slow_ex_state,
+		         argMaxIfMergeState(` + exErrCol + `) AS err_ex_state
 		  FROM ` + s.spanmetricsSourceFor(sourceMV) + `
 		  WHERE ` + where + `
 		  GROUP BY service_name, path, b
@@ -630,8 +631,8 @@ func (s *Store) GetEndpointsMV(ctx context.Context, q EndpointsQuery) ([]Endpoin
 		         toFloat64(coalesce(arrayElement(groupArray(bv_p95), indexOf(groupArray(b), i)), 0)),
 		         range(0, ?)
 		       )                                                AS p95_sparkline,
-		       argMaxMerge(slow_ex_state)                       AS slow_trace_id,
-		       argMaxIfMerge(err_ex_state)                      AS error_trace_id
+		       ` + smExemplarFinal(sourceMV, "argMaxMerge(slow_ex_state)") + ` AS slow_trace_id,
+		       ` + smExemplarFinal(sourceMV, "argMaxIfMerge(err_ex_state)") + ` AS error_trace_id
 		FROM per_bucket
 		GROUP BY service_name, path
 		` + endpointsOrderBy(q.Sort, q.Dir) + `

@@ -29,7 +29,7 @@ const mlTraceErrorsSQL = `
 		FROM (
 			SELECT service_name, name, time_bucket,
 			       countMerge(error_state)             AS e,
-			       argMaxIfMerge(error_exemplar_state) AS tid
+			       %s AS tid
 			FROM %s
 			WHERE time_bucket >= ? AND time_bucket < ?
 			  AND status_code = 'error'
@@ -55,7 +55,8 @@ type MLTraceErrorRow struct {
 
 // MLTraceErrors — [from, to) penceresinde hata span sayıları.
 func (s *Store) MLTraceErrors(ctx context.Context, from, to time.Time, bucketSec int) ([]MLTraceErrorRow, error) {
-	q := fmt.Sprintf(mlTraceErrorsSQL, s.spanmetricsSourceFor("spanmetrics_1m"))
+	_, tidExpr := smExemplarMerges("spanmetrics_1m")
+	q := fmt.Sprintf(mlTraceErrorsSQL, tidExpr, s.spanmetricsSourceFor("spanmetrics_1m"))
 	rows, err := s.telemetryReadConn().Query(ctx, q, bucketSec, from.UTC(), to.UTC(), MLTraceErrorsCap)
 	if err != nil {
 		return nil, err

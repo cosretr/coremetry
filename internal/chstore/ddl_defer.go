@@ -140,9 +140,13 @@ func (s *Store) reprobePromotedAttrs() {
 		}
 		// v0.10.299 — attribute hash indeksi de ertelenen DDL ile iner; kolonlar
 		// görünür görünmez derleyici bloom yoluna geçer (restart gerekmez).
-		if !AttrIndexAvailable() && s.probeAttrIndex(ctx) {
-			registerAttrIndex(true)
+		if attrIndexMode.Load() != attrIndexV2 {
+			if m := s.probeAttrIndex(ctx); m != attrIndexMode.Load() {
+				registerAttrIndex(m)
+			}
 		}
+		// Ertelenen spanmetrics recreate'i inince exemplar okuma şekli tazelenir.
+		s.probeSpanmetricsExemplarShape(ctx)
 		// v0.10.409 — ai_calls genişletilmiş kolonları da ertelenen DDL ile
 		// iner; görünür görünmez INSERT yeni listeye geçer (ikinci boot
 		// gerekmez — gerekirse hâlâ güvenli).

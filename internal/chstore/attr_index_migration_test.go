@@ -46,3 +46,36 @@ func TestAttrIndexMigrationMatchesStore(t *testing.T) {
 		t.Fatalf("rollback: tüm DROP INDEX'ler DROP COLUMN'dan ÖNCE (Code 47): lastIdx=%d firstCol=%d", lastIdx, firstCol)
 	}
 }
+
+// 0017 — v2 ALIAS kolonları ve eski kolonun ALIAS'a dönüşümü attr_index.go
+// ile BİREBİR; sıra kolon → indeks → eski indeks düşür → kodek → ALIAS.
+func TestAttrKVHAliasMigrationMatchesStore(t *testing.T) {
+	raw, err := migrations.FS.ReadFile("0017_attr_kvh_alias.sql")
+	if err != nil {
+		t.Fatalf("0017 gömülü değil: %v", err)
+	}
+	sql := string(raw)
+	for i, c := range attrIndexV2Cols {
+		legacy := attrIndexCols[i]
+		colDDL := "ADD COLUMN IF NOT EXISTS " + c.col + " Array(UInt64)\n  ALIAS " + attrIndexV2Expr(c) + ";"
+		if n := strings.Count(sql, colDDL); n != 2 {
+			t.Fatalf("%s ALIAS DDL'i spans_local + spans için 2 kez geçmeli, %d", c.col, n)
+		}
+		aliasDDL := "DROP COLUMN IF EXISTS " + legacy.col + ", ADD COLUMN " + legacy.col + " Array(UInt64)\n  ALIAS " + attrIndexExpr(legacy) + ";"
+		if n := strings.Count(sql, aliasDDL); n != 2 {
+			t.Fatalf("%s eski DROP+ADD ALIAS DDL'i 2 kez geçmeli, %d", legacy.col, n)
+		}
+		idx := strings.Index(sql, "ADD INDEX IF NOT EXISTS "+c.idx+" "+c.col+" TYPE bloom_filter(0.01) GRANULARITY 4")
+		drop := strings.Index(sql, "DROP INDEX IF EXISTS "+legacy.idx+";")
+		alias := strings.Index(sql, aliasDDL)
+		if idx == -1 || drop == -1 || !(idx < drop && drop < alias) {
+			t.Fatalf("%s: sıra v2 indeks → eski indeks düşür → DROP+ADD ALIAS olmalı (%d %d %d)", c.col, idx, drop, alias)
+		}
+		if strings.Contains(sql, "\nALTER TABLE spans_local ON CLUSTER uptrace_all MODIFY COLUMN "+legacy.col) {
+			t.Errorf("%s: MODIFY … ALIAS yolu mutasyonları kırar — DROP+ADD olmalı", legacy.col)
+		}
+	}
+	if strings.ContainsRune(sql, 0x1f) {
+		t.Error("migration ham 0x1F baytı taşıyor")
+	}
+}

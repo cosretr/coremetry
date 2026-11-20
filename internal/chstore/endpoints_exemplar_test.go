@@ -27,8 +27,8 @@ func TestEndpointExemplarsRideTheExistingScan(t *testing.T) {
 			"1000s of services x routes", n)
 	}
 	for _, frag := range []string{
-		"argMaxMergeState(slow_exemplar_state)",
-		"argMaxIfMergeState(error_exemplar_state)",
+		"argMaxMergeState(` + exSlowCol + `)",
+		"argMaxIfMergeState(` + exErrCol + `)",
 		"argMaxMerge(slow_ex_state)",
 		"argMaxIfMerge(err_ex_state)",
 	} {
