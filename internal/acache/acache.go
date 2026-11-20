@@ -99,9 +99,6 @@ type Policy interface {
 	Classify(attrKey string) Card
 }
 
-// PolicyFunc adapts a plain function to Policy.
-type PolicyFunc func(string) Card
-
 // StaticPolicy resolves keys against an allowlist (Track) and a denylist
 // (HLL); everything else falls to Default. Build it from config (splitCSV
 // env vars) or from a system_settings JSON blob so new attributes are a

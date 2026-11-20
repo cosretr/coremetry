@@ -37,19 +37,6 @@ type Expr interface {
 	String() string
 }
 
-// ValueType is the PromQL value kind an expression evaluates to. The parser
-// tags a few nodes; the evaluator uses it for type checks (e.g. the first arg
-// of histogram_quantile is a scalar, the second a vector).
-type ValueType string
-
-const (
-	ValueTypeNone   ValueType = "none"
-	ValueTypeScalar ValueType = "scalar"
-	ValueTypeVector ValueType = "vector"
-	ValueTypeMatrix ValueType = "matrix"
-	ValueTypeString ValueType = "string"
-)
-
 // MatchType is a label-matcher operator.
 type MatchType int
 
