@@ -1763,5 +1763,150 @@
   "msg": {
    "k": "imp.incident"
   }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a servisinde hata oranı normalde %0,4, şimdi %6,8 (17 kat).",
+  "msg": {
+   "k": "h.mlErr",
+   "a": {
+    "n": "0.4%",
+    "svc": "svc-a",
+    "v": "6.8%",
+    "x": "17"
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer %0,07 (eşik %0,01)",
+  "msg": {
+   "k": "imp.rule.pct",
+   "a": {
+    "tPct": 0.005,
+    "vPct": 0.068
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Son 5 dakikanın 5'inde eşik aşıldı (en az 3 gerekir)",
+  "msg": {
+   "k": "why.viol",
+   "a": {
+    "min": "3",
+    "n": "5",
+    "w": "5"
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Eşik %1,4: en az %1, normalin 1,5 katı ve 1 puan üstü",
+  "msg": {
+   "k": "why.threshold",
+   "a": {
+    "abs": "1",
+    "floor": "1%",
+    "rel": "1.5",
+    "t": "1.4%"
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Yük yeterli: dakikada yaklaşık 3.100 istek (en az 10 gerekir)",
+  "msg": {
+   "k": "why.load",
+   "a": {
+    "load": "3,100",
+    "min": "10"
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Kaynak örneklenmemiş sunucu metriği",
+  "msg": {
+   "k": "why.srcVM"
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a servisinde hata oranı normalde neredeyse hiç yok, şimdi %6,8.",
+  "msg": {
+   "k": "h.mlErrZero",
+   "a": {
+    "svc": "svc-a",
+    "v": "6.8%"
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Son 5 dakikanın 2'sinde eşik aşıldı (açılış için en az 3 gerekir; ihlal sürdüğü için açık)",
+  "msg": {
+   "k": "why.violOpen",
+   "a": {
+    "min": "3",
+    "n": "2",
+    "w": "5"
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Eşik %3",
+  "msg": {
+   "k": "why.thrOnly",
+   "a": {
+    "t": "3%"
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a servisinde hata oranı normalde %2, şimdi %1,5.",
+  "msg": {
+   "k": "h.mlErrFlat",
+   "a": {
+    "n": "2%",
+    "svc": "svc-a",
+    "v": "1.5%"
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer %0,01 (eşik %0,02)",
+  "msg": {
+   "k": "imp.rule.pct",
+   "a": {
+    "tPct": 0.02,
+    "vPct": 0.015
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 2 (eşik 2)",
+  "msg": {
+   "k": "imp.rule",
+   "a": {
+    "tNum": 2,
+    "vNum": 2
+   }
+  }
+ },
+ {
+  "field": "evidence",
+  "tr": "Dedektör sürdürme koşulunu geçti; log kayıtlarından.",
+  "msg": {
+   "k": "ev.sentence",
+   "a": {
+    "baseK": "ev.base.dwell",
+    "srcK": "ev.src.logs"
+   }
+  }
  }
 ]

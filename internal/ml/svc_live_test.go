@@ -160,7 +160,9 @@ func TestSvcProblemInputs(t *testing.T) {
 		t.Fatalf("girdi: %+v", in)
 	}
 	x := in[0]
-	want := "orders-batch servisinde hata oranı %3,4, olağanı %1. orders-batch servisinde 4 operasyon birden yavaşladı (p95 olağanın 3 katı)."
+	// v0.10.2383 — hata oranı cümlesi "normalde X, şimdi Y (N kat)"; sonda
+	// ölçüyü veren olayın (hata oranı, VM) kaynak işareti.
+	want := "orders-batch servisinde hata oranı normalde %1, şimdi %3,4 (3,4 kat). orders-batch servisinde 4 operasyon birden yavaşladı (p95 olağanın 3 katı). " + chstore.REDEvidenceVM + "."
 	if x.Desc != want {
 		t.Errorf("cümle:\n%q\n%q", x.Desc, want)
 	}

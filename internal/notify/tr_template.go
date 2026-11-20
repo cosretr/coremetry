@@ -79,6 +79,7 @@ var sourceLabelTR = map[string]string{
 	chstore.StdSourceProbe: "sentetik kontrol", chstore.StdSourceException: "exception grubu",
 	chstore.StdSourceOracle: "Oracle", chstore.StdSourceSelf: "Coremetry", chstore.StdSourceExternal: "dış kaynak",
 	chstore.StdSourceRule: "kural",
+	chstore.StdSourceLogs: "log kalıpları", // v0.10.2383 — ML log dedektörü liderliğindeki Problem (ekran etiketiyle aynı)
 }
 
 // trDuration — SAF: "45 sn" · "35 dk" · "5 sa 40 dk" · "2 g 3 sa".

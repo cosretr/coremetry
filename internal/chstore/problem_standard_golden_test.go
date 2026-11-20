@@ -31,11 +31,14 @@ type stdGoldenRow struct {
 	Next     string   `json:"next"`
 	Context  []string `json:"context,omitempty"`
 	Gates    []string `json:"gates"`
+	// Reasons — v0.10.2383: "Neden" satırları (yalnız ML servis satırlarında;
+	// boşken JSON'a çıkmaz → eski satırların baytları aynen).
+	Reasons []string `json:"reasons,omitempty"`
 }
 
 func stdGoldenOf(name string, s ProblemStandard) stdGoldenRow {
 	r := stdGoldenRow{Name: name, Kind: s.Kind, Headline: s.Headline, Impact: s.Impact.Primary.Text,
-		Evidence: s.Evidence.Sentence, Next: s.NextStep.Text, Context: s.Context}
+		Evidence: s.Evidence.Sentence, Next: s.NextStep.Text, Context: s.Context, Reasons: s.Evidence.Reasons}
 	for _, g := range s.Confidence.Gates {
 		r.Gates = append(r.Gates, g.ID+" "+g.Name+" "+g.Status+" "+g.Note)
 	}
@@ -176,6 +179,21 @@ func stdGoldenMatrix() []stdGoldenRow {
 	ri := now.Add(-5 * time.Minute).UnixNano()
 	add("inc", StandardizeIncident(Incident{ID: "i-1", Title: " başlık-2 ", Service: "svc-a", Status: "open", Severity: "critical", StartedAt: t0}, StdFacts{Now: now, IncidentProblems: 2}))
 	add("inc-resolved", StandardizeIncident(Incident{ID: "i-2", Title: "başlık-3", Status: "resolved", Severity: "warning", StartedAt: t0, ResolvedAt: &ri}, ctx))
+
+	// v0.10.2383 — ML servis düzeyi Problem'i (kaynak işareti, "normalde X,
+	// şimdi Y" manşeti, etki kuralı "Neden" satırları). Matrisin SONUNA eklenir:
+	// önceki satırların baytları değişmez.
+	ml := func(rule, metric string, v, th float64, desc string) Problem {
+		pr := p(rule, MLPromotedRuleNamePrefix+"servis anomalisi", metric, v, th, desc)
+		pr.Comparator = ">="
+		return pr
+	}
+	rule := StdImpactRule{Window: 5, Violations: 5, MinViolations: 3, Threshold: 0.014, Floor: 0.01, Rel: 1.5, Abs: 0.01, LoadPerMin: 3100, MinLoad: 10, Unsampled: true}
+	ap("ml-svc-vm", ml(MLSvcRulePrefix+"svc-a", "error_rate", 0.068, 0.005, MLErrRateSentence("svc-a", 0.068, 0.004)+" "+REDEvidenceVM+"."), StdFacts{Now: now, ImpactRule: &rule})
+	open := StdImpactRule{Window: 5, Violations: 2, MinViolations: 3, Threshold: 0.03, MinLoad: 10}
+	ap("ml-svc-zero-open", ml(MLSvcRulePrefix+"svc-a", "error_rate", 0.068, 0.005, MLErrRateSentence("svc-a", 0.068, 0)+" "+REDEvidenceVM+"."), StdFacts{Now: now, ImpactRule: &open})
+	ap("ml-svc-flat", ml(MLSvcRulePrefix+"svc-a", "error_rate", 0.015, 0.02, MLErrRateSentence("svc-a", 0.015, 0.02)+" "+REDEvidenceVM+"."), StdFacts{Now: now})
+	ap("ml-group-logs", ml(MLGroupRulePrefix+"ev-1", "ml_group_signals", 2, 2, "svc-a: özet cümlesi. "+EvidenceLogs+"."), StdFacts{Now: now})
 	return out
 }
 
@@ -263,6 +281,12 @@ func TestProblemStandardMessages(t *testing.T) {
 		push("next", s.NextStep.Text, s.NextStep.Msg)
 		for i := range s.ContextMsgs {
 			push("context", s.Context[i], &s.ContextMsgs[i])
+		}
+		if len(s.Evidence.ReasonMsgs) != len(s.Evidence.Reasons) {
+			t.Errorf("%s: neden %d satır, anahtar %d", s.Kind, len(s.Evidence.Reasons), len(s.Evidence.ReasonMsgs))
+		}
+		for i := range s.Evidence.ReasonMsgs { // v0.10.2383
+			push("reason", s.Evidence.Reasons[i], &s.Evidence.ReasonMsgs[i])
 		}
 		for _, g := range s.Confidence.Gates {
 			if (g.Note != "") != (g.NoteMsg != nil) {

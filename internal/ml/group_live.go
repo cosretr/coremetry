@@ -107,7 +107,7 @@ func groupProblemDescription(g decidedGroup, summary func(chstore.MLEvent) strin
 		}
 		fmt.Fprintf(&b, " %s: %s", signalName(s), line)
 	}
-	return truncRunes(b.String(), 600)
+	return withSourceMarker(b.String(), groupLead(g)) // v0.10.2383: lider olayın kaynağı
 }
 
 func containsStr(xs []string, x string) bool {
@@ -607,6 +607,6 @@ func singleProblemDescription(g decidedGroup, card func(chstore.MLEvent) CardInp
 	}
 	what := capFirst(fill(sp.fact, in))
 	mins := int(in.Now.Sub(in.StartedAt).Minutes())
-	return truncRunes(fmt.Sprintf("%s: tek güçlü sinyal (%s, başka sinyal teyit etmedi) — %s şimdi %s, %s; %d dakikadır sürüyor.",
-		g.G.Service, strings.ToLower(signalName(memberSignal(e))), what, f.one(in.Observed, metricS), normal, mins), 600)
+	return withSourceMarker(fmt.Sprintf("%s: tek güçlü sinyal (%s, başka sinyal teyit etmedi) — %s şimdi %s, %s; %d dakikadır sürüyor.",
+		g.G.Service, strings.ToLower(signalName(memberSignal(e))), what, f.one(in.Observed, metricS), normal, mins), e) // v0.10.2383
 }

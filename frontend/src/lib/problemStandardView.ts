@@ -278,6 +278,18 @@ export function stdRequestImpact(std: ProblemStandard | null | undefined, lang: 
 export const stdEvidenceView = (std: ProblemStandard, lang: Lang = 'tr') => stdMsgView(std.evidence.msg, std.evidence.sentence, lang);
 export const stdNextView = (std: ProblemStandard, lang: Lang = 'tr') => stdMsgView(std.nextStep.msg, std.nextStep.text, lang);
 
+/**
+ * v0.10.2383 — "Neden böyle değerlendiriyoruz" satırları (etki kuralı olayının
+ * gerçekleri, Go chstore impactRuleReasons). Boş dizi = satır yok: çağıran
+ * bugünkü tek cümleyi (stdEvidenceView) çizer. TR sunucu metni aynen; EN
+ * anahtardan — anahtar dizisi satırlarla eşleşmezse sunucu metni + orig.
+ */
+export function stdReasonsView(std: ProblemStandard, lang: Lang = 'tr'): { text: string; orig: boolean }[] {
+  const rs = std.evidence.reasons ?? [];
+  const ms = std.evidence.reasonMsgs ?? [];
+  return rs.map((r, i) => stdMsgView(ms.length === rs.length ? ms[i] : null, r, lang));
+}
+
 /** Bağlam satırları (" · " ile): anahtar dizisi eşleşmezse sunucu metni. */
 export function stdContextView(std: ProblemStandard, lang: Lang = 'tr'): { text: string; orig: boolean } {
   const ctx = std.context ?? [];

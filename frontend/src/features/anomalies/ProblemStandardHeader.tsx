@@ -19,7 +19,7 @@ import { useProblemStandard } from '@/lib/queries';
 import {
   splitStdHeadline, stdImpactSecondary, stdRequestImpact, fmtStdClock, stdDurationLine, stdGateSummary, stdGateTitle,
   stdSourceName, stdSamplingNote, stdNextHref, stdConfidenceLabel,
-  stdHeadlineView, stdImpactView, stdEvidenceView, stdNextView, stdContextView,
+  stdHeadlineView, stdImpactView, stdEvidenceView, stdNextView, stdContextView, stdReasonsView,
 } from '@/lib/problemStandardView';
 import { OrigLang } from './OrigLang';
 import type { ProblemStandard } from '@/lib/types';
@@ -49,6 +49,8 @@ export function ProblemStandardBlock({ std, showTitle = true, factsOnly = false 
   const req = stdRequestImpact(std, lang);
   const impact = req ? { text: req.main, orig: req.orig } : stdImpactView(std, lang);
   const evidence = stdEvidenceView(std, lang);
+  // v0.10.2383 — etki kuralı gerçekleri varsa satır satır; yoksa tek cümle.
+  const reasons = stdReasonsView(std, lang);
   const next = stdNextView(std, lang);
   const ctx = stdContextView(std, lang);
   const o = (v: { text: string; orig: boolean }) => (v.orig ? <OrigLang>{v.text}</OrigLang> : v.text);
@@ -87,7 +89,9 @@ export function ProblemStandardBlock({ std, showTitle = true, factsOnly = false 
       </div>
       {!factsOnly && <dl className="std-why">
         <dt>{t('pd.std.why', lang)}</dt>
-        <dd>{evidence.text ? o(evidence) : '—'}</dd>
+        <dd>{reasons.length > 0
+          ? reasons.map((r, i) => <div key={i}>{o(r)}</div>)
+          : evidence.text ? o(evidence) : '—'}</dd>
         {(std.context?.length ?? 0) > 0 && (
           <>
             <dt>{t('pd.std.ctx', lang)}</dt>

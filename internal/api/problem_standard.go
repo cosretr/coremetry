@@ -41,6 +41,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/ml"
 )
 
 func init() { registerRoutesExtra("problem-standard", (*Server).registerProblemStandardRoutes) }
@@ -61,6 +62,10 @@ type inboxStdSrc struct {
 	exception *chstore.ExceptionGroup
 	anomaly   *chstore.AnomalyEvent
 	incident  *chstore.Incident
+	// impactRule — v0.10.2383: Problem'in en yeni servis hata oranı olayının
+	// etki kuralı gerçekleri ("Neden" satırları). YALNIZ detay ucu doldurur
+	// (problemImpactRule); liste yolunda hep nil → ek okuma yok.
+	impactRule *chstore.StdImpactRule
 }
 
 // parseStdRef — SAF: "<kind>:<id>" → (kind, id). Bilinmeyen tür / boş id → ok=false.
@@ -80,7 +85,8 @@ func parseStdRef(ref string) (kind, id string, ok bool) {
 // env'e özgü nesneyi seçer).
 // :v2: — v0.10.2300 (sunucu metinleri S3) gövdeye öncelik gerekçesi + anahtarı
 // eklendi (priorityReason, priorityReasonMsg); dil anahtara GİRMEZ.
-func problemStandardKey(ref string) string { return "pstd:v2:ref=" + strings.TrimSpace(ref) }
+// :v3: — v0.10.2383 kanıta "Neden" satırları eklendi (evidence.reasons).
+func problemStandardKey(ref string) string { return "pstd:v3:ref=" + strings.TrimSpace(ref) }
 
 // stdBaseFacts — SAF: trafik dışındaki gerçekler (takvim, batch, deploy).
 func stdBaseFacts(now time.Time, sens chstore.AnomalySensitivityConfig, service string) chstore.StdFacts {
@@ -109,6 +115,7 @@ func standardizeInboxSrc(src *inboxStdSrc, f chstore.StdFacts, incidentProblems 
 		if p.RecentDeploy != nil {
 			f.RecentDeploy = p.RecentDeploy.Version
 		}
+		f.ImpactRule = src.impactRule // v0.10.2383 — yalnız detay ucunda dolu
 		std = chstore.StandardizeProblem(p, f)
 	case src.exception != nil:
 		std = chstore.StandardizeException(*src.exception, f)
@@ -211,6 +218,9 @@ func (s *Server) getProblemStandard(w http.ResponseWriter, r *http.Request) {
 			// sayfanın geri kalanı (kendi 404'üyle) aynen çalışır.
 			return nil, nil
 		}
+		if src.problem != nil {
+			src.impactRule = s.problemImpactRule(ctx, *src.problem) // v0.10.2383
+		}
 		items := []InboxItem{{ID: kind + ":" + id, stdSrc: src}}
 		if incProblems > 0 {
 			items[0].Incident = &InboxIncidentRef{ID: id, ProblemCount: incProblems}
@@ -231,6 +241,49 @@ func (s *Server) getProblemStandard(w http.ResponseWriter, r *http.Request) {
 		}
 		return items[0].Std, nil
 	})
+}
+
+// stdImpactEventsCap — "Neden" okumasının satır tavanı: tek servis × tek
+// dedektör, en yeniler (bir Problem'in bölümünde birkaç epizot olur).
+const stdImpactEventsCap = 20
+
+// stdImpactRuleSubject — SAF (v0.10.2383): detay başlığı etki kuralı
+// gerçeklerini okusun mu. Yalnız ML servis Problem'i (`anomaly-auto:svc:`) ve
+// yalnız ölçüsü servis hata oranıysa: satırlar Problem'in KENDİ ölçüsünü
+// açıklar (ölçü yaygın yavaşlamadan geldiyse ya da satır grup / eski aile
+// sahibiyse bugünkü cümle kalır, okuma yapılmaz). Kapanmış Problem'de de
+// okunmaz: kanıt olayın SON tikinin penceresidir (kapanmadan önceki sönen
+// pencere) — "son 5 dakikanın 1'inde" bitmiş bir Problem için doğru değildir.
+func stdImpactRuleSubject(p chstore.Problem) bool {
+	return p.Service != "" && p.Metric == "error_rate" && p.Status != "resolved" && chstore.IsMLSvcProblem(p.RuleID)
+}
+
+// stdImpactEventsSince — SAF: okuma penceresinin başı (olay çizelgesiyle aynı:
+// Problem başlangıcı − ProblemEventSlack, en çok 30 gün geri).
+func stdImpactEventsSince(startedAt int64, now time.Time) time.Time {
+	since := time.Unix(0, startedAt).Add(-chstore.ProblemEventSlack)
+	if floor := now.Add(-30 * 24 * time.Hour); since.Before(floor) {
+		since = floor
+	}
+	return since
+}
+
+// problemImpactRule — detay başlığının "Neden" gerçekleri: Problem'e bağlı EN
+// YENİ servis hata oranı olayının kanıtı (ml.ImpactRuleFacts). Mevcut okuyucu
+// (ListMLEvents), olay çizelgesinin okumasından DAR: tek servis × tek dedektör
+// × ≤ 20 satır; yalnız detay ucunda, problemStandardTTL önbelleğinin
+// arkasında. Okuma düşerse gerçek yok → bugünkü tek cümle (hata dönmez).
+func (s *Server) problemImpactRule(ctx context.Context, p chstore.Problem) *chstore.StdImpactRule {
+	if s.store == nil || !stdImpactRuleSubject(p) {
+		return nil
+	}
+	evs, err := s.store.ListMLEvents(ctx, chstore.MLEventsFilter{Service: p.Service, Detector: ml.ImpactFactsDetector,
+		Since: stdImpactEventsSince(p.StartedAt, time.Now()), Limit: stdImpactEventsCap})
+	if err != nil {
+		log.Printf("[problem-standard] etki kuralı gerçekleri okunamadı %s (tek cümleyle devam): %v", p.ID, err)
+		return nil
+	}
+	return ml.NewestImpactRuleFacts(chstore.ProblemEventsOf(evs, p, chstore.ProblemEventSlack))
 }
 
 // loadStdSrc — kimlikten kaynak nesne. nil, nil = bulunamadı.

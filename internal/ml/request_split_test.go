@@ -76,7 +76,8 @@ func TestSvcImpactEventCarriesRequestSplit(t *testing.T) {
 	if err := json.Unmarshal([]byte(ev.Evidence), &m); err != nil || len(m.Ratios) != 5 || m.Loads[4] != 3100 {
 		t.Fatalf("dakika dizileri: %v %s", err, ev.Evidence)
 	}
-	want := "orders servisinde hata oranı %6,8, olağanı %0,4. Dakikada 210 başarısız, 2.890 başarılı istek (olağanı 12 başarısız, 3.090 başarılı)."
+	// v0.10.2383 — cümle "normalde X, şimdi Y (N kat)" (chstore.MLErrRateSentence).
+	want := "orders servisinde hata oranı normalde %0,4, şimdi %6,8 (17 kat). Dakikada 210 başarısız, 2.890 başarılı istek (olağanı 12 başarısız, 3.090 başarılı)."
 	if got := svcEventSentence(ev); got != want {
 		t.Errorf("Problem cümlesi %q, beklenen %q", got, want)
 	}
@@ -92,12 +93,13 @@ func TestSvcImpactEventCarriesRequestSplit(t *testing.T) {
 	}
 	old := ev
 	old.Evidence = `{"rule":"impact","ratios":[0.05],"loads":[200]}`
-	if got := svcEventSentence(old); got != "orders servisinde hata oranı %6,8, olağanı %0,4." {
-		t.Errorf("bölümsüz olayda cümle bugünkü haliyle kalmalı: %q", got)
+	if got := svcEventSentence(old); got != "orders servisinde hata oranı normalde %0,4, şimdi %6,8 (17 kat)." {
+		t.Errorf("bölümsüz olayda cümleye istek bölümü eklenmemeli: %q", got)
 	}
-	// servis başına Problem girdisi cümleyi taşır (svcProblemInputs → Desc)
+	// servis başına Problem girdisi cümleyi taşır (svcProblemInputs → Desc);
+	// v0.10.2383: sonda lider olayın kaynak işareti.
 	in := svcProblemInputs([]chstore.MLEvent{ev}, map[string]SvcShadow{ev.ID: {WouldOpen: true}})
-	if len(in) != 1 || in[0].Desc != want {
+	if len(in) != 1 || in[0].Desc != want+" "+chstore.REDEvidenceVM+"." {
 		t.Errorf("Problem açıklaması: %+v", in)
 	}
 }

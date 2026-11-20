@@ -198,14 +198,14 @@ type svcProblemIn struct {
 	Events           []string // kararın olay kimlikleri (Live işareti)
 }
 
-// pctTR — SAF: oran → "2,5" (yüzde; işaret çağıranda).
-func pctTR(v float64) string { return trDec(v*100, 1) }
-
 // svcEventSentence — SAF: Problem detayındaki düz cümle (spec Karar 5).
 func svcEventSentence(e chstore.MLEvent) string {
 	switch e.Detector {
 	case detSvcErrorRate:
-		s := fmt.Sprintf("%s servisinde hata oranı %%%s, olağanı %%%s.", e.Service, pctTR(e.Observed), pctTR(e.Baseline))
+		// v0.10.2383 — "normalde X, şimdi Y (N kat)": cümlenin tek tanımı
+		// chstore (manşet oradan geri okunur); kat OLAYIN tabanından, Problem'in
+		// %0,5 tabanlı Threshold'undan değil.
+		s := chstore.MLErrRateSentence(e.Service, e.Observed, e.Baseline)
 		// v0.10.2380 — istek sayısıyla etki (chstore işaret cümlesi; Problem
 		// standardı buradan geri okur). Kanıtta bölüm yoksa cümle eklenmez.
 		if rs := chstore.MLRequestSplitOf(e.Evidence); rs != nil {
@@ -266,10 +266,12 @@ func svcProblemInputs(kept []chstore.MLEvent, ds map[string]SvcShadow) []svcProb
 		in := svcProblemIn{Service: svc}
 		best := -1.0
 		var parts []string
+		var lead chstore.MLEvent // Problem'in ölçüsünü veren olay (kaynak işareti)
 		for _, e := range evs {
 			v, th := svcValueThreshold(e)
 			if r := mlProblemRatio(v, th); r > best {
 				best, in.Value, in.Threshold, in.Metric = r, v, th, svcMetric(e.Detector)
+				lead = e
 			}
 			if in.StartedAt == 0 || e.StartedAt < in.StartedAt {
 				in.StartedAt = e.StartedAt
@@ -277,7 +279,7 @@ func svcProblemInputs(kept []chstore.MLEvent, ds map[string]SvcShadow) []svcProb
 			parts = append(parts, svcEventSentence(e))
 			in.Events = append(in.Events, e.ID)
 		}
-		in.Desc = truncRunes(strings.Join(parts, " "), 600)
+		in.Desc = withSourceMarker(strings.Join(parts, " "), lead) // v0.10.2383
 		out = append(out, in)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Service < out[j].Service })

@@ -39,7 +39,8 @@ const rawStrings = (msg: StdMsg) => Object.entries(msg.a ?? {})
 describe('S2 — Go fikstürü EN katalogda', () => {
   it('fikstür dolu ve her alan türü var', () => {
     expect(FX.length).toBeGreaterThan(100);
-    expect([...new Set(FX.map(f => f.field))].sort()).toEqual(['context', 'evidence', 'gate', 'headline', 'impact', 'next']);
+    // v0.10.2383 — 'reason': etki kuralı "Neden" satırları.
+    expect([...new Set(FX.map(f => f.field))].sort()).toEqual(['context', 'evidence', 'gate', 'headline', 'impact', 'next', 'reason']);
   });
   it('her anahtar çizilir, yer tutucu ve Türkçe kalmaz', () => {
     const bad: string[] = [];
@@ -67,12 +68,22 @@ describe('S2 — Go fikstürü EN katalogda', () => {
     expect(stdMsgText(en('Tek ölçümde eşik aşıldı; Oracle hata tablosundan.'))).toBe('Threshold exceeded in a single measurement; from the Oracle error table.');
     expect(stdMsgText(en('Tek ölçümde eşik aşıldı.'))).toBe('Threshold exceeded in a single measurement.');
     expect(stdMsgText({ k: 'imp.occur', a: { cNum: 1 } })).toBe('1 occurrence');
+    // v0.10.2383 — ML servis hata oranı manşeti + "Neden" satırları (Go fikstüründen).
+    expect(stdMsgText(en('svc-a servisinde hata oranı normalde %0,4, şimdi %6,8 (17 kat).'))).toBe('svc-a: error rate normally 0.4%, now 6.8% (17×).');
+    expect(stdMsgText(en('svc-a servisinde hata oranı normalde neredeyse hiç yok, şimdi %6,8.'))).toBe('svc-a: error rate normally near zero, now 6.8%.');
+    expect(stdMsgText(en('svc-a servisinde hata oranı normalde %2, şimdi %1,5.'))).toBe('svc-a: error rate normally 2%, now 1.5%.');
+    expect(stdMsgText(en("Son 5 dakikanın 5'inde eşik aşıldı (en az 3 gerekir)"))).toBe('Threshold exceeded in 5 of the last 5 minutes (at least 3 required)');
+    expect(stdMsgText(en('Eşik %1,4: en az %1, normalin 1,5 katı ve 1 puan üstü'))).toBe('Threshold 1.4%: at least 1%, 1.5× normal and 1 pt above normal');
+    expect(stdMsgText(en('Yük yeterli: dakikada yaklaşık 3.100 istek (en az 10 gerekir)'))).toBe('Enough load: about 3,100 requests per minute (at least 10 required)');
+    expect(stdMsgText(en('Kaynak örneklenmemiş sunucu metriği'))).toBe('Source: unsampled server metric');
+    expect(stdMsgText(en('Dedektör sürdürme koşulunu geçti; log kayıtlarından.'))).toBe('Detector passed its sustain condition; from log records.');
   });
 });
 
 describe('S2 — Go kaynağındaki anahtar literalleri katalogda', () => {
   it('stdM / K-argüman / dal anahtarları', () => {
-    const src = ['internal/chstore/std_msg.go', 'internal/chstore/problem_standard.go', 'internal/chstore/signal_gates.go'].map(GO).join('\n');
+    const src = ['internal/chstore/std_msg.go', 'internal/chstore/problem_standard.go', 'internal/chstore/signal_gates.go',
+      'internal/chstore/problem_standard_ml.go'].map(GO).join('\n'); // v0.10.2383
     const keys = new Set<string>();
     for (const x of src.matchAll(/stdM\("([^"]+)"/g)) keys.add(x[1]);
     for (const x of src.matchAll(/"((?:evl|ev\.base|ev\.src|h\.ex|h\.self|metric)\.[\w-]+)"/g)) keys.add(x[1]);

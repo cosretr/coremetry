@@ -47,6 +47,9 @@ const (
 	REDEvidenceSpan = "kaynak: span (örneklenmiş)"
 	// REDEvidenceVMHold — VM servisi biliyor ama bu tik karar veremedi.
 	REDEvidenceVMHold = "kaynak: VictoriaMetrics — bu tik beklemede: "
+	// EvidenceLogs — v0.10.2383: log kayıtlarının sayımı (Elasticsearch
+	// agregasyonu; ML log dedektörleri). Kaynak adı mevcut StdSourceLogs.
+	EvidenceLogs = "kaynak: log kayıtları"
 )
 
 // Kanıt kaynakları (ProblemStandard.Evidence.Source).
@@ -164,12 +167,27 @@ type StdEvidence struct {
 	Msg      *StdMsg `json:"msg,omitempty"` // v0.10.2299 — Sentence'ın anahtarı
 	Source   string  `json:"source"`
 	Sampled  bool    `json:"sampled"`
+	// Reasons / ReasonMsgs — v0.10.2383: "Neden böyle değerlendiriyoruz"
+	// satırları (etki kuralı olayının gerçekleri; problem_standard_ml.go) ve
+	// aynı sıra / uzunlukta metin anahtarları. Yalnız çağıran gerçekleri
+	// verdiyse (StdFacts.ImpactRule — detay ucu) dolar; boşsa Sentence çizilir.
+	// Sentence her zaman dolu kalır (bildirim, MCP ve liste onu okur).
+	Reasons    []string `json:"reasons,omitempty"`
+	ReasonMsgs []StdMsg `json:"reasonMsgs,omitempty"`
 }
 
 // StdConfidence — güven; YALNIZ kapılardan (signal_gates.go).
 type StdConfidence struct {
 	Level string       `json:"level"` // high | medium | low
 	Gates []SignalGate `json:"gates"`
+	// PolicyLevel — v0.10.2383: bildirim politikasının okuduğu seviye; boş =
+	// Level. Yalnız ML canlı yolunun kaynak işareti ekrandaki seviyeyi
+	// değiştirdiğinde dolar ve işaretten ÖNCEKİ seviyeyi taşır: doğru kaynak
+	// ekranda (ve bildirim metninde) görünür, ama "yüksek güvenli P1" baypası
+	// (D3) canlı gönderim kararlarını operatör onayı olmadan değiştirmez
+	// (problem_standard_ml.go policyLevel; pin TestMLMarkerNotifyPolicyUnchanged).
+	// JSON'a çıkmaz.
+	PolicyLevel string `json:"-"`
 }
 
 // StdNextStep — sonraki adım.
@@ -215,6 +233,10 @@ type StdFacts struct {
 	LastSeen                int64
 	BigBreachRatio          float64 // 0 = CurrentProblemPriority()
 	IncidentProblems        int
+	// ImpactRule — v0.10.2383: Problem'in en yeni uygun ML olayının etki kuralı
+	// gerçekleri ("Neden" satırları). nil = bilinmiyor → bugünkü tek cümle.
+	// Yalnız detay ucu doldurur (liste / bildirim yolunda ek okuma yok).
+	ImpactRule *StdImpactRule
 }
 
 func (f StdFacts) now() time.Time {
@@ -241,8 +263,20 @@ func ParseEvidenceSource(desc string) (source string, hold bool) {
 		return StdSourceVM, false
 	case strings.Contains(desc, REDEvidenceSpan):
 		return StdSourceSpan, false
+	case strings.Contains(desc, EvidenceLogs):
+		return StdSourceLogs, false
 	}
 	return "", false
+}
+
+// StripEvidenceSource — SAF (v0.10.2383): açıklamadan ML canlı yolunun
+// eklediği kaynak cümlesini (" <işaret>.") atar. ML Problem'inin manşeti
+// açıklamanın kendisidir; kaynak başlık kartında söylenir, manşette değil.
+func StripEvidenceSource(desc string) string {
+	for _, m := range []string{REDEvidenceVM, EvidenceLogs} {
+		desc = strings.Replace(desc, " "+m+".", "", 1)
+	}
+	return desc
 }
 
 // stdSampled — SAF: kaynak örneklenmiş mi (D12: örneklenmiş span-yalnız
@@ -491,9 +525,16 @@ func StandardizeProblem(p Problem, f StdFacts) ProblemStandard {
 	k := classifyProblem(p)
 	now := f.now()
 	src, hold := ParseEvidenceSource(p.Description)
+	// v0.10.2383 — ML canlı yolu (servis / grup satırı) lider olayın gerçek
+	// kaynağını işaretler. Yalnız o iki aile: açıklamasını başka bir yazarın
+	// kurduğu satırda işaretin bugünkü etkisi aynen kalır.
+	mlMarked := src != "" && IsMLLiveProblem(p.RuleID)
 	if src == "" {
 		src = k.source
 	}
+	// G3 (VM karar) RED ölçüsüne uygulanır: işaret VM diyorsa ML servis
+	// Problem'inde de ölçülmüş bir gerçektir (işaretsiz eski satırda aynen "na").
+	vmDecides := k.vmDecides || (mlMarked && src == StdSourceVM && isREDFamily(k.family))
 	ratio := stdBreachRatio(p)
 	if k.family == StdFamilyException && p.Priority == "P1" {
 		ratio = math.Inf(1) // merdiven P1'i = büyük ihlal (oran alanı yok)
@@ -510,10 +551,13 @@ func StandardizeProblem(p Problem, f StdFacts) ProblemStandard {
 	std.Since = problemSince(p, f, now)
 	sent, sm := problemEvidenceSentence(p, k, src, hold)
 	std.Evidence = StdEvidence{Sentence: sent, Source: src, Sampled: stdSampled(src), Msg: sm}
+	if f.ImpactRule != nil && k.kind == "anomaly_auto" {
+		std.Evidence.Reasons, std.Evidence.ReasonMsgs = impactRuleReasons(*f.ImpactRule, src == StdSourceVM)
+	}
 	gin := GateInput{
 		Family:           k.family,
 		Traffic:          k.traffic,
-		VMDecides:        k.vmDecides,
+		VMDecides:        vmDecides,
 		Dwell:            k.dwell,
 		Source:           src,
 		VMHold:           hold,
@@ -526,12 +570,21 @@ func StandardizeProblem(p Problem, f StdFacts) ProblemStandard {
 		Batch:            f.Batch,
 	}
 	gates := ComputeSignalGates(gin)
-	std.Confidence = StdConfidence{Level: ConfidenceFromGates(gates, ConfidenceInput{
+	cin := ConfidenceInput{
 		Sampled:          std.Evidence.Sampled,
 		Ratio:            ratio,
 		BigBreach:        f.bigBreach(),
 		ImpactUnverified: k.family == StdFamilyRuntime && !std.Impact.Known,
-	}), Gates: gates}
+	}
+	std.Confidence = StdConfidence{Level: ConfidenceFromGates(gates, cin), Gates: gates}
+	if mlMarked {
+		// Bildirim politikası işaretten önceki seviyeyi okur (PolicyLevel).
+		gin.Source, gin.VMDecides, gin.VMHold = k.source, k.vmDecides, false
+		cin.Sampled = stdSampled(k.source)
+		if old := ConfidenceFromGates(ComputeSignalGates(gin), cin); old != std.Confidence.Level {
+			std.Confidence.PolicyLevel = old
+		}
+	}
 	std.NextStep = problemNextStep(p, k)
 	std.Context, std.ContextMsgs = stdContext(f, p.EpisodeCount)
 	return std
@@ -703,7 +756,8 @@ func MLPromotedHeadline(p Problem) (string, bool) {
 		return "", false
 	}
 	// v0.10.2380 — istek bölümü cümlesi manşete girmez (Etki'de söylenir).
-	h := strings.TrimSpace(StripRequestSplit(p.Description))
+	// v0.10.2383 — kaynak işareti de (başlık kartının Kaynak'ı söyler).
+	h := strings.TrimSpace(StripRequestSplit(StripEvidenceSource(p.Description)))
 	return h, h != ""
 }
 
@@ -740,7 +794,8 @@ func problemHeadline(p Problem, k stdKindInfo, im StdImpact) (string, *StdMsg) {
 		// AYNI cümle; özet servis adıyla başlar, önek eklenmez). Yeni metin
 		// üretici yok: evaluator açıklamaya özeti koyar.
 		if h, ok := MLPromotedHeadline(p); ok {
-			return h, nil
+			// v0.10.2383 — servis hata oranı cümlesi anahtarlıdır (EN arayüz).
+			return h, mlErrRateMsg(h)
 		}
 		r := stdBreachRatio(p)
 		ml, mv := metricLabelArgs(p.Metric)
@@ -911,6 +966,9 @@ func problemEvidenceSentence(p Problem, k stdKindInfo, src string, hold bool) (s
 	case StdSourceExternal:
 		s += "; dış kaynak sorgusundan"
 		srcK = "ev.src.external"
+	case StdSourceLogs: // v0.10.2383 — ML log dedektörünün liderliğindeki Problem
+		s += "; log kayıtlarından"
+		srcK = "ev.src.logs"
 	}
 	return s + ".", stdM("ev.sentence", "baseK", baseK, "srcK", srcK)
 }

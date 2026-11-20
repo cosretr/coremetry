@@ -416,7 +416,8 @@ func StdMagnitude(std ProblemStandard) float64 {
 
 // notifyBypass — SAF (D3): tekrar/işaret penceresini aşan değişiklik.
 func notifyBypass(std ProblemStandard, prio, refPrio string, refMag float64) string {
-	if prio == "P1" && std.Confidence.Level == ConfidenceHigh {
+	// v0.10.2383 — politika seviyesi (ML kaynak işareti kararı değiştirmez).
+	if prio == "P1" && std.Confidence.policyLevel() == ConfidenceHigh {
 		return "high_conf_p1"
 	}
 	if refPrio != "" && prioRank(prio) > prioRank(refPrio) {
@@ -503,7 +504,7 @@ func inQuietHours(q *NotifyQuietHours, now time.Time) bool {
 //	penceresi → tekrar penceresi → sessiz saat
 func NotifiableAt(std ProblemStandard, prio string, hist NotifyHistory, pol NotifyPolicy, now time.Time) NotifyDecision {
 	pol = NormalizeNotifyPolicy(pol)
-	d := NotifyDecision{Priority: prio, Confidence: std.Confidence.Level, Magnitude: StdMagnitude(std)}
+	d := NotifyDecision{Priority: prio, Confidence: std.Confidence.policyLevel(), Magnitude: StdMagnitude(std)}
 	hold := func(code string) NotifyDecision {
 		d.Hold = code
 		return d
@@ -520,7 +521,7 @@ func NotifiableAt(std ProblemStandard, prio string, hist NotifyHistory, pol Noti
 			return hold(NotifyHoldP3Digest)
 		}
 	}
-	if std.Confidence.Level == ConfidenceLow {
+	if std.Confidence.policyLevel() == ConfidenceLow {
 		for _, g := range std.Confidence.Gates {
 			if g.Status == GateFail && (g.ID == "G1" || g.ID == "G2" || g.ID == "G3" || g.ID == "G4") {
 				return hold(NotifyHoldGatePrefix + g.ID)

@@ -2986,7 +2986,11 @@ export interface StdSince {
   startedAt: number; lastSeen?: number; durationSec: number; ongoing: boolean; episode?: number;
 }
 /** vm | span | db_mv | probe | exception | oracle | self | external | rule */
-export interface StdEvidence { sentence: string; source: string; sampled: boolean; msg?: StdMsg }
+export interface StdEvidence {
+  sentence: string; source: string; sampled: boolean; msg?: StdMsg;
+  /** v0.10.2383 — "Neden" satırları (etki kuralı olayının gerçekleri; yalnız detay ucu) + aynı sıradaki anahtarlar. */
+  reasons?: string[]; reasonMsgs?: StdMsg[];
+}
 export interface ProblemStandard {
   family: string;
   kind: string;

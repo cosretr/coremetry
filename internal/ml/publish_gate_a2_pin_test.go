@@ -11,6 +11,7 @@ package ml
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -109,8 +110,25 @@ func a2Digest(b []byte) string {
 // a2OffWant — v0.10.2340 (A2 öncesi) koduyla üretilen çıktı özeti.
 const a2OffWant = "581d8fb36ef19b6a2e472d2fc58d4b14a82834de32ff9a9beb56ab399fb55eff"
 
+// a2SvcSentence — v0.10.2383: servis hata oranı Problem cümlesi BİLİNÇLİ
+// değişti ("normalde X, şimdi Y (N kat)" + kaynak işareti). Pinin gücü
+// korunur: özet, fikstürdeki o TEK cümle v0.10.2340 metnine geri çevrilerek
+// alınır — geri kalan her bayt A2 öncesiyle aynı olmak zorunda.
+const (
+	a2SvcSentenceNow = "orders servisinde hata oranı normalde %1, şimdi %5 (5 kat). " + chstore.REDEvidenceVM + "."
+	a2SvcSentenceOld = "orders servisinde hata oranı %5, olağanı %1."
+)
+
+func a2PreSentence(t *testing.T, out []byte) []byte {
+	t.Helper()
+	if n := bytes.Count(out, []byte(a2SvcSentenceNow)); n != 1 {
+		t.Fatalf("servis cümlesi çıktıda %d kez (1 beklenir)", n)
+	}
+	return bytes.Replace(out, []byte(a2SvcSentenceNow), []byte(a2SvcSentenceOld), 1)
+}
+
 func TestPublishGatesA2OffMatchesPreA2(t *testing.T) {
-	got := a2Digest(a2Outputs(t, a2Fixture(t), GroupGateInput{}))
+	got := a2Digest(a2PreSentence(t, a2Outputs(t, a2Fixture(t), GroupGateInput{})))
 	if got != a2OffWant {
 		t.Fatalf("A2 kapalıyken yazım / terfi / bildirim çıktısı A2 öncesinden farklı: %s", got)
 	}
