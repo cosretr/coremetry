@@ -76,6 +76,11 @@ describe('S2 — Go fikstürü EN katalogda', () => {
     expect(stdMsgText(en('Eşik %1,4: en az %1, normalin 1,5 katı ve 1 puan üstü'))).toBe('Threshold 1.4%: at least 1%, 1.5× normal and 1 pt above normal');
     expect(stdMsgText(en('Yük yeterli: dakikada yaklaşık 3.100 istek (en az 10 gerekir)'))).toBe('Enough load: about 3,100 requests per minute (at least 10 required)');
     expect(stdMsgText(en('Kaynak örneklenmemiş sunucu metriği'))).toBe('Source: unsampled server metric');
+    // v0.10.2391 — yanıt süresi + consumer lag "Neden" satırları.
+    expect(stdMsgText(en("Son 5 dakikanın 4'ünde medyan eşiği aşıldı (en az 3 gerekir)"))).toBe('Median threshold exceeded in 4 of the last 5 minutes (at least 3 required)');
+    expect(stdMsgText(en('Eşik 270 ms: normalin 1,5 katı ve 100 ms üstü'))).toBe('Threshold 270 ms: 1.5× normal and 100 ms above normal');
+    expect(stdMsgText(en('Eşik 1,75 sn: normalin 2 katı ve 1 sn üstü'))).toBe('Threshold 1.75 s: 2× normal and 1 s above normal');
+    expect(stdMsgText(en('Eşik 1.200 kayıt: en az 1.000 kayıt ve normalin 2 katı'))).toBe('Threshold 1,200 records: at least 1,000 records and 2× normal');
     expect(stdMsgText(en('Dedektör sürdürme koşulunu geçti; log kayıtlarından.'))).toBe('Detector passed its sustain condition; from log records.');
   });
 });

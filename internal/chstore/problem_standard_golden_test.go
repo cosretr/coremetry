@@ -194,6 +194,21 @@ func stdGoldenMatrix() []stdGoldenRow {
 	ap("ml-svc-zero-open", ml(MLSvcRulePrefix+"svc-a", "error_rate", 0.068, 0.005, MLErrRateSentence("svc-a", 0.068, 0)+" "+REDEvidenceVM+"."), StdFacts{Now: now, ImpactRule: &open})
 	ap("ml-svc-flat", ml(MLSvcRulePrefix+"svc-a", "error_rate", 0.015, 0.02, MLErrRateSentence("svc-a", 0.015, 0.02)+" "+REDEvidenceVM+"."), StdFacts{Now: now})
 	ap("ml-group-logs", ml(MLGroupRulePrefix+"ev-1", "ml_group_signals", 2, 2, "svc-a: özet cümlesi. "+EvidenceLogs+"."), StdFacts{Now: now})
+	// v0.10.2391 — yanıt süresi (medyan / en yavaş %10) ve consumer lag (tek
+	// sinyal kolunun grup Problem'i) "Neden" satırları. Yine SONA eklenir.
+	med := StdImpactRule{Window: 5, Violations: 4, MinViolations: 3, Threshold: 270, Rel: 1.5, Abs: 100, LoadPerMin: 3100, MinLoad: 10, Unsampled: true, Measure: MLRespMedian}
+	ap("ml-svc-rt-med", ml(MLSvcRulePrefix+"svc-a", "p50_ms", 920, 270, MLResponseTimeSentence("svc-a", MLRespMedian, 920, 180)+" "+REDEvidenceVM+"."), StdFacts{Now: now, ImpactRule: &med})
+	slow := StdImpactRule{Window: 5, Violations: 2, MinViolations: 3, Threshold: 1750, Rel: 2, Abs: 1000, MinLoad: 10, Unsampled: true, Measure: MLRespSlow}
+	ap("ml-svc-rt-slow-open", ml(MLSvcRulePrefix+"svc-a", "p90_ms", 2900, 1750, MLResponseTimeSentence("svc-a", MLRespSlow, 2900, 750)+" "+REDEvidenceVM+"."), StdFacts{Now: now, ImpactRule: &slow})
+	slowOld := StdImpactRule{Window: 5, Violations: 5, MinViolations: 3, Threshold: 1800, MinLoad: 10, Unsampled: true, Measure: MLRespSlow}
+	ap("ml-svc-rt-slow-thronly", ml(MLSvcRulePrefix+"svc-a", "p90_ms", 2900, 1800, MLResponseTimeSentence("svc-a", MLRespSlow, 2900, 750)+" "+REDEvidenceVM+"."), StdFacts{Now: now, ImpactRule: &slowOld})
+	medOpen := med
+	medOpen.Violations = 2
+	ap("ml-svc-rt-med-open", ml(MLSvcRulePrefix+"svc-a", "p50_ms", 920, 270, MLResponseTimeSentence("svc-a", MLRespMedian, 920, 180)+" "+REDEvidenceVM+"."), StdFacts{Now: now, ImpactRule: &medOpen})
+	lag := StdImpactRule{Window: 5, Violations: 4, MinViolations: 3, Threshold: 1200, Floor: 1000, Rel: 2, Unsampled: true, Measure: MLImpactLag}
+	ap("ml-group-lag", ml(MLGroupRulePrefix+"ev-2", "ml_group_signals", 1, 1, "svc-a: tek güçlü sinyal özeti. "+REDEvidenceVM+"."), StdFacts{Now: now, ImpactRule: &lag})
+	lagOld := StdImpactRule{Window: 5, Violations: 4, MinViolations: 3, Threshold: 1300, Unsampled: true, Measure: MLImpactLag}
+	ap("ml-group-lag-thronly", ml(MLGroupRulePrefix+"ev-2", "ml_group_signals", 1, 1, "svc-a: tek güçlü sinyal özeti. "+REDEvidenceVM+"."), StdFacts{Now: now, ImpactRule: &lagOld})
 	return out
 }
 

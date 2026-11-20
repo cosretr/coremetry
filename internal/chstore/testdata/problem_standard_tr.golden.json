@@ -1349,5 +1349,139 @@
    "G6 takvim na ",
    "G7 batch na "
   ]
+ },
+ {
+  "name": "ml-svc-rt-med",
+  "kind": "anomaly_auto",
+  "headline": "svc-a servisinde yanıt süresi (medyan) normalde 180 ms, şimdi 920 ms (5,1 kat).",
+  "impact": "değer 920 ms (eşik 270 ms)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü VictoriaMetrics'ten (örneklenmemiş).",
+  "next": "Yavaş operasyonları ve trace'leri aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar pass ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ],
+  "reasons": [
+   "Son 5 dakikanın 4'ünde medyan eşiği aşıldı (en az 3 gerekir)",
+   "Eşik 270 ms: normalin 1,5 katı ve 100 ms üstü",
+   "Yük yeterli: dakikada yaklaşık 3.100 istek (en az 10 gerekir)",
+   "Kaynak örneklenmemiş sunucu metriği"
+  ]
+ },
+ {
+  "name": "ml-svc-rt-slow-open",
+  "kind": "anomaly_auto",
+  "headline": "svc-a servisinde yanıt süresi (en yavaş %10) normalde 750 ms, şimdi 2.900 ms (3,9 kat).",
+  "impact": "değer 2,9 sn (eşik 1,75 sn)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü VictoriaMetrics'ten (örneklenmemiş).",
+  "next": "Yavaş operasyonları ve trace'leri aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar pass ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ],
+  "reasons": [
+   "Son 5 dakikanın 2'sinde en yavaş %10 eşiği aşıldı (açılış için en az 3 gerekir; ihlal sürdüğü için açık)",
+   "Eşik 1,75 sn: normalin 2 katı ve 1 sn üstü",
+   "Kaynak örneklenmemiş sunucu metriği"
+  ]
+ },
+ {
+  "name": "ml-svc-rt-slow-thronly",
+  "kind": "anomaly_auto",
+  "headline": "svc-a servisinde yanıt süresi (en yavaş %10) normalde 750 ms, şimdi 2.900 ms (3,9 kat).",
+  "impact": "değer 2,9 sn (eşik 1,8 sn)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü VictoriaMetrics'ten (örneklenmemiş).",
+  "next": "Yavaş operasyonları ve trace'leri aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar pass ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ],
+  "reasons": [
+   "Son 5 dakikanın 5'inde en yavaş %10 eşiği aşıldı (en az 3 gerekir)",
+   "Eşik 1,8 sn",
+   "Kaynak örneklenmemiş sunucu metriği"
+  ]
+ },
+ {
+  "name": "ml-svc-rt-med-open",
+  "kind": "anomaly_auto",
+  "headline": "svc-a servisinde yanıt süresi (medyan) normalde 180 ms, şimdi 920 ms (5,1 kat).",
+  "impact": "değer 920 ms (eşik 270 ms)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü VictoriaMetrics'ten (örneklenmemiş).",
+  "next": "Yavaş operasyonları ve trace'leri aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar pass ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ],
+  "reasons": [
+   "Son 5 dakikanın 2'sinde medyan eşiği aşıldı (açılış için en az 3 gerekir; ihlal sürdüğü için açık)",
+   "Eşik 270 ms: normalin 1,5 katı ve 100 ms üstü",
+   "Yük yeterli: dakikada yaklaşık 3.100 istek (en az 10 gerekir)",
+   "Kaynak örneklenmemiş sunucu metriği"
+  ]
+ },
+ {
+  "name": "ml-group-lag",
+  "kind": "anomaly_auto",
+  "headline": "svc-a: tek güçlü sinyal özeti.",
+  "impact": "değer 1 (eşik 1)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü VictoriaMetrics'ten (örneklenmemiş).",
+  "next": "Kural ayrıntısını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ],
+  "reasons": [
+   "Son 5 dakikanın 4'ünde eşik aşıldı (en az 3 gerekir)",
+   "Eşik 1.200 kayıt: en az 1.000 kayıt ve normalin 2 katı",
+   "Kaynak örneklenmemiş sunucu metriği"
+  ]
+ },
+ {
+  "name": "ml-group-lag-thronly",
+  "kind": "anomaly_auto",
+  "headline": "svc-a: tek güçlü sinyal özeti.",
+  "impact": "değer 1 (eşik 1)",
+  "evidence": "Dedektör sürdürme koşulunu geçti; ölçü VictoriaMetrics'ten (örneklenmemiş).",
+  "next": "Kural ayrıntısını aç",
+  "gates": [
+   "G1 trafik na ",
+   "G2 sürdürme pass dedektörün sürdürme kuralı",
+   "G3 VM karar na ",
+   "G4 topoloji na ",
+   "G5 deploy na ",
+   "G6 takvim na ",
+   "G7 batch na "
+  ],
+  "reasons": [
+   "Son 5 dakikanın 4'ünde eşik aşıldı (en az 3 gerekir)",
+   "Eşik 1.300 kayıt",
+   "Kaynak örneklenmemiş sunucu metriği"
+  ]
  }
 ]

@@ -1908,5 +1908,180 @@
     "srcK": "ev.src.logs"
    }
   }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a servisinde yanıt süresi (medyan) normalde 180 ms, şimdi 920 ms (5,1 kat).",
+  "msg": {
+   "k": "h.mlRtMed",
+   "a": {
+    "n": "180 ms",
+    "svc": "svc-a",
+    "v": "920 ms",
+    "x": "5.1"
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 920 ms (eşik 270 ms)",
+  "msg": {
+   "k": "imp.rule.ms",
+   "a": {
+    "tMs": 270,
+    "vMs": 920
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Son 5 dakikanın 4'ünde medyan eşiği aşıldı (en az 3 gerekir)",
+  "msg": {
+   "k": "why.violMed",
+   "a": {
+    "min": "3",
+    "n": "4",
+    "w": "5"
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Eşik 270 ms: normalin 1,5 katı ve 100 ms üstü",
+  "msg": {
+   "k": "why.thrMs",
+   "a": {
+    "absMs": 100,
+    "rel": "1.5",
+    "tMs": 270
+   }
+  }
+ },
+ {
+  "field": "headline",
+  "tr": "svc-a servisinde yanıt süresi (en yavaş %10) normalde 750 ms, şimdi 2.900 ms (3,9 kat).",
+  "msg": {
+   "k": "h.mlRtSlow",
+   "a": {
+    "n": "750 ms",
+    "svc": "svc-a",
+    "v": "2,900 ms",
+    "x": "3.9"
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 2,9 sn (eşik 1,75 sn)",
+  "msg": {
+   "k": "imp.rule.ms",
+   "a": {
+    "tMs": 1750,
+    "vMs": 2900
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Son 5 dakikanın 2'sinde en yavaş %10 eşiği aşıldı (açılış için en az 3 gerekir; ihlal sürdüğü için açık)",
+  "msg": {
+   "k": "why.violOpenSlow",
+   "a": {
+    "min": "3",
+    "n": "2",
+    "w": "5"
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Eşik 1,75 sn: normalin 2 katı ve 1 sn üstü",
+  "msg": {
+   "k": "why.thrMs",
+   "a": {
+    "absMs": 1000,
+    "rel": "2",
+    "tMs": 1750
+   }
+  }
+ },
+ {
+  "field": "impact",
+  "tr": "değer 2,9 sn (eşik 1,8 sn)",
+  "msg": {
+   "k": "imp.rule.ms",
+   "a": {
+    "tMs": 1800,
+    "vMs": 2900
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Son 5 dakikanın 5'inde en yavaş %10 eşiği aşıldı (en az 3 gerekir)",
+  "msg": {
+   "k": "why.violSlow",
+   "a": {
+    "min": "3",
+    "n": "5",
+    "w": "5"
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Eşik 1,8 sn",
+  "msg": {
+   "k": "why.thrOnlyMs",
+   "a": {
+    "tMs": 1800
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Son 5 dakikanın 2'sinde medyan eşiği aşıldı (açılış için en az 3 gerekir; ihlal sürdüğü için açık)",
+  "msg": {
+   "k": "why.violOpenMed",
+   "a": {
+    "min": "3",
+    "n": "2",
+    "w": "5"
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Son 5 dakikanın 4'ünde eşik aşıldı (en az 3 gerekir)",
+  "msg": {
+   "k": "why.viol",
+   "a": {
+    "min": "3",
+    "n": "4",
+    "w": "5"
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Eşik 1.200 kayıt: en az 1.000 kayıt ve normalin 2 katı",
+  "msg": {
+   "k": "why.thrLag",
+   "a": {
+    "floor": "1,000",
+    "rel": "2",
+    "t": "1,200"
+   }
+  }
+ },
+ {
+  "field": "reason",
+  "tr": "Eşik 1.300 kayıt",
+  "msg": {
+   "k": "why.thrOnlyLag",
+   "a": {
+    "t": "1,300"
+   }
+  }
  }
 ]

@@ -15173,3 +15173,10 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Yükseltme sonrası: HTTP tabanları boş başlar; MinBaselineSamples dolana dek (aynı saat ±1, önceki günler) dedektörler sessiz — yaklaşık bir gün. Taban doldurma düzeltilmiş sorguları kullanır. Eşik / kural / Problem / frontend değişmedi.
 - Doğrulanmadı: üretim VM'inin adlandırması çıkarımdır; canlı ortamda uçtan uca dedektör çıktısı; gerçek 5xx verisiyle hata oranı sorgusu.
 
+## 2026-11-20 — v0.10.2391 — Problem standardı: yanıt süresi ve consumer lag için gerçek "Neden"
+- Karar: Etki kuralıyla açılan yanıt süresi (svc_response_time, p50_ms/p90_ms) ve consumer lag (metric_kafka, tek sinyal kolunun grup Problem'i) Problem'lerinde "Neden böyle değerlendiriyoruz" bloğu hata oranındaki gibi kuralın gerçeklerini satır satır söyler: ihlal sayısı (yanıt süresinde ateşleyen ölçü adıyla: medyan / en yavaş %10), eşik ve nasıl kurulduğu (ms/sn ya da kayıt), yük (yalnız yanıt süresi), kaynak (yalnız VM).
+- Tek tanım: katsayılar ml/impact_rule.go impactRules; ml.ImpactRuleFacts üç dedektörü okur, chstore.StdImpactRule.Measure birimi seçer. chstore/arayüzde ikinci kopya yok. EN anahtarlar why.violMed/Slow, why.violOpenMed/Slow, why.thrMs, why.thrOnlyMs, why.thrLag, why.thrOnlyLag.
+- Okuma: yalnız detay ucu (pstd:v4, 15 sn önbellek). Servis Problem'i: ölçüye göre servis × dedektör ≤ 20 satır, en yeni olay; ölçü Problem'inkiyle uyuşmazsa satır yok. Grup Problem'i: yalnız Metric ml_group_signals ve Value = 1 iken kural kimliğindeki lider olay (kaynak işaretinin okuduğu olay), ID ile tek satır, yalnız lag etki olayıysa.
+- Değişmeyen: hata oranı satırları bayt bayt; kanıt yok / eski / uyuşmaz → bugünkü tek cümle; liste, bildirim, öncelik, güven yolu okumaz.
+- Bilinçli dışarıda: ≥ 2 sinyalli grup Problem'i ve servis ölçüsünün devraldığı grup satırı (tek olayın kuralı Problem'in tamamını açıklamaz); iki ölçünün birlikte ateşlemesi ayrı satır olarak yazılmaz.
+

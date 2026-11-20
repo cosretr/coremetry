@@ -443,3 +443,105 @@ func TestMLResponseTimeSentenceAndHeadline(t *testing.T) {
 		t.Errorf("hata oranı cümlesi kendi anahtarında kalmalı: %+v", m)
 	}
 }
+
+// TestImpactRuleReasonsResponseTimeAndLag — v0.10.2391: yanıt süresi ve
+// consumer lag etki olaylarının "Neden" satırları (TR metin + EN anahtar /
+// argüman). Ölçüsüz gerçek (hata oranı) v0.10.2383 satırlarını bayt bayt korur.
+func TestImpactRuleReasonsResponseTimeAndLag(t *testing.T) {
+	med := StdImpactRule{Window: 5, Violations: 4, MinViolations: 3, Threshold: 270, Rel: 1.5, Abs: 100, LoadPerMin: 3100, MinLoad: 10,
+		Unsampled: true, Measure: MLRespMedian}
+	slow := StdImpactRule{Window: 5, Violations: 5, MinViolations: 3, Threshold: 1750, Rel: 2, Abs: 1000, LoadPerMin: 640, MinLoad: 10,
+		Unsampled: true, Measure: MLRespSlow}
+	slowZero := slow // taban 0: eşik = taban + 1 sn
+	slowZero.Threshold = 1000
+	lag := StdImpactRule{Window: 5, Violations: 4, MinViolations: 3, Threshold: 1200, Floor: 1000, Rel: 2, Unsampled: true, Measure: MLImpactLag}
+	lagZero := lag // taban 0: eşik etki tabanı
+	lagZero.Threshold = 1000
+	lagOld := lag // kanıttaki eşik bugünkü sabitlerle uyuşmuyor
+	lagOld.Floor, lagOld.Rel = 0, 0
+	medOpen := med
+	medOpen.Violations = 2
+	type msg struct {
+		k string
+		a map[string]any
+	}
+	cases := []struct {
+		name string
+		r    StdImpactRule
+		vm   bool
+		want []string
+		msgs []msg
+	}{
+		{"medyan", med, true, []string{
+			"Son 5 dakikanın 4'ünde medyan eşiği aşıldı (en az 3 gerekir)",
+			"Eşik 270 ms: normalin 1,5 katı ve 100 ms üstü",
+			"Yük yeterli: dakikada yaklaşık 3.100 istek (en az 10 gerekir)",
+			"Kaynak örneklenmemiş sunucu metriği",
+		}, []msg{
+			{"why.violMed", map[string]any{"n": "4", "w": "5", "min": "3"}},
+			{"why.thrMs", map[string]any{"tMs": 270.0, "rel": "1.5", "absMs": 100.0}},
+			{"why.load", map[string]any{"load": "3,100", "min": "10"}},
+			{"why.srcVM", nil},
+		}},
+		{"en yavaş %10", slow, true, []string{
+			"Son 5 dakikanın 5'inde en yavaş %10 eşiği aşıldı (en az 3 gerekir)",
+			"Eşik 1,75 sn: normalin 2 katı ve 1 sn üstü",
+			"Yük yeterli: dakikada yaklaşık 640 istek (en az 10 gerekir)",
+			"Kaynak örneklenmemiş sunucu metriği",
+		}, []msg{
+			{"why.violSlow", map[string]any{"n": "5", "w": "5", "min": "3"}},
+			{"why.thrMs", map[string]any{"tMs": 1750.0, "rel": "2", "absMs": 1000.0}},
+			{"why.load", map[string]any{"load": "640", "min": "10"}},
+			{"why.srcVM", nil},
+		}},
+		{"en yavaş %10, taban 0", slowZero, false, []string{
+			"Son 5 dakikanın 5'inde en yavaş %10 eşiği aşıldı (en az 3 gerekir)",
+			"Eşik 1 sn: normalin 2 katı ve 1 sn üstü",
+			"Yük yeterli: dakikada yaklaşık 640 istek (en az 10 gerekir)",
+		}, nil},
+		{"medyan, açık koşu uzuyor", medOpen, true, []string{
+			"Son 5 dakikanın 2'sinde medyan eşiği aşıldı (açılış için en az 3 gerekir; ihlal sürdüğü için açık)",
+		}, []msg{{"why.violOpenMed", map[string]any{"n": "2", "w": "5", "min": "3"}}}},
+		{"consumer lag", lag, true, []string{
+			"Son 5 dakikanın 4'ünde eşik aşıldı (en az 3 gerekir)",
+			"Eşik 1.200 kayıt: en az 1.000 kayıt ve normalin 2 katı",
+			"Kaynak örneklenmemiş sunucu metriği",
+		}, []msg{
+			{"why.viol", map[string]any{"n": "4", "w": "5", "min": "3"}},
+			{"why.thrLag", map[string]any{"t": "1,200", "floor": "1,000", "rel": "2"}},
+			{"why.srcVM", nil},
+		}},
+		{"consumer lag, taban 0, kaynak işaretsiz", lagZero, false, []string{
+			"Son 5 dakikanın 4'ünde eşik aşıldı (en az 3 gerekir)",
+			"Eşik 1.000 kayıt: en az 1.000 kayıt ve normalin 2 katı",
+		}, nil},
+		{"consumer lag, katsayı bilinmiyor", lagOld, false, []string{
+			"Son 5 dakikanın 4'ünde eşik aşıldı (en az 3 gerekir)",
+			"Eşik 1.200 kayıt",
+		}, []msg{{"why.viol", map[string]any{"n": "4", "w": "5", "min": "3"}}, {"why.thrOnlyLag", map[string]any{"t": "1,200"}}}},
+	}
+	for _, c := range cases {
+		got, msgs := impactRuleReasons(c.r, c.vm)
+		if len(got) != len(msgs) {
+			t.Fatalf("%s: satır %d, anahtar %d", c.name, len(got), len(msgs))
+		}
+		if c.name == "medyan, açık koşu uzuyor" {
+			got, msgs = got[:1], msgs[:1]
+		}
+		if !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s:\n%q\n%q", c.name, got, c.want)
+		}
+		for i, m := range c.msgs {
+			if msgs[i].K != m.k || (m.a != nil && !reflect.DeepEqual(msgs[i].A, m.a)) {
+				t.Errorf("%s: anahtar %d = %+v, istenen %+v", c.name, i, msgs[i], m)
+			}
+		}
+	}
+	// Ölçüsüz (hata oranı) gerçek: v0.10.2383 metni aynen.
+	got, _ := impactRuleReasons(*mlRule(), true)
+	want := []string{"Son 5 dakikanın 5'inde eşik aşıldı (en az 3 gerekir)", "Eşik %1,4: en az %1, normalin 1,5 katı ve 1 puan üstü",
+		"Yük yeterli: dakikada yaklaşık 3.100 istek (en az 10 gerekir)", "Kaynak örneklenmemiş sunucu metriği"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("hata oranı satırları değişti: %q", got)
+	}
+}

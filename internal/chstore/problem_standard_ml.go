@@ -16,7 +16,9 @@ package chstore
 //     kaçında eşik aşıldı, eşik nasıl oluştu, yük, kaynak. Gerçekleri çağıran
 //     verir (StdFacts.ImpactRule; yalnız detay ucu — liste yolunda okuma yok).
 //     Kuralın sabitleri (kat, puan, taban) BURADA YOK: tek tanım
-//     ml/impact_rule.go, değerler ml.ImpactRuleFacts ile gelir.
+//     ml/impact_rule.go, değerler ml.ImpactRuleFacts ile gelir. v0.10.2391:
+//     yanıt süresi (ateşleyen ölçü adıyla, ms / sn) ve consumer lag (kayıt,
+//     yük satırı yok) da aynı satırlarla (StdImpactRule.Measure).
 //  3. GÜVEN / BİLDİRİM — kaynak işareti güveni mevcut kuraldan (D12:
 //     örneklenmemiş + büyük ihlal → yüksek) yükseltebilir. Bildirim politikası
 //     "yüksek güvenli P1" baypasını (D3) bu yüzden yeni kararlarla işletirdi;
@@ -202,7 +204,15 @@ type StdImpactRule struct {
 	LoadPerMin      float64 // en yeni ihlal dakikasının isteği; 0 = bilinmiyor
 	MinLoad         float64 // yük kapısı (istek/dk); 0 = kapı yok
 	Unsampled       bool    // ölçü örneklenmemiş sunucu metriğinden (kanıt source=vm)
+	// Measure — v0.10.2391: olayın ölçüsü ve eşiğin birimi. "" = servis hata
+	// oranı (oran 0–1; v0.10.2383 satırları bayt bayt), MLRespMedian /
+	// MLRespSlow = yanıt süresi (ms; ateşleyen ölçü satırda adıyla),
+	// MLImpactLag = consumer lag (kayıt; yük kapısı yok).
+	Measure string
 }
+
+// MLImpactLag — StdImpactRule.Measure: consumer lag etki olayı (v0.10.2391).
+const MLImpactLag = "lag"
 
 func (r StdImpactRule) valid() bool {
 	return r.Window > 0 && r.MinViolations > 0 && r.Violations > 0 && r.Violations <= r.Window &&
@@ -238,20 +248,28 @@ func impactRuleReasons(r StdImpactRule, srcVM bool) ([]string, []StdMsg) {
 		msgs = append(msgs, *m)
 	}
 	w, n, need := strconv.Itoa(r.Window), strconv.Itoa(r.Violations), strconv.Itoa(r.MinViolations)
-	head := "Son " + w + " dakikanın " + trCountLoc(r.Violations) + " eşik aşıldı "
+	// v0.10.2391 — yanıt süresinde ateşleyen ölçü adıyla ("medyan eşiği").
+	what, kViol, kOpen := "eşik", "why.viol", "why.violOpen"
+	switch r.Measure {
+	case MLRespMedian:
+		what, kViol, kOpen = mlRespMedianTR+" eşiği", "why.violMed", "why.violOpenMed"
+	case MLRespSlow:
+		what, kViol, kOpen = mlRespSlowTR+" eşiği", "why.violSlow", "why.violOpenSlow"
+	}
+	head := "Son " + w + " dakikanın " + trCountLoc(r.Violations) + " " + what + " aşıldı "
 	if r.Violations >= r.MinViolations {
-		add(head+"(en az "+need+" gerekir)", stdM("why.viol", "n", n, "w", w, "min", need))
+		add(head+"(en az "+need+" gerekir)", stdM(kViol, "n", n, "w", w, "min", need))
 	} else {
 		// Olay açıkken pencerede ihlal sürdükçe uzar (ml svcImpactDecideBase).
-		add(head+"(açılış için en az "+need+" gerekir; ihlal sürdüğü için açık)", stdM("why.violOpen", "n", n, "w", w, "min", need))
+		add(head+"(açılış için en az "+need+" gerekir; ihlal sürdüğü için açık)", stdM(kOpen, "n", n, "w", w, "min", need))
 	}
-	th := sharePct(r.Threshold * 100)
-	if r.Rel > 0 {
-		floor, rel, abs := sharePct(r.Floor*100), plainNum(r.Rel), sharePct(r.Abs*100)
-		add("Eşik %"+swapNumSep.Replace(th)+": en az %"+swapNumSep.Replace(floor)+", normalin "+swapNumSep.Replace(rel)+" katı ve "+swapNumSep.Replace(abs)+" puan üstü",
-			stdM("why.threshold", "t", th+"%", "floor", floor+"%", "rel", rel, "abs", abs))
-	} else {
-		add("Eşik %"+swapNumSep.Replace(th), stdM("why.thrOnly", "t", th+"%"))
+	switch r.Measure {
+	case MLRespMedian, MLRespSlow:
+		add(impactThresholdMs(r))
+	case MLImpactLag:
+		add(impactThresholdLag(r))
+	default:
+		add(impactThresholdRate(r))
 	}
 	if r.MinLoad > 0 && r.LoadPerMin >= r.MinLoad && !math.IsInf(r.LoadPerMin, 0) {
 		add("Yük yeterli: dakikada yaklaşık "+groupInt(r.LoadPerMin, '.')+" istek (en az "+groupInt(r.MinLoad, '.')+" gerekir)",
@@ -261,6 +279,45 @@ func impactRuleReasons(r StdImpactRule, srcVM bool) ([]string, []StdMsg) {
 		add("Kaynak örneklenmemiş sunucu metriği", stdM("why.srcVM"))
 	}
 	return out, msgs
+}
+
+// impactThresholdRate — SAF: hata oranı eşiği satırı (v0.10.2383 metni aynen).
+func impactThresholdRate(r StdImpactRule) (string, *StdMsg) {
+	th := sharePct(r.Threshold * 100)
+	if r.Rel > 0 {
+		floor, rel, abs := sharePct(r.Floor*100), plainNum(r.Rel), sharePct(r.Abs*100)
+		return "Eşik %" + swapNumSep.Replace(th) + ": en az %" + swapNumSep.Replace(floor) + ", normalin " + swapNumSep.Replace(rel) + " katı ve " + swapNumSep.Replace(abs) + " puan üstü",
+			stdM("why.threshold", "t", th+"%", "floor", floor+"%", "rel", rel, "abs", abs)
+	}
+	return "Eşik %" + swapNumSep.Replace(th), stdM("why.thrOnly", "t", th+"%")
+}
+
+// impactThresholdMs — SAF (v0.10.2391): yanıt süresi eşiği. Kuralın tabandan
+// bağımsız alt sınırı yok (Floor 0); varsa formül iddia edilmez. Birim ms /
+// sn (trMs; EN arayüz …Ms argümanını aynı dallarla çizer).
+//
+//	"Eşik 270 ms: normalin 1,5 katı ve 100 ms üstü"
+//	"Eşik 1,75 sn: normalin 2 katı ve 1 sn üstü"
+func impactThresholdMs(r StdImpactRule) (string, *StdMsg) {
+	if r.Rel > 0 && r.Floor == 0 && r.Abs > 0 {
+		rel := plainNum(r.Rel)
+		return "Eşik " + trMs(r.Threshold) + ": normalin " + swapNumSep.Replace(rel) + " katı ve " + trMs(r.Abs) + " üstü",
+			stdM("why.thrMs", "tMs", r.Threshold, "rel", rel, "absMs", r.Abs)
+	}
+	return "Eşik " + trMs(r.Threshold), stdM("why.thrOnlyMs", "tMs", r.Threshold)
+}
+
+// impactThresholdLag — SAF (v0.10.2391): consumer lag eşiği (kayıt; mutlak
+// artış yok, tabandan bağımsız alt sınır var).
+//
+//	"Eşik 1.200 kayıt: en az 1.000 kayıt ve normalin 2 katı"
+func impactThresholdLag(r StdImpactRule) (string, *StdMsg) {
+	if r.Rel > 0 && r.Floor > 0 && r.Abs == 0 {
+		rel := plainNum(r.Rel)
+		return "Eşik " + groupInt(r.Threshold, '.') + " kayıt: en az " + groupInt(r.Floor, '.') + " kayıt ve normalin " + swapNumSep.Replace(rel) + " katı",
+			stdM("why.thrLag", "t", groupInt(r.Threshold, ','), "floor", groupInt(r.Floor, ','), "rel", rel)
+	}
+	return "Eşik " + groupInt(r.Threshold, '.') + " kayıt", stdM("why.thrOnlyLag", "t", groupInt(r.Threshold, ','))
 }
 
 // ── Güven: bildirim politikasının okuduğu seviye ────────────────────────
