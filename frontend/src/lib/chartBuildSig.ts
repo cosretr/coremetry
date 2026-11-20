@@ -114,49 +114,6 @@ export function timeChartBuildSignature(p: TimeChartSigInput): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// overviewChartBuildSignature (v0.8.531) — the seam for the compact service-
-// Overview RED chart (pages/service/charts/OverviewChart.tsx; also Incident).
-// Option inputs: per-series label + colour token, render mode (line/area/
-// stacked — stacked/area change the fill + band structure), the y unit, height,
-// and the deploy marker (time + label). Point VALUES ride setData; the y range
-// + splits re-fit from the live scale on the fast-path exactly as the rebuild
-// did. `renderable` (≥2 x points) covers empty→data.
-export interface OverviewChartSigInput {
-  series: { label: string; color: string }[];
-  height: number;
-  mode?: string;
-  unit?: string;
-  deployAtSec?: number | null;
-  deployLabel?: string;
-  renderable: boolean;
-  // v0.8.534 — drag-zoom PRESENCE: the setSelect hook + cursor.drag are
-  // wired at build time only when onZoom is passed, so a none→some
-  // transition must rebuild.
-  hasZoom?: boolean;
-  // Grafana-parite M1 — cursor.sync build anında kablolanır (MLC/TC/TSP
-  // emsali): key değişimi/gelişi rebuild ister.
-  syncKey?: string;
-  // Grafana-parite M3 — threshold çizgileri + problem/anomali x-bölgeleri.
-  thresholds?: ChartSigColorThreshold[];
-  regions?: ChartSigRegion[];
-}
-export function overviewChartBuildSignature(p: OverviewChartSigInput): string {
-  return JSON.stringify([
-    p.series.map(s => [s.label, s.color]),
-    p.height,
-    p.mode ?? 'line',
-    p.unit ?? '',
-    p.deployAtSec ?? null,
-    p.deployLabel ?? '',
-    p.renderable,
-    !!p.hasZoom,
-    p.syncKey ?? '',
-    colorThresholdsDigest(p.thresholds),
-    regionsDigest(p.regions),
-  ]);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // timeSeriesPanelBuildSignature (v0.8.531) — the seam for <TimeSeriesPanel>
 // (viz/TimeSeriesPanel.tsx: the Grafana-grade Explore primitive with dual axis,
 // stacked/bars, deploy + event annotations, thresholds, and exemplar ◆). Option

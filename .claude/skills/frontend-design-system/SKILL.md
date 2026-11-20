@@ -256,17 +256,41 @@ sayfa `@grafana/data`'ya **statik bağlanamaz** — ölçüldü: vendor 35 KB �
 (`CorePanel.tsx`). İskeleti atlayan sıfır kod var. Kalan borç mimari değil
 **çokluk**: 2 çizim hattı, eski preset tarafında 6 canlı site.
 
-> ⚠️ `viz/TimeSeriesPanel`'in **2 tüketicisi** var (`RuntimeCharts.tsx`
-> **ve** `MetricQueryEditor.tsx`), 1 değil. Motor sökme turunda "tek site
-> kaldı" diye temizlik yapan `MetricQueryEditor` önizlemesini derlenmez
-> hale getirir.
+> ⚠️ `viz/TimeSeriesPanel`'in **4 canlı tüketicisi** var (2026-11-21
+> sayımı): `service/RuntimeCharts.tsx`, `service/HeapBaselineCard.tsx`,
+> `anomalies/MLRecordChart.tsx` (ML kaydı: zarf + bölge + sağ eksen),
+> `clusters/MetricArea.tsx` (zarf kipi). CorePanel'de karşılığı OLMAYAN
+> özellikler: `envelope` (lo–hi dolgu), seri başına `width`/`axis:'right'`,
+> `smooth` (spline + spanGaps), `stepped`, `deploys` ▼. Bu dördü CorePanel'e
+> taşınmadan söküm ML grafiğinin görünüşünü değiştirir. `MetricQueryEditor`
+> artık tüketici değil.
+>
+> **Sarmalayıcı ratchet:** `components/chart/chartWrapperRatchet.test.ts`
+> — adı Chart/Spark/Histogram/Heatmap ile biten dışa açık bileşen +
+> motorlar; taban yalnız aşağı. Ölü `ChartCard` + `OverviewChart`
+> 2026-11-21'de silindi (hat B artık yalnız `TimeChart`).
 
 **Tema/renk — iki kanal, bilinçli ayrı:**
 
 | Kanal | Kaynak | Tema-canlı |
 |---|---|---|
 | Semantik rol | `lib/chart/seriesRole.ts` → `var(--err)`/`var(--ok)` | ✅ |
-| Veri serisi paleti | `lib/chartFmt.ts` — 10 sabit hex, FNV-1a hash | ❌ **bilinçli tema-bağımsız** |
+| Veri serisi paleti | `lib/themeRegistry.ts` `SERIES_PALETTE_SETS` → `chartFmt.SERIES_PALETTES` — 8 yuva, FNV-1a hash yuvası | ✅ **tema başına** |
+| Renk dışı ipucu | `chartFmt.seriesDash` / `seriesCueDashes` — 9. veri serisinden itibaren desen | — |
+
+> **Karar tersine döndü (2026-11-21, operatör onaylı):** eski "palet
+> bilinçli tema-bağımsız" kuralı geçersiz. Gerçekte v0.10.920 + v0.10.1847–
+> 1851'den beri palet tema başına (dark/light/contrast/stone; slate→dark,
+> redhat→light): her yuva `--bg0..--bg2`'ye ≥3:1 (contrast teması ≥4.5),
+> durum renklerine OKLab ≥0.10 — çivi `styles/contrastTokens.test.ts` +
+> `lib/seriesPalette.test.ts`. Ölçülen en düşük oran: dark 3.75, light
+> 3.13, redhat 3.17, slate 3.42, stone 3.42, contrast 8.40. Ad→yuva ataması
+> hash-kararlı kalır (tema değişince yuva aynı, yalnız ton değişir).
+> 8 yuva tükenince renk tekrar eder: CorePanel 9–16. veri serisini
+> `[8,3]`, 17–24'ü `[2,3]`, 25–32'yi `[8,3,2,3]` deseniyle çizer, lejant
+> swatch'ı aynı deseni gösterir (rol serileri ve hayalet `[5,4]` sayılmaz).
+> Paleti OKLCH'den üretmek ayrı bir iş: bugünkü el ayarlı hex'ler zaten
+> doğrulanmış; üretim renkleri değiştirir.
 
 `data-theme` flip'inde yeniden çözüm: `lib/useThemeTick.ts` — modül
 düzeyinde **tek** `MutationObserver` + `useSyncExternalStore`; 4 tüketici,

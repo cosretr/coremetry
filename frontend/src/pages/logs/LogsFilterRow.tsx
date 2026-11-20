@@ -57,6 +57,7 @@ export interface LogsFilterRowProps {
 const CHIP = 'trace-lock';
 
 export function LogsFilterRow(p: LogsFilterRowProps) {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   const tr = useT();
   const { filter, filters, compiledSearch, since } = p;
   const [kqlOpen, setKqlOpen] = useState(false);

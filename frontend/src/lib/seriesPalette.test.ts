@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { SERIES_PALETTES, SERIES_SLOTS, assignSeriesSlots, preferredSlot, seriesColorsFor, inkOn } from './chartFmt';
+import { SERIES_PALETTES, SERIES_SLOTS, SERIES_DASHES, assignSeriesSlots, preferredSlot, seriesColorsFor, inkOn, seriesDash, seriesCueDashes } from './chartFmt';
 import { THEME_IDS, byTheme, type Theme } from './themeRegistry';
 import { themeHex } from '../styles/themeBlocks';
 
@@ -101,4 +101,31 @@ describe('inkOn', () => {
     ['#045c93', '#ffffff'], ['#921545', '#ffffff'], ['#7b489e', '#ffffff'],
     ['var(--err)', '#ffffff'], ['not-a-colour', '#ffffff'],
   ])('%s → %s', (fill, want) => { expect(inkOn(fill)).toBe(want); });
+});
+
+// 2026-11-21 — renk dışı ipucu: palet tükenince (9. veri serisi) desen.
+describe('seriesDash — 8 yuvadan sonra desen', () => {
+  it('ilk SERIES_SLOTS seri düz, sonrakiler sekizlik bloklarla desen döngüsü', () => {
+    for (let k = 0; k < SERIES_SLOTS; k++) expect(seriesDash(k)).toBeUndefined();
+    expect(seriesDash(8)).toEqual(SERIES_DASHES[0]);
+    expect(seriesDash(15)).toEqual(SERIES_DASHES[0]);
+    expect(seriesDash(16)).toEqual(SERIES_DASHES[1]);
+    expect(seriesDash(24)).toEqual(SERIES_DASHES[2]);
+    expect(seriesDash(32)).toEqual(SERIES_DASHES[0]);
+  });
+  it('desenler hayalet kesiğinden ([5,4]) ve birbirinden ayrık', () => {
+    const keys = SERIES_DASHES.map(d => d.join(','));
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys).not.toContain('5,4');
+  });
+  it('sıra yalnız data rollü, kesik olmayan serileri sayar', () => {
+    const roles = ['error', ...Array(9).fill('data')];
+    const d = seriesCueDashes(10, roles);
+    expect(d[0]).toBeUndefined();
+    expect(d.slice(1, 9).every(x => x === undefined)).toBe(true);
+    expect(d[9]).toEqual(SERIES_DASHES[0]);
+    const withGhost = seriesCueDashes(10, undefined, [true, ...Array(9).fill(false)]);
+    expect(withGhost[9]).toEqual(SERIES_DASHES[0]);
+    expect(withGhost[8]).toBeUndefined();
+  });
 });

@@ -15248,3 +15248,9 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Hakem yalnız yerel (self-hosted) çözülen profilde, arka plan AI kapılarıyla ve saatlik sre bütçesinin en çok yarısıyla çağrılır (yüzey sre-replay-judge, arka plan grubu); tik başına ≤3 çağrı, sre pod'unda lider kilitli dakikalık tik.
 - Rapor saved_views page='sre-replay-report'; başlatma ve haftalık zamanlama admin + audit (sre.replay.run / sre.replay.schedule); zamanlama system_settings "sre_agent.replay", varsayılan kapalı. Varyant parametresi yalnız orkestratörün okuduğu contextPack bayrağı.
 - /ai'de değerlendirme panelinin yanında tembel bölüm: puan, dağılım, erişim, kararsızlık, eğilim, Problem satırları.
+
+## 2026-11-21 — v0.10.2406 — React Compiler pilotu, ölü grafik bileşenleri, 8 renk sonrası çizgi deseni
+
+- Operatör onayı (2026-11-20, "hepsi onay"). React Compiler 1.0 annotation modunda (@rolldown/plugin-babel 0.3.0 + babel-plugin-react-compiler 1.0.0): Traces/Logs/Service'te 10 bileşen 'use memo' ile derlenir. TracesPageInner ve LogsInner bilerek dışarıda (13 exhaustive-deps bastırması; useEffectEvent'e taşıma sonraki iş). vite build +0.5 sn. Vitest ayrı küçük Babel eklentisiyle aynı derlemeyi çalıştırır; pilot testi sapmayı yakalar.
+- Ölü ChartCard / OverviewChart silindi; grafik sarmalayıcı sayısı için yalnız azalan ratchet (23 → 22). TimeSeriesPanel kalır (4 tüketici; CorePanel'de zarf dolgusu, sağ eksen, smooth/stepped, deploy işaretleri yok — ML kayıt grafiği değişirdi). LegacyLogChart 10 satırlık veri uyarlayıcı, kalır.
+- Seri paleti zaten temaya göre (v0.10.920, 1847–1851; her temada ≥3:1). "Tema-bağımsız palet" notu skill §7'de düzeltildi; OKLCH ile yeniden üretilmedi (tüm grafikleri yeniden boyardı). Yeni: 8 renkten sonra 9–16 [8,3], 17–24 [2,3], 25–32 [8,3,2,3] çizgi deseni, lejantta da.

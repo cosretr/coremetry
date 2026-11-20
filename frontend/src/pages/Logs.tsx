@@ -1872,6 +1872,7 @@ function LogsInner() {
 // /logs and the trace detail Logs tab).
 
 export default function LogsPage() {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   return (
     <Suspense fallback={<Spinner />}>
       <LogsInner />

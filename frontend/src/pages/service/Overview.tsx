@@ -32,10 +32,9 @@ import { AnomalyWindowTable } from '@/features/anomalies/AnomalyWindowTable';
 const AnomalyDetailDrawerLazy = lazy(() => import('@/features/anomalies/AnomalyDetailDrawer').then(m => ({ default: m.AnomalyDetailDrawer })));
 import { useAuth } from '@/components/AuthProvider';
 import { PanelTitle } from '@/components/ui/PanelTitle';
-// ChartLine — throughput memo'sunun taşıyıcı şekli. TİP-ONLY import:
-// ChartCard BİLEŞENİ v0.9.844'te bu sayfadan çıktı (eski motor söküldü),
-// dosyası ise yaşıyor (Runtime paneli tüketiyor).
-import { type ChartLine } from './charts/ChartCard';
+// ChartLine — throughput memo'sunun taşıyıcı şekli (eski ChartCard'dan; ChartCard
+// ve OverviewChart ölü kod olarak silindi).
+interface ChartLine { series: SpanMetricSeries[]; color: string; label: string; values?: (number | null)[] }
 import { STORAGE_KEYS } from '@/lib/storage';
 import { useCompareParam } from '@/lib/chart/useCompareParam';
 import { CompareToggle } from '@/components/charts/CompareToggle';

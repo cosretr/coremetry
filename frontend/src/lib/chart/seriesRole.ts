@@ -14,7 +14,7 @@
 //
 // Semantik roller TOKEN döndürür — tema-canlı;
 // draw anında resolveVar çözer (canvas CSS var okuyamaz). Palet hex'i
-// bilinçli tema-bağımsız (bugünkü davranış; seriesColor sözleşmesi).
+// tema başına (chartFmt.SERIES_PALETTES; seriesColor build anında okur).
 //
 // v0.10.1616 (shadcn Faz 1 R8, plan §2.2): hata/başarı rolü artık
 // `--status-critical-fg` / `--status-ok-fg` — rozet (StatusBadge), hücre

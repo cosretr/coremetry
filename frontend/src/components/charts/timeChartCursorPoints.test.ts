@@ -26,7 +26,7 @@ describe('TimeChart imleç noktası (uPlot show tuzağı)', () => {
 //     Etiket genişliği yalnız sağ (y2, side 1) eksende ölçülür. Bu kapı
 //     side'ları da çiviler: biri değişirse ölçüm dalı sessizce değişmesin.
 describe('y ekseni oluğu ölçülür, sabit değil (v0.10.1102)', () => {
-  for (const f of ['./TimeChart.tsx', '../../pages/service/charts/OverviewChart.tsx']) {
+  for (const f of ['./TimeChart.tsx']) {
     it(`${f.split('/').pop()} — size: measuredAxisSize(axisFont)`, () => {
       const src = readFileSync(new URL(f, import.meta.url), 'utf8');
       expect(src).toContain('size: measuredAxisSize(axisFont)');

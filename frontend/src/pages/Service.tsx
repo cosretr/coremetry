@@ -79,6 +79,7 @@ function serviceHeadDot(errorRate: number): { cls: 'red' | 'amber' | 'green'; la
 }
 
 function ServiceDetailInner() {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   const tr = useT(); // v0.10.1525 — "All statements" / "Tüm sorgular"
   const [searchParams, setSearchParams] = useSearchParams();
   // v0.10.717 (multi-cluster ilkesi) — Topbar Cluster kapsamı ve Details
@@ -808,6 +809,7 @@ function ServiceDetailInner() {
 // budget-remaining bar + burn-rate badge. Self-contained so the
 // strip stays a simple .map(); links to /slos for full management.
 function ServiceSLOChip({ slo }: { slo: SLORow }) {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   const st = slo.status;
   // v0.10.801 — olaysız pencere (noData) gri: ne sağlıklı ne ihlal.
   const noData = !!st?.noData;
@@ -866,6 +868,7 @@ function TabStrip({ tab, onChange, opCount }: {
   onChange: (t: ServiceTab) => void;
   opCount: number;
 }) {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   const items: { key: ServiceTab; label: string; hint?: string }[] = [
     { key: 'overview',   label: 'Overview' },
     { key: 'operations', label: 'Operations', hint: opCount > 0 ? `${opCount}` : undefined },
@@ -892,6 +895,7 @@ function TabStrip({ tab, onChange, opCount }: {
 }
 
 export default function ServiceDetailPage() {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   return (
     <Suspense fallback={<Spinner />}>
       <ServiceDetailInner />

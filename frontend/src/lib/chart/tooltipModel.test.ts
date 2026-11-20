@@ -180,7 +180,6 @@ describe('satır tavanı — motorlar arası tek sözleşme (v0.9.944)', () => {
     'components/chart/CorePanel.tsx',
     'components/charts/TimeChart.tsx',
     'components/viz/TimeSeriesPanel.tsx',
-    'pages/service/charts/OverviewChart.tsx',
   ];
 
   it('sortedTooltipRows kullanan HER motor capTooltipRows da kullanır', () => {

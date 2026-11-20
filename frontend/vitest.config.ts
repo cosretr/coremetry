@@ -1,5 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+import { transformAsync } from '@babel/core';
+import type { Plugin } from 'vite';
 
 // First frontend test harness (v0.7.25). 58K lines of TS/TSX had zero tests;
 // this seeds vitest against the PURE helpers that have actually regressed in
@@ -17,7 +19,26 @@ import { defineConfig } from 'vitest/config';
 // `// @vitest-environment jsdom` docblock'unu taşır — dosya başına opt-in,
 // yani jsdom'un bedelini yalnız ona ihtiyacı olan dosya öder. include artık
 // .tsx'i de kapsıyor (JSX olmadan bir bileşen mount edilemez).
+// vite.config.ts'teki React Compiler pilotunun ikizi: 'use memo' modülleri
+// testlerde de derlenmiş haliyle render edilir. @rolldown/plugin-babel burada
+// kullanılmıyor: vitest ortamı applyToEnvironment kancasını çağırmadığından
+// dönüşüm sessizce atlanıyordu (reactCompilerPilot.test.ts bunu yakalar).
+const reactCompilerAnnotation: Plugin = {
+  name: 'coremetry-react-compiler-annotation',
+  enforce: 'pre',
+  async transform(code, id) {
+    if (!/\.tsx$/.test(id) || id.includes('/node_modules/') || !/['"]use memo['"]/.test(code)) return null;
+    const out = await transformAsync(code, {
+      filename: id, babelrc: false, configFile: false, sourceMaps: true,
+      parserOpts: { plugins: ['typescript', 'jsx'] },
+      plugins: [['babel-plugin-react-compiler', { compilationMode: 'annotation' }]],
+    });
+    return out?.code ? { code: out.code, map: out.map } : null;
+  },
+};
+
 export default defineConfig({
+  plugins: [reactCompilerAnnotation],
   // Mirror the Vite `@` → src alias so tests can import components that use it
   // (e.g. ServicePicker imports '@/lib/api').
   resolve: {

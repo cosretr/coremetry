@@ -3890,7 +3890,6 @@ tbody td.infra-where-note { color: var(--text2); }
 /* Charts (uPlot host + legend + hover tooltip + deploy flag) */
 .ov-chart-wrap { position: relative; }
 .ov-sw { width: 9px; height: 9px; border-radius: 2px; flex: none; display: inline-block; }
-.ov-deploy-flag { position: absolute; font-size: 10px; font-family: var(--font-mono); color: var(--text2); transform: translateX(-50%); white-space: nowrap; pointer-events: none; }
 
 /* v0.10.928 (Y1) — ölü `.ov-flow*` / `.ov-node*` (servis akış haritası) ve
    `.nbr-*` (komşu kartı) aileleri silindi: 0 kullanım, ikisi de accent

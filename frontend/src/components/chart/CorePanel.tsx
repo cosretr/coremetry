@@ -70,7 +70,7 @@ import { placeTooltip, tooltipClampBox } from '@/lib/chartTooltip';
 import { fmtTooltipTime } from '@/lib/chartFmt';
 import { getItem, setItem, legendCollapseKey } from '@/lib/storage';
 import { useThemeTick } from '@/lib/useThemeTick';
-import { fmtSmart } from '@/lib/chartFmt';
+import { fmtSmart, seriesCueDashes } from '@/lib/chartFmt';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Button, MenuItem } from '@/components/ui';
 import type { PanelMenuAction } from '@/lib/chart/panelMenu';
@@ -747,6 +747,8 @@ export function CorePanel({
     // DÖNGÜ ÇİZİM SIRASINDA, `i` MANTIKSAL indeks: rol/kesikli/renk hep
     // mantıksal seriye ait, uPlot'a eklenme SIRASI ise drawOrder'dan gelir.
     const area = viz === 'area';
+    // 2026-11-21 — renk dışı ipucu: 9. veri serisinden itibaren desen (seriesDash).
+    const cue = seriesCueDashes(aligned.names.length, roles, dashed);
     drawOrder.forEach((i) => {
       const name = aligned.names[i];
       b.addSeries({
@@ -794,7 +796,8 @@ export function CorePanel({
           pointSize: ISOLATED_POINT_PX,
           pointsFilter: isolatedPointsFilter,
         }),
-        lineStyle: dashed?.[i] ? { fill: 'dash' as const, dash: [5, 4] } : undefined,
+        lineStyle: dashed?.[i] ? { fill: 'dash' as const, dash: [5, 4] }
+          : cue[i] ? { fill: 'dash' as const, dash: [...cue[i]!] } : undefined,
         // show BURADA SABİT true: görünürlük setSeries ile uygulanıyor
         // (aşağıdaki effect). Config'e gömmek her legend tıkını full
         // rebuild yapardı — uPlot'un ucuz toggle'ı varken.
@@ -1394,7 +1397,7 @@ export function CorePanel({
           stats={stats} vis={vis} onVisChange={setVis}
           focusName={focusName}
           onHover={(name, leaving) => setHoverName(n => (name !== null ? name : (n === leaving ? null : n)))}
-          roles={roles} colors={colors} fullNames={frames.map(f => fullNameOf(f))}
+          roles={roles} colors={colors} dashes={seriesCueDashes(aligned.names.length, roles, dashed)} fullNames={frames.map(f => fullNameOf(f))}
           fmtCell={fmtCell} sumAdditive={sumAdditive} />
       )}
     </div>

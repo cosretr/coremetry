@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
@@ -18,6 +19,10 @@ const analyze = process.env.ANALYZE === '1' || process.env.ANALYZE === 'true';
 export default defineConfig({
   plugins: [
     react(),
+    // React Compiler 1.0 pilotu — annotation modu: yalnız 'use memo' taşıyan
+    // modüller Babel'den geçer (preset'in kod filtresi), geri kalan oxc'de
+    // kalır. İkizi vitest.config.ts'te (render davranışı testlerde de aynı).
+    babel({ presets: [reactCompilerPreset({ compilationMode: 'annotation' })] }),
     // v0.10.1610 (shadcn Faz 1 R3, §12): <html data-theme> ve açılış betiğinin
     // geri dönüşü lib/themeDefault.ts DEFAULT_THEME'den yazılır — literal yok.
     // 'pre': Vite'ın %ENV% değiştirmesinden önce; dev ve build ikisi de geçer.

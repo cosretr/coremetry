@@ -19,8 +19,20 @@ import { legendOrder, nextLegendSort, type LegendSort, type LegendSortKey } from
 
 export interface PanelLegendRow { name: string; stat: SeriesStat }
 
+// LegendSwatch — düz seri kare; desenli seri (seriesCueDashes) kısa kesikli
+// çizgi: renk 9. seriden sonra tekrar ettiği için ayrımı desen taşır.
+function LegendSwatch({ color, dash }: { color: string; dash?: readonly number[] }) {
+  if (dash) {
+    return <span data-dash={dash.join(',')} style={{
+      display: 'inline-block', width: 12, height: 0, verticalAlign: 'middle', marginRight: 6,
+      borderTop: `2px ${dash[0] <= 2 ? 'dotted' : 'dashed'} ${color}`,
+    }} />;
+  }
+  return <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: color, marginRight: 6 }} />;
+}
+
 export function PanelLegend({
-  count, open, onToggle, stats, vis, onVisChange, focusName, onHover, roles, colors, fullNames, fmtCell, sumAdditive,
+  count, open, onToggle, stats, vis, onVisChange, focusName, onHover, roles, colors, dashes, fullNames, fmtCell, sumAdditive,
 }: {
   count: number;
   open: boolean;
@@ -34,6 +46,8 @@ export function PanelLegend({
   roles?: SeriesRole[];
   // v0.10.968 — CorePanel.colors ile aynı: açık renk varsa swatch da onu çizer.
   colors?: (string | undefined)[];
+  // 2026-11-21 — seriesCueDashes: desenli seri swatch'ı kesikli çizgi olarak.
+  dashes?: (readonly number[] | undefined)[];
   fullNames: (string | undefined)[];
   fmtCell: (i: number, v: number | null) => string;
   sumAdditive: boolean;
@@ -99,11 +113,7 @@ export function PanelLegend({
                   if (e.key === ' ') { e.preventDefault(); onVisChange(v => toggleSeriesVisibility(v, i)); }
                 }}>
                 <td>
-                  <span style={{
-                    display: 'inline-block', width: 8, height: 8, borderRadius: 2,
-                    background: resolveVar(colors?.[i] ?? seriesRoleColor(s.name, roles?.[i] ?? 'data')),
-                    marginRight: 6,
-                  }} />
+                  <LegendSwatch color={resolveVar(colors?.[i] ?? seriesRoleColor(s.name, roles?.[i] ?? 'data'))} dash={dashes?.[i]} />
                   {/* v0.9.1369 — tam ad title'da: lejant Grafana
                       yoğunluğunda kısa kalır (v0.9.539 operatör
                       isteği) ama operatör pod adını üzerine gelerek

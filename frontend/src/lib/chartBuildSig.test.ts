@@ -20,7 +20,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   timeChartBuildSignature, type TimeChartSigInput,
-  overviewChartBuildSignature, type OverviewChartSigInput,
   timeSeriesPanelBuildSignature, type TSPBuildSigInput,
 } from './chartBuildSig';
 
@@ -81,58 +80,6 @@ describe('timeChartBuildSignature — structure/option change forces a rebuild',
   ];
   it.each(diff)('%s → different signature', (_n, input) => {
     expect(timeChartBuildSignature(input)).not.toBe(timeChartBuildSignature(tcBase));
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// overviewChartBuildSignature — v0.8.531. The compact service-Overview RED
-// chart seam (Overview + Incident).
-const ovBase: OverviewChartSigInput = {
-  series: [
-    { label: 'p50', color: 'var(--accent)' },
-    { label: 'p95', color: 'var(--orange)' },
-    { label: 'p99', color: 'var(--err)' },
-  ],
-  height: 150,
-  mode: 'line',
-  unit: ' ms',
-  deployAtSec: 1_700_000_000,
-  deployLabel: 'v1.0.0',
-  renderable: true,
-};
-
-describe('overviewChartBuildSignature — data-only refresh keeps the same signature', () => {
-  const same: [string, OverviewChartSigInput][] = [
-    ['fresh series array, same shape', { ...ovBase, series: ovBase.series.map(s => ({ ...s })) }],
-    ['deep clone', JSON.parse(JSON.stringify(ovBase))],
-  ];
-  it.each(same)('%s → identical signature', (_n, input) => {
-    expect(overviewChartBuildSignature(input)).toBe(overviewChartBuildSignature(ovBase));
-  });
-});
-
-describe('overviewChartBuildSignature — structure/option change forces a rebuild', () => {
-  const diff: [string, OverviewChartSigInput][] = [
-    ['line count changed', { ...ovBase, series: ovBase.series.slice(0, 1) }],
-    ['line recoloured', { ...ovBase, series: [{ ...ovBase.series[0], color: 'var(--teal)' }, ovBase.series[1], ovBase.series[2]] }],
-    ['mode changed (line→area)', { ...ovBase, mode: 'area' }],
-    ['mode changed (line→stacked)', { ...ovBase, mode: 'stacked' }],
-    ['unit changed', { ...ovBase, unit: '%' }],
-    ['height changed', { ...ovBase, height: 110 }],
-    ['deployAtSec changed', { ...ovBase, deployAtSec: 1_700_000_600 }],
-    ['deploy cleared', { ...ovBase, deployAtSec: null }],
-    ['deployLabel changed', { ...ovBase, deployLabel: 'v2.0.0' }],
-    ['renderable toggled', { ...ovBase, renderable: false }],
-    // v0.8.534 — drag-zoom presence: the setSelect hook + cursor.drag are
-    // wired at build time only when onZoom exists, so a none→some flip must
-    // rebuild to register them.
-    ['zoom presence toggled on', { ...ovBase, hasZoom: true }],
-    // Grafana-parite M1 — cursor.sync build anında kablolanır; key
-    // gelişi/değişimi rebuild ister (Service sayfası imleç senkronu).
-    ['sync key added', { ...ovBase, syncKey: 'service:api' }],
-  ];
-  it.each(diff)('%s → different signature', (_n, input) => {
-    expect(overviewChartBuildSignature(input)).not.toBe(overviewChartBuildSignature(ovBase));
   });
 });
 
@@ -226,19 +173,6 @@ describe('Grafana-parite M3 — regions + colour-thresholds in the signatures', 
   it('TC: region label changed → different signature', () => {
     expect(timeChartBuildSignature({ ...tcBase, regions: [{ ...region, label: 'OPEN' }] }))
       .not.toBe(timeChartBuildSignature({ ...tcBase, regions: [region] }));
-  });
-
-  it('OVC: fresh thresholds/regions, same values → identical signature', () => {
-    expect(overviewChartBuildSignature({ ...ovBase, thresholds: [{ ...cth }], regions: [{ ...region }] }))
-      .toBe(overviewChartBuildSignature({ ...ovBase, thresholds: [{ ...cth }], regions: [{ ...region }] }));
-  });
-  it('OVC: threshold appears (none→some) → different signature', () => {
-    expect(overviewChartBuildSignature({ ...ovBase, thresholds: [cth] }))
-      .not.toBe(overviewChartBuildSignature(ovBase));
-  });
-  it('OVC: region colour changed → different signature', () => {
-    expect(overviewChartBuildSignature({ ...ovBase, regions: [{ ...region, color: 'var(--warn)' }] }))
-      .not.toBe(overviewChartBuildSignature({ ...ovBase, regions: [region] }));
   });
 
   it('TSP: fresh regions, same values → identical signature', () => {

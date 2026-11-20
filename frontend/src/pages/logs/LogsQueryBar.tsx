@@ -73,6 +73,7 @@ const NO_CHIPS: never[] = [];
 const noop = () => {};
 
 export function LogsQueryBar(p: LogsQueryBarProps) {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   const { draft } = p;
   const refreshMode = !p.dirty && !p.live;
   return (

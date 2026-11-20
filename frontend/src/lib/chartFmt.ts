@@ -249,6 +249,27 @@ export function assignSeriesSlots(labels: readonly string[], pinned?: ReadonlyMa
   return out;
 }
 
+// seriesDash — SAF (2026-11-21): renk dışı ikinci ipucu. Paletin SERIES_SLOTS
+// yuvası tükenince (9. veri serisinden itibaren) renkler tekrar eder; o
+// serileri kesikli desenle ayırırız. `ordinal` panel içindeki veri serisinin
+// 0 tabanlı sırası (rol serileri — hata/başarı/soluk — sayılmaz). İlk 8 seri
+// düz (undefined); 9–16 SERIES_DASHES[0], 17–24 [1], 25–32 [2], sonra döner.
+// Hayalet/formül kesiği ([5,4], CorePanel `dashed`) bu desenlerden ayrık.
+export const SERIES_DASHES: readonly (readonly number[])[] = [[8, 3], [2, 3], [8, 3, 2, 3]];
+export function seriesDash(ordinal: number): readonly number[] | undefined {
+  if (ordinal < SERIES_SLOTS) return undefined;
+  return SERIES_DASHES[(Math.floor(ordinal / SERIES_SLOTS) - 1) % SERIES_DASHES.length];
+}
+
+// seriesCueDashes — panelin n serisi için seriesDash dizisi. Sıra yalnız
+// 'data' rollü ve zaten kesikli OLMAYAN serileri sayar (CorePanel çizimi ve
+// PanelLegend swatch'ı aynı sonucu okur).
+export function seriesCueDashes(n: number, roles?: readonly (string | undefined)[], dashed?: readonly boolean[]): (readonly number[] | undefined)[] {
+  let k = 0;
+  return Array.from({ length: n }, (_, i) =>
+    (dashed?.[i] || (roles?.[i] ?? 'data') !== 'data') ? undefined : seriesDash(k++));
+}
+
 // seriesColorsFor — panel bağlamlı renkler: etiket → renk (tema-farkında).
 export function seriesColorsFor(labels: readonly string[], pinned?: ReadonlyMap<string, number>, theme: ChartTheme = chartTheme()): Map<string, string> {
   const pal = seriesPalette(theme);

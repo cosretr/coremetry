@@ -235,6 +235,7 @@ function sortAccessor(col: SortColumn): (r: TraceRow) => number | string {
 // süresiydi ve eşiksiz, HER ZAMAN amber'di (sapma değil, sabit boya). Değer
 // artık nötr --text; renk yalnız gerçek sapmada (hata > 0).
 function HeaderStat({ label, value, tone, title }: { label: string; value: string; tone?: 'err'; title?: string }) {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   return (
     <div title={title} className="trl-hstat">
       <span className={tone === 'err' ? 'trl-hstat-v is-err' : 'trl-hstat-v'}>{value}</span>
@@ -2005,6 +2006,7 @@ function AggregateTable({ agg, groupBy, dt, onDrill, state }: {
   // yokken tablonun İÇİNDE çizilecek durum (sayfanın aggState'i).
   state: Omit<DataTableStateProps<AggregateRow>, 'dt'>;
 }) {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   const lang = useLang(); // v0.10.2317 — durumsuz grup ipucu arayüz dilinde
   return (
     <>
@@ -2139,6 +2141,7 @@ function TracesEmptyDetail({ service, search, range, onSwitchView, narrowedFromN
   // v0.10.530 — servisin YÜKLEMSİZ ham span sayısı; "TTL" ile "yüklem"i ayırır.
   serviceSpans?: number;
 }) {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   const lang = useLang();
   const [mvSpans, setMvSpans] = useState<number | null | undefined>(undefined);
   const rangeNs = useMemo(() => timeRangeToNs(range), [range]);
