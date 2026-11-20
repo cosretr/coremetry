@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { seriesColor } from '@/lib/chartFmt';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Spinner } from './Spinner';
 import { Button, DisclosureButton } from '@/components/ui';
 import { api } from '@/lib/api';

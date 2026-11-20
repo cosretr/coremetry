@@ -9,7 +9,7 @@
 // --z-drawer-panel panel; eşlik: --z-nav) — tokens.css utilities katmanı.
 // CosreSheet ayrı kabuk kalır (sohbet ≠ detay); kurallar aynı.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Sheet, SheetContent, SheetTitle } from '@/components/coremetry/overlay';
 import { isEmptyAreaClick } from '@/lib/emptyAreaClose';
 import { storedDrawerWidth } from '@/lib/drawerWidth';

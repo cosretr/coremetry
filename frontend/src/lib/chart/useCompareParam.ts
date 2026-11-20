@@ -6,7 +6,7 @@
 // Yazım replace:true, yabancı anahtarlar korunur; içe aktarım yalnız
 // compare anahtarına bağlı (aralık yazımı state'i silmez).
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { getRaw, setRaw } from '@/lib/storage';
 import { type CompareMode, parseCompareParam, encodeCompareParam, parseStoredCompare } from './compareParam';
 

@@ -7,7 +7,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { TimeRange, DBTrend } from '@/lib/types';
 import { DependenciesTable, OpenProblemsMark, type DepRow } from './DependenciesTable';
 import { DetailDrawer } from '@/features/dependencies/DetailDrawer';

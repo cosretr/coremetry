@@ -15,7 +15,7 @@
 // çağırmaz, hiç ağ isteği (dolayısıyla 401) yapmaz.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEffect } from 'react';
 
@@ -55,7 +55,7 @@ async function mount(at: string) {
   vi.stubGlobal('location', { assign, pathname: p, search: q ? '?' + q : '', hash: '', href: 'http://localhost' + at });
   await act(async () => {
     root.render(
-      <MemoryRouter initialEntries={[at]}>
+      <MemoryRouter initialEntries={[at]} useTransitions={false}>
         <AuthProvider>
           <Routes><Route path="*" element={<Probe />} /></Routes>
         </AuthProvider>

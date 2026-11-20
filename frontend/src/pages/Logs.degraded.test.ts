@@ -39,8 +39,10 @@ describe('degraded log backend surfaces (B1)', () => {
   });
   it('LogContextModal: degraded state okunur, sıfırlanır, çizilir', () => {
     const src = read('../components/LogContextModal.tsx');
-    expect(src).toContain("setDegraded(r?.degraded ?");
-    expect((src.match(/setDegraded\(null\)/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    // 2026-11-21 — durum artık useLogsContext'ten TÜRETİLİYOR (setState yok):
+    // degraded yalnız başarılı cevapta, hata/yükleniyorken null.
+    expect(src).toContain("const degraded: string | null = !ctxQ.isError && ctx?.degraded ?");
+    expect(src).toContain(": null;");
     expect(src).toContain('{degraded && (');
   });
 });

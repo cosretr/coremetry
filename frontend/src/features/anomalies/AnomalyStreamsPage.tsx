@@ -13,7 +13,7 @@
 // Platform = yalnız onlar; Elenenler (yalnız admin) = yayın kapılarının GÖLGE
 // kararıyla tutacağı olaylar — kapılar yürürlükte değil, bu olaylar servis
 // listesinde, bildirimde ve Problem'de aynen kalır (sekme yalnız okur).
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router';
 import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs';
 import { useAuthRole } from '@/components/AuthProvider';
 import { useT } from '@/lib/i18n';

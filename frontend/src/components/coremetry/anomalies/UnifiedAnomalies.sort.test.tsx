@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router';
 import type { UnifiedAnomaliesPage } from '@/lib/types';
 
 type Params = { section: 'open' | 'done'; offset: number; sort?: string; dir?: string };

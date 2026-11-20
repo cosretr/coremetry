@@ -5,7 +5,7 @@
 // sayfası, Trace'ler, Loglar). v0.10.135 PodEntityPanel'in zinciri + v0.9.151
 // KPI şeridinin Cluster/Namespace/faz tekrarı (F1) BURADA birleşti — ikinci
 // satır yok. Entity katmanı kapalı/kayıt yok → düz metin zincir (link yok).
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Stack, Row, Badge } from '@/components/ui';
 import { fmtDateTime } from '@/lib/utils';
 import { t, tf, useLang } from '@/lib/i18n';

@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { api } from '@/lib/api';
 import type { ChatStepDetail, ChatStreamEvent, ChatTurn } from '@/lib/types';
 import { useChatThread } from './useChatThread';

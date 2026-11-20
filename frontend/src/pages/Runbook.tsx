@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import { TabStrip as UiTabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5) — sayfanın yerel TabStrip sarmalayıcısıyla ad çakışmasın
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   Hand, Search, Globe, Code, SquareTerminal, Play, GripVertical, X,
   TriangleAlert, ListChecks, type LucideIcon,

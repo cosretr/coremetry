@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { UnifiedAnomaliesPage, UnifiedAnomalyRow } from '@/lib/types';
 
 const m = vi.hoisted(() => ({ lang: 'en' as 'en' | 'tr', mode: 'rows' as 'rows' | 'empty' | 'error', extra: [] as UnifiedAnomalyRow[] }));

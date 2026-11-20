@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { SafeHref } from '@/components/ui/SafeHref'; // v0.10.1315 — olay/katalog linki XSS kapısı
 import { useEscLayer } from '@/lib/escLayer';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { rolloutEvidenceHref } from '@/lib/rolloutRow';
 import { mlGroupProblemHref } from '@/lib/anomalyHref';
 import { useQuery, useQueryClient } from '@tanstack/react-query';

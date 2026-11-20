@@ -14,7 +14,7 @@ import { TopologyFlowGraph } from './TopologyFlowGraph';
 import type { ServiceMap } from '../lib/types';
 import type React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
 const wrap = (el: React.ReactElement) => <MemoryRouter><QueryClientProvider client={qc}>{el}</QueryClientProvider></MemoryRouter>;
 

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Drawer } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
 import { api } from '@/lib/api';

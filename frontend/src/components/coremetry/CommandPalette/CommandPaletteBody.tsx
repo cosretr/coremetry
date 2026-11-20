@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import { useT } from '@/lib/i18n';
 import { navHref } from '@/lib/navHref';
 import { serviceHref } from '@/lib/serviceHref';

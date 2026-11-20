@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/coremetry/overlay';
 import { Button, Chip, SearchField } from '@/components/ui';
-import { Link, useLocation, useNavigate, useSearchParams, Navigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams, Navigate } from 'react-router';
 import { anomalyEventHref } from '@/lib/anomalyHref';
 import { Topbar } from '@/components/Topbar';
 import { useInbox, useServicesMetadata, useProblemGraphSummary } from '@/lib/queries';

@@ -10,7 +10,7 @@
 // Sunucu LIMIT 50: kayıt listesi, useDataTable; initialSort yok (sunucu sırası
 // = puan ↓, zaman ↓). Kademe özeti ≤20 sabit satır → metin satırı, tablo değil.
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { api } from '@/lib/api';
 import { SegmentedControl } from '@/components/ui';
 import { tsLong } from '@/lib/utils';

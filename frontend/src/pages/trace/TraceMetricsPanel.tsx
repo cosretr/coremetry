@@ -54,7 +54,7 @@
 // kapsamı" yalnız kapsam eksikken, "Trace x dk önce …" notu yalnız geçerliyken
 // aynı satırda. Yukarıdaki odak görünümü / çip anlatımı geçmiştir.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import type { SpanRow, TraceAnalysis } from '@/lib/types';
 import type { CriticalPath } from '@/lib/criticalPath';
 import { useEscLayer } from '@/lib/escLayer';

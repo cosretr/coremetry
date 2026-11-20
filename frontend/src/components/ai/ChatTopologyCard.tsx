@@ -12,7 +12,7 @@
 // uzun ad elipsli + title; kart kendi kabında kayar (sayfa yatay kaymaz).
 // Sütun tavanı sunucuda (sekmenin MAX_PER_COL'u); "+N more" tıklanamaz etiket.
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import type { ChatTopologyPayload } from '@/lib/types';
 import { TopologyFlowGraph } from '@/components/TopologyFlowGraph';
 import { nodeDetailHref } from '@/components/topology/nodeDetailHref';

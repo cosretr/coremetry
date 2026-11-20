@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import type { AnnotationItem } from '@/lib/types';
 import { fmtClock } from '@/lib/utils';
 import { appLinkKind } from '@/lib/safeAppPath';

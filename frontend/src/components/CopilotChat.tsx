@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from 'react';
 import { mergeOpenHref } from '@/lib/openHref'; // v0.10.460
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import { takeMetricPanelAsk } from '@/lib/pageContextOverlay'; // v0.10.1435
 import { hasPinnableContext, pinLabelTR } from '@/lib/pinnedContext';
 import type { ChatExplainAsk, ChatTurn, PageContext } from '@/lib/types';

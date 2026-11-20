@@ -142,7 +142,7 @@ import { toCoreViz } from './panelViz';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { serviceHref } from '@/lib/serviceHref';
 import { encodeFilters } from '@/lib/urlState';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { usePanelMenuHost } from './panelMenuHost';
 import { MULTI, plainVars } from '@/lib/dashboardVars';
 import { resolvePanelQuery } from '@/lib/metricsExplorer/panelQuery';

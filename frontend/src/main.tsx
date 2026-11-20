@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router';
 import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import App from './App';
@@ -173,7 +173,12 @@ const queryClient = new QueryClient({
 const mount = () => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      {/* react-router v7 (2026-11-21): gezinme v6'daki gibi SENKRON.
+          v7 varsayılanı her gezinmeyi startTransition'a sarar; geçişte
+          askıya alınan / sürekli kesilen bir ağaçta konum hiç güncellenmedi
+          (CopilotChat "Tam sayfada aç" → /cosre takıldı, testte yakalandı).
+          URL/durum davranışı v6 ile birebir kalsın diye kapalı. */}
+      <BrowserRouter useTransitions={false}>
         <App />
       </BrowserRouter>
       {/* Devtools mount point. Hidden in production builds via

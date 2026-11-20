@@ -1,0 +1,75 @@
+# ui-nightly — 2026-11-21: Playwright ile gerçek tarayıcı ölçümü.
+# KARAR GERİ ALINDI: Aug-31 denetimi "Playwright yok" demişti; operatör
+# 2026-11-21'de gece işini onayladı. scripts/gate.sh'in parçası DEĞİL.
+#
+# Yığın perf-nightly.yml ile AYNI kalkar (compose: clickhouse + redis +
+# coremetry, cmd/demo 3 dk veri). Sonra her tema × ~10 üst rota için Web
+# Vitals (LCP, INP, CLS; TTFI vs 1.5 s bütçe) + sayfa düzeyinde axe
+# (color-contrast AÇIK) — frontend/e2e/nightly.pw.ts.
+#
+# RAPOR-ÖNCE: bütçe aşımı / axe ihlali geceyi KIRMAZ (özet + artefakt);
+# yalnız çökme (gezinme hatası, belge 5xx, sayfa crash, #main hiç dolmuyor)
+# işi kırmızı yapar. Paylaşımlı koşucu gürültülü: değer koşudan koşuya kıyas.
+name: UI nightly
+
+on:
+  schedule:
+    - cron: '53 3 * * *' # her gece 03:53 UTC (perf-nightly 03:17'den sonra)
+  workflow_dispatch:
+
+concurrency:
+  group: ui-nightly
+  cancel-in-progress: false
+
+jobs:
+  ui:
+    name: Playwright vitals + axe (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Bring up stack (clickhouse + redis + coremetry)
+        env:
+          VERSION: nightly
+        run: |
+          docker compose up -d --build clickhouse redis coremetry
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8088/api/health >/dev/null && break
+            sleep 5
+          done
+          curl -sf http://localhost:8088/api/version
+      - name: Seed telemetry (cmd/demo, 3 dk)
+        run: |
+          go run ./cmd/demo -endpoint http://localhost:8088 -duration 3m
+          sleep 30 # MV/rollup gecikmesi
+      - name: Install frontend deps + Chromium
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Playwright (vitals + axe per theme)
+        working-directory: frontend
+        env:
+          BASE_URL: http://localhost:8088
+        run: npm run e2e:nightly
+      - name: Publish summary
+        if: always()
+        run: cat frontend/e2e/out/summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo 'özet yok (koşu çöktü?)' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ui-nightly-${{ github.run_id }}
+          path: frontend/e2e/out/
+          retention-days: 30
+      - name: Tear down
+        if: always()
+        run: docker compose down -v || true

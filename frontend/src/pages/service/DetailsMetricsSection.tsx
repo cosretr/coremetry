@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo } from 'react';
 import { msSyncKey } from '@/lib/chart/syncNamespace';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { encodeFilters } from '@/lib/urlState';

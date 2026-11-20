@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
 import { CATALOG } from './catalog';
 import { themeScopeAttrs } from '@/lib/theme';

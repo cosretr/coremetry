@@ -9,7 +9,7 @@
 //     kapalı açılırı (sunucu önizlemesi, salt okunur), altta İlgili / İlgisiz
 //     (aynı cosre_signals kaydı: detail "s<i>", cevabın exchangeId'si).
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import { Check, ChevronRight, Loader2, Minus, MoreHorizontal, X } from 'lucide-react';
 import { Badge } from '@/components/shadcn/badge';
 import { Button } from '@/components/shadcn/button';

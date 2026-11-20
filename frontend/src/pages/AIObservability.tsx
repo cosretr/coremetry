@@ -25,7 +25,7 @@ import {
   type AICall, type AIStats, type AICallsTimePoint, type TimeRange, type AICallSource,
   EVALSET_SURFACE_PREFIX,
 } from '@/lib/types';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { traceHref } from '@/lib/traceHref';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { PageShell } from '@/components/coremetry/PageShell';

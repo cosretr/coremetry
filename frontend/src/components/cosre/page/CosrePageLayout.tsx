@@ -7,7 +7,7 @@
 // kapalıyken yol birebir eskisi.
 // components/ui'den HİÇBİR şey içe aktarılmaz (uiImportRatchet, ui/ donmuş).
 import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import type { AiConversationSummary } from '@/lib/types';
 import { Button } from '@/components/shadcn/button';
 import { AiMark } from '@/components/ai/CopilotFab';

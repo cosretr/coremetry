@@ -16,7 +16,7 @@
 import { vi, describe, it, expect, afterEach } from 'vitest';
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { OperationSummary } from '@/lib/types';
 import { OperationsTable } from './OperationsTable';
 // v0.10.2258 — tablo durum metinleri / rozet arayüz dilinde; bu dosya Türkçe metni pinler.

@@ -30,7 +30,7 @@
 //      bulunursa traceSource="tempo" → gerçek link + nötr "Tempo" rozeti; hâlâ
 //      yoksa gri "Coremetry'de yok" (artık tam, kopyalanabilir id ile).
 import type { CSSProperties } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import { stopRowClick } from '@/lib/a11y';
 import { traceHref } from '@/lib/traceHref';
 import { rowClickHandlers, tsLong } from '@/lib/utils';

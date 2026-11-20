@@ -5,7 +5,7 @@
 // v1 CopilotChat + v2 components/cosre/conversation (yalnız cevap yolu farklı).
 // Bileşen dosyasında kanca dışa aktarmak react-refresh uyarısıydı → ayrı dosya.
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useCopilotStarters } from '@/lib/queries/copilot'; // v0.10.702

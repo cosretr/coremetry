@@ -4,7 +4,7 @@
 // okunur (önden çekilmez). Yazma editor+ (sunucu kapısı); düğme viewer'da
 // gerekçesiyle kapalı.
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Button } from '@/components/shadcn/button';
 import { Input } from '@/components/shadcn/input';
 import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';

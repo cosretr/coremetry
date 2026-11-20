@@ -7,7 +7,7 @@
 //
 // Veri: GET /api/exception-groups/{fp}/oracle (fetch-on-open, yalnız Oracle
 // grubunda). Öznitelik paneli = KeyValue atomu (tablo standardı: kayıt değil).
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtNum } from '@/lib/utils';

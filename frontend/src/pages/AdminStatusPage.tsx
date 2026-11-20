@@ -1,6 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Spinner, Empty } from '@/components/Spinner';
 import { IconShield } from '@/components/icons';
 import { ServicePicker } from '@/components/ServicePicker';

@@ -1,6 +1,6 @@
 import { usePivotCtx, withPivotCtx } from '@/lib/pivotContext';
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { DataTableHead, DataTableColgroup, DataTableState, type DataTable, type DataTableStateProps } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { PodJmxInline } from './PodJmxInline';

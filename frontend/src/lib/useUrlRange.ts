@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import type { TimeRange } from './types';
 import { encodeRange, decodeRange } from './urlState';
 import { STORAGE_KEYS, getSessionRaw, setSessionRaw } from './storage';

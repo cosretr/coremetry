@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/shadcn/button';
 import { emitAiPrefill } from '@/components/ai/aiEvents';

@@ -16,7 +16,7 @@ import { vi, describe, it, expect, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
-import { Link, MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter } from 'react-router';
 import { useDataTable, DataTableHead, DataTableColgroup, VirtualTable, DATA_TABLE_STATE_TEXT, type DataTable, type ColumnDef, type ColumnModel, type VirtualTableProps } from './index';
 // v0.10.2258 — tablo durum metinleri / rozet arayüz dilinde; bu dosya Türkçe metni pinler.
 vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));

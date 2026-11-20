@@ -2,7 +2,7 @@
 // CoSRE sohbetleri (çağıranın KENDİ konuşmaları; bağ konuşmanın bağlamından
 // türer ya da elle kurulur — internal/api/ai_conversation_link.go). Satır
 // /cosre?chat=<id> ile konuşmayı açar. Kapalı başlar, açılınca okunur.
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Spinner, Empty } from '@/components/Spinner';

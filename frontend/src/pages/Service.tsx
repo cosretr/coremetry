@@ -2,7 +2,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useT } from '@/lib/i18n';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { TabStrip as UiTabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5) — sayfanın yerel TabStrip sarmalayıcısıyla ad çakışmasın
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { navHref } from '@/lib/navHref';
 import { encodeRange } from '@/lib/urlState';
 import { Topbar } from '@/components/Topbar';

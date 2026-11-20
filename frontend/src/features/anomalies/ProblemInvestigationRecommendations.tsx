@@ -10,7 +10,7 @@
 //     etiket (audit sre.recommendation.ack). Viewer kartları GÖRÜR, düğmeyi
 //     görmez.
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Badge, Button } from '@/components/ui';
 import { api } from '@/lib/api';

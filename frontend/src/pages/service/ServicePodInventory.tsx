@@ -1,5 +1,5 @@
 import { useContext, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { useDataTable, type DataTableStateProps } from '@/components/ui/DataTable';
 import { ServicePodsTable } from './ServicePodsTable';
 import { useServicePods } from './useServicePods';

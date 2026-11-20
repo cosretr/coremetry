@@ -74,7 +74,7 @@
 // "metrik gelmiyor" notu grafik sırasından "Teknik ayrıntı"ya taşındı.
 // Yukarıdaki tarihçe notlarındaki karşılaştırma / odak anlatımı geçmiştir.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Copy, X } from 'lucide-react';
 import { Badge, Button, DisclosureButton, IconButton, LinkButton } from '@/components/ui';
 import { KeyValue, type KeyValueItem } from '@/components/coremetry/KeyValue';

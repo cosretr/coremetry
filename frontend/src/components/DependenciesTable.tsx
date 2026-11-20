@@ -4,7 +4,7 @@ import { rowActivation, stopRowClick } from '@/lib/a11y';
 import { dbTracesHref } from '@/lib/pivotHref';
 import { messagingTopicHref } from '@/pages/messaging/topicHref'; // v0.10.586
 import { dbSeverityBadgeClass } from '@/pages/databases/databaseProblems'; // v0.10.1027
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Sparkline } from './Sparkline';
 import { TrendDelta } from './TrendDelta';
 import { Button } from './ui/Button';

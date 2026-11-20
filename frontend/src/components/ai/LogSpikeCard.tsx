@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Chip } from '@/components/ui/Chip';
 import { DrawerSection } from '@/components/ui/Drawer';
 import { Spinner } from '@/components/Spinner';

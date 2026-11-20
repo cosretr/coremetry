@@ -21,7 +21,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { act, useRef, type RefObject } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { useDataTable, BulkBar, type ColumnDef, type BulkBarAction } from './index';
 
 let host: HTMLDivElement | null = null;

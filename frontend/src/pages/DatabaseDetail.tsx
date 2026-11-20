@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { navHref } from '@/lib/navHref';
 import { useQuery } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';

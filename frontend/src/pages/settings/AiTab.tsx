@@ -23,7 +23,7 @@ import { CosreConversationLine } from './CosreConversationLine'; // v0.10.2324
 import { useT } from '@/lib/i18n'; // v0.10.1434
 import { tuningToForm, tuningToWire } from './aiTuning';
 import { IconSparkles } from '@/components/icons';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 
 // v0.10.940 (operatör onayı K1, 2026-09-26) — Settings › CoSRE iki sekme:
 // "Sağlayıcı ve profiller" (bugünkü gövde, AYNEN) ve "Değerlendirme"

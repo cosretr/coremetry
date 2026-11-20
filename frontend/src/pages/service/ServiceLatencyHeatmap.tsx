@@ -12,7 +12,7 @@ import { heatmapFilters } from './heatmapFilters';
 import { HeatmapCellExemplars } from '@/components/HeatmapCellExemplars';
 import { BubbleUpPanel } from '@/components/BubbleUpPanel';
 import type { FilterExpr } from '@/lib/types';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 // ServiceLatencyHeatmap fetches the heatmap for the current
 // service + window and renders it under a collapsible

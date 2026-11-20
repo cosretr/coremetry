@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import { HealthcheckRunbookRow, HealthcheckRunbookResult } from '@/components/coremetry/ServiceHealthcheck';
 import { Topbar } from '@/components/Topbar';
 import { Button } from '@/components/ui/Button';

@@ -182,7 +182,7 @@ export function useServiceBacktrace(
 export function useClusters(from: number, to: number) {
   return useQuery<string[]>({
     queryKey: ['clusters', from, to],
-    queryFn: async () => (await api.clusters(from, to))?.clusters ?? [],
+    queryFn: async ({ signal }) => (await api.clusters(from, to, signal))?.clusters ?? [],
     staleTime: 60_000,
   });
 }

@@ -6,7 +6,7 @@
 // KAPALI teknik ayrıntı (yayın kapıları + seri tanımı). Tüm metin kayıttan
 // şablonlanır, render'da sorgu yok. Kaydı olmayan olay eski kartı çizer.
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Badge } from '@/components/shadcn/badge';
 import { KeyValue } from '@/components/coremetry/KeyValue';
 import { serviceHref } from '@/lib/serviceHref';

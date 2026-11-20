@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router';
 import { navHref } from '@/lib/navHref';
 
 // TriageCrumb (v0.8.293, Option B slice 4) — a small breadcrumb on the

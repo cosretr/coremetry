@@ -5,7 +5,7 @@
 // SEMPTOM: /services'in alt şeridinde "Next" ve "Last" hiçbir şey yapmıyor;
 // tıktan sonra operatör hâlâ 1. sayfada.
 //
-// KÖK NEDEN: react-router-dom 6.30'un `setSearchParams`ı
+// KÖK NEDEN: react-router 6.30'un `setSearchParams`ı
 // `useCallback(…, [navigate, searchParams])` ve `searchParams`
 // `location.search`e memo'lu — yani HER URL yazımı setter'a yeni bir kimlik
 // veriyor. Services o setter'ı saran `setPage`i "filtre değişince sayfayı
@@ -23,7 +23,7 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act, useEffect, useRef, useState } from 'react';
-import { BrowserRouter, useSearchParams } from 'react-router-dom';
+import { BrowserRouter, useSearchParams } from 'react-router';
 import { Pager } from '@/components/Pager';
 import { useUrlPage } from './useUrlPage';
 

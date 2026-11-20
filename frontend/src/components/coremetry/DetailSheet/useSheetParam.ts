@@ -5,7 +5,7 @@
 // değişimi / kapanış replace:true; yabancı parametreler korunur, aynı değere
 // yazım no-op (imza muhafızı).
 import { useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 /** SAF: prev + (key, v) → yeni params; değişiklik yoksa null. */
 export function nextSheetParams(prev: URLSearchParams, key: string, v: string | null): URLSearchParams | null {

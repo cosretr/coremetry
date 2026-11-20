@@ -157,3 +157,66 @@ export function logsDocQuery(ref: string) {
   };
 }
 export type LogsDocRow = LogRow;
+
+// ── Logs yan panelleri + SpanDetail log bölümü (2026-11-21) ─────────────
+// Eski effect-fetch'lerin hook karşılıkları. Ortak kurallar: signal geçer
+// (panel kapanınca / girdi değişince ES isteği kesilir), retry YOK (eski
+// effect'ler tek atıştı; hata durumları çağıranda aynı çiziliyor),
+// odaklanmada yeniden çekme yok (ES-maliyet disiplini).
+
+export type LogsContextParams = Parameters<typeof api.logsContext>[0];
+
+// Pivot ±n bağlam (LogContextModal, /logs ?doc= çözümü). null = kapalı.
+// staleTime = sunucu önbelleği (15 s).
+export function useLogsContext(params: LogsContextParams | null) {
+  return useQuery({
+    queryKey: ['logs', 'context-window', params],
+    queryFn: ({ signal }) => api.logsContext(params!, signal),
+    enabled: !!params,
+    staleTime: 15_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// SpanDetail "Logs" bölümü: trace'in TÜM logları (≤50), trace penceresine
+// sınırlı (v0.8.180 — trace_id ile tam indeks taraması yok). Trace
+// değişince önceki liste yenisi gelene dek kalır (eski effect de state'i
+// sıfırlamıyordu).
+export function useTracePanelLogs(traceId: string, from: number | undefined, to: number | undefined) {
+  const params: LogsParams = { traceId, from, to, limit: 50 };
+  return useQuery<LogsResponse>({
+    queryKey: ['logs', 'trace-panel', params],
+    queryFn: ({ signal }) => api.logs(params, signal),
+    enabled: !!traceId,
+    staleTime: 15_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
+  });
+}
+
+// /logs alan kenar çubuğu — CompactLogSearch ile AYNI anahtar (tek istek).
+export function useLogsFields(enabled = true) {
+  return useQuery({
+    queryKey: ['logs', 'fields'],
+    queryFn: ({ signal }) => api.logsFields(signal),
+    enabled,
+    staleTime: 300_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// Kibana derin-link ayarı (v0.5.236): kapalı/eksikse buton çizilmez.
+export function useKibanaSettings() {
+  return useQuery({
+    queryKey: ['settings', 'kibana'],
+    queryFn: async ({ signal }) => (await api.getKibanaSettings(signal)) ?? null,
+    // 0: her /logs açılışı tazeler (eski mount-effect'i) — Settings'te
+    // kaydedilen değişiklik bir sonraki açılışta görünür.
+    staleTime: 0,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}

@@ -10,7 +10,7 @@
 // "bağımsız" notu aynen). Viewer salt-okunur görür, boş durum ekibi
 // çözümden sonra doldurmaya çağırır.
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';

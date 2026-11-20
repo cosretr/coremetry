@@ -29,7 +29,7 @@ import { followupSendOpts } from './followupSend';
 import { fillPickTemplate, isServicePick, pickSendOpts } from './followupPick';
 import { useSREHypothesisVerify } from './sreHypothesisVerify';
 import { parseSREHypothesisAction, type SREHypothesisAction } from '@/lib/pageActions';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { safeAppPath } from '@/lib/safeAppPath';
 import { useChatLinkNewTab } from './chatLinkTarget';
 

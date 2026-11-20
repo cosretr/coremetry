@@ -2,7 +2,7 @@ import { lazy, Suspense, useMemo } from 'react';
 import { useT } from '@/lib/i18n';
 import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
 import { msSyncKey } from '@/lib/chart/syncNamespace';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router';
 import { navHref } from '@/lib/navHref';
 import { Turtle } from 'lucide-react';
 import { Card, PanelTitle, StatTile } from '@/components/ui';

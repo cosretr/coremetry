@@ -20,7 +20,7 @@
 // YOK — tableUnityRatchet tavanda, bu dosya hiçbir sayaca bir şey eklemez.
 // Saf kararlar (seçim, Fark, profil, süre, gruplama) aiEval.ts'te, testli.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router';
 import { Spinner, Empty } from '@/components/Spinner';
 import { QueryErrorInline } from '@/components/QueryError';
 import { Badge } from '@/components/shadcn/badge';

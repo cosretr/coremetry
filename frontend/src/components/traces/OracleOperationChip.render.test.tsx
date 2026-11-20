@@ -22,7 +22,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { LogRow, OracleFunctionCodesResponse, SpanRow } from '@/lib/types';
 
 const TRX = 'LEND_PERSONAL_WEB_APPLICATIONTRX_EXPRESS_ORDER_PRE_VALIDATE_REST';

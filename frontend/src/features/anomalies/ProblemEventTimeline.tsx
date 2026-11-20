@@ -8,7 +8,7 @@
 // (ve hata durumunda) hiçbir şey çizilmez — sayfa bugünkü gibi kalır. Metin
 // SAF yardımcıdan (./problemEvents); bileşen yalnız çizer. Viewer görür.
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { fmtClock } from '@/lib/utils';
 import { useProblemEvents } from '@/lib/queries/problems';
 import { Sect } from './detailSections';

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams, useLocation } from 'react-router';
 import { AuthProvider } from './components/AuthProvider';
 import { ConfirmProvider } from './components/ui/ConfirmDialog';
 import { ConfirmGate } from './components/coremetry/Confirm/ConfirmGate';

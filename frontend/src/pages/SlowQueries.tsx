@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
 import { SavedViewsBar } from '@/components/SavedViewsBar';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { navHref } from '@/lib/navHref';
 import { Topbar } from '@/components/Topbar';
 import { Button } from '@/components/ui';

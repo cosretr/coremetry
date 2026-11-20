@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { AI_CODE_PARAM, AI_PARAM, AI_SRC_PARAM, formatAiParamForUrl, parseAiParam, type AISrc, type AISubject } from '@/lib/aiSubject';
 
 // useAiSubject — AI çekmecesinin açık öznesi, ADRESTEN okunur/yazılır

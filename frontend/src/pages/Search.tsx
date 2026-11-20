@@ -15,7 +15,7 @@
 // (timeout)" ≠ "sonuç yok"). Detay çekmecesi ?sel= ile; "Ask CoSRE" ?ai=
 // yazınca sel silinir ve çekmece çizilmez (iki odak tuzağı üst üste binmez).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { Empty, Spinner } from '@/components/Spinner';

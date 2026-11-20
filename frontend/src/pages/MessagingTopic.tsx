@@ -24,7 +24,7 @@
 // (v0.9.973: varsayılan cluster, çok-cluster kurulumda canlı bir topic için
 // sıfırlanmış sayı üretiyordu ve sıfır "topic boşta" ile ayırt edilemiyordu).
 import { lazy, Suspense, useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { Topbar } from '@/components/Topbar';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { TabStrip } from '@/components/ui';

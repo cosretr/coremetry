@@ -2,7 +2,7 @@
 // Problem detayının ilk ekranının ÜSTÜNDE tek satır: şüpheli · ilk anomali ·
 // rollout · daha önce. Deterministik (LLM yok), sormadan dolar; hücre
 // bilinmiyorsa '—'. Tek-varlık skor şeridi kuralı (detay sayfası) ile uyumlu.
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { serviceHref } from '@/lib/serviceHref';
 import { useProblemInsight } from '@/lib/queries/problems';
 import { insightCells } from './problemInsight';

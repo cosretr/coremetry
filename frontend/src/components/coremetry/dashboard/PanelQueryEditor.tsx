@@ -14,7 +14,7 @@
 // (v0.10.1887 dersi: histogram avg = rate(_sum)/rate(_count)). Panel config'i
 // yalnız operatör sorguyu DEĞİŞTİRİNCE yazılır: aç-kapa panoyu bayt-aynı bırakır.
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { MetricsQLEditor, QueryRow } from '@/components/coremetry/metrics';

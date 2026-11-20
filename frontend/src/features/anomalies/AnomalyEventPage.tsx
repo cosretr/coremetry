@@ -1,7 +1,7 @@
 // AnomalyEventPage — /anomalies/:id (C1, v0.10.1770): eski dedektör olayının
 // tam sayfası; AnomalyEventHost (kimlikle okur, 404 → "kayıt yok"). Geri:
 // tarayıcı geçmişi (liste filtresi/scroll korunur), geçmiş yoksa /anomalies.
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import { AnomalyEventHost } from './AnomalyEventDetail';
 import { useAuthRole } from '@/components/AuthProvider';
 

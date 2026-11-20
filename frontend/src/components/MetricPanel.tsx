@@ -2,7 +2,7 @@ import { absoluteShareHref } from '@/lib/shareUrl';
 import { useEffect, useRef, useState } from 'react';
 import { useEscLayer } from '@/lib/escLayer';
 import type { ReactNode, KeyboardEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { CopyButton } from '@/components/CopyButton';
 import { Button, IconButton, LinkButton, MenuItem } from '@/components/ui';
 import { copyToClipboard } from '@/lib/clipboard';

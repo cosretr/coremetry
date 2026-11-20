@@ -157,6 +157,13 @@ export const keys = {
   spans: {
     exemplar:    (svc: string, op: string, from: number, to: number, kind: string) =>
                    ['spans', 'exemplar', svc, op, from, to, kind] as const,
+    // 2026-11-21 — SpanDetail paneli (effect-fetch'ten taşındı).
+    profiles:    (svc: string, start: number, end: number) =>
+                   ['spans', 'profiles', svc, start, end] as const,
+    hotspots:    (svc: string, start: number, end: number, top: number) =>
+                   ['spans', 'hotspots', svc, start, end, top] as const,
+    baselineOps: (svc: string, end: number) =>
+                   ['spans', 'baseline-ops', svc, end] as const,
   },
 
   // v0.10.672 — kiosk bundle (GET /api/traces/{id}/bundle). Limitler
@@ -173,6 +180,8 @@ export const keys = {
     // (the params object itself — col, key, q, limit, window, scope).
     columnValues: (p: import('@/lib/types').TraceColumnValuesParams) =>
                    ['traces', 'column-values', p] as const,
+    // 2026-11-21 — paylaşım popover'ının aktif link listesi.
+    shares:      (id: string) => ['traces', 'shares', id] as const,
   },
 
   deploys: {

@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { ServiceReportCard } from './ServiceReportCard';
 import { drillLogsNote, verdictBadgeClass } from './serviceReportCardView';
 import type { ChatServiceReportPayload } from '@/lib/types';

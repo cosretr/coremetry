@@ -19,7 +19,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { InsightCard } from './InsightCard';
 import { api, type InsightStreamOpts } from '@/lib/api';
 import type { InsightResponse } from '@/lib/types';

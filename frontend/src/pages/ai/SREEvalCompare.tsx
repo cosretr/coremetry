@@ -8,7 +8,7 @@
 //     (tekrar LLM'siz); uyum (top-1 türü / sonuç aynı mı).
 //   - Vaka çifti tablosu (useDataTable, ≤50 satır); satır problemi açar.
 // Hesap Go'da (sre.CompareEvalRuns); burada yalnız biçim. Kendi yoklaması yok.
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Badge, StatTile } from '@/components/ui';
 import { stopRowClick } from '@/lib/a11y';
 import { useSREEvalCompare } from '@/lib/queries/sreEval';

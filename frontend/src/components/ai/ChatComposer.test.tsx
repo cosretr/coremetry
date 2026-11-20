@@ -16,7 +16,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { ChatComposer } from './ChatComposer';
 import { composerShortcut } from './composerKeys';
 

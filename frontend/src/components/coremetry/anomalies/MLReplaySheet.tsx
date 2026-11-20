@@ -12,7 +12,7 @@
 // "Teknik detay". Yalnız replay ucu okunur (ES/VM yok); kayıt yoksa kart
 // yine çizilir, grafik yerine dürüst not.
 import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { SearchX } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TimeChart } from '@/components/charts/TimeChart';

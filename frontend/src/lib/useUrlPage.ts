@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 // useUrlPage — `?page=` sayfalamanın TEK kaynağı, KİMLİĞİ SABİT bir yazıcıyla.
 //
@@ -8,7 +8,7 @@ import { useSearchParams } from 'react-router-dom';
 // Operatör-bildirimli: /services'in alt şeridindeki "Next" ve "Last"
 // hiçbir şey yapmıyordu — tık sonrası sayfa 1'de kalıyordu.
 //
-// Kök neden kütüphanenin sözleşmesinde: react-router-dom 6.30'da
+// Kök neden kütüphanenin sözleşmesinde: react-router 6.30'da
 // `useSearchParams`ın döndürdüğü `setSearchParams`
 // `useCallback(…, [navigate, searchParams])` ve `searchParams` da
 // `location.search`e memo'lu. Yani HER URL yazımı setter'a YENİ BİR

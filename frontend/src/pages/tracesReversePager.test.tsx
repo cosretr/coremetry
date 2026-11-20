@@ -29,7 +29,7 @@ import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 // Sayfa modülü STATİK (v0.10.1707): test gövdesindeki dinamik import ilk

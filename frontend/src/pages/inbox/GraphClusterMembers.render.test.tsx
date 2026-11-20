@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('uplot', () => ({ default: function UPlot() {} })); // InboxCells → ProblemDetail zinciri; jsdom'da matchMedia yok
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { GraphClusterMembers, RowChips } from './InboxCells';
 import type { InboxCluster, InboxItem } from '@/lib/types';
 

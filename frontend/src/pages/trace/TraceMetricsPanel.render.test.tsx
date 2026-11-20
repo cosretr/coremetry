@@ -26,7 +26,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { SpanRow, TraceAnalysis, TracePodMetricsQuery, TracePodMetricsResponse, TracePodSeriesRow } from '@/lib/types';
 import { computeCriticalPath } from '@/lib/criticalPath';
@@ -180,7 +180,7 @@ async function mount(search: string, spans: SpanRow[] = SPANS, opts: { analysis?
     root = createRoot(host!);
     root.render(
       <QueryClientProvider client={qc}>
-        <BrowserRouter>
+        <BrowserRouter useTransitions={false}>
           <Toggle>
             <TraceMetricsPanel traceId="tr-synthetic" spans={spans} analysis={analysis} criticalPath={cpOf(spans)}
               spanCapped={false} onShowPodSpans={p => shown.push(p)} onOpenSpan={s => opened.push(s)} />

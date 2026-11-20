@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 import { useServiceRollouts7d } from '@/lib/queries/services';
 import { fmtNum, fmtAgoNs } from '@/lib/utils';
 import type { Rollout, DeployImpact, TimeRange } from '@/lib/types';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { entityHref } from '@/lib/entityHref';
 import { AiThinking } from '@/components/ai/AiThinking'; // v0.10.1384 — tek tip "düşünüyor"
 import { rolloutHeadline, rolloutCounts, rolloutExplainVersion, rolloutRowKey } from '@/lib/serviceRolloutLabel';

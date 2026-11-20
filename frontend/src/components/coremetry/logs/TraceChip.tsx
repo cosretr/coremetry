@@ -10,7 +10,7 @@
 // "Bu trace'e filtrele (f)", "Trace görünümünde aç (t)", "trace_id kopyala".
 // Servis SAYISI gösterilmez (MV'de yok — dilim 3.9; uydurma yok).
 import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Button } from '@/components/shadcn/button';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/coremetry/overlay';
 import { KeyValue } from '@/components/coremetry/KeyValue';

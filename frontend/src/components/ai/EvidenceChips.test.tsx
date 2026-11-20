@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router';
 import { EvidenceChips } from './EvidenceChips';
 import { ChatBubble } from './ChatBubble';
 import { evidenceChipParts, evidenceDefaultOpen, evidenceChartGroups, evidenceHopLabel, evidenceHref, evidenceLevelTone, stepEvidenceItems } from './evidenceChip';

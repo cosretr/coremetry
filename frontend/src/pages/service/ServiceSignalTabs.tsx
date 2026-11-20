@@ -1,6 +1,6 @@
 import { usePivotCtx, withPivotCtx } from '@/lib/pivotContext';
 import { useMemo } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { encodeRange } from '@/lib/urlState';
 import { timeRangeToNs, fmtNum, isMessagingDep } from '@/lib/utils';
 import type { TimeRange, ServiceMap } from '@/lib/types';

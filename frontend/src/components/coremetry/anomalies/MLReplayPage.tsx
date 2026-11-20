@@ -5,7 +5,7 @@
 // sorgu yok), grafik ve "Gerçek / Değil" grubun en güçlü üyesinden. Grup
 // listede yoksa (24 saatten eski) tek olay olarak açılır.
 import { useMemo } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router';
 import { navHref } from '@/lib/navHref';
 import { Topbar } from '@/components/Topbar';
 import { PageShell } from '@/components/coremetry/PageShell';

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import type { CSSProperties, ReactNode } from 'react';
 import { subjectIsLinkable, subjectLabel, subjectTitle, subjectKind } from '../lib/problemSubject';
 import { useLang } from '../lib/i18n'; // v0.10.2292 — linksiz öznenin ipucu arayüz dilinde

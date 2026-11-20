@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { DATA_TABLE_STATE_TEXT } from '@/components/ui/DataTable';
 import type { OperationSummary } from '@/lib/types';
 import { OpsCard } from './OverviewTables';

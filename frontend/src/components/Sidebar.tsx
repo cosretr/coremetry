@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useHealth } from '@/lib/queries/health';
 import { useInboxCount } from '@/lib/queries/inbox';

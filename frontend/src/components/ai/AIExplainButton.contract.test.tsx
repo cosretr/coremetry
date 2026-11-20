@@ -17,7 +17,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router';
 import { AIExplainButton } from './AIExplainButton';
 import { __resetCopilotEnabledCache } from './useCopilotEnabled';
 import { api } from '@/lib/api';

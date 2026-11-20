@@ -10,7 +10,7 @@ import { HttpEnvScopeBand } from './httpMetricsViz';
 import { overviewWindowItems, overviewWindowKpi, overviewWindowOffsetSec, overviewWindowSec, windowDelta } from './overviewWindowKpi';
 import { metricsHref as sharedMetricsHref } from '@/lib/metricsLink';
 import { useEffect, useId, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import type { Service, TimeRange, SpanMetricSeries, OperationSummary, AnomalyEvent } from '@/lib/types';
 import { timeRangeToNs, rangeToSince } from '@/lib/utils';

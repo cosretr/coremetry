@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { CollapsedSection } from '@/components/coremetry/CollapsedSection';
 import { TableViewBar } from '@/components/coremetry/TableViewBar';
 import { foldNormalRows } from '@/lib/normalFold';

@@ -1,6 +1,6 @@
 import { lazy, Suspense, type ComponentType } from 'react';
 import { SETTINGS_TAB_INDEX } from './settings/tabIndex';
-import { useParams, Navigate, NavLink } from 'react-router-dom';
+import { useParams, Navigate, NavLink } from 'react-router';
 import { Topbar } from '@/components/Topbar';
 import { Empty, Spinner } from '@/components/Spinner';
 import { useAuth } from '@/components/AuthProvider';

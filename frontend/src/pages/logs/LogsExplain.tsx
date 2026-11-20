@@ -8,7 +8,7 @@
 // yeni / artan desenler — desen tıkı mevcut süzgece AND'lenir.
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/shadcn/button';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { IconSparkles } from '@/components/icons';
 import { useCopilotEnabled } from '@/components/ai/useCopilotEnabled';
 import { LogsAiAnswer, type LogsAiAnswerState } from '@/components/coremetry/logs/LogsAiAnswer';

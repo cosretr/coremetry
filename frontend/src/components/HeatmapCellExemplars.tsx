@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEscLayer } from '@/lib/escLayer';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { api } from '@/lib/api';
 import { fmtSmart } from '@/lib/chartFmt';
 import { fmtClock, tsLong } from '@/lib/utils';

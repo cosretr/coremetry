@@ -12,7 +12,7 @@ vi.mock('@/lib/i18n', async (orig) => {
 });
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { MLRecordView } from '@/lib/types';
 
 const m = vi.hoisted(() => ({ panels: [] as unknown[] }));

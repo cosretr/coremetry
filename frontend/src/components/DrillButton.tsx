@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import type { TimeRange } from '@/lib/types';
 import { encodeRange } from '@/lib/urlState';
 import { usePivotCtx, withPivotCtx, type PivotDim } from '@/lib/pivotContext';

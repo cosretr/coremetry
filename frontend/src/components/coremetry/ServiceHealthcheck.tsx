@@ -15,7 +15,7 @@
 // Yük: istek YALNIZ panel açıkken (useServiceHealthcheck enabled); sayfa
 // açılışına eklenmez. "Yeniden çalıştır" sunucunun 60 sn önbelleğini AŞMAZ —
 // art arda tıklama kaynakları yeniden dövmez; ölçüm saati yazılır.
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Button } from '@/components/shadcn/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
 import { DetailSheet, useSheetParam } from '@/components/coremetry/DetailSheet';

@@ -1,7 +1,8 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
+import { urlSpec, useUrlParams, zParam, zOneOf } from '@/lib/urlSchema';
 import { Zap, ChevronRight, ChevronDown } from 'lucide-react';
 import { Topbar } from '@/components/Topbar';
 import { ServicePicker } from '@/components/ServicePicker';
@@ -204,6 +205,12 @@ const DEFAULT_HIDDEN_COL_IDS = ['avgMs', 'p90Ms', 'spread', 'errors', 'reqPerMin
 const DEFAULT_COL_IDS = ALL_COL_IDS.filter(
   id => !(DEFAULT_HIDDEN_COL_IDS as readonly string[]).includes(id));
 
+// ?limit= sabit runglara snap'li — URL sınırsız kardinaliteyi server cache
+// key'ine taşıyamaz (v0.8.270). Şema: lib/urlSchema.
+const ENDPOINT_LIMITS = [100, 500, 1000, 2000, 5000, 10000] as const;
+type EndpointLimit = typeof ENDPOINT_LIMITS[number];
+const ENDPOINTS_URL_SPEC = urlSpec({ limit: zParam(zOneOf(ENDPOINT_LIMITS), 100) });
+
 export default function EndpointsPage() {
   const lang = useLang();
   const navigate = useNavigate();
@@ -265,15 +272,10 @@ export default function EndpointsPage() {
   // kardinaliteyi server cache key'ine taşıyamaz (v0.8.270 disiplini).
   // v0.9.70 ayrıca dropdown↔parser uyumsuzluğunu kapatır: 500/1000/
   // 10000 seçimleri parser'da yoktu, sessizce default'a düşüyordu.
-  const LIMIT_RUNGS = [100, 500, 1000, 2000, 5000, 10000];
-  const limitRaw = Number(params.get('limit') ?? 100);
-  const limit = LIMIT_RUNGS.includes(limitRaw) ? limitRaw : 100;
-  const setLimit = (v: number) => setParams(prev => {
-    const next = new URLSearchParams(prev);
-    if (v !== 100 && LIMIT_RUNGS.includes(v)) next.set('limit', String(v));
-    else next.delete('limit');
-    return next;
-  }, { replace: true });
+  // 2026-11-21 — rung kontrolü zod şemasında (lib/urlSchema zOneOf): küme
+  // dışı okuma 100'e düşer, küme dışı değer URL'e hiç yazılmaz.
+  const [{ limit }, setLimitParams] = useUrlParams(ENDPOINTS_URL_SPEC);
+  const setLimit = (v: number) => setLimitParams({ limit: v as EndpointLimit });
   // compare (v0.5.404 → v0.9.761): prior-window comparison artık
   // VARSAYILAN AÇIK (mockup onayı: Δ chip'leri ilk bakışta). ?compare=0
   // kapatır; eski ?compare=prior linkleri de "açık" okur. Maliyet notu:

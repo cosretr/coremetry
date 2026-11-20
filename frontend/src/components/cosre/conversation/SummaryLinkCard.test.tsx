@@ -7,7 +7,7 @@
 import { describe, it, expect, afterEach, beforeAll } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { parseDataLinksCard } from '@/lib/cosre/protocol';
 import type { ChatTurn } from '@/lib/types';
 import { MessageList, type CosreChatMessage } from './MessageList';

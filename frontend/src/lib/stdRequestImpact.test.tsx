@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { MLRecordView, ProblemEvent, ProblemStandard } from '@/lib/types';
 import { stdImpactSecondary, stdRequestImpact } from './problemStandardView';
 

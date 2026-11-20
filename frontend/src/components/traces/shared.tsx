@@ -7,7 +7,7 @@
 // recalibrates. Everything here is CSS-var-only (light + dark safe).
 
 import type { CSSProperties } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { seriesColor } from '@/lib/chartFmt';
 
 // svcColor — the shared per-service hue. Empty / unknown collapses to a stable

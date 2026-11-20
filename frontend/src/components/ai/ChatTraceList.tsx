@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { traceHref } from '@/lib/traceHref';
 import { tsShort } from '@/lib/utils';
 import type { ChatTraceListPayload } from '@/lib/types';

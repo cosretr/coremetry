@@ -1,7 +1,7 @@
 import { usePivotCtx, withPivotCtx } from '@/lib/pivotContext';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { trendSparkWidth, nextOpDetail } from './operationsTableLayout';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui';
 import { Sparkline } from '@/components/Sparkline';

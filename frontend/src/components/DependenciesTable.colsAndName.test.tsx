@@ -6,7 +6,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { TimeRange } from '@/lib/types';
 import { DependenciesTable, type DepRow } from './DependenciesTable';
 import { parseStoredOrder } from '@/lib/depsTable';

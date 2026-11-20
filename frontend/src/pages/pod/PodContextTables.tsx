@@ -9,7 +9,7 @@
 // v0.10.943 (tablo standardı dilim 3, T1) — etiketler bir öznitelik paneli →
 // KeyValue; ömür tarihçesi statik tablo kalır (gerekçe tablonun içinde).
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Badge, Button } from '@/components/ui';
 import { KeyValue } from '@/components/coremetry/KeyValue';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateStaticProps } from '@/components/ui/DataTable';

@@ -1,5 +1,5 @@
 import type { CSSProperties, MouseEventHandler, ReactNode } from 'react';
-import { Link, useInRouterContext } from 'react-router-dom';
+import { Link, useInRouterContext } from 'react-router';
 import { appLinkKind } from '@/lib/safeAppPath';
 
 // SafeHref — v0.10.1315 (olay linki XSS): API/editör kaynaklı bir URL'yi

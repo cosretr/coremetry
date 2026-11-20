@@ -12,7 +12,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { CATALOG, VARIANTS_COVERED } from './catalog';
 import { axeCells, cellKey, CI_CELLS, ALL_CELLS } from './cells';
 import { axeViolations } from '@/test/axe';

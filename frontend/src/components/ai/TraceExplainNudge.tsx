@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { IconSparkles } from '@/components/icons';
 import { STORAGE_KEYS, getRaw, getSessionRaw, setRaw, setSessionRaw } from '@/lib/storage';

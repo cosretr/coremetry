@@ -24,7 +24,7 @@ import { resolve } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { useDataTable, DataTableHead, DataTableColgroup, type DataTable, type ColumnDef } from './index';
 import { topEscLayer, __resetEscLayers } from '@/lib/escLayer';
 

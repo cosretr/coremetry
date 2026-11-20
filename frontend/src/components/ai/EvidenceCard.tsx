@@ -3,7 +3,7 @@
 // penceredeki değişiklikler, log desenleri, açık problemler. Balonun altında
 // chart bloğuyla aynı yerde; sabit ≤10 satırlı ham tablolar (sıralanmaz).
 // Hipotez yoksa üst satır soluk, kart yine çizilir. Tek commit, kolay geri alınır.
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { serviceHref } from '@/lib/serviceHref';
 import { fmtNum } from '@/lib/utils';
 import { evidenceDeltaClass, evidenceHasHypothesis, fmtEvidenceTime, fmtRangeTR, redRows } from '@/lib/chatEvidence';

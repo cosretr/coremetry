@@ -1,8 +1,8 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import type { ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { useQuery, useIsFetching } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
@@ -29,6 +29,8 @@ import { logsUseTimeRange } from '@/lib/logsTraceWindow'; // v0.10.690
 import type { KibanaSettings } from '@/lib/types';
 import { useLogs, useLogsMyTeam, useLogsScope, useLogsSearchSettings, useLogsTracePreview, logsDocQuery } from '@/lib/queries';
 import { useQueryClient } from '@tanstack/react-query';
+import { useClusters } from '@/lib/queries/services';
+import { useLogsContext, useLogsFields, useKibanaSettings, type LogsContextParams } from '@/lib/queries/logs';
 import { readLogsSample, logsSourceFieldsParam, windowCountAtFloor, LOGS_SAMPLE_MAX_FALLBACK, LOGS_SAMPLE_MIN } from '@/lib/logsSample';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { useUrlEnv } from '@/lib/useUrlEnv';
@@ -99,6 +101,11 @@ import { parseLogsView, effectiveLogsView, writeLogsView, writeTraceView, readTr
 // meant two thousand live rows whose React tree and per-row highlight
 // transform both scale linearly. 2000 is generous — past that the
 // answer is a narrower filter, not more scrolling.
+// Sabit boş değerler: hook verisi yokken useMemo bağımlılıkları her
+// çizimde değişmesin (2026-11-21, effect-fetch → lib/queries).
+const EMPTY_CLUSTERS: string[] = [];
+const EMPTY_FIELDS: string[] = [];
+const EMPTY_FIELD_TYPES: Record<string, string> = {};
 const ACC_CAP = 10000; // v0.10.1831 — örnek 500 (≤ 5000) × "Load more"; DOM yalnız bir sayfa çizer (pp)
 // v0.10.967 — tablo standardı T12: veri yokken / okunamadığında tabloya
 // verilen SABİT boş dizi (her render'da yeni [] j/k gezinmesini tazelerdi).
@@ -387,14 +394,13 @@ function LogsInner() {
   // v0.5.471 — cluster list for the inline selector. /api/clusters
   // returns the distinct k8s/openshift cluster names seen in the
   // last 24h; small list, fetched once on mount.
-  const [clusters, setClusters] = useState<string[]>([]);
-  useEffect(() => {
+  // 2026-11-21 — effect-fetch → useClusters; pencere mount'ta bir kez sabitlenir.
+  const [clusterWin] = useState(() => {
     const toNs = Date.now() * 1_000_000;
-    const fromNs = toNs - 24 * 3600 * 1_000_000_000;
-    api.clusters(fromNs, toNs)
-      .then(r => setClusters(r?.clusters ?? []))
-      .catch(() => setClusters([]));
-  }, []);
+    return { fromNs: toNs - 24 * 3600 * 1_000_000_000, toNs };
+  });
+  const clustersQ = useClusters(clusterWin.fromNs, clusterWin.toNs);
+  const clusters = clustersQ.data ?? EMPTY_CLUSTERS;
   // v0.5.399 — trace peek state. Clicking the "👁" button next to a
   // trace_id in the log row sets this. Task #6: the peek now opens the
   // CorrelationContextDrawer anchored on that trace_id — the SAME trace + sibling
@@ -944,35 +950,25 @@ function LogsInner() {
   // Backend mapping fields (v0.5.136 → fields panel v0.8.255).
   // Feeds the left FieldSidebar's "Available fields" group. CH
   // backend returns an empty list (its shape is fixed).
-  const [fields, setFields] = useState<string[]>([]);
-  const [fieldsTotal, setFieldsTotal] = useState<number | undefined>(undefined);
+  // 2026-11-21 — effect-fetch → useLogsFields (CompactLogSearch ile aynı
+  // anahtar). Hata = boş liste / tip yok / backend '' (eski davranış).
+  const fieldsQ = useLogsFields();
+  const fieldsData = fieldsQ.isError ? undefined : fieldsQ.data;
+  const fields = fieldsData?.fields ?? EMPTY_FIELDS;
+  // v0.9.292 — the mapping's REAL path count. The backend caps
+  // the list; the rail says "first N of M" rather than implying
+  // the cap is the whole mapping.
+  const fieldsTotal = fieldsData?.total;
   // v0.10.280 — alan → mapping tipi (panel tip rozeti); CH'de sabit şema.
-  const [fieldTypes, setFieldTypes] = useState<Record<string, string>>({});
+  const fieldTypes = fieldsData?.types ?? EMPTY_FIELD_TYPES;
   // v0.10.1856 — akıllı kolonlar yalnız ES log yolunda (CH'de sessizce kapalı).
-  const [fieldsBackend, setFieldsBackend] = useState('');
+  const fieldsBackend = fieldsData?.backend ?? '';
 
-  // Kibana deep-link config (v0.5.236). Loaded once on mount;
+  // Kibana deep-link config (v0.5.236). Loaded on mount;
   // when disabled or unconfigured, buildKibanaURL returns null
   // and the button doesn't render.
-  const [kibana, setKibana] = useState<KibanaSettings | null>(null);
-  useEffect(() => {
-    api.getKibanaSettings()
-      .then(s => setKibana(s ?? null))
-      .catch(() => setKibana(null));
-  }, []);
-  useEffect(() => {
-    api.logsFields()
-      .then(d => {
-        setFields(d.fields ?? []);
-        // v0.9.292 — the mapping's REAL path count. The backend caps
-        // the list; the rail says "first N of M" rather than implying
-        // the cap is the whole mapping.
-        setFieldsTotal(d.total);
-        setFieldTypes(d.types ?? {});
-        setFieldsBackend(d.backend ?? '');
-      })
-      .catch(() => { setFields([]); setFieldsTotal(undefined); setFieldTypes({}); setFieldsBackend(''); });
-  }, []);
+  const kibanaQ = useKibanaSettings();
+  const kibana: KibanaSettings | null = (!kibanaQ.isError && kibanaQ.data) || null;
   // v0.10.447 (B3 ikinci yarı, operatör kararı 2026-09-06) — Search her
   // zaman ARAR: eskiden aynı taslakla tık React'te bail-out ediyor,
   // aynı parametreler aynı RQ anahtarına düşüp 15 sn staleTime içinde
@@ -1151,26 +1147,38 @@ function LogsInner() {
   loadedRowsRef.current = loadedRows;
   // v0.10.1880 — `?doc=` çözümü liste yerleşince (yüklü satırda istek yok).
   const docListSettled = live || data !== undefined || !logsListEnabled(view, live, scopeGate);
+  // 2026-11-21 — uzak çözüm useLogsContext'e taşındı: effect yalnız KARAR
+  // verir (yerel satır mı, uzak istek mi); istek RQ'da, doc değişince
+  // uçuştaki istek kesilir ve eski cevap yeni doc'un çekmecesine düşemez.
+  const [docRemote, setDocRemote] = useState<{ raw: string; id: number; params: LogsContextParams } | null>(null);
   useEffect(() => {
-    if (!docRaw) { docResolvedRef.current = ''; setDocRow(null); return; }
+    if (!docRaw) { docResolvedRef.current = ''; setDocRow(null); setDocRemote(null); return; }
     // Liste henüz yükleniyorsa bekle: satır listedeyse İSTEK YOK (v0.10.1880).
     if (!docListSettled || docResolvedRef.current === docRaw) return;
     docResolvedRef.current = docRaw;
+    setDocRemote(null);
     const parsed = parseDocParam(docRaw);
     if (!parsed) { setDocMiss('miss'); return; }
     const local = loadedRowsRef.current.find(r => r.id === parsed.id && r.timestamp === parsed.ts);
     if (local) { setDocMiss(false); setDocRow(local); ensureFullDoc(local); return; }
     const svc = searchParams.get('docsvc') || undefined;
-    api.logsContext({ ts: parsed.ts, service: svc, env: env || undefined, n: 5 })
-      .then(r => {
-        if (r?.degraded) { setDocMiss('degraded'); return; } // v0.10.420 — "kayıt yok" değil "backend yavaş"
-        const rows = [...(r?.before ?? []), ...(r?.after ?? [])];
-        const hit = rows.find(x => x.id === parsed.id);
-        if (hit) { setDocMiss(false); setDocRow(hit); ensureFullDoc(hit); } else setDocMiss('miss');
-      })
-      .catch(() => setDocMiss('miss'));
+    setDocRemote({ raw: docRaw, id: parsed.id, params: { ts: parsed.ts, service: svc, env: env || undefined, n: 5 } });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız doc değişiminde
   }, [docRaw, docListSettled]);
+  const docCtxQ = useLogsContext(docRemote?.params ?? null);
+  const docHandledRef = useRef<object | null>(null);
+  useEffect(() => {
+    if (!docRemote || docRemote.raw !== docRaw || docHandledRef.current === docRemote) return;
+    if (docCtxQ.isError) { docHandledRef.current = docRemote; setDocMiss('miss'); return; }
+    const r = docCtxQ.data;
+    if (!r) return;
+    docHandledRef.current = docRemote;
+    if (r.degraded) { setDocMiss('degraded'); return; } // v0.10.420 — "kayıt yok" değil "backend yavaş"
+    const rows = [...(r.before ?? []), ...(r.after ?? [])];
+    const hit = rows.find(x => x.id === docRemote.id);
+    if (hit) { setDocMiss(false); setDocRow(hit); ensureFullDoc(hit); } else setDocMiss('miss');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız cevap gelince
+  }, [docRemote, docCtxQ.data, docCtxQ.isError]);
   // v0.10.1856 (dilim 2.5) — yüklenen örnekte doluluğu ≥ %80 olan iş alanları
   // kolon olur (yalnız kayıtlı tercih yokken, yalnız ES). Görünüm-yerel: URL'ye
   // ve tercihe yazılmaz; operatör kolonlara dokununca açık tercihe dönüşür.

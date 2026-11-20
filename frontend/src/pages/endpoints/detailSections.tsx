@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router';
 import { Card, PanelTitle, SectionUnavailable, SegmentedControl } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
 import {

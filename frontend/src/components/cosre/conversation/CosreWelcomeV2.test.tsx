@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@/test/radixJsdom';
 import { CosreTeamScopeChip, CosreWelcomeV2 } from './CosreWelcomeV2';

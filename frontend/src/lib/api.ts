@@ -497,8 +497,8 @@ export const api = {
   // List distinct clusters seen in the window. Drives the
   // cluster-filter dropdown on /services and per-cluster
   // selector on the service detail page.
-  clusters: (fromNs: number, toNs: number) =>
-    get<{ clusters: string[] }>(`/api/clusters?from=${fromNs}&to=${toNs}`),
+  clusters: (fromNs: number, toNs: number, signal?: AbortSignal) =>
+    get<{ clusters: string[] }>(`/api/clusters?from=${fromNs}&to=${toNs}`, signal),
   // Distinct derived namespaces (service_metadata.Namespace) — options
   // for the /services namespace filter (v0.9.189). Catalog-sourced,
   // no span scan; 5-min cached server-side.
@@ -1136,8 +1136,8 @@ export const api = {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items }), signal,
     }),
-  logsFields: () => get<{ fields: string[]; total?: number; types?: Record<string, string>; backend: string }>(
-    `/api/logs/fields`),
+  logsFields: (signal?: AbortSignal) => get<{ fields: string[]; total?: number; types?: Record<string, string>; backend: string }>(
+    `/api/logs/fields`, signal),
   // Top values of one keyword field prefix-matched against `q`.
   // Backs the /logs search box autocomplete (v0.5.464). Returns
   // an empty list on CH backend or invalid field — caller tolerates.
@@ -2482,7 +2482,7 @@ export const api = {
   // External Kibana deep-link (v0.5.236). GET is open to every
   // signed-in user so the Logs page can render the link; PUT
   // is admin-only.
-  getKibanaSettings: () => get<KibanaSettings>(`/api/settings/kibana`),
+  getKibanaSettings: (signal?: AbortSignal) => get<KibanaSettings>(`/api/settings/kibana`, signal),
   putKibanaSettings: (s: KibanaSettings) =>
     request<KibanaSettings>(`/api/settings/kibana`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -2591,9 +2591,9 @@ export const api = {
     request<{ token: string; url: string; expiresAt: number }>(
       `/api/traces/${id}/share?ttlHours=${ttlHours}`,
       { method: 'POST' }),
-  listTraceShares: (id: string) =>
+  listTraceShares: (id: string, signal?: AbortSignal) =>
     get<Array<{ token: string; traceId: string; createdBy: string; createdAt: number; expiresAt: number }> | null>(
-      `/api/traces/${id}/shares`),
+      `/api/traces/${id}/shares`, signal),
   revokeTraceShare: (token: string) =>
     request<{ status: string }>(`/api/traces/share/${token}`, { method: 'DELETE' }),
 
@@ -3404,10 +3404,10 @@ export const api = {
 
   profiles:        (params: ProfilesParams) => get<ProfileRow[] | null>(`/api/profiles?${qs(params)}`),
   profile:         (id: string, signal?: AbortSignal) => get<ProfileDetail>(`/api/profiles/${id}`, signal),
-  profilesForSpan: (service: string, startNs: number, endNs: number) =>
-    get<ProfileRow[] | null>(`/api/profiles/by-span?service=${encodeURIComponent(service)}&start=${startNs}&end=${endNs}`),
-  spanHotspots: (service: string, startNs: number, endNs: number, top = 10) =>
-    get<SpanHotspotsResponse>(`/api/profiles/by-span/hotspots?service=${encodeURIComponent(service)}&start=${startNs}&end=${endNs}&top=${top}`),
+  profilesForSpan: (service: string, startNs: number, endNs: number, signal?: AbortSignal) =>
+    get<ProfileRow[] | null>(`/api/profiles/by-span?service=${encodeURIComponent(service)}&start=${startNs}&end=${endNs}`, signal),
+  spanHotspots: (service: string, startNs: number, endNs: number, top = 10, signal?: AbortSignal) =>
+    get<SpanHotspotsResponse>(`/api/profiles/by-span/hotspots?service=${encodeURIComponent(service)}&start=${startNs}&end=${endNs}&top=${top}`, signal),
   profileHotspots: (params: { service: string; type?: string; from: number; to: number; limit?: number; top?: number }) =>
     get<ProfileHotspotsResponse>(`/api/profiles/hotspots?${qs(params)}`),
 
@@ -3422,9 +3422,9 @@ export const api = {
   // env (v0.9.1041, env(a)) — global Topbar picker; forces the raw-spans
   // path (operation_summary_5m has no deploy_env dim) so the normalized
   // Operations table narrows with the rest of the page.
-  serviceOperations: (svc: string, r: RangeParams, normalized = false, compare = false, env = '') =>
+  serviceOperations: (svc: string, r: RangeParams, normalized = false, compare = false, env = '', signal?: AbortSignal) =>
     get<OperationSummary[] | null>(
-      `/api/services/${encodeURIComponent(svc)}/operations?${qs(r)}${normalized ? '&normalized=1' : ''}${compare ? '&compare=prior' : ''}${env ? `&env=${encodeURIComponent(env)}` : ''}`),
+      `/api/services/${encodeURIComponent(svc)}/operations?${qs(r)}${normalized ? '&normalized=1' : ''}${compare ? '&compare=prior' : ''}${env ? `&env=${encodeURIComponent(env)}` : ''}`, signal),
   // v0.10.1023 — Operations (Raw) çıplak HTTP fiili satırlarının (fiil,
   // http_route) kırılımı, spanmetrics_1m'den; pencere + sparkline ızgarası
   // bundle'ın operations satırlarıyla aynı. env doluysa sunucu sorgusuz

@@ -13,7 +13,7 @@
 //     seçici YOK: "pick" çipi sunucu-aramalı Command popover'ı açar.
 //   • takım + zaman kapsamı YALNIZ composer bağlam satırında (CosreTeamScopeChip).
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Search, Sparkles, Users, X } from 'lucide-react';
 import { api } from '@/lib/api';

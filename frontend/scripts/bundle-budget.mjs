@@ -4,7 +4,7 @@
 // Ölçülen şey TARAYICININ ilk yükü: dist/index.html'deki
 // <script type="module" src> + her <link rel="modulepreload" href>.
 // Kural (audit §11 "Bütçe"): ilk yükün JS gz toplamı ≤ BUNDLE_BUDGET_KB
-// (varsayılan 203; v0.10.2403 TR kataloğu tembel: 272.7 → ~201 KB; önce 278 —
+// (varsayılan 207 — v0.10.2407 react-router 7 +5 KB; v0.10.2403 TR kataloğu tembel: 272.7 → ~201 KB; önce 278 —
 // v0.10.2348 kabuk derin import'larıyla 291 → 271 KB,
 // +7 KB pay) ve bu kümedeki HİÇBİR chunk'ın sourcemap'inde
 // Radix / cmdk / sonner / floating-ui / components/shadcn kaynağı yok.
@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
-const BUDGET_KB = Number(process.env.BUNDLE_BUDGET_KB || 203);
+const BUDGET_KB = Number(process.env.BUNDLE_BUDGET_KB || 207);
 // Yazı tipi bütçesi (v0.10.1620, audit §13; operatör): JS bütçesine SAYILMAZ,
 // ayrı satır. YÖNTEM (çivili, bundleBudget.pin): giriş sayfasının
 // <link rel="stylesheet"> CSS'lerinin url(…woff2) ile başvurduğu dosyaların

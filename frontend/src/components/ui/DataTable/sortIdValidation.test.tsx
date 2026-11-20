@@ -25,7 +25,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router';
 
 // jsdom'un localStorage'ı bu pakette KISMİ (setItem yok; tracesSortDefault.
 // test.ts aynı notu taşıyor) — depo modülü bellek içi bir haritayla

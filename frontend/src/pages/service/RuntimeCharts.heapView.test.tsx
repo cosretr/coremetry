@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const m = vi.hoisted(() => ({ pods: 4, limit: true, panels: [] as Record<string, unknown>[], queries: [] as string[], nonheap: 'flat' as 'flat' | 'moving' }));

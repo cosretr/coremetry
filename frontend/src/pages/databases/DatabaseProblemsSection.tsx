@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Card, PanelTitle } from '@/components/ui';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,

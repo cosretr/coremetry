@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { SafeHref } from '@/components/ui/SafeHref'; // v0.10.1315 — olay/katalog linki XSS kapısı
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { Topbar } from '@/components/Topbar';
 import { ServicePicker } from '@/components/ServicePicker';
 import { useAuth } from '@/components/AuthProvider';

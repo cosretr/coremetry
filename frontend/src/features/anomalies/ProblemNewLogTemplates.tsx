@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useProblemLogTemplates } from '@/lib/queries';
 import { tsLong } from '@/lib/utils';
 import type { Problem, ProblemLogTemplateEvidence } from '@/lib/types';

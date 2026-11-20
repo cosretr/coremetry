@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { useAuth } from '@/components/AuthProvider';

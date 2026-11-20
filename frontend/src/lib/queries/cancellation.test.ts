@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 const HEAVY: { file: string; hooks: string[] }[] = [
   // v0.10.1023 — serviceOperationRoutes: spanmetrics_1m okuması; sekme / pencere değişince kesilmeli.
   { file: 'services.ts', hooks: ['api.services(', 'api.serviceMap(', 'api.serviceOperationRoutes('] },
-  { file: 'logs.ts', hooks: ['api.logs(', 'api.logsPatterns(', 'api.logsPatternsCompare(', 'api.logsMyTeam(', 'api.logsScope(', 'api.logsTracePreview(', 'api.getLogsSearchSettings(', 'api.logsDoc('] }, // v0.10.1831 — ayar + tam doküman // v0.10.297 — desen örneklemesi ≤2000 satır; v0.10.1477 my-team
+  { file: 'logs.ts', hooks: ['api.logs(', 'api.logsPatterns(', 'api.logsPatternsCompare(', 'api.logsMyTeam(', 'api.logsScope(', 'api.logsTracePreview(', 'api.getLogsSearchSettings(', 'api.logsDoc(', 'api.logsContext(', 'api.logsFields('] }, // 2026-11-21 bağlam penceresi + alan rail'i (effect-fetch'ten taşındı) // v0.10.1831 — ayar + tam doküman // v0.10.297 — desen örneklemesi ≤2000 satır; v0.10.1477 my-team
   // v0.10.131 — entity pivotları: entity_seen_5m taramaları + Thanos delegasyonu.
   { file: 'entities.ts', hooks: ['api.entityServices(', 'api.servicePods(', 'api.entityMetrics(', 'api.entityContainers(', 'api.entityLatency('] },
   { file: 'rollouts.ts', hooks: ['api.rollouts(', 'api.rolloutStats(', 'api.rolloutRuns(', 'api.rolloutDetail(', 'api.serviceGitOps('] }, // v0.10.201, v0.10.981
@@ -63,7 +63,9 @@ const HEAVY: { file: string; hooks: string[] }[] = [
   // v0.10.672 — kiosk bundle: span taraması (≤20 s) + ES pivot + Oracle tek
   // istekte; kiosk penceresi kapanınca ya da limit değişince eski istek
   // kesilmeli.
-  { file: 'trace.ts', hooks: ['api.traceBundle(', 'api.traceColumnValues('] }, // v0.10.1511 — header column filter popover
+  { file: 'trace.ts', hooks: ['api.traceBundle(', 'api.traceColumnValues(', 'api.listTraceShares('] },
+  // 2026-11-21 — SpanDetail paneli: profil/hotspot + 24 sa baseline (span değişince kesilir).
+  { file: 'spans.ts', hooks: ['api.profilesForSpan(', 'api.spanHotspots(', 'api.serviceOperations('] }, // v0.10.1511 — header column filter popover
   // v0.10.968 — Trace › Metrics toplu uç: dilim başına 2 Thanos range + 6 instant
   // sorgu; sekme/pencere değişince uçuştaki istek kesilmeli.
   { file: 'tracePodMetrics.ts', hooks: ['api.tracePodMetrics('] },

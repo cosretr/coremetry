@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { AnomalyEngineCompare, EngineCompareRow } from '@/lib/types';
 
 const m = vi.hoisted(() => ({ lang: 'tr' as 'en' | 'tr', data: null as unknown, enabled: [] as boolean[] }));

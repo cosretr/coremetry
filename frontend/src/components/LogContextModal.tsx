@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Modal, IconButton, Button } from '@/components/ui';
 import { Spinner } from '@/components/Spinner';
-import { api } from '@/lib/api';
+import { useLogsContext } from '@/lib/queries/logs';
 import { fmtNum, tsLong } from '@/lib/utils';
 import { useUrlEnv } from '@/lib/useUrlEnv';
 import type { LogRow } from '@/lib/types';
@@ -40,11 +40,6 @@ export function LogContextModal({
   // açılırsa iki bağlam yarısına da taşınır (Kibana context filtreleri).
   search?: string;
 }) {
-  const [before, setBefore] = useState<LogRow[] | null | undefined>(undefined);
-  const [after,  setAfter]  = useState<LogRow[] | null | undefined>(undefined);
-  // v0.10.415 (log arama denetimi B1) — sunucu 200 {degraded, reason} dönerse
-  // boş yarılar "0 log before · 0 after" yalanı olurdu (TracePeekDrawer deseni).
-  const [degraded, setDegraded] = useState<string | null>(null);
   // v0.9.1218 (Kibana paritesi, dilim 2) — artımlı pencere + kapsam.
   // n yalnız TIKLAMAYLA büyür (sunucu tavanı 200; her (n, kapsam) kendi
   // 15 sn'lik sunucu cache anahtarı — ES disiplini korunur, otomatik
@@ -77,33 +72,23 @@ export function LogContextModal({
   // büyütülmüş penceresi yeni kayda taşınmaz.
   useEffect(() => { setN(50); setScopeService(true); setKeepQuery(false); setScopePod(false); }, [pivot?.id]);
 
-  useEffect(() => {
-    if (!pivot) {
-      setBefore(undefined); setAfter(undefined); setDegraded(null);
-      return;
-    }
-    let cancelled = false;
-    setBefore(undefined); setAfter(undefined); setDegraded(null);
-    api.logsContext({
-      ts: pivot.timestamp,
-      service: scopeService ? (pivot.serviceName || undefined) : undefined,
-      env: env || undefined,
-      pod: scopePod && pivotPod ? pivotPod : undefined,
-      n,
-      search: keepQuery && search ? search : undefined,
-    })
-      .then(r => {
-        if (cancelled) return;
-        setBefore(r?.before ?? []);
-        setAfter(r?.after ?? []);
-        setDegraded(r?.degraded ? (r?.reason || 'log backend slow/unreachable') : null);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setBefore(null); setAfter(null); setDegraded(null);
-      });
-    return () => { cancelled = true; };
-  }, [pivot, env, n, scopeService, keepQuery, search, scopePod, pivotPod]);
+  // 2026-11-21 — effect-fetch → useLogsContext (anahtar = istek girdilerinin
+  // tamamı; modal kapanınca / girdi değişince ES isteği signal ile kesilir).
+  // undefined = yükleniyor (spinner), null = hata — eski durum makinesi.
+  const ctxQ = useLogsContext(pivot ? {
+    ts: pivot.timestamp,
+    service: scopeService ? (pivot.serviceName || undefined) : undefined,
+    env: env || undefined,
+    pod: scopePod && pivotPod ? pivotPod : undefined,
+    n,
+    search: keepQuery && search ? search : undefined,
+  } : null);
+  const ctx = ctxQ.data;
+  const before: LogRow[] | null | undefined = ctxQ.isError ? null : ctx ? (ctx.before ?? []) : undefined;
+  const after: LogRow[] | null | undefined = ctxQ.isError ? null : ctx ? (ctx.after ?? []) : undefined;
+  // v0.10.415 (log arama denetimi B1) — sunucu 200 {degraded, reason} dönerse
+  // boş yarılar "0 log before · 0 after" yalanı olurdu (TracePeekDrawer deseni).
+  const degraded: string | null = !ctxQ.isError && ctx?.degraded ? (ctx.reason || 'log backend slow/unreachable') : null;
 
   // Unified chronological list with pivot inserted between the two
   // halves. Both halves arrive sorted (before DESC, after ASC) so

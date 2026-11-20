@@ -13,7 +13,7 @@ import { RecurringMarker } from '@/features/anomalies/RecurringMarker'; // v0.10
 import { promotedRecurrence } from '@/features/anomalies/detailSummary'; // v0.10.1054
 import { Badge } from '@/components/ui/Badge';
 import type { InboxItem, InboxCluster, ProblemStandard } from '@/lib/types';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2283 — hücre metinleri arayüz dilinde (TR aynı)
 import {
   prioReasonView, stdRequestImpact, stdImpactView, stdImpactSecondary, stdConfidenceTone, stdConfidenceLabel, stdGateTitle,

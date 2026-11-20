@@ -18,7 +18,7 @@
 // seviye, `llang=lucene` zorla Lucene, `ldoc` açık satır (çekmece; açılış
 // geçmişe girer). Kenar çubuğu açık/kapalı yerel tercih (`svc.logs.fields`).
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/shadcn/button';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';

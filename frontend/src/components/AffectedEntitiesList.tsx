@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Spinner } from '@/components/Spinner';
 import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { useProblemAffected } from '@/lib/queries/problems';

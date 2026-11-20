@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { ClusterChips } from './ClusterChips';
 
 // v0.10.1663 — Operator-reported: küme adı rozetleri her yerde BÜYÜK harf.

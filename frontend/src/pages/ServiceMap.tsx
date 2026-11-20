@@ -1,7 +1,7 @@
 import { useUrlParams, intOneOfParam, strParam } from '@/lib/urlParams';
 import { useEffect, useMemo, useState } from 'react';
 import { seriesColor } from '@/lib/chartFmt';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
 import { useQuery } from '@tanstack/react-query';

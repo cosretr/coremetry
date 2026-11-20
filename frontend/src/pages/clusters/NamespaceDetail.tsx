@@ -1,6 +1,6 @@
 import { podCpuText, podMemText, podLimitHint, podReadyText, podReadyTone, podReadySortValue } from './podUsage';
 import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/shadcn/button';
 import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';

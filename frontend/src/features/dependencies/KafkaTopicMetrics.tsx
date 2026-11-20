@@ -9,7 +9,7 @@
 // üretim↔tüketim + hata grafiği, lag (grafik + partition tablosu; lag/lead
 // eşiği aşıldıysa vurgulu), "kim yazıyor / kim okuyor" tablosu.
 import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { KafkaAlertModal } from '@/pages/alerts/KafkaAlertModal';
 import { messagingTopicHref } from '@/pages/messaging/topicHref';

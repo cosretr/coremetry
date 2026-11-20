@@ -14,7 +14,7 @@
 // aramasıyla sürer, CH kardinalitesi için Sistem › Cardinality bağlantısı.
 // Polling yok; staleTime = sunucu TTL'i.
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { Badge } from '@/components/shadcn/badge';

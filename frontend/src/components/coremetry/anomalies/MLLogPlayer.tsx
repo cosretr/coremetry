@@ -5,7 +5,7 @@
 // `?stack=level`, replace) — + arkada gölge çubuk (bu kovada beklenen üst).
 // Veri sunucudan (course.log; ml_series, ES'e gitmez); etiketler sunucudan.
 import { useMemo, type CSSProperties } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { replayChart } from '@/lib/mlReplay';
 import type { ExplainPlay, LogCourse, MLSnapshot } from '@/lib/types';

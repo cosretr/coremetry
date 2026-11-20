@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 
 vi.mock('@/components/ai/EvidenceChips', () => ({
   EvidenceChart: (p: { p: { series: unknown[]; regions?: unknown[] } }) => <div data-testid="evchart">{p.p.series.length}/{p.p.regions?.length ?? 0}</div>,

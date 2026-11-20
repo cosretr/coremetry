@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType } from 'react';
-import { useParams, Navigate, NavLink } from 'react-router-dom';
+import { useParams, Navigate, NavLink } from 'react-router';
 import { useAuth } from '@/components/AuthProvider';
 import { Spinner } from '@/components/Spinner';
 import { Topbar } from '@/components/Topbar';

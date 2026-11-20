@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { sparkMaxSlotsForWidth, SPARK_DEFAULT_WIDTH } from '@/lib/sparkline';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import { TrendDelta } from '@/components/TrendDelta';
 import { Star } from 'lucide-react';
 import { Topbar } from '@/components/Topbar';

@@ -30,7 +30,7 @@ import { vi, describe, it, expect, afterEach } from 'vitest';
 import { act, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
-import { Link, MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter } from 'react-router';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableState, DATA_TABLE_STATE_TEXT,
   type ColumnDef, type DataTable, type DataTableStateKind,

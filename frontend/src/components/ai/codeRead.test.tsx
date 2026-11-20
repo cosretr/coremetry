@@ -14,7 +14,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { act, useState } from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { api } from '@/lib/api';
 import { ChatComposer } from './ChatComposer';
 import { codeReadKey, readCodeRead, useCodeRead } from './codeRead';

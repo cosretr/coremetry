@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Modal, Button } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
 import { IconLink } from '@/components/icons';

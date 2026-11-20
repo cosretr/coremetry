@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router';
 import { useShortcuts } from '@/lib/keyboard';
 import { navHref } from '@/lib/navHref';
 import { useIncidentsEnabled } from './AuthProvider';

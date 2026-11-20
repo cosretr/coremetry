@@ -7,7 +7,7 @@
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { COSRE_REPO_ROOT, cosreFixture, sseFetch } from '@/test/cosreSse';

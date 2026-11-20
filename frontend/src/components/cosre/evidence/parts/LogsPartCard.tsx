@@ -3,7 +3,7 @@
 // satırda varsa trace linki. Sabit ≤10 sıralanmamış satır: tablo standardının
 // statik liste istisnası (DataTable değil).
 import type { CSSProperties } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { sevClass } from '@/components/traces/TraceLogList';
 import { traceHref } from '@/lib/traceHref';
 import { tsShort } from '@/lib/utils';

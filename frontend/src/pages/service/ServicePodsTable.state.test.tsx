@@ -11,7 +11,7 @@
 import { vi, describe, it, expect, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, Link } from 'react-router-dom';
+import { MemoryRouter, Link } from 'react-router';
 import { useDataTable, DATA_TABLE_STATE_TEXT, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { MergedPodRow } from './podsMerge';

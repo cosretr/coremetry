@@ -9,7 +9,7 @@
 // fazla yükle» sayfa ekler (offset), toplam sayım kapalı (count=skip):
 // «50 · daha fazla var», «50 / N» değil.
 import { useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Chip, Button, Badge } from '@/components/ui';

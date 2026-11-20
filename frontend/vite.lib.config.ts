@@ -24,7 +24,7 @@ export default defineConfig({
     rollupOptions: {
       external: [
         'react', 'react-dom', 'react/jsx-runtime', 'react-dom/client',
-        'react-router-dom', 'lucide-react', '@tanstack/react-virtual', 'uplot',
+        'react-router', 'lucide-react', '@tanstack/react-virtual', 'uplot',
         '@tanstack/react-query',
       ],
     },

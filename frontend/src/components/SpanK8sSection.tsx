@@ -5,7 +5,7 @@
 // (bağlam yok / cluster değeri yok / cluster eşlenmemiş). v0.10.2233 (Entity
 // S3): yol sunucudan (POST /api/entity/paths); pod → iş yükü → servis çipleri.
 // Gösterim kararı (bayrak + uygulama-içi link izni) çağıranda.
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Row, Badge } from '@/components/ui';
 import { spanK8sNote, type SpanK8sContext } from '@/lib/spanK8s';
 

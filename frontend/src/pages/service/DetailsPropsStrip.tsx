@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useServiceRollouts7d } from '@/lib/queries/services';
 import { useServiceGitOps } from '@/lib/queries/rollouts';

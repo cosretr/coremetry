@@ -15,7 +15,7 @@
 import { usePivotCtx, withPivotCtx } from '@/lib/pivotContext';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Row, Badge, LinkButton } from '@/components/ui';
 import { Spinner } from '@/components/Spinner';
 import { api } from '@/lib/api';

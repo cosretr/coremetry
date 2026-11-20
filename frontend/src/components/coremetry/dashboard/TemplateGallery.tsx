@@ -8,7 +8,7 @@
 // Yalnız editor+ çizer (kurulum yazma eylemi); liste açılınca bir kez
 // okunur, polling yok (sunucu 5 dk önbellek).
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/shadcn/badge';
 import { Button } from '@/components/shadcn/button';

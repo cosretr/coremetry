@@ -11,7 +11,7 @@
 // `view` null → hiçbir şey çizilmez (veri kaynağı yok / henüz bilinmiyor).
 // Satır metni tıklaması soruyu composer'a DOLDURUR (onAskLine; göndermez).
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ArrowUpRight } from 'lucide-react';
 import { Button } from '@/components/shadcn/button';
 import { Separator } from '@/components/shadcn/separator';

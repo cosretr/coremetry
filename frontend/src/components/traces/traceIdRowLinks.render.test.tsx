@@ -15,7 +15,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act, useEffect, type JSX } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import type { RepeatedSpanRow, TraceRow } from '@/lib/types';
 
 const T1 = '4bf92f3577b34da6a3ce929d0e0e4736';

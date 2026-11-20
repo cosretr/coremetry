@@ -16,7 +16,7 @@
 // (AIExplainButton → ?ai=; sayfa ?ai= görünce ?sel='i siler ve çekmeceyi
 // çizmez — iki odak tuzağı üst üste binmez), sel'li sayfa linkini kopyala.
 import { useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Badge, Button, Drawer, DrawerSection, SectionUnavailable, StatTile } from '@/components/ui';
 import { ActionRow } from '@/components/coremetry/ActionRow';

@@ -9,7 +9,7 @@
 // bağımlılık (v0.10.2036): tek /api/ml/source-series = tek VM ya da Thanos
 // aralık sorgusu).
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { HttpChartPanel } from '@/pages/service/httpMetricsViz';
 import { LogsHistogram } from '@/components/LogsHistogram';
 import { logsHref } from '@/lib/logsUrl';

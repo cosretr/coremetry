@@ -11,7 +11,7 @@
 //     kaynaktan pivot, link sonra açılınca başka saate kaymasın.
 //   · Hedefin anlamadığı boyut taşınmaz (carry listesi).
 import { useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import { frozenRangeValue } from './shareUrl';
 
 export type PivotDim = 'range' | 'env' | 'cluster' | 'namespace';

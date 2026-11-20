@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Topbar } from '@/components/Topbar';
 import { Empty } from '@/components/Spinner';
 import { readState } from '@/lib/readState';

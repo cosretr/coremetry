@@ -7,7 +7,7 @@
 import { describe, it, expect, expectTypeOf, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { ColumnDef as UiColumnDef, SortState as UiSortState, ServerBinding as UiServerBinding } from '@/components/ui/DataTable';
 import { DataTable, DataTableStateRow, type DataTableProps, type ColumnDef, type SortState, type ServerBinding } from './index';
 import { Table, TableBody } from '@/components/shadcn/table';

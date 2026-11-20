@@ -1,7 +1,7 @@
 import { Suspense, useMemo, useRef, useState } from 'react';
 import { seriesColor } from '@/lib/chartFmt';
-import { Link } from 'react-router-dom';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
 import { Button } from '@/components/ui';

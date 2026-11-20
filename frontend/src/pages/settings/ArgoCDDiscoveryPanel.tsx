@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { X } from 'lucide-react';
 import { Button } from '@/components/shadcn/button';
 import { StatusBadge } from '@/components/coremetry/StatusBadge';

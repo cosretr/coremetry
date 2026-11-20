@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo } from 'react';
 import { msSyncKey } from '@/lib/chart/syncNamespace';
 import { messagingTracesHref, statementTracesHref } from '@/lib/pivotHref';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Spinner } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';
 import { useDepDetail } from '@/lib/queries/dependencies';

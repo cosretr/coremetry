@@ -12,7 +12,7 @@
 // satırı hash eki değil SERVİS adı söyler (mockup "(audit-log-prod, 10 sn
 // zaman aşımı)").
 import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { LinkButton, Popover } from '@/components/ui';
 import type { CoverageLine, CoverageSummary } from './traceMetrics';
 

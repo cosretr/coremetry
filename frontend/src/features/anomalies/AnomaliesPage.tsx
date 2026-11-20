@@ -7,7 +7,7 @@ import { usePickerSearch } from '@/components/usePickerSearch';
 import { useT, useLang, t as tl, tf, type Lang } from '@/lib/i18n'; // v0.10.2287 — exception bulunamadı metni arayüz dilinde; v0.10.2289 — liste de
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router';
 import { Topbar } from '@/components/Topbar';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { TriageCrumb } from '@/components/TriageCrumb';

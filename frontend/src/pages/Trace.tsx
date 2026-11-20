@@ -4,11 +4,12 @@ import { rememberTraceStart } from '@/lib/traceStartHint';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.457 (D5 dilim B)
 import { useEscLayer } from '@/lib/escLayer';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router';
 import { windowRangeParam } from '@/lib/urlState';
 import { operationCardHref } from './endpoints/links'; // v0.10.1491
 import { pickTraceOpCard } from './endpoints/traceOpCardPick'; // v0.10.1503 — gateway kökü → ilk iç servis
 import { useQuery } from '@tanstack/react-query';
+import { useTraceShares } from '@/lib/queries/trace';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
 import { perSpanLogSignals, spanEventLogRows, splitGrpcMessageEvents } from '@/lib/traceEventLogs';
@@ -1125,15 +1126,11 @@ function SharePopover({ traceId, onExport, onKiosk }: {
   // 7-30d; in-team handoffs default to 24h.
   const [ttlHours, setTtlHours] = useState(24);
   // Active shares for this trace. Loaded when the popover
-  // opens; refreshed after mint / revoke.
-  type ShareRow = Awaited<ReturnType<typeof api.listTraceShares>>;
-  const [shares, setShares] = useState<NonNullable<ShareRow>>([]);
-  const reloadShares = async () => {
-    try {
-      const list = await api.listTraceShares(traceId);
-      setShares(list ?? []);
-    } catch { setShares([]); }
-  };
+  // opens; refreshed after mint / revoke. 2026-11-21 — effect-fetch →
+  // useTraceShares (yalnız açıkken; her açılış tazeler; hata = boş liste).
+  const sharesQ = useTraceShares(traceId, open);
+  const shares = (!sharesQ.isError && sharesQ.data) || [];
+  const reloadShares = () => sharesQ.refetch();
 
   // v0.8.551 — was a hand-rolled copy of useOutsideClose (same mousedown
   // logic, same reasoning) sitting in a file that already imports the hook's
@@ -1156,12 +1153,6 @@ function SharePopover({ traceId, onExport, onKiosk }: {
     triggerRef.current?.focus();
   });
 
-  // Fetch active shares when popover opens so the operator sees
-  // what's already out there before minting another.
-  useEffect(() => {
-    if (open) void reloadShares();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
 
   // v0.8.551 — all three copy paths used to flash "Copied" unconditionally,
   // ignoring whether the write landed. On a plain-HTTP install that was a

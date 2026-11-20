@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableColumn, type DataTableStateProps } from '@/components/ui/DataTable';
 import { useLogsPatterns } from '@/lib/queries/logs';

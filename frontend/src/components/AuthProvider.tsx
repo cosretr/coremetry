@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import { api, setUnauthorizedHandler, UnauthorizedError, type AuthUser } from '@/lib/api';
 import { isPublicPath, normalizePath } from '@/lib/auth-paths';
 import { isKioskBare } from '@/lib/kioskMode';

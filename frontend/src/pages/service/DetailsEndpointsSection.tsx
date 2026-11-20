@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useEndpoints, useClusters } from '@/lib/queries';

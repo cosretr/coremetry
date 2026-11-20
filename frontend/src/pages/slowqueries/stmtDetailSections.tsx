@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { SectionUnavailable, StatTile } from '@/components/ui';
 import { Spinner } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';

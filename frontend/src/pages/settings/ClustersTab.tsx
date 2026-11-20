@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { GitBranch } from 'lucide-react';
 import { fmtDateTime } from '@/lib/utils';
 import { SpanClusterValuesPanel } from './SpanClusterValuesPanel';

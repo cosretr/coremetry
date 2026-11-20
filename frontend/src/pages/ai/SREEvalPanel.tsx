@@ -17,7 +17,7 @@
 //     seçili koşu yeniden koşuysa taban ↔ bu koşu karşılaştırması
 //     (SREEvalCompare).
 import { useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';

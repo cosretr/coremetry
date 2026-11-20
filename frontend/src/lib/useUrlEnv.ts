@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { getRaw, setRaw, removeRaw, STORAGE_KEYS } from './storage';
 
 // useUrlEnv (v0.8.383 — env-separation Phase 1) — the single source of

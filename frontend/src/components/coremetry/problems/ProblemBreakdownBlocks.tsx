@@ -12,7 +12,7 @@
 // sıralama / süzme denetimi tabloyu yanlış okuturdu. Satırlar tıklanmaz;
 // bağlantı yalnız gerçekten giden hücrede (exception grubu, bağımlılık olayı).
 // Renk yalnız sapan değerde (.cell-err, T9); grafik yok.
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
 import { mlEventHref } from '@/lib/anomalyHref';
 import type { Lang } from '@/lib/i18n';

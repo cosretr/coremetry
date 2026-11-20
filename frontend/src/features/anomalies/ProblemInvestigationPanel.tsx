@@ -11,7 +11,7 @@
 // bekliyor". Viewer durumu GÖRÜR, düğmeyi görmez. Bulgular ≤8 satır, sabit
 // sıra (taramanın sıralaması) → liste, tablo değil (tablo standardı).
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';

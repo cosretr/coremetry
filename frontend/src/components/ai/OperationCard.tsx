@@ -11,7 +11,7 @@
 // DEĞİL: sohbetin tek trace tablosunda (ChatTraceList, ChatBubble sırası).
 // Başlık ve Çağrı / Hata oranı / p99 satırı yalnız cevap cümlesi YOKKEN —
 // cümle aynı sayıları zaten söylüyor.
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import type { ChatOperationPayload } from '@/lib/types';
 import { chatLinkTargetProps, useChatLinkNewTab } from './chatLinkTarget';
 import {

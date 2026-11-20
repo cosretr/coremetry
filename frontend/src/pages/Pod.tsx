@@ -1,6 +1,7 @@
 import { Suspense, useMemo, useState } from 'react';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router';
+import { urlSpec, useUrlParams, zParam, zInt } from '@/lib/urlSchema';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
@@ -72,6 +73,9 @@ type PodSection = typeof POD_SECTIONS[number];
 // aynı ad birden çok cluster'da (cluster çipleri, resolvePodCluster ilkini
 // seçer ama bunu SÖYLER), metrik gelmeyen cluster (Thanos satırı yok → '—').
 
+// ?at= (ms) tarihsel bağlam: entity paneli o an geçerli pod kaydını çözer.
+const POD_URL_SPEC = urlSpec({ at: zParam(zInt({ min: 0 }), 0) });
+
 export default function PodPage() {
   return <Suspense fallback={<Spinner />}><PodDetail /></Suspense>;
 }
@@ -93,7 +97,8 @@ function PodDetail() {
   // clusters → /clusters sayfası (aşağıda service boşsa zaten oraya gider).
   const drillFrom = sp.get('from') ?? '';
   // v0.10.135 — tarihsel bağlam (ms): entity paneli o an geçerli pod kaydını çözer.
-  const atParam = Number(sp.get('at') ?? 0) || 0;
+  // 2026-11-21 — zod şemalı codec (lib/urlSchema); bozuk/negatif → 0.
+  const [{ at: atParam }] = useUrlParams(POD_URL_SPEC);
   const toPods = drillFrom === 'pods' || drillFrom === 'metrics';
   const backTab = toPods ? 'pods' : 'infra';
   const backLabel = toPods ? 'Pods' : 'Infrastructure';

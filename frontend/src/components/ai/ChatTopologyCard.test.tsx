@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ChatTopologyCard, chatTopologyCutText } from './ChatTopologyCard';
 import { chatTopologyColumns, chatTopologyLayoutFocus, chatTopologyMap } from './chatTopologyView';

@@ -10,7 +10,7 @@
 // hemen altında VictoriaMetrics HTTP grafikleri (throughput · yanıt süresi ·
 // 5xx; kanıt çipinin AYNI çizimi EvidenceChart) + "Metrics'te aç" / PromQL
 // kopyala; çizilmediyse sunucunun dürüst notu.
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { CopyButton } from '@/components/CopyButton';
 import type { ChatServiceReportOp, ChatServiceReportPayload } from '@/lib/types';
 import { fmtNum } from '@/lib/utils';

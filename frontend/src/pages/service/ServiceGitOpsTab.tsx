@@ -23,7 +23,7 @@
 // yok" boş durumu) — istek durur, yalnız blok gider. Eşlenemeyen cluster
 // notu bir yapılandırma uyarısı olduğu için Argo bölümüne taşındı.
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Badge } from '@/components/ui';
 import { SectionHead } from '@/components/coremetry/SectionHead';
 import {

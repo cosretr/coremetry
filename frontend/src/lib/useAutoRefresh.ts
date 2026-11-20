@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   bumpRefresh, formatRefreshParam, holdRefresh, isLiveQuery, refreshPolicy, refreshSnapshot,

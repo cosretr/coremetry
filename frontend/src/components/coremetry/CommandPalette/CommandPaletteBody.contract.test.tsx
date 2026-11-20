@@ -13,7 +13,7 @@ import '@/test/radixJsdom';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router';
 import { useEscLayer, __resetEscLayers } from '@/lib/escLayer';
 import { useShortcuts } from '@/lib/keyboard';
 

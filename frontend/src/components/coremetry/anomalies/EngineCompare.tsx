@@ -6,7 +6,7 @@
 // onları saymaz (sunucu). Renk yalnız rozette ve sıfır olmayan "yalnız"
 // hücrelerinde.
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { DataTable } from '@/components/coremetry/DataTable';
 import type { ColumnDef } from '@/components/coremetry/DataTable';
 import { Badge } from '@/components/shadcn/badge';

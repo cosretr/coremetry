@@ -22,7 +22,7 @@ import { ownedParamSig, nextUrlRemountKey, type UrlKeyState } from '@/lib/urlRem
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { rowActivation } from '@/lib/a11y';
 import { attrKeyWindowParams } from '@/lib/attrKeyWindow';
-import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { Topbar } from '@/components/Topbar';
 import { SavedViewsBar } from '@/components/SavedViewsBar';
 import { Spinner } from '@/components/Spinner';

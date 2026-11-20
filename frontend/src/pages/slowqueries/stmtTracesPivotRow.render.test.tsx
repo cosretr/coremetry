@@ -11,7 +11,7 @@ import { act } from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { ReactNode } from 'react';
 import type { DBStmtDetail } from '@/lib/types';
 import { StmtTracesPivotRow, StmtExemplarsSection } from './stmtDetailSections';

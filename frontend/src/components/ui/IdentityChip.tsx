@@ -1,5 +1,5 @@
 import type { HTMLAttributes, ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { CopyButton } from '@/components/CopyButton';
 
 // IdentityChip — v0.10.1514 (trace başlığı, operatör onayı "A iyi" 2026-10-24).

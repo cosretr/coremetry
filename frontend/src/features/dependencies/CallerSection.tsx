@@ -13,7 +13,7 @@
 // v0.10.939 (tablo standardı S8) — sayfaya özel sıfırlama düğmesi propu
 // kalktı: "Kolonları sıfırla" her tablonun başlık ⋯ menüsünde (DataTableHead).
 import { useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
   type ColumnDef, type DataTableStateProps,

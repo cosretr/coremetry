@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useAuth } from '@/components/AuthProvider';
 import { Spinner } from '@/components/Spinner';
 import { tsLong } from '@/lib/utils';

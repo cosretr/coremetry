@@ -22,7 +22,7 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { spanSeriesToFrames, chartTheme } from '@/lib/chart/dataFrame';
 import { AXIS_FONT_SIZE, widestLabelPx } from '@/lib/chart/axisSize';
 import type { PanelMenuAction } from '@/lib/chart/panelMenu';

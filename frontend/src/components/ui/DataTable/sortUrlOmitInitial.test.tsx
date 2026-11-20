@@ -12,7 +12,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router';
 import { useDataTable, DataTableHead, type DataTable, type ColumnDef } from './index';
 import type { SortState } from '@/lib/dataTable';
 

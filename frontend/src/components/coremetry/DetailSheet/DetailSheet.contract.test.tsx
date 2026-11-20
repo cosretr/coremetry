@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router';
 import { useEscLayer, __resetEscLayers } from '@/lib/escLayer';
 import { useShortcuts } from '@/lib/keyboard';
 import { readFileSync, readdirSync } from 'node:fs';

@@ -19,7 +19,7 @@
 // explain_trace_input.go span'leri ve trace'in loglarını okur). Yeni uç ve
 // yeni ES yolu yok; düğme yalnız tıkla çalışır, copilot kapalıyken çizilmez.
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Button } from '@/components/shadcn/button';
 import { Toggle } from '@/components/shadcn/toggle';
 import { StatusBadge } from '@/components/coremetry/StatusBadge';

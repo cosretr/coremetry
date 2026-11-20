@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 
 const { serviceNeighbors } = vi.hoisted(() => ({
   // v0.10.1408 — yanıt topology_edges_5m şekli (örneklem alanları yok).

@@ -10,7 +10,7 @@ import '@/test/pageJsdom'; // statik sayfa import'undan ÖNCE (matchMedia modül
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act, type ReactNode } from 'react';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
 import { removeRaw, STORAGE_KEYS } from '@/lib/storage';

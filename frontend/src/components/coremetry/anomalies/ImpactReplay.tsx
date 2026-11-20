@@ -5,7 +5,7 @@
 // "Oynat" düğmesi: istek yalnız düğmeyle, yoklama yok. Admin ekranı:
 // çevrilmez (proje kuralı). Yaklaşıklık uyarısı her zaman görünür.
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { DataTable } from '@/components/coremetry/DataTable';
 import type { ColumnDef } from '@/components/coremetry/DataTable';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';

@@ -17,7 +17,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.hoisted(() => {
@@ -245,7 +245,7 @@ function ShellChat() {
 function shell() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
-    <MemoryRouter initialEntries={['/services']}>
+    <MemoryRouter initialEntries={['/services']} useTransitions={false}>
       <QueryClientProvider client={qc}>
         <AuthProvider>
           <ConfirmProvider>

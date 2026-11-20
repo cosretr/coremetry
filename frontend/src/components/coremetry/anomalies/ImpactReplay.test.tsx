@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { ImpactReplayResult } from '@/lib/types';
 
 const m = vi.hoisted(() => ({ data: null as unknown, reqs: [] as unknown[] }));

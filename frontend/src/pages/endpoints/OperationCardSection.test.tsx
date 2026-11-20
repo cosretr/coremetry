@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { OperationCardPayload, OpCallTree } from '@/lib/types';
 
 interface FakeQuery<T> { data: T | undefined; isPending: boolean; isError: boolean }

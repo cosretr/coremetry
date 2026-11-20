@@ -3,7 +3,7 @@ import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { Button } from '@/components/ui/Button';
 import { StatementAlertModal } from './alerts/StatementAlertModal';
 import { useAuth } from '@/components/AuthProvider';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { navHref } from '@/lib/navHref';
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';

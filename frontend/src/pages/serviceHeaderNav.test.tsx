@@ -19,7 +19,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { DrillButton } from '@/components/DrillButton';
 import { IconButton } from '@/components/ui/IconButton';
 import { ButtonGroup } from '@/components/ui/ButtonGroup';

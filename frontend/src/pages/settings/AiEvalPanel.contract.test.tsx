@@ -18,7 +18,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@/test/radixJsdom';
-import { MemoryRouter, useLocation, useNavigate, useSearchParams, type NavigateFunction } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigate, useSearchParams, type NavigateFunction } from 'react-router';
 import type { EvalCaseResult, EvalRunSummary, EvalsetCatalog } from '@/lib/types';
 
 const CATALOG: EvalsetCatalog = {

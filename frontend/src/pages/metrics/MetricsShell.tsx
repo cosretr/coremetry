@@ -11,7 +11,7 @@
 // (CoSRE kanıt çipi), `?metric=` (Overview kapısı; S3: artık burada açılır),
 // `?editor=0` (Keşif).
 import { useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { PageShell } from '@/components/coremetry/PageShell';

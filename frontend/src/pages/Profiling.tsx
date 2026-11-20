@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { stopRowClick } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan); v0.10.1356 R4
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Topbar } from '@/components/Topbar';
 import { Empty } from '@/components/Spinner';
 import { IconFlame } from '@/components/icons';

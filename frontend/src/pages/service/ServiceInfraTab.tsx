@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useRef, useState, type ReactNode } from 'react';
 import { thanosMaxDataPoints } from '@/lib/chartStep';
 import { clampSuffix } from '@/lib/thanosWindow';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { LinkButton, IconButton, Button } from '@/components/ui';

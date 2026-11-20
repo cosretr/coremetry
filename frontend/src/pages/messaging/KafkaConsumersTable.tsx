@@ -3,7 +3,7 @@
 // consumer group yerine servis + client: istemci metriklerinde grup kimliği yok. Sorgular YALNIZ sekme
 // açılınca (bileşen mount olunca) koşar; satır > 100 → cv-row.
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { useHttpPromql } from '@/lib/queries/httpMetrics';
 import { fmtSmart } from '@/lib/chartFmt';

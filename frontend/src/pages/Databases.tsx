@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import { stopRowClick } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3); v0.10.1414 satır linki
 import { SavedViewsBar } from '@/components/SavedViewsBar';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Turtle } from 'lucide-react';
 import { Topbar } from '@/components/Topbar';

@@ -1,5 +1,5 @@
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
-import { Link, type LinkProps } from 'react-router-dom';
+import { Link, type LinkProps } from 'react-router';
 
 // Card is the headed-panel container that 30+ pages roll on
 // their own with the same bg1+border+8px-radius inline style.

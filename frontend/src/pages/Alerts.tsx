@@ -26,7 +26,7 @@ import { notifySummary } from './alerts/notifyTeams';
 import { ConditionPreview } from './alerts/ConditionPreview';
 import { NoisyRulesPanel } from './alerts/NoisyRulesPanel';
 import { WatcherImportModal } from './alerts/WatcherImportModal';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { PageShell } from '@/components/coremetry/PageShell';
 

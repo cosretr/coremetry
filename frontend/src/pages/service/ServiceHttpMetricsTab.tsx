@@ -17,7 +17,7 @@
 // İkisi de varsa iki BÖLÜM: önce HTTP, altta gRPC — asla toplanmaz; gRPC
 // bölümünün süzgeçleri ?groute/?gmethod. Downstream (http_client_*) yalnız HTTP.
 import { useMemo, type ReactNode } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Badge, Card, MethodBadge, PanelTitle, SelectField } from '@/components/ui';
 import { SectionHead } from '@/components/coremetry/SectionHead';
 import { HttpStat, HttpGauge, HttpChartPanel, HttpDonutPanel, HttpEnvScopeBand } from './httpMetricsViz';

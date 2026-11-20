@@ -16,7 +16,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router';
 import { AIExplainButton } from '@/components/ai/AIExplainButton';
 import { __resetCopilotEnabledCache } from '@/components/ai/useCopilotEnabled';
 import { IconSparkles } from '@/components/icons';

@@ -5,7 +5,7 @@
 // paylaşılan menü). Çoğalt ve Sil editor+ (sunucu da editorRoles ister);
 // Dışa aktar herkes (salt okuma). Sil onaylı ve kırmızı (`danger: true`);
 // sunucu tarafı `dashboard.delete` audit kaydını zaten yazar.
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Copy, Download, ExternalLink, Trash2 } from 'lucide-react';
 import { useConfirm } from '@/components/coremetry/Confirm';

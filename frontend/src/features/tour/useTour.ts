@@ -18,7 +18,7 @@
 //     bekleme/zaman aşımı kare anahtarıyla (engine.currentFrame). Rota adımın.
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import type { TipRect } from '@/lib/tipPlacement';
 import type { TourCtx } from './steps';
 import { currentFrame, currentStep, initialTourState, shouldReturn, tourReducer, type TourAction, type TourState } from './engine';

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { stopRowClick } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3); v0.10.1414 satır linki
 import { rowClickHandlers, fmtNum } from '@/lib/utils';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useEffect } from 'react';
 import { endpointDetailHref } from '@/pages/endpoints/endpointParam';
 import { encodeRange } from '@/lib/urlState';

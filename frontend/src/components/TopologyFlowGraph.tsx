@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { ROW_PITCH } from '@/lib/topoLayout';
 import { bfsBarycenterLayout, routeKind } from '@/lib/topoBfsLayout';
 import { reachPath } from '@/lib/topoReach';

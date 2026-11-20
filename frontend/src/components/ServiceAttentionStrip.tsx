@@ -16,7 +16,7 @@
 // Inbox okuması başarısız olursa bundle'daki problem listesine düşülür
 // (SLO hariç; exception satırı çıkmaz, başlık bunu söyler) — şerit hiçbir
 // zaman sessizce kaybolmaz.
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtAgoNs } from '@/lib/utils';

@@ -2,7 +2,7 @@
 // /cosre/shared/:id?t=<sır>. Bağlantıyı alan her kimlikli kullanıcı (viewer
 // dahil) okur; yazma / devam ettirme yok. Yanlış ya da geri alınmış bağlantı
 // 404 → "bulunamadı" (varlık doğrulanmaz).
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Topbar } from '@/components/Topbar';
 import { PageShell } from '@/components/coremetry/PageShell';

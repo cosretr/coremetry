@@ -11,7 +11,7 @@
 //   - Admin: "Replay başlat" (gün / koşu / Problem / varyant) + haftalık
 //     zamanlama aç/kapa (varsayılan kapalı). Admin ekranı — çevrilmez.
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';

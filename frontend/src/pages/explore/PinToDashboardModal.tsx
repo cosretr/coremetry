@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/ui';
 import { Button } from '@/components/ui/Button';

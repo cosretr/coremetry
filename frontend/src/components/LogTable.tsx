@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { TabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5)
 import { rowActivation } from '@/lib/a11y';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { CopyButton } from './CopyButton';
 import {
   useDataTable, DataTableColgroup, DataTableHead, DataTableState, type DataTableStateProps,

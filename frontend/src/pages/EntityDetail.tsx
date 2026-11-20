@@ -6,7 +6,8 @@
 // "artık mevcut değil, son görülme X" + tarihçe. Bayrak kapalı → açık ilan.
 import { useMemo, useState } from 'react';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router';
+import { urlSpec, useUrlParams, zParam, zInt, z } from '@/lib/urlSchema';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { MultiLineChart } from '@/components/MultiLineChart';
@@ -28,10 +29,15 @@ import { serviceHref } from '@/lib/serviceHref';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { EntityDetailResponse, EntityRecord, EntityServiceRow, EntitySeenAgg, EntityServicesResponse, TimeRange } from '@/lib/types';
 
+// 2026-11-21 — URL durumu zod şemasıyla (lib/urlSchema): bozuk `at` → 0
+// (anlık görünüm), kimlik ham metin (≤1024).
+const ENTITY_URL_SPEC = urlSpec({
+  id: zParam(z.string().check(z.maxLength(1024)), ''),
+  at: zParam(zInt({ min: 0 }), 0),
+});
+
 export default function EntityDetail() {
-  const [sp] = useSearchParams();
-  const id = sp.get('id') ?? '';
-  const at = Number(sp.get('at') ?? 0) || 0;
+  const [{ id, at }] = useUrlParams(ENTITY_URL_SPEC);
   const { range, setRange } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
   const { enabled, loading } = useEntityEnabled();

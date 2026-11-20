@@ -25,7 +25,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Fragment } from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router';
 import {
   INSIGHT_PARAM, INSIGHT_KINDS, formatInsightParam, parseInsightParam,
   insightParams, useInsightRow, InsightRowChip, InsightRowSlot, InsightGridSlot,

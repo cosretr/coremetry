@@ -5,7 +5,7 @@
 // Son görülme rows[] (pod × servis) üzerinden. Her satır → servis sayfası +
 // bu pod'a süzülmüş Traces.
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
   type ColumnDef, type DataTableStateProps,

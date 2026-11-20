@@ -2,7 +2,63 @@ import { useQuery } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
-import type { SpanExemplar } from '@/lib/types';
+import type { SpanExemplar, ProfileRow, SpanHotspotsResponse, OperationSummary } from '@/lib/types';
+
+// ── SpanDetail paneli (2026-11-21, effect-fetch → React Query) ──────────
+// Panel açıkken çekilir; span değişince / panel kapanınca uçuştaki istek
+// signal ile kesilir. Hata davranışı eski effect'lerle aynı: profil listesi
+// boş, hotspot null, baseline satırı gizli — panel bir okumanın hatası
+// yüzünden kırılmaz. retry YOK (eski effect'ler de tek atıştı; panel
+// okumasında tekrar = operatörün çoktan geçtiği span'in gecikmiş cevabı).
+
+// Trace-to-profile: penceresi span'le çakışan profiller.
+export function useSpanProfiles(service: string, startNs: number, endNs: number) {
+  return useQuery<ProfileRow[]>({
+    queryKey: keys.spans.profiles(service, startNs, endNs),
+    queryFn: async ({ signal }) => (await api.profilesForSpan(service, startNs, endNs, signal)) ?? [],
+    enabled: !!service && !!startNs,
+    staleTime: 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// Span penceresindeki birleşik CPU hotspot'ları (ilk `top`).
+export function useSpanHotspots(service: string, startNs: number, endNs: number, top = 10) {
+  return useQuery<SpanHotspotsResponse | null>({
+    queryKey: keys.spans.hotspots(service, startNs, endNs, top),
+    queryFn: async ({ signal }) => (await api.spanHotspots(service, startNs, endNs, top, signal)) ?? null,
+    enabled: !!service && !!startNs,
+    staleTime: 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// Baseline p50 — span'in BİTİŞİNE demirli önceki 24 saat, aynı servis
+// (operation_summary_5m, /api/services/{svc}/operations). now()'a değil
+// span'e demirli: eski bir trace kendi zamanının tabanıyla kıyaslanır.
+// Eşleşme (ham ad, sonra gösterim adı) `select`te; anahtar yalnız istek
+// girdileri — aynı servis+bitiş için iki span tek isteği paylaşır.
+const DAY_NS = 86_400_000_000_000;
+export function useSpanBaselineP50(service: string, endNs: number, names: string[]) {
+  return useQuery<OperationSummary[], Error, number | null>({
+    queryKey: keys.spans.baselineOps(service, endNs),
+    queryFn: async ({ signal }) =>
+      (await api.serviceOperations(service, { from: endNs - DAY_NS, to: endNs }, false, false, '', signal)) ?? [],
+    enabled: !!service && !!endNs,
+    staleTime: 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    select: ops => {
+      for (const n of names) {
+        const op = ops.find(o => o.name === n);
+        if (op) return op.p50DurationMs > 0 ? op.p50DurationMs : null;
+      }
+      return null;
+    },
+  });
+}
 
 // Span exemplar — the bridge from a metric chart point to a
 // representative trace in that bucket. The hook is `enabled`-

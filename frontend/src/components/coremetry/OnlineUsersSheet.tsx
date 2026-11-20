@@ -4,7 +4,7 @@
 // Liste GET /api/presence/online: ad · takım · son görülme. Admin'de ad
 // /users/:id'ye bağlanır, diğer rollerde düz metin. ≤200 satır: her satır
 // content-visibility:auto (Table > 100 kuralı).
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Users } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './overlay';
 import { Spinner, Empty } from '@/components/Spinner';

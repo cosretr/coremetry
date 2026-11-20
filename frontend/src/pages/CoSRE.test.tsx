@@ -12,7 +12,7 @@
 //       rel=noopener), çekmecede (bağlamsız) aynı sekmede.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -48,7 +48,7 @@ const tick = () => act(async () => { await new Promise(r => setTimeout(r, 30)); 
 function renderAt(path: string) {
   return act(async () => {
     root.render(
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={[path]} useTransitions={false}>
         <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
           <ConfirmProvider>
             <AuthProvider>

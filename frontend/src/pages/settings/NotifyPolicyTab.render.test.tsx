@@ -6,7 +6,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { ConfirmGate } from '@/components/coremetry/Confirm'; // R9: sekme coremetry useConfirm
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { NotifyPolicy } from '@/lib/types';
 
 const m = vi.hoisted(() => ({ put: vi.fn() }));

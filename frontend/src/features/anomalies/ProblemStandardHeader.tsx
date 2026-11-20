@@ -13,7 +13,7 @@
 // bulunamadığında `fallback` çizilir (önceki tek cümlelik özet) — sayfa
 // hiçbir zaman boş başlıkla açılmaz.
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { t, useLang } from '@/lib/i18n'; // v0.10.2284 — kart etiketleri arayüz dilinde (TR aynı)
 import { useProblemStandard } from '@/lib/queries';
 import {

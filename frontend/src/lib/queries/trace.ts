@@ -46,3 +46,18 @@ export function useTraceColumnValues(p: TraceColumnValuesParams, enabled: boolea
     placeholderData: prev => prev,
   });
 }
+
+// 2026-11-21 — Trace paylaşım popover'ı: bu trace'in aktif public linkleri.
+// Yalnız popover AÇIKKEN çekilir (staleTime 0: her açılış tazeler — eski
+// effect'in davranışı); mint/revoke sonrası çağıran refetch eder. Hata =
+// boş liste (eski davranış).
+export function useTraceShares(traceId: string, open: boolean) {
+  return useQuery({
+    queryKey: keys.traces.shares(traceId),
+    queryFn: async ({ signal }) => (await api.listTraceShares(traceId, signal)) ?? [],
+    enabled: open && !!traceId,
+    staleTime: 0,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}

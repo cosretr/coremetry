@@ -2,7 +2,7 @@ import {
   useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
   type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject,
 } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import { moveColumnOnto, orderColumnsByModel, type ColumnModel } from '@/lib/columnModel';
 import { EMPTY_SELECTION, toggleRow, rangeSelect, selectAll, pruneSelection, type SelectionState } from '@/lib/rowSelection';
 import { useTableNav, type TableNav } from '@/lib/useTableNav';

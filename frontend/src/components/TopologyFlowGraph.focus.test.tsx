@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import type React from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TopologyFlowGraph } from './TopologyFlowGraph';
 import { moreNodeId } from '../lib/topoFocusLayout';

@@ -16,7 +16,7 @@ import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
 import { ProblemStandardHeader } from './ProblemStandardHeader'; // v0.10.1529
 import { api } from '@/lib/api';
 import { keys, useAnomalyEventByID, useLogPatternSeries, useServicesMetadata, useUnifiedAnomalyRow } from '@/lib/queries';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { serviceHref } from '@/lib/serviceHref';
 import { useEscLayer } from '@/lib/escLayer';
 import { DEFAULT_DURATIONS } from '@/lib/actions';

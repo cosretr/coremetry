@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import { Skeleton, TableSkeleton, CardSkeleton } from '../Skeleton';
 
 // RouteSkeleton — the Suspense fallback shown while a code-split route chunk

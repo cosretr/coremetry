@@ -11,7 +11,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { PipelineRule } from '@/lib/api';
 import { ConfirmGate } from '@/components/coremetry/Confirm';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 
 const RULE: PipelineRule = {
   id: 'r1', name: 'drop health', kind: 'drop', signal: 'spans', enabled: true,

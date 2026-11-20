@@ -8,7 +8,7 @@
 // kaydın tüm snapshot'ı çizilir (olay öncesi elde olan her şey). Render'da ek
 // istek yok (ölçüt 9); servis paneli bağlantı olarak kalır.
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import type { TSSeries } from '@/components/viz/TimeSeriesPanel';
 import { Spinner } from '@/components/Spinner';
 import { Chip } from '@/components/ui/Chip';

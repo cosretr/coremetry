@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Bug, Search, Users, Workflow, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';

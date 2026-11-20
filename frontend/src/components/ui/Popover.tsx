@@ -2,7 +2,7 @@ import {
   useCallback, useEffect, useLayoutEffect, useRef,
   type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject,
 } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useEscLayer } from '@/lib/escLayer';
 import { placeMenu, type MenuPlaceOpts } from './DataTable/menuPlacement';
 

@@ -4,7 +4,7 @@
 // kanıt yok; cümle modelden değil (api chat_summary_card.go). Linkler balonun
 // çipleriyle aynı hedef kuralı: iç sayfa, sohbet bağlamı yeni sekme isterse
 // yeni sekme (chatLinkTargetProps).
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Button } from '@/components/shadcn/button';
 import { chatLinkTargetProps, useChatLinkNewTab } from '@/components/ai/chatLinkTarget';
 import type { CosreLinkCard } from '@/lib/types';

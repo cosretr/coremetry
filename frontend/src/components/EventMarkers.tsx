@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { appLinkKind, openSafeLink } from '@/lib/safeAppPath'; // v0.10.1315
 import { api } from '@/lib/api';
 import { tsLong } from '@/lib/utils';

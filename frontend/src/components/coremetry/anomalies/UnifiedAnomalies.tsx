@@ -18,7 +18,7 @@
 // Sıralanan: Başlangıç, Servis, Sinyaller, Durum. "Ne oldu" cümlesi tarayıcıda
 // kurulur → sunucu sıralayamaz, başlığı düz kalır (sortValue yok).
 import { useMemo, type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { DataTable } from '@/components/coremetry/DataTable';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import type { ColumnDef } from '@/components/coremetry/DataTable';

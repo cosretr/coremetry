@@ -24,7 +24,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act, useEffect, type JSX } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type {
   ClusterPodRow, DatabasesOverview, EndpointRow, ExternalHost, HostRow, InboxItem, SlowQueryRow, TimeRange,

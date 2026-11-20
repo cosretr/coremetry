@@ -4,7 +4,7 @@
 // ve tutulacak olaylardan açık Problem'le çakışan ya da Problem'e dönüşen
 // sayısı + örnek olay kimlikleri. Veri skor kartının tik durumunda (ek istek
 // yok); Anomaliler › ML › Teknik detay içinde.
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { DataTable } from '@/components/coremetry/DataTable';
 import type { ColumnDef } from '@/components/coremetry/DataTable';
 import type { MLGateShadow, MLTickStatus } from '@/lib/types';

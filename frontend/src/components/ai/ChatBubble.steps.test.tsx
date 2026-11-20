@@ -6,7 +6,7 @@
 // etiket adımı (tool yok) SAYILMAZ, süre bilinmiyorsa «—», kırpık rozeti.
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { ChatBubble, ChatBubbleSlotsContext, ToolStepsPanel } from './ChatBubble';
 import type { ChatTurn, ChatStepDetail } from '@/lib/types';
 

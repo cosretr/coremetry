@@ -14,7 +14,7 @@ import { Badge } from '@/components/shadcn/badge';
 import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { Field, SelectField } from '@/components/coremetry/Field';
 import { useAuthRole } from '@/components/AuthProvider';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { api } from '@/lib/api';
 import { keys, useMLProfiles } from '@/lib/queries';
 import { serviceHref } from '@/lib/serviceHref';

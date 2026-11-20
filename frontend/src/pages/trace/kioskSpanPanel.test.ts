@@ -9,7 +9,7 @@ const src = readFileSync(resolve(__dirname, 'KioskSpanPanel.tsx'), 'utf8');
 
 describe('KioskSpanPanel (v0.10.681)', () => {
   it('krom ve fetch yok', () => {
-    for (const bad of ["from 'react-router-dom'", 'AIExplainButton', "from '@/lib/api'", 'useQuery(', "from '@/components/SpanDetail'"]) {
+    for (const bad of ["from 'react-router'", 'AIExplainButton', "from '@/lib/api'", 'useQuery(', "from '@/components/SpanDetail'"]) {
       expect(src).not.toContain(bad);
     }
   });

@@ -3,7 +3,7 @@
 // Produce/s / Send errors/s / Retry/s, yalnız `topic="<ad>"` etiketli istemci metrikleri. Sorgular sekme
 // açılınca (mount) koşar; kurucular pages/messaging/kafkaOverview'da testli.
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { useHttpPromql } from '@/lib/queries/httpMetrics';
 import { kafkaTopicSel } from '@/lib/kafkaTopicMetrics';

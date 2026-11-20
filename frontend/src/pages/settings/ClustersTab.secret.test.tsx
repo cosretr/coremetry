@@ -13,7 +13,7 @@ import '@/test/radixJsdom'; // Faz 2 dilim 1 R7: Radix Checkbox/Popper jsdom eks
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { ThanosSettingsInput, ThanosSnapshot } from '@/lib/types';
 
 const { getThanosSettings, putThanosSettings, getArgoCDSettings } = vi.hoisted(() => {

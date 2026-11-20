@@ -17,7 +17,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act, useEffect } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { TourOverlay, type TourOverlayProps } from './TourOverlay';
 import { topEscLayer, pushEscLayer, __resetEscLayers } from '@/lib/escLayer';
 import { waitForTarget, FALLBACK_GRACE_MS } from './waitForTarget';

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router';
 import { Sidebar } from './Sidebar';
 import { AnnouncementBanner } from './AnnouncementBanner';
 import { ShortcutsHelp } from './ShortcutsHelp';

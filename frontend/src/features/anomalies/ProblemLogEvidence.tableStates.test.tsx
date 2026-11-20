@@ -18,7 +18,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { LogPatternGroup, LogPatternsResult } from '@/lib/types';
 
 interface FakeQ { data: LogPatternsResult | undefined; isPending: boolean; isError: boolean; error: unknown }

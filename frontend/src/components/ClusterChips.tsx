@@ -15,7 +15,7 @@
 // (single-cluster deployments or services without cluster
 // resource attrs).
 
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 export function ClusterChips({ clusters }: { clusters?: string[] }) {
   if (!clusters || clusters.length === 0) return null;

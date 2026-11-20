@@ -28,7 +28,7 @@
 //     Esc turu atlar (TourOverlay başlığı).
 
 import { useCallback, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/components/AuthProvider';
 import { StatTile } from '@/components/ui';

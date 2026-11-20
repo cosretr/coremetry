@@ -15,7 +15,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import type { AnomalyEvent, Problem, RolloutDetail } from '@/lib/types';
 
 const m = vi.hoisted(() => ({ detail: null as unknown }));

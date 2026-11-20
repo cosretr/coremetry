@@ -13,7 +13,7 @@
 // (metrik kararı, sayım şeridi, üç tablo) tanımlıyor.
 
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Spinner, Empty } from '@/components/Spinner';

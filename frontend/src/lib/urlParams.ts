@@ -10,7 +10,7 @@
 // Debounce'lu metin kutusu gibi taslaklar sayfada yerel kalır; commit edilen
 // değer buradan yazılır.
 import { useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 export interface ParamCodec<T> {
   decode: (raw: string | null) => T;

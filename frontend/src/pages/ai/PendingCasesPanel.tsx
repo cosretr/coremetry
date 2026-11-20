@@ -13,7 +13,7 @@
 //     yine Onayla ister. Hiçbir şey otomatik onaylanmaz; 👍/👎 bu panele girmez.
 //   - Viewer satırı açar, öneriyi salt-okunur görür.
 import { Fragment, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/components/AuthProvider';
 import { Button, DisclosureButton, SegmentedControl, SelectField, StatTile } from '@/components/ui';

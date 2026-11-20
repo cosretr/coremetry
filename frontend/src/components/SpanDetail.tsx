@@ -1,14 +1,13 @@
 import { attrTracesHref } from '@/lib/pivotHref'; // v0.10.1555
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useEscLayer } from '@/lib/escLayer';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import type { SpanLinkEntry } from '@/lib/spanLinks';
 import { groupSpanAttrs, groupResourceAttrs, resourceGroupOpen } from '@/lib/spanAttrGroups';
 import { traceHref } from '@/lib/traceHref';
 import type { SpanRow, ProfileRow, SpanHotspotsResponse, LogRow, TimeRange } from '@/lib/types';
 import { selfTimeMs } from '@/lib/selfTime';
 import { tsLong, tsShort, fmtNs, sevName, sevClass, displaySpanName } from '@/lib/utils';
-import { api } from '@/lib/api';
 import { getRaw, setRaw } from '@/lib/storage';
 import { logsRangeParam, logsHref } from '@/lib/logsUrl';
 import { serviceHref } from '@/lib/serviceHref';
@@ -26,6 +25,8 @@ import { useDBStmtDetail } from '@/lib/queries/databases'; // v0.10.1956
 import { useT } from '@/lib/i18n';
 import { BreakdownBar, KindBadge } from './KindBadge';
 import { useEntityEnabled, useEntityPaths, useStackFrameLinks } from '@/lib/queries';
+import { useSpanProfiles, useSpanHotspots, useSpanBaselineP50 } from '@/lib/queries/spans';
+import { useTracePanelLogs } from '@/lib/queries/logs';
 import { StackTrace } from './StackTrace';
 import { runningVersion } from '@/lib/runningVersion'; // v0.10.590
 import { SpanK8sSection } from './SpanK8sSection';
@@ -95,22 +96,16 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
   const hasInlineException = inlineStack || inlineExType || inlineExMsg;
 
   // Trace-to-profile: look up profiles whose window overlaps this span
-  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  // 2026-11-21 — effect-fetch → lib/queries (signal ile iptal; hata = boş).
+  const profilesQ = useSpanProfiles(span.serviceName, span.startTime, span.endTime);
+  const profiles: ProfileRow[] = profilesQ.data ?? [];
   // Aggregated hotspots over the span's window — same merge as
   // the Profiling page does for a service, but bounded to the
   // few profiles whose sample window touched this span. Lets
   // the operator see "what burned CPU during this span" inline,
   // without leaving the trace.
-  const [spanHotspots, setSpanHotspots] = useState<SpanHotspotsResponse | null>(null);
-  useEffect(() => {
-    if (!span.serviceName || !span.startTime) { setProfiles([]); setSpanHotspots(null); return; }
-    api.profilesForSpan(span.serviceName, span.startTime, span.endTime)
-      .then(p => setProfiles(p ?? []))
-      .catch(() => setProfiles([]));
-    api.spanHotspots(span.serviceName, span.startTime, span.endTime, 10)
-      .then(r => setSpanHotspots(r ?? null))
-      .catch(() => setSpanHotspots(null));
-  }, [span.spanId, span.serviceName, span.startTime, span.endTime]);
+  const hotspotsQ = useSpanHotspots(span.serviceName, span.startTime, span.endTime, 10);
+  const spanHotspots: SpanHotspotsResponse | null = hotspotsQ.data ?? null;
 
   // Trace-to-logs: fetch logs for the whole trace, not just
   // this span. Span-scoped filtering missed logs from sibling /
@@ -202,29 +197,22 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
       statement: dbSpanStatementHref(ref, spanLinkCtx.dbWindow),
     };
   }, [spanLinkCtx]);
-  const [spanLogs, setSpanLogs] = useState<LogRow[]>([]);
   // v0.9.461 (dürüstlük A5) — zarf düşürülmesin: degraded/hata "log yok"
   // gibi OKUNMASIN (ES brownout'ta emin bir "No logs attached" basılıyordu);
   // total > 50 ise sayfa kısmidir.
-  const [spanLogsMeta, setSpanLogsMeta] = useState<{ degraded?: string; failed?: boolean; total?: number }>({});
   // v0.10.332 (operatör: "tüm trace / bu span ayrımına gerek yok, eskisi gibi
   // logun hepsini göster") — v0.10.277'nin span-kapsamı varsayılanı ve
   // ayrım anahtarı GERİ ALINDI: çekmece trace'in TÜM loglarını gösterir.
   // Span-kapsamlı okuma (logstore.Filter.SpanID) backend'de duruyor; UI'da
   // bir daha sorulmadan açılmaz (memory: davranış değişikliğinde önce sor).
-  useEffect(() => {
-    if (!span.traceId) { setSpanLogs([]); setSpanLogsMeta({}); return; }
-    // v0.10.1822 — span değişince / çekmece kapanınca uçuştaki istek iptal.
-    const ctl = new AbortController();
-    api.logs({ traceId: span.traceId, from: logsFromBound, to: logsToBound, limit: 50 }, ctl.signal)
-      .then(r => {
-        if (ctl.signal.aborted) return;
-        setSpanLogs(r.logs ?? []);
-        setSpanLogsMeta({ degraded: r.degraded ? (r.reason || 'log backend slow/unreachable') : undefined, total: r.total });
-      })
-      .catch(() => { if (!ctl.signal.aborted) { setSpanLogs([]); setSpanLogsMeta({ failed: true }); } });
-    return () => ctl.abort();
-  }, [span.traceId, logsFromBound, logsToBound]);
+  // v0.10.1822 — span değişince / çekmece kapanınca uçuştaki istek iptal
+  // (2026-11-21: RQ signal'i; useTracePanelLogs).
+  const spanLogsQ = useTracePanelLogs(span.traceId, logsFromBound, logsToBound);
+  const spanLogs: LogRow[] = (span.traceId && !spanLogsQ.isError && spanLogsQ.data?.logs) || [];
+  const spanLogsMeta: { degraded?: string; failed?: boolean; total?: number } = !span.traceId ? {}
+    : spanLogsQ.isError ? { failed: true }
+    : spanLogsQ.data ? { degraded: spanLogsQ.data.degraded ? (spanLogsQ.data.reason || 'log backend slow/unreachable') : undefined, total: spanLogsQ.data.total }
+    : {};
 
   // Baseline p50 — the 24h leading up to this span, for the same
   // service+operation, off the RED metrics path (operation_summary_5m
@@ -232,25 +220,10 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
   // end time, not now(), so an old trace compares against the
   // baseline that was current when it ran. Graceful: any miss
   // (endpoint error, operation not in the window) hides the row.
-  const [baseP50, setBaseP50] = useState<number | null>(null);
-  useEffect(() => {
-    setBaseP50(null);
-    if (!span.serviceName || !span.endTime) return;
-    // Stale-response guard: rapid j/k span switching can leave an
-    // older fetch resolving AFTER the newer one — without the flag
-    // the previous span's p50 would land under the current span.
-    let stale = false;
-    const DAY_NS = 86_400_000_000_000;
-    api.serviceOperations(span.serviceName, { from: span.endTime - DAY_NS, to: span.endTime })
-      .then(ops => {
-        if (stale) return;
-        const op = (ops ?? []).find(o => o.name === span.name)
-          ?? (ops ?? []).find(o => o.name === displaySpanName(span));
-        setBaseP50(op && op.p50DurationMs > 0 ? op.p50DurationMs : null);
-      })
-      .catch(() => { if (!stale) setBaseP50(null); });
-    return () => { stale = true; };
-  }, [span.spanId, span.serviceName, span.name, span.endTime]);
+  // Hızlı j/k geçişinde eski cevap yeni span'in altına düşemez: anahtar
+  // (servis, bitiş) — RQ her span'e kendi sonucunu verir.
+  const baseQ = useSpanBaselineP50(span.serviceName, span.endTime, [span.name, displaySpanName(span)]);
+  const baseP50: number | null = baseQ.isError ? null : (baseQ.data ?? null);
 
   // ── Resize handle ────────────────────────────────────────────────────────
   // Panel width persists in localStorage so navigating away and back
