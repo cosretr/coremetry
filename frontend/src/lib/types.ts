@@ -12335,6 +12335,84 @@ export interface SREEvalCompare {
   pack?: { base: SREEvalPackSide; cand: SREEvalPackSide };
   note: string;
 }
+// CoSRE doğruluk ölçümü A2 — replay notlaması. Go aynası: internal/sre/replay_report.go
+// (ReplayReport / ReplayItem / ReplayRun), replay_grade.go ReplaySummary, api/sre_replay.go.
+export type SREReplayGrade = 'bullseye' | 'on_target' | 'miss' | 'nowhere';
+export interface SREReplayVariant { contextPack?: boolean }
+export interface SREReplayRun {
+  rep: number;
+  state: string;
+  reason?: string;
+  conclusion?: string;
+  top?: SREEvalHyp[];
+  grade?: SREReplayGrade;
+  score?: number;
+  why?: string;
+  reach?: boolean;
+  reachBy?: 'evidence' | 'judge';
+  gradeErr?: string;
+  gradeAttempts?: number;
+  finishedAt?: number;
+}
+export interface SREReplayItem {
+  problemId: string;
+  caseId: string;
+  service: string;
+  cause: string;
+  category: string;
+  culprit?: string;
+  startedAt: number;
+  state?: 'skipped';
+  reason?: string;
+  runs: SREReplayRun[];
+  /** okuma anında: notlu koşuların ortalaması (yoksa null), yayılım = en yüksek − en düşük */
+  mean: number | null;
+  spread: number;
+  unstable?: boolean;
+}
+export interface SREReplaySummary {
+  problems: number;
+  skipped: number;
+  runs: number;
+  pending: number;
+  graded: number;
+  errored: number;
+  score: number | null;
+  dist: Record<string, number>;
+  reachKnown: number;
+  reached: number;
+  reachRate: number | null;
+  multiRun: number;
+  unstable: number;
+  meanSpread: number | null;
+  maxSpread: number;
+}
+export interface SREReplayReportBase {
+  reportId: string;
+  state: 'running' | 'done';
+  trigger: 'manual' | 'schedule';
+  by?: string;
+  build?: string;
+  days: number;
+  repeats: number;
+  limit: number;
+  from: number;
+  to: number;
+  variant: SREReplayVariant;
+  createdAt: number;
+  finishedAt?: number;
+  found: number;
+  judge?: string;
+}
+export interface SREReplayListItem extends SREReplayReportBase { summary: SREReplaySummary }
+export interface SREReplayDetail extends SREReplayReportBase { summary: SREReplaySummary; items: SREReplayItem[] }
+export interface SREReplaySchedule { weekly: boolean; days: number; repeats: number; updatedBy?: string; updatedAt?: number }
+export interface SREReplayListResponse {
+  reports: SREReplayListItem[];
+  schedule: SREReplaySchedule;
+  enabled: boolean;
+  grades: Record<string, number>;
+}
 export interface SREEvalRunsResponse {
   runs: SREEvalRun[];
   live: SREEvalLive;

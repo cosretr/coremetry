@@ -1514,6 +1514,16 @@ export const api = {
   startSREEval: (body: ({ from: number; to: number; limit: number } | { rerunOf: string }) & { contextPack?: boolean }) =>
     request<import('./types').SREEvalRun>(`/api/sre/eval/runs`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  // CoSRE doğruluk ölçümü A2 — replay notlama raporları (okuma viewer; başlatma + zamanlama admin).
+  sreReplayReports: (signal?: AbortSignal) => get<import('./types').SREReplayListResponse>(`/api/sre/replay/reports`, signal),
+  sreReplayReport: (id: string, signal?: AbortSignal) =>
+    get<import('./types').SREReplayDetail>(`/api/sre/replay/reports/${encodeURIComponent(id)}`, signal),
+  startSREReplay: (body: { days: number; repeats: number; limit: number; variant: import('./types').SREReplayVariant }) =>
+    request<import('./types').SREReplayDetail>(`/api/sre/replay/reports`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  putSREReplaySchedule: (body: { weekly: boolean; days: number; repeats: number }) =>
+    request<import('./types').SREReplaySchedule>(`/api/sre/replay/schedule`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   sreEvalCompare: (base: string, cand: string, signal?: AbortSignal) =>
     get<import('./types').SREEvalCompare>(`/api/sre/eval/compare?base=${encodeURIComponent(base)}&cand=${encodeURIComponent(cand)}`, signal),
   sreEvalReview: (days: number, signal?: AbortSignal) =>

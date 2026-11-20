@@ -60,6 +60,10 @@ var systemSavedViewPages = map[string]struct{}{
 	// bağlantı); yalnız PUT /api/problems/{id}/root-cause-label (editor+,
 	// denetimli) yazar.
 	ProblemRootCausePage: {},
+	// CoSRE doğruluk ölçümü A2 — replay notlama raporları; yalnız POST
+	// /api/sre/replay/reports (admin, denetimli) ve sre pod'unun notlayıcı
+	// tiki yazar.
+	SREReplayReportPage: {},
 }
 
 // EvalsetCandidatePage — v0.10.2111: aday vaka satırlarının page değeri.

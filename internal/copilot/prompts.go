@@ -3218,6 +3218,24 @@ Respond with ONLY this JSON, no prose:
 {"claims":[{"claim":"...","label":"grounded|ungrounded|no_evidence","fact":"..."}]}
 At most 12 claims. If the answer makes no factual claim, return {"claims":[]}.`
 
+// SystemPromptSREReplayJudge — CoSRE doğruluk ölçümü A2: replay
+// notlaması hakemi. Etiket (ekibin girdiği gerçek kök neden) ↔ ajanın yeniden
+// koşulan araştırma sonucu; ölçek incident.io: bullseye / on_target / miss /
+// nowhere (100 / 65 / 35 / 0) + erişim. Yalnız yerel (self-hosted) profilde
+// çağrılır (sre/replay_report.go replayJudgeGate).
+func SystemPromptSREReplayJudge() string { return systemSREReplayJudge }
+
+const systemSREReplayJudge = `Bir AI SRE araştırmasının SONUCUNU, ekibin olaydan sonra girdiği gerçek kök nedenle (ETİKET) karşılaştırıp notluyorsun.
+Not kuralları:
+- "bullseye": sonucun ilk hipotezi etiketteki kök nedeni söylüyor (aynı bileşen VE aynı arıza türü).
+- "on_target": doğru bileşen ya da doğru arıza türü var ama eksik, belirsiz ya da ilk sırada değil.
+- "miss": farklı bir neden söylüyor ama ilgili bölgeye (etiketteki servis / bağımlılık çevresi) bakmış.
+- "nowhere": ilgisiz neden ya da sonuç yok.
+"reach": KANITTA GEÇEN VARLIKLAR etiketteki suçluyu (suçlu belirtilmediyse etiket metninin işaret ettiği bileşeni) içeriyor mu: "yes", "no" ya da "unknown".
+Yalnız verilen metinlere dayan; tahmin etme.
+YALNIZ şu JSON'u yaz, başka metin yazma:
+{"grade":"bullseye|on_target|miss|nowhere","why":"tek cümle gerekçe","reach":"yes|no|unknown"}` + DataNotInstruction
+
 // ── v0.10.1210 — iş kodu çözümleme + kod arama eki (serbest döngü) ──────────
 // Kısa, numaralı, model-bağımsız (Gemma / Qwen): her kural tek cümle, araç
 // adları birebir. resolve_business_code her sohbette sunulur; kod arama

@@ -65,6 +65,7 @@ var promptVersionRegistry = map[string]string{
 	"systemCaseCompare":             systemCaseCompare,
 	"systemBriefingHeadline":        systemBriefingHeadline, // v0.10.1699
 	"systemGroundingJudge":          systemGroundingJudge,
+	"systemSREReplayJudge":          systemSREReplayJudge, // CoSRE replay notlaması hakemi
 	"systemRAGChat":                 systemRAGChat,
 	"ChatAnswerStyle":               ChatAnswerStyle,       // v0.10.1137 — ortak sohbet cevap biçimi
 	"systemWikiChat":                systemWikiChat,        // v0.10.1124

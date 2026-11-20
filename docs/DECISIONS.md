@@ -15241,3 +15241,10 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Depo: mevcut onaylı incident_cases vakası (p:<problemId>) — SRE değerlendirmesi doğruluğu zaten yalnız buradan okur; ayrı etiket deposu açılmadı. Kolonu olmayan suçlu servis/bileşen + http(s) bağlantı saved_views sistem satırında (page='problem-rootcause'); yeni şema yok. Kategori kümesi cosrelearn.CaseCategories (code → code_bug, unknown → other).
 - GET/PUT /api/problems/{id}/root-cause-label: viewer okur, editor+ yazar, audit problem.rootcause.set. Vaka yoksa Problem satırından kurulur, taslak varsa alanları taşınır.
 - Kart Problem'in "Vaka kaydı" kartının yerini alır; dört kutunun (S7) altında, boşken çözümden sonra doldurmaya çağırır. Problem detayı TR/EN (rcl.*).
+
+## 2026-11-21 — v0.10.2405 — CoSRE replay notu (etiketli Problem'ler)
+
+- Dilim A2: etiketli Problem'lerde SRE araştırması mevcut tekrar mekanizmasıyla (Kind=replay, problemin kendi penceresi) Problem başına N kez (varsayılan 2) yeniden koşar; canlı kayıt yazılmaz, öneri / anlatım / bildirim yok. Notlar incident.io ölçeği: Tam isabet 100 · Hedefte 65 · Iska 35 · Çok uzak 0; erişim = kanıt etiketteki suçluya vardı mı (suçlu varsa deterministik, yoksa hakem). Koşudan koşuya yayılım raporlanır.
+- Hakem yalnız yerel (self-hosted) çözülen profilde, arka plan AI kapılarıyla ve saatlik sre bütçesinin en çok yarısıyla çağrılır (yüzey sre-replay-judge, arka plan grubu); tik başına ≤3 çağrı, sre pod'unda lider kilitli dakikalık tik.
+- Rapor saved_views page='sre-replay-report'; başlatma ve haftalık zamanlama admin + audit (sre.replay.run / sre.replay.schedule); zamanlama system_settings "sre_agent.replay", varsayılan kapalı. Varyant parametresi yalnız orkestratörün okuduğu contextPack bayrağı.
+- /ai'de değerlendirme panelinin yanında tembel bölüm: puan, dağılım, erişim, kararsızlık, eğilim, Problem satırları.

@@ -100,6 +100,9 @@ export const keys = {
     evalRun:  (id: string) => ['sre', 'eval', 'run', id] as const,
     evalReview: (days: number) => ['sre', 'eval', 'review', days] as const,
     evalCompare: (base: string, cand: string) => ['sre', 'eval', 'compare', base, cand] as const, // v0.10.1450
+    // CoSRE doğruluk ölçümü A2 — replay notlama raporları (sre dalı: tekrar SSE'si düşürür).
+    replayReports: ['sre', 'replay', 'reports'] as const,
+    replayReport:  (id: string) => ['sre', 'replay', 'report', id] as const,
   },
 
   // v0.10.1475 — /ai onay bekleyen vakalar. sre dalının DIŞINDA: SSE

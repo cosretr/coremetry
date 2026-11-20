@@ -1845,6 +1845,11 @@ func main() {
 			Copilot: copilotSvc, // v0.10.1287 — Faz 1b anlatımı (arka plan AI kapıları)
 			Eval:    store,      // v0.10.1301 — Faz 5: tekrar özetleri değerlendirme koşusu satırına
 		})
+		// CoSRE doğruluk ölçümü A2 — replay notlayıcısı: drain'in yanında, lider
+		// kilitli dakikalık tik (etiketli Problem tekrarlarını yerel hakemle
+		// notlar; haftalık zamanlama system_settings "sre_agent.replay", kapalı).
+		go sre.StartReplayGrader(ctx, sre.ReplayGraderDeps{Store: store, Settings: store, Cache: cacheImpl,
+			Lock: lockImpl, Copilot: copilotSvc, Build: Version})
 	}
 	// v0.6.4 — Model Context Protocol server. Wired on api/all
 	// modes only — worker / ingest pods don't take operator

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { rowActivation } from '@/lib/a11y'; // v0.10.451 (dış denetim D3 kalan)
 import { Topbar } from '@/components/Topbar';
 import { Spinner, Empty } from '@/components/Spinner';
@@ -10,6 +10,8 @@ import { CosreQualityPanel } from './ai/CosreQualityPanel';
 import { RoutingReportPanel } from './ai/RoutingReportPanel'; // v0.10.1464 — haftalık yanlış-yönlendirme adayları
 import { SREEvalPanel } from './ai/SREEvalPanel'; // v0.10.1301 — AI SRE Faz 5 doğruluk ölçümü
 import { PendingCasesPanel } from './ai/PendingCasesPanel'; // v0.10.1475 — eval'in onaylı vaka girdisi
+// CoSRE doğruluk ölçümü A2 — replay notlaması; admin bölümü tembel chunk (paket bütçesi).
+const SREReplayPanel = lazy(() => import('./ai/SREReplayPanel').then(m => ({ default: m.SREReplayPanel })));
 import { useUrlRange } from '@/lib/useUrlRange';
 import { rcaPctText, rcaEngineTone, rcaSatisfactionText, rcaBucketLabel, rcaBucketSatisfaction, rcaCalibrationNote } from './ai/rcaQualityView';
 import type { RCAVerdictQuality, AIBudgetStatus, NegativeFeedbackCall, RouterGap, RouterGapKind, RouterGapsView } from '@/lib/types';
@@ -451,6 +453,7 @@ function AdminAIObservabilityPage() {
         <CosreQualityPanel /> {/* CoSRE öğrenme Faz 2 — örtük sinyal gece puanı */}
         <PendingCasesPanel /> {/* v0.10.1475 — onay bekleyen vakalar: eval yalnız onaylı vaka okur */}
         <SREEvalPanel /> {/* v0.10.1301 — AI SRE Faz 5: geçmiş problemlerle doğruluk (onaylı vakalar; 👎 yalnız inceleme) */}
+        <Suspense fallback={null}><SREReplayPanel /></Suspense> {/* CoSRE replay notu: etiketli Problem'ler, yerel hakem */}
 
         {open && <CallDrawer call={open} rates={rates} onClose={() => setOpen(null)} />}
       </PageShell>
