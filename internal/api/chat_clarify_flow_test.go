@@ -3,10 +3,14 @@ package api
 // chat_clarify_flow_test.go — v0.10.1571 (operatör, 2026-10-29: "çipler çok
 // kullanılmıyor, soru cevap şeklinde frontier model gibi olsun"): kaynak
 // sorusunun GERÇEK copilotChat handler'ından iki turluk akışı. Tur 1 belirsiz
-// soruya yalnız sourceAskTextTR'yi sorar (LLM'siz, bekleyen soru Redis
+// soruya yalnız kaynak sorusunu sorar (LLM'siz, bekleyen soru Redis
 // bağlamında); tur 2 serbest metin cevabı yorumlar ve ÖZGÜN soruyu seçilen
 // kaynakta yeniden koşar. Tanınmayan cevap / süresi dolmuş soru akışı
 // değiştirmez.
+//
+// v0.10.2381 — soru TEK kaynak sorusu (chat_source_ask.go). Bu düzenekte wiki
+// kurulu, yüklü envanter yok, genel sorular açık → seçenekler telemetri, wiki,
+// genel bilgi (clarifyAskTR).
 
 import (
 	"context"
@@ -20,6 +24,9 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/wiki"
 )
+
+// clarifyAskTR — bu düzeneğin kaynak sorusu (telemetri + wiki + genel bilgi).
+const clarifyAskTR = "Bunu nerede arayayım: telemetride (servis sağlığı, hatalar, trace'ler), wikide; yoksa genel bilgi olarak mı cevaplayayım?"
 
 const (
 	clarifyUID  = "u-clarify"
@@ -129,7 +136,7 @@ func TestClarifySourceAskThenWiki(t *testing.T) {
 	if r.Tier != aisurface.TierClarify || r.Surface != "cosre-turn:clarify/source_ask" {
 		t.Fatalf("tur 1 kaynak sorusu olmalı: tier=%q surface=%q cevap=%q", r.Tier, r.Surface, lastAnswerText(fr))
 	}
-	if got := lastAnswerText(fr); got != sourceAskTextTR {
+	if got := lastAnswerText(fr); got != clarifyAskTR {
 		t.Fatalf("cevap yalnız soru olmalı: %q", got)
 	}
 	if n := len(rg.llm.calls()); n != 0 || r.ModelCalls != 0 {
@@ -143,7 +150,7 @@ func TestClarifySourceAskThenWiki(t *testing.T) {
 		t.Fatalf("bekleyen soru Redis bağlamında olmalı: %+v", p)
 	}
 
-	fr = rg.post(t, clarifyQ, sourceAskTextTR, "wikide ara")
+	fr = rg.post(t, clarifyQ, clarifyAskTR, "wikide ara")
 	r = lastRow(t, rg.rows())
 	if r.Tier != aisurface.TierWiki {
 		t.Fatalf("tur 2 wiki olmalı: tier=%q cevap=%q", r.Tier, lastAnswerText(fr))
@@ -169,7 +176,7 @@ func TestClarifySourceAskThenCoremetry(t *testing.T) {
 	if r := lastRow(t, rg.rows()); r.Tier != aisurface.TierClarify {
 		t.Fatalf("tur 1: %q", r.Tier)
 	}
-	fr := rg.post(t, clarifyQ, sourceAskTextTR, "coremetry'de")
+	fr := rg.post(t, clarifyQ, clarifyAskTR, "coremetry'de")
 	r := lastRow(t, rg.rows())
 	if r.Tier == aisurface.TierWiki || r.Tier == aisurface.TierClarify {
 		t.Fatalf("telemetri seçildi, tier=%q cevap=%q", r.Tier, lastAnswerText(fr))
@@ -197,7 +204,7 @@ func TestClarifySourceAskThenCoremetry(t *testing.T) {
 func TestClarifySourceAskUnrelatedReplyDropped(t *testing.T) {
 	rg := newClarifyRig(t, nil)
 	rg.post(t, clarifyQ)
-	frames := rg.post(t, clarifyQ, sourceAskTextTR, "checkout sağlığı nasıl?")
+	frames := rg.post(t, clarifyQ, clarifyAskTR, "checkout sağlığı nasıl?")
 	// v0.10.1575 — düşen soru ekranda adım çizmez; ölçüm satırda kalır (aşağıda).
 	for _, f := range frames {
 		if f.event == "step" && f.data["tool"] == clarifyReplyTool {
@@ -223,7 +230,7 @@ func TestClarifySourceAskExpiredIgnored(t *testing.T) {
 	rg.mc.mu.Lock()
 	rg.mc.m[chatContextKey(clarifyUID, clarifyConv)] = old
 	rg.mc.mu.Unlock()
-	rg.post(t, clarifyQ, sourceAskTextTR, "wikide ara")
+	rg.post(t, clarifyQ, clarifyAskTR, "wikide ara")
 	r := lastRow(t, rg.rows())
 	if replyTool(r) != nil {
 		t.Fatalf("süresi dolmuş soru cevap sayılmamalı: %+v", r.Tools)

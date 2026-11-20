@@ -7,6 +7,11 @@ package api
 // Operatör: "Bu durumda ragda aramasın, yüklü dokümanlarda arayayım mı diye
 // sormasını beklerim." Çıplak bilinen varlık adı (takım / servis) + tabloda
 // eşleşme → doküman kademeleri kendiliğinden cevaplamaz, düz metin soru sorar.
+//
+// v0.10.2381 — soru TEK kaynak sorusu (chat_source_ask.go): önünde bağlam
+// cümlesi ("“X” bir takım adı; yüklü envanterde de geçiyor." / "… N satırla
+// eşleşiyor."), ardından var olan kaynaklar. Bekleyen soru türü `source`,
+// cevap sınıfı kaynak türü (telemetri / excel / wiki / genel).
 
 import (
 	"context"
@@ -18,6 +23,9 @@ import (
 )
 
 const (
+	// entAsk / entRowsAsk — kaynak sorusunun bağlam cümleleri (v0.10.2381).
+	entAsk     = "“Payments-Core” bir takım adı; yüklü envanterde de geçiyor."
+	entRowsAsk = "yüklü envanter tablosunda"
 	entTeam    = "Payments-Core"
 	entTeamAsk = "Takımımın servisleri nasıl?"
 	entTeamQ   = "Hesabına takım atanmamış. Hangi takımdasın? Uygulama takımları: Payments-Core, Ledger"
@@ -53,7 +61,7 @@ func TestBareTeamNameAsksDocsOrTeam(t *testing.T) {
 	fr := rg.post(t, entTeamAsk, entTeamQ, entTeam)
 	r := lastRow(t, rg.rows())
 	got := lastAnswerText(fr)
-	if r.Tier != aisurface.TierClarify || !strings.Contains(got, "yüklü dokümanlarda mı arayayım") {
+	if r.Tier != aisurface.TierClarify || !strings.HasPrefix(got, entAsk+" "+sourceAskHeadTR) || !strings.Contains(got, "envanterde") {
 		t.Fatalf("çıplak takım adı soru sormalı: tier=%q surface=%q cevap=%q", r.Tier, r.Surface, got)
 	}
 	if strings.Contains(got, "srvpay01") {
@@ -62,7 +70,7 @@ func TestBareTeamNameAsksDocsOrTeam(t *testing.T) {
 }
 
 // TestBareTeamNameAskShape — soru LLM'siz, çipsiz, exchangeId'siz; bekleyen
-// soru doc_or_entity olarak özgün adı taşır.
+// kaynak sorusu özgün adı, varlık türünü ve sunulan kaynakları taşır.
 func TestBareTeamNameAskShape(t *testing.T) {
 	rg := newEntityDocRig(t)
 	fr := rg.post(t, entTeamAsk, entTeamQ, entTeam)
@@ -70,7 +78,12 @@ func TestBareTeamNameAskShape(t *testing.T) {
 	if r.Surface != "cosre-turn:clarify/doc_or_entity_ask" {
 		t.Fatalf("surface=%q", r.Surface)
 	}
-	if got := lastAnswerText(fr); got != docOrEntityAskTR(bareEntityTeam, entTeam) {
+	p := rg.pending(t)
+	if p == nil || p.Kind != pendingKindSource || p.Question != entTeam || p.Entity != bareEntityTeam ||
+		!containsStr(p.Options, srcTelemetry) || !containsStr(p.Options, srcExcel) {
+		t.Fatalf("bekleyen soru: %+v", p)
+	}
+	if got := lastAnswerText(fr); got != sourceAskText(entAsk, p.Options) {
 		t.Fatalf("soru metni: %q", got)
 	}
 	a := framesOf(fr, "answer")[0]
@@ -80,22 +93,19 @@ func TestBareTeamNameAskShape(t *testing.T) {
 	if n := len(rg.llm.calls()); n != 0 || r.ModelCalls != 0 {
 		t.Fatalf("soru LLM'siz olmalı: %d çağrı", n)
 	}
-	if p := rg.pending(t); p == nil || p.Kind != pendingKindDocOrEntity || p.Question != entTeam || p.Entity != bareEntityTeam {
-		t.Fatalf("bekleyen soru: %+v", p)
-	}
 }
 
 // TestBareTeamNameReplyDocs — "dokümanlarda" → ÖZGÜN ad tablo satırlarında.
 func TestBareTeamNameReplyDocs(t *testing.T) {
 	rg := newEntityDocRig(t)
 	rg.post(t, entTeamAsk, entTeamQ, entTeam)
-	ask := docOrEntityAskTR(bareEntityTeam, entTeam)
+	ask := entAsk
 	fr := rg.post(t, entTeamAsk, entTeamQ, entTeam, ask, "yüklü dokümanlarda ara")
 	r := lastRow(t, rg.rows())
 	if r.Tier != aisurface.TierDocRows || !strings.Contains(lastAnswerText(fr), "srvpay01") {
 		t.Fatalf("doküman seçildi: tier=%q cevap=%q", r.Tier, lastAnswerText(fr))
 	}
-	if m := replyTool(r); m["kind"] != pendingKindDocOrEntity || m["reply"] != entityReplyDocs {
+	if m := replyTool(r); m["kind"] != pendingKindSource || m["reply"] != srcExcel {
 		t.Fatalf("clarify_reply kaydı: %v", m)
 	}
 	if p := rg.pending(t); p != nil {
@@ -110,7 +120,7 @@ func TestBareTeamNameReplyEntity(t *testing.T) {
 		t.Run(reply, func(t *testing.T) {
 			rg := newEntityDocRig(t)
 			rg.post(t, entTeamAsk, entTeamQ, entTeam)
-			ask := docOrEntityAskTR(bareEntityTeam, entTeam)
+			ask := entAsk
 			fr := rg.post(t, entTeamAsk, entTeamQ, entTeam, ask, reply)
 			r := lastRow(t, rg.rows())
 			if r.Tier != aisurface.TierGuided || len(*rg.routes) == 0 || (*rg.routes)[len(*rg.routes)-1] != string(guidedTeamServices) {
@@ -119,7 +129,7 @@ func TestBareTeamNameReplyEntity(t *testing.T) {
 			if strings.Contains(lastAnswerText(fr), "srvpay01") {
 				t.Fatalf("tablo cevabı gelmemeli: %q", lastAnswerText(fr))
 			}
-			if m := replyTool(r); m["reply"] != entityReplyEntity {
+			if m := replyTool(r); m["reply"] != srcTelemetry {
 				t.Fatalf("clarify_reply kaydı: %v", m)
 			}
 			if p := rg.pending(t); p != nil {
@@ -134,7 +144,7 @@ func TestBareTeamNameReplyEntity(t *testing.T) {
 func TestBareTeamNameReplyUnrelatedDropped(t *testing.T) {
 	rg := newEntityDocRig(t)
 	rg.post(t, entTeamAsk, entTeamQ, entTeam)
-	ask := docOrEntityAskTR(bareEntityTeam, entTeam)
+	ask := entAsk
 	fr := rg.post(t, entTeamAsk, entTeamQ, entTeam, ask, "checkout sağlığı nasıl?")
 	for _, f := range fr {
 		if f.event == "step" && f.data["tool"] == clarifyReplyTool {
@@ -154,7 +164,7 @@ func TestBareTeamNameReplyUnrelatedDropped(t *testing.T) {
 func TestBareServiceNameAsks(t *testing.T) {
 	rg := newEntityDocRig(t)
 	fr := rg.post(t, "order-api")
-	if r := lastRow(t, rg.rows()); r.Tier != aisurface.TierClarify || lastAnswerText(fr) != docOrEntityAskTR(bareEntityService, "order-api") {
+	if r := lastRow(t, rg.rows()); r.Tier != aisurface.TierClarify || !strings.HasPrefix(lastAnswerText(fr), sourceLeadEntityTR(bareEntityService, "order-api")+" "+sourceAskHeadTR) {
 		t.Fatalf("servis sorusu: tier=%q cevap=%q", r.Tier, lastAnswerText(fr))
 	}
 }
@@ -168,10 +178,10 @@ func TestDocQuestionNotBareEntityUnchanged(t *testing.T) {
 	const q = "Payments-Core sunucuları hangi ortamda"
 	fr := rg.post(t, q)
 	if r := lastRow(t, rg.rows()); r.Tier != aisurface.TierClarify || strings.Contains(lastAnswerText(fr), "srvpay02") ||
-		!strings.Contains(lastAnswerText(fr), "Envanterden mi göstereyim") {
+		!strings.Contains(lastAnswerText(fr), entRowsAsk) {
 		t.Fatalf("doküman sorusu önce sorulmalı: tier=%q cevap=%q", r.Tier, lastAnswerText(fr))
 	}
-	if p := rg.pending(t); p == nil || p.Kind != pendingKindDocOrEntity {
+	if p := rg.pending(t); p == nil || p.Kind != pendingKindSource || p.Entity != "" {
 		t.Fatalf("bekleyen soru beklenir: %+v", p)
 	}
 	fr = rg.post(t, q, lastAnswerText(fr), "envanterden göster")
@@ -190,7 +200,7 @@ func TestDocQuestionNotBareEntityUnchanged(t *testing.T) {
 // TestBareEntityOf — SAF: çıplak varlık tanıma.
 // TestWikiNamedQuestionSkipsInventoryAsk — v0.10.2345 (operatör bulgusu: "wiki'de
 // dediğimde anlamıyor"): sözcükleri envanter tablosuyla eşleşen ama wiki'yi
-// ADIYLA anan soru "Envanterden mi göstereyim…" sorusuna ve tablo satırlarına
+// ADIYLA anan soru envanter eşleşmesi sorusuna ve tablo satırlarına
 // takılmaz; aynı sorunun wiki'siz hâli eskisi gibi önce sorar.
 func TestWikiNamedQuestionSkipsInventoryAsk(t *testing.T) {
 	for _, q := range []string{
@@ -201,15 +211,15 @@ func TestWikiNamedQuestionSkipsInventoryAsk(t *testing.T) {
 		rg := newEntityDocRig(t)
 		fr := rg.post(t, q)
 		ans := lastAnswerText(fr)
-		if strings.Contains(ans, "Envanterden mi göstereyim") || strings.Contains(ans, "srvpay02") {
+		if strings.Contains(ans, entRowsAsk) || strings.Contains(ans, "srvpay02") {
 			t.Fatalf("%q: wiki adıyla anılan soru envanter sorusuna / satırlarına gitmemeli: %q", q, ans)
 		}
-		if p := rg.pending(t); p != nil && p.Kind == pendingKindDocOrEntity {
+		if p := rg.pending(t); p != nil && p.Kind == pendingKindSource {
 			t.Fatalf("%q: bekleyen envanter sorusu olmamalı: %+v", q, p)
 		}
 	}
 	rg := newEntityDocRig(t)
-	if fr := rg.post(t, "Payments-Core sunucuları hangi ortamda"); !strings.Contains(lastAnswerText(fr), "Envanterden mi göstereyim") {
+	if fr := rg.post(t, "Payments-Core sunucuları hangi ortamda"); !strings.Contains(lastAnswerText(fr), entRowsAsk) {
 		t.Fatalf("wiki anılmayan doküman sorusu eskisi gibi önce sormalı: %q", lastAnswerText(fr))
 	}
 }
@@ -237,22 +247,25 @@ func TestBareEntityOf(t *testing.T) {
 }
 
 // TestClassifyDocOrEntityReply — SAF: cevap sınıfları; "evet" tek başına sınıf değil.
+// v0.10.2381 — yorumlayıcı tek (classifySourceChoice); bu tablo envanter /
+// telemetri seçenekli sorunun eski sözleşmesini korur.
 func TestClassifyDocOrEntityReply(t *testing.T) {
+	opts := []string{srcTelemetry, srcExcel}
 	for _, c := range []struct{ in, want string }{
-		{"dokümanlarda", entityReplyDocs},
-		{"yüklü dokümanlarda ara", entityReplyDocs},
-		{"tabloda bak", entityReplyDocs},
-		{"excel", entityReplyDocs},
-		{"takımın servislerini getir", entityReplyEntity},
-		{"servisin durumunu", entityReplyEntity},
-		{"Coremetry'de", entityReplyEntity},
+		{"dokümanlarda", srcExcel},
+		{"yüklü dokümanlarda ara", srcExcel},
+		{"tabloda bak", srcExcel},
+		{"excel", srcExcel},
+		{"takımın servislerini getir", srcTelemetry},
+		{"servisin durumunu", srcTelemetry},
+		{"Coremetry'de", srcTelemetry},
 		{"evet", ""},
 		{"tamam", ""},
 		{"takım dokümanı", ""},
 		{"checkout sağlığı nasıl?", ""},
 	} {
-		if got := classifyDocOrEntityReply(c.in); got != c.want {
-			t.Errorf("classifyDocOrEntityReply(%q) = %q, want %q", c.in, got, c.want)
+		if got := classifySourceChoice(c.in, opts); got != c.want {
+			t.Errorf("classifySourceChoice(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
@@ -282,14 +295,21 @@ func TestIsServiceHealthAsk(t *testing.T) {
 
 // TestDocsAskChips — v0.10.1942: bellek kapalı yolda çipli soru; /excel aynı
 // soruyu envanterden, /telemetri canlı veriden cevaplar.
+// v0.10.2381 — cümle TEK kaynak sorusu; çipler soru sırasıyla (telemetri,
+// wiki, envanter), keşfin diğer adayları etiketleriyle.
 func TestDocsAskChips(t *testing.T) {
 	var got map[string]any
-	docRowsAsk(func(ev string, v any) { got = v.(map[string]any) }, 3, []string{"payments-core", "srvpay01", "x"}, []string{"/telemetri · canlı veri", "/wiki · Runbook"})
-	if txt, _ := got["text"].(string); !strings.Contains(txt, "3 satırla") || !strings.Contains(txt, "payments-core, srvpay01") || strings.Contains(txt, ", x") {
+	(&Server{}).docRowsAsk(context.Background(), func(ev string, v any) { got = v.(map[string]any) }, "payments-core sunucuları", 3,
+		[]string{"payments-core", "srvpay01", "x"}, map[string]string{srcTelemetry: "canlı veri", srcWiki: "Runbook"})
+	txt, _ := got["text"].(string)
+	if !strings.Contains(txt, "3 satırla") || !strings.Contains(txt, "payments-core, srvpay01") || strings.Contains(txt, ", x") {
 		t.Fatalf("metin: %q", txt)
 	}
+	if want := sourceAskText(sourceLeadRowsTR(3, []string{"payments-core", "srvpay01", "x"}), []string{srcTelemetry, srcWiki, srcExcel}); txt != want {
+		t.Fatalf("metin tek kaynak sorusu olmalı:\n got %q\nwant %q", txt, want)
+	}
 	chips, _ := got["suggestions"].([]string)
-	if len(chips) != 3 || chips[0] != "/excel · 3 satır" || chips[1] != "/telemetri" || chips[2] != "/wiki · Runbook" {
+	if len(chips) != 3 || chips[0] != "/telemetri · canlı veri" || chips[1] != "/wiki · Runbook" || chips[2] != "/excel · 3 satır" {
 		t.Fatalf("çipler: %v", chips)
 	}
 }

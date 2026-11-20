@@ -90,10 +90,17 @@ const QuestionMaxOptions = 3
 // sorusunun (eksik tek alan, ör. hangi servis) seçenek tavanı.
 const QuestionSlotMaxOptions = 4
 
+// QuestionSourceMaxOptions — v0.10.2381: `source` sorusunun seçenek tavanı
+// (telemetri, wiki, envanter, exceptions, genel bilgi — yalnız var olanlar).
+const QuestionSourceMaxOptions = 5
+
 // QuestionMaxOptionsFor — türün seçenek tavanı.
 func QuestionMaxOptionsFor(kind string) int {
-	if kind == "slot" {
+	switch kind {
+	case "slot":
 		return QuestionSlotMaxOptions
+	case "source":
+		return QuestionSourceMaxOptions
 	}
 	return QuestionMaxOptions
 }

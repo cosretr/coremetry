@@ -218,15 +218,24 @@ export const QUESTION_KINDS = ['source', 'doc_or_entity', 'trace_synth', 'entity
 export const QUESTION_MAX_OPTIONS = 3;
 /** v0.10.2332 — `slot` (eksik tek alan) seçenek tavanı (Go uistream.QuestionSlotMaxOptions). */
 export const QUESTION_SLOT_MAX_OPTIONS = 4;
+/** v0.10.2381 — `source` (tek kaynak sorusu: telemetri, wiki, envanter, exceptions,
+ *  genel bilgi — yalnız var olanlar) seçenek tavanı (Go uistream.QuestionSourceMaxOptions). */
+export const QUESTION_SOURCE_MAX_OPTIONS = 5;
+/** Türün seçenek tavanı (Go uistream.QuestionMaxOptionsFor). */
+export function questionMaxOptionsFor(kind: unknown): number {
+  if (kind === 'slot') return QUESTION_SLOT_MAX_OPTIONS;
+  if (kind === 'source') return QUESTION_SOURCE_MAX_OPTIONS;
+  return QUESTION_MAX_OPTIONS;
+}
 
 /** v0.10.2102 — data-question → CosreQuestion; bilinmeyen kind, boş metin,
- *  0 ya da >3 seçenek, biçimsiz / yinelenen seçenek null (kart çizilmez; düz
+ *  0 ya da tavanı aşan (>3; slot >4, source >5) seçenek, biçimsiz / yinelenen seçenek null (kart çizilmez; düz
  *  metin soru balonda zaten var). */
 export function parseDataQuestion(p: { type: string; data?: unknown }): CosreQuestion | null {
   if (p.type !== 'data-question' || !isRecord(p.data)) return null;
   const { kind, text, options, allowFree } = p.data;
   if (!(QUESTION_KINDS as readonly unknown[]).includes(kind) || typeof text !== 'string' || !text || !Array.isArray(options)) return null;
-  if (options.length === 0 || options.length > (kind === 'slot' ? QUESTION_SLOT_MAX_OPTIONS : QUESTION_MAX_OPTIONS)) return null;
+  if (options.length === 0 || options.length > questionMaxOptionsFor(kind)) return null;
   const out: CosreQuestion['options'] = [];
   for (const o of options) {
     if (!isRecord(o) || typeof o.id !== 'string' || !o.id || typeof o.label !== 'string' || !o.label) return null;

@@ -78,25 +78,42 @@ func TestChatStreamGoldenV2Question(t *testing.T) {
 // metni bugünkü düz metinle AYNI; seçenek kimlikleri cevap sınıflarının ta
 // kendisi; her seçeneğin ETİKETİ serbest metin olarak yazılsa da aynı sınıfa
 // düşer (kart ile yazı aynı yere gider).
+// v0.10.2381 — seçenekler soruya göre: yalnız var olan kaynaklar, soru sırasıyla.
 func TestClarifyQuestionSource(t *testing.T) {
-	q, ok := clarifyQuestion(pendingKindSource, "", sourceAskTextTR)
+	opts := []string{srcGeneral, srcExcel, srcWiki, srcTelemetry}
+	text := sourceAskText("", opts)
+	q, ok := sourceClarifyQuestion(opts, text)
 	if !ok {
 		t.Fatal("source sorusu kart üretmedi")
 	}
-	want := questionPayload{Kind: "source", Text: sourceAskTextTR, AllowFree: true, Options: []questionOption{
-		{ID: sourceReplyTelemetry, Label: "Coremetry verisi"},
-		{ID: sourceReplyWiki, Label: "Wiki dokümanları"},
+	want := questionPayload{Kind: "source", Text: text, AllowFree: true, Options: []questionOption{
+		{ID: srcTelemetry, Label: "Telemetri"},
+		{ID: srcWiki, Label: "Wiki"},
+		{ID: srcExcel, Label: "Envanter"},
+		{ID: srcGeneral, Label: "Genel bilgi"},
 	}}
 	if !reflect.DeepEqual(q, want) {
 		t.Fatalf("got %+v\nwant %+v", q, want)
 	}
+	p := &chatPendingAsk{Kind: pendingKindSource, Options: opts}
 	for _, o := range q.Options {
-		if got := clarifyReplyClass(&chatPendingAsk{Kind: pendingKindSource}, o.Label); got != o.ID {
+		if got := clarifyReplyClass(p, o.Label); got != o.ID {
 			t.Errorf("etiket %q serbest metinde %q sınıfına düşüyor, seçenek %q", o.Label, got, o.ID)
 		}
 	}
-	if !slices.Contains(uistream.QuestionKinds, q.Kind) || len(q.Options) > uistream.QuestionMaxOptions {
+	if !slices.Contains(uistream.QuestionKinds, q.Kind) || len(q.Options) > uistream.QuestionMaxOptionsFor(q.Kind) {
 		t.Fatalf("kapalı küme / tavan ihlali: %+v", q)
+	}
+	// Bütün kaynaklar birlikte de tavanın içinde.
+	if n := len(sourceAskOrder); n > uistream.QuestionSourceMaxOptions {
+		t.Fatalf("kaynak sayısı %d kart tavanını (%d) aşıyor", n, uistream.QuestionSourceMaxOptions)
+	}
+	// Tek seçenek → kart yok (soru da yok).
+	if _, ok := sourceClarifyQuestion([]string{srcTelemetry}, "x"); ok {
+		t.Error("tek seçenekle kart üretildi")
+	}
+	if _, ok := sourceClarifyQuestion(opts, ""); ok {
+		t.Error("boş metinle kart üretildi")
 	}
 }
 
@@ -106,26 +123,31 @@ func TestClarifyQuestionUnknownKind(t *testing.T) {
 			t.Errorf("%q kart üretti", k)
 		}
 	}
-	if _, ok := clarifyQuestion(pendingKindSource, "", ""); ok {
+	if _, ok := clarifyQuestion(pendingKindTraceSynth, "", ""); ok {
 		t.Error("boş metinle kart üretildi")
 	}
 }
 
 func TestClarifyOptionClass(t *testing.T) {
-	src := &chatPendingAsk{Kind: pendingKindSource}
+	src := &chatPendingAsk{Kind: pendingKindSource, Options: []string{srcTelemetry, srcWiki, srcGeneral}}
+	legacy := &chatPendingAsk{Kind: pendingKindSource} // seçeneksiz eski soru: telemetri / wiki
 	cases := []struct {
 		p    *chatPendingAsk
 		opt  string
 		want string
 		ok   bool
 	}{
-		{src, sourceReplyWiki, sourceReplyWiki, true},
-		{src, sourceReplyTelemetry, sourceReplyTelemetry, true},
+		{src, srcWiki, srcWiki, true},
+		{src, srcTelemetry, srcTelemetry, true},
+		{src, srcGeneral, srcGeneral, true},
+		{src, srcExcel, "", false}, // sunulmayan kaynak
 		{src, "", "", false},
 		{src, "bilinmeyen", "", false},
 		{src, clarifyReplyDropped, "", false},
-		{nil, sourceReplyWiki, "", false},
-		{&chatPendingAsk{Kind: "nope"}, sourceReplyWiki, "", false},
+		{legacy, srcWiki, srcWiki, true},
+		{legacy, srcGeneral, "", false},
+		{nil, srcWiki, "", false},
+		{&chatPendingAsk{Kind: "nope"}, srcWiki, "", false},
 	}
 	for _, c := range cases {
 		got, ok := clarifyOptionClass(c.p, c.opt)
@@ -135,38 +157,32 @@ func TestClarifyOptionClass(t *testing.T) {
 	}
 }
 
-// v0.10.2103 (experience-audit D3) — doc_or_entity + trace_synth kartları.
-// Seçenek sırası sorunun cümlesindeki sırayla aynı; etiketler serbest metinde
-// de aynı sınıfa düşer.
+// v0.10.2103 (experience-audit D3) — trace_synth kartı. Etiketler serbest
+// metinde de aynı sınıfa düşer. v0.10.2381 — doc_or_entity kartı artık
+// yayılmaz (soru TEK kaynak sorusuna birleşti; TestClarifyQuestionSource).
 func TestClarifyQuestionDocOrEntityAndSynth(t *testing.T) {
-	cases := []struct {
-		kind, entity string
-		want         []questionOption
-	}{
-		{pendingKindDocOrEntity, bareEntityTeam, []questionOption{{ID: entityReplyEntity, Label: "Takımın servisleri"}, {ID: entityReplyDocs, Label: "Yüklü dokümanlar"}}},
-		{pendingKindDocOrEntity, bareEntityService, []questionOption{{ID: entityReplyEntity, Label: "Servisin durumu"}, {ID: entityReplyDocs, Label: "Yüklü dokümanlar"}}},
-		{pendingKindDocOrEntity, "", []questionOption{{ID: entityReplyDocs, Label: "Envanterden göster"}, {ID: entityReplyEntity, Label: "Canlı telemetri"}}},
-		{pendingKindTraceSynth, "", []questionOption{{ID: synthReplyYes, Label: "Evet, incele"}, {ID: synthReplyNo, Label: "Hayır"}}},
+	q, ok := clarifyQuestion(pendingKindTraceSynth, "", "soru?")
+	want := []questionOption{{ID: synthReplyYes, Label: "Evet, incele"}, {ID: synthReplyNo, Label: "Hayır"}}
+	if !ok || q.Kind != pendingKindTraceSynth || !q.AllowFree || !reflect.DeepEqual(q.Options, want) {
+		t.Fatalf("trace_synth → %+v %v", q, ok)
 	}
-	for _, c := range cases {
-		q, ok := clarifyQuestion(c.kind, c.entity, "soru?")
-		if !ok || q.Kind != c.kind || !q.AllowFree || !reflect.DeepEqual(q.Options, c.want) {
-			t.Errorf("%s/%s → %+v %v", c.kind, c.entity, q, ok)
-			continue
+	if !slices.Contains(uistream.QuestionKinds, q.Kind) || len(q.Options) > uistream.QuestionMaxOptions {
+		t.Errorf("kapalı küme / tavan ihlali: %+v", q)
+	}
+	for _, o := range q.Options {
+		if got := clarifyReplyClass(&chatPendingAsk{Kind: pendingKindTraceSynth}, o.Label); got != o.ID {
+			t.Errorf("etiket %q metinde %q, seçenek %q", o.Label, got, o.ID)
 		}
-		if !slices.Contains(uistream.QuestionKinds, q.Kind) || len(q.Options) > uistream.QuestionMaxOptions {
-			t.Errorf("kapalı küme / tavan ihlali: %+v", q)
-		}
-		for _, o := range q.Options {
-			if got := clarifyReplyClass(&chatPendingAsk{Kind: c.kind, Entity: c.entity}, o.Label); got != o.ID {
-				t.Errorf("%s/%s etiket %q metinde %q, seçenek %q", c.kind, c.entity, o.Label, got, o.ID)
-			}
-		}
+	}
+	if _, ok := clarifyQuestion("doc_or_entity", bareEntityTeam, "soru?"); ok {
+		t.Error("doc_or_entity kartı artık üretilmemeli")
+	}
+	if !slices.Contains(uistream.QuestionKinds, "doc_or_entity") {
+		t.Error("doc_or_entity arşivdeki eski kartlar için kapalı kümede kalmalı")
 	}
 }
 
 func TestClarifyOptionClassD3(t *testing.T) {
-	ent := &chatPendingAsk{Kind: pendingKindDocOrEntity, Entity: bareEntityTeam}
 	syn := &chatPendingAsk{Kind: pendingKindTraceSynth}
 	cases := []struct {
 		p    *chatPendingAsk
@@ -174,12 +190,9 @@ func TestClarifyOptionClassD3(t *testing.T) {
 		want string
 		ok   bool
 	}{
-		{ent, entityReplyDocs, entityReplyDocs, true},
-		{ent, entityReplyEntity, entityReplyEntity, true},
-		{ent, sourceReplyWiki, "", false},
 		{syn, synthReplyYes, synthReplyYes, true},
 		{syn, synthReplyNo, synthReplyNo, true},
-		{syn, entityReplyDocs, "", false},
+		{syn, srcExcel, "", false},
 		{&chatPendingAsk{Kind: pendingKindSource}, synthReplyYes, "", false},
 	}
 	for _, c := range cases {

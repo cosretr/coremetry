@@ -33,8 +33,8 @@ type questionPayload struct {
 // kimliği = cevap sınıfı (clarifyReplyClass'ın döndürdüğü değer); etiket
 // serbest metin olarak yazılsa da aynı sınıfa düşer (test pinler).
 //
-// v0.10.2103 (D3) — entity: doc_or_entity sorusunun varlık türü (team |
-// service | "" = envanter sorusu); etiketler ve sıra cümleye göre.
+// v0.10.2103 (D3) — entity: doc_or_entity sorusunun varlık türüydü; kaynak
+// sorusu v0.10.2381'dan beri sourceClarifyQuestion'da.
 func clarifyQuestion(kind, entity, text string) (questionPayload, bool) {
 	if text == "" {
 		return questionPayload{}, false
@@ -47,32 +47,42 @@ func clarifyQuestion(kind, entity, text string) (questionPayload, bool) {
 }
 
 // clarifyQuestionOptions — SAF: türün kapalı cevap kümesi (≤ uistream.QuestionMaxOptions).
+// Kaynak sorusunun seçenekleri soruya göre değişir (sourceClarifyQuestion);
+// v0.10.2381'dan beri doc_or_entity kartı YAYILMAZ (soru kaynak sorusuna
+// birleşti; tür yalnız arşivdeki eski kartlar için kapalı kümede durur).
 func clarifyQuestionOptions(kind, entity string) []questionOption {
 	switch kind {
-	case pendingKindSource:
-		return []questionOption{
-			{ID: sourceReplyTelemetry, Label: "Coremetry verisi"},
-			{ID: sourceReplyWiki, Label: "Wiki dokümanları"},
-		}
-	case pendingKindDocOrEntity: // v0.10.2103 (D3) — docOrEntityAskTR / docsAskTR sırası
-		docs := questionOption{ID: entityReplyDocs, Label: "Yüklü dokümanlar"}
-		switch entity {
-		case bareEntityTeam:
-			return []questionOption{{ID: entityReplyEntity, Label: "Takımın servisleri"}, docs}
-		case bareEntityService:
-			return []questionOption{{ID: entityReplyEntity, Label: "Servisin durumu"}, docs}
-		}
-		return []questionOption{{ID: entityReplyDocs, Label: "Envanterden göster"}, {ID: entityReplyEntity, Label: "Canlı telemetri"}}
 	case pendingKindTraceSynth: // v0.10.2103 (D3) — evet / hayır
 		return []questionOption{{ID: synthReplyYes, Label: "Evet, incele"}, {ID: synthReplyNo, Label: "Hayır"}}
 	}
 	return nil
 }
 
+// sourceClarifyQuestion — SAF (v0.10.2381): TEK kaynak sorusunun kartı.
+// Seçenek kimliği = kaynak türü (cevap sınıfının ta kendisi); etiket serbest
+// metin olarak yazılsa da aynı seçeneğe düşer (classifySourceChoice, test pinler).
+func sourceClarifyQuestion(opts []string, text string) (questionPayload, bool) {
+	opts = orderedSourceKinds(opts)
+	if text == "" || len(opts) < 2 {
+		return questionPayload{}, false
+	}
+	out := make([]questionOption, 0, len(opts))
+	for _, k := range opts {
+		out = append(out, questionOption{ID: k, Label: sourceOptionLabelTR(k)})
+	}
+	return questionPayload{Kind: pendingKindSource, Text: text, Options: out, AllowFree: true}, true
+}
+
 // clarifyOptionClass — SAF: kartın gönderdiği seçenek kimliği bekleyen sorunun
 // kümesindeyse o sınıf (birebir eşleme); değilse false → serbest metin yolu.
 func clarifyOptionClass(p *chatPendingAsk, option string) (string, bool) {
 	if p == nil || option == "" {
+		return "", false
+	}
+	if p.Kind == pendingKindSource { // v0.10.2381 — sunulan kaynaklar
+		if containsStr(pendingSourceOptions(p), option) {
+			return option, true
+		}
 		return "", false
 	}
 	for _, o := range clarifyQuestionOptions(p.Kind, p.Entity) {
@@ -90,6 +100,16 @@ func emitClarifyQuestion(ctx context.Context, emit func(string, any), kind, enti
 		return
 	}
 	if q, ok := clarifyQuestion(kind, entity, text); ok {
+		emit(chatQuestionEventKind, q)
+	}
+}
+
+// emitSourceQuestion — v0.10.2381: kaynak sorusunun kartı (yalnız v2).
+func emitSourceQuestion(ctx context.Context, emit func(string, any), opts []string, text string) {
+	if !cosreV2Marked(ctx) {
+		return
+	}
+	if q, ok := sourceClarifyQuestion(opts, text); ok {
 		emit(chatQuestionEventKind, q)
 	}
 }

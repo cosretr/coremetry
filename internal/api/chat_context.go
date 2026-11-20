@@ -61,6 +61,13 @@ type ChatContext struct {
 	// CodeSticky gibi çalışma kümesi DEĞİLDİR (Empty / çip / önsöz görmez);
 	// sonraki tur onu okur ve siler, 10 dk'dan eskisi yok sayılır.
 	Pending *chatPendingAsk `json:"pending,omitempty"`
+	// SourceChoice — v0.10.2381 (chat_source_ask.go): kullanıcının kaynak
+	// sorusuna verdiği son cevap. Aynı soruyu doğuracak sonraki tur 30 dk
+	// boyunca sormadan bu kaynağa gider. Pending gibi çalışma kümesi DEĞİLDİR.
+	SourceChoice *chatSourceChoice `json:"sourceChoice,omitempty"`
+	// GeneralAt — v0.10.2381: son cevap genel bilgi cevabıydı (unix ns). Hemen
+	// sonraki serbest metin turu okur ve siler (genel sohbetin devamı kararı).
+	GeneralAt int64 `json:"generalAt,omitempty"`
 	// Trace / Operation — v0.10.2138 (router boşlukları D5, YALNIZ v2 yazar;
 	// chat_context_subject.go): önceki turun trace'i (32-hex) ve operasyon /
 	// endpoint hedefi. Devam sorusu ("bu trace'te", "bu operasyon") ekranda

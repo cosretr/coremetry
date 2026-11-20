@@ -440,14 +440,17 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 	// isteyen bir niyet seçip servis slotunu sorudaki sıradan bir kelimeyle
 	// doldurunca yakın ad eşleşmesi alakasız servisleri soruyordu. Soruda tam
 	// servis adı da, telemetri işareti de yoksa bu "hangi servis" sorusu
-	// tek başına sorulmaz: soruya "genel bilgi" seçeneği eklenir (kullanıcı seçer).
-	if matched && route.Intent == guidedAskService && len(route.ServiceOptions) > 0 && generalKnowledgeShape(question, svcNames, s.guidedEnvNames(ctx)) {
-		route.GeneralAlt = true
+	// tek başına sorulmaz: kullanıcı seçer.
+	// v0.10.2381 — bu soru da TEK kaynak sorusu (chat_source_ask.go): "nerede
+	// arayayım: telemetride, wikide, envanterde; yoksa genel bilgi olarak mı".
+	sourceAlt := matched && route.Intent == guidedAskService && len(route.ServiceOptions) > 0 && generalKnowledgeShape(question, svcNames, s.guidedEnvNames(ctx))
+	if sourceAlt {
 		vetoNote = " · genel bilgi seçeneği: telemetri işareti yok"
 	}
+	offTopicVetoed := false
 	if matched && route.Intent == guidedOffTopic {
 		if why, vetoed := offTopicVetoFor(question, svcNames, s.guidedEnvNames(ctx), s.guidedTeamNames(ctx), cosreV2Marked(ctx)); vetoed {
-			route, matched = guidedRoute{}, false
+			route, matched, offTopicVetoed = guidedRoute{}, false, true
 			vetoNote = " · off_topic vetosu: " + why
 		} else if why != "" { // v0.10.2123 — yalnız v2: genel sözcük vetosu uygulanmadı
 			vetoNote = " · off_topic vetosu uygulanmadı (genel sözcük): " + why
@@ -463,6 +466,16 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 			"bytes": len(text), "durationMs": time.Since(t0).Milliseconds(),
 		})
 	}
+	if sourceAlt {
+		// Soru basıldıysa ya da hatırlanan kaynak cevapladıysa tur biter; aksi
+		// hâlde (tek seçenek, kaynak zaten seçilmiş) olağan "hangi servis" sorusu.
+		h, hok, done, semit := s.intentSourceAsk(ctx, emit, msgs, sourceAskSite{Route: "service_or_general_ask", Question: question,
+			Lead: sourceLeadServiceTR(route.ServiceOptions)})
+		if done {
+			return h, hok
+		}
+		emit = semit
+	}
 	if !matched {
 		// Router boşluk raporu (chstore.RouterGaps) serbest döngüye düşen
 		// soruları surface='chat' ile sayar; on_no_loop'ta o satır hiç
@@ -471,6 +484,14 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 		s.copilot.RecordUsage(copilot.WithMeta(ctx, copilot.CallMeta{Surface: "chat-intent-none", UserID: m.UserID, UserEmail: m.UserEmail,
 			ExchangeID: aisurface.ChildExchangeID(m.ExchangeID, aisurface.ChatIntentNone)}), t0, // v0.10.1153 — turun altında
 			0, 0, 0, "ok", "", question, strings.TrimSpace(raw))
+		// v0.10.2381 — hiçbir kaynakta kanıt yok ve soru ne genel ne telemetri
+		// biçiminde: sessizce tek yola düşmek yerine kaynak sorulur
+		// (shouldAskUnknownSource; ana sohbet dışında / kaynak seçilmişse kapalı).
+		h, hok, done, semit := s.unknownSourceAsk(ctx, emit, msgs, question, offTopicVetoed)
+		if done {
+			return h, hok
+		}
+		emit = semit
 		if mode != copilot.IntentOnNoLoop {
 			return false, false
 		}
@@ -519,6 +540,7 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 		}
 		ans := map[string]any{"text": text, "suggestions": intentNoneSuggestions(ctxService)}
 		if general {
+			chatContextFromCtx(ctx).noteGeneral(time.Now())        // v0.10.2381 — devam sorusu genel sohbeti sürdürür (chat_source_ask.go)
 			verifyTurnFrom(ctx).setAnswer(verifyTierGeneral, graw) // v0.10.2327 — E1 gölge: canlı veri beklenmez
 			// Model metni oylanabilir (exchangeId = sohbetin kendi alışverişi;
 			// sınıflandırma çağrısı exchange'siz kalmaya devam eder, #2).

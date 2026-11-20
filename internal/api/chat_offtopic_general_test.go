@@ -242,7 +242,7 @@ func TestOffTopicGeneralRoutingTable(t *testing.T) {
 }
 
 // Genel cevap çağrısına araç SUNULMAZ; sistem mesajı OffTopicGeneral istemi,
-// kullanıcı mesajı yalnız soru (RAG/wiki/telemetri bloğu yok); Derin kip yok sayılır.
+// kullanıcı mesajı yalnız soru (RAG/wiki/telemetri bloğu yok).
 func TestOffTopicGeneralOffersNoTools(t *testing.T) {
 	setGeneralQuestions(t, true)
 	l := newOffTopicLLM(t, "off_topic")
@@ -273,13 +273,46 @@ func TestOffTopicGeneralOffersNoTools(t *testing.T) {
 	if u, _ := msgs[1].(map[string]any)["content"].(string); u != offTopicCapitalQ {
 		t.Errorf("kullanıcı mesajı yalnız soru olmalı: %q", u)
 	}
-	// Derin kip yok sayılır: bütçe Derin'siz bir çağrınınkiyle aynı.
-	l2 := newOffTopicLLM(t, "off_topic")
-	s2, _ := offTopicTestServer(t, l2)
-	_, emit2 := collectEmit()
-	s2.guidedOffTopicDispatch(copilot.WithMeta(context.Background(), copilot.CallMeta{ExchangeID: "xplain"}), emit2, nil, offTopicCapitalQ, "")
-	if a, b := st[0]["max_tokens"], l2.streams()[0]["max_tokens"]; !reflect.DeepEqual(a, b) {
-		t.Errorf("Derin kip genel cevabın bütçesini değiştirmemeli: deep=%v plain=%v", a, b)
+}
+
+// v0.10.2381 (operatör, 2026-11-19: "free format da chat yapabilsinler") —
+// genel cevap Derin kipi artık YOK SAYMAZ: kullanıcı Derin'i açtıysa çağrının
+// completion bütçesi Derin bütçesidir; kapalıyken profilin tabanı (bayt aynı).
+// Geniş pencereli model gerekir: gemma4'te pencere tavanı Derin çarpanını yutar.
+func TestOffTopicGeneralHonoursDeepMode(t *testing.T) {
+	setGeneralQuestions(t, true)
+	run := func(deep bool) (int, *Server) {
+		l := newOffTopicLLM(t, "off_topic")
+		cop := copilot.New(copilot.ProviderOpenAI, "test-key", "qwen38-flash-next")
+		cop.Configure(copilot.ProviderOpenAI, "test-key", "qwen38-flash-next", l.srv.URL, false, true)
+		s := &Server{copilot: cop, cache: &ctxMemCache{m: map[string][]byte{}}}
+		ctx := copilot.WithMeta(context.Background(), copilot.CallMeta{ExchangeID: "xdeep"})
+		if deep {
+			ctx = copilot.WithDeepAnswer(ctx)
+		}
+		_, emit := collectEmit()
+		if h, ok := s.guidedOffTopicDispatch(ctx, emit, nil, offTopicCapitalQ, ""); !h || !ok {
+			t.Fatal("cevaplanmalı")
+		}
+		st := l.streams()
+		if len(st) != 1 {
+			t.Fatalf("tek akış çağrısı bekleniyordu: %d", len(st))
+		}
+		mt, _ := st[0]["max_tokens"].(float64)
+		return int(mt), s
+	}
+	plain, s := run(false)
+	deep, _ := run(true)
+	base := s.copilot.MaxTokensFor(context.Background())
+	want := s.copilot.MaxTokensFor(copilot.WithDeepAnswer(context.Background()))
+	if want <= base {
+		t.Fatalf("ön koşul: bu modelde Derin bütçesi tabandan büyük olmalı (taban %d, Derin %d)", base, want)
+	}
+	if plain != base {
+		t.Errorf("Derin kapalıyken bütçe profilin tabanı olmalı: %d, taban %d", plain, base)
+	}
+	if deep != want {
+		t.Errorf("Derin açıkken genel cevap Derin bütçesiyle gitmeli: %d, beklenen %d", deep, want)
 	}
 }
 

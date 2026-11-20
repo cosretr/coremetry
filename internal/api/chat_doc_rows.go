@@ -346,11 +346,28 @@ func (s *Server) docRowsAnswer(ctx context.Context, emit func(string, any), msgs
 	}
 	// v0.10.1942 (operatör: "envanterde direkt cevap dönmesin önce sorsun") —
 	// kullanıcı envanteri seçmediyse satırlar basılmaz, önce sorulur.
+	// v0.10.2381 — soru TEK kaynak sorusu (chat_source_ask.go): ana sohbette düz
+	// metin + bekleyen soru (cevap serbest metinle), kullanıcı kaynağı bu
+	// konuşmada az önce seçtiyse sormadan o kaynak; bellek yoksa çipli soru.
+	var alts []string
 	if !docsConfirmed(ctx) {
-		docRowsAsk(emit, len(rows), vals, nil)
-		return true, true
+		labels := map[string]string{srcExcel: fmt.Sprintf("%d satır", len(rows))}
+		res := s.sourceAskOrReuse(ctx, emit, chatContextFromCtx(ctx), sourceAskSite{Route: "doc_or_entity_ask", Question: q,
+			Lead: sourceLeadRowsTR(len(rows), vals), Avail: s.sourceAvail(ctx, q, true), Labels: labels})
+		switch {
+		case res.Asked:
+			return true, true
+		case res.Reuse == srcExcel:
+			alts = sourceAltChips(res.Opts, srcExcel, labels)
+		case res.Reuse != "":
+			r := s.routeSourceChoice(ctx, emit, msgs, res.Reuse, q, sourceAltChips(res.Opts, res.Reuse, labels))
+			return r.handled, r.ok // telemetri: bu kademe çekilir, zincir sürer
+		default: // bu turda kaynak zaten soruldu / seçildi: satırlar yine seçilmeden basılmaz
+			s.docRowsAsk(ctx, emit, q, len(rows), vals, nil)
+			return true, true
+		}
 	}
-	s.docRowsEmit(withRecordsQuestion(ctx, q), emit, rows, vals, nil)
+	s.docRowsEmit(withRecordsQuestion(ctx, q), emit, rows, vals, alts)
 	return true, true
 }
 

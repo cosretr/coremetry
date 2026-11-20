@@ -230,7 +230,7 @@ func (s *Server) guidedDisambigProbe(ctx context.Context, question string) (text
 	}
 	switch route.Intent {
 	case guidedAskService:
-		return askServiceRouteTR(route), guidedSuggestions(route), nil, true
+		return askServiceAnswerTR(route.ServiceOptions), guidedSuggestions(route), nil, true
 	case guidedFindEntity:
 		return renderFindEntityAsk(route.FindQuery, route.ServiceOptions), guidedSuggestions(route), nil, true
 	}

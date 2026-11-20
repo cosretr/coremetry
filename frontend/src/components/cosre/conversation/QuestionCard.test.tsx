@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 // QuestionCard.test — v0.10.2102 (docs/cosre/experience-audit.md D2).
-// Sözleşme: data-question ≤3 seçenekli kapalı soru; kart etkinse tık
+// Sözleşme: data-question ≤3 (slot ≤4, source ≤5) seçenekli kapalı soru; kart etkinse tık
 // seçeneği verir, pasifse düğmeler kapalı ve seçilen aria-pressed. Biçimsiz
 // yük kart çizdirmez (düz metin soru balonda kalır).
 import { readFileSync } from 'node:fs';
@@ -15,7 +15,7 @@ import { QuestionCard } from './QuestionCard';
 import { questionOf, withClarifyOption } from './question';
 
 const Q: CosreQuestion = { kind: 'source', text: 'Coremetry mi wiki mi?', allowFree: true, options: [
-  { id: 'telemetri', label: 'Coremetry verisi' }, { id: 'wiki', label: 'Wiki dokümanları' },
+  { id: 'telemetri', label: 'Telemetri' }, { id: 'wiki', label: 'Wiki' },
 ] };
 const opt = (id: string) => ({ id, label: id });
 
@@ -37,7 +37,11 @@ describe('parseDataQuestion', () => {
     [{ type: 'data-question', data: { ...Q, kind: 'later' } }, null],
     [{ type: 'data-question', data: { ...Q, text: '' } }, null],
     [{ type: 'data-question', data: { ...Q, options: [] } }, null],
-    [{ type: 'data-question', data: { ...Q, options: ['a', 'b', 'c', 'd'].map(opt) } }, null],
+    [{ type: 'data-question', data: { ...Q, kind: 'trace_synth', options: ['a', 'b', 'c', 'd'].map(opt) } }, null],
+    // v0.10.2381 — tek kaynak sorusu var olan kaynakları sayar: ≤5 seçenek.
+    [{ type: 'data-question', data: { ...Q, options: ['telemetri', 'wiki', 'excel', 'exceptions', 'genel'].map(opt) } },
+      { ...Q, options: ['telemetri', 'wiki', 'excel', 'exceptions', 'genel'].map(opt) }],
+    [{ type: 'data-question', data: { ...Q, options: ['a', 'b', 'c', 'd', 'e', 'f'].map(opt) } }, null],
     [{ type: 'data-question', data: { ...Q, options: [opt('a'), opt('a')] } }, null],
     [{ type: 'data-question', data: { ...Q, options: [{ id: 'a', label: '' }] } }, null],
     [{ type: 'data-pick', data: { ...Q } }, null],
@@ -51,6 +55,7 @@ describe('parseDataQuestion', () => {
     expect(m?.[1].split(',').map(s => s.trim().replace(/"/g, ''))).toEqual([...QUESTION_KINDS]);
     expect(part).toMatch(/QuestionMaxOptions = 3\b/);
     expect(part).toMatch(/QuestionSlotMaxOptions = 4\b/); // v0.10.2332
+    expect(part).toMatch(/QuestionSourceMaxOptions = 5\b/); // v0.10.2381
   });
 });
 
@@ -86,7 +91,7 @@ describe('QuestionCard', () => {
     const onAnswer = vi.fn();
     const el = await draw(<QuestionCard question={Q} onAnswer={onAnswer} />);
     const btns = [...el.querySelectorAll<HTMLButtonElement>('[data-question-option]')];
-    expect(btns.map(b => b.textContent)).toEqual(['Coremetry verisi', 'Wiki dokümanları']);
+    expect(btns.map(b => b.textContent)).toEqual(['Telemetri', 'Wiki']);
     expect(el.textContent).not.toContain(Q.text);
     expect(el.querySelector('[role="group"]')!.getAttribute('aria-label')).toBe(Q.text);
     await act(async () => { btns[1].click(); });

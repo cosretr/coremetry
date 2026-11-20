@@ -182,7 +182,7 @@ func TestContextSubjectPatches(t *testing.T) {
 // olarak akar. Kısa ret ("hayır gerek yok") trace sentez sorusunun cevabıdır.
 func TestClarifyLongNegativeSentenceIsNotConsumed(t *testing.T) {
 	long := "Hayır. bu trace altında giden db çağrılarını listele"
-	for _, kind := range []string{pendingKindTraceSynth, pendingKindSource, pendingKindDocOrEntity} {
+	for _, kind := range []string{pendingKindTraceSynth, pendingKindSource} {
 		p := &chatPendingAsk{Kind: kind, Question: "svc-a hataları", AskedAt: time.Now().UnixNano()}
 		if got := clarifyReplyClass(p, long); got != clarifyReplyDropped {
 			t.Errorf("%s: uzun 'Hayır. …' cümlesi cevap sayıldı (%q)", kind, got)

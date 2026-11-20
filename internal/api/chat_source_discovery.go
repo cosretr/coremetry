@@ -17,7 +17,8 @@ package api
 // Karar SAF (pickChatSource): en güçlü kanıt cevaplar; kanıtı olan diğerleri
 // cevabın altında "/<kaynak> · <kanıt>" çipi olur (çip = eğik komut, chat_scope;
 // argümansız komut önceki soruyu kullanır). İki kaynak güçlü ve başa baş →
-// "Hangi kaynaktan?" sorusu + çipler. Tek kaynak → bugünkü zincir AYNEN (yalnız
+// kaynak sorusu (v0.10.2381: TEK kaynak sorusu, chat_source_ask.go — düz metin,
+// cevap serbest metinle; bellek yoksa çipler). Tek kaynak → bugünkü zincir AYNEN (yalnız
 // exceptions'ın kendi cevabı yeni). Kanıt yok → zincir aynen (sonunda genel
 // bilgi). Kapı: ai.generalQuestions.sourceDiscovery (nil = açık); panel /
 // çekmece / trace bağlamında koşmaz (wikiTierAllowed).
@@ -239,7 +240,9 @@ func (s *Server) sourceDiscoveryEnabled(tc wikiTierContext) bool {
 // chatSourceDiscoveryTier — keşif kademesi. handled=true → cevap basıldı.
 // handled=false → zincir sürer; emitOut alternatif çiplerini cevaba ekler,
 // skipDocs=true → kazanan telemetri: tablo / wiki kademeleri atlanır.
-func (s *Server) chatSourceDiscoveryTier(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, tc wikiTierContext) (handled, ok bool, emitOut func(string, any), skipDocs bool) {
+// tier (v0.10.2381): cevaplayan kademe ("" = discovery; başa başta kaynak
+// sorusu clarify, hatırlanan seçim o kaynağın kademesi).
+func (s *Server) chatSourceDiscoveryTier(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, tc wikiTierContext) (handled, ok bool, emitOut func(string, any), skipDocs bool, tier string) {
 	emitOut = emit
 	if !s.sourceDiscoveryEnabled(tc) {
 		return
@@ -251,7 +254,11 @@ func (s *Server) chatSourceDiscoveryTier(ctx context.Context, emit func(string, 
 	if wikiNamedCue(q) {
 		return // v0.10.2345 — kullanıcı wiki'yi adıyla istedi: keşif araya girmez (chat_wiki_tier.go)
 	}
+	if docsConfirmed(ctx) {
+		return // v0.10.2381 — kullanıcı envanteri adıyla istedi: satır kademesi cevaplar (chat_source_ask.go)
+	}
 	cands := s.discoverChatSources(ctx, q)
+	sourceTurnFrom(ctx).noteDiscovery(len(cands)) // v0.10.2381 — "hiçbir kaynakta kanıt yok" kararının girdisi
 	if len(cands) == 0 {
 		return
 	}
@@ -261,17 +268,13 @@ func (s *Server) chatSourceDiscoveryTier(ctx context.Context, emit func(string, 
 		emitGuidedContextStep(emit, discoverStepLabel(cands))
 	}
 	if len(choice.Tie) > 0 {
-		names := make([]string, 0, len(choice.Tie))
-		for _, c := range choice.Tie {
-			names = append(names, "**"+sourceKindTR(c.Kind)+"** ("+c.Label+")")
-		}
-		emit("answer", map[string]any{
-			"text":        "Bu soru için birden çok kaynakta güçlü kanıt buldum: " + strings.Join(names, ", ") + ". Hangisinden cevaplayayım?",
-			"suggestions": sourceChips(choice.Tie),
-		})
-		return true, true, emit, false
+		return s.discoveryTieAsk(ctx, emit, msgs, q, choice.Tie)
 	}
 	w := choice.Winner
+	// v0.10.2381 — başka bir kaynak açıkça öndeyse hatırlanan seçim biter.
+	if st := chatContextFromCtx(ctx); st != nil && st.ctx.SourceChoice != nil && !sourceChoiceSurvives(st.ctx.SourceChoice.Kind, w.Kind, w.Score) {
+		st.dropSourceChoice()
+	}
 	alts := sourceChips(choice.Alts)
 	switch w.Kind {
 	case srcExcel:
@@ -279,11 +282,15 @@ func (s *Server) chatSourceDiscoveryTier(ctx context.Context, emit func(string, 
 			return // tek kaynak: sıkı satır kademesi (v0.10.1942: önce sorar)
 		}
 		// v0.10.1942 (operatör: "envanterde direkt cevap dönmesin önce sorsun").
-		docRowsAsk(emit, len(w.rows), w.vals, alts)
-		return true, true, emit, false
+		labels := map[string]string{}
+		for _, c := range choice.Alts {
+			labels[c.Kind] = c.Label
+		}
+		s.docRowsAsk(ctx, emit, q, len(w.rows), w.vals, labels)
+		return true, true, emit, false, ""
 	case srcExceptions:
 		s.exceptionsSourceAnswer(ctx, emit, w.exTerm, w.exEv, alts)
-		return true, true, emit, false
+		return true, true, emit, false, ""
 	case srcWiki:
 		if len(alts) == 0 {
 			return
@@ -291,16 +298,42 @@ func (s *Server) chatSourceDiscoveryTier(ctx context.Context, emit func(string, 
 		ew := emitWithAltSources(emit, alts)
 		h, wok := s.wikiProbeAnswer(ctx, ew, wikiKB(), msgs, q)
 		if h {
-			return true, wok, emit, false
+			return true, wok, emit, false, ""
 		}
-		return false, false, ew, false
+		return false, false, ew, false, ""
 	case srcTelemetry:
 		if len(alts) == 0 {
 			return
 		}
-		return false, false, emitWithAltSources(emit, alts), true
+		return false, false, emitWithAltSources(emit, alts), true, ""
 	}
 	return
+}
+
+// discoveryTieAsk — v0.10.2381: iki kaynak güçlü ve başa baş → TEK kaynak
+// sorusu (bağlam cümlesi adayları sayar). Hatırlanan seçim varsa sormadan o
+// kaynaktan; bekleyen soru saklanamıyorsa aynı cümle eğik komut çipleriyle.
+func (s *Server) discoveryTieAsk(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, q string, tie []srcCand) (handled, ok bool, emitOut func(string, any), skipDocs bool, tier string) {
+	avail := s.sourceAvail(ctx, q, false)
+	labels := map[string]string{}
+	for _, c := range tie {
+		labels[c.Kind] = c.Label
+		switch c.Kind { // kanıtı bulunan kaynak sunulur
+		case srcExcel:
+			avail.Inventory = true
+		case srcWiki:
+			avail.Wiki = true
+		case srcExceptions:
+			avail.Exceptions = true
+		}
+	}
+	res := s.sourceAskOrReuse(ctx, emit, chatContextFromCtx(ctx), sourceAskSite{Route: "source_tie_ask", Question: q,
+		Lead: sourceLeadTieTR(tie), Avail: avail, Labels: labels})
+	r := s.finishSourceAsk(ctx, emit, msgs, q, labels, res)
+	if r.handled {
+		return true, r.ok, emit, false, r.tier
+	}
+	return false, false, r.emit, r.skipDocs, ""
 }
 
 // emitWithAltSources — "answer" olayına alternatif kaynak çiplerini ekler
@@ -427,6 +460,9 @@ func previousUserQuestion(msgs []copilot.ChatMessage) string {
 		}
 		_, rest := cleanScopedQuestion(msgs[i].Text)
 		if rest = strings.TrimSpace(rest); rest != "" && !strings.HasPrefix(rest, "·") {
+			if i > 0 && msgs[i-1].Role != "user" && isSourceAskText(msgs[i-1].Text) && classifySourceChoice(rest, sourceAskOrder) != "" {
+				continue // v0.10.2381 — kaynak sorusunun cevabı ("wiki", "envanterden bak") soru değildir
+			}
 			return rest
 		}
 	}
@@ -505,6 +541,7 @@ func (s *Server) generalSourceAnswer(ctx context.Context, question string, ans m
 	}
 	ans["text"] = generalSourceNoteTR + "\n\n" + strings.TrimSpace(raw)
 	ans["exchangeId"] = copilot.MetaFromContext(ctx).ExchangeID
+	chatContextFromCtx(ctx).noteGeneral(time.Now()) // v0.10.2381 — devam sorusu genel sohbeti sürdürür
 	return true
 }
 

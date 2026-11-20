@@ -194,23 +194,24 @@ func TestGeneralKnowledgeShape(t *testing.T) {
 
 // v0.10.2347 — belirsiz durumda kullanıcıya sorulur: servis sorusuna "genel
 // bilgi", envanter sorusuna "wiki" ve "genel bilgi" seçenekleri eklenir.
+// v0.10.2381 — iki soru da TEK kaynak sorusu (chat_source_ask.go): servis
+// adayları bağlam cümlesinde, seçenekler var olan kaynaklar; bellek yoksa
+// aynı cümle eğik komut çipleriyle (envanter sorusunda satır sayısı çipte).
 func TestGeneralAltAsk(t *testing.T) {
-	r := guidedRoute{Intent: guidedAskService, ServiceOptions: []string{"payments-virtualpos-prod"}, GeneralAlt: true}
-	if txt := askServiceRouteTR(r); !strings.Contains(txt, "genel bilgi") || !strings.Contains(txt, "payments-virtualpos-prod") {
+	opts := []string{srcTelemetry, srcWiki, srcExcel, srcGeneral}
+	txt := sourceAskText(sourceLeadServiceTR([]string{"payments-virtualpos-prod"}), opts)
+	if !strings.Contains(txt, "genel bilgi olarak") || !strings.Contains(txt, "payments-virtualpos-prod") || !strings.Contains(txt, sourceAskHeadTR) {
 		t.Fatalf("metin: %q", txt)
 	}
-	chips := guidedSuggestions(r)
-	if len(chips) == 0 || chips[len(chips)-1] != "/genel" {
+	if chips := sourceAltChips(opts, "", nil); len(chips) == 0 || chips[len(chips)-1] != "/genel" {
 		t.Fatalf("son çip /genel olmalı: %v", chips)
 	}
-	r.GeneralAlt = false
-	if txt := askServiceRouteTR(r); strings.Contains(txt, "genel bilgi") {
-		t.Fatalf("bayraksız eski metin beklenir: %q", txt)
+	if txt := askServiceAnswerTR([]string{"payments-virtualpos-prod"}); strings.Contains(txt, "genel bilgi") {
+		t.Fatalf("kaynak seçilmişken olağan servis sorusu beklenir: %q", txt)
 	}
-	var got map[string]any
-	docRowsAskGeneral(func(_ string, v any) { got = v.(map[string]any) }, 45, []string{"opentelemetry"})
-	c := got["suggestions"].([]string)
-	if len(c) != 3 || c[1] != "/wiki" || c[2] != "/genel" || !strings.Contains(got["text"].(string), "wiki'de mi arayayım") {
-		t.Fatalf("envanter sorusu üç seçenek: %v %q", c, got["text"])
+	c := sourceAltChips(opts, "", map[string]string{srcExcel: "45 satır"})
+	rows := sourceAskText(sourceLeadRowsTR(45, []string{"opentelemetry"}), opts)
+	if len(c) != 4 || c[1] != "/wiki" || c[2] != "/excel · 45 satır" || c[3] != "/genel" || !strings.Contains(rows, "45 satırla eşleşiyor (opentelemetry). "+sourceAskHeadTR) {
+		t.Fatalf("envanter sorusu: %v %q", c, rows)
 	}
 }

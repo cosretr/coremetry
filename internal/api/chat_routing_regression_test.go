@@ -339,15 +339,15 @@ var routingRegressionRows = []routingRow{
 		q: "ekibinin açık problemleri neler", wantTier: aisurface.TierGuided, wantRoute: string(guidedMyProblems)},
 
 	// v0.10.1571 — düz metin kaynak sorusu (chat_clarify.go): telemetri şekilli,
-	// guided'a oturmayan soru wiki kuruluyken yalnız "Coremetry mi, wiki mi?"
-	// sorusunu alır (LLM'siz, çip yok). Açık wiki sorusu ve guided'a oturan soru
-	// eskisi gibi.
+	// guided'a oturmayan soru wiki kuruluyken yalnız kaynak sorusunu alır
+	// (LLM'siz, çip yok; v0.10.2381'dan beri TEK kaynak sorusu, chat_source_ask.go).
+	// Açık wiki sorusu ve guided'a oturan soru eskisi gibi.
 	{release: "v0.10.1571", name: "belirsiz telemetri sorusu + wiki → kaynak sorusu (düz metin)",
 		q: "servis sahipliği kimde", setup: withRoutingWiki,
-		wantTier: aisurface.TierClarify, wantRoute: "source_ask", noLLM: true, ansPrefix: sourceAskTextTR},
+		wantTier: aisurface.TierClarify, wantRoute: "source_ask", noLLM: true, ansPrefix: sourceAskHeadTR},
 	{release: "komşu v0.10.1571", name: "açık wiki sorusu + wiki → wiki kademesi (soru sorulmaz)",
 		q: "servis sahipliği runbook'u nedir", setup: withRoutingWiki,
-		wantTier: aisurface.TierWiki, ansNot: []string{sourceAskTextTR}},
+		wantTier: aisurface.TierWiki, ansNot: []string{sourceAskHeadTR}},
 	{release: "komşu v0.10.1571", name: "takımının servisleri + wiki → my_services (1569 kalır)",
 		q: "takımının servisleri nasıl?", setup: withRoutingWiki,
 		wantTier: aisurface.TierGuided, wantRoute: string(guidedMyServices)},
@@ -362,14 +362,14 @@ var routingRegressionRows = []routingRow{
 	{release: "v0.10.1576", name: "çıplak takım adı + tabloda eşleşme → doc_or_entity sorusu",
 		q: "Payments-Core", setup: withRoutingDocTeam(true),
 		wantTier: aisurface.TierClarify, wantRoute: "doc_or_entity_ask", noLLM: true,
-		ansPrefix: docOrEntityAskTR(bareEntityTeam, "Payments-Core"), ansNot: []string{"srvpay01"}},
+		ansPrefix: sourceLeadEntityTR(bareEntityTeam, "Payments-Core") + " " + sourceAskHeadTR, ansNot: []string{"srvpay01"}},
 	// v0.10.1942 (operator-reported) — envanter doğrudan cevap dönmez: çıplak
 	// olmayan doküman sorusu da önce sorulur; servis sağlığı sorusu envantere
 	// hiç gitmez (telemetri).
 	{release: "v0.10.1942", name: "çıplak olmayan doküman sorusu → önce sorar (envanter mi, telemetri mi)",
 		q: "Payments-Core sunucuları hangi ortamda", setup: withRoutingDocTeam(true),
 		wantTier: aisurface.TierClarify, wantRoute: "doc_or_entity_ask", noLLM: true,
-		ansPrefix: docsAskTR(1, []string{"payments-core"}), ansNot: []string{"srvpay01"}},
+		ansPrefix: sourceLeadRowsTR(1, []string{"payments-core"}) + " " + sourceAskHeadTR, ansNot: []string{"srvpay01"}},
 	{release: "v0.10.1942", name: "takımın servisleri nasıl + tabloda eşleşme → envantere gitmez, team_services",
 		q: "Payments-Core takımının servisleri nasıl?", setup: withRoutingDocTeam(true),
 		wantTier: aisurface.TierGuided, wantRoute: string(guidedTeamServices), ansNot: []string{"srvpay01", "envanter"}},

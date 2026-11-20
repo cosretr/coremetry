@@ -181,7 +181,7 @@ describe('data-tool-result + data-stop kalıcılığı (araç seti dilim 1)', ()
 describe('D5: data-links + data-question arşivi', () => {
   const LINKS = [{ label: 'Servis', href: '/services/orders-api' }, { label: 'Problemler', href: '/problems?service=orders-api' }];
   const Q = { kind: 'source', text: 'Coremetry mi wiki mi?', allowFree: true, options: [
-    { id: 'telemetri', label: 'Coremetry verisi' }, { id: 'wiki', label: 'Wiki dokümanları' }] };
+    { id: 'telemetri', label: 'Telemetri' }, { id: 'wiki', label: 'Wiki' }] };
   const card = asst('a1', [text('cevap'), { type: 'data-links', id: 'links', data: { links: LINKS, title: 'orders-api', summary: '3 açık problem var.' } }]);
   const ask = asst('a2', [text(Q.text), { type: 'data-question', id: 'question', data: Q }]);
 
@@ -199,7 +199,7 @@ describe('D5: data-links + data-question arşivi', () => {
   });
 
   it('seçim yedeği: tık yoksa etiket metni; eşleşmezse seçimsiz', () => {
-    expect(toPersistMessages([user('u1', 'q'), ask, user('u2', 'Coremetry verisi')])[1].question?.chosen).toBe('telemetri');
+    expect(toPersistMessages([user('u1', 'q'), ask, user('u2', 'Telemetri')])[1].question?.chosen).toBe('telemetri');
     expect(toPersistMessages([user('u1', 'q'), ask, user('u2', 'başka')])[1].question?.chosen).toBeUndefined();
     expect(toPersistMessages([user('u1', 'q'), ask])[1].question?.chosen).toBeUndefined();
   });

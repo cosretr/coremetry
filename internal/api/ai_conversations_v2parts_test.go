@@ -130,7 +130,7 @@ func TestSanitizeChatLinksPart(t *testing.T) {
 
 func TestSanitizeChatQuestion(t *testing.T) {
 	q := func() *aiChatQuestion {
-		return &aiChatQuestion{Kind: "source", Text: "Hangisi?", AllowFree: true, Options: []questionOption{{ID: "telemetri", Label: "Coremetry verisi"}, {ID: "wiki", Label: "Wiki dokümanları"}}}
+		return &aiChatQuestion{Kind: "source", Text: "Hangisi?", AllowFree: true, Options: []questionOption{{ID: "telemetri", Label: "Telemetri"}, {ID: "wiki", Label: "Wiki"}}}
 	}
 	ok := q()
 	ok.Chosen = "wiki"
@@ -146,7 +146,12 @@ func TestSanitizeChatQuestion(t *testing.T) {
 		"kind":       func(x *aiChatQuestion) { x.Kind = "later" },
 		"metin":      func(x *aiChatQuestion) { x.Text = " " },
 		"seçeneksiz": func(x *aiChatQuestion) { x.Options = nil },
-		"4 seçenek": func(x *aiChatQuestion) {
+		"6 seçenek": func(x *aiChatQuestion) { // v0.10.2381 — kaynak sorusu ≤5 seçenek
+			x.Options = append(x.Options, questionOption{ID: "a", Label: "a"}, questionOption{ID: "b", Label: "b"},
+				questionOption{ID: "c", Label: "c"}, questionOption{ID: "d", Label: "d"})
+		},
+		"evet/hayır sorusunda 4 seçenek": func(x *aiChatQuestion) {
+			x.Kind = "trace_synth"
 			x.Options = append(x.Options, questionOption{ID: "a", Label: "a"}, questionOption{ID: "b", Label: "b"})
 		},
 		"yinelenen":  func(x *aiChatQuestion) { x.Options[1].ID = x.Options[0].ID },

@@ -41,25 +41,28 @@ package api
 //      yoksa (bellek kapalı) satır kademesi / keşif çiplerle sorar
 //      (docRowsAsk: /excel · N satır, /telemetri). "envanter / tablo" cevabı ve
 //      /excel komutu doğrudan cevaplar (withDocsConfirmed / sourceForcedAnswer).
+//
+// v0.10.2381 — bu dosyanın üç sorusu (çıplak varlık, tablo eşleşmesi, genel
+// biçimli soru + tablo eşleşmesi) TEK kaynak sorusuna birleşti
+// (chat_source_ask.go): aynı cümle, yalnız var olan kaynaklar, aynı cevap
+// yorumlayıcısı; önüne bağlam cümlesi gelir ("… 3 satırla eşleşiyor.",
+// "“X” bir takım adı; yüklü envanterde de geçiyor."). İki kural aynen yaşar:
+// tablo eşleşmesi kullanıcı seçmeden cevap olmaz, sağlık sorusu envantere
+// gitmez. Kullanıcı kaynağı bu konuşmada az önce seçtiyse (30 dk) ya da
+// "envanterde …" diye adıyla söylediyse yeniden sorulmaz.
 
 import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/cilcenk/coremetry/internal/copilot"
 )
 
 const (
-	pendingKindDocOrEntity = "doc_or_entity"
-
 	bareEntityTeam    = "team"
 	bareEntityService = "service"
-
-	entityReplyDocs   = "docs"
-	entityReplyEntity = "entity"
 
 	// bareEntityMaxTokens — çıplak varlık mesajının sözcük tavanı.
 	bareEntityMaxTokens = 3
@@ -113,51 +116,24 @@ func isServiceHealthAsk(q string) bool {
 	return hasTeamSelfSignal(toks) || (has(healthSubjectStems) && has(healthStateStems))
 }
 
-// docsAskTR — SAF (v0.10.1942): çıplak olmayan soruda envanter eşleşmesi sorusu.
-func docsAskTR(n int, vals []string) string {
-	what := ""
-	if len(vals) > 0 {
-		v := vals
-		if len(v) > 2 {
-			v = v[:2]
-		}
-		what = " (" + strings.Join(v, ", ") + ")"
-	}
-	return fmt.Sprintf("Bu soru yüklü envanter tablosunda %d satırla eşleşiyor%s. Envanterden mi göstereyim, yoksa canlı telemetriden mi bakayım?", n, what)
-}
-
 // docRowsAsk — v0.10.1942: bekleyen soru saklanamayan yolda (bellek kapalı,
 // keşif, RAG'ın gevşek satırı) çiplerle sor: /excel aynı soruyu envanterden,
 // /telemetri canlı veriden cevaplar (sourceCommandQuestion önceki soruyu alır).
-func docRowsAsk(emit func(string, any), n int, vals []string, alts []string) {
-	chips := []string{sourceChip(srcCand{Kind: srcExcel, Label: fmt.Sprintf("%d satır", n)}), "/" + srcTelemetry}
-	for _, a := range alts {
-		if len(chips) >= discoverMaxChips {
-			break
-		}
-		if !strings.HasPrefix(a, "/"+srcTelemetry) && !strings.HasPrefix(a, "/"+srcExcel) {
-			chips = append(chips, a)
+// v0.10.2381 — cümle TEK kaynak sorusu (chat_source_ask.go); labels: keşfin
+// diğer adaylarının çip etiketleri (tür → kanıt).
+func (s *Server) docRowsAsk(ctx context.Context, emit func(string, any), q string, n int, vals []string, labels map[string]string) {
+	avail := s.sourceAvail(ctx, q, true)
+	chips := map[string]string{srcExcel: fmt.Sprintf("%d satır", n)}
+	for k, v := range labels {
+		chips[k] = v
+		switch k {
+		case srcWiki:
+			avail.Wiki = true
+		case srcExceptions:
+			avail.Exceptions = true
 		}
 	}
-	emit("answer", map[string]any{"text": docsAskTR(n, vals), "suggestions": chips,
-		"sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
-}
-
-// docRowsAskGeneral — v0.10.2347: genel bilgi biçimindeki soru tabloyla
-// eşleşince üç seçenek (çip komutları önceki soruyu alır): envanter, wiki, genel.
-func docRowsAskGeneral(emit func(string, any), n int, vals []string) {
-	what := ""
-	if len(vals) > 0 {
-		v := vals
-		if len(v) > 2 {
-			v = v[:2]
-		}
-		what = " (" + strings.Join(v, ", ") + ")"
-	}
-	text := fmt.Sprintf("Bu soru yüklü envanter tablosunda %d satırla eşleşiyor%s. Envanterden mi göstereyim, wiki'de mi arayayım, yoksa genel bilgi olarak mı cevaplayayım?", n, what)
-	chips := []string{sourceChip(srcCand{Kind: srcExcel, Label: fmt.Sprintf("%d satır", n)}), "/" + srcWiki, "/" + srcGeneral}
-	emit("answer", map[string]any{"text": text, "suggestions": chips,
-		"sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
+	s.sourceAskOrReuse(ctx, emit, nil, sourceAskSite{Question: q, Lead: sourceLeadRowsTR(n, vals), Avail: avail, Labels: chips, Stateless: true})
 }
 
 // hasStrongRowNeedle — SAF (v0.10.2347): soruda kimlik biçimli değer (rakam /
@@ -169,14 +145,6 @@ func hasStrongRowNeedle(q string) bool {
 		}
 	}
 	return false
-}
-
-// docOrEntityAskTR — SAF: sorunun deterministik metni (LLM yok).
-func docOrEntityAskTR(kind, name string) string {
-	if kind == bareEntityService {
-		return "“" + name + "” bir servis adı. Servisin durumunu mu getireyim, yoksa yüklü dokümanlarda mı arayayım?"
-	}
-	return "“" + name + "” bir takım adı. Takımın servislerini mi getireyim, yoksa yüklü dokümanlarda mı arayayım?"
 }
 
 // bareRemainderEmpty — SAF: katlanmış mesajdan ad (sınırlı) çıkarılınca harf /
@@ -216,70 +184,41 @@ func bareEntityOf(msg string, teams, services []string) (kind, name string) {
 	return "", ""
 }
 
-var (
-	entityReplyDocStems = []string{"dokuman", "doc", "yuklu", "yuklen", "tablo", "excel", "dosya", "belge", "wiki", "rag", "envanter"}
-	entityReplyEntStems = []string{"takim", "ekip", "team", "servis", "service", "coremetry", "telemetri", "durum",
-		"saglik", "canli", "veri"}
-	entityReplyFillers = func() map[string]bool {
-		m := map[string]bool{"getir": true, "getirin": true, "goster": true, "gosterin": true, "olsun": true}
-		for k := range sourceReplyFillers {
-			m[k] = true
-		}
-		return m
-	}()
-)
-
-// classifyDocOrEntityReply — SAF: "docs" | "entity" | "" (cevap değil).
-func classifyDocOrEntityReply(text string) string {
-	switch classifyStemReply(text, entityReplyDocStems, entityReplyEntStems, entityReplyFillers) {
-	case 1:
-		return entityReplyDocs
-	case 2:
-		return entityReplyEntity
-	}
-	return ""
-}
-
-// chatDocOrEntityAskTier — çıplak varlık + tabloda eşleşme → soru. Kapılardan
-// biri kapalıysa false ve akış bayt bayt eski.
-func (s *Server) chatDocOrEntityAskTier(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, tc wikiTierContext, cst *chatContextState) bool {
-	if !s.canRemember(cst) || !wikiTierAllowed(tc) || forcedChatSource(ctx) != "" {
-		return false
+// chatDocOrEntityAskTier — tablo eşleşmesi → kaynak sorusu (çıplak varlık adı
+// ya da başka her eşleşme). Kapılardan biri kapalıysa akış bayt bayt eski.
+// v0.10.2381 — soru tek kurucudan; hatırlanan seçim varsa sormadan o kaynağa;
+// kullanıcı envanteri adıyla söylediyse (docsConfirmed) hiç sorulmaz.
+func (s *Server) chatDocOrEntityAskTier(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, tc wikiTierContext, cst *chatContextState) sourceRoute {
+	out := sourceRoute{ctx: ctx, msgs: msgs, emit: emit}
+	if !s.canRemember(cst) || !wikiTierAllowed(tc) || forcedChatSource(ctx) != "" || docsConfirmed(ctx) {
+		return out
 	}
 	q := strings.TrimSpace(lastUserText(msgs))
 	if q == "" {
-		return false
+		return out
 	}
 	if wikiNamedCue(q) {
-		return false // v0.10.2345 — kullanıcı wiki'yi adıyla istedi: tablo sorusu sorulmaz (chat_wiki_tier.go)
+		return out // v0.10.2345 — kullanıcı wiki'yi adıyla istedi: tablo sorusu sorulmaz (chat_wiki_tier.go)
 	}
 	rows, vals := s.docRowsFind(ctx, q, true)
 	if len(rows) == 0 {
-		return false // doküman kademeleri zaten cevaplamazdı
+		return out // doküman kademeleri zaten cevaplamazdı
 	}
-	// v0.10.2347 (operatör: "opentelemetry java instrumentation" genel bilgi
-	// sorusuydu) — genel bilgi biçimindeki soruda üç seçenek: envanter, wiki, genel.
-	if generalKnowledgeShape(q, s.guidedServiceNames(ctx), s.guidedEnvNames(ctx)) && !hasStrongRowNeedle(q) {
-		chatExchangeFrom(ctx).noteRoute("doc_or_general_ask")
-		docRowsAskGeneral(emit, len(rows), vals)
-		return true
+	route, lead, entity := "doc_or_entity_ask", sourceLeadRowsTR(len(rows), vals), ""
+	switch {
+	case generalKnowledgeShape(q, s.guidedServiceNames(ctx), s.guidedEnvNames(ctx)) && !hasStrongRowNeedle(q):
+		// v0.10.2347 (operatör: "opentelemetry java instrumentation" genel bilgi sorusuydu).
+		route = "doc_or_general_ask"
+	case len(guidedTokens(normalizeGuidedMsg(q))) <= bareEntityMaxTokens:
+		// Çıplak varlık adı (≤3 sözcük; katalog yalnız o zaman okunur).
+		if kind, name := bareEntityOf(q, s.guidedTeamNames(ctx), s.guidedServiceNames(ctx)); kind != "" {
+			lead, entity = sourceLeadEntityTR(kind, name), kind
+		}
 	}
-	// Çıplak varlık adı (≤3 sözcük; katalog yalnız o zaman okunur) eski metinle;
-	// v0.10.1942'den beri diğer her tablo eşleşmesi de önce sorulur.
-	kind, name := "", ""
-	if len(guidedTokens(normalizeGuidedMsg(q))) <= bareEntityMaxTokens {
-		kind, name = bareEntityOf(q, s.guidedTeamNames(ctx), s.guidedServiceNames(ctx))
-	}
-	text := docsAskTR(len(rows), vals)
-	if kind != "" {
-		text = docOrEntityAskTR(kind, name)
-	}
-	cst.setPending(&chatPendingAsk{Kind: pendingKindDocOrEntity, Question: clipRunes(q, chatPendingQuestionMax),
-		Entity: kind, AskedAt: time.Now().UnixNano()})
-	chatExchangeFrom(ctx).noteRoute("doc_or_entity_ask")
-	emit("answer", map[string]any{"text": text, "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
-	emitClarifyQuestion(ctx, emit, pendingKindDocOrEntity, kind, text) // v0.10.2103 (D3) — yalnız v2 kartı
-	return true
+	labels := map[string]string{srcExcel: fmt.Sprintf("%d satır", len(rows))}
+	res := s.sourceAskOrReuse(ctx, emit, cst, sourceAskSite{Route: route, Question: q, Lead: lead, Entity: entity,
+		Avail: s.sourceAvail(ctx, q, true), Labels: labels, NeedMemory: true})
+	return s.finishSourceAsk(ctx, emit, msgs, q, labels, res)
 }
 
 // docOrEntityNoRowsTR — SAF: doküman seçildi ama satır artık yok.

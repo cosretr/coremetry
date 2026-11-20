@@ -65,7 +65,10 @@ func TestEvalStreamContract(t *testing.T) {
 		{"link kartı: 4 link title'ı düşürür", [][2]any{links(map[string]any{"label": "a", "href": "/a"}, map[string]any{"label": "b", "href": "/b"},
 			map[string]any{"label": "c", "href": "/c"}, map[string]any{"label": "d", "href": "/d"}), done}, false, "title"},
 		{"soru kartı: 3 seçenek", [][2]any{scEv("question", map[string]any{"kind": "source", "text": "Hangi kaynak?", "options": opts(3)}), answer, done}, true, ""},
-		{"soru kartı: >3 seçenek", [][2]any{scEv("question", map[string]any{"kind": "source", "text": "Hangi kaynak?", "options": opts(4)}), answer, done}, false, "data-question"},
+		{"soru kartı: >3 seçenek", [][2]any{scEv("question", map[string]any{"kind": "trace_synth", "text": "İnceleyeyim mi?", "options": opts(4)}), answer, done}, false, "data-question"},
+		// v0.10.2381 — kaynak sorusu var olan kaynakları sayar: ≤5 seçenek.
+		{"soru kartı: kaynak sorusu 5 seçenek", [][2]any{scEv("question", map[string]any{"kind": "source", "text": "Hangi kaynak?", "options": opts(5)}), answer, done}, true, ""},
+		{"soru kartı: kaynak sorusu >5 seçenek", [][2]any{scEv("question", map[string]any{"kind": "source", "text": "Hangi kaynak?", "options": opts(6)}), answer, done}, false, "data-question"},
 		{"soru kartı: bilinmeyen kind", [][2]any{scEv("question", map[string]any{"kind": "weird", "text": "?", "options": opts(2)}), answer, done}, false, "data-question"},
 		{"soru kartı: tekrar eden id", [][2]any{scEv("question", map[string]any{"kind": "source", "text": "?", "options": []any{
 			map[string]any{"id": "a", "label": "x"}, map[string]any{"id": "a", "label": "y"}}}), answer, done}, false, "data-question"},

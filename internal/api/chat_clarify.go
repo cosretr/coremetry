@@ -13,11 +13,16 @@ package api
 //
 // Dilim 1 — kaynak belirsizliği: telemetri şekilli ama guided'ın almadığı bir
 // soru, wiki gerçek bir alternatifken (wiki açık + oturumlu kullanıcı + yerel
-// profil; armDisambigRescue ile aynı üçlü) yalnız sourceAskTextTR'yi sorar.
-// Cevap "wiki" → ÖZGÜN soru wikide (wikiForcedAnswer, /wiki ile aynı yol);
-// "Coremetry / veri / servis…" → özgün soru telemetri zorlamasıyla zincirde
-// (/telemetri ile aynı işaret: tablo / wiki / keşif atlanır). Cevap bu iki
-// sınıftan değilse bekleyen soru düşer, tur bayt bayt eski akışta sürer.
+// profil; armDisambigRescue ile aynı üçlü) kaynak sorusunu sorar.
+//
+// v0.10.2381 — soru metni, seçenek kümesi, cevap yorumlayıcısı ve hatırlama
+// artık TEK yerde (chat_source_ask.go): bu dosyanın sorusu, başa baş keşif,
+// tablo eşleşmesi ve "servis mi, genel bilgi mi" aynı cümleyi kurar. Cevap
+// sunulan kaynaklardan biriyse ÖZGÜN soru o kaynaktan cevaplanır
+// (routeSourceChoice: wiki = /wiki yolu; telemetri = /telemetri işareti, tablo /
+// wiki / keşif atlanır; envanter = satır kademesi; genel = genel sohbet) ve
+// seçim 30 dk hatırlanır. Cevap tanınmazsa bekleyen soru düşer, tur bayt bayt
+// eski akışta sürer.
 //
 // Kayıt: soru turu cosre-turn:clarify/source_ask (LLM'siz); cevap turu
 // clarify_reply adım çipi (args: kind + reply sınıfı), satırın kademesi
@@ -29,7 +34,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/copilot"
 )
 
@@ -43,13 +47,8 @@ const (
 	// clarifyReplyTool — cevap turunun adım çipi (etkileşim satırının tools'u).
 	clarifyReplyTool = "clarify_reply"
 
-	sourceReplyWiki      = srcWiki
-	sourceReplyTelemetry = srcTelemetry
-	clarifyReplyDropped  = "dropped"
+	clarifyReplyDropped = "dropped"
 )
-
-// sourceAskTextTR — kaynak sorusunun deterministik metni (LLM yok).
-const sourceAskTextTR = "Bunu Coremetry verisinde mi arayayım (servis sağlığı, hatalar, trace'ler), yoksa wiki dokümanlarında mı?"
 
 // chatPendingAsk — bekleyen netleştirme sorusu.
 type chatPendingAsk struct {
@@ -62,9 +61,11 @@ type chatPendingAsk struct {
 	TraceID     string `json:"traceId,omitempty"`
 	Fingerprint string `json:"fingerprint,omitempty"`
 	Operation   string `json:"operation,omitempty"`
-	// Entity — v0.10.1576 doc_or_entity sorusunun varlık türü (team | service).
+	// Entity — v0.10.1576 çıplak varlık adının türü (team | service); v0.10.2381'dan
+	// beri kaynak sorusunun bağlamı (kayıt için).
 	Entity string `json:"entity,omitempty"`
 	// Options — v0.10.2332 slot sorusunun seçenekleri (≤4; cevap bunlara doğrulanır).
+	// v0.10.2381 — kaynak sorusunda SUNULAN kaynak türleri (pendingSourceOptions).
 	Options []string `json:"options,omitempty"`
 }
 
@@ -75,7 +76,7 @@ func pendingAskValid(p *chatPendingAsk, now time.Time) bool {
 		return false
 	}
 	switch p.Kind {
-	case pendingKindSource, pendingKindDocOrEntity:
+	case pendingKindSource:
 		if strings.TrimSpace(p.Question) == "" {
 			return false
 		}
@@ -151,96 +152,39 @@ func sourceAmbiguous(question string) bool {
 	return tokenHasPrefix(toks, sourceTelemetryNouns...)
 }
 
-var (
-	sourceReplyWikiStems = []string{"wiki", "dokuman", "dokumantasyon", "runbook", "belge", "docs", "documentation"}
-	sourceReplyTelStems  = []string{"coremetry", "telemetri", "veri", "servis", "canli", "trace", "metrik", "log", "hata"}
-	sourceReplyFillers   = map[string]bool{"de": true, "da": true, "ara": true, "arayin": true, "bak": true, "bakin": true,
-		"once": true, "ilk": true, "lutfen": true, "evet": true, "tamam": true, "ok": true, "olur": true, "ise": true,
-		"icin": true, "mi": true, "mu": true, "misin": true, "orada": true, "oradan": true, "kaynak": true,
-		"tarafinda": true, "uzerinden": true, "icinde": true, "in": true, "the": true, "please": true, "search": true}
-)
+// sourceReplyFillers — kaynak cevabında kaynak adının yanında geçebilen dolgu
+// sözcükleri (katlanmış; chat_source_ask.go sourceChoiceFillers bunu genişletir).
+var sourceReplyFillers = map[string]bool{"de": true, "da": true, "ara": true, "arayin": true, "bak": true, "bakin": true,
+	"once": true, "ilk": true, "lutfen": true, "evet": true, "tamam": true, "ok": true, "olur": true, "ise": true,
+	"icin": true, "mi": true, "mu": true, "misin": true, "orada": true, "oradan": true, "kaynak": true,
+	"tarafinda": true, "uzerinden": true, "icinde": true, "in": true, "the": true, "please": true, "search": true}
 
-func foldedHasPrefix(f string, stems []string) bool {
-	for _, s := range stems {
-		if strings.HasPrefix(f, s) {
-			return true
-		}
-	}
-	return false
-}
-
-// classifySourceReply — SAF: kaynak sorusuna verilen serbest metin cevabın
-// sınıfı: "wiki" | "telemetri" | "" (cevap değil).
-func classifySourceReply(text string) string {
-	switch classifyStemReply(text, sourceReplyWikiStems, sourceReplyTelStems, sourceReplyFillers) {
-	case 1:
-		return sourceReplyWiki
-	case 2:
-		return sourceReplyTelemetry
-	}
-	return ""
-}
-
-// classifyStemReply — SAF: iki seçenekli sorunun cevabı. 1–6 sözcük; her
-// sözcük tek bir listeye önekle uyar ya da dolgu sözcüğüdür. 1 = a, 2 = b,
-// 0 = cevap değil (yabancı sözcük, iki liste birden ya da yalnız dolgu).
-func classifyStemReply(text string, a, b []string, fillers map[string]bool) int {
-	toks := memTokens(text)
-	if len(toks) == 0 || len(toks) > 6 {
-		return 0
-	}
-	var aHit, bHit bool
-	for _, t := range toks {
-		ia, ib := foldedHasPrefix(t.f, a), foldedHasPrefix(t.f, b)
-		switch {
-		case ia && ib:
-			return 0
-		case ia:
-			aHit = true
-		case ib:
-			bHit = true
-		case fillers[t.f]:
-		default:
-			return 0
-		}
-	}
-	switch {
-	case aHit && bHit:
-		return 0
-	case aHit:
-		return 1
-	case bHit:
-		return 2
-	}
-	return 0
-}
-
-// chatSourceAskTier — kaynak sorusu. Kapılardan biri kapalıysa false ve akış
-// bayt bayt eski.
-func (s *Server) chatSourceAskTier(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, tc wikiTierContext, cst *chatContextState) bool {
+// chatSourceAskTier — kaynak sorusu (telemetri adlı soru guided'a oturmadı,
+// wiki gerçek bir alternatif). Kapılardan biri kapalıysa akış bayt bayt eski.
+// v0.10.2381 — soru tek kurucudan; hatırlanan seçim varsa sormadan o kaynağa.
+func (s *Server) chatSourceAskTier(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, tc wikiTierContext, cst *chatContextState) sourceRoute {
+	out := sourceRoute{ctx: ctx, msgs: msgs, emit: emit}
 	if !s.canRemember(cst) || !wikiTierAllowed(tc) || forcedChatSource(ctx) != "" {
-		return false
+		return out
 	}
 	q := strings.TrimSpace(lastUserText(msgs))
 	if !sourceAmbiguous(q) {
-		return false
+		return out
 	}
-	w := wikiKB()
-	if w == nil || !w.Enabled() || !sourceCodeCallerAllowed(auth.FromContext(ctx)) || !s.localOnlyAvailable(ctx) {
-		return false
+	avail := s.sourceAvail(ctx, q, false)
+	if !avail.Wiki { // tetik bugünkü: wiki açık + oturumlu kullanıcı + yerel profil
+		return out
 	}
-	cst.setPending(&chatPendingAsk{Kind: pendingKindSource, Question: clipRunes(q, chatPendingQuestionMax), AskedAt: time.Now().UnixNano()})
-	chatExchangeFrom(ctx).noteRoute("source_ask")
-	emit("answer", map[string]any{"text": sourceAskTextTR, "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
-	emitClarifyQuestion(ctx, emit, pendingKindSource, "", sourceAskTextTR) // v0.10.2102 (D2) — yalnız v2 kartı
-	return true
+	res := s.sourceAskOrReuse(ctx, emit, cst, sourceAskSite{Route: "source_ask", Question: q, Avail: avail, NeedMemory: true})
+	return s.finishSourceAsk(ctx, emit, msgs, q, nil, res)
 }
 
 // clarifyReply — cevap turunun sonucu.
 type clarifyReply struct {
 	ctx     context.Context
 	msgs    []copilot.ChatMessage
-	tier    string // "" = işlenmedi (zincir sürer); aisurface.Tier* adı
+	emit    func(string, any) // v0.10.2381 — zincir sürerse (telemetri) diğer kaynak çipleriyle
+	tier    string            // "" = işlenmedi (zincir sürer); aisurface.Tier* adı
 	handled bool
 	ok      bool
 }
@@ -256,7 +200,11 @@ func withForcedChatSource(ctx context.Context, kind string) context.Context {
 // v0.10.2102 (D2) — option: v2 soru kartının tıkı (context.clarifyOption);
 // bekleyen sorunun kümesindeyse BİREBİR o sınıf, değilse metin yolu aynen.
 func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, cst *chatContextState, loc *time.Location, option string) clarifyReply {
-	out := clarifyReply{ctx: ctx, msgs: msgs}
+	out := clarifyReply{ctx: ctx, msgs: msgs, emit: emit}
+	if cst.takeGeneral(time.Now()) { // v0.10.2381 — önceki cevap genel bilgiydi (chat_source_ask.go)
+		ctx = withPrevGeneral(ctx)
+		out.ctx = ctx
+	}
 	p, ok := cst.takePending(time.Now())
 	if !ok {
 		return out
@@ -285,28 +233,14 @@ func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any
 		emitGuidedStepResult(emit, n, clarifyReplyTool, clarifyReplyEvidenceTR(p, class), nil)
 	}
 	switch {
-	case p.Kind == pendingKindSource && class == sourceReplyWiki:
-		out.msgs = replaceLastUserText(msgs, p.Question)
-		out.ok = s.wikiForcedAnswer(ctx, emit, out.msgs, p.Question)
-		out.tier, out.handled = "wiki", true
-	case p.Kind == pendingKindSource && class == sourceReplyTelemetry:
-		out.msgs = replaceLastUserText(msgs, p.Question)
-		out.ctx = withRecordsQuestion(withForcedChatSource(ctx, srcTelemetry), p.Question)
+	case p.Kind == pendingKindSource && class != clarifyReplyDropped: // v0.10.2381 — tek kaynak sorusunun cevabı
+		cst.rememberSource(class, time.Now())
+		r := s.routeSourceChoice(ctx, emit, msgs, class, p.Question, sourceAltChips(pendingSourceOptions(p), class, nil))
+		out.ctx, out.msgs, out.emit = r.ctx, r.msgs, r.emit
+		out.handled, out.ok, out.tier = r.handled, r.ok, r.tier
 	case p.Kind == pendingKindTraceSynth && class == synthReplyYes: // v0.10.1572 dilim 2 (chat_clarify_synth.go)
 		out.handled, out.ok = s.chatTraceSynthesisAnswer(ctx, emit, p, loc)
 		out.tier = "operation"
-	case p.Kind == pendingKindDocOrEntity && class == entityReplyDocs: // v0.10.1576 (chat_clarify_entity.go)
-		out.msgs = replaceLastUserText(msgs, p.Question)
-		out.handled = true
-		if h, dok := s.docRowsAnswer(withDocsConfirmed(ctx), emit, out.msgs, true); h { // v0.10.1942 — kullanıcı envanteri seçti
-			out.tier, out.ok = "doc-rows", dok
-			break
-		}
-		emit("answer", map[string]any{"text": docOrEntityNoRowsTR(p.Question), "sources": []any{}, "links": []guidedAnswerLink{}, "allowedLinks": []string{}})
-		out.tier, out.ok = "clarify", true
-	case p.Kind == pendingKindDocOrEntity && class == entityReplyEntity:
-		out.msgs = replaceLastUserText(msgs, p.Question)
-		out.ctx = withForcedChatSource(ctx, srcTelemetry)
 	case p.Kind == pendingKindSlot && class != clarifyReplyDropped: // v0.10.2332 — özgün soru seçilen servisle
 		out.msgs = replaceLastUserText(msgs, slotRewriteQuestion(p.Question, class))
 	case p.Kind == pendingKindTraceSynth && class == synthReplyNo:
@@ -321,17 +255,12 @@ func (s *Server) chatClarifyReplyTier(ctx context.Context, emit func(string, any
 // tanınmayan cevap clarifyReplyDropped.
 func clarifyReplyClass(p *chatPendingAsk, reply string) string {
 	if p != nil && p.Kind == pendingKindSource {
-		if c := classifySourceReply(reply); c != "" {
+		if c := classifySourceChoice(reply, pendingSourceOptions(p)); c != "" {
 			return c
 		}
 	}
 	if p != nil && p.Kind == pendingKindTraceSynth {
 		return synthReplyClass(reply)
-	}
-	if p != nil && p.Kind == pendingKindDocOrEntity {
-		if c := classifyDocOrEntityReply(reply); c != "" {
-			return c
-		}
 	}
 	return clarifyReplyDropped
 }
@@ -343,22 +272,21 @@ func clarifyReplyEvidenceTR(p *chatPendingAsk, class string) string {
 		q = p.Operation
 	}
 	what := "bekleyen soru düşürüldü; bu tur yeni bir soru olarak cevaplanıyor"
-	switch class {
-	case sourceReplyWiki:
+	switch {
+	case p.Kind == pendingKindSource && class == srcWiki:
 		what = "özgün soru wiki dokümanlarında aranıyor"
-	case sourceReplyTelemetry:
+	case p.Kind == pendingKindSource && class == srcTelemetry:
 		what = "özgün soru Coremetry verisinde cevaplanıyor"
-	case synthReplyYes:
+	case p.Kind == pendingKindSource && class == srcExcel:
+		what = "özgün soru yüklü envanter tablolarında aranıyor"
+	case p.Kind == pendingKindSource && class == srcExceptions:
+		what = "özgün soru Exceptions gruplarında aranıyor"
+	case p.Kind == pendingKindSource && class == srcGeneral:
+		what = "özgün soru genel bilgiyle cevaplanıyor"
+	case class == synthReplyYes:
 		what = "Oracle açıklaması trace " + p.TraceID + " ile sentezleniyor"
-	case synthReplyNo:
+	case class == synthReplyNo:
 		what = "trace incelemesi atlandı"
-	case entityReplyDocs:
-		what = "ad yüklü dokümanlarda aranıyor"
-	case entityReplyEntity:
-		what = "ad Coremetry varlığı (" + p.Entity + ") olarak cevaplanıyor"
-		if p.Entity == "" { // v0.10.1942 — çıplak olmayan envanter sorusu
-			what = "özgün soru canlı telemetriden cevaplanıyor"
-		}
 	}
 	if p.Kind == pendingKindSlot && class != clarifyReplyDropped { // v0.10.2332
 		what = "seçilen servisle (" + class + ") özgün soru yeniden cevaplanıyor"

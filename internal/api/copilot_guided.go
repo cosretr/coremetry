@@ -192,11 +192,8 @@ const (
 )
 
 type guidedRoute struct {
-	// GeneralAlt — v0.10.2347: soru genel bilgi biçiminde (telemetri işareti yok);
-	// "hangi servis" sorusuna "genel bilgi" seçeneği de eklenir.
-	GeneralAlt bool
-	Intent     guidedIntent
-	Service    string // extracted entity, "" = none/global
+	Intent  guidedIntent
+	Service string // extracted entity, "" = none/global
 	// Env (v0.8.398 — AI audit env-awareness slice) is the deployment
 	// environment extracted from the question against the LIVE env
 	// list (ListEnvironments), "" = no env narrowing. Threaded into
@@ -3523,16 +3520,6 @@ func askTeamAnswerTR(whyUser string, entries []mcptools.TeamCatalogueEntry, max 
 		"o takımın servislerini en çok hata alandan başlayarak getiririm.\n" + renderTeamAskEvidenceTR(entries, max)
 }
 
-// askServiceRouteTR — SAF (v0.10.2347): genel bilgi biçimindeki soruda
-// "servis mi, genel bilgi mi" diye sorar; aksi askServiceAnswerTR.
-func askServiceRouteTR(route guidedRoute) string {
-	if route.GeneralAlt && len(route.ServiceOptions) > 0 {
-		return fmt.Sprintf("Bunu bir servis için mi soruyorsun, yoksa genel bilgi mi istiyorsun? Servis için adaylar: %s. Genel bilgi için /genel çipine tıkla.",
-			strings.Join(route.ServiceOptions, ", "))
-	}
-	return askServiceAnswerTR(route.ServiceOptions)
-}
-
 // askServiceAnswerTR — SAF: servis netleştirme sorusunun operatöre giden metni.
 func askServiceAnswerTR(opts []string) string {
 	if len(opts) == 0 {
@@ -4827,7 +4814,7 @@ func (s *Server) guidedAskServiceEvidence(ctx context.Context, route *guidedRout
 	var b strings.Builder
 	b.WriteString("Operatörün sorusu bir SERVİS gerektiriyor ama adı çözülemedi ya da birden çok servise oturuyor.\n")
 	fmt.Fprintf(&b, "Soru: %q\n", strings.TrimSpace(question))
-	route.DirectAnswer = askServiceRouteTR(*route) // anlatım çağrısı yok
+	route.DirectAnswer = askServiceAnswerTR(route.ServiceOptions) // anlatım çağrısı yok
 	if len(route.ServiceOptions) == 0 {
 		b.WriteString("Katalogda aday yok. KULLANICIYA SÖYLE: servis adını yazsın (Servisler sayfasından kopyalayabilir).\n")
 		return b.String(), src, nil

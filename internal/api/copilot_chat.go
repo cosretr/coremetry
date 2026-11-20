@@ -533,7 +533,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// Bekleyen soru yoksa / cevap tanınmazsa ctx ve mesajlar AYNEN.
 	if !evm.singleTurn() && !apCont.on { // v0.10.2322 — konuşma kipinde açık (chat_eval_mode.go)
 		cr := s.chatClarifyReplyTier(ctx, emit, req.Messages, cst, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin), req.Context.ClarifyOption)
-		ctx, req.Messages = cr.ctx, cr.msgs
+		ctx, req.Messages, emit = cr.ctx, cr.msgs, cr.emit
 		if cr.handled {
 			switch cr.tier { // literal adlar: ai_surface_registry_test kayıtlı kademeyi denetler
 			case "operation":
@@ -542,6 +542,10 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				cspan.tier("clarify", cr.ok)
 			case "doc-rows": // v0.10.1576 — doc_or_entity sorusunda doküman seçildi
 				cspan.tier("doc-rows", cr.ok)
+			case "intent": // v0.10.2381 — kaynak sorusunda genel bilgi seçildi
+				cspan.tier("intent", cr.ok)
+			case "discovery": // v0.10.2381 — kaynak sorusunda Exceptions seçildi
+				cspan.tier("discovery", cr.ok)
 			default:
 				cspan.tier("wiki", cr.ok)
 			}
@@ -559,6 +563,10 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	if req.Context.Page != nil {
 		wikiTC.PageTraceID = req.Context.Page.TraceID
 	}
+	// v0.10.2381 — tek kaynak sorusunun tur durumu (chat_source_ask.go): yeni soru
+	// koşulu ve hatırlanan seçim yalnız ana sohbette (panel / çekmece / trace
+	// bağlamı, tek-tur değerlendirme ve onay devamı aynen).
+	ctx = withSourceTurn(ctx, wikiTierAllowed(wikiTC) && !evm.singleTurn() && !apCont.on)
 	// v0.10.1143 — içerik yoklaması durumu (chat_wiki_probe.go): kademe ve
 	// guidedProblems'in sıfır-eşleşme ipucu aynı tek aramayı paylaşır.
 	ctx = s.armWikiProbe(ctx, req.Messages, wikiTC)
@@ -575,6 +583,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		ctx = withForcedChatSource(ctx, srcTelemetry)
 		skipDocs = true
 	}
+	// v0.10.2381 — kullanıcı kaynağı adıyla söyledi ("telemetride …", "envanterde …"):
+	// kaynak sorulmaz, o kaynak cevaplar (chat_source_ask.go).
+	ctx, skipDocs = applyNamedSource(ctx, cst, lastUserText(req.Messages), skipDocs)
 	// v0.10.1739 (operator-reported) — v2 endpoint kartına aday tur ("<servis>
 	// endpointleri") doküman / keşif / wiki kademelerine girmez: kart aşağıda
 	// (opPre / rota planından sonra) çıkar, belge kaynağı eklenmez.
@@ -592,14 +603,26 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.1576 (operator-reported) — çıplak takım / servis adı yüklü tabloda da
 	// eşleşiyorsa doküman kademeleri kendiliğinden cevaplamaz: düz metin soru
 	// (chat_clarify_entity.go). Çıplak varlık değil / eşleşme yok → akış aynen.
-	if !skipDocs && !evm.singleTurn() && s.chatDocOrEntityAskTier(ctx, emit, req.Messages, wikiTC, cst) {
-		cspan.tier("clarify", true)
-		emit("done", map[string]bool{"ok": true})
-		return
+	// v0.10.2381 — soru TEK kaynak sorusu; hatırlanan seçim varsa sormadan o
+	// kaynaktan cevaplanır (telemetri → zincir sürer, doküman kademeleri atlanır).
+	if !skipDocs && !evm.singleTurn() {
+		sr := s.chatDocOrEntityAskTier(ctx, emit, req.Messages, wikiTC, cst)
+		if sr.handled {
+			cspan.tierNamed(sr.tier, sr.ok)
+			emit("done", map[string]bool{"ok": sr.ok})
+			return
+		}
+		ctx, emit, skipDocs = sr.ctx, sr.emit, skipDocs || sr.skipDocs
 	}
 	if !skipDocs {
 		var dh, dok bool
-		dh, dok, emit, skipDocs = s.chatSourceDiscoveryTier(ctx, emit, req.Messages, wikiTC)
+		var dtier string
+		dh, dok, emit, skipDocs, dtier = s.chatSourceDiscoveryTier(ctx, emit, req.Messages, wikiTC)
+		if dh && dtier != "" { // v0.10.2381 — başa baş: kaynak sorusu ya da hatırlanan kaynağın cevabı
+			cspan.tierNamed(dtier, dok)
+			emit("done", map[string]bool{"ok": dok})
+			return
+		}
 		if dh {
 			cspan.tier("discovery", dok)
 			emit("done", map[string]bool{"ok": dok})
@@ -615,6 +638,11 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.2345 — soru wiki'yi adıyla anıyorsa (wikiNamedCue) tablo kademesi de çekilir.
 	if wikiTierAllowed(wikiTC) && !skipDocs && !wikiNamedCue(lastUserText(req.Messages)) {
 		if handled, dok := s.docRowsAnswer(ctx, emit, req.Messages, true); handled {
+			if sourceAsked(ctx) { // v0.10.2381 — kademe kaynak sorusuyla bitti
+				cspan.tier("clarify", dok)
+				emit("done", map[string]bool{"ok": dok})
+				return
+			}
 			cspan.tier("doc-rows", dok)
 			emit("done", map[string]bool{"ok": dok})
 			return
@@ -625,6 +653,18 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			cspan.tier("wiki", wok)
 			emit("done", map[string]bool{"ok": wok})
 			return
+		}
+		// v0.10.2381 — genel sohbetin devamı (chat_source_ask.go): önceki cevap genel
+		// bilgiydi ve bu soru telemetri sinyali / varlık / kaynak işareti taşımıyor →
+		// cevap yine genel yoldan, konuşma geçmişiyle. Doküman / keşif / wiki
+		// kademelerinden SONRA: bir kaynak açıkça öndeyse o cevaplar. Kod turu ve
+		// açık araştırma ipucu genel sohbete alınmaz.
+		if !ct.On && !invSkip {
+			if handled, gok := s.chatGeneralFollowTier(ctx, emit, req.Messages, wikiTC); handled {
+				cspan.tier("intent", gok)
+				emit("done", map[string]bool{"ok": gok})
+				return
+			}
 		}
 	}
 	// v0.10.1126 — netleştirme kurtarması: guided/niyet yolu YALNIZ "hangisini
@@ -752,10 +792,15 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// guided'a oturmadı ve wiki gerçek bir alternatif → yalnız "Coremetry
 			// verisinde mi, wikide mi?" sorulur (düz metin, LLM'siz). Kapı kapalıysa
 			// zincir bayt bayt eski.
-			if !evm.singleTurn() && s.chatSourceAskTier(ctx, emit, req.Messages, wikiTC, cst) {
-				cspan.tier("clarify", true)
-				emit("done", map[string]bool{"ok": true})
-				return
+			// v0.10.2381 — TEK kaynak sorusu; hatırlanan seçim varsa sormadan o kaynaktan.
+			if !evm.singleTurn() {
+				sr := s.chatSourceAskTier(ctx, emit, req.Messages, wikiTC, cst)
+				if sr.handled {
+					cspan.tierNamed(sr.tier, sr.ok)
+					emit("done", map[string]bool{"ok": sr.ok})
+					return
+				}
+				ctx, emit = sr.ctx, sr.emit
 			}
 			// v0.10.1053 — exception takibinin tek araçlı kod döngüsü bu alışverişin
 			// audit'ini, span'ını, tavanını kullanır (chat_exception_followup.go).
@@ -772,6 +817,11 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// Sıra bilinçli: telemetri şekilleri > dokümanlar > serbest döngü.
 			if !evm.skipGuided() { // v0.10.1476 — döngü sondası doküman RAG'ını da atlar
 				if handled, rok := s.ragChatAnswer(ctx, emit, req.Messages, req.Context.Service); handled {
+					if sourceAsked(ctx) { // v0.10.2381 — gevşek satır eşleşmesi kaynak sorusuyla bitti
+						cspan.tier("clarify", rok)
+						emit("done", map[string]bool{"ok": rok})
+						return
+					}
 					cspan.tier("rag", rok)
 					emit("done", map[string]bool{"ok": rok})
 					return
@@ -789,6 +839,11 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// işarette skipIntent false → üretim aynen.
 			if !evm.skipIntent() {
 				if handled, iok := s.copilotChatIntent(ctx, emit, req.Messages, req.Context.Service, req.Context.Operation, req.Context.Explain, req.Context.RangeS, req.Context.Env, anchorTo, req.Context.TzOffsetMin, req.Context.Tz); handled {
+					if sourceAsked(ctx) { // v0.10.2381 — niyet kademesi kaynak sorusuyla bitti
+						cspan.tier("clarify", iok)
+						emit("done", map[string]bool{"ok": iok})
+						return
+					}
 					cspan.tier("intent", iok)
 					emit("done", map[string]bool{"ok": iok})
 					return

@@ -127,12 +127,19 @@ var chatCommands = []chatCommandInfo{
 	{"help", "/help", "bu liste"},
 }
 
+// chatCommandInventoryAlias — v0.10.2381: /excel'in takma adı. CoSRE kaynağı
+// "envanter" diye sorar; komut da o adla yazılabilir (çipler /excel kalır).
+const chatCommandInventoryAlias = "envanter"
+
 // normalizeChatCommand — SAF: "/RCA" → "rca". İkinci dönüş komutun bilinip
 // bilinmediği; boş girdi ("", true) döner (komut yok).
 func normalizeChatCommand(cmd string) (string, bool) {
 	c := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(cmd), "/"))
 	if c == "" {
 		return "", true
+	}
+	if c == chatCommandInventoryAlias { // v0.10.2381 — /envanter = /excel (kaynak sorusunun adı)
+		c = srcExcel
 	}
 	for _, k := range chatCommands {
 		if k.Name == c {
@@ -619,6 +626,7 @@ func (s *Server) chatScopeTier(ctx context.Context, emit func(string, any), rq *
 		if q != "" {
 			rq.Msgs = replaceLastUserText(rq.Msgs, q)
 		}
+		noteSourceCommand(ctx, kind) // v0.10.2381 — bekleyen kaynak sorusunun cevabı / adıyla seçim (chat_source_ask.go)
 		return s.sourceForcedAnswer(ctx, emit, kind, q, rq.Msgs)
 	}
 	if cmd == "wiki" {
@@ -631,6 +639,7 @@ func (s *Server) chatScopeTier(ctx context.Context, emit func(string, any), rq *
 		sc = *rq.Scope
 	}
 	if cmd == "wiki" || sc.Wiki {
+		noteSourceCommand(ctx, srcWiki) // v0.10.2381
 		if routed != "" {
 			rq.Msgs = replaceLastUserText(rq.Msgs, routed)
 		}

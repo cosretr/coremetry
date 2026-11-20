@@ -47,7 +47,11 @@ func TestSourceAmbiguous(t *testing.T) {
 	}
 }
 
+// v0.10.2381 — cevap yorumlayıcısı tek (classifySourceChoice); bu tablo iki
+// seçenekli eski kümenin (telemetri / wiki) sözleşmesini korur. Geniş tablo
+// chat_source_ask_test.go'da.
 func TestClassifySourceReply(t *testing.T) {
+	legacy := pendingSourceOptions(&chatPendingAsk{Kind: pendingKindSource})
 	for _, c := range []struct {
 		in, want string
 	}{
@@ -74,8 +78,8 @@ func TestClassifySourceReply(t *testing.T) {
 		{"bunu wiki ve coremetry ikisinde de bir ara bakalım", ""},
 		{"", ""},
 	} {
-		if got := classifySourceReply(c.in); got != c.want {
-			t.Errorf("classifySourceReply(%q) = %q, want %q", c.in, got, c.want)
+		if got := classifySourceChoice(c.in, legacy); got != c.want {
+			t.Errorf("classifySourceChoice(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }

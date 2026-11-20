@@ -338,13 +338,14 @@ describe('MessageList × D5 fixture (gerçek SDK)', () => {
     expect([...card!.querySelectorAll('a')].map(a => a.getAttribute('href'))).toEqual(['/problems?service=orders-api', '/services/orders-api']);
     expect(el.querySelector('.ai-links')).toBeNull();
   });
-  it('ui-stream-v1-question: düz metin soru balonda, altında 2 düğmeli kart (pasif: onQuestion yok)', async () => {
+  // v0.10.2381 — tek kaynak sorusu: yalnız var olan kaynaklar (burada dördü de).
+  it('ui-stream-v1-question: düz metin soru balonda, altında kaynak düğmeli kart (pasif: onQuestion yok)', async () => {
     const core = createCosreChat({ fetch: sseFetch(cosreFixture('ui-stream-v1-question')).fetch });
     await core.chat.sendMessage({ text: 'servis sahipliği kimde' });
     const el = await draw(core);
-    expect(el.querySelector('.cm-msg-ai')?.textContent).toContain('wiki dokümanlarında mı?');
+    expect(el.querySelector('.cm-msg-ai')?.textContent).toContain('yoksa genel bilgi olarak mı cevaplayayım?');
     const btns = [...el.querySelectorAll<HTMLButtonElement>('[data-cosre-question="source"] [data-question-option]')];
-    expect(btns.map(b => b.textContent)).toEqual(['Coremetry verisi', 'Wiki dokümanları']);
+    expect(btns.map(b => b.textContent)).toEqual(['Telemetri', 'Wiki', 'Envanter', 'Genel bilgi']);
   });
 });
 

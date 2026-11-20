@@ -124,11 +124,7 @@ func guidedSuggestions(route guidedRoute) []string {
 	// v0.10.429 (D1) — "hangi servis?" turu: çip = adayın TAM kılavuz cümlesi
 	// (askServiceChip), sorulan niyetle; çıplak ad kapıdan geçmezdi.
 	if len(route.ServiceOptions) > 0 {
-		c := askServiceChipFor(route) // v0.10.436 (D2) — çift/arama çipleri diğer yarıyı taşır
-		if route.GeneralAlt {
-			c = append(c, "/"+srcGeneral) // v0.10.2347 — genel bilgi seçeneği
-		}
-		return c
+		return askServiceChipFor(route) // v0.10.436 (D2) — çift/arama çipleri diğer yarıyı taşır
 	}
 	switch route.Intent {
 	case guidedEndpointCandidates: // v0.10.688 — onay + aday çipleri (deterministik yönlenir)

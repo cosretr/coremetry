@@ -15,7 +15,8 @@ import type { ChatCommand, ChatScope } from '@/lib/types';
 //                biçimindeyse (küçük harf + tire/nokta: svc-orders). Yapıştırılan
 //                stack trace'teki "@Override" / "@Transactional" kapsam olmaz.
 // Komut: mesajın BAŞINDA `/wiki|/trace|/rca|/logs|/excel|/telemetri|/exceptions|/genel|/help` + boşluk/son. "/api/x"
-// gibi yollar komut değildir.
+// gibi yollar komut değildir. v0.10.2381 — `/envanter` = `/excel` (CoSRE kaynağı
+// "envanter" diye sorar; sunucu yarısı chat_scope.go chatCommandInventoryAlias).
 
 export const CHAT_COMMANDS: { cmd: ChatCommand; usage: string; hint: string }[] = [
   { cmd: 'wiki', usage: '/wiki <soru>', hint: "Yalnız kurum wiki'sinde ara" },
@@ -39,7 +40,7 @@ export const MENTION_KINDS: { kind: 'trace' | 'problem' | 'env' | 'team' | 'wiki
   { kind: 'wiki', insert: '@wiki ', hint: "Yalnız wiki'den cevapla" },
 ];
 
-const CMD_RE = /^\s*\/(wiki|trace|rca|logs|excel|telemetri|exceptions|genel|help)(?=\s|$)/i;
+const CMD_RE = /^\s*\/(wiki|trace|rca|logs|excel|envanter|telemetri|exceptions|genel|help)(?=\s|$)/i;
 const MENTION_RE = /(^|\s)@([^\s]+)/g;
 const SERVICE_SHAPE = /^[a-z0-9][a-z0-9_]*(?:[-.][a-z0-9_]+)+$/;
 const TRACE_RE = /^[0-9a-f]{32}$/i;
@@ -54,7 +55,9 @@ export interface ParsedChatInput {
 /** commandOf — SAF: mesaj başındaki bilinen komut. */
 export function commandOf(text: string): ChatCommand | undefined {
   const m = CMD_RE.exec(text);
-  return m ? (m[1].toLowerCase() as ChatCommand) : undefined;
+  if (!m) return undefined;
+  const cmd = m[1].toLowerCase();
+  return (cmd === 'envanter' ? 'excel' : cmd) as ChatCommand;
 }
 
 /** parseChatInput — SAF: metin (+ tamamlamadan seçilen servisler) → kapsam/komut. */

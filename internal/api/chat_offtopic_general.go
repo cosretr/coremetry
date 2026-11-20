@@ -12,10 +12,11 @@ package api
 //   - Tek araçsız çağrı (copilotStreamSurface → StreamText): tool tanımı yok,
 //     telemetri döngüsü yok, RAG/wiki içeriği yok — prompt yalnız soru, o yüzden
 //     localOnly kapısı (kod/wiki → yerel model) burada söz konusu değil.
-//   - Derin kip YOK sayılır (copilot.WithoutDeepAnswer): genel cevap kısa kalır,
-//     bütçe profilin tabanı. Sabit max_tokens tavanı KONMAZ: düşünen modeller
-//     (Qwen3, gpt-5 …) küçük tavanda boş cevap döndürür (modelcaps dersi);
-//     kısalık istemden (SystemPromptOffTopicGeneral), bütçe profilden.
+//   - Derin kip: v0.10.2381'a kadar YOK sayılıyordu (copilot.WithoutDeepAnswer);
+//     artık kullanıcı açtıysa uygulanır (aşağıda). Sabit max_tokens tavanı
+//     KONMAZ: düşünen modeller (Qwen3, gpt-5 …) küçük tavanda boş cevap
+//     döndürür (modelcaps dersi); uzunluk istemden (SystemPromptOffTopicGeneral),
+//     bütçe profilden.
 //   - Zararlı istek (offTopicIsHarmful) anahtar açıkken de MODELE GİTMEZ:
 //     v0.10.819'un kesin sınırı bayt bayt.
 //   - Model hata verir / boş dönerse v0.10.819 sınırı (exchangeId'siz) — cevap
@@ -39,6 +40,21 @@ package api
 //   - Kalabalık azaldı: "Şöyle sorabilirsin" listesi ve bağlantılar bu yolda
 //     YOK; CoSRE'yi keşfettiren en çok 3 çip kalır. Anahtar KAPALI sınırı
 //     (v0.10.819) bayt bayt aynı.
+//
+// v0.10.2381 (operatör, 2026-11-19: "CoSRE'de free format da chat
+// yapabilsinler") — genel yol gerçek çok turlu sohbet:
+//   - Konuşma geçmişi bütçeleri modelin penceresiyle ölçeklenir
+//     (offTopicGeneralPromptScaled × s.evidenceScale; ölçek 1 = bugünkü sayılar,
+//     istem bayt bayt eski). 262k pencereli modelde 6 ileti / 6000 rune yerine
+//     48 ileti / 48000 rune.
+//   - Derin kip kullanıcı açtıysa uygulanır (WithoutDeepAnswer kalktı; kapalıyken
+//     ctx zaten işaretsiz → çağrı gövdesi bayt bayt eski).
+//   - Genel cevabın ardından gelen devam sorusu ("peki örnek verir misin",
+//     "bunun farkı ne") yeniden yönlendirilmez / sorulmaz: genel sohbet sürer
+//     (chat_source_ask.go chatGeneralFollowTier; telemetri sinyali, varlık ya da
+//     kaynak işareti taşıyan soru olağan yönlendirmeye gider).
+//   - Aynen: alttaki not, zararlı istek sınırı (offTopicIsHarmful), modelden
+//     bağımsız kapsam notu süzgeci, ai.generalQuestions.allow anahtarı.
 
 import (
 	"context"
@@ -123,21 +139,29 @@ const (
 // dolana dek) sorunun önüne konur; önceki ileti yoksa istem eskisi gibi
 // yalnız sorudur.
 func offTopicGeneralPrompt(msgs []copilot.ChatMessage, question string) string {
-	q := clipRunes(question, offTopicGeneralQuestionRunes)
+	return offTopicGeneralPromptScaled(msgs, question, 1)
+}
+
+// offTopicGeneralPromptScaled — SAF, v0.10.2381: aynı istem, bütçeler kanıt
+// ölçeğiyle (evidence_scale.go scaleCap: ileti sayısı, toplam / ileti başı
+// rune, soru). Ölçek ≤ 1 bayt bayt offTopicGeneralPrompt.
+func offTopicGeneralPromptScaled(msgs []copilot.ChatMessage, question string, scale int) string {
+	q := clipRunes(question, scaleCap(offTopicGeneralQuestionRunes, scale))
 	end := len(msgs)
 	if end > 0 && msgs[end-1].Role == "user" && strings.TrimSpace(msgs[end-1].Text) == strings.TrimSpace(question) {
 		end-- // son ileti şimdiki sorunun kendisi
 	}
 	var prior []string
-	budget := offTopicGeneralHistoryRunes
-	for i := end - 1; i >= 0 && len(prior) < offTopicGeneralHistoryMsgs && budget > 0; i-- {
+	budget := scaleCap(offTopicGeneralHistoryRunes, scale)
+	maxMsgs := scaleCap(offTopicGeneralHistoryMsgs, scale)
+	for i := end - 1; i >= 0 && len(prior) < maxMsgs && budget > 0; i-- {
 		t := strings.TrimSpace(msgs[i].Text)
 		if t == "" {
 			continue
 		}
-		who, limit := "Kullanıcı", offTopicGeneralUserRunes
+		who, limit := "Kullanıcı", scaleCap(offTopicGeneralUserRunes, scale)
 		if msgs[i].Role != "user" {
-			who, limit = "CoSRE", offTopicGeneralAsstRunes
+			who, limit = "CoSRE", scaleCap(offTopicGeneralAsstRunes, scale)
 		}
 		if limit > budget {
 			limit = budget
@@ -330,12 +354,13 @@ func collapseBlankLines(s string) string {
 // offTopicGeneralAnswer — tek araçsız çağrı + çipler (düşüşte v0.10.819 sınırı
 // çip ve bağlantılarıyla).
 func (s *Server) offTopicGeneralAnswer(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, question, ctxService string) (bool, bool) {
-	q := offTopicGeneralPrompt(msgs, question)
+	q := offTopicGeneralPromptScaled(msgs, question, s.evidenceScaleSurface(ctx, aisurface.ChatOffTopicGeneral))
 	const tool = "off_topic_general"
 	args, _ := json.Marshal(map[string]string{"q": clipRunes(question, 120), "service": ctxService})
 	n := emitGuidedStep(emit, tool, string(args))
 	t0 := time.Now()
-	raw, err := s.copilotStreamSurface(copilot.WithoutDeepAnswer(ctx), aisurface.ChatOffTopicGeneral,
+	// v0.10.2381 — Derin kip kullanıcı açtıysa uygulanır (ctx aynen; kapalıyken işaretsiz).
+	raw, err := s.copilotStreamSurface(ctx, aisurface.ChatOffTopicGeneral,
 		copilot.SystemPromptOffTopicGeneral(), q, func(d string) { emit("delta", map[string]string{"text": d}) })
 	text, general := offTopicGeneralText(raw, question, ctxService)
 	if err != nil {
@@ -359,6 +384,7 @@ func (s *Server) offTopicGeneralAnswer(ctx context.Context, emit func(string, an
 		// Model metni oylanabilir: exchangeId = sohbetin kendi alışverişi (satır
 		// RoleAnswer, kök kimliği aynen taşır). Deterministik düşüşte YOK.
 		ans["exchangeId"] = copilot.MetaFromContext(ctx).ExchangeID
+		chatContextFromCtx(ctx).noteGeneral(time.Now()) // v0.10.2381 — devam sorusu genel sohbeti sürdürür
 	}
 	emit("answer", ans)
 	return true, true

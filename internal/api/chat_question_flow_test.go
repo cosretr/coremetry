@@ -46,7 +46,7 @@ func (rg *clarifyRig) postV2(t *testing.T, option string, turns ...string) strin
 func TestClarifySourceQuestionCardV2(t *testing.T) {
 	rg := newClarifyRig(t, nil)
 	body := rg.postV2(t, "", clarifyQ)
-	q, _ := clarifyQuestion(pendingKindSource, "", sourceAskTextTR)
+	q, _ := sourceClarifyQuestion([]string{srcTelemetry, srcWiki, srcGeneral}, clarifyAskTR)
 	qb, _ := json.Marshal(map[string]any{"data": q, "id": "question", "type": "data-question"})
 	var want map[string]any
 	_ = json.Unmarshal(qb, &want)
@@ -54,7 +54,7 @@ func TestClarifySourceQuestionCardV2(t *testing.T) {
 	if !strings.Contains(body, "data: "+string(wantLine)+"\n") {
 		t.Fatalf("data-question yok ya da farklı:\n%s", body)
 	}
-	textDelta, _ := json.Marshal(sourceAskTextTR)
+	textDelta, _ := json.Marshal(clarifyAskTR)
 	if !strings.Contains(body, `"delta":`+string(textDelta)) {
 		t.Fatalf("düz metin soru akışta kalmalı:\n%s", body)
 	}
@@ -69,7 +69,7 @@ func TestClarifySourceQuestionNotInV1(t *testing.T) {
 	if q := framesOf(fr, "question"); len(q) != 0 {
 		t.Fatalf("v1 akışına question sızdı: %v", q)
 	}
-	if got := lastAnswerText(fr); got != sourceAskTextTR {
+	if got := lastAnswerText(fr); got != clarifyAskTR {
 		t.Fatalf("v1 cevabı değişti: %q", got)
 	}
 }
@@ -77,7 +77,7 @@ func TestClarifySourceQuestionNotInV1(t *testing.T) {
 func TestClarifySourceOptionWiki(t *testing.T) {
 	rg := newClarifyRig(t, nil)
 	rg.postV2(t, "", clarifyQ)
-	rg.postV2(t, sourceReplyWiki, clarifyQ, sourceAskTextTR, "Wiki dokümanları")
+	rg.postV2(t, srcWiki, clarifyQ, clarifyAskTR, "Wiki")
 	r := lastRow(t, rg.rows())
 	if r.Tier != aisurface.TierWiki {
 		t.Fatalf("seçenek wiki → tier %q", r.Tier)
@@ -92,7 +92,7 @@ func TestClarifySourceOptionBeatsText(t *testing.T) {
 	llm := newLoopLLM(t, func(int, map[string]any) map[string]any { return answerMsg("telemetri cevabı") })
 	rg := newClarifyRig(t, llm)
 	rg.postV2(t, "", clarifyQ)
-	rg.postV2(t, sourceReplyTelemetry, clarifyQ, sourceAskTextTR, "zzz")
+	rg.postV2(t, srcTelemetry, clarifyQ, clarifyAskTR, "zzz")
 	r := lastRow(t, rg.rows())
 	if r.Tier == aisurface.TierWiki || r.Tier == aisurface.TierClarify {
 		t.Fatalf("seçenek telemetri → tier %q", r.Tier)
@@ -106,7 +106,7 @@ func TestClarifySourceOptionBeatsText(t *testing.T) {
 func TestClarifySourceBadOptionFallsBackToText(t *testing.T) {
 	rg := newClarifyRig(t, nil)
 	rg.postV2(t, "", clarifyQ)
-	rg.postV2(t, "bilinmeyen", clarifyQ, sourceAskTextTR, "wikide ara")
+	rg.postV2(t, "bilinmeyen", clarifyQ, clarifyAskTR, "wikide ara")
 	r := lastRow(t, rg.rows())
 	if r.Tier != aisurface.TierWiki {
 		t.Fatalf("metin yolu wiki olmalı: %q", r.Tier)
@@ -118,8 +118,8 @@ func TestClarifySourceOptionIgnoredOnV1(t *testing.T) {
 	rg := newClarifyRig(t, nil)
 	rg.post(t, clarifyQ)
 	postLoopChat(t, rg.s, context.Background(), clarifyUID, map[string]any{
-		"messages": []map[string]any{{"role": "user", "text": clarifyQ}, {"role": "assistant", "text": sourceAskTextTR}, {"role": "user", "text": "zzz"}},
-		"context":  map[string]any{"conversation": clarifyConv, "clarifyOption": sourceReplyWiki}})
+		"messages": []map[string]any{{"role": "user", "text": clarifyQ}, {"role": "assistant", "text": clarifyAskTR}, {"role": "user", "text": "zzz"}},
+		"context":  map[string]any{"conversation": clarifyConv, "clarifyOption": srcWiki}})
 	if m := replyTool(lastRow(t, rg.rows())); m["reply"] != clarifyReplyDropped {
 		t.Fatalf("v1 seçeneği okumamalı: %v", m)
 	}
@@ -129,11 +129,12 @@ func TestClarifySourceOptionIgnoredOnV1(t *testing.T) {
 func TestBareTeamQuestionCardV2(t *testing.T) {
 	rg := newEntityDocRig(t)
 	body := rg.postV2(t, "", entTeamAsk, entTeamQ, entTeam)
-	if !strings.Contains(body, `"type":"data-question"`) || !strings.Contains(body, `"kind":"doc_or_entity"`) ||
-		!strings.Contains(body, `"label":"Takımın servisleri"`) {
-		t.Fatalf("doc_or_entity kartı yok:\n%s", body)
+	// v0.10.2381 — kart TEK kaynak sorusunun kartı: tür `source`, seçenekler kaynaklar.
+	if !strings.Contains(body, `"type":"data-question"`) || !strings.Contains(body, `"kind":"source"`) ||
+		!strings.Contains(body, `"label":"Telemetri"`) || !strings.Contains(body, `"label":"Envanter"`) {
+		t.Fatalf("kaynak sorusu kartı yok:\n%s", body)
 	}
-	if !strings.Contains(body, "yüklü dokümanlarda mı arayayım") {
+	if !strings.Contains(body, "yüklü envanterde de geçiyor") || !strings.Contains(body, "Bunu nerede arayayım") {
 		t.Fatalf("düz metin soru akışta kalmalı:\n%s", body)
 	}
 }
@@ -141,13 +142,13 @@ func TestBareTeamQuestionCardV2(t *testing.T) {
 func TestBareTeamOptionDocs(t *testing.T) {
 	rg := newEntityDocRig(t)
 	rg.postV2(t, "", entTeamAsk, entTeamQ, entTeam)
-	ask := docOrEntityAskTR(bareEntityTeam, entTeam)
-	rg.postV2(t, entityReplyDocs, entTeamAsk, entTeamQ, entTeam, ask, "zzz")
+	ask := entAsk
+	rg.postV2(t, srcExcel, entTeamAsk, entTeamQ, entTeam, ask, "zzz")
 	r := lastRow(t, rg.rows())
 	if r.Tier != aisurface.TierDocRows {
-		t.Fatalf("seçenek docs → tier %q", r.Tier)
+		t.Fatalf("seçenek envanter → tier %q", r.Tier)
 	}
-	if m := replyTool(r); m["reply"] != entityReplyDocs {
+	if m := replyTool(r); m["reply"] != srcExcel {
 		t.Fatalf("clarify_reply: %v", m)
 	}
 }
@@ -155,10 +156,10 @@ func TestBareTeamOptionDocs(t *testing.T) {
 func TestBareTeamOptionEntity(t *testing.T) {
 	rg := newEntityDocRig(t)
 	rg.postV2(t, "", entTeamAsk, entTeamQ, entTeam)
-	ask := docOrEntityAskTR(bareEntityTeam, entTeam)
-	rg.postV2(t, entityReplyEntity, entTeamAsk, entTeamQ, entTeam, ask, "Takımın servisleri")
+	ask := entAsk
+	rg.postV2(t, srcTelemetry, entTeamAsk, entTeamQ, entTeam, ask, "Telemetri")
 	r := lastRow(t, rg.rows())
 	if r.Tier != aisurface.TierGuided || len(*rg.routes) == 0 || (*rg.routes)[len(*rg.routes)-1] != string(guidedTeamServices) {
-		t.Fatalf("seçenek entity → tier %q rotalar %v", r.Tier, *rg.routes)
+		t.Fatalf("seçenek telemetri → tier %q rotalar %v", r.Tier, *rg.routes)
 	}
 }

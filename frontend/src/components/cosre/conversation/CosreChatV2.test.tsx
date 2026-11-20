@@ -542,7 +542,7 @@ describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', ()
   // v0.10.2102 (D2) — soru kartı: data-question → ≤3 düğme; tık seçeneğin
   // etiketini yeni turda clarifyOption ile gönderir; sonra kart pasif + seçili.
   const QUESTION = JSON.stringify({ kind: 'source', text: 'Coremetry mi wiki mi?', allowFree: true, options: [
-    { id: 'telemetri', label: 'Coremetry verisi' }, { id: 'wiki', label: 'Wiki dokümanları' },
+    { id: 'telemetri', label: 'Telemetri' }, { id: 'wiki', label: 'Wiki' },
   ] });
   const withQuestion = () => cosreFixture('ui-stream-v1').replace(
     `"id":"scope","type":"data-scope"}`, `"id":"scope","type":"data-scope"}\n\ndata: {"data":${QUESTION},"id":"question","type":"data-question"}`);
@@ -561,7 +561,7 @@ describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', ()
     await act(async () => { btnIn(card, '[data-question-option="wiki"]').click(); });
     await vi.waitFor(() => expect(calls).toHaveLength(2));
     expect(calls[1].body.context).toMatchObject({ clarifyOption: 'wiki' });
-    expect(JSON.stringify(calls[1].body.messages)).toContain('Wiki dokümanları');
+    expect(JSON.stringify(calls[1].body.messages)).toContain('Wiki');
     await vi.waitFor(() => {
       const old = sheet()!.querySelector<HTMLElement>('[data-question-option="wiki"]');
       if (!old || !old.hasAttribute('disabled')) throw new Error('kart pasifleşmedi');

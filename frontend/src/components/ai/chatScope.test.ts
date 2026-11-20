@@ -143,6 +143,10 @@ describe('kaynak komutları', () => {
     expect(commandOf('/telemetri · orders servisi')).toBe('telemetri');
     expect(commandOf('/exceptions ACMException')).toBe('exceptions');
     expect(commandOf('/genel opentelemetry java')).toBe('genel');
+    // v0.10.2381 — /envanter, /excel'in takma adı (kaynak sorusunun adı).
+    expect(commandOf('/envanter PlatformTeam sunucuları')).toBe('excel');
+    expect(commandOf('/Envanter')).toBe('excel');
+    expect(commandOf('/envanterler')).toBeUndefined();
     expect(commandOf('/excelx')).toBeUndefined();
   });
 });

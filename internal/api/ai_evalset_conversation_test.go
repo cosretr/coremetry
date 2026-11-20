@@ -258,8 +258,8 @@ func TestEvalConvSeamInertInProduction(t *testing.T) {
 // kalan `evm == nil`/`evm != nil` ifadeleri bilinçli tek turlu anahtarlardır).
 func TestEvalConvHandlerGatesUseSingleTurn(t *testing.T) {
 	src := readFileT(t, "copilot_chat.go")
-	if n := strings.Count(src, "!evm.singleTurn()"); n != 7 {
-		t.Errorf("!evm.singleTurn() kapısı %d, want 7 (netleştirme, uç nokta erken, doküman/varlık, rota, operasyon-neden, uç nokta kartı, kaynak sorusu)", n)
+	if n := strings.Count(src, "!evm.singleTurn()"); n != 8 { // v0.10.2381 — kaynak sorusu tur durumu (withSourceTurn)
+		t.Errorf("!evm.singleTurn() kapısı %d, want 8 (netleştirme, kaynak tur durumu, uç nokta erken, doküman/varlık, rota, operasyon-neden, uç nokta kartı, kaynak sorusu)", n)
 	}
 	for _, want := range []string{"cst = evm.evalChatContext()", "evm.stubLoopHandlers(byName)", "if evm.singleTurn() {\n\t\t\ttools = evalAgentTools(tools)"} {
 		if !strings.Contains(src, want) {
