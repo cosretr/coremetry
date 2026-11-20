@@ -191,3 +191,28 @@ func TestErrorRateSeriesQuery(t *testing.T) {
 		t.Fatalf("ilk aile seçilmeli: %v", fam)
 	}
 }
+
+// v0.10.2386 — HTTP ailesinin pin adı noktalıdır; kayıt sorguları adı
+// bölmeden kurulmalı (tikin kendi sorguları adı olduğu gibi kullanır).
+func TestRecordQueriesKeepDottedFamilyName(t *testing.T) {
+	var http anomaly.REDFamilyPin
+	for _, p := range anomaly.REDFamilyPins() {
+		if strings.Contains(p.Names, ".") {
+			http = p
+		}
+	}
+	if http.Names == "" {
+		t.Skip("noktalı adlı aile yok")
+	}
+	bad := func(q string) bool {
+		return strings.Contains(q, "}.") || !strings.Contains(q, http.Names+"_")
+	}
+	e, ok := errSeriesQuery(http, "service_name", "http_route", "http_response_status_code", "orders", "", 60)
+	if !ok || bad(e.Query) || bad(e.VolumeQuery) {
+		t.Fatalf("hata oranı kayıt sorgusu bozuk: %s | %s", e.Query, e.VolumeQuery)
+	}
+	l, ok := latSeriesQuery(http, "service_name", "http_route", "orders", "GET /orders", "p95", 300, 1)
+	if !ok || bad(l.Query) || bad(l.VolumeQuery) {
+		t.Fatalf("gecikme kayıt sorgusu bozuk: %s | %s", l.Query, l.VolumeQuery)
+	}
+}

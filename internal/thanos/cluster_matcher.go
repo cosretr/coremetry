@@ -416,7 +416,15 @@ func injectMatcher(expr, m string, track bool) (string, []int) {
 			i++
 		case isIdentStart(c):
 			j := i
-			for j < len(src) && isIdentByte(src[j]) {
+			// v0.10.2386 — noktalı metrik adı TEK tanımlayıcıdır
+			// (`http.server.request.duration_count`: VictoriaMetrics OTel adını
+			// olduğu gibi saklar, MetricsQL noktayı adın parçası sayar). Nokta
+			// yalnız ardından tanımlayıcı başı geliyorsa ada katılır; PromQL'de
+			// tanımlayıcıdan sonra nokta yoktur, sayılar ayrı dalda. Eskiden ad
+			// noktalardan bölünüyor, her parçaya ayrı eşleyici basılıyordu
+			// (`http{…}.server{…}…`): HTTP ailesinin olay kaydı ve kaynak paneli
+			// sorguları geçersizdi.
+			for j < len(src) && (isIdentByte(src[j]) || (src[j] == '.' && j+1 < len(src) && isIdentStart(src[j+1]))) {
 				j++
 			}
 			lower := strings.ToLower(src[i:j])

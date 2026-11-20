@@ -483,3 +483,31 @@ func TestWithClusterMatcherIdempotent(t *testing.T) {
 		}
 	}
 }
+
+// v0.10.2386 — noktalı metrik adı (VictoriaMetrics'in olduğu gibi sakladığı
+// OTel adı) tek tanımlayıcıdır: eşleyici ada BİR kez, adın sonuna eklenir.
+// Eskiden ad noktalardan bölünüp her parçaya ayrı eşleyici basılıyordu.
+func TestWithMatcherDottedMetricName(t *testing.T) {
+	for _, c := range []struct{ name, in, want string }{
+		{"çıplak ad", `http.server.request.duration_count`,
+			`http.server.request.duration_count{service_name="orders"}`},
+		{"rate içinde", `sum(rate(http.server.request.duration_count[60s]))`,
+			`sum(rate(http.server.request.duration_count{service_name="orders"}[60s]))`},
+		{"mevcut süslü seçici", `rate(http.server.request.duration_bucket{le="0.5"}[5m])`,
+			`rate(http.server.request.duration_bucket{service_name="orders",le="0.5"}[5m])`},
+		{"noktasız ad aynen", `rate(rpc_server_duration_milliseconds_count[5m])`,
+			`rate(rpc_server_duration_milliseconds_count{service_name="orders"}[5m])`},
+		{"sayı sabiti adın parçası değil", `histogram_quantile(0.95, sum by (le) (rate(http.server.request.duration_bucket[5m]))) * 1000`,
+			`histogram_quantile(0.95, sum by (le) (rate(http.server.request.duration_bucket{service_name="orders"}[5m]))) * 1000`},
+	} {
+		if got := WithEqualMatcher(c.in, "service_name", "orders"); got != c.want {
+			t.Errorf("%s:\n got  %s\n want %s", c.name, got, c.want)
+		}
+	}
+	// iki eşleyici art arda (servis + durum regex'i): ad yine bölünmez
+	got := WithRegexMatcher(WithEqualMatcher(`http.server.request.duration_count`, "service_name", "orders"), "http_response_status_code", "5..")
+	if strings.Count(got, "{") != 1 || !strings.HasPrefix(got, `http.server.request.duration_count{`) ||
+		!strings.Contains(got, `service_name="orders"`) || !strings.Contains(got, `http_response_status_code=~"5.."`) {
+		t.Errorf("art arda eşleyici: %s", got)
+	}
+}
