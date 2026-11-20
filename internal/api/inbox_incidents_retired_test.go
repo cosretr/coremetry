@@ -21,9 +21,9 @@ func TestInboxKindsForSwitch(t *testing.T) {
 	}{
 		{"açık: boş = hepsi", "", true, []string{"problem", "exception", "httperror", "anomaly", "incident"}},
 		{"açık: incident tek başına", "incident", true, []string{"incident"}},
-		{"açık: varsayılan", "problem,anomaly,incident", true, []string{"problem", "anomaly", "incident"}},
+		{"açık: varsayılan", "problem,exception,httperror,anomaly,incident", true, []string{"problem", "exception", "httperror", "anomaly", "incident"}},
 		{"emekli: boş = hepsi (incident yok)", "", false, []string{"problem", "exception", "httperror", "anomaly"}},
-		{"emekli: yalnız incident → varsayılan", "incident", false, []string{"problem", "anomaly"}},
+		{"emekli: yalnız incident → varsayılan", "incident", false, []string{"problem", "exception", "httperror", "anomaly"}},
 		{"emekli: eski varsayılan linki", "problem,anomaly,incident", false, []string{"problem", "anomaly"}},
 		{"emekli: exception+incident", "exception,incident", false, []string{"exception"}},
 		{"emekli: anlamsız = hepsi", "garbage", false, []string{"problem", "exception", "httperror", "anomaly"}},
@@ -33,8 +33,8 @@ func TestInboxKindsForSwitch(t *testing.T) {
 			t.Errorf("%s: %v, istenen %v", c.name, got, c.want)
 		}
 	}
-	if !reflect.DeepEqual(inboxKindsDefaultFor(true), []string{"problem", "anomaly", "incident"}) ||
-		!reflect.DeepEqual(inboxKindsDefaultFor(false), []string{"problem", "anomaly"}) {
+	if !reflect.DeepEqual(inboxKindsDefaultFor(true), []string{"problem", "exception", "httperror", "anomaly", "incident"}) ||
+		!reflect.DeepEqual(inboxKindsDefaultFor(false), []string{"problem", "exception", "httperror", "anomaly"}) {
 		t.Error("varsayılan tür kümesi anahtara göre değil")
 	}
 	for _, k := range inboxKindsAllFor(false) {
@@ -71,8 +71,9 @@ func TestInboxBadgeDefaultViewRetired(t *testing.T) {
 	items, attached := badgeMixedFixture()
 	rows, total := inboxDefaultViewRows(t, items, attached, inboxBadgeQuery(""))
 	// v0.10.2196 — varsayılan tüm öncelikler: iki P1 problem + P3 CPU + P3 anomali.
-	if total != 4 || len(rows) != 4 {
-		t.Fatalf("emekli varsayılan görünüm %d satır / %d toplam, istenen 4 (katlamasız)", len(rows), total)
+	// v0.10.2399 — tüm türler varsayılan açık: + exception satırları.
+	if total != 6 || len(rows) != 6 {
+		t.Fatalf("emekli varsayılan görünüm %d satır / %d toplam, istenen 6 (katlamasız)", len(rows), total)
 	}
 	got := map[string]bool{}
 	for _, r := range rows {
@@ -84,7 +85,7 @@ func TestInboxBadgeDefaultViewRetired(t *testing.T) {
 	if !got["problem:p-orders"] || !got["problem:p-carts"] {
 		t.Errorf("iki Problem kendi satırı olmalı: %v", got)
 	}
-	if q := inboxBadgeQuery(""); q.Get("kind") != "problem,anomaly" {
+	if q := inboxBadgeQuery(""); q.Get("kind") != "problem,exception,httperror,anomaly" {
 		t.Errorf("emekli rozet tür kümesi %q", q.Get("kind"))
 	}
 }

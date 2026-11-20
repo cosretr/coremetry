@@ -1373,7 +1373,10 @@ var inboxKindsAll = []string{"problem", "exception", "httperror", "anomaly", "in
 // görüyorum; gerçek problemler ve anomaliler görünsün"). Sayfanın parametresiz
 // açılışı (Inbox.tsx KIND_DEFAULT) ve rozet (inboxBadgeQuery) AYNI küme:
 // exception / httperror çipleri sayılarıyla kalır, tek tıkla açılır.
-var inboxKindsDefault = []string{"problem", "anomaly", "incident"}
+// v0.10.2399 (operatör: "HTTP gibi bazı problem tipleri varsayılan seçili
+// değil … değiştirelim", ardından "hepsi varsayılan açık olsun") — tüm türler
+// varsayılan açık (v0.9.443 ve v0.10.1796 kararları geri alındı).
+var inboxKindsDefault = []string{"problem", "exception", "httperror", "anomaly", "incident"}
 var inboxPriosAll = []string{"P1", "P2", "P3"}
 
 // v0.9.1342 — ÖZNE şeridi. `kind` (satırın kaynağı) ile KARIŞTIRILMAZ:

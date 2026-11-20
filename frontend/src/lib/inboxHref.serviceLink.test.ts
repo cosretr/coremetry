@@ -69,7 +69,7 @@ describe('serviceInboxHref ↔ Inbox süzgeci gidiş-dönüşü', () => {
     expect(serviceInboxHref('orders-api', false)).not.toContain('incident');
     expect(serviceInboxHref('orders-api', true)).toContain('incident');
     expect(inboxScope('/inbox?kind=incident', null, false).kind).toEqual(KIND_DEFAULT_RETIRED);
-    expect(KIND_DEFAULT_RETIRED).toEqual(['problem', 'anomaly']);
+    expect(KIND_DEFAULT_RETIRED).toEqual(['problem', 'exception', 'httperror', 'anomaly']);
   });
 
   it('eski link (?service=&status=open) bu kapsamı VERMİYORDU — hata sınıfı pinli', () => {

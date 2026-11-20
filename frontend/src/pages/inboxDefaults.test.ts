@@ -60,14 +60,14 @@ describe('Problems varsayılan görünümü', () => {
   // v0.10.1796 — operatör: exception'lar Problems'ı boğuyor; varsayılan
   // problem + anomaly + incident. Exception / HTTP hatası çipleri kalır.
   it('tür varsayılanı: problem, anomali, olay (exception ve HTTP hatası çipte)', () => {
-    expect(arr('KIND_DEFAULT')).toEqual(['problem', 'anomaly', 'incident']);
+    expect(arr('KIND_DEFAULT')).toEqual(['problem', 'exception', 'httperror', 'anomaly', 'incident']);
     expect(arr('KIND_ALL')).toEqual(['problem', 'exception', 'httperror', 'anomaly', 'incident']);
   });
 
   // v0.10.1827 — Incidents emekliyken (operatör kararı 2026-11-05) incident
   // türü sözlükten ve varsayılandan çıkar; sayfa kabuk bayrağına göre seçer.
-  it('Incidents emekliyken tür varsayılanı: problem + anomali; incident çipi yok', () => {
-    expect(arr('KIND_DEFAULT_RETIRED')).toEqual(['problem', 'anomaly']);
+  it('Incidents emekliyken tür varsayılanı: problem + HTTP hataları + anomali; incident çipi yok', () => {
+    expect(arr('KIND_DEFAULT_RETIRED')).toEqual(['problem', 'exception', 'httperror', 'anomaly']);
     expect(arr('KIND_ALL_RETIRED')).toEqual(['problem', 'exception', 'httperror', 'anomaly']);
     expect(src).toContain('const kindAll = incidentsOn ? KIND_ALL : KIND_ALL_RETIRED;');
     expect(src).toContain('const kindDefault = incidentsOn ? KIND_DEFAULT : KIND_DEFAULT_RETIRED;');

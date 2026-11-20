@@ -67,11 +67,13 @@ func TestInboxDefaultViewKeepsOracleP1(t *testing.T) {
 	if got.Kind != "exception" || got.Priority != "P1" || !strings.Contains(got.PriorityReason, "> eşik 30") {
 		t.Errorf("Oracle satırı exception + P1 + eşik gerekçesi olmalı: %+v", got)
 	}
-	if _, ok := byID["exception:"+steady.Fingerprint]; ok {
-		t.Error("eşik altı (P3) Oracle grubu varsayılan görünüme girmemeli")
+	// v0.10.2399 (operatör: "hepsi varsayılan açık olsun") — Exceptions varsayılanda
+	// açık: eşik altı Oracle grubu ve span exception'ı da varsayılan görünümde.
+	if _, ok := byID["exception:"+steady.Fingerprint]; !ok {
+		t.Error("eşik altı Oracle grubu (tüm türler açık) varsayılan görünümde olmalı")
 	}
-	if _, ok := byID["exception:"+span.Fingerprint]; ok {
-		t.Error("span exception'ı Exceptions çipi kapalıyken varsayılan görünüme girmemeli")
+	if _, ok := byID["exception:"+span.Fingerprint]; !ok {
+		t.Error("span exception'ı (tüm türler açık) varsayılan görünümde olmalı")
 	}
 	// Exceptions çipi açıkken span P1 de görünür (kıyas), Oracle P1 tek kez.
 	q := inboxBadgeQuery("")

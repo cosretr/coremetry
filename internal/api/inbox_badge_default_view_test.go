@@ -121,8 +121,9 @@ func TestInboxBadgeEqualsDefaultListRows(t *testing.T) {
 	// varsayılan görünümde (ve rozette) YOK, Exceptions çipiyle gelir.
 	// v0.10.2196 — varsayılan tüm öncelikler: katlanmış P1 incident + P3'e
 	// düşen CPU problemi + P3 log anomalisi.
-	if total != 3 {
-		t.Fatalf("rozet (total) = %d, want 3 (katlanmış incident + 2 P3; exception çipte)", total)
+	// v0.10.2399 — tüm türler varsayılan açık: exception satırları da görünümde.
+	if total != 5 {
+		t.Fatalf("rozet (total) = %d, want 5 (katlanmış incident + 2 P3 + exception satırları)", total)
 	}
 	if len(rows) != total {
 		t.Fatalf("liste satırı %d ≠ rozet %d — rozet ekrandaki satır sayısı olmalı", len(rows), total)
@@ -131,8 +132,8 @@ func TestInboxBadgeEqualsDefaultListRows(t *testing.T) {
 	for _, r := range rows {
 		got[r.ID] = true
 	}
-	if !got["incident:inc-1"] || !got["problem:p-cpu"] || !got["anomaly:a-demo"] || got["exception:fp-demo-1"] {
-		t.Errorf("beklenen satırlar incident:inc-1 + p-cpu + a-demo (exception varsayılanda yok), gelen %v", got)
+	if !got["incident:inc-1"] || !got["problem:p-cpu"] || !got["anomaly:a-demo"] || !got["exception:fp-demo-1"] {
+		t.Errorf("beklenen satırlar incident:inc-1 + p-cpu + a-demo + exception:fp-demo-1 (v0.10.2399: tümü açık), gelen %v", got)
 	}
 	// Sıra öncelik önce: P1 üstte.
 	if rows[0].Priority != "P1" || rows[len(rows)-1].Priority != "P3" {
@@ -158,9 +159,9 @@ func TestInboxBadgeSharesDefaultListKey(t *testing.T) {
 	for _, on := range []bool{true, false} {
 		t.Run(map[bool]string{true: "incidents-açık", false: "incidents-emekli"}[on], func(t *testing.T) {
 			withIncidentsOn(t, on)
-			kind := "problem,anomaly" // v0.10.1827 KIND_DEFAULT_RETIRED
+			kind := "problem,exception,httperror,anomaly" // v0.10.2399 KIND_DEFAULT_RETIRED
 			if on {
-				kind = "problem,anomaly,incident" // v0.10.1796 KIND_DEFAULT
+				kind = "problem,exception,httperror,anomaly,incident" // v0.10.2399 KIND_DEFAULT
 			}
 			badgeSharesDefaultListKey(t, kind)
 		})
@@ -212,10 +213,10 @@ func TestInboxBadgeQueryMatchesPageDefaults(t *testing.T) {
 	}
 	src := string(b) + "\n" + string(f)
 	for _, want := range []string{
-		"const PRIO_DEFAULT = ['P1', 'P2', 'P3'] as const;",                              // v0.10.2196 (operatör 2026-11-15)
-		"const SORT_DEFAULT = { id: 'priority', dir: 'desc' as const };",                 // v0.10.2122 (S2, onaylı mockup)
-		"const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'anomaly', 'incident'];", // v0.10.1796
-		"const KIND_DEFAULT_RETIRED: readonly InboxKind[] = ['problem', 'anomaly'];",     // v0.10.1827
+		"const PRIO_DEFAULT = ['P1', 'P2', 'P3'] as const;",                                                        // v0.10.2196 (operatör 2026-11-15)
+		"const SORT_DEFAULT = { id: 'priority', dir: 'desc' as const };",                                           // v0.10.2122 (S2, onaylı mockup)
+		"const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly', 'incident'];", // v0.10.2399
+		"const KIND_DEFAULT_RETIRED: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly'];",     // v0.10.2399
 		"limit: 300,",
 	} {
 		if !strings.Contains(src, want) {

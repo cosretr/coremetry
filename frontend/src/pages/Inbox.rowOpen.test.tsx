@@ -341,18 +341,18 @@ describe('Problems varsayılan isteği', () => {
 // "Incidents" seçeneği yok.
 describe('Incidents emekliyken Problems türleri', () => {
   const last = () => m.calls[m.calls.length - 1];
-  it('parametresiz /inbox → kind=problem,anomaly', async () => {
+  it('parametresiz /inbox → kind=problem,exception,httperror,anomaly', async () => {
     m.incidents = false;
     await mount('/inbox');
-    expect(last().kind).toBe('problem,anomaly');
+    expect(last().kind).toBe('problem,exception,httperror,anomaly');
   });
   it('eski ?kind=incident linki hatasız varsayılana düşer', async () => {
     m.incidents = false;
     await mount('/inbox?kind=incident');
-    expect(last().kind).toBe('problem,anomaly');
+    expect(last().kind).toBe('problem,exception,httperror,anomaly');
   });
-  it('açıkken varsayılan aynen problem,anomaly,incident', async () => {
+  it('açıkken varsayılan aynen problem,exception,httperror,anomaly,incident', async () => {
     await mount('/inbox');
-    expect(last().kind).toBe('problem,anomaly,incident');
+    expect(last().kind).toBe('problem,exception,httperror,anomaly,incident');
   });
 });

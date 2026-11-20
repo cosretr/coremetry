@@ -16,7 +16,7 @@ package api
 var inboxKindsAllRetired = []string{"problem", "exception", "httperror", "anomaly"}
 
 // inboxKindsDefaultRetired — anahtar kapalıyken parametresiz açılış ve rozet.
-var inboxKindsDefaultRetired = []string{"problem", "anomaly"}
+var inboxKindsDefaultRetired = []string{"problem", "exception", "httperror", "anomaly"} // v0.10.2399: hepsi
 
 // inboxKindsAllFor — SAF: tür sözlüğü.
 func inboxKindsAllFor(incidentsOn bool) []string {
