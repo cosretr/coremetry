@@ -63,11 +63,11 @@ func TestSourceChecks(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	vm := &probeVM{
 		labels: map[string][]string{
-			"http.server.request.duration":               {"service_name", "http_route"},
-			"rpc.server.call.duration":                   {"service_name"}, // yalnız stable gRPC
-			"http_client_request_duration_seconds_count": {"service_name", "server_address"},
+			"http.server.request.duration":         {"service_name", "http_route"},
+			"rpc.server.call.duration":             {"service_name"},                   // yalnız stable gRPC
+			"http_client_request_duration_seconds": {"service_name", "server_address"}, // v0.10.2390: keşif taban adla (famDiscovery)
 		},
-		labErr:  map[string]error{"messaging_client_operation_duration_seconds_count": errors.New("vm 503")},
+		labErr:  map[string]error{"messaging_client_operation_duration_seconds": errors.New("vm 503")},
 		rowsFor: "kafka_consumer_records_lag_max",
 		qErrFor: "jvm_",
 	}

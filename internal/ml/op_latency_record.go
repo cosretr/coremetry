@@ -25,7 +25,6 @@ import (
 	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/entity"
-	"github.com/cilcenk/coremetry/internal/thanos"
 )
 
 const latRecordMaxPerTick = 10
@@ -42,28 +41,17 @@ func latSeriesQuery(pin anomaly.REDFamilyPin, svcLabel, routeLabel, svc, route, 
 	if svcLabel == "" || routeLabel == "" || svc == "" || route == "" || winSec <= 0 {
 		return latSeries{}, false
 	}
-	scope := func(m string) string {
-		return thanos.WithEqualMatcher(thanos.WithEqualMatcher(m, svcLabel, svc), routeLabel, route)
-	}
-	bucket := scope(pin.Names + "_bucket")
-	s := latSeries{VolumeQuery: fmt.Sprintf("sum(increase(%s[60s]))", scope(pin.Names+"_count"))}
+	bucket := redScope(pin, partBucket, svcLabel, routeLabel, svc, route)
+	s := latSeries{VolumeQuery: fmt.Sprintf("sum(increase(%s[60s]))", redScope(pin, partCount, svcLabel, routeLabel, svc, route))}
 	switch measure {
 	case "p95":
-		scale := 1.0
-		if pin.Unit == "s" {
-			scale = 1000
-		}
-		s.Query = fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s[%ds]))) * %g", bucket, winSec, scale)
+		s.Query = fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s[%ds]))) * %g", bucket, winSec, pinMsScale(pin))
 		s.Unit, s.Aggregation, s.Scale = "ms", "p95", 1
 	case "slow_ratio":
 		if slowSec <= 0 {
 			return latSeries{}, false
 		}
-		thr := slowSec
-		if pin.Unit == "ms" {
-			thr = slowSec * 1000
-		}
-		s.Query = fmt.Sprintf("100 * clamp_min(1 - histogram_share(%g, sum by (le) (rate(%s[%ds]))), 0)", thr, bucket, winSec)
+		s.Query = fmt.Sprintf("100 * clamp_min(1 - histogram_share(%g, sum by (le) (rate(%s[%ds]))), 0)", pinSlowLe(pin, slowSec), bucket, winSec)
 		s.Unit, s.Aggregation, s.Scale = "percent", "slow_ratio", 100
 	default:
 		return latSeries{}, false

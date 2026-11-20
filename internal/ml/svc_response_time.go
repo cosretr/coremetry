@@ -189,7 +189,7 @@ func rtFromBuckets(rows []chstore.SpanMetricSeries, svcLabel string, scale float
 // rtBucketQuery — SAF: ailenin servis × le'ye toplanmış bucket artışı
 // (route / pod / durum kırılımı yok; anlık sorgu, winSec pencere).
 func rtBucketQuery(pin anomaly.REDFamilyPin, svc string, winSec int) string {
-	return fmt.Sprintf("sum by (%s, le) (increase(%s_bucket[%ds]))", svc, pin.Names, winSec)
+	return fmt.Sprintf("sum by (%s, le) (increase(%s[%ds]))", svc, redSel(pin, partBucket), winSec)
 }
 
 // pinMsScale — SAF: aile birimi → ms çarpanı.

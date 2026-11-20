@@ -35,7 +35,6 @@ import (
 	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/entity"
-	"github.com/cilcenk/coremetry/internal/thanos"
 )
 
 const (
@@ -222,12 +221,8 @@ func volCtxQueries(pin anomaly.REDFamilyPin, fl traceFamilyLabels, svc string) (
 	if !ok {
 		return "", "", false
 	}
-	scale := 1.0
-	if pin.Unit == "s" {
-		scale = 1000
-	}
-	bucket := thanos.WithEqualMatcher(pin.Names+"_bucket", fl.svc, svc)
-	latQ = fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s[%ds]))) * %g", bucket, volBucketSec, scale)
+	bucket := redSel(pin, partBucket, mEq(fl.svc, svc))
+	latQ = fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s[%ds]))) * %g", bucket, volBucketSec, pinMsScale(pin))
 	return s.Query, latQ, true
 }
 
@@ -239,7 +234,7 @@ func (d *Volume) familyLabels(ctx context.Context, vm anomaly.REDVM, pin anomaly
 	if ok && time.Since(fl.at) < time.Hour {
 		return fl
 	}
-	names, _, err := vm.MetricLabelNamesIn(ctx, pin.Names+"_count", from, to)
+	names, _, err := vm.MetricLabelNamesIn(ctx, REDDiscoveryMetric(pin), from, to)
 	fl = traceFamilyLabels{at: time.Now()}
 	if err == nil {
 		fl = pickTraceLabels(names, vm.MetricLabelMap().Service, pin)

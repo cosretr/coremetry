@@ -238,7 +238,7 @@ func TestRTBucketQuery(t *testing.T) {
 	pin := anomaly.REDFamilyPins()[0]
 	for win, tag := range map[int]string{60: "[60s]", 300: "[300s]"} {
 		q := rtBucketQuery(pin, "service_name", win)
-		if !strings.HasPrefix(q, "sum by (service_name, le) (increase(") || !strings.Contains(q, pin.Names+"_bucket") || !strings.Contains(q, tag) ||
+		if !strings.HasPrefix(q, "sum by (service_name, le) (increase(") || !strings.Contains(q, "(increase("+redSel(pin, partBucket)+tag+"))") || !strings.Contains(q, tag) ||
 			strings.Contains(q, "http_route") || strings.Contains(q, "topk") || strings.Contains(q, "histogram_quantile") || strings.Contains(q, "_count") {
 			t.Fatalf("sorgu: %s", q)
 		}
@@ -522,13 +522,13 @@ func TestRTMinutesFamilyOrder(t *testing.T) {
 	fams := d.cachedFamilies()
 	vm.svcs["web"] = rtIncident(0, 0, rtNormal, 600)
 	vm.svcs["rpc"] = rtIncident(0, 0, rtNormal, 600)
-	vm.fam["web"], vm.fam["rpc"] = pins[0].Names+"_bucket", pins[1].Names+"_bucket"
+	vm.fam["web"], vm.fam["rpc"] = redSel(pins[0], partBucket), redSel(pins[1], partBucket)
 	ctx := context.Background()
 	now := t0.Add(11*time.Minute + 30*time.Second)
 	end := svcImpactEnd(now, 120)
 	// alt aile (1) düşer
 	vm.fail = func(q string) error {
-		if strings.Contains(q, pins[1].Names+"_bucket") {
+		if strings.Contains(q, redSel(pins[1], partBucket)) {
 			return errors.New("connection refused")
 		}
 		return nil
@@ -547,7 +547,7 @@ func TestRTMinutesFamilyOrder(t *testing.T) {
 	d2.labels[pins[1].ID] = d.labels[pins[1].ID]
 	vm2.svcs, vm2.fam = vm.svcs, vm.fam
 	vm2.fail = func(q string) error {
-		if strings.Contains(q, pins[0].Names+"_bucket") {
+		if strings.Contains(q, redSel(pins[0], partBucket)) {
 			return errors.New("connection refused")
 		}
 		return nil
@@ -1228,7 +1228,7 @@ func TestSvcResponseTimeRecordIsJudgedSeries(t *testing.T) {
 		}
 		q := vm.queries[0]
 		if !strings.HasPrefix(q, c.q) || !strings.Contains(q, "[60s]") || !strings.Contains(q, `service_name="orders"`) || !strings.Contains(q, "sum by (le)") ||
-			!strings.Contains(q, pin.Names+`_bucket{service_name="orders"}`) || strings.Contains(q, "http_route") {
+			!strings.Contains(q, redSel(pin, partBucket, mEq("service_name", "orders"))) || strings.Contains(q, "http_route") {
 			t.Fatalf("ifade tek servisin 1 dk'lık yüzdeliği olmalı: %s", q)
 		}
 		if want := det.Add(-5*time.Minute - lagRecordPad); !vm.froms[0].Equal(want) || vm.froms[0].Unix()%60 != 0 {

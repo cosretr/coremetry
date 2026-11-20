@@ -442,7 +442,7 @@ func (s traceBackfillSource) fetch(ctx context.Context, from, to time.Time) ([]c
 	agg := newSvcAgg() // v0.10.2077: servis hata oranı tabanı (canlı tikle aynı dönüşüm)
 	for fi, pin := range anomaly.REDFamilyPins() {
 		family := "trace:" + pin.ID
-		names, _, err := s.r.vm.MetricLabelNamesIn(ctx, pin.Names+"_count", from, to)
+		names, _, err := s.r.vm.MetricLabelNamesIn(ctx, REDDiscoveryMetric(pin), from, to)
 		if err != nil {
 			return nil, fmt.Errorf("vm %s etiket keşfi: %w", pin.ID, err)
 		}
@@ -452,10 +452,7 @@ func (s traceBackfillSource) fetch(ctx context.Context, from, to time.Time) ([]c
 		}
 		cq, eq, pq := traceQueries(pin, fl.svc, fl.route, fl.status, s.cfg.BucketSec)
 		sq := slowShareQuery(pin, fl.svc, fl.route, s.cfg.BucketSec, s.cfg.SlowRequestSec)
-		scale := 1.0
-		if pin.Unit == "s" {
-			scale = 1000
-		}
+		scale := pinMsScale(pin)
 		for _, x := range []struct{ expr, measure string }{{cq, "count"}, {eq, "err"}, {pq, "p95"}, {sq, "slow"}} {
 			if s.r.sleep != nil {
 				s.r.sleep(s.r.interval)

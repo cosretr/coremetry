@@ -160,22 +160,19 @@ func TracePodSourceQuery(pin anomaly.REDFamilyPin, l TracePodLabels, service, me
 		return SourceQuery{}, false
 	}
 	w := fmt.Sprintf("[%ds]", SourceQueryWinSec)
-	count := thanos.WithEqualMatcher(pin.Names+"_count", l.Svc, service)
+	svcM := mEq(l.Svc, service) // v0.10.2390: seçiciler red_selector.go'dan
+	count := redSel(pin, partCount, svcM)
 	switch measure {
 	case "err_ratio":
 		if l.Status == "" {
 			return SourceQuery{}, false
 		}
-		errSel := thanos.WithRegexMatcher(count, l.Status, pin.ServerErr)
+		errSel := redSel(pin, partCount, mRe(l.Status, pin.ServerErr), svcM)
 		expr := fmt.Sprintf("100 * sum by (%s) (rate(%s%s)) / sum by (%s) (rate(%s%s))", l.Pod, errSel, w, l.Pod, count, w)
 		return SourceQuery{Expr: expr, Unit: "percent", Label: "Pod başına hata oranı", By: l.Pod}, true
 	case "p95":
-		scale := 1.0
-		if pin.Unit == "s" {
-			scale = 1000
-		}
-		bucket := thanos.WithEqualMatcher(pin.Names+"_bucket", l.Svc, service)
-		expr := fmt.Sprintf("histogram_quantile(0.95, sum by (%s, le) (rate(%s%s))) * %g", l.Pod, bucket, w, scale)
+		bucket := redSel(pin, partBucket, svcM)
+		expr := fmt.Sprintf("histogram_quantile(0.95, sum by (%s, le) (rate(%s%s))) * %g", l.Pod, bucket, w, pinMsScale(pin))
 		return SourceQuery{Expr: expr, Unit: "ms", Label: "Pod başına p95", By: l.Pod}, true
 	}
 	return SourceQuery{}, false
@@ -206,31 +203,22 @@ func TraceREDSourceQuery(pin anomaly.REDFamilyPin, l TraceREDLabels, service, ro
 		winSec = SourceQueryWinSec
 	}
 	w := fmt.Sprintf("[%ds]", winSec)
-	scope := func(m string) string {
-		return thanos.WithEqualMatcher(thanos.WithEqualMatcher(m, l.Svc, service), l.Route, route)
-	}
-	count, bucket := scope(pin.Names+"_count"), scope(pin.Names+"_bucket")
+	// v0.10.2390: seçiciler red_selector.go'dan (redScope, kayıtla ortak).
+	count := redScope(pin, partCount, l.Svc, l.Route, service, route)
+	bucket := redScope(pin, partBucket, l.Svc, l.Route, service, route)
 	switch measure {
 	case "p95":
-		scale := 1.0
-		if pin.Unit == "s" {
-			scale = 1000
-		}
-		return SourceQuery{Expr: fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s%s))) * %g", bucket, w, scale), Unit: "ms", Label: "Yanıt süresi (p95)"}, true
+		return SourceQuery{Expr: fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s%s))) * %g", bucket, w, pinMsScale(pin)), Unit: "ms", Label: "Yanıt süresi (p95)"}, true
 	case "slow_ratio":
 		if slowSec <= 0 {
 			return SourceQuery{}, false
 		}
-		thr := slowSec
-		if pin.Unit == "ms" {
-			thr = slowSec * 1000
-		}
-		return SourceQuery{Expr: fmt.Sprintf("100 * (1 - histogram_share(%g, sum by (le) (rate(%s%s))))", thr, bucket, w), Unit: "percent", Label: "Yavaş istek oranı"}, true
+		return SourceQuery{Expr: fmt.Sprintf("100 * (1 - histogram_share(%g, sum by (le) (rate(%s%s))))", pinSlowLe(pin, slowSec), bucket, w), Unit: "percent", Label: "Yavaş istek oranı"}, true
 	case "err_ratio":
 		if l.Status == "" {
 			return SourceQuery{}, false
 		}
-		errSel := thanos.WithRegexMatcher(count, l.Status, pin.ServerErr)
+		errSel := redScope(pin, partCount, l.Svc, l.Route, service, route, mRe(l.Status, pin.ServerErr))
 		return SourceQuery{Expr: fmt.Sprintf("100 * sum(rate(%s%s)) / sum(rate(%s%s))", errSel, w, count, w), Unit: "percent", Label: "Hata oranı"}, true
 	case "rate":
 		return SourceQuery{Expr: fmt.Sprintf("sum(rate(%s%s))", count, w), Label: "İstek hızı (istek/sn)"}, true
@@ -261,8 +249,8 @@ func dependencyErrSourceQuery(code, service, svcLabel string) (SourceQuery, bool
 	}
 	parts := make([]string, 0, len(f.Targets))
 	for _, tl := range f.Targets {
-		all := thanos.WithEqualMatcher(thanos.WithEqualMatcher(f.Metric+"_count", svcLabel, service), tl, target)
-		errs := thanos.WithRegexMatcher(all, depErrorLabel, ".+")
+		all := depSel(*f, partCount, mEq(tl, target), mEq(svcLabel, service))
+		errs := depSel(*f, partCount, mRe(depErrorLabel, ".+"), mEq(tl, target), mEq(svcLabel, service))
 		parts = append(parts, fmt.Sprintf("(sum(rate(%s[%ds])) or vector(0)) / sum(rate(%s[%ds])) * 100", errs, SourceQueryWinSec, all, SourceQueryWinSec))
 	}
 	return SourceQuery{Expr: strings.Join(parts, " or "), Unit: "%", Label: target + " · hata oranı"}, true
@@ -275,7 +263,7 @@ func dependencySourceQuery(code, service, svcLabel string) (SourceQuery, bool) {
 	}
 	parts := make([]string, 0, len(f.Targets))
 	for _, tl := range f.Targets {
-		sel := thanos.WithEqualMatcher(thanos.WithEqualMatcher(f.Metric+"_bucket", svcLabel, service), tl, target)
+		sel := depSel(*f, partBucket, mEq(tl, target), mEq(svcLabel, service))
 		parts = append(parts, fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s[%ds]))) * %g", sel, SourceQueryWinSec, f.Scale))
 	}
 	return SourceQuery{Expr: strings.Join(parts, " or "), Unit: "ms", Label: target + " · p95"}, true

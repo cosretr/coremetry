@@ -63,9 +63,9 @@ func latencyOutliers(pods []podLatency, cfg chstore.MLConfig) []podJudgement {
 func tracePodQueries(pin anomaly.REDFamilyPin, svc, pod, status string, winSec int) (total, errq, p95 string) {
 	by := svc + ", " + pod
 	w := fmt.Sprintf("%ds", winSec)
-	total = fmt.Sprintf("sum by (%s) (increase(%s_count[%s]))", by, pin.Names, w)
-	errq = fmt.Sprintf("sum by (%s) (increase(%s_count{%s=~\"%s\"}[%s]))", by, pin.Names, status, pin.ServerErr, w)
-	p95 = fmt.Sprintf("histogram_quantile(0.95, sum by (%s, le) (rate(%s_bucket[%s])))", by, pin.Names, w)
+	total = fmt.Sprintf("sum by (%s) (increase(%s[%s]))", by, redSel(pin, partCount), w)
+	errq = fmt.Sprintf("sum by (%s) (increase(%s[%s]))", by, redSel(pin, partCount, mRe(status, pin.ServerErr)), w)
+	p95 = fmt.Sprintf("histogram_quantile(0.95, sum by (%s, le) (rate(%s[%s])))", by, redSel(pin, partBucket), w)
 	return
 }
 
@@ -100,7 +100,7 @@ func (d *TracePods) famLabels(ctx context.Context, deps Deps, pin anomaly.REDFam
 		return l
 	}
 	l = podFamLabels{at: time.Now()}
-	if names, _, err := deps.VM.MetricLabelNamesIn(ctx, pin.Names+"_count", from, to); err == nil {
+	if names, _, err := deps.VM.MetricLabelNamesIn(ctx, REDDiscoveryMetric(pin), from, to); err == nil {
 		// v0.10.2055 — seçim detay grafiğiyle ortak (PickTracePodLabels).
 		tl, ok := PickTracePodLabels(names, deps.VM.MetricLabelMap().Service, pin)
 		l.svc, l.pod, l.status, l.ok = tl.Svc, tl.Pod, tl.Status, ok
@@ -149,10 +149,7 @@ func (d *TracePods) pods(ctx context.Context, deps Deps, cfg chstore.MLConfig, n
 		}
 		fams++
 		tq, eq, pq := tracePodQueries(pin, l.svc, l.pod, l.status, win)
-		scale := 1.0
-		if pin.Unit == "s" {
-			scale = 1000
-		}
+		scale := pinMsScale(pin)
 		vals := [3]map[[2]string]float64{{}, {}, {}}
 		var sampleTs int64 // VM'in döndürdüğü örnek damgası (bayat seri teşhisi)
 		for i, q := range []string{tq, eq, pq} {

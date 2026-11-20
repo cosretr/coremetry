@@ -193,7 +193,9 @@ func TestErrorRateSeriesQuery(t *testing.T) {
 }
 
 // v0.10.2386 — HTTP ailesinin pin adı noktalıdır; kayıt sorguları adı
-// bölmeden kurulmalı (tikin kendi sorguları adı olduğu gibi kullanır).
+// bölmeden kurulmalı. v0.10.2390: ad çıplak yazılmaz, yazım adaylarının
+// seçicisinden gelir (red_selector.go); noktalı ad yalnız alternasyonun
+// içinde, kaçışlı durur.
 func TestRecordQueriesKeepDottedFamilyName(t *testing.T) {
 	var http anomaly.REDFamilyPin
 	for _, p := range anomaly.REDFamilyPins() {
@@ -205,7 +207,7 @@ func TestRecordQueriesKeepDottedFamilyName(t *testing.T) {
 		t.Skip("noktalı adlı aile yok")
 	}
 	bad := func(q string) bool {
-		return strings.Contains(q, "}.") || !strings.Contains(q, http.Names+"_")
+		return strings.Contains(q, "}.") || strings.Contains(stripQuoted(q), http.Names) || !strings.Contains(q, `__name__=~"^(`+strings.ReplaceAll(http.Names, ".", `\\.`)+`_`)
 	}
 	e, ok := errSeriesQuery(http, "service_name", "http_route", "http_response_status_code", "orders", "", 60)
 	if !ok || bad(e.Query) || bad(e.VolumeQuery) {

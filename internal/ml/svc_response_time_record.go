@@ -36,11 +36,9 @@ func rtSeriesQuery(pin anomaly.REDFamilyPin, svcLabel, svc string, m rtMeasure) 
 	if svcLabel == "" || svc == "" {
 		return latSeries{}, false
 	}
-	// Seçici elle kurulur (ad + {etiket="değer"}): thanos.WithEqualMatcher
-	// noktalı OTel adını (HTTP ailesi) parçalara böler; tikin sorguları adı
-	// olduğu gibi kullanır, kayıt da öyle.
-	bucket := fmt.Sprintf("%s_bucket{%s=%q}", pin.Names, svcLabel, svc)
-	count := fmt.Sprintf("%s_count{%s=%q}", pin.Names, svcLabel, svc)
+	// v0.10.2390: tikin sorgusuyla aynı seçici (red_selector.go, yazım adayları).
+	bucket := redSel(pin, partBucket, mEq(svcLabel, svc))
+	count := redSel(pin, partCount, mEq(svcLabel, svc))
 	return latSeries{
 		Query:       fmt.Sprintf("histogram_quantile(%g, sum by (le) (increase(%s[%ds]))) * %g", m.q, bucket, impactStepSec, pinMsScale(pin)),
 		VolumeQuery: fmt.Sprintf("sum(increase(%s[60s]))", count),

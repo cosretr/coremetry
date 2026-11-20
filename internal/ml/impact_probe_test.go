@@ -37,7 +37,7 @@ func (f *impProbeVM) QueryPromQLRange(_ context.Context, q string, from, to time
 	if f.fail != nil {
 		return nil, f.fail
 	}
-	isErr := strings.Contains(q, "=~")
+	isErr := strings.Contains(q, "status_code=~") // v0.10.2390: ad alternasyonu da =~ taşır
 	svcs := make([]string, 0, len(f.series))
 	for svc := range f.series {
 		svcs = append(svcs, svc)

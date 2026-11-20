@@ -177,8 +177,8 @@ func svcErrScore(z, criticalZ float64) float64 { return math.Max(math.Abs(z), cr
 // svcImpactQueries — SAF: ailenin 1 dakikalık servis düzeyi istek ve
 // sunucu-hatası sayısı (traceQueries'in pinleri; route kırılımı ve bucket yok).
 func svcImpactQueries(pin anomaly.REDFamilyPin, svc, status string) (count, errq string) {
-	count = fmt.Sprintf("sum by (%s) (increase(%s_count[%ds]))", svc, pin.Names, svcImpactStepSec)
-	errq = fmt.Sprintf("sum by (%s) (increase(%s_count{%s=~\"%s\"}[%ds]))", svc, pin.Names, status, pin.ServerErr, svcImpactStepSec)
+	count = fmt.Sprintf("sum by (%s) (increase(%s[%ds]))", svc, redSel(pin, partCount), svcImpactStepSec)
+	errq = fmt.Sprintf("sum by (%s) (increase(%s[%ds]))", svc, redSel(pin, partCount, mRe(status, pin.ServerErr)), svcImpactStepSec)
 	return
 }
 

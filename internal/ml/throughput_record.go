@@ -31,7 +31,7 @@ func tpSeriesQuery(pin anomaly.REDFamilyPin, svcLabel, routeLabel, svc, route st
 	if svcLabel == "" || routeLabel == "" || svc == "" || route == "" || winSec <= 0 {
 		return latSeries{}, false
 	}
-	cnt := redScope(pin.Names+"_count", svcLabel, routeLabel, svc, route)
+	cnt := redScope(pin, partCount, svcLabel, routeLabel, svc, route)
 	return latSeries{Query: fmt.Sprintf("sum(rate(%s[%ds]))", cnt, winSec), Unit: "req/s", Aggregation: "rate", Scale: 1}, true
 }
 

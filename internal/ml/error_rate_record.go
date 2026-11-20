@@ -38,7 +38,6 @@ import (
 	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/entity"
-	"github.com/cilcenk/coremetry/internal/thanos"
 )
 
 const (
@@ -46,13 +45,15 @@ const (
 	svcErrBandMethod    = "class_days_hour±1_median_impact_x1.5_plus_1pp_floor_1pct"
 )
 
-// redScope — SAF: seçiciye servis (ve route boş değilse route) eşleyicisi.
-func redScope(m, svcLabel, routeLabel, svc, route string) string {
-	m = thanos.WithEqualMatcher(m, svcLabel, svc)
+// redScope — SAF: ailenin parça seçicisi, servis (ve route boş değilse route)
+// kapsamında; extra = ek eşleyiciler (önce yazılır). v0.10.2390: seçici
+// red_selector.go'dan (yazım adayları), thanos enjeksiyonundan değil.
+func redScope(pin anomaly.REDFamilyPin, part, svcLabel, routeLabel, svc, route string, extra ...string) string {
+	ms := append([]string{}, extra...)
 	if route != "" {
-		m = thanos.WithEqualMatcher(m, routeLabel, route)
+		ms = append(ms, mEq(routeLabel, route))
 	}
-	return m
+	return redSel(pin, part, append(ms, mEq(svcLabel, svc))...)
 }
 
 // errSeriesQuery — SAF: hata yüzdesi ifadesi (traceQueries'in err / count
@@ -61,8 +62,8 @@ func errSeriesQuery(pin anomaly.REDFamilyPin, svcLabel, routeLabel, statusLabel,
 	if svcLabel == "" || statusLabel == "" || svc == "" || winSec <= 0 || (route != "" && routeLabel == "") {
 		return latSeries{}, false
 	}
-	cnt := redScope(pin.Names+"_count", svcLabel, routeLabel, svc, route)
-	errSel := thanos.WithRegexMatcher(cnt, statusLabel, pin.ServerErr)
+	cnt := redScope(pin, partCount, svcLabel, routeLabel, svc, route)
+	errSel := redScope(pin, partCount, svcLabel, routeLabel, svc, route, mRe(statusLabel, pin.ServerErr))
 	return latSeries{
 		Query:       fmt.Sprintf("100 * sum(rate(%s[%ds])) / sum(rate(%s[%ds]))", errSel, winSec, cnt, winSec),
 		VolumeQuery: fmt.Sprintf("sum(increase(%s[60s]))", cnt),

@@ -185,7 +185,7 @@ func (s *Server) tracePodSourceSeries(ctx context.Context, rd metricChartReader,
 		if family != "" && pin.ID != family {
 			continue
 		}
-		names, _, err := rd.MetricLabelNamesIn(cctx, pin.Names+"_count", from.Add(-time.Hour), to)
+		names, _, err := rd.MetricLabelNamesIn(cctx, ml.REDDiscoveryMetric(pin), from.Add(-time.Hour), to)
 		if err != nil {
 			return nil, fmt.Errorf("%w: vm: %v", errUpstream, err)
 		}
@@ -247,7 +247,7 @@ func (s *Server) traceREDSourceSeries(ctx context.Context, rd metricChartReader,
 	cfg := s.store.GetMLConfig(ctx)
 	pref := rd.MetricLabelMap().Normalized().Service
 	for _, pin := range anomaly.REDFamilyPins() {
-		names, _, err := rd.MetricLabelNamesIn(cctx, pin.Names+"_count", from.Add(-time.Hour), to)
+		names, _, err := rd.MetricLabelNamesIn(cctx, ml.REDDiscoveryMetric(pin), from.Add(-time.Hour), to)
 		if err != nil {
 			return nil, fmt.Errorf("%w: vm: %v", errUpstream, err)
 		}

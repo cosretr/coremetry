@@ -511,7 +511,7 @@ type impVM struct {
 
 func (f *impVM) QueryPromQLRange(_ context.Context, q string, from, to time.Time, step, _ int) ([]chstore.SpanMetricSeries, error) {
 	f.queries, f.from, f.to, f.step = append(f.queries, q), from.Unix(), to.Unix(), step
-	isErr := strings.Contains(q, "=~")
+	isErr := strings.Contains(q, "status_code=~") // v0.10.2390: ad alternasyonu da =~ taşır
 	if isErr && f.failErr {
 		return nil, errors.New("connection refused")
 	}

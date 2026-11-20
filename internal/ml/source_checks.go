@@ -130,7 +130,7 @@ func SourceChecks(ctx context.Context, vm anomaly.REDVM, cfg chstore.MLConfig, n
 			tasks[i] = func() (bool, bool, string) { return family(id) }
 			for _, f := range depFamilies {
 				if depSourceIDs[f.ID][0] == id {
-					metric := f.Metric + "_count"
+					metric := famDiscovery(f.Metric)
 					tasks[i] = func() (bool, bool, string) { return probe(metric) }
 				}
 			}

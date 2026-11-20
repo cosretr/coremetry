@@ -27,7 +27,6 @@ import (
 	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/entity"
-	"github.com/cilcenk/coremetry/internal/thanos"
 )
 
 const (
@@ -44,8 +43,10 @@ func podSeriesQueries(pin anomaly.REDFamilyPin, svcLabel, podLabel, statusLabel,
 	if svcLabel == "" || podLabel == "" || svc == "" || pod == "" || winSec <= 0 {
 		return podQueries{}, false
 	}
-	cnt := thanos.WithEqualMatcher(pin.Names+"_count", svcLabel, svc)
-	podCnt := thanos.WithEqualMatcher(cnt, podLabel, pod)
+	// v0.10.2390: seçiciler red_selector.go'dan (yazım adayları).
+	svcM, podM := mEq(svcLabel, svc), mEq(podLabel, pod)
+	cnt := redSel(pin, partCount, svcM)
+	podCnt := redSel(pin, partCount, podM, svcM)
 	q := podQueries{Total: fmt.Sprintf("sum by (%s) (increase(%s[%ds]))", podLabel, cnt, winSec),
 		Calls: fmt.Sprintf("sum(increase(%s[60s]))", podCnt)}
 	switch measure {
@@ -53,17 +54,14 @@ func podSeriesQueries(pin anomaly.REDFamilyPin, svcLabel, podLabel, statusLabel,
 		if statusLabel == "" {
 			return podQueries{}, false
 		}
-		q.Meas = fmt.Sprintf("sum by (%s) (increase(%s[%ds]))", podLabel, thanos.WithRegexMatcher(cnt, statusLabel, pin.ServerErr), winSec)
+		errM := mRe(statusLabel, pin.ServerErr)
+		q.Meas = fmt.Sprintf("sum by (%s) (increase(%s[%ds]))", podLabel, redSel(pin, partCount, errM, svcM), winSec)
 		q.Series = fmt.Sprintf("100 * sum(increase(%s[%ds])) / sum(increase(%s[%ds]))",
-			thanos.WithRegexMatcher(podCnt, statusLabel, pin.ServerErr), winSec, podCnt, winSec)
+			redSel(pin, partCount, errM, podM, svcM), winSec, podCnt, winSec)
 	case "p95":
-		scale := 1.0
-		if pin.Unit == "s" {
-			scale = 1000
-		}
-		bkt := thanos.WithEqualMatcher(pin.Names+"_bucket", svcLabel, svc)
-		q.Meas = fmt.Sprintf("histogram_quantile(0.95, sum by (%s, le) (rate(%s[%ds]))) * %g", podLabel, bkt, winSec, scale)
-		q.Series = fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s[%ds]))) * %g", thanos.WithEqualMatcher(bkt, podLabel, pod), winSec, scale)
+		scale := pinMsScale(pin)
+		q.Meas = fmt.Sprintf("histogram_quantile(0.95, sum by (%s, le) (rate(%s[%ds]))) * %g", podLabel, redSel(pin, partBucket, svcM), winSec, scale)
+		q.Series = fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s[%ds]))) * %g", redSel(pin, partBucket, podM, svcM), winSec, scale)
 	default:
 		return podQueries{}, false
 	}

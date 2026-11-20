@@ -49,7 +49,7 @@ const (
 // depFamily — bir client histogram ailesi (SAF tanım).
 type depFamily struct {
 	ID      string
-	Metric  string // VM taban adı (_count / _bucket eklenir)
+	Metric  string // VM taban adı; seçici depSel (red_selector.go), parça adı orada eklenir
 	Targets []string
 	Scale   float64 // ms'ye çarpan
 	// ErrorRate — v0.10.2063: dependency_error_rate bu ailede değerlendirilir.
@@ -71,14 +71,27 @@ func depPart(fam, target, measure string) string {
 func depQueries(f depFamily, svc, target string, winSec int) (count, p95 string) {
 	by := svc + ", " + target
 	w := fmt.Sprintf("%ds", winSec)
-	count = fmt.Sprintf("sum by (%s) (rate(%s_count[%s]))", by, f.Metric, w)
-	p95 = fmt.Sprintf("histogram_quantile(0.95, sum by (%s, le) (rate(%s_bucket[%s])))", by, f.Metric, w)
+	count = fmt.Sprintf("sum by (%s) (rate(%s[%s]))", by, depSel(f, partCount), w)
+	p95 = fmt.Sprintf("histogram_quantile(0.95, sum by (%s, le) (rate(%s[%s])))", by, depSel(f, partBucket), w)
 	return
 }
 
 // depErrQuery — SAF (v0.10.2063): hatalı çağrı hızı (error_type dolu).
 func depErrQuery(f depFamily, svc, target string, winSec int) string {
-	return fmt.Sprintf("sum by (%s, %s) (rate(%s_count{%s!=\"\"}[%ds]))", svc, target, f.Metric, depErrorLabel, winSec)
+	return fmt.Sprintf("sum by (%s, %s) (rate(%s[%ds]))", svc, target, depSel(f, partCount, mSet(depErrorLabel)), winSec)
+}
+
+// depTopkQuery — SAF: servis başına en yoğun k hedefin istek hızı (count
+// serisi, le yok; vm_budget.go A adımı).
+func depTopkQuery(f depFamily, svc, target string, k, winSec int) string {
+	return fmt.Sprintf("topk by (%s) (%d, sum by (%s, %s) (rate(%s[%ds])))", svc, k, svc, target, depSel(f, partCount), winSec)
+}
+
+// depBatchP95Query — SAF: bir servis grubunun seçili hedeflerinin p95'i
+// (vm_budget.go B adımı: ham bucket yalnız grup + hedef regex'iyle).
+func depBatchP95Query(f depFamily, svc, target string, bt svcBatch, winSec int) string {
+	return fmt.Sprintf("histogram_quantile(0.95, sum by (%s, %s, le) (rate(%s[%ds])))",
+		svc, target, depSel(f, partBucket, mRe(svc, bt.svcRe), mRe(target, bt.tgtRe)), winSec)
 }
 
 // depErrRatios — SAF (v0.10.2063): seçili (count) çiftler için hata oranı.
@@ -150,7 +163,7 @@ func (d *Dependency) famLabels(ctx context.Context, deps Deps, f depFamily, from
 		return l
 	}
 	l = depLabels{at: time.Now()}
-	if names, _, err := deps.VM.MetricLabelNamesIn(ctx, f.Metric+"_count", from, to); err == nil {
+	if names, _, err := deps.VM.MetricLabelNamesIn(ctx, famDiscovery(f.Metric), from, to); err == nil {
 		lm := deps.VM.MetricLabelMap()
 		l.svc = pickLabel(names, append([]string{lm.Service}, svcLabelCandidates...))
 		l.target = pickLabel(names, f.Targets)
@@ -197,7 +210,6 @@ func (d *Dependency) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, 
 		series[k][t] = v
 	}
 	fams := 0
-	win := fmt.Sprintf("%ds", cfg.BucketSec)
 	var waiting, errMissing []string
 	errMeasured := false
 	errNow := map[string]float64{}  // err_ratio anahtarı → hatalı istek/sn (son kova)
@@ -217,7 +229,7 @@ func (d *Dependency) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, 
 		fams++
 		labOf[f.ID] = l
 		// A: servis başına en çok K hedef — count serisi ucuz (le yok)
-		cq := fmt.Sprintf("topk by (%s) (%d, sum by (%s, %s) (rate(%s_count[%s])))", l.svc, cfg.VMTargetCardinality, l.svc, l.target, f.Metric, win)
+		cq := depTopkQuery(f, l.svc, l.target, cfg.VMTargetCardinality, cfg.BucketSec)
 		rows, skip, err := vmInstant(ctx, deps, "dep:"+f.ID, cq, to, now)
 		if skip {
 			waiting = append(waiting, f.ID)
@@ -240,8 +252,7 @@ func (d *Dependency) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, 
 		// B: p95 servis grupları halinde, yalnız seçili hedefler (ham bucket taraması sınırlı)
 		if wantLat {
 			for _, bt := range svcBatches(bySvc, cfg.VMServiceBatch) {
-				pq := fmt.Sprintf("histogram_quantile(0.95, sum by (%s, %s, le) (rate(%s_bucket{%s=~%q, %s=~%q}[%s])))",
-					l.svc, l.target, f.Metric, l.svc, bt.svcRe, l.target, bt.tgtRe, win)
+				pq := depBatchP95Query(f, l.svc, l.target, bt, cfg.BucketSec)
 				rows, skip, err := vmInstant(ctx, deps, "dep:"+f.ID, pq, to, now)
 				if skip {
 					waiting = append(waiting, f.ID)

@@ -83,6 +83,112 @@ type TraceRED struct {
 	rtNote      string
 	rtBlindFrom int
 	rtRan       bool
+	// v0.10.2390 — aile keşfedildi ama sorguları seri döndürmüyor (famEmpty):
+	// empty = aile → ardışık boş kova sayacı; emptyNote = dedektör → not.
+	empty     map[string]famEmpty
+	emptyNote map[string]string
+}
+
+// famEmptyBuckets — keşfedilmiş ailenin count sorgusu art arda bu kadar KOVA
+// boş dönerse not düşülür (varsayılan kovayla 15 dk). Kova sayılır, tik değil:
+// erken tik aynı kovayı yeniden sorar, sayacı ilerletmez.
+const famEmptyBuckets = 3
+
+// famEmpty — bir ailenin "keşfedildi ama boş" durumu.
+type famEmpty struct {
+	n      int   // art arda boş kova
+	bucket int64 // sayılan son kova (unix sn)
+}
+
+// next — SAF: bu kovanın gözlemi (rows = count sorgusunun satır sayısı).
+// Seri dönerse sayaç sıfırlanır; aynı kova iki kez sayılmaz.
+func (e famEmpty) next(bucket int64, rows int) famEmpty {
+	if rows > 0 {
+		return famEmpty{bucket: bucket}
+	}
+	if bucket == e.bucket && e.n > 0 {
+		return e
+	}
+	return famEmpty{n: e.n + 1, bucket: bucket}
+}
+
+// flagged — SAF: eşik aşıldı mı.
+func (e famEmpty) flagged() bool { return e.n >= famEmptyBuckets }
+
+// famEmptyLabel — SAF: notta ailenin adı.
+func famEmptyLabel(id string) string {
+	if id == "http" {
+		return "HTTP"
+	}
+	return "gRPC (" + id + ")"
+}
+
+// famEmptyNote — SAF: boş dönen aileler → durum notu ("" = yok). measured: en
+// az bir aile seri döndürdü (dedektörler kısmen ölçüyor).
+func famEmptyNote(empty []string, measured bool) string {
+	if len(empty) == 0 {
+		return ""
+	}
+	labels := make([]string, len(empty))
+	for i, id := range empty {
+		labels[i] = famEmptyLabel(id)
+	}
+	why := strings.Join(labels, ", ") + " ailesi keşfedildi ama sorgular seri döndürmüyor"
+	if measured {
+		return "kısmen ölçülüyor: " + why
+	}
+	return "ölçülemedi: " + why
+}
+
+// observeFamily — tikin count sorgusu sonucu (backoff atlaması ve hata
+// ÇAĞIRMAZ: sayaç ne ilerler ne sıfırlanır). Eşiğe varışta ve düzelmede BİR
+// log satırı.
+func (d *TraceRED) observeFamily(id string, bucket int64, rows int) {
+	d.mu.Lock()
+	if d.empty == nil {
+		d.empty = map[string]famEmpty{}
+	}
+	prev := d.empty[id]
+	cur := prev.next(bucket, rows)
+	d.empty[id] = cur
+	d.mu.Unlock()
+	switch {
+	case cur.flagged() && !prev.flagged():
+		log.Printf("[ml] trace_red: %s ailesi keşfedildi ama sorgular seri döndürmüyor (%d kovadır; metrik yazımı / etiket keşfi kontrol edilmeli)", famEmptyLabel(id), cur.n)
+	case prev.flagged() && !cur.flagged():
+		log.Printf("[ml] trace_red: %s ailesi yeniden seri döndürüyor", famEmptyLabel(id))
+	}
+}
+
+// setEmptyNote — tik sonu: boş aileler → açık trace dedektörlerinin notu.
+// seen = bu tikte keşfedilmiş aileler (keşiften düşen ailenin sayacı silinir).
+func (d *TraceRED) setEmptyNote(seen map[string]bool, cfg chstore.MLConfig) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var empty []string
+	measured := false
+	for _, pin := range anomaly.REDFamilyPins() {
+		e, ok := d.empty[pin.ID]
+		switch {
+		case !seen[pin.ID]:
+			delete(d.empty, pin.ID)
+		case ok && e.flagged():
+			empty = append(empty, pin.ID)
+		case ok && e.n == 0:
+			measured = true
+		}
+	}
+	d.emptyNote = nil
+	note := famEmptyNote(empty, measured)
+	if note == "" {
+		return
+	}
+	d.emptyNote = map[string]string{}
+	for _, det := range []string{detOpLatency, detOpErrorRate, detThroughputDrop, detSvcErrorRate, detSvcResponseTime} {
+		if cfg.DetectorOn(det) {
+			d.emptyNote[det] = note
+		}
+	}
 }
 
 // Unmeasured — v0.10.2373 (unmeasuredReporter, dependency.go emsali): 1 dk'lık
@@ -90,10 +196,13 @@ type TraceRED struct {
 func (d *TraceRED) Unmeasured() map[string]string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.impactNote == "" && d.rtNote == "" {
+	if d.impactNote == "" && d.rtNote == "" && len(d.emptyNote) == 0 {
 		return nil
 	}
 	out := map[string]string{}
+	for det, note := range d.emptyNote { // v0.10.2390; sorgu hatası notu (aşağıda) önceliklidir
+		out[det] = note
+	}
 	if d.impactNote != "" {
 		out[detSvcErrorRate] = d.impactNote
 	}
@@ -146,20 +255,16 @@ func pickLabel(have []string, candidates []string) string {
 func traceQueries(pin anomaly.REDFamilyPin, svc, route, status string, winSec int) (count, errq, p95 string) {
 	by := fmt.Sprintf("%s, %s", svc, route)
 	w := fmt.Sprintf("%ds", winSec)
-	count = fmt.Sprintf("sum by (%s) (rate(%s_count[%s]))", by, pin.Names, w)
-	errq = fmt.Sprintf("sum by (%s) (rate(%s_count{%s=~\"%s\"}[%s]))", by, pin.Names, status, pin.ServerErr, w)
-	p95 = fmt.Sprintf("histogram_quantile(0.95, sum by (%s, le) (rate(%s_bucket[%s])))", by, pin.Names, w)
+	count = fmt.Sprintf("sum by (%s) (rate(%s[%s]))", by, redSel(pin, partCount), w)
+	errq = fmt.Sprintf("sum by (%s) (rate(%s[%s]))", by, redSel(pin, partCount, mRe(status, pin.ServerErr)), w)
+	p95 = fmt.Sprintf("histogram_quantile(0.95, sum by (%s, le) (rate(%s[%s])))", by, redSel(pin, partBucket), w)
 	return
 }
 
 // slowShareQuery — SAF (B2): isteklerin ≤ slow eşiğinde kalan payı
 // (MetricsQL histogram_share; VM kaynağı). slow_ratio = 1 − pay.
 func slowShareQuery(pin anomaly.REDFamilyPin, svc, route string, winSec int, slowSec float64) string {
-	thr := slowSec
-	if pin.Unit == "ms" {
-		thr = slowSec * 1000
-	}
-	return fmt.Sprintf("histogram_share(%g, sum by (%s, %s, le) (rate(%s_bucket[%ds])))", thr, svc, route, pin.Names, winSec)
+	return fmt.Sprintf("histogram_share(%g, sum by (%s, %s, le) (rate(%s[%ds])))", pinSlowLe(pin, slowSec), svc, route, redSel(pin, partBucket), winSec)
 }
 
 // slowAffected — SAF: kovada etkilenen istek ≈ oran × istek/sn × kova sn.
@@ -249,7 +354,7 @@ func (d *TraceRED) familyLabels(ctx context.Context, vm anomaly.REDVM, pin anoma
 	if ok && time.Since(fl.at) < time.Hour {
 		return fl
 	}
-	names, _, err := vm.MetricLabelNamesIn(ctx, pin.Names+"_count", from, to)
+	names, _, err := vm.MetricLabelNamesIn(ctx, REDDiscoveryMetric(pin), from, to) // v0.10.2390: sorguların adaylarıyla aynı aile
 	fl = traceFamilyLabels{at: time.Now()}
 	if err == nil {
 		fl = pickTraceLabels(names, vm.MetricLabelMap().Service, pin)
@@ -307,10 +412,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		families++
 		famOf[fi] = map[string]any{"redFamily": pin.ID, "svcLabel": fl.svc, "statusLabel": fl.status}
 		cq, eq, pq := traceQueries(pin, fl.svc, fl.route, fl.status, cfg.BucketSec)
-		scale := 1.0
-		if pin.Unit == "s" {
-			scale = 1000
-		}
+		scale := pinMsScale(pin)
 		type q struct{ expr, measure string }
 		sq := slowShareQuery(pin, fl.svc, fl.route, cfg.BucketSec, cfg.SlowRequestSec)
 		for _, x := range []q{{cq, "count"}, {eq, "err"}, {pq, "p95"}, {sq, "slow"}} {
@@ -323,6 +425,9 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 			}
 			if x.measure == "err" {
 				agg.errRan(fi)
+			}
+			if x.measure == "count" { // v0.10.2390: keşfedildi ama boş mu
+				d.observeFamily(pin.ID, last.Unix(), len(rows))
 			}
 			for _, r := range rows {
 				lb := groupKeyLabels(r.GroupKey)
@@ -354,6 +459,11 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		}
 		impFams = append(impFams, impFam{idx: fi, pin: pin, fl: fl})
 	}
+	seenFam := make(map[string]bool, len(impFams))
+	for _, f := range impFams {
+		seenFam[f.pin.ID] = true
+	}
+	d.setEmptyNote(seenFam, cfg) // v0.10.2390
 	if families == 0 {
 		return nil, fmt.Errorf("VM'de RED ailesi/etiketi bulunamadı (servis, route, durum)")
 	}

@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
-	"github.com/cilcenk/coremetry/internal/thanos"
 )
 
 const depRecordMaxPerTick = 10
@@ -43,20 +42,19 @@ func depSeriesQuery(det, code, svcLabel, targetLabel, svc string, winSec int) (l
 	if f.ID == "" || tgt == "" || svcLabel == "" || targetLabel == "" || svc == "" || winSec <= 0 {
 		return latSeries{}, "", false
 	}
-	scope := func(m string) string {
-		return thanos.WithEqualMatcher(thanos.WithEqualMatcher(m, svcLabel, svc), targetLabel, tgt)
-	}
-	cnt := scope(f.Metric + "_count")
+	// v0.10.2390: seçiciler red_selector.go'dan (depSel).
+	tgtM, svcM := mEq(targetLabel, tgt), mEq(svcLabel, svc)
+	cnt := depSel(f, partCount, tgtM, svcM)
 	s := latSeries{VolumeQuery: fmt.Sprintf("sum(increase(%s[60s]))", cnt)}
 	switch det {
 	case detDependencyLatency:
-		s.Query = fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s[%ds]))) * %g", scope(f.Metric+"_bucket"), winSec, f.Scale)
+		s.Query = fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s[%ds]))) * %g", depSel(f, partBucket, tgtM, svcM), winSec, f.Scale)
 		s.Unit, s.Aggregation, s.Scale = "ms", "p95", 1
 	case detDependencyErrorRate:
 		if !f.ErrorRate {
 			return latSeries{}, "", false
 		}
-		errSel := thanos.WithRegexMatcher(cnt, depErrorLabel, ".+")
+		errSel := depSel(f, partCount, mRe(depErrorLabel, ".+"), tgtM, svcM)
 		s.Query = fmt.Sprintf("clamp_max(100 * sum(rate(%s[%ds])) / sum(rate(%s[%ds])), 100)", errSel, winSec, cnt, winSec)
 		s.Unit, s.Aggregation, s.Scale = "percent", "err_ratio", 100
 	default:
