@@ -193,8 +193,8 @@ func TestImpactReplayResponseTimeAndLag(t *testing.T) {
 	if err != nil || len(res.Episodes) != 1 {
 		t.Fatalf("lag: err %v epizot %+v", err, res.Episodes)
 	}
-	// aday olmayan topic oynatılmaz; lag Value = Threshold → P2
-	if e := res.Episodes[0]; e.Subject != lagPart || e.Measure != "consumer_lag" || e.Priority != "P2" {
+	// aday olmayan topic oynatılmaz; v0.10.2398 — tepe ≥ 2 × taban → P1 (canlı kural v0.10.2396)
+	if e := res.Episodes[0]; e.Subject != lagPart || e.Measure != "consumer_lag" || e.Priority != "P1" {
 		t.Errorf("lag: %+v", e)
 	}
 	if g.candReq.Signal != chstore.MLSignalMetric || g.candReq.PartPrefix == "" {
@@ -238,6 +238,20 @@ func TestImpactReplayDetectorOK(t *testing.T) {
 	for d, want := range map[string]bool{"failure_rate": true, "response_time": true, "consumer_lag": true, "": false, "svc_error_rate": false} {
 		if ImpactReplayDetectorOK(d) != want {
 			t.Errorf("%q", d)
+		}
+	}
+}
+
+// v0.10.2398 — geri oynatmanın lag önceliği canlı kuralla aynı.
+func TestReplayLagPriorityMatchesLive(t *testing.T) {
+	prio := chstore.DefaultProblemPriority()
+	for _, c := range []struct {
+		peak, normal float64
+		want         string
+	}{{165000, 600, "P1"}, {900, 600, "P2"}, {5000, 0, "P1"}, {1200, 600, "P1"}} {
+		e := ImpactReplayEpisode{Service: "svc-q", Peak: c.peak, Normal: c.normal, Start: 1000, End: 1600}
+		if got, _ := replayPriority(ImpactReplayConsumerLag, e, prio); got != c.want {
+			t.Errorf("tepe %v taban %v: %s, beklenen %s", c.peak, c.normal, got, c.want)
 		}
 	}
 }

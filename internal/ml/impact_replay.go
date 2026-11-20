@@ -26,8 +26,9 @@ package ml
 // MinBaselineSamples). Uzatma / başlangıç impactEmit + impactRunStart.
 // Öncelik svc_shadow.go'nun girdi sözleşmesiyle (Value = gözlenen tepe,
 // Threshold = taban, svcValueThreshold tabanları) MEVCUT computePriority'den
-// (chstore.PreviewProblemPriority); lag tek sinyal kolu gibi Value =
-// Threshold (P2; 4 sa açık → P1). Yeni kural yok.
+// (chstore.PreviewProblemPriority); lag canlı tek sinyal koluyla aynı:
+// tepe ≥ 2 × taban → P1 (v0.10.2396), altında Value = Threshold (P2; 4 sa
+// açık → P1). Yeni kural yok.
 
 import (
 	"context"
@@ -388,7 +389,16 @@ func replayPriority(det string, e ImpactReplayEpisode, prio chstore.ProblemPrior
 	rule, val, th := MLSvcRulePrefix+e.Service, 1.0, 1.0
 	switch det {
 	case ImpactReplayConsumerLag:
-		rule = MLGroupRulePrefix + e.Service // tek sinyal kolu: Value = Threshold
+		// v0.10.2398 — canlı kuralla aynı (v0.10.2396 impactLagBigBreach):
+		// tepe ≥ 2 × taban (taban 0 dahil) → Value = tepe, Threshold = taban
+		// (0 → 1 kayıt) → bigBreach P1; altında tek sinyal kolu Value = Threshold.
+		rule = MLGroupRulePrefix + e.Service
+		switch {
+		case e.Normal <= 0:
+			val, th = e.Peak, 1
+		case e.Peak/e.Normal >= bigBreachRatio:
+			val, th = e.Peak, e.Normal
+		}
 	case ImpactReplayResponseTime:
 		val, th = svcValueThreshold(chstore.MLEvent{Detector: detSvcResponseTime, Observed: e.Peak, Baseline: e.Normal})
 	default:
