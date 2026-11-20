@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
-import type { MLEvent, MLScorecard, MLBaselineBackfillView, MLServiceProfilePage, MLSvcShadowCompare, AnomalyEngineCompare } from '@/lib/types';
+import type { MLEvent, MLScorecard, MLBaselineBackfillView, MLServiceProfilePage, MLSvcShadowCompare, AnomalyEngineCompare, ImpactReplayResult } from '@/lib/types';
 import type { ProblemGraphShadowResponse } from '@/lib/problemGraph';
 
 export function useMLEvents(signal: '' | 'log' | 'trace' | 'metric' = '', enabled = true) {
@@ -73,5 +73,15 @@ export function useProblemGraphShadow(enabled: boolean) {
     queryKey: keys.anomalies.graphShadow,
     queryFn: async () => (await api.problemGraphShadow()) ?? null,
     enabled, staleTime: 15_000,
+  });
+}
+
+/** v0.10.2392 — etki kuralı geri oynatma; yalnız düğmeyle (req null = istek yok),
+ *  yoklama yok, staleTime = sunucu TTL'i (10 dk). Soğuk hesap ≤ 10 sn: sinyal iletilir. */
+export function useImpactReplay(req: { days: number; detector: string } | null) {
+  return useQuery<ImpactReplayResult | null>({
+    queryKey: [...keys.anomalies.impactReplay, req?.days ?? 0, req?.detector ?? ''],
+    queryFn: async ({ signal }) => (req ? (await api.mlImpactReplay(req.days, req.detector, signal)) ?? null : null),
+    enabled: req !== null, staleTime: 10 * 60_000,
   });
 }

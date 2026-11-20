@@ -15180,3 +15180,11 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Değişmeyen: hata oranı satırları bayt bayt; kanıt yok / eski / uyuşmaz → bugünkü tek cümle; liste, bildirim, öncelik, güven yolu okumaz.
 - Bilinçli dışarıda: ≥ 2 sinyalli grup Problem'i ve servis ölçüsünün devraldığı grup satırı (tek olayın kuralı Problem'in tamamını açıklamaz); iki ölçünün birlikte ateşlemesi ayrı satır olarak yazılmaz.
 
+## 2026-11-20 — v0.10.2392 — Etki kuralı geri oynatma: son N gün kaç Problem açardı (ML admin)
+
+- Operatör yeni etki kurallarının gürültüsünü ölçemiyordu. Anomalies › ML › Teknik detay'da (Davis ↔ ML karşılaştırmasının yanında) yalnız admin'e açık, tembel yüklenen bölüm: gün (1/3/7/14) + dedektör (hata oranı / yanıt süresi / consumer lag), "Oynat" ile istek; özet (Problem, P1/P2, servis, medyan süre) + epizot tablosu. Uç `GET /api/ml/impact-replay` (yalnız admin, 10 dk önbellek, anahtar days + dedektör + ML ConfigHash + takvim + mevsimsel dilim + öncelik ayarı).
+- Aynı kural, ikinci kopya yok: karar canlı tikin SAF işlevleri (svcImpactDecideBase / rtDecide / lagImpactDecide → impactDecide, impactEmit, impactRunStart), taban tikinki (baselineDates × saat ± 1, medyan, MinBaselineSamples). Öncelik svc_shadow sözleşmesiyle mevcut computePriority (Value = tepe, Threshold = taban; lag Value = Threshold).
+- YAKLAŞIK: 1 dk örnekler saklanmıyor; dedektörün 5 dk ml_series serisi her kova 5 özdeş dakika sayılarak yargılanır. 5 dk'dan kısa olaylar eksik sayılabilir; kalite süzgeci, günlük tavan, Problem birleştirme ve yeniden açma uygulanmaz (her epizot bir Problem). Arayüz ve cevap notu bunu söyler. HTTP ailesinin tabanı v0.10.2390'a dek boş kaldığı için o tarihten önceki HTTP pencereleri "taban örneği az" ile atlanır.
+- Sınırlar: yalnız ml_series; aday sorgusu kuralın mutlak alt sınırıyla (kesin süzgeç, LIMIT 201, 5 sn), seri sorgusu 50 servislik parçalarla (LIMIT 5000, 8 sn); tavan 200 özne / 2000 epizot; bütçe 10 sn, aşılırsa kısmi cevap. Ayar, migration, LLM yok.
+- Doğrulama: üç sorgu yerel ClickHouse'ta hatasız çalıştı (yerelde ml_series boş, sonuç satırı yok); gerçek veriyle süre ölçülmedi.
+

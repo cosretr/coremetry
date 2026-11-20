@@ -117,6 +117,7 @@ export const keys = {
     mlProfiles: ['anomalies', 'ml', 'profiles'] as const, // v0.10.1816
     mlSvcShadow: ['anomalies', 'ml', 'svc-shadow'] as const, // v0.10.2089
     engineCompare: ['anomalies', 'ml', 'engine-compare'] as const, // v0.10.2310
+    impactReplay: ['anomalies', 'ml', 'impact-replay'] as const, // v0.10.2392
     graphShadow: ['anomalies', 'ml', 'problem-graph-shadow'] as const, // v0.10.2274
     logPatterns: ['anomalies', 'log-patterns'] as const,
     metrics:     ['anomalies', 'metrics'] as const,

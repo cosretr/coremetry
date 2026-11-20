@@ -12,10 +12,15 @@ import { MLPublishGatesSection } from './MLPublishGates';
 import { MLSvcShadowCompareSection } from './MLSvcShadowCompare';
 import { EngineCompareSection } from './EngineCompare';
 import { ProblemGraphShadowSection } from './ProblemGraphShadow';
+import { lazy, Suspense } from 'react';
+import { useAuthRole } from '@/components/AuthProvider';
 import { SIGNAL_KINDS } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
 import { ML_DETECTOR_TR, mlDetectorLabel } from '@/lib/mlDetectorLabels';
 import { t as tr, tf, useLang, type Lang } from '@/lib/i18n';
+
+// v0.10.2392 — etki kuralı geri oynatma: yalnız admin, tembel parça (bundle bütçesi).
+const ImpactReplaySection = lazy(() => import('./ImpactReplay'));
 
 // v0.10.2163 — harita lib/mlDetectorLabels.ts'te (Problem olay çizelgesi de okur;
 // bu ağır modülü Problems parçasına çekmesin). Buradan yeniden dışa açılır.
@@ -294,6 +299,7 @@ export function mlRowText(e: MLEvent, lang: Lang = 'tr'): string {
 export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?: (s: MLSignal) => void }) {
   const sc = useMLScorecard();
   const lang = useLang();
+  const isAdmin = useAuthRole() === 'admin';
   return (
     <div data-testid="ml-tab" className="flex flex-col gap-3">
       {onSignal && (
@@ -377,6 +383,7 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
               <MLPublishGatesSection tick={sc.data.tick} />
               <MLSvcShadowCompareSection />
               <EngineCompareSection />
+              {isAdmin && <Suspense fallback={null}><ImpactReplaySection /></Suspense>}
               <ProblemGraphShadowSection />
             </div>
           </details>

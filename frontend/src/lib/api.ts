@@ -1741,6 +1741,9 @@ export const api = {
   // v0.10.2089 — servis düzeyi gölge ↔ eski Problem karşılaştırması (salt-okunur, 60 sn önbellek).
   mlSvcShadowCompare: (days = 14) => get<import('./types').MLSvcShadowCompare>(`/api/ml/svc-shadow-compare?days=${days}`),
   /** v0.10.2310 — Davis özneleri ↔ ML gölge karşılaştırması (api/anomaly_engine_compare.go). */
+  /** v0.10.2392 — etki kuralı geri oynatma (api/ml_impact_replay.go; yalnız admin, 10 dk önbellek). */
+  mlImpactReplay: (days: number, detector: string, signal?: AbortSignal) =>
+    get<import('./types').ImpactReplayResult>(`/api/ml/impact-replay?days=${days}&detector=${encodeURIComponent(detector)}`, signal),
   anomalyEngineCompare: (days = 7) => get<import('./types').AnomalyEngineCompare>(`/api/anomalies/engine-compare?days=${days}`),
   // v0.10.2274 — entity grafı Problem birleştirme gölge raporu (yalnız admin, 15 sn önbellek).
   problemGraphShadow: () => get<import('./problemGraph').ProblemGraphShadowResponse>(`/api/admin/problem-graph-shadow`),

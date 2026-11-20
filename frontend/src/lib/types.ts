@@ -12957,3 +12957,39 @@ export interface CosreAliasInput {
   notId?: string;
   exchangeId?: string;
 }
+
+// v0.10.2392 — etki kuralı geri oynatma (Go: ml.ImpactReplayResult,
+// internal/ml/impact_replay.go; uç GET /api/ml/impact-replay, yalnız admin).
+export type ImpactReplayDetector = 'failure_rate' | 'response_time' | 'consumer_lag';
+export interface ImpactReplayEpisode {
+  service: string;
+  subject?: string;     // lag: topic part'ı
+  measure: string;      // failure_rate | response_median | response_slow | consumer_lag
+  start: number;        // unix sn
+  end: number;          // unix sn
+  durationSec: number;
+  peak: number;
+  normal: number;
+  threshold: number;
+  priority: string;
+  priorityReason: string;
+  open: boolean;
+}
+export interface ImpactReplaySkip { service: string; subject?: string; reason: string }
+export interface ImpactReplayTotals { problems: number; p1: number; p2: number; p3: number; services: number; medianSec: number }
+export interface ImpactReplayResult {
+  detector: ImpactReplayDetector;
+  days: number;
+  from: number;
+  to: number;
+  bucketSec: number;
+  candidates: number;
+  totals: ImpactReplayTotals;
+  episodes: ImpactReplayEpisode[];
+  skipped: ImpactReplaySkip[];
+  skippedTotal: number;
+  truncated: boolean;
+  episodesTruncated: boolean;
+  partial: boolean;
+  notes: string[];
+}
