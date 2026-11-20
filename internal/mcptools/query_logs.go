@@ -212,6 +212,7 @@ func runQueryLogs(ctx context.Context, st logstore.Store, raw json.RawMessage) (
 	if page.Partial || page.ShardsFailed > 0 {
 		warnings = append(warnings, "log arka ucu kısmi cevap verdi — satırlar gerçek cevabın alt kümesi")
 	}
+	bodyRunes := scaledCap(ctx, qlBodyMaxRunes) // v0.10.2384 — kanıt ölçeği (evidence_scale.go)
 	rows := make([]qlRow, 0, len(page.Logs))
 	for _, rec := range page.Logs {
 		if rec == nil {
@@ -220,7 +221,7 @@ func runQueryLogs(ctx context.Context, st logstore.Store, raw json.RawMessage) (
 		rows = append(rows, qlRow{
 			TsMs: rec.Timestamp / 1e6, Severity: logSeverityLabel(rec), Service: rec.ServiceName,
 			Pod: logstore.RoleValue(rec, logstore.RolePod, m), TraceID: rec.TraceID,
-			Body: promptfmt.FenceSafe(truncateRunes(rec.Body, qlBodyMaxRunes)),
+			Body: promptfmt.FenceSafe(truncateRunes(rec.Body, bodyRunes)),
 		})
 	}
 	if len(rows) > limit {

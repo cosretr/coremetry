@@ -99,8 +99,13 @@ func WikiPageFindRows(rec wiki.PageRecord, find string) map[string]any {
 
 // wikiPageWindowWithTableHint — SAF: pencere + büyük tablo belgesinde find ipucu.
 func wikiPageWindowWithTableHint(rec wiki.PageRecord, offset int) map[string]any {
-	out := WikiPageWindow(rec, offset)
-	if len([]rune(rec.Content)) <= WikiWindowRunes {
+	return wikiPageWindowWithTableHintScaled(rec, offset, 1)
+}
+
+// wikiPageWindowWithTableHintScaled — v0.10.2384: pencere kanıt ölçeğiyle.
+func wikiPageWindowWithTableHintScaled(rec wiki.PageRecord, offset, scale int) map[string]any {
+	out := WikiPageWindowScaled(rec, offset, scale)
+	if len([]rune(rec.Content)) <= scaleCap(WikiWindowRunes, scale) {
 		return out
 	}
 	if _, rows := wikiTableLines(rec.Content); len(rows) >= wikiTableHintMinRows {

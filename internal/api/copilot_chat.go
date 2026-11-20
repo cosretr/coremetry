@@ -1592,7 +1592,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// (ekran-bağlamı çipiyle aynı şekil). Kanca handler'ın KOORDİNATÖR
 			// goroutine'inden çağrılır (executor senkron) — emit tek goroutine'de kalır.
 			// Gölge ctx bu turun gövdesiyle sınırlı; kanca yalnız bileşik araçta.
-			ctx := ctx
+			// v0.10.2384 — araçların KENDİ alan tavanları da döngünün kanıt
+			// ölçeğiyle (mcptools/evidence_scale.go; dış MCP yolu ölçek yazmaz).
+			ctx := mcptools.WithEvidenceScale(ctx, toolEvidenceScale(v2Plan, evScale))
 			if mcptools.IsCompositeEvidenceTool(tc.Name) {
 				ctx = mcptools.WithProgress(ctx, func(phase, label string) {
 					emit("step", chatProgressStep(phase, label))

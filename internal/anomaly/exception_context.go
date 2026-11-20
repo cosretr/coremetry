@@ -37,9 +37,15 @@ import (
 // stack yoksa -1). Çalışan sürüm AYNI olaydan okunmalı: bir olayın stack'i
 // başka bir olayın sürümüyle eşleşirse satırlar yine kayar.
 func pickExceptionStack(sampleStacks []string, logStack, logStackSvc string) (forPrompt, raw, svc string, sample int) {
+	return pickExceptionStackN(sampleStacks, logStack, logStackSvc, exStackPromptRunes)
+}
+
+// pickExceptionStackN — v0.10.2384: prompt kopyasının tavanı parametreli
+// (kanıt ölçeği; exStackPromptRunes = pickExceptionStack, bayt bayt).
+func pickExceptionStackN(sampleStacks []string, logStack, logStackSvc string, promptRunes int) (forPrompt, raw, svc string, sample int) {
 	for i, st := range sampleStacks {
 		if st != "" {
-			return truncRunes(st, 1800), st, "", i
+			return truncRunes(st, promptRunes), st, "", i
 		}
 	}
 	if logStack != "" {
@@ -107,6 +113,12 @@ const dupStackRef = "(stack yukarıdakiyle aynı)"
 //     eşitlik aramak hiçbir şeyi katlamazdı — kısa olan, uzun olanın
 //     ÖN EKİ ise aynı metindir.
 func foldDuplicateLogStacks(stacks []string, primary string) []string {
+	return foldDuplicateLogStacksN(stacks, primary, exLogStackRunes)
+}
+
+// foldDuplicateLogStacksN — v0.10.2384: log stack kopyasının tavanı
+// parametreli (kanıt ölçeği; exLogStackRunes = foldDuplicateLogStacks).
+func foldDuplicateLogStacksN(stacks []string, primary string, stackRunes int) []string {
 	out := make([]string, len(stacks))
 	// seen — prompt'ta TAM hâliyle görünen stack'ler; sonraki kopyalar
 	// bunlardan herhangi birine katlanır ("yukarıdaki" hepsini kapsar).
@@ -129,7 +141,7 @@ func foldDuplicateLogStacks(stacks []string, primary string) []string {
 			out[i] = dupStackRef
 			continue
 		}
-		out[i] = truncRunes(st, 900)
+		out[i] = truncRunes(st, stackRunes)
 		seen = append(seen, st)
 	}
 	return out
@@ -302,6 +314,18 @@ func (t ExceptionTrend) PromptLine(loc *time.Location) string {
 // gider; nil → UTC (etiketli). İstek yolları tarayıcıdan alır
 // (explainOptions.location), arka plan açıklayıcı UTC verir.
 func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs logstore.Store, g *chstore.ExceptionGroup, loc *time.Location) ExceptionExplainInput {
+	return BuildExceptionExplainInputScaled(ctx, store, logs, g, loc, 1)
+}
+
+// BuildExceptionExplainInputScaled — v0.10.2384: kurucunun kendi kanıt
+// tavanları (temsilî stack, grup mesajı, kompakt trace span'leri ve SQL
+// ifadesi, trace logları ve örnek trace logları) çağrının kanıt ölçeğiyle
+// (exception_evidence_scale.go). scale AÇIK parametre: api çağrının
+// profilindeki çarpanı verir; ≤ 1 = BuildExceptionExplainInput, girdi bayt
+// bayt eski. Yapısal alanlar (EvSpans, DBStatements, ErrorText, Stack ham)
+// ölçekten bağımsız.
+func BuildExceptionExplainInputScaled(ctx context.Context, store *chstore.Store, logs logstore.Store, g *chstore.ExceptionGroup, loc *time.Location, scale int) ExceptionExplainInput {
+	lim := exLimitsFor(scale)
 	if loc == nil {
 		loc = time.UTC
 	}
@@ -330,7 +354,7 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 	for _, sm := range samples {
 		sampleStacks = append(sampleStacks, sm.Stacktrace)
 	}
-	st := sampleTraceEvidence(ctx, store, logs, traceID, sampleStacks)
+	st := sampleTraceEvidenceLim(ctx, store, logs, traceID, sampleStacks, lim)
 	// v0.10.1370 (operatör-bildirimli: "trace incelemesi gibi loga bakmıyor") —
 	// örnek trace'lerin logları span'e bağlı OLMADAN, TEK sorguyla (≤3 ayrık
 	// trace, sample_trace_logs.go). Yüklenen trace'in logları tek-trace
@@ -339,7 +363,7 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 	if st.Trace.Loaded() {
 		sampleLogsExclude = traceID
 	}
-	sl := sampleTraceLogsEvidence(ctx, logs, spanSampleLogRefs(samples), sampleLogsExclude)
+	sl := sampleTraceLogsEvidenceLim(ctx, logs, spanSampleLogRefs(samples), sampleLogsExclude, lim)
 	logsBlock := st.LogsBlock + sl.Block // v0.10.1370 — bitişik: LogsBlock User'ın alt dizesi kalır
 
 	// Deploy penceresi — FirstSeen'e YAKINLIĞA göre seçim + önce/sonra
@@ -388,8 +412,8 @@ func BuildExceptionExplainInput(ctx context.Context, store *chstore.Store, logs 
 	appBlock := RenderAppFramesBlock(AppFramesFor(st.StackRaw, nil), nil)
 
 	out := ExceptionExplainInput{
-		User: assembleExceptionPromptChain(g, loc, trend, chain+appBlock, st.StackForPrompt, st.TraceBlock, logsBlock, deployBlock, // v0.10.1370 — logsBlock
-			renderPodConcentration(pods)),
+		User: assembleExceptionPromptChainN(g, loc, trend, chain+appBlock, st.StackForPrompt, st.TraceBlock, logsBlock, deployBlock, // v0.10.1370 — logsBlock
+			renderPodConcentration(pods), lim.msgRunes),
 		EvTraces:     st.EvTraces,
 		EvSpans:      evSpans,   // v0.10.1379
 		LogsBlock:    logsBlock, // v0.10.1370 — tek-trace + örnek trace logları
@@ -437,11 +461,17 @@ type sampleTraceOut struct {
 // traceLogsEvidence — Oracle grubu da onları kullanır), biçim dizeleri ve
 // sıralama AYNEN (prompt bayt bayt eski; pin trace_evidence_test.go).
 func sampleTraceEvidence(ctx context.Context, store TraceSpanLoader, logs logstore.Store, traceID string, sampleStacks []string) sampleTraceOut {
+	return sampleTraceEvidenceLim(ctx, store, logs, traceID, sampleStacks, exLimitsFor(1))
+}
+
+// sampleTraceEvidenceLim — v0.10.2384: tavanlar parametreli (kanıt ölçeği;
+// exLimitsFor(1) = sampleTraceEvidence, bayt bayt).
+func sampleTraceEvidenceLim(ctx context.Context, store TraceSpanLoader, logs logstore.Store, traceID string, sampleStacks []string, lim exLimits) sampleTraceOut {
 	var o sampleTraceOut
 	// Tam trace + kanıt (error span'ler GARANTİLİ — v0.9.414 verify bulgusu:
 	// düz head-cap derindeki hatayı düşürüyordu). Trace.Spans çalışan sürüm
 	// seçimine gider (v0.10.1044; ek okuma yok).
-	o.Trace = traceEvidence(ctx, store, traceID)
+	o.Trace = traceEvidenceLim(ctx, store, traceID, lim)
 	if o.Trace.Loaded() {
 		o.EvTraces = append(o.EvTraces, traceID)
 		if tp, ok := o.Trace.compactJSON(); ok {
@@ -453,7 +483,7 @@ func sampleTraceEvidence(ctx context.Context, store TraceSpanLoader, logs logsto
 	// penceresi) HİÇ gitme (v0.9.414 verify bulgusu, ES maliyet disiplini).
 	// İlk stack'li logun stack'i + servisi (v0.9.1225) ve span'i + resource'u
 	// (v0.10.1044) Logs.Stack* alanlarında.
-	o.Logs = traceLogsEvidence(ctx, logs, traceID, o.Trace.MinT, o.Trace.MaxT)
+	o.Logs = traceLogsEvidenceLim(ctx, logs, traceID, o.Trace.MinT, o.Trace.MaxT, lim)
 
 	// v0.9.1225 — prompt kopyası ile kod-çekici istihkakı AYRILDI. User
 	// bayt-bayt eski (1800 rune'luk kırpık); Stack ise HAM taşınır —
@@ -461,13 +491,14 @@ func sampleTraceEvidence(ctx context.Context, store TraceSpanLoader, logs logsto
 	// ("kesik bir satır konumlandırılamaz") ham taşıyordu, burası kırpığı
 	// veriyordu: derin JBoss stack'lerinde Caused-by uygulama frame'leri
 	// 1800'ün altında kalıp pencereleme hiç isabet etmiyordu.
-	o.StackForPrompt, o.StackRaw, o.StackService, o.StackSample = pickExceptionStack(sampleStacks, o.Logs.Stack, o.Logs.StackService)
+	o.StackForPrompt, o.StackRaw, o.StackService, o.StackSample = pickExceptionStackN(sampleStacks, o.Logs.Stack, o.Logs.StackService, lim.stackRunes)
 
 	// v0.9.1239 — log bloğu ANCAK ŞİMDİ kurulabilir: her logun stack'i
 	// prompt'ta GÖRÜNEN temsilî stack'e karşı katlanıyor ve o seçim
 	// (pickExceptionStack) log döngüsünün kendi çıktısına bağlı.
-	if lp, ok := o.Logs.foldedJSON(o.StackForPrompt); ok {
-		o.LogsBlock = fmt.Sprintf("\n\nBu trace'in ilişkili LOGLARI (yüksek severity önce):\n```json\n%s\n```", lp)
+	if lp, ok := o.Logs.foldedJSONN(o.StackForPrompt, lim.logStackRunes); ok {
+		o.LogsBlock = fmt.Sprintf("\n\nBu trace'in ilişkili LOGLARI (yüksek severity önce):\n```json\n%s\n```", lp) +
+			lim.logsOmittedNote(o.Logs.Read, len(o.Logs.Lines)) // ölçek 1'de "" (bayt bayt eski)
 	}
 	return o
 }
@@ -560,11 +591,17 @@ func assembleExceptionPrompt(g *chstore.ExceptionGroup, loc *time.Location, tren
 // önce gördüğü yerel exception'la (NPE) açıyordu; neden (bağımlı çağrının
 // HTTP 500'ü) belirtiden önce okunmalı. chain "" → çıktı bayt bayt eski.
 func assembleExceptionPromptChain(g *chstore.ExceptionGroup, loc *time.Location, trend, chain, stack, traceBlock, logsBlock, deployBlock, podsBlock string) string {
+	return assembleExceptionPromptChainN(g, loc, trend, chain, stack, traceBlock, logsBlock, deployBlock, podsBlock, exGroupMsgRunes)
+}
+
+// assembleExceptionPromptChainN — v0.10.2384: grup mesajının tavanı parametreli
+// (kanıt ölçeği; exGroupMsgRunes = assembleExceptionPromptChain, bayt bayt).
+func assembleExceptionPromptChainN(g *chstore.ExceptionGroup, loc *time.Location, trend, chain, stack, traceBlock, logsBlock, deployBlock, podsBlock string, msgRunes int) string {
 	if loc == nil {
 		loc = time.UTC
 	}
 	meta := map[string]any{
-		"type": g.Type, "message": truncRunes(g.Message, 400), "service": g.Service,
+		"type": g.Type, "message": truncRunes(g.Message, msgRunes), "service": g.Service,
 		"state": g.State, "occurrences": g.Occurrences,
 		"firstSeen": time.Unix(0, g.FirstSeen).In(loc).Format(time.RFC3339),
 		"lastSeen":  time.Unix(0, g.LastSeen).In(loc).Format(time.RFC3339),

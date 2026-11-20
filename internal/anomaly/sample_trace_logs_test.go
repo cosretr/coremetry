@@ -310,7 +310,7 @@ func TestSpanBuilderAppendsSampleLogsOutsideLegacy(t *testing.T) {
 	}
 	src := string(b)
 	for _, want := range []string{
-		"sl := sampleTraceLogsEvidence(ctx, logs, spanSampleLogRefs(samples), sampleLogsExclude)",
+		"sl := sampleTraceLogsEvidenceLim(ctx, logs, spanSampleLogRefs(samples), sampleLogsExclude, lim)", // v0.10.2384 — tavanlar parametreli
 		"logsBlock := st.LogsBlock + sl.Block",
 		"st.TraceBlock, logsBlock, deployBlock",
 		"LogsBlock:    logsBlock,",
@@ -319,7 +319,7 @@ func TestSpanBuilderAppendsSampleLogsOutsideLegacy(t *testing.T) {
 			t.Errorf("exception_context.go %q bağlantısını kaybetti", want)
 		}
 	}
-	body := src[strings.Index(src, "func sampleTraceEvidence("):]
+	body := src[strings.Index(src, "func sampleTraceEvidenceLim("):] // v0.10.2384 — gövde tavan parametreli kopyada
 	body = body[:strings.Index(body, "\n}\n")]
 	if strings.Contains(body, "sampleTraceLogsEvidence") {
 		t.Error("örnek trace logları sampleTraceEvidence'a girmemeli (bayt pin)")

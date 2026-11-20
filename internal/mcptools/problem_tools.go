@@ -47,12 +47,19 @@ func truncateRunes(s string, max int) string {
 
 // problemView — get_problem / similar_problems ortak zarf satırı (sınırlı).
 func problemView(p chstore.Problem) map[string]any {
+	return problemViewScaled(p, 1)
+}
+
+// problemViewScaled — v0.10.2384: açıklama tavanı kanıt ölçeğiyle
+// (evidence_scale.go). Ölçek 1 = problemView, bayt bayt.
+func problemViewScaled(p chstore.Problem, scale int) map[string]any {
+	descMax := scaleCap(problemDescriptionMax, scale)
 	out := map[string]any{
 		"id": p.ID, "displayId": chstore.ProblemDisplayID(p.ID), "category": chstore.ProblemCategory(p), // v0.10.706
 		"ruleId": p.RuleID, "ruleName": p.RuleName, "severity": p.Severity,
 		"service": p.Service, "kind": p.Kind, "metric": p.Metric, "value": p.Value,
 		"threshold": p.Threshold, "status": p.Status, "startedAt": p.StartedAt,
-		"description": truncateRunes(p.Description, problemDescriptionMax),
+		"description": truncateRunes(p.Description, descMax),
 	}
 	if p.Comparator != "" {
 		out["comparator"] = p.Comparator
@@ -89,7 +96,7 @@ func problemView(p chstore.Problem) map[string]any {
 	if p.EventCount > 0 {
 		out["eventCount"] = p.EventCount
 		if note := problemEventNote(p); note != "" {
-			out["description"] = truncateRunes(p.Description, problemDescriptionMax) + " " + note
+			out["description"] = truncateRunes(p.Description, descMax) + " " + note
 		}
 	}
 	return out
@@ -165,7 +172,7 @@ func getProblemTool(d Deps) mcp.Tool {
 			if enriched := d.Store.EnrichProblemsWithEventCounts(ctx, []chstore.Problem{*p}); len(enriched) == 1 {
 				*p = enriched[0]
 			}
-			out := problemView(*p)
+			out := problemViewScaled(*p, EvidenceScale(ctx)) // v0.10.2384 — kanıt ölçeği
 			out["found"] = true
 			if h, herr := d.Store.GetHypothesis(ctx, "problem", p.ID); herr == nil && h != nil {
 				out["hypothesisComputed"] = true
@@ -382,7 +389,7 @@ func similarProblemsTool(d Deps) mcp.Tool {
 				if anchor != "" && p.ID == anchor {
 					continue
 				}
-				out = append(out, problemView(p))
+				out = append(out, problemViewScaled(p, EvidenceScale(ctx))) // v0.10.2384
 			}
 			return map[string]any{
 				"service": service, "ruleId": ruleID, "rows": out, "count": len(out), "limit": limit,

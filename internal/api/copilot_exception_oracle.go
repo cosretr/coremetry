@@ -30,7 +30,10 @@ import (
 // sahteyle değiştirilir; prod'da aşağıdaki varsayılanlar.
 var (
 	spanExceptionInputFn = func(s *Server, ctx context.Context, g *chstore.ExceptionGroup, loc *time.Location) anomaly.ExceptionExplainInput {
-		return anomaly.BuildExceptionExplainInput(ctx, s.store, s.logs, g, loc)
+		// v0.10.2384 — kurucunun kendi kanıt tavanları çağrının profilindeki
+		// ölçekle (evidence_scale.go; ölçek 1 = bayt bayt eski girdi). Dış
+		// kelepçeler (çekmece kanıtı, fitSingleShot) yine son sınır.
+		return anomaly.BuildExceptionExplainInputScaled(ctx, s.store, s.logs, g, loc, s.evidenceScale(ctx))
 	}
 	oracleExceptionInputFn = func(s *Server, ctx context.Context, g *chstore.ExceptionGroup, loc *time.Location) anomaly.ExceptionExplainInput {
 		var rd anomaly.OracleContextReader

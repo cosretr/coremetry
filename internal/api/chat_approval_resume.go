@@ -38,6 +38,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/cosre/uistream"
 	"github.com/cilcenk/coremetry/internal/mcp"
+	"github.com/cilcenk/coremetry/internal/mcptools"
 )
 
 // addProblemNoteToolName — ilk onay-kapılı araç.
@@ -462,7 +463,7 @@ func (s *Server) resumeApprovalTurn(ctx context.Context, r *http.Request, emit f
 	content, isErr := approvalRejectedJSON(ro.Decision), true
 	if ro.Decision.executes() {
 		pre.tool, pre.digest, pre.used = ans.Tool, approvalArgsDigest(ans.Args), false
-		oc := exec.Call(ctx, ans.Tool, ans.Args)
+		oc := exec.Call(mcptools.WithEvidenceScale(ctx, toolEvidenceScale(v2LoopPlanFrom(ctx), s.evidenceScale(ctx))), ans.Tool, ans.Args) // v0.10.2384 — araç alan tavanları
 		content, isErr = oc.Content, oc.IsError
 		if oc.Executed {
 			out.executed = true

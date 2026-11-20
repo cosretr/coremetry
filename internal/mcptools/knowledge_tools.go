@@ -165,20 +165,27 @@ func runbookIDFromURL(raw string) string {
 
 // runbookView — SAF: içerik zarfı (tavanlı).
 func runbookView(rb chstore.Runbook) map[string]any {
+	return runbookViewScaled(rb, 1)
+}
+
+// runbookViewScaled — v0.10.2384: gövde ve adım metni tavanı kanıt ölçeğiyle
+// (evidence_scale.go). Ölçek 1 = runbookView, bayt bayt.
+func runbookViewScaled(rb chstore.Runbook, scale int) map[string]any {
+	stepMax, bodyMax := scaleCap(runbookStepMax, scale), scaleCap(runbookBodyMax, scale)
 	steps := make([]map[string]any, 0, len(rb.Steps))
 	for _, st := range rb.Steps {
 		row := map[string]any{"order": st.Order, "kind": st.Kind, "title": st.Title}
 		if st.Instructions != "" {
-			row["instructions"] = truncateRunes(st.Instructions, runbookStepMax)
+			row["instructions"] = truncateRunes(st.Instructions, stepMax)
 		}
 		if st.Expected != "" {
-			row["expected"] = truncateRunes(st.Expected, runbookStepMax)
+			row["expected"] = truncateRunes(st.Expected, stepMax)
 		}
 		steps = append(steps, row)
 	}
 	return map[string]any{
 		"id": rb.ID, "title": rb.Title, "enabled": rb.Enabled, "labels": rb.Labels,
-		"description": truncateRunes(rb.Description, runbookBodyMax), "steps": steps, "stepCount": len(rb.Steps),
+		"description": truncateRunes(rb.Description, bodyMax), "steps": steps, "stepCount": len(rb.Steps),
 		"href": "/runbook?id=" + url.QueryEscape(rb.ID), "updatedAt": rb.UpdatedAt,
 	}
 }
@@ -284,7 +291,7 @@ func getRunbookTool(d Deps) mcp.Tool {
 			if rb == nil || rb.ID == "" {
 				return map[string]any{"found": false, "runbookId": id, "via": via, "note": "runbook id not found (deleted?)"}, nil
 			}
-			out := runbookView(*rb)
+			out := runbookViewScaled(*rb, EvidenceScale(ctx)) // v0.10.2384 — kanıt ölçeği
 			out["found"], out["external"], out["via"] = true, false, via
 			return out, nil
 		},

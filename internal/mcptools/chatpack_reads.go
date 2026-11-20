@@ -38,6 +38,8 @@ func SearchTraceLogsOnce(ctx context.Context, d Deps, traceID string, rangeS int
 	}
 	backend := logsBackendSource(st)
 	from, to := rangeWindow(ctx, p.WindowS)
+	scale := EvidenceScale(ctx) // v0.10.2384 — aracın ölçekli gövdesi ve AYNI memo anahtarı
+	p.Limit = slScaledLimit(p.Limit, scale)
 	out, err := v2Memo(ctx, d, searchLogsCacheKey(backend, p, to), slCacheTTL, func(c context.Context) (map[string]any, error) {
 		page, err := logstore.SearchWithTimeout(c, st, p.filter(from, to), searchLogsTimeout)
 		if err != nil {
@@ -46,7 +48,7 @@ func SearchTraceLogsOnce(ctx context.Context, d Deps, traceID string, rangeS int
 		if page == nil {
 			page = &logstore.Page{}
 		}
-		return searchLogsPayload(backend, p, page, nil, nil, from, to), nil
+		return searchLogsPayloadScaled(backend, p, page, nil, nil, from, to, scale), nil
 	})
 	if err != nil {
 		return "", err

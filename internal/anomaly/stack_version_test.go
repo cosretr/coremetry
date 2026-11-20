@@ -110,7 +110,7 @@ func TestExceptionInputCarriesStackVersion(t *testing.T) {
 	// bağları yeni yerlerinde arar.
 	for file, wants := range map[string][]string{
 		"exception_context.go": {
-			"o.StackForPrompt, o.StackRaw, o.StackService, o.StackSample = pickExceptionStack(",
+			"o.StackForPrompt, o.StackRaw, o.StackService, o.StackSample = pickExceptionStackN(", // v0.10.2384 — prompt tavanı parametreli
 			"stackVersion := exceptionStackVersion(samples, st.StackSample, traceID, st.Trace.Spans,",
 			"verSvc, st.Logs.StackSpan, st.Logs.StackRes,",
 			"StackVersion: stackVersion,",

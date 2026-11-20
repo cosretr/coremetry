@@ -63,6 +63,8 @@ const SourceCodeMinRole = ""
 // SourceResultMaxRunes — modele giden JSON sonucunun tavanı. api'nin tool
 // sonucu kırpması (chat_tool_budget.go chatToolResultMaxRunes = 6000) bunun
 // ÜSTÜNDE kalmalı ki pencere yapının ortasından kesilmesin (api testi pinler).
+// v0.10.2384 — TABAN: ctx'teki kanıt ölçeğiyle çarpılır (evidence_scale.go);
+// api tavanı aynı çarpanla büyüdüğü için ilişki her ölçekte aynı.
 const SourceResultMaxRunes = 5800
 
 const (
@@ -187,7 +189,7 @@ func readSourceCodeTool(d Deps) mcp.Tool {
 			if err != nil {
 				return nil, err
 			}
-			return sourceCodeResultFor(req, sr, notes), nil
+			return sourceCodeResultScaled(req, sr, notes, EvidenceScale(ctx)), nil // v0.10.2384 — kanıt ölçeği
 		},
 	}
 }
@@ -243,6 +245,15 @@ func validateReadSourceArgs(a readSourceCodeArgs) (SourceCodeRequest, []string, 
 
 // sourceCodeResultFor — okumayı modelin zarfına çevirir ve bütçeye oturtur.
 func sourceCodeResultFor(req SourceCodeRequest, sr SourceCodeRead, notes []string) sourceCodeResult {
+	return sourceCodeResultScaled(req, sr, notes, 1)
+}
+
+// sourceCodeResultScaled — v0.10.2384: zarf tavanı kanıt ölçeğiyle
+// (SourceResultMaxRunes × ölçek; api'nin chatToolResultMaxRunes × ölçek
+// tavanının yine ALTINDA). Okunan pencere büyümez (context_lines girdisi ve
+// devops.SourceContextMax aynı): yalnız okunan pencere daha az daraltılır.
+// Ölçek 1 = sourceCodeResultFor, bayt bayt.
+func sourceCodeResultScaled(req SourceCodeRequest, sr SourceCodeRead, notes []string, scale int) sourceCodeResult {
 	res := sourceCodeResult{
 		Outcome: string(sr.Outcome), Service: req.Service, Repo: sr.Repo,
 		Ref: sr.RefLabel(), RefBasis: sourceRefBasis(sr), Path: sr.Path,
@@ -262,7 +273,7 @@ func sourceCodeResultFor(req SourceCodeRequest, sr SourceCodeRead, notes []strin
 		res.Hint = "Alıntıda dosya:satır yaz ve satırları aynen aktar; devamı için line'ı kaydırıp yeniden çağır."
 		res.Notes = notes
 		res.Source = sourceCodeStatus(sr, res, false)
-		fitSourceResult(&res, sr)
+		fitSourceResultWithin(&res, sr, scaleCap(SourceResultMaxRunes, scale))
 		return res
 	case devops.SourceAmbiguous:
 		res.Candidates, res.CandidatesTotal = sr.Candidates, sr.CandidatesTotal
@@ -281,12 +292,14 @@ func sourceCodeResultFor(req SourceCodeRequest, sr SourceCodeRead, notes []strin
 	return res
 }
 
-// fitSourceResult — JSON zarfı SourceResultMaxRunes'a oturtur: kod merkez
+// fitSourceResultWithin — JSON zarfı maxRunes'a (taban SourceResultMaxRunes) oturtur: kod merkez
 // satırı ortada kalacak şekilde daraltılır (escape — \n, \", < — ham
 // metinden uzun olduğu için ölçüm marshal edilmiş hâlde, son hâliyle: not ve
 // kaynak durumu dahil). Hiçbir satır sığmazsa kod düşer ve not söyler.
 // Dönen: kırpıldı mı.
-func fitSourceResult(res *sourceCodeResult, sr SourceCodeRead) bool {
+//
+// v0.10.2384 — tavan parametre (maxRunes = SourceResultMaxRunes × kanıt ölçeği).
+func fitSourceResultWithin(res *sourceCodeResult, sr SourceCodeRead, maxRunes int) bool {
 	clipped := false
 	base := append([]string(nil), res.Notes...)
 	for i := 0; i < 8; i++ {
@@ -295,10 +308,10 @@ func fitSourceResult(res *sourceCodeResult, sr SourceCodeRead) bool {
 			break
 		}
 		n := utf8.RuneCount(b)
-		if n <= SourceResultMaxRunes || res.Code == "" {
+		if n <= maxRunes || res.Code == "" {
 			return clipped
 		}
-		keep := utf8.RuneCountInString(res.Code) - (n - SourceResultMaxRunes) - 16
+		keep := utf8.RuneCountInString(res.Code) - (n - maxRunes) - 16
 		if !clipped {
 			keep -= sourceNoteReserve // eklenecek daraltma notu + durum değişimi
 		}

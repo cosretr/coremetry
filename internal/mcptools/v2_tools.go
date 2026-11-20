@@ -275,6 +275,14 @@ func MyServicesPageURL(team string) string {
 // sayılar tüm ortamların toplamı (zarf söyler). open: servis → açık Problem
 // sayısı (R6; nil = okunamadı, alan yazılmaz).
 func myServicesPayload(team string, resolved []string, trimmed int, rows []chstore.ServiceSummary, windowS, limit int, env string, envApplied bool, open map[string]int) map[string]any {
+	return myServicesPayloadScaled(team, resolved, trimmed, rows, windowS, limit, env, envApplied, open, 1)
+}
+
+// myServicesPayloadScaled — v0.10.2384: yalnız gövde bayt bütçesi kanıt
+// ölçeğiyle (evidence_scale.go; satır limiti ve okuma aynı). Ölçek 1 =
+// myServicesPayload, bayt bayt.
+func myServicesPayloadScaled(team string, resolved []string, trimmed int, rows []chstore.ServiceSummary, windowS, limit int, env string, envApplied bool, open map[string]int, scale int) map[string]any {
+	maxBytes := scaleCap(MyServicesMaxBytes, scale)
 	all := teamServiceRows(rows)
 	hasMore := limit > 0 && len(all) > limit
 	if hasMore {
@@ -334,7 +342,7 @@ func myServicesPayload(team string, resolved []string, trimmed int, rows []chsto
 	for {
 		out["services"], out["count"] = slim, len(slim)
 		b, err := json.Marshal(out)
-		if err != nil || len(b) <= MyServicesMaxBytes || len(slim) == 0 {
+		if err != nil || len(b) <= maxBytes || len(slim) == 0 {
 			break
 		}
 		slim = slim[:len(slim)-1]
@@ -413,6 +421,7 @@ func listMyServicesTool(d Deps) mcp.Tool {
 			limit := clampLimit(a.Limit, myServicesDefaultRows, myServicesMaxRows)
 			from, to := rangeWindow(ctx, windowS)
 			env := strings.TrimSpace(a.Env)
+			scale := EvidenceScale(ctx) // v0.10.2384 — kanıt ölçeği (memo kapanışının dışında okunur)
 			run := func(c context.Context) (map[string]any, error) {
 				rows, envApplied, err := ReadTeamServicesREDEnv(c, d, svcs, env, from, to)
 				if err != nil {
@@ -424,12 +433,12 @@ func listMyServicesTool(d Deps) mcp.Tool {
 				if res, _, perr := ReadInboxOpen(c, d, team, svcs, env, InboxOpenScan); perr == nil {
 					open = OpenCounts(res.Rows)
 				}
-				return myServicesPayload(team, svcs, trimmed, rows, windowS, limit, env, envApplied, open), nil
+				return myServicesPayloadScaled(team, svcs, trimmed, rows, windowS, limit, env, envApplied, open, scale), nil
 			}
 			if d.Memo == nil {
 				return run(ctx)
 			}
-			body, err := d.Memo(ctx, myServicesCacheKey(svcs, trimmed, team, env, to, windowS, limit), myServicesCacheTTL, func(c context.Context) (any, bool, error) {
+			body, err := d.Memo(ctx, scaleCacheKey(myServicesCacheKey(svcs, trimmed, team, env, to, windowS, limit), scale), myServicesCacheTTL, func(c context.Context) (any, bool, error) {
 				out, err := run(c)
 				return out, err == nil, err
 			})

@@ -43,6 +43,7 @@ const (
 
 const (
 	// V2ToolMaxBytes — v2 araç gövdesi tavanı (brief "tool text ≤ 2 KB").
+	// v0.10.2384 — TABAN: ctx'teki kanıt ölçeğiyle çarpılır (v2BodyBudget).
 	V2ToolMaxBytes = 2048
 
 	ftDefaultRangeS  = 3600
@@ -105,12 +106,18 @@ func v2Code(kind, raw string) (string, error) {
 	return c, nil
 }
 
-// v2Fit — SAF: gövde ≤ V2ToolMaxBytes olana dek `set(n)` ile satır düşürür.
-func v2Fit(out map[string]any, n int, set func(int)) map[string]any {
+// v2BodyBudget — SAF (v0.10.2384): v2 araç gövdesinin bayt bütçesi, kanıt
+// ölçeğiyle (evidence_scale.go). api'nin chatV2ToolTextMaxBytes × ölçek
+// tavanıyla AYNI sayı: araç kendi bütçesine sığdırdığı gövdeyi api kesmez.
+func v2BodyBudget(scale int) int { return scaleCap(V2ToolMaxBytes, scale) }
+
+// v2FitWithin — SAF: gövde ≤ maxBytes (taban V2ToolMaxBytes; v0.10.2384'ten
+// beri v2BodyBudget(ölçek)) olana dek `set(n)` ile satır düşürür.
+func v2FitWithin(out map[string]any, n, maxBytes int, set func(int)) map[string]any {
 	set(n)
 	for n > 0 {
 		b, err := json.Marshal(out)
-		if err != nil || len(b) <= V2ToolMaxBytes {
+		if err != nil || len(b) <= maxBytes {
 			return out
 		}
 		n--
@@ -124,6 +131,9 @@ func v2Memo(ctx context.Context, d Deps, key string, ttl time.Duration, run func
 	if d.Memo == nil {
 		return run(ctx)
 	}
+	// v0.10.2384 — v2 gövdeleri kanıt ölçeğine bağlı (bayt bütçesi, metin
+	// tavanları): ölçekli gövde ayrı anahtarda; ölçek 1'de anahtar aynen.
+	key = scaleCacheKey(key, EvidenceScale(ctx))
 	body, err := d.Memo(ctx, key, ttl, func(c context.Context) (any, bool, error) {
 		out, err := run(c)
 		return out, err == nil, err
@@ -402,6 +412,13 @@ func findTracesApplied(p findTracesPlan) map[string]any {
 
 // findTracesPayload — SAF: ≤ 2 KB gövde.
 func findTracesPayload(p findTracesPlan, f chstore.TraceFilter, rows []chstore.TraceRow, hasMore bool, from, to time.Time) map[string]any {
+	return findTracesPayloadScaled(p, f, rows, hasMore, from, to, 1)
+}
+
+// findTracesPayloadScaled — v0.10.2384: gövde bütçesi kanıt ölçeğiyle (satır
+// sayısı ve okuma AYNI; yalnız sığmadığı için düşen satır kalmaz). Ölçek 1 =
+// findTracesPayload, bayt bayt.
+func findTracesPayloadScaled(p findTracesPlan, f chstore.TraceFilter, rows []chstore.TraceRow, hasMore bool, from, to time.Time, scale int) map[string]any {
 	all := make([]ftRow, 0, len(rows))
 	for _, t := range rows {
 		all = append(all, ftRow{t.TraceID, truncateRunes(t.RootName, 80), t.ServiceName, traceStartMs(t.StartTime), round4(t.DurationMs), t.SpanCount, t.HasError})
@@ -434,7 +451,7 @@ func findTracesPayload(p findTracesPlan, f chstore.TraceFilter, rows []chstore.T
 	if len(all) == 0 {
 		out["reasons"] = []string{"no trace matched in the window — empty is not 'no errors anywhere'; widen range_s or drop a filter"}
 	}
-	return v2Fit(out, len(all), func(n int) { out["traces"], out["count"] = all[:n], n })
+	return v2FitWithin(out, len(all), v2BodyBudget(scale), func(n int) { out["traces"], out["count"] = all[:n], n })
 }
 
 func findTracesTool(d Deps) mcp.Tool {
@@ -505,6 +522,7 @@ func findTracesTool(d Deps) mcp.Tool {
 				ref := ResolveServiceRef(ctx, d, p.Service)
 				p.Entity = &ref
 			}
+			scale := EvidenceScale(ctx) // v0.10.2384 — memo kapanışının ctx'i ölçeği taşımayabilir: dışarıda okunur
 			return v2Memo(ctx, d, findTracesCacheKey(p, to), ftCacheTTL, func(c context.Context) (map[string]any, error) {
 				rctx, cancel := context.WithTimeout(c, cosreBudget)
 				defer cancel()
@@ -513,7 +531,7 @@ func findTracesTool(d Deps) mcp.Tool {
 				if err != nil {
 					return nil, err
 				}
-				return findTracesPayload(p, f, rows, hasMore, from, to), nil
+				return findTracesPayloadScaled(p, f, rows, hasMore, from, to, scale), nil
 			})
 		},
 	}
@@ -697,13 +715,33 @@ func sortInt64s(xs []int64) {
 
 // searchLogsPayload — SAF: ≤ 2 KB gövde.
 func searchLogsPayload(backend string, p searchLogsPlan, page *logstore.Page, hist []int64, unapplied []string, from, to time.Time) map[string]any {
+	return searchLogsPayloadScaled(backend, p, page, hist, unapplied, from, to, 1)
+}
+
+// slScaledLimit — SAF (v0.10.2384): satır tavanı kanıt ölçeğiyle. Yalnız
+// TAVANDAKİ limit büyür (model limit vermedi ya da tavanı istedi): 10 → 10 ×
+// ölçek; modelin açıkça istediği daha küçük limit aynen kalır. Arka uç
+// okuması LIMIT 10 yerine en çok LIMIT 80 (aynı pencere tavanı, aynı
+// searchLogsTimeout). Ölçek 1 → limit aynen.
+func slScaledLimit(limit, scale int) int {
+	if scale > 1 && limit >= slMaxRows {
+		return scaleCap(slMaxRows, scale)
+	}
+	return limit
+}
+
+// searchLogsPayloadScaled — v0.10.2384: gövde metni (slBodyRunes) ve gövde
+// bayt bütçesi kanıt ölçeğiyle. Ölçek 1 = searchLogsPayload, bayt bayt.
+// Sığmayan satır yine sondan düşer ve `truncated` yazılır.
+func searchLogsPayloadScaled(backend string, p searchLogsPlan, page *logstore.Page, hist []int64, unapplied []string, from, to time.Time, scale int) map[string]any {
+	bodyRunes := scaleCap(slBodyRunes, scale)
 	rows := make([]slRow, 0, len(page.Logs))
 	for _, rec := range page.Logs {
 		if rec == nil {
 			continue
 		}
 		rows = append(rows, slRow{rec.Timestamp / 1e6, logSeverityLabel(rec), rec.ServiceName,
-			promptfmt.FenceSafe(truncateRunes(rec.Body, slBodyRunes)), rec.TraceID})
+			promptfmt.FenceSafe(truncateRunes(rec.Body, bodyRunes)), rec.TraceID})
 	}
 	if len(rows) > p.Limit {
 		rows = rows[:p.Limit]
@@ -735,7 +773,7 @@ func searchLogsPayload(backend string, p searchLogsPlan, page *logstore.Page, hi
 	if len(rows) == 0 {
 		out["reasons"] = []string{"no log line matched in the window — empty is not 'no errors'; widen range_s, drop words or lower severity"}
 	}
-	return v2Fit(out, len(rows), func(n int) { out["rows"], out["count"] = rows[:n], n })
+	return v2FitWithin(out, len(rows), v2BodyBudget(scale), func(n int) { out["rows"], out["count"] = rows[:n], n })
 }
 
 func cosreSearchLogsTool(d Deps) mcp.Tool {
@@ -783,6 +821,8 @@ func cosreSearchLogsTool(d Deps) mcp.Tool {
 			}
 			backend := logsBackendSource(st)
 			from, to := rangeWindow(ctx, p.WindowS)
+			scale := EvidenceScale(ctx) // v0.10.2384 — kanıt ölçeği (memo kapanışının dışında okunur)
+			p.Limit = slScaledLimit(p.Limit, scale)
 			return v2Memo(ctx, d, searchLogsCacheKey(backend, p, to), slCacheTTL, func(c context.Context) (map[string]any, error) {
 				f := p.filter(from, to)
 				page, err := logstore.SearchWithTimeout(c, st, f, searchLogsTimeout)
@@ -800,7 +840,7 @@ func cosreSearchLogsTool(d Deps) mcp.Tool {
 					hist = slHistogram(series)
 				}
 				cancel()
-				return searchLogsPayload(backend, p, page, hist, qlUnapplied(page, f, logFieldMapping(c, st, true)), from, to), nil
+				return searchLogsPayloadScaled(backend, p, page, hist, qlUnapplied(page, f, logFieldMapping(c, st, true)), from, to, scale), nil
 			})
 		},
 	}
@@ -843,16 +883,26 @@ type etErr struct {
 // explainTracePayload — SAF: analiz → ≤ 2 KB özet (span listesi YOK).
 // v0.10.2360 — ev (S3): hatalı span kimliği + start_ms ek alanları.
 func explainTracePayload(id string, an traceToolAnalysis, scope []string, ev bool) map[string]any {
+	return explainTracePayloadScaled(id, an, scope, ev, 1)
+}
+
+// explainTracePayloadScaled — v0.10.2384: yol adımı / hata span'i sayısı,
+// durum ve exception metni, gövde bayt bütçesi kanıt ölçeğiyle (trace zaten
+// tek nokta okumasıyla alındı: arka uç okuması büyümez). Ölçek 1 =
+// explainTracePayload, bayt bayt. Hata span'i sayısı analizdeki listeyle
+// (buildTraceToolAnalysisScaled) sınırlıdır; toplam error_span_count'ta.
+func explainTracePayloadScaled(id string, an traceToolAnalysis, scope []string, ev bool, scale int) map[string]any {
+	maxSteps, maxErrs, msgRunes, maxBytes := scaleCap(etMaxPathSteps, scale), scaleCap(etMaxErrorSpans, scale), scaleCap(etMsgRunes, scale), v2BodyBudget(scale)
 	steps := make([]etStep, 0, etMaxPathSteps)
-	for _, s := range ttTrimPathSteps(an.CriticalPath, etMaxPathSteps) {
+	for _, s := range ttTrimPathSteps(an.CriticalPath, maxSteps) {
 		steps = append(steps, etStep{s.Service, truncateRunes(s.Name, 80), s.Kind, s.SelfOnPathMs, s.SharePct, truncateRunes(s.Target, 80), s.Top})
 	}
 	errs := make([]etErr, 0, etMaxErrorSpans)
 	for i, e := range an.ErrorSpans {
-		if i >= etMaxErrorSpans {
+		if i >= maxErrs {
 			break
 		}
-		er := etErr{"", e.Service, truncateRunes(e.Name, 80), truncateRunes(e.StatusMessage, etMsgRunes), e.ExceptionType, truncateRunes(e.ExceptionMessage, etMsgRunes)}
+		er := etErr{"", e.Service, truncateRunes(e.Name, 80), truncateRunes(e.StatusMessage, msgRunes), e.ExceptionType, truncateRunes(e.ExceptionMessage, msgRunes)}
 		if ev {
 			er.SpanID = e.SpanID
 		}
@@ -890,12 +940,12 @@ func explainTracePayload(id string, an traceToolAnalysis, scope []string, ev boo
 		}
 	}
 	out["critical_path"] = steps
-	return v2Fit(out, len(errs), func(n int) {
+	return v2FitWithin(out, len(errs), maxBytes, func(n int) {
 		out["error_spans"] = errs[:n]
 		if n == 0 && len(errs) > 0 {
 			// hata satırı sığmadıysa yolu da kısalt
 			for len(steps) > 1 {
-				if b, _ := json.Marshal(out); len(b) <= V2ToolMaxBytes {
+				if b, _ := json.Marshal(out); len(b) <= maxBytes {
 					break
 				}
 				steps = steps[:len(steps)-1]
@@ -941,6 +991,7 @@ func explainTraceTool(d Deps) mcp.Tool {
 			if ev {
 				key += ":ev" // ek alanlı gövde ayrı anahtarda (kapalıyken gövde bayt aynı)
 			}
+			scale := EvidenceScale(ctx) // v0.10.2384 — kanıt ölçeği (memo kapanışının dışında okunur)
 			return v2Memo(ctx, d, key, etCacheTTL, func(c context.Context) (map[string]any, error) {
 				spans, err := d.Store.GetTrace(c, id)
 				if err != nil {
@@ -950,7 +1001,7 @@ func explainTraceTool(d Deps) mcp.Tool {
 					return map[string]any{"trace_id": id, "found": false, "page_url": ExplainTracePageURL(id),
 						"reasons": []string{"no span in ClickHouse for this id (retention, sampling or not yet written) — get_trace diagnoses the miss"}}, nil
 				}
-				return explainTracePayload(id, buildTraceToolAnalysis(spans, len(spans) >= traceStoreSpanCap), scope, ev), nil
+				return explainTracePayloadScaled(id, buildTraceToolAnalysisScaled(spans, len(spans) >= traceStoreSpanCap, scale), scope, ev, scale), nil
 			})
 		},
 	}

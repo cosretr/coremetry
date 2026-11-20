@@ -273,6 +273,15 @@ func ttSortedKeys(m map[string]int) []string {
 // buildTraceToolAnalysis — SAF: okunan TÜM span'ler → modele giden analiz.
 // storeCapped: GetTrace SQL tavanına takıldı (trace daha büyük).
 func buildTraceToolAnalysis(spans []chstore.SpanRow, storeCapped bool) traceToolAnalysis {
+	return buildTraceToolAnalysisScaled(spans, storeCapped, 1)
+}
+
+// buildTraceToolAnalysisScaled — v0.10.2384: hata span'i sayısı ve durum /
+// exception metni tavanı kanıt ölçeğiyle (evidence_scale.go; span'ler zaten
+// okundu). Öteki liste tavanları (servis, self süre, yol, pod, sürüm) özet
+// satırlarıdır, ölçeklenmez. Ölçek 1 = buildTraceToolAnalysis, bayt bayt.
+func buildTraceToolAnalysisScaled(spans []chstore.SpanRow, storeCapped bool, scale int) traceToolAnalysis {
+	maxErrSpans, statusRunes := scaleCap(traceToolErrorSpans, scale), scaleCap(traceToolStatusRunes, scale)
 	ta := chstore.BuildTraceAnalysis(spans, storeCapped)
 	out := traceToolAnalysis{
 		SpanCount: len(spans), OrphanCount: ta.OrphanCount,
@@ -347,16 +356,16 @@ func buildTraceToolAnalysis(spans []chstore.SpanRow, storeCapped bool) traceTool
 	out.ErrorSpanCount = len(errIdx)
 	sort.SliceStable(errIdx, func(a, b int) bool { return spans[errIdx[a]].StartTime < spans[errIdx[b]].StartTime })
 	for _, i := range errIdx {
-		if len(out.ErrorSpans) >= traceToolErrorSpans {
+		if len(out.ErrorSpans) >= maxErrSpans {
 			break
 		}
 		s := &spans[i]
 		exType, exMsg := ttSpanException(s.Events)
 		out.ErrorSpans = append(out.ErrorSpans, traceToolErrorSpan{
 			SpanID: s.SpanID, Service: s.ServiceName, Name: s.Name,
-			StatusMessage:    ttCapRunes(s.StatusMessage, traceToolStatusRunes),
-			ExceptionType:    ttCapRunes(exType, traceToolStatusRunes),
-			ExceptionMessage: ttCapRunes(exMsg, traceToolStatusRunes),
+			StatusMessage:    ttCapRunes(s.StatusMessage, statusRunes),
+			ExceptionType:    ttCapRunes(exType, statusRunes),
+			ExceptionMessage: ttCapRunes(exMsg, statusRunes),
 			StartISO:         time.Unix(0, s.StartTime).UTC().Format(time.RFC3339Nano), StartUnixNs: s.StartTime,
 			DurationMs: ttNsToMs(ttSpanDur(s)),
 		})
@@ -531,6 +540,14 @@ func marshalOrderedMap(m map[string]any, first, last []string) ([]byte, error) {
 // Liste traceBodyPayload'dan (coremetry://trace/{id} resource'uyla ortak
 // tavan) geçer; analiz tüm span'ler üzerinden.
 func traceToolPayload(traceID string, spans []chstore.SpanRow) traceToolEnvelope {
+	return traceToolPayloadScaled(traceID, spans, 1)
+}
+
+// traceToolPayloadScaled — v0.10.2384: analiz kanıt ölçeğiyle
+// (buildTraceToolAnalysisScaled). Span LİSTESİ tavanı (getTraceSpanCap)
+// ölçeklenmez: bağlayıcı sınır zaten api'nin sonuç tavanıdır (zarfta liste en
+// sonda; ölçekli tavan da 200 span'in tamamını taşımaz). Ölçek 1 = bayt bayt.
+func traceToolPayloadScaled(traceID string, spans []chstore.SpanRow, scale int) traceToolEnvelope {
 	out := traceToolEnvelope(traceBodyPayload(traceID, spans))
 	storeCapped := len(spans) >= traceStoreSpanCap
 	listed := out["span_count"].(int)
@@ -542,7 +559,7 @@ func traceToolPayload(traceID string, spans []chstore.SpanRow) traceToolEnvelope
 		out["source"] = st.WithNote("Coremetry ClickHouse'ta bu trace yok — saklama süresi dışında, örneklenmiş ya da henüz yazılmamış olabilir (bu araç Tempo yedeğini denemez). Boş sonuç 'hata yok' demek DEĞİLDİR.", false)
 		return out
 	}
-	an := buildTraceToolAnalysis(spans, storeCapped)
+	an := buildTraceToolAnalysisScaled(spans, storeCapped, scale)
 	st = st.WithWindow(time.Unix(0, an.StartUnixNs), time.Unix(0, an.EndUnixNs))
 	if listTruncated {
 		st = st.WithNote(fmt.Sprintf("span listesi %d/%d'e kırpıldı (önce hata span'leri, sonra en yavaşlar); analysis okunan %d span'in TAMAMI üzerinden", listed, len(spans), len(spans)), false)
@@ -595,8 +612,14 @@ func traceToolStubJSON(stub chstore.TraceAggregateStub) map[string]any {
 //
 // aged_out bir sourcestate DEĞİL, gerekçe alanıdır (durum empty kalır).
 func traceToolMissPayload(id string, stub chstore.TraceAggregateStub, agedOut bool, replicaRows []chstore.SpanRow, replicaErr error) traceToolEnvelope {
+	return traceToolMissPayloadScaled(id, stub, agedOut, replicaRows, replicaErr, 1)
+}
+
+// traceToolMissPayloadScaled — v0.10.2384: (a) dalındaki normal zarf kanıt
+// ölçeğiyle; öteki dallar ölçekten bağımsız.
+func traceToolMissPayloadScaled(id string, stub chstore.TraceAggregateStub, agedOut bool, replicaRows []chstore.SpanRow, replicaErr error, scale int) traceToolEnvelope {
 	if len(replicaRows) > 0 {
-		out := traceToolPayload(id, replicaRows)
+		out := traceToolPayloadScaled(id, replicaRows, scale)
 		out["source"] = out["source"].(sourcestate.Status).WithNote("replika ıraksaması: Distributed okuma 0 span döndü; span'ler tüm replikalardan (clusterAllReplicas) okundu — Admin → Replika tutarlılığı", false)
 		out["read_path"] = "clickhouse_all_replicas"
 		return out
@@ -684,7 +707,7 @@ func getTraceAnalyzedTool(d Deps) mcp.Tool {
 				}, nil
 			}
 			if len(spans) > 0 {
-				return traceToolPayload(id, spans), nil
+				return traceToolPayloadScaled(id, spans, EvidenceScale(ctx)), nil // v0.10.2384 — kanıt ölçeği
 			}
 			// v0.10.944 — boş Distributed okuması: REST ucunun (trace_routes.go)
 			// stub → TTL → tüm-replika yolu. ctx ayrıca sorulur.
@@ -716,7 +739,7 @@ func getTraceAnalyzedTool(d Deps) mcp.Tool {
 					return nil, rerr
 				}
 			}
-			return traceToolMissPayload(id, stub, agedOut, rows, rerr), nil
+			return traceToolMissPayloadScaled(id, stub, agedOut, rows, rerr, EvidenceScale(ctx)), nil
 		},
 	}
 }

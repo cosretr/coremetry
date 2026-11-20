@@ -125,6 +125,14 @@ func sampleLogFilter(refs []sampleLogRef) (logstore.Filter, bool) {
 // referans yok ya da hepsi exclude → sorgu yok, sıfır değer. Okuma düşerse
 // (yavaş/erişilemez) de sıfır değer: best-effort, prompt eskisi gibi.
 func sampleTraceLogsEvidence(ctx context.Context, logs logstore.Store, refs []sampleLogRef, exclude string) sampleTraceLogsResult {
+	return sampleTraceLogsEvidenceLim(ctx, logs, refs, exclude, exLimitsFor(1))
+}
+
+// sampleTraceLogsEvidenceLim — v0.10.2384: okunan kayıt, trace başına satır ve
+// gövde tavanı parametreli (kanıt ölçeği). Yine TEK sorgu, ≤3 trace, damga
+// ±2 dk, sampleLogTimeout; yalnız LIMIT büyür (60 → 60 × ölçek).
+// exLimitsFor(1) = sampleTraceLogsEvidence, bayt bayt.
+func sampleTraceLogsEvidenceLim(ctx context.Context, logs logstore.Store, refs []sampleLogRef, exclude string, lim exLimits) sampleTraceLogsResult {
 	if logs == nil {
 		return sampleTraceLogsResult{}
 	}
@@ -133,11 +141,12 @@ func sampleTraceLogsEvidence(ctx context.Context, logs logstore.Store, refs []sa
 	if !ok {
 		return sampleTraceLogsResult{}
 	}
+	f.Limit = lim.sampleFetch
 	page, err := logstore.SearchWithTimeout(ctx, logs, f, sampleLogTimeout)
 	if err != nil || page == nil {
 		return sampleTraceLogsResult{}
 	}
-	return renderSampleTraceLogs(picked, page.Logs)
+	return renderSampleTraceLogsLim(picked, page.Logs, lim)
 }
 
 // renderSampleTraceLogs — SAF (v0.10.1370): gruplanmış loglar → deterministik
@@ -145,6 +154,14 @@ func sampleTraceLogsEvidence(ctx context.Context, logs logstore.Store, refs []sa
 // sonra zaman artan (GroupByTrace). Logu olmayan trace açıkça "log
 // bulunamadı" der — model "bakılmadı" ile "yok"u karıştırmasın.
 func renderSampleTraceLogs(refs []sampleLogRef, lgs []*logstore.LogRecord) sampleTraceLogsResult {
+	return renderSampleTraceLogsLim(refs, lgs, exLimitsFor(1))
+}
+
+// renderSampleTraceLogsLim — SAF (v0.10.2384): trace başına satır ve gövde
+// tavanı parametreli; ölçekli yolda blok toplam gövde baytıyla da sınırlı
+// (lim.sampleBlockBytes) ve yazılmayan satır notla söylenir.
+// exLimitsFor(1) = renderSampleTraceLogs, bayt bayt.
+func renderSampleTraceLogsLim(refs []sampleLogRef, lgs []*logstore.LogRecord, lim exLimits) sampleTraceLogsResult {
 	r := sampleTraceLogsResult{Asked: len(refs)}
 	if len(refs) == 0 {
 		return r
@@ -153,8 +170,9 @@ func renderSampleTraceLogs(refs []sampleLogRef, lgs []*logstore.LogRecord) sampl
 	for i, ref := range refs {
 		ids[i] = ref.TraceID
 	}
-	groups := logstore.GroupByTrace(lgs, ids, sampleLogPerTrace)
+	groups := logstore.GroupByTrace(lgs, ids, lim.samplePerTrace)
 	var body strings.Builder
+	grouped, blockBytes := 0, 0 // ölçekli yol: bütçe sayacı
 	for i, ref := range refs {
 		src := ref.Source
 		if src == "" {
@@ -165,15 +183,25 @@ func renderSampleTraceLogs(refs []sampleLogRef, lgs []*logstore.LogRecord) sampl
 			fmt.Fprintf(&body, "\ntrace %s (%s): log bulunamadı", sampleLogID12(ref.TraceID), src)
 			continue
 		}
+		grouped += len(g)
 		lines := make([]liteLog, 0, len(g))
 		for _, lg := range g {
+			if lim.sampleBlockBytes > 0 && blockBytes >= lim.sampleBlockBytes {
+				break
+			}
 			_, stackFromBody := stackparse.FromLog(lg.Attributes, lg.Body)
 			b := lg.Body
 			if stackFromBody {
 				b = stackparse.MessageHead(lg.Body)
 			}
 			lines = append(lines, liteLog{Sev: lg.SeverityText, Svc: lg.ServiceName,
-				ExType: lg.Attributes["exception.type"], Body: truncRunes(b, sampleLogBodyRunes)})
+				ExType: lg.Attributes["exception.type"], Body: truncRunes(b, lim.sampleBodyRunes)})
+			blockBytes += len(lines[len(lines)-1].Body)
+		}
+		if len(lines) == 0 { // bütçe bu trace'e yer bırakmadı (yalnız ölçekli yol)
+			r.WithLogs++ // log VAR; yazılmadı
+			fmt.Fprintf(&body, "\ntrace %s (%s): bütçe nedeniyle yazılmadı", sampleLogID12(ref.TraceID), src)
+			continue
 		}
 		lp, err := json.Marshal(lines)
 		if err != nil {
@@ -185,7 +213,7 @@ func renderSampleTraceLogs(refs []sampleLogRef, lgs []*logstore.LogRecord) sampl
 		fmt.Fprintf(&body, "\ntrace %s (%s, %d satır):\n```json\n%s\n```", sampleLogID12(ref.TraceID), src, len(lines), promptfmt.FenceSafe(string(lp)))
 	}
 	r.Block = fmt.Sprintf("\n\nÖrnek trace'lerin LOGLARI (trace id ile, %d trace soruldu / %d trace'te log bulundu; yüksek severity önce):", r.Asked, r.WithLogs) +
-		body.String()
+		body.String() + lim.logsOmittedNote(grouped, r.Lines) // ölçek 1'de "" (bayt bayt eski)
 	return r
 }
 

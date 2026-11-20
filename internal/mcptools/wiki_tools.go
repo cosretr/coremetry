@@ -44,7 +44,8 @@ const (
 	// WikiPageMaxRunes — sayfanın modele açılan toplam tavanı (≈40 KB).
 	WikiPageMaxRunes = 40000
 	// WikiWindowRunes — tek çağrıda dönen içerik penceresi (6000'lik sonuç
-	// bütçesinin altında, zarfa pay bırakarak).
+	// bütçesinin altında, zarfa pay bırakarak). v0.10.2384 — TABAN: ctx'teki
+	// kanıt ölçeğiyle çarpılır (WikiPageWindowScaled).
 	WikiWindowRunes = 4800
 )
 
@@ -223,13 +224,22 @@ func readWikiPageTool(d Deps) mcp.Tool {
 			if strings.TrimSpace(a.Find) != "" { // v0.10.1554 — belgenin tamamında satır araması
 				return WikiPageFindRows(*rec, a.Find), nil
 			}
-			return wikiPageWindowWithTableHint(*rec, a.Offset), nil
+			return wikiPageWindowWithTableHintScaled(*rec, a.Offset, EvidenceScale(ctx)), nil // v0.10.2384 — kanıt ölçeği
 		},
 	}
 }
 
 // WikiPageWindow — SAF: sayfanın offset'ten başlayan penceresi + zarf.
 func WikiPageWindow(rec wiki.PageRecord, offset int) map[string]any {
+	return WikiPageWindowScaled(rec, offset, 1)
+}
+
+// WikiPageWindowScaled — v0.10.2384: tek çağrının penceresi kanıt ölçeğiyle
+// (WikiWindowRunes × ölçek; api'nin chatToolResultMaxRunes × ölçek tavanının
+// altında). Sayfanın TOPLAM tavanı (WikiPageMaxRunes) ölçeklenmez: açığa
+// çıkarma sınırıdır ve ölçek 8 penceresi onu neredeyse tek çağrıda kapsar.
+// Ölçek 1 = WikiPageWindow, bayt bayt.
+func WikiPageWindowScaled(rec wiki.PageRecord, offset, scale int) map[string]any {
 	r := []rune(rec.Content)
 	total := len(r)
 	capped := false
@@ -239,7 +249,7 @@ func WikiPageWindow(rec wiki.PageRecord, offset int) map[string]any {
 	if offset > len(r) {
 		offset = len(r)
 	}
-	end := offset + WikiWindowRunes
+	end := offset + scaleCap(WikiWindowRunes, scale)
 	if end > len(r) {
 		end = len(r)
 	}

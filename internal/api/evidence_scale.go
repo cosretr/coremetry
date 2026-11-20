@@ -114,6 +114,22 @@ func (s *Server) chatEntryEvidenceScale(ctx context.Context, profile string) int
 	return s.evidenceScaleSurface(ctx, "chat")
 }
 
+// toolEvidenceScale — SAF (v0.10.2384): araç çağrısının ctx'ine yazılan ölçek
+// (mcptools.WithEvidenceScale). mcptools'un kendi alan tavanları ve gövde
+// bütçeleri bu sayıyla büyür; api tavanı DIŞ sınır kalsın diye v2 döngüsünde
+// planın araç metni tavanının (operatör daraltmış olabilir) izin verdiği
+// çarpanı aşmaz: araç bütçesi (V2ToolMaxBytes × n) ≤ plan tavanı. v1'de
+// çarpanlar zaten aynı (5800 × n < 6000 × n). Ölçek 1 → 1.
+func toolEvidenceScale(v2 *v2LoopPlan, scale int) int {
+	if scale <= 1 {
+		return 1
+	}
+	if v2 != nil && v2.Budget.ToolTextBytes > 0 {
+		return max(1, min(scale, v2.Budget.ToolTextBytes/chatV2ToolTextMaxBytes))
+	}
+	return scale
+}
+
 // scaleCap — SAF: taban tavan × ölçek (ölçek ≤ 1 → taban aynen).
 func scaleCap(base, scale int) int {
 	if scale <= 1 {

@@ -205,6 +205,14 @@ func OpenCounts(rows []InboxRow) map[string]int {
 
 // openProblemsPayload — SAF: ≤ OpenProblemsMaxBytes gövde; sığmayan satır sondan düşer.
 func openProblemsPayload(team, env string, services []string, trimmed, unread int, res InboxOpenResult, limit int) map[string]any {
+	return openProblemsPayloadScaled(team, env, services, trimmed, unread, res, limit, 1)
+}
+
+// openProblemsPayloadScaled — v0.10.2384: yalnız gövde bayt bütçesi kanıt
+// ölçeğiyle (evidence_scale.go; satır limiti ve Inbox okuması aynı). Ölçek 1
+// = openProblemsPayload, bayt bayt.
+func openProblemsPayloadScaled(team, env string, services []string, trimmed, unread int, res InboxOpenResult, limit, scale int) map[string]any {
+	maxBytes := scaleCap(OpenProblemsMaxBytes, scale)
 	all := append([]InboxRow(nil), res.Rows...)
 	if all == nil {
 		all = []InboxRow{}
@@ -239,7 +247,7 @@ func openProblemsPayload(team, env string, services []string, trimmed, unread in
 	for {
 		out["items"], out["count"] = all, len(all)
 		b, err := json.Marshal(out)
-		if err != nil || len(b) <= OpenProblemsMaxBytes || len(all) == 0 {
+		if err != nil || len(b) <= maxBytes || len(all) == 0 {
 			break
 		}
 		all = all[:len(all)-1]
@@ -303,18 +311,19 @@ func openProblemsTool(d Deps) mcp.Tool {
 				return nil, errNoProblemScope
 			}
 			limit := clampLimit(a.Limit, openProblemsDefaultRows, openProblemsMaxRows)
+			scale := EvidenceScale(ctx) // v0.10.2384 — kanıt ölçeği (memo kapanışının dışında okunur)
 			run := func(c context.Context) (map[string]any, error) {
 				res, unread, err := ReadInboxOpen(c, d, team, svcs, env, InboxOpenScan)
 				if err != nil {
 					return nil, err
 				}
-				return openProblemsPayload(team, env, svcs, trimmed, unread, res, limit), nil
+				return openProblemsPayloadScaled(team, env, svcs, trimmed, unread, res, limit, scale), nil
 			}
 			if d.Memo == nil {
 				return run(ctx)
 			}
 			_, now := rangeWindow(ctx, 60) // çıpalı "şimdi" (anchor_test)
-			body, err := d.Memo(ctx, openProblemsCacheKey(svcs, team, env, limit, now), openProblemsCacheTTL, func(c context.Context) (any, bool, error) {
+			body, err := d.Memo(ctx, scaleCacheKey(openProblemsCacheKey(svcs, team, env, limit, now), scale), openProblemsCacheTTL, func(c context.Context) (any, bool, error) {
 				out, err := run(c)
 				return out, err == nil, err
 			})

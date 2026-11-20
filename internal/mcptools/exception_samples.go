@@ -93,11 +93,19 @@ type ExceptionSampleRow struct {
 // exSampleRows — chstore örnekleri → tool satırları + "metin kesildi mi".
 // Sıra korunur (yeniden-eskiye). Saf, tablo testli.
 func exSampleRows(service, exType string, in []chstore.ExceptionSample) ([]ExceptionSampleRow, bool) {
+	return exSampleRowsScaled(service, exType, in, 1)
+}
+
+// exSampleRowsScaled — v0.10.2384: mesaj ve stack tavanı kanıt ölçeğiyle
+// (evidence_scale.go). Ölçek 1 = exSampleRows, bayt bayt; kesim notu
+// (capRunesSpoken) gerçek tavanı ve gerçek boyu yazar.
+func exSampleRowsScaled(service, exType string, in []chstore.ExceptionSample, scale int) ([]ExceptionSampleRow, bool) {
 	out := make([]ExceptionSampleRow, 0, len(in))
 	anyCut := false
+	msgRunes, stackRunes := scaleCap(exSampleMsgMaxRunes, scale), scaleCap(exSampleStackMaxRunes, scale)
 	for _, s := range in {
-		msg, cutMsg := capRunesSpoken(s.Message, exSampleMsgMaxRunes)
-		stack, cutStack := capRunesSpoken(s.Stacktrace, exSampleStackMaxRunes)
+		msg, cutMsg := capRunesSpoken(s.Message, msgRunes)
+		stack, cutStack := capRunesSpoken(s.Stacktrace, stackRunes)
 		anyCut = anyCut || cutMsg || cutStack
 		out = append(out, ExceptionSampleRow{
 			Service:    service,
@@ -249,7 +257,7 @@ func getExceptionSamplesTool(d Deps) mcp.Tool {
 			}
 			cutoff := nowOrAnchor(ctx).Add(-time.Duration(windowS) * time.Second).UnixNano()
 			kept, dropped := exSamplesInWindow(res.Samples, cutoff)
-			rows, anyCut := exSampleRows(g.Service, g.Type, kept)
+			rows, anyCut := exSampleRowsScaled(g.Service, g.Type, kept, EvidenceScale(ctx)) // v0.10.2384 — kanıt ölçeği
 			out["samples"] = rows
 			out["count"] = len(rows)
 			out["truncated"] = anyCut

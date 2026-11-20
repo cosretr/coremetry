@@ -191,7 +191,7 @@ func getLogsForTraceTool(d Deps) mcp.Tool {
 			if match == "contextual" {
 				st = st.WithNote("trace/span kimliği yapısal bir alanda doğrulanamadı — eşleşme bağlamsal (gövde metni)", false)
 			}
-			rows := logRows(page.Logs, m) // v0.10.944 — ts_iso (UTC) + ts_unix_ns, gövde ≤500 rune + body_truncated, FenceSafe (search_logs ile aynı satır)
+			rows := logRowsScaled(page.Logs, m, EvidenceScale(ctx)) // v0.10.2384 — kanıt ölçeği; v0.10.944 — ts_iso (UTC) + ts_unix_ns, gövde ≤500 rune + body_truncated, FenceSafe (search_logs ile aynı satır)
 			res := getLogsForTraceResult{
 				// v0.10.944 — kaynak durumu + kimlik eşleşmesinin niteliği ÖNCE (zarf struct: alan sırası = JSON sırası).
 				Source:   st,

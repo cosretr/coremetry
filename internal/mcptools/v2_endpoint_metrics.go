@@ -290,6 +290,12 @@ func endpointRows(p endpointPlan, r EndpointREDResult) ([]emRow, bool) {
 // endpointMetricsPayload — SAF: ≤ 2 KB gövde. Skip → yalnız gerekçe (page_url
 // ve kanıt YOK: okunmadı).
 func endpointMetricsPayload(p endpointPlan, r EndpointREDResult, from, to time.Time) map[string]any {
+	return endpointMetricsPayloadScaled(p, r, from, to, 1)
+}
+
+// endpointMetricsPayloadScaled — v0.10.2384: yalnız gövde bayt bütçesi kanıt
+// ölçeğiyle (satır tavanı ve VM okuması aynı). Ölçek 1 = bayt bayt.
+func endpointMetricsPayloadScaled(p endpointPlan, r EndpointREDResult, from, to time.Time, scale int) map[string]any {
 	out := map[string]any{"tool": EndpointMetricsName, "service": p.Service, "mode": p.Mode, "window_s": p.WindowS}
 	if p.Route != "" {
 		out["route"] = p.Route
@@ -322,7 +328,7 @@ func endpointMetricsPayload(p endpointPlan, r EndpointREDResult, from, to time.T
 		}
 		out["reasons"] = []string{"VictoriaMetrics has no HTTP server series for " + what + " in the window — absent is not healthy; check the route spelling (http_route template) or widen window_s"}
 	}
-	return v2Fit(out, n, func(k int) { out["endpoints"], out["count"] = rows[:k], k })
+	return v2FitWithin(out, n, v2BodyBudget(scale), func(k int) { out["endpoints"], out["count"] = rows[:k], k })
 }
 
 // V2SkipReason — SAF: v2 aracının "okunmadı" gerekçesi ("" = okundu / başka araç).
@@ -384,6 +390,7 @@ func endpointMetricsTool(d Deps) mcp.Tool {
 			if d.MetricsName != nil {
 				src = d.MetricsName()
 			}
+			scale := EvidenceScale(ctx) // v0.10.2384 — kanıt ölçeği (memo kapanışının dışında okunur)
 			return v2Memo(ctx, d, endpointMetricsCacheKey(src, p, to), emCacheTTL, func(c context.Context) (map[string]any, error) {
 				rctx, cancel := context.WithTimeout(c, cosreBudget)
 				defer cancel()
@@ -391,7 +398,7 @@ func endpointMetricsTool(d Deps) mcp.Tool {
 				if err != nil {
 					return nil, err
 				}
-				return endpointMetricsPayload(p, r, from, to), nil
+				return endpointMetricsPayloadScaled(p, r, from, to, scale), nil
 			})
 		},
 	}

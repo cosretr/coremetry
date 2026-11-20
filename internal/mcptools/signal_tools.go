@@ -74,6 +74,13 @@ type logPatternsArgs struct {
 // filterLogPatterns — SAF: servis (ana ya da topServices'te) + tür süzgeci,
 // sessize alınmış parmak izleri düşer, oran azalan, tavan.
 func filterLogPatterns(hits []anomaly.LogPatternAnomaly, service, kind string, muted map[string]bool, limit int) ([]anomaly.LogPatternAnomaly, int) {
+	return filterLogPatternsScaled(hits, service, kind, muted, limit, 1)
+}
+
+// filterLogPatternsScaled — v0.10.2384: örnek satır tavanı kanıt ölçeğiyle
+// (evidence_scale.go). Ölçek 1 = filterLogPatterns, bayt bayt.
+func filterLogPatternsScaled(hits []anomaly.LogPatternAnomaly, service, kind string, muted map[string]bool, limit, scale int) ([]anomaly.LogPatternAnomaly, int) {
+	sampleMax := scaleCap(logPatternSampleMax, scale)
 	out := make([]anomaly.LogPatternAnomaly, 0, len(hits))
 	for _, h := range hits {
 		if muted[chstore.FingerprintAnomaly("log_pattern", h.Pattern, h.Service)] {
@@ -94,7 +101,7 @@ func filterLogPatterns(hits []anomaly.LogPatternAnomaly, service, kind string, m
 				continue
 			}
 		}
-		h.Sample = truncateRunes(h.Sample, logPatternSampleMax)
+		h.Sample = truncateRunes(h.Sample, sampleMax)
 		out = append(out, h)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Ratio > out[j].Ratio })
@@ -143,7 +150,7 @@ func logPatternsTool(d Deps) mcp.Tool {
 			if d.Store != nil {
 				muted, _ = d.Store.ActiveSilencedFingerprints(ctx)
 			}
-			rows, total := filterLogPatterns(hits, strings.TrimSpace(a.Service), kind, muted, limit)
+			rows, total := filterLogPatternsScaled(hits, strings.TrimSpace(a.Service), kind, muted, limit, EvidenceScale(ctx)) // v0.10.2384
 			return map[string]any{
 				"windowS": int(window.Seconds()), "service": a.Service, "kind": kind,
 				"rows": rows, "count": len(rows), "total": total,

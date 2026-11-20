@@ -148,7 +148,7 @@ func getLogAnomaliesTool(d Deps) mcp.Tool {
 			}
 			body := map[string]any{"signal": sig, "window_s": a.RangeS, "total": len(evs), "stage": "shadow (Problem değil, terfi kapalı)",
 				"page_url": "/anomalies?tab=ml&signal=" + url.QueryEscape(sig)}
-			return fitRows(body, "events", rows, mlToolMaxBytes), nil
+			return fitRows(body, "events", rows, scaledCap(ctx, mlToolMaxBytes)), nil // v0.10.2384 — bayt bütçesi kanıt ölçeğiyle
 		},
 	}
 }
@@ -161,6 +161,13 @@ var errNoMLEventID = errors.New("id zorunlu: get_log_anomalies satırındaki id'
 
 // explainMLPayload — SAF: replay kaydı → model olguları (ham seri yok).
 func explainMLPayload(s chstore.MLSnapshot, related []chstore.MLSnapshot, card *ml.ExplainCard) map[string]any {
+	return explainMLPayloadScaled(s, related, card, 1)
+}
+
+// explainMLPayloadScaled — v0.10.2384: yalnız gövde bayt bütçesi kanıt
+// ölçeğiyle (kanıt referansları sığdığı sürece düşmez). Ölçek 1 = bayt bayt.
+func explainMLPayloadScaled(s chstore.MLSnapshot, related []chstore.MLSnapshot, card *ml.ExplainCard, scale int) map[string]any {
+	maxBytes := scaleCap(mlToolMaxBytes, scale)
 	var pts []chstore.MLPoint
 	_ = json.Unmarshal([]byte(s.Series), &pts)
 	var dwell []int64
@@ -221,10 +228,10 @@ func explainMLPayload(s chstore.MLSnapshot, related []chstore.MLSnapshot, card *
 	if len(tids) > 0 {
 		out["sample_trace_ids"] = tids
 	}
-	if raw, _ := json.Marshal(out); len(raw) > mlToolMaxBytes { // kanıt referansları uzunsa en büyükleri düşer
+	if raw, _ := json.Marshal(out); len(raw) > maxBytes { // kanıt referansları uzunsa en büyükleri düşer
 		for _, k := range []string{"bubbleUp", "influencers", "oracle", "other_signals", "rollouts", "exceptions", "card"} {
 			delete(out, k)
-			if raw, _ := json.Marshal(out); len(raw) <= mlToolMaxBytes {
+			if raw, _ := json.Marshal(out); len(raw) <= maxBytes {
 				break
 			}
 		}
@@ -280,7 +287,7 @@ func explainMLEventTool(d Deps) mcp.Tool {
 				c := ml.BuildExplainCard(in)
 				card = &c
 			}
-			return explainMLPayload(s, related, card), nil
+			return explainMLPayloadScaled(s, related, card, EvidenceScale(ctx)), nil // v0.10.2384
 		},
 	}
 }

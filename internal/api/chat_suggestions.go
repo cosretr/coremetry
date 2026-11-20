@@ -613,7 +613,7 @@ func (s *Server) runSuggestionIntent(ctx context.Context, emit func(string, any)
 	} else {
 		oc, gated := v2LoopPlanFrom(ctx).scopeCheck(tool, args)
 		if !gated {
-			oc = exec.Call(ctx, tool, args)
+			oc = exec.Call(mcptools.WithEvidenceScale(ctx, toolEvidenceScale(v2LoopPlanFrom(ctx), s.evidenceScale(ctx))), tool, args) // v0.10.2384 — araç alan tavanları
 		}
 		content, isErr = oc.Content, oc.IsError
 		if oc.Executed {

@@ -86,6 +86,11 @@ func (r traceEvidenceResult) compactJSON() (string, bool) {
 // traceEvidence — trace'i sınırlı bekleyişle okur ve kompakt kanıta çevirir.
 // Okuma düşerse sıfır değer (best-effort; çağıran bloğu basmaz).
 func traceEvidence(ctx context.Context, ld TraceSpanLoader, traceID string) traceEvidenceResult {
+	return traceEvidenceLim(ctx, ld, traceID, exLimitsFor(1))
+}
+
+// traceEvidenceLim — v0.10.2384: kompakt blok tavanları parametreli (okuma aynı).
+func traceEvidenceLim(ctx context.Context, ld TraceSpanLoader, traceID string, lim exLimits) traceEvidenceResult {
 	if ld == nil || traceID == "" {
 		return traceEvidenceResult{}
 	}
@@ -95,11 +100,19 @@ func traceEvidence(ctx context.Context, ld TraceSpanLoader, traceID string) trac
 	if err != nil || len(spans) == 0 {
 		return traceEvidenceResult{}
 	}
-	return compactTraceEvidence(spans)
+	return compactTraceEvidenceLim(spans, lim)
 }
 
 // compactTraceEvidence — SAF çekirdek: span'ler → zarf + kompakt blok + kanıt.
 func compactTraceEvidence(spans []chstore.SpanRow) traceEvidenceResult {
+	return compactTraceEvidenceLim(spans, exLimitsFor(1))
+}
+
+// compactTraceEvidenceLim — v0.10.2384: span / hata span'i sayısı ve SQL
+// ifadesi tavanı parametreli (kanıt ölçeği). Yapısal DBStatements (şema
+// kanıtı girdisi) HER ölçekte 600 rune'luk kopyadan: ölçek yalnız prompt'a
+// giren ifadeyi büyütür. exLimitsFor(1) = compactTraceEvidence, bayt bayt.
+func compactTraceEvidenceLim(spans []chstore.SpanRow, lim exLimits) traceEvidenceResult {
 	if len(spans) == 0 {
 		return traceEvidenceResult{}
 	}
@@ -115,14 +128,14 @@ func compactTraceEvidence(spans []chstore.SpanRow) traceEvidenceResult {
 	include := make([]bool, len(spans))
 	kept, errKept := 0, 0
 	for i, sp := range spans {
-		if sp.StatusCode == "error" && errKept < traceEvidenceErrSpans {
+		if sp.StatusCode == "error" && errKept < lim.traceErrSpans {
 			include[i] = true
 			kept++
 			errKept++
 		}
 	}
 	for i := range spans {
-		if kept >= traceEvidenceMaxSpans {
+		if kept >= lim.traceSpans {
 			break
 		}
 		if !include[i] {
@@ -147,10 +160,11 @@ func compactTraceEvidence(spans []chstore.SpanRow) traceEvidenceResult {
 			}
 			if sp.DBStatement != "" {
 				l.DBSystem = sp.DBSystem
-				l.DBStatement = truncRunes(sp.DBStatement, 600)
-				if len(r.DBStatements) < traceEvidenceDBStmts && !seenStmt[l.DBStatement] {
-					seenStmt[l.DBStatement] = true
-					r.DBStatements = append(r.DBStatements, l.DBStatement)
+				l.DBStatement = truncRunes(sp.DBStatement, lim.dbStmtRunes)
+				stmt := truncRunes(sp.DBStatement, exDBStatementRunes) // yapısal kopya: ölçekten bağımsız
+				if len(r.DBStatements) < traceEvidenceDBStmts && !seenStmt[stmt] {
+					seenStmt[stmt] = true
+					r.DBStatements = append(r.DBStatements, stmt)
 				}
 			}
 		}
@@ -165,6 +179,7 @@ func compactTraceEvidence(spans []chstore.SpanRow) traceEvidenceResult {
 // v0.10.1044).
 type traceLogsResult struct {
 	Lines        []liteLog
+	Read         int // v0.10.2384 — log deposundan okunan satır (yazılmayan satır notu)
 	Stacks       []string
 	Stack        string            // ilk stack'li logun HAM stack'i
 	StackService string            // o logu atan servis
@@ -176,6 +191,15 @@ type traceLogsResult struct {
 // (maxT 0 → 1970 penceresi) HİÇ gitme (v0.9.414 verify bulgusu, ES maliyet
 // disiplini). logs nil olabilir (CH-only kurulum / işçi bağlamı) → boş.
 func traceLogsEvidence(ctx context.Context, logs logstore.Store, traceID string, minT, maxT int64) traceLogsResult {
+	return traceLogsEvidenceLim(ctx, logs, traceID, minT, maxT, exLimitsFor(1))
+}
+
+// traceLogsEvidenceLim — v0.10.2384: okunan / yazılan satır sayısı ve gövde
+// tavanı parametreli (kanıt ölçeği). Ölçekli yolda blok toplam bayt bütçesiyle
+// de sınırlı (lim.logsBlockBytes; satır × boy karesel büyümesin). Okuma yine
+// TEK sorgu, tek trace, span zarfı ±1 dk, traceLogsTimeout; yalnız LIMIT
+// büyür (30 → 30 × ölçek). exLimitsFor(1) = traceLogsEvidence, bayt bayt.
+func traceLogsEvidenceLim(ctx context.Context, logs logstore.Store, traceID string, minT, maxT int64, lim exLimits) traceLogsResult {
 	var r traceLogsResult
 	if logs == nil || traceID == "" || maxT <= 0 {
 		return r
@@ -184,15 +208,17 @@ func traceLogsEvidence(ctx context.Context, logs logstore.Store, traceID string,
 	to := time.Unix(0, maxT).Add(time.Minute)
 	lctx, cancel := context.WithTimeout(ctx, traceLogsTimeout)
 	defer cancel()
-	page, err := logstore.LogsForTrace(lctx, logs, traceID, from, to, traceLogsFetch)
+	page, err := logstore.LogsForTrace(lctx, logs, traceID, from, to, lim.logFetch)
 	if err != nil || page == nil || len(page.Logs) == 0 {
 		return r
 	}
 	lgs := page.Logs
 	sort.SliceStable(lgs, func(i, j int) bool { return lgs[i].Severity > lgs[j].Severity })
-	r.Lines = make([]liteLog, 0, traceLogsLines)
+	r.Read = len(lgs)
+	r.Lines = make([]liteLog, 0, min(lim.logLines, len(lgs)))
+	blockBytes := 0
 	for _, lg := range lgs {
-		if len(r.Lines) >= traceLogsLines {
+		if len(r.Lines) >= lim.logLines || (lim.logsBlockBytes > 0 && blockBytes >= lim.logsBlockBytes) {
 			break
 		}
 		// v0.9.1182 — kardeş yolla AYNI çözücü: `exception.stacktrace`,
@@ -208,8 +234,9 @@ func traceLogsEvidence(ctx context.Context, logs logstore.Store, traceID string,
 		if stackFromBody {
 			bodyForPrompt = stackparse.MessageHead(lg.Body)
 		}
-		e := liteLog{Sev: lg.SeverityText, Svc: lg.ServiceName, Body: truncRunes(bodyForPrompt, 500)}
-		e.ExType = lg.Attributes["exception.type"] // nil map okuması güvenli
+		e := liteLog{Sev: lg.SeverityText, Svc: lg.ServiceName, Body: truncRunes(bodyForPrompt, lim.logBodyRunes)}
+		e.ExType = lg.Attributes["exception.type"]                           // nil map okuması güvenli
+		blockBytes += len(e.Body) + min(len(stackText), lim.logStackRunes*3) // stack sonra katlanır / kesilir: üst kestirim
 		r.Lines = append(r.Lines, e)
 		r.Stacks = append(r.Stacks, stackText)
 	}
@@ -220,11 +247,16 @@ func traceLogsEvidence(ctx context.Context, logs logstore.Store, traceID string,
 // temsilî stack'e (primary; yoksa "") karşı katlanır (v0.9.1239). Girdi
 // satırları değişmez (kopya). ok=false: satır yok / marshal düştü.
 func (r traceLogsResult) foldedJSON(primary string) (string, bool) {
+	return r.foldedJSONN(primary, exLogStackRunes)
+}
+
+// foldedJSONN — v0.10.2384: log stack kopyasının tavanı parametreli.
+func (r traceLogsResult) foldedJSONN(primary string, stackRunes int) (string, bool) {
 	if len(r.Lines) == 0 {
 		return "", false
 	}
 	lines := append([]liteLog(nil), r.Lines...)
-	folded := foldDuplicateLogStacks(r.Stacks, primary)
+	folded := foldDuplicateLogStacksN(r.Stacks, primary, stackRunes)
 	for i := range lines {
 		if i < len(folded) {
 			lines[i].Stack = folded[i]

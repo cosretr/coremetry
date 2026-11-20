@@ -189,6 +189,13 @@ var logAttrIDKeys = []string{"trace.id", "span.id", "traceId", "spanId", "trace_
 // Değer logAttrValueMaxRunes'ta kesilir, anahtar ve değer fence-safe. İkinci
 // dönüş düşürülen anahtar sayısıdır.
 func logAttrs(rec *logstore.LogRecord, m logstore.FieldMapping) (map[string]string, int) {
+	return logAttrsScaled(rec, m, 1)
+}
+
+// logAttrsScaled — v0.10.2384: öznitelik sayısı ve değer boyu kanıt ölçeğiyle
+// (evidence_scale.go; kayıt zaten okundu, arka uç okuması büyümez). Ölçek 1 =
+// logAttrs, bayt bayt.
+func logAttrsScaled(rec *logstore.LogRecord, m logstore.FieldMapping, scale int) (map[string]string, int) {
 	if rec == nil || len(rec.Attributes)+len(rec.ResourceAttributes) == 0 {
 		return nil, 0
 	}
@@ -235,13 +242,14 @@ func logAttrs(rec *logstore.LogRecord, m logstore.FieldMapping) (map[string]stri
 		return keys[i] < keys[j]
 	})
 	omitted := 0
-	if len(keys) > logAttrsMax {
-		omitted = len(keys) - logAttrsMax
-		keys = keys[:logAttrsMax]
+	if maxAttrs := scaleCap(logAttrsMax, scale); len(keys) > maxAttrs {
+		omitted = len(keys) - maxAttrs
+		keys = keys[:maxAttrs]
 	}
+	valRunes := scaleCap(logAttrValueMaxRunes, scale)
 	out := make(map[string]string, len(keys))
 	for _, k := range keys {
-		out[promptfmt.FenceSafe(k)] = promptfmt.FenceSafe(truncateRunes(strings.TrimSpace(merged[k]), logAttrValueMaxRunes))
+		out[promptfmt.FenceSafe(k)] = promptfmt.FenceSafe(truncateRunes(strings.TrimSpace(merged[k]), valRunes))
 	}
 	return out, omitted
 }
@@ -290,6 +298,13 @@ func logSeverityLabel(rec *logstore.LogRecord) string {
 // logRows — kayıtları satıra çevirir (SAF). Gövde ≤logBodyMaxRunes,
 // kesildiyse body_truncated; fence dizileri etkisizleştirilir.
 func logRows(logs []*logstore.LogRecord, m logstore.FieldMapping) []logRow {
+	return logRowsScaled(logs, m, 1)
+}
+
+// logRowsScaled — v0.10.2384: gövde ve öznitelik tavanları kanıt ölçeğiyle
+// (evidence_scale.go). Ölçek 1 = logRows, bayt bayt.
+func logRowsScaled(logs []*logstore.LogRecord, m logstore.FieldMapping, scale int) []logRow {
+	bodyRunes := scaleCap(logBodyMaxRunes, scale)
 	out := make([]logRow, 0, len(logs))
 	for _, rec := range logs {
 		if rec == nil {
@@ -311,9 +326,9 @@ func logRows(logs []*logstore.LogRecord, m logstore.FieldMapping) []logRow {
 		if rec.Timestamp > 0 {
 			row.TsISO = time.Unix(0, rec.Timestamp).UTC().Format(time.RFC3339Nano)
 		}
-		row.Attrs, row.AttrsOmitted = logAttrs(rec, m) // v0.10.944
-		row.BodyTruncated = utf8.RuneCountInString(rec.Body) > logBodyMaxRunes
-		row.Body = promptfmt.FenceSafe(truncateRunes(rec.Body, logBodyMaxRunes))
+		row.Attrs, row.AttrsOmitted = logAttrsScaled(rec, m, scale) // v0.10.944
+		row.BodyTruncated = utf8.RuneCountInString(rec.Body) > bodyRunes
+		row.Body = promptfmt.FenceSafe(truncateRunes(rec.Body, bodyRunes))
 		out = append(out, row)
 	}
 	return out
@@ -533,7 +548,7 @@ func searchLogsV2Tool(d Deps) mcp.Tool {
 			if (traceID != "" || spanID != "") && match == "contextual" {
 				st = st.WithNote("kimlik filtresi yapısal bir trace/span alanında doğrulanamadı — eşleşme bağlamsal (gövde metni)", false)
 			}
-			res := searchLogsEnvelope(logRows(page.Logs, m), match, m.Labels(), window, hasMore,
+			res := searchLogsEnvelope(logRowsScaled(page.Logs, m, EvidenceScale(ctx)), match, m.Labels(), window, hasMore, // v0.10.2384 — kanıt ölçeği
 				page.Total, page.TotalIsLowerBound, st)
 			res.DeepLink = searchLogsDeepLink(a, traceID, spanID, from, to)
 			return res, nil
