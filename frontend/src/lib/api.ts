@@ -1465,6 +1465,9 @@ export const api = {
   // v0.10.2275 — entity grafı gölge bağları ("Neden tek Problem"), 15 s cache; aç-üzerine-getir.
   problemGraph: (id: string, signal?: AbortSignal) =>
     get<import('./problemGraph').ProblemGraphResponse>(`/api/problems/${encodeURIComponent(id)}/graph`, signal),
+  // v0.10.2388 — "Hata nerede" kırılımları (endpoint / sürüm / exception / bağımlılık), 30 s cache; aç-üzerine-getir.
+  problemBreakdown: (id: string, signal?: AbortSignal) =>
+    get<import('./types').ProblemBreakdownResponse>(`/api/problems/${encodeURIComponent(id)}/breakdown`, signal),
   // v0.10.2279 (entity grafı S2) — Problems listesi alt satırı (gölge özet).
   problemGraphSummary: (signal?: AbortSignal) =>
     get<import('./problemGraph').ProblemGraphSummaryResponse>(`/api/problems/graph-summary`, signal),

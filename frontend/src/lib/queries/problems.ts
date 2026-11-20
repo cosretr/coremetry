@@ -250,6 +250,19 @@ export function useProblemGraph(id: string, enabled = true) {
   });
 }
 
+// v0.10.2388 — "Hata nerede" kırılımları (hata oranı Problem'i); yalnız detay
+// açıkken ve bölüm çizilecekse (enabled), staleTime = sunucu TTL (30 s).
+// Yoklama yok: uç VM'e ve ham span'e gider (ES-maliyet disipliniyle aynı duruş);
+// yenileme sayfanın kendi tazelemesiyle.
+export function useProblemBreakdown(id: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.problems.breakdown(id),
+    queryFn: ({ signal }) => api.problemBreakdown(id, signal),
+    enabled: enabled && !!id,
+    staleTime: 30_000,
+  });
+}
+
 // v0.10.2279 (entity grafı S2) — Problems listesi "Ne bozuk" alt satırı için
 // gölge özet (tek blob, sunucu 15 s önbellek). Liste satırlarını katlamaz,
 // sıralamaz, süzmez. 30 s yoklama; RQ gizli sekmede durur.

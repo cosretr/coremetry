@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { SafeHref } from '@/components/ui/SafeHref'; // v0.10.1315 — olay/katalog linki XSS kapısı
 import { useEscLayer } from '@/lib/escLayer';
 import { Link } from 'react-router-dom';
@@ -40,6 +40,7 @@ import { ExternalEvidencePanel } from './ExternalEvidencePanel';
 import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
 import { ProblemEventTimeline, ProblemEventEvidence } from './ProblemEventTimeline'; // v0.10.2163 — birleşen olaylar
 import { ProblemRequestsSection } from './ProblemRequestsSection'; // v0.10.2380 — başarılı / başarısız istek
+import { breakdownCapable } from '@/lib/problemBreakdown'; // v0.10.2388 — "Hata nerede" yüklemi (bölüm tembel)
 import { ProblemGraphSection, ProblemOriginLine, ProblemFrequentChip, ProblemRepeatSection } from './ProblemGraphSection'; // v0.10.2275 — entity grafı gölge bağları; v0.10.2279 köken satırı
 import type { ExceptionGroup, ExceptionGroupState, Problem, ProblemStandard, RolloutEvidence } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
@@ -93,6 +94,10 @@ import { problemVerdictSubject, exceptionVerdictSubject } from '@/lib/problemVer
 // All colors ride globals.css tokens (.pb-* helpers) so dark / light /
 // redhat themes drive them; deploy correlation renders ONLY when the
 // row carries recentDeploy — no placeholder, no extra fetch.
+
+// v0.10.2388 — "Hata nerede" bölümü ayrı yüklenir: yalnız hata oranı
+// Problem'inin detayında gerekir (ProblemRequestsSection'ın grafiği emsali).
+const ProblemBreakdownSection = lazy(() => import('./ProblemBreakdownSection'));
 
 const STATE_LABEL: Record<ExceptionGroupState, string> = {
   // v0.10.922 (sade palet adım 1) — 'new' artık NEW basıyor. v0.8.382'nin
@@ -1226,6 +1231,15 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         <div className="pd-col">
           <AlertDetailBoxes problem={problem} std={std} window={probWindow}
             dbHealthLinks={dbHealthLinks} svcSlowLinks={svcSlowLinks} />
+          {/* v0.10.2388 — "Hata nerede": hata oranı Problem'inin deterministik
+              kırılımları (endpoint · sürüm · exception · bağımlılık). Yalnız
+              servis özneli hata oranı Problem'inde mount edilir; başka türde
+              ne paket ne istek. Blok yoksa bölüm çizilmez. */}
+          {breakdownCapable(problem, Date.now()) && (
+            <Suspense fallback={null}>
+              <ProblemBreakdownSection problem={problem} />
+            </Suspense>
+          )}
         </div>
         <div className="pd-col">
           {/* v0.10.1064 — kuralın kendi serisi (eşik + başlangıç işaretli);

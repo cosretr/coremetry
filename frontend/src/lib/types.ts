@@ -11704,6 +11704,77 @@ export interface ProblemEventsResponse {
   detectors: number;
 }
 
+// v0.10.2388 — "Hata nerede" (GET /api/problems/{id}/breakdown; Go
+// api.problemBreakdownResponse). Oranlar 0–1. Verisi olmayan blok gövdede YOK;
+// `failed` = okunamadı. Kaynaklar blok başına: endpoints / versions
+// örneklenmemiş sunucu metriği, exceptions hata durumlu span kayıtları (sayım),
+// dependencies bağımlılık dedektörü olayları.
+export interface ProblemBreakdownRoute {
+  route: string;
+  /** Olağan hata oranı (mevsimsel taban); yok = bilinmiyor. */
+  normal?: number;
+  current: number;
+  failedPerMin: number;
+  requestsPerMin: number;
+  /** Şimdiki oran olağana göre etki eşiğinin üstünde (renk yalnız bu hücrede). */
+  deviates?: boolean;
+}
+export interface ProblemBreakdownVersion {
+  version: string;
+  current: number;
+  failedPerMin: number;
+  requestsPerMin: number;
+  deviates?: boolean;
+}
+export interface ProblemBreakdownException {
+  type: string;
+  count: number;
+  /** Penceredeki kayıtlar içindeki pay; toplam bilinmiyorsa yok. */
+  share?: number;
+  message?: string;
+  fingerprint?: string;
+  groups?: number;
+}
+export interface ProblemBreakdownDependency {
+  eventId: string;
+  family: string; // http | db | messaging
+  target: string;
+  measure: 'error_rate' | 'latency'; // oran 0–1 | p95 ms
+  baseline: number;
+  observed: number;
+  startedAt: number; // unix ns
+  lastSeen: number;  // unix ns
+  live: boolean;
+}
+export interface ProblemBreakdownResponse {
+  problemId: string;
+  applicable: boolean;
+  service?: string;
+  open?: boolean;
+  windowFrom?: number; // unix ns
+  windowTo?: number;   // unix ns
+  endpoints?: {
+    failed?: boolean;
+    rows: ProblemBreakdownRoute[];
+    other?: ProblemBreakdownRoute;
+    otherCount?: number;
+    failedPerMin: number;
+    requestsPerMin: number;
+    normalFailed?: boolean;
+  };
+  versions?: { rows: ProblemBreakdownVersion[]; more?: number; label: string };
+  exceptions?: {
+    failed?: boolean;
+    rows: ProblemBreakdownException[];
+    total?: number;
+    capped?: boolean;
+    otherTypes?: number;
+    otherCount?: number;
+    otherShare?: number;
+  };
+  dependencies?: { failed?: boolean; rows: ProblemBreakdownDependency[]; more?: number };
+}
+
 export interface ProblemAffectedResponse {
   problemId: string;
   displayId: string;
