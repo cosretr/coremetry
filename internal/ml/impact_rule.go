@@ -18,8 +18,11 @@ package ml
 // oran olayı ne açar ne kapatır).
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
+	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -35,8 +38,9 @@ const (
 )
 
 const (
-	impactWindow     = 5 // karar penceresi: son N bir dakikalık örnek
-	impactViolations = 3 // penceredeki asgari ihlal
+	impactWindow     = 5  // karar penceresi: son N bir dakikalık örnek
+	impactViolations = 3  // penceredeki asgari ihlal
+	impactStepSec    = 60 // örnek adımı (1 dk; kod sabiti)
 )
 
 // impactRule — bir ölçünün eşik kuralı. Eşik = max(Floor, taban·Rel,
@@ -141,4 +145,64 @@ func impactDecide(kind impactKind, samples []impactSample, base float64) impactV
 		v.Reason = fmt.Sprintf("ihlal %d/%d, en az %d gerekir", v.Violations, impactWindow, impactViolations)
 	}
 	return v
+}
+
+// ── ölçüler arası ortak parçalar (v0.10.2382, I5: hata oranı + consumer lag) ──
+
+// impactMinuteOf — SAF: aralık sorgusu noktasının (unix ns) DAKİKA BAŞI. VM
+// noktası t, (t − 60 sn, t] aralığını temsil eder (sayaçta o dakikanın artışı,
+// gauge'da dakikanın kapanış okuması) → dakika başı t − 60. Pencere
+// [end − 5 dk, end) dışındaki nokta ok=false.
+func impactMinuteOf(pointNs, end int64) (int64, bool) {
+	m := pointNs/1e9/impactStepSec*impactStepSec - impactStepSec
+	return m, m >= end-impactWindow*impactStepSec && m < end
+}
+
+// impactEmit — SAF: karar bu tik olay yazar mı: yeni ateşleme ya da AÇIK
+// koşunun uzatması (kural "temiz" demiyor ve pencerede en az bir ihlal var).
+func impactEmit(v impactVerdict, open bool) bool {
+	return v.Fire || (open && !v.Clear && v.Violations > 0)
+}
+
+// impactRunStart — SAF: olayın başlangıcı (unix ns) = ilk ihlal dakikasının
+// başı (onset: n örnekli pencerede indis, −1 = yok → en yeni dakika). Açık
+// koşunun yazılmış başlangıcı (openStart, 0 = yok) daha erkense o kalır:
+// pencere kayarken başlangıç oynamaz.
+func impactRunStart(end time.Time, n, onset int, openStart int64) int64 {
+	started := (end.Unix() - impactStepSec) * 1e9
+	if onset >= 0 {
+		started = (end.Unix() - int64(n-onset)*impactStepSec) * 1e9
+	}
+	if openStart > 0 && openStart < started {
+		started = openStart
+	}
+	return started
+}
+
+// impactMark — olay kanıtındaki etki kuralı damgası (rule=impact): olay 1
+// dakikalık örneklerle ve etki kuralıyla açıldı. Problem kapısı, kalite
+// süzgeci ve olay kaydı olayı bu damgadan tanır.
+type impactMark struct {
+	Fired      bool    // bu yazımda kural ateşliyor (false = açık koşunun uzatması)
+	Threshold  float64 // uygulanan eşik
+	Violations int     // penceredeki ihlal
+	Window     int     // pencere (dakika)
+}
+
+// impactMarkOf — SAF: kanıttan damga (yoksa ok=false).
+func impactMarkOf(evidence string) (impactMark, bool) {
+	if !strings.Contains(evidence, `"impact"`) { // çoğu olayda damga yok: çözümleme yapma
+		return impactMark{}, false
+	}
+	var m struct {
+		Rule       string  `json:"rule"`
+		Fired      bool    `json:"fired"`
+		Threshold  float64 `json:"threshold"`
+		Violations int     `json:"violations"`
+		Window     int     `json:"window"`
+	}
+	if json.Unmarshal([]byte(evidence), &m) != nil || m.Rule != "impact" {
+		return impactMark{}, false
+	}
+	return impactMark{Fired: m.Fired, Threshold: m.Threshold, Violations: m.Violations, Window: m.Window}, true
 }

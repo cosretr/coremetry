@@ -237,7 +237,9 @@ func singleWorsening(e chstore.MLEvent) (worse, count bool) {
 // singleSignalShadow — SAF: tek sinyalli grubun Davis tek-olay kolu. Açık,
 // batch kuralından geçen bir üye ≥ 600 sn sürmüş, kötüleşme yönünde ve
 // tabanın ≥ 2 katıysa (taban 0: sayım ≥ 20) gölgede "açardı". En güçlü
-// üyenin cümlesi döner.
+// üyenin cümlesi döner. v0.10.2382 (I5): etki kuralıyla açılmış üye (bugün
+// VM consumer lag) süre ve kat şartı aranmadan sayılır; diğer şartlar (açık,
+// kötüleşme yönü, batch, A2 adaylığı ve K10) aynen.
 func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in GroupGateInput, now time.Time) (string, string, bool) {
 	best, bestID, bestR := "", "", 0.0
 	for _, e := range members {
@@ -248,12 +250,23 @@ func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in G
 		if !worse || !singleArmEvidenceOK(e, in.Published) { // K10 (A2): ≥ 2 bağımsız kanıt
 			continue
 		}
+		var why string
+		var r float64
+		// v0.10.2382 (I5): etki kuralıyla açılmış olay (kanıt rule=impact) 600 sn
+		// sürdürme ve "≥ 2 × taban" tekrarı OLMADAN açar: kuralın 5'te 3
+		// penceresi sürdürmedir, eşiği zaten göreli + mutlak tabanı içerir;
+		// uzatma tikinde (en yeni dakika eşiğin altında) karar değişmez.
+		if m, ok := impactMarkOf(e.Evidence); ok {
+			why, r = impactSingleWhy(e, m)
+			if best == "" || r > bestR {
+				best, bestID, bestR = why, e.ID, r
+			}
+			continue
+		}
 		dur := now.Sub(time.Unix(0, e.StartedAt))
 		if dur < singleMinSustained {
 			continue
 		}
-		var why string
-		var r float64
 		if e.Baseline <= 0 {
 			if !count || e.Observed < singleCountOnlyMin {
 				continue
@@ -272,6 +285,21 @@ func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in G
 		}
 	}
 	return best, bestID, best != ""
+}
+
+// impactSingleWhy — SAF: etki kuralıyla açılmış üyenin tek sinyal kolu
+// cümlesi ve gücü (gözlenen / taban; taban 0 → sonsuz). Cümle kuralı söyler,
+// süre iddia etmez ("10 dk sürdü" değil).
+func impactSingleWhy(e chstore.MLEvent, m impactMark) (string, float64) {
+	r, normal := math.Inf(1), "normalde hiç yok"
+	if e.Baseline > 0 {
+		r, normal = e.Observed/e.Baseline, "normalde "+fmtNum(e.Baseline)
+	}
+	tail := fmt.Sprintf("eşik %s, şimdi %s (%s)", fmtNum(m.Threshold), fmtNum(e.Observed), normal)
+	if !m.Fired {
+		return fmt.Sprintf("%s etki kuralıyla açık: pencerede %d ihlal sürüyor, %s", e.Detector, m.Violations, tail), r
+	}
+	return fmt.Sprintf("%s etki kuralı: son %d dakikada %d ihlal, %s", e.Detector, m.Window, m.Violations, tail), r
 }
 
 // memberSignal — SAF: olayın sinyali (eski satırda dedektörden).

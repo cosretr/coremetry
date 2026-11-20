@@ -72,7 +72,7 @@ const (
 	svcMeasureCount = "svc_count"
 	svcMeasureRatio = "svc_err_ratio"
 	// svcImpactStepSec — etki kuralının örnek adımı (1 dk; kod sabiti).
-	svcImpactStepSec = 60
+	svcImpactStepSec = impactStepSec
 )
 
 // svcAgg — SAF toplayıcı: aile × servis × kova → count / err toplamı.
@@ -192,12 +192,10 @@ func svcImpactEnd(now time.Time, lagSec int) time.Time {
 // noktası t, (t − 60 sn, t] artışıdır → dakika başı t − 60. Pencere
 // [end − 5 dk, end) dışındaki nokta yok sayılır.
 func (a *svcAgg) addMinutes(famIdx int, svcLabel, measure string, rows []chstore.SpanMetricSeries, end int64) {
-	from := end - impactWindow*svcImpactStepSec
 	for _, r := range rows {
 		svc := groupKeyLabels(r.GroupKey)[svcLabel]
 		for _, p := range r.Points {
-			m := p.Time/1e9/svcImpactStepSec*svcImpactStepSec - svcImpactStepSec
-			if m >= from && m < end {
+			if m, ok := impactMinuteOf(p.Time, end); ok {
 				a.add(famIdx, svc, measure, m, p.Value)
 			}
 		}
@@ -303,7 +301,7 @@ func svcImpactDecideBase(samples []impactSample, b svcBase, minSamples int, open
 	v.Median, v.MAD, v.BaseRate = b.Median, b.MAD, b.Rate
 	v.impactVerdict = impactDecide(impactFailureRate, samples, v.Median)
 	v.Z = (v.Observed - v.Median) / effMAD(v.Median, v.MAD)
-	v.Emit = v.Fire || (open && !v.Clear && v.Violations > 0)
+	v.Emit = impactEmit(v.impactVerdict, open)
 	return v
 }
 
@@ -316,13 +314,7 @@ func svcImpactDecideBase(samples []impactSample, b svcBase, minSamples int, open
 // sayısı ve dakika dakika oran (null = ölçülmedi) + yük. "dwell" YAZILMAZ.
 func svcImpactEvent(svc string, samples []impactSample, v svcImpactVerdict, end time.Time, openStart int64, cfg chstore.MLConfig, class string) chstore.MLEvent {
 	first := end.Unix() - int64(len(samples))*svcImpactStepSec
-	started := (end.Unix() - svcImpactStepSec) * 1e9
-	if v.Onset >= 0 {
-		started = (first + int64(v.Onset)*svcImpactStepSec) * 1e9
-	}
-	if openStart > 0 && openStart < started {
-		started = openStart
-	}
+	started := impactRunStart(end, len(samples), v.Onset, openStart)
 	ratios, loads := make([]any, len(samples)), make([]float64, len(samples))
 	for i, s := range samples {
 		loads[i] = s.Load

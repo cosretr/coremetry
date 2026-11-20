@@ -421,6 +421,23 @@ func admitMetric(deps Deps, fam, svc, part string, dayCap func(fam string) bool)
 // dwell geçmişi (CH), taban, karar, olay. evidence: anahtar → ek kanıt.
 func evalMetricSeries(ctx context.Context, deps Deps, cfg chstore.MLConfig, last, now time.Time, series map[string]map[int64]float64,
 	dirOf map[string]string, dayCap func(fam string) bool, evidence func(key string) map[string]any) ([]chstore.MLEvent, error) {
+	evs, _, err := evalMetricSeriesOwned(ctx, deps, cfg, last, now, series, dirOf, dayCap, evidence, nil)
+	return evs, err
+}
+
+// metricBase — evalMetricSeriesOwned'un okuduğu mevsimsel taban (anahtar →
+// örnekler; sinyalin TÜM serileri) + takvim sınıfı. Kova yargısını devralan
+// ölçü (consumer lag etki kuralı, kafka_lag_impact.go) kararını bununla verir.
+type metricBase struct {
+	samples chstore.MLBaselineSeries
+	class   string
+}
+
+// evalMetricSeriesOwned — evalMetricSeries'in gövdesi. owned (nil = yok):
+// part'ı başka bir kuralın sahiplendiği seri YAZILIR ve tabanı okunur ama 5
+// dakikalık kova yargısına GİRMEZ (v0.10.2382, I5). now imzada kalır (çağıranlar ortak).
+func evalMetricSeriesOwned(ctx context.Context, deps Deps, cfg chstore.MLConfig, last, _ time.Time, series map[string]map[int64]float64,
+	dirOf map[string]string, dayCap func(fam string) bool, evidence func(key string) map[string]any, owned func(part string) bool) ([]chstore.MLEvent, metricBase, error) {
 	bucket := time.Duration(cfg.BucketSec) * time.Second
 	dwellFrom := last.Add(-time.Duration(cfg.DwellBuckets-1) * bucket)
 	if hist, herr := deps.Store.MLSeriesRecent(ctx, chstore.MLSignalMetric, nil, "", "", dwellFrom, cfg.BucketSec); herr == nil {
@@ -434,7 +451,7 @@ func evalMetricSeries(ctx context.Context, deps Deps, cfg chstore.MLConfig, last
 		}
 	}
 	if err := deps.insertSeries(ctx, srows); err != nil {
-		return nil, err
+		return nil, metricBase{}, err
 	}
 	deps.countSeries(len(series))
 	sens := deps.Store.AnomalySensitivityForDetectors()
@@ -445,15 +462,26 @@ func evalMetricSeries(ctx context.Context, deps Deps, cfg chstore.MLConfig, last
 	base, err := deps.Store.MLBaseline(ctx, chstore.MLBaselineRequest{Signal: chstore.MLSignalMetric, Dates: dates, HourFrom: max(h-1, 0), HourTo: min(h+1, 23), TargetSec: cfg.BucketSec, TZ: loc.String()})
 	global.lastCHMs.Store(time.Since(t0).Milliseconds())
 	if err != nil {
-		return nil, err
+		return nil, metricBase{}, err
 	}
-	dwellStart := dwellFrom.Unix()
+	return judgeMetricSeries(deps, cfg, last, series, base, class, dirOf, dayCap, evidence, owned), metricBase{samples: base, class: class}, nil
+}
+
+// judgeMetricSeries — SAF (I/O yok): 5 dakikalık kova yargısı (dwell +
+// medyan/MAD) → olaylar. owned(part) true olan seri atlanır.
+func judgeMetricSeries(deps Deps, cfg chstore.MLConfig, last time.Time, series map[string]map[int64]float64, base chstore.MLBaselineSeries, class string,
+	dirOf map[string]string, dayCap func(fam string) bool, evidence func(key string) map[string]any, owned func(part string) bool) []chstore.MLEvent {
+	bucket := time.Duration(cfg.BucketSec) * time.Second
+	dwellStart := last.Add(-time.Duration(cfg.DwellBuckets-1) * bucket).Unix()
 	off := isOffDay(class)
 	c2 := cfg
 	c2.MinBaselineRate = 0 // gauge/oran serilerinde hacim tabanı anlamsız; eksik veri kuralı yeter
 	var evs []chstore.MLEvent
 	for k := range series {
 		svc, part, _ := strings.Cut(k, "\x00")
+		if owned != nil && owned(part) {
+			continue
+		}
 		fam, _, _ := strings.Cut(part, "|")
 		cur, ok := dwellWindow(series[k], dwellStart, last.Unix(), int64(cfg.BucketSec), false)
 		if !ok { // scrape boşluğu: eksik veri → değerlendirme yok
@@ -478,5 +506,5 @@ func evalMetricSeries(ctx context.Context, deps Deps, cfg chstore.MLConfig, last
 			Baseline: j.Median, Observed: j.Observed, Score: math.Abs(j.Z), Direction: j.Direction, Evidence: string(raw),
 		})
 	}
-	return evs, nil
+	return evs
 }

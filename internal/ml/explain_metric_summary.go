@@ -30,8 +30,12 @@ type ExplainValue struct {
 }
 
 // metricMeasureName — SAF: dedektör değerinin adı. Pencereli ifade (rate /
-// increase, `{win}`) kova ortalaması; değilse kova sonundaki ölçüm.
+// increase, `{win}`) kova ortalaması; değilse kova sonundaki ölçüm. v0.10.2382
+// (I5): etki kuralıyla açılan olayın değeri 1 dakikalık okumadır (kova değil).
 func metricMeasureName(in CardInput) string {
+	if in.ImpactRule != nil {
+		return fmt.Sprintf("%d dakikalık ölçüm", impactStepSec/60)
+	}
 	m := int(in.bucket().Minutes())
 	if m <= 0 {
 		m = 5

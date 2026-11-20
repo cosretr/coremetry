@@ -39,9 +39,11 @@ func dwellWindow(byB map[int64]float64, start, last, step int64, missingIsZero b
 
 // belowImpactFloor — SAF (v0.10.2041): olayın değeri ailenin mutlak etki
 // tabanının altında mı. Bugün yalnız Kafka consumer lag (VM ve Thanos
-// parçası): değer = dedektörün kova ölçüsü, yani
-// max by (servis) (kafka_consumer_records_lag_max) kova sonunda (servisin en
-// kötü partition lag'i, anlık). Taban chstore.MLKafkaLagImpactFloor.
+// parçası): değer = dedektörün ölçüsü, yani en kötü partition lag'i (Thanos
+// ve eski yol: 5 dk kovanın sonundaki okuma; VM etki kuralı v0.10.2382: en
+// yeni ölçülen dakikanın okuması). Taban chstore.MLKafkaLagImpactFloor — etki
+// kuralının mutlak tabanıyla AYNI sabit: kuralın açtığı yeni olay bu süzgece
+// takılamaz (son ölçülen dakika ≥ eşik ≥ taban); uzatma tiki açık koşudur.
 func belowImpactFloor(ev chstore.MLEvent) bool {
 	if ev.Detector != "metric_kafka" || ev.Direction == "down" {
 		return false
@@ -50,6 +52,20 @@ func belowImpactFloor(ev chstore.MLEvent) bool {
 		return false
 	}
 	return ev.Observed < chstore.MLKafkaLagImpactFloor
+}
+
+// impactRuleRun — SAF: olayın koşusunu etki kuralı mı yönetiyor (dedektör
+// açık koşuyu kural "temiz" diyene dek uzatır): servis hata oranı (I3) ve
+// kanıtı rule=impact damgalı consumer lag (I5). Thanos ve eski yol lag olayı değil.
+func impactRuleRun(ev chstore.MLEvent) bool {
+	if ev.Detector == detSvcErrorRate {
+		return true
+	}
+	if !isConsumerLagEvent(ev) {
+		return false
+	}
+	_, ok := impactMarkOf(ev.Evidence)
+	return ok
 }
 
 // impactOK — SAF: etki eşiği. Taban 0 iken göreli eşik uygulanmaz.
@@ -391,7 +407,8 @@ func qualityFilter(evs []chstore.MLEvent, cfg chstore.MLConfig, tr *tracker, now
 		// v0.10.2373 (I3): açık servis hata oranı koşusu, en yeni dakika tabana
 		// dönse de etki kuralı "temiz" diyene dek sürer (dedektör uzatır); etki
 		// eşiği yalnız YENİ olayı süzer (aşağıdaki lag tabanıyla aynı ilke).
-		if !impactOK(ev.Baseline, ev.Observed, q) && !(ev.Detector == detSvcErrorRate && tr.openRun(ev.ID, now, tick)) {
+		// v0.10.2382 (I5): etki kuralıyla açılmış consumer lag koşusu da öyle.
+		if !impactOK(ev.Baseline, ev.Observed, q) && !(impactRuleRun(ev) && tr.openRun(ev.ID, now, tick)) {
 			sup.Impact++
 			continue
 		}

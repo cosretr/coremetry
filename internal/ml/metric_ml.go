@@ -8,6 +8,8 @@ package ml
 // yok (eksik veri kuralı judge'da); pod etiketi ifadede servis düzeyine
 // toplanır (pod_outlier hariç — T3). Seri ml_series (signal=metric, part
 // `family|exprID`), taban CH takvim sınıfı × ±1 saat, log/trace ile aynı judge.
+// İSTİSNA (v0.10.2382, etki olayı I5): metric_kafka consumer_lag kova yargısına
+// girmez; 1 dakikalık örneklerle etki kuralı karar verir (kafka_lag_impact.go).
 
 import (
 	"context"
@@ -31,6 +33,8 @@ type MetricML struct {
 	src *MetricSources
 	// kafkaSel — v0.10.2064 (Davis S3): consumer lag topic seçimi (30 dk; kafka_topic.go).
 	kafkaSel kafkaTopicSel
+	// lag — v0.10.2382 (I5): consumer lag etki kuralının yoklama durumu (kafka_lag_impact.go).
+	lag lagImpactState
 }
 
 func NewMetricML() *MetricML { return &MetricML{daily: map[string]int{}} }
@@ -93,13 +97,21 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	series := map[string]map[int64]float64{}
 	dirOf := map[string]string{} // part → direction
 	var waiting []string
+	// v0.10.2382 (I5): consumer lag KARARI 5 dakikalık kovayla değil, etki
+	// kuralıyla (kafka_lag_impact.go). lagQ = bu tikte 1 dk adımla sorulacak
+	// ifade (dedektörün kendi ifadesi); nil = ölçü yok / beklemede ya da
+	// operatör ifadesi 1 dk'da örneklenemiyor (o kurulumda eski kova yargısı).
+	// Aşağıdaki anlık sorgular DEĞİŞMEDİ: 5 dk seri taban için yazılmaya devam eder.
+	var lagQ *lagQuery
+	_, lagSafe := lagImpactExpr(cfg)
 	for _, pe := range metricExprs(cfg, svcLabel, cfg.BucketSec) {
 		if !familyOnVM(src, pe.family) {
 			continue
 		}
+		isLag := pe.family == detMetricKafka && pe.id == kafkaLagExprID
 		// v0.10.2064 (Davis S3): varsayılan consumer_lag ifadesi servis × topic
 		// (kafka_topic.go); topic etiketli seri yoksa aşağıdaki servis düzeyi ifade.
-		if pe.family == "metric_kafka" && pe.id == kafkaLagExprID && kafkaTopicDefault(cfg) {
+		if isLag && kafkaTopicDefault(cfg) {
 			tv, ok, skip, err := d.kafkaTopicSeries(ctx, deps, cfg, svcLabel, to, now)
 			if skip {
 				if len(waiting) == 0 || waiting[len(waiting)-1] != pe.family {
@@ -125,6 +137,7 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 						series[k][last.Unix()] = v
 					}
 				}
+				lagQ = &lagQuery{expr: kafkaTopicExpr(svcLabel), svcLabel: svcLabel, topic: true}
 				continue
 			}
 		}
@@ -137,6 +150,9 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		}
 		if err != nil {
 			return nil, fmt.Errorf("vm %s/%s: %w", pe.family, pe.id, err)
+		}
+		if isLag && lagSafe { // servis düzeyi ifade ({win} yok: çözülmüş hali adımdan bağımsız)
+			lagQ = &lagQuery{expr: pe.expr, svcLabel: svcLabel}
 		}
 		part := metricPart(pe.family, pe.id)
 		dirOf[part] = pe.direction
@@ -159,6 +175,21 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	if len(waiting) > 0 && len(series) == 0 {
 		return nil, fmt.Errorf("VM metrik aileleri beklemede (backoff): %v", waiting)
 	}
-	return evalMetricSeries(ctx, deps, cfg, last, now, series, dirOf, func(fam string) bool { return d.dayCap(fam, cfg, now) },
-		func(string) map[string]any { return nil })
+	// 1 dk'lık lag örnekleri: TEK aralık sorgusu (yoklama aynı pencere bitişi
+	// için aldıysa sıfır). Hatası YALITILIR: tik düşmez, tik hatası olarak
+	// DÖNMEZ; yalnız lag bu tik sessiz kalır ve "kısmen ölçülüyor" görünür.
+	lagEnd := svcImpactEnd(now, cfg.IngestLagSec)
+	var lagMin map[string]map[int64]float64
+	var lagErr error
+	var owned func(part string) bool
+	if lagQ != nil {
+		lagMin, lagErr = d.lagMinutes(ctx, deps, *lagQ, lagEnd, now)
+		owned = isLagImpactPart // 5 dk kova yargısı bu part'lar için yok
+	}
+	evs, mb, err := evalMetricSeriesOwned(ctx, deps, cfg, last, now, series, dirOf, func(fam string) bool { return d.dayCap(fam, cfg, now) },
+		func(string) map[string]any { return nil }, owned)
+	if err != nil {
+		return nil, err
+	}
+	return append(evs, d.lagImpactTick(deps, lagQ, lagMin, lagErr, mb, lagEnd, cfg, now)...), nil
 }

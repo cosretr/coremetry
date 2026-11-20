@@ -21,6 +21,10 @@ package ml
 // ml_events.code = part. Servis düzeyi seri topic serisi gelince yazılmaz →
 // açık servis düzeyi olay 3 tik sonra kapanır; aynı lag için çift olay yok.
 // Lag tabanı (chstore.MLKafkaLagImpactFloor = 1000) aynen.
+//
+// v0.10.2382 (etki olayı I5): bu dosyanın anlık sorguları 5 dakikalık TABAN
+// serisini yazmayı sürdürür; KARAR artık 1 dakikalık örneklerle etki kuralında
+// (kafka_lag_impact.go): tik başına +1 aralık sorgusu (kafkaTopicExpr, 60 sn adım).
 
 import (
 	"context"
