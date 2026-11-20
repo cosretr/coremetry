@@ -75,6 +75,10 @@ type AnomalyEvent struct {
 	// Şablonlar sekmesi ve Problem şablon kanıtıyla AYNI türetici). Boş =
 	// türetilemedi, bağlantı yalnız servisle açılır. Okuma zincirinde dolar.
 	LogQuery string `json:"logQuery,omitempty"`
+	// Requests — v0.10.2380, SAKLANMAZ: ML servis hata oranı olayında dakikada
+	// başarısız / başarılı istek (olay kanıtından, MLEventAsAnomaly). Problem
+	// standardı etkiyi buradan söyler; diğer her satırda nil.
+	Requests *StdRequestSplit `json:"requests,omitempty"`
 	// PredatesDeploy — v0.10.1049, SAKLANMAZ: yalnız deploy raporu / rollout
 	// çekmecesinin "deploy sonrası anomaliler" satırında, o deploy'a göre
 	// AnomalyPredatesDeploy true ise (düzenli yinelenen olay) dolar. Satır

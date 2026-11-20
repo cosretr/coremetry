@@ -330,16 +330,41 @@ func svcImpactEvent(svc string, samples []impactSample, v svcImpactVerdict, end 
 			ratios[i] = s.Value
 		}
 	}
-	raw, _ := json.Marshal(map[string]any{"source": "vm", "route": "", "dayClass": class, "mad": v.MAD, "baselineDays": cfg.BaselineDays,
+	ev := map[string]any{"source": "vm", "route": "", "dayClass": class, "mad": v.MAD, "baselineDays": cfg.BaselineDays,
 		"measure": svcMeasureRatio, "z": v.Z, "baseRate": v.BaseRate,
 		"rule": "impact", "fired": v.Fire, "threshold": v.Threshold, "violations": v.Violations, "window": impactWindow,
 		"minViolations": impactViolations, "minLoad": impactRules[impactFailureRate].MinLoad,
-		"sampleSec": svcImpactStepSec, "minuteFrom": first, "ratios": ratios, "loads": loads})
+		"sampleSec": svcImpactStepSec, "minuteFrom": first, "ratios": ratios, "loads": loads}
+	// v0.10.2380 — başarısız / başarılı istek (en yeni ölçülen dakika + olağan düzey).
+	if rs, ok := svcRequestSplit(samples, v, first); ok {
+		ev[requestsKey] = rs
+	}
+	raw, _ := json.Marshal(ev)
 	return chstore.MLEvent{
 		ID: chstore.MLEventID(detSvcErrorRate, svc, ""), Detector: detSvcErrorRate, Signal: chstore.MLSignalTrace, Stage: chstore.MLStageShadow,
 		Service: svc, StartedAt: started, LastSeen: end.UnixNano(), WindowSec: uint32(cfg.BucketSec),
 		Baseline: v.Median, Observed: v.Observed, Score: svcErrScore(v.Z, cfg.CriticalZ), Direction: "up", Evidence: string(raw),
 	}
+}
+
+// requestsKey — olay kanıtındaki başarısız / başarılı istek bölümü
+// (chstore.MLRequestSplitOf aynı anahtarı okur).
+const requestsKey = "requests"
+
+// svcRequestSplit — SAF (v0.10.2380): kararın örneklerinden dakikada
+// başarısız / başarılı istek. Kaynak dedektörün ZATEN attığı 1 dakikalık
+// istek + hata sayısı çifti (oran × istek = hata sayısı; ek sorgu yok). En
+// yeni ÖLÇÜLEN dakika okunur (v.Observed ile aynı örnek). Olağan düzey: taban
+// trafiği (5 dk serinin istek/sn medyanı × 60) × taban oran medyanı; taban
+// trafiği yoksa yazılmaz. first = pencerenin ilk dakikasının başı (unix sn).
+// ok=false: pencerede ölçülmüş dakika yok.
+func svcRequestSplit(samples []impactSample, v svcImpactVerdict, first int64) (chstore.StdRequestSplit, bool) {
+	for i := len(samples) - 1; i >= 0; i-- {
+		if s := samples[i]; s.OK {
+			return chstore.NewRequestSplit(first+int64(i)*svcImpactStepSec, s.Value, s.Load, v.Median, v.BaseRate*svcImpactStepSec)
+		}
+	}
+	return chstore.StdRequestSplit{}, false
 }
 
 // svcImpactEvents — TraceRED tikinin servis düzeyi adımı: 1 dk'lık örnekler

@@ -93,10 +93,12 @@ type errRecVM struct {
 	det     time.Time
 	queries []string
 	froms   []time.Time
+	tos     []time.Time
 }
 
 func (f *errRecVM) QueryPromQLRange(_ context.Context, q string, from, to time.Time, _, _ int) ([]chstore.SpanMetricSeries, error) {
 	f.queries, f.froms = append(f.queries, q), append(f.froms, from)
+	f.tos = append(f.tos, to)
 	var pts []chstore.SpanMetricPoint
 	for at := from.Truncate(time.Minute); !at.After(to); at = at.Add(time.Minute) {
 		v := 0.4
@@ -131,6 +133,12 @@ func TestSvcErrorRateRecordIsOneMinuteSeries(t *testing.T) {
 	}
 	if want := det.Add(-5*time.Minute - lagRecordPad); !vm.froms[0].Equal(want) {
 		t.Fatalf("pencere başı %s want %s", vm.froms[0], want)
+	}
+	// v0.10.2380 — pencere ölçülen son TAM dakikada biter (now − ingest payı,
+	// dakikaya yuvarlı), `now`da değil: yarım ingest edilmiş dakika istek
+	// görünümünde sağ uçta sahte trafik düşüşü çizerdi.
+	if want := svcImpactEnd(now, cfg.IngestLagSec); !vm.tos[0].Equal(want) || !vm.tos[1].Equal(want) || !want.Before(now) {
+		t.Fatalf("pencere sonu %s / %s want %s", vm.tos[0], vm.tos[1], want)
 	}
 	ev := applyRecordContract(evs[0])
 	if ev.PublishState != PublishPublished {

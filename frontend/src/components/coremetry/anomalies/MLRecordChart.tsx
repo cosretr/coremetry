@@ -17,6 +17,9 @@ import { fmtClock } from '@/lib/utils';
 import { serviceHref } from '@/lib/serviceHref';
 import type { MLRecordView } from '@/lib/types';
 import { fmtRecordValue, measureKey, outsideRegions, recordBuckets, axisUnit, peakAtSec } from './mlRecord';
+import { requestSeries } from './mlRequests';
+import { seriesRoleColor } from '@/lib/chart/seriesRole';
+import { MLRequestFigures } from './MLRequestFigures';
 
 // Ağır uPlot bileşeni ayrı parça (MetricArea ile aynı yol; sayfa bütçesi).
 const TimeSeriesPanel = lazy(() => import('@/components/viz/TimeSeriesPanel').then(m => ({ default: m.TimeSeriesPanel })));
@@ -35,16 +38,37 @@ export function measureLabel(rec: MLRecordView, t: (k: string) => string): strin
   return k ? t(k) : rec.metricLabel || rec.metricId || t('mlRecord.measure.value');
 }
 
-export function MLRecordChart({ rec, height = 200 }: { rec: MLRecordView; height?: number }) {
+// v0.10.2380 (operatör 2026-11-19: "ilk grafikte timeseries gibi olan çizgiler",
+// "failure rate kırmızı, başarılı yeşil") — hata oranı kaydında grafik oranı
+// değil İSTEĞİ çizer: başarılı istek / dk (yeşil, sol eksen) ve başarısız
+// istek / dk (kırmızı, sağ eksen), Servis genel görünümündeki OK / Errors
+// ayrımıyla aynı işlev ve aynı rol renkleri. İki eksen: başarısız çoğu zaman
+// toplamın birkaç yüzdesi, tek eksende dibe yapışırdı. Renk dışı ayrım:
+// başarısız çizgi kalın (2,5 px), başarılı ince (1,5 px) + açıklamada eksen adı.
+// Eşik çizgisi / bant yok (eksenler istek sayısı); eşiğin aşıldığı süre gölgeli
+// kalır, eşik değeri açıklamada yazar. Altında "Şimdi ve normalde" rakamları.
+// Eksenler 0'dan başlar (zeroBase): "trafik düşmedi, hata eklendi" doğru okunsun.
+// `frameless`: başka bir bölüm kartının içinde (Problem detayı) çerçevesiz.
+export function MLRecordChart({ rec, height = 200, frameless = false }: { rec: MLRecordView; height?: number; frameless?: boolean }) {
   const t = useT();
   const lang = useLang();
-  const measure = measureLabel(rec, t);
+  const rq = useMemo(() => requestSeries(rec), [rec]);
+  const measure = rq ? t('mlReq.title') : measureLabel(rec, t);
   const b = useMemo(() => recordBuckets(rec), [rec]);
   // v0.10.2344 — uzun birim (ör. "spans/request") her eksen etiketine yazılınca
   // etiket kırpılıyordu ("…est"); ölçü adı zaten başlıkta, eksen yalın sayı gösterir.
   const chartUnit = axisUnit(rec.series.unit);
   const volLabel = t(rec.detector === 'svc_telemetry_volume' ? 'mlRecord.chart.spansPerMin' : 'mlRecord.chart.volume');
+  const okLabel = t('mlReq.ok');
+  const failLabel = t('mlReq.failed');
   const series = useMemo<TSSeries[]>(() => {
+    if (rq) {
+      const line = (xs: number[]) => xs.map((v, i) => ({ time: rq.t[i] * 1e9, value: v }));
+      return [
+        { label: okLabel, points: line(rq.ok), color: seriesRoleColor(okLabel, 'success'), unit: '', width: 1.5 },
+        { label: failLabel, points: line(rq.failed), color: seriesRoleColor(failLabel, 'error'), unit: '', axis: 'right', width: 2.5 },
+      ];
+    }
     const pts = (xs: number[]) => xs.map((v, i) => ({ time: b.t[i] * 1e9, value: v }));
     const out: TSSeries[] = [
       // v0.10.2357 (operatör: "merdiven gibi") — sayfalardaki zaman serisi grafikleri gibi düz çizgi; kova noktaları ayrıca işaretli.
@@ -52,22 +76,22 @@ export function MLRecordChart({ rec, height = 200 }: { rec: MLRecordView; height
     ];
     if (b.n) out.push({ label: volLabel, points: pts(b.n), axis: 'right', unit: '', width: 1 });
     return out;
-  }, [b, measure, chartUnit, volLabel]);
+  }, [b, rq, measure, chartUnit, volLabel, okLabel, failLabel]);
   // v0.10.2366 — hacim gizli başlar; panelin kontrollü gizli-seri yolu (hiddenLabels).
   const [showVol, setShowVol] = useState(false);
   const hidden = useMemo(() => new Set(showVol ? [] : [volLabel]), [showVol, volLabel]);
-  const envelope = useMemo(() => (b.lo && b.hi ? {
+  const envelope = useMemo(() => (!rq && b.lo && b.hi ? {
     lo: { label: 'lo', points: b.lo.map((v, i) => ({ time: b.t[i] * 1e9, value: v })) },
     hi: { label: 'hi', points: b.hi.map((v, i) => ({ time: b.t[i] * 1e9, value: v })) },
     fill: 'var(--accent)',
-  } : undefined), [b]);
+  } : undefined), [b, rq]);
   const regions = useMemo(() => outsideRegions(b).map(r => ({ ...r, color: 'var(--err)', subtle: true })), [b]);
   const fmt = (v: number) => fmtRecordValue(v, rec.series.unit, lang);
   const band = `${fmt(rec.baseline.lo)}–${fmt(rec.baseline.hi)}`;
   const peak = peakAtSec(rec);
   const span = b.t.length ? `${hm(b.t[0])}–${hm(b.t[b.t.length - 1] + b.bucketSec)}` : '';
   return (
-    <div className="rounded-md border border-border bg-card px-3 py-2.5" data-testid="ml-record-chart">
+    <div className={frameless ? '' : 'rounded-md border border-border bg-card px-3 py-2.5'} data-testid="ml-record-chart" data-mode={rq ? 'requests' : 'measure'}>
       <p className="m-0 mb-1.5 text-xs text-muted-foreground" data-testid="ml-record-chart-caption">
         <span data-testid="ml-course-kind">{t('mlCourse.snapshot')}</span>
         {' · '}{measure}{' · '}{tf('mlRecord.chart.step', lang, { step: stepText(b.bucketSec, lang) })}{span && ` · ${span}`}
@@ -78,19 +102,30 @@ export function MLRecordChart({ rec, height = 200 }: { rec: MLRecordView; height
         {rec.endedAt ? ` · ${t(rec.endReason === 'no_data' ? 'mlRecord.chart.noData' : 'mlRecord.chart.ended')} ${hm(rec.endedAt / 1e9)}` : ''}
       </p>
       <Suspense fallback={<Spinner />}>
-        <TimeSeriesPanel series={series} envelope={envelope} regions={regions} height={height} hiddenLabels={hidden} hideLegend />
+        <TimeSeriesPanel series={series} envelope={envelope} regions={regions} height={height} hiddenLabels={rq ? undefined : hidden} hideLegend zeroBase={!!rq} />
       </Suspense>
       <p className="m-0 mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground" data-testid="ml-record-chart-legend">
-        <span>— {measure}</span>
-        <span>▒ {tf('mlRecord.chart.band', lang, { band })}</span>
-        {regions.length > 0 && <span className="text-[color:var(--err)]">▮ {t('mlRecord.chart.outside')}</span>}
-        {b.n && (
-          <Chip size="xs" active={showVol} data-testid="ml-record-chart-volume" onClick={() => setShowVol(x => !x)}>
-            ┃ {volLabel} ({t('mlRecord.chart.rightAxis')})
-          </Chip>
+        {rq ? (
+          <>
+            <span className="text-[color:var(--ok)]">─ {okLabel} ({t('mlReq.leftAxis')})</span>
+            <span className="font-semibold text-[color:var(--err)]">━ {failLabel} ({t('mlRecord.chart.rightAxis')})</span>
+            {regions.length > 0 && <span>▒ {tf('mlReq.over', lang, { thr: fmt(rec.baseline.hi) })}</span>}
+          </>
+        ) : (
+          <>
+            <span>— {measure}</span>
+            <span>▒ {tf('mlRecord.chart.band', lang, { band })}</span>
+            {regions.length > 0 && <span className="text-[color:var(--err)]">▮ {t('mlRecord.chart.outside')}</span>}
+            {b.n && (
+              <Chip size="xs" active={showVol} data-testid="ml-record-chart-volume" onClick={() => setShowVol(x => !x)}>
+                ┃ {volLabel} ({t('mlRecord.chart.rightAxis')})
+              </Chip>
+            )}
+          </>
         )}
         <Link to={serviceHref(rec.subject.service)} className="ml-auto">{t('mlRecord.chart.servicePanel')} ↗</Link>
       </p>
+      {rq && <MLRequestFigures rec={rec} />}
     </div>
   );
 }

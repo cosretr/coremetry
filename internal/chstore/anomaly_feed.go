@@ -64,6 +64,8 @@ type mlFeedEvidence struct {
 	LogQuery string `json:"logQuery"`
 	Sample   string `json:"sample"`
 	Template string `json:"template"`
+	// Requests — v0.10.2380: svc_error_rate'in başarısız / başarılı bölümü.
+	Requests *StdRequestSplit `json:"requests"`
 }
 
 func parseMLFeedEvidence(raw string) mlFeedEvidence {
@@ -122,8 +124,13 @@ func MLEventAsAnomaly(e MLEvent, nowNs int64) AnomalyEvent {
 	if e.Baseline > 0 {
 		ratio, baseKind = e.Observed/e.Baseline, ""
 	}
+	var req *StdRequestSplit
+	if ev.Requests != nil && ev.Requests.valid() {
+		req = ev.Requests
+	}
 	return AnomalyEvent{
-		ID: e.ID, Kind: MLAnomalyKindPrefix + e.Detector, Pattern: pattern, Service: e.Service,
+		Requests: req,
+		ID:       e.ID, Kind: MLAnomalyKindPrefix + e.Detector, Pattern: pattern, Service: e.Service,
 		StartedAt: e.StartedAt, LastSeen: e.LastSeen, PeakRatio: ratio, CurrentRatio: ratio,
 		CurrentCount: uint64(max(e.Observed, 0)), Sample: ev.Sample, Direction: dir,
 		BaselineValue: e.Baseline, BaselineKind: baseKind, LogQuery: ev.LogQuery, Status: status,

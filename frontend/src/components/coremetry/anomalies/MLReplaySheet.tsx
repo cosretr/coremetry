@@ -53,6 +53,7 @@ import { recordUsable } from './mlRecord';
 import { fmtPctLang, t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; // v0.10.2291 — sayfa kromu arayüz dilinde (sunucu metni aynen)
 import { contributorLine, leadFromSnapshot, panelPeakLine, parseLogsLink, recordLead, type Contributors } from './mlSourcePanel';
 import { MLRecordChart } from './MLRecordChart';
+import { requestsCapable } from './mlRequests';
 import { evidenceRows, evidenceSub } from './mlEvidenceRows';
 import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2302 — EN arayüzde sunucu cümlesi işaretli
 import { stripServicePrefix } from './unifiedRows';
@@ -160,6 +161,10 @@ function RecordCourse({ rec, lead, snap, open, logsLink, direction }: {
     return base ? recordLead(base, rec.onsetAt) : null;
   }, [lead, snap, rec.onsetAt]);
   const stored = <MLRecordChart rec={rec} />;
+  // v0.10.2380 — hata oranı olayında ilk grafik başarılı / başarısız istek
+  // çizgileri ve bunlar KAYITTAN çizilir (açık ve bitmiş olayda aynı, render'da
+  // istek yok); canlı kaynak paneli oranı çizer ve ayrı bir sorgu atar.
+  if (requestsCapable(rec)) return stored;
   return l ? <MLSourceChart lead={l} open={open} fallback={stored} logsLink={logsLink} direction={direction} /> : stored;
 }
 

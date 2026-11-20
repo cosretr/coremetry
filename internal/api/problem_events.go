@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/ml"
 )
 
 func init() { registerRoutesExtra("problem-events", (*Server).registerProblemEventRoutes) }
@@ -55,10 +56,16 @@ type problemEventRow struct {
 	Live      bool    `json:"live"`
 	// Own — sahibin KENDİ sinyali (Problem'i açan dedektör).
 	Own bool `json:"own,omitempty"`
+	// Record — v0.10.2380: servis hata oranı olayının kaydı (başarılı /
+	// başarısız istek grafiği + rakamlar; ml.RequestsRecordView). Yalnız EN
+	// YENİ uygun olayın satırında — gövde tek kayıtla sınırlı. Kayıt bu
+	// okumada zaten geliyor (ListMLEvents); ek sorgu / ek istek yok.
+	Record *ml.RecordView `json:"record,omitempty"`
 }
 
 // problemEventsKey — SAF: cache anahtarı (tek girdi: kimlik).
-func problemEventsKey(id string) string { return "problem:events:v1:" + id }
+// :v2: — v0.10.2380 satıra `record` eklendi (gövde şekli değişti).
+func problemEventsKey(id string) string { return "problem:events:v2:" + id }
 
 // buildProblemEventRows — SAF: Problem + bağlı olaylar → çizelge (başlangıç,
 // eşitse sahip önce, sonra dedektör adı). evs boşsa çizelge boş (sahibin
@@ -83,15 +90,24 @@ func buildProblemEventRows(p chstore.Problem, evs []chstore.MLEvent, nowNs int64
 		}
 		rows = append(rows, own)
 	}
-	for _, e := range evs {
+	recAt, recSeen := -1, int64(0) // en yeni istek-görünümü kaydı olan satır
+	var recView *ml.RecordView
+	for i := range evs {
+		e := evs[i]
 		r := problemEventRow{Detector: e.Detector, StartedAt: e.StartedAt, LastSeen: e.LastSeen, Observed: e.Observed,
 			Baseline: e.Baseline, Direction: e.Direction, Live: chstore.MLEventOpen(e, nowNs)}
 		if ev, ok := chstore.MemberEvidenceOf(e); ok {
 			r.RuleID = ev.RuleID
 		} else {
 			r.EventID = e.ID
+			if rv := ml.RequestsRecordView(&e); rv != nil && (recAt < 0 || e.LastSeen > recSeen) {
+				recAt, recSeen, recView = len(rows), e.LastSeen, rv
+			}
 		}
 		rows = append(rows, r)
+	}
+	if recAt >= 0 {
+		rows[recAt].Record = recView
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		if rows[i].StartedAt != rows[j].StartedAt {

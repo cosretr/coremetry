@@ -17,7 +17,7 @@ import { Link } from 'react-router-dom';
 import { t, useLang } from '@/lib/i18n'; // v0.10.2284 — kart etiketleri arayüz dilinde (TR aynı)
 import { useProblemStandard } from '@/lib/queries';
 import {
-  splitStdHeadline, stdImpactSecondary, fmtStdClock, stdDurationLine, stdGateSummary, stdGateTitle,
+  splitStdHeadline, stdImpactSecondary, stdRequestImpact, fmtStdClock, stdDurationLine, stdGateSummary, stdGateTitle,
   stdSourceName, stdSamplingNote, stdNextHref, stdConfidenceLabel,
   stdHeadlineView, stdImpactView, stdEvidenceView, stdNextView, stdContextView,
 } from '@/lib/problemStandardView';
@@ -45,7 +45,9 @@ export function ProblemStandardBlock({ std, showTitle = true, factsOnly = false 
   const head = splitStdHeadline(std, lang);
   // v0.10.2299 (S2) — EN'de anahtardan; çizilemeyen sunucu metni özgün dil işaretiyle.
   const headOrig = stdHeadlineView(std, lang).orig;
-  const impact = stdImpactView(std, lang);
+  // v0.10.2380 — istek bölümlü etkide kart değeri kısa biçim (satırla aynı), pay alt satırda.
+  const req = stdRequestImpact(std, lang);
+  const impact = req ? { text: req.main, orig: req.orig } : stdImpactView(std, lang);
   const evidence = stdEvidenceView(std, lang);
   const next = stdNextView(std, lang);
   const ctx = stdContextView(std, lang);

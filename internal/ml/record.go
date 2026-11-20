@@ -137,7 +137,13 @@ type EventRecord struct {
 	// kaydı: hata oranı + gecikme). Snapshot ızgarasıyla aynı t0/adım/uzunluk;
 	// A kapıları servis etkisini buradan okur. Boş = yok (diğer dedektörler).
 	Context []RecordContext `json:"context,omitempty"`
-	Title   string          `json:"title"`
+	// Requests — v0.10.2380: hata oranı kaydında dakikada başarısız / başarılı
+	// istek (en yeni ölçülen dakika + olağan düzey; tikin kanıtından, olay
+	// kapanınca son ölçülen dakika). Dakika dakika seri AYRICA saklanmaz:
+	// snapshot'tan türetilir (başarısız = v/100 × n; oran ve hacim aynı 1
+	// dakikalık pencerede). nil = yok (eski kayıt, başka dedektör).
+	Requests *chstore.StdRequestSplit `json:"requests,omitempty"`
+	Title    string                   `json:"title"`
 }
 
 // RecordContext — yan seri: ölçü (error_rate | latency), tanımı ve bantlı
@@ -179,6 +185,7 @@ const (
 	RuleClass          = "class"
 	RuleSize           = "size"
 	RuleContextShape   = "context_shape" // v0.10.2242: yan seri ızgarası ana snapshot'la aynı
+	RuleRequests       = "requests"      // v0.10.2380: istek bölümü sonlu, negatif değil, dakikası belli
 )
 
 // ValidateRecord — SAF yazım-öncesi doğrulayıcı. Boş dönüş = geçti.
@@ -221,6 +228,9 @@ func ValidateRecord(r EventRecord) []RecordViolation {
 		if cs.T0 != sn.T0 || cs.StepSec != sn.StepSec || len(cs.V) != len(sn.V) || len(cs.Lo) != len(cs.V) || len(cs.Hi) != len(cs.V) || c.Measure == "" || c.Query == "" {
 			add(RuleContextShape, "yan seri %q ızgarası/bandı ana snapshot'la uyuşmuyor", c.Measure)
 		}
+	}
+	if q := r.Requests; q != nil && !requestsValid(*q) {
+		add(RuleRequests, "istek bölümü geçersiz (negatif / sonsuz sayı, istek yok ya da dakika yok)")
 	}
 	if bad := titleNumbersOutsideFields(r); len(bad) > 0 {
 		add(RuleTitleNumbers, "başlıktaki sayı(lar) hiçbir alanla eşleşmiyor: %s", strings.Join(bad, ", "))
@@ -319,6 +329,20 @@ func onsetAndBand(r EventRecord, from, det int) []RecordViolation {
 			fmtNum(sn.Lo[det]), fmtNum(sn.Hi[det]), fmtNum(r.Baseline.Lo), fmtNum(r.Baseline.Hi), r.Baseline.Method)})
 	}
 	return out
+}
+
+// requestsValid — SAF: kayıttaki istek bölümü tutarlı mı (sayılar sonlu ve
+// negatif değil, en az bir istek, ölçülen dakika belli, olağan düzey ya ikisi
+// ya hiçbiri).
+func requestsValid(q chstore.StdRequestSplit) bool {
+	ok := func(v float64) bool { return v >= 0 && !math.IsNaN(v) && !math.IsInf(v, 0) }
+	if q.Minute <= 0 || !ok(q.FailedPerMin) || !ok(q.OKPerMin) || q.Total() <= 0 {
+		return false
+	}
+	if (q.NormalFailedPerMin == nil) != (q.NormalOKPerMin == nil) {
+		return false
+	}
+	return q.NormalFailedPerMin == nil || (ok(*q.NormalFailedPerMin) && ok(*q.NormalOKPerMin))
 }
 
 func sameValue(a, b float64) bool {

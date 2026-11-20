@@ -21,6 +21,12 @@ package ml
 // (impactRules[impactFailureRate]). gates[] boş, sınıf service_anomaly.
 // Maliyet: açık olay başına tik başına 2 aralık sorgusu, tik başına en çok
 // errRecordMaxPerTick olay.
+//
+// v0.10.2380 — başarısız / başarılı istek: svc_error_rate kaydı tikin
+// kanıtındaki bölümü (Requests) taşır; dakika dakika seri snapshot'tan
+// türetilir (v/100 × n), ek sorgu ve ek seri yok. op_error_rate KAPSAM DIŞI:
+// oranı kayan 5 dakikalık pencere, hacmi 1 dakikalık sayım — çarpımları bir
+// dakikanın hata sayısı değildir.
 
 import (
 	"context"
@@ -219,6 +225,19 @@ func attachErrorRateRecords(ctx context.Context, deps Deps, cfg chstore.MLConfig
 				to = now
 			}
 		}
+		// v0.10.2380 — 1 dk'lık serviste pencere ÖLÇÜLEN son tam dakikada biter
+		// (dedektörün karar penceresiyle aynı bitiş). `now`a kadar okumak
+		// ingest'i tamamlanmamış dakikaları da alır: oran serisinde gürültü,
+		// istek görünümünde ise sağ uçta sahte "trafik sıfıra düştü" dalışı
+		// (açık olayda da, kapanış yazımında da).
+		if ev.Detector == detSvcErrorRate {
+			if end := svcImpactEnd(now, cfg.IngestLagSec); to.After(end) {
+				to = end
+			}
+			if !to.After(from) {
+				continue
+			}
+		}
 		*budget--
 		rows, err := latRange(ctx, deps, s.Query, from, to)
 		if err != nil || len(rows) == 0 {
@@ -239,6 +258,11 @@ func attachErrorRateRecords(ctx context.Context, deps Deps, cfg chstore.MLConfig
 			Points: rows[0].Points, Calls: calls, From: from, To: to, Confirmers: conf, Head: "Hata oranı", Label: "hata oranı", Fmt: pctFmt})
 		if !ok {
 			continue
+		}
+		// v0.10.2380 — başarısız / başarılı istek bölümü: tikin kanıtından aynen
+		// (yalnız svc_error_rate yazar; op_error_rate'in kanıtında yok).
+		if rs := chstore.MLRequestSplitOf(ev.Evidence); ev.Detector == detSvcErrorRate && rs != nil && requestsValid(*rs) {
+			rec.Requests = rs
 		}
 		raw, err := json.Marshal(rec)
 		if err != nil {

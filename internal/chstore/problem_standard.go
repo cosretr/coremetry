@@ -143,6 +143,10 @@ type StdImpact struct {
 	Callers      []string         `json:"callers,omitempty"` // YALNIZ topolojiyle doğrulanmış çağıranlar
 	Known        bool             `json:"known"`
 	Floor        StdFloorMeasures `json:"floor"`
+	// Requests — v0.10.2380: hata oranı Problem'i / olayında dakikada başarısız
+	// ve başarılı istek (request_split.go). nil = sayılar bilinmiyor; Primary
+	// bugünkü metniyle kalır.
+	Requests *StdRequestSplit `json:"requests,omitempty"`
 }
 
 // StdSince — ne zamandan beri.
@@ -645,6 +649,13 @@ func problemImpact(p Problem, k stdKindInfo, f StdFacts, ratio float64) StdImpac
 			Value: p.Value, Normal: p.Threshold, Unit: unit, Ratio: r, Msg: ruleValueMsg(p.Value, p.Threshold, unit)}
 		im.Known = p.Threshold != 0 || p.Value != 0
 	}
+	// v0.10.2380 — ML hata oranı Problem'i: etki istek sayısıyla (tikin
+	// açıklamaya yazdığı işaret cümlesi; yoksa metin aynen kalır).
+	if k.kind == "anomaly_auto" && k.family == StdFamilyError {
+		if s, ok := ParseRequestSplit(p.Description); ok {
+			applyRequestSplit(&im, s)
+		}
+	}
 	if t := f.Traffic; t != nil && k.traffic {
 		im.Floor.Calls5m = f64(t.Calls5m)
 		if im.Floor.Failed5m == nil {
@@ -691,7 +702,8 @@ func MLPromotedHeadline(p Problem) (string, bool) {
 	if !strings.HasPrefix(p.RuleID, "anomaly-auto:") || !strings.HasPrefix(p.RuleName, MLPromotedRuleNamePrefix) {
 		return "", false
 	}
-	h := strings.TrimSpace(p.Description)
+	// v0.10.2380 — istek bölümü cümlesi manşete girmez (Etki'de söylenir).
+	h := strings.TrimSpace(StripRequestSplit(p.Description))
 	return h, h != ""
 }
 
@@ -1119,6 +1131,10 @@ func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
 	}
 	std.Impact = StdImpact{Primary: StdMeasure{Text: impactText, Value: e.CurrentRatio, Ratio: e.PeakRatio, Msg: impactMsg},
 		Known: known, Callers: f.VerifiedCallers}
+	// v0.10.2380 — servis hata oranı olayı: etki istek sayısıyla (kanıttan).
+	if isML && e.Requests != nil && e.Requests.valid() {
+		applyRequestSplit(&std.Impact, *e.Requests)
+	}
 	std.Since = StdSince{StartedAt: e.StartedAt, LastSeen: e.LastSeen, Ongoing: e.Status != "cleared", Episode: e.EpisodeCount}
 	end := now.UnixNano()
 	if e.LastSeen > 0 && e.LastSeen < end {

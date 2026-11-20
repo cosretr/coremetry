@@ -2963,12 +2963,24 @@ export type StdMsgArg = string | number | boolean | StdMsg;
 export interface StdMsg { k: string; a?: Record<string, StdMsgArg> }
 export interface SignalGate { id: string; name: string; status: SignalGateStatus; note?: string; noteMsg?: StdMsg }
 export interface StdMeasure { text: string; value: number; normal: number; unit?: string; ratio?: number; msg?: StdMsg }
+/** v0.10.2380 — dakikada başarısız / başarılı istek (Go chstore.StdRequestSplit;
+ *  tam sayı). `minute` ölçülen dakikanın başı (unix sn); olağan düzey taban
+ *  trafiği bilinmiyorsa yok. */
+export interface StdRequestSplit {
+  minute?: number;
+  failedPerMin: number;
+  okPerMin: number;
+  normalFailedPerMin?: number;
+  normalOkPerMin?: number;
+}
 export interface StdImpact {
   primary: StdMeasure;
   failedPerMin?: number;
   /** Yalnız topolojiyle doğrulanmış çağıranlar. */
   callers?: string[];
   known: boolean;
+  /** v0.10.2380 — hata oranı Problem'i / olayında istek bölümü; yoksa sayılar bilinmiyor. */
+  requests?: StdRequestSplit;
 }
 export interface StdSince {
   startedAt: number; lastSeen?: number; durationSec: number; ongoing: boolean; episode?: number;
@@ -11678,6 +11690,8 @@ export interface ProblemEvent {
   live: boolean;
   /** Sahibin KENDİ sinyali (Problem'i açan dedektör). */
   own?: boolean;
+  /** v0.10.2380 — servis hata oranı olayının kaydı (istek grafiği); yalnız en yeni uygun olayda. */
+  record?: MLRecordView;
 }
 export interface ProblemEventsResponse {
   problemId: string;
@@ -12614,6 +12628,8 @@ export interface MLRecordView {
   evidence: MLRecordEvidence[] | null; class: string; gates?: MLRecordGate[];
   snapshot: MLRecordSnapshot; context?: MLRecordContext[]; title: string;
   detector: string; publishState?: string; metricId?: string; metricLabel?: string;
+  /** v0.10.2380 — hata oranı kaydında en yeni ölçülen dakikanın istek bölümü. */
+  requests?: StdRequestSplit;
 }
 export interface MLReplay { snapshot: MLSnapshot | null; related: MLSnapshot[]; card: ExplainCard; verdict?: MLReplayVerdict | null; course?: ExplainCourse; record?: MLRecordView | null }
 export interface MLBacktestDetector { detector: string; fired: number; tp: number; fp: number; unlabeled: number; positives: number; covered: number; precision: number; recall: number }

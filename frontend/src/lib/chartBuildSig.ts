@@ -197,6 +197,8 @@ export interface TSPBuildSigInput {
   renderable: boolean;
   /** v0.10.2146 (S7) — zarf VARLIĞI + dolgu rengi (seri sayısı ve bant build anında). */
   envelope?: string;
+  /** v0.10.2380 — y eksenleri 0'dan (ölçek build anında kurulur). */
+  zeroBase?: boolean;
 }
 export function timeSeriesPanelBuildSignature(p: TSPBuildSigInput): string {
   return JSON.stringify([
@@ -214,5 +216,6 @@ export function timeSeriesPanelBuildSignature(p: TSPBuildSigInput): string {
     p.renderable,
     regionsDigest(p.regions),
     p.envelope ?? '',
+    !!p.zeroBase,
   ]);
 }

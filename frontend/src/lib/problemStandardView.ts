@@ -113,6 +113,8 @@ export function stdDurationLine(std: ProblemStandard, lang: Lang = 'tr'): string
 /** Etkinin ikinci satırı: ölçülmüş dakikalık hata + doğrulanmış çağıranlar. Boş = çizme. */
 export function stdImpactSecondary(std: ProblemStandard, lang: Lang = 'tr'): string {
   const parts: string[] = [];
+  const req = stdRequestImpact(std, lang); // v0.10.2380 — istek bölümünün payı ("isteklerin %6,8'i")
+  if (req?.note) parts.push(req.note);
   const fpm = std.impact.failedPerMin ?? 0;
   if (fpm > 0) parts.push(tf('pd.std.failed', lang, { n: lang === 'tr' ? fmtCount(fpm) : fmtCountEn(fpm) }));
   const n = std.impact.callers?.length ?? 0;
@@ -258,6 +260,21 @@ export function stdHeadlineView(std: ProblemStandard, lang: Lang = 'tr'): { text
 }
 
 export const stdImpactView = (std: ProblemStandard, lang: Lang = 'tr') => stdMsgView(std.impact.primary.msg, std.impact.primary.text, lang);
+/**
+ * v0.10.2380 — istek bölümlü etki (hata oranı Problem'i): sunucu cümlesi
+ * "Dakikada 210 başarısız · 2.890 başarılı (isteklerin %6,8'i)" düzen için iki
+ * parçaya ayrılır: `main` (liste satırının kısa biçimi, başlık kartının değeri)
+ * ve `note` (parantez içi pay; kartın alt satırı). Sayı burada BİÇİMLENMEZ —
+ * metin tek Go çekirdeğinden (EN'de anahtarından), satır ve başlık aynı şeyi
+ * söyler. Bölüm yoksa null: çağıran bugünkü etki metnini çizer.
+ */
+export function stdRequestImpact(std: ProblemStandard | null | undefined, lang: Lang = 'tr'): { main: string; note: string; orig: boolean } | null {
+  if (!std?.impact.requests) return null;
+  const v = stdImpactView(std, lang);
+  const m = /^(.*\S)\s*\(([^()]+)\)$/.exec(v.text);
+  return m ? { main: m[1], note: m[2], orig: v.orig } : { main: v.text, note: '', orig: v.orig };
+}
+
 export const stdEvidenceView = (std: ProblemStandard, lang: Lang = 'tr') => stdMsgView(std.evidence.msg, std.evidence.sentence, lang);
 export const stdNextView = (std: ProblemStandard, lang: Lang = 'tr') => stdMsgView(std.nextStep.msg, std.nextStep.text, lang);
 

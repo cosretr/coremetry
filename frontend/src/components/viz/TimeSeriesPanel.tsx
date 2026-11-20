@@ -162,6 +162,19 @@ interface TimeSeriesPanelProps {
   smooth?: boolean;
   // v0.10.2146 (S7) — ADDİTİF: verilmezse çıktı bugünküyle birebir aynı.
   envelope?: TSEnvelope;
+  // v0.10.2380 — ADDİTİF: y eksenleri (sol + sağ) 0'dan başlar. Sayım serisi
+  // (dakikada istek) otomatik aralıkta küçük bir düşüşü uçurum gibi gösterir;
+  // sıfır tabanında oran doğru okunur. Verilmezse bugünkü otomatik aralık.
+  zeroBase?: boolean;
+}
+
+// zeroRange — SAF: [0, tepe × pay]; veri yok / tepe ≤ 0 ise [0, 1]. Sol eksen
+// %10 pay; sağ eksen %50 (ZERO_PAD_RIGHT): iki eksen de 0'dan başlayınca iki
+// çizginin tepesi aynı yüksekliğe gelir ve üst üste biner — sağ eksenin çizgisi
+// alanın ~2/3'ünde kalır, soldaki çizginin altında okunur.
+export const ZERO_PAD_RIGHT = 1.5;
+export function zeroRange(max: number | null | undefined, pad = 1.1): [number, number] {
+  return [0, typeof max === 'number' && max > 0 ? max * pad : 1];
 }
 
 // v0.9.75 (chart-consolidation Adım 0) — resolveColor lib/chart/
@@ -200,7 +213,7 @@ interface LegendRow {
 
 export function TimeSeriesPanel({
   series, deploys, events, thresholds, regions, height, mode = 'line', logScale, syncKey, onZoom, onZoomReset, hideLegend, smooth,
-  zoomWindow, hiddenLabels, focusedLabel, onCursorTime, onExemplarClick, xRange, envelope,
+  zoomWindow, hiddenLabels, focusedLabel, onCursorTime, onExemplarClick, xRange, envelope, zeroBase,
 }: TimeSeriesPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Live per-series visibility, kept in a ref so legend clicks don't rebuild
@@ -353,6 +366,7 @@ export function TimeSeriesPanel({
     pointsTier: prepared.times.length <= 100 ? 2 : prepared.times.length <= 300 ? 1 : 0,
     renderable: series.length > 0 && prepared.times.length > 0,
     envelope: envelope ? (envelope.fill ?? 'default') : undefined,
+    zeroBase,
   });
 
   // buildOptions — renkleri REBUILD ANINDA çöz (motor tema flip'te yeniden
@@ -383,6 +397,9 @@ export function TimeSeriesPanel({
     // buildOptions closure'ından — rebuild'de tazelenir, mevcut sözleşme).
     const cz = buildCursorOpts({ syncKey, onZoom });
 
+    // v0.10.2380 — zeroBase: doğrusal y ölçeği 0'dan (log ölçekte anlamsız).
+    const yLinear: uPlot.Scale = zeroBase ? { range: (_u, _mn, mx) => zeroRange(mx) } : {};
+    const yrLinear: uPlot.Scale = zeroBase ? { range: (_u, _mn, mx) => zeroRange(mx, ZERO_PAD_RIGHT) } : {};
     const opts: uPlot.Options = {
       width,
       height,
@@ -392,8 +409,8 @@ export function TimeSeriesPanel({
       pxAlign: stacked ? 0 : 1,
       scales: {
         x: { time: true, range: (u, mn, mx) => xRangePinned(u.data[0] as number[], xRangeRef.current, mn, mx) },
-        y: logScale ? { distr: 3, log: 10 } : {},
-        ...(hasRight ? { yr: logScale ? { distr: 3, log: 10 } : {} } : {}),
+        y: logScale ? { distr: 3, log: 10 } : yLinear,
+        ...(hasRight ? { yr: logScale ? { distr: 3, log: 10 } : yrLinear } : {}),
       },
       series: [
         {},

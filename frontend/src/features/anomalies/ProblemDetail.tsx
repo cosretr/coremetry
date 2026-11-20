@@ -39,6 +39,7 @@ import { representativeStack, frameLinksRef } from './stackSource'; // v0.10.104
 import { ExternalEvidencePanel } from './ExternalEvidencePanel';
 import { ProblemInsightStrip } from './ProblemInsightStrip'; // v0.10.562
 import { ProblemEventTimeline, ProblemEventEvidence } from './ProblemEventTimeline'; // v0.10.2163 — birleşen olaylar
+import { ProblemRequestsSection } from './ProblemRequestsSection'; // v0.10.2380 — başarılı / başarısız istek
 import { ProblemGraphSection, ProblemOriginLine, ProblemFrequentChip, ProblemRepeatSection } from './ProblemGraphSection'; // v0.10.2275 — entity grafı gölge bağları; v0.10.2279 köken satırı
 import type { ExceptionGroup, ExceptionGroupState, Problem, ProblemStandard, RolloutEvidence } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
@@ -1231,6 +1232,9 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
               yalnız span-metrik alarm kurallarında. v0.10.1106 — terfi
               Problem'inin log deseni sayısı. Diğerlerinde ikisi de null. */}
           {hasAlertMetricChart(problem) && <AlertMetricChartSection problem={problem} />}
+          {/* v0.10.2380 — hata oranı Problem'i: başarılı / başarısız istek grafiği
+              + rakamlar (olay çizelgesinin okumasından; kaydı yoksa null). */}
+          <ProblemRequestsSection problemId={problem.id} />
           <PromotedLogPatternCount problem={problem} />
           <Sect title={tl('pd.recent', lang)}>
             <ProblemTimelineList problem={problem} rollouts={rcRollouts} limit={5} kind={std?.kind} />

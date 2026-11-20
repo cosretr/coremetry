@@ -194,6 +194,7 @@ describe('timeSeriesPanelBuildSignature — structure/option change forces a reb
     ['exemplar presence toggled off', { ...tspBase, hasExemplars: false }],
     ['point tier changed (crosses dot threshold)', { ...tspBase, pointsTier: 0 }],
     ['renderable toggled', { ...tspBase, renderable: false }],
+    ['zeroBase toggled', { ...tspBase, zeroBase: true }], // v0.10.2380
   ];
   it.each(diff)('%s → different signature', (_n, input) => {
     expect(timeSeriesPanelBuildSignature(input)).not.toBe(timeSeriesPanelBuildSignature(tspBase));

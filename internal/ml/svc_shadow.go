@@ -205,7 +205,13 @@ func pctTR(v float64) string { return trDec(v*100, 1) }
 func svcEventSentence(e chstore.MLEvent) string {
 	switch e.Detector {
 	case detSvcErrorRate:
-		return fmt.Sprintf("%s servisinde hata oranı %%%s, olağanı %%%s.", e.Service, pctTR(e.Observed), pctTR(e.Baseline))
+		s := fmt.Sprintf("%s servisinde hata oranı %%%s, olağanı %%%s.", e.Service, pctTR(e.Observed), pctTR(e.Baseline))
+		// v0.10.2380 — istek sayısıyla etki (chstore işaret cümlesi; Problem
+		// standardı buradan geri okur). Kanıtta bölüm yoksa cümle eklenmez.
+		if rs := chstore.MLRequestSplitOf(e.Evidence); rs != nil {
+			s += " " + chstore.RequestSplitSentence(*rs)
+		}
+		return s
 	case detSvcBreadth:
 		_, n := breadthOpsOf(e.Evidence)
 		cnt := "birden çok"
