@@ -45,6 +45,21 @@ type ProblemNotifier interface {
 // groupProblemMetric — Problem'in ölçüsü: farklı sinyal sayısı.
 const groupProblemMetric = "ml_group_signals"
 
+// groupLagMetric — v0.10.2396: tek sinyal kolunu etki kuralı consumer lag'i
+// (≥ 2 × taban) açtığında Problem'in ölçüsü: Value = gözlenen lag (kayıt),
+// Threshold = taban (GroupDecision.Value/Threshold). Aile/tür sinyal sayısı
+// satırıyla aynı (anomaly_auto, kural ailesi).
+const groupLagMetric = "ml_group_lag"
+
+// groupProblemMeasure — SAF: kararın Problem ölçüsü (metrik, değer, eşik).
+func groupProblemMeasure(d GroupDecision) (string, float64, float64) {
+	if d.Value > 0 && d.Threshold > 0 {
+		return groupLagMetric, d.Value, d.Threshold
+	}
+	n := float64(len(d.Signals))
+	return groupProblemMetric, n, n
+}
+
 // groupProblemRuleName — "ML · " öneki manşeti açıklamadan alır
 // (chstore.MLPromotedHeadline): başlık = düz Türkçe cümle.
 const groupProblemRuleName = chstore.MLPromotedRuleNamePrefix + "anomali grubu"
@@ -142,11 +157,11 @@ type groupProblemPlan struct {
 
 // newGroupProblem — SAF: açılacak Problem satırı.
 func newGroupProblem(g decidedGroup, desc string) chstore.Problem {
-	n := float64(len(g.D.Signals))
+	m, v, th := groupProblemMeasure(g.D)
 	return chstore.Problem{
 		ID: g.D.RuleID + ":" + g.G.Service, RuleID: g.D.RuleID, RuleName: groupProblemRuleName,
-		Severity: g.D.Severity, Service: g.G.Service, Metric: groupProblemMetric, Comparator: ">=",
-		Value: n, Threshold: n, Status: "open", Description: desc, StartedAt: g.G.Start,
+		Severity: g.D.Severity, Service: g.G.Service, Metric: m, Comparator: ">=",
+		Value: v, Threshold: th, Status: "open", Description: desc, StartedAt: g.G.Start,
 	}
 }
 
@@ -295,9 +310,12 @@ func planMLProblemsWith(groups []decidedGroup, svcs []svcProblemIn, open []chsto
 			q := row(id)
 			if g.D.WouldOpen && chstore.IsMLGroupProblem(q.RuleID) {
 				q.Description = desc(g)
-				if mlProblemRatio(q.Value, q.Threshold) <= 1 { // svc'nin yükselttiği oran korunur
-					n := float64(len(g.D.Signals))
-					q.Value, q.Threshold, q.Metric = n, n, groupProblemMetric
+				m, v, th := groupProblemMeasure(g.D)
+				// svc'nin ya da önceki lag tikinin yükselttiği oran korunur;
+				// v0.10.2396: lag ölçüsü yalnız DAHA YÜKSEK oranla yazılır
+				// (öncelik yalnız yükselir).
+				if r := mlProblemRatio(q.Value, q.Threshold); r <= 1 || mlProblemRatio(v, th) > r {
+					q.Value, q.Threshold, q.Metric = v, th, m
 				}
 			}
 			continue

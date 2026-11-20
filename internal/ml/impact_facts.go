@@ -144,8 +144,11 @@ func NewestImpactRuleFacts(evs []chstore.MLEvent) *chstore.StdImpactRule {
 // üye; kaynak işaretinin de okuduğu olay, groupLead). Consumer lag etki olayı
 // Problem'i bu koldan açar. ≥ 2 sinyalli grup ya da servis düzeyi ölçünün
 // devraldığı satır ok=false: tek olayın kuralı Problem'in tamamını açıklamaz.
+// v0.10.2396: lag ≥ 2 × taban satırı (Metric groupLagMetric, Value = lag)
+// da aynı lider olaydan okunur.
 func ImpactFactsLeadOf(p chstore.Problem) (string, bool) {
-	if p.Metric != groupProblemMetric || p.Value != 1 {
+	lag := p.Metric == groupLagMetric
+	if !lag && (p.Metric != groupProblemMetric || p.Value != 1) {
 		return "", false
 	}
 	return GroupEventOfRule(p.RuleID)

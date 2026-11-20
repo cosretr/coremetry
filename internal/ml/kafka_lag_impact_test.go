@@ -781,23 +781,24 @@ func TestSingleArmOpensOnImpactRuleLag(t *testing.T) {
 		ev     chstore.MLEvent
 		pub    map[string]PubVerdict
 		want   bool
+		prio   string   // v0.10.2396: etki kuralı lag ≥ 2 × taban → P1
 		why    []string // gerekçede geçmeli
 		whyNot string   // gerekçede geçmemeli
 	}{
-		{"etki kuralı, 4 dk önce başladı → açar", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), nil, true,
+		{"etki kuralı, 4 dk önce başladı → açar", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), nil, true, "P1",
 			[]string{"etki kuralı", "son 5 dakikada 4 ihlal", "eşik 1200", "şimdi 165000", "normalde 600"}, "sürdü"},
-		{"etki kuralı, taban 0 → açar", lagGateEv("a", now, 3*time.Minute, 0, 5000, lagImpactEvidence(true, 1000, 3)), nil, true,
+		{"etki kuralı, taban 0 → açar", lagGateEv("a", now, 3*time.Minute, 0, 5000, lagImpactEvidence(true, 1000, 3)), nil, true, "P1",
 			[]string{"etki kuralı", "eşik 1000", "normalde hiç yok"}, "sürdü"},
-		{"etki kuralı, uzatma tiki (en yeni dakika eşiğin altında) → karar değişmez", lagGateEv("a", now, 9*time.Minute, 600, 900, lagImpactEvidence(false, 1200, 2)), nil, true,
+		{"etki kuralı, uzatma tiki (en yeni dakika eşiğin altında) → karar değişmez", lagGateEv("a", now, 9*time.Minute, 600, 900, lagImpactEvidence(false, 1200, 2)), nil, true, "P2",
 			[]string{"etki kuralıyla açık", "pencerede 2 ihlal"}, "sürdü"},
-		{"damgasız lag olayı, 4 dk → açmaz (600 sn kuralı)", lagGateEv("a", now, 4*time.Minute, 600, 165000, `{"source":"vm","dwell":2}`), nil, false, nil, ""},
-		{"damgasız lag olayı, 10 dk → açar (eski kol)", lagGateEv("a", now, 10*time.Minute, 600, 165000, `{"source":"vm","dwell":2}`), nil, true,
+		{"damgasız lag olayı, 4 dk → açmaz (600 sn kuralı)", lagGateEv("a", now, 4*time.Minute, 600, 165000, `{"source":"vm","dwell":2}`), nil, false, "", nil, ""},
+		{"damgasız lag olayı, 10 dk → açar (eski kol)", lagGateEv("a", now, 10*time.Minute, 600, 165000, `{"source":"vm","dwell":2}`), nil, true, "P2",
 			[]string{"10 dk sürdü", "normalin 275.0 katı"}, "etki kuralı"},
-		{"Thanos lag olayı, 4 dk → açmaz (kapsam dışı, 600 sn kuralı)", thanos, nil, false, nil, ""},
-		{"A2 açık, 2 bağımsız kanıt → açar", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), pubOK, true,
+		{"Thanos lag olayı, 4 dk → açmaz (kapsam dışı, 600 sn kuralı)", thanos, nil, false, "", nil, ""},
+		{"A2 açık, 2 bağımsız kanıt → açar", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), pubOK, true, "P1",
 			[]string{"etki kuralı"}, "sürdü"},
-		{"A2 açık, 1 bağımsız kanıt → açmaz (K10)", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), pubThin, false, nil, ""},
-		{"A2 açık, karar yok (ilk tik) → aday değil", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), map[string]PubVerdict{}, false, nil, ""},
+		{"A2 açık, 1 bağımsız kanıt → açmaz (K10)", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), pubThin, false, "", nil, ""},
+		{"A2 açık, karar yok (ilk tik) → aday değil", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), map[string]PubVerdict{}, false, "", nil, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			gs := GroupMLEvents([]chstore.MLEvent{tc.ev}, 10*time.Minute)
@@ -814,7 +815,7 @@ func TestSingleArmOpensOnImpactRuleLag(t *testing.T) {
 				}
 				return
 			}
-			if d.Severity != "critical" || d.Priority != "P2" || d.SingleEvent != "a" || !strings.HasPrefix(d.Reason, "açardı: tek güçlü sinyal (metric)") {
+			if d.Severity != "critical" || d.Priority != tc.prio || d.SingleEvent != "a" || !strings.HasPrefix(d.Reason, "açardı: tek güçlü sinyal (metric)") {
 				t.Fatalf("karar: %+v", d)
 			}
 			for _, w := range tc.why {

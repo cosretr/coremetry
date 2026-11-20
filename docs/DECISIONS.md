@@ -15198,3 +15198,10 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - Genişlik / öncelik: Etki 260/150 (2), Güven 92/80 (2), Kanıt 84/72 (4); Tür 3→4, Servis 2→3, İlgilenen 3→2. 1366 px + 220 px kenar çubuğunda düşme sırası Tür → Kanıt → Servis ("+N sütun"). `storageKey` `inbox2` aynı.
 - Doğrulanmadı: gerçek sayfada 1366 px sığma ve düşme sırası (hesap; yalnız hücrelerin statik önizlemesi redhat + dark).
 
+## 2026-11-20 — v0.10.2396 — Consumer lag etki Problem'i ≥ 2 × tabanda P1
+
+- Operatör kararı 2026-11-20: etki kuralıyla açılan consumer lag Problem'i (v0.10.2382, tek sinyal kolu) Value = Threshold = sinyal sayısı ile P2 açılıyor, Problems listesinin yalnız-P1 varsayılanında 165 bin kayıtlık lag ilk anda görünmüyordu.
+- Kural: tetikleyen üye etki damgalı metric_kafka consumer_lag ve gözlenen ≥ 2 × taban (taban 0 da; kuralın mutlak tabanı zaten ≥ 1000 kayıt) → karar P1; satır ölçüsü `ml_group_lag`, Value = gözlenen lag, Threshold = taban (0 → 1 kayıt). Öncelik mevcut computePriority bigBreach kuralından gelir (sabit öncelik yazılmaz). Altında bugünkü P2 satırı (sinyal sayısı) aynen.
+- Tazeleme: lag ölçüsü yalnız daha yüksek oranla yazılır — öncelik yalnız yükselir. Detay "Neden" satırları `ml_group_lag` satırında da lider olaydan okunur (ImpactFactsLeadOf).
+- Değişmeyen: etki damgasız olaylar, Thanos lag, ≥ 2 sinyalli gruplar, 4 sa staleCrit kuralı. Geri oynatma ekranı (v0.10.2392) lag önceliğini hâlâ eski kuralla sayar (takip).
+

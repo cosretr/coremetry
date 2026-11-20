@@ -17,7 +17,9 @@ package ml
 //   olduğundan kural hiçbir grubu açmazdı). Karne kapı DEĞİL (N2).
 //
 // ÖNCELİK: şiddet critical; canlı Problem'de Value = Threshold = sinyal
-// sayısı (oran 1, büyük sapma yok) → computePriority P2. Audit D4 öncelik
+// sayısı (oran 1, büyük sapma yok) → computePriority P2. v0.10.2396: etki
+// kuralı consumer lag tek sinyali ≥ 2 × tabansa Value = lag, Threshold =
+// taban → computePriority bigBreach P1 (impactLagBigBreach). Audit D4 öncelik
 // söylemiyor; brif varsayılanı P2. 4 sa açık kalan critical'ı mevcut
 // staleCrit kuralı P1 yapar (merdiven aynen).
 //
@@ -90,6 +92,13 @@ type GroupDecision struct {
 	// SingleEvent — v0.10.2092: tek sinyal kolunu tetikleyen en güçlü üye
 	// (Problem cümlesi onu adıyla, değeri ve normaliyle söyler).
 	SingleEvent string `json:"singleEvent,omitempty"`
+	// Value / Threshold — v0.10.2396 (operatör kararı 2026-11-20): tek sinyal
+	// kolunu etki kuralıyla açılmış consumer lag tetikledi ve gözlenen ≥ 2 ×
+	// taban → Problem satırının ölçüsü (groupLagMetric): Value = gözlenen
+	// lag, Threshold = taban (0 ise 1 kayıt). Oran ≥ 2 mevcut computePriority
+	// bigBreach kuralıyla P1 verir. Diğer kararlarda 0 (satır sinyal sayısı).
+	Value     float64 `json:"value,omitempty"`
+	Threshold float64 `json:"threshold,omitempty"`
 }
 
 // eventRatio — SAF: sapma oranı (≥ 1). Yukarı: gözlenen/taban; aşağı:
@@ -172,6 +181,11 @@ func DecideGroupPromotion(g MLGroup, members []chstore.MLEvent, in GroupGateInpu
 			d.WouldOpen = true
 			d.Severity = "critical"
 			d.Priority = "P2"
+			if v, th, ok := impactLagBigBreach(members, id); ok {
+				// v0.10.2396: etki kuralı consumer lag'i ≥ 2 × taban → P1
+				// (Value/Threshold satıra taşınır, computePriority bigBreach).
+				d.Priority, d.Value, d.Threshold = "P1", v, th
+			}
 			d.Reason = fmt.Sprintf("açardı: tek güçlü sinyal (%s) — %s", strings.Join(d.Signals, ", "), why)
 		}
 	default:
@@ -286,6 +300,35 @@ func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in G
 		}
 	}
 	return best, bestID, best != ""
+}
+
+// impactLagBigBreach — SAF (v0.10.2396, operatör kararı 2026-11-20): tek
+// sinyal kolunu tetikleyen üye (id) etki kuralıyla açılmış consumer lag ise
+// ve gözlenen ≥ 2 × taban ise (taban 0 da sayılır: kuralın mutlak tabanı
+// zaten ≥ 1000 kayıt ister) Problem ölçüsü: Value = gözlenen, Threshold =
+// taban (0 → 1 kayıt; oran tanımlı kalsın). Oran 2'nin altı ok=false:
+// bugünkü P2 satırı (sinyal sayısı) aynen. Diğer üyeler (etki kuralsız
+// olay, Thanos lag) ok=false.
+func impactLagBigBreach(members []chstore.MLEvent, id string) (float64, float64, bool) {
+	for _, e := range members {
+		if e.ID != id || e.Detector != "metric_kafka" {
+			continue
+		}
+		if _, part, _ := splitThanosPart(e.Code); part != "consumer_lag" {
+			return 0, 0, false
+		}
+		if _, ok := impactMarkOf(e.Evidence); !ok {
+			return 0, 0, false
+		}
+		th := e.Baseline
+		if th <= 0 {
+			th = 1
+		} else if e.Observed/th < bigBreachRatio {
+			return 0, 0, false
+		}
+		return e.Observed, th, true
+	}
+	return 0, 0, false
 }
 
 // impactSingleWhy — SAF: etki kuralıyla açılmış üyenin tek sinyal kolu

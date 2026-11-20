@@ -112,6 +112,19 @@ func TestStdImpactFactsOfReadPath(t *testing.T) {
 	if std == nil || std.Evidence.Reasons[1] != "Eşik 1.200 kayıt: en az 1.000 kayıt ve normalin 2 katı" {
 		t.Fatalf("lag satırları: %+v", std)
 	}
+	// v0.10.2396: lag ≥ 2 × taban satırı (Metric ml_group_lag, Value = lag,
+	// Threshold = taban; P1) aynı lider olaydan aynı "Neden" satırlarını verir.
+	p1 := grp
+	p1.Metric, p1.Value, p1.Threshold = "ml_group_lag", 165000, 600
+	p1rd, ok := stdImpactReadFor(p1, now)
+	if !ok || p1rd.lead != "lag-1" {
+		t.Fatalf("P1 lag satırı lider okumalı: %+v %v", p1rd, ok)
+	}
+	if g1 := stdImpactFactsOf(p1rd, p1, []chstore.MLEvent{lag}); !reflect.DeepEqual(g1, wantLag) {
+		t.Fatalf("P1 lag: %+v", g1)
+	} else if s1 := standardizeInboxSrc(&inboxStdSrc{problem: &p1, impactRule: g1}, chstore.StdFacts{Now: now}, 0); s1 == nil || s1.Evidence.Reasons[1] != std.Evidence.Reasons[1] {
+		t.Fatalf("P1 lag satırları: %+v", s1)
+	}
 	// Lider olay değil / lag değil → nil.
 	other := lag
 	other.ID = "lag-2"
