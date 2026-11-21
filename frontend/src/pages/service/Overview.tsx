@@ -26,6 +26,7 @@ import { readBandsParam, writeBandsParam } from '@/lib/bandsParam';
 import { toast } from '@/lib/toast';
 import { t as tl, tf, useLang } from '@/lib/i18n'; // v0.10.2315 — genel bakış metni arayüz dilinde (ov.*; TR aynı)
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
+import { redHasServiceSeries } from '@/lib/metricRedSeries';
 import { LinkButton } from '@/components/ui';
 import { AnomalyWindowTable } from '@/features/anomalies/AnomalyWindowTable';
 // v0.10.162 — çekmece TEMBEL: CopilotExplain/RootCauseRibbon/LogsHistogram'ı en sıcak sayfanın chunk'ına sokmasın (yalnız satır tıkında yüklenir).
@@ -275,7 +276,13 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   });
   // Otomatik kipte metrik yoksa span: sorgu bitene dek metrik varsayılır
   // (karolar zaten yükleniyor). Zorlanmış metrikte (?src=metric) hep metrik.
-  const metricMode = explicitSrc ?? (metricRedQ.data ? !!metricRedQ.data.metricExists : !metricRedQ.isError);
+  // v0.10.2419 (operatör, yerel ledger-service ekranı: "burası böyle yazmasın")
+  // — metrik kurulumda var ama BU servise ait seri yoksa (ör. HTTP metriği
+  // olmayan gRPC servisi) otomatik kip de span'a döner; boş grafik + teşhis
+  // metni yerine span'den çizilir. ?src=metric yine zorlar.
+  const metricMode = explicitSrc ?? (metricRedQ.data
+    ? !!metricRedQ.data.metricExists && redHasServiceSeries(metricRedQ.data)
+    : !metricRedQ.isError);
   // v0.10.1377 — env seçiliyken pencere karoları / durum kodu / toplam istek
   // sorguları VM ortam eşleyicisiyle süzülür (/metric-red sunucuda AYNI
   // çözücüyle süzer — iki yüzey aynı değerde). Çözüm gelene dek sorgu yok.
@@ -1239,7 +1246,10 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
             </div>
           )}
           {metricTputQ.data && metricTputEmpty && (
-            <MetricThroughputNote d={metricTputQ.data} />
+            <details>
+              <summary>{tl('ov.whyEmpty', lang)}</summary>
+              <MetricThroughputNote d={metricTputQ.data} />
+            </details>
           )}
           </>)}
         </MetricPanel>

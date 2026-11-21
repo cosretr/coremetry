@@ -3525,6 +3525,7 @@ export const EN: Record<string, string> = {
   'ov.toast.partVerdict': 'verdict',
   'ov.toast.notFail': '«Not» could not be saved: {what} — {err}',
   'ov.toast.verdictFail': 'Verdict could not be saved: {err}',
+  'ov.whyEmpty': 'Why is this empty?',
   'ov.rt.unitUnknown': 'unit not recognized',
   'ov.rt.labelLast': 'Response time · avg · last step',
   'ov.rt.subMetric': 'P99 (metric) · {v} ms',

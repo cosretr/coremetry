@@ -15333,3 +15333,8 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 ## 2026-11-21 — v0.10.2418 — CoSRE'de takım seçilince arkadaki sayfa süzülü /services
 
 - Operatör isteği (2026-11-21): "Takımını seçtiğinde otomatik olarak filtreli services sayfasını açsın arkada." Üç seçim yolu da (karşılamadaki takım araması, composer takım çipi, sohbetteki takım sorusu) useOpenTeamServices'i çağırır: panel açık kalır, arkadaki sayfa /services?ownerTeam=<takım> (takım yalnız SRE ekseninde varsa ?sreTeam=) olur; eksen ve katalog yazımı exceptionsTeamAxis kuralıyla. Tam sayfa /cosre'de arkada sayfa yok → gezinme yapılmaz. Takımı kaldırmak (✕) gezinmez.
+
+## 2026-11-21 — v0.10.2419 — Service Overview: servise ait metrik serisi yoksa otomatik span; teşhis metni katlanır
+
+- Operatör isteği (2026-11-21, yerel ledger-service ekranı): "Burası da böyle yazmasın." Metrik kurulumda vardı (metricExists) ama bu servise eşleşen seri yoktu (HTTP metriği olmayan gRPC servisi); otomatik kip metrikte kalıyor, boş grafikler + "missing" rozeti + uzun teşhis metni çıkıyordu.
+- Otomatik kip (?src yok) artık metrik VE servise ait en az bir noktalı seri (redHasServiceSeries) ister; yoksa span kaynağından çizer. ?src=metric zorlamaya devam eder. Zorlanmış metrikte boş throughput teşhisi (MetricThroughputNote) katlanmış "Neden boş?" bölümünde, varsayılan kapalı. v0.10.359 "metrik varsayılan" kararı geçerli; yalnız boş seri durumunda span'a dönüş eklendi.

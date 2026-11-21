@@ -3469,6 +3469,7 @@ export const TR: Record<string, string> = {
   'ov.toast.partVerdict': 'karar',
   'ov.toast.notFail': '«Değil» yazılamadı: {what} — {err}',
   'ov.toast.verdictFail': 'Karar yazılamadı: {err}',
+  'ov.whyEmpty': 'Neden boş?',
   'ov.rt.unitUnknown': 'birim tanınmadı',
   'ov.rt.labelLast': 'Response time · avg · son adım',
   'ov.rt.subMetric': 'P99 (metrik) · {v} ms',
