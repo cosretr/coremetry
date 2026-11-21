@@ -74,15 +74,44 @@ func (s *Server) cosreRuleContext(ctx context.Context, service string, rules []c
 	return c
 }
 
-// cosreRulesBlock — bağlama uyan kuralların çitli bloğu ve kural sayısı;
-// kural yoksa ("", 0).
-func (s *Server) cosreRulesBlock(ctx context.Context, service string) (string, int) {
-	rules := cosreRulesSource()
-	if len(rules) == 0 {
-		return "", 0
+// cosreRulesBlock — bağlama uyan kuralların çitli bloğu, ARKASINDAN (Faz E)
+// bağlama uyan ekip notlarının çitli bloğu (cosre_memory_prompt.go) ve
+// sayıları; ikisi de yoksa ("", sıfır). Kural ve not yoksa prompt'lar bayt
+// bayt eski.
+func (s *Server) cosreRulesBlock(ctx context.Context, service string) (string, ctxNoteCount) {
+	var n ctxNoteCount
+	block := ""
+	if rules := cosreRulesSource(); len(rules) > 0 {
+		picked, omitted := cosrerules.Relevant(rules, s.cosreRuleContext(ctx, service, rules), cosrerules.PromptMaxRules, cosrerules.PromptMaxBytes)
+		block, n.Rules = cosrerules.BlockTR(picked, omitted, tzdefault.Location()), len(picked)
 	}
-	picked, omitted := cosrerules.Relevant(rules, s.cosreRuleContext(ctx, service, rules), cosrerules.PromptMaxRules, cosrerules.PromptMaxBytes)
-	return cosrerules.BlockTR(picked, omitted, tzdefault.Location()), len(picked)
+	mem, m := s.cosreMemoryBlock(ctx, service)
+	n.Notes = m
+	switch {
+	case mem == "":
+	case block == "":
+		block = mem
+	default:
+		block += "\n" + mem
+	}
+	return block, n
+}
+
+// ctxNoteCount — modele giren operatör kuralı ve ekip notu sayısı (adım çipi).
+type ctxNoteCount struct{ Rules, Notes int }
+
+// contextAddendaTR — SAF: blokta hangi çit varsa onun sistem eki (kural,
+// not, ikisi). Başlık+çit çifti yalnız gerçek bloktan gelir: kural ve not
+// metinleri tek satıra normalize edildiği için başlık satırı üretemez.
+func contextAddendaTR(block string) string {
+	var parts []string
+	if strings.Contains(block, cosrerules.BlockHeader+"\n"+cosrerules.FenceOpen) {
+		parts = append(parts, copilot.CosreRulesAddendum())
+	}
+	if hasMemoryBlock(block) {
+		parts = append(parts, copilot.CosreMemoryAddendum())
+	}
+	return strings.Join(parts, "\n")
 }
 
 // cosreRulesLoopPromptTR — SAF: serbest döngü sistem mesajı parçası (blok +
@@ -91,7 +120,7 @@ func cosreRulesLoopPromptTR(block string) string {
 	if block == "" {
 		return ""
 	}
-	return block + "\n" + copilot.CosreRulesAddendum() + "\n\n"
+	return block + "\n" + contextAddendaTR(block) + "\n\n"
 }
 
 // cosreRulesSystemPrefix — SAF: guided anlatımın sistem mesajı öneki; blok yoksa "".
@@ -99,7 +128,7 @@ func cosreRulesSystemPrefix(block string) string {
 	if block == "" {
 		return ""
 	}
-	return copilot.CosreRulesAddendum() + "\n\n"
+	return contextAddendaTR(block) + "\n\n"
 }
 
 // cosreRulesDataSuffix — SAF: guided VERİ bölümünün eki; blok yoksa "".
@@ -110,11 +139,15 @@ func cosreRulesDataSuffix(block string) string {
 	return "\n\n" + block
 }
 
-// cosreRulesStepLabel — SAF: kural kullanıldığında görünen çip (operatör
-// cevabın hangi notlarla yorumlandığını görür).
-func cosreRulesStepLabel(n int) string {
-	if n <= 0 {
-		return ""
+// cosreRulesStepLabel — SAF: kural / ekip notu kullanıldığında görünen çip
+// (operatör cevabın hangi notlarla yorumlandığını görür).
+func cosreRulesStepLabel(n ctxNoteCount) string {
+	var parts []string
+	if n.Rules > 0 {
+		parts = append(parts, "operatör kuralları: "+strconv.Itoa(n.Rules))
 	}
-	return "operatör kuralları: " + strconv.Itoa(n)
+	if n.Notes > 0 {
+		parts = append(parts, "ekip notları: "+strconv.Itoa(n.Notes))
+	}
+	return strings.Join(parts, " · ")
 }

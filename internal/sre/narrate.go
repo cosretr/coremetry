@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/ai/cosrememory"
 	"github.com/cilcenk/coremetry/internal/ai/cosrerules"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
@@ -127,6 +128,16 @@ func narrate(ctx context.Context, rd readers, inv *Investigation, p chstore.Prob
 		system = copilot.CosreRulesAddendum() + "\n\n" + system
 		user += "\n" + block + "\n"
 	}
+	// CoSRE Faz E — ekip notları: aynı yer ve aynı çerçeve (blok paketin
+	// sonuna, ek sistem mesajının önüne). Replay varyantı noMemory kapatır;
+	// replay'de yalnız Problem'den ÖNCE öğrenilmiş notlar ve o Problem'in
+	// kendi kök neden notu HARİÇ (cevap sızmaz). Skor / plan / kontrol görmez.
+	inv.MemoryNotes = 0
+	if block, n := narrationMemoryBlock(rd, *inv, p, now(), tzdefault.Location()); block != "" {
+		system = copilot.CosreMemoryAddendum() + "\n\n" + system
+		user += "\n" + block + "\n"
+		inv.MemoryNotes = n
+	}
 	rd.budget.inc(ctx)
 	text, err := rd.narrator.Explain(nctx, system, user)
 	text = strings.TrimSpace(text)
@@ -162,7 +173,39 @@ func narrationRulesBlock(rd readers, p chstore.Problem, loc *time.Location) stri
 	return cosrerules.BlockTR(picked, omitted, loc)
 }
 
-// newNarrationExchangeID — anlatım çağrısının exchange kimliği: tıklamalı ✨
+// narrationMemoryBlock — anlatıma girecek ekip notu bloğu ve not sayısı.
+// inv.NoMemory (replay varyantı) → yok. Replay / değerlendirme koşusunda
+// (inv.AsOf > 0) süzgeç: kaynağı Problem başlangıcından önce olan notlar,
+// Problem'in kendi kök neden notu hariç.
+func narrationMemoryBlock(rd readers, inv Investigation, p chstore.Problem, at time.Time, loc *time.Location) (string, int) {
+	if inv.NoMemory {
+		return "", 0
+	}
+	var items []cosrememory.Item
+	if rd.memory != nil {
+		items = rd.memory()
+	} else {
+		items = chstore.CurrentCosreMemory()
+	}
+	if len(items) == 0 {
+		return "", 0
+	}
+	f := cosrememory.Filter{Now: at.UnixNano(), ExcludeProblem: p.ID}
+	if inv.AsOf > 0 {
+		f.Now, f.Before = inv.AsOf, inv.ProblemAt
+		if f.Before <= 0 {
+			f.Before = p.StartedAt
+		}
+		if f.ExcludeProblem == "" {
+			f.ExcludeProblem = inv.ProblemID
+		}
+	}
+	picked, omitted := cosrememory.Relevant(items, cosrememory.Context{Service: p.Service, Team: p.OwnerTeam}, f,
+		cosrememory.PromptMaxItems, cosrememory.PromptMaxBytes)
+	return cosrememory.BlockTR(picked, omitted, loc), len(picked)
+}
+
+// newNarrationExchangeID —anlatım çağrısının exchange kimliği: tıklamalı ✨
 // yüzeylerinin biçimi (16 bayt hex, api.newRandID(16) ile aynı; oy ucunun
 // kimlik kapısı ≤64). crypto/rand okunamazsa "" — çağrı yine yapılır, yalnız
 // oylanamaz (FE kimliksiz rayı çizmez).

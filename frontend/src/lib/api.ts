@@ -1604,6 +1604,15 @@ export const api = {
     request<import('./types').CosreRuleMutation>(`/api/ai/rules/${encodeURIComponent(id)}`, {
       method: 'DELETE', headers: cosreRuleHeaders(rev),
     }),
+  // CoSRE Faz E — ekip notları (cosre_memory.go; GET her rol, yazım editör+, audit).
+  cosreMemory: (service?: string, signal?: AbortSignal) =>
+    get<import('./types').CosreMemoryPayload>(`/api/ai/memory${service ? `?service=${encodeURIComponent(service)}` : ''}`, signal),
+  createCosreMemory: (body: import('./types').CosreMemoryCreate) =>
+    request<{ item: import('./types').CosreMemoryItem }>('/api/ai/memory', { method: 'POST', body: JSON.stringify(body) }),
+  updateCosreMemory: (id: string, body: import('./types').CosreMemoryUpdate) =>
+    request<{ item: import('./types').CosreMemoryItem }>(`/api/ai/memory/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteCosreMemory: (id: string) =>
+    request<{ ok: boolean }>(`/api/ai/memory/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   // v0.10.2335 — CoSRE kullanıcı deposu: kendi eş adları (cosre_user_prefs.go).
   getCosreUserPrefs: () => request<import('./types').CosreUserPrefs>('/api/cosre/user-prefs'),
   saveCosreAlias: (body: import('./types').CosreAliasInput) =>

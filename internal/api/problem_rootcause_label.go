@@ -257,6 +257,7 @@ func (s *Server) putRootCauseLabel(w http.ResponseWriter, r *http.Request) {
 	details, _ := json.Marshal(map[string]any{"caseId": c.CaseID, "category": c.Category, "culprit": in.Culprit,
 		"link": in.Link != "", "edit": edit, "createdCase": created, "cosreCorrect": c.CosreCorrect})
 	s.audit(r, "problem.rootcause.set", "problem", id, string(details))
+	s.captureRootCauseMemory(r, *p, in.Cause, in.Category, who) // CoSRE Faz E — etiket = doğrulanmış olgu → ekip notu
 	s.cacheInvalidatePrefix(ctx, pendingCasesCachePrefix)
 	writeJSON(w, rootCauseLabelResponse{Label: labelOf(id, c, &extra), Categories: cosrelearn.CaseCategories})
 }

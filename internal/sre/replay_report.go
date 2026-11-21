@@ -98,6 +98,10 @@ type ReplayVariant struct {
 	// KAPALI (B öncesi davranış, Investigation.Plain). Aynı etiket
 	// penceresinde plain ve varsayılan iki rapor = B'nin ölçümü.
 	Plain bool `json:"plain,omitempty"`
+	// NoMemory — CoSRE Faz E: ekip notları KAPALI (Investigation.NoMemory).
+	// Aynı etiket penceresinde noMemory ve varsayılan iki rapor = hafızanın
+	// ölçümü.
+	NoMemory bool `json:"noMemory,omitempty"`
 }
 
 // ReplayRun — bir Problem'in bir tekrar koşusu + notu.
@@ -387,7 +391,7 @@ func StartReplayReport(ctx context.Context, st ReplayStore, req ReplayReportRequ
 				run := ReplayRun{Rep: r, State: StateQueued}
 				created, err := EnqueueReplay(ctx, st, ReplayRequest{RunID: ReplayRunKey(rep.ReportID, r), CaseID: c.CaseID,
 					ProblemID: it.ProblemID, Service: it.Service, ProblemStartedAt: it.StartedAt, By: req.By, Now: now,
-					ContextPack: req.Variant.ContextPack, Plain: req.Variant.Plain}, cfg)
+					ContextPack: req.Variant.ContextPack, Plain: req.Variant.Plain, NoMemory: req.Variant.NoMemory}, cfg)
 				switch {
 				case err != nil:
 					run.State, run.Reason = CaseSkipped, truncRunes("kuyruğa alınamadı: "+err.Error(), 200)

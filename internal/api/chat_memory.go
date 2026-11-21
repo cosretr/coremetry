@@ -34,6 +34,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/ai/agent/blocks"
 	"github.com/cilcenk/coremetry/internal/ai/aisurface"
+	"github.com/cilcenk/coremetry/internal/ai/cosrememory"
 	"github.com/cilcenk/coremetry/internal/ai/cosrerules"
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/copilot"
@@ -367,6 +368,9 @@ type memoryTierReq struct {
 // chatMemoryTier — kademe. handled=false → akış bayt bayt eski yoldan sürer.
 func (s *Server) chatMemoryTier(ctx context.Context, emit func(string, any), seq *blocks.Sequencer, rq memoryTierReq) (handled, ok bool) {
 	_, rest := cleanScopedQuestion(lastUserText(rq.Msgs))
+	if stmt, ok := cosrememory.DetectCorrection(rest); ok { // CoSRE Faz E — açık düzeltme (chat_correction.go)
+		return s.chatCorrectionTier(ctx, emit, seq, rq, stmt)
+	}
 	mi, hit := detectMemoryIntent(rest)
 	if !hit {
 		return false, false

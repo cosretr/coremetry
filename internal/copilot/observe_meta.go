@@ -97,6 +97,7 @@ var promptVersionRegistry = map[string]string{
 	"codeSearchChatAddendum":             codeSearchChatAddendum,  // v0.10.1210     // v0.10.1050 — read_source_code sunulunca
 	"wikiChatAddendum":                   wikiChatAddendum,        // v0.10.1122 — search_wiki / read_wiki_page sunulunca
 	"cosreRulesAddendum":                 cosreRulesAddendum,      // v0.10.1289 — operatör kuralı bloğu varken
+	"cosreMemoryAddendum":                cosreMemoryAddendum,     // CoSRE Faz E — ekip notu bloğu varken
 	"systemRuleProposal":                 systemRuleProposal,      // v0.10.1289 — "bunu hatırla" kural önerisi
 	"systemChatAgentLoop":                systemChatAgentLoop,     // v0.10.482
 	"systemIntentClassify":               systemIntentClassify,

@@ -67,6 +67,9 @@ var systemSavedViewPages = map[string]struct{}{
 	// /api/sre/replay/reports (admin, denetimli) ve sre pod'unun notlayıcı
 	// tiki yazar.
 	SREReplayReportPage: {},
+	// CoSRE Faz E — ekip notları (hafıza); yalnız /api/ai/memory (editor+,
+	// denetimli) ve kök neden etiketi PUT'u yazar (cosre_memory.go).
+	CosreMemoryPage: {},
 }
 
 // EvalsetCandidatePage — v0.10.2111: aday vaka satırlarının page değeri.

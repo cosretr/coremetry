@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '@/lib/i18n';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { TabStrip as UiTabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5) — sayfanın yerel TabStrip sarmalayıcısıyla ad çakışmasın
@@ -70,6 +70,9 @@ const SERVICE_PIVOT_CARRY: readonly PivotDim[] = ['env', 'cluster'];
 // sortable). A stale ?tab=traces link redirects there rather than 404ing to
 // the default tab.
 type ServiceTab = 'overview' | 'operations' | 'details' | 'logs' | 'topology' | 'infra' | 'gitops' | 'http' | 'messaging';
+
+// CoSRE Faz E — Details › "CoSRE notları" gövdesi tembel (bölüm açılınca).
+const ServiceCosreNotes = lazy(() => import('./service/ServiceCosreNotes'));
 
 // v0.10.929 (K5) — /service başlık noktası. Sağlıklı hâl nötr halka
 // (`.ov-dot.green` globals'ta artık soluk --border-strong halkası; ad tarihsel),
@@ -770,6 +773,15 @@ function ServiceDetailInner() {
                         onZoomWindow={(tNs) => handleZoom(tNs / 1e9 - 1800, tNs / 1e9 + 1800)} />
                     </LazyMount>
                   </div>
+                </CollapsedSection>
+                {/* CoSRE Faz E — ekip notları: açık düzeltmeler + kök neden
+                    etiketlerinden öğrenilen notlar (görüntüle / düzenle /
+                    emekliye ayır / sil). Kapalıyken chunk ve okuma yok. */}
+                <CollapsedSection id="dtl-cosre-notes" title={tr('cmem.title')}
+                  open={sectionOpen('dtl-cosre-notes')} onOpenChange={setSectionOpen('dtl-cosre-notes')}>
+                  <Suspense fallback={<Spinner />}>
+                    <ServiceCosreNotes service={svc} />
+                  </Suspense>
                 </CollapsedSection>
               </div>
             )}

@@ -1,4 +1,4 @@
-import { Component, Fragment, createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
+import { Component, Fragment, Suspense, createContext, lazy, memo, useContext, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import '@/styles/cosreChat.css';
 import { chatErrorText } from './chatErrorText';
 import { Link, useLocation, useNavigate } from 'react-router';
@@ -6,7 +6,7 @@ import { chartBlocks, mergeBlockLinks, traceListBlocks, operationBlocks, operati
 import { ChatTraceList } from './ChatTraceList'; // v0.10.688 — trace_list bloğu
 import { evidenceBlocks } from '@/lib/chatEvidence'; // v0.10.558
 import { EvidenceCard } from './EvidenceCard';
-import { parseAction, actionVisible, applyActionHref, parseProblemNoteAction, parseSREHypothesisAction, parseCosreRuleAction, parseCosreAliasAction } from '@/lib/pageActions';
+import { parseAction, actionVisible, applyActionHref, parseProblemNoteAction, parseSREHypothesisAction, parseCosreRuleAction, parseCosreAliasAction, parseCosreMemoryAction } from '@/lib/pageActions';
 import { ProblemNoteButton } from './ProblemNoteButton';
 import { SREHypothesisButton } from './SREHypothesisButton';
 import { showSREHypothesisButton } from './sreHypothesisDedup'; // v0.10.1300
@@ -35,6 +35,9 @@ import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { Chip } from '@/components/ui/Chip';
 import { Badge } from '@/components/ui/Badge'; // v0.10.1170 — kaynak türü rozeti
 import { Brain } from 'lucide-react'; // v0.10.1150 — "Derin" rozeti
+
+// CoSRE Faz E — ekip notu onay kartı ("Düzeltme: …"); yalnız kart gelince yüklenir.
+const CosreMemoryConfirm = lazy(() => import('./CosreMemoryConfirm'));
 import { summarizeSteps, parseToolError, previewFirstLine, visibleRows, isDeadlineError, fmtMs, VISIBLE_ROWS, sourceStates, stateUnknown, stepRunning, toolErrorLabel } from './toolSteps';
 import { StateBadges } from './StateBadges'; // v0.10.948 — paylaşılan durum rozetleri
 import { chatLinkTargetProps, useChatLinkNewTab } from './chatLinkTarget'; // v0.10.1125 — /cosre yeni sekme
@@ -1248,6 +1251,9 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
               // v0.10.1289 — "bunu hatırla" onay kartı (sunucu hafıza kademesi; tık-only kayıt).
               const rule = parseCosreRuleAction(b.payload);
               if (rule) return <CosreRuleConfirm key={b.id} action={rule} />;
+              // CoSRE Faz E — "Düzeltme: …" → ekip notu onay kartı (tembel; tık-only kayıt).
+              const mem = parseCosreMemoryAction(b.payload);
+              if (mem) return <Suspense key={b.id} fallback={null}><CosreMemoryConfirm action={mem} /></Suspense>;
               // v0.10.2335 — eş ad önerisi (düzeltmeden sonra; tık-only kayıt, kişisel).
               const alias = parseCosreAliasAction(b.payload);
               if (alias) return <CosreAliasConfirm key={b.id} action={alias} exchangeId={turn.exchangeId} />;

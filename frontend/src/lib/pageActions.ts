@@ -132,6 +132,31 @@ export function parseCosreRuleAction(payload: unknown): CosreRuleAction | null {
   };
 }
 
+// CoSRE Faz E — açık düzeltme ("Düzeltme: …") → ekip notu onay kartı (sunucu
+// chat_correction.go cosreMemoryAction). Kural kartıyla aynı kapsam çözümü;
+// yalnız "Kaydet" tıkı POST /api/ai/memory {source: correction} çağırır.
+export interface CosreMemoryAction {
+  kind: 'cosre_memory';
+  statement: string;
+  scope: CosreRuleScope;
+  scopeOptions: CosreRuleScopeOption[];
+  canSave: boolean;
+  reason?: string;
+  exchangeId?: string;
+}
+
+export function parseCosreMemoryAction(payload: unknown): CosreMemoryAction | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const p = payload as Record<string, unknown>;
+  if (p.kind !== 'cosre_memory' || typeof p.statement !== 'string') return null;
+  const r = parseCosreRuleAction({ ...p, kind: 'cosre_rule', text: p.statement });
+  if (!r) return null;
+  return {
+    kind: 'cosre_memory', statement: p.statement, scope: r.scope, scopeOptions: r.scopeOptions, canSave: r.canSave, reason: r.reason,
+    exchangeId: typeof p.exchangeId === 'string' && p.exchangeId ? p.exchangeId : undefined,
+  };
+}
+
 // v0.10.2335 (conversation-audit §6.1 G) — eş ad önerisi kartı: sunucu
 // kullanıcının varlık düzeltmesinden sonra üretir (chat_alias_proposal.go).
 // HİÇBİR ŞEY kaydedilmez; yalnız "Kaydet" tıkı POST

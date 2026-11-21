@@ -58,7 +58,8 @@ export function deploysSummary(rollouts: ReadonlyArray<Pick<Rollout, 'timeUnixNs
 /** Kapanabilir bölümlerin kimlikleri (= başlık satırının id'si).
  *  v0.10.2154 — 'dtl-perf' (Performance) bölümüyle birlikte kalktı; saklı
  *  listede kalan eski kimlik parseOpenSections'ta bilinmeyen diye düşer. */
-export const COLLAPSIBLE_SECTIONS = ['dtl-endpoints', 'dtl-metrics', 'dtl-latency', 'dtl-runtime'] as const;
+// CoSRE Faz E — 'dtl-cosre-notes': servisin ekip notları (tembel panel).
+export const COLLAPSIBLE_SECTIONS = ['dtl-endpoints', 'dtl-metrics', 'dtl-latency', 'dtl-runtime', 'dtl-cosre-notes'] as const;
 export type CollapsibleSection = typeof COLLAPSIBLE_SECTIONS[number];
 
 /** SAF: saklı ham değer → açık bölüm kümesi (bozuk / bilinmeyen kimlik yok sayılır). */

@@ -1060,6 +1060,11 @@ func main() {
 		log.Printf("[cosre-rules] load persisted rules: %v", err)
 	}
 	cfgRefresh.Add("cosre-rules", store.LoadCosreRules)
+	// CoSRE Faz E — ekip notları (saved_views cosre_memory) aynı yolla.
+	if err := store.LoadCosreMemory(ctx); err != nil {
+		log.Printf("[cosre-memory] load notes: %v", err)
+	}
+	cfgRefresh.Add("cosre-memory", store.LoadCosreMemory)
 	// v0.10.1434 — AI araç setleri (system_settings ai.toolsets) HER rolde:
 	// sohbet kataloğu + dış MCP çağrı kapısı (api) ve drain (sre/all) aynı
 	// mcpDeps kurucusundan okur; yüklenemezse hepsi açık (bugünkü davranış).

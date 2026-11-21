@@ -33,6 +33,7 @@ import { useMemo } from 'react';
 import '@/styles/cosreChat.css';
 import { ChatBubble, ChatBubbleSlotsContext, type ChatBubbleSlots } from '@/components/ai/ChatBubble';
 import { MessageNote } from '@/components/ai/EvidenceRelevance';
+import { CosreCorrectButton } from '@/components/ai/CosreCorrectButton'; // CoSRE Faz E
 import { AiThinking } from '@/components/ai/AiThinking';
 import { FollowupChips } from '@/components/ai/FollowupChips';
 import type { ChatSendOpts } from '@/components/ai/useChatThread';
@@ -191,7 +192,8 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   const xid = live ? undefined : turn.exchangeId;
   const slots = useMemo<ChatBubbleSlots>(() => ({
     hideSteps: true,
-    actionsExtra: <MessageNote exchangeId={xid} />,
+    // CoSRE Faz E — "Düzelt": açık düzeltme → ekip notu (tık-only kayıt).
+    actionsExtra: <><MessageNote exchangeId={xid} /><CosreCorrectButton exchangeId={xid} /></>,
   }), [xid]);
   const badges = useMemo(() => stopBadges(turn, steps.stop), [turn, steps.stop]);
   const sumToken = live && onStopSummarize ? summarizeToken(steps) : undefined; // v0.10.2368 — I2

@@ -199,10 +199,15 @@ type Investigation struct {
 	// yalnız tekrarda, canlı koşu hep false). Playbook — problem türünün
 	// sıralı kontrolleri (playbook.go); Reach — hangi kaynağa bakıldı / bakılamadı
 	// (reach.go); Coverage — kanıt kapsama kapısının kararı (coverage.go).
-	Plain    bool          `json:"plain,omitempty"`
-	Playbook *Playbook     `json:"playbook,omitempty"`
-	Reach    []ReachEntry  `json:"reach,omitempty"`
-	Coverage *CoverageGate `json:"coverage,omitempty"`
+	Plain bool `json:"plain,omitempty"`
+	// CoSRE Faz E — NoMemory: değerlendirme varyantı, ekip notları anlatıma
+	// GİRMEZ (yalnız tekrarda; canlı koşu hep false). MemoryNotes: son
+	// anlatıma giren not sayısı (hafıza açık/kapalı kıyasının künyesi).
+	NoMemory    bool          `json:"noMemory,omitempty"`
+	MemoryNotes int           `json:"memoryNotes,omitempty"`
+	Playbook    *Playbook     `json:"playbook,omitempty"`
+	Reach       []ReachEntry  `json:"reach,omitempty"`
+	Coverage    *CoverageGate `json:"coverage,omitempty"`
 }
 
 // QueueKey — v0.10.1301: kuyruk anahtarı (satır kimliği

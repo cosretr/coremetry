@@ -9350,6 +9350,49 @@ export interface CosreRuleInput {
   scope: CosreRuleScope;
 }
 
+// CoSRE Faz E — ekip notları (hafıza). Go aynası: internal/ai/cosrememory
+// Item / Source ve internal/api/cosre_memory.go. Damgalar unix ns.
+export type CosreMemorySourceKind = 'correction' | 'rootcause' | 'manual';
+export interface CosreMemorySource {
+  kind: CosreMemorySourceKind;
+  by?: string;
+  byEmail?: string;
+  at: number;
+  conversationId?: string;
+  exchangeId?: string;
+  problemId?: string;
+  displayId?: string;
+}
+export interface CosreMemoryItem {
+  id: string;
+  statement: string;
+  scope: CosreRuleScope;
+  source: CosreMemorySource;
+  status: 'active' | 'retired';
+  expiresAt?: number;
+  updatedAt?: number;
+  updatedBy?: string;
+}
+/** GET /api/ai/memory[?service=] */
+export interface CosreMemoryPayload {
+  items: CosreMemoryItem[];
+  limits: { maxItems: number; minStatement: number; maxStatement: number; promptItems: number };
+}
+/** POST /api/ai/memory — yalnız correction | manual (rootcause etiket PUT'undan). */
+export interface CosreMemoryCreate {
+  statement: string;
+  scope: CosreRuleScope;
+  expiresAt?: number;
+  source: { kind: 'correction' | 'manual'; conversationId?: string; exchangeId?: string };
+}
+/** PUT /api/ai/memory/{id} */
+export interface CosreMemoryUpdate {
+  statement: string;
+  scope: CosreRuleScope;
+  status: 'active' | 'retired';
+  expiresAt: number;
+}
+
 // CoSRE öğrenme Faz 2 — istemcinin örtük sinyalleri (POST /api/ai/signal;
 // internal/cosrelearn ClientSignalKinds). Türetilenler sunucuda hesaplanır.
 export type CosreSignalKind = 'copy' | 'link_click' | 'evidence_click' | 'problem_note' | 'followup_click' // v0.10.1291 — takip çipi
@@ -12401,7 +12444,8 @@ export interface SREEvalCompare {
 // (ReplayReport / ReplayItem / ReplayRun), replay_grade.go ReplaySummary, api/sre_replay.go.
 export type SREReplayGrade = 'bullseye' | 'on_target' | 'miss' | 'nowhere';
 /** plain — CoSRE Faz B kapalı (oyun kitabı / hipotez durumu / kanıt kapısı; B öncesi). */
-export interface SREReplayVariant { contextPack?: boolean; plain?: boolean }
+/** CoSRE Faz E — noMemory: ekip notları kapalı (hafıza açık/kapalı kıyası). */
+export interface SREReplayVariant { contextPack?: boolean; plain?: boolean; noMemory?: boolean }
 export interface SREReplayRun {
   rep: number;
   state: string;

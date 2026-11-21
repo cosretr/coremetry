@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { Suspense, lazy, useState, type FormEvent } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/shadcn/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shadcn/tabs';
@@ -43,10 +43,14 @@ import { Link, useSearchParams } from 'react-router';
 // v0.10.1434 — dördüncü sekme "Araç setleri" (`?tab=toolsets`): 74 aracın kaynak
 // bazlı 12 toolset'i, sağlık + aç/kapa (AiToolsetsPanel; kendi /api/ai/toolsets
 // ucuna dayanır, ayar okuması düşse de açılır).
-type AiTabKey = 'provider' | 'eval' | 'rules' | 'toolsets';
+// CoSRE Faz E — beşinci sekme "Notlar" (`?tab=memory`): bütün ekip notları
+// (CosreMemoryPanel; Servis › Details'teki bölümle aynı panel, tembel).
+type AiTabKey = 'provider' | 'eval' | 'rules' | 'memory' | 'toolsets';
+
+const CosreMemoryPanel = lazy(() => import('@/components/ai/CosreMemoryPanel'));
 
 function aiTabFromParam(v: string | null): AiTabKey {
-  return v === 'eval' || v === 'rules' || v === 'toolsets' ? v : 'provider';
+  return v === 'eval' || v === 'rules' || v === 'memory' || v === 'toolsets' ? v : 'provider';
 }
 
 export function AITab() {
@@ -69,7 +73,7 @@ export function AITab() {
   // URL sözleşmesi aynı); yalnız seçili sekmenin gövdesi bağlanır (Radix).
   const tabs: { key: AiTabKey; label: string }[] = [
     { key: 'provider', label: 'Sağlayıcı ve profiller' }, { key: 'eval', label: 'Değerlendirme' },
-    { key: 'rules', label: 'Kurallar' }, { key: 'toolsets', label: t('aiToolsets.tab') },
+    { key: 'rules', label: 'Kurallar' }, { key: 'memory', label: 'Notlar' }, { key: 'toolsets', label: t('aiToolsets.tab') },
   ];
   return (
     <>
@@ -83,6 +87,9 @@ export function AITab() {
         <TabsContent value="provider"><AiProviderSettings /></TabsContent>
         <TabsContent value="eval"><AiEvalPanel /></TabsContent>
         <TabsContent value="rules"><CosreRulesPanel canEdit storageKey="settings-cosre-rules" /></TabsContent>
+        <TabsContent value="memory">
+          <Suspense fallback={<Spinner />}><CosreMemoryPanel canEdit storageKey="settings-cosre-memory" /></Suspense>
+        </TabsContent>
         <TabsContent value="toolsets"><AiToolsetsPanel /></TabsContent>
       </Tabs>
     </>

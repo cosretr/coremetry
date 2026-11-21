@@ -207,7 +207,8 @@ function StartForm({ enabled, schedule, onStarted }: { enabled: boolean; schedul
   };
   const start = () => run(async () => {
     const rep = await api.startSREReplay({ days: Number(days), repeats: Number(repeats), limit: Number(limit),
-      variant: variant === 'contextPack' ? { contextPack: true } : variant === 'plain' ? { plain: true } : {} });
+      variant: variant === 'contextPack' ? { contextPack: true } : variant === 'plain' ? { plain: true }
+        : variant === 'noMemory' ? { noMemory: true } : {} });
     onStarted(rep.reportId);
   });
   const weekly = !!schedule?.weekly;
@@ -226,6 +227,8 @@ function StartForm({ enabled, schedule, onStarted }: { enabled: boolean; schedul
           <option value="default">varsayılan</option>
           <option value="contextPack">bağlam paketi (contextPack)</option>
           <option value="plain">B kapalı — oyun kitabı / hipotez durumu / kanıt kapısı yok (plain)</option>
+          {/* CoSRE Faz E — hafıza ölçümü: aynı pencerede varsayılan + noMemory iki rapor. */}
+          <option value="noMemory">ekip notları kapalı (noMemory)</option>
         </SelectField>
         <Button variant="primary" size="sm" loading={busy} disabled={busy || !enabled} onClick={() => { void start(); }}
           title={enabled ? 'Etiketli Problem\'leri kendi pencerelerinde yeniden koştur ve yerel hakemle notla (düşük öncelik; hakem saatlik AI bütçesinin en çok yarısını kullanır)' : 'AI SRE kapalı'}>

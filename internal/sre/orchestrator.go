@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/ai/cosrememory"
 	"github.com/cilcenk/coremetry/internal/ai/cosrerules"
 	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/cache"
@@ -67,6 +68,9 @@ type readers struct {
 	// YALNIZ anlatım girdisine (narrate.go); skor / plan / kontrol okumaz
 	// (TestRulesNeverReachScoring).
 	rules func() []cosrerules.Rule
+	// memory — CoSRE Faz E: ekip notları (nil → chstore.CurrentCosreMemory).
+	// Kurallar gibi YALNIZ anlatım girdisine (narrationMemoryBlock).
+	memory func() []cosrememory.Item
 	// v0.10.1293 (Faz 4) — öneri okumaları (recommend.go): etkin runbook
 	// listesi, problemin runbook bağlantısı (EnrichProblemsWithRunbooks: kural →
 	// servis kataloğu; OKUMA zenginleştirmesi, satıra yazmaz) ve TEMBEL Argo
