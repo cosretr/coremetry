@@ -1,7 +1,7 @@
 {
   "conditional/chat": {
-    "count": 73,
-    "sha256": "333bd83c7f273df87ae3c2871bb50497be61b7208fa646757cc40b6084e3d984",
+    "count": 74,
+    "sha256": "d041f787da69072e04d92b69e2642a215f1bb3e86ce079446744d4149b862524",
     "names": [
       "list_services",
       "list_teams",
@@ -49,6 +49,7 @@
       "get_exception_samples",
       "search_code",
       "read_source_code",
+      "compare_baseline",
       "get_correlated_changes",
       "get_deploy_diff",
       "compare_periods",
@@ -79,8 +80,8 @@
     ]
   },
   "conditional/chat_auto": {
-    "count": 73,
-    "sha256": "333bd83c7f273df87ae3c2871bb50497be61b7208fa646757cc40b6084e3d984",
+    "count": 74,
+    "sha256": "d041f787da69072e04d92b69e2642a215f1bb3e86ce079446744d4149b862524",
     "names": [
       "list_services",
       "list_teams",
@@ -128,6 +129,7 @@
       "get_exception_samples",
       "search_code",
       "read_source_code",
+      "compare_baseline",
       "get_correlated_changes",
       "get_deploy_diff",
       "compare_periods",
@@ -158,8 +160,8 @@
     ]
   },
   "conditional/chat_full": {
-    "count": 73,
-    "sha256": "333bd83c7f273df87ae3c2871bb50497be61b7208fa646757cc40b6084e3d984",
+    "count": 74,
+    "sha256": "d041f787da69072e04d92b69e2642a215f1bb3e86ce079446744d4149b862524",
     "names": [
       "list_services",
       "list_teams",
@@ -207,6 +209,7 @@
       "get_exception_samples",
       "search_code",
       "read_source_code",
+      "compare_baseline",
       "get_correlated_changes",
       "get_deploy_diff",
       "compare_periods",
@@ -237,8 +240,8 @@
     ]
   },
   "conditional/chat_simple": {
-    "count": 69,
-    "sha256": "29b850e3c52f3fd052fbb66909a694e3cd84e4650e4b9c36bae710319c5868b1",
+    "count": 70,
+    "sha256": "3e091ad5a49881ab5fe1c691b8344b5b3993fb64fecc771330499563cd1b86f7",
     "names": [
       "list_services",
       "list_teams",
@@ -282,6 +285,7 @@
       "get_exception_samples",
       "search_code",
       "read_source_code",
+      "compare_baseline",
       "get_correlated_changes",
       "get_deploy_diff",
       "compare_periods",
@@ -313,12 +317,12 @@
   },
   "conditional/mcp_tools_list": {
     "count": -1,
-    "sha256": "f94c8e478f6ed25d9f43021ad78a034f15211d69a20c13cee8f263dbbac0ad31",
+    "sha256": "47755072b91be40dead73d71cae50adde646ac487d8e3ead26fba7174dfbdb0f",
     "names": null
   },
   "conditional/tool_list": {
-    "count": 74,
-    "sha256": "97682ee5128863f9048112f3af110ed709861cf3d43872f6d296f26d776224c5",
+    "count": 75,
+    "sha256": "9fabbb491d37c15f0ddc0fc36895bed634b2c3ee9833300edf518c4cdbe8c76c",
     "names": [
       "list_services",
       "list_teams",
@@ -366,6 +370,7 @@
       "get_exception_samples",
       "search_code",
       "read_source_code",
+      "compare_baseline",
       "get_correlated_changes",
       "get_deploy_diff",
       "compare_periods",
@@ -397,8 +402,8 @@
     ]
   },
   "conditional/v2": {
-    "count": 77,
-    "sha256": "82630d92075b63965ceedef81042b5af44adc4083cbafa0b9996c4e7229a5552",
+    "count": 78,
+    "sha256": "061710cdf5cf51f871c3f3d9bbf55c10d1443c8bd0f5771cb0b7e359b355527b",
     "names": [
       "list_services",
       "list_teams",
@@ -443,6 +448,7 @@
       "get_exception_samples",
       "search_code",
       "read_source_code",
+      "compare_baseline",
       "get_correlated_changes",
       "get_deploy_diff",
       "compare_periods",
@@ -480,8 +486,8 @@
     ]
   },
   "zero/chat": {
-    "count": 68,
-    "sha256": "0020c44c77e09ef8a1a1cb4b31073547c08845f437fce1c4bbffb340f44e03d1",
+    "count": 69,
+    "sha256": "9eab674dbdf0ac11050a3a43dd92881739ff28465133b494ac3247d97f453f9a",
     "names": [
       "list_services",
       "list_teams",
@@ -526,6 +532,7 @@
       "list_operations",
       "list_exception_groups",
       "get_exception_samples",
+      "compare_baseline",
       "get_correlated_changes",
       "get_deploy_diff",
       "compare_periods",
@@ -554,8 +561,8 @@
     ]
   },
   "zero/chat_auto": {
-    "count": 68,
-    "sha256": "0020c44c77e09ef8a1a1cb4b31073547c08845f437fce1c4bbffb340f44e03d1",
+    "count": 69,
+    "sha256": "9eab674dbdf0ac11050a3a43dd92881739ff28465133b494ac3247d97f453f9a",
     "names": [
       "list_services",
       "list_teams",
@@ -600,6 +607,7 @@
       "list_operations",
       "list_exception_groups",
       "get_exception_samples",
+      "compare_baseline",
       "get_correlated_changes",
       "get_deploy_diff",
       "compare_periods",
@@ -628,8 +636,8 @@
     ]
   },
   "zero/chat_full": {
-    "count": 68,
-    "sha256": "0020c44c77e09ef8a1a1cb4b31073547c08845f437fce1c4bbffb340f44e03d1",
+    "count": 69,
+    "sha256": "9eab674dbdf0ac11050a3a43dd92881739ff28465133b494ac3247d97f453f9a",
     "names": [
       "list_services",
       "list_teams",
@@ -674,6 +682,7 @@
       "list_operations",
       "list_exception_groups",
       "get_exception_samples",
+      "compare_baseline",
       "get_correlated_changes",
       "get_deploy_diff",
       "compare_periods",
@@ -702,8 +711,8 @@
     ]
   },
   "zero/chat_simple": {
-    "count": 64,
-    "sha256": "147ad96f9ee72943b9b51a5317f8eeabb4b3a292922802de0bab57e4390541aa",
+    "count": 65,
+    "sha256": "3dfaf66254dd39e085d29cfa174da9e15d6e1104f1ace5c498150cedc9105f48",
     "names": [
       "list_services",
       "list_teams",
@@ -744,6 +753,7 @@
       "list_operations",
       "list_exception_groups",
       "get_exception_samples",
+      "compare_baseline",
       "get_correlated_changes",
       "get_deploy_diff",
       "compare_periods",
@@ -773,12 +783,12 @@
   },
   "zero/mcp_tools_list": {
     "count": -1,
-    "sha256": "f94c8e478f6ed25d9f43021ad78a034f15211d69a20c13cee8f263dbbac0ad31",
+    "sha256": "47755072b91be40dead73d71cae50adde646ac487d8e3ead26fba7174dfbdb0f",
     "names": null
   },
   "zero/tool_list": {
-    "count": 74,
-    "sha256": "97682ee5128863f9048112f3af110ed709861cf3d43872f6d296f26d776224c5",
+    "count": 75,
+    "sha256": "9fabbb491d37c15f0ddc0fc36895bed634b2c3ee9833300edf518c4cdbe8c76c",
     "names": [
       "list_services",
       "list_teams",
@@ -826,6 +836,7 @@
       "get_exception_samples",
       "search_code",
       "read_source_code",
+      "compare_baseline",
       "get_correlated_changes",
       "get_deploy_diff",
       "compare_periods",
@@ -857,8 +868,8 @@
     ]
   },
   "zero/v2": {
-    "count": 72,
-    "sha256": "98ab7f8658d7b75e615b062a3a8cd920852d1653a25762c2d7d3703dabc2ec12",
+    "count": 73,
+    "sha256": "a4b4497a8a7462f60a542a6da6a6eda0c2ddaefb6f4f291b7904367989dc3e84",
     "names": [
       "list_services",
       "list_teams",
@@ -900,6 +911,7 @@
       "list_operations",
       "list_exception_groups",
       "get_exception_samples",
+      "compare_baseline",
       "get_correlated_changes",
       "get_deploy_diff",
       "compare_periods",

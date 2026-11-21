@@ -85,7 +85,7 @@ var Toolsets = []Toolset{
 	{Name: ToolsetServices, Source: "ClickHouse service / operation / topology / SLO rollups", Required: true, Health: healthServices,
 		Tools: []string{"list_services", "list_teams", "get_team_services", "service_health_sweep", "get_service_health", "get_operation_health",
 			"get_topology", "get_blast_radius", "get_db_health", "get_messaging_health", "list_environments", "list_clusters",
-			"list_slo_status", "list_operations", "compare_periods", "render_chart", "resolve_business_code"}},
+			"list_slo_status", "list_operations", "compare_periods", CompareBaselineName, "render_chart", "resolve_business_code"}},
 	{Name: ToolsetTraces, Source: "ClickHouse spans / trace rollups", Required: true, Health: healthTraces,
 		Tools: []string{"describe_attributes", "find_attribute_by_value", "get_trace", tsSearchTraces, "query_traces", "trace_stats",
 			"find_trace_by_span", "bubble_up", "pivot_from_trace", "get_exemplar_traces", "get_linked_traces", "get_metrics_for_span"}},

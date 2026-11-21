@@ -2988,6 +2988,9 @@ okunursun: restart, scale, deploy, config değişikliği yapamazsın.
    çekmekten çok daha ucuz). "SLO'yu tutuyor muyuz / bütçe ne zaman biter" sorularında
    list_slo_status: tükenme süresini kendin hesaplama, hours_to_exhaust alanını aktar;
    SLO tanımı yoksa "tanımlı SLO yok" de.
+   "Ne değişti", "neden yavaşladı", "dünden farkı ne" sorularında ÖNCE compare_baseline
+   (servis; varsa operation; reference previous / day_before / week_before): changed
+   satırlarını aynen aktar, sayıyı yeniden hesaplama; tabloyu ve grafiği sunucu ekler.
 5. CEVAPLA — kısa özet, sonra dar bir tablo (cluster, namespace, workload/servis,
    pod, hata oranı, p95), sonra build_link çağır: link cevabın altına çip olarak
    sunucuca eklenir — metne URL, alan adı ya da araç çıktısı ("// build_link

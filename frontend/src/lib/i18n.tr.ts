@@ -294,6 +294,8 @@ export const TR: Record<string, string> = {
   'ai.ctx.clusterNs': 'Cluster / namespace',
   'ai.ctx.window':    'Pencere',
 
+  'cosre.ev.hop.baseline':       'Taban kıyası', // CoSRE faz D — compare_baseline kanıt çipi
+  'cosre.ev.hop.baseline_chart': 'Taban grafiği',
   'cosre.cap.aria':             'CoSRE neler yapabilir',
   'cosre.cap.tryHint':          'Kutuya örnek bir soru yazar — düzenleyip gönder',
   // v0.10.1368 (operatör: "wiki cache refresh nasıl yapılır var ama düzgün çalışmıyor") — örnek

@@ -109,7 +109,7 @@ func TestTraceFollowUpToolsExactKeptSet(t *testing.T) {
 	want := []string{
 		// services
 		"get_service_health", "get_operation_health", "get_topology", "get_db_health", "get_messaging_health",
-		"compare_periods", "render_chart", "resolve_business_code", "list_slo_status",
+		"compare_periods", "compare_baseline", "render_chart", "resolve_business_code", "list_slo_status",
 		// traces
 		"describe_attributes", "find_attribute_by_value", "get_trace", "search_traces", "query_traces", "trace_stats",
 		"find_trace_by_span", "pivot_from_trace", "get_exemplar_traces", "get_linked_traces", "get_metrics_for_span",

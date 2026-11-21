@@ -268,6 +268,8 @@ export const EN: Record<string, string> = {
 
   // v0.10.1128 — empty CoSRE chat: "what I can do" hint (drawer + /cosre).
   // `|` in a prompt marks where the caret lands (the user types the name).
+  'cosre.ev.hop.baseline':       'Baseline comparison', // CoSRE phase D — compare_baseline evidence chip
+  'cosre.ev.hop.baseline_chart': 'Baseline chart',
   'cosre.cap.aria':             'What CoSRE can do',
   'cosre.cap.tryHint':          'Fills the box with an example — edit it, then send',
   'cosre.cap.wiki':             'I can search the company wiki — e.g. “@wiki payments cache refresh most common errors”', // v0.10.1368

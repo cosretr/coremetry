@@ -105,6 +105,7 @@ export const TOOL_TITLES: Record<string, string> = {
   list_services: 'Servis listesi',
   get_topology: 'Topoloji',
   compare_periods: 'Dönem karşılaştırması',
+  compare_baseline: 'Ne değişti (taban karşılaştırması)',
   get_log_anomalies: 'ML anomalileri', // v0.10.1875
   explain_ml_event: 'ML olayı', // v0.10.1875
 };

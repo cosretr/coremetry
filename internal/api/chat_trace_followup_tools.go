@@ -80,7 +80,7 @@ func traceFollowUpToolsFor(tools []mcp.Tool, panelFollowUp bool) []mcp.Tool {
 var traceFollowUpKeepTools = map[string]bool{
 	// services — servis/operasyon sağlığı, bağımlılıklar, kıyas, grafik, iş kodu
 	"get_service_health": true, "get_operation_health": true, "get_topology": true, "get_db_health": true,
-	"get_messaging_health": true, "compare_periods": true, "render_chart": true, "resolve_business_code": true,
+	"get_messaging_health": true, "compare_periods": true, "compare_baseline": true, "render_chart": true, "resolve_business_code": true,
 	// traces
 	"describe_attributes": true, "find_attribute_by_value": true, "get_trace": true, "search_traces": true,
 	"query_traces": true, "trace_stats": true, "find_trace_by_span": true, "bubble_up": true, "pivot_from_trace": true,

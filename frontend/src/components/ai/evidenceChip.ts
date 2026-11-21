@@ -5,6 +5,7 @@ import type { EvidenceBlockView } from '@/lib/chatBlocks';
 import type { Tone } from '@/components/ui/Badge';
 import { fmtClock, fmtDateTime, fmtDurShort } from '@/lib/utils';
 import { safeAppPath } from '@/lib/safeAppPath';
+import { currentLang, t } from '@/lib/i18n';
 import { fmtMs } from './toolSteps';
 
 // evidenceChip — v0.10.1272 (CoSRE adım 3): kanıt çipinin SAF yarısı.
@@ -52,6 +53,10 @@ const HOP_LABEL: Record<string, string> = {
   corroborate: 'Ham span doğrulaması', // v0.10.1299 — service_health_sweep gecikme adayı
 };
 
+const STANDALONE_HOPS: Record<string, string> = {
+  baseline: 'cosre.ev.hop.baseline', baseline_chart: 'cosre.ev.hop.baseline_chart',
+};
+
 /**
  * evidenceHopLabel — v0.10.1275 (CoSRE adım 6): bileşik kanıtın halka etiketi.
  * Zincir trace'ten başlar: trace halkası "Trace", diğerleri "Trace › Pod" gibi.
@@ -59,6 +64,9 @@ const HOP_LABEL: Record<string, string> = {
  */
 export function evidenceHopLabel(hop?: string): string {
   if (!hop) return '';
+  // CoSRE faz D — trace zincirine ait OLMAYAN halkalar (compare_baseline): öneksiz, i18n.
+  const own = STANDALONE_HOPS[hop];
+  if (own) return t(own, currentLang());
   const l = HOP_LABEL[hop] ?? hop;
   return hop === 'trace' ? l : `Trace › ${l}`;
 }

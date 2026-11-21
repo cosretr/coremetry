@@ -59,7 +59,7 @@
 //     doğru çağrının koşulu, orada kazanılan bayt yanlış argümanla
 //     harcanan bir tura değmez.
 //
-// Tool catalogue (74 tools · 12 toolsets — v0.10.1434: kaynak bazlı gruplama + operatör aç/kapa
+// Tool catalogue (75 tools · 12 toolsets — CoSRE faz D — 74 → 75: compare_baseline.go (yalnız-MV taban kıyası + grafik bloğu; salt okuma, sohbet + MCP); v0.10.1434: kaynak bazlı gruplama + operatör aç/kapa
 // toolset.go'da, sayı DEĞİŞMEDİ; v0.10.1284 — 73 → 74: log_spike.go explain_log_spike (AI SRE Faz 1a,
 // log artışını ne açıklıyor: tepe tespiti + önceki pencereyle pod / seviye / desen payı kıyası; salt okuma, sohbet + MCP);
 // v0.10.1276 — 72 → 73: service_sweep.go service_health_sweep (CoSRE adım 7,
@@ -526,6 +526,9 @@ func ToolList(d Deps) []mcp.Tool {
 		// da görsün.
 		searchCodeTool(d), // v0.10.1208 — Code Search (koşullu, yalnız sohbet)
 		readSourceCodeTool(d),
+		// CoSRE faz D — "ne değişti / neden yavaşladı": ucuz, yalnız-MV taban kıyası +
+		// satır içi grafik (compare_baseline.go); kıyas ailesinin başı.
+		compareBaselineTool(d),
 		// v0.9.1092 (Faz 4) — "o anda başka ne değişti" (MV okuması).
 		getCorrelatedChangesTool(d),
 		// v0.9.1092 (Faz 4) — deploy önce/sonra RED kıyası.

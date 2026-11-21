@@ -152,12 +152,12 @@ func mcpToolsListRaw(t *testing.T, srv *mcp.Server) string {
 
 // ── v0.10.1434 — kaynak bazlı toolset'ler (CoSRE araştırma PR 1, §6.1) ──
 
-// Her araç TAM BİR toolset'te; birleşim = ToolList ad kümesi (74); 12 set,
+// Her araç TAM BİR toolset'te; birleşim = ToolList ad kümesi (75; CoSRE faz D compare_baseline); 12 set,
 // sabit sıra ve §6.1 tablosundaki sayılar.
 func TestToolsetsPartitionCatalog(t *testing.T) {
 	catalog := ToolList(goldenConditionalDeps())
-	if len(catalog) != 74 {
-		t.Fatalf("katalog %d araç, 74 bekleniyordu", len(catalog))
+	if len(catalog) != 75 {
+		t.Fatalf("katalog %d araç, 75 bekleniyordu", len(catalog))
 	}
 	owner := map[string]string{}
 	for _, ts := range Toolsets {
@@ -184,7 +184,7 @@ func TestToolsetsPartitionCatalog(t *testing.T) {
 		n        int
 		required bool
 	}{
-		{ToolsetServices, 17, true}, {ToolsetTraces, 12, true}, {ToolsetProblems, 10, true}, {ToolsetChanges, 4, false},
+		{ToolsetServices, 18, true}, {ToolsetTraces, 12, true}, {ToolsetProblems, 10, true}, {ToolsetChanges, 4, false},
 		{ToolsetMetrics, 6, false}, {ToolsetLogs, 8, false}, {ToolsetK8s, 4, false}, {ToolsetOracle, 1, false},
 		{ToolsetDevOpsCode, 2, false}, {ToolsetDevOpsWiki, 2, false}, {ToolsetKnowledge, 3, false}, {ToolsetMeta, 5, true},
 	}

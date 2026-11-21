@@ -5,6 +5,21 @@ import (
 	"testing"
 )
 
+// CoSRE faz D — "ne değişti / neden yavaşladı" sorusu compare_baseline'a
+// yönlenir; v1, v2 ve simple/full çekirdeklerinin hepsinde.
+func TestChatAgentLoopOffersCompareBaseline(t *testing.T) {
+	for name, p := range map[string]string{
+		"v1":        SystemPromptChatAgentLoop(),
+		"v1/simple": SystemPromptChatAgentLoopFor(true),
+		"v2/full":   SystemPromptChatAgentLoopV2For(false),
+		"v2/simple": SystemPromptChatAgentLoopV2For(true),
+	} {
+		if !strings.Contains(p, "compare_baseline") || !strings.Contains(p, "neden yavaşladı") {
+			t.Errorf("%s: compare_baseline yönlendirmesi yok", name)
+		}
+	}
+}
+
 // v0.10.482 — ajan çekirdek döngüsü: kataloğun gerçek tool adlarını anar,
 // Ek A düzeltmeleri (N1 cluster attribute'tan; N5 OR yerine anahtar başına
 // arama) uygulanmış; systemChat'i yeniden YAZMAZ (ayrı const, öne eklenir).

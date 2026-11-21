@@ -123,7 +123,7 @@ var v2ScopeCarrying = map[string]bool{
 	"list_anomalies": true, "query_logs": true, "search_logs": true, "get_log_histogram": true,
 	"explain_log_spike": true, "describe_attributes": true, "find_attribute_by_value": true, "query_traces": true,
 	"trace_stats": true, "list_slo_status": true, "query_metrics": true, "list_exception_groups": true,
-	"get_deploy_diff": true, "compare_periods": true, "list_deploys": true, "list_deployments": true,
+	"get_deploy_diff": true, "compare_periods": true, CompareBaselineName: true, "list_deploys": true, "list_deployments": true,
 	"similar_problems": true, "similar_incidents": true, "log_patterns": true, "pivot_from_trace": true,
 	"get_exemplar_traces": true, "get_metrics_for_span": true, "render_chart": true,
 	ListMyServicesName: true, OpenProblemsName: true, FindTracesName: true, ExplainTraceName: true,

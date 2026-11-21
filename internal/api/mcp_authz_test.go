@@ -294,8 +294,9 @@ func TestAllShippedToolsAreViewerLevel(t *testing.T) {
 	// v0.10.1275 — 71 → 72: pivot_from_trace (CoSRE adım 6; trace → pod → JVM → log + playbook, tek deterministik bileşik çağrı; salt okuma, REST eşi GET /api/trace-pods/metrics kapısız → MinRole ""; sohbet + dış MCP).
 	// v0.10.1276 — 72 → 73: service_health_sweep (CoSRE adım 7; servisin pod / operasyon / fonksiyon / JVM taraması + sorunluların logları, tek deterministik bileşik çağrı; salt okuma, REST eşi yok → MinRole ""; sohbet + dış MCP).
 	// v0.10.1284 — 73 → 74: explain_log_spike (AI SRE Faz 1a; log artışını ne açıklıyor — tepe + önceki pencereyle pod / seviye / desen payı, tek deterministik bileşik çağrı; salt okuma, REST eşleri /api/logs/timeseries + /api/logs/fieldstats viewer → MinRole ""; sohbet + dış MCP).
-	if len(tools) != 74 { // v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız)
-		t.Errorf("katalog %d tool (74 bekleniyordu) — yeni tool'un REST eşinin kapısını (auth.RequireRole/"+
+	// CoSRE faz D — 74 → 75: compare_baseline (ne değişti / neden yavaşladı; yalnız 5 dk MV, servis/endpoint vs önceki dönem / dün / geçen hafta + grafik bloğu; salt okuma, REST eşi yok → MinRole ""; sohbet + dış MCP).
+	if len(tools) != 75 { // v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız)
+		t.Errorf("katalog %d tool (75 bekleniyordu) — yeni tool'un REST eşinin kapısını (auth.RequireRole/"+
 			"RequireAnyRole) kontrol et, MinRole'ü ona eşitle, sonra bu sayıyı güncelle", len(tools))
 	}
 	for _, tool := range tools {

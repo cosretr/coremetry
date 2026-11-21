@@ -132,13 +132,20 @@ başına TEK `_search`) + ≤2 desen örneklemi (≤500 satır) + ≤12 örnek s
 
 ### Kaynak araç setleri (toolset) — v0.10.1434
 
-74 araç, okudukları veri kaynağına göre **12 toolset**'e bölünür
+CoSRE faz D'de 75 oldu: `compare_baseline` — "ne değişti / neden yavaşladı": servis (ya da tek
+endpoint) penceresini önceki dönem / dün / geçen hafta aynı saatle kıyaslar;
+RED farkı, en çok değişen ≤5 endpoint, taban sonrası ilk görülen hata tipleri,
+aradaki deploy'lar, bağımlılık ortalama gecikme farkı. YALNIZ 5 dk MV'ler
+(service_summary_5m, operation_summary_5m, topology_edges_5m, service_version_5m);
+60 sn önbellekli. Sonuç tablo + satır içi grafik bloğu taşır (pencere gölgeli).
+
+75 araç, okudukları veri kaynağına göre **12 toolset**'e bölünür
 (`internal/mcptools/toolset.go`; her araç tam bir sette —
 `TestToolsetsPartitionCatalog`). Sayı DEĞİŞMEDİ; gruplama yeni.
 
 | Toolset | Araç | Kapatılabilir | Sağlık türevi (sorgusuz) |
 |---|---|---|---|
-| `services` | 17 | hayır | ClickHouse deposu bağlı mı |
+| `services` | 18 | hayır | ClickHouse deposu bağlı mı |
 | `traces` | 12 | hayır | ClickHouse deposu |
 | `problems` | 10 | hayır | ClickHouse deposu |
 | `changes` | 4 | evet | depo; rollouts bayrağı → not |

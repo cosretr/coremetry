@@ -87,7 +87,7 @@ var evidenceTools = map[string]bool{queryMetricsName: true, queryTracesName: tru
 // v0.10.1276 — service_health_sweep (bölüm başına kanıt: red · ops ·
 // functions · pods · jvm · logs).
 // v0.10.1284 — explain_log_spike (histogram · fields · patterns · samples).
-var compositeEvidenceTools = map[string]bool{PivotFromTraceName: true, ServiceHealthSweepName: true, ExplainLogSpikeName: true}
+var compositeEvidenceTools = map[string]bool{PivotFromTraceName: true, ServiceHealthSweepName: true, ExplainLogSpikeName: true, CompareBaselineName: true}
 
 // compositeEvidenceMax — bileşik aracın çip tavanı (hop sayısının üstü).
 const compositeEvidenceMax = 6

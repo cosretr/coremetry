@@ -21,7 +21,7 @@ var stepPhaseByTool = map[string]string{
 	// Metrik
 	"query_metrics": "Metrik", "query_metric": "Metrik", "cluster_metric": "Metrik",
 	"list_metric_names": "Metrik", "list_metric_labels": "Metrik",
-	"get_metrics_for_span": "Metrik", "compare_periods": "Metrik", "render_chart": "Metrik",
+	"get_metrics_for_span": "Metrik", "compare_periods": "Metrik", "compare_baseline": "Metrik", "render_chart": "Metrik",
 	"metric_chart": "Metrik", // v0.10.1386 — CoSRE metrik grafiği (guided, tek VM sorgusu)
 	// Log
 	"query_logs": "Log", "search_logs": "Log", "log_patterns": "Log",

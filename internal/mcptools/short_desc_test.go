@@ -64,14 +64,17 @@ const shortDescMinBytes = 60
 // v0.10.1284 — 74 tool: explain_log_spike (AI SRE Faz 1a, log artışını ne
 // açıklıyor — tepe + önceki pencereyle pod/seviye/desen payı tek çağrıda;
 // ölçülen +150 B → 9846 B) → tavan 9.95 KB (+150 B, 50 B'a yukarı).
-const shortCatalogMaxBytes = 9950
+// CoSRE faz D — 75 tool: compare_baseline ("ne değişti / neden yavaşladı", yalnız-MV
+// taban kıyası + grafik bloğu; ölçülen +174 B → 10117 B) → tavan 10.25 KB (50 B'a yukarı).
+const shortCatalogMaxBytes = 10250
 
 // shortCatalogSimpleMaxBytes — v0.10.1302: simple araç seti varyantının
 // (küçük model; simpleHiddenTools gizli, ⟦full|simple⟧ işaretleri simple
 // tarafıyla) kompakt toplamı. Ölçülen: 9344 B (full 9854 B; dört gizli
 // aracın metni −~510 B, işaretlerin simple tarafı +~0) → tavan 9.5 KB (+150 B,
 // 50 B'a yukarı; full'un kuralı). Simple < full ayrıca zorlanır.
-const shortCatalogSimpleMaxBytes = 9500
+// CoSRE faz D — compare_baseline +174 B → 9607 B; tavan 9.7 KB.
+const shortCatalogSimpleMaxBytes = 9700
 
 // shortCatalogConditionalMaxBytes — v0.10.1050: KOŞULLU sohbet araçlarının
 // (chatOffered; bugün yalnız read_source_code, DevOps bağlıyken) kompakt

@@ -1,0 +1,390 @@
+{
+  "tool": "compare_baseline",
+  "ok": true,
+  "partial": false,
+  "request": {
+    "range_s": 3600,
+    "reference": "previous",
+    "service": "checkout"
+  },
+  "window": {
+    "from_iso": "2026-11-21T09:00:00Z",
+    "to_iso": "2026-11-21T10:00:00Z"
+  },
+  "reference": {
+    "from_iso": "2026-11-21T08:00:00Z",
+    "to_iso": "2026-11-21T09:00:00Z",
+    "kind": "previous"
+  },
+  "red": {
+    "current": {
+      "calls": 7200,
+      "rate_per_s": 2,
+      "error_rate_pct": 0.5,
+      "p50_ms": 20,
+      "p95_ms": 180,
+      "p99_ms": 420
+    },
+    "baseline": {
+      "calls": 7200,
+      "rate_per_s": 2,
+      "error_rate_pct": 0.5,
+      "p50_ms": 18,
+      "p95_ms": 40,
+      "p99_ms": 90
+    },
+    "delta": {
+      "rate_pct": 0,
+      "error_rate_pp": 0,
+      "p95_pct": 350,
+      "p99_pct": 366.67,
+      "p95_delta_ms": 140,
+      "errors_change": 0
+    }
+  },
+  "changed": [
+    "p95 40.0 → 180 ms (+350%; taban: önceki dönem)",
+    "en çok yavaşlayan endpoint: GET /cart (p95 50.0 → 300 ms)",
+    "bağımlılık yavaşladı: db:orders (ort. 8.0 → 60.0 ms)",
+    "1 yeni hata tipi (ilk: java.sql.SQLTimeoutException)",
+    "arada deploy: 1.42.0 (2026-11-21T09:05:00Z)"
+  ],
+  "top_endpoints": [
+    {
+      "endpoint": "POST /checkout/v2",
+      "change": "new",
+      "calls": 100,
+      "baseline_calls": 0,
+      "p95_ms": 90,
+      "baseline_p95_ms": 0,
+      "error_rate_pct": 0,
+      "baseline_error_rate_pct": 0
+    },
+    {
+      "endpoint": "GET /cart",
+      "change": "latency",
+      "calls": 3000,
+      "baseline_calls": 3000,
+      "p95_ms": 300,
+      "baseline_p95_ms": 50,
+      "error_rate_pct": 0.1,
+      "baseline_error_rate_pct": 0.1,
+      "p95_pct": 500
+    }
+  ],
+  "new_error_types": [
+    {
+      "type": "java.sql.SQLTimeoutException",
+      "message": "query timed out",
+      "first_seen_iso": "2026-11-21T09:10:00Z",
+      "occurrences": 42,
+      "fingerprint": "fp-new"
+    }
+  ],
+  "deploys": [
+    {
+      "version": "1.42.0",
+      "at_iso": "2026-11-21T09:05:00Z",
+      "between": true,
+      "source": "inferred"
+    }
+  ],
+  "dependencies": [
+    {
+      "target": "db:orders",
+      "kind": "db",
+      "change": "latency",
+      "avg_ms": 60,
+      "baseline_avg_ms": 8,
+      "avg_pct": 650,
+      "calls": 5000,
+      "baseline_calls": 5000,
+      "error_rate_pct": 0,
+      "baseline_error_rate_pct": 0
+    }
+  ],
+  "chart_signal": "p95",
+  "notes": [
+    "Kaynak 5 dk ön-agregatlar (service_summary_5m / operation_summary_5m / topology_edges_5m): servisin TÜM span'leri, ortamlar birleşik; ortam ayrımı ya da giriş-span'i popülasyonu gerekiyorsa compare_periods.",
+    "Bağımlılık gecikmesi çağıranın gördüğü ORTALAMADIR (p95 değil)."
+  ],
+  "evidence": {
+    "source": "ClickHouse",
+    "query": "SELECT time_bucket \u003e= '2026-11-21 09:00:00' AS is_cur, countMerge(span_count_state) AS calls, countIfMerge(error_count_state) AS errs, arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state) AS q, 1) / 1e6 AS p50_ms, arrayElement(q, 2) / 1e6 AS p95_ms, arrayElement(q, 3) / 1e6 AS p99_ms, uniqExact(time_bucket) AS buckets FROM service_summary_5m WHERE service_name = 'checkout' AND ((time_bucket \u003e= '2026-11-21 08:00:00' AND time_bucket \u003c '2026-11-21 09:00:00') OR (time_bucket \u003e= '2026-11-21 09:00:00' AND time_bucket \u003c '2026-11-21 10:00:00')) GROUP BY is_cur LIMIT 2 SETTINGS max_execution_time = 10, distributed_aggregation_memory_efficient = 1;\nSELECT name, time_bucket \u003e= '2026-11-21 09:00:00' AS is_cur, countMerge(span_count_state) AS calls, countIfMerge(error_count_state) AS errs, arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95_ms FROM operation_summary_5m WHERE service_name = 'checkout' AND ((time_bucket \u003e= '2026-11-21 08:00:00' AND time_bucket \u003c '2026-11-21 09:00:00') OR (time_bucket \u003e= '2026-11-21 09:00:00' AND time_bucket \u003c '2026-11-21 10:00:00')) GROUP BY name, is_cur ORDER BY calls DESC LIMIT 1001 SETTINGS max_execution_time = 10, distributed_aggregation_memory_efficient = 1",
+    "queryKind": "sql",
+    "window": {
+      "fromMs": 1795248000000,
+      "toMs": 1795255200000
+    },
+    "durationMs": 0
+  },
+  "evidences": [
+    {
+      "hop": "baseline",
+      "as": "query_metrics",
+      "request": {
+        "family": "red",
+        "service": "checkout"
+      },
+      "source": "ClickHouse",
+      "query": "SELECT time_bucket \u003e= '2026-11-21 09:00:00' AS is_cur, countMerge(span_count_state) AS calls, countIfMerge(error_count_state) AS errs, arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state) AS q, 1) / 1e6 AS p50_ms, arrayElement(q, 2) / 1e6 AS p95_ms, arrayElement(q, 3) / 1e6 AS p99_ms, uniqExact(time_bucket) AS buckets FROM service_summary_5m WHERE service_name = 'checkout' AND ((time_bucket \u003e= '2026-11-21 08:00:00' AND time_bucket \u003c '2026-11-21 09:00:00') OR (time_bucket \u003e= '2026-11-21 09:00:00' AND time_bucket \u003c '2026-11-21 10:00:00')) GROUP BY is_cur LIMIT 2 SETTINGS max_execution_time = 10, distributed_aggregation_memory_efficient = 1;\nSELECT name, time_bucket \u003e= '2026-11-21 09:00:00' AS is_cur, countMerge(span_count_state) AS calls, countIfMerge(error_count_state) AS errs, arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95_ms FROM operation_summary_5m WHERE service_name = 'checkout' AND ((time_bucket \u003e= '2026-11-21 08:00:00' AND time_bucket \u003c '2026-11-21 09:00:00') OR (time_bucket \u003e= '2026-11-21 09:00:00' AND time_bucket \u003c '2026-11-21 10:00:00')) GROUP BY name, is_cur ORDER BY calls DESC LIMIT 1001 SETTINGS max_execution_time = 10, distributed_aggregation_memory_efficient = 1",
+      "queryKind": "sql",
+      "window": {
+        "fromMs": 1795248000000,
+        "toMs": 1795255200000
+      },
+      "durationMs": 0
+    },
+    {
+      "hop": "baseline_chart",
+      "as": "query_metrics",
+      "request": {
+        "family": "red",
+        "service": "checkout"
+      },
+      "source": "ClickHouse",
+      "query": "SELECT toUnixTimestamp(toStartOfInterval(time_bucket, INTERVAL 300 SECOND)) AS b, countMerge(span_count_state) AS calls, countIfMerge(error_count_state) AS errs, arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95_ms FROM service_summary_5m WHERE service_name = 'checkout' AND ((time_bucket \u003e= '2026-11-21 08:00:00' AND time_bucket \u003c '2026-11-21 10:00:00') OR (time_bucket \u003e= '2026-11-21 10:00:00' AND time_bucket \u003c '2026-11-21 10:00:00')) GROUP BY b ORDER BY b LIMIT 260 SETTINGS max_execution_time = 10, distributed_aggregation_memory_efficient = 1",
+      "queryKind": "sql",
+      "window": {
+        "fromMs": 1795248000000,
+        "toMs": 1795255200000
+      },
+      "series": 1,
+      "durationMs": 0
+    }
+  ],
+  "data": {
+    "blocks": [
+      {
+        "hop": "baseline",
+        "type": "table",
+        "payload": {
+          "title": "checkout · ne değişti (önceki dönem)",
+          "evidenceRef": "",
+          "columns": [
+            {
+              "key": "what",
+              "label": "Ne",
+              "kind": "text"
+            },
+            {
+              "key": "name",
+              "label": "Ad",
+              "kind": "text"
+            },
+            {
+              "key": "base",
+              "label": "Taban",
+              "kind": "text"
+            },
+            {
+              "key": "now",
+              "label": "Şimdi",
+              "kind": "text"
+            },
+            {
+              "key": "change",
+              "label": "Değişim",
+              "kind": "text"
+            }
+          ],
+          "rows": [
+            [
+              "RED",
+              "istek/s",
+              "2.00",
+              "2.00",
+              "+0%"
+            ],
+            [
+              "RED",
+              "hata %",
+              "0.50",
+              "0.50",
+              "+0.00 puan"
+            ],
+            [
+              "RED",
+              "p95 ms",
+              "40.0",
+              "180",
+              "+350%"
+            ],
+            [
+              "RED",
+              "p99 ms",
+              "90.0",
+              "420",
+              "+367%"
+            ],
+            [
+              "endpoint · yeni",
+              "POST /checkout/v2",
+              "0",
+              "100",
+              "yeni"
+            ],
+            [
+              "endpoint · gecikme",
+              "GET /cart",
+              "50.0 ms",
+              "300 ms",
+              "+500%"
+            ],
+            [
+              "bağımlılık · gecikme",
+              "db:orders",
+              "8.0 ms",
+              "60.0 ms",
+              "+650%"
+            ],
+            [
+              "yeni hata",
+              "java.sql.SQLTimeoutException",
+              "—",
+              "42",
+              "ilk 2026-11-21T09:10:00Z"
+            ],
+            [
+              "deploy",
+              "1.42.0",
+              "—",
+              "2026-11-21T09:05:00Z",
+              "arada"
+            ]
+          ]
+        }
+      },
+      {
+        "hop": "baseline_chart",
+        "type": "chart",
+        "payload": {
+          "title": "checkout · p95 · önceki dönem kıyası",
+          "evidenceRef": "",
+          "window": {
+            "fromNs": 1795248000000000000,
+            "toNs": 1795255200000000000
+          },
+          "series": [
+            {
+              "name": "p95",
+              "unit": "ms",
+              "points": [
+                [
+                  1795248000000,
+                  40
+                ],
+                [
+                  1795248300000,
+                  40
+                ],
+                [
+                  1795248600000,
+                  40
+                ],
+                [
+                  1795248900000,
+                  40
+                ],
+                [
+                  1795249200000,
+                  40
+                ],
+                [
+                  1795249500000,
+                  40
+                ],
+                [
+                  1795249800000,
+                  40
+                ],
+                [
+                  1795250100000,
+                  40
+                ],
+                [
+                  1795250400000,
+                  40
+                ],
+                [
+                  1795250700000,
+                  40
+                ],
+                [
+                  1795251000000,
+                  40
+                ],
+                [
+                  1795251300000,
+                  40
+                ],
+                [
+                  1795251600000,
+                  180
+                ],
+                [
+                  1795251900000,
+                  180
+                ],
+                [
+                  1795252200000,
+                  180
+                ],
+                [
+                  1795252500000,
+                  180
+                ],
+                [
+                  1795252800000,
+                  180
+                ],
+                [
+                  1795253100000,
+                  180
+                ],
+                [
+                  1795253400000,
+                  180
+                ],
+                [
+                  1795253700000,
+                  180
+                ],
+                [
+                  1795254000000,
+                  180
+                ],
+                [
+                  1795254300000,
+                  180
+                ],
+                [
+                  1795254600000,
+                  180
+                ],
+                [
+                  1795254900000,
+                  180
+                ]
+              ]
+            }
+          ],
+          "regions": [
+            {
+              "fromMs": 1795248000000,
+              "toMs": 1795251600000,
+              "label": "taban",
+              "tone": "muted"
+            },
+            {
+              "fromMs": 1795251600000,
+              "toMs": 1795255200000,
+              "label": "inceleme",
+              "tone": "warn"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
