@@ -165,6 +165,8 @@ func (e *Evaluator) evaluateRuntimePods(ctx context.Context) {
 	// "değerlendirme yok" demektir, CH okuyucusuna dönüş değil.
 	vmActive := metricsrc.UsesVM(metricsrc.FamilyOTelRuntime, e.vmetrics != nil && e.vmetrics.Configured())
 	e.drainRetiredRuntimeProblems(ctx, snap, vmActive)
+	// 2026-11-21 — .NET runtime sinyalleri (runtime_dotnet.go; kip off|shadow|on).
+	e.evaluateRuntimeSignals(ctx, snap, vmActive)
 	if !vmActive {
 		return
 	}

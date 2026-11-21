@@ -345,6 +345,23 @@ func (s *Server) resolveMetricEnvScopeMapped(ctx context.Context, vm httpEnvLabe
 			live, sc.Partial = vals, sc.Partial || partial
 		}
 		m := vmetrics.MatchEnvValue(want, live)
+		if role == vmetrics.RoleEnv {
+			// 2026-11-21 — ortam etiketi `<env>-<cluster>` birleşik olabilir
+			// ("prod-clusterA"): ortam "prod" tüm prod kümelerini kapsar. Bölme
+			// küme etiketinin canlı değerleriyle doğrulanır (yapılandırılmış küme
+			// etiketi, yoksa openshift_cluster_name); okunamazsa ≥3 karakter kuralı.
+			cl := clusterLabel
+			if cl == "" {
+				cl = "openshift_cluster_name"
+			}
+			var clusters []string
+			if cl != el.Label {
+				if vals, _, cerr := s.metricEnvLabelValues(ctx, vm, metric, cl, to); cerr == nil {
+					clusters = vals
+				}
+			}
+			m = vmetrics.MatchEnvRole(want, live, clusters, nil)
+		}
 		if role == vmetrics.RoleCluster && label == el.Label && len(clusterEnvs) > 0 {
 			if cm := matchClusterEnvs(clusterEnvs, live); cm.Tier != vmetrics.EnvTierNone {
 				m = cm

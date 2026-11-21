@@ -55,6 +55,8 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		// main.go'nun dış literalinde vardı; sohbet CH-only okuyordu).
 		// v0.10.1270 — VM/CH seçimi metricsrc çözümleyicisinde (tek karar noktası).
 		RuntimePods: router.RuntimePods(),
+		// 2026-11-21 — runtime tespiti + .NET sinyalleri (runtime_signals.go; /runtime-signals ile tek gövde).
+		RuntimeSignals: s.mcpRuntimeSignals,
 		// v0.10.468 (Faz 2, F2-1) — varlık kataloğu tool'ları: etkin Remote
 		// Cluster'lar + entity_layer bayrağı (nil-güvenli; her ikisi de
 		// yoksa tool'lar dürüst disabled/boş döner).

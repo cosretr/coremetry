@@ -7502,6 +7502,46 @@ export interface ServiceRuntime {
   os?: string;
 }
 
+// 2026-11-21 — GET /api/services/{name}/runtime-signals (Go internal/runtimesig
+// Report / Profile / Resolved / Signal).
+export type RuntimeKind = '' | 'jvm' | 'dotnet' | 'go' | 'nodejs' | 'python';
+export interface RuntimeResolvedSignal {
+  signal: string;
+  metric: string;
+  kind: 'gauge' | 'counter';
+  agg: 'avg' | 'rate';
+  scale: number;
+  genLabel?: string;
+  filterKey?: string;
+  filterValue?: string;
+  gen?: string;
+}
+export interface RuntimeSignal {
+  check: string;
+  level: 'info' | 'warning' | 'critical';
+  service: string;
+  pod?: string;
+  pods: number;
+  value: number;
+  baseline: number;
+  threshold: number;
+  unit: string;
+  rising: boolean;
+  extra?: Record<string, number>;
+  summary: string;
+  /** 2026-11-21 — en kötü pod'un varlık kaydı (sunucu entity katmanından çözer). */
+  podEntity?: { id: string; clusterId?: string; namespace?: string; pod: string };
+}
+export interface RuntimeSignalReport {
+  service: string;
+  mode: 'off' | 'shadow' | 'on';
+  profile: { runtime: RuntimeKind; dotnetGen?: string; signals: RuntimeResolvedSignal[] };
+  pods: number;
+  signals: RuntimeSignal[];
+  notes?: string[];
+  atNs: number;
+}
+
 export interface ServiceMapNode {
   service: string;
   spanCount: number;

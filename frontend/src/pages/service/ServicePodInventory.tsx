@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router';
 import { useDataTable, type DataTableStateProps } from '@/components/ui/DataTable';
 import { ServicePodsTable } from './ServicePodsTable';
 import { useServicePods } from './useServicePods';
+import { useRuntimeFamily, useRuntimeProfile } from './runtimeFamily';
 import { useEntityEnabled, useEntityServicePods } from '@/lib/queries';
 import { timeRangeToNs } from '@/lib/utils';
 import { servicePodRegex } from '@/pages/clusters/podWorkload';
@@ -123,6 +124,13 @@ export function ServicePodInventory({ service, range, cluster }: {
   // v0.10.2367 — iş yükü ucu bu cluster için hata verdiyse kırmızı durum yok:
   // sessiz tek satır not, tablo ve sayfanın geri kalanı çizilir.
   const depFailed = (th.depErrors ?? []).includes(cluster);
+  // 2026-11-21 — runtime tespiti JMX'i sürer (.NET servis satırında JVM paneli yok).
+  const { family: rtFamily, pending: rtPending } = useRuntimeFamily(service);
+  // Kaynak tekilliği: JVM'in OTel heap serisi (VM / metric_points) varsa Runtime
+  // bölümü onu çizer; JMX (Thanos) yalnız OTel JVM serisi YOKSA (yedek kaynak).
+  const jvmLike = rtFamily === null || rtFamily === 'jvm';
+  const rtProf = useRuntimeProfile(service, !rtPending && jvmLike);
+  const otelJvm = rtProf.data?.profile?.runtime === 'jvm' && (rtProf.data.profile.signals ?? []).some(s => s.signal === 'heap_used');
   return (
     <>
       {depFailed && (
@@ -132,7 +140,7 @@ export function ServicePodInventory({ service, range, cluster }: {
       )}
       <ServicePodsTable dt={dt} service={service} range={range}
         effNs={th.effNs} effDeploy={th.effDeploy} cFrom={th.cFrom} cTo={th.cTo} rangeParam={rangeParam}
-        state={podsState} />
+        state={podsState} jmx={jvmLike && !otelJvm} />
     </>
   );
 }

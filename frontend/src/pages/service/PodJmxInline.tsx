@@ -25,8 +25,11 @@ export function jmxTitle(metrics: string[], lang: Lang = 'tr'): string {
   return metrics.some(m => /jboss|wildfly|undertow/i.test(m)) ? 'JBoss / JVM (JMX)' : 'JVM (JMX)';
 }
 
-export function PodJmxInline({ cluster, ns, deploy, pod, cFrom, cTo, onFull }: {
+export function PodJmxInline({ cluster, ns, deploy, pod, cFrom, cTo, onFull, jmx = true }: {
   cluster: string;
+  /** 2026-11-21 — servis runtime'ı JVM değilse (.NET / Go / Node / Python) JMX
+   *  keşfi hiç yapılmaz; yalnız pod kaynak kullanımı (JVM etiketi yok). */
+  jmx?: boolean;
   ns: string;
   deploy: string;
   pod: string;
@@ -38,9 +41,9 @@ export function PodJmxInline({ cluster, ns, deploy, pod, cFrom, cTo, onFull }: {
   const metricsQ = useQuery({
     queryKey: ['jmx-metrics', cluster, ns, deploy],
     queryFn: () => api.clusterJmxMetrics(cluster, ns, deploy),
-    staleTime: 60_000, retry: 1, enabled: !!cluster && !!ns && !!deploy,
+    staleTime: 60_000, retry: 1, enabled: jmx && !!cluster && !!ns && !!deploy,
   });
-  const metrics = useMemo(() => metricsQ.data?.metrics ?? [], [metricsQ.data]);
+  const metrics = useMemo(() => (jmx ? metricsQ.data?.metrics ?? [] : []), [metricsQ.data, jmx]);
   const panelQs = useQueries({
     queries: metrics.map(m => ({
       queryKey: ['jmx-trend', cluster, ns, deploy, m, false, pod, cFrom, cTo],
@@ -65,7 +68,10 @@ export function PodJmxInline({ cluster, ns, deploy, pod, cFrom, cTo, onFull }: {
           Tam detay → /pod
         </Button>
       </div>
-      {metricsQ.isSuccess && metrics.length === 0 ? (
+      {!jmx ? (
+        <PodInlineResourceCharts cluster={cluster} ns={ns} deploy={deploy}
+          pod={pod} cFrom={cFrom} cTo={cTo} />
+      ) : metricsQ.isSuccess && metrics.length === 0 ? (
         // v0.9.574 (operatör: "podlara tıklayınca cpu memory
         // utilizasyon gelsin demiştik") — JMX yoksa panel eskiden TEK
         // CÜMLEYLE bitiyordu: bir açıklama, ama bir veri değil.

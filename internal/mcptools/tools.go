@@ -214,6 +214,9 @@ type Deps struct {
 	// nil → Store. api.mcpDeps hands metricsrc Resolver.RuntimePods (v0.10.1270) so a
 	// VictoriaMetrics-primary install's pod-health tool is not empty.
 	RuntimePods chstore.RuntimePodReader
+	// RuntimeSignals — 2026-11-21: servisin runtime raporu (tespit + .NET sinyalleri;
+	// runtime_signals.go). nil = tarama eski JVM halkasını koşar.
+	RuntimeSignals RuntimeSignalsFunc
 	// Metrics — v0.9.1150. The METRIC read router (ClickHouse or an
 	// external VictoriaMetrics), for the two tools whose reads the
 	// operator can repoint from Settings: query_metric and

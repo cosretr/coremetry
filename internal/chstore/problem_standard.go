@@ -382,6 +382,12 @@ func classifyProblem(p Problem) stdKindInfo {
 		} else {
 			k.unit = "%"
 		}
+	case strings.HasPrefix(id, "runtime:dotnet-"):
+		// 2026-11-21 — .NET runtime sinyalleri (evaluator/runtime_dotnet.go).
+		k.family, k.kind, k.dwell, k.source = StdFamilyRuntime, "runtime.dotnet", "pass", StdSourceVM
+		if p.Metric == "runtime.dotnet_gc_pressure" {
+			k.unit = "%"
+		}
 	case strings.HasPrefix(id, "monitor:"):
 		k.family, k.kind, k.dwell, k.source = StdFamilyAvailability, "monitor", "na", StdSourceProbe
 	case strings.HasPrefix(id, "self-"):

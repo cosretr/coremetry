@@ -590,6 +590,10 @@ export const api = {
   serviceRuntime: (svc: string) =>
     get<import('./types').ServiceRuntime>(
       `/api/services/${encodeURIComponent(svc)}/runtime`),
+  // 2026-11-21 — runtime profili (tespit + çözülmüş metrik adları) + akıllı sinyaller.
+  serviceRuntimeSignals: (svc: string) =>
+    get<import('./types').RuntimeSignalReport>(withMetricSource(
+      `/api/services/${encodeURIComponent(svc)}/runtime-signals`)),
 
   // Batch runtime fingerprints — { [serviceName]: ServiceRuntime }.
   // Single CH query (argMax) on the backend; replaces the

@@ -29,7 +29,8 @@ describe('HeapBaselineCard — dürüstlük pinleri', () => {
     expect(src).toContain("queryKey: ['svc-heap-baseline', service, from, to]");
   });
   it('Pods sekmesinde yalnız JVM ailesi', () => {
-    expect(tab).toContain("runtimeFamily === 'jvm' && (");
+    expect(tab).toContain("surf.heapBand && (");
+    expect(tab).toContain("heapBand: family === 'jvm'");
   });
   it('bant cümlesi: baseline yokken dakika, varken 24s · n', () => {
     const d = { needBuckets: 15, bucketSec: 300, historyHours: 24 };

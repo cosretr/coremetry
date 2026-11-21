@@ -39,6 +39,8 @@ type AnomalyRuntimeConfig struct {
 	HeapMinAbsDelta   float64 `json:"heapMinAbsDelta"`
 	HeapSilentBuckets int     `json:"heapSilentBuckets"`
 	HeapMaxPods       int     `json:"heapMaxPods"`
+	// Signals — 2026-11-21 runtime akıllı sinyalleri (runtime_signals_config.go).
+	Signals RuntimeSignalConfig `json:"signals"`
 }
 
 func DefaultAnomalyRuntime() AnomalyRuntimeConfig {
@@ -46,6 +48,7 @@ func DefaultAnomalyRuntime() AnomalyRuntimeConfig {
 		HeapMode: HeapModeOff, HeapSource: HeapSourceAuto,
 		HeapMinMAD: 2.0, HeapFloorPct: 0.10, HeapMinAbsDelta: 5.0,
 		HeapSilentBuckets: 3, HeapMaxPods: 5000,
+		Signals: DefaultRuntimeSignals(),
 	}
 }
 
@@ -86,6 +89,7 @@ func NormalizeAnomalyRuntime(r AnomalyRuntimeConfig) AnomalyRuntimeConfig {
 		HeapMinAbsDelta:   clampRangeF(r.HeapMinAbsDelta, 0, 100, d.HeapMinAbsDelta),
 		HeapSilentBuckets: clampRangeI(r.HeapSilentBuckets, 1, 12, d.HeapSilentBuckets),
 		HeapMaxPods:       clampRangeI(r.HeapMaxPods, 100, 50000, d.HeapMaxPods),
+		Signals:           NormalizeRuntimeSignals(r.Signals),
 	}
 }
 

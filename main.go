@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	_ "time/tzdata" // v0.10.445 — tarayıcı IANA saat dilimi (DST) konteynerde zoneinfo olmasa da çözülsün
@@ -755,7 +756,7 @@ func main() {
 		go runExceptionRefresher(ctx, store, lockImpl)
 
 		// ── Service team deriver (owner/sre team from span attrs) ───────
-		go runServiceTeamDeriver(ctx, store, lockImpl)
+		go runServiceTeamDeriver(ctx, store, lockImpl, teamVMRef.Load)
 
 		// ── Topology aggregator ─────────────────────────────────────────
 		topology.New(store, 5*time.Minute, 1*time.Hour, lockImpl).Start(chstore.WithQueryTag(ctx, "worker:topology"))
@@ -1456,6 +1457,7 @@ func main() {
 	// Kapalıyken (varsayılan) metrik yüzeyleri ClickHouse'tan okumaya
 	// devam eder — Configured() tek karar noktası.
 	vmSvc := vmetrics.New()
+	teamVMRef.Store(vmSvc) // 2026-11-21 — takım türetici metrik etiketlerini buradan okur
 	if err := vmSvc.LoadPersisted(ctx, store); err != nil {
 		log.Printf("[vmetrics] load persisted config: %v", err)
 	}
@@ -2298,7 +2300,11 @@ func runLdapGroupSync(ctx context.Context, engine *ldap.SyncEngine, lock cache.L
 // full-row replace, so PopulateServiceTeamsFromSpans read-merge-writes).
 // Leader-gated so it runs once cluster-wide. Populates the /services team
 // dropdowns, the catalog chips, and notify team routing automatically.
-func runServiceTeamDeriver(ctx context.Context, store *chstore.Store, lock cache.Lock) {
+// teamVMRef — 2026-11-21: takım türeticisinin VM kaynağı (vmSvc türeticiden
+// SONRA kurulur; nil iken metrik etiketi okunmaz).
+var teamVMRef atomic.Pointer[vmetrics.Service]
+
+func runServiceTeamDeriver(ctx context.Context, store *chstore.Store, lock cache.Lock, vm func() *vmetrics.Service) {
 	const lockKey = "coremetry:lock:service-team-deriver"
 	const interval = 10 * time.Minute
 	const window = 3 * time.Hour
@@ -2310,7 +2316,17 @@ func runServiceTeamDeriver(ctx context.Context, store *chstore.Store, lock cache
 		// v0.9.715 (perf #5) — üç ayrı 3-saatlik tarama TEK taramaya indi
 		// (DeriveServiceMetadataAll; SELECT baytının %9.3'ü). Merge/pin/
 		// TOCTOU yarıları birebir; yalnız türetme birleşti.
-		n, nd, nn, err := store.PopulateAllServiceMetadataFromSpans(ctx, window)
+		// 2026-11-21 — metrik serilerinin ug_team / sy_team etiketleri EN DÜŞÜK
+		// öncelikle (yalnız metrik gönderen servis de takım süzgecine girer).
+		var metricTeams map[string]chstore.ServiceTeams
+		if v := vm(); v != nil && v.Configured() {
+			if mt, merr := v.ServiceTeamLabels(ctx); merr == nil {
+				metricTeams = mt
+			} else {
+				log.Printf("[team-derive] metric team labels: %v", merr)
+			}
+		}
+		n, nd, nn, err := store.PopulateAllServiceMetadata(ctx, window, metricTeams)
 		if err != nil {
 			log.Printf("[metadata-derive] %v", err)
 			return

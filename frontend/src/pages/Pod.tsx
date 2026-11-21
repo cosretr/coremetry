@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, lazy, useMemo, useState } from 'react';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { useSearchParams, Link } from 'react-router';
 import { urlSpec, useUrlParams, zParam, zInt } from '@/lib/urlSchema';
@@ -47,8 +47,11 @@ import { PodLogsSection } from '@/pages/pod/PodLogsSection';
 import { PodContainersTable, PodSiblingsTable, PodLabelsTable, PodLifetimesTable } from '@/pages/pod/PodContextTables';
 import { joinSiblings, traceScopeCtx } from '@/pages/pod/podPage';
 
+// 2026-11-21 — pod runtime bölümü (lazy chunk).
+const PodRuntimeSection = lazy(() => import('@/pages/pod/PodRuntimeSection'));
+
 // Clusters S10 (D8, D6) — kapalı bölümlerin kalıcılık kimlikleri.
-const POD_SECTIONS = ['traces', 'netjvm', 'labels'] as const;
+const POD_SECTIONS = ['traces', 'netjvm', 'runtime', 'labels'] as const;
 type PodSection = typeof POD_SECTIONS[number];
 
 
@@ -424,6 +427,13 @@ function PodDetail() {
                 ['Working-set memory', `container_memory_working_set_bytes{namespace="${promQuote(namespace)}",pod="${promQuote(pod)}"}`],
               ]} />
             </div>
+          </CollapsedSection>
+          {/* 2026-11-21 — runtime sinyalleri pod'un CPU / bellek / restart'ının yanında (OOM ↔ heap). Kapalıyken chunk ve okuma yok. */}
+          <CollapsedSection id="pod-runtime" title={t('rt.pod.title', lang)} summary={t('rt.pod.sum', lang)}
+            open={openSecs.has('runtime')} onOpenChange={setSecOpen('runtime')}>
+            <Suspense fallback={<Spinner />}>
+              <PodRuntimeSection service={service || metaServices[0]?.service || ''} pod={pod} from={from} to={to} />
+            </Suspense>
           </CollapsedSection>
           {entityOn && detail && (
             <CollapsedSection id="pod-labels" title={t('podpage.labelsHist', lang)} summary={t('podpage.labelsHistSum', lang)}

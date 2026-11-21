@@ -115,6 +115,57 @@ func MatchEnvValue(want string, live []string) EnvMatch {
 	return m
 }
 
+// EnvTierEnvPart — 2026-11-21: ortam etiketi `<env>-<cluster>` birleşik
+// ("prod-clusterA"); istenen ortam ("prod") değerin ilk parçası.
+const EnvTierEnvPart = "envpart"
+
+// MatchEnvRole — SAF (2026-11-21, operatör: prod deployment_environment_name
+// ortamla kümeyi birleştiriyor — "prod-clusterA", bazı serilerde yalnız küme
+// "clusterB"; openshift_cluster_name "clusterA"). ORTAM terimi için
+// MatchEnvValue'a ek kademe: canlı değer `<want>-<rest>` ise ve rest bilinen
+// bir küme (clusters: küme etiketinin canlı değerleri, büyük/küçük harf
+// duyarsız; boşsa rest ≥3 karakter yeter) → eşleşir; yalnız küme taşıyan
+// değer (v) clusterEnv[v] (küme varlığının ortamı) want ise eşleşir. Birebir /
+// harf duyarsız eşleşme VARSA envpart değerleri ona EKLENİR (ortam "prod"
+// tüm prod kümelerini kapsar); prefix kademesi (küme adı istenmiş) aynen.
+func MatchEnvRole(want string, live, clusters []string, clusterEnv map[string]string) EnvMatch {
+	m := MatchEnvValue(want, live)
+	if m.Tier == EnvTierPrefix {
+		return m
+	}
+	w := strings.TrimSpace(want)
+	if w == "" {
+		return m
+	}
+	known := make(map[string]bool, len(clusters))
+	for _, c := range clusters {
+		if c = strings.ToLower(strings.TrimSpace(c)); c != "" {
+			known[c] = true
+		}
+	}
+	var vals []string
+	for _, v := range live {
+		if i := strings.IndexByte(v, '-'); i > 0 && strings.EqualFold(v[:i], w) {
+			rest := v[i+1:]
+			if (len(known) == 0 && len([]rune(rest)) >= envPrefixMinRest) || known[strings.ToLower(rest)] {
+				vals = append(vals, v)
+			}
+			continue
+		}
+		if e, ok := clusterEnv[strings.ToLower(v)]; ok && strings.EqualFold(e, w) {
+			vals = append(vals, v)
+		}
+	}
+	if len(vals) == 0 {
+		return m
+	}
+	if m.Tier == EnvTierNone {
+		m.Tier = EnvTierEnvPart
+	}
+	m.Values = sortedUnique(append(m.Values, vals...))
+	return m
+}
+
 // MatchEnvValues — SAF (v0.10.1376): istenen her ad için MatchEnvValue, girdi
 // sırasıyla; ≤6 ad.
 func MatchEnvValues(want, live []string) []EnvMatch {

@@ -306,7 +306,7 @@ export const EN_EAGER: Record<string, string> = {
   'hyp.chk.deploy_near': 'Deploy near the start', 'hyp.chk.deploy_before_error': 'Deploy before the first error',
   'hyp.chk.recurring_before_deploy': 'Recurred before the deploy', 'hyp.chk.rollout_failed': 'Rollout failed',
   'hyp.chk.change_without_image': 'Change without a new image', 'hyp.chk.change_before_error': 'Change before the first error',
-  'hyp.chk.argo_sync': 'Argo CD sync', 'hyp.chk.pod_limits': 'Pod limits / OOMKilled', 'hyp.chk.jvm_post_gc': 'JVM post-GC heap',
+  'hyp.chk.argo_sync': 'Argo CD sync', 'hyp.chk.pod_limits': 'Pod limits / OOMKilled', 'hyp.chk.jvm_post_gc': 'JVM post-GC heap', 'hyp.chk.runtime_signals': 'Runtime signals (thread pool / GC / pools)',
   'hyp.chk.node_pressure': 'Node pressure', 'hyp.chk.latency_symptom': 'Latency symptom',
   'hyp.chk.downstream_worse': 'Downstream got worse', 'hyp.chk.synth_agrees': 'Synthesizer agrees',
   'hyp.chk.downstream_errors': 'Downstream errors', 'hyp.chk.external_problem_open': 'External problem open',

@@ -22,6 +22,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcptools"
+	"github.com/cilcenk/coremetry/internal/runtimesig"
 )
 
 // Facts — kayıttaki gerçekler (adım başına bir parça; nil = adım koşmadı).
@@ -136,6 +137,10 @@ type PodFacts struct {
 	// DOĞRULANANLAR (chkP99Up: doğrulanan yoksa p99 artışı "olası" → 0).
 	LatencyCandidates   int `json:"latencyCandidates,omitempty"`
 	LatencyCorroborated int `json:"latencyCorroborated,omitempty"`
+	// 2026-11-21 — taramanın runtime tespiti + .NET sinyalleri (runtimesig).
+	Runtime        string              `json:"runtime,omitempty"`
+	RuntimeState   string              `json:"runtimeState,omitempty"`
+	RuntimeSignals []runtimesig.Signal `json:"runtimeSignals,omitempty"`
 }
 
 // EdgeFact — aşağı akış kenarı (servis, db:, ext:, q: düğümleri).
@@ -332,6 +337,7 @@ func podFactsOf(res mcptools.SweepResult) *PodFacts {
 	out.JVMPods = res.Scanned.JVMPods
 	out.LatencyCandidates = res.Scanned.LatencyCandidates
 	out.LatencyCorroborated = res.Scanned.LatencyCorroborated
+	out.Runtime, out.RuntimeState, out.RuntimeSignals = res.Scanned.Runtime, sectionState(res, "runtime"), res.Data.RuntimeSignals
 	best := -1.0
 	for _, p := range res.Data.Pods {
 		before := best

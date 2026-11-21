@@ -637,6 +637,32 @@ func marginalModes(rows []metaComboRow) (teams map[string]ServiceTeams, ns, dep 
 	return teams, ns, dep
 }
 
+// MergeMetricTeams — SAF (2026-11-21): span-türetilmiş takımlar + metrik
+// etiketi takımları; span değeri alan alan kazanır, metrik yalnız BOŞ alanı
+// doldurur (yalnız metrik gönderen servis de takım süzgecine girer).
+func MergeMetricTeams(span, metric map[string]ServiceTeams) map[string]ServiceTeams {
+	if len(metric) == 0 {
+		return span
+	}
+	out := make(map[string]ServiceTeams, len(span)+len(metric))
+	for k, v := range span {
+		out[k] = v
+	}
+	for svc, m := range metric {
+		cur := out[svc]
+		if cur.OwnerTeam == "" {
+			cur.OwnerTeam = m.OwnerTeam
+		}
+		if cur.SRETeam == "" {
+			cur.SRETeam = m.SRETeam
+		}
+		if cur.OwnerTeam != "" || cur.SRETeam != "" {
+			out[svc] = cur
+		}
+	}
+	return out
+}
+
 // DeriveServiceMetadataAll — TEK taramada üç türetmenin tamamı.
 func (s *Store) DeriveServiceMetadataAll(ctx context.Context, since time.Duration) (map[string]ServiceTeams, map[string]string, map[string]string, error) {
 	to := time.Now()
@@ -677,10 +703,19 @@ func (s *Store) DeriveServiceMetadataAll(ctx context.Context, since time.Duratio
 // (teams → deployments → namespaces); merge/pin/TOCTOU yarıları
 // birebir korunmuş populate gövdeleri.
 func (s *Store) PopulateAllServiceMetadataFromSpans(ctx context.Context, since time.Duration) (teams, deps, ns int, err error) {
+	return s.PopulateAllServiceMetadata(ctx, since, nil)
+}
+
+// PopulateAllServiceMetadata — PopulateAllServiceMetadataFromSpans + metrik
+// etiketlerinden (VM ug_team / sy_team; 2026-11-21) takımlar, EN DÜŞÜK
+// öncelikle: span türetmesi alan alan kazanır (MergeMetricTeams), katalog /
+// pin kuralları populateTeams'te aynen.
+func (s *Store) PopulateAllServiceMetadata(ctx context.Context, since time.Duration, metricTeams map[string]ServiceTeams) (teams, deps, ns int, err error) {
 	dt, dns, ddep, derr := s.DeriveServiceMetadataAll(ctx, since)
 	if derr != nil {
 		return 0, 0, 0, derr
 	}
+	dt = MergeMetricTeams(dt, metricTeams)
 	teams, _ = s.populateTeams(ctx, dt)
 	deps, _ = s.populateDeployments(ctx, ddep)
 	ns, _ = s.populateNamespaces(ctx, dns)

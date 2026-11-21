@@ -288,6 +288,7 @@ var checkNames = map[string][2]string{
 	"argo_sync":               {"Argo CD senkronu", "Argo CD sync"},
 	"pod_limits":              {"Pod limitleri / OOMKilled", "Pod limits / OOMKilled"},
 	"jvm_post_gc":             {"JVM post-GC heap", "JVM post-GC heap"},
+	"runtime_signals":         {"Runtime sinyalleri (thread pool / GC / havuzlar)", "Runtime signals (thread pool / GC / pools)"},
 	"node_pressure":           {"Node baskısı", "Node pressure"},
 	"latency_symptom":         {"Gecikme belirtisi", "Latency symptom"},
 	"downstream_worse":        {"Aşağı akış kötüleşti", "Downstream got worse"},

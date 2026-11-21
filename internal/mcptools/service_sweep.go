@@ -56,6 +56,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/mcp"
 	"github.com/cilcenk/coremetry/internal/metricsrc"
 	"github.com/cilcenk/coremetry/internal/promptfmt"
+	"github.com/cilcenk/coremetry/internal/runtimesig"
 	"github.com/cilcenk/coremetry/internal/sourcestate"
 	"github.com/cilcenk/coremetry/internal/thanos"
 )
@@ -276,6 +277,9 @@ type SweepScanned struct {
 	// (AI SRE chkP99Up bunu okur: aday var ama doğrulanan yok → bilinmez).
 	LatencyCandidates   int `json:"latencyCandidates,omitempty"`
 	LatencyCorroborated int `json:"latencyCorroborated,omitempty"`
+	// Runtime — 2026-11-21: taramanın tespit ettiği runtime (jvm | dotnet | go | nodejs |
+	// python; "" = bilinmiyor / tespit okuyucusu yok).
+	Runtime string `json:"runtime,omitempty"`
 }
 
 // SweepLogs — bulgunun logları (evre 2).
@@ -376,15 +380,16 @@ type sweepPattern struct {
 }
 
 type sweepData struct {
-	Operations    []sweepOpRow                `json:"operations"`
-	Functions     []sweepFnRow                `json:"functions"`
-	CodeFunctions []chstore.CodeFunctionSlice `json:"codeFunctions,omitempty"` // derin kip, ÖRNEKLEM
-	Pods          []sweepPodRow               `json:"pods"`
-	JVM           []pivotJVMRow               `json:"jvm"`
-	OpenItems     []InboxRow                  `json:"openItems,omitempty"`
-	FindingLogs   []sweepFindingLogRows       `json:"findingLogs,omitempty"`
-	Patterns      []sweepPattern              `json:"patterns,omitempty"`
-	Blocks        []pivotBlock                `json:"blocks"`
+	Operations     []sweepOpRow                `json:"operations"`
+	Functions      []sweepFnRow                `json:"functions"`
+	CodeFunctions  []chstore.CodeFunctionSlice `json:"codeFunctions,omitempty"` // derin kip, ÖRNEKLEM
+	Pods           []sweepPodRow               `json:"pods"`
+	JVM            []pivotJVMRow               `json:"jvm"`
+	RuntimeSignals []runtimesig.Signal         `json:"runtimeSignals,omitempty"` // 2026-11-21 — .NET runtime sinyalleri
+	OpenItems      []InboxRow                  `json:"openItems,omitempty"`
+	FindingLogs    []sweepFindingLogRows       `json:"findingLogs,omitempty"`
+	Patterns       []sweepPattern              `json:"patterns,omitempty"`
+	Blocks         []pivotBlock                `json:"blocks"`
 }
 
 // SweepResult — zarf; alan sırası = JSON sırası (veri EN SONDA).
@@ -412,20 +417,21 @@ type SweepResult struct {
 type sweepReaders struct {
 	windowRED func(ctx context.Context, service, env string, from, to time.Time) (chstore.ServiceWindowRED, error)
 	// openItems — v0.10.1694: servis şeridinin "Açık konular" kümesi (Deps.InboxOpen + Attention).
-	openItems     InboxOpenReader
-	ops           func(ctx context.Context, service string, from, to time.Time) ([]chstore.OperationSummary, error)
-	fnRollup      func(ctx context.Context, service string, from, to time.Time) ([]chstore.RollupSeries, error)
-	fnSpans       func(ctx context.Context, service string, from, to time.Time) ([]chstore.BusinessSlice, error)
-	codeSample    func(ctx context.Context, service string, ops []string, from, to time.Time) ([]chstore.CodeFunctionSlice, error)
-	clusterValues func(ctx context.Context, service string, from, to time.Time) ([]string, error)
-	clusters      func() []ClusterRef
-	servicePods   ServicePodsFunc
-	runtime       chstore.RuntimePodReader
-	runtimeSource string
-	runtimeAlerts func(ctx context.Context) chstore.RuntimeAlertConfig
-	logs          logstore.Store
-	searchTraces  func(ctx context.Context, f chstore.TraceFilter) ([]chstore.TraceRow, uint64, bool, error)
-	patterns      func(ctx context.Context, window time.Duration) ([]anomaly.LogPatternAnomaly, error)
+	openItems      InboxOpenReader
+	ops            func(ctx context.Context, service string, from, to time.Time) ([]chstore.OperationSummary, error)
+	fnRollup       func(ctx context.Context, service string, from, to time.Time) ([]chstore.RollupSeries, error)
+	fnSpans        func(ctx context.Context, service string, from, to time.Time) ([]chstore.BusinessSlice, error)
+	codeSample     func(ctx context.Context, service string, ops []string, from, to time.Time) ([]chstore.CodeFunctionSlice, error)
+	clusterValues  func(ctx context.Context, service string, from, to time.Time) ([]string, error)
+	clusters       func() []ClusterRef
+	servicePods    ServicePodsFunc
+	runtime        chstore.RuntimePodReader
+	runtimeSource  string
+	runtimeAlerts  func(ctx context.Context) chstore.RuntimeAlertConfig
+	runtimeSignals RuntimeSignalsFunc // 2026-11-21 — runtime tespiti + .NET sinyalleri (nil = yalnız JVM)
+	logs           logstore.Store
+	searchTraces   func(ctx context.Context, f chstore.TraceFilter) ([]chstore.TraceRow, uint64, bool, error)
+	patterns       func(ctx context.Context, window time.Duration) ([]anomaly.LogPatternAnomaly, error)
 	// deploys — v0.10.1287: deploy kontrolünün okuyucusu (list_deployments ile
 	// AYNI gövde, ListDeploymentsWindow). nil = bölüm skipped.
 	deploys func(ctx context.Context, service string, from, to time.Time) ([]ChangeRow, string, error)
@@ -443,6 +449,7 @@ type sweepReaders struct {
 func sweepReadersFrom(d Deps) sweepReaders {
 	r := sweepReaders{servicePods: d.ServicePods, logs: d.LogStore, clusters: d.Clusters, openItems: d.InboxOpen,
 		runtimeAlerts: func(context.Context) chstore.RuntimeAlertConfig { return chstore.DefaultRuntimeAlerts() }}
+	r.runtimeSignals = d.RuntimeSignals
 	r.runtime, r.runtimeSource = d.RuntimePods, evSourceCH
 	if d.MetricRouter != nil {
 		r.runtime = d.MetricRouter.RuntimePods()
@@ -514,25 +521,27 @@ type sweepOutcome struct {
 	cands     []sweepCand
 	failed    bool
 
-	red, prior   chstore.ServiceWindowRED
-	redErr       error
-	redOK        bool
-	priorOK      bool
-	openItems    InboxOpenResult
-	openItemsOK  bool
-	ops          []chstore.OperationSummary
-	opRows       []sweepOpRow
-	fnRows       []sweepFnRow
-	fnSource     string
-	fnSeries     map[string]chstore.RollupSeries
-	pods         []sweepPodRow
-	clusters     int
-	jvm          []pivotJVMRow
-	scannedPods  int
-	scannedOps   int
-	scannedFns   int
-	scannedJVM   int
-	anyDataFound bool
+	red, prior     chstore.ServiceWindowRED
+	redErr         error
+	redOK          bool
+	priorOK        bool
+	openItems      InboxOpenResult
+	openItemsOK    bool
+	ops            []chstore.OperationSummary
+	opRows         []sweepOpRow
+	fnRows         []sweepFnRow
+	fnSource       string
+	fnSeries       map[string]chstore.RollupSeries
+	pods           []sweepPodRow
+	clusters       int
+	jvm            []pivotJVMRow
+	runtimeSignals []runtimesig.Signal // 2026-11-21 — .NET sinyalleri (runtime halkası)
+	runtime        string              // 2026-11-21 — tespit edilen runtime
+	scannedPods    int
+	scannedOps     int
+	scannedFns     int
+	scannedJVM     int
+	anyDataFound   bool
 	// v0.10.1287 — k8s kontrolünün girdisi (pods bölümü doldurur) + bekleme
 	// sebebi okunamayan cluster notları.
 	k8s        []K8sPodState
@@ -606,7 +615,7 @@ func runServiceSweep(ctx context.Context, r sweepReaders, req SweepRequest, warn
 		{sweepHopOps, "Sağlık", sweepCapOps, func(c context.Context) sweepOutcome { return sweepRunOps(c, r, req) }},
 		{sweepHopFunctions, "Sağlık", sweepCapFunctions, func(c context.Context) sweepOutcome { return sweepRunFunctions(c, r, req) }},
 		{sweepHopPods, "Altyapı", sweepCapPods, func(c context.Context) sweepOutcome { return sweepRunPods(c, r, req) }},
-		{sweepHopJVM, "Metrik", sweepCapJVM, func(c context.Context) sweepOutcome { return sweepRunJVM(c, r, req, alerts) }},
+		{sweepHopJVM, "Metrik", sweepCapJVM, func(c context.Context) sweepOutcome { return sweepRunRuntime(c, r, req, alerts) }},
 	}
 	checks := sweepChecksOf(req)
 	if checks[SweepCheckDeploys] { // v0.10.1287 — deploy kontrolü (list_deployments okuyucusu)
@@ -614,7 +623,7 @@ func runServiceSweep(ctx context.Context, r sweepReaders, req SweepRequest, warn
 			return sweepRunDeploys(c, r, req.Service, sweepAnchor(req), req.To)
 		}})
 	}
-	reportProgress(ctx, "Sağlık", "taranıyor: "+req.Service+" — RED · problemler · operasyonlar · fonksiyonlar · pod'lar · JVM")
+	reportProgress(ctx, "Sağlık", "taranıyor: "+req.Service+" — RED · problemler · operasyonlar · fonksiyonlar · pod'lar · runtime")
 	outs := make([]sweepOutcome, len(jobs))
 	got := make([]bool, len(jobs))
 	type done struct {
@@ -791,6 +800,9 @@ wait:
 		sc.Operations += o.scannedOps
 		sc.Functions += o.scannedFns
 		sc.JVMPods += o.scannedJVM
+		if o.runtime != "" {
+			sc.Runtime = o.runtime
+		}
 		sc.Clusters += o.clusters
 		sc.LatencyCandidates += o.corrobCands
 		sc.LatencyCorroborated += o.corrobConfirmed
@@ -801,6 +813,7 @@ wait:
 		res.Data.Functions = append(res.Data.Functions, o.fnRows...)
 		res.Data.Pods = append(res.Data.Pods, o.pods...)
 		res.Data.JVM = append(res.Data.JVM, o.jvm...)
+		res.Data.RuntimeSignals = append(res.Data.RuntimeSignals, o.runtimeSignals...)
 	}
 	res.Scanned = sc
 	if pr != nil && pr.openItemsOK {
@@ -846,6 +859,8 @@ func sweepSectionLabelTR(n string) string {
 		return "pod'lar"
 	case sweepHopJVM:
 		return "JVM"
+	case sweepHopRuntime:
+		return "runtime"
 	case sweepHopLogs:
 		return "sorunluların logları"
 	case sweepHopCode:
@@ -1771,7 +1786,7 @@ func sweepFindingLogs(ctx context.Context, r sweepReaders, req SweepRequest, f S
 	traceID := ""
 	elapsed := stopwatch()
 	switch f.Kind {
-	case sweepKindPod, sweepKindJVM, sweepKindK8s: // v0.10.1287 — k8s bulgusu da bir pod
+	case sweepKindPod, sweepKindJVM, sweepKindRuntime, sweepKindK8s: // v0.10.1287 — k8s bulgusu da bir pod
 		lf = logstore.Filter{Service: req.Service, Pod: f.Name, SeverityMin: qlOTelErrorFloor, Limit: sweepLogFetch, From: req.From, To: req.To}
 		page, err = logstore.SearchWithTimeout(ctx, r.logs, lf, sweepCapLogs)
 	default:
@@ -1956,6 +1971,20 @@ func sweepBlocks(req SweepRequest, res SweepResult, ops, fns *sweepOutcome, logR
 				p.Rows = append(p.Rows, []any{r.Pod, ptrVal(r.HeapPct), ptrVal(r.PostGCPct), ptrVal(r.GCPauseMs), r.Level})
 			}
 			add(pivotBlock{Hop: sweepHopJVM, Type: blocks.TypeTable, Payload: p})
+		case sweepKindRuntime:
+			// 2026-11-21 — runtime sinyalleri (tek tablo; .NET'te JVM sözcüğü yok).
+			if jvmDone || len(res.Data.RuntimeSignals) == 0 {
+				continue
+			}
+			jvmDone = true
+			p := EvTablePayload{Title: req.Service + " · runtime sinyalleri (son 60 dk)", Columns: []EvTableColumn{
+				{Key: "signal", Label: "Sinyal", Kind: "text"}, {Key: "pod", Label: "En kötü pod", Kind: "text"},
+				{Key: "value", Label: "Son 10 dk", Kind: "num"}, {Key: "baseline", Label: "Önceki 50 dk", Kind: "num"},
+				{Key: "unit", Label: "Birim", Kind: "text"}, {Key: "level", Label: "Seviye", Kind: "level"}}, Rows: [][]any{}}
+			for _, s := range res.Data.RuntimeSignals {
+				p.Rows = append(p.Rows, []any{RuntimeCheckTR(s.Check), s.Pod, s.Value, s.Baseline, s.Unit, s.Level})
+			}
+			add(pivotBlock{Hop: sweepHopRuntime, Type: blocks.TypeTable, Payload: p})
 		}
 	}
 	lt := EvTablePayload{Title: "sorunluların logları", Columns: []EvTableColumn{

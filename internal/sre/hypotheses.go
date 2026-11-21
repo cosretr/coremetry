@@ -156,6 +156,7 @@ var hypothesisTable = []hypothesisSpec{
 	{HypSaturation, "capacity", "Doygunluk / OOM", 0.15, []check{
 		{"pod_limits", 0.35, chkPodLimits},
 		{"jvm_post_gc", 0.25, chkJVM},
+		{"runtime_signals", 0.25, chkRuntimeSignals}, // 2026-11-21 — .NET (yalnız .NET serviste listelenir)
 		{"node_pressure", 0.20, chkNode},
 		{"latency_symptom", 0.10, chkLatencySymptom},
 	}},
@@ -235,6 +236,9 @@ func Score(ev Evidence) []Hypothesis {
 		h := Hypothesis{Kind: spec.Kind, Category: spec.Category, Label: spec.Label, Prior: spec.Prior, Checks: make([]HypothesisCheck, 0, len(spec.Checks))}
 		sum := spec.Prior
 		for _, c := range spec.Checks {
+			if ap := checkApplies[c.Name]; ap != nil && !ap(ev) {
+				continue // 2026-11-21 — runtime'a uymayan kontrol kartta HİÇ yok (.NET'te JVM satırı yok)
+			}
 			o, why, ref := c.Run(ev)
 			if o > 1 {
 				o = 1

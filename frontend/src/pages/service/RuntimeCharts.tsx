@@ -9,6 +9,7 @@ import { TimeSeriesPanel, type TSSeries } from '@/components/viz/TimeSeriesPanel
 import type { FilterExpr, SpanMetricSeries } from '@/lib/types';
 import { podLineLabel, podClusterOf, withClusterPrefix } from './runtimePodLabel';
 import { smoothPoints } from './runtimeSmooth';
+import { familyFromResource } from './runtimeFamily';
 import { heapSummary, podPercentLines, flatSummary, parseRtView, rtViewParam, type FlatSummary, type HeapKeyedLine, type HeapPodLine, type HeapSummary, type RtView } from './runtimeHeapView';
 
 // RuntimeCharts (v0.9.87, operatör talebi) — Service Overview'da dil
@@ -118,20 +119,8 @@ const FAMILY_CARDS: Record<string, CardSpec[]> = {
         groupBy: POD_GROUP, fanout: true, labelOf: podLineLabel },
     ] },
   ],
-  dotnet: [
-    { key: 'heap', title: '.NET heap (by pod)', unit: ' MB', lines: [
-      { metric: 'process.runtime.dotnet.gc.heap.size', label: 'heap', color: 'var(--accent)',
-        groupBy: POD_GROUP, fanout: true, labelOf: podLineLabel, scale: MB },
-    ] },
-    { key: 'committed', title: 'GC committed (by pod)', unit: ' MB', lines: [
-      { metric: 'process.runtime.dotnet.gc.committed_memory.size', label: 'committed', color: 'var(--purple)',
-        groupBy: POD_GROUP, fanout: true, labelOf: podLineLabel, scale: MB },
-    ] },
-    { key: 'threads', title: 'ThreadPool threads (by pod)', unit: '', mode: 'line', lines: [
-      { metric: 'process.runtime.dotnet.thread_pool.threads.count', label: 'threads', color: 'var(--teal)',
-        groupBy: POD_GROUP, fanout: true, labelOf: podLineLabel },
-    ] },
-  ],
+  // .NET 2026-11-21'den beri DotnetRuntimePanel'de (runtimesig profili; eski +
+  // yeni kuşak, Prom + noktalı ad) — burada kart yok.
   go: [
     { key: 'heap', title: 'Go heap', unit: ' MB', lines: [
       { metric: 'process.runtime.go.mem.heap_inuse', label: 'in-use', color: 'var(--accent)', scale: MB },
@@ -153,11 +142,10 @@ const FAMILY_CARDS: Record<string, CardSpec[]> = {
 // ayrışırsa bir servis hem runtime hem kaynak grafiği görür ya da
 // hiçbirini görmez.
 export function familyOf(language: string | undefined): string | null {
-  const l = (language || '').toLowerCase();
-  if (l === 'java' || l === 'kotlin') return 'jvm';
-  if (l === 'dotnet' || l === 'csharp') return 'dotnet';
-  if (l === 'go') return 'go';
-  return null;
+  // 2026-11-21 — tek tespit kaynağı runtimeFamily.ts; burada grafik ailesi
+  // olanlar (JVM / .NET / Go). Node / Python → null (genel kaynak grafikleri).
+  const f = familyFromResource(language);
+  return f === 'jvm' || f === 'dotnet' || f === 'go' ? f : null;
 }
 
 const FAMILY_TITLE: Record<string, string> = { jvm: 'JVM', dotnet: '.NET', go: 'Go' };
@@ -195,8 +183,10 @@ function rtViewSearch(params: URLSearchParams, next: RtView): string {
   return q ? `?${q}` : '';
 }
 
-export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHeader = false }: {
+export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHeader = false, family: familyProp }: {
   service: string;
+  // 2026-11-21 — üst bileşenin tespit ettiği aile (dil yoksa katalogdan); verilmezse dil.
+  family?: string | null;
   from: number; // unix ns (parent'ın çözülmüş penceresi — RQ anahtarı hizalı)
   to: number;
   onZoom?: (fromSec: number, toSec: number) => void;
@@ -212,7 +202,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
     enabled: !!service,
     staleTime: 300_000,
   });
-  const family = familyOf(runtimeQ.data?.language);
+  const family = familyProp !== undefined ? familyProp : familyOf(runtimeQ.data?.language);
   const [params] = useSearchParams();
   const rtRaw = params.get('rtview');
   const view = useMemo(() => parseRtView(rtRaw), [rtRaw]);
@@ -220,7 +210,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
   // kimliği aşağıdaki useMemo'ları boşa tetiklerdi (eslint exhaustive-deps).
   const cards = useMemo(() => {
     if (!family) return [];
-    return FAMILY_CARDS[family].map(c => (isHeapSummaryCard(family, c, view) ? { ...c, lines: HEAP_SUMMARY_LINES } : c));
+    return (FAMILY_CARDS[family] ?? []).map(c => (isHeapSummaryCard(family, c, view) ? { ...c, lines: HEAP_SUMMARY_LINES } : c));
   }, [family, view]);
 
   // Madde 4 sweep — deploy ▼ marker'ları runtime panellerine: "heap spike
@@ -378,7 +368,6 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
         </div>
         <div className="rt-head__sub">
           {family === 'jvm' && <>Auto-instrumentation <code>jvm.*</code> metrics per pod (heap · GC · threads). Lejantta bir pod'a tıkla = izole.</>}
-          {family === 'dotnet' && <>Runtime instrumentation <code>process.runtime.dotnet.*</code> metrics per pod.</>}
           {family === 'go' && <>Go runtime <code>process.runtime.go.*</code> metrics.</>}
         </div>
       </div>}

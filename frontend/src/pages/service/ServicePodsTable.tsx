@@ -49,7 +49,10 @@ const SRC_LABEL: Record<MergedPodRow['source'], { text: string; title: string }>
   thanos: { text: 'T', title: 'Yalnız Thanos envanteri; bu pencerede span görülmedi' },
 };
 
-export function ServicePodsTable({ dt, service, range, effNs, effDeploy, cFrom, cTo, rangeParam, state }: {
+export function ServicePodsTable({ dt, service, range, effNs, effDeploy, cFrom, cTo, rangeParam, state, jmx = true }: {
+  /** 2026-11-21 — JMX (JVM/JBoss) yalnız JVM ya da runtime'ı bilinmeyen serviste;
+   *  .NET / Go / Node / Python satırı yalnız pod kaynak kullanımını açar. */
+  jmx?: boolean;
   dt: DataTable<MergedPodRow>;
   service: string;
   range: TimeRange;
@@ -213,7 +216,7 @@ export function ServicePodsTable({ dt, service, range, effNs, effDeploy, cFrom, 
                     <td colSpan={colCount} className="pods-jmx">
                       {/* ns = pod'un KENDİ namespace'i; çok-namespace serviste effNs yanlış olurdu. */}
                       <PodJmxInline cluster={r.cluster} ns={r.namespace || effNs} deploy={effDeploy}
-                        pod={r.pod} cFrom={cFrom} cTo={cTo} onFull={() => { window.location.assign(podHref(r)); }} />
+                        pod={r.pod} cFrom={cFrom} cTo={cTo} jmx={jmx} onFull={() => { window.location.assign(podHref(r)); }} />
                     </td>
                   </tr>
                 )}

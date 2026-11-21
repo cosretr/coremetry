@@ -216,7 +216,7 @@ func sweepJVMCand(row pivotJVMRow) sweepCand {
 // v0.10.1287 — k8s (bekleme sebebi / pencerede OOM) ve deploy (başlangıca
 // yakın rollout) altyapının da önünde: follow-up B sırası "crit önce, sonra
 // k8s > deploy"; mevcut pod > JVM > operasyon > fonksiyon sırası korunur.
-var sweepKindOrder = map[string]int{sweepKindK8s: -2, sweepKindDeploy: -1, sweepKindPod: 0, sweepKindJVM: 1, sweepKindOperation: 2, sweepKindFunction: 3}
+var sweepKindOrder = map[string]int{sweepKindK8s: -2, sweepKindDeploy: -1, sweepKindPod: 0, sweepKindJVM: 1, sweepKindRuntime: 1, sweepKindOperation: 2, sweepKindFunction: 3}
 
 // scoreFindings — SAF: yalnız ok OLMAYAN adaylar; sıra seviye → etki (azalan)
 // → tür → ad. topN'e kırpılır; ikinci dönüş kırpıldı mı. Rank 1'den.
@@ -303,6 +303,8 @@ func sweepKindTR(k string) string {
 		return "pod"
 	case sweepKindJVM:
 		return "JVM"
+	case sweepKindRuntime:
+		return "runtime"
 	case sweepKindOperation:
 		return "operasyon"
 	case sweepKindFunction:
