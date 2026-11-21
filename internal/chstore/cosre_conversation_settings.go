@@ -4,7 +4,7 @@ package chstore
 // §7 karar 5, seçenek b): CoSRE konuşma kalitesi programının TEK ayar blobu,
 // system_settings `cosre_conversation`:
 //
-//	{"state":true,"style":false,"verification":"shadow","bannedPhrases":["…"],"updatedBy":"…","updatedAt":"…"}
+//	{"state":true,"style":false,"verification":"enforce","verificationRev":1,"bannedPhrases":["…"],"updatedBy":"…","updatedAt":"…"}
 //
 //   - state — A/G dilimleri (konuşma durumu: çözücü, döngünün kendi yazdığı
 //     bağlam, data-state). Varsayılan AÇIK (operatör davranışı istedi; anahtar
@@ -16,7 +16,11 @@ package chstore
 //     kipi bağlı ve VARSAYILAN shadow: cevap doğrulayıcısı yalnız sayar,
 //     kullanıcıya görünen hiçbir şey değişmez; off kill switch'tir. enforce
 //     v0.10.2339 (E2) ile bağlı: uyuşmayan değer cevapta "(doğrulanmamış
-//     değer)" notuyla işaretlenir (api/answer_seam.go). Varsayılan shadow kalır.
+//     değer)" notuyla işaretlenir (api/answer_seam.go). v0.10.2439'tan beri
+//     VARSAYILAN enforce (operatör kararı 2026-11-21, "kanıt kapısı açık").
+//     verificationRev (yazımda cosreVerifyRev) olmayan eski blobun "shadow"u
+//     o günden önceki varsayılanın taşınmış hâlidir → enforce okunur; "off"
+//     ve rev'li her değer aynen kalır.
 //   - bannedPhrases — v0.10.2338 (D): cevap dikişinin kalıp açılış/kapanış
 //     listesini GENİŞLETEN operatör ifadeleri (varsayılan liste
 //     evalrubric.BoilerplateOpenings/Closings, tek kaynak). En çok 40 ifade,
@@ -75,14 +79,17 @@ func ValidCosreEvidence(v string) bool {
 
 // CosreConversation — blob.
 type CosreConversation struct {
-	State         bool      `json:"state"`
-	Style         bool      `json:"style"`
-	Verification  string    `json:"verification"`
-	BannedPhrases []string  `json:"bannedPhrases,omitempty"` // v0.10.2338 — D: varsayılan kalıp listesine ek
-	Interaction   string    `json:"interaction"`             // v0.10.2353 — I5: off | on
-	Evidence      string    `json:"evidence"`                // v0.10.2355 — S1: off | shadow | on
-	UpdatedBy     string    `json:"updatedBy,omitempty"`
-	UpdatedAt     time.Time `json:"updatedAt,omitzero"`
+	State         bool     `json:"state"`
+	Style         bool     `json:"style"`
+	Verification  string   `json:"verification"`
+	BannedPhrases []string `json:"bannedPhrases,omitempty"` // v0.10.2338 — D: varsayılan kalıp listesine ek
+	Interaction   string   `json:"interaction"`             // v0.10.2353 — I5: off | on
+	Evidence      string   `json:"evidence"`                // v0.10.2355 — S1: off | shadow | on
+	// VerificationRev — v0.10.2439: doğrulama kipinin yazıldığı varsayılan
+	// kuşağı. SaveCosreConversation her yazımda cosreVerifyRev yazar.
+	VerificationRev int       `json:"verificationRev,omitempty"`
+	UpdatedBy       string    `json:"updatedBy,omitempty"`
+	UpdatedAt       time.Time `json:"updatedAt,omitzero"`
 }
 
 // Kalıp ifadesi tavanları (v0.10.2338, D).
@@ -134,10 +141,14 @@ func clipCosreBannedPhrases(in []string) []string {
 	return out
 }
 
+// cosreVerifyRev — doğrulama varsayılanının kuşağı: 0 = shadow varsayılanı
+// (v0.10.2327–2439), 1 = enforce varsayılanı (v0.10.2439).
+const cosreVerifyRev = 1
+
 // DefaultCosreConversation — blob yokken geçerli ayar: durum AÇIK, üslup
-// kapalı, doğrulama gölge (v0.10.2327), kanıt kapalı (v0.10.2355).
+// kapalı, doğrulama ZORLA (v0.10.2439; önce gölge), kanıt kapalı (v0.10.2355).
 func DefaultCosreConversation() CosreConversation {
-	return CosreConversation{State: true, Verification: CosreVerifyShadow, Interaction: CosreInteractionOff, Evidence: CosreEvidenceOff}
+	return CosreConversation{State: true, Verification: CosreVerifyEnforce, Interaction: CosreInteractionOff, Evidence: CosreEvidenceOff}
 }
 
 // ValidCosreVerification — SAF: kapalı küme.
@@ -159,7 +170,7 @@ func CurrentCosreConversation() CosreConversation {
 func SetCosreConversation(c CosreConversation) {
 	c.UpdatedBy = strings.TrimSpace(c.UpdatedBy)
 	if !ValidCosreVerification(c.Verification) {
-		c.Verification = CosreVerifyShadow
+		c.Verification = CosreVerifyEnforce
 	}
 	if !ValidCosreInteraction(c.Interaction) {
 		c.Interaction = CosreInteractionOff
@@ -172,7 +183,7 @@ func SetCosreConversation(c CosreConversation) {
 
 // parseCosreConversation — SAF: boş blob varsayılan; "state" alanı olmayan
 // blob da açık. Bozuk blob ok=false; bilinmeyen ya da boş doğrulama kipi
-// varsayılan (shadow; v0.10.2327).
+// varsayılan (enforce; v0.10.2439). Rev'siz eski blobun "shadow"u enforce.
 func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 	if len(raw) == 0 {
 		return DefaultCosreConversation(), true
@@ -184,6 +195,7 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 		BannedPhrases []string  `json:"bannedPhrases"`
 		Interaction   string    `json:"interaction"`
 		Evidence      string    `json:"evidence"`
+		VerifyRev     int       `json:"verificationRev"`
 		UpdatedBy     string    `json:"updatedBy"`
 		UpdatedAt     time.Time `json:"updatedAt"`
 	}
@@ -198,6 +210,10 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 	if ValidCosreVerification(in.Verification) {
 		out.Verification = in.Verification
 	}
+	if in.VerifyRev < cosreVerifyRev && out.Verification == CosreVerifyShadow {
+		out.Verification = CosreVerifyEnforce // v0.10.2439 — taşınmış eski varsayılan
+	}
+	out.VerificationRev = cosreVerifyRev
 	out.BannedPhrases = clipCosreBannedPhrases(in.BannedPhrases)
 	if ValidCosreInteraction(in.Interaction) {
 		out.Interaction = in.Interaction
@@ -213,6 +229,7 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 // SaveCosreConversation — yazar ve bu pod'a yayınlar.
 func (s *Store) SaveCosreConversation(ctx context.Context, c CosreConversation) (CosreConversation, error) {
 	c.UpdatedBy = strings.TrimSpace(c.UpdatedBy)
+	c.VerificationRev = cosreVerifyRev // v0.10.2439 — yazılan kip operatörün seçimi
 	raw, err := json.Marshal(c)
 	if err != nil {
 		return CosreConversation{}, err

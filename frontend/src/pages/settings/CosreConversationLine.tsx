@@ -13,7 +13,7 @@ import type { CosreConversationSettings } from '@/lib/types';
 // kalitesi anahtarları: Settings › CoSRE'de CosreBriefingLine'ın altında
 // (operatör ekranı, yalnız Türkçe). Blob `cosre_conversation` üç alan taşır:
 // `state` (A), v0.10.2327'den beri `verification` off | shadow (E1; v0.10.2339'dan
-// beri enforce da — üç seçenekli denetim, varsayılan gölge) ve
+// beri enforce da — üç seçenekli denetim; v0.10.2439'tan beri varsayılan zorla) ve
 // v0.10.2331'den beri `style` (B) bağlı. state ve verification varsayılanı
 // açık, style varsayılanı kapalı (sunucu varsayılanı); kapatmak geri alma
 // anahtarıdır. Audit sunucuda (`settings.cosre_conversation.update`).
@@ -25,14 +25,16 @@ export const CONVERSATION_STATE_HINT =
   + '"bak" / "evet" ile yürütür. Kapalıyken v2 bu özellikten önceki gibi davranır.';
 
 export const CONVERSATION_VERIFY_HINT =
-  'Gölge kip: CoSRE v2 her cevaptaki sayıları, saatleri ve servis adlarını o turda okunan veriyle '
-  + 'karşılaştırır ve yalnız sayar; cevap değişmez, gecikmez, işaretlenmez. Uyuşmayan tur kalite '
-  + 'sinyali olarak kaydedilir. Kapalıyken hiçbir denetim koşmaz.';
+  'CoSRE v2 her cevaptaki sayıları, saatleri ve servis adlarını o turda okunan veriyle karşılaştırır. '
+  + 'Gölge kip yalnız sayar; cevap değişmez, işaretlenmez (uyuşmayan tur kalite sinyali olarak kaydedilir). '
+  + 'Kapalıyken hiçbir denetim koşmaz.';
 
-// v0.10.2339 (audit §6.1 E2, karar 6–7) — üç kip; varsayılan gölge. "zorla"nın tek satırlık açıklaması.
+// v0.10.2339 (audit §6.1 E2, karar 6–7) — üç kip; v0.10.2439'tan beri varsayılan zorla
+// (operatör kararı 2026-11-21). "zorla"nın tek satırlık açıklaması.
 export const CONVERSATION_ENFORCE_HINT =
-  'Zorla: o turda okunan veride bulunmayan sayı, saat ya da adın hemen ardına “(doğrulanmamış değer)” yazılır '
-  + 've cümle doğrulanana dek taslakta görünmez; Derin kipte model önce bir kez yeniden yazar.';
+  'Zorla (varsayılan): o turda okunan veride bulunmayan sayı, saat ya da adın ardına “(doğrulanmamış değer)” yazılır, '
+  + 'cevabın sonuna kısa bir not ve “Değerleri veriden yeniden kontrol et” önerisi eklenir; yerine değer uydurulmaz. '
+  + 'Cümle doğrulanana dek taslakta görünmez; Derin kipte model önce bir kez yeniden yazar.';
 
 type VerifyMode = CosreConversationSettings['verification'];
 const VERIFY_OPTIONS: ReadonlyArray<{ value: VerifyMode; label: string }> = [

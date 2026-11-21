@@ -248,7 +248,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	}
 	a := nextAudit(t, s)
 	if a.Action != "settings.cosre_conversation.update" || a.TargetID != chstore.CosreConversationKey ||
-		a.Details != `{"before":{"state":true,"style":false,"verification":"shadow","bannedPhrases":0,"interaction":"off","evidence":"off"},"after":{"state":false,"style":false,"verification":"shadow","bannedPhrases":0,"interaction":"off","evidence":"off"}}` {
+		a.Details != `{"before":{"state":true,"style":false,"verification":"enforce","bannedPhrases":0,"interaction":"off","evidence":"off"},"after":{"state":false,"style":false,"verification":"enforce","bannedPhrases":0,"interaction":"off","evidence":"off"}}` {
 		t.Fatalf("audit = %+v", a)
 	}
 	// v0.10.2327 — verification bağlı: off (kill switch) ↔ shadow; state korunur.
@@ -283,7 +283,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"off","bannedPhrases":1,"interaction":"off","evidence":"off"}`) {
 		t.Fatalf("audit = %+v", a)
 	}
-	// v0.10.2339 — E2: enforce kabul edilir; varsayılan yine shadow.
+	// v0.10.2339 — E2: enforce kabul edilir (v0.10.2439: varsayılan).
 	w = rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"verification":"enforce"}`, auth.RoleAdmin, "")
 	if w.Code != http.StatusOK || chstore.CurrentCosreConversation().Verification != chstore.CosreVerifyEnforce {
 		t.Fatalf("enforce PUT %d: %s", w.Code, w.Body)
@@ -291,9 +291,23 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if a := nextAudit(t, s); !strings.Contains(a.Details, `"verification":"enforce"`) {
 		t.Fatalf("audit = %+v", a)
 	}
-	if chstore.DefaultCosreConversation().Verification != chstore.CosreVerifyShadow {
-		t.Fatal("varsayılan shadow kalmalı")
+	if chstore.DefaultCosreConversation().Verification != chstore.CosreVerifyEnforce {
+		t.Fatal("v0.10.2439 — varsayılan enforce")
 	}
+	// v0.10.2439 — geri dönüş: admin shadow'a döner, audit önce/sonra taşır.
+	w = rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"verification":"shadow"}`, auth.RoleAdmin, "")
+	if w.Code != http.StatusOK || chstore.CurrentCosreConversation().Verification != chstore.CosreVerifyShadow {
+		t.Fatalf("shadow PUT %d: %s", w.Code, w.Body)
+	}
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"before":{"state":false,"style":true,"verification":"enforce"`) ||
+		!strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"shadow"`) {
+		t.Fatalf("audit = %+v", a)
+	}
+	w = rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"verification":"enforce"}`, auth.RoleAdmin, "")
+	if w.Code != http.StatusOK || chstore.CurrentCosreConversation().Verification != chstore.CosreVerifyEnforce {
+		t.Fatalf("enforce PUT %d: %s", w.Code, w.Body)
+	}
+	_ = nextAudit(t, s)
 	// v0.10.2353 — I5: interaction off | on; diğer alanlar korunur, varsayılan off.
 	w = rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"interaction":"on"}`, auth.RoleAdmin, "")
 	if cur := chstore.CurrentCosreConversation(); w.Code != http.StatusOK || cur.Interaction != chstore.CosreInteractionOn || cur.Verification != chstore.CosreVerifyEnforce {

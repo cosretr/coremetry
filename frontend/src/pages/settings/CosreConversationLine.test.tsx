@@ -81,7 +81,7 @@ describe('CosreConversationLine', () => {
     await tick();
     expect(m.put).toHaveBeenCalledWith(false);
   });
-  it('v0.10.2339 — doğrulayıcı üç seçenek (kapalı / gölge / zorla); varsayılan gölge; seçim yazar', async () => {
+  it('v0.10.2339 — doğrulayıcı üç seçenek (kapalı / gölge / zorla); sunucunun kipi seçili; seçim yazar', async () => {
     const el = await render();
     expect(el.textContent).toContain('Cevap doğrulayıcısı');
     expect(el.textContent).toContain('(doğrulanmamış değer)');
@@ -93,6 +93,17 @@ describe('CosreConversationLine', () => {
     await tick();
     expect(m.putVerify).toHaveBeenLastCalledWith('off');
     expect(m.put).not.toHaveBeenCalled();
+  });
+  it('v0.10.2439 — zorla varsayılan: açıklama notu ve yeniden kontrol önerisini anlatır; gölgeye dönüş yazar', async () => {
+    m.get = () => Promise.resolve({ state: true, style: false, verification: 'enforce' });
+    const el = await render();
+    expect(verifyRadio(el, 'zorla').getAttribute('aria-checked')).toBe('true');
+    expect(el.textContent).toContain('Zorla (varsayılan)');
+    expect(el.textContent).toContain('Değerleri veriden yeniden kontrol et');
+    expect(el.textContent).toContain('yerine değer uydurulmaz');
+    await act(async () => { verifyRadio(el, 'gölge').click(); });
+    await tick();
+    expect(m.putVerify).toHaveBeenCalledWith('shadow');
   });
   it('seçili kipe tık yazmaz', async () => {
     m.get = () => Promise.resolve({ state: true, style: false, verification: 'enforce' });

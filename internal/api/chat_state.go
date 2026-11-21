@@ -526,7 +526,7 @@ func (t *chatStateTurn) wrapEmit(emit func(string, any)) func(string, any) {
 		switch kind {
 		case "answer":
 			t.answered = true
-			if text := stateAnswerText(payload); text != "" {
+			if text := stripEnforceNote(stateAnswerText(payload)); text != "" { // v0.10.2439 — sunucu notu modelin önerisini örtmez
 				t.offer = detectOffer(text, t.st.ctx.Service, chatStateNow())
 			}
 		case "done":

@@ -13,12 +13,16 @@ func TestParseCosreConversation(t *testing.T) {
 		ok, state bool
 		verify    string
 	}{
-		{"", true, true, CosreVerifyShadow},
-		{`{}`, true, true, CosreVerifyShadow},
-		{`{"state":false}`, true, false, CosreVerifyShadow},
+		// v0.10.2439 — varsayılan enforce; rev'siz eski "shadow" taşınmış varsayılandır → enforce.
+		{"", true, true, CosreVerifyEnforce},
+		{`{}`, true, true, CosreVerifyEnforce},
+		{`{"state":false}`, true, false, CosreVerifyEnforce},
 		{`{"verification":"off"}`, true, true, CosreVerifyOff},
-		{`{"state":true,"verification":"shadow"}`, true, true, CosreVerifyShadow},
-		{`{"verification":"loud"}`, true, true, CosreVerifyShadow},
+		{`{"state":true,"verification":"shadow"}`, true, true, CosreVerifyEnforce},
+		{`{"verification":"shadow","verificationRev":1}`, true, true, CosreVerifyShadow},
+		{`{"verification":"off","verificationRev":1}`, true, true, CosreVerifyOff},
+		{`{"verification":"enforce"}`, true, true, CosreVerifyEnforce},
+		{`{"verification":"loud"}`, true, true, CosreVerifyEnforce},
 		{`{bozuk`, false, false, ""},
 	}
 	for _, c := range cases {
@@ -53,7 +57,7 @@ func TestParseCosreConversationInteraction(t *testing.T) {
 }
 
 func TestCosreConversationDefaultStateOn(t *testing.T) {
-	if d := DefaultCosreConversation(); !d.State || d.Style || d.Verification != CosreVerifyShadow {
+	if d := DefaultCosreConversation(); !d.State || d.Style || d.Verification != CosreVerifyEnforce {
 		t.Fatalf("varsayılan %+v", d)
 	}
 }
@@ -114,5 +118,26 @@ func TestCosreConversationEvidence(t *testing.T) {
 	SetCosreConversation(CosreConversation{State: true, Verification: CosreVerifyShadow, Evidence: "loud"})
 	if c := CurrentCosreConversation(); c.Evidence != CosreEvidenceOff {
 		t.Fatalf("geçersiz kip yayınlandı: %q", c.Evidence)
+	}
+}
+
+// v0.10.2439 — yazılan blob rev taşır: operatörün yeniden seçtiği "shadow"
+// bir sonraki okumada enforce'a çevrilmez (geri dönüş anahtarı çalışır).
+func TestCosreConversationShadowRoundTrip(t *testing.T) {
+	c := DefaultCosreConversation()
+	c.Verification = CosreVerifyShadow
+	c.VerificationRev = cosreVerifyRev
+	raw, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := parseCosreConversation(raw)
+	if !ok || got.Verification != CosreVerifyShadow {
+		t.Fatalf("%s → %+v", raw, got)
+	}
+	SetCosreConversation(CosreConversation{State: true, Verification: "loud"})
+	t.Cleanup(func() { SetCosreConversation(DefaultCosreConversation()) })
+	if v := CurrentCosreConversation().Verification; v != CosreVerifyEnforce {
+		t.Fatalf("geçersiz kip enforce'a düşmeli, %q", v)
 	}
 }

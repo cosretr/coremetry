@@ -23,7 +23,9 @@ package api
 //     cevap notu metinden çıkar, adım çipine düşer (döngü emsali,
 //     chat_source_note.go splitSourceNoteV2).
 //
-// E2 (v0.10.2339, `cosre_conversation.verification` = enforce; varsayılan shadow):
+// E2 (v0.10.2339, `cosre_conversation.verification` = enforce; v0.10.2439'tan
+// beri VARSAYILAN — önce shadow; işaretli cevaba not + takip çipi
+// answer_seam_fallback.go):
 //   - cevap: otoriter `answer`dan ÖNCE doğrulayıcı (answer_verify.go, SAF,
 //     ≈3 ms) modelin son metninde koşar; uyuşmayan (mismatch) her değerin
 //     hemen ardına " (doğrulanmamış değer)" yazılır — cümle silinmez (karar 6),
@@ -267,8 +269,9 @@ func (g *answerSeam) answer(payload any) any {
 	}
 	orig, _ := m["text"].(string)
 	text := orig
+	var left []verifyClaim
 	if g.enforce {
-		text, model = g.enforceText(text, model)
+		text, model, left = g.enforceText(text, model)
 	}
 	if g.style && model != "" {
 		if i := strings.Index(text, model); i >= 0 {
@@ -278,12 +281,18 @@ func (g *answerSeam) answer(payload any) any {
 			}
 		}
 	}
+	if len(left) > 0 { // v0.10.2439 — işaretli cevap sessiz kalmaz: not + takip çipi
+		text = seamWithEnforceNote(text)
+	}
 	if text != orig {
 		out := make(map[string]any, len(m))
 		for k, v := range m {
 			out[k] = v
 		}
 		out["text"] = text
+		if len(left) > 0 {
+			out = seamWithRecheckFollowup(out, left)
+		}
 		payload = out
 	}
 	return withAssumeClause(payload, clause)
@@ -291,17 +300,18 @@ func (g *answerSeam) answer(payload any) any {
 
 // enforceText — E2: doğrulayıcı modelin son metninde; uyuşmazlık varsa
 // (Derin + hak varsa) bir kez yeniden üretim, kalan uyuşmazlık işaretlenir.
-// Dönüş: yeni cevap metni ve modelin (işaretli) metni.
-func (g *answerSeam) enforceText(text, model string) (string, string) {
+// Dönüş: yeni cevap metni, modelin (işaretli) metni ve işaretlenen
+// (yeniden üretimden sonra da kalan) uyuşmazlıklar.
+func (g *answerSeam) enforceText(text, model string) (string, string, []verifyClaim) {
 	v := verifyTurnFrom(g.ctx)
 	r, ok := v.run()
 	if !ok {
-		return text, model // anlatım yok (rapor, şablon, LLM'siz cevap)
+		return text, model, nil // anlatım yok (rapor, şablon, LLM'siz cevap)
 	}
 	mm := r.mismatches()
 	if len(mm) == 0 {
 		g.noteEnforce(v, verifyEnforcePass, nil)
-		return text, model
+		return text, model, nil
 	}
 	vm := strings.TrimSpace(v.answerText())
 	var first *verifyResult
@@ -343,7 +353,7 @@ func (g *answerSeam) enforceText(text, model string) (string, string) {
 		}
 	}
 	g.noteEnforce(v, mode, first)
-	return text, model
+	return text, model, mm
 }
 
 func (g *answerSeam) noteEnforce(v *answerVerifyTurn, mode string, first *verifyResult) {

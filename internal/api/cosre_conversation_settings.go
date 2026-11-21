@@ -9,8 +9,9 @@ package api
 // Depo system_settings `cosre_conversation` (chstore/cosre_conversation_settings.go;
 // boot + 30 s cfgRefresh). Bağlı olanlar: `state` (A dilimi, chat_state.go) ve
 // v0.10.2327'den beri `verification` off | shadow (E1, answer_verify_turn.go);
-// v0.10.2339'dan beri `enforce` de (E2, answer_seam.go — varsayılan yine shadow;
-// operatör bir haftalık gölge verisinden sonra açar, karar 7). ai_general_questions.go ile aynı duruş:
+// v0.10.2339'dan beri `enforce` de (E2, answer_seam.go); v0.10.2439'tan beri
+// varsayılan enforce (operatör kararı 2026-11-21; shadow / off bu uçla geri
+// dönüş, audit önce/sonra). ai_general_questions.go ile aynı duruş:
 // requireCopilot'suz kurulum ayarı, GET atomic okuma.
 //
 // v0.10.2331 — `style` artık bağlı (B dilimi, chat_answer_class.go; varsayılan kapalı).
