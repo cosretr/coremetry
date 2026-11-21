@@ -10,8 +10,6 @@
 //     `active` (Button `active` → aria-pressed + .is-active; Button.contract
 //     ölçüyor). Tam sayfayı jsdom'da kurmak yerine etiket düzeyinde: aynı
 //     <Button> hem `variant="secondary"` hem `active=` taşıyor.
-//   • AdminClickhouse onay ağırlığı → CONFIRM_VARIANT tablosu (apply dolu
-//     birincil, rollback danger — görsel sonuç değişmedi).
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -88,11 +86,5 @@ describe('v0.10.1342 — Metrics / Explore anahtarları ikincil + active', () =>
     expect(on.className).toBe('sec sm is-active');
   });
 });
-
-describe('v0.10.1342 — AdminClickhouse onay ağırlığı tablodan', () => {
-  it('CONFIRM_VARIANT: apply → primary, rollback → danger; iki "Evet/Uygula" sitesi tabloyu okuyor', () => {
-    const src = read('pages/AdminClickhouse.tsx');
-    expect(src).toMatch(/const CONFIRM_VARIANT: Record<ConfirmKind, 'primary' \| 'danger'> = \{\s*apply: 'primary',\s*rollback: 'danger',\s*\};/);
-    expect(src.match(/variant=\{CONFIRM_VARIANT\[/g)?.length).toBe(2);
-  });
-});
+// v0.10.2410 — AdminClickhouse CONFIRM_VARIANT çivisi kalktı: sihirbazlar
+// AutoWizard'a geçti (tek "Çalıştır" = primary; geri alma UI'da yok).

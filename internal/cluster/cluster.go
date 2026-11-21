@@ -47,17 +47,47 @@ type Member struct {
 	LastSeen    int64    `json:"lastSeen"`  // unix ns
 	IsThisPod   bool     `json:"isThisPod"`
 	LeaderLocks []string `json:"leaderLocks,omitempty"`
+	// Facts — pod'un kendi bildirdiği küçük durum değerleri (RegisterFact;
+	// v0.10.2410: attrIndexMode — 0017 sihirbazı her pod'un v2'ye geçtiğini görür).
+	Facts map[string]string `json:"facts,omitempty"`
 }
 
 // payload is the JSON shape written to Redis on each heartbeat.
 // Kept narrow so a future field doesn't break old pods reading
 // new keys mid-rollout.
 type payload struct {
-	ID        string `json:"id"`
-	Hostname  string `json:"hostname"`
-	Version   string `json:"version"`
-	StartedAt int64  `json:"startedAt"`
-	Updated   int64  `json:"updated"`
+	ID        string            `json:"id"`
+	Hostname  string            `json:"hostname"`
+	Version   string            `json:"version"`
+	StartedAt int64             `json:"startedAt"`
+	Updated   int64             `json:"updated"`
+	Facts     map[string]string `json:"facts,omitempty"`
+}
+
+var (
+	factsMu sync.RWMutex
+	factFns = map[string]func() string{}
+)
+
+// RegisterFact — heartbeat'e her vuruşta yazılacak bir değer (ad → üretici).
+// Eski pod'lar alanı bilmez: okuyan taraf eksik değeri "bildirmiyor" sayar.
+func RegisterFact(name string, fn func() string) {
+	factsMu.Lock()
+	factFns[name] = fn
+	factsMu.Unlock()
+}
+
+func currentFacts() map[string]string {
+	factsMu.RLock()
+	defer factsMu.RUnlock()
+	if len(factFns) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(factFns))
+	for k, fn := range factFns {
+		out[k] = fn()
+	}
+	return out
 }
 
 // Service is the per-pod heartbeat loop + membership lookup. One
@@ -148,6 +178,7 @@ func (s *Service) heartbeat(ctx context.Context) error {
 		Version:   s.version,
 		StartedAt: s.startedAt.UnixNano(),
 		Updated:   time.Now().UnixNano(),
+		Facts:     currentFacts(),
 	}
 	raw, err := json.Marshal(p)
 	if err != nil {
@@ -203,6 +234,7 @@ func (s *Service) Members(ctx context.Context) ([]Member, error) {
 			LastSeen:    time.Now().UnixNano(),
 			IsThisPod:   true,
 			LeaderLocks: locks,
+			Facts:       currentFacts(),
 		}}, nil
 	}
 	out := make([]Member, 0, len(raws))
@@ -218,6 +250,7 @@ func (s *Service) Members(ctx context.Context) ([]Member, error) {
 			StartedAt: p.StartedAt,
 			LastSeen:  p.Updated,
 			IsThisPod: p.ID == s.id,
+			Facts:     p.Facts,
 		}
 		if m.IsThisPod {
 			s.mu.RLock()

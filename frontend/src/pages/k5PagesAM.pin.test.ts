@@ -104,39 +104,22 @@ describe('v0.10.929 — AdminClickhouse: yeşil yalnız ön kontrol ve eylem son
     expect(src).toContain("return maxPP >= 1000 ? 'b-err' : maxPP >= 300 ? 'b-warn' : 'b-gray';");
     expect(src).toContain("function rootTone(pct: number): string { return pct >= 90 ? 'b-gray' : pct >= 50 ? 'b-warn' : 'b-err'; }");
     expect(src).toContain('<span className="badge b-gray">MV&apos;ler sağlıklı');
-    expect(src.match(/<span className="badge b-gray">VAR<\/span>/g)).toHaveLength(5);
-    expect(src.match(/<span className="badge b-gray">TAM<\/span>/g)).toHaveLength(4);
   });
 
-  it('kalan her yeşil satır ön kontrol kutusu ya da az önceki eylemin sonucu', () => {
-    // Operatör kararı: ön kontrol 'UYGULANABİLİR' kullanıcı eylemi geri
-    // bildirimi → yeşil KALIR; uygula/geri al TAMAM ve adım ✓ da öyle.
-    // v0.10.929 (K5) — lider kararı: kutuda YALNIZ hüküm rozeti + çerçeve
-    // yeşil; PreRow ✓ ve MV KAPISI AÇIK durum kontrolleri → nötr (izinli değil).
-    const allowed = [
-      /pre\.supported \?/,                          // ön kontrol kutusu çerçevesi + UYGULANABİLİR
-      /action\.res\.ok \?/,                         // uygula / geri al TAMAM
-      /s\.ok \? <span style=\{\{ color: 'var\(--ok\)' \}\}>✓/, // uygulama adımı ✓
-    ];
-    const greens = src.split('\n').filter(l => GREEN.test(l));
-    expect(greens.length).toBeGreaterThan(0);
-    for (const l of greens) {
-      expect(allowed.some(r => r.test(l)), l.trim()).toBe(true);
-    }
-    // Geçiş tarafı gerçekten yeşil kaldı (yanlışlıkla nötrlenmedi).
-    // v0.10.960 — Rollouts katmanı kartının 0012 ve 0015 blokları ön kontrol
-    // kutusunu ORTAK WizPreflightFrame'den basar (tek kopya, aynı çerçeve +
-    // hüküm rozeti, aynı kural) → sayı 5'te kalır: dört sihirbaz + ortak çerçeve.
-    expect(src.match(/pre\.supported \? 'b-ok' : 'b-warn'/g)).toHaveLength(5);
-    expect(src.match(/border: `1px solid \$\{pre\.supported \? 'var\(--ok\)' : 'var\(--warn\)'\}`/g)).toHaveLength(5);
+  // v0.10.2410 — kurulum sihirbazları adminch/AutoWizard'a geçti: AdminClickhouse
+  // artık hiç yeşil taşımaz; AutoWizard'da yeşil YALNIZ az önceki koşunun TAMAM'ı.
+  it('kalan her yeşil satır az önceki eylemin sonucu', () => {
+    expect(src.split('\n').filter(l => GREEN.test(l))).toEqual([]);
+    const wiz = read('./adminch/AutoWizard.tsx');
+    const greens = wiz.split('\n').filter(l => GREEN.test(l));
+    expect(greens).toHaveLength(1);
+    expect(greens[0]).toMatch(/res\.ok \? <span className="badge b-ok">TAMAM/);
   });
 
-  it('ön kontrol satırları durum kontrolü: ✓ nötr --text2, ✗ kırmızı; MV KAPISI AÇIK gri', () => {
-    // v0.10.929 (K5) — lider kararı: ✓ bir geçiş değil, o anki durumun okunuşu.
-    expect(src).toContain("<span style={{ color: ok ? 'var(--text2)' : neutral ? 'var(--text3)' : 'var(--err)' }}>");
-    expect(src).not.toMatch(/color: ok \? 'var\(--ok/);
-    expect(src).toContain("<span className={`badge ${pre.mvGate ? 'b-gray' : 'b-warn'}`}");
-    expect(src).not.toMatch(/pre\.mvGate \? 'b-ok'/);
+  it('ön kontrol satırları durum kontrolü: ✓ nötr --text2, ✗ engelleyici kırmızı / uyarı sarı', () => {
+    const wiz = read('./adminch/AutoWizard.tsx');
+    expect(wiz).toContain("<span style={{ color: c.ok ? 'var(--text2)' : c.blocking ? 'var(--err)' : 'var(--warn)' }}>");
+    expect(wiz).not.toMatch(/color: c\.ok \? 'var\(--ok/);
   });
 
   it('runbook adımı renge bağlı değil (sağlıklı hâl artık yeşil değil)', () => {

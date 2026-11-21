@@ -67,9 +67,9 @@ const SET_INTERVAL_FILES = [
   'components/RefreshPicker.tsx',        // 5 s altyazı re-render'ı (istek yok, hidden guard)
   'lib/useAutoRefresh.ts',               // TEK global saat
   'pages/AIObservability.tsx',
-  'pages/AdminClickhouse.tsx',
   'pages/Profiling.tsx',
   'pages/Rollouts.tsx',
+  'pages/adminch/AutoWizard.tsx',        // v0.10.2410 — arka plan işi sürerken 10 s yeniden probe (hidden guard)
   'pages/settings/KnowledgeTab.tsx',
   'pages/settings/WikiKnowledgeSection.tsx',
 ].sort();

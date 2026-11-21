@@ -4188,28 +4188,17 @@ export const api = {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cluster }), timeoutMs: 200_000,
     }),
-  // v0.10.306 — 0014 attribute hash indeksi sihirbazı (admin_attr_index.go; 0013 aynası).
+  // v0.10.2410 — 0017 attr_kvh ALIAS sihirbazı (admin_attr_kvh_alias.go; 0014 sihirbazının yerine).
   // v0.10.1226 — function_code biçim ölçümü (admin, 5 dk önbellek).
   functionCodeShape: () =>
     get<import('./types').FunctionCodeShapeReport>('/api/admin/function-code-shape'),
-  attrIndexStatus: () =>
-    get<import('./types').AttrIndexStatusResult>('/api/admin/attr-index/status'),
-  attrIndexPreflight: () =>
-    get<import('./types').AttrIndexPreflightResult>('/api/admin/attr-index/preflight'),
-  attrIndexApply: (cluster: string) =>
-    request<import('./types').RollupActionResult & { note?: string }>('/api/admin/attr-index/apply', {
+  attrKVHAliasStatus: () =>
+    get<import('./types').AttrKVHAliasStatus>('/api/admin/attr-kvh-alias/status'),
+  /** Bekleyen 0017 adımlarını arka planda koşar (sunucu: ön kontrol → 409). */
+  attrKVHAliasRun: (materialize: boolean) =>
+    request<import('./types').AttrKVHAliasStatus>('/api/admin/attr-kvh-alias/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cluster }), timeoutMs: 330_000, // sunucu bütçesi 5 dk (8 ON CLUSTER ifadesi)
-    }),
-  attrIndexMaterialize: (cluster: string) =>
-    request<import('./types').RollupActionResult & { note?: string }>('/api/admin/attr-index/materialize', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cluster }), timeoutMs: 200_000,
-    }),
-  attrIndexRollback: (cluster: string) =>
-    request<import('./types').RollupActionResult>('/api/admin/attr-index/rollback', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cluster }), timeoutMs: 200_000,
+      body: JSON.stringify({ materialize }), timeoutMs: 60_000,
     }),
   rolloutLayerStatus: () =>
     get<import('./types').RolloutLayerStatusResult>('/api/admin/rollout-layer/status'),

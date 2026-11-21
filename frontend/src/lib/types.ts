@@ -5399,33 +5399,42 @@ export interface FunctionIDColumnStatusResult {
   generated: number;
 }
 export interface FunctionIDKeyCount { key: string; count: number }
-// ── 0014 attribute hash indeksi sihirbazı (v0.10.306) — chstore/attr_index_admin.go ──
-export interface AttrIndexStatusResult {
-  cluster: string;
-  objects: EntityLayerObjectStatus[];
-  /** spans uygulama yönetimli: boot kolon/indeksleri kendisi ekler, sihirbaz gerekmez. */
-  bootManaged: boolean;
-  /** BU pod'un derleyicisi bloom yolunda mı (probe kolonu gördü). */
-  ready: boolean;
-  /** BU pod'un boot'tan beri ürettiği bloom yüklemi sayısı. */
-  used: number;
-  /** son 10 dk: attr_kvh uzunluğu attr_keys ile eşit satır / toplam. */
-  filled: number;
-  total: number;
-  generated: number;
+// ── 0017 attr_kvh ALIAS sihirbazı (v0.10.2410) — chstore/attr_kvh_alias_admin.go ──
+export interface AttrKVHObjectStatus {
+  name: string; kind: 'column' | 'index'; table: string;
+  want: 'present' | 'absent' | 'alias';
+  hosts: number; haveHosts: number;
+  state: 'ok' | 'partial' | 'missing' | 'unknown'; err?: string;
 }
-export interface AttrIndexPreflightResult {
-  clusters: string[];
-  suggestedCluster?: string;
-  spansLocal: boolean;
-  bootManaged: boolean;
-  columnsExist: boolean;
-  indexesExist: boolean;
-  filled: number;
-  total: number;
-  probeErrors?: string[];
-  supported: boolean;
-  detail: string;
+export interface AttrKVHStep {
+  id: 'columns' | 'indexes' | 'switch' | 'legacy' | 'materialize';
+  title: string;
+  state: 'done' | 'pending' | 'partial' | 'unknown' | 'optional';
+  detail?: string;
+  objects: AttrKVHObjectStatus[];
+  sql: string[];
+}
+export interface AttrKVHCheck { name: string; ok: boolean; blocking: boolean; detail: string }
+export interface AttrKVHPod { id: string; hostname: string; version: string; mode: string; isThisPod: boolean }
+export interface AttrKVHPartition { id: string; partition: string; parts: number; rows: number; bytes: number; materialized: boolean }
+export interface AttrKVHJob {
+  running: boolean; cluster?: string; startedBy?: string; startedAt?: number; doneAt?: number;
+  materialize: boolean; step?: string; failedStep?: string; err?: string;
+  log: RollupStmtResult[];
+}
+export interface AttrKVHAliasStatus {
+  cluster: string; hosts: number; bootManaged: boolean; spansLocal: boolean;
+  thisPodMode: string; bloomUsed: number;
+  checks: AttrKVHCheck[];
+  hostInfo: { host: string; version: string; freeBytes: number; totalBytes: number }[];
+  steps: AttrKVHStep[];
+  pods: AttrKVHPod[];
+  partitions: AttrKVHPartition[];
+  pendingMutations: number;
+  /** zorunlu dört adımdan biri bitmemiş — kart yalnız o zaman görünür. */
+  pending: boolean;
+  blocker?: string;
+  job: AttrKVHJob;
   generated: number;
 }
 export interface FunctionIDColumnPreflightResult {

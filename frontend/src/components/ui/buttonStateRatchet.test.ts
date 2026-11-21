@@ -143,9 +143,8 @@ describe('K3 — durum birincil dolgu değil (v0.10.1318)', () => {
     }
     // Vurgu → arama tablosu (üçlü değil).
     expect(src('components/ai/AIExplainButton.tsx')).toContain('variant={look.variant}');
-    const ch = src('pages/AdminClickhouse.tsx');
-    expect(ch).toContain("variant={CONFIRM_VARIANT[confirmKind ?? 'rollback']}");
-    expect(ch).toContain('variant={CONFIRM_VARIANT[confirmKind]}');
+    // v0.10.2410 — AdminClickhouse CONFIRM_VARIANT siteleri sihirbazlarla
+    // kalktı (AutoWizard tek "Çalıştır"; geri alma UI'da yok).
   });
 
   it('(c) hiçbir <Button> `active` ile dolu varyant (primary|danger) taşımaz', () => {

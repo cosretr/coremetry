@@ -5372,6 +5372,9 @@ func (s *Store) migrate(ctx context.Context) error {
 	// probe (küme kipinde ertelenir → ddl_defer.go yeniden probe eder).
 	s.repairAttrIndexCols(ctx)
 	registerAttrIndex(s.probeAttrIndex(ctx))
+	if attrIndexMode.Load() != attrIndexV2 {
+		go s.attrIndexReprobeLoop() // v0.10.2410 — 0017 sihirbazı: restart'sız v2 geçişi
+	}
 	// v0.10.409 — ai_calls genişletilmiş kolon probe'u (iki-boot).
 	s.probeAICallsColumns(ctx)
 	s.probeAICallsCachedColumn(ctx)      // v0.10.807

@@ -136,6 +136,7 @@ func clusterTableArgQualified(arg string) bool {
 var caRIndirect = map[string]string{
 	"entity_layer_admin.go | %s":    "q(system.*) — kolon/index/tablo envanteri",
 	"rollout_layer_admin.go | %s":   "q(system.*) — kolon/index/tablo envanteri",
+	"attr_kvh_alias_admin.go | %s":  "src(system.*) — 0017 sihirbazı: kolon/index/parts/mutations/disks envanteri",
 	`server_stats.go | " + tbl + "`: "wrap(system.*) — düğüm metrikleri",
 }
 

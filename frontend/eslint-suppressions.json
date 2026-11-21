@@ -146,7 +146,7 @@
   },
   "src/pages/AdminClickhouse.tsx": {
     "ui/no-raw-element": {
-      "count": 16
+      "count": 8
     }
   },
   "src/pages/AdminQuery.tsx": {
