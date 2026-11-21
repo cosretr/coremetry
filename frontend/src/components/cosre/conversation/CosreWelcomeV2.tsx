@@ -30,7 +30,7 @@ import type { ChatSendOpts } from '@/components/ai/useChatThread';
 import {
   operationErrorQuestion, serviceHealthQuestion, splitCaret, tCosre as t, teamPickQuestion,
 } from '@/components/ai/capabilityHints';
-import { BriefingFeed, type BriefingFeedLine, type BriefingLineRef, type BriefingView } from './BriefingFeed';
+import { BriefingFeed, type BriefingLineRef, type BriefingView } from './BriefingFeed';
 import { CosreScopeSearch } from './CosreScopeSearch';
 import type { CosreTeamScope } from './useCosreTeamScope';
 import type { PageStarter } from '@/lib/cosre/pageStarters';
@@ -87,7 +87,7 @@ function SuggestionChip({ s, onRun, onPick }: {
   );
 }
 
-export function CosreWelcomeV2({ firstName, scope, wiki, ctxStarter, pageStarters, briefing, onPrefill, onAskBriefingLine, onAsk, onAskExplain }: CosreWelcomeV2Props) {
+export function CosreWelcomeV2({ firstName, scope, wiki, ctxStarter, pageStarters, onPrefill, onAsk, onAskExplain }: CosreWelcomeV2Props) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const tabs = welcomeTabs({ team: scope.team, wiki, ctxStarter, pageStarters });
@@ -121,13 +121,11 @@ export function CosreWelcomeV2({ firstName, scope, wiki, ctxStarter, pageStarter
   const pick = (kind: 'service' | 'operation', name: string) =>
     onAsk(kind === 'service' ? serviceHealthQuestion(name) : operationErrorQuestion(name));
   const chooseTeam = (name: string) => { scope.choose(name); onAsk(teamPickQuestion(name)); };
-  const askLine = (l: BriefingFeedLine) => { onAskBriefingLine?.(l.ref); onPrefill(l.ask, l.ask.length); };
 
-  const view: BriefingView | null = scope.unknown ? { state: 'unknownTeam' } : briefing;
-  const lead = view?.state === 'unknownTeam' ? t('cosre.welcome.lead.noTeam')
-    : view && scope.team
-      ? t('cosre.welcome.lead.briefing').replace('{window}', view.windowLabel).replace('{team}', scope.team)
-      : t('cosre.welcome.lead.default');
+  // v0.10.2417 — operatör: "karşılamada bu kadar detaya gerek yok, sorarsa
+  // bilgileri verirsin". Brifing listesi karşılamada çizilmez (veri de
+  // çekilmez); durum sorulunca cevapta gelir. Karşılama = selam + çipler.
+  const lead = scope.unknown ? t('cosre.welcome.lead.noTeam') : t('cosre.welcome.lead.default');
 
   return (
     <div className="cosre-welcome flex w-full flex-col gap-4 py-4" data-cosre-welcome="">
@@ -135,8 +133,8 @@ export function CosreWelcomeV2({ firstName, scope, wiki, ctxStarter, pageStarter
         <div className="cosre-welcome__hello text-[15px] font-semibold">{greetHello(firstName)}</div>
         <p className="m-0 mt-0.5 text-[13px] text-muted-foreground">{lead}</p>
       </div>
-      <BriefingFeed view={view} onAskLine={askLine}
-        teamPicker={<CosreScopeSearch kind="team" onPick={chooseTeam} />} />
+      {scope.unknown && <BriefingFeed view={{ state: 'unknownTeam' }} onAskLine={() => {}}
+        teamPicker={<CosreScopeSearch kind="team" onPick={chooseTeam} />} />}
       {active && (
         <Tabs value={active} onValueChange={v => setTab(v as WelcomeTabId)} className="gap-2.5">
           <TabsList aria-label={t('cosre.welcome.tabs.aria')}>

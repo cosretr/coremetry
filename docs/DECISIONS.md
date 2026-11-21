@@ -15325,3 +15325,7 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 
 - Operator-reported (prod ekran görüntüsü): CoSRE karşılamasında ham i18n anahtarları (cosre.welcome.lead.briefing …); kodda sabit Türkçe metinler doğru. Kök neden: v0.10.2403'ten beri iki katalog da açılışta dinamik import ile gelir; prod'da ikisi de yüklenemedi, loadCatalog hatayı yuttu, uygulama ham anahtarla açıldı ve bir daha denemedi. Import'un neden düştüğü (chunk 404 / proxy / MIME) prod konsolundan doğrulanacak.
 - Düzeltme: hata konsola yazılır; hiç katalog yokken 1/3/8/20/45 sn geri çekilmeyle yeniden denenir; son denemeden sonra sekme oturumu başına bir kez sayfa yenilenir (yükseltmeden önce açılmış sekme artık sunulmayan chunk adını istiyorsa); useLang hiç katalog yoksa marka çözülmeden de yükleme ister.
+
+## 2026-11-21 — v0.10.2417 — CoSRE karşılamasında brifing listesi kalktı
+
+- Operatör isteği (2026-11-21, prod ekran görüntüsü üzerine): "Karşılama ekranında bu kadar detaya gerek yok, sorarsa bilgileri verirsin." Karşılama = selam + kısa açılış cümlesi + niyet sekmelerindeki çipler; RED / CLIENT / EXC / LOG / ORACLE / PROBLEM satırları çizilmez ve /api/cosre/v2/briefing karşılamada çağrılmaz. Takım bilinmiyorsa "hangi takımdasın?" sorusu ve takım araması kalır. Durum bilgisi sorulunca cevapta gelir. Bu, v0.10.1700 brifing kartı kararını (karşılamada brifing) tersine çevirir.

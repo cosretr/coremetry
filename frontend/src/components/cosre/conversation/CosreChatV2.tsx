@@ -135,7 +135,8 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
   const welcome = useCosreWelcomeData(welcomeActive, ask.env, { greeting: false });
   const teamScope = useCosreTeamScope(welcome.team, welcome.teamSettled);
   // v0.10.1700 — brifing kartı (Faz 1 ucu); yalnız karşılama ekrandayken, kendi poll'u yok.
-  const briefingQ = useCosreBriefing(welcomeActive, ask.env);
+  // v0.10.2417 — brifing karşılamada gösterilmiyor: istek de atılmaz.
+  const briefingQ = useCosreBriefing(false, ask.env);
   const briefing = useMemo(() => briefingView(briefingQ.data, teamScope.picked), [briefingQ.data, teamScope.picked]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { pin: pinBottom, atBottom } = useStickToBottomState(scrollRef, [messages, open]);
