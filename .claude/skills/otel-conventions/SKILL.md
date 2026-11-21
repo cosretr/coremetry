@@ -395,7 +395,7 @@ Tek giriş noktaları (hepsi `convert.go`): `ConvertTraces` + `convertSpan`
 | OTLP | CH | Durum |
 |---|---|---|
 | `trace_id`, `span_id`, `parent_span_id`, `name`, `status` | aynı adlı kolonlar | TAM |
-| `kind` | `kind` | TAM ama **daraltma: 6 girdi → 5 çıktı** (`UNSPECIFIED` + `INTERNAL` → ikisi de `internal`) |
+| `kind` | `kind` | TAM ama **daraltma: 6 girdi → 5 çıktı** (`UNSPECIFIED` + `INTERNAL` → ikisi de `internal`). **Türetme (v0.10.2414, `mainframe.go`):** CTG/CICS çağrısı (`com.ibm.ctg.*` code.*, `rpc.system=cics_ctg`, `cics.*`) internal→`client` + `peer_service=mainframe` + `rpc_system=cics_ctg`; `messaging.system=jms` + IBM MQ MsgId'li `messaging.message.id` → `msg_system=ibmmq`. Attr dizileri verbatim kalır; golden `convert_mainframe_golden_test.go` |
 | `start_time_unix_nano` | `time` DateTime64(9) | TAM — **`0` gelirse 1970 partition, fallback YOK** |
 | `end_time_unix_nano` | yalnız `duration` | KISMİ; negatif sessizce 0'a kelepçelenir |
 | `attributes` | `attr_keys`/`attr_values` + 11 tipli kolon | KISMİ (tip düzleştirme) |

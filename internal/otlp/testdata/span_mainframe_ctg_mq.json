@@ -1,0 +1,109 @@
+{
+  "resourceSpans": [{
+    "resource": {"attributes": [
+      {"key": "service.name", "value": {"stringValue": "transfer-core"}},
+      {"key": "host.name", "value": {"stringValue": "transfer-core-1"}},
+      {"key": "deployment.environment", "value": {"stringValue": "prod"}}
+    ]},
+    "scopeSpans": [
+      {
+        "scope": {"name": "io.opentelemetry.methods", "version": "2.9.0"},
+        "spans": [
+          {
+            "traceId": "AAAAAAAAAAAAAAAAAAAAAQ==",
+            "spanId": "AAAAAAAAAAE=",
+            "parentSpanId": "AAAAAAAAAAk=",
+            "name": "JavaGateway.flow",
+            "kind": "SPAN_KIND_INTERNAL",
+            "startTimeUnixNano": "1700000000000000000",
+            "endTimeUnixNano": "1700000000120000000",
+            "attributes": [
+              {"key": "code.namespace", "value": {"stringValue": "com.ibm.ctg.client.JavaGateway"}},
+              {"key": "code.function", "value": {"stringValue": "flow"}},
+              {"key": "thread.name", "value": {"stringValue": "default task-7"}}
+            ]
+          },
+          {
+            "traceId": "AAAAAAAAAAAAAAAAAAAAAQ==",
+            "spanId": "AAAAAAAAAAI=",
+            "parentSpanId": "AAAAAAAAAAk=",
+            "name": "JavaGateway.flow",
+            "kind": "SPAN_KIND_INTERNAL",
+            "startTimeUnixNano": "1700000000200000000",
+            "endTimeUnixNano": "1700000000210000000",
+            "attributes": [
+              {"key": "code.function.name", "value": {"stringValue": "com.ibm.ctg.client.JavaGateway.flow"}}
+            ],
+            "status": {"code": "STATUS_CODE_ERROR", "message": "java.io.IOException: CTG6651E Unable to connect to the Gateway"}
+          }
+        ]
+      },
+      {
+        "scope": {"name": "transfer-core.ctg"},
+        "spans": [
+          {
+            "traceId": "AAAAAAAAAAAAAAAAAAAAAQ==",
+            "spanId": "AAAAAAAAAAM=",
+            "parentSpanId": "AAAAAAAAAAk=",
+            "name": "CICS TR01 PAYPOST",
+            "kind": "SPAN_KIND_CLIENT",
+            "startTimeUnixNano": "1700000000300000000",
+            "endTimeUnixNano": "1700000000380000000",
+            "attributes": [
+              {"key": "rpc.system", "value": {"stringValue": "cics_ctg"}},
+              {"key": "rpc.method", "value": {"stringValue": "PAYPOST"}},
+              {"key": "cics.transaction_id", "value": {"stringValue": "TR01"}},
+              {"key": "cics.program", "value": {"stringValue": "PAYPOST"}}
+            ]
+          },
+          {
+            "traceId": "AAAAAAAAAAAAAAAAAAAAAQ==",
+            "spanId": "AAAAAAAAAAY=",
+            "name": "CICS TR01 PAYPOST",
+            "kind": "SPAN_KIND_SERVER",
+            "startTimeUnixNano": "1700000000300000000",
+            "endTimeUnixNano": "1700000000380000000",
+            "attributes": [
+              {"key": "cics.program", "value": {"stringValue": "PAYPOST"}}
+            ]
+          }
+        ]
+      },
+      {
+        "scope": {"name": "io.opentelemetry.jms-1.1", "version": "2.9.0"},
+        "spans": [
+          {
+            "traceId": "AAAAAAAAAAAAAAAAAAAAAQ==",
+            "spanId": "AAAAAAAAAAQ=",
+            "parentSpanId": "AAAAAAAAAAk=",
+            "name": "TRANSFER.CONFIRM publish",
+            "kind": "SPAN_KIND_PRODUCER",
+            "startTimeUnixNano": "1700000000400000000",
+            "endTimeUnixNano": "1700000000405000000",
+            "attributes": [
+              {"key": "messaging.system", "value": {"stringValue": "jms"}},
+              {"key": "messaging.destination.name", "value": {"stringValue": "TRANSFER.CONFIRM"}},
+              {"key": "messaging.operation", "value": {"stringValue": "publish"}},
+              {"key": "messaging.message.id", "value": {"stringValue": "ID:414d5120514d4d41494e2020202020200123456789abcdef"}}
+            ]
+          },
+          {
+            "traceId": "AAAAAAAAAAAAAAAAAAAAAQ==",
+            "spanId": "AAAAAAAAAAU=",
+            "parentSpanId": "AAAAAAAAAAQ=",
+            "name": "TRANSFER.AUDIT process",
+            "kind": "SPAN_KIND_CONSUMER",
+            "startTimeUnixNano": "1700000000410000000",
+            "endTimeUnixNano": "1700000000420000000",
+            "attributes": [
+              {"key": "messaging.system", "value": {"stringValue": "jms"}},
+              {"key": "messaging.destination.name", "value": {"stringValue": "TRANSFER.AUDIT"}},
+              {"key": "messaging.operation", "value": {"stringValue": "process"}},
+              {"key": "messaging.message.id", "value": {"stringValue": "ID:broker-1-41231-1700000000000-1:1:1:1:1"}}
+            ]
+          }
+        ]
+      }
+    ]
+  }]
+}

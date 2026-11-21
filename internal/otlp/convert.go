@@ -168,9 +168,11 @@ func convertSpan(sp *tracepb.Span, svcName, hostName, deployEnv, scopeName strin
 	rpcSystem := attrStr(sp.Attributes, "rpc.system", "")
 	rpcMethod := attrStr(sp.Attributes, "rpc.method", "")
 	peerService := attrStr(sp.Attributes, "peer.service", "")
-	msgSystem := attrStr(sp.Attributes, "messaging.system", "")
+	msgSystem := applyIBMMQ(sp.Attributes, attrStr(sp.Attributes, "messaging.system", ""))
 
 	kind := kindStr(sp.Kind)
+	// v0.10.2414 — CTG/CICS calls → outbound call to "mainframe" (mainframe.go).
+	kind, peerService, rpcSystem = applyMainframe(sp.Attributes, kind, peerService, rpcSystem)
 
 	// Phase-2 #3 — only build + marshal the events JSON when the span actually
 	// carries events. The empty-events majority stored "[]" at the cost of a
