@@ -218,7 +218,7 @@
      (styles/fonts.css), sistem yığını yedek. v0.10.1623 — redhat de aynı
      yüzü alır (operatör: tipografi üç temada tek; renkler değişmez). */
   --font-mono: 'JetBrains Mono Variable', var(--font-mono-fallback);
-  --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-sans: 'Inter Variable', 'Inter Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   /* v0.10.933 (tablo standardı T6) — satır ritmi. Bu RAHAT (varsayılan)
      değer; compact/dense kendi değerini dolgu kurallarının yanında
      bildirir. rowHeight.ts `ROW_H` ile eşit olmak ZORUNDA (rowHeight.test). */

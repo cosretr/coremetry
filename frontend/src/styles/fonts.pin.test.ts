@@ -9,7 +9,9 @@ import { resolve } from 'node:path';
 const FE = resolve(__dirname, '..', '..');
 const read = (p: string) => readFileSync(resolve(FE, p), 'utf8');
 const css = read('src/styles/fonts.css');
-const faces = css.match(/@font-face\s*{[^}]*}/g) ?? [];
+// v0.10.2420 — dosyalı yüzler; metrik yedeği (local(), dosya yok) ayrı çivili.
+const allFaces = css.match(/@font-face\s*{[^}]*}/g) ?? [];
+const faces = allFaces.filter(f => /files\//.test(f));
 
 function pkgRanges(pkg: string): Map<string, string> {
   const m = new Map<string, string>();
@@ -55,7 +57,7 @@ describe('yazı tipleri', () => {
   it('yığınlar: paketli yüz üç temada (v0.10.1623 redhat de)', () => {
     const g = read('src/styles/globals.css');
     expect(g).toContain("--font-mono: 'JetBrains Mono Variable', var(--font-mono-fallback);");
-    expect(g).toContain("--font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;");
+    expect(g).toContain("--font-sans: 'Inter Variable', 'Inter Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;");
     expect(g).toMatch(/body \{\n {2}background: var\(--bg0\); color: var\(--text\);\n {2}font: 13px\/1\.5 var\(--font-sans\);/);
     // v0.10.1623 — redhat yazı tipini geri çekmez: tema bloğunda font token'ı yok,
     // yerel Red Hat Text kuralı (body / .tip) yok.
@@ -65,6 +67,14 @@ describe('yazı tipleri', () => {
     // Çıplak sistem sans yığını yalnız --font-sans token'ında.
     const bare = g.split('\n').filter(l => /-apple-system/.test(l) && !/--font-sans:/.test(l));
     expect(bare).toEqual([]);
+  });
+
+  it('Inter metrik yedeği: yalnız local(), dosya indirmez, swap kaymasını önler (v0.10.2420)', () => {
+    const fb = allFaces.filter(f => /'Inter Fallback'/.test(f));
+    expect(fb).toHaveLength(1);
+    expect(fb[0]).toMatch(/src:\s*local\('Arial'\)/);
+    expect(fb[0]).not.toMatch(/url\(/);
+    for (const k of ['size-adjust', 'ascent-override', 'descent-override', 'line-gap-override']) expect(fb[0]).toContain(k);
   });
 
   it('bundle-budget yazı tipi yöntemi çivili', () => {

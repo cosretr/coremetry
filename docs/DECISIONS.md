@@ -15338,3 +15338,7 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 
 - Operatör isteği (2026-11-21, yerel ledger-service ekranı): "Burası da böyle yazmasın." Metrik kurulumda vardı (metricExists) ama bu servise eşleşen seri yoktu (HTTP metriği olmayan gRPC servisi); otomatik kip metrikte kalıyor, boş grafikler + "missing" rozeti + uzun teşhis metni çıkıyordu.
 - Otomatik kip (?src yok) artık metrik VE servise ait en az bir noktalı seri (redHasServiceSeries) ister; yoksa span kaynağından çizer. ?src=metric zorlamaya devam eder. Zorlanmış metrikte boş throughput teşhisi (MetricThroughputNote) katlanmış "Neden boş?" bölümünde, varsayılan kapalı. v0.10.359 "metrik varsayılan" kararı geçerli; yalnız boş seri durumunda span'a dönüş eklendi.
+
+## 2026-11-21 — v0.10.2420 — Inter için metrik ayarlı yedek font (swap kaymasız)
+
+- Operatör onayı (2026-11-21, "17 yapabilirsin"): v0.10.2413 CLS düzeltmesinden sonra /logs'ta kalan kayma Inter'in font-display: swap ile yüklenmesindendi. Yeni 'Inter Fallback' @font-face: yalnız local('Arial'/'Helvetica'/'Liberation Sans'), dosya indirmez; size-adjust 107.06%, ascent-override 90.49%, descent-override 22.56%, line-gap-override 0% (Inter'in Arial'a göre metrikleri; Next.js / fontaine hesabı). --font-sans yığınında Inter'den hemen sonra. v0.10.1620 font pin'leri güncellendi (dört dosyalı yüz aynı; yedek ayrı çivili). JetBrains Mono için yedek eklenmedi (kayma kaynağı değil). Aynı gün: log metin indeksi ve Slack/Teams takip mesajı soruları operatörce kuyruktan düşürüldü.
