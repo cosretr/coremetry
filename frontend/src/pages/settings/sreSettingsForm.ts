@@ -43,6 +43,8 @@ export interface SREForm {
   nums: Record<SRENumKey, string>;
   /** CoSRE Faz B3 — kanıt kapısı kipi ('' = shadow, varsayılan). */
   evidenceGate: SREEvidenceGateMode;
+  /** CoSRE Faz C1 — bildirimde araştırma özeti (varsayılan açık). */
+  notifySummary: boolean;
 }
 
 /** Kanıt kapısı kipleri (Go sre.NormalizeGateMode; '' = shadow). */
@@ -59,7 +61,7 @@ const emptyNums = (): Record<SRENumKey, string> =>
 
 /** Varsayılan form (ayar hiç kaydedilmemiş gibi). */
 export function sreDefaultForm(): SREForm {
-  return { enabled: true, priorities: [...SRE_DEFAULT_PRIORITIES], nums: emptyNums(), evidenceGate: '' };
+  return { enabled: true, priorities: [...SRE_DEFAULT_PRIORITIES], nums: emptyNums(), evidenceGate: '', notifySummary: true };
 }
 
 /** Tel → form. Varsayılana eşit değer kutuya YAZILIR (sunucunun saklı değeri
@@ -75,7 +77,7 @@ export function sreToForm(s: SRESettings | null | undefined): SREForm {
     ? [...SRE_DEFAULT_PRIORITIES]
     : SRE_PRIORITIES.filter(p => s.autoPriorities!.includes(p));
   const gate = s.evidenceGate === 'show' || s.evidenceGate === 'off' ? s.evidenceGate : '';
-  return { enabled: s.enabled !== false, priorities: pr, nums, evidenceGate: gate };
+  return { enabled: s.enabled !== false, priorities: pr, nums, evidenceGate: gate, notifySummary: s.notifySummary !== false };
 }
 
 /** Alan doğrulaması — boş geçerli (varsayılan), aksi hâlde tam sayı ve aralıkta. */
@@ -109,6 +111,7 @@ export function sreFormToWire(f: SREForm): { ok: true; wire: SRESettings } | { o
   };
   for (const b of SRE_NUM_BOUNDS) wire[b.key] = num(b);
   if (f.evidenceGate) wire.evidenceGate = f.evidenceGate; // '' = shadow → alan yok (bayt bayt eski gövde)
+  if (!f.notifySummary) wire.notifySummary = false; // açık = alan yok (nil = açık)
   return { ok: true, wire };
 }
 

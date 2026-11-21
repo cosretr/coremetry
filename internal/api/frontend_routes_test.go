@@ -213,6 +213,11 @@ func routeServes(routes map[string]bool, p string) bool {
 		return true
 	}
 	segs := strings.Split(strings.Trim(p, "/"), "/")
+	// CoSRE Faz C2 — `base + "/sre/report/" + id`: sonda "/" ile biten
+	// emisyon bir kimlik ekler; yalnız SON segmenti param olan rota karşılar.
+	if strings.HasSuffix(p, "/") && len(p) > 1 {
+		segs = append(segs, "")
+	}
 	for r := range routes {
 		if r == "*" || !strings.Contains(r, ":") {
 			continue

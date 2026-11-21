@@ -56,6 +56,10 @@ type Settings struct {
 	// EvidenceGate — CoSRE Faz B3 kanıt kapısının kipi: "" / shadow
 	// (VARSAYILAN: kayda yazılır, gösterilmez) | show | off (coverage.go).
 	EvidenceGate string `json:"evidenceGate,omitempty"`
+	// NotifySummary — CoSRE Faz C1: Problem bildirimine araştırma özeti
+	// (en olası neden / kanıt / kör noktalar / rapor bağlantısı). nil = AÇIK
+	// (operatör onayı 2026-11-21); false = bildirim bugünkü gibi.
+	NotifySummary *bool `json:"notifySummary,omitempty"`
 	// UpdatedBy / UpdatedAt — son admin PUT.
 	UpdatedBy string `json:"updatedBy,omitempty"`
 	UpdatedAt int64  `json:"updatedAt,omitempty"`
@@ -118,6 +122,9 @@ func NormalizeSettings(c Settings) Settings {
 
 // IsEnabled — nil = açık.
 func (c Settings) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
+
+// NotifySummaryOn — nil = açık.
+func (c Settings) NotifySummaryOn() bool { return c.NotifySummary == nil || *c.NotifySummary }
 
 // Priorities — çözülmüş otomatik öncelik listesi.
 func (c Settings) Priorities() []string {

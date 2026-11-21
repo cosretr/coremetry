@@ -29,6 +29,8 @@ describe('Tailwind kaynak listesi kilitli', () => {
       "'../pages/metrics'",
       // v0.10.1906 (Login yeniden tasarımı): /login sayfa modülleri.
       "'../pages/login'",
+      // CoSRE Faz C2: /sre/report/:id rapor sayfası.
+      "'../pages/sre'",
     ]);
   });
 

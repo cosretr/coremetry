@@ -4594,6 +4594,13 @@ tr:hover .pv-row, tr:focus-within .pv-row, .pv-row.is-set, .pv-row:focus-within 
    mesajlar + composer. İçerik ortada okunur genişlikte, kenarlarda 16px boşluk
    (telefonda da). Mesaj listesi kendi içinde kayar, composer altta sabit kalır. */
 .cosre-bare #main { padding: 0; overflow: hidden; }
+/* CoSRE Faz C2 — araştırma raporu (/sre/report/:id, .sre-report-bare): sayfa
+   kendi içinde kayar; yazdırırken kabuğun 100vh + taşma kısıtı kalkar ki rapor
+   sayfalara bölünerek tam basılsın. */
+.sre-report-bare #main { padding: 0; overflow: hidden; }
+@media print {
+  .sre-report-bare, .sre-report-bare #main { display: block; height: auto; overflow: visible; }
+}
 .cosre-page {
   display: flex; flex-direction: column; flex: 1; min-height: 0;
   background: var(--bg);

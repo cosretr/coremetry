@@ -12513,6 +12513,8 @@ export interface SRESettings {
   maxLLMCallsPerHour: number;
   /** CoSRE Faz B3 — kanıt kapısı kipi: yok = shadow (varsayılan: kayda yazılır, gösterilmez) | show | off. */
   evidenceGate?: SREEvidenceGateMode;
+  /** CoSRE Faz C1 — Problem bildirimine araştırma özeti; yok = açık (varsayılan). */
+  notifySummary?: boolean;
   updatedBy?: string;
   updatedAt?: number; // unix ns
 }

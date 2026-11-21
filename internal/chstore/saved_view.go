@@ -52,6 +52,9 @@ var systemSavedViewPages = map[string]struct{}{
 	NotifyThreadPage: {},
 	// v0.10.1533 — P3 özet kuyruğu (Problem standardı R5); yalnız notify yazar.
 	NotifyDigestPage: {},
+	// CoSRE Faz C1 — bildirimin araştırma özeti bekleyen künyeleri; yalnız
+	// notify yazar (sre_followup.go).
+	NotifySREFollowUpPage: {},
 	// v0.10.2111 — CoSRE evalset aday vakaları (kalite döngüsü D6); yalnız
 	// gece kalite işi (yazım) ve POST /api/ai/evalset/candidates/{id}/accept
 	// (admin, denetimli) yazar.

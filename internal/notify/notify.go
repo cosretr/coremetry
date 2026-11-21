@@ -277,6 +277,9 @@ type Notifier struct {
 
 	// enf — v0.10.1533 (Problem standardı R5) enforce kipinin defteri (enforce.go).
 	enf enforceBook
+
+	// sreSum — CoSRE Faz C1 araştırma özeti (sre_summary.go).
+	sreSum sreSummary
 }
 
 // maintenanceSilenced reports whether any active maintenance
@@ -615,6 +618,7 @@ func (n *Notifier) SendProblemAlert(ctx context.Context, p chstore.Problem) {
 	if p.Status == "resolved" {
 		n.forgetProblem(p.ID)
 	}
+	sreAttached := false
 	for _, c := range channels {
 		if !c.MatchRules.MatchesProblem(in) {
 			// v0.9.1344 — KUSURUN BİRİNCİ YARISI TAM BURASI. Bu `continue`
@@ -657,10 +661,18 @@ func (n *Notifier) SendProblemAlert(ctx context.Context, p chstore.Problem) {
 		// hatayı "kimseye gitmedi" saymak iki farklı arızayı tek kovaya
 		// atardı ve eşleşme kusuru ölü-kanal gürültüsünde kaybolurdu.
 		facts.Sends++
+		// CoSRE Faz C1 — bitmiş araştırma özeti ctx'e; bekleniyorsa künye
+		// toplayıcı (sre_summary.go). Tembel: yalnız tekrar tabanını geçen
+		// İLK gönderimde bir okuma (her tikte yeniden çağrılan açık problem
+		// kayıt okumaz). Yeni bildirim AÇMAZ.
+		if !sreAttached {
+			ctx, sreAttached = n.attachInvestigation(ctx, p), true
+		}
 		if err := n.sendOne(ctx, c, p, relKind, p.ID); err != nil {
 			log.Printf("[notify] %s (%s): %v", c.Name, c.Type, err)
 		}
 	}
+	n.queueInvestigationFollowUp(ctx, p) // CoSRE Faz C1
 	n.recordRouting(ctx, p, relKind, facts)
 }
 
@@ -1146,6 +1158,7 @@ func (n *Notifier) SendTest(ctx context.Context, c chstore.NotificationChannel) 
 // relKind/relID describe the originating entity (problem|runbook|test).
 func (n *Notifier) sendOne(ctx context.Context, c chstore.NotificationChannel, p chstore.Problem, relKind, relID string) error {
 	err := n.dispatch(ctx, c, p)
+	noteSent(ctx, c, err) // CoSRE Faz C1 — künye (yalnız özet bekleniyorsa)
 	n.recordNotification(ctx, c, p, relKind, relID, err)
 	return err
 }
@@ -1221,9 +1234,9 @@ func (n *Notifier) sendEmail(ctx context.Context, c chstore.NotificationChannel,
 	// AYRI mail. İmzalayıcı/public URL yoksa eski tek-mail yolu bayt-bayt.
 	bodies := func(ignore string) (string, string) {
 		if view != nil {
-			return n.buildEmailBodyTR(view, p, rc, ignore), n.buildEmailHTMLTR(view, p, rc, ignore)
+			return n.withSREEmail(ctx, n.buildEmailBodyTR(view, p, rc, ignore), n.buildEmailHTMLTR(view, p, rc, ignore))
 		}
-		return n.buildEmailBodyWith(p, rc, ignore), n.buildEmailHTMLWith(p, rc, ignore)
+		return n.withSREEmail(ctx, n.buildEmailBodyWith(p, rc, ignore), n.buildEmailHTMLWith(p, rc, ignore))
 	}
 	if n.ignoreURL(p, ec.Recipients[0]) == "" {
 		plain, htm := bodies("")
@@ -1669,7 +1682,7 @@ func (n *Notifier) sendSlack(ctx context.Context, c chstore.NotificationChannel,
 		return errors.New("channel has no webhook URL")
 	}
 	if v := alertViewOf(ctx); v != nil { // v0.10.1532 — Türkçe standart
-		return postJSON(ctx, sc.WebhookURL, n.slackBodyTR(v, c, p))
+		return postJSON(ctx, sc.WebhookURL, n.withSRESlack(ctx, n.slackBodyTR(v, c, p)))
 	}
 	color := severityColor(p.Severity)
 	t := notifyStamp(p.StartedAt) // v0.10.758 — sunucu diliminde, etiketli (stamp.go)
@@ -1723,7 +1736,7 @@ func (n *Notifier) sendSlack(ctx context.Context, c chstore.NotificationChannel,
 			"footer": "Coremetry",
 		}},
 	}
-	return postJSON(ctx, sc.WebhookURL, body)
+	return postJSON(ctx, sc.WebhookURL, n.withSRESlack(ctx, body))
 }
 
 // ── Microsoft Teams backend (Office-365 Connector card) ────────────────────
@@ -1741,7 +1754,7 @@ func (n *Notifier) sendTeams(ctx context.Context, c chstore.NotificationChannel,
 		return errors.New("channel has no webhook URL")
 	}
 	if v := alertViewOf(ctx); v != nil { // v0.10.1532 — Türkçe standart
-		return postJSON(ctx, tc.WebhookURL, n.teamsBodyTR(v, c, p))
+		return postJSON(ctx, tc.WebhookURL, n.withSRETeams(ctx, n.teamsBodyTR(v, c, p)))
 	}
 	colour := strings.TrimPrefix(severityColor(p.Severity), "#")
 	t := notifyStamp(p.StartedAt) // v0.10.758 — sunucu diliminde, etiketli (stamp.go)
@@ -1805,7 +1818,7 @@ func (n *Notifier) sendTeams(ctx context.Context, c chstore.NotificationChannel,
 	if len(actions) > 0 {
 		body["potentialAction"] = actions
 	}
-	return postJSON(ctx, tc.WebhookURL, body)
+	return postJSON(ctx, tc.WebhookURL, n.withSRETeams(ctx, body))
 }
 
 // ── Zoom Chat backend (Server-to-Server OAuth) ─────────────────────────────
@@ -1933,6 +1946,7 @@ func (n *Notifier) sendZoomChat(ctx context.Context, c chstore.NotificationChann
 	if v := alertViewOf(ctx); v != nil { // v0.10.1532 — Türkçe standart
 		msg = n.zoomTextTR(v, c, p)
 	}
+	msg = n.withSREText(ctx, msg) // CoSRE Faz C1
 
 	payload := map[string]any{"message": msg}
 	if zc.ChannelID != "" {
@@ -1942,7 +1956,8 @@ func (n *Notifier) sendZoomChat(ctx context.Context, c chstore.NotificationChann
 	}
 
 	// First attempt with the (cached) token.
-	if err := postZoomChatMessage(ctx, token, payload, zc.APIBaseURL, zc.InsecureSkipVerify); err != nil {
+	msgID, err := postZoomChatMessageID(ctx, token, payload, zc.APIBaseURL, zc.InsecureSkipVerify)
+	if err != nil {
 		// On auth failure, drop the cached token and retry once
 		// with a freshly-minted one. Zoom can revoke tokens at
 		// any moment (admin rotated the secret, app pause, etc.)
@@ -1954,10 +1969,16 @@ func (n *Notifier) sendZoomChat(ctx context.Context, c chstore.NotificationChann
 			if err2 != nil {
 				return fmt.Errorf("zoom oauth retry: %w", err2)
 			}
-			return postZoomChatMessage(ctx, token2, payload, zc.APIBaseURL, zc.InsecureSkipVerify)
+			msgID, err = postZoomChatMessageID(ctx, token2, payload, zc.APIBaseURL, zc.InsecureSkipVerify)
+			if err != nil {
+				return err
+			}
+			noteZoomMessage(ctx, c, msgID, msg)
+			return nil
 		}
 		return err
 	}
+	noteZoomMessage(ctx, c, msgID, msg) // CoSRE Faz C1 — düzenleme için kimlik
 	return nil
 }
 
@@ -2036,9 +2057,22 @@ func (n *Notifier) zoomInvalidate(accountID, clientID string) {
 }
 
 func postZoomChatMessage(ctx context.Context, token string, payload map[string]any, apiBaseURL string, skipVerify bool) error {
+	_, err := postZoomChatMessageID(ctx, token, payload, apiBaseURL, skipVerify)
+	return err
+}
+
+// postZoomChatMessageID — CoSRE Faz C1: gönderir ve Zoom'un döndürdüğü mesaj
+// kimliğini verir (yanıtta yoksa boş; gönderim yine başarılı).
+func postZoomChatMessageID(ctx context.Context, token string, payload map[string]any, apiBaseURL string, skipVerify bool) (string, error) {
+	return zoomChatRequest(ctx, http.MethodPost, "", token, payload, apiBaseURL, skipVerify)
+}
+
+// zoomChatRequest — /v2/chat/users/me/messages[/{id}] çağrısı (POST gönderir,
+// PUT düzenler). POST'ta yanıttaki "id" döner.
+func zoomChatRequest(ctx context.Context, method, msgID, token string, payload map[string]any, apiBaseURL string, skipVerify bool) (string, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("encode chat payload: %w", err)
+		return "", fmt.Errorf("encode chat payload: %w", err)
 	}
 	// API host override — `https://api.zoom.us` is the public
 	// default. Proxy / sandbox deployments point this at their
@@ -2048,23 +2082,30 @@ func postZoomChatMessage(ctx context.Context, token string, payload map[string]a
 	if base == "" {
 		base = "https://api.zoom.us"
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST",
-		base+"/v2/chat/users/me/messages", bytes.NewReader(body))
+	endpoint := base + "/v2/chat/users/me/messages"
+	if msgID != "" {
+		endpoint += "/" + url.PathEscape(msgID)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := zoomClientFor(skipVerify).Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode >= 300 {
-		return zoomAPIError{status: resp.StatusCode, body: strings.TrimSpace(string(respBody))}
+		return "", zoomAPIError{status: resp.StatusCode, body: strings.TrimSpace(string(respBody))}
 	}
-	return nil
+	var out struct {
+		ID string `json:"id"`
+	}
+	_ = json.Unmarshal(respBody, &out)
+	return out.ID, nil
 }
 
 type zoomAPIError struct {
@@ -2307,6 +2348,7 @@ func (n *Notifier) sendWhatsApp(ctx context.Context, c chstore.NotificationChann
 	if v := alertViewOf(ctx); v != nil { // v0.10.1532 — Türkçe standart
 		bodyText = n.buildWhatsAppTextTR(v, p)
 	}
+	bodyText = n.withSREText(ctx, bodyText) // CoSRE Faz C1
 
 	cli := &http.Client{Timeout: 10 * time.Second}
 	for _, to := range wc.To {

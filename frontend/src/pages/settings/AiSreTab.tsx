@@ -139,6 +139,11 @@ export function AiSreTab() {
             {SRE_GATE_MODES.map(m => <option key={m.value || 'shadow'} value={m.value}>{m.label}</option>)}
           </SelectField>
 
+          <SectionTitle>Bildirim</SectionTitle>
+          <CheckboxField className="mb-3" label="Problem bildirimine CoSRE araştırma özeti ekle" checked={form.notifySummary} disabled={busy}
+            hint="En olası neden, 2–3 kanıt, kör noktalar ve rapor bağlantısı. Araştırma bildirimden sonra biterse Zoom mesajı düzenlenir (diğer kanallara konuda tek kısa yanıt). Kanıt kapısı 'yetersiz' derse neden yazılmaz. Varsayılan: açık."
+            onCheckedChange={v => setForm(f => ({ ...f, notifySummary: v }))} />
+
           <ActionRow
             secondary={meta.updatedAt ? (
               <span className={HINT} title={tsLong(meta.updatedAt)}>

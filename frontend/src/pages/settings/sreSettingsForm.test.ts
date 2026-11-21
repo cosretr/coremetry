@@ -149,3 +149,14 @@ describe('kanıt kapısı kipi (CoSRE Faz B3)', () => {
     expect(sreToForm({ ...stored, evidenceGate: 'weird' as never }).evidenceGate).toBe('');
   });
 });
+
+describe('bildirim özeti (CoSRE Faz C1)', () => {
+  it('varsayılan açık ve alan yollamaz; kapalı false gider ve geri okunur', () => {
+    expect(sreDefaultForm().notifySummary).toBe(true);
+    const def = sreFormToWire(sreToForm(stored));
+    expect(def.ok && 'notifySummary' in def.wire).toBe(false);
+    const off = sreFormToWire({ ...sreToForm(stored), notifySummary: false });
+    expect(off.ok && off.wire.notifySummary).toBe(false);
+    expect(sreToForm({ ...stored, notifySummary: false }).notifySummary).toBe(false);
+  });
+});

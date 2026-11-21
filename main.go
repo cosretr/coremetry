@@ -55,6 +55,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/rollout"
 	"github.com/cilcenk/coremetry/internal/selfobs"
 	"github.com/cilcenk/coremetry/internal/sre"
+	"github.com/cilcenk/coremetry/internal/srenotify"
 	"github.com/cilcenk/coremetry/internal/sse"
 	"github.com/cilcenk/coremetry/internal/templater"
 	"github.com/cilcenk/coremetry/internal/tempo"
@@ -674,6 +675,8 @@ func main() {
 	// Coremetry" link so the recipient lands on the relevant
 	// detail page in one tap.
 	notifier.SetPublicURL(cfg.PublicURL)
+	// CoSRE Faz C1 — bildirime araştırma özeti (sre_agent.notifySummary).
+	notifier.SetInvestigationLookup(srenotify.Lookup(store))
 	notifier.SetDedupCache(cacheImpl) // v0.10.2231 (Redis R5): filo geneli tekrar tabanı; hata = gönder
 
 	// ── SSE event broker (in-process pub/sub) ────────────────────────────────
@@ -1620,6 +1623,9 @@ func main() {
 		// özete düşen P3 bildirimleri günün özet saatlerinde tek mesajda gider
 		// (notify/digest.go). Lider kilitli; shadow/off kipinde kuyruk boş kalır.
 		go notifier.RunDigestLoop(ctx, lockImpl)
+		// CoSRE Faz C1 — bildirim anında bitmemiş araştırma bitince Zoom
+		// mesajını düzenler / konuya tek yanıt (notify/sre_followup.go).
+		go notifier.RunInvestigationFollowUpLoop(ctx, lockImpl)
 	}
 
 	// ── Root-cause synthesizer (rc #2, v0.8.x) ───────────────────────────────

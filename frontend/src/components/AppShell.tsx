@@ -15,6 +15,7 @@ import { useAutoRefresh } from '@/lib/useAutoRefresh';
 import { isPublicPath } from '@/lib/auth-paths';
 import { isKioskBare } from '@/lib/kioskMode';
 import { isCosrePage } from '@/lib/cosrePage';
+import { isSreReportPage } from '@/pages/sre/sreReportView';
 import { useBranding } from '@/lib/branding';
 import { useT } from '@/lib/i18n';
 import { PageLoader } from './Spinner';
@@ -127,7 +128,10 @@ export function AppShell() {
   // v0.10.1125 — /cosre: kimlikli, kromsuz sohbet sayfası (lib/cosrePage.ts).
   // Kiosk gibi krom/akış bileşeni mount edilmez; farkı 401'de: normal /login
   // akışı + derin bağlantı dönüşü (oturum kartı yok).
-  const cosreBare = isCosrePage(pathname);
+  // CoSRE Faz C2 — /sre/report/:id de bu daldan: kromsuz, yazdırılabilir rapor
+  // (ayrı sınıf .sre-report-bare: globals.css print bloğu kabuk kısıtını kaldırır).
+  const reportBare = isSreReportPage(pathname);
+  const cosreBare = isCosrePage(pathname) || reportBare;
   // Subscribe so a saved branding update (from Settings) flows
   // through document.title + --accent immediately. Return value
   // unused here — applyBranding() inside the hook is the
@@ -232,7 +236,7 @@ export function AppShell() {
     // kendisi (CopilotChat variant="page" → <main className="cosre-page__body">);
     // kabuğu da <main> yapmak iç içe iki <main> olurdu (shellLandmarks.test.tsx).
     return (
-      <div id="app" className="cosre-bare">
+      <div id="app" className={reportBare ? 'sre-report-bare' : 'cosre-bare'}>
         <div id="main">
           <ErrorBoundary key={pathname}>
             <Outlet />
