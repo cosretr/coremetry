@@ -10,6 +10,7 @@ import {
   insightHasEvidence, insightHrefInternal, insightQuestion, insightTone,
 } from '@/lib/insightCard';
 import type { InsightKind, InsightResponse, InsightSignal } from '@/lib/types';
+import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 // InsightCard — gömülü bağlamsal açıklama kartı (v0.9.1130, AI Faz 2.2;
 // onaylı mockup "InsightCard — mockup", docs/plans/ai-assistant-design-2026-08-16.md §2.3).
@@ -254,6 +255,7 @@ export function InsightCard({ kind, id, windowSec, onClose }: {
           // kez aynı kusur). pre-wrap YOK: Markdown zaten blok üretiyor,
           // ikisi birlikte satır aralarını ikiye katlar.
           <div style={proseStyle}>
+            <AiGeneratedMark style={{ marginBottom: 4 }} />
             <RenderedMarkdown text={prose} />
             {streaming && <span className="cm-ai-cursor" />}
           </div>

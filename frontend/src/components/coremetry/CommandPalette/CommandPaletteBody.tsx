@@ -23,6 +23,12 @@ import { groupPaletteResults } from '@/lib/palette/groups';
 import { usePaletteServices } from '@/lib/palette/usePaletteServices';
 import { usePaletteEndpoints, usePaletteOracleOps } from '@/lib/palette/usePaletteEndpoints';
 import { promptModel, type PromptPick } from '@/lib/palette/prompt';
+// wave 3 — gezinme katmanı: kayıtlı görünümler, pod araması, zaman aralığı, kısayollar, CoSRE'ye sor.
+import { askRow, podRows, rangeRows, savedViewRows, shortcutRows } from '@/lib/palette/navLayer';
+import { usePalettePods, usePaletteViews } from '@/lib/palette/usePaletteNav';
+import { listShortcuts } from '@/lib/keyboard';
+import { useUrlRange } from '@/lib/useUrlRange';
+import type { PaletteGroupId } from '@/lib/palette/groups';
 import { CommandPaletteView } from './CommandPaletteView';
 import type { CommandPaletteGroup } from './CommandPalette';
 
@@ -40,6 +46,8 @@ import type { CommandPaletteGroup } from './CommandPalette';
 // listeye döner, ikinci Esc kapatır (Q3).
 
 const SEARCH_PLACEHOLDER = 'Search or paste a trace id…';
+/** wave 3 — başlığı i18n'den gelen gruplar (palette.group.*). */
+const NAV_GROUPS: ReadonlySet<PaletteGroupId> = new Set<PaletteGroupId>(['views', 'pods', 'shortcuts', 'ask', 'range']);
 
 // v0.10.1665 (P3) — yerel eylemlerin yan etkileri; hepsi mevcut tek yollar.
 const LOCAL_EFFECTS: LocalActionEffects = {
@@ -87,6 +95,9 @@ export function CommandPaletteBody({ open, onOpenChange, openSeq, takeBufferedQu
   const services = usePaletteServices(query, open);
   const endpoints = usePaletteEndpoints(query, open, locationSearch);
   const oracleOps = usePaletteOracleOps(query, open, locationSearch);
+  const savedViews = usePaletteViews(open, openSeq);
+  const pods = usePalettePods(query, open);
+  const [, setRange] = useUrlRange();
   // v0.7.89 — pinned + recently-viewed services, refreshed each open.
   const [pivotSvcs, setPivotSvcs] = useState<PaletteResult[]>([]);
   // Param-prompt sub-mode (v0.5.457).
@@ -154,11 +165,25 @@ export function CommandPaletteBody({ open, onOpenChange, openSeq, takeBufferedQu
   const isAdmin = user?.role === 'admin';
   const incidentsOn = user?.features?.incidents === true; // v0.10.1828 — kabuk bayrağı
   const localizedPages = useMemo(() => localizePages(t, isAdmin, incidentsOn), [t, isAdmin, incidentsOn]);
-  const results = useMemo(() => buildPaletteResults({
-    query, pages: localizedPages, services, endpoints, oracleOps, pivotSvcs,
-    role: user?.role, seeAllLabel: t('search.seeAll'),
-    localActions: filterLocalActions(localCtx, query),
-  }), [query, services, endpoints, oracleOps, pivotSvcs, user?.role, localizedPages, t, localCtx]);
+  const results = useMemo(() => {
+    const base = buildPaletteResults({
+      query, pages: localizedPages, services, endpoints, oracleOps, pivotSvcs,
+      role: user?.role, seeAllLabel: t('search.seeAll'),
+      localActions: filterLocalActions(localCtx, query),
+    });
+    // wave 3 — trace kimliği en üstte kalır; ardından aralık + görünümler, sonra
+    // mevcut sonuçlar, pod'lar, kısayollar, en sonda "CoSRE'ye sor".
+    const head = base.length > 0 && base[0].kind === 'trace' && base[0].score === 999 ? [base[0]] : [];
+    return [
+      ...head,
+      ...rangeRows(query, t),
+      ...savedViewRows(savedViews, query, t),
+      ...base.slice(head.length),
+      ...podRows(pods, t),
+      ...shortcutRows(listShortcuts(), query),
+      ...askRow(query, localCtx.copilotEnabled, t),
+    ];
+  }, [query, services, endpoints, oracleOps, pivotSvcs, user?.role, localizedPages, t, localCtx, savedViews, pods]);
 
   const runLocal = (id: LocalActionId) => {
     // Pencere TIK anında dondurulur; URL o anki adres çubuğu (origin dahil).
@@ -176,6 +201,14 @@ export function CommandPaletteBody({ open, onOpenChange, openSeq, takeBufferedQu
   };
 
   const pick = (r: PaletteResult) => {
+    // wave 3 — gezinme katmanı eylemleri.
+    if (r.rangePreset) { setRange({ preset: r.rangePreset }); onOpenChange(false); return; }
+    if (r.askCosre) {
+      onOpenChange(false);
+      window.dispatchEvent(new CustomEvent('coremetry:ai-ask', { detail: { question: r.askCosre } }));
+      return;
+    }
+    if (r.shortcut) { onOpenChange(false); return; }
     if (r.kind === 'action' && r.local) { runLocal(r.local); return; }
     if (r.kind === 'action' && r.action) { enterAction(r.action); return; }
     if (r.to) {
@@ -258,10 +291,10 @@ export function CommandPaletteBody({ open, onOpenChange, openSeq, takeBufferedQu
   } else {
     groups = groupPaletteResults(results).map(g => ({
       id: g.id,
-      label: g.label,
+      label: NAV_GROUPS.has(g.group) ? t(`palette.group.${g.group}`) : g.label,
       items: g.rows.map((r, i) => ({
         // Benzersiz: aynı hedef iki satırda görünebilir (cmdk değeri = seçim kimliği).
-        id: `${g.id}#${i}:${r.kind}:${r.to ?? r.action?.id ?? r.local ?? ''}`,
+        id: `${g.id}#${i}:${r.kind}:${r.to ?? r.action?.id ?? r.local ?? r.rangePreset ?? r.askCosre ?? r.label}`,
         label: r.label,
         hint: r.hint,
         href: r.to,

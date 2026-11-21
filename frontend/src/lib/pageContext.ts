@@ -149,6 +149,9 @@ export function pageContext(pathname: string, search: string): PageContext {
     case 'service': case 'service-backtrace':
       put(ctx, 'operation', get(sp, 'op'));
       break;
+    case 'endpoint': // wave 3 — endpoint detayı (servis + route); panel bağlamı endpoint'i bilsin
+      put(ctx, 'operation', get(sp, 'path'));
+      break;
     case 'clusters':
       put(ctx, 'workload', get(sp, 'deployment')); put(ctx, 'search', get(sp, 'q'));
       break;

@@ -83,6 +83,7 @@ import { t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; // v0.10.132
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
 import { ProblemStandardHeader } from './ProblemStandardHeader'; // v0.10.1529
 import { problemVerdictSubject, exceptionVerdictSubject } from '@/lib/problemVerdict';
+import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 // ProblemDetail — Variant B (Dynatrace problem feed) full-page details.
 // Two surfaces share one skeleton: a top triage bar (badges + ID +
@@ -697,7 +698,7 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
           {/* v0.9.696 — pre-wrap KALKTI: RenderedMarkdown zaten <p>/<ul>
               üretiyor, ikisi birlikte satır aralarını ikiye katlıyor
               (v0.9.641'de CopilotExplain'de öğrenildi). */}
-          <IconSparkles size={11} /> <OrigLang block><RenderedMarkdown text={group.aiSummary} /></OrigLang>
+          <AiGeneratedMark /> <OrigLang block><RenderedMarkdown text={group.aiSummary} /></OrigLang>
         </div>
       )}
 
@@ -1324,7 +1325,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                     borderLeft: '2px solid var(--accent)',
                   }}>
                     {/* v0.9.696 — exception ikiziyle aynı: markdown basılıyor. */}
-                    <IconSparkles size={11} /> <OrigLang block><RenderedMarkdown text={problem.aiSummary} /></OrigLang>
+                    <AiGeneratedMark /> <OrigLang block><RenderedMarkdown text={problem.aiSummary} /></OrigLang>
                   </div>
                 )}
                 {problem.recentDeploy && (

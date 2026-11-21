@@ -29,6 +29,11 @@ export type PaletteResult = {
   action?: Action;
   // v0.10.1665 (P3) — yerel eylem (sunucu durumu yazmaz; lib/palette/localActions).
   local?: LocalActionId;
+  // wave 3 (lib/palette/navLayer) — gezinme katmanı eylemleri: zaman aralığı,
+  // kısayol satırı (bilgi; seçim paleti kapatır), yazılan metinle CoSRE'ye sor.
+  rangePreset?: string;
+  shortcut?: boolean;
+  askCosre?: string;
   score?: number;
 };
 

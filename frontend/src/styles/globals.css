@@ -735,6 +735,11 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 12px; } /* v0.10.93
 .sidebar-resizer:active { background: var(--accent); }
 
 #main { flex: 1; overflow: auto; display: flex; flex-direction: column; min-width: 0; min-height: 0; } /* v0.10.722 — min-height:0 (zararsız; 726'da da kaldı) */
+/* wave 3 — CoSRE yan paneli DOCKED (lib/cosre/dock.ts): açıkken içerik panel
+   genişliği kadar daralır, panel tablonun üstüne binmez. Dar ekranda yok. */
+@media (min-width: 1280px) {
+  :root[data-cosre-docked] #main { margin-right: var(--cosre-dock-w, 0px); }
+}
 /* ── v0.10.1340 BEGIN — kabuk: "İçeriğe atla" bağlantısı + <main id="main"> odağı ──
    Bağlantı tam-kromlu kabuğun ilk odak durağı (AppShell SkipToContent);
    ekran dışında bekler (display:none DEĞİL — ekran okuyucu ulaşır), klavye
@@ -6488,6 +6493,12 @@ a.cell-link--block { display: block; overflow: hidden; text-overflow: ellipsis; 
 .ld-saved-share { display: flex; align-items: center; gap: var(--sp-2); color: var(--text2); }
 .ld-qbar .pc-actions { flex-wrap: wrap; }
 .ld-qbar .pc-actions > * { white-space: nowrap; }
+/* v0.10.24xx (CLS) — 1440 px'te eylem yuvası zaten ikinci satıra sarılıyordu,
+   ama ancak küme seçici / yazı yüzü gelince: satır SONRADAN kırılıp tüm
+   sayfayı 40 px itiyordu (CLS 0,22–0,39). Sarma yazı yüzüne bağlı olduğundan
+   (eşik kümesi {640,1024,1280} 1440'ı kapsamaz) yuva HER genişlikte baştan
+   kendi satırında, sağa yaslı. */
+.ld-qbar .pc-actions { flex: 1 0 100%; justify-content: flex-end; margin-left: 0; }
 @media (max-width: 640px) {
   .ld-qbar .ld-kql { flex-basis: 100%; min-width: 0; }
   .ld-kql-btn { margin-left: 0; }
@@ -6529,7 +6540,11 @@ a.cell-link--block { display: block; overflow: hidden; text-overflow: ellipsis; 
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg1); padding: var(--sp-4);
 }
 .lh-left { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-4); min-width: 0; }
+/* v0.10.24xx (CLS) — başlık sol öbeği (isabet + seviye çipleri) veri gelince
+   genişler; ipucu o an alt satıra düşüp grafiği ve tabloyu itiyordu. İpucu
+   baştan kendi satırında, sağa yaslı. */
 .lh-hint { font-family: var(--font-mono); }
+.lh-left + .lh-hint { flex-basis: 100%; text-align: right; }
 .ld-hits { font-size: var(--fs-sm); font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ld-levels { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
 .ld-levels-note { font-size: var(--fs-xs); color: var(--text3); }
@@ -6547,6 +6562,7 @@ a.cell-link--block { display: block; overflow: hidden; text-overflow: ellipsis; 
 .ld-tbar-note { color: var(--text2); }
 .ld-tbar-note.is-warn { color: var(--warn); }
 .ld-tbar-right { margin-left: auto; display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
+.ld-tbar-status { flex-basis: 100%; display: flex; justify-content: flex-end; }
 /* v0.10.1516 — ui/ColumnsPicker (Sütunlar ▾; /logs v0.10.1502'den genelleştirildi,
    /traces de kullanır). Eski ad `.ld-cols-*`. */
 .colpick-head { font-size: var(--fs-xs); color: var(--text2); }

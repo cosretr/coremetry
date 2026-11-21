@@ -243,7 +243,9 @@ export function SavedViewsBar({ page, right, variant = 'bar', size }: {
     );
   }
 
-  if (views === undefined) return null;
+  // v0.10.24xx (CLS) — yüklenirken satırın yeri ayrılır (Save düğmesi satırı 24 px);
+  // null dönüp sonra belirmesi /endpoints'te altındaki her şeyi kaydırıyordu.
+  if (views === undefined) return <div aria-hidden style={{ minHeight: 24, marginBottom: 8 }} />;
 
   return (
     <div style={{

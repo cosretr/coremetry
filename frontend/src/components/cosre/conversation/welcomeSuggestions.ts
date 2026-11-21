@@ -12,6 +12,7 @@
 // Takım kapsamlı çipler (Durum) yalnız takım biliniyorken; boş sekme çizilmez.
 import type { ChatContextStarter } from '@/lib/chatContext';
 import { TEAM_ASKS, teamCardQuestion, type TeamAsk } from '@/components/ai/capabilityHints';
+import type { PageStarter } from '@/lib/cosre/pageStarters';
 
 export type WelcomeTabId = 'status' | 'investigate' | 'find' | 'learn';
 export type WelcomePickKind = 'service' | 'operation';
@@ -39,10 +40,12 @@ const TEAM_ASK_LABEL: Record<TeamAsk, string> = {
 };
 
 /** SAF — görünen sekmeler (sırası sabit), boş sekme düşer, her sekme ≤4 çip. */
-export function welcomeTabs({ team, wiki, ctxStarter }: {
+export function welcomeTabs({ team, wiki, ctxStarter, pageStarters = [] }: {
   team: string;
   wiki: boolean;
   ctxStarter: ChatContextStarter | null;
+  /** wave 3 — sayfa türüne göre hazır sorular (lib/cosre/pageStarters); Araştır'ın başında. */
+  pageStarters?: readonly PageStarter[];
 }): WelcomeTab[] {
   const tm = team.trim();
   const status: WelcomeSuggestion[] = tm ? [
@@ -55,6 +58,7 @@ export function welcomeTabs({ team, wiki, ctxStarter }: {
       ? { id: 'ctx', mode: 'explain', label: ctxStarter.chip, starter: ctxStarter }
       : { id: 'ctx', mode: 'send', label: ctxStarter.chip, question: ctxStarter.question });
   }
+  for (const ps of pageStarters) investigate.push({ id: `page-${ps.id}`, mode: 'send', label: ps.question, question: ps.question });
   investigate.push(
     { id: 'pick-service', mode: 'pick', labelKey: 'cosre.welcome.s.pickService', pick: 'service' },
     { id: 'pick-operation', mode: 'pick', labelKey: 'cosre.welcome.s.pickOperation', pick: 'operation' },

@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/shadcn/button';
 import { Spinner, Empty } from '@/components/Spinner';
 import { RenderedMarkdown } from '@/components/Markdown';
+import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 export type LogsAiAnswerState =
   | { status: 'loading' }
@@ -32,6 +33,7 @@ export function LogsAiAnswer({ title, subtitle, state, onClose, onRetry, footer,
       data-testid={testId}>
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="m-0 text-[length:var(--fs-xs)] font-bold tracking-wide text-(--text2) uppercase">{title}</h4>
+        <AiGeneratedMark />
         {subtitle && <span className="text-[length:var(--fs-xs)] text-(--text3)">{subtitle}</span>}
         <span className="flex-1" />
         <Button variant="ghost" size="xs" aria-label="Cevabı kapat" onClick={onClose}>Kapat</Button>

@@ -63,7 +63,10 @@ import { useCosreChat } from '@/lib/cosre/useCosreChat';
 import { hasCodeLock, hasCompletedExchange, toPersistMessages } from '@/lib/cosre/cosrePersist';
 import { isPlainLeftClick } from '@/lib/a11y';
 import { toast } from '@/lib/toast';
-import { AI_PREFILL_EVENT, type AIPrefillDetail } from '@/components/ai/aiEvents';
+import { AI_PREFILL_EVENT, COSRE_PANEL_EVENT, nextPanelOpen, type AIPrefillDetail, type CosrePanelDetail } from '@/components/ai/aiEvents';
+import { tCosre } from '@/components/ai/capabilityHints'; // sohbetin dili (karşılamayla aynı)
+import { pageStarters as buildPageStarters } from '@/lib/cosre/pageStarters'; // wave 3 — sayfa türüne göre hazır sorular
+import { useCosreDock } from '@/lib/cosre/dock'; // wave 3 — docked yan panel
 import { AI_DRAWER_WIDTH } from '@/components/ai/answerCard';
 import { CopilotFab } from '@/components/ai/CopilotFab';
 import { TraceExplainNudge } from '@/components/ai/TraceExplainNudge';
@@ -401,11 +404,18 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
       const q = (e as CustomEvent<AIPrefillDetail>).detail?.question;
       if (q) live.current.prefill(q, q.length);
     };
+    // wave 3 — ⌘I / Ctrl+I ve palet: aç ya da aç-kapa; konuşma state'i korunur (bileşen mount kalır).
+    const onPanel = (e: Event) => {
+      const d = (e as CustomEvent<CosrePanelDetail>).detail;
+      setOpen(o => nextPanelOpen(o, d));
+    };
     window.addEventListener('coremetry:ai-ask', onAsk);
     window.addEventListener(AI_PREFILL_EVENT, onPrefill);
+    window.addEventListener(COSRE_PANEL_EVENT, onPanel);
     return () => {
       window.removeEventListener('coremetry:ai-ask', onAsk);
       window.removeEventListener(AI_PREFILL_EVENT, onPrefill);
+      window.removeEventListener(COSRE_PANEL_EVENT, onPanel);
     };
   }, []);
 
@@ -442,6 +452,8 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
     [open],
   );
   const width = dragW ?? storedW;
+  useCosreDock(open && !isPage, width); // wave 3 — panel içeriğin yanına oturur (≥1280 px)
+  const starters = useMemo(() => buildPageStarters(ask.page, tCosre), [ask.page]);
 
   // v0.10.1785 — gövde TEK yerde; Sheet ve /cosre sayfası aynı düğümleri sarar.
   const bodyNode = (<>
@@ -460,7 +472,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
         <div ref={scrollRef} className="cm-thread flex-1 overflow-y-auto" role="log" aria-live="polite" aria-busy={busy} aria-label={T.threadLabel}>
           <div className="cm-thread__col">
             {messages.length === 0 ? (
-              <CosreWelcomeV2 firstName={ask.user?.firstName} scope={teamScope} wiki={ask.wikiOn} ctxStarter={ask.ctxStarter}
+              <CosreWelcomeV2 firstName={ask.user?.firstName} scope={teamScope} wiki={ask.wikiOn} ctxStarter={ask.ctxStarter} pageStarters={starters}
                 briefing={briefing} onPrefill={composer.prefill} onAskBriefingLine={r => { briefingAsk.current = r ?? null; }} onAsk={askChip} onAskExplain={askExplain} />
             ) : (
               <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}

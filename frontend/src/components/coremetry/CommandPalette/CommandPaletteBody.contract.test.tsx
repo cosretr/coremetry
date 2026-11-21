@@ -22,6 +22,11 @@ const apiMock = vi.hoisted(() => ({
   operationNames: vi.fn(async () => ({ names: [] as string[] })),
   oracleOperations: vi.fn(async () => ({ hits: [], attrKey: '' })),
   copilotConfig: vi.fn(async () => ({ enabled: false })),
+  // wave 3 — gezinme katmanı: kayıtlı görünümler + pod araması (entity modeli).
+  savedViews: vi.fn(async () => [{ id: 'v1', ownerId: 'u1', name: 'Payment errors', page: 'logs', queryString: 'q=pay', pinned: true, createdAt: 1 }]),
+  entityClusters: vi.fn(async () => ({ clusters: [{ id: 'c1', name: 'prod', spanClusterValue: 'prod' }] })),
+  entities: vi.fn(async (q: { q?: string }) => ({ cluster: 'c1', items: q.q?.startsWith('check')
+    ? [{ type: 'pod', clusterId: 'c1', id: 'pod:c1/shop/checkout-7d9', namespace: 'shop', name: 'checkout-7d9', source: 'thanos', validFrom: '', firstSeen: '' }] : [] })),
 }));
 vi.mock('@/lib/api', () => ({ api: apiMock }));
 vi.mock('@/components/AuthProvider', () => ({ useAuth: () => ({ user: { id: 'u1', role: 'editor' } }) }));
@@ -106,6 +111,24 @@ describe('CommandPaletteBody (cmdk)', () => {
     await key('ArrowDown');
     await key('Enter');
     expect(loc).toBe('/service?name=checkout-worker');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('wave 3 — boş sorguda kayıtlı görünüm; "check" → pod araması (entity); "range" → aralık eylemi URL\'e yazar', async () => {
+    const onClose = vi.fn();
+    await mount(<Harness onClose={onClose} />);
+    await settle(0);
+    expect(headings()[0]).toBe('Saved views');
+    await type('check');
+    await settle();
+    expect(apiMock.entities).toHaveBeenCalledWith({ cluster: 'c1', type: 'pod', q: 'check', limit: 5 });
+    const pods = [...document.querySelectorAll('[cmdk-item]')].map(o => o.textContent ?? '').filter(s => s.includes('checkout-7d9'));
+    expect(pods).toHaveLength(1);
+    await type('range');
+    await settle(0);
+    expect(headings()[0]).toBe('Time range');
+    await key('Enter');
+    expect(loc).toContain('range=15m');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

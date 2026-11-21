@@ -20,6 +20,7 @@ import { aiErrorHint } from '@/lib/aiErrors';
 import { tsLong } from '@/lib/utils';
 import type { AuditEntry, Runbook, RunbookStep, RunbookStepKind, RunbookExecution } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 // Runbook detail (v0.7.0) — Overview + the Steps editor (the OneUptime
 // "Runbook Steps" surface: kind cards to add, drag-to-reorder, per-step
@@ -310,6 +311,7 @@ function ExecutionsTab({ runbookId }: { runbookId: string }) {
               <div style={{ color: 'var(--err)', fontSize: 12 }}>{sugg.err}</div>
             ) : (
               <>
+                <AiGeneratedMark style={{ marginBottom: 4 }} />
                 <RenderedMarkdown text={sugg.text} />
               </>
             )}

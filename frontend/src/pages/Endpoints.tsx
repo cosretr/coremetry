@@ -907,6 +907,9 @@ export default function EndpointsPage() {
             combination EXPLICITLY rather than rendering an empty table
             under an "RPC & Messaging" heading; the reason rides the error
             row (rpcNeedsMv) so the refusal is actionable. */}
+        {/* v0.10.24xx (CLS) — "listelenen toplam" satırı satırlar gelince belirir ve
+            tabloyu ~29 px iterdi; yüklenirken aynı yükseklikte yer tutucu. */}
+        {rows === undefined && <div aria-hidden style={{ marginBottom: 12, minHeight: 17 }} />}
         {hasRows && (
           <>
             {/* v0.9.834 — v0.9.818/819'un KPI şeridi + üç grafiği

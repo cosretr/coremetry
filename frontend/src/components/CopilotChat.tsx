@@ -35,7 +35,10 @@ import { cosreFullPageHref } from './ai/drawerFullPage'; // v0.10.1138 — "Tam 
 import { isPlainLeftClick } from '@/lib/a11y';
 import { toast } from '@/lib/toast'; // v0.10.1139 — tam sayfa kayıt hatası
 import { useCosreAskContext, useCosreComposerInput, useCosreWelcomeData, type CosreAskContext, type CosreComposerInput, type CosreWelcomeData } from './ai/cosreAsk'; // v0.10.1648 — v1/v2 ortak kancalar
-import { AI_PREFILL_EVENT, type AIPrefillDetail } from './ai/aiEvents'; // v0.10.1336 — tur: aç + doldur, gönderme
+import { AI_PREFILL_EVENT, COSRE_PANEL_EVENT, nextPanelOpen, type AIPrefillDetail, type CosrePanelDetail } from './ai/aiEvents'; // v0.10.1336 — tur: aç + doldur, gönderme
+import { useCosreDock } from '@/lib/cosre/dock'; // wave 3 — docked yan panel
+import { COSRE_DRAWER_WIDTH_KEY, cosreSheetWidth } from '@/lib/cosre/sheetWidth';
+import { getRaw } from '@/lib/storage';
 import { AI_DRAWER_WIDTH } from './ai/answerCard'; // v0.10.461
 import { useAiSubject } from './ai/useAiSubject';
 import { AI_CODE_PARAM, AI_SRC_PARAM, formatAiParam } from '@/lib/aiSubject';
@@ -312,6 +315,17 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
     window.addEventListener(AI_PREFILL_EVENT, h);
     return () => window.removeEventListener(AI_PREFILL_EVENT, h);
   }, []);
+  // wave 3 — ⌘I / Ctrl+I ve palet: aç ya da aç-kapa (v2 ile aynı olay); thread korunur.
+  useEffect(() => {
+    const h = (e: Event) => setOpen(o => nextPanelOpen(o, (e as CustomEvent<CosrePanelDetail>).detail));
+    window.addEventListener(COSRE_PANEL_EVENT, h);
+    return () => window.removeEventListener(COSRE_PANEL_EVENT, h);
+  }, []);
+  // wave 3 — docked: genişlik açılışta saklanandan (Drawer resizeKey ile aynı anahtar).
+  const dockW = useMemo(
+    () => (drawerOpen ? cosreSheetWidth(getRaw(COSRE_DRAWER_WIDTH_KEY), AI_DRAWER_WIDTH, window.innerWidth) : AI_DRAWER_WIDTH),
+    [drawerOpen]);
+  useCosreDock(drawerOpen && !isPage, dockW);
 
   if (!enabled) {
     if (!isPage) return null;

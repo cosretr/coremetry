@@ -33,6 +33,7 @@ import {
 import { BriefingFeed, type BriefingFeedLine, type BriefingLineRef, type BriefingView } from './BriefingFeed';
 import { CosreScopeSearch } from './CosreScopeSearch';
 import type { CosreTeamScope } from './useCosreTeamScope';
+import type { PageStarter } from '@/lib/cosre/pageStarters';
 import { welcomeTabs, type WelcomeSuggestion, type WelcomeTabId } from './welcomeSuggestions';
 
 export interface CosreWelcomeV2Props {
@@ -40,6 +41,8 @@ export interface CosreWelcomeV2Props {
   scope: CosreTeamScope;
   wiki: boolean;
   ctxStarter: ChatContextStarter | null;
+  /** wave 3 — sayfa türüne göre 2–4 hazır soru (lib/cosre/pageStarters). */
+  pageStarters?: readonly PageStarter[];
   /** Brifing görünümü; null = veri kaynağı yok (yuva çizilmez). */
   briefing: BriefingView | null;
   onPrefill: (text: string, caret: number) => void;
@@ -84,12 +87,14 @@ function SuggestionChip({ s, onRun, onPick }: {
   );
 }
 
-export function CosreWelcomeV2({ firstName, scope, wiki, ctxStarter, briefing, onPrefill, onAskBriefingLine, onAsk, onAskExplain }: CosreWelcomeV2Props) {
+export function CosreWelcomeV2({ firstName, scope, wiki, ctxStarter, pageStarters, briefing, onPrefill, onAskBriefingLine, onAsk, onAskExplain }: CosreWelcomeV2Props) {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const tabs = welcomeTabs({ team: scope.team, wiki, ctxStarter });
+  const tabs = welcomeTabs({ team: scope.team, wiki, ctxStarter, pageStarters });
   const [tab, setTab] = useState<WelcomeTabId | null>(null);
-  const active = tabs.find(x => x.id === tab)?.id ?? tabs[0]?.id;
+  // wave 3 — sayfanın hazır soruları varsa karşılama Araştır sekmesinde açılır.
+  const active = tabs.find(x => x.id === tab)?.id
+    ?? (pageStarters?.length && tabs.some(x => x.id === 'investigate') ? 'investigate' : tabs[0]?.id);
 
   // v1 CosreCapabilities goExceptions ile aynı: katalog yalnız tıklamada (RQ önbelleği ya da tek istek).
   const goExceptions = (team: string) => {

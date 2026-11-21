@@ -51,6 +51,7 @@ import { splitListLabel } from './listLabel'; // v0.10.1720
 import { AiThinking } from './AiThinking'; // v0.10.1384 — tek tip "düşünüyor" göstergesi
 import { useTypewriter } from './useTypewriter'; // v0.10.1384 — büyük parçada hızlı yazma efekti
 import { ExplainBody } from './ExplainBody'; // v0.10.1400 — açıklama turu ✨ Explain anatomisiyle
+import { AiGeneratedMark } from './AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 import { EvidenceRow } from './EvidenceRow'; // v0.10.1400 — kanıt trace satırları
 import { explainEvidence, explainRenderer } from './explainTurn';
 import { ChartsSignalsCard } from './ChartsSignalsCard'; // v0.10.1407 — charts açıklama turu kartı
@@ -1115,8 +1116,11 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
           yok ve ortalı olsun") — marka etiketi ilk metin gelince görünür; bekleyiş
           yalnız ortalanmış AiThinking. */}
       {!thinkingOnly && (
-        <div className="cm-msg-ai__who" aria-hidden="true">
-          <img src="/favicon.svg" width={14} height={14} alt="" draggable={false} /> CoSRE
+        <div className="cm-msg-ai__who">
+          <span aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <img src="/favicon.svg" width={14} height={14} alt="" draggable={false} /> CoSRE
+          </span>
+          <AiGeneratedMark />{/* wave 3 — AI içeriği etiketi (tek bileşen) */}
         </div>
       )}
       <div onClick={onBodyClick} className="cm-msg-ai" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>

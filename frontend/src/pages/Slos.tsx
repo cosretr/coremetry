@@ -16,6 +16,7 @@ import type { SLIType, SLORow } from '@/lib/types';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { readState } from '@/lib/readState';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 // v0.6.44 — sortable columns on /slos. Forecast + 7d trend stay
 // non-sortable because their values are loaded asynchronously per
@@ -553,6 +554,7 @@ function BurnExplainButton({ sloId }: { sloId: string }) {
                   </>
                 )}
               </div>
+              <AiGeneratedMark style={{ marginBottom: 4 }} />
               <div style={{ whiteSpace: 'pre-wrap' }}>{resp.explanation}</div>
             </div>
           )}

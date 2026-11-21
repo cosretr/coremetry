@@ -538,7 +538,9 @@ export function TimeChart({
   return (
     <>
       <div className="ov-chart-wrap" style={{ position: 'relative' }}>
-        <div ref={hostRef} style={{ width: '100%' }} />
+        {/* v0.10.24xx (CLS) — uPlot kurulana dek host 0 px'ti: veri gelince grafik
+            önce çöküp sonra açılıyor, altındaki tabloyu iki kez itiyordu (/logs). */}
+        <div ref={hostRef} style={{ width: '100%', minHeight: height }} />
         <div ref={ttRef} className="ov-tt" style={{ display: 'none' }} />
       </div>
       {/* v0.9.103 (Grafana-parity #1) — grafik altında seri istatistikleri;

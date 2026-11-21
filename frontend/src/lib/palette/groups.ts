@@ -8,7 +8,9 @@ import type { PaletteResult } from './pages';
 
 export type PaletteGroupId =
   | 'pinned' | 'recent' | 'trace' | 'actions' | 'services' | 'endpoints'
-  | 'operations' | 'pages' | 'identity' | 'search';
+  | 'operations' | 'pages' | 'identity' | 'search'
+  // wave 3 — gezinme katmanı (lib/palette/navLayer); başlıklar gövdede i18n ile.
+  | 'views' | 'pods' | 'shortcuts' | 'ask' | 'range';
 
 export const GROUP_LABELS: Record<PaletteGroupId, string> = {
   pinned: 'Pinned',
@@ -21,6 +23,11 @@ export const GROUP_LABELS: Record<PaletteGroupId, string> = {
   pages: 'Pages',
   identity: 'Problem / identity',
   search: 'Search',
+  views: 'Saved views',
+  pods: 'Pods',
+  shortcuts: 'Keyboard shortcuts',
+  ask: 'CoSRE',
+  range: 'Time range',
 };
 
 /** Bir satırın grubu: açık `group` ezmesi > boş sorguda ★/Recent > kind. */

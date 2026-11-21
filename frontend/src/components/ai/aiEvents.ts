@@ -30,6 +30,23 @@ export function emitAiEvidence(detail: AIEvidenceDetail) {
 export const AI_PREFILL_EVENT = 'coremetry:ai-prefill';
 export type AIPrefillDetail = { question?: string };
 
+// wave 3 — CoSRE yan paneli: aç / aç-kapa (⌘I / Ctrl+I, komut paleti). Kapı
+// (CopilotChatGate) sohbet yüklenmemişken olayı sıraya alır ve sohbeti yükler;
+// sohbet (v1 / v2) mount olunca kendi dinleyicisiyle uygular. Konuşma kapanışta
+// korunur: sohbet bir kez mount olduktan sonra kabukta kalır.
+export const COSRE_PANEL_EVENT = 'coremetry:cosre-panel';
+export type CosrePanelDetail = { mode: 'open' | 'toggle' };
+
+export function emitCosrePanel(mode: CosrePanelDetail['mode']) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent<CosrePanelDetail>(COSRE_PANEL_EVENT, { detail: { mode } }));
+}
+
+/** Olayın açık/kapalı geçişi (saf): toggle tersine çevirir, open her zaman açar. */
+export function nextPanelOpen(open: boolean, d: CosrePanelDetail | undefined): boolean {
+  return d?.mode === 'toggle' ? !open : true;
+}
+
 export function emitAiPrefill(detail: AIPrefillDetail) {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(AI_PREFILL_EVENT, { detail }));

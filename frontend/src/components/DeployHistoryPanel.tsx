@@ -8,6 +8,7 @@ import { Link } from 'react-router';
 import { entityHref } from '@/lib/entityHref';
 import { AiThinking } from '@/components/ai/AiThinking'; // v0.10.1384 — tek tip "düşünüyor"
 import { rolloutHeadline, rolloutCounts, rolloutExplainVersion, rolloutRowKey } from '@/lib/serviceRolloutLabel';
+import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 // Per-row Copilot explain state (v0.5.192). Keyed by rollout
 // timestamp so each row remembers its own answer + loading flag
@@ -222,6 +223,7 @@ export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range 
                             lineHeight: 1.55,
                             whiteSpace: 'pre-wrap',
                           }}>
+                            <AiGeneratedMark style={{ marginBottom: 4 }} />
                             <div style={{
                               fontSize: 10, color: 'var(--accent2)',
                               textTransform: 'uppercase', letterSpacing: 0.4,

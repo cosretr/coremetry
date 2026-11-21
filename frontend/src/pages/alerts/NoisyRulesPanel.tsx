@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { tsLong } from '@/lib/utils';
 import type { AlertRule, NoisyRule } from '@/lib/types';
 import { RenderedMarkdown } from '@/components/Markdown';
+import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 // NoisyRulesPanel — surfaces rules that have opened problems most
 // often in the last 24h with a one-click "Apply" affordance that
@@ -245,7 +246,7 @@ export function NoisyRulesPanel({ rules, onEditFromSuggestion }: {
           fontSize: 12.5, lineHeight: 1.55,
         }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text2)', marginBottom: 6 }}>
-            AI GÜRÜLTÜ ANLATIMI
+            AI GÜRÜLTÜ ANLATIMI {ai.text && <AiGeneratedMark style={{ marginLeft: 6 }} />}
           </div>
           {ai.busy && <Spinner />}
           {ai.err && <span style={{ color: 'var(--err)' }}>{ai.err}</span>}

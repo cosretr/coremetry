@@ -4,7 +4,9 @@ import { useOpenCriticalCount } from '@/lib/queries/problems';
 import { AI_PARAM } from '@/lib/aiSubject';
 import { pickChatImpl, type ChatImpl } from '@/lib/cosre/pickChatImpl';
 import { useCopilotConfig } from './ai/useCopilotEnabled';
-import { AI_PREFILL_EVENT } from './ai/aiEvents';
+import { AI_PREFILL_EVENT, COSRE_PANEL_EVENT, emitCosrePanel } from './ai/aiEvents';
+import { useShortcuts } from '@/lib/keyboard';
+import { useT } from '@/lib/i18n';
 import { TraceExplainNudge } from './ai/TraceExplainNudge';
 import { CopilotFab } from './ai/CopilotFab';
 import { Spinner } from './Spinner';
@@ -36,7 +38,8 @@ const CopilotChat = lazy(() => import('./CopilotChat').then(m => ({ default: m.C
 const CosreChatV2 = lazy(() => import('./cosre/conversation/CosreChatV2').then(m => ({ default: m.CosreChatV2 })));
 
 const AI_ASK_EVENT = 'coremetry:ai-ask';
-const OPEN_EVENTS = [AI_ASK_EVENT, AI_PREFILL_EVENT] as const;
+// wave 3 — panel olayı (⌘I / Ctrl+I, palet) da bir açılma niyeti: sıraya alınır, sohbet yüklenir.
+const OPEN_EVENTS = [AI_ASK_EVENT, AI_PREFILL_EVENT, COSRE_PANEL_EVENT] as const;
 
 /** URL bir sohbet niyeti taşıyor mu (sohbet mount olunca kendisi tüketir). */
 export function urlWantsChat(sp: URLSearchParams): boolean {
@@ -79,6 +82,14 @@ export function CopilotChatGate() {
     for (const t of OPEN_EVENTS) window.addEventListener(t, h);
     return () => { for (const t of OPEN_EVENTS) window.removeEventListener(t, h); };
   }, []);
+
+  // wave 3 — ⌘I / Ctrl+I: her sayfadan CoSRE yan panelini aç / kapat (Datadog Bits emsali).
+  // Kapı eager → kısayol sohbet yığını yüklenmeden de çalışır; ilk basış yığını çeker.
+  const t = useT();
+  useShortcuts(enabled ? [{
+    keys: 'mod+i', label: t('cosre.panel.shortcut'), group: 'CoSRE', evenInInputs: true,
+    handler: e => { e.preventDefault(); emitCosrePanel('toggle'); },
+  }] : [], [enabled, t]);
 
   const v2 = cfg?.cosreV2 === true;
   // FAB'ı kapı çizdiği sürece poll; sohbet mount olunca kendi poll'unu yürütür (aynı RQ anahtarı).

@@ -55,16 +55,18 @@ export function LogsTableToolbar(p: LogsTableToolbarProps) {
       {/* v0.9.294 — narrow within results: it says LOADED in the placeholder
           because it filters the rows already in the page; it does not
           re-query. At 10B docs/day the cheapest query is the one you don't send. */}
-      {p.loadedCount > 0 && (
-        <Input
-          ref={p.narrowRef}
-          className="ld-narrow h-7 bg-field dark:bg-field"
-          value={p.narrow}
-          aria-label="Yüklenen satırlarda süz"
-          onChange={e => p.onNarrow(e.target.value)}
-          placeholder={`Filter the ${p.loadedCount.toLocaleString()} loaded rows… (no new query)`}
-          title="Filters the rows already loaded into this page — body, service, severity and trace id. It does NOT search the rest of the window; widen the query above for that." />
-      )}
+      {/* v0.10.24xx (CLS) — süzgeç kutusu ve grupla düğmesi satırlar gelmeden de
+          çizilir (devre dışı): sonradan belirmeleri sağ öbeği alt satıra itip
+          tabloyu kaydırıyordu. */}
+      <Input
+        ref={p.narrowRef}
+        className="ld-narrow h-7 bg-field dark:bg-field"
+        value={p.narrow}
+        disabled={p.loadedCount === 0}
+        aria-label="Yüklenen satırlarda süz"
+        onChange={e => p.onNarrow(e.target.value)}
+        placeholder={p.loadedCount > 0 ? `Filter the ${p.loadedCount.toLocaleString()} loaded rows… (no new query)` : 'Filter loaded rows… (no new query)'}
+        title="Filters the rows already loaded into this page — body, service, severity and trace id. It does NOT search the rest of the window; widen the query above for that." />
       {p.loadedCount > 0 && p.narrow.trim() && (
         <>
           <span className={p.shownCount === 0 ? 'ld-tbar-note is-warn' : 'ld-tbar-note'}>
@@ -85,8 +87,9 @@ export function LogsTableToolbar(p: LogsTableToolbarProps) {
           yüklenen {p.loadedCount.toLocaleString('tr-TR')} satırın {p.shownCount.toLocaleString('tr-TR')}'i kritik
         </span>
       )}
-      {!p.live && p.onGroupByTrace && p.loadedCount > 0 && (
+      {!p.live && p.onGroupByTrace && (
         <Toggle variant="outline" size="sm" pressed={!!p.groupByTrace} onPressedChange={p.onGroupByTrace} className="px-3"
+          disabled={p.loadedCount === 0}
           data-testid="logs-group-trace"
           title="Yüklenen satırları trace'e göre grupla (yeni sorgu yok). Başlıkta süre, hata ve kök span — trace önizlemesinden.">
           Trace'e göre grupla
@@ -97,7 +100,6 @@ export function LogsTableToolbar(p: LogsTableToolbarProps) {
       )}
       <span className="ld-tbar-right">
         {p.explain}
-        {p.status}
         <LogsColumnPicker columns={p.columns} fields={p.fields} onChange={p.onColumns} />
         {p.display}
         {/* v0.9.295 — sort direction; hidden in live tail (the stream is by
@@ -113,6 +115,11 @@ export function LogsTableToolbar(p: LogsTableToolbarProps) {
         )}
         <LogsExportMenu exportCount={p.shownCount} onExport={p.onExport} />
       </span>
+      {/* v0.10.24xx (CLS) — yükleme durumu kendi satırında (sağa yaslı): sağ
+          öbeğin içindeyken Inter yüklenince öbek iki satıra sarılıp tabloyu
+          ~38 px itiyordu (/logs CLS ~0,2). Satır baştan var; çip yuvaları
+          LoadStatus'ta sabit. */}
+      {p.status && <span className="ld-tbar-status">{p.status}</span>}
     </div>
   );
 }

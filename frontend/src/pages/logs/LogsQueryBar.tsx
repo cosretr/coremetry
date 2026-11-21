@@ -36,6 +36,9 @@ export interface LogsQueryBarProps {
   preferredServices?: readonly string[];
   serviceMeta?: (name: string) => string | undefined;
   clusters: string[];
+  /** v0.10.24xx (CLS) — küme listesi yüklenirken seçici YERİ ayrılır (devre dışı);
+   *  gelince belirmesi eylem yuvasını ikinci satıra itip /logs'u kaydırıyordu. */
+  clustersPending?: boolean;
   autocompleteSince: string;
   fields: string[];
   fieldsTotal?: number;
@@ -104,8 +107,8 @@ export function LogsQueryBar(p: LogsQueryBarProps) {
           preferred={p.preferredServices} optionMeta={p.serviceMeta} />
         {/* v0.5.471 — cluster selector. /api/clusters: typically 1-5 entries
             per install, so a plain select is the right shape. */}
-        {p.clusters.length > 0 && (
-          <NativeSelect size="sm" value={draft.cluster} aria-label="Cluster"
+        {(p.clusters.length > 0 || p.clustersPending) && (
+          <NativeSelect size="sm" value={draft.cluster} aria-label="Cluster" disabled={p.clusters.length === 0}
             onChange={e => p.onDraft({ ...draft, cluster: e.target.value })}
             title="Filter logs to a single k8s/openshift cluster"
             className="ld-cluster bg-field dark:bg-field">

@@ -84,6 +84,7 @@ import { useLogsExplain, LogsExplainButton, LogsExplainResult } from './logs/Log
 import { LogsNLToggle, LogsNLQueryRow } from './logs/LogsNLQuery'; // Log Search 6.6
 import { applyNLToDraft } from '@/lib/logsNLQuery';
 import { parseLogsView, effectiveLogsView, writeLogsView, writeTraceView, readTraceViewTarget, logsListEnabled, type LogsView } from './logs/logsView';
+import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 // v0.10.1498 — Share affordance (Copy link) moved into pages/logs/LogsActionsMenus.tsx (Share ▾).
 
@@ -1540,7 +1541,7 @@ function LogsInner() {
         <LogsQueryBar
           draft={draft} onDraft={setDraft}
           preferredServices={scopeNames} serviceMeta={serviceMeta}
-          clusters={clusters} autocompleteSince={autocompleteSince}
+          clusters={clusters} clustersPending={clustersQ.isLoading} autocompleteSince={autocompleteSince}
           fields={fields} fieldsTotal={fieldsTotal} history={historyTexts}
           queryLang={lang === 'lucene' ? 'lucene' : (staticQ.data?.queryLang ?? 'kql')}
           forcedLucene={lang === 'lucene'} onToggleLang={toggleLang}
@@ -1696,7 +1697,7 @@ function LogsInner() {
                 fontSize: 12.5, lineHeight: 1.55,
               }}>
                 <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text2)', marginBottom: 6 }}>
-                  AI DESEN ANLATIMI
+                  AI DESEN ANLATIMI {aiPat.text && <AiGeneratedMark />}
                 </div>
                 {aiPat.busy && <Spinner />}
                 {aiPat.err && <span style={{ color: 'var(--err)' }}>{aiPat.err}</span>}

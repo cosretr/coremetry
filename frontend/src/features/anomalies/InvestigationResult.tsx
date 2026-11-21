@@ -29,6 +29,7 @@ import { ProblemInvestigationRecommendations } from './ProblemInvestigationRecom
 import {
   stepLabel, askInChatQuestion, findingEvidence, findingKindLabel, fmtStepDuration, orderedSteps, stepStateView,
 } from './investigationResultView';
+import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestigation; canEdit?: boolean }) {
   const lang = useLang();
@@ -86,7 +87,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
         : (
           <div>
             <div style={{ color: 'var(--text3)', fontSize: 12, marginBottom: 4 }}>
-              {t('inv.res.aiSummary', lang)}{inv.summary.model ? ` · ${inv.summary.model}` : ''}
+              <AiGeneratedMark style={{ marginRight: 6 }} />{t('inv.res.aiSummary', lang)}{inv.summary.model ? ` · ${inv.summary.model}` : ''}
               {inv.summary.at ? <span title={tsLong(inv.summary.at)}> · {agoLang(inv.summary.at, lang)}</span> : null}
             </div>
             <OrigLang block><ExplainBody text={inv.summary.text} busy={false} verdict={false} /></OrigLang>

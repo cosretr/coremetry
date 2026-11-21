@@ -43,7 +43,12 @@ export function LoadStatus({ items, onCancel }: LoadStatusProps) {
   return (
     <span className="inline-flex items-center gap-1.5" data-testid="logs-load-status">
       <span role="status" aria-live="polite" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-        {shown.map(i => (
+        {/* v0.10.24xx (CLS) — fazı henüz olmayan iş de YERİNİ tutar (görünmez,
+            aynı min-genişlik): çipler sırayla belirdikçe araç çubuğu iki-üç
+            satıra sarılıp tabloyu aşağı itiyordu (/logs CLS 0,81). */}
+        {items.map(i => !i.phase ? (
+          <span key={i.key} aria-hidden className="invisible inline-block min-w-[8.5em] whitespace-nowrap">{chipText(i.label, { state: 'done' })}</span>
+        ) : (
           <span key={i.key} data-phase={i.phase!.state} data-testid={`load-${i.key}`}
             title={i.phase!.state === 'done' ? loadTimingTitle(i.phase!.timing) : undefined}
             className={[

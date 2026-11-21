@@ -15,6 +15,7 @@ import type { Problem, ChangedService, ExceptionGroup } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { RenderedMarkdown } from '@/components/Markdown';
 import { SubjectLink } from '../components/SubjectLink';
+import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 // Shift.tsx — /shift vardiya özeti (v0.9.1072, Faz 3.2; mockup
 // operatör-onaylı). Vardiya devri bugüne dek 4 sayfa gezilerek
@@ -126,7 +127,7 @@ export default function ShiftPage() {
           fontSize: 12.5, lineHeight: 1.55,
         }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text2)', marginBottom: 6 }}>
-            AI VARDİYA ANLATIMI
+            AI VARDİYA ANLATIMI {ai.text && <AiGeneratedMark style={{ marginLeft: 6 }} />}
           </div>
           {ai.busy && <Spinner />}
           {ai.err && <span style={{ color: 'var(--err)' }}>{ai.err}</span>}
