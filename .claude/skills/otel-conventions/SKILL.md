@@ -401,7 +401,7 @@ Tek giriş noktaları (hepsi `convert.go`): `ConvertTraces` + `convertSpan`
 | `attributes` | `attr_keys`/`attr_values` + 11 tipli kolon | KISMİ (tip düzleştirme) |
 | `events` | `spans.events` JSON blob | KISMİ (map daraltması) |
 | `links` | `span_links` tablosu | KISMİ (6 alandan 3'ü) |
-| **`trace_state`** | — | **KAYIP** (0 referans, doğrulandı) |
+| **`trace_state`** | yalnız `sample_weight` türetmesi | **KISMİ** (v0.10.2430): `ot=th` eşiği okunur → `spans.sample_weight` (ingest.sampling açıkken); metin saklanmaz. Scope attr'ları da yalnız bu türetmede okunur (`tailsampling.policy`). Golden `convert_sampling_golden_test.go` |
 | **`flags`** | — | **KAYIP** — W3C `SAMPLED` biti + `PARENT_IS_REMOTE` |
 | **`dropped_attributes_count`** | — | **KAYIP** |
 | **`dropped_events_count`** | — | **KAYIP** |

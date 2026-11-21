@@ -563,6 +563,13 @@ func main() {
 	// ctx'te; Store.GetSetting oradan cevaplar). Ölçüldü: 224 okuma/5 dk,
 	// ~1 s/sorgu lokal. appschema 5 dk'lık kendi döngüsünde kalır.
 	cfgRefresh := chstore.NewSettingsRefresher(store, 30*time.Second)
+	// v0.10.2430 — upstream-sampling weight rules (system_settings
+	// ingest.sampling): ingest pods stamp spans.sample_weight, the api pod
+	// serves the admin card. Every role loads it; default off.
+	if err := store.LoadIngestSampling(ctx); err != nil {
+		log.Printf("[ingest-sampling] load persisted settings: %v", err)
+	}
+	cfgRefresh.Add("ingest-sampling", store.LoadIngestSampling)
 	pipelineEng := pipeline.New()
 	if mode.ingest {
 		// Loads its rule set from system_settings at boot; admin PUTs through

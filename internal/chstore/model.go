@@ -32,6 +32,10 @@ type Span struct {
 	ResValues   []string
 	Events      string // JSON array
 	ScopeName   string
+	// SampleWeight — v0.10.2430: how many original spans this stored span
+	// represents under upstream sampling (adjusted count). 1 = unsampled /
+	// unknown; 0 (a producer that never set it) is written as 1.
+	SampleWeight float32
 }
 
 // Log is a normalised OTLP log record.

@@ -1545,6 +1545,12 @@ export const api = {
   aiChatRetention: () => get<import('./types').AIChatRetention>(`/api/ai/chat-retention`),
   putAIChatRetention: (c: import('./types').AIChatRetention) =>
     request<import('./types').AIChatRetention>(`/api/ai/chat-retention`, { method: 'PUT', body: JSON.stringify(c) }),
+  // v0.10.2430 — upstream-sampling weight rules (admin + audit settings.ingest_sampling.update).
+  ingestSampling: () => get<import('./types').IngestSamplingStatus>(`/api/admin/ingest-sampling`),
+  putIngestSampling: (c: import('./types').IngestSampling) =>
+    request<import('./types').IngestSampling>(`/api/admin/ingest-sampling`, { method: 'PUT', body: JSON.stringify(c) }),
+  ingestSamplingStored: (windowS = 300) =>
+    get<import('./types').IngestSamplingStored>(`/api/admin/ingest-sampling/stored?window_s=${windowS}`),
   // CoSRE kişi başı tur sınırı (admin + audit settings.ai_turn_limits.update).
   aiTurnLimits: () => get<import('./types').AITurnLimits>(`/api/ai/turn-limits`),
   putAITurnLimits: (c: Partial<import('./types').AITurnLimits>) =>

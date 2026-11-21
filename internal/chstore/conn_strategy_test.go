@@ -336,6 +336,9 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// v0.10.1807 — SAF telemetri: servis süzgeçli /traces satırının
 		// Name/route'u, tek FROM'u spans (trace_id IN sayfa, zaman sınırlı).
 		"trace_row_op.go": true,
+		// v0.10.2430 — SAF telemetri: sample_weight dağılımı, tek FROM'u spans
+		// (≤ 15 dk, LIMIT). Kolon probu metadata'dan (columnPresentAllHosts).
+		"sample_weight.go": true,
 		// TAŞINMAZ ÜÇÜNCÜ SINIF: sysstats.go + cluster.go system.* okuyor.
 		// Bunlar NODE-LOKAL tablolar; RoundRobin'e verilirse disk/utilizasyon
 		// panelleri her çağrıda BAŞKA node'u raporlar (SQL konsolunun in-order

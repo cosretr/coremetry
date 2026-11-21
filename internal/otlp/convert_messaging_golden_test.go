@@ -57,7 +57,7 @@ func TestConvertSpanMessagingGolden(t *testing.T) {
 				"messaging.destination.partition.id", "messaging.kafka.message.key",
 				"messaging.kafka.bootstrap.servers", "server.address", "peer.service"},
 			AttrValues: []string{"kafka", "orders", "orders-legacy", "publish", "send", "publish", "3", "k1", "broker:9092", "broker", "kafka"},
-			ResKeys:    res, ResValues: resV, Events: "", ScopeName: "io.opentelemetry.kafka-clients-2.6",
+			ResKeys:    res, ResValues: resV, Events: "", ScopeName: "io.opentelemetry.kafka-clients-2.6", SampleWeight: 1,
 		},
 		{
 			TraceID: "00000000000000000000000000000001", SpanID: "0000000000000003", ParentID: "",
@@ -70,7 +70,7 @@ func TestConvertSpanMessagingGolden(t *testing.T) {
 				"messaging.consumer.group.name", "messaging.kafka.consumer.group",
 				"messaging.kafka.message.offset", "messaging.destination.partition.id"},
 			AttrValues: []string{"kafka", "orders", "process", "orders-workers", "orders-workers-legacy", "4711", "3"},
-			ResKeys:    res, ResValues: resV, Events: "", ScopeName: "io.opentelemetry.kafka-clients-2.6",
+			ResKeys:    res, ResValues: resV, Events: "", ScopeName: "io.opentelemetry.kafka-clients-2.6", SampleWeight: 1,
 		},
 	}
 	for i := range want {

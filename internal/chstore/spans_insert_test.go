@@ -40,7 +40,7 @@ var spansCreateOrder = []string{
 	"db_system", "db_statement", "http_method", "http_route", "http_status",
 	"rpc_system", "rpc_method", "peer_service", "msg_system",
 	"attr_keys", "attr_values", "res_keys", "res_values",
-	"events", "scope_name", "op_group",
+	"events", "scope_name", "op_group", "sample_weight",
 }
 
 func TestSpansInsert_ColumnValueAlignment(t *testing.T) {
@@ -56,8 +56,8 @@ func TestSpansInsert_ColumnValueAlignment(t *testing.T) {
 	}
 
 	for _, withOpGroup := range []bool{true, false} {
-		cols := spansInsertColumnNames(withOpGroup)
-		args := spanAppendArgs(sp, withOpGroup)
+		cols := spansInsertColumnNames(withOpGroup, false)
+		args := spanAppendArgs(sp, withOpGroup, false)
 
 		// THE alignment invariant: one value per column, both ways.
 		if len(cols) != len(args) {
@@ -81,7 +81,7 @@ func TestSpansInsert_ColumnValueAlignment(t *testing.T) {
 		}
 
 		// The SQL must list exactly these columns in order.
-		gotSQL := spansInsertSQL(withOpGroup)
+		gotSQL := spansInsertSQL(withOpGroup, false)
 		wantSQL := "INSERT INTO spans (" + strings.Join(cols, ", ") + ")"
 		if gotSQL != wantSQL {
 			t.Fatalf("withOpGroup=%v: spansInsertSQL = %q, want %q", withOpGroup, gotSQL, wantSQL)
@@ -97,7 +97,7 @@ func TestSpansInsert_ColumnValueAlignment(t *testing.T) {
 // guardrail that keeps the positional INSERT honest.
 func TestSpansInsert_ColumnsMatchSchema(t *testing.T) {
 	// With op_group: must equal the full CREATE order.
-	withCols := spansInsertColumnNames(true)
+	withCols := spansInsertColumnNames(true, true)
 	if len(withCols) != len(spansCreateOrder) {
 		t.Fatalf("with-op_group column count = %d, schema order count = %d", len(withCols), len(spansCreateOrder))
 	}
@@ -107,9 +107,9 @@ func TestSpansInsert_ColumnsMatchSchema(t *testing.T) {
 		}
 	}
 
-	// Without op_group: must equal the CREATE order minus the trailing op_group.
-	wantBase := spansCreateOrder[:len(spansCreateOrder)-1]
-	base := spansInsertColumnNames(false)
+	// Without op_group / sample_weight: the CREATE order minus both.
+	wantBase := spansCreateOrder[:len(spansCreateOrder)-2]
+	base := spansInsertColumnNames(false, false)
 	if len(base) != len(wantBase) {
 		t.Fatalf("without-op_group column count = %d, want %d", len(base), len(wantBase))
 	}
@@ -118,8 +118,8 @@ func TestSpansInsert_ColumnsMatchSchema(t *testing.T) {
 			t.Fatalf("without-op_group column[%d] = %q, want %q", i, base[i], wantBase[i])
 		}
 	}
-	if last := spansCreateOrder[len(spansCreateOrder)-1]; last != "op_group" {
-		t.Fatalf("schema order must end in op_group, ends in %q — update this test if the schema changed", last)
+	if tail := spansCreateOrder[len(spansCreateOrder)-2:]; tail[0] != "op_group" || tail[1] != "sample_weight" {
+		t.Fatalf("schema order must end in op_group, sample_weight; ends in %q — update this test if the schema changed", tail)
 	}
 }
 
@@ -133,5 +133,35 @@ func TestSpansInsertColumns_NoOpGroupLeak(t *testing.T) {
 		if c == "cluster" {
 			t.Fatal("spansInsertColumns must NOT contain the materialized `cluster` column — it is never in an INSERT")
 		}
+	}
+}
+
+// v0.10.2430 — sample_weight is conditional like op_group: present iff
+// withWeight, after op_group, one value per column in all four shapes, and a
+// zero weight (producer never set it) is written as 1.
+func TestSpansInsert_SampleWeightAlignment(t *testing.T) {
+	sp := &Span{TraceID: "t", SpanID: "s", OpGroup: "g"}
+	for _, og := range []bool{true, false} {
+		for _, ww := range []bool{true, false} {
+			cols := spansInsertColumnNames(og, ww)
+			args := spanAppendArgs(sp, og, ww)
+			if len(cols) != len(args) {
+				t.Fatalf("og=%v ww=%v: %d columns, %d values", og, ww, len(cols), len(args))
+			}
+			has := cols[len(cols)-1] == "sample_weight"
+			if has != ww {
+				t.Fatalf("og=%v ww=%v: sample_weight last = %v", og, ww, has)
+			}
+			if ww {
+				if w, ok := args[len(args)-1].(float32); !ok || w != 1 {
+					t.Fatalf("zero weight must be written as float32 1, got %#v", args[len(args)-1])
+				}
+			}
+		}
+	}
+	sp.SampleWeight = 10
+	args := spanAppendArgs(sp, true, true)
+	if w := args[len(args)-1].(float32); w != 10 {
+		t.Fatalf("weight 10 written as %v", w)
 	}
 }

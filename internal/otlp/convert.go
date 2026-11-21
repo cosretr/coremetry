@@ -61,6 +61,19 @@ import (
 func ConvertTraces(req *tracecollpb.ExportTraceServiceRequest) ([]*chstore.Span, []*chstore.SpanLinkRow) {
 	var out []*chstore.Span
 	var links []*chstore.SpanLinkRow
+	// v0.10.2430 — upstream-sampling weight (sampling_weight.go). One atomic
+	// load per request; mode off = no per-span work, weight 1.
+	sw := chstore.CurrentIngestSampling()
+	active := sw.Active()
+	var errTraces map[string]struct{}
+	var tally weightBatch
+	if active {
+		tally = weightBatch{}
+		defer tally.flush()
+		if sw.UsesTraceError() {
+			errTraces = errorTraces(req.ResourceSpans)
+		}
+	}
 	for _, rs := range req.ResourceSpans {
 		svcName, hostName, deployEnv := "unknown", "", ""
 		resK, resV := attrsToArrays(nil)
@@ -80,12 +93,29 @@ func ConvertTraces(req *tracecollpb.ExportTraceServiceRequest) ([]*chstore.Span,
 		}
 		for _, ss := range rs.ScopeSpans {
 			scopeName := ""
+			var scopeAttrs []*commonpb.KeyValue
 			if ss.Scope != nil {
 				scopeName = ss.Scope.Name
+				scopeAttrs = ss.Scope.Attributes
 			}
 			for _, sp := range ss.Spans {
 				countSpanQuality(sp.TraceId, sp.SpanId, sp.StartTimeUnixNano) // v0.10.754 — sayar, düşürmez
 				row := convertSpan(sp, svcName, hostName, deployEnv, scopeName, resK, resV)
+				if active {
+					in := weightInput{traceID: sp.TraceId, traceState: sp.TraceState, spanAttrs: sp.Attributes,
+						scopeAttrs: scopeAttrs, isError: row.StatusCode == "error"}
+					if rs.Resource != nil {
+						in.resAttrs = rs.Resource.Attributes
+					}
+					if errTraces != nil {
+						_, in.traceError = errTraces[string(sp.TraceId)]
+					}
+					w, src := deriveWeight(&sw, in)
+					tally.add(src, w)
+					if sw.Writes() {
+						row.SampleWeight = float32(w)
+					}
+				}
 				out = append(out, row)
 				links = appendSpanLinks(links, sp.Links, row)
 			}
@@ -209,6 +239,7 @@ func convertSpan(sp *tracepb.Span, svcName, hostName, deployEnv, scopeName strin
 		AttrKeys: attrK, AttrValues: attrV,
 		ResKeys: resK, ResValues: resV,
 		Events: string(events), ScopeName: scopeName,
+		SampleWeight: 1, // ConvertTraces overrides when ingest.sampling is on
 	}
 }
 

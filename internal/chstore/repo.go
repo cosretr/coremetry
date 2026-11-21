@@ -131,7 +131,11 @@ var spansInsertColumns = []string{
 // withOpGroup is true. Keeping the column list and the value list in one place
 // (this function + spansInsertColumns) is the single guarantee against
 // positional drift: op_group is appended to both, or to neither, in lockstep.
-func spanAppendArgs(sp *Span, withOpGroup bool) []any {
+//
+// v0.10.2430 — sample_weight follows the same discipline (s.hasSampleWeightCol):
+// appended after op_group iff withWeight; a zero weight (producer never set
+// it) is written as 1.
+func spanAppendArgs(sp *Span, withOpGroup, withWeight bool) []any {
 	args := []any{
 		sp.TraceID, sp.SpanID, sp.ParentID, sp.Name, sp.Kind,
 		sp.ServiceName, sp.HostName, sp.DeployEnv, sp.StatusCode, sp.StatusMsg,
@@ -144,22 +148,36 @@ func spanAppendArgs(sp *Span, withOpGroup bool) []any {
 	if withOpGroup {
 		args = append(args, sp.OpGroup)
 	}
+	if withWeight {
+		w := sp.SampleWeight
+		if w <= 0 {
+			w = 1
+		}
+		args = append(args, w)
+	}
 	return args
 }
 
 // spansInsertColumnNames returns the ordered column list the INSERT will use,
 // appending op_group as the LAST column iff withOpGroup. Pure helper shared by
 // spansInsertSQL and the alignment regression test (v0.8.186).
-func spansInsertColumnNames(withOpGroup bool) []string {
-	if !withOpGroup {
+func spansInsertColumnNames(withOpGroup, withWeight bool) []string {
+	if !withOpGroup && !withWeight {
 		return spansInsertColumns
 	}
-	return append(append([]string{}, spansInsertColumns...), "op_group")
+	cols := append([]string{}, spansInsertColumns...)
+	if withOpGroup {
+		cols = append(cols, "op_group")
+	}
+	if withWeight {
+		cols = append(cols, "sample_weight")
+	}
+	return cols
 }
 
 // spansInsertSQL builds the `INSERT INTO spans (col, col, …)` statement.
-func spansInsertSQL(withOpGroup bool) string {
-	return "INSERT INTO spans (" + strings.Join(spansInsertColumnNames(withOpGroup), ", ") + ")"
+func spansInsertSQL(withOpGroup, withWeight bool) string {
+	return "INSERT INTO spans (" + strings.Join(spansInsertColumnNames(withOpGroup, withWeight), ", ") + ")"
 }
 
 func (s *Store) InsertSpans(ctx context.Context, spans []*Span) error {
@@ -172,12 +190,13 @@ func (s *Store) InsertSpans(ctx context.Context, spans []*Span) error {
 	// and ingest survives. The monolithic / cluster-name-set path keeps
 	// hasOpGroupCol=true → byte-identical column+value layout to pre-v0.8.186.
 	withOpGroup := s.hasOpGroupCol
-	batch, err := s.ingestWriteConn().PrepareBatch(ctx, spansInsertSQL(withOpGroup))
+	withWeight := s.hasSampleWeightCol.Load()
+	batch, err := s.ingestWriteConn().PrepareBatch(ctx, spansInsertSQL(withOpGroup, withWeight))
 	if err != nil {
 		return fmt.Errorf("prepare spans: %w", err)
 	}
 	for _, sp := range spans {
-		if err := batch.Append(spanAppendArgs(sp, withOpGroup)...); err != nil {
+		if err := batch.Append(spanAppendArgs(sp, withOpGroup, withWeight)...); err != nil {
 			return fmt.Errorf("append span: %w", err)
 		}
 	}

@@ -93,6 +93,11 @@ Existing MVs:
   — text compresses ~3×.
 - Numeric float metrics: `CODEC(Gorilla, ZSTD(3))` — Facebook Gorilla
   exploits float32 mantissa similarity in adjacent samples.
+- Near-constant per-row floats: `spans.sample_weight Float32 DEFAULT 1
+  CODEC(ZSTD(3))` (v0.10.2430, upstream-sampling adjusted count) — runs of
+  one value compress to almost nothing with plain ZSTD. Explicit ingest
+  column: ALTER gated + `hasSampleWeightCol` probe
+  (`docs/architecture/sampling-weight.md`).
 
 ## 5. TTL
 

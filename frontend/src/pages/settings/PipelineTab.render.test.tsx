@@ -12,6 +12,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import type { PipelineRule } from '@/lib/api';
 import { ConfirmGate } from '@/components/coremetry/Confirm';
 import { MemoryRouter } from 'react-router';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const RULE: PipelineRule = {
   id: 'r1', name: 'drop health', kind: 'drop', signal: 'spans', enabled: true,
@@ -27,6 +28,11 @@ vi.mock('@/lib/api', () => ({
     deletePipelineRule: async () => ({}),
     getMetricExclusions: async () => ({ rules: [] }),
     putMetricExclusions: async () => ({ rules: [] }),
+    // v0.10.2430 — SamplingWeightPanel (same tab).
+    ingestSampling: async () => ({
+      settings: { mode: 'off', defaultWeight: 1, rules: [] }, columnStored: true,
+      pod: { host: 'h', ingestRole: true, tally: [], overflow: 0 },
+    }),
   },
 }));
 
@@ -37,7 +43,7 @@ import { PipelineTab } from './PipelineTab';
 let host: HTMLDivElement | null = null; let root: Root | null = null;
 async function render(): Promise<HTMLElement> {
   host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
-  await act(async () => { root!.render(<MemoryRouter><ConfirmGate><PipelineTab /></ConfirmGate></MemoryRouter>); });
+  await act(async () => { root!.render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><ConfirmGate><PipelineTab /></ConfirmGate></MemoryRouter></QueryClientProvider>); });
   await act(async () => { await new Promise(r => setTimeout(r, 0)); });
   return host;
 }

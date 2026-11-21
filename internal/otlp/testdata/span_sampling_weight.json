@@ -1,0 +1,187 @@
+{
+ "resourceSpans": [
+  {
+   "resource": {
+    "attributes": [
+     {
+      "key": "service.name",
+      "value": {
+       "stringValue": "checkout"
+      }
+     }
+    ]
+   },
+   "scopeSpans": [
+    {
+     "scope": {
+      "name": "tail",
+      "attributes": [
+       {
+        "key": "tailsampling.policy",
+        "value": {
+         "stringValue": "keep-errors"
+        }
+       }
+      ]
+     },
+     "spans": [
+      {
+       "traceId": "AAAAAAAAAAAAAAAAAAAAAQ==",
+       "spanId": "AAAAAAAAAAE=",
+       "name": "work",
+       "kind": "SPAN_KIND_INTERNAL",
+       "startTimeUnixNano": "1700000000000000000",
+       "endTimeUnixNano": "1700000000001000000",
+       "status": {
+        "code": "STATUS_CODE_ERROR"
+       }
+      },
+      {
+       "traceId": "AAAAAAAAAAAAAAAAAAAAAQ==",
+       "spanId": "AAAAAAAAAAI=",
+       "name": "work",
+       "kind": "SPAN_KIND_INTERNAL",
+       "startTimeUnixNano": "1700000000000000000",
+       "endTimeUnixNano": "1700000000001000000"
+      }
+     ]
+    },
+    {
+     "scope": {
+      "name": "tail",
+      "attributes": [
+       {
+        "key": "tailsampling.policy",
+        "value": {
+         "stringValue": "sample-10"
+        }
+       }
+      ]
+     },
+     "spans": [
+      {
+       "traceId": "AAAAAAAAAAAAAAAAAAAAAg==",
+       "spanId": "AAAAAAAAAAM=",
+       "name": "work",
+       "kind": "SPAN_KIND_INTERNAL",
+       "startTimeUnixNano": "1700000000000000000",
+       "endTimeUnixNano": "1700000000001000000"
+      }
+     ]
+    },
+    {
+     "scope": {
+      "name": "sdk"
+     },
+     "spans": [
+      {
+       "traceId": "AAAAAAAAAAAAAAAAAAAABQ==",
+       "spanId": "AAAAAAAAAAQ=",
+       "name": "work",
+       "kind": "SPAN_KIND_INTERNAL",
+       "startTimeUnixNano": "1700000000000000000",
+       "endTimeUnixNano": "1700000000001000000",
+       "traceState": "vendor=x,ot=th:c;rv:abcdef01234567"
+      },
+      {
+       "traceId": "AAAAAAAAAAAAAAAAAAAABg==",
+       "spanId": "AAAAAAAAAAU=",
+       "name": "work",
+       "kind": "SPAN_KIND_INTERNAL",
+       "startTimeUnixNano": "1700000000000000000",
+       "endTimeUnixNano": "1700000000001000000",
+       "traceState": "ot=rv:abcdef01234567;th:0"
+      },
+      {
+       "traceId": "AAAAAAAAAAAAAAAAAAAABw==",
+       "spanId": "AAAAAAAAAAY=",
+       "name": "work",
+       "kind": "SPAN_KIND_INTERNAL",
+       "startTimeUnixNano": "1700000000000000000",
+       "endTimeUnixNano": "1700000000001000000",
+       "attributes": [
+        {
+         "key": "sampling.weight",
+         "value": {
+          "intValue": "10"
+         }
+        }
+       ]
+      },
+      {
+       "traceId": "AAAAAAAAAAAAAAAAAAAAAw==",
+       "spanId": "AAAAAAAAAAc=",
+       "name": "work",
+       "kind": "SPAN_KIND_INTERNAL",
+       "startTimeUnixNano": "1700000000000000000",
+       "endTimeUnixNano": "1700000000001000000"
+      },
+      {
+       "traceId": "AAAAAAAAAAAAAAAAAAAAAw==",
+       "spanId": "AAAAAAAAAAg=",
+       "name": "work",
+       "kind": "SPAN_KIND_INTERNAL",
+       "startTimeUnixNano": "1700000000000000000",
+       "endTimeUnixNano": "1700000000001000000",
+       "status": {
+        "code": "STATUS_CODE_ERROR"
+       }
+      },
+      {
+       "traceId": "AAAAAAAAAAAAAAAAAAAABA==",
+       "spanId": "AAAAAAAAAAk=",
+       "name": "work",
+       "kind": "SPAN_KIND_INTERNAL",
+       "startTimeUnixNano": "1700000000000000000",
+       "endTimeUnixNano": "1700000000001000000"
+      },
+      {
+       "traceId": "AAAAAAAAAAAAAAAAAAAACA==",
+       "spanId": "AAAAAAAAAAo=",
+       "name": "work",
+       "kind": "SPAN_KIND_INTERNAL",
+       "startTimeUnixNano": "1700000000000000000",
+       "endTimeUnixNano": "1700000000001000000",
+       "traceState": "ot=th:zz"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "resource": {
+    "attributes": [
+     {
+      "key": "service.name",
+      "value": {
+       "stringValue": "legacy"
+      }
+     },
+     {
+      "key": "SampleRate",
+      "value": {
+       "stringValue": "20"
+      }
+     }
+    ]
+   },
+   "scopeSpans": [
+    {
+     "scope": {
+      "name": "sdk"
+     },
+     "spans": [
+      {
+       "traceId": "AAAAAAAAAAAAAAAAAAAACQ==",
+       "spanId": "AAAAAAAAAAs=",
+       "name": "work",
+       "kind": "SPAN_KIND_INTERNAL",
+       "startTimeUnixNano": "1700000000000000000",
+       "endTimeUnixNano": "1700000000001000000"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

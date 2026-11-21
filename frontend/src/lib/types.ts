@@ -8730,6 +8730,35 @@ export interface AITurnLimits {
   updatedAt?: string;
 }
 export interface AIChatRetention { days: number }
+
+/** v0.10.2430 — upstream-sampling weight rules (Go chstore.IngestSampling). */
+export interface SamplingRule {
+  name: string;
+  attr?: string;
+  value?: string;
+  status?: '' | 'error';
+  traceError?: boolean;
+  /** tail_sampling probabilistic bucket: percentage, salt, in/out. */
+  hashPercent?: number;
+  hashSalt?: string;
+  hashBucket?: 'in' | 'out';
+  weight: number;
+}
+export interface IngestSampling {
+  mode: 'off' | 'shadow' | 'on';
+  defaultWeight: number;
+  honorTracestate?: boolean;
+  honorAttributes?: boolean;
+  rules: SamplingRule[];
+  updatedBy?: string;
+  updatedAt?: string;
+}
+export interface IngestSamplingStatus {
+  settings: IngestSampling;
+  columnStored: boolean;
+  pod: { host: string; ingestRole: boolean; tally: { source: string; weight: number; spans: number }[]; overflow: number };
+}
+export interface IngestSamplingStored { windowS: number; rows: { weight: number; spans: number }[] }
 // AIGeneralQuestions — /api/ai/general-questions (v0.10.1458): konu dışı sorulara
 // kısa genel cevap anahtarı; blob yokken allow=true. Go: chstore.AIGeneralQuestions.
 export interface AIGeneralQuestions {

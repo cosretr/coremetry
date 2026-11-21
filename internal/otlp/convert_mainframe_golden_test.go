@@ -51,7 +51,7 @@ func TestConvertSpanMainframeGolden(t *testing.T) {
 	base := func(i int) chstore.Span {
 		return chstore.Span{TraceID: tid, OpGroup: rows[i].OpGroup,
 			ServiceName: "transfer-core", HostName: "transfer-core-1", DeployEnv: "prod",
-			ResKeys: res, ResValues: resV}
+			ResKeys: res, ResValues: resV, SampleWeight: 1}
 	}
 	want := make([]chstore.Span, 6)
 

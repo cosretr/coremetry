@@ -145,6 +145,10 @@ func (s *Store) reprobePromotedAttrs() {
 				registerAttrIndex(m)
 			}
 		}
+		// v0.10.2430 — spans.sample_weight ertelenen ALTER ile iner.
+		if !s.hasSampleWeightCol.Load() {
+			s.reprobeSampleWeightCol(ctx)
+		}
 		// Ertelenen spanmetrics recreate'i inince exemplar okuma şekli tazelenir.
 		s.probeSpanmetricsExemplarShape(ctx)
 		// v0.10.409 — ai_calls genişletilmiş kolonları da ertelenen DDL ile

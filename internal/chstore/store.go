@@ -194,6 +194,13 @@ type Store struct {
 	// ClusterName set (where adaptDDL owns spans_local) this is true
 	// and the path is byte-identical to pre-v0.8.186.
 	hasOpGroupCol bool
+	// hasSampleWeightCol — spans.sample_weight (v0.10.2430, upstream-sampling
+	// adjusted count) present on the table the WRITE path inserts into. Same
+	// hazard class as hasOpGroupCol (explicit Go-written ingest column) +
+	// the two-boot contract (cluster-mode DDL is deferred): atomic, flipped by
+	// reprobeSampleWeightCol after the deferred ALTER lands. false ⇒ the
+	// INSERT omits the column and rows read the DEFAULT 1 (= unweighted).
+	hasSampleWeightCol atomic.Bool
 	// v0.9.1077 — system.distribution_queue.last_exception_time probe'u
 	// (süreç ömründe bir kez; distribution_queue.go).
 	distQueueLastAtOnce sync.Once
@@ -2362,6 +2369,7 @@ func canonicalTables(sd, ld, md int) []string {
 			scope_name    LowCardinality(String) DEFAULT '',
 			op_group      LowCardinality(String) DEFAULT '',
 			cluster       LowCardinality(String) MATERIALIZED %s,
+			sample_weight Float32      DEFAULT 1 CODEC(ZSTD(3)),
 			INDEX idx_trace  trace_id  TYPE bloom_filter(0.01) GRANULARITY 4,
 			INDEX idx_name   name      TYPE set(0) GRANULARITY 4
 		) ENGINE = MergeTree()
@@ -5171,6 +5179,23 @@ func (s *Store) migrate(ctx context.Context) error {
 	if !s.hasOpGroupCol && ogProbeErr == nil {
 		s.dropIngestBlockingMV(ctx, "operation_group_summary_5m", "op_group")
 	}
+
+	// sample_weight — v0.10.2430, upstream-sampling adjusted count
+	// (docs/architecture/sampling-weight.md). EXPLICIT Go-written ingest
+	// column → the op_group treatment: ALTER skipped on an external
+	// Distributed spans with cluster_name unset (wrapper-only DEFAULT column
+	// would code-16 every INSERT, v0.8.186), metadata probe decides whether
+	// the INSERT binds it. Float32 DEFAULT 1: old parts and every row written
+	// without the column read 1 = "unweighted" (ZSTD on a near-constant
+	// column ≈ 0 bytes/row). No MV reads it yet (Phase 2), so a missing
+	// column only means weights are not stored.
+	const sampleWeightAlter = `ALTER TABLE spans ADD COLUMN IF NOT EXISTS sample_weight Float32 DEFAULT 1 CODEC(ZSTD(3))`
+	if s.spansIsExternalDistributed(ctx) {
+		log.Printf("[chstore] external Distributed `spans` with cluster_name unset — SKIPPING sample_weight ALTER (wrapper-only would break every INSERT with code 16). Sampling weights are not stored; set config.clickhouse.cluster_name to enable them.")
+	} else if err := s.execDDL(ctx, sampleWeightAlter); err != nil {
+		return fmt.Errorf("alter table (sample_weight): %w", err)
+	}
+	s.reprobeSampleWeightCol(ctx)
 
 	// series_fingerprint — v0.8.328 cross-signal pivot: the persisted metric
 	// series identity (see hasSeriesFpCol on the Store struct). EXPLICIT

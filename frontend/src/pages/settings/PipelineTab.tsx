@@ -16,6 +16,7 @@ import { api, type PipelineRule } from '@/lib/api';
 import type { MetricExclusionRule } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
 import { buildPipelineRuleBody, describeCondition } from './pipelineRuleBody';
+import { SamplingWeightPanel } from './SamplingWeightPanel'; // v0.10.2430
 
 // Faz 2 dilim 1 R14 — inline stil → Tailwind utility; ui/ DataTable kancası
 // → coremetry DataTable (renderCell), Modal → coremetry/overlay Dialog,
@@ -216,6 +217,8 @@ export function PipelineTab() {
           onSpanRule={() => { setSpanPrefill(true); setCreating(true); }}
         />
       </div>
+
+      <SamplingWeightPanel />
     </div>
   );
 }
