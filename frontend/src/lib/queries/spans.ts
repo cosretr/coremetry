@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
-import type { SpanExemplar, ProfileRow, SpanHotspotsResponse, OperationSummary } from '@/lib/types';
+import type { SpanExemplar, ProfileRow, SpanHotspotsResponse, OperationSummary, LatencyHeatmap } from '@/lib/types';
 
 // ── SpanDetail paneli (2026-11-21, effect-fetch → React Query) ──────────
 // Panel açıkken çekilir; span değişince / panel kapanınca uçuştaki istek
@@ -57,6 +57,27 @@ export function useSpanBaselineP50(service: string, endNs: number, names: string
       }
       return null;
     },
+  });
+}
+
+// Dalga 3 (Honeycomb "span vs peers") — aynı servis + operasyonun trace
+// penceresindeki (±15 dk) süre ızgarası; mevcut /api/spans/heatmap (sunucuda
+// 30 sn serveCached; ham span taraması zaman sınırlı + LIMIT + max_execution_time).
+// Pencere dakikaya yuvarlı gelir → aynı trace'te gezinmek aynı anahtar.
+export function useSpanPeers(service: string, operation: string, from: number, to: number, buckets: number) {
+  return useQuery<LatencyHeatmap | null>({
+    queryKey: keys.spans.peers(service, operation, from, to),
+    queryFn: ({ signal }) => api.spanHeatmap({
+      from, to, buckets,
+      filters: JSON.stringify([
+        { k: 'service.name', op: '=', v: [service] },
+        { k: 'name', op: '=', v: [operation] },
+      ]),
+    }, signal),
+    enabled: !!service && !!operation && to > from,
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 }
 

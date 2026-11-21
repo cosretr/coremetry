@@ -12,6 +12,9 @@ import { fmtNs, displaySpanName, sevClass, sevName } from '@/lib/utils';
 import { inkOn } from '@/lib/chartFmt';
 import { wfBarAreaPx, wfLabelPlacement, wfOutsideRightLeft } from './traceWaterfall.label';
 import { nameColWidth, NAME_MIN, NAME_MAX, INDENT_PX } from '@/lib/traceNameCol';
+import type { CriticalSegments } from '@/lib/criticalSegments';
+import { clampTraceZoom, clipBar, type TraceZoom } from '@/lib/traceZoom';
+import { useT } from '@/lib/i18n';
 
 // v0.10.278 — sanal satır eşiği ve harita eşiği (ölçüm: 1000-1500 satır arası
 // content-visibility ile açık basılıyordu, audit §1.3).
@@ -202,7 +205,7 @@ export function TraceWaterfall({
   spans, selectedId, onSelect, defaultCollapsed, groupSimilar = false,
   onGroupSimilarChange,
   criticalPathIds, matchIds, focusIds, evidenceIds, logSignals, onLogsClick, linkedSpanIds, analysis, revealSpanId,
-  renderDetail, logRows,
+  renderDetail, logRows, criticalSegments, onlyIds, zoom, onZoom,
 }: {
   spans: SpanRow[];
   selectedId: string | null;
@@ -272,7 +275,21 @@ export function TraceWaterfall({
   // Undefined = focus off. Independent from criticalPathIds so
   // the stripe toggle and the focus toggle compose freely.
   focusIds?: Set<string>;
+  // Dalga 3 (2026-11-21, Grafana 12.4 kritik yol gölgesi) — span id → çubuğun
+  // kritik KESİTLERİ (ns; lib/criticalSegments, worker'da). Yalnız o kısım
+  // gölgelenir (.wf-bar-crit); verilmezse gölge yok.
+  criticalSegments?: CriticalSegments;
+  // Dalga 3 — "Yalnız kritik yol": verilirse YALNIZ bu kümedeki span'ler
+  // satır olur (küme ata-kapalı: kritik span'in atası da kritik → ağaç
+  // bozulmaz). undefined = süzgeç kapalı.
+  onlyIds?: Set<string>;
+  // Dalga 3 (Grafana 13 minimap) — zaman yakınlaştırması (trace başlangıcına
+  // göre ns ofset; lib/traceZoom). onZoom verilirse harita her trace'te çizilir
+  // ve yatay sürükleme dilim seçer; çağıran durumu sahiplenir (/trace: ?wz=).
+  zoom?: TraceZoom;
+  onZoom?: (z: TraceZoom) => void;
 }) {
+  const tt = useT();
   // Memoise the parents-of-something set keyed by the spans array
   // identity. When defaultCollapsed is on, that set becomes the
   // initial collapsed Set; otherwise we start with an empty Set.
@@ -296,6 +313,19 @@ export function TraceWaterfall({
   // Re-sync when spans flip (a fresh trace replaces the previous
   // one) so the new structure also opens collapsed.
   useEffect(() => { setCollapsed(initialCollapsed); }, [initialCollapsed]);
+  // Dalga 3 — "Yalnız kritik yol" açılınca yol üstündeki katlı satırlar açılır
+  // (büyük trace otomatik katlı gelir; süzgeç tek satıra inmesin).
+  useEffect(() => {
+    if (!onlyIds) return;
+    setCollapsed(prev => {
+      let hit = false;
+      for (const id of onlyIds) if (prev.has(id)) { hit = true; break; }
+      if (!hit) return prev;
+      const next = new Set(prev);
+      for (const id of onlyIds) next.delete(id);
+      return next;
+    });
+  }, [onlyIds]);
   const [nameWidth, setNameWidth] = useState<number | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -340,6 +370,10 @@ export function TraceWaterfall({
   }, [spans]);
 
   const { minT, totalNs } = tree;
+  // Dalga 3 — görünür zaman penceresi (yakınlaştırma yoksa tam trace).
+  const zoomC = useMemo(() => clampTraceZoom(zoom ?? null, totalNs), [zoom, totalNs]);
+  const viewMin = zoomC ? minT + zoomC[0] : minT;
+  const viewTotal = zoomC ? zoomC[1] - zoomC[0] : totalNs;
   // v0.10.276 — sunucu analizi düğümleri (spanId → TraceNode); yoksa boş.
   const nodeById = useMemo(() => {
     const m = new Map<string, TraceNode>();
@@ -402,9 +436,14 @@ export function TraceWaterfall({
       });
     };
 
+    const keep = (sp: SpanRow) => onlyIds === undefined || onlyIds.has(sp.spanId);
+    const kidsOf = (id: string) => {
+      const k = children.get(id) ?? [];
+      return onlyIds === undefined ? k : k.filter(keep);
+    };
     const dfs = (id: string, depth: number, isLast: boolean, ancestorContinues: boolean[]) => {
       const s = map.get(id); if (!s) return;
-      const kids = children.get(id) ?? [];
+      const kids = kidsOf(id);
       out.push({ span: s, depth, hasChildren: kids.length > 0, ancestorContinues, isLastSibling: isLast });
       if (collapsed.has(id)) return;
       const entries = groupChildren(kids);
@@ -419,7 +458,7 @@ export function TraceWaterfall({
         // member's subtree (representative) so the operator still
         // sees a typical call shape under the group.
         const synthId = `group:${id}:${i}:${entry.key}`;
-        const repKids = children.get(entry.rep.spanId) ?? [];
+        const repKids = kidsOf(entry.rep.spanId);
         const synthSpan: SpanRow = {
           ...entry.rep,
           spanId: synthId,
@@ -452,11 +491,12 @@ export function TraceWaterfall({
         });
       });
     };
-    roots.forEach((r, i) => dfs(r.spanId, 0, i === roots.length - 1, []));
+    const shownRoots = roots.filter(keep);
+    shownRoots.forEach((r, i) => dfs(r.spanId, 0, i === shownRoots.length - 1, []));
 
     const maxDepth = out.reduce((m, r) => Math.max(m, r.depth), 0);
     return { rows: out, maxDepth };
-  }, [tree, collapsed, groupSimilar]);
+  }, [tree, collapsed, groupSimilar, onlyIds]);
 
   // v0.9.983 (denetim B1) — hesap `lib/traceNameCol.ts`e SAF fonksiyon
   // olarak çıkarıldı ve tablo-güdümlü test aldı. Eski hâlde `depthMin`
@@ -689,7 +729,7 @@ export function TraceWaterfall({
               t === 0 ? 'translate(0, -50%)'
               : t === 1 ? 'translate(-100%, -50%)'
               : 'translate(-50%, -50%)';
-            const offsetNs = t * totalNs;
+            const offsetNs = (viewMin - minT) + t * viewTotal;
             return (
               <span key={`l${t}`}>
                 <span className="wf-tick-label"
@@ -720,10 +760,20 @@ export function TraceWaterfall({
         </div>
       </div>
 
-      {rows.length >= MINIMAP_MIN_ROWS && (
-        /* v0.10.278 — trace haritası (canvas), görünür pencere + tıkla-git. */
+      {(rows.length >= MINIMAP_MIN_ROWS || onZoom) && (
+        /* v0.10.278 — trace haritası (canvas), görünür pencere + tıkla-git.
+           Dalga 3 — onZoom varsa yatay sürükleme = zaman fırçası. */
         <TraceMinimap spans={minimapSpans} minT={minT} totalNs={totalNs} colorFor={colorFor}
-          range={visibleRange} onSeek={seekRow} />
+          range={visibleRange} onSeek={seekRow}
+          zoom={zoomC} onBrush={onZoom ? z => onZoom(clampTraceZoom(z, totalNs)) : undefined} />
+      )}
+      {zoomC && (
+        <div className="wf-zoombar" data-testid="wf-zoombar">
+          <span>{tt('trace.zoom.label')} <span className="mono">+{fmtNs(zoomC[0])} – +{fmtNs(zoomC[1])}</span> ({fmtNs(viewTotal)} / {fmtNs(totalNs)})</span>
+          {onZoom && (
+            <Chip pill size="xs" data-testid="wf-zoom-reset" onClick={() => onZoom(null)}>{tt('trace.zoom.reset')}</Chip>
+          )}
+        </div>
       )}
       <div ref={listRef} className="wf-rows" style={virtual ? { position: 'relative', height: virtualizer.getTotalSize() } : undefined}>
       {rendered.map(({ row: { span: s, depth, hasChildren, ancestorContinues, isLastSibling,
@@ -759,8 +809,11 @@ export function TraceWaterfall({
           s.parentSpanId ? tree.map.get(s.parentSpanId)?.serviceName : undefined,
           !!s.parentSpanId,
         );
-        const startPct = ((s.startTime - minT) / totalNs * 100).toFixed(4);
-        const widthPct = Math.max(0.15, ((s.endTime - s.startTime) / totalNs) * 100).toFixed(4);
+        // Dalga 3 — çubuk görünür pencereye kırpılır; pencere dışıysa çubuk yok.
+        const clip = clipBar(s.startTime, s.endTime, viewMin, viewTotal);
+        const clipped = !!clip && (clip.s > s.startTime || clip.e < s.endTime);
+        const startPct = (clip?.leftPct ?? 0).toFixed(4);
+        const widthPct = Math.max(0.15, clip?.widthPct ?? 0).toFixed(4);
         const dur = s.endTime - s.startTime;
         // Replace generic gRPC names ("grpc command", "rpc", bare method)
         // with a richer label derived from rpc.* / peer.service attrs.
@@ -803,9 +856,10 @@ export function TraceWaterfall({
         const exc = (s.events ?? []).find(e => e.name === 'exception');
         let excLeftPct: number | null = null;
         if (exc) {
-          const t = exc.timeNano > 0 ? exc.timeNano : s.endTime;
-          const clamped = Math.min(Math.max(t, s.startTime), s.endTime);
-          excLeftPct = Math.min(((clamped - minT) / totalNs) * 100, 99);
+          const at = exc.timeNano > 0 ? exc.timeNano : s.endTime;
+          const clamped = Math.min(Math.max(at, s.startTime), s.endTime);
+          const pct = ((clamped - viewMin) / viewTotal) * 100;
+          excLeftPct = pct >= 0 && pct <= 100 ? Math.min(pct, 99) : null;
         }
 
         // v0.10.1643 — duration label: inside only when it fits in the
@@ -957,7 +1011,7 @@ export function TraceWaterfall({
               {TICKS.filter(t => t > 0).map(t => (
                 <div key={`v${t}`} className="wf-vline" style={{ left: `${t * 100}%` }} />
               ))}
-              <div
+              {clip && <div
                 className="wf-bar"
                 title={
                   `${displayName}\n${s.serviceName}\n` +
@@ -974,13 +1028,26 @@ export function TraceWaterfall({
                 }}
               >
                 {/* v0.10.276 — öz süre payı (sunucu analizi): koyu iç şerit. */}
-                {node && dur > 0 && node.selfNs < dur && (
+                {node && dur > 0 && !clipped && node.selfNs < dur && (
                   <span className="wf-bar-self" style={{
                     width: `${Math.max(0, Math.min(100, (node.selfNs / dur) * 100))}%`,
                     // v0.10.920 — gölge mürekkepten UZAKLAŞIR: koyu mürekkepte açık, beyaz mürekkepte koyu.
                     background: ink === '#ffffff' ? 'color-mix(in srgb, black 30%, transparent)' : 'color-mix(in srgb, white 35%, transparent)',
                   }} />
                 )}
+                {/* Dalga 3 — kritik kesit gölgesi: çubuğun yalnız kritik yol
+                    üstündeki kısmı (grup satırında yok — sentetik zaman aralığı). */}
+                {!memberIds && clip && clip.e > clip.s && criticalSegments?.get(s.spanId)?.map(([a, b]) => {
+                  const ca = Math.max(a, clip.s), cb = Math.min(b, clip.e);
+                  if (cb <= ca) return null;
+                  const w = clip.e - clip.s;
+                  return (
+                    <span key={a} className="wf-bar-crit" data-testid="wf-bar-crit" style={{
+                      left: `${((ca - clip.s) / w) * 100}%`,
+                      width: `${((cb - ca) / w) * 100}%`,
+                    }} />
+                  );
+                })}
                 {labelInside && (
                   // v0.10.920 — mürekkep bar rengine göre (inkOn); açık seri renklerinde beyaz okunmazdı.
                   <span className="wf-bar-label"
@@ -988,12 +1055,12 @@ export function TraceWaterfall({
                     {durLabel}
                   </span>
                 )}
-              </div>
+              </div>}
               {excLeftPct !== null && (
                 <span className="wf-ev" style={{ left: `${excLeftPct}%` }}
                       title={exc!.attributes?.['exception.type'] || 'exception'} />
               )}
-              {!labelInside && (
+              {clip && !labelInside && (
                 <span className={`wf-bar-label-outside${labelLeft ? ' wf-bar-label-outside-left' : ''}`}
                       style={{ left: labelLeft
                         ? `calc(${startPct}% - 4px)`

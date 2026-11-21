@@ -3204,6 +3204,14 @@ export const api = {
     selFilters?: string; selDsl?: string;
   }) =>
     get<import('./types').BubbleUpResult>(`/api/spans/bubbleup?${qs(params)}`),
+  // Dalga 3 (fırça → karşılaştır) — aynı süzgeç, iki PENCERE: seçim dilimi
+  // vs taban (grafiğin penceresi). internal/api/bubbleup_compare.go; yanıt
+  // spanBubbleUp ile aynı şekil (chstore.BubbleUpResult).
+  spanBubbleUpCompare: (params: {
+    selFrom: number; selTo: number; baseFrom: number; baseTo: number;
+    filters?: string; dsl?: string;
+  }) =>
+    get<import('./types').BubbleUpResult>(`/api/spans/bubbleup/compare?${qs(params)}`),
 
   // /api/services/{name}/db-queries — top normalised DB
   // statements for a service in a time window. Powers the

@@ -15,6 +15,8 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { perSpanLogSignals, spanEventLogRows, splitGrpcMessageEvents } from '@/lib/traceEventLogs';
 import { STORAGE_KEYS, getRaw, setRaw } from '@/lib/storage';
 import { computeCriticalPath } from '@/lib/criticalPath';
+import { useCriticalSegments } from '@/lib/useCriticalSegments'; // dalga 3 — kesitler worker'da
+import { traceZoomCodec, type TraceZoom } from '@/lib/traceZoom'; // dalga 3 — ?wz= şelale yakınlaştırması
 import { traceRepeatGroups, type TraceRepeatGroup } from '@/lib/traceRepeats';
 import { CopyButton } from '@/components/CopyButton';
 import { TraceLogsPanel } from './trace/TraceLogsPanel'; // v0.10.675 — kiosk ile paylaşılan panel
@@ -124,6 +126,9 @@ function TraceDetailInner() {
     () => searchParams.get('xn') === '1');
   // v0.10.1556 — servis odağı (?svc=); ayrıntı aşağıda svcFocusInfo'da.
   const [svcFocus, setSvcFocus] = useState<string | null>(() => searchParams.get('svc'));
+  // Dalga 3 (Grafana 13 minimap) — şelale zaman yakınlaştırması; ?wz= (ns ofset,
+  // lib/traceZoom codec'i) aşağıdaki tek URL yazıcısından iner.
+  const [wfZoom, setWfZoom] = useState<TraceZoom>(() => traceZoomCodec.decode(searchParams.get('wz')));
 
   // Trace-anchored log lookup window (Unix ns) — min(span.startTime)-1min ..
   // max(span.endTime)+1min. Bounds the trace→logs ES query to the trace's own
@@ -258,8 +263,11 @@ function TraceDetailInner() {
     else url.searchParams.delete('xn');
     if (svcFocus) url.searchParams.set('svc', svcFocus); // v0.10.1556
     else url.searchParams.delete('svc');
+    const wz = traceZoomCodec.encode(wfZoom); // dalga 3
+    if (wz) url.searchParams.set('wz', wz);
+    else url.searchParams.delete('wz');
     window.history.replaceState({}, '', url.toString());
-  }, [selectedId, tab, id, groupSimilar, svcFocus]);
+  }, [selectedId, tab, id, groupSimilar, svcFocus, wfZoom]);
 
   // v0.10.944 (CoSRE Faz A) — CoSRE çekmecesinin "Bağlam" şeridi + her
   // takip turunun page/env/pencere alanları: yüklü span'lerden ve seçili
@@ -317,46 +325,6 @@ function TraceDetailInner() {
   // useTableNav installs for list pages; the waterfall has
   // its own row layout so it gets a hand-rolled binding rather
   // than the hook.
-  useShortcuts([
-    {
-      keys: 'j', label: 'Next span', group: 'Trace',
-      handler: () => {
-        if (orderedSpanIds.length === 0) return;
-        const i = selectedId ? orderedSpanIds.indexOf(selectedId) : -1;
-        const next = Math.min(orderedSpanIds.length - 1, i + 1);
-        setSelectedId(orderedSpanIds[next] ?? null);
-      },
-    },
-    {
-      keys: 'k', label: 'Previous span', group: 'Trace',
-      handler: () => {
-        if (orderedSpanIds.length === 0) return;
-        const i = selectedId ? orderedSpanIds.indexOf(selectedId) : 0;
-        const prev = Math.max(0, i - 1);
-        setSelectedId(orderedSpanIds[prev] ?? null);
-      },
-    },
-    {
-      keys: 'g g', label: 'Jump to first span', group: 'Trace',
-      handler: () => {
-        if (orderedSpanIds.length > 0) setSelectedId(orderedSpanIds[0]);
-      },
-    },
-    {
-      keys: 'shift+g', label: 'Jump to last span', group: 'Trace',
-      handler: () => {
-        if (orderedSpanIds.length > 0) {
-          setSelectedId(orderedSpanIds[orderedSpanIds.length - 1]);
-        }
-      },
-    },
-    {
-      keys: 'Escape', label: 'Close span detail', group: 'Trace',
-      evenInInputs: true,
-      handler: () => setSelectedId(null),
-    },
-  ], [orderedSpanIds, selectedId]);
-
   // Critical path — synchronous longest chain through the
   // span DAG. Cheap O(N) DFS; useMemo only recomputes when
   // the span list identity changes (i.e., when a new trace
@@ -374,6 +342,60 @@ function TraceDetailInner() {
       duration: s.endTime - s.startTime,
     })));
   }, [spans]);
+
+  // Dalga 3 (Grafana 12.4) — kritik yol KESİTLERİ (worker) + "Yalnız kritik
+  // yol" süzgeci. Kesit kümesi zinciri kapsar (her seviyede sıralı çağrıların
+  // hepsi); worker yanıtı gelene dek şerit/odak zincirle çizilir.
+  const critSegments = useCriticalSegments(spans);
+  const critSet = useMemo<Set<string> | undefined>(
+    () => (critSegments ? new Set(critSegments.keys()) : criticalPath?.ids),
+    [critSegments, criticalPath]);
+  const [critOnly, setCritOnly] = useState(false);
+  const critOnlyIds = critOnly && critSegments ? critSet : undefined;
+  // Dalga 3 — "Yalnız kritik yol" açıkken j/k yalnız görünen satırlarda gezer.
+  const navIds = useMemo(
+    () => (critOnlyIds ? orderedSpanIds.filter(sid => critOnlyIds.has(sid)) : orderedSpanIds),
+    [orderedSpanIds, critOnlyIds]);
+  useShortcuts([
+    {
+      keys: 'j', label: 'Next span', group: 'Trace',
+      handler: () => {
+        if (navIds.length === 0) return;
+        const i = selectedId ? navIds.indexOf(selectedId) : -1;
+        const next = Math.min(navIds.length - 1, i + 1);
+        setSelectedId(navIds[next] ?? null);
+      },
+    },
+    {
+      keys: 'k', label: 'Previous span', group: 'Trace',
+      handler: () => {
+        if (navIds.length === 0) return;
+        const i = selectedId ? navIds.indexOf(selectedId) : 0;
+        const prev = Math.max(0, i - 1);
+        setSelectedId(navIds[prev] ?? null);
+      },
+    },
+    {
+      keys: 'g g', label: 'Jump to first span', group: 'Trace',
+      handler: () => {
+        if (navIds.length > 0) setSelectedId(navIds[0]);
+      },
+    },
+    {
+      keys: 'shift+g', label: 'Jump to last span', group: 'Trace',
+      handler: () => {
+        if (navIds.length > 0) {
+          setSelectedId(navIds[navIds.length - 1]);
+        }
+      },
+    },
+    {
+      keys: 'Escape', label: 'Close span detail', group: 'Trace',
+      evenInInputs: true,
+      handler: () => setSelectedId(null),
+    },
+  ], [navIds, selectedId]);
+
 
   // v0.5.383 — span filter within ONE trace. Operator searches
   // by substring across span name, service, displayed name,
@@ -480,7 +502,7 @@ function TraceDetailInner() {
   const opCardRef = opCardPick?.ref ?? null;
   const minT = spans && spans.length ? Math.min(...spans.map(s => s.startTime)) : 0;
   const maxT = spans && spans.length ? Math.max(...spans.map(s => s.endTime)) : 0;
-  const criticalPathIds = (showCritical && criticalPath) ? criticalPath.ids : undefined;
+  const criticalPathIds = showCritical ? critSet : undefined;
   const totalNs = maxT - minT;
   // spanHasError is the honest "is this a failure" — error status OR a recorded
   // exception event (matches the waterfall tint + the trace-level badge).
@@ -776,8 +798,9 @@ function TraceDetailInner() {
                     <TraceServiceBreakdown spans={spans} services={analysis?.services}
                       active={svcFocusInfo.ids.size > 0 ? svcFocus : null} onPick={pickSvcFocus} />
                     <SpanFilterBar spans={spans} value={spanFilter} onChange={setSpanFilter}
-                      critCount={criticalPath?.ids.size ?? 0}
+                      critCount={critSet?.size ?? 0}
                       critFocus={critFocus} onCritFocus={pickCritFocus}
+                      critOnly={critOnly} onCritOnly={critSegments ? setCritOnly : undefined}
                       repeatGroups={repeatGroups}
                       onRepeatChip={g => { setSpanFilter(g.name); setGroupSimilar(true); }}
                       jumps={jumpTargets} onJump={jumpTo} />
@@ -787,7 +810,9 @@ function TraceDetailInner() {
                       groupSimilar={groupSimilar}
                       onGroupSimilarChange={setGroupSimilar}
                       criticalPathIds={criticalPathIds} matchIds={spanMatchIds}
-                      focusIds={critFocus && criticalPath ? criticalPath.ids
+                      criticalSegments={critSegments} onlyIds={critOnlyIds}
+                      zoom={wfZoom} onZoom={setWfZoom}
+                      focusIds={critFocus && critSet ? critSet
                         : svcFocusInfo.ids.size > 0 ? svcFocusInfo.ids : undefined}
                       linkedSpanIds={linkedIds} analysis={analysis}
                       revealSpanId={jumpId ?? svcFocusInfo.first ?? (svcTouched ? null : revealSpanId)}
@@ -880,7 +905,7 @@ function repeatTotalLabel(totalMs: number): string {
   return fmtNs(totalMs * 1e6);
 }
 
-function SpanFilterBar({ spans, value, onChange, critCount, critFocus, onCritFocus,
+function SpanFilterBar({ spans, value, onChange, critCount, critFocus, onCritFocus, critOnly, onCritOnly,
   repeatGroups, onRepeatChip, jumps, onJump }: {
   spans: SpanRow[];
   value: string;
@@ -888,6 +913,9 @@ function SpanFilterBar({ spans, value, onChange, critCount, critFocus, onCritFoc
   critCount?: number;
   critFocus?: boolean;
   onCritFocus?: (v: boolean) => void;
+  // Dalga 3 — "Yalnız kritik yol" süzgeci (kesitler hazır olunca verilir).
+  critOnly?: boolean;
+  onCritOnly?: (v: boolean) => void;
   // v0.9.1277 — trace'in tekrar desenleri (traceRepeatGroups, toplam
   // süreye göre sıralı). Boşsa çip HİÇ çizilmez: sağlıklı bir trace'te
   // "0 desen" rozeti taşımak, kritik-yol çipinin critCount>0 disiplinini
@@ -945,6 +973,13 @@ function SpanFilterBar({ spans, value, onChange, critCount, critFocus, onCritFoc
           title="Dim every span that is NOT on the critical path"
           onClick={() => onCritFocus(!critFocus)}>
           Critical path focus <span className="mono">{critCount}</span>
+        </Chip>
+      )}
+      {onCritOnly && (critCount ?? 0) > 0 && (
+        <Chip pill active={!!critOnly} data-testid="trace-crit-only"
+          title={t('trace.critOnly.tip')}
+          onClick={() => onCritOnly(!critOnly)}>
+          {t('trace.critOnly')}
         </Chip>
       )}
       {/* v0.9.1277 — N+1 uyarı çipi. En pahalı tekrar desenini adıyla

@@ -52,6 +52,8 @@ import { ServiceHealthcheckButton } from '@/components/coremetry/ServiceHealthch
 import { ServiceHttpMetricsTab } from './service/ServiceHttpMetricsTab';
 import { ServiceMessagingTab } from './service/ServiceMessagingTab'; // v0.10.1536
 import { withPivotCtx, pivotCtxFromSearch, type PivotDim } from '@/lib/pivotContext';
+import { BrushCompare } from '@/components/coremetry/BrushCompare'; // dalga 3 — fırça → karşılaştır
+import { heatmapFilters } from './service/heatmapFilters';
 
 // v0.10.1231 — servis sayfasından traces/logs/endpoints pivotları ekrandaki
 // env + cluster'ı taşır (önce yalnız endpoints env'i taşıyordu).
@@ -106,7 +108,7 @@ function ServiceDetailInner() {
   // v0.9.429 — zoom-yığını deseni (bu dosyanın v0.9.199 referans
   // implementasyonu) paylaşılan usePageZoomRange hook'una taşındı;
   // davranış sözleşmesi hook başlığında, birebir aynı.
-  const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange(DEFAULT_RANGE_PRESET);
+  const { range, setRange, handleZoom, handleZoomReset, zoomDepth, zoomBase } = usePageZoomRange(DEFAULT_RANGE_PRESET);
   // v0.9.1041 (env(a)) — env is now APPLIED, not just forwarded to the
   // Endpoints drill: it narrows the bundle (KPI + operations), the Overview
   // span+metric RED (tiles + charts) and the latency heatmap
@@ -618,6 +620,10 @@ function ServiceDetailInner() {
               tab={tab}
               onChange={setTab}
               opCount={rawOps.rows.length} />
+            {/* Dalga 3 — grafikte sürüklenip yakınlaştırılınca: seçili dilim vs
+                operatörün penceresi (zoomBase), servis kapsamında BubbleUp. */}
+            <BrushCompare range={range} zoomBase={zoomDepth > 0 ? zoomBase : null}
+              baseline={heatmapFilters(svc, scopeCluster || undefined, undefined, false, env || undefined)} />
 
             {tab === 'overview' && (
               <ServiceOverview service={svc} range={range} windowNs={rangeNs} info={info} operations={operations}

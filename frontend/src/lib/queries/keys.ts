@@ -164,6 +164,9 @@ export const keys = {
                    ['spans', 'hotspots', svc, start, end, top] as const,
     baselineOps: (svc: string, end: number) =>
                    ['spans', 'baseline-ops', svc, end] as const,
+    // dalga 3 — span vs akranlar (aynı servis+operasyon, trace penceresi).
+    peers:       (svc: string, op: string, from: number, to: number) =>
+                   ['spans', 'peers', svc, op, from, to] as const,
   },
 
   // v0.10.672 — kiosk bundle (GET /api/traces/{id}/bundle). Limitler

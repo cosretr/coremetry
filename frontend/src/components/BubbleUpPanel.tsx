@@ -21,7 +21,7 @@ import { fmtNum } from '@/lib/utils';
 // remounts hit the 60s server cache.
 
 export function BubbleUpPanel({
-  baseline, selection, baselineDsl, selectionDsl, from, to, onApplyFilter,
+  baseline, selection, baselineDsl, selectionDsl, from, to, onApplyFilter, baseWindow,
 }: {
   baseline: FilterExpr[];
   selection: FilterExpr[];
@@ -36,23 +36,36 @@ export function BubbleUpPanel({
   // it as a real filter to the parent's URL state. The parent
   // wires what "apply" means in its context.
   onApplyFilter?: (f: FilterExpr) => void;
+  // Dalga 3 (fırça → karşılaştır) — verilirse ZAMAN kıyası: from/to SEÇİM
+  // dilimi, baseWindow TABAN penceresi; iki taraf aynı `baseline` süzgeci
+  // (+ baselineDsl). `selection` / `selectionDsl` bu kipte yok sayılır.
+  // Uç: /api/spans/bubbleup/compare.
+  baseWindow?: { from: number; to: number };
 }) {
   const [data, setData] = useState<BubbleUpResult | null | undefined>(undefined);
 
   useEffect(() => {
     setData(undefined);
-    api.spanBubbleUp({
-      from, to,
-      filters: baseline.length ? encodeFilters(baseline) : undefined,
-      selFilters: selection.length ? encodeFilters(selection) : undefined,
-      dsl: baselineDsl?.trim() || undefined,
-      selDsl: selectionDsl?.trim() || undefined,
-    })
+    const req = baseWindow
+      ? api.spanBubbleUpCompare({
+        selFrom: from, selTo: to, baseFrom: baseWindow.from, baseTo: baseWindow.to,
+        filters: baseline.length ? encodeFilters(baseline) : undefined,
+        dsl: baselineDsl?.trim() || undefined,
+      })
+      : api.spanBubbleUp({
+        from, to,
+        filters: baseline.length ? encodeFilters(baseline) : undefined,
+        selFilters: selection.length ? encodeFilters(selection) : undefined,
+        dsl: baselineDsl?.trim() || undefined,
+        selDsl: selectionDsl?.trim() || undefined,
+      });
+    req
       .then(r => setData(r ?? null))
       .catch(() => setData(null));
   }, [
     // Stringify both sides so the deps shape is stable.
     JSON.stringify(baseline), JSON.stringify(selection), baselineDsl, selectionDsl, from, to,
+    baseWindow?.from, baseWindow?.to,
   ]);
 
   if (data === undefined) {
