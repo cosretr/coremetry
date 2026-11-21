@@ -2230,6 +2230,30 @@ func canonicalMVs() []string {
 		 TTL toDate(time_bucket) + INTERVAL %d DAY
 		 SETTINGS index_granularity = 8192
 		 AS SELECT%s`, dbReceiverInstTTLDays, dbReceiverInstMVSelect()),
+
+		// trace_id_ts — trace_id → [ilk span, son span sonu] arama tablosu
+		// (OTel collector ClickHouse exporter'ının <traces>_trace_id_ts
+		// emsali). ORDER BY trace_id ile BAŞLAR: trace açılışı tek PK
+		// aramasıyla pencereyi bulur (trace_id_ts.go). Saat kovası yalnız
+		// gün partisyonu + kapsama probu için; okuma GROUP'suz min/maxMerge.
+		// Saniye grenli (DateTime / UInt32 tavan): ±5 dk marj zaten var, ns
+		// state'e göre satır başı ~7 B daha küçük (ölçüm: 50 → 42 MiB / 1M trace).
+		// Geriye DOLMAZ: okuyucu sourceCovers ile kapılar, ıska/kapsam
+		// dışı → trace_summary_5m kademeli yolu. DİLİMİN SONUNDA.
+		`CREATE MATERIALIZED VIEW IF NOT EXISTS trace_id_ts
+		 ENGINE = AggregatingMergeTree
+		 PARTITION BY toDate(time_bucket)
+		 ORDER BY (trace_id, time_bucket)
+		 TTL toDate(time_bucket) + INTERVAL 90 DAY
+		 SETTINGS index_granularity = 2048
+		 AS SELECT
+		   trace_id,
+		   toStartOfInterval(time, INTERVAL 1 HOUR)         AS time_bucket,
+		   minState(toDateTime(time))                       AS start_state,
+		   maxState(toUInt32(intDiv(toUnixTimestamp64Nano(time) + duration, 1000000000) + 1)) AS end_state
+		 FROM spans
+		 WHERE trace_id != ''
+		 GROUP BY trace_id, time_bucket`,
 	}
 	return mvs
 }

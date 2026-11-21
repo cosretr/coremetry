@@ -1,15 +1,13 @@
 // spanPeersModel.ts — dalga 3 (2026-11-21, Honeycomb "span vs peers"): aynı
 // servis + operasyonun trace penceresindeki süre dağılımı. Kaynak mevcut
-// /api/spans/heatmap (sunucuda serveCached 30 sn; ham span ızgarası, geniş
-// pencerede örneklenir — sorgu zaten LIMIT + max_execution_time + zaman
-// sınırlı). Bu modül SAF: ızgarayı zaman ekseninde katlar, span'in kovasını
-// ve yaklaşık yüzdelik sırasını bulur.
+// /api/spans/peers (2026-11-21; spanmetrics_1m TDigest'inden tek sütun, MV
+// boşsa ham heatmap ızgarası — ikisi de LatencyHeatmap şekli). Bu modül SAF:
+// ızgarayı zaman ekseninde katlar, span'in kovasını ve yaklaşık yüzdelik
+// sırasını bulur.
 import type { LatencyHeatmap } from '@/lib/types';
 
 /** Trace penceresinin iki yanına eklenen pay: tek bir trace milisaniyeler sürer, akranlar ±15 dk'da. */
 export const PEER_PAD_NS = 15 * 60 * 1e9;
-/** Dakikada bir sütun yeter — sütunlar katlanacak. */
-export const PEER_BUCKETS = 30;
 
 export interface PeerHist {
   bins: number[];     // kova üst sınırı (ms), boş uçlar kırpılmış

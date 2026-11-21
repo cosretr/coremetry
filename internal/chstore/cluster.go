@@ -393,6 +393,10 @@ var defaultShardPolicy = map[string]string{
 	// shard-yerel, okumalar wrapper'dan yayılır.
 	"service_meta_combo_5m":   "cityHash64(service_name)",
 	"db_receiver_instance_5m": "cityHash64(metric_prefix)",
+	// trace_id_ts — ORDER BY trace_id ile başlar (O5); MV yazımı shard-yerel
+	// (bir trace'in span'leri servis shard'larına dağılır, satırı birden çok
+	// shard'da olabilir — min/maxMerge shard'lar arası idempotent).
+	"trace_id_ts": "cityHash64(trace_id)",
 	// v0.9.249 — deploy/version rollup. Reads are always
 	// `WHERE service_name = ?` (GetServiceDeploys is per-service), so
 	// service_name is the honest key even though the MV's own writes
@@ -959,6 +963,7 @@ var highVolumeTables = map[string]bool{
 	// v0.10.2402 — iki yeni MV gün-bir kayıt (spans / metric_points okur).
 	"service_meta_combo_5m":   true,
 	"db_receiver_instance_5m": true,
+	"trace_id_ts":             true, // trace açılışı pencere araması (trace_id_ts.go)
 	// v0.8.396 — metric-name catalog MV reading FROM metric_points
 	// (prod /api/metrics/names timeout fix): registered day one per
 	// the same D1 rule.

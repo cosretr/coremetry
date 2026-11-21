@@ -64,16 +64,11 @@ export function useSpanBaselineP50(service: string, endNs: number, names: string
 // penceresindeki (±15 dk) süre ızgarası; mevcut /api/spans/heatmap (sunucuda
 // 30 sn serveCached; ham span taraması zaman sınırlı + LIMIT + max_execution_time).
 // Pencere dakikaya yuvarlı gelir → aynı trace'te gezinmek aynı anahtar.
-export function useSpanPeers(service: string, operation: string, from: number, to: number, buckets: number) {
+export function useSpanPeers(service: string, operation: string, from: number, to: number) {
   return useQuery<LatencyHeatmap | null>({
     queryKey: keys.spans.peers(service, operation, from, to),
-    queryFn: ({ signal }) => api.spanHeatmap({
-      from, to, buckets,
-      filters: JSON.stringify([
-        { k: 'service.name', op: '=', v: [service] },
-        { k: 'name', op: '=', v: [operation] },
-      ]),
-    }, signal),
+    // 2026-11-21 — /api/spans/peers: MV-öncelikli (spanmetrics_1m), ham heatmap yedek.
+    queryFn: ({ signal }) => api.spanPeers({ service, operation, from, to }, signal),
     enabled: !!service && !!operation && to > from,
     staleTime: 5 * 60_000,
     retry: false,

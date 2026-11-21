@@ -92,6 +92,8 @@ var telemetryPurgeTables = []string{
 	"service_version_5m", "rca_verdicts",
 	// v0.10.2402 — ham-agregat MV ikizleri (telemetriden yeniden doğar).
 	"service_meta_combo_5m", "db_receiver_instance_5m",
+	// trace_id → zaman aralığı araması (spans'tan yeniden doğar).
+	"trace_id_ts",
 }
 
 // configPreserveTables is NOT consulted at runtime. It exists so the regression

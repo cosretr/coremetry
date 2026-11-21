@@ -17,6 +17,16 @@ package api
 // zaman sınırlı ve birleşimleri ≤ 24 sa (ham spans taraması; store sorgusu
 // LIMIT + max_execution_time taşır). Rol kapısı yok — salt okuma.
 // serveCached 60 sn; anahtar TÜM girdileri taşır (iki pencere + süzgeçler).
+//
+// 2026-11-21 — attribute kıyası doğası gereği span satırı ister (MV'de
+// attribute dizisi yok), o yüzden ham kalır ama SINIRLI: birleşim ≤ 24 sa,
+// her taraf en çok 3 dk ZAMAN okur (pencere genişse 12 × 15 sn eşit
+// aralıklı dilim; chstore.bubbleUpSlices) — zaman PK'da olduğu için okunan
+// bayt pencereyle değil bütçeyle orantılı (prod 24 sa ≈ 2.3B span → taraf
+// başına ≈ 4.9M). Bedel: sayılar yaklaşık (1/oran ile ölçekli; yanıt
+// selectionSampleRate/baselineSampleRate taşır), dilimler arasına düşen
+// kısa olaylar ve seyrek değerler (örneklemde < 5 satır, HAVING) kaçabilir;
+// yüzdeler ve skor günün saatine yayılmış örnekte yansız.
 
 import (
 	"context"
@@ -69,11 +79,13 @@ func (s *Server) spanBubbleUpCompare(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	key := fmt.Sprintf("span-bubbleup-compare:sel=%s:base=%s:f=%s:d=%s",
+	// v2 (2026-11-21): yanıt örnekleme oranlarını taşır (şekil değişti).
+	key := fmt.Sprintf("span-bubbleup-compare:v2:sel=%s:base=%s:f=%s:d=%s",
 		cacheBucket(selFrom, selTo), cacheBucket(baseFrom, baseTo),
 		q.Get("filters"), q.Get("dsl"))
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
-		// selection nil → seçim tarafı baseline süzgeciyle, kendi penceresinde.
-		return s.store.BubbleUp(ctx, filters, nil, baseFrom, baseTo, selFrom, selTo)
+		// Seçim tarafı baseline süzgeciyle, kendi penceresinde; her taraf
+		// pencere genişliğine göre trace-örneklenir (chstore.BubbleUpCompareSampled).
+		return s.store.BubbleUpCompareSampled(ctx, filters, baseFrom, baseTo, selFrom, selTo)
 	})
 }

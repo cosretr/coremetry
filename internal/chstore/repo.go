@@ -4959,6 +4959,11 @@ func (s *Store) FindTraceIDBySpan(ctx context.Context, spanID string, from, to t
 // sınırsız arama). Bloom/granül budaması yok (trace_id ORDER BY sonunda), o
 // yüzden pencere daraltması partisyon budamasıdır.
 func (s *Store) TraceWindow(ctx context.Context, traceID string) (lo, hi time.Time, ok bool) {
+	// 2026-11-21 — önce trace_id_ts nokta araması (trace_id_ts.go); ıska ya
+	// da kapsam dışı → aşağıdaki kademeli trace_summary_5m yolu.
+	if lo, hi, ok := s.traceWindowFromIDTs(ctx, traceID); ok {
+		return lo, hi, true
+	}
 	var winStart time.Time
 	var winEndNanos int64
 	for _, step := range traceWindowSteps {
@@ -5041,6 +5046,11 @@ func (s *Store) traceWindowNear(ctx context.Context, traceID string, hint time.T
 
 // GetTraceNear — v0.10.1889: GetTrace + log zamanı ipucu (sıfır = GetTrace).
 func (s *Store) GetTraceNear(ctx context.Context, traceID string, hint time.Time) ([]SpanRow, error) {
+	// 2026-11-21 — trace_id_ts isabeti ipucu probundan da ucuz (PK araması);
+	// ıskada GetTrace aynı aramayı bir kez daha yapar (0 satır, ~1 ms).
+	if lo, hi, ok := s.traceWindowFromIDTs(ctx, traceID); ok {
+		return s.getTraceIn(ctx, traceID, lo, hi, true)
+	}
 	if lo, hi, ok := s.traceWindowNear(ctx, traceID, hint); ok {
 		return s.getTraceIn(ctx, traceID, lo, hi, true)
 	}

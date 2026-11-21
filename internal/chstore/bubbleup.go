@@ -3,6 +3,7 @@ package chstore
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -66,6 +67,10 @@ type BubbleUpResult struct {
 	// Attributes sorted by their top-value score so the
 	// most "explanatory" attribute appears first.
 	Attributes []BubbleUpAttribute `json:"attributes"`
+	// 2026-11-21 — compare yolunun zaman-dilimi örnekleme oranı (yalnız
+	// örneklenince yazılır; sayılar 1/oran ile ölçekli, yüzdeler/skor yansız).
+	SelectionSampleRate float64 `json:"selectionSampleRate,omitempty"`
+	BaselineSampleRate  float64 `json:"baselineSampleRate,omitempty"`
 }
 
 // BubbleUp computes the attribute-divergence report for a
@@ -89,6 +94,61 @@ func (s *Store) BubbleUp(
 	selection []FilterExpr,
 	baseFrom, baseTo, selFrom, selTo time.Time,
 ) (*BubbleUpResult, error) {
+	return s.bubbleUpSampled(ctx, baseline, selection, baseFrom, baseTo, selFrom, selTo, false)
+}
+
+// BubbleUpCompareSampled — /api/spans/bubbleup/compare'in sınırlı yolu
+// (2026-11-21). Her taraf en çok bubbleUpCompareBudget kadar ZAMAN okur:
+// pencere bütçeden genişse bubbleUpSliceCount eşit aralıklı dilime bölünmüş
+// bir örnek (bubbleUpSlices). Neden satır-hash örneklemesi DEĞİL:
+// `cityHash64(trace_id) % N` granül budamaz — her satır yine okunur,
+// üstüne trace_id kolonu eklenir (ölçüm: totals 17 → 91 MiB). Zaman ise
+// PK'nın (service_name, time) parçası: dilimler partisyon + granül budar,
+// okunan bayt pencere değil bütçe ile orantılı. Yüzdeler (skor) yansız
+// (günün saatine yayılmış örnek), sayılar 1/oran ile ölçeklenir.
+func (s *Store) BubbleUpCompareSampled(
+	ctx context.Context,
+	filters []FilterExpr,
+	baseFrom, baseTo, selFrom, selTo time.Time,
+) (*BubbleUpResult, error) {
+	return s.bubbleUpSampled(ctx, filters, nil, baseFrom, baseTo, selFrom, selTo, true)
+}
+
+// bubbleUpCompareBudget — taraf başına okunan zaman. Prod ~27k span/sn
+// ortalamada ≈ 4.9M span/taraf (24 sa birleşim ≈ 2.3B span'in ~1/230'u);
+// servis süzgeciyle çok daha az. bubbleUpSliceCount dilim × 15 sn.
+const (
+	bubbleUpCompareBudget = 3 * time.Minute
+	bubbleUpSliceCount    = 12
+)
+
+// bubbleUpSlices — SAF: [from, to] pencereyi bütçeye indirir. Pencere ≤
+// bütçe → tek aralık, oran 1. Aksi halde n eşit aralıklı dilim (her biri
+// bütçe/n uzunluğunda, i. dilim from + i·pencere/n'de başlar), oran =
+// bütçe/pencere. pred "(… OR …)" biçiminde, args sırasıyla.
+func bubbleUpSlices(from, to time.Time, budget time.Duration, n int) (pred string, args []any, rate float64) {
+	w := to.Sub(from)
+	if w <= budget || n < 1 {
+		return "(time >= ? AND time <= ?)", []any{from, to}, 1
+	}
+	sl := budget / time.Duration(n)
+	step := w / time.Duration(n)
+	parts := make([]string, n)
+	for i := 0; i < n; i++ {
+		a := from.Add(step * time.Duration(i))
+		parts[i] = "(time >= ? AND time < ?)"
+		args = append(args, a, a.Add(sl))
+	}
+	return "(" + strings.Join(parts, " OR ") + ")", args, float64(sl*time.Duration(n)) / float64(w)
+}
+
+func (s *Store) bubbleUpSampled(
+	ctx context.Context,
+	baseline []FilterExpr,
+	selection []FilterExpr,
+	baseFrom, baseTo, selFrom, selTo time.Time,
+	sampled bool,
+) (*BubbleUpResult, error) {
 	// Dış tarama: iki pencerenin BİRLEŞİMİ + baseline filtreleri.
 	unionFrom, unionTo := baseFrom, baseTo
 	if selFrom.Before(unionFrom) {
@@ -110,7 +170,7 @@ func (s *Store) BubbleUp(
 		selPred = "((" + p + ") AND time >= ? AND time <= ?)"
 		selPredArgs = append(selectionPredicateArgs(selection), selFrom, selTo)
 	}
-	const basePred = "(time >= ? AND time <= ?)"
+	basePred := "(time >= ? AND time <= ?)"
 	basePredArgs := []any{baseFrom, baseTo}
 
 	// Selection tarafının kendi WHERE'i (adım 2 anahtar keşfi).
@@ -120,6 +180,24 @@ func (s *Store) BubbleUp(
 	ApplyFilters(&wcSel, baseline)
 	ApplyFilters(&wcSel, selection)
 
+	// Bütçe (yalnız compare yolu; false'ta SQL eski). Taraf predicate'leri
+	// kendi zaman dilimlerini taşır; dış tarama iki tarafın dilimlerinin
+	// birleşimine daraltılır — PK/partisyon budaması okunmayan aralığı atlar.
+	selRate, baseRate := 1.0, 1.0
+	if sampled {
+		var sp string
+		var sa []any
+		sp, sa, selRate = bubbleUpSlices(selFrom, selTo, bubbleUpCompareBudget, bubbleUpSliceCount)
+		if p := selectionPredicate(selection); p != "1" {
+			selPred, selPredArgs = "(("+p+") AND "+sp+")", append(selectionPredicateArgs(selection), sa...)
+		} else {
+			selPred, selPredArgs = sp, sa
+		}
+		wcSel.add(sp, sa...)
+		basePred, basePredArgs, baseRate = bubbleUpSlices(baseFrom, baseTo, bubbleUpCompareBudget, bubbleUpSliceCount)
+		wcOuter.add("("+selPred+" OR "+basePred+")", append(append([]any{}, selPredArgs...), basePredArgs...)...)
+	}
+
 	// Step 1 — totals (one query for both sides). Avoids two
 	// round-trips and the racy window edge.
 	totalsSQL := fmt.Sprintf(`
@@ -128,6 +206,7 @@ func (s *Store) BubbleUp(
 		  countIf(%s) AS base_total
 		FROM spans
 		%s
+		LIMIT 1
 		SETTINGS max_execution_time = 25`,
 		selPred, basePred, wcOuter.sql())
 	totalsArgs := append(append(append([]any{}, selPredArgs...), basePredArgs...), wcOuter.args...)
@@ -154,7 +233,7 @@ func (s *Store) BubbleUp(
 	// anahtar keşfi, sınırlı paralel anahtar başı okuma) runBubbleUp'ta ve
 	// sahte ops ile ardışık referansa karşı eşdeğerlik testli
 	// (bubbleup_parallel_test.go). SQL metinleri bayt bayt aynı.
-	return runBubbleUp(ctx, bubbleUpOps{
+	res, err := runBubbleUp(ctx, bubbleUpOps{
 		totals: func(ctx context.Context) (uint64, uint64, error) {
 			var selTotal, baseTotal uint64
 			err := s.conn.QueryRow(ctx, totalsSQL, totalsArgs...).Scan(&selTotal, &baseTotal)
@@ -185,6 +264,27 @@ func (s *Store) BubbleUp(
 			})
 		},
 	})
+	if err == nil {
+		scaleBubbleUp(res, selRate, baseRate)
+	}
+	return res, err
+}
+
+// scaleBubbleUp — SAF: örneklenmiş sayıları 1/oran ile geri ölçekler
+// (yüzdeler ve skor örneklemeden bağımsız, dokunulmaz), oranları zarfa yazar.
+func scaleBubbleUp(r *BubbleUpResult, selRate, baseRate float64) {
+	if r == nil || (selRate >= 1 && baseRate >= 1) || selRate <= 0 || baseRate <= 0 {
+		return
+	}
+	up := func(n int64, rate float64) int64 { return int64(math.Round(float64(n) / rate)) }
+	r.SelectionTotal, r.BaselineTotal = up(r.SelectionTotal, selRate), up(r.BaselineTotal, baseRate)
+	r.SelectionSampleRate, r.BaselineSampleRate = selRate, baseRate
+	for i := range r.Attributes {
+		for j := range r.Attributes[i].Values {
+			v := &r.Attributes[i].Values[j]
+			v.SelectionCount, v.BaselineCount = up(v.SelectionCount, selRate), up(v.BaselineCount, baseRate)
+		}
+	}
 }
 
 // bubbleUpOps — BubbleUp'ın üç CH adımı (v0.10.1119). Üretimde

@@ -48,6 +48,7 @@ func mvRetentionTargets(spansDays int) []mvRetentionTarget {
 		out = append(out,
 			mvRetentionTarget{"trace_summary_5m", spansDays + 1},
 			mvRetentionTarget{"trace_service_index_5m", spansDays + 1},
+			mvRetentionTarget{traceIDTsMV, spansDays + 1},
 		)
 	}
 	return out

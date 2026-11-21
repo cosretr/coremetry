@@ -9,7 +9,7 @@ import { useSpanPeers } from '@/lib/queries/spans';
 import { operationTracesHref } from '@/lib/pivotHref';
 import { fmtNum } from '@/lib/utils';
 import { useT } from '@/lib/i18n';
-import { foldPeers, peerWindow, PEER_BUCKETS } from './spanPeersModel';
+import { foldPeers, peerWindow } from './spanPeersModel';
 import type { SpanRow } from '@/lib/types';
 
 function fmtMs(v: number): string {
@@ -22,7 +22,7 @@ function fmtMs(v: number): string {
 export function SpanPeers({ span, traceStartNs, traceEndNs }: { span: SpanRow; traceStartNs: number; traceEndNs: number }) {
   const t = useT();
   const win = useMemo(() => peerWindow(traceStartNs, traceEndNs), [traceStartNs, traceEndNs]);
-  const q = useSpanPeers(span.serviceName, span.name, win.from, win.to, PEER_BUCKETS);
+  const q = useSpanPeers(span.serviceName, span.name, win.from, win.to);
   const hist = useMemo(() => foldPeers(q.data, span.durationMs), [q.data, span.durationMs]);
   const max = hist ? Math.max(1, ...hist.counts) : 1;
   const href = operationTracesHref({ window: { fromNs: win.from, toNs: win.to }, operation: span.name, service: span.serviceName });

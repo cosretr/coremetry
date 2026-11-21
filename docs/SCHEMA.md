@@ -71,6 +71,7 @@ Existing MVs:
 | MV                    | Source  | Bucket | Used by |
 |-----------------------|---------|--------|---------|
 | `service_summary_5m`  | `spans` | 5 min  | `chstore.GetServiceSummary5m` (services overview, anomaly baseline) |
+| `trace_id_ts`         | `spans` | 1 h (ORDER BY trace_id first) | `chstore.traceWindowFromIDTs` — trace open: trace_id → [start, end] PK lookup before the tiered `trace_summary_5m` probe; not backfilled, gated by `sourceCovers` |
 
 ## 3. Partitioning + ORDER BY
 

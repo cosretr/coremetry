@@ -57,6 +57,9 @@ const (
 	// kova pencere başından önce değilse okuyucu ham yola düşer.
 	priorSrcSvcMetaCombo   // service_metadata.go DeriveServiceMetadataAll
 	priorSrcDBReceiverInst // dependencies.go discoverReceiverInstances
+	// trace_id_ts.go — isabet, trace başlangıcı MV'nin ilk kovasından
+	// sonra değilse (MV trace'in ilk span'lerinden sonra kuruldu) atlanır.
+	priorSrcTraceIDTs
 	priorSourceCount
 )
 
@@ -70,6 +73,7 @@ var priorSourceProbeSQL = [priorSourceCount]string{
 	priorSrcDBStmtSummary1m:  "SELECT min(time_bucket), count() FROM db_statement_summary_1m SETTINGS max_execution_time = 5",
 	priorSrcSvcMetaCombo:     "SELECT min(time_bucket), count() FROM " + serviceMetaComboMV + " SETTINGS max_execution_time = 5",
 	priorSrcDBReceiverInst:   "SELECT min(time_bucket), count() FROM " + dbReceiverInstMV + " SETTINGS max_execution_time = 5",
+	priorSrcTraceIDTs:        "SELECT min(time_bucket), count() FROM " + traceIDTsMV + " SETTINGS max_execution_time = 5",
 }
 
 // spansLiveBeforeSQL — ham yolun varlık probu: [pFrom − 24 sa, pFrom)

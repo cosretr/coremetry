@@ -89,7 +89,7 @@ func TestHumanBytes(t *testing.T) {
 // DROP PARTITION SQL'i inner adı + ON CLUSTER eki ile.
 func TestMVRetentionTargets(t *testing.T) {
 	got := mvRetentionTargets(30)
-	want := map[string]int{"spanmetrics_1s": 1, "spanmetrics_10s": 2, "trace_summary_5m": 31, "trace_service_index_5m": 31}
+	want := map[string]int{"spanmetrics_1s": 1, "spanmetrics_10s": 2, "trace_summary_5m": 31, "trace_service_index_5m": 31, "trace_id_ts": 31}
 	if len(got) != len(want) {
 		t.Fatalf("hedef sayısı %d, istenen %d: %+v", len(got), len(want), got)
 	}

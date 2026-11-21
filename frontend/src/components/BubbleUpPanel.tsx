@@ -6,6 +6,11 @@ import { Spinner } from './Spinner';
 import { Chip } from './ui/Chip';
 import { fmtNum } from '@/lib/utils';
 
+// Örnekleme oranı (0..1) → "%"; küçük oranlar iki ondalıkla (24 sa ≈ %0.21).
+function fmtPct(r: number): string {
+  return r >= 0.1 ? `${Math.round(r * 100)}%` : `${(r * 100).toFixed(2)}%`;
+}
+
 // BubbleUp panel — Honeycomb's "what's special about THESE
 // spans" investigator. Caller hands in:
 //   • baseline filter list (the wider population)
@@ -107,6 +112,12 @@ export function BubbleUpPanel({
       }}>
         Comparing <b style={{ color: 'var(--text)' }}>{fmtNum(data.selectionTotal)}</b> selected
         {' '}spans against <b style={{ color: 'var(--text)' }}>{fmtNum(data.baselineTotal)}</b> baseline.
+        {/* 2026-11-21 — compare yolu zaman-dilimi örneklemeli: sayılar ≈ (1/oran ile ölçekli). */}
+        {(data.baselineSampleRate ?? 1) < 1 && (
+          <span data-testid="bubbleup-sampled">
+            {' '}Counts ≈ (sampled {fmtPct(data.selectionSampleRate ?? 1)} of selection, {fmtPct(data.baselineSampleRate ?? 1)} of baseline time).
+          </span>
+        )}
         Score = selection % − baseline %; values over-represented in the selection
         sort to the top.
       </div>

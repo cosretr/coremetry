@@ -183,11 +183,7 @@ func (s *Store) latencyHeatmapWhere(
 	}
 
 	// Pre-build the latency-bin upper bounds in ms.
-	durBins := make([]float64, totalBins)
-	for j := 0; j < totalBins; j++ {
-		exp := float64(minLogMs) + float64(j+1)/float64(subBins)
-		durBins[j] = pow10(exp)
-	}
+	durBins := heatmapDurationBins(minLogMs, subBins, totalBins)
 
 	counts := make([][]uint32, timeBuckets)
 	exemplars := make([][]string, timeBuckets)
@@ -236,6 +232,16 @@ func (s *Store) latencyHeatmapWhere(
 		MaxCount:     maxCnt,
 		SamplingRate: 1.0 / float64(sampleN),
 	}, rows.Err()
+}
+
+// heatmapDurationBins — log-ms kova üst sınırları (span_peers.go ile ortak).
+func heatmapDurationBins(minLogMs, subBins, totalBins int) []float64 {
+	durBins := make([]float64, totalBins)
+	for j := 0; j < totalBins; j++ {
+		exp := float64(minLogMs) + float64(j+1)/float64(subBins)
+		durBins[j] = pow10(exp)
+	}
+	return durBins
 }
 
 // pow10 — integer-friendly stand-in for math.Pow(10, x). Avoids

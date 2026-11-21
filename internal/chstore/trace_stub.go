@@ -13,7 +13,10 @@ package chstore
 // can render a "trace aged out, only aggregates remain" pane
 // instead of a blank page.
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // TraceAggregateStub is the minimal "we have aggregates only"
 // payload the UI uses to explain the missing-spans case. All
@@ -55,6 +58,13 @@ func (s *Store) GetTraceAggregateStubErr(ctx context.Context, traceID string) (T
 	// argMaxIfMerge over the per-bucket states; min/max merge over
 	// the time states. countMerge for span + error counts.
 	// SETTINGS max_execution_time = 5 — small bounded lookup.
+	// 2026-11-21 — trace_id_ts penceresi biliniyorsa time_bucket sınırı
+	// (90 günlük FINAL taraması yerine 1-2 kova); ıskada eski sınırsız okuma.
+	where, args := "trace_id = ?", []any{traceID}
+	if lo, hi, ok := s.traceWindowFromIDTs(ctx, traceID); ok {
+		where += " AND time_bucket >= ? AND time_bucket <= ?"
+		args = append(args, chDateTimeArg(lo.Truncate(5*time.Minute)), chDateTimeArg(hi))
+	}
 	row := s.conn.QueryRow(ctx, `
 		SELECT
 		  `+s.traceDisplaySvcExpr()+`          AS root_service,
@@ -64,8 +74,8 @@ func (s *Store) GetTraceAggregateStubErr(ctx context.Context, traceID string) (T
 		  countMerge(span_count_state)               AS span_count,
 		  countMerge(error_count_state)              AS error_count
 		FROM trace_summary_5m FINAL
-		WHERE trace_id = ?
-		SETTINGS max_execution_time = 5`, traceID)
+		WHERE `+where+`
+		SETTINGS max_execution_time = 5`, args...)
 	var startNs, endNs int64
 	if err := row.Scan(&stub.RootService, &stub.RootName,
 		&startNs, &endNs, &stub.SpanCount, &stub.ErrorCount); err != nil {

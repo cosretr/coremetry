@@ -3194,6 +3194,13 @@ export const api = {
     from?: number; to?: number; filters?: string; dsl?: string; buckets?: number;
   }, signal?: AbortSignal) =>
     get<import('./types').LatencyHeatmap>(`/api/spans/heatmap?${qs(params)}`, signal),
+  // Span detay "akranlar" (2026-11-21) — tek (servis, operasyon) süre
+  // dağılımı; sunucu spanmetrics_1m TDigest'inden, MV boşsa ham heatmap.
+  // Yanıt LatencyHeatmap şekli + source (internal/api/span_peers.go).
+  spanPeers: (params: {
+    service: string; operation: string; from: number; to: number;
+  }, signal?: AbortSignal) =>
+    get<import('./types').LatencyHeatmap>(`/api/spans/peers?${qs(params)}`, signal),
 
   // BubbleUp — attribute divergence between selection and
   // baseline. `filters`/`dsl` define the baseline population;
