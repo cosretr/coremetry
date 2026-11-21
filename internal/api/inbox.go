@@ -1376,7 +1376,10 @@ var inboxKindsAll = []string{"problem", "exception", "httperror", "anomaly", "in
 // v0.10.2399 (operatör: "HTTP gibi bazı problem tipleri varsayılan seçili
 // değil … değiştirelim", ardından "hepsi varsayılan açık olsun") — tüm türler
 // varsayılan açık (v0.9.443 ve v0.10.1796 kararları geri alındı).
-var inboxKindsDefault = []string{"problem", "exception", "httperror", "anomaly", "incident"}
+// v0.10.2431 (operatör: "Prod'da problemler regressed gözüken çok fazla var;
+// exceptions kapalı olsun") — exception türü yine varsayılanda KAPALI
+// (v0.10.2399 yalnız bu tür için geri alındı); Exceptions çipi sayısıyla kalır.
+var inboxKindsDefault = []string{"problem", "httperror", "anomaly", "incident"}
 var inboxPriosAll = []string{"P1", "P2", "P3"}
 
 // v0.9.1342 — ÖZNE şeridi. `kind` (satırın kaynağı) ile KARIŞTIRILMAZ:

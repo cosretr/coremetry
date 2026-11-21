@@ -77,13 +77,15 @@ export const KIND_ALL: readonly InboxKind[] = ['problem', 'exception', 'httperro
 // v0.10.2399 (operatör: "HTTP gibi bazı problem tipleri varsayılan seçili değil, değiştirelim") —
 // ardından "hepsi varsayılan açık olsun" — tüm türler varsayılan açık (v0.9.443 ve
 // v0.10.1796 kararları geri alındı).
-export const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly', 'incident'];
+// v0.10.2431 (operatör: "regressed gözüken çok fazla var; exceptions kapalı
+// olsun") — exception yine varsayılanda kapalı; çip sayısıyla kalır.
+export const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'httperror', 'anomaly', 'incident'];
 // v0.10.1827 — Incidents emekliyken (kabuk bayrağı user.features.incidents
 // kapalı; operatör kararı 2026-11-05) `incident` türü sözlükten, çiplerden ve
 // varsayılandan çıkar; eski ?kind=incident linki codec'te varsayılana düşer.
 // Sunucu ikizi inbox_incidents_retired.go (rozet aynı kümeyi sayar).
 export const KIND_ALL_RETIRED: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly'];
-export const KIND_DEFAULT_RETIRED: readonly InboxKind[] = ['problem', 'exception', 'httperror', 'anomaly'];
+export const KIND_DEFAULT_RETIRED: readonly InboxKind[] = ['problem', 'httperror', 'anomaly'];
 // v0.9.443 — 'httperror': error.type fallback'inin ürettiği çıplak
 // durum-kodu grupları ("404"). Varsayılan facet'te KAPALI (KIND_DEFAULT
 // değişmedi) — bankada beklenen istemci hataları triage'ı boğmasın;
