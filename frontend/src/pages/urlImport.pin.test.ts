@@ -8,7 +8,7 @@ const read = (p: string) => readFileSync(resolve(__dirname, p), 'utf8');
 
 describe('dış URL değişimi içe alınır', () => {
   it.each([
-    ['Logs.tsx', /if \(urlAsc !== asc\)/],
+    ['Logs.tsx', /if \(u !== asc\) \{ setAsc\(u\); resetPaging\(\); \}/], // 2026-11-21 — useEffectEvent (importUrlAsc)
     ['Endpoints.tsx', /if \(urlSearch !== search\) setSearch\(urlSearch\)/],
     ['SlowQueries.tsx', /if \(q === lastQRef\.current\) return;/],
     ['ServiceMap.tsx', /if \(urlFocus && urlFocus !== focus\) setFocus\(urlFocus\)/],

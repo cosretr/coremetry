@@ -8,8 +8,10 @@ const src = readFileSync(resolve(__dirname, 'Traces.tsx'), 'utf8');
 
 describe('Traces teşhis linki', () => {
   it('admin kapısı + son istek parametreleri + TracesEmpty prop', () => {
-    expect(src).toContain("authUser?.role === 'admin' ? tracesExplainUrl(lastListParamsRef.current) : null");
-    expect(src).toContain('lastListParamsRef.current = listParams;');
+    // 2026-11-21 (React Compiler) — ref yerine türetilmiş listParams: link ve
+    // istek AYNI nesneden (render'da ref okunmaz).
+    expect(src).toContain("authUser?.role === 'admin' ? tracesExplainUrl(listParams) : null");
+    expect(src).toContain('const listParams = useMemo<TracesParams>(');
     expect(src).toContain('api.traces(listParams, ctl.signal)');
     expect(src).toContain('explainHref={explainHref ?? undefined}');
     expect(src).toMatch(/<a href=\{explainHref\} target="_blank" rel="noreferrer"/);

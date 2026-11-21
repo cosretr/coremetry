@@ -11,7 +11,9 @@ describe('Traces K8s hücreleri', () => {
     expect(src).not.toContain('className="mono sec"');
     expect(src).not.toMatch(/entity sayfası \(trace anı\)/);
     expect(src).toContain('<span className="mono cell-ellipsis" style={{ color: \'var(--text2)\' }} title={v}>{v}</span>');
-    expect(src).toContain('const ownLink = false;');
+    // 2026-11-21 — sabit `ownLink = false` dalı söküldü (React Compiler):
+    // her hücre koşulsuz satır linkine sarılır.
+    expect(src).not.toContain('const ownLink');
     expect(src).not.toMatch(/import \{[^}]*traceK8sHref[^}]*\} from '@\/lib\/traceK8sLinks'/);
   });
   it('K8s başlangıç genişlikleri daraltıldı (1440 px bütçesi)', () => {

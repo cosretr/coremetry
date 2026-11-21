@@ -52,8 +52,10 @@ describe('/traces satırı gerçek bir link', () => {
     const src = traces();
     // v0.10.330 (operatör): entity çipi kalktı, hücre düz metin — artık
     // <a> içinde <a> tehlikesi yok, hücre diğerleri gibi satır linkine sarılır.
-    expect(src).toContain('const ownLink = false;');
-    expect(src).toContain('{ownLink ? cell : <Link to={href}');
+    // 2026-11-21 — sabit `ownLink = false` dalı söküldü (React Compiler);
+    // hücre koşulsuz satır linkine sarılır.
+    expect(src).not.toContain('const ownLink');
+    expect(src).toMatch(/<td key=\{id\}[\s\S]{0,900}?<Link to=\{href\}[^>]*>\{cell\}<\/Link>/);
     expect(src).not.toContain('className="mono sec"');
     expect(src).not.toContain('onClick={e => e.stopPropagation()}>{v}</Link>');
   });

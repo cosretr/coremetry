@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -157,7 +157,17 @@ function pickVolumeBucket(from?: number, to?: number): number {
 // through verbatim (it's already KQL on this page). Returned
 // string may be empty — Kibana handles "no query" cleanly.
 
+const errText = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+
+type DocRemote = { raw: string; id: number; params: LogsContextParams };
+
+// Liste penceresi (ns). `_refresh` (↻ sayacı) yalnız yeniden hesap anahtarı.
+function logsWindowNs(useTimeRange: boolean, range: TimeRange, _refresh: number): { from: number | undefined; to: number | undefined } {
+  return useTimeRange ? timeRangeToNs(range) : { from: undefined, to: undefined };
+}
+
 function LogsInner() {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   const [searchParams, setSearchParams] = useSearchParams();
 
   // v0.9.1220 (Kibana dilim 3) — histogram kırılımı. URL tek kaynak
@@ -175,13 +185,35 @@ function LogsInner() {
     }, { replace: true });
   };
 
+  // Cursor accumulation (v0.8.260 — "Load more" replaced the
+  // Back/Next pager; v0.7.22 keyset cursor mechanics unchanged).
+  // `cursor` is the opaque `after` token of the page most recently
+  // FETCHED ('' = first). Fetched pages append into `accRows`; a
+  // filter / range / query change resets both (a cursor from the
+  // old result set is meaningless against a new one — v0.7.81).
+  // Sayfalama durumu + resetPaging zoom hook'undan ÖNCE: React Compiler
+  // bildirimden önce erişimi kabul etmez.
+  const [cursor, setCursor] = useState('');
+  const [accRows, setAccRows] = useState<LogRow[]>([]);
+  // v0.9.292 — how many rows the accumulation cap has dropped off the
+  // top in this browsing session. Surfaced, never silent.
+  const [accDropped, setAccDropped] = useState(0);
+  // İstemci sayfalaması: yüklenen örnek `pp` satırlık sayfalara bölünür.
+  const [page, setPage] = useState(0);
+  // Dar `_source` satırının tam dokümanı (satır açılınca): id → tam satır |
+  // 'error' (okunamadı; yüklenen alanlar kalır).
+  const [fullDocs, setFullDocs] = useState<Record<number, LogRow | 'error'>>({});
+  const resetPaging = () => { setCursor(''); setAccRows([]); setAccDropped(0); setPage(0); setFullDocs({}); };
+  // Effect'lerden çağrılan kopya (useEffectEvent — bağımlılık değil).
+  const resetPagingFx = useEffectEvent(() => resetPaging());
+
   // v0.9.431 — v0.9.390'ın sayfa-yerel yığını paylaşılan
   // usePageZoomRange hook'una taşındı. İki boşluk da kapandı:
   // (1) out-of-band Topbar seçimi artık yığını geçersizleştiriyor
   // (bayat pre-zoom girdisi geri yazılamaz), (2) boş yığın + custom
   // pencerede çift-tık default preset'e dönüyor (diğer sayfalarla
   // aynı sözleşme). resetPaging her iki yönde (v0.7.81 kuralı) —
-  // closure çağrı anında değerlendirilir, TDZ yok.
+  // closure çağrı anında değerlendirilir.
   const { range, setRange, handleZoom, handleZoomReset } = usePageZoomRange(DEFAULT_RANGE_PRESET, () => resetPaging());
   // v0.9.291 — the window handed to the KQL autocomplete. Memoised on
   // the range, never computed bare in JSX (v0.5.184: a bare
@@ -197,18 +229,6 @@ function LogsInner() {
   // ES backend answers envUnapplied:true when no environment field
   // resolves — surfaced as the honest chip next to the toolbar.
   const [env] = useUrlEnv();
-  // Cursor accumulation (v0.8.260 — "Load more" replaced the
-  // Back/Next pager; v0.7.22 keyset cursor mechanics unchanged).
-  // `cursor` is the opaque `after` token of the page most recently
-  // FETCHED ('' = first). Fetched pages append into `accRows`; a
-  // filter / range / query change resets both (a cursor from the
-  // old result set is meaningless against a new one — v0.7.81).
-  const [cursor, setCursor] = useState('');
-  const [accRows, setAccRows] = useState<LogRow[]>([]);
-  // v0.9.292 — how many rows the accumulation cap has dropped off the
-  // top in this browsing session. Surfaced, never silent.
-  const [accDropped, setAccDropped] = useState(0);
-  const resetPaging = () => { setCursor(''); setAccRows([]); setAccDropped(0); setPage(0); setFullDocs({}); };
   // v0.10.440 (log arama denetimi B3) — sayfa-yerel ↻. Göreli preset'in
   // penceresi timeRangeToNs ile SON range değişiminde donuyor ("son 30 dk"
   // bir saat sonra bir saat önceki 30 dakikayı sorguluyordu, ekranda hiçbir
@@ -256,7 +276,9 @@ function LogsInner() {
   const urlScope = parseLogsScope(searchParams.get('scope'));
   const scopeDecision = decideLogsScope({ urlScope, urlHadFilters, service: filter.service, scope: scopeData });
   // İstek parametresi AYNI render'da (apply'da URL yazımı efektte; istek beklemez).
-  const scopeParam = logsScopeRequestParam(scopeDecision);
+  // Literal ternary: React Compiler değeri ilkel (string) bilir; aşağıdaki
+  // prevScopeRef'e yazım onu "sonradan değişebilir" saydırıp memoları bozmasın.
+  const scopeParam = logsScopeRequestParam(scopeDecision) === 'mine' ? 'mine' as const : undefined;
   const scopeGate = logsScopeGate(scopeDecision);
   useEffect(() => {
     if (scopeDecision.kind !== 'apply') return;
@@ -309,8 +331,6 @@ function LogsInner() {
   // Görünüm seçenekleri (rh / hh / den / pp) — URL eklenen parametreler;
   // yokken bugünkü görünüm (lib/logsDisplay).
   const display = useMemo(() => readLogsDisplay(searchParams, displayBase).display, [searchParams, displayBase]);
-  // İstemci sayfalaması: yüklenen örnek `pp` satırlık sayfalara bölünür.
-  const [page, setPage] = useState(0);
   // v0.10.1831 (Log Search Faz 1 dilim 1.8; açık soru §9-6) — örnek boyu
   // `smp` (varsayılan 500, 10 … Settings üst sınırı). İstek boyu budur;
   // "Load more" sonraki `smp` satırı search_after ile getirir.
@@ -323,41 +343,13 @@ function LogsInner() {
     () => readLogsSample(searchParams.get('smp') ?? (prefSample !== undefined ? String(prefSample) : null), maxSample).sample,
     [searchParams, maxSample, prefSample]);
   const qc = useQueryClient();
-  // Dar `_source` satırının tam dokümanı (satır açılınca): id → tam satır |
-  // 'error' (okunamadı; yüklenen alanlar kalır).
-  const [fullDocs, setFullDocs] = useState<Record<number, LogRow | 'error'>>({});
   const setDisplay = (patch: Partial<LogsDisplay>) => {
     if (patch.pageSize !== undefined) setPage(0);
     setSearchParams(prev => writeLogsDisplay(prev, patch), { replace: true });
     displayPref.save(viewToPref({ ...display, ...patch }, sample)); // v0.10.1832
   };
-  // v0.10.502 (B6) — mode: 'replace' (Ara / satır tıkı, eski davranış) |
-  // 'and' (⊕ mevcut metne ekle) | 'not' (⊖ hariç tut, NOT). Ekleme
-  // mevcut serbest metni EZMEZ (mergePatternQuery).
-  const searchFromPattern = (qStr: string, mode: 'replace' | 'and' | 'not' = 'replace') => {
-    const search = mode === 'replace' ? qStr : mergePatternQuery(filter.search, qStr, mode === 'not');
-    const next = { ...filter, search };
-    // v0.10.1499 — satır / "Ara" (replace) sorguyu yazar VE Logs görünümüne
-    // geçer (tek URL yazımı); ⊕ / ⊖ desen görünümünde kalır (süzmeye devam).
-    setFilter(next); setDraft(next); resetPaging(); writeUrl(next, filters, undefined, mode === 'replace' ? 'logs' : undefined);
-  };
   // v0.9.1100 (F3.5) — ✨ desen anlatımı durumu (Shift emsali).
   const [aiPat, setAiPat] = useState<{ busy: boolean; text: string | null; err: string | null }>({ busy: false, text: null, err: null });
-  const explainPatterns = async () => {
-    setAiPat({ busy: true, text: null, err: null });
-    try {
-      const winSec = from && to ? Math.max(60, Math.round((to - from) / 1e9)) : 1800;
-      // v0.10.507 (C7) — ekrandaki süzgeç ve pencere de gider; cevap "bakılan
-      // kapsam"ı anlatır, filo geneli bölümler ayrı etiketlenir.
-      const r = await api.explainLogPatterns(winSec, {
-        service: filter.service, cluster: filter.cluster, env, search: compiledSearch,
-        severity: filter.severity, fromNs: from ?? undefined, toNs: to ?? undefined,
-      });
-      setAiPat({ busy: false, text: r.explanation, err: null });
-    } catch (e) {
-      setAiPat({ busy: false, text: null, err: e instanceof Error ? e.message : 'Anlatım alınamadı' });
-    }
-  };
 
   // Structured field filters (Kibana Discover pill model) — separate
   // from the free-text `search`. Compiled together right before any
@@ -420,7 +412,6 @@ function LogsInner() {
   const docRaw = docParam;
   const docResolvedRef = useRef('');
   const [docRow, setDocRow] = useState<LogRow | null>(null);
-  const loadedRowsRef = useRef<LogRow[]>([]);
   const ensureFullDoc = (row: LogRow) => {
     if (!row.partial || !row.docRef || fullDocs[row.id]) return;
     qc.fetchQuery(logsDocQuery(row.docRef))
@@ -489,10 +480,11 @@ function LogsInner() {
   };
   // İstemci sözdizimi denetimi (kqlLint, Enter'da) — çubuğun altındaki satır.
   const [queryLint, setQueryLint] = useState<string | null>(null);
-  useEffect(() => {
-    if (urlAsc !== asc) { setAsc(urlAsc); resetPaging(); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız URL değişiminde
-  }, [urlAsc]);
+  // Yalnız URL değişiminde; o anki asc useEffectEvent'ten.
+  const importUrlAsc = useEffectEvent((u: boolean) => {
+    if (u !== asc) { setAsc(u); resetPaging(); }
+  });
+  useEffect(() => { importUrlAsc(urlAsc); }, [urlAsc]);
   // v0.10.1833 (dilim 1.10) — çoklu alan SUNUCU sıralaması (URL `sort`,
   // lib/logsSort). Cursor sıralama imzasını taşır → her değişimde (geri/ileri
   // dahil) sayfalama sıfırlanır.
@@ -500,8 +492,7 @@ function LogsInner() {
   const sortKeys = useMemo(() => parseLogsSort(sortParam), [sortParam]);
   const prevSortRef = useRef(sortParam);
   useEffect(() => {
-    if (prevSortRef.current !== sortParam) { prevSortRef.current = sortParam; resetPaging(); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız sıralama değişiminde
+    if (prevSortRef.current !== sortParam) { prevSortRef.current = sortParam; resetPagingFx(); }
   }, [sortParam]);
   const setSortKeys = (next: ReturnType<typeof parseLogsSort>) => {
     setSearchParams(prev => {
@@ -571,15 +562,14 @@ function LogsInner() {
     if (visible.length) setLogCols(visible);
   }, [prefs.model]);
   const urlSig = logsUrlSig;
-  // v0.10.1854 — içe aktarma efekti mevcut sabitleri okur (efekt yalnız URL'de koşar).
-  const filtersRef = useRef<LogFilter[]>(filters);
-  filtersRef.current = filters;
   // v0.10.1076 — ilk sig önceden yazılı: durum zaten URL'den kuruldu, bağlama
   // anındaki içe aktarma no-op'tur (ikinci, aynı dilimli set yok). Sonraki
   // URL değişimleri (SPA gezinmesi, kayıtlı görünüm) sig farkıyla içe aktarılır.
   const lastUrlSigRef = useRef<string | null>(initialUrl.sig);
-  useEffect(() => {
-    const { filter: next, filtersRaw, colsRaw, pinsRaw, sig } = readLogsUrlState(searchParams);
+  // v0.10.1854 — içe aktarma mevcut sabitleri okur; useEffectEvent: effect
+  // yalnız URL değişiminde koşar, o anki filters / setSearchParams okunur.
+  const importUrlState = useEffectEvent((sp: URLSearchParams) => {
+    const { filter: next, filtersRaw, colsRaw, pinsRaw, sig } = readLogsUrlState(sp);
     if (sig === lastUrlSigRef.current) return;
     lastUrlSigRef.current = sig;
     setFilter(next);
@@ -587,7 +577,7 @@ function LogsInner() {
     // v0.10.1854 (dilim 2.3) — `pins` yoksa mevcut sabitler KALIR (servis
     // değişimi / SPA gezinmesi / kayıtlı görünüm) ve URL'ye geri yazılır ki
     // paylaşılan link gördüğünü taşısın.
-    const pills = importPills(filtersRaw, pinsRaw, filtersRef.current);
+    const pills = importPills(filtersRaw, pinsRaw, filters);
     setFilters(pills);
     if (!pinsRaw && keepPinned(pills).length > 0) {
       const enc = encodePillParams(pills);
@@ -599,7 +589,8 @@ function LogsInner() {
     // /logs link never resets their column setup.
     if (colsRaw) setLogCols(colsRaw.split(',').filter(Boolean));
     resetPaging();
-  }, [searchParams]);
+  });
+  useEffect(() => { importUrlState(searchParams); }, [searchParams]);
 
   // State → URL. Writes every filter-bearing param (replace:true — a
   // filter tweak refines the view, no history entry per click) and
@@ -627,18 +618,11 @@ function LogsInner() {
     prefs.save({ v: 1, order: next, hidden: [], sig: 'logs' });
     writeUrl(filter, filters, next);
   };
-  // v0.10.1856 — düzenleme GÖRÜNEN küme üzerinde (akıllı kolon kaldırılabilir).
-  const removeColumn = (id: string) => changeCols(viewColsRef.current.filter(c => c !== id));
-  const toggleColumn = (id: string) => {
-    const cur = viewColsRef.current;
-    changeCols(cur.includes(id) ? cur.filter(c => c !== id) : [...cur, id]);
-  };
   // Uygunken iş alanı ADAYLARI dar `_source`a girer (doluluk ölçülebilsin);
   // aday listesi ayardan — satırdan değil (istek ↔ kolon geri beslemesi yok).
   const smartEligible = !colsExplicit && !prefs.model;
   const bizDefs = searchSettingsQ.data?.businessFields;
   const smartCandidates = useMemo(() => (smartEligible ? businessCandidates(bizDefs) : []), [smartEligible, bizDefs]);
-  const viewColsRef = useRef<string[]>(logCols);
 
   // Build the params for the static-window query. When live
   // tail is on, we don't run this query (the live useQuery
@@ -655,10 +639,10 @@ function LogsInner() {
   // v0.10.690 — traceId + mutlak aralık → pencere gönderilir (derin bağlantı);
   // göreli aralıkta sunucu trace'in penceresini çözer (lib/logsTraceWindow.ts).
   const useTimeRange = logsUseTimeRange(filter.traceId, range);
+  // nowTick: ↻ tıkı göreli pencereyi şimdiye taşır (v0.10.440, B3) — argüman
+  // olarak geçer ki React Compiler'ın çıkardığı bağımlılıkta da bulunsun.
   const { from, to } = useMemo(
-    () => useTimeRange ? timeRangeToNs(range) : { from: undefined, to: undefined },
-    // nowTick: ↻ tıkı göreli pencereyi şimdiye taşır (v0.10.440, B3).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => logsWindowNs(useTimeRange, range, nowTick),
     [useTimeRange, range, nowTick],
   );
   // Pills + free text → the single query string every consumer
@@ -738,6 +722,33 @@ function LogsInner() {
   // drift doesn't thrash it (the parent memo already froze them).
   const volumeEnabled = (from !== undefined && to !== undefined) || !!filter.traceId;
   const volumeBucket = useMemo(() => pickVolumeBucket(from, to), [from, to]);
+  // v0.10.502 (B6) — mode: 'replace' (Ara / satır tıkı, eski davranış) |
+  // 'and' (⊕ mevcut metne ekle) | 'not' (⊖ hariç tut, NOT). Ekleme
+  // mevcut serbest metni EZMEZ (mergePatternQuery).
+  const searchFromPattern = (qStr: string, mode: 'replace' | 'and' | 'not' = 'replace') => {
+    const search = mode === 'replace' ? qStr : mergePatternQuery(filter.search, qStr, mode === 'not');
+    const next = { ...filter, search };
+    // v0.10.1499 — satır / "Ara" (replace) sorguyu yazar VE Logs görünümüne
+    // geçer (tek URL yazımı); ⊕ / ⊖ desen görünümünde kalır (süzmeye devam).
+    setFilter(next); setDraft(next); resetPaging(); writeUrl(next, filters, undefined, mode === 'replace' ? 'logs' : undefined);
+  };
+  // (try dışındaki hesaplar: React Compiler try içinde değer bloklarını derlemiyor.)
+  const explainPatterns = async () => {
+    setAiPat({ busy: true, text: null, err: null });
+    const winSec = from && to ? Math.max(60, Math.round((to - from) / 1e9)) : 1800;
+    // v0.10.507 (C7) — ekrandaki süzgeç ve pencere de gider; cevap "bakılan
+    // kapsam"ı anlatır, filo geneli bölümler ayrı etiketlenir.
+    const scope = {
+      service: filter.service, cluster: filter.cluster, env, search: compiledSearch,
+      severity: filter.severity, fromNs: from ?? undefined, toNs: to ?? undefined,
+    };
+    try {
+      const r = await api.explainLogPatterns(winSec, scope);
+      setAiPat({ busy: false, text: r.explanation, err: null });
+    } catch (e) {
+      setAiPat({ busy: false, text: null, err: errText(e, 'Anlatım alınamadı') });
+    }
+  };
   // v0.9.1220 — çift-fetch katlaması: severity=0 + seviye-kırılımında bu
   // sorgu LogsHistogram'ın iç fetch'iyle BAYT-BAYT aynıydı (aynı uç, aynı
   // parametreler) — her /logs açılışında iki özdeş ES _search. O durumda
@@ -863,7 +874,6 @@ function LogsInner() {
       document.removeEventListener('visibilitychange', onVis);
       es?.close();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, filter.service, filter.cluster, env, compiledSearch, filter.pattern, filter.team, scopeParam, scopeGate, filter.severity, filter.hasTrace, filter.traceId, filter.spanId]); // v0.10.416 — kilit değişince akış yeniden açılır
 
   // When live, the table renders the SSE buffer; otherwise the static
@@ -945,8 +955,7 @@ function LogsInner() {
   // v0.8.400 — an env change is a NEW result set: a keyset cursor from
   // the old set is meaningless (the v0.7.81 cursor rule) and row
   // expansion doesn't carry over.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { resetPaging(); setExpanded(new Set()); }, [env]);
+  useEffect(() => { resetPagingFx(); setExpanded(new Set()); }, [env]);
 
   // Backend mapping fields (v0.5.136 → fields panel v0.8.255).
   // Feeds the left FieldSidebar's "Available fields" group. CH
@@ -1091,8 +1100,7 @@ function LogsInner() {
   // cursor sıfırlanır (v0.7.81 kuralı).
   const prevScopeRef = useRef(scopeParam);
   useEffect(() => {
-    if (prevScopeRef.current !== scopeParam) { prevScopeRef.current = scopeParam; resetPaging(); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız kapsam değişiminde
+    if (prevScopeRef.current !== scopeParam) { prevScopeRef.current = scopeParam; resetPagingFx(); }
   }, [scopeParam]);
   // v0.10.1880 (dilim 3.1) — satır tıkı / Enter detay ÇEKMECESİNİ açar (satır
   // içi genişleme /logs'ta kalktı; servis sekmesi / pod / trace panelleri aynen).
@@ -1108,7 +1116,7 @@ function LogsInner() {
   const toggleRow = (id: number) => {
     const opening = !expanded.has(id);
     setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-    const row = opening ? loadedRowsRef.current.find(r => r.id === id) : undefined;
+    const row = opening ? loadedRows.find(r => r.id === id) : undefined;
     if (row) ensureFullDoc(row);
   };
   const closeRow = () => {
@@ -1145,14 +1153,15 @@ function LogsInner() {
   }, [loadedRows, narrow, critOnly, groupMode]);
   const logs = grouped.rows;
   const hasExceptions = useMemo(() => loadedRows.some(r => r.exception), [loadedRows]);
-  loadedRowsRef.current = loadedRows;
   // v0.10.1880 — `?doc=` çözümü liste yerleşince (yüklü satırda istek yok).
   const docListSettled = live || data !== undefined || !logsListEnabled(view, live, scopeGate);
   // 2026-11-21 — uzak çözüm useLogsContext'e taşındı: effect yalnız KARAR
   // verir (yerel satır mı, uzak istek mi); istek RQ'da, doc değişince
   // uçuştaki istek kesilir ve eski cevap yeni doc'un çekmecesine düşemez.
-  const [docRemote, setDocRemote] = useState<{ raw: string; id: number; params: LogsContextParams } | null>(null);
-  useEffect(() => {
+  const [docRemote, setDocRemote] = useState<DocRemote | null>(null);
+  // Yalnız doc / liste-yerleşti değişiminde koşar; o anki satırlar, URL ve env
+  // useEffectEvent'ten okunur.
+  const resolveDoc = useEffectEvent((docRaw: string | null, docListSettled: boolean) => {
     if (!docRaw) { docResolvedRef.current = ''; setDocRow(null); setDocRemote(null); return; }
     // Liste henüz yükleniyorsa bekle: satır listedeyse İSTEK YOK (v0.10.1880).
     if (!docListSettled || docResolvedRef.current === docRaw) return;
@@ -1160,26 +1169,26 @@ function LogsInner() {
     setDocRemote(null);
     const parsed = parseDocParam(docRaw);
     if (!parsed) { setDocMiss('miss'); return; }
-    const local = loadedRowsRef.current.find(r => r.id === parsed.id && r.timestamp === parsed.ts);
+    const local = loadedRows.find(r => r.id === parsed.id && r.timestamp === parsed.ts);
     if (local) { setDocMiss(false); setDocRow(local); ensureFullDoc(local); return; }
     const svc = searchParams.get('docsvc') || undefined;
     setDocRemote({ raw: docRaw, id: parsed.id, params: { ts: parsed.ts, service: svc, env: env || undefined, n: 5 } });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız doc değişiminde
-  }, [docRaw, docListSettled]);
+  });
+  useEffect(() => { resolveDoc(docRaw, docListSettled); }, [docRaw, docListSettled]);
   const docCtxQ = useLogsContext(docRemote?.params ?? null);
   const docHandledRef = useRef<object | null>(null);
-  useEffect(() => {
+  // Yalnız cevap gelince; o anki docRaw useEffectEvent'ten.
+  const handleDocContext = useEffectEvent((docRemote: DocRemote | null, r: typeof docCtxQ.data, isError: boolean) => {
     if (!docRemote || docRemote.raw !== docRaw || docHandledRef.current === docRemote) return;
-    if (docCtxQ.isError) { docHandledRef.current = docRemote; setDocMiss('miss'); return; }
-    const r = docCtxQ.data;
+    if (isError) { docHandledRef.current = docRemote; setDocMiss('miss'); return; }
     if (!r) return;
     docHandledRef.current = docRemote;
     if (r.degraded) { setDocMiss('degraded'); return; } // v0.10.420 — "kayıt yok" değil "backend yavaş"
     const rows = [...(r.before ?? []), ...(r.after ?? [])];
     const hit = rows.find(x => x.id === docRemote.id);
     if (hit) { setDocMiss(false); setDocRow(hit); ensureFullDoc(hit); } else setDocMiss('miss');
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız cevap gelince
-  }, [docRemote, docCtxQ.data, docCtxQ.isError]);
+  });
+  useEffect(() => { handleDocContext(docRemote, docCtxQ.data, docCtxQ.isError); }, [docRemote, docCtxQ.data, docCtxQ.isError]);
   // v0.10.1856 (dilim 2.5) — yüklenen örnekte doluluğu ≥ %80 olan iş alanları
   // kolon olur (yalnız kayıtlı tercih yokken, yalnız ES). Görünüm-yerel: URL'ye
   // ve tercihe yazılmaz; operatör kolonlara dokununca açık tercihe dönüşür.
@@ -1187,7 +1196,11 @@ function LogsInner() {
     () => (smartEligible && fieldsBackend === 'elasticsearch' ? smartBusinessColumns(bizDefs, loadedRows) : []),
     [smartEligible, fieldsBackend, bizDefs, loadedRows]);
   const viewCols = useMemo(() => withSmartColumns(logCols, smartCols), [logCols, smartCols]);
-  viewColsRef.current = viewCols;
+  // v0.10.1856 — düzenleme GÖRÜNEN küme üzerinde (akıllı kolon kaldırılabilir).
+  const removeColumn = (id: string) => changeCols(viewCols.filter(c => c !== id));
+  const toggleColumn = (id: string) => {
+    changeCols(viewCols.includes(id) ? viewCols.filter(c => c !== id) : [...viewCols, id]);
+  };
   // v0.10.1899 (Log Search Faz 5 dilim 5.2) — paylaşılan link göndericinin
   // gördüğü tabloyu taşır (URL'de olmayan görünüm anahtarları linke eklenir).
   const shareView = useMemo(() => ({ display, sample, cols: viewCols, range }), [display, sample, viewCols, range]);
@@ -1225,7 +1238,7 @@ function LogsInner() {
   // canlı kuyruk kendi tamponunu yürütür, burada hiç tetik yok.
   const nextCursor = data?.nextCursor ?? '';
   const loadNext = () => { if (nextCursor) { setPage(Math.floor(logs.length / display.pageSize)); setCursor(nextCursor); } };
-  const autoLoad = useAutoLoadMore({
+  const { active: autoLoadActive, capped: autoLoadCapped, sentinelRef: autoLoadSentinelRef } = useAutoLoadMore({
     enabled: !live && view === 'logs' && !!nextCursor && paged.page === paged.pages - 1,
     busy: staticQ.isFetching, failed: staticQ.isError, loaded: logs.length, onLoad: loadNext,
   });
@@ -1238,11 +1251,13 @@ function LogsInner() {
   });
   // Çekmece açıkken j/k seçimi çekmeceyi taşır (mockup ↑/↓ "Önceki (k) / Sonraki (j)").
   const navSel = tableNav.selectedItem;
-  useEffect(() => {
+  const navSelId = navSel?.id;
+  // Yalnız seçim değişiminde; o anki doc / satır useEffectEvent'ten.
+  const followNavSelection = useEffectEvent(() => {
     if (!docRaw || !navSel || navSel.id === docRow?.id) return;
     openRow(navSel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- yalnız seçim değişiminde
-  }, [navSel?.id]);
+  });
+  useEffect(() => { followNavSelection(); }, [navSelId]);
   // v0.10.1883 (dilim 3.4) — görünen sayfanın trace çipleri: TEK önizleme
   // isteği (ClickHouse MV), satırlar geldikten sonra; canlı kuyrukta yok.
   const tracePreviewItems = useMemo(() => {
@@ -1821,8 +1836,8 @@ function LogsInner() {
             lastReachablePage={paged.pages - 1}
             onPage={setPage} />
         )}
-        {data && logs.length > 0 && autoLoad.active && (
-          <div ref={autoLoad.sentinelRef} aria-hidden data-testid="logs-autoload-sentinel" style={{ height: 1 }} />
+        {data && logs.length > 0 && autoLoadActive && (
+          <div ref={autoLoadSentinelRef} aria-hidden data-testid="logs-autoload-sentinel" style={{ height: 1 }} />
         )}
         {data && logs.length > 0 && !live && paged.page === paged.pages - 1 && (
           <Pager mode="cursor"
@@ -1832,7 +1847,7 @@ function LogsInner() {
             moreLabel={`Daha fazla yükle (sonraki ${sample.toLocaleString('tr-TR')})`}
             onMore={loadNext}
             loading={staticQ.isFetching}
-            extras={accDropped === 0 && autoLoad.capped ? (
+            extras={accDropped === 0 && autoLoadCapped ? (
               <span title={tr('logs.autoLoad.cappedTitle')}>{tr('logs.autoLoad.capped')}</span>
             ) :
               /* v0.9.292 — the accumulation window slid forward. Rows

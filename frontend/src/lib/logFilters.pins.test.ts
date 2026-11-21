@@ -54,7 +54,7 @@ describe('sabit haplar — URL', () => {
 
   it('sayfa: içe aktarma importPills + mevcut sabitler; Tümünü temizle / sıfırla keepPinned', () => {
     const src = readFileSync(resolve(__dirname, '../pages/Logs.tsx'), 'utf8');
-    expect(src).toContain('importPills(filtersRaw, pinsRaw, filtersRef.current)');
+    expect(src).toContain('importPills(filtersRaw, pinsRaw, filters)');
     expect(src).toContain('onClearPills={() => applyPills(keepPinned(filters))}');
     expect(src).toContain('const kept = keepPinned(filters);');
   });

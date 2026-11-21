@@ -39,7 +39,7 @@ describe('/traces Start time sticky-left (v0.10.723)', () => {
   it('yalnız time kolonu sabit; ofsetler saf çekirdekten; hücre sınıf + left', () => {
     expect(traces).toContain("stickyLeft: id === 'time',");
     expect(traces).toContain('const leftOffs = stickyLeftOffsets(dt.visibleColumns, dt.colWidths, ATTR_W);');
-    expect(traces).toContain("stickyL !== undefined ? 'sticky-left' : ''");
+    expect(traces).toContain("stickyL !== undefined ? 'row-cell sticky-left' : 'row-cell'");
     expect(traces).toContain('style={{ left: stickyL }}>');
     expect(css).toMatch(/th\.sticky-left, td\.sticky-left \{[^}]*position: sticky/);
     expect(css).toMatch(/th\.sticky-left, td\.sticky-left \{[^}]*background: var\(--bg1\)/);

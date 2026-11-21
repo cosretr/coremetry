@@ -17,7 +17,7 @@
 // Range is the SINGLE-source-of-truth via useUrlRange; timeRangeToNs(range)
 // only ever runs inside a useMemo([range]) (the v0.5.184 trap).
 
-import { useCallback, useEffect, useMemo, useRef, useState, Suspense, Fragment } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, Suspense, Fragment } from 'react';
 import { ownedParamSig, nextUrlRemountKey, type UrlKeyState } from '@/lib/urlRemountKey';
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { rowActivation } from '@/lib/a11y';
@@ -244,7 +244,22 @@ function HeaderStat({ label, value, tone, title }: { label: string; value: strin
   );
 }
 
+// localStorage'daki boş olmayan id dizisi; yoksa / bozuksa null. (Modül
+// düzeyinde: React Compiler try/catch içinde `??` gibi değer bloklarını
+// derleyemiyor.)
+function storedTraceIds(key: string): string[] | null {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(key) ?? 'null');
+    if (Array.isArray(stored)) {
+      const ids = stored.filter((c): c is string => typeof c === 'string' && c !== '');
+      if (ids.length) return ids;
+    }
+  } catch { /* corrupt storage → default */ }
+  return null;
+}
+
 function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => void }) {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   const navigate = useNavigate();
   const lang = useLang();
   // v0.10.219 — satır Link'i listenin O ANKİ URL'sini state olarak taşır;
@@ -252,9 +267,10 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   const loc = useLocation();
   const [searchParams] = useSearchParams();
 
+  const [page, setPage] = useState(() => parseInt(searchParams.get('page') ?? '0', 10) || 0);
   // v0.9.430 — zoom-yığını hook'u; sayfalama her zoom/geri adımında
-  // sıfırlanır (onChange; setPage sonradan tanımlı — closure çağrı
-  // anında değerlendirilir, TDZ yok).
+  // sıfırlanır (onChange). setPage yukarıda: React Compiler bildirimden önce
+  // erişimi kabul etmez.
   const { range, setRange, handleZoom, handleZoomReset, zoomDepth } = usePageZoomRange(DEFAULT_RANGE_PRESET, () => setPage(0));
   // v0.10.251 — ContextBar (Topbar yuvası). Aralık sahibi usePageZoomRange
   // KALIR (sayfa sıfırlama + zoom); çubuğun set()'i aralığı oraya, kalanı
@@ -295,7 +311,6 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   // List view server sort.
   const [sort, setSort] = useState<SortColumn>(() => (searchParams.get('sort') as SortColumn) || 'time');
   const [order, setOrder] = useState<SortOrder>(() => (searchParams.get('order') === 'asc' ? 'asc' : 'desc'));
-  const [page, setPage] = useState(() => parseInt(searchParams.get('page') ?? '0', 10) || 0);
   // v0.10.733 — Root kutusunun başlığı hangi kök tanımının geçerli olduğunu
   // yazar (strict | entry; Settings'te, viewer görür değiştiremez).
   const rootDefQ = useTraceRootDef();
@@ -310,7 +325,8 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   });
   const toggleStrip = () => setStripCollapsed(v => {
     const next = !v;
-    try { localStorage.setItem(STRIP_COLLAPSED_KEY, next ? '1' : '0'); } catch { /* özel pencere / kota */ }
+    const stored = next ? '1' : '0';
+    try { localStorage.setItem(STRIP_COLLAPSED_KEY, stored); } catch { /* özel pencere / kota */ }
     return next;
   });
 
@@ -397,14 +413,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
     // attribute listesi decodeTraceCols'tan, sıra aşağıdaki colOrder'da.
     const url = (searchParams.get('cols') ?? '').split(',').map(s => s.trim()).filter(Boolean);
     if (url.length) return decodeTraceCols(url).extras;
-    try {
-      const stored: unknown = JSON.parse(localStorage.getItem(EXTRA_COLS_LS_KEY) ?? 'null');
-      if (Array.isArray(stored)) {
-        const cols = stored.filter((c): c is string => typeof c === 'string' && c !== '');
-        if (cols.length) return cols.slice(0, 8);
-      }
-    } catch { /* corrupt storage → default */ }
-    return DEFAULT_TRACE_COLUMNS;
+    return storedTraceIds(EXTRA_COLS_LS_KEY)?.slice(0, 8) ?? DEFAULT_TRACE_COLUMNS;
   });
   // v0.10.1516 — kullanıcı sütun sırası (null = varsayılan traceColumnOrder).
   // Öncelik extraCols ile AYNI: URL `cols=` (tam sıra biçimi) > sunucu >
@@ -413,23 +422,18 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   const [colOrder, setColOrder] = useState<string[] | null>(() => {
     const url = (searchParams.get('cols') ?? '').split(',').map(s => s.trim()).filter(Boolean);
     if (url.length) return decodeTraceCols(url).order;
-    try {
-      const stored: unknown = JSON.parse(localStorage.getItem(COL_ORDER_LS_KEY) ?? 'null');
-      if (Array.isArray(stored)) {
-        const ids = stored.filter((c): c is string => typeof c === 'string' && c !== '');
-        if (ids.length) return ids;
-      }
-    } catch { /* corrupt storage → default */ }
-    return null;
+    return storedTraceIds(COL_ORDER_LS_KEY);
   });
   const colOrderIds = useMemo(() => resolveTraceOrder(extraCols, colOrder), [extraCols, colOrder]);
   // Tek yazım yolu (başlık sürükle-bırak, Sütunlar ▾, sıfırla): çizilen sıradan
   // attribute listesi + (varsayılan değilse) tam sıra.
-  const applyColOrder = useCallback((next: readonly string[]) => {
+  // (useCallback / useMemo yok: React Compiler memoize eder — elle memo
+  // derleyicinin kapsamıyla korunamıyordu.)
+  const applyColOrder = (next: readonly string[]) => {
     const st = splitTraceOrder(resolveTraceOrder(extraCols, next));
     setExtraCols(prev => (prev.join(',') === st.extras.join(',') ? prev : st.extras));
     setColOrder(st.order);
-  }, [extraCols]);
+  };
   // Persist every column-selection change (add AND remove) so the next
   // fresh /traces visit restores it without a URL.
   useEffect(() => {
@@ -449,28 +453,34 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   // cols yazmaz — aksi hâlde URL > sunucu önceliği sunucu tercihini sonsuza
   // dek erişilmez kılardı.
   const prefs = useTablePrefs('traces-list');
-  const urlHadCols = useRef(!!parseColsParam(searchParams.get('cols')));
+  // İlk render'ın URL'i; sabit (render'da okunduğu için ref değil state).
+  const [urlHadCols] = useState(() => !!parseColsParam(searchParams.get('cols')));
   const prefsAdopted = useRef(false);
-  const colsOwned = prefs.model !== undefined || urlHadCols.current;
-  useEffect(() => {
-    if (prefs.model === undefined || prefsAdopted.current) return;
-    prefsAdopted.current = true;
-    if (urlHadCols.current || !prefs.model) return;
+  const colsOwned = prefs.model !== undefined || urlHadCols;
+  // useEffectEvent: benimseme yalnız prefs.model çözülünce koşar, o anki
+  // extraCols'u okur (bağımlılık değil).
+  const adoptPrefsModel = useEffectEvent((model: NonNullable<typeof prefs.model>) => {
     const fixed = new Set<string>(FIXED_COLS);
-    const extras = prefs.model.order.filter(id => !fixed.has(id) && !prefs.model!.hidden.includes(id)).slice(0, 8);
+    const extras = model.order.filter(id => !fixed.has(id) && !model.hidden.includes(id)).slice(0, 8);
     if (extras.length) setExtraCols(extras);
     // v0.10.1516 — sunucu modelinin `order`ı tam sıradır (v0.10.251'den beri
     // traceColumnOrder yazılıyordu → eski kayıtlar varsayılana çözülür).
-    setColOrder(splitTraceOrder(resolveTraceOrder(extras.length ? extras : extraCols, prefs.model.order)).order);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.model]);
+    setColOrder(splitTraceOrder(resolveTraceOrder(extras.length ? extras : extraCols, model.order)).order);
+  });
   useEffect(() => {
+    if (prefs.model === undefined || prefsAdopted.current) return;
+    prefsAdopted.current = true;
+    if (urlHadCols || !prefs.model) return;
+    adoptPrefsModel(prefs.model);
+  }, [prefs.model, urlHadCols]);
+  // Yalnız sıra değişiminde koşar; prefs'in o anki modeli/save'i okunur.
+  const savePrefsOrder = useEffectEvent((ids: string[]) => {
     if (!prefsAdopted.current) return;
     // v0.10.1516 — karşılaştırma TAM sıra üzerinden (attribute kümesi + sıra).
-    if (prefs.model && prefs.model.order.join(',') === colOrderIds.join(',')) return;
-    prefs.save({ v: 1, order: colOrderIds, hidden: [], sig: 'traces-list' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [colOrderIds]);
+    if (prefs.model && prefs.model.order.join(',') === ids.join(',')) return;
+    prefs.save({ v: 1, order: ids, hidden: [], sig: 'traces-list' });
+  });
+  useEffect(() => { savePrefsOrder(colOrderIds); }, [colOrderIds]);
 
 
   // Header viz mode + interaction state.
@@ -485,23 +495,19 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
 
 
   const [data, setData] = useState<TracesResponse | null | undefined>(undefined);
-  const lastListParamsRef = useRef<TracesParams | null>(null);
   const { user: authUser } = useAuth();
-  const explainHref = authUser?.role === 'admin' ? tracesExplainUrl(lastListParamsRef.current) : null;
   // v0.8.478 (perf dalga-3) — refetch'te ekran boşalmaz: önceki sonuç
   // solgunlaştırılarak ekranda kalır (keepPreviousData semantiği),
-  // skeleton yalnız İLK yüklemede. dataRef effect'lere dep eklemeden
-  // "elimde veri var mı" sorusunu cevaplar.
+  // skeleton yalnız İLK yüklemede. hasListRows / hasAggRows (useEffectEvent)
+  // effect'lere dep eklemeden "elimde veri var mı" sorusunu cevaplar.
   const [refreshing, setRefreshing] = useState(false);
-  const dataRef = useRef<TracesResponse | null | undefined>(undefined);
-  dataRef.current = data;
+  const hasListRows = useEffectEvent(() => !!data?.traces?.length);
   const [aggRefreshing, setAggRefreshing] = useState(false);
-  const aggRef = useRef<AggregateRow[] | null | undefined>(undefined);
   const [agg, setAgg] = useState<AggregateRow[] | null | undefined>(undefined);
   // v0.9.858 (UX denetimi K6) — aggregate sorgusunun hata metni. Liste
   // dalının listErr'ının kardeşi; ikisi de aynı Retry nonce'ını kullanır.
   const [aggErr, setAggErr] = useState<string | null>(null);
-  aggRef.current = agg;
+  const hasAggRows = useEffectEvent(() => !!agg?.length);
   const [listErr, setListErr] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
   // v0.10.654 (operatör: "Show total gerek yok, direkt göstersin") — toplam
@@ -588,11 +594,35 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
     const r = timeRangeToNs(range);
     return alignTraceWindow(r.from, r.to);
   }, [range]);
+  // v0.10.328 — boş sonuç ekranındaki "Teşhis (explain)" linki SON isteğin
+  // parametrelerini kullanır (URL cerrahisi yok; yalnız admin görür). Effect
+  // içinde ref'e yazılıyordu; artık türetilmiş değer — effect aynısını yollar.
+  const listParams = useMemo<TracesParams>(() => {
+    const { from, to } = listRangeNs;
+    return {
+      limit: 50, offset: page * 50, from, to, sort, order,
+      // v0.10.1082 — süzgeç alanları TEK kaynaktan (pages/traces/scopeParams.ts):
+      // Errors şeridi (/api/traces/error-histogram) aynı fonksiyonu çağırır.
+      // env/cluster birinci-sınıf (v0.8.383 / v0.9.943 — FilterRoot düz
+      // filtreleri supersede eder); gruplu kök düz çipleri supersede eder.
+      ...traceScopeParams({ filter, env, cluster: clusterScope, filtersEff: advFiltersEff, groupParam: advGroupParam }),
+      // FAZ 2 — the list fetch is ALWAYS narrow (no extraAttrs): attribute
+      // columns arrive via the phase-2 enrichment effect below, so a column
+      // toggle never re-runs this (window-wide) query. extraCols is
+      // deliberately NOT a dep here for the same reason.
+      // v0.9.638 — liste ARTIK sayım istemiyor. ?count=exact tek başına
+      // countModeAllowsMV'yi kapatıp listeyi ham spans yoluna düşürüyordu
+      // (çift ceza). Sayı ayrı endpoint'ten geliyor; liste SQL'i bayt bayt
+      // aynı kaldığı için "toplamı göster" listeyi MV'de BIRAKIYOR.
+      count: 'skip',
+    };
+  }, [listRangeNs, sort, order, page, filter, env, clusterScope, advFiltersEff, advGroupParam]);
+  const explainHref = authUser?.role === 'admin' ? tracesExplainUrl(listParams) : null;
   useEffect(() => {
     if (view !== 'list') return;
     // Önceki sayfa/sıralama/filtre sonucu ekranda kalır; yalnız ilk
     // yüklemede skeleton (v0.8.478).
-    if (dataRef.current && dataRef.current.traces?.length) {
+    if (hasListRows()) {
       setRefreshing(true);
     } else {
       setData(undefined);
@@ -614,27 +644,6 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
     // (traceIdJump); başka bir kimlik (function_id) `search` terimidir ve
     // sunucunun kimlik-önce yolunu koşar (v0.10.342). Dört yüzeyin tek terimi
     // lib/traceSearchTerm.effectiveTraceSearch (v0.10.523).
-    const { from, to } = listRangeNs;
-    const listParams: TracesParams = {
-      limit: 50, offset: page * 50, from, to, sort, order,
-      // v0.10.1082 — süzgeç alanları TEK kaynaktan (pages/traces/scopeParams.ts):
-      // Errors şeridi (/api/traces/error-histogram) aynı fonksiyonu çağırır.
-      // env/cluster birinci-sınıf (v0.8.383 / v0.9.943 — FilterRoot düz
-      // filtreleri supersede eder); gruplu kök düz çipleri supersede eder.
-      ...traceScopeParams({ filter, env, cluster: clusterScope, filtersEff: advFiltersEff, groupParam: advGroupParam }),
-      // FAZ 2 — the list fetch is ALWAYS narrow (no extraAttrs): attribute
-      // columns arrive via the phase-2 enrichment effect below, so a column
-      // toggle never re-runs this (window-wide) query. extraCols is
-      // deliberately NOT a dep here for the same reason.
-      // v0.9.638 — liste ARTIK sayım istemiyor. ?count=exact tek başına
-      // countModeAllowsMV'yi kapatıp listeyi ham spans yoluna düşürüyordu
-      // (çift ceza). Sayı ayrı endpoint'ten geliyor; liste SQL'i bayt bayt
-      // aynı kaldığı için "toplamı göster" listeyi MV'de BIRAKIYOR.
-      count: 'skip',
-    };
-    // v0.10.328 — boş sonuç ekranındaki "Teşhis (explain)" linki SON isteğin
-    // parametrelerini kullanır (URL cerrahisi yok; yalnız admin görür).
-    lastListParamsRef.current = listParams;
     api.traces(listParams, ctl.signal).then(d => { if (!cancelled) { setData(d); setRefreshing(false); } }).catch((e: unknown) => {
       // İptal HATA DEĞİL — operatörün kendi eylemi. Yutulmazsa aralık
       // her değiştiğinde ekrana kırmızı bir kutu düşerdi.
@@ -644,7 +653,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
       setRefreshing(false);
     });
     return () => { cancelled = true; ctl.abort(); };
-  }, [view, listRangeNs, sort, order, page, filter, env, clusterScope, advFiltersEff, advGroupParam, retryNonce]);
+  }, [view, listParams, retryNonce]);
 
   // ── Extras enrichment (FAZ 2 — docs/audit/traces-attribute-columns.md
   // §6B). Fires when the page rows are in and attribute columns are
@@ -849,7 +858,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   const aggRangeNs = useMemo(() => timeRangeToNs(range), [range]);
   useEffect(() => {
     if (view !== 'aggregate') return;
-    if (aggRef.current && aggRef.current.length) {
+    if (hasAggRows()) {
       setAggRefreshing(true);
     } else {
       setAgg(undefined);
@@ -898,11 +907,12 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
     setFilter(next);
   };
   // Auto-apply 250ms after the last draft edit (Datadog/Honeycomb feel).
+  // apply useEffectEvent ile: zamanlayıcı ateşlendiği andaki draft/range'i okur.
+  const autoApply = useEffectEvent(() => apply());
   useEffect(() => {
     if (JSON.stringify(draft) === JSON.stringify(filter)) return;
-    const t = setTimeout(() => apply(), 250);
+    const t = setTimeout(() => autoApply(), 250);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, filter]);
   const reset = () => {
     const empty = { service: '', search: '', op: '', minMs: '', maxMs: '', hasError: false, rootOnly: false, requireServices: [] as string[] };
@@ -944,12 +954,10 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   // Eski link köprüsü: `?aggSort=p99&aggOrder=asc`. Önceliği `s_traces-agg`in
   // ALTINDA, localStorage'ın ÜSTÜNDE — paylaşılan linkin niyeti alıcının
   // kişisel varsayılanını yenmeli (primitifin resolveInitialSort sözleşmesi).
-  const legacyAggSort = useMemo(
-    () => decodeLegacyAggSort(searchParams.get('aggSort'), searchParams.get('aggOrder')),
-    // Yalnız İLK okuma anlamlı; searchParams her yazımda değişiyor ve
-    // bağımlılığa koymak köprüyü canlı bir kanala çevirirdi.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []);
+  // Yalnız İLK okuma anlamlı (useState başlatıcısı); searchParams her yazımda
+  // değişiyor ve izlemek köprüyü canlı bir kanala çevirirdi.
+  const [legacyAggSort] = useState(
+    () => decodeLegacyAggSort(searchParams.get('aggSort'), searchParams.get('aggOrder')));
 
   const aggDt = useDataTable<AggregateRow>({
     storageKey: 'traces-agg',
@@ -1109,10 +1117,10 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   // Hücreler renderRow'da `dt.visibleColumns` üzerinden çizilir (başlıkla aynı
   // kullanıcı sırası; v0.10.1511 huni başlıkla birlikte taşınır).
   const colIds = useMemo(() => traceColumnOrder(extraCols), [extraCols]);
-  const colModel = useMemo(() => ({
+  const colModel = {
     value: { v: 1 as const, order: colOrderIds, hidden: [], sig: 'traces-list' },
     onChange: (m: { order: string[] }) => applyColOrder(m.order),
-  }), [colOrderIds, applyColOrder]);
+  };
   const columns: DataTableColumn<TraceRow>[] = useMemo(() =>
     colIds.map(id => {
       const server = SERVER_SORTABLE[id];
@@ -1235,18 +1243,18 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   // Sync the shared table's sort → the SERVER query. The header click flips
   // dt.sort; we translate it into the server sort/order + reset the page. Guard
   // on a genuine difference so we don't loop with our own initialSort.
-  useEffect(() => {
-    const id = dt.sort.id;
+  // Yalnız başlık sıralaması değişince; o anki sort/order useEffectEvent'ten.
+  const syncServerSort = useEffectEvent((id: string | null | undefined, dir: SortOrder) => {
     if (!id) return;
     const server = SERVER_SORTABLE[id];
     if (!server) return;
-    if (server !== sort || dt.sort.dir !== order) {
+    if (server !== sort || dir !== order) {
       setSort(server);
-      setOrder(dt.sort.dir);
+      setOrder(dir);
       setPage(0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dt.sort.id, dt.sort.dir]);
+  });
+  useEffect(() => { syncServerSort(dt.sort.id, dt.sort.dir); }, [dt.sort.id, dt.sort.dir]);
 
   // v0.10.967 — tablo standardı T12 (dilim 5, P-1): liste ve toplu görünüm
   // tablolarının yükleniyor / hata / boş hâlleri tablonun İÇİNDE, başlık
@@ -1757,20 +1765,20 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                   <Fragment>
                     {dt.visibleColumns.map(({ id }) => {
                       // v0.10.330 — K8s hücreleri artık düz metin (kendi <a>'sı yok) → satır
-                      // linkine diğer hücreler gibi sarılır; ölü hücre kalmaz.
-                      const ownLink = false;
+                      // linkine diğer hücreler gibi sarılır; ölü hücre kalmaz (her hücre
+                      // satır linkli; sabit "kendi linki yok" dalı React Compiler için söküldü).
                       const cell = renderTraceCell(id, t, visibleMax, k8sOn, filter.op, serviceScoped, lang);
                       // v0.10.723 — sola sabit hücre: sınıf + kümülatif left (Endpoints deseni).
                       const stickyL = leftOffs[id];
                       return (
                         <td key={id} onMouseEnter={() => prefetchTrace(t.traceId)}
-                          className={[ownLink ? '' : 'row-cell', stickyL !== undefined ? 'sticky-left' : ''].filter(Boolean).join(' ') || undefined}
+                          className={stickyL !== undefined ? 'row-cell sticky-left' : 'row-cell'}
                           // v0.10.922 (sade palet adım 1) — hatalı satırın kırmızı zemin
                           // tonu SÖKÜLDÜ: aynı gerçeği STATUS'taki ERROR rozeti zaten
                           // söylüyor (bir gerçek = bir sinyal). Sabit hücrenin opak
                           // zemini globals.css td.sticky-left (--bg1) kuralından gelir.
                           style={{ left: stickyL }}>
-                          {ownLink ? cell : <Link to={href} state={{ from: loc.pathname + loc.search }} className={id === 'operation' ? 'row-link row-link--name' : 'row-link'}>{cell}</Link>}
+                          <Link to={href} state={{ from: loc.pathname + loc.search }} className={id === 'operation' ? 'row-link row-link--name' : 'row-link'}>{cell}</Link>
                           {/* v0.10.2116 (operatör kararı 2026-11-13) — satır-içi kiosk ⧉
                               düğmesi KALDIRILDI; kiosk girişi yalnız trace detayında
                               (Trace.tsx kimlik menüsü). */}
@@ -2084,13 +2092,24 @@ const TRACES_OWNED_PARAMS = [
 ] as const;
 
 export default function TracesPage() {
+  'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   const { search } = useLocation();
-  const selfWriteSigRef = useRef<string | null>(null);
-  const keyRef = useRef<UrlKeyState | null>(null);
+  // Ref yerine state: render'da okunuyor. İç sayfa onSelfWrite'ı navigate'ten
+  // hemen önce aynı effect'te çağırır → konum güncellemesiyle aynı yığında
+  // işlenir (ref'in "bir sonraki render görür" sözleşmesinin aynısı).
+  const [selfWriteSig, setSelfWriteSig] = useState<string | null>(null);
   const onSelfWrite = useCallback((next: string) => {
-    selfWriteSigRef.current = ownedParamSig(next, TRACES_OWNED_PARAMS);
+    setSelfWriteSig(ownedParamSig(next, TRACES_OWNED_PARAMS));
   }, []);
-  keyRef.current = nextUrlRemountKey(keyRef.current, ownedParamSig(search, TRACES_OWNED_PARAMS), selfWriteSigRef.current);
+  // Önceki render'ın anahtar durumu (React'in "önceki prop'u sakla" kalıbı:
+  // render sırasında koşullu setState, ref değil).
+  const sig = ownedParamSig(search, TRACES_OWNED_PARAMS);
+  const [keyState, setKeyState] = useState<UrlKeyState>(() => nextUrlRemountKey(null, sig, null));
+  let key = keyState;
+  if (keyState.sig !== sig) {
+    key = nextUrlRemountKey(keyState, sig, selfWriteSig);
+    setKeyState(key);
+  }
   // v0.10.1423 — eski Trace ID kutusunun `?traceId=` derin bağlantısı BİR KEZ
   // okunur: 32-hex → /trace?id=…, başka kimlik → `?search=`; param düşer
   // (replace — geri tuşu bu ara durağa dönmez). İç sayfa onu hiç görmez.
@@ -2098,7 +2117,7 @@ export default function TracesPage() {
   if (legacy) return <Navigate to={legacy} replace />;
   return (
     <Suspense fallback={<Spinner />}>
-      <TracesPageInner key={keyRef.current.key} onSelfWrite={onSelfWrite} />
+      <TracesPageInner key={key.key} onSelfWrite={onSelfWrite} />
     </Suspense>
   );
 }
