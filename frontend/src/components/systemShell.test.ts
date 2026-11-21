@@ -17,6 +17,7 @@
 // "sayfanın başlığı görünsün" diye bir `<Topbar>` eklemek çok kolay ve
 // sonucu ekranda İKİ topbar olur.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
@@ -138,7 +139,7 @@ describe('D4 — /system/* kabuk hizalaması', () => {
   // yüksekliğinde kalıyor ve `height: 100%` isteyen sekme gövdeleri
   // (SQL Console) AUTO'ya çöküyor.
   it('sys-layout içerik kolonunu geriyor', () => {
-    const css = readFileSync(join(SRC, 'styles/globals.css'), 'utf8');
+    const css = readLegacyCss();
     expect(css).toMatch(/\.sys-layout \{[^}]*min-height: 100%/);
     expect(css).toMatch(/\.sys-content \{[^}]*align-self: stretch/);
   });

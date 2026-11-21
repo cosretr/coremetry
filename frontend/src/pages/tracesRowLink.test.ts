@@ -14,12 +14,13 @@
 // linklerini taşır ve satır linkine SARILMAZ (ownLink dalı). Dal kaybolursa
 // tarayıcı iç <a>'yı dışarı taşır, entity linki satır linkini keser.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const SRC = resolve(__dirname, '..');
 const traces = () => readFileSync(resolve(SRC, 'pages/Traces.tsx'), 'utf8');
-const css = () => readFileSync(resolve(SRC, 'styles/globals.css'), 'utf8');
+const css = () => readLegacyCss();
 
 describe('/traces satırı gerçek bir link', () => {
   it('hücreler <Link className="row-link"> ile sarılı, td onClick→navigate yok', () => {

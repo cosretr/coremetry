@@ -2,6 +2,7 @@ import {
   useCallback, useEffect, useId, useLayoutEffect, useRef, useState,
   type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject, type TextareaHTMLAttributes,
 } from 'react';
+import '@/styles/cosreChat.css';
 import { Bold, Brain, Code, FileCode, Eye, Italic, Link as LinkIcon, List, ListOrdered, SquareCode, TextQuote, type LucideIcon } from 'lucide-react';
 import { IconButton } from '@/components/ui/IconButton';
 import { Button } from '@/components/ui/Button';

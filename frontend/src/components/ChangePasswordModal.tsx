@@ -1,6 +1,9 @@
 import { useState, FormEvent } from 'react';
 import { api } from '@/lib/api';
-import { Modal, Field, Button, Stack } from '@/components/ui';
+import { Modal } from '@/components/ui/Modal';
+import { Field } from '@/components/ui/Field';
+import { Button } from '@/components/ui/Button';
+import { Stack } from '@/components/ui/Stack';
 
 // Refactored to lean on the new ui/ primitives — Modal handles
 // focus-trap + ESC + backdrop, Field carries label/hint/error

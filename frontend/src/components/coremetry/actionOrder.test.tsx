@@ -20,6 +20,7 @@
 //      `confirm`in gerçekten en sağda, `destructive`in en solda
 //      render edildiğini ölçüyor. Saf bir prop testi bunu ölçmezdi.
 import { describe, it, expect, afterEach } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -188,7 +189,7 @@ describe('K5-B — ActionRow sırayı YAPIDAN alıyor', () => {
     // ANINDA bastığı sınıf statik taramanın kör noktası. CSS aynı
     // commit'te gelmezse satır sola yaslı kalır ve düzeltme sessizce
     // hiçbir şey yapmaz.
-    const css = readFileSync(join(SRC, 'styles/globals.css'), 'utf8');
+    const css = readLegacyCss();
     for (const cls of ['.action-row', '.action-row.is-inline', '.action-row-gap']) {
       expect(css.includes(cls + ' '), `${cls} tanımsız`).toBe(true);
     }

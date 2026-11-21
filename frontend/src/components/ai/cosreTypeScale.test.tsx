@@ -14,10 +14,11 @@ import { resolve } from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { CosreSidebar } from './CosreSidebar';
 import type { AiConversationSummary } from '@/lib/types';
 
-const CSS = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8')
+const CSS = readLegacyCss()
   .replace(/\/\*[\s\S]*?\*\//g, '');
 const CHAT = readFileSync(resolve(__dirname, '../CopilotChat.tsx'), 'utf8');
 

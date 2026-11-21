@@ -140,7 +140,15 @@ export default defineConfig({
             // grafana'yı, grafana ai'yi çekmez.
             { name: 'zod', test: /node_modules\/zod[\/]/, priority: 91 },
             { name: 'ai', test: /node_modules\/(ai|@ai-sdk|swr|throttleit|@standard-schema|eventsource-parser|@vercel\/oidc|json-schema|use-stick-to-bottom)[\/]/, priority: 88 },
-            { name: 'vendor', test: /node_modules/, priority: 10 },
+            // v0.10.2427 — node_modules catch-all (`vendor`, priority 10) KALDIRILDI:
+            // tek grup olduğu için yalnız tembel sayfaların kullandığı lucide
+            // ikonlarını (95 dosya) + virtual-core'u eager vendor chunk'ına
+            // topluyor, index.html modulepreload'ıyla ilk yüke bindiriyordu
+            // (27 KB gz). Grupsuz node_modules artık rolldown'ın varsayılanıyla
+            // tüketicisinin chunk'ına düşer: kabuğun kullandığı ilk yükte,
+            // gerisi tembel. Yukarıdaki gruplar (radix/ai/zod/grafana/charts)
+            // tembel kalmak için hâlâ şart; bundleBudget.pin catch-all'ın
+            // geri gelmesini yasaklar.
           ],
         },
       },

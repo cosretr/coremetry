@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
+import '@/styles/cosreChat.css';
 import { CopilotChat } from '@/components/CopilotChat';
 import { Spinner } from '@/components/Spinner';
 import { useCopilotConfig } from '@/components/ai/useCopilotEnabled';

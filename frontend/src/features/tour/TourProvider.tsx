@@ -31,7 +31,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/components/AuthProvider';
-import { StatTile } from '@/components/ui';
+import { StatTile } from '@/components/ui/StatTile';
 import { loadCopilotConfig } from '@/components/ai/useCopilotEnabled';
 import { emitAiPrefill } from '@/components/ai/aiEvents';
 import { api } from '@/lib/api';

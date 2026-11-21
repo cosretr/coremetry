@@ -3,9 +3,10 @@
 // hücrenin min-content genişliğini tek harfe indiriyordu; kısa başlıklı
 // kolonlar sıkışıp "AKTİF" AKTİ/F, "1526" 152/6 diye kırılıyordu.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 
-const css = readFileSync(new URL('./globals.css', import.meta.url), 'utf8');
+const css = readLegacyCss();
 const rules = (sel: string) => {
   const esc = sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return Array.from(css.matchAll(new RegExp(`(?:^|\\n)${esc}\\s*\\{([^}]*)\\}`, 'g'))).map(m => m[1]);

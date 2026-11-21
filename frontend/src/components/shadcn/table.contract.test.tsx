@@ -6,10 +6,9 @@
 // sabit h-10 / p-2 değil. data-slot her parçada (globals.css'in eleman
 // kuralları `:where(:not([data-slot]))` ile bunları atlıyor, R4).
 import { describe, it, expect, afterEach } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './table';
 
 let host: HTMLDivElement | null = null;
@@ -42,7 +41,7 @@ describe('shadcn Table — yoğunluk ritmi', () => {
   });
 
   it('--row-h her yoğunlukta globals.css\'te tanımlı (36 / 24 / 20)', () => {
-    const g = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8');
+    const g = readLegacyCss();
     expect(g).toMatch(/--row-h: 36px;/);
     expect(g).toMatch(/\[data-density="compact"\] \{ --row-h: 24px;/);
     expect(g).toMatch(/\[data-density="dense"\] \{ --row-h: 20px;/);

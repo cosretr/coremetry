@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
@@ -10,7 +11,7 @@ import { resolve, join } from 'node:path';
 // dayandığı YAPISAL varsayımlar: bunlar bozulursa sticky sessizce
 // çalışmaz ve kimse fark etmez.
 
-const css = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8')
+const css = readLegacyCss()
   .replace(/\/\*[\s\S]*?\*\//g, ''); // yorumlar önce sıyrılır: açıklama kuralı alıntılıyor
 
 function block(sel: string): string {

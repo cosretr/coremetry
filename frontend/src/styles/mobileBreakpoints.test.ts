@@ -19,10 +19,11 @@
 // (`@media (max-width: var(--bp-sm))` geçersizdir), bu yüzden sayılar
 // elle yazılmak ZORUNDA. Tek kaynak disiplinini o yüzden test taşıyor.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
-const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const CSS = readLegacyCss();
 const SRC = resolve(__dirname, '..');
 
 const ALLOWED = new Set([640, 1024, 1280]);

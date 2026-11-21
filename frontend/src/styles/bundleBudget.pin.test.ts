@@ -5,14 +5,14 @@ import { resolve } from 'node:path';
 // bundleBudget.pin — v0.10.1609 (shadcn Faz 1 R2, plan §1.3). İlk-yük
 // kapısı üç parçadan oluşur ve biri kablosuz kalırsa kapı YEŞİL ama
 // işe yaramaz ("test edilmiş ama ulaşılamaz"): vite.config.ts'teki
-// radix/toast grupları (Radix eager vendor catch-all'ına düşmesin),
+// radix/toast grupları (Radix tembel kalsın; catch-all yok, v0.10.2427),
 // sourcemap (betik sources[] tarar), betiğin yasak regex'i + bütçesi,
 // CI adımı ve npm betiği, ve kabuğun no-restricted-imports bloğu.
 const FE = resolve(__dirname, '..', '..');
 const read = (p: string) => readFileSync(resolve(FE, p), 'utf8');
 
 describe('bundle bütçe kapısı kablolu', () => {
-  it('vite.config.ts: radix + toast grupları catch-all üstünde, sourcemap açık', () => {
+  it('vite.config.ts: radix + toast grupları catch-all yok, sourcemap açık', () => {
     const cfg = read('vite.config.ts');
     expect(cfg).toContain("{ name: 'toast', test: /node_modules\\/sonner[\\/]/, priority: 86 },");
     // v0.10.1613 (R5, §12 Q8 + operatör): `radix-ui` tek paketi; öncelik 92 =
@@ -24,14 +24,16 @@ describe('bundle bütçe kapısı kablolu', () => {
     expect(prio('radix')).toBeGreaterThan(prio('grafana'));
     expect(prio('radix')).toBeLessThan(prio('charts'));
     expect(cfg).toMatch(/sourcemap:\s*true/);
-    // Gruplar catch-all'dan ÖNCE tanımlı (sıra okunabilirlik; öncelik sayısı bağlayıcı).
-    expect(cfg.indexOf("name: 'radix'")).toBeLessThan(cfg.indexOf("{ name: 'vendor', test: /node_modules/, priority: 10 }"));
+    // v0.10.2427: node_modules catch-all (`vendor`, 10) KALDIRILDI — tek grup
+    // olduğundan yalnız tembel sayfaların lucide ikonlarını + virtual-core'u
+    // eager vendor chunk'ına topluyordu (~13 KB gz ilk yük). Geri gelmesin.
+    expect(cfg).not.toMatch(/name: 'vendor', test: \/node_modules\/, priority/);
   });
 
   // v0.10.1647 (CoSRE v2 Faz 2b B1, plan §1.3 / §5.3): AI SDK kapanışı kendi
   // tembel grubunda; grafana (90) altı, 80'li grupların (otel @opentelemetry/api
-  // dahil) üstü. Grupsuz kalırsa eager vendor catch-all'ına düşer.
-  it('vite.config.ts: ai grubu regex\'i + öncelik 88 + ayrı zod grubu (91), catch-all üstünde', () => {
+  // dahil) üstü.
+  it('vite.config.ts: ai grubu regex\'i + öncelik 88 + ayrı zod grubu (91)', () => {
     const cfg = read('vite.config.ts');
     expect(cfg).toContain(
       "{ name: 'ai', test: /node_modules\\/(ai|@ai-sdk|swr|throttleit|@standard-schema|eventsource-parser|@vercel\\/oidc|json-schema|use-stick-to-bottom)[\\/]/, priority: 88 },",
@@ -44,18 +46,17 @@ describe('bundle bütçe kapısı kablolu', () => {
     expect(prio('ai')).toBe(88);
     expect(prio('ai')).toBeLessThan(prio('grafana'));
     expect(prio('ai')).toBeGreaterThan(prio('otel'));
-    expect(cfg.indexOf("name: 'ai'")).toBeLessThan(cfg.indexOf("{ name: 'vendor', test: /node_modules/, priority: 10 }"));
     const re = /node_modules\/(ai|@ai-sdk|swr|throttleit|@standard-schema|eventsource-parser|@vercel\/oidc|json-schema|use-stick-to-bottom)[/]/;
     for (const p of ['node_modules/ai/dist/index.mjs', 'node_modules/@ai-sdk/provider-utils/dist/index.mjs', 'node_modules/json-schema/lib/validate.js']) expect(re.test(p), p).toBe(true);
     for (const p of ['node_modules/zod/v4/index.js', 'node_modules/aria-hidden/dist/index.js', 'node_modules/json-schema-traverse/index.js', 'node_modules/@opentelemetry/api/build/index.js']) expect(re.test(p), p).toBe(false);
   });
 
-  it('scripts/bundle-budget.mjs: yasak kaynak regex\'i, 207 KB, zlib, index.html kümesi', () => {
+  it('scripts/bundle-budget.mjs: yasak kaynak regex\'i, 164 KB, zlib, index.html kümesi', () => {
     const s = read('scripts/bundle-budget.mjs');
     expect(s).toContain('/node_modules\\/(radix-ui|@radix-ui|cmdk|sonner|@floating-ui|react-remove-scroll|aria-hidden|use-sidecar|use-callback-ref|react-style-singleton|get-nonce|detect-node-es)\\//');
     expect(s).toContain('/src\\/components\\/shadcn\\//');
-    expect(s).toContain('process.env.BUNDLE_BUDGET_KB || 207');
-    expect(s).toContain('process.env.CSS_BUDGET_KB || 54'); // v0.10.2400 — CSS cırcırı (yalnız aşağı)
+    expect(s).toContain('process.env.BUNDLE_BUDGET_KB || 164'); // v0.10.2427 — 205.2 → 161.6 KB (yalnız aşağı)
+    expect(s).toContain('process.env.CSS_BUDGET_KB || 50'); // v0.10.2427 — 54.0 → 49.3 KB (cırcır, yalnız aşağı)
     expect(s).toContain('gzipSync(buf)');
     expect(s).toContain("'modulepreload'");
     expect(s).toContain("'bundle-budget.txt'");

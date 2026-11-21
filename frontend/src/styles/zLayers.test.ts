@@ -16,10 +16,11 @@
 // değişirse bu bir davranış kararıdır ve testi güncellemek gerekir —
 // tam da istenen sürtünme.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
-const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const CSS = readLegacyCss();
 const SRC = resolve(__dirname, '..');
 
 // `-` regex'te kelime sınırı DEĞİL: `\b--z-drawer\b` `--z-drawer-panel`in

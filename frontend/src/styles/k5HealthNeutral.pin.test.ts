@@ -19,12 +19,13 @@
 // Neden ayrı kapı: bunların hiçbiri tsc/colorLeaks/undefinedCssRefs'e
 // takılmaz — `var(--ok)` geçerli bir token, kural da geçerli CSS.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { THEME_IDS } from '../lib/themeRegistry';
 import { hexDecls, themeBlockBody } from './themeBlocks';
 
-const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const CSS = readLegacyCss();
 
 // Yorumları BOŞALT (satır korunur): gerekçe yorumlarında `var(--ok)` geçiyor.
 const CLEAN = CSS.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '));

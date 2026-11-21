@@ -8,13 +8,14 @@
 // kullanan her kural onu okur (uygulama geneli, yalnız Traces değil).
 
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { readdirSync, statSync } from 'node:fs';
 import { THEME_IDS, byTheme, type Theme } from '../lib/themeRegistry';
 import { themeBlockBody } from './themeBlocks';
 
-const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+const CSS = readLegacyCss().replace(/\/\*[\s\S]*?\*\//g, '');
 
 function block(re: RegExp): string {
   const m = re.exec(CSS);

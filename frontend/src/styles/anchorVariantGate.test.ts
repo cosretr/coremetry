@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
@@ -25,7 +26,7 @@ import { resolve, join } from 'node:path';
 // globals.css'te BULUNMALI. Kapı ikinci yarıyı hatırlatır; ne yapacağını
 // değil, var olup olmadığını denetler.
 const SRC = resolve(__dirname, '..');
-const CSS = readFileSync(resolve(SRC, 'styles', 'globals.css'), 'utf8');
+const CSS = readLegacyCss();
 
 // Yalnız BUTON varyantları — düzen/yardımcı sınıfları (`mono`, `badge`,
 // `tab`, sayfaya özel adlar) bu sözleşmenin dışında; onların anchor

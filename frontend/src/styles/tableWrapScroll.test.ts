@@ -6,12 +6,13 @@
 // tablo kabı `is-scroll` taşır ve `is-scroll` kabın kendisini kaydırır
 // (yapışkan başlık da oradan gelir).
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { stripTsComments } from './zLayers.test';
 
 const SRC = resolve(__dirname, '..');
-const css = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const css = readLegacyCss();
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir)) {

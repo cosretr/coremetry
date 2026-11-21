@@ -13,6 +13,7 @@
 // (CosreChatV2). Bu dosya sunumsal kalır (katalog statik içerikle çizer).
 // components/ui'den HİÇBİR şey içe aktarılmaz (uiImportRatchet, ui/ donmuş).
 import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import '@/styles/cosreChat.css';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/coremetry/overlay';
 import { AiMark } from '@/components/ai/CopilotFab';
 import { isEmptyAreaClick } from '@/lib/emptyAreaClose';

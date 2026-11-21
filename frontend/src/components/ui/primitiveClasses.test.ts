@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
@@ -107,7 +108,7 @@ describe('primitiveClasses — atomun bastığı her sınıfın CSS karşılığ
     // Nokta iddia: haritada VAR olmaları yetmez, kuralın `button.` ön ekiyle
     // yazılmış olması gerekir — `.xs` diye serbest bir sınıf, element-seviyesi
     // `button` kuralının özgüllüğünü (0,1,1 vs 0,0,1) yenemezdi.
-    const css = stripComments(readFileSync(resolve(SRC, 'styles/globals.css'), 'utf8'));
+    const css = stripComments(readLegacyCss());
     expect(css).toMatch(/button\.xs\s*\{/);
     expect(css).toMatch(/button\.ghost-danger\s*\{/);
   });
@@ -203,7 +204,7 @@ describe('primitiveClasses — atomun bastığı her sınıfın CSS karşılığ
   // desenini (`const classes = [...]`) bırakıp sahiplik kapısından da
   // kaçmıştı.
   it('primitif :hover kuralları arka planı geri bildiriyor (button:hover kaçağı)', () => {
-    const css = stripComments(readFileSync(resolve(SRC, 'styles/globals.css'), 'utf8'));
+    const css = stripComments(readLegacyCss());
 
     // Kaçağın KAYNAĞI hâlâ orada mı? Kural kaldırılmışsa bu kapı gereksiz
     // yere kısıtlıyor demektir — o zaman burası kırmızıya dönüp haber verir.
@@ -263,7 +264,7 @@ describe('primitiveClasses — atomun bastığı her sınıfın CSS karşılığ
     // (`.spinner` ve `button.sm`), dolayısıyla o kapı yeşil. Ama BİLEŞİK
     // kural yoksa spinner 14px kalır, `sm` butonun satır kutusu 11px'tir ve
     // buton istek sırasında ZIPLAR. Bileşik seçiciyi ayrıca yokluyoruz.
-    const css = stripComments(readFileSync(resolve(SRC, 'styles/globals.css'), 'utf8'));
+    const css = stripComments(readLegacyCss());
     expect(css).toMatch(/\.spinner\.sm\s*\{/);
     const btn = stripComments(readFileSync(join(UI, 'Button.tsx'), 'utf8'));
     expect(btn).toMatch(/className="spinner sm"/);

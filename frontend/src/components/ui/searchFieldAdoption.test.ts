@@ -13,6 +13,7 @@
 // gürültüye dönerdi. Liste yalnız BÜYÜR: bir yüzey atomdan geri
 // çıkarsa kapı haber verir.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { stripTsComments } from '../../styles/zLayers.test';
@@ -50,7 +51,7 @@ const DELIBERATELY_OUT: Record<string, string> = {
 
 describe('M8 — SearchField atomu', () => {
   const atom = read('components/ui/SearchField.tsx');
-  const css = readFileSync(join(SRC, 'styles/globals.css'), 'utf8');
+  const css = readLegacyCss();
 
   it('type="search" atomda SABİT — çağıran düşüremez', () => {
     // L2: depoda `type="search"` TEK bir inputta vardı. Mobil klavyede

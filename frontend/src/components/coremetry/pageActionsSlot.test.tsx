@@ -14,6 +14,7 @@
 //      yukarı çıkamıyor (ratchet).
 //   C) CSS — yuva kuralları ve telefon katmanı.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -265,7 +266,7 @@ describe('v0.10.1319 K1 — sayfa özel çiviler', () => {
 // ── C) CSS ────────────────────────────────────────────────────────────
 describe('v0.10.1319 K1 — CSS yuva kuralları', () => {
   // v0.10.1611 — öğe kuralları `:where(:not([data-slot]))` korumalı; taban seçiciyle oku.
-  const css = read('styles/globals.css').replace(/\/\*[\s\S]*?\*\//g, '').split(':where(:not([data-slot]))').join('');
+  const css = readLegacyCss().replace(/\/\*[\s\S]*?\*\//g, '').split(':where(:not([data-slot]))').join('');
   const rule = (sel: string) => {
     const i = css.indexOf(sel + ' {');
     return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
@@ -306,7 +307,7 @@ describe('v0.10.1319 K1 — CSS yuva kuralları', () => {
 // filtre barı butonları birebir eskisi gibi küçülür.
 describe('v0.10.1322 — yoğunluk: eylem yuvası md kalıyor', () => {
   // v0.10.1611 — öğe kuralları `:where(:not([data-slot]))` korumalı; taban seçiciyle oku.
-  const css = read('styles/globals.css').replace(/\/\*[\s\S]*?\*\//g, '').split(':where(:not([data-slot]))').join('');
+  const css = readLegacyCss().replace(/\/\*[\s\S]*?\*\//g, '').split(':where(:not([data-slot]))').join('');
   const PHONE = css.indexOf('@media (max-width: 640px)');
   // Taban katmandaki (telefon katmanından önce) kurallar: [seçiciler, gövde].
   const baseRules = (): Array<{ sels: string[]; body: string }> => {

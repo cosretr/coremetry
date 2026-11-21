@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
@@ -39,7 +40,7 @@ function readCss() {
   // Blok yorumları ŞART: bu kuralların gerekçeleri CSS'te yorum olarak
   // duruyor ve "position: sticky" dizgisi oralarda da geçiyor. Sıyırmazsam
   // test kendi açıklamasını kural sanar (bu kod tabanında altı kez ısırdı).
-  return readFileSync(resolve(SRC, 'styles/globals.css'), 'utf8')
+  return readLegacyCss()
     .replace(/\/\*[\s\S]*?\*\//g, '');
 }
 

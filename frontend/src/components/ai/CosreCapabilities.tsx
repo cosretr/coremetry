@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import '@/styles/cosreChat.css';
 import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Bug, Search, Users, Workflow, type LucideIcon } from 'lucide-react';

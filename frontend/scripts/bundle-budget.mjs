@@ -4,7 +4,8 @@
 // Ölçülen şey TARAYICININ ilk yükü: dist/index.html'deki
 // <script type="module" src> + her <link rel="modulepreload" href>.
 // Kural (audit §11 "Bütçe"): ilk yükün JS gz toplamı ≤ BUNDLE_BUDGET_KB
-// (varsayılan 207 — v0.10.2407 react-router 7 +5 KB; v0.10.2403 TR kataloğu tembel: 272.7 → ~201 KB; önce 278 —
+// (varsayılan 164 — v0.10.2427 kabuk ui-barrel derin import + node_modules
+// catch-all kaldırıldı: 205.2 → 161.6 KB, +2.4 KB pay; önce 207 — v0.10.2407 react-router 7 +5 KB; v0.10.2403 TR kataloğu tembel: 272.7 → ~201 KB; önce 278 —
 // v0.10.2348 kabuk derin import'larıyla 291 → 271 KB,
 // +7 KB pay) ve bu kümedeki HİÇBİR chunk'ın sourcemap'inde
 // Radix / cmdk / sonner / floating-ui / components/shadcn kaynağı yok.
@@ -24,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
-const BUDGET_KB = Number(process.env.BUNDLE_BUDGET_KB || 207);
+const BUDGET_KB = Number(process.env.BUNDLE_BUDGET_KB || 164);
 // Yazı tipi bütçesi (v0.10.1620, audit §13; operatör): JS bütçesine SAYILMAZ,
 // ayrı satır. YÖNTEM (çivili, bundleBudget.pin): giriş sayfasının
 // <link rel="stylesheet"> CSS'lerinin url(…woff2) ile başvurduğu dosyaların
@@ -41,7 +42,8 @@ const FONT_BUDGET_KB = Number(process.env.FONT_BUDGET_KB || 190);
 // <link rel="stylesheet"> CSS'lerinin gz toplamı (JS'le aynı yöntem). Yalnız
 // AŞAĞI yönlü cırcır: ölçülen + küçük pay; artış = açık operatör kararı.
 // v0.10.2400: globals.css yetim sınıflar silindi → ölçülen 53.6 KB (önce ~54.3).
-const CSS_BUDGET_KB = Number(process.env.CSS_BUDGET_KB || 54);
+// v0.10.2427: CoSRE sohbet kuralları tembel cosreChat.css'e → 54.0 → 49.3 KB.
+const CSS_BUDGET_KB = Number(process.env.CSS_BUDGET_KB || 50);
 const FONT_SUBSET_OK = /-(latin|latin-ext)-wght-normal-[\w-]+\.woff2$/;
 
 // Yasak kaynaklar (plan §1.3 adım 3). v0.10.1613 (R5, §12 Q8): paketleme

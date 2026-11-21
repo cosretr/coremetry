@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { THEME_REGISTRY, THEME_IDS, SERIES_PALETTE_SETS, isThemeId } from '../lib/themeRegistry';
@@ -14,7 +15,7 @@ import { THEME_TOKENS, decls, hexDecls, themeBlockBody, themeRules } from './the
 //   · color-scheme = kayıttaki scheme; meta theme-color = blok --bg0;
 //   · seri: her tema tam bir tokens.css seri kuralında, 8 değer = JS paleti.
 const STYLES = __dirname;
-const GLOBALS = readFileSync(resolve(STYLES, 'globals.css'), 'utf8');
+const GLOBALS = readLegacyCss();
 const TOKENS = readFileSync(resolve(STYLES, 'tokens.css'), 'utf8');
 
 describe('tema kaydı ↔ globals.css blokları', () => {

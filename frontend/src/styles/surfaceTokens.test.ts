@@ -22,10 +22,11 @@
 // devralınan v0.9.887 dersi: satıra bağlı muafiyet bir import
 // eklenince kayar).
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const CSS = readLegacyCss();
 
 // Yorumları BOŞALT, silme — satır numaraları rapora giriyor ve
 // yorumların İÇİNDEKİ örnek kodlar kural sanılmamalı (depoda yedi kez

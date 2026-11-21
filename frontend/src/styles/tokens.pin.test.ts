@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { SERIES_PALETTES } from '../lib/chartFmt';
@@ -16,7 +17,7 @@ const SRC = resolve(STYLES, '..');
 const FE = resolve(SRC, '..');
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '');
 const TOKENS = strip(readFileSync(resolve(STYLES, 'tokens.css'), 'utf8'));
-const GLOBALS = strip(readFileSync(resolve(STYLES, 'globals.css'), 'utf8'));
+const GLOBALS = strip(readLegacyCss());
 const CHART = strip(readFileSync(resolve(STYLES, 'chart.css'), 'utf8'));
 const INDEX = strip(readFileSync(resolve(STYLES, 'index.css'), 'utf8'));
 

@@ -19,10 +19,11 @@
 // alakasız bir yerde kırmızıya döner). Bir muafiyet, gerekçesi
 // ortadan kalktığında ÇIKARILMALI.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const CSS = readLegacyCss();
 
 // Yorumları BOŞALT, silme — satır numaraları rapora giriyor.
 function stripComments(src: string): string {

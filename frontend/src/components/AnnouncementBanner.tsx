@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { SafeHref } from '@/components/ui/SafeHref'; // v0.10.1315 — olay/katalog linki XSS kapısı
 import { useState } from 'react';
-import { Button } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
 import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
 import { shouldShowAnnouncement, announcementDismissValue, type AnnouncementView } from '@/lib/announcement';

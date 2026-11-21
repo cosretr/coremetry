@@ -12,6 +12,7 @@
 // ULAŞILAMAZ yapar — v0.9.923'te sidebar kullanıcı menüsü tam bu
 // durumdaydı.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -33,7 +34,7 @@ describe('kabuk tetikleri klavyeyle erişilebilir', () => {
     // (özgüllük 0,2,1) bir :hover kuralıdır; sınıfın (0,1,0) taban
     // bildirimi onu yenemez. Modifier :hover'ı background yazmazsa
     // buton üstüne gelindiğinde DOLU MAVİ olur.
-    const css = readFileSync(resolve(SRC, 'styles/globals.css'), 'utf8');
+    const css = readLegacyCss();
     const HOVER = ':hover' + ':not\\(:disabled\\)';
     const m = new RegExp(`\\.sb-user-trigger${HOVER}\\s*\\{[^}]*background`).exec(css);
     expect(m, 'hover kuralı background bildirmiyor → element kuralı kazanır').not.toBeNull();
@@ -42,7 +43,7 @@ describe('kabuk tetikleri klavyeyle erişilebilir', () => {
   it('element seviyesi buton hover kuralı hâlâ var (kısıt hâlâ gerekli)', () => {
     // Kural kaldırılırsa yukarıdaki zorunluluk gereksiz kalır; kapı
     // gereksiz yere kısıtlıyor olmasın diye haber versin.
-    const css = readFileSync(resolve(SRC, 'styles/globals.css'), 'utf8');
+    const css = readLegacyCss();
     expect(css.includes('button:hover:not(:disabled)')).toBe(true);
   });
 });

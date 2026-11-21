@@ -14,6 +14,7 @@
 //     O CSS varsayımı da burada çivili: bir `.cm-steps-t td` kuralı sarmayı
 //     açarsa rozetler alt alta düşer.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { jsxOpenTags } from '@/styles/jsxTags';
@@ -78,7 +79,7 @@ describe('T5/T11 — ChatBubble adım tablosu: tek satırlık CSS\'ten', () => {
   });
 
   it('`tbody td` nowrap; hiçbir `.cm-steps*` hücre kuralı sarmayı açmıyor', () => {
-    const css = readFileSync(resolve(SRC, 'styles/globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const css = readLegacyCss().replace(/\/\*[\s\S]*?\*\//g, '');
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(m => ({
       sels: m[1].split(',').map(x => x.trim().replace(/\s+/g, ' ')),
       body: m[2],

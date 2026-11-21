@@ -6,11 +6,12 @@
 // globals.css'te yalnız o token'la tanımlı ve hücre bilinmeyen restart'ı
 // eskisi gibi soluk basar.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { restartColor, restartToneClass } from './thresholds';
 
-const css = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8');
+const css = readLegacyCss();
 const TOKEN_OF: Record<ReturnType<typeof restartToneClass>, string> = {
   'cell-err': 'var(--err)',
   'cell-warn': 'var(--warn)',

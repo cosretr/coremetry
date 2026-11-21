@@ -30,6 +30,7 @@
 //   • Bilinmeyen parça çizilmez (çökmez).
 // Sunumsal: Chat örneği yok (katalog ve testler statik mesajla da çizer).
 import { useMemo } from 'react';
+import '@/styles/cosreChat.css';
 import { ChatBubble, ChatBubbleSlotsContext, type ChatBubbleSlots } from '@/components/ai/ChatBubble';
 import { MessageNote } from '@/components/ai/EvidenceRelevance';
 import { AiThinking } from '@/components/ai/AiThinking';

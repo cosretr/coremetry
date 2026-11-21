@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { Button } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
 
 // ErrorBoundary — last-resort guard around the route tree.
 // React doesn't have a hooks-based equivalent, so this remains

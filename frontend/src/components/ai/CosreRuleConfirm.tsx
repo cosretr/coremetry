@@ -5,6 +5,7 @@
 // çağırır (editör+, audit) — tıklanmadan hiçbir şey kaydedilmez. Viewer kartı
 // görür, düğme sunucunun gerekçesiyle kapalı (canSave=false).
 import { useId, useMemo, useState } from 'react';
+import '@/styles/cosreChat.css';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button, SelectField, TextareaField } from '@/components/ui';
 import { api } from '@/lib/api';

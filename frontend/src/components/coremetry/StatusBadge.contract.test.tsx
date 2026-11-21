@@ -2,6 +2,7 @@
 //
 // StatusBadge sözleşmesi — v0.10.1616 (shadcn Faz 1 R8, plan §6).
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { readFileSync } from 'node:fs';
@@ -58,7 +59,7 @@ describe('StatusBadge', () => {
   });
 
   it('ölçü bugünkü .badge ile aynı: globals.css 11px / 2px 8px, compact 9px / 1px 5px, dense 8px / 1px 4px', () => {
-    const g = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8');
+    const g = readLegacyCss();
     expect(g).toMatch(/\.badge \{[^}]*padding: 2px 8px;[^}]*font-size: 11px; font-weight: 700;/);
     expect(g).toContain('[data-density="compact"] .badge { font-size: 9px; padding: 1px 5px; }');
     expect(g).toContain('[data-density="dense"] .badge { font-size: 8px; padding: 1px 4px; }');

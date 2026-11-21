@@ -6,6 +6,7 @@
 // yalnız kartı kapatır (sunucuya istek yok; sunucu aynı konuşmada öneriyi
 // yinelemez).
 import { useState } from 'react';
+import '@/styles/cosreChat.css';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/shadcn/button';
 import { api } from '@/lib/api';

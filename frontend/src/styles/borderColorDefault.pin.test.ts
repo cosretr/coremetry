@@ -5,8 +5,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 
-const G = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const G = readLegacyCss();
 const INDEX = readFileSync(resolve(__dirname, 'index.css'), 'utf8');
 const RULE = '*, ::before, ::after, ::backdrop, ::file-selector-button { border-color: var(--border); }';
 

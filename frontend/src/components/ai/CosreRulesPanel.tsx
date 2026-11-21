@@ -6,6 +6,7 @@
 // başka bir editör arada yazdıysa sunucu 409 döner → liste yenilenir, uyarı.
 // ≤200 kural (sunucu tavanı) → istemci sıralaması meşru, sanallaştırma yok.
 import { useMemo, useState, type FormEvent } from 'react';
+import '@/styles/cosreChat.css';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button, ButtonGroup, Field, SearchField, SelectField, TextareaField, useConfirm } from '@/components/ui';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';

@@ -19,7 +19,9 @@ import { useAuth } from './AuthProvider';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { applyTheme, currentTheme, SCHEME_LABEL, THEME_GROUPS, THEME_LABEL } from '@/lib/theme';
 import { Wordmark } from './Wordmark';
-import { MenuItem, IconButton, DisclosureButton } from '@/components/ui';
+import { MenuItem } from '@/components/ui/Menu';
+import { IconButton } from '@/components/ui/IconButton';
+import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { requestTourRestart } from '@/features/tour/restart'; // v0.10.1334
 
 // v0.10.1736 — "Kim çevrimiçi" listesi tembel: kabuk coremetry/overlay'i

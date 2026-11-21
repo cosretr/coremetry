@@ -15,10 +15,9 @@
 // textarea`), yani testin ölçtüğü şey operatörün göreceği şeyle aynı
 // kaynaktan.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { PageControls, leadChildIndex, isInteractiveChild, hasLeadMark, hasPinMark } from './PageControls';
 import { topEscLayer, escLayerDepth, __resetEscLayers } from '@/lib/escLayer';
 
@@ -368,7 +367,7 @@ describe('v0.10.1332 — data-pc-pin', () => {
 // doğruluyor, o sınıfların bir şey YAPTIĞINI değil. Sınıflar ölü kalırsa
 // panel telefonda kapalıyken de görünür durur ve hiçbir test kırılmaz.
 describe('D6.4 — sınıfların CSS karşılığı var ve doğru katmanda', () => {
-  const CSS = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8');
+  const CSS = readLegacyCss();
   const phone = () => {
     const m = /@media \(max-width: 640px\) \{([\s\S]*)/.exec(CSS);
     expect(m, '640px telefon katmanı kayboldu').toBeTruthy();

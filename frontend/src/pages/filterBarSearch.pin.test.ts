@@ -12,6 +12,7 @@
 //     barında Search Root'tan sonra, boşluk + görünüm anahtarından önce;
 //   · Logs: v0.10.1498'de Discover taslağıyla değişti (aşağıdaki blok).
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -165,7 +166,7 @@ describe('v0.10.1498 / v0.10.1821 — Logs sorgu çubuğu (Discover taslağı, s
 });
 
 describe('v0.10.1332 — CSS', () => {
-  const css = read('styles/globals.css');
+  const css = readLegacyCss();
   const block = css.slice(css.indexOf('v0.10.1332 BEGIN'), css.indexOf('v0.10.1332 END'));
 
   it('işaretli tek blok, .kbd token\'larla (10px mono, 1px kenar, 2px alt kenar)', () => {

@@ -20,10 +20,11 @@
 // stil kapıları susar. Kusur yalnız fareyle 18px'lik bir hedefi ıskalayan
 // operatörde görünür.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const RAW = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const RAW = readLegacyCss();
 // Yorumları BOŞALT (karakter-karakter, ofsetler korunur): gerekçe
 // yorumları `min-height: 0`, `button.xs` gibi dizgileri düz metin anıyor.
 const CSS = RAW.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '));

@@ -25,11 +25,12 @@
 // gecikme, gri parlama, sayfanın modal arkasında kayması, barın altına
 // gizlenen başlık) görünür.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const SRC = resolve(__dirname, '..');
-const RAW = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const RAW = readLegacyCss();
 // Yorumları karakter-karakter boşalt (ofsetler korunur; depo idiyomu).
 const CSS = RAW.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '));
 const read = (rel: string) => readFileSync(resolve(SRC, rel), 'utf8');

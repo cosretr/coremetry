@@ -5,6 +5,7 @@
 // çipleriyle aynı hedef kuralı: iç sayfa, sohbet bağlamı yeni sekme isterse
 // yeni sekme (chatLinkTargetProps).
 import { Link } from 'react-router';
+import '@/styles/cosreChat.css';
 import { Button } from '@/components/shadcn/button';
 import { chatLinkTargetProps, useChatLinkNewTab } from '@/components/ai/chatLinkTarget';
 import type { CosreLinkCard } from '@/lib/types';

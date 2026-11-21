@@ -6,6 +6,7 @@
 // sunucu niyeti jetondan (router'sız) yürütür — istemci niyet yollamaz.
 // Sinyal `suggestion_click` {chip, rule, tool, rank} (ağırlık 0, etiket değil).
 import { Chip } from '@/components/ui';
+import '@/styles/cosreChat.css';
 import { api } from '@/lib/api';
 import { parseDataSuggestions } from '@/lib/cosre/protocol';
 import type { CosreSuggestion, CosreSuggestions } from '@/lib/types';

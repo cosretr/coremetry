@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Modal, LinkButton } from '@/components/ui';
+import { Modal } from '@/components/ui/Modal';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { listShortcuts, useShortcuts, type Shortcut } from '@/lib/keyboard';
 import { useT } from '@/lib/i18n';
 import { requestTourRestart } from '@/features/tour/restart'; // v0.10.1334

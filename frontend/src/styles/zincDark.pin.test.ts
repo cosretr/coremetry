@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { THEME_COLOR } from '../lib/theme';
@@ -11,7 +12,7 @@ import { renderDefaultTheme } from '../lib/themeDefault';
 // ikincil metin için kullanılan her ton (--text2, --text3, shadcn
 // --muted-foreground ← --text2) bg0/bg1/bg2 üstünde ≥ 4.5:1. Geçmeyen ton
 // ikincil metinde kullanılmaz (--text-faint yalnız devre dışı, 3:1).
-const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+const CSS = readLegacyCss().replace(/\/\*[\s\S]*?\*\//g, '');
 const DARK = /:root\s*\{([\s\S]*?)\n\}/.exec(CSS)![1];
 const tok = (n: string) => new RegExp(`\\n\\s*${n}:\\s*(#[0-9a-fA-F]{6})\\s*;`).exec(DARK)?.[1].toLowerCase();
 

@@ -34,6 +34,7 @@
 // 3 return) kural "dosya başına tek kap"a sertleştirilemez; `return`
 // sayısıyla karşılaştırmak kaynak seviyesinde mümkün olan en sıkı hâli.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join, sep } from 'node:path';
 
@@ -198,7 +199,7 @@ describe('D9 — PageShell sözleşmesi', () => {
   });
 
   it('full varyantın CSS karşılığı VAR (ölü sınıf değil)', () => {
-    const css = readFileSync(join(SRC, 'styles/globals.css'), 'utf8');
+    const css = readLegacyCss();
     expect(css, '#content.is-full kuralı yok — variant="full" hiçbir şey yapmaz')
       .toMatch(/#content\.is-full \{[^}]*padding: 0[^}]*overflow: hidden/);
   });
@@ -206,7 +207,7 @@ describe('D9 — PageShell sözleşmesi', () => {
   // Kural, dosyanın SONUNDA olmak zorunda: `[data-density="…"] #content`
   // ile aynı özgüllükte (1,1,0), kazanan sıralamayla belirleniyor.
   it('full kuralı yoğunluk kurallarından SONRA geliyor', () => {
-    const css = readFileSync(join(SRC, 'styles/globals.css'), 'utf8');
+    const css = readLegacyCss();
     expect(css.indexOf('#content.is-full'))
       .toBeGreaterThan(css.lastIndexOf('[data-density="dense"] #content'));
   });

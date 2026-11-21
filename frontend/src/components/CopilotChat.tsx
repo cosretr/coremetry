@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from 'react';
+import '@/styles/cosreChat.css';
 import { mergeOpenHref } from '@/lib/openHref'; // v0.10.460
 import { useCatalogs } from '@/lib/i18n';
 import { Link, useNavigate } from 'react-router';

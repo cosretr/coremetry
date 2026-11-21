@@ -10,6 +10,7 @@
 //     soru kart atlanarak (bugünkü servis özeti).
 // Sunumsal: gönderim çağıranda (CosreChatV2).
 import { useMemo, useState } from 'react';
+import '@/styles/cosreChat.css';
 import { Waypoints } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { CosreEndpointPick, CosreEndpointPickItem } from '@/lib/types';

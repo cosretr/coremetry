@@ -7,6 +7,7 @@
 // çağıranlar yalnız başlıkta (servis süzgeci yok); üç exemplar linki yerinde;
 // sayfa satırı başlığın altında, detail beklemeden monte eder.
 import { describe, it, expect, afterEach } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { act } from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -89,7 +90,7 @@ describe('StmtTracesPivotRow', () => {
     const row = el.querySelector('[data-testid="stmt-traces-row"]')!;
     expect(row.classList.contains('stmt-pivots')).toBe(true);
     for (const a of row.querySelectorAll('a')) expect(a.classList.contains('sec')).toBe(true);
-    const css = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8');
+    const css = readLegacyCss();
     expect(css).toMatch(/\.stmt-pivots \{[^}]*margin-left: auto/);
   });
 

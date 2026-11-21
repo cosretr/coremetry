@@ -1,4 +1,5 @@
 import { Chip } from '@/components/ui/Chip';
+import '@/styles/cosreChat.css';
 import type { ContextBarItem, ContextKey } from './chatContextScope';
 
 // ChatContextBar — v0.10.1274 (CoSRE adım 5): composer'daki aktif bağlam şeridi.

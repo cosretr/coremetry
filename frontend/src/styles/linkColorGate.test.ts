@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
@@ -110,7 +111,7 @@ describe('link rengi kapısı (v0.9.1379)', () => {
   it('varsayılan link rengi GERÇEKTEN tanımlı — kapının dayanağı', () => {
     // Kapı "varsayılan zaten doğru" diyor. O kural bir gün düşerse
     // kapı linkleri RENKSİZ bırakır ve yine yeşil kalır.
-    const css = readFileSync(resolve(SRC, 'styles', 'globals.css'), 'utf8');
+    const css = readLegacyCss();
     expect(css).toMatch(/^a \{ color: var\(--accent2\)/m);
   });
 

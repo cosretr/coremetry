@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -6,7 +7,7 @@ import { resolve } from 'node:path';
 // position:absolute) statik .wf-bar-label'ın üstüne boyanınca süre yazısı
 // sönük kalıyordu. Etiket gölgenin üstünde (relative + z-index) ve beyaz.
 describe('.wf-bar-label öz-süre gölgesinin üstünde ve beyaz (v0.10.356)', () => {
-  const css = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+  const css = readLegacyCss();
   const rule = css.match(/^\.wf-bar-label \{([^}]*)\}/m);
   it('kural var ve katmanı gölgeden üstte', () => {
     expect(rule).not.toBeNull();

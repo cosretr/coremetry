@@ -24,6 +24,7 @@
 // hiç (sayfayı kaydırırdı), varsayılan seçim / grup yeniden açılışı kaydırmaz
 // (test 4); çip yolu seçimi taşıyınca odak yeni bölgeye (test 6).
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { act, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
@@ -591,9 +592,7 @@ describe('TraceMetricsPanel — v0.10.976 satır altı ayrıntı', () => {
     expect(stubs.panel!.selected).toMatchObject({ pod: P_F2 });
     // Yan panel yerleşimi gitti (DOM'da da, CSS'te de).
     expect(el.querySelector('.tpm-side, .has-side, .tpm-body')).toBeNull();
-    const { readFileSync } = await import('node:fs');
-    const { resolve } = await import('node:path');
-    const css = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const css = readLegacyCss().replace(/\/\*[\s\S]*?\*\//g, '');
     expect(css).not.toMatch(/\.tpm-side\b|\.has-side\b|\.tpm-body\b/);
     expect(css).toMatch(/\.tpm-detail-row/);
   });

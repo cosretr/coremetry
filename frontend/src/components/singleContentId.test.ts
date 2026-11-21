@@ -36,6 +36,7 @@
 // bulamıyor. Artık iki biçim de sayılıyor ve "tarama bir şey buluyor"
 // assert'i geçişin İLERLEMESİYLE ERİMİYOR (44 dosya, biçimden bağımsız).
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
@@ -122,7 +123,7 @@ describe('D3 — tek #content', () => {
   // `.page-body` yalnız bir sınıf adı değil, `#content`in stil ikizi
   // olmak ZORUNDA — aksi hâlde liste kabı padding/scroll kaybeder.
   it('.page-body globals.css\'te #content ile aynı kuralı paylaşıyor', () => {
-    const css = readFileSync(join(SRC, 'styles/globals.css'), 'utf8');
+    const css = readLegacyCss();
     expect(css).toMatch(/#content, \.page-body \{[^}]*flex: 1[^}]*overflow: auto/);
     // v0.10.933 — yoğunluk 4 → 3 basamak (spacious kalktı, lib/density.ts).
     for (const d of ['compact', 'dense']) {

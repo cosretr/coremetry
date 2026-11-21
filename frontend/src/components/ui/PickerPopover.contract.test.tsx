@@ -12,10 +12,9 @@
 // `title`, yatay taşma yokluğu (globals.css'in `.pick-*` kuralları jsdom'a
 // enjekte edilerek). Adlar sentetik.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { Combobox } from '@/components/Combobox';
 import { STORAGE_KEYS } from '@/lib/storage';
 
@@ -237,7 +236,7 @@ describe('PickerPopover — uzun adlar', () => {
 
   it('yatay taşma yok: liste overflow-x hidden, ad üç noktayla kısalır', () => {
     // globals.css'in `.pick-*` kuralları (gerçek kaynak, kopya değil) enjekte edilir.
-    const css = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8')
+    const css = readLegacyCss()
       .replace(/\/\*[\s\S]*?\*\//g, '');
     const rules = css.match(/(^|\n)\.pick-[^{]*\{[^}]*\}/g) ?? [];
     expect(rules.length).toBeGreaterThan(5);

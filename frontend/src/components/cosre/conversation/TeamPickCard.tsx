@@ -10,6 +10,7 @@
 //     açık kapsamsız bayrağıyla (takım bir daha sorulmaz).
 // Sunumsal: gönderim çağıranda (CosreChatV2).
 import { useMemo, useState } from 'react';
+import '@/styles/cosreChat.css';
 import { Users } from 'lucide-react';
 import { api } from '@/lib/api';
 import { usePickerSearch } from '@/components/usePickerSearch';

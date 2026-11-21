@@ -5,6 +5,7 @@
 // çipler ve composer için aynı; composer yuvarlak 18px; renk yalnız token;
 // üst şerit sticky değil.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -20,7 +21,7 @@ function block(css: string, marker: string): string {
 }
 
 describe('CoSRE v2 tam sayfası düzeni (1786)', () => {
-  const css = read('styles/globals.css');
+  const css = readLegacyCss();
   const body = block(css, 'v0.10.1786 — CoSRE v2 TAM SAYFASI düzeni');
 
   it('her kural [data-cosre-v2].cosre-root--page kapsamında; hex/rgba yok', () => {

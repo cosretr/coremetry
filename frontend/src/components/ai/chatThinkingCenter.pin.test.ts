@@ -2,11 +2,12 @@
 // yok ve ortalı olsun") — ilk token öncesi bekleyişte marka etiketi (logo +
 // "CoSRE") çizilmez; AiThinking ortalı kapta durur.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const src = readFileSync(resolve(__dirname, 'ChatBubble.tsx'), 'utf8');
-const css = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8');
+const css = readLegacyCss();
 
 describe('sohbet bekleyişi: logosuz + ortalı', () => {
   it('marka etiketi yalnız bekleyiş bitince', () => {

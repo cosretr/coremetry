@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { SERIES_PALETTES } from '../lib/chartFmt';
@@ -20,7 +21,7 @@ import { contrastRatio, hexDecls, themeBlockBody } from './themeBlocks';
 // Kapsam dürüstçe: yalnız hex değerli tokenlar çözülür; color-mix/rgba
 // (--accent-soft, gölgeler) burada ölçülmez.
 
-const RAW = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const RAW = readLegacyCss();
 const CSS = RAW.replace(/\/\*[\s\S]*?\*\//g, '');
 
 function block(re: RegExp): Map<string, string> {

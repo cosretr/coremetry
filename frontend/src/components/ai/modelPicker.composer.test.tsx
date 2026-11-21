@@ -15,10 +15,9 @@
 //       aria-label'da, telefonda yalnız ikon; menü tam ayrıntıyı taşır.
 // Adlar sentetik.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -308,7 +307,7 @@ describe('kompakt tetikleyici (6)', () => {
     expect(p.querySelector('.cm-model-pill__caret')!.textContent).toBe('▾');
     // İkon gizlenen parçaların dışında.
     expect(p.querySelector('svg')!.closest('.cm-model-pill__name, .cm-model-pill__caret')).toBeNull();
-    const css = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8');
+    const css = readLegacyCss();
     expect(css).toMatch(/@media \(max-width: 640px\) \{[^@]*\.cm-model-pill__name, \.cm-model-pill__caret, \.cm-model-label__name \{ display: none; \}/);
   });
 });

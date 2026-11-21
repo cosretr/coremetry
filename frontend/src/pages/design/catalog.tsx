@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import '@/styles/cosreChat.css';
 import type { VariantProps } from 'class-variance-authority';
 import { Bell, Bold, ChevronDown, Copy, Italic, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Badge, badgeVariants } from '@/components/shadcn/badge';

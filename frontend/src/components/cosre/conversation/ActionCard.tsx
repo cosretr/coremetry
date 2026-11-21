@@ -10,6 +10,7 @@
 //   • İptal yalnız action_cancel sinyali yazar (sunucu ucu), kartı kapatır.
 //   • Jira yok (açık soru 2); ara çözüm "Metni kopyala" (istemci, sunucu yazımı yok).
 import { useRef, useState } from 'react';
+import '@/styles/cosreChat.css';
 import { Button } from '@/components/shadcn/button';
 import { Field, TextareaField } from '@/components/coremetry/Field';
 import { api } from '@/lib/api';

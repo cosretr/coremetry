@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { stripTsComments } from '../styles/zLayers.test';
@@ -40,7 +41,7 @@ describe('/design yalnız geliştirmede', () => {
       .filter(p => /design\/design\.css/.test(readFileSync(p, 'utf8')))
       .map(p => p.slice(SRC.length + 1));
     expect(refs).toEqual(['pages/Design.tsx']);
-    expect(readFileSync(join(SRC, 'styles', 'globals.css'), 'utf8')).not.toMatch(/\.dc-/);
+    expect(readLegacyCss()).not.toMatch(/\.dc-/);
   });
 
   it('paket-kanıtı işareti sayfada duruyor', () => {

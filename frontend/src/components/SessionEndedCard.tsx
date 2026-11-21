@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
 import { Empty } from '@/components/Spinner';
 
 // SessionEndedCard — v0.10.673 (trace kiosk modu Dilim 3; audit §6 + §11

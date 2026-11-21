@@ -15,12 +15,13 @@
 // deponun ritmine oturmaz, ilk çağrı yerinde terk edilir ve geriye iki
 // paralel ölçek kalır — token'sız olmaktan daha kötü bir durum.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
 const STYLES = resolve(__dirname);
 const UI = resolve(__dirname, '..', 'components', 'ui');
-const CSS = readFileSync(join(STYLES, 'globals.css'), 'utf8');
+const CSS = readLegacyCss();
 
 const SP = ['--sp-1', '--sp-2', '--sp-3', '--sp-4', '--sp-5', '--sp-6', '--sp-7', '--sp-8'];
 const FS = ['--fs-3xs', '--fs-2xs', '--fs-xs', '--fs-sm', '--fs-md', '--fs-lg', '--fs-xl'];

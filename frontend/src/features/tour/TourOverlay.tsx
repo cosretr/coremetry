@@ -28,7 +28,7 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Button } from '@/components/ui';
+import { Button } from '@/components/ui/Button';
 import { useFocusTrap } from '@/components/ui/useFocusTrap';
 import { useEscLayer } from '@/lib/escLayer';
 import { placeTip, type TipRect } from '@/lib/tipPlacement';

@@ -14,12 +14,13 @@
 //   4. Özgüllük `.badge.m-*` (0,2,0): Badge atomunun `b-gray`ı (0,1,0)
 //      kuralı yenemesin.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { THEME_IDS, type Theme } from '../lib/themeRegistry';
 import { contrastRatio, themeHex } from './themeBlocks';
 
-const RAW = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const RAW = readLegacyCss();
 const CSS = RAW.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '));
 
 interface Rule { selectors: string[]; body: string }

@@ -7,6 +7,7 @@
 // v0.10.2363 (I1) — sözleşmeli adımlar (data-step) sıra + tek satır sonuçla; çalışan
 // adımın başlığı katlı başlıkta canlı.
 import { useState } from 'react';
+import '@/styles/cosreChat.css';
 import { ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/shadcn/badge';
 import { Button } from '@/components/shadcn/button';

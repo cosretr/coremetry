@@ -4,6 +4,7 @@
 // de .cosre-root--drawer taşır, dokunulmaz), Temizle hayalet düğme, kapsam
 // rozeti sert kenarsız, Girdiler · Sorgu · Ham çıktı tek satır.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -19,7 +20,7 @@ function lookBlock(css: string, marker: string): string {
 }
 
 describe('CoSRE v2 görünüm turu A (1729)', () => {
-  const css = read('styles/globals.css');
+  const css = readLegacyCss();
   const block = lookBlock(css, 'v0.10.1729 — CoSRE v2 çekmecesi görünüm turu A');
 
   it('turun her kuralı [data-cosre-v2] kapsamında (v1 dokunulmaz)', () => {

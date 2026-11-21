@@ -20,6 +20,7 @@
 // `pointermove` geri `mousemove` yapıldığında kırmızıya döndüğü
 // görüldükten sonra gemiye alındı.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { stripTsComments } from './zLayers.test';
@@ -96,7 +97,7 @@ describe('D6.5 — sürükleme jestleri Pointer Events üstünde', () => {
     // `touch-action: none` olmadan Pointer sürüklemesi dokunmada YİNE
     // çalışmaz: tarayıcı ilk parmak hareketinde jesti kaydırma olarak
     // devralır. JS doğru, davranış yanlış — tam olarak sessiz sınıf.
-    const css = readFileSync(join(__dirname, 'globals.css'), 'utf8');
+    const css = readLegacyCss();
     const rule = css.match(/\.col-resize-handle\s*\{[^}]*\}/);
     expect(rule?.[0], '.col-resize-handle kuralı bulunamadı').toBeTruthy();
     expect(rule![0]).toMatch(/touch-action:\s*none/);

@@ -17,10 +17,11 @@
 // aynı kalıyor; 36 hem parmak için yeterli hem de dar bir topbar'da
 // üç ikonu yan yana sığdırıyor (44 sığdırmıyordu).
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const RAW = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const RAW = readLegacyCss();
 
 // v0.9.1013 — YORUMLARI SOY. Bu kapı depodaki tek yorum SOYMAYAN stil
 // testiydi ve tam da bu dosyada patlamaya hazırdı: G0'ın gerekçe bloğu

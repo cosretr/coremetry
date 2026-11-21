@@ -16,10 +16,11 @@
 // tam olarak böyle doğmuştu ve aynı özgüllükteki `.card-tight`i de
 // sessizce yutmuştu.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const CSS = readLegacyCss();
 
 // Yorumları BOŞALT, silme: gerekçe yorumlarında `.card:hover`,
 // `uppercase` gibi dizgiler geçiyor ve kural sanılmamalı.

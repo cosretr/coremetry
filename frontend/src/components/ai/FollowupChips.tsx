@@ -20,6 +20,7 @@
 // (adaylar = cevabın servisleri, önce; arama tüm servislerde). Seçim şablonu
 // doldurup cümleyi kapsam + seçilen servisle gönderir (followupPick.ts).
 import { useState } from 'react';
+import '@/styles/cosreChat.css';
 import { Chip } from '@/components/ui';
 import { ServicePicker } from '@/components/ServicePicker';
 import { api } from '@/lib/api';

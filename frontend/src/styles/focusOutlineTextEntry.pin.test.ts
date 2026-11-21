@@ -7,8 +7,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 
-const G = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const G = readLegacyCss();
 
 describe('v0.10.1782: metin girişleri :focus-visible dış çizgisi almaz', () => {
   it('genel dış çizgi kuralı yalnız kenarsız input türlerini alır, textarea\'yı hiç almaz', () => {

@@ -15,11 +15,12 @@
 // A yolculuğu operatörün telefonda EN SIK gireceği yol: alarm bildirimi
 // linki (PUBLIC_URL + /problems?problem=<id>).
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
 const SRC = resolve(__dirname, '..');
-const CSS = readFileSync(join(SRC, 'styles/globals.css'), 'utf8');
+const CSS = readLegacyCss();
 
 function phoneLayer(): string {
   const m = /@media \(max-width: 640px\) \{([\s\S]*)/.exec(CSS);

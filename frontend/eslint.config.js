@@ -178,6 +178,13 @@ export default tseslint.config(
       'src/components/coremetry/Confirm/context.ts',
       'src/components/GlobalShortcuts.tsx',
       'src/components/AnnouncementBanner.tsx',
+      // v0.10.2427 — ilk yük bütçe boşluğu: barrel (components/ui) kullanan
+      // diğer eager kabuk dosyaları da (aşağıdaki barrel kuralı).
+      'src/components/ErrorBoundary.tsx',
+      'src/components/ShortcutsHelp.tsx',
+      'src/components/SessionEndedCard.tsx',
+      'src/components/ChangePasswordModal.tsx',
+      'src/features/tour/**',
     ],
     ignores: ['src/**/*.test.{ts,tsx}'],
     rules: {
@@ -201,6 +208,12 @@ export default tseslint.config(
           // açılamaz.
           regex: '(^|/)components/coremetry(/index)?$|^\\.{1,2}/coremetry(/index)?$',
           message: 'Kabuk coremetry barrel\'ını import edemez (overlay → Radix ilk yüke biner). Dosya yolundan al: @/components/coremetry/PageShell.',
+        }, {
+          // v0.10.2427 — components/ui BARREL'ı DataTable + VirtualList'i
+          // (@tanstack/virtual-core) ve Sparkline'ı yeniden dışa aktarır; kabuk
+          // barrel'dan alınca hepsi ilk yüke biniyordu (~30 KB gz). Dosya yolundan al.
+          regex: '(^|/)components/ui(/index)?$|^\\.{1,2}/ui(/index)?$',
+          message: 'Kabuk components/ui barrel\'ını import edemez (DataTable/virtual-core ilk yüke biner). Dosya yolundan al: @/components/ui/Button.',
         }, {
           // v0.10.1647 (Faz 2b B1): çıplak `ai` paketi regex ile — glob `ai/**`
           // göreli './ai/…' (components/ai) yollarını da yakalardı.

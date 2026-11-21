@@ -16,10 +16,11 @@
 //       (istisna: tonlu AI cevap kartındaki markdown tablosu çerçeveli).
 // (T6 `--row-h` ↔ ROW_H eşitliği: ui/DataTable/rowHeight.test.ts.)
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8');
+const CSS = readLegacyCss();
 // Yorumları BOŞALT (paletteStep2 deseni): gerekçe yorumlarında
 // `tbody tr { cursor: pointer }` gibi eski kurallar anılıyor.
 const CLEAN = CSS.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '));

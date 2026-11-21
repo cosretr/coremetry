@@ -38,6 +38,7 @@
 // kalktı; JVM "metrik gelmiyor" notu Teknik ayrıntıda. Bu yüzeylerin testleri
 // silindi; grafikte yalnız seçili pod.
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
@@ -467,9 +468,7 @@ describe('TracePodPanel — v0.10.976 kompakt satır altı ayrıntı', () => {
     expect([...row.querySelectorAll('[data-chart][role="group"]')].map(c => c.getAttribute('aria-label')))
       .toEqual(['Bellek (working set)', 'CPU (çekirdek)']);
     // v0.10.976 (inceleme) — grafik ızgarası İÇSEL auto-fit: kap dar ise alt alta; v0.10.1096 — viewport kuralı yok.
-    const { readFileSync } = await import('node:fs');
-    const { resolve } = await import('node:path');
-    const css = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const css = readLegacyCss().replace(/\/\*[\s\S]*?\*\//g, '');
     expect(css).toMatch(/\.tpp-chart-row \{[^}]*repeat\(auto-fit, minmax\(min\(240px, 100%\), 1fr\)\)/);
     expect(css).not.toMatch(/\.tpp-detail-body|\.tpp-detail-charts/);
     expect(css).not.toMatch(/@media \(max-width: 1024px\) \{[^}]*\.tpp-chart-row/);

@@ -37,6 +37,7 @@
 //     (B7) v1 ile aynı TEK SEFERLİK niyet: Sheet açılır, açıklama SOHBET TURU
 //     olarak gider (context.explainAsk), `?ai=` (+ `?aicode=`) hemen düşer.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import '@/styles/cosreChat.css';
 import { useCatalogs } from '@/lib/i18n';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { mergeOpenHref } from '@/lib/openHref';

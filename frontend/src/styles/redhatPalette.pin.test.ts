@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { THEME_COLOR } from '../lib/theme';
@@ -12,7 +13,7 @@ import { renderDefaultTheme } from '../lib/themeDefault';
 // çift tablosunu zaten koşuyor; burada operatör kuralı açıkça: ikincil metin
 // için kullanılan her ton bg0/bg1/bg2 üstünde ≥ 4.5:1 — geçmeyen ton
 // kullanılmaz (zinc-500 #71717a --bg0'da 4.40, --text3 olamadı).
-const CSS = readFileSync(resolve(__dirname, 'globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+const CSS = readLegacyCss().replace(/\/\*[\s\S]*?\*\//g, '');
 const RH = /\[data-theme="redhat"\]\s*\{([\s\S]*?)\n\}/.exec(CSS)![1];
 const SB = /\[data-theme="redhat"\] #sidebar\s*\{([\s\S]*?)\n\}/.exec(CSS)![1];
 const read = (blk: string, n: string) =>

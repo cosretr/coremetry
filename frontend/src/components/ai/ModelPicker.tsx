@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import '@/styles/cosreChat.css';
 import { Cpu } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { MenuItem } from '@/components/ui/Menu';

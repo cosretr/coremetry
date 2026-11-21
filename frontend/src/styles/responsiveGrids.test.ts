@@ -24,11 +24,12 @@
 // '1fr 1fr'` geri konduğunda kırmızıya döndüğü görüldükten sonra
 // gemiye alındı.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const SRC = resolve(__dirname, '..');
-const CSS = readFileSync(join(__dirname, 'globals.css'), 'utf8');
+const CSS = readLegacyCss();
 
 function tsxFiles(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir)) {

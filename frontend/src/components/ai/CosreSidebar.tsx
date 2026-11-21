@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import '@/styles/cosreChat.css';
 import type { AiConversationSummary } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';

@@ -10,6 +10,7 @@
 //   3. Bileşenin kullandığı her `cl-*` sınıfı globals.css'te tanımlı ve
 //      sınıf bloğu renkleri yalnız token'dan alıyor.
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { stripTsComments } from '@/styles/zLayers.test';
@@ -17,7 +18,7 @@ import { stripTsComments } from '@/styles/zLayers.test';
 const read = (f: string) => stripTsComments(readFileSync(resolve(__dirname, f), 'utf8'));
 // NamespaceCombobox bu listede yok: S5'te shadcn giydirilirken sıfırlanır.
 const DRAWINGS = ['Gauge', 'MiniBar', 'NodeHeatmap', 'PhaseDonut', 'PodRing', 'PromQLList', 'TrendPanel', 'MetricArea'];
-const css = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8');
+const css = readLegacyCss();
 const blockStart = css.indexOf('/* ── /clusters çizimleri');
 const block = css.slice(blockStart, css.indexOf('/* ── Copilot araç-çağrısı paneli', blockStart));
 

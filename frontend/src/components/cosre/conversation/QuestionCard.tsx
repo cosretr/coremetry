@@ -5,6 +5,7 @@
 // metin cevabı aynen geçerli. Cevaplanmış (eski) kart pasif ve görünür,
 // seçilen dolu düğme + işaret.
 import { Check } from 'lucide-react';
+import '@/styles/cosreChat.css';
 import { Button } from '@/components/shadcn/button';
 import type { CosreQuestion } from '@/lib/types';
 import { COSRE_V2_STRINGS as T } from './strings';

@@ -2,6 +2,7 @@
 // kabuğu: SummaryLinkCard'ın kart dili (başlık satırı + gövde + "Sayfada aç"
 // linki). Link hedef kuralı balonun çipleriyle aynı (chatLinkTargetProps).
 import type { ReactNode } from 'react';
+import '@/styles/cosreChat.css';
 import { Link } from 'react-router';
 import { chatLinkTargetProps, useChatLinkNewTab } from '@/components/ai/chatLinkTarget';
 import { EVIDENCE_PART_STRINGS as T } from './strings';

@@ -7,6 +7,7 @@
 //   • Karar verildiyse (parça output-available) yalnız durum rozeti.
 // Sunumsal: kararı onAnswer'a bildirir; gönderimi çağıran yapar.
 import { useEffect, useState } from 'react';
+import '@/styles/cosreChat.css';
 import { Button } from '@/components/shadcn/button';
 import { KeyValue } from '@/components/coremetry/KeyValue';
 import { fmtClock } from '@/lib/utils';

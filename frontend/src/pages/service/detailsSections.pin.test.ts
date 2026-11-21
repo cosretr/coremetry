@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -71,7 +72,7 @@ describe('Details bölüm kimlikleri ve sırası (S0)', () => {
 // düz etiket-değer (KeyValue), satır içi stil yok; #deploys bağlantısı korunur.
 describe('Details S2: ToC yok, Properties düz', () => {
   const props = readFileSync(resolve(__dirname, 'DetailsPropsStrip.tsx'), 'utf8');
-  const css = readFileSync(resolve(__dirname, '../../styles/globals.css'), 'utf8');
+  const css = readLegacyCss();
   it('ToC yok', () => {
     expect(svc).not.toContain('DetailsToc');
     expect(css).not.toContain('.dtl-toc');

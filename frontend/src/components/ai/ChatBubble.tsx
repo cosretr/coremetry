@@ -1,4 +1,5 @@
 import { Component, Fragment, createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
+import '@/styles/cosreChat.css';
 import { chatErrorText } from './chatErrorText';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { chartBlocks, mergeBlockLinks, traceListBlocks, operationBlocks, operationDeltaTexts, serviceReportBlocks, topologyBlocks, evidenceBlocksByRef, chartsSignalsBlock, logSpikeBlock, metricPanelBlock, type EvidenceBlockView } from '@/lib/chatBlocks';

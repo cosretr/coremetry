@@ -19,6 +19,7 @@
 // jsdom Tailwind CSS'ini yüklemez: hesaplanmış zemin burada ÖLÇÜLEMEZ; kaynak
 // + seçici pinidir. Tarayıcı ölçümü sürüm notunda (üç tema, Chromium).
 import { describe, it, expect, afterEach } from 'vitest';
+import { readLegacyCss } from './legacyCss';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -137,7 +138,7 @@ describe('sınıf gerçek DOM\'da alanın kendisinde', () => {
 });
 
 describe('tek odak göstergesi', () => {
-  const css = readFileSync(join(SRC, 'styles/globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const css = readLegacyCss().replace(/\/\*[\s\S]*?\*\//g, '');
   const ns = readFileSync(join(SRC, 'components/shadcn/native-select.tsx'), 'utf8');
   it('global select dış çizgisi shadcn NativeSelect\'i dışlar', () => {
     expect(css).toContain('select:where(:not([data-slot="native-select"])):focus-visible,');

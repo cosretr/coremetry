@@ -6,6 +6,7 @@
 // ToggleGroup (segmented) ve davranış aynı (Derin aç/kapa aynı çağrı), v1
 // (segmented yok) hapları değişmedi, v2 composer segmented verir.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readLegacyCss } from '@/styles/legacyCss';
 import { createRoot, type Root } from 'react-dom/client';
 import { act, useState } from 'react';
 import { readFileSync } from 'node:fs';
@@ -78,7 +79,7 @@ describe('CoSRE v2 görünüm turu B (1730)', () => {
   });
 
   it('CSS: odak halkası :focus-within, tek kart --radius-lg, her kural [data-cosre-v2] altında', () => {
-    const css = read('styles/globals.css');
+    const css = readLegacyCss();
     const i = css.indexOf('v0.10.1730 — CoSRE v2 çekmecesi görünüm turu B');
     expect(i).toBeGreaterThan(-1);
     const block = css.slice(css.indexOf('*/', i) + 2);

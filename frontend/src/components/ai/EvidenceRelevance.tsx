@@ -10,6 +10,7 @@
 //     UTF-8, lib/cosre/signalDetail).
 // exchangeId yokken (akış bitmeden / arşiv turu) düğmeler devre dışı.
 import { useState } from 'react';
+import '@/styles/cosreChat.css';
 import { api } from '@/lib/api';
 import { noteDetail } from '@/lib/cosre/signalDetail';
 import { Button } from '@/components/shadcn/button';
