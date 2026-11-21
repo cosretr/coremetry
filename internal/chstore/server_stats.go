@@ -77,6 +77,9 @@ func (s *Store) collectServerStats(ctx context.Context) []ServerStat {
 		UNION ALL
 		SELECT %[1]s, name, toFloat64OrZero(value)
 		  FROM %[4]s WHERE name IN (%[7]s)
+		UNION ALL
+		SELECT %[1]s, 'CPUCores', toFloat64(count())
+		  FROM %[2]s WHERE metric LIKE 'OSUserTimeCPU%%' GROUP BY 1
 		SETTINGS max_execution_time = 5`,
 		host,
 		wrap("system.asynchronous_metrics"),
@@ -108,6 +111,12 @@ func (s *Store) collectServerStats(ctx context.Context) []ServerStat {
 	if err := rows.Err(); err != nil {
 		log.Printf("[sysstats] server utilisation stream: %v — partial node list", err)
 	}
+
+	// v0.10.2434 (operatör: "burada CPU'yu da görebilsem") — ClickHouse
+	// sürecinin son 60 sn'de harcadığı çekirdek (metric_log user+system
+	// mikrosaniye / 60e6). metric_log kapalıysa ya da okunamazsa alan 0 kalır;
+	// panel yine çizilir (ayrı sorgu, ana okumayı düşürmez).
+	s.applyServerProcessCPU(ctx, host, wrap, byHost)
 
 	out := make([]ServerStat, 0, len(byHost))
 	for _, st := range byHost {
@@ -167,6 +176,8 @@ func applyServerMetric(st *ServerStat, key string, v float64) {
 		st.CPUSystem = v
 	case "OSIOWaitTimeNormalized":
 		st.CPUIOWait = v
+	case "CPUCores":
+		st.CPUCores = u()
 	case "LoadAverage1":
 		st.LoadAvg1 = v
 	case "Uptime":
@@ -175,5 +186,33 @@ func applyServerMetric(st *ServerStat, key string, v float64) {
 		st.RunningQueries = u()
 	case "Merge":
 		st.RunningMerges = u()
+	}
+}
+
+// applyServerProcessCPU fills ProcessCPUCores per host from system.metric_log.
+// Best-effort: any error leaves the field at 0.
+func (s *Store) applyServerProcessCPU(ctx context.Context, host string, wrap func(string) string, byHost map[string]*ServerStat) {
+	q := fmt.Sprintf(`
+		SELECT %s AS host,
+		       sum(ProfileEvent_UserTimeMicroseconds + ProfileEvent_SystemTimeMicroseconds) / 60e6 AS cores
+		  FROM %s
+		 WHERE event_time > now() - INTERVAL 60 SECOND
+		 GROUP BY host
+		 LIMIT 64
+		SETTINGS max_execution_time = 5`, host, wrap("system.metric_log"))
+	rows, err := s.conn.Query(ctx, q)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var h string
+		var v float64
+		if rows.Scan(&h, &v) != nil {
+			return
+		}
+		if st, ok := byHost[h]; ok && v >= 0 {
+			st.ProcessCPUCores = v
+		}
 	}
 }

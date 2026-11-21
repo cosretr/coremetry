@@ -256,6 +256,13 @@ type SystemSnapshot struct {
 type ServerStat struct {
 	Host string `json:"host,omitempty"`
 
+	// ── CPU capacity (v0.10.2434) ───────────────────────────────
+	// CPUCores — logical cores (count of OSUserTimeCPU<N> counters).
+	// ProcessCPUCores — cores the ClickHouse process used over the last
+	// 60 s (system.metric_log); 0 when metric_log is unavailable.
+	CPUCores        uint64  `json:"cpuCores"`
+	ProcessCPUCores float64 `json:"processCpuCores"`
+
 	// ── Memory ──────────────────────────────────────────────────
 	OSMemoryTotal     uint64 `json:"osMemoryTotal"`
 	OSMemoryAvailable uint64 `json:"osMemoryAvailable"`

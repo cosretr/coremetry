@@ -395,6 +395,14 @@ export default function AdminStatsPage() {
                           <span style={{ color: 'var(--text3)', fontSize: 11 }}>
                             load {n.loadAvg1.toFixed(2)} · {n.runningQueries} queries · {n.runningMerges} merges
                           </span>
+                          {/* v0.10.2434 — CPU kapasitesi: çekirdek, ClickHouse süreci, toplam kullanım. */}
+                          {!!n.cpuCores && (
+                            <span style={{ fontSize: 11 }} data-cpu-capacity="">
+                              CPU {n.cpuCores} cores
+                              {n.processCpuCores ? ` · ClickHouse ${n.processCpuCores.toFixed(1)} cores (${Math.round((n.processCpuCores / n.cpuCores) * 100)}%)` : ''}
+                              {` · total ${Math.round((n.cpuUser + n.cpuSystem + n.cpuIoWait) * 100)}%`}
+                            </span>
+                          )}
                           <span style={{ flex: 1 }} />
                           <span style={{ color: 'var(--text3)', fontSize: 11 }}>
                             up {(n.uptimeSec / 86400).toFixed(1)}d

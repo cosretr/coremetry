@@ -7773,6 +7773,10 @@ export interface SystemStats {
     cpuUser: number;
     cpuSystem: number;
     cpuIoWait: number;
+    /** v0.10.2434 — mantıksal çekirdek; 0 = bilinmiyor. */
+    cpuCores?: number;
+    /** v0.10.2434 — ClickHouse sürecinin son 60 sn'de kullandığı çekirdek (metric_log). */
+    processCpuCores?: number;
     loadAvg1: number;
     runningQueries: number;
     runningMerges: number;
