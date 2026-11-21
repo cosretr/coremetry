@@ -199,6 +199,8 @@ type ReplayRequest struct {
 	// ContextPack — v0.10.1494: tekrar Context Pack okuyucularıyla koşar
 	// (Investigation.Pack; canlı bayrak tekrarı etkilemez).
 	ContextPack bool
+	// Plain — CoSRE Faz B kapalı (oyun kitabı / hipotez durumu / kanıt kapısı).
+	Plain bool
 }
 
 // replayInvestigation — SAF: tekrar işinin kuyruk kaydı. Çıpa problemin
@@ -215,6 +217,7 @@ func replayInvestigation(req ReplayRequest) Investigation {
 		EnqueuedAt: now.UnixNano(), RequestBy: req.By, ProblemAt: req.ProblemStartedAt,
 		EvalRun: req.RunID, CaseID: req.CaseID, AsOf: asOf.UnixNano(),
 		Anchor: anchorFor(req.ProblemStartedAt, asOf), Pack: req.ContextPack,
+		Plain: req.Plain,
 	}
 }
 

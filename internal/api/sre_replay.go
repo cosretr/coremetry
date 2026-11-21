@@ -8,7 +8,7 @@ package api
 //	GET  /api/sre/replay/reports/{id}   → rapor + özet + Problem başına
 //	     ortalama / yayılım; viewer görür.
 //	POST /api/sre/replay/reports        → admin, audit sre.replay.run:
-//	     {days (7|30|90|180), repeats 1–3, limit 1–30, variant:{contextPack}}
+//	     {days (7|30|90|180), repeats 1–3, limit 1–30, variant:{contextPack, plain}}
 //	     409 = ajan kapalı / rapor sürüyor.
 //	PUT  /api/sre/replay/schedule       → admin, audit sre.replay.schedule:
 //	     {weekly, days, repeats} (system_settings "sre_agent.replay"; kapalı varsayılan).

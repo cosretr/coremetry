@@ -137,11 +137,23 @@ func culpritReached(culprit string, entities []string) bool {
 	return false
 }
 
+// replayInconclusive — SAF: kanıt kapısı "yetersiz" dedi mi (kipten
+// bağımsız: tekrar gösterilecek olanı ölçer; plain → kapı yok → false).
+func replayInconclusive(inv Investigation) bool {
+	return !inv.Plain && inv.Coverage != nil && inv.Coverage.Verdict == GateInsufficient
+}
+
 // replayConclusion — SAF: tekrarın sonucu düz metin (hipotez sırası ≤3 +
-// bulgular ≤4). Hipotez yoksa dürüst "sonuç yok".
+// bulgular ≤4). Hipotez yoksa dürüst "sonuç yok". CoSRE Faz B: kanıt kapısı
+// yetersiz dediyse hipotez sırası YERİNE "KANIT YETERSİZ — eksik …" (yanlış
+// yerine sonuçsuz); erişim beyanı sona eklenir (plain'de yok).
 func replayConclusion(inv Investigation) string {
 	var b strings.Builder
 	top := caseTop(inv)
+	if replayInconclusive(inv) {
+		top = nil
+		b.WriteString(coverageTR(*inv.Coverage) + "\n")
+	}
 	for i, h := range top {
 		label := h.Kind
 		if i < len(inv.Hypotheses) && inv.Hypotheses[i].Label != "" {
@@ -162,6 +174,9 @@ func replayConclusion(inv Investigation) string {
 			fmt.Fprintf(&b, ": %s", f.Reasons[0])
 		}
 		b.WriteString("\n")
+	}
+	if len(inv.Reach) > 0 && b.Len() > 0 {
+		b.WriteString(reachTR(inv.Reach) + "\n")
 	}
 	if b.Len() == 0 {
 		return "sonuç yok (hipotez ya da bulgu üretilmedi)"
@@ -243,6 +258,8 @@ type ReplaySummary struct {
 	Unstable   int      `json:"unstable"`   // notu koşudan koşuya değişen Problem
 	MeanSpread *float64 `json:"meanSpread"` // ortalama (en yüksek − en düşük) puan
 	MaxSpread  int      `json:"maxSpread"`
+	// Inconclusive — CoSRE Faz B3: kapının "kanıt yetersiz" dediği biten koşu.
+	Inconclusive int `json:"inconclusive"`
 }
 
 // ItemStats — SAF: bir Problem'in notlu koşuları → ortalama puan, yayılım
@@ -301,6 +318,9 @@ func SummarizeReplay(rep ReplayReport) ReplaySummary {
 				sm.Errored++
 			default:
 				sm.Pending++
+			}
+			if r.Inconclusive {
+				sm.Inconclusive++
 			}
 			if r.Reach != nil {
 				sm.ReachKnown++

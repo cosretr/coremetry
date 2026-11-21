@@ -23,6 +23,7 @@ import { tsLong } from '@/lib/utils';
 import { agoLang, t, tf, useLang } from '@/lib/i18n'; // v0.10.2285 — metinler arayüz dilinde (TR aynı)
 import type { SREInvestigation } from '@/lib/types';
 import { OrigLang, MsgText } from './OrigLang'; // v0.10.2301 — MsgText: anahtarlı sunucu metni (S4)
+import { InvestigationGateBanner, InvestigationQuality } from './InvestigationQuality';
 import { ProblemInvestigationCards } from './ProblemInvestigationCards';
 import { ProblemInvestigationRecommendations } from './ProblemInvestigationRecommendations';
 import {
@@ -75,6 +76,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
           </tbody>
         </table>
       )}
+      <InvestigationGateBanner inv={inv} />
       {inv.summary && (inv.summary.gated
         ? (
           <div style={{ color: 'var(--text3)' }}>
@@ -90,6 +92,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
             <OrigLang block><ExplainBody text={inv.summary.text} busy={false} verdict={false} /></OrigLang>
           </div>
         ))}
+      <InvestigationQuality inv={inv} />
       <ProblemInvestigationCards inv={inv} canEdit={canEdit} />
       <ProblemInvestigationRecommendations inv={inv} canEdit={canEdit} />
       {inv.findings.length > 0 && (

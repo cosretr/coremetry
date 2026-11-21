@@ -194,6 +194,15 @@ type Investigation struct {
 	// değil). Kapalı → ikisi de yok, kayıt bayt bayt eski.
 	Pack        bool      `json:"pack,omitempty"`
 	ContextPack *PackMeta `json:"contextPack,omitempty"`
+	// CoSRE Faz B (araştırma kalitesi). Plain — değerlendirme varyantı:
+	// oyun kitabı / hipotez durumu / kanıt kapısı KAPALI (B öncesi davranış;
+	// yalnız tekrarda, canlı koşu hep false). Playbook — problem türünün
+	// sıralı kontrolleri (playbook.go); Reach — hangi kaynağa bakıldı / bakılamadı
+	// (reach.go); Coverage — kanıt kapsama kapısının kararı (coverage.go).
+	Plain    bool          `json:"plain,omitempty"`
+	Playbook *Playbook     `json:"playbook,omitempty"`
+	Reach    []ReachEntry  `json:"reach,omitempty"`
+	Coverage *CoverageGate `json:"coverage,omitempty"`
 }
 
 // QueueKey — v0.10.1301: kuyruk anahtarı (satır kimliği

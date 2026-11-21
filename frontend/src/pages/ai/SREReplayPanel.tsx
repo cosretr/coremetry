@@ -96,6 +96,10 @@ export function SREReplayPanel() {
             <span className="mono">{pctText(sm?.reachRate)}</span>{' '}
             <span className="field-hint">{sm ? `${sm.reached}/${sm.reachKnown} koşu` : ''}</span>
           </StatTile>
+          <StatTile label="Kanıt yetersiz (sonuçsuz)">
+            <span className="mono">{sm?.inconclusive ?? '—'}</span>{' '}
+            <span className="field-hint">{sm ? `${sm.runs} koşu` : ''}</span>
+          </StatTile>
           <StatTile label="Koşudan koşuya" tone={sm && sm.unstable > 0 ? 'warn' : undefined}>
             <span className="mono">{sm ? `${sm.unstable}/${sm.multiRun}` : '—'}</span>{' '}
             <span className="field-hint">{sm ? `kararsız · ort. yayılım ${scoreText(sm.meanSpread)} · en çok ${sm.maxSpread}` : ''}</span>
@@ -203,7 +207,7 @@ function StartForm({ enabled, schedule, onStarted }: { enabled: boolean; schedul
   };
   const start = () => run(async () => {
     const rep = await api.startSREReplay({ days: Number(days), repeats: Number(repeats), limit: Number(limit),
-      variant: variant === 'contextPack' ? { contextPack: true } : {} });
+      variant: variant === 'contextPack' ? { contextPack: true } : variant === 'plain' ? { plain: true } : {} });
     onStarted(rep.reportId);
   });
   const weekly = !!schedule?.weekly;
@@ -221,6 +225,7 @@ function StartForm({ enabled, schedule, onStarted }: { enabled: boolean; schedul
         <SelectField label="Varyant" value={variant} onChange={e => setVariant(e.target.value)}>
           <option value="default">varsayılan</option>
           <option value="contextPack">bağlam paketi (contextPack)</option>
+          <option value="plain">B kapalı — oyun kitabı / hipotez durumu / kanıt kapısı yok (plain)</option>
         </SelectField>
         <Button variant="primary" size="sm" loading={busy} disabled={busy || !enabled} onClick={() => { void start(); }}
           title={enabled ? 'Etiketli Problem\'leri kendi pencerelerinde yeniden koştur ve yerel hakemle notla (düşük öncelik; hakem saatlik AI bütçesinin en çok yarısını kullanır)' : 'AI SRE kapalı'}>

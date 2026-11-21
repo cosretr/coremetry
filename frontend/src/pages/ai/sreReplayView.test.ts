@@ -37,5 +37,6 @@ describe('sreReplayView', () => {
   it('kip: varyant + tetik', () => {
     expect(reportMode({ variant: { contextPack: true }, trigger: 'schedule' })).toBe('bağlam paketi · haftalık');
     expect(reportMode({ variant: {}, trigger: 'manual' })).toBe('varsayılan');
+    expect(reportMode({ variant: { plain: true }, trigger: 'manual' })).toBe('B kapalı (plain)');
   });
 });

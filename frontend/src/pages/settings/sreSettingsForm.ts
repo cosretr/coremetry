@@ -6,7 +6,7 @@
 // aralık dışını hata olarak gösterir (operatör "500 yazdım, 200 kaydoldu"
 // sürprizini yaşamasın). Boş kutu = varsayılan (kutuya varsayılan basılmaz,
 // placeholder'da görünür — vmForm dersi).
-import type { SREPriority, SRESettings } from '@/lib/types';
+import type { SREPriority, SRESettings, SREEvidenceGateMode } from '@/lib/types';
 
 export type SRENumKey =
   | 'maxPerTick' | 'maxPerHour' | 'serviceCooldownMin' | 'maxConcurrent'
@@ -41,7 +41,16 @@ export interface SREForm {
   enabled: boolean;
   priorities: SREPriority[];
   nums: Record<SRENumKey, string>;
+  /** CoSRE Faz B3 — kanıt kapısı kipi ('' = shadow, varsayılan). */
+  evidenceGate: SREEvidenceGateMode;
 }
+
+/** Kanıt kapısı kipleri (Go sre.NormalizeGateMode; '' = shadow). */
+export const SRE_GATE_MODES: { value: SREEvidenceGateMode; label: string }[] = [
+  { value: '', label: 'gölge — karar kayda yazılır, gösterilmez (varsayılan)' },
+  { value: 'show', label: 'göster — "Kanıt yetersiz" bandı' },
+  { value: 'off', label: 'kapalı — hesaplanmaz' },
+];
 
 export type SREFormErrors = Partial<Record<SRENumKey, string>>;
 
@@ -50,7 +59,7 @@ const emptyNums = (): Record<SRENumKey, string> =>
 
 /** Varsayılan form (ayar hiç kaydedilmemiş gibi). */
 export function sreDefaultForm(): SREForm {
-  return { enabled: true, priorities: [...SRE_DEFAULT_PRIORITIES], nums: emptyNums() };
+  return { enabled: true, priorities: [...SRE_DEFAULT_PRIORITIES], nums: emptyNums(), evidenceGate: '' };
 }
 
 /** Tel → form. Varsayılana eşit değer kutuya YAZILIR (sunucunun saklı değeri
@@ -65,7 +74,8 @@ export function sreToForm(s: SRESettings | null | undefined): SREForm {
   const pr = s.autoPriorities === undefined || s.autoPriorities === null
     ? [...SRE_DEFAULT_PRIORITIES]
     : SRE_PRIORITIES.filter(p => s.autoPriorities!.includes(p));
-  return { enabled: s.enabled !== false, priorities: pr, nums };
+  const gate = s.evidenceGate === 'show' || s.evidenceGate === 'off' ? s.evidenceGate : '';
+  return { enabled: s.enabled !== false, priorities: pr, nums, evidenceGate: gate };
 }
 
 /** Alan doğrulaması — boş geçerli (varsayılan), aksi hâlde tam sayı ve aralıkta. */
@@ -98,6 +108,7 @@ export function sreFormToWire(f: SREForm): { ok: true; wire: SRESettings } | { o
     itemBudgetSec: 0, maxAttempts: 0, maxQueue: 0, maxLLMCallsPerHour: 0,
   };
   for (const b of SRE_NUM_BOUNDS) wire[b.key] = num(b);
+  if (f.evidenceGate) wire.evidenceGate = f.evidenceGate; // '' = shadow → alan yok (bayt bayt eski gövde)
   return { ok: true, wire };
 }
 

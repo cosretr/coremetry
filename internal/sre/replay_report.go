@@ -30,7 +30,8 @@ package sre
 // sre_agent formu tüm blobu yazar; contextpack emsali), VARSAYILAN KAPALI.
 //
 // Varyant: koşu başına özellik anahtarı — yalnız orkestratörün ZATEN okuduğu
-// bayrak: contextPack (Investigation.Pack). Başka anahtar yok.
+// bayraklar: contextPack (Investigation.Pack), plain (Investigation.Plain —
+// CoSRE Faz B kapalı). Başka anahtar yok.
 
 import (
 	"context"
@@ -93,6 +94,10 @@ var (
 type ReplayVariant struct {
 	// ContextPack — tekrar Context Pack okuyucularıyla (Investigation.Pack).
 	ContextPack bool `json:"contextPack,omitempty"`
+	// Plain — CoSRE Faz B: oyun kitabı + hipotez durumu + kanıt kapısı
+	// KAPALI (B öncesi davranış, Investigation.Plain). Aynı etiket
+	// penceresinde plain ve varsayılan iki rapor = B'nin ölçümü.
+	Plain bool `json:"plain,omitempty"`
 }
 
 // ReplayRun — bir Problem'in bir tekrar koşusu + notu.
@@ -106,10 +111,13 @@ type ReplayRun struct {
 	Score      *int      `json:"score,omitempty"`
 	Why        string    `json:"why,omitempty"`
 	Reach      *bool     `json:"reach,omitempty"`
-	ReachBy    string    `json:"reachBy,omitempty"` // evidence | judge
-	GradeErr   string    `json:"gradeErr,omitempty"`
-	Attempts   int       `json:"gradeAttempts,omitempty"`
-	FinishedAt int64     `json:"finishedAt,omitempty"`
+	// Inconclusive — CoSRE Faz B3: kanıt kapısı "yetersiz" dedi; sonuç
+	// kök neden iddia etmedi (plain varyantta hep yok).
+	Inconclusive bool   `json:"inconclusive,omitempty"`
+	ReachBy      string `json:"reachBy,omitempty"` // evidence | judge
+	GradeErr     string `json:"gradeErr,omitempty"`
+	Attempts     int    `json:"gradeAttempts,omitempty"`
+	FinishedAt   int64  `json:"finishedAt,omitempty"`
 }
 
 // ReplayItem — etiketli bir Problem.
@@ -379,7 +387,7 @@ func StartReplayReport(ctx context.Context, st ReplayStore, req ReplayReportRequ
 				run := ReplayRun{Rep: r, State: StateQueued}
 				created, err := EnqueueReplay(ctx, st, ReplayRequest{RunID: ReplayRunKey(rep.ReportID, r), CaseID: c.CaseID,
 					ProblemID: it.ProblemID, Service: it.Service, ProblemStartedAt: it.StartedAt, By: req.By, Now: now,
-					ContextPack: req.Variant.ContextPack}, cfg)
+					ContextPack: req.Variant.ContextPack, Plain: req.Variant.Plain}, cfg)
 				switch {
 				case err != nil:
 					run.State, run.Reason = CaseSkipped, truncRunes("kuyruğa alınamadı: "+err.Error(), 200)
@@ -442,6 +450,7 @@ func applyReplayRow(it ReplayItem, r *ReplayRun, inv Investigation) bool {
 		r.State, r.FinishedAt = inv.State, inv.FinishedAt
 		r.Top = caseTop(inv)
 		r.Conclusion = truncRunes(replayConclusion(inv), replayStoredRunes)
+		r.Inconclusive = replayInconclusive(inv)
 		if inv.State == StateError {
 			r.Reason = truncRunes(firstNonEmpty(inv.Error, "tekrar tamamlanamadı"), 200)
 		}

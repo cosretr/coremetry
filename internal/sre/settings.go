@@ -53,6 +53,9 @@ type Settings struct {
 	// MaxLLMCallsPerHour — Faz 1b anlatımı için saatlik LLM çağrı tavanı
 	// (0a'da LLM çağrısı yok; alan sözleşme için şimdiden saklanır).
 	MaxLLMCallsPerHour int `json:"maxLLMCallsPerHour"`
+	// EvidenceGate — CoSRE Faz B3 kanıt kapısının kipi: "" / shadow
+	// (VARSAYILAN: kayda yazılır, gösterilmez) | show | off (coverage.go).
+	EvidenceGate string `json:"evidenceGate,omitempty"`
 	// UpdatedBy / UpdatedAt — son admin PUT.
 	UpdatedBy string `json:"updatedBy,omitempty"`
 	UpdatedAt int64  `json:"updatedAt,omitempty"`
@@ -95,6 +98,9 @@ func NormalizeSettings(c Settings) Settings {
 	c.MaxAttempts = clampInt(c.MaxAttempts, 1, 5, d.MaxAttempts)
 	c.MaxQueue = clampInt(c.MaxQueue, 10, 1000, d.MaxQueue)
 	c.MaxLLMCallsPerHour = clampInt(c.MaxLLMCallsPerHour, 1, 500, d.MaxLLMCallsPerHour)
+	if c.EvidenceGate != GateShow && c.EvidenceGate != GateOff {
+		c.EvidenceGate = "" // shadow (varsayılan; boş = bayt bayt eski blob)
+	}
 	if c.AutoPriorities != nil {
 		seen := map[string]bool{}
 		out := []string{}

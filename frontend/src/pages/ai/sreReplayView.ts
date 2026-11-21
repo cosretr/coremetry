@@ -66,6 +66,7 @@ export function scoreTrend(reports: SREReplayListItem[]): string {
 
 /** Rapor kipi: varyant + tetik. */
 export function reportMode(r: Pick<SREReplayListItem, 'variant' | 'trigger'>): string {
-  const v = r.variant?.contextPack ? 'bağlam paketi' : 'varsayılan';
+  const parts = [r.variant?.contextPack ? 'bağlam paketi' : '', r.variant?.plain ? 'B kapalı (plain)' : ''].filter(Boolean);
+  const v = parts.length ? parts.join(' + ') : 'varsayılan';
   return r.trigger === 'schedule' ? `${v} · haftalık` : v;
 }

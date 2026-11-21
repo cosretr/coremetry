@@ -271,10 +271,21 @@ func runInvestigation(ctx context.Context, rd readers, inv *Investigation, check
 	if !replay {
 		inv.Pack = pk != nil
 	}
-	specs := planSteps(p, hyp, planInput{Env: inv.Env, Priority: inv.Priority, Anchor: inv.Anchor, StartNs: inv.ProblemAt, Now: planNow,
-		Verify: verify, ProblemID: inv.ProblemID, Pack: pk})
+	pin := planInput{Env: inv.Env, Priority: inv.Priority, Anchor: inv.Anchor, StartNs: inv.ProblemAt, Now: planNow,
+		Verify: verify, ProblemID: inv.ProblemID, Pack: pk}
+	specs := planSteps(p, hyp, pin)
 	inv.Anchor.Families = anomaly.PlanFamilies(p)
 	inv.Anchor.Symptom = symptomOf(inv.Anchor.Families)
+	// CoSRE Faz B1 — problem türünün oyun kitabı: planın eksik bıraktığı
+	// kaynaklar aynı okuyucularla eklenir. Plain varyant (tekrar) → kapalı.
+	pbNode := false
+	if inv.Plain {
+		inv.Playbook = nil
+	} else {
+		pb := PlaybookFor(ProblemTypeOf(p, inv.Anchor.Symptom))
+		inv.Playbook = &pb
+		specs, pbNode = applyPlaybook(specs, pb, p, hyp, pin)
+	}
 	if inv.Facts == nil {
 		inv.Facts = &Facts{}
 	}
@@ -333,7 +344,7 @@ func runInvestigation(ctx context.Context, rd readers, inv *Investigation, check
 		runWave(ctx, rd, inv.Service, batch, now, apply)
 	}
 	// Dalga 3 — TEMBEL node kontrolü: yalnız doygunluk hipotezi isterse.
-	if !reuse(stepNode) && ctx.Err() == nil && needsNodeCheck(evidenceFrom(inv), verify) {
+	if !reuse(stepNode) && ctx.Err() == nil && (pbNode || needsNodeCheck(evidenceFrom(inv), verify)) {
 		runWave(ctx, rd, inv.Service, []StepSpec{nodeSpec(inv.Service, inv.Anchor)}, now, apply)
 	}
 	// v0.10.1310 — Argo CD gerçeği: koşu başına EN ÇOK BİR Deps.ArgoApps
@@ -343,6 +354,7 @@ func runInvestigation(ctx context.Context, rd readers, inv *Investigation, check
 	// Hipotezler + zaman çizelgesi: SAF, okuma yok; operatör işaretleri taşınır.
 	ev := evidenceFrom(inv)
 	inv.Hypotheses = carryHuman(Score(ev), inv.Hypotheses)
+	structureResult(rd, inv, replay)           // CoSRE Faz B2–B4 — durum + erişim + kanıt kapısı (SAF)
 	inv.ContextPack = packMetaFor(*inv, p, pk) // v0.10.1494 — künye (metin değil); kapalı → nil
 	if replay {
 		inv.Timeline = buildTimeline(ev, inv.ProblemID, planNow)
@@ -374,6 +386,33 @@ func runInvestigation(ctx context.Context, rd readers, inv *Investigation, check
 		st := narrateTraced(ctx, func(nctx context.Context) Step { return narrate(nctx, rd, inv, p, now) }, inv)
 		apply(stepOutcome{step: st, findings: groups[stepSummary]})
 	}
+}
+
+// structureResult — CoSRE Faz B2–B4 (SAF, okuma yok): hipotez durumları,
+// erişim beyanı, kanıt kapısı. Plain varyant → üçü de yok (B öncesi kayıt).
+// Kapı kipi canlıda sre_agent.evidenceGate (varsayılan shadow); tekrarda
+// kip kayda shadow yazılır, tekrar sonucu kararı yine uygular.
+func structureResult(rd readers, inv *Investigation, replay bool) {
+	if inv.Plain {
+		inv.Reach, inv.Coverage = nil, nil
+		return
+	}
+	inv.Hypotheses = assignHypothesisStates(inv.Hypotheses)
+	inv.Reach = buildReach(inv.Playbook, inv.Steps)
+	mode := GateShadow
+	if !replay {
+		get := CurrentSettings
+		if rd.settings != nil {
+			get = rd.settings
+		}
+		mode = NormalizeGateMode(get().EvidenceGate)
+	}
+	if mode == GateOff {
+		inv.Coverage = nil
+		return
+	}
+	g := evaluateCoverage(inv.Hypotheses, inv.Playbook, inv.Reach, mode)
+	inv.Coverage = &g
 }
 
 // runWave — dalganın adımları paralel; sonuçlar koordinatörde (apply) sırayla.

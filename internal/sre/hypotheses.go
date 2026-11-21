@@ -97,6 +97,13 @@ type Hypothesis struct {
 	Prior      float64           `json:"prior"`
 	Checks     []HypothesisCheck `json:"checks"`
 	HumanState *HumanState       `json:"humanState,omitempty"`
+	// CoSRE Faz B2 — açık hipotez durumu (hypothesis_state.go; skoru
+	// DEĞİŞTİRMEZ): supported | ruled_out | tested | untested + durumu
+	// belirleyen kanıt künyeleri ve kısa gerekçe. Plain varyantta / eski
+	// kayıtta boş.
+	State       string   `json:"state,omitempty"`
+	StateRefs   []string `json:"stateRefs,omitempty"`
+	StateReason string   `json:"stateReason,omitempty"`
 }
 
 // Evidence — Score'un girdisi: kayıttaki gerçekler + problemin şekli.

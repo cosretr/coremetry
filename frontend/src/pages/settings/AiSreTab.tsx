@@ -10,7 +10,7 @@ import { useId, useMemo, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/shadcn/button';
-import { Field, CheckboxField } from '@/components/coremetry/Field';
+import { Field, CheckboxField, SelectField } from '@/components/coremetry/Field';
 import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
 import { keys } from '@/lib/queries';
@@ -20,7 +20,7 @@ import { AiSreStatusPanel } from './AiSreStatusPanel';
 import { ContextPackPanel } from './ContextPackPanel'; // 2026-10-24
 import { useAuthRole } from '@/components/AuthProvider';
 import {
-  SRE_NUM_BOUNDS, SRE_PRIORITIES, sreDefaultForm, sreFormToWire, sreSavedSummaryTR,
+  SRE_GATE_MODES, SRE_NUM_BOUNDS, SRE_PRIORITIES, sreDefaultForm, sreFormToWire, sreSavedSummaryTR,
   sreToForm, togglePriority, validateSREForm, type SREForm, type SRENumKey,
 } from './sreSettingsForm';
 import { ConfigStatusBanner, FlashBox, SectionTitle, SettingsLoadError, SettingsSection, humanize, useSettingsLoad } from './shared';
@@ -131,6 +131,13 @@ export function AiSreTab() {
                 hint={`${b.hint} · varsayılan ${b.def} · ${b.min}–${b.max}`} />
             ))}
           </div>
+
+          <SectionTitle>Kanıt kapısı</SectionTitle>
+          <SelectField label="Kanıt yetersizse" value={form.evidenceGate} disabled={busy}
+            onChange={e => setForm(f => ({ ...f, evidenceGate: e.target.value as SREForm['evidenceGate'] }))}
+            hint="En olası hipotez ≥2 bağımsız kaynakla desteklenmiyorsa sonuç kök neden yerine 'Kanıt yetersiz' der. Ölçülene dek gölgede.">
+            {SRE_GATE_MODES.map(m => <option key={m.value || 'shadow'} value={m.value}>{m.label}</option>)}
+          </SelectField>
 
           <ActionRow
             secondary={meta.updatedAt ? (

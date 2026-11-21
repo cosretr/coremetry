@@ -139,3 +139,13 @@ describe('togglePriority + özet', () => {
     expect(sreSavedSummaryTR(stored)).toBe('Kaydedildi — P1 problemleri otomatik araştırılır (saatte en çok 40).');
   });
 });
+
+describe('kanıt kapısı kipi (CoSRE Faz B3)', () => {
+  it('show / off gidip döner; shadow (boş) alan yollamaz; bilinmeyen → shadow', () => {
+    const show = sreFormToWire(sreToForm({ ...stored, evidenceGate: 'show' }));
+    expect(show.ok && show.wire.evidenceGate).toBe('show');
+    const def = sreFormToWire(sreToForm(stored));
+    expect(def.ok && 'evidenceGate' in def.wire).toBe(false);
+    expect(sreToForm({ ...stored, evidenceGate: 'weird' as never }).evidenceGate).toBe('');
+  });
+});

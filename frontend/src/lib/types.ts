@@ -12019,6 +12019,27 @@ export interface SREInvestigation {
   /** v0.10.1494 — Context Pack: koşu paketli mi + anlatım paketinin künyesi (UI PR 6). */
   pack?: boolean;
   contextPack?: SREPackMeta;
+  /** CoSRE Faz B — plain: değerlendirme varyantı (B kapalı); playbook: problem
+   *  türünün sıralı kontrolleri; reach: bakılan / bakılamayan kaynaklar;
+   *  coverage: kanıt kapısı (mode shadow = kayıtta, GÖSTERİLMEZ). Eski kayıt: yok. */
+  plain?: boolean;
+  playbook?: SREPlaybook;
+  reach?: SREReachEntry[];
+  coverage?: SRECoverageGate;
+}
+// CoSRE Faz B — Go: sre.Playbook / ReachEntry / CoverageGate (playbook.go, reach.go, coverage.go).
+export type SREPlaybookType = 'failure_rate' | 'latency' | 'consumer_lag' | 'generic';
+export interface SREPlaybookCheck { id: string; label: string; sources: string[]; hypotheses?: SREHypothesisKind[] }
+export interface SREPlaybook { type: SREPlaybookType; label: string; checks: SREPlaybookCheck[] }
+export type SREReachStatus = 'checked' | 'partial' | 'no_data' | 'not_configured' | 'timed_out' | 'error' | 'not_run';
+export interface SREReachEntry { source: string; status: SREReachStatus; note?: string }
+export interface SREGateGap { code: 'no_supported' | 'single_source' | 'blind_source'; source?: string; status?: SREReachStatus }
+export interface SRECoverageGate {
+  mode: 'shadow' | 'show' | 'off';
+  verdict: 'sufficient' | 'insufficient';
+  top?: SREHypothesisKind;
+  sources?: string[];
+  missing?: SREGateGap[];
 }
 // v0.10.1494 — Go: sre.PackMeta / PackSectionMeta (metin değil, künye).
 export interface SREPackSectionMeta {
@@ -12082,7 +12103,12 @@ export interface SREHypothesis {
   prior: number;
   checks: SREHypothesisCheck[];
   humanState?: SREHumanState;
+  /** CoSRE Faz B2 — açık durum (skoru değiştirmez) + durumu belirleyen kanıt künyeleri. */
+  state?: SREHypothesisState;
+  stateRefs?: string[];
+  stateReason?: string;
 }
+export type SREHypothesisState = 'supported' | 'ruled_out' | 'tested' | 'untested';
 // v0.10.1288 — Go: sre.TimelineEvent.
 export type SRETimelineKind = 'problem_start' | 'deploy' | 'spike_start' | 'first_error' | 'alert' | 'alert_resolved' | 'incident_attach';
 export interface SRETimelineEvent {
@@ -12347,7 +12373,8 @@ export interface SREEvalCompare {
 // CoSRE doğruluk ölçümü A2 — replay notlaması. Go aynası: internal/sre/replay_report.go
 // (ReplayReport / ReplayItem / ReplayRun), replay_grade.go ReplaySummary, api/sre_replay.go.
 export type SREReplayGrade = 'bullseye' | 'on_target' | 'miss' | 'nowhere';
-export interface SREReplayVariant { contextPack?: boolean }
+/** plain — CoSRE Faz B kapalı (oyun kitabı / hipotez durumu / kanıt kapısı; B öncesi). */
+export interface SREReplayVariant { contextPack?: boolean; plain?: boolean }
 export interface SREReplayRun {
   rep: number;
   state: string;
@@ -12359,6 +12386,8 @@ export interface SREReplayRun {
   why?: string;
   reach?: boolean;
   reachBy?: 'evidence' | 'judge';
+  /** CoSRE Faz B3 — kanıt kapısı "yetersiz" dedi (kök neden iddia edilmedi). */
+  inconclusive?: boolean;
   gradeErr?: string;
   gradeAttempts?: number;
   finishedAt?: number;
@@ -12395,6 +12424,8 @@ export interface SREReplaySummary {
   unstable: number;
   meanSpread: number | null;
   maxSpread: number;
+  /** CoSRE Faz B3 — kapının "kanıt yetersiz" dediği koşu sayısı (eski rapor: yok). */
+  inconclusive?: number;
 }
 export interface SREReplayReportBase {
   reportId: string;
@@ -12480,9 +12511,12 @@ export interface SRESettings {
   maxAttempts: number;
   maxQueue: number;
   maxLLMCallsPerHour: number;
+  /** CoSRE Faz B3 — kanıt kapısı kipi: yok = shadow (varsayılan: kayda yazılır, gösterilmez) | show | off. */
+  evidenceGate?: SREEvidenceGateMode;
   updatedBy?: string;
   updatedAt?: number; // unix ns
 }
+export type SREEvidenceGateMode = '' | 'show' | 'off';
 
 // v0.10.1434 — CoSRE araştırma programı PR 1: AI araç setleri (toolset).
 // Go aynası: internal/mcptools/toolset.go ToolsetState + ToolsetHealth,
