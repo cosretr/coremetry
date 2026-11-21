@@ -54,9 +54,8 @@ describe('kayma mekanizması ve saat', () => {
     const strip = code(read('../pages/service/DetailsPropsStrip.tsx'));
     expect(strip).toContain('meta: LIVE_META,');
   });
-  it('ağır okumalar rung\'lu pencere alır (heatmap, endpoint downstream/callers)', () => {
-    expect(code(read('../pages/service/ServiceLatencyHeatmap.tsx')))
-      .toContain('useMemo(() => snapHeavyWindow(range, timeRangeToNs(range)), [range])');
+  // v0.10.2436 — ServiceLatencyHeatmap (Service › Metrics Latency) kalktı.
+  it('ağır okumalar rung\'lu pencere alır (endpoint downstream/callers)', () => {
     const ed = code(read('../pages/EndpointDetail.tsx'));
     expect(ed).toContain('const heavy = useMemo(() => snapHeavyWindow(range, { from, to }), [range, from, to]);');
     expect(ed).toMatch(/<WhereTheTimeGoesSection refObj=\{refObj\} from=\{heavy\.from\} to=\{heavy\.to\}/);

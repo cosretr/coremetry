@@ -16,7 +16,7 @@ const SRC = resolve(__dirname, '../..');
 // 2026-11-21: ölçülen 56 → ilk dilimde (SpanDetail, LogContextModal, Logs
 // yan panelleri/rail; Trace paylaşım popover'ı) 53. pages/Trace.tsx listede
 // kalıyor: ana trace yüklemesi (api.trace) panel değil, sonraki dilim.
-const CEILING = 53;
+const CEILING = 52;
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {

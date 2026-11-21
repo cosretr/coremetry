@@ -193,7 +193,6 @@ describe('envApplies — §4.3 (b) dürüstlük sözleşmesi', () => {
     // Service.tsx env'i çocuklara ve bundle'a GEÇİRİR.
     expect(service, 'Service <Topbar envApplies/> vermeli').toMatch(/envApplies/);
     expect(service, 'ServiceOverview env almalı').toMatch(/<ServiceOverview[\s\S]*?env=\{env\}/);
-    expect(service, 'Latency heatmap env almalı').toMatch(/<ServiceLatencyHeatmap[\s\S]*?env=\{env\}/);
     expect(service, 'serviceBundle env almalı').toContain('env: env || undefined');
 
     // Overview: SPAN yolu (envDSL) VE METRİK yolu (serviceMetricThroughput +

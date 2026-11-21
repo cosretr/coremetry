@@ -22,7 +22,6 @@ import { expandBareVerbRows, routeRowsForBundle } from './service/operationRoute
 import { isBareHTTPMethod } from '@/lib/opDisplayName';
 import { useServiceOperationRoutes } from '@/lib/queries';
 import { ServiceClusterBreakdown } from './service/ServiceClusterBreakdown';
-import { ServiceLatencyHeatmap } from './service/ServiceLatencyHeatmap';
 import { Spinner, Empty } from '@/components/Spinner';
 import { LazyMount } from '@/components/LazyMount';
 import { ServiceCatalogPill } from '@/components/ServiceCatalogPill';
@@ -33,7 +32,7 @@ import { DetailsPropsStrip } from './service/DetailsPropsStrip';
 import { DetailsEndpointsSection, useEndpointsHeadParts } from './service/DetailsEndpointsSection'; // v0.10.715
 import { CollapsedSection } from '@/components/coremetry/CollapsedSection'; // v0.10.2132 (S1)
 import { DetailsDeploysSummary } from './service/DetailsDeploysSummary';
-import { ENDPOINTS_SUMMARY, latencySummary, metricsSummary, parseOpenSections, serializeOpenSections, sectionForHash, type CollapsibleSection } from './service/detailsSummaries';
+import { ENDPOINTS_SUMMARY, parseOpenSections, serializeOpenSections, sectionForHash, type CollapsibleSection } from './service/detailsSummaries';
 import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
 import { SectionHead } from '@/components/coremetry/SectionHead'; // v0.10.715
 import { ClusterModeToggle } from '@/components/ClusterModeToggle'; // v0.10.717
@@ -55,6 +54,10 @@ import { withPivotCtx, pivotCtxFromSearch, type PivotDim } from '@/lib/pivotCont
 import { BrushCompare } from '@/components/coremetry/BrushCompare'; // dalga 3 — fırça → karşılaştır
 import { heatmapFilters } from './service/heatmapFilters';
 
+// v0.10.2436 — Metrics sekmesinin ilk bölümü (runtime); uPlot / CorePanel
+// zinciri yalnız sekme açılınca yüklenir.
+const ServiceRuntimeSection = lazy(() => import('./service/ServiceRuntimeSection'));
+
 // v0.10.1231 — servis sayfasından traces/logs/endpoints pivotları ekrandaki
 // env + cluster'ı taşır (önce yalnız endpoints env'i taşıyordu).
 const SERVICE_PIVOT_CARRY: readonly PivotDim[] = ['env', 'cluster'];
@@ -69,6 +72,9 @@ const SERVICE_PIVOT_CARRY: readonly PivotDim[] = ['env', 'cluster'];
 // already lands on the same service-scoped /traces page (where the column is
 // sortable). A stale ?tab=traces link redirects there rather than 404ing to
 // the default tab.
+// v0.10.2436 — 'details' sekmesinin etiketi "Metrics" (Elastic APM adı); URL
+// anahtarı `details` kalır (derin link / CoSRE hedefi / #deploys / dtl-*),
+// `?tab=metrics` de aynı sekmeyi açar.
 type ServiceTab = 'overview' | 'operations' | 'details' | 'logs' | 'topology' | 'infra' | 'gitops' | 'http' | 'messaging';
 
 // CoSRE Faz E — Details › "CoSRE notları" gövdesi tembel (bölüm açılınca).
@@ -178,12 +184,13 @@ function ServiceDetailInner() {
   // health view). Operations / Details are opt-in via ?tab=.
   const tabParam = searchParams.get('tab');
   const tab: ServiceTab = tabParam === 'operations' ? 'operations'
-    : tabParam === 'details' ? 'details'
+    : (tabParam === 'details' || tabParam === 'metrics') ? 'details'
     : tabParam === 'logs' ? 'logs'
     : tabParam === 'topology' ? 'topology'
     // v0.10.1206 — Pods sekmesi Infrastructure'a katıldı (cluster satırında
-    // inline pod'lar + altta runtime); eski ?tab=pods / ?tab=metrics oraya.
-    : (tabParam === 'infra' || tabParam === 'pods' || tabParam === 'metrics') ? 'infra'
+    // inline pod'lar); eski ?tab=pods oraya. v0.10.2436 — ?tab=metrics artık
+    // Metrics (details) sekmesi.
+    : (tabParam === 'infra' || tabParam === 'pods') ? 'infra'
     : tabParam === 'gitops' ? 'gitops'
     : tabParam === 'http' ? 'http' // v0.10.1244 — HTTP Metrics (VictoriaMetrics)
     : tabParam === 'messaging' ? 'messaging' // v0.10.1536 — Kafka istemci metrikleri (VictoriaMetrics)
@@ -206,7 +213,7 @@ function ServiceDetailInner() {
   // AFTER the initial paint (bundle fetch + tab gate). The
   // ?tab=details&#deploys link from /deploys depends on this.
   // v0.10.2132 (S1) — çapa KAPALI bir bölümü hedefliyorsa (#deploys,
-  // #dtl-latency …) önce bölüm açılır (bu oturumluk; kalıcı tercihe yazılmaz),
+  // #dtl-endpoints …) önce bölüm açılır (bu oturumluk; kalıcı tercihe yazılmaz),
   // iki kare sonra kaydırılır (açılan gövde DOM'a insin). Sayfa içi
   // `<a href="#deploys">` tıkı hashchange ile aynı yoldan geçer.
   const [hashSection, setHashSection] = useState<CollapsibleSection | null>(null);
@@ -263,19 +270,19 @@ function ServiceDetailInner() {
   const { panels: metricPanels } = useDetailsMetricPanels(svc, tab === 'details');
   const hasMetricPanels = metricPanels.length > 0;
 
-  // v0.8.415 (Tempo-parity T3) — operation scope lives in the URL
-  // (?op=) so the latency heatmap and CoSRE's page context ride one
-  // selection, and a copied link / refresh reproduces the exact
-  // scoped view (house rule: URL is the source of truth). '' = all.
-  // v0.10.2154 — the Performance section (and its operation picker, the
-  // only in-app writer of ?op=) is gone; the param is still honoured when
-  // present and the scope chip below clears it.
-  const opScope = searchParams.get('op') ?? '';
-  const clearOpScope = () => setSearchParams(prev => {
-    const p = new URLSearchParams(prev);
-    p.delete('op');
-    return p;
-  }, { replace: true });
+  // v0.10.2436 — Metrics sekmesinde ?op= kapsamının daralttığı bölüm kalmadı
+  // (Latency heatmap kalktı; kapsam şeridi de onunla). Eski
+  // `?tab=details&op=X` derin linki Operations sekmesine, o operasyona
+  // süzülü açılır (OperationsTable ?op= okur). replace: geri tuşu döngüsü yok.
+  const opParam = searchParams.get('op') ?? '';
+  useEffect(() => {
+    if (tab !== 'details' || !opParam) return;
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      p.set('tab', 'operations');
+      return p;
+    }, { replace: true });
+  }, [tab, opParam, setSearchParams]);
   // NO svc-change wipe of ?op= (v0.8.423). Every cross-service link in
   // the app builds a fresh /service?name=X href, so a forward
   // navigation sheds the scope naturally; the only path where svc
@@ -660,52 +667,47 @@ function ServiceDetailInner() {
             )}
             {tab === 'details' && (
               <div>
-                {/* v0.9.380 (redesign D4, mockup af7419e5) — dtl-cols (1fr 1fr)
-                    grid'i ÖLDÜ: v0.9.141/348 kaldırmalarından beri üç bölümde
-                    de sağ sütun boştu (sayfanın yarısı ölü piksel). Heatmap/
-                    DB/Runtime tam genişlikte. v0.10.2133 (S2, mockup onaylı
-                    2026-11-13): sağdaki yapışkan ToC rayı KALKTI — bölümler
-                    kapalı satır olunca sayfa kısa; dtl-* kimlikleri derin
-                    link / CoSRE hedefi olarak kalır. LazyMount değişmedi.
-                    ?op= kapsam şeridi hangi bölümün daraldığını İŞARETLER —
-                    v0.9.358-374 dürüstlük çizgisinin düzen hali. */}
+                {/* v0.9.380 (redesign D4) — bölümler tam genişlikte; v0.10.2133
+                    (S2) ToC rayı kalktı; dtl-* kimlikleri derin link / CoSRE
+                    hedefi olarak kalır. v0.10.2436 (operatör onayı 2026-11-21,
+                    Elastic APM adı "Metrics"): sıra Runtime → uygulama
+                    metrikleri → Clusters → Database; Latency (heatmap) ve ?op=
+                    kapsam şeridi kalktı (operasyon kapsamı Operations
+                    sekmesinde). */}
                 <div id="dtl-props"><DetailsPropsStrip service={svc} range={range} /></div>
-                {opScope && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 8px', fontSize: 12 }}>
-                    <span className="badge b-info mono" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      op: {opScope}
-                      <span onClick={clearOpScope} style={{ cursor: 'pointer' }} title="Operasyon kapsamını kaldır">✕</span>
-                    </span>
-                    {/* v0.9.784 — beyan sayfa SIRASINI izler ve KOŞULLU
-                        bölümü ancak kuruluysa anar. Metrikler yalnız
-                        service.name ile filtreleniyor (metric_points'te
-                        operasyon boyutu yok) → kapsam DIŞI. */}
-                    <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-                      kapsam: <span style={{ opacity: .65 }}>Clusters ✗ · Database ✗ · </span>
-                      {hasMetricPanels && <span style={{ opacity: .65 }}>Metrikler ✗ · </span>}
-                      Latency ✓ · <span style={{ opacity: .65 }}>Runtime ✗</span>
-                    </span>
-                  </div>
+                {/* v0.10.2436 — Runtime Infrastructure sekmesinden taşındı (ilk
+                    bölüm; başlık + #runtime-sec çapası bileşenin içinde). */}
+                <div className="ov-mb">
+                  <Suspense fallback={<Spinner />}>
+                    <ServiceRuntimeSection service={svc} range={range}
+                      onZoom={handleZoom} onZoomReset={handleZoomReset} />
+                  </Suspense>
+                </div>
+                {/* v0.9.784 — OTLP metrik paneli; set servisin KENDİ kataloğundan
+                    (ad hardcode YOK), panel yoksa bölüm de yok. v0.10.2436 —
+                    Metrics sekmesinin ana gövdesi: kapanır satır değil, açık. */}
+                {hasMetricPanels && (
+                  <>
+                    <SectionHead id="dtl-metrics" title="Uygulama metrikleri" source="metric_points"
+                      badges={<span className="badge b-gray" title="metric_points'te operasyon boyutu yok">tüm servis</span>} />
+                    <LazyMount minHeight={240}>
+                      <DetailsMetricsSection service={svc} rangeNs={rangeNs}
+                        onZoom={handleZoom} onZoomReset={handleZoomReset} />
+                    </LazyMount>
+                  </>
                 )}
-                {/* v0.10.151 (operatör): Clusters ve Database EN ÜSTTE —
-                    çok-cluster'lı prod'da ilk soru "hangi cluster'da ne
-                    oluyor?" ve "hangi sorgu?"; Latency aşağı indi.
-                    Per-cluster breakdown Runtime & rollouts'tan buraya taşındı
-                    (kendi çapası dtl-clusters). */}
-                <SectionHead id="dtl-clusters" title="Clusters"
-                  badges={opScope && <span className="badge b-gray">tüm servis</span>} />
+                {/* v0.10.151 (operatör): Clusters ve Database — çok-cluster'lı
+                    prod'da "hangi cluster'da ne oluyor?" ve "hangi sorgu?". */}
+                <SectionHead id="dtl-clusters" title="Clusters" />
                 <div className="ov-mb">
                   <LazyMount minHeight={140}>
                     <ServiceClusterBreakdown service={svc} range={range} />
                   </LazyMount>
                 </div>
-                {/* v0.9.141 (operatör) — Structure paneli kaldırıldı; bölüm
-                    yalnız DB sorgularına indi, başlık "Database" oldu. */}
-                {/* v0.10.717 — kaynak rozeti düzeltildi: panel ham spans okur
+                {/* v0.10.717 — kaynak rozeti: panel ham spans okur
                     (db_statement_summary_5m yalnız /slow-queries + alarm). */}
                 <SectionHead id="dtl-db" title="Database"
                   badges={<>
-                    {opScope && <span className="badge b-gray">tüm servis</span>}
                     {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
                     {!scopeCluster && <ClusterModeToggle value={dbByCluster} onChange={setDbByCluster} label="DB ifadeleri kırılımı" />}
                   </>}
@@ -721,48 +723,18 @@ function ServiceDetailInner() {
                                     defaultOpen />
                   </LazyMount>
                 </div>
-                {/* v0.10.715 (etüt dilim 1) — Endpoints bölümü: bugüne dek yalnız
-                    Overview'daydı; cluster boyutlu (mockup şerh 4).
-                    v0.10.2132 (S1, mockup onaylı 2026-11-13) — aşağıdaki
-                    bölümler varsayılan KAPALI satır: gövde (ve okumaları) yalnız
-                    açılınca; özet yalnız sayfada zaten yüklü veriden;
-                    kaynak rozeti açıkken bölüm altındaki "kaynak" satırında.
-                    v0.10.2154 (operatör) — Performance bölümü (operasyon
-                    başına RPS / hata oranı / p99 grafikleri) kalktı. */}
+                {/* v0.10.2132 (S1) — aşağıdaki bölümler varsayılan KAPALI satır:
+                    gövde (ve okumaları) yalnız açılınca. */}
                 <CollapsedSection id="dtl-endpoints" title="Endpoints" summary={ENDPOINTS_SUMMARY}
                   source={endpointsHead.source} badges={endpointsHead.badges} meta={endpointsHead.meta} actions={endpointsHead.actions}
                   open={sectionOpen('dtl-endpoints')} onOpenChange={setSectionOpen('dtl-endpoints')}>
                   <DetailsEndpointsSection service={svc} range={range} rangeNs={rangeNs} env={env} />
                 </CollapsedSection>
-                {/* v0.9.784 — OTLP metrik satırı. Details'te bugüne dek
-                    metric_points türevli TEK panel yoktu; panel seti
-                    servisin KENDİ kataloğundan kurulur (ad hardcode YOK),
-                    ailesi olmayan panel hiç kurulmaz, hiç panel yoksa
-                    bölüm satırı da gizli. */}
-                {hasMetricPanels && (
-                  <CollapsedSection id="dtl-metrics" title="Metrikler" summary={metricsSummary(metricPanels)} source="metric_points"
-                    badges={<span className="badge b-gray" title="metric_points'te operasyon boyutu yok — bölüm daralmaz">tüm servis</span>}
-                    open={sectionOpen('dtl-metrics')} onOpenChange={setSectionOpen('dtl-metrics')}>
-                    <DetailsMetricsSection service={svc} rangeNs={rangeNs}
-                      onZoom={handleZoom} onZoomReset={handleZoomReset} />
-                  </CollapsedSection>
-                )}
-                <CollapsedSection id="dtl-latency" title="Latency" summary={latencySummary(info)} source="spans · heatmap"
-                  badges={opScope && <span className="badge b-info">op kapsamı</span>}
-                  open={sectionOpen('dtl-latency')} onOpenChange={setSectionOpen('dtl-latency')}>
-                  <div className="ov-mb">
-                    <LazyMount minHeight={360}>
-                      <ServiceLatencyHeatmap service={svc} range={range}
-                                             operation={opScope} rootOnly env={env} />
-                    </LazyMount>
-                  </div>
-                </CollapsedSection>
-                <CollapsedSection id="dtl-runtime" title={<>Runtime &amp; rollouts</>} summary={<DetailsDeploysSummary service={svc} />}
+                {/* v0.10.2436 — başlık "Rollouts" (yeni Runtime bölümüyle ad
+                    çakışmasın); kimlik dtl-runtime derin link için aynı. */}
+                <CollapsedSection id="dtl-runtime" title="Rollouts" summary={<DetailsDeploysSummary service={svc} />}
                   source="spans · service.version × cluster"
-                  badges={<>
-                    {opScope && <span className="badge b-gray">tüm servis</span>}
-                    {scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
-                  </>}
+                  badges={scopeCluster && <span className="badge b-info mono">cluster: {scopeCluster}</span>}
                   open={sectionOpen('dtl-runtime')} onOpenChange={setSectionOpen('dtl-runtime')}>
                   {/* Recent rollouts — #deploys anchor preserved so the
                       /deploys "history →" link still scrolls here (v0.10.2132:
@@ -890,7 +862,7 @@ function TabStrip({ tab, onChange, opCount }: {
   const items: { key: ServiceTab; label: string; hint?: string }[] = [
     { key: 'overview',   label: 'Overview' },
     { key: 'operations', label: 'Operations', hint: opCount > 0 ? `${opCount}` : undefined },
-    { key: 'details',    label: 'Details' },
+    { key: 'details',    label: 'Metrics' }, // v0.10.2436 — Elastic APM adı; URL anahtarı `details`
     { key: 'infra',      label: 'Infrastructure' },
     { key: 'gitops',     label: 'GitOps' }, // v0.10.981
     { key: 'http',       label: 'HTTP/GRPC' }, // v0.10.1244; v0.10.1566 ad HTTP/GRPC, gRPC eki yok (operatör: "başlıkta +grpc demesine gerek yok")

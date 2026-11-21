@@ -4,13 +4,15 @@
 // VARLIK pod'larıyla (sunucunun /runtime-signals podEntities dizini; pod adı
 // = host_name) sorulur — ad eşlemesi yok. Profil sinyali `podScoped`.
 // LAZY chunk (ServiceRuntimeSection yalnız profilde db_pool_* varken yükler).
+// v0.10.2436 — kartlar RuntimePodChart (CorePanel); iki kart da pod başına
+// (alma süresi pod'un kendi sum/count oranı), medyan + en kötü + eşik üstü.
 import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';
 import { panelMaxDataPoints } from '@/lib/chartStep';
-import { Spinner } from '@/components/Spinner';
-import { TimeSeriesPanel, type TSSeries } from '@/components/viz/TimeSeriesPanel';
+import { RuntimePodChart, type RuntimeExtraLine } from './RuntimePodChart';
+import type { PodSeries } from './runtimePodReduce';
 import type { FilterExpr, RuntimeResolvedSignal, SpanMetricSeries } from '@/lib/types';
 import { useRuntimeProfile } from './runtimeFamily';
 import { podLineLabel } from './runtimePodLabel';
@@ -47,7 +49,7 @@ export default function RuntimePoolCards({ service, from, to, extraFilters }: {
     const out: Q[] = [];
     const add = (sig: string, byPod: boolean) => { const r = by.get(sig); if (r) out.push({ key: sig, res: r, byPod }); };
     add('db_pool_active', true); add('db_pool_max', false); add('db_pool_pending', false);
-    add('db_acquire_sum', false); add('db_acquire_count', false);
+    add('db_acquire_sum', true); add('db_acquire_count', true);
     return out;
   }, [profQ.data]);
   const filters = useMemo(() => (pf ? JSON.stringify([pf, ...(extraFilters ?? [])]) : ''), [pf, extraFilters]);
@@ -68,33 +70,40 @@ export default function RuntimePoolCards({ service, from, to, extraFilters }: {
     return i < 0 ? undefined : ((queries[i]?.data ?? []) as SpanMetricSeries[]);
   };
   const pending = queries.some(q => q.isPending);
+  const failed = queries.some(q => q.isError);
+  const status: 'loading' | 'error' | 'ready' = failed ? 'error' : pending ? 'loading' : 'ready';
   const pts = (s: SpanMetricSeries) => s.points.map(p => ({ time: p.time, value: p.value }));
+  // host_name yoksa (grup anahtarı boş) tek çizgi + "pod etiketi yok".
+  const anon = (d: SpanMetricSeries[] | undefined) => !!d?.length && d.every(s => !(s.groupKey[0] ?? '').trim());
+  const label = (s: SpanMetricSeries, fallback: string) => podLineLabel(s.groupKey, fallback);
 
-  const pool: TSSeries[] = [];
-  (data('db_pool_active') ?? []).slice(0, 40).forEach(s => pool.push({ label: podLineLabel(s.groupKey, tr('rt.line.dbActive')), unit: '', points: pts(s) }));
+  const active = data('db_pool_active');
+  const poolPods: PodSeries[] = (active ?? []).map(s => ({ label: label(s, tr('rt.line.dbActive')), points: pts(s) }));
+  const poolExtra: RuntimeExtraLine[] = [];
   const mx = data('db_pool_max')?.[0];
-  if (mx) pool.push({ label: tr('rt.line.dbMax'), unit: '', color: 'var(--err)', dash: [5, 4], points: pts(mx) });
+  if (mx) poolExtra.push({ label: tr('rt.line.dbMax'), color: 'var(--err)', dashed: true, points: pts(mx) });
   const pe = data('db_pool_pending')?.[0];
-  if (pe) pool.push({ label: tr('rt.line.dbPending'), unit: '', color: 'var(--warn)', points: pts(pe) });
-  const acq = ratioMs(data('db_acquire_sum')?.[0], data('db_acquire_count')?.[0]);
+  if (pe) poolExtra.push({ label: tr('rt.line.dbPending'), color: 'var(--warn)', points: pts(pe) });
+  const sums = data('db_acquire_sum') ?? [];
+  const cnts = new Map((data('db_acquire_count') ?? []).map(c => [c.groupKey.join('\u0000'), c]));
+  const acqPods: PodSeries[] = sums
+    .map(s => ({ label: label(s, tr('rt.line.dbAcquire')), points: ratioMs(s, cnts.get(s.groupKey.join('\u0000'))) }))
+    .filter(x => x.points.length > 0);
   const srcTip = (m: string[]) => `${m.join(', ')} · VM Micrometer (HikariCP) · host_name ∈ ${tr('rt.pods.title')}`;
 
   if (!pf || specs.length === 0) return null;
-  const card = (key: string, title: string, tip: string, series: TSSeries[]) => (
-    <div key={key} className="card" data-testid={`rt-card-${key}`}>
-      <div className="ov-card-h"><h3 title={tip}>{title}</h3><span className="badge b-gray" title={tip}>Micrometer</span></div>
-      <div className="ov-card-b rt-card-b">
-        {pending && series.length === 0 ? <div className="rt-slot"><Spinner /></div>
-          : series.length === 0 ? <div className="rt-slot rt-slot--empty">{tr('rt.noData')}</div>
-            : <TimeSeriesPanel series={series} height={220} mode="line" syncKey={`runtime:${service}`} smooth />}
-      </div>
-    </div>
-  );
   return (
     <div className="rt-cards" data-testid="runtime-pool-cards">
-      {card('dbpool', tr('rt.card.dbPool'), srcTip(specs.filter(s => s.key.startsWith('db_pool')).map(s => s.res.metric)), pool)}
-      {acq.length > 0 && card('dbacquire', tr('rt.card.dbAcquire'), srcTip(['hikaricp_connections_acquire_seconds_{sum,count}']),
-        [{ label: tr('rt.line.dbAcquire'), unit: 'ms', color: 'var(--purple)', points: acq }])}
+      <RuntimePodChart testId="rt-card-dbpool" title={tr('rt.card.dbPool')} storageKey="rt-pool-dbpool" unit=""
+        service={service} from={from} to={to} pods={poolPods} podless={anon(active)} extra={poolExtra}
+        status={status} mode="line"
+        source={{ label: 'Micrometer', tip: srcTip(specs.filter(s => s.key.startsWith('db_pool')).map(s => s.res.metric)) }} />
+      {(acqPods.length > 0 || (status === 'loading' && sums.length === 0 && specs.some(s => s.key === 'db_acquire_sum'))) && (
+        <RuntimePodChart testId="rt-card-dbacquire" title={tr('rt.card.dbAcquire')} storageKey="rt-pool-dbacquire" unit="ms"
+          service={service} from={from} to={to} pods={acqPods} podless={anon(sums)}
+          status={status} mode="line"
+          source={{ label: 'Micrometer', tip: srcTip(['hikaricp_connections_acquire_seconds_{sum,count}']) }} />
+      )}
     </div>
   );
 }

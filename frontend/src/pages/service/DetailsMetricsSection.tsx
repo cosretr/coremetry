@@ -167,7 +167,7 @@ export function DetailsMetricsSection({ service, rangeNs, onZoom, onZoomReset }:
                 onZoom={onZoom}
                 onZoomReset={onZoomReset}
                 // v0.9.948 (D5/Ö26) — imleç zamanını paylaşılan kanala
-                // yayınlar. Bu sekmenin ALTINDA duran LatencyHeatmap bir
+                // yayınlar (v0.10.2436: sekmedeki LatencyHeatmap kalktı; otobüs kalır). Heatmap bir
                 // CANVAS, yani uPlot.sync'e katılamaz; "aynı zaman ekseni"
                 // vaadinin tek taşıyıcısı bu otobüs. Yayın rAF-kısıtlı,
                 // 60fps mousemove yolu React'a girmez.

@@ -66,7 +66,7 @@ describe('OperationsTable — Normalized satırdan Traces (v0.10.1115)', () => {
     expect(params(href).get('rootOnly')).toBe('false');
     expect(nameLink(tr).title).toContain(`op_group) = ${SHAPE}`);
     // Normalized'da kapsamlı grafik simgesi yok (v0.8.422, değişmedi).
-    expect(tr.querySelector('a[aria-label^="Open scoped charts"]')).toBeNull();
+    expect(tr.querySelector('a[aria-label^="Filter to"]')).toBeNull();
   });
 
   it('satır altı panel: "View traces" ve Explore bağlantıları da op_group taşır', async () => {

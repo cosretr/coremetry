@@ -4,50 +4,43 @@ import { resolve } from 'node:path';
 
 // S0 karakterizasyon (docs/frontend/service-tabs-plan.md §5, K11–K13):
 // JVM bellek kartlarında limit serisi referans (ref) ve KESİK çizgi; pod
-// başına çizgi tavanı 40 (v0.9.95 operatör: "sadece 8 pod gösteriyor"),
-// tavan yalnız ÇİZİMDE uygulanır (fetch tüm serileri getirir); pod çizgi
-// etiketi podLineLabel sözleşmesinden. S9 heap kartını zarfa çevirirken
-// "Pod başına çizgiler" kipi bu sözleşmeyi korur.
+// çizgi etiketi podLineLabel sözleşmesinden. v0.10.2436 — 40 pod tavanı
+// kalktı: pod seçimi runtimePodReduce'ta (medyan + en kötü + eşik üstü), çizim
+// RuntimePodChart (CorePanel) üzerinden; TimeSeriesPanel kullanılmaz.
 const src = readFileSync(resolve(__dirname, 'RuntimeCharts.tsx'), 'utf8');
+const dotnet = readFileSync(resolve(__dirname, 'DotnetRuntimePanel.tsx'), 'utf8');
+const pool = readFileSync(resolve(__dirname, 'RuntimePoolCards.tsx'), 'utf8');
+const chart = readFileSync(resolve(__dirname, 'RuntimePodChart.tsx'), 'utf8');
 
-describe('RuntimeCharts limit / tavan / etiket (S0)', () => {
-  it('heap ve non-heap limit serisi ref:true', () => {
+describe('RuntimeCharts limit / etiket (S0)', () => {
+  it('heap ve non-heap limit serisi ref:true; referans kesik', () => {
     const refs = src.match(/metric: 'jvm\.memory\.limit'[^}]*ref: true/g) ?? [];
     expect(refs.length).toBe(2);
+    expect(src).toContain('dashed: !!line.ref');
   });
-  it('referans çizgi kesik [5, 4]', () => {
-    expect(src).toContain('dash: line.ref ? [5, 4] : undefined');
-  });
-  it('pod tavanı 40, kesim çizimde, not "N / M pod"', () => {
-    expect(src).toContain('const FANOUT_MAX = 40;');
-    expect(src).toContain('data.slice(0, FANOUT_MAX)');
-    expect(src).toContain('`${FANOUT_MAX} / ${podTotal} pod gösteriliyor`');
-  });
-  it('pod çizgileri podLineLabel ile etiketlenir', () => {
-    expect((src.match(/labelOf: podLineLabel/g) ?? []).length).toBeGreaterThanOrEqual(5);
+  it('pod çizgileri podLineLabel ile etiketlenir; 40 tavanı yok', () => {
+    expect((src.match(/labelOf: podLineLabel/g) ?? []).length).toBeGreaterThanOrEqual(8);
+    expect(src).not.toContain('FANOUT_MAX');
+    expect(dotnet).not.toContain('FANOUT_MAX');
   });
 });
 
-// v0.10.2148 (S9; plan K12 — operatör kararı 2026-11-14, seçenek B): heap
-// kartının varsayılanı özet görünüm; yukarıdaki sözleşme (40 tavan, kesik
-// limit, podLineLabel) `?rtview=lines` kipinde aynen yaşar ve özet de aynı
-// etiketi kullanır.
-describe('RuntimeCharts heap görünümü (S9)', () => {
-  it('görünüm URL\'den (?rtview), yalnız JVM heap kartı özetlenir', () => {
-    expect(src).toContain("const rtRaw = params.get('rtview');");
-    expect(src).toContain("family === 'jvm' && card.key === 'heap' && !view.lines;");
+describe('Runtime grafikleri tek motor (v0.10.2436)', () => {
+  it('RuntimeCharts / .NET / havuz kartları RuntimePodChart; TimeSeriesPanel yok', () => {
+    for (const f of [src, dotnet, pool]) {
+      expect(f).toContain('<RuntimePodChart');
+      expect(f).not.toContain('TimeSeriesPanel');
+    }
   });
-  it('özet TÜM pod\'ları alır (kesim yok), etiket aynı sözleşmeden, sınır yumuşatılmaz', () => {
-    expect(src).toMatch(/if \(summaryMode\) \{[\s\S]*?for \(const s of data\) \{[\s\S]*?line\.labelOf \? line\.labelOf\(s\.groupKey, line\.label\)/);
-    expect(src).toContain('withClusterPrefix(base, podClusterOf(s.groupKey), multi)');
-    expect(src).toContain('summary = pct.length > 0 ? heapSummary(pct, true, smoothPoints) : heapSummary(absPods, false, smoothPoints);');
-    // Yüzde okumaları pod başına TOPLAM (havuzların toplamı / toplamı); ortalama değil.
+  it('RuntimePodChart CorePanelMulti\'yi lazy yükler, görünüm ?rtview\'dan', () => {
+    expect(chart).toContain("lazy(() =>\n  import('@/components/chart/corePanelEntry')");
+    expect(chart).toContain("parseRtView(params.get('rtview'))");
+    expect(chart).toContain('reducePods(pods ?? []');
+    expect(chart).not.toMatch(/localStorage|STORAGE_KEYS/);
+  });
+  it('heap kartı sınırın yüzdesi: pod başına TOPLAM okumalar', () => {
     expect(src.match(/agg: 'sum', role: 'pct(Used|Limit)'/g)?.length).toBe(2);
-  });
-  it('geçiş gerçek bağlantı, replace; ayar / localStorage yok', () => {
-    expect(src).toContain('<Link replace to={{ search: rtViewSearch(params, { ...view, lines: true }) }}>Pod başına çizgiler</Link>');
-    expect(src).toContain('<Link replace to={{ search: rtViewSearch(params, { ...view, lines: false }) }}>Özet görünüm</Link>');
-    expect(src).not.toMatch(/localStorage|STORAGE_KEYS/);
+    expect(src).toContain('const pct = podPercentLines(pctUsed, pctLimit);');
   });
 });
 
@@ -62,4 +55,3 @@ describe('RuntimeCharts non-heap düzlük (S10)', () => {
     expect(src).toContain('flat && !view.lines && !view.nonheap ? (');
   });
 });
-

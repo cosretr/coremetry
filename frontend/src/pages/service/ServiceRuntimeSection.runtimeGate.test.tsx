@@ -12,7 +12,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { RuntimeSignalReport } from '@/lib/types';
+import type { RuntimeSignalReport, TimeRange } from '@/lib/types';
 
 const m = vi.hoisted(() => ({ language: 'dotnet' as string | undefined, profileRuntime: 'dotnet', profileCalls: 0, metricNames: [] as string[] }));
 
@@ -61,13 +61,17 @@ vi.mock('@/lib/queries', async (importOriginal) => {
   return { ...mod, useServiceDeploys: () => ({ data: [] }) };
 });
 vi.mock('@/components/viz/TimeSeriesPanel', () => ({ TimeSeriesPanel: () => <div data-testid="tsp" /> }));
+// v0.10.2436 — runtime kartları CorePanelMulti (RuntimePodChart, lazy).
+vi.mock('@/components/chart/corePanelEntry', () => ({ CorePanelMulti: () => <div data-testid="cpm" /> }));
+// Genel kaynak yedeği Thanos envanterini yalnız çizilirken okur.
+vi.mock('./useServicePods', () => ({ useServicePods: () => ({ clustersWithPods: [], effNs: '', effDeploy: '', cFrom: 0, cTo: 3600, clamped: false }) }));
 vi.mock('./RuntimeCharts', () => ({ RuntimeCharts: (p: { family: string }) => <div data-testid={`runtime-charts-${p.family}`}>JVM heap</div> }));
 vi.mock('./HeapBaselineCard', () => ({ HeapBaselineCard: () => <div data-testid="heap-band">JVM heap band</div> }));
 vi.mock('./PodResourceCharts', () => ({ PodResourceCharts: () => <div data-testid="pod-resources" /> }));
 
 import { ServiceRuntimeSection, runtimeSurfaces, hasOwnRuntimeMetrics } from './ServiceRuntimeSection';
 
-const th = { from: 0, to: 3600e9, clustersWithPods: [], effNs: '', effDeploy: '', cFrom: 0, cTo: 3600, clamped: false };
+const range = { preset: '1h' } as TimeRange;
 
 let root: Root | null = null;
 let host: HTMLDivElement;
@@ -78,7 +82,7 @@ async function render() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
     root = createRoot(host);
-    root.render(<QueryClientProvider client={qc}><MemoryRouter><ServiceRuntimeSection service="svc-a" th={th} /></MemoryRouter></QueryClientProvider>);
+    root.render(<QueryClientProvider client={qc}><MemoryRouter><ServiceRuntimeSection service="svc-a" range={range} /></MemoryRouter></QueryClientProvider>);
   });
   // Lazy chunk (DotnetRuntimePanel) gerçek import süresi ister.
   const settled = () => !host.querySelector('.spinner') && !!host.querySelector('[data-testid$="-runtime"], [data-testid^="runtime-charts"], [data-testid="pod-resources"]');
@@ -103,6 +107,8 @@ describe('runtime gate', () => {
     expect(q('rt-card-gc')).not.toBeNull();
     expect(q('rt-card-pool')).not.toBeNull();
     expect(q('rt-card-lock')).toBeNull(); // profilde yok → kart yok
+    expect(host.querySelector('[data-testid="rt-card-gc"] [data-testid="cpm"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="tsp"]')).toBeNull();
     expect(host.textContent).not.toMatch(/JVM/);
     expect(m.metricNames).toContain('process_runtime_dotnet_gc_duration_nanoseconds_total');
     expect(m.metricNames.some(n => n.startsWith('jvm'))).toBe(false);

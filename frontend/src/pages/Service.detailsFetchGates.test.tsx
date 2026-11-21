@@ -11,7 +11,7 @@
 // ve S1+ dilimlerinde DEĞİŞMEDEN geçmelidir.
 //   • Endpoints → /api/endpoints (birleşik kip, kapsam yok);
 //   • Metrikler → katalog (/api/metrics/names) + panel × metrik sorgusu;
-//   • Gecikme dağılımı → /api/spans/heatmap + cluster listesi;
+//   • (Gecikme dağılımı v0.10.2436'da Metrics sekmesinden kalktı.)
 //   • Dağıtımlar → 7 günlük rollout okuması + copilot yapılandırma probu.
 // v0.10.2154 (operatör) — beşinci bölüm Performance (ServiceCharts, RED
 // okuması) Details'ten kalktı; pini de onunla düştü.
@@ -52,7 +52,6 @@ vi.mock('@/components/AuthProvider', () => ({
 
 import { DetailsEndpointsSection } from './service/DetailsEndpointsSection';
 import { DetailsMetricsSection } from './service/DetailsMetricsSection';
-import { ServiceLatencyHeatmap } from './service/ServiceLatencyHeatmap';
 import { DeployHistoryPanel } from '@/components/DeployHistoryPanel';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -102,11 +101,6 @@ describe('Details bölümleri — monte edilince okuduğu uçlar (S0)', () => {
     await mount(<DetailsMetricsSection service="orders-api" rangeNs={rangeNs} />);
     expect(m.calls).toContain('metricNamesSearch');
     expect(m.calls).toContain('metricQueryFull');
-  });
-  it('Gecikme dağılımı: heatmap + cluster listesi', async () => {
-    await mount(<ServiceLatencyHeatmap service="orders-api" range={range} operation="" rootOnly env="" />);
-    expect(m.calls).toContain('spanHeatmap');
-    expect(m.calls).toContain('serviceClusters');
   });
   it('Dağıtımlar: 7 günlük rollout okuması + copilot probu', async () => {
     await mount(<DeployHistoryPanel service="orders-api" cluster="" range={range} />);

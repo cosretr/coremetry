@@ -3844,10 +3844,10 @@ tbody td.infra-where-note { color: var(--text2); }
 .rt-head__title { font-size: var(--fs-md); font-weight: 700; color: var(--text); }
 .rt-head__sub { font-size: var(--fs-sm); color: var(--text2); }
 .rt-cards { display: flex; flex-direction: column; gap: var(--sp-6); }
-.rt-pod-note { font-size: var(--fs-xs); color: var(--text3); }
+/* v0.10.2436 — RuntimePodChart üst satırı: pod görünümü özeti + "Tüm pod'lar". */
+.rt-pod-bar { display: flex; flex-wrap: wrap; gap: var(--sp-4); align-items: baseline; margin-bottom: var(--sp-2); font-size: var(--fs-xs); color: var(--text3); }
 .ov-card-b.rt-card-b { padding-top: var(--sp-5); padding-bottom: var(--sp-5); }
 .rt-slot { height: 240px; display: grid; place-items: center; }
-.rt-slot--err { color: var(--err); font-size: var(--fs-sm); }
 .rt-slot--empty { color: var(--text3); font-size: var(--fs-sm); }
 .heap-wrap { margin-top: var(--sp-4); }
 .heap-meta { display: flex; gap: var(--sp-3); align-items: center; font-size: var(--fs-xs); color: var(--text3); }

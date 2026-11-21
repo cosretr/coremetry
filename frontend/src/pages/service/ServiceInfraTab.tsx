@@ -30,7 +30,6 @@ import { ServiceKafkaClientsPanel } from './ServiceKafkaClientsPanel'; // v0.10.
 import { ServicePodInventory } from './ServicePodInventory';
 import { PodAllColumnsContext } from './podAllColumns';
 import { InfraSourceNote } from './InfraSourceNote';
-import { ServiceRuntimeSection } from './ServiceRuntimeSection';
 
 // ServiceInfraTab — servis detayının Infrastructure sekmesi. CLUSTER-SEVİYESİ
 // altyapı: Clusters tablosu (seçili satır = kapsam, ?icluster), KPI şeridi
@@ -130,6 +129,8 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
   onZoomReset?: () => void;
 }) {
   const [params, setParams] = useSearchParams();
+  // Metrics sekmesi (URL anahtarı `details`) — yabancı parametreler korunur.
+  const runtimeSearch = (() => { const p = new URLSearchParams(params); p.set('tab', 'details'); return `?${p.toString()}`; })();
   const {
     metaQ, ns, deploy, matched, rows, clustersWithPods, workloads = [],
     effNs, effDeploy, from, to, cFrom, cTo, clamped,
@@ -529,7 +530,7 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
                   </span>
                 )}
               </>}
-              actions={<a href="#runtime-sec" title="Pod başına kırılım sayfanın altında (Runtime)">Pod başına ↓</a>} />
+              actions={<Link to={{ search: runtimeSearch, hash: '#runtime-sec' }} title="Pod başına runtime kırılımı Metrics sekmesinde">Pod başına → Metrics</Link>} />
             <div className="grid-2 infra-charts">
               <div ref={cpuChartRef} style={flashStyle('cpu')}>
                 <ChartSlot q={aggCpu}>
@@ -603,9 +604,11 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
   return (
     <PodAllColumnsContext.Provider value={allCols}>
       {thanosBody}
-      <ServiceRuntimeSection service={service}
-        th={{ from, to, clustersWithPods, effNs, effDeploy, cFrom, cTo, clamped }}
-        onZoom={onZoom} onZoomReset={onZoomReset} />
+      {/* v0.10.2436 (operatör onayı 2026-11-21) — Runtime bölümü Metrics
+          sekmesinin ilk bölümü oldu; burada yalnız tek satır bağlantı. */}
+      <div className="kc-line" data-testid="infra-runtime-link">
+        <Link to={{ search: runtimeSearch, hash: '#runtime-sec' }}>Runtime → Metrics</Link>
+      </div>
       <ServiceKafkaClientsPanel service={service} range={range} onZoom={onZoom} onZoomReset={onZoomReset} />
       {/* v0.10.2145 (S6) — eski başlık rozetleri (eşleşme kuralı, E / T, unmapped,
           topk kısmi, okuma hataları) sayfanın ALTINDA kapalı tek satır. */}

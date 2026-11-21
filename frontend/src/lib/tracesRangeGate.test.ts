@@ -128,9 +128,4 @@ describe('dönüştürülen siteler aile üreticisini çağırıyor', () => {
       .not.toMatch(/const logsFrom\s*=/);
   });
 
-  it('ServiceLatencyHeatmap kutu seçimi — tracesPivotHref, kutu penceresiyle', () => {
-    const src = read('pages/service/ServiceLatencyHeatmap.tsx');
-    expect(src).toMatch(/tracesPivotHref\(\{/);
-    expect(src).toMatch(/fromNs: boxSel\.timeFromNs, toNs: boxSel\.timeToNs/);
-  });
 });

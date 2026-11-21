@@ -374,11 +374,6 @@
       "count": 1
     }
   },
-  "src/pages/service/ServiceLatencyHeatmap.tsx": {
-    "ui/no-raw-element": {
-      "count": 1
-    }
-  },
   "src/pages/traces/ColumnFilter.tsx": {
     "ui/no-raw-element": {
       "count": 4

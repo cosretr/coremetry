@@ -9,10 +9,13 @@ import { join } from 'node:path';
 const order = (src: string, ids: string[]) => ids.map(id => src.indexOf(id));
 const ascending = (xs: number[]) => xs.every((x, i) => x > -1 && (i === 0 || x > xs[i - 1]));
 
-describe('Service Details section order (v0.10.151)', () => {
-  it('page: clusters and database come before latency', () => {
+// v0.10.2436 — sekme "Metrics": Runtime ilk bölüm, uygulama metrikleri ikinci;
+// Latency (heatmap) kalktı.
+describe('Service Metrics (details) section order (v0.10.2436)', () => {
+  it('page: runtime → app metrics → clusters → database → rollouts', () => {
     const src = readFileSync(join(__dirname, 'Service.tsx'), 'utf8');
-    expect(ascending(order(src, ['id="dtl-props"', 'id="dtl-clusters"', 'id="dtl-db"', 'id="dtl-latency"', 'id="dtl-runtime"']))).toBe(true);
+    expect(ascending(order(src, ['id="dtl-props"', '<ServiceRuntimeSection', 'id="dtl-metrics"', 'id="dtl-clusters"', 'id="dtl-db"', 'id="dtl-runtime"']))).toBe(true);
+    expect(src).not.toContain('dtl-latency');
     expect(src).toMatch(/<ServiceClusterBreakdown service=\{svc\} range=\{range\} \/>/);
   });
 });

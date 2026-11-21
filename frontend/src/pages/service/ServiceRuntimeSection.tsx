@@ -1,13 +1,16 @@
 // ServiceRuntimeSection — v0.10.1206: eski Pods sekmesinin runtime bölümü
 // (OTel dil-runtime heap/GC/threads + JVM heap bandı; aile yoksa pod başına
-// Thanos kaynak grafikleri), Infrastructure sekmesinin altında.
+// Thanos kaynak grafikleri). v0.10.2436 (operatör onayı 2026-11-21): Infra
+// sekmesinden Service › Metrics sekmesinin İLK bölümüne taşındı; Infra'da
+// yalnız "Runtime → Metrics" bağlantısı kaldı. Thanos pod envanteri
+// (useServicePods) yalnız genel kaynak grafikleri gerektiğinde okunur.
 //
 // 2026-11-21 (operatör: ".NET servis JVM metrikleri göstermemeli") — aile TEK
 // tespitten (runtimeFamily.useRuntimeFamily: dil → runtime adı → sunucu metrik
 // kataloğu). JVM yüzeyleri (heap kartları, heap bandı) yalnız JVM'de; .NET'te
 // DotnetRuntimePanel (lazy); Node / Python / bilinmeyen → genel pod kaynak
 // grafikleri.
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { SectionHead } from '@/components/coremetry/SectionHead';
 import { Spinner } from '@/components/Spinner';
 import { useT } from '@/lib/i18n';
@@ -15,7 +18,9 @@ import { RuntimeCharts } from './RuntimeCharts';
 import { HeapBaselineCard } from './HeapBaselineCard'; // v0.10.887 — paritesi #4 dilim 1
 import { PodResourceCharts } from './PodResourceCharts';
 import { useRuntimeFamily, useRuntimeProfile, useRuntimeScope, type RuntimeFamily } from './runtimeFamily';
-import type { useServicePods } from './useServicePods';
+import { useServicePods } from './useServicePods';
+import { timeRangeToNs } from '@/lib/utils';
+import type { TimeRange } from '@/lib/types';
 
 const DotnetRuntimePanel = lazy(() => import('./DotnetRuntimePanel'));
 // Ortak süreç sinyalleri (dosya tanıtıcısı / HttpClient / Kafka) JVM / Go /
@@ -57,13 +62,31 @@ export function runtimeSurfaces(family: RuntimeFamily | null, ownMetrics = true)
   };
 }
 
-export function ServiceRuntimeSection({ service, th, onZoom, onZoomReset }: {
+// Genel kaynak grafikleri (Thanos pod başına) — Thanos cluster taraması
+// yalnız bu yedek yol çizilirken (runtime ailesi yokken) yapılır.
+function PodResourcesFallback({ service, range, onZoom, onZoomReset }: {
   service: string;
-  th: Pick<ReturnType<typeof useServicePods>, 'from' | 'to' | 'clustersWithPods' | 'effNs' | 'effDeploy' | 'cFrom' | 'cTo' | 'clamped'>;
+  range: TimeRange;
+  onZoom?: (fromUnixSec: number, toUnixSec: number) => void;
+  onZoomReset?: () => void;
+}) {
+  const th = useServicePods(service, range);
+  return (
+    <PodResourceCharts service={service} cluster={th.clustersWithPods[0] ?? ''}
+      ns={th.effNs} deploy={th.effDeploy} cFrom={th.cFrom} cTo={th.cTo} clamped={th.clamped}
+      onZoom={onZoom} onZoomReset={onZoomReset} />
+  );
+}
+
+export function ServiceRuntimeSection({ service, range, onZoom, onZoomReset }: {
+  service: string;
+  range: TimeRange;
   onZoom?: (fromUnixSec: number, toUnixSec: number) => void;
   onZoomReset?: () => void;
 }) {
   const tr = useT();
+  // Sayfanın çözülmüş penceresi (unix ns) — RQ anahtarları hizalı; bare JSX'te değil.
+  const th = useMemo(() => timeRangeToNs(range), [range]);
   const { family, pending: famPending, language } = useRuntimeFamily(service);
   // Profil (sunucu 60 s önbellekli, panel aynı RQ anahtarını okur): .NET kuşağı
   // rozeti, Go / Python'un kendi ailesi var mı, ortak süreç sinyalleri.
@@ -128,10 +151,11 @@ export function ServiceRuntimeSection({ service, th, onZoom, onZoomReset }: {
           (Thanos deploy-trend byPod). Aile VARSA çizilmez — iki kaynak yan
           yana aynı şeyi göstermesin. */}
       {!pending && surf.podResources && (
-        <PodResourceCharts service={service} cluster={th.clustersWithPods[0] ?? ''}
-          ns={th.effNs} deploy={th.effDeploy} cFrom={th.cFrom} cTo={th.cTo} clamped={th.clamped}
-          onZoom={onZoom} onZoomReset={onZoomReset} />
+        <PodResourcesFallback service={service} range={range} onZoom={onZoom} onZoomReset={onZoomReset} />
       )}
     </>
   );
 }
+
+// Service.tsx Metrics sekmesi lazy yükler (uPlot / CorePanel zinciri ilk JS'e girmez).
+export default ServiceRuntimeSection;

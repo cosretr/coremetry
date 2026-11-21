@@ -1,7 +1,7 @@
 import { usePivotCtx, withPivotCtx } from '@/lib/pivotContext';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { trendSparkWidth, nextOpDetail } from './operationsTableLayout';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui';
 import { Sparkline } from '@/components/Sparkline';
@@ -14,7 +14,6 @@ import { sparkBucketWindow, fmtBucketWindow } from '@/lib/sparkline';
 import { encodeFilters, encodeRange, buildQuery } from '@/lib/urlState';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
-import { serviceHref } from '@/lib/serviceHref';
 import { opDisplayName } from '@/lib/opDisplayName';
 import type { TimeRange, OperationRow, SpanMetricSeries, SpanAgg } from '@/lib/types';
 import { opRowKey, opTraceFilters } from './operationRoutes';
@@ -141,7 +140,24 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
   // v0.5.374 — client-side filter. At 500+ operations on a
   // monolith service the scroll-then-eyeball loop fails;
   // typing narrows live with no server round-trip.
-  const [filter, setFilter] = useState('');
+  // v0.10.2436 — ?op= süzgeci tohumlar: satırın "bu operasyona süz" ikonu ve
+  // eski `?tab=details&op=X` derin linki (Service.tsx Operations'a çevirir)
+  // tabloyu o operasyona süzülü açar. Operatör süzgeci değiştirince ?op=
+  // düşer (URL ile kutu çelişmesin; replace).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const opParam = searchParams.get('op') ?? '';
+  const [filter, setFilterState] = useState(opParam);
+  const [seenOp, setSeenOp] = useState(opParam);
+  if (opParam !== seenOp) {
+    setSeenOp(opParam);
+    if (opParam) setFilterState(opParam);
+  }
+  const setFilter = (v: string) => {
+    setFilterState(v);
+    if (opParam && v !== opParam) {
+      setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('op'); return p; }, { replace: true });
+    }
+  };
   const navigate = useNavigate();
   // Filter input ref — wired into useDataTable's searchRef so the
   // app-wide "/" shortcut focuses it (UX#4 keyboard nav).
@@ -219,13 +235,15 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
     `/traces?service=${encodeURIComponent(service)}&filters=${encodeURIComponent(encodeFilters(opTraceFilters(op, !!op.splitResidual, normalized)))}&range=${encodeURIComponent(encodeRange(range))}&view=list&rootOnly=false`,
     pctx, { carry: ['env', 'cluster'] }); // v0.8.488 — kesin isim filtresi (search değil)
 
-  // v0.8.416 (Tempo-parity T4) — row → the operation-scoped Details
-  // view (?op=, v0.8.414/415): RED triple with the percentile band +
-  // the latency heatmap narrowed to exactly this operation. The name
-  // link keeps going to Traces (operator-picked, v0.5.317); this is
-  // the metrics-shaped sibling.
-  const detailsHref = (op: string) =>
-    serviceHref(service, { range, tab: 'details', params: { op } });
+  // v0.8.416 (Tempo-parity T4) → v0.10.2436: Metrics sekmesinde operasyon
+  // kapsamlı bölüm kalmadı (Latency heatmap kalktı); ikon artık bu sekmeyi o
+  // operasyona süzer (?op=, URL kaynak; mevcut parametreler korunur).
+  const opFilterSearch = (op: string) => {
+    const p = new URLSearchParams(searchParams);
+    p.set('tab', 'operations');
+    p.set('op', op);
+    return `?${p.toString()}`;
+  };
 
   // v0.10.1491 — satır eylemi "Operasyon kartı": /endpoint#opcard (çağrı
   // ağacı). Kimlik: rota varsa rota, yoksa span adı + entry=rpc; Normalized
@@ -570,11 +588,12 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                     )}
                     {!normalized && !op.route && !op.splitResidual && (
                       <Link
-                        to={detailsHref(op.name)}
+                        to={{ search: opFilterSearch(op.name) }}
                         onClick={e => e.stopPropagation()}
                         onAuxClick={e => e.stopPropagation()}
-                        title="Operation-scoped charts — RPS / error rate / p50–p99 duration band + latency heatmap for just this operation"
-                        aria-label={`Open scoped charts for ${op.name}`}
+                        data-testid="op-filter-link"
+                        title="Tabloyu bu operasyona süz (paylaşılabilir ?op= bağlantısı)"
+                        aria-label={`Filter to ${op.name}`}
                         style={{
                           marginLeft: 8, color: 'var(--accent2)',
                           textDecoration: 'none', verticalAlign: 'middle',
@@ -583,8 +602,7 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
                              stroke="currentColor" strokeWidth="2" strokeLinecap="round"
                              aria-hidden="true">
-                          <path d="M3 3v18h18" />
-                          <path d="M7 14l4-6 4 3 5-8" />
+                          <path d="M3 4h18l-7 8v6l-4 2v-8z" />
                         </svg>
                       </Link>
                     )}

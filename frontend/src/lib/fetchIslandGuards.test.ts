@@ -34,27 +34,7 @@ const read = (p: string) => readFileSync(resolve(__dirname, p), 'utf8');
 const code = (p: string) =>
   read(p).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-describe('C1 — Service latency heatmap (v0.9.939)', () => {
-  const src = code('../pages/service/ServiceLatencyHeatmap.tsx');
-
-  it('yarış koruması + gerçek iptal', () => {
-    expect(src).toContain('raceGuard()');
-    expect(src).toContain('}, g.signal)');
-    expect(src).toContain('return g.cancel;');
-  });
-
-  it('her değişiklikte paneli BOŞALTMIYOR', () => {
-    // setData(undefined) = keep-previous'ın tam tersi; geri gelirse
-    // operatör her tıkta grafiğini yeniden kaybeder.
-    expect(src).not.toContain('setData(undefined)');
-    expect(src).toContain('setBusy(true)');
-  });
-
-  it('bayat veriyi taze gibi göstermiyor', () => {
-    // Sessiz keep-previous, yanlış pencereyi doğru sanmaya yol açar.
-    expect(read('../pages/service/ServiceLatencyHeatmap.tsx')).toContain('yenileniyor');
-  });
-});
+// C1 (Service latency heatmap) — v0.10.2436'da bileşenle birlikte kalktı.
 
 describe('C2 — Explore üç mod (v0.9.939)', () => {
   const src = code('../pages/Explore.tsx');

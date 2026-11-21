@@ -15,9 +15,11 @@ describe('Details bölüm başlıkları (v0.10.715; v0.10.2132 S1)', () => {
   // CollapsedSection (varsayılan kapalı satır). Endpoints başlığı gövdeden
   // Service.tsx'e taşındı (kip hook'u useEndpointsMode gövdeyle ortak).
   // v0.10.2154 (operatör) — Performance (dtl-perf) kalktı; dört kapanır bölüm.
+  // v0.10.2436 — Uygulama metrikleri (dtl-metrics) açık bölüm; Latency kalktı.
   it('Service.tsx: açık bölümler SectionHead, kapananlar CollapsedSection; ham dtl-sech kalmadı', () => {
-    for (const id of ['dtl-clusters', 'dtl-db']) expect(svc).toContain(`<SectionHead id="${id}"`);
-    for (const id of ['dtl-endpoints', 'dtl-metrics', 'dtl-latency', 'dtl-runtime']) {
+    for (const id of ['dtl-clusters', 'dtl-db', 'dtl-metrics']) expect(svc).toContain(`<SectionHead id="${id}"`);
+    expect(svc).not.toContain('dtl-latency');
+    for (const id of ['dtl-endpoints', 'dtl-runtime']) {
       expect(svc).toContain(`<CollapsedSection id="${id}"`);
     }
     expect(svc).not.toContain('className="dtl-sech"');
@@ -35,12 +37,12 @@ describe('Details bölüm başlıkları (v0.10.715; v0.10.2132 S1)', () => {
     expect(ep).toContain("const scopeCluster = sp.get('cluster') ?? ''");
     expect(ep).toContain("scopeCluster ? 'combined' : parseEndpointsMode(");
   });
-  it('kapalı bölümler kalıcı hafızadan (tek anahtar) + çapa açar; Heatmap eski anahtarı yok', () => {
+  it('kapalı bölümler kalıcı hafızadan (tek anahtar) + çapa açar; Latency heatmap yok', () => {
     expect(svc).toContain('parseOpenSections(getRaw(STORAGE_KEYS.svcDetailsOpen))');
     expect(svc).toContain('setRaw(STORAGE_KEYS.svcDetailsOpen, serializeOpenSections(next))');
     expect(svc).toContain("window.addEventListener('hashchange', go)");
-    const heat = readFileSync(resolve(__dirname, 'ServiceLatencyHeatmap.tsx'), 'utf8');
-    expect(heat).not.toContain('svcHeatmapCollapsed');
+    expect(existsSync(resolve(__dirname, 'ServiceLatencyHeatmap.tsx'))).toBe(false);
+    expect(svc).not.toContain('ServiceLatencyHeatmap');
   });
 });
 
@@ -52,13 +54,15 @@ describe('Details bölüm başlıkları (v0.10.715; v0.10.2132 S1)', () => {
 describe('Details bölüm kimlikleri ve sırası (S0)', () => {
   const all = svc + ep + metrics;
   it('dtl-* kimlikleri ve #deploys çapası var', () => {
-    for (const id of ['dtl-props', 'dtl-clusters', 'dtl-db', 'dtl-endpoints', 'dtl-metrics', 'dtl-latency', 'dtl-runtime', 'deploys']) {
+    for (const id of ['dtl-props', 'dtl-clusters', 'dtl-db', 'dtl-endpoints', 'dtl-metrics', 'dtl-runtime', 'deploys']) {
       expect(all).toMatch(new RegExp(`id="${id}"`));
     }
   });
-  it('sıra: Props → Clusters → Database → Endpoints → Latency → Runtime', () => {
+  // v0.10.2436 (operatör onayı 2026-11-21) — Runtime → Uygulama metrikleri →
+  // Clusters → Database, sonra kapalı Endpoints / Rollouts.
+  it('sıra: Props → Runtime → Metrikler → Clusters → Database → Endpoints → Rollouts', () => {
     const at = (s: string) => svc.indexOf(s);
-    const order = ['id="dtl-props"', 'id="dtl-clusters"', 'id="dtl-db"', '<DetailsEndpointsSection', 'id="dtl-latency"', 'id="dtl-runtime"', 'id="deploys"'];
+    const order = ['id="dtl-props"', '<ServiceRuntimeSection', 'id="dtl-metrics"', 'id="dtl-clusters"', 'id="dtl-db"', '<DetailsEndpointsSection', 'id="dtl-runtime"', 'id="deploys"'];
     for (const s of order) expect(at(s), s).toBeGreaterThan(-1);
     for (let i = 1; i < order.length; i++) expect(at(order[i]), order[i]).toBeGreaterThan(at(order[i - 1]));
   });

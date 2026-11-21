@@ -6,7 +6,8 @@
 //   • gösterim "GET /metrics" (Traces listesiyle aynı opDisplayName);
 //   • satır bağlantısı name + http.route çipini, artık satır http.route
 //     NOT EXISTS çipini taşır; bölünmemiş satır yalnız adı (bugünkü gibi);
-//   • kapsamlı grafik simgesi rota ve artık satırda gizli, ham satırda var;
+//   • "bu operasyona süz" simgesi (v0.10.2436; eski kapsamlı grafik) rota ve
+//     artık satırda gizli, ham satırda var;
 //   • sayaç "· HTTP verb rows split by route" der; süzgeç gösterim metnini arar;
 //   • aynı gösterim metnini taşıyan iki satır (gerçek "GET /metrics" span adı +
 //     bölünmüş GET /metrics) ayrı satır olarak çizilir.
@@ -75,12 +76,12 @@ describe('OperationsTable — çıplak fiil rota satırları (v0.10.1023)', () =
       { k: 'name', op: '=', v: ['GET'] },
       { k: 'http.route', op: '=', v: ['/metrics'] },
     ]);
-    expect(split.querySelector('a[aria-label^="Open scoped charts"]')).toBeNull();
+    expect(split.querySelector('a[aria-label^="Filter to"]')).toBeNull();
 
     const [real] = rowByText(el, 'GET /metrics', /service \+ name pre-filtered/);
     expect(real).toBeDefined();
     expect(chipsOf(nameLink(real).getAttribute('href')!)).toEqual([{ k: 'name', op: '=', v: ['GET /metrics'] }]);
-    expect(real.querySelector('a[aria-label^="Open scoped charts"]')).not.toBeNull();
+    expect(real.querySelector('a[aria-label^="Filter to"]')).not.toBeNull();
 
     const [res] = rowByText(el, 'GET');
     expect(chipsOf(nameLink(res).getAttribute('href')!)).toEqual([
@@ -90,7 +91,7 @@ describe('OperationsTable — çıplak fiil rota satırları (v0.10.1023)', () =
     // İnceleme R5 — artık satırda da simge YOK: kapsamlı grafikler yalnız
     // span adıyla daralır, satırın gösterdiği rotasız alt kümeyi değil tüm
     // GET'leri çizerdi. (Önceki pin simgeyi burada VAR sayıyordu.)
-    expect(res.querySelector('a[aria-label^="Open scoped charts"]')).toBeNull();
+    expect(res.querySelector('a[aria-label^="Filter to"]')).toBeNull();
 
     expect(el.textContent).toContain('4 operations in payments-api · HTTP verb rows split by route');
     expect(el.textContent).not.toContain('distinct span name');

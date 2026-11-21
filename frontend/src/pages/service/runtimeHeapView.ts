@@ -1,15 +1,11 @@
-import { seriesScore, topSeriesIndexes } from '@/lib/chart/seriesEnvelope';
 import { median } from '@/lib/normalFold';
 
 // runtimeHeapView — v0.10.2148 (servis sekmeleri S9, docs/frontend/
 // service-tabs-plan.md §4; plan K12 — operatör kararı 2026-11-14, seçenek B).
-// Runtime bölümünün JVM heap kartı için SAF çekirdek:
-//
-// - VARSAYILAN görünüm: her pod ince gri çizgi, EN YÜKSEK ÜÇ pod renkli ve
-//   adıyla; değer heap sınırının yüzdesi; sınır %100'de kesik çizgi. v0.9.95'in
-//   "sadece 8 pod gösteriyor" şikâyetine cevap korunur: hiçbir pod çizimden
-//   düşmez (40 tavanı bu görünümde yok), yalnız renk üçe iner.
-// - `?rtview=lines`: eski pod başına renkli çizgiler (40 tavanlı, mutlak MB).
+// Runtime bölümünün JVM heap kartı için SAF çekirdek: değer heap sınırının
+// yüzdesi. v0.10.2436 — gri/renkli özet (heapSummary) kalktı; pod seçimi
+// runtimePodReduce'ta (medyan + en kötü + eşik üstü), `?rtview=lines` = Tüm
+// pod'lar (her runtime grafiğinde).
 //
 // Yüzde POD BAŞINA ve kendi sınırına göre: kullanım ve sınır aynı pod için
 // havuzların TOPLAMI olarak okunur (agg=sum, pod'a göre gruplu) ve bölünür —
@@ -20,17 +16,8 @@ import { median } from '@/lib/normalFold';
 
 export interface HeapPoint { time: number; value: number | null }
 export interface HeapPodLine { label: string; points: HeapPoint[] }
-export interface HeapViewLine {
-  label: string;
-  points: HeapPoint[];
-  color?: string;
-  width?: number;
-  dash?: number[];
-  unit?: string;
-}
-
-// ── ?rtview ── Virgüllü küme: `lines` = eski görünümün tamamı (heap pod başına
-// çizgiler + non-heap grafiği); `nonheap` = yalnız non-heap grafiğini aç (S10).
+// ── ?rtview ── Virgüllü küme: `lines` = Tüm pod'lar (her runtime grafiği +
+// non-heap grafiği açık); `nonheap` = yalnız non-heap grafiğini aç (S10).
 // Bilinmeyen değer yok sayılır (varsayılan görünüm).
 export interface RtView { lines: boolean; nonheap: boolean }
 export function parseRtView(v: string | null | undefined): RtView {
@@ -61,11 +48,6 @@ export function toPercentOfLimit(points: readonly HeapPoint[], limit: readonly H
   });
 }
 
-export const HEAP_TOP = 3;
-// Güvenlik tavanı (ayar değil): gri çizgi sayısı. Aşılırsa en düşük ortalamalı
-// pod'lar çizimden düşer ve başlık bunu söyler; renkli üç her zaman çizilir.
-export const HEAP_GREY_MAX = 120;
-
 /** Pod kimliğiyle (grup anahtarı) eşlenen ham seri. */
 export interface HeapKeyedLine { key: string; label: string; points: HeapPoint[] }
 
@@ -83,48 +65,6 @@ export function podPercentLines(used: readonly HeapKeyedLine[], limit: readonly 
     if (points.some(p => finite(p.value))) out.push({ label: u.label, points });
   }
   return out;
-}
-
-export interface HeapSummary {
-  /** Çizim sırası: gri pod'lar, renkli en yüksek üç, (yüzdede) sınır. */
-  lines: HeapViewLine[];
-  /** Değerler sınırın yüzdesi mi. */
-  percent: boolean;
-  /** En yüksek pod'ların adları (azalan). */
-  top: string[];
-  /** Değeri olan pod sayısı. */
-  total: number;
-  /** Çizilen pod sayısı (gri + renkli). */
-  drawn: number;
-}
-
-/**
- * Varsayılan heap görünümü. `pods` son birimindeki ham (yumuşatılmamış)
- * seriler: `percent` ise sınırın yüzdesi (podPercentLines), değilse mutlak.
- * `smooth` yalnız çizgiye uygulanır (sıralama ham değerden — yumuşatma sırayı
- * değiştirmesin; sınır çizgisi yumuşatılmaz, K13).
- */
-export function heapSummary(
-  pods: readonly HeapPodLine[], percent: boolean,
-  smooth: (pts: HeapPoint[]) => HeapPoint[] = pts => pts, absUnit = '',
-): HeapSummary {
-  const unit = percent ? '%' : absUnit;
-  const vals = pods.filter(p => seriesScore(p.points) != null);
-  const order = topSeriesIndexes(vals, vals.length);
-  const topIdx = order.slice(0, HEAP_TOP);
-  const greyIdx = order.slice(HEAP_TOP, HEAP_TOP + HEAP_GREY_MAX);
-  const lines: HeapViewLine[] = [
-    // Gri çizgiler en düşükten yükseğe: yüksek olan üstte kalır.
-    ...[...greyIdx].reverse().map(i => ({ label: vals[i].label, points: smooth(vals[i].points), color: 'var(--text3)', width: 1, unit })),
-    ...[...topIdx].reverse().map(i => ({ label: vals[i].label, points: smooth(vals[i].points), width: 2, unit })),
-  ];
-  if (percent) {
-    const times = [...new Set(vals.flatMap(v => v.points.map(p => p.time)))].sort((a, b) => a - b);
-    if (times.length > 0) {
-      lines.push({ label: 'sınır', color: 'var(--err)', dash: [5, 4], width: 2, unit, points: times.map(time => ({ time, value: 100 })) });
-    }
-  }
-  return { lines, percent, top: topIdx.map(i => vals[i].label), total: vals.length, drawn: topIdx.length + greyIdx.length };
 }
 
 // ── S10: "düz" seri ── (max − min) / ortanca, pencere boyunca. Eşik SABİT

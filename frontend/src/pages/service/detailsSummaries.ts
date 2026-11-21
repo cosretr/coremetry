@@ -3,43 +3,13 @@
 // tek cümle özetleri. SAF: yalnız sayfada ZATEN yüklü veriden (bundle
 // `info`, metrik kataloğu, Props şeridinin 7 günlük rollout okuması) kurulur;
 // veri yoksa sabit açıklama. Yeni istek YOK (ana oturum kararı 2026-11-14).
-//
-// Gecikme özeti planın "p50 / p99"si yerine "ortalama / p99": sayfada yüklü
-// servis özeti (`Service`) p50 taşımıyor, p50 için yeni okuma gerekirdi.
-import type { Rollout, Service } from '@/lib/types';
+// v0.10.2436 — Latency (heatmap) bölümü kalktı, Uygulama metrikleri açık
+// bölüm oldu: ikisinin özeti ve kapanır kimliği de kalktı.
+import type { Rollout } from '@/lib/types';
 import { agoTR } from '@/lib/utils';
 
-type Kpi = Pick<Service, 'spanCount' | 'p99DurationMs' | 'avgDurationMs'> | null | undefined;
-
 export const ENDPOINTS_SUMMARY = "HTTP route'ları: çağrı payı, hata oranı, p50 / p99.";
-const LATENCY_STATIC = 'Span süresi dağılımı (heatmap).';
-const METRICS_STATIC = 'Servisin OTLP metrik panelleri.';
 const DEPLOYS_STATIC = "Son 7 günün rollout'ları ve sürümleri.";
-
-/** SAF: "12,3" — Türkçe ondalık, gereksiz sıfır atılır. */
-function trNum(v: number, digits = 1): string {
-  let s = v.toFixed(digits);
-  if (s.includes('.')) s = s.replace(/\.?0+$/, '');
-  return s.replace('.', ',');
-}
-
-/** SAF: ms → "850 ms" / "1,4 sn". */
-export function msTR(ms: number): string {
-  if (!Number.isFinite(ms)) return '—';
-  return ms >= 1000 ? `${trNum(ms / 1000, 1)} sn` : `${Math.round(ms)} ms`;
-}
-
-/** SAF: Gecikme dağılımı satırı. */
-export function latencySummary(info: Kpi): string {
-  if (!info || !(info.spanCount > 0)) return LATENCY_STATIC;
-  return `Ortalama ${msTR(info.avgDurationMs)}, p99 ${msTR(info.p99DurationMs)}; dağılım grafiği kapalı.`;
-}
-
-/** SAF: Metrikler satırı — "3 panel hazır (HTTP istek hızı, …)." */
-export function metricsSummary(panels: ReadonlyArray<{ title: string }>): string {
-  if (panels.length === 0) return METRICS_STATIC;
-  return `${panels.length} panel hazır (${panels.map(p => p.title).join(', ')}).`;
-}
 
 /** SAF: Dağıtımlar satırı. rollouts undefined = henüz okunmadı → sabit. */
 export function deploysSummary(rollouts: ReadonlyArray<Pick<Rollout, 'timeUnixNs'>> | undefined, nowMs = Date.now()): string {
@@ -59,7 +29,8 @@ export function deploysSummary(rollouts: ReadonlyArray<Pick<Rollout, 'timeUnixNs
  *  v0.10.2154 — 'dtl-perf' (Performance) bölümüyle birlikte kalktı; saklı
  *  listede kalan eski kimlik parseOpenSections'ta bilinmeyen diye düşer. */
 // CoSRE Faz E — 'dtl-cosre-notes': servisin ekip notları (tembel panel).
-export const COLLAPSIBLE_SECTIONS = ['dtl-endpoints', 'dtl-metrics', 'dtl-latency', 'dtl-runtime', 'dtl-cosre-notes'] as const;
+// v0.10.2436 — 'dtl-latency' (bölüm kalktı) ve 'dtl-metrics' (açık bölüm) düştü.
+export const COLLAPSIBLE_SECTIONS = ['dtl-endpoints', 'dtl-runtime', 'dtl-cosre-notes'] as const;
 export type CollapsibleSection = typeof COLLAPSIBLE_SECTIONS[number];
 
 /** SAF: saklı ham değer → açık bölüm kümesi (bozuk / bilinmeyen kimlik yok sayılır). */
