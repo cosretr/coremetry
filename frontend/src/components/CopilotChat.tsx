@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from 'react';
 import { mergeOpenHref } from '@/lib/openHref'; // v0.10.460
+import { useCatalogs } from '@/lib/i18n';
 import { Link, useNavigate } from 'react-router';
 import { takeMetricPanelAsk } from '@/lib/pageContextOverlay'; // v0.10.1435
 import { hasPinnableContext, pinLabelTR } from '@/lib/pinnedContext';
@@ -96,6 +97,7 @@ import { ChatDashContext } from './ai/chatDash'; // v0.10.1443
 // çekmece gibi işler), FAB çizilmez, iç linkler yeni sekmede açılır
 // (chatLinkTarget) ve sunucunun `open` önerisi sohbeti terk ettirmez.
 export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer', defaultOpen = false }: { launcher?: boolean; variant?: 'drawer' | 'page'; defaultOpen?: boolean } = {}) {
+  useCatalogs(); // v0.10.2421 — sabit Türkçe CoSRE metni TR kataloğu gelince yeniden çizilsin
   const isPage = variant === 'page';
   const launcher = launcherProp && !isPage;
   // v0.10.1648 (CoSRE v2 Faz 2b B2a) — soru bağlamı (model/Derin/Kod + sayfa/pin/

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCatalogs } from '@/lib/i18n';
 import { Spinner } from '@/components/Spinner';
 import { CheckboxField, TextareaField } from '@/components/coremetry/Field';
 import { Button } from '@/components/shadcn/button';
@@ -142,6 +143,7 @@ function BannedPhrasesEditor({ saved, canEdit }: { saved: string[]; canEdit: boo
 }
 
 export function CosreConversationLine() {
+  useCatalogs(); // v0.10.2421 — sabit Türkçe CoSRE metni TR kataloğu gelince yeniden çizilsin
   const qc = useQueryClient();
   const role = useAuthRole(); // sağlayıcısız ağaç (Settings zaten admin kapılı) → düzenlenebilir
   const canEdit = role === undefined || role === 'admin';

@@ -35,7 +35,7 @@ import { StatTile } from '@/components/ui';
 import { loadCopilotConfig } from '@/components/ai/useCopilotEnabled';
 import { emitAiPrefill } from '@/components/ai/aiEvents';
 import { api } from '@/lib/api';
-import { useT } from '@/lib/i18n';
+import { useT, useCatalogs } from '@/lib/i18n';
 import { fmtNum } from '@/lib/utils';
 import { getRaw, setRaw, getSessionRaw, setSessionRaw, STORAGE_KEYS, tourSeenKey } from '@/lib/storage';
 import type { TourStateResponse } from '@/lib/types';
@@ -52,6 +52,7 @@ import { useTour } from './useTour';
 import { TourOverlay } from './TourOverlay';
 
 export function TourProvider() {
+  useCatalogs(); // v0.10.2421 — sabit Türkçe CoSRE metni TR kataloğu gelince yeniden çizilsin
   const { user } = useAuth();
   const { pathname, search } = useLocation();
   const qc = useQueryClient();

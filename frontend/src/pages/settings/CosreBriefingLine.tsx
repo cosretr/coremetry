@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Spinner } from '@/components/Spinner';
+import { useCatalogs } from '@/lib/i18n';
 import { CheckboxField } from '@/components/coremetry/Field';
 import { useAuthRole } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
@@ -27,6 +28,7 @@ export function briefingHint(c: CosreBriefingSettings): string {
 }
 
 export function CosreBriefingLine() {
+  useCatalogs(); // v0.10.2421 — sabit Türkçe CoSRE metni TR kataloğu gelince yeniden çizilsin
   const qc = useQueryClient();
   const role = useAuthRole(); // sağlayıcısız ağaç (Settings zaten admin kapılı) → düzenlenebilir
   const canEdit = role === undefined || role === 'admin';

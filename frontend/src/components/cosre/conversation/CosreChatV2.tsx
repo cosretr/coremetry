@@ -37,6 +37,7 @@
 //     (B7) v1 ile aynı TEK SEFERLİK niyet: Sheet açılır, açıklama SOHBET TURU
 //     olarak gider (context.explainAsk), `?ai=` (+ `?aicode=`) hemen düşer.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCatalogs } from '@/lib/i18n';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { mergeOpenHref } from '@/lib/openHref';
 import { isSafeAppPath } from '@/lib/safeAppPath';
@@ -103,6 +104,7 @@ export interface CosreChatV2Props {
 }
 
 export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreChatV2Props) {
+  useCatalogs(); // v0.10.2421 — sabit Türkçe CoSRE metni TR kataloğu gelince yeniden çizilsin
   const isPage = variant === 'page';
   const [openState, setOpen] = useState(defaultOpen);
   const open = isPage || openState; // v0.10.1785 — sayfa kipinde hep açık (v1 isPage ile aynı)

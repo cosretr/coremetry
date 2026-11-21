@@ -6,7 +6,7 @@ import { pickChatImpl, type ChatImpl } from '@/lib/cosre/pickChatImpl';
 import { useCopilotConfig } from './ai/useCopilotEnabled';
 import { AI_PREFILL_EVENT, COSRE_PANEL_EVENT, emitCosrePanel } from './ai/aiEvents';
 import { useShortcuts } from '@/lib/keyboard';
-import { useT } from '@/lib/i18n';
+import { useT, useCatalogs } from '@/lib/i18n';
 import { TraceExplainNudge } from './ai/TraceExplainNudge';
 import { CopilotFab } from './ai/CopilotFab';
 import { Spinner } from './Spinner';
@@ -49,6 +49,7 @@ export function urlWantsChat(sp: URLSearchParams): boolean {
 type Queued = { type: string; detail: unknown };
 
 export function CopilotChatGate() {
+  useCatalogs(); // v0.10.2421 — sabit Türkçe CoSRE metni TR kataloğu gelince yeniden çizilsin
   const cfg = useCopilotConfig(true);
   const enabled = cfg ? cfg.enabled : null;
   const [sp] = useSearchParams();

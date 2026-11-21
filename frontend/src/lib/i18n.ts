@@ -133,7 +133,17 @@ function lookup(key: string, lang: Lang): string {
   // Modül düzeyinde t() (ilk yükte, katalog gelmeden) ham anahtar döndürür:
   // sabiti fonksiyona çevir. Yalnız geliştirmede uyarır.
   if (import.meta.env.DEV && !catalogs.tr && !catalogs.en) console.warn(`[i18n] '${key}' katalog yüklenmeden okundu`);
-  if (lang === 'tr') return catalogs.tr?.[key] ?? EN_EAGER[key] ?? key;
+  if (lang === 'tr') {
+    const tr = catalogs.tr;
+    if (tr) return tr[key] ?? EN_EAGER[key] ?? key;
+    // v0.10.2421 — operator-reported (prod, English UI): CoSRE text is
+    // always Turkish (tCosre → 'tr'), but since v0.10.2403 an English
+    // session only loads the EN catalog, so every CoSRE key rendered raw.
+    // Start the TR load (idempotent, deduped) and show the English text
+    // meanwhile instead of a raw key; subscribers re-render when TR arrives.
+    void loadCatalog('tr');
+    return catalogs.en?.[key] ?? EN_EAGER[key] ?? key;
+  }
   const en = catalogs.en;
   return en?.[key] ?? EN_EAGER[key] ?? (en ? key : catalogs.tr?.[key] ?? key);
 }
@@ -242,6 +252,13 @@ export function currentLang(): Lang {
 // (admin saves new branding → invalidateBranding fires; user
 // clicks the picker → USER_LANG_EVENT fires; English catalog
 // loads) flows through every consumer without a manual reload.
+// useCatalogs — v0.10.2421: re-render on ANY catalog load. Surfaces whose
+// text is not in the UI language (CoSRE is fixed Turkish via tCosre) call
+// the module-level t() and would otherwise keep the fallback text forever.
+export function useCatalogs(): number {
+  return useSyncExternalStore(subscribeCatalogs, catalogSnapshot, catalogSnapshot);
+}
+
 export function useT(): (key: string) => string {
   const lang = useLang();
   return (key: string) => lookup(key, lang);

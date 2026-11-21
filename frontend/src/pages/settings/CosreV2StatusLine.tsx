@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Spinner } from '@/components/Spinner';
+import { useCatalogs } from '@/lib/i18n';
 import { Button } from '@/components/shadcn/button';
 import { CheckboxField } from '@/components/coremetry/Field';
 import { api } from '@/lib/api';
@@ -18,6 +19,7 @@ import type { CosreV2Flag } from '@/lib/types';
 const KEY = ['admin', 'cosre-v2'] as const;
 
 export function CosreV2StatusLine() {
+  useCatalogs(); // v0.10.2421 — sabit Türkçe CoSRE metni TR kataloğu gelince yeniden çizilsin
   const qc = useQueryClient();
   const q = useQuery({ queryKey: KEY, queryFn: () => api.cosreV2Flag(), staleTime: 30_000 });
   const m = useMutation({
