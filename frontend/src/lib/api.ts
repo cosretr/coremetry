@@ -1572,6 +1572,8 @@ export const api = {
   samplingCorrection: () => get<import('./samplingCorrection').SamplingCorrection>(`/api/sampling/correction`),
   ingestSamplingStored: (windowS = 300) =>
     get<import('./types').IngestSamplingStored>(`/api/admin/ingest-sampling/stored?window_s=${windowS}`),
+  // v0.10.2441 — span error-rate rules: stored vs sampling-weighted firing (shadow) + retune values.
+  ingestSamplingRuleShadow: () => get<import('./types').IngestSamplingRuleShadow>(`/api/admin/ingest-sampling/rule-shadow`),
   // CoSRE kişi başı tur sınırı (admin + audit settings.ai_turn_limits.update).
   aiTurnLimits: () => get<import('./types').AITurnLimits>(`/api/ai/turn-limits`),
   putAITurnLimits: (c: Partial<import('./types').AITurnLimits>) =>

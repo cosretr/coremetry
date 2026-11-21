@@ -677,6 +677,7 @@ func (d *Detector) scan(ctx context.Context) {
 		oc              anomalyOutcome
 	}
 	var pending []pendingApply
+	shadowModel, shadowOK := chstore.RuleShadowModel() // v0.10.2441 — sampling rule shadow (mode=shadow only)
 	for _, svc := range services {
 		// v0.10.1046 — batch yüklemi servis başına BİR kez; evaluateAnomaly
 		// yalnız p99_ms açılışında okur (yük altında gecikme artışı açılmaz).
@@ -707,6 +708,9 @@ func (d *Detector) scan(ctx context.Context) {
 			}
 			bl := batchLatSeries{Batch: batchSvc, SeasonalRates: seriesFor(seasonalRatesByMetric[m], svc)}
 			oc := evaluateAnomaly(m, buckets, seasonal, rates, minSamples, hasOpen, bl, sens)
+			if o, ok := shadowAnomalyErrorRate(shadowModel, shadowOK, m, svc, redUsed[svc+"|"+m].VM, buckets, seasonal, rates, minSamples, hasOpen, bl, sens, oc); ok {
+				chstore.RecordRuleShadow(shadowModel, o) // v0.10.2441 — observation only
+			}
 			if !reachesApply(oc.Action, hasOpen) {
 				continue
 			}

@@ -598,6 +598,9 @@ func (e *Evaluator) evaluateAll(ctx context.Context) int {
 		}
 	}
 	vt.Publish()
+	if err := e.store.FlushRuleShadow(ctx); err != nil { // v0.10.2441 — no-op unless shadow recorded
+		log.Printf("[evaluator] sampling rule shadow flush: %v", err)
+	}
 
 	// SLO burn-rate alarms — independent of the user-defined
 	// alert rules above. Each configured SLO gets two passes
@@ -900,6 +903,7 @@ func (e *Evaluator) evaluateOne(ctx context.Context, r chstore.AlertRule, servic
 	value := m.value
 
 	breached := compare(value, r.Comparator, r.Threshold)
+	recordSamplingShadow(r, service, m, breached) // v0.10.2441 — shadow only, decision unchanged
 
 	// Sustained-breach gate (v0.5.127): when r.ForSec > 0 we
 	// stamp the first-breach time and only open a problem after

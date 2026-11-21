@@ -1,5 +1,5 @@
 // samplingWeight.ts — v0.10.2430 pure helpers for SamplingWeightPanel.
-import type { SamplingRule } from '@/lib/types';
+import type { RuleShadowRow, SamplingRule } from '@/lib/types';
 
 /** Rules textarea → rules; string = error text. */
 export function parseSamplingRules(text: string): SamplingRule[] | string {
@@ -53,4 +53,24 @@ export function impliedFactor(rows: { weight: number; spans: number }[]): number
   const n = rows.reduce((a, r) => a + r.spans, 0);
   if (n === 0) return 0;
   return rows.reduce((a, r) => a + r.weight * r.spans, 0) / n;
+}
+
+// v0.10.2441 — rule shadow card helpers.
+
+/** Totals across rules: evaluations, fires today / weighted, disagreements. */
+export function ruleShadowTotals(rows: RuleShadowRow[]) {
+  return rows.reduce(
+    (a, r) => ({
+      evals: a.evals + r.evals, today: a.today + r.todayFires, weighted: a.weighted + r.weightedFires,
+      todayOnly: a.todayOnly + r.todayOnly, weightedOnly: a.weightedOnly + r.weightedOnly,
+    }),
+    { evals: 0, today: 0, weighted: 0, todayOnly: 0, weightedOnly: 0 },
+  );
+}
+
+/** Threshold / rate value with enough precision for sub-1 % weighted rates. */
+export function fmtShadowValue(v: number): string {
+  if (!Number.isFinite(v)) return '—';
+  const a = Math.abs(v);
+  return a === 0 ? '0' : a < 1 ? v.toFixed(3) : a < 100 ? v.toFixed(2) : v.toFixed(0);
 }

@@ -8891,6 +8891,20 @@ export interface IngestSamplingStatus {
   pod: { host: string; ingestRole: boolean; tally: { source: string; weight: number; spans: number }[]; overflow: number };
 }
 export interface IngestSamplingStored { windowS: number; rows: { weight: number; spans: number }[] }
+// IngestSamplingRuleShadow — /api/admin/ingest-sampling/rule-shadow (v0.10.2441).
+// Go: api.ingestSamplingRuleShadowResponse / chstore.RuleShadowState.
+export interface SamplingShadowModel { errWeight: number; okWeight: number; basis: string }
+export interface RuleShadowRow {
+  family: 'alert' | 'anomaly'; ruleId: string; name?: string; metric: string; comparator?: string;
+  threshold: number; retune: number; evals: number; todayFires: number; weightedFires: number;
+  todayOnly: number; weightedOnly: number; lastService?: string; lastToday: number; lastWeighted: number;
+}
+export interface RuleRetuneHint { ruleId: string; name: string; metric: string; comparator: string; threshold: number; retune: number; note: string }
+export interface IngestSamplingRuleShadow {
+  mode: 'off' | 'shadow' | 'on'; modelOk: boolean; model: SamplingShadowModel;
+  state: { since: string; updatedAt: string; model: SamplingShadowModel; rows: RuleShadowRow[]; overflow?: number };
+  hints: RuleRetuneHint[];
+}
 // AIGeneralQuestions — /api/ai/general-questions (v0.10.1458): konu dışı sorulara
 // kısa genel cevap anahtarı; blob yokken allow=true. Go: chstore.AIGeneralQuestions.
 export interface AIGeneralQuestions {

@@ -209,3 +209,81 @@ design** — they measure what was stored.
   their readers, raw-spans RED paths (env-scoped /api/services, GetServices
   raw), SLO good/total, service_slowdown (bind `?` in conditions),
   remaining ~40 lower-traffic MV readers.
+
+## Rule thresholds (v0.10.2441)
+
+With mode = on every reader below sees represented values; a static
+threshold tuned on stored (inflated) error rates stops firing. Inventory at
+v0.10.2440:
+
+| Rule / detector | Read (weighted when on?) | Threshold | Kind | Under weighting |
+|---|---|---|---|---|
+| Alert rule `error_rate` (window ≥ 5 m, span path) | `MeasureAllServices` spanmetrics_1m, entry spans — **yes** | operator value (builtins 15 / 50 / 5 %, off by default) | absolute | drops ~20×: retune to `ErrorPct(T)` |
+| Alert rule `mq_publish_rate` / `mq_consume_rate` (≥ 5 m) | spanmetrics_1m error_state — **yes** | operator | absolute | same as error_rate |
+| Alert rule `http_5xx/4xx_rate`, `http_/db_/rpc_*_rate` | raw spans GROUP BY — **no** (aggToSQLW not used here) | operator | absolute | unchanged (still stored rate) — inconsistent with error_rate, known gap |
+| Alert rule, any metric, window < 5 m | raw spans — **no** | operator | absolute | unchanged |
+| Alert rule `request_rate` | service_summary_5m count — **yes** | operator | absolute | ×≈ okWeight (20): `<` drop rules stop firing |
+| Alert rule `error_count` | service_summary_5m error count — **yes** | operator | absolute | ×errWeight (1 in prod shape): ≈ unchanged |
+| Alert rule `avg_ms` / `p*_ms` | service_summary_5m sum / TDigest — **yes** | operator | absolute | shifts toward the success-path latency (direction per service) |
+| Alert `MinSamples` gate | count — **yes** | per rule | absolute | ×≈ 20: more low-volume pairs pass the floor |
+| Any alert rule served by VictoriaMetrics (`alert_source.go`) | VM, unsampled | — | — | unaffected |
+| Anomaly `anomaly:*:error_rate` z / MAD | service_summary_5m — **yes**, history from `BaselineFloor` | z ≥ 6, FloorPct 10 % | relative | re-baselines at the switch (no history until dwell + minSamples) |
+| — its `AbsFloor` | same | 1 % | absolute | binding: a service at true < 1 % never opens (prod 0.33 %) |
+| — error ramp `MinRatioPct` / `MinErrorsPerSec` | same | 0.2 % / 1 err/s | absolute | ratio drops ~20×; errors/s unchanged |
+| — `MinBaselineRate` volume gate | same | 0.2 req/s | absolute | ×≈ 20: more services eligible |
+| Anomaly `p99_ms` / `request_rate` | weighted, `BaselineFloor` | z, AbsFloor 10 ms | relative | re-baselines |
+| Seasonal baseline | weighted, waits `minDays` | — | relative | falls back to the recent-history baseline |
+| ML impact rule (`svc_error_rate`, response time) | VictoriaMetrics only | Floor 1 %, +50 % / +1 pt | absolute + relative | unaffected |
+| ML telemetry volume (`ml_volume.go`) | weighted (both MVs) | spans/request ratio | relative, scale-free | unaffected (ratio) |
+| Problem standard impact floors (notify_policy D6) | value of the source Problem | 30 failed / 5 m or ≥ 1 % with ≥ 30 calls | absolute | inherits the source: error % lower, calls higher |
+| DB health (`db-health:`), service_slowdown, SLO good/total | not weighted (left for later) | — | — | unchanged |
+
+### Shadow comparison
+
+In shadow the derived weight is **not stored** (shadow writes 1), so the
+weighted MV states equal the unweighted ones and a weighted re-read would
+show no difference. The shadow instead re-scores the value each rule already
+read with a two-class model from the operator's sampling rules
+(`SamplingShadowModelFor`): failing spans weigh E (explicit status=error /
+traceError rule, else the smallest configured weight), the rest O (largest).
+`weighted % = p·E / (p·E + (1−p)·O)`. Scope: alert rules that become weighted
+(`RuleShadowEligible`: error_rate + mq_*_rate, window ≥ 5 m, not VM) and the
+anomaly error_rate decision (`evaluateAnomaly` re-run on transformed
+series). Results: self-obs `sampling.rule_shadow{family, outcome}` and the
+blob `sampling.ruleShadow` (per-rule counts, ≤ every 5 min, leader-local
+window) → Settings → Pipeline "Rule thresholds under weighting (shadow)".
+
+Cost per evaluator tick: zero ClickHouse reads; one multiply + compare per
+eligible (rule, service) pair; the anomaly tick runs one extra pure
+`evaluateAnomaly` per span-sourced service for error_rate (~µs each). One
+`system_settings` write per 5 minutes while shadow records (it bumps the
+settings cache generation once). Mode off / on: nothing runs.
+
+Bias: non-failing spans of failing traces keep weight 1 upstream, the model
+gives them O → the estimate sits at or below the true weighted rate, so
+"stop firing" is an upper bound. Pairs below MinSamples today are not
+scored (under on more pass the floor).
+
+### Retune (no automatic change)
+
+The transform is monotone, so threshold T on stored rates and `ErrorPct(T)`
+on weighted rates fire on the same values under the model. Alert rules
+carry one threshold; a second "on true rates" field would split every rule
+editor, the notify text and the VM path, so no mode-aware threshold is
+added. The card lists each enabled rule's retune value; the operator edits
+the rules when switching to on. Prod shape (E = 1, O = 20):
+
+| Stored threshold | Weighted equivalent |
+|---|---|
+| 1 % | 0.05 % |
+| 2 % | 0.10 % |
+| 5 % | 0.26 % |
+| 10 % | 0.55 % |
+| 15 % | 0.87 % |
+| 25 % | 1.64 % |
+| 50 % | 4.76 % |
+
+`request_rate` thresholds: × O (upper bound). Anomaly `AbsFloor` 1 % on true
+rates is equivalent to ~17 % stored; recommended `anomaly_sensitivity`
+error_rate AbsFloor for mode on: 0.05 (≈ today's 1 % stored), ErrorRamp
+MinRatioPct 0.01 (its lower clamp; today 0.2 % stored ≈ 0.01 % weighted).

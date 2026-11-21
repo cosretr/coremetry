@@ -15,6 +15,7 @@ import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
 import type { IngestSampling, IngestSamplingStored } from '@/lib/types';
 import { FlashBox, SectionTitle, humanize } from './shared';
+import { SamplingRuleShadowSection } from './SamplingRuleShadowSection';
 import { FALLBACK_RULES, HASH_RULES, POLICY_RULES, impliedFactor, parseSamplingRules, withShares } from './samplingWeight';
 
 const INTRO = 'mb-2.5 text-[length:var(--fs-sm)] text-(--text2)';
@@ -152,6 +153,7 @@ export function SamplingWeightPanel() {
           </TableBody>
         </Table>
       )}
+      <SamplingRuleShadowSection />
     </form>
   );
 }
