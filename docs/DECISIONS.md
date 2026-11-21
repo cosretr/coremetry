@@ -15329,3 +15329,7 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 ## 2026-11-21 — v0.10.2417 — CoSRE karşılamasında brifing listesi kalktı
 
 - Operatör isteği (2026-11-21, prod ekran görüntüsü üzerine): "Karşılama ekranında bu kadar detaya gerek yok, sorarsa bilgileri verirsin." Karşılama = selam + kısa açılış cümlesi + niyet sekmelerindeki çipler; RED / CLIENT / EXC / LOG / ORACLE / PROBLEM satırları çizilmez ve /api/cosre/v2/briefing karşılamada çağrılmaz. Takım bilinmiyorsa "hangi takımdasın?" sorusu ve takım araması kalır. Durum bilgisi sorulunca cevapta gelir. Bu, v0.10.1700 brifing kartı kararını (karşılamada brifing) tersine çevirir.
+
+## 2026-11-21 — v0.10.2418 — CoSRE'de takım seçilince arkadaki sayfa süzülü /services
+
+- Operatör isteği (2026-11-21): "Takımını seçtiğinde otomatik olarak filtreli services sayfasını açsın arkada." Üç seçim yolu da (karşılamadaki takım araması, composer takım çipi, sohbetteki takım sorusu) useOpenTeamServices'i çağırır: panel açık kalır, arkadaki sayfa /services?ownerTeam=<takım> (takım yalnız SRE ekseninde varsa ?sreTeam=) olur; eksen ve katalog yazımı exceptionsTeamAxis kuralıyla. Tam sayfa /cosre'de arkada sayfa yok → gezinme yapılmaz. Takımı kaldırmak (✕) gezinmez.

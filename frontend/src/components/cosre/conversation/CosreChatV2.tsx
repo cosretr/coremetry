@@ -81,6 +81,7 @@ import { withTeamPick, type TeamPickResend } from './teamPick';
 import { endpointInspectText, withEndpointInspect, withEndpointSummarize } from './endpointPick';
 import { withClarifyOption } from './question';
 import { briefingView } from './briefingView';
+import { useOpenTeamServices } from './useOpenTeamServices';
 import type { BriefingLineRef } from './BriefingFeed';
 import { Button } from '@/components/shadcn/button';
 import { Badge } from '@/components/shadcn/badge';
@@ -134,6 +135,8 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
   const welcomeActive = ask.enabled === true && open && messages.length === 0;
   const welcome = useCosreWelcomeData(welcomeActive, ask.env, { greeting: false });
   const teamScope = useCosreTeamScope(welcome.team, welcome.teamSettled);
+  // v0.10.2418 — takım seçimi arkadaki sayfayı süzülü /services yapar.
+  const openTeamServices = useOpenTeamServices();
   // v0.10.1700 — brifing kartı (Faz 1 ucu); yalnız karşılama ekrandayken, kendi poll'u yok.
   // v0.10.2417 — brifing karşılamada gösterilmiyor: istek de atılmaz.
   const briefingQ = useCosreBriefing(false, ask.env);
@@ -234,7 +237,7 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
   };
   const teamPick = {
     initial: teamScope.picked,
-    onPick: (name: string) => { teamScope.choose(name); resendTeamPick({ userTeam: name }); },
+    onPick: (name: string) => { teamScope.choose(name); openTeamServices(name); resendTeamPick({ userTeam: name }); },
     onUnscoped: () => resendTeamPick({ unscoped: true }),
   };
   // v0.10.1737 — "Endpoint seç" kartı: İncele → seçilen route aynı sohbette YENİ

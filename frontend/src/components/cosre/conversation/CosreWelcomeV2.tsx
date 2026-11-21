@@ -18,6 +18,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Pencil, Search, Sparkles, Users, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { keys } from '@/lib/queries';
+import { useOpenTeamServices } from './useOpenTeamServices';
 import type { ChatExplainAsk, ServiceMetadata } from '@/lib/types';
 import type { ChatContextStarter } from '@/lib/chatContext';
 import { exceptionsTeamAxis, exceptionsTeamHref } from '@/lib/exceptionsTeamHref';
@@ -120,7 +121,8 @@ export function CosreWelcomeV2({ firstName, scope, wiki, ctxStarter, pageStarter
   };
   const pick = (kind: 'service' | 'operation', name: string) =>
     onAsk(kind === 'service' ? serviceHealthQuestion(name) : operationErrorQuestion(name));
-  const chooseTeam = (name: string) => { scope.choose(name); onAsk(teamPickQuestion(name)); };
+  const openTeamServices = useOpenTeamServices();
+  const chooseTeam = (name: string) => { scope.choose(name); openTeamServices(name); onAsk(teamPickQuestion(name)); };
 
   // v0.10.2417 — operatör: "karşılamada bu kadar detaya gerek yok, sorarsa
   // bilgileri verirsin". Brifing listesi karşılamada çizilmez (veri de
@@ -156,6 +158,7 @@ export function CosreWelcomeV2({ firstName, scope, wiki, ctxStarter, pageStarter
  *  "Takım seç" (sunucu-aramalı Command popover; seçim yalnız kapsamı kurar). */
 export function CosreTeamScopeChip({ scope }: { scope: CosreTeamScope }) {
   const [open, setOpen] = useState(false);
+  const openTeamServices = useOpenTeamServices();
   if (scope.team) {
     return (
       <Badge variant="secondary" className="h-6 gap-1 pr-0.5 pl-2 font-normal" data-team-scope={scope.team}
@@ -177,7 +180,7 @@ export function CosreTeamScopeChip({ scope }: { scope: CosreTeamScope }) {
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-0">
         <CosreScopeSearch kind="team" autoFocus className="rounded-md"
-          onPick={name => { setOpen(false); scope.choose(name); }} />
+          onPick={name => { setOpen(false); scope.choose(name); openTeamServices(name); }} />
       </PopoverContent>
     </Popover>
   );
