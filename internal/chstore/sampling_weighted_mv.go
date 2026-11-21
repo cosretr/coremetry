@@ -98,8 +98,9 @@ func wSpanmetrics() []weightedCol {
 // weightedMVs — registry (SAF; pinned by sampling_weighted_mv_test.go).
 // Left unweighted BY DESIGN: trace_summary_5m / trace_summary_1d /
 // trace_service_index_5m (trace search counts what was stored; trace-level
-// weighting is a later slice — see the design doc), business_code_summary_5m
-// (no operator-visible RED reader yet), presence/identity MVs.
+// weighting is a later slice — see the design doc), presence/identity MVs.
+// business_code_summary_5m joined in v0.10.2442 (CoSRE code → service
+// calls / errors); its DDL lives outside canonicalMVs (weightedMVCatalogue).
 var weightedMVs = map[string][]weightedCol{
 	"service_summary_5m":          wREDApdex(),
 	"operation_summary_5m":        wREDApdex(),
@@ -116,6 +117,16 @@ var weightedMVs = map[string][]weightedCol{
 	"messaging_summary_5m":        wRED(wLevels3),
 	"messaging_caller_summary_5m": wRED(wLevels3),
 	"service_version_5m":          {wCountCol("w_span_count_state")},
+	"business_code_summary_5m": {
+		wCountCol("w_span_count_state"),
+		wCountIfCol("w_error_count_state", "status_code = 'error'"),
+	},
+}
+
+// weightedMVCatalogue — every CREATE the weighted registry can name: the
+// canonical catalogue plus MVs migrate appends outside it.
+func weightedMVCatalogue() []string {
+	return append(canonicalMVs(), businessCodeMVDDL())
 }
 
 // weightedMVBucket — the MV's time_bucket width (coverage alignment).
@@ -389,7 +400,7 @@ func (s *Store) migrateWeightedMV(ctx context.Context, mv string) (ok, migrated 
 
 // weightedCanonicalDDL — the canonical (weighted) CREATE for mv.
 func (s *Store) weightedCanonicalDDL(mv string) string {
-	return weightMVDDL(mvDDLByName(canonicalMVs(), mv))
+	return weightMVDDL(mvDDLByName(weightedMVCatalogue(), mv))
 }
 
 // liveMVDDL — the CREATE a repair/recreate path must run: weighted when

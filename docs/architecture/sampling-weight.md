@@ -204,11 +204,54 @@ design** — they measure what was stored.
   (the duplicate weighted TDigest dominates), spanmetrics +28 % on this
   high-cardinality sample. Prod check: `system.parts` bytes of the
   weighted MVs a day after the switch.
-- **Left for later:** trace_summary_* / trace_service_index_5m /
-  business_code_summary_5m states, rollup_* migrations (operator SQL) and
-  their readers, raw-spans RED paths (env-scoped /api/services, GetServices
-  raw), SLO good/total, service_slowdown (bind `?` in conditions),
-  remaining ~40 lower-traffic MV readers.
+- **Left for later (as of v0.10.2435):** see "Reader coverage (v0.10.2442)"
+  below for what was closed.
+
+## Reader coverage (v0.10.2442)
+
+All span-derived RED that the alert rules, Services, Endpoints, SLOs and
+the slowdown detector read now agrees under mode = on. Mode off / shadow:
+every reader below emits byte-identical SQL and binds
+(`TestWeighReadersModeOffIdentical`, `TestWeighSQLModeOffIdentical`).
+
+| Reader | Path | Weighted how |
+|---|---|---|
+| Alert rules `http_5xx/4xx_rate`, `http_/db_/rpc_*` (any window), every metric with window < 5 m (evaluator per-service + `MeasureAllServices` raw fallback) | raw spans | `weighRawSQL`: `count()` → Σw, `countIf(c)` → `sumIf(w, c)`, `avg(duration)` → Σwd/Σw, `quantile(q)(duration)` → `quantileTDigestWeighted` |
+| Alert metric series (raw plans, sub-5 m) | raw spans | same, incl. `quantileState` / outer `quantileMerge` → weighted TDigest twins |
+| Alert metric series (MV p*_ms), endpoints window percentiles, `operation_routes` | `-MergeState` + outer `-Merge` | `weighMergeState`: weighted state AND outer merge, **full windows only**; a window straddling the switch keeps both levels stored |
+| SLO availability good/total (status, burn series, burn rate) | service / operation summary | `weighSQL` |
+| SLO latency (t-digest inverse CDF) | spanmetrics_1m | `weighSQL` (quantile curve + calls) |
+| SLO raw fallbacks (sub-5 m, pre-coverage) | raw spans | `weighRawSQL` |
+| `/api/services` raw path (`GetServicesQuery`, also the env-scoped fallback when service_env_summary_5m does not cover) | raw spans | `weighRawSQL` (apdex binds keep their order) |
+| Endpoints raw path (no spanmetrics coverage) | raw spans | `weighRawSQL` (+ `quantilesTDigestState` / outer merge) |
+| service_slowdown services arm | service_summary_5m, `?` inside merge conditions | `weighSQLArgs`: a mixed window repeats each condition AND its bind values (2× counts, 3× quantiles); placeholder/bind mismatch → untracked fallback |
+| business_code_summary_5m (CoSRE code → service calls / errors) | new weighted states (`w_span_count_state`, `w_error_count_state`) | same in-place migration + marker, gated on mode shadow/on (`weightedMVsWhenActive`); fresh CREATE weighted when `spans.sample_weight` exists |
+
+Rule shadow (`RuleShadowEligible`) follows: every window, error_rate and
+every transport `*_rate` whose numerator is a failing span (status error
+or HTTP 5xx); `http_4xx_rate` stays out (4xx server spans are not error
+spans, the E/O model does not describe them). `request_rate` retune hint
+applies to every window.
+
+Cost: no new scans; the raw rewrites replace an aggregate by its weighted
+twin over the same rows (one Float32 column read more), the MV rewrites
+read the twin state columns already written since v0.10.2435.
+
+**Still left (follow-up):**
+
+- `trace_summary_5m` / `trace_summary_1d` / `trace_service_index_5m`:
+  trace search and counts stay "stored" by design; the one RED reader is
+  tracemetrics (`tracemetric.go`, trace rate / % failing traces /
+  trace-duration percentiles). Weighting it needs a per-trace weight state
+  on trace_summary_5m (a migration on the trace-search MV with its own
+  drop/recreate history — `mv_shape_guard.go`) — a separate slice.
+- `rollup_spans_*` (operator-applied migrations 0001 / 0002) and their
+  readers.
+- `db_health.go` (DB health detector), `-MergeState` in `mcptools`
+  (service sweep, pivot trace) and the remaining lower-traffic MV readers
+  that never pass through `weighSQL`.
+- `OpP99Pivot` (`op_p99_cache.go`) still calls `weighSQL` without binds:
+  a `?` merge condition in a mixed window stays stored there.
 
 ## Rule thresholds (v0.10.2441)
 
@@ -220,8 +263,8 @@ v0.10.2440:
 |---|---|---|---|---|
 | Alert rule `error_rate` (window ≥ 5 m, span path) | `MeasureAllServices` spanmetrics_1m, entry spans — **yes** | operator value (builtins 15 / 50 / 5 %, off by default) | absolute | drops ~20×: retune to `ErrorPct(T)` |
 | Alert rule `mq_publish_rate` / `mq_consume_rate` (≥ 5 m) | spanmetrics_1m error_state — **yes** | operator | absolute | same as error_rate |
-| Alert rule `http_5xx/4xx_rate`, `http_/db_/rpc_*_rate` | raw spans GROUP BY — **no** (aggToSQLW not used here) | operator | absolute | unchanged (still stored rate) — inconsistent with error_rate, known gap |
-| Alert rule, any metric, window < 5 m | raw spans — **no** | operator | absolute | unchanged |
+| Alert rule `http_5xx/4xx_rate`, `http_/db_/rpc_*_rate` | raw spans GROUP BY — **yes since v0.10.2442** (`weighRawSQL`) | operator | absolute | 5xx / error rates drop like error_rate (retune); 4xx rate shifts by the non-failing mix |
+| Alert rule, any metric, window < 5 m | raw spans — **yes since v0.10.2442** | operator | absolute | as the ≥ 5 m row of the same metric |
 | Alert rule `request_rate` | service_summary_5m count — **yes** | operator | absolute | ×≈ okWeight (20): `<` drop rules stop firing |
 | Alert rule `error_count` | service_summary_5m error count — **yes** | operator | absolute | ×errWeight (1 in prod shape): ≈ unchanged |
 | Alert rule `avg_ms` / `p*_ms` | service_summary_5m sum / TDigest — **yes** | operator | absolute | shifts toward the success-path latency (direction per service) |
@@ -236,7 +279,8 @@ v0.10.2440:
 | ML impact rule (`svc_error_rate`, response time) | VictoriaMetrics only | Floor 1 %, +50 % / +1 pt | absolute + relative | unaffected |
 | ML telemetry volume (`ml_volume.go`) | weighted (both MVs) | spans/request ratio | relative, scale-free | unaffected (ratio) |
 | Problem standard impact floors (notify_policy D6) | value of the source Problem | 30 failed / 5 m or ≥ 1 % with ≥ 30 calls | absolute | inherits the source: error % lower, calls higher |
-| DB health (`db-health:`), service_slowdown, SLO good/total | not weighted (left for later) | — | — | unchanged |
+| service_slowdown, SLO good/total | weighted since v0.10.2442 | rise factor / SLO target | relative / ratio | slowdown: base p95 stays stored until 24 h after the switch; SLO ratio drops toward the true failure share |
+| DB health (`db-health:`) | not weighted (left for later) | — | — | unchanged |
 
 ### Shadow comparison
 
@@ -247,7 +291,9 @@ read with a two-class model from the operator's sampling rules
 (`SamplingShadowModelFor`): failing spans weigh E (explicit status=error /
 traceError rule, else the smallest configured weight), the rest O (largest).
 `weighted % = p·E / (p·E + (1−p)·O)`. Scope: alert rules that become weighted
-(`RuleShadowEligible`: error_rate + mq_*_rate, window ≥ 5 m, not VM) and the
+(`RuleShadowEligible`: error_rate + mq_*_rate, window ≥ 5 m, not VM; since
+v0.10.2442 every window and every failing-span `*_rate` — see "Reader
+coverage") and the
 anomaly error_rate decision (`evaluateAnomaly` re-run on transformed
 series). Results: self-obs `sampling.rule_shadow{family, outcome}` and the
 blob `sampling.ruleShadow` (per-rule counts, ≤ every 5 min, leader-local

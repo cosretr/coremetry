@@ -77,20 +77,35 @@ type CodeServiceStat struct {
 	Errors  uint64 `json:"errors"`
 }
 
-// BusinessCodeServices — verilen kodların servis kırılımı (kod başına ≤20 servis).
-func (s *Store) BusinessCodeServices(ctx context.Context, kind string, codes []string, from, to time.Time) (map[string][]CodeServiceStat, error) {
-	out := map[string][]CodeServiceStat{}
-	if len(codes) == 0 {
-		return out, nil
-	}
-	rows, err := s.conn.Query(ctx, `
+// businessCodeServicesSQL / businessCodeSeenSQL — SAF metinler (ağırlık
+// testi: sampling_weighted_readers_test.go).
+const businessCodeServicesSQL = `
 		SELECT code, service_name, countMerge(span_count_state) AS c, countMerge(error_count_state) AS e
 		FROM business_code_summary_5m
 		WHERE kind = ? AND code IN (?) AND time_bucket >= ? AND time_bucket < ?
 		GROUP BY code, service_name
 		ORDER BY code, c DESC
 		LIMIT 20 BY code
-		SETTINGS max_execution_time = 10`, kind, codes, from, to)
+		SETTINGS max_execution_time = 10`
+
+const businessCodeSeenSQL = `
+		SELECT kind, service_name, countMerge(span_count_state) AS c, countMerge(error_count_state) AS e,
+		       min(time_bucket) AS f, max(time_bucket) AS l
+		FROM business_code_summary_5m
+		WHERE kind IN ('function_code', 'channel_code') AND code = ? AND time_bucket >= ? AND time_bucket < ?
+		GROUP BY kind, service_name
+		ORDER BY c DESC
+		LIMIT 20
+		SETTINGS max_execution_time = 5`
+
+// BusinessCodeServices — verilen kodların servis kırılımı (kod başına ≤20 servis).
+func (s *Store) BusinessCodeServices(ctx context.Context, kind string, codes []string, from, to time.Time) (map[string][]CodeServiceStat, error) {
+	out := map[string][]CodeServiceStat{}
+	if len(codes) == 0 {
+		return out, nil
+	}
+	// v0.10.2442 — sampling-weight Phase 2: represented calls when on.
+	rows, err := s.conn.Query(ctx, s.weighSQL(businessCodeServicesSQL, from, "business_code_summary_5m"), kind, codes, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -171,15 +186,7 @@ type BusinessCodeSeenRow struct {
 // ilk/son görülme. business_code_summary_5m nokta okuması (ORDER BY kind,
 // code ile başlar); ham span YOK. ≤20 satır.
 func (s *Store) BusinessCodeSeen(ctx context.Context, code string, from, to time.Time) ([]BusinessCodeSeenRow, error) {
-	rows, err := s.conn.Query(ctx, `
-		SELECT kind, service_name, countMerge(span_count_state) AS c, countMerge(error_count_state) AS e,
-		       min(time_bucket) AS f, max(time_bucket) AS l
-		FROM business_code_summary_5m
-		WHERE kind IN ('function_code', 'channel_code') AND code = ? AND time_bucket >= ? AND time_bucket < ?
-		GROUP BY kind, service_name
-		ORDER BY c DESC
-		LIMIT 20
-		SETTINGS max_execution_time = 5`, code, from, to)
+	rows, err := s.conn.Query(ctx, s.weighSQL(businessCodeSeenSQL, from, "business_code_summary_5m"), code, from, to) // v0.10.2442
 	if err != nil {
 		return nil, err
 	}

@@ -207,6 +207,9 @@ func ServiceSlowdownServicesQuery(cur time.Time, cfg ServiceSlowdownConfig, sens
 // ServiceSlowdownServices — servis özeti; truncated = satır tavanına dayandı.
 func (s *Store) ServiceSlowdownServices(ctx context.Context, cur time.Time, cfg ServiceSlowdownConfig, sens AnomalySensitivityConfig, services []string) ([]SvcSlowServiceRow, bool, error) {
 	q, args := ServiceSlowdownServicesQuery(cur, cfg, sens, services)
+	// v0.10.2442 — sampling-weight Phase 2: the merge conditions carry `?`
+	// binds; weighSQLArgs repeats them with the conditions in a mixed window.
+	q, args = s.weighSQLArgs(q, args, cur.Add(-svcSlowBaseLookback), "service_summary_5m")
 	rows, err := s.telemetryReadConn().Query(ctx, q, args...)
 	if err != nil {
 		return nil, false, err

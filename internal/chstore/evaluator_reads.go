@@ -356,7 +356,7 @@ func (s *Store) MeasureAllServices(ctx context.Context, metric string, window ti
 	start := MVWindowStart(now, window)
 	covered := MVCoveredSeconds(now, window)
 
-	rows, err := s.conn.Query(ctx, s.weighSQL(plan.sql, start, plan.source), start) // v0.10.2435 — sampling-weight Phase 2
+	rows, err := s.conn.Query(ctx, s.weighPlanSQL(plan.sql, plan.source, start), start) // v0.10.2435 — sampling-weight Phase 2
 	if err != nil {
 		return nil, err
 	}
@@ -401,6 +401,16 @@ func (s *Store) MeasureAllServices(ctx context.Context, metric string, window ti
 		}
 	}
 	return out, rows.Err()
+}
+
+// weighPlanSQL — v0.10.2442: an alert read on raw spans (http_* / db_* /
+// rpc_* transport families, sub-5m windows) is weighted like the MV reads,
+// so every error-rate family agrees when sampling mode is on.
+func (s *Store) weighPlanSQL(sql, source string, from time.Time) string {
+	if source == "spans" {
+		return s.weighRawSQL(sql)
+	}
+	return s.weighSQL(sql, from, source)
 }
 
 // MeasureCountAllServices returns the span count per service over the

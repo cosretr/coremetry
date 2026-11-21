@@ -127,22 +127,23 @@ func RuleShadowModel() (SamplingShadowModel, bool) {
 }
 
 // RuleShadowEligible — SAF: an alert metric whose read becomes weighted
-// under mode=on: error_rate and the mq_*_rate families (spanmetrics_1m
-// error_state), on a window the 5m MV grid serves. Sub-5m windows and the
-// http_/db_/rpc_ rates read raw spans unweighted even when on — no shift.
-func RuleShadowEligible(metric string, windowSec uint32) bool {
-	if !UseSummaryMV(time.Duration(windowSec) * time.Second) {
-		return false
-	}
+// under mode=on and whose shift the two-class model describes. Since
+// v0.10.2442 every span read is weighted (MV and raw, any window), so:
+// error_rate and every transport *_rate whose numerator is a failing span
+// (status_code='error', or HTTP 5xx — a server span with 5xx is an error
+// span by OTel semconv). http_4xx_rate is NOT: 4xx server spans are not
+// error spans, they carry the non-failing weight, and the model's E/O
+// transform does not describe their ratio. The window no longer matters
+// (the parameter stays for the callers' shape).
+func RuleShadowEligible(metric string, _ uint32) bool {
 	if metric == "error_rate" {
 		return true
 	}
 	if TransportOp(metric) != "error_rate" {
 		return false
 	}
-	_, mv := spanmetricsTransportWhere(metric)
-	_, num, _ := TransportFilter(metric)
-	return mv && num == "status_code='error'"
+	_, num, ok := TransportFilter(metric)
+	return ok && (num == "status_code='error'" || num == "http_status >= 500")
 }
 
 // RuleShadowRow — one rule's counts. Evals = (rule, service) evaluations.
@@ -352,7 +353,7 @@ func RuleRetuneHints(rules []AlertRule, m SamplingShadowModel) []RuleRetuneHint 
 		switch {
 		case RuleShadowEligible(r.Metric, r.WindowSec):
 			h.Retune, h.Note = m.ErrorPct(r.Threshold), "same firing under the model"
-		case UseSummaryMV(time.Duration(r.WindowSec)*time.Second) && r.Metric == "request_rate":
+		case r.Metric == "request_rate": // v0.10.2442 — raw (sub-5m) reads weighted too
 			h.Retune, h.Note = r.Threshold*m.OkWeight, "×okWeight (upper bound; less where errors are a large share)"
 		default:
 			continue

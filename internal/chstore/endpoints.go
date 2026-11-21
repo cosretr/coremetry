@@ -978,7 +978,7 @@ func (s *Store) getEndpointsRaw(ctx context.Context, q EndpointsQuery) ([]Endpoi
 		` + endpointsOrderBy(q.Sort, q.Dir) + `
 		LIMIT ?
 		SETTINGS max_execution_time = 15` + s.heavyScanSpill()
-	rows, err := s.conn.Query(ctx, sql, allArgs...)
+	rows, err := s.conn.Query(ctx, s.weighRawSQL(sql), allArgs...) // v0.10.2442 — sampling-weight Phase 2
 	if err != nil {
 		return nil, err
 	}

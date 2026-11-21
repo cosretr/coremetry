@@ -155,10 +155,14 @@ func TestWeighSQLIfCombinators(t *testing.T) {
 	if got := weighSQLWith(full, bind); got != `toUInt64(round(sumMergeIf(w_span_count_state, time_bucket >= ?))) AS c` {
 		t.Fatalf("full rewrite with ?: %s", got)
 	}
-	// -MergeState stays untouched (its outer merge cannot read a weighted state).
+	// -MergeState: mixed window untouched (one outer merge cannot combine
+	// both state types); full window weighted (v0.10.2442, TestWeighMergeState).
 	st := `quantilesTDigestMergeState(0.5, 0.95, 0.99)(duration_q_state) AS q`
-	if weighSQLWith(full, st) != st {
-		t.Fatal("MergeState must not be rewritten")
+	if weighSQLWith(mixed, st) != st {
+		t.Fatal("MergeState must not be rewritten in a mixed window")
+	}
+	if got := weighSQLWith(full, st); got != `quantilesTDigestWeightedMergeState(0.5, 0.95, 0.99)(w_duration_q_state) AS q` {
+		t.Fatalf("full MergeState: %s", got)
 	}
 }
 

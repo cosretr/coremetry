@@ -203,7 +203,8 @@ func (s *Store) ComputeSLOStatus(ctx context.Context, o SLO) (*SLOStatus, error)
 			"toUInt64(greatest(countMerge(span_count_state) - countIfMerge(error_count_state), 0)) AS good " +
 			"FROM " + mv + " WHERE service_name = ? AND time_bucket >= ?" + nameClause +
 			" SETTINGS max_execution_time = 20"
-		if err := s.conn.QueryRow(ctx, q, args...).Scan(&total, &good); err != nil {
+		// v0.10.2442 — sampling-weight Phase 2: represented good/total when on.
+		if err := s.conn.QueryRow(ctx, s.weighSQL(q, since, mv), args...).Scan(&total, &good); err != nil {
 			return nil, err
 		}
 	case SLITypeLatency:
@@ -220,7 +221,7 @@ func (s *Store) ComputeSLOStatus(ctx context.Context, o SLO) (*SLOStatus, error)
 				args = append(args, o.Operation)
 			}
 			var qs []float64
-			if err := s.conn.QueryRow(ctx, q, args...).Scan(&total, &qs); err != nil {
+			if err := s.conn.QueryRow(ctx, s.weighSQL(q, from, "spanmetrics_1m"), args...).Scan(&total, &qs); err != nil { // v0.10.2442
 				return nil, err
 			}
 			good = sloGoodCount(total, sloGoodFraction(sloLatencyLevels, qs, o.ThresholdMs*1e6))
@@ -237,7 +238,7 @@ func (s *Store) ComputeSLOStatus(ctx context.Context, o SLO) (*SLOStatus, error)
 			args = append(args, o.Operation)
 		}
 		q += " SETTINGS max_execution_time = 20"
-		if err := s.conn.QueryRow(ctx, q, args...).Scan(&total, &good); err != nil {
+		if err := s.conn.QueryRow(ctx, s.weighRawSQL(q), args...).Scan(&total, &good); err != nil { // v0.10.2442
 			return nil, err
 		}
 	default:
@@ -303,6 +304,7 @@ func (s *Store) ComputeSLOBurnSeries(ctx context.Context, o SLO, days int) ([]Bu
 		       toUInt64(greatest(countMerge(span_count_state) - countIfMerge(error_count_state), 0)) AS good
 		FROM ` + mv + `
 		WHERE service_name = ? AND time_bucket >= ?` + nameClause
+		q = s.weighSQL(q, since, mv) // v0.10.2442
 		if o.Operation != "" {
 			args = append(args, o.Operation)
 		}
@@ -324,6 +326,7 @@ func (s *Store) ComputeSLOBurnSeries(ctx context.Context, o SLO, days int) ([]Bu
 		       ` + fmt.Sprintf("countIf(duration <= %f)", o.ThresholdMs*1e6) + ` AS good
 		FROM spans
 		WHERE service_name = ? AND time >= ?` + sloLatencyEntryWhere
+		q = s.weighRawSQL(q) // v0.10.2442
 		if o.Operation != "" {
 			q += ` AND name = ?`
 			args = append(args, o.Operation)
@@ -365,7 +368,8 @@ func (s *Store) ComputeSLOBurnSeries(ctx context.Context, o SLO, days int) ([]Bu
 // sloBurnSeriesFromMV — v0.10.518: per-day latency burn points from the
 // spanmetrics_1m quantile curve (one row per day: bucket, total, qs).
 func (s *Store) sloBurnSeriesFromMV(ctx context.Context, o SLO, q string, args []any) ([]BurnPoint, error) {
-	rows, err := s.conn.Query(ctx, q, args...)
+	from, _ := args[1].(time.Time)
+	rows, err := s.conn.Query(ctx, s.weighSQL(q, from, "spanmetrics_1m"), args...) // v0.10.2442
 	if err != nil {
 		return nil, err
 	}
@@ -512,7 +516,7 @@ func (s *Store) ComputeSLOBurnRate(ctx context.Context, o SLO, window time.Durat
 			args = append(args, o.Operation)
 		}
 		var qs []float64
-		if err := s.conn.QueryRow(ctx, q, args...).Scan(&total, &qs); err != nil {
+		if err := s.conn.QueryRow(ctx, s.weighSQL(q, mvFrom, "spanmetrics_1m"), args...).Scan(&total, &qs); err != nil { // v0.10.2442
 			return 0, 0, err
 		}
 		good = sloGoodCount(total, sloGoodFraction(sloLatencyLevels, qs, o.ThresholdMs*1e6))
@@ -535,7 +539,7 @@ func (s *Store) ComputeSLOBurnRate(ctx context.Context, o SLO, window time.Durat
 			"toUInt64(greatest(countMerge(span_count_state) - countIfMerge(error_count_state), 0)) AS good " +
 			"FROM " + mv + " WHERE service_name = ? AND time_bucket >= ?" + nameClause +
 			" SETTINGS max_execution_time = 10"
-		if err := s.conn.QueryRow(ctx, q, args...).Scan(&total, &good); err != nil {
+		if err := s.conn.QueryRow(ctx, s.weighSQL(q, args[1].(time.Time), mv), args...).Scan(&total, &good); err != nil { // v0.10.2442
 			return 0, 0, err
 		}
 	} else {
@@ -567,7 +571,7 @@ func (s *Store) ComputeSLOBurnRate(ctx context.Context, o SLO, window time.Durat
 			args = append(args, o.Operation)
 		}
 		q += ` SETTINGS max_execution_time = 10`
-		if err := s.conn.QueryRow(ctx, q, args...).Scan(&total, &good); err != nil {
+		if err := s.conn.QueryRow(ctx, s.weighRawSQL(q), args...).Scan(&total, &good); err != nil { // v0.10.2442
 			return 0, 0, err
 		}
 	}

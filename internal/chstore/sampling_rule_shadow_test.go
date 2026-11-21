@@ -62,11 +62,14 @@ func TestRuleShadowEligible(t *testing.T) {
 		want   bool
 	}{
 		{"error_rate", 300, true},
-		{"error_rate", 60, false}, // sub-5m raw path stays unweighted
+		{"error_rate", 60, true}, // v0.10.2442: sub-5m raw path weighted too
 		{"mq_consume_rate", 600, true},
 		{"mq_publish_rate", 300, true},
-		{"http_5xx_rate", 300, false}, // raw spans, unweighted even when on
-		{"db_error_rate", 300, false},
+		{"http_5xx_rate", 300, true}, // v0.10.2442: raw spans weighted
+		{"http_5xx_rate", 60, true},
+		{"db_error_rate", 300, true},
+		{"rpc_error_rate", 300, true},
+		{"http_4xx_rate", 300, false}, // 4xx spans are not error spans — model does not apply
 		{"request_rate", 300, false},
 		{"p99_ms", 300, false},
 	}
@@ -172,7 +175,8 @@ func TestRuleRetuneHints(t *testing.T) {
 		{ID: "r5", Name: "p99", Metric: "p99_ms", Comparator: ">", Threshold: 900, WindowSec: 300, Enabled: true},
 	}
 	h := RuleRetuneHints(rules, m)
-	if len(h) != 2 || h[0].RuleID != "r1" || h[1].RuleID != "r2" {
+	// v0.10.2442: http_5xx_rate (raw spans) is weighted too → hinted.
+	if len(h) != 3 || h[0].RuleID != "r1" || h[1].RuleID != "r2" || h[2].RuleID != "r4" {
 		t.Fatalf("hints %+v", h)
 	}
 	if math.Abs(h[0].Retune-m.ErrorPct(5)) > 1e-9 || h[1].Retune != 40 {

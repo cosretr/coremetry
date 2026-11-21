@@ -1014,6 +1014,23 @@ func (s *Store) GetServicesFilteredIn(ctx context.Context, since time.Duration, 
 	})
 }
 
+// servicesRawSQL — SAF: the raw-spans /api/services text (weighting test
+// pins it; heavyScanSpill is appended by the caller).
+func servicesRawSQL(where, having, orderBy, limitClause string) string {
+	return `
+		SELECT service_name,
+		       count()                                  AS span_count,
+		       countIf(status_code = 'error')           AS error_count,
+		       avg(duration) / 1e6                      AS avg_ms,
+		       quantile(0.99)(duration) / 1e6           AS p99_ms,
+		       (countIf(duration <= ?* 1e6) + countIf(duration > ? * 1e6 AND duration <= ? * 1e6) / 2)
+		         / nullIf(count(), 0)                   AS apdex
+		FROM spans ` + where + `
+		GROUP BY service_name` + having + `
+		ORDER BY ` + orderBy + limitClause + `
+		SETTINGS max_execution_time = 20`
+}
+
 func (s *Store) GetServicesQuery(ctx context.Context, q ServicesQuery) ([]ServiceSummary, error) {
 	since, from, to := q.Since, q.From, q.To
 	nameMatch, serviceIn := q.NameMatch, q.ServiceIn
@@ -1034,18 +1051,9 @@ func (s *Store) GetServicesQuery(ctx context.Context, q ServicesQuery) ([]Servic
 
 	havingSQL, havingArgs := q.Display.having("span_count", "error_count", "p99_ms")
 
-	rows, err := s.telemetryReadConn().Query(ctx, `
-		SELECT service_name,
-		       count()                                  AS span_count,
-		       countIf(status_code = 'error')           AS error_count,
-		       avg(duration) / 1e6                      AS avg_ms,
-		       quantile(0.99)(duration) / 1e6           AS p99_ms,
-		       (countIf(duration <= ?* 1e6) + countIf(duration > ? * 1e6 AND duration <= ? * 1e6) / 2)
-		         / nullIf(count(), 0)                   AS apdex
-		FROM spans `+wc.sql()+`
-		GROUP BY service_name`+havingSQL+`
-		ORDER BY `+servicesSortExpr(sort, dir)+limitClause+`
-		SETTINGS max_execution_time = 20`+s.heavyScanSpill(),
+	// v0.10.2442 — sampling-weight Phase 2: raw /api/services (env-scoped
+	// fallback included) reads represented spans when on.
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighRawSQL(servicesRawSQL(wc.sql(), havingSQL, servicesSortExpr(sort, dir), limitClause)+s.heavyScanSpill()),
 		append(append([]any{apdexT, apdexT, apdexT * 4}, wc.args...), havingArgs...)...)
 	if err != nil {
 		return nil, err

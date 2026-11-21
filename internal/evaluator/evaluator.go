@@ -1965,9 +1965,9 @@ func (e *Evaluator) measureCount(ctx context.Context, service string, window tim
 		}
 		return uint64(scaleToWindow(float64(n), window.Seconds(), mvCoveredSeconds(now, window))), nil
 	}
-	err := e.store.TelemetryReadConn().QueryRow(ctx, `
+	err := e.store.TelemetryReadConn().QueryRow(ctx, e.store.WeighRawSQL(`
 		SELECT count() FROM spans WHERE service_name = ? AND time >= ?
-		SETTINGS max_execution_time = 10`,
+		SETTINGS max_execution_time = 10`), // v0.10.2442
 		service, now.Add(-window)).Scan(&n)
 	return n, err
 }
@@ -2001,7 +2001,7 @@ func (e *Evaluator) measure(ctx context.Context, service, metric string, window 
 			       FROM spans WHERE service_name=? AND time>=? AND ` + chstore.EntrySpanKindsWhere + `
 			       SETTINGS max_execution_time = 10`
 		}
-		err := conn.QueryRow(ctx, e.store.WeighSQL(sql, cutoff, "spanmetrics_1m"), service, cutoff).Scan(&v) // v0.10.2435 — sampling-weight Phase 2
+		err := conn.QueryRow(ctx, weighAlertSQL(e.store, sql, mv, cutoff, "spanmetrics_1m"), service, cutoff).Scan(&v) // v0.10.2435 — sampling-weight Phase 2
 		if err != nil {
 			return 0, err
 		}
@@ -2018,7 +2018,7 @@ func (e *Evaluator) measure(ctx context.Context, service, metric string, window 
 			       WHERE service_name=? AND time>=?
 			       SETTINGS max_execution_time = 10`
 		}
-		err := conn.QueryRow(ctx, e.store.WeighSQL(sql, cutoff, "service_summary_5m"), service, cutoff).Scan(&n) // v0.10.2435 — sampling-weight Phase 2
+		err := conn.QueryRow(ctx, weighAlertSQL(e.store, sql, mv, cutoff, "service_summary_5m"), service, cutoff).Scan(&n) // v0.10.2435 — sampling-weight Phase 2
 		if err != nil {
 			return 0, err
 		}
@@ -2039,7 +2039,7 @@ func (e *Evaluator) measure(ctx context.Context, service, metric string, window 
 			sql = `SELECT count() FROM spans WHERE service_name=? AND time>=?
 			       SETTINGS max_execution_time = 10`
 		}
-		err := conn.QueryRow(ctx, e.store.WeighSQL(sql, cutoff, "service_summary_5m"), service, cutoff).Scan(&n) // v0.10.2435 — sampling-weight Phase 2
+		err := conn.QueryRow(ctx, weighAlertSQL(e.store, sql, mv, cutoff, "service_summary_5m"), service, cutoff).Scan(&n) // v0.10.2435 — sampling-weight Phase 2
 		if err != nil {
 			return 0, err
 		}
@@ -2094,7 +2094,7 @@ func (e *Evaluator) measure(ctx context.Context, service, metric string, window 
 			}
 		}
 		var v float64
-		err := conn.QueryRow(ctx, e.store.WeighSQL(sql, cutoff, "service_summary_5m"), service, cutoff).Scan(&v) // v0.10.2435 — sampling-weight Phase 2
+		err := conn.QueryRow(ctx, weighAlertSQL(e.store, sql, mv, cutoff, "service_summary_5m"), service, cutoff).Scan(&v) // v0.10.2435 — sampling-weight Phase 2
 		return v, err
 	}
 
@@ -2139,10 +2139,27 @@ func (e *Evaluator) measure(ctx context.Context, service, metric string, window 
 			return 0, fmt.Errorf("unknown transport op %q in %q", op, metric)
 		}
 		var v float64
-		err := conn.QueryRow(ctx, sql, service, cutoff).Scan(&v)
+		err := conn.QueryRow(ctx, e.store.WeighRawSQL(sql), service, cutoff).Scan(&v) // v0.10.2442 — transport families weighted like the MV reads
 		return v, err
 	}
 	return 0, fmt.Errorf("unknown metric %q", metric)
+}
+
+// alertSQLWeigher — the two chstore rewrites measure() needs.
+type alertSQLWeigher interface {
+	WeighSQL(sql string, from time.Time, mvs ...string) string
+	WeighRawSQL(sql string) string
+}
+
+// weighAlertSQL — v0.10.2442: the per-service alert read weighted on both
+// paths (MV states via WeighSQL, sub-5m raw spans via WeighRawSQL), so a
+// < 5 m rule reads the same represented rate as a ≥ 5 m one. Mode off /
+// shadow → identical SQL.
+func weighAlertSQL(w alertSQLWeigher, sql string, mv bool, cutoff time.Time, table string) string {
+	if !mv {
+		return w.WeighRawSQL(sql)
+	}
+	return w.WeighSQL(sql, cutoff, table)
 }
 
 // transportFilter returns the denominator population predicate + the

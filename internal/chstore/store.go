@@ -5524,7 +5524,12 @@ func (s *Store) migrate(ctx context.Context) error {
 	}
 	// CoSRE iş kodu çözümleme (business_code.go): kod ifadeleri attr dizilerinden
 	// (promoted kolona bağlı değil) → koşulsuz.
-	mvs = append(mvs, businessCodeMVDDL())
+	// v0.10.2442 — weighted states like the canonical MVs (same column gate).
+	if s.hasSampleWeightCol.Load() {
+		mvs = append(mvs, weightMVDDL(businessCodeMVDDL()))
+	} else {
+		mvs = append(mvs, businessCodeMVDDL())
+	}
 
 	for _, q := range mvs {
 		// Skip the operation_group_summary_5m MV when op_group isn't on the
