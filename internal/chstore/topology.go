@@ -550,7 +550,7 @@ func (s *Store) WriteTopologyBucket(ctx context.Context, bucketStart time.Time) 
 	// fits even on a modest 4-8 GB CH. allow_experimental_analyzer
 	// off keeps grace_hash on the legacy planner where it's
 	// stable across 23.x→24.x.
-	if err := s.conn.Exec(ctx, `
+	if err := s.conn.Exec(ctx, s.topoWeightSQL(`
 		INSERT INTO topology_edges_5m
 			(time_bucket, parent_service, child_node, node_kind,
 			 protocol, top_labels, distinct_labels, calls,
@@ -627,7 +627,7 @@ func (s *Store) WriteTopologyBucket(ctx context.Context, bucketStart time.Time) 
 		GROUP BY parent_service, child_node, protocol
 		SETTINGS max_execution_time = 180,
 		         `+s.topoJoinMemSettings()+`,
-		         distributed_product_mode = 'global'`,
+		         distributed_product_mode = 'global'`),
 		bucketStart.Unix(),
 		uint64(time.Now().UnixNano()),
 		bucketStart.Unix(), end.Unix(),
@@ -652,7 +652,7 @@ func (s *Store) WriteTopologyBucket(ctx context.Context, bucketStart time.Time) 
 	// kenar çağrı değil yerleşim; okuyucular türü child_node önekinden
 	// (nodeIDPrefix) tanır, TopoCallEdgeFilterSQL dışlar.
 	// Per-row hesaplar İÇ SELECT'te (v0.9.186 analyzer-portable kuralı).
-	if err := s.conn.Exec(ctx, `
+	if err := s.conn.Exec(ctx, s.topoWeightSQL(`
 		INSERT INTO topology_edges_5m
 			(time_bucket, parent_service, child_node, node_kind,
 			 protocol, top_labels, distinct_labels, calls,
@@ -687,7 +687,7 @@ func (s *Store) WriteTopologyBucket(ctx context.Context, bucketStart time.Time) 
 		)
 		WHERE node_name != ''
 		GROUP BY parent_service, node_name
-		SETTINGS max_execution_time = 60`,
+		SETTINGS max_execution_time = 60`),
 		bucketStart.Unix(),
 		uint64(time.Now().UnixNano()),
 		bucketStart.Unix(), end.Unix(),
@@ -725,7 +725,7 @@ func (s *Store) WriteTopologyBucket(ctx context.Context, bucketStart time.Time) 
 	// materialize edilir, dış sorgu düz kolonlarla aggregate eder — WITH
 	// scope karışıklığı ortadan kalkar. Çıktı iki analyzer modunda da
 	// birebir aynı (24.8 single+distributed doğrulandı; 26.2 reproduce).
-	if err := s.conn.Exec(ctx, `
+	if err := s.conn.Exec(ctx, s.topoWeightSQL(`
 		INSERT INTO topology_edges_5m
 			(time_bucket, parent_service, child_node, node_kind,
 			 protocol, top_labels, distinct_labels, calls,
@@ -904,7 +904,7 @@ func (s *Store) WriteTopologyBucket(ctx context.Context, bucketStart time.Time) 
 		  AND `+topoNoiseExcludeSQL("msg_dest")+`
 		GROUP BY parent_service, child, proto, kind_out
 		SETTINGS max_execution_time = 120,
-		         distributed_product_mode = 'global'`,
+		         distributed_product_mode = 'global'`),
 		// v0.9.186 — arg sırası restructure ile değişti: DIŞ SELECT önce
 		// (time_bucket, version), sonra İÇ SELECT (unanswered penceresi,
 		// bilinen-servis lookback'i, iç WHERE penceresi).
@@ -927,7 +927,7 @@ func (s *Store) WriteTopologyBucket(ctx context.Context, bucketStart time.Time) 
 	// service_name is the destination. Protocol stays 'kafka' so
 	// the frontend can render messaging edges dashed (async
 	// semantics) regardless of which half of the chain it sees.
-	if err := s.conn.Exec(ctx, `
+	if err := s.conn.Exec(ctx, s.topoWeightSQL(`
 		INSERT INTO topology_edges_5m
 			(time_bucket, parent_service, child_node, node_kind,
 			 protocol, top_labels, distinct_labels, calls,
@@ -987,7 +987,7 @@ func (s *Store) WriteTopologyBucket(ctx context.Context, bucketStart time.Time) 
 		  AND `+topoNoiseExcludeSQL("msg_dest")+`
 		GROUP BY parent_service, child_node
 		SETTINGS max_execution_time = 60,
-		         distributed_product_mode = 'global'`,
+		         distributed_product_mode = 'global'`),
 		bucketStart.Unix(),
 		uint64(time.Now().UnixNano()),
 		bucketStart.Unix(), end.Unix(),
@@ -1353,6 +1353,7 @@ func (s *Store) readServiceTopologyAggFiltered(ctx context.Context, from, to tim
 	touchWhere, touchArgs := topologyTouchWhere(touching, extCallersOf)
 	args = append(args, touchArgs...)
 	args = append(args, limit)
+	rawW := s.topoReadWeighted() // v0.10.2435 — sampling-weight Phase 2
 	// v0.9.1026 — cluster projeksiyonu probe'a bağlı (hasTopoClusterCol).
 	// Kolonun inmediği boot'ta koşulsuz bir `argMax(cluster, …)` bu
 	// sorguyu code 47 ile düşürürdü — ve bu sorgu /topology'nin TAMAMINI
@@ -1402,8 +1403,7 @@ func (s *Store) readServiceTopologyAggFiltered(ctx context.Context, from, to tim
 				any(node_kind) AS node_kind,
 				protocol,
 				arrayDistinct(arrayFlatten(groupArray(top_labels))) AS merged,
-				toUInt64(sum(calls)) AS total_calls,
-				toUInt64(sum(errors)) AS total_errors,
+				`+topoCallsSel(rawW)+`,
 				if(sum(calls) > 0,
 				   toFloat64(sum(sum_duration_ns)) / sum(calls) / 1e6,
 				   0) AS avg_ms,

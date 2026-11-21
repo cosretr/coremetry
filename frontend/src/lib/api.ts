@@ -530,19 +530,19 @@ export const api = {
   // v0.10.337 — Overview RED'i metrikten (?src=metric). withMetricSource:
   // ?metricsrc= deneme modu diğer metrik uçlarıyla aynı depoya gitsin.
   // v0.10.1429 — opts.family 'grpc': gRPC sunucu histogramı kimliği (aile çözücüsü gRPC derse).
-  serviceMetricRED: (svc: string, fromNs: number, toNs: number, mdp?: number, opts?: { rateWindow?: number; env?: string; family?: 'grpc' }) =>
+  serviceMetricRED: (svc: string, fromNs: number, toNs: number, mdp?: number, opts?: { rateWindow?: number; env?: string; family?: 'grpc' | 'http_legacy' | 'spanmetrics'; infra?: boolean }) =>
     get<import('./types').ServiceMetricRED>(withMetricSource(
       `/api/services/${encodeURIComponent(svc)}/metric-red?from=${fromNs}&to=${toNs}`
       + (mdp ? `&maxDataPoints=${mdp}` : '')
       + (opts?.rateWindow ? `&rateWindow=${opts.rateWindow}` : '')
       + (opts?.env ? `&env=${encodeURIComponent(opts.env)}` : '')
-      + (opts?.family ? `&family=${opts.family}` : ''))),
+      + (opts?.family ? `&family=${opts.family}` : '') + (opts?.infra ? '&infra=1' : ''))),
   // v0.10.1429 — breakdown 'rpc_method' + family 'grpc': gRPC ailesinin route kırılımı.
-  serviceMetricThroughput: (svc: string, fromNs: number, toNs: number, metric?: string, mdp?: number, opts?: { breakdown?: 'route' | 'rpc_method'; rateWindow?: number; env?: string; family?: 'grpc' }) =>
+  serviceMetricThroughput: (svc: string, fromNs: number, toNs: number, metric?: string, mdp?: number, opts?: { breakdown?: 'route' | 'rpc_method'; rateWindow?: number; env?: string; family?: 'grpc' | 'http_legacy'; infra?: boolean }) =>
     get<import('./types').ServiceMetricThroughput>(
       `/api/services/${encodeURIComponent(svc)}/metric-throughput?from=${fromNs}&to=${toNs}`
       + (metric ? `&metric=${encodeURIComponent(metric)}` : '')
-      + (opts?.family ? `&family=${opts.family}` : '')
+      + (opts?.family ? `&family=${opts.family}` : '') + (opts?.infra ? '&infra=1' : '')
       // v0.9.706 — nokta bütçesi (parite px pilotu). panelMaxDataPoints
       // kuantalı üretir → sunucu cache anahtarı sınırlı kardinalitede.
       + (mdp ? `&maxDataPoints=${mdp}` : '')
@@ -591,9 +591,16 @@ export const api = {
     get<import('./types').ServiceRuntime>(
       `/api/services/${encodeURIComponent(svc)}/runtime`),
   // 2026-11-21 — runtime profili (tespit + çözülmüş metrik adları) + akıllı sinyaller.
-  serviceRuntimeSignals: (svc: string) =>
-    get<import('./types').RuntimeSignalReport>(withMetricSource(
-      `/api/services/${encodeURIComponent(svc)}/runtime-signals`)),
+  // Follow-up 2026-11-21 — ?env= / ?cluster= kapsamı (yokken URL bayt-aynı).
+  serviceRuntimeSignals: (svc: string, scope?: { env?: string; cluster?: string }) => {
+    const q = qs({ env: scope?.env || undefined, cluster: scope?.cluster || undefined });
+    return get<import('./types').RuntimeSignalReport>(withMetricSource(
+      `/api/services/${encodeURIComponent(svc)}/runtime-signals${q ? `?${q}` : ''}`));
+  },
+  // Follow-up 2026-11-21 — giden çağrılar · hedefe göre (VM client histogramı).
+  serviceDownstreamRED: (svc: string, from: number, to: number, scope?: { env?: string; cluster?: string }) =>
+    get<import('./types').DownstreamREDReport>(withMetricSource(
+      `/api/services/${encodeURIComponent(svc)}/downstream-red?${qs({ from, to, env: scope?.env || undefined, cluster: scope?.cluster || undefined })}`)),
 
   // Batch runtime fingerprints — { [serviceName]: ServiceRuntime }.
   // Single CH query (argMax) on the backend; replaces the
@@ -665,6 +672,10 @@ export const api = {
   serviceSparklines: (r: RangeParams, services?: string[], maxSlots?: number) =>
     get<Record<string, SparklineBucket[]> | null>(
       `/api/services/sparklines?${qs({ ...r, services: services?.join(','), maxSlots })}`),
+  // v0.10.2434 — Services listesi RED'i örneklenmemiş metrikten (görünen servisler, ≤100).
+  servicesRedMetric: (r: RangeParams, services: string[], opts?: { env?: string; cluster?: string }) =>
+    get<import('./types').ServicesRedMetric>(
+      `/api/services-red-metric?${qs({ ...r, services: services.join(','), env: opts?.env || undefined, cluster: opts?.cluster || undefined })}`),
   serviceNames: (q?: string, limit = 200, offset = 0) =>
     get<{ names: string[]; total: number; hasMore: boolean }>(
       `/api/service-names?${qs({ q, limit, offset })}`),
@@ -1553,6 +1564,8 @@ export const api = {
   ingestSampling: () => get<import('./types').IngestSamplingStatus>(`/api/admin/ingest-sampling`),
   putIngestSampling: (c: import('./types').IngestSampling) =>
     request<import('./types').IngestSampling>(`/api/admin/ingest-sampling`, { method: 'PUT', body: JSON.stringify(c) }),
+  // v0.10.2435 — sampling-weight Phase 2: from when RED numbers are corrected.
+  samplingCorrection: () => get<import('./samplingCorrection').SamplingCorrection>(`/api/sampling/correction`),
   ingestSamplingStored: (windowS = 300) =>
     get<import('./types').IngestSamplingStored>(`/api/admin/ingest-sampling/stored?window_s=${windowS}`),
   // CoSRE kişi başı tur sınırı (admin + audit settings.ai_turn_limits.update).

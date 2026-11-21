@@ -7,6 +7,7 @@ import { MultiLineChart } from '@/components/MultiLineChart';
 import { namedSeriesToSeries } from '@/pages/clusters/trendSeries';
 import { PodInlineResourceCharts } from './PodInlineResourceCharts';
 import { t, useLang, type Lang } from '@/lib/i18n';
+import { RUNTIME_SOURCE_LABEL } from './runtimeSource';
 
 // PodJmxInline (v0.9.155) — Infrastructure açılır-grup tasarımında (operatör
 // onaylı mock A) bir pod satırı açılınca YERİNDE gösterilen JVM/JBoss JMX
@@ -60,7 +61,8 @@ export function PodJmxInline({ cluster, ns, deploy, pod, cFrom, cTo, onFull, jmx
       background: 'var(--panel2, var(--bg))',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}
+          title={jmx && metrics.length > 0 ? t('rt.src.tip', lang).replace('{m}', metrics.join(', ')).replace('{s}', RUNTIME_SOURCE_LABEL.jmx) : undefined}>
           {jmxTitle(metrics, lang)} · <span className="mono">{pod}</span>
         </span>
         <Button variant="accent" size="sm" onClick={onFull}

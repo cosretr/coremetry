@@ -21,7 +21,8 @@ package ml
 //
 // KARAR: son volDwell kovanın HER BİRİ aynı yönde bant dışı VE hacim tabanı
 // (saatlik span ≥ volMinSpansHour; güncel ya da taban medyanı) sağlanıyorsa
-// olay. Aşağı yönde kovada span 0 ise olay yok (tam susma service_silent /
+// olay; oran ölçüsünde ayrıca her kovada örneklenmiş giriş span'i ≥
+// volMinEntries (örnek kapısı, 2026-11-21). Aşağı yönde kovada span 0 ise olay yok (tam susma service_silent /
 // throughput dedektörlerinin işi). Başlangıç: tik penceresinde bant dışı
 // koşunun ilk kovası (kayıtta onset seriden yeniden türer); bitiş: seri banda
 // dönünce koşu kapanır (episodeCloseMisses). Rejim bastırması (6 sa) bu
@@ -52,11 +53,22 @@ const (
 	volDwell           = 3   // ardışık kova (15 dk)
 	volMinSamples      = 4   // K6: dilim başına az örnek; altında sessiz
 	volMinSpansHour    = 6000
-	volMargin          = 1.5 // küçük örnek kuralı: en büyük × pay
-	volAbsRatio        = 1.0 // istek başına span, mutlak fark
-	volAbsSpans5m      = 500 // 5 dk span, mutlak fark
-	volMaxDuration     = 7 * 24 * time.Hour
-	volBandMethod      = "class_days_hour±1_max(median+z·mad,max×1.5,max+abs)"
+	// volMinEntries — oran ölçüsünde kova başına en az örneklenmiş giriş
+	// span'i (2026-11-21). Prod upstream tail sampling: tüm ERROR trace + %5
+	// olasılıksal. Oran trace başına span ortalamasıdır; trace başına span
+	// değişkenlik katsayısı ~1 iken ortalamanın göreli standart hatası
+	// ≈ 1/√E: E = 110 (≈ 7 istek/sn servis) ≈ %10, E = 200 ≈ %7. Hata trace'i
+	// örneklemede ~20 kat fazla temsil edildiğinden birkaç hata trace'i küçük
+	// kovada payı puanlarca oynatır (sahte olay: 21,9 / bant 8,49–20,5,
+	// E ≈ 110). 200 ≈ %5 örneklemede ~13 istek/sn; altındaki servis bu
+	// dedektörün çözünürlüğünün altında (hata/gecikme dedektörleri VM'den
+	// örneklemesiz izler). Kova altındaysa olay açılmaz/uzatılmaz.
+	volMinEntries  = 200
+	volMargin      = 1.5 // küçük örnek kuralı: en büyük × pay
+	volAbsRatio    = 1.0 // istek başına span, mutlak fark
+	volAbsSpans5m  = 500 // 5 dk span, mutlak fark
+	volMaxDuration = 7 * 24 * time.Hour
+	volBandMethod  = "class_days_hour±1_max(median+z·mad,max×1.5,max+abs)"
 )
 
 // Volume — dedektör (günlük olay tavanı + VM etiket önbelleği süreç içi).
@@ -138,9 +150,16 @@ func judgeVolume(in volInput) volJudgement {
 		j.Reason = "dwell: yeterli kova yok"
 		return j
 	}
-	entriesOK := true
+	entriesOK, thin := true, false
 	for _, e := range in.Entries {
 		entriesOK = entriesOK && e > 0
+		thin = thin || (e > 0 && e < volMinEntries)
+	}
+	if entriesOK && thin {
+		// Örnek kapısı (2026-11-21): giriş span'i var ama az — oran gürültü,
+		// ham span sayısına da düşülmez (aynı örneklenmiş veri, aynı sapma).
+		j.Reason = "örnek az: kovada örneklenmiş giriş span'i < volMinEntries"
+		return j
 	}
 	var base []float64
 	var abs float64

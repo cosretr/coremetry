@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/runtimesig"
+	"github.com/cilcenk/coremetry/internal/vmetrics"
 )
 
 // runtime_signals.go — 2026-11-21 (.NET runtime paritesi): servisin runtime
@@ -38,19 +40,27 @@ func (s *Server) getRuntimeSignals(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// Follow-up 2026-11-21 — ?env= / ?cluster= (Topbar): kapsam anahtarda; terim
+	// yoksa anahtar bayt-aynı (eski önbellek gövdesi geçerli).
+	terms := runtimeEnvTerms(r)
 	key := fmt.Sprintf("runtime-signals:svc=%s:src=%s", name, src.Name())
+	if len(terms) > 0 {
+		key += fmt.Sprintf(":env=%s:cl=%s", terms[vmetrics.RoleEnv], terms[vmetrics.RoleCluster])
+	}
 	s.serveCached(w, r, key, time.Minute, func(ctx context.Context) (any, error) {
-		return s.runtimeSignalReport(ctx, src, name)
+		return s.runtimeSignalReport(ctx, src, name, terms)
 	})
 }
 
 // mcpRuntimeSignals — CoSRE servis taraması (mcptools.Deps.RuntimeSignals).
 func (s *Server) mcpRuntimeSignals(ctx context.Context, service string) (runtimesig.Report, error) {
-	return s.runtimeSignalReport(ctx, s.metricSource(), service)
+	return s.runtimeSignalReport(ctx, s.metricSource(), service, nil)
 }
 
 // runtimeSignalReport — API + CoSRE ortak gövde (mcp_deps RuntimeSignals).
-func (s *Server) runtimeSignalReport(ctx context.Context, src runtimesig.MetricReader, service string) (runtimesig.Report, error) {
+// terms: ortam / küme kapsamı (yalnız VM; çözüm runtime metriğinin kendi
+// etiket değerleriyle, cluster → ortam varlık haritası dahil).
+func (s *Server) runtimeSignalReport(ctx context.Context, src runtimesig.MetricReader, service string, terms map[string]string) (runtimesig.Report, error) {
 	ctx, cancel := context.WithTimeout(ctx, runtimeSignalsTimeout)
 	defer cancel()
 	now := time.Now()
@@ -67,12 +77,29 @@ func (s *Server) runtimeSignalReport(ctx context.Context, src runtimesig.MetricR
 		}
 	}
 	th := runtimesig.ThresholdsFrom(s.store.AnomalySensitivity().RuntimeSignals(), s.store.GetRuntimeAlerts(ctx))
-	rep, err := runtimesig.Analyze(ctx, src, service, lang, rtName, th, now)
+	// Follow-up 2026-11-21 — varlık pod'ları TEK okuma: grafik bağlantıları +
+	// HikariCP eşlemesi (host_name → pod varlığı → servis; seri service_name
+	// taşımaz, ad eşlemesi yok).
+	refs, pods := s.runtimePodIndex(ctx, service, now)
+	opts := runtimesig.AnalyzeOpts{Pods: pods}
+	if n, ok := src.(interface{ Name() string }); ok && len(terms) > 0 && n.Name() == metricSourceVM {
+		opts.ScopeFor = func(ctx context.Context, probe string) ([]chstore.FilterExpr, string) {
+			sc, ok := s.runtimeEnvScope(ctx, service, probe, terms, now)
+			if !ok {
+				return nil, sc.Reason
+			}
+			return httpEnvScopeFilters(sc), ""
+		}
+	}
+	rep, err := runtimesig.AnalyzeWith(ctx, src, service, lang, rtName, th, now, opts)
 	if err == nil {
-		s.attachPodEntities(ctx, service, now, rep.Signals)
+		rep.PodEntities = attachPodEntities(refs, rep.Signals)
 	}
 	return rep, err
 }
+
+// runtimePodEntitiesMax — yanıtta taşınan pod varlığı tavanı (UI ≤ 40 çizgi).
+const runtimePodEntitiesMax = 200
 
 // attachPodEntities — sinyallerin en kötü pod'unu VARLIK katmanından çözer
 // (standing rule: pod/servis/cluster bağı entity üzerinden): servisin son 1
@@ -80,19 +107,34 @@ func (s *Server) runtimeSignalReport(ctx context.Context, src runtimesig.MetricR
 // Remote Cluster id (getServicePods'un eşlemesi). Pod adı yalnız BU servisin
 // varlık kümesinde aranır; birden çok cluster'da aynı ad → ilan edilmez
 // (belirsiz). Okuma düşerse sinyaller varlıksız döner (best-effort).
-func (s *Server) attachPodEntities(ctx context.Context, service string, now time.Time, sigs []runtimesig.Signal) {
-	need := false
-	for _, sg := range sigs {
-		if sg.Pod != "" {
-			need = true
+// Follow-up 2026-11-21: dizin her zaman döner (grafik pod bağlantıları +
+// HikariCP host_name → pod → servis eşlemesi); ≤ runtimePodEntitiesMax.
+func attachPodEntities(refs map[string]runtimesig.PodEntityRef, sigs []runtimesig.Signal) map[string]runtimesig.PodEntityRef {
+	for i := range sigs {
+		if r, ok := refs[sigs[i].Pod]; ok {
+			rr := r
+			sigs[i].PodEntity = &rr
 		}
 	}
-	if !need || s.store == nil {
-		return
+	return runtimesig.CapPodIndex(refs, runtimePodEntitiesMax)
+}
+
+// runtimePodIndex — servisin son 1 sa varlık pod'ları → pod adı dizini
+// (cluster id'si çözülenler) + TÜM pod adları (HikariCP host_name süzgeci;
+// cluster eşlemesi gerekmez, servis bağı entity_seen'den).
+func (s *Server) runtimePodIndex(ctx context.Context, service string, now time.Time) (map[string]runtimesig.PodEntityRef, []string) {
+	if s.store == nil {
+		return nil, nil
 	}
 	aggs, err := s.store.EntitySeenForService(ctx, service, nil, now.Add(-time.Hour), now)
 	if err != nil {
-		return
+		return nil, nil
+	}
+	pods := make([]string, 0, len(aggs))
+	for _, a := range aggs {
+		if a.Pod != "" {
+			pods = append(pods, a.Pod)
+		}
 	}
 	cidOf := map[string]string{}
 	if s.thanos != nil {
@@ -104,11 +146,5 @@ func (s *Server) attachPodEntities(ctx context.Context, service string, now time
 			}
 		}
 	}
-	refs := runtimesig.PodEntityIndex(aggs, cidOf)
-	for i := range sigs {
-		if r, ok := refs[sigs[i].Pod]; ok {
-			rr := r
-			sigs[i].PodEntity = &rr
-		}
-	}
+	return runtimesig.PodEntityIndex(aggs, cidOf), pods
 }

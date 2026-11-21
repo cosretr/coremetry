@@ -76,9 +76,9 @@ func (s *Store) FleetFailedRequests(ctx context.Context, env string, from, to ti
 	var n uint64
 	var err error
 	if env == "" {
-		err = s.telemetryReadConn().QueryRow(ctx, fleetFailedRequestsSQL(), from, to).Scan(&n)
+		err = s.telemetryReadConn().QueryRow(ctx, s.weighSQL(fleetFailedRequestsSQL(), from, "spanmetrics_1m"), from, to).Scan(&n) // v0.10.2435 — sampling-weight Phase 2
 	} else {
-		err = s.telemetryReadConn().QueryRow(ctx, fleetFailedRequestsEnvSQL(), from, to, env, from, to).Scan(&n)
+		err = s.telemetryReadConn().QueryRow(ctx, s.weighSQL(fleetFailedRequestsEnvSQL(), from, "spanmetrics_1m", "service_env_summary_5m"), from, to, env, from, to).Scan(&n) // v0.10.2435 — sampling-weight Phase 2
 	}
 	return n, err
 }

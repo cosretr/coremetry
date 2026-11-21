@@ -52,11 +52,30 @@ type vmREDFamily struct {
 	Unit         string   // "s" | "ms" — p99 ölçeği buradan (ms'ye çevrilir)
 	StatusLabels []string // VM yazımı, tercih sırası
 	ServerErr    string   // hata kümesi regex gövdesi (PİNLİ)
+	// Matcher — v0.10.2434: ailenin SABİT ek eşleyicisi ("" = yok). Collector
+	// spanmetrics connector'ı her span türünü yazar; servis RED'i yalnız giriş
+	// span'leri (SERVER | CONSUMER) — client span'leri toplanmaz.
+	Matcher string
 }
 
 // vmREDFamilies — sıra = seçim sırası (HTTP birincil; legacy stable'dan önce).
 // vmFamN — aile sayısı (dizi boyutları; görünümün hazırlık tabloları).
-const vmFamN = 3
+//
+// v0.10.2434 (RED metrik-önce) — iki aile SONA eklendi (servis başına ilk
+// aile kazanır; uygulama histogramı her zaman connector'dan önce):
+//   - http_legacy: ESKİ semconv HTTP sunucu histogramı (http.server.duration,
+//     ms → http_server_duration_milliseconds_*; http_status_code). Yeni semconv
+//     ailesinin aday kümesi bu adı İÇERMİYORDU (http.server.request.duration ≠
+//     http.server.duration) — eski SDK'lı servisler metrik RED'den düşüyordu.
+//   - spanmetrics: gateway collector'ının spanmetrics connector çıktısı
+//     (traces_span_metrics_*, ÖRNEKLEMEDEN ÖNCE sayılır); hata =
+//     status_code="STATUS_CODE_ERROR" (sunucu span'inde OTel 5xx'i ERROR, 4xx'i
+//     UNSET yazar → 5xx kuralıyla aynı).
+const vmFamN = 5
+
+// SpanMetricsEntryMatcher — spanmetrics ailesinin giriş-span eşleyicisi (PİNLİ;
+// api/red_family.go ve lib/redFamily.ts aynı metni taşır).
+const SpanMetricsEntryMatcher = `span_kind=~"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER"`
 
 var vmREDFamilies = [vmFamN]vmREDFamily{
 	{ID: "http", Label: "HTTP", Probe: "http.server.request.duration", Names: "http.server.request.duration", Unit: "s",
@@ -65,12 +84,17 @@ var vmREDFamilies = [vmFamN]vmREDFamily{
 		StatusLabels: []string{"rpc_grpc_status_code"}, ServerErr: "2|4|8|12|13|14|15"},
 	{ID: "grpc_stable", Label: "gRPC", Probe: "rpc.server.call.duration", Names: "rpc_server_call_duration_seconds", Unit: "s",
 		StatusLabels: []string{"rpc_response_status_code"}, ServerErr: "2|4|8|12|13|14|15"},
+	{ID: "http_legacy", Label: "HTTP", Probe: "http.server.duration", Names: "http_server_duration_milliseconds", Unit: "ms",
+		StatusLabels: []string{"http_status_code", "http_response_status_code"}, ServerErr: "5.."},
+	{ID: "spanmetrics", Label: "spanmetrics", Probe: "traces.span.metrics.duration", Names: "traces_span_metrics_duration_seconds", Unit: "s",
+		StatusLabels: []string{"status_code"}, ServerErr: "STATUS_CODE_ERROR", Matcher: SpanMetricsEntryMatcher},
 }
 
 // REDFamilyPin — api tarafının pin testi için dışa açık özet.
 type REDFamilyPin struct {
 	ID, Probe, Names, Unit, ServerErr string
 	StatusLabels                      []string
+	Matcher                           string // v0.10.2434 — sabit ek eşleyici ("" = yok)
 }
 
 // REDFamilyPins — katalog özeti (TestAnomalyREDFamiliesMatchAPI).
@@ -78,7 +102,7 @@ func REDFamilyPins() []REDFamilyPin {
 	out := make([]REDFamilyPin, 0, len(vmREDFamilies))
 	for _, f := range vmREDFamilies {
 		out = append(out, REDFamilyPin{ID: f.ID, Probe: f.Probe, Names: f.Names, Unit: f.Unit, ServerErr: f.ServerErr,
-			StatusLabels: append([]string(nil), f.StatusLabels...)})
+			StatusLabels: append([]string(nil), f.StatusLabels...), Matcher: f.Matcher})
 	}
 	return out
 }
@@ -156,6 +180,9 @@ func vmWithSelect(e string, sc vmQueryScope) string {
 // vmSelector — SAF: {__name__ adayları, env, ek}.
 func vmSelector(f vmREDFamily, nameKind string, sc vmQueryScope, extra string) string {
 	parts := []string{vmetrics.NameSelector(vmetrics.NameCandidates(nameKind, f.Names))}
+	if f.Matcher != "" {
+		parts = append(parts, f.Matcher)
+	}
 	if m := strings.TrimSpace(sc.EnvMatcher); m != "" {
 		parts = append(parts, m)
 	}

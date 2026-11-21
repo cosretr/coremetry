@@ -36,6 +36,7 @@ func (r OpRED) ErrorRate() float64 {
 // SpanOperationRED — operation_summary_5m'den tek pencere (servis boşsa tüm servisler).
 func (s *Store) SpanOperationRED(ctx context.Context, service, name string, from, to time.Time) (OpRED, error) {
 	q, args := spanOperationREDQuery(service, name, from, to)
+	q = s.weighSQL(q, from, "operation_summary_5m") // v0.10.2435 — sampling-weight Phase 2
 	var r OpRED
 	var p99, p50 float64
 	if err := s.conn.QueryRow(ctx, q, args...).Scan(&r.Calls, &r.Errors, &p99, &p50); err != nil {
@@ -76,6 +77,7 @@ func spanOperationREDQuery(service, name string, from, to time.Time) (string, []
 // SpanOperationRED ile aynı (calls, errors, p99, p50).
 func (s *Store) RouteRED(ctx context.Context, service, route string, from, to time.Time) (OpRED, error) {
 	q, args := routeREDQuery(service, route, from, to)
+	q = s.weighSQL(q, from, "spanmetrics_1m") // v0.10.2435 — sampling-weight Phase 2
 	var r OpRED
 	var p99, p50 float64
 	if err := s.conn.QueryRow(ctx, q, args...).Scan(&r.Calls, &r.Errors, &p99, &p50); err != nil {

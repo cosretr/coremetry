@@ -42,9 +42,14 @@ export function overviewWindowOffsetSec(compareOffNs: number): number {
  */
 // v0.10.1377 — envSel: ortam eşleyicisi (useRedFamily'nin aile kapsamı); yoksa bayt bayt eski sorgular.
 // v0.10.1429 — family: gRPC ailesinde aynı pencere sorguları rpc_server_duration_* adlarından (ms → /1000).
-export function overviewWindowItems(service: string, windowSec: number, offsetSec = 0, envSel?: string, family: RedFamilySpec = HTTP_FAMILY): HttpPromqlItem[] {
-  const fam = family.kind === 'http' ? {} : { family };
-  const scope = envSel ? { app: service, envSel, ...fam } : { app: service, ...fam };
+// v0.10.2434 — aile KİMLİKLE (eski semconv / spanmetrics da kind 'http'; önceden
+// düşüyordu → yeni semconv adı soruluyordu); routeExclude: tesisat rotaları
+// (+ yönetici kalıpları) pencere toplamlarından dışlanır.
+export function overviewWindowItems(service: string, windowSec: number, offsetSec = 0, envSel?: string, family: RedFamilySpec = HTTP_FAMILY,
+  routeExclude?: readonly string[]): HttpPromqlItem[] {
+  const fam = family.id === 'http' ? {} : { family };
+  const ex = routeExclude?.length ? { routeExclude } : {};
+  const scope = envSel ? { app: service, envSel, ...fam, ...ex } : { app: service, ...fam, ...ex };
   const w = windowQueries(scope, windowSec);
   const out: HttpPromqlItem[] = [
     { id: 'wAvg', expr: w.avg, instant: true },

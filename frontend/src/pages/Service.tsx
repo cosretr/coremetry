@@ -489,7 +489,7 @@ function ServiceDetailInner() {
 
   return (
     <>
-      <Topbar title={`Service · ${svc}`} range={range} onRangeChange={setRange} envApplies />
+      <Topbar title={`Service · ${svc}`} range={range} onRangeChange={setRange} envApplies sampling="services" />
       <PageShell>
         {/* Service identity header (design handoff app.jsx .svc-head): big
             status dot + bare service name + runtime badge + health pill. */}

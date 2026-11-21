@@ -296,7 +296,9 @@ func (s *Store) AlertMetricSeries(ctx context.Context, q AlertMetricSeriesQuery)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.telemetryReadConn().Query(ctx, alertMetricSeriesSQL(p, sp), alertMetricSeriesArgs(q, sp)...)
+	// v0.10.2435 — sampling-weight Phase 2 (raw "spans" plan has no marker → unchanged)
+	sql := s.weighSQL(alertMetricSeriesSQL(p, sp), q.From.Add(-time.Duration(sp.FrameSec)*time.Second), p.table)
+	rows, err := s.telemetryReadConn().Query(ctx, sql, alertMetricSeriesArgs(q, sp)...)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +329,9 @@ func (s *Store) AlertSampleCountSeries(ctx context.Context, q AlertMetricSeriesQ
 		return nil, err
 	}
 	p := alertSampleCountPlan(!UseSummaryMV(time.Duration(q.WindowSec) * time.Second))
-	rows, err := s.telemetryReadConn().Query(ctx, alertMetricSeriesSQL(p, sp), alertMetricSeriesArgs(q, sp)...)
+	// v0.10.2435 — sampling-weight Phase 2 (raw "spans" plan has no marker → unchanged)
+	sql := s.weighSQL(alertMetricSeriesSQL(p, sp), q.From.Add(-time.Duration(sp.FrameSec)*time.Second), p.table)
+	rows, err := s.telemetryReadConn().Query(ctx, sql, alertMetricSeriesArgs(q, sp)...)
 	if err != nil {
 		return nil, err
 	}

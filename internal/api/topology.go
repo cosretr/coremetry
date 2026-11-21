@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/infraroutes"
 )
 
 // TopologyNode is a service.operation node in the response. The
@@ -404,14 +405,9 @@ func excludeKeyDigest(m map[string]bool) string {
 // the risk — kept the pattern list tight so a legitimate edge
 // like /api/v1/users/{id}/healthcheck-status is unlikely to
 // match.
-var infraOpFragments = []string{
-	"/health", "/healthz", "/healthcheck", "/livez", "/readyz",
-	"/metrics", "/-/metrics", "/prometheus", "/actuator/prometheus",
-	"/actuator/health", "/actuator/info",
-	"/ping", "/heartbeat", "/keepalive",
-	"/.well-known/", "/-/ready", "/-/healthy",
-}
-
+//
+// v0.10.2434 — parça listesi internal/infraroutes'a taşındı (metrik RED'in
+// rota süzgeci de aynı listeyi kullanır; kopya yok).
 func looksLikeInfraEdge(topLabels []string) bool {
 	if len(topLabels) == 0 {
 		return false
@@ -420,15 +416,7 @@ func looksLikeInfraEdge(topLabels []string) bool {
 	// (top_labels is up to 5 most-frequent ops; one health probe
 	// among 4 real endpoints still surfaces.)
 	for _, l := range topLabels {
-		lower := strings.ToLower(l)
-		matched := false
-		for _, frag := range infraOpFragments {
-			if strings.Contains(lower, frag) {
-				matched = true
-				break
-			}
-		}
-		if !matched {
+		if !infraroutes.Match(l) {
 			return false
 		}
 	}

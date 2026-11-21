@@ -66,6 +66,8 @@ const scaleS = (F: RedFamilySpec, expr: string) => (F.unit === 'ms' ? `(${expr})
 /** Durum sınıfı ifadesi: HTTP `${1}xx` (bayt bayt eski); gRPC ok | client | server (kod kümeleri). */
 function statusClassExpr(F: RedFamilySpec, inner: string, by = ''): string {
   const st = F.labels.status;
+  // v0.10.2434 — spanmetrics: OTel span durumu → server (ERROR) | ok (diğer).
+  if (F.otelStatus) return `sum by (${by}cls) (label_replace(label_replace(${inner}, "cls", "ok", "${st}", ".+"), "cls", "server", "${st}", "^(${F.serverErr})$"))`;
   if (F.kind === 'http') return `sum by (${by}cls) (label_replace(${inner}, "cls", "\${1}xx", "${st}", "([0-9]).*"))`;
   return `sum by (${by}cls) (label_replace(label_replace(label_replace(${inner}, "cls", "ok", "${st}", "^0$"), "cls", "client", "${st}", "^(${F.clientErr})$"), "cls", "server", "${st}", "^(${F.serverErr})$"))`;
 }
@@ -79,6 +81,8 @@ export function promStr(v: string): string {
 export function serverSel(s: HttpScope, extra = ''): string {
   const FL = famOf(s).labels; // v0.10.1429 — aile etiketleri (HTTP: HTTP_LABELS)
   const parts = [`${FL.service}=${promStr(s.app)}`];
+  const fm = famOf(s).matcher; // v0.10.2434 — spanmetrics: yalnız giriş span'leri
+  if (fm) parts.push(fm);
   if (s.envSel) parts.push(s.envSel);
   if (s.routeRe !== undefined) parts.push(`${FL.route}=~${promStr(s.routeRe)}`);
   else if (s.route) parts.push(`${FL.route}=${promStr(s.route)}`);
@@ -438,8 +442,25 @@ export const HTTP_INSTANT_IDS: ReadonlySet<string> = new Set([
 // status; yalnız sınıflar değil kodlar) — status KODU başına istek hızı.
 // v0.10.1377 — envSel: Overview'ın ortam eşleyicisi (yoksa bayt bayt eski sorgu).
 // v0.10.1429 — family: gRPC ailesinde rpc_grpc_status_code (kodlar 0..16).
-export function statusCodeRateQuery(app: string, windowSec: number, envSel?: string, family: RedFamilySpec = HTTP_FAMILY): string {
-  return `sum by (${family.labels.status}) (rate(${family.names.count}${serverSel({ app, envSel, family })}[${rateWindow(windowSec)}]))`;
+export function statusCodeRateQuery(app: string, windowSec: number, envSel?: string, family: RedFamilySpec = HTTP_FAMILY, routeExclude?: readonly string[]): string {
+  return `sum by (${family.labels.status}) (rate(${family.names.count}${serverSel({ app, envSel, family, routeExclude })}[${rateWindow(windowSec)}]))`;
+}
+
+/**
+ * v0.10.2434 — penceredeki trafiği olan TESİSAT rotası sayısı (gizlendi notu):
+ * `count(sum by (route) (increase(count{…, route=~"tesisat"}[W])) > 0)`. Tek anlık sorgu.
+ */
+export function infraHiddenCountQuery(app: string, windowSec: number, infraBody: string, envSel?: string, family: RedFamilySpec = HTTP_FAMILY): string {
+  const R = family.labels.route;
+  const sel = serverSel({ app, envSel, family }, `${R}=~${promStr(`.*(?:${infraBody}).*`)}`);
+  return `count(sum by (${R}) (increase(${family.names.count}${sel}[${Math.max(60, Math.round(windowSec))}s])) > 0)`;
+}
+
+/** v0.10.2434 — infraHiddenCountQuery sonucu → sayı (seri yok = 0 gizli; yüklenmedi = null). */
+export function infraHiddenCount(series: SpanMetricSeries[] | null | undefined): number | null {
+  if (!series) return null;
+  const v = series.length ? lastValue(series[0]) : 0;
+  return v !== null && Number.isFinite(v) ? Math.round(v) : null;
 }
 
 /** Kod serileri: ad = kod, sıra 2xx→5xx (kod artan); renk tokenı sınıftan. gRPC (v0.10.1429): ad "14 UNAVAILABLE", sıra sayısal, renk ok/client/server sınıfından. */
@@ -460,8 +481,8 @@ export function statusCodeSeries(series: SpanMetricSeries[] | null | undefined, 
 }
 
 // v0.10.1259 — Overview "Toplam istek" karosu: penceredeki toplam (anlık sorgu).
-export function totalRequestsQuery(app: string, windowSec: number, envSel?: string, family: RedFamilySpec = HTTP_FAMILY): string {
-  return `sum(increase(${family.names.count}${serverSel({ app, envSel, family })}[${Math.max(60, Math.round(windowSec))}s]))`;
+export function totalRequestsQuery(app: string, windowSec: number, envSel?: string, family: RedFamilySpec = HTTP_FAMILY, routeExclude?: readonly string[]): string {
+  return `sum(increase(${family.names.count}${serverSel({ app, envSel, family, routeExclude })}[${Math.max(60, Math.round(windowSec))}s]))`;
 }
 
 // ── v0.10.1352 — endpoint sayfası metrik kipi = HTTP Metrics sekmesinin
@@ -692,11 +713,13 @@ export function routeSubstringRegex(search: string): string {
 }
 
 /** v0.10.1359 — liste kapsamı: servis (zorunlu) + isteğe bağlı yol araması (route regex); v0.10.1377 ortam eşleyicisi. */
-export function endpointListScope(service: string, search = '', envSel?: string, family?: RedFamilySpec): HttpScope {
+export function endpointListScope(service: string, search = '', envSel?: string, family?: RedFamilySpec, routeExclude?: readonly string[]): HttpScope {
   const q = search.trim();
   const env = envSel ? { envSel } : {};
   const fam = family ? { family } : {}; // v0.10.1429
-  return q ? { app: service, ...env, ...fam, routeRe: routeSubstringRegex(q) } : { app: service, ...env, ...fam };
+  // v0.10.2434 — tesisat rotaları varsayılan dışlanır (yalnız aramasız liste; arama kendi regex'ini taşır).
+  const ex = routeExclude?.length ? { routeExclude } : {};
+  return q ? { app: service, ...env, ...fam, routeRe: routeSubstringRegex(q) } : { app: service, ...env, ...fam, ...ex };
 }
 
 export type EndpointListId =
@@ -755,6 +778,7 @@ export function endpointListRows(
 ): EndpointListRow[] {
   const FL = family.labels; // v0.10.1429 — gRPC: method = rpc_service, path = rpc_method
   const grpc = family.kind === 'grpc';
+  const cls3 = grpc || !!family.otelStatus;
   const key = (l: Record<string, string>) => `${l[FL.method] ?? ''}\u0000${l[FL.route] ?? ''}`;
   const val = (s: SpanMetricSeries) => { const v = lastValue(s); return v !== null && Number.isFinite(v) ? v : null; };
   const index = (series: SpanMetricSeries[] | null | undefined) => {
@@ -792,8 +816,9 @@ export function endpointListRows(
       p50Ms: ms(p50.get(k)), p95Ms: ms(p95.get(k)),
       p99Ms: ms(p99.get(k)) ?? 0,
       // gRPC: sınıf sütunları HTTP karşılığına oturur (ok→2xx, istemci→4xx, sunucu→5xx; 3xx yok).
-      http2xx: (grpc ? c['ok'] : c['2xx']) ?? 0, http3xx: grpc ? 0 : (c['3xx'] ?? 0),
-      http4xx: (grpc ? c['client'] : c['4xx']) ?? 0, http5xx: (grpc ? c['server'] : c['5xx']) ?? 0,
+      // v0.10.2434 — spanmetrics (otelStatus) de ok/server sınıfı yazar (4xx ayrılmaz).
+      http2xx: (cls3 ? c['ok'] : c['2xx']) ?? 0, http3xx: cls3 ? 0 : (c['3xx'] ?? 0),
+      http4xx: (cls3 ? c['client'] : c['4xx']) ?? 0, http5xx: (cls3 ? c['server'] : c['5xx']) ?? 0,
       ...(grpc ? { family: 'grpc' as const } : {}),
     };
     if (hasPrior) {

@@ -1,8 +1,9 @@
 # Sampling weight — design (Phase 1 shipped, Phase 2 proposal)
 
 Status: Phase 1 implemented in v0.10.2430 (ingest column, settings, admin
-card, operator guide `docs/operator/tail-sampling-weights.md`). **Phase 2 is a
-design only — needs operator approval before any MV change.**
+card, operator guide `docs/operator/tail-sampling-weights.md`). Phase 2
+approved 2026-11-21 and implemented in v0.10.2435 — see "Phase 2 as built"
+at the end.
 
 ## Problem
 
@@ -164,3 +165,47 @@ design** — they measure what was stored.
    counts should stay "stored")?
 3. Is Option A's collector change (alpha feature gate on the gateway)
    acceptable, or do we go with Option B (hash, no collector change)?
+
+## Phase 2 as built (v0.10.2435)
+
+- **Schema.** `weightedMVs` (`internal/chstore/sampling_weighted_mv.go`):
+  service / operation / operation_group / service_env summaries (count,
+  error, duration sum, weighted TDigest, both apdex bands), spanmetrics
+  1s / 10s / 1m, db_summary 5m / 1m, db_caller_summary_5m,
+  db_statement_summary 5m / 1m, messaging_summary_5m,
+  messaging_caller_summary_5m (count, error, sum, TDigest),
+  service_version_5m (count). Old states stay. Fresh CREATE / recreate
+  carries them only when `spans.sample_weight` exists (`liveMVDDL`).
+- **Rollout.** Background after boot (`applyWeightedMVsOnce`): per MV
+  inner `ADD COLUMN IF NOT EXISTS` (ON CLUSTER, one `.inner_id` name across
+  hosts or skip) → `DESCRIBE` of the new SELECT vs the inner table (names +
+  state types; mismatch = skip, protects ingest) → `MODIFY QUERY` → wrapper
+  `ADD COLUMN` → columns visible on every host → marker
+  `sampling.weightedSince[mv]` (an MV migrated now resets its marker).
+- **Readers.** `weighSQL(sql, from, mvs…)` rewrites merge literals (incl.
+  `-If`) to weighted twins for buckets ≥ ceil(marker + 1 min, bucket);
+  mixed windows split counts per bucket and keep unweighted quantiles for
+  groups reaching before the switch; a `?` inside a merge condition is
+  never duplicated. Mode ≠ on → identical SQL. `-MergeState` quantiles
+  stay unweighted. Raw-span chart aggregates: `aggToSQLW`.
+- **Topology.** `topology_edges_5m.w_calls / w_errors`; service map reads
+  them per row with a calls/errors fallback.
+- **Baselines.** `BaselineFloor` (metric baseline, anomaly history), the
+  seasonal baseline waits for `minDays` of weighted history, comparisons
+  straddling the switch read stored values on both sides
+  (`weighSQLPeriods`).
+- **UI.** `/api/sampling/correction` + `SamplingCorrectionBadge` on
+  Services, Service, Endpoints.
+- **Measured cost (2026-11-21).** The 15 MV SELECTs, unweighted vs
+  weighted, over 1 M synthetic spans (CH 26.3 `clickhouse local`, one
+  thread, median of 5): 3.18 s → 3.76 s, **+18 % MV aggregation CPU**
+  (+0.58 µs/span). At 27 k stored spans/s that is ≈ +0.016 core
+  cluster-wide. Storage (OPTIMIZE FINAL): the 5-minute summaries ≈ ×2
+  (the duplicate weighted TDigest dominates), spanmetrics +28 % on this
+  high-cardinality sample. Prod check: `system.parts` bytes of the
+  weighted MVs a day after the switch.
+- **Left for later:** trace_summary_* / trace_service_index_5m /
+  business_code_summary_5m states, rollup_* migrations (operator SQL) and
+  their readers, raw-spans RED paths (env-scoped /api/services, GetServices
+  raw), SLO good/total, service_slowdown (bind `?` in conditions),
+  remaining ~40 lower-traffic MV readers.

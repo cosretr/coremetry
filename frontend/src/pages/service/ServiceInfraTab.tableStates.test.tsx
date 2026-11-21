@@ -300,17 +300,13 @@ describe('ServiceInfraTab — "Nerede çalışıyor" tek tablo (S6)', () => {
     expect(el.querySelector('tbody tr[aria-expanded="true"]')).not.toBeNull();
   });
 
-  it('Thanos\'ta görünmeyen pod Dikkat\'te: "pod\'ları aç" o cluster satırını açar (eski "aşağıda" bağlantısı yok)', async () => {
+  // 2026-11-21 (operatör): Thanos'ta görünmeyen pod Dikkat kutusuna girmez.
+  it('Thanos\'ta görünmeyen pod tek başına Dikkat kutusu açmaz', async () => {
     m.entity = true;
     m.pods = [pod('c1', 'orders-5d9f7c6b8-abcde')];
     m.entityPods = [entityPod('c9', 'orders-7f9-aaa')];
     const el = await mount();
-    const attn = el.querySelector('.infra-attn')!;
-    expect(attn.textContent).toContain("span'lerde görünüyor, Thanos'ta yok");
-    expect(attn.querySelector('a[href="#pods-sec"]')).toBeNull();
-    const open = [...attn.querySelectorAll('button')].find(b => b.textContent?.includes("pod'ları aç"))!;
-    await act(async () => { open.click(); });
-    expect(el.querySelector('[data-testid="inv"]')?.textContent).toBe('c9');
+    expect(el.querySelector('.infra-attn')).toBeNull();
   });
 
   it('bayat satır + yenileme düştü: satır durur, Durum "son okuma başarısız" der', async () => {

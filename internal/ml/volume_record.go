@@ -15,10 +15,17 @@ package ml
 // hesaplanmaz). Bant olay öncesi referanstan: hata oranı üst sınır
 // max(2 × medyan, %1) (ctxErrMinRatio / ctxErrFloorPct; svc_error_rate'in
 // v0.10.2373 öncesi kuralı — yan seri bandı etki kuralına GEÇMEDİ), p95 üst sınır
-// max(medyan + z·effMAD, 1,5 × medyan) (pod p95 kuralı), alt 0. Sınıf:
-// giriş span'i yoksa telemetry_volume; oran kaydında iki yan seri bant içinde
-// → telemetry_volume; biri üst bandı aşıyor ya da yan seri yok →
-// service_anomaly (etki gösterilemedi; ana listeden düşmez).
+// max(medyan + z·effMAD, 1,5 × medyan) (pod p95 kuralı), alt 0.
+//
+// Sınıf (2026-11-21, operatör onaylı): hacim ölçüsü (istek başına span ya
+// da span sayısı) TEK BAŞINA hiçbir zaman service_anomaly değildir — iki
+// sayı da upstream tail sampling'li CH verisinden (tüm ERROR trace + %5),
+// oran hata trace payına bağlı ve az örnekte gürültülü. service_anomaly
+// yalnız etki kanıtıyla: bir yan seri (VM hata oranı / p95, örneklemesiz)
+// olay penceresinde gerçekten üst bandını aşıyorsa. Yan seri yok, eksik ya
+// da bant içinde → telemetry_volume. Etki kuralı programıyla aynı ilke:
+// servis etkisi örneklemesiz ölçüden, 1 dakikalık noktalarda (impact_rule.go).
+// Giriş span'i yoksa (span ölçüsü) her zaman telemetry_volume.
 //
 // Maliyet: açık olay başına tik başına 1 CH MV okuması (tek servis) + en çok
 // 2 VM aralık sorgusu (aile bulunamazsa sıradaki aile denenir); tik başına
@@ -128,6 +135,19 @@ func ctxSeries(measure, query string, pts []chstore.SpanMetricPoint, from, to ti
 	return c, true
 }
 
+// volumeClass — SAF: hacim kaydının sınıfı. service_anomaly yalnız bir yan
+// seri olay penceresinde üst bandını aştıysa (etki kanıtı); hacim ölçüsü
+// tek başına ya da yan seri eksikken telemetry_volume.
+func volumeClass(measure string, rec EventRecord) string {
+	if measure == volPartSpans {
+		return ClassTelemetryVolume // oran tanımsız: her zaman (audit B)
+	}
+	if run, _ := contextImpact(rec); run > 0 {
+		return ClassServiceAnomaly
+	}
+	return ClassTelemetryVolume
+}
+
 // BuildVolumeRecord — SAF: svc_telemetry_volume olay kaydı. ok=false: seri yok.
 func BuildVolumeRecord(in VolRecordInput) (EventRecord, bool) {
 	pts, perMin := volPoints(in.Rows, in.Measure, in.From, in.To)
@@ -176,13 +196,7 @@ func BuildVolumeRecord(in VolRecordInput) (EventRecord, bool) {
 	if c, ok := ctxSeries(ctxLatency, in.LatQuery, in.LatPoints, in.From, in.To, t0, step, len(v), onset, in.CriticalZ); ok {
 		rec.Context = append(rec.Context, c)
 	}
-	run, evaluated := contextImpact(rec)
-	switch {
-	case in.Measure == volPartSpans:
-		rec.Class = ClassTelemetryVolume // oran tanımsız: her zaman (audit B)
-	case run == 0 && len(evaluated) == 2:
-		rec.Class = ClassTelemetryVolume
-	}
+	rec.Class = volumeClass(in.Measure, rec)
 	label := "İstek başına span (span / giriş span'i)"
 	if in.Measure == volPartSpans {
 		label = "Servisin 5 dk span sayısı (giriş span'i yok; oran tanımsız)"

@@ -94,7 +94,7 @@ export const HYP_CHECKS = [
   'deploy_near', 'deploy_before_error', 'recurring_before_deploy', 'rollout_failed',
   'change_without_image', 'change_before_error', 'argo_sync',
   'pod_limits', 'jvm_post_gc', 'runtime_signals', 'node_pressure', 'latency_symptom',
-  'downstream_worse', 'synth_agrees', 'downstream_errors',
+  'downstream_worse', 'synth_agrees', 'downstream_errors', 'downstream_exact',
   'external_problem_open', 'external_edge_errors',
   'db_health_open', 'pivot_db_path', 'db_edge_slow',
   'rate_up', 'p99_up', 'upstream_surge',

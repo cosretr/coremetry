@@ -68,6 +68,7 @@ func (s *Store) RouteREDSeries(ctx context.Context, service, route string, from,
 	}
 	stepS -= stepS % 60
 	sql, args := routeREDSQL(service, route, from, to, stepS)
+	sql = s.weighSQL(sql, from, "spanmetrics_1m") // v0.10.2435 — sampling-weight Phase 2
 	rows, err := s.telemetryReadConn().Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err

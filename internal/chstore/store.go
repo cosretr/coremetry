@@ -417,6 +417,9 @@ type Store struct {
 	// KATALOG köprüsünde kalır — yani en kötü hâl "eski davranış",
 	// asla yanlış bir cluster'a açılan çekmece değil.
 	hasTopoClusterCol bool
+	// hasTopoWeightCols — topology_edges_5m.w_calls/w_errors (v0.10.2435,
+	// sampling-weight Phase 2); false → writers omit them (code-47 guard).
+	hasTopoWeightCols atomic.Bool
 	// hasTraceEntrySvcCol — trace_summary_5m.entry_service_state okunabilir
 	// mi (v0.10.97). false iken /traces okumaları eski zinciri kullanır.
 	hasTraceEntrySvcCol bool
@@ -1055,6 +1058,11 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 	// kapandıktan SONRA (execDDL artık senkron: işaret ancak ALTER döndükten
 	// sonra yazılır), ayrı goroutine'de — boot beklemez. log_templates_ttl.go.
 	go s.applyLogTemplatesTTLOnce()
+	// v0.10.2435 — sampling-weight Phase 2: weighted MV states in place
+	// (inner ADD COLUMN + MODIFY QUERY) + coverage marker. Background: boot
+	// never waits on cluster DDL. v0.10.2435 (operatör): yalnız mod shadow/on
+	// olunca — deploy kendiliğinden prod şemasını değiştirmez.
+	go s.weightedMVsWhenActive(30 * time.Second)
 	return s, nil
 }
 
@@ -4657,6 +4665,12 @@ func (s *Store) migrate(ctx context.Context) error {
 		// second fragment the wrapper keeps its old column list and every
 		// read of `cluster` fails with "no such column".
 		`ALTER TABLE topology_edges_5m ADD COLUMN IF NOT EXISTS cluster    LowCardinality(String) DEFAULT ''`,
+		// v0.10.2435 — sampling-weight Phase 2: represented calls / errors
+		// per edge (Σ sample_weight). DEFAULT 0 = row written without them
+		// (old pod / before the column) → readers fall back to calls/errors
+		// per row, so no coverage marker is needed (topology_weight.go).
+		`ALTER TABLE topology_edges_5m ADD COLUMN IF NOT EXISTS w_calls    Float64 DEFAULT 0`,
+		`ALTER TABLE topology_edges_5m ADD COLUMN IF NOT EXISTS w_errors   Float64 DEFAULT 0`,
 		`ALTER TABLE spans ADD INDEX IF NOT EXISTS idx_kind        kind        TYPE set(0)    GRANULARITY 4`,
 		`ALTER TABLE spans ADD INDEX IF NOT EXISTS idx_db_system   db_system   TYPE set(0)    GRANULARITY 4`,
 		`ALTER TABLE spans ADD INDEX IF NOT EXISTS idx_http_status http_status TYPE minmax    GRANULARITY 4`,
@@ -5041,6 +5055,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	tcRows, tcErr := s.conn.Query(ctx, `SELECT cluster FROM topology_edges_5m LIMIT 1 SETTINGS max_execution_time = 3`)
 	maybeCloseRows(tcRows, tcErr)
 	s.hasTopoClusterCol = tcErr == nil
+	s.probeTopoWeightCols(ctx) // v0.10.2435
 	// entry_service_state okuma probe'u (v0.10.97) — BARE ada sorar,
 	// çünkü koruduğu okumalar bare addan geçiyor. Cluster'da sarmalayıcı
 	// bu migrate'in İÇİNDE düşürülüp boot'un ilerisinde (ensure) yeniden
@@ -5498,6 +5513,13 @@ func (s *Store) migrate(ctx context.Context) error {
 	// Materialized views — katalog canonicalMVs() içinde (v0.10.564: sihirbaz
 	// da AYNI gövdeyi okuyor). Koşullu eklemeler aşağıda append edilir.
 	mvs := canonicalMVs()
+	// v0.10.2435 — sampling-weight Phase 2: fresh CREATEs / recreates carry
+	// the weighted states, but ONLY when spans has sample_weight (an MV
+	// reading a missing column code-16s every span INSERT). Running installs
+	// gain them in place (applyWeightedMVsOnce, sampling_weighted_mv.go).
+	if s.hasSampleWeightCol.Load() {
+		mvs = weightMVs(mvs)
+	}
 	// v0.5.361 — bug-fix: the spanmetrics_hist_5m MV (added in
 	// v0.5.359) references metric_points.bucket_counts. On an
 	// existing install the column doesn't exist yet at this

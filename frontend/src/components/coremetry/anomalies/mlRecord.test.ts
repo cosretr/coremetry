@@ -3,7 +3,7 @@
 // bölge (5 dk), beş ardışık dakika değil; birimler dile göre.
 import { describe, it, expect } from 'vitest';
 import type { MLRecordView } from '@/lib/types';
-import { fmtRecordValue, measureKey, outsideRegions, peakAtSec, recordBuckets, recordUsable, sourceLabel } from './mlRecord';
+import { fmtRecordValue, measureKey, measuredSeriesFirst, outsideRegions, peakAtSec, recordBuckets, recordUsable, sourceLabel } from './mlRecord';
 
 const T0 = 1_800_000_000; // 300'ün katı
 function recFixture(over: Partial<MLRecordView> = {}): MLRecordView {
@@ -73,5 +73,23 @@ describe('birim ve ölçü', () => {
     expect(sourceLabel('vm')).toBe('VictoriaMetrics');
     expect(sourceLabel('ch:service_summary_5m')).toBe('ClickHouse · service_summary_5m');
     expect(sourceLabel('thanos:cluster-a')).toBe('Thanos · cluster-a');
+  });
+});
+
+describe('measuredSeriesFirst — Olayın seyri ilk grafiği', () => {
+  const vol = (aggregation: string) => recFixture({
+    detector: 'svc_telemetry_volume',
+    series: { source: 'ch:service_summary_5m', query: 'service_summary_5m …', aggregation, unit: 'span/request', stepSec: 300 },
+  });
+  it('istek başına span ve 5 dk span: ölçülen seri önde (istek hızı bağlam)', () => {
+    expect(measuredSeriesFirst(vol('spans_per_request'))).toBe(true);
+    expect(measuredSeriesFirst(vol('span_count'))).toBe(true);
+  });
+  it('diğer ölçüler canlı kaynak panelinde kalır', () => {
+    expect(measuredSeriesFirst(recFixture())).toBe(false);
+  });
+  it('boş görüntü: ölçülen seri önde değil', () => {
+    const r = vol('spans_per_request');
+    expect(measuredSeriesFirst({ ...r, snapshot: { ...r.snapshot, v: [] } })).toBe(false);
   });
 });

@@ -9,6 +9,8 @@ import { TimeSeriesPanel, type TSSeries } from '@/components/viz/TimeSeriesPanel
 import type { FilterExpr, SpanMetricSeries } from '@/lib/types';
 import { podLineLabel, podClusterOf, withClusterPrefix } from './runtimePodLabel';
 import { smoothPoints } from './runtimeSmooth';
+import { runtimeSourceBadge } from './runtimeSource';
+import { useT } from '@/lib/i18n';
 import { familyFromResource } from './runtimeFamily';
 import { heapSummary, podPercentLines, flatSummary, parseRtView, rtViewParam, type FlatSummary, type HeapKeyedLine, type HeapPodLine, type HeapSummary, type RtView } from './runtimeHeapView';
 
@@ -183,8 +185,11 @@ function rtViewSearch(params: URLSearchParams, next: RtView): string {
   return q ? `?${q}` : '';
 }
 
-export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHeader = false, family: familyProp }: {
+export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHeader = false, family: familyProp, scopeFilters }: {
   service: string;
+  // Follow-up 2026-11-21 — sunucunun (/runtime-signals) çözdüğü ortam / küme
+  // kapsamı; her çizginin süzgecine aynen eklenir. Yokken sorgu bayt-aynı.
+  scopeFilters?: FilterExpr[];
   // 2026-11-21 — üst bileşenin tespit ettiği aile (dil yoksa katalogdan); verilmezse dil.
   family?: string | null;
   from: number; // unix ns (parent'ın çözülmüş penceresi — RQ anahtarı hizalı)
@@ -229,16 +234,23 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
     () => cards.flatMap(c => c.lines.map(l => ({ card: c, line: l }))),
     [cards],
   );
+  // Follow-up 2026-11-21 — kart kaynak ipucu (metrik ailesi + kaynak).
+  const tr = useT();
+  const srcOf = (card: CardSpec) => runtimeSourceBadge(card.lines.map(l => l.metric), tr('rt.src.tip'));
+  const lineFilters = (l: LineSpec): FilterExpr[] | undefined => {
+    const fs = [...(scopeFilters ?? []), ...(l.filters ?? [])];
+    return fs.length ? fs : undefined;
+  };
   const queries = useQueries({
     queries: specs.map(({ line }) => ({
       // 'avg' anahtarı eskisiyle aynı (önbellek korunur); 'sum' ayrı anahtar.
       queryKey: ['svc-runtime-metric', service, line.metric, line.groupBy ?? '',
-        line.filters ? JSON.stringify(line.filters) : '', from, to, ...(line.agg && line.agg !== 'avg' ? [line.agg] : [])],
+        lineFilters(line) ? JSON.stringify(lineFilters(line)) : '', from, to, ...(line.agg && line.agg !== 'avg' ? [line.agg] : [])],
       queryFn: () => api.metricQuery({
         name: line.metric,
         service,
         agg: line.agg ?? 'avg',
-        filters: line.filters ? JSON.stringify(line.filters) : undefined,
+        filters: lineFilters(line) ? JSON.stringify(lineFilters(line)) : undefined,
         groupBy: line.groupBy,
         from, to, step: 0,
         // v0.9.707 — default 1500 nokta tek aşan yüzeydi (~1.3 nokta/px).
@@ -378,7 +390,8 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
         {built.byCard.map(({ card, series, status, podTotal, capped, clusterCount, summary, flat }) => (
           flat && !view.lines && !view.nonheap ? (
             <div key={card.key} className="card" data-testid="rt-flat-card">
-              <div className="ov-card-h"><h3>{card.title}{card.unit ? ` (${card.unit.trim()})` : ''}</h3></div>
+              <div className="ov-card-h"><h3 title={srcOf(card).tip}>{card.title}{card.unit ? ` (${card.unit.trim()})` : ''}</h3>
+                <span className="badge b-gray" title={srcOf(card).tip}>{srcOf(card).label}</span></div>
               <div className="ov-card-b rt-flat">
                 <span>
                   Düz: {flat.pods} pod, {flat.min === flat.max ? fmtMB(flat.min) : `${fmtMB(flat.min)}–${fmtMB(flat.max)}`}{card.unit} aralığında;
@@ -390,7 +403,8 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
           ) : (
           <div key={card.key} className="card">
             <div className="ov-card-h">
-              <h3>{summary?.percent ? 'JVM heap — sınırın yüzdesi (pod başına)' : `${card.title}${card.unit ? ` (${card.unit.trim()})` : ''}`}</h3>
+              <h3 title={srcOf(card).tip}>{summary?.percent ? 'JVM heap — sınırın yüzdesi (pod başına)' : `${card.title}${card.unit ? ` (${card.unit.trim()})` : ''}`}</h3>
+              <span className="badge b-gray" title={srcOf(card).tip}>{srcOf(card).label}</span>
               {/* v0.10.2148 (S9) — özet görünümün notu + eski görünüme geçiş (URL kaynak, replace). */}
               {summary && (
                 <span className="rt-view-note">

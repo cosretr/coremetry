@@ -446,7 +446,7 @@ func (s *Store) DropLeftoverMV(ctx context.Context, host, view string) ([]string
 		return nil, errors.New(leftoverGuardedReason(storage))
 	}
 	// Sarmalayıcı ifadesi ÖNCE: üretilemiyorsa hiçbir şey düşürmeyiz.
-	wrapper := distributedWrapperStmt(s.adaptDDL(canonicalMVDDL(base)))
+	wrapper := distributedWrapperStmt(s.adaptDDL(s.liveMVDDL(base)))
 	if wrapper == "" {
 		return nil, fmt.Errorf("%s için Distributed sarmalayıcı ifadesi üretilemedi — DROP tek başına çıplak adı bu host'ta yok ederdi (sonraki okumalar UNKNOWN_TABLE); elle", view)
 	}

@@ -308,7 +308,8 @@ func (s *Store) GetBareVerbRouteOperations(ctx context.Context, service string, 
 	}
 	// telemetryReadConn: ops MV okumasıyla (repo.go) aynı havuz — aynı
 	// tablonun iki yarısı farklı yoldan okunmasın.
-	rows, err := s.telemetryReadConn().Query(ctx, bareVerbRouteOpsSQL(s.spanmetricsSourceFor("spanmetrics_1m")),
+	sql := s.weighSQL(bareVerbRouteOpsSQL(s.spanmetricsSourceFor("spanmetrics_1m")), p.start, "spanmetrics_1m") // v0.10.2435 — sampling-weight Phase 2
+	rows, err := s.telemetryReadConn().Query(ctx, sql,
 		p.start.Unix(), p.bucketSec, service, p.start, p.scanEnd)
 	if err != nil {
 		return nil, true, err

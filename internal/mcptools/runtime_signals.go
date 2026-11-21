@@ -57,6 +57,8 @@ func RuntimeCheckTR(check string) string {
 		return "Kafka producer geri basıncı"
 	case runtimesig.CheckKafkaLag:
 		return "Kafka consumer gecikmesi"
+	case runtimesig.CheckDBPoolSaturation:
+		return "DB bağlantı havuzu (HikariCP) doygunluğu"
 	}
 	return check
 }

@@ -318,7 +318,7 @@ func (s *Store) dbDetailAggregate(
 	// Scan is POSITIONAL — pointer order must mirror the SELECT exactly.
 	var avgMs, p50Ms, p95Ms, p99Ms *float64
 	aggArgs := append([]any{bucketStart, to, system, mvInstance}, mvNameArgs...)
-	row := s.telemetryReadConn().QueryRow(ctx, `
+	row := s.telemetryReadConn().QueryRow(ctx, s.weighSQL(` // v0.10.2435 — sampling-weight Phase 2
 		SELECT countMerge(span_count_state),
 		       countMerge(error_count_state),
 		       sumMerge(duration_sum_state) / 1e6
@@ -329,7 +329,7 @@ func (s *Store) dbDetailAggregate(
 		FROM db_caller_summary_5m
 		WHERE time_bucket >= ? AND time_bucket < ?
 		  AND db_system = ? AND instance = ?`+mvNameSQL+`
-		SETTINGS max_execution_time = 8`,
+		SETTINGS max_execution_time = 8`, bucketStart, "db_caller_summary_5m"),
 		aggArgs...)
 	if err := row.Scan(&a.SpanCount, &a.ErrorCount, &avgMs, &p50Ms, &p95Ms, &p99Ms); err != nil {
 		return dbDetailAgg{}, err
@@ -510,7 +510,7 @@ func (s *Store) GetDatabaseDetail(
 
 	// Per-(service, pod) breakdown — read from db_caller_summary_5m.
 	aggArgs := append([]any{bucketStart, to, system, mvInstance}, mvNameArgs...)
-	rows, err := s.telemetryReadConn().Query(ctx, `
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(` // v0.10.2435 — sampling-weight Phase 2
 		SELECT service_name,
 		       host_name AS pod,
 		       countMerge(span_count_state),
@@ -526,7 +526,7 @@ func (s *Store) GetDatabaseDetail(
 		GROUP BY service_name, pod
 		ORDER BY countMerge(span_count_state) DESC
 		LIMIT 500
-		SETTINGS max_execution_time = 8`,
+		SETTINGS max_execution_time = 8`, bucketStart, "db_caller_summary_5m"),
 		aggArgs...)
 	if err != nil {
 		return out, nil // partial result fine — overview-only mode
@@ -703,7 +703,7 @@ func (s *Store) GetMessagingDetail(
 	// "(default)" matches the implicit-cluster bucket.
 	// Scan is POSITIONAL — pointer order must mirror the SELECT exactly.
 	var avgMs, p50Ms, p95Ms, p99Ms *float64
-	row := s.telemetryReadConn().QueryRow(ctx, `
+	row := s.telemetryReadConn().QueryRow(ctx, s.weighSQL(` // v0.10.2435 — sampling-weight Phase 2
 		SELECT countMerge(span_count_state),
 		       countMerge(error_count_state),
 		       sumMerge(duration_sum_state) / 1e6
@@ -714,7 +714,7 @@ func (s *Store) GetMessagingDetail(
 		FROM messaging_caller_summary_5m
 		WHERE time_bucket >= ? AND time_bucket < ?
 		  AND msg_system = ? AND cluster = ? AND destination = ?
-		SETTINGS max_execution_time = 8`,
+		SETTINGS max_execution_time = 8`, bucketStart, "messaging_caller_summary_5m"),
 		bucketStart, to, system, cluster, destination)
 	if err := row.Scan(&out.SpanCount, &out.ErrorCount, &avgMs, &p50Ms, &p95Ms, &p99Ms); err != nil {
 		return nil, err
@@ -731,7 +731,7 @@ func (s *Store) GetMessagingDetail(
 	// Per-(service, pod, role) breakdown from the MV. kind
 	// rides the dimension so a service that both publishes and
 	// consumes lands on two rows.
-	rows, err := s.telemetryReadConn().Query(ctx, `
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(` // v0.10.2435 — sampling-weight Phase 2
 		SELECT service_name,
 		       host_name AS pod,
 		       coalesce(nullIf(kind, ''), 'client') AS role,
@@ -748,7 +748,7 @@ func (s *Store) GetMessagingDetail(
 		GROUP BY service_name, pod, role
 		ORDER BY countMerge(span_count_state) DESC
 		LIMIT 500
-		SETTINGS max_execution_time = 8`,
+		SETTINGS max_execution_time = 8`, bucketStart, "messaging_caller_summary_5m"),
 		bucketStart, to, system, cluster, destination)
 	if err != nil {
 		return out, nil
@@ -987,7 +987,7 @@ func (s *Store) GetDatabases(ctx context.Context, q DatabasesQuery) (*DatabasesO
 	// Sözleşme db_bucket_bound_test.go'da sabitli; GetDBTrends ile
 	// AYNI sınır.
 	bucketStart := from.Truncate(5 * time.Minute)
-	rows, err := s.telemetryReadConn().Query(ctx, `
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(` // v0.10.2435 — sampling-weight Phase 2
 		SELECT db_system,
 		       instance,
 		       db_name,
@@ -1003,7 +1003,7 @@ func (s *Store) GetDatabases(ctx context.Context, q DatabasesQuery) (*DatabasesO
 		GROUP BY db_system, instance, db_name
 		ORDER BY span_count DESC
 		LIMIT 5000
-		SETTINGS max_execution_time = 15`, bucketStart, to)
+		SETTINGS max_execution_time = 15`, bucketStart, "db_summary_5m"), bucketStart, to)
 	if err != nil {
 		return nil, err
 	}
@@ -1063,7 +1063,7 @@ func (s *Store) GetDatabases(ctx context.Context, q DatabasesQuery) (*DatabasesO
 	// v0.9.821 — prior (compare) okuması bu turu ATLAR: delta rozetleri
 	// çağıran listesini hiç okumuyor.
 	if q.IncludeCallers {
-		cRows, err := s.telemetryReadConn().Query(ctx, dbTopCallersSQL, bucketStart, to)
+		cRows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(dbTopCallersSQL, bucketStart, "db_caller_summary_5m"), bucketStart, to) // v0.10.2435 — sampling-weight Phase 2
 		if err == nil {
 			for cRows.Next() {
 				var system, instance, dbName, svc string
@@ -1495,7 +1495,7 @@ func (s *Store) getMessaging(ctx context.Context, from, to time.Time, includeCal
 	// string equality. v0.8.364 — p50/p95 projected out of the
 	// same TDigest state that already served p99 (elements 1/2 of
 	// the 0.5/0.95/0.99 grid); zero extra scan cost.
-	rows, err := s.telemetryReadConn().Query(ctx, `
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(` // v0.10.2435 — sampling-weight Phase 2
 		SELECT msg_system,
 		       cluster,
 		       destination,
@@ -1511,7 +1511,7 @@ func (s *Store) getMessaging(ctx context.Context, from, to time.Time, includeCal
 		GROUP BY msg_system, cluster, destination
 		ORDER BY span_count DESC
 		LIMIT `+strconv.Itoa(msgOverviewRowLimit)+`
-		SETTINGS max_execution_time = 15`, bucketStart, to)
+		SETTINGS max_execution_time = 15`, bucketStart, "messaging_summary_5m"), bucketStart, to)
 	if err != nil {
 		return nil, err
 	}
@@ -1591,7 +1591,7 @@ func (s *Store) getMessaging(ctx context.Context, from, to time.Time, includeCal
 		return out, nil
 	}
 
-	cRows, err := s.telemetryReadConn().Query(ctx, msgTopCallersSQL, bucketStart, to)
+	cRows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(msgTopCallersSQL, bucketStart, "messaging_caller_summary_5m"), bucketStart, to) // v0.10.2435 — sampling-weight Phase 2
 	if err != nil {
 		return out, nil
 	}

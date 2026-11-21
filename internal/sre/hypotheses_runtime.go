@@ -40,6 +40,11 @@ var checkApplies = map[string]func(Evidence) bool{
 	"runtime_signals": func(ev Evidence) bool {
 		return podRuntime(ev) == string(runtimesig.RuntimeDotnet) || (ev.Facts.Pods != nil && len(ev.Facts.Pods.RuntimeSignals) > 0)
 	},
+	// Follow-up 2026-11-21 — giden çağrı tam sayımı yalnız VM'den OKUNDUĞUNDA
+	// listelenir (VM'siz kurulumda / eski kayıtta bağımlılık skoru aynen).
+	"downstream_exact": func(ev Evidence) bool {
+		return ev.Facts.Deps != nil && ev.Facts.Deps.ExactOK
+	},
 }
 
 // chkRuntimeSignals — .NET sinyalleri. Gecikme belirtisinde thread-pool

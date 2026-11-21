@@ -448,6 +448,7 @@ func (s *Store) ResolveMetricQuery(ctx context.Context, q MetricResolveQuery) (M
 		SETTINGS max_execution_time = 25`,
 		step, groupSelect, aggExpr, exemplarCols, s.spanmetricsSourceFor(tier.table), strings.Join(conds, " AND "),
 		SpanMetricRowCap)
+	sql = s.weighSQL(sql, q.From, tier.table) // v0.10.2435 — sampling-weight Phase 2
 
 	rows, err := s.conn.Query(ctx, sql, args...)
 	if err != nil {
@@ -637,6 +638,7 @@ func (s *Store) resolveBand(ctx context.Context, q MetricResolveQuery, step int)
 		SETTINGS max_execution_time = 25`,
 		step, groupSelect, bandProjection(), exemplarCols, s.spanmetricsSourceFor(tier.table), strings.Join(conds, " AND "),
 		SpanMetricRowCap)
+	sql = s.weighSQL(sql, q.From, tier.table) // v0.10.2435 — sampling-weight Phase 2
 
 	rows, err := s.conn.Query(ctx, sql, args...)
 	if err != nil {

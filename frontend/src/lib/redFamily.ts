@@ -45,6 +45,10 @@ export interface RedFamilySpec {
   /** Sütun başlıkları: route eşdeğeri / method eşdeğeri. */
   routeTitle: string;
   methodTitle: string;
+  /** v0.10.2434 — sabit ek eşleyici (spanmetrics: giriş span'leri); Go Match ile pinli. */
+  matcher?: string;
+  /** v0.10.2434 — durum etiketi OTel span durumu (STATUS_CODE_*), HTTP kodu değil. */
+  otelStatus?: boolean;
 }
 
 export const HTTP_FAMILY: RedFamilySpec = {
@@ -92,7 +96,44 @@ export const GRPC_STABLE_FAMILY: RedFamilySpec = {
   routeTitle: 'Method', methodTitle: 'Service',
 };
 
-export const RED_FAMILIES: readonly RedFamilySpec[] = [HTTP_FAMILY, GRPC_LEGACY_FAMILY, GRPC_STABLE_FAMILY];
+// v0.10.2434 (RED metrik-önce) — ESKİ semconv HTTP sunucu histogramı (ms);
+// yeni semconv yoksa HTTP yuvasına girer (çözücü seçer, toplanmaz).
+export const HTTP_LEGACY_FAMILY: RedFamilySpec = {
+  id: 'http_legacy', kind: 'http', label: 'HTTP',
+  probe: 'http.server.duration',
+  names: {
+    count: 'http_server_duration_milliseconds_count',
+    bucket: 'http_server_duration_milliseconds_bucket',
+    sum: 'http_server_duration_milliseconds_sum',
+  },
+  unit: 'ms',
+  labels: { service: 'service_name', route: 'http_route', method: 'http_method', status: 'http_status_code' },
+  serverErr: '5..', clientErr: '4..',
+  sliLe: '500',
+  routeTitle: 'Route', methodTitle: 'Method',
+};
+
+// v0.10.2434 — gateway spanmetrics connector'ı (örneklemeden ÖNCE sayar);
+// yalnız uygulama histogramı yoksa. Hata = STATUS_CODE_ERROR (sunucu span'inde
+// 5xx); istemci hatası kümesi yok (connector 4xx'i ayırmaz).
+export const SPANMETRICS_FAMILY: RedFamilySpec = {
+  id: 'spanmetrics', kind: 'http', label: 'spanmetrics',
+  probe: 'traces.span.metrics.duration',
+  names: {
+    count: 'traces_span_metrics_duration_seconds_count',
+    bucket: 'traces_span_metrics_duration_seconds_bucket',
+    sum: 'traces_span_metrics_duration_seconds_sum',
+  },
+  unit: 's',
+  labels: { service: 'service_name', route: 'http_route', method: 'http_request_method', status: 'status_code' },
+  serverErr: 'STATUS_CODE_ERROR', clientErr: '__none__',
+  sliLe: '0.5',
+  routeTitle: 'Route', methodTitle: 'Method',
+  matcher: 'span_kind=~"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER"',
+  otelStatus: true,
+};
+
+export const RED_FAMILIES: readonly RedFamilySpec[] = [HTTP_FAMILY, GRPC_LEGACY_FAMILY, GRPC_STABLE_FAMILY, HTTP_LEGACY_FAMILY, SPANMETRICS_FAMILY];
 
 /** Katalog araması; bilinmeyen / boş → HTTP (bugünkü sorgular). */
 export function familyById(id: string | undefined | null): RedFamilySpec {
@@ -112,6 +153,7 @@ const GRPC_CLIENT_FAULT = new Set(GRPC_LEGACY_FAMILY.clientErr.split('|'));
 
 /** Durum sınıfı etiketi: HTTP "2xx".."5xx" (ilk hane); gRPC ok | client | server | '' (bilinmeyen kod). */
 export function statusClassOf(family: RedFamilySpec, code: string): string {
+  if (family.otelStatus) return code === family.serverErr ? 'server' : code ? 'ok' : '';
   if (family.kind === 'http') return code ? `${code.charAt(0)}xx` : '';
   const c = code.trim();
   if (c === '0') return 'ok';
@@ -134,7 +176,27 @@ export function statusCodeLabel(family: RedFamilySpec, code: string): string {
 
 /** Hata metni rozetler/notlar için: "5xx" | "sunucu-hatası (2|4|8|12|13|14|15)". */
 export function serverErrorLabel(family: RedFamilySpec): string {
+  if (family.otelStatus) return `status_code=${family.serverErr}`;
   return family.kind === 'grpc' ? `sunucu-hatası kodları (${family.serverErr})` : '5xx';
+}
+
+/**
+ * v0.10.2434 — çözümün SEÇİLEN kaynağı (Go Source): aile kimliği ya da
+ * 'spans' (örneklenmiş span verisi). Eski uç source taşımıyorsa birincilden.
+ */
+export function redSourceOf(r: RedFamilyResolution | undefined): RedFamilyId | 'spans' | undefined {
+  if (!r || r.state !== 'known') return undefined;
+  if (r.source) return r.source;
+  if (r.primary === 'grpc' && r.grpc) return r.grpc.id;
+  if (r.primary === 'http' && r.http) return r.http.id;
+  return 'spans';
+}
+
+/** v0.10.2434 — /metric-red ?family= değeri: HTTP yeni semconv → yok; gRPC → 'grpc'; diğer aile → kimliği. */
+export function metricRedFamilyParam(f: RedFamilySpec): 'grpc' | 'http_legacy' | 'spanmetrics' | undefined {
+  if (f.kind === 'grpc') return 'grpc';
+  if (f.id === 'http_legacy' || f.id === 'spanmetrics') return f.id;
+  return undefined;
 }
 
 // ── GET /api/services/{name}/red-family cevabı (lib/types.ts RedFamilyResolution) → sayfa görünümü ──
@@ -155,6 +217,8 @@ export interface RedFamilyView {
   grpc?: RedFamilySection;
   both: boolean;
   tried: string[];
+  /** v0.10.2434 — seçilen kaynak (yalnız known): aile kimliği | 'spans'. */
+  source?: RedFamilyId | 'spans';
 }
 
 /**
@@ -171,11 +235,11 @@ export function redFamilyView(q: { data?: RedFamilyResolution; error?: Error | n
   if (r.state === 'unknown') {
     return { state: 'unknown', ready: true, reason: r.reason, primary: 'http', http: httpDefault, both: false, tried: r.tried ?? [] };
   }
-  const http = r.http ? { family: HTTP_FAMILY, presence: r.http } : undefined;
+  const http = r.http ? { family: familyById(r.http.id), presence: r.http } : undefined; // v0.10.2434 — http | http_legacy | spanmetrics
   const grpc = r.grpc ? { family: familyById(r.grpc.id), presence: r.grpc } : undefined;
   return {
     state: 'known', ready: true, reason: r.reason, primary: r.primary,
-    http, grpc, both: !!http && !!grpc, tried: r.tried ?? [],
+    http, grpc, both: !!http && !!grpc, tried: r.tried ?? [], source: redSourceOf(r),
   };
 }
 
@@ -199,6 +263,9 @@ export function familySections(v: RedFamilyView): RedFamilySection[] {
 export function familyBadgeSuffix(v: RedFamilyView): string {
   if (v.primary === 'grpc') return ' · gRPC';
   if (v.both) return ' · +gRPC';
+  const id = v.http?.family.id; // v0.10.2434 — HTTP yuvasının kaynağı
+  if (id === 'spanmetrics') return ' · spanmetrics';
+  if (id === 'http_legacy') return ' · http.server.duration';
   return '';
 }
 

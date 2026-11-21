@@ -338,6 +338,7 @@ func (s *Store) OpP99Pivot(ctx context.Context, scope string, sp OpP99PivotSpec)
 // opP99PivotLegacy — eski tek geçiş (OpP99PivotQuery), satırları OpP99Row.
 func (s *Store) opP99PivotLegacy(ctx context.Context, sp OpP99PivotSpec) ([]OpP99Row, error) {
 	q, args := OpP99PivotQuery(sp)
+	q = s.weighSQL(q, time.Time{}, "operation_summary_5m") // v0.10.2435 — sampling-weight Phase 2
 	rows, err := s.telemetryReadConn().Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -357,6 +358,7 @@ func (s *Store) opP99PivotLegacy(ctx context.Context, sp OpP99PivotSpec) ([]OpP9
 // opP99PivotCurrent — tur sorgusu (OpP99CurrentQuery).
 func (s *Store) opP99PivotCurrent(ctx context.Context, sp OpP99PivotSpec) ([]OpP99CurRow, error) {
 	q, args := OpP99CurrentQuery(sp)
+	q = s.weighSQL(q, time.Time{}, "operation_summary_5m") // v0.10.2435 — sampling-weight Phase 2
 	rows, err := s.telemetryReadConn().Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -377,6 +379,7 @@ func (s *Store) opP99PivotCurrent(ctx context.Context, sp OpP99PivotSpec) ([]OpP
 
 // opP99Baseline — taban tazelemesinin okuması (OpBaselineQuery); n = dönen satır.
 func (s *Store) opP99Baseline(ctx context.Context, q string, args []any) (map[OpPair]OpBaseline, int, error) {
+	q = s.weighSQL(q, time.Time{}, "operation_summary_5m") // v0.10.2435 — sampling-weight Phase 2
 	rows, err := s.telemetryReadConn().Query(ctx, q, args...)
 	if err != nil {
 		return nil, 0, err

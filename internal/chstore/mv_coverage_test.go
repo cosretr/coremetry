@@ -308,7 +308,7 @@ func TestMVRebuildSourcePins(t *testing.T) {
 	}
 	src := string(b)
 	for _, want := range []string{
-		"s.shardConn(", "stripOnCluster(", "s.adaptDDL(canonicalMVDDL(name))", "purgeGuard",
+		"s.shardConn(", "stripOnCluster(", "s.adaptDDL(s.liveMVDDL(name))", "purgeGuard",
 		"DROP TABLE IF EXISTS `", "` SYNC", // SYNC eki: kaskad iç tabloyu da götürür
 		"context.WithTimeout(ctx, mvRebuildStepTimeout)",
 		"toUInt32(total_replicas), toUInt32(active_replicas), toUInt8(is_readonly)",
@@ -368,7 +368,7 @@ func TestMVRebuildSourcePins(t *testing.T) {
 	if i, j := strings.Index(rep, "aynı shard'da Replicated eş yok"), strings.Index(rep, "canonicalMVForObject(view)"); i < 0 || j < 0 || i > j {
 		t.Error("wantPeer RET'i kanonik dala DÜŞMEDEN önce olmalı")
 	}
-	if !strings.Contains(dsrc, "s.rebuildMVOnConn(ctx, conn, view, name)") {
+	if !strings.Contains(dsrc, "s.rebuildMVOnConn(ctx, conn, view, name, mvPeerIDs{})") {
 		t.Error("RepairDanglingMV kanonik dalı paylaşılan gövdeyi çağırmalı")
 	}
 	if strings.Contains(dsrc, "adaptDDL(canonicalMVDDL(") {

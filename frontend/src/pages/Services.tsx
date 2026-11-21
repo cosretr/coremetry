@@ -19,6 +19,8 @@ import {
 import { useAllServiceRuntimes, useServicesMetadata } from '@/lib/queries';
 import { useTableNav } from '@/lib/useTableNav';
 import { api } from '@/lib/api';
+import type { ServiceRedMetricRow } from '@/lib/types';
+import { t, tf, useLang } from '@/lib/i18n';
 import { fmtNum, fmtFixed, timeRangeToNs, rowClickHandlers, tsLong, fmtAgoNs } from '@/lib/utils';
 import { teamOptionsCI } from '@/lib/teamOptions';
 import { encodeRange, encodeFilters, buildQuery } from '@/lib/urlState';
@@ -67,6 +69,11 @@ export default function ServicesPage() {
   // (AnomaliesPage sortSig emsali).
   const fetchSigRef = useRef<string | null>(null);
   const [sparklines, setSparklines] = useState<Record<string, SparklineBucket[]>>({});
+  // v0.10.2434 (RED metrik-önce) — görünen servislerin örneklenmemiş RED'i
+  // (GET /api/services-red-metric). Satır metrikte varsa İstek/Hata/Avg/P99
+  // değerleri buradan; yoksa span değeri "örneklenmiş" rozetiyle.
+  const [redMetric, setRedMetric] = useState<Record<string, ServiceRedMetricRow>>({});
+  const lang = useLang();
   // Batch runtime fetch — one query for every service in the
   // listing, server-cached 5 min. The component renders per-row
   // ServiceRuntimeBadge inside the name cell.
@@ -287,6 +294,7 @@ export default function ServicesPage() {
       setData(undefined);
     }
     setSparklines({});
+    setRedMetric({});
     // v0.8.300 (quality bar S3) — cancelled flag: deps change on every
     // sort/filter/page click, and without cancellation an OLDER in-flight
     // response could resolve LAST and overwrite the fresh page
@@ -356,6 +364,10 @@ export default function ServicesPage() {
         // v0.10.286 — sunucudan yalnız çizilebilecek kadar slot iste
         // (varsayılan 80 px sparkline → 80 slot; eski sabit 120).
         api.serviceSparklines(r, names, sparkMaxSlotsForWidth(SPARK_DEFAULT_WIDTH)).then(d => { if (!cancelled) setSparklines(d ?? {}); }).catch(() => {});
+      }
+      // v0.10.2434 — tek çağrı, sayfa başına (≤ PAGE_SIZE servis); başarısızsa span değerleri kalır.
+      if (names.length > 0) {
+        api.servicesRedMetric(r, names, { env, cluster }).then(d => { if (!cancelled) setRedMetric(d?.services ?? {}); }).catch(() => {});
       }
     }).catch(e => {
       if (cancelled) return;
@@ -601,7 +613,7 @@ export default function ServicesPage() {
 
   return (
     <>
-      <Topbar title="Services" range={range} onRangeChange={setRange} envApplies />
+      <Topbar title="Services" range={range} onRangeChange={setRange} envApplies sampling="services" />
       <PageShell>
         {data != null && (
           <PageControls sticky>
@@ -800,6 +812,7 @@ export default function ServicesPage() {
               )}
               {shown.map((s, i) => {
                 const buckets = sparklines[s.name] ?? [];
+                const rm = redMetric[s.name]; // v0.10.2434 — örneklenmemiş RED (yoksa span)
                 // v0.10.922 (sade palet adım 1) — hata serisi bir kez
                 // hesaplanır: hem çizilir hem rengini (errSparkColor) belirler.
                 const errSeries = buckets.map(b => b.spans > 0 ? (b.errs / b.spans) * 100 : null);
@@ -864,6 +877,10 @@ export default function ServicesPage() {
                           glyph, just the language-coloured
                           text. Hidden when the SDK didn't
                           emit usable resource attributes. */}
+                      <Badge tone={rm ? 'info' : 'warning'}style={{ marginLeft: 8 }}
+                        title={rm ? tf('red.src.metricTitle', lang, { fam: rm.source }) : t('red.src.spansTitle', lang)}>
+                        {rm ? t('red.src.metric', lang) : t('red.src.sampled', lang)}
+                      </Badge>
                       {runtimes && runtimes[s.name] && (
                         <ServiceRuntimeBadge rt={runtimes[s.name]} compact
                                              style={{ marginLeft: 8 }} />
@@ -879,14 +896,14 @@ export default function ServicesPage() {
                       )}
                     </td>
                     <td className="num">
-                      <SparkCell value={fmtNum(s.spanCount)}
+                      <SparkCell value={rm ? fmtNum(Math.round(rm.requests)) : fmtNum(s.spanCount)}
                                  spark={buckets.map(b => b.spans)}
                                  color={SPARK_NEUTRAL}
                                  title={`Spans/5m for ${s.name}`}
                                  onClick={() => goToExplore(s.name, 'rate')} />
                     </td>
                     <td className="num">
-                      <SparkCell value={<ErrRateValue pct={s.errorRate} />}
+                      <SparkCell value={<ErrRateValue pct={rm?.errorRate ?? s.errorRate} />}
                       spark={errSeries}
                       color={errSparkColor(errSeries)}
                       title={`Error rate (%) for ${s.name}`}
@@ -894,14 +911,14 @@ export default function ServicesPage() {
                       onClick={() => goToExplore(s.name, 'error_rate')} />
                     </td>
                     <td className="num">
-                      <SparkCell value={`${fmtFixed(s.avgDurationMs, 1)}ms`}
+                      <SparkCell value={`${fmtFixed(rm?.avgMs ?? s.avgDurationMs, 1)}ms`}
                                  spark={buckets.map(b => b.avgMs)}
                                  color={SPARK_NEUTRAL}
                                  title={`Avg latency (ms) for ${s.name}`}
                                  onClick={() => goToExplore(s.name, 'avg')} />
                     </td>
                     <td className="num">
-                      <SparkCell value={`${fmtFixed(s.p99DurationMs, 1)}ms`}
+                      <SparkCell value={`${fmtFixed(rm?.p99Ms ?? s.p99DurationMs, 1)}ms`}
                                  spark={buckets.map(b => b.p99Ms)}
                                  color={SPARK_NEUTRAL}
                                  title={`P99 latency (ms) for ${s.name}`}

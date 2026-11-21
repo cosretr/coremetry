@@ -45,13 +45,16 @@ describe('infraAttention', () => {
       pod('c2', 'oom', { lastTermReason: 'OOMKilled', restarts: 4 }),
       pod('c2', 'pend', { phase: 'Pending', restarts: 7, lastTermReason: 'OOMKilled' }),
     ], ['c9'], [{ pod: 'ghost', cluster: 'c7' }]));
+    // 2026-11-21 (operatör): yanıt vermeyen cluster (üst cümle + tablo satırı
+    // zaten söylüyor) ve Thanos'ta görünmeyen pod Dikkat'e girmez.
     expect(items.map(i => `${i.kind}:${i.subject}`)).toEqual([
-      'unreachable:c9', 'notRunning:pend', 'oom:oom', 'restarts:r9', 'restarts:r2', 'entityOnly:ghost',
+      'notRunning:pend', 'oom:oom', 'restarts:r9', 'restarts:r2',
     ]);
-    expect(items[0]).toMatchObject({ tone: 'err', cluster: '', text: 'yanıt vermedi — durum alınamıyor' });
-    expect(items[1]).toMatchObject({ tone: 'err', cluster: 'c2', text: 'çalışmıyor (Pending)' });
-    expect(items[3]).toMatchObject({ tone: 'warn', text: '9 kez yeniden başladı' });
-    expect(items[5]).toMatchObject({ tone: 'warn', cluster: 'c7' });
+    expect(items[0]).toMatchObject({ tone: 'err', cluster: 'c2', text: 'çalışmıyor (Pending)' });
+    expect(items[2]).toMatchObject({ tone: 'warn', text: '9 kez yeniden başladı' });
+  });
+  it('yalnız yanıt vermeyen cluster / Thanos dışı pod varken kutu yok', () => {
+    expect(infraAttention(input([pod('c1', 'ok')], ['c9'], [{ pod: 'ghost', cluster: 'c7' }]))).toEqual([]);
   });
   it('restart sayısı bilinmiyorsa sapma uydurulmaz', () => {
     expect(infraAttention(input([pod('c1', 'a', { restartsUnknown: true, restarts: 5 })]))).toEqual([]);

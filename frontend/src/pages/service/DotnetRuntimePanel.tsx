@@ -20,26 +20,32 @@ import { panelMaxDataPoints } from '@/lib/chartStep';
 import { useServiceDeploys } from '@/lib/queries';
 import { Spinner } from '@/components/Spinner';
 import { TimeSeriesPanel, type TSSeries } from '@/components/viz/TimeSeriesPanel';
-import type { RuntimeResolvedSignal, RuntimeSignal, SpanMetricSeries } from '@/lib/types';
-import { podLineLabel, podClusterOf, withClusterPrefix } from './runtimePodLabel';
+import type { FilterExpr, RuntimePodEntity, RuntimeResolvedSignal, RuntimeSignal, SpanMetricSeries } from '@/lib/types';
+import { podLineLabel, podClusterOf, withClusterPrefix, isAnonPodSeries, divideByCount } from './runtimePodLabel';
 import { smoothPoints } from './runtimeSmooth';
 import { useRuntimeProfile } from './runtimeFamily';
 import { podDetailPath } from './podDetailPath';
+import { runtimeSourceBadge } from './runtimeSource';
 import { Link } from 'react-router';
 
 const MB = 1 / (1024 * 1024);
-const POD_GROUP = 'resource.k8s.pod.name,resource.host.name,resource.service.instance.id,cluster';
+// Follow-up 2026-11-21 (operatör, prod gerçeği): VM serileri host_name (= pod
+// adı) taşır — pod boyutu önce host.name, sonra k8s.pod.name (Go
+// runtimesig.PodGroupBy ile aynı sıra). Hiçbiri yoksa servis toplamı yedeği.
+const POD_GROUP = 'resource.host.name,resource.k8s.pod.name,resource.service.instance.id,cluster';
 const FANOUT_MAX = 40;
 
 type Group = 'pod' | 'gen' | 'none';
-interface LineSpec { signal: string; labelKey: string; scale: number; group: Group; unit: string; color?: string; dash?: number[] }
+// share — oran sinyali (GC payı, CPU): pod etiketi yoksa toplam pod sayısına
+// bölünür (10 pod × %5 = %50 okunmasın).
+interface LineSpec { signal: string; labelKey: string; scale: number; group: Group; unit: string; color?: string; dash?: number[]; share?: boolean }
 interface CardSpec { key: string; titleKey: string; lines: LineSpec[]; mode: 'area' | 'line'; latency?: boolean }
 
 // Kart sırası Elastic APM .NET görünümünün sırası: GC → bellek → thread
 // pool → çekişme → exception → working set.
 export const DOTNET_CARDS: CardSpec[] = [
   { key: 'gc', titleKey: 'rt.card.gcShare', mode: 'line', latency: true, lines: [
-    { signal: 'gc_time', labelKey: 'rt.line.gcShare', scale: 100, group: 'pod', unit: '%' },
+    { signal: 'gc_time', labelKey: 'rt.line.gcShare', scale: 100, group: 'pod', unit: '%', share: true },
   ] },
   { key: 'gcgen', titleKey: 'rt.card.gcCollections', mode: 'line', lines: [
     { signal: 'gc_collections', labelKey: 'rt.line.collections', scale: 60, group: 'gen', unit: '/min' },
@@ -69,7 +75,7 @@ export const DOTNET_CARDS: CardSpec[] = [
 // CPython (2026-11-21) — kompakt görünüm: CPU, RSS, GC (nesil), thread, bağlam değişimi.
 export const PYTHON_CARDS: CardSpec[] = [
   { key: 'cpu', titleKey: 'rt.card.cpu', mode: 'line', latency: true, lines: [
-    { signal: 'cpu_util', labelKey: 'rt.line.cpu', scale: 100, group: 'pod', unit: '%' },
+    { signal: 'cpu_util', labelKey: 'rt.line.cpu', scale: 100, group: 'pod', unit: '%', share: true },
   ] },
   { key: 'rss', titleKey: 'rt.card.rss', mode: 'area', lines: [
     { signal: 'memory_rss', labelKey: 'rt.line.rss', scale: MB, group: 'pod', unit: 'MB' },
@@ -100,6 +106,13 @@ export function plannedCards(resolved: RuntimeResolvedSignal[], runtime: Profile
       return [{ line: line.group === 'gen' && !res.genLabel ? { ...line, group: 'none' as Group } : line, res }];
     }),
   })).filter(c => c.lines.length > 0);
+}
+
+/** SAF — sinyalin kendi süzgeci + sunucunun ortam kapsamı → JSON (yoksa undefined). */
+export function scopedFilters(res: Pick<RuntimeResolvedSignal, 'filterKey' | 'filterValue'>, scope?: FilterExpr[]): string | undefined {
+  const fs: FilterExpr[] = [...(scope ?? [])];
+  if (res.filterKey) fs.push({ k: res.filterKey, op: '=', v: [res.filterValue ?? ''] });
+  return fs.length ? JSON.stringify(fs) : undefined;
 }
 
 const LEVEL_BADGE: Record<RuntimeSignal['level'], string> = { critical: 'b-err', warning: 'b-warn', info: 'b-gray' };
@@ -142,6 +155,30 @@ export function RuntimeSignalList({ signals, mode }: { signals: RuntimeSignal[];
   );
 }
 
+const POD_LINKS_MAX = 12;
+
+/** Follow-up 2026-11-21 — grafik çizgilerindeki pod adları (host_name) → pod
+ *  varlığı bağlantısı; dizin sunucudan (entity katmanı), ad eşlemesi yok. */
+export function RuntimePodLinks({ service, entities }: { service: string; entities?: Record<string, RuntimePodEntity> }) {
+  const tr = useT();
+  const names = useMemo(() => Object.keys(entities ?? {}).sort(), [entities]);
+  if (!entities || names.length === 0) return null;
+  return (
+    <div className="kc-line" data-testid="rt-pod-links">
+      <strong>{tr('rt.pods.title')}:</strong>{' '}
+      {names.slice(0, POD_LINKS_MAX).map((n, i) => {
+        const e = entities[n];
+        return (
+          <span key={n}>{i > 0 && ' · '}
+            <Link className="mono" to={podDetailPath({ pod: e.pod, cluster: e.clusterId, namespace: e.namespace, service, from: 'infra' })} title={e.id}>{n}</Link>
+          </span>
+        );
+      })}
+      {names.length > POD_LINKS_MAX && <> · {tr('rt.pods.more').replace('{n}', String(names.length - POD_LINKS_MAX))}</>}
+    </div>
+  );
+}
+
 export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomReset, runtime = 'dotnet' }: {
   service: string;
   /** 2026-11-21 — aynı panel CPython kartlarıyla da (profil çözümü ortak). */
@@ -156,19 +193,41 @@ export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomRe
   const resolved = useMemo(() => profQ.data?.profile?.signals ?? [], [profQ.data]);
   const planned = useMemo(() => plannedCards(resolved, runtime), [resolved, runtime]);
   const specs = useMemo(() => planned.flatMap(p => p.lines.map(l => ({ card: p.card.key, ...l }))), [planned]);
+  // Follow-up 2026-11-21 — sunucunun çözdüğü ortam / küme kapsamı (aynen eklenir).
+  const scope = profQ.data?.scopeFilters;
+  const filtersOf = (res: RuntimeResolvedSignal) => scopedFilters(res, scope);
 
   const queries = useQueries({
     queries: specs.map(({ line, res }) => ({
-      queryKey: ['svc-runtime-metric', service, res.metric, line.group, res.genLabel ?? '', res.agg, from, to],
+      queryKey: ['svc-runtime-metric', service, res.metric, line.group, res.genLabel ?? '', res.agg, from, to, filtersOf(res) ?? ''],
       queryFn: () => api.metricQuery({
         name: res.metric, service, agg: res.agg,
-        filters: res.filterKey ? JSON.stringify([{ k: res.filterKey, op: '=', v: [res.filterValue ?? ''] }]) : undefined,
+        filters: filtersOf(res),
         groupBy: line.group === 'pod' ? POD_GROUP : line.group === 'gen' ? res.genLabel : undefined,
         from, to, step: 0, maxDataPoints: panelMaxDataPoints(1),
       }).then(r => r ?? []),
       staleTime: 60_000,
     })),
   });
+  // Anonim (pod etiketsiz) oran serisi → aynı gruplamayla seri SAYISI (yalnız
+  // o durumda; prod'da host_name olduğundan sorgu çoğu zaman hiç atılmaz).
+  const countIdx = useMemo(() => specs.flatMap((sp, i) => (sp.line.group === 'pod' && sp.line.share && sp.res.agg === 'rate'
+    && isAnonPodSeries((queries[i]?.data ?? []) as SpanMetricSeries[])) ? [i] : []), [specs, queries]);
+  const countQs = useQueries({
+    queries: countIdx.map(i => {
+      const { res } = specs[i];
+      return {
+        queryKey: ['svc-runtime-metric-count', service, res.metric, from, to, scopedFilters(res, scope) ?? ''],
+        queryFn: () => api.metricQuery({
+          name: res.metric, service, agg: 'count', groupBy: POD_GROUP,
+          filters: scopedFilters(res, scope),
+          from, to, step: 0, maxDataPoints: panelMaxDataPoints(1),
+        }).then(r => r ?? []),
+        staleTime: 60_000,
+      };
+    }),
+  });
+  const countBySpec = useMemo(() => new Map(countIdx.map((i, k) => [i, (countQs[k]?.data ?? []) as SpanMetricSeries[]])), [countIdx, countQs]);
 
   const wantLatency = planned.some(p => p.card.latency);
   const latQ = useQuery({
@@ -202,7 +261,18 @@ export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomRe
       const data = (q?.data ?? []) as SpanMetricSeries[];
       const scale = sp.res.scale * sp.line.scale;
       const pts = (s: SpanMetricSeries) => s.points.map(p => ({ time: p.time, value: p.value == null ? null : p.value * scale }));
-      if (sp.line.group === 'pod') {
+      if (sp.line.group === 'pod' && isAnonPodSeries(data)) {
+        // Pod etiketi yok: tek toplam çizgi, ne olduğu adında yazar. Oran +
+        // rate → pod sayısına bölünmüş ortalama; gauge (avg) zaten ortalama.
+        const cnt = countBySpec.get(qi);
+        const divided = sp.line.share && sp.res.agg === 'rate';
+        const p0 = pts(data[0]);
+        series.push({
+          label: `${tr(sp.line.labelKey)} · ${tr(divided || sp.res.agg !== 'rate' ? 'rt.line.svcAvg' : 'rt.line.svcTotal')}`,
+          unit: sp.line.unit,
+          points: smoothPoints(divided && cnt?.[0] ? divideByCount(p0, cnt[0].points) : p0),
+        });
+      } else if (sp.line.group === 'pod') {
         const multi = new Set(data.map(s => podClusterOf(s.groupKey)).filter(Boolean)).size > 1;
         data.slice(0, FANOUT_MAX).forEach(s => series.push({
           label: withClusterPrefix(podLineLabel(s.groupKey, sp.line.signal), podClusterOf(s.groupKey), multi),
@@ -215,8 +285,10 @@ export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomRe
       }
     });
     if (card.latency && latSeries && series.length > 0) series.push(latSeries);
-    return { card, series, status: failed ? 'error' : pending ? 'loading' : 'ready' };
-  }), [planned, specs, queries, latSeries, tr]);
+    // Follow-up 2026-11-21 — kaynak ipucu: kartın çözülmüş metrik adları + kaynak.
+    const src = runtimeSourceBadge(specs.filter(sp => sp.card === card.key).map(sp => sp.res.metric), tr('rt.src.tip'));
+    return { card, series, src, status: failed ? 'error' : pending ? 'loading' : 'ready' };
+  }), [planned, specs, queries, countBySpec, latSeries, tr]);
 
   if (profQ.isPending) return <div className="rt-slot"><Spinner /></div>;
   if (profQ.isError || !profQ.data) return <div className="kc-line">{tr('rt.err')}</div>;
@@ -225,9 +297,10 @@ export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomRe
   return (
     <div className="rt-cards" data-testid={`${runtime}-runtime`}>
       <RuntimeSignalList signals={profQ.data.signals ?? []} mode={profQ.data.mode} />
-      {cards.map(({ card, series, status }) => (
+      <RuntimePodLinks service={service} entities={profQ.data.podEntities} />
+      {cards.map(({ card, series, src, status }) => (
         <div key={card.key} className="card" data-testid={`rt-card-${card.key}`}>
-          <div className="ov-card-h"><h3>{tr(card.titleKey)}</h3></div>
+          <div className="ov-card-h"><h3 title={src.tip}>{tr(card.titleKey)}</h3><span className="badge b-gray" title={src.tip}>{src.label}</span></div>
           <div className="ov-card-b rt-card-b">
             {status === 'loading' && series.length === 0 ? (
               <div className="rt-slot"><Spinner /></div>

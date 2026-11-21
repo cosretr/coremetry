@@ -11,7 +11,8 @@ describe('Overview RED ailesi (v0.10.1429)', () => {
   it('aile çözümü metrik sorgularından önce; rozet eki; gRPC/both rozetleri', () => {
     expect(src).toContain("const fam = useRedFamily(service, env, '', to, !!service && wantMetric);");
     expect(src).toContain('const famSec = pickFamilySection(fam);');
-    expect(src).toContain("const famOpt = famGrpc ? { family: 'grpc' as const } : {};");
+    expect(src).toContain("const famOpt = { ...(famGrpc ? { family: 'grpc' as const } : family.id === 'http_legacy' ? { family: 'http_legacy' as const } : {}), ...infraOpt };"); // v0.10.2434
+    expect(src).toContain('const redFamOpt = { ...(redFamParam ? { family: redFamParam } : {}), ...infraOpt };'); // v0.10.2434 — aile + tesisat süzgeci
     expect(src).toContain('enabled: !!service && wantMetric && fam.ready,');
     // v0.10.2315 — rozet metni katalogda (ov.badge.metric); TR değeri aynen.
     expect(src).toContain("tf('ov.badge.metric', lang, { src: metricRedQ.data?.source ?? '…' }) + familyBadgeSuffix(fam)");
@@ -27,6 +28,6 @@ describe('Overview RED ailesi (v0.10.1429)', () => {
     expect(src).toContain('groupBy: routeDim,');
     expect(src).toContain("title={`Response time · avg (by ${famGrpc ? 'method' : 'route'})`}");
     expect(src).toContain("statusCodeSeries(httpStatusQ.data, family)");
-    expect(src).toContain("totalRequestsQuery(service, Math.max(60, (to - from) / 1e9), envSel, family)");
+    expect(src).toContain("totalRequestsQuery(service, Math.max(60, (to - from) / 1e9), envSel, family, infraEx)"); // v0.10.2434 tesisat süzgeci
   });
 });

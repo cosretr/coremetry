@@ -71,7 +71,8 @@ func (s *Store) OperationLatencySeries(ctx context.Context, service, op string, 
 	if !opLatencyCovered(from, s.spanmetricsCoverageStart(ctx), time.Now()) {
 		return nil, ErrOpLatencyNotCovered
 	}
-	rows, err := s.conn.Query(ctx, opLatencySeriesSQL(s.spanmetricsSourceFor("spanmetrics_1m"), stepSec),
+	sql := s.weighSQL(opLatencySeriesSQL(s.spanmetricsSourceFor("spanmetrics_1m"), stepSec), from, "spanmetrics_1m") // v0.10.2435 — sampling-weight Phase 2
+	rows, err := s.conn.Query(ctx, sql,
 		service, op, from.Truncate(time.Minute), to)
 	if err != nil {
 		return nil, fmt.Errorf("op latency (spanmetrics_1m): %w", err)

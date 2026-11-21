@@ -73,7 +73,8 @@ func (s *Store) MLServiceVolume(ctx context.Context, service string, from, to ti
 		args = append(args, service)
 	}
 	args = append(args, MLVolumeCap)
-	rows, err := s.conn.Query(ctx, mlVolumeSQL(service != ""), args...)
+	sql := s.weighSQL(mlVolumeSQL(service != ""), from, "service_summary_5m", "spanmetrics_1m") // v0.10.2435 — sampling-weight Phase 2
+	rows, err := s.conn.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}

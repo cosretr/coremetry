@@ -246,7 +246,7 @@ func (s *Store) QuerySpanMetric(ctx context.Context, f SpanMetricFilter) ([]Span
 		field = "duration_ms"
 	}
 	fieldExpr := fieldToSQL(field)
-	aggExpr, err := aggToSQL(f.Aggregation, fieldExpr, step)
+	aggExpr, err := aggToSQLW(f.Aggregation, fieldExpr, step, s.rawSpansWeighted())
 	if err != nil {
 		return nil, err
 	}
@@ -432,6 +432,7 @@ func (s *Store) tryServiceMVFastPath(ctx context.Context, f SpanMetricFilter) ([
 		SETTINGS max_execution_time = 25`,
 		step, groupSelect, aggExpr, strings.Join(whereClauses, " AND "))
 
+	sql = s.weighSQL(sql, f.From, "service_summary_5m") // v0.10.2435 — sampling-weight Phase 2
 	rows, err := s.telemetryReadConn().Query(ctx, sql, args...)
 	if err != nil {
 		return nil, false
@@ -635,6 +636,7 @@ func (s *Store) tryOperationMVFastPath(ctx context.Context, f SpanMetricFilter) 
 		SETTINGS max_execution_time = 25`,
 		step, groupSelect, aggExpr, strings.Join(whereClauses, " AND "))
 
+	sql = s.weighSQL(sql, f.From, "operation_summary_5m") // v0.10.2435 — sampling-weight Phase 2
 	rows, err := s.telemetryReadConn().Query(ctx, sql, args...)
 	if err != nil {
 		return nil, false
@@ -773,6 +775,7 @@ func (s *Store) tryOperationMVFastPathMulti(ctx context.Context, f SpanMetricBat
 		strings.Join(selectParts, ",\n        "),
 		strings.Join(whereClauses, " AND "))
 
+	sql = s.weighSQL(sql, f.From, "operation_summary_5m") // v0.10.2435 — sampling-weight Phase 2
 	rows, err := s.telemetryReadConn().Query(ctx, sql, args...)
 	if err != nil {
 		return nil, false
@@ -1178,6 +1181,7 @@ func (s *Store) QuerySpanMetricMulti(ctx context.Context, f SpanMetricBatchFilte
 		}
 	}
 	tupleFor := map[int]string{} // agg index → hazır ifade
+	rawW := s.rawSpansWeighted() // v0.10.2435 — sampling-weight Phase 2
 	tn := 0
 	for field, g := range pctByField {
 		if len(g.qs) < 2 {
@@ -1185,8 +1189,12 @@ func (s *Store) QuerySpanMetricMulti(ctx context.Context, f SpanMetricBatchFilte
 		}
 		alias := fmt.Sprintf("_qt%d", tn)
 		tn++
+		qf := "quantilesTDigest(%s)(%s) AS %s"
+		if rawW {
+			qf = "quantilesTDigestWeighted(%s)(%s, " + rawWeightUInt + ") AS %s"
+		}
 		selectParts = append(selectParts, fmt.Sprintf(
-			"quantilesTDigest(%s)(%s) AS %s", strings.Join(g.qs, ", "), fieldToSQL(field), alias))
+			qf, strings.Join(g.qs, ", "), fieldToSQL(field), alias))
 		for j, idx := range g.idxs {
 			tupleFor[idx] = fmt.Sprintf("toNullable(toFloat64(%s[%d]))", alias, j+1)
 		}
@@ -1204,7 +1212,7 @@ func (s *Store) QuerySpanMetricMulti(ctx context.Context, f SpanMetricBatchFilte
 		if winK > 0 {
 			rateDiv = effWin
 		}
-		expr, err := aggToSQL(a.Aggregation, fieldToSQL(field), rateDiv)
+		expr, err := aggToSQLW(a.Aggregation, fieldToSQL(field), rateDiv, rawW)
 		if err != nil {
 			return nil, 0, fmt.Errorf("agg %q: %w", a.Name, err)
 		}
@@ -1468,7 +1476,21 @@ func groupKeyExpr(key string, hasOpGroup bool) (string, []any) {
 // a single `*float64` for both nullable (quantile) and non-nullable (count)
 // aggregations.
 func aggToSQL(agg, field string, stepSec int) (string, error) {
+	return aggToSQLW(agg, field, stepSec, false)
+}
+
+// aggToSQLW — aggToSQL with the sampling-weight switch (v0.10.2435, Phase
+// 2): weighted=true reads raw spans as REPRESENTED spans (Σ sample_weight,
+// weighted avg / TDigest). Raw rows always carry a weight (old parts read
+// DEFAULT 1), so no coverage marker is needed here. weighted=false is the
+// pre-2434 text byte-for-byte.
+func aggToSQLW(agg, field string, stepSec int, weighted bool) (string, error) {
 	wrap := func(s string) string { return "toNullable(toFloat64(" + s + "))" }
+	if weighted {
+		if e, ok := weightedRawAgg(agg, field, stepSec); ok {
+			return wrap(e), nil
+		}
+	}
 	switch strings.ToLower(agg) {
 	case "", "count":
 		return wrap("count()"), nil

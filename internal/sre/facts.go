@@ -169,7 +169,14 @@ type DepsFacts struct {
 	Edges      []EdgeFact     `json:"edges"`
 	Causes     []depsCause    `json:"causes"`
 	Subject    *SubjectChange `json:"subject,omitempty"`
+	// Exact — follow-up 2026-11-21: hedef başına giden RED, VM HTTP client
+	// histogramı (örnekleme öncesi TAM sayım; topology_edges_5m örneklenmiş
+	// span'lerden). ExactOK = okundu (boş liste = giden HTTP çağrısı yok).
+	ExactOK bool                   `json:"exactOk,omitempty"`
+	Exact   []runtimesig.TargetRED `json:"exact,omitempty"`
 }
+
+const factsExactTargets = 10
 
 // PathFact — kritik yol adımı.
 type PathFact struct {
@@ -394,6 +401,13 @@ func depsFactsOf(req depsRequest, res depsResult) *DepsFacts {
 			if c.CauseEligible && len(out.Causes) < depsCausesMax {
 				out.Causes = append(out.Causes, depsCause{Service: c.Service, Relation: c.Relation, Direction: c.Direction})
 			}
+		}
+	}
+	if res.exact != nil {
+		out.ExactOK = true
+		out.Exact = res.exact.Targets
+		if len(out.Exact) > factsExactTargets {
+			out.Exact = out.Exact[:factsExactTargets]
 		}
 	}
 	return out

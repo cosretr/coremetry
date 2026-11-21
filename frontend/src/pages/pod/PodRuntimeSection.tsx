@@ -16,6 +16,7 @@ import { TimeSeriesPanel, type TSSeries } from '@/components/viz/TimeSeriesPanel
 import type { RuntimeResolvedSignal, SpanMetricSeries } from '@/lib/types';
 import { useRuntimeProfile } from '@/pages/service/runtimeFamily';
 import { RuntimeSignalList } from '@/pages/service/DotnetRuntimePanel';
+import { runtimeSourceBadge, runtimeSourceTip } from '@/pages/service/runtimeSource';
 
 const MB = 1 / (1024 * 1024);
 
@@ -27,6 +28,9 @@ const POD_CARDS: { signal: string; titleKey: string; scale: number; unit: string
   { signal: 'http_pending', titleKey: 'rt.sig.http-pool-saturation', scale: 1, unit: '' },
   { signal: 'working_set', titleKey: 'rt.card.workingSet', scale: MB, unit: 'MB' },
   { signal: 'memory_rss', titleKey: 'rt.card.rss', scale: MB, unit: 'MB' },
+  // Follow-up 2026-11-21 — HikariCP (seri service_name taşımaz → pod süzgeci yeter).
+  { signal: 'db_pool_active', titleKey: 'rt.card.dbPool', scale: 1, unit: '' },
+  { signal: 'db_pool_pending', titleKey: 'rt.line.dbPending', scale: 1, unit: '' },
 ];
 
 /** SAF — pod'un çizilecek kartları (profilde çözülenler). */
@@ -48,7 +52,7 @@ export default function PodRuntimeSection({ service, pod, from, to }: { service:
     queries: cards.map(c => ({
       queryKey: ['pod-runtime-metric', service, pod, c.res.metric, from, to],
       queryFn: () => api.metricQuery({
-        name: c.res.metric, service, agg: c.res.agg,
+        name: c.res.metric, service: c.res.podScoped ? undefined : service, agg: c.res.agg,
         filters: JSON.stringify([
           { k: 'resource.host.name', op: '=', v: [pod] },
           ...(c.res.filterKey ? [{ k: c.res.filterKey, op: '=', v: [c.res.filterValue ?? ''] }] : []),
@@ -75,7 +79,8 @@ export default function PodRuntimeSection({ service, pod, from, to }: { service:
         }));
         return (
           <div key={c.signal} className="card" data-testid={`pod-rt-${c.signal}`}>
-            <div className="ov-card-h"><h3 title={`${c.res.metric} · host.name = ${pod}`}>{tr(c.titleKey)}</h3></div>
+            <div className="ov-card-h"><h3 title={`${runtimeSourceTip([c.res.metric], tr('rt.src.tip'))} · host.name = ${pod}`}>{tr(c.titleKey)}</h3>
+              <span className="badge b-gray" title={runtimeSourceTip([c.res.metric], tr('rt.src.tip'))}>{runtimeSourceBadge([c.res.metric], '').label}</span></div>
             <div className="ov-card-b rt-card-b">
               {queries[i]?.isPending ? <div className="rt-slot"><Spinner /></div>
                 : series.length === 0 ? <div className="rt-slot rt-slot--empty">{tr('rt.noData')}</div>

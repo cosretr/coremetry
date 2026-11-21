@@ -74,6 +74,11 @@ type MLMetricExpr struct {
 	// kalıbına giren serviste değerlendirilmez (klasik request_rate kuralının
 	// aynası, internal/ml/batch.go). Varsayılan serilerin hiçbiri yük değil.
 	Load bool `json:"load,omitempty"`
+	// VolumeExpr — operatör hatası 2026-11-21: quantile / oran serisinin
+	// eşlik eden çağrı sayısı ifadesi (aynı {svc}/{win}); kovada çağrı <
+	// MLMetricMinVolume ise kova yazılmaz ve yargılanmaz. Boş = türet
+	// (MLMetricVolumeExpr), türetilemezse kapı yok.
+	VolumeExpr string `json:"volumeExpr,omitempty"`
 }
 
 // DefaultMLMetricFamilies — OTel/Prometheus yaygın adlar; operatör Settings'ten düzenler.
@@ -93,8 +98,8 @@ func DefaultMLMetricFamilies() map[string][]MLMetricExpr {
 			{ID: "fetch_throttle", Label: "Fetch throttle", Expr: "max by ({svc}) (kafka_consumer_fetch_throttle_time_max)", Direction: "up", Unit: "ms"},
 		},
 		"metric_http_client": {
-			{ID: "client_p95", Label: "HTTP client p95", Expr: "histogram_quantile(0.95, sum by ({svc}, le) (rate(http_client_request_duration_seconds_bucket[{win}])))", Direction: "up", Unit: "s"},
-			{ID: "client_5xx", Label: "HTTP client 5xx oranı", Expr: "sum by ({svc}) (rate(http_client_request_duration_seconds_count{http_response_status_code=~\"5..\"}[{win}])) / sum by ({svc}) (rate(http_client_request_duration_seconds_count[{win}]))", Direction: "up"},
+			{ID: "client_p95", Label: "HTTP client p95", Expr: "histogram_quantile(0.95, sum by ({svc}, le) (rate(http_client_request_duration_seconds_bucket[{win}])))", Direction: "up", Unit: "s", VolumeExpr: httpClientVolumeExpr},
+			{ID: "client_5xx", Label: "HTTP client 5xx oranı", Expr: "sum by ({svc}) (rate(http_client_request_duration_seconds_count{http_response_status_code=~\"5..\"}[{win}])) / sum by ({svc}) (rate(http_client_request_duration_seconds_count[{win}]))", Direction: "up", VolumeExpr: httpClientVolumeExpr},
 		},
 		// v0.10.2020 — cAdvisor pod toplam satırı (container="") ve duraklatma
 		// kabı (container="POD") süzülür; clusters katmanının süzgeciyle aynı
@@ -432,6 +437,9 @@ type MLStats struct {
 	SuppressedImpact int64 `json:"suppressedImpact"`
 	SuppressedRegime int64 `json:"suppressedRegime"`
 	SuppressedBatch  int64 `json:"suppressedBatch"` // v0.10.1811: batch kuralının kestiği aday (kümülatif)
+	// SuppressedVolume — 2026-11-21: metrik ailesi hacim kapısının (quantile /
+	// oran serisi, kovada < MLMetricMinVolume çağrı) yazmadığı kova (kümülatif).
+	SuppressedVolume int64 `json:"suppressedVolume"`
 	// EarlyTicks / Probes — v0.10.2377 (etki olayı I2): dakikalık etki
 	// yoklaması ve yoklamanın açtığı erken tam tik (kümülatif, süreç-içi).
 	// Ticks yalnız ZAMANLI tiki sayar.

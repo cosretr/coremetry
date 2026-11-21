@@ -13,6 +13,7 @@ import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { windowQueries } from '@/lib/httpMetrics';
+import { withInfraExclude } from '@/lib/infraRoutes';
 import type { SpanMetricSeries, ServiceMetricThroughput } from '@/lib/types';
 
 const FROM = 1_791_000_000 * 1e9;
@@ -24,7 +25,7 @@ const ser = (vals: number[]): SpanMetricSeries[] => [{ groupKey: [], points: val
 
 vi.mock('@/lib/api', async (orig) => {
   const actual = await orig<typeof import('@/lib/api')>();
-  const W = windowQueries({ app: 'svc-a' }, 3600);
+  const W = windowQueries({ app: 'svc-a', routeExclude: withInfraExclude([], false) }, 3600); // v0.10.2434 — tesisat rotaları varsayılan dışlanır
   const winVal: Record<string, number> = { [W.avg]: 0.123, [W.p50]: 0.04, [W.p95]: 0.3, [W.p99]: 0.456 };
   const c = () => m.c;
   return {

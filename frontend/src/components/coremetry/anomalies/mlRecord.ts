@@ -202,3 +202,12 @@ export function axisUnit(unit: string): string {
   const u = unit === 'percent' ? '%' : unit;
   return u && u.length > 6 ? '' : u;
 }
+
+/** SAF (2026-11-21): "Olayın seyri"nde ilk grafik kaydın ölçtüğü seri mi?
+ *  Telemetri hacmi kaydı (istek başına span / 5 dk span) VM istek hızıyla
+ *  değil kendi serisi + bandıyla açılır; canlı istek hızı altta bağlamdır
+ *  (sahte olayda istek hızı düzdü, sapan seri görünmüyordu). */
+export function measuredSeriesFirst(rec: MLRecordView): boolean {
+  const a = rec.series.aggregation;
+  return (a === 'spans_per_request' || a === 'span_count') && rec.snapshot.v.length > 0;
+}

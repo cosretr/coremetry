@@ -10,14 +10,19 @@ import { t } from '@/lib/i18n';
 describe('endpoints source defaults (v0.10.454 + v0.10.788)', () => {
   const list = readFileSync(resolve(__dirname, 'Endpoints.tsx'), 'utf8');
   const detail = readFileSync(resolve(__dirname, 'EndpointDetail.tsx'), 'utf8');
-  it('list page defaults to span and only explicit ?src=metric forces metric', () => {
-    expect(list).toContain("const src: 'span' | 'metric' = entry === 'rpc' ? 'span'\n    : explicitSrc === 'metric' ? 'metric'\n    : 'span';");
+  it('list page: metric when the family resolver finds unsampled RED (v0.10.2434), else span', () => {
+    // v0.10.2434 (operatör onaylı RED metrik-önce) — v0.10.454 "liste varsayılanı span" geri alındı:
+    // servis seçili + aile çözücüsü metrik kaynağı bulduysa metrik; ?src= zorlar; çözülene dek liste okunmaz.
+    expect(list).toContain("const famWanted = !!service && entry !== 'rpc' && explicitSrc !== 'span';");
+    expect(list).toContain("const autoMetric = explicitSrc === null && famWanted && fam.state === 'known' && !!fam.source && fam.source !== 'spans';");
+    expect(list).toContain("const src: 'span' | 'metric' = entry === 'rpc' ? 'span'\n    : explicitSrc === 'metric' || autoMetric ? 'metric'\n    : 'span';");
+    expect(list).toContain('}, !metricMode && !srcPending);');
     expect(list).not.toContain('autoSpan');
     // v0.10.1359 — metrik kipi /api/endpoints/metric okumaz (sunucu notu yok):
     // satırlar sekmenin PromQL'inden, servis zorunlu; useEndpoints yalnız span'de.
     expect(list).not.toContain('rowsQ.data?.note');
     expect(list).toContain("const metricMode = src === 'metric';");
-    expect(list).toContain('}, !metricMode);');
+
     // v0.10.1377 — env/cluster seçiliyse ortam eşleyicisi çözülene dek bekler.
     // v0.10.1429 — aile (HTTP / gRPC) çözülene dek de bekler; gRPC satırları ayrı okuma (toplanmaz).
     expect(list).toContain('const metricOn = metricMode && !!service && fam.ready && httpEnvScopeReady(envScope);');

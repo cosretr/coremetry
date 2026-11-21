@@ -10,6 +10,9 @@
 //   [2] service.instance.id  — javaagent'in ürettiği UUID (SON çare;
 //                              operatör "4abcd5" olarak bunu görüyordu)
 //
+// Follow-up 2026-11-21: .NET / CPython paneli (DotnetRuntimePanel) [0]=host.name,
+// [1]=k8s.pod.name sırasıyla sorar (prod VM host_name = pod adı); ikisi de
+// okunabilir pod adı, etiket kuralı aynı.
 // Okunabilir pod adı (0 veya 1) varsa TAM hali basılır; yoksa instance id
 // ilk 8; üçü de boşsa spec fallback'i (tek çizgi aggregate).
 // v0.10.1640 (operatör raporu) — servis-adı öneki artık KIRPILMAZ: eski
@@ -37,4 +40,23 @@ export function podClusterOf(groupKey: string[]): string {
 // önek almaz; etiketi değişmediği için rengi de stabil kalır.
 export function withClusterPrefix(label: string, cluster: string, multiCluster: boolean): string {
   return multiCluster && cluster ? `${cluster} · ${label}` : label;
+}
+
+// isAnonPodSeries — follow-up 2026-11-21: pod kırılımı istenen sorgu pod
+// kimliği taşımayan tek grup döndü mü (host_name / k8s_pod_name /
+// service_instance_id üçü de boş). Prod VM serileri host_name taşır; bu yalnız
+// yedek — o zaman çizgi servis toplamıdır ve öyle etiketlenir.
+export function isAnonPodSeries(data: { groupKey: string[] }[]): boolean {
+  return data.length > 0 && data.every(s => !(s.groupKey[0] ?? '').trim() && !(s.groupKey[1] ?? '').trim() && !(s.groupKey[2] ?? '').trim());
+}
+
+// divideByCount — SAF: pay (oran) sinyali anonim seride pod toplamıdır;
+// aynı zaman damgasındaki seri sayısına bölünür (Go runtimesig ReadPods'un
+// gc_time yedeğiyle aynı kural). Sayı yoksa / ≤1 ise değer aynen.
+export function divideByCount<P extends { time: number; value: number | null }>(points: P[], counts: { time: number; value: number | null }[]): P[] {
+  const by = new Map(counts.map(c => [c.time, c.value ?? 0]));
+  return points.map(p => {
+    const n = by.get(p.time) ?? 0;
+    return p.value != null && n > 1 ? { ...p, value: p.value / n } : p;
+  });
 }

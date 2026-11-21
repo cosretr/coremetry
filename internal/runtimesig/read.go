@@ -24,8 +24,11 @@ type MetricReader interface {
 }
 
 // PodGroupBy — pod kimliği adayları (UI POD_GROUP ile aynı sıra; resource.
-// öneki VM'de düşer, CH'de res_keys'e çözülür).
-var PodGroupBy = []string{"resource.k8s.pod.name", "resource.host.name", "resource.service.instance.id"}
+// öneki VM'de düşer, CH'de res_keys'e çözülür). Follow-up 2026-11-21
+// (operatör, prod gerçeği): VM serileri host_name (= pod adı) TAŞIR — pod
+// boyutu önce host_name, sonra k8s_pod_name, son çare instance id. Pod
+// etiketi hiç yoksa seri anonimdir (pod "") ve servis toplamı yedeğine düşer.
+var PodGroupBy = []string{"resource.host.name", "resource.k8s.pod.name", "resource.service.instance.id"}
 
 // detectSignals — dedektörlerin okuduğu sinyaller (UI'nin çizdiği fazlası
 // okunmaz).
@@ -63,7 +66,25 @@ func podOf(gk []string, off int) string {
 // (groupBy başına service.name). Tek sinyal okuması düşerse not düşülür, öteki
 // sinyaller sürer; hepsi düşerse hata.
 func ReadPods(ctx context.Context, r MetricReader, service string, p Profile, now time.Time) ([]PodData, []string, error) {
+	return readPodsWith(ctx, r, service, p, now, readOpts{})
+}
+
+// readOpts — follow-up 2026-11-21: okuma kapsamı. keys nil = runtime'ın
+// dedektör girdileri; filters = ortam kapsamı / pod süzgeci (her sorguya
+// eklenir); noServiceFilter = seri service_name taşımaz (HikariCP), servis
+// yalnız anahtar olarak kullanılır.
+type readOpts struct {
+	keys            []SignalKey
+	filters         []chstore.FilterExpr
+	noServiceFilter bool
+}
+
+func readPodsWith(ctx context.Context, r MetricReader, service string, p Profile, now time.Time, o readOpts) ([]PodData, []string, error) {
 	from := now.Add(-time.Duration(AnalysisWindowNs))
+	keys := o.keys
+	if keys == nil {
+		keys = detectSignalsFor(p.Runtime)
+	}
 	type pk struct{ svc, pod string }
 	pods := map[pk]*PodData{}
 	get := func(svc, pod string) *PodData {
@@ -77,7 +98,7 @@ func ReadPods(ctx context.Context, r MetricReader, service string, p Profile, no
 	}
 	var notes []string
 	tried, failed := 0, 0
-	for _, key := range detectSignalsFor(p.Runtime) {
+	for _, key := range keys {
 		res, ok := p.Get(key)
 		if !ok {
 			continue
@@ -99,8 +120,15 @@ func ReadPods(ctx context.Context, r MetricReader, service string, p Profile, no
 			From: from, To: now, StepSeconds: 60, MaxDataPoints: int(AnalysisWindowNs/60e9) + 2,
 			PlainSeries: true,
 		}
+		if o.noServiceFilter {
+			f.Service = ""
+		}
+		f.Filters = append([]chstore.FilterExpr{}, o.filters...)
 		if res.FilterKey != "" {
-			f.Filters = []chstore.FilterExpr{{Key: res.FilterKey, Op: "=", Values: []string{res.FilterValue}}}
+			f.Filters = append(f.Filters, chstore.FilterExpr{Key: res.FilterKey, Op: "=", Values: []string{res.FilterValue}})
+		}
+		if len(f.Filters) == 0 {
+			f.Filters = nil
 		}
 		series, err := r.QueryMetric(ctx, f)
 		if err != nil {
@@ -147,8 +175,8 @@ func ReadPods(ctx context.Context, r MetricReader, service string, p Profile, no
 			sort.Slice(out, func(i, j int) bool { return out[i].T < out[j].T })
 			return out
 		}
-		// Pod kimliği yok (prod VM: yalnız service_name / k8s_deployment_name;
-		// k8s_pod_name, host_name, service_instance_id taşımayan seriler) →
+		// Pod kimliği yok (host_name / k8s_pod_name / service_instance_id
+		// taşımayan seriler; prod VM host_name taşır — bu yalnız yedek) →
 		// `sum(rate)` servisin TÜM pod'larının toplamıdır; GC PAYI (mutlak
 		// eşik) pod sayısıyla bölünmezse 10 pod × %5 = %50 okunurdu. Aynı
 		// gruplamayla tek `count` sorgusu seri sayısını verir, pay ortalamaya
@@ -225,12 +253,39 @@ type Report struct {
 	Signals []Signal `json:"signals"`
 	Notes   []string `json:"notes,omitempty"`
 	AtNs    int64    `json:"atNs"`
+	// PodEntities — follow-up 2026-11-21: servisin varlık katmanındaki pod'ları
+	// (pod adı = metrikteki host_name → entity kaydı). UI pod çizgisini / pod
+	// bağlantısını bununla kurar; ad eşlemesi yok. API doldurur (best-effort).
+	PodEntities map[string]PodEntityRef `json:"podEntities,omitempty"`
+	// ScopeFilters — follow-up 2026-11-21: uygulanmış ortam / küme kapsamı
+	// (UI grafik sorgularına AYNEN ekler — tek çözüm, iki yüz). ScopeNote:
+	// istendi ama uygulanamadı (tüm ortamlar okundu).
+	ScopeFilters []chstore.FilterExpr `json:"scopeFilters,omitempty"`
+	ScopeNote    string               `json:"scopeNote,omitempty"`
 }
 
 // Analyze — tek servis: katalog → tespit → çözümleme → okuma → dedektör.
 // Kip off ise yalnız profil (grafikler için) döner, sinyal okunmaz.
 // Dedektör yalnız .NET'te koşar (JVM'in GC kuralları evaluator'da ayrı).
 func Analyze(ctx context.Context, r MetricReader, service, language, runtimeName string, th Thresholds, now time.Time) (Report, error) {
+	return AnalyzeWith(ctx, r, service, language, runtimeName, th, now, AnalyzeOpts{})
+}
+
+// AnalyzeOpts — follow-up 2026-11-21.
+type AnalyzeOpts struct {
+	// Pods — servisin varlık pod'ları (pod adı = host_name). Doluysa HikariCP
+	// serileri bu pod'larla okunur (service_name taşımazlar).
+	Pods []string
+	// Filters — uygulanmış ortam / küme kapsamı (her sorguya eklenir).
+	Filters []chstore.FilterExpr
+	// ScopeFor — follow-up 2026-11-21: ortam / küme kapsamı, çözülen ilk
+	// runtime metriğinin KENDİ etiket değerleriyle (API: resolveMetricEnvScope
+	// Mapped). Filters'a eklenir; uygulanamazsa note (kapsamsız okunur).
+	ScopeFor func(ctx context.Context, probe string) (filters []chstore.FilterExpr, note string)
+}
+
+// AnalyzeWith — Analyze + pod kapsamlı HikariCP + ortam kapsamı.
+func AnalyzeWith(ctx context.Context, r MetricReader, service, language, runtimeName string, th Thresholds, now time.Time, o AnalyzeOpts) (Report, error) {
 	rep := Report{Service: service, Mode: th.Mode, Signals: []Signal{}, AtNs: now.UnixNano()}
 	cat, err := Catalog(ctx, r, service)
 	if err != nil {
@@ -238,14 +293,41 @@ func Analyze(ctx context.Context, r MetricReader, service, language, runtimeName
 	}
 	rt := DetectRuntime(language, runtimeName, cat)
 	rep.Profile = Resolve(rt, cat)
-	if th.Mode == chstore.RuntimeSignalsOff || !hasDetectSignal(rep.Profile) {
+	if o.ScopeFor != nil && len(rep.Profile.Signals) > 0 {
+		fs, note := o.ScopeFor(ctx, rep.Profile.Signals[0].Metric)
+		if note != "" {
+			rep.ScopeNote = note
+		}
+		if len(fs) > 0 {
+			rep.ScopeFilters = fs
+			o.Filters = append(append([]chstore.FilterExpr{}, o.Filters...), fs...)
+		}
+	}
+	// HikariCP: katalogda servis süzgeciyle görünmez; varlık pod'larıyla
+	// çözülür + okunur (kip off'ta yalnız çözüm — grafikler çizer).
+	var hikariPods []PodData
+	if len(o.Pods) > 0 {
+		hres, hdata, hnotes, herr := readHikariFor(ctx, r, service, o, now, th.Mode != chstore.RuntimeSignalsOff)
+		rep.Profile.Signals = append(rep.Profile.Signals, hres...)
+		rep.Notes = append(rep.Notes, hnotes...)
+		if herr != nil {
+			rep.Notes = append(rep.Notes, "HikariCP okunamadı: "+herr.Error())
+		}
+		hikariPods = hdata
+	}
+	if th.Mode == chstore.RuntimeSignalsOff || (!hasDetectSignal(rep.Profile) && len(hikariPods) == 0) {
 		return rep, nil
 	}
-	pods, notes, err := ReadPods(ctx, r, service, rep.Profile, now)
-	rep.Notes = notes
-	if err != nil {
-		return rep, err
+	var pods []PodData
+	if hasDetectSignal(rep.Profile) {
+		var notes []string
+		pods, notes, err = readPodsWith(ctx, r, service, rep.Profile, now, readOpts{filters: o.Filters})
+		rep.Notes = append(rep.Notes, notes...)
+		if err != nil {
+			return rep, err
+		}
 	}
+	pods = mergePods(pods, hikariPods)
 	rep.Pods = len(pods)
 	if sigs := Evaluate(pods, now.UnixNano(), th); sigs != nil {
 		rep.Signals = sigs

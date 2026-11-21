@@ -92,6 +92,7 @@ func routePrefixTotalsQuery(service, prefix string, prevFrom, from, to time.Time
 func (s *Store) RoutePrefixRED(ctx context.Context, service, prefix string, from, to time.Time, limit int) (RoutePrefixREDResult, error) {
 	var out RoutePrefixREDResult
 	q, args := routePrefixRowsQuery(service, prefix, from, to, limit)
+	q = s.weighSQL(q, from, "spanmetrics_1m") // v0.10.2435 — sampling-weight Phase 2
 	rows, err := s.conn.Query(ctx, q, args...)
 	if err != nil {
 		return out, err
@@ -113,6 +114,7 @@ func (s *Store) RoutePrefixRED(ctx context.Context, service, prefix string, from
 	}
 	prevFrom := from.Add(-to.Sub(from))
 	tq, targs := routePrefixTotalsQuery(service, prefix, prevFrom, from, to)
+	tq = s.weighSQL(tq, prevFrom, "spanmetrics_1m") // v0.10.2435 — sampling-weight Phase 2
 	trows, err := s.conn.Query(ctx, tq, targs...)
 	if err != nil {
 		return out, err

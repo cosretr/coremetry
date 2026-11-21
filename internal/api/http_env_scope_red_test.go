@@ -74,7 +74,7 @@ func TestServiceMetricREDEnvScopeOnVM_v0101377(t *testing.T) {
 	}
 
 	// Çözüldü → süzgeç her sorguda, EnvAmbiguous=false, not etiketi söyler.
-	p := serviceMetricREDPlan{Service: "orders-api-prod", From: from, To: to, Mdp: 300, RateWin: 180, Env: "eu-a"}
+	p := serviceMetricREDPlan{Service: "orders-api-prod", From: from, To: to, Mdp: 300, RateWin: 180, Env: "eu-a", ShowInfra: true} // v0.10.2434 — tesisat süzgeci ayrı test
 	p.EnvScope = s.serviceMetricREDEnvScope(context.Background(), src, p.Env, p.To)
 	resp, err := buildServiceMetricRED(context.Background(), src, id, p)
 	if err != nil {

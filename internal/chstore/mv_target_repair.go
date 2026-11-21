@@ -319,7 +319,7 @@ func (s *Store) repairMVTargetOn(ctx context.Context, conn, peer driver.Conn, ro
 		if !ok {
 			return nil, fmt.Errorf("%s için kanonik DDL yok (migrations/*.sql MV'si) ve Replicated eş de bulunamadı — elle onar", row.View)
 		}
-		st, rerr := s.rebuildMVOnConn(ctx, conn, row.View, name)
+		st, rerr := s.rebuildMVOnConn(ctx, conn, row.View, name, mvPeerIDs{})
 		steps = append(steps, st...)
 		if rerr != nil {
 			return steps, rerr

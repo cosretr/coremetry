@@ -6,6 +6,7 @@
 // (/runtime-signals profile.runtime). Her runtime'a özgü yüzey (JVM heap
 // kartı, JMX, .NET paneli) bu aileye göre açılır.
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router';
 import { api } from '@/lib/api';
 
 export type RuntimeFamily = 'jvm' | 'dotnet' | 'go' | 'nodejs' | 'python';
@@ -34,11 +35,20 @@ export function familyFromProfile(rt: string | undefined): RuntimeFamily | null 
   return rt === 'jvm' || rt === 'dotnet' || rt === 'go' || rt === 'nodejs' || rt === 'python' ? rt : null;
 }
 
-/** Runtime profili + sinyaller (sunucu 60 s önbellekli). */
+/** Follow-up 2026-11-21 — Topbar ?env= / ?cluster= kapsamı (URL kaynak-of-truth;
+ *  tüm runtime yüzeyleri aynı anahtarı paylaşsın diye tek yerden). */
+export function useRuntimeScope(): { env: string; cluster: string } {
+  const [params] = useSearchParams();
+  return { env: params.get('env') ?? '', cluster: params.get('cluster') ?? '' };
+}
+
+/** Runtime profili + sinyaller (sunucu 60 s önbellekli). Kapsam çözümü
+ *  sunucuda: yanıtın scopeFilters'ı grafik sorgularına aynen eklenir. */
 export function useRuntimeProfile(service: string, enabled = true) {
+  const { env, cluster } = useRuntimeScope();
   return useQuery({
-    queryKey: ['svc-runtime-signals', service],
-    queryFn: () => api.serviceRuntimeSignals(service),
+    queryKey: ['svc-runtime-signals', service, env, cluster],
+    queryFn: () => api.serviceRuntimeSignals(service, { env, cluster }),
     enabled: !!service && enabled,
     staleTime: 60_000,
   });

@@ -12,7 +12,7 @@ describe('Overview HTTP Status paneli', () => {
     expect(src).toContain('statusCodeRateQuery(service,');
     // v0.10.1377 — env seçiliyse ortam eşleyicisi çözülene dek bekler.
     expect(src).toContain("enabled: metricMode && envReady,");
-    expect(src).toContain('statusCodeRateQuery(service, Math.max(60, (to - from) / 1e9), envSel, family)'); // v0.10.1429 aile
+    expect(src).toContain('statusCodeRateQuery(service, Math.max(60, (to - from) / 1e9), envSel, family, infraEx)'); // v0.10.1429 aile; v0.10.2434 tesisat süzgeci
     // v0.10.2315 — başlıklar katalogda (ov.httpStatusTitle / ov.failTitleMetric); TR değerleri aynen.
     expect(src).toContain("title={showHttpStatus ? tl('ov.httpStatusTitle', lang) : metricMode ? tl('ov.failTitleMetric', lang)");
     expect(cat).toContain("'ov.httpStatusTitle': 'HTTP Status · metrik',");

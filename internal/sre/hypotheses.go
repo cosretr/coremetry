@@ -37,6 +37,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcptools"
+	"github.com/cilcenk/coremetry/internal/runtimesig"
 )
 
 // Hipotez türleri (kayıttaki Hypothesis.Kind; FE aynası hypothesisView.ts).
@@ -164,6 +165,9 @@ var hypothesisTable = []hypothesisSpec{
 		{"downstream_worse", 0.40, chkDownstreamWorse},
 		{"synth_agrees", 0.20, chkSynthAgrees},
 		{"downstream_errors", 0.15, chkDownstreamErrors},
+		// Follow-up 2026-11-21 — VM client histogramı (örnekleme öncesi); yalnız
+		// okunduğunda listelenir (checkApplies), diğer servislerin skoru aynen.
+		{"downstream_exact", 0.25, chkDownstreamExact},
 	}},
 	{HypExternal, "external", "Dış servis kesintisi", 0.10, []check{
 		{"external_problem_open", 0.45, chkExternalProblem},
@@ -330,6 +334,8 @@ func (ev Evidence) refAt(step string, i int) string {
 const (
 	depsEvTopology = 0
 	depsEvChanges  = 1
+	// depsEvExact — follow-up 2026-11-21: giden RED künyesi (yalnız okunduğunda).
+	depsEvExact = 3
 )
 
 const (
@@ -781,6 +787,66 @@ func chkDownstreamErrors(ev Evidence) (int, string, string) {
 		return -1, "aşağı akış çağrılarında hata < %1", ref
 	}
 	return 0, "aşağı akış hataları eşik altı", ref
+}
+
+// Tam sayım eşikleri: hata oranı ≥ %5 ve ≥ 0,1 istek/sn (pencerede ~30+
+// çağrı); gecikme payı: hedef p95 ≥ servis p99'unun yarısı VE servis p99'u
+// ≥ %20 artmış.
+const (
+	exactErrPct     = 5.0
+	exactErrMinRPS  = 0.1
+	exactCleanPct   = 1.0
+	exactLatShare   = 0.5
+	exactP99RisePct = 20.0
+)
+
+// chkDownstreamExact — follow-up 2026-11-21: hedef başına giden RED, VM
+// HTTP client histogramından (prod span'leri upstream örneklenmiş; bu sayım
+// örnekleme ÖNCESİ). Hata ya da gecikme baskınlığı → +1; tüm hedefler temiz
+// → -1; aksi 0.
+func chkDownstreamExact(ev Evidence) (int, string, string) {
+	df := ev.Facts.Deps
+	ref := ev.refAt(stepDeps, depsEvExact)
+	if df == nil || !df.ExactOK {
+		return 0, "giden çağrı tam sayımı okunmadı", ref
+	}
+	if len(df.Exact) == 0 {
+		return 0, "giden HTTP çağrısı yok (client histogramı boş)", ref
+	}
+	name := func(t runtimesig.TargetRED) string {
+		if t.Service != "" {
+			return t.Service + " (" + t.Address + ")"
+		}
+		return t.Address
+	}
+	clean := true
+	for _, t := range df.Exact {
+		if t.ErrorPct >= exactErrPct && t.RPS >= exactErrMinRPS {
+			why := fmt.Sprintf("giden çağrı %s: hata %%%.1f (%.2f istek/sn, tam sayım)", name(t), t.ErrorPct, t.RPS)
+			if t.DominantError != "" {
+				why += fmt.Sprintf(", baskın hata %s (%%%.0f)", t.DominantError, t.DominantErrorPct)
+			}
+			if t.P95Ms >= 0 {
+				why += fmt.Sprintf(", p95 %.0f ms", t.P95Ms)
+			}
+			return 1, why, ref
+		}
+		if t.ErrorPct >= exactCleanPct {
+			clean = false
+		}
+	}
+	if s := df.Subject; s != nil && s.CurP99Ms > 0 && s.P99DeltaPct >= exactP99RisePct {
+		for _, t := range df.Exact {
+			if t.P95Ms >= exactLatShare*s.CurP99Ms {
+				return 1, fmt.Sprintf("giden çağrı %s p95 %.0f ms — servis p99'unun (%.0f ms, +%%%.0f) %%%.0f'i (tam sayım)",
+					name(t), t.P95Ms, s.CurP99Ms, s.P99DeltaPct, t.P95Ms/s.CurP99Ms*100), ref
+			}
+		}
+	}
+	if clean {
+		return -1, fmt.Sprintf("%d giden hedefin hepsinde hata < %%1 (tam sayım)", len(df.Exact)), ref
+	}
+	return 0, "giden çağrı hataları eşik altı (tam sayım)", ref
 }
 
 // ── kontroller: dış servis ──────────────────────────────────────────────────

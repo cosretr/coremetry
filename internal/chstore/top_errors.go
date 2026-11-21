@@ -52,12 +52,12 @@ func (s *Store) TopErrorServices(ctx context.Context, from, to time.Time, servic
 		args = append(args, sv)
 	}
 	args = append(args, limit)
-	return s.scanErrorRanks(ctx, topErrorServicesSQL(len(services)), args)
+	return s.scanErrorRanks(ctx, s.weighSQL(topErrorServicesSQL(len(services)), from, "service_summary_5m"), args) // v0.10.2435 — sampling-weight Phase 2
 }
 
 // TopErrorOperations — bir servisin en çok hata üreten operasyonları.
 func (s *Store) TopErrorOperations(ctx context.Context, service string, from, to time.Time, limit int) ([]ErrorRank, error) {
-	return s.scanErrorRanks(ctx, topErrorOpsSQL(), []any{service, alignBucketStart(from), to, limit})
+	return s.scanErrorRanks(ctx, s.weighSQL(topErrorOpsSQL(), from, "operation_summary_5m"), []any{service, alignBucketStart(from), to, limit}) // v0.10.2435 — sampling-weight Phase 2
 }
 
 func (s *Store) scanErrorRanks(ctx context.Context, q string, args []any) ([]ErrorRank, error) {

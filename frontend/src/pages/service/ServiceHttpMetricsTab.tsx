@@ -20,6 +20,8 @@ import { useMemo, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Badge, Card, MethodBadge, PanelTitle, SelectField } from '@/components/ui';
 import { SectionHead } from '@/components/coremetry/SectionHead';
+import { InfraRoutesToggle } from '@/components/coremetry/InfraRoutesToggle';
+import { useShowInfraRoutes, withInfraExclude } from '@/lib/infraRoutes';
 import { HttpStat, HttpGauge, HttpChartPanel, HttpDonutPanel, HttpEnvScopeBand } from './httpMetricsViz';
 import { Spinner, Empty } from '@/components/Spinner';
 import {
@@ -154,7 +156,10 @@ function FamilySection({ service, win, range, family, envScope, head, tried }: {
   // v0.10.1377 — ortam eşleyicisi; env/cluster yoksa envSel undefined → sorgular bayt bayt eski.
   const envSel = envScope.envSel;
   // v0.10.1976 — healthcheck (ve operatörün diğer "her metrik" route dışlamaları) varsayılan düşer.
-  const routeExclude = useRouteExclusions();
+  const adminExclude = useRouteExclusions();
+  // v0.10.2434 (operatör onaylı) — + tesisat rotaları (health / scrape / ping) varsayılan dışlanır; ?infra=1 gösterir.
+  const [showInfra] = useShowInfraRoutes();
+  const routeExclude = useMemo(() => withInfraExclude(adminExclude, showInfra), [adminExclude, showInfra]);
   const scope = { app: service, envSel, route: fRoute || undefined, method: fMethod || undefined, family, routeExclude };
   const queries = useMemo(() => httpQueries(scope, windowSec), [service, envSel, fRoute, fMethod, windowSec, family, routeExclude]); // eslint-disable-line react-hooks/exhaustive-deps
   const optsExpr = useMemo(() => httpQueries({ app: service, envSel, family, routeExclude }, windowSec).rateByRoute, [service, envSel, windowSec, family, routeExclude]);
@@ -306,6 +311,7 @@ function FamilySection({ service, win, range, family, envScope, head, tried }: {
           {opts.methods.map(m => <option key={m} value={m}>{m}</option>)}
         </SelectField>
         <span className="field-hint">{T.source}</span>
+        {!grpc && <InfraRoutesToggle />}
         {grpc && <Badge tone="info" title={tf('hm.grpcTitle', lang, { m: family.names.count.replace(/_count$/, '_*'), p: family.probe, u: family.unit, s: family.serverErr, c: family.clientErr })}>gRPC</Badge>}
         <HttpEnvScopeBand view={envScope} />
       </div>

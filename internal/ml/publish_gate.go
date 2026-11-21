@@ -335,7 +335,8 @@ func contextImpact(r EventRecord) (run float64, evaluated []string) {
 // volumeImpactGate — hacim kaydında servis etkisi YAN serilerden: hata oranı
 // ya da gecikme üst bandı aşıyorsa etki var (Passed). İkisi de değerlendirilip
 // bant içindeyse etki yok → sınıf telemetry_volume. Biri eksikse ve etki
-// görünmüyorsa değerlendirilemez.
+// görünmüyorsa değerlendirilemez; kayıt bu durumda zaten telemetry_volume
+// (2026-11-21: hacim tek başına service_anomaly değil) ve gateVerdict onu korur.
 func volumeImpactGate(r EventRecord) RecordGate {
 	run, ev := contextImpact(r)
 	g := RecordGate{Name: GateImpact, Passed: run > 0, Value: run, Threshold: float64(r.Snapshot.StepSec) / 60}

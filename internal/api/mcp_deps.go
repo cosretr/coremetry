@@ -57,6 +57,8 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		RuntimePods: router.RuntimePods(),
 		// 2026-11-21 — runtime tespiti + .NET sinyalleri (runtime_signals.go; /runtime-signals ile tek gövde).
 		RuntimeSignals: s.mcpRuntimeSignals,
+		// Follow-up 2026-11-21 — hedef başına giden RED (VM; downstream_red.go ile tek gövde).
+		DownstreamRED: s.mcpDownstreamRED,
 		// v0.10.468 (Faz 2, F2-1) — varlık kataloğu tool'ları: etkin Remote
 		// Cluster'lar + entity_layer bayrağı (nil-güvenli; her ikisi de
 		// yoksa tool'lar dürüst disabled/boş döner).
@@ -248,19 +250,51 @@ func (m mcpClusterMetrics) NetworkTrend(ctx context.Context, cluster string, fro
 // metricsrc'de. Çalışan MetricsQL vmetrics.QueryRecorder ile toplanır (kanıt
 // çipi). Önbellek YOK: araç bütçesi kendi zaman aşımını taşır, sonuç modele
 // gider (cache anahtarı HTTP ucunun).
+// mcpServiceREDFamily — v0.10.2434: VM kaynağında servisin birincil RED
+// ailesi (resolveServiceREDFamily, 60 sn önbellek) → serviceREDIdentityFor
+// girdisi. CH kaynağı / çözüm hatası → "" (bugünkü HTTP kimliği).
+func (s *Server) mcpServiceREDFamily(ctx context.Context, src metricSource, service, env string, to time.Time) string {
+	rd, ok := src.(redFamilyReader)
+	if !ok {
+		return ""
+	}
+	terms := map[string]string{}
+	if env != "" {
+		terms[vmetrics.RoleEnv] = env
+	}
+	fr, err := s.resolveServiceREDFamily(ctx, rd, service, terms, to)
+	if err != nil {
+		return ""
+	}
+	if fam, pres := fr.primaryFamily(); pres != nil && fam.ID != redFamilyHTTP {
+		if fam.Kind == redKindGRPC {
+			return redKindGRPC
+		}
+		return fam.ID
+	}
+	return ""
+}
+
 func (s *Server) mcpServiceMetricRED(ctx context.Context, service, env string, from, to time.Time, mdp int) (mcptools.MetricREDResult, error) {
 	src := s.metricSource()
 	rec := &vmetrics.QueryRecorder{}
 	ctx = vmetrics.WithQueryRecorder(ctx, rec)
 	out := mcptools.MetricREDResult{Source: src.Name()}
-	id, ok := s.httpMetricIdentity(ctx, src, service, env)
+	// v0.10.2434 — kimlik aile çözücüsünün birincilinden (Overview ile aynı karar):
+	// eski semconv / gRPC / spanmetrics servisleri artık "metrik yok → span"a düşmez.
+	family := s.mcpServiceREDFamily(ctx, src, service, env, to)
+	id, ok := s.serviceREDIdentityFor(ctx, src, service, env, family)
 	if !ok {
 		out.Tried = id.Tried
 		out.Queries = rec.Queries()
 		return out, nil
 	}
-	p := serviceMetricREDPlan{Service: service, From: from, To: to, Mdp: mdp, RateWin: 180, Env: env}
-	p.EnvScope = s.serviceMetricREDEnvScope(ctx, src, env, to) // v0.10.1377 — Overview ile aynı env süzgeci
+	p := serviceMetricREDPlan{Service: service, From: from, To: to, Mdp: mdp, RateWin: 180, Env: env, Family: family}
+	if id.Family != nil {
+		p.EnvScope = s.serviceMetricREDEnvScopeFor(ctx, src, env, to, id.Family.Probe)
+	} else {
+		p.EnvScope = s.serviceMetricREDEnvScope(ctx, src, env, to) // v0.10.1377 — Overview ile aynı env süzgeci
+	}
 	resp, err := buildServiceMetricRED(ctx, src, id, p)
 	out.Queries = rec.Queries()
 	if err != nil {

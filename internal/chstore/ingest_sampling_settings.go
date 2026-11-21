@@ -112,8 +112,13 @@ type IngestSampling struct {
 	// SampleRate) when present. Nil = true.
 	HonorAttributes *bool          `json:"honorAttributes,omitempty"`
 	Rules           []SamplingRule `json:"rules"`
-	UpdatedBy       string         `json:"updatedBy,omitempty"`
-	UpdatedAt       time.Time      `json:"updatedAt,omitzero"`
+	// OnSince — when mode last switched to "on" (v0.10.2435, Phase 2):
+	// weighted reads, the UI "sampling-corrected from …" marker and the
+	// error-rate baseline reset start here. Zero while not on. Server-owned:
+	// SaveIngestSampling stamps it, a client value is ignored.
+	OnSince   time.Time `json:"onSince,omitzero"`
+	UpdatedBy string    `json:"updatedBy,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt,omitzero"`
 }
 
 // Active — the converter derives weights (shadow or on).
@@ -256,6 +261,11 @@ func parseIngestSampling(raw []byte) (IngestSampling, bool) {
 
 // SaveIngestSampling — writes the normalized blob and publishes it here.
 func (s *Store) SaveIngestSampling(ctx context.Context, c IngestSampling) (IngestSampling, error) {
+	var prev IngestSampling
+	if raw, err := s.GetSetting(WithoutSettingsSnapshot(ctx), IngestSamplingKey); err == nil {
+		prev, _ = parseIngestSampling(raw)
+	}
+	c.OnSince = samplingOnSince(prev, c.Mode, time.Now())
 	n := NormalizeIngestSampling(c)
 	raw, err := json.Marshal(n)
 	if err != nil {
@@ -266,6 +276,18 @@ func (s *Store) SaveIngestSampling(ctx context.Context, c IngestSampling) (Inges
 	}
 	SetIngestSampling(n)
 	return n, nil
+}
+
+// samplingOnSince — SAF: keeps the previous OnSince while mode stays on,
+// stamps now on an off/shadow → on transition, clears it otherwise.
+func samplingOnSince(prev IngestSampling, newMode string, now time.Time) time.Time {
+	if strings.ToLower(strings.TrimSpace(newMode)) != SamplingModeOn {
+		return time.Time{}
+	}
+	if prev.Mode == SamplingModeOn && !prev.OnSince.IsZero() {
+		return prev.OnSince
+	}
+	return now.UTC().Truncate(time.Second)
 }
 
 // LoadIngestSampling — boot + 30 s refresh. A corrupt blob keeps the last value.

@@ -16,6 +16,7 @@ import (
 type stats struct {
 	ticks, skipped, lastUnix, lastMs, lastESMs, esQueries, events, series, lastCHMs atomic.Int64
 	supImpact, supRegime, supBatch, vmQueries, partial, docs                        atomic.Int64
+	supVolume                                                                       atomic.Int64 // 2026-11-21: metrik hacim kapısının düşürdüğü kova (kümülatif)
 	earlyTicks, probes                                                              atomic.Int64 // v0.10.2377 (I2): erken tik / etki yoklaması (kümülatif)
 	mu                                                                              sync.Mutex
 	esSamples                                                                       []int64
@@ -145,7 +146,8 @@ func (s *stats) snapshot(placement string, enabled, leader, tableReady bool) chs
 		LastDurationMs: s.lastMs.Load(), LastESMs: s.lastESMs.Load(), ESP95Ms: p95,
 		ESQueries: s.esQueries.Load(), Events: s.events.Load(), SeriesInMemory: s.series.Load(), LastCHMs: s.lastCHMs.Load(),
 		VMQueries: s.vmQueries.Load(), Partial: s.partial.Load(), LastDocs: s.docs.Load(), SuppressedImpact: s.supImpact.Load(), SuppressedRegime: s.supRegime.Load(), SuppressedBatch: s.supBatch.Load(),
-		LastError: lastErr, LastKinds: lastKinds, RecordInvalid: recInvalid,
+		SuppressedVolume: s.supVolume.Load(),
+		LastError:        lastErr, LastKinds: lastKinds, RecordInvalid: recInvalid,
 	}
 }
 

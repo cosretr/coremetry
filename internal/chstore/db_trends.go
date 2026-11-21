@@ -134,7 +134,7 @@ func (s *Store) GetDBTrends(ctx context.Context, from, to time.Time) ([]DBTrend,
 	// countIfMerge for the error state because the MV defines it
 	// as countIfState(status_code = 'error'); countMerge would
 	// silently read the wrong aggregate.
-	rows, err := s.conn.Query(ctx, `
+	rows, err := s.conn.Query(ctx, s.weighSQL(` // v0.10.2435 — sampling-weight Phase 2
 		SELECT db_system,
 		       instance,
 		       db_name,
@@ -147,7 +147,7 @@ func (s *Store) GetDBTrends(ctx context.Context, from, to time.Time) ([]DBTrend,
 		GROUP BY db_system, instance, db_name, time_bucket
 		ORDER BY db_system, instance, db_name, time_bucket
 		LIMIT 200000
-		SETTINGS max_execution_time = 15`, bucketStart, to)
+		SETTINGS max_execution_time = 15`, bucketStart, "db_summary_5m"), bucketStart, to)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +231,7 @@ func (s *Store) DbNamesBySystem(ctx context.Context, from, to time.Time) (map[st
 		to = time.Now()
 	}
 	bucketStart := from.Truncate(5 * time.Minute)
-	rows, err := s.conn.Query(ctx, `
+	rows, err := s.conn.Query(ctx, s.weighSQL(` // v0.10.2435 — sampling-weight Phase 2
 		SELECT db_system, db_name, countMerge(span_count_state) AS calls
 		FROM db_summary_5m
 		WHERE time_bucket >= ? AND time_bucket < ?
@@ -239,7 +239,7 @@ func (s *Store) DbNamesBySystem(ctx context.Context, from, to time.Time) (map[st
 		GROUP BY db_system, db_name
 		ORDER BY db_system, calls DESC
 		LIMIT 5000
-		SETTINGS max_execution_time = 10`, bucketStart, to)
+		SETTINGS max_execution_time = 10`, bucketStart, "db_summary_5m"), bucketStart, to)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +280,7 @@ func (s *Store) GetMessagingTrends(ctx context.Context, from, to time.Time) ([]D
 		to = time.Now()
 	}
 	bucketStart := from.Truncate(5 * time.Minute)
-	rows, err := s.conn.Query(ctx, `
+	rows, err := s.conn.Query(ctx, s.weighSQL(` // v0.10.2435 — sampling-weight Phase 2
 		SELECT msg_system,
 		       cluster,
 		       destination,
@@ -293,7 +293,7 @@ func (s *Store) GetMessagingTrends(ctx context.Context, from, to time.Time) ([]D
 		GROUP BY msg_system, cluster, destination, time_bucket
 		ORDER BY msg_system, cluster, destination, time_bucket
 		LIMIT 200000
-		SETTINGS max_execution_time = 15`, bucketStart, to)
+		SETTINGS max_execution_time = 15`, bucketStart, "messaging_summary_5m"), bucketStart, to)
 	if err != nil {
 		return nil, err
 	}

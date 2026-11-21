@@ -682,7 +682,8 @@ func (s *Store) servicesAggFrom(ctx context.Context, source, cluster, env string
 	aggHaving, havingArgs := display.having("spans", "errs", "p99_ms")
 	args = append(args, havingArgs...)
 
-	rows, err := s.telemetryReadConn().Query(ctx, servicesAggSQL(source, scopeClause, nameClause, aggHaving, servicesAggSortExpr(sort, dir), limitClause), args...)
+	// v0.10.2435 — sampling-weight Phase 2: represented spans when on.
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(servicesAggSQL(source, scopeClause, nameClause, aggHaving, servicesAggSortExpr(sort, dir), limitClause), from, source), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -735,7 +736,7 @@ func (s *Store) GetServiceSummary5mFor(ctx context.Context, services []string, f
 		svcFilter = " AND service_name IN ?"
 		args = append(args, services)
 	}
-	rows, err := s.telemetryReadConn().Query(ctx, `
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(`
 		SELECT
 		  service_name,
 		  toUnixTimestamp64Nano(toDateTime64(time_bucket, 9)) AS bucket_ns,
@@ -749,7 +750,7 @@ func (s *Store) GetServiceSummary5mFor(ctx context.Context, services []string, f
 		WHERE time_bucket >= ? AND time_bucket < ?`+svcFilter+`
 		GROUP BY service_name, time_bucket
 		ORDER BY service_name, time_bucket
-		SETTINGS max_execution_time = 25`, args...)
+		SETTINGS max_execution_time = 25`, from, "service_summary_5m"), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -818,7 +819,7 @@ func (s *Store) GetServiceSummarySlots(ctx context.Context, services []string, f
 	if len(services) > 0 {
 		args = append(args, services)
 	}
-	rows, err := s.telemetryReadConn().Query(ctx, serviceSummarySlotsSQL(len(services) > 0), args...)
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(serviceSummarySlotsSQL(len(services) > 0), from, "service_summary_5m"), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -861,7 +862,7 @@ func (s *Store) GetServiceSummary5m(ctx context.Context, service string, from, t
 	// strips sub-second precision regardless of input type), so explicitly
 	// widen to DateTime64(9) before extracting nanoseconds. Otherwise CH
 	// errors with "illegal type ... Expected: DateTime64, got: DateTime".
-	rows, err := s.telemetryReadConn().Query(ctx, `
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(`
 		SELECT
 		  service_name,
 		  toUnixTimestamp64Nano(toDateTime64(time_bucket, 9)) AS bucket_ns,
@@ -874,7 +875,7 @@ func (s *Store) GetServiceSummary5m(ctx context.Context, service string, from, t
 		FROM service_summary_5m
 		WHERE time_bucket >= ? AND time_bucket < ?`+svcFilter+`
 		GROUP BY service_name, time_bucket
-		ORDER BY service_name, time_bucket`, args...)
+		ORDER BY service_name, time_bucket`, from, "service_summary_5m"), args...)
 	if err != nil {
 		return nil, err
 	}

@@ -472,7 +472,7 @@ func TestMVLeftoverActionPins(t *testing.T) {
 		"storage == view",            // kanonik depolama adı düşürülmez
 		"s.mvGuardedOff(base)",       // guarded MV'nin _local'i hiç doğmaz
 		"distributedWrapperStmt(",    // sarmalayıcı ifadesi (tek gövde: adaptDDL)
-		"s.adaptDDL(canonicalMVDDL(base))",
+		"s.adaptDDL(s.liveMVDDL(base))",
 		"s.MVLeftovers(ctx, rep.Targets)",  // TAZE tespit + hedef kümesi (v0.10.833)
 		"s.mvCoverageReport(ctx, false)",   // TAZE kapsama; kapaklı SÜPÜRME atlanır (D)
 		"s.mvHardenCell(ctx, storageCell,", // kapının hedef kolu ÖLÇÜLÜR

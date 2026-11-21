@@ -832,6 +832,10 @@ func (s *Store) ReplicaConsistency(ctx context.Context) (*ReplicaConsistencyRepo
 		return nil, fmt.Errorf("system.parts: %w", err) // yarım sayım = sahte ıraksama
 	}
 
+	// v0.10.2434 — host başına kurulmuş MV'lerin farklı adlı iç tabloları tek
+	// satırda (sahip view / ZK yolu); parça sayımından SONRA (sayım adla eşler).
+	out.Notes = append(out.Notes, innerAliasNotes(mergeInnerAliases(byTable, engineOf, innerOwners), innerOwners)...)
+
 	// v0.10.965 — state tablolarının ZK yolu hükmü: aynı okumalardan, SAF.
 	out.StatePaths = statePathCheckFor(byTable, engineOf, hostNames, len(hostRows), s.zkPrefix())
 

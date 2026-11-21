@@ -39,6 +39,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/infraroutes"
 )
 
 func init() { registerRoutesExtra("service-metric-red", (*Server).registerServiceMetricREDRoutes) }
@@ -63,6 +64,18 @@ type serviceMetricREDPlan struct {
 	// histogramı (ilk var olan aile: rpc.server.duration ms / rpc.server.call.duration s).
 	// Overview, aile çözücüsü (GET /red-family) gRPC derse bunu geçer.
 	Family string
+	// ShowInfra — v0.10.2434: true = tesisat rotaları (health / scrape / ping)
+	// DAHİL (?infra=1); varsayılan false = HTTP ailelerinde dışlanır.
+	ShowInfra bool
+}
+
+// infraRouteFilter — SAF (v0.10.2434): HTTP türü ailede tesisat rotası süzgeci
+// (rota anahtarına `!~ .*(?:…).*`); gRPC'de / gösterilirken nil.
+func infraRouteFilter(fam redFamily, show bool) *chstore.FilterExpr {
+	if show || fam.Kind != redKindHTTP || fam.RouteKey == "" {
+		return nil
+	}
+	return &chstore.FilterExpr{Key: fam.RouteKey, Op: "!~", Values: []string{infraroutes.RouteRegex()}}
 }
 
 // v0.10.1350 — v2: zarf statusState/statusReason taşır, hata veri güdümlü.
@@ -71,8 +84,8 @@ type serviceMetricREDPlan struct {
 // değişirse eski süzgeç servis edilmesin); CH'de "-".
 // v0.10.1429 — v4: aile anahtarda (fam=); zarf family/familyId/routeLabel taşır.
 func serviceMetricREDKey(p serviceMetricREDPlan, srcName, mx, lm string) string {
-	return fmt.Sprintf("svc-metric-red:v4:src=%s:%s:%s:mdp%d:rw%d:env=%s:mx=%s:lm=%s:fam=%s",
-		srcName, p.Service, cacheBucket(p.From, p.To), p.Mdp, p.RateWin, p.Env, mx, lm, p.Family)
+	return fmt.Sprintf("svc-metric-red:v5:src=%s:%s:%s:mdp%d:rw%d:env=%s:mx=%s:lm=%s:fam=%s:infra=%t",
+		srcName, p.Service, cacheBucket(p.From, p.To), p.Mdp, p.RateWin, p.Env, mx, lm, p.Family, p.ShowInfra)
 }
 
 // serviceMetricREDLabelDigest — v0.10.1377: anahtarın lm bileşeni.
@@ -144,6 +157,8 @@ type serviceMetricREDResponse struct {
 	Family     string `json:"family,omitempty"`
 	FamilyID   string `json:"familyId,omitempty"`
 	RouteLabel string `json:"routeLabel,omitempty"`
+	// InfraExcluded — v0.10.2434: tesisat rotası süzgeci uygulandı.
+	InfraExcluded bool `json:"infraExcluded,omitempty"`
 }
 
 // seriesStep — noktalar arası en küçük pozitif aralık (sn); tek nokta → 0.
@@ -275,6 +290,45 @@ func grpcMetricIdentity(ctx context.Context, src metricSource, service string) (
 	return id, true
 }
 
+// familyMetricIdentity — v0.10.2434: tek (gRPC olmayan) ailenin kimliği —
+// http_legacy (eski semconv ms) ya da spanmetrics (connector). Ad ailenin
+// tam tabanı (VM) / OTel adı (CH); sabit süzgeç (spanmetrics giriş span'leri)
+// Filters'ta. Metrik kaynakta yoksa ok=false + denenen.
+func familyMetricIdentity(ctx context.Context, src metricSource, service string, fam redFamily) (httpMetricIdentity, bool) {
+	name := fam.metricName(src)
+	id := httpMetricIdentity{Service: service, MatchedBy: "service_name", Tried: []string{name}}
+	if ok, err := src.MetricExists(ctx, name); err != nil || !ok {
+		return id, false
+	}
+	f := fam
+	id.Family, id.Metric, id.RTMetric = &f, name, src.LatencyMetricName(name)
+	id.MatchedBy, id.Instrument, id.Filters = "family:"+fam.ID, "histogram", fam.filters()
+	return id, true
+}
+
+// serviceREDIdentityFor — v0.10.2434: ?family= / çözümün birincil aile kimliği →
+// kimlik. "grpc" = ilk var olan gRPC ailesi; http_legacy / spanmetrics = o aile;
+// diğer her değer (boş, "http") bugünkü HTTP kimliği (bayt bayt).
+func (s *Server) serviceREDIdentityFor(ctx context.Context, src metricSource, service, env, family string) (httpMetricIdentity, bool) {
+	switch family {
+	case redKindGRPC, redFamilyGRPCLegacy, redFamilyGRPCStable:
+		return grpcMetricIdentity(ctx, src, service)
+	case redFamilyHTTPLegacy, redFamilySpanMetrics:
+		f, _ := redFamilyByID(family)
+		return familyMetricIdentity(ctx, src, service, f)
+	}
+	return s.httpMetricIdentity(ctx, src, service, env)
+}
+
+// serviceREDFamilyParam — SAF: ?family= değeri → plan ailesi ("" = HTTP; bilinmeyen yok sayılır, 400 değil).
+func serviceREDFamilyParam(v string) string {
+	switch v {
+	case redKindGRPC, redFamilyHTTPLegacy, redFamilySpanMetrics:
+		return v
+	}
+	return ""
+}
+
 func (s *Server) httpMetricIdentity(ctx context.Context, src metricSource, service, env string) (httpMetricIdentity, bool) {
 	id := httpMetricIdentity{Service: service, MatchedBy: "service_name"}
 	if service != "" {
@@ -343,6 +397,12 @@ func buildServiceMetricRED(ctx context.Context, src metricSource, id httpMetricI
 	base := chstore.MetricQueryFilter{
 		Name: id.Metric, Service: id.Service, Filters: id.Filters,
 		From: p.From, To: p.To, MaxDataPoints: p.Mdp, RateWindowSec: p.RateWin,
+	}
+	// v0.10.2434 (operatör onaylı) — tesisat rotaları (health / scrape / ping)
+	// toplamlardan varsayılan dışlanır: rota etiketine `!~` (etiketsiz seri korunur).
+	if f := infraRouteFilter(fam, p.ShowInfra); f != nil {
+		base.Filters = append(append([]chstore.FilterExpr(nil), base.Filters...), *f)
+		resp.InfraExcluded = true
 	}
 	switch {
 	case p.Env != "" && p.EnvScope != nil:
@@ -439,6 +499,12 @@ func serviceMetricREDNote(r serviceMetricREDResponse) string {
 	if r.Family == redKindGRPC {
 		b.WriteString(" Aile: gRPC sunucu histogramı (servis HTTP sunucu histogramı yazmıyor); route kırılımı rpc.method.")
 	}
+	switch r.FamilyID { // v0.10.2434
+	case redFamilyHTTPLegacy:
+		b.WriteString(" Aile: ESKİ semconv HTTP sunucu histogramı (http.server.duration, ms; durum http_status_code).")
+	case redFamilySpanMetrics:
+		b.WriteString(" Aile: gateway spanmetrics connector'ı (traces_span_metrics_*, örneklemeden ÖNCE sayılır; yalnız SERVER/CONSUMER span'leri) — servis uygulama histogramı yazmıyor.")
+	}
 	b.WriteString(statusLabelNoteFamily(r.StatusState, r.StatusKey, r.StatusReason, r.Source, "Failure rate", "", fam))
 	if r.LatencyUnitKnown {
 		// v0.10.1360 — grafik = adım serisi, karo = pencere değeri (Overview
@@ -450,6 +516,9 @@ func serviceMetricREDNote(r serviceMetricREDResponse) string {
 		b.WriteString(".")
 	} else {
 		b.WriteString(" Süre birimi BİLİNMİYOR: P50/P95/P99 metrikten verilmedi, karo span'a düşer.")
+	}
+	if r.InfraExcluded { // v0.10.2434
+		b.WriteString(" Tesisat rotaları (health / readiness / Prometheus scrape / ping) toplamlardan DIŞLANDI (?infra=1 gösterir); rota etiketi olmayan seriler korunur.")
 	}
 	b.WriteString(serviceMetricREDEnvNote(r))
 	if len(r.Partial) > 0 {
@@ -499,9 +568,9 @@ func (s *Server) getServiceMetricRED(w http.ResponseWriter, r *http.Request) {
 	}
 	p := serviceMetricREDPlan{Service: name, From: from, To: to, Mdp: mdp, RateWin: rateWin, Env: strings.TrimSpace(r.URL.Query().Get("env"))}
 	// v0.10.1429 — ?family=grpc: gRPC sunucu histogramı kimliği; başka değer yok sayılır (400 değil).
-	if r.URL.Query().Get("family") == redKindGRPC {
-		p.Family = redKindGRPC
-	}
+	// v0.10.2434 — + http_legacy | spanmetrics (aile çözücüsünün birincili).
+	p.Family = serviceREDFamilyParam(r.URL.Query().Get("family"))
+	p.ShowInfra = r.URL.Query().Get("infra") == "1" // v0.10.2434 — tesisat rotaları dahil
 	src, err := s.metricSourceFor(r)
 	if err != nil {
 		writeErr(w, err)
@@ -510,17 +579,13 @@ func (s *Server) getServiceMetricRED(w http.ResponseWriter, r *http.Request) {
 	mx := s.store.MetricExclusions().Digest()
 	key := serviceMetricREDKey(p, src.Name(), mx, serviceMetricREDLabelDigest(src))
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		var id httpMetricIdentity
-		var ok bool
-		if p.Family == redKindGRPC {
-			id, ok = grpcMetricIdentity(ctx, src, name)
-		} else {
-			id, ok = s.httpMetricIdentity(ctx, src, name, p.Env)
-		}
+		id, ok := s.serviceREDIdentityFor(ctx, src, name, p.Env, p.Family)
 		if !ok {
 			resp := serviceMetricREDResponse{Service: name, Source: src.Name(), Tried: id.Tried, Series: map[string][]chstore.SpanMetricSeries{}}
 			if p.Family == redKindGRPC {
 				resp.Family = redKindGRPC
+			} else if p.Family != "" {
+				resp.Family, resp.FamilyID = redKindHTTP, p.Family
 			}
 			resp.Note = serviceMetricREDNote(resp)
 			return resp, nil

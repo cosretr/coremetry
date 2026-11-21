@@ -60,7 +60,7 @@ export function infraSentence(inp: InfraSummaryInput): string {
   return `${head} ${parts.join(', ')}.`;
 }
 
-export type AttentionKind = 'unreachable' | 'notRunning' | 'oom' | 'restarts' | 'entityOnly';
+export type AttentionKind = 'notRunning' | 'oom' | 'restarts';
 export interface AttentionItem {
   kind: AttentionKind;
   tone: 'err' | 'warn';
@@ -74,15 +74,13 @@ export interface AttentionItem {
 export const ATTENTION_MAX = 8;
 
 /**
- * Yalnız sapanlar, önem sırasıyla: yanıt vermeyen cluster → çalışmayan pod →
- * OOM → restart (çoktan aza) → Thanos'ta görünmeyen pod. Bir pod en ağır
- * TEK nedeniyle listelenir. Boş dizi = kutu çizilmez.
+ * Yalnız sapan pod'lar, önem sırasıyla: çalışmayan → OOM → restart (çoktan
+ * aza). Bir pod en ağır TEK nedeniyle listelenir. Boş dizi = kutu çizilmez.
+ * 2026-11-21 (operatör): yanıt vermeyen cluster (üst cümle + tablo satırı
+ * zaten söyler) ve "span'lerde var, Thanos'ta yok" pod'u gürültüydü, çıktı.
  */
 export function infraAttention(inp: InfraSummaryInput): AttentionItem[] {
   const out: AttentionItem[] = [];
-  for (const c of [...inp.unreachable].sort()) {
-    out.push({ kind: 'unreachable', tone: 'err', subject: c, cluster: '', text: 'yanıt vermedi — durum alınamıyor' });
-  }
   const notRunning: AttentionItem[] = [], oom: AttentionItem[] = [];
   const restarts: (AttentionItem & { n: number })[] = [];
   for (const p of inp.pods) {
@@ -97,9 +95,6 @@ export function infraAttention(inp: InfraSummaryInput): AttentionItem[] {
   const byName = (a: AttentionItem, b: AttentionItem) => a.cluster.localeCompare(b.cluster) || a.subject.localeCompare(b.subject);
   out.push(...notRunning.sort(byName), ...oom.sort(byName));
   out.push(...restarts.sort((a, b) => b.n - a.n || byName(a, b)).map(({ n: _n, ...it }) => it));
-  for (const e of [...inp.entityOnly].sort((a, b) => a.cluster.localeCompare(b.cluster) || a.pod.localeCompare(b.pod))) {
-    out.push({ kind: 'entityOnly', tone: 'warn', subject: e.pod, cluster: e.cluster, text: "span'lerde görünüyor, Thanos'ta yok" });
-  }
   return out;
 }
 

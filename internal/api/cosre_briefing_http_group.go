@@ -109,6 +109,13 @@ func briefingSplitKinds(cands []string, calls map[string]chstore.ServerEntryCall
 func briefingKindFamilies(kind string) []redFamily {
 	var out []redFamily
 	for _, f := range redFamilies {
+		// v0.10.2434 — kalem 2 türün aileleri TEK alternasyonda toplar; eski semconv
+		// (http/dup kurulumunda yeni semconv'la birlikte yazılır) ve spanmetrics
+		// (HER servis için yazılır) burada çift sayardı → dışarıda (servis başına
+		// öncelik seçimi resolveServiceREDFamily'de).
+		if f.ID == redFamilyHTTPLegacy || f.ID == redFamilySpanMetrics {
+			continue
+		}
 		if f.Kind == kind {
 			out = append(out, f)
 		}

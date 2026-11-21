@@ -57,7 +57,7 @@ describe('Overview pencere sorguları = windowQueries({ app }, W)', () => {
     expect(src).toContain("import { useHttpPromql, useRedFamily, sectionEnvScope } from '@/lib/queries/httpMetrics';");
     // v0.10.1377 — ortam eşleyicisi geçer; çözüm gelene dek sorgu yok.
     // v0.10.1429 — aile de geçer (gRPC: rpc_server_duration_* adları, ms → /1000); aile çözülene dek sorgu yok.
-    expect(src).toContain('overviewWindowItems(service, ovWinSec, ovWinOffsetSec, envSel, family)');
+    expect(src).toContain('overviewWindowItems(service, ovWinSec, ovWinOffsetSec, envSel, family, infraEx)');
     expect(src).toContain('useHttpPromql(ovWinItems, { from, to }, metricMode && !!service && envReady)');
     expect(src).toContain("useRedFamily(service, env, '', to, !!service && wantMetric)");
     expect(src).toContain('const envReady = httpEnvScopeReady(envScope) && fam.ready;');

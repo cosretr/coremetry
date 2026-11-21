@@ -360,7 +360,9 @@ func (s *Server) resolveMetricEnvScopeMapped(ctx context.Context, vm httpEnvLabe
 					clusters = vals
 				}
 			}
-			m = vmetrics.MatchEnvRole(want, live, clusters, nil)
+			// Follow-up 2026-11-21 — yalnız-küme değerleri (deployment_environment_name
+			// = "<küme>") küme varlığının ortamıyla eşlenir (cluster_env_map.go).
+			m = vmetrics.MatchEnvRole(want, live, clusters, s.clusterEnvMap(ctx, to))
 		}
 		if role == vmetrics.RoleCluster && label == el.Label && len(clusterEnvs) > 0 {
 			if cm := matchClusterEnvs(clusterEnvs, live); cm.Tier != vmetrics.EnvTierNone {

@@ -151,6 +151,9 @@ func (s *Store) reprobePromotedAttrs() {
 		}
 		// Ertelenen spanmetrics recreate'i inince exemplar okuma şekli tazelenir.
 		s.probeSpanmetricsExemplarShape(ctx)
+		if !s.hasTopoWeightCols.Load() { // v0.10.2435
+			s.probeTopoWeightCols(ctx)
+		}
 		// v0.10.409 — ai_calls genişletilmiş kolonları da ertelenen DDL ile
 		// iner; görünür görünmez INSERT yeni listeye geçer (ikinci boot
 		// gerekmez — gerekirse hâlâ güvenli).

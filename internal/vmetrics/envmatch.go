@@ -166,6 +166,41 @@ func MatchEnvRole(want string, live, clusters []string, clusterEnv map[string]st
 	return m
 }
 
+// ClusterEnvMap — SAF (follow-up 2026-11-21): cluster varlığının span
+// ortamlarından MatchEnvRole'un clusterEnv haritası (küçük harf küme → ortam).
+// Çift (küme, deploy_env): deploy_env küme adının kendisiyse bilgi yok (atla);
+// `<env>-<küme>` biçimindeyse ortam = önek; aksi hâlde deploy_env aynen. Bir
+// küme birden çok ortama düşerse BELİRSİZ → haritaya girmez (yanlış eşleme
+// yerine eşleme yok).
+func ClusterEnvMap(pairs [][2]string) map[string]string {
+	envs := map[string]map[string]bool{}
+	for _, p := range pairs {
+		c, e := strings.TrimSpace(p[0]), strings.TrimSpace(p[1])
+		if c == "" || e == "" || strings.EqualFold(c, e) {
+			continue
+		}
+		env := e
+		if i := strings.IndexByte(e, '-'); i > 0 && strings.EqualFold(e[i+1:], c) {
+			env = e[:i]
+		}
+		k := strings.ToLower(c)
+		if envs[k] == nil {
+			envs[k] = map[string]bool{}
+		}
+		envs[k][strings.ToLower(env)] = true
+	}
+	out := map[string]string{}
+	for c, set := range envs {
+		if len(set) != 1 {
+			continue
+		}
+		for e := range set {
+			out[c] = e
+		}
+	}
+	return out
+}
+
 // MatchEnvValues — SAF (v0.10.1376): istenen her ad için MatchEnvValue, girdi
 // sırasıyla; ≤6 ad.
 func MatchEnvValues(want, live []string) []EnvMatch {

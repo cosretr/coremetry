@@ -196,6 +196,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/entity"
 	"github.com/cilcenk/coremetry/internal/logstore"
 	"github.com/cilcenk/coremetry/internal/mcp"
+	"github.com/cilcenk/coremetry/internal/runtimesig"
 )
 
 // Deps bundles the data-access handles concrete tools close over.
@@ -217,6 +218,10 @@ type Deps struct {
 	// RuntimeSignals — 2026-11-21: servisin runtime raporu (tespit + .NET sinyalleri;
 	// runtime_signals.go). nil = tarama eski JVM halkasını koşar.
 	RuntimeSignals RuntimeSignalsFunc
+	// DownstreamRED — follow-up 2026-11-21: hedef başına giden çağrı RED'i (VM
+	// HTTP client histogramı, örnekleme öncesi tam sayım; downstream_red.go).
+	// nil = CoSRE bağımlılık adımı yalnız topoloji okur.
+	DownstreamRED func(ctx context.Context, service string, from, to time.Time) (runtimesig.DownstreamReport, error)
 	// Metrics — v0.9.1150. The METRIC read router (ClickHouse or an
 	// external VictoriaMetrics), for the two tools whose reads the
 	// operator can repoint from Settings: query_metric and

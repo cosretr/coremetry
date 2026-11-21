@@ -1285,9 +1285,11 @@ func (d *Detector) fetchAllBuckets(ctx context.Context, metric string, now time.
 	if err != nil {
 		return nil, nil, err
 	}
-	cutoff := now.Add(-time.Duration(historyHours) * time.Hour)
+	// v0.10.2435 — sampling-weight Phase 2: history restarts at the switch
+	// (BaselineFloor) — enoughHistory then waits for weighted buckets.
+	cutoff := chstore.BaselineFloor(now.Add(-time.Duration(historyHours)*time.Hour), "service_summary_5m")
 	upper := lastCompleteBucketStart(now)
-	rows, err := d.store.TelemetryReadConn().Query(ctx, buildAllBucketsQuery(vexpr), cutoff, upper)
+	rows, err := d.store.TelemetryReadConn().Query(ctx, d.store.WeighSQL(buildAllBucketsQuery(vexpr), cutoff, "service_summary_5m"), cutoff, upper) // v0.10.2435 — sampling-weight Phase 2
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1553,7 +1555,14 @@ func (d *Detector) fetchAllSeasonal(ctx context.Context, metric string, at time.
 // dayKey — gün çeşitliliğinin gün anahtarı; nil = UTC günü (t/86400). Takvim
 // okuması yerel günü verir (v0.10.1490).
 func (d *Detector) querySeasonal(ctx context.Context, metric, q string, args []any, minDays int, dayKey func(int64) int64) (map[string][]float64, map[string][]float64, error) {
-	rows, err := d.store.TelemetryReadConn().Query(ctx, q, args...)
+	// v0.10.2435 — sampling-weight Phase 2: same-slot history from before the
+	// switch is unweighted; until minDays of weighted days exist the seasonal
+	// baseline is skipped (callers fall back to the recent-history baseline).
+	if since := chstore.EffectiveWeightedSince("service_summary_5m"); !since.IsZero() &&
+		time.Since(since) < time.Duration(minDays)*24*time.Hour {
+		return map[string][]float64{}, map[string][]float64{}, nil
+	}
+	rows, err := d.store.TelemetryReadConn().Query(ctx, d.store.WeighSQL(q, time.Time{}, "service_summary_5m"), args...) // v0.10.2435 — sampling-weight Phase 2
 	if err != nil {
 		return nil, nil, err
 	}

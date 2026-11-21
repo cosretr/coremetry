@@ -47,13 +47,16 @@ func TestREDFamilyErrorSetsPinned(t *testing.T) {
 }
 
 func TestREDFamilyCatalogueShape(t *testing.T) {
-	if len(redFamilies) != 3 || redFamilies[0].ID != redFamilyHTTP || redFamilies[1].ID != redFamilyGRPCLegacy || redFamilies[2].ID != redFamilyGRPCStable {
-		t.Fatalf("sıra: HTTP, legacy, stable — %+v", redFamilies)
+	if len(redFamilies) != 5 || redFamilies[0].ID != redFamilyHTTP || redFamilies[1].ID != redFamilyGRPCLegacy || redFamilies[2].ID != redFamilyGRPCStable ||
+		redFamilies[3].ID != redFamilyHTTPLegacy || redFamilies[4].ID != redFamilySpanMetrics {
+		t.Fatalf("sıra: HTTP, legacy, stable, http_legacy, spanmetrics — %+v", redFamilies)
 	}
 	want := map[string][3]string{
-		redFamilyHTTP:       {"http_server_request_duration_seconds_count", "s", mcHTTPMetric},
-		redFamilyGRPCLegacy: {"rpc_server_duration_milliseconds_count", "ms", "rpc.server.duration"},
-		redFamilyGRPCStable: {"rpc_server_call_duration_seconds_count", "s", "rpc.server.call.duration"},
+		redFamilyHTTP:        {"http_server_request_duration_seconds_count", "s", mcHTTPMetric},
+		redFamilyGRPCLegacy:  {"rpc_server_duration_milliseconds_count", "ms", "rpc.server.duration"},
+		redFamilyGRPCStable:  {"rpc_server_call_duration_seconds_count", "s", "rpc.server.call.duration"},
+		redFamilyHTTPLegacy:  {"http_server_duration_milliseconds_count", "ms", "http.server.duration"},
+		redFamilySpanMetrics: {"traces_span_metrics_duration_seconds_count", "s", "traces.span.metrics.duration"},
 	}
 	for _, f := range redFamilies {
 		w := want[f.ID]
@@ -139,18 +142,18 @@ func TestResolveServiceREDFamilyTable(t *testing.T) {
 		state   string
 		tried   int
 	}{
-		{"http → http", famLabels(redFamilyHTTP), map[string]bool{redFamilyHTTP: true}, nil, nil, redKindHTTP, redFamilyHTTP, "", false, "known", 2},
-		{"http yok + legacy → grpc ms", famLabels(redFamilyHTTP, redFamilyGRPCLegacy), map[string]bool{redFamilyGRPCLegacy: true}, nil, nil, redKindGRPC, "", redFamilyGRPCLegacy, false, "known", 2},
-		{"yalnız stable → grpc s", famLabels(redFamilyGRPCStable), map[string]bool{redFamilyGRPCStable: true}, nil, nil, redKindGRPC, "", redFamilyGRPCStable, false, "known", 2},
-		{"ikisi → http birincil + both", famLabels(redFamilyHTTP, redFamilyGRPCLegacy), map[string]bool{redFamilyHTTP: true, redFamilyGRPCLegacy: true}, nil, nil, redKindHTTP, redFamilyHTTP, redFamilyGRPCLegacy, true, "known", 1},
-		{"rpc/dup → legacy birincil, stable tried", famLabels(redFamilyGRPCLegacy, redFamilyGRPCStable), map[string]bool{redFamilyGRPCLegacy: true, redFamilyGRPCStable: true}, nil, nil, redKindGRPC, "", redFamilyGRPCLegacy, false, "known", 2},
-		{"metrik yok → none", map[string][]string{}, nil, nil, nil, redKindNone, "", "", false, "known", 3},
-		{"metrik var, servisin serisi yok → none", famLabels(redFamilyHTTP, redFamilyGRPCLegacy), map[string]bool{}, nil, nil, redKindNone, "", "", false, "known", 3},
+		{"http → http", famLabels(redFamilyHTTP), map[string]bool{redFamilyHTTP: true}, nil, nil, redKindHTTP, redFamilyHTTP, "", false, "known", 4},
+		{"http yok + legacy → grpc ms", famLabels(redFamilyHTTP, redFamilyGRPCLegacy), map[string]bool{redFamilyGRPCLegacy: true}, nil, nil, redKindGRPC, "", redFamilyGRPCLegacy, false, "known", 4},
+		{"yalnız stable → grpc s", famLabels(redFamilyGRPCStable), map[string]bool{redFamilyGRPCStable: true}, nil, nil, redKindGRPC, "", redFamilyGRPCStable, false, "known", 4},
+		{"ikisi → http birincil + both", famLabels(redFamilyHTTP, redFamilyGRPCLegacy), map[string]bool{redFamilyHTTP: true, redFamilyGRPCLegacy: true}, nil, nil, redKindHTTP, redFamilyHTTP, redFamilyGRPCLegacy, true, "known", 3},
+		{"rpc/dup → legacy birincil, stable tried", famLabels(redFamilyGRPCLegacy, redFamilyGRPCStable), map[string]bool{redFamilyGRPCLegacy: true, redFamilyGRPCStable: true}, nil, nil, redKindGRPC, "", redFamilyGRPCLegacy, false, "known", 4},
+		{"metrik yok → none", map[string][]string{}, nil, nil, nil, redKindNone, "", "", false, "known", 5},
+		{"metrik var, servisin serisi yok → none", famLabels(redFamilyHTTP, redFamilyGRPCLegacy), map[string]bool{}, nil, nil, redKindNone, "", "", false, "known", 5},
 		{"etiket hatası → unknown (okunamadı ≠ yok)", famLabels(redFamilyHTTP), nil, errors.New("vm down"), nil, redKindHTTP, "", "", false, "unknown", 0},
 		// v0.10.1559 — tek okunabilir aile (HTTP) yoklamada düşer, gRPC
 		// aileleri "metrik yok" diye KESİN cevap verir: unknown değil; HTTP
 		// varsayılan olarak çizilir, gerekçe reason'da (okunamadı ≠ yok).
-		{"yoklama hatası → HTTP varsayılan, kısmi", famLabels(redFamilyHTTP), nil, nil, errors.New("timeout"), redKindHTTP, redFamilyHTTP, "", false, "known", 3},
+		{"yoklama hatası → HTTP varsayılan, kısmi", famLabels(redFamilyHTTP), nil, nil, errors.New("timeout"), redKindHTTP, redFamilyHTTP, "", false, "known", 5},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -269,8 +272,8 @@ func TestREDFamilyPromQLGolden(t *testing.T) {
 func TestREDFamilyLabelsMatchFrontend(t *testing.T) {
 	src := readRepoFile(t, "../../frontend/src/lib/redFamily.ts")
 	blocks := regexp.MustCompile(`(?s)export const (\w+)_FAMILY: RedFamilySpec = \{(.*?)\n\};`).FindAllStringSubmatch(src, -1)
-	if len(blocks) != 3 {
-		t.Fatalf("üç aile bloğu bekleniyordu: %d", len(blocks))
+	if len(blocks) != len(redFamilies) {
+		t.Fatalf("%d aile bloğu bekleniyordu: %d", len(redFamilies), len(blocks))
 	}
 	field := func(block, key string) string {
 		m := regexp.MustCompile(`\b` + key + `:\s*'([^']*)'`).FindStringSubmatch(block)
@@ -310,6 +313,10 @@ func TestREDFamilyLabelsMatchFrontend(t *testing.T) {
 			if v[0] != v[1] {
 				t.Errorf("%s.%s: FE %q, Go %q", f.ID, k, v[0], v[1])
 			}
+		}
+		// v0.10.2434 — sabit eşleyici (spanmetrics giriş span'leri) bayt bayt.
+		if f.Match != "" && field(body, "matcher") != f.Match {
+			t.Errorf("%s.matcher: FE %q, Go %q", f.ID, field(body, "matcher"), f.Match)
 		}
 		// SLI kovası ailenin biriminde 500 ms.
 		if want := map[string]string{"s": "0.5", "ms": "500"}[f.Unit]; field(body, "sliLe") != want {
@@ -492,8 +499,8 @@ func TestServiceMetricREDGRPCFamily(t *testing.T) {
 	if serviceMetricREDKey(p, "vm", "0", "-") == serviceMetricREDKey(serviceMetricREDPlan{Service: "grpc.example.test", From: from, To: to, Mdp: 300, RateWin: 180}, "vm", "0", "-") {
 		t.Error("fam= anahtarda olmalı")
 	}
-	if !strings.HasPrefix(serviceMetricREDKey(p, "vm", "0", "-"), "svc-metric-red:v4:") {
-		t.Error("zarf büyüdü → v4")
+	if !strings.HasPrefix(serviceMetricREDKey(p, "vm", "0", "-"), "svc-metric-red:v5:") {
+		t.Error("zarf büyüdü → v5 (v0.10.2434 infra)")
 	}
 	// breakdown=rpc_method → rpc.method; bilinmeyen kapalı.
 	if g := breakdownGroupBy("rpc_method"); len(g) != 1 || g[0] != "rpc.method" {
@@ -613,7 +620,8 @@ func TestREDFamilyLabelReadIsServiceScoped(t *testing.T) {
 	if rd.unscopedCalls != 0 {
 		t.Errorf("kapsamsız etiket okuması çağrıldı: %d", rd.unscopedCalls)
 	}
-	if len(rd.scopedLabelCalls) != len(redFamilies) {
+	// v0.10.2434 — spanmetrics yoklanmaz (gRPC uygulama histogramı birincil).
+	if len(rd.scopedLabelCalls) != len(redFamilies)-1 {
 		t.Fatalf("aile başına bir kapsamlı okuma beklenirdi: %v", rd.scopedLabelCalls)
 	}
 	for _, c := range rd.scopedLabelCalls {
@@ -667,5 +675,77 @@ func TestServiceHTTPREDLabelReadIsServiceScoped(t *testing.T) {
 	}
 	if !res.routeLabelOK || res.statusLabel == "" || res.svcLabel != "service_name" {
 		t.Errorf("kapsamlı etiket kümesinden çözülmeli: route=%v status=%q svc=%q", res.routeLabelOK, res.statusLabel, res.svcLabel)
+	}
+}
+
+// TestResolveServiceREDFamilySourcePrecedence — v0.10.2434 (RED metrik-önce):
+// kaynak önceliği uygulama histogramı (yeni semconv HTTP > eski semconv HTTP;
+// gRPC ayrı yuva) > spanmetrics connector > span; seçilen kaynak Source'ta.
+func TestResolveServiceREDFamilySourcePrecedence(t *testing.T) {
+	to := time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)
+	s := &Server{}
+	cases := []struct {
+		name, svc string
+		labels    map[string][]string
+		present   map[string]bool
+		source    string
+		primary   string
+	}{
+		{"eski semconv yalnız → http_legacy", "legacy-billing-api", famLabels(redFamilyHTTPLegacy), map[string]bool{redFamilyHTTPLegacy: true}, redFamilyHTTPLegacy, redKindHTTP},
+		{"yeni + eski semconv → yeni (toplanmaz)", "orders-api", famLabels(redFamilyHTTP, redFamilyHTTPLegacy), map[string]bool{redFamilyHTTP: true, redFamilyHTTPLegacy: true}, redFamilyHTTP, redKindHTTP},
+		{"yalnız connector → spanmetrics", "mainframe-adapter", famLabels(redFamilySpanMetrics), map[string]bool{redFamilySpanMetrics: true}, redFamilySpanMetrics, redKindHTTP},
+		{"uygulama + connector → uygulama", "payments-api", famLabels(redFamilyHTTP, redFamilySpanMetrics), map[string]bool{redFamilyHTTP: true, redFamilySpanMetrics: true}, redFamilyHTTP, redKindHTTP},
+		{"gRPC + connector → gRPC", "ledger-grpc", famLabels(redFamilyGRPCLegacy, redFamilySpanMetrics), map[string]bool{redFamilyGRPCLegacy: true, redFamilySpanMetrics: true}, redFamilyGRPCLegacy, redKindGRPC},
+		{"hiçbiri → spans", "batch-loader", map[string][]string{}, nil, redSourceSpans, redKindNone},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rd := &famReader{fakeChartReader: fakeChartReader{labels: c.labels}, present: c.present}
+			res, err := s.resolveServiceREDFamily(context.Background(), rd, c.svc, nil, to)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Source != c.source || res.Primary != c.primary {
+				t.Errorf("source=%s primary=%s tried=%v", res.Source, res.Primary, res.Tried)
+			}
+			if f, pres := res.primaryFamily(); pres != nil && f.ID != c.source {
+				t.Errorf("primaryFamily %s ≠ source %s", f.ID, c.source)
+			}
+			// Öncelik sorgu tasarrufu: üstteki bulunduysa connector YOKLANMAZ.
+			if c.source != redFamilySpanMetrics && c.source != redSourceSpans {
+				if !strings.Contains(strings.Join(res.Tried, "|"), "traces_span_metrics_duration_seconds_count: yoklanmadı") {
+					t.Errorf("connector yoklanmamalıydı: %v", res.Tried)
+				}
+			}
+		})
+	}
+}
+
+func TestREDFamilySpanMetricsShape(t *testing.T) {
+	f, ok := redFamilyByID(redFamilySpanMetrics)
+	if !ok {
+		t.Fatal("spanmetrics ailesi yok")
+	}
+	for v, want := range map[string]bool{"STATUS_CODE_ERROR": true, "STATUS_CODE_UNSET": false, "STATUS_CODE_OK": false, "500": false} {
+		if f.IsServerError(v) != want {
+			t.Errorf("%s: %v", v, !want)
+		}
+	}
+	q := redFamilyPresenceQuery(f, "service_name", "mainframe-adapter")
+	if !strings.Contains(q, `span_kind=~"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER"`) || !strings.Contains(q, "traces_span_metrics_duration_seconds_count") {
+		t.Errorf("yoklama giriş span'lerine kapsanmalı: %s", q)
+	}
+	if fs := f.filters(); len(fs) != 1 || fs[0].Key != "span.kind" {
+		t.Errorf("metricSource süzgeci: %+v", fs)
+	}
+	lg, _ := redFamilyByID(redFamilyHTTPLegacy)
+	if lg.Unit != "ms" || !lg.IsServerError("503") || lg.IsServerError("404") || lg.filters() != nil {
+		t.Errorf("http_legacy: %+v", lg)
+	}
+	// /metric-red ?family= kabul kümesi.
+	for in, want := range map[string]string{"grpc": "grpc", "spanmetrics": "spanmetrics", "http_legacy": "http_legacy", "http": "", "x": ""} {
+		if got := serviceREDFamilyParam(in); got != want {
+			t.Errorf("family=%s → %q", in, got)
+		}
 	}
 }

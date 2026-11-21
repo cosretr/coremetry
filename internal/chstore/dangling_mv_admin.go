@@ -365,7 +365,7 @@ func (s *Store) RepairDanglingMV(ctx context.Context, host, view string, wantPee
 	}
 	// v0.10.825 — kanonik dal TEK GÖVDE: "Yeniden kur" (RebuildMVOnHost) ile
 	// aynı adımlar ve aynı doğrulama. İkinci bir kopya ayrışırdı.
-	return s.rebuildMVOnConn(ctx, conn, view, name)
+	return s.rebuildMVOnConn(ctx, conn, view, name, mvPeerIDs{})
 }
 
 // chInnerUUIDSettings — nesne uuid'sini metinde GÖRÜNÜR kılan ayar +

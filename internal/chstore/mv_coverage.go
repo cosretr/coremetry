@@ -31,6 +31,7 @@ package chstore
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -324,6 +325,9 @@ type MVCoverageReport struct {
 	// bir MV'nin hedefidir, öksüz DEĞİLDİR. İkinci bir sorgu açmamak için
 	// kapsamadan taşınır.
 	Targets MVTargetSet `json:"-"`
+	// ShardOf — hostName() → shard (v0.10.2434): "Yeniden kur" aynı shard'daki
+	// sağlıklı eşin uuid'lerini seçmek için (mvRebuildPeerIDs). JSON'a girmez.
+	ShardOf map[string]int `json:"-"`
 }
 
 // MVCoverage — kanonik MV kataloğu × erişilebilir host: hücre başına durum.
@@ -380,6 +384,7 @@ func (s *Store) mvCoverageReportFrom(ctx context.Context, snap mvInventorySnap, 
 			shardOf = m
 		}
 	}
+	rep.ShardOf = shardOf
 	out := mvCoverageFromRows(rows, canonical, hosts, cluster != "", shardOf)
 	// v0.10.833 — hedef uuid okuması: KÜME GENELİ TEK sorgu, yalnız MV
 	// satırları, AYARI 1 YAPAN tek yer (mv_target_uuid.go). Buraya konuldu
@@ -503,7 +508,77 @@ func (s *Store) RebuildMVOnHost(ctx context.Context, host, view string) ([]strin
 		}
 		conn = c
 	}
-	return s.rebuildMVOnConn(ctx, conn, view, name)
+	// v0.10.2434 — shard eşinde sağlıklı MV varsa AYNI view + iç tablo
+	// uuid'leriyle kur (mvRebuildPeerIDs): iç tablo adı replikalar arasında
+	// aynı kalır. Eş yoksa eski davranış (CH rastgele uuid üretir).
+	return s.rebuildMVOnConn(ctx, conn, view, name, mvRebuildPeerIDs(cov, host, view, rep.ShardOf))
+}
+
+// mvPeerIDs — shard eşindeki sağlıklı MV'nin kimliği: View = view'ın uuid'si
+// (iç tablonun ADI `.inner_id.<View>` bundan doğar), Inner = iç tablonun NESNE
+// uuid'si (`TO INNER UUID`). Sıfır değer = eş yok.
+type mvPeerIDs struct {
+	Host, View, Inner string
+}
+
+// mvRebuildPeerIDs — SAF (v0.10.2434). Operatör-bildirimli (prod): MV dört
+// host'ta da eksikti; host başına "Yeniden kur" her host'a FARKLI uuid'li
+// `.inner_id.*` verdi. Replikasyon doğruydu (ZK yolu shard başına ortak, 2/2)
+// ama adlar ayrıştı ve Replika tutarlılığı kartı her iç tabloyu "eksik
+// replika" saydı. ON CLUSTER kurulumda uuid'ler replikalar arasında aynıdır;
+// host başına kurulum bunu eşten kopyalayarak taklit eder.
+//
+// Aday: aynı view, başka host, AYNI shard (başka shard'ın iç tablosu başka ZK
+// yolundadır), durum ok (küme kipinde iç tablo Replicated), iki uuid de
+// geçerli ve — ölçüldüyse — MV'nin hedefi iç tablonun kendisi (TargetUUID ≠
+// InnerUUID olan eş yanlış nesneyi adresler, kopyalanmaz). Shard bilinmiyorsa
+// eş YOK: "bilinmiyor" uygun demek değildir (replicatedInnerPeer ile aynı).
+func mvRebuildPeerIDs(cov []MVHostState, host, view string, shardOf map[string]int) mvPeerIDs {
+	sh, ok := shardOf[host]
+	if !ok {
+		return mvPeerIDs{}
+	}
+	var best mvPeerIDs
+	for _, r := range cov {
+		if r.View != view || r.Host == host || r.State != MVStateOK {
+			continue
+		}
+		if psh, pok := shardOf[r.Host]; !pok || psh != sh {
+			continue
+		}
+		if !validUUID(r.UUID) || !validUUID(r.InnerUUID) {
+			continue
+		}
+		if r.TargetUUID != "" && !strings.EqualFold(r.TargetUUID, r.InnerUUID) {
+			continue
+		}
+		if best.Host == "" || r.Host < best.Host {
+			best = mvPeerIDs{Host: r.Host, View: strings.ToLower(r.UUID), Inner: strings.ToLower(r.InnerUUID)}
+		}
+	}
+	return best
+}
+
+// injectMVPeerUUIDs — SAF (v0.10.2434): `CREATE MATERIALIZED VIEW [IF NOT
+// EXISTS] <view>` adından hemen sonra `UUID '<view>' TO INNER UUID '<inner>'`
+// ekler (CH 26.2'de doğrulandı: iç tablo `.inner_id.<view uuid>` adıyla ve
+// <inner> nesne uuid'siyle doğar). Yalnız gizli iç tablolu MV'de: `TO <tablo>`
+// biçiminde, metinde zaten UUID varsa ya da ad bulunamazsa metin DEĞİŞMEZ
+// (ok=false; çağıran adımda uyarır).
+func injectMVPeerUUIDs(ddl, view string, ids mvPeerIDs) (string, bool) {
+	if ids.View == "" || ids.Inner == "" || reMVWithTO.MatchString(ddl) {
+		return ddl, false
+	}
+	re := regexp.MustCompile(`(?is)^(\s*CREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?` + "`?" + regexp.QuoteMeta(view) + "`?" + `)(\s|\()`)
+	loc := re.FindStringSubmatchIndex(ddl)
+	if loc == nil {
+		return ddl, false
+	}
+	rest := ddl[loc[3]:]
+	if strings.HasPrefix(strings.TrimLeft(rest, " \t\r\n"), "UUID ") {
+		return ddl, false
+	}
+	return ddl[:loc[3]] + " UUID '" + ids.View + "' TO INNER UUID '" + ids.Inner + "'" + rest, true
 }
 
 // rebuildMVOnConn — TEK GÖVDE (RebuildMVOnHost + RepairDanglingMV kanonik
@@ -513,10 +588,24 @@ func (s *Store) RebuildMVOnHost(ctx context.Context, host, view string) ([]strin
 //
 // DROP purgeGuard taşır: düz iç tablo GiB'lerce olabilir ve
 // max_table_size_to_drop varsayılanı DROP'u reddederdi (v0.10.110 dersi).
-func (s *Store) rebuildMVOnConn(ctx context.Context, conn driver.Conn, view, name string) ([]string, error) {
+//
+// peer (v0.10.2434): sıfır değilse MV ifadesi eşin uuid'leriyle kurulur
+// (injectMVPeerUUIDs); sıfırsa eski davranış.
+func (s *Store) rebuildMVOnConn(ctx context.Context, conn driver.Conn, view, name string, peer mvPeerIDs) ([]string, error) {
 	steps := []string{"DROP TABLE IF EXISTS `" + view + "` SYNC" + purgeGuard}
-	for _, st := range s.adaptDDL(canonicalMVDDL(name)) {
-		steps = append(steps, stripOnCluster(st))
+	var note string
+	for _, st := range s.adaptDDL(s.liveMVDDL(name)) {
+		st = stripOnCluster(st)
+		if peer.Host != "" {
+			if withIDs, ok := injectMVPeerUUIDs(st, view, peer); ok {
+				st = withIDs
+				note = fmt.Sprintf("-- eş %s ile aynı uuid'ler: view %s · iç tablo `%s` (nesne %s)", peer.Host, peer.View, innerTableName(peer.View), peer.Inner)
+			}
+		}
+		steps = append(steps, st)
+	}
+	if peer.Host != "" && note == "" {
+		note = fmt.Sprintf("-- uyarı: eş %s bulundu ama uuid'ler DDL'e eklenemedi — iç tablo adı eşten farklı olabilir (Replika tutarlılığı kartı ZK yoluyla eşler)", peer.Host)
 	}
 	for _, st := range steps {
 		ectx, cancel := context.WithTimeout(ctx, mvRebuildStepTimeout)
@@ -525,6 +614,9 @@ func (s *Store) rebuildMVOnConn(ctx context.Context, conn driver.Conn, view, nam
 		if err != nil {
 			return steps, fmt.Errorf("%s: %w", firstWords(st, 4), err)
 		}
+	}
+	if note != "" {
+		steps = append(steps, note)
 	}
 	return s.verifyMVRebuild(ctx, conn, view, steps)
 }

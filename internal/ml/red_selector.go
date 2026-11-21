@@ -76,7 +76,8 @@ func famSelector(names, part string, matchers ...string) string {
 
 // redSel — SAF: RED ailesinin (anomaly pini) parça seçicisi.
 func redSel(pin anomaly.REDFamilyPin, part string, matchers ...string) string {
-	return famSelector(pin.Names, part, matchers...)
+	// v0.10.2434 — ailenin sabit eşleyicisi (spanmetrics: giriş span'leri) önce.
+	return famSelector(pin.Names, part, append([]string{pin.Matcher}, matchers...)...)
 }
 
 // depSel — SAF: client (bağımlılık) ailesinin parça seçicisi.

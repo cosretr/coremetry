@@ -4587,7 +4587,7 @@ export interface HttpEnvScope {
 // HTTP birincil, ikisi varsa both (toplanmaz, iki bölüm). state unknown =
 // okunamadı ≠ yok (sayfa HTTP sorgularını koşar). envScope aile başına
 // (o ailenin metriğine karşı çözülmüş ortam eşleyicisi).
-export type RedFamilyId = 'http' | 'grpc_legacy' | 'grpc_stable';
+export type RedFamilyId = 'http' | 'grpc_legacy' | 'grpc_stable' | 'http_legacy' | 'spanmetrics';
 export type RedFamilyKind = 'http' | 'grpc';
 export interface RedFamilyPresence {
   id: RedFamilyId;
@@ -4595,11 +4595,30 @@ export interface RedFamilyPresence {
   statusLabel?: string;
   envScope?: HttpEnvScope;
 }
+/** v0.10.2434 — GET /api/services-red-metric satırı (örneklenmemiş RED). */
+export interface ServiceRedMetricRow {
+  source: RedFamilyId;
+  requests: number;
+  ratePerSec: number;
+  errorRate?: number; // yüzde; yoksa durum etiketi yok (0 değil)
+  avgMs?: number;
+  p99Ms?: number;
+}
+export interface ServicesRedMetric {
+  source: string;
+  windowSec: number;
+  services: Record<string, ServiceRedMetricRow>;
+  queries: number;
+  notes?: string[];
+}
+
 export interface RedFamilyResolution {
   service: string;
   state: 'known' | 'unknown';
   reason?: string;
   primary: RedFamilyKind | 'none';
+  /** v0.10.2434 — seçilen kaynak: birincil aile ya da 'spans' (örneklenmiş span verisi). */
+  source?: RedFamilyId | 'spans';
   http?: RedFamilyPresence;
   grpc?: RedFamilyPresence;
   both?: boolean;
@@ -7515,6 +7534,9 @@ export interface RuntimeResolvedSignal {
   filterKey?: string;
   filterValue?: string;
   gen?: string;
+  /** Follow-up 2026-11-21 — seri service_name taşımaz (HikariCP): servis yerine
+   *  servisin varlık pod'larıyla (host_name ∈ podEntities) sorulur. */
+  podScoped?: boolean;
 }
 export interface RuntimeSignal {
   check: string;
@@ -7530,8 +7552,9 @@ export interface RuntimeSignal {
   extra?: Record<string, number>;
   summary: string;
   /** 2026-11-21 — en kötü pod'un varlık kaydı (sunucu entity katmanından çözer). */
-  podEntity?: { id: string; clusterId?: string; namespace?: string; pod: string };
+  podEntity?: RuntimePodEntity;
 }
+export interface RuntimePodEntity { id: string; clusterId?: string; namespace?: string; pod: string }
 export interface RuntimeSignalReport {
   service: string;
   mode: 'off' | 'shadow' | 'on';
@@ -7540,6 +7563,38 @@ export interface RuntimeSignalReport {
   signals: RuntimeSignal[];
   notes?: string[];
   atNs: number;
+  /** Follow-up 2026-11-21 — servisin varlık pod'ları (pod adı = host_name → entity). */
+  podEntities?: Record<string, RuntimePodEntity>;
+  /** Follow-up 2026-11-21 — uygulanmış ortam / küme kapsamı (grafik sorgularına aynen). */
+  scopeFilters?: FilterExpr[];
+  /** İstendi ama uygulanamadı (tüm ortamlar gösteriliyor). */
+  scopeNote?: string;
+}
+
+// Follow-up 2026-11-21 — GET /api/services/{name}/downstream-red (Go
+// runtimesig.DownstreamReport; VM HTTP client histogramı, örnekleme öncesi).
+export interface DownstreamTarget {
+  address: string;
+  service?: string;
+  rps: number;
+  /** < 0 = ölçülemedi */
+  p95Ms: number;
+  errorPct: number;
+  dominantError?: string;
+  dominantErrorPct?: number;
+}
+export interface DownstreamREDReport {
+  available: boolean;
+  reason?: string;
+  service: string;
+  metric: string;
+  windowSec: number;
+  atNs: number;
+  targets: DownstreamTarget[];
+  pool?: { leased: number; max: number; pending: number };
+  errorSource: 'error_type' | 'status_code' | 'none';
+  scope?: string;
+  notes?: string[];
 }
 
 export interface ServiceMapNode {

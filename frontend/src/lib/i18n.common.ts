@@ -309,7 +309,7 @@ export const EN_EAGER: Record<string, string> = {
   'hyp.chk.argo_sync': 'Argo CD sync', 'hyp.chk.pod_limits': 'Pod limits / OOMKilled', 'hyp.chk.jvm_post_gc': 'JVM post-GC heap', 'hyp.chk.runtime_signals': 'Runtime signals (thread pool / GC / pools)',
   'hyp.chk.node_pressure': 'Node pressure', 'hyp.chk.latency_symptom': 'Latency symptom',
   'hyp.chk.downstream_worse': 'Downstream got worse', 'hyp.chk.synth_agrees': 'Synthesizer agrees',
-  'hyp.chk.downstream_errors': 'Downstream errors', 'hyp.chk.external_problem_open': 'External problem open',
+  'hyp.chk.downstream_errors': 'Downstream errors', 'hyp.chk.downstream_exact': 'Outgoing calls, exact count (VM)','hyp.chk.external_problem_open': 'External problem open',
   'hyp.chk.external_edge_errors': 'External call errors', 'hyp.chk.db_health_open': 'Database problem open',
   'hyp.chk.pivot_db_path': 'DB on the critical path', 'hyp.chk.db_edge_slow': 'Slow database calls',
   'hyp.chk.rate_up': 'Request rate up', 'hyp.chk.p99_up': 'p99 up', 'hyp.chk.upstream_surge': 'Caller traffic surge',

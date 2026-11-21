@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/infraroutes"
 )
 
 // throughputMetricSettingKey — ayarlanabilir metrik adı. Her kurulumun
@@ -173,6 +174,22 @@ func metricThroughputPlan(service, metric, jobLabel string, from, to time.Time, 
 // looks exactly like the bug this release fixes. The caller marks the wider
 // answer envAmbiguous so the operator is told, rather than being handed a chart
 // that narrowed by nothing.
+// metricRateFn — metricSource.QueryMetricRate / QueryMetricCountRate imzası.
+type metricRateFn = func(context.Context, chstore.MetricQueryFilter, string) ([]chstore.SpanMetricSeries, error)
+
+// withInfraRouteRate — v0.10.2434: off iken her okumaya http.route `!~ tesisat`
+// süzgeci ekler (etiketsiz seri korunur); aksi okuyucu aynen.
+func withInfraRouteRate(rate metricRateFn, off bool) metricRateFn {
+	if !off {
+		return rate
+	}
+	return func(ctx context.Context, f chstore.MetricQueryFilter, mode string) ([]chstore.SpanMetricSeries, error) {
+		f.Filters = append(append([]chstore.FilterExpr(nil), f.Filters...),
+			chstore.FilterExpr{Key: "http.route", Op: "!~", Values: []string{infraroutes.RouteRegex()}})
+		return rate(ctx, f, mode)
+	}
+}
+
 func withEnvFilter(f chstore.MetricQueryFilter, env string, src metricSource) chstore.MetricQueryFilter {
 	expr, ok := src.EnvFilterExpr(env)
 	if !ok {
@@ -269,6 +286,13 @@ func (s *Server) getServiceMetricThroughput(w http.ResponseWriter, r *http.Reque
 			metric = tried[0]
 		}
 	}
+	// v0.10.2434 — ?family=http_legacy: eski semconv HTTP histogramının tam adı
+	// (çözücünün birincili). spanmetrics burada YOK: bu uç sabit süzgeç (giriş
+	// span'leri) taşımaz, client span'leri toplardı — bağ yoluna düşer.
+	if metric == "" && strings.TrimSpace(r.URL.Query().Get("family")) == redFamilyHTTPLegacy {
+		f, _ := redFamilyByID(redFamilyHTTPLegacy)
+		metric = f.metricName(src)
+	}
 
 	// mx: dışlama seti özeti — seri QueryMetricRate'ten geliyor ve o yol
 	// artık kuralları uyguluyor. VM tarafında dışlama kuralları YOK (motor
@@ -276,7 +300,10 @@ func (s *Server) getServiceMetricThroughput(w http.ResponseWriter, r *http.Reque
 	// anahtarlamak yalnız gereksiz bir soğuk okuma yapar, eksik anahtarlamak
 	// yanlış gövde servis eder.
 	mx := s.store.MetricExclusions().Digest()
-	key := metricThroughputCacheKey(name, metric, jobLabel, from, to, mdp, breakdown, rateWin, mx, env, src.Name())
+	// v0.10.2434 (operatör onaylı) — tesisat rotaları (health / scrape / ping)
+	// varsayılan dışlanır (?infra=1 dahil eder); gRPC kırılımında rota yok.
+	infraOff := r.URL.Query().Get("infra") != "1" && breakdown != "rpc_method"
+	key := metricThroughputCacheKey(name, metric, jobLabel, from, to, mdp, breakdown, rateWin, mx, env, src.Name()) + fmt.Sprintf(":infraOff=%t", infraOff)
 	pattern := chstore.JobServiceRegex(name)
 	// envApplied: kaynak env kısıtını İFADE EDEBİLİYOR mu (VM edemiyor).
 	// Edemiyorsa cevap daha GENİŞ olur, daha dar değil — ve bunu söylemek
@@ -328,6 +355,7 @@ func (s *Server) getServiceMetricThroughput(w http.ResponseWriter, r *http.Reque
 					if b.Instrument == "histogram" {
 						rate = src.QueryMetricCountRate
 					}
+					rate = withInfraRouteRate(rate, infraOff)
 					if ser, err := rate(ctx, withEnvFilter(f, env, src), "rate"); err == nil && len(ser) > 0 {
 						out["metric"] = b.Metric
 						out["rtMetric"] = src.LatencyMetricName(b.Metric)
@@ -414,6 +442,8 @@ func (s *Server) getServiceMetricThroughput(w http.ResponseWriter, r *http.Reque
 			out["unsupportedInstrument"] = true
 			return out, nil
 		}
+		rate = withInfraRouteRate(rate, infraOff)
+		out["infraExcluded"] = infraOff
 
 		// 3) KİMLİK ETİKETİNİ ARA.
 		//

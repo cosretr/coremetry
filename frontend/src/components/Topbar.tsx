@@ -10,6 +10,8 @@ import { TopbarSearch } from './TopbarSearch';
 import type { TimeRange } from '@/lib/types';
 import { ContextBar, type ContextBarProps } from './ContextBar';
 import { setPageTitle } from '@/lib/branding';
+import { SamplingCorrectionBadge } from './coremetry/SamplingCorrectionBadge';
+import type { SamplingSurface } from '@/lib/samplingCorrection';
 
 // `range` is optional — pages that aren't time-bound (e.g. /users) omit it
 // and the time picker is hidden. The global env picker (v0.8.383) rides the
@@ -24,7 +26,7 @@ import { setPageTitle } from '@/lib/branding';
 // envApplies: bu sayfa env filtresini GERÇEKTEN uyguluyor mu? Varsayılan
 // false; picker uygulamayan sayfada devre dışı + dürüst ipuçlu görünür.
 // Gerekçe ve neden gizlemek yerine devre dışı: EnvPicker.tsx.
-export function Topbar({ title, range, onRangeChange, showEnv, envApplies, context }: {
+export function Topbar({ title, range, onRangeChange, showEnv, envApplies, context, sampling }: {
   title: string;
   range?: TimeRange;
   onRangeChange?: (r: TimeRange) => void;
@@ -33,6 +35,8 @@ export function Topbar({ title, range, onRangeChange, showEnv, envApplies, conte
   envApplies?: boolean;
   /** v0.10.250 — ContextBar: verilirse EnvPicker+TimeRangePicker çiftinin yerine geçer (aynı yuva). */
   context?: ContextBarProps;
+  /** v0.10.2435 — span-RED sayfası: örnekleme düzeltmesi işareti (yalnız mod on iken görünür). */
+  sampling?: SamplingSurface;
 }) {
   // v0.10.1340 (Web Interface Guidelines) — sayfa başlığı sekmeye de yazılır:
   // `${title} · ${marka}` (bileşim + marka yeniden çözümü lib/branding.ts
@@ -45,6 +49,7 @@ export function Topbar({ title, range, onRangeChange, showEnv, envApplies, conte
   return (
     <div id="topbar">
       <h1>{title}</h1>
+      {sampling && range && <SamplingCorrectionBadge surface={sampling} range={range} />}
       {/* v0.9.1019 (G1) — global aramanın GÖRÜNÜR kapısı.
           Öncelik sırası dar topbar'da şu: başlık ezilir (`h1` zaten tek
           esneyebilen eleman, D2.6), sonra arama kutusunun kısayol

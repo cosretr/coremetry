@@ -638,6 +638,7 @@ func (s *Store) GetEndpointsMV(ctx context.Context, q EndpointsQuery) ([]Endpoin
 		` + endpointsOrderBy(q.Sort, q.Dir) + `
 		LIMIT ?
 		SETTINGS max_execution_time = 15` + s.heavyScanSpill()
+	sql = s.weighSQL(sql, from, sourceMV) // v0.10.2435 — sampling-weight Phase 2
 	rows, err := s.conn.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err

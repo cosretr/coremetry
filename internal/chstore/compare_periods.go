@@ -560,6 +560,7 @@ func (s *Store) ReadComparePeriods(ctx context.Context, sc PeriodScope, cur, ref
 	q, args := comparePeriodsREDSQL(sc, rcur, rref, capFor(periodCapRED))
 	if useMV {
 		q, args = comparePeriodsREDMVSQL(s.spanmetricsSourceFor("spanmetrics_1m"), sc, rcur, rref, capFor(periodCapRED))
+		q = s.weighSQLPeriods(q, rcur.From, rref.From, "spanmetrics_1m") // v0.10.2435 — sampling-weight Phase 2
 	}
 	rows, err := conn.Query(ctx, q, args...)
 	if err != nil {
@@ -590,6 +591,7 @@ func (s *Store) ReadComparePeriods(ctx context.Context, sc PeriodScope, cur, ref
 	q, args = comparePeriodsOpsSQL(sc, rcur, rref, capFor(periodCapSecondary))
 	if useMV {
 		q, args = comparePeriodsOpsMVSQL(s.spanmetricsSourceFor("spanmetrics_1m"), sc, rcur, rref, capFor(periodCapSecondary))
+		q = s.weighSQLPeriods(q, rcur.From, rref.From, "spanmetrics_1m") // v0.10.2435 — sampling-weight Phase 2
 	}
 	raw.Ops, raw.OpsErr = s.readPeriodPairs(ctx, false, q, args)
 	if cancelled() {
@@ -615,6 +617,7 @@ func (s *Store) ReadComparePeriods(ctx context.Context, sc PeriodScope, cur, ref
 	if versionsMV {
 		raw.VersionsSource = PeriodSourceVersionsMV
 		q, args = comparePeriodsVersionsMVSQL(sc, vcur, vref, capFor(periodCapSecondary))
+		q = s.weighSQLPeriods(q, vcur.From, vref.From, "service_version_5m") // v0.10.2435 — sampling-weight Phase 2
 	} else {
 		q, args = comparePeriodsVersionsSQL(sc, rcur, rref, capFor(periodCapVersions))
 	}
@@ -1054,7 +1057,7 @@ func scanServiceWindowRED(row interface{ Scan(dest ...any) error }) (ServiceWind
 // v0.10.944 — telemetri okuma havuzu (yerini aldığı GetServiceSummary5m'in
 // havuzu; ana bağlantı state tablolarına kalır).
 func (s *Store) ServiceWindowRED(ctx context.Context, service string, from, to time.Time) (ServiceWindowRED, error) {
-	out, err := scanServiceWindowRED(s.telemetryReadConn().QueryRow(ctx, serviceWindowREDSQL(), service, alignBucketStart(from), to))
+	out, err := scanServiceWindowRED(s.telemetryReadConn().QueryRow(ctx, s.weighSQL(serviceWindowREDSQL(), from, "service_summary_5m"), service, alignBucketStart(from), to)) // v0.10.2435 — sampling-weight Phase 2
 	if err != nil {
 		return ServiceWindowRED{}, fmt.Errorf("service window red: %w", err)
 	}
@@ -1067,7 +1070,7 @@ func (s *Store) ServiceWindowRED(ctx context.Context, service string, from, to t
 // dürüst not (guided window_compare). İki pencereden biri ortamlı, diğeri
 // birleşik OKUNMAZ.
 func (s *Store) ServiceEnvWindowRED(ctx context.Context, service, env string, from, to time.Time) (ServiceWindowRED, error) {
-	out, err := scanServiceWindowRED(s.telemetryReadConn().QueryRow(ctx, serviceEnvWindowREDSQL(), service, env, alignBucketStart(from), to))
+	out, err := scanServiceWindowRED(s.telemetryReadConn().QueryRow(ctx, s.weighSQL(serviceEnvWindowREDSQL(), from, "service_env_summary_5m"), service, env, alignBucketStart(from), to)) // v0.10.2435 — sampling-weight Phase 2
 	if err != nil {
 		return ServiceWindowRED{}, fmt.Errorf("service env window red: %w", err)
 	}

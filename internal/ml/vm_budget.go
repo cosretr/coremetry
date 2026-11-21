@@ -239,6 +239,7 @@ func svcBatches(bySvc map[string][]string, n int) []svcBatch {
 // sorgu göndermez" buradan).
 type plannedExpr struct {
 	family, id, expr, direction string
+	vol                         string // hacim kapısı ifadesi (çözülmüş; "" = kapı yok)
 }
 
 // metricExprs — SAF: yalnız açık ailelerin ifadeleri.
@@ -249,7 +250,11 @@ func metricExprs(cfg chstore.MLConfig, svcLabel string, winSec int) []plannedExp
 			continue
 		}
 		for _, e := range cfg.MetricFamilies[fam] {
-			out = append(out, plannedExpr{family: fam, id: e.ID, expr: renderExpr(e.Expr, svcLabel, winSec), direction: e.Direction})
+			pe := plannedExpr{family: fam, id: e.ID, expr: renderExpr(e.Expr, svcLabel, winSec), direction: e.Direction}
+			if v := chstore.MLMetricVolumeExpr(fam, e); v != "" {
+				pe.vol = renderExpr(v, svcLabel, winSec)
+			}
+			out = append(out, pe)
 		}
 	}
 	return out

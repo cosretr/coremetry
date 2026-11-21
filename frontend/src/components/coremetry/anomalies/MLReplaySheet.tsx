@@ -49,7 +49,7 @@ import { MLSourceChart } from './MLSourceChart';
 import { MLRecordCard } from './MLRecordCard';
 import { MLVerdictReasonForm } from './MLVerdictReasonForm';
 import { isVerdictReason, type VerdictReason } from './mlVerdictReason';
-import { recordUsable } from './mlRecord';
+import { measuredSeriesFirst, recordUsable } from './mlRecord';
 import { fmtPctLang, t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; // v0.10.2291 — sayfa kromu arayüz dilinde (sunucu metni aynen)
 import { contributorLine, leadFromSnapshot, panelPeakLine, parseLogsLink, recordLead, type Contributors } from './mlSourcePanel';
 import { MLRecordChart } from './MLRecordChart';
@@ -160,11 +160,27 @@ function RecordCourse({ rec, lead, snap, open, logsLink, direction }: {
     const base = lead ?? (snap ? leadFromSnapshot(snap) : null);
     return base ? recordLead(base, rec.onsetAt) : null;
   }, [lead, snap, rec.onsetAt]);
+  const lang = useLang();
   const stored = <MLRecordChart rec={rec} />;
   // v0.10.2380 — hata oranı olayında ilk grafik başarılı / başarısız istek
   // çizgileri ve bunlar KAYITTAN çizilir (açık ve bitmiş olayda aynı, render'da
   // istek yok); canlı kaynak paneli oranı çizer ve ayrı bir sorgu atar.
   if (requestsCapable(rec)) return stored;
+  // 2026-11-21 — telemetri hacmi: ölçülen seri + bandı önde, canlı istek hızı
+  // altta bağlam (yedeği yok: kayıtlı görüntü zaten üstte).
+  if (measuredSeriesFirst(rec)) {
+    return (
+      <>
+        {stored}
+        {l && (
+          <div className="mt-2" data-testid="ml-course-context">
+            <p className="m-0 mb-1 text-xs text-muted-foreground">{tl('mlCourse.context', lang)}</p>
+            <MLSourceChart lead={l} open={open} fallback={null} logsLink={logsLink} direction={direction} />
+          </div>
+        )}
+      </>
+    );
+  }
   return l ? <MLSourceChart lead={l} open={open} fallback={stored} logsLink={logsLink} direction={direction} /> : stored;
 }
 

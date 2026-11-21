@@ -27,6 +27,8 @@ const m = vi.hoisted(() => ({
   // v0.10.1377 — ortam kapsamı sahtesi: gate çözülene dek cevap gelmez.
   scope: null as unknown, scopeCalls: [] as unknown[], gate: Promise.resolve() as Promise<void>,
 }));
+// v0.10.2434 — liste sorguları (tesisat-rotası sayım sorgusu hariç).
+const listProm = () => m.prom.filter(c => !c.query.startsWith('count(sum by (http_route)'));
 
 const SVC = 'checkout';
 const ser = (labels: Record<string, string>, v: number): SpanMetricSeries => ({
@@ -131,8 +133,11 @@ describe('/endpoints metrik kipi = HTTP Metrics PromQL (v0.10.1359)', () => {
   it('servisle: satırlar PromQL\'den (method + route), /api/endpoints okunmaz', async () => {
     await mount(`/endpoints?src=metric&range=3h&service=${SVC}&compare=0`);
     expect(m.endpoints).toBe(0);
-    expect(m.prom.length).toBe(7);
-    for (const c of m.prom) {
+    expect(listProm().length).toBe(7);
+    // v0.10.2434 — + tek tesisat-rotası sayım sorgusu (gizlendi notu); liste sorguları tesisatı dışlar.
+    expect(m.prom.filter(c => c.query.startsWith('count(sum by (http_route)')).length).toBe(1);
+    for (const c of listProm()) expect(c.query).toContain('http_route!~".*(?:(?i:/health|');
+    for (const c of listProm()) {
       expect(c.instant).toBe('1');
       expect(c.query).toContain(`{service_name="${SVC}"`);
       expect(c.query).toContain('[10800s]');
@@ -151,7 +156,7 @@ describe('/endpoints metrik kipi = HTTP Metrics PromQL (v0.10.1359)', () => {
 
   it('compare (varsayılan açık): önceki pencere offset W ile', async () => {
     await mount(`/endpoints?src=metric&range=3h&service=${SVC}`);
-    expect(m.prom.length).toBe(11);
+    expect(listProm().length).toBe(11);
     expect(m.prom.filter(c => c.query.includes('[10800s] offset 10800s'))).toHaveLength(4);
   });
 
@@ -207,8 +212,8 @@ describe('/endpoints metrik kipi: env süzgeci (v0.10.1377)', () => {
     await act(async () => { release(); });
     await settle();
     await settle();
-    expect(m.prom.length).toBe(7);
-    for (const c of m.prom) expect(c.query).toContain(`{service_name="${SVC}", ${ENV2}`);
+    expect(listProm().length).toBe(7);
+    for (const c of listProm()) expect(c.query).toContain(`{service_name="${SVC}", ${ENV2}`);
     expect(host!.textContent).not.toContain('Ortam süzgeci metrikte uygulandı'); // v0.10.2211
     expect(host!.textContent).not.toContain('süzgeci bu tabloya uygulanmaz');
   });
@@ -218,9 +223,9 @@ describe('/endpoints metrik kipi: env süzgeci (v0.10.1377)', () => {
     m.gate.catch(() => {});
     await mount(`/endpoints?src=metric&range=3h&service=${SVC}&compare=0&env=eu-a`);
     await settle();
-    expect(m.prom.length).toBe(7);
-    for (const c of m.prom) expect(c.query).toContain(`{service_name="${SVC}"`);
-    for (const c of m.prom) expect(c.query).not.toContain('deployment_environment_name');
+    expect(listProm().length).toBe(7);
+    for (const c of listProm()) expect(c.query).toContain(`{service_name="${SVC}"`);
+    for (const c of listProm()) expect(c.query).not.toContain('deployment_environment_name');
     expect(host!.textContent).toContain('Ortam süzgeci çözülemedi (HTTP 502: VictoriaMetrics erişilemiyor) — süzgeç uygulanmadı, seriler TÜM ortamları kapsıyor');
   });
 });

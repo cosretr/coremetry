@@ -1951,10 +1951,10 @@ func (e *Evaluator) measureCount(ctx context.Context, service string, window tim
 	if useSummaryMV(window) {
 		// v0.8.315 — bucket-aligned cutoff + normalize back to the
 		// nominal window (see mvWindowStart).
-		err := e.store.TelemetryReadConn().QueryRow(ctx, `
+		err := e.store.TelemetryReadConn().QueryRow(ctx, e.store.WeighSQL(`
 			SELECT countMerge(span_count_state) FROM service_summary_5m
 			WHERE service_name = ? AND time_bucket >= ?
-			SETTINGS max_execution_time = 10`,
+			SETTINGS max_execution_time = 10`, mvWindowStart(now, window), "service_summary_5m"), // v0.10.2435 — sampling-weight Phase 2
 			service, mvWindowStart(now, window)).Scan(&n)
 		if err != nil {
 			return 0, err
@@ -1997,7 +1997,7 @@ func (e *Evaluator) measure(ctx context.Context, service, metric string, window 
 			       FROM spans WHERE service_name=? AND time>=? AND ` + chstore.EntrySpanKindsWhere + `
 			       SETTINGS max_execution_time = 10`
 		}
-		err := conn.QueryRow(ctx, sql, service, cutoff).Scan(&v)
+		err := conn.QueryRow(ctx, e.store.WeighSQL(sql, cutoff, "spanmetrics_1m"), service, cutoff).Scan(&v) // v0.10.2435 — sampling-weight Phase 2
 		if err != nil {
 			return 0, err
 		}
@@ -2014,7 +2014,7 @@ func (e *Evaluator) measure(ctx context.Context, service, metric string, window 
 			       WHERE service_name=? AND time>=?
 			       SETTINGS max_execution_time = 10`
 		}
-		err := conn.QueryRow(ctx, sql, service, cutoff).Scan(&n)
+		err := conn.QueryRow(ctx, e.store.WeighSQL(sql, cutoff, "service_summary_5m"), service, cutoff).Scan(&n) // v0.10.2435 — sampling-weight Phase 2
 		if err != nil {
 			return 0, err
 		}
@@ -2035,7 +2035,7 @@ func (e *Evaluator) measure(ctx context.Context, service, metric string, window 
 			sql = `SELECT count() FROM spans WHERE service_name=? AND time>=?
 			       SETTINGS max_execution_time = 10`
 		}
-		err := conn.QueryRow(ctx, sql, service, cutoff).Scan(&n)
+		err := conn.QueryRow(ctx, e.store.WeighSQL(sql, cutoff, "service_summary_5m"), service, cutoff).Scan(&n) // v0.10.2435 — sampling-weight Phase 2
 		if err != nil {
 			return 0, err
 		}
@@ -2090,7 +2090,7 @@ func (e *Evaluator) measure(ctx context.Context, service, metric string, window 
 			}
 		}
 		var v float64
-		err := conn.QueryRow(ctx, sql, service, cutoff).Scan(&v)
+		err := conn.QueryRow(ctx, e.store.WeighSQL(sql, cutoff, "service_summary_5m"), service, cutoff).Scan(&v) // v0.10.2435 — sampling-weight Phase 2
 		return v, err
 	}
 

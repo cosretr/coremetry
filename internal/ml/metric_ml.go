@@ -156,10 +156,18 @@ func (d *MetricML) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 		}
 		part := metricPart(pe.family, pe.id)
 		dirOf[part] = pe.direction
+		var vol map[string]float64 // hacim kapısı (metric_volume_gate.go)
+		if len(rows) > 0 {
+			vol = metricVolume(ctx, deps, pe, svcLabel, to, now)
+		}
 		for _, r := range rows {
 			svc := groupKeyLabels(r.GroupKey)[svcLabel]
 			v, ok := instantValue(r)
 			if svc == "" || !ok {
+				continue
+			}
+			if belowMinVolume(vol, svc) { // kova yazılmaz, yargılanmaz
+				global.supVolume.Add(1)
 				continue
 			}
 			k := chstore.MLSeriesKey(svc, part)

@@ -571,6 +571,12 @@ func main() {
 		log.Printf("[ingest-sampling] load persisted settings: %v", err)
 	}
 	cfgRefresh.Add("ingest-sampling", store.LoadIngestSampling)
+	// v0.10.2435 — weighted-MV coverage markers (sampling-weight Phase 2):
+	// readers switch to weighted states only for buckets after them.
+	if err := store.LoadWeightedSince(ctx); err != nil {
+		log.Printf("[sampling-weight] load coverage markers: %v", err)
+	}
+	cfgRefresh.Add("sampling-weighted-since", store.LoadWeightedSince)
 	pipelineEng := pipeline.New()
 	if mode.ingest {
 		// Loads its rule set from system_settings at boot; admin PUTs through

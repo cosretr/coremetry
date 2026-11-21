@@ -56,7 +56,7 @@ async function mount() {
   root = createRoot(host);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
-    root!.render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={['/services/checkout?tab=http&range=6h']}>
+    root!.render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={['/services/checkout?tab=http&range=6h&infra=1']} /* v0.10.2434 — tesisat süzgeci kapalı: bağlantı biçimi pinli */>
       <Routes>
         <Route path="/services/:svc" element={<ServiceHttpMetricsTab service="checkout" range={{ preset: '6h' }} />} />
         <Route path="/metrics" element={<Loc />} />

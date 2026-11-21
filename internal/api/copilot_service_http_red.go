@@ -98,12 +98,15 @@ func svcREDFamilyQueriesIn(fam redFamily, service string, base metricChartQueryI
 	p99, _ := metricChartTemplateByID(mcHTTPP99)
 	in := func(v metricChartVariant) metricChartQueryInput {
 		v.Probe, v.Names = fam.Probe, []string{fam.names()}
+		if fam.Match != "" { // v0.10.2434 — spanmetrics: yalnız giriş span'leri
+			v.Match = fam.Match
+		}
 		out := base
 		out.Variant, out.ErrMatch = v, fam.ServerErr
 		return out
 	}
 	errTitle, errName := fam.Label+" 5xx oranı", "5xx %"
-	if fam.Kind == redKindGRPC {
+	if fam.Kind == redKindGRPC || fam.ID == redFamilySpanMetrics {
 		errTitle, errName = fam.Label+" sunucu-hatası oranı", "hata %"
 	}
 	out := []svcHTTPREDQuery{{Kind: svcHTTPREDRate, Title: svcHTTPREDTitle(service, fam.Label+" istek hızı"), Unit: "req/s", Name: "req/s",
@@ -332,7 +335,7 @@ func (s *Server) resolveSvcREDInputs(ctx context.Context, rd redFamilyReader, se
 		if fam.Kind == redKindGRPC {
 			in.notes = append(in.notes, fmt.Sprintf("gRPC histogramında durum kodu etiketi yok (%s) — hata oranı ölçülemez, grafiği YOK (0 sanılmasın)", strings.Join(fam.StatusLabels, " / ")))
 		} else {
-			in.notes = append(in.notes, fmt.Sprintf("HTTP histogramında durum kodu etiketi yok (%s) — 5xx oranı ölçülemez, grafiği YOK (0 sanılmasın)", strings.Join(mcStatusLabels, " / ")))
+			in.notes = append(in.notes, fmt.Sprintf("HTTP histogramında durum kodu etiketi yok (%s) — 5xx oranı ölçülemez, grafiği YOK (0 sanılmasın)", strings.Join(fam.StatusLabels, " / ")))
 		}
 	}
 	if fr.Both {

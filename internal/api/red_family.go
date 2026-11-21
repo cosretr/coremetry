@@ -56,6 +56,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/sourcestate"
 	"github.com/cilcenk/coremetry/internal/vmetrics"
@@ -106,7 +107,19 @@ type redFamily struct {
 	StatusLabels            []string // VM yazımı, tercih sırası
 	StatusKeys              []string // OTel anahtarı (probeStatusLabel adayları)
 	ServerErr, ClientErr    string   // regex gövdeleri
+	// Match — v0.10.2434: sabit ek eşleyici ("" = yok; spanmetrics: giriş
+	// span'leri). MatchKey/MatchRe aynı süzgecin metricSource (FilterExpr) yazımı.
+	Match             string
+	MatchKey, MatchRe string
 }
+
+// Kaynak kimlikleri (v0.10.2434): çözümün SEÇİLEN kaynağı — aile kimliği ya
+// da hiçbir metrik ailesi yoksa "spans" (örneklenmiş span verisi).
+const (
+	redFamilyHTTPLegacy  = "http_legacy"
+	redFamilySpanMetrics = "spanmetrics"
+	redSourceSpans       = "spans"
+)
 
 // redFamilies — sıra = çözüm sırası (HTTP birincil; legacy stable'dan önce).
 var redFamilies = []redFamily{
@@ -122,7 +135,30 @@ var redFamilies = []redFamily{
 		RouteLabel: "rpc_method", MethodLabel: "rpc_service", RouteKey: "rpc.method", MethodKey: "rpc.service",
 		StatusLabels: []string{"rpc_response_status_code"}, StatusKeys: []string{"rpc.response.status_code"},
 		ServerErr: grpcServerFaultMatch, ClientErr: grpcClientFaultMatch},
+	// v0.10.2434 — ESKİ semconv HTTP sunucu histogramı (ms). Yeni semconv
+	// ailesinin yazım adayları bu adı kapsamıyordu; HTTP yuvasına yeni semconv
+	// yoksa girer (ikisi birden → yeni semconv, toplanmaz).
+	{ID: redFamilyHTTPLegacy, Kind: redKindHTTP, Label: "HTTP", Probe: "http.server.duration", VMBase: "http_server_duration_milliseconds", Exact: true, Unit: "ms",
+		RouteLabel: "http_route", MethodLabel: "http_method", RouteKey: "http.route", MethodKey: "http.method",
+		StatusLabels: []string{"http_status_code", "http_response_status_code"}, StatusKeys: []string{"http.status_code", "http.response.status_code"},
+		ServerErr: httpServerFaultMatch, ClientErr: httpClientFaultMatch},
+	// v0.10.2434 — gateway spanmetrics connector'ı (örneklemeden ÖNCE sayar).
+	// Yalnız hiçbir uygulama histogramı yoksa seçilir (uygulama > connector).
+	// Hata = STATUS_CODE_ERROR (sunucu span'inde 5xx; 4xx UNSET) — istemci
+	// hatası kümesi yok (connector 4xx'i ayırmaz).
+	{ID: redFamilySpanMetrics, Kind: redKindHTTP, Label: "spanmetrics", Probe: "traces.span.metrics.duration", VMBase: "traces_span_metrics_duration_seconds", Exact: true, Unit: "s",
+		RouteLabel: "http_route", MethodLabel: "http_request_method", RouteKey: "http.route", MethodKey: "http.request.method",
+		StatusLabels: []string{"status_code"}, StatusKeys: []string{"status.code"},
+		ServerErr: spanMetricsErrMatch, ClientErr: spanMetricsNoClientErr,
+		Match: anomaly.SpanMetricsEntryMatcher, MatchKey: "span.kind", MatchRe: "SPAN_KIND_SERVER|SPAN_KIND_CONSUMER"},
 }
+
+// spanmetrics hata kümeleri: sunucu = STATUS_CODE_ERROR; istemci kümesi YOK
+// (hiçbir değerle eşleşmeyen gövde — connector 4xx'i ayırmaz).
+const (
+	spanMetricsErrMatch    = "STATUS_CODE_ERROR"
+	spanMetricsNoClientErr = "__none__"
+)
 
 // redFamilyByID — katalog araması; bilinmeyen → HTTP, ok=false.
 func redFamilyByID(id string) (redFamily, bool) {
@@ -175,11 +211,25 @@ func (f redFamily) IsServerError(v string) bool {
 	if f.Kind == redKindGRPC {
 		return grpcServerFaultRe.MatchString(strings.TrimSpace(v))
 	}
+	if f.ID == redFamilySpanMetrics {
+		return strings.TrimSpace(v) == spanMetricsErrMatch
+	}
 	return isHTTP5xx(v)
+}
+
+// filters — v0.10.2434: ailenin sabit süzgecinin metricSource yazımı (nil = yok).
+func (f redFamily) filters() []chstore.FilterExpr {
+	if f.MatchKey == "" {
+		return nil
+	}
+	return []chstore.FilterExpr{{Key: f.MatchKey, Op: "=~", Values: []string{f.MatchRe}}}
 }
 
 // errorNoteTR — SAF: notlardaki hata tanımı cümlesi.
 func (f redFamily) errorNoteTR() string {
+	if f.ID == redFamilySpanMetrics {
+		return "status_code=STATUS_CODE_ERROR (sunucu span'inde OTel 5xx'i ERROR yazar; 4xx hata sayılmaz)"
+	}
 	if f.Kind == redKindGRPC {
 		return "sunucu-hatası kodları " + grpcServerFaultMatch + " (UNKNOWN/DEADLINE_EXCEEDED/RESOURCE_EXHAUSTED/UNIMPLEMENTED/INTERNAL/UNAVAILABLE/DATA_LOSS; istemci kodları hata sayılmaz)"
 	}
@@ -197,14 +247,18 @@ type redFamilyPresence struct {
 // redFamilyResolution — servis başına çözüm. State unknown ⇒ yokluk iddiası
 // YOK (okunamadı ≠ yok); Primary o hâlde "http" (bugünkü sorgular koşar).
 type redFamilyResolution struct {
-	Service string             `json:"service"`
-	State   string             `json:"state"` // known | unknown
-	Reason  string             `json:"reason,omitempty"`
-	Primary string             `json:"primary"` // http | grpc | none
-	HTTP    *redFamilyPresence `json:"http,omitempty"`
-	GRPC    *redFamilyPresence `json:"grpc,omitempty"`
-	Both    bool               `json:"both,omitempty"`
-	Tried   []string           `json:"tried"`
+	Service string `json:"service"`
+	State   string `json:"state"` // known | unknown
+	Reason  string `json:"reason,omitempty"`
+	Primary string `json:"primary"` // http | grpc | none
+	// Source — v0.10.2434: SEÇİLEN kaynak (birincil ailenin kimliği: http |
+	// http_legacy | grpc_legacy | grpc_stable | spanmetrics) ya da "spans" (hiçbir
+	// metrik ailesi yok → yüzeyler örneklenmiş span verisi gösterir). unknown → "".
+	Source string             `json:"source,omitempty"`
+	HTTP   *redFamilyPresence `json:"http,omitempty"`
+	GRPC   *redFamilyPresence `json:"grpc,omitempty"`
+	Both   bool               `json:"both,omitempty"`
+	Tried  []string           `json:"tried"`
 }
 
 // redFamilyUnknown — SAF: okuma hatası → unknown çözüm (önbelleğe YAZILMAZ).
@@ -224,7 +278,7 @@ type redFamilyReader interface {
 // redFamilyPresenceQuery — SAF: TEK anlık yoklama; ≥1 seri = servis bu
 // aileyi bu saatte yazmış. Seçici metricChartSelector'dan (aynı yazım kuralı).
 func redFamilyPresenceQuery(f redFamily, svcLabel, service string) string {
-	v := metricChartVariant{Probe: f.Probe, Names: []string{f.names()}, Kind: "count"}
+	v := metricChartVariant{Probe: f.Probe, Names: []string{f.names()}, Kind: "count", Match: f.Match}
 	return "sum(increase(" + metricChartSelector(metricChartQueryInput{Variant: v, Service: service, SvcLabel: svcLabel}, "") + "[1h]))"
 }
 
@@ -315,8 +369,22 @@ func (s *Server) resolveServiceREDFamily(ctx context.Context, rd redFamilyReader
 	// bugünkü gibi çizilir (varsayılan aile; unknown hâlinde de çiziliyordu);
 	// yalnız HEPSİ okunamazsa unknown. Kısmi sonuç önbelleğe yazılmaz.
 	var firstErr error
-	failed := 0
+	failed, attempted := 0, 0
+	httpFound := false // HTTP yuvası GERÇEK bir aileyle dolu (okunamayan yer tutucu değil)
 	for _, f := range redFamilies {
+		// v0.10.2434 — kaynak önceliği: uygulama histogramı (yeni semconv HTTP >
+		// eski semconv HTTP; gRPC ayrı yuva) > spanmetrics connector > span.
+		// Önceliği düşük aile, üstteki bulunduysa YOKLANMAZ (sorgu tasarrufu; toplanmaz).
+		if f.ID == redFamilyHTTPLegacy && httpFound {
+			res.Tried = append(res.Tried, f.vmCount()+": yoklanmadı (yeni semconv HTTP birincil)")
+			continue
+		}
+		// Okunamayan yeni semconv HTTP (yer tutucu) da connector'ı keser: okunamadı ≠ yok.
+		if f.ID == redFamilySpanMetrics && (res.HTTP != nil || res.GRPC != nil) {
+			res.Tried = append(res.Tried, f.vmCount()+": yoklanmadı (uygulama histogramı birincil)")
+			continue
+		}
+		attempted++
 		// v0.10.1574 — etiket keşfi SERVİSE kapsanır (redFamilyLabelSet); boş küme
 		// = bu servis bu aileyi 24 sa'te yazmamış (filo geneli yokluk iddiası değil).
 		step := "etiket okuması"
@@ -347,7 +415,7 @@ func (s *Server) resolveServiceREDFamily(ctx context.Context, rd redFamilyReader
 			}
 			failed++
 			res.Tried = append(res.Tried, f.vmCount()+": okunamadı ("+step+", "+string(sourcestate.Classify(err))+") — yok DEĞİL")
-			if f.Kind == redKindHTTP {
+			if f.ID == redFamilyHTTP {
 				res.HTTP = &redFamilyPresence{ID: f.ID, Kind: f.Kind}
 			}
 			continue
@@ -368,7 +436,7 @@ func (s *Server) resolveServiceREDFamily(ctx context.Context, rd redFamilyReader
 		}
 		switch f.Kind {
 		case redKindHTTP:
-			res.HTTP = p
+			res.HTTP, httpFound = p, true
 		case redKindGRPC:
 			if res.GRPC == nil {
 				res.GRPC = p
@@ -386,7 +454,11 @@ func (s *Server) resolveServiceREDFamily(ctx context.Context, rd redFamilyReader
 		res.Primary = redKindGRPC
 	}
 	res.Both = res.HTTP != nil && res.GRPC != nil
-	if failed == len(redFamilies) {
+	res.Source = redSourceSpans
+	if _, pres := res.primaryFamily(); pres != nil {
+		res.Source = pres.ID
+	}
+	if failed > 0 && failed == attempted {
 		return redFamilyUnknown(service, "okuması", firstErr), firstErr
 	}
 	if failed > 0 {
@@ -407,7 +479,8 @@ func (r redFamilyResolution) primaryFamily() (redFamily, *redFamilyPresence) {
 		}
 	case redKindHTTP:
 		if r.HTTP != nil {
-			return redFamilies[0], r.HTTP
+			f, _ := redFamilyByID(r.HTTP.ID) // v0.10.2434 — http | http_legacy | spanmetrics
+			return f, r.HTTP
 		}
 	}
 	return redFamilies[0], nil

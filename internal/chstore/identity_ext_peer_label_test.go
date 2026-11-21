@@ -294,6 +294,9 @@ func TestResolveExtPeerCallSitesPinned(t *testing.T) {
 		"chstore/entity_calls.go": 1,
 		"api/servicegraph.go":     1,
 		"api/topology.go":         1,
+		// Follow-up 2026-11-21: giden çağrı RED'i server_address → servis,
+		// servis grafiğiyle aynı katlama (hedef bazında tablo + CoSRE kanıtı).
+		"api/downstream_red.go": 1,
 	}
 	got := map[string]int{}
 	root := filepath.Join("..")

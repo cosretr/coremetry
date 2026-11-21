@@ -322,6 +322,9 @@ type Resolved struct {
 	FilterKey   string `json:"filterKey,omitempty"`
 	FilterValue string `json:"filterValue,omitempty"`
 	Gen         string `json:"gen,omitempty"`
+	// PodScoped — follow-up 2026-11-21: seri service_name TAŞIMAZ (HikariCP);
+	// servis süzgeci yerine servisin varlık pod'larıyla (host_name) sorulur.
+	PodScoped bool `json:"podScoped,omitempty"`
 }
 
 // Profile — servisin runtime'ı + çözülmüş sinyaller.

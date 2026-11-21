@@ -216,6 +216,16 @@ func (s *Store) ReadBaseline(ctx context.Context, q BaselineQuery) (BaselineRaw,
 	errs := map[string]error{}
 	redA, serA, opsA, edgA := BaselineArgs(q)
 	out.SQL = BaselineSQL{RED: BaselineREDSQL(q.Operation), Series: BaselineSeriesSQL(q.Operation, q.StepS), Ops: BaselineOpsSQL(), Edges: BaselineEdgesSQL()}
+	// v0.10.2435 — sampling-weight Phase 2 (series: zero from → mixed form)
+	tbl, _ := baselineTable(q.Operation)
+	// Periods straddling the switch read stored values on both sides.
+	out.SQL.RED = s.weighSQLPeriods(out.SQL.RED, q.Cur.From, q.Ref.From, tbl)
+	serFrom := q.ViewFrom
+	if q.Overlay > 0 {
+		serFrom = q.ViewFrom.Add(-q.Overlay)
+	}
+	out.SQL.Series = s.weighSQLPeriods(out.SQL.Series, serFrom, q.Cur.From, tbl)
+	out.SQL.Ops = s.weighSQLPeriods(out.SQL.Ops, q.Cur.From, q.Ref.From, "operation_summary_5m")
 	conn := s.telemetryReadConn()
 
 	rows, err := conn.Query(ctx, out.SQL.RED, redA...)

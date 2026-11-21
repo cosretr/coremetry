@@ -69,7 +69,10 @@ export function useRedFamily(service: string, env: string, cluster: string, toNs
     staleTime: 60_000,
     retry: false,
   });
-  return redFamilyView({ data: q.data, error: (q.error as Error | null) ?? null }, on);
+  // v0.10.2434 — başarılı ama BOŞ cevap sonsuz "pending" değildir (Endpoints
+  // kaynak varsayılanı çözümü bekler): hata gibi → HTTP varsayılanı, span kaynağı.
+  const empty = q.isSuccess && !q.data ? new Error('red-family: boş cevap') : null;
+  return redFamilyView({ data: q.data ?? undefined, error: (q.error as Error | null) ?? empty }, on);
 }
 
 /** Bölümün ortam eşleyicisi görünümü (bant + envSel): aile çözümünün envScope'u httpEnvScopeView'a girer. */

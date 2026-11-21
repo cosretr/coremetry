@@ -1,9 +1,11 @@
-import { statusCodeRateQuery, statusCodeSeries, totalRequestsQuery, scalarOf, HTTP_METRICS_POINTS, windowRange } from '@/lib/httpMetrics';
+import { statusCodeRateQuery, statusCodeSeries, totalRequestsQuery, scalarOf, HTTP_METRICS_POINTS, windowRange, infraHiddenCountQuery, infraHiddenCount } from '@/lib/httpMetrics';
+import { useShowInfraRoutes, withInfraExclude, infraRouteRegexBody } from '@/lib/infraRoutes';
+import { InfraRoutesToggle } from '@/components/coremetry/InfraRoutesToggle';
 // v0.10.1360 — metrik karoları pencere değeri (HTTP Metrics sekmesiyle aynı sorgu + kanca).
 import { useHttpPromql, useRedFamily, sectionEnvScope } from '@/lib/queries/httpMetrics';
 // v0.10.1429 — RED ailesi (HTTP / gRPC): yalnız gRPC sunan serviste karolar, durum kodu, toplam istek ve
 // /metric-red + /metric-throughput gRPC ailesinden; ikisi varsa HTTP + "gRPC de var" (toplanmaz).
-import { pickFamilySection, familyBadgeSuffix, familyUnknownNote } from '@/lib/redFamily';
+import { pickFamilySection, familyBadgeSuffix, familyUnknownNote, metricRedFamilyParam } from '@/lib/redFamily';
 // v0.10.1377 — metrik kipi env süzgeci VM PromQL'inde (karolar + /metric-red aynı çözücü).
 import { httpEnvScopeNote, httpEnvScopeReady } from '@/lib/httpEnvScopeNote';
 import { HttpEnvScopeBand } from './httpMetricsViz';
@@ -267,10 +269,17 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   const famSec = pickFamilySection(fam);
   const family = famSec.family;
   const famGrpc = family.kind === 'grpc';
-  const famOpt = famGrpc ? { family: 'grpc' as const } : {};
+  const redFamParam = metricRedFamilyParam(family); // v0.10.2434 — gRPC | http_legacy | spanmetrics
+  // v0.10.2434 (operatör onaylı) — tesisat rotaları (health / scrape / ping) metrik
+  // RED toplamlarından ve rota grafiklerinden varsayılan dışlanır; ?infra=1 gösterir.
+  const [showInfra] = useShowInfraRoutes();
+  const infraEx = useMemo(() => withInfraExclude([], showInfra), [showInfra]);
+  const infraOpt = showInfra ? { infra: true } : {};
+  const famOpt = { ...(famGrpc ? { family: 'grpc' as const } : family.id === 'http_legacy' ? { family: 'http_legacy' as const } : {}), ...infraOpt }; // v0.10.2434 — throughput: + eski semconv, tesisat süzgeci
+  const redFamOpt = { ...(redFamParam ? { family: redFamParam } : {}), ...infraOpt };
   const metricRedQ = useQuery({
-    queryKey: ['service-metric-red', service, from, to, redMdp, env, family.kind],
-    queryFn: () => api.serviceMetricRED(service, from, to, redMdp, { rateWindow: 180, env: env || undefined, ...famOpt }),
+    queryKey: ['service-metric-red', service, from, to, redMdp, env, family.id, showInfra],
+    queryFn: () => api.serviceMetricRED(service, from, to, redMdp, { rateWindow: 180, env: env || undefined, ...redFamOpt }),
     enabled: !!service && wantMetric && fam.ready,
     staleTime: 30_000,
   });
@@ -293,8 +302,8 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   // KODU başına istek hızı (VictoriaMetrics, HTTP Metrics sekmesiyle aynı
   // metrik). Seri yoksa (HTTP semconv metriği yayınlanmıyor) eski OK/Errors.
   const httpStatusQ = useQuery({
-    queryKey: ['ov-http-status', service, from, to, envSel ?? '', family.id],
-    queryFn: () => api.httpMetricsPromql({ query: statusCodeRateQuery(service, Math.max(60, (to - from) / 1e9), envSel, family), from, to, maxDataPoints: HTTP_METRICS_POINTS }),
+    queryKey: ['ov-http-status', service, from, to, envSel ?? '', family.id, infraEx.length],
+    queryFn: () => api.httpMetricsPromql({ query: statusCodeRateQuery(service, Math.max(60, (to - from) / 1e9), envSel, family, infraEx), from, to, maxDataPoints: HTTP_METRICS_POINTS }),
     enabled: metricMode && envReady,
     staleTime: 30_000,
     retry: false,
@@ -305,13 +314,22 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   // kipinde hata oranı hesaplanamıyorsa (durum etiketi yok, "—") karo
   // penceredeki TOPLAM isteği gösterir (VM anlık sorgu, HTTP Metrics'le aynı).
   const totalReqQ = useQuery({
-    queryKey: ['ov-http-total', service, from, to, envSel ?? '', family.id],
-    queryFn: () => api.httpMetricsPromql({ query: totalRequestsQuery(service, Math.max(60, (to - from) / 1e9), envSel, family), from, to, maxDataPoints: HTTP_METRICS_POINTS, instant: '1' }),
+    queryKey: ['ov-http-total', service, from, to, envSel ?? '', family.id, infraEx.length],
+    queryFn: () => api.httpMetricsPromql({ query: totalRequestsQuery(service, Math.max(60, (to - from) / 1e9), envSel, family, infraEx), from, to, maxDataPoints: HTTP_METRICS_POINTS, instant: '1' }),
     enabled: metricMode && envReady,
     staleTime: 30_000,
     retry: false,
   });
   const totalReq = scalarOf(totalReqQ.data);
+  // v0.10.2434 — kaç tesisat rotası gizlendi (tek anlık sorgu; gösterilirken koşmaz; gRPC'de rota yok).
+  const infraHiddenQ = useQuery({
+    queryKey: ['ov-infra-hidden', service, from, to, envSel ?? '', family.id],
+    queryFn: () => api.httpMetricsPromql({ query: infraHiddenCountQuery(service, Math.max(60, (to - from) / 1e9), infraRouteRegexBody(), envSel, family), from, to, maxDataPoints: HTTP_METRICS_POINTS, instant: '1' }),
+    enabled: metricMode && envReady && !showInfra && !famGrpc,
+    staleTime: 30_000,
+    retry: false,
+  });
+  const infraHidden = infraHiddenCount(infraHiddenQ.data);
   // v0.10.1360 (operatör: yüzeyler arası tutarlılık) — Response time karosu +
   // "P99 (metrik)" alt satırı PENCERE değeri: HTTP Metrics sekmesi / endpoint
   // karolarıyla AYNI üretici (windowQueries({ app }, W) — anlık increase[W])
@@ -321,12 +339,12 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   // sayfanın compare kaydırması; prior'da W) yalnız delta için.
   const ovWinSec = overviewWindowSec(from, to);
   const ovWinOffsetSec = overviewWindowOffsetSec(compareOff);
-  const ovWinItems = useMemo(() => overviewWindowItems(service, ovWinSec, ovWinOffsetSec, envSel, family), [service, ovWinSec, ovWinOffsetSec, envSel, family]);
+  const ovWinItems = useMemo(() => overviewWindowItems(service, ovWinSec, ovWinOffsetSec, envSel, family, infraEx), [service, ovWinSec, ovWinOffsetSec, envSel, family, infraEx]);
   const ovWin = overviewWindowKpi(useHttpPromql(ovWinItems, { from, to }, metricMode && !!service && envReady), family, lang);
   const metricAutoFellBack = explicitSrc === null && !!metricRedQ.data && !metricRedQ.data.metricExists;
   const metricRedGhostQ = useQuery({
-    queryKey: ['service-metric-red', service, from - compareOff, to - compareOff, redMdp, env, family.kind],
-    queryFn: () => api.serviceMetricRED(service, from - compareOff, to - compareOff, redMdp, { rateWindow: 180, env: env || undefined, ...famOpt }),
+    queryKey: ['service-metric-red', service, from - compareOff, to - compareOff, redMdp, env, family.id, showInfra],
+    queryFn: () => api.serviceMetricRED(service, from - compareOff, to - compareOff, redMdp, { rateWindow: 180, env: env || undefined, ...redFamOpt }),
     enabled: !!service && metricMode && ghostEnabled && fam.ready,
     staleTime: 30_000,
   });
@@ -405,7 +423,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
     // by(http_route) + [3m] referansı).
     // v0.9.844 — bayrak anahtardan çıktı, breakdown='route' sabitlendi.
     // v0.10.1429 — gRPC ailesinde kimlik ?family=grpc, kırılım rpc.method (aile çözülene dek bekler).
-    queryKey: ['service-metric-throughput', service, from, to, redMdp, env, family.kind],
+    queryKey: ['service-metric-throughput', service, from, to, redMdp, env, family.id, showInfra],
     queryFn: () => api.serviceMetricThroughput(service, from, to, undefined, redMdp,
       { breakdown: famGrpc ? 'rpc_method' : 'route', rateWindow: 180, env: env || undefined, ...famOpt }),
     enabled: !wantMetric || fam.ready,
@@ -978,7 +996,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
           style={{ textTransform: 'none', letterSpacing: 0 }} title={latScopeNote}>
           {metricMode
             ? tf('ov.badge.metric', lang, { src: metricRedQ.data?.source ?? '…' }) + familyBadgeSuffix(fam) /* v0.10.1429 — " · gRPC" | " · +gRPC" */
-            : tl(usingAllSpans ? 'ov.badge.all' : 'ov.badge.entry', lang)}
+            : tl(usingAllSpans ? 'ov.badge.all' : 'ov.badge.entry', lang) + tl('ov.badge.sampled', lang) /* v0.10.2434 */}
         </span>
       </div>
       {/* KPI row — golden signals + full-bleed trend sparklines. Each tile is
@@ -1063,6 +1081,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
           <option value="span">{tl('ep.src.span', lang)}</option>
           <option value="metric">{tl('ep.src.metric', lang)}</option>
         </select>
+        {metricMode && !famGrpc && <InfraRoutesToggle hidden={infraHidden} />}
         <CompareToggle value={compare} onChange={setCompare} />
         {ghostEnabled && <span style={{ color: 'var(--text3)' }}>{tl('ov.ghostNote', lang)}</span>}
         {metricMode && metricRedQ.isError && <span className="badge b-err" title={metricRedQ.error instanceof Error ? metricRedQ.error.message : ''}>{tl('ov.redErr', lang)}</span>}

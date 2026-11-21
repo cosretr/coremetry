@@ -33,6 +33,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/cache"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcptools"
+	"github.com/cilcenk/coremetry/internal/runtimesig"
 )
 
 const (
@@ -81,13 +82,16 @@ type readers struct {
 	argo       func(ctx context.Context, service string) ([]mcptools.ArgoAppStatus, error)
 	// v0.10.1494 (CoSRE 2d) — Context Pack okuyucuları (readers_*.go) ve
 	// bayrak/bütçe. pack nil → CurrentContextPackSettings (varsayılan kapalı).
-	redMetric   mcptools.ServiceMetricREDReader
-	redSpan     func(ctx context.Context, service string, from, to time.Time) (chstore.ServiceWindowRED, error)
-	anomalies   func(ctx context.Context, f chstore.ListAnomalyEventsFilter) ([]chstore.AnomalyEvent, error)
-	errorOps    func(ctx context.Context, service string, from, to time.Time, limit int) ([]chstore.ErrorRank, error)
-	exceptions  func(ctx context.Context, f chstore.ExceptionFilter) ([]chstore.ExceptionRow, error)
-	sensitivity func() chstore.AnomalySensitivityConfig
-	pack        func() ContextPackSettings
+	redMetric mcptools.ServiceMetricREDReader
+	// downstreamRED — follow-up 2026-11-21: hedef başına giden RED (VM HTTP
+	// client histogramı; örnekleme öncesi tam sayım). nil = okunmaz.
+	downstreamRED func(ctx context.Context, service string, from, to time.Time) (runtimesig.DownstreamReport, error)
+	redSpan       func(ctx context.Context, service string, from, to time.Time) (chstore.ServiceWindowRED, error)
+	anomalies     func(ctx context.Context, f chstore.ListAnomalyEventsFilter) ([]chstore.AnomalyEvent, error)
+	errorOps      func(ctx context.Context, service string, from, to time.Time, limit int) ([]chstore.ErrorRank, error)
+	exceptions    func(ctx context.Context, f chstore.ExceptionFilter) ([]chstore.ExceptionRow, error)
+	sensitivity   func() chstore.AnomalySensitivityConfig
+	pack          func() ContextPackSettings
 }
 
 // readersFrom — üretim okuyucuları: srv.MCPDeps() (sohbetle aynı kurucu).
@@ -113,8 +117,9 @@ func readersFrom(d mcptools.Deps, n Narrator, c cache.Cache, now func() time.Tim
 		settings: CurrentSettings,
 		// v0.10.1494 — paket okuyucuları: metrik RED (Overview metrik kipi;
 		// VM-first, örneklenmemiş) + bayrak.
-		redMetric: d.ServiceMetricRED,
-		pack:      CurrentContextPackSettings,
+		redMetric:     d.ServiceMetricRED,
+		downstreamRED: d.DownstreamRED,
+		pack:          CurrentContextPackSettings,
 	}
 	if st := d.Store; st != nil {
 		// v0.10.1494 — paket okuyucuları (hepsi okuma; MV-first ya da sınırlı).

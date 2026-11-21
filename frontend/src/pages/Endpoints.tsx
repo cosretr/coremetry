@@ -50,7 +50,9 @@ import { useHttpPromql, useRedFamily, sectionEnvScope } from '@/lib/queries/http
 // (satır = rpc_service + rpc_method); ikisi varsa HTTP satırları + gRPC satırları (toplanmaz).
 import { HTTP_FAMILY, familyUnknownNote } from '@/lib/redFamily';
 import { httpEnvScopeNote, httpEnvScopeReady } from '@/lib/httpEnvScopeNote';
-import { ENDPOINT_LIST_POOL_MAX, endpointListRows, endpointListScope, listQueries } from '@/lib/httpMetrics';
+import { ENDPOINT_LIST_POOL_MAX, endpointListRows, endpointListScope, listQueries, infraHiddenCountQuery, infraHiddenCount } from '@/lib/httpMetrics';
+import { useShowInfraRoutes, withInfraExclude, infraRouteRegexBody } from '@/lib/infraRoutes';
+import { InfraRoutesToggle } from '@/components/coremetry/InfraRoutesToggle';
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2305 — kalan Türkçe metinler arayüz dilinde (TR aynı)
 
 // /endpoints — operator-asked v0.5.365. Cross-service inbound
@@ -323,8 +325,19 @@ export default function EndpointsPage() {
   // Messaging sekmesi (entry=rpc) metrikte yok → o sekmede kaynak span.
   const srcParam = params.get('src');
   const explicitSrc: 'metric' | 'span' | null = srcParam === 'metric' ? 'metric' : srcParam === 'span' ? 'span' : null;
+  // v0.10.2434 (operatör onaylı "RED metrik-önce"; v0.10.454 "liste varsayılanı
+  // span" kararı GERİ ALINDI): prod trace'leri örneklenir (hatalar + %5) — span
+  // sayıları ~1/20 hız, şişik hata oranı. Servis seçiliyken ve aile çözücüsü
+  // örneklenmemiş bir metrik kaynağı (uygulama histogramı ya da spanmetrics
+  // connector) bulduysa varsayılan METRİK; yoksa span (rozet "örneklenmiş").
+  // ?src=span / ?src=metric zorlar. Aile çözülene dek liste okunmaz.
+  const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
+  const famWanted = !!service && entry !== 'rpc' && explicitSrc !== 'span';
+  const fam = useRedFamily(service, env, cluster, to, famWanted);
+  const autoMetric = explicitSrc === null && famWanted && fam.state === 'known' && !!fam.source && fam.source !== 'spans';
+  const srcPending = explicitSrc === null && famWanted && fam.state === 'pending';
   const src: 'span' | 'metric' = entry === 'rpc' ? 'span'
-    : explicitSrc === 'metric' ? 'metric'
+    : explicitSrc === 'metric' || autoMetric ? 'metric'
     : 'span';
   const setSrc = (v: 'span' | 'metric') => setParams(prev => {
     const next = new URLSearchParams(prev);
@@ -433,7 +446,6 @@ export default function EndpointsPage() {
     },
   ));
 
-  const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
 
   // v0.8.356 — serverSort mode (v0.8.251 Services / v0.8.318 inbox
   // pattern): the hook owns the header UX, the `s_endpoints` URL
@@ -602,7 +614,7 @@ export default function EndpointsPage() {
     status: entry === 'http' && statusF ? statusF : undefined,
     // v0.10.1359 — metrik kipinde satır okunmaz (aşağıda PromQL);
     // v0.10.1361 — /api/endpoints/metric silindi, bu okuma yalnız span.
-  }, !metricMode);
+  }, !metricMode && !srcPending); // v0.10.2434 — aile çözülene dek okunmaz (kaynak belirsiz)
   // v0.10.1359 — metrik kipi = HTTP Metrics sekmesinin AYNI pencere sorguları
   // (lib/httpMetrics listQueries: sekmenin windowQueries'i + `and on (BY)
   // topk(N, …)` havuzu), anlık, /api/metrics/promql?metricsrc=vm. Servis
@@ -615,22 +627,32 @@ export default function EndpointsPage() {
   // v0.10.1377 — env/cluster metrik kipinde de süzer (ortam adı → VM ortam
   // etiketi); çözüm gelene dek sorgu atılmaz, uygulanamazsa not söyler.
   // v0.10.1429 — önce aile çözümü (GET /red-family; ortam eşleyicisi aile başına onun içinde).
-  const fam = useRedFamily(service, env, cluster, to, metricMode && !!service);
+  // (v0.10.2434 — `fam` kaynak varsayılanının yanında, yukarıda çözülür.)
   const httpSec = fam.http ?? (fam.grpc ? undefined : { family: HTTP_FAMILY });
   const grpcSec = fam.grpc;
   const envScope = sectionEnvScope(httpSec ?? grpcSec, fam, env, cluster);
   const envSelHttp = sectionEnvScope(httpSec, fam, env, cluster).envSel;
   const envSelGrpc = sectionEnvScope(grpcSec, fam, env, cluster).envSel;
   const grpcFamily = grpcSec?.family;
-  const metricItems = useMemo(() => (metricMode && service && httpSec
-    ? listQueries(endpointListScope(service, searchQ, envSelHttp), windowSec, metricN, compare)
-    : []), [metricMode, service, searchQ, envSelHttp, windowSec, metricN, compare, !!httpSec]); // eslint-disable-line react-hooks/exhaustive-deps
+  // v0.10.2434 — HTTP yuvasının ailesi (http | http_legacy | spanmetrics); önceden hep HTTP_FAMILY.
+  const httpFamily = httpSec?.family;
+  // v0.10.2434 (operatör onaylı) — tesisat rotaları (health / scrape / ping) varsayılan dışlanır; ?infra=1 gösterir.
+  const [showInfra] = useShowInfraRoutes();
+  const infraEx = useMemo(() => withInfraExclude([], showInfra), [showInfra]);
+  const metricItems = useMemo(() => (metricMode && service && httpFamily
+    ? listQueries(endpointListScope(service, searchQ, envSelHttp, httpFamily, infraEx), windowSec, metricN, compare)
+    : []), [metricMode, service, searchQ, envSelHttp, windowSec, metricN, compare, httpFamily, infraEx]);
+  const infraItems = useMemo(() => (metricMode && service && httpFamily && !showInfra
+    ? [{ id: 'infraN', expr: infraHiddenCountQuery(service, windowSec, infraRouteRegexBody(), envSelHttp, httpFamily), instant: true as const }]
+    : []), [metricMode, service, httpFamily, showInfra, windowSec, envSelHttp]);
   const grpcItems = useMemo(() => (metricMode && service && grpcFamily
     ? listQueries(endpointListScope(service, searchQ, envSelGrpc, grpcFamily), windowSec, metricN, compare)
     : []), [metricMode, service, searchQ, envSelGrpc, windowSec, metricN, compare, grpcFamily]);
   const metricOn = metricMode && !!service && fam.ready && httpEnvScopeReady(envScope);
   const metricRes = useHttpPromql(metricItems, { from, to }, metricOn);
   const grpcRes = useHttpPromql(grpcItems, { from, to }, metricOn);
+  const infraRes = useHttpPromql(infraItems, { from, to }, metricOn);
+  const infraHidden = infraHiddenCount(infraRes.data.infraN);
   const md = metricRes.data;
   const gd = grpcRes.data;
   const metricRows = useMemo(
@@ -638,7 +660,7 @@ export default function EndpointsPage() {
       ...endpointListRows({
         total: md.total, err5: md.err5, avg: md.avg, p50: md.p50, p95: md.p95, p99: md.p99, cls: md.cls,
         ...(compare ? { pTotal: md.pTotal, pErr5: md.pErr5, pAvg: md.pAvg, pP99: md.pP99 } : {}),
-      }, windowSec, service),
+      }, windowSec, service, httpFamily),
       // gRPC satırları ayrı aileden (path = rpc_method, method = rpc_service; sınıflar ok/istemci/sunucu) — toplanmaz, eklenir.
       ...(grpcFamily ? endpointListRows({
         total: gd.total, err5: gd.err5, avg: gd.avg, p50: gd.p50, p95: gd.p95, p99: gd.p99, cls: gd.cls,
@@ -647,7 +669,7 @@ export default function EndpointsPage() {
     ],
     // md/gd her render'da yeni nesne; anahtar seriler tek tek (v0.10.1359).
     [md.total, md.err5, md.avg, md.p50, md.p95, md.p99, md.cls, md.pTotal, md.pErr5, md.pAvg, md.pP99,
-      gd.total, gd.err5, gd.avg, gd.p50, gd.p95, gd.p99, gd.cls, gd.pTotal, gd.pErr5, gd.pAvg, gd.pP99, grpcFamily, compare, windowSec, service]);
+      gd.total, gd.err5, gd.avg, gd.p50, gd.p95, gd.p99, gd.cls, gd.pTotal, gd.pErr5, gd.pAvg, gd.pP99, grpcFamily, httpFamily, compare, windowSec, service]);
   const metricPending = !fam.ready || metricItems.some(q => metricRes.pending(q.id)) || grpcItems.some(q => grpcRes.pending(q.id));
   const metricErr = [...metricItems.map(q => metricRes.error(q.id)), ...grpcItems.map(q => grpcRes.error(q.id))].find((e): e is Error => !!e) ?? null;
   // v0.9.812 — zarf: satırlar + sıralama havuzunun gerçeği.
@@ -745,7 +767,7 @@ export default function EndpointsPage() {
 
   return (
     <>
-      <Topbar title="Endpoints" range={range} onRangeChange={setRange} envApplies />
+      <Topbar title="Endpoints" range={range} onRangeChange={setRange} envApplies sampling="endpoints" />
       <PageShell>
         {/* v0.9.308 (brief N6c) — the page's whole selection already
             lives in the URL: service, search, cluster, limit, compare,
@@ -803,6 +825,7 @@ export default function EndpointsPage() {
             <option value="span">{t('ep.src.span', lang)}</option>
             <option value="metric">{t('ep.src.metric', lang)}</option>
           </select>
+          {metricMode && <InfraRoutesToggle hidden={infraHidden} />}
           <span style={{ color: 'var(--text3)', fontSize: 12, marginLeft: 'auto' }}>
             {rows && (
               <>

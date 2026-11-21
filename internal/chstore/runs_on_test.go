@@ -68,7 +68,7 @@ func chstoreSources(t *testing.T) map[string]string {
 // eklenirse ve süzgeçsizse bu test kırmızıya döner — dosya listesi değil,
 // desen kapısı.
 func TestCallGraphReadersExcludeRunsOn(t *testing.T) {
-	probeRe := regexp.MustCompile(`SELECT cluster FROM topology_edges_5m LIMIT 1`)
+	probeRe := regexp.MustCompile(`SELECT (cluster|w_calls, w_errors) FROM topology_edges_5m LIMIT 1`) // v0.10.2435 — w_* kolon probu
 	for name, src := range chstoreSources(t) {
 		reads := strings.Count(src, "FROM topology_edges_5m")
 		if reads == 0 {

@@ -38,6 +38,11 @@ func TestJudgeVolume(t *testing.T) {
 		{"giriş span'i yok → ham span ölçüsü", volInput{Spans: rep(60000, 3), Entries: rep(0, 3), HourSpans: 700000, BaseSpan: baseSpan, Z: 4}, true, volPartSpans, "up"},
 		{"küçük servis → hacim tabanı", volInput{Spans: rep(400, 3), Entries: rep(10, 3), HourSpans: 1600, BaseRatio: baseRatio, BaseSpan: []float64{500, 400, 600, 450}, Z: 4}, false, "", ""},
 		{"taban yetersiz → sessiz", volInput{Spans: rep(40000, 3), Entries: rep(2500, 3), HourSpans: 200000, BaseRatio: baseRatio[:2], BaseSpan: baseSpan[:2], Z: 4}, false, "", ""},
+		// Örnek kapısı (2026-11-21): ~7 istek/sn servis, %5 + tüm ERROR trace →
+		// kovada ~110 örneklenmiş giriş span'i; oran bandı aşsa da olay yok.
+		{"az örnek (110 giriş) → oran olayı yok", volInput{Spans: rep(2420, 3), Entries: rep(110, 3), HourSpans: 29000, BaseRatio: []float64{12, 13, 14, 12, 13, 14}, BaseSpan: rep(26000, 6), Z: 4}, false, "", ""},
+		{"tek kova az örnek → olay ilerlemez", volInput{Spans: []float64{25000, 1500, 25000}, Entries: []float64{2500, 150, 2500}, HourSpans: 200000, BaseRatio: baseRatio, BaseSpan: baseSpan, Z: 4}, false, "", ""},
+		{"sınırda örnek (200 giriş) → oran olayı", volInput{Spans: rep(2000, 3), Entries: rep(volMinEntries, 3), HourSpans: 24000, BaseRatio: baseRatio, BaseSpan: rep(24000, 6), Z: 4}, true, volPartRatio, "up"},
 		{"aşağı yönde tam susma → olay yok", volInput{Spans: []float64{100, 0, 100}, Entries: rep(0, 3), HourSpans: 50000, BaseSpan: baseSpan, Z: 4}, false, "", ""},
 	}
 	for _, c := range cases {
@@ -185,12 +190,14 @@ func TestVolumeRecordNoCompanions(t *testing.T) {
 	in := volFixture(0.5, 120)
 	in.ErrPoints, in.LatPoints = nil, nil
 	rec, _ := BuildVolumeRecord(in)
-	if rec.Class != ClassServiceAnomaly {
-		t.Fatalf("yan seri yokken sınıf %s, beklenen service_anomaly (etki gösterilemedi)", rec.Class)
+	// 2026-11-21: hacim ölçüsü tek başına service_anomaly değil; etki kanıtı
+	// (yan serinin bandı aşması) yoksa telemetry_volume.
+	if rec.Class != ClassTelemetryVolume {
+		t.Fatalf("yan seri yokken sınıf %s, beklenen telemetry_volume (etki kanıtı yok)", rec.Class)
 	}
 	o := gateVerdict(rec, EvaluateGates(rec))
-	if o.WouldClass == ClassTelemetryVolume {
-		t.Fatalf("yan seri yokken telemetry_volume sayıldı: %+v", o)
+	if o.WouldClass != ClassTelemetryVolume || o.Drop {
+		t.Fatalf("yan seri yokken kapı kararı %+v, beklenen telemetry_volume", o)
 	}
 	in.Measure = volPartSpans // giriş span'i yok: her zaman telemetry_volume
 	in.Expected, in.Lo, in.Hi = 10000, 5000, 15000
@@ -203,6 +210,25 @@ func TestVolumeRecordNoCompanions(t *testing.T) {
 	}
 	if o := gateVerdict(rec, EvaluateGates(rec)); o.WouldClass != ClassTelemetryVolume {
 		t.Fatalf("span ölçüsü kapı kararı %+v", o)
+	}
+}
+
+// Tek yan seri: bant içindeyse telemetry_volume (eskiden service_anomaly),
+// bandı aşıyorsa service_anomaly (etki kanıtı tek seriyle de yeter).
+func TestVolumeRecordOneCompanion(t *testing.T) {
+	in := volFixture(0.5, 120)
+	in.LatPoints = nil
+	if rec, _ := BuildVolumeRecord(in); rec.Class != ClassTelemetryVolume || len(rec.Context) != 1 {
+		t.Fatalf("tek yan seri bant içinde: sınıf %s, yan seri %d", rec.Class, len(rec.Context))
+	}
+	in = volFixture(6, 120)
+	in.LatPoints = nil
+	rec, _ := BuildVolumeRecord(in)
+	if rec.Class != ClassServiceAnomaly {
+		t.Fatalf("hata oranı bandı aştı: sınıf %s, beklenen service_anomaly", rec.Class)
+	}
+	if o := gateVerdict(rec, EvaluateGates(rec)); o.WouldClass == ClassTelemetryVolume {
+		t.Fatalf("etkili tek yan seri telemetry_volume sayıldı: %+v", o)
 	}
 }
 

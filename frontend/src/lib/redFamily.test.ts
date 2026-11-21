@@ -8,12 +8,12 @@ import {
   HTTP_FAMILY, GRPC_LEGACY_FAMILY, GRPC_STABLE_FAMILY, RED_FAMILIES, familyById, GRPC_CODE_NAMES,
   statusClassOf, statusClassToken, statusCodeLabel, serverErrorLabel,
   redFamilyView, pickFamilySection, familySections, familyBadgeSuffix, familyUnknownNote, familyPartialNote,
-  type RedFamilyResolution,
+  type RedFamilyResolution, HTTP_LEGACY_FAMILY, SPANMETRICS_FAMILY, metricRedFamilyParam, redSourceOf,
 } from './redFamily';
 
 describe('katalog', () => {
   it('üç aile, sıra HTTP → legacy → stable; adlar/etiketler/hata kümeleri pinli', () => {
-    expect(RED_FAMILIES.map(f => f.id)).toEqual(['http', 'grpc_legacy', 'grpc_stable']);
+    expect(RED_FAMILIES.map(f => f.id)).toEqual(['http', 'grpc_legacy', 'grpc_stable', 'http_legacy', 'spanmetrics']); // v0.10.2434
     expect(HTTP_FAMILY.names.count).toBe('http_server_request_duration_seconds_count');
     expect(HTTP_FAMILY.labels).toEqual({ service: 'service_name', route: 'http_route', method: 'http_request_method', status: 'http_response_status_code' });
     expect(HTTP_FAMILY.serverErr).toBe('5..');
@@ -127,5 +127,37 @@ describe('kısmi aile çözümü (v0.10.1559)', () => {
     expect(familySections(v).map(s => s.family.kind)).toEqual(['http', 'grpc']);
     expect(familyUnknownNote(v)).toBeNull();
     expect(familyPartialNote(v)).toContain('okunamadı ≠ yok');
+  });
+});
+
+// v0.10.2434 (RED metrik-önce) — eski semconv HTTP (ms) + spanmetrics connector.
+describe('metrik-önce aileleri', () => {
+  it('eski semconv HTTP: ms, http_status_code, 5xx', () => {
+    expect(HTTP_LEGACY_FAMILY).toMatchObject({ kind: 'http', unit: 'ms', sliLe: '500',
+      names: { count: 'http_server_duration_milliseconds_count' },
+      labels: { route: 'http_route', method: 'http_method', status: 'http_status_code' }, serverErr: '5..' });
+    expect(statusClassOf(HTTP_LEGACY_FAMILY, '503')).toBe('5xx');
+  });
+  it('spanmetrics: giriş span eşleyicisi, STATUS_CODE_ERROR = sunucu hatası', () => {
+    expect(SPANMETRICS_FAMILY.matcher).toBe('span_kind=~"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER"');
+    expect(SPANMETRICS_FAMILY.names.count).toBe('traces_span_metrics_duration_seconds_count');
+    expect(statusClassOf(SPANMETRICS_FAMILY, 'STATUS_CODE_ERROR')).toBe('server');
+    expect(statusClassOf(SPANMETRICS_FAMILY, 'STATUS_CODE_UNSET')).toBe('ok');
+    expect(serverErrorLabel(SPANMETRICS_FAMILY)).toBe('status_code=STATUS_CODE_ERROR');
+  });
+  it('HTTP yuvası çözümün ailesiyle; kaynak ve /metric-red parametresi', () => {
+    const r: RedFamilyResolution = { service: 'mainframe-adapter', state: 'known', primary: 'http', source: 'spanmetrics',
+      http: { id: 'spanmetrics', kind: 'http' }, tried: [] };
+    const v = redFamilyView({ data: r });
+    expect(pickFamilySection(v).family.id).toBe('spanmetrics');
+    expect(v.source).toBe('spanmetrics');
+    expect(familyBadgeSuffix(v)).toBe(' · spanmetrics');
+    expect(metricRedFamilyParam(SPANMETRICS_FAMILY)).toBe('spanmetrics');
+    expect(metricRedFamilyParam(HTTP_FAMILY)).toBeUndefined();
+    expect(metricRedFamilyParam(GRPC_STABLE_FAMILY)).toBe('grpc');
+    // Eski uç source taşımaz → birincilden; hiçbir aile yok → spans; unknown → yok.
+    expect(redSourceOf({ ...r, source: undefined, http: { id: 'http_legacy', kind: 'http' } })).toBe('http_legacy');
+    expect(redSourceOf({ service: 'batch-loader', state: 'known', primary: 'none', tried: [] })).toBe('spans');
+    expect(redSourceOf({ service: 'x', state: 'unknown', primary: 'http', tried: [] })).toBeUndefined();
   });
 });

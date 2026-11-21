@@ -67,11 +67,14 @@ func (s *Store) GetMetricBaseline(
 	// t-digest uç centroid'i); oran/sayı: kova başına merge'ler üstünde quantile.
 	// SampleCount: gecikmede span, oranlarda 5-dk kova sayısı (eskiden dakika).
 	to := time.Now()
-	from := to.Add(-lookback)
+	// v0.10.2435 — sampling-weight Phase 2: the baseline restarts at the
+	// switch to weighted reads (BaselineFloor) and reads weighted states.
+	from := BaselineFloor(to.Add(-lookback), "service_summary_5m")
 	sqlText, latency, ok := baselineSQL(metric, service != "")
 	if !ok {
 		return nil, fmt.Errorf("baseline not supported for metric %q", metric)
 	}
+	sqlText = s.weighSQL(sqlText, from, "service_summary_5m")
 	args := []any{from, to}
 	if service != "" {
 		args = append(args, service)

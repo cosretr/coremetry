@@ -76,7 +76,8 @@ func (s *Store) MessagingOperationRED(
 	if from.IsZero() {
 		from = to.Add(-time.Hour)
 	}
-	rows, err := s.telemetryReadConn().Query(ctx, msgOperationREDSQL,
+	sql := s.weighSQL(msgOperationREDSQL, alignBucketStart(from), "messaging_summary_5m") // v0.10.2435 — sampling-weight Phase 2
+	rows, err := s.telemetryReadConn().Query(ctx, sql,
 		alignBucketStart(from), to, system, cluster, destination)
 	if err != nil {
 		return nil, err

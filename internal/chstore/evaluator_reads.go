@@ -356,7 +356,7 @@ func (s *Store) MeasureAllServices(ctx context.Context, metric string, window ti
 	start := MVWindowStart(now, window)
 	covered := MVCoveredSeconds(now, window)
 
-	rows, err := s.conn.Query(ctx, plan.sql, start)
+	rows, err := s.conn.Query(ctx, s.weighSQL(plan.sql, start, plan.source), start) // v0.10.2435 — sampling-weight Phase 2
 	if err != nil {
 		return nil, err
 	}
@@ -416,10 +416,10 @@ func (s *Store) MeasureCountAllServices(ctx context.Context, window time.Duratio
 	start := MVWindowStart(now, window)
 	covered := MVCoveredSeconds(now, window)
 
-	rows, err := s.conn.Query(ctx, `
+	rows, err := s.conn.Query(ctx, s.weighSQL(`
 			SELECT service_name, countMerge(span_count_state)
 			FROM service_summary_5m
-			WHERE time_bucket >= ?`+evalReadTail, start)
+			WHERE time_bucket >= ?`+evalReadTail, start, "service_summary_5m"), start) // v0.10.2435 — sampling-weight Phase 2
 	if err != nil {
 		return nil, err
 	}

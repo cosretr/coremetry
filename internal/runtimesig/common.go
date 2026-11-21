@@ -3,6 +3,7 @@ package runtimesig
 import (
 	"fmt"
 	"math"
+	"sort"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -108,6 +109,27 @@ func PodEntityIndex(aggs []chstore.EntitySeenAgg, cidOf map[string]string) map[s
 	return out
 }
 
+// CapPodIndex — SAF: dizini ada göre sıralı ilk n pod'la sınırlar (yanıt
+// boyutu; deterministik). Boş dizin → nil.
+func CapPodIndex(in map[string]PodEntityRef, n int) map[string]PodEntityRef {
+	if len(in) == 0 {
+		return nil
+	}
+	if len(in) <= n {
+		return in
+	}
+	names := make([]string, 0, len(in))
+	for k := range in {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	out := make(map[string]PodEntityRef, n)
+	for _, k := range names[:n] {
+		out[k] = in[k]
+	}
+	return out
+}
+
 // commonDetect — her runtime'da okunan ortak dedektör sinyalleri.
 var commonDetect = []SignalKey{SigFDOpen, SigFDMax, SigHTTPPending, SigHTTPLeased, SigHTTPMax,
 	SigKafkaWaiting, SigKafkaInFlight, SigKafkaBufExhausted, SigKafkaLag}
@@ -207,5 +229,7 @@ func evaluateCommon(d PodData, now int64, mk func(check, level string, value, ba
 			out = append(out, s)
 		}
 	}
+	// HikariCP havuz doygunluğu (follow-up 2026-11-21; pod kapsamlı okuma).
+	out = append(out, evaluateHikari(d, now, mk, where)...)
 	return out
 }

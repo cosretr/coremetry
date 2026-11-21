@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { podLineLabel, podClusterOf, withClusterPrefix } from './runtimePodLabel';
+import { podLineLabel, podClusterOf, withClusterPrefix, isAnonPodSeries, divideByCount } from './runtimePodLabel';
+
+describe('anonim pod serisi yedeği (follow-up 2026-11-21)', () => {
+  it('host_name taşıyan seri anonim değil; üç anahtar boşsa anonim', () => {
+    expect(isAnonPodSeries([{ groupKey: ['svc-a-7f9c-1', '', '', ''] }])).toBe(false);
+    expect(isAnonPodSeries([{ groupKey: ['', 'svc-a-7f9c-1', '', ''] }])).toBe(false);
+    expect(isAnonPodSeries([{ groupKey: ['', '', '', 'cl-a'] }])).toBe(true);
+    expect(isAnonPodSeries([])).toBe(false);
+  });
+  it('oran toplamı aynı damgadaki seri sayısına bölünür', () => {
+    const out = divideByCount([{ time: 1, value: 0.5 }, { time: 2, value: 0.3 }, { time: 3, value: null }],
+      [{ time: 1, value: 10 }, { time: 2, value: 1 }]);
+    expect(out.map(p => p.value)).toEqual([0.05, 0.3, null]);
+  });
+});
 
 // v0.9.91 — pod-bazlı runtime çizgi etiketi kontratı (üçlü groupKey:
 // k8s.pod.name > host.name > service.instance.id).

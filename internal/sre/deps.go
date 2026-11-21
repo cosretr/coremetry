@@ -24,6 +24,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcptools"
+	"github.com/cilcenk/coremetry/internal/runtimesig"
 )
 
 const depsCausesMax = 3
@@ -35,7 +36,11 @@ type depsPayload struct {
 	Callers    int          `json:"callers"`
 	Cascading  int          `json:"cascading"`
 	Upstream   []depsCaller `json:"upstream,omitempty"`
+	// Exact — follow-up 2026-11-21: hedef başına giden RED (VM, örnekleme öncesi; ≤5).
+	Exact []runtimesig.TargetRED `json:"exact,omitempty"`
 }
+
+const depsExactPayloadMax = 5
 
 type depsEdge struct {
 	Target    string  `json:"target"`
@@ -78,13 +83,32 @@ type depsResult struct {
 	chgErr  error
 	blast   *chstore.BlastRadius
 	blstErr error
+	// exact — follow-up 2026-11-21: hedef başına giden RED (VM client
+	// histogramı, örnekleme öncesi). Okuyucu yoksa ikisi de nil (künye yok);
+	// adım durumunu ETKİLEMEZ (topoloji / korelasyon / blast sayımı aynen).
+	exact    *runtimesig.DownstreamReport
+	exactErr error
 }
 
 // runDeps — adım (okumalar paralel, birleştirme SAF depsStep).
 func runDeps(ctx context.Context, rd readers, req depsRequest) (Step, []Finding, *DepsFacts) {
 	var res depsResult
 	var wg sync.WaitGroup
-	durs := make([]int64, 3)
+	durs := make([]int64, 4)
+	if rd.downstreamRED != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s := time.Now()
+			rep, err := rd.downstreamRED(ctx, req.Service, req.From, req.To)
+			durs[3] = time.Since(s).Milliseconds()
+			if err != nil {
+				res.exactErr = err
+				return
+			}
+			res.exact = &rep
+		}()
+	}
 	if rd.graph != nil {
 		wg.Add(1)
 		go func() {
@@ -195,6 +219,13 @@ func depsStep(req depsRequest, res depsResult) (Step, []Finding) {
 	} else {
 		parts = append(parts, "çağıran yok")
 	}
+	if res.exact != nil && len(res.exact.Targets) > 0 {
+		p.Exact = res.exact.Targets
+		if len(p.Exact) > depsExactPayloadMax {
+			p.Exact = p.Exact[:depsExactPayloadMax]
+		}
+		parts = append(parts, fmt.Sprintf("giden çağrı tam sayımı %d hedef (VM)", len(res.exact.Targets)))
+	}
 	switch failed {
 	case 0:
 		st.State = StepOK
@@ -238,6 +269,20 @@ func depsEvidence(req depsRequest, res depsResult, durs []int64) []mcptools.Chat
 	}
 	if res.blstErr == nil && res.blast != nil {
 		out[2].Rows = n(len(res.blast.Callers))
+	}
+	if res.exact != nil || res.exactErr != nil {
+		win := 0
+		if res.exact != nil {
+			win = res.exact.WindowSec
+		}
+		e := mcptools.ChatEvidence{Tool: "downstream_red", Source: "VictoriaMetrics", QueryKind: "summary",
+			Window: mcptools.EvidenceWindow{FromMs: req.From.UnixMilli(), ToMs: req.To.UnixMilli()}, DurationMs: durs[3],
+			Query: fmt.Sprintf("topk(%d) hedef × (istek/sn, hata %%, p95) FROM %s_{count,bucket}{service = '%s'} rate[%ds] — örnekleme öncesi tam sayım",
+				runtimesig.DownstreamTopK, runtimesig.DownstreamMetric, req.Service, win)}
+		if res.exact != nil {
+			e.Rows = n(len(res.exact.Targets))
+		}
+		out = append(out, e)
 	}
 	return out
 }
