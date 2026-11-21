@@ -212,7 +212,7 @@ func (s *Store) setRetention(ctx context.Context, sp RetentionSpec, actor string
 // past the column TTL but inside the row TTL keeps countMerge/quantiles and
 // returns ” for the exemplar.
 //
-// The shorter tiers (10s → 2d, 1s → 6h) can't produce a dead link today —
+// The shorter tiers (10s → 2d, 1s → 24h) can't produce a dead link today —
 // they expire before spans — but they're listed anyway: the column TTL is a
 // no-op while the row TTL is shorter, and it becomes the fix the moment an
 // operator drops spans retention below 2d.
@@ -373,6 +373,8 @@ func (s *Store) upsertSetting(ctx context.Context, key, value, actor string) err
 // previously-persisted overrides without the operator having to click
 // "Apply" again.
 func (s *Store) ApplyPersistedRetention(ctx context.Context) error {
+	// v0.10.2409 — spanmetrics_1s 6 saat → 24 saat; retention ayarından bağımsız.
+	s.applySpanmetrics1sTTL(ctx)
 	sp, err := s.GetRetention(ctx)
 	if err != nil {
 		return err

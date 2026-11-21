@@ -1421,7 +1421,7 @@ func canonicalMVs() []string {
 		 ENGINE = AggregatingMergeTree
 		 PARTITION BY toDate(time_bucket)
 		 ORDER BY (service_name, name, kind, status_code, time_bucket)
-		 TTL time_bucket + INTERVAL 6 HOUR
+		 TTL time_bucket + INTERVAL 24 HOUR
 		 SETTINGS index_granularity = 8192
 		 AS SELECT
 		   service_name, name, kind, status_code,

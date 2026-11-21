@@ -90,12 +90,12 @@ type spanmetricTier struct {
 }
 
 // spanmetricTiers — coarse first. Mirrors the DDL in store.go (TTLs: 1m=30d,
-// 10s=2d, 1s=6h; 1s has no http_route). Keep in sync with the CREATE
+// 10s=2d, 1s=24h (v0.10.2409); 1s has no http_route). Keep in sync with the CREATE
 // statements — the retention numbers are load-bearing for tier eligibility.
 var spanmetricTiers = []spanmetricTier{
 	{table: "spanmetrics_1m", label: "1m", grainSec: 60, ttl: 30 * 24 * time.Hour, hasRoute: true},
 	{table: "spanmetrics_10s", label: "10s", grainSec: 10, ttl: 2 * 24 * time.Hour, hasRoute: true},
-	{table: "spanmetrics_1s", label: "1s", grainSec: 1, ttl: 6 * time.Hour, hasRoute: false},
+	{table: "spanmetrics_1s", label: "1s", grainSec: 1, ttl: 24 * time.Hour, hasRoute: false},
 }
 
 // tierDimColumn maps a descriptor key to the spanmetrics rollup column, or

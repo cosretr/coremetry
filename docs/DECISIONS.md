@@ -15269,3 +15269,9 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 - attr_kvh/res_kvh: aynı ifadeli ALIAS analyzer açıkken bloom indeksini kullanmıyor (sabit ayraç). Yeni attr_kvh2/res_kvh2 ALIAS cityHash64(k, v) + idx_*_kvh2; sorgu kurucu açılışta v2/legacy/none seçer. Eski attr_kvh aynı ifadeyle ALIAS kalır (eski pod'lar doğru sonuç alır). Dönüşüm MODIFY ile değil DROP COLUMN + ADD ALIAS tek ALTER'da (MODIFY eski veriyi bırakır, sonraki mutasyonlar Code 47 ile takılır). Harici Distributed prod: migrations/0017_attr_kvh_alias.sql elle.
 - spanmetrics_{1s,10s,1m} DROP+RECREATE (mvDimMigrations): örnek trace_id unhex ham bayt (48 karakterli id'ler için FixedString değil), durum kolonları ZSTD(3); TDigest korunur; sum/count SimpleAggregateFunction'a geçmedi (~1 MiB, 30 okuyucu). 1m geçmişi (30 gün) silinir; route RED / alarm / Endpoints / ML yeniden dolana kadar boşluk görür; geçiş sırasında eski pod'larda örnek sorguları hata verir — hızlı yuvarlayın.
 - metric_points: count/bucket_counts T64+ZSTD(3), min/max Gorilla+ZSTD(3), bucket_bounds ve series_fingerprint ZSTD(3); yalnız yeni parçalar. ORDER BY değişmedi.
+
+## 2026-11-21 — v0.10.2409 — spanmetrics_1s satır saklama 6 saat → 24 saat
+
+- Operatör onayı (2026-11-21, "önerini yapalım"): saniyelik ayrıntı son bir günde işe yarıyor; uzun aralıklar 1m katmanında kalır, 1s'i 30 güne uzatmak MV'nin amacını bozardı (satır sayısı ham spans'e yaklaşır).
+- Ek disk küçük: retention enforcer günlük bölümü zaten 1 günde düşürüyordu (retention_mv.go); satır TTL'i artık bölüm ömrüyle aynı. metricresolve katman uygunluğu 24 saat.
+- Yeni kurulum CREATE'te; mevcut kurulumda açılışta inner tabloya metadata-only MODIFY TTL (materialize_ttl_after_modify=0, ON CLUSTER, ayrışmış uuid'ler için tek tek), tüm host'larda zaten 24 saatse atlanır. v0.10.2408'in yeniden kurduğu tablo da böylece 24 saate geçer.
