@@ -13,6 +13,7 @@ import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
 import { canRepair, canSeedFirstReplica, catalogLabel, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, statePathHeadline, statePathLabel, statePathOwnsRepair, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
 import { StatePathBlock } from './adminch/StatePathRebuild'; // v0.10.965 — state tablolarının ZK yolu
 import { AutoWizard } from './adminch/AutoWizard'; // v0.10.2410 — kendi kendini denetleyen tek-koşu sihirbaz
+import { TraceThinningPanel } from './adminch/TraceThinningPanel'; // v0.10.2440 — gölge mod, silme yok
 import { attrKVHWizard, entityLayerWizard, functionIdWizard, rolloutLayerWizard, rollupWizard, skipMatWizard, spansNgramWizard, traceBackfillWizard } from './adminch/wizards';
 import type {
   CHMeasurePartsRow, CHMeasureEventsRow, CHMeasureAsyncRow, CHMeasureInsertRow, // v0.10.683 — ölçüm paneli
@@ -774,6 +775,7 @@ export default function AdminClickhousePage() {
             <MeasurePanel />
             <RootCoveragePanel />
             <TraceHealthPanel />
+            <TraceThinningPanel />
             <DanglingMVPanel />
             <ReplicaConsistencyPanel />
 

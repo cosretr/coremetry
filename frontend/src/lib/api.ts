@@ -4266,6 +4266,13 @@ export const api = {
     request<import('./types').SkipMatStatus>(`/api/admin/skipidx-materialize/${action}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
     }),
+  // v0.10.2440 — trace inceltme gölge modu (admin_trace_thinning.go).
+  traceThinningStatus: () =>
+    get<import('./types').TraceThinningStatus>('/api/admin/trace-thinning'),
+  traceThinningSave: (settings: import('./types').TraceThinningSettings) =>
+    request<import('./types').TraceThinningStatus>('/api/admin/trace-thinning/settings', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings),
+    }),
   // v0.10.2425 — spans.db_statement n-gram indeksi (admin_spans_ngram.go).
   spansNgramStatus: () =>
     get<import('./types').SpansNgramStatus>('/api/admin/spans-ngram/status'),

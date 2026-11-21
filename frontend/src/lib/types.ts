@@ -5486,6 +5486,25 @@ export interface SkipMatJob {
 export interface SkipMatStatus {
   jobs: SkipMatJob[]; active: boolean; failing: boolean; health?: string; generated: number;
 }
+// v0.10.2440 — trace inceltme gölge modu (chstore/trace_thinning.go). Silme yok.
+export interface TraceThinningSettings { mode: 'off' | 'shadow' | 'on'; keepPercent: number; fullDays: number }
+export interface TraceThinningClassCount { traces: number; spans: number }
+export type TraceThinningClass = 'hash' | 'error' | 'ref' | 'slow';
+export interface TraceThinningDay {
+  day: string; measuredAt: number; keepPercent: number;
+  spans: number; bytes: number; traces: number; keepTraces: number; keepSpans: number; bytesSaved: number;
+  byClass: Partial<Record<TraceThinningClass, TraceThinningClassCount>>;
+  sampledTraces: number; sampleDen: number; bucketFraction: number;
+  refsInDay: number; refsTruncated?: boolean; elapsedMs: number; note?: string; failed?: boolean;
+}
+export interface TraceThinningTotals {
+  days: number; spans: number; bytes: number; traces: number; keepTraces: number; keepSpans: number; bytesSaved: number;
+  byClass: Partial<Record<TraceThinningClass, TraceThinningClassCount>>;
+}
+export interface TraceThinningStatus {
+  settings: TraceThinningSettings; days: TraceThinningDay[]; totals: TraceThinningTotals;
+  bandDays: number; pending: number; lastRunAt?: number; lastError?: string; generated: number;
+}
 // v0.10.2425 — spans.db_statement n-gram indeksi kartı (spans_ngram_admin.go).
 export interface SpansNgramStatus {
   cluster: string; local: string; hosts: number; haveHosts: number;

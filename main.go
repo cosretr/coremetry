@@ -912,6 +912,7 @@ func main() {
 		go store.StartRetentionEnforcer(ctx, time.Hour, lockImpl)
 		go store.StartAIChatSweeper(ctx, time.Hour, lockImpl)      // v0.10.561 — saved_views(page='ai-chat') süpürücüsü
 		go store.StartSkipMatWorker(ctx, 30*time.Second, lockImpl) // v0.10.2424 — arka plan MATERIALIZE INDEX|PROJECTION
+		go store.StartTraceThinningShadow(ctx, lockImpl)           // v0.10.2440 — trace inceltme gölge tahmini (silme yok)
 		go cosrelearn.StartCaseBuilder(ctx, store, lockImpl)       // CoSRE öğrenme Faz 3 — vaka taslakları
 	}
 
