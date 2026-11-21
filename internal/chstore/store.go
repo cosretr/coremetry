@@ -1063,6 +1063,9 @@ func New(cfg config.CHConfig, ret config.RetentionConfig) (*Store, error) {
 	// never waits on cluster DDL. v0.10.2435 (operatör): yalnız mod shadow/on
 	// olunca — deploy kendiliğinden prod şemasını değiştirmez.
 	go s.weightedMVsWhenActive(30 * time.Second)
+	// v0.10.2438 — spanmetrics_*_5m (metric_points) connector names +
+	// source_family in place (spanmetrics_metric_mv.go). Background.
+	go s.applySpanmetricsMetricMVsOnce()
 	return s, nil
 }
 
@@ -1685,28 +1688,7 @@ func canonicalMVs() []string {
 		// the bare "spanmetrics.*" form, and the bare
 		// "calls" / "duration". metric is LowCardinality so
 		// the predicate evaluates once per distinct name.
-		`CREATE MATERIALIZED VIEW IF NOT EXISTS spanmetrics_calls_5m
-		 ENGINE = AggregatingMergeTree
-		 PARTITION BY toDate(time_bucket)
-		 ORDER BY (service_name, time_bucket)
-		 TTL toDate(time_bucket) + INTERVAL 30 DAY
-		 SETTINGS index_granularity = 8192
-		 AS SELECT
-		   service_name,
-		   toStartOfInterval(time, INTERVAL 5 MINUTE) AS time_bucket,
-		   sumState(value)                            AS calls_state,
-		   sumIfState(value,
-		     attr_values[indexOf(attr_keys, 'status.code')] = 'STATUS_CODE_ERROR'
-		   )                                          AS errors_state
-		 FROM metric_points
-		 WHERE metric IN (
-		     'traces.spanmetrics.calls.total',
-		     'traces_spanmetrics_calls_total',
-		     'spanmetrics.calls',
-		     'spanmetrics_calls_total',
-		     'calls'
-		   )
-		 GROUP BY service_name, time_bucket`,
+		"CREATE MATERIALIZED VIEW IF NOT EXISTS spanmetrics_calls_5m" + spanmetricsCallsMVBody(), // v0.10.2438 — spanmetrics_metric_mv.go
 
 		// spanmetrics_hist_5m: per-(service, 5min) pre-aggregation
 		// of the histogram bucket layout. v0.5.359 — the
@@ -1727,59 +1709,16 @@ func canonicalMVs() []string {
 		// sum keyed by bucket index. Different-length bucket
 		// arrays across data points (rare but possible) sum
 		// cleanly via the map abstraction.
-		`CREATE MATERIALIZED VIEW IF NOT EXISTS spanmetrics_hist_5m
-		 ENGINE = AggregatingMergeTree
-		 PARTITION BY toDate(time_bucket)
-		 ORDER BY (service_name, time_bucket)
-		 TTL toDate(time_bucket) + INTERVAL 30 DAY
-		 SETTINGS index_granularity = 8192
-		 AS SELECT
-		   service_name,
-		   toStartOfInterval(time, INTERVAL 5 MINUTE) AS time_bucket,
-		   anyState(bucket_bounds)                    AS bounds_state,
-		   sumMapState(
-		     arrayMap(i -> toUInt32(i), range(0, toUInt32(length(bucket_counts)))),
-		     bucket_counts
-		   )                                          AS counts_state
-		 FROM metric_points
-		 WHERE metric IN (
-		     'traces.spanmetrics.duration',
-		     'traces.spanmetrics.duration.seconds.sum',
-		     'traces_spanmetrics_duration',
-		     'spanmetrics.duration',
-		     'duration'
-		   )
-		   AND length(bucket_counts) > 0
-		 GROUP BY service_name, time_bucket`,
+		"CREATE MATERIALIZED VIEW IF NOT EXISTS spanmetrics_hist_5m" + spanmetricsHistMVBody(), // v0.10.2438 — spanmetrics_metric_mv.go
 
 		// spanmetrics_duration_5m: per-(service, 5min)
 		// pre-aggregation of the histogram-shaped duration
 		// metric. Stores sum + count + max from the
 		// metric_points columns the OTLP convert path fills
 		// in for histogram data points (otlp/convert.go).
-		// avgMs is derived at read time as sum/count×1000;
-		// maxMs is max×1000.
-		`CREATE MATERIALIZED VIEW IF NOT EXISTS spanmetrics_duration_5m
-		 ENGINE = AggregatingMergeTree
-		 PARTITION BY toDate(time_bucket)
-		 ORDER BY (service_name, time_bucket)
-		 TTL toDate(time_bucket) + INTERVAL 30 DAY
-		 SETTINGS index_granularity = 8192
-		 AS SELECT
-		   service_name,
-		   toStartOfInterval(time, INTERVAL 5 MINUTE) AS time_bucket,
-		   sumState(sum_value)  AS sum_state,
-		   sumState(count)      AS count_state,
-		   maxState(max_value)  AS max_state
-		 FROM metric_points
-		 WHERE metric IN (
-		     'traces.spanmetrics.duration',
-		     'traces.spanmetrics.duration.seconds.sum',
-		     'traces_spanmetrics_duration',
-		     'spanmetrics.duration',
-		     'duration'
-		   )
-		 GROUP BY service_name, time_bucket`,
+		// v0.10.2438 — sum/max are stored in ms (seconds-unit
+		// series ×1000 in the MV): avgMs = sum/count, maxMs = max.
+		"CREATE MATERIALIZED VIEW IF NOT EXISTS spanmetrics_duration_5m" + spanmetricsDurationMVBody(), // v0.10.2438 — spanmetrics_metric_mv.go
 
 		// messaging_summary_5m: structural parallel for /api/messaging.
 		// Cluster + destination are derived expressions in the source

@@ -146,7 +146,7 @@ var redFamilies = []redFamily{
 	// Yalnız hiçbir uygulama histogramı yoksa seçilir (uygulama > connector).
 	// Hata = STATUS_CODE_ERROR (sunucu span'inde 5xx; 4xx UNSET) — istemci
 	// hatası kümesi yok (connector 4xx'i ayırmaz).
-	{ID: redFamilySpanMetrics, Kind: redKindHTTP, Label: "spanmetrics", Probe: "traces.span.metrics.duration", VMBase: "traces_span_metrics_duration_seconds", Exact: true, Unit: "s",
+	{ID: redFamilySpanMetrics, Kind: redKindHTTP, Label: "spanmetrics", Probe: chstore.SpanMetricsConnectorDuration, VMBase: chstore.SpanMetricsConnectorDurationProm, Exact: true, Unit: "s",
 		RouteLabel: "http_route", MethodLabel: "http_request_method", RouteKey: "http.route", MethodKey: "http.request.method",
 		StatusLabels: []string{"status_code"}, StatusKeys: []string{"status.code"},
 		ServerErr: spanMetricsErrMatch, ClientErr: spanMetricsNoClientErr,
@@ -156,7 +156,7 @@ var redFamilies = []redFamily{
 // spanmetrics hata kümeleri: sunucu = STATUS_CODE_ERROR; istemci kümesi YOK
 // (hiçbir değerle eşleşmeyen gövde — connector 4xx'i ayırmaz).
 const (
-	spanMetricsErrMatch    = "STATUS_CODE_ERROR"
+	spanMetricsErrMatch    = chstore.SpanMetricsErrorStatus
 	spanMetricsNoClientErr = "__none__"
 )
 

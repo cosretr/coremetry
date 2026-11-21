@@ -36,6 +36,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/vmetrics"
 )
 
@@ -86,8 +87,8 @@ var vmREDFamilies = [vmFamN]vmREDFamily{
 		StatusLabels: []string{"rpc_response_status_code"}, ServerErr: "2|4|8|12|13|14|15"},
 	{ID: "http_legacy", Label: "HTTP", Probe: "http.server.duration", Names: "http_server_duration_milliseconds", Unit: "ms",
 		StatusLabels: []string{"http_status_code", "http_response_status_code"}, ServerErr: "5.."},
-	{ID: "spanmetrics", Label: "spanmetrics", Probe: "traces.span.metrics.duration", Names: "traces_span_metrics_duration_seconds", Unit: "s",
-		StatusLabels: []string{"status_code"}, ServerErr: "STATUS_CODE_ERROR", Matcher: SpanMetricsEntryMatcher},
+	{ID: "spanmetrics", Label: "spanmetrics", Probe: chstore.SpanMetricsConnectorDuration, Names: chstore.SpanMetricsConnectorDurationProm, Unit: "s",
+		StatusLabels: []string{"status_code"}, ServerErr: chstore.SpanMetricsErrorStatus, Matcher: SpanMetricsEntryMatcher},
 }
 
 // REDFamilyPin — api tarafının pin testi için dışa açık özet.
