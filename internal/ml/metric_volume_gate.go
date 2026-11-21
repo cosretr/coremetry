@@ -8,14 +8,46 @@ package ml
 // biriktiremez ve judge "eksik veri: taban < MinBaselineSamples" der.
 // Hacim sorgusu başarısızsa kapı AÇIK geçer (önceki davranış; anomali
 // gizlenmez). Bastırma sayacı self-obs `suppressedVolume`.
+//
+// v0.10.2437: Thanos yolu (metric_thanos.go) aynı kapıyı uygular — aynı
+// ifade (chstore.MLMetricVolumeExpr, pod düzeyinde çözülür), aynı sabit, aynı
+// sayaç. Pod çağrı sayıları servis başına TOPLANIR (değer ifadesinin max/avg
+// birleşiminden bağımsız). Hacim sorgusu cluster × tik bütçesinden düşer
+// (thanosPlanned.cost); hatası kapıyı bu tik açık geçirir (backoff yok).
 
 import (
 	"context"
 	"log"
+	"regexp"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
+
+// thanosVolumeBySvc — SAF: pod düzeyi hacim örnekleri → servis → kova çağrı
+// sayısı (pod'lar toplanır; eşlenemeyen / namespace dışı pod sayılmaz). Boş
+// sonuç boş (nil olmayan) harita: pencerede çağrı yok → kapıya takılır.
+func thanosVolumeBySvc(rows []ThanosSample, ix podIndex, nsRe *regexp.Regexp) map[string]float64 {
+	vals, _ := podValuesByService(rows, ix, nsRe)
+	out := make(map[string]float64, len(vals))
+	for svc, vs := range vals {
+		out[svc] = combine("sum", vs)
+	}
+	return out
+}
+
+// thanosVolume — pe'nin Thanos hacim haritası; kapı yok ya da sorgu başarısız → nil.
+func (d *MetricThanos) thanosVolume(ctx context.Context, m *thanosMeter, c ThanosCluster, pe thanosPlanned, ix podIndex, nsRe *regexp.Regexp, at time.Time) map[string]float64 {
+	if pe.vol == "" {
+		return nil
+	}
+	rows, err := d.instant(ctx, m, c, pe.vol, at)
+	if err != nil {
+		log.Printf("[ml] thanos %s %s/%s hacim sorgusu: %v (kapı bu tik açık)", c.Name, pe.family, pe.id, err)
+		return nil
+	}
+	return thanosVolumeBySvc(rows, ix, nsRe)
+}
 
 // volumeBySvc — SAF: hacim sorgusu satırları → servis → kova çağrı sayısı.
 func volumeBySvc(rows []chstore.SpanMetricSeries, svcLabel string) map[string]float64 {

@@ -4611,6 +4611,20 @@ export interface ServicesRedMetric {
   queries: number;
   notes?: string[];
 }
+/** v0.10.2437 — metrik kaynaklı servisin mini-grafik kovaları (SparklineBucket biçimi). */
+export interface ServiceRedSparkRow {
+  source: RedFamilyId;
+  buckets: SparklineBucket[];
+  hasErrors: boolean;
+  hasLatency: boolean;
+}
+export interface ServicesRedSpark {
+  source: string;
+  stepSec: number;
+  services: Record<string, ServiceRedSparkRow>;
+  queries: number;
+  notes?: string[];
+}
 
 export interface RedFamilyResolution {
   service: string;

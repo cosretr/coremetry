@@ -3560,6 +3560,9 @@ export const EN: Record<string, string> = {
   'red.src.metricTitle': 'Unsampled metric RED: {fam}',
   'red.src.metric': 'metric',
   'red.src.sampled': 'sampled',
+  'red.agg.mixed': 'mixed', // v0.10.2437
+  'red.agg.mixedTitle': 'Mixed total: {m} of {n} rows come from unsampled metrics, the rest from sampled span data (two scales; request counts differ ~1/20). The total sparkline uses span buckets.',
+  'red.agg.metricTitle': 'Page total from unsampled metric RED values (requests summed; error rate and avg weighted by requests; p99 = worst service).',
   'infra.toggle': 'Show infrastructure routes',
   'infra.hidden': '{n} infrastructure routes hidden',
   'infra.hiddenTitle': 'Health / readiness probes, Prometheus scrapes (actuator/prometheus, /metrics), ping / keepalive routes are excluded from metric RED totals and route charts (not business traffic). Series without a route label are kept.',

@@ -676,6 +676,10 @@ export const api = {
   servicesRedMetric: (r: RangeParams, services: string[], opts?: { env?: string; cluster?: string }) =>
     get<import('./types').ServicesRedMetric>(
       `/api/services-red-metric?${qs({ ...r, services: services.join(','), env: opts?.env || undefined, cluster: opts?.cluster || undefined })}`),
+  // v0.10.2437 — metrik kaynaklı servislerin mini-grafikleri; sources[i] = services[i]'nin ailesi (aile başına 1 aralık sorgusu).
+  servicesRedMetricSpark: (r: RangeParams, services: string[], sources: string[], slots: number, opts?: { env?: string; cluster?: string }) =>
+    get<import('./types').ServicesRedSpark>(
+      `/api/services-red-metric-spark?${qs({ ...r, services: services.join(','), sources: sources.join(','), slots, env: opts?.env || undefined, cluster: opts?.cluster || undefined })}`),
   serviceNames: (q?: string, limit = 200, offset = 0) =>
     get<{ names: string[]; total: number; hasMore: boolean }>(
       `/api/service-names?${qs({ q, limit, offset })}`),

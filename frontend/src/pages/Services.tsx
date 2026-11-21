@@ -19,7 +19,8 @@ import {
 import { useAllServiceRuntimes, useServicesMetadata } from '@/lib/queries';
 import { useTableNav } from '@/lib/useTableNav';
 import { api } from '@/lib/api';
-import type { ServiceRedMetricRow } from '@/lib/types';
+import type { ServiceRedMetricRow, ServiceRedSparkRow } from '@/lib/types';
+import { servicesSortScope, resortByDisplayed, servicesAggregate, rowSpark, aggregateSpark, METRIC_SORT_COLS } from '@/lib/servicesMetricRed';
 import { t, tf, useLang } from '@/lib/i18n';
 import { fmtNum, fmtFixed, timeRangeToNs, rowClickHandlers, tsLong, fmtAgoNs } from '@/lib/utils';
 import { teamOptionsCI } from '@/lib/teamOptions';
@@ -73,6 +74,9 @@ export default function ServicesPage() {
   // (GET /api/services-red-metric). Satır metrikte varsa İstek/Hata/Avg/P99
   // değerleri buradan; yoksa span değeri "örneklenmiş" rozetiyle.
   const [redMetric, setRedMetric] = useState<Record<string, ServiceRedMetricRow>>({});
+  // v0.10.2437 — metrik kaynaklı satırların mini-grafikleri (GET
+  // /api/services-red-metric-spark; aile başına 1 aralık sorgusu). Yoksa span.
+  const [redSpark, setRedSpark] = useState<Record<string, ServiceRedSparkRow>>({});
   const lang = useLang();
   // Batch runtime fetch — one query for every service in the
   // listing, server-cached 5 min. The component renders per-row
@@ -254,6 +258,15 @@ export default function ServicesPage() {
   // Sanitized ?sort/&dir pair for the fetch below — a stale persisted id
   // (old column schema, hand-edited URL) never reaches the backend ORDER BY.
   const { sort: sortBy, dir: sortDir } = sanitizeServicesSort(dt.sort);
+  // v0.10.2437 — metrik değeriyle sıralama YALNIZ tüm sonuç bu sayfadaysa
+  // (lib/servicesMetricRed.ts başı): sayfalı listede istemci sıralaması
+  // sayfayı küresel sıra gibi gösterirdi; orada sunucunun span sırası kalır.
+  const sortScope = servicesSortScope(page, total, hasMore, PAGE_SIZE);
+  const displayRows = useMemo(
+    () => resortByDisplayed(sorted ?? [], redMetric, sortBy, sortDir, sortScope, pinned),
+    [sorted, redMetric, sortBy, sortDir, sortScope, pinned]);
+  const metricSortNote = METRIC_SORT_COLS.has(sortBy) && Object.keys(redMetric).length > 0
+    ? (sortScope === 'client' ? 'metric' : 'spans') : null;
   // v0.9.1111 (Faz 5) — önceki-pencere kıyası. URL'den okunur
   // (?compare=prior, paylaşılan link aynı görünümü açar); p99Delta
   // sıralaması kıyası zorunlu kılar (sunucu da zorlar), o yüzden
@@ -295,6 +308,7 @@ export default function ServicesPage() {
     }
     setSparklines({});
     setRedMetric({});
+    setRedSpark({});
     // v0.8.300 (quality bar S3) — cancelled flag: deps change on every
     // sort/filter/page click, and without cancellation an OLDER in-flight
     // response could resolve LAST and overwrite the fresh page
@@ -367,7 +381,18 @@ export default function ServicesPage() {
       }
       // v0.10.2434 — tek çağrı, sayfa başına (≤ PAGE_SIZE servis); başarısızsa span değerleri kalır.
       if (names.length > 0) {
-        api.servicesRedMetric(r, names, { env, cluster }).then(d => { if (!cancelled) setRedMetric(d?.services ?? {}); }).catch(() => {});
+        api.servicesRedMetric(r, names, { env, cluster }).then(d => {
+          if (cancelled) return;
+          const rm = d?.services ?? {};
+          setRedMetric(rm);
+          // v0.10.2437 — metrik kaynaklı satırların mini-grafikleri: yalnız
+          // kaynağı çözülmüş (≤ görünen) servisler, aile başına 1 aralık
+          // sorgusu (≤5), aynı env/cluster kapsamı; başarısızsa span kalır.
+          const ms = Object.keys(rm).sort();
+          if (ms.length === 0) return;
+          api.servicesRedMetricSpark(r, ms, ms.map(n => rm[n].source), sparkMaxSlotsForWidth(SPARK_DEFAULT_WIDTH), { env, cluster })
+            .then(sp => { if (!cancelled) setRedSpark(sp?.services ?? {}); }).catch(() => {});
+        }).catch(() => {});
       }
     }).catch(e => {
       if (cancelled) return;
@@ -444,53 +469,15 @@ export default function ServicesPage() {
     () => teamOptionsCI(Object.values(catalog).map(m => m.sreTeam)), [catalog]);
 
   // Aggregate row across the currently-visible (filtered) services.
-  // Span count → sum. Error rate / avg / apdex → weighted by span count
-  // so a chatty service with low latency doesn't drag the headline down
-  // when a quiet but slow service is the actual outlier. P99 is the
-  // max across services — there's no meaningful "average P99".
-  const agg = useMemo(() => {
-    if (!sorted || sorted.length === 0) return null;
-    let totalSpans = 0, totalErrs = 0;
-    let wAvg = 0, wApdex = 0, maxP99 = 0;
-    for (const s of sorted) {
-      totalSpans += s.spanCount;
-      totalErrs += s.errorCount;
-      wAvg += s.avgDurationMs * s.spanCount;
-      wApdex += (s.apdex ?? 0) * s.spanCount;
-      if (s.p99DurationMs > maxP99) maxP99 = s.p99DurationMs;
-    }
-    const avgMs = totalSpans > 0 ? wAvg / totalSpans : 0;
-    const apdex = totalSpans > 0 ? wApdex / totalSpans : 0;
-    const errorRate = totalSpans > 0 ? (totalErrs / totalSpans) * 100 : 0;
-    return { spans: totalSpans, errs: totalErrs, errorRate, avgMs, p99Ms: maxP99, apdex };
-  }, [sorted]);
+  // v0.10.2437 — GÖSTERİLEN değerlerden (metrik varsa metrik): istek toplam,
+  // hata / ortalama istek ağırlıklı, p99 en kötü servis, apdex span ağırlıklı.
+  // Metrik + span satırı birlikteyse `mixed` (iki ölçek) — satırda rozetli.
+  const agg = useMemo(() => servicesAggregate(displayRows, redMetric), [displayRows, redMetric]);
 
-  // Aggregate sparkline buckets — sum spans/errs across visible services
-  // per timestamp; avgMs / p99Ms become weighted-by-spans / max so the
-  // mini-chart stays representative.
-  const aggBuckets = useMemo(() => {
-    if (!sorted || sorted.length === 0) return [] as { t: number; spans: number; errs: number; avgMs: number; p99Ms: number }[];
-    const merged = new Map<number, { spans: number; errs: number; avgWeighted: number; p99Max: number }>();
-    for (const s of sorted) {
-      for (const b of (sparklines[s.name] ?? [])) {
-        const cur = merged.get(b.t) ?? { spans: 0, errs: 0, avgWeighted: 0, p99Max: 0 };
-        cur.spans += b.spans;
-        cur.errs += b.errs;
-        cur.avgWeighted += b.avgMs * b.spans;
-        if (b.p99Ms > cur.p99Max) cur.p99Max = b.p99Ms;
-        merged.set(b.t, cur);
-      }
-    }
-    return Array.from(merged.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([t, v]) => ({
-        t,
-        spans: v.spans,
-        errs: v.errs,
-        avgMs: v.spans > 0 ? v.avgWeighted / v.spans : 0,
-        p99Ms: v.p99Max,
-      }));
-  }, [sorted, sparklines]);
+  // Aggregate sparkline — metrik ve span kovaları farklı ızgarada, karışmaz:
+  // her satırın metrik eğrisi varsa metrik, yoksa span (servicesMetricRed.ts).
+  const aggSpark = useMemo(() => aggregateSpark(displayRows, sparklines, redSpark), [displayRows, sparklines, redSpark]);
+  const aggBuckets = aggSpark.buckets;
   // v0.10.922 (sade palet adım 1) — toplam hata serisi bir kez türetilir:
   // hem çizilir hem rengini (errSparkColor) belirler.
   const aggErrSeries = useMemo(
@@ -512,7 +499,7 @@ export default function ServicesPage() {
   // enstrümantasyon eksikliği gibi okunuyordu. "Filtreleri temizle" =
   // sayfanın Reset'i; Reset cluster / namespace / env'i silmediği için
   // yalnız onlar seçiliyken düğme basılmaz (işe yaramayan eylem olmasın).
-  const shown = sorted ?? [];
+  const shown = displayRows;
   const serverFiltered = !!(committedFilter || ownerTeam || sreTeam || cluster || namespace || env
     || errorsOnly || minSpans || minP99);
   const resettable = !!(committedFilter || ownerTeam || sreTeam || errorsOnly || minSpans || minP99);
@@ -559,7 +546,7 @@ export default function ServicesPage() {
   };
 
   // j/k row navigation. Enter / o opens the service detail.
-  const tableNav = useTableNav<Service>(sorted ?? [], {
+  const tableNav = useTableNav<Service>(displayRows, {
     pageId: 'services',
     onOpen: (svc) => goToService(svc.name),
     // v0.9.1018 — klavye sayfa sınırını GEÇİYOR. Öncesinde 50. satırda
@@ -764,22 +751,31 @@ export default function ServicesPage() {
                         of {fmtNum(total)}
                       </span>
                     )}
+                    {/* v0.10.2437 — toplamın kaynağı: metrik / örneklenmiş / karma. */}
+                    <Badge tone={agg.mixed ? 'warning' : agg.metricRows > 0 ? 'info' : 'warning'} style={{ marginLeft: 8 }}
+                      title={agg.mixed
+                        ? tf('red.agg.mixedTitle', lang, { m: agg.metricRows, n: shown.length })
+                        : agg.metricRows > 0 ? t('red.agg.metricTitle', lang) : t('red.src.spansTitle', lang)}>
+                      {agg.mixed ? t('red.agg.mixed', lang) : agg.metricRows > 0 ? t('red.src.metric', lang) : t('red.src.sampled', lang)}
+                    </Badge>
                   </td>
                   {/* v0.10.922 (sade palet adım 1) — toplam satırının
                       mini-grafikleri de satırlarla aynı kuralda: nötr
                       SPARK_NEUTRAL, hata serisi yalnız >0 kovada kırmızı. */}
                   <td className="num">
-                    <SparkCell value={fmtNum(agg.spans)}
+                    <SparkCell value={fmtNum(Math.round(agg.requests))}
                                spark={aggBuckets.map(b => b.spans)}
                                color={SPARK_NEUTRAL}
-                               title="Total spans/5m across visible services"
+                               title={aggSpark.metric
+                                 ? 'Total requests per step across visible services (unsampled metrics)'
+                                 : 'Total spans/5m across visible services (sampled spans)'}
                                onClick={() => goToExplore('', 'rate')} />
                   </td>
                   <td className="num">
                     <SparkCell value={<ErrRateValue pct={agg.errorRate} />}
                     spark={aggErrSeries}
                     color={errSparkColor(aggErrSeries)}
-                    title="Aggregate error rate (weighted by spans)"
+                    title="Aggregate error rate (weighted by requests)"
                     // v0.9.499 — çizgi moduna geri (operatör: "eskiden
                     // spans ile aynı şekilde chart'tı, bar görünümüne
                     // ihtiyaç yok"). M4'ün eşikli mini-bar'ı satırdaki
@@ -791,7 +787,7 @@ export default function ServicesPage() {
                     <SparkCell value={`${fmtFixed(agg.avgMs, 1)}ms`}
                                spark={aggBuckets.map(b => b.avgMs)}
                                color={SPARK_NEUTRAL}
-                               title="Aggregate avg latency (weighted by spans)"
+                               title="Aggregate avg latency (weighted by requests)"
                                onClick={() => goToExplore('', 'avg')} />
                   </td>
                   <td className="num">
@@ -811,11 +807,12 @@ export default function ServicesPage() {
                 </tr>
               )}
               {shown.map((s, i) => {
-                const buckets = sparklines[s.name] ?? [];
                 const rm = redMetric[s.name]; // v0.10.2434 — örneklenmemiş RED (yoksa span)
-                // v0.10.922 (sade palet adım 1) — hata serisi bir kez
-                // hesaplanır: hem çizilir hem rengini (errSparkColor) belirler.
-                const errSeries = buckets.map(b => b.spans > 0 ? (b.errs / b.spans) * 100 : null);
+                // v0.10.2437 — mini-grafikler metrik eğrisinden (varsa; hata /
+                // gecikme eğrisi ayrı ayrı span'e düşebilir), yoksa span kovaları.
+                // v0.10.922 — hata serisi bir kez: hem çizilir hem rengini belirler.
+                const sp = rowSpark(sparklines[s.name] ?? [], redSpark[s.name]);
+                const errSeries = sp.err;
                 const isSelected = tableNav.selected === i;
                 return (
                   <tr key={s.name}
@@ -897,9 +894,9 @@ export default function ServicesPage() {
                     </td>
                     <td className="num">
                       <SparkCell value={rm ? fmtNum(Math.round(rm.requests)) : fmtNum(s.spanCount)}
-                                 spark={buckets.map(b => b.spans)}
+                                 spark={sp.count}
                                  color={SPARK_NEUTRAL}
-                                 title={`Spans/5m for ${s.name}`}
+                                 title={sp.metric ? `Requests per step for ${s.name} (unsampled metric)` : `Spans/5m for ${s.name} (sampled spans)`}
                                  onClick={() => goToExplore(s.name, 'rate')} />
                     </td>
                     <td className="num">
@@ -912,14 +909,14 @@ export default function ServicesPage() {
                     </td>
                     <td className="num">
                       <SparkCell value={`${fmtFixed(rm?.avgMs ?? s.avgDurationMs, 1)}ms`}
-                                 spark={buckets.map(b => b.avgMs)}
+                                 spark={sp.avg}
                                  color={SPARK_NEUTRAL}
                                  title={`Avg latency (ms) for ${s.name}`}
                                  onClick={() => goToExplore(s.name, 'avg')} />
                     </td>
                     <td className="num">
                       <SparkCell value={`${fmtFixed(rm?.p99Ms ?? s.p99DurationMs, 1)}ms`}
-                                 spark={buckets.map(b => b.p99Ms)}
+                                 spark={sp.p99}
                                  color={SPARK_NEUTRAL}
                                  title={`P99 latency (ms) for ${s.name}`}
                                  onClick={() => goToExplore(s.name, 'p99')} />
@@ -971,11 +968,11 @@ export default function ServicesPage() {
           <Pager mode="offset" count="exact" total={total}
             page={page} pageSize={PAGE_SIZE} onPage={setPage}
             lastReachablePage={Math.max(0, Math.ceil(total / PAGE_SIZE) - 1)}
-            extras={<ServicesPagerExtras shown={shown.length} sortBy={sortBy} sortDir={sortDir} env={env} />} />
+            extras={<ServicesPagerExtras shown={shown.length} sortBy={sortBy} sortDir={sortDir} env={env} sortNote={metricSortNote} />} />
         ) : (
           <Pager mode="offset" count="skip"
             page={page} pageSize={PAGE_SIZE} hasMore={hasMore} onPage={setPage}
-            extras={<ServicesPagerExtras shown={shown.length} sortBy={sortBy} sortDir={sortDir} env={env} />} />
+            extras={<ServicesPagerExtras shown={shown.length} sortBy={sortBy} sortDir={sortDir} env={env} sortNote={metricSortNote} />} />
         ))}
       </PageShell>
     </>
@@ -1133,19 +1130,32 @@ function HealthDot({ health, reason, openProblems }: {
 // ekranın iki ucundaydı. Tek şeritte birleştiler.
 // v0.10.922 (sade palet adım 1) — sortBy/env vurgusu --accent2 idi ama
 // ikisi de link DEĞİL (--accent2 yalnız linklere); vurgu kalın --text.
-function ServicesPagerExtras({ shown, sortBy, sortDir, env }: {
-  shown: number; sortBy: string; sortDir: string; env: string;
+// v0.10.2437 — sortNote: metrik değerli sütunda sıralamanın gerçek tabanı
+// ('metric' = tek sayfa, gösterilen değerle; 'spans' = sayfalı, sunucunun
+// örneklenmiş span sırası — metrik sayfalar arası sıralanamaz).
+function ServicesPagerExtras({ shown, sortBy, sortDir, env, sortNote }: {
+  shown: number; sortBy: string; sortDir: string; env: string; sortNote: 'metric' | 'spans' | null;
 }) {
   return (
     <>
       {shown} services · sorted by <b style={{ color: 'var(--text)' }}>{sortBy}</b> {sortDir}
-      {/* v0.8.385 — empty-state honesty: the sparkline source
+      {sortNote === 'metric' && (
+        <span title="All matching services fit on this page, so rows are ordered by the values shown (unsampled metric where present, sampled spans otherwise).">
+          {' '}(shown values)
+        </span>
+      )}
+      {sortNote === 'spans' && (
+        <span title="The list is paged on the server and ranked by sampled span values before paging; metric values are read only for the visible page, so they cannot reorder across pages. Cells still show the unsampled metric where present.">
+          {' '}(server rank on sampled spans)
+        </span>
+      )}
+      {/* v0.8.385 — empty-state honesty: the span sparkline source
           (5m summary MV) has no env dimension, so under an env
-          filter the thumbnails are omitted rather than showing
-          all-environment shapes next to env-filtered numbers. */}
+          filter those thumbnails are omitted. v0.10.2437 — rows with an
+          unsampled metric source keep env-scoped metric sparklines. */}
       {env && (
-        <span title="Sparklines aggregate across all environments (their materialized view has no env dimension), so they are hidden while an environment filter is active.">
-          {' '}· env <b style={{ color: 'var(--text)' }}>{env}</b> — sparklines hidden (all-environment source)
+        <span title="Span sparklines aggregate across all environments (their materialized view has no env dimension), so they are hidden while an environment filter is active. Metric sparklines are env-scoped and stay.">
+          {' '}· env <b style={{ color: 'var(--text)' }}>{env}</b> — span sparklines hidden (all-environment source)
         </span>
       )}
     </>

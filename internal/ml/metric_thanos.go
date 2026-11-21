@@ -248,9 +248,17 @@ func (d *MetricThanos) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig
 			unmatched += un
 			podsOf := podNamesByService(rows, ix, nsRe)
 			part := thanosMetricPart(pe.family, pe.id, c.Name)
+			var vol map[string]float64 // hacim kapısı (metric_volume_gate.go)
+			if len(vals) > 0 {
+				vol = d.thanosVolume(cctx, meter, c, pe, ix, nsRe, at)
+			}
 			mu.Lock()
 			dirOf[part] = pe.direction
 			for svc, vs := range vals {
+				if belowMinVolume(vol, svc) { // kova yazılmaz, yargılanmaz
+					global.supVolume.Add(1)
+					continue
+				}
 				k := chstore.MLSeriesKey(svc, part)
 				if series[k] == nil {
 					if len(series) >= metricSeriesCap {

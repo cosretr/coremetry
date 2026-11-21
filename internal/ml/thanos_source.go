@@ -207,17 +207,31 @@ func combine(agg string, vals []float64) float64 {
 
 // ── bütçe ────────────────────────────────────────────────────────────────
 
-// thanosPlanned — bir cluster'da sorulacak ifade.
+// thanosPlanned — bir cluster'da sorulacak ifade. vol — v0.10.2437: hacim
+// kapısı ifadesi, pod düzeyinde ("" = kapı yok; metric_volume_gate.go).
 type thanosPlanned struct {
-	family, id, expr, direction, agg string
+	family, id, expr, direction, agg, vol string
 }
 
-// budgetPlan — SAF: cluster × tik tavanı; sıra korunur, fazlası sayılır.
-func budgetPlan(exprs []thanosPlanned, capN int) ([]thanosPlanned, int) {
-	if len(exprs) <= capN {
-		return exprs, 0
+// cost — ifadenin cluster × tik bütçesinden düştüğü sorgu (hacim kapısı +1).
+func (p thanosPlanned) cost() int {
+	if p.vol != "" {
+		return 2
 	}
-	return exprs[:capN], len(exprs) - capN
+	return 1
+}
+
+// budgetPlan — SAF: cluster × tik tavanı SORGU sayısıdır (hacim kapılı
+// ifade 2 sayılır); sıra korunur, sığmayan ifadeler sayılır.
+func budgetPlan(exprs []thanosPlanned, capN int) ([]thanosPlanned, int) {
+	used := 0
+	for i, e := range exprs {
+		if used+e.cost() > capN {
+			return exprs[:i], len(exprs) - i
+		}
+		used += e.cost()
+	}
+	return exprs, 0
 }
 
 // thanosFamilyVariants — v0.10.2019: Settings ifadeleri Thanos'ta veri
@@ -260,7 +274,11 @@ func variantPlan(cfg chstore.MLConfig, fam string, set []chstore.MLMetricExpr, w
 		if b, ok := base[e.ID]; ok {
 			agg, dir = exprAgg(b.Expr), b.Direction
 		}
-		out = append(out, thanosPlanned{family: fam, id: e.ID, expr: renderThanosExpr(e.Expr, winSec), direction: dir, agg: agg})
+		var vol string
+		if v := chstore.MLMetricVolumeExpr(fam, e); v != "" {
+			vol = renderThanosExpr(v, winSec)
+		}
+		out = append(out, thanosPlanned{family: fam, id: e.ID, expr: renderThanosExpr(e.Expr, winSec), direction: dir, agg: agg, vol: vol})
 	}
 	return out
 }

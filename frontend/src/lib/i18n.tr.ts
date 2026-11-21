@@ -3504,6 +3504,9 @@ export const TR: Record<string, string> = {
   'red.src.metricTitle': 'Örneklenmemiş metrik RED: {fam}',
   'red.src.metric': 'metrik',
   'red.src.sampled': 'örneklenmiş',
+  'red.agg.mixed': 'karma', // v0.10.2437 — sayfa toplamı metrik + span satırlarından
+  'red.agg.mixedTitle': 'Karma toplam: {n} satırın {m} tanesi örneklenmemiş metrikten, kalanı örneklenmiş span verisinden (iki ölçek; istek sayıları ~1/20 farklı). Toplam mini-grafiği span kovalarından.',
+  'red.agg.metricTitle': 'Sayfa toplamı örneklenmemiş metrik RED değerlerinden (istek toplamı; hata ve ortalama istek ağırlıklı; p99 en kötü servis).',
   'infra.toggle': 'Altyapı rotalarını göster',
   'infra.hidden': '{n} altyapı rotası gizlendi',
   'infra.hiddenTitle': 'Sağlık / hazırlık yoklaması, Prometheus scrape (actuator/prometheus, /metrics), ping / keepalive rotaları metrik RED toplamlarından ve rota grafiklerinden dışlandı (iş trafiği değil). Rota etiketi olmayan seriler korunur.',
