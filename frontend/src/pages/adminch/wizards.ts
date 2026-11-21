@@ -4,7 +4,7 @@
 import { api } from '@/lib/api';
 import { fmtNum } from '@/lib/utils';
 import type {
-  AttrKVHAliasStatus, EntityLayerObjectStatus, RollupStmtResult, RollupTarget, TraceBackfillRun,
+  AttrKVHAliasStatus, EntityLayerObjectStatus, RollupStmtResult, RollupTarget, SkipMatStatus, TraceBackfillRun,
 } from '@/lib/types';
 import { ROLLOUT_V2_TABLES } from '@/lib/types';
 import type { WizardCheck, WizardProbe, WizardRunResult } from './AutoWizard';
@@ -85,6 +85,43 @@ export function attrKVHProbe(st: AttrKVHAliasStatus): WizardProbe {
 export const attrKVHWizard = {
   probe: async () => attrKVHProbe(await api.attrKVHAliasStatus()),
   run: async ({ heavy }: { heavy: boolean }) => { await api.attrKVHAliasRun(heavy); return null; },
+};
+
+// ── arka plan MATERIALIZE işleri (v0.10.2424) ───────────────────────
+
+/** Kart yalnız sürmekte olan, başarısız ya da self-health notu açık iş varken görünür. */
+export function skipMatProbe(st: SkipMatStatus): WizardProbe {
+  const live = st.jobs.filter(j => j.state !== 'declined' && j.state !== 'cancelled' && j.state !== 'done');
+  const failed = live.filter(j => j.counts.failed > 0);
+  const checks: WizardCheck[] = [];
+  if (st.failing && st.health) checks.push({ name: 'self-health', ok: false, detail: st.health });
+  return {
+    applicable: true,
+    pending: live.length > 0,
+    checks,
+    steps: live.map(j => ({
+      id: j.id, title: `${j.kind} ${j.name} · ${j.local}${j.cluster ? ` ON CLUSTER ${j.cluster}` : ''}`,
+      state: j.counts.failed > 0 ? 'failed' : j.state,
+      detail: `${j.counts.done}/${j.counts.total} partition bitti · ${j.counts.running} yazılıyor · ${j.counts.failed} başarısız · ${j.counts.dropped} retention'la düştü${j.note ? ` — ${j.note}` : ''}`,
+    })),
+    blocker: failed.length === 0 ? 'yeniden denenecek başarısız partition yok — işler arka planda ilerliyor' : '',
+    plan: live.filter(j => j.sql).map(j => ({ title: `${j.id} — sıradaki partition`, lines: [j.sql as string] })),
+    summary: 'Worker lideri her 30 sn\'de bir adım atar: tabloda tek MATERIALIZE mutasyonu, en yeni partition önce; başka mutasyon / merge birikimi / disk < %10 iken bekler.',
+    running: st.active && failed.length === 0,
+  };
+}
+
+export const skipMatWizard = {
+  probe: async () => skipMatProbe(await api.skipMatStatus()),
+  run: async ({ probe }: { probe: WizardProbe }): Promise<WizardRunResult> => {
+    const log: RollupStmtResult[] = [];
+    for (const s of probe.steps ?? []) {
+      if (s.state !== 'failed') continue;
+      try { await api.skipMatAction('retry', s.id); log.push({ head: `${s.id}: başarısız partition'lar yeniden sırada`, ok: true }); }
+      catch (e) { return { ok: false, failedStep: s.id, err: msg(e), log }; }
+    }
+    return { ok: true, log };
+  },
 };
 
 // ── 0001/0003/0008 rollup zinciri ───────────────────────────────────

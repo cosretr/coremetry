@@ -896,8 +896,9 @@ func main() {
 	// natural fit.
 	if mode.worker {
 		go store.StartRetentionEnforcer(ctx, time.Hour, lockImpl)
-		go store.StartAIChatSweeper(ctx, time.Hour, lockImpl) // v0.10.561 — saved_views(page='ai-chat') süpürücüsü
-		go cosrelearn.StartCaseBuilder(ctx, store, lockImpl)  // CoSRE öğrenme Faz 3 — vaka taslakları
+		go store.StartAIChatSweeper(ctx, time.Hour, lockImpl)      // v0.10.561 — saved_views(page='ai-chat') süpürücüsü
+		go store.StartSkipMatWorker(ctx, 30*time.Second, lockImpl) // v0.10.2424 — arka plan MATERIALIZE INDEX|PROJECTION
+		go cosrelearn.StartCaseBuilder(ctx, store, lockImpl)       // CoSRE öğrenme Faz 3 — vaka taslakları
 	}
 
 	// ── Optional OIDC ─────────────────────────────────────────────────────────

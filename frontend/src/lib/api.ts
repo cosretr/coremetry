@@ -4215,6 +4215,13 @@ export const api = {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ materialize }), timeoutMs: 60_000,
     }),
+  // v0.10.2424 — arka plan MATERIALIZE işleri (admin_skipidx_materialize.go).
+  skipMatStatus: () =>
+    get<import('./types').SkipMatStatus>('/api/admin/skipidx-materialize/status'),
+  skipMatAction: (action: 'retry' | 'cancel', id: string) =>
+    request<import('./types').SkipMatStatus>(`/api/admin/skipidx-materialize/${action}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
+    }),
   rolloutLayerStatus: () =>
     get<import('./types').RolloutLayerStatusResult>('/api/admin/rollout-layer/status'),
   rolloutLayerPreflight: () =>

@@ -66,6 +66,7 @@ var selfHealthRules = map[string]bool{
 	selfDiskRuleID:       true,
 	selfChannelRuleID:    true,
 	selfRedisEvictRuleID: true, // Redis R6 — selfhealth_redis.go
+	selfSkipMatRuleID:    true, // v0.10.2424 — selfhealth_skipmat.go
 }
 
 // ── Disk ETA serisi ─────────────────────────────────────────────────────
@@ -298,6 +299,10 @@ func (e *Evaluator) evaluateSelfHealth(ctx context.Context, snap *chstore.OpenPr
 	}
 	if p, ok := e.selfRedisEvict(ctx, snap); ok {
 		covered[selfRedisEvictRuleID] = true
+		want = append(want, p...)
+	}
+	if p, ok := e.selfSkipMat(ctx); ok {
+		covered[selfSkipMatRuleID] = true
 		want = append(want, p...)
 	}
 	// v0.10.2242 (anomali kartı Dilim B) — hacim sıçraması kuralı

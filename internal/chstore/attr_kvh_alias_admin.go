@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -25,8 +24,9 @@ import (
 //     [NOT] EXISTS). Pod restart YOK: pod'lar attrIndexReprobeLoop ile
 //     kolonları kendileri görür; koşu "switch" adımında görünen her pod v2
 //     diyene kadar bekler, demezse eski kolona dokunmadan durur.
-//   - MATERIALIZE INDEX varsayılan KAPALI; açıkken partition partition
-//     (her partition'ın mutasyonu bitmeden sonrakine geçilmez).
+//   - MATERIALIZE INDEX varsayılan KAPALI; açıkken genel arka plan işine
+//     sıraya alınır (skipidx_materialize.go — partition partition, en
+//     yeniden eskiye, her partition'ın mutasyonu bitmeden sonrakine geçilmez).
 //
 // ASLA `MODIFY COLUMN … ALIAS` (eski part'larda veri kalır, sonraki
 // mutasyonlar Code 47) — eski kolon tek ALTER'da DROP + ADD … ALIAS.
@@ -52,8 +52,6 @@ var attrKVHStepTitles = map[string]string{
 	AttrKVHStepLegacy:      "4 · eski attr_kvh/res_kvh → ALIAS (indeks düşer, DROP+ADD)",
 	AttrKVHStepMaterialize: "5 · (opsiyonel) eski part'lara indeks — MATERIALIZE INDEX",
 }
-
-var attrKVHPartitionIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 // AttrIndexModeName — bu pod'un derleyici kipi (pod heartbeat'i + durum).
 func AttrIndexModeName() string {
@@ -745,62 +743,17 @@ func (s *Store) attrKVHRun(ctx context.Context, opt AttrKVHRunOptions) {
 	if !opt.Materialize {
 		return
 	}
+	// v0.10.2424 — kendi partition döngüsü yerine genel arka plan işi
+	// (skipidx_materialize.go): en yeniden eskiye, tabloda tek mutasyon,
+	// kısma + geri çekilme + restart'a dayanıklı. Kart ilerlemeyi
+	// "Arka plan MATERIALIZE işleri"nde gösterir.
 	attrKVHJobUpdate(func(j *AttrKVHJob) { j.Step = AttrKVHStepMaterialize })
-	st := s.attrKVHReprobe(ctx, opt)
-	for _, c := range st.Checks {
-		if c.Name == "disk boşluğu" && !c.OK {
-			s.attrKVHFail(AttrKVHStepMaterialize, "disk boşluğu yetersiz: "+c.Detail)
+	for _, c := range attrIndexV2Cols {
+		if _, err := s.SkipMatEnqueue(ctx, "spans", SkipMatKindIndex, c.idx, opt.StartedBy); err != nil {
+			s.attrKVHFail(AttrKVHStepMaterialize, c.idx+": "+err.Error())
 			return
 		}
-	}
-	local, _ := attrKVHTables(st.Cluster)
-	for _, p := range st.Partitions {
-		if p.Materialized {
-			continue
-		}
-		if !attrKVHPartitionIDRe.MatchString(p.ID) {
-			s.attrKVHFail(AttrKVHStepMaterialize, "beklenmeyen partition_id "+p.ID)
-			return
-		}
-		if !s.attrKVHExec(ctx, AttrKVHStepMaterialize, attrKVHStepSQL(AttrKVHStepMaterialize, st.Cluster, p.ID)) {
-			return
-		}
-		// Partition partition: bu partition'ın mutasyonları bitmeden sonrakine geçme.
-		if err := s.attrKVHWaitMutations(ctx, st.Cluster, local, p.ID, opt.Poll); err != nil {
-			s.attrKVHFail(AttrKVHStepMaterialize, "partition "+p.ID+": "+err.Error())
-			return
-		}
-		note("materialize: partition " + p.ID + " bitti")
-	}
-}
-
-// attrKVHWaitMutations — partition'ın MATERIALIZE mutasyonları her host'ta
-// bitene kadar bekler (en çok 6 saat); hatalı mutasyon = hata.
-func (s *Store) attrKVHWaitMutations(ctx context.Context, cluster, table, partitionID string, poll time.Duration) error {
-	src := "system.mutations"
-	if cluster != "" {
-		src = fmt.Sprintf("clusterAllReplicas('%s', system.mutations)", cluster)
-	}
-	deadline := time.Now().Add(6 * time.Hour)
-	like := "%MATERIALIZE INDEX%" + partitionID + "%"
-	for {
-		var pending uint64
-		var failReason string
-		qctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		err := s.conn.QueryRow(qctx, `SELECT countIf(NOT is_done), anyIf(latest_fail_reason, latest_fail_reason != '' AND NOT is_done)
-			FROM `+src+` WHERE database = currentDatabase() AND table = ? AND command LIKE ?
-			SETTINGS max_execution_time = 10, skip_unavailable_shards = 1`, table, like).Scan(&pending, &failReason)
-		cancel()
-		if err == nil && pending == 0 {
-			return nil
-		}
-		if failReason != "" {
-			return fmt.Errorf("mutasyon hatası: %s", failReason)
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("6 saatte bitmedi (system.mutations izleyin)")
-		}
-		time.Sleep(poll)
+		note("materialize: " + c.idx + " arka plan işine sıraya alındı (partition partition, en yeniden eskiye)")
 	}
 }
 

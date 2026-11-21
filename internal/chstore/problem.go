@@ -815,6 +815,8 @@ var selfHealthRunbooks = map[string]string{
 	"self-ingest-stall":   "/admin/stats",
 	"self-channel-broken": "/settings/channels",
 	"self-redis-evict":    "/admin/stats", // Redis R6: Redis kartı (Memory / Evicted)
+	// v0.10.2424 — arka plan MATERIALIZE işleri kartı (Admin → ClickHouse).
+	"self-skipidx-materialize": "/system/clickhouse",
 	// v0.9.1294 — hacim sıçramasının müdahale ekranı kardinalite
 	// panelidir: hangi servis/metrik/attr anahtarı yazma yolunu yiyor
 	// sorusunun cevabı orada. DOĞRUDAN rota yazıldı (/system/cardinality);

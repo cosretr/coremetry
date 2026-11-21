@@ -5437,6 +5437,22 @@ export interface AttrKVHAliasStatus {
   job: AttrKVHJob;
   generated: number;
 }
+// v0.10.2424 — arka plan MATERIALIZE INDEX|PROJECTION işleri (skipidx_materialize.go).
+export interface SkipMatPartition {
+  id: string; state: 'pending' | 'running' | 'done' | 'failed' | 'dropped' | string;
+  attempts?: number; nextAt?: number; issuedAt?: number; doneAt?: number; err?: string;
+}
+export interface SkipMatJob {
+  id: string; table: string; local: string; cluster: string; kind: string; name: string;
+  state: 'pending' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'declined' | string;
+  createdAt: number; createdBy?: string; updatedAt: number; note?: string;
+  partitions: SkipMatPartition[];
+  counts: { total: number; done: number; pending: number; running: number; failed: number; dropped: number };
+  sql?: string;
+}
+export interface SkipMatStatus {
+  jobs: SkipMatJob[]; active: boolean; failing: boolean; health?: string; generated: number;
+}
 export interface FunctionIDColumnPreflightResult {
   clusters: string[];
   suggestedCluster?: string;

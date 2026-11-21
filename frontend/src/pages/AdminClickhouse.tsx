@@ -13,7 +13,7 @@ import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
 import { canRepair, canSeedFirstReplica, catalogLabel, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, statePathHeadline, statePathLabel, statePathOwnsRepair, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
 import { StatePathBlock } from './adminch/StatePathRebuild'; // v0.10.965 — state tablolarının ZK yolu
 import { AutoWizard } from './adminch/AutoWizard'; // v0.10.2410 — kendi kendini denetleyen tek-koşu sihirbaz
-import { attrKVHWizard, entityLayerWizard, functionIdWizard, rolloutLayerWizard, rollupWizard, traceBackfillWizard } from './adminch/wizards';
+import { attrKVHWizard, entityLayerWizard, functionIdWizard, rolloutLayerWizard, rollupWizard, skipMatWizard, traceBackfillWizard } from './adminch/wizards';
 import type {
   CHMeasurePartsRow, CHMeasureEventsRow, CHMeasureAsyncRow, CHMeasureInsertRow, // v0.10.683 — ölçüm paneli
   CHRootCoverageRow, // v0.10.712 — kök kapsaması paneli
@@ -2718,6 +2718,9 @@ function SetupWizards() {
           (asla MODIFY). Her adım öncesi yeniden probe; ilk hatada durur, tekrar koşmak kaldığı yerden devam eder.</>}
         confirmText="Bekleyen 0017 adımları sırayla koşacak; 4. adım eski idx_attr_kvh/idx_res_kvh indekslerini düşürüp attr_kvh/res_kvh'yi DROP+ADD ile ALIAS yapar (disk boşalır, geri alma 0014 ile)."
         heavy={{ label: 'eski veriye de indeks uygula (MATERIALIZE INDEX) — ağır I/O', hint: 'Partition partition MATERIALIZE INDEX: her partition bitmeden sonrakine geçilmez; disk + merge, mesai dışı.' }} />
+      <AutoWizard title="Arka plan MATERIALIZE işleri" {...skipMatWizard}
+        intro="Skip indeks / projection'ı eski partition'lara yazan arka plan işleri (0017 MATERIALIZE, n-gram indeksi …). Partition partition, en yeni önce; tabloda aynı anda tek mutasyon. Çalıştır = başarısız partition'ları yeniden sıraya al."
+        confirmText="Başarısız partition'lar sıfırlanıp yeniden sıraya alınacak." />
       <AutoWizard title="/traces tarihçe geri doldurma" {...traceBackfillWizard}
         intro="trace_summary_5m'de boş kalan günler (bugün hariç) ham spans'ten yeniden kurulur: gün başına MV partition'ı düşer + yeniden aggregate (tekrar koşmak güvenli; span'lere dokunulmaz). Ardışık, 1 dilim."
         confirmText="Boş günlerin MV partition'ları düşürülüp ham spans'ten yeniden kurulacak." />

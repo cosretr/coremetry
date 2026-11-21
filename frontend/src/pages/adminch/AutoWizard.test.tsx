@@ -8,8 +8,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { AutoWizard, type AutoWizardProps, type WizardProbe } from './AutoWizard';
-import { attrKVHProbe, backfillGapDays, objectsPlan, pickCluster, rollout0012State, rollupWizard } from './wizards';
-import type { AttrKVHAliasStatus, EntityLayerObjectStatus } from '@/lib/types';
+import { attrKVHProbe, backfillGapDays, objectsPlan, pickCluster, rollout0012State, rollupWizard, skipMatProbe } from './wizards';
+import type { AttrKVHAliasStatus, EntityLayerObjectStatus, SkipMatJob } from '@/lib/types';
 
 let host: HTMLElement | null = null;
 let root: Root | null = null;
@@ -131,5 +131,29 @@ describe('rollup: sıralı koşu', () => {
     const r = await rollupWizard.run({ cluster: 'c1' });
     expect(applied).toEqual(['narrow']);
     expect(r).toMatchObject({ ok: false, failedStep: 'narrow', err: 'kuyruk' });
+  });
+});
+
+describe('skipMatProbe (v0.10.2424)', () => {
+  const job = (over: Partial<SkipMatJob>): SkipMatJob => ({
+    id: 'spans:index:idx_x', table: 'spans', local: 'spans_local', cluster: 'c1', kind: 'index', name: 'idx_x',
+    state: 'running', createdAt: 1, updatedAt: 1, partitions: [],
+    counts: { total: 3, done: 1, pending: 1, running: 1, failed: 0, dropped: 0 }, ...over,
+  });
+  it('no live job → card hidden; declined/done/cancelled are not work', () => {
+    const p = skipMatProbe({ jobs: [job({ state: 'declined' }), job({ state: 'done' }), job({ state: 'cancelled' })], active: false, failing: false, generated: 0 });
+    expect(p.pending).toBe(false);
+  });
+  it('running job → visible, polling, retry blocked', () => {
+    const p = skipMatProbe({ jobs: [job({ sql: "ALTER TABLE spans_local ON CLUSTER c1 MATERIALIZE INDEX idx_x IN PARTITION ID '20261120'" })], active: true, failing: false, generated: 0 });
+    expect(p).toMatchObject({ pending: true, running: true });
+    expect(p.blocker).toMatch(/başarısız partition yok/);
+    expect(p.plan[0].lines[0]).toMatch(/IN PARTITION ID/);
+  });
+  it('failed partitions → retry allowed + self-health check shown', () => {
+    const p = skipMatProbe({ jobs: [job({ state: 'failed', counts: { total: 2, done: 1, pending: 0, running: 0, failed: 1, dropped: 0 } })], active: false, failing: true, health: 'x', generated: 0 });
+    expect(p.blocker).toBe('');
+    expect(p.steps?.[0].state).toBe('failed');
+    expect(p.checks[0]).toMatchObject({ name: 'self-health', ok: false });
   });
 });

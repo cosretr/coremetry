@@ -920,6 +920,8 @@ func selfHeadlineTR(ruleID string) string {
 		return "telemetri hacmi sıçradı"
 	case strings.HasPrefix(ruleID, "self-redis-evict"):
 		return "Redis belleği doldu, anahtar tahliye ediyor"
+	case strings.HasPrefix(ruleID, "self-skipidx-materialize"):
+		return "arka plan indeks materialize işi başarısız"
 	}
 	return "iç sağlık uyarısı"
 }
