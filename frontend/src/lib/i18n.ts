@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { DEFAULT_BRANDING, useBranding } from './branding';
-import { getRaw, setRaw, removeRaw } from './storage';
+import { getRaw, setRaw, removeRaw, getSessionRaw, setSessionRaw } from './storage';
 
 // Tiny in-repo i18n. No external dependency — the SPA's
 // branding settings carry a `language` field that picks one of
@@ -77,11 +77,46 @@ export function loadCatalog(lang: Lang): Promise<void> {
       ? import('./i18n.en').then((m) => ({ cat: m.EN, eager: m.EN_EAGER }))
       : import('./i18n.tr').then((m) => ({ cat: m.TR, eager: m.EN_EAGER }));
     p = mod
-      .then(({ cat, eager }) => registerCatalog(lang, cat, eager))
-      .catch(() => { delete pending[lang]; });
+      .then(({ cat, eager }) => { registerCatalog(lang, cat, eager); retryCount = 0; })
+      .catch((err: unknown) => {
+        delete pending[lang];
+        // v0.10.2416 — operator-reported (prod): both catalog chunks failed to
+        // load, the app mounted with raw keys and never tried again. Log the
+        // cause (chunk 404 / blocked by a proxy / MIME) and retry while no
+        // catalog is loaded at all.
+        console.error(`[i18n] catalog '${lang}' could not be loaded`, err);
+        scheduleRetry(lang);
+      });
     pending[lang] = p;
   }
   return p;
+}
+
+// Retry with backoff while NO catalog is loaded (one language loaded is
+// enough to draw real text). After the last attempt, reload the page once per
+// tab session: a tab opened before an upgrade asks for chunk names the new
+// build no longer serves, and only a fresh index.html fixes that.
+const RETRY_DELAYS_MS = [1000, 3000, 8000, 20000, 45000];
+const RELOAD_GUARD_KEY = 'coremetry.i18nReloaded';
+let retryCount = 0;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleRetry(lang: Lang): void {
+  if (catalogs.tr || catalogs.en || retryTimer || typeof window === 'undefined') return;
+  if (retryCount >= RETRY_DELAYS_MS.length) {
+    // getSessionRaw/setSessionRaw swallow storage errors; if the guard
+    // can't be written, don't reload (no loop).
+    if (!getSessionRaw(RELOAD_GUARD_KEY)) {
+      setSessionRaw(RELOAD_GUARD_KEY, '1');
+      if (getSessionRaw(RELOAD_GUARD_KEY)) window.location.reload();
+    }
+    return;
+  }
+  const delay = RETRY_DELAYS_MS[retryCount++];
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    if (!catalogs.tr && !catalogs.en) void loadCatalog(lang);
+  }, delay);
 }
 export const loadEnCatalog = (): Promise<void> => loadCatalog('en');
 
@@ -180,7 +215,10 @@ export function useLang(): Lang {
   // DEFAULT_BRANDING (fetch öncesi 'en') bir istek DEĞİL: branding'i
   // export'suz mock'layan testler (kataloglar kurulumda yüklü) ona hiç
   // dokunmaz — koşul yalnız katalog yüklü değilken okunur.
-  const request = catalogs[wanted] === null && (userLang !== null || brand !== DEFAULT_BRANDING);
+  // v0.10.2416 — with NO catalog loaded (boot import failed) always ask for
+  // one, even before branding resolves; loadCatalog dedups in-flight loads.
+  const request = catalogs[wanted] === null &&
+    (userLang !== null || brand !== DEFAULT_BRANDING || (!catalogs.tr && !catalogs.en));
   useEffect(() => {
     if (request) void loadCatalog(wanted);
   }, [request, wanted]);
