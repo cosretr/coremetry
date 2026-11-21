@@ -10,6 +10,6 @@ ADIMLAR:
 - olaylar: atlandı
 - node baskısı: tamam — node baskısı yok
 - custom_step: weird — bilinmeyen adım adı aynen
-AJAN HİPOTEZİ (kod skoru): orders-api@rev 42 rollout'u — yüksek 0.71 — deploy başlangıçtan 12 dk önce
-DİĞER HİPOTEZLER: db.example.test yavaşlığı orta 0.44 (operatör onayladı) · node baskısı düşük 0.12 (operatör eledi)
+EKİBİN DOĞRULADIĞI NEDEN: db.example.test yavaşlığı (ekip doğruladı; kod skoru orta 0.44)
+DİĞER HİPOTEZLER: orders-api@rev 42 rollout'u yüksek 0.71 · dördüncü hipotez gösterilmez düşük 0.05
 BULGULAR: yok — okunan bölümlerde eşik aşan bulgu çıkmadı

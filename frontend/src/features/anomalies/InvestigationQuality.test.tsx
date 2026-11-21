@@ -6,6 +6,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 
 vi.mock('@/lib/i18n', async (orig) => ({ ...(await orig<typeof import('@/lib/i18n')>()), useLang: () => 'tr' as const }));
 import { act } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createRoot, type Root } from 'react-dom/client';
 import type { SREHypothesis, SREInvestigation } from '@/lib/types';
 import { InvestigationGateBanner, InvestigationQuality } from './InvestigationQuality';
@@ -89,5 +90,24 @@ describe('InvestigationQuality', () => {
     const el = render(<InvestigationGateBanner inv={inv({ coverage: { mode: 'show', verdict: 'insufficient', missing: [{ code: 'no_supported' }] } })} />);
     expect(el.textContent).toContain('Kanıt yetersiz');
     expect(el.textContent).toContain('desteklenen hipotez yok');
+  });
+  it('ekip kararı: viewer salt-okur (otomatik durum yanında), editor iki eylem', () => {
+    const ruled = inv({ hypotheses: [
+      h('deploy', 'supported', 0.75, { humanState: { state: 'dismissed', by: 'op@example.test', at: 1, note: 'geri alındı, sürüyor' } }),
+      h('db_slow', 'tested', 0.3, { humanState: { state: 'confirmed', at: 1 } }),
+    ] });
+    const tr = hypothesisTree(ruled);
+    expect(tr.open.map(x => x.kind)).toEqual(['db_slow']);
+    expect(tr.ruledOut.map(x => x.kind)).toEqual(['deploy']);
+    const el = render(<InvestigationQuality inv={ruled} />);
+    const row = el.querySelector('[data-ruling="confirmed"]')!;
+    expect(row.textContent).toContain('Doğrulandı');
+    expect(row.textContent).toContain('otomatik: test edildi');
+    expect(el.querySelector('[data-ruling-action]')).toBeNull();
+    act(() => root?.unmount()); host?.remove();
+    const qc = new QueryClient();
+    const ed = render(<QueryClientProvider client={qc}><InvestigationQuality inv={ruled} canEdit /></QueryClientProvider>);
+    const acts = [...ed.querySelectorAll('[data-ruling="confirmed"] [data-ruling-action]')].map(b => b.textContent);
+    expect(acts).toEqual(['Kararı kaldır', 'Reddedildi']);
   });
 });

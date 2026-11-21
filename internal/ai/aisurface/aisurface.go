@@ -245,13 +245,15 @@ const (
 	TierClarify = "clarify"
 	// TierStepRedirect — v0.10.2368: adım yönlendirmesi reddi / durdur-özetle (api/chat_step_redirect.go).
 	TierStepRedirect = "step-redirect"
-	TierLoop         = "loop"
-	TierOther        = "other"
+	// TierTurnLimit — kişi başı tur sınırı: sınır cevabı, LLM'siz (api/chat_turn_limit.go).
+	TierTurnLimit = "turn-limit"
+	TierLoop      = "loop"
+	TierOther     = "other"
 )
 
 var tiers = map[string]bool{TierScope: true, TierWiki: true, TierGuided: true, TierDrawer: true,
 	TierRAG: true, TierIntent: true, TierLoop: true, TierOther: true, TierDocRows: true, TierDiscovery: true, TierOperation: true,
-	TierMemory: true, TierExplain: true, TierCodeSticky: true, TierClarify: true, TierStepRedirect: true}
+	TierMemory: true, TierExplain: true, TierCodeSticky: true, TierClarify: true, TierStepRedirect: true, TierTurnLimit: true}
 
 // KnownTier — kademe adı kayıtlı mı (api kaynak testi copilotChat'in
 // cspan.tier(...) adlarını buna karşı denetler).

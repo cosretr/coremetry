@@ -379,6 +379,13 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	ctx = copilot.WithCallSink(ctx, xch.noteModelCall)
 	emit = xch.tap(emit)
 	defer func() { s.recordChatExchange(ctx, xch, cspan) }()
+	// CoSRE kişi başı tur sınırı (chat_turn_limit.go): sınırda model çağrısı
+	// yok, açık cevap + sıfırlanma süresi. Değerlendirme / onay devamı sayılmaz.
+	if evm == nil && !apCont.resume() && s.chatTurnLimited(ctx, emit, c) {
+		cspan.tier("turn-limit", true)
+		emit("done", map[string]bool{"ok": true})
+		return
+	}
 	if dm.On {
 		ctx = withDeepMode(ctx, dm)
 		emit("step", map[string]string{"label": dm.stepLabel()})

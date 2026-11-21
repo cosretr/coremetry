@@ -8720,6 +8720,15 @@ export interface ProblemInsight {
 }
 
 // AIChatRetention — /api/ai/chat-retention (v0.10.561): sohbet arşivi saklama; days 0 = süpürme kapalı.
+/** CoSRE kişi başı sohbet turu sınırı (Go chstore.AITurnLimits; 0 = varsayılan). */
+export interface AITurnLimits {
+  perHour: number;
+  perDay: number;
+  disabled?: boolean;
+  exemptAdmins?: boolean;
+  updatedBy?: string;
+  updatedAt?: string;
+}
 export interface AIChatRetention { days: number }
 // AIGeneralQuestions — /api/ai/general-questions (v0.10.1458): konu dışı sorulara
 // kısa genel cevap anahtarı; blob yokken allow=true. Go: chstore.AIGeneralQuestions.
@@ -12110,6 +12119,8 @@ export interface SRECoverageGate {
   top?: SREHypothesisKind;
   sources?: string[];
   missing?: SREGateGap[];
+  /** "confirmed" — top'u ekip doğruladı (hypothesis_ruling.go). */
+  ruling?: 'confirmed';
 }
 // v0.10.1494 — Go: sre.PackMeta / PackSectionMeta (metin değil, künye).
 export interface SREPackSectionMeta {

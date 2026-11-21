@@ -38,6 +38,18 @@ func TestSREBlockLinesTR(t *testing.T) {
 	}
 }
 
+// Ekip doğruladı → neden "ekip doğruladı" ile söylenir (TR/EN).
+func TestSREBlockLinesTeamConfirmed(t *testing.T) {
+	d := sufficientDigest()
+	d.TeamConfirmed = true
+	if tr := sreBlockLines(d, true, ""); tr[1] != "Neden: Deploy (ekip doğruladı)" {
+		t.Fatalf("TR: %v", tr)
+	}
+	if en := sreBlockLines(d, false, ""); en[1] != "Cause: Deploy (confirmed by the team)" {
+		t.Fatalf("EN: %v", en)
+	}
+}
+
 func TestSREBlockLinesENAndInsufficient(t *testing.T) {
 	d := sufficientDigest()
 	d.TopKind = "db_slow"

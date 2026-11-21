@@ -680,7 +680,7 @@ func TestRenderHypothesesTR(t *testing.T) {
 		{Kind: HypConfig, Label: "Konfigürasyon değişikliği", Score: 0.1, Band: BandLow},
 	}
 	want := "AJAN HİPOTEZİ (kod skoru): Bağımlılık arızası — orta 0.55 — aşağı akış payments kötüleşti\n" +
-		"DİĞER HİPOTEZLER: Deploy yüksek 0.90 (operatör eledi) · Konfigürasyon değişikliği düşük 0.10\n"
+		"DİĞER HİPOTEZLER: Konfigürasyon değişikliği düşük 0.10 · Deploy yüksek 0.90 (ekip reddetti)\n"
 	if got := renderHypothesesTR(hs); got != want {
 		t.Fatalf("golden:\n%s\nbeklenen:\n%s", got, want)
 	}
@@ -692,11 +692,12 @@ func TestRenderHypothesesTR(t *testing.T) {
 		t.Fatal("hipotezsiz kayıt satır basmaz")
 	}
 	// Sohbet özeti: ≤3, destek / karşı gerekçe, operatör işareti.
-	sum := SummaryOf(Investigation{State: StateDone, Hypotheses: append(hs, Hypothesis{Kind: HypExternal})})
-	if len(sum.Hypotheses) != 3 || sum.Hypotheses[0].Operator != MarkDismissed || len(sum.Hypotheses[1].Support) != 1 {
+	// Ekip kararı sırası: reddedilen en sona (hypothesis_ruling.go).
+	sum := SummaryOf(Investigation{State: StateDone, Hypotheses: hs})
+	if len(sum.Hypotheses) != 3 || sum.Hypotheses[2].Operator != MarkDismissed || len(sum.Hypotheses[0].Support) != 1 {
 		t.Fatalf("özet hipotezleri: %+v", sum.Hypotheses)
 	}
-	if txt := RenderSavedTR("P-1", sum, time.UTC); !strings.Contains(txt, "Ajanın hipotezleri (kod skoru — değiştirme):") || !strings.Contains(txt, "(operatör eledi)") {
+	if txt := RenderSavedTR("P-1", sum, time.UTC); !strings.Contains(txt, "Ajanın hipotezleri (kod skoru — değiştirme):") || !strings.Contains(txt, "(ekip reddetti") {
 		t.Fatalf("kayıtlı araştırma bloğu: %s", txt)
 	}
 }

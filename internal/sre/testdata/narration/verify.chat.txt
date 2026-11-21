@@ -3,7 +3,7 @@ KAYITLI ARAŞTIRMA (14:04) — AI SRE ajanı, problem P-1043 · aynı servisin y
 - [warn] JVM orders-api-7d9f
 - [info] Kubernetes kxzone/orders-api: restart 3
 Ajanın hipotezleri (kod skoru — değiştirme):
+- db.example.test yavaşlığı: orta 0.44 (ekip doğruladı)
 - node baskısı: düşük 0.18
-- db.example.test yavaşlığı: orta 0.44 (operatör onayladı)
 Ajanın özeti:
 paylaşılan kaydın özeti

@@ -54,7 +54,7 @@ func SummaryOf(inv Investigation) mcptools.InvestigationSummary {
 // özeti (destek / karşı gerekçeler ≤2'şer, operatör işareti).
 func summaryHypotheses(hs []Hypothesis) []mcptools.InvestigationHypothesis {
 	var out []mcptools.InvestigationHypothesis
-	for i, h := range hs {
+	for i, h := range rulingOrder(hs) { // ekip kararı sırayı belirler (hypothesis_ruling.go)
 		if i >= HypothesesShown {
 			break
 		}
@@ -117,9 +117,9 @@ func renderSavedHypothesesTR(hs []mcptools.InvestigationHypothesis) string {
 		}
 		switch h.Operator {
 		case MarkDismissed:
-			line += " (operatör eledi)"
+			line += " (ekip reddetti — neden olarak söyleme)"
 		case MarkConfirmed:
-			line += " (operatör onayladı)"
+			line += " (ekip doğruladı)"
 		}
 		b.WriteString(truncRunes(line, 400) + "\n")
 	}

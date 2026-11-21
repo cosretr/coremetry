@@ -18,6 +18,7 @@ const TIER_LABELS: Record<string, string> = {
   memory: 'Hafıza (kurallar)', // v0.10.1289 — "bunu hatırla" (chat_memory.go)
   explain: 'Açıklama turu', // v0.10.1400 — trace/exception ✨ sohbet içinde (chat_explain_turn.go)
   'step-redirect': 'Adım yönlendirme (red / durdur-özetle)', // v0.10.2368 — chat_step_redirect.go
+  'turn-limit': 'Tur sınırı (LLM yok)', // chat_turn_limit.go
   'code-sticky': 'Kod kilidi (yerel profil yok)', // v0.10.1465 — kod okunmuş konuşma, LLM'siz kapalı cevap (chat_code_sticky.go)
   clarify: 'Netleştirme sorusu', // v0.10.1571 — düz metin "Coremetry mi, wiki mi?" (chat_clarify.go)
   loop: 'Serbest döngü',

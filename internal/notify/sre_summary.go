@@ -42,6 +42,7 @@ type InvestigationDigest struct {
 	Sufficient      bool   // kanıt kapısı kararı
 	TopKind         string // yalnız Sufficient
 	TopLabel        string // türün Türkçe adı (kayıttan)
+	TeamConfirmed   bool   // top'u ekip doğruladı → "(ekip doğruladı)"
 	Evidence        []DigestEvidence
 	Missing         []DigestGap
 	Blind           []DigestReach
@@ -368,7 +369,11 @@ func sreBlockLines(d *InvestigationDigest, tr bool, report string) []string {
 		if en, ok := hypKindEN[d.TopKind]; ok && !tr {
 			name = en
 		}
-		out = append(out, trEN(tr, "En olası neden: ", "Most likely cause: ")+name)
+		if d.TeamConfirmed {
+			out = append(out, trEN(tr, "Neden: ", "Cause: ")+name+trEN(tr, " (ekip doğruladı)", " (confirmed by the team)"))
+		} else {
+			out = append(out, trEN(tr, "En olası neden: ", "Most likely cause: ")+name)
+		}
 		for _, e := range d.Evidence {
 			line := trEN(tr, "Kanıt: ", "Evidence: ") + pick(checkNames, e.Check, tr)
 			if e.Source != "" {

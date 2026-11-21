@@ -1496,6 +1496,10 @@ export const api = {
   markProblemHypothesis: (id: string, kind: import('./types').SREHypothesisKind, body: { state: 'dismissed' | 'confirmed'; note?: string }) =>
     request<import('./types').SREHypothesis>(`/api/problems/${encodeURIComponent(id)}/investigation/hypotheses/${encodeURIComponent(kind)}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  // Ekip kararını kaldır (editor+, audit sre.hypothesis.unmark).
+  clearProblemHypothesis: (id: string, kind: import('./types').SREHypothesisKind) =>
+    request<import('./types').SREHypothesis>(`/api/problems/${encodeURIComponent(id)}/investigation/hypotheses/${encodeURIComponent(kind)}`,
+      { method: 'DELETE' }),
   // v0.10.1293 — AI SRE öneri işareti "Uygulandı" (ack) / "Ele" (dismissed) — editor+,
   // audit sre.recommendation.ack; yalnız etiket, sunucu hiçbir şeyi uygulamaz.
   ackProblemRecommendation: (id: string, rid: string, body: { state: 'ack' | 'dismissed' }) =>
@@ -1541,6 +1545,10 @@ export const api = {
   aiChatRetention: () => get<import('./types').AIChatRetention>(`/api/ai/chat-retention`),
   putAIChatRetention: (c: import('./types').AIChatRetention) =>
     request<import('./types').AIChatRetention>(`/api/ai/chat-retention`, { method: 'PUT', body: JSON.stringify(c) }),
+  // CoSRE kişi başı tur sınırı (admin + audit settings.ai_turn_limits.update).
+  aiTurnLimits: () => get<import('./types').AITurnLimits>(`/api/ai/turn-limits`),
+  putAITurnLimits: (c: Partial<import('./types').AITurnLimits>) =>
+    request<import('./types').AITurnLimits>(`/api/ai/turn-limits`, { method: 'PUT', body: JSON.stringify(c) }),
   // v0.10.1458 — konu dışı sorulara genel cevap anahtarı: GET her rol, PUT admin + audit.
   aiGeneralQuestions: (signal?: AbortSignal) =>
     get<import('./types').AIGeneralQuestions>(`/api/ai/general-questions`, signal),

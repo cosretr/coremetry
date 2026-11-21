@@ -318,9 +318,9 @@ func humanTR(h Hypothesis) string {
 	}
 	switch h.HumanState.State {
 	case MarkDismissed:
-		return " (operatör eledi)"
+		return " (ekip reddetti)"
 	case MarkConfirmed:
-		return " (operatör onayladı)"
+		return " (ekip doğruladı)"
 	}
 	return ""
 }
@@ -332,17 +332,20 @@ func renderHypothesesTR(hs []Hypothesis) string {
 	if len(hs) == 0 {
 		return ""
 	}
+	// Ekip kararları sırayı belirler (hypothesis_ruling.go): doğrulanan
+	// sonuçtur, reddedilen asla en olası neden değildir.
+	hs = rulingOrder(hs)
 	top := -1
-	for i, h := range hs {
-		if h.HumanState == nil || h.HumanState.State != MarkDismissed {
-			top = i
-			break
-		}
+	if ruling(hs[0]) != MarkDismissed {
+		top = 0
 	}
 	var b strings.Builder
 	switch {
 	case top < 0:
-		b.WriteString("AJAN HİPOTEZİ: operatör tüm hipotezleri eledi\n")
+		b.WriteString("AJAN HİPOTEZİ: ekip tüm hipotezleri reddetti — neden söyleme\n")
+	case ruling(hs[top]) == MarkConfirmed:
+		h := hs[top]
+		fmt.Fprintf(&b, "EKİBİN DOĞRULADIĞI NEDEN: %s (ekip doğruladı; kod skoru %s %.2f)\n", h.Label, h.Band, h.Score)
 	case hs[top].Band == BandLow:
 		fmt.Fprintf(&b, "AJAN HİPOTEZİ (kod skoru): belirgin hipotez yok — en yüksek %s %s %.2f\n", hs[top].Label, hs[top].Band, hs[top].Score)
 	default:

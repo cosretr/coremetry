@@ -22,6 +22,7 @@ import (
 type NotifyDigest struct {
 	InvestigationID, ProblemID, State string
 	Finished, Sufficient              bool
+	TeamConfirmed                     bool // top'u ekip doğruladı ("ekip doğruladı")
 	TopKind, TopLabel                 string
 	Evidence                          []NotifyEvidence
 	Missing                           []GateGap
@@ -61,12 +62,18 @@ func Digest(inv Investigation) NotifyDigest {
 		reach = buildReach(inv.Playbook, inv.Steps)
 	}
 	var g CoverageGate
-	if inv.Coverage != nil && inv.Coverage.Verdict != "" {
+	switch {
+	case hasRulings(hs):
+		// Ekip kararı kayıttaki kapı kararından sonra gelmiş olabilir: aynı
+		// kural kararlarla yeniden (doğrulanan söylenir, reddedilen asla).
+		g = evaluateCoverage(hs, inv.Playbook, reach, GateShadow)
+	case inv.Coverage != nil && inv.Coverage.Verdict != "":
 		g = *inv.Coverage
-	} else {
+	default:
 		g = evaluateCoverage(hs, inv.Playbook, reach, GateShadow)
 	}
 	d.Sufficient = g.Verdict == GateSufficient
+	d.TeamConfirmed = d.Sufficient && g.Ruling == MarkConfirmed
 	if d.Sufficient {
 		for _, h := range hs {
 			if h.Kind != g.Top {

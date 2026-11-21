@@ -357,7 +357,13 @@ func runInvestigation(ctx context.Context, rd readers, inv *Investigation, check
 	inv.Facts.Argo = argoFactsFor(ctx, rd, inv.Facts.Argo, inv.Service, replay, verify, now)
 	// Hipotezler + zaman çizelgesi: SAF, okuma yok; operatör işaretleri taşınır.
 	ev := evidenceFrom(inv)
-	inv.Hypotheses = carryHuman(Score(ev), inv.Hypotheses)
+	if replay {
+		// Değerlendirme tekrarı ekip kararlarını GÖRMEZ (cevap sızıntısı):
+		// kendi anahtarında taze kayıttır; yine de taşıma yapılmaz.
+		inv.Hypotheses = Score(ev)
+	} else {
+		inv.Hypotheses = carryHuman(Score(ev), inv.Hypotheses)
+	}
 	structureResult(rd, inv, replay)           // CoSRE Faz B2–B4 — durum + erişim + kanıt kapısı (SAF)
 	inv.ContextPack = packMetaFor(*inv, p, pk) // v0.10.1494 — künye (metin değil); kapalı → nil
 	if replay {

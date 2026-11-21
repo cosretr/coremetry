@@ -9,6 +9,9 @@ package api
 //        işaret skora hiçbir yoldan girmez). "Doğrula" ayrı uç değil:
 //        POST /api/problems/{id}/investigation {kind:"verify", hypothesis}
 //        (sre_status.go).
+//   DELETE /api/problems/{id}/investigation/hypotheses/{kind} → editor+,
+//        ekip kararını kaldırır, audit sre.hypothesis.unmark (otomatik durum
+//        yeniden tek başına geçerli; kanıt kapısı kararı yenilenir).
 //
 // Yazım YALNIZ ajanın kendi kaydına (saved_views page='sre-investigation') —
 // root_cause_hypotheses / problems / öncelik dokunulmaz (sentezleyici tek
@@ -32,6 +35,42 @@ func init() { registerRoutesExtra("sre-hypothesis", (*Server).registerSREHypothe
 func (s *Server) registerSREHypothesisRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/problems/{id}/investigation/hypotheses/{kind}",
 		auth.RequireAnyRole(editorRoles, http.HandlerFunc(s.postSREHypothesisMark)))
+	mux.Handle("DELETE /api/problems/{id}/investigation/hypotheses/{kind}",
+		auth.RequireAnyRole(editorRoles, http.HandlerFunc(s.deleteSREHypothesisMark)))
+}
+
+func (s *Server) deleteSREHypothesisMark(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	kind := strings.TrimSpace(r.PathValue("kind"))
+	if id == "" || !sre.IsHypothesisKind(kind) {
+		writeJSONError(w, http.StatusBadRequest, "problem kimliği ve bilinen hipotez türü zorunlu")
+		return
+	}
+	h, err := sre.ClearHypothesisMark(r.Context(), sreStoreOf(s), id, kind)
+	if !writeMarkErr(w, err) {
+		return
+	}
+	details, _ := json.Marshal(map[string]any{"kind": kind})
+	s.audit(r, "sre.hypothesis.unmark", "problem", id, string(details))
+	s.PublishSRE(sre.EventKind, map[string]any{"problemId": id, "state": "marked"})
+	writeJSON(w, h)
+}
+
+// writeMarkErr — işaret hatası → HTTP; false = yanıt yazıldı.
+func writeMarkErr(w http.ResponseWriter, err error) bool {
+	switch {
+	case errors.Is(err, sre.ErrMarkInvalid):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, sre.ErrMarkNotFound):
+		writeJSONError(w, http.StatusNotFound, "araştırma ya da hipotez bulunamadı")
+	case errors.Is(err, sre.ErrMarkBusy):
+		writeJSONError(w, http.StatusConflict, err.Error())
+	case err != nil:
+		writeErr(w, err)
+	default:
+		return true
+	}
+	return false
 }
 
 func (s *Server) postSREHypothesisMark(w http.ResponseWriter, r *http.Request) {
@@ -59,18 +98,7 @@ func (s *Server) postSREHypothesisMark(w http.ResponseWriter, r *http.Request) {
 		by = firstNonEmpty(c.Email, c.UserID)
 	}
 	h, err := sre.ApplyHypothesisMark(r.Context(), sreStoreOf(s), id, sre.MarkRequest{Kind: kind, State: body.State, Note: body.Note, By: by})
-	switch {
-	case errors.Is(err, sre.ErrMarkInvalid):
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
-	case errors.Is(err, sre.ErrMarkNotFound):
-		writeJSONError(w, http.StatusNotFound, "araştırma ya da hipotez bulunamadı")
-		return
-	case errors.Is(err, sre.ErrMarkBusy):
-		writeJSONError(w, http.StatusConflict, err.Error())
-		return
-	case err != nil:
-		writeErr(w, err)
+	if !writeMarkErr(w, err) {
 		return
 	}
 	details, _ := json.Marshal(map[string]any{"kind": kind, "state": body.State, "score": h.Score, "band": h.Band, "noted": strings.TrimSpace(body.Note) != ""})

@@ -1091,6 +1091,12 @@ func main() {
 		log.Printf("[loop-budget] load persisted settings: %v", err)
 	}
 	cfgRefresh.Add("ai-loop-budget", store.LoadAILoopBudget)
+	// CoSRE kişi başı sohbet turu sınırı (system_settings ai.turnLimits);
+	// yüklenemezse varsayılan 60 / saat, 300 / 24 sa.
+	if err := store.LoadAITurnLimits(ctx); err != nil {
+		log.Printf("[turn-limits] load persisted settings: %v", err)
+	}
+	cfgRefresh.Add("ai-turn-limits", store.LoadAITurnLimits)
 	// v0.10.1458 — konu dışı sorulara genel cevap anahtarı (system_settings
 	// ai.generalQuestions) HER rolde (sohbet api'de); yüklenemezse varsayılan
 	// AÇIK (operatör kararı 2026-10-23).

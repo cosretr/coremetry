@@ -1,6 +1,6 @@
 KAYITLI ARAŞTIRMA (14:20) — AI SRE ajanı, problem P-1045. Bu bir ÖNERİDİR, hiçbir şey değiştirilmedi; yaşı yukarıdaki saatte.
 Ajanın hipotezleri (kod skoru — değiştirme):
+- db.example.test yavaşlığı: orta 0.44 (ekip doğruladı)
 - orders-api@rev 42 rollout'u: yüksek 0.71 — deploy başlangıçtan
 12 dk önce; ikinci destek
-- db.example.test yavaşlığı: orta 0.44 (operatör onayladı)
-- node baskısı: düşük 0.12 (operatör eledi)
+- dördüncü hipotez gösterilmez: düşük 0.05

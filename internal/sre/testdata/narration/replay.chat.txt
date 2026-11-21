@@ -3,4 +3,4 @@ KAYITLI ARAŞTIRMA (14:10) — AI SRE ajanı, problem p-replay · kısmi (bazı 
 - [crit] operasyon POST /orders: hata oranı %9
 (önceki %0,5)
 Ajanın hipotezleri (kod skoru — değiştirme):
-- eleme: yüksek 0.90 (operatör eledi)
+- eleme: yüksek 0.90 (ekip reddetti — neden olarak söyleme)

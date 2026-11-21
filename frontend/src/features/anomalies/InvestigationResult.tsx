@@ -93,7 +93,7 @@ export function InvestigationResult({ inv, canEdit = false }: { inv: SREInvestig
             <OrigLang block><ExplainBody text={inv.summary.text} busy={false} verdict={false} /></OrigLang>
           </div>
         ))}
-      <InvestigationQuality inv={inv} />
+      <InvestigationQuality inv={inv} canEdit={canEdit} />
       <ProblemInvestigationCards inv={inv} canEdit={canEdit} />
       <ProblemInvestigationRecommendations inv={inv} canEdit={canEdit} />
       {inv.findings.length > 0 && (

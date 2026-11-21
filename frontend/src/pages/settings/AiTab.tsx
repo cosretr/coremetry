@@ -12,6 +12,7 @@ import { AiProfilesPanel } from './AiProfilesPanel';
 import { AiContextWindowLine } from './AiContextWindowLine'; // v0.10.1991
 import { AiBudgetPanel } from './AiBudgetPanel'; // v0.10.411
 import { AiChatRetentionPanel } from './AiChatRetentionPanel'; // v0.10.561
+import { AiTurnLimitsPanel } from './AiTurnLimitsPanel'; // CoSRE kişi başı tur sınırı
 import { AiEvalPanel } from './AiEvalPanel'; // v0.10.940
 import { EVAL_URL_PARAMS } from './aiEval';
 import { CosreRulesPanel } from '@/components/ai/CosreRulesPanel'; // v0.10.1289
@@ -324,6 +325,7 @@ function AiProviderSettings() {
       )}
       <AiBudgetPanel />
       <AiChatRetentionPanel />
+      <AiTurnLimitsPanel />
       <AiGeneralQuestionsPanel />
       <div className="max-w-[640px]">
       <form onSubmit={save} className="mt-[18px] flex flex-col gap-3 rounded-lg border border-(--border) bg-(--bg2) p-4">

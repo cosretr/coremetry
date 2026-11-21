@@ -85,6 +85,20 @@ func TestHypothesisMarkRoles(t *testing.T) {
 		t.Fatalf("admin = %d", w.Code)
 	}
 	<-s.auditQ
+	// Karar kaldırma: viewer 403; editor 200 + audit sre.hypothesis.unmark.
+	if w := sreDo(mux, "DELETE", "/api/problems/p1/investigation/hypotheses/dependency", "", auth.RoleViewer); w.Code != http.StatusForbidden {
+		t.Fatalf("viewer DELETE = %d", w.Code)
+	}
+	if w := sreDo(mux, "DELETE", "/api/problems/p1/investigation/hypotheses/dependency", "", auth.RoleEditor); w.Code != 200 {
+		t.Fatalf("editor DELETE = %d %s", w.Code, w.Body)
+	}
+	if a := <-s.auditQ; a.Action != "sre.hypothesis.unmark" || a.TargetID != "p1" {
+		t.Fatalf("unmark audit = %+v", a)
+	}
+	inv, _, _ = sre.Load(context.Background(), st, "p1")
+	if inv.Hypotheses[1].HumanState != nil || inv.Hypotheses[0].HumanState == nil {
+		t.Fatalf("kaldırma yalnız o kartı etkilemeli: %+v", inv.Hypotheses)
+	}
 	// Koşan kayıt 409, kayıt yok 404.
 	seedSREInvestigation(t, st, sre.StateRunning)
 	if w := sreDo(mux, "POST", path, `{"state":"confirmed"}`, auth.RoleEditor); w.Code != http.StatusConflict {

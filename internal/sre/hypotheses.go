@@ -1063,7 +1063,7 @@ func chkErrorSymptom(ev Evidence) (int, string, string) {
 // MarkRequest — operatörün kart işareti.
 type MarkRequest struct {
 	Kind  string
-	State string // dismissed | confirmed
+	State string // dismissed | confirmed (| markClear — kararı kaldır)
 	Note  string
 	By    string
 	Now   time.Time
@@ -1084,7 +1084,7 @@ const markNoteMax = 500
 // checkpoint'i işareti ezerdi); paylaşılan kayıt da (kartlar kaynağın).
 // Tek yazım kendi kaydı (QueueStore).
 func ApplyHypothesisMark(ctx context.Context, st QueueStore, problemID string, m MarkRequest) (Hypothesis, error) {
-	if !IsHypothesisKind(m.Kind) || (m.State != MarkDismissed && m.State != MarkConfirmed) {
+	if !IsHypothesisKind(m.Kind) || (m.State != MarkDismissed && m.State != MarkConfirmed && m.State != markClear) {
 		return Hypothesis{}, ErrMarkInvalid
 	}
 	inv, ok, err := Load(ctx, st, problemID)
@@ -1111,7 +1111,17 @@ func ApplyHypothesisMark(ctx context.Context, st QueueStore, problemID string, m
 	if now.IsZero() {
 		now = time.Now()
 	}
-	inv.Hypotheses[idx].HumanState = &HumanState{State: m.State, Note: truncRunes(strings.TrimSpace(m.Note), markNoteMax), By: m.By, At: now.UnixNano()}
+	if m.State == markClear {
+		inv.Hypotheses[idx].HumanState = nil
+	} else {
+		inv.Hypotheses[idx].HumanState = &HumanState{State: m.State, Note: truncRunes(strings.TrimSpace(m.Note), markNoteMax), By: m.By, At: now.UnixNano()}
+	}
+	// Kanıt kapısı kararı kayıtta: ekip kararı değişti → aynı kip ile yeniden
+	// (SAF; okuma yok). Kip off / plain → Coverage nil kalır.
+	if inv.Coverage != nil && !inv.Plain {
+		g := evaluateCoverage(inv.Hypotheses, inv.Playbook, inv.Reach, inv.Coverage.Mode)
+		inv.Coverage = &g
+	}
 	if err := save(ctx, st, inv); err != nil {
 		return Hypothesis{}, err
 	}

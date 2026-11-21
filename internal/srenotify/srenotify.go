@@ -30,6 +30,7 @@ func Convert(d sre.NotifyDigest) notify.InvestigationDigest {
 	out := notify.InvestigationDigest{
 		InvestigationID: d.InvestigationID, ProblemID: d.ProblemID, State: d.State,
 		Finished: d.Finished, Sufficient: d.Sufficient, TopKind: d.TopKind, TopLabel: d.TopLabel,
+		TeamConfirmed: d.TeamConfirmed,
 	}
 	for _, e := range d.Evidence {
 		out.Evidence = append(out.Evidence, notify.DigestEvidence{Check: e.Check, Source: e.Source})

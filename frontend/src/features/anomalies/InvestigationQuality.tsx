@@ -6,6 +6,7 @@
 //   - InvestigationQuality: oyun kitabı adı + kompakt hipotez ağacı
 //     (desteklenen önce; elenenler katlı, gerekçesiyle) + erişim beyanı
 //     (bakılan / bakılamayan kaynaklar). Durumsuz kayıt (eski / plain) → yok.
+//     Her satırda ekip kararı (HypothesisRuling: Doğrulandı / Reddedildi).
 // Liste tek sütunlu durum akışı (tablo değil); renk yalnız sapan değerde.
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
@@ -15,6 +16,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { t, tf, useLang } from '@/lib/i18n';
 import type { SREHypothesis, SREInvestigation } from '@/lib/types';
 import { fmtScore, hypLabel } from './hypothesisView';
+import { HypothesisRuling } from './HypothesisRuling';
 import { OrigLang } from './OrigLang';
 import {
   gapText, hypothesisTree, playbookLabel, reachSplit, reachStatusLabel, showGate, sourceLabel, stateLabel, stateTone,
@@ -36,11 +38,11 @@ export function InvestigationGateBanner({ inv }: { inv: SREInvestigation }) {
   );
 }
 
-function TreeRow({ h }: { h: SREHypothesis }) {
+function TreeRow({ inv, h, canEdit }: { inv: SREInvestigation; h: SREHypothesis; canEdit: boolean }) {
   const lang = useLang();
   const refs = h.stateRefs?.length ?? 0;
   return (
-    <li data-state={h.state} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 6 }}>
+    <li data-state={h.state} data-ruling={h.humanState?.state} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 6 }}>
       <span style={h.state === 'untested' || h.state === 'ruled_out' ? muted : undefined}>{hypLabel(h, lang)}</span>
       {h.state === 'supported' || h.state === 'tested'
         ? <StatusBadge status={stateTone(h.state)} size="sm">{stateLabel(h.state, lang)}</StatusBadge>
@@ -50,11 +52,12 @@ function TreeRow({ h }: { h: SREHypothesis }) {
       {h.state === 'ruled_out' && h.stateReason && (
         <span style={{ ...muted, fontSize: 12, flexBasis: '100%', paddingLeft: 12 }}><OrigLang>{h.stateReason}</OrigLang></span>
       )}
+      <HypothesisRuling inv={inv} h={h} canEdit={canEdit} />
     </li>
   );
 }
 
-export function InvestigationQuality({ inv }: { inv: SREInvestigation }) {
+export function InvestigationQuality({ inv, canEdit = false }: { inv: SREInvestigation; canEdit?: boolean }) {
   const lang = useLang();
   const [showRuled, setShowRuled] = useState(false);
   const { open, ruledOut } = hypothesisTree(inv);
@@ -68,7 +71,7 @@ export function InvestigationQuality({ inv }: { inv: SREInvestigation }) {
         <div>
           <div style={{ ...muted, fontSize: 12, marginBottom: 4 }}>{t('iq.tree.head', lang)}{pb ? ` · ${pb}` : ''}</div>
           <ul aria-label={t('iq.tree.aria', lang)} style={list}>
-            {open.map(h => <TreeRow key={h.kind} h={h} />)}
+            {open.map(h => <TreeRow key={h.kind} inv={inv} h={h} canEdit={canEdit} />)}
           </ul>
           {ruledOut.length > 0 && (
             <Collapsible open={showRuled} onOpenChange={setShowRuled}>
@@ -79,7 +82,7 @@ export function InvestigationQuality({ inv }: { inv: SREInvestigation }) {
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <ul style={list}>{ruledOut.map(h => <TreeRow key={h.kind} h={h} />)}</ul>
+                <ul style={list}>{ruledOut.map(h => <TreeRow key={h.kind} inv={inv} h={h} canEdit={canEdit} />)}</ul>
               </CollapsibleContent>
             </Collapsible>
           )}

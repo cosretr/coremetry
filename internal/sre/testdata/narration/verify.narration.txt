@@ -5,8 +5,8 @@ ADIMLAR:
 - trace pivotu: tamam — POST /orders — 2300 ms, 41 span (3 hatalı)
 - log artışı: OKUNAMADI — log arka ucu bağlı değil
 - olaylar: atlandı
-AJAN HİPOTEZİ (kod skoru): belirgin hipotez yok — en yüksek node baskısı düşük 0.18
-DİĞER HİPOTEZLER: db.example.test yavaşlığı orta 0.44 (operatör onayladı)
+EKİBİN DOĞRULADIĞI NEDEN: db.example.test yavaşlığı (ekip doğruladı; kod skoru orta 0.44)
+DİĞER HİPOTEZLER: node baskısı düşük 0.18
 BULGULAR (sunucu sırası):
 1. [warn] bağımlılık db.example.test — p99 +180%; aşağı akış; nedensellik değil
 2. [warn] JVM orders-api-7d9f

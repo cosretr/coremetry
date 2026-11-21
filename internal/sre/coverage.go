@@ -3,7 +3,8 @@ package sre
 // coverage.go — CoSRE Faz B3: kanıt kapsama kapısı ("yanlış yerine
 // sonuçsuz"). SAF, deterministik kural:
 //
-//	top = skor sırasında İLK supported hipotez
+//	ekip doğruladı (HumanState confirmed) → sufficient, top = o, Ruling=confirmed
+//	top = skor sırasında İLK supported hipotez (ekibin reddettiği atlanır)
 //	top yok                              → insufficient (no_supported)
 //	top'un bağımsız kaynağı < 2          → insufficient (single_source)
 //	aksi                                 → sufficient
@@ -49,6 +50,9 @@ type CoverageGate struct {
 	Top     string    `json:"top,omitempty"` // hipotez türü
 	Sources []string  `json:"sources,omitempty"`
 	Missing []GateGap `json:"missing,omitempty"`
+	// Ruling — "confirmed": top'u ekip doğruladı (kanıt sayısından bağımsız
+	// yeterli). Boş = karar otomatik kuraldan.
+	Ruling string `json:"ruling,omitempty"`
 }
 
 // NormalizeGateMode — SAF: bilinmeyen / boş → shadow.
@@ -65,7 +69,14 @@ func evaluateCoverage(hs []Hypothesis, pb *Playbook, reach []ReachEntry, mode st
 	g := CoverageGate{Mode: NormalizeGateMode(mode), Verdict: GateInsufficient}
 	var top *Hypothesis
 	for i := range hs {
-		if hs[i].State == HypStateSupported {
+		if ruling(hs[i]) == MarkConfirmed {
+			g.Top, g.Verdict, g.Ruling = hs[i].Kind, GateSufficient, MarkConfirmed
+			g.Sources = refSources(hs[i].StateRefs)
+			return g
+		}
+	}
+	for i := range hs {
+		if hs[i].State == HypStateSupported && ruling(hs[i]) != MarkDismissed {
 			top = &hs[i]
 			break
 		}
@@ -74,13 +85,7 @@ func evaluateCoverage(hs []Hypothesis, pb *Playbook, reach []ReachEntry, mode st
 		g.Missing = append(g.Missing, GateGap{Code: GapNoSupported})
 	} else {
 		g.Top = top.Kind
-		seen := map[string]bool{}
-		for _, r := range top.StateRefs {
-			if s := refSource(r); s != "" && !seen[s] {
-				seen[s] = true
-				g.Sources = append(g.Sources, s)
-			}
-		}
+		g.Sources = refSources(top.StateRefs)
 		if len(g.Sources) >= gateMinSources {
 			g.Verdict = GateSufficient
 			return g
@@ -89,6 +94,19 @@ func evaluateCoverage(hs []Hypothesis, pb *Playbook, reach []ReachEntry, mode st
 	}
 	g.Missing = append(g.Missing, blindGaps(top, pb, reach, g.Sources)...)
 	return g
+}
+
+// refSources — SAF: künyelerin tekrarsız kaynak adımları (sıra korunur).
+func refSources(refs []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, r := range refs {
+		if s := refSource(r); s != "" && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // blindGaps — SAF: oyun kitabında top'u besleyen (top yoksa herhangi) ve

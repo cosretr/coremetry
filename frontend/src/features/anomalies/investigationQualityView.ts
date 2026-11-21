@@ -29,9 +29,20 @@ export function stateLabel(s: SREHypothesisState | undefined, lang: Lang = 'tr')
  *  sırası korunur) + elenenler (katlı). Durumsuz kayıt (eski / plain) → boş. */
 export function hypothesisTree(inv: SREInvestigation): { open: SREHypothesis[]; ruledOut: SREHypothesis[] } {
   const hs = (inv.hypotheses ?? []).filter(h => !!h.state);
-  const rank = (h: SREHypothesis) => STATE_ORDER.indexOf(h.state as SREHypothesisState);
-  const open = hs.filter(h => h.state !== 'ruled_out').sort((a, b) => rank(a) - rank(b));
-  return { open, ruledOut: hs.filter(h => h.state === 'ruled_out') };
+  // Ekip kararı otomatik durumu ezer (Go hypothesis_ruling.go rulingOrder):
+  // doğrulanan en üstte, reddedilen elenenlerde; otomatik durum yine görünür.
+  const rank = (h: SREHypothesis) => (h.humanState?.state === 'confirmed' ? -1 : STATE_ORDER.indexOf(h.state as SREHypothesisState));
+  const out = (h: SREHypothesis) => h.humanState?.state === 'dismissed' || (h.state === 'ruled_out' && h.humanState?.state !== 'confirmed');
+  const open = hs.filter(h => !out(h)).sort((a, b) => rank(a) - rank(b));
+  return { open, ruledOut: hs.filter(out) };
+}
+
+export type Ruling = 'confirmed' | 'dismissed';
+
+/** Ekip kararının etiketi ("Doğrulandı" / "Reddedildi"); karar yoksa ''. */
+export function rulingLabel(h: SREHypothesis, lang: Lang = 'tr'): string {
+  const r = h.humanState?.state;
+  return r ? t(`iq.ruling.${r}`, lang) : '';
 }
 
 /** Kaynak (adım) adı: bilinen adım katalogdan, errors ayrıca; bilinmeyen olduğu gibi. */
