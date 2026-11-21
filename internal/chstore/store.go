@@ -273,6 +273,11 @@ type Store struct {
 	// "yok" → regressed grup P2'de kalır (güvenli yön: ömür boyu toplamla P1
 	// ASLA). Ertelenen DDL inince reprobePromotedAttrs bayrağı çevirir.
 	hasExResolveSnapCol atomic.Bool
+	// hasExResolveSourceCol — exception_groups.resolve_source (v0.10.2432,
+	// süpürme kapanışı vs insan kapanışı). Aynı iki-boot sözleşmesi: false ⇒
+	// okuma/INSERT kolonu ATLAR; kaynak "" okunur ve resolved_at == last_seen
+	// süpürme kanıtı kullanılır (exceptionAutoResolved).
+	hasExResolveSourceCol atomic.Bool
 
 	// hasAnomalyVerifiedCol — anomaly_events.verified_ratio taşıyor mu
 	// (v0.10.1080, ES log deseni regex doğrulaması). hasAnomalyEpisodeCols ile
@@ -4498,6 +4503,11 @@ func (s *Store) migrate(ctx context.Context) error {
 		// (anomaly_events episode emsali): taze ve yükseltilmiş kurulumda
 		// fiziksel kolon sırası aynı. Probe hasExResolveSnapCol (iki-boot).
 		`ALTER TABLE exception_groups ADD COLUMN IF NOT EXISTS occurrences_at_resolve UInt64 DEFAULT 0`,
+		// v0.10.2432 — son resolve'un kaynağı: 'auto' (bayat süpürme) | 'user'
+		// | '' (bilinmiyor). Süpürmeden dönen grup regressed değil sıradan açık
+		// grup. CREATE TABLE'a bilinçli EKLENMEDİ (occurrences_at_resolve
+		// emsali). Probe hasExResolveSourceCol (iki-boot).
+		`ALTER TABLE exception_groups ADD COLUMN IF NOT EXISTS resolve_source LowCardinality(String) DEFAULT ''`,
 		// v0.8.283 — synthetic monitor types beyond http+heartbeat: tcp,
 		// ssl-cert, keyword. Additive columns on the existing monitors
 		// state table (no new schema). `monitors` isn't a high-volume
@@ -5014,6 +5024,12 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.hasExResolveSnapCol.Store(exOK)
 	if !exOK {
 		log.Printf("[chstore] `occurrences_at_resolve` column not present on exception_groups (err=%v) — read/INSERT omit it; regressed groups stay P2 (the pre-v0.10.1072 ladder) until the deferred-DDL re-probe or the next boot", exErr)
+	}
+	// exception_groups.resolve_source probe'u (v0.10.2432) — aynı şekil.
+	srcOK, srcErr := s.probeExResolveSourceCol(ctx)
+	s.hasExResolveSourceCol.Store(srcOK)
+	if !srcOK {
+		log.Printf("[chstore] `resolve_source` column not present on exception_groups (err=%v) — read/INSERT omit it; sweep-resolved groups are recognised by resolved_at == last_seen until the deferred-DDL re-probe or the next boot", srcErr)
 	}
 
 	// topology_edges_5m.cluster probe (v0.9.1025) — comparator ile birebir

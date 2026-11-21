@@ -15412,3 +15412,9 @@ Tasarım: `docs/problems/entity-graph-merge-design.md` (operatör kararları: "b
 ## 2026-11-21 — v0.10.2431 — Problems: exception türü varsayılanda yine kapalı
 
 - Operator-reported (prod): "problemler regressed gözüken çok fazla var, exceptions kapalı olsun". inboxKindsDefault / inboxKindsDefaultRetired / KIND_DEFAULT / KIND_DEFAULT_RETIRED'den "exception" çıktı; rozet ve liste aynı varsayılanı paylaşır, kullanıcı işaretleyerek açabilir. v0.10.2399'u yalnız exception türü için tersine çevirir. Oracle P1 grupları v0.10.1803 kuralıyla "problem" türünde sayıldığından varsayılan görünümde kalır.
+
+## 2026-11-21 — v0.10.2432 — Exception: otomatik çözülen grubun tekrarı "regressed" değil
+
+- Operator-reported (prod "regressed" yığılması). Kök neden: 24 sa sessiz grubu süpürücü otomatik çözüyor; prod'da trace'ler örneklendiği (tüm hatalar + %5) ve birçok hata seyrek olduğu için sonraki her tekrar grubu "regressed" + P2 yapıyordu.
+- exception_groups.resolve_source ('auto' süpürücü / 'user' elle; ALTER ADD COLUMN IF NOT EXISTS, prob + ertelenmiş DDL sonrası yeniden prob, tam satır taşıma). Otomatik çözülen grup grace (5 dk) sonrası tekrar görülürse state=new ile yeniden açılır (regressed yok, P2 yok, regressed bildirimi yok); elle çözülen grubun tekrarı regressed kalır. Kaynak bilinmiyorsa resolved_at == last_seen ise otomatik sayılır (süpürücü damgası). Bilinen sonuç: elle çözülüp sonra 24 sa sessiz kalıp süpürülen grubun tekrarı "new" açılır.
+- Mevcut regressed satırlar: liderin ilk exception tikinde bir kez, en çok 2000 satır; servisin resolved_at anında span'i varsa (süpürücü kanıtı) new/'auto' yapılır, yoksa (span saklama süresi dışı, Oracle) dokunulmaz — sessiz kalınca kendiliğinden düzelir.

@@ -2190,6 +2190,7 @@ func runExceptionRefresher(ctx context.Context, store *chstore.Store, lock cache
 	// modulo on a tick counter rather than a second ticker so the
 	// HA leader-holder still gates both paths.
 	tickCount := 0
+	regressFixed := false // v0.10.2432 — bir kezlik düzeltme (lider, yenilemeyle sıralı)
 	tick := func() {
 		if !leader.IsLeader() {
 			return
@@ -2210,6 +2211,18 @@ func runExceptionRefresher(ctx context.Context, store *chstore.Store, lock cache
 		}
 		if n > 0 {
 			log.Printf("[errors-inbox] refreshed %d groups", n)
+		}
+		// v0.10.2432 — süpürme kapanışından "regressed" açılmış eski grupları
+		// sıradan açık gruba çevir (span kanıtı; exception_resolve_source.go).
+		if !regressFixed {
+			if fixed, ferr := store.CorrectAutoResolvedRegressions(ctx); ferr != nil {
+				log.Printf("[errors-inbox] auto-resolve regression fix: %v", ferr)
+			} else {
+				regressFixed = true
+				if fixed > 0 {
+					log.Printf("[errors-inbox] relabelled %d sweep-resolved regressed group(s) as open", fixed)
+				}
+			}
 		}
 
 		// Stale-sweep every 6th tick (≈ every 6 min). Hourly

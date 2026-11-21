@@ -162,7 +162,12 @@ patlama (BurstMinTotal + BurstMinRate) → **P1 yapışkan** (v0.9.1205); `regre
 ise P1 "yeniden açıldıktan sonra ≥N oluşum", değilse P2 (v0.10.1072; anlık görüntü
 resolve anında `markExceptionResolved` ile `exception_groups.occurrences_at_resolve`'a,
 iki-boot probe `hasExResolveSnapCol`; anlık görüntüsüz grup P2 — kapıyı ömür toplamıyla
-regressed'in üstüne taşıma, sel olur); `Occurrences ≥ P1MinOccurrences` → **P1 yapışkan** (v0.10.741, kronik
+regressed'in üstüne taşıma, sel olur). **`regressed` yalnız İNSAN kapanışından döner**
+(v0.10.2432, `exception_resolve_source.go`): `resolve_source` 'auto' (bayat süpürme) | 'user'
+| '' (eski: `resolved_at == last_seen` = süpürme kanıtı); süpürmeden dönen grup `state=new`
+(sıradan açık, P2 "regressed" yok) — seyrek/örneklenen exception her sessiz günden sonra
+regressed seli üretiyordu. Eski regressed satırlar boot'ta bir kez span kanıtıyla
+(`CorrectAutoResolvedRegressions`) düzeltilir); `Occurrences ≥ P1MinOccurrences` → **P1 yapışkan** (v0.10.741, kronik
 damlama istisnası kalktı); taze && ≥100 → P2; oran ≥ BurstMinRate/2 → P3
 gerekçeli; değilse P3. **Operatör direktifleri (yeniden önerme):** P1 zamanla
 P2/P3'e İNMEZ; "kuyruk şişer" cevabı `p1MinOccurrences` vidasıdır, zaman

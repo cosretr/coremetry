@@ -192,6 +192,9 @@ func (s *Store) reprobePromotedAttrs() {
 		// v0.10.1072 — exception_groups.occurrences_at_resolve: bayrak false
 		// kaldıkça resolve anlık görüntüsü yazılmaz (regressed P2'de kalır).
 		snapDone := s.reprobeExResolveSnapCol(ctx)
+		// v0.10.2432 — exception_groups.resolve_source: bayrak false kaldıkça
+		// kaynak yazılmaz (süpürme kanıtı resolved_at == last_seen'e düşer).
+		srcDone := s.reprobeExResolveSourceCol(ctx)
 		// v0.10.1080 — anomaly_events.verified_ratio: bayrak false kaldıkça
 		// desen doğrulama oranı yazılmaz (grafik notu yok).
 		verifiedDone := s.reprobeAnomalyVerifiedCol(ctx)
@@ -214,7 +217,7 @@ func (s *Store) reprobePromotedAttrs() {
 		// değil" nedeni yazılmaz/okunmaz (karar yine kaydedilir).
 		reasonDone := s.reprobeVerdictReasonCol(ctx)
 		cancel()
-		if attrsDone && episodeDone && snapDone && verifiedDone && subjectDone && promotionDone && dirDone && evalPathDone && mlRecordDone && reasonDone {
+		if attrsDone && episodeDone && snapDone && srcDone && verifiedDone && subjectDone && promotionDone && dirDone && evalPathDone && mlRecordDone && reasonDone {
 			return
 		}
 	}
@@ -238,6 +241,9 @@ func (s *Store) reprobePromotedAttrs() {
 	}
 	if !s.hasExResolveSnapCol.Load() {
 		log.Printf("[chstore] exception_groups.occurrences_at_resolve hâlâ doğrulanamadı — resolve anlık görüntüsü yazılmıyor (regressed P2'de kalır), sonraki boot yeniden deneyecek")
+	}
+	if !s.hasExResolveSourceCol.Load() {
+		log.Printf("[chstore] exception_groups.resolve_source hâlâ doğrulanamadı — resolve kaynağı yazılmıyor (resolved_at == last_seen kanıtı), sonraki boot yeniden deneyecek")
 	}
 	if !s.hasEvalRunsPathCol.Load() {
 		log.Printf("[chstore] ai_eval_runs.path hâlâ doğrulanamadı — koşu yolu yazılmıyor ('v1' okunur), sonraki boot yeniden deneyecek")

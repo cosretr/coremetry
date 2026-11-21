@@ -185,11 +185,13 @@ func TestResolveAgainResetsSnapshot(t *testing.T) {
 	const h = int64(time.Hour)
 	g := ExceptionGroup{Fingerprint: "fp", State: ExStateNew, Occurrences: 1_000, LastSeen: 10 * h}
 	markExceptionResolved(&g, g.LastSeen) // 1. resolve: görüntü 1000
+	g.ResolveSource = ExResolveSourceUser // v0.10.2432 — insan resolve'u (süpürme dönüşü regressed olmaz)
 	g = mergeExceptionGroup(ExceptionGroup{Fingerprint: "fp", LastSeen: 12 * h, Occurrences: 600}, &g)
 	if since, ok := ExceptionOccurrencesSinceResolve(g); g.State != ExStateRegressed || !ok || since != 600 {
 		t.Fatalf("1. regresyon: state=%s since=(%d,%v), want regressed 600", g.State, since, ok)
 	}
 	markExceptionResolved(&g, g.LastSeen) // 2. resolve: görüntü 1600
+	g.ResolveSource = ExResolveSourceUser
 	if g.OccurrencesAtResolve != 1_600 {
 		t.Fatalf("2. resolve görüntüyü güncellemedi: %d, want 1600", g.OccurrencesAtResolve)
 	}

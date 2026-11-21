@@ -26,24 +26,30 @@ import (
 // (hasExResolveSnapCol): küme kipinde kolonu ekleyen boot DDL'i ertelediği
 // için kolonu koşulsuz okumak her exception okumasını "no such column" ile
 // düşürürdü. Sıra exGroupScanDest ile birebir (pozisyonel Scan).
-func exGroupSelectCols(snap bool) string {
+func exGroupSelectCols(c exGroupCols) string {
 	cols := `fingerprint, ex_type, ex_message, service, state, assignee,
 		       toUnixTimestamp64Nano(first_seen),
 		       toUnixTimestamp64Nano(last_seen),
 		       resolved_at, occurrences, notes, ai_summary,
 		       toUnixTimestamp64Nano(ai_summary_at)`
-	if snap {
+	if c.snap {
 		cols += `, occurrences_at_resolve`
+	}
+	if c.source { // v0.10.2432 — exception_resolve_source.go
+		cols += `, resolve_source`
 	}
 	return cols
 }
 
 // exGroupScanDest — exGroupSelectCols ile AYNI bool'dan türeyen Scan hedefi.
-func exGroupScanDest(g *ExceptionGroup, resolvedAt **time.Time, snap bool) []any {
+func exGroupScanDest(g *ExceptionGroup, resolvedAt **time.Time, c exGroupCols) []any {
 	dest := []any{&g.Fingerprint, &g.Type, &g.Message, &g.Service, &g.State, &g.Assignee,
 		&g.FirstSeen, &g.LastSeen, resolvedAt, &g.Occurrences, &g.Notes, &g.AISummary, &g.AISummaryAt}
-	if snap {
+	if c.snap {
 		dest = append(dest, &g.OccurrencesAtResolve)
+	}
+	if c.source {
+		dest = append(dest, &g.ResolveSource)
 	}
 	return dest
 }
