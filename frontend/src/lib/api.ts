@@ -4222,6 +4222,14 @@ export const api = {
     request<import('./types').SkipMatStatus>(`/api/admin/skipidx-materialize/${action}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
     }),
+  // v0.10.2425 — spans.db_statement n-gram indeksi (admin_spans_ngram.go).
+  spansNgramStatus: () =>
+    get<import('./types').SpansNgramStatus>('/api/admin/spans-ngram/status'),
+  spansNgramRun: (materialize: boolean) =>
+    request<import('./types').SpansNgramStatus>('/api/admin/spans-ngram/run', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ materialize }), timeoutMs: 400_000,
+    }),
   rolloutLayerStatus: () =>
     get<import('./types').RolloutLayerStatusResult>('/api/admin/rollout-layer/status'),
   rolloutLayerPreflight: () =>

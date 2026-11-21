@@ -363,3 +363,39 @@ WHERE database = 'coremetry' AND table = 'spans';
 SELECT count() FROM spans WHERE time >= now() - INTERVAL 1 MINUTE;
 -- Returns the merged count across all shards.
 ```
+
+## Skip index backfill and the db_statement n-gram index (v0.10.2424–2425)
+
+**Background materialize job** (`internal/chstore/skipidx_materialize.go`):
+`ALTER TABLE <local> [ON CLUSTER c] MATERIALIZE INDEX|PROJECTION x IN
+PARTITION ID '…'`, newest partition first, one partition (one mutation per
+table) at a time, next only after `system.mutations` says done on every
+replica. Paused while the table has other unfinished mutations,
+`MaxPartCountForPartition` > 300 or the fullest disk < 10 % free. State in
+`system_settings` key `skipidx_materialize_jobs`; worker leader, 30 s tick;
+restart-safe (a running partition is watched, never re-sent).
+Admin → ClickHouse → "Arka plan MATERIALIZE işleri"; self-health rule
+`self-skipidx-materialize`.
+
+**`idx_db_stmt_ngram`** — `db_statement TYPE ngrambf_v1(3, 8192, 3, 0)
+GRANULARITY 1`. Measured on 26.2.4.23 (throwaway container, copy of local
+data: 10.94 M spans, 8 partitions, 1 371 granules, 26 % with a statement;
+`use_query_condition_cache=0`, 7-day window):
+
+| query shape | no index | 3/4096/2 g1 | 3/8192/3 g1 | 4/8192/3 g1 | 3/16384/3 g4 |
+|---|---|---|---|---|---|
+| `LIKE '%SANCTIONS_WATCHLIST%'` (common) | 10.94 M rows, 25 ms | 221 k, 6 ms | 221 k, 5 ms | 221 k, 5 ms | 349 k, 5 ms |
+| `LIKE '%argMaxIfMerge(root_name_state)%'` (rare) | 10.94 M, 24 ms | 41 k, 4 ms | 41 k, 5 ms | 41 k, 5 ms | 66 k, 6 ms |
+| `LIKE '%NO_SUCH_TABLE_XYZ%'` (absent) | 10.94 M, 20 ms | 0, 4 ms | 0, 3 ms | 0, 3 ms | 0, 3 ms |
+| `ILIKE` / `positionCaseInsensitive` | 10.94 M | not pruned | not pruned | not pruned | not pruned |
+| index size compressed / uncompressed | — | 0.57 / 5.6 MB | 1.02 / 11.2 MB | 1.08 / 11.2 MB | 0.72 / 5.7 MB |
+
+Distinct 3-grams per 8 192-row granule here: p50 89, p90 267, p99 4 590
+(demo SQL is repetitive; prod is more diverse, hence 8 KB / 3 hashes over
+4 KB / 2: at 20 k distinct 3-grams the per-n-gram false-positive rate is
+~0.22 vs ~0.50). Prod extrapolation (70 B spans / 30 d = 8.5 M granules):
+uncompressed 70 GB worst case; at the measured 0.093 B/row compressed
+≈ 6.5 GB / 30 d (granules of services without DB spans hold empty blooms).
+`spans.name` gets no n-gram index: the existing `idx_name set(0)
+GRANULARITY 4` already prunes LIKE / ILIKE / positionCaseInsensitiveUTF8
+on it (10.94 M → 32 k rows).

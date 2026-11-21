@@ -4650,6 +4650,13 @@ func (s *Store) migrate(ctx context.Context) error {
 		// near-zero overhead and lets CH skip granules whose
 		// status set doesn't include 'error'.
 		`ALTER TABLE spans ADD INDEX IF NOT EXISTS idx_status      status_code TYPE set(0)    GRANULARITY 4`,
+		// v0.10.2425 — db_statement alt dize araması (filtre dili
+		// `db.statement LIKE x` → db_statement LIKE '%x%'). Ölçüm ve
+		// parametre gerekçesi spans_ngram_admin.go; metadata-only, yalnız
+		// yeni part'lar; eski partition'lar Admin → ClickHouse'tan arka
+		// plan işiyle (opsiyonel). Dış Distributed'da kod 48 → atlanır,
+		// kart ekler.
+		`ALTER TABLE spans ADD INDEX IF NOT EXISTS idx_db_stmt_ngram db_statement TYPE ngrambf_v1(3, 8192, 3, 0) GRANULARITY 1`,
 		// v0.8.348 — pivot Phase 1c: the trace→log pivot
 		// (/api/logs?traceId=, Trace Logs tab) filters `WHERE
 		// trace_id = ?`, but the logs ORDER BY is (service_name,

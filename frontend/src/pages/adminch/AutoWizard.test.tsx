@@ -8,8 +8,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { AutoWizard, type AutoWizardProps, type WizardProbe } from './AutoWizard';
-import { attrKVHProbe, backfillGapDays, objectsPlan, pickCluster, rollout0012State, rollupWizard, skipMatProbe } from './wizards';
-import type { AttrKVHAliasStatus, EntityLayerObjectStatus, SkipMatJob } from '@/lib/types';
+import { attrKVHProbe, backfillGapDays, objectsPlan, pickCluster, rollout0012State, rollupWizard, skipMatProbe, spansNgramProbe } from './wizards';
+import type { AttrKVHAliasStatus, EntityLayerObjectStatus, SkipMatJob, SpansNgramStatus } from '@/lib/types';
 
 let host: HTMLElement | null = null;
 let root: Root | null = null;
@@ -131,6 +131,24 @@ describe('rollup: sıralı koşu', () => {
     const r = await rollupWizard.run({ cluster: 'c1' });
     expect(applied).toEqual(['narrow']);
     expect(r).toMatchObject({ ok: false, failedStep: 'narrow', err: 'kuyruk' });
+  });
+});
+
+describe('spansNgramProbe (v0.10.2425)', () => {
+  const st = (over: Partial<SpansNgramStatus>): SpansNgramStatus => ({
+    cluster: 'c1', local: 'spans_local', hosts: 2, haveHosts: 2, indexState: 'ok', addSql: 'ALTER TABLE spans_local ON CLUSTER c1 ADD INDEX IF NOT EXISTS idx_db_stmt_ngram …',
+    partitions: 30, pending: false, generated: 0, ...over,
+  });
+  it('index everywhere + decision recorded → no card', () => {
+    expect(spansNgramProbe(st({ job: { state: 'declined' } as SkipMatJob })).pending).toBe(false);
+  });
+  it('missing index → ADD INDEX planned; unknown → blocked', () => {
+    const p = spansNgramProbe(st({ indexState: 'missing', haveHosts: 0, pending: true }));
+    expect(p.pending).toBe(true);
+    expect(p.plan[0].lines[0]).toMatch(/ADD INDEX IF NOT EXISTS idx_db_stmt_ngram/);
+    const u = spansNgramProbe(st({ indexState: 'unknown', pending: true, blocker: 'okunamadı' }));
+    expect(u.blocker).toBe('okunamadı');
+    expect(u.checks[0].ok).toBe(false);
   });
 });
 

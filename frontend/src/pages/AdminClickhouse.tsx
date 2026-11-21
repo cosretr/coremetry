@@ -13,7 +13,7 @@ import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
 import { canRepair, canSeedFirstReplica, catalogLabel, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, statePathHeadline, statePathLabel, statePathOwnsRepair, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
 import { StatePathBlock } from './adminch/StatePathRebuild'; // v0.10.965 — state tablolarının ZK yolu
 import { AutoWizard } from './adminch/AutoWizard'; // v0.10.2410 — kendi kendini denetleyen tek-koşu sihirbaz
-import { attrKVHWizard, entityLayerWizard, functionIdWizard, rolloutLayerWizard, rollupWizard, skipMatWizard, traceBackfillWizard } from './adminch/wizards';
+import { attrKVHWizard, entityLayerWizard, functionIdWizard, rolloutLayerWizard, rollupWizard, skipMatWizard, spansNgramWizard, traceBackfillWizard } from './adminch/wizards';
 import type {
   CHMeasurePartsRow, CHMeasureEventsRow, CHMeasureAsyncRow, CHMeasureInsertRow, // v0.10.683 — ölçüm paneli
   CHRootCoverageRow, // v0.10.712 — kök kapsaması paneli
@@ -2718,6 +2718,11 @@ function SetupWizards() {
           (asla MODIFY). Her adım öncesi yeniden probe; ilk hatada durur, tekrar koşmak kaldığı yerden devam eder.</>}
         confirmText="Bekleyen 0017 adımları sırayla koşacak; 4. adım eski idx_attr_kvh/idx_res_kvh indekslerini düşürüp attr_kvh/res_kvh'yi DROP+ADD ile ALIAS yapar (disk boşalır, geri alma 0014 ile)."
         heavy={{ label: 'eski veriye de indeks uygula (MATERIALIZE INDEX) — ağır I/O', hint: 'Partition partition MATERIALIZE INDEX: her partition bitmeden sonrakine geçilmez; disk + merge, mesai dışı.' }} />
+      <AutoWizard title="db_statement alt dize indeksi (n-gram)" {...spansNgramWizard}
+        intro={<>spans.db_statement&apos;e <code className="mono">ngrambf_v1(3, 8192, 3, 0) GRANULARITY 1</code> skip indeksi: <code className="mono">db.statement LIKE</code> filtreleri granül budar.
+          ADD INDEX yalnız metadata (yeni part&apos;lar indeksle yazılır); eski partition&apos;lar için arka plan işi opsiyonel.</>}
+        confirmText="Eksikse indeks eklenecek (metadata) ve eski partition kararı kaydedilecek."
+        heavy={{ label: 'eski partition\'lara da uygula (arka plan MATERIALIZE INDEX) — I/O', hint: 'Partition partition, en yeni önce, tabloda tek mutasyon; başka mutasyon / merge birikimi / dolu disk varken bekler.' }} />
       <AutoWizard title="Arka plan MATERIALIZE işleri" {...skipMatWizard}
         intro="Skip indeks / projection'ı eski partition'lara yazan arka plan işleri (0017 MATERIALIZE, n-gram indeksi …). Partition partition, en yeni önce; tabloda aynı anda tek mutasyon. Çalıştır = başarısız partition'ları yeniden sıraya al."
         confirmText="Başarısız partition'lar sıfırlanıp yeniden sıraya alınacak." />

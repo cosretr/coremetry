@@ -5453,6 +5453,13 @@ export interface SkipMatJob {
 export interface SkipMatStatus {
   jobs: SkipMatJob[]; active: boolean; failing: boolean; health?: string; generated: number;
 }
+// v0.10.2425 — spans.db_statement n-gram indeksi kartı (spans_ngram_admin.go).
+export interface SpansNgramStatus {
+  cluster: string; local: string; hosts: number; haveHosts: number;
+  indexState: 'ok' | 'partial' | 'missing' | 'unknown' | string;
+  addSql: string; partitions: number; job?: SkipMatJob;
+  pending: boolean; blocker?: string; err?: string; generated: number;
+}
 export interface FunctionIDColumnPreflightResult {
   clusters: string[];
   suggestedCluster?: string;

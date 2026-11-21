@@ -4,7 +4,7 @@
 import { api } from '@/lib/api';
 import { fmtNum } from '@/lib/utils';
 import type {
-  AttrKVHAliasStatus, EntityLayerObjectStatus, RollupStmtResult, RollupTarget, SkipMatStatus, TraceBackfillRun,
+  AttrKVHAliasStatus, EntityLayerObjectStatus, RollupStmtResult, RollupTarget, SkipMatStatus, SpansNgramStatus, TraceBackfillRun,
 } from '@/lib/types';
 import { ROLLOUT_V2_TABLES } from '@/lib/types';
 import type { WizardCheck, WizardProbe, WizardRunResult } from './AutoWizard';
@@ -121,6 +121,36 @@ export const skipMatWizard = {
       catch (e) { return { ok: false, failedStep: s.id, err: msg(e), log }; }
     }
     return { ok: true, log };
+  },
+};
+
+// ── spans.db_statement n-gram indeksi (v0.10.2425) ──────────────────
+
+/** Kart: indeks bir host'ta eksikse ya da eski partition'lar için karar verilmediyse. */
+export function spansNgramProbe(st: SpansNgramStatus): WizardProbe {
+  const idxDone = st.indexState === 'ok';
+  const checks: WizardCheck[] = [{ name: 'indeks durumu', ok: st.indexState !== 'unknown', blocking: true, detail: st.err || `${st.haveHosts}/${st.hosts} host · ${st.local}${st.cluster ? ` ON CLUSTER ${st.cluster}` : ''}` }];
+  return {
+    applicable: true,
+    pending: st.pending,
+    checks,
+    steps: [
+      { id: 'add', title: '1 · ADD INDEX idx_db_stmt_ngram (metadata, yalnız yeni part\'lar)', state: idxDone ? 'done' : st.indexState === 'partial' ? 'partial' : st.indexState === 'unknown' ? 'unknown' : 'pending' },
+      { id: 'materialize', title: `2 · (opsiyonel) eski ${st.partitions} partition — arka plan işi, en yeni önce`, state: st.job ? 'done' : 'optional', detail: st.job ? `karar: ${st.job.state}` : 'işaretlenmezse eski partition\'lar TTL ile döner (karar kaydedilir, kart kapanır)' },
+    ],
+    blocker: st.blocker,
+    plan: [{ title: 'ADD INDEX', lines: idxDone ? [] : [st.addSql] }],
+    summary: 'db.statement LIKE filtresi (alt dize, büyük/küçük harf duyarlı) granül budar; ILIKE budanmaz.',
+  };
+}
+
+export const spansNgramWizard = {
+  probe: async () => spansNgramProbe(await api.spansNgramStatus()),
+  run: async ({ heavy }: { heavy: boolean }): Promise<WizardRunResult> => {
+    try {
+      const st = await api.spansNgramRun(heavy);
+      return { ok: true, log: [{ head: `indeks ${st.indexState} · ${heavy ? 'eski partition\'lar arka plan işine sıraya alındı' : 'eski partition\'lar materialize edilmeyecek (kaydedildi)'}`, ok: true }] };
+    } catch (e) { return { ok: false, err: msg(e), log: [] }; }
   },
 };
 
