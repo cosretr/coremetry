@@ -11,6 +11,13 @@
 // ?kcons, ?kprod); seçenekler süzgeçsiz anlık bağlantı serilerinden.
 // Servis VM'de hiç Kafka istemci metriği yazmıyorsa sekme bunu söyler
 // (boş grafik ızgarası yerine).
+//
+// v0.10.2450 (operatör 2026-11-22) — METRİK ÖNCE, span SONRA (RED'in
+// red_family.go ilkesi): Genel bakış'ın altına "Topic'ler" bölümü — aile
+// (OTel Java / Micrometer) sunucuda çözülür, topic tablosu + grafikler VM'den;
+// servis hiç Kafka istemci metriği yaymıyorsa aynı bölüm span yedeğinden
+// (messaging_caller_summary_{1m,5m}) ve rozet "örneklenmiş" der. Mevcut
+// bölümler ve düzen DEĞİŞMEDİ.
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { DisclosureButton, SelectField } from '@/components/ui';
@@ -26,6 +33,8 @@ import { timeRangeToNs } from '@/lib/utils';
 import { useUrlParams, strParam } from '@/lib/urlParams';
 import { useThemeTick } from '@/lib/useThemeTick';
 import type { TimeRange } from '@/lib/types';
+import { useServiceKafkaFamily } from '@/lib/queries/messaging'; // v0.10.2450 — metrik önce, span sonra
+import { ServiceKafkaTopics } from './ServiceKafkaTopics';
 
 const FILTER_SPEC = { khost: strParam(), kcons: strParam(), kprod: strParam() };
 // v0.10.1548 (operatör: "paneller açık olsun ama series kısmı kapalı") — tüm
@@ -61,6 +70,8 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
   const consumers = kafkaOptionValues(consRows, 'client_id');
   const producers = kafkaOptionValues(prodRows, 'client_id');
   const noKafka = !opts.pending('cons') && !opts.pending('prod') && consRows.length === 0 && prodRows.length === 0;
+  const famQ = useServiceKafkaFamily(service, win.to);
+  const fam = famQ.data;
 
   const panels = useMemo(() => kafkaPanels({ service, host: f.khost, consumer: f.kcons, producer: f.kprod }, lang),
     [service, f.khost, f.kcons, f.kprod, lang]);
@@ -76,6 +87,17 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
   if (opts.error('cons') && opts.error('prod')) {
     return <Empty icon="⚠" title={t('kmsg.vmErrTitle', lang)}>{opts.error('cons')?.message}</Empty>;
   }
+  // v0.10.2450 — bağlantı metriği yok ama aile çözüldüyse (Micrometer / span
+  // yedeği) topic bölümü yine çizilir; okunamadı (unknown) → bugünkü boş durum.
+  if (noKafka && fam && fam.state !== 'unknown') {
+    return (
+      <div>
+        {fam.state === 'spans' && <div className="field-hint" style={{ marginBottom: 8 }}>{t('ktop.noMetric', lang)}</div>}
+        <ServiceKafkaTopics service={service} win={win} step={step} fam={fam} />
+      </div>
+    );
+  }
+  if (noKafka && famQ.isPending) return <Spinner />;
   if (noKafka) {
     return (
       <Empty icon="∅" title={t('kmsg.noSvcMetric', lang)}>
@@ -144,6 +166,7 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
             {isOpen && (sec.id === 'overview'
               ? <div style={grid(180)}>{ps.map(p => renderStat(p, res.overview))}</div>
               : <div style={grid(420)}>{ps.map(p => renderChart(p, res[sec.id]))}</div>)}
+            {sec.id === 'overview' && fam && <ServiceKafkaTopics service={service} win={win} step={step} fam={fam} />}
           </section>
         );
       })}

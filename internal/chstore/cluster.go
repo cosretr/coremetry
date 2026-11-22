@@ -304,7 +304,9 @@ var tablesWithoutTraceID = map[string]bool{
 	"spanmetrics_10s":             true,
 	"spanmetrics_1s":              true,
 	"messaging_summary_5m":        true,
+	"messaging_summary_1m":        true, // v0.10.2450 — 1 dk ikiz, aynı projeksiyon
 	"messaging_caller_summary_5m": true,
+	"messaging_caller_summary_1m": true, // v0.10.2450 — 1 dk ikiz
 	"service_callers_5m":          true,
 	"topology_root_flows_5m":      true,
 }
@@ -441,7 +443,9 @@ var defaultShardPolicy = map[string]string{
 	// /messaging filter by (msg_system, destination) — both
 	// land cleanly under destination-locality.
 	"messaging_summary_5m":        "cityHash64(destination)",
+	"messaging_summary_1m":        "cityHash64(destination)", // v0.10.2450 — 1 dk ikiz, kardeşle aynı anahtar
 	"messaging_caller_summary_5m": "cityHash64(service_name)",
+	"messaging_caller_summary_1m": "cityHash64(service_name)", // v0.10.2450 — kardeşle aynı
 	"service_callers_5m":          "cityHash64(service)",
 	"topology_root_flows_5m":      "cityHash64(root_service)",
 }
@@ -1028,7 +1032,9 @@ var highVolumeTables = map[string]bool{
 	"spanmetrics_10s":             true,
 	"spanmetrics_1s":              true,
 	"messaging_summary_5m":        true,
+	"messaging_summary_1m":        true, // v0.10.2450 — 1 dk ikiz, aynı projeksiyon
 	"messaging_caller_summary_5m": true,
+	"messaging_caller_summary_1m": true, // v0.10.2450 — 1 dk ikiz
 	"service_callers_5m":          true,
 	"topology_root_flows_5m":      true,
 }

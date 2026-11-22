@@ -3068,6 +3068,23 @@ export const TR: Record<string, string> = {
   'kmsg.noSvc.b': ' için',
   'kmsg.noSvc.c': ' serisi bulunamadı (OTel Java ajanının Kafka istemci metrikleri açık olmalı).',
   'kmsg.svcFoot': 'Kaynak: VictoriaMetrics, “OTel Java - Kafka Client Metrics” panosundan sadeleştirilmiş sorgular (service_name="{s}"). Grafikler istemci (client_id) başınadır, pod\'lar toplanır; topic başına görünüm Messaging → topic sayfasında.',
+  'ktop.title': 'Topic\'ler', // v0.10.2450
+  'ktop.col.err': 'Hata', // v0.10.2450
+  'ktop.empty': 'Bu pencerede topic düzeyinde Kafka istemci metriği yok.', // v0.10.2450
+  'ktop.emptySpans': 'Bu pencerede servisin messaging span\'i yok.', // v0.10.2450
+  'ktop.src.metric': 'Kaynak: metrik · {fam}', // v0.10.2450
+  'ktop.src.metricHint': 'Kafka istemci metrikleri (VictoriaMetrics) — örneklenmemiş, tüm trafik.', // v0.10.2450
+  'ktop.src.spans': 'Kaynak: span (örneklenmiş) · {min} dk', // v0.10.2450
+  'ktop.src.spansHint': 'Servis Kafka istemci metriği yaymıyor; sayılar örneklenmiş span\'lerden (messaging özeti). Lag span\'den türemez.', // v0.10.2450
+  'ktop.c.produce': 'Produce — kayıt /sn (topic)', // v0.10.2450
+  'ktop.c.consume': 'Consume — kayıt /sn (topic)', // v0.10.2450
+  'ktop.c.errors': 'Gönderim hatası /sn (topic)', // v0.10.2450
+  'ktop.c.latency': 'Gecikme — producer istek / consumer fetch (ort.)', // v0.10.2450
+  'ktop.c.lag': 'Consumer lag (topic, maks.)', // v0.10.2450
+  'ktop.c.errPct': 'Hata % (topic · yön)', // v0.10.2450
+  'ktop.c.p95': 'p95 gecikme (topic · yön)', // v0.10.2450
+  'ktop.noLagSpans': 'Consumer lag yalnız Kafka istemci metriğinden gelir; span yedeğinde yok.', // v0.10.2450
+  'ktop.noMetric': 'Bu servis Kafka istemci metriği yaymıyor — aşağıdaki topic görünümü span yedeğinden.', // v0.10.2450
   // v0.10.2311 — ortak DependenciesTable (Messaging + Databases) ve dependencies çekmecesi (DetailDrawer, CallerSection, DegradedBand). TR değerler bugünkü metnin birebir aynısı.
   'deps.svcLoading': '{n} {what} servis (adlar yükleniyor)',
   'deps.svcCount': '{n} servis',
@@ -3087,8 +3104,8 @@ export const TR: Record<string, string> = {
   'deps.p99d.noPrior': 'Önceki pencerede bu destination yok — karşılaştırılacak taban değeri de yok.',
   'deps.p99d.off': 'Karşılaştırma kapalı. "Compare vs prior" ile önceki eşit pencereye göre kötüleşme gelir.',
   'deps.p99d.tip': 'p99 {cur}ms · önceki {prior}ms',
-  'deps.bucket.partial': 'Bu pencerede kapanmış bir 5 dk kovası yok — değer HÂLÂ DOLAN kovadan, düşük görünür.',
-  'deps.bucket.full': 'Son TAM 5 dk kovası (dolmakta olan kova bilerek atlanır: sayısı düşük gelir ve sahte bir düzelme gibi okunur).',
+  'deps.bucket.partial': 'Bu pencerede kapanmış bir {min} dk kovası yok — değer HÂLÂ DOLAN kovadan, düşük görünür.',
+  'deps.bucket.full': 'Son TAM {min} dk kovası (dolmakta olan kova bilerek atlanır: sayısı düşük gelir ve sahte bir düzelme gibi okunur).',
   'deps.spark': 'çağrı hızı · son tam kova {rps}/s\n{note}',
   'deps.errRate': 'hata oranı · {note}',
   'deps.prob.count': '{n} problem',

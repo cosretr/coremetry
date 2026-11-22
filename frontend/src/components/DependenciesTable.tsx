@@ -1040,7 +1040,10 @@ function TrendCell({ trend, loading }: {
   // curFromPartial: pencerede TEK bir tam kova bile yoktu (çok dar
   // aralık) — o zaman rozet dolmakta olandan okunuyor ve bunu ilan
   // ediyor. Yanlış bir sayıyı sessizce basmaktansa "henüz oturmadı".
-  const bucketNote = t(trend.curFromPartial ? 'deps.bucket.partial' : 'deps.bucket.full', lang);
+  // v0.10.2450 — messaging trendi kısa pencerede 1 dk kovadan gelir
+  // (backend bucketSec); /databases daima 5 dk (alan yok → 300).
+  const bucketNote = tf(trend.curFromPartial ? 'deps.bucket.partial' : 'deps.bucket.full', lang,
+    { min: Math.round((trend.bucketSec ?? 300) / 60) });
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Sparkline

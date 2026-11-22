@@ -115,7 +115,9 @@ var weightedMVs = map[string][]weightedCol{
 	"db_statement_summary_5m":     wRED(wLevels3),
 	"db_statement_summary_1m":     wRED(wLevels3),
 	"messaging_summary_5m":        wRED(wLevels3),
+	"messaging_summary_1m":        wRED(wLevels3), // v0.10.2450
 	"messaging_caller_summary_5m": wRED(wLevels3),
+	"messaging_caller_summary_1m": wRED(wLevels3), // v0.10.2450
 	"service_version_5m":          {wCountCol("w_span_count_state")},
 	"business_code_summary_5m": {
 		wCountCol("w_span_count_state"),

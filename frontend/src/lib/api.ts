@@ -3380,6 +3380,13 @@ export const api = {
   // eşleyicisi, TEK istekte (v0.10.1377 httpEnvScope'un yerine — o istemci
   // metodu kaldırıldı, GET /api/metrics/http-env-scope ucu da v0.10.1437'de; sunucu 60 sn önbellek).
   // Yalnız VM (metrik kipi yüzeyleri gibi sabit); `to` ns, sunucu 10 dk'ya yuvarlar.
+  // v0.10.2450 — Service → Messaging metrik-önce: servisin Kafka istemci metrik
+  // ailesi (OTel Java / Micrometer; yoksa state=spans). Yalnız VM; sunucu 60 sn.
+  serviceKafkaFamily: (svc: string, toNs: number, signal?: AbortSignal) =>
+    get<import('./kafkaTopics').KafkaFamilyResolution>(withMetricSource(`/api/services/${encodeURIComponent(svc)}/kafka-family?to=${toNs}`, 'vm'), signal),
+  // v0.10.2450 — span yedeği: messaging_caller_summary_{1m,5m}, servis süzgeçli.
+  serviceMessagingSpans: (svc: string, fromNs: number, toNs: number, signal?: AbortSignal) =>
+    get<import('./kafkaTopics').ServiceMessagingSpans>(`/api/services/${encodeURIComponent(svc)}/messaging-spans?from=${fromNs}&to=${toNs}`, signal),
   serviceRedFamily: (svc: string, params: { env?: string; cluster?: string; to: number }, signal?: AbortSignal) =>
     get<import('./types').RedFamilyResolution>(withMetricSource(`/api/services/${encodeURIComponent(svc)}/red-family?${qs(params)}`, 'vm'), signal),
   // v0.10.1306 — `src` (/metrics PromQL sekmesi ?src=vm|ch): bu TEK isteği o

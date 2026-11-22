@@ -58,6 +58,9 @@ type DBTrend struct {
 	// dolmakta olan kovadan okundu. omitempty: normal hâlde alan hiç
 	// çıkmaz; çıktığında frontend tooltip'i bunu söyler.
 	CurFromPartial bool `json:"curFromPartial,omitempty"`
+	// BucketSec — v0.10.2450: kova genişliği (sn). Yalnız messaging trendi
+	// doldurur (60 | 300; msgTrendGrainFor); /databases'te alan çıkmaz (300).
+	BucketSec int `json:"bucketSec,omitempty"`
 }
 
 // dbTrendCurrentIdx — sağlık rozetinin okunacağı noktanın indeksi.
@@ -196,16 +199,19 @@ func (s *Store) GetDBTrends(ctx context.Context, from, to time.Time) ([]DBTrend,
 	// v0.9.820 — Cur* artık son TAM kovadan. Eskiden döngü içinde her
 	// noktada üzerine yazılıyordu, yani daima DOLMAKTA olan son kovaya
 	// oturuyordu (gerekçe: DBTrend başlığı).
-	applyDBTrendCurrent(out, time.Now().Unix())
+	applyDBTrendCurrent(out, int64(dbTrendBucketSeconds), time.Now().Unix())
 	return out, nil
 }
 
 // applyDBTrendCurrent — her trendin Cur* alanlarını son TAM kovadan
 // doldurur. GetDBTrends ve GetMessagingTrends'in ORTAK adımı: iki
 // sayfanın sağlık rozeti aynı tanımdan okumalı.
-func applyDBTrendCurrent(out []DBTrend, nowUnix int64) {
+//
+// v0.10.2450 — bucketSec parametre: messaging trendi 1 dk kovadan da
+// okunabiliyor (msgTrendGrainFor); "tam kova" kovanın KENDİ genişliğiyle.
+func applyDBTrendCurrent(out []DBTrend, bucketSec, nowUnix int64) {
 	for i := range out {
-		idx, partial := dbTrendCurrentIdx(out[i].Points, dbTrendBucketSeconds, nowUnix)
+		idx, partial := dbTrendCurrentIdx(out[i].Points, bucketSec, nowUnix)
 		if idx < 0 {
 			continue
 		}
@@ -272,28 +278,25 @@ func (s *Store) DbNamesBySystem(ctx context.Context, from, to time.Time) (map[st
 // + LIMIT + max_execution_time). error_count_state bu MV'de countState
 // — countMerge (db_summary_5m'in countIfMerge'ünden farklı, getMessaging
 // ile birebir aynı okuma).
-func (s *Store) GetMessagingTrends(ctx context.Context, from, to time.Time) ([]DBTrend, error) {
+//
+// v0.10.2450 — kaynak g'den (MessagingTrendGrain): ≤ 3 sa pencerede ve
+// messaging_summary_1m pencere başını kapsıyorsa 1 dk kova, aksi 5m.
+// Rps kovanın KENDİ genişliğine bölünür; Cur* son TAM kovadan — 1m'de
+// tam sayılmak için kova bittikten sonra msgTrendSettle (30 sn) geçmeli
+// (geç gelen span'ler son dakikayı eksik sayıp sahte "trafik düştü"
+// rozeti basmasın).
+func (s *Store) GetMessagingTrends(ctx context.Context, g DBTrendGrain, from, to time.Time) ([]DBTrend, error) {
 	if from.IsZero() {
 		from = time.Now().Add(-1 * time.Hour)
 	}
 	if to.IsZero() {
 		to = time.Now()
 	}
-	bucketStart := from.Truncate(5 * time.Minute)
-	rows, err := s.conn.Query(ctx, s.weighSQL(` // v0.10.2435 — sampling-weight Phase 2
-		SELECT msg_system,
-		       cluster,
-		       destination,
-		       toUnixTimestamp64Nano(toDateTime64(time_bucket, 9))                     AS bucket_ns,
-		       countMerge(span_count_state)                                            AS span_count,
-		       countMerge(error_count_state)                                           AS error_count,
-		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms
-		FROM messaging_summary_5m
-		WHERE time_bucket >= ? AND time_bucket < ?
-		GROUP BY msg_system, cluster, destination, time_bucket
-		ORDER BY msg_system, cluster, destination, time_bucket
-		LIMIT 200000
-		SETTINGS max_execution_time = 15`, bucketStart, "messaging_summary_5m"), bucketStart, to)
+	if g.Table != msgTrendTableFine {
+		g = DBTrendGrain{Table: msgTrendTableCoarse, BucketSec: 300}
+	}
+	bucketStart := from.Truncate(time.Duration(g.BucketSec) * time.Second)
+	rows, err := s.conn.Query(ctx, s.weighSQL(msgTrendsSQL(g.Table), bucketStart, g.Table), bucketStart, to) // v0.10.2435 — sampling-weight Phase 2
 	if err != nil {
 		return nil, err
 	}
@@ -316,28 +319,21 @@ func (s *Store) GetMessagingTrends(ctx context.Context, from, to time.Time) ([]D
 		i, ok := idxByKey[k]
 		if !ok {
 			out = append(out, DBTrend{
-				DbSystem: system,
-				Instance: dest,
-				Cluster:  cluster,
-				Points:   []DBTrendPoint{},
+				DbSystem:  system,
+				Instance:  dest,
+				Cluster:   cluster,
+				Points:    []DBTrendPoint{},
+				BucketSec: g.BucketSec,
 			})
 			i = len(out) - 1
 			idxByKey[k] = i
 		}
-		pt := DBTrendPoint{
-			T:     bucketNs,
-			Rps:   float64(spanCount) / dbTrendBucketSeconds,
-			P99Ms: safeF(p99Ms),
-		}
-		if spanCount > 0 {
-			pt.ErrorRate = float64(errorCount) / float64(spanCount) * 100
-		}
-		out[i].Points = append(out[i].Points, pt)
+		out[i].Points = append(out[i].Points, dbTrendPointOf(bucketNs, spanCount, errorCount, p99Ms, g.BucketSec))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	// v0.9.820 — DB ikiziyle aynı kural: rozet son TAM kovadan.
-	applyDBTrendCurrent(out, time.Now().Unix())
+	applyDBTrendCurrent(out, int64(g.BucketSec), msgTrendCurrentNow(g, time.Now()).Unix())
 	return out, nil
 }

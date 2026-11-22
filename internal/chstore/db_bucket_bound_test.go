@@ -195,7 +195,7 @@ func TestDBReadsExcludeUpperBucket(t *testing.T) {
 // aralığını kapsar — istenen pencerenin tamamen dışında.) Yeni bir
 // `<=` girerse bu test adıyla yakalar.
 func TestNoInclusiveUpperBucketBoundInDepReads(t *testing.T) {
-	for _, file := range []string{"dependencies.go", "db_trends.go"} {
+	for _, file := range []string{"dependencies.go", "db_trends.go", "messaging_trend_grain.go"} {
 		b, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatalf("%s okunamadı: %v", file, err)

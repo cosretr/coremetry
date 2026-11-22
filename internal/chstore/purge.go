@@ -58,7 +58,7 @@ var telemetryPurgeTables = []string{
 	// RED / aggregation MVs
 	"service_summary_5m", "service_env_summary_5m", "operation_summary_5m", "operation_group_summary_5m",
 	"db_summary_5m", "db_summary_1m", "db_caller_summary_5m",
-	"messaging_summary_5m", "messaging_caller_summary_5m",
+	"messaging_summary_5m", "messaging_summary_1m", "messaging_caller_summary_5m", "messaging_caller_summary_1m",
 	"spanmetrics_1s", "spanmetrics_10s", "spanmetrics_1m",
 	"spanmetrics_calls_5m", "spanmetrics_duration_5m", "spanmetrics_hist_5m",
 	"service_callers_5m",

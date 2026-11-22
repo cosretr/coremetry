@@ -39,7 +39,7 @@ func messagingFlowSQL(topic, service string) string {
 	}
 	if service != "" {
 		// servisin dokunduğu hedefler → o hedeflerin TÜM üretici/tüketicileri.
-		cond.WriteString(` AND destination IN (SELECT destination FROM messaging_caller_summary_5m
+		cond.WriteString(` AND destination GLOBAL IN (SELECT destination FROM messaging_caller_summary_5m
   WHERE time_bucket >= ? AND time_bucket < ? AND service_name = ? GROUP BY destination LIMIT 50)`)
 	}
 	return `SELECT msg_system, cluster, destination, service_name, coalesce(nullIf(kind, ''), 'client') AS role,

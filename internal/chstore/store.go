@@ -2213,6 +2213,92 @@ func canonicalMVs() []string {
 		 FROM spans
 		 WHERE trace_id != ''
 		 GROUP BY trace_id, time_bucket`,
+
+		// v0.10.2450 — messaging_summary_1m: messaging_summary_5m'in 1
+		// DAKİKALIK ikizi (operatör 2026-11-22: "messaging özeti 1 dk
+		// çözünürlükte olsun"). db_summary_1m (v0.10.1095) emsali: kardeşle
+		// BİREBİR (anahtar, cluster/destination/operation zincirleri, WHERE,
+		// dört state) — fark yalnız ad, kova (1 dk) ve TTL (7 gün; uzun vadeli
+		// depo 5m). messaging_summary_1m_test.go 1m metnini kardeşten türetip
+		// karşılaştırır. Okuyucu: /messaging satır trendleri (GetMessagingTrends,
+		// msgTrendGrainFor: pencere ≤ 3 sa VE sourceCovers → 1m, aksi 5m).
+		// Pencere TOPLAMLARI (liste, çekmece, operasyon tablosu) 5m'de kalır:
+		// çekmece sayıları messaging_caller_summary_5m'den gelir ve aynı
+		// çekmecede iki farklı hizalama iki farklı toplam gösterirdi. Geriye DOLMAZ.
+		// Gün-bir üç kayıt (highVolumeTables + defaultShardPolicy +
+		// tablesWithoutTraceID); DİLİMİN SONUNDA.
+		`CREATE MATERIALIZED VIEW IF NOT EXISTS messaging_summary_1m
+		 ENGINE = AggregatingMergeTree
+		 PARTITION BY toDate(time_bucket)
+		 ORDER BY (msg_system, cluster, destination, operation, time_bucket)
+		 TTL toDate(time_bucket) + INTERVAL 7 DAY
+		 SETTINGS index_granularity = 8192
+		 AS SELECT
+		   msg_system,
+		   coalesce(
+		     nullIf(attr_values[indexOf(attr_keys, 'server.address')], ''),
+		     nullIf(attr_values[indexOf(attr_keys, 'messaging.kafka.bootstrap.servers')], ''),
+		     nullIf(attr_values[indexOf(attr_keys, 'messaging.kafka.cluster.name')], ''),
+		     '(default)'
+		   ) AS cluster,
+		   coalesce(
+		     nullIf(attr_values[indexOf(attr_keys, 'messaging.destination.name')], ''),
+		     nullIf(attr_values[indexOf(attr_keys, 'messaging.destination')], ''),
+		     nullIf(peer_service, ''),
+		     'unknown'
+		   ) AS destination,
+		   coalesce(
+		     nullIf(attr_values[indexOf(attr_keys, 'messaging.operation.type')], ''),
+		     nullIf(attr_values[indexOf(attr_keys, 'messaging.operation.name')], ''),
+		     nullIf(attr_values[indexOf(attr_keys, 'messaging.operation')], ''),
+		     ''
+		   ) AS operation,
+		   toStartOfInterval(time, INTERVAL 1 MINUTE) AS time_bucket,
+		   countState()                               AS span_count_state,
+		   countIfState(status_code = 'error')        AS error_count_state,
+		   sumState(duration)                         AS duration_sum_state,
+		   quantilesTDigestState(0.5, 0.95, 0.99)(duration)  AS duration_q_state
+		 FROM spans
+		 WHERE msg_system != ''
+		 GROUP BY msg_system, cluster, destination, operation, time_bucket`,
+
+		// v0.10.2450 — messaging_caller_summary_1m: messaging_caller_summary_5m'in
+		// 1 dk ikizi, aynı kural (yalnız ad / kova / TTL 7 gün ayrışır). Okuyucu:
+		// Service → Messaging sekmesinin SPAN YEDEĞİ (servisin Kafka istemci
+		// metriği yoksa topic tablosu + grafikler; service_messaging_spans.go,
+		// ≤ 3 sa VE sourceCovers → 1m, aksi 5m). service_name boyutu yalnız bu
+		// MV'de — messaging_summary_1m servis bilmez. Geriye DOLMAZ; DİLİMİN SONUNDA.
+		`CREATE MATERIALIZED VIEW IF NOT EXISTS messaging_caller_summary_1m
+		 ENGINE = AggregatingMergeTree
+		 PARTITION BY toDate(time_bucket)
+		 ORDER BY (msg_system, cluster, destination, service_name, host_name, kind, time_bucket)
+		 TTL toDate(time_bucket) + INTERVAL 7 DAY
+		 SETTINGS index_granularity = 8192
+		 AS SELECT
+		   msg_system,
+		   coalesce(
+		     nullIf(attr_values[indexOf(attr_keys, 'server.address')], ''),
+		     nullIf(attr_values[indexOf(attr_keys, 'messaging.kafka.bootstrap.servers')], ''),
+		     nullIf(attr_values[indexOf(attr_keys, 'messaging.kafka.cluster.name')], ''),
+		     '(default)'
+		   ) AS cluster,
+		   coalesce(
+		     nullIf(attr_values[indexOf(attr_keys, 'messaging.destination.name')], ''),
+		     nullIf(attr_values[indexOf(attr_keys, 'messaging.destination')], ''),
+		     nullIf(peer_service, ''),
+		     'unknown'
+		   ) AS destination,
+		   service_name,
+		   coalesce(nullIf(host_name, ''), '(unknown)') AS host_name,
+		   kind,
+		   toStartOfInterval(time, INTERVAL 1 MINUTE)   AS time_bucket,
+		   countState()                                 AS span_count_state,
+		   countIfState(status_code = 'error')          AS error_count_state,
+		   sumState(duration)                           AS duration_sum_state,
+		   quantilesTDigestState(0.5, 0.95, 0.99)(duration)    AS duration_q_state
+		 FROM spans
+		 WHERE msg_system != ''
+		 GROUP BY msg_system, cluster, destination, service_name, host_name, kind, time_bucket`,
 	}
 	return mvs
 }

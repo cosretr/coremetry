@@ -51,7 +51,8 @@ func TestServiceEnvSummaryMVShape(t *testing.T) {
 	// ondan daha yeni MV'ler durabilir (db_summary_1m, db_summary_1m_test.go
 	// kendi "son" pinini taşır).
 	newer := map[string]bool{"db_summary_1m": true, "db_statement_summary_1m": true,
-		"service_meta_combo_5m": true, "db_receiver_instance_5m": true, "trace_id_ts": true} // v0.10.2402 + trace_id_ts
+		"service_meta_combo_5m": true, "db_receiver_instance_5m": true, "trace_id_ts": true,
+		"messaging_summary_1m": true, "messaging_caller_summary_1m": true} // v0.10.2402 + trace_id_ts + v0.10.2450
 	idx := -1
 	for i, n := range names {
 		if n == name {

@@ -51,3 +51,27 @@ export function useServiceKafkaClients(p: { service: string; fromNs: number; toN
     staleTime: 30_000,
   });
 }
+
+// v0.10.2450 — Service → Messaging metrik-önce: Kafka istemci metrik ailesi.
+// `to` 10 dk'ya yuvarlanır (sunucu yoklama kovası); staleTime = sunucu TTL;
+// retry yok (hata → state unknown, sekme bugünkü panoyu çizer).
+export function useServiceKafkaFamily(service: string, toNs: number) {
+  const snapped = Math.floor(toNs / 600e9) * 600e9;
+  return useQuery({
+    queryKey: ['service', 'kafka-family', service, snapped],
+    queryFn: ({ signal }) => api.serviceKafkaFamily(service, snapped, signal),
+    enabled: !!service,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+// v0.10.2450 — span yedeği (aile yoksa): messaging_caller_summary_{1m,5m}.
+export function useServiceMessagingSpans(p: { service: string; fromNs: number; toNs: number; enabled: boolean }) {
+  return useQuery({
+    queryKey: ['service', 'messaging-spans', p.service, p.fromNs, p.toNs],
+    queryFn: ({ signal }) => api.serviceMessagingSpans(p.service, p.fromNs, p.toNs, signal),
+    enabled: p.enabled && !!p.service,
+    staleTime: 30_000,
+  });
+}

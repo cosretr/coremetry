@@ -35,9 +35,11 @@ func TestDBStmtSummary1mCatalogue(t *testing.T) {
 	// v0.10.2402 — ardında yalnız daha yeni iki MV durabilir (pinleri
 	// mv_raw_agg_test.go'da: service_meta_combo_5m, db_receiver_instance_5m).
 	// 2026-11-21 — ardına trace_id_ts eklendi (pini trace_id_ts_test.go).
-	if n := len(names); names[n-4] != "db_statement_summary_1m" ||
-		names[n-3] != "service_meta_combo_5m" || names[n-2] != "db_receiver_instance_5m" || names[n-1] != traceIDTsMV {
-		t.Fatalf("katalog sonu db_statement_summary_1m, service_meta_combo_5m, db_receiver_instance_5m, trace_id_ts olmalı: %v", names[n-4:])
+	// v0.10.2450 — ardına messaging_summary_1m + messaging_caller_summary_1m (pinleri messaging_summary_1m_test.go).
+	if n := len(names); names[n-6] != "db_statement_summary_1m" ||
+		names[n-5] != "service_meta_combo_5m" || names[n-4] != "db_receiver_instance_5m" || names[n-3] != traceIDTsMV ||
+		names[n-2] != "messaging_summary_1m" || names[n-1] != "messaging_caller_summary_1m" {
+		t.Fatalf("katalog sonu db_statement_summary_1m, service_meta_combo_5m, db_receiver_instance_5m, trace_id_ts, messaging_summary_1m, messaging_caller_summary_1m olmalı: %v", names[n-6:])
 	}
 	got := sqlNormalize(canonicalMVDDL("db_statement_summary_1m"))
 	if got != dbStmtSummary1mGolden {

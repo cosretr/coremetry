@@ -7,7 +7,8 @@ description: 'Coremetry CH guardrails: tables/MVs/columns, engine, ORDER BY, MV-
 
 Ölçek sayımları kayar — kullanmadan önce yeniden say: span MV'leri
 `canonicalMVs()` (`internal/chstore/store.go`; taban 2026-09-26: 22 →
-2026-10-04: 23, `db_summary_1m` eklendi → v0.10.1525: +`db_statement_summary_1m`),
+2026-10-04: 23, `db_summary_1m` eklendi → v0.10.1525: +`db_statement_summary_1m` →
+v0.10.2450: +`messaging_summary_1m`, +`messaging_caller_summary_1m`),
 operatör katmanı `grep -ci 'CREATE MATERIALIZED VIEW' migrations/*.sql`
 (taban: 16). Prod dış Distributed CH (2 shard × 2 replica), lokal chc-0/chc-1.
 
@@ -230,6 +231,8 @@ Alternatif (yıkıcı olmayan): inner-table `ALTER` + `MODIFY QUERY` —
 > | spanmetrics | `spanmetrics_1m` (+10s/1s) | `operation_summary_5m` | 30g | `selectMetricTier` (metricresolve.go) |
 > | db (v0.10.1095) | `db_summary_1m` | `db_summary_5m` | **7g** | `dbTrendGrainFor` (db_detail_trend.go): pencere ≤ 3 sa **ve** `sourceCovers(priorSrcDBSummary1m)` → 1m, aksi 5m |
 > | statement (v0.10.1525) | `db_statement_summary_1m` | `db_statement_summary_5m` | **7g** | `dbStmtTrendGrainFor` (dbstmt_detail.go): pencere ≤ 6 sa **ve** `sourceCovers(priorSrcDBStmtSummary1m)` → 1m, aksi 5m. ORDER BY **stmt_hash ile başlar** (kardeşten farklı — filtre öznesi); `mvGuardedOff` kapısı kardeşle aynı |
+> | messaging (v0.10.2450) | `messaging_summary_1m` | `messaging_summary_5m` | **7g** | `msgTrendGrainFor` (messaging_trend_grain.go): pencere ≤ 3 sa **ve** `sourceCovers(priorSrcMsgSummary1m)` → 1m, aksi 5m. Yalnız /messaging satır trendi (Cur* 30 sn settle) |
+> | messaging caller (v0.10.2450) | `messaging_caller_summary_1m` | `messaging_caller_summary_5m` | **7g** | `svcMsgGrainFor` (service_messaging_spans.go), aynı eşik + `priorSrcMsgCallerSummary1m`. Yalnız Service → Messaging SPAN YEDEĞİ (Kafka istemci metrik ailesi yoksa) |
 >
 > `db_summary_1m` yalnız /database detay grafiklerini besler; karolar, /databases sparkline'ı ve
 > db-health 5m'de. `db_statement_summary_1m` yalnız Statement detayının TRENDİNİ besler (özet /

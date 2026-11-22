@@ -71,8 +71,8 @@ confidence (a 5-minute bucket with 3 stored non-failing spans × 20 is ±58 %
 - `db_summary_5m`, `db_summary_1m`, `db_caller_summary_5m`,
   `db_statement_summary_5m`, `db_statement_summary_1m` — count, error, sum,
   TDigest (max/argMax unchanged).
-- `messaging_summary_5m`, `messaging_caller_summary_5m` — count, error, sum,
-  TDigest.
+- `messaging_summary_5m`, `messaging_summary_1m`, `messaging_caller_summary_5m`,
+  `messaging_caller_summary_1m` — count, error, sum, TDigest (1m twins v0.10.2450).
 - `trace_summary_5m` (+ `trace_summary_1d` uniq), `trace_service_index_5m`,
   `service_version_5m` — span/error counts per trace / service.
 - `business_code_summary_5m` (`business_code.go`) — count, error count.

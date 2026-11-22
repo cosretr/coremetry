@@ -155,11 +155,16 @@ func (s *Server) getDBTrends(w http.ResponseWriter, r *http.Request) {
 // /messaging grid'inin satır-içi sparkline + sağlık chip kaynağı.
 // Aynı 30s TTL — sayfa yüklemesiyle sparkline fetch'i sıcak pencereyi
 // paylaşır; anahtar tüm girdileri (pencere) hashler.
+//
+// v0.10.2450 — kaynak grenliği (1m / 5m, MessagingTrendGrain) anahtara
+// girer: 1m tablo pencereyi kapsamaya başlayınca eski 5m yükü 1m
+// anahtarında servis edilmesin (db detay trendiyle aynı kural).
 func (s *Server) getMessagingTrends(w http.ResponseWriter, r *http.Request) {
 	from, to := parseFromTo(r, time.Hour)
-	key := "msg-trends:" + cacheBucket(from, to)
+	g := s.store.MessagingTrendGrain(r.Context(), from, to)
+	key := fmt.Sprintf("msg-trends:g=%d:%s", g.BucketSec, cacheBucket(from, to))
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
-		return s.store.GetMessagingTrends(ctx, from, to)
+		return s.store.GetMessagingTrends(ctx, g, from, to)
 	})
 }
 

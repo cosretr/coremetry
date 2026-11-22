@@ -248,6 +248,8 @@ export interface DBTrend {
   curP99Ms: number;
   /** Pencerede tek bir TAM kova bile yoktu — rozet dolmakta olandan. */
   curFromPartial?: boolean;
+  /** v0.10.2450 — kova genişliği (sn); yalnız messaging trendi taşır (60 | 300). Yok → 300. */
+  bucketSec?: number;
 }
 
 // DBCallerBreakdown — one row of the per-(service, pod)

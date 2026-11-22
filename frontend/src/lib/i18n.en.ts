@@ -3109,6 +3109,23 @@ export const EN: Record<string, string> = {
   'kmsg.noSvc.b': '',
   'kmsg.noSvc.c': ' series was found (the OTel Java agent\'s Kafka client metrics must be enabled).',
   'kmsg.svcFoot': 'Source: VictoriaMetrics, queries simplified from the “OTel Java - Kafka Client Metrics” dashboard (service_name="{s}"). Charts are per client (client_id), pods are summed; the per-topic view is on Messaging → topic page.',
+  'ktop.title': 'Topics', // v0.10.2450
+  'ktop.col.err': 'Errors', // v0.10.2450
+  'ktop.empty': 'No topic-level Kafka client metric in this window.', // v0.10.2450
+  'ktop.emptySpans': 'No messaging spans for this service in this window.', // v0.10.2450
+  'ktop.src.metric': 'Source: metrics · {fam}', // v0.10.2450
+  'ktop.src.metricHint': 'Kafka client metrics (VictoriaMetrics) — unsampled, all traffic.', // v0.10.2450
+  'ktop.src.spans': 'Source: spans (sampled) · {min} min', // v0.10.2450
+  'ktop.src.spansHint': 'The service emits no Kafka client metrics; numbers come from sampled spans (messaging summary). Lag cannot be derived from spans.', // v0.10.2450
+  'ktop.c.produce': 'Produce — records /s (topic)', // v0.10.2450
+  'ktop.c.consume': 'Consume — records /s (topic)', // v0.10.2450
+  'ktop.c.errors': 'Send errors /s (topic)', // v0.10.2450
+  'ktop.c.latency': 'Latency — producer request / consumer fetch (avg)', // v0.10.2450
+  'ktop.c.lag': 'Consumer lag (topic, max)', // v0.10.2450
+  'ktop.c.errPct': 'Error % (topic · side)', // v0.10.2450
+  'ktop.c.p95': 'p95 latency (topic · side)', // v0.10.2450
+  'ktop.noLagSpans': 'Consumer lag only comes from Kafka client metrics; the span fallback has none.', // v0.10.2450
+  'ktop.noMetric': 'This service emits no Kafka client metrics — the topic view below is from the span fallback.', // v0.10.2450
   // v0.10.2311 — shared DependenciesTable (Messaging + Databases) and the dependencies drawer (DetailDrawer, CallerSection, DegradedBand).
   'deps.svcLoading': '{n} {what} services (names loading)',
   'deps.svcLoading_one': '{n} {what} service (name loading)',
@@ -3130,8 +3147,8 @@ export const EN: Record<string, string> = {
   'deps.p99d.noPrior': 'This destination was not in the previous window — there is no baseline to compare against.',
   'deps.p99d.off': 'Comparison is off. "Compare vs prior" shows the regression against the previous equal window.',
   'deps.p99d.tip': 'p99 {cur}ms · previous {prior}ms',
-  'deps.bucket.partial': 'No closed 5 min bucket in this window — the value comes from the bucket STILL FILLING and reads low.',
-  'deps.bucket.full': 'Last COMPLETE 5 min bucket (the filling bucket is skipped on purpose: its count reads low and looks like a false recovery).',
+  'deps.bucket.partial': 'No closed {min} min bucket in this window — the value comes from the bucket STILL FILLING and reads low.',
+  'deps.bucket.full': 'Last COMPLETE {min} min bucket (the filling bucket is skipped on purpose: its count reads low and looks like a false recovery).',
   'deps.spark': 'call rate · last complete bucket {rps}/s\n{note}',
   'deps.errRate': 'error rate · {note}',
   'deps.prob.count': '{n} problems',

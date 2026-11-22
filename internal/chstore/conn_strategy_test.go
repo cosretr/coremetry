@@ -139,7 +139,10 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// (AggregatingMergeTree telemetri MV'si, state tablosu DEĞİL).
 		// dependencies.go'daki kardeş messaging okumalarıyla aynı havuz —
 		// aynı çekmecenin iki yarısı farklı replikadan okunmasın.
-		"messaging_operations.go":      true,
+		"messaging_operations.go": true,
+		// v0.10.2450 — SAF telemetri: messaging_caller_summary_{1m,5m} (Service →
+		// Messaging span yedeği); state tablosu yok.
+		"service_messaging_spans.go":   true,
 		"store.go":                     true, // tanım + fallback
 		"rollout_problem_telemetry.go": true, // workload_revision_activity_1m + spans pod→revizyon (v0.10.241 Problem↔Rollout)
 		"summary.go":                   true, // service_summary_5m / operation_summary_5m / spans (v0.9.496 dilim 1)
