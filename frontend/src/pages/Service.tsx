@@ -45,6 +45,7 @@ import { ServiceRuntimeBadge } from '@/components/ServiceRuntimeBadge';
 import { keys } from '@/lib/queries/keys';
 import type { Service, Problem, OperationSummary, OperationRoutesFor, SLORow, TimeRange } from '@/lib/types';
 import { QueryError } from '@/components/QueryError';
+import { ServiceNoTracesNote } from './service/ServiceNoTracesNote'; // v0.10.2451
 import type { DataTableStateProps } from '@/components/ui/DataTable';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { ServiceHealthcheckButton } from '@/components/coremetry/ServiceHealthcheck'; // v0.10.2039
@@ -612,6 +613,7 @@ function ServiceDetailInner() {
             missing because the read failed — not because the service is idle.
           </QueryError>
         )}
+        <ServiceNoTracesNote loading={loading} bundleErr={bundleErr} info={info} operations={operations} endpoints={endpoints} />
         {!loading && (
           <div style={{ opacity: refreshing ? 0.55 : 1, transition: 'opacity 120ms' }}
             aria-busy={refreshing}>

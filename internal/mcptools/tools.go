@@ -222,6 +222,11 @@ type Deps struct {
 	// HTTP client histogramı, örnekleme öncesi tam sayım; downstream_red.go).
 	// nil = CoSRE bağımlılık adımı yalnız topoloji okur.
 	DownstreamRED func(ctx context.Context, service string, from, to time.Time) (runtimesig.DownstreamReport, error)
+	// MetricServiceNames — v0.10.2451: VictoriaMetrics RED'i olan servis adları
+	// (api filo sıralaması, 60 sn önbellek, son 24 sa). Servis çözümü span
+	// kataloğuyla BİRLEŞTİRİR — span'i olmayan (tail sampling / trace'lenmeyen)
+	// servis "bulunamadı" almaz. nil = yalnız span kataloğu.
+	MetricServiceNames func(ctx context.Context) []string
 	// Metrics — v0.9.1150. The METRIC read router (ClickHouse or an
 	// external VictoriaMetrics), for the two tools whose reads the
 	// operator can repoint from Settings: query_metric and
@@ -985,6 +990,10 @@ func listServicesTool(d Deps) mcp.Tool {
 					}
 				}
 			}
+			if mo := metricOnlyMatches(ctx, d, a.NameContains, res["services"], 20); len(mo) > 0 { // v0.10.2451
+				res["metric_only"] = mo
+				res["metric_only_note"] = metricOnlyNote
+			}
 			if a.Env != "" {
 				res["env"] = a.Env // echo the applied narrowing
 			}
@@ -1246,6 +1255,16 @@ func getServiceHealthTool(d Deps) mcp.Tool {
 				}
 			}
 			if len(rows) == 0 {
+				// v0.10.2451 — span'siz metrik servisi VAR (env'siz: env daraltmasında
+				// found=false "bu ortamda yok" anlamını korur; metrik kataloğu env'siz).
+				if mo := metricOnlyService(ctx, d, name); mo != "" && a.Env == "" {
+					probs, _ := d.Store.CountProblems(ctx, chstore.ProblemFilter{Status: "open", Service: mo})
+					res := metricOnlyHealth(mo, probs)
+					if mo != a.Service {
+						res["matched_name"] = mo
+					}
+					return res, nil
+				}
 				res := map[string]any{"found": false, "service": a.Service}
 				if a.Env != "" {
 					res["env"] = a.Env
@@ -1693,6 +1712,9 @@ func renderChartTool(d Deps) mcp.Tool {
 					found = true
 					break
 				}
+			}
+			if !found && metricOnlyService(ctx, d, a.Service) == a.Service {
+				found = true // v0.10.2451 — span'siz metrik servisi: grafik metrik RED'den çizilir
 			}
 			if !found {
 				// v0.10.464 (D3) — yakın adlar hatanın içinde: model bir sonraki

@@ -277,7 +277,7 @@ func entityIndexKey(d Deps) string {
 		}
 	}
 	sort.Strings(ids)
-	return fmt.Sprintf("%v|%s", entityLayerOn(d), strings.Join(ids, ","))
+	return fmt.Sprintf("%v|%v|%s", entityLayerOn(d), d.MetricServiceNames != nil, strings.Join(ids, ",")) // v0.10.2451 — metrik kataloğu var mı
 }
 
 // loadEntityIndex — servisler + (bayrak açıksa) namespace/workload'lar; 60 s cache.
@@ -292,7 +292,7 @@ func loadEntityIndex(ctx context.Context, d Deps) (EntityCatalogIndex, error) {
 	}
 	idx := EntityCatalogIndex{EntityLayer: entityLayerOn(d)}
 	if d.Store != nil {
-		names, _, err := d.Store.ListServiceNames(ctx, "", serviceCatalogueMax, 0)
+		names, err := serviceCatalogue(ctx, d) // v0.10.2451 — span ∪ metrik servisleri
 		if err != nil {
 			return idx, err
 		}

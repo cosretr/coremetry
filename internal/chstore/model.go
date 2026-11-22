@@ -271,6 +271,10 @@ type ServiceSummary struct {
 	// boyutu yok: satırın RED değerleri TÜM namespace'lerin toplamı; FE bunu
 	// rozetle ilan eder. Süzgeç yoksa ya da tek namespace'se yazılmaz.
 	NamespaceCount int `json:"namespaceCount,omitempty"`
+	// v0.10.2451 — servis penceredeki span'lerde YOK, yalnız VictoriaMetrics
+	// RED'inde var (tail sampling tümünü düşürdü ya da trace'lenmiyor). Yalnız
+	// /api/services-metric-rank sıralı yolunda yazılır; span alanları sıfır.
+	MetricOnly bool `json:"metricOnly,omitempty"`
 }
 
 // ── Exception aggregate (Errors page) ────────────────────────────────────────

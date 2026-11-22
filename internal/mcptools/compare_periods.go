@@ -555,6 +555,10 @@ func runComparePeriods(ctx context.Context, d Deps, r comparePeriodsReader, a co
 				msg = fmt.Sprintf("service %q bulunamadı — adaylar: %s", svc, strings.Join(cands, ", "))
 			}
 		}
+		if !found && metricOnlyService(ctx, d, svc) == svc {
+			// v0.10.2451 — servis VAR ama penceredeki span'i yok: span kıyası yapılamaz.
+			msg = fmt.Sprintf("service %q has no spans (%s)", svc, metricOnlyNote)
+		}
 		if !found {
 			return nil, fmt.Errorf("%s", msg)
 		}

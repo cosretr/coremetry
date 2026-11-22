@@ -2620,6 +2620,9 @@ func (s *Server) guidedServiceNames(ctx context.Context) []string {
 	if err != nil {
 		return nil
 	}
+	// v0.10.2451 — span'siz (tail sampling / trace'lenmeyen) metrik servisleri de
+	// varlık çıkarımına girer; VM yoksa ya da okunamazsa nil (yalnız span).
+	names = mcptools.UnionServiceNames(names, s.metricServiceCatalogue(ctx))
 	if b, merr := json.Marshal(names); merr == nil {
 		_ = s.cache.Set(ctx, key, b, 60*time.Second)
 	}

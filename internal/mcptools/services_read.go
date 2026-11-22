@@ -2,6 +2,8 @@ package mcptools
 
 import (
 	"context"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -108,13 +110,116 @@ const serviceCatalogueMax = 2000
 
 // resolveServiceFuzzy — v0.10.464 (D3): ifadeyi canlı katalogla çözer
 // (ResolveServiceAmong). Katalog okuması picker'ın DISTINCT'i (ucuz).
+// v0.10.2451 — katalog span adları ∪ metrik servis adları (serviceCatalogue).
 func resolveServiceFuzzy(ctx context.Context, d Deps, phrase string) (exact string, candidates []string, err error) {
-	names, _, err := d.Store.ListServiceNames(ctx, "", serviceCatalogueMax, 0)
+	names, err := serviceCatalogue(ctx, d)
 	if err != nil {
 		return "", nil, err
 	}
 	exact, candidates = ResolveServiceAmong(phrase, names, 8)
 	return exact, candidates, nil
+}
+
+// serviceCatalogue — v0.10.2451: span kataloğu (ListServiceNames, ≤2000) ∪
+// VictoriaMetrics RED'i olan servisler (Deps.MetricServiceNames). Span okuma
+// hatası hata; metrik tarafı yumuşak (nil → yalnız span, eski davranış).
+func serviceCatalogue(ctx context.Context, d Deps) ([]string, error) {
+	names, _, err := d.Store.ListServiceNames(ctx, "", serviceCatalogueMax, 0)
+	if err != nil {
+		return nil, err
+	}
+	return UnionServiceNames(names, metricServiceNames(ctx, d)), nil
+}
+
+// metricServiceNames — nil-güvenli Deps.MetricServiceNames.
+func metricServiceNames(ctx context.Context, d Deps) []string {
+	if d.MetricServiceNames == nil {
+		return nil
+	}
+	return d.MetricServiceNames(ctx)
+}
+
+// UnionServiceNames — SAF: span adları sırasıyla, ardından span'de olmayan
+// metrik adları sıralı; tekrarsız. api.guidedServiceNames de kullanır.
+func UnionServiceNames(span, metric []string) []string {
+	if len(metric) == 0 {
+		return span
+	}
+	seen := make(map[string]bool, len(span)+len(metric))
+	out := make([]string, 0, len(span)+len(metric))
+	for _, n := range span {
+		if !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	var extra []string
+	for _, n := range metric {
+		if n != "" && !seen[n] {
+			seen[n] = true
+			extra = append(extra, n)
+		}
+	}
+	sort.Strings(extra)
+	return append(out, extra...)
+}
+
+// metricOnlyService — v0.10.2451: ad (tam ya da tek yakın eşleşme) metrik
+// kataloğunda varsa o ad, yoksa "". Span kataloğuna BAKMAZ: çağıran span
+// okumasının boş döndüğünü zaten bilir.
+func metricOnlyService(ctx context.Context, d Deps, name string) string {
+	ms := metricServiceNames(ctx, d)
+	if len(ms) == 0 || strings.TrimSpace(name) == "" {
+		return ""
+	}
+	exact, _ := ResolveServiceAmong(name, ms, 8)
+	return exact
+}
+
+// metricOnlyNote — modele metrik-yalnız servisin anlamı + sonraki adım.
+const metricOnlyNote = "metric-only: the service has VictoriaMetrics RED (unsampled app histograms / spanmetrics) but no spans in this window — upstream tail sampling dropped its traces or it is not traced. It EXISTS; read its RED with query_metrics (family red) or compare_baseline; span tools (traces, operations, exemplars) will be empty."
+
+// metricOnlyHealth — SAF: get_service_health'in metrik-yalnız cevabı.
+func metricOnlyHealth(name string, openProblems uint64) map[string]any {
+	return map[string]any{
+		"found": true, "service": name, "metric_only": true,
+		"traces_in_window": false, "open_problems": openProblems, "note": metricOnlyNote,
+	}
+}
+
+// metricOnlyMatches — v0.10.2451: list_services name_contains için span
+// satırlarında olmayan, alt-dizeyle eşleşen metrik servis adları (≤max).
+// name_contains boşsa yok (filo listesini şişirmez).
+func metricOnlyMatches(ctx context.Context, d Deps, nameContains string, rows any, max int) []string {
+	needle := strings.ToLower(strings.TrimSpace(nameContains))
+	if needle == "" {
+		return nil
+	}
+	ms := metricServiceNames(ctx, d)
+	if len(ms) == 0 {
+		return nil
+	}
+	have := map[string]bool{}
+	if rs, ok := rows.([]chstore.ServiceSummary); ok {
+		for _, r := range rs {
+			have[r.Name] = true
+		}
+	}
+	return metricOnlyFilter(ms, have, needle, max)
+}
+
+// metricOnlyFilter — SAF çekirdek: alt-dize (küçük harf iğne), span'de yok, ≤max.
+func metricOnlyFilter(metric []string, have map[string]bool, needle string, max int) []string {
+	var out []string
+	for _, n := range metric {
+		if len(out) >= max {
+			break
+		}
+		if !have[n] && strings.Contains(strings.ToLower(n), needle) {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // ReadServiceEnvRED — v0.10.1274: tek servisin TEK ortamdaki RED'i (guided

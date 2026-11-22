@@ -869,7 +869,8 @@ export default function ServicesPage() {
                           badge is auditable. */}
                       <HealthDot health={s.health} reason={s.healthReason}
                         openProblems={s.openProblems} />
-                      <span style={{ fontWeight: 600 }}>{s.name}</span>
+                      {/* v0.10.2451 — metrik-yalnız servis: rozet YOK (v0.10.2445), yalnız ipucu. */}
+                      <span style={{ fontWeight: 600 }} title={s.metricOnly ? METRIC_ONLY_TIP : undefined}>{s.name}</span>
                       {/* Runtime fingerprint pill — pulled from
                           the per-list batch fetch (one query
                           for every service vs N queries per
@@ -927,7 +928,7 @@ export default function ServicesPage() {
                             title="Önceki pencereyle kıyas için Δ prior'u aç ya da bu kolonu sırala">—</span>}
                     </td>
                     <td className="num">
-                      <ApdexBadge value={s.apdex} />
+                      <ApdexBadge value={s.metricOnly ? NaN : s.apdex} />
                     </td>
                     {/* v0.9.1317 — service_seen MV'sinden "Last seen".
                         firstSeen YOKSA "unknown" yazar: MV yalnız
@@ -1062,6 +1063,9 @@ function ErrRateValue({ pct }: { pct: number }) {
 // `b-info` (0.85–0.94) bantları kalktı: K5 gereği sağlıklı durum nötr,
 // "iyi" ile "çok iyi" arasındaki fark renk değil sayı. Bant adı title'da
 // yazılı — renk tek başına bilgi taşımasın.
+// v0.10.2451 — metrik-yalnız satırın ad ipucu (görünür rozet yok, v0.10.2445).
+const METRIC_ONLY_TIP = 'No traces in this window — this service is seen only in VictoriaMetrics RED (upstream tail sampling dropped its traces, or it is not traced). Values are unsampled metric; span columns (Apdex, lifecycle) are empty.';
+
 function ApdexBadge({ value }: { value: number }) {
   if (value == null || isNaN(value)) return <span style={{ color: 'var(--text3)' }}>—</span>;
   const band = value >= 0.94 ? 'Excellent'

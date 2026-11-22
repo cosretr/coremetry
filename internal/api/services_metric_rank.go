@@ -33,6 +33,8 @@ package api
 //     Metrik grubu dir'den bağımsız ÖNDE: örneklenmemiş değer ile örneklenmiş
 //     değer tek eksende karşılaştırılmaz; ikinci grup "örneklenmiş" rozetini
 //     taşımaya devam eder (rozet /services-red-metric cevabından, değişmedi).
+//     v0.10.2451 — evrene span'i OLMAYAN metrik servisleri (MetricOnly)
+//     eklenir, aynı süzgeçlerle (services_metric_only.go); toplam ≤ tavan.
 //
 // DÜRÜST GERİ DÜŞÜŞ (ranked=false + not; sayfa = /api/services'in span sırası):
 // metrik dışı sütun, VM olmayan kaynak, pencere > 24 sa, evren > tavan, ya da
@@ -106,6 +108,7 @@ type servicesMetricRankResponse struct {
 	WindowS      int                      `json:"windowSec"`
 	Queries      int                      `json:"queries"`
 	Notes        []string                 `json:"notes,omitempty"`
+	MetricOnly   int                      `json:"metricOnly,omitempty"` // v0.10.2451 — listeye eklenen metrik-yalnız servis sayısı
 }
 
 // servicesMetricRankKey — SAF: filo sıralaması önbellek anahtarı; TÜM girdiler.
@@ -435,17 +438,27 @@ func (s *Server) getServicesMetricRank(w http.ResponseWriter, r *http.Request) {
 			case len(universe) > servicesMetricRankUniverseMax:
 				ok, why = false, fmt.Sprintf("%d'den fazla servis eşleşiyor — filo geneli metrik sırası yapılmadı, sıra örneklenmiş span değerinden", servicesMetricRankUniverseMax)
 			default:
-				total := len(universe)
-				resp.Total = &total
 				ranking, notes, rerr := s.servicesMetricRankingCached(ctx, vm, col, env, cluster, from, to, showInfra)
 				resp.Queries = ranking.Queries
 				ordered := universe
 				if rerr != nil {
 					resp.Notes = append(notes, "filo geneli metrik sırası okunamadı — sıra örneklenmiş span değerinden")
 				} else {
-					ordered, resp.MetricRanked = servicesMetricRankMerge(universe, ranking.Services, dir)
+					// v0.10.2451 — span'i olmayan metrik servisleri (services_metric_only.go).
+					extra := servicesMetricOnlyRows(universe, ranking.Services, servicesMetricOnlyFilter{
+						NameMatch: nameMatch, Allow: servicesMetricOnlyAllow(serviceIn, filtered),
+						SpanDisplay: display.ErrorsOnly || display.MinSpans > 0 || display.MinP99Ms > 0,
+					})
+					all, cut := servicesWithMetricOnly(universe, extra, servicesMetricRankUniverseMax)
+					if cut > 0 {
+						resp.Notes = append(resp.Notes, fmt.Sprintf("%d metrik-yalnız servis %d servis tavanını aştığı için listelenmedi", cut, servicesMetricRankUniverseMax))
+					}
+					resp.MetricOnly = len(extra) - cut
+					ordered, resp.MetricRanked = servicesMetricRankMerge(all, ranking.Services, dir)
 					resp.Ranked = true
 				}
+				total := len(ordered)
+				resp.Total = &total
 				page, resp.HasMore = servicesMetricRankPage(ordered, offset, limit)
 			}
 		}

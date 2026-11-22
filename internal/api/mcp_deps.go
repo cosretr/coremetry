@@ -59,6 +59,8 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		RuntimeSignals: s.mcpRuntimeSignals,
 		// Follow-up 2026-11-21 — hedef başına giden RED (VM; downstream_red.go ile tek gövde).
 		DownstreamRED: s.mcpDownstreamRED,
+		// v0.10.2451 — servis çözümü span'siz metrik servislerini de tanır (services_metric_only.go).
+		MetricServiceNames: s.metricServiceCatalogue,
 		// v0.10.468 (Faz 2, F2-1) — varlık kataloğu tool'ları: etkin Remote
 		// Cluster'lar + entity_layer bayrağı (nil-güvenli; her ikisi de
 		// yoksa tool'lar dürüst disabled/boş döner).

@@ -37,6 +37,10 @@ export interface Service {
   // namespace'te koşuyorsa gelir; satırın metrikleri tüm namespace'lerin
   // toplamıdır (service_summary_5m'de namespace boyutu yok).
   namespaceCount?: number;
+  // v0.10.2451 — penceredeki span'lerde yok, yalnız VictoriaMetrics RED'i var
+  // (tail sampling / trace'lenmiyor). Yalnız /api/services-metric-rank sıralı
+  // yolunda; span alanları 0 — hücreler metrik değerini /services-red-metric'ten alır.
+  metricOnly?: boolean;
 }
 
 // OTel-native service graph (v0.8.10 — topology rebuild). One compact
@@ -4630,6 +4634,8 @@ export interface ServicesMetricRankPage {
   windowSec: number;
   queries: number;
   notes?: string[];
+  /** v0.10.2451 — listeye eklenen metrik-yalnız (span'siz) servis sayısı. */
+  metricOnly?: number;
 }
 /** v0.10.2437 — metrik kaynaklı servisin mini-grafik kovaları (SparklineBucket biçimi). */
 export interface ServiceRedSparkRow {
