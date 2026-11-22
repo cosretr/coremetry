@@ -114,6 +114,9 @@ type chatFollowup struct {
 	// sunucu-aramalı servis seçici açar (adaylar önce); seçilen servisle
 	// Template doldurulur ve o cümle Scope + seçilen servisle gönderilir.
 	Pick *followupPick `json:"pick,omitempty"`
+	// LongWait — v0.10.2466 (chat_long_wait.go): "daha uzun bekle" çipi; tık
+	// Text'i + context.longWait=true gönderir (okumalar uzun bütçeyle).
+	LongWait bool `json:"longWait,omitempty"`
 }
 
 // followupPick — v0.10.1515: seçici çipinin yükü. Template "{service}" yer
@@ -560,7 +563,7 @@ func withAnswerFollowups(ans map[string]any, chips []chatFollowup) map[string]an
 	ans["followups"] = chips
 	var texts []string
 	for _, c := range chips {
-		if c.Action == nil && c.Href == "" && c.ExplainAsk == nil && c.Pick == nil { // v0.10.1331 — link çipi eski istemcide metin olarak gönderilmez; v0.10.1400 — açıklama çipi de (niyetsiz metin yönlenmez); v0.10.1515 — seçici çipi de (etiketi soru değil)
+		if c.Action == nil && c.Href == "" && c.ExplainAsk == nil && c.Pick == nil && !c.LongWait { // v0.10.1331 — link çipi eski istemcide metin olarak gönderilmez; v0.10.1400 — açıklama çipi de (niyetsiz metin yönlenmez); v0.10.1515 — seçici çipi de (etiketi soru değil)
 			texts = append(texts, c.Text)
 		}
 	}

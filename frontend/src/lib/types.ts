@@ -3914,6 +3914,10 @@ export interface TraceRow {
 }
 
 export interface TracesResponse {
+  // v0.10.2466 — okuma bütçesi aşıldı: liste KISMİ (500 yerine). coveredFromNs
+  // = bu andan sonra başlayan trace'ler eksiksiz (yoksa hiçbir basamak bitmedi).
+  // longWaitSec > 0 → "Daha uzun bekle" düğmesi o bütçeyle sunulur.
+  partial?: TracesPartial;
   // v0.10.329 — boş liste öz-teşhisi: aynı filtreyle eşleşen SPAN sayısı (yalnız boş sonuçta).
   emptyDiag?: {
     matchingSpans: number; error?: string;
@@ -5363,6 +5367,22 @@ export interface CHTraceHealthResponse {
 // strict = tam kök (parent boş + ad + servis); entry = tam kök YA DA giriş span'i (server/consumer).
 export type TraceRootDef = 'strict' | 'entry';
 export interface TraceRootDefSettings { def: TraceRootDef }
+/** v0.10.2466 — /api/traces `partial` zarfı. */
+export interface TracesPartial {
+  reason: 'timeout';
+  elapsedMs: number;
+  limitSec: number;
+  longWaitSec: number;
+  coveredFromNs?: number;
+}
+/** v0.10.2466 — /api/settings/traces-long-wait. */
+export interface TracesLongWaitSettings {
+  maxSec: number;
+  effectiveSec: number;
+  minSec: number;
+  limitSec: number;
+  defaultSec: number;
+}
 export interface CHMeasureResponse {
   mode: 'cluster' | 'standalone';
   cluster?: string;
@@ -8627,6 +8647,8 @@ export interface ChatFollowup {
   label?: string;
   /** v0.10.1400 — AÇIKLAMA çipi: tık `text`i + bu niyeti (context.explainAsk) gönderir; açıklama sohbet içinde. */
   explainAsk?: ChatExplainAsk;
+  /** v0.10.2466 — "daha uzun bekle" çipi: tık `text`i + context.longWait gönderir (okumalar 60 sn bütçeyle). */
+  longWait?: boolean;
   /**
    * v0.10.1515 — SEÇİCİ çipi: tık mesaj göndermez, satır içi servis seçicisi
    * açar (`services` önce, arama tüm servislerde); seçim `template`deki

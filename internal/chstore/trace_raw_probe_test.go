@@ -19,11 +19,13 @@ func TestTraceRawProbeWindows(t *testing.T) {
 		win  time.Duration
 		want []time.Duration
 	}{
-		{"1h — basamak yok, tam tarama zaten dar", time.Hour, nil},
-		{"2h — (1h+1h)*2 > 2h, yok", 2 * time.Hour, nil},
-		{"4h — yalnız 1h", 4 * time.Hour, []time.Duration{time.Hour}},
-		{"24h — 1h, 6h (24h basamağı sığmaz)", 24 * time.Hour, []time.Duration{time.Hour, 6 * time.Hour}},
-		{"7d — üçü de", 7 * 24 * time.Hour, []time.Duration{time.Hour, 6 * time.Hour, 24 * time.Hour}},
+		{"30m — basamak yok, tam tarama zaten dar", 30 * time.Minute, nil},
+		{"1h — yalnız 15m (L=15m, 30m*3/2 ≤ 1h)", time.Hour, []time.Duration{15 * time.Minute}},
+		{"2h — 15m (1h+1h)*3/2 > 2h", 2 * time.Hour, []time.Duration{15 * time.Minute}},
+		{"4h — 15m, 1h", 4 * time.Hour, []time.Duration{15 * time.Minute, time.Hour}},
+		{"12h — 15m, 1h, 6h (v0.10.2466 operatör vakası)", 12 * time.Hour, []time.Duration{15 * time.Minute, time.Hour, 6 * time.Hour}},
+		{"24h — 15m, 1h, 6h (24h basamağı sığmaz)", 24 * time.Hour, []time.Duration{15 * time.Minute, time.Hour, 6 * time.Hour}},
+		{"7d — dördü de", 7 * 24 * time.Hour, []time.Duration{15 * time.Minute, time.Hour, 6 * time.Hour, 24 * time.Hour}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -59,7 +61,7 @@ func TestTraceRawProbeEligible(t *testing.T) {
 		{"id listesi — zaten sınırlı", func(f *TraceFilter) { f.TraceIDs = []string{"a"} }, false},
 		{"CSV dışa aktarım (50k) — basamak boşuna", func(f *TraceFilter) { f.Limit = 50000 }, false},
 		{"limit 500 — sınırın kendisi uygun", func(f *TraceFilter) { f.Limit = 500 }, true},
-		{"2h pencere — basamak sığmaz", func(f *TraceFilter) { f.From = t0.Add(-2 * time.Hour) }, false},
+		{"20m pencere — basamak sığmaz", func(f *TraceFilter) { f.From = t0.Add(-20 * time.Minute) }, false},
 		{"offset 200 — sayfa 5 uygun", func(f *TraceFilter) { f.Offset = 200 }, true},
 		{"attribute filtresi (P2 senaryosu) uygun", func(f *TraceFilter) {
 			f.Filters = []FilterExpr{{Key: "user_agent.original", Op: "LIKE", Values: []string{"%"}}}

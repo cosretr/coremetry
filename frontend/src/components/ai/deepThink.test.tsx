@@ -178,7 +178,7 @@ describe('Derin düşün kablolaması', () => {
   it('useChatThread opts.deep → copilotChat son argüman; cevap turu deep işaretli', () => {
     const src = read('./useChatThread.ts');
     expect(src).toMatch(/deep\?: boolean;/);
-    expect(src).toMatch(/o\.deep \|\| undefined,[\s\S]{0,120}so\?\.attempt,[\s\S]{0,120}so\?\.explainAsk,[\s\S]{0,80}\(o\.code \|\| codeLocked\) \|\| undefined,[\s\S]{0,160}codeLocked \|\| undefined\)/); // CoSRE Faz 1 — deneme beyanı; v0.10.1400 — açıklama niyeti en sonda; v0.10.1461 — ardından Kod hapı; v0.10.1465 — en sonda kod kilidi
+    expect(src).toMatch(/o\.deep \|\| undefined,[\s\S]{0,120}so\?\.attempt,[\s\S]{0,120}so\?\.explainAsk,[\s\S]{0,80}\(o\.code \|\| codeLocked\) \|\| undefined,[\s\S]{0,160}codeLocked \|\| undefined,[\s\S]{0,120}so\?\.longWait \|\| undefined\)/); // v0.10.2466 — en sonda uzun bekleme evet'i // CoSRE Faz 1 — deneme beyanı; v0.10.1400 — açıklama niyeti en sonda; v0.10.1461 — ardından Kod hapı; v0.10.1465 — en sonda kod kilidi
     expect(src).toMatch(/\.\.\.\(o\.deep \? \{ deep: true \} : \{\}\)/);
   });
   it('iki kabuk da hook\'u thread\'e ve composer\'a geçirir (akarken devre dışı)', () => {

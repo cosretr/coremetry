@@ -55,6 +55,7 @@ export function cosreRequestContext(
     deep: sel.deep || undefined,
     attempt: so?.attempt,
     explainAsk: so?.explainAsk,
+    longWait: so?.longWait || undefined, // v0.10.2466
     code: (sel.code || codeLocked) || undefined,
     codeLocked: codeLocked || undefined,
   });

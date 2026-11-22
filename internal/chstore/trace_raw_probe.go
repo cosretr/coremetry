@@ -43,13 +43,28 @@ import (
 //
 // Sayım sorguları (exact/approx) DEĞİŞMEZ — ayrı sorgudur, tam pencere.
 
-// traceRawProbeRungs — kuyruk pencereleri, dar→geniş. Basamak yalnız
-// (W+L)*2 ≤ pencere ise anlamlı; aksi hâlde tam tarama zaten o kadar.
-var traceRawProbeRungs = []time.Duration{time.Hour, 6 * time.Hour, 24 * time.Hour}
+// traceRawProbeRungs — kuyruk pencereleri, dar→geniş.
+// v0.10.2466 — 15 dk basamağı eklendi (operatör: 15 dk → 1 sa → 6 sa → tam)
+// ve uygunluk (W+L)*3/2 ≤ pencere'ye gevşedi: 12 saatlik pencere artık
+// 15m, 1h, 6h basamaklarını dener. Tam tarama bütçeyi aşarsa en geniş
+// başarılı basamağın KESİN satırları kısmi sonuç olarak döner
+// (traceRawProbeExact) — basamak ne kadar genişse kısmi cevap o kadar dolu.
+var traceRawProbeRungs = []time.Duration{15 * time.Minute, time.Hour, 6 * time.Hour, 24 * time.Hour}
 
-// traceRawProbeLookback — floor'un altına bakış (L). MV yolunun 12 kova
-// (1h) lookback'iyle aynı.
+// traceRawProbeLookback — floor'un altına bakış (L) üst sınırı. MV yolunun
+// 12 kova (1h) lookback'iyle aynı.
 const traceRawProbeLookback = time.Hour
+
+// traceRawProbeLookbackFor — v0.10.2466: L = min(1h, W). 15 dk basamağı
+// 75 dk değil 30 dk tarar (prod ≈ 27k span/s: 49M yerine 24M span). Kabul
+// edilen kusur aynı sınıf: floor'un altında L'den uzun span boşluğu olan
+// trace "kesin" görünür; 15 dk'lık boşluklu trace pratikte yok.
+func traceRawProbeLookbackFor(w time.Duration) time.Duration {
+	if w < traceRawProbeLookback {
+		return w
+	}
+	return traceRawProbeLookback
+}
 
 // traceRawProbeMaxLimit — liste sayfaları için; CSV dışa aktarımı (50k)
 // K=50001 kesin satır bulamaz, boşuna basamak tarardı.
@@ -63,7 +78,7 @@ func traceRawProbeWindows(from, to time.Time) []time.Duration {
 	win := to.Sub(from)
 	var out []time.Duration
 	for _, w := range traceRawProbeRungs {
-		if (w+traceRawProbeLookback)*2 <= win {
+		if (w+traceRawProbeLookbackFor(w))*3/2 <= win {
 			out = append(out, w)
 		}
 	}
@@ -111,6 +126,30 @@ func traceRawProbePage(rows []TraceRow, floorNs int64, offset, limit int) (page 
 		page = page[:limit]
 	}
 	return page, hasMore, true
+}
+
+// traceRawProbeExact — v0.10.2466 (kısmi sonuç): bir sonraki basamak ya da
+// tam tarama bütçeyi aştığında, son başarılı basamağın yalnız KESİN satırları
+// (trace_start ≥ floor; DESC sıralı) üzerinden sayfa. Bu satırlar tam
+// taramanın en yeni satırlarıyla bire bir aynıdır — eksik olan yalnız
+// floor'dan ESKİ trace'ler (yanıt "kısmi: floor sonrası" der). SAF; testli.
+func traceRawProbeExact(rows []TraceRow, floorNs int64, offset, limit int) (page []TraceRow, hasMore bool) {
+	page = []TraceRow{}
+	if limit <= 0 || offset < 0 {
+		return page, false
+	}
+	n := 0
+	for n < len(rows) && rows[n].StartTime >= floorNs {
+		n++
+	}
+	if offset >= n {
+		return page, false
+	}
+	end := offset + limit
+	if end > n {
+		end = n
+	}
+	return rows[offset:end], n > offset+limit
 }
 
 // scanTraceListRows — buildGetTracesListSQL satırlarını çözer (probe ve

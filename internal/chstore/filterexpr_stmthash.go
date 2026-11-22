@@ -119,7 +119,8 @@ func (f FilterExpr) spansSQL(alias string, promoted map[string]string) (string, 
 	if isShapeFilterKey(f.Key) {
 		return shapeFilterSQL(f.Key, alias, op, f.Values)
 	}
-	return f.sql(alias, wellKnown, wellKnownResource, promoted, AttrIndexAvailable())
+	wk, wkRes := spansFilterMaps(clusterColReady.Load()) // v0.10.2466 — cluster anahtarları `cluster` kolonuna (cluster_filter_col.go)
+	return f.sql(alias, wk, wkRes, promoted, AttrIndexAvailable())
 }
 
 // normOp — boş op "=" (sql() ve Validate ile aynı kural).

@@ -9,6 +9,7 @@ import { bucketBars, fleetVerdict, lossVerdict, nameTone, pctOf, rawHostLabel, s
 import { makeBaseline, nodeWorkView, type Baseline, type NodeWorkRow } from '@/lib/chNodeWork';
 import { Button, Modal, SegmentedControl } from '@/components/ui';
 import { useTraceRootDef, useSaveTraceRootDef } from '@/lib/queries'; // v0.10.733
+import { TracesLongWaitPanel } from './settings/TracesLongWaitPanel'; // v0.10.2466
 import { entryRootOf } from '@/lib/rootCoverage'; // v0.10.733 — saf
 import { canRepair, canSeedFirstReplica, catalogLabel, innerViewLabel, leavesFixTable, repairModeLabel, repairRequestMode, runbook, shortZk, statePathHeadline, statePathLabel, statePathOwnsRepair, summarize, verdictLabel, verdictRank, verdictTone } from './adminch/replicaConsistency'; // v0.10.791 — saf
 import { StatePathBlock } from './adminch/StatePathRebuild'; // v0.10.965 — state tablolarının ZK yolu
@@ -774,6 +775,7 @@ export default function AdminClickhousePage() {
             <NodeWorkPanel />
             <MeasurePanel />
             <RootCoveragePanel />
+            <TracesLongWaitPanel />{/* v0.10.2466 — "Wait longer" cap */}
             <TraceHealthPanel />
             <TraceThinningPanel />
             <DanglingMVPanel />

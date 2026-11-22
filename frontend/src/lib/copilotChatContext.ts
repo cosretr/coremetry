@@ -27,6 +27,8 @@ export interface CopilotChatContextFields {
   explainAsk?: ChatExplainAsk;
   code?: boolean;
   codeLocked?: boolean;
+  /** v0.10.2466 — kullanıcının "daha uzun bekle" evet'i (çip tıkı); bu tur okumaları 60 sn bütçeyle. */
+  longWait?: boolean;
 }
 
 /** `context` gövdesi; hiçbir alan yoksa (ve dilim UTC + IANA adı yoksa) undefined. */
@@ -36,7 +38,7 @@ export function buildCopilotChatContext(f: CopilotChatContextFields, now?: Date)
   // v0.10.445 — IANA adı da gider (sabit ofset DST'yi bilmez).
   // v0.10.745 — çift lib/browserTz'den; Explain/insight uçlarıyla aynı kaynak.
   const { tz, tzOffsetMin } = browserTz(now);
-  return f.service || f.operation || f.explain || f.subject || f.rangeS || f.trace || f.env || f.toMs || f.profile || f.conversation || f.page || f.pinnedPage || (f.wikiRefs && f.wikiRefs.length > 0) || f.scope || f.command || f.deep || f.attempt || f.explainAsk || f.code || f.codeLocked || tzOffsetMin !== 0 || tz
+  return f.service || f.operation || f.explain || f.subject || f.rangeS || f.trace || f.env || f.toMs || f.profile || f.conversation || f.page || f.pinnedPage || (f.wikiRefs && f.wikiRefs.length > 0) || f.scope || f.command || f.deep || f.attempt || f.explainAsk || f.code || f.codeLocked || f.longWait || tzOffsetMin !== 0 || tz
     ? {
         ...(tzOffsetMin !== 0 ? { tzOffsetMin } : {}),
         ...(tz ? { tz } : {}),
@@ -60,6 +62,7 @@ export function buildCopilotChatContext(f: CopilotChatContextFields, now?: Date)
         ...(f.explainAsk ? { explainAsk: f.explainAsk } : {}),
         ...(f.code ? { code: true } : {}),
         ...(f.codeLocked ? { codeLocked: true } : {}),
+        ...(f.longWait ? { longWait: true } : {}),
       }
     : undefined;
 }

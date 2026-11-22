@@ -6042,6 +6042,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	// Close() and crash-loops the pod at boot. NEVER touch the rows on error.
 	maybeCloseRows(probeRows, probeErr)
 	s.hasClusterCol = probeErr == nil
+	clusterColReady.Store(s.hasClusterCol) // v0.10.2466 — filtre derleyicisi (cluster_filter_col.go)
 	if !s.hasClusterCol {
 		log.Printf("[chstore] `cluster` column not resolvable on spans (%v) — cluster filter queries use the res/attr derive (expected on an external Distributed cluster with cluster_name unset)", probeErr)
 	}

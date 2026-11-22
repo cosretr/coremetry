@@ -1997,6 +1997,11 @@ type TraceFilter struct {
 	// operator's question silently answered is the failure mode this
 	// codebase keeps paying for.
 	NarrowedFrom *time.Time
+	// Partial (v0.10.2466) — OUT param, opt-in: nil iken davranış eski
+	// (bütçe aşımı hata döner). Doluyken okuma bütçesi aşımı HTTP 500 yerine
+	// kısmi sonuç olur: en geniş başarılı yenilik basamağının kesin satırları
+	// (ya da hiç yoksa boş liste) + Partial.Hit. Çağıran notu GÖSTERMEK zorunda.
+	Partial *TracePartial
 	// CountMode controls the cost/accuracy of the total-rows badge:
 	//
 	//	"skip"    no DISTINCT count at all — the cheapest path. The caller
@@ -2450,6 +2455,9 @@ func (s *Store) traceDisplaySvcExpr() string {
 // GetTraces — the /traces list. Trace-level NOT HAS (trace_exclude.go): the
 // deferred page guard below makes the raw paths exact past the anti-join cap.
 func (s *Store) GetTraces(ctx context.Context, f TraceFilter) (gtRows []TraceRow, gtTotal uint64, gtHasMore bool, gtErr error) {
+	// v0.10.2466 — kısmi sonuç kapısı (trace_partial.go): İLK kaydedilen
+	// defer, yani EN SON koşar — iç yolların hepsinin hatasını görür.
+	defer func() { gtRows, gtHasMore, gtErr = traceTimeoutAsPartial(ctx, f.Partial, gtRows, gtHasMore, gtErr) }()
 	f = hoistTraceExcludes(f)     // trace-level NOT HAS → f.Excludes (trace_exclude.go)
 	f = normalizeTraceServices(f) // v0.10.1684 — servis kümesi sözleşmesi
 	if len(f.Excludes) > 0 {
@@ -2883,12 +2891,23 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) (gtRows []TraceRow
 	// bellek 3.8× (oran prod'a taşınır). İki aşama: 1) yalnız trace_id +
 	// SAYISAL sıralama anahtarı, LIMIT/OFFSET burada; 2) tam satır YALNIZ
 	// sayfanın id'leri için (traceExtrasSQL ile aynı `trace_id IN` deseni).
+	// v0.10.2466 — son başarılı basamağın satırları + floor'u: sonraki
+	// basamak / tam tarama bütçeyi aşarsa kısmi sonuç bunlardan kesilir.
+	var probeRows []TraceRow
+	var probeFloor time.Time
 	if traceRawProbeEligible(f) {
 		f.Explain.note("path=probe (sort=time; basamaklar %v)", traceRawProbeWindows(f.From, f.To))
 		for _, w := range traceRawProbeWindows(f.From, f.To) {
 			floor := f.To.Add(-w)
-			rows, err := runList(floor.Add(-traceRawProbeLookback), probeFetchLimit(f.Offset+pageLimit, rootPostFilter), 0, rootPostFilter)
+			rows, err := runList(floor.Add(-traceRawProbeLookbackFor(w)), probeFetchLimit(f.Offset+pageLimit, rootPostFilter), 0, rootPostFilter)
 			if err != nil {
+				if f.Partial != nil && isResourceExhaustion(err) {
+					out, hasMore = traceRawProbeExact(probeRows, probeFloor.UnixNano(), f.Offset, f.Limit)
+					f.Partial.mark(probeFloor, err)
+					f.Explain.note("partial=probe (basamak %v bütçeyi aştı; kesin satırlar %s sonrası)", w, probeFloor.UTC().Format(time.RFC3339))
+					served = true
+					break
+				}
 				return nil, 0, false, err
 			}
 			if rootPostFilter && len(rows) > 0 {
@@ -2915,6 +2934,7 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) (gtRows []TraceRow
 				out, hasMore, served = page, more, true
 				break
 			}
+			probeRows, probeFloor = rows, floor
 		}
 	}
 	if !served && rawListLightEligible(f, rootPostFilter) {
@@ -3072,13 +3092,20 @@ func (s *Store) GetTraces(ctx context.Context, f TraceFilter) (gtRows []TraceRow
 	if !served {
 		f.Explain.note("path=raw-list (sort=%s order=%s window=%s→%s)", f.Sort, f.Order, f.From.UTC().Format(time.RFC3339), f.To.UTC().Format(time.RFC3339))
 		rows, err := runList(f.From, pageLimit, f.Offset, false)
-		if err != nil {
+		switch {
+		case err != nil && f.Partial != nil && isResourceExhaustion(err) && !probeFloor.IsZero():
+			// v0.10.2466 — tam pencere bütçeyi aştı: basamağın kesin satırları.
+			out, hasMore = traceRawProbeExact(probeRows, probeFloor.UnixNano(), f.Offset, f.Limit)
+			f.Partial.mark(probeFloor, err)
+			f.Explain.note("partial=raw-list (tam pencere bütçeyi aştı; kesin satırlar %s sonrası)", probeFloor.UTC().Format(time.RFC3339))
+		case err != nil:
 			return nil, 0, false, err
-		}
-		out = rows
-		hasMore = len(out) > f.Limit
-		if hasMore {
-			out = out[:f.Limit]
+		default:
+			out = rows
+			hasMore = len(out) > f.Limit
+			if hasMore {
+				out = out[:f.Limit]
+			}
 		}
 	}
 	// v0.10.1005 — çip trace'i SEÇER, satırı şekillendirmez: çipler WHERE'de

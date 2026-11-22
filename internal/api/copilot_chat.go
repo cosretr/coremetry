@@ -207,6 +207,9 @@ type chatRequest struct {
 		State *chatStateWire `json:"state,omitempty"`
 		// StatePatch (v0.10.2325) — istemcinin durum alanı değişikliği; doğrulanır.
 		StatePatch *chatStatePatch `json:"statePatch,omitempty"`
+		// LongWait (v0.10.2466, chat_long_wait.go) — "daha uzun bekle" çipinin
+		// evet'i: bu turun okumaları min(60, tavan) sn bütçeyle. Yokken aynen.
+		LongWait bool `json:"longWait,omitempty"`
 	} `json:"context,omitempty"`
 	// Approvals — agent-core S5 (chat_approval_resume.go): v2 onay kartının
 	// cevabı; dolu istek onay bekleyen alışverişin DEVAMIDIR (kademeler atlanır,
@@ -450,6 +453,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	emit = s.beginChatActionTurn(ctx, exchangeID, agentctx.Sanitize(req.Context.Page)).wrapEmit(ctx, emit)
 	stepT := s.beginChatStepTurn(ctx, exchangeID, req.Context.Conversation, evm != nil) // v0.10.2363 — I1 adım sözleşmesi; kapalıyken nil, emit aynen
 	emit, ctx = stepT.wrapEmit(ctx, emit), withChatStepTurn(ctx, stepT)
+	// v0.10.2466 — "daha uzun bekleyeyim mi?" (chat_long_wait.go): öneri sarıcısının
+	// İÇİNDE kalır (döngü kipinde followups'ı düşürür; soru çipi düşmemeli).
+	emit, ctx = beginChatLongWaitTurn(ctx, emit, req.Context.LongWait)
 	// v0.10.2364 — I3 data-suggestions (chat_suggestions.go); kapalıyken emit/ctx aynen.
 	emit, ctx = s.beginChatSuggestTurn(ctx, emit, exchangeID, req.Context.Conversation, cst)
 	xch.verify.noteState(cst) // v0.10.2327 — durum adları + önceki defter (istemci yankısı hariç)
@@ -1328,6 +1334,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	wrapTraceSearchScope(ctx, byName) // v0.10.2294 — trace takibi: YALNIZ search_code besler (dikişin üstünde: testin sahte sonucu da)
 	// v0.10.1465 — başarılı kod okuması konuşmayı yapışkan yapar (trace takibi dahil).
 	wrapCodeReadHandlers(byName, func() { noteCodeRead(cst, emit) })
+	wrapLongWaitHandlers(byName) // v0.10.2466 — araç zaman aşımı → "daha uzun bekleyeyim mi?" (chat_long_wait.go)
 	execHooks := agenttools.Hooks{
 		Span: cspan.tool,
 		Audit: func(name string, args json.RawMessage, dur time.Duration, err error, bytes int) {
@@ -1348,6 +1355,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// değişmez (log + metrik + span özniteliği + ai_calls notu).
 	argObs, argScope := applyChatToolArgScope(&execHooks, toolSchemas)
 	exec := agenttools.NewExecutor(byName, extNames, execHooks).WithSchemas(toolSchemas) // v0.10.2201 — sayı-metin düzeltmesi
+	exec.WithBudget(longWaitToolBudget(ctx))                                             // v0.10.2466 — evet'li turda okuma bütçesi + pay; 0 = aynen
 	if argScope != nil {
 		exec.WithScope(argScope)
 	}

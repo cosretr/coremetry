@@ -69,6 +69,7 @@ import { mergeTraceExtras, missingExtraKeys } from '@/lib/traceExtrasMerge';
 import { DEFAULT_TRACE_COLUMNS, FIXED_COLS, decodeTraceCols, encodeTraceCols, isDefaultTraceOrder, resolveTraceOrder, splitTraceOrder, traceColumnOrder } from '@/lib/traceColumns';
 import { TracesColumnPicker } from './traces/TracesColumnPicker'; // v0.10.1516 — sütun sırası
 import { opChipFor, opCellText, opCellTitle } from './traces/opPick'; // v0.10.752
+import { TracesPartialNote } from './traces/TracesPartialNote'; // v0.10.2466 — kısmi sonuç + "Daha uzun bekle"
 import { ColumnFilter, type ColumnFilterScope } from './traces/ColumnFilter'; // v0.10.1511 — header column filters
 import { applyColFilter, colFilterKind, colFilterStatus, type ColFilterAction, type ColFilterState } from './traces/colFilter';
 import { aggRowsOf, aggErrorHeadline } from './traces/aggResult'; // v0.10.1505 — boş cevap ≠ hata
@@ -597,7 +598,11 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
   // v0.10.328 — boş sonuç ekranındaki "Teşhis (explain)" linki SON isteğin
   // parametrelerini kullanır (URL cerrahisi yok; yalnız admin görür). Effect
   // içinde ref'e yazılıyordu; artık türetilmiş değer — effect aynısını yollar.
-  const listParams = useMemo<TracesParams>(() => {
+  // v0.10.2466 — "Daha uzun bekle": YALNIZ tıklandığı andaki sorguya
+  // (imza eşleşmesi) wait=long eklenir; aralık/filtre/sayfa değişince
+  // kendiliğinden düşer (ayrı sıfırlama efekti = çift istek olurdu).
+  const [longWaitSig, setLongWaitSig] = useState<string | null>(null);
+  const baseListParams = useMemo<TracesParams>(() => {
     const { from, to } = listRangeNs;
     return {
       limit: 50, offset: page * 50, from, to, sort, order,
@@ -617,6 +622,10 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
       count: 'skip',
     };
   }, [listRangeNs, sort, order, page, filter, env, clusterScope, advFiltersEff, advGroupParam]);
+  const baseListSig = useMemo(() => JSON.stringify(baseListParams), [baseListParams]);
+  const listParams = useMemo<TracesParams>(
+    () => (longWaitSig === baseListSig ? { ...baseListParams, wait: 'long' } : baseListParams),
+    [baseListParams, baseListSig, longWaitSig]);
   const explainHref = authUser?.role === 'admin' ? tracesExplainUrl(listParams) : null;
   useEffect(() => {
     if (view !== 'list') return;
@@ -1276,8 +1285,11 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
     }
     : {
       kind: 'empty',
-      message: tl(data.narrowedFromNs ? 'trc.list.emptyNarrowed' : 'trc.list.empty', lang),
-      detail: (
+      message: tl(data.partial ? 'trc.partial.label' : data.narrowedFromNs ? 'trc.list.emptyNarrowed' : 'trc.list.empty', lang),
+      detail: data.partial ? ( // v0.10.2466 — boş kısmi sonuç: "bulunamadı" değil, süre sınırı
+        <TracesPartialNote partial={data.partial} lang={lang} busy={refreshing}
+          onLongWait={() => setLongWaitSig(baseListSig)} />
+      ) : (
         <TracesEmptyDetail service={filter.service} search={filter.search} range={range} onSwitchView={() => setView('aggregate')}
           explainHref={explainHref ?? undefined}
           matchingSpans={data?.emptyDiag?.matchingSpans}
@@ -1891,6 +1903,10 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
                     {/* v0.9.297 — the backend could not afford the window
                         the operator picked and halved it. Loud, not a
                         footnote: these rows answer a DIFFERENT question. */}
+                    {data?.partial ? (
+                      <TracesPartialNote partial={data.partial} lang={lang} busy={refreshing}
+                        onLongWait={() => setLongWaitSig(baseListSig)} />
+                    ) : null}
                     {data?.narrowedFromNs ? (
                       <span className="badge b-err trl-ml6"
                         title={'This query ran out of memory or time over the range you selected, so the backend answered over a shorter, more recent window instead of failing.\nThe list below is NOT your full range — narrow the range or add a filter for an answer that covers it.'}>

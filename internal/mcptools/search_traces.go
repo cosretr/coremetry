@@ -192,6 +192,10 @@ func searchTracesTool(d Deps) mcp.Tool {
 				Filters:      filters, Env: strings.TrimSpace(a.Env), Cluster: clusterVal,
 				MinMs: a.MinMs, MaxMs: a.MaxMs,
 			}
+			// v0.10.2466 — bütçe aşımı hata değil kısmi sonuç; CoSRE turu
+			// "daha uzun bekleyeyim mi?" sorusunu buna bakarak sorar.
+			var partial chstore.TracePartial
+			f.Partial = &partial
 			rows, _, hasMore, err := d.Store.GetTraces(ctx, f)
 			if err != nil {
 				return nil, err
@@ -218,7 +222,17 @@ func searchTracesTool(d Deps) mcp.Tool {
 			if !narrowed.IsZero() {
 				out["narrowed_from_iso"] = narrowed.UTC().Format(time.RFC3339)
 			}
-			out["source"] = searchTracesSource(len(rows), limit, hasMore, ranked, from, to, gate.Reason, narrowed)
+			st := searchTracesSource(len(rows), limit, hasMore, ranked, from, to, gate.Reason, narrowed)
+			if partial.Hit {
+				out["partial_timeout"] = true
+				note := "okuma süresi bütçesi aşıldı; sonuç kısmi"
+				if !partial.CoveredFrom.IsZero() {
+					out["covered_from_iso"] = partial.CoveredFrom.UTC().Format(time.RFC3339)
+					note += ", yalnız " + partial.CoveredFrom.UTC().Format(time.RFC3339) + " sonrası kesin"
+				}
+				st = st.WithNote(note, true)
+			}
+			out["source"] = st
 			return out, nil
 		},
 	}

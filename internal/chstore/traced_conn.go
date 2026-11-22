@@ -145,7 +145,8 @@ func recordCHError(span trace.Span, err error) {
 }
 
 func (t *tracedConn) Query(ctx context.Context, q string, args ...any) (driver.Rows, error) {
-	ctx = applyQueryTag(ctx) // v0.10.254 — log_comment etiketi
+	ctx = applyQueryTag(ctx)                  // v0.10.254 — log_comment etiketi
+	ctx, q, lwCancel := longWaitQuery(ctx, q) // v0.10.2466 — "daha uzun bekle" (long_wait.go); bayraksız no-op
 	ctx, span := selfobs.Tracer().Start(ctx, "clickhouse.query")
 	span.SetAttributes(
 		attribute.String("db.system", dbSystem),
@@ -155,11 +156,19 @@ func (t *tracedConn) Query(ctx context.Context, q string, args ...any) (driver.R
 	defer span.End()
 	rows, err := t.Conn.Query(ctx, q, args...)
 	recordCHError(span, err)
-	return rows, err
+	if lwCancel == nil {
+		return rows, err
+	}
+	if err != nil {
+		lwCancel()
+		return rows, err
+	}
+	return &cancelRows{Rows: rows, cancel: lwCancel}, nil
 }
 
 func (t *tracedConn) QueryRow(ctx context.Context, q string, args ...any) driver.Row {
-	ctx = applyQueryTag(ctx) // v0.10.254 — log_comment etiketi
+	ctx = applyQueryTag(ctx)                  // v0.10.254 — log_comment etiketi
+	ctx, q, lwCancel := longWaitQuery(ctx, q) // v0.10.2466 — long_wait.go
 	ctx, span := selfobs.Tracer().Start(ctx, "clickhouse.queryrow")
 	span.SetAttributes(
 		attribute.String("db.system", dbSystem),
@@ -172,7 +181,10 @@ func (t *tracedConn) QueryRow(ctx context.Context, q string, args ...any) driver
 	// row fetch. Acceptable trade-off for QueryRow's typical
 	// "1-row lookup" use.
 	defer span.End()
-	return t.Conn.QueryRow(ctx, q, args...)
+	if lwCancel == nil {
+		return t.Conn.QueryRow(ctx, q, args...)
+	}
+	return &cancelRow{Row: t.Conn.QueryRow(ctx, q, args...), cancel: lwCancel}
 }
 
 func (t *tracedConn) Exec(ctx context.Context, q string, args ...any) error {

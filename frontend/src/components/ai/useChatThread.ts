@@ -112,6 +112,8 @@ export interface ChatSendOpts {
    * kullanıcı turunda durur, yeniden dene / üret aynısını yollar.
    */
   window?: ChatSendWindow;
+  /** v0.10.2466 — "daha uzun bekle" çipi: bu tur okumaları uzun bütçeyle (yalnız kullanıcı evet'i). */
+  longWait?: boolean;
 }
 
 export function useChatThread(opts: ChatThreadOpts = {}) {
@@ -312,7 +314,8 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
         so?.attempt, // Faz 1 — retry/regenerate/edit beyanı
         so?.explainAsk, // v0.10.1400 — yapısal açıklama niyeti
         (o.code || codeLocked) || undefined, // v0.10.1461 — Kod hapı (kapalıyken gövdede yok); v0.10.1465 — kilitli konuşmada açık
-        codeLocked || undefined); // v0.10.1465 — kod kilidi ipucu (yalnız sıkılaştırır)
+        codeLocked || undefined, // v0.10.1465 — kod kilidi ipucu (yalnız sıkılaştırır)
+        so?.longWait || undefined); // v0.10.2466 — "daha uzun bekle" evet'i
       // v0.10.648 — terminal olaysız EOF: tur asılı kalmasın (chatAbort.ts).
       patchLast(settleTruncatedTurn);
     } catch (err) {

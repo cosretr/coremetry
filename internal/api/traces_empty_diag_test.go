@@ -31,7 +31,7 @@ func TestNewEmptyDiagCounts(t *testing.T) {
 	if !strings.Contains(string(h), `"traces_empty_mismatch": tracesEmptyMismatch.Load()`) {
 		t.Error("/api/health sayacı taşımalı")
 	}
-	a, err := os.ReadFile("api.go")
+	a, err := os.ReadFile("traces_list.go") // v0.10.2466 — getTraces api.go'dan taşındı
 	if err != nil {
 		t.Fatal(err)
 	}

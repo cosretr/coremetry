@@ -816,8 +816,12 @@ export const api = {
   // v0.9.603 (traces D2) — signal ile İPTAL EDİLEBİLİR. Sayfanın en pahalı
   // isteği bu; operatör aralığı/filtreyi hızlı değiştirdiğinde eski sorgu
   // ClickHouse'ta koşmaya devam etmemeli.
+  // v0.10.2466 — wait=long ("Daha uzun bekle"): sunucu 60 sn'ye kadar
+  // bekler (birkaç basamak); varsayılan 60 sn istemci zaman aşımı yetmez.
   traces:    (params: TracesParams, signal?: AbortSignal) =>
-    get<TracesResponse>(`/api/traces?${qs(params)}`, signal),
+    params.wait === 'long'
+      ? request<TracesResponse>(`/api/traces?${qs(params)}`, { ...(signal ? { signal } : {}), timeoutMs: 150_000 })
+      : get<TracesResponse>(`/api/traces?${qs(params)}`, signal),
   // FAZ 2 (traces attribute columns) — phase-2-only enrichment: fetch the
   // selected attribute columns for an EXPLICIT page of trace ids, bounded
   // by the visible rows' real min/max timestamps (ns). Same GET /api/traces
@@ -2832,6 +2836,8 @@ export const api = {
     // v0.10.1465 — konuşma kod okunmuş (kilitli): sunucuya ipucu, yalnız sıkılaştırır
     // (internal/api/chat_code_sticky.go). Kilitsizken anahtar gövdede HİÇ yok.
     contextCodeLocked?: boolean,
+    // v0.10.2466 — "daha uzun bekle" çipinin evet'i (internal/api/chat_long_wait.go).
+    contextLongWait?: boolean,
   ): Promise<void> => {
     // v0.10.1648 — gövde lib/copilotChatContext'ten (v2 aynı kurucuyu kullanır; bayt bayt aynı).
     const context = buildCopilotChatContext({
@@ -2840,6 +2846,7 @@ export const api = {
       conversation: contextConversation, page: contextPage, pinnedPage: contextPinnedPage, wikiRefs: contextWikiRefs,
       scope: contextScope, command: contextCommand, deep: contextDeep, attempt: contextAttempt,
       explainAsk: contextExplainAsk, code: contextCode, codeLocked: contextCodeLocked,
+      longWait: contextLongWait,
     });
     const r = await fetch(API_BASE + '/api/copilot/chat', {
       method: 'POST',
@@ -4195,6 +4202,14 @@ export const api = {
   chTraceHealth: (rangeS: number, raw?: boolean, signal?: AbortSignal) =>
     get<import('./types').CHTraceHealthResponse>(`/api/admin/clickhouse/trace-health?range_s=${rangeS}${raw ? '&raw=1' : ''}`, signal),
   // v0.10.733 — kök tanımı (strict | entry); GET tüm roller, PUT admin.
+  // v0.10.2466 — "Daha uzun bekle" tavanı (GET tüm roller, PUT admin).
+  getTracesLongWait: (signal?: AbortSignal) =>
+    get<import('./types').TracesLongWaitSettings>('/api/settings/traces-long-wait', signal),
+  putTracesLongWait: (maxSec: number) =>
+    request<import('./types').TracesLongWaitSettings>('/api/settings/traces-long-wait', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxSec }),
+    }),
   getTraceRootDef: (signal?: AbortSignal) =>
     get<import('./types').TraceRootDefSettings>('/api/settings/trace-root-def', signal),
   putTraceRootDef: (def: import('./types').TraceRootDef) =>
@@ -4712,6 +4727,8 @@ export interface TracesParams {
   // Comma-separated user-selected attribute keys whose values should
   // be projected into TraceRow.extras. Bounded to 8 cols server-side.
   extraAttrs?: string;
+  // v0.10.2466 — operatörün açık "Daha uzun bekle" isteği (yalnız bu sorgu).
+  wait?: 'long';
 }
 
 // v0.10.310 — /api/logs/templates parametreleri. since rung'lu string

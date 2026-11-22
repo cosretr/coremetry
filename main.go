@@ -1753,6 +1753,8 @@ func main() {
 	// v0.10.733 — kök tanımı (strict | entry), aynı kablo.
 	srv.LoadTraceRootDef(ctx)
 	cfgRefresh.Add("trace-root-def", func(ctx context.Context) error { srv.LoadTraceRootDef(ctx); return nil })
+	srv.LoadTracesLongWait(ctx) // v0.10.2466 — "Daha uzun bekle" tavanı
+	cfgRefresh.Add("traces-long-wait", func(ctx context.Context) error { srv.LoadTracesLongWait(ctx); return nil })
 	// v0.10.952 — PromQL konsolu korkulukları (promql_console), aynı kablo.
 	srv.LoadPromQLConsoleSettings(ctx)
 	cfgRefresh.Add("promql-console", func(ctx context.Context) error { srv.LoadPromQLConsoleSettings(ctx); return nil })

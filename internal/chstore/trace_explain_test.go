@@ -127,7 +127,7 @@ func TestServiceSpansFilterKeepsOnlyScope(t *testing.T) {
 // v0.10.530 — kaynak pini: handler ikinci sayımı yalnız servis seçili VE
 // eşleşen 0 iken ister; yanıt anahtarı serviceSpans.
 func TestEmptyDiagServiceSpansWired(t *testing.T) {
-	b, err := os.ReadFile("../api/api.go")
+	b, err := os.ReadFile("../api/traces_list.go") // v0.10.2466 — getTraces taşındı
 	if err != nil {
 		t.Fatal(err)
 	}
