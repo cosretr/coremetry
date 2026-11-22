@@ -174,8 +174,8 @@ export function QueryTab({ model, onModel, from, to, cluster, caps, canEdit }: Q
             options={[{ value: 'builder', label: 'Builder' }, { value: 'code', label: 'MetricsQL' }]} />
           <span className="flex-1" />
           <Button type="button" variant="outline" size="sm" onClick={() => setDashOpen(true)} disabled={!canEdit}
-            title={canEdit ? undefined : 'Pano düzenleme editor ve üstü rol ister'}>Dashboard'a ekle</Button>
-          <Button type="button" variant="outline" size="sm" onClick={share}><Link2 aria-hidden="true" />Paylaş</Button>
+            title={canEdit ? undefined : 'Pano düzenleme editor ve üstü rol ister'}>Add to dashboard</Button>
+          <Button type="button" variant="outline" size="sm" onClick={share}><Link2 aria-hidden="true" />Share</Button>
         </div>
 
         {model.mode === 'builder' ? (
@@ -194,20 +194,20 @@ export function QueryTab({ model, onModel, from, to, cluster, caps, canEdit }: Q
             )))}
             <div className="flex flex-wrap items-center gap-2 pt-2">
               <Button type="button" variant="ghost" size="xs" disabled={!canAdd}
-                onClick={() => { const id = nextMxLetter(model.queries); if (id) set({ queries: [...model.queries, blankMxQuery(id)] }); }}>+ Sorgu</Button>
+                onClick={() => { const id = nextMxLetter(model.queries); if (id) set({ queries: [...model.queries, blankMxQuery(id)] }); }}>+ Query</Button>
               <Button type="button" variant="ghost" size="xs"
-                onClick={() => set({ queries: [...model.queries, blankMxFormula(nextMxFormulaId(model.queries))] })}>+ Formül</Button>
+                onClick={() => set({ queries: [...model.queries, blankMxFormula(nextMxFormulaId(model.queries))] })}>+ Formula</Button>
               {model.scopeOff && cluster && (
                 <Button type="button" variant="link" size="xs" className="h-auto px-0" onClick={() => set({ scopeOff: false })}>
                   Kapsamı geri aç ({cluster})
                 </Button>
               )}
               <span className="flex-1" />
-              <span className="text-xs text-muted-foreground">Yazdıkça çalışır.</span>
+              <span className="text-xs text-muted-foreground">Runs as you type.</span>
             </div>
             {generated.length > 0 && (
               <details className="mt-2 border-t pt-2 text-xs">
-                <summary className="cursor-pointer text-muted-foreground">Üretilen MetricsQL</summary>
+                <summary className="cursor-pointer text-muted-foreground">Generated MetricsQL</summary>
                 {generated.map(g => (
                   <div key={g.id} className="mt-1 flex flex-col gap-1">
                     <pre className="m-0 overflow-x-auto rounded-md bg-muted p-2 font-mono text-xs whitespace-pre-wrap break-all"><b>{g.id}</b>  {g.text}</pre>

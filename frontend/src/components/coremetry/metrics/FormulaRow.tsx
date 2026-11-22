@@ -51,7 +51,7 @@ export function FormulaRow({ query: q, queries, onChange, onRemove, className }:
           </DropdownMenuContent>
         </DropdownMenu>
         <label className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          lejant
+          legend
           <Input value={q.legend} onChange={e => set({ legend: e.target.value })} placeholder="hata % {{service_name}}"
             className="h-6 w-48 px-1.5 font-mono text-xs md:text-xs bg-field dark:bg-field" aria-label={`Formül ${q.id} lejant biçimi`} />
         </label>

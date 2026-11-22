@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { readLegacyCss } from './legacyCss';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { SERIES_PALETTES } from '../lib/chartFmt';
 import { DEFAULT_RAMP_TOKENS } from '../lib/chart/heatmapRamp';
 import { THEME_IDS, themeEntry, type Theme, type ThemeContrast } from '../lib/themeRegistry';
@@ -160,13 +158,10 @@ describe('token karşıtlığı (v0.10.920)', () => {
     }
   });
 
-  it('kanvas yedek değerleri :root ile aynı (heatmapRamp, TraceMinimap)', () => {
+  // v0.10.2467 — TraceMinimap kaldırıldı; kanvas yedeği yalnız heatmapRamp'te.
+  it('kanvas yedek değerleri :root ile aynı (heatmapRamp)', () => {
     expect(DEFAULT_RAMP_TOKENS).toEqual({
       accent: tok('dark', '--accent'), warn: tok('dark', '--warn'), err: tok('dark', '--err'),
     });
-    const minimap = readFileSync(resolve(__dirname, '..', 'components', 'traces', 'TraceMinimap.tsx'), 'utf8');
-    const fb = /getPropertyValue\('--accent'\)\.trim\(\) \|\| '(#[0-9a-f]{6})'/.exec(minimap);
-    expect(fb, 'TraceMinimap --accent yedeği bulunamadı').not.toBeNull();
-    expect(fb![1]).toBe(tok('dark', '--accent'));
   });
 });

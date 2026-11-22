@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // traceWaterfallVirtual.test.tsx — v0.10.278 (Dilim 1d): 400+ satırda pencere
 // sanallaştırma (DOM'da yalnız görünür + overscan satır), altında tüm satırlar;
-// 150+ satırda trace haritası; küçük trace'te harita yok.
+// v0.10.2467 — trace haritası (TraceMinimap) kaldırıldı: hiçbir boyutta yok.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
@@ -34,7 +34,7 @@ describe('TraceWaterfall × sanal satırlar + harita', () => {
     const rowsEl = host.querySelector('.wf-rows') as HTMLElement;
     expect(rowsEl.style.position).toBe('relative');
     expect(parseInt(rowsEl.style.height, 10)).toBeGreaterThan(1000 * 20);
-    expect(host.querySelector('.tm-wrap')).not.toBeNull();
+    expect(host.querySelector('.tm-wrap')).toBeNull(); // v0.10.2467 — harita kaldırıldı
     expect(host.querySelector('.wf-row[data-index]')).not.toBeNull();
   });
   it('küçük trace: tüm satırlar DOM\'da, harita ve sanal kap yok', () => {
@@ -45,7 +45,7 @@ describe('TraceWaterfall × sanal satırlar + harita', () => {
   });
   it('200 satır: harita var ama sanal değil (content-visibility yolu)', () => {
     act(() => { root.render(<TraceWaterfall spans={flat(200)} selectedId={null} onSelect={() => {}} />); });
-    expect(host.querySelector('.tm-wrap')).not.toBeNull();
+    expect(host.querySelector('.tm-wrap')).toBeNull(); // v0.10.2467 — harita kaldırıldı
     expect(host.querySelectorAll('.wf-row').length).toBe(201);
   });
 });

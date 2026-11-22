@@ -3063,8 +3063,6 @@ export const TR: Record<string, string> = {
   'kmsg.svcFoot': 'Kaynak: VictoriaMetrics, “OTel Java - Kafka Client Metrics” panosundan sadeleştirilmiş sorgular (service_name="{s}"). Grafikler istemci (client_id) başınadır, pod\'lar toplanır; topic başına görünüm Messaging → topic sayfasında.',
   'ktop.title': 'Topic\'ler', // v0.10.2450
   'ktop.col.err': 'Hata', // v0.10.2450
-  'ktop.empty': 'Bu pencerede topic düzeyinde Kafka istemci metriği yok.', // v0.10.2450
-  'ktop.emptySpans': 'Bu pencerede servisin messaging span\'i yok.', // v0.10.2450
   'ktop.src.metric': 'Kaynak: metrik · {fam}', // v0.10.2450
   'ktop.src.metricHint': 'Kafka istemci metrikleri (VictoriaMetrics) — örneklenmemiş, tüm trafik.', // v0.10.2450
   'ktop.src.spans': 'Kaynak: span (örneklenmiş) · {min} dk', // v0.10.2450

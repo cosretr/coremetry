@@ -30,7 +30,7 @@ export const PAGE_FILES: Record<Page, readonly string[]> = {
     'components/traces/OracleOperationChip.tsx', 'components/traces/ServiceTimeline.tsx',
     'components/traces/ShapesView.tsx', 'components/traces/TraceHonesty.tsx',
     'components/traces/TraceLogList.tsx', 'components/traces/TraceMeasures.tsx',
-    'components/traces/TraceMinimap.tsx', 'components/traces/shared.tsx',
+    'components/traces/shared.tsx',
   ],
   TracesCharts: ['components/traces/VolumeChart.tsx', 'components/traces/LatencyScatter.tsx'],
   Explore: ['pages/Explore.tsx', 'pages/explore/'], // v0.10.1867 — MetricsExplorer / LogsExplorer silindi

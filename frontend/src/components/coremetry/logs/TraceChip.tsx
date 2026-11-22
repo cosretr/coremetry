@@ -78,13 +78,15 @@ export function TraceChip({ traceId, preview, onFilter, onOpen, href }: TraceChi
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
         {href ? (
-          <Button asChild variant="ghost" size="xs" className={'h-5 px-1 font-mono ' + TONE[v.tone]}>
-            <Link to={href} title={`${v.title} — tıkla: trace sayfası`} data-testid="trace-chip" data-state-kind={preview?.state ?? 'loading'}
-              onMouseEnter={() => hold(true, 250)} onMouseLeave={() => hold(false, 200)}
-              onClick={e => e.stopPropagation()}>
-              {v.text}
-            </Link>
-          </Button>
+          // v0.10.2467 (operatör: "Trace kolonu kırmızı ✕ … · N oldu, eskisi gibi
+          // düz link olsun") — bağlantı kipinde DÜZ link: kısa kimlik, link rengi
+          // (global `a`), üzerine gelince alt çizgi; hata / span / süre yalnız
+          // ipucunda ve hover kartında. Durum işareti ya da hata tonu yok.
+          <Link to={href} className="font-mono" title={`${v.title} — tıkla: trace sayfası`} data-testid="trace-chip" data-state-kind={preview?.state ?? 'loading'}
+            onMouseEnter={() => hold(true, 250)} onMouseLeave={() => hold(false, 200)}
+            onClick={e => e.stopPropagation()}>
+            {short(traceId)}
+          </Link>
         ) : (
           <Button variant="ghost" size="xs" className={'h-5 px-1 font-mono ' + TONE[v.tone]} title={v.title}
             aria-haspopup="dialog" aria-expanded={open} data-testid="trace-chip" data-state-kind={preview?.state ?? 'loading'}

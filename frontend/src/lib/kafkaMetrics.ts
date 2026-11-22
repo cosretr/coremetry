@@ -27,6 +27,8 @@ export interface KafkaScope {
   host?: string;
   consumer?: string;
   producer?: string;
+  /** v0.10.2467 — ?ktopic (boş = hepsi). */
+  topic?: string;
 }
 
 // v0.10.1540 — operatör: "panoyu baz alarak daha anlamlı, sade grafikler;
@@ -87,17 +89,71 @@ export function kafkaFilters(s: KafkaScope, side: 'consumer' | 'producer'): MxFi
 }
 
 /**
+ * v0.10.2467 — topic süzgecinin seçicisi: servisin bu yöndeki, topic etiketli
+ * HER Kafka istemci serisi (OTel Java rate/total ve Micrometer adları
+ * `kafka_<yön>_` ile başlar). Pod / client süzgeçleri de içinde.
+ */
+export function kafkaTopicSeriesSel(s: KafkaScope, side: 'consumer' | 'producer'): string {
+  const inner = kafkaSel(s, side).slice(1, -1);
+  return `{__name__=~"kafka_${side}_.+", ${inner}, topic=${promStr(s.topic ?? '')}}`;
+}
+
+/**
+ * v0.10.2467 — topic seçiliyken topic etiketi OLMAYAN (istemci / node düzeyi)
+ * seri, o topic'e yazan/okuyan istemcilerle sınırlanır: `and on (host_name,
+ * client_id)`. Bağlantı, gecikme, rebalance gibi kartlar da seçili topic'i
+ * izler. Topic yoksa ifade aynen döner.
+ */
+export function kafkaTopicScoped(expr: string, s: KafkaScope, side: 'consumer' | 'producer'): string {
+  if (!s.topic) return expr;
+  return `(${expr} and on (host_name, client_id) group by (host_name, client_id) (${kafkaTopicSeriesSel(s, side)}))`;
+}
+
+/** v0.10.2467 — Topic seçicisinin sunucu araması için `match` (label-values, topic). */
+export function kafkaTopicMatch(service: string): string {
+  return `{__name__=~"kafka_(consumer|producer)_.+", service_name=${promStr(service)}, topic!=""}`;
+}
+
+/**
+ * v0.10.2467 — builder'ın ifade edemediği panelin birebir PromQL'i (Metrics
+ * kod kipi). Tek ifade aynen; çok ifadede her biri `label_replace` ile
+ * `series` etiketi alır (lejant öneki) ve `or` ile birleşir — aynı client_id
+ * iki ifadede de olsa seri ezilmez.
+ */
+export function kafkaCodeOf(queries: readonly { expr: string; legend: string }[]): string {
+  if (queries.length === 1) return queries[0].expr;
+  return queries.map((q, i) => {
+    const name = q.legend.replace(/\{\{[^}]*\}\}/g, '').replace(/[\s\-–·]+$/, '').trim() || String.fromCharCode(65 + i);
+    return `label_replace((${q.expr}), "series", ${promStr(name)}, "", "")`;
+  }).join(' or ');
+}
+
+/**
  * v0.10.2346 — grafik panelinin Metrics açılışı: `link` ya da HER sorgunun
- * `open`'ı; biri eksikse null (panel link almaz — eksik seriyle açılış
- * başka veri olurdu).
+ * `open`'ı (builder). v0.10.2467 (operatör: "bazı grafikler Metrics'te
+ * açılmıyor") — builder'ın ifade edemediği panel (`or` yedekli istemci
+ * düzeyi, çok-ifadeli hata paneli, topic kapsamı) artık link'siz KALMAZ:
+ * birebir PromQL ile kod kipinde açılır. Boş panel → null.
  */
 export function kafkaPanelLink(p: KafkaPanel): MetricsLinkSpec | null {
   if (p.link) return p.link;
   const qs = p.queries.map(q => q.open);
-  return qs.length > 0 && qs.every((q): q is MetricsLinkQuery => !!q) ? { queries: qs } : null;
+  if (qs.length === 0) return null;
+  return qs.every((q): q is MetricsLinkQuery => !!q) ? { queries: qs } : { code: kafkaCodeOf(p.queries) };
 }
 
 const CL = '{{client_id}}';
+
+/**
+ * v0.10.2467 — topic düzeyinde de yayınlanan metrikler (Kafka Java istemcisi
+ * producer-topic / consumer fetch-manager-topic / partition lag). Topic
+ * seçiliyken `topic="<seçili>"` serisi okunur; geri kalanlar istemci kapsamı.
+ */
+const TOPIC_METRICS = new Set([
+  'kafka_producer_record_send_rate', 'kafka_producer_record_error_rate',
+  'kafka_consumer_records_consumed_rate', 'kafka_consumer_fetch_size_avg',
+  'kafka_consumer_records_lag_max', 'kafka_consumer_records_lag',
+]);
 
 /** Panonun eşik basamakları (Grafana thresholds). */
 const ge = (warn: number, err: number) => (v: number | null): KafkaTone =>
@@ -141,41 +197,56 @@ function kafkaPanelsTR(s: KafkaScope): KafkaPanel[] {
   // "—") — istemci düzeyi seri her kurulumda yok; varsa o, yoksa `or` ile
   // tüm seriler (o istemci için tek düzey vardır, çift sayım yine olmaz).
   const withM = (sel: string, extra?: string) => (extra ? sel.replace(/}$/, `, ${extra}}`) : sel);
-  const pref = (aggBy: string, m: string, sel: string, extra?: string) =>
-    (extra ? `${aggBy} (${m}${withM(sel, extra)}) or ${aggBy} (${m}${sel})` : `${aggBy} (${m}${sel})`);
-  // v0.10.2346 — `open` yalnız yedeksiz (extra'sız) sorguda: builder `or` ifade edemez.
-  const cf = kafkaFilters(s, 'consumer');
-  const pf = kafkaFilters(s, 'producer');
+  type Side = 'consumer' | 'producer';
+  const selOf = (side: Side) => (side === 'consumer' ? c : p);
+  // v0.10.2467 — topic süzgeci. Topic düzeyinde de yayınlanan metrik
+  // (TOPIC_METRICS) seçili topic'in serisini okur (istemci düzeyi topic=""
+  // yedeği yok — topic serisi yoksa boş, dürüst); topic etiketi olmayanlar
+  // o topic'in istemcileriyle sınırlanır (kafkaTopicScoped).
+  const topicSel = s.topic ? `topic=${promStr(s.topic)}` : '';
+  const isTopic = (m: string) => !!s.topic && TOPIC_METRICS.has(m);
+  const vec = (m: string, side: Side, extra?: string) =>
+    (isTopic(m) ? `${m}${withM(selOf(side), topicSel)}` : kafkaTopicScoped(`${m}${withM(selOf(side), extra)}`, s, side));
+  const pref = (aggBy: string, m: string, side: Side, extra?: string) =>
+    (extra && !isTopic(m) ? `${aggBy} (${vec(m, side, extra)}) or ${aggBy} (${vec(m, side)})` : `${aggBy} (${vec(m, side)})`);
+  // v0.10.2346 — `open` yalnız builder'ın birebir ifade ettiği sorguda: yedeksiz
+  // (extra'sız) ve topic kapsamı `and on` gerektirmeyen; diğerleri kod kipi
+  // (kafkaPanelLink → kafkaCodeOf).
+  const topicF: MxFilter[] = s.topic ? [{ k: 'topic', op: '=', v: s.topic }] : [];
+  const filtersOf = (m: string, side: Side) => [...kafkaFilters(s, side), ...(isTopic(m) ? topicF : [])];
+  const canOpen = (m: string, extra?: string) => (s.topic ? isTopic(m) : !extra);
   const open = (agg: KafkaAgg, m: string, filters: MxFilter[], by: string[] = ['client_id']): MetricsLinkQuery =>
     ({ metric: m, agg, by, ...(filters.length ? { filters } : {}) });
-  const byC = (agg: KafkaAgg, m: string, legend: string, extra?: string): KafkaQuery =>
-    ({ expr: pref(`${agg} by (client_id)`, m, c, extra), legend, ...(extra ? {} : { open: open(agg, m, cf) }) });
-  const byP = (agg: KafkaAgg, m: string, legend: string, extra?: string): KafkaQuery =>
-    ({ expr: pref(`${agg} by (client_id)`, m, p, extra), legend, ...(extra ? {} : { open: open(agg, m, pf) }) });
-  const bufferAvail = `sum by (client_id) (kafka_producer_buffer_available_bytes${p})`;
-  const bufferTotal = `sum by (client_id) (kafka_producer_buffer_total_bytes${p})`;
-  const fetchSize = pref('avg by (client_id)', 'kafka_consumer_fetch_size_avg', c, 'topic=""');
-  const batchSize = pref('avg by (client_id)', 'kafka_producer_batch_size_avg', p, 'topic=""');
+  const by = (side: Side) => (agg: KafkaAgg, m: string, legend: string, extra?: string): KafkaQuery =>
+    ({ expr: pref(`${agg} by (client_id)`, m, side, extra), legend, ...(canOpen(m, extra) ? { open: open(agg, m, filtersOf(m, side)) } : {}) });
+  const byC = by('consumer');
+  const byP = by('producer');
+  const rate5 = (m: string, side: Side) => kafkaTopicScoped(`rate(${m}${selOf(side)}[5m])`, s, side);
+  const pf = kafkaFilters(s, 'producer');
+  const bufferAvail = `sum by (client_id) (${vec('kafka_producer_buffer_available_bytes', 'producer')})`;
+  const bufferTotal = `sum by (client_id) (${vec('kafka_producer_buffer_total_bytes', 'producer')})`;
+  const fetchSize = pref('avg by (client_id)', 'kafka_consumer_fetch_size_avg', 'consumer', 'topic=""');
+  const batchSize = pref('avg by (client_id)', 'kafka_producer_batch_size_avg', 'producer', 'topic=""');
   return [
     // ── Genel bakış (stat) ──
     { id: 'consumer_conns', section: 'overview', kind: 'stat', title: 'Consumer bağlantıları', unit: '',
       hint: 'Seçili pod / consumer client’lardaki toplam consumer connection sayısı (0 = bağlı değil).',
-      queries: [{ expr: `sum(kafka_consumer_connection_count${c})`, legend: 'consumer conns' }], tone: zeroIsBad },
+      queries: [{ expr: `sum(${vec('kafka_consumer_connection_count', 'consumer')})`, legend: 'consumer conns' }], tone: zeroIsBad },
     { id: 'producer_conns', section: 'overview', kind: 'stat', title: 'Producer bağlantıları', unit: '',
       hint: 'Seçili pod / producer client’lardaki toplam producer connection sayısı (0 = bağlı değil).',
-      queries: [{ expr: `sum(kafka_producer_connection_count${p})`, legend: 'producer conns' }], tone: zeroIsBad },
+      queries: [{ expr: `sum(${vec('kafka_producer_connection_count', 'producer')})`, legend: 'producer conns' }], tone: zeroIsBad },
     { id: 'active_pods', section: 'overview', kind: 'stat', title: 'Aktif pod', unit: '',
       hint: 'Metrik gönderen (consumer ya da producer client’ı olan) pod sayısı.',
-      queries: [{ expr: `count(count by (host_name) (kafka_consumer_connection_count${c}) or count by (host_name) (kafka_producer_connection_count${p}))`, legend: 'pods' }] },
+      queries: [{ expr: `count(count by (host_name) (${vec('kafka_consumer_connection_count', 'consumer')}) or count by (host_name) (${vec('kafka_producer_connection_count', 'producer')}))`, legend: 'pods' }] },
     { id: 'producer_errors', section: 'overview', kind: 'stat', title: 'Producer kayıt hatası/sn', unit: '',
       hint: 'Producer record error rate toplamı. > 0 ise mesaj kaybı riski var.',
-      queries: [{ expr: pref('sum', 'kafka_producer_record_error_rate', p, 'topic=""'), legend: 'errors/s' }], tone: ge(0.001, 1) },
+      queries: [{ expr: pref('sum', 'kafka_producer_record_error_rate', 'producer', 'topic=""'), legend: 'errors/s' }], tone: ge(0.001, 1) },
     { id: 'max_lag', section: 'overview', kind: 'stat', title: 'En yüksek consumer lag', unit: '',
       hint: 'kafka_consumer_records_lag_max — en yüksek partition lag değeri.',
-      queries: [{ expr: `max(kafka_consumer_records_lag_max${c})`, legend: 'max lag' }], tone: ge(1000, 10000) },
+      queries: [{ expr: `max(${vec('kafka_consumer_records_lag_max', 'consumer')})`, legend: 'max lag' }], tone: ge(1000, 10000) },
     { id: 'producer_latency', section: 'overview', kind: 'stat', title: 'Producer istek gecikmesi (ort.)', unit: 'ms',
       hint: 'Producer ortalama request latency (ms).',
-      queries: [{ expr: pref('avg', 'kafka_producer_request_latency_avg', p, 'node_id=""'), legend: 'avg latency' }], tone: ge(100, 500) },
+      queries: [{ expr: pref('avg', 'kafka_producer_request_latency_avg', 'producer', 'node_id=""'), legend: 'avg latency' }], tone: ge(100, 500) },
 
     // ── Sağlık (açık): dört soru — akıyor mu, geride mi, yavaş mı, hata var mı ──
     { id: 'flow', section: 'health', kind: 'chart', title: 'Produce / Consume — kayıt /sn', unit: 'reqps',
@@ -192,9 +263,9 @@ function kafkaPanelsTR(s: KafkaScope): KafkaPanel[] {
     { id: 'errors', section: 'health', kind: 'chart', title: 'Hata sinyalleri /sn', unit: '',
       hint: 'Gönderim hatası (record_error_rate), başarısız rebalance ve başarısız kimlik doğrulama (sayaçların 5 dk hızı). Hepsi 0 olmalı.',
       queries: [byP('sum', 'kafka_producer_record_error_rate', `gönderim hatası - ${CL}`, 'topic=""'),
-        { expr: `sum by (client_id) (rate(kafka_consumer_failed_rebalance_total${c}[5m]))`, legend: `başarısız rebalance - ${CL}` },
-        { expr: `sum by (client_id) (rate(kafka_consumer_failed_authentication_total${c}[5m]))`, legend: `auth hatası (consumer) - ${CL}` },
-        { expr: `sum by (client_id) (rate(kafka_producer_failed_authentication_total${p}[5m]))`, legend: `auth hatası (producer) - ${CL}` }] },
+        { expr: `sum by (client_id) (${rate5('kafka_consumer_failed_rebalance_total', 'consumer')})`, legend: `başarısız rebalance - ${CL}` },
+        { expr: `sum by (client_id) (${rate5('kafka_consumer_failed_authentication_total', 'consumer')})`, legend: `auth hatası (consumer) - ${CL}` },
+        { expr: `sum by (client_id) (${rate5('kafka_producer_failed_authentication_total', 'producer')})`, legend: `auth hatası (producer) - ${CL}` }] },
 
     // ── Ayrıntı (kapalı, açılınca sorgu) ──
     { id: 'connections', section: 'detail', kind: 'chart', title: 'Açık bağlantı', unit: '',
@@ -206,16 +277,16 @@ function kafkaPanelsTR(s: KafkaScope): KafkaPanel[] {
     { id: 'buffer', section: 'detail', kind: 'chart', title: 'Producer buffer doluluğu %', unit: '%',
       hint: '1 − buffer_available_bytes / buffer_total_bytes. %100\'e yaklaşınca send() bloklanır.',
       queries: [{ expr: `100 * (1 - ${bufferAvail} / ${bufferTotal})`, legend: CL }],
-      link: { queries: [{ ...open('sum', 'kafka_producer_buffer_available_bytes', pf), hidden: true }, { ...open('sum', 'kafka_producer_buffer_total_bytes', pf), hidden: true }],
-        formula: { expr: '100 * (1 - A / B)', unit: '%' } } },
+      ...(s.topic ? {} : { link: { queries: [{ ...open('sum', 'kafka_producer_buffer_available_bytes', pf), hidden: true }, { ...open('sum', 'kafka_producer_buffer_total_bytes', pf), hidden: true }],
+        formula: { expr: '100 * (1 - A / B)', unit: '%' } } }) },
     { id: 'bytes', section: 'detail', kind: 'chart', title: 'Ağ trafiği (gelen / giden)', unit: 'bytes',
       hint: 'İstemci düzeyi kafka_consumer_incoming_byte_rate / kafka_producer_outgoing_byte_rate (bayt/sn; broker-node serileri hariç).',
       queries: [byC('sum', 'kafka_consumer_incoming_byte_rate', `gelen - ${CL}`, 'node_id=""'),
         byP('sum', 'kafka_producer_outgoing_byte_rate', `giden - ${CL}`, 'node_id=""')] },
     { id: 'partition_lag', section: 'detail', kind: 'chart', title: 'Partition başına lag (en yüksek 10)', unit: '',
       hint: 'kafka_consumer_records_lag, topic-partition başına (pod\'lar arasında maks.).',
-      queries: [{ expr: `topk(10, max by (topic, partition) (kafka_consumer_records_lag${c}))`, legend: '{{topic}}-{{partition}}',
-        open: open('max', 'kafka_consumer_records_lag', cf, ['topic', 'partition']) }] },
+      queries: [{ expr: `topk(10, max by (topic, partition) (${vec('kafka_consumer_records_lag', 'consumer')}))`, legend: '{{topic}}-{{partition}}',
+        open: open('max', 'kafka_consumer_records_lag', filtersOf('kafka_consumer_records_lag', 'consumer'), ['topic', 'partition']) }] },
 
     // ── Diğer pano panelleri (kapalı) — "OTel Java - Kafka Client Metrics"in
     // Sağlık/Ayrıntı'da olmayan panelleri; client_id kırılımı, istemci + node

@@ -87,7 +87,7 @@ describe('TraceWaterfall kritik yol', () => {
     expect(bar('a')).not.toBeNull(); // 10–40: pencerenin sol kenarına değiyor
     expect(bar('b')!.style.left).toBe('20%');
     expect(bar('b')!.style.width).toBe('80%');
-    expect(host.querySelector('[data-testid="trace-minimap"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="trace-minimap"]')).toBeNull(); // v0.10.2467 — harita kaldırıldı
     act(() => { host.querySelector<HTMLElement>('[data-testid="wf-zoom-reset"]')!.click(); });
     expect(got).toBeNull();
     act(() => root.render(<TraceWaterfall spans={SPANS} selectedId={null} onSelect={() => {}} zoom={[45e6, 90e6]} onZoom={() => {}} />));

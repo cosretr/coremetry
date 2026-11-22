@@ -3104,8 +3104,6 @@ export const EN: Record<string, string> = {
   'kmsg.svcFoot': 'Source: VictoriaMetrics, queries simplified from the “OTel Java - Kafka Client Metrics” dashboard (service_name="{s}"). Charts are per client (client_id), pods are summed; the per-topic view is on Messaging → topic page.',
   'ktop.title': 'Topics', // v0.10.2450
   'ktop.col.err': 'Errors', // v0.10.2450
-  'ktop.empty': 'No topic-level Kafka client metric in this window.', // v0.10.2450
-  'ktop.emptySpans': 'No messaging spans for this service in this window.', // v0.10.2450
   'ktop.src.metric': 'Source: metrics · {fam}', // v0.10.2450
   'ktop.src.metricHint': 'Kafka client metrics (VictoriaMetrics) — unsampled, all traffic.', // v0.10.2450
   'ktop.src.spans': 'Source: spans (sampled) · {min} min', // v0.10.2450

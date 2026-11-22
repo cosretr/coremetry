@@ -36,7 +36,7 @@ describe('Explore metrik satırı → ortak QueryRow', () => {
     expect(row).not.toBeNull();
     expect(row.textContent).toContain('service.name = orders-api');
     expect(document.querySelector('[aria-label^="Toplama:"]')).toBeNull();
-    expect(row.textContent).toContain('topla sum');
+    expect(row.textContent).toContain('sumby');
     expect(document.querySelector('[aria-label="Veri kaynağı"], [aria-label="Sorgu kaynağı"]')).not.toBeNull();
     act(() => document.querySelector<HTMLElement>('[aria-label="A sorgusunu grafikte gizle"]')!.click());
     expect(last).toEqual({ ...q, enabled: false });

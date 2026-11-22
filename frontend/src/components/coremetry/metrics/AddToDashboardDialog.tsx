@@ -61,7 +61,7 @@ export function AddToDashboardDialog({ open, onOpenChange, buildPanels }: AddToD
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Dashboard'a ekle</DialogTitle>
+          <DialogTitle>Add to dashboard</DialogTitle>
           <DialogDescription>Görünür her sorgu bir panel olur; panel çalışan MetricsQL'i taşır.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">

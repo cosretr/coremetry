@@ -30,10 +30,10 @@ import type { RunResult } from './useMetricsRun';
 const CorePanelMulti = lazy(() => import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
 
 const VIZ_OPTS: { value: MxViz; label: string }[] = [
-  { value: 'line', label: 'Çizgi' }, { value: 'area', label: 'Alan' }, { value: 'stacked', label: 'Yığın' },
-  { value: 'heatmap', label: 'Isı haritası' }, { value: 'table', label: 'Tablo' }, { value: 'stat', label: 'Tek değer' },
+  { value: 'line', label: 'Line' }, { value: 'area', label: 'Area' }, { value: 'stacked', label: 'Stack' },
+  { value: 'heatmap', label: 'Heatmap' }, { value: 'table', label: 'Table' }, { value: 'stat', label: 'Single value' },
 ];
-const STEP_LABEL: Record<number, string> = { 0: 'Oto', 15: '15 sn', 60: '1 dk', 300: '5 dk', 3600: '1 sa' };
+const STEP_LABEL: Record<number, string> = { 0: 'Auto', 15: '15s', 60: '1m', 300: '5m', 3600: '1h' };
 
 /** Grafana birim kimliği (CorePanel) — ham UCUM ya da formülün seçtiği kimlik. */
 function chartUnit(raw: string | undefined): string | undefined {
@@ -89,11 +89,11 @@ export function ResultPanel({ model, results, stepSec, onModel, heatmap, onSwitc
   const nextLimit = (MX_LIMITS.find(l => tr?.total != null && l >= tr.total) ?? MX_LIMITS[MX_LIMITS.length - 1]) as MxLimit;
 
   return (
-    <section aria-label="Sonuç" className="rounded-lg border bg-card">
+    <section aria-label="Result" className="rounded-lg border bg-card">
       <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
         <SegmentedControl<MxViz> size="sm" aria-label="Görselleştirme" value={model.viz} onChange={viz => onModel({ viz })} options={VIZ_OPTS} />
-        <span className="text-xs text-muted-foreground">Adım</span>
-        <SegmentedControl<string> size="sm" aria-label="Adım" value={String(model.step)} onChange={v => onModel({ step: Number(v) })}
+        <span className="text-xs text-muted-foreground">Step</span>
+        <SegmentedControl<string> size="sm" aria-label="Step" value={String(model.step)} onChange={v => onModel({ step: Number(v) })}
           options={MX_STEPS.map(s => ({ value: String(s), label: STEP_LABEL[s] }))} />
         <span className="flex-1" />
         {fetching && <Spinner />}
@@ -154,7 +154,7 @@ export function ResultPanel({ model, results, stepSec, onModel, heatmap, onSwitc
         ) : (
           <Suspense fallback={<Spinner />}>
             <div className={fetching && !loading ? 'opacity-60 transition-opacity' : undefined}>
-              <CorePanelMulti title="Sonuç" height={240} storageKey="metrics-explorer:main" legendDefaultOpen
+              <CorePanelMulti title="Result" height={240} storageKey="metrics-explorer:main" legendDefaultOpen
                 viz={model.viz === 'stacked' ? 'stacked' : model.viz === 'area' ? 'area' : 'line'}
                 loading={loading && rows.length === 0}
                 emptyReason={!loading && errors.length === 0 && rows.length === 0 ? 'Bu aralıkta seri yok' : undefined}

@@ -2298,7 +2298,7 @@ a.dep-prob-mark:hover { text-decoration: none; }
 
 /* Per-service self-time breakdown strip above the waterfall —
    Jaeger trace-summary pattern. Segment width ∝ self-time share. */
-.wf-svcbreak { display: flex; height: 10px; border-radius: 5px; overflow: hidden; border: 1px solid var(--border); }
+.wf-svcbreak { display: flex; height: 4px; border-radius: 2px; overflow: hidden; } /* v0.10.2467 — ince şerit (10px kalın bar → 4px) */
 .wf-svcbreak i { display: block; height: 100%; min-width: 1px; }
 .wf-svcbreak-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 5px; font-size: 10.5px; color: var(--text2); }
 .wf-svcbreak-legend .it { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }

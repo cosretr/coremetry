@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useVirtualizer, observeElementRect, observeElementOffset, elementScroll, observeWindowRect, observeWindowOffset, windowScroll, type VirtualizerOptions } from '@tanstack/react-virtual';
 import { findScrollParent, offsetWithinScrollParent } from '@/lib/scrollParent';
-import { TraceMinimap } from './traces/TraceMinimap';
 import { Chip } from './ui/Chip';
 import { DisclosureButton } from './ui/DisclosureButton';
 import type { LogRow, SpanRow, TraceAnalysis, TraceNode, TraceServiceSummary } from '@/lib/types';
@@ -19,7 +18,6 @@ import { useT } from '@/lib/i18n';
 // v0.10.278 — sanal satır eşiği ve harita eşiği (ölçüm: 1000-1500 satır arası
 // content-visibility ile açık basılıyordu, audit §1.3).
 const VIRTUAL_MIN_ROWS = 400;
-const MINIMAP_MIN_ROWS = 150;
 const ROW_EST_PX = 24;
 
 // HH:MM:SS.mmm wall-clock formatter for the waterfall ruler +
@@ -163,7 +161,9 @@ export function TraceServiceBreakdown({ spans, services, active, onPick }: {
              title={`${b.svc} — ${fmtNs(b.ns)} self time (${b.pct.toFixed(b.pct < 1 ? 1 : 0)}%)`} />
         ))}
       </div>
-      {onPick ? (
+      {/* v0.10.2467 (operatör: "ince servis şeridi yeter") — şerit 4px; tek
+          servisli trace'te "svc · 100%" satırı bilgi taşımaz → yalnız şerit. */}
+      {breakdown.length < 2 ? null : onPick ? (
         <div className="wf-svcbreak-legend wf-svcbreak-legend--pick" role="group" aria-label="Servise git">
           {(showAll ? breakdown : breakdown.slice(0, 5)).map(b => (
             <Chip key={b.svc} size="xs" pill active={active === b.svc}
@@ -684,9 +684,6 @@ export function TraceWaterfall({
     seekRow(hit.idx);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealSpanId, rows]);
-  const minimapSpans = useMemo(() => rows.map(r => r.span), [rows]);
-  const visibleRange: [number, number] | null = vItems && vItems.length
-    ? [vItems[0].index, vItems[vItems.length - 1].index] : null;
 
   return (
     <div id="wf-outer" ref={containerRef}>
@@ -760,13 +757,11 @@ export function TraceWaterfall({
         </div>
       </div>
 
-      {(rows.length >= MINIMAP_MIN_ROWS || onZoom) && (
-        /* v0.10.278 — trace haritası (canvas), görünür pencere + tıkla-git.
-           Dalga 3 — onZoom varsa yatay sürükleme = zaman fırçası. */
-        <TraceMinimap spans={minimapSpans} minT={minT} totalNs={totalNs} colorFor={colorFor}
-          range={visibleRange} onSeek={seekRow}
-          zoom={zoomC} onBrush={onZoom ? z => onZoom(clampTraceZoom(z, totalNs)) : undefined} />
-      )}
+      {/* v0.10.2467 (operatör: "trace sayfasında büyük mavi çubuklar") — trace
+          mini haritası (v0.10.278 canvas; v0.10.2411'den beri /trace'te hep
+          görünür, tek span'de de tam genişlik mavi blok) KALDIRILDI: zaman
+          cetvelinden doğrudan şelale satırlarına. ?wz yakınlaştırması eski
+          linklerde çalışır (Sıfırla çubuğu). */}
       {zoomC && (
         <div className="wf-zoombar" data-testid="wf-zoombar">
           <span>{tt('trace.zoom.label')} <span className="mono">+{fmtNs(zoomC[0])} – +{fmtNs(zoomC[1])}</span> ({fmtNs(viewTotal)} / {fmtNs(totalNs)})</span>

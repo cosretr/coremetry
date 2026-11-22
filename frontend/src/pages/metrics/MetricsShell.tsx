@@ -76,8 +76,8 @@ export function MetricsShell() {
       <PageShell>
         <Tabs value={tab} onValueChange={setTab} className="gap-3">
           <TabsList variant="line" aria-label="Metrics bölümleri">
-            <TabsTrigger value="query">Sorgu</TabsTrigger>
-            <TabsTrigger value="discover">Keşif</TabsTrigger>
+            <TabsTrigger value="query">Query</TabsTrigger>
+            <TabsTrigger value="discover">Explore</TabsTrigger>
           </TabsList>
           <TabsContent value="query">
             <QueryTab model={model} onModel={setModel} from={ctx.windowNs.from} to={ctx.windowNs.to}

@@ -723,8 +723,9 @@ export const api = {
   // {supported:false}). top-queries admin/editor (sunucu 403).
   metricsDiscoverLabels: (p: { match?: string; q?: string; limit?: number; since?: string; cluster?: string }, signal?: AbortSignal) =>
     get<import('./types').MetricsDiscoverLabels>(withMetricSource(`/api/metrics/discover/labels?${qs(p)}`), signal),
-  metricsDiscoverLabelValues: (p: { label: string; match?: string; q?: string; limit?: number; since?: string; cluster?: string }, signal?: AbortSignal) =>
-    get<import('./types').MetricsDiscoverLabelValues>(withMetricSource(`/api/metrics/discover/label-values?${qs(p)}`), signal),
+  // v0.10.2467 — `src`: isteği o depoya sabitler (Service → Messaging Topic seçicisi VM).
+  metricsDiscoverLabelValues: ({ src, ...p }: { label: string; match?: string; q?: string; limit?: number; since?: string; cluster?: string; src?: import('./metricSource').MetricSourceParam }, signal?: AbortSignal) =>
+    get<import('./types').MetricsDiscoverLabelValues>(withMetricSource(`/api/metrics/discover/label-values?${qs(p)}`, src), signal),
   metricsDiscoverCardinality: (p: { topN?: number; focusLabel?: string; match?: string; date?: string; cluster?: string }, signal?: AbortSignal) =>
     get<import('./types').MetricsDiscoverCardinality>(withMetricSource(`/api/metrics/discover/cardinality?${qs(p)}`), signal),
   metricsDiscoverSeriesSample: (p: { match: string; limit?: number; since?: string; cluster?: string }, signal?: AbortSignal) =>

@@ -114,14 +114,14 @@ export function QueryRow({
           </Button>
         </span>
       ))}
-      <FilterPopover metric={q.metric} cluster={cluster} triggerLabel="Süzgeç ekle" trigger="+ süzgeç"
+      <FilterPopover metric={q.metric} cluster={cluster} triggerLabel="Add filter" trigger="+ filter"
         onSave={f => set({ filters: [...q.filters, f] })} />
       <span className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
 
       <DropdownMenu open={fnOpen} onOpenChange={setFnOpen}>
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="outline" size="xs" aria-label={`Fonksiyon: ${FN_LABEL[q.fn].text}`}>
-            <span className="text-muted-foreground">fonksiyon</span><span className="font-mono">{FN_LABEL[q.fn].text}</span>
+            <span className="text-muted-foreground">function</span><span className="font-mono">{FN_LABEL[q.fn].text}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="min-w-56">
@@ -143,12 +143,12 @@ export function QueryRow({
       )}
 
       {fixedSum ? (
-        <span className="text-xs text-muted-foreground" title={pct ? 'Yüzdelik, kovaları sum by (le) ile toplar; seri kırılımı by ile' : 'Bu fonksiyonda toplama sabit: sum'}>topla <span className="font-mono">sum</span></span>
+        <span className="text-xs text-muted-foreground" title={pct ? 'Yüzdelik, kovaları sum by (le) ile toplar; seri kırılımı by ile' : 'Bu fonksiyonda toplama sabit: sum'}><span className="font-mono">sum</span></span>
       ) : (
         <DropdownMenu open={aggOpen} onOpenChange={setAggOpen}>
           <DropdownMenuTrigger asChild>
             <Button type="button" variant="outline" size="xs" aria-label={`Toplama: ${AGG_LABEL[q.agg]}`}>
-              <span className="text-muted-foreground">topla</span><span className="font-mono">{AGG_LABEL[q.agg]}</span>
+              <span className="font-mono">{AGG_LABEL[q.agg]}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -182,7 +182,7 @@ export function QueryRow({
         <>
           <span className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
           <label className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            lejant
+            legend
             <Input value={q.legend} onChange={e => set({ legend: e.target.value })} placeholder="{{service_name}}"
               className="h-6 w-44 px-1.5 font-mono text-xs md:text-xs bg-field dark:bg-field" aria-label={`Sorgu ${q.id} lejant biçimi`} />
           </label>

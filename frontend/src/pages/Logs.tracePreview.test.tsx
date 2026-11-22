@@ -81,8 +81,12 @@ describe('/logs trace çipi + önizleme (v0.10.1883)', () => {
     expect(items).toEqual([{ id: B, tsNs: TS }, { id: A, tsNs: TS + 5 }]);
     const chips = [...host!.querySelectorAll('[data-testid="trace-chip"]')];
     expect(chips).toHaveLength(3); // trace'siz satırda çip yok
-    expect(chips[0].textContent).toBe('✕ 9c1d07aa… · 1,84 sn');
-    expect(chips[2].textContent).toBe('○ 77e0b1c2… · örneklenmiş');
+    // v0.10.2467 — düz link: kısa kimlik; hata / süre ipucunda.
+    expect(chips[0].textContent).toBe('9c1d07aa…');
+    expect(chips[0].getAttribute('title')).toContain('hatalı span');
+    expect(chips[0].className).not.toMatch(/status-critical/);
+    expect(chips[2].textContent).toBe('77e0b1c2…');
+    expect(chips[2].getAttribute('title')).toContain('örneklenmiş');
   });
 
   it('menü: Bu trace\'e filtrele → traceId URL\'de', async () => {
@@ -111,7 +115,7 @@ describe('/logs trace\'e göre grupla (v0.10.1884)', () => {
     const heads = [...host!.querySelectorAll('[data-testid="log-group-head"]')].map(h => h.textContent ?? '');
     expect(heads).toHaveLength(3);
     expect(heads[0]).toContain('1,84 sn · ✕ hata var · kök POST /api/orders · 2 log (bu örnekte)');
-    expect(heads[1]).toContain('örneklenmiş');
+    expect(heads[1]).toContain('sampling Collector'); // v0.10.2467 — çip düz kimlik; durum özet metninde
     expect(heads[2]).toBe('trace_id yok · 1 log (bu örnekte)');
     expect(host!.querySelector('[data-testid="logs-group-note"]')!.textContent).toBe('yüklenen 4 satır içinde');
     expect(m.previews).toHaveLength(1); // gruplama yeni istek atmaz

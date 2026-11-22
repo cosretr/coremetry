@@ -83,3 +83,28 @@ describe('seçenekler', () => {
     expect(kafkaOptionValues([{ host_name: 'b' }, { host_name: 'a' }, { host_name: 'b' }, {}], 'host_name')).toEqual(['a', 'b']);
   });
 });
+
+// v0.10.2467 — Topic süzgeci (operatör: "tüm kartlar ve grafikler seçili topic'i izlesin").
+describe('topic süzgeci', () => {
+  const scope = { service: 'orders-api', host: 'pod-1', consumer: 'c1', producer: 'p1', topic: 'payments-topic' };
+  const ps = kafkaPanels(scope);
+  const byId = Object.fromEntries(ps.map(p => [p.id, p]));
+  it('her panelin her sorgusu topic\'i taşır (pod / client süzgeçleriyle)', () => {
+    for (const p of ps) {
+      for (const q of p.queries) {
+        expect(q.expr, p.id).toContain('topic="payments-topic"');
+        expect(q.expr, p.id).toContain('host_name="pod-1"');
+        // istemci düzeyi (topic="") seri yalnız topic'in istemcileriyle sınırlı okunur
+        if (q.expr.includes('topic=""')) expect(q.expr, p.id).toContain('and on (host_name, client_id)');
+      }
+    }
+  });
+  it('topic düzeyi metrik seriyi doğrudan okur; etiketsiz metrik o topic\'in istemcileriyle sınırlanır', () => {
+    expect(byId.flow.queries[0].expr).toBe('sum by (client_id) (kafka_producer_record_send_rate{service_name="orders-api", host_name="pod-1", client_id="p1", topic="payments-topic"})');
+    expect(byId.consumer_conns.queries[0].expr).toBe('sum((kafka_consumer_connection_count{service_name="orders-api", host_name="pod-1", client_id="c1"} and on (host_name, client_id) group by (host_name, client_id) ({__name__=~"kafka_consumer_.+", service_name="orders-api", host_name="pod-1", client_id="c1", topic="payments-topic"})))');
+    expect(byId.errors.queries[1].expr).toContain('(rate(kafka_consumer_failed_rebalance_total{service_name="orders-api", host_name="pod-1", client_id="c1"}[5m]) and on (host_name, client_id)');
+  });
+  it('topic yokken ifadeler değişmez', () => {
+    expect(JSON.stringify(kafkaPanels({ service: 'orders' }))).toBe(JSON.stringify(kafkaPanels({ service: 'orders', topic: '' })));
+  });
+});
