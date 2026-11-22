@@ -599,3 +599,17 @@ describe('otomatik vurgu', () => {
     expect(qa('code.cm-hl-err').length).toBe(0);
   });
 });
+
+// v0.10.2462 — kişisel eş adlar kaldırıldı: eski konuşmada kalmış
+// kind=cosre_alias action bloğu kart çizmez (Kaydet / Hayır yok).
+describe('eski eş ad önerisi bloğu', () => {
+  it('cosre_alias yükü kart doğurmuyor', async () => {
+    await mount(asst('Tamam, payments.', { blocks: [{ id: 'al1', type: 'action', seq: 1, final: true, payload: {
+      kind: 'cosre_alias', phrase: 'kart tarafı', entityId: 'svc:payments', name: 'payments',
+      text: '«kart tarafı» dediğinde payments servisini kastettiğini hatırlayayım mı?', label: 'Kaydet', dismissLabel: 'Hayır',
+    } }] }));
+    expect(text()).toContain('Tamam, payments.');
+    expect(text()).not.toContain('hatırlayayım mı');
+    expect(qa('button').some(b => b.textContent === 'Kaydet' || b.textContent === 'Hayır')).toBe(false);
+  });
+});

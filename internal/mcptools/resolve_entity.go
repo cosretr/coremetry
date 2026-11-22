@@ -407,8 +407,8 @@ func ResolveEntityText(ctx context.Context, d Deps, text, cluster, namespace str
 		}
 		idx.Namespaces, idx.Workloads, idx.Pods = filt(idx.Namespaces), filt(idx.Workloads), filt(idx.Pods)
 	}
-	// v0.10.2334 (G) — kullanıcının eş adları katalog sıralamasından ÖNCE
-	// (entity_alias.go; bağlamda yalnız o kullanıcının turunda bulunur).
+	// v0.10.2334 (G) — konuşmanın eş adları katalog sıralamasından ÖNCE
+	// (entity_alias.go; bağlamda yalnız o konuşmanın turunda bulunur).
 	cands, _ := ApplyEntityAliases(text, idx, EntityAliasesFrom(ctx), ResolveEntities(text, idx, 12))
 	return cands, idx, nil
 }

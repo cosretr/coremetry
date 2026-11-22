@@ -137,7 +137,7 @@ type chatContextState struct {
 	// fromClient — v0.10.2324 (chat_state.go, karar 2): durum Redis'siz
 	// kurulumda istemcinin yankısından geldi; doğrulayıcı kanıtı OLAMAZ.
 	fromClient bool
-	// aliasService — v0.10.2334 (G): bu turda servis kullanıcının eş adından
+	// aliasService — v0.10.2334 (G): bu turda servis konuşmanın eş adından
 	// çözüldü; o ad doğrulayıcı kanıtı DEĞİLDİR (eşleme kanıta dokunmaz).
 	aliasService string
 }

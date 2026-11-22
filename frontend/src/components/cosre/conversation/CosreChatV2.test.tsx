@@ -158,6 +158,8 @@ describe('CosreChatV2 kabuğu', () => {
     expect(ta.disabled).toBe(false);
     expect(ta.placeholder).toBe("CoSRE'ye sor… (Shift+Enter: yeni satır · @ kapsam · / komutlar)");
     expect(fab()).toBeNull();
+    // v0.10.2462 — «Eş adlarım» başlık düğmesi kaldırıldı.
+    expect(el.textContent).not.toContain('Eş adlarım');
   });
 
   it('kapalı başlar → FAB; FAB tıklaması açar', async () => {

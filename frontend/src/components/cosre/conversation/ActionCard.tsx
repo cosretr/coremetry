@@ -1,7 +1,7 @@
 // ActionCard — v0.10.2353 (docs/cosre/interaction-audit.md §6 I5). v2
 // sohbetinde sunucu kuralının önerdiği onaylı aksiyon kartı (data-action):
-// paylaşım bağlantısı ya da probleme not. Görünüş CosreRuleConfirm /
-// CosreAliasConfirm ile aynı (cosre-rule-card sınıfları; yeni CSS yok).
+// paylaşım bağlantısı ya da probleme not. Görünüş CosreRuleConfirm ile
+// aynı (cosre-rule-card sınıfları; yeni CSS yok).
 //   • Alanlar sunucudan dolu gelir, formda düzenlenir; Onayla'ya basmadan
 //     hiçbir şey yazılmaz. Onay POST /api/cosre/actions/confirm (imzalı jeton +
 //     kartın ömrü boyunca sabit idemKey: çift tık / yeniden gönderim ikinci

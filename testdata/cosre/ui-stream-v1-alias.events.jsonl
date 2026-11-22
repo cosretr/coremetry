@@ -1,6 +1,0 @@
-{"kind": "step", "payload": {"i": 1, "tool": "get_service_health", "args": "{\"service\":\"payments\"}", "argsJson": {"service": "payments"}, "phase": "Sağlık"}}
-{"kind": "step-result", "payload": {"i": 1, "tool": "get_service_health", "ok": true, "preview": "{\"p95_ms\":870}", "truncated": false, "bytes": 14, "durationMs": 30}}
-{"kind": "answer", "payload": {"text": "payments son bir saatte yavaş: p95 870 ms, hata oranı %2,6."}}
-{"kind": "block", "payload": {"id": "b1", "type": "action", "seq": 1, "final": true, "payload": {"kind": "cosre_alias", "phrase": "kart tarafı", "entityId": "svc:payments", "name": "payments", "notId": "svc:orders", "notName": "orders", "text": "«kart tarafı» dediğinde payments servisini kastettiğini hatırlayayım mı?", "label": "Kaydet", "dismissLabel": "Hayır"}}}
-{"kind": "state", "payload": {"service": "payments", "address": "sen", "updatedAt": 1794910000000}}
-{"kind": "done", "payload": {"ok": true}}

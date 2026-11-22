@@ -17,10 +17,10 @@ import (
 
 // chat_alias_flow_test.go — v0.10.2334 (conversation-audit §6.1 G, kabul):
 // GERÇEK v2 handler'ı + sahte model + sahte araçlar + Redis sahtesi + bellek
-// içi kullanıcı deposu. Sahte model "kart tarafı" için HER kullanıcıda kendi
-// katalog tahminini (orders) yazar; doğru eşleme yalnız o kullanıcının
-// düzeltmesinden ve kaydından gelir. Nötr adlar: checkout, orders, payments,
-// inventory.
+// içi kullanıcı deposu. Sahte model "kart tarafı" için kendi katalog
+// tahminini (orders) yazar; doğru eşleme yalnız konuşmadaki düzeltmeden
+// gelir (kişisel eş adlar v0.10.2462'de kaldırıldı). Nötr adlar: checkout,
+// orders, payments, inventory.
 
 // memPrefStore — saved_views'in bellek içi ikizi (nokta okuma sayacıyla).
 type memPrefStore struct {
@@ -159,13 +159,6 @@ func (ar *aliasRig) servicesRead(from [2]int) []string {
 	return out
 }
 
-func seedAlias(t *testing.T, st *memPrefStore, uid string, a cosreUserAlias) {
-	t.Helper()
-	p := withCosreUserAlias(cosreUserPrefs{}, a)
-	_ = st.UpsertSavedView(context.Background(), chstore.SavedView{ID: cosreUserRowID(uid), OwnerID: uid, Name: cosreUserPage,
-		Page: cosreUserPage, QueryString: encodeCosreUserPrefs(p)})
-}
-
 // TestAliasCorrectionInConversation — düzeltme durumu değiştirir ve aynı
 // deyim aynı konuşmada doğrudan yeni varlığa çözülür; eski varlık okunmaz.
 func TestAliasCorrectionInConversation(t *testing.T) {
@@ -202,39 +195,21 @@ func TestAliasCorrectionInConversation(t *testing.T) {
 	}
 }
 
-// TestAliasSavedMappingIsPersonal — kayıtlı eşleme yeni konuşmada katalogdan
-// önce uygulanır (orders hiç okunmaz); başka kullanıcı etkilenmez.
-func TestAliasSavedMappingIsPersonal(t *testing.T) {
+// TestOldAliasBlobNotApplied — v0.10.2462: eski satırdaki kişisel eş ad
+// (`m`) çözücüye girmez; model tahmini orders okunur, hitap yine gelir.
+func TestOldAliasBlobNotApplied(t *testing.T) {
 	ar := newAliasRig(t)
-	seedAlias(t, ar.prefs, "u-a", cosreUserAlias{P: "kart tarafı", ID: "svc:payments", Not: "svc:orders", At: 1})
-
-	ar.say("u-a", "c2", "kart tarafı nasıl")
-	if got := ar.servicesRead([2]int{}); !allEqual(got, "payments") {
-		t.Fatalf("u-a: eşleme uygulanmadı / orders okundu: %v", got)
-	}
-	if st := ar.stateOf("u-a", "c2"); st.Service != "payments" {
-		t.Fatalf("u-a durumu: %+v", st)
-	}
-	n := ar.mark()
-	ar.say("u-b", "c3", "kart tarafı nasıl")
-	if got := ar.servicesRead(n); len(got) != 1 || got[0] != "orders" {
-		t.Fatalf("u-b etkilendi: %v", got)
-	}
-	if st := ar.stateOf("u-b", "c3"); st.Service != "orders" {
-		t.Fatalf("u-b durumu: %+v", st)
-	}
-}
-
-// TestAliasStaleTargetIgnored — hedef katalogdan kalkmışsa eşleme yok sayılır.
-func TestAliasStaleTargetIgnored(t *testing.T) {
-	ar := newAliasRig(t)
-	seedAlias(t, ar.prefs, "u-a", cosreUserAlias{P: "kart tarafı", ID: "svc:legacy-cards", Not: "svc:orders", At: 1})
-	body := ar.say("u-a", "c4", "kart tarafı nasıl")
+	_ = ar.prefs.UpsertSavedView(context.Background(), chstore.SavedView{ID: cosreUserRowID("u-a"), OwnerID: "u-a", Name: cosreUserPage,
+		Page: cosreUserPage, QueryString: oldAliasBlob})
+	body := ar.say("u-a", "c2", "kart tarafı nasıl")
 	if got := ar.servicesRead([2]int{}); len(got) != 1 || got[0] != "orders" {
-		t.Fatalf("bayat eşleme uygulandı: %v", got)
+		t.Fatalf("eski eş ad uygulandı: %v", got)
 	}
 	if hasLabel(v2StepLabels(body), "eş adın") {
-		t.Fatalf("bayat eşleme çipi: %v", v2StepLabels(body))
+		t.Fatalf("eski eş ad çipi: %v", v2StepLabels(body))
+	}
+	if st := ar.stateOf("u-a", "c2"); st.Address != "siz" {
+		t.Fatalf("eski satırın hitabı okunmadı: %q", st.Address)
 	}
 }
 

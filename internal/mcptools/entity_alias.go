@@ -1,8 +1,9 @@
 package mcptools
 
 // entity_alias.go — v0.10.2334 (conversation-audit §6.1 G, karar 15):
-// kullanıcının KENDİ eş adları ("kart tarafı" → svc:payments, "kart tarafı"
-// ↛ svc:orders). Katalog sıralamasından ÖNCE uygulanır; iki yol aynı
+// konuşmadaki düzeltmeden çıkan eş adlar ("kart tarafı" → svc:payments,
+// "kart tarafı" ↛ svc:orders; kalıcı kişisel eş adlar v0.10.2462'de
+// kaldırıldı). Katalog sıralamasından ÖNCE uygulanır; iki yol aynı
 // fonksiyonu çağırır: konuşma durumunun çözücüsü (api/chat_state_resolve.go)
 // ve resolve_entity aracı (ResolveEntityText).
 //
@@ -13,8 +14,8 @@ package mcptools
 //   - Hedef kimlikle (entity id; servis için svc:<ad>) CANLI katalogda
 //     aranır; katalogda olmayan hedef = bayat → eşleme bütünüyle yok sayılır
 //     (aday listesi aynen kalır). Çıplak adla eşleme yok.
-//   - Kişisel: eş adlar isteğin bağlamına yalnız o kullanıcının turunda konur
-//     (WithEntityAliases); bağlamsız çağrı (başka kullanıcı, değerlendirme,
+//   - Konuşmaya özel: eş adlar isteğin bağlamına yalnız o konuşmanın turunda
+//     konur (WithEntityAliases); bağlamsız çağrı (başka kullanıcı, değerlendirme,
 //     gece işleri) hiçbir eş ad görmez.
 
 import (
@@ -151,7 +152,7 @@ func ApplyEntityAliases(text string, idx EntityCatalogIndex, aliases []EntityAli
 
 type entityAliasesKey struct{}
 
-// WithEntityAliases — turun kullanıcısının eş adları bağlama (boşsa ctx aynen).
+// WithEntityAliases — turun konuşmasının eş adları bağlama (boşsa ctx aynen).
 func WithEntityAliases(ctx context.Context, a []EntityAlias) context.Context {
 	if len(a) == 0 {
 		return ctx

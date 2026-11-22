@@ -174,11 +174,10 @@ type chatStateTurn struct {
 	// assumedSvc / assumedWin — v0.10.2332 (B): bu turda önceki turdan
 	// devralınıp isteğe UYGULANAN servis ve pencere etiketi (varsay ve söyle).
 	assumedSvc, assumedWin string
-	// v0.10.2334 (G, chat_state_correction.go) — düzeltme ve eş adlar.
+	// v0.10.2334 (G, chat_state_correction.go) — düzeltme ve konuşmanın eş adları.
 	s          *Server
 	uid        string                 // kullanıcı deposunun sahibi ("" = okunmadı / değerlendirme)
-	prefs      cosreUserPrefs         // kullanıcının kaydı (önbellekten)
-	aliases    []mcptools.EntityAlias // konuşma düzeltmeleri + kullanıcının eş adları (öncelik sırası)
+	aliases    []mcptools.EntityAlias // konuşma düzeltmeleri (en yeni önce)
 	corr       *chatCorrection        // bu turda algılanan düzeltme (Right boşsa tur sonunda belirlenir)
 	learned    *chatCorrection        // kesinleşen düzeltme (finalize)
 	avoid      string                 // bu turda seçilmeyecek servis (düzeltilen ya da eş adın yanlış adayı)
@@ -206,11 +205,11 @@ func (s *Server) beginChatStateTurn(ctx context.Context, req *chatRequest, st *c
 	stt := &chatStateTurn{st: st, svcNames: svcs, loc: loc, s: s}
 	// v0.10.2334 (G) — kullanıcının kaydı (önbellekli tek nokta okuma; değerlendirmede yok).
 	uid, prefs := s.cosreUserTurnPrefs(ctx)
-	stt.uid, stt.prefs = uid, prefs
+	stt.uid = uid
 	if st.ctx.Address == "" && prefs.Addr != "" { // karar 13 — yeni konuşma kullanıcının hitabıyla başlar
 		st.ctx.Address = prefs.Addr
 	}
-	stt.aliases = append(conversationAliases(st.ctx), cosreUserEntityAliases(prefs)...)
+	stt.aliases = conversationAliases(st.ctx)
 	last := len(req.Messages) - 1
 	hasPrior := chatUserTurns(req.Messages) > 1
 	prevState, _ := freshChatState(st.ctx, now)
@@ -436,7 +435,7 @@ func withChatStateTurn(ctx context.Context, t *chatStateTurn) context.Context {
 	if t == nil {
 		return ctx
 	}
-	ctx = mcptools.WithEntityAliases(ctx, t.aliases) // v0.10.2334 — resolve_entity aynı eş adları görür
+	ctx = mcptools.WithEntityAliases(ctx, t.aliases) // v0.10.2334 — resolve_entity konuşmanın eş adlarını görür
 	return context.WithValue(ctx, chatStateTurnKey{}, t)
 }
 
@@ -531,9 +530,6 @@ func (t *chatStateTurn) wrapEmit(emit func(string, any)) func(string, any) {
 			}
 		case "done":
 			t.finalize()
-			if act := t.aliasProposal(); act != nil { // v0.10.2335 — eş ad önerisi (action bloğu; kayıt yalnız Kaydet tıkıyla)
-				emit(cosreAliasActionEvent, act)
-			}
 			// v0.10.2325 — data-state: turun çözülmüş kapsamı (defter değerleri yok), "done"dan hemen önce.
 			if w := chatStateWireOf(t.st.ctx, chatStateNow()); !stateWireEmpty(w) {
 				emit(chatStateEventKind, w)

@@ -235,10 +235,6 @@ func withBlockSeq(emit func(string, any), seq *blocks.Sequencer) func(string, an
 			emit("block", seq.Next(blocks.TypeTopology, payload))
 			return
 		}
-		if kind == cosreAliasActionEvent && seq != nil { // v0.10.2335 — eş ad önerisi kartı (chat_alias_proposal.go)
-			emit("block", seq.Next(blocks.TypeAction, payload))
-			return
-		}
 		// v0.10.1407 — açıklama turunun kanıt kartları (chat_explain_registry.go).
 		if (kind == blocks.TypeChartsSignals || kind == blocks.TypeLogSpike || kind == blocks.TypeMetricPanel) && seq != nil { // v0.10.1435 — metric_panel
 			emit("block", seq.Next(kind, payload))

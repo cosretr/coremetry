@@ -62,20 +62,6 @@ export const COSRE_V2_STRINGS = {
   // v0.10.2325 — konuşma bağlamı satırı (data-state; salt okunur).
   stateLineLabel: 'Konuşma bağlamı',
   stateLineTitle: 'CoSRE devam sorularında bu kapsamı kullanır; soruda başka servis ya da zaman yazarsan o geçerli olur.',
-  // v0.10.2335 — kullanıcının kendi eş adları (CosreAliasPanel).
-  aliases: 'Eş adlarım',
-  aliasesButtonTitle: 'CoSRE\'nin senin için hatırladığı eş adlar',
-  aliasesTitle: 'Eş adlarım',
-  aliasesIntro: 'Düzelttiğinde kaydettiğin ifadeler. Yalnız senin sohbetlerinde geçerli.',
-  aliasesLoading: 'Yükleniyor…',
-  aliasesError: 'Eş adlar okunamadı',
-  aliasesEmpty: 'Henüz kayıtlı eş ad yok.',
-  aliasesNot: 'değil',
-  aliasesStale: 'bayat',
-  aliasesStaleTitle: 'Bu servis artık katalogda yok; CoSRE bu eşlemeyi kullanmıyor.',
-  aliasesDelete: 'Sil',
-  aliasesDeleteError: 'Silinemedi',
-  aliasesDeleteTitle: 'Eş ad silinsin mi?',
   // v0.10.2353 — onaylı aksiyon kartı (ActionCard; interaction-audit I5).
   actionNoteTitle: 'Probleme not ekle',
   actionShareTitle: 'Paylaşım bağlantısı',

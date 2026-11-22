@@ -11,9 +11,9 @@ package api
 //     yeniden seçemez (avoid);
 //   - çift konuşmaya yazılır (ChatContext.Corrections, ≤5): aynı deyim bu
 //     konuşmada doğrudan yeni varlığa çözülür;
-//   - deyim (yanlış varlığa götüren, kullanıcının önceki turda YAZDIĞI söz
-//     öbeği) bulunduysa öneri kartı çıkar (chat_alias_proposal.go); kalıcı
-//     kayıt yalnız Kaydet tıkıyla (cosre_user_prefs.go).
+//   - deyim, yanlış varlığa götüren ve kullanıcının önceki turda YAZDIĞI söz
+//     öbeğidir; yalnız bu konuşmada geçerlidir (kalıcı kişisel eş ad yok —
+//     v0.10.2462'de kaldırıldı).
 //
 // Deyim çıkarımı (aliasPhraseOf): önceki kullanıcı mesajının sözcükleri; soru,
 // zaman, durum ve dolgu sözcükleri (aliasStopWords), sayılar ve ortam adları
@@ -29,15 +29,18 @@ import (
 )
 
 // chatCorrection — konuşmada kaydedilen düzeltme (servis adları; deyim
-// boş olabilir — o zaman öneri yok, yalnız durum değişti).
+// boş olabilir — o zaman yalnız durum değişti).
 type chatCorrection struct {
-	Phrase   string `json:"phrase,omitempty"`
-	Wrong    string `json:"wrong"`
-	Right    string `json:"right"`
-	Proposed bool   `json:"proposed,omitempty"` // öneri kartı bu konuşmada çıktı
+	Phrase string `json:"phrase,omitempty"`
+	Wrong  string `json:"wrong"`
+	Right  string `json:"right"`
 }
 
-const chatCorrectionsMax = 5
+const (
+	chatCorrectionsMax       = 5
+	correctionPhraseMaxRunes = 40
+	correctionPhraseMinRunes = 3
+)
 
 // correctionCuePhrases — kapalı liste (sözcük sınırında, küçük harf).
 var correctionCuePhrases = []string{
@@ -114,11 +117,11 @@ func aliasPhraseOf(prevQ string, services, envs []string) string {
 			break
 		}
 	}
-	for len(run) > 0 && utf8.RuneCountInString(strings.Join(run, " ")) > cosreUserPhraseMaxRunes {
+	for len(run) > 0 && utf8.RuneCountInString(strings.Join(run, " ")) > correctionPhraseMaxRunes {
 		run = run[:len(run)-1]
 	}
 	p := strings.Join(run, " ")
-	if utf8.RuneCountInString(p) < cosreUserPhraseMinRunes {
+	if utf8.RuneCountInString(p) < correctionPhraseMinRunes {
 		return ""
 	}
 	return p
@@ -152,16 +155,13 @@ func conversationAliases(c ChatContext) []mcptools.EntityAlias {
 }
 
 // withCorrection — SAF: aynı deyimli (deyimsizse aynı yanlış varlıklı) eski
-// kayıt düşer, yenisi sona; ≤5. Önceki önerilmiş işareti aynı çiftte korunur.
+// kayıt düşer, yenisi sona; ≤5.
 func withCorrection(list []chatCorrection, k chatCorrection) []chatCorrection {
 	key := mcptools.AliasKey(k.Phrase)
 	out := make([]chatCorrection, 0, len(list)+1)
 	for _, x := range list {
 		same := (key != "" && mcptools.AliasKey(x.Phrase) == key) || (key == "" && x.Phrase == "" && strings.EqualFold(x.Wrong, k.Wrong))
 		if same {
-			if strings.EqualFold(x.Right, k.Right) && x.Proposed {
-				k.Proposed = true
-			}
 			continue
 		}
 		out = append(out, x)
@@ -171,4 +171,13 @@ func withCorrection(list []chatCorrection, k chatCorrection) []chatCorrection {
 		out = out[len(out)-chatCorrectionsMax:]
 	}
 	return out
+}
+
+// svcIDName — "svc:<ad>" → ad ("" = servis kimliği değil).
+func svcIDName(id string) string {
+	name, ok := strings.CutPrefix(strings.TrimSpace(id), "svc:")
+	if !ok || name == "" || len(name) > 256 {
+		return ""
+	}
+	return name
 }

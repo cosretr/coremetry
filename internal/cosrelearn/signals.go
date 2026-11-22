@@ -83,11 +83,6 @@ const (
 	// tarih / ad saydı. Tur başına en çok bir satır; ayrıntı "tier=… kinds=…
 	// tokens=…" (cevap metni yok). Cevap DEĞİŞMEZ; yalnız ölçüm (E2 eşiği).
 	SigVerifyMismatch = "verify_mismatch"
-	// SigAliasSaved — v0.10.2334 (conversation-audit G): kullanıcı eş ad
-	// önerisini Kaydet'le onayladı (kendi sözlüğü hakkında açık talimat, kalite
-	// oyu DEĞİL). Ayrıntı yalnız "kind=service" — deyim ve kullanıcı yok; puana
-	// ve değerlendirme etiketlerine girmez.
-	SigAliasSaved = "alias_saved"
 	// SigActionConfirm / SigActionCancel — v0.10.2353 (interaction-audit §5,
 	// I4 eylem kısmı): kullanıcı onaylı aksiyon kartını onayladı / iptal etti
 	// (api/cosre_actions.go yazar; ayrıntı {"kind","result"} JSON). Açık
@@ -110,8 +105,8 @@ const (
 
 // SystemSignalKinds — sunucunun yazabileceği kapalı küme.
 var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrected: true, SigBriefingAsk: true,
-	SigVerifyMismatch: true, SigAliasSaved: true, // v0.10.2327, v0.10.2334
-	SigActionConfirm: true, SigActionCancel: true, // v0.10.2353
+	SigVerifyMismatch: true,                        // v0.10.2327
+	SigActionConfirm:  true, SigActionCancel: true, // v0.10.2353
 	SigScopeWouldRefuse: true,                         // v0.10.2355
 	SigStepRedirect:     true, SigStepSummarize: true} // v0.10.2364
 

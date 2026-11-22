@@ -1657,12 +1657,6 @@ export const api = {
     request<{ item: import('./types').CosreMemoryItem }>(`/api/ai/memory/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteCosreMemory: (id: string) =>
     request<{ ok: boolean }>(`/api/ai/memory/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  // v0.10.2335 — CoSRE kullanıcı deposu: kendi eş adları (cosre_user_prefs.go).
-  getCosreUserPrefs: () => request<import('./types').CosreUserPrefs>('/api/cosre/user-prefs'),
-  saveCosreAlias: (body: import('./types').CosreAliasInput) =>
-    request<import('./types').CosreUserPrefs>('/api/cosre/user-prefs/aliases', { method: 'POST', body: JSON.stringify(body) }),
-  deleteCosreAlias: (phrase: string) =>
-    request<import('./types').CosreUserPrefs>(`/api/cosre/user-prefs/aliases?phrase=${encodeURIComponent(phrase)}`, { method: 'DELETE' }),
   // v0.10.1169 — CoSRE bulgusu probleme not (editör+; jeton sunucudan, metni imzalar).
   saveProblemNote: (problemId: string, body: { token: string; text: string; tool: string }) =>
     request<import('./types').ProblemNote>(`/api/problems/${encodeURIComponent(problemId)}/notes`, {

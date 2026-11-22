@@ -47,20 +47,6 @@ export function useCosreBriefing(enabled: boolean, env: string) {
 // (süreç-içi yenileme aralığı). Yazımdan sonra çağıran anahtarı geçersizler.
 export const COSRE_RULES_KEY = ['copilot', 'rules'] as const;
 
-// v0.10.2335 — kullanıcının kendi CoSRE eş adları (GET /api/cosre/user-prefs).
-// Yalnız liste açıkken; kayıt / silme anahtarı geçersizler.
-export const COSRE_USER_PREFS_KEY = ['copilot', 'user-prefs'] as const;
-
-export function useCosreUserPrefs(enabled = true) {
-  return useQuery({
-    queryKey: COSRE_USER_PREFS_KEY,
-    queryFn: () => api.getCosreUserPrefs(),
-    enabled,
-    staleTime: 30_000,
-    retry: false,
-  });
-}
-
 export function useCosreRules(enabled = true) {
   return useQuery({
     queryKey: COSRE_RULES_KEY,

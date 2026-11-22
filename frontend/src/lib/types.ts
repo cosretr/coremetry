@@ -13398,32 +13398,6 @@ export interface EntityPathsResponse { paths: EntityPath[] }
 export interface ServiceWorkload { id: string; clusterId: string; cluster?: string; namespace: string; kind: string; name: string }
 export interface ServiceWorkloads { workloads: ServiceWorkload[]; source: 'serves' | 'pods' | 'none' }
 
-// v0.10.2335 (conversation-audit §6.1 G) — CoSRE kullanıcı deposu
-// (internal/api/cosre_user_prefs.go cosreUserPrefsView). Eş adlar en yeni
-// önce; stale = hedef servis artık katalogda yok (çözücü yok sayar).
-export interface CosreUserAlias {
-  phrase: string;
-  entityId: string;
-  name: string;
-  notId?: string;
-  notName?: string;
-  at: number;
-  stale: boolean;
-}
-export interface CosreUserPrefs {
-  address: '' | 'sen' | 'siz';
-  aliases: CosreUserAlias[];
-  maxAliases: number;
-  bytes: number;
-  maxBytes: number;
-}
-export interface CosreAliasInput {
-  phrase: string;
-  entityId: string;
-  notId?: string;
-  exchangeId?: string;
-}
-
 // v0.10.2392 — etki kuralı geri oynatma (Go: ml.ImpactReplayResult,
 // internal/ml/impact_replay.go; uç GET /api/ml/impact-replay, yalnız admin).
 export type ImpactReplayDetector = 'failure_rate' | 'response_time' | 'consumer_lag';
