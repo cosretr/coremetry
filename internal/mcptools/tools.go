@@ -59,7 +59,7 @@
 //     doğru çağrının koşulu, orada kazanılan bayt yanlış argümanla
 //     harcanan bir tura değmez.
 //
-// Tool catalogue (80 tools · 12 toolsets — v0.10.2449 — 75 → 80: endpoint_lookup.go, trace_where.go, repo_lookup.go, flow_tools.go messaging_flow + downstream_calls (endpoint / trace-nerede / repo / Kafka / aşağı bağımlılık soruları; salt okuma, sohbet + MCP); CoSRE faz D — 74 → 75: compare_baseline.go (yalnız-MV taban kıyası + grafik bloğu; salt okuma, sohbet + MCP); v0.10.1434: kaynak bazlı gruplama + operatör aç/kapa
+// Tool catalogue (81 tools · 12 toolsets — v0.10.2453 — 80 → 81: dependency_path.go (çok-atlamalı bağımlılık yolu, taban kıyası, olası kaynak; salt okuma, sohbet + MCP); v0.10.2449 — 75 → 80: endpoint_lookup.go, trace_where.go, repo_lookup.go, flow_tools.go messaging_flow + downstream_calls (endpoint / trace-nerede / repo / Kafka / aşağı bağımlılık soruları; salt okuma, sohbet + MCP); CoSRE faz D — 74 → 75: compare_baseline.go (yalnız-MV taban kıyası + grafik bloğu; salt okuma, sohbet + MCP); v0.10.1434: kaynak bazlı gruplama + operatör aç/kapa
 // toolset.go'da, sayı DEĞİŞMEDİ; v0.10.1284 — 73 → 74: log_spike.go explain_log_spike (AI SRE Faz 1a,
 // log artışını ne açıklıyor: tepe tespiti + önceki pencereyle pod / seviye / desen payı kıyası; salt okuma, sohbet + MCP);
 // v0.10.1276 — 72 → 73: service_sweep.go service_health_sweep (CoSRE adım 7,
@@ -464,6 +464,9 @@ func ToolList(d Deps) []mcp.Tool {
 		// aşağı hedefler RED (flow_tools.go); kuyruk/db sağlığının yanında.
 		messagingFlowTool(d),
 		downstreamCallsTool(d),
+		// v0.10.2453 — "neden yavaş, zincir / kim çağırıyor / etki alanı": çok-atlamalı
+		// kenar RED vs taban + olası kaynak (dependency_path.go); downstream_calls'ın yanında.
+		dependencyPathTool(d),
 		// v0.9.1141 (Faz 3.2) — yukarıdaki üçlünün + list_problems'in
 		// `env` arg'ının keşif eşi; hemen yanında duruyor ki model
 		// katalogda arg'ı görünce listesini de görsün.

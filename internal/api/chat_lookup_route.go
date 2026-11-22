@@ -10,6 +10,8 @@ package api
 //   - trace_where — "timeout hangi poddan", "hangi mq'da uzamış", "pod
 //     içinde geçen süre", "hata X'ten mi dönmüş", "external call var mı";
 //   - repo_lookup — "reponun linki", "podun reposu".
+//   - dependency_path (v0.10.2453) — "neden yavaş, zincir", "hangi downstream
+//     yüzünden", "kim çağırıyor", "etki alanı", "bağımlılık zinciri".
 //
 // İki SAF parça, MODELDEN BAĞIMSIZ (Qwen / gemma aynı metni görür; model
 // dalı yok):
@@ -92,6 +94,28 @@ func lookupPeerToken(toks []string) string {
 	return ""
 }
 
+// lookupDepPathDir — SAF (v0.10.2453): çok-atlamalı bağımlılık sorusu → yön
+// (down | up | both; "" = değil). Dar tutuldu: "neden yavaşladı, hangi
+// bağımlılık" / "yavaşlamasının sebebi hangi downstream" root_cause'ta,
+// "bağımlılıkları neler" service_topology'de, "nereden çağrılıyor" guided'da
+// KALIR (TestRoutingRegression komşu satırları). Zincir / yüzünden / kim
+// çağırıyor / etki alanı sözcüğü şart.
+func lookupDepPathDir(toks []string) string {
+	down := tokenHasPrefix(toks, "zincir", "dependency-path") ||
+		(tokenHasPrefix(toks, "yüzünden") && tokenHasPrefix(toks, "downstream", "bağımlılık", "dependency"))
+	up := tokenHasPrefix(toks, "etki-alan", "blast-radius") ||
+		(hasExact(toks, "kim", "kimler", "who") && tokenHasPrefix(toks, "çağır", "call"))
+	switch {
+	case down && up:
+		return "both"
+	case up:
+		return "up"
+	case down:
+		return "down"
+	}
+	return ""
+}
+
 func hasExact(toks []string, words ...string) bool {
 	for _, t := range toks {
 		for _, w := range words {
@@ -114,6 +138,9 @@ func lookupAskFor(question string) lookupAsk {
 	norm = strings.ReplaceAll(norm, "uç nokta", "uç-nokta")
 	norm = strings.ReplaceAll(norm, "dış çağrı", "external-call")
 	norm = strings.ReplaceAll(norm, "external call", "external-call")
+	norm = strings.ReplaceAll(norm, "etki alanı", "etki-alanı")
+	norm = strings.ReplaceAll(norm, "blast radius", "blast-radius")
+	norm = strings.ReplaceAll(norm, "dependency path", "dependency-path")
 	toks := guidedTokens(norm)
 	var clues mcptools.LogClues
 	pasted := mcptools.LooksLikePastedLog(q)
@@ -161,6 +188,8 @@ func lookupAskFor(question string) lookupAsk {
 		return ask(mcptools.MessagingFlowName, "queue", args)
 	case tokenHasPrefix(toks, "lag") && tokenHasPrefix(toks, "consumer", "tüketici"):
 		return ask(mcptools.MessagingFlowName, "consumer-lag", nil)
+	case lookupDepPathDir(toks) != "" && len(clues.TraceIDs) == 0: // trace id varsa tek trace sorusu
+		return ask(mcptools.DependencyPathName, "dependency-path", map[string]string{"direction": lookupDepPathDir(toks)})
 	case (!tokenHasPrefix(toks, "sebe", "neden", "niye", "yavaşlama") && tokenHasPrefix(toks, "downstream")) || (hasExact(toks, "kimi", "kimleri", "neleri", "neyi", "hangi", "hangilerini") && tokenHasPrefix(toks, "çağır")):
 		return ask(mcptools.DownstreamCallsName, "downstream", nil)
 	case tokenHasPrefix(toks, lookupPodStems...) && tokenHasPrefix(toks, lookupWhereVerbs...) && lookupDomainToken(toks) == "":
@@ -259,4 +288,5 @@ var lookupToolHintTR = map[string]string{
 	mcptools.RepoLookupName:      "repo_url \"unknown\" ise depo linki UYDURMA; note alanındaki açma yolunu aktar.",
 	mcptools.MessagingFlowName:   "Cevapta topic başına üretici ve tüketici servisleri, p95 ve hata %'sini aktar; lag yalnız lag[] doluysa, yoksa lag_status'u söyle.",
 	mcptools.DownstreamCallsName: "Cevapta hedef başına (targets önce, yoksa topology) yavaş ve hatalı olanları değerleriyle aktar.",
+	mcptools.DependencyPathName:  "Cevapta likely_source'u (yol, farklar, deploy, sample_trace_id) ve kötüleşen kenarları değerleriyle aktar; likely_source null ise kaynak ADLANDIRMA; etki alanında çağıranları ve caller_degraded_too'yu söyle.",
 }

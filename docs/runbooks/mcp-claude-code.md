@@ -149,7 +149,12 @@ cluster · karşı taraf · süre; hata kökeni, zaman aşımı, öz süre, dı�
 yoksa dürüst unknown), `messaging_flow` (topic → üretici/tüketici + VM consumer
 lag), `downstream_calls` (hedef başına VM client RED + topoloji kenarları).
 
-80 araç, okudukları veri kaynağına göre **12 toolset**'e bölünür
+v0.10.2453'te 81 oldu: `dependency_path` (servisten aşağı / yukarı ≤3 atlama
+topology_edges_5m kenarı, dün aynı saatler ya da önceki dönem tabanına göre
+fark, deploy işaretleri, kötüleşen kenarlar; sorulan servisten tümü kötüleşmiş
+yolun en derin kenarı "olası kaynak" + sınırlı örnek trace; yukarıda etki alanı).
+
+81 araç, okudukları veri kaynağına göre **12 toolset**'e bölünür
 (`internal/mcptools/toolset.go`; her araç tam bir sette —
 `TestToolsetsPartitionCatalog`). Sayı DEĞİŞMEDİ; gruplama yeni.
 

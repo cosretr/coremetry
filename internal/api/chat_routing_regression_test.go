@@ -558,6 +558,20 @@ var routingRegressionRows = []routingRow{
 		q: rrSvc + " kimi çağırıyor, hangisi yavaş", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
 	{release: "v0.10.2449", name: "v1: servisin endpoint'i → döngü",
 		q: rrSvc + " endpoint'i nedir", wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	// v0.10.2453 — operatör onayı 2026-11-22: çok-atlamalı bağımlılık soruları
+	// serbest döngüye (dependency_path). "neden yavaşladı, hangi bağımlılık" ve
+	// "yavaşlamasının sebebi hangi downstream" root_cause'ta KALIR (v0.10.1479
+	// satırları), "bağımlılıkları neler" service_topology'de.
+	{release: "v0.10.2453", name: "neden yavaş, zincir → döngü (dependency_path)",
+		q: rrSvc + " neden yavaş, zincirde hangi bağımlılık", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2453", name: "hangi downstream yüzünden → döngü (dependency_path)",
+		q: rrSvc + " hangi downstream yüzünden yavaşladı", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2453", name: "kim çağırıyor → döngü (dependency_path up)",
+		q: rrSvc + "'yi kim çağırıyor", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2453", name: "etki alanı → döngü (dependency_path up)",
+		q: rrSvc + " etki alanı ne", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2453", name: "v1: bağımlılık zinciri → döngü",
+		q: rrSvc + " bağımlılık zinciri", wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
 }
 
 // withConversationStateOff — v0.10.2324: cosre_conversation.state kapalı

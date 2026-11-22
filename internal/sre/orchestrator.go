@@ -86,12 +86,14 @@ type readers struct {
 	// downstreamRED — follow-up 2026-11-21: hedef başına giden RED (VM HTTP
 	// client histogramı; örnekleme öncesi tam sayım). nil = okunmaz.
 	downstreamRED func(ctx context.Context, service string, from, to time.Time) (runtimesig.DownstreamReport, error)
-	redSpan       func(ctx context.Context, service string, from, to time.Time) (chstore.ServiceWindowRED, error)
-	anomalies     func(ctx context.Context, f chstore.ListAnomalyEventsFilter) ([]chstore.AnomalyEvent, error)
-	errorOps      func(ctx context.Context, service string, from, to time.Time, limit int) ([]chstore.ErrorRank, error)
-	exceptions    func(ctx context.Context, f chstore.ExceptionFilter) ([]chstore.ExceptionRow, error)
-	sensitivity   func() chstore.AnomalySensitivityConfig
-	pack          func() ContextPackSettings
+	// depPath — v0.10.2453: dependency_path özeti (faz-B ek kanıt; skora girmez). nil = okunmaz.
+	depPath     func(ctx context.Context, service string, from, to time.Time) (mcptools.DepPathSummary, error)
+	redSpan     func(ctx context.Context, service string, from, to time.Time) (chstore.ServiceWindowRED, error)
+	anomalies   func(ctx context.Context, f chstore.ListAnomalyEventsFilter) ([]chstore.AnomalyEvent, error)
+	errorOps    func(ctx context.Context, service string, from, to time.Time, limit int) ([]chstore.ErrorRank, error)
+	exceptions  func(ctx context.Context, f chstore.ExceptionFilter) ([]chstore.ExceptionRow, error)
+	sensitivity func() chstore.AnomalySensitivityConfig
+	pack        func() ContextPackSettings
 }
 
 // readersFrom — üretim okuyucuları: srv.MCPDeps() (sohbetle aynı kurucu).
@@ -124,6 +126,13 @@ func readersFrom(d mcptools.Deps, n Narrator, c cache.Cache, now func() time.Tim
 	if st := d.Store; st != nil {
 		// v0.10.1494 — paket okuyucuları (hepsi okuma; MV-first ya da sınırlı).
 		r.redSpan = st.ServiceWindowRED
+		// v0.10.2453 — çok-atlamalı bağımlılık yolu (dependency_path; MV-first, ek kanıt).
+		r.depPath = func(ctx context.Context, service string, from, to time.Time) (mcptools.DepPathSummary, error) {
+			// VM tam sayımı adımın kendi downstreamRED okumasında; burada tekrar okunmaz.
+			dd := d
+			dd.DownstreamRED = nil
+			return mcptools.DependencyPathSummary(ctx, dd, service, from, to)
+		}
 		r.anomalies = st.ListAnomalyFeed // v0.10.2081 — ML olayları da (aynı satır şekli)
 		r.errorOps = st.TopErrorOperations
 		r.exceptions = st.GetExceptions

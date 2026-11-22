@@ -20,10 +20,10 @@ func TestStyleV1PromptsUnchanged(t *testing.T) {
 	}{
 		"Chat":          {SystemPromptChat(), "3dd6a7026abf37c44b8b54a455f0735b2f8d343b285dbfebb8c1a033d568c10f"},
 		"ChatRoundCap":  {SystemPromptChatRoundCap(), "939cf8dcddbc4f38d4e51107749ff0c4e72bdc3b0f429600460bc72341836763"},
-		"AgentLoop":     {SystemPromptChatAgentLoopFor(false), "8119c6367488870777cc82a7e756eff44ee64070bb5b6507110d7946041a229a"},   // CoSRE faz D — adım 4 compare_baseline (bilerek yenilendi); v0.10.2449 araç yönlendirmesi (bilerek yenilendi)
-		"AgentLoop.s":   {SystemPromptChatAgentLoopFor(true), "218ba4b17e743a3b833101b8629f3c2f1987d137d723661ac7397465afd69547"},    // v0.10.2449 — adım 4 endpoint/trace/Kafka/repo araçları (bilerek yenilendi)
-		"AgentLoopV2":   {SystemPromptChatAgentLoopV2For(false), "2d82bdcea5e29845289d5f61f8690ee225ca9bb2280f1779f5291fe386bbad08"}, // v0.10.2356 — S2: adım 4 find_traces; CoSRE faz D compare_baseline (bilerek yenilendi); v0.10.2449 araç yönlendirmesi (bilerek yenilendi)
-		"AgentLoopV2.s": {SystemPromptChatAgentLoopV2For(true), "6e987dea6056ab3c8410b98b9b721e9dbf296687142141ee2155c4b9c633fab0"},  // v0.10.2449 — adım 4 endpoint/trace/Kafka/repo araçları (bilerek yenilendi)
+		"AgentLoop":     {SystemPromptChatAgentLoopFor(false), "c3ccf562efad34df98f98adce0674f3a128d637087b3f5102c81158da32f8406"},   // CoSRE faz D — adım 4 compare_baseline (bilerek yenilendi); v0.10.2449 araç yönlendirmesi (bilerek yenilendi); v0.10.2453 dependency_path (bilerek yenilendi)
+		"AgentLoop.s":   {SystemPromptChatAgentLoopFor(true), "e42bd9d46779018842297cbd9da2f7cd373fe24bef6d9c826ad667b0c9afb8f5"},    // v0.10.2449 — adım 4 endpoint/trace/Kafka/repo araçları (bilerek yenilendi); v0.10.2453 dependency_path (bilerek yenilendi)
+		"AgentLoopV2":   {SystemPromptChatAgentLoopV2For(false), "8fe1e8d00ee697877c067b3416d0a694a94ea78761df2d8df21fa4fe74cec1a7"}, // v0.10.2356 — S2: adım 4 find_traces; CoSRE faz D compare_baseline (bilerek yenilendi); v0.10.2449 araç yönlendirmesi (bilerek yenilendi); v0.10.2453 dependency_path (bilerek yenilendi)
+		"AgentLoopV2.s": {SystemPromptChatAgentLoopV2For(true), "59a1b64066668a213c1c4d73aa51144d565c0ed502fc3d20ed73b5e42272c55c"},  // v0.10.2449 — adım 4 endpoint/trace/Kafka/repo araçları (bilerek yenilendi); v0.10.2453 dependency_path (bilerek yenilendi)
 		"GuidedChat":    {SystemPromptGuidedChat(), "7d6eb7ff63fc2f51398a250d1cb4e3a59528b860182c4181d96e80112003006f"},
 		"GeneralChat":   {SystemPromptGeneralChat(), "01c948112dcad381a131c8d4aeed73e9a3c349b981e3daf0ad8ae32bdbc8ad5c"},
 	}

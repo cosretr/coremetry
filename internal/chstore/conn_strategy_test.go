@@ -340,6 +340,10 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// v0.10.2449 — SAF telemetri: messaging_flow (messaging_caller_summary_5m);
 		// downstream_calls topology_edges_5m FINAL ana bağlantıda.
 		"cosre_lookup_flow.go": true,
+		// v0.10.2453 — SAF telemetri: dependency_path deploy (service_version_5m),
+		// çağıran RED (service_summary_5m) ve tek örnek trace (spans, satır tavanlı);
+		// atlama okuması topology_edges_5m FINAL ana bağlantıda.
+		"cosre_dependency_path.go": true,
 		// v0.10.2018 — SAF telemetri: ML trace_error_count, tek FROM'u
 		// spanmetrics_1m (zaman sınırlı, LIMIT). Taban okuması ml_series.go'da (ana bağlantı).
 		"ml_trace_errors.go": true,

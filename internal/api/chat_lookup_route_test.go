@@ -39,6 +39,13 @@ func TestLookupAskForOperatorQuestions(t *testing.T) {
 		{"yani hata osb'den mi dönmüş [kod: ERR-42]", mcptools.TraceWhereName, map[string]string{"peer": "osb"}},
 		{"bir log attım, external call var mı\n" + lkPastedLog, mcptools.TraceWhereName, map[string]string{"trace_id": "4bf92f3577b34da6a3ce929d0e0e4736"}},
 		{lkPastedLog, mcptools.TraceWhereName, map[string]string{"trace_id": "4bf92f3577b34da6a3ce929d0e0e4736"}},
+		// v0.10.2453 — dependency_path (operatör onaylı ifadeler; adlar sentetik)
+		{"orders-api neden yavaş, zincirde hangi bağımlılık", mcptools.DependencyPathName, map[string]string{"direction": "down"}},
+		{"orders-api hangi downstream yüzünden yavaşladı", mcptools.DependencyPathName, map[string]string{"direction": "down"}},
+		{"orders-api'yi kim çağırıyor", mcptools.DependencyPathName, map[string]string{"direction": "up"}},
+		{"orders-api çökerse etki alanı ne olur", mcptools.DependencyPathName, map[string]string{"direction": "up"}},
+		{"orders-api bağımlılık zinciri ve etki alanı", mcptools.DependencyPathName, map[string]string{"direction": "both"}},
+		{"who calls orders-api", mcptools.DependencyPathName, map[string]string{"direction": "up"}},
 	}
 	for _, c := range cases {
 		got := lookupAskFor(c.q)
@@ -64,6 +71,8 @@ func TestLookupAskForNeighboursStayGuided(t *testing.T) {
 		"orders-api son 1 saatte hata oranı",
 		"orders-api nereden çağrılıyor",
 		"orders-api yavaşlamasının sebebi hangi downstream?",
+		"orders-api neden yavaşladı, hangi bağımlılık",
+		"orders-api bağımlılıkları neler",
 		"orders-api-7d9f pod sürekli restart oluyor",
 		"orders-api podları restart ediyor mu",
 		"siparis no 73066 için trace ara",

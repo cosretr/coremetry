@@ -115,6 +115,7 @@ func TestTraceFollowUpToolsExactKeptSet(t *testing.T) {
 		"find_trace_by_span", "pivot_from_trace", "get_exemplar_traces", "get_linked_traces", "get_metrics_for_span",
 		// v0.10.2449
 		"trace_where", "endpoint_lookup", "messaging_flow", "downstream_calls", "repo_lookup",
+		"dependency_path", // v0.10.2453
 		// exceptions
 		"list_exception_groups", "get_exception_samples",
 		// changes

@@ -38,6 +38,9 @@ type depsPayload struct {
 	Upstream   []depsCaller `json:"upstream,omitempty"`
 	// Exact — follow-up 2026-11-21: hedef başına giden RED (VM, örnekleme öncesi; ≤5).
 	Exact []runtimesig.TargetRED `json:"exact,omitempty"`
+	// Path — v0.10.2453: dependency_path özeti (çok-atlamalı, dün aynı saatler
+	// tabanı). EK kanıt: bulgu / skor / adım durumu ETKİLEMEZ.
+	Path *mcptools.DepPathSummary `json:"path,omitempty"`
 }
 
 const depsExactPayloadMax = 5
@@ -88,13 +91,31 @@ type depsResult struct {
 	// adım durumunu ETKİLEMEZ (topoloji / korelasyon / blast sayımı aynen).
 	exact    *runtimesig.DownstreamReport
 	exactErr error
+	// path — v0.10.2453: dependency_path özeti; okuyucu yoksa ikisi de nil.
+	// Adım durumunu, bulguları ve skoru ETKİLEMEZ (yalnız yük + künye).
+	path    *mcptools.DepPathSummary
+	pathErr error
 }
 
 // runDeps — adım (okumalar paralel, birleştirme SAF depsStep).
 func runDeps(ctx context.Context, rd readers, req depsRequest) (Step, []Finding, *DepsFacts) {
 	var res depsResult
 	var wg sync.WaitGroup
-	durs := make([]int64, 4)
+	durs := make([]int64, 5)
+	if rd.depPath != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s := time.Now()
+			sum, err := rd.depPath(ctx, req.Service, req.From, req.To)
+			durs[4] = time.Since(s).Milliseconds()
+			if err != nil {
+				res.pathErr = err
+				return
+			}
+			res.path = &sum
+		}()
+	}
 	if rd.downstreamRED != nil {
 		wg.Add(1)
 		go func() {
@@ -226,6 +247,12 @@ func depsStep(req depsRequest, res depsResult) (Step, []Finding) {
 		}
 		parts = append(parts, fmt.Sprintf("giden çağrı tam sayımı %d hedef (VM)", len(res.exact.Targets)))
 	}
+	if res.path != nil {
+		p.Path = res.path
+		if s := res.path.Source; s != nil {
+			parts = append(parts, fmt.Sprintf("bağımlılık yolunda olası kaynak kenar %s → %s (hop %d)", s.Edge.From, s.Edge.To, s.Edge.Hop))
+		}
+	}
 	switch failed {
 	case 0:
 		st.State = StepOK
@@ -281,6 +308,16 @@ func depsEvidence(req depsRequest, res depsResult, durs []int64) []mcptools.Chat
 				runtimesig.DownstreamTopK, runtimesig.DownstreamMetric, req.Service, win)}
 		if res.exact != nil {
 			e.Rows = n(len(res.exact.Targets))
+		}
+		out = append(out, e)
+	}
+	if res.path != nil || res.pathErr != nil {
+		e := mcptools.ChatEvidence{Tool: mcptools.DependencyPathName, Source: "ClickHouse", QueryKind: "summary",
+			Window: mcptools.EvidenceWindow{FromMs: req.From.UnixMilli(), ToMs: req.To.UnixMilli()}, DurationMs: durs[4],
+			Query: fmt.Sprintf("dependency_path service = '%s' direction=down depth=2 FROM topology_edges_5m FINAL (şimdiki vs dün aynı saatler, ≤60 kenar) + service_version_5m + tek sınırlı örnek trace", req.Service)}
+		if res.path != nil {
+			n := res.path.Walked
+			e.Rows = &n
 		}
 		out = append(out, e)
 	}

@@ -1,7 +1,7 @@
 {
   "conditional/chat": {
-    "count": 79,
-    "sha256": "607e026566cc8a7e69ad139c239566bdf319f4fcaa94154e15f197e06ac340ad",
+    "count": 80,
+    "sha256": "c099d878e07484214aad0215155159864214d4cd366536ae72bc05c59c52fb4e",
     "names": [
       "list_services",
       "list_teams",
@@ -16,6 +16,7 @@
       "get_messaging_health",
       "messaging_flow",
       "downstream_calls",
+      "dependency_path",
       "list_environments",
       "list_problems",
       "list_problem_window_events",
@@ -85,8 +86,8 @@
     ]
   },
   "conditional/chat_auto": {
-    "count": 79,
-    "sha256": "607e026566cc8a7e69ad139c239566bdf319f4fcaa94154e15f197e06ac340ad",
+    "count": 80,
+    "sha256": "c099d878e07484214aad0215155159864214d4cd366536ae72bc05c59c52fb4e",
     "names": [
       "list_services",
       "list_teams",
@@ -101,6 +102,7 @@
       "get_messaging_health",
       "messaging_flow",
       "downstream_calls",
+      "dependency_path",
       "list_environments",
       "list_problems",
       "list_problem_window_events",
@@ -170,8 +172,8 @@
     ]
   },
   "conditional/chat_full": {
-    "count": 79,
-    "sha256": "607e026566cc8a7e69ad139c239566bdf319f4fcaa94154e15f197e06ac340ad",
+    "count": 80,
+    "sha256": "c099d878e07484214aad0215155159864214d4cd366536ae72bc05c59c52fb4e",
     "names": [
       "list_services",
       "list_teams",
@@ -186,6 +188,7 @@
       "get_messaging_health",
       "messaging_flow",
       "downstream_calls",
+      "dependency_path",
       "list_environments",
       "list_problems",
       "list_problem_window_events",
@@ -255,8 +258,8 @@
     ]
   },
   "conditional/chat_simple": {
-    "count": 75,
-    "sha256": "6236179158c09fb373d80d17f82a9e6ab5be277eb25a04cce54476cec40331be",
+    "count": 76,
+    "sha256": "32d1e6f05b5bf25ee6acae54449c5172fc59446178393fe489d9caa8016a4f23",
     "names": [
       "list_services",
       "list_teams",
@@ -271,6 +274,7 @@
       "get_messaging_health",
       "messaging_flow",
       "downstream_calls",
+      "dependency_path",
       "list_environments",
       "list_problems",
       "list_problem_window_events",
@@ -337,12 +341,12 @@
   },
   "conditional/mcp_tools_list": {
     "count": -1,
-    "sha256": "dbb95ff3a59645857cec392d14ff9eb1800df142cde55eaba3ac92d835c7d58a",
+    "sha256": "7ed6f2f0e1afce98ce032ac8cc87bfa3b29c3988f62d9bbfa75cfd5d787a4cc3",
     "names": null
   },
   "conditional/tool_list": {
-    "count": 80,
-    "sha256": "f8ef40fb518cc2c4315abf05ac40b389baa74c0064b3cdd54564d7ec30d54b0d",
+    "count": 81,
+    "sha256": "4151a777d6ac3793a08ede1f3ffe48a1b8504e1c691e470285fecc1cfc49f9f4",
     "names": [
       "list_services",
       "list_teams",
@@ -357,6 +361,7 @@
       "get_messaging_health",
       "messaging_flow",
       "downstream_calls",
+      "dependency_path",
       "list_environments",
       "list_problems",
       "list_problem_window_events",
@@ -427,8 +432,8 @@
     ]
   },
   "conditional/v2": {
-    "count": 83,
-    "sha256": "ff9dfd865f273a0746bc797b14978a201129a60871875aa72f64c4a120cc4666",
+    "count": 84,
+    "sha256": "cb907fa9bb3f7fc88ea3d190def97b0d83dc8f091252ea5c44c5a92c343903f8",
     "names": [
       "list_services",
       "list_teams",
@@ -443,6 +448,7 @@
       "get_messaging_health",
       "messaging_flow",
       "downstream_calls",
+      "dependency_path",
       "list_environments",
       "list_problems",
       "list_problem_window_events",
@@ -516,8 +522,8 @@
     ]
   },
   "zero/chat": {
-    "count": 74,
-    "sha256": "0eb446b7946f3ec519fc22cd62640ed478a8360b049b16e1f06d6ffc7249078a",
+    "count": 75,
+    "sha256": "53812b2cf7b0524b5d6e312bafb70cbad42a21bd79e5ba0012f8c37da64a7466",
     "names": [
       "list_services",
       "list_teams",
@@ -532,6 +538,7 @@
       "get_messaging_health",
       "messaging_flow",
       "downstream_calls",
+      "dependency_path",
       "list_environments",
       "list_problems",
       "list_problem_window_events",
@@ -596,8 +603,8 @@
     ]
   },
   "zero/chat_auto": {
-    "count": 74,
-    "sha256": "0eb446b7946f3ec519fc22cd62640ed478a8360b049b16e1f06d6ffc7249078a",
+    "count": 75,
+    "sha256": "53812b2cf7b0524b5d6e312bafb70cbad42a21bd79e5ba0012f8c37da64a7466",
     "names": [
       "list_services",
       "list_teams",
@@ -612,6 +619,7 @@
       "get_messaging_health",
       "messaging_flow",
       "downstream_calls",
+      "dependency_path",
       "list_environments",
       "list_problems",
       "list_problem_window_events",
@@ -676,8 +684,8 @@
     ]
   },
   "zero/chat_full": {
-    "count": 74,
-    "sha256": "0eb446b7946f3ec519fc22cd62640ed478a8360b049b16e1f06d6ffc7249078a",
+    "count": 75,
+    "sha256": "53812b2cf7b0524b5d6e312bafb70cbad42a21bd79e5ba0012f8c37da64a7466",
     "names": [
       "list_services",
       "list_teams",
@@ -692,6 +700,7 @@
       "get_messaging_health",
       "messaging_flow",
       "downstream_calls",
+      "dependency_path",
       "list_environments",
       "list_problems",
       "list_problem_window_events",
@@ -756,8 +765,8 @@
     ]
   },
   "zero/chat_simple": {
-    "count": 70,
-    "sha256": "1ac48002b52d23d26efa109f51ee00117a2da66ccd0e713b985d4656c6657c83",
+    "count": 71,
+    "sha256": "1084e649cb447c87b49f34872022377f842a7e39d6e34e661cf81f264605ede1",
     "names": [
       "list_services",
       "list_teams",
@@ -772,6 +781,7 @@
       "get_messaging_health",
       "messaging_flow",
       "downstream_calls",
+      "dependency_path",
       "list_environments",
       "list_problems",
       "list_problem_window_events",
@@ -833,12 +843,12 @@
   },
   "zero/mcp_tools_list": {
     "count": -1,
-    "sha256": "dbb95ff3a59645857cec392d14ff9eb1800df142cde55eaba3ac92d835c7d58a",
+    "sha256": "7ed6f2f0e1afce98ce032ac8cc87bfa3b29c3988f62d9bbfa75cfd5d787a4cc3",
     "names": null
   },
   "zero/tool_list": {
-    "count": 80,
-    "sha256": "f8ef40fb518cc2c4315abf05ac40b389baa74c0064b3cdd54564d7ec30d54b0d",
+    "count": 81,
+    "sha256": "4151a777d6ac3793a08ede1f3ffe48a1b8504e1c691e470285fecc1cfc49f9f4",
     "names": [
       "list_services",
       "list_teams",
@@ -853,6 +863,7 @@
       "get_messaging_health",
       "messaging_flow",
       "downstream_calls",
+      "dependency_path",
       "list_environments",
       "list_problems",
       "list_problem_window_events",
@@ -923,8 +934,8 @@
     ]
   },
   "zero/v2": {
-    "count": 78,
-    "sha256": "58a0011a0a083087f5ece992af33a5b6a515ec2e6095fd489c10876cb5d28f96",
+    "count": 79,
+    "sha256": "b07ff12b6eee9b09c799dcf5b02cbd94707896b479fd6baa050b78811736f3a2",
     "names": [
       "list_services",
       "list_teams",
@@ -939,6 +950,7 @@
       "get_messaging_health",
       "messaging_flow",
       "downstream_calls",
+      "dependency_path",
       "list_environments",
       "list_problems",
       "list_problem_window_events",
