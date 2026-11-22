@@ -28,7 +28,6 @@ func readerSQLs2452(t *testing.T) map[string]string {
 		"business_breakdown":     businessBreakdownSQL("attr_values[indexOf(attr_keys, ?)]"),
 		"slow_span_corroborate":  mustSQL(SlowSpanCorroborateSQL("svc", "op", 1e9, time.Unix(1_800_000_000, 0), time.Unix(1_800_003_600, 0), 1)),
 		"route_window":           routeWindowSQL(),
-		"span_peers":             spanPeersMVSQL(),
 		"notify_replay_traffic":  mustSQL(serviceBucketTrafficSQL([]ServiceBucket{{Service: "a", Bucket: 1_800_000_000}, {Service: "b", Bucket: 1_800_000_300}})),
 		"rootcause_error_series": buildErrorRateSeriesQuery(2),
 		"slow_statement_buckets": slowStatementBucketsSQL(),

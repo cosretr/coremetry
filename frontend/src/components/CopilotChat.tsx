@@ -38,7 +38,7 @@ import { isPlainLeftClick } from '@/lib/a11y';
 import { toast } from '@/lib/toast'; // v0.10.1139 — tam sayfa kayıt hatası
 import { useCosreAskContext, useCosreComposerInput, useCosreWelcomeData, type CosreAskContext, type CosreComposerInput, type CosreWelcomeData } from './ai/cosreAsk'; // v0.10.1648 — v1/v2 ortak kancalar
 import { AI_PREFILL_EVENT, COSRE_PANEL_EVENT, nextPanelOpen, type AIPrefillDetail, type CosrePanelDetail } from './ai/aiEvents'; // v0.10.1336 — tur: aç + doldur, gönderme
-import { useCosreDock } from '@/lib/cosre/dock'; // wave 3 — docked yan panel
+import { useCosreDock, useCosreDockPref } from '@/lib/cosre/dock'; // v0.10.2459 — docked isteğe bağlı
 import { COSRE_DRAWER_WIDTH_KEY, cosreSheetWidth } from '@/lib/cosre/sheetWidth';
 import { getRaw } from '@/lib/storage';
 import { AI_DRAWER_WIDTH } from './ai/answerCard'; // v0.10.461
@@ -328,7 +328,9 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
   const dockW = useMemo(
     () => (drawerOpen ? cosreSheetWidth(getRaw(COSRE_DRAWER_WIDTH_KEY), AI_DRAWER_WIDTH, window.innerWidth) : AI_DRAWER_WIDTH),
     [drawerOpen]);
-  useCosreDock(drawerOpen && !isPage, dockW);
+  // v0.10.2459 — varsayılan overlay; docked yalnız izleyici "Sabitle" dediyse.
+  const [docked, setDocked] = useCosreDockPref();
+  useCosreDock(drawerOpen && !isPage && docked, dockW);
 
   if (!enabled) {
     if (!isPage) return null;
@@ -428,6 +430,11 @@ export function CopilotChat({ launcher: launcherProp = true, variant = 'drawer',
                 <Button variant="ghost" size="sm" className="cm-head-btn" onClick={() => setShowHistory(h => !h)}
                   aria-expanded={showHistory}
                   title="Konuşma geçmişi">🕘 Geçmiş</Button>
+              )}
+              {!isPage && (
+                <Button variant="ghost" size="sm" className="cm-head-btn" data-testid="cosre-dock-toggle"
+                  onClick={() => setDocked(!docked)} aria-pressed={docked}
+                  title="Paneli sayfanın yanına sabitle (içerik daralır); tekrar tıkla: sayfanın üstünde aç">📌 Sabitle</Button>
               )}
               {/* v0.10.1295 (operatör 2026-10-17: "en üstte iki tane tam ekran ve tam
                   sayfada aç çıkıyor") — "⤢ Tam ekran" (çekmeceyi 1100 px'e genişletme)

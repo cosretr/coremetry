@@ -234,7 +234,7 @@ func (s *Store) latencyHeatmapWhere(
 	}, rows.Err()
 }
 
-// heatmapDurationBins — log-ms kova üst sınırları (span_peers.go ile ortak).
+// heatmapDurationBins — log-ms kova üst sınırları.
 func heatmapDurationBins(minLogMs, subBins, totalBins int) []float64 {
 	durBins := make([]float64, totalBins)
 	for j := 0; j < totalBins; j++ {

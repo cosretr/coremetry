@@ -8146,7 +8146,6 @@ export interface BubbleUpResult {
 export interface LatencyHeatmap {
   times: number[];          // unix nanoseconds, len = N time buckets
   durationBins: number[];   // upper bound in ms per bin, len = M
-  source?: 'mv' | 'raw';    // yalnız /api/spans/peers (2026-11-21)
   counts: number[][];       // [N][M] grid
   // v0.9.393 — hücrenin temsilci trace_id'si (en yavaş span'in trace'i;
   // '' = boş). Tık→trace garantisi + ◆ overlay bunun üstünden.

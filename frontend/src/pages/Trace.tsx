@@ -16,6 +16,7 @@ import { perSpanLogSignals, spanEventLogRows, splitGrpcMessageEvents } from '@/l
 import { STORAGE_KEYS, getRaw, setRaw } from '@/lib/storage';
 import { computeCriticalPath } from '@/lib/criticalPath';
 import { useCriticalSegments } from '@/lib/useCriticalSegments'; // dalga 3 — kesitler worker'da
+import { traceCritView } from '@/lib/traceCritView'; // v0.10.2459 — boya yalnız "Kritik yol" açıkken
 import { traceZoomCodec, type TraceZoom } from '@/lib/traceZoom'; // dalga 3 — ?wz= şelale yakınlaştırması
 import { traceRepeatGroups, type TraceRepeatGroup } from '@/lib/traceRepeats';
 import { CopyButton } from '@/components/CopyButton';
@@ -330,9 +331,9 @@ function TraceDetailInner() {
   // the span list identity changes (i.e., when a new trace
   // is loaded). Operator can hide the highlight via the
   // toolbar toggle.
-  // v0.10.354 (operatör) — kritik yol kutusu KALDIRILDI: vurgu hep açık,
-  // odaklama alttaki "Critical path focus" düğmesinde.
-  const showCritical = true;
+  // v0.10.2459 (operatör 2026-11-22) — çubuklar varsayılan DÜZ; kritik yol
+  // boyası (şerit + kesit + odak/süzgeç çipleri) yalnız "Kritik yol" çipiyle.
+  const [showCritical, setShowCritical] = useState(false);
   const criticalPath = useMemo(() => {
     if (!spans || spans.length === 0) return null;
     return computeCriticalPath(spans.map(s => ({
@@ -351,7 +352,8 @@ function TraceDetailInner() {
     () => (critSegments ? new Set(critSegments.keys()) : criticalPath?.ids),
     [critSegments, criticalPath]);
   const [critOnly, setCritOnly] = useState(false);
-  const critOnlyIds = critOnly && critSegments ? critSet : undefined;
+  const critView = traceCritView(showCritical, critSet, critSegments, critOnly);
+  const critOnlyIds = critView.onlyIds;
   // Dalga 3 — "Yalnız kritik yol" açıkken j/k yalnız görünen satırlarda gezer.
   const navIds = useMemo(
     () => (critOnlyIds ? orderedSpanIds.filter(sid => critOnlyIds.has(sid)) : orderedSpanIds),
@@ -420,6 +422,8 @@ function TraceDetailInner() {
   const [svcTouched, setSvcTouched] = useState(false);
   const pickSvcFocus = (svc: string | null) => { setSvcTouched(true); setSvcFocus(svc); setJumpId(null); if (svc) setCritFocus(false); };
   const pickCritFocus = (on: boolean) => { setCritFocus(on); if (on) setSvcFocus(null); };
+  // v0.10.2459 — kritik yol kapanınca odak + "yalnız kritik" de kapanır.
+  const pickCritShow = (on: boolean) => { setShowCritical(on); if (!on) { setCritFocus(false); setCritOnly(false); } };
   // Trace'in TAMAMINDAKİ tekrar desenleri. Ham `spans` kimliğine bağlı —
   // seçim / sekme değişimi yeniden hesaplatmaz.
   const repeatGroups = useMemo(
@@ -502,7 +506,6 @@ function TraceDetailInner() {
   const opCardRef = opCardPick?.ref ?? null;
   const minT = spans && spans.length ? Math.min(...spans.map(s => s.startTime)) : 0;
   const maxT = spans && spans.length ? Math.max(...spans.map(s => s.endTime)) : 0;
-  const criticalPathIds = showCritical ? critSet : undefined;
   const totalNs = maxT - minT;
   // spanHasError is the honest "is this a failure" — error status OR a recorded
   // exception event (matches the waterfall tint + the trace-level badge).
@@ -799,6 +802,7 @@ function TraceDetailInner() {
                       active={svcFocusInfo.ids.size > 0 ? svcFocus : null} onPick={pickSvcFocus} />
                     <SpanFilterBar spans={spans} value={spanFilter} onChange={setSpanFilter}
                       critCount={critSet?.size ?? 0}
+                      critShow={showCritical} onCritShow={pickCritShow}
                       critFocus={critFocus} onCritFocus={pickCritFocus}
                       critOnly={critOnly} onCritOnly={critSegments ? setCritOnly : undefined}
                       repeatGroups={repeatGroups}
@@ -809,8 +813,8 @@ function TraceDetailInner() {
                       evidenceIds={evidenceIds}
                       groupSimilar={groupSimilar}
                       onGroupSimilarChange={setGroupSimilar}
-                      criticalPathIds={criticalPathIds} matchIds={spanMatchIds}
-                      criticalSegments={critSegments} onlyIds={critOnlyIds}
+                      criticalPathIds={critView.criticalPathIds} matchIds={spanMatchIds}
+                      criticalSegments={critView.criticalSegments} onlyIds={critOnlyIds}
                       zoom={wfZoom} onZoom={setWfZoom}
                       focusIds={critFocus && critSet ? critSet
                         : svcFocusInfo.ids.size > 0 ? svcFocusInfo.ids : undefined}
@@ -905,12 +909,15 @@ function repeatTotalLabel(totalMs: number): string {
   return fmtNs(totalMs * 1e6);
 }
 
-function SpanFilterBar({ spans, value, onChange, critCount, critFocus, onCritFocus, critOnly, onCritOnly,
+function SpanFilterBar({ spans, value, onChange, critCount, critShow, onCritShow, critFocus, onCritFocus, critOnly, onCritOnly,
   repeatGroups, onRepeatChip, jumps, onJump }: {
   spans: SpanRow[];
   value: string;
   onChange: (v: string) => void;
   critCount?: number;
+  // v0.10.2459 — "Kritik yol" anahtarı; kapalıyken odak/süzgeç çipleri gizli.
+  critShow?: boolean;
+  onCritShow?: (v: boolean) => void;
   critFocus?: boolean;
   onCritFocus?: (v: boolean) => void;
   // Dalga 3 — "Yalnız kritik yol" süzgeci (kesitler hazır olunca verilir).
@@ -968,14 +975,21 @@ function SpanFilterBar({ spans, value, onChange, critCount, critFocus, onCritFoc
           {t('trace.jump.slow').replace('{d}', fmtNs(jumps.hot.ms * 1e6))}
         </Chip>
       )}
-      {onCritFocus && (critCount ?? 0) > 0 && (
+      {onCritShow && (critCount ?? 0) > 0 && (
+        <Chip pill active={!!critShow} data-testid="trace-crit-show"
+          title={t('trace.critShow.tip')}
+          onClick={() => onCritShow(!critShow)}>
+          {t('trace.critShow')}
+        </Chip>
+      )}
+      {critShow && onCritFocus && (critCount ?? 0) > 0 && (
         <Chip pill active={!!critFocus}
           title="Dim every span that is NOT on the critical path"
           onClick={() => onCritFocus(!critFocus)}>
           Critical path focus <span className="mono">{critCount}</span>
         </Chip>
       )}
-      {onCritOnly && (critCount ?? 0) > 0 && (
+      {critShow && onCritOnly && (critCount ?? 0) > 0 && (
         <Chip pill active={!!critOnly} data-testid="trace-crit-only"
           title={t('trace.critOnly.tip')}
           onClick={() => onCritOnly(!critOnly)}>

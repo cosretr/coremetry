@@ -68,7 +68,7 @@ import { toast } from '@/lib/toast';
 import { AI_PREFILL_EVENT, COSRE_PANEL_EVENT, nextPanelOpen, type AIPrefillDetail, type CosrePanelDetail } from '@/components/ai/aiEvents';
 import { tCosre } from '@/components/ai/capabilityHints'; // sohbetin dili (karşılamayla aynı)
 import { pageStarters as buildPageStarters } from '@/lib/cosre/pageStarters'; // wave 3 — sayfa türüne göre hazır sorular
-import { useCosreDock } from '@/lib/cosre/dock'; // wave 3 — docked yan panel
+import { useCosreDock, useCosreDockPref } from '@/lib/cosre/dock'; // v0.10.2459 — docked isteğe bağlı
 import { AI_DRAWER_WIDTH } from '@/components/ai/answerCard';
 import { CopilotFab } from '@/components/ai/CopilotFab';
 import { TraceExplainNudge } from '@/components/ai/TraceExplainNudge';
@@ -459,7 +459,9 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
     [open],
   );
   const width = dragW ?? storedW;
-  useCosreDock(open && !isPage, width); // wave 3 — panel içeriğin yanına oturur (≥1280 px)
+  // v0.10.2459 — varsayılan overlay; docked yalnız izleyici "Sabitle" dediyse (≥1280 px).
+  const [docked, setDocked] = useCosreDockPref();
+  useCosreDock(open && !isPage && docked, width);
   const starters = useMemo(() => buildPageStarters(ask.page, tCosre), [ask.page]);
 
   // v0.10.1785 — gövde TEK yerde; Sheet ve /cosre sayfası aynı düğümleri sarar.
@@ -535,6 +537,8 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
             aria-expanded={showHistory} title={T.historyTitle}>{T.history}</Button>
           <Button variant="ghost" size="sm" className="cm-head-btn" onClick={() => setShowAliases(v => !v)}
             aria-expanded={showAliases} title={T.aliasesButtonTitle}>{T.aliases}</Button>
+          <Button variant="ghost" size="sm" className="cm-head-btn" data-testid="cosre-dock-toggle"
+            onClick={() => setDocked(!docked)} aria-pressed={docked} title={T.dockTitle}>{T.dock}</Button>
           {messages.length > 0 && (
             <Button variant="ghost" size="sm" className="cm-head-btn" onClick={clear} title={T.clearTitle}>{T.clear}</Button>
           )}

@@ -659,3 +659,46 @@ describe('CosreChatV2 × v1 paylaşılan karşılama + composer (plan §10)', ()
     expect(await axeViolations(document.querySelector('[data-tour="cosre-drawer"]')!)).toEqual([]);
   });
 });
+
+// v0.10.2459 (operatör 2026-11-22) — panel varsayılan OVERLAY: açılış sayfa
+// genişliğine/dolgusuna dokunmaz (#main daraltan kök işaret yok). Docked
+// yalnız "Sabitle" ile; tercih izleyici başına localStorage'da.
+describe('CoSRE panel overlay varsayılanı (v0.10.2459)', () => {
+  const docked = () => document.documentElement.hasAttribute('data-cosre-docked');
+  const dockVar = () => document.documentElement.style.getPropertyValue('--cosre-dock-w');
+  const dockBtn = () => document.querySelector<HTMLElement>('[data-testid="cosre-dock-toggle"]');
+
+  it('v2: açılış içeriği daraltmaz; Sabitle docked yapar ve hatırlanır', async () => {
+    const main = document.createElement('main');
+    main.id = 'main';
+    document.body.appendChild(main);
+    await render({ defaultOpen: true });
+    expect(sheet()).not.toBeNull();
+    expect(docked()).toBe(false);
+    expect(dockVar()).toBe('');
+    expect(main.style.marginRight).toBe('');
+    expect(main.style.paddingRight).toBe('');
+    await act(async () => { dockBtn()!.click(); });
+    expect(docked()).toBe(true);
+    expect(store.get('coremetry-cosre-docked')).toBe('1');
+    await act(async () => { dockBtn()!.click(); });
+    expect(docked()).toBe(false);
+    expect(store.get('coremetry-cosre-docked')).toBe('0');
+  });
+
+  it('v2: kayıtlı tercih "1" ise açılışta docked; kapanınca temizlenir', async () => {
+    store.set('coremetry-cosre-docked', '1');
+    await render({ defaultOpen: true });
+    expect(docked()).toBe(true);
+    await unmount();
+    expect(docked()).toBe(false);
+  });
+
+  it('v1 çekmece: açılış içeriği daraltmaz; Sabitle opt-in', async () => {
+    vi.spyOn(api, 'copilotConfig').mockResolvedValue({ enabled: true, model: 'm', cosreV2: false } as never);
+    await mount(<CopilotChat defaultOpen />);
+    expect(docked()).toBe(false);
+    await act(async () => { dockBtn()!.click(); });
+    expect(docked()).toBe(true);
+  });
+});

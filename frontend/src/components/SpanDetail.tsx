@@ -30,7 +30,6 @@ import { useTracePanelLogs } from '@/lib/queries/logs';
 import { StackTrace } from './StackTrace';
 import { runningVersion } from '@/lib/runningVersion'; // v0.10.590
 import { SpanK8sSection } from './SpanK8sSection';
-import { SpanPeers } from './coremetry/traces/SpanPeers'; // dalga 3 — span vs akranlar
 import { spanK8sContext, spanK8sHint, k8sAttrHref, type SpanK8sContext } from '@/lib/spanK8s';
 
 const PANEL_MIN = 300;
@@ -394,13 +393,6 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
             ))}
           </div>
         </div>
-
-        {/* Dalga 3 (Honeycomb) — aynı servis+operasyonun trace penceresindeki dağılımı. */}
-        <Section wide title={tr('span.peers.title')}>
-          <SpanPeers span={span}
-            traceStartNs={Number.isFinite(traceStartNs) ? traceStartNs : span.startTime}
-            traceEndNs={Math.max(span.endTime, ...(traceSpans ?? []).map(x => x.endTime))} />
-        </Section>
 
         {serviceLinks && k8sOn && (
           <Section wide title="Kubernetes">

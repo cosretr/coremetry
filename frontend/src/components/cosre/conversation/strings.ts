@@ -13,6 +13,9 @@ export const COSRE_V2_STRINGS = {
   fullPageBusyTitle: 'Cevap bitince tam sayfada açılabilir',
   history: '🕘 Geçmiş',
   historyTitle: 'Konuşma geçmişi',
+  // v0.10.2459 — panel varsayılan overlay; "Sabitle" içeriği daraltıp yanına oturtur (≥1280 px).
+  dock: '📌 Sabitle',
+  dockTitle: 'Paneli sayfanın yanına sabitle (içerik daralır); tekrar tıkla: sayfanın üstünde aç',
   clear: 'Temizle',
   clearTitle: 'Konuşmayı temizle ve yeni konuşma başlat',
   jumpBottom: '↓ En alta',

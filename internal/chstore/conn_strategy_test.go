@@ -215,7 +215,6 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// ile POZİTİF olarak da pinli (bu liste yalnız tek yönlü kapı).
 		"repeats.go":     true, // spans
 		"trace_count.go": true, // trace_summary_5m / trace_service_index_5m — tavanlı sayım (v0.9.638)
-		"span_peers.go":  true, // SAF telemetri: spanmetrics_1m TDigest; yedek yol GetLatencyHeatmap (s.conn)
 		"trace_id_ts.go": true, // SAF telemetri: trace_id_ts MV nokta araması; kapsama probu sourceCovers'ta (s.conn)
 		// v0.9.814 — SAF telemetri: iki FROM'u messaging_summary_5m ve
 		// messaging_caller_summary_5m (ikisi de AggregatingMergeTree
