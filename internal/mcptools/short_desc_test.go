@@ -68,7 +68,12 @@ const shortDescMinBytes = 60
 // taban kıyası + grafik bloğu; ölçülen +174 B → 10117 B) → tavan 10.25 KB (50 B'a yukarı).
 // v0.10.2449 — 80 tool: endpoint_lookup / trace_where / repo_lookup / messaging_flow / downstream_calls (ölçülen +575 B → 10692 B) → tavan 10.75 KB.
 // v0.10.2453 — 81 tool: dependency_path (ölçülen +119 B → 10811 B) → tavan 10.85 KB.
-const shortCatalogMaxBytes = 10850
+// v0.10.2454 — get_service_health raporu +32 B → 10843 B.
+// v0.10.2455 (operatör 2026-11-22: "limiti bilinçli artıralım") — tavan
+// 12 KB: ~1.2 KB (~300 token) pay, sonraki 6–8 araç için. Küçük model
+// bağlamı ve tur başı token maliyeti nedeniyle tavan kalır; her yeni araç
+// ölçülen B'ı bu yoruma yazar.
+const shortCatalogMaxBytes = 12000
 
 // shortCatalogSimpleMaxBytes — v0.10.1302: simple araç seti varyantının
 // (küçük model; simpleHiddenTools gizli, ⟦full|simple⟧ işaretleri simple
@@ -78,7 +83,9 @@ const shortCatalogMaxBytes = 10850
 // CoSRE faz D — compare_baseline +174 B → 9607 B; tavan 9.7 KB.
 // v0.10.2449 — beş araç +575 B → 10182 B; tavan 10.25 KB.
 // v0.10.2453 — dependency_path +119 B → 10301 B; tavan 10.35 KB.
-const shortCatalogSimpleMaxBytes = 10350
+// v0.10.2454 — +32 B → 10333 B. v0.10.2455 (operatör) — tavan 11.5 KB
+// (full ile aynı ~1.2 KB pay; simple < full kuralı sürer).
+const shortCatalogSimpleMaxBytes = 11500
 
 // shortCatalogConditionalMaxBytes — v0.10.1050: KOŞULLU sohbet araçlarının
 // (chatOffered; bugün yalnız read_source_code, DevOps bağlıyken) kompakt
