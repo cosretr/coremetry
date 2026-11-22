@@ -761,13 +761,6 @@ export default function ServicesPage() {
                         of {fmtNum(total)}
                       </span>
                     )}
-                    {/* v0.10.2437 — toplamın kaynağı: metrik / örneklenmiş / karma. */}
-                    <Badge tone={agg.mixed ? 'warning' : agg.metricRows > 0 ? 'info' : 'warning'} style={{ marginLeft: 8 }}
-                      title={agg.mixed
-                        ? tf('red.agg.mixedTitle', lang, { m: agg.metricRows, n: shown.length })
-                        : agg.metricRows > 0 ? t('red.agg.metricTitle', lang) : t('red.src.spansTitle', lang)}>
-                      {agg.mixed ? t('red.agg.mixed', lang) : agg.metricRows > 0 ? t('red.src.metric', lang) : t('red.src.sampled', lang)}
-                    </Badge>
                   </td>
                   {/* v0.10.922 (sade palet adım 1) — toplam satırının
                       mini-grafikleri de satırlarla aynı kuralda: nötr
@@ -884,10 +877,6 @@ export default function ServicesPage() {
                           glyph, just the language-coloured
                           text. Hidden when the SDK didn't
                           emit usable resource attributes. */}
-                      <Badge tone={rm ? 'info' : 'warning'}style={{ marginLeft: 8 }}
-                        title={rm ? tf('red.src.metricTitle', lang, { fam: rm.source }) : t('red.src.spansTitle', lang)}>
-                        {rm ? t('red.src.metric', lang) : t('red.src.sampled', lang)}
-                      </Badge>
                       {runtimes && runtimes[s.name] && (
                         <ServiceRuntimeBadge rt={runtimes[s.name]} compact
                                              style={{ marginLeft: 8 }} />
