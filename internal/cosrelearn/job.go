@@ -127,6 +127,16 @@ func StartQualityJob(ctx context.Context, st QualityStore, lock cache.Lock, inte
 		if !leader.IsLeader() {
 			return
 		}
+		// v0.10.2468 — başarısız tur bayrakları (inceleme kuyruğu), saatlik.
+		if fs, ok := st.(FailedTurnStore); ok {
+			sctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+			if n, err := RunFailedTurnSweep(sctx, fs, time.Now()); err != nil {
+				log.Printf("[cosre-failed-turns] süpürme: %v", err)
+			} else if n > 0 {
+				log.Printf("[cosre-failed-turns] %d tur bayraklandı", n)
+			}
+			cancel()
+		}
 		for _, d := range DueDays(time.Now()) {
 			done, err := st.CosreQualityDayDone(ctx, d)
 			if err != nil {

@@ -51,6 +51,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/ai/evalrubric"
@@ -134,6 +135,9 @@ type evalJob struct {
 	// researchProfile — v0.10.2365 (S6): konuşma kipi turlarında profil ayrımının
 	// araştırma profili ("" = ayrım yok). Yalnız değerlendirmede okunur.
 	researchProfile string
+	// concurrency — v0.10.2468: aynı anda koşan vaka (1 = ardışık; konuşma
+	// kipi vakaları her zaman tek başına koşar).
+	concurrency int
 }
 
 type evalJobBook struct {
@@ -299,6 +303,7 @@ func (s *Server) getAIEvalsetCatalog(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	cat.Real = s.evalRealCatalog(r.Context()) // v0.10.2468 — gerçek sorular (tohum + terfi)
 	writeJSON(w, cat)
 }
 
@@ -339,6 +344,8 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 		// ResearchProfile — v0.10.2365 (S6): konuşma kipi turları "bu profil
 		// araştırır → koşunun profili anlatır" düzeninde koşar; yok = tek profil.
 		ResearchProfile string `json:"researchProfile"`
+		// Concurrency — v0.10.2468: 1..3 eşzamanlı vaka (0 = 1, ardışık).
+		Concurrency int `json:"concurrency"`
 	}
 	// Boş gövde = tümü (FE düğmesi seçim yokken gövdesiz gönderebilir).
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
@@ -348,6 +355,11 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 	in.Verification = strings.TrimSpace(in.Verification)
 	if in.Verification != "" && !chstore.ValidCosreVerification(in.Verification) {
 		writeJSONError(w, http.StatusBadRequest, "verification boş, 'off', 'shadow' ya da 'enforce' olmalı")
+		return
+	}
+	concurrency, cerr := evalNormConcurrency(in.Concurrency) // v0.10.2468
+	if cerr != nil {
+		writeJSONError(w, http.StatusBadRequest, cerr.Error())
 		return
 	}
 	in.Toolset = strings.TrimSpace(in.Toolset)
@@ -409,9 +421,29 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 		}
 		all = append(append([]evalCase{}, all...), conv...)
 	}
-	cases, surfaces, err := evalSelectCases(all, in.Surfaces)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+	// v0.10.2468 — gerçek sorular yalnız açık seçimle; tek başına seçildiyse
+	// plan yalnız onlar ("kalan yok" evalSelectCases'te "tümü" demek olurdu).
+	wantReal, restSurfaces := evalWantsReal(in.Surfaces)
+	var cases []evalCase
+	var surfaces []string
+	if !wantReal || len(restSurfaces) > 0 {
+		cases, surfaces, err = evalSelectCases(all, restSurfaces)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	if wantReal {
+		realCases, _, _, rerr := s.evalRealCases(r.Context())
+		if rerr != nil {
+			writeJSONError(w, http.StatusInternalServerError, "gerçek sorular yüklenemedi: "+rerr.Error())
+			return
+		}
+		cases = append(append([]evalCase{}, cases...), realCases...)
+		surfaces = append(append([]string{}, surfaces...), evalRealSurface)
+	}
+	if len(cases) == 0 {
+		writeJSONError(w, http.StatusBadRequest, "seçili kümede vaka yok")
 		return
 	}
 	cases = evalExpandProfiles(cases, profiles) // v0.10.2322 — profil × vaka, profiller sırayla
@@ -452,6 +484,7 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 	job.styleOverride = in.Style             // v0.10.2331
 	job.verifyOverride = in.Verification     // v0.10.2339
 	job.researchProfile = in.ResearchProfile // v0.10.2365
+	job.concurrency = concurrency            // v0.10.2468
 	evalJobs.running = job
 	sum := job.summaryLocked()
 	first := job.rowLocked(false)
@@ -477,6 +510,9 @@ func (s *Server) startAIEvalsetRun(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Verification != "" { // v0.10.2339 — koşuya özel doğrulama zorlaması
 		details += " verification=" + in.Verification
+	}
+	if concurrency > 1 { // v0.10.2468
+		details += fmt.Sprintf(" concurrency=%d", concurrency)
 	}
 	if job.toolset != "" { // v0.10.1311 — araç setinin uygulandığı koşu
 		mode := "auto"
@@ -636,10 +672,58 @@ func (s *Server) runEvalJob(ctx context.Context, release func(), job *evalJob, s
 		s.finishEvalJob(job, st, status, errText)
 	}()
 	agent := s.evalsetServerAgent(job) // v0.10.1316 — ajan kipi vakaların koşucusu
+	// v0.10.2468 — sınırlı eşzamanlılık: concurrency>1 iken tek çağrılı ve
+	// ajan vakaları en çok N goroutine'de; konuşma kipi vakası (kendi sohbet
+	// durumu) uçuştakiler bitince TEK başına. 1 = eski ardışık yol, bayt aynı.
+	conc := max(job.concurrency, 1)
+	sem := make(chan struct{}, conc)
+	var wg sync.WaitGroup
+	var stopped atomic.Bool
+	runOne := func(c evalCase) {
+		if !s.runEvalPlanCase(ctx, job, st, agent, c) {
+			stopped.Store(true)
+		}
+	}
 	for _, c := range job.plan {
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || stopped.Load() {
 			break
 		}
+		if conc == 1 || evalConvCase(c) {
+			wg.Wait()
+			runOne(c)
+			continue
+		}
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(c evalCase) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("[evalset] koşu %s vaka %s panik: %v", job.row.ID, c.ID, rec)
+					stopped.Store(true)
+				}
+			}()
+			runOne(c)
+		}(c)
+	}
+	wg.Wait()
+	evalJobs.mu.Lock()
+	attempted, cancelled := int(job.row.Done) == len(job.plan), job.cancelled
+	evalJobs.mu.Unlock()
+	switch {
+	case attempted:
+	case cancelled:
+		status = evalStatusCancelled
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		status, errText = evalStatusFailed, fmt.Sprintf("koşu tavanı aşıldı (%d dk) — kalan vakalar koşulmadı", int(job.deadline/time.Minute))
+	}
+}
+
+// runEvalPlanCase — planın TEK vakası: profil + araç seti bağlamı, koşu,
+// kayıt. false = koşu bağlamı bitti, vaka sayılmadı (döngü durur).
+func (s *Server) runEvalPlanCase(ctx context.Context, job *evalJob, st evalRunStore, agent evalAgentFn, c evalCase) bool {
+	{
 		pid, _, _, model, _ := s.evalProfileFor(c.Surface)
 		if c.profile != "" { // v0.10.2322 — koşu isteğinin profili
 			pid = c.profile
@@ -669,21 +753,14 @@ func (s *Server) runEvalJob(ctx context.Context, release func(), job *evalJob, s
 		// v0.10.1316 — ajan vakası hata dönmeden de yarıda kalabilir (handler
 		// iptali "aborted" diye bitirir): koşu bağlamı bittiyse hiç sayılmaz.
 		if ctx.Err() != nil && (out.Err != nil || out.Mode == evalModeAgent || out.Mode == evalModeConversation) {
-			break
+			return false
 		}
-		row := evalJobs.record(job, evalCaseResultFrom(c, out, pid, model), out.Rubric)
+		res := evalCaseResultFrom(c, out, pid, model)
+		res.Thinking = s.evalThinkingLabel(out) // v0.10.2468
+		row := evalJobs.record(job, res, out.Rubric)
 		_ = s.persistEvalRun(st, row)
 	}
-	evalJobs.mu.Lock()
-	attempted, cancelled := int(job.row.Done) == len(job.plan), job.cancelled
-	evalJobs.mu.Unlock()
-	switch {
-	case attempted:
-	case cancelled:
-		status = evalStatusCancelled
-	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		status, errText = evalStatusFailed, fmt.Sprintf("koşu tavanı aşıldı (%d dk) — kalan vakalar koşulmadı", int(job.deadline/time.Minute))
-	}
+	return true
 }
 
 // finishEvalJob — son durum bellekte, sonra CH'ye (cases dahil), en son

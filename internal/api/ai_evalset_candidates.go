@@ -83,7 +83,21 @@ type evalsetCandidate struct {
 	Accepted       bool     `json:"accepted"`
 	AcceptedBy     string   `json:"acceptedBy,omitempty"`
 	AcceptedAt     string   `json:"acceptedAt,omitempty"`
+	// v0.10.2468 — admin'in başarısız-tur listesinden (ya da herhangi bir
+	// turdan) TERFİ ettirdiği gerçek soru (Source "promoted"): beklentiyi
+	// operatör yazar (rota/kademe, araç, geçmesi / geçmemesi gereken
+	// ifadeler). Günlük koşuya GİRMEZ — yalnız açık "Gerçek sorular" koşusu.
+	Source      string   `json:"source,omitempty"`
+	ExpectTier  string   `json:"expectTier,omitempty"`
+	ExpectRoute string   `json:"expectRoute,omitempty"`
+	MustContain []string `json:"mustContain,omitempty"`
+	BindService string   `json:"bindService,omitempty"`
+	Anonymized  bool     `json:"anonymized,omitempty"`
+	Note        string   `json:"note,omitempty"`
 }
+
+// evalCandidateSourcePromoted — terfi edilen turun kaynağı.
+const evalCandidateSourcePromoted = "promoted"
 
 // evalCandidateStore — G/Ç dikişi (sunucuda *chstore.Store).
 type evalCandidateStore interface {
@@ -146,6 +160,9 @@ func evalCandidateFrom(w chstore.CosreWorstAnswer, inter chstore.CosreInteractio
 
 // evalCandidateCase — SAF: kabul edilmiş aday → koşulacak ajan vakası.
 func evalCandidateCase(c evalsetCandidate) evalCase {
+	if c.Source == evalCandidateSourcePromoted { // v0.10.2468
+		return evalPromotedCase(c)
+	}
 	return evalCase{
 		ID: evalCandidateCasePrefix + c.ExchangeID, Surface: evalAgentLoopSurface, Mode: evalModeAgent,
 		User: c.Question,
@@ -162,12 +179,24 @@ func evalCandidateCase(c evalsetCandidate) evalCase {
 // (gömülünce fikstür doğrulamasından geçen ajan biçimi).
 func evalCandidateExportCase(c evalsetCandidate) evalsetExportCase {
 	ec := evalCandidateCase(c)
-	expect := map[string]any{"requireEvidence": true}
+	expect := map[string]any{}
+	if ec.Expect.RequireEvidence {
+		expect["requireEvidence"] = true
+	}
 	if len(c.AnyOfTools) > 0 {
 		expect["anyOfTools"] = c.AnyOfTools
 	}
 	if len(c.MustNotContain) > 0 {
 		expect["mustNotContain"] = c.MustNotContain
+	}
+	if len(ec.Expect.MustContain) > 0 { // v0.10.2468 — terfi edilen turun beklentisi
+		expect["mustContain"] = ec.Expect.MustContain
+	}
+	if ec.Expect.ExpectTier != "" {
+		expect["expectTier"] = ec.Expect.ExpectTier
+	}
+	if ec.Expect.ExpectRoute != "" {
+		expect["expectRoute"] = ec.Expect.ExpectRoute
 	}
 	return evalsetExportCase{
 		ID: ec.ID, Surface: ec.Surface, Why: ec.Why, User: ec.User, Mode: ec.Mode, Expect: expect,
@@ -332,6 +361,9 @@ func (s *Server) evalDailyCandidateCases(ctx context.Context) []evalCase {
 	}
 	out := make([]evalCase, 0, len(acc))
 	for _, c := range acc {
+		if c.Source == evalCandidateSourcePromoted { // v0.10.2468 — yalnız açık koşuda
+			continue
+		}
 		out = append(out, evalCandidateCase(c))
 	}
 	return out

@@ -108,7 +108,8 @@ var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrect
 	SigVerifyMismatch: true,                        // v0.10.2327
 	SigActionConfirm:  true, SigActionCancel: true, // v0.10.2353
 	SigScopeWouldRefuse: true,                         // v0.10.2355
-	SigStepRedirect:     true, SigStepSummarize: true} // v0.10.2364
+	SigStepRedirect:     true, SigStepSummarize: true, // v0.10.2364
+	SigFailedTurn: true} // v0.10.2468 — inceleme kuyruğu, etiket değil (failed_turns.go)
 
 // nonLabelKinds — v0.10.2354: istemcinin POST edebildiği ama cevaba etiket
 // (gerekçe / puan) olarak bağlanmayan örtük sinyaller.

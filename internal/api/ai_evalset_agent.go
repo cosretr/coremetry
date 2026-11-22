@@ -294,7 +294,9 @@ func (w *evalDiscardResponse) status() int {
 // (deterministik router, ayrı mekanizma) ve öteki kademeler açık kalır.
 // İstisna: vaka expectTier "intent" sabitlediyse kademeyi ölçmek istiyordur →
 // açık kalır.
-func evalAgentSkipIntent(c evalCase) bool { return c.Expect.ExpectTier != aisurface.TierIntent }
+func evalAgentSkipIntent(c evalCase) bool {
+	return !c.real && c.Expect.ExpectTier != aisurface.TierIntent // v0.10.2468 — gerçek soru üretim yolunu koşar
+}
 
 // evalAgentLoopProbe — SAF, v0.10.1476 (prod koşusu 2026-10-23, ChatLoop 2/6):
 // vaka expectTier "loop" sabitlediyse serbest döngünün ARAÇ SEÇİMİNİ ölçen
@@ -608,6 +610,9 @@ func scoreEvalAgentCase(c evalCase, o evalAgentOutcome, st evalAgentStats, fullT
 	if c.Expect.ExpectTier != "" && o.Tier != c.Expect.ExpectTier {
 		fails = append(fails, fmt.Sprintf("tier %q, want %q", o.Tier, c.Expect.ExpectTier))
 	}
+	if c.Expect.ExpectRoute != "" && o.Route != c.Expect.ExpectRoute { // v0.10.2468
+		fails = append(fails, fmt.Sprintf("route %q, want %q", o.Route, c.Expect.ExpectRoute))
+	}
 	if answer == "" {
 		return fails, 0
 	}
@@ -664,7 +669,13 @@ type evalAgentTrail struct {
 	Capped       bool   `json:"capped"`
 	Deep         bool   `json:"deep,omitempty"`
 	// Overruns — METRİK aşımları (maxTokens / maxLatencyMs); vakayı kaldırmaz.
-	Overruns       []string        `json:"overruns,omitempty"`
+	Overruns []string `json:"overruns,omitempty"`
+	// Verify / QuoteChecked / QuoteMismatch — v0.10.2468: turun gölge
+	// doğrulama özeti ve alıntı denetimi (answer_verify_quote.go); nil / 0 =
+	// doğrulama koşmadı.
+	Verify         *evalConvVerify `json:"verify,omitempty"`
+	QuoteChecked   int             `json:"quoteChecked,omitempty"`
+	QuoteMismatch  int             `json:"quoteMismatch,omitempty"`
 	Steps          []evalAgentStep `json:"steps"`
 	StepsTruncated bool            `json:"stepsTruncated,omitempty"`
 }
@@ -679,6 +690,12 @@ func evalAgentTrailFrom(c evalCase, o evalAgentOutcome, st evalAgentStats, laten
 	}
 	if o.BoundTo != "" && c.BindService != "" {
 		tr.Bound = c.BindService + " → " + o.BoundTo
+	}
+	if o.Verify != nil { // v0.10.2468
+		tr.Verify = evalConvVerifyOf(o.Verify)
+		_, by := o.Verify.totals()
+		q := by[verifyKindQuote]
+		tr.QuoteChecked, tr.QuoteMismatch = q.Checked, q.Mismatch
 	}
 	for i, t := range steps {
 		if evalStepSkipped(t) {

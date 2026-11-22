@@ -383,6 +383,9 @@ export function agentMetaLine(tr: EvalAgentTrail): string {
   if (tr.capped) parts.push('bütçe doldu');
   if (tr.deep) parts.push('derin');
   if (tr.bound) parts.push(`servis ${tr.bound}`); // v0.10.1476
+  // v0.10.2468 — gölge doğrulayıcı ve alıntı denetimi (yalnız ölçüldüyse).
+  if (tr.verify && tr.verify.checked > 0) parts.push(tr.verify.mismatch ? `doğrulayıcı ${tr.verify.mismatch} uyuşmazlık` : 'doğrulayıcı geçti');
+  if (tr.quoteChecked) parts.push(tr.quoteMismatch ? `alıntı ${tr.quoteMismatch}/${tr.quoteChecked} uyuşmadı` : `alıntı ${tr.quoteChecked} birebir`);
   return parts.join(' · ');
 }
 

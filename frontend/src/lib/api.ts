@@ -1395,10 +1395,22 @@ export const api = {
   // simple | full (açık seçim; yalnız serbest döngü yüzeylerine uygulanır).
   // v0.10.2323 — profiles: en çok iki profil, sırayla (akıcılık koşusu); boş = gövdeye girmez.
   // v0.10.2331 — style: konuşma turlarında üslup anahtarını yalnız bu koşu için zorlar (undefined = canlı ayar).
-  aiEvalsetStartRun: (surfaces: string[], toolset: import('./types').AIToolset = '', profiles: string[] = [], style?: boolean) =>
+  // v0.10.2468 — concurrency: gerçek sorular koşusunda 1..3 eşzamanlı vaka (undefined = gövdeye girmez).
+  aiEvalsetStartRun: (surfaces: string[], toolset: import('./types').AIToolset = '', profiles: string[] = [], style?: boolean, concurrency?: number) =>
     request<{ run: import('./types').EvalRunSummary }>(`/api/ai/evalset/runs`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ surfaces, toolset, ...(profiles.length ? { profiles } : {}), ...(style === undefined ? {} : { style }) }), timeoutMs: 30_000,
+      body: JSON.stringify({ surfaces, toolset, ...(profiles.length ? { profiles } : {}), ...(style === undefined ? {} : { style }),
+        ...(concurrency === undefined ? {} : { concurrency }) }), timeoutMs: 30_000,
+    }),
+  // v0.10.2468 — koşunun vaka metrikli Markdown raporu + önceki koşuyla kıyas (ek dosya).
+  aiEvalsetRunReport: (id: string) =>
+    downloadFile(`/api/ai/evalset/runs/${encodeURIComponent(id)}/report`, 'cosre-eval.md'),
+  // v0.10.2468 — başarısız tur inceleme kuyruğu (admin) + gerçek soruya terfi (admin, audit).
+  aiFailedTurns: (days: 1 | 7 | 30 = 7, signal?: AbortSignal) =>
+    get<import('./types').FailedTurnsView>(`/api/ai/failed-turns?days=${days}`, signal),
+  aiPromoteTurn: (body: import('./types').PromoteTurnRequest) =>
+    request<{ candidate: import('./types').EvalsetCandidate; caseId: string }>(`/api/ai/failed-turns/promote`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), timeoutMs: 15_000,
     }),
   // v0.10.2323 — konuşma koşusunun yan yana Markdown raporu (ek dosya).
   aiEvalsetFluencyReport: (id: string) =>

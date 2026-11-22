@@ -3460,6 +3460,72 @@ export interface EvalsetCatalog {
   /** v0.10.2322 — konuşma kipi (akıcılık) kümesi; yalnız açık seçimle koşar,
    *  total / surfaces'e girmez. Yok = küme yok ya da eski sunucu. */
   conversation?: EvalsetConversation;
+  /** v0.10.2468 — gerçek sorular (tohum + terfi edilen turlar); yalnız açık seçimle. */
+  real?: EvalsetReal;
+}
+
+/** v0.10.2468 — Go evalCatalogReal. */
+export interface EvalsetReal {
+  surface: string;
+  cases: number;
+  seed: number;
+  promoted: number;
+  maxConcurrency: number;
+  profiles: { id: string; label: string; model: string }[];
+  /** düşünme yüzeyi → off | on | inherit */
+  thinking?: Record<string, string>;
+  error?: string;
+}
+
+/** v0.10.2468 — GET /api/ai/failed-turns (cosrelearn.FailedTurn). */
+export interface FailedTurn {
+  exchangeId: string;
+  conversationId?: string;
+  userEmail?: string;
+  at: string;
+  tier?: string;
+  question: string;
+  reasons: string[];
+  nextQuestion?: string;
+  errorMsg?: string;
+}
+
+export interface FailedReasonCount { reason: string; count: number }
+
+export interface FailedCluster {
+  week: string;
+  label: string;
+  count: number;
+  users: number;
+  samples: string[];
+  reasons: FailedReasonCount[];
+  exchangeIds: string[];
+}
+
+export interface FailedTurnsView {
+  days: number;
+  turns: FailedTurn[];
+  total: number;
+  scanned: number;
+  truncated: boolean;
+  byReason: FailedReasonCount[];
+  clusters: FailedCluster[];
+  generatedAt: number;
+}
+
+/** v0.10.2468 — POST /api/ai/failed-turns/promote gövdesi. */
+export interface PromoteTurnRequest {
+  exchangeId: string;
+  question?: string;
+  expectTier?: string;
+  expectRoute?: string;
+  anyOfTools?: string[];
+  mustContain?: string[];
+  mustNotContain?: string[];
+  anonymize?: { from: string; to: string }[];
+  bindService?: string;
+  reasons?: string[];
+  note?: string;
 }
 
 /** v0.10.2322/2323 — akıcılık kümesi + seçilebilir profiller (Go evalCatalogConversation). */
@@ -3549,6 +3615,12 @@ export interface EvalsetCandidate {
   accepted: boolean;
   acceptedBy?: string;
   acceptedAt?: string;
+  /** v0.10.2468 — 'promoted' = admin'in terfi ettirdiği tur (günlük koşuya girmez). */
+  source?: string;
+  expectTier?: string;
+  expectRoute?: string;
+  mustContain?: string[];
+  anonymized?: boolean;
 }
 
 /** GET /api/ai/evalset/candidates */
@@ -3625,6 +3697,10 @@ export interface EvalAgentTrail {
   overruns?: string[];
   steps: EvalAgentStep[];
   stepsTruncated?: boolean;
+  /** v0.10.2468 — gölge doğrulama özeti ve alıntı denetimi (yoksa ölçülmedi). */
+  verify?: { checked: number; verified: number; derived: number; mismatch: number; mismatches?: string[] };
+  quoteChecked?: number;
+  quoteMismatch?: number;
 }
 
 /** Bir vakanın sonucu (GET /runs/{id} `cases`). Girdi 8 KiB, cevap 16 KiB'de
@@ -3656,6 +3732,8 @@ export interface EvalCaseResult {
   agent?: EvalAgentTrail;
   /** v0.10.1476 — altyapı hatası sınıfı (skipped ile; vaka puanlanmadı). */
   infraError?: string;
+  /** v0.10.2468 — ajan vakasının düşünme yüzeyi ve kipi ("guided=off"). */
+  thinking?: string;
 }
 
 /** Karşılaştırmanın bir tarafı (koşu künyesi). */

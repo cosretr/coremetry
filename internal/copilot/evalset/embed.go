@@ -28,3 +28,12 @@ var FS embed.FS
 //
 //go:embed conversation/*.json
 var ConversationFS embed.FS
+
+// RealFS — v0.10.2468: "Gerçek sorular" kümesinin TOHUMU (real/*.json; router
+// fikstürlerinden ve prod tarzı sorulardan, servis adları sentetik +
+// bindService). FS'ten AYRI: "tümü" ve günlük koşuya girmez; yalnız
+// RealQuestions açıkça seçilince yüklenir (api ai_evalset_real.go). Admin'in
+// panelden terfi ettirdiği turlar koşu anında eklenir.
+//
+//go:embed real/*.json
+var RealFS embed.FS

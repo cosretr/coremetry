@@ -36,7 +36,7 @@ import { DataTable, type ColumnDef, type DataTableStateInput } from '@/component
 import { Sparkline } from '@/components/Sparkline';
 import { AiEvalCandidates } from './AiEvalCandidates';
 import { useEvalsetCatalog, useEvalRuns, useEvalRun, useEvalCompare, useStartEvalRun, useCancelEvalRun } from '@/lib/queries';
-import type { AIToolset, EvalCaseResult, EvalCompare, EvalRunSummary, EvalSurfaceSummary, EvalsetConversation } from '@/lib/types';
+import type { AIToolset, EvalCaseResult, EvalCompare, EvalRunSummary, EvalSurfaceSummary, EvalsetConversation, EvalsetReal } from '@/lib/types';
 import { api } from '@/lib/api';
 import { FlashBox, humanize } from './shared';
 import {
@@ -354,6 +354,18 @@ export function AiEvalPanel() {
               });
             }} />
         )}
+        {/* v0.10.2468 — gerçek sorular: tohum + /ai'dan terfi edilen turlar; yalnız bu tıklamayla. */}
+        {catalog?.real && (
+          <RealRunControls real={catalog.real} defaultProfile={catalog.defaultProfileId}
+            disabledReason={!catalog.ready || active ? blockReason : ''} pending={startM.isPending}
+            onStart={(profiles, concurrency) => {
+              setFlash(null);
+              startM.mutate({ surfaces: [catalog.real?.surface ?? 'RealQuestions'], toolset, profiles, concurrency }, {
+                onSuccess: () => setParams({ run: null, case: null, cmp: null }),
+                onError: e => setFlash({ kind: 'err', text: humanize(e) }),
+              });
+            }} />
+        )}
         {active && <RunProgress run={active} nowMs={runsQ.dataUpdatedAt || Date.now()} />}
         {flash && <FlashBox kind={flash.kind}>{flash.text}</FlashBox>}
         <div className="mt-2.5 border-t border-(--divider) pt-2 text-[length:var(--fs-xs)] text-(--text3)">
@@ -392,6 +404,16 @@ export function AiEvalPanel() {
           <span className="field-hint mt-0">
             {selectedRun.status === 'running' ? 'Koşu bitince indirilebilir.' : 'docs/cosre/eval/fluency-<tarih>.md olarak kaydet.'}
           </span>
+        </div>
+      )}
+      {/* v0.10.2468 — vaka metrikli rapor (rota, araç, doğrulayıcı, alıntı, gecikme, token, düşünme) + önceki koşuyla kıyas. */}
+      {selectedRun && selectedRun.status !== 'running' && (
+        <div className={ROW}>
+          <Button variant="outline" size="sm"
+            onClick={() => { api.aiEvalsetRunReport(selectedRun.id).catch(e => setFlash({ kind: 'err', text: humanize(e) })); }}>
+            Koşu raporunu indir (.md)
+          </Button>
+          <span className="field-hint mt-0">Aynı yüzey seçimli önceki bitmiş koşuyla vaka vaka kıyas içerir.</span>
         </div>
       )}
       {selectedRun?.status === 'failed' && selectedRun.error && (
@@ -513,6 +535,56 @@ function FluencyRunControls({ conv, defaultProfile, disabledReason, pending, onS
         </Button>
       </div>
       <span className="field-hint mt-1 block">{reason || `${conv.turns * picked.length} sohbet turu · sırayla koşar`}</span>
+    </div>
+  );
+}
+
+/** v0.10.2468 — gerçek sorular satırı: bir ya da iki profil (ör. Qwen ve gemma),
+ *  sınırlı eşzamanlılık. Koşu yalnız bu düğmeyle başlar; günlük koşuya girmez. */
+function RealRunControls({ real, defaultProfile, disabledReason, pending, onStart }: {
+  real: EvalsetReal; defaultProfile: string; disabledReason: string; pending: boolean;
+  onStart: (profiles: string[], concurrency: number) => void;
+}) {
+  const profiles = real.profiles ?? [];
+  const [a, setA] = useState(defaultProfile);
+  const [b, setB] = useState('');
+  const [conc, setConc] = useState(1);
+  const picked = [a, b].filter((p, i, all) => p !== '' && all.indexOf(p) === i);
+  const label = (p: { id: string; label: string; model: string }) => `${p.label || p.id}${p.model ? ` · ${p.model}` : ''}`;
+  const reason = disabledReason || (real.error ? `Küme okunamadı: ${real.error}` : '')
+    || (real.cases === 0 ? 'Kümede vaka yok.' : picked.length === 0 ? 'En az bir profil seç.' : '');
+  const thinking = Object.entries(real.thinking ?? {}).map(([k, v]) => `${k}=${v}`).join(' · ');
+  return (
+    <div data-evs-real="" className="mt-3 border-t border-(--divider) pt-3">
+      <div className="text-[length:var(--fs-sm)] font-semibold">Gerçek sorular</div>
+      <p className="mb-2 mt-1 text-[length:var(--fs-xs)] text-(--text2)">
+        {real.cases} vaka: {real.seed} tohum (router fikstürleri + prod tarzı sorular) ve /ai'dan terfi edilen {real.promoted} tur.
+        Canlı veriyle, üretimin tam yolundan koşar. Tümü ve günlük koşuya girmez.
+        {thinking && <> Düşünme kipleri: {thinking}.</>}
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[220px]">
+          <SelectField label="Profil A" value={a} onChange={e => setA(e.target.value)}>
+            <option value="">— seç —</option>
+            {profiles.map(p => <option key={p.id} value={p.id}>{label(p)}</option>)}
+          </SelectField>
+        </div>
+        <div className="min-w-[220px]">
+          <SelectField label="Profil B" value={b} onChange={e => setB(e.target.value)}>
+            <option value="">— yok —</option>
+            {profiles.filter(p => p.id !== a).map(p => <option key={p.id} value={p.id}>{label(p)}</option>)}
+          </SelectField>
+        </div>
+        <div className="min-w-[140px]">
+          <SelectField label="Eşzamanlı vaka" value={String(conc)} onChange={e => setConc(Number(e.target.value) || 1)}>
+            {Array.from({ length: Math.max(1, real.maxConcurrency) }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
+          </SelectField>
+        </div>
+        <Button variant="outline" disabled={!!reason} loading={pending} onClick={() => onStart(picked, conc)}>
+          {picked.length > 1 ? 'İki profille koş' : 'Gerçek soruları koş'}
+        </Button>
+      </div>
+      <span className="field-hint mt-1 block">{reason || `${real.cases * picked.length} vaka · en çok ${conc} aynı anda`}</span>
     </div>
   );
 }

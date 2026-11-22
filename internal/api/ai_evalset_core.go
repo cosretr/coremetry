@@ -92,6 +92,10 @@ type evalExpect struct {
 	// bir araç BAŞARIYLA yürümeli (kanıt araması zorunlu). Aday vakaların
 	// veriden bağımsız beklentisi; adı ne olursa olsun bir araç yeter.
 	RequireEvidence bool `json:"requireEvidence,omitempty"`
+	// ExpectRoute — v0.10.2468 (gerçek sorular; yalnız ajan kipi): turun
+	// guided rotası (service_health, log_errors …) bu olmalı. Kademe
+	// (expectTier) ile birlikte "rota doğruluğu" metriğidir.
+	ExpectRoute string `json:"expectRoute,omitempty"`
 }
 
 type evalCase struct {
@@ -149,6 +153,9 @@ type evalCase struct {
 	// Evidence — v0.10.2360 (S3): vakanın kanıt kipi (off | shadow | on).
 	Evidence string `json:"evidence,omitempty"`
 	file     string
+	// real — v0.10.2468: "Gerçek sorular" kümesinden (tohum ya da terfi edilen
+	// tur). Niyet sınıflandırıcısı ATLANMAZ — üretimin tam yolu ölçülür.
+	real bool
 	// profile — v0.10.2322: koşu isteğinin profil listesinden bu plan öğesine
 	// sabitlenen profil (evalExpandProfiles); "" = üretimin yüzey eşlemesi.
 	profile string
@@ -840,6 +847,9 @@ type evalCatalog struct {
 	// Conversation — v0.10.2322 (H1): konuşma kipi kümesi (yalnız açık
 	// seçimle koşar; Total ve Surfaces'e girmez). nil = küme yok.
 	Conversation *evalCatalogConversation `json:"conversation,omitempty"`
+	// Real — v0.10.2468: gerçek sorular kümesi (yalnız açık seçimle; Total'e
+	// girmez). Katalog ucu doldurur (terfi edilen turlar ctx'li okuma).
+	Real *evalCatalogReal `json:"real,omitempty"`
 }
 
 // evalCatalogConversation — v0.10.2322: panelin akıcılık koşusu satırı.
@@ -945,6 +955,9 @@ type evalCaseResult struct {
 	Agent *evalAgentTrail `json:"agent,omitempty"`
 	// Turns — v0.10.2322 (H1): konuşma kipi vakasının turları (sınırlı).
 	Turns []evalConvTurnResult `json:"turns,omitempty"`
+	// Thinking — v0.10.2468: ajan vakasının anlatım düşünme yüzeyi ve koşu
+	// anındaki kipi ("guided=off"); ajan dışı vakada "".
+	Thinking string `json:"thinking,omitempty"`
 }
 
 type evalCompareSide struct {

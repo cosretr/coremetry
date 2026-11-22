@@ -1,0 +1,83 @@
+{
+  "schema": "coremetry.evalset/1",
+  "cases": [
+    {
+      "id": "real-seed-health", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2468 tohum — router fikstürü (sağlık sorusu): deterministik guided service_health rotası.",
+      "user": "checkout sağlığı nasıl?",
+      "expect": {"expectTier": "guided", "expectRoute": "service_health", "mustContain": ["checkout"], "maxLatencyMs": 60000}
+    },
+    {
+      "id": "real-seed-healthcheck", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2468 tohum — router fikstürü: sağlık kontrolü runbook'u.",
+      "user": "checkout servisinin sağlık kontrolünü yap",
+      "expect": {"expectTier": "guided", "expectRoute": "service_healthcheck", "mustContain": ["checkout"]}
+    },
+    {
+      "id": "real-seed-trace-search-url", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2468 tohum — prod tarzı soru (url + cluster ile trace arama); cluster kanıttan gelmeli, uydurulmamalı.",
+      "user": "checkout servisinde /api/orders url'li trace'leri cluster-a üzerinde bul",
+      "expect": {"expectTier": "guided", "mustNotContain": ["kubectl"], "knownEntities": ["checkout", "cluster-a"], "maxUnknownEntities": 2}
+    },
+    {
+      "id": "real-seed-trace-search-id", "surface": "ChatLoop", "mode": "agent",
+      "why": "v0.10.2468 tohum — router fikstürü: iş kimliğiyle trace arama.",
+      "user": "siparis no 73066 olan trace'leri bul",
+      "expect": {"expectTier": "guided", "expectRoute": "trace_search"}
+    },
+    {
+      "id": "real-seed-endpoint", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2468 tohum — prod tarzı soru (endpoint yavaşlığı): endpoint adayları rotası.",
+      "user": "checkout /api/orders/list endpoint'i neden yavaş",
+      "expect": {"expectTier": "guided", "expectRoute": "endpoint_candidates", "mustContain": ["checkout"]}
+    },
+    {
+      "id": "real-seed-logs-quote", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2468 tohum — prod tarzı soru (Türkçe log mesajı): mesaj kanıttaki dilde ve birebir alıntılanmalı (raporda doğrulayıcının alıntı denetimi).",
+      "user": "checkout servisinde son 30 dakikadaki hata loglarını özetle; en sık hata mesajını aynen yaz",
+      "expect": {"expectTier": "guided", "expectRoute": "log_errors", "mustContain": ["checkout"]}
+    },
+    {
+      "id": "real-seed-dependency-chain", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2468 tohum — prod tarzı soru (bağımlılık zinciri): kök neden rotası, bağımlılık kanıttan.",
+      "user": "checkout neden yavaşladı, hangi bağımlılık",
+      "expect": {"expectTier": "guided", "expectRoute": "root_cause", "mustContain": ["checkout"], "mustNotContain": ["kubectl delete"]}
+    },
+    {
+      "id": "real-seed-topology", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2468 tohum — router fikstürü: bağımlılık listesi.",
+      "user": "checkout hangi bağımlılıkları var?",
+      "expect": {"expectTier": "guided", "expectRoute": "service_topology"}
+    },
+    {
+      "id": "real-seed-kafka-lag", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2468 tohum — prod tarzı soru (Kafka lag): mesajlaşma sağlığı rotası.",
+      "user": "checkout kafka kuyruğunda birikme var mı",
+      "expect": {"expectTier": "guided", "expectRoute": "messaging_health"}
+    },
+    {
+      "id": "real-seed-exceptions", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2468 tohum — router fikstürü: servis exception grupları.",
+      "user": "checkout servisinde son 1 saatte hangi exception grupları arttı?",
+      "expect": {"expectTier": "guided", "expectRoute": "service_exceptions"}
+    },
+    {
+      "id": "real-seed-deploy", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2468 tohum — router fikstürü: deploy etkisi.",
+      "user": "checkout servisinde son 24 saatte deploy oldu mu? Deploy sonrasında hata oranı ya da gecikme değişti mi?",
+      "expect": {"expectTier": "guided", "expectRoute": "deploy_impact"}
+    },
+    {
+      "id": "real-seed-problems", "surface": "ChatLoop", "mode": "agent",
+      "why": "v0.10.2468 tohum — router fikstürü: açık problemler.",
+      "user": "son 3 saatte kaç hata oldu?",
+      "expect": {"expectTier": "guided", "expectRoute": "problems"}
+    },
+    {
+      "id": "real-seed-family-traces", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2468 tohum — router fikstürü: hatalı trace'ler.",
+      "user": "checkout hatalı trace'leri göster",
+      "expect": {"expectTier": "guided", "expectRoute": "family_traces"}
+    }
+  ]
+}

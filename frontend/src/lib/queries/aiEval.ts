@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import type { AIToolset, EvalRunSummary } from '@/lib/types';
+import type { AIToolset, EvalRunSummary, PromoteTurnRequest } from '@/lib/types';
 
 // queries/aiEval.ts — v0.10.940 (Settings › CoSRE › Değerlendirme). Evalset
 // panelinin okuma + yazma kancaları.
@@ -92,8 +92,10 @@ export function useStartEvalRun() {
     // v0.10.1311 — araç seti seçimi ('' = otomatik) gövdeye.
     // v0.10.2323 — profiles yalnız akıcılık koşusunda (en çok iki, sırayla).
     // v0.10.2331 — style yalnız akıcılık koşusunda (undefined = canlı ayar).
-    mutationFn: ({ surfaces, toolset, profiles, style }: { surfaces: string[]; toolset: AIToolset; profiles?: string[]; style?: boolean }) =>
-      style !== undefined ? api.aiEvalsetStartRun(surfaces, toolset, profiles ?? [], style)
+    // v0.10.2468 — concurrency yalnız gerçek sorular koşusunda.
+    mutationFn: ({ surfaces, toolset, profiles, style, concurrency }: { surfaces: string[]; toolset: AIToolset; profiles?: string[]; style?: boolean; concurrency?: number }) =>
+      concurrency !== undefined ? api.aiEvalsetStartRun(surfaces, toolset, profiles ?? [], style, concurrency)
+        : style !== undefined ? api.aiEvalsetStartRun(surfaces, toolset, profiles ?? [], style)
         : profiles?.length ? api.aiEvalsetStartRun(surfaces, toolset, profiles) : api.aiEvalsetStartRun(surfaces, toolset),
     onSuccess: res => {
       if (!res?.run) return;
@@ -133,5 +135,26 @@ export function useAcceptEvalCandidate() {
   return useMutation({
     mutationFn: (id: string) => api.aiEvalsetAcceptCandidate(id),
     onSettled: () => qc.invalidateQueries({ queryKey: aiEvalKeys.candidates() }),
+  });
+}
+
+/** v0.10.2468 — /ai "Başarısız turlar": inceleme kuyruğu (sunucu 60 s önbellekli; yoklama yok). */
+export function useFailedTurns(days: 1 | 7 | 30) {
+  return useQuery({
+    queryKey: [...EVAL_KEY, 'failed-turns', days] as const,
+    queryFn: ({ signal }) => api.aiFailedTurns(days, signal),
+    staleTime: 60_000,
+  });
+}
+
+/** v0.10.2468 — turu gerçek sorulara terfi et; aday listesi ve katalog (vaka sayısı) tazelenir. */
+export function usePromoteTurn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PromoteTurnRequest) => api.aiPromoteTurn(body),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: aiEvalKeys.candidates() });
+      void qc.invalidateQueries({ queryKey: aiEvalKeys.catalog() });
+    },
   });
 }

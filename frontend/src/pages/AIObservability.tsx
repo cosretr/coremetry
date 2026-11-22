@@ -12,6 +12,8 @@ import { SREEvalPanel } from './ai/SREEvalPanel'; // v0.10.1301 — AI SRE Faz 5
 import { PendingCasesPanel } from './ai/PendingCasesPanel'; // v0.10.1475 — eval'in onaylı vaka girdisi
 // CoSRE doğruluk ölçümü A2 — replay notlaması; admin bölümü tembel chunk (paket bütçesi).
 const SREReplayPanel = lazy(() => import('./ai/SREReplayPanel').then(m => ({ default: m.SREReplayPanel })));
+// v0.10.2468 — başarısız tur inceleme kuyruğu + eval'e terfi (admin; tembel chunk).
+const FailedTurnsPanel = lazy(() => import('./ai/FailedTurnsPanel').then(m => ({ default: m.FailedTurnsPanel })));
 import { useUrlRange } from '@/lib/useUrlRange';
 import { rcaPctText, rcaEngineTone, rcaSatisfactionText, rcaBucketLabel, rcaBucketSatisfaction, rcaCalibrationNote } from './ai/rcaQualityView';
 import type { RCAVerdictQuality, AIBudgetStatus, NegativeFeedbackCall, RouterGap, RouterGapsView } from '@/lib/types';
@@ -449,6 +451,7 @@ function AdminAIObservabilityPage() {
             bakan tek yer. */}
         <RCAQualityPanel range={range} />
         <RouterGapsPanel />
+        <Suspense fallback={null}><FailedTurnsPanel /></Suspense>
         <RoutingReportPanel />
         <NegativeFeedbackPanel />
         <CosreQualityPanel /> {/* CoSRE öğrenme Faz 2 — örtük sinyal gece puanı */}
