@@ -5,13 +5,14 @@
 //
 // Table kind: shadcn Table (T1 justification — server-sorted summary by
 // disagreement, capped at 50 rows, not sortable, rows not clickable).
-// No polling: one read on mount + explicit "Refresh".
+// No polling: one read on mount + explicit "Refresh". v0.10.2457: count-floor
+// table (sample gates under the same model; capped at 50 rows, T1 as above).
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/shadcn/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shadcn/table';
 import { api } from '@/lib/api';
 import { fmtDateTime } from '@/lib/utils';
-import { fmtShadowValue, ruleShadowTotals } from './samplingWeight';
+import { fmtFloorEquivalent, fmtShadowValue, ruleShadowTotals } from './samplingWeight';
 
 const INTRO = 'mb-2.5 text-[length:var(--fs-sm)] text-(--text2)';
 const MAX_ROWS = 50;
@@ -87,6 +88,30 @@ export function SamplingRuleShadowSection() {
                   <TableCell>{h.comparator} {fmtShadowValue(h.threshold)}</TableCell>
                   <TableCell>{h.comparator} {fmtShadowValue(h.retune)}</TableCell>
                   <TableCell>{h.note}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </>
+      )}
+      {d && (d.floors?.length ?? 0) > 0 && (
+        <>
+          <div className="mt-3 text-[length:var(--fs-sm)] font-semibold">Count floors under weighting</div>
+          <div className={INTRO}>
+            Sample gates count spans, not rates. Under weighting a pair with n stored spans reads about n × (failing weight
+            … rest weight), so more low-volume pairs pass the same floor. The range keeps today&apos;s pairs (all failing … all
+            healthy traffic). Gates whose reader still counts stored spans do not move when mode goes on. Not applied
+            automatically.
+          </div>
+          <Table>
+            <TableHeader><TableRow><TableHead>Gate</TableHead><TableHead>Floor now</TableHead><TableHead>Same pairs under weighting</TableHead><TableHead>Basis</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {(d.floors ?? []).slice(0, MAX_ROWS).map(f => (
+                <TableRow key={f.id}>
+                  <TableCell>{f.name}</TableCell>
+                  <TableCell>{f.floor.toLocaleString()}</TableCell>
+                  <TableCell className={f.weightedRead ? 'font-semibold' : undefined}>{fmtFloorEquivalent(f)}</TableCell>
+                  <TableCell>{f.note}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

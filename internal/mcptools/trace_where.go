@@ -416,7 +416,11 @@ func runTraceWhere(ctx context.Context, r traceWhereReader, a traceWhereArgs) (m
 	if a.Peer != "" {
 		out["peer_filter"] = a.Peer
 	}
-	notes := []string{"counts are stored (sampled) spans — use them to locate pods/peers, not as request totals",
+	countNote := "counts are stored (sampled) spans — use them to locate pods/peers, not as request totals"
+	if res.Weighted {
+		countNote = "counts are " + spanLabelWeighted + " (sampling-weighted) spans — use them to locate pods/peers; rates come from metrics"
+	}
+	notes := []string{countNote,
 		"pass a sample_trace_id back as trace_id for the span-level path of one request"}
 	if res.Clamped {
 		notes = append(notes, fmt.Sprintf("window capped to the last %d s (raw-span read)", int(res.To.Sub(res.From).Seconds())))

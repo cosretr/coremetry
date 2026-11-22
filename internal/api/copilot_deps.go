@@ -108,6 +108,11 @@ func (s *Server) guidedMessagingBundle(ctx context.Context, emit func(string, an
 	return ev, src, rerr
 }
 
+// messagingEvidenceLagNoteTR — v0.10.2457: bu kırılım lag okumaz; lag
+// yalnız VictoriaMetrics Kafka istemci metriğinden (messaging_flow /
+// get_messaging_health), yoksa ölçülmüyor.
+const messagingEvidenceLagNoteTR = "Not: consumer lag bu kırılımda yok — Kafka lag metriği VictoriaMetrics'te varsa messaging_flow verir, yoksa ölçülmüyor; yüksek avg/p95 consumer tarafındaki işleme süresidir.\n"
+
 // renderMessagingEvidenceTR — SAF (bkz. renderDBHealthEvidenceTR).
 func renderMessagingEvidenceTR(data mcptools.MessagingHealthData, service string, rangeS int64) (string, string, error) {
 	var b strings.Builder
@@ -129,6 +134,6 @@ func renderMessagingEvidenceTR(data mcptools.MessagingHealthData, service string
 	if data.StoreCapped {
 		fmt.Fprintf(&b, "Not: destination okuması tavana (%d) dayandı — liste EKSİK olabilir, sayılar alt sınırdır.\n", data.StoreRowLimit)
 	}
-	b.WriteString("Not: consumer-lag doğrudan ölçülmez (broker metriği ingest edilmiyor) — yüksek avg/p95 consumer tarafındaki işleme süresidir; lag şüphesinde Messaging sayfasındaki trend'e bak.\n")
+	b.WriteString(messagingEvidenceLagNoteTR)
 	return b.String(), fmt.Sprintf("messaging MV (%d destination, %s)", data.Total, fmtAgoTR(rangeS)), nil
 }

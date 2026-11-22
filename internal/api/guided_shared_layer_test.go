@@ -114,7 +114,7 @@ func TestRenderMessagingEvidenceTRByteShape(t *testing.T) {
 	}
 	want := "Mesajlaşma kırılımı — son 12sa, filo geneli.\n" +
 		"- kafka/kafka-mobile · orders · 900 mesaj-span · hata %0.50 · avg 4.4ms · p95 120.0ms\n" +
-		"Not: consumer-lag doğrudan ölçülmez (broker metriği ingest edilmiyor) — yüksek avg/p95 consumer tarafındaki işleme süresidir; lag şüphesinde Messaging sayfasındaki trend'e bak.\n"
+		"Not: consumer lag bu kırılımda yok — Kafka lag metriği VictoriaMetrics'te varsa messaging_flow verir, yoksa ölçülmüyor; yüksek avg/p95 consumer tarafındaki işleme süresidir.\n"
 	if got != want {
 		t.Errorf("kanıt metni değişti:\n--- gelen ---\n%s\n--- beklenen ---\n%s", got, want)
 	}

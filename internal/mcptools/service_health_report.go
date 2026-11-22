@@ -265,6 +265,9 @@ type hrSources struct {
 	problems    func(ctx context.Context) (uint64, error)
 	anomalies   func(ctx context.Context, from time.Time) ([]chstore.AnomalyEvent, error)
 	deploys     func(ctx context.Context, from, to time.Time) ([]chstore.Deploy, bool, error)
+	// spanWeighted — v0.10.2457: spanRED's read is sampling-weighted (label
+	// only; nil = stored).
+	spanWeighted func(from, to time.Time) bool
 }
 
 // hrRaw — paralel okumaların ham sonuçları (assembleHealthReport girdisi).
@@ -287,6 +290,7 @@ type hrRaw struct {
 	Anomalies     hrRead[[]chstore.AnomalyEvent]
 	Deploys       hrRead[[]chstore.Deploy]
 	DeployCovered bool
+	SpanWeighted  bool // v0.10.2457 — SpanCur read sampling-weighted
 }
 
 func hrGo[T any](ctx context.Context, wg *sync.WaitGroup, dst *hrRead[T], f func(context.Context) (T, error)) {
@@ -306,6 +310,7 @@ func hrGo[T any](ctx context.Context, wg *sync.WaitGroup, dst *hrRead[T], f func
 // collectHealthRaw — okumaları paralel koşturur (goroutine emit etmez).
 func collectHealthRaw(ctx context.Context, src hrSources, service, env string, from, to time.Time) hrRaw {
 	raw := hrRaw{Service: service, Env: env, From: from, To: to}
+	raw.SpanWeighted = src.spanWeighted != nil && src.spanWeighted(from, to)
 	w := to.Sub(from)
 	pFrom, pTo := from.Add(-w), from
 	var wg sync.WaitGroup
@@ -534,8 +539,12 @@ func hrTrend(cur, prior float64, priorSpans uint64) string {
 func assembleTraceErrors(raw hrRaw) HRTraceErrors {
 	t := HRTraceErrors{Source: "service_summary_5m (örneklenmiş span)",
 		Note: "örneklenmiş: upstream tüm hataları + %5'ini saklar — bu, saklanan span'ler içindeki hata payıdır, gerçek hata oranı DEĞİL (gerçek oran: metrics)"}
+	if raw.SpanWeighted { // v0.10.2457
+		t.Source = "service_summary_5m (" + spanLabelWeighted + " span)"
+		t.Note = hrWeightedSpanNote
+	}
 	if raw.Env != "" {
-		t.Source = "spans (örneklenmiş, ortam " + raw.Env + ")"
+		t.Source = "spans (" + spanLabelTR(raw.SpanWeighted) + ", ortam " + raw.Env + ")"
 	}
 	cur := raw.SpanCur
 	switch {
@@ -649,6 +658,9 @@ func hrProfileSource(p chstore.ErrorProfile) string {
 	if p.Clamped {
 		s += " (pencere 1 sa'e kırpıldı)"
 	}
+	if p.Weighted {
+		s += ", " + spanLabelWeighted
+	}
 	return s
 }
 
@@ -660,6 +672,9 @@ func assembleErrorOps(raw hrRaw) HROps {
 	}
 	p := raw.Profile.V
 	o.Source = hrProfileSource(p) + "; hata % = operation_summary_5m saklanan span'leri (örneklenmiş)"
+	if !raw.OpTotals.failed() && opTotalsWeighted(raw.OpTotals.V) {
+		o.Source = hrProfileSource(p) + "; hata % = operation_summary_5m span'leri (" + spanLabelWeighted + ")"
+	}
 	aggs := hrOpAggs(p.Rows)
 	if len(aggs) == 0 {
 		o.Status, o.Note = HRStatusNone, "pencerede hatalı span yok"
@@ -798,6 +813,9 @@ func assembleTechnical(raw hrRaw) HRTech {
 		t.DownstreamStatus = "hatalı aşağı hedef yok"
 	default:
 		t.DownstreamStatus = "vm = örneklenmemiş hata %; topology = saklanan span'ler (örneklenmiş)"
+		if !raw.Edges.failed() && len(raw.Edges.V) > 0 && raw.Edges.V[0].Weighted {
+			t.DownstreamStatus = "vm = örneklenmemiş hata %; topology = span'ler (" + spanLabelWeighted + ")"
+		}
 		if !vmOK {
 			t.DownstreamStatus += "; " + strings.Join(dsNotes, "; ")
 		}
@@ -857,6 +875,9 @@ func assembleMessaging(raw hrRaw) HRMessaging {
 	}
 	consumer := m.Family != nil && m.Family.Consume
 	flow := raw.Flow
+	if !flow.failed() && len(flow.V) > 0 && flow.V[0].Weighted {
+		m.Source = "messaging_caller_summary_5m (" + spanLabelWeighted + " span) + Kafka istemci metrikleri (VictoriaMetrics)"
+	}
 	if !flow.failed() {
 		for _, r := range flow.V {
 			if r.Service != raw.Service {
@@ -1031,6 +1052,12 @@ func hrSourcesFrom(d Deps, service, env string) hrSources {
 			return chstore.ServiceSummary{Name: service}, err
 		}
 		return rows[0], nil
+	}
+	s.spanWeighted = func(from, to time.Time) bool {
+		if servicesReadUseMV(to.Sub(from), env) {
+			return chstore.SpanMVWeighted(from, "service_summary_5m")
+		}
+		return st.RawSpansWeighted()
 	}
 	s.errProfile = func(ctx context.Context, from, to time.Time) (chstore.ErrorProfile, error) {
 		return st.ServiceErrorProfile(ctx, service, env, from, to)

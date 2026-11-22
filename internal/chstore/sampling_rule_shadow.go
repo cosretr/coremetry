@@ -362,3 +362,67 @@ func RuleRetuneHints(rules []AlertRule, m SamplingShadowModel) []RuleRetuneHint 
 	}
 	return out
 }
+
+// ── count floors (v0.10.2457) ─────────────────────────────────────────
+
+// CorrelatedChangesMinSpans — the `HAVING base_cnt + cur_cnt >= 30` gate of
+// GetCorrelatedChanges / GetCorrelatedChangesMV (correlate.go), named here
+// for the count-floor table; the SQL keeps its literal.
+const CorrelatedChangesMinSpans = 30
+
+// CountFloorHint — one span-count floor (a sample gate, not an alert
+// threshold). Under weighting a pair with n stored spans reads ≈ n·f, f
+// between ErrWeight (all failing) and OkWeight (all non-failing), so more
+// low-volume pairs pass the same floor. Healthy / Failing are the floors
+// that admit the same pairs (×OkWeight upper bound, ×ErrWeight lower).
+type CountFloorHint struct {
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	Floor   float64 `json:"floor"`
+	Healthy float64 `json:"healthy"`
+	Failing float64 `json:"failing"`
+	// WeightedRead — the reader counts represented spans under mode on
+	// (the floor's meaning shifts at the switch). false: the reader stays
+	// on stored counts today — the floor is unchanged under on, the
+	// equivalents apply once that reader is weighted.
+	WeightedRead bool   `json:"weightedRead"`
+	Note         string `json:"note"`
+}
+
+// CountFloorHints — SAF: the count floors that move under weighting —
+// enabled span-path alert rules' MinSamples (needsFloor = the evaluator's
+// sample-floor metric rule), db-health MinCallerCalls / MinCalls, the
+// slow-statement MinExecutions and the correlated-changes span gate.
+// Observation only: nothing reads these values back.
+func CountFloorHints(rules []AlertRule, needsFloor func(string) bool, db DBSlowQueryConfig, m SamplingShadowModel) []CountFloorHint {
+	mk := func(id, name string, floor float64, weighted bool, note string) CountFloorHint {
+		return CountFloorHint{ID: id, Name: name, Floor: floor, Healthy: floor * m.OkWeight, Failing: floor * m.ErrWeight, WeightedRead: weighted, Note: note}
+	}
+	out := []CountFloorHint{}
+	for _, r := range rules {
+		if !r.Enabled || r.LogQuery != "" || r.WatcherJSON != "" || r.Target != nil || r.MinSamples == 0 || needsFloor == nil || !needsFloor(r.Metric) {
+			continue
+		}
+		name := r.Name
+		if name == "" {
+			name = r.ID
+		}
+		out = append(out, mk("alert:"+r.ID, name+" · minSamples ("+r.Metric+")", float64(r.MinSamples), true,
+			"window span count is weighted under on: more low-volume services pass the gate"))
+	}
+	db = NormalizeDBSlowQuery(db)
+	h := DefaultDBHealth()
+	if db.Health != nil {
+		h = NormalizeDBHealth(*db.Health)
+	}
+	const dbNote = "db-health MV reads stay stored (not weighted yet): unchanged under on"
+	out = append(out,
+		mk("db-health:minCallerCalls", "DB health · calls per affected caller / 5 min", float64(h.MinCallerCalls), false, dbNote),
+		mk("db-health:minCalls", "DB health · calls per database / 5 min", float64(h.MinCalls), false, dbNote),
+		mk("db-slow:minExecutions", "Slow statement · executions / 5 min", float64(db.MinExecutions), false,
+			"db_statement_summary_5m read stays stored (not weighted yet): unchanged under on"),
+		mk("correlated-changes:minSpans", "Correlated changes · base + current spans", CorrelatedChangesMinSpans, false,
+			"raw-span count stays stored (not weighted yet): unchanged under on"),
+	)
+	return out
+}

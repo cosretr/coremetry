@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { RuleShadowRow } from '@/lib/types';
-import { FALLBACK_RULES, fmtShadowValue, impliedFactor, parseSamplingRules, ruleShadowTotals, withShares } from './samplingWeight';
+import type { CountFloorHint, RuleShadowRow } from '@/lib/types';
+import { FALLBACK_RULES, fmtFloorEquivalent, fmtShadowValue, impliedFactor, parseSamplingRules, ruleShadowTotals, withShares } from './samplingWeight';
 
 describe('samplingWeight helpers', () => {
   it('parses rules and rejects bad input', () => {
@@ -27,5 +27,18 @@ describe('samplingWeight helpers', () => {
     expect(fmtShadowValue(6.24)).toBe('6.24');
     expect(fmtShadowValue(0)).toBe('0');
     expect(fmtShadowValue(Number.NaN)).toBe('—');
+  });
+});
+
+describe('fmtFloorEquivalent (v0.10.2457)', () => {
+  const base: CountFloorHint = { id: 'alert:r1', name: 'Rule', floor: 50, healthy: 1000, failing: 50, weightedRead: true, note: '' };
+  it('weighted read: failing–healthy range', () => {
+    expect(fmtFloorEquivalent(base)).toBe(`50–${(1000).toLocaleString()}`);
+  });
+  it('stored read: unchanged, equivalent once weighted', () => {
+    expect(fmtFloorEquivalent({ ...base, weightedRead: false })).toBe(`unchanged (stored read); 50–${(1000).toLocaleString()} once weighted`);
+  });
+  it('equal weights collapse the range', () => {
+    expect(fmtFloorEquivalent({ ...base, healthy: 50 })).toBe('50');
   });
 });

@@ -1,5 +1,5 @@
 // samplingWeight.ts — v0.10.2430 pure helpers for SamplingWeightPanel.
-import type { RuleShadowRow, SamplingRule } from '@/lib/types';
+import type { CountFloorHint, RuleShadowRow, SamplingRule } from '@/lib/types';
 
 /** Rules textarea → rules; string = error text. */
 export function parseSamplingRules(text: string): SamplingRule[] | string {
@@ -73,4 +73,14 @@ export function fmtShadowValue(v: number): string {
   if (!Number.isFinite(v)) return '—';
   const a = Math.abs(v);
   return a === 0 ? '0' : a < 1 ? v.toFixed(3) : a < 100 ? v.toFixed(2) : v.toFixed(0);
+}
+
+// v0.10.2457 — count floors (sample gates) under weighting.
+
+/** Floor equivalent cell: the range that admits the same pairs, or the
+ *  "unchanged" note when the reader still counts stored spans. */
+export function fmtFloorEquivalent(f: CountFloorHint): string {
+  const r = (v: number) => Math.round(v).toLocaleString();
+  const range = f.failing === f.healthy ? r(f.healthy) : `${r(f.failing)}–${r(f.healthy)}`;
+  return f.weightedRead ? range : `unchanged (stored read); ${range} once weighted`;
 }

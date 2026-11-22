@@ -42,7 +42,7 @@ func TestLookupSQLBounded(t *testing.T) {
 		}
 	}
 	for _, q := range []EndpointObservedQuery{{Host: "api.example.com"}, {Services: []string{"orders-api"}, URL: "/v1"}} {
-		sql, extra := endpointObservedSQL("cluster", q)
+		sql, extra := endpointObservedSQL("cluster", q, false)
 		lkAssertBounded(t, "observed", sql, 2+len(extra)+1, true)
 		if !strings.Contains(sql, "PREWHERE kind IN ('server', 'consumer')") {
 			t.Error("observed giriş span PREWHERE'i yok")
@@ -57,7 +57,7 @@ func TestLookupSQLBounded(t *testing.T) {
 	}
 	for _, q := range []WhereQuery{{Service: "orders-api", Mode: WhereModeErrors}, {Service: "orders-api", Mode: WhereModeSlow, MinMs: 500, Peer: "osb"},
 		{Service: "orders-api", Mode: WhereModeMessaging}} {
-		sql, extra := whereSQL("cluster", q)
+		sql, extra := whereSQL("cluster", q, false)
 		args := whereArgs(q, extra, time.Unix(0, 0), time.Unix(60, 0))
 		lkAssertBounded(t, "where/"+q.Mode, sql, len(args), true)
 		if args[0] != "orders-api" {

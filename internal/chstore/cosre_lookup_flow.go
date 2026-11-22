@@ -28,6 +28,9 @@ type MessagingFlowRow struct {
 	AvgMs       float64  `json:"avg_ms"`
 	P95Ms       float64  `json:"p95_ms"`
 	Pods        []string `json:"pods,omitempty"` // host_name (≤5)
+	// Weighted — v0.10.2457: spans / errors / avg / p95 read the sampling-
+	// weighted states; false = stored (sampled) spans.
+	Weighted bool `json:"-"`
 }
 
 // messagingFlowSQL — SAF: topic parçası ve/veya servis koşulu; bind sırası:
@@ -79,8 +82,13 @@ func (s *Store) MessagingFlow(ctx context.Context, topic, service string, from, 
 		limit = 40
 	}
 	from, to, _ = ClampLookupWindow(from, to, lookupMVMax)
-	rows, err := s.telemetryReadConn().Query(ctx, messagingFlowSQL(topic, service),
-		messagingFlowArgs(topic, service, from.Truncate(5*time.Minute), to, limit)...)
+	from = from.Truncate(5 * time.Minute)
+	// v0.10.2457 — sampling weight (the GLOBAL IN subquery reads only
+	// destination, no merge): mode ≠ on → identical SQL.
+	sql := messagingFlowSQL(topic, service)
+	wsql := s.weighSQL(sql, from, "messaging_caller_summary_5m")
+	weighted := wsql != sql
+	rows, err := s.telemetryReadConn().Query(ctx, wsql, messagingFlowArgs(topic, service, from, to, limit)...)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +99,7 @@ func (s *Store) MessagingFlow(ctx context.Context, topic, service string, from, 
 		if err := rows.Scan(&r.System, &r.Broker, &r.Destination, &r.Service, &r.Role, &r.Spans, &r.Errors, &avg, &r.P95Ms, &r.Pods); err != nil {
 			return nil, err
 		}
-		r.AvgMs, r.P95Ms = finiteOr0(safeF(avg)), finiteOr0(r.P95Ms)
+		r.AvgMs, r.P95Ms, r.Weighted = finiteOr0(safeF(avg)), finiteOr0(r.P95Ms), weighted
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -105,6 +113,9 @@ type DownstreamEdge struct {
 	Errors uint64  `json:"errors"`
 	AvgMs  float64 `json:"avg_ms"`
 	P99Ms  float64 `json:"p99_ms_max_bucket"`
+	// Weighted — v0.10.2457: calls / errors are represented calls
+	// (topology w_calls / w_errors); avg and p99 stay stored-span values.
+	Weighted bool `json:"-"`
 }
 
 // downstreamEdgesSQL — SAF.
@@ -118,6 +129,18 @@ ORDER BY c DESC
 LIMIT ?
 SETTINGS max_execution_time = 5`
 
+// downstreamEdgesSQLFor — SAF (v0.10.2457): w = represented calls / errors
+// per row (w_calls > 0, else the stored counts — rows from before the
+// column; topoCallsSel's rule); avg stays Σd / stored calls (no weighted
+// duration sum on the edge table). false = downstreamEdgesSQL byte for byte.
+func downstreamEdgesSQLFor(w bool) string {
+	if !w {
+		return downstreamEdgesSQL
+	}
+	return strings.Replace(downstreamEdgesSQL, "sum(calls) AS c, sum(errors) AS e,",
+		"toUInt64(round(sum("+topoWCalls+"))) AS c, toUInt64(round(sum("+topoWErrors+"))) AS e,", 1)
+}
+
 // DownstreamEdges — servisin aşağı bağımlılıkları; çağrı sayısı azalan.
 func (s *Store) DownstreamEdges(ctx context.Context, service string, from, to time.Time, limit int) ([]DownstreamEdge, error) {
 	out := []DownstreamEdge{}
@@ -128,7 +151,8 @@ func (s *Store) DownstreamEdges(ctx context.Context, service string, from, to ti
 		limit = 15
 	}
 	from, to, _ = ClampLookupWindow(from, to, lookupMVMax)
-	rows, err := s.conn.Query(ctx, downstreamEdgesSQL, from.Truncate(5*time.Minute), to, service, limit)
+	weighted := s.topoReadWeighted()
+	rows, err := s.conn.Query(ctx, downstreamEdgesSQLFor(weighted), from.Truncate(5*time.Minute), to, service, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +171,7 @@ func (s *Store) DownstreamEdges(ctx context.Context, service string, from, to ti
 		if name == "" || name == service {
 			continue
 		}
-		e.Target, e.Kind, e.AvgMs, e.P99Ms = name, kind, finiteOr0(safeF(avg)), finiteOr0(e.P99Ms)
+		e.Target, e.Kind, e.AvgMs, e.P99Ms, e.Weighted = name, kind, finiteOr0(safeF(avg)), finiteOr0(e.P99Ms), weighted
 		out = append(out, e)
 	}
 	return out, rows.Err()

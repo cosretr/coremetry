@@ -181,8 +181,12 @@ func TestGetMessagingHealthSchemaDeclaresLagAbsence(t *testing.T) {
 	// Lag YOKLUĞU açıklamada BÜYÜK harfle: modelin en olası halüsinasyonu
 	// tam olarak bir lag sayısı uydurmak (broker metrikleri ingest
 	// edilmiyor — memory: feedback-no-db-engine-metrics).
-	if !strings.Contains(tool.Description, "CONSUMER LAG IS NOT AVAILABLE") {
-		t.Error("açıklama consumer-lag'in ÖLÇÜLMEDİĞİNİ söylemiyor — model lag uydurur")
+	// v0.10.2457: lag yalnız lag[]'dan (VM Kafka metriği); yoksa ölçülmüyor.
+	if !strings.Contains(tool.Description, "CONSUMER LAG comes only from lag[]") || !strings.Contains(tool.Description, "never state a lag value") {
+		t.Error("açıklama lag kaynağını / yokluğunu söylemiyor — model lag uydurur")
+	}
+	if strings.Contains(tool.Description, "NOT AVAILABLE") || strings.Contains(tool.ShortDescription, "ÖLÇÜLMÜYOR;") {
+		t.Error("açıklama hâlâ lag'in hiç ölçülmediğini söylüyor (messaging_flow ile çelişki)")
 	}
 	if !strings.Contains(tool.Description, "produce_p95_ms") || !strings.Contains(tool.Description, "consume_p95_ms") {
 		t.Error("açıklama publish/process gecikme ayrışmasını anlatmıyor (v0.9.816)")

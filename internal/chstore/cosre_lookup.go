@@ -56,6 +56,9 @@ type EndpointRouteRow struct {
 	Calls   uint64  `json:"calls"`
 	Errors  uint64  `json:"errors"`
 	P95Ms   float64 `json:"p95_ms"`
+	// Weighted — v0.10.2457: calls / errors / p95 read the sampling-weighted
+	// states (mode on, coverage marker); false = stored (sampled) spans.
+	Weighted bool `json:"-"`
 }
 
 // endpointRoutesSQL — SAF: SQL + bind sırası (services boşsa kosul yok).
@@ -93,9 +96,12 @@ func (s *Store) EndpointEntryRoutes(ctx context.Context, services []string, frag
 	}
 	from, to, _ = ClampLookupWindow(from, to, LookupRoutesMax)
 	sql, extra := endpointRoutesSQL(services, frag)
+	// v0.10.2457 — sampling weight: mode ≠ on → identical SQL.
+	wsql := s.weighSQL(sql, from, "spanmetrics_1m")
+	weighted := wsql != sql
 	args := append([]any{from, to}, extra...)
 	args = append(args, limit)
-	rows, err := s.telemetryReadConn().Query(ctx, sql, args...)
+	rows, err := s.telemetryReadConn().Query(ctx, wsql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +112,7 @@ func (s *Store) EndpointEntryRoutes(ctx context.Context, services []string, frag
 		if err := rows.Scan(&r.Service, &r.Name, &r.Route, &r.Calls, &r.Errors, &r.P95Ms); err != nil {
 			return nil, err
 		}
-		r.P95Ms = finiteOr0(r.P95Ms)
+		r.P95Ms, r.Weighted = finiteOr0(r.P95Ms), weighted
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -153,10 +159,15 @@ type EndpointObservedResult struct {
 	To      time.Time
 	Clamped bool
 	MaxRows int // okuma tavanı (satır); tavana dayanmış olabilir
+	// Weighted — v0.10.2457: spans / error_spans / p95 are Σ sample_weight
+	// (mode on + column); false = stored (sampled) spans.
+	Weighted bool
 }
 
-// endpointObservedSQL — SAF.
-func endpointObservedSQL(clusterExpr string, q EndpointObservedQuery) (string, []any) {
+// endpointObservedSQL — SAF. w (v0.10.2457): sampling-weighted aggregates
+// (inner projection carries sample_weight, weighRawSQLWith); false = the
+// pre-v0.10.2457 text byte for byte.
+func endpointObservedSQL(clusterExpr string, q EndpointObservedQuery, w bool) (string, []any) {
 	var where strings.Builder
 	var args []any
 	if len(q.Services) > 0 {
@@ -184,7 +195,7 @@ FROM (
   SELECT service_name, ` + clusterExpr + ` AS cl, ` + lookupHostSQL + ` AS host, http_method, http_route,
          ` + externalPathURLSQL + ` AS u,
          ` + externalPathNormalizeSQL("if(position(u, '://') > 0, path(u), cutQueryStringAndFragment(u))") + ` AS g,
-         status_code, duration, host_name
+         status_code, duration, host_name` + rawWeightProj(w) + `
   FROM spans
   PREWHERE kind IN ('server', 'consumer')
   WHERE time >= ? AND time < ?` + where.String() + `
@@ -193,7 +204,7 @@ GROUP BY service_name, cl, host, http_method, path
 ORDER BY calls DESC
 LIMIT ?
 SETTINGS max_execution_time = 8, max_rows_to_read = ` + fmt.Sprint(maxRows) + `, read_overflow_mode = 'break'`
-	return sql, args
+	return weighRawSQLWith(w, sql), args
 }
 
 // EndpointObserved — giriş span'lerinde GÖZLENEN host / yol / fiil + hangi
@@ -212,7 +223,8 @@ func (s *Store) EndpointObserved(ctx context.Context, q EndpointObservedQuery) (
 	if q.Limit <= 0 {
 		q.Limit = 20
 	}
-	sql, extra := endpointObservedSQL(s.clusterExpr(), q)
+	res.Weighted = s.rawSpansWeighted()
+	sql, extra := endpointObservedSQL(s.clusterExpr(), q, res.Weighted)
 	args := append([]any{res.From, res.To}, extra...)
 	args = append(args, q.Limit)
 	rows, err := s.telemetryReadConn().Query(ctx, sql, args...)
@@ -287,10 +299,13 @@ type WhereResult struct {
 	From    time.Time
 	To      time.Time
 	Clamped bool
+	// Weighted — v0.10.2457: span / error / timeout counts and p50 / p95
+	// are sampling-weighted (mode on + column); false = stored spans.
+	Weighted bool
 }
 
-// whereSQL — SAF.
-func whereSQL(clusterExpr string, q WhereQuery) (string, []any) {
+// whereSQL — SAF. w (v0.10.2457): as endpointObservedSQL.
+func whereSQL(clusterExpr string, q WhereQuery, w bool) (string, []any) {
 	cond := `status_code = 'error'`
 	group := `host_name, cl, name, kind, peer`
 	switch q.Mode {
@@ -324,7 +339,7 @@ func whereSQL(clusterExpr string, q WhereQuery) (string, []any) {
        argMax(trace_id, duration) AS sample
 FROM (
   SELECT host_name, ` + clusterExpr + ` AS cl, name, kind, ` + lookupPeerSQL + ` AS peer,
-         status_code, status_msg, duration, trace_id, ` + lookupTimeoutSQL + ` AS to_flag
+         status_code, status_msg, duration, trace_id, ` + lookupTimeoutSQL + ` AS to_flag` + rawWeightProj(w) + `
   FROM spans
   PREWHERE service_name = ? AND ` + cond + `
   WHERE time >= ? AND time < ?` + peerCond + `
@@ -335,7 +350,7 @@ LIMIT ?
 SETTINGS max_execution_time = 8, max_rows_to_read = ` + fmt.Sprint(LookupScopedRowsMax) + `, read_overflow_mode = 'break'`
 	// bind sırası: [slow eşiği], servis, from, to, [peer×3], limit — PREWHERE
 	// metinde WHERE'den önce, slow eşiği cond içinde servisin ARDINDA.
-	return sql, args
+	return weighRawSQLWith(w, sql), args
 }
 
 // TraceWhere — servisin pencere içi hatalı / yavaş / mesajlaşma span'leri
@@ -349,7 +364,8 @@ func (s *Store) TraceWhere(ctx context.Context, q WhereQuery) (WhereResult, erro
 	if q.Limit <= 0 {
 		q.Limit = 20
 	}
-	sql, extra := whereSQL(s.clusterExpr(), q)
+	res.Weighted = s.rawSpansWeighted()
+	sql, extra := whereSQL(s.clusterExpr(), q, res.Weighted)
 	args := whereArgs(q, extra, res.From, res.To)
 	rows, err := s.telemetryReadConn().Query(ctx, sql, args...)
 	if err != nil {

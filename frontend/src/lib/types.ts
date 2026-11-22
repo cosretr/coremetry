@@ -8943,10 +8943,13 @@ export interface RuleShadowRow {
   todayOnly: number; weightedOnly: number; lastService?: string; lastToday: number; lastWeighted: number;
 }
 export interface RuleRetuneHint { ruleId: string; name: string; metric: string; comparator: string; threshold: number; retune: number; note: string }
+// v0.10.2457 — span-count floors under the same two-class model (chstore.CountFloorHint).
+export interface CountFloorHint { id: string; name: string; floor: number; healthy: number; failing: number; weightedRead: boolean; note: string }
 export interface IngestSamplingRuleShadow {
   mode: 'off' | 'shadow' | 'on'; modelOk: boolean; model: SamplingShadowModel;
   state: { since: string; updatedAt: string; model: SamplingShadowModel; rows: RuleShadowRow[]; overflow?: number };
   hints: RuleRetuneHint[];
+  floors?: CountFloorHint[];
 }
 // AIGeneralQuestions — /api/ai/general-questions (v0.10.1458): konu dışı sorulara
 // kısa genel cevap anahtarı; blob yokken allow=true. Go: chstore.AIGeneralQuestions.

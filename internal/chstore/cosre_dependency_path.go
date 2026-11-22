@@ -50,6 +50,9 @@ type DepHopEdge struct {
 	Kind   string // child'ın node_kind'ı (MV)
 	Cur    DepPathCell
 	Ref    DepPathCell
+	// Weighted — v0.10.2457: calls / errors are represented calls (both
+	// windows); avg / p99 stay stored-span values.
+	Weighted bool
 }
 
 // DepHopQuery — tek atlama: bilinen uç(lar)dan bir yön.
@@ -62,7 +65,13 @@ type DepHopQuery struct {
 }
 
 // DependencyHopSQL — SAF. Bind sırası DependencyHopArgs ile aynı.
-func DependencyHopSQL(up, env bool) string {
+func DependencyHopSQL(up, env bool) string { return DependencyHopSQLW(up, env, false) }
+
+// DependencyHopSQLW — SAF (v0.10.2457). w: cc / ce / rc / re are
+// represented calls / errors per row (w_calls > 0, else stored) and two
+// trailing stored-call sums (cn, rn) keep avg = Σd / stored calls. Bind
+// order unchanged; w=false is the pre-v0.10.2457 text byte for byte.
+func DependencyHopSQLW(up, env, w bool) string {
 	known, envCol := "parent_service", "parent_env"
 	if up {
 		known, envCol = "child_node", "child_env"
@@ -71,12 +80,25 @@ func DependencyHopSQL(up, env bool) string {
 	if env {
 		envCond = "\n  AND " + envCol + " IN (?, '')"
 	}
+	cnt := func(col, cond string) string { return "sumIf(" + col + ", " + cond + ")" }
+	tail := ""
+	if w {
+		cnt = func(col, cond string) string {
+			v := topoWCalls
+			if col == "errors" {
+				v = topoWErrors
+			}
+			return "toUInt64(round(sumIf(" + v + ", " + cond + ")))"
+		}
+		tail = ",\n       sumIf(calls, time_bucket >= cur_from) AS cn, sumIf(calls, time_bucket < cur_from) AS rn"
+	}
+	cur, ref := "time_bucket >= cur_from", "time_bucket < cur_from"
 	return fmt.Sprintf(`WITH ? AS cur_from
 SELECT parent_service, child_node, any(node_kind) AS kind,
-       sumIf(calls, time_bucket >= cur_from) AS cc, sumIf(errors, time_bucket >= cur_from) AS ce,
+       %s AS cc, %s AS ce,
        sumIf(sum_duration_ns, time_bucket >= cur_from) AS cd, maxIf(p99_ms, time_bucket >= cur_from) AS cp,
-       sumIf(calls, time_bucket < cur_from) AS rc, sumIf(errors, time_bucket < cur_from) AS re,
-       sumIf(sum_duration_ns, time_bucket < cur_from) AS rd, maxIf(p99_ms, time_bucket < cur_from) AS rp
+       %s AS rc, %s AS re,
+       sumIf(sum_duration_ns, time_bucket < cur_from) AS rd, maxIf(p99_ms, time_bucket < cur_from) AS rp%s
 FROM topology_edges_5m FINAL
 WHERE ((time_bucket >= ? AND time_bucket < ?) OR (time_bucket >= ? AND time_bucket < ?))
   AND %s IN ?
@@ -86,7 +108,8 @@ HAVING cc > 0 OR rc > 0
 ORDER BY cc DESC, rc DESC, parent_service, child_node
 LIMIT %d BY %s
 LIMIT ?
-SETTINGS max_execution_time = 5`, known, TopoCallEdgeFilterSQL, envCond, DepHopPerNode, known)
+SETTINGS max_execution_time = 5`, cnt("calls", cur), cnt("errors", cur), cnt("calls", ref), cnt("errors", ref), tail,
+		known, TopoCallEdgeFilterSQL, envCond, DepHopPerNode, known)
 }
 
 // DependencyHopArgs — SAF: bind değerleri (pencereler 5 dk kovasına hizalı).
@@ -109,19 +132,28 @@ func (s *Store) DependencyHop(ctx context.Context, q DepHopQuery) ([]DepHopEdge,
 		q.Nodes = q.Nodes[:DepHopFrontierMax]
 	}
 	q.Cur.From, q.Cur.To, _ = ClampLookupWindow(q.Cur.From, q.Cur.To, DepPathMaxWindow)
-	rows, err := s.conn.Query(ctx, DependencyHopSQL(q.Up, strings.TrimSpace(q.Env) != ""), DependencyHopArgs(q)...)
+	weighted := s.topoPeriodsWeighted(alignBucketStart(q.Ref.From))
+	rows, err := s.conn.Query(ctx, DependencyHopSQLW(q.Up, strings.TrimSpace(q.Env) != "", weighted), DependencyHopArgs(q)...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var e DepHopEdge
-		var cd, rd uint64
-		if err := rows.Scan(&e.Parent, &e.Child, &e.Kind, &e.Cur.Calls, &e.Cur.Errors, &cd, &e.Cur.P99Ms,
-			&e.Ref.Calls, &e.Ref.Errors, &rd, &e.Ref.P99Ms); err != nil {
+		var cd, rd, cn, rn uint64
+		dst := []any{&e.Parent, &e.Child, &e.Kind, &e.Cur.Calls, &e.Cur.Errors, &cd, &e.Cur.P99Ms,
+			&e.Ref.Calls, &e.Ref.Errors, &rd, &e.Ref.P99Ms}
+		if weighted {
+			dst = append(dst, &cn, &rn)
+		}
+		if err := rows.Scan(dst...); err != nil {
 			return nil, err
 		}
-		e.Cur.AvgMs, e.Ref.AvgMs = depAvgMs(cd, e.Cur.Calls), depAvgMs(rd, e.Ref.Calls)
+		if !weighted {
+			cn, rn = e.Cur.Calls, e.Ref.Calls
+		}
+		e.Cur.AvgMs, e.Ref.AvgMs = depAvgMs(cd, cn), depAvgMs(rd, rn)
+		e.Weighted = weighted
 		e.Cur.P99Ms, e.Ref.P99Ms = finiteOr0(e.Cur.P99Ms), finiteOr0(e.Ref.P99Ms)
 		out = append(out, e)
 	}
@@ -269,6 +301,9 @@ type DepServiceRED struct {
 	CurCalls, RefCalls uint64
 	CurErrs, RefErrs   uint64
 	CurP95Ms, RefP95Ms float64
+	// Weighted — v0.10.2457: read through weighSQLPeriods (both windows
+	// on the same side of the switch); false = stored spans.
+	Weighted bool
 }
 
 // dependencyServiceREDSQL — SAF. Bind: curFrom(is_cur), services, refFrom, refTo, curFrom, curTo, limit.
@@ -293,9 +328,14 @@ func (s *Store) DependencyServiceRED(ctx context.Context, services []string, cur
 	if len(services) > DepHopFrontierMax {
 		services = services[:DepHopFrontierMax]
 	}
-	cf := alignBucketStart(cur.From)
-	rows, err := s.telemetryReadConn().Query(ctx, dependencyServiceREDSQL(),
-		cf, services, alignBucketStart(ref.From), ref.To, cf, cur.To, 2*len(services))
+	cf, rf := alignBucketStart(cur.From), alignBucketStart(ref.From)
+	// v0.10.2457 — sampling weight; a pair straddling the switch reads
+	// stored values on both sides. Mode ≠ on → identical SQL.
+	sql := dependencyServiceREDSQL()
+	wsql := s.weighSQLPeriods(sql, rf, cf, "service_summary_5m")
+	weighted := wsql != sql
+	rows, err := s.telemetryReadConn().Query(ctx, wsql,
+		cf, services, rf, ref.To, cf, cur.To, 2*len(services))
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +352,7 @@ func (s *Store) DependencyServiceRED(ctx context.Context, services []string, cur
 		}
 		r := by[svc]
 		if r == nil {
-			r = &DepServiceRED{Service: svc}
+			r = &DepServiceRED{Service: svc, Weighted: weighted}
 			by[svc] = r
 			order = append(order, svc)
 		}

@@ -53,28 +53,36 @@ type ErrorProfile struct {
 	ErrorTraces uint64 // ayrık hatalı trace (uniq, ±%2)
 	Rows        []ErrorProfileRow
 	Truncated   bool // grup tavanı doldu
+	// Weighted — v0.10.2457: error counts are Σ sample_weight (mode on +
+	// column); ErrorTraces stays distinct stored traces.
+	Weighted bool
 }
 
 // ServiceErrorProfileSQL — SAF. Bind: service, [env], from, to, limit.
-func ServiceErrorProfileSQL(env bool) string {
+func ServiceErrorProfileSQL(env bool) string { return ServiceErrorProfileSQLW(env, false) }
+
+// ServiceErrorProfileSQLW — SAF (v0.10.2457). w: count() → Σ sample_weight
+// (inner projection carries the column); uniq(trace_id) stays stored.
+// w=false is the pre-v0.10.2457 text byte for byte.
+func ServiceErrorProfileSQLW(env, w bool) string {
 	envCond := ""
 	if env {
 		envCond = " AND deploy_env = ?"
 	}
-	return `SELECT grouping(name) AS is_total, name, err_type, http_status, grpc_code, db_system,
+	return weighRawSQLWith(w, `SELECT grouping(name) AS is_total, name, err_type, http_status, grpc_code, db_system,
        count() AS errors, uniq(trace_id) AS traces, any(trace_id) AS sample,
        substring(anyIf(status_msg, status_msg != ''), 1, 120) AS msg
 FROM (
   SELECT name, attr_values[indexOf(attr_keys, 'error.type')] AS err_type, http_status,
-         attr_values[indexOf(attr_keys, 'rpc.grpc.status_code')] AS grpc_code, db_system, trace_id, status_msg
+         attr_values[indexOf(attr_keys, 'rpc.grpc.status_code')] AS grpc_code, db_system, trace_id, status_msg`+rawWeightProj(w)+`
   FROM spans
-  PREWHERE service_name = ? AND status_code = 'error'` + envCond + `
+  PREWHERE service_name = ? AND status_code = 'error'`+envCond+`
   WHERE time >= ? AND time < ?
 )
 GROUP BY GROUPING SETS ((name, err_type, http_status, grpc_code, db_system), ())
 ORDER BY is_total DESC, errors DESC
 LIMIT ?
-SETTINGS max_execution_time = 8, max_rows_to_read = ` + fmt.Sprint(LookupScopedRowsMax) + `, read_overflow_mode = 'break'`
+SETTINGS max_execution_time = 8, max_rows_to_read = `+fmt.Sprint(LookupScopedRowsMax)+`, read_overflow_mode = 'break'`)
 }
 
 // ServiceErrorProfileArgs — SAF: bind sırası ServiceErrorProfileSQL ile aynı.
@@ -96,7 +104,8 @@ func (s *Store) ServiceErrorProfile(ctx context.Context, service, env string, fr
 		return p, fmt.Errorf("service required")
 	}
 	p.From, p.To, p.Clamped = ClampLookupWindow(from, to, HealthErrProfileMax)
-	rows, err := s.telemetryReadConn().Query(ctx, ServiceErrorProfileSQL(env != ""), ServiceErrorProfileArgs(service, env, p.From, p.To)...)
+	p.Weighted = s.rawSpansWeighted()
+	rows, err := s.telemetryReadConn().Query(ctx, ServiceErrorProfileSQLW(env != "", p.Weighted), ServiceErrorProfileArgs(service, env, p.From, p.To)...)
 	if err != nil {
 		return p, err
 	}
@@ -124,6 +133,8 @@ func (s *Store) ServiceErrorProfile(ctx context.Context, service, env string, fr
 type OpTotal struct {
 	Calls  uint64
 	Errors uint64
+	// Weighted — v0.10.2457: sampling-weighted states (mode on + marker).
+	Weighted bool
 }
 
 // ServiceOpTotalsSQL — SAF. Bind: service, names, from, to, limit.
@@ -144,7 +155,11 @@ func (s *Store) ServiceOpTotals(ctx context.Context, service string, names []str
 	if len(names) > healthOpTotalsMax {
 		names = names[:healthOpTotalsMax]
 	}
-	rows, err := s.telemetryReadConn().Query(ctx, ServiceOpTotalsSQL, service, names, from.Truncate(5*time.Minute), to, healthOpTotalsMax)
+	from = from.Truncate(5 * time.Minute)
+	// v0.10.2457 — sampling weight: mode ≠ on → identical SQL.
+	wsql := s.weighSQL(ServiceOpTotalsSQL, from, "operation_summary_5m")
+	weighted := wsql != ServiceOpTotalsSQL
+	rows, err := s.telemetryReadConn().Query(ctx, wsql, service, names, from, to, healthOpTotalsMax)
 	if err != nil {
 		return nil, err
 	}
@@ -155,6 +170,7 @@ func (s *Store) ServiceOpTotals(ctx context.Context, service string, names []str
 		if err := rows.Scan(&n, &t.Calls, &t.Errors); err != nil {
 			return nil, err
 		}
+		t.Weighted = weighted
 		out[n] = t
 	}
 	return out, rows.Err()

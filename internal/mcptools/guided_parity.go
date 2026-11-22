@@ -426,6 +426,82 @@ type MessagingHealthData struct {
 	Truncated     bool
 	StoreCapped   bool
 	StoreRowLimit int
+	// Lag — v0.10.2457: consumer lag read by the tool (nil = not read; the
+	// guided path does not read it).
+	Lag *MessagingLag
+}
+
+// MessagingLag — consumer lag beside the messaging breakdown (VictoriaMetrics
+// Kafka client metric, the messaging_flow resolver). Status is set when Rows
+// is empty: "ölçülmüyor: …" or "okunamadı: …" — never a value.
+type MessagingLag struct {
+	Rows     []mfLag
+	Services []string
+	Status   string
+	Unread   []string
+}
+
+const (
+	msgHealthLagServices = 3  // VM queries per call (one per service)
+	msgHealthLagRows     = 10 // lag rows in the body, highest max first
+)
+
+// msgHealthLagServicesOf — SAF: ≤msgHealthLagServices distinct services
+// calling destinations that have consume traffic, busiest destination first.
+func msgHealthLagServicesOf(rows []MessagingHealthRow) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, r := range rows {
+		if r.ConsumeCalls == 0 {
+			continue
+		}
+		for _, c := range r.Callers {
+			if c == "" || seen[c] {
+				continue
+			}
+			if len(out) >= msgHealthLagServices {
+				return out
+			}
+			seen[c] = true
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// readMessagingHealthLag — v0.10.2457: the same lag resolver as
+// messaging_flow (readConsumerLag), window ≤ mfLagWindow ending at to.
+func readMessagingHealthLag(ctx context.Context, d Deps, rows []MessagingHealthRow, from, to time.Time) *MessagingLag {
+	l := &MessagingLag{Services: msgHealthLagServicesOf(rows)}
+	switch {
+	case d.Metrics == nil:
+		l.Status = "ölçülmüyor: metrik kaynağı (VictoriaMetrics) bağlı değil"
+		return l
+	case len(l.Services) == 0:
+		l.Status = "ölçülmüyor: pencerede tüketim (consume) satırı yok"
+		return l
+	}
+	if to.Sub(from) > mfLagWindow {
+		from = to.Add(-mfLagWindow)
+	}
+	l.Rows, l.Unread = readConsumerLag(ctx, d, l.Services, "", from, to)
+	return finishMessagingLag(l)
+}
+
+// finishMessagingLag — SAF: cap + status.
+func finishMessagingLag(l *MessagingLag) *MessagingLag {
+	sort.SliceStable(l.Rows, func(i, j int) bool { return l.Rows[i].Max > l.Rows[j].Max })
+	if len(l.Rows) > msgHealthLagRows {
+		l.Rows = l.Rows[:msgHealthLagRows]
+	}
+	switch {
+	case len(l.Rows) > 0:
+	case len(l.Unread) > 0 && len(l.Unread) == len(l.Services):
+		l.Status = "okunamadı (okunamadı ≠ lag yok)"
+	default:
+		l.Status = "ölçülmüyor: " + hcKafkaLagMetric + " bu servisler için VictoriaMetrics'te yok"
+	}
+	return l
 }
 
 // messagingHealthData — zarf → yapısal veri. SAF, tablo testli.
@@ -511,7 +587,10 @@ func ReadMessagingHealth(ctx context.Context, d Deps, from, to time.Time, limit 
 // bu cümleyi kullanıyor. Consumer lag DOĞRUDAN ölçülmüyor (broker
 // metrikleri ingest edilmiyor, memory: feedback-no-db-engine-metrics) ve
 // model bunu bilmezse "lag şu kadar" diye UYDURUR.
-const messagingLagNote = "Consumer lag is NOT measured — broker metrics are not ingested. A high avg/p95 on the consumer side is PROCESSING time, not queue depth; never report a lag figure."
+// v0.10.2457: lag IS read when the Kafka client lag metric exists in
+// VictoriaMetrics (same resolver as messaging_flow) — the note now says
+// where a lag figure may come from instead of "never measured".
+const messagingLagNote = "Consumer lag comes ONLY from lag[] (VictoriaMetrics Kafka client metric, records). Without lag[] it is not measured (ölçülmüyor) — never report a lag figure; a high consumer avg/p95 is PROCESSING time, not queue depth."
 
 // messagingEmptyReasons — hiç messaging satırı yok.
 func messagingEmptyReasons() []string {
@@ -546,6 +625,17 @@ func messagingHealthPayload(data MessagingHealthData, windowS int) map[string]an
 		body["store_row_limit"] = data.StoreRowLimit
 		body["note"] = fmt.Sprintf("The store-side read hit its %d-row ceiling, so `total` is a LOWER bound on how many destinations exist.", data.StoreRowLimit)
 	}
+	if l := data.Lag; l != nil {
+		if len(l.Rows) > 0 {
+			body["lag"] = l.Rows
+			body["lag_source"] = hcKafkaLagMetric + " (VictoriaMetrics, ≤1 h; services: " + strings.Join(l.Services, ", ") + ")"
+		} else {
+			body["lag_status"] = l.Status
+		}
+		if len(l.Unread) > 0 {
+			body["lag_unread"] = l.Unread
+		}
+	}
 	body["next"] = "Tüketici yavaşsa o servisin RED'i için get_service_health; üretici/tüketici zincirini iz üzerinde takip için get_linked_traces; hata patlamasında get_log_histogram."
 	return body
 }
@@ -558,13 +648,14 @@ type getMessagingHealthArgs struct {
 func getMessagingHealthTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             "get_messaging_health",
-		ShortDescription: "Kuyruk/topic tarafı — (sistem, cluster, destination) RED + producer/consumer ayrımı. Filo geneli. CONSUMER LAG ÖLÇÜLMÜYOR; asla lag değeri verme.",
+		ShortDescription: "Kuyruk/topic tarafı — (sistem, cluster, destination) RED + producer/consumer ayrımı. Filo geneli. Consumer lag yalnız lag[]'dan (VM Kafka metriği); yoksa ölçülmüyor.",
 		Description: "Answer 'how is the QUEUE/TOPIC side doing' — the fleet-wide messaging breakdown from the 5-minute pre-aggregate: one row per " +
 			"(messaging.system, cluster, destination) with calls, errors, error rate, avg/p50/p95/p99, plus the producer/consumer split " +
 			"(produce_calls / consume_calls and their separate p95s) and the busiest calling services. " +
 			"READ THE SPLIT: produce_p95_ms is publish time (writing to the broker, usually fast); consume_p95_ms is PROCESSING time of the consumer. " +
-			"CONSUMER LAG IS NOT AVAILABLE — broker metrics are not ingested, so there is no queue-depth or lag figure anywhere in this response. " +
-			"Never state a lag value; if asked, say lag is not measured and reason from consume_p95_ms and error rate instead. " +
+			"CONSUMER LAG comes only from lag[] (per consumer service × topic, last/max records over ≤1 h): the VictoriaMetrics Kafka client metric " +
+			"kafka.consumer.records_lag_max for up to 3 consuming services — the same source as messaging_flow. Without lag[], lag_status says " +
+			"'ölçülmüyor' (or 'okunamadı'): then never state a lag value and reason from consume_p95_ms and error rate instead. " +
 			"SCOPE IS ALWAYS FLEET-WIDE (a topic is shared infrastructure). COST: one pre-aggregate read, cheap. " +
 			"BOUNDS: the window snaps DOWN to the 5-minute bucket at the start AND can include up to one bucket past the end, so treat counts as " +
 			"±5 minutes at the edges. An empty list is NOT an error and you get reasons. Never invent a topic name.",
@@ -603,6 +694,7 @@ func getMessagingHealthTool(d Deps) mcp.Tool {
 			if err != nil {
 				return nil, err
 			}
+			data.Lag = readMessagingHealthLag(ctx, d, data.Rows, from, to) // v0.10.2457
 			return messagingHealthPayload(data, windowS), nil
 		},
 	}

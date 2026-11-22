@@ -27,6 +27,7 @@ import (
 
 	"github.com/cilcenk/coremetry/internal/auth"
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/evaluator"
 	"github.com/cilcenk/coremetry/internal/otlp"
 )
 
@@ -143,6 +144,8 @@ type ingestSamplingRuleShadowResponse struct {
 	Model   chstore.SamplingShadowModel `json:"model"`
 	State   chstore.RuleShadowState     `json:"state"`
 	Hints   []chstore.RuleRetuneHint    `json:"hints"`
+	// Floors — v0.10.2457: span-count floors under the same model.
+	Floors []chstore.CountFloorHint `json:"floors"`
 }
 
 // getIngestSamplingRuleShadow — the persisted shadow counts (written by the
@@ -155,7 +158,7 @@ func (s *Server) getIngestSamplingRuleShadow(w http.ResponseWriter, r *http.Requ
 	}
 	cfg := chstore.CurrentIngestSampling()
 	model, ok := chstore.SamplingShadowModelFor(cfg)
-	resp := ingestSamplingRuleShadowResponse{Mode: cfg.Mode, ModelOK: ok, Model: model, Hints: []chstore.RuleRetuneHint{}}
+	resp := ingestSamplingRuleShadowResponse{Mode: cfg.Mode, ModelOK: ok, Model: model, Hints: []chstore.RuleRetuneHint{}, Floors: []chstore.CountFloorHint{}}
 	st, err := s.store.LoadRuleShadow(r.Context())
 	if err != nil {
 		writeErr(w, err)
@@ -169,6 +172,8 @@ func (s *Server) getIngestSamplingRuleShadow(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		resp.Hints = chstore.RuleRetuneHints(rules, model)
+		// v0.10.2457 — count floors (one more settings read, nothing on spans).
+		resp.Floors = chstore.CountFloorHints(rules, evaluator.MetricNeedsSampleFloor, s.store.GetDBSlowQuery(r.Context()), model)
 	}
 	writeJSON(w, resp)
 }

@@ -120,6 +120,34 @@ func groupMessagingFlow(rows []chstore.MessagingFlowRow) []mfTopic {
 	return out
 }
 
+// readConsumerLag — consumer lag of the given services from the
+// VictoriaMetrics Kafka client metric (hcKafkaLagFilter: kafka.consumer.
+// records_lag_max, topic breakdown), one query per service; topic "" = all
+// topics, else substring. Shared by messaging_flow and (v0.10.2457)
+// get_messaging_health. d.Metrics must be non-nil.
+func readConsumerLag(ctx context.Context, d Deps, consumers []string, topic string, from, to time.Time) ([]mfLag, []string) {
+	lags := []mfLag{}
+	var unread []string
+	for _, c := range consumers {
+		f, ferr := hcKafkaLagFilter(c, from, to)
+		if ferr != nil {
+			unread = append(unread, c+": "+ferr.Error())
+			continue
+		}
+		ser, qerr := d.Metrics.QueryMetric(ctx, f)
+		if qerr != nil {
+			unread = append(unread, c+": "+qerr.Error())
+			continue
+		}
+		for _, l := range lagRows(c, ser) {
+			if topic == "" || strings.Contains(strings.ToLower(l.Topic), strings.ToLower(topic)) {
+				lags = append(lags, l)
+			}
+		}
+	}
+	return lags, unread
+}
+
 // lagRows — SAF: VM serileri → topic başına son / en yüksek lag.
 func lagRows(service string, series []chstore.SpanMetricSeries) []mfLag {
 	var out []mfLag
@@ -179,6 +207,10 @@ func runMessagingFlow(ctx context.Context, d Deps, r flowReader, a messagingFlow
 	if err != nil {
 		return nil, err
 	}
+	weighted := len(rows) > 0 && rows[0].Weighted // v0.10.2457 — one read, one decision
+	if weighted {
+		out["source"] = "messaging_caller_summary_5m (" + spanLabelWeighted + " spans, 5-minute buckets)"
+	}
 	topics := groupMessagingFlow(rows)
 	out["topics"] = topics
 	out["has_more"] = len(rows) >= mfRowsMax
@@ -203,25 +235,7 @@ func runMessagingFlow(ctx context.Context, d Deps, r flowReader, a messagingFlow
 	case len(consumers) == 0:
 		out["lag_status"] = "no consumer service seen in the window"
 	default:
-		lags := []mfLag{}
-		var unread []string
-		for _, c := range consumers {
-			f, ferr := hcKafkaLagFilter(c, lagFrom, to)
-			if ferr != nil {
-				unread = append(unread, c+": "+ferr.Error())
-				continue
-			}
-			ser, qerr := d.Metrics.QueryMetric(ctx, f)
-			if qerr != nil {
-				unread = append(unread, c+": "+qerr.Error())
-				continue
-			}
-			for _, l := range lagRows(c, ser) {
-				if topic == "" || strings.Contains(strings.ToLower(l.Topic), strings.ToLower(topic)) {
-					lags = append(lags, l)
-				}
-			}
-		}
+		lags, unread := readConsumerLag(ctx, d, consumers, topic, lagFrom, to)
 		out["lag"] = lags
 		out["lag_source"] = hcKafkaLagMetric + " (consumer client metric, records)"
 		if len(lags) == 0 && len(unread) == 0 {
@@ -233,7 +247,7 @@ func runMessagingFlow(ctx context.Context, d Deps, r flowReader, a messagingFlow
 	}
 	out["notes"] = []string{
 		"producer p95_ms = publish time (writing to the broker); consumer p95_ms = processing time in the consumer",
-		"pods are the spans' host_name; error_pct is over stored (sampled) spans",
+		"pods are the spans' host_name; error_pct is over " + spanLabelLong(weighted) + " spans",
 	}
 	if len(topics) == 0 {
 		out["note"] = "no messaging span for this topic/service in the window — say so; do not invent a topic or consumer"
@@ -288,7 +302,11 @@ func runDownstreamCalls(ctx context.Context, d Deps, r flowReader, a downstreamC
 				rows = append(rows, edgeRow{e, pct(e.Errors, e.Calls)})
 			}
 			out["topology"] = rows
-			out["topology_source"] = "topology_edges_5m (sampled spans; avg over the window, p99 = worst 5-minute bucket)"
+			src := "topology_edges_5m (sampled spans; avg over the window, p99 = worst 5-minute bucket)"
+			if len(edges) > 0 && edges[0].Weighted {
+				src = "topology_edges_5m (calls/errors " + spanLabelWeighted + "; avg over stored spans, p99 = worst 5-minute bucket)"
+			}
+			out["topology_source"] = src
 		}
 	}
 	if d.DownstreamRED == nil {

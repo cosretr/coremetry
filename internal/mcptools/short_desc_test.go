@@ -73,6 +73,8 @@ const shortDescMinBytes = 60
 // 12 KB: ~1.2 KB (~300 token) pay, sonraki 6–8 araç için. Küçük model
 // bağlamı ve tur başı token maliyeti nedeniyle tavan kalır; her yeni araç
 // ölçülen B'ı bu yoruma yazar.
+// v0.10.2457 — get_messaging_health kısa metni (lag lag[]'dan, yoksa
+// ölçülmüyor) +21 B → 10864 B (simple 10354 B).
 const shortCatalogMaxBytes = 12000
 
 // shortCatalogSimpleMaxBytes — v0.10.1302: simple araç seti varyantının

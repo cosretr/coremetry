@@ -240,10 +240,14 @@ func runEndpointLookup(ctx context.Context, d Deps, r endpointLookupReader, a en
 			notes = append(notes, fmt.Sprintf("observed URL/host rows read only the last %d s of the window (raw-span cap)", int(obs.To.Sub(obs.From).Seconds())))
 		}
 		if len(obsSvcs) == 0 {
-			notes = append(notes, fmt.Sprintf("domain/URL search without a service reads at most %d spans (sampled spans; a missing row is not proof the domain is unused — give the service to search wider)", obs.MaxRows))
+			notes = append(notes, fmt.Sprintf("domain/URL search without a service reads at most %d spans (%s spans; a missing row is not proof the domain is unused — give the service to search wider)", obs.MaxRows, spanLabel(obs.Weighted)))
 		}
 	}
-	notes = append(notes, "observed spans/error_spans/p95_ms count stored (sampled) spans; rates and error % for decisions come from `red`")
+	if obs.Weighted {
+		notes = append(notes, "observed spans/error_spans/p95_ms are "+spanLabelWeighted+" (sampling-weighted) span counts; rates and error % for decisions come from `red`")
+	} else {
+		notes = append(notes, "observed spans/error_spans/p95_ms count stored (sampled) spans; rates and error % for decisions come from `red`")
+	}
 
 	// 3) RED — örneklenmemiş önce.
 	out["red"] = endpointLookupRED(ctx, d, routes, from, to)
@@ -306,7 +310,7 @@ func endpointLookupRED(ctx context.Context, d Deps, routes []chstore.EndpointRou
 			}
 		}
 		calls := rt.Calls
-		row.Source, row.Calls = "spanmetrics_1m (sampled spans)", &calls
+		row.Source, row.Calls = "spanmetrics_1m ("+spanLabel(rt.Weighted)+" spans)", &calls
 		if rt.Calls > 0 {
 			pct := round4(float64(rt.Errors) * 100 / float64(rt.Calls))
 			row.ErrPct = &pct

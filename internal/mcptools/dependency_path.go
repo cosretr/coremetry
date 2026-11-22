@@ -401,7 +401,7 @@ func dpView(e dpEdge, deploys map[string][]string) dpEdgeView {
 		c, r := round4(m.CurVol), round4(m.RefVol)
 		v.RPS, v.RefRPS = &c, &r
 	} else {
-		v.Source = "topology_edges_5m (sampled)"
+		v.Source = "topology_edges_5m (" + spanLabel(e.Weighted) + ")"
 		c, r := e.Cur.Calls, e.Ref.Calls
 		v.Calls, v.RefCalls = &c, &r
 		if e.Cur.P99Ms > 0 {
@@ -505,10 +505,15 @@ func runDependencyPath(ctx context.Context, d Deps, r depPathReader, a dependenc
 	winS := int(p.Cur.To.Sub(p.Cur.From).Seconds())
 	judgeAll(down, winS)
 	judgeAll(upE, winS)
+	// v0.10.2457 — sampling weight: MV calls are represented calls.
+	weighted := dpAnyWeighted(down) || dpAnyWeighted(upE)
+	if weighted {
+		notes[1] = dpWeightedNote
+	}
 
 	// VM (örnekleme öncesi) — sorulan servis + olası kaynağın üst ucu.
 	src, path := likelySource(p.Service, down)
-	vmStatus := "not_configured: no VictoriaMetrics HTTP client histogram reader — edge values are sampled MV values"
+	vmStatus := "not_configured: no VictoriaMetrics HTTP client histogram reader — edge values are " + spanLabel(weighted) + " MV values"
 	if d.DownstreamRED != nil && len(down) > 0 {
 		parents := []string{p.Service}
 		if src >= 0 {

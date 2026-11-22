@@ -226,6 +226,9 @@ every reader below emits byte-identical SQL and binds
 | Endpoints raw path (no spanmetrics coverage) | raw spans | `weighRawSQL` (+ `quantilesTDigestState` / outer merge) |
 | service_slowdown services arm | service_summary_5m, `?` inside merge conditions | `weighSQLArgs`: a mixed window repeats each condition AND its bind values (2× counts, 3× quantiles); placeholder/bind mismatch → untracked fallback |
 | business_code_summary_5m (CoSRE code → service calls / errors) | new weighted states (`w_span_count_state`, `w_error_count_state`) | same in-place migration + marker, gated on mode shadow/on (`weightedMVsWhenActive`); fresh CREATE weighted when `spans.sample_weight` exists |
+| CoSRE lookup tools (v0.10.2457): `endpoint_lookup` routes, `messaging_flow`, `get_service_health` operation totals, `dependency_path` caller RED | spanmetrics_1m / messaging_caller_summary_5m / operation_summary_5m / service_summary_5m | `weighSQL` (caller RED: `weighSQLPeriods`, a pair straddling the switch reads stored on both sides) |
+| CoSRE raw reads (v0.10.2457): `endpoint_lookup` observed host/path, `trace_where` service mode, `get_service_health` error profile | raw spans (column-projecting subquery) | inner SELECT projects `sample_weight` + `weighRawSQLWith`; `uniq(trace_id)`, `max`, `argMax` stay stored |
+| CoSRE topology (v0.10.2457): `downstream_calls` / health report edges, `dependency_path` hops | topology_edges_5m | calls / errors per row `if(w_calls > 0, w_calls, calls)`; avg stays Σd / stored calls; two-window hops weighted only when mode went on before the reference window |
 
 Rule shadow (`RuleShadowEligible`) follows: every window, error_rate and
 every transport `*_rate` whose numerator is a failing span (status error
@@ -386,3 +389,23 @@ the rules when switching to on. Prod shape (E = 1, O = 20):
 rates is equivalent to ~17 % stored; recommended `anomaly_sensitivity`
 error_rate AbsFloor for mode on: 0.05 (≈ today's 1 % stored), ErrorRamp
 MinRatioPct 0.01 (its lower clamp; today 0.2 % stored ≈ 0.01 % weighted).
+
+### Count floors (v0.10.2457)
+
+Sample gates count spans: under weighting a pair with n stored spans reads
+≈ n·f, f between E (all failing) and O (all non-failing), so more low-volume
+pairs pass the same floor. `CountFloorHints` lists floor × E … floor × O
+(the floors that keep today's pairs) on the same card. No live change.
+
+| Gate | Floor (default) | Reader weighted under on? |
+|---|---|---|
+| Alert `MinSamples` (ratio / latency metrics, span path) | per rule | yes — the floor's meaning shifts at the switch |
+| db-health `MinCallerCalls` / `MinCalls` | 10 / 100 per 5 min | no (db-health MV reads stay stored) — unchanged under on |
+| Slow statement `MinExecutions` | 20 per 5 min | no (db_statement_summary_5m stays stored) |
+| Correlated changes `base + cur ≥ 30` | 30 | no (raw count stays stored) |
+
+The CoSRE tools label weighted numbers "örnekleme düzeltilmiş" (`Weighted`
+on each chstore result); mode off / shadow keep the "sampled" texts and
+byte-identical SQL (`TestCoSREReadersModeOffIdentical`, hashes of the
+v0.10.2456 texts). `dependency_path`'s "< 20 calls is not judged" floor sees
+represented calls when weighted.
