@@ -658,7 +658,7 @@ func TestCodeFetchCarriesRunningVersion(t *testing.T) {
 		{"copilot_code_operation.go", "s.buildCodeContext(ctx, in.StackService, in.Stack, in.StackVersion)"},
 		{"copilot_exception.go", "s.buildCodeContext(ctx, codeSvc, in.Stack, in.StackVersion)"},
 		{"explain_trace_input.go", "StackVersion: anomaly.StackVersion(allSpans, stackService, stackSpanID, stackRes),"},
-		{"explain_trace_input.go", "stackSpanID, stackRes = lg.SpanID, lg.ResourceAttributes"},
+		{"explain_trace_input.go", "stackSpanID, stackRes = tl.StackRec.SpanID, tl.StackRec.ResourceAttributes"}, // v0.10.2456 — seçim explain_trace_logs.go
 		// v0.10.1047 — {service}: ResolveRepo'ya verilen AYNI servis adı kod
 		// çekicisine de gider (frame linkleri de ham adı verir; soyma tek yerde).
 		{"copilot_code.go", "stackparse.ErrorCodeTokens(stack), service, version)"},

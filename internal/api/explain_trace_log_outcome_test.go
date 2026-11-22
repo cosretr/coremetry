@@ -73,7 +73,8 @@ func TestTraceLogOutcomeWired(t *testing.T) {
 		return string(b)
 	}
 	in := read("explain_trace_input.go")
-	if !strings.Contains(in, "logOutcome = classifyTraceLogRead(true, page, lerr)") || !strings.Contains(in, "Logs:            logOutcome") {
+	// v0.10.2456 — okuma explain_trace_logs.go'da (requestId ek araması dahil).
+	if !strings.Contains(read("explain_trace_logs.go"), "out.Outcome = classifyTraceLogRead(true, page, lerr)") || !strings.Contains(in, "Logs:            logOutcome") {
 		t.Fatal("explain_trace_input log sonucunu taşımıyor")
 	}
 	if !strings.Contains(read("chat_explain_turn.go"), "Logs: sanitizeTraceLogOutcome(&in.Logs)") {

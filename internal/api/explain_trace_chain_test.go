@@ -302,7 +302,7 @@ func TestExplainTraceCarriesErrorChain(t *testing.T) {
 			t.Errorf("kanıt %q içermiyor:\n%s", want, user)
 		}
 	}
-	if !strings.Contains(sys, "CAUSAL CHAIN OUTRANKS THE SYMPTOM") {
+	if !strings.Contains(sys, "3. HATA KAYNAĞI") {
 		t.Error("sistem istemi zincir kuralını taşımıyor")
 	}
 	ev, _ := first["evidenceSpanIds"].([]any)

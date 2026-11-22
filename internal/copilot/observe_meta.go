@@ -135,6 +135,10 @@ var promptVersionRegistry = map[string]string{
 	"systemResourceClassify": systemResourceClassify,
 
 	// v0.10.2337 — v2 örnekle üslup (çekirdek, kalan biçim satırları, örnek başlığı).
+	// v0.10.2456 — Qwen-first: sohbet ve guided istemlerinin sondaki kural tekrarı.
+	"chatClosingCheck":   chatClosingCheck,
+	"guidedClosingCheck": guidedClosingCheck,
+
 	"chatStyleCore":       chatStyleCore,
 	"chatStyleKeep":       chatStyleKeep,
 	"styleExamplesHeader": styleExamplesHeader,

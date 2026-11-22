@@ -11,6 +11,7 @@ import type { ChatExplainMeta } from '@/lib/types';
 describe('traceLogEvidence', () => {
   it.each([
     [{ state: 'rows', rows: 12 } as const, '12 log satırı'],
+    [{ state: 'rows', rows: 12, via: 'request_id', reqIdRows: 3 } as const, '12 log satırı (3 requestId ile)'],
     [{ state: 'rows', rows: 0 } as const, ''],
     [{ state: 'none' } as const, 'log yok'],
     [{ state: 'failed', reason: 'timeout' } as const, 'log okunamadı (zaman aşımı)'],

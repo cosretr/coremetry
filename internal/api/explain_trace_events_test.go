@@ -372,7 +372,7 @@ func TestExplainTraceCarriesSpanExceptionEvent(t *testing.T) {
 			t.Errorf("explain kanıtı %q içermiyor:\n%s", want, user)
 		}
 	}
-	if !strings.Contains(sys, "EXCEPTION EVENTS COME FIRST") {
+	if !strings.Contains(sys, "EXCEPTION EVENT'İ") {
 		t.Error("trace sistem istemi exception kuralını taşımıyor")
 	}
 }

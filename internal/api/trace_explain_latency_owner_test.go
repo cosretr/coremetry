@@ -95,7 +95,7 @@ func TestExplainTraceButtonComposesLatencyOwner(t *testing.T) {
 		t.Errorf("cevap mekanik satırla başlamıyor:\n%.400s", w.Body.String())
 	}
 	sys, user := p.lastMessages(t)
-	if !strings.HasPrefix(user, cpGatewayBlock) || !strings.Contains(sys, "LATENCY OWNER IS PRECOMPUTED") {
+	if !strings.HasPrefix(user, cpGatewayBlock) || !strings.Contains(sys, "2. DIŞ BEKLEME SATIRI") {
 		t.Errorf("istem/kanıt eksik:\n%.200s", user)
 	}
 }

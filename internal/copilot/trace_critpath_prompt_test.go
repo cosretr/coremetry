@@ -17,11 +17,12 @@ import (
 
 func TestSystemTraceLatencyOwnerRule(t *testing.T) {
 	for _, want := range []string{
-		"LATENCY OWNER IS PRECOMPUTED",
+		"2. DIŞ BEKLEME SATIRI",
 		"KRİTİK YOL",
 		"dış bağımlılık bekleme: <hedef> <süre>",
-		"never the root or SERVER\nspan's duration, never a sum",
-		"(kök süresinin %<share>'ı)",
+		"(kökün ya da SERVER span'inin süresi değil, toplam değil)",
+		"(kök süresinin %<pay>'ı)",
+		"Span sürelerini\n   toplayarak yeniden bulma",
 	} {
 		if !strings.Contains(systemTraceBody, want) {
 			t.Errorf("systemTraceBody %q taşımıyor", want)
@@ -30,13 +31,13 @@ func TestSystemTraceLatencyOwnerRule(t *testing.T) {
 	if strings.Contains(systemTraceBody, "toplam sürenin %") {
 		t.Error(`"toplam sürenin %" geri geldi — pay kök süresine oranıdır`)
 	}
-	// ANSWER SHAPE'te önek satırı ilk bölüm başlığından ÖNCE.
-	shape := systemTraceBody[strings.Index(systemTraceBody, "ANSWER SHAPE"):]
-	if i, j := strings.Index(shape, "dış bağımlılık bekleme:"), strings.Index(shape, "**İşlem Akışı ve Veri Özeti**"); i < 0 || i > j {
-		t.Errorf("ANSWER SHAPE önek satırı başlıktan önce değil (%d, %d)", i, j)
+	// ÇIKTI BİÇİMİ'nde önek satırı ilk bölüm başlığından ÖNCE.
+	shape := systemTraceBody[strings.Index(systemTraceBody, "ÇIKTI BİÇİMİ"):]
+	if i, j := strings.Index(shape, "dış bağımlılık bekleme:"), strings.Index(shape, "**Özet:**"); i < 0 || j < 0 || i > j {
+		t.Errorf("ÇIKTI BİÇİMİ önek satırı başlıktan önce değil (%d, %d)", i, j)
 	}
 	for name, p := range map[string]string{"trace": SystemPromptTrace(), "code": SystemPromptTraceWithCode(), "opCode": SystemPromptTraceWithOperationCode(), "opCand": SystemPromptTraceWithOperationCandidate()} {
-		if !strings.Contains(p, "LATENCY OWNER IS PRECOMPUTED") {
+		if !strings.Contains(p, "2. DIŞ BEKLEME SATIRI") {
 			t.Errorf("%s bileşimi kuralı taşımıyor", name)
 		}
 	}

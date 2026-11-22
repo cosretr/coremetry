@@ -254,12 +254,12 @@ func TestTracePromptForbidsDuplicateIDLine(t *testing.T) {
 	if strings.Contains(p, "correlation IDs worth searching") {
 		t.Error("şablon hâlâ ayrı korelasyon-ID satırı istiyor — kopya geri gelir")
 	}
-	if !strings.Contains(flat(p), "must never repeat under another") {
+	if !strings.Contains(flat(p), "tek etiketle, tek satırda; ayrı korelasyon-ID satırı yok") {
 		t.Error("kopya-yasağı cümlesi yok — model aynı değeri iki etiketle basar")
 	}
 	// Taban paylaşılan: kodlu varyant da aynı yasağı taşımalı
 	// ([[feedback-fixes-have-second-halves]] — taban+ek deseni bunu bedava verir).
-	if !strings.Contains(flat(SystemPromptTraceWithCode()), "must never repeat under another") {
+	if !strings.Contains(flat(SystemPromptTraceWithCode()), "tek etiketle, tek satırda; ayrı korelasyon-ID satırı yok") {
 		t.Error("kodlu trace prompt'u yasağı kaybetmiş — taban ayrışmış olabilir")
 	}
 }

@@ -17,7 +17,14 @@ type traceLogOutcome struct {
 	State  string `json:"state"`            // rows | none | failed
 	Rows   int    `json:"rows,omitempty"`   // State=rows: okunan satır
 	Reason string `json:"reason,omitempty"` // State=failed: timeout | error | nostore
+	// v0.10.2456 — requestId ek araması satır kattıysa: Via="request_id",
+	// ReqIDRows = eklenen (Rows toplamı içerir).
+	Via       string `json:"via,omitempty"`
+	ReqIDRows int    `json:"reqIdRows,omitempty"`
 }
+
+// traceLogViaRequestID — Via değeri (requestId / correlationId ek araması).
+const traceLogViaRequestID = "request_id"
 
 const (
 	traceLogRows   = "rows"
@@ -58,7 +65,11 @@ func sanitizeTraceLogOutcome(o *traceLogOutcome) *traceLogOutcome {
 		if o.Rows <= 0 {
 			return nil
 		}
-		return &traceLogOutcome{State: traceLogRows, Rows: min(o.Rows, 1000)}
+		out := &traceLogOutcome{State: traceLogRows, Rows: min(o.Rows, 1000)}
+		if o.Via == traceLogViaRequestID && o.ReqIDRows > 0 {
+			out.Via, out.ReqIDRows = traceLogViaRequestID, min(o.ReqIDRows, out.Rows)
+		}
+		return out
 	case traceLogNone:
 		return &traceLogOutcome{State: traceLogNone}
 	case traceLogFailed:

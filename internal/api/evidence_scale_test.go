@@ -639,8 +639,9 @@ func TestTraceExplainInputScalesWithModel(t *testing.T) {
 	// bugünkü kesimler tabanda görünür
 	lastFrame := "at " + fmt.Sprintf(esLastApp, 69, 69, 79)
 	if !strings.Contains(base.User, "(trace'in tamamı 300 span; hatalar + en yavaşlar öncelikli 100 span analiz edildi)") ||
-		strings.Contains(base.User, lastFrame) || strings.Contains(base.User, "log-0015") || !strings.Contains(base.User, "log-0014") {
-		t.Fatal("taban fikstür bugünkü kesimleri göstermeli (100 span, 12 satır stack, 15 log)")
+		strings.Contains(base.User, lastFrame) || !strings.Contains(base.User, "ERROR orders-api ×40") || strings.Contains(base.User, "log-0001") {
+		// v0.10.2456 — aynı imzalı 40 ERROR satırı tek desen satırı (×40), temsilci stack'li ilk kayıt.
+		t.Fatal("taban fikstür bugünkü kesimleri göstermeli (100 span, 12 satır stack, 40 log → tek desen)")
 	}
 	wide := esInput(t, &Server{tempo: tp, logs: logs, copilot: esCop(esQwen)})
 	if strings.Contains(wide.User, "trace'in tamamı") || strings.Count(wide.User, `"name":"OrderFlow.step`) < 300 {
@@ -655,27 +656,21 @@ func TestTraceExplainInputScalesWithModel(t *testing.T) {
 	if !strings.Contains(wide.User, esText("mesaj", 2000)) {
 		t.Error("ölçek 8: 2000 rune'luk exception mesajı tam")
 	}
-	if !strings.Contains(wide.User, "log-0039") || !strings.Contains(wide.User, "log-0039 "+esText("gövde", 1500)) {
-		t.Error("ölçek 8: 40 log satırının hepsi tam gövdeyle")
+	if !strings.Contains(wide.User, "log-0000 "+esText("gövde", 1500)) {
+		t.Error("ölçek 8: desen temsilcisi tam gövdeyle")
 	}
 	// hâlâ uzunsa notlar: 1000 span → 800 + not; 200 log → 120
 	big := esInput(t, &Server{tempo: esTempo(t, 1000, 100, 5, 0), logs: &cbLogStore{recs: esLogs(200, 50, 5)}, copilot: esCop(esQwen)})
 	if !strings.Contains(big.User, "(trace'in tamamı 1000 span; hatalar + en yavaşlar öncelikli 800 span analiz edildi)") {
 		t.Error("ölçek 8: 1000 span → 800 + doğru sayılı not")
 	}
-	if !strings.Contains(big.User, "log-0119") || strings.Contains(big.User, "log-0120") {
-		t.Error("ölçek 8: log satırı tavanı 120")
-	}
-	if !strings.Contains(big.User, "(Okunan 200 log satırının en ciddi 120 tanesi verildi; kalanı bütçe nedeniyle yazılmadı") {
-		t.Error("ölçek 8: yazılmayan log satırları modele söylenmeli")
-	}
-	if strings.Contains(wide.User, "log satırının en ciddi") || strings.Contains(base.User, "log satırının en ciddi") {
-		t.Error("tam taşınan logda ve ölçek 1'de not olmamalı")
+	if !strings.Contains(big.User, "ERROR orders-api ×200") || strings.Contains(big.User, "GÖSTERİLMEYEN") {
+		t.Error("ölçek 8: 200 aynı imzalı satır tek desen, gösterilmeyen yok")
 	}
 	// log bloğunun toplam bütçesi (192 KB): uzun gövdeli 120 satır sığmaz → en ciddiler + not
 	heavy := esInput(t, &Server{tempo: esTempo(t, 20, 100, 5, 0), logs: &cbLogStore{recs: esLogs(200, 4000, 5)}, copilot: esCop(esQwen)})
-	if n := strings.Count(heavy.LogsBlock, `"body":"log-`); n >= 120 || n < 30 || !strings.Contains(heavy.LogsBlock, fmt.Sprintf("(Okunan 200 log satırının en ciddi %d tanesi verildi", n)) {
-		t.Errorf("ölçek 8: toplam log bütçesi satırları sınırlamalı ve sayıyı söylemeli (%d satır)", n)
+	if !strings.Contains(heavy.LogsBlock, "ERROR orders-api ×200") {
+		t.Error("ölçek 8: uzun gövdeli 200 satır tek desen")
 	}
 	if len(heavy.LogsBlock) > 8*traceExplainLogsBlockBytes*5/4 {
 		t.Errorf("ölçek 8: log bloğu %d bayt, toplam bütçenin (%d) çok üstünde", len(heavy.LogsBlock), 8*traceExplainLogsBlockBytes)
@@ -1056,7 +1051,8 @@ func TestEvidenceScaleNoModelNamesOutsideModelcaps(t *testing.T) {
 		}
 	}
 	for f, pins := range map[string][]string{
-		"explain_trace_input.go":   {"evScale := s.evidenceScale(ctx)", "scaleCap(traceExplainSpanCap, evScale)", "scaleCap(traceExplainLogLines, evScale)", "traceEventLimitsFor(evScale)"},
+		"explain_trace_input.go":   {"evScale := s.evidenceScale(ctx)", "scaleCap(traceExplainSpanCap, evScale)", "traceEventLimitsFor(evScale)"},
+		"explain_trace_logs.go":    {"scaleCap(traceExplainLogLines, evScale)", "scaleCap(traceExplainLogsBlockBytes, evScale)"},
 		"explain_trace_events.go":  {"evScale := s.evidenceScale(ctx)"},
 		"explain_span.go":          {"spanExplainUserScaled(traceID, spans, *target, s.evidenceScale(ctx))"},
 		"copilot_drawer.go":        {`s.evidenceScaleSurface(ctx, "chat-drawer")`, "clampDrawerEvidenceScaled(in.User, in.LogsBlock, evScale)"},

@@ -13,12 +13,13 @@ func TestTraceFollowUpAddendumContract(t *testing.T) {
 	a := TraceFollowUpAddendum()
 	for _, want := range []string{"AKTİF BAĞLAM", "from_iso/to_iso", "source.state", "get_logs_for_trace",
 		"bağlamsal", "compare_periods", "list_metric_labels", "Eksik veri", "profiling",
-		"İşlem Akışı ve Veri Özeti", "Kök Neden ve Sonraki Adım", "Stacktrace Detayı", "cevaba yazma"} {
+		"**Özet:**", "**Kritik Yol**", "**Hata Kaynağı**", "**Olası Neden**", "**Önerilen Sonraki Adım**", "cevaba yazma", "SON HATIRLATMA"} {
 		if !strings.Contains(a, want) {
 			t.Errorf("ek talimatta %q yok", want)
 		}
 	}
-	for _, old := range []string{"Olası neden", "Güven:", "Bulgu", "Sonraki kontrol"} {
+	// v0.10.2456 — "Olası Neden" ilk cevabın bölümü olarak geri geldi (operatör 2026-11-22).
+	for _, old := range []string{"Güven:", "Bulgu", "Sonraki kontrol", "İşlem Akışı ve Veri Özeti"} {
 		if strings.Contains(a, old) {
 			t.Errorf("v0.10.986 — takip eki eski biçimi söylememeli: %q", old)
 		}

@@ -8505,6 +8505,9 @@ export interface TraceLogOutcome {
   state: 'rows' | 'none' | 'failed';
   rows?: number;
   reason?: 'timeout' | 'error' | 'nostore';
+  /** v0.10.2456 — requestId / correlationId ek araması satır kattı. */
+  via?: 'request_id';
+  reqIdRows?: number;
 }
 
 /**

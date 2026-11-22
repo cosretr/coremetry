@@ -8,6 +8,9 @@ describe('promoteHeadLine', () => {
     ['Hata zinciri:', '**Hata zinciri**'],
     ['Metod:', '**Metod**'],
     ['İşlem Akışı ve Veri Özeti', '**İşlem Akışı ve Veri Özeti**'],
+    ['Hata Kaynağı', '**Hata Kaynağı**'], // v0.10.2456
+    ['3. Önerilen Sonraki Adım', '**Önerilen Sonraki Adım**'],
+    ['Olası Neden: ödeme servisi 503 döndü', '**Olası Neden:** ödeme servisi 503 döndü'],
     ['1. Kök Neden ve Sonraki Adım', '**Kök Neden ve Sonraki Adım**'],
     ['### Kök Neden', '### Kök Neden'],
     ['**Stacktrace Detayı:**', '**Stacktrace Detayı**'],

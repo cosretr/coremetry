@@ -18,13 +18,13 @@ func TestStyleV1PromptsUnchanged(t *testing.T) {
 		got  string
 		hash string
 	}{
-		"Chat":          {SystemPromptChat(), "3dd6a7026abf37c44b8b54a455f0735b2f8d343b285dbfebb8c1a033d568c10f"},
-		"ChatRoundCap":  {SystemPromptChatRoundCap(), "939cf8dcddbc4f38d4e51107749ff0c4e72bdc3b0f429600460bc72341836763"},
-		"AgentLoop":     {SystemPromptChatAgentLoopFor(false), "67261d228ce8aa96c78fa91edb1f8a5bef170977962b8f4dbdf16db540d9b3d9"},   // CoSRE faz D — adım 4 compare_baseline (bilerek yenilendi); v0.10.2449 araç yönlendirmesi (bilerek yenilendi); v0.10.2453 dependency_path; v0.10.2454 sağlık raporu satırı (bilerek yenilendi)
-		"AgentLoop.s":   {SystemPromptChatAgentLoopFor(true), "37f8ea963a6a01835439b610bf0ea1256277463e27507307f62f398e47f28b87"},    // v0.10.2449 — adım 4 endpoint/trace/Kafka/repo araçları (bilerek yenilendi); v0.10.2453 dependency_path; v0.10.2454 sağlık raporu satırı (bilerek yenilendi)
-		"AgentLoopV2":   {SystemPromptChatAgentLoopV2For(false), "b835f88a8d4e04bb3f22d5ec3b73a3df8a7d76727fc0d3c67035b7450f4507ba"}, // v0.10.2356 — S2: adım 4 find_traces; CoSRE faz D compare_baseline (bilerek yenilendi); v0.10.2449 araç yönlendirmesi (bilerek yenilendi); v0.10.2453 dependency_path; v0.10.2454 sağlık raporu satırı (bilerek yenilendi)
-		"AgentLoopV2.s": {SystemPromptChatAgentLoopV2For(true), "d2d0fd326de94dfa2207a40958bc8ff6dc4c6542cc92d4e80e2ff930d5e17440"},  // v0.10.2449 — adım 4 endpoint/trace/Kafka/repo araçları (bilerek yenilendi); v0.10.2453 dependency_path; v0.10.2454 sağlık raporu satırı (bilerek yenilendi)
-		"GuidedChat":    {SystemPromptGuidedChat(), "7d6eb7ff63fc2f51398a250d1cb4e3a59528b860182c4181d96e80112003006f"},
+		"Chat":          {SystemPromptChat(), "eb9feed322976d8442c96b314bc4ceb1545244cec3db664440e1123a822a29f1"},                    // v0.10.2456 — SON KONTROL eki (bilerek yenilendi),
+		"ChatRoundCap":  {SystemPromptChatRoundCap(), "fcd14dbeba6208ec1a37b4c55bfd27f0ba9ffc4bed68e2b98d6b8edfa7176c5c"},            // v0.10.2456 — SON KONTROL eki (bilerek yenilendi),
+		"AgentLoop":     {SystemPromptChatAgentLoopFor(false), "e31757bc402a1a75d13ce974edeb549907c26774959b5b3dbcf4f54af4f7545f"},   // v0.10.2456 ÖNCELİK + adım 4 madde listesi (bilerek yenilendi); CoSRE faz D — adım 4 compare_baseline (bilerek yenilendi); v0.10.2449 araç yönlendirmesi (bilerek yenilendi); v0.10.2453 dependency_path; v0.10.2454 sağlık raporu satırı (bilerek yenilendi)
+		"AgentLoop.s":   {SystemPromptChatAgentLoopFor(true), "15044c2b491e2b28ac840ef67aae04163b9c260d0efa91f575cf847ed254e697"},    // v0.10.2456 ÖNCELİK + adım 4 madde listesi (bilerek yenilendi); v0.10.2449 — adım 4 endpoint/trace/Kafka/repo araçları (bilerek yenilendi); v0.10.2453 dependency_path; v0.10.2454 sağlık raporu satırı (bilerek yenilendi)
+		"AgentLoopV2":   {SystemPromptChatAgentLoopV2For(false), "08eb2e640d521b947c9666a3f02a6a68480cb879c68e5750894bd89ee40581a7"}, // v0.10.2456 ÖNCELİK + adım 4 madde listesi (bilerek yenilendi); v0.10.2356 — S2: adım 4 find_traces; CoSRE faz D compare_baseline (bilerek yenilendi); v0.10.2449 araç yönlendirmesi (bilerek yenilendi); v0.10.2453 dependency_path; v0.10.2454 sağlık raporu satırı (bilerek yenilendi)
+		"AgentLoopV2.s": {SystemPromptChatAgentLoopV2For(true), "06d307826b1cd5e99dc29b03ac9f37594e4dcd75e866a7af9589a6f8063163cf"},  // v0.10.2456 ÖNCELİK + adım 4 madde listesi (bilerek yenilendi); v0.10.2449 — adım 4 endpoint/trace/Kafka/repo araçları (bilerek yenilendi); v0.10.2453 dependency_path; v0.10.2454 sağlık raporu satırı (bilerek yenilendi)
+		"GuidedChat":    {SystemPromptGuidedChat(), "5d532213fdfc4e2ba35de49f98ba4bd0d3b2b82de80e80555752b0a2fb4b014c"},              // v0.10.2456 — örnek + SON KONTROL (bilerek yenilendi),
 		"GeneralChat":   {SystemPromptGeneralChat(), "01c948112dcad381a131c8d4aeed73e9a3c349b981e3daf0ad8ae32bdbc8ad5c"},
 	}
 	for name, p := range pins {

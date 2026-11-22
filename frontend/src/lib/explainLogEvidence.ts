@@ -8,7 +8,12 @@ const REASON: Record<string, string> = { timeout: 'zaman aşımı', nostore: 'lo
 export function traceLogEvidence(o: TraceLogOutcome | undefined): string {
   if (!o) return '';
   switch (o.state) {
-    case 'rows': return (o.rows ?? 0) > 0 ? `${o.rows} log satırı` : '';
+    case 'rows': {
+      if ((o.rows ?? 0) <= 0) return '';
+      // v0.10.2456 — requestId ek araması satır kattıysa kaynağı görünür.
+      const via = o.via === 'request_id' && (o.reqIdRows ?? 0) > 0 ? ` (${o.reqIdRows} requestId ile)` : '';
+      return `${o.rows} log satırı${via}`;
+    }
     case 'none': return 'log yok';
     case 'failed': return `log okunamadı (${REASON[o.reason ?? ''] ?? 'hata'})`;
     default: return '';

@@ -44,8 +44,8 @@ func TestGuidedNarrationPromptPerIntent(t *testing.T) {
 			}
 		})
 	}
-	// Derinliğin işareti: trace anlatıcısı 3-bölümlü yapıyı taşır.
-	if !strings.Contains(traceSys, "İşlem Akışı") {
+	// Derinliğin işareti: trace anlatıcısı bölümlü yapıyı taşır (v0.10.2456 — Özet → … → Önerilen Sonraki Adım).
+	if !strings.Contains(traceSys, "**Hata Kaynağı**") {
 		t.Error("SystemPromptTrace 3-bölümlü yapı çapasını kaybetmiş — bu test yeniden değerlendirilmeli")
 	}
 }

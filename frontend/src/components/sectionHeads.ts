@@ -20,6 +20,8 @@ const KNOWN = [
   'Hata ne demek', 'Nerede yoğunlaşıyor', 'Patlama mı, sürekli akış mı', 'Ne kontrol edilmeli', 'Trace özeti',
   'Hipotez', 'Teknik hatalar', 'Durum özeti', 'Yayılım ve Bağlam', 'Şüpheli Değişiklik', 'Metod', 'Metot',
   'Etkilenen metod', 'Etkilenen metot', 'Öneri', 'Öneriler', 'Çözüm', 'Çözüm Önerisi', 'Neden', 'Etki',
+  // v0.10.2456 — trace açıklamasının Qwen-first bölümleri.
+  'Kritik Yol', 'Hata Kaynağı', 'Olası Neden', 'Önerilen Sonraki Adım',
 ];
 const lc = (s: string) => s.toLocaleLowerCase('tr');
 const KNOWN_LC = new Set(KNOWN.map(lc));

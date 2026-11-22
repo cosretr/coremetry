@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +13,6 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/logstore"
 	"github.com/cilcenk/coremetry/internal/promptfmt"
-	"github.com/cilcenk/coremetry/internal/stackparse"
 	"github.com/cilcenk/coremetry/internal/tracechain"
 )
 
@@ -90,23 +88,15 @@ func traceLiteOfScaled(sp chstore.SpanRow, scale int) traceLite {
 // değerler aynı). Kanıt ölçeğiyle çarpılır (evidence_scale.go).
 const (
 	traceLiteDBStatementRunes = 600  // hata span'inin SQL ifadesi
-	traceExplainLogFetch      = 30   // log deposundan okunan satır
-	traceExplainLogLines      = 15   // prompt'a giren log satırı (yüksek severity önce)
+	traceExplainLogFetch      = 250  // v0.10.2456 — trace_id ile okunan satır (30 → 250; pivotLogLimit ≤500)
+	traceExplainLogLines      = 30   // v0.10.2456 — prompt'a giren ayrık satır/desen (15 → 30; desen ×adet)
 	traceExplainLogBodyBytes  = 600  // log gövdesi
 	traceExplainLogStackFirst = 1500 // ilk stack'li logun stack'i
 	traceExplainLogStackRest  = 900  // sonraki logların stack'i
-	// traceExplainLogsBlockBytes — log bloğunun TOPLAM gövde + stack baytı.
-	// Taban tavanlarda toplam zaten bunun altında kalır (15 × (600 + 900) +
-	// 600 ≈ 23 KB), o yüzden ölçek 1'de UYGULANMAZ. Ölçek > 1'de satır sayısı
-	// VE satır boyu birlikte büyür (çarpım ölçeğin karesi); toplam bununla
-	// doğrusal tutulur. Sıra severity-öncelikli olduğundan en ciddi satırlar
-	// kalır ve yazılmayan satır sayısı modele söylenir.
+	// traceExplainLogsBlockBytes — LOGLAR bloğunun TOPLAM baytı. v0.10.2456:
+	// her ölçekte uygulanır (× ölçek); gösterilmeyenler özet satırında.
 	traceExplainLogsBlockBytes = 24000
 )
-
-// traceExplainLogsOmittedFmt — ölçekli yolda yazılmayan log satırlarının notu
-// (%d: okunan satır, verilen satır).
-const traceExplainLogsOmittedFmt = "\n(Okunan %d log satırının en ciddi %d tanesi verildi; kalanı bütçe nedeniyle yazılmadı — eksik satırlara dayanarak sayım yapma.)"
 
 // traceRootSpan — kök: parent'ı olmayan span; yoksa en erken başlayan
 // (kırık/eksik parent zincirinde de bir cevap üretmeli). spans boş olmamalı.
@@ -374,92 +364,18 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 			}
 		}()
 	}
-	logOutcome := classifyTraceLogRead(false, nil, nil) // v0.10.1742 — depo yok
-	if s.logs != nil {
-		from := time.Unix(0, minT).Add(-time.Minute)
-		to := time.Unix(0, maxT).Add(time.Minute)
-		lctx, cancel := context.WithTimeout(ctx, 6*time.Second)
-		page, lerr := logstore.LogsForTrace(lctx, s.logs, id, from, to, scaleCap(traceExplainLogFetch, evScale))
-		logOutcome = classifyTraceLogRead(true, page, lerr)
-		if lerr == nil && page != nil && len(page.Logs) > 0 {
-			type liteLog struct {
-				Sev    string `json:"sev,omitempty"`
-				Svc    string `json:"svc,omitempty"`
-				ExType string `json:"exType,omitempty"`
-				Stack  string `json:"stack,omitempty"`
-				Body   string `json:"body,omitempty"`
-			}
-			logs := page.Logs
-			logsRead = logs
-			sort.SliceStable(logs, func(i, j int) bool { return logs[i].Severity > logs[j].Severity })
-			logLines := scaleCap(traceExplainLogLines, evScale)
-			logBytes, logBudget := 0, scaleCap(traceExplainLogsBlockBytes, evScale)
-			ll := make([]liteLog, 0, min(logLines, len(logs)))
-			for _, lg := range logs {
-				if len(ll) >= logLines || (evScale > 1 && logBytes >= logBudget) {
-					break
-				}
-				// v0.9.1182 (operatör-bildirimli) — stack ARANIR, tek bir
-				// anahtardan okunmaz. Eskiden yalnız `exception.stacktrace`
-				// bakılıyordu; ECS kurulumlarında alan `error.stack_trace` ve
-				// Java'nın en yaygın deseninde stack ayrı bir alanda DEĞİL,
-				// mesajın arkasında. İkisinde de kod çekici "stacktrace yok"
-				// diyordu ve model stack'i 600 baytlık gövde bütçesinin içinden
-				// yarım okuyordu ("metot ismi tam görünmüyor" notu buydu).
-				stackText, stackFromBody := stackparse.FromLog(lg.Attributes, lg.Body)
-				bodyForPrompt := lg.Body
-				if stackFromBody {
-					// Frame'ler artık stack alanında ve orada bütçe daha büyük;
-					// gövdeye yalnız mesaj başı kalır, aynı baytı iki kez
-					// ödemeyelim.
-					bodyForPrompt = stackparse.MessageHead(lg.Body)
-				}
-				e := liteLog{Sev: lg.SeverityText, Svc: lg.ServiceName, Body: truncate(bodyForPrompt, scaleCap(traceExplainLogBodyBytes, evScale))}
-				e.ExType = lg.Attributes["exception.type"] // nil map okuması güvenli
-				// v0.9.1182 — stack ataması artık `lg.Attributes != nil`
-				// koşulunun DIŞINDA. Gövdeden gelen bir stack, özniteliksiz bir
-				// kayıtta da geçerlidir ve eski yerleşim onu sessizce yutardı:
-				// tam olarak bu bug'ın (stack gövdede) en saf hâli.
-				if strings.TrimSpace(stackText) != "" {
-					// v0.9.842 — the FIRST log carrying a stacktrace gets a
-					// bigger budget (1500 vs 900). Because the sort above is
-					// severity-first, that log is the trace's most serious
-					// error, and it is the one the new "Stacktrace Detayı"
-					// section is asked to name a class, a method and a
-					// deployment unit from. 900 bytes routinely cut the frame
-					// list before the application frames — the framework
-					// preamble survived and the answer to "where in OUR code"
-					// did not. Only the first: the remaining stacks stay at
-					// 900 so the prompt budget does not grow with every
-					// duplicate of the same failure.
-					stackLimit := traceExplainLogStackRest
-					if rawStack == "" {
-						stackLimit = traceExplainLogStackFirst
-					}
-					e.Stack = truncate(stackText, scaleCap(stackLimit, evScale))
-					// v0.9.831 — kod çekici için HAM stack (prompt'a giren
-					// 900-byte kesilmiş kopya değil): frame'ler dosya+satır
-					// taşıyor ve kesik bir satır konumlandırılamaz. İlk
-					// stack'li log kazanır; sıralama severity-öncelikli
-					// olduğu için bu, trace'in EN CİDDİ hatası.
-					if rawStack == "" {
-						rawStack, stackService = stackText, lg.ServiceName
-						stackSpanID, stackRes = lg.SpanID, lg.ResourceAttributes
-						chainLogEx = traceChainLogException(lg, stackText) // v0.10.1371
-					}
-				}
-				logBytes += len(e.Body) + len(e.Stack)
-				ll = append(ll, e)
-			}
-			logsNote := ""
-			if evScale > 1 && len(ll) < len(logs) { // ölçek 1'de not yok (bayt bayt eski)
-				logsNote = fmt.Sprintf(traceExplainLogsOmittedFmt, len(logs), len(ll))
-			}
-			if lp, e := json.Marshal(ll); e == nil {
-				logsBlock = fmt.Sprintf("\n\nBu trace'in ilişkili LOGLARI (log store; stacktrace burada span event'lerinden zengin olabilir), yüksek severity önce:\n```json\n%s\n```%s\n\nTrace waterfall'ı VE logları BİRLİKTE yorumla — hata/stacktrace varsa kök nedeni logdaki stacktrace + exception.type'a dayandır ve ilgili span'ın StatusMsg'ıyla eşleştir.", promptfmt.FenceSafe(string(lp)), logsNote)
-			}
-		}
-		cancel()
+	// v0.10.2456 — LOGLAR bloğu explain_trace_logs.go'da: ≤250 satır okuma,
+	// requestId ek araması, desen toplama, her ölçekte bütçe, gösterilmeyen özeti.
+	topSpan := ""
+	if crit.OK && crit.Top >= 0 && crit.Top < len(crit.Steps) {
+		topSpan = crit.Steps[crit.Top].SpanID
+	}
+	tl := s.traceExplainLogs(ctx, id, allSpans, minT, maxT, evScale, chain.Origin.Span.SpanID, topSpan)
+	logsBlock, logsRead, logOutcome := tl.Block, tl.Read, tl.Outcome
+	if tl.RawStack != "" {
+		rawStack, stackService = tl.RawStack, tl.StackRec.ServiceName
+		stackSpanID, stackRes = tl.StackRec.SpanID, tl.StackRec.ResourceAttributes
+		chainLogEx = traceChainLogException(tl.StackRec, tl.RawStack) // v0.10.1371
 	}
 
 	// v0.10.1147 — loglarda stack yoksa "Kodu da incele" hata span'inin
