@@ -18,11 +18,11 @@ func TestAddRouterGapTotal(t *testing.T) {
 	for _, c := range []struct {
 		kind string
 		n    uint64
-	}{{RouterGapKindLoop, 7}, {RouterGapKindGeneral, 3}, {"", 1}, {RouterGapKindGeneral, 2}} {
+	}{{RouterGapKindLoop, 7}, {RouterGapKindGeneral, 3}, {"", 1}, {RouterGapKindGeneral, 2}, {RouterGapKindClarify, 4}} {
 		addRouterGapTotal(&tot, c.kind, c.n)
 	}
-	if tot.Loop != 8 || tot.General != 5 {
-		t.Errorf("toplam = %+v, want loop 8 general 5", tot)
+	if tot.Loop != 8 || tot.General != 5 || tot.Clarify != 4 {
+		t.Errorf("toplam = %+v, want loop 8 general 5 clarify 4", tot)
 	}
 }
 
@@ -40,7 +40,7 @@ func TestRouterGapKindExprMatchesLabels(t *testing.T) {
 	if has[aisurface.ChatPrefetch] {
 		t.Error("chat-prefetch router boşluğu sayılmamalı")
 	}
-	if routerGapKindExpr != `if(has_loop, 'loop', 'general')` {
+	if routerGapKindExpr != `if(has_loop, 'loop', if(has_clarify, 'clarify', 'general'))` {
 		t.Errorf("tür ifadesi değişti: %s", routerGapKindExpr)
 	}
 }
@@ -54,7 +54,9 @@ func TestRouterGapTurnsSQLGroupsByExchangeRoot(t *testing.T) {
 		"if(exchange_id = '', id,",
 		"GROUP BY turn_key",
 		"max(surface = ?)",
-		"max(surface != ?)",
+		"max(surface != ? AND NOT startsWith(surface, ?))",
+		"max(startsWith(surface, ?))",
+		"(surface IN (?) OR startsWith(surface, ?))",
 		"anyIf(user_email, user_email != '')",
 	} {
 		if !strings.Contains(routerGapTurnsSQL(), want) {
@@ -66,5 +68,42 @@ func TestRouterGapTurnsSQLGroupsByExchangeRoot(t *testing.T) {
 	marker := aisurface.ChildExchangeID(root, aisurface.ChatIntentNone)
 	if got, _, _ := strings.Cut(marker, aisurface.ExchangeSep); got != root {
 		t.Fatalf("işaret kökü %q, want %q", got, root)
+	}
+}
+
+// v0.10.2465 (operator-reported, 2026-11-22) — netleştirme turları (kaynak
+// sorusu doc_or_entity_ask vb., LLM'siz) router boşluğu sayılır, tur başına
+// TEK satır: etkileşim satırı "kök:turn" kökünde döngü / işaret satırlarıyla
+// aynı tur anahtarına iner; bind sırası SQL'deki ? sırasıyla aynı.
+func TestRouterGapClarifyTurns(t *testing.T) {
+	for _, route := range []string{"doc_or_entity_ask", "source_ask", ""} {
+		for _, deep := range []bool{false, true} {
+			l := aisurface.TurnLabel(aisurface.TierClarify, route, deep)
+			if !strings.HasPrefix(l, routerGapClarifyPrefix) {
+				t.Errorf("netleştirme etiketi %q önekle (%q) eşleşmiyor", l, routerGapClarifyPrefix)
+			}
+		}
+	}
+	for _, other := range []string{aisurface.TierLoop, aisurface.TierGuided, aisurface.TierDocRows} {
+		if l := aisurface.TurnLabel(other, "x", false); strings.HasPrefix(l, routerGapClarifyPrefix) {
+			t.Errorf("%q netleştirme sayılmamalı", l)
+		}
+	}
+	root := "0123456789abcdef0123456789abcdef"
+	if got, _, _ := strings.Cut(aisurface.TurnExchangeID(root), aisurface.ExchangeSep); got != root {
+		t.Fatalf("etkileşim satırı kökü %q, want %q (tur başına tek satır)", got, root)
+	}
+	args := routerGapTurnsArgs([]string{aisurface.Chat}, "since")
+	if n := strings.Count(routerGapTurnsSQL(), "?"); n != len(args) {
+		t.Fatalf("SQL %d bind, argüman %d", n, len(args))
+	}
+	want := []any{aisurface.ChatIntentNone, aisurface.ChatIntentNone, routerGapClarifyPrefix, routerGapClarifyPrefix}
+	for i, w := range want {
+		if args[i] != w {
+			t.Errorf("arg[%d] = %v, want %v", i, args[i], w)
+		}
+	}
+	if args[5] != routerGapClarifyPrefix || args[6] != "since" {
+		t.Errorf("WHERE argümanları = %v", args[4:])
 	}
 }

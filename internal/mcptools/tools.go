@@ -59,7 +59,7 @@
 //     doğru çağrının koşulu, orada kazanılan bayt yanlış argümanla
 //     harcanan bir tura değmez.
 //
-// Tool catalogue (81 tools · 12 toolsets — v0.10.2453 — 80 → 81: dependency_path.go (çok-atlamalı bağımlılık yolu, taban kıyası, olası kaynak; salt okuma, sohbet + MCP); v0.10.2449 — 75 → 80: endpoint_lookup.go, trace_where.go, repo_lookup.go, flow_tools.go messaging_flow + downstream_calls (endpoint / trace-nerede / repo / Kafka / aşağı bağımlılık soruları; salt okuma, sohbet + MCP); CoSRE faz D — 74 → 75: compare_baseline.go (yalnız-MV taban kıyası + grafik bloğu; salt okuma, sohbet + MCP); v0.10.1434: kaynak bazlı gruplama + operatör aç/kapa
+// Tool catalogue (82 tools · 12 toolsets — v0.10.2465 — 81 → 82: traces_search.go (çıplak değer → cluster/env/namespace çözümü + Traces toplamları + deep link; salt okuma, sohbet + MCP); v0.10.2453 — 80 → 81: dependency_path.go (çok-atlamalı bağımlılık yolu, taban kıyası, olası kaynak; salt okuma, sohbet + MCP); v0.10.2449 — 75 → 80: endpoint_lookup.go, trace_where.go, repo_lookup.go, flow_tools.go messaging_flow + downstream_calls (endpoint / trace-nerede / repo / Kafka / aşağı bağımlılık soruları; salt okuma, sohbet + MCP); CoSRE faz D — 74 → 75: compare_baseline.go (yalnız-MV taban kıyası + grafik bloğu; salt okuma, sohbet + MCP); v0.10.1434: kaynak bazlı gruplama + operatör aç/kapa
 // toolset.go'da, sayı DEĞİŞMEDİ; v0.10.1284 — 73 → 74: log_spike.go explain_log_spike (AI SRE Faz 1a,
 // log artışını ne açıklıyor: tepe tespiti + önceki pencereyle pod / seviye / desen payı kıyası; salt okuma, sohbet + MCP);
 // v0.10.1276 — 72 → 73: service_sweep.go service_health_sweep (CoSRE adım 7,
@@ -339,6 +339,11 @@ type Deps struct {
 	// v0.10.2449 — pod adı → sahibi servis(ler), entity.Resolver.PodsNamed
 	// (ad öneki tahmini yok). nil = pod girişi adlandırılmış hata döner.
 	PodServices func(ctx context.Context, pod string) ([]string, error)
+	// v0.10.2465 — traces_search değer çözümünün aday listeleri: span cluster
+	// değerleri, değeri içeren deploy_env'ler, görülen namespace'ler (api:
+	// picker okumaları, LC kolon / MV, memo'lu). nil = çözüm yalnız Remote
+	// Cluster adlarıyla.
+	TraceValueDims func(ctx context.Context, value string) (TraceValueDims, error)
 	// v0.10.1297 (operatör 2026-10-17: model linke coremetry.io yazdı) — kurulumun
 	// COREMETRY_PUBLIC_URL origin'i ("" = yapılandırılmamış). build_link yalnız bu
 	// doluysa mutlak `url` döner; boşken yalnız kök-göreli `href` — host UYDURULMAZ.
@@ -548,6 +553,10 @@ func ToolList(d Deps) []mcp.Tool {
 		// giriş rotaları + gözlenen host/yol + RED + domain → servis → pod
 		// (endpoint_lookup.go); endpoint kataloğunun hemen ardında.
 		endpointLookupTool(d),
+		// v0.10.2465 — "X'te / X içeren trace / çağrı var mı": değer çözümü
+		// (cluster → env → namespace → url) + Traces toplamları + link
+		// (traces_search.go); endpoint_lookup'ın yanında (url yorumu ona gider).
+		tracesSearchTool(d),
 		// v0.9.1091 (Faz 4) — parmak-izine gruplu istisnalar.
 		listExceptionGroupsTool(d),
 		// v0.9.1233 — grubun DEVAMI: stack + trace pivotu. Zincir burada

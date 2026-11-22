@@ -154,7 +154,12 @@ topology_edges_5m kenarı, dün aynı saatler ya da önceki dönem tabanına gö
 fark, deploy işaretleri, kötüleşen kenarlar; sorulan servisten tümü kötüleşmiş
 yolun en derin kenarı "olası kaynak" + sınırlı örnek trace; yukarıda etki alanı).
 
-81 araç, okudukları veri kaynağına göre **12 toolset**'e bölünür
+v0.10.2465'te 82 oldu: `traces_search` (çıplak değer → cluster / env /
+namespace çözümü — ucuz, düşük kardinaliteli boyutlar; hiçbiri değilse `url`
+yorumu endpoint_lookup'a — + Traces Aggregated toplamları, servis / operasyon,
+örnek trace id ve süzgeçleri kurulu `/traces` linki).
+
+82 araç, okudukları veri kaynağına göre **12 toolset**'e bölünür
 (`internal/mcptools/toolset.go`; her araç tam bir sette —
 `TestToolsetsPartitionCatalog`). Sayı DEĞİŞMEDİ; gruplama yeni.
 

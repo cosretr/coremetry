@@ -503,7 +503,8 @@ func (s *Server) aiRouterGaps(w http.ResponseWriter, r *http.Request) {
 		days = 30
 	}
 	// v2 — v0.10.2134: cevap şekli değişti (kind + gerçek toplamlar).
-	key := fmt.Sprintf("ai:router-gaps:v2:d=%d", days)
+	// v3 — v0.10.2465: netleştirme turları (kind clarify + totalClarify).
+	key := fmt.Sprintf("ai:router-gaps:v3:d=%d", days)
 	s.serveCached(w, r, key, 5*time.Minute, func(ctx context.Context) (any, error) {
 		gaps, totals, err := s.store.RouterGaps(ctx, time.Duration(days)*24*time.Hour, 50)
 		if err != nil {
@@ -514,7 +515,7 @@ func (s *Server) aiRouterGaps(w http.ResponseWriter, r *http.Request) {
 		// totalFallbacks = serbest döngü, totalGeneral = none → genel cevap.
 		return map[string]any{
 			"gaps": gaps, "days": days, "totalFallbacks": totals.Loop,
-			"totalGeneral": totals.General, "generatedAt": time.Now().UnixNano(),
+			"totalGeneral": totals.General, "totalClarify": totals.Clarify, "generatedAt": time.Now().UnixNano(),
 		}, nil
 	})
 }

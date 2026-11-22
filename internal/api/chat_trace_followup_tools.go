@@ -89,6 +89,7 @@ var traceFollowUpKeepTools = map[string]bool{
 	mcptools.TraceWhereName: true, mcptools.EndpointLookupName: true, mcptools.MessagingFlowName: true,
 	mcptools.DownstreamCallsName: true, mcptools.RepoLookupName: true,
 	mcptools.DependencyPathName: true, // v0.10.2453 — "bu yavaşlık hangi bağımlılıktan, kim çağırıyor"
+	mcptools.TracesSearchName:   true, // v0.10.2465 — "bu cluster'da başka trace var mı"
 	// exceptions (problems setinden)
 	"list_exception_groups": true, "get_exception_samples": true,
 	// changes

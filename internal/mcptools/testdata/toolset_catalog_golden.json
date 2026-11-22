@@ -1,7 +1,7 @@
 {
   "conditional/chat": {
-    "count": 80,
-    "sha256": "7958bdd06b8627b47974b2a54623b87313f6a933ce6001691d90f66c0769d198",
+    "count": 81,
+    "sha256": "7329bf49474cdefe248783a290a56020cc6e3566335299bd52ee7f303da9ac3c",
     "names": [
       "list_services",
       "list_teams",
@@ -49,6 +49,7 @@
       "list_metric_labels",
       "list_operations",
       "endpoint_lookup",
+      "traces_search",
       "list_exception_groups",
       "get_exception_samples",
       "search_code",
@@ -86,8 +87,8 @@
     ]
   },
   "conditional/chat_auto": {
-    "count": 80,
-    "sha256": "7958bdd06b8627b47974b2a54623b87313f6a933ce6001691d90f66c0769d198",
+    "count": 81,
+    "sha256": "7329bf49474cdefe248783a290a56020cc6e3566335299bd52ee7f303da9ac3c",
     "names": [
       "list_services",
       "list_teams",
@@ -135,6 +136,7 @@
       "list_metric_labels",
       "list_operations",
       "endpoint_lookup",
+      "traces_search",
       "list_exception_groups",
       "get_exception_samples",
       "search_code",
@@ -172,8 +174,8 @@
     ]
   },
   "conditional/chat_full": {
-    "count": 80,
-    "sha256": "7958bdd06b8627b47974b2a54623b87313f6a933ce6001691d90f66c0769d198",
+    "count": 81,
+    "sha256": "7329bf49474cdefe248783a290a56020cc6e3566335299bd52ee7f303da9ac3c",
     "names": [
       "list_services",
       "list_teams",
@@ -221,6 +223,7 @@
       "list_metric_labels",
       "list_operations",
       "endpoint_lookup",
+      "traces_search",
       "list_exception_groups",
       "get_exception_samples",
       "search_code",
@@ -258,8 +261,8 @@
     ]
   },
   "conditional/chat_simple": {
-    "count": 76,
-    "sha256": "aec7f43c08674a94c8bb601049c4ed6d9a7acc44db7200500ae0984c3fc7f582",
+    "count": 77,
+    "sha256": "9632dc38eed442dd20b1861a4047cea2b07166a048f6621919851808f451bb5f",
     "names": [
       "list_services",
       "list_teams",
@@ -303,6 +306,7 @@
       "list_metric_names",
       "list_operations",
       "endpoint_lookup",
+      "traces_search",
       "list_exception_groups",
       "get_exception_samples",
       "search_code",
@@ -341,12 +345,12 @@
   },
   "conditional/mcp_tools_list": {
     "count": -1,
-    "sha256": "e192746eea7339d1b923386b187c58c7dcd0d06852346b43783fa22e14c8e5d8",
+    "sha256": "d01e2495b5680575ac69b7bd563edcb225a53db8ed8f27dc89299da039f84155",
     "names": null
   },
   "conditional/tool_list": {
-    "count": 81,
-    "sha256": "29a5be454b96203fc86d3202d82a67a1d6344fe506395806dffb8c7ba02f26ff",
+    "count": 82,
+    "sha256": "1a6f742b86f898b8fc86891ce3cfe4a46dfefe0dbc2042b47ca1eef1b163cda7",
     "names": [
       "list_services",
       "list_teams",
@@ -394,6 +398,7 @@
       "list_metric_labels",
       "list_operations",
       "endpoint_lookup",
+      "traces_search",
       "list_exception_groups",
       "get_exception_samples",
       "search_code",
@@ -432,8 +437,8 @@
     ]
   },
   "conditional/v2": {
-    "count": 84,
-    "sha256": "22a24cd5269a33b81f009ed985df5c5e2a7524402074354c399eb29f46e87dbe",
+    "count": 85,
+    "sha256": "ff04c4b84d722d024b414afc3cb5b2ef73efe278df2f4c831b8415a10c826ea3",
     "names": [
       "list_services",
       "list_teams",
@@ -478,6 +483,7 @@
       "list_metric_names",
       "list_operations",
       "endpoint_lookup",
+      "traces_search",
       "list_exception_groups",
       "get_exception_samples",
       "search_code",
@@ -522,8 +528,8 @@
     ]
   },
   "zero/chat": {
-    "count": 75,
-    "sha256": "2de3cd8e026b6b1b440c938e2a2b2d371d6ce3e6efe97667267d49252cf9c90d",
+    "count": 76,
+    "sha256": "7e739191c57fe9691bf673e33d2667ace423009cafb0493fd79aad23cb0cb10e",
     "names": [
       "list_services",
       "list_teams",
@@ -570,6 +576,7 @@
       "list_metric_labels",
       "list_operations",
       "endpoint_lookup",
+      "traces_search",
       "list_exception_groups",
       "get_exception_samples",
       "repo_lookup",
@@ -603,8 +610,8 @@
     ]
   },
   "zero/chat_auto": {
-    "count": 75,
-    "sha256": "2de3cd8e026b6b1b440c938e2a2b2d371d6ce3e6efe97667267d49252cf9c90d",
+    "count": 76,
+    "sha256": "7e739191c57fe9691bf673e33d2667ace423009cafb0493fd79aad23cb0cb10e",
     "names": [
       "list_services",
       "list_teams",
@@ -651,6 +658,7 @@
       "list_metric_labels",
       "list_operations",
       "endpoint_lookup",
+      "traces_search",
       "list_exception_groups",
       "get_exception_samples",
       "repo_lookup",
@@ -684,8 +692,8 @@
     ]
   },
   "zero/chat_full": {
-    "count": 75,
-    "sha256": "2de3cd8e026b6b1b440c938e2a2b2d371d6ce3e6efe97667267d49252cf9c90d",
+    "count": 76,
+    "sha256": "7e739191c57fe9691bf673e33d2667ace423009cafb0493fd79aad23cb0cb10e",
     "names": [
       "list_services",
       "list_teams",
@@ -732,6 +740,7 @@
       "list_metric_labels",
       "list_operations",
       "endpoint_lookup",
+      "traces_search",
       "list_exception_groups",
       "get_exception_samples",
       "repo_lookup",
@@ -765,8 +774,8 @@
     ]
   },
   "zero/chat_simple": {
-    "count": 71,
-    "sha256": "a3df707cb7786409bef91c7c3ca094cb394c49e4de25a217df7b36016b300713",
+    "count": 72,
+    "sha256": "f4eb73e64deae4a11862f3139f71ff95359c3a2f812e771ab88f6c1e4ecaba49",
     "names": [
       "list_services",
       "list_teams",
@@ -809,6 +818,7 @@
       "list_metric_names",
       "list_operations",
       "endpoint_lookup",
+      "traces_search",
       "list_exception_groups",
       "get_exception_samples",
       "repo_lookup",
@@ -843,12 +853,12 @@
   },
   "zero/mcp_tools_list": {
     "count": -1,
-    "sha256": "e192746eea7339d1b923386b187c58c7dcd0d06852346b43783fa22e14c8e5d8",
+    "sha256": "d01e2495b5680575ac69b7bd563edcb225a53db8ed8f27dc89299da039f84155",
     "names": null
   },
   "zero/tool_list": {
-    "count": 81,
-    "sha256": "29a5be454b96203fc86d3202d82a67a1d6344fe506395806dffb8c7ba02f26ff",
+    "count": 82,
+    "sha256": "1a6f742b86f898b8fc86891ce3cfe4a46dfefe0dbc2042b47ca1eef1b163cda7",
     "names": [
       "list_services",
       "list_teams",
@@ -896,6 +906,7 @@
       "list_metric_labels",
       "list_operations",
       "endpoint_lookup",
+      "traces_search",
       "list_exception_groups",
       "get_exception_samples",
       "search_code",
@@ -934,8 +945,8 @@
     ]
   },
   "zero/v2": {
-    "count": 79,
-    "sha256": "230b29ec7914ebbf2b4f1ead987e8d2df457e9a4bee89ff73aa8bc283e824bc1",
+    "count": 80,
+    "sha256": "9729fb7ce5b0e423c1167a612914fe6e71c94962ed68f764e1d22221ee2948ce",
     "names": [
       "list_services",
       "list_teams",
@@ -979,6 +990,7 @@
       "list_metric_names",
       "list_operations",
       "endpoint_lookup",
+      "traces_search",
       "list_exception_groups",
       "get_exception_samples",
       "repo_lookup",

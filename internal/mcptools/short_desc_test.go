@@ -75,6 +75,8 @@ const shortDescMinBytes = 60
 // ölçülen B'ı bu yoruma yazar.
 // v0.10.2457 — get_messaging_health kısa metni (lag lag[]'dan, yoksa
 // ölçülmüyor) +21 B → 10864 B (simple 10354 B).
+// v0.10.2465 — 82 tool: traces_search (değer çözümü + Traces toplamları +
+// link; ölçülen +175 B → 11039 B; simple 10529 B). Tavan aynı.
 const shortCatalogMaxBytes = 12000
 
 // shortCatalogSimpleMaxBytes — v0.10.1302: simple araç seti varyantının

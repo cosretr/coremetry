@@ -586,7 +586,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.1942 (operator-reported) — "<takım> servisleri nasıl?" / "servislerim
 	// nasıl" servis SAĞLIĞI sorusudur: yüklü envantere gitmez, telemetriye gider
 	// (doküman / keşif / satır / wiki kademeleri atlanır; chat_clarify_entity.go).
-	if !skipDocs && forcedChatSource(ctx) == "" && isServiceHealthAsk(lastUserText(req.Messages)) {
+	// v0.10.2465 (operator-reported) — telemetriyi açıkça soran soru (trace, çağrı,
+	// url'inde X içeren, son N saat; chat_telemetry_cue.go) da kaynak sorusu almaz.
+	if !skipDocs && forcedChatSource(ctx) == "" && (isServiceHealthAsk(lastUserText(req.Messages)) || explicitTelemetryAsk(lastUserText(req.Messages))) {
 		ctx = withForcedChatSource(ctx, srcTelemetry)
 		skipDocs = true
 	}

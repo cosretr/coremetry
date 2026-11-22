@@ -29,7 +29,7 @@ func TestChatAgentLoopOffersLookupTools(t *testing.T) {
 		"v2/full":   SystemPromptChatAgentLoopV2For(false),
 		"v2/simple": SystemPromptChatAgentLoopV2For(true),
 	} {
-		for _, tool := range []string{"endpoint_lookup", "trace_where", "messaging_flow", "downstream_calls", "repo_lookup", "dependency_path"} { // v0.10.2453 dependency_path
+		for _, tool := range []string{"endpoint_lookup", "trace_where", "messaging_flow", "downstream_calls", "repo_lookup", "dependency_path", "traces_search"} { // v0.10.2453 dependency_path
 			if !strings.Contains(p, tool) {
 				t.Errorf("%s: %s yönlendirmesi yok", name, tool)
 			}

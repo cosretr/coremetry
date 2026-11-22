@@ -155,7 +155,7 @@ func toolResultDeepLink(tool, content string) (guidedAnswerLink, bool) {
 		label, prefix = "Servisler'de aç", "/services"
 	case mcptools.OpenProblemsName: // briefing Faz 1 — /problems veya /inbox
 		label, prefix = "Problemler'de aç", "/"
-	case mcptools.FindTracesName: // dilim 3
+	case mcptools.FindTracesName, mcptools.TracesSearchName: // dilim 3; v0.10.2465 traces_search
 		label, prefix = "Traces'te aç", "/traces?"
 	case mcptools.ExplainTraceName: // dilim 3
 		label, prefix = "Trace'i aç", "/trace/"

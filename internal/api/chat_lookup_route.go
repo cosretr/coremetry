@@ -24,6 +24,7 @@ package api
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/cilcenk/coremetry/internal/mcptools"
@@ -216,7 +217,29 @@ func lookupAskFor(question string) lookupAsk {
 	domain := lookupDomainToken(toks)
 	urlAsk := tokenHasPrefix(toks, lookupURLStems...)
 	epAsk := tokenHasPrefix(toks, lookupEndpointStems...) && hasExact(toks, lookupIdentityAsk...)
-	if (urlAsk || epAsk || (domain != "" && tokenHasPrefix(toks, "pod", "çöz", "servis", "cluster"))) && !health {
+	// v0.10.2465 (operator-reported) — değer araması: "url'inde X içeren çağrı /
+	// trace var mı", "X içeren trace", "X'te trace / çağrı var mı". Çıplak X
+	// çoğu zaman bir cluster / env adıdır (prod: ocp5 = openshift cluster):
+	// traces_search(value=X) önce ucuz boyutlarda çözer (cluster → env →
+	// namespace), hiçbiri değilse url yorumu endpoint_lookup'a gider. Yol
+	// biçimli parça ("/v1/orders") ve domain doğrudan endpoint_lookup.
+	frag := lookupURLFragmentQ(q, lookupURLFragment(toks))
+	fragAsk := frag != "" && (urlAsk || tokenHasPrefix(toks, "endpoint", "route", "rota", "path", "trace", "span", "çağrı", "call"))
+	if !fragAsk && domain == "" {
+		if v := lookupLocValue(toks); v != "" && tokenHasPrefix(toks, "trace", "span", "çağrı", "call", "istek", "request") {
+			frag, fragAsk = v, true
+		}
+	}
+	window := func(args map[string]string) map[string]string {
+		if v, explicit := guidedRangeSExplicit(norm); explicit && v > 0 {
+			args["range_s"] = strconv.FormatInt(v, 10)
+		}
+		return args
+	}
+	if fragAsk && domain == "" && !strings.HasPrefix(frag, "/") {
+		return ask(mcptools.TracesSearchName, "value", window(map[string]string{"value": frag}))
+	}
+	if (urlAsk || epAsk || fragAsk || (domain != "" && tokenHasPrefix(toks, "pod", "çöz", "servis", "cluster"))) && (!health || fragAsk) {
 		args := map[string]string{}
 		if domain != "" {
 			args["domain"] = domain
@@ -224,7 +247,15 @@ func lookupAskFor(question string) lookupAsk {
 		if op := opNameToken(q); op != "" {
 			args["operation"] = op
 		}
-		return ask(mcptools.EndpointLookupName, "endpoint", args)
+		why := "endpoint"
+		if fragAsk {
+			why = "url-fragment"
+			if domain == "" {
+				args["url"] = frag
+			}
+			window(args)
+		}
+		return ask(mcptools.EndpointLookupName, why, args)
 	}
 	// 4) yapıştırılan log + trace id, başka soru sözcüğü yok → trace_where.
 	if pasted && len(clues.TraceIDs) > 0 {
@@ -283,6 +314,7 @@ func lookupLoopPromptTR(a lookupAsk) string {
 
 // lookupToolHintTR — aracın cevapta nasıl aktarılacağı (tek cümle).
 var lookupToolHintTR = map[string]string{
+	mcptools.TracesSearchName:    "Cevapta hangi yorumun (cluster / env / namespace) eşleştiğini istek ve hata sayısıyla, en çok çağrılan servisleri p99 ile aktar; yorum url ise endpoint_lookup(url=değer) çağır; deep_link Traces'te aç çipi olur, linki metne yazma.",
 	mcptools.EndpointLookupName:  "Cevapta gözlenen host + yol + fiili (observed) ve rotaları aktar; domain sorusunda served_by'daki servis ve cluster başına pod'ları listele.",
 	mcptools.TraceWhereName:      "Cevapta error_origin / timeouts / messaging / self_by_service / external_calls alanlarından ilgili olanı pod ve cluster adlarıyla aktar.",
 	mcptools.RepoLookupName:      "repo_url \"unknown\" ise depo linki UYDURMA; note alanındaki açma yolunu aktar.",

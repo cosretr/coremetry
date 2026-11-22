@@ -116,6 +116,7 @@ func TestTraceFollowUpToolsExactKeptSet(t *testing.T) {
 		// v0.10.2449
 		"trace_where", "endpoint_lookup", "messaging_flow", "downstream_calls", "repo_lookup",
 		"dependency_path", // v0.10.2453
+		"traces_search",   // v0.10.2465
 		// exceptions
 		"list_exception_groups", "get_exception_samples",
 		// changes

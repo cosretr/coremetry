@@ -156,8 +156,8 @@ func mcpToolsListRaw(t *testing.T, srv *mcp.Server) string {
 // sabit sıra ve §6.1 tablosundaki sayılar.
 func TestToolsetsPartitionCatalog(t *testing.T) {
 	catalog := ToolList(goldenConditionalDeps())
-	if len(catalog) != 81 {
-		t.Fatalf("katalog %d araç, 81 bekleniyordu", len(catalog))
+	if len(catalog) != 82 {
+		t.Fatalf("katalog %d araç, 82 bekleniyordu", len(catalog))
 	}
 	owner := map[string]string{}
 	for _, ts := range Toolsets {
@@ -184,7 +184,7 @@ func TestToolsetsPartitionCatalog(t *testing.T) {
 		n        int
 		required bool
 	}{
-		{ToolsetServices, 23, true}, {ToolsetTraces, 13, true}, {ToolsetProblems, 10, true}, {ToolsetChanges, 4, false},
+		{ToolsetServices, 23, true}, {ToolsetTraces, 14, true}, {ToolsetProblems, 10, true}, {ToolsetChanges, 4, false},
 		{ToolsetMetrics, 6, false}, {ToolsetLogs, 8, false}, {ToolsetK8s, 4, false}, {ToolsetOracle, 1, false},
 		{ToolsetDevOpsCode, 2, false}, {ToolsetDevOpsWiki, 2, false}, {ToolsetKnowledge, 3, false}, {ToolsetMeta, 5, true},
 	}

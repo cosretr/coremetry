@@ -353,6 +353,13 @@ func ragDocID(name string) string {
 // kapalı / doküman yok / soru dokümanlarla ilgisiz (skor tabanı) —
 // akış aynen devam eder.
 func (s *Server) ragChatAnswer(ctx context.Context, emit func(string, any), msgs []copilot.ChatMessage, ctxService string) (handled, ok bool) {
+	// v0.10.2465 (operator-reported) — telemetri zorlandıysa (açık telemetri
+	// sorusu, sağlık sorusu, /telemetri) doküman RAG'ı da cevaplamaz: yüklü
+	// envanterin benzer satırı "url'inde X içeren trace var mı" sorusunu
+	// lookup router'dan (serbest döngü) önce yakalıyordu.
+	if forcedChatSource(ctx) == srcTelemetry {
+		return false, false
+	}
 	// v0.10.1122 — wiki dayanağı RAG kapalıyken de çalışır (chat_wiki.go).
 	ragOn := s.rag != nil
 	if !ragOn && wikiKB() == nil {

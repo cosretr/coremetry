@@ -9752,7 +9752,8 @@ export interface RoutingReport {
 // v0.10.2134 (router boşlukları D1) — GET /api/ai/router-gaps. kind: loop =
 // serbest döngü, general = sınıflandırıcı none → genel cevap. Toplamlar
 // penceredeki gerçek sayılar (liste en çok 50 grup). Go: chstore.RouterGap.
-export type RouterGapKind = 'loop' | 'general';
+// v0.10.2465 — clarify = netleştirme kademesi turu (kaynak sorusu, LLM'siz).
+export type RouterGapKind = 'loop' | 'general' | 'clarify';
 export interface RouterGap {
   question: string;
   count: number;
@@ -9769,6 +9770,8 @@ export interface RouterGapsView {
   days: number;
   totalFallbacks: number;
   totalGeneral: number;
+  /** v0.10.2465 — netleştirme turları (kaynak sorusu); eski önbellek cevabında yok. */
+  totalClarify?: number;
   generatedAt: number;
 }
 

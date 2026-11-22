@@ -43,6 +43,7 @@ var stepPhaseByTool = map[string]string{
 	// v0.10.2449 — endpoint / Kafka akışı / aşağı bağımlılıklar
 	"endpoint_lookup": "Sağlık", "messaging_flow": "Sağlık", "downstream_calls": "Sağlık",
 	"dependency_path": "Sağlık", // v0.10.2453 — çok-atlamalı bağımlılık yolu
+	"traces_search":   "Trace",  // v0.10.2465 — değer çözümü + Traces toplamları
 	// v0.10.1454 — giden çağrı (client span): sonda · ölçüm · grafik · hüküm
 	"outbound_probe": "Sağlık", "outbound_calls": "Sağlık", "outbound_series": "Sağlık", "outbound_verdict": "Sağlık",
 	"outbound_codes":  "Sağlık", // v0.10.1455 — iş kodu kırılımı

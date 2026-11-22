@@ -572,6 +572,38 @@ var routingRegressionRows = []routingRow{
 		q: rrSvc + " etki alanı ne", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
 	{release: "v0.10.2453", name: "v1: bağımlılık zinciri → döngü",
 		q: rrSvc + " bağımlılık zinciri", wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	// v0.10.2465 (operator-reported, prod 2026-11-22) — telemetriyi açıkça
+	// soran soru yüklü envanterde eşleşse de kaynak sorusu ALMAZ: doküman
+	// kademeleri atlanır, soru lookup router'a (traces_search value=c1ocp).
+	// Çıplak envanter terimi ve telemetri sözcüğü taşımayan soru eskisi gibi sorar.
+	{release: "v0.10.2465", name: "son 1 saat url'inde X içeren çağrı/trace + envanter eşleşmesi → döngü (kaynak sorusu yok)",
+		q: "Son 1 saat içerisinde url'inde c1ocp içeren bir servis çağrımı veya trace'i var mı?", v2: true, setup: withRoutingDocCluster,
+		wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true, ansNot: []string{sourceAskHeadTR, "srvc1ocp01"}},
+	{release: "v0.10.2465", name: "v1: X'te trace var mı + envanter → döngü",
+		q: "c1ocp'te trace var mı", setup: withRoutingDocCluster,
+		wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true, ansNot: []string{sourceAskHeadTR}},
+	{release: "komşu v0.10.2465", name: "çıplak envanter terimi → kaynak sorusu kalır",
+		q: "c1ocp", setup: withRoutingDocCluster,
+		wantTier: aisurface.TierClarify, wantRoute: "doc_or_entity_ask", noLLM: true, ansNot: []string{"srvc1ocp01"}},
+	{release: "komşu v0.10.2465", name: "telemetri sözcüksüz envanter sorusu → kaynak sorusu kalır",
+		q: "c1ocp sunucuları hangi ekipte", setup: withRoutingDocCluster,
+		wantTier: aisurface.TierClarify, wantRoute: "doc_or_entity_ask", noLLM: true, ansNot: []string{"srvc1ocp01"}},
+}
+
+// withRoutingDocCluster — v0.10.2465: wiki kurulu + yüklü envanterde c1ocp
+// cluster'ının sunucu satırları (operatörün 200 satırlık tablosunun sentetiği).
+func withRoutingDocCluster(t *testing.T, s *routingRig) {
+	t.Helper()
+	withRoutingWiki(t, s)
+	table := "altyapi_envanteri · satır 2 — Cluster: c1ocp · Sunucu: srvc1ocp01 · Ortam: PROD\n"
+	prev := docRowChunksSeam
+	docRowChunksSeam = func(_ context.Context, needle string) ([]chstore.LocalDocChunk, error) {
+		if !strings.Contains(strings.ToLower(table), strings.ToLower(needle)) {
+			return nil, nil
+		}
+		return []chstore.LocalDocChunk{{Title: "altyapi_envanteri", Text: table}}, nil
+	}
+	t.Cleanup(func() { docRowChunksSeam = prev })
 }
 
 // withConversationStateOff — v0.10.2324: cosre_conversation.state kapalı

@@ -88,7 +88,7 @@ var Toolsets = []Toolset{
 			"list_slo_status", "list_operations", "compare_periods", CompareBaselineName, "render_chart", "resolve_business_code", EndpointLookupName, RepoLookupName, MessagingFlowName, DownstreamCallsName, DependencyPathName}},
 	{Name: ToolsetTraces, Source: "ClickHouse spans / trace rollups", Required: true, Health: healthTraces,
 		Tools: []string{"describe_attributes", "find_attribute_by_value", "get_trace", tsSearchTraces, "query_traces", "trace_stats",
-			"find_trace_by_span", "bubble_up", "pivot_from_trace", "get_exemplar_traces", "get_linked_traces", "get_metrics_for_span", TraceWhereName}},
+			"find_trace_by_span", "bubble_up", "pivot_from_trace", "get_exemplar_traces", "get_linked_traces", "get_metrics_for_span", TraceWhereName, TracesSearchName}},
 	{Name: ToolsetProblems, Source: "problems / anomaly events / root-cause hypotheses / exception groups / incident cases", Required: true, Health: healthProblems,
 		Tools: []string{"list_problems", "list_problem_window_events", "get_problem_root_cause", "list_anomalies", "list_exception_groups",
 			"get_exception_samples", "get_problem", "get_correlation_evidence", "similar_problems", "similar_incidents"}},

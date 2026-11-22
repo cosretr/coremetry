@@ -3,7 +3,27 @@
 // "Router boşlukları" panelinin saf yardımcıları. Sunucu satırı TUR başına
 // sayar (chstore.RouterGaps exchange kökü); e-postalar uç yalnız admin'e açık.
 
-import type { RouterGap } from '@/lib/types';
+import type { RouterGap, RouterGapKind } from '@/lib/types';
+
+// v0.10.2465 (operator-reported) — netleştirme turları (kaynak sorusu
+// doc_or_entity_ask vb., LLM'siz) da router boşluğu: "Netleştirme" türü + süzgeç.
+export const GAP_KIND_LABEL: Record<RouterGapKind, string> = { loop: 'Serbest döngü', general: 'Genel soru', clarify: 'Netleştirme' };
+
+export type GapKindFilter = 'all' | RouterGapKind;
+
+/** Tür süzgeci seçenekleri (Tümü önce; sayılar satır sayısı). */
+export function gapKindOptions(gaps: Pick<RouterGap, 'kind'>[]): { value: GapKindFilter; label: string }[] {
+  const n = (k: RouterGapKind) => gaps.filter(g => g.kind === k).length;
+  return [
+    { value: 'all', label: `Tümü · ${gaps.length}` },
+    ...(['loop', 'general', 'clarify'] as const).map(k => ({ value: k, label: `${GAP_KIND_LABEL[k]} · ${n(k)}` })),
+  ];
+}
+
+/** Tür süzgeci uygulanmış satırlar (sunucu sırası korunur). */
+export function filterGapsByKind<T extends Pick<RouterGap, 'kind'>>(gaps: T[], kind: GapKindFilter): T[] {
+  return kind === 'all' ? gaps : gaps.filter(g => g.kind === kind);
+}
 
 /** "Kim" hücresi: soranların e-postaları; e-postasız (eski) satır "". */
 export function gapWho(g: Pick<RouterGap, 'emails'>): string {

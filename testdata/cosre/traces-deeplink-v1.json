@@ -1,0 +1,58 @@
+{
+  "cases": [
+    {
+      "name": "cluster",
+      "href": "/traces?cluster=c1\u0026order=desc\u0026range=custom%3A1763820000000-1763823600000\u0026sort=time\u0026env=",
+      "expect": {
+        "cluster": "c1",
+        "env": "",
+        "filters": [],
+        "fromMs": 1763820000000,
+        "hasError": false,
+        "minMs": 0,
+        "search": "",
+        "service": "",
+        "toMs": 1763823600000
+      }
+    },
+    {
+      "name": "env+service+errors",
+      "href": "/traces?env=prod-c1\u0026hasError=true\u0026order=desc\u0026range=custom%3A1763820000000-1763823600000\u0026service=orders-api\u0026sort=time",
+      "expect": {
+        "cluster": "",
+        "env": "prod-c1",
+        "filters": [],
+        "fromMs": 1763820000000,
+        "hasError": true,
+        "minMs": 0,
+        "search": "",
+        "service": "orders-api",
+        "toMs": 1763823600000
+      }
+    },
+    {
+      "name": "namespace filter+duration",
+      "href": "/traces?filters=%5B%7B%22k%22%3A%22k8s.namespace.name%22%2C%22op%22%3A%22%3D%22%2C%22v%22%3A%5B%22payments%22%5D%7D%5D\u0026minMs=250\u0026order=desc\u0026range=custom%3A1763820000000-1763823600000\u0026search=GET+%2Forders\u0026sort=time\u0026env=",
+      "expect": {
+        "cluster": "",
+        "env": "",
+        "filters": [
+          {
+            "k": "k8s.namespace.name",
+            "op": "=",
+            "v": [
+              "payments"
+            ]
+          }
+        ],
+        "fromMs": 1763820000000,
+        "hasError": false,
+        "minMs": 250,
+        "search": "GET /orders",
+        "service": "",
+        "toMs": 1763823600000
+      }
+    }
+  ],
+  "version": 1
+}

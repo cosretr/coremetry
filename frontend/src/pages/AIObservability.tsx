@@ -14,9 +14,9 @@ import { PendingCasesPanel } from './ai/PendingCasesPanel'; // v0.10.1475 — ev
 const SREReplayPanel = lazy(() => import('./ai/SREReplayPanel').then(m => ({ default: m.SREReplayPanel })));
 import { useUrlRange } from '@/lib/useUrlRange';
 import { rcaPctText, rcaEngineTone, rcaSatisfactionText, rcaBucketLabel, rcaBucketSatisfaction, rcaCalibrationNote } from './ai/rcaQualityView';
-import type { RCAVerdictQuality, AIBudgetStatus, NegativeFeedbackCall, RouterGap, RouterGapKind, RouterGapsView } from '@/lib/types';
+import type { RCAVerdictQuality, AIBudgetStatus, NegativeFeedbackCall, RouterGap, RouterGapsView } from '@/lib/types';
 import { budgetVerdict, budgetCls } from './ai/aiBudgetView';
-import { gapWho, gapChainTitle } from './ai/routerGapsView'; // v0.10.2448 — kim sordu, tur başına satır
+import { gapWho, gapChainTitle, GAP_KIND_LABEL, gapKindOptions, filterGapsByKind, type GapKindFilter } from './ai/routerGapsView'; // v0.10.2448 — kim sordu, tur başına satır; v0.10.2465 netleştirme türü + süzgeç
 import { timeRangeToNs, tsLong, fmtNum } from '@/lib/utils';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import {
@@ -586,7 +586,6 @@ function RCAQualityPanel({ range }: { range: TimeRange }) {
 // başına toplar): none işareti + ardından gelen serbest döngü artık tek tur,
 // son rota "Serbest döngü"; yedek zinciri Tür hücresinin title'ında. "Kim"
 // soranların e-postaları (uç yalnız admin; e-postasız eski satır "—").
-const GAP_KIND_LABEL: Record<RouterGapKind, string> = { loop: 'Serbest döngü', general: 'Genel soru' };
 const GAP_COLS: ColumnDef<RouterGap>[] = [
   { id: 'question', label: 'Soru',      sortValue: g => g.question, naturalDir: 'asc', flex: true, mono: true },
   { id: 'kind',     label: 'Tür',       sortValue: g => g.kind, naturalDir: 'asc', width: 120, tone: () => 'faint' },
@@ -599,6 +598,7 @@ const GAP_COLS: ColumnDef<RouterGap>[] = [
 function RouterGapsPanel() {
   const [days, setDays] = useState<1 | 7 | 30>(7);
   const [data, setData] = useState<RouterGapsView | null | undefined>(undefined);
+  const [kind, setKind] = useState<GapKindFilter>('all'); // v0.10.2465 — tür süzgeci
   useEffect(() => {
     let cancelled = false;
     setData(undefined);
@@ -607,7 +607,8 @@ function RouterGapsPanel() {
       .catch(() => { if (!cancelled) setData(null); });
     return () => { cancelled = true; };
   }, [days]);
-  const gapDt = useDataTable<RouterGap>({ storageKey: 'ai-router-gaps', columns: GAP_COLS, rows: data?.gaps ?? [] });
+  const gapRows = useMemo(() => filterGapsByKind(data?.gaps ?? [], kind), [data, kind]);
+  const gapDt = useDataTable<RouterGap>({ storageKey: 'ai-router-gaps', columns: GAP_COLS, rows: gapRows });
   // v0.10.954 — tablo standardı T12: durumlar tablonun İÇİNDE, başlık durur.
   const gapState: Omit<DataTableStateProps<RouterGap>, 'dt'> =
     data === undefined ? { kind: 'loading' }
@@ -618,7 +619,7 @@ function RouterGapsPanel() {
       <div className="ov-card-h">
         <h3>Router boşlukları</h3>
         <span className="ov-sub">
-          guided intent'e OTURMAYAN sorular — serbest tool döngüsüne düştüler ya da sınıflandırıcı «none» dedi (v0.10.172)
+          guided intent'e OTURMAYAN sorular — serbest tool döngüsüne düştüler, sınıflandırıcı «none» dedi ya da netleştirme sorusu aldılar
         </span>
         <span style={{ marginLeft: 'auto' }}>
           <SegmentedControl size="sm" aria-label="Gün penceresi" value={String(days)}
@@ -631,9 +632,16 @@ function RouterGapsPanel() {
           <div style={{ fontSize: 11.5, color: 'var(--text2)', marginBottom: 8 }}>
             Toplam <b>{data.totalFallbacks.toLocaleString()}</b> soru serbest döngüye
             düştü, <b>{data.totalGeneral.toLocaleString()}</b> soru genel cevaba gitti
-            (sınıflandırıcı «none»). Sık tekrarlayanlar yeni bir guided intent adayıdır:
+            (sınıflandırıcı «none»), <b>{(data.totalClarify ?? 0).toLocaleString()}</b> soru
+            netleştirme sorusu aldı (kaynak sorusu, LLM'siz). Sık tekrarlayanlar yeni bir guided intent adayıdır:
             deterministik prefetch + tek anlatım çağrısı, N turluk tool döngüsünden hem
             ucuz hem tutarlı olur.
+          </div>
+        )}
+        {data && data.gaps.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <SegmentedControl size="sm" aria-label="Tür" value={kind}
+              onChange={v => setKind(v as GapKindFilter)} options={gapKindOptions(data.gaps)} />
           </div>
         )}
         <div className="table-wrap">

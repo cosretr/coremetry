@@ -35,6 +35,9 @@ type RouterGap struct {
 	// Kind — v0.10.2134 (router boşlukları D1): "loop" = serbest döngü
 	// (surface chat), "general" = sınıflandırıcı none → genel cevap
 	// (chat-intent-none). Aynı soru iki türde ayrı satırdır.
+	// v0.10.2465 (operator-reported): "clarify" = netleştirme kademesi turu
+	// (kaynak sorusu doc_or_entity_ask / source_ask / netleştirme cevabı —
+	// LLM'siz, etkileşim satırı cosre-turn:clarify…).
 	Kind string `json:"kind"`
 	// v0.10.2448 (operatör, 2026-11-22: "kimler yazmış göremiyorum") —
 	// soran kullanıcıların e-postaları (en çok 10, sıralı; e-postasız eski
@@ -50,7 +53,15 @@ type RouterGap struct {
 const (
 	RouterGapKindLoop    = "loop"
 	RouterGapKindGeneral = "general"
+	RouterGapKindClarify = "clarify" // v0.10.2465
 )
+
+// routerGapClarifyPrefix — v0.10.2465: netleştirme kademesinin etkileşim
+// satırı yüzeyi (aisurface.TurnLabel(TierClarify, rota, derin) → "cosre-turn:
+// clarify", "…/doc_or_entity_ask", "…+deep"). Her tur TEK etkileşim satırı
+// yazar; exchange kimliği "kök:turn" → tur anahtarı kök (döngü satırlarıyla
+// aynı tur).
+var routerGapClarifyPrefix = aisurface.TurnPrefix + ":" + aisurface.TierClarify
 
 // RouterGapTotals — v0.10.2134: penceredeki GERÇEK toplamlar (ilk 50 grubun
 // toplamı değil; v0.9.549'dan beri totalFallbacks yalnız listelenen grupları
@@ -58,6 +69,7 @@ const (
 type RouterGapTotals struct {
 	Loop    uint64 `json:"loop"`
 	General uint64 `json:"general"`
+	Clarify uint64 `json:"clarify"` // v0.10.2465
 }
 
 // routerGapKindExpr — SAF: TURUN son rotası. v0.10.2448 (operatör, 2026-11-22:
@@ -68,9 +80,11 @@ type RouterGapTotals struct {
 // sayıldığından tek tur iki gruba (general + loop) bölünüyordu. Artık önce
 // TUR (exchange kökü) başına toplanır: turda döngü satırı varsa son rota
 // "loop", yalnız işaret varsa "general".
-const routerGapKindExpr = `if(has_loop, 'loop', 'general')`
+// v0.10.2465 — netleştirme turu (has_clarify) ayrı tür; döngü satırı olan tur
+// yine loop (son rota).
+const routerGapKindExpr = `if(has_loop, 'loop', if(has_clarify, 'clarify', 'general'))`
 
-// routerGapTurnsSQL — SAF: tur başına tek satır (bind: none, none, labels, since).
+// routerGapTurnsSQL — SAF: tur başına tek satır (bind: routerGapTurnsArgs).
 // Tur anahtarı exchange kökü (ayırıcıdan önceki parça: işaret "kök:rol",
 // döngü satırı kökün kendisi); kimliksiz eski satır kendi id'siyle tek tur.
 // Döngünün her LLM çağrısı da ayrı 'chat' satırı yazdığından "Kez" eskiden
@@ -80,15 +94,22 @@ func routerGapTurnsSQL() string {
 		SELECT if(exchange_id = '', id, splitByChar('` + aisurface.ExchangeSep + `', exchange_id)[1]) AS turn_key,
 		       argMin(prompt_sample, created_at) AS q,
 		       max(surface = ?)                  AS has_none,
-		       max(surface != ?)                 AS has_loop,
+		       max(surface != ? AND NOT startsWith(surface, ?)) AS has_loop,
+		       max(startsWith(surface, ?))       AS has_clarify,
 		       max(created_at)                   AS at,
 		       any(user_id)                      AS uid,
 		       anyIf(user_email, user_email != '') AS email
 		FROM ai_calls
-		WHERE surface IN (?)
+		WHERE (surface IN (?) OR startsWith(surface, ?))
 		  AND created_at >= ?
 		  AND prompt_sample != ''
 		GROUP BY turn_key`
+}
+
+// routerGapTurnsArgs — SAF: routerGapTurnsSQL'in bind sırası.
+func routerGapTurnsArgs(labels []string, since any) []any {
+	none := aisurface.ChatIntentNone
+	return []any{none, none, routerGapClarifyPrefix, routerGapClarifyPrefix, labels, routerGapClarifyPrefix, since}
 }
 
 // RouterGaps — guided router'ın yakalayamadığı sorular, sıklığa göre.
@@ -112,8 +133,8 @@ func (s *Store) RouterGaps(ctx context.Context, since time.Duration, limit int) 
 	// v0.10.1153 — liste yüzey kaydından (chat, chat-intent-none): elle
 	// yazılmış IN listesi yeni yüzeyleri görmüyordu.
 	labels, sinceArg := aisurface.RouterGapLabels(), chDateTime64Arg(time.Now().Add(-since))
-	// liste: soru × son-rota grupları, TUR sayısıyla (bind: none, none, labels, since, limit).
-	none := aisurface.ChatIntentNone
+	// liste: soru × son-rota grupları, TUR sayısıyla (bind: tur argümanları, limit).
+	turnArgs := routerGapTurnsArgs(labels, sinceArg)
 	rows, err := s.conn.Query(ctx, `
 		SELECT q,
 		       `+routerGapKindExpr+`                                AS kind,
@@ -126,7 +147,7 @@ func (s *Store) RouterGaps(ctx context.Context, since time.Duration, limit int) 
 		GROUP BY q, kind
 		ORDER BY n DESC, last_at DESC
 		LIMIT ?
-		SETTINGS max_execution_time = 10`, none, none, labels, sinceArg, limit)
+		SETTINGS max_execution_time = 10`, append(append([]any(nil), turnArgs...), limit)...)
 	if err != nil {
 		return nil, totals, err
 	}
@@ -147,7 +168,7 @@ func (s *Store) RouterGaps(ctx context.Context, since time.Duration, limit int) 
 		FROM (`+routerGapTurnsSQL()+`)
 		GROUP BY kind
 		LIMIT 10
-		SETTINGS max_execution_time = 10`, none, none, labels, sinceArg)
+		SETTINGS max_execution_time = 10`, turnArgs...)
 	if err != nil {
 		return nil, totals, err
 	}
@@ -168,6 +189,8 @@ func addRouterGapTotal(t *RouterGapTotals, kind string, n uint64) {
 	switch kind {
 	case RouterGapKindGeneral:
 		t.General += n
+	case RouterGapKindClarify:
+		t.Clarify += n
 	default:
 		t.Loop += n
 	}

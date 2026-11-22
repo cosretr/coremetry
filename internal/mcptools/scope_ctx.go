@@ -130,6 +130,7 @@ var v2ScopeCarrying = map[string]bool{
 	EndpointMetricsName: true, "get_log_anomalies": true,
 	EndpointLookupName: true, TraceWhereName: true, RepoLookupName: true, MessagingFlowName: true, DownstreamCallsName: true, // v0.10.2449
 	DependencyPathName: true, // v0.10.2453
+	TracesSearchName:   true, // v0.10.2465
 }
 
 // V2ScopeClass — SAF: aracın kapsam sınıfı ve (muafsa) gerekçesi; ok=false

@@ -1,7 +1,7 @@
 package mcptools
 
 // schema_validate_catalog_test.go — v0.10.1456 (C1, karar 6): yerli şema
-// doğrulayıcısı (mcp/schema_validate.go) 81 aracın HER BİRİNİN gerçek
+// doğrulayıcısı (mcp/schema_validate.go) 82 aracın HER BİRİNİN gerçek
 // şemasıyla tablo testli. Her araç için:
 //
 //  1. `{}` → bulgu listesi TAM OLARAK şemanın required alanlarıdır (sıra
@@ -164,8 +164,8 @@ func walkSchemaKeys(t *testing.T, tool, path string, v any) {
 
 func TestAllCatalogSchemasValidateTheirOwnExamples(t *testing.T) {
 	tools := ToolList(Deps{})
-	if len(tools) != 81 {
-		t.Fatalf("katalog %d araç — 81 pini (discovery_test.go) ile aynı küme beklenir", len(tools))
+	if len(tools) != 82 {
+		t.Fatalf("katalog %d araç — 82 pini (discovery_test.go) ile aynı küme beklenir", len(tools))
 	}
 	typeProbes := 0
 	for _, tl := range tools {
