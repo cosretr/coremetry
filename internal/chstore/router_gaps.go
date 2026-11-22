@@ -36,6 +36,14 @@ type RouterGap struct {
 	// (surface chat), "general" = sınıflandırıcı none → genel cevap
 	// (chat-intent-none). Aynı soru iki türde ayrı satırdır.
 	Kind string `json:"kind"`
+	// v0.10.2448 (operatör, 2026-11-22: "kimler yazmış göremiyorum") —
+	// soran kullanıcıların e-postaları (en çok 10, sıralı; e-postasız eski
+	// satırlar listede yok). Uç yalnız admin'e açık (ai_routes.go).
+	Emails []string `json:"emails"`
+	// ViaGeneral — v0.10.2448: bu gruptaki kaç tur önce sınıflandırıcı
+	// «none» (chat-intent-none işareti) deyip SONRA serbest döngüye düştü:
+	// yedek zinciri genel → döngü. Tur yine TEK satırdır (son rota: loop).
+	ViaGeneral uint64 `json:"viaGeneral"`
 }
 
 // Router boşluk türleri (RouterGap.Kind).
@@ -52,9 +60,36 @@ type RouterGapTotals struct {
 	General uint64 `json:"general"`
 }
 
-// routerGapKindExpr — SAF: yüzeyden tür; none işareti "general", gerisi
-// (RouterGapLabels'ın kalan üyesi: chat) "loop". Tek bind: ChatIntentNone.
-const routerGapKindExpr = `if(surface = ?, 'general', 'loop')`
+// routerGapKindExpr — SAF: TURUN son rotası. v0.10.2448 (operatör, 2026-11-22:
+// aynı soru ~10 sn arayla önce "Genel soru" sonra "Serbest döngü" iki satır):
+// sınıflandırıcı none deyince copilot_intent.go chat-intent-none İŞARETİNİ
+// yazar; ardından (on kipi ya da v2 durumunda özne varsa) serbest döngü koşar
+// ve aynı tura surface='chat' satır(lar)ı yazar. Eskiden satır başına
+// sayıldığından tek tur iki gruba (general + loop) bölünüyordu. Artık önce
+// TUR (exchange kökü) başına toplanır: turda döngü satırı varsa son rota
+// "loop", yalnız işaret varsa "general".
+const routerGapKindExpr = `if(has_loop, 'loop', 'general')`
+
+// routerGapTurnsSQL — SAF: tur başına tek satır (bind: none, none, labels, since).
+// Tur anahtarı exchange kökü (ayırıcıdan önceki parça: işaret "kök:rol",
+// döngü satırı kökün kendisi); kimliksiz eski satır kendi id'siyle tek tur.
+// Döngünün her LLM çağrısı da ayrı 'chat' satırı yazdığından "Kez" eskiden
+// çağrı sayıyordu; artık tur sayar.
+func routerGapTurnsSQL() string {
+	return `
+		SELECT if(exchange_id = '', id, splitByChar('` + aisurface.ExchangeSep + `', exchange_id)[1]) AS turn_key,
+		       argMin(prompt_sample, created_at) AS q,
+		       max(surface = ?)                  AS has_none,
+		       max(surface != ?)                 AS has_loop,
+		       max(created_at)                   AS at,
+		       any(user_id)                      AS uid,
+		       anyIf(user_email, user_email != '') AS email
+		FROM ai_calls
+		WHERE surface IN (?)
+		  AND created_at >= ?
+		  AND prompt_sample != ''
+		GROUP BY turn_key`
+}
 
 // RouterGaps — guided router'ın yakalayamadığı sorular, sıklığa göre.
 //
@@ -77,21 +112,21 @@ func (s *Store) RouterGaps(ctx context.Context, since time.Duration, limit int) 
 	// v0.10.1153 — liste yüzey kaydından (chat, chat-intent-none): elle
 	// yazılmış IN listesi yeni yüzeyleri görmüyordu.
 	labels, sinceArg := aisurface.RouterGapLabels(), chDateTime64Arg(time.Now().Add(-since))
-	// liste: soru × tür grupları (bind: none, labels, since, limit).
+	// liste: soru × son-rota grupları, TUR sayısıyla (bind: none, none, labels, since, limit).
+	none := aisurface.ChatIntentNone
 	rows, err := s.conn.Query(ctx, `
-		SELECT prompt_sample                        AS q,
-		       `+routerGapKindExpr+`             AS kind,
-		       count()                              AS n,
-		       toUnixTimestamp64Nano(max(created_at)) AS last_at,
-		       uniqExact(user_id)                   AS users
-		FROM ai_calls
-		WHERE surface IN (?)
-		  AND created_at >= ?
-		  AND prompt_sample != ''
+		SELECT q,
+		       `+routerGapKindExpr+`                                AS kind,
+		       count()                                              AS n,
+		       toUnixTimestamp64Nano(max(at))                       AS last_at,
+		       uniqExact(uid)                                       AS users,
+		       arraySort(groupUniqArrayIf(10)(email, email != '')) AS emails,
+		       countIf(has_none AND has_loop)                       AS via_general
+		FROM (`+routerGapTurnsSQL()+`)
 		GROUP BY q, kind
 		ORDER BY n DESC, last_at DESC
 		LIMIT ?
-		SETTINGS max_execution_time = 10`, aisurface.ChatIntentNone, labels, sinceArg, limit)
+		SETTINGS max_execution_time = 10`, none, none, labels, sinceArg, limit)
 	if err != nil {
 		return nil, totals, err
 	}
@@ -99,7 +134,7 @@ func (s *Store) RouterGaps(ctx context.Context, since time.Duration, limit int) 
 	out := make([]RouterGap, 0, limit)
 	for rows.Next() {
 		var g RouterGap
-		if err := rows.Scan(&g.Question, &g.Kind, &g.Count, &g.LastAt, &g.Users); err != nil {
+		if err := rows.Scan(&g.Question, &g.Kind, &g.Count, &g.LastAt, &g.Users, &g.Emails, &g.ViaGeneral); err != nil {
 			continue
 		}
 		out = append(out, g)
@@ -109,13 +144,10 @@ func (s *Store) RouterGaps(ctx context.Context, since time.Duration, limit int) 
 	}
 	trows, err := s.conn.Query(ctx, `
 		SELECT `+routerGapKindExpr+` AS kind, count() AS n
-		FROM ai_calls
-		WHERE surface IN (?)
-		  AND created_at >= ?
-		  AND prompt_sample != ''
+		FROM (`+routerGapTurnsSQL()+`)
 		GROUP BY kind
 		LIMIT 10
-		SETTINGS max_execution_time = 10`, aisurface.ChatIntentNone, labels, sinceArg)
+		SETTINGS max_execution_time = 10`, none, none, labels, sinceArg)
 	if err != nil {
 		return nil, totals, err
 	}

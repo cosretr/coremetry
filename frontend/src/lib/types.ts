@@ -9736,6 +9736,10 @@ export interface RouterGap {
   lastAt: number;
   users: number;
   kind: RouterGapKind;
+  /** v0.10.2448 — soran kullanıcıların e-postaları (en çok 10; uç yalnız admin). */
+  emails?: string[];
+  /** v0.10.2448 — kaç tur önce «none» (genel) deyip sonra serbest döngüye düştü. */
+  viaGeneral?: number;
 }
 export interface RouterGapsView {
   gaps: RouterGap[];

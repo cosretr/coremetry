@@ -166,7 +166,7 @@ var aiCallsReaderDecisions = map[string]string{
 	"aiCallsTimeseriesSQL":           "source",
 	"aiCallsListSQL":                 "source",
 	"aiBudgetUsageQueries":           "source",
-	"RouterGaps":                     "whitelist", // surface IN (?) ← aisurface.RouterGapLabels (v0.10.1153)
+	"routerGapTurnsSQL":              "whitelist", // surface IN (?) ← aisurface.RouterGapLabels (v0.10.1153); v0.10.2448 RouterGaps tur alt sorgusu
 	"aiExchangeCallsSQL":             "source",    // v0.10.1153 — etkileşimin model çağrıları
 	"aiExchangeTurnsSQL":             "turn",      // v0.10.1153 — YALNIZ etkileşim satırları
 	"aiExchangeCountSQL":             "turn",      // v0.10.1646 — süzgece uyan tur sayısı (Pager toplamı)

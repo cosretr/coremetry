@@ -16,6 +16,7 @@ import { useUrlRange } from '@/lib/useUrlRange';
 import { rcaPctText, rcaEngineTone, rcaSatisfactionText, rcaBucketLabel, rcaBucketSatisfaction, rcaCalibrationNote } from './ai/rcaQualityView';
 import type { RCAVerdictQuality, AIBudgetStatus, NegativeFeedbackCall, RouterGap, RouterGapKind, RouterGapsView } from '@/lib/types';
 import { budgetVerdict, budgetCls } from './ai/aiBudgetView';
+import { gapWho, gapChainTitle } from './ai/routerGapsView'; // v0.10.2448 — kim sordu, tur başına satır
 import { timeRangeToNs, tsLong, fmtNum } from '@/lib/utils';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import {
@@ -581,12 +582,17 @@ function RCAQualityPanel({ range }: { range: TimeRange }) {
 // v0.10.2134 (router boşlukları D1) — "Tür" kolonu: serbest döngü ile genel
 // cevap (sınıflandırıcı none) ayrı satır; ön-getirmeyle tohumlanan döngü
 // (chat-prefetch) listede yok. Toplamlar gerçek sayı (eskiden ilk 50 grup).
+// v0.10.2448 (operatör, 2026-11-22) — satır TUR sayar (sunucu exchange kökü
+// başına toplar): none işareti + ardından gelen serbest döngü artık tek tur,
+// son rota "Serbest döngü"; yedek zinciri Tür hücresinin title'ında. "Kim"
+// soranların e-postaları (uç yalnız admin; e-postasız eski satır "—").
 const GAP_KIND_LABEL: Record<RouterGapKind, string> = { loop: 'Serbest döngü', general: 'Genel soru' };
 const GAP_COLS: ColumnDef<RouterGap>[] = [
   { id: 'question', label: 'Soru',      sortValue: g => g.question, naturalDir: 'asc', flex: true, mono: true },
   { id: 'kind',     label: 'Tür',       sortValue: g => g.kind, naturalDir: 'asc', width: 120, tone: () => 'faint' },
   { id: 'count',    label: 'Kez',       sortValue: g => g.count, numeric: true, width: 80 },
   { id: 'users',    label: 'Kullanıcı', sortValue: g => g.users, numeric: true, width: 100, tone: () => 'faint' },
+  { id: 'who',      label: 'Kim',       sortValue: g => gapWho(g), naturalDir: 'asc', width: 200, tone: () => 'faint' },
   { id: 'last',     label: 'Son',       sortValue: g => g.lastAt, width: 165, tone: () => 'faint' },
 ];
 
@@ -638,9 +644,10 @@ function RouterGapsPanel() {
               {gapDt.sortedRows.length === 0 ? <DataTableState dt={gapDt} {...gapState} /> : gapDt.sortedRows.map(g => (
                 <tr key={`${g.kind}:${g.question}`}>
                   <DataTableCell dt={gapDt} col="question" row={g} value={g.question} />
-                  <DataTableCell dt={gapDt} col="kind" row={g} value={GAP_KIND_LABEL[g.kind] ?? g.kind} />
+                  <DataTableCell dt={gapDt} col="kind" row={g} value={GAP_KIND_LABEL[g.kind] ?? g.kind} title={gapChainTitle(g)} />
                   <DataTableCell dt={gapDt} col="count" row={g} value={g.count.toLocaleString()} />
                   <DataTableCell dt={gapDt} col="users" row={g} value={g.users} />
+                  <DataTableCell dt={gapDt} col="who" row={g} value={gapWho(g) || null} title={gapWho(g) || undefined} />
                   <DataTableCell dt={gapDt} col="last" row={g} value={tsLong(g.lastAt)} className="mono" />
                 </tr>
               ))}

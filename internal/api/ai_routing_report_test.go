@@ -185,7 +185,9 @@ func TestRoutingReportDaysAndGate(t *testing.T) {
 	// v0.10.1484 — rol kapısı: viewer 403, editor 200, admin 200. Gövde
 	// önbellekten (store'suz sunucu; anahtar handler'ınkiyle aynı).
 	s := &Server{cache: &fakeCache{}, l1: newL1Cache(8), stats: newCacheStats()}
-	s.l1.set("ai:routing-report:v1:d=7", []byte(`{"days":7,"rows":[]}`), time.Minute)
+	// v0.10.2448 — kimlik yalnız admin'e: rol anahtarda, iki gövde ayrı.
+	s.l1.set("ai:routing-report:v2:d=7:who=false", []byte(`{"days":7,"who":"none"}`), time.Minute)
+	s.l1.set("ai:routing-report:v2:d=7:who=true", []byte(`{"days":7,"who":"admin"}`), time.Minute)
 	mux := http.NewServeMux()
 	s.registerAIRoutingReportRoutes(mux)
 	for role, want := range map[string]int{auth.RoleViewer: http.StatusForbidden, auth.RoleEditor: http.StatusOK, auth.RoleAdmin: http.StatusOK} {
@@ -196,6 +198,26 @@ func TestRoutingReportDaysAndGate(t *testing.T) {
 		if w.Code != want {
 			t.Errorf("%s: kod %d, beklenen %d (%s)", role, w.Code, want, w.Body.String())
 		}
+		if role == auth.RoleEditor && !strings.Contains(w.Body.String(), `"who":"none"`) {
+			t.Errorf("editör kimliksiz gövdeyi almadı: %s", w.Body.String())
+		}
+		if role == auth.RoleAdmin && !strings.Contains(w.Body.String(), `"who":"admin"`) {
+			t.Errorf("admin kimlikli gövdeyi almadı: %s", w.Body.String())
+		}
+	}
+}
+
+// v0.10.2448 — admin olmayan okuyucunun raporunda soranın e-postası yok.
+func TestRoutingReportDropUsers(t *testing.T) {
+	r := rrTurn("a", aisurface.TierLoop, "", "orders-api hata veriyor mu")
+	r.Status = "error"
+	rep := buildRoutingReport([]chstore.RoutingTurn{r}, nil)
+	if len(rep.Items) != 1 || rep.Items[0].UserEmail != "u@example.test" {
+		t.Fatalf("kurulum: %+v", rep.Items)
+	}
+	routingReportDropUsers(&rep)
+	if rep.Items[0].UserEmail != "" {
+		t.Errorf("e-posta kaldı: %q", rep.Items[0].UserEmail)
 	}
 }
 

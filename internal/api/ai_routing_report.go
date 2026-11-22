@@ -130,7 +130,11 @@ func routingReportDays(v string) int {
 
 func (s *Server) aiRoutingReport(w http.ResponseWriter, r *http.Request) {
 	days := routingReportDays(r.URL.Query().Get("days"))
-	key := fmt.Sprintf("ai:routing-report:v1:d=%d", days)
+	// v0.10.2448 (operatör, 2026-11-22: "kimler yazmış") — soranın kimliği
+	// yalnız admin'e; editör aynı raporu kimliksiz görür. Rol anahtarda:
+	// admin önbelleği editöre sızmaz.
+	admin := routingReportShowsUser(r)
+	key := fmt.Sprintf("ai:routing-report:v2:d=%d:who=%t", days, admin)
 	s.serveCached(w, r, key, 5*time.Minute, func(ctx context.Context) (any, error) {
 		to := time.Now()
 		from := to.Add(-time.Duration(days) * 24 * time.Hour)
@@ -145,8 +149,25 @@ func (s *Server) aiRoutingReport(w http.ResponseWriter, r *http.Request) {
 		}
 		rep := buildRoutingReport(turns, votes)
 		rep.Days, rep.Truncated, rep.GeneratedAt = days, len(turns) >= routingReportTurnLimit, time.Now().UnixNano()
+		if !admin {
+			routingReportDropUsers(&rep)
+		}
 		return rep, nil
 	})
+}
+
+// routingReportShowsUser — v0.10.2448: soranın e-postası yalnız admin'e
+// (editör başkalarının kimliğini görmez; viewer uca hiç giremez).
+func routingReportShowsUser(r *http.Request) bool {
+	c := auth.FromContext(r.Context())
+	return c != nil && c.Role == auth.RoleAdmin
+}
+
+// routingReportDropUsers — SAF: admin olmayan okuyucu için kimlik alanını boşaltır.
+func routingReportDropUsers(rep *RoutingReport) {
+	for i := range rep.Items {
+		rep.Items[i].UserEmail = ""
+	}
 }
 
 // routingTurnReasons — SAF: tek turun kendinden okunan nedenler.

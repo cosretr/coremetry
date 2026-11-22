@@ -9,11 +9,15 @@
 //
 // Sunucu LIMIT 50: kayıt listesi, useDataTable; initialSort yok (sunucu sırası
 // = puan ↓, zaman ↓). Kademe özeti ≤20 sabit satır → metin satırı, tablo değil.
+// v0.10.2448 (operatör, 2026-11-22: "kimler yazmış göremiyorum") — "Kim" kolonu
+// yalnız admin'de; sunucu editöre e-postayı hiç göndermez (ai_routing_report.go
+// routingReportShowsUser). E-postasız eski tur "—".
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api } from '@/lib/api';
 import { SegmentedControl } from '@/components/ui';
 import { tsLong } from '@/lib/utils';
+import { useAuthRole } from '@/components/AuthProvider';
 import type { RoutingReport, RoutingReportItem } from '@/lib/types';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import { routingReasonLabel, routingReasonTitle, routingTierLabel, routingArchiveHref, routingSummary, routingScoreTone } from './routingReportView';
@@ -23,13 +27,16 @@ const COLS: ColumnDef<RoutingReportItem>[] = [
   { id: 'question', label: 'Soru',     sortValue: r => r.question, naturalDir: 'asc', flex: true },
   { id: 'reasons',  label: 'Nedenler', sortValue: r => r.reasons.join(','), naturalDir: 'asc', width: 280 },
   { id: 'tier',     label: 'Kademe · rota', sortValue: r => routingTierLabel(r), naturalDir: 'asc', width: 200 },
+  { id: 'who',      label: 'Kim',      sortValue: r => r.userEmail ?? '', naturalDir: 'asc', width: 170, tone: () => 'faint' },
   { id: 'service',  label: 'Servis',   sortValue: r => r.service ?? '', naturalDir: 'asc', width: 140, tone: () => 'faint' },
   { id: 'when',     label: 'Ne zaman', sortValue: r => r.createdAt, width: 165, tone: () => 'faint' },
   { id: 'vote',     label: '👎',       sortValue: r => (r.downvote ? 1 : 0), numeric: true, width: 56, tone: () => 'faint' },
   { id: 'archive',  label: 'Tur',      sortValue: r => r.conversationId ?? '', naturalDir: 'asc', width: 110 },
 ];
+const COLS_NO_WHO = COLS.filter(c => c.id !== 'who');
 
 export function RoutingReportPanel() {
+  const isAdmin = useAuthRole() === 'admin';
   const [days, setDays] = useState<1 | 7 | 30>(7);
   const [data, setData] = useState<RoutingReport | null | undefined>(undefined);
   useEffect(() => {
@@ -40,7 +47,7 @@ export function RoutingReportPanel() {
       .catch(() => { if (!cancelled) setData(null); });
     return () => { cancelled = true; };
   }, [days]);
-  const dt = useDataTable<RoutingReportItem>({ storageKey: 'ai-routing-report', columns: COLS, rows: data?.items ?? [] });
+  const dt = useDataTable<RoutingReportItem>({ storageKey: 'ai-routing-report', columns: isAdmin ? COLS : COLS_NO_WHO, rows: data?.items ?? [] });
   const state: Omit<DataTableStateProps<RoutingReportItem>, 'dt'> =
     data === undefined ? { kind: 'loading' }
     : data === null ? { kind: 'error' }
@@ -84,6 +91,7 @@ export function RoutingReportPanel() {
                       ))}
                     </DataTableCell>
                     <DataTableCell dt={dt} col="tier" row={r} value={routingTierLabel(r)} />
+                    {isAdmin && <DataTableCell dt={dt} col="who" row={r} value={r.userEmail || null} title={r.userEmail || undefined} />}
                     <DataTableCell dt={dt} col="service" row={r} value={r.service || null} />
                     <DataTableCell dt={dt} col="when" row={r} value={tsLong(Date.parse(r.createdAt) * 1e6)} className="mono" />
                     <DataTableCell dt={dt} col="vote" row={r} value={r.downvote ? '👎' : null} />
