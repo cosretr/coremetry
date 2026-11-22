@@ -84,6 +84,7 @@ func (s *Service) StreamText(ctx context.Context, systemPrompt, userPrompt strin
 		inputTokens  uint32
 		outputTokens uint32
 	)
+	obs := s.thinkingObserve(ctx) // v0.10.2458
 	switch provider {
 	case ProviderOpenAI:
 		out, inputTokens, outputTokens, err = s.streamOpenAIWithUsage(ctx, systemPrompt, userPrompt, onDelta)
@@ -95,6 +96,7 @@ func (s *Service) StreamText(ctx context.Context, systemPrompt, userPrompt strin
 	default: // anthropic
 		out, inputTokens, outputTokens, err = s.streamAnthropicWithUsage(ctx, systemPrompt, userPrompt, onDelta)
 	}
+	obs(err)
 	s.recordNarration(ctx, started, provider, model, baseURL, systemPrompt, userPrompt, out, inputTokens, outputTokens, err)
 	s.noteProviderError(err) // v0.9.200 — kota devre-kesici (Explain ile aynı)
 	return out, err

@@ -1480,6 +1480,8 @@ export interface AIModelProfile {
   temperature?: number | null;
   timeoutS?: number;
   thinking?: AIThinking; // v0.10.534
+  /** v0.10.2458 — admin beyanı: uç Qwen3 enable_thinking anahtarını kabul eder (geçit takma adı) */
+  thinkingSwitch?: boolean;
   toolset?: AIToolset; // v0.10.1302 — ayarın kendisi; yok = otomatik
   /** v0.10.1302 — yürürlükteki araç seti (otomatik kural dahil; sunucu çözer) */
   effectiveToolset?: Exclude<AIToolset, ''>;
@@ -1514,6 +1516,7 @@ export interface AIModelProfileInput {
   temperature?: number | null;
   timeoutS?: number;
   thinking?: AIThinking; // v0.10.534
+  thinkingSwitch?: boolean; // v0.10.2458
   toolset?: AIToolset;  // v0.10.1302 — '' otomatik | simple | full
   description?: string; // v0.10.1138
   roles?: Role[];       // v0.10.1138 — boş = herkes
@@ -1521,6 +1524,13 @@ export interface AIModelProfileInput {
   headers?: Record<string, string>; // v0.10.1238 — tam liste; gönderilmeyen başlık silinir
   localOnly?: boolean;  // v0.10.1451 — admin beyanı; yalnız openai-uyumlu + özel host
 }
+/** v0.10.2458 — yüzey başına düşünme kipi (GET/PUT /api/settings/ai/thinking). */
+export type AIThinkMode = 'off' | 'on' | 'inherit';
+export interface AIThinkingSurface { id: string; label: string; hint: string; mode: AIThinkMode }
+/** Bu pod, açılıştan beri: yüzey × düşünme etiketi (on | off | model_default | unsupported). */
+export interface AIThinkingStat { surface: string; thinking: string; calls: number; errors: number; avgMs: number }
+export interface AIThinkingProfile { id: string; label?: string; model?: string; thinking?: AIThinking; switch: boolean }
+export interface AIThinkingPayload { surfaces: AIThinkingSurface[]; stats: AIThinkingStat[]; profiles: AIThinkingProfile[] }
 export interface AIProfilesPayload { profiles: AIModelProfile[]; defaultProfile: string; surfaceMap: AISurfaceMap }
 export interface AIProfileTestResult { ok: boolean; ms: number; profile: string; error?: string; sample?: string }
 export interface AISettingsInput {

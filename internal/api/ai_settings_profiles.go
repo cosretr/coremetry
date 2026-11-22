@@ -54,6 +54,8 @@ type aiProfileView struct {
 	Temperature *float64 `json:"temperature,omitempty"`
 	TimeoutS    int      `json:"timeoutS,omitempty"`
 	Thinking    string   `json:"thinking,omitempty"` // v0.10.534 (modelcaps): "" | off | on
+	// v0.10.2458 — admin beyanı: uç Qwen3 enable_thinking anahtarını kabul eder.
+	ThinkingSwitch bool `json:"thinkingSwitch,omitempty"`
 	// v0.10.1302 — CoSRE araç seti: Toolset ayarın kendisi ("" otomatik |
 	// simple | full); EffectiveToolset otomatik kuralın sonucu dahil yürürlükteki
 	// değer (rozet için; model adından, modelcaps.ResolveToolset).
@@ -78,7 +80,7 @@ func aiProfileViews(profiles []copilot.ModelProfile, defaultID string) []aiProfi
 		out = append(out, aiProfileView{
 			ID: p.ID, Label: p.Label, Provider: p.Provider, BaseURL: p.BaseURL, Model: p.Model, SkipTLS: p.SkipTLS,
 			HasKey: p.APIKey != "", MaxTokens: p.MaxTokens, Temperature: p.Temperature, TimeoutS: p.TimeoutS,
-			Thinking: p.Thinking, Default: p.ID == defaultID,
+			Thinking: p.Thinking, ThinkingSwitch: p.ThinkingSwitch, Default: p.ID == defaultID,
 			Toolset: p.Toolset, EffectiveToolset: modelcaps.ResolveToolset(p.Toolset, p.Model), // v0.10.1302
 			Description: p.Description, Roles: p.Roles, Deep: p.Deep, Headers: p.Headers,
 			LocalOnly:      p.LocalOnly,      // v0.10.1451
@@ -132,11 +134,13 @@ type aiProfileInput struct {
 	MaxTokens   int      `json:"maxTokens"`
 	Temperature *float64 `json:"temperature"`
 	TimeoutS    int      `json:"timeoutS"`
-	Thinking    string   `json:"thinking"`    // v0.10.534
-	Toolset     string   `json:"toolset"`     // v0.10.1302 — "" otomatik | simple | full
-	Description string   `json:"description"` // v0.10.1138 — seçicideki kısa açıklama
-	Roles       []string `json:"roles"`       // v0.10.1138 — boş = herkes
-	Deep        bool     `json:"deep"`        // v0.10.1150 — "Derin düşün" profili (tek)
+	Thinking    string   `json:"thinking"` // v0.10.534
+	// v0.10.2458 — nil = MEVCUT değer korunur (StrictToolArgs emsali).
+	ThinkingSwitch *bool    `json:"thinkingSwitch"`
+	Toolset        string   `json:"toolset"`     // v0.10.1302 — "" otomatik | simple | full
+	Description    string   `json:"description"` // v0.10.1138 — seçicideki kısa açıklama
+	Roles          []string `json:"roles"`       // v0.10.1138 — boş = herkes
+	Deep           bool     `json:"deep"`        // v0.10.1150 — "Derin düşün" profili (tek)
 	// v0.10.1238 — ek HTTP başlıkları; tam liste (gönderilmeyen = silinir).
 	Headers map[string]string `json:"headers"`
 	// v0.10.1451 — admin beyanı (yalnız openai-uyumlu + özel host; ValidateProfile).
@@ -186,6 +190,7 @@ func (s *Server) putAIProfile(w http.ResponseWriter, r *http.Request) {
 	p := aiProfileFromInput(id, in)
 	existing, _, _ := s.copilot.ProfilesSnapshot()
 	p.StrictToolArgs = resolveStrictToolArgs(in.StrictToolArgs, id, existing)
+	p.ThinkingSwitch = resolveThinkingSwitch(in.ThinkingSwitch, id, existing) // v0.10.2458
 	if err := copilot.ValidateProfile(p); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -251,7 +256,29 @@ func profileHeadersAudit(h map[string]string) string {
 // açık araç seti " toolset=simple|full" eki (otomatikte satır bayt bayt eski).
 func aiProfileUpsertAudit(p copilot.ModelProfile, hasKey bool) string {
 	return fmt.Sprintf("provider=%s model=%s baseUrl=%s hasKey=%v roles=%s", p.Provider, p.Model, p.BaseURL, hasKey, profileRolesAudit(p.Roles)) +
-		profileDeepAudit(p.Deep) + profileToolsetAudit(p.Toolset) + profileHeadersAudit(p.Headers) + profileLocalOnlyAudit(p.LocalOnly) + profileStrictAudit(p.StrictToolArgs)
+		profileDeepAudit(p.Deep) + profileToolsetAudit(p.Toolset) + profileHeadersAudit(p.Headers) + profileLocalOnlyAudit(p.LocalOnly) + profileStrictAudit(p.StrictToolArgs) +
+		profileThinkingSwitchAudit(p.ThinkingSwitch)
+}
+
+// profileThinkingSwitchAudit — v0.10.2458, SAF: yalnız işaretliyse (işaretsiz satır bayt bayt eski).
+func profileThinkingSwitchAudit(on bool) string {
+	if !on {
+		return ""
+	}
+	return " thinkingSwitch=true"
+}
+
+// resolveThinkingSwitch — v0.10.2458, SAF: gövdede yoksa saklanan değer.
+func resolveThinkingSwitch(in *bool, id string, existing []copilot.ModelProfile) bool {
+	if in != nil {
+		return *in
+	}
+	for _, p := range existing {
+		if p.ID == id {
+			return p.ThinkingSwitch
+		}
+	}
+	return false
 }
 
 // profileStrictAudit — v0.10.1456 (C1), SAF: yalnız açıksa; kapalı satır bayt bayt eski.

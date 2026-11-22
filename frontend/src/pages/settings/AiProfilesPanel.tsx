@@ -41,12 +41,13 @@ const COLS: ColumnDef<AIModelProfile>[] = [
   { id: 'actions',  label: 'Eylemler',  kind: 'actions', width: 340, minWidth: 340 },
 ];
 
-type Draft = { id: string; label: string; provider: AIProvider; baseUrl: string; apiKey: string; model: string; skipTls: boolean; maxTokens: string; temperature: string; timeoutS: string; thinking: AIThinking; toolset: AIToolset; description: string; roles: Role[]; deep: boolean; headers: string; localOnly: boolean };
-const emptyDraft = (): Draft => ({ id: '', label: '', provider: 'openai', baseUrl: '', apiKey: '', model: '', skipTls: false, maxTokens: '', temperature: '', timeoutS: '', thinking: '', toolset: '', description: '', roles: [], deep: false, headers: '', localOnly: false });
+type Draft = { id: string; label: string; provider: AIProvider; baseUrl: string; apiKey: string; model: string; skipTls: boolean; maxTokens: string; temperature: string; timeoutS: string; thinking: AIThinking; thinkingSwitch: boolean; toolset: AIToolset; description: string; roles: Role[]; deep: boolean; headers: string; localOnly: boolean };
+const emptyDraft = (): Draft => ({ id: '', label: '', provider: 'openai', baseUrl: '', apiKey: '', model: '', skipTls: false, maxTokens: '', temperature: '', timeoutS: '', thinking: '', thinkingSwitch: false, toolset: '', description: '', roles: [], deep: false, headers: '', localOnly: false });
 const draftOf = (p: AIModelProfile): Draft => ({
   id: p.id, label: p.label ?? '', provider: p.provider, baseUrl: p.baseUrl ?? '', apiKey: '', model: p.model ?? '', skipTls: !!p.skipTls,
   maxTokens: p.maxTokens ? String(p.maxTokens) : '', temperature: p.temperature === undefined || p.temperature === null ? '' : String(p.temperature), timeoutS: p.timeoutS ? String(p.timeoutS) : '',
   thinking: p.thinking ?? '',
+  thinkingSwitch: !!p.thinkingSwitch, // v0.10.2458
   toolset: p.toolset ?? '', // v0.10.1302
   description: p.description ?? '', roles: p.roles ?? [], // v0.10.1138
   deep: !!p.deep, // v0.10.1150
@@ -87,6 +88,7 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
       temperature: draft.temperature === '' ? undefined : Number(draft.temperature),
       timeoutS: draft.timeoutS ? Number(draft.timeoutS) : undefined,
       thinking: draft.thinking || undefined,
+      thinkingSwitch: draft.provider === 'openai' && draft.thinkingSwitch, // v0.10.2458
       toolset: draft.toolset, // v0.10.1302 — '' = otomatik (gönderilir: eski açık ayar temizlenebilsin)
       description: draft.description.trim() || undefined, // v0.10.1138 — sohbet seçicisindeki kısa açıklama
       roles: draft.roles, // v0.10.1138 — boş = herkes (sunucu üçü de seçiliyse boşa indirir)
@@ -247,6 +249,11 @@ export function AiProfilesPanel({ payload, onChange }: { payload: AIProfilesPayl
                   <option value="off">kapalı (enable_thinking=false)</option>
                   <option value="on">açık</option>
                 </SelectField>
+              )}
+              {/* v0.10.2458 — geçit takma adı model ailesini saklıyorsa (ad Qwen3 değil) */}
+              {draft.provider === 'openai' && (
+                <CheckboxField label="Accepts enable_thinking (Qwen3 chat template)" checked={draft.thinkingSwitch} onCheckedChange={v => set({ thinkingSwitch: v })}
+                  hint="Only for gateway aliases that hide a Qwen3 model name. Qwen3 names are detected automatically; leave unchecked for gemma / llama." />
               )}
               {/* v0.10.1302 — CoSRE araç seti: küçük modelde serbest-sorgu araçları gizlenir;
                   dış MCP sunucusu ve guided/niyet kademeleri etkilenmez. */}

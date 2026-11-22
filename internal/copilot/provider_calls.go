@@ -59,14 +59,18 @@ func (s *Service) callSnapshot(ctx context.Context) (cfg provider.Config, req pr
 	}
 	// v0.10.2375 — model-farkında taban bütçe ve tavan (model_tuning.go);
 	// yetenek kaydı olmayan modelde profil > küresel > 4096 aynen.
-	caps := modelcaps.For(model)
+	caps := capsForProfile(p) // v0.10.2458 — profil thinkingSwitch beyanı dahil
 	window := cachedContextWindow(p)
-	maxTok := resolveMaxTokens(p.MaxTokens, s.maxTokens, caps, p.Thinking, window)
+	// v0.10.2458 — yüzey başına düşünme (thinking_surface.go): varsayılan off;
+	// profil Thinking yalnız yüzey "inherit" iken. Bütçe, cevap tavanı,
+	// örnekleme ve gövde AYNI değerle karar verir.
+	thinking, fromProfile := s.effectiveThinking(ctx, p)
+	maxTok := resolveMaxTokens(p.MaxTokens, s.maxTokens, caps, thinking, window)
 	maxTok = deepMaxTokensFor(ctx, maxTok, model, window) // v0.10.1150 — Derin kapalıyken aynen
 	// v0.10.1699 — WithMaxTokensCap Explain yolunda da tavan (briefing başlığı
 	// ~300 tok). Tavan yoksa aynen; sohbet yolu ayrıca uygular (min, idempotent).
 	maxTok = cappedMaxTokens(ctx, maxTok)
-	maxTok = answerCappedMaxTokens(ctx, maxTok, model, p.Thinking) // v0.10.2331 — cevap sınıfı tavanı (answer_cap.go)
+	maxTok = answerCappedMaxTokens(ctx, maxTok, model, thinking) // v0.10.2331 — cevap sınıfı tavanı (answer_cap.go)
 	req = provider.Request{
 		Model:     model,
 		MaxTokens: maxTok,
@@ -75,13 +79,13 @@ func (s *Service) callSnapshot(ctx context.Context) (cfg provider.Config, req pr
 	}
 	// v0.10.2375 — sıcaklık: profil > küresel (operatör) > modelin önerisi >
 	// 0.2. Öneri yoksa (gemma, bilinmeyen, katı JSON çağrısı) eski değer aynen.
-	rec, hasRec := recommendedSampling(ctx, caps, p.Thinking)
+	rec, hasRec := recommendedSampling(ctx, caps, thinking)
 	temp := resolveTemperature(p.Temperature, s.temperature, rec, hasRec)
 	req.Temperature = &temp
 	// v0.10.534 — model-farkında yetenekler (modelcaps): profilin thinking
 	// ayarı ailenin gövde anahtarına çevrilir; aile anahtar bilmiyorsa ya da
 	// düşünen model küçük bütçeyle koşuyorsa modele göre BİR kez uyarılır.
-	req.ExtraBody = s.thinkingBody(model, p.Thinking, maxTok)
+	req.ExtraBody = s.thinkingBody(model, caps, thinking, fromProfile, maxTok)
 	// v0.10.2375 — önerilen top_p / top_k / presence_penalty; uç bunları
 	// reddettiyse softFieldTTL boyunca eklenmez (sampling_fallback.go).
 	if hasRec && !softFields.blocked(softFieldKey(base, model)) {
@@ -286,10 +290,13 @@ func clampTokens(n int) uint32 {
 // thinkingBody — v0.10.534: modelcaps çözümü + tek-seferlik uyarılar
 // (warnedModels; anahtar model+konu). callSnapshot RLock altında çağırır;
 // sync.Map kilitsiz.
-func (s *Service) thinkingBody(model, thinking string, budget int) map[string]any {
-	caps := modelcaps.For(model)
+//
+// v0.10.2458 — caps çağıranın (profil beyanı dahil); anahtarı bilinmeyen
+// modelde gövde değişmez. Uyarı yalnız ayar profilden geldiyse (inherit):
+// yüzey varsayılanı "off" gemma'da no-op'tur, uyarılacak bir şey yok.
+func (s *Service) thinkingBody(model string, caps modelcaps.Caps, thinking string, fromProfile bool, budget int) map[string]any {
 	eb, ok := modelcaps.ExtraBody(caps, modelcaps.Thinking(thinking))
-	if !ok {
+	if !ok && fromProfile {
 		s.warnOnce(model+"|thinking", "[copilot] model %q (aile %s): thinking=%q istendi ama bu aile için gövde anahtarı bilinmiyor — ayar uygulanmadı", model, caps.Family, thinking)
 	}
 	if caps.Reasoning && modelcaps.Thinking(thinking) != modelcaps.ThinkingOff && budget > 0 && budget <= modelcapsReasoningBudgetHint {

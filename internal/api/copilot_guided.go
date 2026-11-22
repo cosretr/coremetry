@@ -2537,6 +2537,7 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	// v0.10.2331 — B: cevap sınıfı (chat_answer_class.go); üslup kapalıyken nctx = ctx, classLine "".
 	answerStyleNoteWindow(ctx, rangeS) // v0.10.2332 — varsay ve söyle: anlatımın penceresi
 	nctx, classLine := answerStyleNarration(ctx, answerClassOfIntent(route.Intent))
+	nctx = copilot.WithThinkingSurface(nctx, guidedThinkingSurface(route.Intent)) // v0.10.2458 — sağlık raporu anlatımı ayrı düşünme yüzeyi
 	raw, exErr := s.copilotStreamSurface(nctx, "chat-guided", withAddressee(addresseeFromCtx(ctx), cosreRulesSystemPrefix(rulesBlock)+answerStyleGuidedPrompt(nctx, route.Intent)+healthReportPromptFor(route.Intent, evidence))+classLine, user, func(delta string) {
 		emit("delta", map[string]string{"text": delta})
 	})

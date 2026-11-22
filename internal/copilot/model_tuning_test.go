@@ -217,7 +217,7 @@ func (l *tuneLLM) service(p ModelProfile) *Service {
 	s := New(ProviderOpenAI, "", p.Model)
 	s.Configure(ProviderOpenAI, "", p.Model, p.BaseURL, false, true)
 	s.SetProfiles([]ModelProfile{p}, "p", nil)
-	return s
+	return inheritThinking(s) // v0.10.2458 — bu dosya PROFİL thinking anlamını pinler (yüzey varsayılanı off: thinking_surface_test.go)
 }
 
 // tuningKeys — gövdenin bu dilimle ilgili alanları (messages / tools gibi
@@ -367,6 +367,7 @@ func TestMaxTokensForMatchesSnapshot(t *testing.T) {
 	} {
 		s := New(ProviderOpenAI, "", c.model)
 		s.SetProfiles([]ModelProfile{{ID: "p", Provider: ProviderOpenAI, BaseURL: "http://llm.invalid/v1", Model: c.model, Thinking: c.thinking}}, "p", nil)
+		inheritThinking(s)
 		if got := s.MaxTokensFor(context.Background()); got != c.want {
 			t.Errorf("%s thinking=%q: %d, want %d", c.model, c.thinking, got, c.want)
 		}

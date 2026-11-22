@@ -22,7 +22,7 @@ OracleLogsResponse, CopilotScopeNames, CosreRouteRED,
   Monitor, MonitorResult, MonitorRow,
   StatusPageConfig, StatusComponent, StatusSubscriber,
   RetentionSpec,
-  AISettings, AISettingsInput, AIModelProfileInput, AIProfilesPayload, AIProfileTestResult, AISurfaceMap,
+  AISettings, AISettingsInput, AIModelProfileInput, AIProfilesPayload, AIProfileTestResult, AISurfaceMap, AIThinkingPayload, AIThinkMode,
   AnomalyVerdict, AnomalyVerdictKind,
   TempoSnapshot, TempoSettingsInput,
   OidcSettingsSnapshot, OidcSettingsInput, OidcTestResult,
@@ -2155,6 +2155,12 @@ export const api = {
   putAISurfaceMap: (m: AISurfaceMap) =>
     request<AIProfilesPayload>('/api/settings/ai/surface-map', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(m),
+    }),
+  // v0.10.2458 — yüzey başına Qwen düşünme kipi (admin + audit).
+  aiThinking: () => get<AIThinkingPayload>('/api/settings/ai/thinking'),
+  putAIThinking: (modes: Record<string, AIThinkMode>) =>
+    request<AIThinkingPayload>('/api/settings/ai/thinking', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(modes),
     }),
 
   // Runtime settings: external Tempo backend (v0.5.208).

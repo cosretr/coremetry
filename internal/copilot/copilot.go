@@ -126,6 +126,8 @@ type Service struct {
 	timeoutS int
 	// warnedModels — v0.10.534: modelcaps uyarıları model+konu başına bir kez (provider_calls.go thinkingBody).
 	warnedModels sync.Map
+	// v0.10.2458 — yüzey başına düşünme kipi + öz-gözlem sayaçları (thinking_surface.go).
+	thinkState
 	// autoExplain — v0.9.1138 (bkz. SetAutoExplain). nil ⇒ açık.
 	autoExplain *bool
 	// intentClassify — v0.10.172 (bkz. SetIntentClassify). "" ⇒ IntentOnNoLoop.
@@ -758,6 +760,7 @@ func (s *Service) explain(ctx context.Context, systemPrompt, userPrompt string, 
 	// FAZ 1.2 — üç dal da internal/ai/provider'dan geçiyor; yüzey
 	// ayrımı YOK (Faz 1.1'in tek-yüzey canary'si ve üç eski üretici
 	// birlikte silindi). Gövdeleri kuran kod provider_calls.go'da.
+	obs := s.thinkingObserve(ctx) // v0.10.2458 — yüzey × düşünme sayacı + gecikme
 	switch provider {
 	case ProviderGitHub:
 		out, inputTokens, outputTokens, err = s.explainGitHub(ctx, systemPrompt, userPrompt)
@@ -766,6 +769,7 @@ func (s *Service) explain(ctx context.Context, systemPrompt, userPrompt string, 
 	default:
 		out, inputTokens, outputTokens, err = s.explainAnthropic(ctx, systemPrompt, userPrompt)
 	}
+	obs(err)
 
 	s.recordNarration(ctx, started, provider, model, baseURL, systemPrompt, userPrompt, out, inputTokens, outputTokens, err)
 	s.noteProviderError(err)
@@ -1243,6 +1247,7 @@ type SettingsStore interface {
 // LoadPersisted reads any DB-saved override and applies it. Silently
 // skips when nothing's saved — env defaults stay in effect.
 func (s *Service) LoadPersisted(ctx context.Context, store SettingsStore) error {
+	s.loadThinkingPersisted(ctx, store) // v0.10.2458 — ayrı anahtar; ai_copilot blobu boşken de okunur
 	raw, err := store.GetSetting(ctx, settingsKey)
 	if err != nil {
 		return err

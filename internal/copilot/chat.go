@@ -149,14 +149,19 @@ func (s *Service) ChatWithTools(ctx context.Context, system string, msgs []ChatM
 		return ChatTurn{}, err
 	}
 	provider, _, _ := s.profileIdentity(ctx) // v0.10.175
+	obs := s.thinkingObserve(ctx)            // v0.10.2458
+	var turn ChatTurn
+	var err error
 	switch provider {
 	case ProviderGitHub:
-		return s.chatGitHubWithTools(ctx, system, msgs, tools)
+		turn, err = s.chatGitHubWithTools(ctx, system, msgs, tools)
 	case ProviderOpenAI:
-		return s.chatOpenAIWithTools(ctx, system, msgs, tools)
+		turn, err = s.chatOpenAIWithTools(ctx, system, msgs, tools)
 	default:
-		return s.chatAnthropicWithTools(ctx, system, msgs, tools)
+		turn, err = s.chatAnthropicWithTools(ctx, system, msgs, tools)
 	}
+	obs(err)
+	return turn, err
 }
 
 // RecordUsage writes a single ai_calls row for a completed chat

@@ -769,6 +769,14 @@ func TestSingleShotGuardKeepsExplainWithinWindow(t *testing.T) {
 		p := newDefProvider(t, "cevap")
 		cop := copilot.New(copilot.ProviderOpenAI, "test-key", model)
 		cop.Configure(copilot.ProviderOpenAI, "test-key", model, p.srv.URL, false, true)
+		// v0.10.2458 — bu test modelin düşünme-varsayılan bütçesini (32768) pinler:
+		// yüzeyler inherit (profil thinking boş = modele dokunma); varsayılan off
+		// bütçeyi 4096'ya indirir ve fikstür patolojik olmaktan çıkar.
+		inherit := map[string]string{}
+		for _, i := range copilot.ThinkSurfaces() {
+			inherit[string(i.ID)] = copilot.ThinkModeInherit
+		}
+		cop.SetThinkingModes(inherit)
 		s = &Server{copilot: cop, cache: newMemCache(), tempo: tp, logs: logs}
 		r := httptest.NewRequest(http.MethodPost, "/api/copilot/explain-trace/"+esTrace, strings.NewReader(""))
 		if deep {

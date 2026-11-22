@@ -18,3 +18,13 @@ func healthReportPromptFor(intent guidedIntent, evidence string) string {
 	}
 	return copilot.ServiceHealthAnswerOrder()
 }
+
+// guidedThinkingSurface — v0.10.2458, SAF: servis sağlığı / servis raporu
+// anlatımı "health_report" düşünme yüzeyine düşer; diğer guided niyetler ""
+// (etiket sınıflaması: chat-guided → guided).
+func guidedThinkingSurface(intent guidedIntent) copilot.ThinkSurface {
+	if intent == guidedServiceHealth || intent == guidedServiceReport {
+		return copilot.ThinkHealthReport
+	}
+	return ""
+}

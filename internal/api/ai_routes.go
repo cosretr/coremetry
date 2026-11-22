@@ -102,10 +102,11 @@ func (s *Server) registerAIRoutes(mux *http.ServeMux) {
 	// ── AI ayarları (Settings→AI sekmesi) ──
 	mux.HandleFunc("GET /api/settings/ai", auth.RequireRole(auth.RoleAdmin, s.getAISettings))
 	mux.HandleFunc("PUT /api/settings/ai", auth.RequireRole(auth.RoleAdmin, s.putAISettings))
-	s.registerAISettingsProfileRoutes(mux) // v0.10.175 — model profilleri, ai_settings_profiles.go
-	s.registerAIBudgetRoutes(mux)          // v0.10.411 — maliyet/gecikme bütçesi, ai_budget.go
-	s.registerAITurnLimitRoutes(mux)       // CoSRE kişi başı tur sınırı, chat_turn_limit.go
-	s.registerAIEvalsetRoutes(mux)         // v0.10.423 — 👎 → evalset export, ai_evalset.go
+	s.registerAISettingsProfileRoutes(mux)  // v0.10.175 — model profilleri, ai_settings_profiles.go
+	s.registerAISettingsThinkingRoutes(mux) // v0.10.2458 — yüzey başına düşünme, ai_settings_thinking.go
+	s.registerAIBudgetRoutes(mux)           // v0.10.411 — maliyet/gecikme bütçesi, ai_budget.go
+	s.registerAITurnLimitRoutes(mux)        // CoSRE kişi başı tur sınırı, chat_turn_limit.go
+	s.registerAIEvalsetRoutes(mux)          // v0.10.423 — 👎 → evalset export, ai_evalset.go
 
 	// ── AI Copilot ──
 	mux.HandleFunc("GET    /api/copilot/config", s.copilotConfig)

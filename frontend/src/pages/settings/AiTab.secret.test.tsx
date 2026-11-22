@@ -34,6 +34,7 @@ const api = vi.hoisted(() => {
     aiBudget: vi.fn(async () => ({ budget: {} })),
     aiChatRetention: vi.fn(async () => ({ days: 90 })),
     aiTurnLimits: vi.fn(async () => ({ perHour: 60, perDay: 300 })),
+    aiThinking: vi.fn(async () => ({ surfaces: [], stats: [], profiles: [] })), // v0.10.2458
     aiGeneralQuestions: vi.fn(async () => ({ allow: true })),
     cosreV2Flag: vi.fn(async () => ({ enabled: false })),
     cosreBriefingSettings: vi.fn(async () => ({ enabled: false, window_s: 10800, refresh_interval_s: 300, ttl_s: 600, envs: [''], llm_phrasing: true, thresholds: {} })), // v0.10.2105

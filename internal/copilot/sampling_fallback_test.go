@@ -95,7 +95,7 @@ func (l *pickyLLM) service(model string) *Service {
 	s := New(ProviderOpenAI, "", model)
 	s.Configure(ProviderOpenAI, "", model, base, false, true)
 	s.SetProfiles([]ModelProfile{{ID: "p", Provider: ProviderOpenAI, BaseURL: base, Model: model}}, "p", nil)
-	return s
+	return inheritThinking(s) // v0.10.2458 — profilin (boş) thinking'i: bu test örnekleme düşüşünü pinler
 }
 
 func sameBools(a []bool, b ...bool) bool {

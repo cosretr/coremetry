@@ -749,7 +749,7 @@ func seamNoteNarrationCall(ctx context.Context, surface string, call func(ctx co
 // düzeltme notu, akışsız (buffered) tek çağrı.
 func (s *Server) seamNoteNarration(ctx context.Context, surface, system, user string) {
 	seamNoteNarrationCall(ctx, surface, func(c context.Context, extra string) (string, error) {
-		return s.aiCall(c, nil, system, user+extra, aiCallOpts{surface: surface})
+		return s.aiCall(copilot.WithThinkingSurface(c, copilot.ThinkVerifier), nil, system, user+extra, aiCallOpts{surface: surface}) // v0.10.2458
 	})
 }
 
@@ -765,7 +765,7 @@ func seamNoteLoopCall(ctx context.Context, s *Server, pctx context.Context, syst
 	base := append(append([]copilot.ChatMessage(nil), conv...), copilot.ChatMessage{Role: "assistant", Text: answer})
 	t.setRegen(verifyTierLoop, func(note string) (string, error) {
 		msgs := append(append([]copilot.ChatMessage(nil), base...), copilot.ChatMessage{Role: "user", Text: note})
-		turn, err := s.copilot.ChatWithToolsStream(copilot.WithBufferedOnly(copilot.WithNoToolCalls(pctx)), system, msgs, specs, nil)
+		turn, err := s.copilot.ChatWithToolsStream(copilot.WithThinkingSurface(copilot.WithBufferedOnly(copilot.WithNoToolCalls(pctx)), copilot.ThinkVerifier), system, msgs, specs, nil) // v0.10.2458
 		return turn.Text, err
 	})
 }

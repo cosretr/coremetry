@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/cilcenk/coremetry/internal/ai/modelcaps"
 )
 
 func f64(v float64) *float64 { return &v }
@@ -322,17 +324,17 @@ func TestProfileThinking(t *testing.T) {
 		t.Fatal("thinking farkı sameProfile'ı ayırmalı (blob yeniden yazılmalı)")
 	}
 	s := New(ProviderOpenAI, "k", "qwen3-8b")
-	if eb := s.thinkingBody("qwen3-8b", "off", 4096); eb == nil || eb["chat_template_kwargs"].(map[string]any)["enable_thinking"] != false {
+	if eb := s.thinkingBody("qwen3-8b", modelcaps.For("qwen3-8b"), "off", true, 4096); eb == nil || eb["chat_template_kwargs"].(map[string]any)["enable_thinking"] != false {
 		t.Fatalf("qwen3 off → chat_template_kwargs: %v", eb)
 	}
-	if eb := s.thinkingBody("qwen3-8b", "", 4096); eb != nil {
+	if eb := s.thinkingBody("qwen3-8b", modelcaps.For("qwen3-8b"), "", true, 4096); eb != nil {
 		t.Fatalf("thinking boş → gövde değişmez: %v", eb)
 	}
-	if eb := s.thinkingBody("gemma4", "off", 4096); eb != nil {
+	if eb := s.thinkingBody("gemma4", modelcaps.For("gemma4"), "off", true, 4096); eb != nil {
 		t.Fatalf("gemma anahtar bilmez → nil (uyarı loglanır): %v", eb)
 	}
 	// Uyarılar model+konu başına bir kez.
-	s.thinkingBody("gemma4", "off", 4096)
+	s.thinkingBody("gemma4", modelcaps.For("gemma4"), "off", true, 4096)
 	n := 0
 	s.warnedModels.Range(func(k, _ any) bool { n++; return true })
 	if n != 2 { // gemma4|thinking + qwen3-8b|budget

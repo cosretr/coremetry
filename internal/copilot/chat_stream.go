@@ -61,6 +61,7 @@ func (s *Service) ChatWithToolsStream(ctx context.Context, system string, msgs [
 	var turn ChatTurn
 	var err error
 	provider, _, _ := s.profileIdentity(ctx)
+	obs := s.thinkingObserve(ctx) // v0.10.2458
 	switch provider {
 	case ProviderOpenAI:
 		turn, err = s.streamToolsOpenAI(ctx, system, msgs, tools, onDelta)
@@ -71,6 +72,7 @@ func (s *Service) ChatWithToolsStream(ctx context.Context, system string, msgs [
 	default:
 		turn, err = s.streamToolsAnthropic(ctx, system, msgs, tools, onDelta)
 	}
+	obs(err)
 	if !st.fallbackSet() {
 		turn.TTFTMs = st.ttftMs()
 	}

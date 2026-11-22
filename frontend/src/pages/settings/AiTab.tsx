@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { useSettingsLoad, SettingsLoadError, FlashBox, ConfigStatusBanner } from './shared';
 import type { AIProvider, AISettings, AIIntentClassify, AIProfilesPayload } from '@/lib/types';
 import { AiProfilesPanel } from './AiProfilesPanel';
+import { AiThinkingPanel } from './AiThinkingPanel'; // v0.10.2458 — yüzey başına düşünme kipi
 import { AiContextWindowLine } from './AiContextWindowLine'; // v0.10.1991
 import { AiBudgetPanel } from './AiBudgetPanel'; // v0.10.411
 import { AiChatRetentionPanel } from './AiChatRetentionPanel'; // v0.10.561
@@ -323,6 +324,7 @@ function AiProviderSettings() {
           if (d) { setProvider(d.provider); setModel(d.model ?? ''); setBaseUrl(d.baseUrl ?? ''); setHasKey(d.hasKey); setSkipTls(!!d.skipTls); }
         }} />
       )}
+      <AiThinkingPanel />
       <AiBudgetPanel />
       <AiChatRetentionPanel />
       <AiTurnLimitsPanel />

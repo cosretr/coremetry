@@ -64,6 +64,10 @@ type ModelProfile struct {
 	// anahtarı biliniyorsa (Qwen3: chat_template_kwargs.enable_thinking)
 	// gövdeye iner; bilinmiyorsa bir kez uyarılır, gövde değişmez.
 	Thinking string `json:"thinking,omitempty"`
+	// ThinkingSwitch — v0.10.2458: admin BEYANI "bu uç Qwen3 şablon anahtarını
+	// (chat_template_kwargs.enable_thinking) kabul eder" — geçit takma adı
+	// model ailesini saklıyorsa. Ad Qwen3 ise gereksiz (modelcaps zaten bilir).
+	ThinkingSwitch bool `json:"thinkingSwitch,omitempty"`
 	// Toolset — v0.10.1302 (modelcaps): CoSRE sohbet kataloğu "" otomatik
 	// (model adı ≤12B → simple, aksi/bilinmeyen → full) | "simple" (serbest-
 	// sorgu araçları gizli) | "full". Çözüm: (*Service).ToolsetFor.
@@ -143,7 +147,7 @@ func sameHeaders(a, b map[string]string) bool {
 func sameProfile(a, b ModelProfile) bool {
 	if a.ID != b.ID || a.Label != b.Label || a.Provider != b.Provider || a.BaseURL != b.BaseURL ||
 		a.APIKey != b.APIKey || a.Model != b.Model || a.SkipTLS != b.SkipTLS ||
-		a.MaxTokens != b.MaxTokens || a.TimeoutS != b.TimeoutS || a.Thinking != b.Thinking || a.Toolset != b.Toolset ||
+		a.MaxTokens != b.MaxTokens || a.TimeoutS != b.TimeoutS || a.Thinking != b.Thinking || a.ThinkingSwitch != b.ThinkingSwitch || a.Toolset != b.Toolset ||
 		a.Description != b.Description || !sameStrings(a.Roles, b.Roles) || a.Deep != b.Deep || a.LocalOnly != b.LocalOnly || a.StrictToolArgs != b.StrictToolArgs ||
 		!sameHeaders(a.Headers, b.Headers) {
 		return false
@@ -565,8 +569,9 @@ func (s *Service) MaxTokensFor(ctx context.Context) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	p := s.resolveProfileLocked(ctx).cfg
-	window := cachedContextWindow(p) // v0.10.2375 — callSnapshot ile aynı çözüm (model_tuning.go)
-	maxTok := resolveMaxTokens(p.MaxTokens, s.maxTokens, modelcaps.For(p.Model), p.Thinking, window)
+	window := cachedContextWindow(p)           // v0.10.2375 — callSnapshot ile aynı çözüm (model_tuning.go)
+	thinking, _ := s.effectiveThinking(ctx, p) // v0.10.2458 — yüzey başına düşünme (callSnapshot ile aynı)
+	maxTok := resolveMaxTokens(p.MaxTokens, s.maxTokens, capsForProfile(p), thinking, window)
 	return deepMaxTokensFor(ctx, maxTok, p.Model, window) // v0.10.1150 — Derin kapalıyken aynen
 }
 
