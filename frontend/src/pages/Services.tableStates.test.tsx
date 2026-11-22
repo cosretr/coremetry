@@ -48,6 +48,8 @@ vi.mock('@/lib/api', () => {
     servicesMetadata: () => Promise.resolve({}),
     serviceNames: () => Promise.resolve({ names: [], total: 0 }),
   };
+  // v0.10.2444 — varsayılan sıra (İstek) RED sütunu: sayfa filo sırası ucundan.
+  stub.servicesMetricRank = stub.servicesPage;
   return {
     api: new Proxy({}, { get: (_t, k: string) => stub[k] ?? (() => Promise.resolve({})) }),
     isCanceled: () => false,

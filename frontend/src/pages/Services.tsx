@@ -19,8 +19,10 @@ import {
 import { useAllServiceRuntimes, useServicesMetadata } from '@/lib/queries';
 import { useTableNav } from '@/lib/useTableNav';
 import { api } from '@/lib/api';
-import type { ServiceRedMetricRow, ServiceRedSparkRow } from '@/lib/types';
-import { servicesSortScope, resortByDisplayed, servicesAggregate, rowSpark, aggregateSpark, METRIC_SORT_COLS } from '@/lib/servicesMetricRed';
+import type { RangeParams, ServicesPageOpts } from '@/lib/api';
+import type { ServiceRedMetricRow, ServiceRedSparkRow, ServicesMetricRankPage } from '@/lib/types';
+import { servicesSortScope, servicesSortNote, resortByDisplayed, servicesAggregate, rowSpark, aggregateSpark, METRIC_SORT_COLS } from '@/lib/servicesMetricRed';
+import type { ServicesRankInfo, ServicesSortNote } from '@/lib/servicesMetricRed';
 import { t, tf, useLang } from '@/lib/i18n';
 import { fmtNum, fmtFixed, timeRangeToNs, rowClickHandlers, tsLong, fmtAgoNs } from '@/lib/utils';
 import { teamOptionsCI } from '@/lib/teamOptions';
@@ -160,6 +162,9 @@ export default function ServicesPage() {
   // v0.7.44 — distinct-service total (opt-in ?withTotal=1) drives the First/Last
   // pager. null when unknown (e.g. cluster filter → raw path returns no total).
   const [total, setTotal] = useState<number | null>(null);
+  // v0.10.2444 — RED sütununda sayfa /api/services-metric-rank'ten: filo
+  // geneli metrik sırası (ranked) ya da dürüst geri düşüş (notes).
+  const [rank, setRank] = useState<ServicesRankInfo | null>(null);
 
   // Filters (in-memory — service list is small)
   // v0.10.1229 (paylaşılabilir URL, Faz 1-B) — filtreler URL'den TÜRETİLİR
@@ -261,12 +266,12 @@ export default function ServicesPage() {
   // v0.10.2437 — metrik değeriyle sıralama YALNIZ tüm sonuç bu sayfadaysa
   // (lib/servicesMetricRed.ts başı): sayfalı listede istemci sıralaması
   // sayfayı küresel sıra gibi gösterirdi; orada sunucunun span sırası kalır.
-  const sortScope = servicesSortScope(page, total, hasMore, PAGE_SIZE);
+  // v0.10.2444 — filo sırası geldiyse sunucu sırası esastır (istemci sıralamaz).
+  const sortScope = rank?.ranked ? 'server' : servicesSortScope(page, total, hasMore, PAGE_SIZE);
   const displayRows = useMemo(
     () => resortByDisplayed(sorted ?? [], redMetric, sortBy, sortDir, sortScope, pinned),
     [sorted, redMetric, sortBy, sortDir, sortScope, pinned]);
-  const metricSortNote = METRIC_SORT_COLS.has(sortBy) && Object.keys(redMetric).length > 0
-    ? (sortScope === 'client' ? 'metric' : 'spans') : null;
+  const metricSortNote = servicesSortNote(sortBy, Object.keys(redMetric).length > 0, sortScope, rank);
   // v0.9.1111 (Faz 5) — önceki-pencere kıyası. URL'den okunur
   // (?compare=prior, paylaşılan link aynı görünümü açar); p99Delta
   // sıralaması kıyası zorunlu kılar (sunucu da zorlar), o yüzden
@@ -309,6 +314,7 @@ export default function ServicesPage() {
     setSparklines({});
     setRedMetric({});
     setRedSpark({});
+    setRank(null);
     // v0.8.300 (quality bar S3) — cancelled flag: deps change on every
     // sort/filter/page click, and without cancellation an OLDER in-flight
     // response could resolve LAST and overwrite the fresh page
@@ -324,7 +330,10 @@ export default function ServicesPage() {
     // `committedFilter` is forwarded as ?name=… so the substring
     // search runs server-side across every service, not just the
     // current page.
-    api.servicesPage(r, {
+    // v0.10.2444 — RED sütunu (İstek / Hata % / Avg / P99): aynı parametrelerle
+    // filo geneli metrik sıralı sayfa; diğer sütunlar CH span sırası.
+    const rankByMetric = METRIC_SORT_COLS.has(sortBy);
+    servicesPageFetch(rankByMetric)(r, {
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,
       name: committedFilter || undefined,
@@ -367,6 +376,7 @@ export default function ServicesPage() {
       setRefreshing(false);
       setHasMore(resp?.hasMore ?? false);
       setTotal(resp?.total ?? null);
+      setRank(rankByMetric && resp ? { ranked: !!resp.ranked, metricRanked: resp.metricRanked ?? 0, notes: resp.notes } : null);
       const names = (resp?.services ?? []).map(s => s.name);
       // Sparklines ride the 5m summary MV, which has NO env dimension
       // (v0.8.385 kept it that way — cluster-parity raw-fallback, no
@@ -968,11 +978,11 @@ export default function ServicesPage() {
           <Pager mode="offset" count="exact" total={total}
             page={page} pageSize={PAGE_SIZE} onPage={setPage}
             lastReachablePage={Math.max(0, Math.ceil(total / PAGE_SIZE) - 1)}
-            extras={<ServicesPagerExtras shown={shown.length} sortBy={sortBy} sortDir={sortDir} env={env} sortNote={metricSortNote} />} />
+            extras={<ServicesPagerExtras shown={shown.length} sortBy={sortBy} sortDir={sortDir} env={env} sortNote={metricSortNote} rank={rank} />} />
         ) : (
           <Pager mode="offset" count="skip"
             page={page} pageSize={PAGE_SIZE} hasMore={hasMore} onPage={setPage}
-            extras={<ServicesPagerExtras shown={shown.length} sortBy={sortBy} sortDir={sortDir} env={env} sortNote={metricSortNote} />} />
+            extras={<ServicesPagerExtras shown={shown.length} sortBy={sortBy} sortDir={sortDir} env={env} sortNote={metricSortNote} rank={rank} />} />
         ))}
       </PageShell>
     </>
@@ -1128,13 +1138,19 @@ function HealthDot({ health, reason, openProblems }: {
 // `extras` yuvasında. v0.9.1015'e kadar sayfalama tablonun ÜSTÜNDE
 // (filtre barında) ve özet ALTINDA duruyordu: aynı sorunun iki yarısı
 // ekranın iki ucundaydı. Tek şeritte birleştiler.
+// v0.10.2444 — RED sütununda filo sırası ucu, diğerlerinde /api/services (aynı parametreler).
+type ServicesPageResp = { services: Service[]; hasMore: boolean; total?: number } & Partial<Pick<ServicesMetricRankPage, 'ranked' | 'metricRanked' | 'notes'>>;
+function servicesPageFetch(rankByMetric: boolean): (r: RangeParams, o: ServicesPageOpts) => Promise<ServicesPageResp> {
+  return rankByMetric ? api.servicesMetricRank : api.servicesPage;
+}
+
 // v0.10.922 (sade palet adım 1) — sortBy/env vurgusu --accent2 idi ama
 // ikisi de link DEĞİL (--accent2 yalnız linklere); vurgu kalın --text.
 // v0.10.2437 — sortNote: metrik değerli sütunda sıralamanın gerçek tabanı
 // ('metric' = tek sayfa, gösterilen değerle; 'spans' = sayfalı, sunucunun
 // örneklenmiş span sırası — metrik sayfalar arası sıralanamaz).
-function ServicesPagerExtras({ shown, sortBy, sortDir, env, sortNote }: {
-  shown: number; sortBy: string; sortDir: string; env: string; sortNote: 'metric' | 'spans' | null;
+function ServicesPagerExtras({ shown, sortBy, sortDir, env, sortNote, rank }: {
+  shown: number; sortBy: string; sortDir: string; env: string; sortNote: ServicesSortNote; rank: ServicesRankInfo | null;
 }) {
   return (
     <>
@@ -1144,8 +1160,14 @@ function ServicesPagerExtras({ shown, sortBy, sortDir, env, sortNote }: {
           {' '}(shown values)
         </span>
       )}
+      {sortNote === 'fleet' && rank && (
+        <span title={`Ranked across all pages by the unsampled VictoriaMetrics value. The ${fmtNum(rank.metricRanked)} services with a metric value come first; services without one (marked sampled) follow, ranked by sampled span values.`}>
+          {' '}(fleet rank on unsampled metric)
+        </span>
+      )}
       {sortNote === 'spans' && (
-        <span title="The list is paged on the server and ranked by sampled span values before paging; metric values are read only for the visible page, so they cannot reorder across pages. Cells still show the unsampled metric where present.">
+        <span title={'The list is paged on the server and ranked by sampled span values before paging; metric values are read only for the visible page, so they cannot reorder across pages. Cells still show the unsampled metric where present.'
+          + (rank?.notes?.length ? ' Fleet metric rank unavailable: ' + rank.notes.join('; ') : '')}>
           {' '}(server rank on sampled spans)
         </span>
       )}

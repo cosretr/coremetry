@@ -48,7 +48,13 @@ func (s *Server) getRuntimeSignals(w http.ResponseWriter, r *http.Request) {
 		key += fmt.Sprintf(":env=%s:cl=%s", terms[vmetrics.RoleEnv], terms[vmetrics.RoleCluster])
 	}
 	s.serveCached(w, r, key, time.Minute, func(ctx context.Context) (any, error) {
-		return s.runtimeSignalReport(ctx, src, name, terms)
+		rep, err := s.runtimeSignalReport(ctx, src, name, terms)
+		if err == nil && s.store != nil {
+			// v0.10.2443 — grafik eşikleri operatörün ayarından (yoksa varsayılan).
+			ra := s.store.GetRuntimeAlerts(ctx)
+			rep.RuntimeAlerts = &ra
+		}
+		return rep, err
 	})
 }
 

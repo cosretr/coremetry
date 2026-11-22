@@ -8,11 +8,20 @@
 // en çok 5 pod; "Tüm pod'lar" (?rtview=lines, URL kaynak, replace) her pod'u
 // çizer. Seri pod etiketi taşımıyorsa tek çizgi + "pod etiketi yok" notu.
 //
+// v0.10.2443 — sağ eksen bindirmesi (`right`: servis p99'u, kesikli, sağ
+// eksen, etiketli) ve nesil kartlarının pod kırılımı (`gens`,
+// runtimeGenReduce): varsayılan nesil başına pod medyanı; seçici
+// (`?rtgen=<pod>`, en kötüden ≤10 pod) o pod'un nesil çizgilerine geçer;
+// "Tüm pod'lar" (?rtview=lines) her pod × nesil.
+//
 // CorePanel LAZY (DetailsMetricsSection emsali): @grafana/* statik bağlansa
 // Service sayfasının vendor chunk'ı ~1 MB olurdu.
+import { FIELD_SURFACE } from '@/components/coremetry/Field/fieldSurface';
 import { lazy, Suspense, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Spinner } from '@/components/Spinner';
+import { NativeSelect, NativeSelectOption } from '@/components/shadcn/native-select';
+import { urlSpec, zParam, z, useUrlParams } from '@/lib/urlSchema';
 import { useT } from '@/lib/i18n';
 import { msSyncKey } from '@/lib/chart/syncNamespace';
 import type { ChartThreshold, ChartTimeRegion } from '@/lib/chart/overlays';
@@ -21,12 +30,19 @@ import type { SpanMetricSeries } from '@/lib/types';
 import { parseRtView, rtViewParam } from './runtimeHeapView';
 import { reducePods, POD_REDUCE_MIN, type PodPoint, type PodSeries } from './runtimePodReduce';
 import { smoothPoints } from './runtimeSmooth';
+import { reduceGenerations, genPodChoices, type GenPodSeries } from './runtimeGenReduce';
 
 const CorePanelMultiLazy = lazy(() =>
   import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
 
 /** Pod'a bağlı olmayan çizgi (sınır, tavan, servis ortalaması …). */
 export interface RuntimeExtraLine { label: string; points: PodPoint[]; color?: string; dashed?: boolean }
+/** Sağ eksen bindirmesi (ör. servis p99'u) — kendi birimi, kesikli. */
+export interface RuntimeRightLine { label: string; unit: string; points: PodPoint[] }
+
+// `?rtgen=<pod>` — nesil kartlarının seçili pod'u (boş = medyan). Uzunluk
+// tavanlı: sunucuya gitmez ama URL'e sınırsız metin yazılmaz.
+const GEN_SPEC = urlSpec({ rtgen: zParam(z.string().check(z.maxLength(256)), '') });
 
 /** Kart başlığındaki birim yazımı → CorePanel (Grafana) birim kimliği. */
 export function runtimeUnitId(unit: string | undefined): string | undefined {
@@ -63,7 +79,7 @@ const fmtThr = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : String(Number
 
 export function RuntimePodChart({
   title, storageKey, unit, service, from, to, pods, podless, extra, threshold, status, errorText,
-  deploys, mode = 'line', note, source, testId, onZoom, onZoomReset, smooth = true,
+  deploys, mode = 'line', note, source, testId, onZoom, onZoomReset, smooth = true, right, gens,
 }: {
   title: string;
   storageKey: string;
@@ -90,27 +106,44 @@ export function RuntimePodChart({
   onZoom?: (fromSec: number, toSec: number) => void;
   onZoomReset?: () => void;
   smooth?: boolean;
+  /** v0.10.2443 — sağ eksen bindirmesi (kesikli, kendi birimi, etiketli eksen). */
+  right?: RuntimeRightLine | null;
+  /** v0.10.2443 — nesil kırılımlı kart: pod × nesil serileri (verilirse `pods` yok sayılır). */
+  gens?: GenPodSeries[];
 }) {
   const tr = useT();
   const { all, searchFor } = useRuntimePodView();
+  const [{ rtgen }, setGen] = useUrlParams(GEN_SPEC);
   const red = useMemo(
-    () => reducePods(pods ?? [], { threshold, all, medianLabel: tr('rt.pv.median') }),
-    [pods, threshold, all, tr],
+    () => reducePods(gens ? [] : (pods ?? []), { threshold, all, medianLabel: tr('rt.pv.median') }),
+    [pods, gens, threshold, all, tr],
+  );
+  const gred = useMemo(
+    () => (gens ? reduceGenerations(gens, { pod: rtgen || null, all, medianSuffix: tr('rt.pv.median') }) : null),
+    [gens, rtgen, all, tr],
   );
   const items = useMemo<CorePanelMultiItem[]>(() => {
     const sm = smooth ? smoothPoints : (p: PodPoint[]) => p;
-    return [
-      ...red.lines.map(l => ({
+    const main: CorePanelMultiItem[] = gred
+      ? gred.lines.map(l => ({ name: l.label, series: [toSeries(sm(l.points))] }))
+      : red.lines.map(l => ({
         name: l.role === 'worst' ? `${l.label} · ${tr('rt.pv.worst')}` : l.label,
         series: [toSeries(sm(l.points))],
         // Medyan nötr; pod çizgileri ad-hash paleti (renk = kimlik, sapma değil).
         color: l.role === 'median' ? 'var(--text2)' : undefined,
-      })),
+      }));
+    return [
+      ...main,
       ...(extra ?? []).map(x => ({
         name: x.label, series: [toSeries(sm(x.points))], color: x.color, dashed: x.dashed,
       })),
+      // Sağ eksen: kesikli + nötr; boş seri item üretmez (tek eksenli kart bayt-aynı).
+      ...(right && right.points.length ? [{
+        name: right.label, series: [toSeries(sm(right.points))], color: 'var(--text3)', dashed: true,
+        axis: 'right' as const, unit: runtimeUnitId(right.unit),
+      }] : []),
     ];
-  }, [red, extra, smooth, tr]);
+  }, [red, gred, extra, right, smooth, tr]);
   const empty = status === 'ready' && items.every(it => it.series[0].points.length === 0);
   const xRange = useMemo(() => ({ from: from / 1e9, to: to / 1e9 }), [from, to]);
   const regions = useMemo<ChartTimeRegion[] | undefined>(() => {
@@ -125,8 +158,13 @@ export function RuntimePodChart({
     [red.thresholdKind, red.threshold, unit, tr]);
 
   const u = (unit ?? '').trim();
-  const canToggle = !podless && red.total >= POD_REDUCE_MIN;
+  const podTotal = gred ? gred.total : red.total;
+  const canToggle = !podless && podTotal >= POD_REDUCE_MIN;
+  const genChoices = gred && !all && !podless && gred.total >= POD_REDUCE_MIN ? genPodChoices(gred.pods, gred.selected) : null;
   const summary = podless ? null
+    : gred
+      ? (gred.reduced ? tr('rt.gv.median').replace('{n}', String(gred.total))
+        : gred.total > 0 ? `${gred.total} pod` : null)
     : red.reduced
       ? `${tr('rt.pv.reduced').replace('{n}', String(red.total))}${red.overCount > 0
         ? ` · ${tr('rt.pv.over').replace('{n}', String(red.overCount))}${red.threshold != null ? ` (> ${fmtThr(red.threshold)}${u}${red.thresholdKind === 'relative' ? ` · ${tr('rt.pv.relative')}` : ''})` : ''}`
@@ -135,11 +173,21 @@ export function RuntimePodChart({
 
   return (
     <div data-testid={testId}>
-      {(summary || podless || canToggle || note) && (
+      {(summary || podless || canToggle || note || genChoices) && (
         <div className="rt-pod-bar">
           {summary && <span data-testid="rt-pod-summary">{summary}</span>}
           {podless && <span data-testid="rt-no-pod-label" title={tr('rt.pv.noPodLabelTip')}>{tr('rt.pv.noPodLabel')}</span>}
           {note && <span>{note}</span>}
+          {genChoices && (
+            <NativeSelect size="sm" value={gred?.selected ?? ''} data-testid="rt-gen-pod" className={FIELD_SURFACE}
+              aria-label={tr('rt.gv.pick')} title={tr('rt.gv.pick')}
+              onChange={e => setGen({ rtgen: e.target.value })}>
+              <NativeSelectOption value="">{tr('rt.gv.medianOpt')}</NativeSelectOption>
+              {genChoices.map((p, i) => (
+                <NativeSelectOption key={p} value={p}>{i === 0 ? `${p} · ${tr('rt.pv.worst')}` : p}</NativeSelectOption>
+              ))}
+            </NativeSelect>
+          )}
           {canToggle && (
             <Link replace to={{ search: searchFor(!all) }} data-testid="rt-pod-toggle">
               {all ? tr('rt.pv.summary') : tr('rt.pv.all')}
@@ -165,6 +213,7 @@ export function RuntimePodChart({
           onZoom={onZoom}
           onZoomReset={onZoomReset}
           syncKey={msSyncKey(`runtime:${service}`)}
+          rightAxisLabel={right && right.points.length ? `${right.label}${right.unit ? ` (${right.unit.trim()})` : ''}` : undefined}
         />
       </Suspense>
     </div>

@@ -121,7 +121,7 @@ export function ServiceRuntimeSection({ service, range, onZoom, onZoomReset }: {
       )}
       {(surf.jvmCharts || surf.goCharts) && scopeReady && (
         <RuntimeCharts service={service} family={family} from={th.from} to={th.to} onZoom={onZoom} onZoomReset={onZoomReset} hideHeader
-          scopeFilters={profQ.data?.scopeFilters} />
+          scopeFilters={profQ.data?.scopeFilters} alerts={profQ.data?.runtimeAlerts} />
       )}
       {/* v0.10.887 (paritesi #4 dilim 1, Onay 2026-09-23) — yalnız JVM: heap-after-GC pod
           başına adaptif bant; problem açmaz; JVM pod / metrik yoksa kart yok. */}

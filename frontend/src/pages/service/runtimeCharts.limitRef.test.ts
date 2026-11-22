@@ -35,7 +35,7 @@ describe('Runtime grafikleri tek motor (v0.10.2436)', () => {
   it('RuntimePodChart CorePanelMulti\'yi lazy yükler, görünüm ?rtview\'dan', () => {
     expect(chart).toContain("lazy(() =>\n  import('@/components/chart/corePanelEntry')");
     expect(chart).toContain("parseRtView(params.get('rtview'))");
-    expect(chart).toContain('reducePods(pods ?? []');
+    expect(chart).toContain("reducePods(gens ? [] : (pods ?? [])"); // v0.10.2443 — nesil kartı runtimeGenReduce'ta
     expect(chart).not.toMatch(/localStorage|STORAGE_KEYS/);
   });
   it('heap kartı sınırın yüzdesi: pod başına TOPLAM okumalar', () => {

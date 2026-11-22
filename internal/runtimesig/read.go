@@ -262,6 +262,10 @@ type Report struct {
 	// istendi ama uygulanamadı (tüm ortamlar okundu).
 	ScopeFilters []chstore.FilterExpr `json:"scopeFilters,omitempty"`
 	ScopeNote    string               `json:"scopeNote,omitempty"`
+	// RuntimeAlerts — v0.10.2443: operatörün runtime_alerts eşikleri
+	// (zero-patch'li GetRuntimeAlerts). Yalnız HTTP yanıtı doldurur: UI'nin
+	// "eşik üstü pod" seçimi varsayılanı değil ayarı okusun. CoSRE yolunda nil.
+	RuntimeAlerts *chstore.RuntimeAlertConfig `json:"runtimeAlerts,omitempty"`
 }
 
 // Analyze — tek servis: katalog → tespit → çözümleme → okuma → dedektör.

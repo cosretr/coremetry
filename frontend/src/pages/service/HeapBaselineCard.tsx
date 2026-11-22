@@ -1,10 +1,14 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtClock } from '@/lib/utils'; // v0.10.891 — tek saat biçimleyici (24 sa kilidi)
 import { useServiceDeploys } from '@/lib/queries';
-import { TimeSeriesPanel, type TSSeries, type TSThreshold } from '@/components/viz/TimeSeriesPanel';
+import { Spinner } from '@/components/Spinner';
+import { msSyncKey } from '@/lib/chart/syncNamespace';
+import type { ChartTimeRegion } from '@/lib/chart/overlays';
+import type { CorePanelMultiItem } from '@/components/chart/corePanelEntry';
+import type { SpanMetricSeries } from '@/lib/types';
 import { rowActivation } from '@/lib/a11y';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { parseRtView, rtViewParam } from './runtimeHeapView';
@@ -19,9 +23,10 @@ import type { HeapBaselinePod, HeapBaselineResponse } from '@/lib/types';
 // Dürüstlük: pods boşsa kart HİÇ çizilmez (metrik akmıyor / JVM pod yok —
 // boş küme kaybolur, sıfır göstermez); n < needBuckets → "baseline yok",
 // bant çizilmez; başlık bandın kaynağını (24 s, n) ve deponun adını söyler.
-// Bant, panelin hazır `thresholds` yatay çizgileriyle çizilir (odaklı pod
-// için alt/üst sınır) — paylaşılan çizim kancasına dokunulmaz. Hata durumu
-// tek satır (kart yok ≠ hata); ölmüş pod "sessiz · N dk önce" der.
+// v0.10.2443 — grafik paylaşılan motorda (CorePanelMulti, lazy): odaklı pod'un
+// bandı alt–üst kenar serileri arası DOLGU (CorePanel.fillBetween; eskiden
+// TimeSeriesPanel'de iki yatay eşik çizgisiydi). Hata durumu tek satır (kart
+// yok ≠ hata); ölmüş pod "sessiz · N dk önce" der.
 
 export const HEAP_STATUS: Record<string, { icon: string; label: string; tone: string }> = {
   critical:    { icon: '●', label: 'kritik sapma', tone: 'b-err' },
@@ -31,6 +36,31 @@ export const HEAP_STATUS: Record<string, { icon: string; label: string; tone: st
 };
 
 const LINES_MAX = 12; // grafikte çizilen pod sayısı (tablo hepsini listeler)
+
+// CorePanel LAZY (RuntimePodChart emsali): @grafana/* Service sayfasının ilk
+// chunk'ına girmez.
+const CorePanelMultiLazy = lazy(() =>
+  import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
+
+const toSeries = (points: { time: number; value: number | null }[]): SpanMetricSeries =>
+  ({ groupKey: [], points: points as SpanMetricSeries['points'] });
+
+/** Pod çizgileri + odaklı pod'un bant kenarları (alt/üst, kesikli, arası dolu). SAF. */
+export function heapChartItems(pods: readonly HeapBaselinePod[], focused: HeapBaselinePod | undefined, max: number = LINES_MAX): CorePanelMultiItem[] {
+  // Odaklı pod HER ZAMAN çizilir (bant neyin bandı belli olsun), kalan max-1.
+  const drawn = focused ? [focused, ...pods.filter(p => p !== focused)].slice(0, max) : pods.slice(0, max);
+  const items: CorePanelMultiItem[] = drawn.map(p => ({
+    name: p.pod, series: [toSeries(p.series.map(pt => ({ time: pt.t, value: pt.v })))],
+  }));
+  if (focused && focused.band.status !== 'no_baseline' && focused.series.length > 0) {
+    const edge = (v: number) => toSeries(focused.series.map(pt => ({ time: pt.t, value: v })));
+    items.push(
+      { name: 'bant alt', series: [edge(focused.band.lower)], color: 'var(--text3)', dashed: true, band: 'lo' },
+      { name: `bant üst · ${focused.pod}`, series: [edge(focused.band.upper)], color: 'var(--text3)', dashed: true, band: 'hi' },
+    );
+  }
+  return items;
+}
 const HEAP_TITLE = 'Heap after GC — % of limit (by pod)'; // v0.10.954 — kart ve hata kartı aynı başlık
 
 /** Bant cümlesi — SAF (pin testli): kaynağı ve örnek sayısını söyler, yoksa neden yok. */
@@ -202,18 +232,13 @@ function HeapBaselineLines({ service, from, to, onZoom, onZoomReset }: HeapCardP
   const pods = useMemo(() => data?.pods ?? [], [data]);
   const focused = pods.find(p => p.pod === focus) ?? pods.find(p => p.pod === data?.worst) ?? pods[0];
 
-  const series = useMemo<TSSeries[]>(() => {
-    // Odaklı pod HER ZAMAN çizilir (bant neyin bandı belli olsun), kalan LINES_MAX-1.
-    const drawn = focused ? [focused, ...pods.filter(p => p !== focused)].slice(0, LINES_MAX) : pods.slice(0, LINES_MAX);
-    return drawn.map(p => ({ label: p.pod, unit: '%', points: p.series.map(pt => ({ time: pt.t, value: pt.v })) }));
-  }, [pods, focused]);
-  const thresholds = useMemo<TSThreshold[] | undefined>(() => {
-    if (!focused || focused.band.status === 'no_baseline') return undefined;
-    return [
-      { value: focused.band.upper, label: `bant üst · ${focused.pod}`, color: 'var(--text3)' },
-      { value: focused.band.lower, label: 'bant alt', color: 'var(--text3)' },
-    ];
-  }, [focused]);
+  const items = useMemo(() => heapChartItems(pods, focused), [pods, focused]);
+  const xRange = useMemo(() => ({ from: from / 1e9, to: to / 1e9 }), [from, to]);
+  const regions = useMemo<ChartTimeRegion[] | undefined>(() => {
+    if (!deployNs?.length) return undefined;
+    const spanSec = Math.max(1, (to - from) / 1e9);
+    return deployNs.map(ns => ({ fromSec: ns / 1e9, toSec: ns / 1e9 + spanSec * 0.004, color: 'var(--purple)', label: '▼ deploy' }));
+  }, [deployNs, from, to]);
 
   // Hook koşulsuz, boş-küme erken dönüşünün ÜSTÜNDE (useDataTable kuralı).
   const dt = useDataTable<HeapBaselinePod>({
@@ -270,16 +295,22 @@ function HeapBaselineLines({ service, from, to, onZoom, onZoomReset }: HeapCardP
         </span>
       </div>
       <div className="ov-card-b rt-card-b">
-        <TimeSeriesPanel
-          series={series}
-          thresholds={thresholds}
-          height={220}
-          mode="line"
-          syncKey={`runtime:${service}`}
-          deploys={deployNs}
-          onZoom={onZoom}
-          onZoomReset={onZoomReset}
-        />
+        <Suspense fallback={<div className="rt-slot"><Spinner /></div>}>
+          <CorePanelMultiLazy
+            title=""
+            ariaLabel={HEAP_TITLE}
+            storageKey="service-heap-baseline-chart"
+            height={220}
+            unit="percent"
+            viz="line"
+            xRange={xRange}
+            items={items}
+            regions={regions}
+            onZoom={onZoom}
+            onZoomReset={onZoomReset}
+            syncKey={msSyncKey(`runtime:${service}`)}
+          />
+        </Suspense>
         {focused && (
           <div className="kc-line heap-line">
             en kötü pod: <span className="mono">{data.worst || '—'}</span>

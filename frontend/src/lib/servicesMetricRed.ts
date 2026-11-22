@@ -8,6 +8,11 @@
 // filo geneli VM sorgusu gerektirir — yapılmaz. Bu yüzden metrik değeriyle
 // istemci sıralaması YALNIZ tüm sonuç tek sayfaya sığdığında uygulanır;
 // aksi halde sunucunun span sırası kalır ve alt şerit bunu söyler.
+//
+// v0.10.2444 — RED sütununda sayfa GET /api/services-metric-rank'ten gelir:
+// filo geneli metrik sırası (ranked) — metrik değeri olanlar önde, kalanlar
+// span sırasıyla ("örneklenmiş" rozeti aynen). Sunucu geri düşerse (pencere
+// > 24 sa, VM yok, okuma hatası) ranked=false ve yukarıdaki kural sürer.
 
 import type { Service, ServiceRedMetricRow, ServiceRedSparkRow, SparklineBucket } from './types';
 
@@ -15,6 +20,24 @@ export type ServicesSortScope = 'client' | 'server';
 
 /** Metrik değeriyle sıralanabilen sütunlar (servicesTable SERVICE_COLS id'leri). */
 export const METRIC_SORT_COLS = new Set(['spanCount', 'errorRate', 'avg', 'p99']);
+
+/** v0.10.2444 — /api/services-metric-rank sıralama bilgisi. */
+export interface ServicesRankInfo { ranked: boolean; metricRanked: number; notes?: string[] }
+
+/** Alt şeritteki sıralama tabanı notu. */
+export type ServicesSortNote = 'fleet' | 'metric' | 'spans' | null;
+
+/**
+ * Sıralamanın gerçek tabanı: 'fleet' = sunucu filo geneli metrik sırası;
+ * 'metric' = tek sayfa, gösterilen değerle; 'spans' = sayfalı span sırası.
+ * Metrik dışı sütunda ya da (filo sırası yokken) metrik hiç yoksa null.
+ */
+export function servicesSortNote(sortBy: string, hasMetric: boolean, scope: ServicesSortScope, rank: ServicesRankInfo | null): ServicesSortNote {
+  if (!METRIC_SORT_COLS.has(sortBy)) return null;
+  if (rank?.ranked) return 'fleet';
+  if (!hasMetric) return null;
+  return scope === 'client' ? 'metric' : 'spans';
+}
 
 /** Tüm sonuç ekranda mı: ilk sayfa ve (kesin toplam ≤ sayfa ya da devamı yok). */
 export function servicesSortScope(page: number, total: number | null, hasMore: boolean, pageSize: number): ServicesSortScope {

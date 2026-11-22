@@ -256,14 +256,14 @@ sayfa `@grafana/data`'ya **statik bağlanamaz** — ölçüldü: vendor 35 KB �
 (`CorePanel.tsx`). İskeleti atlayan sıfır kod var. Kalan borç mimari değil
 **çokluk**: 2 çizim hattı, eski preset tarafında 6 canlı site.
 
-> ⚠️ `viz/TimeSeriesPanel`'in **4 canlı tüketicisi** var (2026-11-21
-> sayımı): `service/RuntimeCharts.tsx`, `service/HeapBaselineCard.tsx`,
-> `anomalies/MLRecordChart.tsx` (ML kaydı: zarf + bölge + sağ eksen),
-> `clusters/MetricArea.tsx` (zarf kipi). CorePanel'de karşılığı OLMAYAN
-> özellikler: `envelope` (lo–hi dolgu), seri başına `width`/`axis:'right'`,
-> `smooth` (spline + spanGaps), `stepped`, `deploys` ▼. Bu dördü CorePanel'e
-> taşınmadan söküm ML grafiğinin görünüşünü değiştirir. `MetricQueryEditor`
-> artık tüketici değil.
+> ⚠️ `viz/TimeSeriesPanel` hâlâ yaşıyor: `anomalies/MLRecordChart.tsx` (ML
+> kaydı: zarf + bölge + sağ eksen) ve tip/yardımcı ithal edenler. Runtime
+> kartları (v0.10.2436) ve HeapBaselineCard (v0.10.2443) CorePanelMulti'de.
+> v0.10.2443'ten beri CorePanel'de **sağ eksen** (`rightAxis` /
+> item `axis:'right'` + item `unit`, `rightAxisLabel`) ve **alt–üst bant**
+> (`fillBetween` / item `band:'lo'|'hi'`) VAR. Hâlâ karşılığı OLMAYAN:
+> seri başına `width`, `smooth` (spline + spanGaps), `stepped`. Bunlar
+> taşınmadan ML grafiğinin sökümü görünüşü değiştirir.
 >
 > **Sarmalayıcı ratchet:** `components/chart/chartWrapperRatchet.test.ts`
 > — adı Chart/Spark/Histogram/Heatmap ile biten dışa açık bileşen +

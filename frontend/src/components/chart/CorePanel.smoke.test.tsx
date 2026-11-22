@@ -84,8 +84,8 @@ vi.mock('@grafana/ui', async (importOriginal) => {
     ...actual,
     UPlotChart: ({ config, width, height, plotRef }: {
       config: { getConfig: () => {
-        series?: unknown[]; bands?: unknown[];
-        axes?: { scale?: string; size?: unknown }[];
+        series?: { scale?: string }[]; bands?: { series?: unknown[]; fill?: unknown }[];
+        axes?: { scale?: string; size?: unknown; side?: number; label?: string; grid?: { show?: boolean } }[];
         scales?: Record<string, { range?: unknown } | undefined>;
         cursor?: { points?: { size?: unknown; width?: unknown; show?: unknown }; drag?: { x?: unknown; y?: unknown; setScale?: unknown } };
       } };
@@ -138,6 +138,10 @@ vi.mock('@grafana/ui', async (importOriginal) => {
         <div data-testid="uplot"
           data-series={String(n)}
           data-bands={String((cfg.bands ?? []).length)}
+          // v0.10.2443 — sağ eksen + alt–üst bant KURULAN config'ten.
+          data-axes={(cfg.axes ?? []).map(a => `${a.scale}:${a.side}:${a.grid?.show === false ? 'nogrid' : 'grid'}:${a.label ?? ''}`).join('|')}
+          data-series-scales={(cfg.series ?? []).slice(1).map(x => x.scale ?? '').join(',')}
+          data-band0={(cfg.bands ?? [])[0] ? `${JSON.stringify((cfg.bands ?? [])[0].series)}|${String((cfg.bands ?? [])[0].fill ?? '')}` : ''}
           data-yaxis-size={String(ySize)}
           data-cursor-pt={`${String(pts.size ?? '')}/${String(pts.width ?? '')}/${String(pts.show ?? '')}`}
           data-cursor-drag={cfg.cursor?.drag ? `${String(cfg.cursor.drag.x)}/${String(cfg.cursor.drag.y)}/${String(cfg.cursor.drag.setScale)}` : 'default'}
@@ -293,6 +297,45 @@ describe('CorePanel render duman testi (UPlotChart vi.mock ile stub)', () => {
     expect(plot).not.toBeNull();
     // İki görünür katman = ardışık çift = 1 bant.
     expect(plot!.getAttribute('data-bands')).toBe('1');
+  });
+
+  it('v0.10.2443 sağ eksen: verilmezse tek y ekseni (bayt-aynı), verilince y2 + sağ eksen etiketli', () => {
+    const base = render(
+      <CorePanel title="GC" storageKey="smoke-right-0" data={{ state: 'ready', frames: TWO_SERIES }} />);
+    const p0 = base.querySelector('[data-testid="uplot"]')!;
+    expect(p0.getAttribute('data-axes')).toBe('x:2:grid:|y:3:grid:');
+    expect(p0.getAttribute('data-series-scales')).toBe('y,y');
+    act(() => root!.unmount()); host?.remove(); root = null; holder.plot = null;
+
+    const el = render(
+      <CorePanel title="GC" storageKey="smoke-right-1" rightAxis={[false, true]} rightAxisLabel="p99 latency (ms)"
+        data={{ state: 'ready', frames: TWO_SERIES }} />);
+    const p = el.querySelector('[data-testid="uplot"]')!;
+    // uPlot side: 1 = sağ; sağ eksen ızgarasız, etiketli.
+    expect(p.getAttribute('data-axes')).toBe('x:2:grid:|y:3:grid:|y2:1:nogrid:p99 latency (ms)');
+    expect(p.getAttribute('data-series-scales')).toBe('y,y2');
+  });
+
+  it('v0.10.2443 hepsi false rightAxis = sağ eksen yok', () => {
+    const el = render(
+      <CorePanel title="GC" storageKey="smoke-right-2" rightAxis={[false, false]}
+        data={{ state: 'ready', frames: TWO_SERIES }} />);
+    expect(el.querySelector('[data-testid="uplot"]')!.getAttribute('data-axes')).toBe('x:2:grid:|y:3:grid:');
+  });
+
+  it('v0.10.2443 alt–üst bant: [üst, alt] çizim pozisyonu + saydam dolgu; yığında yok sayılır', () => {
+    const el = render(
+      <CorePanel title="Heap" storageKey="smoke-band" fillBetween={[1, 0]} colors={['#112233', '#112233']}
+        data={{ state: 'ready', frames: TWO_SERIES }} />);
+    const p = el.querySelector('[data-testid="uplot"]')!;
+    expect(p.getAttribute('data-bands')).toBe('1');
+    expect(p.getAttribute('data-band0')).toBe('[1,2]|rgba(17, 34, 51, 0.13)');
+    act(() => root!.unmount()); host?.remove(); root = null; holder.plot = null;
+    const st = render(
+      <CorePanel title="Heap" storageKey="smoke-band-st" viz="stacked" fillBetween={[1, 0]}
+        data={{ state: 'ready', frames: TWO_SERIES }} />);
+    // Yığın bandı tek (ardışık çift); fillBetween eklenmez.
+    expect(st.querySelector('[data-testid="uplot"]')!.getAttribute('data-bands')).toBe('1');
   });
 
   it('v0.9.792/793: pin ipucu ve kesikli işaret mount\'u kırmaz', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  servicesSortScope, resortByDisplayed, servicesAggregate, rowSpark, aggregateSpark, mergeBuckets,
+  servicesSortScope, servicesSortNote, resortByDisplayed, servicesAggregate, rowSpark, aggregateSpark, mergeBuckets,
 } from './servicesMetricRed';
 import type { Service, ServiceRedMetricRow, ServiceRedSparkRow, SparklineBucket } from './types';
 
@@ -77,5 +77,18 @@ describe('sparklines', () => {
   });
   it('mergeBuckets weights avg by count', () => {
     expect(mergeBuckets([[b(1, 1, 0, 10, 1)], [b(1, 3, 0, 20, 5)]])[0]).toEqual({ t: 1, spans: 4, errs: 0, avgMs: 17.5, p99Ms: 5 });
+  });
+});
+
+describe('servicesSortNote (v0.10.2444)', () => {
+  it('filo sırası gelince fleet; geri düşüşte eski kural; metrik dışı sütun null', () => {
+    const ranked = { ranked: true, metricRanked: 3 };
+    const fallback = { ranked: false, metricRanked: 0, notes: ['pencere 24 saati aşıyor'] };
+    expect(servicesSortNote('p99', false, 'server', ranked)).toBe('fleet');
+    expect(servicesSortNote('p99', true, 'server', fallback)).toBe('spans');
+    expect(servicesSortNote('errorRate', true, 'client', fallback)).toBe('metric');
+    expect(servicesSortNote('spanCount', false, 'server', fallback)).toBeNull();
+    expect(servicesSortNote('apdex', true, 'server', ranked)).toBeNull();
+    expect(servicesSortNote('avg', true, 'server', null)).toBe('spans');
   });
 });

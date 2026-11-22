@@ -49,13 +49,22 @@ export interface CorePanelMultiItem {
   // (seriesColorsFor) buradan geçirir: iki pod aynı hash yuvasına düşünce
   // aynı renkte çizilmesin. Ghost item'lar rengi almaz (soluk rolde kalır).
   color?: string;
+  // v0.10.2443 (Runtime kartları) — SAĞ EKSEN: item'ın frame'leri ikinci
+  // ölçeğe biner (CorePanel.rightAxis). `unit` item'a özgü birim (panelin
+  // `unit`'ini ezer) — sağ eksen serisi çoğu zaman başka birimdedir (ms).
+  axis?: 'right';
+  unit?: string;
+  // v0.10.2443 — ALT–ÜST BANT kenarı: 'lo' ve 'hi' işaretli İLK item'ların
+  // ilk frame'leri arası doldurulur (CorePanel.fillBetween). İkisi de
+  // yoksa bant yok.
+  band?: 'lo' | 'hi';
   // v0.9.799 — emphasis KALDIRILDI (v0.9.798'de eklenmişti). Tek
   // tüketicisi Overview'ın "Toplam" item'ıydı; operatör o çizgiyi büyük
   // grafiklerden geri aldırınca kanal tüketicisiz kaldı ve CorePanel
   // tarafıyla birlikte silindi — yarım kablo bırakmıyoruz.
 }
 
-export interface CorePanelMultiProps extends Omit<CorePanelProps, 'data' | 'roles' | 'dashed' | 'colors'> {
+export interface CorePanelMultiProps extends Omit<CorePanelProps, 'data' | 'roles' | 'dashed' | 'colors' | 'rightAxis' | 'fillBetween'> {
   items: CorePanelMultiItem[];
   unit?: string;
   // v0.9.764 — önceki-dönem hayaleti: zamanları ÇAĞIRAN kaydırmış
@@ -120,13 +129,24 @@ export function CorePanelMulti({
   const dashed: boolean[] = [];
   // v0.10.968 — açık renkler frame'lerle AYNI geçişte (hizalama tek sayaçta).
   const colors: (string | undefined)[] = [];
+  // v0.10.2443 — sağ eksen işaretleri + bant kenarları AYNI geçişte.
+  const right: boolean[] = [];
+  let anyRight = false;
+  let bandLo = -1;
+  let bandHi = -1;
   let anyEx = false;
   let anyDash = false;
   let anyColor = false;
   for (const it of ordered) {
-    const fs = spanSeriesToFrames(it.series, { unit, name: it.name });
+    const fs = spanSeriesToFrames(it.series, { unit: it.unit ?? unit, name: it.name });
+    if (fs.length > 0) {
+      if (it.band === 'lo' && bandLo < 0) bandLo = frames.length;
+      if (it.band === 'hi' && bandHi < 0) bandHi = frames.length;
+    }
     frames.push(...fs);
     for (let i = 0; i < fs.length; i++) {
+      right.push(it.axis === 'right');
+      if (it.axis === 'right') anyRight = true;
       roles.push(it.role ?? 'data');
       // ◆'lar item'ın İLK frame'ine biner (Explore: item = tek seri).
       exemplars.push(i === 0 ? it.exemplars : undefined);
@@ -141,6 +161,7 @@ export function CorePanelMulti({
     const fs = spanSeriesToFrames(g.series, { unit, name: `${g.name} (önceki)` });
     frames.push(...fs);
     for (let i = 0; i < fs.length; i++) {
+      right.push(false);
       roles.push('muted');
       exemplars.push(undefined);
       dashed.push(true);
@@ -151,5 +172,7 @@ export function CorePanelMulti({
   return <CorePanel {...rest} viz={viz} roles={roles} exemplars={anyEx ? exemplars : undefined}
     dashed={anyDash ? dashed : undefined}
     colors={anyColor ? colors : undefined}
+    rightAxis={anyRight ? right : undefined}
+    fillBetween={bandLo >= 0 && bandHi >= 0 ? [bandLo, bandHi] : undefined}
     data={{ state: 'ready', frames }} />;
 }

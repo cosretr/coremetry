@@ -433,6 +433,46 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
 
 export interface RangeParams { from: number; to: number }
 
+/** /api/services sayfa parametreleri (servicesPage + servicesMetricRank, v0.10.2444). */
+export interface ServicesPageOpts {
+  limit?: number; offset?: number; name?: string;
+  sort?: string; dir?: 'asc' | 'desc';
+  // Catalog-driven team filters. Backend resolves the team
+  // → service-name allowlist via the service_metadata
+  // table; downstream spans query stays a microsecond
+  // partition-pruned operation.
+  ownerTeam?: string; sreTeam?: string;
+  // Cluster filter (k8s.cluster.name / openshift.cluster.name
+  // / cluster). Setting this forces the raw-span scan path
+  // on the backend since the service MV doesn't carry the
+  // cluster dim.
+  cluster?: string;
+  // Global env filter (spans.deploy_env — the Topbar picker,
+  // v0.8.385). Same raw-fallback semantics as cluster, but the
+  // conjunct is a typed LowCardinality column (cheaper).
+  env?: string;
+  // Namespace filter (v0.9.189) — derived service namespace
+  // (service.namespace / k8s.namespace.name via service_metadata).
+  // Resolved server-side into the service-name allowlist like the
+  // team filters, so it keeps the MV fast path (unlike cluster/env).
+  namespace?: string;
+  // v0.7.44 — opt-in distinct-service total for the First/Last pager.
+  // Default off keeps the hot path count-free.
+  withTotal?: '1';
+  // v0.9.345 — display filters, now SERVER-side (HAVING on the grouped
+  // aggregates). They used to run in the browser over the 50 rows of the
+  // current page, so "Errors only" could empty page 1 while erroring
+  // services sat on page 7. Both the MV and raw paths apply them, from one
+  // shared predicate builder, so switching paths (by picking a cluster or
+  // env) cannot change what they mean.
+  errorsOnly?: '1';
+  minSpans?: number;
+  minP99?: number;
+  // v0.9.1111 — önceki eş-uzunluk pencereyle kıyas; sort=p99Delta
+  // sunucuda compare'i zaten zorlar, param yine de açık gönderilir.
+  compare?: 'prior';
+}
+
 export const api = {
   // `name` is an optional case-insensitive substring filter applied
   // server-side BEFORE the limit clamp, so a service in the long
@@ -448,44 +488,7 @@ export const api = {
   },
   // Page-aware variant — returns the full {services, hasMore,
   // offset, limit} payload so /services can drive prev/next.
-  servicesPage: (r: RangeParams, opts: {
-    limit?: number; offset?: number; name?: string;
-    sort?: string; dir?: 'asc' | 'desc';
-    // Catalog-driven team filters. Backend resolves the team
-    // → service-name allowlist via the service_metadata
-    // table; downstream spans query stays a microsecond
-    // partition-pruned operation.
-    ownerTeam?: string; sreTeam?: string;
-    // Cluster filter (k8s.cluster.name / openshift.cluster.name
-    // / cluster). Setting this forces the raw-span scan path
-    // on the backend since the service MV doesn't carry the
-    // cluster dim.
-    cluster?: string;
-    // Global env filter (spans.deploy_env — the Topbar picker,
-    // v0.8.385). Same raw-fallback semantics as cluster, but the
-    // conjunct is a typed LowCardinality column (cheaper).
-    env?: string;
-    // Namespace filter (v0.9.189) — derived service namespace
-    // (service.namespace / k8s.namespace.name via service_metadata).
-    // Resolved server-side into the service-name allowlist like the
-    // team filters, so it keeps the MV fast path (unlike cluster/env).
-    namespace?: string;
-    // v0.7.44 — opt-in distinct-service total for the First/Last pager.
-    // Default off keeps the hot path count-free.
-    withTotal?: '1';
-    // v0.9.345 — display filters, now SERVER-side (HAVING on the grouped
-    // aggregates). They used to run in the browser over the 50 rows of the
-    // current page, so "Errors only" could empty page 1 while erroring
-    // services sat on page 7. Both the MV and raw paths apply them, from one
-    // shared predicate builder, so switching paths (by picking a cluster or
-    // env) cannot change what they mean.
-    errorsOnly?: '1';
-    minSpans?: number;
-    minP99?: number;
-    // v0.9.1111 — önceki eş-uzunluk pencereyle kıyas; sort=p99Delta
-    // sunucuda compare'i zaten zorlar, param yine de açık gönderilir.
-    compare?: 'prior';
-  } = {}) =>
+  servicesPage: (r: RangeParams, opts: ServicesPageOpts = {}) =>
     get<{
       services: Service[];
       hasMore: boolean;
@@ -680,6 +683,10 @@ export const api = {
   servicesRedMetricSpark: (r: RangeParams, services: string[], sources: string[], slots: number, opts?: { env?: string; cluster?: string }) =>
     get<import('./types').ServicesRedSpark>(
       `/api/services-red-metric-spark?${qs({ ...r, services: services.join(','), sources: sources.join(','), slots, env: opts?.env || undefined, cluster: opts?.cluster || undefined })}`),
+  // v0.10.2444 — RED sütununda sayfa: servicesPage ile aynı parametreler, sıra
+  // filo geneli örneklenmemiş metrikten (ranked=false → span sırası + not).
+  servicesMetricRank: (r: RangeParams, opts: ServicesPageOpts) =>
+    get<import('./types').ServicesMetricRankPage>(`/api/services-metric-rank?${qs({ ...r, ...opts })}`),
   serviceNames: (q?: string, limit = 200, offset = 0) =>
     get<{ names: string[]; total: number; hasMore: boolean }>(
       `/api/service-names?${qs({ q, limit, offset })}`),

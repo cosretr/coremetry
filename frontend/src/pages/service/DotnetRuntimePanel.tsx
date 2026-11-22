@@ -12,19 +12,25 @@
 // v0.10.2436 (Service › Metrics sekmesi) — kartlar RuntimePodChart'la
 // (CorePanel: ipucu, Series listesi, Shift+tık sabitleme) çizilir; pod boyutlu
 // her kart medyan + en kötü + eşik üstü pod görünümünde, "Tüm pod'lar" hepsi.
-// Eski sağ eksen p99 bindirmesi kalktı (CorePanel tek y ekseni); tüm kartlar
-// RuntimeCharts ile aynı syncKey (runtime:<servis>) → ortak imleç.
-// Nesil kırılımlı kartlar (GC koleksiyonu, heap) nesil boyutunda kalır: pod ×
-// nesil çizgi sayısını patlatır; pod başına nesil kırılımı Pod sayfasında.
+// Tüm kartlar RuntimeCharts ile aynı syncKey (runtime:<servis>) → ortak imleç.
+//
+// v0.10.2443 — (1) GC payı / thread pool / CPython CPU kartlarına servis p99'u
+// geri geldi: CorePanel'in sağ ekseninde, kesikli, etiketli. (2) Nesil kartları
+// pod × nesil okur (groupBy pod anahtarları + nesil etiketi); varsayılan nesil
+// başına pod medyanı, seçici o pod'un nesilleri, "Tüm pod'lar" hepsi
+// (runtimeGenReduce). (4) GC payı eşiği operatörün runtime_alerts ayarından
+// (/runtime-signals runtimeAlerts; yoksa varsayılan).
 import { useMemo } from 'react';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';
 import { panelMaxDataPoints } from '@/lib/chartStep';
 import { useServiceDeploys } from '@/lib/queries';
 import { Spinner } from '@/components/Spinner';
-import { RuntimePodChart, type RuntimeExtraLine } from './RuntimePodChart';
+import { RuntimePodChart, type RuntimeExtraLine, type RuntimeRightLine } from './RuntimePodChart';
 import type { PodSeries } from './runtimePodReduce';
+import type { GenPodSeries } from './runtimeGenReduce';
+import { runtimeThresholds } from './runtimeThresholds';
 import type { FilterExpr, RuntimePodEntity, RuntimeResolvedSignal, RuntimeSignal, SpanMetricSeries } from '@/lib/types';
 import { podLineLabel, podClusterOf, withClusterPrefix, isAnonPodSeries, divideByCount } from './runtimePodLabel';
 import { useRuntimeProfile } from './runtimeFamily';
@@ -42,14 +48,16 @@ type Group = 'pod' | 'gen' | 'none';
 // share — oran sinyali (GC payı, CPU): pod etiketi yoksa toplam pod sayısına
 // bölünür (10 pod × %5 = %50 okunmasın).
 interface LineSpec { signal: string; labelKey: string; scale: number; group: Group; unit: string; color?: string; dash?: number[]; share?: boolean }
-// threshold — sinyalin mutlak eşiği (kart biriminde; GC payı = chstore
-// DefaultRuntimeAlerts GCShareWarnPct). Yoksa pod görünümü göreli eşik kullanır.
-interface CardSpec { key: string; titleKey: string; lines: LineSpec[]; mode: 'area' | 'line'; threshold?: number }
+// thresholdOf — sinyalin mutlak eşiği (kart biriminde; GC payı = operatörün
+// runtime_alerts GCShareWarnPct'i, yoksa varsayılan). Yoksa pod görünümü
+// göreli eşik kullanır. latency — v0.10.2443: servis p99'u sağ eksende.
+type Thresholds = ReturnType<typeof runtimeThresholds>;
+interface CardSpec { key: string; titleKey: string; lines: LineSpec[]; mode: 'area' | 'line'; thresholdOf?: (t: Thresholds) => number; latency?: boolean }
 
 // Kart sırası Elastic APM .NET görünümünün sırası: GC → bellek → thread
 // pool → çekişme → exception → working set.
 export const DOTNET_CARDS: CardSpec[] = [
-  { key: 'gc', titleKey: 'rt.card.gcShare', mode: 'line', threshold: 10, lines: [
+  { key: 'gc', titleKey: 'rt.card.gcShare', mode: 'line', thresholdOf: t => t.gcSharePct, latency: true, lines: [
     { signal: 'gc_time', labelKey: 'rt.line.gcShare', scale: 100, group: 'pod', unit: '%', share: true },
   ] },
   { key: 'gcgen', titleKey: 'rt.card.gcCollections', mode: 'line', lines: [
@@ -62,7 +70,7 @@ export const DOTNET_CARDS: CardSpec[] = [
   { key: 'alloc', titleKey: 'rt.card.alloc', mode: 'area', lines: [
     { signal: 'alloc_rate', labelKey: 'rt.line.alloc', scale: MB, group: 'pod', unit: 'MB/s' },
   ] },
-  { key: 'pool', titleKey: 'rt.card.pool', mode: 'line', lines: [
+  { key: 'pool', titleKey: 'rt.card.pool', mode: 'line', latency: true, lines: [
     { signal: 'pool_queue', labelKey: 'rt.line.queue', scale: 1, group: 'pod', unit: '' },
     { signal: 'threads', labelKey: 'rt.line.threads', scale: 1, group: 'none', unit: '', color: 'var(--teal)' },
   ] },
@@ -79,7 +87,7 @@ export const DOTNET_CARDS: CardSpec[] = [
 
 // CPython (2026-11-21) — kompakt görünüm: CPU, RSS, GC (nesil), thread, bağlam değişimi.
 export const PYTHON_CARDS: CardSpec[] = [
-  { key: 'cpu', titleKey: 'rt.card.cpu', mode: 'line', lines: [
+  { key: 'cpu', titleKey: 'rt.card.cpu', mode: 'line', latency: true, lines: [
     { signal: 'cpu_util', labelKey: 'rt.line.cpu', scale: 100, group: 'pod', unit: '%', share: true },
   ] },
   { key: 'rss', titleKey: 'rt.card.rss', mode: 'area', lines: [
@@ -208,7 +216,8 @@ export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomRe
       queryFn: () => api.metricQuery({
         name: res.metric, service, agg: res.agg,
         filters: filtersOf(res),
-        groupBy: line.group === 'pod' ? POD_GROUP : line.group === 'gen' ? res.genLabel : undefined,
+        // v0.10.2443 — nesil kartı pod × nesil: pod anahtarları [0..3], nesil [4].
+        groupBy: line.group === 'pod' ? POD_GROUP : line.group === 'gen' ? `${POD_GROUP},${res.genLabel}` : undefined,
         from, to, step: 0, maxDataPoints: panelMaxDataPoints(1),
       }).then(r => r ?? []),
       staleTime: 60_000,
@@ -234,11 +243,31 @@ export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomRe
   });
   const countBySpec = useMemo(() => new Map(countIdx.map((i, k) => [i, (countQs[k]?.data ?? []) as SpanMetricSeries[]])), [countIdx, countQs]);
 
+  // v0.10.2443 — servis p99'u (sağ eksen), yalnız bindirmeli kart çizilecekse.
+  const wantLatency = planned.some(p => p.card.latency);
+  const latQ = useQuery({
+    queryKey: ['svc-runtime-latency', service, from, to],
+    queryFn: () => api.spanMetricBatch({
+      from, to, maxDataPoints: panelMaxDataPoints(1),
+      dsl: `service.name = "${service.replace(/"/g, '\\"')}"`,
+      aggs: [{ name: 'p99', agg: 'p99', field: 'duration_ms' }],
+    }),
+    enabled: !!service && wantLatency,
+    staleTime: 60_000,
+  });
+  const latLine = useMemo<RuntimeRightLine | null>(() => {
+    const s = latQ.data?.series?.p99?.[0];
+    return s ? { label: tr('rt.line.p99'), unit: 'ms', points: s.points.map(p => ({ time: p.time, value: p.value })) } : null;
+  }, [latQ.data, tr]);
+  const thresholds = useMemo(() => runtimeThresholds(profQ.data?.runtimeAlerts), [profQ.data]);
+
   const deploysQ = useServiceDeploys(service, from, to);
   const deployNs = useMemo(() => (deploysQ.data?.length ? deploysQ.data.map(x => x.timeUnixNs) : undefined), [deploysQ.data]);
 
   const cards = useMemo(() => planned.map(({ card }) => {
     const pods: PodSeries[] = [];
+    const gens: GenPodSeries[] = [];
+    let genCard = false;
     const extra: RuntimeExtraLine[] = [];
     let podless = false;
     let pending = false, failed = false;
@@ -268,7 +297,16 @@ export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomRe
           points: pts(s),
         }));
       } else if (sp.line.group === 'gen') {
-        data.forEach(s => extra.push({ label: s.groupKey[0] || tr(sp.line.labelKey), points: pts(s) }));
+        genCard = true;
+        // Pod etiketi yok → tek "pod" (ad boş): nesil çizgileri aynen, kart not düşer.
+        const anon = isAnonPodSeries(data);
+        if (anon) podless = true;
+        const multi = new Set(data.map(s => podClusterOf(s.groupKey)).filter(Boolean)).size > 1;
+        data.forEach(s => gens.push({
+          pod: anon ? '' : withClusterPrefix(podLineLabel(s.groupKey, sp.line.signal), podClusterOf(s.groupKey), multi),
+          gen: (s.groupKey[4] ?? '').trim() || tr(sp.line.labelKey),
+          points: pts(s),
+        }));
       } else if (data[0]) {
         extra.push({ label: tr(sp.line.labelKey), color: sp.line.color, dashed: !!sp.line.dash, points: pts(data[0]) });
       }
@@ -277,8 +315,10 @@ export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomRe
     const src = runtimeSourceBadge(specs.filter(sp => sp.card === card.key).map(sp => sp.res.metric), tr('rt.src.tip'));
     const unit = card.lines[0]?.unit ?? '';
     const status: 'loading' | 'error' | 'ready' = failed ? 'error' : pending ? 'loading' : 'ready';
-    return { card, pods, extra, podless, src, unit, status };
-  }), [planned, specs, queries, countBySpec, tr]);
+    const threshold = card.thresholdOf?.(thresholds);
+    const right = card.latency ? latLine : null;
+    return { card, pods, gens: genCard ? gens : undefined, extra, podless, src, unit, status, threshold, right };
+  }), [planned, specs, queries, countBySpec, tr, thresholds, latLine]);
 
   if (profQ.isPending) return <div className="rt-slot"><Spinner /></div>;
   if (profQ.isError || !profQ.data) return <div className="kc-line">{tr('rt.err')}</div>;
@@ -288,11 +328,11 @@ export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomRe
     <div className="rt-cards" data-testid={`${runtime}-runtime`}>
       <RuntimeSignalList signals={profQ.data.signals ?? []} mode={profQ.data.mode} />
       <RuntimePodLinks service={service} entities={profQ.data.podEntities} />
-      {cards.map(({ card, pods, extra, podless, src, unit, status }) => (
+      {cards.map(({ card, pods, gens, extra, podless, src, unit, status, threshold, right }) => (
         <RuntimePodChart key={card.key} testId={`rt-card-${card.key}`}
           title={tr(card.titleKey)} storageKey={`rt-${runtime}-${card.key}`} unit={unit}
           service={service} from={from} to={to}
-          pods={pods} podless={podless} extra={extra} threshold={card.threshold}
+          pods={pods} gens={gens} podless={podless} extra={extra} threshold={threshold} right={right}
           status={status} errorText={tr('rt.err')} deploys={deployNs} mode={card.mode}
           source={src} onZoom={onZoom} onZoomReset={onZoomReset} />
       ))}

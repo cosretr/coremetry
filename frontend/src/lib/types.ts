@@ -4611,6 +4611,24 @@ export interface ServicesRedMetric {
   queries: number;
   notes?: string[];
 }
+/**
+ * v0.10.2444 — GET /api/services-metric-rank: /api/services sayfası, RED
+ * sütununda filo geneli örneklenmemiş metrik sırasıyla. ranked=false → sıra
+ * span (örneklenmiş) değerinden, notes nedenini söyler. Önce metricRanked
+ * servis (metrik değeriyle), sonra metrik değeri olmayanlar span sırasıyla.
+ */
+export interface ServicesMetricRankPage {
+  services: Service[];
+  hasMore: boolean;
+  offset: number;
+  limit: number;
+  total?: number;
+  ranked: boolean;
+  metricRanked: number;
+  windowSec: number;
+  queries: number;
+  notes?: string[];
+}
 /** v0.10.2437 — metrik kaynaklı servisin mini-grafik kovaları (SparklineBucket biçimi). */
 export interface ServiceRedSparkRow {
   source: RedFamilyId;
@@ -7602,6 +7620,20 @@ export interface RuntimeSignalReport {
   scopeFilters?: FilterExpr[];
   /** İstendi ama uygulanamadı (tüm ortamlar gösteriliyor). */
   scopeNote?: string;
+  /** v0.10.2443 — operatörün runtime_alerts eşikleri (zero-patch'li; grafik "eşik üstü pod" seçimi). */
+  runtimeAlerts?: RuntimeAlertConfig;
+}
+
+/** chstore.RuntimeAlertConfig (system_settings runtime_alerts). */
+export interface RuntimeAlertConfig {
+  gcPauseWarnMs: number;
+  gcPauseCritMs: number;
+  gcShareWarnPct: number;
+  gcShareCritPct: number;
+  heapPostGCWarnPct: number;
+  heapPostGCCritPct: number;
+  heapRawWarnPct: number;
+  heapRawCritPct: number;
 }
 
 // Follow-up 2026-11-21 — GET /api/services/{name}/downstream-red (Go

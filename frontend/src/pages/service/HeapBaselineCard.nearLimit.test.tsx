@@ -14,7 +14,7 @@ import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { HeapBaselinePod, HeapBaselineResponse } from '@/lib/types';
 
-const m = vi.hoisted(() => ({ resp: null as unknown, fail: false, panels: 0 }));
+const m = vi.hoisted(() => ({ resp: null as unknown, fail: false, panels: 0, items: [] as { name: string; band?: string; dashed?: boolean }[] }));
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
   return {
@@ -29,8 +29,11 @@ vi.mock('@/lib/queries', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
   return { ...mod, useServiceDeploys: () => ({ data: [] }) };
 });
-vi.mock('@/components/viz/TimeSeriesPanel', () => ({
-  TimeSeriesPanel: () => { m.panels++; return <div data-testid="tsp" />; },
+// v0.10.2443 — grafik paylaşılan motorda (CorePanelMulti, lazy giriş).
+vi.mock('@/components/chart/corePanelEntry', () => ({
+  CorePanelMulti: (p: { items: { name: string; band?: string; dashed?: boolean }[] }) => {
+    m.panels++; m.items = p.items; return <div data-testid="tsp" />;
+  },
 }));
 
 import { HeapBaselineCard, nearestToLimit, NEAR_LIMIT_MAX } from './HeapBaselineCard';
@@ -126,6 +129,18 @@ describe('HeapBaselineCard — sınıra en yakın 5 pod (S9)', () => {
     expect(el.querySelector('[data-testid="heap-baseline-card"]')).not.toBeNull();
     expect(el.querySelector('[data-testid="tsp"]')).not.toBeNull();
     expect(podCells(el).length).toBe(7);
+    // Odaklı (en kötü) pod önce; bandı alt–üst kesikli kenar + dolgu çifti.
+    expect(m.items[0].name).toBe('pod-a');
+    const edges = m.items.filter(i => i.band);
+    expect(edges.map(i => [i.band, i.dashed])).toEqual([['lo', true], ['hi', true]]);
+    expect(edges[1].name).toBe('bant üst · pod-a');
+  });
+
+  it('?rtview=lines: baseline yokken bant kenarı çizilmez', async () => {
+    m.resp = resp(SEVEN.map(p => ({ ...p, band: { ...p.band, status: 'no_baseline' } })));
+    await mount('/service?name=orders&tab=infra&rtview=lines');
+    expect(m.items.some(i => i.band)).toBe(false);
+    expect(m.items).toHaveLength(7);
   });
 
   it('boş küme: kart yok; okuma hatası tablonun içinde', async () => {

@@ -52,6 +52,7 @@ import {
   selectedSeriesNames, // v0.10.1435
 } from '@/lib/chart/legendVisibility';
 import { resolveVar } from '@/lib/chart/resolveVar';
+import { bandFillColor } from '@/lib/chart/bandFill';
 import { isolatedPointsFilter } from '@/lib/chart/gapPolicy';
 import {
   drawThresholds, drawTimeRegions, drawExemplars, exemplarAt, regionAt, fmtRegionSpan, thresholdSoftRange, yScaleSoftMin,
@@ -131,6 +132,7 @@ class MeasuredAxisConfigBuilder extends UPlotConfigBuilder {
     const cfg = super.getConfig();
     for (const a of cfg.axes ?? []) {
       if (a.scale === 'y') a.size = this.ySize;
+      if (a.scale === 'y2') a.size = this.ySize; // v0.10.2443 — sağ eksen de ölçülür
     }
     return cfg;
   }
@@ -291,6 +293,18 @@ export interface CorePanelProps {
   // frame 5-4 kesikli, dolgusuz çizilir; rol rengi aynen (muted
   // öneriliyor ama çağıranın kararı).
   dashed?: boolean[];
+  // v0.10.2443 (Runtime kartları, madde 1) — SAĞ EKSEN, frame-hizalı. true
+  // olan seri ikinci ölçeğe ('y2') biner; sağda kendi birimiyle (o frame'in
+  // display processor'ı) bir eksen çizilir, ızgara solun. Verilmezse ya da
+  // hepsi false ise config bayt bayt eskisi (tek 'y' ölçeği). Eşik / ◆ /
+  // yığın sol ölçekte kalır; sağ seri yığına katılmaz (kesikli gibi ham).
+  rightAxis?: boolean[];
+  /** Sağ eksen etiketi (ör. "p99 gecikme (ms)"); PRİMİTİF — config kimliği yıkılmaz. */
+  rightAxisLabel?: string;
+  // v0.10.2443 (madde 3) — ALT–ÜST BANT: [alt frame, üst frame] arası dolgu
+  // (uPlot band). Dolgu üst kenarın renginden ~%13 alfa (bandFillColor).
+  // Yığın ailesinde yok sayılır (orada bantlar kümülatif katmanların).
+  fillBetween?: [number, number];
   // v0.9.799 — emphasis[] KANALI KALDIRILDI. v0.9.798'de tek tüketicisi
   // Overview'ın "Toplam" çizgisiydi; operatör o çizgiyi büyük
   // grafiklerden geri aldırınca kanal tüketicisiz kaldı. Ölü bir prop
@@ -337,7 +351,7 @@ export function CorePanel({
   thresholds, regions, queryText,
   defaultHidden, xRange, note, onExpandClick, exemplars, onExemplarClick, onRegionClick, regionClickHint,
   onBucketClick, hiddenNames, hideLegend, onCursorTime, dashed, viz = 'line',
-  focusedLabel, menuExtra, onFocusChange, embedded,
+  focusedLabel, menuExtra, onFocusChange, embedded, rightAxis, rightAxisLabel, fillBetween,
 }: CorePanelProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -481,8 +495,21 @@ export function CorePanel({
   const rawIdx = useMemo(() => {
     const s = new Set<number>();
     dashed?.forEach((d, i) => { if (d) s.add(i); });
+    // v0.10.2443 — sağ eksen serisi başka bir ölçekte: yığına katılmaz.
+    rightAxis?.forEach((r, i) => { if (r) s.add(i); });
     return s;
-  }, [dashed]);
+  }, [dashed, rightAxis]);
+  // v0.10.2443 — sağ eksen var mı + içerik imzası (config bağımlılığı; dizi
+  // kimliği değil — inline [] her render'da yeni kimlik = sürekli yıkım).
+  const rightSig = rightAxis?.some(Boolean) ? rightAxis.map(r => (r ? 1 : 0)).join('') : '';
+  const hasRight = rightSig !== '';
+  // Sağ eksen biçimi ilk sağ frame'in display processor'ından; ref'ten CANLI
+  // (framesRef deseni — birim değişimi config'i yıkmaz).
+  const rightIdxRef = useRef(-1);
+  rightIdxRef.current = rightAxis ? rightAxis.findIndex(Boolean) : -1;
+  // Sol eksen biçimi ilk SOL frame'den (sağ seri ilk sırada olsa da).
+  const leftIdxRef = useRef(0);
+  leftIdxRef.current = hasRight ? Math.max(0, frames.findIndex((_, i) => !rightAxis?.[i])) : 0;
   const stackedData = useMemo(
     () => (stacked ? stackData(aligned.data, hiddenIdx, rawIdx) : aligned.data),
     [stacked, aligned, hiddenIdx, rawIdx]);
@@ -516,6 +543,8 @@ export function CorePanel({
   // silindi); imzada tutmak sahte rebuild üretirdi.
   const overlaySig = JSON.stringify([
     thresholds ?? null, regions ?? null, stackedBands,
+    // v0.10.2443 — alt–üst bant çifti (içerikçe; prop bands değil).
+    fillBetween ?? null,
   ]);
 
   // Görünen aralık (uPlot x scale) — legend istatistikleri bundan.
@@ -610,21 +639,23 @@ export function CorePanel({
     if (data.state !== 'ready' || frames.length === 0) return 0;
     // v0.10.384 — plan eşiği de görsün (ölçek eşiğe uzar).
     const thrRow = (thresholds ?? []).map(t => t.value).filter(v => Number.isFinite(v));
-    const ext = seriesExtent([...(drawData.slice(1) as (number | null)[][]), ...(thrRow.length ? [thrRow] : [])]);
+    // v0.10.2443 — sağ eksen serileri sol eksenin ondalığını sürmez.
+    const leftCols = (drawData.slice(1) as (number | null)[][]).filter((_, k) => !rightAxis?.[drawOrder[k]]);
+    const ext = seriesExtent([...leftCols, ...(thrRow.length ? [thrRow] : [])]);
     if (!ext) return 0;
     // Log ölçekte dolgu yok (decade'ler zaten sınırları kapsıyor).
     const [lo, hi] = effLog ? ext : paddedExtent(ext);
     // Çizim yüksekliği ≈ panel yüksekliği − x ekseni şeridi.
     const plan = axisTickPlan(lo, hi, Math.max(40, height - 34), effLog);
     if (plan.ticks.length === 0) return 0;
-    const disp = frames[0]?.fields[1].display;
+    const disp = frames[leftIdxRef.current]?.fields[1].display;
     // Ölçek en BÜYÜK tick'ten geri okunur: biçimlendirici birimi ona
     // göre seçiyor ("0" tick'i 6.85 TiB'lik eksende ölçeği ele vermez).
     const ref = scaleRefTick(plan.ticks);
     return disp
       ? decimalsForScaledIncr(plan.incr, displayScaleOf(ref, disp(ref).text))
       : decimalsForIncr(plan.incr);
-  }, [data.state, frames, drawData, effLog, height, thresholds]);
+  }, [data.state, frames, drawData, effLog, height, thresholds, rightAxis, drawOrder]);
 
   // uPlot hook'ları (eksen/tooltip) config kurulduğu anki closure'ı taşır;
   // ondalık ref'ten CANLI okunur ki veri değişimi grafiği
@@ -681,6 +712,16 @@ export function CorePanel({
       // "eşik yok" gibi görünür (alarm önizlemesi, pod CPU limiti).
       ...thresholdSoftRange(thresholds, { log: effLog, bars }),
     });
+    // v0.10.2443 — sağ ölçek (yalnız sağ seri varken). Doğrusal, taban 0
+    // yumuşak: gecikme / oran miktardır; negatif veri kırpılmaz (softMin).
+    if (hasRight) {
+      b.addScale({
+        scaleKey: 'y2',
+        orientation: ScaleOrientation.Vertical, direction: ScaleDirection.Up,
+        distribution: ScaleDistribution.Linear,
+        softMin: 0,
+      });
+    }
     b.addAxis({ scaleKey: 'x', isTime: true, placement: AxisPlacement.Bottom, theme });
     b.addAxis({
       scaleKey: 'y', placement: AxisPlacement.Left, theme,
@@ -703,7 +744,7 @@ export function CorePanel({
       // aralığı tam sayı kalır. Grafana TimeSeries ekseninin birebiri.
       formatValue: (v: unknown, decimals?: DecimalCount) => {
         const n = typeof v === 'number' ? v : Number(v);
-        const disp = framesRef.current[0]?.fields[1].display;
+        const disp = framesRef.current[leftIdxRef.current]?.fields[1].display;
         if (!disp || n == null || !isFinite(n)) return fmtSmart(n);
         // v0.9.1368 — @grafana/ui'nin ondalığı ile bizimki MAKSİMUMLANIR:
         // onunki ham tick artışından türüyor (bytes ekseninde hep 0 →
@@ -721,6 +762,22 @@ export function CorePanel({
       // alıyor; ölçen geri çağrıyı MeasuredAxisConfigBuilder getConfig'te
       // y eksenine yazar (sabit sayı = tahmin edilen etiket = kırpma).
     });
+    // v0.10.2443 — sağ eksen: kendi frame'inin birimi (ör. ms), ızgara yok
+    // (iki ızgara okunmaz), etiket çağırandan. Ondalık Grafana otomatiği.
+    if (hasRight) {
+      b.addAxis({
+        scaleKey: 'y2', placement: AxisPlacement.Right, theme,
+        grid: { show: false },
+        label: rightAxisLabel || undefined,
+        formatValue: (v: unknown, decimals?: DecimalCount) => {
+          const n = typeof v === 'number' ? v : Number(v);
+          const disp = framesRef.current[rightIdxRef.current]?.fields[1].display;
+          if (!disp || n == null || !isFinite(n)) return fmtSmart(n);
+          const d = disp(n, decimals ?? undefined);
+          return `${d.text}${d.suffix ?? ''}`;
+        },
+      });
+    }
     // v0.9.785 — bars markı. Grafana'nın kendi UPlotSeriesBuilder'ı
     // drawStyle=Bars görünce path builder'ı `bars({size:[barWidthFactor,
     // barMaxWidth]})` ile kurar. İKİ alan da ŞART:
@@ -749,11 +806,15 @@ export function CorePanel({
     const area = viz === 'area';
     // 2026-11-21 — renk dışı ipucu: 9. veri serisinden itibaren desen (seriesDash).
     const cue = seriesCueDashes(aligned.names.length, roles, dashed);
+    // v0.10.2443 — çözülmüş çizgi renkleri (mantıksal indeks): alt–üst bant
+    // dolgusu üst kenarın rengini buradan okur (ikinci bir renk çözümü yok).
+    const lineColors: string[] = [];
     drawOrder.forEach((i) => {
       const name = aligned.names[i];
+      lineColors[i] = resolveVar(colors?.[i] ?? seriesRoleColor(name, roles?.[i] ?? 'data'));
       b.addSeries({
-        scaleKey: 'y', theme,
-        lineColor: resolveVar(colors?.[i] ?? seriesRoleColor(name, roles?.[i] ?? 'data')),
+        scaleKey: rightAxis?.[i] ? 'y2' : 'y', theme,
+        lineColor: lineColors[i],
         // Çubuk kenarı ince (1) — 1.5px stroke dar çubuğu şişman gösterir.
         lineWidth: bars ? 1 : 1.5,
         // v0.9.93 (uPlot Aşama 3) dersinin bu motordaki karşılığı: yığın
@@ -853,6 +914,18 @@ export function CorePanel({
       // kanaldan (seriesRoleColor → fillOpacity) gelir ve burada ikinci
       // bir palet doğmaz.
       for (const sb of stackedBands ?? []) b.addBand({ series: sb.series });
+    } else if (fillBetween) {
+      // v0.10.2443 — alt–üst bant: uPlot band [üst, alt] (1-tabanlı ÇİZİM
+      // pozisyonu). Dolgu AÇIK verilir: kenar serileri dolgusuz (kesikli)
+      // çizildiğinde uPlot'un "üst serinin dolgusu" yedeği boş kalırdı.
+      const [lo, hi] = fillBetween;
+      const n = aligned.names.length;
+      if (lo !== hi && lo >= 0 && hi >= 0 && lo < n && hi < n) {
+        b.addBand({
+          series: [drawPos[hi] + 1, drawPos[lo] + 1],
+          fill: bandFillColor(lineColors[hi]),
+        });
+      }
     }
     // Eşik çizgileri + annotation bölgeleri: M3 çizim çekirdeği. Renk
     // token'ları DRAW anında çözülür (tema-canlı) — build anında değil;
@@ -1001,7 +1074,8 @@ export function CorePanel({
           // v0.9.1368 — eksenle AYNI ondalık: tooltip "6.85 TiB" derken
           // eksen "6.852 TiB" deseydi operatör iki farklı sayı okurdu.
           fmt: v != null && disp
-            ? (() => { const d = disp(v, yDecRef.current > 0 ? yDecRef.current : undefined); return `${d.text}${d.suffix ?? ''}`; })()
+            // v0.10.2443 — sağ eksen serisi sol eksenin ondalığını almaz.
+            ? (() => { const d = rightAxis?.[i] ? disp(v) : disp(v, yDecRef.current > 0 ? yDecRef.current : undefined); return `${d.text}${d.suffix ?? ''}`; })()
             : undefined,
         };
       })));
@@ -1056,7 +1130,7 @@ export function CorePanel({
     // çıktı: oluk uPlot'un size geri çağrısında ölçülür, config kimliğine
     // girmez (measuredAxisSize).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aligned.names.join(' '), roles?.join(), colors?.join(), syncKey, effLog, zeroBase, themeTick, overlaySig, xRange?.from, xRange?.to, viz, dashed?.join(','), embedded]);
+  }, [aligned.names.join(' '), roles?.join(), colors?.join(), syncKey, effLog, zeroBase, themeTick, overlaySig, xRange?.from, xRange?.to, viz, dashed?.join(','), embedded, rightSig, rightAxisLabel]);
 
   // ── v0.9.793 — focusedLabel (lejant hover vurgusu) ───────────────────────
   //

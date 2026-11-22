@@ -10,11 +10,14 @@ const src = readFileSync(resolve(__dirname, 'HeapBaselineCard.tsx'), 'utf8');
 const tab = readFileSync(resolve(__dirname, 'ServiceRuntimeSection.tsx'), 'utf8');
 
 describe('HeapBaselineCard — dürüstlük pinleri', () => {
-  it('boş küme → kart yok; hata tek satır; bant thresholds ile; odaklı pod hep çizilir; problem açmaz', () => {
+  it('boş küme → kart yok; hata tek satır; bant dolgulu iki kenar; odaklı pod hep çizilir; problem açmaz', () => {
     expect(src).toContain('if (!data || pods.length === 0) return null;');
     expect(src).toContain('heap bandı okunamadı:');
-    expect(src).toContain('thresholds={thresholds}');
-    expect(src).toContain('[focused, ...pods.filter(p => p !== focused)].slice(0, LINES_MAX)');
+    // v0.10.2443 — bant paylaşılan motorda alt–üst dolgu (CorePanel.fillBetween).
+    expect(src).toContain("band: 'lo'");
+    expect(src).toContain("band: 'hi'");
+    expect(src).not.toContain("from '@/components/viz/TimeSeriesPanel'");
+    expect(src).toContain('[focused, ...pods.filter(p => p !== focused)].slice(0, max)');
     expect(src).toContain('rowActivation(() => setFocus(p.pod))');
     // v0.10.933 (tablo standardı T2) — odaklı satır tek seçili görünümle, satır içi bg3 yok.
     expect(src).toContain("className={focused?.pod === p.pod ? 'row-selected' : undefined}");

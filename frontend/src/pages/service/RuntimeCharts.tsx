@@ -4,7 +4,8 @@ import { useQuery, useQueries } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { panelMaxDataPoints } from '@/lib/chartStep';
 import { useServiceDeploys } from '@/lib/queries';
-import type { FilterExpr, SpanMetricSeries } from '@/lib/types';
+import type { FilterExpr, RuntimeAlertConfig, SpanMetricSeries } from '@/lib/types';
+import { runtimeThresholds } from './runtimeThresholds';
 import { podLineLabel, podClusterOf, withClusterPrefix, isAnonPodSeries } from './runtimePodLabel';
 import { runtimeSourceBadge } from './runtimeSource';
 import { useT } from '@/lib/i18n';
@@ -86,16 +87,17 @@ const POD_GROUP = 'resource.k8s.pod.name,resource.host.name,resource.service.ins
 // mode (v0.9.128, operatör talebi) — memory kartları (heap/committed, MB) =
 // area (dolu kapasite okunur); GC pause / thread / object COUNT kartları =
 // line (dolgu yanıltıcı, "biriken alan" anlamı yok). Verilmezse 'area'.
-// v0.10.2436 — threshold: sinyalin mutlak eşiği (kart biriminde; sunucu
-// runtime_alerts varsayılanları). Yoksa pod görünümü göreli eşik kullanır
-// (runtimePodReduce: tepe ortancasının 1,5 katı).
-interface CardSpec { key: string; title: string; unit: string; lines: LineSpec[]; mode?: 'area' | 'line'; threshold?: number }
+// v0.10.2436 — thresholdOf: sinyalin mutlak eşiği (kart biriminde). Yoksa pod
+// görünümü göreli eşik kullanır (runtimePodReduce: tepe ortancasının 1,5 katı).
+// v0.10.2443 — eşik operatörün runtime_alerts ayarından (runtimeThresholds;
+// ayar yoksa chstore.DefaultRuntimeAlerts varsayılanı).
+type Thresholds = ReturnType<typeof runtimeThresholds>;
+interface CardSpec { key: string; title: string; unit: string; lines: LineSpec[]; mode?: 'area' | 'line'; thresholdOf?: (t: Thresholds) => number }
 
 // v0.10.2436 — 40 pod tavanı (v0.9.95) kalktı: varsayılan görünüm medyan +
 // en kötü + eşik üstü ≤5 pod (runtimePodReduce), "Tüm pod'lar" hepsini çizer.
-// Heap sınırının yüzdesi için uyarı eşiği: chstore.DefaultRuntimeAlerts
-// HeapRawWarnPct (ham heap, GC sonrası değil).
-const HEAP_PCT_WARN = 92;
+// Heap sınırının yüzdesi için uyarı eşiği: runtime_alerts HeapRawWarnPct
+// (ham heap, GC sonrası değil) — runtimeThresholds.heapRawPct.
 
 const FAMILY_CARDS: Record<string, CardSpec[]> = {
   jvm: [
@@ -113,7 +115,7 @@ const FAMILY_CARDS: Record<string, CardSpec[]> = {
       // o zaman hiç gelmez; MaxMetaspaceSize verilen kurulumda referans.
       { metric: 'jvm.memory.limit', label: 'limit', color: 'var(--err)', filters: NONHEAP, scale: MB, ref: true },
     ] },
-    { key: 'gc', title: 'GC pause by pod (avg)', unit: ' ms', mode: 'line', threshold: 2000, lines: [
+    { key: 'gc', title: 'GC pause by pod (avg)', unit: ' ms', mode: 'line', thresholdOf: t => t.gcPauseMs, lines: [
       { metric: 'jvm.gc.duration', label: 'gc', color: 'var(--warn)',
         groupBy: POD_GROUP, fanout: true, labelOf: podLineLabel, scale: 1000 },
     ] },
@@ -188,8 +190,10 @@ function rtViewSearch(params: URLSearchParams, next: RtView): string {
   return q ? `?${q}` : '';
 }
 
-export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHeader = false, family: familyProp, scopeFilters }: {
+export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHeader = false, family: familyProp, scopeFilters, alerts }: {
   service: string;
+  /** v0.10.2443 — operatörün runtime_alerts eşikleri (/runtime-signals); yoksa varsayılan. */
+  alerts?: RuntimeAlertConfig;
   // Follow-up 2026-11-21 — sunucunun (/runtime-signals) çözdüğü ortam / küme
   // kapsamı; her çizginin süzgecine aynen eklenir. Yokken sorgu bayt-aynı.
   scopeFilters?: FilterExpr[];
@@ -262,6 +266,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
     })),
   });
 
+  const thr = useMemo(() => runtimeThresholds(alerts), [alerts]);
   const built = useMemo(() => {
     if (!family) return null;
     let anyData = false;
@@ -322,7 +327,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
         : cardQs.some(x => x.q.isPending) ? 'loading'
         : 'ready';
       let unit = card.unit;
-      let threshold = card.threshold;
+      let threshold = card.thresholdOf?.(thr);
       let percent = false;
       // Heap: kartın TÜM okumaları oturunca kurulur — yüzde okuması gecikirse
       // önce mutlak değeri çizip sonra yüzdeye çevirmek ekseni zıplatırdı.
@@ -332,7 +337,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
           pods = pct;
           percent = true;
           unit = '%';
-          threshold = HEAP_PCT_WARN;
+          threshold = thr.heapRawPct;
           const times = [...new Set(pct.flatMap(p => p.points.map(x => x.time)))].sort((a, b) => a - b);
           extra.push({ label: 'sınır', color: 'var(--err)', dashed: true, points: times.map(time => ({ time, value: 100 })) });
         } else {
@@ -349,7 +354,7 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
       return { card, pods, extra, podless, status, flat, unit, threshold, percent, note };
     });
     return { byCard, anyData };
-  }, [family, cards, specs, queries]);
+  }, [family, cards, specs, queries, thr]);
 
   // Aile bilinmiyor ya da (yüklendi + hiç veri yok) → section hiç yok
   // (runtime metriği göndermeyen servise boş kart duvarı gösterme).

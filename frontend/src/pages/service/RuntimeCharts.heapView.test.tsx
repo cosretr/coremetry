@@ -64,6 +64,7 @@ vi.mock('@/components/chart/corePanelEntry', () => ({
 }));
 
 import { RuntimeCharts } from './RuntimeCharts';
+import type { RuntimeAlertConfig } from '@/lib/types';
 
 type Item = { name: string; color?: string; dashed?: boolean; series: { points: { value: number | null }[] }[] };
 type Panel = { title: string; items: Item[]; viz: string; thresholds?: { value: number }[] };
@@ -71,7 +72,7 @@ let host: HTMLDivElement | null = null;
 let root: Root | null = null;
 let qc: QueryClient;
 function Loc() { return <output data-testid="loc">{useLocation().search}</output>; }
-async function mount(url: string): Promise<HTMLElement> {
+async function mount(url: string, alerts?: RuntimeAlertConfig): Promise<HTMLElement> {
   m.panels.length = 0; m.queries.length = 0;
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -81,7 +82,7 @@ async function mount(url: string): Promise<HTMLElement> {
     root.render(
       <QueryClientProvider client={qc}>
         <MemoryRouter initialEntries={[url]}>
-          <RuntimeCharts service="orders" from={1} to={2} hideHeader />
+          <RuntimeCharts service="orders" from={1} to={2} hideHeader alerts={alerts} />
           <Loc />
         </MemoryRouter>
       </QueryClientProvider>,
@@ -123,6 +124,24 @@ describe('RuntimeCharts JVM heap (sınırın yüzdesi + pod görünümü)', () =
     expect(m.queries).toContain('jvm.memory.limit|sum|pod');
     expect(el.textContent).toContain('median + worst pod · 8 pods');
     expect(el.textContent).toContain('All pods');
+  });
+
+  it('v0.10.2443 — eşikler operatörün runtime_alerts ayarından (heap %, GC pause ms)', async () => {
+    m.pods = 8;
+    await mount('/service?name=orders&tab=details', {
+      gcPauseWarnMs: 1500, gcPauseCritMs: 3000, gcShareWarnPct: 10, gcShareCritPct: 25,
+      heapPostGCWarnPct: 85, heapPostGCCritPct: 90, heapRawWarnPct: 30, heapRawCritPct: 97,
+    });
+    const p = heapPanel();
+    expect(p.thresholds?.[0].value).toBe(30);
+    // pod-7 %35 artık eşik üstü (varsayılan %92'de değildi).
+    expect(names(p)).toEqual(['median', 'pod-8 · worst', 'pod-7', 'sınır']);
+    expect(panel('GC pause').thresholds?.[0].value).toBe(1500);
+  });
+
+  it('ayar yokken GC pause eşiği varsayılan 2000 ms', async () => {
+    await mount('/service?name=orders&tab=details');
+    expect(panel('GC pause').thresholds?.[0].value).toBe(2000);
   });
 
   it('"Tüm pod\'lar" (?rtview=lines): 45 pod\'un hepsi çizilir (tavan yok)', async () => {
