@@ -50,9 +50,14 @@ export class ErrorBoundary extends Component<Props, State> {
       /Loading chunk \d+ failed/i.test(msg) ||
       /Importing a module script failed/i.test(msg);
     if (isChunkLoadError) {
+      // v0.10.2447 (operatör: deploy sonrası Trace açılmadı) — bayrak
+      // oturum boyu '1' kalıyordu: sekmede İKİNCİ deploy'dan sonra oto-yenile
+      // hiç tetiklenmiyordu. Zaman korkuluğu (main.tsx preloadError ile
+      // aynı 30 sn): döngü yine engellenir, her deploy bir kez yenilenir.
       const FLAG = 'coremetry_chunk_reload_attempt';
-      if (sessionStorage.getItem(FLAG) !== '1') {
-        sessionStorage.setItem(FLAG, '1');
+      const last = Number(sessionStorage.getItem(FLAG) || 0);
+      if (!(Date.now() - last < 30_000)) {
+        sessionStorage.setItem(FLAG, String(Date.now()));
         // eslint-disable-next-line no-console
         console.warn('[ErrorBoundary] stale chunk after deploy — reloading');
         window.location.reload();
