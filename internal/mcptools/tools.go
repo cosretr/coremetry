@@ -59,7 +59,7 @@
 //     doğru çağrının koşulu, orada kazanılan bayt yanlış argümanla
 //     harcanan bir tura değmez.
 //
-// Tool catalogue (75 tools · 12 toolsets — CoSRE faz D — 74 → 75: compare_baseline.go (yalnız-MV taban kıyası + grafik bloğu; salt okuma, sohbet + MCP); v0.10.1434: kaynak bazlı gruplama + operatör aç/kapa
+// Tool catalogue (80 tools · 12 toolsets — v0.10.2449 — 75 → 80: endpoint_lookup.go, trace_where.go, repo_lookup.go, flow_tools.go messaging_flow + downstream_calls (endpoint / trace-nerede / repo / Kafka / aşağı bağımlılık soruları; salt okuma, sohbet + MCP); CoSRE faz D — 74 → 75: compare_baseline.go (yalnız-MV taban kıyası + grafik bloğu; salt okuma, sohbet + MCP); v0.10.1434: kaynak bazlı gruplama + operatör aç/kapa
 // toolset.go'da, sayı DEĞİŞMEDİ; v0.10.1284 — 73 → 74: log_spike.go explain_log_spike (AI SRE Faz 1a,
 // log artışını ne açıklıyor: tepe tespiti + önceki pencereyle pod / seviye / desen payı kıyası; salt okuma, sohbet + MCP);
 // v0.10.1276 — 72 → 73: service_sweep.go service_health_sweep (CoSRE adım 7,
@@ -323,6 +323,13 @@ type Deps struct {
 	// tekrar (Kind=replay) koşusu bu dikişi HİÇ çağırmaz (durum "şimdi"dir,
 	// as-of değil). nil = yok.
 	ArgoApps func(ctx context.Context, service string) ([]ArgoAppStatus, error)
+	// v0.10.2449 — repo_lookup'un api tarafı: katalog pini, Azure DevOps
+	// (ResolveDryRun ile doğrulanmış depo + tarayıcı linki), Argo CD repoURL
+	// (yalnız bağlıysa). nil = yalnız resource öznitelikleri okunur.
+	RepoSources RepoSourcesFunc
+	// v0.10.2449 — pod adı → sahibi servis(ler), entity.Resolver.PodsNamed
+	// (ad öneki tahmini yok). nil = pod girişi adlandırılmış hata döner.
+	PodServices func(ctx context.Context, pod string) ([]string, error)
 	// v0.10.1297 (operatör 2026-10-17: model linke coremetry.io yazdı) — kurulumun
 	// COREMETRY_PUBLIC_URL origin'i ("" = yapılandırılmamış). build_link yalnız bu
 	// doluysa mutlak `url` döner; boşken yalnız kök-göreli `href` — host UYDURULMAZ.
@@ -448,6 +455,10 @@ func ToolList(d Deps) []mcp.Tool {
 		// "peki o db nasıl" diye sorduğunda cevabı yanında bulsun.
 		getDBHealthTool(d),
 		getMessagingHealthTool(d),
+		// v0.10.2449 (operatör eki) — Kafka/MQ topic → üretici/tüketici + lag, servis →
+		// aşağı hedefler RED (flow_tools.go); kuyruk/db sağlığının yanında.
+		messagingFlowTool(d),
+		downstreamCallsTool(d),
 		// v0.9.1141 (Faz 3.2) — yukarıdaki üçlünün + list_problems'in
 		// `env` arg'ının keşif eşi; hemen yanında duruyor ki model
 		// katalogda arg'ı görünce listesini de görsün.
@@ -521,6 +532,10 @@ func ToolList(d Deps) []mcp.Tool {
 		// v0.9.1141 (Faz 3.2) — katalog ikizi: render_chart'ın
 		// `operation` arg'ının (ve "hangi endpoint'ler var" sorusunun) eşi.
 		listOperationsTool(d),
+		// v0.10.2449 — "bu servisin url'i / endpoint'i ne, bu domain hangi pod":
+		// giriş rotaları + gözlenen host/yol + RED + domain → servis → pod
+		// (endpoint_lookup.go); endpoint kataloğunun hemen ardında.
+		endpointLookupTool(d),
 		// v0.9.1091 (Faz 4) — parmak-izine gruplu istisnalar.
 		listExceptionGroupsTool(d),
 		// v0.9.1233 — grubun DEVAMI: stack + trace pivotu. Zincir burada
@@ -534,6 +549,9 @@ func ToolList(d Deps) []mcp.Tool {
 		// da görsün.
 		searchCodeTool(d), // v0.10.1208 — Code Search (koşullu, yalnız sohbet)
 		readSourceCodeTool(d),
+		// v0.10.2449 — "reponun linki": servis / pod → depo URL'i (repo_lookup.go);
+		// kod okuyucularının yanında, KOŞULSUZ (DevOps yoksa dürüst unknown).
+		repoLookupTool(d),
 		// CoSRE faz D — "ne değişti / neden yavaşladı": ucuz, yalnız-MV taban kıyası +
 		// satır içi grafik (compare_baseline.go); kıyas ailesinin başı.
 		compareBaselineTool(d),
@@ -577,6 +595,9 @@ func ToolList(d Deps) []mcp.Tool {
 		// v0.10.1275 (CoSRE adım 6) — trace → pod → JVM → log zinciri tek
 		// deterministik çağrıda (pivot_trace.go); trace→log pivotunun hemen ardında.
 		pivotFromTraceTool(d),
+		// v0.10.2449 — "hangi pod / hangi MQ / hata X'ten mi / dış çağrı var mı":
+		// span başına nerede (trace_where.go); trace → pod pivotunun yanında.
+		traceWhereTool(d),
 		getExemplarTracesTool(d),
 		getLinkedTracesTool(d),
 		getMetricsForSpanTool(d),

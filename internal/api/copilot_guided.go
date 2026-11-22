@@ -1919,6 +1919,11 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 		return false, false
 	}
 	norm := normalizeGuidedMsg(question)
+	// v0.10.2449 — endpoint / trace-nerede / repo soruları guided demetine değil
+	// serbest döngüye (endpoint_lookup / trace_where / repo_lookup; chat_lookup_route.go).
+	if lookupAskFor(question).Tool != "" {
+		return false, false
+	}
 	// v0.9.410 — takip soruları ("peki payments?", "son 24 saatte?")
 	// guided sinyal taşımasa da katalog okumasını hak eder; devralma
 	// applyFollowUpContext'te (copilot_followup.go).

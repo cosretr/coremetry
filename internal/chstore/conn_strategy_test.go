@@ -330,6 +330,13 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// okumaları service_summary_5m + operation_summary_5m (zaman sınırlı,
 		// LIMIT). topology_edges_5m FINAL ve deploy okumaları ana bağlantıda.
 		"compare_baseline.go": true,
+		// v0.10.2449 — SAF telemetri: CoSRE endpoint_lookup / trace_where /
+		// repo_lookup okumaları, FROM'ları spanmetrics_1m + spans (zaman sınırlı,
+		// LIMIT, satır tavanı). argocd_sync_events (state) ana bağlantıda.
+		"cosre_lookup.go": true,
+		// v0.10.2449 — SAF telemetri: messaging_flow (messaging_caller_summary_5m);
+		// downstream_calls topology_edges_5m FINAL ana bağlantıda.
+		"cosre_lookup_flow.go": true,
 		// v0.10.2018 — SAF telemetri: ML trace_error_count, tek FROM'u
 		// spanmetrics_1m (zaman sınırlı, LIMIT). Taban okuması ml_series.go'da (ana bağlantı).
 		"ml_trace_errors.go": true,

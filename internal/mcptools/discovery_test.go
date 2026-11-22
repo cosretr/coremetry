@@ -573,7 +573,8 @@ func TestDiscoveryToolsGroupedNearConsumers(t *testing.T) {
 	// v0.10.1276 — 72 → 73: service_health_sweep (CoSRE adım 7; servisin pod / operasyon / fonksiyon / JVM taraması + sorunluların logları, tek deterministik bileşik çağrı; salt okuma, REST eşi yok → MinRole ""; sohbet + dış MCP).
 	// v0.10.1284 — 73 → 74: explain_log_spike (AI SRE Faz 1a; log artışını ne açıklıyor — tepe + önceki pencereyle pod / seviye / desen payı, tek deterministik bileşik çağrı; salt okuma, REST eşleri /api/logs/timeseries + /api/logs/fieldstats viewer → MinRole ""; sohbet + dış MCP).
 	// CoSRE faz D — 74 → 75: compare_baseline (ne değişti / neden yavaşladı; yalnız 5 dk MV, servis/endpoint vs önceki dönem / dün / geçen hafta + grafik bloğu; salt okuma, REST eşi yok → MinRole ""; sohbet + dış MCP).
-	if len(tools) != 75 { // v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız)
+	// v0.10.2449 — 75 → 80: endpoint_lookup / trace_where / repo_lookup / messaging_flow / downstream_calls (CoSRE endpoint, trace-nerede, repo, Kafka, aşağı bağımlılık soruları; salt okuma, REST eşi yok → MinRole ""; sohbet + dış MCP).
+	if len(tools) != 80 { // v0.10.944 — 57 → 60: list_log_fields / list_metric_labels / compare_periods (CoSRE araştırma asistanı; üçü de viewer, REST eşleri /api/logs/fields, /api/metrics label okumaları ve servis RED kıyası kapısız)
 		t.Errorf("katalog %d tool — sayı değiştiyse tools.go başlığındaki sayım yorumunu, "+
 			"api/mcp_authz_test.go'daki duruş notunu ve docs/runbooks/mcp-claude-code.md'yi de güncelle", len(tools))
 	}

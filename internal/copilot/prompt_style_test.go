@@ -20,10 +20,10 @@ func TestStyleV1PromptsUnchanged(t *testing.T) {
 	}{
 		"Chat":          {SystemPromptChat(), "3dd6a7026abf37c44b8b54a455f0735b2f8d343b285dbfebb8c1a033d568c10f"},
 		"ChatRoundCap":  {SystemPromptChatRoundCap(), "939cf8dcddbc4f38d4e51107749ff0c4e72bdc3b0f429600460bc72341836763"},
-		"AgentLoop":     {SystemPromptChatAgentLoopFor(false), "8730aee7815ce253fe03c4ece7cae6da38694cd56bb740e395e59797e9417c7c"}, // CoSRE faz D — adım 4 compare_baseline (bilerek yenilendi)
-		"AgentLoop.s":   {SystemPromptChatAgentLoopFor(true), "095db5b56711a7bd980beef97658ac205f19cf1f9c75f134f663805cc3266ece"},
-		"AgentLoopV2":   {SystemPromptChatAgentLoopV2For(false), "c848721d211020e3739a1f2b71e32ccf9bad8a5514c4dc8a444b495356fc56ec"}, // v0.10.2356 — S2: adım 4 find_traces; CoSRE faz D compare_baseline (bilerek yenilendi)
-		"AgentLoopV2.s": {SystemPromptChatAgentLoopV2For(true), "9167cef5d1ff27cb7ea663e9e74cd417714e080127e2a42aaec70971139eca2e"},
+		"AgentLoop":     {SystemPromptChatAgentLoopFor(false), "8119c6367488870777cc82a7e756eff44ee64070bb5b6507110d7946041a229a"},   // CoSRE faz D — adım 4 compare_baseline (bilerek yenilendi); v0.10.2449 araç yönlendirmesi (bilerek yenilendi)
+		"AgentLoop.s":   {SystemPromptChatAgentLoopFor(true), "218ba4b17e743a3b833101b8629f3c2f1987d137d723661ac7397465afd69547"},    // v0.10.2449 — adım 4 endpoint/trace/Kafka/repo araçları (bilerek yenilendi)
+		"AgentLoopV2":   {SystemPromptChatAgentLoopV2For(false), "2d82bdcea5e29845289d5f61f8690ee225ca9bb2280f1779f5291fe386bbad08"}, // v0.10.2356 — S2: adım 4 find_traces; CoSRE faz D compare_baseline (bilerek yenilendi); v0.10.2449 araç yönlendirmesi (bilerek yenilendi)
+		"AgentLoopV2.s": {SystemPromptChatAgentLoopV2For(true), "6e987dea6056ab3c8410b98b9b721e9dbf296687142141ee2155c4b9c633fab0"},  // v0.10.2449 — adım 4 endpoint/trace/Kafka/repo araçları (bilerek yenilendi)
 		"GuidedChat":    {SystemPromptGuidedChat(), "7d6eb7ff63fc2f51398a250d1cb4e3a59528b860182c4181d96e80112003006f"},
 		"GeneralChat":   {SystemPromptGeneralChat(), "01c948112dcad381a131c8d4aeed73e9a3c349b981e3daf0ad8ae32bdbc8ad5c"},
 	}

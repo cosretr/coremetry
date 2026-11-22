@@ -66,7 +66,8 @@ const shortDescMinBytes = 60
 // ölçülen +150 B → 9846 B) → tavan 9.95 KB (+150 B, 50 B'a yukarı).
 // CoSRE faz D — 75 tool: compare_baseline ("ne değişti / neden yavaşladı", yalnız-MV
 // taban kıyası + grafik bloğu; ölçülen +174 B → 10117 B) → tavan 10.25 KB (50 B'a yukarı).
-const shortCatalogMaxBytes = 10250
+// v0.10.2449 — 80 tool: endpoint_lookup / trace_where / repo_lookup / messaging_flow / downstream_calls (ölçülen +575 B → 10692 B) → tavan 10.75 KB.
+const shortCatalogMaxBytes = 10750
 
 // shortCatalogSimpleMaxBytes — v0.10.1302: simple araç seti varyantının
 // (küçük model; simpleHiddenTools gizli, ⟦full|simple⟧ işaretleri simple
@@ -74,7 +75,8 @@ const shortCatalogMaxBytes = 10250
 // aracın metni −~510 B, işaretlerin simple tarafı +~0) → tavan 9.5 KB (+150 B,
 // 50 B'a yukarı; full'un kuralı). Simple < full ayrıca zorlanır.
 // CoSRE faz D — compare_baseline +174 B → 9607 B; tavan 9.7 KB.
-const shortCatalogSimpleMaxBytes = 9700
+// v0.10.2449 — beş araç +575 B → 10182 B; tavan 10.25 KB.
+const shortCatalogSimpleMaxBytes = 10250
 
 // shortCatalogConditionalMaxBytes — v0.10.1050: KOŞULLU sohbet araçlarının
 // (chatOffered; bugün yalnız read_source_code, DevOps bağlıyken) kompakt

@@ -20,6 +20,23 @@ func TestChatAgentLoopOffersCompareBaseline(t *testing.T) {
 	}
 }
 
+// v0.10.2449 — endpoint / trace-nerede / Kafka / aşağı bağımlılık / repo
+// soruları yeni araçlara yönlenir; v1, v2 ve simple/full çekirdeklerinin hepsinde.
+func TestChatAgentLoopOffersLookupTools(t *testing.T) {
+	for name, p := range map[string]string{
+		"v1":        SystemPromptChatAgentLoop(),
+		"v1/simple": SystemPromptChatAgentLoopFor(true),
+		"v2/full":   SystemPromptChatAgentLoopV2For(false),
+		"v2/simple": SystemPromptChatAgentLoopV2For(true),
+	} {
+		for _, tool := range []string{"endpoint_lookup", "trace_where", "messaging_flow", "downstream_calls", "repo_lookup"} {
+			if !strings.Contains(p, tool) {
+				t.Errorf("%s: %s yönlendirmesi yok", name, tool)
+			}
+		}
+	}
+}
+
 // v0.10.482 — ajan çekirdek döngüsü: kataloğun gerçek tool adlarını anar,
 // Ek A düzeltmeleri (N1 cluster attribute'tan; N5 OR yerine anahtar başına
 // arama) uygulanmış; systemChat'i yeniden YAZMAZ (ayrı const, öne eklenir).

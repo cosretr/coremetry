@@ -33,12 +33,15 @@ var stepPhaseByTool = map[string]string{
 	"get_exemplar_traces": "Trace", "get_linked_traces": "Trace", "trace_stats": "Trace",
 	"compare_traces": "Trace", "bubble_up": "Trace", "explain_trace": "Trace",
 	"pivot_from_trace": "Trace", // v0.10.1275 — CoSRE adım 6: trace → pod → JVM → log
+	"trace_where":      "Trace", // v0.10.2449 — span başına pod / cluster / karşı taraf
 	// v0.10.1327 — en yavaş trace kritik yolu + o trace'lerin logları
 	"trace_drill": "Trace", "trace_drill_logs": "Log",
 	// Sağlık (servis / operasyon / veritabanı / kuyruk / SLO)
 	"get_service_health": "Sağlık", "get_operation_health": "Sağlık", "get_db_health": "Sağlık",
 	"get_messaging_health": "Sağlık", "list_slo_status": "Sağlık", "explain_service_health": "Sağlık",
 	"service_health_sweep": "Sağlık", // v0.10.1276 — CoSRE adım 7: pod/operasyon/fonksiyon taraması
+	// v0.10.2449 — endpoint / Kafka akışı / aşağı bağımlılıklar
+	"endpoint_lookup": "Sağlık", "messaging_flow": "Sağlık", "downstream_calls": "Sağlık",
 	// v0.10.1454 — giden çağrı (client span): sonda · ölçüm · grafik · hüküm
 	"outbound_probe": "Sağlık", "outbound_calls": "Sağlık", "outbound_series": "Sağlık", "outbound_verdict": "Sağlık",
 	"outbound_codes":  "Sağlık", // v0.10.1455 — iş kodu kırılımı

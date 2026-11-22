@@ -104,6 +104,9 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		// v0.10.1293 (AI SRE Faz 4) — geri alma önerisinin Argo eki (sre_argo.go;
 		// GitOps sekmesiyle aynı kurucu, salt okuma).
 		ArgoApps: s.mcpArgoApps,
+		// v0.10.2449 — repo_lookup: katalog pini + Azure DevOps + Argo (mcp_repo_lookup.go).
+		RepoSources: s.mcpRepoSources,
+		PodServices: s.mcpPodServices,
 		// v0.10.1494 (CoSRE 2d) — list_deployments satırının git kaynağı (rollback |
 		// redeploy_older); /rollouts listesiyle AYNI sarmalayıcı (Argo ayar kapısı +
 		// chstore.AttachRolloutOriginWith) → SRE DeployFacts da görür.

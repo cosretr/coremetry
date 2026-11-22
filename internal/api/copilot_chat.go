@@ -1232,6 +1232,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		opPre.clusterPromptTR() + // v0.10.1374 — küme kıyası yoksa ""
 		dm.loopPrefix() + // v0.10.1150 — Derin kapalıyken ""
 		withAddressee(addressee, loopChatPromptFor(ctx)) + // v0.10.2337 — C: üslup açıkken biçim kuralsız varyant
+		lookupLoopPromptTR(lookupAskFor(lastUserText(req.Messages))) + // v0.10.2449 — endpoint / trace-nerede / repo ipucu; eşleşme yoksa ""
 		stt.promptLine() // v0.10.2324 — konuşma durumu SONDA (değişken blok; kapalıyken "")
 	psplit.setNarrator(withAddressee(addressee, loopChatPromptFor(ctx)) + stt.promptLine()) // v0.10.2365 — anlatıcı: üslup çekirdeği + durum bloğu
 	// v0.10.1324 — yankı süzgecinin cümleleri loopPrompt'a giren AYNI önsöz

@@ -85,6 +85,9 @@ var traceFollowUpKeepTools = map[string]bool{
 	"describe_attributes": true, "find_attribute_by_value": true, "get_trace": true, "search_traces": true,
 	"query_traces": true, "trace_stats": true, "find_trace_by_span": true, "bubble_up": true, "pivot_from_trace": true,
 	"get_exemplar_traces": true, "get_linked_traces": true, "get_metrics_for_span": true,
+	// v0.10.2449 — trace'ten doğan "hangi pod / hangi MQ / kim çağırıyor / url / repo" takipleri
+	mcptools.TraceWhereName: true, mcptools.EndpointLookupName: true, mcptools.MessagingFlowName: true,
+	mcptools.DownstreamCallsName: true, mcptools.RepoLookupName: true,
 	// exceptions (problems setinden)
 	"list_exception_groups": true, "get_exception_samples": true,
 	// changes

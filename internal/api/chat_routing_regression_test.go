@@ -89,6 +89,9 @@ type routingRow struct {
 	// konuşmanın Redis sohbet bağlamı (copilot:ctx:u-route:conv-routing).
 	prior   []string
 	chatCtx *ChatContext
+	// v0.10.2449 — guided'a girmeyip niyet kademesine ya da serbest döngüye
+	// düşmesi yeterli (araç seçimi döngüde; ipucu chat_lookup_route_test.go).
+	loopOK bool
 }
 
 // routingRig — satırın sahte dünyası.
@@ -524,6 +527,37 @@ var routingRegressionRows = []routingRow{
 	{release: "komşu v0.10.2138", name: "v2 açık servis bağlamı ezer: 'billing-api neden gecikmiş olabilir?' → root_cause",
 		q: "billing-api neden gecikmiş olabilir?", v2: true, prior: []string{rrSvc + " sağlığı nasıl?"}, chatCtx: &ChatContext{Service: rrSvc},
 		wantTier: aisurface.TierGuided, wantRoute: string(guidedRootCause)},
+	// v0.10.2449 — operatör raporu 2026-11-22: endpoint / trace-nerede / repo /
+	// Kafka / aşağı bağımlılık soruları guided demetine değil serbest döngüye
+	// (endpoint_lookup, trace_where, repo_lookup, messaging_flow, downstream_calls;
+	// araç ipucu chat_lookup_route.go). v1 ve v2 aynı.
+	{release: "v0.10.2449", name: "servisin url'i → döngü (endpoint_lookup)",
+		q: rrSvc + " servisinin url'i nedir", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2449", name: "operasyon exact endpoint url → döngü",
+		q: "OP_ORDER_QUERY_REST what is this service exact endpoint url", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2449", name: "domain hangi pod (3 cluster) → döngü",
+		q: "api.example.com bu domainin çözdüğü podu soruyorum 3 cluster var", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2449", name: "timeout hangi poddan → döngü (trace_where)",
+		q: "timeout'un hangi poddan geldiğini biliyor musun", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2449", name: "ocpka/ocpkb podlarından birine düştü → döngü",
+		q: "ocpka veya ocpkb'deki podlardan birine düştüğünü biliyorum hangisi", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2449", name: "hangi mq'da uzamış → döngü (messaging_flow)",
+		q: "hangi mq'da uzamış", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2449", name: "pod içinde geçen süre → döngü (trace_where öz süre)",
+		q: rrSvc + " pod içerisinde geçen sürelere baktığımda 200ms göremiyorum", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2449", name: "reponun linki → döngü (repo_lookup)",
+		q: "reponun linkini veremez misin", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2449", name: "hata osb'den mi dönmüş → döngü (trace_where peer)",
+		q: "yani hata osb'den mi dönmüş [kod: ERR-42]", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2449", name: "yapıştırılan log + external call → döngü",
+		q:  "bir log attım, external call var mı\n2026-11-22 10:41:07.123 ERROR [orders-api,4bf92f3577b34da6a3ce929d0e0e4736,00f067aa0ba902b7] call failed\nCaused by: java.net.SocketTimeoutException: Read timed out",
+		v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2449", name: "topic'i kim tüketiyor → döngü",
+		q: "payments-topic mesajını kim tüketiyor", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2449", name: "servis kimi çağırıyor, hangisi yavaş → döngü (downstream_calls)",
+		q: rrSvc + " kimi çağırıyor, hangisi yavaş", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2449", name: "v1: servisin endpoint'i → döngü",
+		q: rrSvc + " endpoint'i nedir", wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
 }
 
 // withConversationStateOff — v0.10.2324: cosre_conversation.state kapalı
@@ -638,7 +672,8 @@ func TestRoutingRegression(t *testing.T) {
 			mu.Lock()
 			seen := append([]string(nil), routes...)
 			mu.Unlock()
-			if r.Tier != row.wantTier || route != row.wantRoute {
+			tierOK := r.Tier == row.wantTier || (row.loopOK && r.Tier == aisurface.TierLoop)
+			if !tierOK || route != row.wantRoute {
 				t.Fatalf("YANLIŞ YÖNLENDİRME\n  soru:  %q\n  bugün: kademe=%q rota=%q (guided kararları %v)\n  beklenen: kademe=%q rota=%q\n  cevap: %.200s",
 					row.q, r.Tier, route, seen, row.wantTier, row.wantRoute, text)
 			}
@@ -649,7 +684,7 @@ func TestRoutingRegression(t *testing.T) {
 				t.Errorf("guided'a hiç girmemeliydi, kararlar: %v", seen)
 			}
 			// Serbest araç döngüsü koşmadı: araç seti yalnız döngüde yazılır.
-			if r.Toolset != "" || r.Tier == aisurface.TierLoop {
+			if !row.loopOK && (r.Toolset != "" || r.Tier == aisurface.TierLoop) {
 				t.Errorf("serbest araç döngüsü koştu (toolset=%q)", r.Toolset)
 			}
 			if r.Status != "ok" {

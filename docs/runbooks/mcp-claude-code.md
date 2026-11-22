@@ -139,7 +139,17 @@ aradaki deploy'lar, bağımlılık ortalama gecikme farkı. YALNIZ 5 dk MV'ler
 (service_summary_5m, operation_summary_5m, topology_edges_5m, service_version_5m);
 60 sn önbellekli. Sonuç tablo + satır içi grafik bloğu taşır (pencere gölgeli).
 
-75 araç, okudukları veri kaynağına göre **12 toolset**'e bölünür
+v0.10.2449'da 80 oldu (operatör raporu 2026-11-22: prod soruları trace ve
+endpoint ağırlıklı): `endpoint_lookup` (servis / operasyon / URL / domain →
+giriş rotaları spanmetrics_1m'den, gözlenen host + yol + fiil + pod'lar sınırlı
+ham okumadan, RED önce VM, domain → servis → pod entity modelinden),
+`trace_where` (trace id ya da servis + errors|slow|messaging → span başına pod ·
+cluster · karşı taraf · süre; hata kökeni, zaman aşımı, öz süre, dış çağrı),
+`repo_lookup` (resource öznitelikleri → katalog pini → Azure DevOps → Argo CD;
+yoksa dürüst unknown), `messaging_flow` (topic → üretici/tüketici + VM consumer
+lag), `downstream_calls` (hedef başına VM client RED + topoloji kenarları).
+
+80 araç, okudukları veri kaynağına göre **12 toolset**'e bölünür
 (`internal/mcptools/toolset.go`; her araç tam bir sette —
 `TestToolsetsPartitionCatalog`). Sayı DEĞİŞMEDİ; gruplama yeni.
 
