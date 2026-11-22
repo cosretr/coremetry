@@ -16,7 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/corem
 import { useFailedTurns, usePromoteTurn } from '@/lib/queries';
 import { tsLong } from '@/lib/utils';
 import type { FailedCluster, FailedTurn, FailedTurnsView } from '@/lib/types';
-import { emptyPromoteForm, failedSummary, promoteBody, reasonLabel, reasonsText, turnHref, type PromoteForm } from './failedTurnsView';
+import { emptyPromoteForm, failedSummary, promoteBody, reasonLabel, reasonsText, turnHref, type PromoteForm } from '@/pages/ai/failedTurnsView';
 
 const TURN_COLS: ColumnDef<FailedTurn>[] = [
   { id: 'at',       label: 'Ne zaman', sortValue: t => t.at, width: 165, tone: () => 'faint' },

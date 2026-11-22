@@ -1325,6 +1325,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// /databases + /messaging GROUP-BY warm set every 25s.
 	if !s.roleAPIOff {
 		go s.warmDependenciesCache()
+		go s.pageWarmLoop() // v0.10.2469 — Services / Endpoints / Databases (page_warm.go)
 	}
 
 }
@@ -1480,20 +1481,12 @@ func (s *Server) warmDependenciesCache() {
 		}
 		to := time.Now()
 		from := to.Add(-warmWin)
-		// v0.9.821 — önek getDatabases handler'ıyla BİREBİR aynı kalmalı
-		// (databases:v2:…:env=…:cmp=…), yoksa ısıtılan slotu kimse okumaz.
-		// Isıtılan slot filtresiz + compare'siz olan: sayfayı açan
-		// operatörün ilk isteği bu.
-		warm("databases", fmt.Sprintf("databases:v2:%s:env=:cmp=false", cacheBucket(from, to)), ttl,
-			func(ctx context.Context) (any, error) {
-				return s.store.GetDatabases(ctx, chstore.DatabasesQuery{
-					From: from, To: to, IncludeCallers: true, IncludeReceivers: true,
-				})
-			})
 		// v0.9.813 — önek getMessaging handler'ıyla BİREBİR aynı kalmalı
 		// (messaging:v2:), yoksa ısıtılan slotu kimse okumaz.
-		warm("messaging", "messaging:v2:"+cacheBucket(from, to), ttl,
-			func(ctx context.Context) (any, error) { return s.store.GetMessaging(ctx, from, to) })
+		// v0.10.2469 — sayfa penceresi 3 sa (DEFAULT_RANGE_PRESET); 1 sa anahtarı ölüydü.
+		msgFrom := to.Add(-pageWarmWindow)
+		warm("messaging", "messaging:v2:"+cacheBucket(msgFrom, to), ttl,
+			func(ctx context.Context) (any, error) { return s.store.GetMessaging(ctx, msgFrom, to) })
 		// Services list — the page operators open first after
 		// login. Use the same key shape as listServices so the
 		// live handler picks up the warm entry on its next call.
@@ -1562,37 +1555,6 @@ func (s *Server) warmDependenciesCache() {
 		warm("services-metadata", "services-metadata", 60*time.Second,
 			func(ctx context.Context) (any, error) {
 				return s.store.ListServiceMetadata(ctx)
-			})
-		// /services landing page — first page, default sort
-		// (errorRate desc), no filters, default 15-min window.
-		// Same key shape as getServices builds via cacheBucket,
-		// so the operator's very first click after each warmer
-		// tick lands on a HIT-L1 instead of waiting for the MV
-		// scan. The bucket also extends slightly into the
-		// future so the next request a few seconds later still
-		// matches the same key.
-		landingFrom := to.Add(-15 * time.Minute)
-		// v0.9.231 (scale-audit) — this string used to be hand-written and had
-		// gone stale: servicesListKey grew :env=:ns=:wt= and the warm key never
-		// did, so the handler always looked up a key the warmer never wrote.
-		// The entry was unreachable — a fleet-wide MV scan every 25s that
-		// nothing ever read, while the landing page (the whole reason this
-		// warmer exists) still paid a cold scan on every login. Building it
-		// through the same function the handler uses means they cannot drift
-		// again.
-		landingKey := servicesLandingWarmKey(landingFrom, to) // v0.10.256 — handler ile aynı fonksiyon (ek dahil)
-		warm("services-landing", landingKey, 30*time.Second,
-			func(ctx context.Context) (any, error) {
-				list, err := s.store.GetServicesAggFiltered(ctx,
-					landingFrom, to, "", "errorRate", "desc", 50, 0)
-				if err != nil {
-					return nil, err
-				}
-				return map[string]any{
-					"services": list,
-					"hasMore":  len(list) == 50,
-					"offset":   0,
-				}, nil
 			})
 		sleepToGrid()
 	}
@@ -1703,14 +1665,6 @@ func servicesListKey(useMV bool, limit, offset int, bucket, nameMatch, sort, dir
 func servicesFullKey(useMV bool, limit, offset int, bucket, nameMatch, sort, dir, ownerTeam, sreTeam, cluster, env, namespace string, withTotal bool, display chstore.ServiceDisplayFilters, compare bool) string {
 	return servicesListKey(useMV, limit, offset, bucket, nameMatch, sort, dir, ownerTeam, sreTeam, cluster, env, namespace, withTotal) +
 		fmt.Sprintf(":err=%v:minSpans=%d:minP99=%g:cmp=%v", display.ErrorsOnly, display.MinSpans, display.MinP99Ms, compare)
-}
-
-// servicesLandingWarmKey — ısıtıcının (api.go warm("services-landing")) ve
-// testin ortak anahtarı: açılış isteği = mv, 50/0, errorRate desc, süzgeç
-// yok, 15 dk pencere.
-func servicesLandingWarmKey(landingFrom, to time.Time) string {
-	return servicesFullKey(true, 50, 0, cacheBucket(landingFrom, to),
-		"", "errorRate", "desc", "", "", "", "", "", false, chstore.ServiceDisplayFilters{}, false)
 }
 
 func (s *Server) getServices(w http.ResponseWriter, r *http.Request) {
@@ -2868,9 +2822,9 @@ func (s *Server) getSlowQueriesGlobal(w http.ResponseWriter, r *http.Request) {
 	// dbName is part of the cache key: leaving it out would serve one
 	// database's rows for another's request — the cross-poisoning class
 	// CLAUDE.md calls out (v0.5.187).
-	key := fmt.Sprintf("slow-queries-global:from=%d:to=%d:sys=%s:db=%s:limit=%d",
-		from.UnixNano()/int64(time.Minute), to.UnixNano()/int64(time.Minute),
-		dbSystem, dbName, limit)
+	// v0.10.2469 — dakika damgası yerine cacheBucket: canlı pencere sabit anahtar (ısıtılabilir).
+	key := fmt.Sprintf("slow-queries-global:%s:sys=%s:db=%s:limit=%d",
+		cacheBucket(from, to), dbSystem, dbName, limit)
 	s.serveCached(w, r, key, 60*time.Second, func(ctx context.Context) (any, error) {
 		return s.store.GetSlowQueriesGlobal(ctx, from, to, dbSystem, dbName, limit)
 	})

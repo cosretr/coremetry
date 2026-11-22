@@ -231,6 +231,11 @@ func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, 
 	// gen — v0.10.2229 (R3): hesaplamadan ÖNCE okunan nesil; yazılan zarf
 	// bunu taşır, araya giren bir geçersizleştirme sonucu bayat bırakır.
 	gen := ""
+	// v0.10.2469 — sayfa ısıtıcısı (page_warm.go): aynı handler'dan gelen
+	// istek burada önden-tazelemeye (ya da testte anahtar yoklamasına) döner.
+	if pw := pageWarmFrom(ctx); pw != nil {
+		return s.pageWarmCompute(ctx, pw, key, ttl, fn)
+	}
 	if bypass {
 		gen = s.cacheGenOf(ctx, key)
 	} else {
@@ -261,7 +266,7 @@ func (s *Server) cachedJSON(ctx context.Context, key string, ttl time.Duration, 
 					s.stats.record("HIT", key)
 					return body, "HIT", nil
 				}
-				if age < ttl*staleFactor {
+				if age < staleHorizon(key, ttl) { // v0.10.2469: ısıtılan ailelerde ≥ 10 dk
 					// Stale-but-usable. Serve immediately,
 					// kick a background refresh (deduped via
 					// singleflight so concurrent stale hits
@@ -368,7 +373,7 @@ func (s *Server) storeL2(ctx context.Context, key string, body []byte, ttl time.
 	// v0.10.2230 (R4): gövde + olumsuz girdiyi ve claim'i silme tek turda.
 	// R6: tavanı aşan gövde L2'ye yazılmaz (L1'de kalır); claim/olumsuz
 	// girdi yine silinir, bekleyen replikalar beklemeden kendisi hesaplar.
-	valOp := cache.PipeOp{Key: l2ValueKey(key), Value: env, TTL: ttl * staleFactor}
+	valOp := cache.PipeOp{Key: l2ValueKey(key), Value: env, TTL: staleHorizon(key, ttl)}
 	if err != nil {
 		s.stats.oversize(key, len(body))
 		valOp = cache.PipeOp{Key: l2ValueKey(key), Del: true}

@@ -382,6 +382,7 @@ func (s *Server) getServicesMetricRank(w http.ResponseWriter, r *http.Request) {
 	ownerTeam, sreTeam := strings.TrimSpace(q.Get("ownerTeam")), strings.TrimSpace(q.Get("sreTeam"))
 	cluster, env := strings.TrimSpace(q.Get("cluster")), strings.TrimSpace(q.Get("env"))
 	namespace := strings.TrimSpace(q.Get("namespace"))
+	s.notePageWarmEnv(r, env) // v0.10.2469 — env varyantı ısıtma adayı (page_warm.go)
 	if len(env) > httpEnvScopeTermMax || len(cluster) > httpEnvScopeTermMax {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("env/cluster en çok %d karakter", httpEnvScopeTermMax))
 		return

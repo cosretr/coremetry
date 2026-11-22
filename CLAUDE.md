@@ -45,7 +45,7 @@ OpenTelemetry-native APM. Single Go binary + ClickHouse + Redis + optional exter
 ## Workflow
 
 - `kuyruk` = show prioritised queue, end with "Hangisi?". `devam` = continue current item.
-- Operator-reported bugs = NEW priority, ship as `v0.10.X+1` immediately, never batch.
+- Operator-reported bugs = NEW priority, ship immediately — batched with whatever else is ready (one release per round; operator 2026-11-22). Local release gate is fast (tsc, eslint, vitest --changed, bundle, gate.sh go); full vitest runs in CI.
 - ≥1000 satırlık dosya (liste `docs/claude/large-files.md`) bütün okunmaz: sembolü grep'le, ±80 satır oku; DECISIONS/INCIDENTS'ta başlık grep'i; testdata golden dosyaları asla.
 
 **Release — every functional change:**

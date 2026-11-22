@@ -1,11 +1,8 @@
 package api
 
 import (
-	"strings"
 	"testing"
 	"time"
-
-	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
 // v0.5.187 — locks the cache-key digest invariants for set-shaped
@@ -178,21 +175,6 @@ func TestCacheRawQueryString(t *testing.T) {
 	}
 	if got := cacheRawQueryString("%zz"); got != "%zz" {
 		t.Errorf("bozuk sorgu dizesi aynen: %s", got)
-	}
-}
-
-// v0.10.256 (C1 ⭐) — ısıtılan açılış anahtarı handler'ın kuracağı anahtarla
-// BİREBİR aynı olmalı; ek (":err=…:cmp=…") iki tarafta da tek fonksiyondan.
-func TestServicesLandingWarmKeyMatchesHandler(t *testing.T) {
-	to := time.Date(2026, 9, 2, 12, 0, 7, 0, time.UTC)
-	from := to.Add(-15 * time.Minute)
-	warm := servicesLandingWarmKey(from, to)
-	handler := servicesFullKey(true, 50, 0, cacheBucket(from, to), "", "errorRate", "desc", "", "", "", "", "", false, chstore.ServiceDisplayFilters{}, false)
-	if warm != handler {
-		t.Fatalf("ısıtma anahtarı handler anahtarından ayrıştı:\n warm=%s\n hand=%s", warm, handler)
-	}
-	if !strings.HasSuffix(warm, ":err=false:minSpans=0:minP99=0:cmp=false") {
-		t.Errorf("görüntü süzgeci eki anahtarda yok: %s", warm)
 	}
 }
 

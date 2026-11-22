@@ -35,7 +35,7 @@ func (s *Server) getDatabases(w http.ResponseWriter, r *http.Request) {
 	// sırasında eski dizi payload'ı 30 sn boyunca yeni SPA'ya servis
 	// edilir ve sayfa boş açılırdı (v0.9.443/458 + messaging v0.9.813
 	// dersi). Warm loop (api.go) aynı öneki kullanır — yoksa ısıtılan
-	// slot hiç okunmaz. env de anahtarda: farklı env = farklı liste.
+	// slot hiç okunmaz (v0.10.2469: page_warm.go handler'ın kendisini çağırır). env de anahtarda: farklı env = farklı liste.
 	key := fmt.Sprintf("databases:v2:%s:env=%s:cmp=%v", cacheBucket(from, to), env, compare)
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {
 		ov, err := s.store.GetDatabases(ctx, chstore.DatabasesQuery{
