@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { podLineLabel, podClusterOf, withClusterPrefix, isAnonPodSeries, divideByCount } from './runtimePodLabel';
+import { podLineLabel, podClusterOf, podEnvOf, podScopeLabel, POD_SCOPE_KEYS, GEN_KEY_IDX, isAnonPodSeries, divideByCount } from './runtimePodLabel';
 
 describe('anonim pod serisi yedeği (follow-up 2026-11-21)', () => {
   it('host_name taşıyan seri anonim değil; üç anahtar boşsa anonim', () => {
@@ -37,24 +37,34 @@ describe('podLineLabel', () => {
   });
 });
 
-// v0.9.532 — cluster öneki sözleşmesi (operatör: "jvm var ama hangi
-// cluster belli değil"). Önek YALNIZ çok-cluster'lı seri kümesinde ve
-// yalnız cluster'ı bilinen seride basılır — tek cluster'da her etikete
-// "ocp-eu · " eklemek gürültü, cluster'sız seriye önek basmak yalan.
-describe('withClusterPrefix / podClusterOf', () => {
-  it('çok cluster + cluster bilinen → önek', () => {
-    expect(withClusterPrefix('6f9c7b-x2v', 'ocp-eu', true)).toBe('ocp-eu · 6f9c7b-x2v');
+// v0.10.2464 (operatör: pod çizgisinde cluster / ortam) — etiket
+// "pod · cluster · ortam"; cluster [3] (CH coalesce) yoksa serinin kendi
+// openshift [5] / k8s [6] etiketi; ortam [4]. İkisi de yoksa yalnız pod.
+describe('podScopeLabel / podClusterOf / podEnvOf', () => {
+  const POD = 'apigateway-mobile-fc7c5bf68-f4rrz';
+  it('VM serisi: openshift_cluster_name → pod · cluster', () => {
+    expect(podScopeLabel(POD, [POD, '', '', '', '', 'ocpkb', ''])).toBe(`${POD} · ocpkb`);
   });
-  it('tek cluster → önek YOK (gürültü)', () => {
-    expect(withClusterPrefix('6f9c7b-x2v', 'ocp-eu', false)).toBe('6f9c7b-x2v');
+  it('cluster + ortam → ikisi de; ortam cluster\'la aynıysa bir kez', () => {
+    expect(podScopeLabel(POD, [POD, '', '', '', 'prod', '', 'ocpkb'])).toBe(`${POD} · ocpkb · prod`);
+    expect(podScopeLabel(POD, [POD, '', '', 'ocpkb', 'ocpkb'])).toBe(`${POD} · ocpkb`);
   });
-  it('cluster bilinmiyor → önek YOK (attr basmayan ~%1-2 pod)', () => {
-    expect(withClusterPrefix('6f9c7b-x2v', '', true)).toBe('6f9c7b-x2v');
+  it('yalnız ortam → pod · ortam', () => {
+    expect(podScopeLabel(POD, [POD, '', '', '', 'uat'])).toBe(`${POD} · uat`);
   });
-  it('podClusterOf groupKey[3] okur, kırpar, yoksa boş', () => {
-    expect(podClusterOf(['p', 'h', 'i', ' ocp-eu '])).toBe('ocp-eu');
-    expect(podClusterOf(['p', 'h', 'i'])).toBe('');
+  it('ikisi de yok → yalnız pod', () => {
+    expect(podScopeLabel(POD, [POD, '', '', ''])).toBe(POD);
+    expect(podScopeLabel(POD, [POD])).toBe(POD);
+  });
+  it('podClusterOf: [3] önce, sonra [5], [6]; kırpar', () => {
+    expect(podClusterOf(['p', 'h', 'i', ' ocp-eu ', '', 'x'])).toBe('ocp-eu');
+    expect(podClusterOf(['p', 'h', 'i', '', '', '', ' k8s-a '])).toBe('k8s-a');
     expect(podClusterOf([])).toBe('');
+    expect(podEnvOf(['p', 'h', 'i', 'c', ' prod '])).toBe('prod');
+  });
+  it('kapsam anahtarları 3 tane; nesil indeksi POD_GROUP 4 + 3', () => {
+    expect(POD_SCOPE_KEYS.split(',')).toEqual(['deployment.environment.name', 'resource.openshift.cluster.name', 'resource.k8s.cluster.name']);
+    expect(GEN_KEY_IDX).toBe(7);
   });
   it('4. anahtar eklenmesi podLineLabel sözleşmesini BOZMAZ', () => {
     // groupKey[0..2] indeksleri v0.9.91 kontratı; [3] cluster.

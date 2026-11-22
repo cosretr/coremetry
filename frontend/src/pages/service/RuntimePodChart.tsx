@@ -14,6 +14,14 @@
 // (`?rtgen=<pod>`, en kötüden ≤10 pod) o pod'un nesil çizgilerine geçer;
 // "Tüm pod'lar" (?rtview=lines) her pod × nesil.
 //
+// v0.10.2464 (operatör-raporlu, 53 pod'lu prod servis) — (1) DÜZ ÇİZGİ:
+// CorePanelMulti'ye `plain` (viz='line' tek başına dolgusuz değildi; her seri
+// %12 degrade alan dolgusu basıyordu → "altı taralı"). (2) Nesil kartları
+// v0.10.2446'nın "parametresiz = Tüm pod'lar" varsayılanını ALMAZ: kendi
+// parametreleri var — varsayılan nesil başına pod medyanı (nesil sayısı kadar
+// çizgi), `?rtgen=<pod>` o pod'un nesilleri, `?rtgenview=all` pod × nesil.
+// `?rtview` nesil kartlarını etkilemez (yokluğu "hepsi" demek; 159 çizgi).
+//
 // CorePanel LAZY (DetailsMetricsSection emsali): @grafana/* statik bağlansa
 // Service sayfasının vendor chunk'ı ~1 MB olurdu.
 import { FIELD_SURFACE } from '@/components/coremetry/Field/fieldSurface';
@@ -42,7 +50,21 @@ export interface RuntimeRightLine { label: string; unit: string; points: PodPoin
 
 // `?rtgen=<pod>` — nesil kartlarının seçili pod'u (boş = medyan). Uzunluk
 // tavanlı: sunucuya gitmez ama URL'e sınırsız metin yazılmaz.
-const GEN_SPEC = urlSpec({ rtgen: zParam(z.string().check(z.maxLength(256)), '') });
+// `?rtgenview=all` — v0.10.2464: nesil kartlarında pod × nesil (açık seçim);
+// yok = medyan. Global `?rtview` varsayılanından bağımsız.
+const GEN_SPEC = urlSpec({
+  rtgen: zParam(z.string().check(z.maxLength(256)), ''),
+  rtgenview: zParam(z.string().check(z.maxLength(16)), ''),
+});
+
+/** Nesil kartı geçişinin araması: `?rtgenview=all` ↔ yok (pod seçimi düşer). SAF. */
+export function genViewSearch(search: string, all: boolean): string {
+  const p = new URLSearchParams(search);
+  p.delete('rtgen');
+  if (all) p.set('rtgenview', 'all'); else p.delete('rtgenview');
+  const q = p.toString();
+  return q ? `?${q}` : '';
+}
 
 /** Kart başlığındaki birim yazımı → CorePanel (Grafana) birim kimliği. */
 export function runtimeUnitId(unit: string | undefined): string | undefined {
@@ -114,14 +136,16 @@ export function RuntimePodChart({
 }) {
   const tr = useT();
   const { all, searchFor } = useRuntimePodView();
-  const [{ rtgen }, setGen] = useUrlParams(GEN_SPEC);
+  const [params] = useSearchParams();
+  const [{ rtgen, rtgenview }, setGen] = useUrlParams(GEN_SPEC);
+  const genAll = rtgenview === 'all';
   const red = useMemo(
     () => reducePods(gens ? [] : (pods ?? []), { threshold, all, medianLabel: tr('rt.pv.median') }),
     [pods, gens, threshold, all, tr],
   );
   const gred = useMemo(
-    () => (gens ? reduceGenerations(gens, { pod: rtgen || null, all, medianSuffix: tr('rt.pv.median') }) : null),
-    [gens, rtgen, all, tr],
+    () => (gens ? reduceGenerations(gens, { pod: rtgen || null, all: genAll, medianSuffix: tr('rt.pv.median') }) : null),
+    [gens, rtgen, genAll, tr],
   );
   const items = useMemo<CorePanelMultiItem[]>(() => {
     const sm = smooth ? smoothPoints : (p: PodPoint[]) => p;
@@ -161,7 +185,10 @@ export function RuntimePodChart({
   const u = (unit ?? '').trim();
   const podTotal = gred ? gred.total : red.total;
   const canToggle = !podless && podTotal >= POD_REDUCE_MIN;
-  const genChoices = gred && !all && !podless && gred.total >= POD_REDUCE_MIN ? genPodChoices(gred.pods, gred.selected) : null;
+  // Nesil kartında geçiş kendi parametresini yazar (?rtgenview), ?rtview'e dokunmaz.
+  const shownAll = gred ? genAll : all;
+  const toggleSearch = gred ? genViewSearch(params.toString(), !genAll) : searchFor(!all);
+  const genChoices = gred && !genAll && !podless && gred.total >= POD_REDUCE_MIN ? genPodChoices(gred.pods, gred.selected) : null;
   const summary = podless ? null
     : gred
       ? (gred.reduced ? tr('rt.gv.median').replace('{n}', String(gred.total))
@@ -190,8 +217,8 @@ export function RuntimePodChart({
             </NativeSelect>
           )}
           {canToggle && (
-            <Link replace to={{ search: searchFor(!all) }} data-testid="rt-pod-toggle">
-              {all ? tr('rt.pv.summary') : tr('rt.pv.all')}
+            <Link replace to={{ search: toggleSearch }} data-testid="rt-pod-toggle">
+              {shownAll ? tr('rt.pv.summary') : tr('rt.pv.all')}
             </Link>
           )}
         </div>
@@ -202,7 +229,8 @@ export function RuntimePodChart({
           storageKey={storageKey}
           height={220}
           unit={runtimeUnitId(unit)}
-          viz={'line'}  /* v0.10.2446 (operatör): pod'lar üst üste binmesin — alan dolgusu yok */
+          viz={'line'}
+          plain /* v0.10.2464 (operatör): düz çizgi — seri dolgusu yok, pod serisine kesikli desen yok */
           xRange={xRange}
           items={items}
           loading={status === 'loading' && items.length === 0}

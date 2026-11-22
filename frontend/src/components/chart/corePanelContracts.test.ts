@@ -233,8 +233,9 @@ describe('CorePanel bars markı (v0.9.785)', () => {
     // v0.9.808 — stackedBars dalı EN ÖNE eklendi (100, opak). Sırası
     // önemli: `bars` yığılmış çubuğu da kapsıyor, arkada kalsaydı 35'e
     // düşer ve üst üste binen kümülatif çubuklar birbirini gösterirdi.
-    expect(src).toMatch(
-      /fillOpacity: stackedBars \? 100 : bars \? 35 : area \? 60 : stacked \? 28 : \(dashed\?\.\[i\] \? 0 : 12\)/);
+    // v0.10.2464 — zincir SAF karara taşındı (lib/chart/seriesFill, değerler
+    // ve sıra orada tablo-testli: 100 / 35 / 28 / 60 / dashed 0 / 12).
+    expect(src).toMatch(/fillOpacity: seriesFillOpacity\(viz, !!dashed\?\.\[i\], !!plain\)/);
   });
 
   it('🔴 config bağımlılığı viz + dashed + connectNulls TAŞIR', () => {
@@ -369,7 +370,7 @@ describe('CorePanel yığılmış çubuk (v0.9.808)', () => {
   });
 
   it('çubuk dolgusu OPAK — yarı saydam kümülatif çubuk alttakini gösterirdi', () => {
-    expect(src).toMatch(/fillOpacity: stackedBars \? 100 :/);
+    expect(src).toMatch(/fillOpacity: seriesFillOpacity\(viz,/); // stacked-bars = 100: seriesFill.test
     // Düz dolgu + dikişsiz hizalama yığın ailesinin İKİSİNDE de.
     expect(src).toMatch(/gradientMode: stacked \? GraphGradientMode\.None/);
     expect(src).toMatch(/pxAlign: stacked \? false : undefined/);
@@ -433,9 +434,9 @@ describe('CorePanel çubuk tabanı (v0.9.811)', () => {
   it('mark ayrımı korunur: line/area kendi dallarında, taban yalnız çubukta', () => {
     // fillOpacity zinciri v0.9.808'deki sırasıyla yerinde (mark başına ayrı
     // dal); sıfır taban o zincire karışmadı.
-    expect(src).toMatch(
-      /fillOpacity: stackedBars \? 100 : bars \? 35 : area \? 60 : stacked \? 28 : \(dashed\?\.\[i\] \? 0 : 12\)/);
-    expect(src).toMatch(/const area = viz === 'area';/);
+    // v0.10.2464 — zincir SAF karara taşındı (lib/chart/seriesFill, değerler
+    // ve sıra orada tablo-testli: 100 / 35 / 28 / 60 / dashed 0 / 12).
+    expect(src).toMatch(/fillOpacity: seriesFillOpacity\(viz, !!dashed\?\.\[i\], !!plain\)/);
   });
 
   it('🟠 taban config bağımlılığına yeni kimlik SOKMAZ (viz zaten var)', () => {

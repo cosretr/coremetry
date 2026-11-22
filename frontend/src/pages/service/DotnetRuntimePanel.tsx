@@ -32,7 +32,7 @@ import type { PodSeries } from './runtimePodReduce';
 import type { GenPodSeries } from './runtimeGenReduce';
 import { runtimeThresholds } from './runtimeThresholds';
 import type { FilterExpr, RuntimePodEntity, RuntimeResolvedSignal, RuntimeSignal, SpanMetricSeries } from '@/lib/types';
-import { podLineLabel, podClusterOf, withClusterPrefix, isAnonPodSeries, divideByCount } from './runtimePodLabel';
+import { podLineLabel, podScopeLabel, isAnonPodSeries, divideByCount, POD_SCOPE_KEYS, GEN_KEY_IDX } from './runtimePodLabel';
 import { useRuntimeProfile } from './runtimeFamily';
 import { podDetailPath } from './podDetailPath';
 import { runtimeSourceBadge } from './runtimeSource';
@@ -42,7 +42,8 @@ const MB = 1 / (1024 * 1024);
 // Follow-up 2026-11-21 (operatör, prod gerçeği): VM serileri host_name (= pod
 // adı) taşır — pod boyutu önce host.name, sonra k8s.pod.name (Go
 // runtimesig.PodGroupBy ile aynı sıra). Hiçbiri yoksa servis toplamı yedeği.
-const POD_GROUP = 'resource.host.name,resource.k8s.pod.name,resource.service.instance.id,cluster';
+// v0.10.2464 — kapsam anahtarları (ortam + cluster etiketleri) [4..6]; nesil [7].
+const POD_GROUP = `resource.host.name,resource.k8s.pod.name,resource.service.instance.id,cluster,${POD_SCOPE_KEYS}`;
 
 type Group = 'pod' | 'gen' | 'none';
 // share — oran sinyali (GC payı, CPU): pod etiketi yoksa toplam pod sayısına
@@ -216,7 +217,7 @@ export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomRe
       queryFn: () => api.metricQuery({
         name: res.metric, service, agg: res.agg,
         filters: filtersOf(res),
-        // v0.10.2443 — nesil kartı pod × nesil: pod anahtarları [0..3], nesil [4].
+        // v0.10.2443 — nesil kartı pod × nesil: pod anahtarları [0..6], nesil [GEN_KEY_IDX].
         groupBy: line.group === 'pod' ? POD_GROUP : line.group === 'gen' ? `${POD_GROUP},${res.genLabel}` : undefined,
         from, to, step: 0, maxDataPoints: panelMaxDataPoints(1),
       }).then(r => r ?? []),
@@ -291,9 +292,8 @@ export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomRe
           points: divided && cnt?.[0] ? divideByCount(p0, cnt[0].points) : p0,
         });
       } else if (sp.line.group === 'pod') {
-        const multi = new Set(data.map(s => podClusterOf(s.groupKey)).filter(Boolean)).size > 1;
         data.forEach(s => pods.push({
-          label: withClusterPrefix(podLineLabel(s.groupKey, sp.line.signal), podClusterOf(s.groupKey), multi),
+          label: podScopeLabel(podLineLabel(s.groupKey, sp.line.signal), s.groupKey),
           points: pts(s),
         }));
       } else if (sp.line.group === 'gen') {
@@ -301,10 +301,9 @@ export default function DotnetRuntimePanel({ service, from, to, onZoom, onZoomRe
         // Pod etiketi yok → tek "pod" (ad boş): nesil çizgileri aynen, kart not düşer.
         const anon = isAnonPodSeries(data);
         if (anon) podless = true;
-        const multi = new Set(data.map(s => podClusterOf(s.groupKey)).filter(Boolean)).size > 1;
         data.forEach(s => gens.push({
-          pod: anon ? '' : withClusterPrefix(podLineLabel(s.groupKey, sp.line.signal), podClusterOf(s.groupKey), multi),
-          gen: (s.groupKey[4] ?? '').trim() || tr(sp.line.labelKey),
+          pod: anon ? '' : podScopeLabel(podLineLabel(s.groupKey, sp.line.signal), s.groupKey),
+          gen: (s.groupKey[GEN_KEY_IDX] ?? '').trim() || tr(sp.line.labelKey),
           points: pts(s),
         }));
       } else if (data[0]) {

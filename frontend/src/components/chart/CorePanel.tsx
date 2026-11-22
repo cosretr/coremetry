@@ -53,6 +53,7 @@ import {
 } from '@/lib/chart/legendVisibility';
 import { resolveVar } from '@/lib/chart/resolveVar';
 import { bandFillColor } from '@/lib/chart/bandFill';
+import { seriesFillOpacity } from '@/lib/chart/seriesFill';
 import { isolatedPointsFilter } from '@/lib/chart/gapPolicy';
 import {
   drawThresholds, drawTimeRegions, drawExemplars, exemplarAt, regionAt, fmtRegionSpan, thresholdSoftRange, yScaleSoftMin,
@@ -334,6 +335,12 @@ export interface CorePanelProps {
   // çizer (kendi kartının içine gömmek için). PRİMİTİF boolean: config kimliği
   // yıkılmaz. Verilmediğinde davranış bayt bayt eskisi.
   embedded?: boolean;
+  // v0.10.2464 (operatör-raporlu, Metrics sekmesi runtime kartları) — DÜZ
+  // ÇİZGİ: line/area dalında seri dolgusu yok, 9.+ seriye renk-dışı kesikli
+  // desen yok (kesikli yalnız çağıranın `dashed` işaretlediği eşik / sınır /
+  // sağ eksen serisi). fillBetween bandı etkilenmez. PRİMİTİF boolean;
+  // verilmezse config bayt-aynı. Karar: lib/chart/seriesFill.
+  plain?: boolean;
 }
 
 /** fullNameOf — frame'in kısaltılmamış seri adı (v0.9.1369).
@@ -351,7 +358,7 @@ export function CorePanel({
   thresholds, regions, queryText,
   defaultHidden, xRange, note, onExpandClick, exemplars, onExemplarClick, onRegionClick, regionClickHint,
   onBucketClick, hiddenNames, hideLegend, onCursorTime, dashed, viz = 'line',
-  focusedLabel, menuExtra, onFocusChange, embedded, rightAxis, rightAxisLabel, fillBetween,
+  focusedLabel, menuExtra, onFocusChange, embedded, rightAxis, rightAxisLabel, fillBetween, plain,
 }: CorePanelProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -803,9 +810,8 @@ export function CorePanel({
     //
     // DÖNGÜ ÇİZİM SIRASINDA, `i` MANTIKSAL indeks: rol/kesikli/renk hep
     // mantıksal seriye ait, uPlot'a eklenme SIRASI ise drawOrder'dan gelir.
-    const area = viz === 'area';
     // 2026-11-21 — renk dışı ipucu: 9. veri serisinden itibaren desen (seriesDash).
-    const cue = seriesCueDashes(aligned.names.length, roles, dashed);
+    const cue = plain ? [] : seriesCueDashes(aligned.names.length, roles, dashed);
     // v0.10.2443 — çözülmüş çizgi renkleri (mantıksal indeks): alt–üst bant
     // dolgusu üst kenarın rengini buradan okur (ikinci bir renk çözümü yok).
     const lineColors: string[] = [];
@@ -833,7 +839,8 @@ export function CorePanel({
         // motorun '47' alpha'sının (0x47/0xff ≈ %28) birebiri.
         // v0.9.808 — stackedBars dalı EN ÖNDE: `bars` onu da kapsıyor ama
         // 35 saydamlık kümülatif çubuklarda yanlış renk üretir (yukarıya bkz).
-        fillOpacity: stackedBars ? 100 : bars ? 35 : area ? 60 : stacked ? 28 : (dashed?.[i] ? 0 : 12),
+        // v0.10.2464 — karar SAF (seriesFill); `plain` line/area dolgusunu kapatır.
+        fillOpacity: seriesFillOpacity(viz, !!dashed?.[i], !!plain),
         // Stacked'te dolgu DÜZ olmalı: bantlar üst serinin dolgusunu
         // yeniden kullanıyor (aşağıya bkz.) ve degrade bir bandın içinde
         // katman sınırını bulanıklaştırır. None + fillOpacity =
@@ -1130,7 +1137,7 @@ export function CorePanel({
     // çıktı: oluk uPlot'un size geri çağrısında ölçülür, config kimliğine
     // girmez (measuredAxisSize).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aligned.names.join(' '), roles?.join(), colors?.join(), syncKey, effLog, zeroBase, themeTick, overlaySig, xRange?.from, xRange?.to, viz, dashed?.join(','), embedded, rightSig, rightAxisLabel]);
+  }, [aligned.names.join(' '), roles?.join(), colors?.join(), syncKey, effLog, zeroBase, themeTick, overlaySig, xRange?.from, xRange?.to, viz, dashed?.join(','), embedded, rightSig, rightAxisLabel, plain]);
 
   // ── v0.9.793 — focusedLabel (lejant hover vurgusu) ───────────────────────
   //
@@ -1471,7 +1478,7 @@ export function CorePanel({
           stats={stats} vis={vis} onVisChange={setVis}
           focusName={focusName}
           onHover={(name, leaving) => setHoverName(n => (name !== null ? name : (n === leaving ? null : n)))}
-          roles={roles} colors={colors} dashes={seriesCueDashes(aligned.names.length, roles, dashed)} fullNames={frames.map(f => fullNameOf(f))}
+          roles={roles} colors={colors} dashes={plain ? undefined : seriesCueDashes(aligned.names.length, roles, dashed)} fullNames={frames.map(f => fullNameOf(f))}
           fmtCell={fmtCell} sumAdditive={sumAdditive} />
       )}
     </div>

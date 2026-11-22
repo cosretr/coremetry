@@ -14,7 +14,7 @@ import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { HeapBaselinePod, HeapBaselineResponse } from '@/lib/types';
 
-const m = vi.hoisted(() => ({ resp: null as unknown, fail: false, panels: 0, items: [] as { name: string; band?: string; dashed?: boolean }[] }));
+const m = vi.hoisted(() => ({ resp: null as unknown, fail: false, panels: 0, plain: undefined as unknown, viz: undefined as unknown, items: [] as { name: string; band?: string; dashed?: boolean }[] }));
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<Record<string, unknown>>();
   return {
@@ -31,8 +31,8 @@ vi.mock('@/lib/queries', async (importOriginal) => {
 });
 // v0.10.2443 — grafik paylaşılan motorda (CorePanelMulti, lazy giriş).
 vi.mock('@/components/chart/corePanelEntry', () => ({
-  CorePanelMulti: (p: { items: { name: string; band?: string; dashed?: boolean }[] }) => {
-    m.panels++; m.items = p.items; return <div data-testid="tsp" />;
+  CorePanelMulti: (p: { items: { name: string; band?: string; dashed?: boolean }[]; plain?: boolean; viz?: string }) => {
+    m.panels++; m.items = p.items; m.plain = p.plain; m.viz = p.viz; return <div data-testid="tsp" />;
   },
 }));
 
@@ -133,6 +133,9 @@ describe('HeapBaselineCard — sınıra en yakın 5 pod (S9)', () => {
     expect(m.items[0].name).toBe('pod-a');
     const edges = m.items.filter(i => i.band);
     expect(edges.map(i => [i.band, i.dashed])).toEqual([['lo', true], ['hi', true]]);
+    // v0.10.2464 — pod çizgileri düz (plain: seri dolgusu yok); tek dolgu taban bandı.
+    expect([m.viz, m.plain]).toEqual(['line', true]);
+    expect(m.items.filter(i => !i.band).every(i => !i.dashed)).toBe(true);
     expect(edges[1].name).toBe('bant üst · pod-a');
   });
 

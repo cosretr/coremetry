@@ -26,20 +26,40 @@ export function podLineLabel(groupKey: string[], fallback: string): string {
   return fallback;
 }
 
-// podClusterOf — v0.9.532. groupKey[3] = sunucunun çözdüğü cluster adı
-// (POD_GROUP'un 4. anahtarı); yoksa ''.
-export function podClusterOf(groupKey: string[]): string {
-  return (groupKey[3] ?? '').trim();
+// POD_SCOPE_KEYS — v0.10.2464 (operatör: pod çizgisinde cluster / ortam
+// görünsün). POD_GROUP'un [3] "cluster" anahtarı CH yolunda metricClusterExpr
+// coalesce'ine çözülür, ama VM yolunda (prod) düz `cluster` etiketidir ve prod
+// serileri `openshift_cluster_name` / `k8s_cluster_name` taşır → [3] boş
+// kalıyordu. Bu üç anahtar pod gruplamasına EKLENİR (indeks 4..6; pod başına
+// tek değer → seri sayısı değişmez): [4] ortam (CH: metricEnvExpr; VM:
+// deployment_environment_name), [5] openshift.cluster.name, [6] k8s.cluster.name
+// (resource. öneki CH'de res_keys, VM'de düz etiket). Etiketten okunur — ad
+// eşlemesi yok. Nesil anahtarı bunlardan SONRA gelir (GEN_KEY_IDX).
+export const POD_SCOPE_KEYS = 'deployment.environment.name,resource.openshift.cluster.name,resource.k8s.cluster.name';
+/** Nesil kırılımlı sorguda nesil etiketinin groupKey indeksi (POD_GROUP 4 + kapsam 3). */
+export const GEN_KEY_IDX = 7;
+
+const at = (gk: readonly string[], i: number) => (gk[i] ?? '').trim();
+
+// podClusterOf — v0.9.532. groupKey[3] = sunucunun çözdüğü cluster adı;
+// v0.10.2464: boşsa serinin kendi cluster etiketi ([5] openshift, [6] k8s).
+export function podClusterOf(groupKey: readonly string[]): string {
+  return at(groupKey, 3) || at(groupKey, 5) || at(groupKey, 6);
 }
 
-// withClusterPrefix — cluster önekini YALNIZ ayırt ediciyken basar.
-//
-// Tek cluster'lı serviste her etikete "ocp-eu · " eklemek gürültü —
-// operatörün sorusu "hangisi hangi cluster'da", cevabı ancak birden çok
-// cluster varken anlamlı. Cluster'ı boş olan seri (attr basmayan ~%1-2)
-// önek almaz; etiketi değişmediği için rengi de stabil kalır.
-export function withClusterPrefix(label: string, cluster: string, multiCluster: boolean): string {
-  return multiCluster && cluster ? `${cluster} · ${label}` : label;
+/** v0.10.2464 — serinin ortam etiketi ([4]); yoksa ''. */
+export function podEnvOf(groupKey: readonly string[]): string {
+  return at(groupKey, 4);
+}
+
+// podScopeLabel — v0.10.2464: pod etiketi + taşıdığı cluster ve/veya ortam,
+// "apigateway-…-f4rrz · ocpkb · prod". İkisi de yoksa yalnız pod; ortam
+// cluster'la aynıysa bir kez. Pod adı KIRPILMAZ (v0.10.1640 kuralı: kırpılmış
+// hash pod'u tanıtmaz) — dar lejand ellipsis + title ile tam değeri gösterir.
+export function podScopeLabel(label: string, groupKey: readonly string[]): string {
+  const cluster = podClusterOf(groupKey);
+  const env = podEnvOf(groupKey);
+  return [label, cluster, env && env !== cluster ? env : ''].filter(Boolean).join(' · ');
 }
 
 // isAnonPodSeries — follow-up 2026-11-21: pod kırılımı istenen sorgu pod

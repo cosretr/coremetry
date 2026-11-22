@@ -6,7 +6,7 @@ import { panelMaxDataPoints } from '@/lib/chartStep';
 import { useServiceDeploys } from '@/lib/queries';
 import type { FilterExpr, RuntimeAlertConfig, SpanMetricSeries } from '@/lib/types';
 import { runtimeThresholds } from './runtimeThresholds';
-import { podLineLabel, podClusterOf, withClusterPrefix, isAnonPodSeries } from './runtimePodLabel';
+import { podLineLabel, podClusterOf, podScopeLabel, isAnonPodSeries, POD_SCOPE_KEYS } from './runtimePodLabel';
 import { runtimeSourceBadge } from './runtimeSource';
 import { useT } from '@/lib/i18n';
 import { familyFromResource } from './runtimeFamily';
@@ -83,7 +83,8 @@ interface LineSpec {
 // coalesce, spans clusterDeriveExpr'in ikizi). groupKey[0..2] indeksleri
 // DEĞİŞMEZ — podLineLabel sözleşmesi bozulmaz; [3] cluster önekidir ve
 // yalnız seri kümesi birden çok cluster'a yayılıyorsa basılır.
-const POD_GROUP = 'resource.k8s.pod.name,resource.host.name,resource.service.instance.id,cluster';
+// v0.10.2464 — [4..6] ortam + cluster etiketleri (POD_SCOPE_KEYS); etiket pod · cluster · ortam.
+const POD_GROUP = `resource.k8s.pod.name,resource.host.name,resource.service.instance.id,cluster,${POD_SCOPE_KEYS}`;
 // mode (v0.9.128, operatör talebi) — memory kartları (heap/committed, MB) =
 // area (dolu kapasite okunur); GC pause / thread / object COUNT kartları =
 // line (dolgu yanıltıcı, "biriken alan" anlamı yok). Verilmezse 'area'.
@@ -299,14 +300,12 @@ export function RuntimeCharts({ service, from, to, onZoom, onZoomReset, hideHead
         const anon = isAnonPodSeries(data);
         if (anon) podless = true;
         // v0.9.532 — cluster öneki kesilmemiş TAM kümeden.
-        const clusterSet = new Set(data.map(s => podClusterOf(s.groupKey)).filter(Boolean));
-        clusterSet.forEach(cl => cardClusters.add(cl));
-        const multi = clusterSet.size > 1;
+        data.forEach(s => { const cl = podClusterOf(s.groupKey); if (cl) cardClusters.add(cl); });
         for (const s of data) {
           const base = anon ? line.label
             : line.labelOf ? line.labelOf(s.groupKey, line.label)
               : (s.groupKey.filter(Boolean).join('/') || line.label);
-          const label = withClusterPrefix(base, podClusterOf(s.groupKey), multi);
+          const label = anon ? base : podScopeLabel(base, s.groupKey);
           const points = scaled(s);
           if (heapCard) {
             const keyed: HeapKeyedLine = { key: s.groupKey.join('\u0000'), label, points };

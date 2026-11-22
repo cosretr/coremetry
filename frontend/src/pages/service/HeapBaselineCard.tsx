@@ -305,6 +305,7 @@ function HeapBaselineLines({ service, from, to, onZoom, onZoomReset }: HeapCardP
             height={220}
             unit="percent"
             viz="line"
+            plain /* v0.10.2464: pod çizgileri dolgusuz; taban bandı (fillBetween) kalır */
             xRange={xRange}
             items={items}
             regions={regions}

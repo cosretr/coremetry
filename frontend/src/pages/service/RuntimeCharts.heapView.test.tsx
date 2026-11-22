@@ -67,7 +67,7 @@ import { RuntimeCharts } from './RuntimeCharts';
 import type { RuntimeAlertConfig } from '@/lib/types';
 
 type Item = { name: string; color?: string; dashed?: boolean; series: { points: { value: number | null }[] }[] };
-type Panel = { title: string; items: Item[]; viz: string; thresholds?: { value: number }[] };
+type Panel = { title: string; items: Item[]; viz: string; plain?: boolean; thresholds?: { value: number }[] };
 let host: HTMLDivElement | null = null;
 let root: Root | null = null;
 let qc: QueryClient;
@@ -137,6 +137,20 @@ describe('RuntimeCharts JVM heap (sınırın yüzdesi + pod görünümü)', () =
     // pod-7 %35 artık eşik üstü (varsayılan %92'de değildi).
     expect(names(p)).toEqual(['median', 'pod-8 · worst', 'pod-7', 'sınır']);
     expect(panel('GC pause').thresholds?.[0].value).toBe(1500);
+  });
+
+  it('v0.10.2464 — tüm JVM kartları düz çizgi: viz=line + plain, bant yok, pod çizgisi kesiksiz', async () => {
+    m.pods = 12;
+    await mount('/service?name=orders&tab=details');
+    const cards = m.panels as unknown as Panel[];
+    expect(cards.length).toBeGreaterThan(0);
+    for (const p of cards) {
+      expect(p.viz).toBe('line');
+      expect(p.plain).toBe(true);
+      expect(p.items.some(i => (i as { band?: string }).band)).toBe(false);
+    }
+    // Kesikli yalnız sınır çizgisi; 12 pod çizgisinin hiçbiri değil.
+    expect(heapPanel().items.filter(i => i.dashed).map(i => i.name)).toEqual(['sınır']);
   });
 
   it('ayar yokken GC pause eşiği varsayılan 2000 ms', async () => {
