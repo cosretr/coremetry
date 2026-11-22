@@ -15,7 +15,8 @@ package api
 //     ham yolu, v0.8.385). Sıra hata % sonra p95; ilk endpointPickVisible
 //     satır karta gider, gerisi kartın aramasıyla (/api/endpoints search,
 //     katalog istemciye gitmez).
-//   - Kart yok: soru rota / operasyon / trace içeriyor, servis yok, "Hepsini
+//   - Kart yok: bütün-servis sağlık sorusu (v0.10.2462 → sağlık raporu),
+//     soru rota / operasyon / trace içeriyor, servis yok, "Hepsini
 //     özetle" bayrağı (context.skipEndpointPick), servisin ≤1 endpoint'i var
 //     ya da okuma başarısız — akış bugünkü gibi sürer (servis özeti).
 // LLM yok: cevap deterministik tek cümle; tur "clarify" kademesi sayılır.
@@ -124,8 +125,49 @@ func needsEndpointPick(ctx endpointPickCtx, question string) bool {
 	if questionNamesRoute(q) || !endpointPickCue(q) {
 		return false
 	}
+	if isWholeServiceHealthAsk(q) {
+		return false
+	}
 	f := strings.ToLower(trFold.Replace(q))
 	return !tokenHasPrefix(guidedTokens(f), endpointPickVetoStems...)
+}
+
+// v0.10.2462 (operator-reported) — "<servis> sağlığı nasıl?" endpoint kartı
+// aldı ("13 endpoint'i var. Hangisini inceleyeyim?"); bütün-servis sağlık
+// sorusu v0.10.2454 sağlık raporuna (guidedServiceHealthBundle) gider. Kart
+// yalnız soru bir endpoint / operasyonu hedefleyip adını vermediğinde kalır.
+var (
+	// serviceHealthAskStems — katlanmış jeton öneki (sağlığı, durumu, health).
+	serviceHealthAskStems = []string{"saglik", "health", "durum"}
+	// serviceHealthAskPhrases — katlanmış kalıp (iki uçta boşluklu metinde).
+	serviceHealthAskPhrases = []string{" nasil ", " nasil gidiyor ", " iyi mi ", " sorun var mi ",
+		" problem var mi ", " how is ", " how s ", " hows "}
+	// endpointScopeStems — soru servisin bir endpoint / operasyonunu hedefliyor.
+	endpointScopeStems = []string{"endpoint", "rota", "route", "operasyon", "operation", "uclar", "ucu"}
+)
+
+// isWholeServiceHealthAsk — SAF: soru bütün servisin sağlığını mı soruyor
+// (sağlık / durum / nasıl / sorun var mı) ve endpoint / operasyon hedeflemiyor mu.
+func isWholeServiceHealthAsk(q string) bool {
+	fw := foldWords(q)
+	var toks []string // ad jetonları (orders-api, route-svc) sinyal değildir
+	for _, t := range strings.Fields(fw) {
+		if !strings.ContainsAny(t, "-._") {
+			toks = append(toks, t)
+		}
+	}
+	if tokenHasPrefix(toks, endpointScopeStems...) {
+		return false
+	}
+	if tokenHasPrefix(toks, serviceHealthAskStems...) {
+		return true
+	}
+	for _, p := range serviceHealthAskPhrases {
+		if strings.Contains(fw, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // endpointPickItem — kart satırı (lib/types.ts CosreEndpointPickItem).

@@ -45,7 +45,24 @@ func TestNeedsEndpointPick(t *testing.T) {
 		{"ekip", svc, "ekibimin servisleri ne durumda", false},
 		{"İngilizce team", svc, "how is my team's services", false},
 		{"en yavaş servisler", svc, "En yavaş servisler?", false},
-		{"tekil servis yine kart", svc, "orders-api servisi nasıl?", true},
+		// v0.10.2462 (operator-reported) — bütün-servis sağlık sorusu kart
+		// değil, sağlık raporu (önceden "tekil servis yine kart" = true).
+		{"tekil servis sağlık raporu", svc, "orders-api servisi nasıl?", false},
+		{"sağlığı nasıl", svc, "orders-api-prod sağlığı nasıl?", false},
+		{"saglik ASCII", svc, "orders-api saglik durumu", false},
+		{"ne durumda", svc, "orders-api ne durumda", false},
+		{"nasıl gidiyor", svc, "orders-api nasıl gidiyor", false},
+		{"durumu", svc, "orders-api durumu", false},
+		{"sorun var mı", svc, "orders-api'de sorun var mı?", false},
+		{"İngilizce health", svc, "orders-api health", false},
+		{"İngilizce how is", svc, "how is orders-api doing", false},
+		{"büyük harf SAĞLIĞI", svc, "ORDERS-API SAĞLIĞI NASIL", false},
+		// endpoint hedefli sorular kartı korur
+		{"en yavaş endpoint", svc, "orders-api en yavaş endpoint hangisi neden yavaş", true},
+		{"bu endpoint hata", svc, "orders-api bu endpoint neden hata veriyor", true},
+		{"endpoint sağlığı", svc, "orders-api endpointlerinin sağlığı nasıl", true},
+		{"operasyonları nasıl", svc, "orders-api operasyonları nasıl", true},
+		{"rota adlı servis sağlığı", svc, "route-gateway sağlığı nasıl", false},
 		{"rota soruda", svc, "orders-api POST /v1/orders yavaş mı", false},
 		{"çıplak rota", svc, "/v1/orders/{id} ne oluyor", false},
 		{"trace kimliği", svc, "4bf92f3577b34da6a3ce929d0e0e4736 ne oluyor", false},
@@ -261,6 +278,42 @@ func TestEndpointPickPendingSkipsDocTiers(t *testing.T) {
 		i := strings.Index(src, call)
 		if i < 0 || i < pend {
 			t.Errorf("%s ön-kontrolden önce (ya da yok): call=%d pending=%d", call, i, pend)
+		}
+	}
+}
+
+// v0.10.2462 (operator-reported): "<servis> sağlığı nasıl?" endpoint kartı
+// ("N endpoint'i var. Hangisini inceleyeyim?") aldı. Bütün-servis sağlık
+// sorusu kart kademesinden geçer (kart yok) ve guided sağlık raporuna
+// (service_health) yönlenir; endpoint hedefli soru kartı korur. Adlar sentetik.
+func TestServiceHealthAskSkipsEndpointPick(t *testing.T) {
+	names := []string{"loan-scoring-prod", "orders-api", "stock-svc"}
+	for _, c := range []struct{ q, ctxSvc string }{
+		{"loan-scoring-prod sağlığı nasıl?", ""},
+		{"loan-scoring-prod ne durumda", ""},
+		{"loan-scoring-prod nasıl gidiyor", ""},
+		{"loan-scoring-prod durumu", ""},
+		{"loan-scoring-prod'da sorun var mı", ""},
+		{"loan-scoring-prod health", ""},
+		{"sağlığı nasıl?", "loan-scoring-prod"}, // bağlam çipi
+	} {
+		if pc, ok := resolveEndpointPick(c.q, endpointPickCtx{Service: c.ctxSvc}, names, nil); ok {
+			t.Errorf("%q: endpoint kartı çıkmamalı (servis %q)", c.q, pc.Service)
+		}
+	}
+	for _, q := range []string{"loan-scoring-prod sağlığı nasıl?", "loan-scoring-prod ne durumda"} {
+		if r := routeGuidedIntent(q, names, nil, nil, ""); r.Intent != guidedServiceHealth || r.Service != "loan-scoring-prod" {
+			t.Errorf("%q → %s / %q (service_health bekleniyor)", q, r.Intent, r.Service)
+		}
+	}
+	for _, q := range []string{
+		"loan-scoring-prod en yavaş endpoint hangisi neden yavaş",
+		"loan-scoring-prod bu endpoint neden hata veriyor",
+		"loan-scoring-prod endpointleri",
+		"loan-scoring-prod'da ne oluyor",
+	} {
+		if pc, ok := resolveEndpointPick(q, endpointPickCtx{}, names, nil); !ok || pc.Service != "loan-scoring-prod" {
+			t.Errorf("%q: endpoint kartı bekleniyor (got %q, %v)", q, pc.Service, ok)
 		}
 	}
 }
