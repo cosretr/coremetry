@@ -129,7 +129,7 @@ func (s *Store) GetDBDetailTrend(
 	bucketStart := from.Truncate(time.Duration(g.BucketSec) * time.Second)
 	args := append([]any{system, mvInstance}, nameArgs...)
 	args = append(args, bucketStart, to)
-	rows, err := s.telemetryReadConn().Query(ctx, dbDetailTrendSQL(g.Table, nameSQL), args...)
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(dbDetailTrendSQL(g.Table, nameSQL), bucketStart, g.Table), args...) // v0.10.2452
 	if err != nil {
 		return nil, fmt.Errorf("db detay trendi (%s): %w", g.Table, err)
 	}

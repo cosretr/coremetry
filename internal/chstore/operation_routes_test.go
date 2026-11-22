@@ -108,7 +108,7 @@ func TestOpsMVReadGridSourcePin(t *testing.T) {
 	src := string(b)
 	for _, w := range []string{
 		"bucketStart := winStart.Truncate(5 * time.Minute)",
-		"WHERE service_name = ? AND time_bucket >= ? AND time_bucket < ?`+opFilter+`",
+		"WHERE service_name = ? AND time_bucket >= ? AND time_bucket < ?` + opFilter + `", // v0.10.2452 — opsMVSummarySQL / opsMVSparkSQL
 		"winSec := int64(winEnd.Sub(bucketStart).Seconds())",
 		"bucketSec, nBuckets := sparklineGrid(winSec, 300)",
 		"intDiv(toUInt32(time_bucket) - toUInt32(?), ?) AS bidx",

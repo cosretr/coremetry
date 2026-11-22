@@ -97,7 +97,8 @@ func routeStatsFinish(st RouteWindowStats, from, to time.Time) RouteWindowStats 
 func (s *Store) RouteWindowStats(ctx context.Context, t RuleTarget, window time.Duration) (RouteWindowStats, error) {
 	var st RouteWindowStats
 	from, to := routeWindowBounds(time.Now(), window)
-	err := s.telemetryReadConn().QueryRow(ctx, routeWindowSQL(),
+	q := s.weighSQL(routeWindowSQL(), from, "spanmetrics_1m") // v0.10.2452 — sampling weight
+	err := s.telemetryReadConn().QueryRow(ctx, q,
 		strings.TrimSpace(t.Service), strings.TrimSpace(t.Route), from, to).
 		Scan(&st.Calls, &st.Errors, &st.P95Ms, &st.P99Ms)
 	if err != nil {

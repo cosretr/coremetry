@@ -60,7 +60,7 @@ func spanPeersMVSQL() string {
 func (s *Store) SpanPeerDistribution(ctx context.Context, service, operation string, from, to time.Time) (*SpanPeerDist, error) {
 	var total uint64
 	var qs []float64
-	err := s.telemetryReadConn().QueryRow(ctx, spanPeersMVSQL(), service, operation,
+	err := s.telemetryReadConn().QueryRow(ctx, s.weighSQL(spanPeersMVSQL(), from.Truncate(time.Minute), "spanmetrics_1m"), service, operation, // v0.10.2452
 		chDateTimeArg(from.Truncate(time.Minute)), chDateTimeArg(to)).Scan(&total, &qs)
 	if err == nil && total > 0 && len(qs) == len(peerQuantileLevels) {
 		bins := heatmapDurationBins(peerMinLogMs, peerSubBins, peerBins)

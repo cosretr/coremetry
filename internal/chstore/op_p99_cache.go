@@ -338,7 +338,7 @@ func (s *Store) OpP99Pivot(ctx context.Context, scope string, sp OpP99PivotSpec)
 // opP99PivotLegacy — eski tek geçiş (OpP99PivotQuery), satırları OpP99Row.
 func (s *Store) opP99PivotLegacy(ctx context.Context, sp OpP99PivotSpec) ([]OpP99Row, error) {
 	q, args := OpP99PivotQuery(sp)
-	q = s.weighSQL(q, time.Time{}, "operation_summary_5m") // v0.10.2435 — sampling-weight Phase 2
+	q, args = s.weighSQLArgs(q, args, sp.BaseStart, "operation_summary_5m") // v0.10.2435 / v0.10.2452 — binds + window start
 	rows, err := s.telemetryReadConn().Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -358,7 +358,7 @@ func (s *Store) opP99PivotLegacy(ctx context.Context, sp OpP99PivotSpec) ([]OpP9
 // opP99PivotCurrent — tur sorgusu (OpP99CurrentQuery).
 func (s *Store) opP99PivotCurrent(ctx context.Context, sp OpP99PivotSpec) ([]OpP99CurRow, error) {
 	q, args := OpP99CurrentQuery(sp)
-	q = s.weighSQL(q, time.Time{}, "operation_summary_5m") // v0.10.2435 — sampling-weight Phase 2
+	q, args = s.weighSQLArgs(q, args, opP99CurrentFrom(sp), "operation_summary_5m") // v0.10.2435 / v0.10.2452 — binds + window start
 	rows, err := s.telemetryReadConn().Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -379,7 +379,7 @@ func (s *Store) opP99PivotCurrent(ctx context.Context, sp OpP99PivotSpec) ([]OpP
 
 // opP99Baseline — taban tazelemesinin okuması (OpBaselineQuery); n = dönen satır.
 func (s *Store) opP99Baseline(ctx context.Context, q string, args []any) (map[OpPair]OpBaseline, int, error) {
-	q = s.weighSQL(q, time.Time{}, "operation_summary_5m") // v0.10.2435 — sampling-weight Phase 2
+	q, args = s.weighSQLArgs(q, args, opBaselineFrom(args), "operation_summary_5m") // v0.10.2435 / v0.10.2452 — binds + window start
 	rows, err := s.telemetryReadConn().Query(ctx, q, args...)
 	if err != nil {
 		return nil, 0, err
@@ -464,4 +464,25 @@ func opPivotRecordRefresh(scope, result string, dur time.Duration, rows int, ok 
 	if ok && opBaselineRows != nil {
 		opBaselineRows.Record(ctx, int64(rows), attrs)
 	}
+}
+
+// opP99CurrentFrom — SAF (v0.10.2452): OpP99CurrentQuery's window start (the
+// oldest slot start), so a window wholly after the sampling switch reads the
+// weighted states directly. Zero (no slots) → the per-bucket mixed form.
+func opP99CurrentFrom(sp OpP99PivotSpec) time.Time {
+	if n := len(sp.SlotStarts); n > 0 {
+		return sp.SlotStarts[n-1]
+	}
+	return time.Time{}
+}
+
+// opBaselineFrom — SAF (v0.10.2452): OpBaselineQuery's first bind is the
+// window start; anything else → zero (per-bucket mixed form, still correct).
+func opBaselineFrom(args []any) time.Time {
+	if len(args) > 0 {
+		if t, ok := args[0].(time.Time); ok {
+			return t
+		}
+	}
+	return time.Time{}
 }

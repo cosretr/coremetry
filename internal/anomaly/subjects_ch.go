@@ -169,7 +169,10 @@ func (d *Detector) fetchCHSubjects(ctx context.Context, src subjectCHSource, pai
 		return subjectKey{Kind: src.Kind, Owner: sid, ID: sid}.String()
 	}
 	args := subjectPairArgs(pairs)
-	cutoff := now.Add(-time.Duration(historyHours) * time.Hour)
+	// v0.10.2452 — sampling weight, same as the service path: history resets
+	// at the switch (BaselineFloor), the reads are weighted, and the seasonal
+	// baseline waits for its minimum of weighted days.
+	cutoff := chstore.BaselineFloor(now.Add(-time.Duration(historyHours)*time.Hour), src.Table)
 	upper := lastCompleteBucketStart(now)
 	loc = seasonalLocOrUTC(loc)
 	scut, supper, _, target, radius := seasonalBinds(now, days, neighbor, loc)
@@ -181,7 +184,7 @@ func (d *Detector) fetchCHSubjects(ctx context.Context, src subjectCHSource, pai
 			continue
 		}
 		vals, rates, times := map[string][]float64{}, map[string][]float64{}, map[string][]int64{}
-		if err := d.scanSubjectRows(ctx, buildSubjectBucketsQuery(src, vexpr, len(pairs)), append([]any{cutoff, upper}, args...),
+		if err := d.scanSubjectRows(ctx, d.store.WeighSQL(buildSubjectBucketsQuery(src, vexpr, len(pairs)), cutoff, src.Table), append([]any{cutoff, upper}, args...),
 			func(k string, t int64, v, r float64) {
 				vals[k] = append(vals[k], v)
 				rates[k] = append(rates[k], r)
@@ -194,9 +197,13 @@ func (d *Detector) fetchCHSubjects(ctx context.Context, src subjectCHSource, pai
 			v, r := fillDwellGrid(series, rates[k], times[k], upper.Unix(), dwell)
 			out.put(m, k, func(s *subjectSeries) { s.Values, s.Rates = v, r })
 		}
+		if since := chstore.EffectiveWeightedSince(src.Table); !since.IsZero() &&
+			time.Since(since) < time.Duration(seasonalMinDaysFor(class))*24*time.Hour {
+			continue
+		}
 		seas, seasRates, days := map[string][]float64{}, map[string][]float64{}, map[string]map[int64]struct{}{}
 		sargs := append([]any{scut, supper, class, target, target, radius}, args...)
-		if err := d.scanSubjectRows(ctx, buildSubjectSeasonalQuery(src, vexpr, seasonalTZLiteral(loc), len(pairs)), sargs,
+		if err := d.scanSubjectRows(ctx, d.store.WeighSQL(buildSubjectSeasonalQuery(src, vexpr, seasonalTZLiteral(loc), len(pairs)), time.Time{}, src.Table), sargs,
 			func(k string, t int64, v, r float64) {
 				seas[k] = append(seas[k], v)
 				seasRates[k] = append(seasRates[k], r)

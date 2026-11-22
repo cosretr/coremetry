@@ -513,6 +513,7 @@ func (s *Store) getSlowQueriesGlobalMV(
 		}
 		args = append(args, limit, page.offset)
 	}
+	sql = s.weighSQL(sql, bucketStart, "db_statement_summary_5m") // v0.10.2452 — sampling weight
 	rows, err := s.conn.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query slow queries (mv): %w", err)

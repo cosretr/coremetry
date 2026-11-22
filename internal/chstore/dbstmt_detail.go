@@ -135,7 +135,7 @@ func dbStmtSummarySQL(where string) string {
 // and encoding/json rejects NaN (the v0.5.301 500-class).
 func (s *Store) GetDBStmtSummary(ctx context.Context, q DBStmtDetailQuery) (*DBStmtSummary, error) {
 	wc := dbStmtDetailWhere(q)
-	row := s.telemetryReadConn().QueryRow(ctx, dbStmtSummarySQL(wc.sql()), wc.args...)
+	row := s.telemetryReadConn().QueryRow(ctx, s.weighSQL(dbStmtSummarySQL(wc.sql()), q.From, "db_statement_summary_5m"), wc.args...) // v0.10.2452
 	var out DBStmtSummary
 	var totalMs, p50, p95, p99, maxMs float64
 	if err := row.Scan(&out.SampleStatement, &out.DBSystem, &out.DBName,
@@ -196,7 +196,7 @@ func (s *Store) GetDBStmtSummaryGrain(ctx context.Context, q DBStmtDetailQuery, 
 	wc := dbStmtDetailWhereGrain(q, time.Minute)
 	var cnt, errs uint64
 	var totalMs, p50, p95, p99 float64
-	if ferr := s.telemetryReadConn().QueryRow(ctx, dbStmtSummaryFineSQL(wc.sql()), wc.args...).Scan(&cnt, &errs, &totalMs, &p50, &p95, &p99); ferr != nil {
+	if ferr := s.telemetryReadConn().QueryRow(ctx, s.weighSQL(dbStmtSummaryFineSQL(wc.sql()), q.From, dbStmtTrendTableFine), wc.args...).Scan(&cnt, &errs, &totalMs, &p50, &p95, &p99); ferr != nil {
 		return out, nil
 	}
 	mergeFineSummary(out, cnt, errs, totalMs, p50, p95, p99)
@@ -332,7 +332,7 @@ func (s *Store) GetDBStmtTrend(ctx context.Context, q DBStmtDetailQuery, g DBStm
 	bucketSec = g.BucketSec
 	wc := dbStmtDetailWhereGrain(q, grain)
 	args := append([]any{bucketStart.Unix(), bucketSec}, wc.args...)
-	rows, err := s.telemetryReadConn().Query(ctx, dbStmtTrendSQLFrom(g.Table, wc.sql()), args...)
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(dbStmtTrendSQLFrom(g.Table, wc.sql()), bucketStart, g.Table), args...) // v0.10.2452
 	if err != nil {
 		return nil, bucketSec, err
 	}
@@ -397,7 +397,7 @@ func (s *Store) GetDBStmtCallers(ctx context.Context, q DBStmtDetailQuery, limit
 	}
 	wc := dbStmtDetailWhere(q)
 	args := append(append([]any{}, wc.args...), limit)
-	rows, err := s.telemetryReadConn().Query(ctx, dbStmtCallersSQL(wc.sql()), args...)
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(dbStmtCallersSQL(wc.sql()), q.From, "db_statement_summary_5m"), args...) // v0.10.2452
 	if err != nil {
 		return nil, err
 	}
@@ -613,7 +613,7 @@ func (s *Store) GetDBStmtBaseline(ctx context.Context, q DBStmtDetailQuery) ([]D
 	from5 := q.From.Truncate(dbStmtBaselineStepSec * time.Second)
 	wc := dbStmtBaselineWhere(q, from5, int64(q.To.Sub(from5)/time.Second))
 	args := append([]any{from5.Unix()}, wc.args...)
-	rows, err := s.telemetryReadConn().Query(ctx, dbStmtBaselineSQL(wc.sql()), args...)
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(dbStmtBaselineSQL(wc.sql()), from5.Add(-dbStmtBaselineDays*24*time.Hour), "db_statement_summary_5m"), args...) // v0.10.2452
 	if err != nil {
 		return nil, err
 	}

@@ -57,6 +57,7 @@ type MLTraceErrorRow struct {
 func (s *Store) MLTraceErrors(ctx context.Context, from, to time.Time, bucketSec int) ([]MLTraceErrorRow, error) {
 	_, tidExpr := smExemplarMerges("spanmetrics_1m")
 	q := fmt.Sprintf(mlTraceErrorsSQL, tidExpr, s.spanmetricsSourceFor("spanmetrics_1m"))
+	q = s.weighSQL(q, from, "spanmetrics_1m") // v0.10.2452 — sampling weight
 	rows, err := s.telemetryReadConn().Query(ctx, q, bucketSec, from.UTC(), to.UTC(), MLTraceErrorsCap)
 	if err != nil {
 		return nil, err
@@ -97,6 +98,7 @@ const MLTraceErrorMinutesCap = 720
 // sayısı (Time = dakika başı, unix ns). Hatasız dakika satır üretmez (= 0).
 func (s *Store) MLTraceErrorMinutes(ctx context.Context, service, operation string, from, to time.Time) ([]SpanMetricPoint, error) {
 	q := fmt.Sprintf(mlTraceErrorMinutesSQL, s.spanmetricsSourceFor("spanmetrics_1m"))
+	q = s.weighSQL(q, from, "spanmetrics_1m") // v0.10.2452
 	rows, err := s.telemetryReadConn().Query(ctx, q, service, operation, from.UTC(), to.UTC(), MLTraceErrorMinutesCap)
 	if err != nil {
 		return nil, err

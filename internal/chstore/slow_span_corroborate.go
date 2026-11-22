@@ -120,7 +120,7 @@ func (s *Store) SlowSpanCorroborate(ctx context.Context, service, op string, thr
 	}
 	n := SlowCorrobSampleN(priorFrom, curTo)
 	sql, args := SlowSpanCorroborateSQL(service, op, int64(thresholdMs*1e6), priorFrom, curTo, n)
-	rows, err := s.telemetryReadConn().Query(ctx, sql, args...)
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighRawSQL(sql), args...) // v0.10.2452 — slow-span counts represented
 	if err != nil {
 		return SlowSpanCorroboration{}, fmt.Errorf("slow-span corroborate: %w", err)
 	}

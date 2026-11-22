@@ -136,6 +136,7 @@ func (s *Store) ServiceBucketTraffic(ctx context.Context, pairs []ServiceBucket)
 	if q == "" {
 		return out, false, nil
 	}
+	q = s.weighSQL(q, time.Time{}, "service_summary_5m") // v0.10.2452 — per-bucket groups: each bucket one side of the switch
 	rows, err := s.conn.Query(ctx, q, args...)
 	if err != nil {
 		return nil, false, err

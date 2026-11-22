@@ -102,7 +102,7 @@ func (s *Store) ServiceErrorRateSeries5m(ctx context.Context, services []string,
 		args = append(args, v)
 	}
 	args = append(args, start, end)
-	rows, err := s.TelemetryReadConn().Query(ctx, buildErrorRateSeriesQuery(len(svcs)), args...)
+	rows, err := s.TelemetryReadConn().Query(ctx, s.WeighSQL(buildErrorRateSeriesQuery(len(svcs)), start, "service_summary_5m"), args...) // v0.10.2452
 	if err != nil {
 		return nil, err
 	}

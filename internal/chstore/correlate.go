@@ -321,28 +321,9 @@ func (s *Store) GetCorrelatedChangesMVTop(
 		baseFromB = atB.Add(-grid)
 	}
 
-	rows, err := s.conn.Query(ctx, `
-		SELECT service_name,
-		       sumIf(cnt, NOT is_cur)  AS base_cnt,
-		       sumIf(cnt, is_cur)      AS cur_cnt,
-		       sumIf(errs, NOT is_cur) AS base_err,
-		       sumIf(errs, is_cur)     AS cur_err,
-		       maxIf(p99, NOT is_cur)  AS base_p99,
-		       maxIf(p99, is_cur)      AS cur_p99
-		FROM (
-			SELECT service_name,
-			       time_bucket >= ? AS is_cur,
-			       countMerge(span_count_state)  AS cnt,
-			       countMerge(error_count_state) AS errs,
-			       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99
-			FROM service_summary_5m
-			WHERE time_bucket >= ? AND time_bucket < ?
-			GROUP BY service_name, is_cur
-		)
-		GROUP BY service_name
-		HAVING base_cnt + cur_cnt >= 30
-		LIMIT 500
-		SETTINGS max_execution_time = 10`,
+	// v0.10.2452 — base vs current in one read: a pair straddling the
+	// sampling switch reads stored states on both sides (weighSQLPeriods).
+	rows, err := s.conn.Query(ctx, s.weighSQLPeriods(correlatedChangesMVTopSQL, baseFromB, atB, "service_summary_5m"),
 		atB, baseFromB, winTo)
 	if err != nil {
 		return nil, err
@@ -456,3 +437,28 @@ func itoa(v int64) string {
 	}
 	return s
 }
+
+// correlatedChangesMVTopSQL — GetCorrelatedChangesMVTop's text (v0.10.2452:
+// SAF so the sampling-weight tests pin it). Binds: atB, baseFromB, winTo.
+const correlatedChangesMVTopSQL = `
+		SELECT service_name,
+		       sumIf(cnt, NOT is_cur)  AS base_cnt,
+		       sumIf(cnt, is_cur)      AS cur_cnt,
+		       sumIf(errs, NOT is_cur) AS base_err,
+		       sumIf(errs, is_cur)     AS cur_err,
+		       maxIf(p99, NOT is_cur)  AS base_p99,
+		       maxIf(p99, is_cur)      AS cur_p99
+		FROM (
+			SELECT service_name,
+			       time_bucket >= ? AS is_cur,
+			       countMerge(span_count_state)  AS cnt,
+			       countMerge(error_count_state) AS errs,
+			       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99
+			FROM service_summary_5m
+			WHERE time_bucket >= ? AND time_bucket < ?
+			GROUP BY service_name, is_cur
+		)
+		GROUP BY service_name
+		HAVING base_cnt + cur_cnt >= 30
+		LIMIT 500
+		SETTINGS max_execution_time = 10`

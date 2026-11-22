@@ -32,28 +32,19 @@ import (
 
 const opsMVSig = "func (s *Store) queryOperationsFromMV("
 
-// operationsBucketReads — iki okuma, tek gövdeden. Gövde İKİ kova yüklemi
-// taşıdığı için bucketUpperOp'a bütün hâlde verilemez (o "tam 1 yüklem"
-// şartı koşar, ki yeni bir denetlenmeyen sorgu eklenirse yakalasın diye
-// öyle); GROUP BY satırından ikiye bölünüyor.
+// operationsBucketReads — iki okuma (v0.10.2452: SAF SQL kurucuları;
+// eskiden queryOperationsFromMV gövdesi "AS bidx"ten ikiye bölünürdü).
 func operationsBucketReads(t *testing.T) []struct {
 	name string
 	sql  string
 } {
 	t.Helper()
-	body := funcBody(t, "repo.go", opsMVSig)
-	// İkinci sorgu sparkline slot indeksini hesaplayan tek yer.
-	split := strings.Index(body, "AS bidx")
-	if split < 0 {
-		t.Fatalf("%s içinde sparkline sorgusu (AS bidx) bulunamadı — yapı "+
-			"değiştiyse testi güncelle", opsMVSig)
-	}
 	return []struct {
 		name string
 		sql  string
 	}{
-		{"birinci geçiş (satır toplamı)", body[:split]},
-		{"ikinci geçiş (sparkline)", body[split:]},
+		{"birinci geçiş (satır toplamı)", opsMVSummarySQL("operation_summary_5m", "name", "", "x = 0")},
+		{"ikinci geçiş (sparkline)", opsMVSparkSQL("operation_summary_5m", "name", "", "x = 0")},
 	}
 }
 

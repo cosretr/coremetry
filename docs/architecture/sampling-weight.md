@@ -237,6 +237,59 @@ Cost: no new scans; the raw rewrites replace an aggregate by its weighted
 twin over the same rows (one Float32 column read more), the MV rewrites
 read the twin state columns already written since v0.10.2435.
 
+**Left after v0.10.2442** — closed in v0.10.2452 except the first two
+items; see "Reader coverage (v0.10.2452)".
+
+## Reader coverage (v0.10.2452)
+
+Second pass, no MV drop / recreate: every reader below reads the weighted
+twin states the MVs already write. Mode off / shadow: byte-identical SQL
+and binds (`readerSQLs2452` joins `TestWeighReadersModeOffIdentical`;
+anomaly builders `TestSubjectAndExplainReadsModeOffIdentical`). A
+full-window rewrite of each text leaves no unweighted merge
+(`TestWeighSmallerMVReaders`).
+
+| Reader | Path | Weighted how |
+|---|---|---|
+| DB health buckets (`DBHealthBuckets`, `db-health:` detector) | db_caller_summary_5m, inner per (caller, bucket) + `-MergeState` p99 | `weighSQL` from `since`: inner counts per bucket; `-MergeState` + outer merge full windows only (a window reaching before the switch keeps p99 stored) |
+| DB health reference (24 h back) | db_summary_5m, per bucket | `weighSQL`: every group is one bucket, so each reads one side of the switch; until 24 h after the switch the reference is stored (like the slowdown base p95) |
+| OpP99 pivot / current / baseline (`op_p99_cache.go`) | operation_summary_5m | `weighSQLArgs` with binds and the real window start (was `weighSQL(sql, zero)` = always the mixed form). No merge condition carries a `?` today; a future one is weighted, not left stored |
+| Operations table (`GetOperationSummary`, `GetOperationSummaryCompared`; Service → Operations, CoSRE service sweep `ops`, pivot trace `op_baseline`, investigation) | operation_summary_5m / operation_group_summary_5m; raw spans (env, sub-5 m) | MV: `weighSQL`, compare pair `weighSQLPeriods` (straddling pair = stored both sides); raw: `weighRawSQL` (both passes) |
+| CoSRE sweep function breakdown (`BusinessBreakdown`) | raw spans | `weighRawSQL` |
+| CoSRE sweep latency corroboration (`SlowSpanCorroborate`) | raw spans | `weighRawSQL` (slow-span counts represented; the evidence chip keeps showing the stored text) |
+| Service cluster breakdown + series (sweep `clusterValues`, Service → clusters) | service_env_summary_5m | `weighSQL` |
+| DB statement detail: summary (5m / 1m), trend, callers, 7-day baseline | db_statement_summary_5m / _1m | `weighSQL` (baseline from its own start: mixed groups keep quantiles stored) |
+| Slow queries / DB statements list (MV path) | db_statement_summary_5m | `weighSQL` |
+| Statement alert target window + statement search | db_statement_summary_5m | `weighSQL` |
+| Slow-statement detector (`SlowStatementBuckets`) | db_statement_summary_5m, per bucket | `weighSQL` (`execs >= minExecs` floor: ×≈ okWeight) |
+| DB detail trend | db_summary_5m / _1m | `weighSQL` |
+| Route alert target window, span peer distribution | spanmetrics_1m | `weighSQL` |
+| Correlated changes (`GetCorrelatedChangesMVTop`) | service_summary_5m, base vs current in one read | `weighSQLPeriods` |
+| Root-cause error-rate series, notify-policy replay traffic | service_summary_5m | `weighSQL` (replay: per (service, bucket) groups) |
+| ML trace errors (`MLTraceErrors`, `MLTraceErrorMinutes`) | spanmetrics_1m | `weighSQL` (error spans: E ≈ 1 in prod shape, ≈ unchanged) |
+| Anomaly explain replay | service_summary_5m | `WeighSQL` (same as the detector read it replays) |
+| Anomaly DB / queue subjects (consecutive + seasonal) | db_summary_5m / messaging_summary_5m | as the service path: `BaselineFloor` history, `WeighSQL`, seasonal waits `seasonalMinDaysFor(class)` weighted days |
+
+**Stored by design** (presence, ranking, catalogue or ingest health — a
+stored count is the right answer there): `selfhealth.go`
+`ReadIngestWindows`, `trace_health.go`, `sysstats.go`, `login_summary.go`
+volumes, `operation_catalog.go`, `server_entry_kinds.go` (HTTP vs other
+ratio), `db_ownership.go`, `db_errors.go` caller ordering,
+`messaging_clients.go`, `deploys.go` version markers
+(service_version_5m), `api.go` `copilotSuggestServiceTags` ordering,
+anomaly subject top-N selection, `CodeFunctionSample` (a LIMIT-5000 sample
+whose subquery has no weight column), entity_seen_5m readers (not a
+weighted MV).
+
+**mcptools:** the package holds no span SQL of its own; its sweep / pivot /
+compare reads are the chstore methods above (`ServiceWindowRED` and the
+compare-periods reads were already weighted in v0.10.2435). The function
+rollup arm (`QueryRollupRED`) reads `rollup_spans_*` (below). The
+v0.10.2449 tools (endpoint_lookup, trace_where, messaging_flow,
+downstream_calls) are not on the v0.10.2450 line this slice is based on;
+they are weighted when that line merges (span-derived counts via
+`weighSQL` / `weighRawSQL`, VictoriaMetrics sources unchanged).
+
 **Still left (follow-up):**
 
 - `trace_summary_5m` / `trace_summary_1d` / `trace_service_index_5m`:
@@ -244,14 +297,14 @@ read the twin state columns already written since v0.10.2435.
   tracemetrics (`tracemetric.go`, trace rate / % failing traces /
   trace-duration percentiles). Weighting it needs a per-trace weight state
   on trace_summary_5m (a migration on the trace-search MV with its own
-  drop/recreate history — `mv_shape_guard.go`) — a separate slice.
-- `rollup_spans_*` (operator-applied migrations 0001 / 0002) and their
-  readers.
-- `db_health.go` (DB health detector), `-MergeState` in `mcptools`
-  (service sweep, pivot trace) and the remaining lower-traffic MV readers
-  that never pass through `weighSQL`.
-- `OpP99Pivot` (`op_p99_cache.go`) still calls `weighSQL` without binds:
-  a `?` merge condition in a mixed window stays stored there.
+  drop/recreate history — `mv_shape_guard.go`) — a separate slice needing
+  its own approval.
+- `rollup_spans_*` (operator-applied migrations 0001 / 0002, `migrations/`)
+  and their readers (`rollup_read.go` `QueryRollupRED`, `rollup_fastpath.go`
+  — chart fast path, CoSRE sweep function-code arm). They carry no
+  weighted states; weighting needs a new operator-applied migration
+  (weighted count / sum / TDigest columns + the MV SELECT), then the reader
+  swap. Documented only: until then these values are stored counts.
 
 ## Rule thresholds (v0.10.2441)
 
@@ -280,7 +333,7 @@ v0.10.2440:
 | ML telemetry volume (`ml_volume.go`) | weighted (both MVs) | spans/request ratio | relative, scale-free | unaffected (ratio) |
 | Problem standard impact floors (notify_policy D6) | value of the source Problem | 30 failed / 5 m or ≥ 1 % with ≥ 30 calls | absolute | inherits the source: error % lower, calls higher |
 | service_slowdown, SLO good/total | weighted since v0.10.2442 | rise factor / SLO target | relative / ratio | slowdown: base p95 stays stored until 24 h after the switch; SLO ratio drops toward the true failure share |
-| DB health (`db-health:`) | not weighted (left for later) | — | — | unchanged |
+| DB health (`db-health:`) | weighted since v0.10.2452 (counts per bucket; p99 full windows) | MinCallerCalls / ErrorPct / P99Ms / MinErrorCount, P99RiseFactor vs 24 h | absolute + relative | calls ×≈ 20 (more callers pass MinCallerCalls), error % drops like error_rate, error count ≈ unchanged; reference stored for 24 h after the switch |
 
 ### Shadow comparison
 

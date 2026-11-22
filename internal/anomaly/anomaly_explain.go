@@ -375,7 +375,7 @@ func storeSpanRows(st *chstore.Store) spanRowsReader {
 		if err != nil {
 			return nil, err
 		}
-		rows, err := st.TelemetryReadConn().Query(ctx, buildExplainSpanQuery(vexpr), service, from, to)
+		rows, err := st.TelemetryReadConn().Query(ctx, st.WeighSQL(buildExplainSpanQuery(vexpr), from, "service_summary_5m"), service, from, to) // v0.10.2452 — same weighting as the detector read
 		if err != nil {
 			return nil, err
 		}

@@ -205,6 +205,7 @@ func dbHealthBucketsQuery(since, until time.Time, cfg DBHealthConfig, sens Anoma
 // dayandı (küme eksik olabilir).
 func (s *Store) DBHealthBuckets(ctx context.Context, since, until time.Time, cfg DBHealthConfig, sens AnomalySensitivityConfig, openIDs []string) ([]DBHealthBucket, bool, error) {
 	q, args := dbHealthBucketsQuery(since, until, cfg, sens, openIDs)
+	q = s.weighSQL(q, since, "db_caller_summary_5m") // v0.10.2452 — sampling weight (inner counts; -MergeState p99 full windows)
 	rows, err := s.telemetryReadConn().Query(ctx, q, args...)
 	if err != nil {
 		return nil, false, err
@@ -286,6 +287,7 @@ func (s *Store) DBHealthReference(ctx context.Context, since, until time.Time, s
 		return out, nil
 	}
 	q, args := dbHealthReferenceQuery(since, until, cfg, ruleIDs)
+	q = s.weighSQL(q, since, "db_summary_5m") // v0.10.2452 — per-bucket groups: each bucket reads one side of the switch
 	rows, err := s.telemetryReadConn().Query(ctx, q, args...)
 	if err != nil {
 		return nil, err

@@ -305,7 +305,7 @@ func (s *Store) SlowStatementBuckets(ctx context.Context, since time.Time, minEx
 	if !s.hasDBStmtHashCol {
 		return nil, nil
 	}
-	rows, err := s.conn.Query(ctx, slowStatementBucketsSQL(), since, minExecs, thresholdMs)
+	rows, err := s.conn.Query(ctx, s.weighSQL(slowStatementBucketsSQL(), since, "db_statement_summary_5m"), since, minExecs, thresholdMs) // v0.10.2452
 	if err != nil {
 		return nil, err
 	}

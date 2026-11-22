@@ -94,19 +94,7 @@ func (s *Store) BusinessBreakdown(ctx context.Context, service, attrKey string, 
 	args = append(args, exprArgs...)
 	args = append(args, businessDimLimit)
 
-	sql := fmt.Sprintf(`
-		SELECT %s AS dim,
-		       count()                          AS calls,
-		       countIf(status_code = 'error')    AS errors
-		FROM spans
-		WHERE service_name = ?
-		  AND time >= ?
-		  AND time < ?
-		  AND %s != ''
-		GROUP BY dim
-		ORDER BY errors DESC, calls DESC
-		LIMIT ?
-		SETTINGS max_execution_time = 5`, expr, expr)
+	sql := s.weighRawSQL(businessBreakdownSQL(expr)) // v0.10.2452 — sampling weight (CoSRE service sweep)
 
 	rows, err := s.telemetryReadConn().Query(ctx, sql, args...)
 	if err != nil {
@@ -126,4 +114,22 @@ func (s *Store) BusinessBreakdown(ctx context.Context, service, attrKey string, 
 		out = append(out, b)
 	}
 	return out, rows.Err()
+}
+
+// businessBreakdownSQL — SAF (v0.10.2452): BusinessBreakdown's text. Binds:
+// expr binds, service, from, to, expr binds, limit.
+func businessBreakdownSQL(expr string) string {
+	return fmt.Sprintf(`
+		SELECT %s AS dim,
+		       count()                          AS calls,
+		       countIf(status_code = 'error')    AS errors
+		FROM spans
+		WHERE service_name = ?
+		  AND time >= ?
+		  AND time < ?
+		  AND %s != ''
+		GROUP BY dim
+		ORDER BY errors DESC, calls DESC
+		LIMIT ?
+		SETTINGS max_execution_time = 5`, expr, expr)
 }

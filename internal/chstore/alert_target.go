@@ -234,7 +234,8 @@ func (s *Store) StatementWindowStats(ctx context.Context, t RuleTarget, window t
 		args = append(args, t.DBName)
 	}
 	var avg *float64
-	err = s.telemetryReadConn().QueryRow(ctx, statementWindowSQL(t.DBSystem != "", t.DBName != ""), args...).
+	q := s.weighSQL(statementWindowSQL(t.DBSystem != "", t.DBName != ""), since, "db_statement_summary_5m") // v0.10.2452
+	err = s.telemetryReadConn().QueryRow(ctx, q, args...).
 		Scan(&st.Count, &st.P95Ms, &st.P99Ms, &st.MaxMs, &avg, &st.Sample, &st.Exemplar, &st.Services)
 	if err != nil {
 		return st, err
@@ -311,7 +312,7 @@ func (s *Store) SearchStatements(ctx context.Context, q, service string, limit i
 	if service != "" {
 		args = []any{service, q, limit}
 	}
-	rows, err := s.telemetryReadConn().Query(ctx, statementSearchSQL(service != ""), args...)
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(statementSearchSQL(service != ""), time.Now().Add(-24*time.Hour), "db_statement_summary_5m"), args...) // v0.10.2452
 	if err != nil {
 		return nil, err
 	}

@@ -41,6 +41,9 @@ func readerSQLs(t *testing.T) map[string]string {
 		}
 		out["measure_all_"+m] = p.sql
 	}
+	for k, v := range readerSQLs2452(t) { // v0.10.2452
+		out[k] = v
+	}
 	return out
 }
 

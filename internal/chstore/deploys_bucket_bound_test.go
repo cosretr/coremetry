@@ -40,8 +40,8 @@ func deploysBucketReads(t *testing.T) []struct {
 		{"deploysWindowMVSQL (filo /deploys)", deploysWindowMVSQL},
 		// v0.10.1063 — sorgu GetCorrelatedChangesMVTop'a taşındı (MV sürümü
 		// ona ince sarmalayıcı); sınır kontrolü sorgunun YAŞADIĞI gövdede.
-		{"GetCorrelatedChangesMV (korele değişiklikler)",
-			funcBody(t, "correlate.go", "func (s *Store) GetCorrelatedChangesMVTop(")},
+		// v0.10.2452 — metin SAF sabite çıktı (correlatedChangesMVTopSQL).
+		{"GetCorrelatedChangesMV (korele değişiklikler)", correlatedChangesMVTopSQL},
 	}
 }
 

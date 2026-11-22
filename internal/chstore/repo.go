@@ -1155,7 +1155,7 @@ const latSparkCap = 150
 // (old/pre-Release-A spans) is excluded so the normalized list stays
 // clean. When normalized is false the behaviour is byte-for-byte the
 // pre-rel-B path.
-func (s *Store) queryOperationsFromMV(ctx context.Context, service string, winStart, winEnd time.Time, normalized bool) ([]OperationSummary, error) {
+func (s *Store) queryOperationsFromMV(ctx context.Context, service string, winStart, winEnd time.Time, normalized bool, weigh func(sql, mv string) string) ([]OperationSummary, error) {
 	if service == "" {
 		return nil, fmt.Errorf("queryOperationsFromMV: service required")
 	}
@@ -1199,27 +1199,8 @@ func (s *Store) queryOperationsFromMV(ctx context.Context, service string, winSt
 	// input) so the interpolation is injection-safe; the window bounds
 	// stay parameterised.
 	const apdexT = 200.0
-	rows, err := s.telemetryReadConn().Query(ctx, `
-		SELECT `+nameCol+` AS name,
-		       countMerge(span_count_state)                            AS span_count,
-		       countMerge(error_count_state)                           AS error_count,
-		       sumMerge(duration_sum_state) / 1e6
-		         / nullIf(countMerge(span_count_state), 0)             AS avg_ms,
-		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 1) / 1e6 AS p50_ms,
-		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95_ms,
-		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms,
-		       (countMerge(apdex_satisfied_state)
-		         + countMerge(apdex_tolerating_state) / 2)
-		         / nullIf(countMerge(span_count_state), 0)             AS apdex
-		FROM `+mvTable+`
-		WHERE service_name = ? AND time_bucket >= ? AND time_bucket < ?`+opFilter+`
-		GROUP BY `+nameCol+`
-		ORDER BY span_count DESC
-		LIMIT 500
-		SETTINGS max_execution_time = 25,
-		         optimize_read_in_order = 1,
-		         optimize_aggregation_in_order = 1,
-		         `+s.shardSkipSetting()+`, `+mvQuantileMemSettings,
+	// v0.10.2452 — sampling weight: weighOps (pair-aware, weighSQLPeriods).
+	rows, err := s.telemetryReadConn().Query(ctx, weigh(opsMVSummarySQL(mvTable, nameCol, opFilter, s.shardSkipSetting()), mvTable),
 		service, bucketStart, winEnd)
 	if err != nil {
 		return nil, err
@@ -1268,20 +1249,7 @@ func (s *Store) queryOperationsFromMV(ctx context.Context, service string, winSt
 	// v0.9.60 — quantile merge 0.99'dan (0.5,0.95,0.99)'a genişledi +
 	// slot başına süre toplamı (avg serisi için): Elastic-parity latency
 	// hücresinin percentile-seçicili sparkline'ı. Aynı tek scan.
-	bucketRows, err := s.telemetryReadConn().Query(ctx, `
-		SELECT `+nameCol+` AS name,
-		       intDiv(toUInt32(time_bucket) - toUInt32(?), ?) AS bidx,
-		       countMerge(span_count_state)                   AS c,
-		       countMerge(error_count_state)                  AS e,
-		       sumMerge(duration_sum_state) / 1e6             AS sum_ms,
-		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 1) / 1e6 AS p50,
-		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95,
-		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99
-		FROM `+mvTable+`
-		WHERE service_name = ? AND time_bucket >= ? AND time_bucket < ?`+opFilter+`
-		GROUP BY `+nameCol+`, bidx
-		SETTINGS max_execution_time = 25,
-		         `+s.shardSkipSetting()+`, `+mvQuantileMemSettings,
+	bucketRows, err := s.telemetryReadConn().Query(ctx, weigh(opsMVSparkSQL(mvTable, nameCol, opFilter, s.shardSkipSetting()), mvTable),
 		bucketStart, bucketSec, service, bucketStart, winEnd)
 	if err != nil {
 		// Sparkline failure non-fatal — return aggregates without.
@@ -1372,11 +1340,12 @@ func (s *Store) GetOperationSummaryCompared(ctx context.Context, service string,
 	} else if winEnd.IsZero() {
 		winEnd = time.Now()
 	}
-	cur, err := s.GetOperationSummary(ctx, service, 0, winStart, winEnd, normalized, env)
+	dur := winEnd.Sub(winStart)
+	prStart := winStart.Add(-dur)
+	cur, err := s.getOperationSummary(ctx, service, 0, winStart, winEnd, normalized, env, prStart)
 	if err != nil || len(cur) == 0 {
 		return cur, err
 	}
-	dur := winEnd.Sub(winStart)
 	// v0.9.64 (review MAJÖR) — prior pencerenin sonu, winStart'ı içeren
 	// 5dk MV bucket'ını DIŞLAMALI: queryOperationsFromMV başlangıcı
 	// aşağı yuvarlayıp sonu dahil ettiğinden floor5(winStart) bucket'ı
@@ -1385,7 +1354,7 @@ func (s *Store) GetOperationSummaryCompared(ctx context.Context, service string,
 	// (15dk pencerede ~1/3'e kadar). floor5(ws)-1s: bucket-start
 	// karşılaştırmasında önceki bucket'ta biter.
 	priorEnd := winStart.Truncate(5 * time.Minute).Add(-time.Second)
-	prior, perr := s.GetOperationSummary(ctx, service, 0, winStart.Add(-dur), priorEnd, normalized, env)
+	prior, perr := s.getOperationSummary(ctx, service, 0, prStart, priorEnd, normalized, env, winStart)
 	if perr != nil {
 		return cur, nil
 	}
@@ -1460,6 +1429,14 @@ func IsTopologyNodeName(name string) bool {
 }
 
 func (s *Store) GetOperationSummary(ctx context.Context, service string, since time.Duration, from, to time.Time, normalized bool, env string) ([]OperationSummary, error) {
+	return s.getOperationSummary(ctx, service, since, from, to, normalized, env, time.Time{})
+}
+
+// getOperationSummary — GetOperationSummary; pairStart (v0.10.2452) is the
+// start of the compared window when this read is one side of a comparison
+// (GetOperationSummaryCompared): a pair straddling the sampling switch reads
+// stored states on both sides (weighSQLPeriods). Zero = single window.
+func (s *Store) getOperationSummary(ctx context.Context, service string, since time.Duration, from, to time.Time, normalized bool, env string, pairStart time.Time) ([]OperationSummary, error) {
 	// v0.10.1242 — operatör log'u: "service=db:oracle@… MV path empty —
 	// falling through to raw spans" ~20 dk'da bir. Topoloji düğüm adları
 	// (db:/queue:/ext:) span service_name'i DEĞİL; iki yol da tanım gereği
@@ -1512,7 +1489,13 @@ func (s *Store) GetOperationSummary(ctx context.Context, service string, since t
 	// which path is serving each request.
 	useMV := operationsUseMV(winEnd.Sub(winStart), env)
 	if useMV {
-		out, err := s.queryOperationsFromMV(ctx, service, winStart, winEnd, normalized)
+		weigh := func(sql, mv string) string {
+			if pairStart.IsZero() {
+				return s.weighSQL(sql, winStart, mv)
+			}
+			return s.weighSQLPeriods(sql, winStart, pairStart, mv)
+		}
+		out, err := s.queryOperationsFromMV(ctx, service, winStart, winEnd, normalized, weigh)
 		if err != nil {
 			log.Printf("[ops] service=%s MV path errored: %v — falling through to raw spans",
 				service, err)
@@ -1551,23 +1534,7 @@ func (s *Store) GetOperationSummary(ctx context.Context, service string, since t
 		wc.add("op_group != ''") // no placeholder — adds zero args
 	}
 	const apdexT = 200.0
-	rows, err := s.telemetryReadConn().Query(ctx, `
-		SELECT `+rawNameCol+` AS name,
-		       count()                                       AS span_count,
-		       countIf(status_code = 'error')                AS error_count,
-		       avg(duration) / 1e6                           AS avg_ms,
-		       quantile(0.50)(duration) / 1e6                AS p50_ms,
-		       quantile(0.95)(duration) / 1e6                AS p95_ms,
-		       quantile(0.99)(duration) / 1e6                AS p99_ms,
-		       (countIf(duration <= ? * 1e6)
-		         + countIf(duration > ? * 1e6 AND duration <= ? * 1e6) / 2)
-		         / nullIf(count(), 0)                        AS apdex
-		FROM spans `+wc.sql()+`
-		GROUP BY `+rawNameCol+`
-		ORDER BY span_count DESC
-		LIMIT 500
-		SETTINGS max_execution_time = 20,
-		         optimize_skip_unused_shards = 0`+s.heavyScanSpill(),
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighRawSQL(opsRawSummarySQL(rawNameCol, wc.sql(), s.heavyScanSpill())), // v0.10.2452
 		append([]any{apdexT, apdexT, apdexT * 4}, wc.args...)...)
 	if err != nil {
 		return nil, err
@@ -1646,19 +1613,7 @@ func (s *Store) GetOperationSummary(ctx context.Context, service string, since t
 	// (raw yol) en görünür hücre '—' basıyordu. MV yolundaki genişletmenin
 	// aynısı; quantileTDigest raw'da da ~%2 hata ile yeter (pitfall
 	// kuralı: 1M+ satırda quantile() değil).
-	sparkRows, err := s.telemetryReadConn().Query(ctx, `
-		SELECT `+rawNameCol+` AS name,
-		       intDiv(toUInt32(time) - toUInt32(?), ?) AS bidx,
-		       count()                                 AS c,
-		       countIf(status_code = 'error')          AS e,
-		       sum(duration) / 1e6                     AS sum_ms,
-		       quantileTDigest(0.5)(duration) / 1e6    AS p50,
-		       quantileTDigest(0.95)(duration) / 1e6   AS p95,
-		       quantileTDigest(0.99)(duration) / 1e6   AS p99
-		FROM spans `+wc.sql()+`
-		  AND `+rawNameCol+` IN (`+strings.Join(holders, ",")+`)
-		GROUP BY `+rawNameCol+`, bidx
-		SETTINGS max_execution_time = 15`,
+	sparkRows, err := s.telemetryReadConn().Query(ctx, s.weighRawSQL(opsRawSparkSQL(rawNameCol, wc.sql(), strings.Join(holders, ","))), // v0.10.2452
 		args...)
 	if err != nil {
 		// Sparkline failure is non-fatal — return aggregates without
@@ -6338,4 +6293,92 @@ func aggBuiltinRootExpr(col string, narrowed bool) string {
 		return root
 	}
 	return "if(countIf(" + aggRootPred + ") > 0, " + root + ", argMin(" + col + ", time))"
+}
+
+// ── Operations table SQL (v0.10.2452: SAF so the sampling-weight tests pin
+// them; text byte-identical to the former inline literals) ──────────────
+
+// opsMVSummarySQL — queryOperationsFromMV first pass. Binds: service,
+// bucketStart, winEnd.
+func opsMVSummarySQL(mvTable, nameCol, opFilter, shardSkip string) string {
+	return `
+		SELECT ` + nameCol + ` AS name,
+		       countMerge(span_count_state)                            AS span_count,
+		       countMerge(error_count_state)                           AS error_count,
+		       sumMerge(duration_sum_state) / 1e6
+		         / nullIf(countMerge(span_count_state), 0)             AS avg_ms,
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 1) / 1e6 AS p50_ms,
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95_ms,
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99_ms,
+		       (countMerge(apdex_satisfied_state)
+		         + countMerge(apdex_tolerating_state) / 2)
+		         / nullIf(countMerge(span_count_state), 0)             AS apdex
+		FROM ` + mvTable + `
+		WHERE service_name = ? AND time_bucket >= ? AND time_bucket < ?` + opFilter + `
+		GROUP BY ` + nameCol + `
+		ORDER BY span_count DESC
+		LIMIT 500
+		SETTINGS max_execution_time = 25,
+		         optimize_read_in_order = 1,
+		         optimize_aggregation_in_order = 1,
+		         ` + shardSkip + `, ` + mvQuantileMemSettings
+}
+
+// opsMVSparkSQL — queryOperationsFromMV sparkline pass. Binds: bucketStart,
+// bucketSec, service, bucketStart, winEnd.
+func opsMVSparkSQL(mvTable, nameCol, opFilter, shardSkip string) string {
+	return `
+		SELECT ` + nameCol + ` AS name,
+		       intDiv(toUInt32(time_bucket) - toUInt32(?), ?) AS bidx,
+		       countMerge(span_count_state)                   AS c,
+		       countMerge(error_count_state)                  AS e,
+		       sumMerge(duration_sum_state) / 1e6             AS sum_ms,
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 1) / 1e6 AS p50,
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 2) / 1e6 AS p95,
+		       arrayElement(quantilesTDigestMerge(0.5, 0.95, 0.99)(duration_q_state), 3) / 1e6 AS p99
+		FROM ` + mvTable + `
+		WHERE service_name = ? AND time_bucket >= ? AND time_bucket < ?` + opFilter + `
+		GROUP BY ` + nameCol + `, bidx
+		SETTINGS max_execution_time = 25,
+		         ` + shardSkip + `, ` + mvQuantileMemSettings
+}
+
+// opsRawSummarySQL — GetOperationSummary raw-spans pass. Binds: apdex T ×3,
+// then the where-clause args.
+func opsRawSummarySQL(nameCol, where, spill string) string {
+	return `
+		SELECT ` + nameCol + ` AS name,
+		       count()                                       AS span_count,
+		       countIf(status_code = 'error')                AS error_count,
+		       avg(duration) / 1e6                           AS avg_ms,
+		       quantile(0.50)(duration) / 1e6                AS p50_ms,
+		       quantile(0.95)(duration) / 1e6                AS p95_ms,
+		       quantile(0.99)(duration) / 1e6                AS p99_ms,
+		       (countIf(duration <= ? * 1e6)
+		         + countIf(duration > ? * 1e6 AND duration <= ? * 1e6) / 2)
+		         / nullIf(count(), 0)                        AS apdex
+		FROM spans ` + where + `
+		GROUP BY ` + nameCol + `
+		ORDER BY span_count DESC
+		LIMIT 500
+		SETTINGS max_execution_time = 20,
+		         optimize_skip_unused_shards = 0` + spill
+}
+
+// opsRawSparkSQL — GetOperationSummary raw sparkline pass. Binds: winStart,
+// bucketSec, the where-clause args, the IN-list names.
+func opsRawSparkSQL(nameCol, where, holders string) string {
+	return `
+		SELECT ` + nameCol + ` AS name,
+		       intDiv(toUInt32(time) - toUInt32(?), ?) AS bidx,
+		       count()                                 AS c,
+		       countIf(status_code = 'error')          AS e,
+		       sum(duration) / 1e6                     AS sum_ms,
+		       quantileTDigest(0.5)(duration) / 1e6    AS p50,
+		       quantileTDigest(0.95)(duration) / 1e6   AS p95,
+		       quantileTDigest(0.99)(duration) / 1e6   AS p99
+		FROM spans ` + where + `
+		  AND ` + nameCol + ` IN (` + holders + `)
+		GROUP BY ` + nameCol + `, bidx
+		SETTINGS max_execution_time = 15`
 }

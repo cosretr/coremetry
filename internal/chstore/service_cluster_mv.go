@@ -99,7 +99,7 @@ func (s *Store) serviceClusterBreakdownMV(ctx context.Context, service string, f
 	if to.IsZero() {
 		to = time.Now()
 	}
-	rows, err := s.telemetryReadConn().Query(ctx, serviceClusterBreakdownMVSQL(), from, to, service)
+	rows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(serviceClusterBreakdownMVSQL(), from, "service_env_summary_5m"), from, to, service) // v0.10.2452
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (s *Store) serviceClusterBreakdownMV(ctx context.Context, service string, f
 		args = append(args, r.Cluster)
 		names = append(names, r.Cluster)
 	}
-	srows, err := s.telemetryReadConn().Query(ctx, serviceClusterSeriesMVSQL(len(names)), args...)
+	srows, err := s.telemetryReadConn().Query(ctx, s.weighSQL(serviceClusterSeriesMVSQL(len(names)), from, "service_env_summary_5m"), args...) // v0.10.2452
 	if err != nil {
 		return out, nil // seri süs: kırılım kalır, seri boş
 	}
