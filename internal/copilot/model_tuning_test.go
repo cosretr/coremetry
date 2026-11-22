@@ -311,7 +311,8 @@ func TestOtherModelBodiesUnchanged(t *testing.T) {
 		if _, err := s.chatOpenAIWithTools(context.Background(), "sys", []ChatMessage{{Role: "user", Text: "user"}}, nil); err != nil {
 			t.Fatalf("%s tools: %v", model, err)
 		}
-		want = `{"max_tokens":4096,"messages":[{"content":"sys","role":"system"},{"content":"user","role":"user"}],"model":"` + model + `","temperature":0.2,"tools":[]}`
+		want = `{"max_tokens":4096,"messages":[{"content":"sys","role":"system"},{"content":"user","role":"user"}],"model":"` + model + `","temperature":0.2}`
+		// v0.10.2463 — boş tools dizisi gövdeye girmez (gateway 400).
 		if got := string(llm.bodies[2]); got != want {
 			t.Errorf("%s araçlı gövde değişti:\n got  %s\n want %s", model, got, want)
 		}

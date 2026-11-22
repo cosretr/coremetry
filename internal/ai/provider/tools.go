@@ -332,10 +332,11 @@ func openAIToolsEndpoint(cfg Config) (url string, hdrs map[string]string, toolCh
 		// Explain yoluyla aynı gerekçe (v0.8.384).
 		hdrs["api-key"] = cfg.APIKey
 	}
-	// tool_choice "none" yalnız barındırılan OpenAI'de (boş tools dizisini
-	// reddediyor); yerel uçların tool_choice desteği doğrulanmadı → bugünkü şekil.
-	return chatCompletionsURL(base), hdrs,
-		strings.TrimRight(base, "/") == defaultBaseURL
+	// v0.10.2463 — tool_choice "none" artık her openai-uyumlu uçta: prod
+	// yerel gateway (vLLM) de boş tools dizisini 400 ile reddediyor; tur
+	// tavanında tanımlar kalır, çağrı "none" ile kapanır (önceki turun
+	// tool_calls'ı çözülebilir kalır).
+	return chatCompletionsURL(base), hdrs, true
 }
 
 // ChatGitHubTools tek bir tool'lu Copilot turu yürütür.
@@ -462,8 +463,13 @@ func buildOpenAIToolsBody(cfg Config, req ChatRequest, fallbackModel string, too
 		"max_tokens": req.resolvedMaxTokens(),
 		"messages":   apiMsgs, "tools": apiTools,
 	}
-	if req.OmitTools && len(req.Tools) == 0 {
-		delete(body, "tools") // v0.10.2365
+	// v0.10.2463 (operatör: prod gateway 400 "`tools` must not be an empty
+	// array"): openai-uyumlu gövde BOŞ tools dizisini hiç taşımaz — tur
+	// tavanında (NoToolCalls, tool_choice "none" kapalı profil) ya da araç
+	// listesi kapsamla boşaldığında dizi boş kalıyordu. vLLM/OpenAI şeması
+	// boş diziyi reddeder; alanın yokluğu "araç yok" ile aynı anlam.
+	if len(apiTools) == 0 {
+		delete(body, "tools")
 	}
 	if req.NoToolCalls && len(apiTools) > 0 {
 		// Tur tavanı, barındırılan uç: boş tools dizisi burada 400 alır;

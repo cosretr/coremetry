@@ -86,19 +86,19 @@ func TestChatOpenAITools_GoldenRequestBody(t *testing.T) {
 	}
 }
 
-// TestChatOpenAITools_EmptyToolListStillSendsField — döngünün son turu
-// tool'ları KASITLI olarak nil geçiyor ("elindekiyle cevapla"). Alan
-// tamamen düşerse bazı uçlar önceki turdaki tool_calls'ı çözemez.
-func TestChatOpenAITools_EmptyToolListStillSendsField(t *testing.T) {
+// TestChatOpenAITools_EmptyToolListOmitsField — v0.10.2463 (operatör, prod
+// gateway 400 "`tools` must not be an empty array"): araç listesi boşsa
+// openai-uyumlu gövde "tools" alanını hiç taşımaz. Tur tavanı artık
+// tanımları korur + tool_choice "none" (TestChatOpenAITools_NoToolCalls).
+func TestChatOpenAITools_EmptyToolListOmitsField(t *testing.T) {
 	rt := &captureRT{}
 	if _, err := ChatOpenAITools(context.Background(), toolsClient(rt), ChatRequest{
 		System: "sys", Messages: []ChatMessage{{Role: "user", Text: "q"}},
 	}); err != nil {
 		t.Fatalf("ChatOpenAITools: %v", err)
 	}
-	tools, ok := rt.bodies[0]["tools"].([]any)
-	if !ok || len(tools) != 0 {
-		t.Fatalf("tools = %v; want boş dizi (alan düşmemeli)", rt.bodies[0]["tools"])
+	if v, ok := rt.bodies[0]["tools"]; ok {
+		t.Fatalf("tools = %v; want alan yok", v)
 	}
 }
 
@@ -394,7 +394,7 @@ func TestChatOpenAITools_NoToolCalls(t *testing.T) {
 		wantNone  bool
 	}{
 		{"barındırılan OpenAI", "", 1, true},
-		{"yerel openai-compat uç", "http://vllm.local/v1", 0, false},
+		{"yerel openai-compat uç", "http://vllm.local/v1", 1, true}, // v0.10.2463
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rt := &captureRT{}
