@@ -57,7 +57,8 @@ var promptVersionRegistry = map[string]string{
 	"systemSREInvestigation":        systemSREInvestigation,  // v0.10.1287 — AI SRE Faz 1b
 	"systemPostmortem":              systemPostmortem,
 	"systemRunbookUpdate":           systemRunbookUpdate,
-	"systemServiceReport":           systemServiceReport, // v0.10.1337 — guided servis raporu
+	"systemServiceReport":           systemServiceReport,      // v0.10.1337 — guided servis raporu
+	"serviceHealthAnswerOrder":      serviceHealthAnswerOrder, // v0.10.2454 — guided sağlık cevabı bölüm sırası
 	"DataNotInstruction":            DataNotInstruction,
 	"systemGuidedChat":              systemGuidedChat,
 	"latencyEvidenceRule":           latencyEvidenceRule, // v0.10.1299 — guided / serbest döngü / AI SRE ortak kuralı

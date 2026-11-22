@@ -2718,6 +2718,27 @@ func SystemPromptRAGChatWiki() string { return systemRAGChatWiki }
 // deterministik; tek anlatım çağrısı (yüzey chat-guided).
 func SystemPromptServiceReport() string { return systemServiceReport }
 
+// serviceHealthAnswerOrder — v0.10.2454 (operatör 2026-11-22): guided servis
+// sağlığı anlatımının bölüm sırası; kanıtta get_service_health raporu
+// ("SAĞLIK RAPORU") varken taban isteme EK. Model ayrımı yok (Qwen / gemma
+// aynı metin); taban istemler bayt bayt aynı.
+const serviceHealthAnswerOrder = `
+
+SERVİS SAĞLIĞI CEVABI (kanıtta SAĞLIK RAPORU var): önce tek cümle hüküm, sonra
+bölümleri BU SIRAYLA, her biri 1-3 kısa satır ve parantez içinde kaynağıyla:
+1. Metrikler (VictoriaMetrics, örneklenmemiş): istek/s, hata %, p95/p99, önceki pencereye fark.
+2. Trace hataları: "örneklenmiş" de; saklanan span'ler içindeki hata payı, hatalı trace
+   sayısı, eğilim — gerçek hata oranı diye sunma.
+3. En çok hata veren operasyonlar: ad, hata sayısı, hata %, baskın sınıf, örnek trace id.
+4. Teknik hatalar: error.type / HTTP / gRPC / DB dağılımı, hatalı aşağı hedefler.
+5. Exception'lar: tür + mesaj, sayı, ilk/son görülme, yeni ya da tekrarlayan.
+6. Messaging: topic başına hata % ve p95, consumer lag; lag yoksa "ölçülmüyor".
+Son satır: açık problem, anomali, son deploy. "ölçülmüyor" / "OKUNAMADI" bölümü
+öyle söyle, değer yazma; boş bölümü tek kısa satırla geç. Sayılar kanıttan aynen.`
+
+// ServiceHealthAnswerOrder — guided sağlık anlatımına eklenen bölüm sırası.
+func ServiceHealthAnswerOrder() string { return serviceHealthAnswerOrder }
+
 // SystemPromptResourceInvestigation — v0.10.1431: guided resource_investigation
 // rotasının anlatıcısı (KAYNAK ÖZETİ deterministik; tek anlatım çağrısı).
 func SystemPromptResourceInvestigation() string { return systemResourceInvestigation }
@@ -3018,6 +3039,9 @@ okunursun: restart, scale, deploy, config değişikliği yapamazsın.
    lag") → messaging_flow; "kimi çağırıyor, hangisi yavaş" → downstream_calls; "neden yavaş, zincir",
    "hangi downstream yüzünden", "kim çağırıyor", "etki alanı" → dependency_path (likely_source yoksa
    kaynak ADLANDIRMA); repo linki → repo_lookup, bulunamazsa "bilinmiyor" de ve link UYDURMA.
+   Servis sağlığı ("X nasıl", "sağlığı", "ne durumda") → get_service_health: report bölümlerini
+   order sırasıyla, her birini kaynağıyla kısaca aktar; trace hata payını "örneklenmiş" de;
+   missing/unread bölümde "ölçülmüyor / okunamadı" de, değer yazma.
 5. CEVAPLA — kısa özet, sonra dar bir tablo (cluster, namespace, workload/servis,
    pod, hata oranı, p95), sonra build_link çağır: link cevabın altına çip olarak
    sunucuca eklenir — metne URL, alan adı ya da araç çıktısı ("// build_link

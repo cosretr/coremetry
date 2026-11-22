@@ -283,6 +283,10 @@ type Deps struct {
 	// dilim 3b (CoSRE v2) — endpoint_metrics okuması (api/copilot_endpoint_metrics.go;
 	// servis RED çözümü + v0.10.1481 rota sorguları). nil = VM yok → araç skipped.
 	EndpointMetricRED EndpointMetricREDReader
+	// KafkaFamily — v0.10.2454: servisin Kafka istemci metriği ailesi
+	// (api resolveServiceKafkaFamily, /kafka-family ile tek gövde); nil →
+	// get_service_health raporunda aile "missing".
+	KafkaFamily KafkaFamilyFunc
 	// v0.10.1133 — resolve_oracle_operation çözümleyicisi (oracle_operation.go;
 	// api/oracle_op_resolve.go doldurur). nil ya da Enabled()=false = etkin
 	// Oracle kaynağı yok → sohbete SUNULMAZ; dış MCP'de araç dürüst enabled=false döner.
@@ -1201,8 +1205,18 @@ type getServiceHealthArgs struct {
 func getServiceHealthTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             "get_service_health",
-		ShortDescription: "TEK servisin RED'i + açık problem sayısı, verilen pencerede. list_services'ten sonraki kazı adımı. env ile tek ortama daralt.",
-		Description:      "Get ONE service's RED summary (request rate, error rate, p99 latency) plus its open-problem count over a window. `service` is matched by exact name as list_services returns it; a case variant or single near-match is resolved and echoed as matched_name, an ambiguous name returns found=false with candidates (resolve partial names with list_services name_contains). COST: the same read as list_services — the 5-minute pre-aggregate when range_s >= 300 and no env is set, otherwise a bounded raw-span scan. Use after list_services to drill into one service; pass env to scope both numbers to one deployment environment. For a full sweep (every pod, operation and function code plus the logs of the problematic ones) use service_health_sweep.",
+		ShortDescription: "Servis sağlığı (\"X nasıl / ne durumda\"): TEK çağrıda report — metrik RED, trace hatası, hatalı operasyon, teknik hata, exception, Kafka, problem/deploy.",
+		Description: "Get ONE service's health in one call: `summary` (span RED row) + `open_problems` + `report`, the health answer's sections in `report.order`: " +
+			"metrics (unsampled RED from VictoriaMetrics — rps, error_pct, p95/p99 window means, infra routes excluded — with prior-window delta), " +
+			"trace_errors (error share among STORED spans; upstream keeps all errors + 5% so this is NOT the true error rate; error trace count; trend vs prior window), " +
+			"error_operations (top 5 by error count: error %, dominant error.type / HTTP / gRPC / DB class, sample trace id), " +
+			"technical_errors (error.type / HTTP status / gRPC status / DB distribution + erroring downstream targets), " +
+			"exceptions (top exception groups: type, message, count, first/last seen, new|recurring), " +
+			"messaging (the service's Kafka/MQ topics, error % and p95, consumer lag — lag_status 'ölçülmüyor' when no lag metric), " +
+			"context (open problems, anomalies, last deploy). Each section has status ok | none | missing | unread and its source; quote missing/unread as such, never fill a value. " +
+			"`service` is matched by exact name as list_services returns it; a case variant or single near-match is resolved and echoed as matched_name, an ambiguous name returns found=false with candidates. " +
+			"COST: 5-minute pre-aggregates + one raw read of the service's ERROR spans only (≤1 h, row-capped) + a few VictoriaMetrics queries; cached 60 s. " +
+			"Pass env to scope span numbers to one deployment environment. For a pod / function sweep use service_health_sweep.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -1289,6 +1303,14 @@ func getServiceHealthTool(d Deps) mcp.Tool {
 			}
 			if a.Env != "" {
 				res["env"] = a.Env // echo the applied narrowing
+			}
+			// v0.10.2454 — sağlık raporu (service_health_report.go): operatörün
+			// altı bölümü + bağlam, sırayla ve kaynaklı. Rapor okunamazsa RED
+			// satırı yine döner; neden `report_error`'da (sessiz düşüş yok).
+			if rep, rerr := ReadServiceHealthReport(ctx, d, name, a.Env, from, to); rerr == nil {
+				res["report"] = rep
+			} else {
+				res["report_error"] = rerr.Error()
 			}
 			return res, nil
 		},

@@ -344,6 +344,10 @@ func TestTelemetryReadConnCallSurface(t *testing.T) {
 		// çağıran RED (service_summary_5m) ve tek örnek trace (spans, satır tavanlı);
 		// atlama okuması topology_edges_5m FINAL ana bağlantıda.
 		"cosre_dependency_path.go": true,
+		// v0.10.2454 — SAF telemetri: get_service_health raporu — hatalı span
+		// profili (spans, PREWHERE servis + status_code, ≤1 sa, satır tavanı)
+		// + operation_summary_5m operasyon toplamları.
+		"service_health_report.go": true,
 		// v0.10.2018 — SAF telemetri: ML trace_error_count, tek FROM'u
 		// spanmetrics_1m (zaman sınırlı, LIMIT). Taban okuması ml_series.go'da (ana bağlantı).
 		"ml_trace_errors.go": true,

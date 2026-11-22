@@ -2537,7 +2537,7 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	// v0.10.2331 — B: cevap sınıfı (chat_answer_class.go); üslup kapalıyken nctx = ctx, classLine "".
 	answerStyleNoteWindow(ctx, rangeS) // v0.10.2332 — varsay ve söyle: anlatımın penceresi
 	nctx, classLine := answerStyleNarration(ctx, answerClassOfIntent(route.Intent))
-	raw, exErr := s.copilotStreamSurface(nctx, "chat-guided", withAddressee(addresseeFromCtx(ctx), cosreRulesSystemPrefix(rulesBlock)+answerStyleGuidedPrompt(nctx, route.Intent))+classLine, user, func(delta string) {
+	raw, exErr := s.copilotStreamSurface(nctx, "chat-guided", withAddressee(addresseeFromCtx(ctx), cosreRulesSystemPrefix(rulesBlock)+answerStyleGuidedPrompt(nctx, route.Intent)+healthReportPromptFor(route.Intent, evidence))+classLine, user, func(delta string) {
 		emit("delta", map[string]string{"text": delta})
 	})
 	if exErr != nil {
@@ -3106,6 +3106,19 @@ func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string
 			Service: service, Env: env, From: from, To: to, Window: fmt.Sprintf("%ds", rangeS), Deep: deep, SkipPatterns: true})
 		sweepCh <- sweepOut{res, err}
 	}()
+	// v0.10.2454 — operatörün sağlık raporu (get_service_health ile AYNI okuma
+	// ve 60 sn önbellek girdisi): metrik → trace hatası → hatalı operasyonlar →
+	// teknik hatalar → exception → messaging + bağlam. Tarama ile PARALEL;
+	// goroutine emit etmez. Kanıtta hükmün hemen ardında (anlatım sırası).
+	type reportOut struct {
+		rep mcptools.ServiceHealthReport
+		err error
+	}
+	reportCh := make(chan reportOut, 1)
+	go func() {
+		rep, err := mcptools.ReadServiceHealthReport(sweepCtx, s.mcpDeps(), service, env, from, to)
+		reportCh <- reportOut{rep, err}
+	}()
 	var b strings.Builder
 	// v0.10.2101 — özet kartı (chat_summary_card.go); yalnız aşağıda zaten okunan değerler.
 	facts := guidedSummaryFacts{Scope: service}
@@ -3213,6 +3226,18 @@ func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string
 		emitGuidedStepResult(emit, nSw, mcptools.ServiceHealthSweepName, "", serr)
 	}
 	vl, vr, vn = mergeSweepVerdict(vl, vr, vn, sw.res, sweepOK)
+	nRep := emitGuidedStep(emit, "get_service_health", withEnvArg(`{"service":"`+service+`"}`, env))
+	var ro reportOut
+	select {
+	case ro = <-reportCh:
+	case <-ctx.Done():
+		ro.err = ctx.Err()
+	}
+	reportText := ""
+	if ro.err == nil {
+		reportText = mcptools.RenderServiceHealthReportTR(ro.rep)
+	}
+	emitGuidedStepResult(emit, nRep, "get_service_health", reportText, ro.err)
 	verdict := renderServiceHealthVerdictTR(vl, vr, vn)
 	facts.Verdict = vl
 	nV := emitGuidedStep(emit, "health_verdict", `{"service":"`+service+`"}`)
@@ -3220,6 +3245,7 @@ func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string
 	body := b.String()
 	b.Reset()
 	b.WriteString(verdict)
+	b.WriteString(reportText)
 	b.WriteString(body)
 	routeDrawn := false
 	if httpRED.UseVM {
@@ -3243,7 +3269,7 @@ func (s *Server) guidedServiceHealthBundle(ctx context.Context, emit func(string
 		// sebebi söyleyen not (servis sağlığında grafik kaynağı yalnız VM).
 		b.WriteString(svcHTTPREDNoChartNoteTR(httpRED.Reason))
 	}
-	src := fmt.Sprintf("SLO durumu + deterministik sağlık hükmü + servis RED özeti + baseline + en sık hatalar + deploy işaretçileri + açık problemler + hatalı trace'ler + error logları + servis taraması (pod/operasyon/fonksiyon + sorunluların logları)%s (son %s)", svcHTTPREDSourcesTR(httpRED)+svcRouteREDSourcesTR(routeDrawn), fmtAgoTR(rangeS))
+	src := fmt.Sprintf("SLO durumu + deterministik sağlık hükmü + sağlık raporu (metrik RED, trace hataları, hatalı operasyonlar, teknik hatalar, exception, messaging) + servis RED özeti + baseline + en sık hatalar + deploy işaretçileri + açık problemler + hatalı trace'ler + error logları + servis taraması (pod/operasyon/fonksiyon + sorunluların logları)%s (son %s)", svcHTTPREDSourcesTR(httpRED)+svcRouteREDSourcesTR(routeDrawn), fmtAgoTR(rangeS))
 	if env != "" {
 		src += fmt.Sprintf("; RED tüm ortamlar, problemler ortam: %s", env)
 	}

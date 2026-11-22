@@ -127,6 +127,7 @@ type MetricREDResult struct {
 	Series           map[string][]chstore.SpanMetricSeries // rate · error_rate (%) · p50/p95/p99/avg (ms)
 	ErrorsUnknown    bool                                  // durum-kodu etiketi yok → hata oranı bilinmiyor
 	LatencyUnitKnown bool
+	InfraExcluded    bool // v0.10.2454 — tesisat rotaları (health / scrape) toplamdan dışlandı
 	EnvApplied       bool
 	Partial          []string
 	Queries          []string // çalışan MetricsQL (vmetrics.QueryRecorder)
