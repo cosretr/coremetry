@@ -91,7 +91,7 @@ describe('nearestToLimit', () => {
 
 describe('HeapBaselineCard — sınıra en yakın 5 pod (S9)', () => {
   it('varsayılan: grafik yok, beş satır doluluğa göre azalan, "5 / 7 pod"', async () => {
-    const el = await mount();
+    const el = await mount('/service?name=orders&tab=infra&rtview=summary');
     expect(el.querySelector('[data-testid="heap-near-limit-card"]')).not.toBeNull();
     expect(el.querySelector('[data-testid="tsp"]')).toBeNull();
     expect(m.panels).toBe(0);
@@ -102,7 +102,7 @@ describe('HeapBaselineCard — sınıra en yakın 5 pod (S9)', () => {
   });
 
   it('ton yalnız sınıra yaklaşan değerde (≥ %75 uyarı, ≥ %90 hata)', async () => {
-    const el = await mount();
+    const el = await mount('/service?name=orders&tab=infra&rtview=summary');
     const cells = [...el.querySelectorAll('tbody tr td:nth-child(2)')];
     expect(cells[0].className).toContain('cell-err');
     expect(cells[1].className).toContain('cell-warn');
@@ -114,14 +114,14 @@ describe('HeapBaselineCard — sınıra en yakın 5 pod (S9)', () => {
       mode: 'shadow',
       verdict: { service: 'orders', status: 'critical', pod: 'pod-b', z: 5, current: 92, median: 50, mode: 'shadow', source: 'ch', at: 1700000000, wouldOpen: true, wouldP1: false, livePods: 7 },
     } as Partial<HeapBaselineResponse>);
-    const el = await mount();
+    const el = await mount('/service?name=orders&tab=infra&rtview=summary');
     expect(el.textContent).toContain('gölge: problem AÇILIRDI · pod-b');
   });
 
-  it('bağlantı eski görünümü açar (?rtview=lines), yabancı parametreler korunur', async () => {
-    const el = await mount();
+  it('bağlantı varsayılan (Tüm pod\'lar) görünümü açar (rtview silinir), yabancı parametreler korunur', async () => {
+    const el = await mount('/service?name=orders&tab=infra&rtview=summary');
     const a = [...el.querySelectorAll('a')].find(x => x.textContent?.includes('bant grafiği'))!;
-    expect(a.getAttribute('href')).toBe('/service?name=orders&tab=infra&rtview=lines');
+    expect(a.getAttribute('href')).toBe('/service?name=orders&tab=infra');
   });
 
   it('?rtview=lines: eski kart — grafik + TÜM pod\'lar', async () => {
@@ -145,11 +145,11 @@ describe('HeapBaselineCard — sınıra en yakın 5 pod (S9)', () => {
 
   it('boş küme: kart yok; okuma hatası tablonun içinde', async () => {
     m.resp = resp([]);
-    let el = await mount();
+    let el = await mount('/service?name=orders&tab=infra&rtview=summary');
     expect(el.querySelector('.card')).toBeNull();
     act(() => { root?.unmount(); }); qc.clear(); host?.remove();
     m.fail = true;
-    el = await mount();
+    el = await mount('/service?name=orders&tab=infra&rtview=summary');
     expect(el.querySelector('tr[data-dt-state="error"]')?.textContent).toContain('heap bandı okunamadı: 503 heap');
   });
 });

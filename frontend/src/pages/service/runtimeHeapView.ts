@@ -19,14 +19,17 @@ export interface HeapPodLine { label: string; points: HeapPoint[] }
 // ── ?rtview ── Virgüllü küme: `lines` = Tüm pod'lar (her runtime grafiği +
 // non-heap grafiği açık); `nonheap` = yalnız non-heap grafiğini aç (S10).
 // Bilinmeyen değer yok sayılır (varsayılan görünüm).
+// v0.10.2446 (operatör 2026-11-22): varsayılan = Tüm pod'lar; özet görünüm
+// (medyan + en kötü + eşik üstü) `summary` ile. Eski `lines` linkleri aynı
+// (varsayılan) görünümü açar.
 export interface RtView { lines: boolean; nonheap: boolean }
 export function parseRtView(v: string | null | undefined): RtView {
   const set = new Set((v ?? '').split(',').map(x => x.trim()).filter(Boolean));
-  return { lines: set.has('lines'), nonheap: set.has('nonheap') };
+  return { lines: !set.has('summary'), nonheap: set.has('nonheap') };
 }
 /** Parametre değeri; varsayılan görünümde '' (parametre silinir). */
 export function rtViewParam(v: RtView): string {
-  return [v.lines ? 'lines' : '', v.nonheap && !v.lines ? 'nonheap' : ''].filter(Boolean).join(',');
+  return [v.lines ? '' : 'summary', v.nonheap && !v.lines ? 'nonheap' : ''].filter(Boolean).join(',');
 }
 
 const finite = (v: number | null | undefined): v is number => v != null && Number.isFinite(v);

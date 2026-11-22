@@ -5,7 +5,7 @@
 // (kesikli, kendi birimi ms, etiketli eksen); bindirmesiz kartta sağ eksen yok.
 // (2) Nesil kartı pod × nesil okur: varsayılan nesil başına pod medyanı;
 // seçici (?rtgen) o pod'un nesil çizgilerine geçer; "Tüm pod'lar"
-// (?rtview=lines) her pod × nesil. (4) GC payı eşiği operatörün
+// (varsayılan; özet = ?rtview=summary) her pod × nesil. (4) GC payı eşiği operatörün
 // runtime_alerts ayarından; ayar yoksa varsayılan %10.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
@@ -128,8 +128,8 @@ describe('DotnetRuntimePanel — eşik ayardan (madde 4)', () => {
 });
 
 describe('DotnetRuntimePanel — nesil kartı pod kırılımı (madde 2)', () => {
-  it('sorgu pod × nesil; varsayılan nesil başına medyan + seçici', async () => {
-    const el = await mount();
+  it('sorgu pod × nesil; özet görünümde nesil başına medyan + seçici', async () => {
+    const el = await mount('/service?name=svc&tab=details&rtview=summary');
     expect(m.groupBys).toContain('dotnet.gc.collections|resource.host.name,resource.k8s.pod.name,resource.service.instance.id,cluster,gc.heap.generation');
     expect(names(panel('gcgen'))).toEqual(['gen0 · median', 'gen1 · median']);
     const card = el.querySelector('[data-testid="rt-card-gcgen"]')!;
@@ -141,7 +141,9 @@ describe('DotnetRuntimePanel — nesil kartı pod kırılımı (madde 2)', () =>
   });
 
   it('pod seçimi URL\'ye yazılır, o pod\'un nesil çizgileri çizilir', async () => {
-    const el = await mount();
+    // useUrlParams window.location'dan yazar (MemoryRouter'dan değil): özet görünümü jsdom URL'sine de yansıt.
+    window.history.replaceState(null, '', '/service?name=svc&tab=details&rtview=summary');
+    const el = await mount('/service?name=svc&tab=details&rtview=summary');
     const sel = el.querySelector('[data-testid="rt-card-gcgen"] select') as HTMLSelectElement;
     await act(async () => {
       sel.value = 'pod-b';
@@ -153,12 +155,12 @@ describe('DotnetRuntimePanel — nesil kartı pod kırılımı (madde 2)', () =>
   });
 
   it('?rtgen derin linki açılışta uygulanır', async () => {
-    await mount('/service?name=svc&tab=details&rtgen=pod-a');
+    await mount('/service?name=svc&tab=details&rtview=summary&rtgen=pod-a');
     expect(names(panel('gcgen'))).toEqual(['gen0', 'gen1']);
   });
 
-  it('"Tüm pod\'lar" (?rtview=lines): pod × nesil, seçici yok', async () => {
-    const el = await mount('/service?name=svc&tab=details&rtview=lines&rtgen=pod-a');
+  it('varsayılan (parametresiz) = "Tüm pod\'lar": pod × nesil, seçici yok', async () => {
+    const el = await mount('/service?name=svc&tab=details&rtgen=pod-a');
     expect(names(panel('gcgen'))).toEqual(['pod-c · gen0', 'pod-c · gen1', 'pod-b · gen0', 'pod-b · gen1', 'pod-a · gen0', 'pod-a · gen1']);
     expect(el.querySelector('[data-testid="rt-card-gcgen"] select')).toBeNull();
   });

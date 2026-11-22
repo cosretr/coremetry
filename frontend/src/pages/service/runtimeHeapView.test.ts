@@ -11,19 +11,20 @@ const pod = (label: string, values: (number | null)[]): HeapPodLine => ({ label,
 const vals = (p: { value: number | null }[]) => p.map(x => x.value);
 
 describe('?rtview codec', () => {
-  it('varsayılan: özet; lines / nonheap ayrı ayrı; bilinmeyen değer yok sayılır', () => {
-    expect(parseRtView(null)).toEqual({ lines: false, nonheap: false });
-    expect(parseRtView('')).toEqual({ lines: false, nonheap: false });
+  it('varsayılan: Tüm pod\'lar; summary özeti açar; lines eski bağlantı = varsayılan; bilinmeyen değer yok sayılır', () => {
+    expect(parseRtView(null)).toEqual({ lines: true, nonheap: false });
+    expect(parseRtView('')).toEqual({ lines: true, nonheap: false });
     expect(parseRtView('lines')).toEqual({ lines: true, nonheap: false });
-    expect(parseRtView('nonheap')).toEqual({ lines: false, nonheap: true });
-    expect(parseRtView(' lines , nonheap ')).toEqual({ lines: true, nonheap: true });
-    expect(parseRtView('envelope')).toEqual({ lines: false, nonheap: false });
+    expect(parseRtView('summary')).toEqual({ lines: false, nonheap: false });
+    expect(parseRtView('summary,nonheap')).toEqual({ lines: false, nonheap: true });
+    expect(parseRtView(' summary , nonheap ')).toEqual({ lines: false, nonheap: true });
+    expect(parseRtView('envelope')).toEqual({ lines: true, nonheap: false });
   });
-  it('yazım: varsayılanda boş (parametre silinir); lines her şeyi kapsar', () => {
-    expect(rtViewParam({ lines: false, nonheap: false })).toBe('');
-    expect(rtViewParam({ lines: true, nonheap: false })).toBe('lines');
-    expect(rtViewParam({ lines: false, nonheap: true })).toBe('nonheap');
-    expect(rtViewParam({ lines: true, nonheap: true })).toBe('lines');
+  it('yazım: varsayılanda boş (parametre silinir); summary yalnız özette; nonheap yalnız özette', () => {
+    expect(rtViewParam({ lines: true, nonheap: false })).toBe('');
+    expect(rtViewParam({ lines: true, nonheap: true })).toBe('');
+    expect(rtViewParam({ lines: false, nonheap: false })).toBe('summary');
+    expect(rtViewParam({ lines: false, nonheap: true })).toBe('summary,nonheap');
   });
 });
 

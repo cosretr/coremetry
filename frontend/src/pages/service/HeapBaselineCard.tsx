@@ -75,11 +75,11 @@ export function heapBandSentence(p: HeapBaselinePod | undefined, d: Pick<HeapBas
 const fmtPct = (v: number) => `${v.toFixed(0)} %`;
 
 // ── v0.10.2148 (servis sekmeleri S9; plan K12 — operatör kararı 2026-11-14) ──
-// VARSAYILAN görünüm "sınıra en yakın 5 pod": grafik yok, yalnız GC sonrası
+// ÖZET görünüm (`?rtview=summary`) "sınıra en yakın 5 pod": grafik yok, yalnız GC sonrası
 // heap doluluğu en yüksek beş pod (heap-baseline yanıtının kendi % sınır
 // değeri; yeni sorgu yok). "Hangi pod" sorusunun cevabı burada; pod başına
-// çizgi + bant grafiği ve TÜM pod'ların tablosu `?rtview=lines` ile (eski
-// kart, aşağıda aynen).
+// çizgi + bant grafiği ve TÜM pod'ların tablosu varsayılan görünümdür
+// (v0.10.2446; `?rtview=summary` bu özeti açar, eski kart aşağıda aynen).
 export const NEAR_LIMIT_MAX = 5;
 
 /** Sınıra en yakın pod'lar: son GC-sonrası doluluğa göre azalan; eşitlikte ada göre (kararlı). SAF. */
@@ -150,8 +150,10 @@ function HeapNearLimit({ service, from, to }: HeapCardProps) {
   });
   const linesSearch = (() => {
     const p = new URLSearchParams(params);
-    p.set('rtview', rtViewParam({ ...parseRtView(params.get('rtview')), lines: true }));
-    return `?${p.toString()}`;
+    const v = rtViewParam({ ...parseRtView(params.get('rtview')), lines: true });
+    if (v) p.set('rtview', v); else p.delete('rtview');
+    const q = p.toString();
+    return q ? `?${q}` : '';
   })();
   const table = (body: ReactNode) => (
     <div className="table-wrap">
@@ -206,7 +208,7 @@ function HeapNearLimit({ service, from, to }: HeapCardProps) {
   );
 }
 
-/** Görünüm seçimi URL'den (`?rtview`): varsayılan özet, `lines` eski kart. */
+/** Görünüm seçimi URL'den (`?rtview`): varsayılan tüm pod'lar (eski kart), `summary` özet. */
 export function HeapBaselineCard(props: HeapCardProps) {
   const [params] = useSearchParams();
   return parseRtView(params.get('rtview')).lines ? <HeapBaselineLines {...props} /> : <HeapNearLimit {...props} />;

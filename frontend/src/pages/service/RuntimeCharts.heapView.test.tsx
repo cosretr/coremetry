@@ -4,7 +4,7 @@
 //
 // NE ÇİVİLİYOR: JVM heap kartı heap sınırının yüzdesi (pod başına, kendi
 // sınırına), sınır %100'de kesik; varsayılan pod görünümü medyan + en kötü +
-// eşik üstü (≤5) pod; `?rtview=lines` ("Tüm pod'lar") her pod'u çizer (tavan
+// eşik üstü (≤5) pod; `?rtview=lines` (varsayılan, "Tüm pod'lar") her pod'u çizer (tavan
 // yok); geçiş bağlantısı URL'yi yazar ve yabancı parametreleri korur; çizim
 // CorePanelMulti ile (Metrics panelleriyle aynı motor); pod etiketi olmayan (test dili EN)
 // seri tek çizgi + "pod etiketi yok".
@@ -110,7 +110,7 @@ afterEach(() => {
 describe('RuntimeCharts JVM heap (sınırın yüzdesi + pod görünümü)', () => {
   it('varsayılan: medyan + en kötü + eşik üstü, % sınır, sınır %100 kesik, eşik çizgisi', async () => {
     m.pods = 8;
-    const el = await mount('/service?name=orders&tab=details');
+    const el = await mount('/service?name=orders&tab=details&rtview=summary');
     const p = heapPanel();
     expect(p.title).toBe('JVM heap — sınırın yüzdesi (pod başına)');
     expect(p.viz).toBe('line');
@@ -128,7 +128,7 @@ describe('RuntimeCharts JVM heap (sınırın yüzdesi + pod görünümü)', () =
 
   it('v0.10.2443 — eşikler operatörün runtime_alerts ayarından (heap %, GC pause ms)', async () => {
     m.pods = 8;
-    await mount('/service?name=orders&tab=details', {
+    await mount('/service?name=orders&tab=details&rtview=summary', {
       gcPauseWarnMs: 1500, gcPauseCritMs: 3000, gcShareWarnPct: 10, gcShareCritPct: 25,
       heapPostGCWarnPct: 85, heapPostGCCritPct: 90, heapRawWarnPct: 30, heapRawCritPct: 97,
     });
@@ -144,9 +144,9 @@ describe('RuntimeCharts JVM heap (sınırın yüzdesi + pod görünümü)', () =
     expect(panel('GC pause').thresholds?.[0].value).toBe(2000);
   });
 
-  it('"Tüm pod\'lar" (?rtview=lines): 45 pod\'un hepsi çizilir (tavan yok)', async () => {
+  it('varsayılan = "Tüm pod\'lar": 45 pod\'un hepsi çizilir (tavan yok), çizgi modu', async () => {
     m.pods = 45;
-    const el = await mount('/service?name=orders&tab=details&rtview=lines');
+    const el = await mount('/service?name=orders&tab=details');
     expect(heapPanel().items.length).toBe(45 + 1);
     expect(el.textContent).toContain('45 pod');
     expect(el.textContent).toContain('Summary');
@@ -162,12 +162,12 @@ describe('RuntimeCharts JVM heap (sınırın yüzdesi + pod görünümü)', () =
   });
 
   it('geçiş bağlantısı URL\'yi yazar, yabancı parametreleri korur', async () => {
-    const el = await mount('/service?name=orders&tab=details');
+    const el = await mount('/service?name=orders&tab=details&rtview=summary');
     const toAll = [...el.querySelectorAll('a')].find(a => a.textContent === 'All pods')!;
-    expect(toAll.getAttribute('href')).toBe('/service?name=orders&tab=details&rtview=lines');
+    expect(toAll.getAttribute('href')).toBe('/service?name=orders&tab=details');
     await act(async () => { toAll.click(); });
     await act(async () => { await new Promise(r => setTimeout(r, 10)); });
-    expect(el.querySelector('[data-testid="loc"]')?.textContent).toBe('?name=orders&tab=details&rtview=lines');
+    expect(el.querySelector('[data-testid="loc"]')?.textContent).toBe('?name=orders&tab=details');
   });
 
   it('pod etiketi olmayan seri: tek çizgi + "pod etiketi yok"', async () => {
@@ -186,13 +186,13 @@ describe('RuntimeCharts JVM non-heap düz → cümle (S10)', () => {
   const flatCard = (el: HTMLElement) => el.querySelector('[data-testid="rt-flat-card"]');
 
   it('düz: grafik yerine tek cümle (pod sayısı + aralık) ve "Grafiği göster"', async () => {
-    const el = await mount('/service?name=orders&tab=details');
+    const el = await mount('/service?name=orders&tab=details&rtview=summary');
     const card = flatCard(el)!;
     expect(card.querySelector('h3')?.textContent).toBe('JVM non-heap (by pod) (MB)');
     expect(card.querySelector('[data-testid="cpm"]')).toBeNull();
     expect(card.textContent).toContain('Düz: 2 pod, 100–120 MB aralığında');
     const a = [...card.querySelectorAll('a')].find(x => x.textContent === 'Grafiği göster')!;
-    expect(a.getAttribute('href')).toBe('/service?name=orders&tab=details&rtview=nonheap');
+    expect(a.getAttribute('href')).toBe('/service?name=orders&tab=details&rtview=summary%2Cnonheap');
     expect(el.querySelectorAll('[data-testid="cpm"]').length).toBe(3);
   });
 
@@ -204,11 +204,11 @@ describe('RuntimeCharts JVM non-heap düz → cümle (S10)', () => {
     expect(el.textContent).not.toContain('Grafiği göster');
   });
 
-  it('?rtview=nonheap: düz olsa da grafik + "Grafiği gizle"', async () => {
-    const el = await mount('/service?name=orders&tab=details&rtview=nonheap');
+  it('?rtview=summary,nonheap: düz olsa da grafik + "Grafiği gizle"', async () => {
+    const el = await mount('/service?name=orders&tab=details&rtview=summary,nonheap');
     expect(flatCard(el)).toBeNull();
     expect(el.querySelectorAll('[data-testid="cpm"]').length).toBe(4);
     const hide = [...el.querySelectorAll('a')].find(x => x.textContent === 'Grafiği gizle')!;
-    expect(hide.getAttribute('href')).toBe('/service?name=orders&tab=details');
+    expect(hide.getAttribute('href')).toBe('/service?name=orders&tab=details&rtview=summary');
   });
 });

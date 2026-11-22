@@ -79,7 +79,7 @@ const fmtThr = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : String(Number
 
 export function RuntimePodChart({
   title, storageKey, unit, service, from, to, pods, podless, extra, threshold, status, errorText,
-  deploys, mode = 'line', note, source, testId, onZoom, onZoomReset, smooth = true, right, gens,
+  deploys, note, source, testId, onZoom, onZoomReset, smooth = true, right, gens,
 }: {
   title: string;
   storageKey: string;
@@ -99,6 +99,7 @@ export function RuntimePodChart({
   errorText?: string;
   /** Deploy anları (unix ns). */
   deploys?: number[];
+  /** v0.10.2446: yok sayılır — tüm runtime pod grafikleri düz çizgi (alan dolgusu yok). */
   mode?: 'line' | 'area';
   note?: string | null;
   source?: { label: string; tip: string };
@@ -201,7 +202,7 @@ export function RuntimePodChart({
           storageKey={storageKey}
           height={220}
           unit={runtimeUnitId(unit)}
-          viz={mode}
+          viz={'line'}  /* v0.10.2446 (operatör): pod'lar üst üste binmesin — alan dolgusu yok */
           xRange={xRange}
           items={items}
           loading={status === 'loading' && items.length === 0}
