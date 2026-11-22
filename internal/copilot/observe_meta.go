@@ -138,6 +138,7 @@ var promptVersionRegistry = map[string]string{
 	// v0.10.2456 — Qwen-first: sohbet ve guided istemlerinin sondaki kural tekrarı.
 	"chatClosingCheck":   chatClosingCheck,
 	"guidedClosingCheck": guidedClosingCheck,
+	"quoteVerbatimRule":  quoteVerbatimRule, // v0.10.2461
 
 	"chatStyleCore":       chatStyleCore,
 	"chatStyleKeep":       chatStyleKeep,

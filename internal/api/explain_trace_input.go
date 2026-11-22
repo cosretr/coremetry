@@ -389,6 +389,9 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 	oracleWG.Wait()
 	chainWG.Wait() // v0.10.1371
 	chain.BaseP50Ms, chain.BaseOK = chainBaseP50, chainBaseOK
+	// v0.10.2461 (operatör-bildirimli) — span exception mesajıyla AYNI hatayı
+	// anlatan log metni zincirde ve event bloğunda ÖNCE (explain_trace_logpair.go).
+	pairTraceExceptionLogs(&chain, &evd, spans, logsRead)
 	// v0.10.1371 — HATA ZİNCİRİ User'ın EN BAŞINDA (düz metin, çitsiz; çekmece
 	// kırpması baştan tutar). traceExplainUser'a dokunulmaz (golden pin).
 	chainBlock := ""

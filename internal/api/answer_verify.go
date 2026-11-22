@@ -62,7 +62,7 @@ const (
 	verifyKindName     = "name"
 )
 
-var verifyKinds = []string{verifyKindNumber, verifyKindPercent, verifyKindDuration, verifyKindTime, verifyKindDate, verifyKindName}
+var verifyKinds = []string{verifyKindNumber, verifyKindPercent, verifyKindDuration, verifyKindTime, verifyKindDate, verifyKindName, verifyKindQuote} // v0.10.2461 — quote (answer_verify_quote.go)
 
 // Sonuçlar.
 const (
@@ -171,6 +171,11 @@ func verifyAnswer(tier, answer string, ev verifyEvidence, catalog []string) veri
 	p := prepareVerifyEvidence(ev)
 	general := tier == verifyTierGeneral
 
+	if !general { // v0.10.2461 — alıntı denetimi; alıntı içi aşağıdaki denetimlerden maskelenir
+		var quotes []verifyClaim
+		quotes, text = verifyQuotePass(text, func() string { return verifyNormEvidence(ev) })
+		res.Claims = append(res.Claims, quotes...)
+	}
 	names, text := verifyNameClaims(text, catalog, general)
 	for _, n := range names {
 		st := verifyMismatch

@@ -122,6 +122,10 @@ type Failure struct {
 	HTTPCode int
 	ExType   string
 	ExMsg    string
+	// LogMsg — v0.10.2461: AYNI exception'ı anlatan log satırının metni
+	// (kullanıcının gördüğü; çağıran eşler — trace explain). Doluysa satırda
+	// span mesajının yerine o yazılır, span event mesajı exception satırında kalır.
+	LogMsg string
 }
 
 // SpanFailure — SAF: status + HTTP kodu (kolon, yoksa semconv attribute) +
@@ -232,6 +236,9 @@ type Chain struct {
 // Source "span event" | "log" | çağıranın etiketi.
 type Exception struct {
 	Service, Type, Msg, Source string
+	// LogMsg — v0.10.2461: aynı exception'ın log metni (Failure.LogMsg);
+	// doluysa satır önce log metnini, sonra span event mesajını verir.
+	LogMsg string
 }
 
 // Of — SAF: span'ler → hata zinciri. Hata yoksa OK=false. Kaynak kuralı:
@@ -326,6 +333,8 @@ func FailText(f Failure) string {
 		parts = append(parts, fmt.Sprintf("HTTP %d", f.HTTPCode))
 	}
 	switch {
+	case f.ExType != "" && f.LogMsg != "": // v0.10.2461 — log metni önce
+		parts = append(parts, OneLine(f.ExType, exTypeMaxRunes)+": "+OneLine(f.LogMsg, ExMsgRunes)+" (log)")
 	case f.ExType != "" && f.ExMsg != "":
 		parts = append(parts, OneLine(f.ExType, exTypeMaxRunes)+": "+OneLine(f.ExMsg, ExMsgRunes))
 	case f.ExType != "":
@@ -407,7 +416,7 @@ func (c Chain) Block(ex Exception) string {
 	}
 	for _, h := range c.Hops {
 		if h.Fail.ExType != "" {
-			ex = Exception{Service: h.Span.ServiceName, Type: h.Fail.ExType, Msg: h.Fail.ExMsg, Source: "span event"}
+			ex = Exception{Service: h.Span.ServiceName, Type: h.Fail.ExType, Msg: h.Fail.ExMsg, Source: "span event", LogMsg: h.Fail.LogMsg}
 			break
 		}
 	}
@@ -443,6 +452,19 @@ func (e Exception) Line() string {
 	out := "Zincirin ardından kaydedilen exception: "
 	if svc := OneLine(e.Service, serviceMaxRunes); svc != "" {
 		out += svc + " · "
+	}
+	if lm := OneLine(e.LogMsg, ExMsgRunes); lm != "" && typ != "" {
+		// v0.10.2461 (operatör-bildirimli) — aynı hatanın log metni (kullanıcının
+		// gördüğü) ÖNCE, span event mesajı ayrıca; iki kaynak da adıyla.
+		out += typ + " — log: \"" + lm + "\""
+		if msg != "" {
+			src := e.Source
+			if src == "" {
+				src = "span event"
+			}
+			out += " · " + src + ": \"" + msg + "\""
+		}
+		return out
 	}
 	out += what
 	if e.Source != "" {

@@ -39,6 +39,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/cosrelearn"
+	"github.com/cilcenk/coremetry/internal/selfobs"
 )
 
 // verifyEvidenceMaxBytes — tur başına toplanan kanıt metni tavanı (bellek).
@@ -457,6 +458,11 @@ func (v *answerVerifyTurn) finish() (verifyOutcome, bool) {
 	tr, mode, first := v.truncated, v.enforce, v.first
 	v.mu.Unlock()
 	c := r.compact()
+	if _, by := r.totals(); by[verifyKindQuote].Checked > 0 { // v0.10.2461 — alıntı denetimi öz-gözlemi
+		q := by[verifyKindQuote]
+		selfobs.CountCoSREQuoteCheck(verifyVerified, q.Verified)
+		selfobs.CountCoSREQuoteCheck(verifyMismatch, q.Mismatch)
+	}
 	if tr {
 		c += " truncated"
 	}
