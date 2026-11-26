@@ -61,12 +61,12 @@ import { rowPassesKindFacet } from '@/lib/inboxBuckets'; // v0.10.1803 — Oracl
 // satır hücreleri kendi dosyalarında (davranış değişmez).
 import {
   PRIO_ALL, PRIO_DEFAULT, SORT_DEFAULT, INBOX_SORT_IDS, KIND_ALL, KIND_DEFAULT, KIND_ALL_RETIRED, KIND_DEFAULT_RETIRED,
-  KIND_LABEL, SUBJECT_LANES, SUBJECT_LABEL, SUBJECT_TITLE, STATUS_PIVOTS, DEFAULT_MIN_OCC, type InboxStatus,
+  KIND_LABEL, SUBJECT_LANES, SUBJECT_LABEL, SUBJECT_TITLE, STATUS_PIVOTS, STATUS_LABEL, INBOX_STATUS_CODEC, DEFAULT_MIN_OCC, type InboxStatus,
 } from './inbox/inboxFilters';
 import { inboxCols, capSortLabel, occLine } from './inbox/inboxColumns';
 import { t as tl, tf, useLang } from '@/lib/i18n'; // v0.10.2283 — Türkçe metinler lib/i18n inbox.* (TR aynı)
 import { StdOriginLine } from '@/features/anomalies/StdOriginLine';
-import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub, GraphFrequentChip, GraphClusterMembers, ImpactCell, ConfidenceCell, EvidenceCell } from './inbox/InboxCells';
+import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub, GraphFrequentChip, GraphClusterMembers, ImpactCell, ConfidenceCell, EvidenceCell, ClosedWhen } from './inbox/InboxCells';
 
 
 // exception ailesi — httperror satırları da exception payload'u taşır
@@ -115,10 +115,9 @@ export default function InboxPage() {
   // BAŞKA hiçbir pivotta görünmüyordu (store varsayılanı da 'all' da onları
   // eliyor), ve bunları geri açan tek yüzey /problems'ın Ignored sekmesiydi.
   // O sayfa kalkarsa susturma kalıcı ve geri alınamaz hale gelirdi.
-  const statusFilter: InboxStatus =
-    searchParams.get('status') === 'all' ? 'all'
-      : searchParams.get('status') === 'ignored' ? 'ignored'
-        : 'open';
+  // v0.10.2476 — 'closed' (Kapanan); codec inboxFilters INBOX_STATUS_CODEC.
+  const statusFilter: InboxStatus = INBOX_STATUS_CODEC.decode(searchParams.get('status'));
+  const closedView = statusFilter === 'closed';
   const rawPrio = searchParams.get('prio');
   const rawKind = searchParams.get('kind');
   const rawCat = searchParams.get(INBOX_CAT_PARAM); // v0.10.706
@@ -251,7 +250,7 @@ export default function InboxPage() {
       return p;
     }, { replace: true });
   };
-  const setStatusFilter = (s: InboxStatus) => setParam('status', s === 'open' ? null : s);
+  const setStatusFilter = (s: InboxStatus) => setParam('status', INBOX_STATUS_CODEC.encode(s) || null);
   // v0.10.1015 — öğretme görünümü: ?verdict=noise yalnız "problem değil"
   // işaretli satırları gösterir; parametresiz (varsayılan) onları GİZLER.
   const verdictView = parseVerdictView(searchParams.get('verdict'));
@@ -510,7 +509,7 @@ export default function InboxPage() {
   // priority"; the server now ranks the whole candidate set before capping,
   // so re-ordering here would corrupt the order the cap was applied in.
   const inboxRows = filtered ?? [];
-  const cols = useMemo(() => inboxCols(lang), [lang]); // v0.10.2283
+  const cols = useMemo(() => inboxCols(lang, closedView), [lang, closedView]); // v0.10.2283; v0.10.2476 Kapanan
   const dt = useDataTable<InboxItem>({
     // v0.10.2121 — 'inbox2': eski kolon genişlikleri yeni düzene taşınmasın;
     // sıralama URL'i paylaşılan linkler için `s_inbox` kalır.
@@ -750,6 +749,22 @@ export default function InboxPage() {
             select via togglePrio/toggleKind. Team selects + service filter
             stay pushed right with margin-left:auto. */}
         <div className="facetbar">
+          {/* Status pivot — single-select. v0.9.356: 'ignored' "All" diye
+              etiketleniyordu (iki anlamı belirsiz "All"). v0.10.2476 (operatör:
+              "problemler kapanınca ayrıca gözüksün aktifler arasında kalmasın")
+              — Açık · Kapanan · Susturulan · Tümü, "Diğer süzgeçler"den ana
+              çubuğa taşındı: kapanmış Problem'ler tek tıkla, ayrı görünümde. */}
+          <span className="facet-grp" role="radiogroup" aria-label={tl('inbox.f.status', lang)}>
+            <span className="gl">{tl('inbox.f.status', lang)}</span>
+            {STATUS_PIVOTS.map(s => (
+              <span key={s} role="radio" aria-checked={statusFilter === s} tabIndex={0}
+                onClick={() => setStatusFilter(s)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter(s); } }}
+                className={`facet${statusFilter === s ? ' on' : ''}`}>
+                {tl(STATUS_LABEL[s], lang)}
+              </span>
+            ))}
+          </span>
           {/* v0.10.2124 (S4) — Ekip önde: `team` (owner VEYA SRE, v0.9.1246 /
               DECISIONS:12118 kararı değişmez). Eski çipin yerini alır: seçili
               takım açılırda GÖRÜNÜR; katalogda olmayan takım (sohbet derin
@@ -848,21 +863,6 @@ export default function InboxPage() {
               v0.10.2124'ten beri bu bölümde. */}
           <SavedViewsBar page="inbox" />
           <div className="facetbar">
-            {/* Status pivot — single-select. v0.9.356: 'ignored' "All" diye
-                etiketleniyordu (ternary yalnız 'open'ı ayırıyordu), yani
-                çubukta İKİ "All" vardı ve biri susturulmuş exception'ları
-                açıyordu. Operatörün "iki anlamı belirsiz All" gözlemi düpedüz
-                etiket hatasıydı. */}
-            <span className="facet-grp">
-              <span className="gl">{tl('inbox.f.status', lang)}</span>
-              {STATUS_PIVOTS.map(s => (
-                <span key={s} onClick={() => setStatusFilter(s)}
-                  className={`facet${statusFilter === s ? ' on' : ''}`}>
-                  {s === 'open' ? 'Open / Active' : s === 'all' ? 'All' : 'Ignored'}
-                </span>
-              ))}
-            </span>
-
             {/* v0.10.1015 (operatör: "hangisi gerçek problem hangisi değil zamanla
                 öğretelim") — öğretme görünümü. Tek-seçim, URL'de ?verdict=.
                 "Problem değil" işaretli imzalar varsayılanda gizlenir; sayısı
@@ -920,14 +920,14 @@ export default function InboxPage() {
             <select
               value={sinceFilter}
               onChange={e => setParam('since', e.target.value || null)}
-              title={tl('inbox.since.title', lang)}
+              title={tl(closedView ? 'inbox.closed.window.title' : 'inbox.since.title', lang)}
               style={{
                 background: 'var(--field-bg)', color: 'var(--text)',
                 border: '1px solid var(--border)', borderRadius: 6,
                 fontSize: 12, padding: '4px 8px',
               }}
             >
-              {SINCE_OPTS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+              {SINCE_OPTS.map(o => <option key={o.v} value={o.v}>{closedView && o.v === '' ? tl('inbox.closed.window.default', lang) : o.label}</option>)}
             </select>
             {/* Team filters (v0.5.234). Distinct values come from
                 the current result set so an operator can stack
@@ -1237,7 +1237,9 @@ export default function InboxPage() {
                   {/* v0.10.736 — 13 px mono damga sınıfta (ib-when). v0.10.1529 —
                       "Ne zamandan beri": başlangıç + süre · sürüyor; tam damga title'da. */}
                   <td className="ib-when" title={it.startedAt ? tsLong(it.startedAt) : undefined}>
-                    {it.std && it.std.since.startedAt
+                    {closedView && it.resolvedAt
+                      ? <ClosedWhen startedAt={it.startedAt} resolvedAt={it.resolvedAt} lang={lang} />
+                      : it.std && it.std.since.startedAt
                       ? <>
                           {stdSinceLine(it.std, Date.now(), lang)}
                           <div className="ib-when__ago">{stdDurationLine(it.std, lang)}</div>
@@ -1281,7 +1283,7 @@ export default function InboxPage() {
         {/* v0.10.2124 (S4) — sayfa altı bağlantıları (mockup): durum
             görünümleri mevcut süzgeçleri korur; kural yönetimi /alerts. */}
         <nav className="ib-foot" aria-label={tl('inbox.foot', lang)}>
-          <Link to={inboxStatusHref(searchParams, 'all')}>{tl('inbox.foot.resolved', lang)}</Link>
+          <Link to={inboxStatusHref(searchParams, 'closed')}>{tl('inbox.foot.resolved', lang)}</Link>
           <span aria-hidden="true">·</span>
           <Link to={inboxStatusHref(searchParams, 'ignored')}>{tl('inbox.foot.ignored', lang)}</Link>
           <span aria-hidden="true">·</span>

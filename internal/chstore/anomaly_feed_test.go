@@ -7,6 +7,7 @@ package chstore
 // kısmı (aktif, başlangıç penceresi, susturma) ML satırına da uygulanır.
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -126,10 +127,52 @@ func TestMLFeedFilter(t *testing.T) {
 	// raporlar) servis görünümüyle okur; yalnız açık hacim türü süzgeci okur.
 	mf, _ = mlFeedFilter(ListAnomalyEventsFilter{}, now)
 	if where, _ := mlEventsWhere(MLEventsFilter{Since: mf.Since, View: mf.View, recCols: true}); mf.View != MLViewService ||
-		!strings.Contains(where, "NOT (class = 'telemetry_volume' OR detector IN ('svc_volume_spike', 'svc_telemetry_volume'))") {
+		!strings.Contains(where, "NOT ((class = 'telemetry_volume' OR detector IN ('svc_volume_spike', 'svc_telemetry_volume')) OR ") {
 		t.Fatalf("akış hacim satırlarını dışlamalı: view=%q where=%s", mf.View, where)
 	}
 	if mf, _ := mlFeedFilter(ListAnomalyEventsFilter{Kind: "ml:" + MLDetSvcTelemetryVolume}, now); mf.View != "" || mf.Detector != MLDetSvcTelemetryVolume {
 		t.Fatalf("açık hacim süzgeci okunabilmeli: %+v", mf)
+	}
+}
+
+// v0.10.2476 (operatör: "ana liste yalnız Problem açabilen / besleyen
+// olaylar") — pin: anomali akışının (Anomalies ana listesi, rozet, inbox,
+// raporlar, CoSRE) dışındaki türler TEK listede ve tam olarak bunlar; akış
+// SQL'i her birini ve invalid kaydı dışlar; Problem besleyen türler akışta.
+func TestAnomalyFeedExcludedKinds(t *testing.T) {
+	wantLoad := []string{"throughput_drop", "service_silent", "log_volume", "trace_pod_outlier", "new_template"}
+	if !slices.Equal(MLLoadStructureDetectors, wantLoad) {
+		t.Fatalf("yük / yapı listesi değişti: %v", MLLoadStructureDetectors)
+	}
+	off := append([]string{MLDetSvcVolumeSpike, MLDetSvcTelemetryVolume}, wantLoad...)
+	for _, d := range off {
+		if !MLOffFeedDetector(d) {
+			t.Errorf("%s akış dışında olmalı", d)
+		}
+	}
+	for _, d := range []string{"op_latency", "op_error_rate", "svc_error_rate", "svc_response_time", "endpoint_impact", "error_rate", "dependency_latency", "metric_kafka"} {
+		if MLOffFeedDetector(d) {
+			t.Errorf("%s Problem besler; akışta kalmalı", d)
+		}
+	}
+	now := time.Now()
+	mf, _ := mlFeedFilter(ListAnomalyEventsFilter{}, now)
+	for _, rc := range []bool{false, true} {
+		where, _ := mlEventsWhere(MLEventsFilter{Since: mf.Since, View: mf.View, recCols: rc})
+		neg := where[strings.Index(where, "NOT ("):]
+		for _, d := range off {
+			if !strings.Contains(neg, "'"+d+"'") {
+				t.Errorf("recCols=%v akış %s satırını dışlamıyor: %s", rc, d, where)
+			}
+		}
+		if rc && !strings.Contains(neg, "publish_state = 'invalid'") {
+			t.Errorf("akış invalid kaydı dışlamalı: %s", where)
+		}
+	}
+	// açık tür süzgeci (Yük ve yapı satırından tür bağlantısı, RCA kanıtı) okur
+	for _, d := range wantLoad {
+		if mf, _ := mlFeedFilter(ListAnomalyEventsFilter{Kind: MLAnomalyKindPrefix + d}, now); mf.View != "" || mf.Detector != d {
+			t.Errorf("açık %s süzgeci okunabilmeli: %+v", d, mf)
+		}
 	}
 }

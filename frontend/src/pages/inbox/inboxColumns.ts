@@ -47,7 +47,8 @@ const PRIO_RANK: Record<string, number> = { P1: 3, P2: 2, P3: 1 };
 // ikinci kez çizerdi. 1366 px (kenar çubuğu 220) bütçesinde tabanlar sığmaz;
 // düşme sırası Tür (4) → Kanıt (4) → Servis (3; std manşeti özneyi zaten
 // taşıyor) — Etki / Güven / İlgilenen kalır, düşenler "+N sütun"dan açılır.
-export const inboxCols = (lang: Lang): DataTableColumn<InboxItem>[] => [
+// v0.10.2476 — closed: Kapanan görünümü; zaman kolonu kapanış + süreyi çizer.
+export const inboxCols = (lang: Lang, closed = false): DataTableColumn<InboxItem>[] => [
   { id: 'priority', label: t('inbox.col.priority', lang), sortValue: it => PRIO_RANK[it.priority] ?? 0, naturalDir: 'desc', width: 84, minWidth: 80, priority: 1 },
   // v0.9.648 — ESNEK kolon: başlık serbest metin ve en geniş olan.
   { id: 'detail',   label: t('inbox.col.detail', lang),  sortValue: it => it.std?.headline ?? inboxRowHeadline(it), naturalDir: 'asc', flex: true, minWidth: 260, priority: 1 },
@@ -57,7 +58,7 @@ export const inboxCols = (lang: Lang): DataTableColumn<InboxItem>[] => [
   { id: 'service',  label: t('inbox.col.service', lang), sortValue: it => it.service, naturalDir: 'asc', width: 170, minWidth: 120, priority: 3 },
   { id: 'team',     label: t('inbox.col.team', lang), width: 150, minWidth: 110, priority: 2 },
   { id: 'kind',     label: t('inbox.col.kind', lang), width: 110, minWidth: 90, priority: 4 },
-  { id: 'firstSeen', label: t('inbox.col.firstSeen', lang), sortValue: it => it.startedAt, naturalDir: 'desc', width: 160, minWidth: 140, priority: 2 },
+  { id: 'firstSeen', label: t(closed ? 'inbox.col.closedAt' : 'inbox.col.firstSeen', lang), sortValue: it => it.startedAt, naturalDir: 'desc', width: 160, minWidth: 140, priority: 2 },
   { id: 'assignee', label: t('inbox.col.assignee', lang), sortValue: it => it.assignee ?? '', naturalDir: 'asc', width: 236, minWidth: 150, priority: 2 },
 ];
 

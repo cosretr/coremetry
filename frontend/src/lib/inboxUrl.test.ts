@@ -143,7 +143,7 @@ describe('inboxMoreFiltersActive', () => {
   });
   it('her ikincil süzgeç tek tek sayılır', () => {
     const cases: Array<[string, string]> = [
-      ['status=all', 'status'], ['status=ignored', 'status'], ['verdict=noise', 'verdict'],
+      ['verdict=noise', 'verdict'],
       ['subject=db', 'subject'], ['subject=external', 'subject'], [`${INBOX_CAT_PARAM}=ERROR`, INBOX_CAT_PARAM],
       ['since=30m', 'since'], ['since=7d', 'since'], ['owner=a', 'owner'], ['sre=b', 'sre'],
       ['minOcc=0', 'minOcc'], ['minOcc=10', 'minOcc'],

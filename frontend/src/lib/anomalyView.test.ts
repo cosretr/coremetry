@@ -9,6 +9,11 @@ describe('resolveAnomalyView', () => {
     expect(resolveAnomalyView('held', false)).toBe('');
     expect(resolveAnomalyView('x', true)).toBe('');
     expect(resolveAnomalyView(null, true)).toBe('');
+    expect(resolveAnomalyView('load', false)).toBe('load'); // v0.10.2476 Yük ve yapı herkese
+  });
+  it('v0.10.2476: invalid kayıt Elenenler nedeni ve sayacı', () => {
+    expect(heldReasonText([{ name: 'invalid_record', value: 0, threshold: 0 }], 'tr')).toBe('Kayıt doğrulanamadı (olay kaydı sözleşmeye uymuyor)');
+    expect(heldCounterText({ events: 1, byGate: { invalid_record: 1 } }, false, 'en')).toBe('Events filtered out in the last 24 hours: 1 (invalid record 1)');
   });
   it('sekme metinleri iki dilde; İngilizce arayüz İngilizce sözcük gösterir', () => {
     expect(t('anomalies.view.held', 'en')).toBe('Filtered out');

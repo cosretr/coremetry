@@ -35,6 +35,11 @@ type StdLag struct {
 	Baseline float64 `json:"baseline"`        // normal (mevsimsel medyan, mesaj)
 	// More — aynı serviste lag'i açık başka topic sayısı ("+N topic daha").
 	More int `json:"more,omitempty"`
+	// PatternDays / Pattern — v0.10.2476: beklenen günlük desen (önceki 7
+	// günün kaçında benzer saatte) ve cümlesi (LagDailyPatternText); desen
+	// değilse boş. Kaynak satırın ölçüsü (MLGroupLagPatternMetric).
+	PatternDays int    `json:"patternDays,omitempty"`
+	Pattern     string `json:"pattern,omitempty"`
 }
 
 // MLConsumerLagSentence — SAF: consumer lag Problem'inin cümlesi (manşet;

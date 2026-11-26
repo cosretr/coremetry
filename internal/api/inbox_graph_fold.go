@@ -96,7 +96,10 @@ func foldGraphClusters(items []InboxItem, groups []chstore.ProblemGraphGroup) []
 	}
 	byProblem := map[string]int{}
 	for i, it := range items {
-		if it.Kind == "problem" && it.Problem != nil && it.Problem.ID != "" {
+		// v0.10.2476 — kapanmış satır katlanmaz: "Tümü" görünümünde kapanmış
+		// bir sahip açık üyeyi (ya da açık sahip kapanmış üyeyi) kendi
+		// satırının altına gizlemesin; küme blobu açık Problem'lerden kurulur.
+		if it.Kind == "problem" && it.Problem != nil && it.Problem.ID != "" && it.Status != "resolved" {
 			byProblem[it.Problem.ID] = i
 		}
 	}

@@ -37,8 +37,15 @@ var (
 		"endpoint_impact"}       // v0.10.2474: uç nokta hata oranı + yanıt süresi (etki kuralı; servisin tek Problem'ine üye)
 	// Metrik aileleri = dedektörler (M1): her aile ayrı anahtar + ayrı terfi.
 	MLMetricDetectorNames = []string{"metric_jvm", "metric_pool", "metric_kafka", "metric_http_client", "metric_k8s"}
-	MLDetectorNames       = append(append(append([]string{}, MLLogDetectorNames...), MLTraceDetectorNames...), MLMetricDetectorNames...)
+	// MLInfraDetectorNames — v0.10.2476: tek güçlü altyapı olayları (aile
+	// DEĞİL: ifade / kaynak tespiti yok). pod_oom = OOMKilled pod (Remote
+	// Cluster kube-state-metrics; servisin tek Problem'ine üye). Sinyal metric.
+	MLInfraDetectorNames = []string{MLDetPodOOM}
+	MLDetectorNames      = append(append(append(append([]string{}, MLLogDetectorNames...), MLTraceDetectorNames...), MLMetricDetectorNames...), MLInfraDetectorNames...)
 )
+
+// MLDetPodOOM — v0.10.2476: OOMKilled pod dedektörü (ml/pod_oom.go).
+const MLDetPodOOM = "pod_oom"
 
 // MLDetectorSignal — SAF: dedektör → 'log' | 'trace' (bilinmeyen → 'log').
 func MLDetectorSignal(detector string) string {
@@ -57,6 +64,9 @@ func MLDetectorSignal(detector string) string {
 		if n == detector {
 			return MLSignalMetric
 		}
+	}
+	if detector == MLDetPodOOM { // v0.10.2476: kube-state-metrics kaynaklı
+		return MLSignalMetric
 	}
 	return MLSignalLog
 }
@@ -242,6 +252,11 @@ type MLConfig struct {
 	// değer kazanır. omitempty: ConfigHash'e girmez (tespit ayarı değil —
 	// olay aynı üretilir, yalnız liste ve Problem adaylığı değişir).
 	PublishGates string `json:"publishGates,omitempty"`
+	// LagDailyPattern — v0.10.2476 (operatör kararı): önceki 7 günün ≥ 3'ünde
+	// benzer saatte tekrarlayan consumer lag olayının Problem'i P3 açılır
+	// ("beklenen günlük desen"; ml_lag_pattern.go). nil = AÇIK (varsayılan),
+	// false = v0.10.2396 önceliği aynen. omitempty: ConfigHash'e girmez.
+	LagDailyPattern *bool `json:"lagDailyPattern,omitempty"`
 }
 
 // Gürültü kapısı kipleri (MLConfig.PublishGates). off: kapılar hiç
@@ -276,6 +291,11 @@ func (c MLConfig) GroupProblemsOn() bool {
 	return c.Enabled && (c.GroupProblems == nil || *c.GroupProblems)
 }
 
+// LagDailyPatternOn — SAF: lag günlük desen kuralı (nil = açık).
+func (c MLConfig) LagDailyPatternOn() bool {
+	return c.LagDailyPattern == nil || *c.LagDailyPattern
+}
+
 // MLGroupRulePrefix — ML grubunun açtığı Problem'in kural kimliği öneki
 // (v0.10.2015 gölge, v0.10.2052 canlı). `anomaly-auto:` ailesi: bildirim
 // türü "anomaly", kategori ve incident yolu değişmez (audit §6 B). Kuyruk:
@@ -307,7 +327,8 @@ var mlDefaultOnDetectors = map[string]bool{"op_latency": true, "dependency_error
 	"svc_error_rate":     true, // v0.10.2077: eski anomaly:*:error_rate işinin ML karşılığı (birleşik yetenek)
 	"svc_breadth":        true, // v0.10.2086: eski svc-slowdown işinin ML karşılığı (birleşik yetenek)
 	"svc_response_time":  true, // v0.10.2385: etki olayı (operatör kararı 2026-11-19: etki olayları varsayılan açık)
-	"endpoint_impact":    true} // v0.10.2474: uç nokta etki olayı (operatör 2026-11-26; kapatılabilir, deploy gerekmez)
+	"endpoint_impact":    true, // v0.10.2474: uç nokta etki olayı (operatör 2026-11-26; kapatılabilir, deploy gerekmez)
+	MLDetPodOOM:          true} // v0.10.2476: OOMKilled pod → Problem (operatör 2026-11-26; Settings › ML'den kapatılır)
 
 // MLDetectorDefaultOn — SAF: dedektörün varsayılan durumu.
 func MLDetectorDefaultOn(name string) bool { return mlDefaultOnDetectors[name] }
@@ -416,9 +437,10 @@ func (c MLConfig) DetectorOn(name string) bool { return c.Enabled && c.Detectors
 // hangi ayarla üretildi; replay/what-if karşılaştırması).
 func (c MLConfig) ConfigHash() string {
 	n := NormalizeMLConfig(c)
-	n.Baseline = nil      // v0.10.1814: gözlem işi tespit ayarı değil
-	n.GroupProblems = nil // v0.10.2052: Problem anahtarı tespit ayarı değil
-	n.PublishGates = ""   // v0.10.2473: kapı kipi tespit ayarı değil
+	n.Baseline = nil        // v0.10.1814: gözlem işi tespit ayarı değil
+	n.GroupProblems = nil   // v0.10.2052: Problem anahtarı tespit ayarı değil
+	n.PublishGates = ""     // v0.10.2473: kapı kipi tespit ayarı değil
+	n.LagDailyPattern = nil // v0.10.2476: öncelik anahtarı tespit ayarı değil
 	raw, _ := json.Marshal(n)
 	h := fnv.New64a()
 	_, _ = h.Write(raw)

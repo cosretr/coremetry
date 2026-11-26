@@ -2,6 +2,7 @@
 // v0.10.2170 (Problems S10, docs/frontend/problems-page-plan.md) — Inbox.tsx'ten
 // taşındı; içerik ve değerler aynen (davranış değişmez).
 import type { InboxKind, SubjectLane } from '@/lib/types';
+import { z, zParam } from '@/lib/urlSchema';
 
 // Facet vocab + defaults (v0.8.291) — both defaults are what the URL codec
 // omits so a fresh link stays clean.
@@ -124,8 +125,18 @@ export const SUBJECT_TITLE: Partial<Record<SubjectLane, string>> = {
   service: 'inbox.lane.service.title',
   external: 'inbox.lane.external.title',
 };
-export type InboxStatus = 'open' | 'all' | 'ignored';
-export const STATUS_PIVOTS: readonly InboxStatus[] = ['open', 'all', 'ignored'];
+// v0.10.2476 (operatör: "problemler kapanınca ayrıca gözüksün aktifler
+// arasında kalmasın") — 'closed' (Kapanan): seçili pencerede kapanmış
+// Problem'ler, en son kapanan önce (sunucu inbox_closed.go). Sıra operatörün:
+// Açık · Kapanan · Susturulan · Tümü. Etiketler lib/i18n inbox.st.*.
+export type InboxStatus = 'open' | 'closed' | 'ignored' | 'all';
+export const STATUS_PIVOTS: readonly InboxStatus[] = ['open', 'closed', 'ignored', 'all'];
+export const STATUS_LABEL: Record<InboxStatus, string> = {
+  open: 'inbox.st.open', closed: 'inbox.st.closed', ignored: 'inbox.st.ignored', all: 'inbox.st.all',
+};
+// ?status= codec'i (lib/urlSchema): bilinmeyen / eksik değer → 'open';
+// varsayılan yazılmaz (param silinir), küme dışı değer URL'e asla yazılmaz.
+export const INBOX_STATUS_CODEC = zParam<InboxStatus>(z.enum(['open', 'closed', 'ignored', 'all']), 'open');
 
 // v0.10.740 — varsayılan occurrence tabanı (sunucu inboxDefaultMinOcc ile aynı).
 // v0.10.949 — 2 → 5, çoklu-servis istisnalı (aynı anda ≥2 serviste görülen

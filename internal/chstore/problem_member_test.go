@@ -204,7 +204,7 @@ func TestMLEventsWhereViews(t *testing.T) {
 		want string
 		not  string
 	}{
-		{MLEventsFilter{Since: now, View: MLViewService, recCols: true}, "NOT " + plat, ""},
+		{MLEventsFilter{Since: now, View: MLViewService, recCols: true}, "NOT (" + plat + " OR ", ""},
 		{MLEventsFilter{Since: now, View: MLViewPlatform, recCols: true}, plat, "NOT ("},
 		{MLEventsFilter{Since: now, View: MLViewPlatform}, "detector IN ('svc_volume_spike', 'svc_telemetry_volume')", "class"},
 		{MLEventsFilter{Since: now, View: MLViewHeld, recCols: true}, `position(record, '"passed":false') > 0`, ""},

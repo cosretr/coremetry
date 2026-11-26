@@ -209,6 +209,8 @@ var mlDetSpecs = map[string]detSpec{
 	"svc_response_time": {label: "Servis yanıt süresi (VM RED, sunucu istekleri; medyan ve en yavaş %10)", fact: "yanıt süresi", what: "{svc} servisinde isteklerin yanıt süresi uzadı.", past: "servis yanıt süresi uzadı", unit: unitMs, measure: "Yanıt süresi (medyan)"},
 	// v0.10.2474 — uç nokta etki olayı; ölçü olayın part'ında (err_ratio | ep_p50 | ep_p90; specFor).
 	detEndpointImpact: {label: "Uç nokta etkisi (VM RED, sunucu istekleri; hata oranı, medyan ve en yavaş %10)", fact: "{code} hata oranı", what: "{svc} servisinin {code} uç noktasında hata alan isteklerin oranı arttı.", past: "uç nokta hata oranı arttı", unit: unitRatio},
+	// v0.10.2476 — OOMKilled pod (kube-state-metrics); code = iş yükü adı, gözlenen = 15 dk kill sayısı.
+	detPodOOM: {label: "Pod bellek sınırında sonlandırıldı (OOMKilled; kube-state-metrics restart + son sonlanma nedeni)", fact: "{code} OOMKilled sayısı", what: "{svc} servisinin {code} iş yükünde pod'lar bellek sınırında sonlandırıldı (OOMKilled).", past: "pod'lar OOMKilled oldu", unit: unitCount, noun: "OOMKilled"},
 	// v0.10.2118 — evaluator yazar (chstore.MLDetSvcVolumeSpike; MLDetectorNames'te yok).
 	// v0.10.2242 (Dilim B) — ML hacim dedektörü; kart başlığı olay kaydından (RecordTitle).
 	chstore.MLDetSvcTelemetryVolume: {label: "Telemetri hacmi (istek başına span)", fact: "istek başına span", what: "{svc} servisinin istek başına yazdığı span sayısı değişti.", past: "telemetri hacmi değişti", unit: unitCount, noun: "span"},

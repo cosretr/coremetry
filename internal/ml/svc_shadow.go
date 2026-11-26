@@ -78,8 +78,13 @@ type SvcShadow struct {
 // isSvcDetector — SAF.
 func isSvcDetector(d string) bool {
 	return d == detSvcErrorRate || d == detSvcBreadth || d == detSvcResponseTime || // yanıt süresi: v0.10.2385 (I4)
-		d == detEndpointImpact // v0.10.2474: uç nokta etki olayı servisin TEK Problem'ine üye
+		d == detEndpointImpact || // v0.10.2474: uç nokta etki olayı servisin TEK Problem'ine üye
+		d == detPodOOM // v0.10.2476: OOMKilled pod (iş yükü) da
 }
+
+// svcSecondary — SAF (v0.10.2476): servis düzeyi olay varken yalnız üye olan,
+// yokken Problem'i tek başına açabilen olaylar (uç nokta, OOMKilled iş yükü).
+func svcSecondary(d string) bool { return d == detEndpointImpact || d == detPodOOM }
 
 // svcErrThresholdFloor — hata oranı Problem'inin Threshold tabanı: etki
 // kuralının mutlak tabanının yarısı (%1 / 2 = %0,5). Taban bunun altındayken
@@ -88,6 +93,9 @@ var svcErrThresholdFloor = impactRules[impactFailureRate].Floor / 2
 
 // svcValueThreshold — SAF: Problem'in Value / Threshold'u.
 func svcValueThreshold(e chstore.MLEvent) (float64, float64) {
+	if e.Detector == detPodOOM { // v0.10.2476: öncelik kodu (pod_oom.go oomValueThreshold)
+		return oomValueThreshold(e)
+	}
 	th := e.Baseline
 	det := e.Detector
 	if det == detEndpointImpact { // v0.10.2474: ölçüsüne göre servis karşılığının kuralı
@@ -139,8 +147,9 @@ func decideSvcShadow(kept []chstore.MLEvent, open map[string]bool, groups []deci
 		best, bestReason, bestV, bestT := "", "", 0.0, 0.0
 		for _, e := range svcLeadEvents(evs) { // v0.10.2474: uç nokta olayı servis olayı varken yalnız üye
 			v, th := svcValueThreshold(e)
+			// v0.10.2476: ölçü + cümle de (OOM önceliği kendi dalında, manşetten)
 			p, why := chstore.PreviewProblemPriority(chstore.Problem{RuleID: rule, Severity: "critical", Service: svc, Value: v, Threshold: th,
-				Status: "open", StartedAt: evs[0].StartedAt}, now.UnixNano(), prio)
+				Metric: svcMetric(e), Description: svcEventSentence(e), Status: "open", StartedAt: evs[0].StartedAt}, now.UnixNano(), prio)
 			if prioRank[p] > prioRank[best] {
 				best, bestReason, bestV, bestT = p, why, v, th
 			}
@@ -237,6 +246,8 @@ func svcEventSentence(e chstore.MLEvent) string {
 		return chstore.MLResponseTimeSentence(e.Service, rtMeasureOfEvent(e).key, e.Observed, e.Baseline)
 	case detEndpointImpact: // v0.10.2474: "checkout · POST /pay: hata oranı normalde %0,2, şimdi %14 (70 kat)."
 		return epSentence(e)
+	case detPodOOM: // v0.10.2476: "checkout · pod bellek sınırında sonlandırıldı (OOMKilled): 2 pod, son 15 dk'da 3 kez — limit 512 Mi."
+		return oomSentence(e)
 	case detSvcBreadth:
 		_, n := breadthOpsOf(e.Evidence)
 		cnt := "birden çok"
@@ -261,6 +272,8 @@ func svcMetric(e chstore.MLEvent) string {
 		return "p95_ms"
 	case detSvcResponseTime:
 		return rtMeasureOfEvent(e).agg + "_ms"
+	case detPodOOM: // v0.10.2476
+		return chstore.MLOOMMetric
 	case detEndpointImpact: // v0.10.2474: servis karşılığının ölçüsü (problem standardı ailesi aynı)
 		switch epMeasureOfEvent(e).key {
 		case chstore.MLRespMedian:
@@ -274,7 +287,7 @@ func svcMetric(e chstore.MLEvent) string {
 
 // svcSentenceRank — Problem açıklamasında cümle sırası: hata oranı, yanıt
 // süresi, yaygın yavaşlama.
-var svcSentenceRank = map[string]int{detSvcErrorRate: 0, detSvcResponseTime: 1, detSvcBreadth: 2, detEndpointImpact: 3}
+var svcSentenceRank = map[string]int{detSvcErrorRate: 0, detSvcResponseTime: 1, detSvcBreadth: 2, detEndpointImpact: 3, detPodOOM: 4}
 
 // mlProblemRatio — SAF: Value/Threshold (Threshold ≤ 0 → 1; grup satırı 1).
 func mlProblemRatio(v, th float64) float64 {
@@ -293,7 +306,7 @@ func svcLeadEvents(evs []chstore.MLEvent) []chstore.MLEvent {
 	var svcEvs []chstore.MLEvent
 	bestI, best := -1, -1.0
 	for i, e := range evs {
-		if e.Detector != detEndpointImpact {
+		if !svcSecondary(e.Detector) { // v0.10.2476: OOMKilled iş yükü de uç nokta gibi
 			svcEvs = append(svcEvs, e)
 			continue
 		}

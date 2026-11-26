@@ -32,6 +32,7 @@ export const EN_EAGER: Record<string, string> = {
   'mlDetector.svc_breadth': 'Widespread slowdown',
   'mlDetector.svc_response_time': 'Service response time',
   'mlDetector.endpoint_impact': 'Endpoint impact',
+  'mlDetector.pod_oom': 'OOMKilled pod',
   'mlDetector.svc_volume_spike': 'Service volume spiked',
   'mlDetector.svc_telemetry_volume': 'Telemetry volume',
   'clusters.fleet.head_one': '1 cluster: ',
@@ -158,6 +159,9 @@ export const EN_EAGER: Record<string, string> = {
   'std.m.h.mlEpRtMedFlat': '{svc} · {op}: response time (median) normally {n}, now {v}.',
   'std.m.h.mlEpRtSlow': '{svc} · {op}: response time (slowest 10%) normally {n}, now {v} ({x}×).',
   'std.m.h.mlEpRtSlowFlat': '{svc} · {op}: response time (slowest 10%) normally {n}, now {v}.',
+  // v0.10.2476 — OOMKilled pod manşeti (iş yükü başına).
+  'std.m.h.mlOom': '{wl} · pods killed at the memory limit (OOMKilled): {n} pods, {m} times in the last {win} min — limit {lim} Mi.',
+  'std.m.h.mlOomNoLim': '{wl} · pods killed at the memory limit (OOMKilled): {n} pods, {m} times in the last {win} min.',
   // v0.10.2475 — consumer lag Problem'i (Go chstore MLConsumerLagSentence / lagImpactText).
   'std.m.h.mlLag': '{svc} · Kafka consumer lag: normally ~{n} messages, now {v}.',
   'std.m.h.mlLagT': '{svc} · Kafka consumer lag: normally ~{n} messages, now {v} (topic {t}).',
@@ -212,10 +216,13 @@ export const EN_EAGER: Record<string, string> = {
   // computePriorityMsg / IncidentPriorityMsg, api exceptionPriorityAtMsg /
   // oraclePriorityAtMsg / anomalyPriorityMsg / inbox_keep_priority). YALNIZ EN.
   // Sayılar sunucunun biçimiyle ham ("2.5", "11,260"); …Sec süre, …M iç içe mesaj.
-  'std.m.prio.info': 'info', 'std.m.prio.storm': 'storm: {n} services (threshold {thr})',
+  'std.m.prio.info': 'info', 'std.m.prio.lagPattern': 'expected daily pattern: seen at a similar hour on {d} of the last 7 days', 'std.m.prio.storm': 'storm: {n} services (threshold {thr})',
   'std.m.prio.incCritical': 'critical incident', 'std.m.prio.incident': 'incident',
   'std.m.prio.breach.critical': 'critical + {r}x threshold', 'std.m.prio.breach.warning': 'warning + {r}x threshold',
   'std.m.prio.totalLoss.critical': 'critical + total loss (0/{thr})', 'std.m.prio.totalLoss.warning': 'warning + total loss (0/{thr})',
+  // v0.10.2476 — OOMKilled Problem'i: gerçek neden (oran yok).
+  'std.m.prio.oomRepeat': 'OOMKilled {k} times in {win} min', 'std.m.prio.oomShare': '{n}/{t} pods ({pct}%) killed at the memory limit',
+  'std.m.prio.oom': 'OOMKilled: {n}/{t} pods, {k} times in {win} min', 'std.m.imp.oom': '{n}/{t} pods OOMKilled, {k} times in {win} min',
   'std.m.prio.stale': 'critical open {h}h', 'std.m.prio.critical': 'critical', 'std.m.prio.warnSteady': 'warning steady',
   'std.m.prio.inc.declared': 'Declared incident', 'std.m.prio.inc.critical': 'Declared incident, critical',
   'std.m.prio.inc.warning': 'Declared incident, warning', 'std.m.prio.inc.criticalAck': 'Declared incident, critical — acknowledged',

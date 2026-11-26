@@ -64,6 +64,11 @@ type GroupGateInput struct {
 	// sayılır). Doluyken tutulan (held) üye sayılmaz; etki kuralı olayı her
 	// zaman sayılır. Bağımsız kanıt sayısı (K10) hiçbir kolda aranmaz.
 	Published map[string]PubVerdict
+	// LagHistory — v0.10.2476 (ml_lag_pattern.go): consumer lag serisinin
+	// (chstore.MLSeriesKey(servis, kod)) önceki bölüm başlangıçları (unix
+	// ns, son 7 gün + 1 sa). nil = kural kapalı (ml.lagDailyPattern) ya da
+	// okunamadı: v0.10.2396 önceliği aynen.
+	LagHistory map[string][]int64
 }
 
 // GroupDecision — grup terfi kararı (gölge kaydı; canlıda Live/ProblemID dolu).
@@ -99,6 +104,12 @@ type GroupDecision struct {
 	// bigBreach kuralıyla P1 verir. Diğer kararlarda 0 (satır sinyal sayısı).
 	Value     float64 `json:"value,omitempty"`
 	Threshold float64 `json:"threshold,omitempty"`
+	// PatternDays / Pattern — v0.10.2476: tek sinyal kolunu açan consumer lag
+	// önceki 7 günün ≥ 3'ünde benzer saatte görüldü → beklenen günlük desen:
+	// Problem P3 (Metric chstore.MLGroupLagPatternMetric, Value = gün,
+	// Threshold = 7), bastırılmaz. Pattern = chstore.LagDailyPatternText.
+	PatternDays int    `json:"patternDays,omitempty"`
+	Pattern     string `json:"pattern,omitempty"`
 }
 
 // eventRatio — SAF: sapma oranı (≥ 1). Yukarı: gözlenen/taban; aşağı:
@@ -187,6 +198,14 @@ func DecideGroupPromotion(g MLGroup, members []chstore.MLEvent, in GroupGateInpu
 				d.Priority, d.Value, d.Threshold = "P1", v, th
 			}
 			d.Reason = fmt.Sprintf("açardı: tek güçlü sinyal (%s) — %s", strings.Join(d.Signals, ", "), why)
+			if days, ok := lagDailyPattern(members, id, in.LagHistory); ok {
+				// v0.10.2476: beklenen günlük desen → P3 (warning; ölçü desen
+				// satırı, computePriority dalı). Bastırma yok.
+				d.Severity, d.Priority = "warning", "P3"
+				d.Value, d.Threshold = float64(days), chstore.LagPatternWindowDays
+				d.PatternDays, d.Pattern = days, chstore.LagDailyPatternText(days)
+				d.Reason += " · " + d.Pattern
+			}
 		}
 	default:
 		d.WouldOpen = true
@@ -330,6 +349,26 @@ func impactLagBigBreach(members []chstore.MLEvent, id string) (float64, float64,
 		return e.Observed, th, true
 	}
 	return 0, 0, false
+}
+
+// lagDailyPattern — SAF (v0.10.2476): tek sinyal kolunu tetikleyen üye (id)
+// consumer lag ise ve serisi önceki 7 günün ≥ 3'ünde benzer saatte bölüm
+// başlattıysa desenli gün sayısı. hist nil = kural kapalı.
+func lagDailyPattern(members []chstore.MLEvent, id string, hist map[string][]int64) (int, bool) {
+	if hist == nil {
+		return 0, false
+	}
+	for _, e := range members {
+		if e.ID != id {
+			continue
+		}
+		if _, ok := lagEventTopic(e); !ok {
+			return 0, false
+		}
+		days := chstore.LagDailyPatternDays(e.StartedAt, hist[chstore.MLSeriesKey(e.Service, e.Code)])
+		return days, chstore.IsLagDailyPattern(days)
+	}
+	return 0, false
 }
 
 // impactSingleWhy — SAF: etki kuralıyla açılmış üyenin tek sinyal kolu

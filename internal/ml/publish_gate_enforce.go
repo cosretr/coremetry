@@ -25,7 +25,7 @@ package ml
 //   - service_impact ve series_consistency: operatör yalnız üç kapıyı onayladı.
 //
 // ETKİ KURALI OLAYLARI MUAF (impactRuleRun: servis hata oranı, servis yanıt
-// süresi, v0.10.2474 uç nokta etki olayı, etki kuralıyla açılmış consumer lag): kendi yük kapıları ve eşikleri
+// süresi, v0.10.2474 uç nokta etki olayı, v0.10.2476 OOMKilled pod, etki kuralıyla açılmış consumer lag): kendi yük kapıları ve eşikleri
 // var (impact_rule.go); kapı satırları kayda yazılmaya devam eder ama olay
 // hiçbir kipte tutulmaz ve karar beklemeden adaydır (çift kapı yok).
 //
@@ -51,7 +51,7 @@ func gatesEnforced(mode string) bool  { return mode == chstore.MLGatesOn }
 const PublishGatesCriterion = "Kip ayardan okunur (Settings › Anomaly › ML › Gürültü kapıları: off | shadow | on, varsayılan on). " +
 	"on: hacim (en az 100 çağrı), mutlak fark (en az 25 ms) ya da görünür sapma kapısında kalan olay ana listede görünmez ve Problem adayı olmaz; Elenenler'de nedeniyle okunur. " +
 	"Bağımsız kanıt (K10), servis etkisi ve seri tutarlılığı satırları hiçbir kipte uygulanmaz, yalnız kayda yazılır. " +
-	"Etki kuralı olayları (servis hata oranı, servis yanıt süresi, uç nokta hata oranı ve yanıt süresi, consumer lag) muaftır."
+	"Etki kuralı olayları (servis hata oranı, servis yanıt süresi, uç nokta hata oranı ve yanıt süresi, OOMKilled pod, consumer lag) muaftır."
 
 // gateHoldExempt — SAF: kapıların hiçbir kipte tutmadığı olay. Etki kuralı
 // aileleri kendi yük kapısı ve eşiğiyle yargılanır (çift kapı yok).

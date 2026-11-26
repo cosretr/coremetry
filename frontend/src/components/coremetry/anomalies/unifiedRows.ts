@@ -194,6 +194,14 @@ export function listHeadlineView(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLe
   return { text: listHeadline(r, lang), serverText: !!r.mlLead && !leadRecord(r.mlLead) && !!r.mlLead.summary };
 }
 
+/** v0.10.2476 — SAF: grup kararı consumer lag'i beklenen günlük desen
+ *  saydıysa (P3) satırın ek notu; değilse ''. TR sunucu cümlesi, EN anahtardan. */
+export function rowLagPattern(r: Pick<UnifiedAnomalyRow, 'mlLead'>, lang: Lang = 'tr'): string {
+  const d = r.mlLead?.groupShadow;
+  if (!d?.pattern || !d.patternDays) return '';
+  return lang === 'tr' ? `${d.pattern} · P3` : tf('anomalies.lagPattern', lang, { d: d.patternDays });
+}
+
 /** SAF: listedeki "Ne oldu" metni. */
 export function listHeadline(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLead' | 'service'>, lang: Lang = 'tr'): string {
   return stripServicePrefix(rowHeadline(r, lang), r.service, lang);

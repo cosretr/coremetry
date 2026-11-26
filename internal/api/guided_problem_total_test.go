@@ -201,7 +201,7 @@ func TestCountableFilterCoversEveryListOnlyPredicate(t *testing.T) {
 	for _, m := range fields {
 		name := m[1]
 		switch name {
-		case "Limit", "Offset", "OrderBy", "Order":
+		case "Limit", "Offset", "OrderBy", "Order", "OrderByResolved":
 			continue // sayfalama; kapsamı daraltmaz
 		case "ServicesAllowDBSubjects":
 			// ⚠ MUAFİYET, KANITIYLA. Bu alan bir DEĞİŞTİRİCİ: ListProblems

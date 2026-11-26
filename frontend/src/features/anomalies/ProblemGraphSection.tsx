@@ -16,7 +16,7 @@ import { useProblemGraph } from '@/lib/queries/problems';
 import { graphCounts, graphSectionMode, type GraphT } from '@/lib/problemGraph';
 import { ProblemGraphMembers, ProblemGraphNearMisses } from '@/components/coremetry/problems/ProblemGraphTable';
 import { BlastTable, OriginEvidence, OriginLine } from '@/components/coremetry/problems/ProblemOriginBlocks';
-import { FrequentChip, RepeatBlock } from '@/components/coremetry/problems/ProblemRepeatBlock';
+import { FrequentChip, RepeatBlock, type LagPattern } from '@/components/coremetry/problems/ProblemRepeatBlock';
 import { Sect } from './detailSections';
 
 const clockHM = (ns: number) => fmtClock(ns / 1e6).slice(0, 5);
@@ -40,15 +40,17 @@ export function ProblemFrequentChip({ problemId }: { problemId: string }) {
   return <span style={{ marginLeft: 6, verticalAlign: 'middle' }}><FrequentChip f={f} t={t} /></span>;
 }
 
-/** v0.10.2281 (S3) — "Tekrar" bölümü; sık değilse hiçbir şey çizmez. */
-export function ProblemRepeatSection({ problemId, startedAt }: { problemId: string; startedAt?: number }) {
+/** v0.10.2281 (S3) — "Tekrar" bölümü; sık değilse ve lag deseni yoksa
+ *  hiçbir şey çizmez. v0.10.2476: pattern = consumer lag beklenen günlük
+ *  desen (Problem standardı std.lag; P3 gerekçesi) — satır olarak en üstte. */
+export function ProblemRepeatSection({ problemId, startedAt, pattern }: { problemId: string; startedAt?: number; pattern?: LagPattern }) {
   const q = useProblemGraph(problemId);
   const t = useGraphT();
-  const f = q.data?.frequent;
-  if (!f?.frequent) return null;
+  const f = q.data?.frequent?.frequent ? q.data.frequent : undefined;
+  if (!f && !pattern) return null;
   return (
-    <Sect title={t('pg.rep.title')} sub={t('pg.rep.sub')}>
-      <RepeatBlock v={f} t={t} when={whenDT} startedAt={startedAt} />
+    <Sect title={t('pg.rep.title')} sub={f ? t('pg.rep.sub') : t('pg.rep.patternSub')}>
+      <RepeatBlock v={f} t={t} when={whenDT} startedAt={startedAt} pattern={pattern} />
     </Sect>
   );
 }

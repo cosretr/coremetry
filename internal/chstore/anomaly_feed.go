@@ -220,7 +220,9 @@ func mlFeedFilter(f ListAnomalyEventsFilter, now time.Time) (MLEventsFilter, boo
 	} else if f.FeedMLDetector != "" {
 		mf.Detector = f.FeedMLDetector
 	}
-	if mf.Detector == MLDetSvcTelemetryVolume || mf.Detector == MLDetSvcVolumeSpike {
+	// v0.10.2476: yük / yapı dedektörleri ve invalid kayıt da dışarıda
+	// (mlOffFeedCond); açık dedektör istisnası aynı tek listeden.
+	if MLOffFeedDetector(mf.Detector) {
 		mf.View = ""
 	}
 	return mf, true

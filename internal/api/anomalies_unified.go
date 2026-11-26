@@ -106,7 +106,7 @@ func parseUnifiedParams(get func(string) string) unifiedParams {
 	}
 	p.Sort, p.Dir = ml.NormalizeUnifiedSort(p.Section, get("sort"), get("dir"))
 	switch v := get("view"); v {
-	case chstore.MLViewPlatform, chstore.MLViewHeld:
+	case chstore.MLViewPlatform, chstore.MLViewHeld, chstore.MLViewLoad:
 		p.View = v
 	}
 	return p
@@ -122,7 +122,8 @@ const unifiedCachePrefix = "anomaly:unified:"
 func unifiedKey(p unifiedParams, tz string) string {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(p.Event))
-	return fmt.Sprintf(unifiedCachePrefix+"v4:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:view=%s:gates=%s:ev=%x:tz=%s",
+	// v5 (v0.10.2476): servis görünümü yük / yapı ve invalid satırları düşürür.
+	return fmt.Sprintf(unifiedCachePrefix+"v5:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:view=%s:gates=%s:ev=%x:tz=%s",
 		p.Section, p.Signal, p.Offset, p.Limit, p.Sort, p.Dir, p.View, p.Gates, h.Sum64(), tz)
 }
 
@@ -161,8 +162,16 @@ type heldSummary struct {
 	ByGate map[string]int `json:"byGate"`
 }
 
-// heldGatesOf — SAF: olayın kaldığı gürültü kapıları (ml.HeldGates) → yanıt.
+// heldGateInvalid — v0.10.2476: doğrulayıcıdan kalan kayıt (publish_state
+// invalid) Elenenler'de bu adla; değer / eşik yok.
+const heldGateInvalid = "invalid_record"
+
+// heldGatesOf — SAF: olayın kaldığı gürültü kapıları (ml.HeldGates) → yanıt;
+// invalid kayıt tek satır heldGateInvalid.
 func heldGatesOf(e chstore.MLEvent) []heldGate {
+	if e.PublishState == ml.PublishInvalid {
+		return []heldGate{{Name: heldGateInvalid}}
+	}
 	var out []heldGate
 	for _, g := range ml.HeldGates(e) {
 		out = append(out, heldGate{Name: g.Name, Value: g.Value, Threshold: g.Threshold})
@@ -174,7 +183,7 @@ func heldGatesOf(e chstore.MLEvent) []heldGate {
 func summarizeHeld(items []chstore.MLEvent) *heldSummary {
 	s := &heldSummary{Events: len(items), ByGate: map[string]int{}}
 	for _, e := range items {
-		for _, g := range ml.HeldGates(e) {
+		for _, g := range heldGatesOf(e) {
 			s.ByGate[g.Name]++
 		}
 	}
@@ -249,10 +258,15 @@ func (s *Server) getAnomaliesUnified(w http.ResponseWriter, r *http.Request) {
 // heldOnly — SAF: Elenenler'in olayları. on: gerçekten tutulan satırlar
 // (publish_state=held — ana listede olmayanlar; kip açılmadan önce yazılmış,
 // listede duran eski satır buraya girmez). shadow: on olsaydı tutulacaklar
-// (ml.ShadowHeld). off: kapılar değerlendirilmiyor → boş.
+// (ml.ShadowHeld). off: kapılar değerlendirilmiyor → boş. v0.10.2476: invalid
+// kayıt (doğrulayıcıdan kaldı; hiçbir listede yok) her kipte burada.
 func heldOnly(items []chstore.MLEvent, gates string) []chstore.MLEvent {
 	out := items[:0:0]
 	for _, e := range items {
+		if e.PublishState == ml.PublishInvalid {
+			out = append(out, e)
+			continue
+		}
 		switch gates {
 		case chstore.MLGatesOn:
 			if e.PublishState == ml.PublishHeld {

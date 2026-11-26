@@ -1267,7 +1267,8 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
           bağ ya da bağlanmayan yoksa hiçbir şey çizmez. */}
       <ProblemGraphSection problemId={problem.id} />
       {/* v0.10.2281 (S3) — "Tekrar" (gölge; bildirim değişmedi). */}
-      <ProblemRepeatSection problemId={problem.id} startedAt={problem.startedAt} />
+      <ProblemRepeatSection problemId={problem.id} startedAt={problem.startedAt}
+        pattern={std?.lag?.pattern && std.lag.patternDays ? { days: std.lag.patternDays, text: std.lag.pattern } : undefined} />
       {/* "Kök neden" etiketi (CoSRE doğruluk ölçümünün doğruluk
           kaynağı). Problem'in "Vaka kaydı" kartının yerini alır (aynı onaylı
           incident_cases vakası); dört kutunun (S7) altında, Teknik kanıttaki

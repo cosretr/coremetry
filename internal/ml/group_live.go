@@ -53,11 +53,41 @@ const groupLagMetric = "ml_group_lag"
 
 // groupProblemMeasure — SAF: kararın Problem ölçüsü (metrik, değer, eşik).
 func groupProblemMeasure(d GroupDecision) (string, float64, float64) {
+	if d.PatternDays > 0 && d.Threshold > 0 { // v0.10.2476: beklenen günlük desen (P3)
+		return chstore.MLGroupLagPatternMetric, d.Value, d.Threshold
+	}
 	if d.Value > 0 && d.Threshold > 0 {
 		return groupLagMetric, d.Value, d.Threshold
 	}
 	n := float64(len(d.Signals))
 	return groupProblemMetric, n, n
+}
+
+// refreshGroupMeasure — SAF: açık grup satırının ölçüsünü tazeler. svc'nin
+// ya da önceki lag tikinin yükselttiği oran korunur; v0.10.2396: lag ölçüsü
+// yalnız DAHA YÜKSEK oranla yazılır (öncelik yalnız yükselir). v0.10.2476:
+// desen ölçüsü (P3) yalnız zaten desen olan satıra yazılır — açık P1/P2
+// satırı desene İNMEZ; desen satırı desen dışı karar gelince (ikinci sinyal,
+// desen kapandı) kararın ölçüsünü ve şiddetini alır.
+func refreshGroupMeasure(q *chstore.Problem, d GroupDecision) {
+	m, v, th := groupProblemMeasure(d)
+	wasPattern := q.Metric == chstore.MLGroupLagPatternMetric
+	switch {
+	case m == chstore.MLGroupLagPatternMetric:
+		if wasPattern {
+			q.Value, q.Threshold = v, th
+		}
+		return
+	case wasPattern:
+		q.Value, q.Threshold, q.Metric = v, th, m
+		if d.Severity != "" {
+			q.Severity = d.Severity
+		}
+		return
+	}
+	if r := mlProblemRatio(q.Value, q.Threshold); r <= 1 || mlProblemRatio(v, th) > r {
+		q.Value, q.Threshold, q.Metric = v, th, m
+	}
 }
 
 // groupProblemRuleName — "ML · " öneki manşeti açıklamadan alır
@@ -310,13 +340,7 @@ func planMLProblemsWith(groups []decidedGroup, svcs []svcProblemIn, open []chsto
 			q := row(id)
 			if g.D.WouldOpen && chstore.IsMLGroupProblem(q.RuleID) {
 				q.Description = desc(g)
-				m, v, th := groupProblemMeasure(g.D)
-				// svc'nin ya da önceki lag tikinin yükselttiği oran korunur;
-				// v0.10.2396: lag ölçüsü yalnız DAHA YÜKSEK oranla yazılır
-				// (öncelik yalnız yükselir).
-				if r := mlProblemRatio(q.Value, q.Threshold); r <= 1 || mlProblemRatio(v, th) > r {
-					q.Value, q.Threshold, q.Metric = v, th, m
-				}
+				refreshGroupMeasure(q, g.D)
 			}
 			continue
 		}
@@ -346,7 +370,12 @@ func planMLProblemsWith(groups []decidedGroup, svcs []svcProblemIn, open []chsto
 			raise(id, newSvcProblem(in))
 		default:
 			q := row(id)
-			if mlProblemRatio(in.Value, in.Threshold) > mlProblemRatio(q.Value, q.Threshold) {
+			if q.Metric == chstore.MLGroupLagPatternMetric || mlProblemRatio(in.Value, in.Threshold) > mlProblemRatio(q.Value, q.Threshold) {
+				// v0.10.2476: desen satırına servis düzeyi olay katıldı → servis
+				// ölçüsü ve şiddeti (desen yalnız tek lag olayını açıklar).
+				if q.Metric == chstore.MLGroupLagPatternMetric {
+					q.Severity = newSvcProblem(in).Severity
+				}
 				q.Value, q.Threshold, q.Metric = in.Value, in.Threshold, in.Metric
 			}
 			if chstore.IsMLSvcProblem(q.RuleID) {

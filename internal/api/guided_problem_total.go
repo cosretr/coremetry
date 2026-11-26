@@ -73,7 +73,7 @@ type problemsTotal struct {
 // yani beşincisi eklendiğinde burası kırmızıya döner.
 func countableFilter(f chstore.ProblemFilter) bool {
 	return f.Services == nil && len(f.NotStatuses) == 0 && f.IDs == nil &&
-		f.SubjectKind == ""
+		f.SubjectKind == "" && f.ResolvedSinceNs == 0 // v0.10.2476 — kapanış penceresi CountProblems'ta yok
 }
 
 // listDefaultLimit — ListProblems'in Limit==0 iken UYGULADIĞI tavan.

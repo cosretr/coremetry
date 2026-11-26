@@ -143,6 +143,7 @@ export function detectorGroup(d: string): string {
     case 'dependency_latency': case 'dependency_error_rate': return 'dependency';
     case 'trace_error_count': return 'trace_errors'; // v0.10.2018
     case 'svc_breadth': return 'svc_breadth'; // v0.10.2086: türetilmiş, kendi tik satırı
+    case 'pod_oom': return 'metric_pod_oom'; // v0.10.2476: OOMKilled pod (kube-state-metrics)
     default: return 'trace_pods';
   }
 }

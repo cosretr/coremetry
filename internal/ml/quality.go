@@ -58,7 +58,8 @@ func belowImpactFloor(ev chstore.MLEvent) bool {
 // açık koşuyu kural "temiz" diyene dek uzatır): servis hata oranı (I3), servis
 // yanıt süresi (I4) ve kanıtı rule=impact damgalı consumer lag (I5). Thanos ve eski yol lag olayı değil.
 func impactRuleRun(ev chstore.MLEvent) bool {
-	if ev.Detector == detSvcErrorRate || ev.Detector == detSvcResponseTime || ev.Detector == detEndpointImpact { // yanıt süresi: v0.10.2385 (I4); uç nokta: v0.10.2474
+	if ev.Detector == detSvcErrorRate || ev.Detector == detSvcResponseTime || ev.Detector == detEndpointImpact || // yanıt süresi: v0.10.2385 (I4); uç nokta: v0.10.2474
+		ev.Detector == detPodOOM { // v0.10.2476: tek güçlü altyapı olayı (OOMKilled), kapılardan muaf
 		return true
 	}
 	if !isConsumerLagEvent(ev) {

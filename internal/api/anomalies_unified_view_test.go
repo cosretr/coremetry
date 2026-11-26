@@ -55,7 +55,8 @@ func TestHeldOnlyShadowVerdict(t *testing.T) {
 	invalid.ID, invalid.PublishState = "d", ml.PublishInvalid
 	legacy := chstore.MLEvent{ID: "e"}
 	got := heldOnly([]chstore.MLEvent{drop, info, pass, invalid, legacy}, chstore.MLGatesShadow)
-	if len(got) != 1 || got[0].ID != "a" {
-		t.Fatalf("Elenenler = %+v, beklenen yalnız gölge drop kararı (a)", got)
+	// v0.10.2476: invalid kayıt (d) da Elenenler'de (hiçbir listede yok).
+	if len(got) != 2 || got[0].ID != "a" || got[1].ID != "d" {
+		t.Fatalf("Elenenler = %+v, beklenen gölge drop kararı (a) + invalid kayıt (d)", got)
 	}
 }

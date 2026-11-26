@@ -155,7 +155,7 @@ func NewestImpactRuleFacts(evs []chstore.MLEvent) *chstore.StdImpactRule {
 // v0.10.2396: lag ≥ 2 × taban satırı (Metric groupLagMetric, Value = lag)
 // da aynı lider olaydan okunur.
 func ImpactFactsLeadOf(p chstore.Problem) (string, bool) {
-	lag := p.Metric == groupLagMetric
+	lag := p.Metric == groupLagMetric || p.Metric == chstore.MLGroupLagPatternMetric // v0.10.2476 desen satırı
 	if !lag && (p.Metric != groupProblemMetric || p.Value != 1) {
 		return "", false
 	}

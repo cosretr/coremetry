@@ -14,18 +14,23 @@ import (
 func TestMLEventsWhereA2(t *testing.T) {
 	since := time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)
 	const base = "last_seen >= ? AND detector NOT IN ('svc_slowdown','metric_anomaly','anomaly_promotion')"
-	pre := map[bool]map[string]string{ // v0.10.2340 çıktısı
+	// v0.10.2476: servis görünümü yük / yapı ve invalid satırları da düşürür;
+	// invalid kayıt yalnız Elenenler'de.
+	const load = "detector IN ('throughput_drop', 'service_silent', 'log_volume', 'trace_pod_outlier', 'new_template')"
+	pre := map[bool]map[string]string{
 		false: {
 			"":             base,
-			MLViewService:  base + " AND NOT detector IN ('svc_volume_spike', 'svc_telemetry_volume')",
+			MLViewService:  base + " AND NOT (detector IN ('svc_volume_spike', 'svc_telemetry_volume') OR " + load + ")",
 			MLViewPlatform: base + " AND detector IN ('svc_volume_spike', 'svc_telemetry_volume')",
+			MLViewLoad:     base + " AND " + load + " AND NOT detector IN ('svc_volume_spike', 'svc_telemetry_volume')",
 			MLViewHeld:     base + " AND 0",
 		},
 		true: {
 			"":             base,
-			MLViewService:  base + " AND NOT (class = 'telemetry_volume' OR detector IN ('svc_volume_spike', 'svc_telemetry_volume'))",
-			MLViewPlatform: base + " AND (class = 'telemetry_volume' OR detector IN ('svc_volume_spike', 'svc_telemetry_volume'))",
-			MLViewHeld:     base + ` AND record != '' AND publish_state != 'invalid' AND position(record, '"passed":false') > 0`,
+			MLViewService:  base + " AND NOT ((class = 'telemetry_volume' OR detector IN ('svc_volume_spike', 'svc_telemetry_volume')) OR " + load + " OR publish_state = 'invalid')",
+			MLViewPlatform: base + " AND (class = 'telemetry_volume' OR detector IN ('svc_volume_spike', 'svc_telemetry_volume')) AND publish_state != 'invalid'",
+			MLViewLoad:     base + " AND " + load + " AND NOT (class = 'telemetry_volume' OR detector IN ('svc_volume_spike', 'svc_telemetry_volume')) AND publish_state != 'invalid'",
+			MLViewHeld:     base + ` AND record != '' AND (publish_state = 'invalid' OR position(record, '"passed":false') > 0)`,
 		},
 	}
 	for rc, views := range pre {
@@ -34,7 +39,7 @@ func TestMLEventsWhereA2(t *testing.T) {
 				t.Errorf("A2 kapalı recCols=%v view=%q:\n got %s\nwant %s", rc, v, got, want)
 			}
 			on := want
-			if rc && (v == MLViewService || v == MLViewPlatform) {
+			if rc && (v == MLViewService || v == MLViewPlatform || v == MLViewLoad) {
 				on += " AND publish_state != 'held'"
 			}
 			if got, _ := mlEventsWhere(MLEventsFilter{Since: since, View: v, recCols: rc, HideHeld: true}); got != on {

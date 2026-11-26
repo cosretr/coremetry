@@ -16,12 +16,19 @@ export function FrequentChip({ f, t, enforce }: { f: { prior24h: number; days7d:
   );
 }
 
-export function RepeatBlock({ v, t, when, startedAt }: { v: FrequentVerdict; t: GraphT; when: (ns: number) => string; startedAt?: number }) {
-  const eps = (v.episodes ?? []).slice(0, 5);
+/** v0.10.2476 — consumer lag beklenen günlük desen (P3): gün sayısı + sunucu cümlesi (TR). */
+export interface LagPattern { days: number; text: string }
+
+export function RepeatBlock({ v, t, when, startedAt, pattern }: { v?: FrequentVerdict; t: GraphT; when: (ns: number) => string; startedAt?: number; pattern?: LagPattern }) {
+  const eps = (v?.episodes ?? []).slice(0, 5);
+  const rows = [
+    ...(pattern ? [{ k: t('pg.rep.patternK'), v: t('pg.rep.patternV', { text: pattern.text, d: pattern.days }) }] : []),
+    ...(v ? repeatRows(v, t, startedAt) : []),
+  ];
   return (
     <div className="flex flex-col gap-2" data-testid="pg-repeat">
       <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3.5 gap-y-1 text-xs">
-        {repeatRows(v, t, startedAt).map(r => (
+        {rows.map(r => (
           <div key={r.k} className="contents">
             <dt className="text-muted-foreground">{r.k}</dt>
             <dd className="m-0 [overflow-wrap:anywhere]">{r.v}</dd>
@@ -36,7 +43,7 @@ export function RepeatBlock({ v, t, when, startedAt }: { v: FrequentVerdict; t: 
           </ul>
         </div>
       )}
-      {v.partial && <p className="m-0 text-xs text-muted-foreground">{t('pg.rep.partial')}</p>}
+      {v?.partial && <p className="m-0 text-xs text-muted-foreground">{t('pg.rep.partial')}</p>}
     </div>
   );
 }

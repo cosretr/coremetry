@@ -112,3 +112,33 @@ func TestHeldViewEventsReasonsAndCounter(t *testing.T) {
 		t.Fatalf("held görünümü kipi ve sayacı taşımalı: %s", b)
 	}
 }
+
+// v0.10.2476 — invalid kayıt (doğrulayıcıdan kaldı) hiçbir listede yok →
+// Elenenler'de her kipte, nedeni "invalid_record"; sayaçta ayrı satır.
+// "Yük ve yapı" görünümü (view=load) çözülür ve anahtarda ayrı.
+func TestHeldViewIncludesInvalidAndLoadView(t *testing.T) {
+	inv := chstore.MLEvent{ID: "inv", Detector: "op_latency", Service: "checkout", PublishState: ml.PublishInvalid, Record: "{}"}
+	for _, mode := range []string{chstore.MLGatesOn, chstore.MLGatesShadow, chstore.MLGatesOff} {
+		if got := heldOnly([]chstore.MLEvent{inv}, mode); len(got) != 1 {
+			t.Errorf("%s: invalid kayıt Elenenler'de olmalı", mode)
+		}
+	}
+	if got := heldGatesOf(inv); !reflect.DeepEqual(got, []heldGate{{Name: heldGateInvalid}}) {
+		t.Fatalf("invalid nedeni: %+v", got)
+	}
+	if s := summarizeHeld([]chstore.MLEvent{inv}); s.ByGate[heldGateInvalid] != 1 {
+		t.Fatalf("sayaç invalid: %+v", s)
+	}
+	p := parseUnifiedParams(func(k string) string {
+		if k == "view" {
+			return chstore.MLViewLoad
+		}
+		return ""
+	})
+	if p.View != chstore.MLViewLoad {
+		t.Fatalf("view=load çözülmeli: %+v", p)
+	}
+	if unifiedKey(p, "UTC") == unifiedKey(parseUnifiedParams(func(string) string { return "" }), "UTC") {
+		t.Fatal("load görünümü servis listesiyle aynı anahtarı paylaşmamalı")
+	}
+}

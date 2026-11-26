@@ -477,6 +477,17 @@ func computePriorityMsg(p Problem, nowNs int64, cfg ProblemPriorityConfig) (stri
 	if sev == "info" {
 		return "P3", "info", stdM("prio.info")
 	}
+	// v0.10.2476 — consumer lag beklenen günlük deseni (ML kaydedicisi
+	// açılışta karar verir, ml_lag_pattern.go): şiddetten bağımsız P3;
+	// Value = önceki 7 günden desenli gün sayısı.
+	if p.Metric == MLGroupLagPatternMetric {
+		d := int(p.Value)
+		return "P3", LagDailyPatternText(d), stdM("prio.lagPattern", "d", strconv.Itoa(d))
+	}
+	// v0.10.2476 — OOMKilled Problem'i: kendi kuralı (oran merdiveni değil).
+	if prio, why, m, ok := oomProblemPriority(p, nowNs, cfg); ok {
+		return prio, why, m
+	}
 
 	// v0.9.1194 — FIRTINA tanım gereği P1 (operatör-bildirimli + spec
 	// onayı). Genel merdiven burada YANLIŞ cevap verir: Value=9 servis /
@@ -1192,8 +1203,32 @@ type ProblemFilter struct {
 	// by ListProblems AND CountProblems so list / count / buckets /
 	// sidebar badge agree, and Limit bites AFTER the env narrowing.
 	// service='' (global log-query) rows always survive. Empty = off.
-	Env   string
-	Limit int
+	Env string
+	// ResolvedSinceNs (v0.10.2476, operatör: "problemler kapanınca ayrıca
+	// gözüksün") — yalnız bu andan (unix ns) SONRA kapanmış satırlar
+	// (resolved_at >= ?). Problems "Kapanan" görünümünün penceresi; 0 = kısıt
+	// yok. SQL'de, LIMIT'ten ÖNCE (v0.9.322 sınıfı).
+	ResolvedSinceNs int64
+	// OrderByResolved — en son kapanan önce (ORDER BY resolved_at DESC);
+	// false = bugünkü started_at DESC.
+	OrderByResolved bool
+	Limit           int
+}
+
+// problemResolvedSinceConjunct — SAF: ResolvedSinceNs'in WHERE parçası.
+func problemResolvedSinceConjunct(sinceNs int64) (string, bool) {
+	if sinceNs <= 0 {
+		return "", false
+	}
+	return "resolved_at IS NOT NULL AND toUnixTimestamp64Nano(resolved_at) >= ?", true
+}
+
+// problemListOrder — SAF: ListProblems'in sıralaması.
+func problemListOrder(f ProblemFilter) string {
+	if f.OrderByResolved {
+		return "resolved_at DESC, started_at DESC"
+	}
+	return "started_at DESC"
 }
 
 // CountProblems returns the row count matching the same filter
@@ -1478,6 +1513,9 @@ func (s *Store) ListProblems(ctx context.Context, f ProblemFilter) ([]Problem, e
 		}
 	}
 	s.envScopeProblems(ctx, &wc, f.Env) // v0.8.387 — service-scoped env narrowing (env_members.go)
+	if sql, ok := problemResolvedSinceConjunct(f.ResolvedSinceNs); ok {
+		wc.add(sql, f.ResolvedSinceNs)
+	}
 	if f.Limit == 0 {
 		f.Limit = 100
 	}
@@ -1495,7 +1533,7 @@ func (s *Store) ListProblems(ctx context.Context, f ProblemFilter) ([]Problem, e
 	rows, err := s.conn.Query(ctx, `
 		SELECT `+s.problemSelectExpr()+`
 		FROM problems FINAL `+wc.sql()+`
-		ORDER BY started_at DESC
+		ORDER BY `+problemListOrder(f)+`
 		LIMIT ?
 		SETTINGS max_execution_time = 8`, append(wc.args, f.Limit)...)
 	if err != nil {

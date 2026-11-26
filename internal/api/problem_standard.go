@@ -88,7 +88,8 @@ func parseStdRef(ref string) (kind, id string, ok bool) {
 // eklendi (priorityReason, priorityReasonMsg); dil anahtara GİRMEZ.
 // :v3: — v0.10.2383 kanıta "Neden" satırları eklendi (evidence.reasons).
 // :v4: — v0.10.2391 yanıt süresi + consumer lag Problem'lerinde de "Neden".
-func problemStandardKey(ref string) string { return "pstd:v4:ref=" + strings.TrimSpace(ref) }
+// :v5: — v0.10.2476 lag beklenen günlük desen (lag.patternDays / pattern).
+func problemStandardKey(ref string) string { return "pstd:v5:ref=" + strings.TrimSpace(ref) }
 
 // stdBaseFacts — SAF: trafik dışındaki gerçekler (takvim, batch, deploy).
 func stdBaseFacts(now time.Time, sens chstore.AnomalySensitivityConfig, service string) chstore.StdFacts {

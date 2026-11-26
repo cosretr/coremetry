@@ -1287,7 +1287,9 @@ func (e *Evaluator) escalateStaleProblems(ctx context.Context) {
 		// hem tazeleme dalında olmalı: yalnız birinde olsaydı süpürme
 		// yükseltir, tazeleme geri indirir ve v0.8.309'un bildirim seli
 		// geri gelirdi.
-		if escalationExempt(p.RuleID) {
+		// v0.10.2476 — lag günlük desen satırı (P3, ML açar ve tazeler) yaşla
+		// şiddet kazanmaz: yükseltme bildirimi yeniden gönderirdi.
+		if escalationExempt(p.RuleID) || p.Metric == chstore.MLGroupLagPatternMetric {
 			continue
 		}
 		openFor := now.Sub(time.Unix(0, p.StartedAt))

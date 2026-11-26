@@ -37,7 +37,7 @@ import { groupStatusText } from './mlGroupRows';
 import { useUrlPage } from '@/lib/useUrlPage';
 import { t as tr, tf, useLang } from '@/lib/i18n';
 import { heldCounterText, heldReasonText } from '@/lib/anomalyView';
-import { listHeadlineView, rowHref } from './unifiedRows';
+import { listHeadlineView, rowHref, rowLagPattern } from './unifiedRows';
 import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2302
 import {
   UNIFIED_SORT_DEFAULT, UNIFIED_SORT_IDS, UNIFIED_SORT_URL_KEY, parseUnifiedSort, unifiedSortApiParams,
@@ -94,7 +94,16 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
     switch (col.id) {
       case 'started': return <span className="font-mono" title={fmtTs(r.start)}>{fmtClock(new Date(r.start / 1e6)).slice(0, 5)}</span>;
       case 'service': return <span className="dt-trunc font-mono" title={r.service}>{r.service || '—'}</span>;
-      case 'headline': { const { text: h, serverText } = listHeadlineView(r, lang); return <Link to={rowHref(r)} className="dt-trunc" title={h}>{serverText ? <OrigLang>{h}</OrigLang> : h}</Link>; }
+      case 'headline': {
+        const { text: h, serverText } = listHeadlineView(r, lang);
+        const pat = rowLagPattern(r, lang); // v0.10.2476 — beklenen günlük desen (P3)
+        return (
+          <Link to={rowHref(r)} className="dt-trunc" title={pat ? `${h} · ${pat}` : h}>
+            {serverText ? <OrigLang>{h}</OrigLang> : h}
+            {pat && <span className="text-muted-foreground" data-testid="row-lag-pattern"> · {pat}</span>}
+          </Link>
+        );
+      }
       case 'heldReason': { const why = heldReasonText(r.heldGates, lang); return why ? <span className="dt-trunc" title={why}>{why}</span> : <span className="text-muted-foreground">—</span>; }
       case 'signals': return (
         <span className="inline-flex flex-wrap items-center gap-2">

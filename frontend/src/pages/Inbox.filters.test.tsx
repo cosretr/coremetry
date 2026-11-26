@@ -24,11 +24,11 @@ const m = vi.hoisted(() => {
     addListener: () => {}, removeListener: () => {},
     addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
-  return { items: [] as unknown[] };
+  return { items: [] as unknown[], calls: [] as Array<Record<string, unknown>> };
 });
 vi.mock('@/lib/api', () => {
   const stub: Record<string, (...a: unknown[]) => Promise<unknown>> = {
-    inbox: async () => ({
+    inbox: async (p: unknown) => (m.calls.push(p as Record<string, unknown>), {
       items: m.items, total: m.items.length, limit: 300, truncated: false,
       minOccDefault: true, minOcc: 5, hiddenByMinOcc: 0,
       counts: { P1: 2, P2: 1, P3: 0, problem: 1, exception: 1, httperror: 0, anomaly: 1, incident: 0 },
@@ -123,7 +123,10 @@ describe('Problems süzgeçleri — S4 (v0.10.2124)', () => {
     expect(bar.textContent).toContain('Öncelik');
     expect(bar.textContent).toContain('Tür');
     expect(bar.querySelector('input[aria-label="Search service, title, source"]')).not.toBeNull();
-    for (const gone of ['Durum', 'Öğrenilen', 'Özne', 'Kategori', 'Owner: all', 'SRE: all']) {
+    // v0.10.2476 — Durum pivotu ana çubukta (Açık · Kapanan · Susturulan · Tümü).
+    expect(bar.textContent).toContain('Durum');
+    expect([...bar.querySelectorAll('[role="radio"]')].map(r => r.textContent)).toEqual(['Açık', 'Kapanan', 'Susturulan', 'Tümü']);
+    for (const gone of ['Öğrenilen', 'Özne', 'Kategori', 'Owner: all', 'SRE: all']) {
       expect(bar.textContent, gone).not.toContain(gone);
     }
     const t = trigger(el);
@@ -136,7 +139,7 @@ describe('Problems süzgeçleri — S4 (v0.10.2124)', () => {
     const el = await mount();
     await act(async () => { trigger(el).click(); });
     const sec = el.querySelector('[data-testid="more-filters"]') as HTMLElement;
-    for (const label of ['Durum', 'Öğrenilen', 'Özne', 'Kategori', 'Owner: all', 'SRE: all', 'First seen: any']) {
+    for (const label of ['Öğrenilen', 'Özne', 'Kategori', 'Owner: all', 'SRE: all', 'First seen: any']) {
       expect(sec.textContent, label).toContain(label);
     }
   });
@@ -145,8 +148,9 @@ describe('Problems süzgeçleri — S4 (v0.10.2124)', () => {
     const el = await mount('/inbox?status=all&owner=team-checkout');
     const t = trigger(el);
     expect(t.getAttribute('aria-expanded')).toBe('true');
-    expect(t.textContent).toContain('2 etkin');
-    expect(el.querySelector('[data-testid="more-filters"]')!.textContent).toContain('Durum');
+    // v0.10.2476 — status ana çubukta, "Diğer süzgeçler" sayısına girmez.
+    expect(t.textContent).toContain('1 etkin');
+    expect(el.querySelector('[data-testid="more-filters"]')!.textContent).toContain('Owner');
   });
 
   it('takım derin linki Ekip açılırında görünür (katalogda olmasa da)', async () => {
@@ -158,10 +162,10 @@ describe('Problems süzgeçleri — S4 (v0.10.2124)', () => {
   it('sayfa altı bağlantıları süzgeçleri korur', async () => {
     const el = await mount('/inbox?prio=P1,P2&q=timeout');
     const links = [...el.querySelectorAll<HTMLAnchorElement>('nav.ib-foot a')];
-    expect(links.map(a => a.textContent)).toEqual(['Çözülenler', 'Yok sayılanlar', 'Alarm kurallarını yönet']);
+    expect(links.map(a => a.textContent)).toEqual(['Kapananlar', 'Susturulanlar', 'Alarm kurallarını yönet']);
     const solved = new URL(links[0].getAttribute('href')!, 'http://x');
     expect(solved.pathname).toBe('/inbox');
-    expect(solved.searchParams.get('status')).toBe('all');
+    expect(solved.searchParams.get('status')).toBe('closed');
     expect(solved.searchParams.get('q')).toBe('timeout');
     expect(new URL(links[1].getAttribute('href')!, 'http://x').searchParams.get('status')).toBe('ignored');
     expect(links[2].getAttribute('href')).toBe('/alerts');
@@ -185,5 +189,26 @@ describe('Problems — S5 (v0.10.2125)', () => {
     const src = readFileSync(resolve(__dirname, 'Inbox.tsx'), 'utf8');
     expect(src).not.toMatch(/<ProblemsSection\b/);
     expect(src).not.toMatch(/import\s*\{[^}]*\bProblemsSection\b[^}]*\}/);
+  });
+
+  // v0.10.2476 (operatör: "problemler kapanınca ayrıca gözüksün aktifler
+  // arasında kalmasın") — Kapanan pivotu sunucuya status=closed sorar, satır
+  // kapanış + süreyi çizer, zaman kolonu "Kapandı".
+  it('Kapanan pivotu: sunucuya closed, satırda kapanış + süre', async () => {
+    m.calls = [];
+    m.items = [{ ...PROBLEM, status: 'resolved', resolvedAt: T0 + 47 * 60e9, std: undefined }];
+    const el = await mount('/inbox?status=closed');
+    expect(m.calls.at(-1)?.status).toBe('closed');
+    const on = el.querySelector('[role="radio"][aria-checked="true"]');
+    expect(on?.textContent).toBe('Kapanan');
+    expect(el.textContent).toContain('47m sürdü');
+    expect(el.textContent).toContain('Kapandı');
+  });
+
+  it('Açık pivotu varsayılan: status=open gider, Açık seçili', async () => {
+    m.calls = [];
+    const el = await mount();
+    expect(m.calls.at(-1)?.status).toBe('open');
+    expect(el.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toBe('Açık');
   });
 });

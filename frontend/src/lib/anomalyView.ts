@@ -6,11 +6,16 @@ import { tf, type Lang } from '@/lib/i18n';
  *  tanınmayan / yetkisiz değer servis listesine düşer. */
 export function resolveAnomalyView(raw: string | null, isAdmin: boolean): AnomalyView {
   if (raw === 'platform') return 'platform';
+  if (raw === 'load') return 'load'; // v0.10.2476 — Yük ve yapı (herkese)
   if (raw === 'held' && isAdmin) return 'held';
   return '';
 }
 
-const HELD_GATES = ['min_volume', 'min_abs_diff', 'visible_deviation'];
+/** URL'de geçerli ?view= değerleri (lib/urlSchema şeması; rol kontrolü resolveAnomalyView). */
+export const ANOMALY_VIEWS = ['', 'platform', 'load', 'held'] as const;
+
+// v0.10.2476: invalid_record — doğrulayıcıdan kalan kayıt (sunucu heldGateInvalid).
+const HELD_GATES = ['min_volume', 'min_abs_diff', 'visible_deviation', 'invalid_record'];
 const heldNum = (v: number, lang: Lang) => v.toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 1 });
 
 /** heldReasonText — SAF (v0.10.2473): kalan gürültü kapıları → "Elenme nedeni"

@@ -118,6 +118,9 @@ type Recorder struct {
 	// seri sayan aileler (süreç-içi; tik goroutine'i tek kullanıcı).
 	classOf      map[string]string
 	countsSeries map[string]bool
+	// lagHist — v0.10.2476 (lag_pattern.go): consumer lag bölümünün önceki
+	// 7 günlük başlangıçları (bölüm başına bir okuma; tik goroutine'i tek kullanıcı).
+	lagHist lagHistMemo
 }
 
 // WithNotifier — v0.10.2052: grup Problem'i bildirimi için mevcut Problem
@@ -417,8 +420,12 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 	// (publish_gate_enforce.go). pubWarming: karar haritası bu tik kuruldu →
 	// bu tik Problem kapatılmaz.
 	pub, pubWarming := r.publishVerdicts(start, gateMode)
-	groups, shadow := decideGroups(kept, r.runs.events(), GroupSlack(cfg),
-		GroupGateInput{IsBatch: isBatch, LoadParts: loadParts, Open: r.runs.openIDs(kept), Published: pub}, start)
+	runEvs := r.runs.events()
+	lagHist := r.lagHistory(tctx, cfg, append(append([]chstore.MLEvent(nil), kept...), runEvs...)) // v0.10.2476
+	groups, shadow := decideGroups(kept, runEvs, GroupSlack(cfg),
+		// v0.10.2476 — Problem kararı olayı ≥ 15 dk önce bitmiş koşuyu açık saymaz
+		// (problem_end.go: no-data tutması Problem'i 3 sa açık tutuyordu).
+		GroupGateInput{IsBatch: isBatch, LoadParts: loadParts, Open: problemOpenIDs(r.runs.openIDs(kept), runEvs, kept, start), Published: pub, LagHistory: lagHist}, start)
 	// v0.10.2089 — servis düzeyi kapı (spec dilim 3): karar kanıta, sayaç
 	// tik durumuna. v0.10.2130 (dilim 4, operatör kararı 2026-11-14) — aynı
 	// karar canlı yola girer: grup kararlarıyla TEK planda, servis başına tek

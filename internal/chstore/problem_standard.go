@@ -551,6 +551,9 @@ func StandardizeProblem(p Problem, f StdFacts) ProblemStandard {
 	// Problem'inde de ölçülmüş bir gerçektir (işaretsiz eski satırda aynen "na").
 	vmDecides := k.vmDecides || (mlMarked && src == StdSourceVM && isREDFamily(k.family))
 	ratio := stdBreachRatio(p)
+	if p.Metric == MLOOMMetric { // v0.10.2476: Value/Threshold oran değil (kill / pod)
+		ratio = 0
+	}
 	if k.family == StdFamilyException && p.Priority == "P1" {
 		ratio = math.Inf(1) // merdiven P1'i = büyük ihlal (oran alanı yok)
 	}
@@ -561,6 +564,9 @@ func StandardizeProblem(p Problem, f StdFacts) ProblemStandard {
 		Operation: k.operation,
 	}
 	std.Impact = problemImpact(p, k, f, ratio)
+	if m, ok := oomImpact(p); ok { // v0.10.2476
+		std.Impact.Primary, std.Impact.Known = m, true
+	}
 	head, hm := problemHeadline(p, k, std.Impact)
 	std.Headline, std.HeadlineMsg = clipHeadline(head), hm
 	std.Since = problemSince(p, f, now)
@@ -570,6 +576,7 @@ func StandardizeProblem(p Problem, f StdFacts) ProblemStandard {
 	// cümlesi etki kuralını söyler, sonraki adım Messaging sekmesi.
 	lag, isLag := stdLagOf(p, k)
 	if isLag {
+		lag = lagPatternOf(p, lag) // v0.10.2476: beklenen günlük desen
 		std.Lag = &lag
 		std.Impact.Primary.Text, std.Impact.Primary.Msg = lagImpactText(lag)
 		sent, sm = lagEvidenceSentence(sent, sm)
@@ -1007,6 +1014,9 @@ func problemEvidenceSentence(p Problem, k stdKindInfo, src string, hold bool) (s
 
 // problemNextStep — SAF.
 func problemNextStep(p Problem, k stdKindInfo) StdNextStep {
+	if ns, ok := mlOOMNextStep(p); ok { // v0.10.2476: OOMKilled pod manşeti
+		return ns
+	}
 	svc := url.QueryEscape(p.Service)
 	switch k.family {
 	case StdFamilyError:

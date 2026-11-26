@@ -60,7 +60,7 @@ export type InboxPage = {
 // blend. Priority/kind chips filter client-side on the page; only
 // the server-side filters participate in the key.
 export function useInbox(filter: {
-  status?: 'open' | 'all' | 'ignored'; service?: string;
+  status?: 'open' | 'closed' | 'ignored' | 'all'; service?: string; // v0.10.2476 — 'closed' anahtarda (filter nesnesi)
   q?: string; // v0.9.251 — free-text search (service + title + source)
   ownerTeam?: string; sreTeam?: string;
   // v0.9.1246 — tek eksenli takım süzgeci (owner VEYA SRE). ownerTeam/

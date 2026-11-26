@@ -2982,7 +2982,8 @@ export const api = {
   // common priority blend; returns at most `limit` items.
   inbox: (params: {
     // v0.9.254 — 'ignored' pivotu: susturulmuş exception grupları.
-    status?: 'open' | 'all' | 'ignored'; service?: string;
+    // v0.10.2476 — 'closed' (Kapanan): pencerede kapanmış Problem'ler.
+    status?: 'open' | 'closed' | 'ignored' | 'all'; service?: string;
     // v0.9.251 — free-text triage search (service + title + source).
     // `service` stays the narrower service-only filter for older
     // shared links; the page's search box drives this.

@@ -4,7 +4,7 @@
 import { SafeHref } from '@/components/ui/SafeHref'; // v0.10.1315 — olay/katalog linki XSS kapısı
 import { Chip } from '@/components/ui';
 import { Users, Shield } from 'lucide-react';
-import { tsLong, fmtFixed } from '@/lib/utils';
+import { tsLong, tsCompact, fmtFixed, fmtDurShort } from '@/lib/utils';
 import { inboxRowLabel } from '@/lib/inboxRowText';
 import { derivedTeamTitle } from '@/lib/problemSubject';
 import { isInboxExcFamily } from '@/lib/inboxHref';
@@ -14,7 +14,7 @@ import { promotedRecurrence } from '@/features/anomalies/detailSummary'; // v0.1
 import { Badge } from '@/components/ui/Badge';
 import type { InboxItem, InboxCluster, ProblemStandard } from '@/lib/types';
 import { Link } from 'react-router';
-import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2283 — hücre metinleri arayüz dilinde (TR aynı)
+import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2283 — hücre metinleri arayüz dilinde (TR aynı)
 import {
   prioReasonView, stdRequestImpact, stdImpactView, stdImpactSecondary, stdConfidenceTone, stdConfidenceLabel, stdGateTitle,
 } from '@/lib/problemStandardView'; // v0.10.2300 (S3) — gerekçe EN anahtardan; v0.10.2395 Etki / Güven
@@ -303,4 +303,16 @@ export function EvidenceCell({ it }: { it: InboxItem }) {
   const n = it.eventCount ?? 0;
   if (n < 1) return <span className="cell-faint">—</span>;
   return <span title={t('inbox.evidence.title', lang)}>{tf('inbox.evidence', lang, { n })}</span>;
+}
+
+// ClosedWhen — v0.10.2476 (Kapanan görünümü): zaman hücresi kapanış anını ve
+// Problem'in süresini (başlangıç → kapanış) çizer; tam damga title'da.
+export function ClosedWhen({ startedAt, resolvedAt, lang }: { startedAt: number; resolvedAt: number; lang: Lang }) {
+  const dur = startedAt > 0 && resolvedAt > startedAt ? fmtDurShort((resolvedAt - startedAt) / 1e9) : null;
+  return (
+    <span title={tf('inbox.closed.at.title', lang, { t: tsLong(resolvedAt) })}>
+      <span className="mono">{tsCompact(resolvedAt)}</span>
+      <div className="ib-when__ago">{dur ? tf('inbox.closed.lasted', lang, { d: dur }) : t('inbox.closed.at', lang)}</div>
+    </span>
+  );
 }

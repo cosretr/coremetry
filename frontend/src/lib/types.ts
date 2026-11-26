@@ -2919,6 +2919,8 @@ export interface InboxItem {
   teamsVia?: string;
   /** v0.10.2121 — Go InboxItem.Teams: farklı ekipler, yalnız ≥ 2 ise (çok servisli exception). */
   teams?: string[];
+  /** v0.10.2476 — Go InboxItem.ResolvedAt: kapanış anı (unix ns; yalnız kapanmış problem satırı). */
+  resolvedAt?: number;
   status: string;
   clusters?: string[];
   // v0.9.255 — enrichment sonuçları. Backend bunları ZATEN hesaplıyordu
@@ -3045,6 +3047,9 @@ export interface StdLag {
   baseline: number;
   /** Lag'i açık diğer topic sayısı. */
   more?: number;
+  /** v0.10.2476 — beklenen günlük desen: önceki 7 günden kaçında benzer saatte; cümle (TR, sunucu). */
+  patternDays?: number;
+  pattern?: string;
 }
 
 /** v0.10.2473 — Go chstore.StdOrigin. Bağlantı entity kimliğinden (entity), ad yalnız metin. */
@@ -13213,7 +13218,8 @@ export interface HeldGate { name: 'min_volume' | 'min_abs_diff' | 'visible_devia
  *  (süzgeç sonrası); truncated = bir kaynak okuma tavanına değdi (son 24 saat);
  *  partial = o kaynak okunamadı. */
 /** v0.10.2243 (anomali kartı Dilim C) — /anomalies görünümü: '' servis listesi, platform = telemetry_volume, held = gürültü kapılarında elenenler. */
-export type AnomalyView = '' | 'platform' | 'held';
+/** v0.10.2476 — load = "Yük ve yapı" (Problem açmayan yük / yapı dedektörleri). */
+export type AnomalyView = '' | 'platform' | 'load' | 'held';
 export interface UnifiedAnomaliesPage {
   items: UnifiedAnomalyRow[]; total: number; openTotal: number; doneTotal: number;
   offset: number; limit: number; truncated: boolean; partial?: 'ml' | 'legacy';
@@ -13229,6 +13235,8 @@ export interface MLGroupDecision {
   signals?: string[]; finished?: boolean; live?: boolean; problemId?: string;
   /** v0.10.2058 Davis tek-olay kolu; v0.10.2092 CANLI: tek sinyalin güçlü + uzun kötüleşmesi Problem açar (wouldOpen da true). */
   singleWouldOpen?: boolean; singleEvent?: string;
+  /** v0.10.2476 — consumer lag beklenen günlük desen (P3): gün sayısı + cümle (TR, sunucu). */
+  patternDays?: number; pattern?: string;
 }
 /** v0.10.1843 — ml.ExplainCard aynası (internal/ml/explain_card.go). Boş impact = satır yok. */
 export interface ExplainLink { label: string; href?: string }
@@ -13351,6 +13359,8 @@ export interface MLConfig {
   groupProblems?: boolean;
   /** v0.10.2473: gürültü kapısı kipi; yok = on (varsayılan). */
   publishGates?: MLGatesMode;
+  /** v0.10.2476: günlük tekrarlayan consumer lag Problem'i P3; yok = açık. */
+  lagDailyPattern?: boolean;
 }
 /** v0.10.1886 — önerilen ML kurulumu (GET /api/admin/ml/recommended; salt-okunur). */
 export interface MLSourceCheck { id: string; label: string; checked: boolean; present: boolean; note?: string }

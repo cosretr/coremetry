@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -246,7 +247,57 @@ const (
 	MLViewService  = "service"
 	MLViewPlatform = "platform"
 	MLViewHeld     = "held"
+	// MLViewLoad — v0.10.2476 (operatör): "Yük ve yapı" sekmesi, yalnız
+	// MLLoadStructureDetectors satırları.
+	MLViewLoad = "load"
 )
+
+// MLLoadStructureDetectors — v0.10.2476 (operatör: "ana liste yalnız
+// Problem açabilen / besleyen olaylar"): yük (trafik düşüşü, servis sustu,
+// log hacmi) ve yapı (aykırı pod, yeni log kalıbı) dedektörleri. Tek sinyal
+// kolu bunları kötüleşme saymaz (ml/group_gate.go singleWorsening). Anomali
+// listesinde, rozetinde, inbox / rapor / CoSRE akışında görünmez; "Yük ve
+// yapı" görünümünde okunur. Kayıt ve tespit aynen sürer (yalnız görüntü /
+// akış süzgeci). TEK liste: SQL (mlOffFeedCond) ve akışın açık dedektör
+// istisnası (MLOffFeedDetector) buradan okur.
+var MLLoadStructureDetectors = []string{
+	"throughput_drop", "service_silent", "log_volume", "trace_pod_outlier", "new_template",
+}
+
+// MLOffFeedDetector — SAF: dedektörün olayları anomali akışının DIŞINDA mı
+// (telemetri hacmi ya da yük / yapı). Açıkça bu dedektörü isteyen okuma
+// (tür süzgeci, RCA'nın new_template kanıtı) görünüm süzgeci olmadan okur.
+func MLOffFeedDetector(det string) bool {
+	return det == MLDetSvcVolumeSpike || det == MLDetSvcTelemetryVolume || slices.Contains(MLLoadStructureDetectors, det)
+}
+
+// mlLoadCond — SAF: yük / yapı satırı (sabit liste; kullanıcı girdisi yok).
+func mlLoadCond() string {
+	return "detector IN ('" + strings.Join(MLLoadStructureDetectors, "', '") + "')"
+}
+
+// mlPublishInvalid — ml.PublishInvalid (chstore ml'i içe aktaramaz).
+const mlPublishInvalid = "invalid"
+
+// mlOffFeedCond — SAF (v0.10.2476): anomali listesi / akışı DIŞINDAKİ satır
+// = telemetri hacmi (mlPlatformCond) YA DA yük / yapı (mlLoadCond) YA DA
+// doğrulayıcıdan kalmış kayıt (publish_state='invalid'; Elenenler'de
+// okunur). Servis görünümü bunun değilidir. Kolon yoksa invalid de yoktur.
+func mlOffFeedCond(recCols bool) string {
+	parts := []string{mlPlatformCond(recCols), mlLoadCond()}
+	if recCols {
+		parts = append(parts, "publish_state = '"+mlPublishInvalid+"'")
+	}
+	return "(" + strings.Join(parts, " OR ") + ")"
+}
+
+// mlValidCond — SAF: invalid kayıt yalnız Elenenler'de (kolon yoksa yok).
+func mlValidCond(recCols bool) []string {
+	if !recCols {
+		return nil
+	}
+	return []string{"publish_state != '" + mlPublishInvalid + "'"}
+}
 
 // mlPlatformCond — SAF: platform satırı = sınıfı telemetry_volume (K8) ya da
 // telemetri hacmi dedektörlerinin (eski svc_volume_spike, K11; halefi
@@ -310,14 +361,20 @@ func mlEventsWhere(f MLEventsFilter) (string, []any) {
 	}
 	switch f.View {
 	case MLViewService:
-		where = append(where, "NOT "+mlPlatformCond(f.recCols))
+		where = append(where, "NOT "+mlOffFeedCond(f.recCols))
 		where = append(where, mlHeldCond(f)...)
 	case MLViewPlatform:
 		where = append(where, mlPlatformCond(f.recCols))
+		where = append(where, mlValidCond(f.recCols)...)
+		where = append(where, mlHeldCond(f)...)
+	case MLViewLoad:
+		where = append(where, mlLoadCond(), "NOT "+mlPlatformCond(f.recCols))
+		where = append(where, mlValidCond(f.recCols)...)
 		where = append(where, mlHeldCond(f)...)
 	case MLViewHeld:
+		// v0.10.2476: doğrulayıcıdan kalan (invalid) kayıt da Elenenler'de.
 		if f.recCols {
-			where = append(where, `record != '' AND publish_state != 'invalid' AND position(record, '"passed":false') > 0`)
+			where = append(where, `record != '' AND (publish_state = 'invalid' OR position(record, '"passed":false') > 0)`)
 		} else {
 			where = append(where, "0")
 		}

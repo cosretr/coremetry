@@ -71,8 +71,11 @@ type InboxItem struct {
 	// FARKLI ekipleri, yalnız ≥ 2 ise (çok servisli exception: kendi servisi +
 	// yayılım ortakları; servis başına owner, yoksa SRE). Tek ekipte boş —
 	// OwnerTeam / SRETeam yeter. annotateInboxTeams (inbox_teams.go).
-	Teams  []string `json:"teams,omitempty"`
-	Status string   `json:"status"` // open | acknowledged | resolved (problems);
+	Teams []string `json:"teams,omitempty"`
+	// ResolvedAt — v0.10.2476: Problem'in kapanış anı (unix ns; yalnız
+	// kapanmış problem satırında). "Kapanan" görünümü kapanış + süre çizer.
+	ResolvedAt int64  `json:"resolvedAt,omitempty"`
+	Status     string `json:"status"` // open | acknowledged | resolved (problems);
 	// open | regressed (exceptions); active | cleared (anomalies);
 	// muted (v0.10.1042 — aktif susturmalı anomali, yalnız "all" görünümü)
 	Clusters []string `json:"clusters,omitempty"`
@@ -267,9 +270,11 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 	// purpose. Ignoring is a deliberate silencing act; dumping those
 	// rows back into the everyday "all" view would re-add exactly the
 	// noise the operator silenced.
+	// v0.10.2476 — `closed` (Kapanan): pencerede kapanmış Problem'ler,
+	// en son kapanan önce (inbox_closed.go).
 	statusFilter := strings.TrimSpace(q.Get("status"))
 	switch statusFilter {
-	case "open", "all", "ignored":
+	case "open", "all", "ignored", inboxStatusClosed:
 		// ok
 	default:
 		statusFilter = "open"
@@ -383,6 +388,13 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 		sortID != inboxSortDefault || sortDir != "desc" ||
 		len(kinds) < len(inboxKindsAllFor(incidentsOn)) || len(prios) < len(inboxPriosAll)
 	srcLimit := inboxSourceLimit(limit, narrowed)
+	if statusFilter == inboxStatusClosed {
+		return cacheKey, s.closedInboxBuild(closedInboxQuery{
+			service: service, search: search, ownerTeam: ownerTeam, sreTeam: sreTeam, team: team, env: env,
+			limit: limit, srcLimit: srcLimit, sortID: sortID, sortDir: sortDir, since: since,
+			kinds: kinds, prios: prios, cats: cats, subject: subject, graphMerge: graphMerge,
+		})
+	}
 
 	return cacheKey, func(ctx context.Context) (any, error) {
 		items := make([]InboxItem, 0, 256)
@@ -2068,8 +2080,11 @@ func inboxKeepsIncident(incidentStatus, inboxStatus string) bool {
 // problem status is treated as active (never silently hide a pre-status row);
 // an unknown inbox mode is treated as "open" (defensive). Pure + table-tested.
 func inboxKeepsProblem(problemStatus, inboxStatus string) bool {
-	if inboxStatus == "all" {
+	switch inboxStatus {
+	case "all":
 		return true
+	case inboxStatusClosed: // v0.10.2476 — Kapanan: yalnız kapanmışlar
+		return problemStatus == "resolved"
 	}
 	return problemStatus != "resolved"
 }
@@ -2094,13 +2109,16 @@ var inboxDoneStatuses = []string{"resolved"}
 // keepers still run afterwards: they are cheap, and they keep the pivot
 // semantics readable in one place rather than only in SQL.
 func pickExcludedStatuses(inboxStatus string) []string {
-	if inboxStatus == "all" {
+	if inboxStatus == "all" || inboxStatus == inboxStatusClosed {
 		return nil
 	}
 	return inboxDoneStatuses
 }
 
 func pickStatus(inboxStatus string) string {
+	if inboxStatus == inboxStatusClosed {
+		return "resolved" // v0.10.2476 — tek kova, SQL'de
+	}
 	if inboxStatus == "all" {
 		return ""
 	}
@@ -2170,7 +2188,8 @@ func problemToInbox(p chstore.Problem) InboxItem {
 		// v0.9.530 — aynı sınıf: ListProblems bunu zaten SELECT ediyordu.
 		AISummary:   inboxTruncate(p.AISummary, inboxAISummaryMax),
 		AISummaryAt: p.AISummaryAt,
-		EventCount:  p.EventCount, // v0.10.2163 — birleşen olay sayısı (0 = birleşme yok)
+		EventCount:  p.EventCount,           // v0.10.2163 — birleşen olay sayısı (0 = birleşme yok)
+		ResolvedAt:  problemResolvedAtNs(p), // v0.10.2476
 		Problem: &InboxProblemRef{
 			ID: p.ID, RuleID: p.RuleID, Metric: p.Metric,
 			Value: p.Value, Threshold: p.Threshold,

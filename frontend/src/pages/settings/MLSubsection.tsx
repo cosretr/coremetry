@@ -52,6 +52,8 @@ export const ML_METRIC_DETECTORS: { id: string; label: string; hint: string }[] 
   { id: 'metric_kafka', label: 'Kafka', hint: 'Consumer lag servis × topic (servis başına en çok 20 topic), 1 dakikalık örnek: son 5 dakikanın en az 3\'ünde lag en az 1.000 kayıt ve normalin en az 2 katı; tek başına Problem açar (Thanos kaynaklı lag eski 5 dakikalık kuralda). Throttle' },
   { id: 'metric_http_client', label: 'HTTP client', hint: 'Dış çağrı p95, 5xx oranı' },
   { id: 'metric_k8s', label: 'Kubernetes', hint: 'CPU, bellek, restart (pod → servis toplanır)' },
+  // v0.10.2476 — tek güçlü altyapı olayı (aile değil, ifadesi yok); varsayılan açık.
+  { id: 'pod_oom', label: 'OOMKilled pod', hint: 'Remote Cluster kube-state-metrics: restart sayacı son tikte arttı VE son sonlanma nedeni OOMKilled (neden tek başına tetiklemez). İş yükü başına tek olay (pod → iş yükü → servis entity modelinden), servisin tek Problem\'ine üye olur, açık Problem yoksa açar. P2; 30 dk\'da en az 3 kill ya da en az 2 pod\'lu iş yükünde pod\'ların en az yarısı 15 dk\'da → P1 (tek replika yalnız tekrarla). Cluster başına tik başına 1 anlık sorgu, kill varsa +1' },
 ];
 
 const H3 = 'mt-4 mb-1 text-[length:var(--fs-md)] font-semibold';
@@ -130,11 +132,16 @@ export function MLSubsection() {
             onCheckedChange={v => setCfg({ ...cfg, groupProblems: v })}
             label="Anomali grubu Problem açar"
             hint="Aynı serviste en az 2 farklı sinyalde (trace, log, metrik) anomali varsa ya da tek sinyal güçlü (normalin en az 2 katı) ve en az 10 dk sürerse grup bir Problem açar (P2) ve bildirim mevcut kanallardan gider. Kapalı: yalnız kayıt (Problem açardı)." />
+          {/* v0.10.2476 — lag günlük desen → P3; alan yok = açık. */}
+          <CheckboxField className="mb-3" checked={cfg.lagDailyPattern !== false} disabled={!cfg.enabled}
+            onCheckedChange={v => setCfg({ ...cfg, lagDailyPattern: v })}
+            label="Günlük tekrarlayan consumer lag P3 (beklenen desen)"
+            hint="Aynı servis ve topic'te consumer lag önceki 7 günün en az 3'ünde benzer saatte (başlangıç saati ± 1 sa) görüldüyse Problem P3 açılır ve 'beklenen günlük desen' gerekçesini taşır; gizlenmez. Kapalı: v0.10.2396 önceliği (normalin 2 katı ve üstü P1)." />
           {/* v0.10.2473 — gürültü kapısı kipi; alan yok = on (varsayılan). */}
           <SelectField className="mb-3" controlClassName="max-w-[320px]" label="Gürültü kapıları" disabled={!cfg.enabled}
             value={cfg.publishGates ?? 'on'}
             onChange={e => setCfg({ ...cfg, publishGates: e.target.value as MLGatesMode })}
-            hint="on: olay penceresinde 100'den az çağrısı olan, tepe ile beklenen arasındaki farkı 25 ms'nin altında kalan ya da görünür sapması olmayan (gecikmede art arda 3 kovadan az, diğerlerinde bant dışı kova yok) olay Anomaliler listesinde görünmez ve Problem adayı olmaz; Anomaliler › Elenenler'de nedeniyle okunur. Etki kuralı olayları (servis hata oranı, servis yanıt süresi, uç nokta hata oranı ve yanıt süresi, consumer lag) muaftır; bağımsız kanıt sayısı hiçbir kipte aranmaz. shadow: kapılar yalnız kayda yazılır. off: değerlendirilmez.">
+            hint="on: olay penceresinde 100'den az çağrısı olan, tepe ile beklenen arasındaki farkı 25 ms'nin altında kalan ya da görünür sapması olmayan (gecikmede art arda 3 kovadan az, diğerlerinde bant dışı kova yok) olay Anomaliler listesinde görünmez ve Problem adayı olmaz; Anomaliler › Elenenler'de nedeniyle okunur. Etki kuralı olayları (servis hata oranı, servis yanıt süresi, uç nokta hata oranı ve yanıt süresi, OOMKilled pod, consumer lag) muaftır; bağımsız kanıt sayısı hiçbir kipte aranmaz. shadow: kapılar yalnız kayda yazılır. off: değerlendirilmez.">
             <option value="on">on — ele (varsayılan)</option>
             <option value="shadow">shadow — yalnız kaydet</option>
             <option value="off">off — değerlendirme</option>

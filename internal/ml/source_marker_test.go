@@ -28,6 +28,7 @@ func TestEventSourceMarkerPerDetector(t *testing.T) {
 		{detSvcErrorRate, "", vm}, {detOpErrorRate, "", vm}, {detOpLatency, "", vm}, {detThroughputDrop, "", vm},
 		{detSvcResponseTime, "", vm}, // v0.10.2385 (I4): aynı sunucu histogramının bucket'ları
 		{detEndpointImpact, "", vm},  // v0.10.2474: aynı sunucu RED ailesi
+		{detPodOOM, "", none},        // v0.10.2476: kube-state-metrics (RED işareti yok)
 		// op_latency olaylarından türetilen / aynı VM serilerini okuyanlar
 		{detSvcBreadth, "", vm}, {detTracePodOutlier, "", vm}, {detTraceChangePoint, "", vm},
 		// VM client histogramları

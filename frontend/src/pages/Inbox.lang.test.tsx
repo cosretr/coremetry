@@ -97,7 +97,8 @@ async function mount(url: string): Promise<HTMLElement> {
   await settle();
   return host;
 }
-const ALL = '/inbox?kind=problem,exception,httperror,anomaly,incident&prio=P1,P2&status=all&team=team-x';
+// v0.10.2476 — status artık ana çubukta; "Diğer süzgeçler"i açık getiren owner=.
+const ALL = '/inbox?kind=problem,exception,httperror,anomaly,incident&prio=P1,P2&status=all&team=team-x&owner=team-x';
 async function pickFirstRow(el: HTMLElement) {
   const box = el.querySelector<HTMLInputElement>('.page-body tbody input[type="checkbox"]')!;
   await act(async () => { box.click(); });
@@ -121,7 +122,7 @@ const TR_LABELS = [
   'sırasına göre', 'taranan adaylar', 'Seç:', 'Görünen satırların', 'oluşum', 'servis', 'ekip', 'sahipsiz', 'Alarm',
   'beri', 'sürüyor', 'örneklenmemiş', 'Kaynak:', '. kez', 'Runbook aç', 'Aynı exception', 'Varsayılan kural', 'olay',
   'Güven', 'Kanıt', 'kanıt', 'YÜKSEK', // v0.10.2395
-  'Diğer görünümler', 'Çözülenler', 'Yok sayılanlar', 'Alarm kurallarını', 'Gerçek problem', 'seçili', 'onaylanabilir',
+  'Diğer görünümler', 'Çözülenler', 'Yok sayılanlar', 'Kapananlar', 'Susturulanlar', 'Alarm kurallarını', 'Gerçek problem', 'seçili', 'onaylanabilir',
   'atlanacak', 'Onayla', 'Kapat', 'Kalıcı sil', 'Seçimi temizle', 'Durum:',
 ];
 const leaked = (r: { text: string; html: string }) => TR_LABELS.filter(l => r.text.includes(l) || r.html.includes(l));
@@ -141,7 +142,7 @@ describe('Problems listesi — İngilizce arayüz (v0.10.2283)', () => {
       '⚠ Showing the first 3 of 43 items — cut by priority order',
       'VM · not sampled', '5 h 40 min · ongoing · episode 3', '3 events', '42 occurrences', '3 services', '2 teams', 'unowned',
       'Alert', '1 selected', '1 can be acknowledged', 'Acknowledge (1)', 'Real problem (0)', 'Not a problem (0)', 'Close (1)',
-      'Delete permanently (1)', 'Clear selection', 'Resolved', 'Ignored', 'Manage alert rules',
+      'Delete permanently (1)', 'Clear selection', 'Closed', 'Ignored', 'Open', 'All', 'Manage alert rules',
     ]) expect(r.text, en).toContain(en);
     expect(r.text).toMatch(/since \d{2}[.:]\d{2}/);
     for (const en of ['Select every visible row', 'Select: svc-a error rate', 'Other views', 'Source: VictoriaMetrics · not sampled',
@@ -205,7 +206,7 @@ describe('Problems listesi — Türkçe arayüzde metin aynen (v0.10.2283)', () 
       'VM · örneklenmemiş', '5 sa 40 dk · sürüyor · 3. kez', '3 kanıt', // v0.10.2395: "N olay" Kanıt kolonunda
       '42 oluşum', '3 servis', '2 ekip', 'sahipsiz', 'Alarm',
       '1 seçili', '1 onaylanabilir', 'Onayla (1)', 'Gerçek problem (0)', 'Problem değil (0)', 'Kapat (1)', 'Kalıcı sil (1)',
-      'Seçimi temizle', 'Çözülenler', 'Yok sayılanlar', 'Alarm kurallarını yönet',
+      'Seçimi temizle', 'Kapananlar', 'Susturulanlar', 'Açık', 'Kapanan', 'Tümü', 'Alarm kurallarını yönet',
     ]) expect(r.text, tr).toContain(tr);
     expect(r.text).toMatch(/\d{2}:\d{2}'(?:ten|den|tan|dan) beri/);
     for (const tr of ['Görünen satırların hepsini seç', 'Seç: svc-a error rate', 'Kaynak: VictoriaMetrics · örneklenmemiş',
