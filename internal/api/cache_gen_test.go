@@ -41,7 +41,7 @@ func TestCacheGenInvalidateCrossReplicaNoScan(t *testing.T) {
 	mem := cachetest.NewMem()
 	a, b := genTestServer(mem), genTestServer(mem)
 	const ttl = 15 * time.Second
-	keys := []string{"problems:v3:status=open", "problems-count:v1:env=", "inbox:count:v3:inc=true:env=", "inbox:list:x"}
+	keys := []string{"problems:v3:status=open", "problems-count:v1:env=", "inbox:count:v4:inc=true:env=", "inbox:list:x"}
 	calls := 0
 	fn := func(context.Context) (any, error) { calls++; return map[string]int{"n": calls}, nil }
 

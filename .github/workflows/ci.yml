@@ -220,7 +220,10 @@ jobs:
           # linter / 3 per identical issue and hid the true total (the audit's
           # "123" was a capped number; uncapped it was 143). Lift the caps so
           # the gate — and any local run mirroring it — sees everything.
-          args: --max-issues-per-linter 0 --max-same-issues 0
+          # v0.10.2479: --timeout 15m. Varsayılan 5 dk; v0.10.2478'in ilk CI
+          # koşusu "0 issues" yazdıktan sonra "Timeout exceeded" ile kızardı
+          # (300 sn). Yerel sürüm kapısı zaten 15 dk kullanıyor.
+          args: --max-issues-per-linter 0 --max-same-issues 0 --timeout 15m
 
   security:
     name: Security (vuln + dep scan)

@@ -34,7 +34,8 @@ const m = vi.hoisted(() => {
     addListener: () => {}, removeListener: () => {},
     addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
-  return { items: [] as unknown[], calls: [] as Record<string, unknown>[], incidents: true };
+  return { items: [] as unknown[], calls: [] as Record<string, unknown>[], incidents: true,
+    counts: undefined as Record<string, number> | undefined };
 });
 vi.mock('@/lib/api', () => {
   const stub: Record<string, (...a: unknown[]) => Promise<unknown>> = {
@@ -42,7 +43,7 @@ vi.mock('@/lib/api', () => {
       m.calls.push(p as Record<string, unknown>);
       return {
         items: m.items, total: m.items.length, limit: 300, truncated: false,
-        minOccDefault: true, minOcc: 5, hiddenByMinOcc: 0,
+        minOccDefault: true, minOcc: 5, hiddenByMinOcc: 0, counts: m.counts,
       };
     },
     servicesMetadata: async () => ({}),
@@ -138,7 +139,7 @@ const queueHidden = (el: HTMLElement) => (el.querySelector('.page-body') as HTML
 // Çekmece kabuğu (ui/Drawer) DOM'da hiç olmamalı.
 const anyDrawer = (el: HTMLElement) => document.querySelector('[role="dialog"]') ?? el.querySelector('.drawer');
 
-beforeEach(() => { m.items = ROWS; m.calls = []; m.incidents = true; try { localStorage.clear(); } catch { /* jsdom */ } });
+beforeEach(() => { m.items = ROWS; m.calls = []; m.incidents = true; m.counts = undefined; try { localStorage.clear(); } catch { /* jsdom */ } });
 afterEach(() => {
   act(() => { root?.unmount(); });
   host?.remove();
@@ -341,18 +342,37 @@ describe('Problems varsayılan isteği', () => {
 // "Incidents" seçeneği yok.
 describe('Incidents emekliyken Problems türleri', () => {
   const last = () => m.calls[m.calls.length - 1];
-  it('parametresiz /inbox → kind=problem,httperror,anomaly (v0.10.2431)', async () => {
+  it('parametresiz /inbox → kind=problem (v0.10.2479)', async () => {
     m.incidents = false;
     await mount('/inbox');
-    expect(last().kind).toBe('problem,httperror,anomaly');
+    expect(last().kind).toBe('problem');
   });
   it('eski ?kind=incident linki hatasız varsayılana düşer', async () => {
     m.incidents = false;
     await mount('/inbox?kind=incident');
-    expect(last().kind).toBe('problem,httperror,anomaly');
+    expect(last().kind).toBe('problem');
   });
-  it('açıkken varsayılan problem,httperror,anomaly,incident', async () => {
+  it('açıkken varsayılan problem,incident (v0.10.2479)', async () => {
     await mount('/inbox');
-    expect(last().kind).toBe('problem,httperror,anomaly,incident');
+    expect(last().kind).toBe('problem,incident');
+  });
+});
+
+// v0.10.2479 — operatör: "Çok fazla problem ürüyor, gerçek problemler olsun
+// isterim." Varsayılan yalnız Problem; gizlenen türler kaybolmaz: Tür
+// çipleri sunucunun sayılarıyla kalır (ör. "Anomalies 970") ve varsayılan
+// URL'e yazılmaz.
+describe('varsayılan yalnız Problem — gizli türler çipte görünür', () => {
+  it('parametresiz /inbox: URL temiz, anomali / HTTP hatası sayıları çipte', async () => {
+    m.counts = { P1: 3, P2: 0, P3: 0, problem: 2, exception: 0, httperror: 41, anomaly: 970, incident: 1 };
+    const el = await mount('/inbox');
+    expect(loc(el)).toBe('/inbox');
+    const btn = [...el.querySelectorAll('button')].find(b => b.textContent?.startsWith('Tür:'));
+    expect(btn?.textContent).toContain('kapalı'); // gizlenen türler başlıkta söylenir
+    act(() => { btn!.click(); });
+    await settle();
+    const txt = document.body.textContent ?? '';
+    expect(txt).toMatch(/Anomalies\D*970/);
+    expect(txt).toMatch(/HTTP errors\D*41/);
   });
 });

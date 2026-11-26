@@ -136,17 +136,22 @@ export function ThanosTrendPanel({ cluster, namespace, pod, row, fromNs, toNs, o
           Top {shownPods} of {totalPods} pods by average CPU.
         </div>
       )}
+      {/* v0.10.2479 (operatör-bildirimli, prod pod sayfası) — y tabanı 0
+          (zeroBase): otomatik aralık veriye oturunca 2,4568 → 2,4596 GiB'lik
+          (≈ 3 MiB, %0,1) bir artış paneli boydan boya dolduran bir sıçrama
+          gibi çiziliyordu. CPU / bellek miktardır; sıfırdan çizilir (aynı
+          gerekçe: CorePanel.zeroBase, v0.10.916). */}
       {/* Madde 4 sweep — unit'ler eksen/tooltip'e iner: Memory ham 1e9
           rakamları yerine "1.2 GB" okur (fmtSmart 'bytes'); CPU "cores". */}
       <div>
         <div className="cl-trend__title">CPU (cores)</div>
-        <MultiLineChart series={cpuSeries} height={180} syncKey={syncKey} unit="cores"
+        <MultiLineChart series={cpuSeries} height={180} syncKey={syncKey} unit="cores" zeroBase
           deploys={deployMarkers} onZoom={onZoom} onZoomReset={onZoomReset} xRange={xRange}
           thresholds={single ? limitThresholds(row?.cpuLimitCores, row?.cpuRequestCores, 'cores') : undefined} />
       </div>
       <div>
         <div className="cl-trend__title">Memory (bytes)</div>
-        <MultiLineChart series={memSeries} height={180} syncKey={syncKey} unit="bytes"
+        <MultiLineChart series={memSeries} height={180} syncKey={syncKey} unit="bytes" zeroBase
           deploys={deployMarkers} onZoom={onZoom} onZoomReset={onZoomReset} xRange={xRange}
           thresholds={single ? limitThresholds(row?.memLimitBytes, row?.memRequestBytes, 'bytes') : undefined} />
       </div>

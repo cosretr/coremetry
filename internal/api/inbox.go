@@ -1170,8 +1170,11 @@ func inboxCountKey(env string) string {
 // inboxCountKeyFor — SAF (v0.10.1827): rozet anahtarı Incidents ana
 // anahtarını taşır (rozet varsayılan görünümün total'ı; tür kümesi ve
 // katlama anahtara bağlı). :v3: — şekil aynı, satır kümesi değişti.
+// :v4: — v0.10.2479 varsayılan tür kümesi yalnız Problem(+incident); eski
+// (anomali + HTTP hatası dahil) sayı yeni anlamla servis edilmesin. Liste
+// anahtarı `kind=`i zaten taşır, sürüm artışı gerekmez.
 func inboxCountKeyFor(env string, incidentsOn bool) string {
-	return "inbox:count:v3:inc=" + strconv.FormatBool(incidentsOn) + ":env=" + env
+	return "inbox:count:v4:inc=" + strconv.FormatBool(incidentsOn) + ":env=" + env
 }
 
 // inboxDefaultPageLimit — Problems sayfasının (/inbox) istediği satır tavanı
@@ -1192,7 +1195,7 @@ func inboxBadgeQuery(env string) url.Values {
 	q.Set("sort", "priority") // v0.10.2122 — sayfa SORT_DEFAULT ile aynı (S2)
 	q.Set("dir", "desc")
 	// v0.10.1796 — sayfa varsayılanıyla aynı; v0.10.1827 — Incidents ana
-	// anahtarına göre (kapalıyken problem + anomaly).
+	// anahtarına göre; v0.10.2479 — yalnız problem (+ açıkken incident).
 	q.Set("kind", strings.Join(inboxKindsDefaultFor(chstore.IncidentsEnabled()), ","))
 	q.Set("prio", "P1,P2,P3") // v0.10.2196 — sayfa PRIO_DEFAULT ile aynı (hepsi)
 	if env != "" {
@@ -1401,7 +1404,12 @@ var inboxKindsAll = []string{"problem", "exception", "httperror", "anomaly", "in
 // v0.10.2431 (operatör: "Prod'da problemler regressed gözüken çok fazla var;
 // exceptions kapalı olsun") — exception türü yine varsayılanda KAPALI
 // (v0.10.2399 yalnız bu tür için geri alındı); Exceptions çipi sayısıyla kalır.
-var inboxKindsDefault = []string{"problem", "httperror", "anomaly", "incident"}
+// v0.10.2479 (operatör: "Çok fazla problem ürüyor, gerçek problemler olsun
+// isterim"; v0.10.1014 "bütün hepsi gelsin" kararının TERSİ) — varsayılan
+// yalnız gerçek problemler: problem + incident. Anomali ve HTTP hatası
+// grupları rozeti şişiriyordu (7 günde 291 Problem, 2 açık; rozet 974);
+// çipleri sayılarıyla kalır, `?kind=` bağlantıları aynen çalışır.
+var inboxKindsDefault = []string{"problem", "incident"}
 var inboxPriosAll = []string{"P1", "P2", "P3"}
 
 // v0.9.1342 — ÖZNE şeridi. `kind` (satırın kaynağı) ile KARIŞTIRILMAZ:

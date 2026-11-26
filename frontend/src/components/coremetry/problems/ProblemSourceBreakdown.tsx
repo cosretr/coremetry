@@ -41,9 +41,18 @@ function familyLabel(family: string, lang: Lang): string {
 
 const pctText = (v: number, lang: Lang) => fmtPctLang(Math.round(v), lang);
 
+// v0.10.2479 (operator-reported) — aile sütunu prod'da HİÇ görünmüyordu:
+// `flex` + genişliksiz idi, sabit sütunlar ~1100 px'i 1040 px'lik çekmecede
+// aşınca table-layout:fixed 'auto' sütuna 0 px bıraktı (/frontend-design-system
+// "table-layout clip"). Aile (ve açılınca metrik) adı artık GERÇEK genişlikte;
+// esneyen sütun sondaki "en çok açan servisler"; çekmece toplamı karşılar
+// (DetailSheet genişliği viewport ile sınırlar, dar ekranda sığdırma
+// önce öncelik-3 sütunları gizler).
+const BREAKDOWN_SHEET_W = 1360;
+
 function famCols(lang: Lang): ColumnDef<ProblemSourceFamily>[] {
   return [
-    { id: 'family', label: tl('inbox.bd.col.family', lang), sortValue: r => familyLabel(r.family, lang), naturalDir: 'asc', flex: true, minWidth: 200, priority: 1 },
+    { id: 'family', label: tl('inbox.bd.col.family', lang), sortValue: r => familyLabel(r.family, lang), naturalDir: 'asc', width: 240, minWidth: 180, priority: 1 },
     { id: 'count', label: tl('inbox.bd.col.count', lang), sortValue: r => r.count, numeric: true, width: 90, minWidth: 70, priority: 1 },
     { id: 'share', label: tl('inbox.bd.col.share', lang), sortValue: r => r.sharePct, numeric: true, width: 70, minWidth: 56, priority: 2 },
     { id: 'services', label: tl('inbox.bd.col.services', lang), sortValue: r => r.services, numeric: true, width: 80, minWidth: 60, priority: 3 },
@@ -56,7 +65,7 @@ function famCols(lang: Lang): ColumnDef<ProblemSourceFamily>[] {
     { id: 'long', label: tl('inbox.bd.col.long', lang), sortValue: r => r.long1h, numeric: true, width: 70, minWidth: 56, priority: 3 },
     { id: 'churn', label: tl('inbox.bd.col.churn', lang), sortValue: r => r.churnCount, numeric: true, width: 80, minWidth: 60, priority: 3,
       tone: r => (r.churnPairs > 0 ? 'warn' : undefined) },
-    { id: 'top', label: tl('inbox.bd.col.top', lang), sortValue: r => r.topServices[0]?.count ?? 0, numeric: true, width: 260, minWidth: 160, priority: 3 },
+    { id: 'top', label: tl('inbox.bd.col.top', lang), sortValue: r => r.topServices[0]?.count ?? 0, numeric: true, flex: true, width: 200, minWidth: 140, priority: 3 },
   ];
 }
 
@@ -77,7 +86,7 @@ export function ProblemSourceBreakdownEntry() {
         {tl('inbox.bd.open', lang)}
       </Button>
       <DetailSheet open={open} onOpenChange={o => { if (!o) setUrl({ view: '', bdw: '7d' }); }}
-        title={tl('inbox.bd.title', lang)} width={1040}>
+        title={tl('inbox.bd.title', lang)} width={BREAKDOWN_SHEET_W}>
         {open && <ProblemSourceBreakdownView />}
       </DetailSheet>
     </>
@@ -165,31 +174,35 @@ export function ProblemSourceBreakdownView() {
         </div>
       )}
       {d?.partial && <p className="text-[color:var(--warn)]">{tl('inbox.bd.partial', lang)}</p>}
-      <CmDataTable<ProblemSourceFamily>
-        storageKey="problem-source-breakdown"
-        ariaLabel={tl('inbox.bd.title', lang)}
-        columns={cols}
-        rows={d?.families ?? []}
-        sort={{ initial: { id: 'count', dir: 'desc' } }}
-        state={state}
-        getRowKey={r => r.family}
-        renderCell={renderCell}
-        detail={{
-          isOpen: r => expanded.has(r.family),
-          cellClassName: () => 'row-detail',
-          render: r => (
-            <ul className="flex flex-col gap-0.5" aria-label={tf('inbox.bd.expand', lang, { f: familyLabel(r.family, lang) })}>
-              {r.metrics.map(m => (
-                <li key={m.metric}>
-                  <code>{m.metric}</code> — {m.count} ({pctText(m.sharePct, lang)}) · {tl('inbox.bd.col.median', lang)} {fmtDurShort(m.medianSec)}
-                  {' · '}{tl('inbox.bd.col.short', lang)} {m.short15} ({pctText(m.short15Pct, lang)})
-                  {' · '}{tl('inbox.bd.col.long', lang)} {m.long1h}
-                </li>
-              ))}
-            </ul>
-          ),
-        }}
-      />
+      {/* v0.10.2479 — .table-wrap: DataTableColgroup sığdırması (öncelik-3 sütunları
+          gizleme) yalnız bu kabı ölçer; çıplak tablo dar çekmecede taşıyordu. */}
+      <div className="table-wrap">
+        <CmDataTable<ProblemSourceFamily>
+          storageKey="problem-source-breakdown"
+          ariaLabel={tl('inbox.bd.title', lang)}
+          columns={cols}
+          rows={d?.families ?? []}
+          sort={{ initial: { id: 'count', dir: 'desc' } }}
+          state={state}
+          getRowKey={r => r.family}
+          renderCell={renderCell}
+          detail={{
+            isOpen: r => expanded.has(r.family),
+            cellClassName: () => 'row-detail',
+            render: r => (
+              <ul className="flex flex-col gap-0.5" aria-label={tf('inbox.bd.expand', lang, { f: familyLabel(r.family, lang) })}>
+                {r.metrics.map(m => (
+                  <li key={m.metric}>
+                    <code>{m.metric}</code> — {m.count} ({pctText(m.sharePct, lang)}) · {tl('inbox.bd.col.median', lang)} {fmtDurShort(m.medianSec)}
+                    {' · '}{tl('inbox.bd.col.short', lang)} {m.short15} ({pctText(m.short15Pct, lang)})
+                    {' · '}{tl('inbox.bd.col.long', lang)} {m.long1h}
+                  </li>
+                ))}
+              </ul>
+            ),
+          }}
+        />
+      </div>
       <p className="text-[color:var(--text2)] text-xs">{tl('inbox.bd.sevNote', lang)} {tl('inbox.bd.durNote', lang)}</p>
     </div>
   );

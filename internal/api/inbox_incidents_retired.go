@@ -11,12 +11,12 @@ package api
 //     düşer;
 //   - rozet ve liste anahtarı anahtar durumunu taşır (açık/kapalı iki
 //     görünüm aynı önbellek girdisini paylaşmaz).
-// Açıkken davranış aynen (v0.10.1796 varsayılanı problem+anomaly+incident).
+// Açıkken davranış aynen (v0.10.2479 varsayılanı problem+incident).
 
 var inboxKindsAllRetired = []string{"problem", "exception", "httperror", "anomaly"}
 
 // inboxKindsDefaultRetired — anahtar kapalıyken parametresiz açılış ve rozet.
-var inboxKindsDefaultRetired = []string{"problem", "httperror", "anomaly"} // v0.10.2431: exception kapalı
+var inboxKindsDefaultRetired = []string{"problem"} // v0.10.2479: yalnız Problem (anomali / HTTP hatası çipte)
 
 // inboxKindsAllFor — SAF: tür sözlüğü.
 func inboxKindsAllFor(incidentsOn bool) []string {

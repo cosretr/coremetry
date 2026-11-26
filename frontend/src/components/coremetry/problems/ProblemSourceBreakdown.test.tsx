@@ -102,6 +102,26 @@ describe('ProblemSourceBreakdown', () => {
     expect(document.body.textContent).toContain('error_rate');
   });
 
+  // v0.10.2479 (operator-reported) — aile sütunu `flex` + genişliksizdi;
+  // sabit sütunlar çekmeceyi aşınca table-layout:fixed onu 0 px'e indirdi ve
+  // aile adı hiç görünmedi. Sütun gerçek genişlik taşır, ilk hücre etiketi basar.
+  it('aile sütunu gerçek genişlikte; ilk hücre aile adını basar', async () => {
+    await mount('/inbox?view=breakdown', <ProblemSourceBreakdownView />);
+    const cols = [...document.querySelectorAll('colgroup col:not([data-dt-hidden-slot])')] as HTMLTableColElement[];
+    expect(cols.length).toBe(11);
+    expect(parseInt(cols[0].style.width, 10)).toBeGreaterThanOrEqual(180);
+    // Esneyen yalnız son sütun (en çok açan servisler).
+    expect(cols.map(c => c.style.width).filter(w => w === 'auto')).toEqual(['auto']);
+    expect(cols[cols.length - 1].style.width).toBe('auto');
+    // Sabit sütunlar + esneyenin tabanı (140) çekmeceye (1360) sığar.
+    const fixed = cols.slice(0, -1).reduce((s, c) => s + parseInt(c.style.width, 10), 0);
+    expect(fixed + 140).toBeLessThanOrEqual(1360);
+    // Sığdırma (dar çekmecede öncelik-3 gizleme) yalnız .table-wrap kabını ölçer.
+    expect(document.querySelector('.table-wrap > div > table, .table-wrap table')).toBeTruthy();
+    const first = document.querySelector('tbody tr td');
+    expect(first?.textContent).toContain('ML · servis (hata / yanıt süresi)');
+  });
+
   it('giriş: ?view yoksa yalnız bağlantı, uç çağrılmaz', async () => {
     await mount('/inbox', <ProblemSourceBreakdownEntry />);
     expect(document.body.textContent).toContain('Döküm');

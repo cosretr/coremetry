@@ -123,8 +123,10 @@ func TestInboxBadgeEqualsDefaultListRows(t *testing.T) {
 	// düşen CPU problemi + P3 log anomalisi.
 	// v0.10.2399 — tüm türler varsayılan açık: exception satırları da görünümde.
 	// v0.10.2431 — exception yine varsayılanda kapalı: exception satırı yok.
-	if total != 3 {
-		t.Fatalf("rozet (total) = %d, want 3 (katlanmış incident + 2 P3)", total)
+	// v0.10.2479 — yalnız Problem + incident: log anomalisi rozette YOK
+	// (Anomalies çipiyle gelir; operatör: "gerçek problemler olsun").
+	if total != 2 {
+		t.Fatalf("rozet (total) = %d, want 2 (katlanmış incident + P3 CPU)", total)
 	}
 	if len(rows) != total {
 		t.Fatalf("liste satırı %d ≠ rozet %d — rozet ekrandaki satır sayısı olmalı", len(rows), total)
@@ -133,8 +135,8 @@ func TestInboxBadgeEqualsDefaultListRows(t *testing.T) {
 	for _, r := range rows {
 		got[r.ID] = true
 	}
-	if !got["incident:inc-1"] || !got["problem:p-cpu"] || !got["anomaly:a-demo"] || got["exception:fp-demo-1"] || got["exception:fp-demo-2"] {
-		t.Errorf("beklenen satırlar incident:inc-1 + p-cpu + a-demo, exception yok (v0.10.2431), gelen %v", got)
+	if !got["incident:inc-1"] || !got["problem:p-cpu"] || got["anomaly:a-demo"] || got["exception:fp-demo-1"] || got["exception:fp-demo-2"] {
+		t.Errorf("beklenen satırlar incident:inc-1 + p-cpu; anomali / exception yok (v0.10.2479), gelen %v", got)
 	}
 	// Sıra öncelik önce: P1 üstte.
 	if rows[0].Priority != "P1" || rows[len(rows)-1].Priority != "P3" {
@@ -160,9 +162,9 @@ func TestInboxBadgeSharesDefaultListKey(t *testing.T) {
 	for _, on := range []bool{true, false} {
 		t.Run(map[bool]string{true: "incidents-açık", false: "incidents-emekli"}[on], func(t *testing.T) {
 			withIncidentsOn(t, on)
-			kind := "problem,httperror,anomaly" // v0.10.2431 KIND_DEFAULT_RETIRED
+			kind := "problem" // v0.10.2479 KIND_DEFAULT_RETIRED
 			if on {
-				kind = "problem,httperror,anomaly,incident" // v0.10.2431 KIND_DEFAULT
+				kind = "problem,incident" // v0.10.2479 KIND_DEFAULT
 			}
 			badgeSharesDefaultListKey(t, kind)
 		})
@@ -214,10 +216,10 @@ func TestInboxBadgeQueryMatchesPageDefaults(t *testing.T) {
 	}
 	src := string(b) + "\n" + string(f)
 	for _, want := range []string{
-		"const PRIO_DEFAULT = ['P1', 'P2', 'P3'] as const;",                                           // v0.10.2196 (operatör 2026-11-15)
-		"const SORT_DEFAULT = { id: 'priority', dir: 'desc' as const };",                              // v0.10.2122 (S2, onaylı mockup)
-		"const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'httperror', 'anomaly', 'incident'];", // v0.10.2431
-		"const KIND_DEFAULT_RETIRED: readonly InboxKind[] = ['problem', 'httperror', 'anomaly'];",     // v0.10.2431
+		"const PRIO_DEFAULT = ['P1', 'P2', 'P3'] as const;",                   // v0.10.2196 (operatör 2026-11-15)
+		"const SORT_DEFAULT = { id: 'priority', dir: 'desc' as const };",      // v0.10.2122 (S2, onaylı mockup)
+		"const KIND_DEFAULT: readonly InboxKind[] = ['problem', 'incident'];", // v0.10.2479
+		"const KIND_DEFAULT_RETIRED: readonly InboxKind[] = ['problem'];",     // v0.10.2479
 		"limit: 300,",
 	} {
 		if !strings.Contains(src, want) {
@@ -233,10 +235,11 @@ func TestInboxBadgeQueryMatchesPageDefaults(t *testing.T) {
 
 // :v2: — count'un anlamı değişti; önek mutasyon düşürmesi için aynen kalır.
 // :v3: — v0.10.1827 Incidents ana anahtarı anahtarda (iki durum ayrı girdi).
+// :v4: — v0.10.2479 varsayılan tür kümesi yalnız Problem (+incident).
 func TestInboxCountKeyBumpedUnderPrefix(t *testing.T) {
 	k := inboxCountKey("prod")
-	if !strings.HasPrefix(k, "inbox:count:v3:") {
-		t.Fatalf("rozet anahtarı sürümlenmeli (:v3:): %q", k)
+	if !strings.HasPrefix(k, "inbox:count:v4:") {
+		t.Fatalf("rozet anahtarı sürümlenmeli (:v4:): %q", k)
 	}
 	if inboxCountKeyFor("prod", true) == inboxCountKeyFor("prod", false) {
 		t.Fatal("rozet anahtarı Incidents ana anahtarını taşımalı")

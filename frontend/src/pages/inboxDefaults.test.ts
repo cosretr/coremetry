@@ -57,18 +57,21 @@ describe('Problems varsayılan görünümü', () => {
     expect(src).toContain('persistSort: false,');
   });
 
-  // v0.10.1796 — operatör: exception'lar Problems'ı boğuyor; varsayılan
-  // problem + anomaly + incident. Exception / HTTP hatası çipleri kalır.
-  it('tür varsayılanı: problem, anomali, olay (exception ve HTTP hatası çipte)', () => {
-    // v0.10.2431 — operatör: "exceptions kapalı olsun" (v0.10.2399 exception için geri alındı).
-    expect(arr('KIND_DEFAULT')).toEqual(['problem', 'httperror', 'anomaly', 'incident']);
+  // v0.10.2479 — operatör: "Çok fazla problem ürüyor, gerçek problemler
+  // olsun isterim." v0.10.1014 "bütün hepsi gelsin, zamanla öğretelim"
+  // kararının TERSİ (zincir: v0.10.1796 problem+anomaly+incident →
+  // v0.10.2399 hepsi → v0.10.2431 exception kapalı). Varsayılan yalnız gerçek
+  // problemler: Problem + incident. Anomali / HTTP hatası / exception çipleri
+  // sayılarıyla kalır, tek tıkla açılır; ?kind= linkleri aynen.
+  it('tür varsayılanı: yalnız Problem + olay (anomali, HTTP hatası, exception çipte)', () => {
+    expect(arr('KIND_DEFAULT')).toEqual(['problem', 'incident']);
     expect(arr('KIND_ALL')).toEqual(['problem', 'exception', 'httperror', 'anomaly', 'incident']);
   });
 
   // v0.10.1827 — Incidents emekliyken (operatör kararı 2026-11-05) incident
   // türü sözlükten ve varsayılandan çıkar; sayfa kabuk bayrağına göre seçer.
-  it('Incidents emekliyken tür varsayılanı: problem + HTTP hataları + anomali; incident çipi yok', () => {
-    expect(arr('KIND_DEFAULT_RETIRED')).toEqual(['problem', 'httperror', 'anomaly']);
+  it('Incidents emekliyken tür varsayılanı: yalnız Problem; incident çipi yok', () => {
+    expect(arr('KIND_DEFAULT_RETIRED')).toEqual(['problem']); // v0.10.2479
     expect(arr('KIND_ALL_RETIRED')).toEqual(['problem', 'exception', 'httperror', 'anomaly']);
     expect(src).toContain('const kindAll = incidentsOn ? KIND_ALL : KIND_ALL_RETIRED;');
     expect(src).toContain('const kindDefault = incidentsOn ? KIND_DEFAULT : KIND_DEFAULT_RETIRED;');

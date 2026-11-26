@@ -97,7 +97,9 @@ async function mount(): Promise<HTMLElement> {
   await act(async () => {
     root!.render(
       <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={['/inbox?prio=P1,P2,P3']}>
+        {/* v0.10.2479 — varsayılan yalnız Problem; anomali satırıyla kıyas için
+            anomali türü açıkça istenir (Tür çipiyle aynı). */}
+        <MemoryRouter initialEntries={['/inbox?prio=P1,P2,P3&kind=problem,anomaly']}>
           <ConfirmProvider><Inbox /></ConfirmProvider>
         </MemoryRouter>
       </QueryClientProvider>,
