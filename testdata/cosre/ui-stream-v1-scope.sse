@@ -16,6 +16,8 @@ data: {"data":{"count":0,"reason":"escape","unscoped":true},"id":"scope","type":
 
 data: {"data":{"count":0,"reason":"error","unscoped":true},"id":"scope","type":"data-scope"}
 
+data: {"data":{"count":2,"pattern":"harvester-*","reason":"pattern","services":["harvester-a","harvester-b"],"unscoped":false},"id":"scope","type":"data-scope"}
+
 data: {"id":"t1","type":"text-start"}
 
 data: {"delta":"Hangi takım?","id":"t1","type":"text-delta"}

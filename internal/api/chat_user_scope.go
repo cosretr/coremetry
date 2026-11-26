@@ -45,6 +45,8 @@ const (
 	scopeReasonDisabled   = "disabled"
 	scopeReasonEscape     = "escape"
 	scopeReasonError      = "error"
+	// scopeReasonPattern ("pattern", v0.10.2471) chat_service_set.go'da:
+	// kapsam bir servis adı kalıbının kümesi (kapsamlı, unscoped=false).
 )
 
 // chatScopeEventKind — v1 olay türü; yalnız v2 yazıcısına ulaşır (v1OnlySink düşürür).
@@ -60,6 +62,9 @@ type userScope struct {
 	Team     string
 	Services []string // TeamServiceNames sırası (alfabetik), MaxTeamServices tavanlı
 	Trimmed  int
+	// Pattern — v0.10.2471: kapsam bir servis adı kalıbı ("harvester-*");
+	// Reason = scopeReasonPattern, Team boş (chat_service_set.go).
+	Pattern string
 }
 
 // event — data-scope yükü (SAF): {unscoped, reason, count, team?, services?, trimmed?}.
@@ -67,6 +72,9 @@ func (u userScope) event() map[string]any {
 	out := map[string]any{"unscoped": u.Unscoped, "reason": u.Reason, "count": len(u.Services) + u.Trimmed}
 	if u.Team != "" {
 		out["team"] = u.Team
+	}
+	if u.Pattern != "" { // v0.10.2471 — rozet: "Kapsam: harvester-* · N servis"
+		out["pattern"] = u.Pattern
 	}
 	if len(u.Services) > 0 {
 		svcs := u.Services
@@ -178,6 +186,8 @@ func teamAlreadyAsked(msgs []copilot.ChatMessage) bool {
 // Kaçış ve kapalı anahtar ek ÜRETMEZ (operatörün açık seçimi / eski davranış).
 func userScopeAddendum(u userScope, msgs []copilot.ChatMessage) string {
 	switch {
+	case !u.Unscoped && u.Reason == scopeReasonPattern: // v0.10.2471 — servis adı kalıbı kümesi
+		return copilot.ChatServicePatternScopeAddendum(u.Pattern, len(u.Services)+u.Trimmed, u.Services)
 	case !u.Unscoped:
 		return copilot.ChatUserScopeAddendum(u.Team, len(u.Services)+u.Trimmed)
 	case u.Reason == scopeReasonEscape || u.Reason == scopeReasonDisabled:

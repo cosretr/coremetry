@@ -101,6 +101,12 @@ type ChatContext struct {
 	// konuşmada gösterilen / cevaplanan çip niyeti anahtarları (≤32); bir daha
 	// önerilmez. Yalnız v2 + interaction açıkken yazılır.
 	Suggested []string `json:"suggested,omitempty"`
+	// ServiceSet — v0.10.2471 (chat_service_pattern.go): servis adı kalıbından
+	// ("harvester-*") çözülen küme = konuşmanın kapsamı. Devam soruları aynı
+	// kümede koşar; v2 döngüsüne kullanıcı kapsamı olarak iner. Kalıp
+	// yazılmadıkça hiç yazılmaz → JSON bayt bayt eski. Çalışma kümesi DEĞİLDİR
+	// (Empty / çip / önsöz görmez); ömrü serviceSetTTL.
+	ServiceSet *chatServiceSet `json:"serviceSet,omitempty"`
 }
 
 func (c ChatContext) Empty() bool {

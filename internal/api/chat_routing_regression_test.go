@@ -588,6 +588,97 @@ var routingRegressionRows = []routingRow{
 	{release: "komşu v0.10.2465", name: "telemetri sözcüksüz envanter sorusu → kaynak sorusu kalır",
 		q: "c1ocp sunucuları hangi ekipte", setup: withRoutingDocCluster,
 		wantTier: aisurface.TierClarify, wantRoute: "doc_or_entity_ask", noLLM: true, ansNot: []string{"srvc1ocp01"}},
+	// v0.10.2471 (operator-reported, 2026-11-26) — servis adı kalıbı bir servis
+	// KÜMESİ adlandırır (chat_service_pattern.go): kaynak sorusuna
+	// (doc_or_entity_ask) ve endpoint kartına düşmez; 2..N eşleşme → guided
+	// service_set genel bakışı, 1 eşleşme → o tek servis, 0 → LLM'siz "yok".
+	{release: "v0.10.2471", name: "X-* ile başlayan servisleri incele → küme bakışı",
+		q: "harvester-* ile başlayan servisleri incele", v2: true, setup: withHarvesterCatalog,
+		wantTier: aisurface.TierGuided, wantRoute: "service_set"},
+	{release: "v0.10.2471", name: "X ile başlayan servisler nasıl → küme bakışı",
+		q: "harvester ile başlayan servisler nasıl", v2: true, setup: withHarvesterCatalog,
+		wantTier: aisurface.TierGuided, wantRoute: "service_set"},
+	{release: "v0.10.2471", name: "X-* servislerinde sorun var mı → küme bakışı",
+		q: "harvester-* servislerinde sorun var mı", v2: true, setup: withHarvesterCatalog,
+		wantTier: aisurface.TierGuided, wantRoute: "service_set"},
+	{release: "v0.10.2471", name: "adı X içeren servisler → küme bakışı",
+		q: "adı harvester içeren servisler", v2: true, setup: withHarvesterCatalog,
+		wantTier: aisurface.TierGuided, wantRoute: "service_set"},
+	{release: "v0.10.2471", name: "-X ile biten servisler → küme bakışı",
+		q: "-batch ile biten servisler", v2: true, setup: withHarvesterCatalog,
+		wantTier: aisurface.TierGuided, wantRoute: "service_set"},
+	{release: "v0.10.2471", name: "v1: X-* servisleri nasıl → küme bakışı",
+		q: "harvester-* servisleri nasıl", setup: withHarvesterCatalog,
+		wantTier: aisurface.TierGuided, wantRoute: "service_set"},
+	{release: "v0.10.2471", name: "v1: küme + log sorusu → yine küme bakışı (v1'de kapsam enjeksiyonu yok)",
+		q: "harvester-* servislerinin loglarında hata var mı", setup: withHarvesterCatalog,
+		wantTier: aisurface.TierGuided, wantRoute: "service_set"},
+	{release: "v0.10.2471", name: "servis sayfasında X-* servisleri nasıl → küme bakışı (endpoint kartı yok)",
+		q: "harvester-* servisleri nasıl", v2: true, ctx: rrSvcPage(), setup: withHarvesterCatalog,
+		wantTier: aisurface.TierGuided, wantRoute: "service_set"},
+	{release: "v0.10.2471", name: "kalıp + envanter eşleşmesi → küme bakışı (kaynak sorusu yok)",
+		q: "harvester ile başlayan servisler nasıl", v2: true, setup: withHarvesterDocRows,
+		wantTier: aisurface.TierGuided, wantRoute: "service_set", ansNot: []string{sourceAskHeadTR, "srvharv01"}},
+	{release: "v0.10.2471", name: "küme + log sorusu (v2) → küme kapsamıyla döngü",
+		q: "harvester-* servislerinin loglarında hata var mı", v2: true, setup: withHarvesterCatalog,
+		wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true, ansNot: []string{sourceAskHeadTR}},
+	{release: "v0.10.2471", name: "tek eşleşme → o servisin sağlık raporu",
+		q: "orders ile başlayan servisler nasıl", v2: true, setup: withHarvesterCatalog,
+		wantTier: aisurface.TierGuided, wantRoute: "service_health"},
+	{release: "v0.10.2471", name: "eşleşme yok → LLM'siz yok cevabı (ad uydurulmaz)",
+		q: "zzqx-* servisleri nasıl", v2: true, setup: withHarvesterCatalog,
+		wantTier: aisurface.TierClarify, wantRoute: servicePatternNoneRoute, noLLM: true,
+		ansHas: []string{"«zzqx-*»", "uyan servis bulamadım"}, ansNot: []string{"harvester", sourceAskHeadTR}},
+	{release: "v0.10.2471", name: "eşleşme yok + yakın ad → en yakın adlar önerilir",
+		q: "harvestr-* servisleri nasıl", v2: true, setup: withHarvesterCatalog,
+		wantTier: aisurface.TierClarify, wantRoute: servicePatternNoneRoute, noLLM: true,
+		ansHas: []string{"uyan servis bulamadım", "harvester-a", "harvester-b"}},
+	{release: "v0.10.2471", name: "devam: hangisi en yavaş → aynı küme",
+		q: "hangisi en yavaş", v2: true, setup: withHarvesterCatalog, prior: []string{"harvester-* servisleri nasıl"}, chatCtx: rrHarvesterSet(),
+		wantTier: aisurface.TierGuided, wantRoute: "service_set"},
+	{release: "v0.10.2471", name: "devam: hata verenleri göster → aynı küme",
+		q: "hata verenleri göster", v2: true, setup: withHarvesterCatalog, prior: []string{"harvester-* servisleri nasıl"}, chatCtx: rrHarvesterSet(),
+		wantTier: aisurface.TierGuided, wantRoute: "service_set"},
+	{release: "komşu v0.10.2471", name: "yumuşak kalıp katalogda yok → kademe sahiplenmez (eski yol: hangi servis?)",
+		q: "zzqx-* incele", v2: true, setup: withHarvesterCatalog,
+		wantTier: aisurface.TierGuided, wantRoute: "ask_service", ansNot: []string{"uyan servis bulamadım"}},
+	{release: "komşu v0.10.2471", name: "tek servis sağlık sorusu aynen (küme yok)",
+		q: "harvester-a sağlığı nasıl?", v2: true, setup: withHarvesterCatalog,
+		wantTier: aisurface.TierGuided, wantRoute: "service_health"},
+}
+
+// withHarvesterCatalog — v0.10.2471: katalogda iki "harvester-" servisi, iki
+// "-batch" servisi ve tek "orders" servisi (adlar sentetik).
+func withHarvesterCatalog(t *testing.T, s *routingRig) {
+	t.Helper()
+	s.cache["copilot:guided:svcnames"] = []byte(`["harvester-a","harvester-b","orders-api","billing-batch","ledger-batch"]`)
+}
+
+// withHarvesterDocRows — v0.10.2471: wiki kurulu + yüklü envanterde
+// "harvester" geçen satırlar (kaynak sorusunu doğuran koşul).
+func withHarvesterDocRows(t *testing.T, s *routingRig) {
+	t.Helper()
+	withHarvesterCatalog(t, s)
+	withRoutingWiki(t, s)
+	table := "altyapi_envanteri · satır 2 — Uygulama: harvester · Sunucu: srvharv01 · Ortam: PROD\n"
+	prev := docRowChunksSeam
+	docRowChunksSeam = func(_ context.Context, needle string) ([]chstore.LocalDocChunk, error) {
+		if !strings.Contains(strings.ToLower(table), strings.ToLower(needle)) {
+			return nil, nil
+		}
+		return []chstore.LocalDocChunk{{Title: "altyapi_envanteri", Text: table}}, nil
+	}
+	t.Cleanup(func() { docRowChunksSeam = prev })
+}
+
+// rrHarvesterSet — v0.10.2471: önceki tur küme bakışıydı (konuşma bağlamı).
+func rrHarvesterSet() *ChatContext {
+	return &ChatContext{
+		ServiceSet: &chatServiceSet{Kind: svcPatPrefix, Pattern: "harvester-", Label: "harvester-*",
+			Services: []string{"harvester-a", "harvester-b"}, Total: 2, At: time.Now().UnixNano()},
+		LastRoute: &guidedRoute{Intent: guidedServiceSet, Family: []string{"harvester-a", "harvester-b"}, SetLabel: "harvester-*", SetTotal: 2},
+		UpdatedAt: time.Now().UnixNano(),
+	}
 }
 
 // withRoutingDocCluster — v0.10.2465: wiki kurulu + yüklü envanterde c1ocp

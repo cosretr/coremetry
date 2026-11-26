@@ -264,7 +264,9 @@ describe('data-scope (araç seti dilim 2)', () => {
     const scopes = read('ui-stream-v1-scope').filter(p => p.type === 'data-scope');
     const parsed = scopes.map(p => parseDataScope(p));
     expect(parsed.map(s => s?.reason)).toEqual([...SCOPE_REASONS]);
-    expect(parsed.map(s => s?.unscoped)).toEqual(SCOPE_REASONS.map(r => r !== 'team'));
+    expect(parsed.map(s => s?.unscoped)).toEqual(SCOPE_REASONS.map(r => r !== 'team' && r !== 'pattern'));
+    // v0.10.2471 — servis adı kalıbı kapsamı: kalıp + küme
+    expect(parsed[parsed.length - 1]).toEqual({ unscoped: false, reason: 'pattern', count: 2, pattern: 'harvester-*', services: ['harvester-a', 'harvester-b'] });
   });
 
   it('ana fixture kapsamlı akışla açılır (start-step\'ten hemen sonra)', () => {
@@ -277,6 +279,10 @@ describe('data-scope (araç seti dilim 2)', () => {
     [{ type: 'data-scope', data: { unscoped: true, reason: 'no_team', count: 0 } }, { unscoped: true, reason: 'no_team', count: 0 }],
     [{ type: 'data-scope', data: { unscoped: false, reason: 'team', count: 130, team: 'acme-orders', services: ['orders-api', 7, ''], trimmed: 30 } },
       { unscoped: false, reason: 'team', count: 130, team: 'acme-orders', services: ['orders-api'], trimmed: 30 }],
+    [{ type: 'data-scope', data: { unscoped: false, reason: 'pattern', count: 60, pattern: 'harvester-*', services: ['harvester-a'], trimmed: 10 } },
+      { unscoped: false, reason: 'pattern', count: 60, pattern: 'harvester-*', services: ['harvester-a'], trimmed: 10 }],
+    [{ type: 'data-scope', data: { unscoped: true, reason: 'pattern', count: 2, pattern: 'harvester-*' } }, null],
+    [{ type: 'data-scope', data: { unscoped: false, reason: 'pattern', count: 2 } }, null],
     [{ type: 'data-scope', data: { unscoped: true, reason: 'later', count: 0 } }, null],
     [{ type: 'data-scope', data: { unscoped: true, reason: 'team', count: 0 } }, null],
     [{ type: 'data-scope', data: { unscoped: false, reason: 'no_team', count: 0 } }, null],

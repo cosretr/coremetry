@@ -1,5 +1,5 @@
 // ScopeBadge — CoSRE v2 kapsam rozeti (araç seti dilim 5; tools-audit Q1/Q2).
-// CosreSheet başlığında; 7 nedenin hepsi (scopeView). Tık → popover: açıklama
+// CosreSheet başlığında; 8 nedenin hepsi (scopeView). Tık → popover: açıklama
 // + kapsamdaki servisler (≤20, fazlası "+N"). Kapsamsız sarı, okuma hatası
 // kırmızı — kapsamsız hiçbir zaman sessiz değil.
 import { useState } from 'react';

@@ -61,7 +61,8 @@ func (s *Service) callSnapshot(ctx context.Context) (cfg provider.Config, req pr
 	// yetenek kaydı olmayan modelde profil > küresel > 4096 aynen.
 	caps := capsForProfile(p) // v0.10.2458 — profil thinkingSwitch beyanı dahil
 	window := cachedContextWindow(p)
-	// v0.10.2458 — yüzey başına düşünme (thinking_surface.go): varsayılan off;
+	// v0.10.2458 — yüzey başına düşünme (thinking_surface.go); v0.10.2471 —
+	// varsayılan on (intent off), kayıtlı ayar kazanır;
 	// profil Thinking yalnız yüzey "inherit" iken. Bütçe, cevap tavanı,
 	// örnekleme ve gövde AYNI değerle karar verir.
 	thinking, fromProfile := s.effectiveThinking(ctx, p)

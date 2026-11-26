@@ -87,6 +87,7 @@ var promptVersionRegistry = map[string]string{
 	"chatUserScopeAskTeamAddendum":       chatUserScopeAskTeamAddendum,
 	"chatUserScopeUnscopedAddendum":      chatUserScopeUnscopedAddendum,
 	"chatUserScopeAnchoredAddendum":      chatUserScopeAnchoredAddendum, // v0.10.1723 — çapalı soru: takım sorma
+	"chatServiceSetScopeAddendumTmpl":    chatServiceSetScopeAddendumTmpl,
 	"chatBriefingLineAddendumTmpl":       chatBriefingLineAddendumTmpl,
 	"chatRouteInvestigationAddendumTmpl": chatRouteInvestigationAddendumTmpl, // v0.10.1738 — v2 rota incelemesi
 	"ChatUserScopeAskMarker":             ChatUserScopeAskMarker,             // "bir kez sor" sezgisinin işareti

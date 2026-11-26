@@ -58,9 +58,9 @@ func TestAIThinkingSettingsRolesAuditRoundTrip(t *testing.T) {
 	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &body) != nil || len(body.Surfaces) != len(copilot.ThinkSurfaces()) {
 		t.Fatalf("GET %d: %s", w.Code, w.Body)
 	}
-	for _, sf := range body.Surfaces {
-		if sf.Mode != "off" {
-			t.Fatalf("default must be off: %+v", sf)
+	for _, sf := range body.Surfaces { // v0.10.2471 — varsayılan on, intent off
+		if want := copilot.DefaultThinkingModes()[sf.ID]; sf.Mode != want || (sf.ID == "intent") != (sf.Mode == "off") {
+			t.Fatalf("default must be on except intent: %+v (want %s)", sf, want)
 		}
 	}
 

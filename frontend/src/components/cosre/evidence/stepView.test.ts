@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
 import type { CosreStop, CosreStopReason } from '@/lib/types';
-import { SCOPE_REASONS, STOP_REASONS } from '@/lib/cosre/protocol';
+import { SCOPE_REASONS, STOP_REASONS, isScopedReason } from '@/lib/cosre/protocol';
 import { errorMessage, inputsLine, previewFor, queryKindLabel, stepsView, stopBadges, stopLine } from './stepView';
 import { latestScope, scopeChangeNotes, scopeOf, scopeView } from './scopeView';
 
@@ -145,14 +145,23 @@ describe('stepsView — kind eşlemesi', () => {
 const scopePart = (data: Record<string, unknown>) => P({ type: 'data-scope', id: 'scope', data });
 const msg = (id: string, role: 'user' | 'assistant', parts: Part[]) => ({ id, role, parts }) as CosreUIMessage;
 
-describe('scopeView — 7 neden', () => {
-  it('her neden etiket + açıklama + ton taşır; yalnız team kapsamlı', () => {
+describe('scopeView — 8 neden', () => {
+  it('her neden etiket + açıklama + ton taşır; yalnız team ve pattern kapsamlı', () => {
     for (const reason of SCOPE_REASONS) {
-      const v = scopeView({ reason, unscoped: reason !== 'team', count: reason === 'team' ? 2 : 0, team: 'acme-orders', ...(reason === 'team' ? { services: ['orders-api', 'payments-core'] } : {}) });
+      const scoped = isScopedReason(reason);
+      const v = scopeView({ reason, unscoped: !scoped, count: scoped ? 2 : 0, team: 'acme-orders', ...(scoped ? { services: ['orders-api', 'payments-core'] } : {}) });
       expect(v.label).not.toBe('');
       expect(v.text).not.toBe('');
-      expect(v.tone).toBe(reason === 'team' ? 'ok' : reason === 'error' ? 'err' : 'warn');
+      expect(v.tone).toBe(scoped ? 'ok' : reason === 'error' ? 'err' : 'warn');
     }
+    // v0.10.2471 — servis adı kalıbı kapsamı: rozet kalıbı ve küme büyüklüğünü söyler.
+    const p = scopeView({ reason: 'pattern', unscoped: false, count: 60, pattern: 'harvester-*', services: ['harvester-a', 'harvester-b'], trimmed: 10 });
+    expect(p.label).toBe('Kapsam: harvester-* · 60 servis');
+    expect(p.text).toContain('harvester-*');
+    expect(p.services).toEqual(['harvester-a', 'harvester-b']);
+    expect(p.more).toBe(58);
+    expect(p.tone).toBe('ok');
+    expect(p.sig).not.toBe(scopeView({ reason: 'team', unscoped: false, count: 60, team: 'harvester-*', services: ['harvester-a', 'harvester-b'] }).sig);
     const t = scopeView({ reason: 'team', unscoped: false, count: 32, team: 'acme-orders', services: ['orders-api', 'payments-core'], trimmed: 12 });
     expect(t.label).toBe('Kapsam: acme-orders · 32 servis');
     expect(t.services).toEqual(['orders-api', 'payments-core']);

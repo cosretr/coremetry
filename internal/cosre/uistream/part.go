@@ -112,7 +112,9 @@ var StopReasons = []string{"stop", "round_cap", "call_cap", "cancelled", "deadli
 // ScopeReasons — data-scope `reason` kapalı kümesi (api chat_user_scope.go
 // üretir; protocol.ts SCOPE_REASONS ile eşit, test pinler). "team" = kapsamlı;
 // gerisi unscoped:true (tools-audit Q1/Q2 — sessiz genişleme yok, rozet var).
-var ScopeReasons = []string{"team", "no_identity", "no_team", "no_services", "disabled", "escape", "error"}
+// v0.10.2471 — "pattern": kapsam bir servis adı kalıbının kümesi (kapsamlı,
+// `pattern` alanı kalıbın glob yazımı; api chat_service_set.go).
+var ScopeReasons = []string{"team", "no_identity", "no_team", "no_services", "disabled", "escape", "error", "pattern"}
 
 // ReasonApprovalRequired — agent-core S4: `step-result.reason` onay bekleyen
 // çağrı (api skipReasonApproval / Executor KindApproval ile aynı dizgi; api

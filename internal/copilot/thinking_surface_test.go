@@ -96,14 +96,78 @@ func TestResolveSurfaceThinking(t *testing.T) {
 			t.Errorf("mode=%q profile=%q → %q, want %q", c.mode, c.profile, got, c.want)
 		}
 	}
+	// v0.10.2471 (operatör 2026-11-26, v0.10.2458 varsayılanını tersine çevirir):
+	// kayıtsız yüzey AÇIK; tek istisna intent (tek satır JSON sınıflayıcı) kapalı.
 	s := New(ProviderOpenAI, "", "qwen3-8b")
 	for k, v := range s.ThinkingModes() {
-		if v != ThinkModeOff {
-			t.Errorf("fresh service: %s=%s, want off (operator default 2026-11-22)", k, v)
+		want := ThinkModeOn
+		if k == string(ThinkIntent) {
+			want = ThinkModeOff
+		}
+		if v != want {
+			t.Errorf("fresh service: %s=%s, want %s (operator default 2026-11-26)", k, v, want)
 		}
 	}
 	if len(s.ThinkingModes()) != len(ThinkSurfaces()) {
 		t.Fatalf("modes must list every surface")
+	}
+	if !reflect.DeepEqual(s.ThinkingModes(), DefaultThinkingModes()) {
+		t.Fatalf("fresh service must equal DefaultThinkingModes: %v", s.ThinkingModes())
+	}
+}
+
+// v0.10.2471 — kayıtlı ayar varsayılanı ezer; yalnız kaydı olmayan yüzey yeni
+// varsayılanı alır. Kayıt seyrek: dokunulmayan yüzey depoya yazılmaz.
+func TestThinkingStoredModesWinOverDefault(t *testing.T) {
+	store := newMemStore()
+	store.m[ThinkingSettingsKey] = []byte(`{"guided":"off","intent":"on","trace":"inherit"}`)
+	s := New(ProviderOpenAI, "", "qwen3-8b")
+	if err := s.LoadPersisted(context.Background(), store); err != nil {
+		t.Fatal(err)
+	}
+	got := s.ThinkingModes()
+	for k, want := range map[string]string{"guided": "off", "intent": "on", "trace": "inherit", // kayıtlı
+		"health_report": "on", "explain": "on", "investigation": "on", "verifier": "on", "other": "on"} { // kayıtsız → varsayılan
+		if got[k] != want {
+			t.Errorf("%s=%s, want %s", k, got[k], want)
+		}
+	}
+	if _, err := s.SaveThinkingModes(context.Background(), store, map[string]string{"explain": "off"}); err != nil {
+		t.Fatal(err)
+	}
+	var blob map[string]string
+	if err := json.Unmarshal(store.m[ThinkingSettingsKey], &blob); err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]string{"guided": "off", "intent": "on", "trace": "inherit", "explain": "off"}; !reflect.DeepEqual(blob, want) {
+		t.Fatalf("stored blob must hold only explicit surfaces: %v, want %v", blob, want)
+	}
+}
+
+// v0.10.2471 — bütçe / cevap tavanı varsayılanı izler (mekanik v0.10.2458 ile aynı):
+// kayıtsız guided çağrısı düşünen bütçeyle, kayıtsız intent çağrısı düşünmesiz.
+func TestThinkingDefaultDrivesBudgetAndBody(t *testing.T) {
+	llm := newTuneLLM(t)
+	s := llm.service(ModelProfile{Model: "qwen3-8b"})
+	s.SetThinkingModes(nil) // gerçek varsayılan
+	on := map[string]any{"enable_thinking": true}
+	off := map[string]any{"enable_thinking": false}
+	for _, c := range []struct {
+		label string
+		want  any
+	}{{"chat-guided", on}, {"chat", on}, {"explain-problem", on}, {"chat-intent", off}} {
+		if _, err := s.Explain(surfaceCtx(c.label), "sys", "user"); err != nil {
+			t.Fatalf("%s: %v", c.label, err)
+		}
+		if got := thinkingKwargs(t, llm); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: chat_template_kwargs=%v, want %v", c.label, got, c.want)
+		}
+	}
+	caps := capsForProfile(ModelProfile{Model: "qwen3-8b"})
+	thOn, _ := s.effectiveThinking(surfaceCtx("chat-guided"), ModelProfile{Model: "qwen3-8b"})
+	thOff, _ := s.effectiveThinking(surfaceCtx("chat-intent"), ModelProfile{Model: "qwen3-8b"})
+	if a, b := resolveMaxTokens(0, 0, caps, thOn, 0), resolveMaxTokens(0, 0, caps, thOff, 0); b != defaultMaxTokens || (caps.DefaultMaxTokens > defaultMaxTokens && a <= b) {
+		t.Errorf("budget must follow the surface default: guided=%d intent=%d (model default %d)", a, b, caps.DefaultMaxTokens)
 	}
 }
 
@@ -113,9 +177,10 @@ func thinkingKwargs(t *testing.T, l *tuneLLM) any {
 	return body["chat_template_kwargs"]
 }
 
-// Gövde: Qwen3 profilinde off varsayılanı enable_thinking=false gönderir, on
-// true, inherit profilin değerini (boşsa hiç); gemma'da hiçbir kipte anahtar
-// yok; profil thinkingSwitch beyanı adı tanınmayan modelde anahtarı açar.
+// Gövde: Qwen3 profilinde varsayılan (v0.10.2471: on, intent off) enable_thinking
+// true / intent'te false gönderir, kayıtlı off false, inherit profilin değerini
+// (boşsa hiç); gemma'da hiçbir kipte anahtar yok; profil thinkingSwitch beyanı
+// adı tanınmayan modelde anahtarı açar.
 func TestProviderBodyPerSurfaceThinking(t *testing.T) {
 	off := map[string]any{"enable_thinking": false}
 	on := map[string]any{"enable_thinking": true}
@@ -130,15 +195,17 @@ func TestProviderBodyPerSurfaceThinking(t *testing.T) {
 		steps   []step
 	}{
 		{"qwen3", ModelProfile{Model: tuneQwen}, []step{
-			{nil, "explain-trace", off},
+			{nil, "explain-trace", on},
 			{nil, "chat-intent", off},
+			{map[string]string{"trace": "off"}, "explain-trace", off},
 			{map[string]string{"trace": "on"}, "explain-trace", on},
 			{map[string]string{"trace": "on"}, "chat-intent", off},
+			{map[string]string{"intent": "on"}, "chat-intent", on},
 			{map[string]string{"intent": "inherit"}, "chat-intent", nil},
 		}},
-		{"qwen3 profile thinking=on, inherit", ModelProfile{Model: "qwen3-30b", Thinking: "on"}, []step{
-			{nil, "chat", off},
-			{map[string]string{"investigation": "inherit"}, "chat", on},
+		{"qwen3 profile thinking=off, inherit", ModelProfile{Model: "qwen3-30b", Thinking: "off"}, []step{
+			{nil, "chat", on}, // varsayılan on profilin off'unu ezer; profil yalnız inherit'te
+			{map[string]string{"investigation": "inherit"}, "chat", off},
 		}},
 		{"gemma never gets the key", ModelProfile{Model: tuneGemma, Thinking: "on"}, []step{
 			{nil, "explain-span", nil},
@@ -146,8 +213,8 @@ func TestProviderBodyPerSurfaceThinking(t *testing.T) {
 			{map[string]string{"explain": "inherit"}, "explain-span", nil},
 		}},
 		{"alias with profile thinkingSwitch", ModelProfile{Model: "cosre-default", ThinkingSwitch: true}, []step{
-			{nil, "chat-guided", off},
-			{map[string]string{"guided": "on"}, "chat-guided", on},
+			{nil, "chat-guided", on},
+			{map[string]string{"guided": "off"}, "chat-guided", off},
 		}},
 		{"alias without flag", ModelProfile{Model: "cosre-default"}, []step{
 			{map[string]string{"guided": "on"}, "chat-guided", nil},

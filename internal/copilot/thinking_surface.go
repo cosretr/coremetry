@@ -2,13 +2,17 @@ package copilot
 
 // thinking_surface.go — v0.10.2458 (operatör kararı 2026-11-22: "Qwen düşünme
 // kipi varsayılan KAPALI"; v0.10.2456 takibi "yüzey başına düşünme").
+// v0.10.2471 (operatör 2026-11-26, v0.10.2458 varsayılanı TERSİNE): düşünme
+// varsayılanı AÇIK — `intent` hariç her yüzey (defaultThinkMode). Kayıtlı
+// admin ayarı (ai_thinking_surfaces) varsayılanı ezer; yalnız kaydı olmayan
+// yüzey değişir. Mekanik (bütçe, cevap tavanı, örnekleme, gövde) aynı.
 //
 // Her LLM çağrısı bir DÜŞÜNME YÜZEYİNE düşer (niyet sınıflayıcı, guided
 // anlatım, sağlık raporu, kısa ✨ açıklama, trace açıklaması, CoSRE serbest
 // döngü / araştırma, doğrulayıcı yeniden üretimi, diğer). Yüzey başına ayar:
 //
-//	off      → enable_thinking=false (varsayılan, her yüzey)
-//	on       → enable_thinking=true
+//	off      → enable_thinking=false (varsayılan: yalnız intent)
+//	on       → enable_thinking=true (varsayılan: diğer bütün yüzeyler)
 //	inherit  → profilin `Thinking` alanı ("" = modele dokunma — v0.10.534'ün
 //	           davranışı bayt bayt)
 //
@@ -164,8 +168,29 @@ func ClassifyThinkSurface(label string) ThinkSurface {
 	return ThinkOther
 }
 
+// defaultThinkMode — SAF: kaydı olmayan yüzeyin kipi (v0.10.2471, operatör
+// 2026-11-26): AÇIK. Tek istisna `intent`: yönlendirici / sınıflayıcı her
+// turdan önce tek satır katı JSON üretir, düşünme orada yalnız gecikme ekler
+// — kapalı kalır; operatör "Thinking mode per surface" kartından açabilir.
+func defaultThinkMode(surface ThinkSurface) string {
+	if surface == ThinkIntent {
+		return ThinkModeOff
+	}
+	return ThinkModeOn
+}
+
+// DefaultThinkingModes — her yüzeyin varsayılan kipi (admin kartı ve testler).
+func DefaultThinkingModes() map[string]string {
+	out := make(map[string]string, len(thinkSurfaceInfos))
+	for _, i := range thinkSurfaceInfos {
+		out[string(i.ID)] = defaultThinkMode(i.ID)
+	}
+	return out
+}
+
 // ResolveSurfaceThinking — SAF: yüzey kipi + profil ayarı → gövdeye giden
-// modelcaps değeri. Kayıtsız / bilinmeyen kip = off (operatör varsayılanı).
+// modelcaps değeri. Boş / bilinmeyen KİP dizgisi = off (savunma; yüzeyin
+// varsayılanı thinkingModeFor'da çözülür, buraya hep geçerli kip gelir).
 func ResolveSurfaceThinking(mode, profileThinking string) string {
 	switch mode {
 	case ThinkModeOn:
@@ -176,17 +201,18 @@ func ResolveSurfaceThinking(mode, profileThinking string) string {
 	return string(modelcaps.ThinkingOff)
 }
 
-// thinkingModeFor — ayar tablosundan (yoksa off).
+// thinkingModeFor — ayar tablosundan; kaydı yoksa yüzeyin varsayılanı
+// (defaultThinkMode: intent off, diğerleri on). Kayıtlı değer hep kazanır.
 func (s *Service) thinkingModeFor(surface ThinkSurface) string {
 	s.thinkMu.RLock()
 	defer s.thinkMu.RUnlock()
 	if m, ok := s.thinkModes[surface]; ok && ValidThinkMode(m) {
 		return m
 	}
-	return ThinkModeOff
+	return defaultThinkMode(surface)
 }
 
-// ThinkingModes — her yüzeyin yürürlükteki kipi (kayıtsız = off).
+// ThinkingModes — her yüzeyin yürürlükteki kipi (kayıtsız = yüzey varsayılanı).
 func (s *Service) ThinkingModes() map[string]string {
 	out := make(map[string]string, len(thinkSurfaceInfos))
 	for _, i := range thinkSurfaceInfos {
@@ -224,13 +250,29 @@ func (s *Service) loadThinkingPersisted(ctx context.Context, store SettingsStore
 	s.SetThinkingModes(m)
 }
 
-// SaveThinkingModes — kısmi gövde mevcut tabloya birleşir, doğrulanır,
-// system_settings'e yazılır, canlı tablo güncellenir. Dönen = tam tablo.
+// storedThinkingModes — yalnız KAYITLI (açıkça ayarlanmış) yüzeyler; varsayılanlar yok.
+func (s *Service) storedThinkingModes() map[string]string {
+	s.thinkMu.RLock()
+	defer s.thinkMu.RUnlock()
+	out := make(map[string]string, len(s.thinkModes))
+	for k, v := range s.thinkModes {
+		if ValidThinkMode(v) {
+			out[string(k)] = v
+		}
+	}
+	return out
+}
+
+// SaveThinkingModes — kısmi gövde KAYITLI tabloya birleşir, doğrulanır,
+// system_settings'e yazılır, canlı tablo güncellenir. Dönen = tam (yürürlükteki)
+// tablo. v0.10.2471 — yalnız açıkça ayarlanan yüzeyler yazılır: dokunulmayan
+// yüzey kayda varsayılanıyla GİRMEZ, böylece varsayılan değişikliği onu izler
+// (eskiden her kayıt 8 yüzeyi de yazıyor, sonraki varsayılanı donduruyordu).
 func (s *Service) SaveThinkingModes(ctx context.Context, store SettingsStore, patch map[string]string) (map[string]string, error) {
 	if err := ValidateThinkingModes(patch); err != nil {
 		return nil, err
 	}
-	merged := s.ThinkingModes()
+	merged := s.storedThinkingModes()
 	for k, v := range patch {
 		merged[k] = v
 	}
@@ -242,12 +284,12 @@ func (s *Service) SaveThinkingModes(ctx context.Context, store SettingsStore, pa
 		return nil, err
 	}
 	s.SetThinkingModes(merged)
-	return merged, nil
+	return s.ThinkingModes(), nil
 }
 
 // effectiveThinking — callSnapshot'ın tek kararı: profil + yüzey → thinking
 // değeri; fromProfile = kip inherit (bilinmeyen aile uyarısı yalnız onda —
-// varsayılan off gemma'da her çağrıda uyarı basmasın).
+// varsayılan kip gemma'da her çağrıda uyarı basmasın).
 func (s *Service) effectiveThinking(ctx context.Context, p ModelProfile) (thinking string, fromProfile bool) {
 	mode := s.thinkingModeFor(ThinkSurfaceOf(ctx))
 	return ResolveSurfaceThinking(mode, p.Thinking), mode == ThinkModeInherit

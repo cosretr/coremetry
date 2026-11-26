@@ -567,6 +567,32 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		}
 	}
 
+	// v0.10.2471 (operator-reported) — servis adı kalıbı ("harvester-* ile
+	// başlayan servisleri incele", "adı payment içeren servisler";
+	// chat_service_pattern.go / chat_service_set.go): soru bir servis KÜMESİ
+	// adlandırıyor. Doküman kademeleri, kaynak sorusu, endpoint kartı ve
+	// guided'dan ÖNCE: 0 eşleşme → LLM'siz "yok" + yakın adlar; 1 → o servis
+	// yazılmış gibi sürer; 2..N → küme konuşma kapsamı olur ve genel bakış
+	// (guided service_set) ya da v2'de küme kapsamıyla serbest döngü. Kalıp ve
+	// etkin küme yoksa kademe hiçbir şey okumaz, akış bayt bayt eski.
+	spt := s.chatServicePatternTier(ctx, emit, servicePatternReq{Msgs: req.Messages, RangeS: int64(req.Context.RangeS), AnchorTo: anchorTo,
+		Loc: chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin),
+		Off: apCont.on || ct.On || evm.singleTurn() || evm.skipGuided() || chatScopeActive(req.Context.Scope, req.Context.Command) ||
+			req.Context.Explain != "" || req.Context.Subject != "" || req.Context.Trace != "" || pageTID != ""}, cst)
+	if spt.handled {
+		if spt.tier == "clarify" { // literal adlar: ai_surface_registry_test kayıtlı kademeyi denetler
+			cspan.tier("clarify", spt.ok)
+		} else {
+			cspan.tier("guided", spt.ok)
+		}
+		emit("done", map[string]bool{"ok": spt.ok})
+		return
+	}
+	ctx, req.Messages = spt.ctx, spt.msgs
+	if spt.toLoop { // küme kapsamıyla serbest döngü: orta kademeler ve ekran servisi daraltması atlanır
+		invSkip, req.Context.Service = true, ""
+	}
+
 	// v0.10.1124 — AÇIK wiki sorusu ("runbook'u nedir", "wikide nasıl
 	// anlatılıyor") guided'dan ÖNCE: servis adı taşıyan wiki sorusu telemetri
 	// anlatımına kaçıyordu (chat_wiki_tier.go). İşaretsiz soru bayt bayt eski.
@@ -1260,6 +1286,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			teamOverride = evm.UserTeam
 		}
 		us := s.resolveUserScope(ctx, requestScopeEscape(req.Context.Scope, req.Context.Command), teamOverride)
+		// v0.10.2471 — konuşmanın servis adı kalıbı kümesi takım kapsamının yerine geçer (chat_service_set.go).
+		us = activeServicePatternScope(us, cst, requestScopeEscape(req.Context.Scope, req.Context.Command), time.Now())
 		if evm != nil && evm.OnScope != nil {
 			evm.OnScope(us)
 		}

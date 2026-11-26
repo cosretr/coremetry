@@ -88,7 +88,7 @@ func answerClassOfIntent(intent guidedIntent) answerClass {
 	switch intent {
 	case guidedTraceByID, guidedSpanByID, guidedRequestID, guidedServiceReport, guidedResourceInvestigation:
 		return classReport // guidedNarrationPrompt'un rapor anlatıcıları (karar 1)
-	case guidedServiceHealth, guidedFamilyHealth, guidedMyServices, guidedTeamServices, guidedPodHealth,
+	case guidedServiceHealth, guidedFamilyHealth, guidedServiceSet, guidedMyServices, guidedTeamServices, guidedPodHealth,
 		guidedDBHealth, guidedMessagingHealth, guidedServiceHealthcheck, guidedNamespaceServices,
 		guidedMyProblems, guidedProblems, guidedFindEntity, guidedEndpointCandidates:
 		return classStatus

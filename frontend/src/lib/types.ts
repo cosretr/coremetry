@@ -9224,9 +9224,10 @@ export interface CosreStop {
 }
 
 /** CoSRE v2 araç seti dilim 2 — `data-scope.data.reason` kapalı kümesi (Go uistream.ScopeReasons).
- *  'team' = kapsamlı; gerisi unscoped (sessiz genişleme yok, rozet gösterilir). */
+ *  'team' = kapsamlı; gerisi unscoped (sessiz genişleme yok, rozet gösterilir).
+ *  v0.10.2471 — 'pattern' = kapsamlı: servis adı kalıbının kümesi ("harvester-*"). */
 export type CosreScopeReason =
-  | 'team' | 'no_identity' | 'no_team' | 'no_services' | 'disabled' | 'escape' | 'error';
+  | 'team' | 'no_identity' | 'no_team' | 'no_services' | 'disabled' | 'escape' | 'error' | 'pattern';
 
 /** CoSRE v2 araç seti dilim 2 — `data-scope`: alışverişin kullanıcı kapsamı
  *  (users.team → ownerTeam VEYA sreTeam servisleri). services ≤ 20 ad; count tamamı. */
@@ -9256,6 +9257,8 @@ export interface CosreScope {
   reason: CosreScopeReason;
   count: number;
   team?: string;
+  /** v0.10.2471 — reason 'pattern': kalıbın glob yazımı ("harvester-*"). */
+  pattern?: string;
   services?: string[];
   trimmed?: number;
   /** v0.10.1725 — sunucu "Takımını seç" kartını istiyor (no_team + takım biçimli soru). */

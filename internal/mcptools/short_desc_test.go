@@ -77,6 +77,8 @@ const shortDescMinBytes = 60
 // ölçülmüyor) +21 B → 10864 B (simple 10354 B).
 // v0.10.2465 — 82 tool: traces_search (değer çözümü + Traces toplamları +
 // link; ölçülen +175 B → 11039 B; simple 10529 B). Tavan aynı.
+// v0.10.2471 — servis adı kalıbı (api chat_service_pattern.go): yeni araç YOK
+// (kademe + guided service_set rotası); ölçülen aynı 11039 B / simple 10529 B.
 const shortCatalogMaxBytes = 12000
 
 // shortCatalogSimpleMaxBytes — v0.10.1302: simple araç seti varyantının

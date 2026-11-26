@@ -437,6 +437,16 @@ type guidedRoute struct {
 	OutboundOptions []string `json:",omitempty"`
 	OutboundMiss    bool     `json:",omitempty"`
 	OutboundProbeS  int64    `json:"-"`
+	// v0.10.2471 — guidedServiceSet (chat_service_set.go): servis adı kalıbından
+	// çözülen küme. Servisler Family'de (aile rotasıyla aynı yuva); SetLabel
+	// kalıbın glob yazımı ("harvester-*"), SetTotal kalıba uyan servis sayısı
+	// (tavan aşıldıysa > len(Family)), SetRankedBy tavan sırasının kaynağı,
+	// SetFocus devam sorusunun odağı (slow | errors | traffic | problems).
+	SetLabel    string `json:",omitempty"`
+	SetKind     string `json:",omitempty"`
+	SetTotal    int    `json:",omitempty"`
+	SetRankedBy string `json:",omitempty"`
+	SetFocus    string `json:",omitempty"`
 }
 
 // normalizeGuidedMsg lowercases for matching. Go's ToLower maps the
@@ -2411,6 +2421,8 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		}
 	case guidedFamilyHealth:
 		evidence, sources, err = s.guidedFamilyHealthBundle(ctx, emit, route.Family, route.Env, from, to, rangeS)
+	case guidedServiceSet: // v0.10.2471 — servis adı kalıbı kümesi (chat_service_set.go)
+		evidence, sources, err = s.guidedServiceSetBundle(ctx, emit, &route, from, to, rangeS)
 	case guidedSlowTraces:
 		evidence, sources, err = s.guidedSlowTracesBundle(ctx, emit, route.Service, route.Env, from, to, rangeS)
 	case guidedTraceDrill: // v0.10.1327 — en yavaş trace kritik yolu + o trace'lerin logları

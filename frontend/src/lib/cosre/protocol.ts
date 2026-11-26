@@ -77,8 +77,11 @@ export const STOP_REASONS = [
 
 /** data-scope `reason` kapalı kümesi (Go uistream.ScopeReasons). */
 export const SCOPE_REASONS = [
-  'team', 'no_identity', 'no_team', 'no_services', 'disabled', 'escape', 'error',
+  'team', 'no_identity', 'no_team', 'no_services', 'disabled', 'escape', 'error', 'pattern',
 ] as const satisfies readonly CosreScopeReason[];
+
+/** Kapsamlı nedenler (unscoped:false): takım ve v0.10.2471'den beri servis adı kalıbı. */
+export const isScopedReason = (r: CosreScopeReason): boolean => r === 'team' || r === 'pattern';
 
 /** data-tool-result tavanı (Go uistream.ToolResultMaxBytes). */
 export const TOOL_RESULT_MAX_BYTES = 2048;
@@ -134,16 +137,20 @@ const isScopeReason = (v: unknown): v is CosreScopeReason =>
   typeof v === 'string' && (SCOPE_REASONS as readonly string[]).includes(v);
 
 /** data-scope → CosreScope; bilinmeyen neden, biçimsiz alan ya da çelişki
- *  (kapsamlı 'team' ama unscoped:true, ya da tersi) null — rozet yanlış
+ *  (kapsamlı 'team' / 'pattern' ama unscoped:true, ya da tersi) null — rozet yanlış
  *  kapsam iddia etmesin. services yalnız dize elemanlarını tutar. */
 export function parseDataScope(p: { type: string; data?: unknown }): CosreScope | null {
   if (p.type !== 'data-scope' || !isRecord(p.data)) return null;
-  const { unscoped, reason, count, team, services, trimmed } = p.data;
+  const { unscoped, reason, count, team, pattern, services, trimmed } = p.data;
   const n = finiteNum(count);
   if (typeof unscoped !== 'boolean' || !isScopeReason(reason) || n === undefined) return null;
-  if (unscoped === (reason === 'team')) return null;
+  if (unscoped === isScopedReason(reason)) return null;
   const out: CosreScope = { unscoped, reason, count: n };
   if (typeof team === 'string' && team !== '') out.team = team;
+  if (reason === 'pattern') { // v0.10.2471 — kalıpsız kalıp kapsamı rozete yazılmaz
+    if (typeof pattern !== 'string' || pattern === '') return null;
+    out.pattern = pattern;
+  }
   if (Array.isArray(services)) {
     const names = services.filter((s): s is string => typeof s === 'string' && s !== '');
     if (names.length > 0) out.services = names;

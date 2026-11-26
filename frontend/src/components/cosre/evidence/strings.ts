@@ -123,7 +123,8 @@ export const PAGE_LABELS: Record<string, string> = {
 };
 export const PAGE_LABEL_DEFAULT = 'Sayfada aç';
 
-/** Kapsam rozeti — 7 neden (Go uistream.ScopeReasons). Yalnız `team` kapsamlı. */
+/** Kapsam rozeti — 8 neden (Go uistream.ScopeReasons). `team` ve `pattern` kapsamlı;
+ *  `pattern`da ilk argüman kalıbın glob yazımıdır (scopeView). */
 export const SCOPE_LABELS: Record<CosreScopeReason, { label: (team: string, n: number) => string; text: (team: string, n: number) => string }> = {
   team: {
     label: (team, n) => `Kapsam: ${team || 'takımın'} · ${n} servis`,
@@ -152,5 +153,9 @@ export const SCOPE_LABELS: Record<CosreScopeReason, { label: (team: string, n: n
   error: {
     label: () => 'Kapsam okunamadı',
     text: () => 'Takım bilgisi okunamadı (okunamadı ≠ takımın yok). Tüm servislerde arandı.',
+  },
+  pattern: {
+    label: (pattern, n) => `Kapsam: ${pattern || 'servis kalıbı'} · ${n} servis`,
+    text: pattern => `Bu konuşmanın kapsamı adı ${pattern || 'yazdığın kalıba'} uyan servisler. Bırakmak için "tüm servisler" yaz.`,
   },
 };

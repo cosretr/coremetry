@@ -1,5 +1,6 @@
 // AiThinkingPanel.tsx — v0.10.2458 (operator decision 2026-11-22: Qwen thinking
-// mode default OFF, configurable per surface). Own GET/PUT
+// mode configurable per surface). v0.10.2471 (operator 2026-11-26): default is
+// ON for every surface except the intent / router classifier. Own GET/PUT
 // (/api/settings/ai/thinking, admin + audit settings.ai.thinking). Sits next to
 // the model profiles; "inherit" uses the profile's Thinking value. The request
 // key (chat_template_kwargs.enable_thinking) is only sent to models that accept
@@ -52,7 +53,9 @@ export function AiThinkingPanel() {
     <div className={CARD} data-thinking-surfaces-panel="">
       <SectionTitle>Thinking mode per surface</SectionTitle>
       <div className={INTRO}>
-        Qwen3 thinking (<code>enable_thinking</code>) per call surface. Default is <b>off</b> everywhere.
+        Qwen3 thinking (<code>enable_thinking</code>) per call surface. Default is <b>on</b>, except the
+        intent / router classifier (<b>off</b>: it emits one line of JSON before every turn, thinking only adds latency).
+        A saved choice always wins over the default.
         <b> inherit</b> uses the model profile&apos;s Thinking setting. The key is sent only to models that accept it
         (Qwen3 family, or a profile marked &quot;accepts enable_thinking&quot;); gemma and other models ignore this setting.
         Thinking output is stripped from answers in every mode.

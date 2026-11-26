@@ -3365,6 +3365,39 @@ func ChatUserScopeAddendum(team string, n int) string {
 	return fmt.Sprintf(chatUserScopeAddendumTmpl, team, n)
 }
 
+// chatServiceSetScopeAddendumTmpl — v0.10.2471: konuşmanın kapsamı bir
+// servis adı kalıbından çözülen küme ("harvester-*"). Takım kapsamının yerine
+// geçer; `services` argümanını yine sunucu koyar (api applyUserScope).
+const chatServiceSetScopeAddendumTmpl = `
+
+SERVİS KÜMESİ KAPSAMI: Kullanıcı bu konuşmada adı %q kalıbına uyan servisleri
+seçti; varsayılan kapsam bu kümenin %d servisi: %s. 'services' argümanı alan
+araçlara listeyi sunucu koyar; kümeye servis adı EKLEME, ad TAHMİN ETME.
+"Hangisi", "bunlar", "hata verenler" bu kümeyi kasteder. Kullanıcı tek bir
+servisi adıyla yazarsa onu kullan. Cevapta kapsamı bir kez söyle ("%s kalıbına
+uyan %d servis").`
+
+// chatServicePatternScopeNames — ekte adıyla yazılan servis tavanı.
+const chatServicePatternScopeNames = 20
+
+// ChatServicePatternScopeAddendum — servis adı kalıbı kapsamlı alışverişin eki.
+// names: kapsamdaki servisler (tavanlı liste); total: kalıba uyan servis sayısı.
+func ChatServicePatternScopeAddendum(label string, total int, names []string) string {
+	shown := names
+	if len(shown) > chatServicePatternScopeNames {
+		shown = shown[:chatServicePatternScopeNames]
+	}
+	list := strings.Join(shown, ", ")
+	if more := len(names) - len(shown); more > 0 {
+		list += fmt.Sprintf(" … (+%d)", more)
+	}
+	n := len(names)
+	if out := total - n; out > 0 {
+		list += fmt.Sprintf("; kalıba uyan %d servisin %d tanesi tavan dışında, incelenmedi", total, out)
+	}
+	return fmt.Sprintf(chatServiceSetScopeAddendumTmpl, label, n, list, label, n)
+}
+
 const chatUserScopeAskTeamAddendum = `
 
 KULLANICI KAPSAMI YOK: Kullanıcının takımı çözülemedi. Soru kullanıcının

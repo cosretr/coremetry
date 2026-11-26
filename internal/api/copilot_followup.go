@@ -249,6 +249,18 @@ func guidedSuggestions(route guidedRoute) []string {
 		return []string{route.PairFrom + "'dan " + route.PairTo + "'ye giden istekler", route.PairTo + " sağlığı nasıl?", route.PairTo + " en yavaş trace'ler?"}
 	case guidedFamilyHealth:
 		return []string{"Açık problemler?", "Takımımın en hatalı servisleri?", "Takımımın exception'ları?"}
+	case guidedServiceSet: // v0.10.2471 — kümeden bir servise in (sıra: en sorunlu önce)
+		out := make([]string, 0, 3)
+		for i, sv := range route.TeamServices {
+			if i >= 3 {
+				break
+			}
+			out = append(out, sv+" sağlığı nasıl?")
+		}
+		if len(out) == 0 {
+			return []string{"Açık problemler?"}
+		}
+		return out
 	case guidedMyServices:
 		// v0.9.651 (operatör: "takımıma ait servisleri listeledikten
 		// sonra SEÇECEĞİ servisle ilgili hatalar / logları / en yavaş
@@ -433,7 +445,7 @@ func guidedFollowups(route guidedRoute, asked []string) []chatFollowup {
 		return nil
 	}
 	switch route.Intent { // v0.10.1385 — takım exception rotaları grup çiplerini taşır
-	case guidedTeamServices, guidedMyServices: // v0.10.1397 — servis başına "hangi servis?" çipleri + özet adımları
+	case guidedTeamServices, guidedMyServices, guidedServiceSet: // v0.10.1397 — servis başına "hangi servis?" çipleri + özet adımları; v0.10.2471 — küme bakışı da
 		return dedupFollowupsAsked(route.TeamFollowups, asked, teamOverviewFollowupMax)
 	case guidedMyExceptions, guidedTeamExceptions:
 		return dedupFollowupsAsked(route.TeamFollowups, asked, guidedFollowupMax)
@@ -749,6 +761,8 @@ func guidedAnswerLinkTargets(route guidedRoute) []guidedAnswerLink {
 		return links
 	case guidedFamilyHealth:
 		return []guidedAnswerLink{{Label: "Servisler", Href: "/services"}}
+	case guidedServiceSet: // v0.10.2471 — ad süzgeçli Servisler + sıradaki ilk servis
+		return serviceSetLinks(route)
 	case guidedMyProblems:
 		return []guidedAnswerLink{{Label: "Problemler", Href: "/problems"}}
 	// v0.10.1397 — takım servis cevabının linkleri (my_services = kimlikten

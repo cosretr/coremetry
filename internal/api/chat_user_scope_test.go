@@ -63,7 +63,7 @@ func TestResolveUserScopeCore(t *testing.T) {
 
 // Kapalı küme Go tarafında eşit (FE protocol.ts SCOPE_REASONS ile vitest pinler).
 func TestScopeReasonsClosedSet(t *testing.T) {
-	ours := []string{scopeReasonTeam, scopeReasonNoIdentity, scopeReasonNoTeam, scopeReasonNoServices, scopeReasonDisabled, scopeReasonEscape, scopeReasonError}
+	ours := []string{scopeReasonTeam, scopeReasonNoIdentity, scopeReasonNoTeam, scopeReasonNoServices, scopeReasonDisabled, scopeReasonEscape, scopeReasonError, scopeReasonPattern}
 	if !slices.Equal(ours, uistream.ScopeReasons) {
 		t.Fatalf("api %v ≠ uistream %v", ours, uistream.ScopeReasons)
 	}

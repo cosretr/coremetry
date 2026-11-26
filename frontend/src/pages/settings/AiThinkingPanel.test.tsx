@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // AiThinkingPanel.test.tsx — v0.10.2458. Contract: every surface shows its
-// server mode (default off); changing one select and saving PUTs ONLY the
+// server mode (v0.10.2471: server default is on, intent off — the panel shows
+// whatever the server sends); changing one select and saving PUTs ONLY the
 // changed surface; stats render per surface; inherit summary per profile.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act } from 'react';
