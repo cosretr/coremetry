@@ -7,8 +7,9 @@
 //   - /incident?id= de Anomalies'e iner (arşiv sayfası Incidents ölü kod dilimi 2'de silindi).
 // Açıkken her şey bugünkü gibi. Yüzey başına ikinci anahtar YOK.
 
-/** /incidents'ın emekliyken yönlendiği yer (Anomalies › Gruplar). */
-export const INCIDENTS_RETIRED_HOME = '/anomalies?tab=groups';
+/** /incidents'ın emekliyken yönlendiği yer. v0.10.2481: Anomalies listesi
+ *  Problems sayfasının Sinyaller sekmesi oldu (lib/inboxTabs SIGNALS_HREF). */
+export const INCIDENTS_RETIRED_HOME = '/inbox?tab=signals';
 
 /** SAF: bir gezinme hedefi (menü / ⌘K / kısayol) bu anahtar durumunda görünür mü. */
 export function incidentsNavVisible(to: string, incidentsOn: boolean): boolean {

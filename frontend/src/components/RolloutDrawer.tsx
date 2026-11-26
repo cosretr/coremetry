@@ -191,7 +191,7 @@ export function RolloutDrawer({ id, onClose }: { id: RolloutIdParam; onClose: ()
               <SignalSection title={t('rod.sig.anomalies', lang)} rows={d.services.flatMap(s => s.anomalies.map(a => ({
                 key: `${s.service}/${a.id}`, svc: s.service, a: a.kind, b: a.pattern, at: a.startedAt,
                 mark: a.predatesDeploy ? <RecurringMarker episodeCount={a.episodeCount} firstStartedAt={a.firstStartedAt} /> : undefined,
-              })))} moreHref="/anomalies" />
+              })))} moreHref="/inbox?tab=signals" />
               <SignalSection title={t('rod.sig.errors', lang)} rows={d.services.flatMap(s => s.newErrors.map(e => ({ key: `${s.service}/${e.fingerprint}`, svc: s.service, a: e.type, b: e.message, at: e.firstSeen })))} moreHref="/problems" />
             </>
           )}

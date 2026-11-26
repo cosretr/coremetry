@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { stopRowClick } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3); v0.10.1414 satır linki
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import { useQueryClient } from '@tanstack/react-query';
@@ -57,6 +57,10 @@ import {
 import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2299 — çizilemeyen sunucu metni (EN)
 import { verdictOf, countNoise, filterByVerdictView, parseVerdictView, inboxVerdictSubject, type VerdictView } from '@/lib/problemVerdict';
 import { rowPassesKindFacet } from '@/lib/inboxBuckets'; // v0.10.1803 — Oracle P1 problem kovasında
+import { useUrlParams } from '@/lib/urlSchema';
+import { INBOX_TAB_SPEC, resolveInboxTab } from '@/lib/inboxTabs'; // v0.10.2481 — Problemler / Sinyaller
+import { InboxTabStrip, SignalsTab } from './inbox/InboxTabs';
+import { ProblemSignalsToggle, ProblemSignalsRow, useRowExpand } from './inbox/ProblemSignals'; // v0.10.2481
 
 // v0.10.2170 (Problems S10) — süzgeç sözlükleri/varsayılanları ve kolonlar +
 // satır hücreleri kendi dosyalarında (davranış değişmez).
@@ -93,7 +97,18 @@ const isExcFamily = isInboxExcFamily;
 // (/incident?id=) gider; eski ?item= linki tam sayfaya yönlendirilir.
 
 
+// v0.10.2481 (operatör: "yapalım, sade ve güzel") — Problems, Incidents ve
+// Anomalies TEK sayfa, iki sekme: Problemler (varsayılan; bugünkü liste,
+// aşağıdaki ProblemsTab) · Sinyaller (?tab=signals; eski /anomalies listesi).
+// Yalnız etkin sekme mount edilir (pages/inbox/InboxTabs).
 export default function InboxPage() {
+  const [{ tab: rawTab }] = useUrlParams(INBOX_TAB_SPEC);
+  const tab = resolveInboxTab(rawTab);
+  const strip = <InboxTabStrip tab={tab} />;
+  return tab === 'signals' ? <SignalsTab strip={strip} /> : <ProblemsTab tabStrip={strip} />;
+}
+
+function ProblemsTab({ tabStrip }: { tabStrip: ReactNode }) {
   const navigate = useNavigate();
   // v0.10.1827 — tür sözlüğü + varsayılan Incidents ana anahtarına bağlı
   // (kabuk bayrağı user.features.incidents; yoksa emekli).
@@ -345,6 +360,10 @@ export default function InboxPage() {
   // Adresler değişmedi: tam sayfa push (incident'te kuyruğa geri dönüş
   // durumu), yerinde detay withInboxDetail'in kuyruk adresi (replace).
   const rowLinkOf = (it: InboxItem) => inboxRowLink(inboxRowOpen(it), location.pathname, location.search);
+  // v0.10.2481 — Problem satırının sinyalleri yerinde (kapalı başlar; ilk
+  // açılışta yüklenir, kapatınca DOM'da gizli kalır → tekrar istek yok).
+  const expand = useRowExpand();
+  const signalsOf = (it: InboxItem) => it.kind === 'problem' && !!it.problem?.id && (it.eventCount ?? 0) > 0;
   const openRow = (it: InboxItem) => {
     const link = rowLinkOf(it);
     if (link) navigate(link.to, { replace: link.replace, state: link.state });
@@ -735,6 +754,7 @@ export default function InboxPage() {
           DOM'da iki `#content` bulunurdu (geçersiz HTML + `getElementById`
           gizli olanı döndürür). Stil `#content` ile birebir aynı. */}
       <div className="page-body" style={problemParam || anomalyParam ? { display: 'none' } : undefined}>
+        {tabStrip}
         {/* v0.10.1081 — varsayılan metni sabitlerden türer (elle yazılmaz). */}
         <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 14 }}>
           Everything needing a human — Problems (alert rules), open Exception
@@ -1141,7 +1161,8 @@ export default function InboxPage() {
                 // v0.10.1109 — Oracle hata tablosu grubu: Exceptions'taki etiket.
                 const ora = isExcFamily(it) && isOracleGroup(it.exception!.fingerprint);
                 return (
-                <tr key={it.id}
+                <Fragment key={it.id}>
+                <tr
                   {...rp}
                   {...(link
                     ? rowClickHandlers(link.to, () => navigate(link.to, { replace: link.replace, state: link.state }))
@@ -1220,7 +1241,8 @@ export default function InboxPage() {
                   {/* v0.10.2395 — Etki · Güven · Kanıt (triage mockup liste dilimi). */}
                   <td><ImpactCell std={it.std} /></td>
                   <td><ConfidenceCell std={it.std} /></td>
-                  <td className="num"><EvidenceCell it={it} /></td>
+                  {/* v0.10.2481 — Problem satırı sinyallerini yerinde açar (kapalı başlar). */}
+                  <td className="num">{signalsOf(it) ? <ProblemSignalsToggle n={it.eventCount ?? 0} open={expand.isOpen(it.id)} controls={`ib-sig-${it.id}`} onToggle={() => expand.toggle(it.id)} /> : <EvidenceCell it={it} />}</td>
                   <td>
                     {ora && isSyntheticOracleService(it.service) ? (
                       <span className="mono cell-faint" title={tl('inbox.oraNoSvc', lang)}>{it.service}</span>
@@ -1272,6 +1294,11 @@ export default function InboxPage() {
                     </div>
                   </td>
                 </tr>
+                {signalsOf(it) && expand.wasOpened(it.id) && (
+                  <ProblemSignalsRow id={`ib-sig-${it.id}`} open={expand.isOpen(it.id)} problemId={it.problem!.id}
+                    service={it.service} href={link?.to ?? null} colSpan={dt.shownColumns.length + 1} />
+                )}
+                </Fragment>
                 );
               })}
             </tbody>

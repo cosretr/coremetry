@@ -1,30 +1,32 @@
 // @vitest-environment jsdom
 //
-// v0.10.2476 — pin: Anomalies › "Yük ve yapı" sekmesi (?view=load, lib/urlSchema).
-// Sekme herkese görünür; seçiliyken liste view=load ile okunur, açıklama ve
-// boş metin o görünümün; sekme değişince ?view= ve iki tablonun sayfası
-// (page / donePage) URL'den düşer. Elenenler yalnız admin. Servis adları SENTETİK.
+// v0.10.2476 — pin: Anomalies › "Yük ve yapı" görünümü (?view=load, lib/urlSchema).
+// v0.10.2481 — sayfa Problems › Sinyaller sekmesi oldu; görünümler çip
+// (SegmentedControl): Bağlanmamış anomaliler (varsayılan) · Yük ve yapı ·
+// Elenenler (yalnız admin) · Telemetri hacmi. Varsayılan görünüm listeyi
+// unattached=true okur; "Problem'e bağlı olanları da göster" ?attached=1 yazar
+// ve süzgeci kaldırır. Görünüm değişince ?view= ve iki tablonun sayfası
+// (page / donePage) URL'den düşer. Servis adları SENTETİK.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, useLocation } from 'react-router';
 import type { AnomalyView, UnifiedAnomaliesPage } from '@/lib/types';
 
-const m = vi.hoisted(() => ({ role: 'viewer' as 'viewer' | 'admin', views: [] as (AnomalyView | undefined)[] }));
+const m = vi.hoisted(() => ({ role: 'viewer' as 'viewer' | 'admin', calls: [] as { view?: AnomalyView; unattached?: boolean }[] }));
 vi.mock('@/lib/i18n', async (orig) => {
   const mod = await orig<typeof import('@/lib/i18n')>();
   return { ...mod, useLang: () => 'tr', useT: () => (k: string) => mod.t(k, 'tr') };
 });
 vi.mock('@/lib/queries', () => ({
-  useUnifiedAnomalies: (p: { view?: AnomalyView }) => {
-    m.views.push(p.view);
+  useUnifiedAnomalies: (p: { view?: AnomalyView; unattached?: boolean }) => {
+    m.calls.push({ view: p.view, unattached: p.unattached });
     const data: UnifiedAnomaliesPage = { items: [], total: 0, openTotal: 0, doneTotal: 0, offset: 0, limit: 50, truncated: false };
     return { data, isLoading: false, isError: false };
   },
   useMLScorecard: () => ({ data: undefined }),
 }));
 vi.mock('@/components/AuthProvider', () => ({ useAuthRole: () => m.role }));
-vi.mock('@/components/Topbar', () => ({ Topbar: () => null }));
 vi.mock('@/components/SavedViewsBar', () => ({ SavedViewsBar: () => null }));
 vi.mock('@/components/coremetry/anomalies/MLTab', () => ({ MLTab: () => null, resolveMLSignal: () => '' }));
 vi.mock('./streams', () => ({ AnomalyStreams: () => null }));
@@ -36,51 +38,61 @@ import AnomalyStreamsPage from './AnomalyStreamsPage';
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 let search = '';
-afterEach(() => { act(() => root?.unmount()); host?.remove(); root = null; host = null; m.role = 'viewer'; m.views = []; });
+afterEach(() => { act(() => root?.unmount()); host?.remove(); root = null; host = null; m.role = 'viewer'; m.calls = []; });
 
 function Probe() { search = useLocation().search; return null; }
 
 function render(url: string): HTMLElement {
+  // useUrlParams yazımı window.location tabanlı (BrowserRouter); MemoryRouter'da elle eşle.
+  window.history.replaceState(null, '', url);
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
   act(() => { root!.render(<MemoryRouter initialEntries={[url]}><AnomalyStreamsPage /><Probe /></MemoryRouter>); });
   return host;
 }
-const tabs = (el: HTMLElement) => Array.from(el.querySelectorAll('[role="tab"]'));
-const tab = (el: HTMLElement, label: string) => tabs(el).find(t => t.textContent === label) as HTMLElement;
-const click = (t: HTMLElement) => act(() => {
-  t.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
-  t.click();
-});
+const chips = (el: HTMLElement) =>
+  Array.from(el.querySelectorAll('[role="radiogroup"][aria-label="Anomali görünümü"] [role="radio"]')) as HTMLElement[];
+const chip = (el: HTMLElement, label: string) => chips(el).find(t => t.textContent === label) as HTMLElement;
+const click = (t: HTMLElement) => act(() => { t.click(); });
 
-describe('Anomalies › Yük ve yapı (v0.10.2476)', () => {
-  it('?view=load: sekme seçili, liste view=load okur, açıklama ve boş metin görünümün', () => {
-    const el = render('/anomalies?view=load');
-    expect(tab(el, 'Yük ve yapı').getAttribute('aria-selected')).toBe('true');
-    expect(m.views).toContain('load');
+describe('Problems › Sinyaller görünümleri (v0.10.2476 / v0.10.2481)', () => {
+  it('?view=load: çip seçili, liste view=load okur, açıklama ve boş metin görünümün', () => {
+    const el = render('/inbox?tab=signals&view=load');
+    expect(chip(el, 'Yük ve yapı').getAttribute('aria-checked')).toBe('true');
+    expect(m.calls.map(c => c.view)).toContain('load');
+    expect(m.calls.filter(c => c.view === 'load').every(c => !c.unattached)).toBe(true);
     expect(el.querySelector('[data-testid="anomalies-view-hint"]')?.textContent).toMatch(/^Yük \(trafik düşüşü, servis sustu, log hacmi\)/);
     expect(el.textContent).toContain('Son 24 saatte yük ya da yapı değişimi yok.');
-    // görüntüleyici: Elenenler sekmesi yok, Yük ve yapı var
-    expect(tabs(el).map(t => t.textContent)).toEqual(['Servisler', 'Yük ve yapı', 'Telemetri hacmi']);
+    // görüntüleyici: Elenenler yok
+    expect(chips(el).map(t => t.textContent)).toEqual(['Bağlanmamış anomaliler', 'Yük ve yapı', 'Telemetri hacmi']);
   });
-  it('sekme değişimi URL\'e yazar, sayfa paramlarını düşürür; servis listesi view yazmaz', () => {
+  it('varsayılan: Bağlanmamış anomaliler, yardım satırı, liste unattached okur; anahtar ?attached=1 yazar', () => {
+    const el = render('/inbox?tab=signals');
+    expect(chip(el, 'Bağlanmamış anomaliler').getAttribute('aria-checked')).toBe('true');
+    expect(el.textContent).toContain("Bir Problem'e bağlanmamış olaylar. Rozette sayılmaz, bildirim göndermez.");
+    expect(m.calls.at(-1)).toEqual({ view: '', unattached: true });
+    const box = el.querySelector('[role="checkbox"]') as HTMLElement;
+    expect(box.closest('[data-cm-field]')?.textContent).toContain("Problem'e bağlı olanları da göster");
+    click(box);
+    expect(search).toBe('?tab=signals&attached=1');
+    expect(m.calls.at(-1)).toEqual({ view: '', unattached: false });
+  });
+  it('görünüm değişimi URL\'e yazar, sayfa paramlarını düşürür; varsayılan view yazmaz', () => {
     m.role = 'admin';
-    const el = render('/anomalies?page=2&donePage=1&signal=trace');
-    expect(tabs(el).map(t => t.textContent)).toContain('Elenenler');
-    expect(m.views.at(-1)).toBe('');
-    // useUrlParams yazımı window.location tabanlı (BrowserRouter); MemoryRouter'da elle eşle.
-    window.history.replaceState(null, '', '/anomalies?page=2&donePage=1&signal=trace');
-    click(tab(el, 'Yük ve yapı'));
-    expect(search).toBe('?signal=trace&view=load');
-    expect(m.views.at(-1)).toBe('load');
-    window.history.replaceState(null, '', `/anomalies${search}`);
-    click(tab(el, 'Servisler'));
-    expect(search).toBe('?signal=trace');
+    const el = render('/inbox?tab=signals&page=2&donePage=1&signal=trace');
+    expect(chips(el).map(t => t.textContent)).toEqual(['Bağlanmamış anomaliler', 'Yük ve yapı', 'Elenenler', 'Telemetri hacmi']);
+    expect(m.calls.at(-1)?.view).toBe('');
+    click(chip(el, 'Yük ve yapı'));
+    expect(search).toBe('?tab=signals&signal=trace&view=load');
+    expect(m.calls.at(-1)?.view).toBe('load');
+    window.history.replaceState(null, '', `/inbox${search}`);
+    click(chip(el, 'Bağlanmamış anomaliler'));
+    expect(search).toBe('?tab=signals&signal=trace');
   });
-  it('tanınmayan ?view= servis listesine düşer', () => {
-    const el = render('/anomalies?view=bogus');
-    expect(tab(el, 'Servisler').getAttribute('aria-selected')).toBe('true');
-    expect(m.views.at(-1)).toBe('');
+  it('tanınmayan ?view= varsayılana düşer', () => {
+    const el = render('/inbox?tab=signals&view=bogus');
+    expect(chip(el, 'Bağlanmamış anomaliler').getAttribute('aria-checked')).toBe('true');
+    expect(m.calls.at(-1)?.view).toBe('');
   });
 });

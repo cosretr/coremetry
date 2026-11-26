@@ -13358,7 +13358,7 @@ export interface HeldGate { name: 'min_volume' | 'min_abs_diff' | 'visible_devia
 export type AnomalyView = '' | 'platform' | 'load' | 'held';
 export interface UnifiedAnomaliesPage {
   items: UnifiedAnomalyRow[]; total: number; openTotal: number; doneTotal: number;
-  offset: number; limit: number; truncated: boolean; partial?: 'ml' | 'legacy';
+  offset: number; limit: number; truncated: boolean; partial?: 'ml' | 'legacy' | 'problems'; // v0.10.2481 problems: bağ süzgeci uygulanamadı
   row?: UnifiedAnomalyRow;
   /** v0.10.2473: yalnız held görünümünde — gürültü kapısı kipi ve sayaç (son 24 sa: elenen olay + kapı başına olay). */
   gatesMode?: MLGatesMode;

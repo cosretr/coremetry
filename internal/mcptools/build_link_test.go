@@ -91,7 +91,7 @@ func TestBuildLinkEntityPages(t *testing.T) {
 	}{
 		{buildLinkArgs{Page: "problem", ProblemID: "p-1"}, "/problems?problem=p-1"},
 		{buildLinkArgs{Page: "exception", Fingerprint: "abc"}, "/problems?exc=abc"},
-		{buildLinkArgs{Page: "incident"}, "/anomalies?tab=groups"}, // Incidents emekli
+		{buildLinkArgs{Page: "incident"}, "/inbox?tab=signals"}, // Incidents emekli
 		{buildLinkArgs{Page: "endpoint", Service: "shop", Path: "/api/orders/{id}", Signature: true, Env: "prod"}, "/endpoint?cluster=c-1&env=prod&path=%2Fapi%2Forders%2F%7Bid%7D&range=custom%3A1000-2000&service=shop&sig=1"},
 		{buildLinkArgs{Page: "statement", StmtHash: "123", DBSystem: "my sql"}, "/databases/statement?range=custom%3A1000-2000&stmt=123%7Cmy%2520sql"},
 		{buildLinkArgs{Page: "topic", MsgSystem: "kafka", Cluster: "b1", Destination: "orders"}, "/messaging/topic?cluster=b1&destination=orders&range=custom%3A1000-2000&system=kafka"},

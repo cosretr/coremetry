@@ -7,6 +7,8 @@
 import { useMemo } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 import { navHref } from '@/lib/navHref';
+import { SIGNALS_HREF } from '@/lib/inboxTabs'; // v0.10.2481 — geri: Problems › Sinyaller
+import { t as tr, useLang } from '@/lib/i18n';
 import { Topbar } from '@/components/Topbar';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { Spinner } from '@/components/Spinner';
@@ -18,13 +20,14 @@ import { findGroup } from './mlGroupDetail';
 export default function MLReplayPage() {
   const { id = '' } = useParams();
   const { search } = useLocation();
+  const lang = useLang();
   const list = useMLEvents('');
   const group = useMemo(() => findGroup(list.data?.items, id), [list.data, id]);
   return (
     <>
       <Topbar title="Anomali" />
       <PageShell>
-        <Link to={navHref('/anomalies?tab=ml', search)} className="text-sm">‹ Anomaliler</Link>
+        <Link to={navHref(SIGNALS_HREF, search)} className="text-sm">‹ {tr('inbox.tab.signals', lang)}</Link>
         {list.isLoading ? <Spinner />
           : <MLReplayContent id={group?.lead.id ?? id} group={group} autoPlay={wantsAutoPlay(new URLSearchParams(search))} />}
       </PageShell>

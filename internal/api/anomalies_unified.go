@@ -81,6 +81,10 @@ type unifiedParams struct {
 	// Gates — v0.10.2473: gürültü kapısı kipi (chstore.MLGates*). İstekten
 	// DEĞİL ayardan gelir (handler doldurur); anahtara girer.
 	Gates string
+	// Unattached — v0.10.2481: yalnız açık bir Problem'e bağlı OLMAYAN
+	// satırlar (Sinyaller › Bağlanmamış anomaliler; anomalies_unified_attached.go).
+	// Yalnız servis görünümünde ve liste kipinde anlamlı; başka yerde false.
+	Unattached bool
 }
 
 // parseUnifiedParams — SAF: sınırlama anahtardan ÖNCE (crafted değer ayrı
@@ -109,6 +113,7 @@ func parseUnifiedParams(get func(string) string) unifiedParams {
 	case chstore.MLViewPlatform, chstore.MLViewHeld, chstore.MLViewLoad:
 		p.View = v
 	}
+	p.Unattached = p.View == "" && get("unattached") == "1"
 	return p
 }
 
@@ -123,8 +128,9 @@ func unifiedKey(p unifiedParams, tz string) string {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(p.Event))
 	// v5 (v0.10.2476): servis görünümü yük / yapı ve invalid satırları düşürür.
-	return fmt.Sprintf(unifiedCachePrefix+"v5:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:view=%s:gates=%s:ev=%x:tz=%s",
-		p.Section, p.Signal, p.Offset, p.Limit, p.Sort, p.Dir, p.View, p.Gates, h.Sum64(), tz)
+	// v6 (v0.10.2481): unattached (Problem'e bağlı satırları düşür) anahtarda.
+	return fmt.Sprintf(unifiedCachePrefix+"v6:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:view=%s:gates=%s:unatt=%t:ev=%x:tz=%s",
+		p.Section, p.Signal, p.Offset, p.Limit, p.Sort, p.Dir, p.View, p.Gates, p.Unattached, h.Sum64(), tz)
 }
 
 // unifiedAnomalyRow — birleşik satır. Liste kipinde yalnız lider (mlLead YA
@@ -198,7 +204,7 @@ type unifiedAnomaliesResponse struct {
 	Offset    int                 `json:"offset"`
 	Limit     int                 `json:"limit"`
 	Truncated bool                `json:"truncated"`         // bir kaynak okuma tavanına değdi
-	Partial   string              `json:"partial,omitempty"` // "ml" | "legacy": o kaynak okunamadı
+	Partial   string              `json:"partial,omitempty"` // "ml" | "legacy": o kaynak okunamadı; "problems": bağ süzgeci uygulanamadı (v0.10.2481)
 	Row       *unifiedAnomalyRow  `json:"row,omitempty"`     // olay kipi
 	// GatesMode / Held — v0.10.2473: yalnız held görünümünde; gürültü kapısı
 	// kipi (off | shadow | on) ve Elenenler sayacı.
@@ -320,6 +326,9 @@ func (s *Server) buildAnomaliesUnified(ctx context.Context, p unifiedParams, loc
 	shadows := groupShadows(items, groups)
 	in := ml.UnifiedInput{ML: items, Groups: groups, Shadows: shadows, Legacy: legacy, Now: now, Slack: slack}
 	rows := ml.BuildUnified(in)
+	if p.Unattached && p.Event == "" {
+		rows = s.unattachedUnified(ctx, rows, items, legacy, since, &resp)
+	}
 
 	toRow := func(u ml.UnifiedRow, members bool) unifiedAnomalyRow {
 		out := unifiedAnomalyRow{Key: u.Key, Service: u.Service, Start: u.Start, End: u.End, Signals: u.Signals,

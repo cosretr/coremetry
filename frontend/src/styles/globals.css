@@ -5505,6 +5505,14 @@ tbody td.pods-jmx { padding: 0; background: var(--bg); }
 .ib-team-select { min-width: 130px; }
 .ib-foot { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-6) 0 var(--sp-3); font-size: var(--fs-sm); color: var(--text3); }
 .ib-foot a { color: var(--accent2); }
+/* v0.10.2481 — Problems › Sinyaller sekmesi + Problem satırının yerinde açılan sinyalleri. */
+.ib-tabs { margin-bottom: var(--sp-3); }
+.ib-signals { display: flex; flex-direction: column; gap: var(--sp-3); }
+.ib-signals__hint { margin: 0; font-size: var(--fs-sm); color: var(--text2); }
+.ib-sig-row > td { background: var(--bg1); }
+.ib-sig-list { list-style: none; margin: 0 0 var(--sp-1); padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }
+.ib-sig-list .is-ended { color: var(--text3); }
+.ib-sig-all { font-size: var(--fs-sm); color: var(--accent2); }
 
 /* ── Servis dikkat şeridi — v0.10.784 (components/ServiceAttentionStrip.tsx).
    Eski kırmızı callout'un sıkı hâli: başlık satırı 20px, satır 22px, kart

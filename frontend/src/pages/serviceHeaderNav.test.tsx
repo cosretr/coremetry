@@ -93,8 +93,9 @@ describe('v0.10.1320 — servis başlığı kaynağı', () => {
     expect(between).toBe('');
   });
 
-  it('drill sırası: Backtrace < Logs < Endpoints < Problems < Anomalies < Traces', () => {
-    const order = ['/service/backtrace', '/logs', '/endpoints', '/problems', '/anomalies', '/traces']
+  // v0.10.2481 — Anomalies çipi Problems › Sinyaller'e (/inbox?tab=signals) gider.
+  it('drill sırası: Backtrace < Logs < Endpoints < Problems < Signals < Traces', () => {
+    const order = ['/service/backtrace', '/logs', '/endpoints', '/problems', '/inbox', '/traces']
       .map(to => head.indexOf(`<DrillButton to="${to}"`));
     for (const i of order) expect(i).toBeGreaterThan(0);
     for (let k = 1; k < order.length; k++) expect(order[k]).toBeGreaterThan(order[k - 1]);
@@ -105,7 +106,7 @@ describe('v0.10.1320 — servis başlığı kaynağı', () => {
     expect(groups.map(g => g[1])).toEqual(['Bağımlılık ve sinyaller', 'Sağlık', 'Traces']);
     const drillsIn = (s: string) => [...s.matchAll(/<DrillButton to="([^"]+)"/g)].map(m => m[1]);
     expect(drillsIn(groups[0][2])).toEqual(['/service/backtrace', '/logs', '/endpoints']);
-    expect(drillsIn(groups[1][2])).toEqual(['/problems', '/anomalies']);
+    expect(drillsIn(groups[1][2])).toEqual(['/problems', '/inbox']);
     expect(drillsIn(groups[2][2])).toEqual(['/traces']);
     // primitiveClasses: taban sınıf ui/ dışında elle yazılmaz.
     expect(page).not.toContain('className="btn-group');
@@ -122,9 +123,8 @@ describe('v0.10.1320 — servis başlığı kaynağı', () => {
     for (const to of ['/traces', '/logs', '/endpoints']) {
       expect(head).toContain(`<DrillButton to="${to}" params={{ service: svc }} range={range} carry={SERVICE_PIVOT_CARRY}`);
     }
-    for (const to of ['/problems', '/anomalies']) {
-      expect(head).toMatch(new RegExp(`<DrillButton to="${to}" params=\\{\\{ service: svc \\}\\} variant="subtle"`));
-    }
+    expect(head).toMatch(/<DrillButton to="\/problems" params=\{\{ service: svc \}\} variant="subtle"/);
+    expect(head).toContain(`<DrillButton to="/inbox" params={{ tab: 'signals', service: svc }} variant="subtle"`);
   });
 
   it('Problems rozeti yalnız açık problem > 0 iken; sayı bundle problemlerinden', () => {

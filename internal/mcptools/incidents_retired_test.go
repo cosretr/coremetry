@@ -14,16 +14,16 @@ import (
 func TestBuildLinkIncidentRetired(t *testing.T) {
 	for _, a := range []buildLinkArgs{{Page: "incident"}, {Page: "incident", Service: "svc-a"}} {
 		h, err := buildLink(a, "c-1", nil, "custom:1000-2000")
-		if err != nil || h != "/anomalies?tab=groups" {
-			t.Errorf("%+v: got %q err=%v, want /anomalies?tab=groups", a, h, err)
+		if err != nil || h != "/inbox?tab=signals" {
+			t.Errorf("%+v: got %q err=%v, want /inbox?tab=signals", a, h, err)
 		}
 	}
 }
 
 func TestProblemsGuidePointsToAnomalies(t *testing.T) {
 	links := problemsGuideLinks("", "")
-	if got := links[len(links)-1].Href; got != "/anomalies" {
-		t.Errorf("son bağlantı %q, istenen /anomalies", got)
+	if got := links[len(links)-1].Href; got != "/inbox?tab=signals" {
+		t.Errorf("son bağlantı %q, istenen /inbox?tab=signals", got)
 	}
 	a, ok := GuideFor("", "incident nerede görülür", "", "")
 	if !ok || !strings.Contains(a.Title, "anomaliler") {

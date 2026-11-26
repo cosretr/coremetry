@@ -9,6 +9,7 @@ import { RouteSkeleton } from './components/ui/RouteSkeleton';
 import { PerfMeter } from './components/perf/PerfMeter';
 import { usePrefetchOnHover, prefetchRoute } from './lib/perf/routePrefetch';
 import { INCIDENTS_RETIRED_HOME } from './lib/incidentsRetired'; // v0.10.1828
+import { AnomaliesListRedirect } from './components/AnomaliesListRedirect'; // v0.10.2481
 
 // All route components are code-split via React.lazy so the
 // initial bundle stays small. The loader fallback is the
@@ -59,10 +60,10 @@ const Dashboard         = lazy(() => import('./pages/Dashboard'));
 const Events            = lazy(() => import('./pages/Events'));
 // Problems page: assignable exception inbox at top, alert-rule
 // firings beneath. /exceptions is kept as a silent redirect so
-// older shared links don't 404. /anomalies is its own
-// observation-only page (live streams + 24h history).
+// older shared links don't 404. v0.10.2481 — /anomalies listesi Problems
+// sayfasının Sinyaller sekmesi (/inbox?tab=signals); eski adres oraya yönlenir,
+// detay sayfaları (/anomalies/:id, /anomalies/ml/:id) yerinde.
 const Problems          = lazy(() => import('./features/anomalies'));
-const Anomalies         = lazy(() => import('./features/anomalies/AnomalyStreamsPage'));
 const AnomalyEventPage  = lazy(() => import('./features/anomalies/AnomalyEventPage'));
 const MLReplayPage      = lazy(() => import('./components/coremetry/anomalies/MLReplayPage'));
 const Rollouts          = lazy(() => import('./pages/Rollouts')); // v0.10.201 — Deployment Report → Rollouts
@@ -216,7 +217,7 @@ export default function App() {
             <Route path="/inbox"          element={<Inbox />} />
             <Route path="/shift"          element={<Shift />} />
             <Route path="/problems"       element={<Problems />} />
-            <Route path="/anomalies"      element={<Anomalies />} />
+            <Route path="/anomalies"      element={<AnomaliesListRedirect />} />
             <Route path="/anomalies/ml/:id" element={<MLReplayPage />} />
             <Route path="/anomalies/:id"  element={<AnomalyEventPage />} />
             <Route path="/rollouts"          element={<Rollouts />} />

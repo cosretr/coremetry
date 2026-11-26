@@ -54,9 +54,9 @@ var glossaryTerms = map[string]glossaryEntry{
 	"exception": {"Exception grubu: aynı hata türü + mesaj şablonu + yığın imzasıyla gruplanmış exception'lar; ilk/son görülme, sayı, etkilenen servis ve pod'lar. Çok servisi aynı pencerede vuran yeni gruplar 'fırtına' olarak P1 problem açar.",
 		[]guidedAnswerLink{{Label: "Exception'lar", Href: "/exceptions"}}},
 	"anomali": {"Anomali: bir metriğin kendi geçmişine (mevsimsel baz çizgisi: önceki günlerin/haftaların aynı saati) göre beklenmedik sapması. Coremetry sapmayı kanıt zinciriyle kök nedene bağlamaya çalışır; formül değil korelasyon.",
-		[]guidedAnswerLink{{Label: "Anomaliler", Href: "/anomalies"}}},
+		[]guidedAnswerLink{{Label: "Sinyaller", Href: "/inbox?tab=signals"}}}, // v0.10.2481 — Problems › Sinyaller
 	"bazcizgisi": {"Baz çizgisi (baseline): bir metriğin 'normal' aralığı — önceki günlerin/haftaların aynı saatinden türetilir. Anomali bu aralıktan sapmadır; bant grafikte gölge olarak çizilir.",
-		[]guidedAnswerLink{{Label: "Anomaliler", Href: "/anomalies"}}},
+		[]guidedAnswerLink{{Label: "Sinyaller", Href: "/inbox?tab=signals"}}},
 	"rollout": {"Rollout / deploy: bir servisin yeni sürüme geçişi (imaj etiketi ya da revizyon değişimi). Coremetry deploy olaylarını RED metrikleriyle yan yana koyar ('deploy etkisi') ama deploy tek başına problem önceliğini değiştirmez.",
 		[]guidedAnswerLink{{Label: "Rollout'lar", Href: "/rollouts"}}},
 	"servisharitasi": {"Servis haritası (topoloji): span'lerdeki parent→child çağrı ilişkilerinden türeyen servis-servis grafiği; kenarlar istek sayısı, hata oranı ve p95 taşır. 5 dakikalık ön-toplamlardan okunur.",

@@ -487,7 +487,7 @@ func hcBase(service, check, subject string) HealthcheckRow {
 	case HCCheckProblems, HCCheckExceptions:
 		row.Link, row.LinkLabel = ServiceInboxHref(service), "Inbox"
 	case HCCheckAnomalies:
-		row.Link, row.LinkLabel = "/anomalies?service="+url.QueryEscape(service), "Anomaliler"
+		row.Link, row.LinkLabel = SignalsTabHref+"&service="+url.QueryEscape(service), "Sinyaller" // v0.10.2481 — Problems › Sinyaller
 	case HCCheckDeploys:
 		row.Link, row.LinkLabel = "/rollouts", "Rollouts"
 	case HCCheckPodRestarts, HCCheckPodWaiting, HCCheckPodResources, HCCheckReplicas, HCCheckDatasource:

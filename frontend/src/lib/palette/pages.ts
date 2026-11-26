@@ -50,7 +50,8 @@ export const PAGES: PaletteResult[] = [
   { kind: 'page', label: 'Inbox',       navKey: 'nav.inbox', aliases: ['inbox'], hint: 'Unified triage queue', to: '/inbox' },
   { kind: 'page', label: 'Incidents',   navKey: 'nav.incidents', hint: 'Manual incident log', to: '/incidents' },
   { kind: 'page', label: 'Problems',    navKey: 'nav.problems', aliases: ['problems'], hint: 'Open alert + exception inbox', to: '/problems' },
-  { kind: 'page', label: 'Anomalies',   navKey: 'nav.anomalies', hint: 'Log + trace anomaly streams', to: '/anomalies' },
+  // v0.10.2481 — Anomalies listesi Problems › Sinyaller sekmesi; "anomal…" araması da bulur.
+  { kind: 'page', label: 'Signals',     navKey: 'inbox.tab.signals', aliases: ['anomalies', 'anomaliler', 'signals'], hint: 'Problems › Signals: anomalies not attached to a Problem', to: '/inbox?tab=signals' },
   // v0.10.201 — Inbox/Incidents/Problems/Anomalies'in navKey'siz KOPYA bloğu silindi
   // (⌘K aynı dört sayfayı iki kez listeliyordu, dedup yok); Deployment Report → Rollouts.
   // v0.10.984 (Rollouts v2 P2.3) — sayfa adı «Deployment/Rollouts»; "deployments" araması da bulur.

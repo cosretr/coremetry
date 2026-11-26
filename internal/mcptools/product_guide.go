@@ -333,8 +333,12 @@ func problemsGuideLinks(svc, _ string) []GuideLink {
 	} else {
 		out = append(out, GuideLink{Label: "Problemler", Href: "/problems"})
 	}
-	return append(out, GuideLink{Label: "Anomaliler", Href: "/anomalies"})
+	return append(out, GuideLink{Label: "Sinyaller", Href: SignalsTabHref})
 }
+
+// SignalsTabHref — v0.10.2481: eski /anomalies listesi Problems sayfasının
+// Sinyaller sekmesi (FE lib/inboxTabs SIGNALS_HREF ile aynı adres).
+const SignalsTabHref = "/inbox?tab=signals"
 
 func guideTopicByID(id string) (GuideTopic, bool) {
 	for _, t := range productGuide {

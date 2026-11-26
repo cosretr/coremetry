@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import type { AnnotationItem } from '@/lib/types';
 import { fmtClock } from '@/lib/utils';
 import { appLinkKind } from '@/lib/safeAppPath';
+import { anomalyEventHref } from '@/lib/anomalyHref';
 
 // AnnotationLane — v0.9.395, Faz C-2 Ş2 (mockup 52b05851 operatör onaylı).
 // Chart'ın ALTINDA x-hizalı ince olay bandı: deploy ▲ / rollout ↻ /
@@ -61,7 +62,7 @@ export const KIND_LABEL_TR: Record<string, string> = {
 function targetHref(it: AnnotationItem): string | null {
   switch (it.targetType) {
     case 'problem': return `/problems?problem=${encodeURIComponent(it.targetId ?? '')}`;
-    case 'anomaly': return `/anomalies?event=${encodeURIComponent(it.targetId ?? '')}`;
+    case 'anomaly': return anomalyEventHref(it.targetId ?? ''); // v0.10.2481 — doğrudan tam sayfa (eski ?event= yönlendirmesi atlanır)
     case 'event': return it.link || null;
     default: return null;
   }

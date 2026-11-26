@@ -16,7 +16,7 @@ describe('incidentsNavVisible', () => {
     expect(incidentsNavVisible('/incidents?status=open', false)).toBe(false);
     expect(incidentsNavVisible('/incident', false)).toBe(true); // arşiv detay sayfası
     expect(incidentsNavVisible('/anomalies', false)).toBe(true);
-    expect(INCIDENTS_RETIRED_HOME).toBe('/anomalies?tab=groups');
+    expect(INCIDENTS_RETIRED_HOME).toBe('/inbox?tab=signals'); // v0.10.2481 — Problems › Sinyaller
   });
 });
 
@@ -26,7 +26,7 @@ describe('⌘K sayfaları', () => {
     const off = localizePages(k => k, false, false).map(p => p.to);
     expect(on).toContain('/incidents');
     expect(off).not.toContain('/incidents');
-    expect(off).toContain('/anomalies');
+    expect(off).toContain('/inbox?tab=signals'); // v0.10.2481 — eski Anomalies girişi
     expect(off.length).toBe(on.length - 1);
   });
 });
@@ -35,9 +35,10 @@ describe('kablolama', () => {
   // v0.10.2024 — operatör 2026-11-12: kayıtlı anahtar açık kalmış kurulumda
   // menü Incidents gösterip Anomalies'i gizliyordu. Menü artık bayrağa hiç
   // bakmaz: Incidents girişi yok, Anomalies her zaman.
-  it('menü: Incidents girişi yok, Anomalies koşulsuz', () => {
+  // v0.10.2481 — Anomalies girişi de kalktı (Problems › Sinyaller sekmesi).
+  it('menü: Incidents ve Anomalies girişi yok', () => {
     const src = read('../components/Sidebar.tsx');
-    expect(src).toContain("{ href: '/anomalies', label: 'nav.anomalies', icon: Activity },");
+    expect(src).not.toContain("href: '/anomalies'");
     expect(src).not.toContain("href: '/incidents'");
     expect(src).not.toContain('features?.incidents');
     expect(src).not.toMatch(/incidentsOnly|retiredOnly/);

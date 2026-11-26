@@ -187,10 +187,11 @@ func buildLink(a buildLinkArgs, clusterID string, filters []chstore.FilterExpr, 
 	case "incident":
 		// Incidents emekli (v0.10.1826 / 2024); sayfa Incidents ölü kod dilimi
 		// 2'de silindi. `incident` isteyen istem hata değil Anomalies bağlantısı
-		// alır (FE INCIDENTS_RETIRED_HOME ile aynı adres).
-		path = "/anomalies"
+		// alır (FE INCIDENTS_RETIRED_HOME ile aynı adres). v0.10.2481: Anomalies
+		// listesi Problems sayfasının Sinyaller sekmesi oldu (/inbox?tab=signals).
+		path = "/inbox"
 		q = url.Values{}
-		q.Set("tab", "groups")
+		q.Set("tab", "signals")
 		withRange = false
 	case "endpoint":
 		if a.Service == "" || a.Path == "" {

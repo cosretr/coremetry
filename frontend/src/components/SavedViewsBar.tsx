@@ -1,5 +1,5 @@
 import { savedViewTooLarge } from '@/lib/savedViewLimits';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/components/AuthProvider';
@@ -37,8 +37,12 @@ function normaliseQS(qs: string): string {
 //   - Anyone signed in can save personal views.
 //   - Admins can flip "shared" so everyone on the team sees it.
 //   - You can only delete your own views (admins can delete any).
-export function SavedViewsBar({ page, right, variant = 'bar', size }: {
+export function SavedViewsBar({ page, right, variant = 'bar', size, viewQuery }: {
   page: string;
+  // v0.10.2481 — kayıtlı sorgunun bu sayfadaki hali (uygula + "etkin görünüm"
+  // karşılaştırması). Problems › Sinyaller eski Anomalies kayıtlarına ?tab=
+  // ekler (lib/inboxTabs withSignalsTab); verilmezse sorgu aynen.
+  viewQuery?: (qs: string) => string;
   // v0.9.304 — trailing slot, right-aligned on the same line. /traces
   // parks Reset + CSV here: they are page-level actions, and the strip
   // they used to sit in was removed as a whole row (operator).
@@ -89,22 +93,24 @@ export function SavedViewsBar({ page, right, variant = 'bar', size }: {
   // was previously set, we KEEP it so the modified-from indicator
   // still has a target to revert to.
   const currentQS = useMemo(() => normaliseQS(location.search), [location.search]);
+  const viewQs = useCallback((qs: string) => (viewQuery ? viewQuery(qs) : qs), [viewQuery]);
   useEffect(() => {
     if (!views) return;
-    const match = views.find(v => normaliseQS(v.queryString) === currentQS);
+    const match = views.find(v => normaliseQS(viewQs(v.queryString)) === currentQS);
     if (match) {
       setLastAppliedViewId(match.id);
       try { sessionStorage.setItem(sessionKey, match.id); } catch { /* noop */ }
     }
-  }, [currentQS, views, sessionKey]);
+  }, [currentQS, views, sessionKey, viewQs]);
 
   const activeViewId = useMemo(() => {
     if (!views) return null;
-    return views.find(v => normaliseQS(v.queryString) === currentQS)?.id ?? null;
-  }, [views, currentQS]);
+    return views.find(v => normaliseQS(viewQs(v.queryString)) === currentQS)?.id ?? null;
+  }, [views, currentQS, viewQs]);
 
   const apply = (v: SavedView) => {
-    const target = window.location.pathname + (v.queryString ? '?' + v.queryString : '');
+    const qs = viewQs(v.queryString);
+    const target = window.location.pathname + (qs ? '?' + qs : '');
     setLastAppliedViewId(v.id);
     try { sessionStorage.setItem(sessionKey, v.id); } catch { /* noop */ }
     navigate(target);

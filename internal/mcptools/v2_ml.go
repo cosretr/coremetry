@@ -147,7 +147,7 @@ func getLogAnomaliesTool(d Deps) mcp.Tool {
 				rows = append(rows, mlEventRow(e, ml.ExplainSummary(ml.SummaryInput(e, cfg, now, loc))))
 			}
 			body := map[string]any{"signal": sig, "window_s": a.RangeS, "total": len(evs), "stage": "shadow (Problem değil, terfi kapalı)",
-				"page_url": "/anomalies?tab=ml&signal=" + url.QueryEscape(sig)}
+				"page_url": SignalsTabHref + "&signal=" + url.QueryEscape(sig)} // v0.10.2481 — Problems › Sinyaller
 			return fitRows(body, "events", rows, scaledCap(ctx, mlToolMaxBytes)), nil // v0.10.2384 — bayt bütçesi kanıt ölçeğiyle
 		},
 	}

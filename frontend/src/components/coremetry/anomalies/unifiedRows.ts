@@ -71,7 +71,7 @@ export function rowHeadline(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLead' |
 export function rowHref(r: Pick<UnifiedAnomalyRow, 'mlLead' | 'legacyLead'>): string {
   if (r.mlLead) return mlEventHref(r.mlLead.id);
   if (r.legacyLead) return anomalyEventHref(r.legacyLead.id);
-  return '/anomalies';
+  return '/inbox?tab=signals'; // v0.10.2481 — liste Problems › Sinyaller
 }
 
 /** SAF: eski olay türü → sinyal çipi. */

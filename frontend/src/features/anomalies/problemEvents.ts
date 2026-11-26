@@ -108,3 +108,37 @@ export function splitEventLines(lines: ProblemEventLine[], shown = EVENT_LINES_S
   const ordered = [...lines.filter(l => l.live), ...lines.filter(l => !l.live).reverse()];
   return { head: ordered.slice(0, shown), rest: Math.max(0, lines.length - shown) };
 }
+
+/** v0.10.2481 — Problems listesinde satırın yerinde açılan sinyalleri: en
+ *  çok `shown` kısa satır (splitEventLines sırası: süren önce), her biri
+ *  "saat · servis · ne oldu (normalde X → şimdi Y)". Olağan değer yoksa
+ *  parantez YAZILMAZ (uydurma sayı yok); lag satırı kendi ölçüsüyle. */
+export interface ProblemSignalLine {
+  key: string;
+  time: string;
+  service: string;
+  what: string;
+  vals: string | null;
+  live: boolean;
+  href: string | null;
+}
+
+export function problemSignalLines(events: ProblemEvent[] | undefined, service: string, clock: (ns: number) => string,
+  lang: Lang = 'tr', shown = EVENT_LINES_SHOWN): { lines: ProblemSignalLine[]; total: number } {
+  const all = (events ?? []).map((e, i): ProblemSignalLine => {
+    const lag = e.measure === 'consumer_lag';
+    const what = (lag ? t('pev.lag', lang) + (e.topic ? ` · ${e.topic}` : '') : problemEventName(e, lang)) + (e.own ? t('pev.own', lang) : '');
+    const fmt = (v: number) => (lag ? Math.round(v) : v).toLocaleString(LOCALE[lang], { maximumFractionDigits: 3 });
+    return {
+      key: `${e.detector}:${e.ruleId ?? e.eventId ?? ''}:${e.startedAt}:${i}`,
+      time: clock(e.startedAt),
+      service,
+      what,
+      vals: e.baseline > 0 && e.observed >= 0 ? tf('inbox.sig.vals', lang, { b: fmt(e.baseline), o: fmt(e.observed) }) : null,
+      live: e.live,
+      href: e.eventId ? `/anomalies/ml/${encodeURIComponent(e.eventId)}` : null,
+    };
+  });
+  const ordered = [...all.filter(l => l.live), ...all.filter(l => !l.live).reverse()];
+  return { lines: ordered.slice(0, shown), total: all.length };
+}

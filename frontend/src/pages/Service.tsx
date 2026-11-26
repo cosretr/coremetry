@@ -586,9 +586,9 @@ function ServiceDetailInner() {
               <DrillButton to="/problems" params={{ service: svc }} variant="subtle"
                 title="Open problems for this service"
                 label={<>⚠ Problems{openProblems > 0 && <span className="badge b-err">{openProblems}</span>}</>} />
-              <DrillButton to="/anomalies" params={{ service: svc }} variant="subtle"
-                title="Anomaly events for this service"
-                label="∿ Anomalies" />
+              <DrillButton to="/inbox" params={{ tab: 'signals', service: svc }} variant="subtle"
+                title="Anomaly events (Problems › Signals)"
+                label="∿ Signals" />
             </ButtonGroup>
             {/* v0.10.2039 — servis sağlık kontrolü: "Sağlık" grubunun sağında AYRI
                 düğme (gezinme değil, eylem: çekmecede salt-okunur kontrol turu

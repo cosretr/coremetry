@@ -681,7 +681,7 @@ func presetErrorsExceptions() Dashboard {
 					"of dimension. After identifying the hot service / operation "+
 					"here, jump to:\n\n"+
 					"• [Exceptions](/errors) — grouped stack traces with sample occurrences\n"+
-					"• [Anomalies](/anomalies) — log-pattern detector + trace-op spikes\n"+
+					"• [Signals](/inbox?tab=signals) — anomalies not attached to a Problem\n"+
 					"• [Traces](/traces) (filter `status_code:error`) — sample failed traces"),
 
 			row("row-rate", "Error rate"),

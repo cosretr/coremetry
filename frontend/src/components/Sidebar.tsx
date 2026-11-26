@@ -12,7 +12,7 @@ import {
   Inbox, Boxes, Webhook, Workflow, Database, ClipboardList,
   MessageSquare, ListTree, ChartSpline, ScrollText, Compass, BookText,
   LayoutDashboard, Bell, Target, CircleGauge, Hash, Eye,
-  Sparkles, LayoutGrid, FileClock, Terminal, Code, Server, Bug, Flag, Rocket, Activity, type LucideIcon,
+  Sparkles, LayoutGrid, FileClock, Terminal, Code, Server, Bug, Flag, Rocket, type LucideIcon,
 } from 'lucide-react';
 import { navHref } from '@/lib/navHref';
 import { useAuth } from './AuthProvider';
@@ -92,8 +92,9 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/inbox',     label: 'nav.inbox',     icon: Inbox },
       { href: '/problems',  label: 'nav.problems',  icon: Bug },
       // v0.10.2024 — Incidents kalıcı emekli (operatör 2026-11-12: "sen
-      // default yap onu"); yuvada her zaman Anomalies.
-      { href: '/anomalies', label: 'nav.anomalies', icon: Activity },
+      // default yap onu"). v0.10.2481 — Anomalies girişi de kalktı: liste
+      // Problems sayfasının Sinyaller sekmesi (/inbox?tab=signals); Problems =
+      // tek triyaj yüzeyi (rozet yalnız açık Problem'ler, değişmedi).
       { href: '/rollouts',  label: 'nav.rollouts',  icon: Rocket }, // v0.10.201 — Deployment Report → Rollouts (olay tabanlı)
     ],
   },

@@ -71,8 +71,12 @@ type SignalFilter = '' | Exclude<SignalKind, 'group'>;
  *  v0.10.2243 (Dilim C) — view: '' servis listesi | platform | held; emptyText
  *  o görünümün boş durum metni, hint görünüm açıklaması (sayfa çevirir; held
  *  uyarı renginde — gölge karar olduğu açık). */
-export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view = '', emptyText, hint }: {
+// v0.10.2481 — unattached: yalnız açık bir Problem'e bağlı olmayan satırlar
+// (Problems › Sinyaller varsayılanı; süzgeç sunucuda, sayfalamadan önce).
+// controls: süzgeç satırının sonuna eklenen denetim (Sinyaller'in anahtarı).
+export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view = '', emptyText, hint, unattached = false, controls }: {
   signal?: SignalFilter; onSignal?: (s: SignalFilter) => void; detectorStatus?: ReactNode; view?: AnomalyView; emptyText?: string; hint?: string;
+  unattached?: boolean; controls?: ReactNode;
 }) {
   const lang = useLang();
   const t = (k: string) => tr(k, lang);
@@ -83,9 +87,9 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
   const openSort = parseUnifiedSort('open', sp.get(UNIFIED_SORT_URL_KEY.open));
   const doneSort = parseUnifiedSort('done', sp.get(UNIFIED_SORT_URL_KEY.done));
 
-  const openQ = useUnifiedAnomalies({ section: 'open', signal, offset: openPage * UNIFIED_PAGE_SIZE, limit: UNIFIED_PAGE_SIZE, ...unifiedSortApiParams('open', openSort), view });
+  const openQ = useUnifiedAnomalies({ section: 'open', signal, offset: openPage * UNIFIED_PAGE_SIZE, limit: UNIFIED_PAGE_SIZE, ...unifiedSortApiParams('open', openSort), view, unattached });
   const doneTotal = openQ.data?.doneTotal ?? 0;
-  const doneQ = useUnifiedAnomalies({ section: 'done', signal, offset: donePage * UNIFIED_PAGE_SIZE, limit: UNIFIED_PAGE_SIZE, ...unifiedSortApiParams('done', doneSort), view }, doneTotal > 0);
+  const doneQ = useUnifiedAnomalies({ section: 'done', signal, offset: donePage * UNIFIED_PAGE_SIZE, limit: UNIFIED_PAGE_SIZE, ...unifiedSortApiParams('done', doneSort), view, unattached }, doneTotal > 0);
   const open = useMemo(() => openQ.data?.items ?? [], [openQ.data]);
   const done = useMemo(() => doneQ.data?.items ?? [], [doneQ.data]);
   const nowNs = Date.now() * 1e6;
@@ -123,6 +127,7 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
       : { kind: 'empty' as const, message: emptyText ?? t('anomalies.list.empty') };
   const partialSrc = openQ.data?.partial;
   const partial = partialSrc === 'ml' ? t('anomalies.list.partialMl') : partialSrc === 'legacy' ? t('anomalies.list.partialLegacy') : '';
+  const partialAttach = partialSrc === 'problems'; // v0.10.2481 — bağ süzgeci uygulanamadı, liste süzgeçsiz
   const doneState = doneQ.isError ? { kind: 'error' as const, message: t('anomalies.list.doneError') }
     : doneQ.isLoading ? { kind: 'loading' as const } : { kind: 'empty' as const, message: t('anomalies.list.doneEmpty') };
   const openTotal = openQ.data?.total ?? 0;
@@ -143,9 +148,14 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
 
   return (
     <div data-testid="anomalies-unified" className="flex flex-col gap-3">
-      {onSignal && (
-        <SegmentedControl<SignalFilter> value={signal} onChange={onSignal} aria-label={t('anomalies.signal.aria')} size="sm"
-          options={[{ value: '', label: t('anomalies.signal.all') }, { value: 'trace', label: 'Trace' }, { value: 'log', label: 'Log' }, { value: 'metric', label: t('signalKind.metric') }]} />
+      {(onSignal || controls) && (
+        <div className="flex flex-wrap items-center gap-3">
+          {onSignal && (
+            <SegmentedControl<SignalFilter> value={signal} onChange={onSignal} aria-label={t('anomalies.signal.aria')} size="sm"
+              options={[{ value: '', label: t('anomalies.signal.all') }, { value: 'trace', label: 'Trace' }, { value: 'log', label: 'Log' }, { value: 'metric', label: t('signalKind.metric') }]} />
+          )}
+          {controls}
+        </div>
       )}
       {hint && (
         <p data-testid="anomalies-view-hint" className={view === 'held' && gatesMode !== 'on' ? 'm-0 text-sm text-[color:var(--warn)]' : 'm-0 text-sm text-muted-foreground'}>
@@ -157,6 +167,7 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
         <p data-testid="anomalies-held-counter" className="m-0 text-sm font-semibold">{heldCounterText(heldInfo, gatesMode === 'shadow', lang)}</p>
       )}
       {partial && <p className="m-0 text-sm text-[color:var(--warn)]">{tf('anomalies.list.partial', lang, { src: partial })}</p>}
+      {partialAttach && <p data-testid="anomalies-partial-attach" className="m-0 text-sm text-[color:var(--warn)]">{t('anomalies.list.partialAttach')}</p>}
       {/* v0.10.2030 — sayfada DOĞRUDAN duran tablo, diğer liste sayfaları gibi
           .table-wrap yüzeyinde (Inbox emsali; coremetry DataTable çıplak <table>). */}
       <div className="table-wrap">

@@ -22,7 +22,7 @@ const PAGES: { key: string; label: string; to: string }[] = [
   { key: 'g n', label: 'Go to Inbox',       to: '/inbox' },
   { key: 'g i', label: 'Go to Incidents',   to: '/incidents' },
   { key: 'g p', label: 'Go to Problems',    to: '/problems' },
-  { key: 'g a', label: 'Go to Anomalies',   to: '/anomalies' },
+  { key: 'g a', label: 'Go to Signals',     to: '/inbox?tab=signals' }, // v0.10.2481 — Problems › Sinyaller
   { key: 'g s', label: 'Go to Services',    to: '/services' },
   { key: 'g o', label: 'Go to Service Map', to: '/service-map' }, // 'o' = tOpology mnemonic (retired /topology → /service-map)
   { key: 'g t', label: 'Go to Traces',      to: '/traces' },
