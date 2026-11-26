@@ -134,7 +134,8 @@ func (s *Server) chatExchangeMax() time.Duration {
 
 func (s *Server) getAILoopBudget(w http.ResponseWriter, r *http.Request) {
 	// v0.10.2378 — gösterilen araç metni tavanı sohbet profilinin gerçek (ölçekli) tavanı.
-	c := v2LoopCeilings(deepMode{}, s.chatExchangeMax(), s.evidenceScaleSurface(r.Context(), "chat"))
+	scale := s.evidenceScaleSurface(r.Context(), "chat")
+	c := v2LoopCeilings(deepMode{loopScale: scale}, s.chatExchangeMax(), scale) // v0.10.2473 — çağrı / tur da ölçekli
 	writeJSON(w, aiLoopBudgetResponse{
 		Setting: chstore.CurrentAILoopBudget(),
 		Ceilings: aiLoopBudgetCeilings{

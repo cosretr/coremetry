@@ -1471,6 +1471,11 @@ export const api = {
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style }),
     }),
+  // v0.10.2473 — araç turu ara durum cümlesi (style'dan ayrı; varsayılan açık).
+  putCosreConversationStatusLine: (statusLine: boolean) =>
+    request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statusLine }),
+    }),
   // v0.10.2353 — I5: onaylı aksiyon kartı anahtarı (off | on; varsayılan off).
   putCosreConversationInteraction: (interaction: 'off' | 'on') =>
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
@@ -2945,6 +2950,12 @@ export const api = {
   notifyPolicyReplay: (days: number, signal?: AbortSignal) =>
     get<import('./types').NotifyReplayReport>(`/api/admin/notify-policy/replay?days=${days}`, signal),
   notifyDigest: () => get<{ items: import('./types').NotifyDigestItem[]; lastSlot: string }>('/api/admin/notify-digest'),
+  // v0.10.2473 — servisler arası Problem birleştirmesinin görünüm kipi (admin).
+  problemGraphMerge: () => get<import('./types').ProblemGraphMergeSetting>('/api/admin/problem-graph-merge'),
+  putProblemGraphMerge: (mode: import('./types').ProblemGraphMergeSetting['mode']) =>
+    request<import('./types').ProblemGraphMergeSetting>('/api/admin/problem-graph-merge', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }),
+    }),
   putProblemVerdictPolicy: (muteNotifications: boolean) =>
     request<import('./types').ProblemVerdictsResponse>(`/api/problem-verdicts/policy`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ muteNotifications }),

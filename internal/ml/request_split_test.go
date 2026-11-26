@@ -118,7 +118,7 @@ func TestErrorRateRecordRequests(t *testing.T) {
 			Baseline: 0.004, Observed: 0.05, StartedAt: det.Add(-4 * time.Minute).UnixNano(), LastSeen: det.UnixNano(), WindowSec: 300, Evidence: evidence}}
 		budget := 5
 		attachErrorRateRecords(context.Background(), Deps{VM: &errRecVM{det: det}}, cfg, evs, false, func(string) time.Time { return det }, nil, &budget, now)
-		ev := applyRecordContract(evs[0])
+		ev := applyRecordContractShadow(evs[0])
 		var rec EventRecord
 		if ev.Record != "" {
 			if err := json.Unmarshal([]byte(ev.Record), &rec); err != nil {

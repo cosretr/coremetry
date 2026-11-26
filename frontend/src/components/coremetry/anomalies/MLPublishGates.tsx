@@ -1,5 +1,6 @@
-// MLPublishGates — v0.10.2343 (anomali kartı A2 kapalı gelir, K16): yayın
-// kapısı gölge raporu ekranda. Operatör A2'yi açmadan önce bu tabloyu okur:
+// MLPublishGates — v0.10.2343 (anomali kartı A2, K16): gürültü kapısı raporu
+// ekranda. v0.10.2473: kip operatör ayarı (off | shadow | on, varsayılan on);
+// kip satırı tikin okuduğu kipi söyler. Operatör bu tabloyu okur:
 // dedektör başına değerlendirilen / yayımlanırdı / tutulurdu / bilgiye inerdi
 // ve tutulacak olaylardan açık Problem'le çakışan ya da Problem'e dönüşen
 // sayısı + örnek olay kimlikleri. Veri skor kartının tik durumunda (ek istek
@@ -33,6 +34,9 @@ const colsFor = (lang: Lang): ColumnDef<GateRow>[] => { const c = (k: string) =>
 const COLS_BY_LANG: Partial<Record<Lang, ColumnDef<GateRow>[]>> = {};
 const colsOf = (lang: Lang): ColumnDef<GateRow>[] => (COLS_BY_LANG[lang] ??= colsFor(lang));
 
+/** Tikin bildirdiği kip tanınıyorsa satır çizilir (eski sürüm tik durumu → satır yok). */
+const GATE_MODES = new Set(['off', 'shadow', 'on']);
+
 export function MLPublishGatesSection({ tick }: { tick?: MLTickStatus }) {
   const lang = useLang();
   const t = (k: string) => tr(`mlGates.${k}`, lang);
@@ -41,7 +45,9 @@ export function MLPublishGatesSection({ tick }: { tick?: MLTickStatus }) {
     <details data-testid="ml-publish-gates" className="rounded-md border border-border px-3 py-2">
       <summary className="cursor-pointer text-[length:var(--fs-sm)] font-semibold text-muted-foreground">{t('title')}</summary>
       <div className="mt-2 flex flex-col gap-2">
-        <p className="m-0 text-sm font-semibold" data-testid="ml-publish-gates-mode">{t(tick?.publishGatesEnforced ? 'modeOn' : 'modeOff')}</p>
+        {GATE_MODES.has(tick?.publishGatesMode ?? '') && (
+          <p className="m-0 text-sm font-semibold" data-testid="ml-publish-gates-mode">{t(`mode.${tick?.publishGatesMode}`)}</p>
+        )}
         <p className="m-0 text-xs text-muted-foreground">{t('criterion')}</p>
         {tick?.publishGatesWindowH ? <p className="m-0 text-xs text-muted-foreground">{tf('mlGates.window', lang, { h: tick.publishGatesWindowH })}</p> : null}
         <DataTable<GateRow>

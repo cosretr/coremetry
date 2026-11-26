@@ -4,6 +4,7 @@
 //
 //   manşet         özne (mono) — standart manşet   (showTitle=false: sayfanın
 //                  kendi başlığı kalır, ör. exception tipi)
+//   köken          v0.10.2473 — "Köken: <varlık> — <gerekçe>" (bağlı küme; yoksa yok)
 //   dört kart      Etki · Ne zamandan beri · Güven · Kaynak
 //   üç satır       Neden böyle değerlendiriyoruz · Bağlam · Sonraki adım
 //
@@ -22,6 +23,7 @@ import {
   stdHeadlineView, stdImpactView, stdEvidenceView, stdNextView, stdContextView, stdReasonsView,
 } from '@/lib/problemStandardView';
 import { OrigLang } from './OrigLang';
+import { StdOriginLine } from './StdOriginLine';
 import type { ProblemStandard } from '@/lib/types';
 
 export function ProblemStandardHeader({ stdRef, fallback, showTitle = true, factsOnly = false }: {
@@ -63,6 +65,8 @@ export function ProblemStandardBlock({ std, showTitle = true, factsOnly = false 
           {head.subject && <><span className="std-subject">{head.subject}</span> — </>}{headOrig ? <OrigLang>{head.rest}</OrigLang> : head.rest}
         </h1>
       )}
+      {/* v0.10.2473 — bağlı kümenin kökeni (liste satırıyla aynı çekirdek); yoksa hiçbir şey. */}
+      {!factsOnly && <StdOriginLine std={std} />}
       <div className="std-head__cards grid-4">
         <div className="std-card">
           <div className="std-card__label">{t('pd.std.impact', lang)}</div>

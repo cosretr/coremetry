@@ -15,7 +15,9 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/wiki"
 )
@@ -192,5 +194,31 @@ func TestWikiSelectPagesDeepPool(t *testing.T) {
 	}
 	if n := len(wikiScorePages(pages)); n != wikiMaxPages {
 		t.Fatalf("kapalı skor tabanlı seçim %d sayfa, want 5", n)
+	}
+}
+
+// TestLoopBudgetScales — v0.10.2473: ölçek 1 → 6 / 5 (bugünkü); büyük pencere
+// 12 / 8'e dek büyür; Derin ×1.5 aynı mutlak tavanda; v2 tavanları aynı sayı.
+func TestLoopBudgetScales(t *testing.T) {
+	cases := []struct{ scale, calls, rounds int }{
+		{0, 6, 5}, {1, 6, 5}, {2, 8, 6}, {3, 8, 6}, {4, 10, 7}, {6, 10, 7}, {8, 12, 8}, {16, 12, 8},
+	}
+	for _, c := range cases {
+		d := deepMode{loopScale: c.scale}
+		if d.toolCalls() != c.calls || d.toolRounds() != c.rounds {
+			t.Errorf("ölçek %d: %d / %d, beklenen %d / %d", c.scale, d.toolCalls(), d.toolRounds(), c.calls, c.rounds)
+		}
+		b := v2LoopCeilings(d, time.Minute, c.scale)
+		if b.MaxCalls != c.calls || b.MaxRounds != c.rounds {
+			t.Errorf("ölçek %d v2: %+v", c.scale, b)
+		}
+		deep := deepMode{On: true, loopScale: c.scale}
+		if deep.toolCalls() > deepToolCallsCeiling || deep.toolRounds() > deepToolRoundsCeiling || deep.toolCalls() < c.calls {
+			t.Errorf("ölçek %d Derin: %d / %d", c.scale, deep.toolCalls(), deep.toolRounds())
+		}
+	}
+	// operatör ayarı yine yalnız daraltır
+	if b := narrowLoopBudget(chstore.AILoopBudget{MaxCalls: 7}, v2LoopCeilings(deepMode{loopScale: 8}, time.Minute, 8)); b.MaxCalls != 7 || b.MaxRounds != 8 {
+		t.Errorf("daraltma: %+v", b)
 	}
 }

@@ -1,8 +1,9 @@
 package ml
 
-// publish_gate_a2_pin_test.go — v0.10.2343 (anomali kartı A2, kapalı gelir):
-// anahtar (mlPublishGatesEnforce) KAPALIYKEN yazım, Problem terfisi ve
-// bildirim kararlarının bu dilimden ÖNCEKİ kodla bayt bayt aynı olduğunun
+// publish_gate_a2_pin_test.go — v0.10.2343 (anomali kartı A2): gürültü kapısı
+// kipi SHADOW iken (v0.10.2473: ayar; shadow = eski "A2 kapalı") yazım,
+// Problem terfisi ve bildirim kararlarının A2'den ÖNCEKİ kodla bayt bayt
+// aynı olduğunun
 // kanıtı. a2OffDigest aynı fikstürü (replay fikstürlerinin kayıtları +
 // sentetik grup / servis düzeyi olaylar) bugünkü yoldan geçirir ve çıktının
 // SHA-256'sını döner; beklenen değer v0.10.2340 (A2 öncesi) koduyla
@@ -78,7 +79,7 @@ func a2Outputs(t *testing.T, evs []chstore.MLEvent, in GroupGateInput) []byte {
 	now := gBase.Add(40 * time.Minute)
 	written := make([]chstore.MLEvent, len(evs))
 	for i, e := range evs {
-		written[i] = applyRecordContract(e)
+		written[i] = applyRecordContractShadow(e)
 	}
 	kept := make([]chstore.MLEvent, len(evs))
 	copy(kept, evs)

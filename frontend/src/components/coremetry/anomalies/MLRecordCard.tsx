@@ -159,7 +159,7 @@ export function MLRecordCard({ rec, actions, groupMembers, leadId = '', chart, d
         <div className="mt-2 flex flex-col gap-3">
           {(rec.gates ?? []).length > 0 && (
             <div>
-              <p className="m-0 mb-1 text-xs text-muted-foreground">{t('mlRecord.card.gatesShadow')}</p>
+              <p className="m-0 mb-1 text-xs text-muted-foreground">{t(rec.publishState === 'held' ? 'mlRecord.card.gatesHeld' : 'mlRecord.card.gatesShadow')}</p>
               <ul className="m-0 flex list-none flex-col p-0 text-xs" data-testid="ml-record-gates">
                 {(rec.gates ?? []).map(g => (
                   <li key={g.name} className="grid grid-cols-[minmax(0,2fr)_1fr_1fr_auto] gap-2 border-t border-border py-1 first:border-t-0">

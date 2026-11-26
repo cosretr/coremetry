@@ -109,7 +109,7 @@ func TestOccurrenceRecordContract(t *testing.T) {
 			if CardRecordView(&ev, CardInput{}) != nil {
 				t.Fatalf("%s: oluşum kaydı kart grafiğine girmemeli", ev.Detector)
 			}
-			if got := applyRecordContract(ev); got.PublishState != PublishPublished {
+			if got := applyRecordContractShadow(ev); got.PublishState != PublishPublished {
 				t.Fatalf("%s: %q", ev.Detector, got.PublishState)
 			}
 			// Gölge: seri kapıları değerlendirilemez, tek bağımlı kanıt → info.

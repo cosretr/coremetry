@@ -140,7 +140,7 @@ func TestSvcErrorRateRecordIsOneMinuteSeries(t *testing.T) {
 	if want := svcImpactEnd(now, cfg.IngestLagSec); !vm.tos[0].Equal(want) || !vm.tos[1].Equal(want) || !want.Before(now) {
 		t.Fatalf("pencere sonu %s / %s want %s", vm.tos[0], vm.tos[1], want)
 	}
-	ev := applyRecordContract(evs[0])
+	ev := applyRecordContractShadow(evs[0])
 	if ev.PublishState != PublishPublished {
 		t.Fatalf("kayıt doğrulayıcıdan geçmeli: %q", ev.PublishState)
 	}
@@ -164,7 +164,7 @@ func TestErrorRateRecordInvalidWhenSeriesNeverLeavesBand(t *testing.T) {
 		t.Fatal("kayıt kurulmalı")
 	}
 	raw, _ := json.Marshal(rec)
-	if ev := applyRecordContract(chstore.MLEvent{ID: "x", Detector: detOpErrorRate, Record: string(raw), PublishState: PublishPublished}); ev.PublishState != PublishInvalid {
+	if ev := applyRecordContractShadow(chstore.MLEvent{ID: "x", Detector: detOpErrorRate, Record: string(raw), PublishState: PublishPublished}); ev.PublishState != PublishInvalid {
 		t.Fatalf("geçersiz kayıt yayımlanmamalı: %q", ev.PublishState)
 	}
 }

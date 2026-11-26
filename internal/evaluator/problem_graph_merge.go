@@ -2,8 +2,11 @@ package evaluator
 
 // problem_graph_merge.go — v0.10.2341 (entity grafı ile Problem birleştirme
 // S4, docs/problems/entity-graph-merge-design.md §2, §7, §9): "birleşmeyi
-// uygula" yolunun evaluator yarısı. KAPALI GELİR
-// (chstore.ProblemGraphMergeEnforced).
+// uygula" yolunun evaluator yarısı. Bildirim tutması KAPALI GELİR
+// (chstore.ProblemGraphMergeEnforced). v0.10.2473 — küme kurulumundaki emme
+// sınırı ve liste katlaması ayrı anahtarda: görünüm kipi ayarı
+// (chstore.ProblemGraphMergeOn, varsayılan açık); bu dosyadaki bildirim
+// kararı (MergeHold) o ayara BAKMAZ.
 //
 //   - mergeHoldsOf (SAF): plandan "sonradan bağlanan üye" listesi — ≥ 2
 //     varlıklı kümede sahibin satırı dışında, sahipten SONRA başlayan her
@@ -160,7 +163,7 @@ func (s *graphShadowState) observeMerge(plan graphPlan, keep []string, now time.
 
 // mergeReport — 24 sa sayaçları (S4 geçiş ölçütü).
 func (s *graphShadowState) mergeReport() *chstore.ProblemGraphMergeReport {
-	r := &chstore.ProblemGraphMergeReport{Enforce: chstore.ProblemGraphMergeEnforced()}
+	r := &chstore.ProblemGraphMergeReport{Enforce: chstore.ProblemGraphMergeEnforced(), Mode: chstore.ProblemGraphMergeMode()}
 	for id, e := range s.mergeSeen {
 		r.Joined++
 		if e.late {

@@ -28,9 +28,15 @@ package api
 // v0.10.2243 (anomali kartı Dilim C, K8/K11) — view: "" servis ekibi listesi
 // (telemetry_volume sınıfı ve eski svc_volume_spike satırları SQL'de
 // dışarıda) | platform (yalnız onlar; eski dedektör olayı okunmaz) | held
-// (yalnız admin: yayın kapılarının GÖLGE kararıyla tutacağı ML olayları,
-// ml.ShadowHeld). held salt okumadır: servis listesi, bildirim ve Problem
-// terfisi bu karara bakmaz (A1 gölge; A2 açılana dek).
+// ("Elenenler", yalnız admin).
+//
+// v0.10.2473 — gürültü kapısı kipi (ml ayarı publishGates: off | shadow | on,
+// varsayılan on) İSTEK başına ayardan okunur ve önbellek anahtarına girer.
+// on: servis / platform görünümü publish_state='held' satırı düşürür; held
+// görünümü tutulan olayları, satır başına kalan kapıları (heldGates: ad,
+// değer, eşik) ve sayacı (held: olay sayısı + kapı başına) taşır. shadow:
+// liste aynen, held görünümü "on olsaydı tutulurdu" olaylarını gösterir
+// (ml.ShadowHeld). off: held görünümü boş.
 
 import (
 	"context"
@@ -72,6 +78,9 @@ type unifiedParams struct {
 	Sort    string // ml.UnifiedSortCols üyesi; "" = bölüm varsayılanı
 	Dir     string // asc | desc; Sort boşken ""
 	View    string // "" | platform | held (v0.10.2243)
+	// Gates — v0.10.2473: gürültü kapısı kipi (chstore.MLGates*). İstekten
+	// DEĞİL ayardan gelir (handler doldurur); anahtara girer.
+	Gates string
 }
 
 // parseUnifiedParams — SAF: sınırlama anahtardan ÖNCE (crafted değer ayrı
@@ -113,8 +122,8 @@ const unifiedCachePrefix = "anomaly:unified:"
 func unifiedKey(p unifiedParams, tz string) string {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(p.Event))
-	return fmt.Sprintf(unifiedCachePrefix+"v3:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:view=%s:ev=%x:tz=%s",
-		p.Section, p.Signal, p.Offset, p.Limit, p.Sort, p.Dir, p.View, h.Sum64(), tz)
+	return fmt.Sprintf(unifiedCachePrefix+"v4:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:view=%s:gates=%s:ev=%x:tz=%s",
+		p.Section, p.Signal, p.Offset, p.Limit, p.Sort, p.Dir, p.View, p.Gates, h.Sum64(), tz)
 }
 
 // unifiedAnomalyRow — birleşik satır. Liste kipinde yalnız lider (mlLead YA
@@ -132,6 +141,44 @@ type unifiedAnomalyRow struct {
 	LegacyCount int                    `json:"legacyCount"`
 	ML          []mlEventRow           `json:"ml,omitempty"`
 	Legacy      []chstore.AnomalyEvent `json:"legacy,omitempty"`
+	// HeldGates — v0.10.2473: yalnız held görünümünde; satırın (lider ML
+	// olayının) kaldığı gürültü kapıları = elenme nedeni.
+	HeldGates []heldGate `json:"heldGates,omitempty"`
+}
+
+// heldGate — kalan gürültü kapısı: ad (min_volume | min_abs_diff |
+// visible_deviation), gözlenen değer ve eşik. Cümleyi arayüz kurar (TR / EN).
+type heldGate struct {
+	Name      string  `json:"name"`
+	Value     float64 `json:"value"`
+	Threshold float64 `json:"threshold"`
+}
+
+// heldSummary — Elenenler sayacı: pencerede (24 sa) elenen olay sayısı ve
+// kapı başına olay (bir olay birden çok kapıda kalabilir).
+type heldSummary struct {
+	Events int            `json:"events"`
+	ByGate map[string]int `json:"byGate"`
+}
+
+// heldGatesOf — SAF: olayın kaldığı gürültü kapıları (ml.HeldGates) → yanıt.
+func heldGatesOf(e chstore.MLEvent) []heldGate {
+	var out []heldGate
+	for _, g := range ml.HeldGates(e) {
+		out = append(out, heldGate{Name: g.Name, Value: g.Value, Threshold: g.Threshold})
+	}
+	return out
+}
+
+// summarizeHeld — SAF: Elenenler sayacı.
+func summarizeHeld(items []chstore.MLEvent) *heldSummary {
+	s := &heldSummary{Events: len(items), ByGate: map[string]int{}}
+	for _, e := range items {
+		for _, g := range ml.HeldGates(e) {
+			s.ByGate[g.Name]++
+		}
+	}
+	return s
 }
 
 type unifiedAnomaliesResponse struct {
@@ -144,18 +191,17 @@ type unifiedAnomaliesResponse struct {
 	Truncated bool                `json:"truncated"`         // bir kaynak okuma tavanına değdi
 	Partial   string              `json:"partial,omitempty"` // "ml" | "legacy": o kaynak okunamadı
 	Row       *unifiedAnomalyRow  `json:"row,omitempty"`     // olay kipi
-	// GatesEnforced — v0.10.2343 (A2): yayın kapıları yürürlükte; yalnız held
-	// görünümünde ve A2 açıkken true (kapalıyken alan yazılmaz — yanıt aynı).
-	GatesEnforced bool `json:"gatesEnforced,omitempty"`
+	// GatesMode / Held — v0.10.2473: yalnız held görünümünde; gürültü kapısı
+	// kipi (off | shadow | on) ve Elenenler sayacı.
+	GatesMode string       `json:"gatesMode,omitempty"`
+	Held      *heldSummary `json:"held,omitempty"`
 }
 
-// publishGatesEnforced — A2 anahtarı (ml); testlerin dikiş yeri.
-var publishGatesEnforced = ml.PublishGatesEnforced
-
-// unifiedMLFilter — SAF: listenin ml_events süzgeci. A2 açıkken servis /
-// platform görünümü held satırı düşürür; olay ve held görünümü düşürmez.
-func unifiedMLFilter(view string, since time.Time) chstore.MLEventsFilter {
-	return chstore.MLEventsFilter{Since: since, Limit: chstore.MLUnifiedCap, View: view, HideHeld: publishGatesEnforced()}
+// unifiedMLFilter — SAF: listenin ml_events süzgeci. Kip on iken servis /
+// platform görünümü held satırı düşürür (SQL yalnız o iki görünümde uygular);
+// olay ve held görünümü düşürmez. shadow / off: süzgeç yok.
+func unifiedMLFilter(view string, since time.Time, gates string) chstore.MLEventsFilter {
+	return chstore.MLEventsFilter{Since: since, Limit: chstore.MLUnifiedCap, View: view, HideHeld: gates == chstore.MLGatesOn}
 }
 
 // pageUnified — SAF: süzgeç → bölüm → sıra (tüm bölüm, sayfadan ÖNCE) → sayfa.
@@ -191,18 +237,31 @@ func (s *Server) getAnomaliesUnified(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// v0.10.2473: kip ayardan (kontrol düzlemi önbelleği; ek CH okuması yok)
+	// ve anahtarda — kip değişince eski kipin sayfası sunulmaz.
+	p.Gates = s.store.GetMLConfig(r.Context()).PublishGatesMode()
 	loc := ml.OperatorLocation(s.store.AnomalySensitivityForDetectors())
 	s.serveCached(w, r, unifiedKey(p, loc.String()), unifiedTTL, func(ctx context.Context) (any, error) {
 		return s.buildAnomaliesUnified(ctx, p, loc)
 	})
 }
 
-// heldOnly — SAF: gölge kapı kararı "tutulur" olan ML olayları (Elenenler).
-func heldOnly(items []chstore.MLEvent) []chstore.MLEvent {
+// heldOnly — SAF: Elenenler'in olayları. on: gerçekten tutulan satırlar
+// (publish_state=held — ana listede olmayanlar; kip açılmadan önce yazılmış,
+// listede duran eski satır buraya girmez). shadow: on olsaydı tutulacaklar
+// (ml.ShadowHeld). off: kapılar değerlendirilmiyor → boş.
+func heldOnly(items []chstore.MLEvent, gates string) []chstore.MLEvent {
 	out := items[:0:0]
 	for _, e := range items {
-		if ml.ShadowHeld(e) {
-			out = append(out, e)
+		switch gates {
+		case chstore.MLGatesOn:
+			if e.PublishState == ml.PublishHeld {
+				out = append(out, e)
+			}
+		case chstore.MLGatesShadow:
+			if ml.ShadowHeld(e) {
+				out = append(out, e)
+			}
 		}
 	}
 	return out
@@ -217,7 +276,7 @@ func (s *Server) buildAnomaliesUnified(ctx context.Context, p unifiedParams, loc
 	if view == "" && p.Event == "" {
 		view = chstore.MLViewService
 	}
-	items, mlErr := s.store.ListMLEvents(ctx, unifiedMLFilter(view, since))
+	items, mlErr := s.store.ListMLEvents(ctx, unifiedMLFilter(view, since, p.Gates))
 	var legacy []chstore.AnomalyEvent
 	var legErr error
 	if p.View == "" { // platform / held: yalnız ML olayları
@@ -225,8 +284,8 @@ func (s *Server) buildAnomaliesUnified(ctx context.Context, p unifiedParams, loc
 			SinceNs: since.UnixNano(), Limit: unifiedLegacyCap, MaxExecSec: unifiedExecSec})
 	}
 	if p.View == chstore.MLViewHeld {
-		items = heldOnly(items)
-		resp.GatesEnforced = publishGatesEnforced()
+		items = heldOnly(items, p.Gates)
+		resp.GatesMode, resp.Held = p.Gates, summarizeHeld(items)
 	}
 	switch {
 	case mlErr != nil && legErr != nil:
@@ -276,6 +335,9 @@ func (s *Server) buildAnomaliesUnified(ctx context.Context, p unifiedParams, loc
 				lead.Evidence = ""
 			}
 			out.MLLead = &lead
+			if p.View == chstore.MLViewHeld {
+				out.HeldGates = heldGatesOf(items[u.MLLead])
+			}
 		}
 		if u.LegLead >= 0 {
 			lead := legacy[u.LegLead]

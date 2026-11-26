@@ -10,9 +10,10 @@
 // v0.10.2243 (anomali kartı Dilim C, K8 mockup): üç görünüm sekmesi, URL'de
 // ?view= (varsayılan yazılmaz). Servisler = servis ekibi listesi (sınıfı
 // telemetry_volume olan ve eski svc_volume_spike satırları SQL'de dışarıda);
-// Platform = yalnız onlar; Elenenler (yalnız admin) = yayın kapılarının GÖLGE
-// kararıyla tutacağı olaylar — kapılar yürürlükte değil, bu olaylar servis
-// listesinde, bildirimde ve Problem'de aynen kalır (sekme yalnız okur).
+// Platform = yalnız onlar; Elenenler (yalnız admin) = gürültü kapılarında
+// elenen olaylar, nedeni ve sayacıyla. v0.10.2473: kip operatör ayarı
+// (Settings › Anomaly › ML, varsayılan on) — on iken bu olaylar Servisler
+// listesinde görünmez ve Problem adayı olmaz; shadow iken yalnız "elenecekti".
 import { Navigate, useSearchParams } from 'react-router';
 import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs';
 import { useAuthRole } from '@/components/AuthProvider';

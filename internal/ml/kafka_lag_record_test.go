@@ -187,7 +187,7 @@ func TestLagRecordInvalidWhenSeriesNeverLeavesBand(t *testing.T) {
 		t.Fatalf("onset_from_series ihlali beklenir: %+v", vs)
 	}
 	raw, _ := json.Marshal(rec)
-	ev := applyRecordContract(chstore.MLEvent{ID: "x", Detector: "metric_kafka", Record: string(raw), PublishState: PublishPublished})
+	ev := applyRecordContractShadow(chstore.MLEvent{ID: "x", Detector: "metric_kafka", Record: string(raw), PublishState: PublishPublished})
 	if ev.PublishState != PublishInvalid {
 		t.Fatalf("geçersiz kayıt yayımlanmamalı: %q", ev.PublishState)
 	}

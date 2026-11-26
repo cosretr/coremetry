@@ -229,9 +229,9 @@ type MLEventsFilter struct {
 	// karar ml.ShadowHeld).
 	View string
 	// HideHeld — v0.10.2343 (anomali kartı A2): servis / platform görünümünde
-	// publish_state='held' satırı düşer. Yalnız A2 açıkken (ml.PublishGates
-	// Enforced) api doldurur; false = SQL bugünküyle aynı. ID okuması ve held
-	// görünümü etkilenmez (tutulan olay erişilebilir kalır).
+	// publish_state='held' satırı düşer. Yalnız gürültü kapısı kipi on iken
+	// (MLConfig.PublishGatesMode) api doldurur; false = SQL süzgeçsiz. ID
+	// okuması ve held görünümü etkilenmez (tutulan olay erişilebilir kalır).
 	HideHeld bool
 	// recCols — ListMLEvents doldurur (hasMLRecordCols); kolon yoksa sınıf
 	// süzgeci yalnız dedektör adına düşer.

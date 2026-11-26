@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/cilcenk/coremetry/internal/ai/evalrubric"
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/cosre/uistream"
 	"github.com/cilcenk/coremetry/internal/mcptools"
@@ -168,12 +169,12 @@ func withoutStatus(sse string) string {
 	return strings.Join(keep, "\n")
 }
 
-// Kapı: style kapalı → v2 akışı bugünkü altınla bayt bayt aynı, data-status
-// yok. Açık → tek ek tur başına bir data-status; onu çıkarınca akış aynı.
-// v1 style açıkken de altını aynen yazar.
+// Kapı (v0.10.2473: statusLine, style'dan ayrı): kapalı → v2 akışı altınla
+// bayt bayt aynı, data-status yok. Açık → tek ek tur başına bir data-status;
+// onu çıkarınca akış aynı. v1 açıkken de altını aynen yazar.
 func TestChatStatusStyleGateGolden(t *testing.T) {
-	run := func(style bool) string {
-		setConversationStyle(t, style)
+	run := func(on bool) string {
+		setConversationStatusLine(t, on)
 		llm := goldenLoopLLM(t)
 		s, _ := newLoopTestServer(t, llm, "u-golden")
 		setCosreV2(t, s, true)
@@ -185,17 +186,17 @@ func TestChatStatusStyleGateGolden(t *testing.T) {
 	off := run(false)
 	compareChatGolden(t, "v2_loop.sse", off)
 	if strings.Contains(off, "data-status") {
-		t.Fatal("style kapalıyken data-status")
+		t.Fatal("statusLine kapalıyken data-status")
 	}
 	on := run(true)
 	if got := statusTexts(t, on); len(got) != 1 || got[0] != chatStatusPool["Sağlık"][0] {
-		t.Fatalf("style açık: %q", got)
+		t.Fatalf("statusLine açık: %q", got)
 	}
 	if withoutStatus(on) != off {
 		t.Fatal("data-status dışında akış değişti")
 	}
 
-	setConversationStyle(t, true)
+	setConversationStatusLine(t, true)
 	llm := goldenLoopLLM(t)
 	s, _ := newLoopTestServer(t, llm, "u-golden")
 	ft := &fakeTools{}
@@ -228,7 +229,7 @@ func statusLoopLLM(t *testing.T) *loopLLM {
 // akışında parça sözleşmeye uyar, cevap metni cümleleri içermez ve akıcılık
 // ölçütleri (cümle sayısı, kalıp) onları saymaz.
 func TestChatStatusPerRoundAndEvalFluency(t *testing.T) {
-	setConversationStyle(t, true)
+	setConversationStatusLine(t, true)
 	llm := statusLoopLLM(t)
 	s, _ := newLoopTestServer(t, llm, "u-golden")
 	setCosreV2(t, s, true)
@@ -304,10 +305,9 @@ func TestEvalStreamContractStatus(t *testing.T) {
 	}
 }
 
-// Kapı tek kaynaktır (answerStyleOn, B): v2 işaretsiz bağlamda (v1) style
-// açıkken de kapalı; değerlendirme konuşma kipinde koşunun zorlaması canlı
-// ayarın yerine geçer — ara cümle de üslubun geri kalanıyla aynı kararı okur.
-func TestChatStatusGateIsAnswerStyle(t *testing.T) {
+// v0.10.2473 — kapı statusLine (karar 11 tersine): varsayılan AÇIK, style'dan
+// bağımsız; v1 bağlamında kapalı; kayıtlı kapalı değer kazanır.
+func TestChatStatusGateIsStatusLine(t *testing.T) {
 	calls := []copilot.ToolCall{{Name: "search_logs"}}
 	emitted := func(ctx context.Context) bool {
 		var n int
@@ -315,24 +315,33 @@ func TestChatStatusGateIsAnswerStyle(t *testing.T) {
 		l.round(ctx, func(string, any) { n++ }, 0, calls)
 		return n == 1
 	}
-	setConversationStyle(t, true)
-	if emitted(context.Background()) {
-		t.Fatal("v1 bağlamında style açık sayıldı")
-	}
+	prev := chstore.CurrentCosreConversation()
+	t.Cleanup(func() { chstore.SetCosreConversation(prev) })
+	chstore.SetCosreConversation(chstore.DefaultCosreConversation())
 	v2 := withCosreV2Loop(context.Background())
 	if !emitted(v2) {
-		t.Fatal("v2 + style açık değil")
+		t.Fatal("varsayılan ayarda v2 ara cümlesi yok")
+	}
+	if emitted(context.Background()) {
+		t.Fatal("v1 bağlamında ara cümle")
 	}
 	setConversationStyle(t, false)
-	if emitted(v2) {
-		t.Fatal("style kapalıyken açık")
+	if !emitted(v2) {
+		t.Fatal("style kapalı ara cümleyi kapatmamalı")
 	}
-	on, off := true, false
-	if !emitted(withChatEvalMode(v2, &chatEvalMode{Conversation: &evalConvTurn{Style: &on}})) {
-		t.Fatal("koşu zorlaması (açık) ara cümleye ulaşmadı")
-	}
+	setConversationStatusLine(t, false)
 	setConversationStyle(t, true)
-	if emitted(withChatEvalMode(v2, &chatEvalMode{Conversation: &evalConvTurn{Style: &off}})) {
-		t.Fatal("koşu zorlaması (kapalı) ara cümleye ulaşmadı")
+	if emitted(v2) {
+		t.Fatal("statusLine kapalıyken style açık ara cümle yazmamalı")
 	}
+}
+
+// setConversationStatusLine — canlı ayarın statusLine alanı (test sonunda geri).
+func setConversationStatusLine(t *testing.T, on bool) {
+	t.Helper()
+	prev := chstore.CurrentCosreConversation()
+	c := prev
+	c.StatusLine = on
+	chstore.SetCosreConversation(c)
+	t.Cleanup(func() { chstore.SetCosreConversation(prev) })
 }

@@ -21,7 +21,7 @@ const g = (o: Partial<MLGateShadow> = {}): MLGateShadow => ({
   wouldDropProblem: 0, wouldDropEscalated: 0, ...o,
 });
 const tick = (o: Partial<MLTickStatus> = {}): MLTickStatus => ({
-  at: 0, durationMs: 0, events: 0, backoff: [], publishGatesWindowH: 24, publishGatesMode: 'A2: kapalı',
+  at: 0, durationMs: 0, events: 0, backoff: [], publishGatesWindowH: 24, publishGatesMode: 'shadow',
   publishGates: {
     op_latency: g({ evaluated: 10, wouldPublish: 6, wouldDrop: 3, wouldInfo: 1, wouldDropProblem: 1, wouldDropEscalated: 2, dropExamples: ['abcdef0123456789'] }),
     svc_volume_spike: g({ notEvaluated: 4 }),
@@ -45,18 +45,22 @@ describe('MLPublishGates', () => {
     expect(publishGateRows(tick()).map(r => r.detector)).toEqual(['op_latency']);
     expect(publishGateRows(undefined)).toEqual([]);
   });
-  it('TR: kip kapalı, ölçüt K16, örnek olay bağlantısı', () => {
+  it('TR: gölge kip, ölçüt (yalnız üç kapı), örnek olay bağlantısı', () => {
     const el = render(tick());
-    expect(el.querySelector('[data-testid="ml-publish-gates-mode"]')?.textContent).toContain('A2: kapalı');
-    expect(el.textContent).toContain('K16');
+    expect(el.querySelector('[data-testid="ml-publish-gates-mode"]')?.textContent).toContain('Kip: gölge');
+    expect(el.textContent).toContain('en az 100 çağrı');
     expect(el.textContent).toContain('Tutulurdu');
     const a = el.querySelector('a[href="/anomalies/ml/abcdef0123456789"]');
     expect(a?.textContent).toBe('abcdef01');
   });
   it('EN + açık kip', () => {
     m.lang = 'en';
-    const el = render(tick({ publishGatesEnforced: true }));
-    expect(el.querySelector('[data-testid="ml-publish-gates-mode"]')?.textContent).toContain('A2: on');
+    const el = render(tick({ publishGatesMode: 'on', publishGatesEnforced: true }));
+    expect(el.querySelector('[data-testid="ml-publish-gates-mode"]')?.textContent).toContain('Mode: on');
     expect(el.textContent).toContain('Would hold');
+  });
+  it('tanınmayan kip (eski tik durumu): kip satırı çizilmez', () => {
+    const el = render(tick({ publishGatesMode: 'A2: kapalı' }));
+    expect(el.querySelector('[data-testid="ml-publish-gates-mode"]')).toBeNull();
   });
 });

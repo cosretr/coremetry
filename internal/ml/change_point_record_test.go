@@ -61,7 +61,7 @@ func TestChangePointRecordContractRoundTrip(t *testing.T) {
 			if vs := ValidateRecord(rec); len(vs) != 0 {
 				t.Fatalf("%s closed=%v doğrulayıcıdan geçmeli: %+v", c.det, closed, vs)
 			}
-			if out := applyRecordContract(evs[0]); out.PublishState != PublishPublished {
+			if out := applyRecordContractShadow(evs[0]); out.PublishState != PublishPublished {
 				t.Fatalf("sözleşme: %q", out.PublishState)
 			}
 			if rec.OnsetAt != r.At*1e9 || rec.PeakValue != 200 || rec.ValueAtDetection != 200 || rec.ExpectedValue != 100 || rec.Snapshot.StepSec != 60 || rec.Series.StepSec != 300 {
@@ -95,7 +95,7 @@ func TestChangePointRecordInvalidWhenSeriesInBand(t *testing.T) {
 		t.Fatal("kayıt kurulmalı")
 	}
 	raw, _ := json.Marshal(rec)
-	if ev := applyRecordContract(chstore.MLEvent{ID: "x", Detector: detChangePoint, Record: string(raw), PublishState: PublishPublished}); ev.PublishState != PublishInvalid {
+	if ev := applyRecordContractShadow(chstore.MLEvent{ID: "x", Detector: detChangePoint, Record: string(raw), PublishState: PublishPublished}); ev.PublishState != PublishInvalid {
 		t.Fatalf("geçersiz kayıt yayımlanmamalı: %q", ev.PublishState)
 	}
 	if _, ok := BuildChangePointRecord(CPRecordInput{BucketSec: 90, V: []float64{1}, Lo: []float64{0}, Hi: []float64{2}}); ok {

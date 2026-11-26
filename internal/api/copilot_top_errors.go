@@ -78,6 +78,7 @@ func (s *Server) guidedTopErrorOpsBundle(ctx context.Context, emit func(string, 
 		return "", "", err
 	}
 	ev := renderTopErrorsTR(service+" en hatalı operasyonları", rows, int64(to.Sub(from).Seconds()), "operasyon")
+	stateTurnFrom(ctx).noteRows(operationRows(service, errorRankNames(rows))) // v0.10.2473 — "ikincisini aç" (chat_turn_rows.go)
 	emitGuidedStepResult(emit, n, "top_error_operations", ev, nil)
 	return ev, "operasyon hata sıralaması (operation_summary_5m)", nil
 }

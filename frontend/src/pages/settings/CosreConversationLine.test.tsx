@@ -16,6 +16,7 @@ const m = vi.hoisted(() => ({
   putBanned: vi.fn((bannedPhrases: string[]) => Promise.resolve({ state: true, style: true, verification: 'shadow', bannedPhrases })),
   putInteraction: vi.fn((interaction: string) => Promise.resolve({ state: true, style: false, verification: 'shadow', interaction })),
   putEvidence: vi.fn((evidence: string) => Promise.resolve({ state: true, style: false, verification: 'shadow', evidence })),
+  putStatusLine: vi.fn((statusLine: boolean) => Promise.resolve({ state: true, style: false, verification: 'shadow', statusLine })),
 }));
 vi.mock('@/lib/api', () => ({
   api: {
@@ -26,11 +27,12 @@ vi.mock('@/lib/api', () => ({
     putCosreConversationBannedPhrases: (p: string[]) => m.putBanned(p),
     putCosreConversationInteraction: (v: string) => m.putInteraction(v),
     putCosreConversationEvidence: (e: string) => m.putEvidence(e),
+    putCosreConversationStatusLine: (v: boolean) => m.putStatusLine(v),
   },
 }));
 vi.mock('@/components/AuthProvider', () => ({ useAuthRole: () => m.role }));
 
-import { CosreConversationLine, CONVERSATION_STYLE_HINT, parseBannedPhrases, bannedPhrasesError } from './CosreConversationLine';
+import { CosreConversationLine, CONVERSATION_STYLE_HINT, CONVERSATION_STATUS_LINE_HINT, parseBannedPhrases, bannedPhrasesError } from './CosreConversationLine';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 beforeAll(() => {
@@ -135,8 +137,21 @@ describe('CosreConversationLine', () => {
     expect(m.put).not.toHaveBeenCalled();
     expect(m.putStyle).not.toHaveBeenCalled();
   });
-  it('üslup metni (v0.10.2337): ölçü, örnekle üslup ve ara cümleyi söyler', () => {
-    for (const w of ['uzunluğu', 'örnek diyalog', 'ara durum cümlesi', 'Raporlar']) expect(CONVERSATION_STYLE_HINT).toContain(w);
+  it('üslup metni (v0.10.2337): ölçü ve örnekle üslubu söyler; ara cümle v0.10.2473 ayrı', () => {
+    for (const w of ['uzunluğu', 'örnek diyalog', 'Raporlar']) expect(CONVERSATION_STYLE_HINT).toContain(w);
+    expect(CONVERSATION_STYLE_HINT).not.toContain('ara durum cümlesi');
+    expect(CONVERSATION_STATUS_LINE_HINT).toContain('model çağrısı yapmaz');
+  });
+  it('ara durum cümlesi (v0.10.2473): alanı yoksa açık; tık statusLine:false yazar, style yazmaz', async () => {
+    const el = await render();
+    const boxes = el.querySelectorAll<HTMLButtonElement>('[role="checkbox"]');
+    expect(el.textContent).toContain('Ara durum cümlesi');
+    expect(boxes[3]?.getAttribute('aria-checked')).toBe('true');
+    await act(async () => { boxes[3]!.click(); });
+    await tick();
+    expect(m.putStatusLine).toHaveBeenCalledWith(false);
+    expect(m.putStyle).not.toHaveBeenCalled();
+    m.putStatusLine.mockClear();
   });
   it('viewer salt okunur', async () => {
     m.role = 'viewer';

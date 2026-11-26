@@ -74,7 +74,7 @@ func TestTraceErrorRecordInvalidWhenSeriesNeverLeavesBand(t *testing.T) {
 		t.Fatal("kayıt kurulmalı")
 	}
 	raw, _ := json.Marshal(rec)
-	if ev := applyRecordContract(chstore.MLEvent{ID: "x", Detector: detTraceErrorCount, Record: string(raw), PublishState: PublishPublished}); ev.PublishState != PublishInvalid {
+	if ev := applyRecordContractShadow(chstore.MLEvent{ID: "x", Detector: detTraceErrorCount, Record: string(raw), PublishState: PublishPublished}); ev.PublishState != PublishInvalid {
 		t.Fatalf("geçersiz kayıt yayımlanmamalı: %q", ev.PublishState)
 	}
 }

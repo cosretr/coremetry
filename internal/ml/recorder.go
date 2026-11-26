@@ -386,11 +386,12 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 	attachBreadthRecords(&r.breadthH, cfg, closing, true, r.runs.firstOf, start)
 	vol, volBudget, volVM := r.volume(), volRecordMaxPerTick, volVMMaxPerTick // v0.10.2242 (B): hacim kaydı
 	vol.attachVolumeRecords(tctx, deps, cfg, closing, true, r.runs.firstOf, nil, &volBudget, &volVM, start)
+	gateMode := cfg.PublishGatesMode() // v0.10.2473: gürültü kapısı kipi (ayar; off | shadow | on)
 	for _, ev := range closing {
 		if _, nd := NoDataOf(ev.Evidence); nd { // v0.10.2359: kayıt üstüne (attach* sonrası)
 			ev = stampRecordEnd(ev)
 		}
-		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
+		ev = applyRecordContract(ev, gateMode) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
 		r.observePublish(ev, start)
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil && firstErr == nil {
 			firstErr = werr
@@ -411,9 +412,11 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 	// Girdi süreç-içi koşu durumu; canlıda tek ek okuma açık Problem
 	// anlık görüntüsü. Kapanış satırı (closeStale) koşunun son halini
 	// yazdığı için damgalı hal koşuya da geri verilir.
-	// v0.10.2343 (A2, kapalı gelir): A2 açıkken terfi kapısı yalnız son
-	// yazımda yayımlanan service_anomaly olayını sayar (publish_gate_enforce.go).
-	pub := r.publishVerdicts(start)
+	// v0.10.2343 / v0.10.2473: kip on iken terfi kapısı son yazımda gürültü
+	// kapısında kalan (held) olayı saymaz; etki kuralı olayları muaf
+	// (publish_gate_enforce.go). pubWarming: karar haritası bu tik kuruldu →
+	// bu tik Problem kapatılmaz.
+	pub, pubWarming := r.publishVerdicts(start, gateMode)
 	groups, shadow := decideGroups(kept, r.runs.events(), GroupSlack(cfg),
 		GroupGateInput{IsBatch: isBatch, LoadParts: loadParts, Open: r.runs.openIDs(kept), Published: pub}, start)
 	// v0.10.2089 — servis düzeyi kapı (spec dilim 3): karar kanıta, sayaç
@@ -430,7 +433,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 			}
 			return groupProblemDescription(g, func(e chstore.MLEvent) string { return ExplainSummary(SummaryInput(e, cfg, start, loc)) })
 		}
-		lc, lerr := r.liveGroupProblems(tctx, groups, kept, svcDec, r.leaderTicks > episodeCloseMisses, desc, start)
+		lc, lerr := r.liveGroupProblems(tctx, groups, kept, svcDec, r.leaderTicks > episodeCloseMisses && !pubWarming, desc, start)
 		live = lc
 		if lerr != nil {
 			log.Printf("[ml] group problems: %v", lerr)
@@ -511,7 +514,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 		}
 	}
 	for _, ev := range kept {
-		ev = applyRecordContract(ev) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
+		ev = applyRecordContract(ev, gateMode) // v0.10.2199 H1: kaydı olmayan olay aynen geçer
 		r.observePublish(ev, start)
 		if werr := r.store.UpsertMLEvent(tctx, ev); werr != nil {
 			if firstErr == nil {
@@ -551,7 +554,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 		Early: early, ScheduledAt: unixOrZero(r.lastScheduled), EarlyTicks: global.earlyTicks.Load(), Probes: global.probes.Load()}
 	// v0.10.2241 (A1) — yayın kapısı gölge raporu: /api/ml/scorecard tick.publishGates
 	status.PublishGates, status.PublishGatesWindowH = global.gateShadowReport(start), int(gateShadowWindow/time.Hour)
-	status.PublishGatesMode, status.PublishGatesEnforced, status.PublishGatesCriterion = PublishGatesMode(), PublishGatesEnforced(), PublishGatesCriterion
+	status.PublishGatesMode, status.PublishGatesEnforced, status.PublishGatesCriterion = gateMode, gatesEnforced(gateMode), PublishGatesCriterion
 	// v0.10.2019 — metrik aile kaynakları + Thanos ölçümü (MetricThanos)
 	for _, det := range r.detectors {
 		if ts, ok := det.(interface {
@@ -579,7 +582,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 		log.Print(line)
 	}
 	log.Print(recordInvalidLine(global.recordInvalidCopy()))
-	log.Print(gateShadowLine(status.PublishGates))
+	log.Print(gateShadowLine(status.PublishGates, gateMode))
 	for name, st := range signals {
 		log.Printf("[ml] tick %s ran=%v services=%d source=%dms candidates=%d batch_cut=%d written=%d partial=%d err=%s", name, st.Ran, st.Services, st.SourceMs, st.Candidates, st.BatchCut, st.Written, st.Partial, st.Error)
 	}

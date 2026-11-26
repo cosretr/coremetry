@@ -32,6 +32,9 @@ type thanosPodsResult struct {
 	// Unknown — v0.10.2239 (S4): entity deposunda servisin pod'u yok; Thanos
 	// sorgulanmadı.
 	Unknown bool
+	// CIDs — v0.10.2473: cluster adı → EffectiveID (entity.PodID kimliği; satırın
+	// Cluster alanı görünen addır).
+	CIDs map[string]string
 }
 
 // guidedThanosPods — etkin cluster'larda servisin pod'ları (Thanos yoksa boş).
@@ -74,6 +77,10 @@ func (s *Server) guidedThanosPods(ctx context.Context, service string) thanosPod
 					rows[i].Cluster = c.Name
 				}
 			}
+			if out.CIDs == nil {
+				out.CIDs = map[string]string{}
+			}
+			out.CIDs[c.Name] = c.EffectiveID()
 			out.Rows = append(out.Rows, rows...)
 		}(c)
 	}
@@ -146,16 +153,7 @@ func renderThanosPodsTR(res thanosPodsResult, service string) string {
 			a := by[n]
 			fmt.Fprintf(&b, "- %s: %d pod (%d çalışıyor), restart %d, CPU %.2f core, bellek %s\n", n, a.pods, a.running, a.restarts, a.cpu, fmtGiB(a.mem))
 		}
-		rows := append([]thanos.PodRow(nil), res.Rows...)
-		sort.SliceStable(rows, func(i, j int) bool {
-			if rows[i].Restarts != rows[j].Restarts {
-				return rows[i].Restarts > rows[j].Restarts
-			}
-			return rows[i].MemBytes > rows[j].MemBytes
-		})
-		if len(rows) > thanosPodsListMax {
-			rows = rows[:thanosPodsListMax]
-		}
+		rows := thanosPodsRanked(res.Rows)
 		b.WriteString("En çok restart / bellek:\n")
 		for _, r := range rows {
 			phase := r.Phase
@@ -175,6 +173,22 @@ func renderThanosPodsTR(res thanosPodsResult, service string) string {
 		b.WriteString(".\n")
 	}
 	return b.String()
+}
+
+// thanosPodsRanked — SAF: kanıtta listelenen pod'lar (en çok restart, sonra
+// bellek; thanosPodsListMax). v0.10.2473 — satır belleği aynı sırayı kullanır.
+func thanosPodsRanked(in []thanos.PodRow) []thanos.PodRow {
+	rows := append([]thanos.PodRow(nil), in...)
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].Restarts != rows[j].Restarts {
+			return rows[i].Restarts > rows[j].Restarts
+		}
+		return rows[i].MemBytes > rows[j].MemBytes
+	})
+	if len(rows) > thanosPodsListMax {
+		rows = rows[:thanosPodsListMax]
+	}
+	return rows
 }
 
 // podHTTPChartFences — v0.10.1250: pod sorusuna HTTP metrikleri (VictoriaMetrics

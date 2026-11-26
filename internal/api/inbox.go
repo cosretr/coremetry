@@ -312,7 +312,7 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 	// sözlüğü, incident kaynağı, katlama ve önbellek anahtarı aynı değeri
 	// kullanır (inbox_incidents_retired.go).
 	incidentsOn := chstore.IncidentsEnabled()
-	graphMerge := chstore.ProblemGraphMergeEnforced() // v0.10.2341 (S4); kapalıyken hiçbir şey değişmez
+	graphMerge := chstore.ProblemGraphMergeOn() // v0.10.2473 — görünüm kipi ayarı (varsayılan on); shadow / off iken hiçbir şey değişmez
 	kinds := inboxKindsFromQuery(q.Get("kind"), incidentsOn)
 	prios := normalizeInboxSet(q.Get("prio"), inboxPriosAll)
 	cats := normalizeInboxSet(q.Get("cat"), chstore.ProblemCategories) // v0.10.706
@@ -987,8 +987,12 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 			items = s.foldInboxIncidents(ctx, items)
 		}
 		// v0.10.2341 (entity grafı S4) — bağlı küme tek satır; yalnız açıkken.
+		// v0.10.2473 — kümeler derleme başına TEK okunur; aynı kümeler aşağıda
+		// köken alanını da besler (attachInboxOrigins).
+		var graphGroups []chstore.ProblemGraphGroup
 		if graphMerge {
-			items = s.foldInboxGraphClusters(ctx, items)
+			graphGroups = s.inboxGraphGroups(ctx)
+			items = foldGraphClusters(items, graphGroups)
 		}
 
 		// v0.9.330 — facet counts are computed HERE, over everything that
@@ -1031,6 +1035,7 @@ func (s *Server) inboxView(q url.Values) (string, func(ctx context.Context) (any
 		// v0.10.1529 (Problem standardı R2) — standart, tavandan ÖNCE tüm
 		// adaylarda: D10 sıralaması (düşük güven altta) tavanı da belirler.
 		s.attachInboxStandards(ctx, items, time.Now())
+		attachInboxOrigins(items, graphGroups) // v0.10.2473 — "Köken: …" (kip on değilse küme yok, no-op)
 
 		// Rank the WHOLE candidate set before the cap (v0.9.318 scan fix +
 		// v0.9.319 server sort) — inboxSortAndCap.
@@ -1143,7 +1148,12 @@ func (s *Server) inboxCount(w http.ResponseWriter, r *http.Request) {
 // gövde şekli (scanCapped; problems/anomalies/incidents kırılımı kalktı)
 // değişti; kayan dağıtımda eski sürümün toplamı yeni sözleşmeymiş gibi
 // servis edilmesin. Önek "inbox:count" aynen (mutasyon düşürmesi).
-func inboxCountKey(env string) string { return inboxCountKeyFor(env, chstore.IncidentsEnabled()) }
+// v0.10.2473 — rozet listenin varsayılan görünümünün `total`ı; liste görünüm
+// kipi `on` iken kümeyi tek satır sayar, anahtar da kipi taşır (kip değişince
+// eski sayı yeni sözleşmeyle servis edilmesin). Önek aynen.
+func inboxCountKey(env string) string {
+	return inboxCountKeyFor(env, chstore.IncidentsEnabled()) + inboxGraphKeySuffix(chstore.ProblemGraphMergeOn())
+}
 
 // inboxCountKeyFor — SAF (v0.10.1827): rozet anahtarı Incidents ana
 // anahtarını taşır (rozet varsayılan görünümün total'ı; tür kümesi ve

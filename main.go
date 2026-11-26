@@ -730,6 +730,13 @@ func main() {
 	// v0.10.2341 (entity grafı S4) — sonradan bağlanan küme üyesinin tutma
 	// kaynağı; yalnız chstore.ProblemGraphMergeEnforced() açıkken sorulur.
 	notifier.SetMergeHold(evalr)
+	// v0.10.2473 — servisler arası Problem birleştirmesinin görünüm kipi
+	// (problem_graph_merge: off | shadow | on, varsayılan on). Evaluator
+	// Start'tan ÖNCE hidrate edilir: kayıtlı `off` / `shadow` ilk tikten
+	// itibaren geçerli; her pod 30 sn'de bir yeniler. Bildirim tutmasını
+	// DEĞİŞTİRMEZ (o yol yukarıdaki kod sabitinde).
+	store.LoadProblemGraphMerge(ctx)
+	cfgRefresh.Add("problem-graph-merge", func(ctx context.Context) error { store.LoadProblemGraphMerge(ctx); return nil })
 	// v0.8.354 — sustain/cooldown stamps write-through to Redis so a leader
 	// failover (or every maxUnavailable:0 deploy) no longer resets ForSec
 	// clocks / punches CooldownSec holes. cacheImpl is the Switchable, so

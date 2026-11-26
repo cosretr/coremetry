@@ -6,10 +6,10 @@
 import { useEffect, useState } from 'react';
 import { Spinner } from '@/components/Spinner';
 import { Button } from '@/components/shadcn/button';
-import { Field, CheckboxField } from '@/components/coremetry/Field';
+import { Field, CheckboxField, SelectField } from '@/components/coremetry/Field';
 import { ActionRow } from '@/components/coremetry/ActionRow';
 import { api } from '@/lib/api';
-import type { MLConfig, MLQuality, MLMetricSource } from '@/lib/types';
+import type { MLConfig, MLGatesMode, MLQuality, MLMetricSource } from '@/lib/types';
 import { FlashBox, humanize } from './shared';
 import { MLBaselineSections } from './MLBaselineSections';
 import { MLRecommendedCard } from './MLRecommendedCard';
@@ -128,6 +128,15 @@ export function MLSubsection() {
             onCheckedChange={v => setCfg({ ...cfg, groupProblems: v })}
             label="Anomali grubu Problem açar"
             hint="Aynı serviste en az 2 farklı sinyalde (trace, log, metrik) anomali varsa ya da tek sinyal güçlü (normalin en az 2 katı) ve en az 10 dk sürerse grup bir Problem açar (P2) ve bildirim mevcut kanallardan gider. Kapalı: yalnız kayıt (Problem açardı)." />
+          {/* v0.10.2473 — gürültü kapısı kipi; alan yok = on (varsayılan). */}
+          <SelectField className="mb-3" controlClassName="max-w-[320px]" label="Gürültü kapıları" disabled={!cfg.enabled}
+            value={cfg.publishGates ?? 'on'}
+            onChange={e => setCfg({ ...cfg, publishGates: e.target.value as MLGatesMode })}
+            hint="on: olay penceresinde 100'den az çağrısı olan, tepe ile beklenen arasındaki farkı 25 ms'nin altında kalan ya da görünür sapması olmayan (gecikmede art arda 3 kovadan az, diğerlerinde bant dışı kova yok) olay Anomaliler listesinde görünmez ve Problem adayı olmaz; Anomaliler › Elenenler'de nedeniyle okunur. Etki kuralı olayları (servis hata oranı, servis yanıt süresi, consumer lag) muaftır; bağımsız kanıt sayısı hiçbir kipte aranmaz. shadow: kapılar yalnız kayda yazılır. off: değerlendirilmez.">
+            <option value="on">on — ele (varsayılan)</option>
+            <option value="shadow">shadow — yalnız kaydet</option>
+            <option value="off">off — değerlendirme</option>
+          </SelectField>
 
           <p className={NOTE}>Anahtar dedektörü açar; dedektör anomali kaydeder, Problem açmaz.</p>
           {([['Log dedektörleri', ML_LOG_DETECTORS], ['Trace dedektörleri', ML_TRACE_DETECTORS], ['Metrik aileleri', ML_METRIC_DETECTORS]] as const).map(([title, list]) => (<div key={title}>

@@ -99,8 +99,8 @@ type MLTickStatus struct {
 	// (son değerlendirme geçerli; recorder pod belleği, lider değişince sıfır).
 	PublishGates        map[string]MLGateShadow `json:"publishGates,omitempty"`
 	PublishGatesWindowH int                     `json:"publishGatesWindowH,omitempty"`
-	// v0.10.2343 (A2 kapalı gelir, K16): raporun kipi ("A2: kapalı" | "A2:
-	// açık"), uygulama anahtarı ve inceleme ölçütü metni.
+	// v0.10.2343 / v0.10.2473: tikin okuduğu gürültü kapısı kipi (off | shadow
+	// | on; ayar MLConfig.PublishGates), on mu ve neyin uygulandığının metni.
 	PublishGatesMode      string `json:"publishGatesMode,omitempty"`
 	PublishGatesEnforced  bool   `json:"publishGatesEnforced,omitempty"`
 	PublishGatesCriterion string `json:"publishGatesCriterion,omitempty"`

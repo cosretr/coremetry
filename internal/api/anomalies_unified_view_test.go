@@ -54,7 +54,7 @@ func TestHeldOnlyShadowVerdict(t *testing.T) {
 	invalid := drop
 	invalid.ID, invalid.PublishState = "d", ml.PublishInvalid
 	legacy := chstore.MLEvent{ID: "e"}
-	got := heldOnly([]chstore.MLEvent{drop, info, pass, invalid, legacy})
+	got := heldOnly([]chstore.MLEvent{drop, info, pass, invalid, legacy}, chstore.MLGatesShadow)
 	if len(got) != 1 || got[0].ID != "a" {
 		t.Fatalf("Elenenler = %+v, beklenen yalnız gölge drop kararı (a)", got)
 	}

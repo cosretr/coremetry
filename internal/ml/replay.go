@@ -82,7 +82,7 @@ type replayRow struct {
 // ReplayRecord — SAF: tek olayın bugünkü sözleşme + kapı sonucu.
 func ReplayRecord(id, detector, record string) ReplayEvent {
 	e := ReplayEvent{ID: id, Detector: detector}
-	_, vs, o := contractVerdict(record)
+	_, vs, o := contractVerdict(record, true)
 	e.FailedGates, e.NotEvalGate, e.Violations = o.Failed, o.NotEvaluable, vs
 	e.Outcome = replayOutcome(record, o)
 	return e

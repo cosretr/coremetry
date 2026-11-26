@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 )
 
@@ -21,9 +22,10 @@ import (
 //     Bilinmeyen araç (dış MCP, uydurma ad) cümle üretmez.
 //   - Havuz araç başına değil evre ailesi başına; seçim deterministik
 //     (tur sırası), aynı alışverişte art arda aynı cümle yok.
-//   - Kapı: v2 VE cosre_conversation.style (answerStyleOn, B dilimiyle tek
-//     kaynak; değerlendirme koşusunun zorlaması da geçerli). Kapalıyken akış
-//     bayt bayt bugünkü (model çağrısı yok, olay yok).
+//   - Kapı: v2 VE cosre_conversation.statusLine (v0.10.2473: `style`tan
+//     ayrıldı, varsayılan AÇIK — karar 11 tersine; statusLineOn). Cümle
+//     deterministiktir (evre ailesi havuzu), model çağrısı yok. Kapalıyken
+//     olay yok.
 //   - Cümleler birinci tekil, hitapsız (sen/siz gerekmez), ünlemsiz,
 //     emojisiz; "…" ile biter.
 
@@ -81,7 +83,7 @@ type chatStatusLine struct{ last string }
 // round — araç turunun başında (çağrılar yürütülmeden önce) en çok bir
 // `status` olayı. Kapı kapalıysa ya da aile yoksa hiçbir şey yazmaz.
 func (l *chatStatusLine) round(ctx context.Context, emit func(string, any), round int, calls []copilot.ToolCall) {
-	if len(calls) == 0 || !answerStyleOn(ctx) {
+	if len(calls) == 0 || !statusLineOn(ctx) {
 		return
 	}
 	s := chatStatusPick(chatStatusFamily(calls), round, l.last)
@@ -90,4 +92,9 @@ func (l *chatStatusLine) round(ctx context.Context, emit func(string, any), roun
 	}
 	l.last = s
 	emit("status", map[string]string{"text": s})
+}
+
+// statusLineOn — v0.10.2473: v2 VE statusLine ayarı (style'dan bağımsız).
+func statusLineOn(ctx context.Context) bool {
+	return cosreV2Marked(ctx) && chstore.CurrentCosreConversation().StatusLine
 }

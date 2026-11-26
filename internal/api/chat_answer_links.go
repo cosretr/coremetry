@@ -238,5 +238,6 @@ func chatToolNameSet[V any](schemas map[string]V) map[string]bool {
 	out[opExceptionsTool] = true
 	out[opDrillTool] = true
 	out[opClusterTool] = true
+	out[guidedEscTool] = true // v0.10.2473 — guided demeti devri (chat_guided_escalate.go)
 	return out
 }

@@ -59,10 +59,10 @@ type GroupGateInput struct {
 	// Open — koşusu açık olay kimlikleri (tracker + bu tikin olayları).
 	// nil = bilinmiyor (replay): stage=closed olmayan üye açık sayılır.
 	Open map[string]bool
-	// Published — v0.10.2343 (A2, publish_gate_enforce.go): olay id → son
-	// yazımın yayın kararı. nil = A2 kapalı (bugünkü davranış, her üye
-	// sayılır). Doluyken yalnız yayımlanan service_anomaly üye sayılır ve tek
-	// sinyal kolu ≥ 2 bağımsız kanıt ister (K10).
+	// Published — v0.10.2343 / v0.10.2473 (publish_gate_enforce.go): olay id
+	// → son yazımın gürültü kapısı kararı. nil = kip on değil (her üye
+	// sayılır). Doluyken tutulan (held) üye sayılmaz; etki kuralı olayı her
+	// zaman sayılır. Bağımsız kanıt sayısı (K10) hiçbir kolda aranmaz.
 	Published map[string]PubVerdict
 }
 
@@ -254,7 +254,8 @@ func singleWorsening(e chstore.MLEvent) (worse, count bool) {
 // tabanın ≥ 2 katıysa (taban 0: sayım ≥ 20) gölgede "açardı". En güçlü
 // üyenin cümlesi döner. v0.10.2382 (I5): etki kuralıyla açılmış üye (bugün
 // VM consumer lag) süre ve kat şartı aranmadan sayılır; diğer şartlar (açık,
-// kötüleşme yönü, batch, A2 adaylığı ve K10) aynen.
+// kötüleşme yönü, batch) aynen. v0.10.2473: K10 (≥ 2 bağımsız kanıt) hiçbir
+// kipte aranmaz — tek etki olayı Problem açar (operatör kararı 2026-11-19).
 func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in GroupGateInput, now time.Time) (string, string, bool) {
 	best, bestID, bestR := "", "", 0.0
 	for _, e := range members {
@@ -262,7 +263,7 @@ func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in G
 			continue
 		}
 		worse, count := singleWorsening(e)
-		if !worse || !singleArmEvidenceOK(e, in.Published) { // K10 (A2): ≥ 2 bağımsız kanıt
+		if !worse {
 			continue
 		}
 		var why string

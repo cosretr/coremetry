@@ -441,18 +441,26 @@ func parseTRNumber(tok string) (v float64, decimals int, ok bool) {
 // sonuç YALNIZ record.gates[]'e ve gölge sayacına yazılır — sınıf,
 // publish_state, bildirim, Problem ve kart değişmez. Kaydı olmayan / kalan
 // olay gölgede "değerlendirilmedi" sayılır.
-func applyRecordContract(ev chstore.MLEvent) chstore.MLEvent {
+//
+// v0.10.2473: mode = gürültü kapısı kipi (chstore.MLGates*; ayardan). off →
+// kapılar değerlendirilmez; on → uygulanan kapıda kalan olay held yazılır
+// (publish_gate_enforce.go). Etki kuralı olayının satırları kayda yazılır ama
+// karar Drop sayılmaz (muaf; kendi yük kapısı var).
+func applyRecordContract(ev chstore.MLEvent, mode string) chstore.MLEvent {
 	if ev.Record == "" {
 		global.observeGate(ev.ID, ev.Detector, ev.Service, gateOutcome{})
 		return ev
 	}
-	rec, vs, o := contractVerdict(ev.Record)
+	rec, vs, o := contractVerdict(ev.Record, gatesEvaluated(mode))
 	if len(vs) == 0 {
 		if b, err := json.Marshal(rec); err == nil {
 			ev.Record = string(b)
 		}
-		if publishGatesEnforce { // v0.10.2343 (A2, kapalı gelir): karar satıra
-			ev = enforceVerdict(ev, rec.Class, o)
+		if gateHoldExempt(ev) {
+			o.Drop = false
+		}
+		if gatesEnforced(mode) {
+			ev = enforceVerdict(ev, o)
 		}
 		global.observeGate(ev.ID, ev.Detector, ev.Service, o)
 		return ev
@@ -468,8 +476,9 @@ func applyRecordContract(ev chstore.MLEvent) chstore.MLEvent {
 // gölge kapı sonucu, yan etkisiz. applyRecordContract (yazım yolu) ve replay
 // (replay.go, geliştirici aracı) AYNI kararı buradan alır. raw == "" → kayıt
 // yok (değerlendirilmedi); çözülemeyen ya da doğrulayıcıdan kalan kayıt
-// Invalid; geçen kaydın Gates'i doldurulur.
-func contractVerdict(raw string) (EventRecord, []RecordViolation, gateOutcome) {
+// Invalid; geçen kaydın Gates'i doldurulur. gates=false (kip off): kapılar
+// değerlendirilmez, sonuç "değerlendirilmedi".
+func contractVerdict(raw string, gates bool) (EventRecord, []RecordViolation, gateOutcome) {
 	var rec EventRecord
 	if raw == "" {
 		return rec, nil, gateOutcome{}
@@ -479,6 +488,9 @@ func contractVerdict(raw string) (EventRecord, []RecordViolation, gateOutcome) {
 	}
 	if vs := ValidateRecord(rec); len(vs) > 0 {
 		return rec, vs, gateOutcome{Invalid: true}
+	}
+	if !gates {
+		return rec, nil, gateOutcome{}
 	}
 	rec.Gates = EvaluateGates(rec)
 	return rec, nil, gateVerdict(rec, rec.Gates)

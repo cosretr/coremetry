@@ -375,3 +375,28 @@ export function stdNextHref(std: ProblemStandard): string | undefined {
   if (!h || !isSafeAppPath(h)) return undefined;
   return SELF_NEXT.some(re => re.test(h)) ? undefined : h;
 }
+
+/** v0.10.2473 — köken etiketinin dört kuralı (Go chstore stdOriginRule). */
+const STD_ORIGIN_RULES = ['K-ROLLOUT', 'K-SHARED', 'K-DEEP', 'K-FIRST'] as const;
+
+/**
+ * v0.10.2473 — manşet altı "Köken: <varlık> — <gerekçe>" (liste satırı ve
+ * detay başlığı AYNI çekirdek). Sunucu yalnız görünüm kipi `on` iken ve köken
+ * ayırt edildiyse (güven strong / weak) alanı doldurur; burada da tahmin yok:
+ * alan yoksa, kural tanınmıyorsa, güven belirsizse ya da kimlik / ad boşsa
+ * null (etiket çizilmez). Bağlantı entity kimliğinden kurulur (ad eşlemesi yok).
+ */
+export function stdOriginView(std: ProblemStandard | null | undefined, lang: Lang = 'tr'):
+  { label: string; name: string; reason: string; title: string; entity: { id: string; type: string; name: string } } | null {
+  const o = std?.origin;
+  if (!o || !o.entity || !o.name || (o.entities ?? 0) < 2) return null;
+  if (!(STD_ORIGIN_RULES as readonly string[]).includes(o.rule)) return null;
+  if (o.confidence !== 'strong' && o.confidence !== 'weak') return null;
+  return {
+    label: t('std.origin.label', lang),
+    name: o.name,
+    reason: t(`std.origin.why.${o.rule}`, lang),
+    title: tf('std.origin.title', lang, { n: o.entities }),
+    entity: { id: o.entity, type: o.type, name: o.name },
+  };
+}

@@ -43,23 +43,48 @@ type deepMode struct {
 	On bool
 	// Profile — Derin için seçilen profil kimliği ("" = model değişmedi).
 	Profile string
+	// loopScale — v0.10.2473: döngü profilinin kanıt ölçeği (evidence_scale.go;
+	// 0/1 = taban 6 / 5). Alışverişte kanıt ölçeği okununca yazılır.
+	loopScale int
+}
+
+// Ölçekli döngü bütçesinin mutlak tavanları (v0.10.2473) — Derin'inkilerle aynı.
+const (
+	scaledToolCallsCeiling  = 12
+	scaledToolRoundsCeiling = 8
+)
+
+// loopBudgetAt — SAF (v0.10.2473): kanıt ölçeği → (çağrı, tur) tabanı. Ölçek
+// 1 → 6 / 5 (bugünkü, küçük pencereli model değişmez); her ölçek ikiye
+// katlanışında +2 çağrı / +1 tur: 2 → 8 / 6, 4 → 10 / 7, ≥8 → 12 / 8 (tavan).
+// Ölçek yetenek kaydından gelir (copilot.EvidenceBudgetFor); model adı yok.
+func loopBudgetAt(scale int) (calls, rounds int) {
+	steps := 0
+	for s := scale; s >= 2; s /= 2 {
+		steps++
+	}
+	return min(chatMaxToolCalls+2*steps, scaledToolCallsCeiling), min(chatMaxToolRounds+steps, scaledToolRoundsCeiling)
 }
 
 func deepScale(n int) int { return n * deepScaleNum / deepScaleDen }
 
 // toolRounds / toolCalls — serbest döngünün tur ve çağrı tavanı.
+// v0.10.2473 — taban kanıt ölçeğiyle büyür (loopBudgetAt); Derin onun ×1.5'i,
+// mutlak tavan yine 12 / 8.
 func (d deepMode) toolRounds() int {
+	_, base := loopBudgetAt(d.loopScale)
 	if !d.On {
-		return chatMaxToolRounds
+		return base
 	}
-	return min(deepScale(chatMaxToolRounds), deepToolRoundsCeiling)
+	return min(deepScale(base), deepToolRoundsCeiling)
 }
 
 func (d deepMode) toolCalls() int {
+	base, _ := loopBudgetAt(d.loopScale)
 	if !d.On {
-		return chatMaxToolCalls
+		return base
 	}
-	return min(deepScale(chatMaxToolCalls), deepToolCallsCeiling)
+	return min(deepScale(base), deepToolCallsCeiling)
 }
 
 // wikiMaxPages — okunan en çok wiki sayfası (skor tabanlı ve model seçimi).

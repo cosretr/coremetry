@@ -2872,9 +2872,14 @@ export interface InboxCountResponse {
 /** v0.10.2341 (entity grafı S4) — katlanan küme (inbox_graph_fold.go). */
 export interface InboxCluster {
   ownerId: string;
+  /** Kümenin TAMAMI (süzgeçten bağımsız): varlık sayısı. */
   entities: number;
-  origin?: string;
-  members: { problemId: string; name: string; title?: string; priority?: string; startedAt: number; owner?: boolean; link?: string; late?: boolean }[];
+  /** v0.10.2473 — kümedeki farklı servis varlığı; 0/yok = bilinmiyor (üye tavanı kesti). */
+  services?: number;
+  /** v0.10.2473 — kümedeki üye Problem sayısı (tamamı). */
+  problems?: number;
+  /** Bu görünümde (süzgeçlerden sonra) bulunan üyeler. */
+  members: { problemId: string; name: string; type?: string; title?: string; priority?: string; startedAt: number; owner?: boolean; link?: string; late?: boolean }[];
 }
 
 export interface InboxItem {
@@ -3026,6 +3031,26 @@ export interface ProblemStandard {
   /** v0.10.2300 (S3) — yalnız detay ucu (problem ref'i): satırdaki gerekçe + anahtarı. */
   priorityReason?: string;
   priorityReasonMsg?: StdMsg;
+  /** v0.10.2473 — bağlı kümenin kökeni (Go chstore.StdOrigin); yalnız görünüm kipi `on`, yoksa etiket yok. */
+  origin?: StdOrigin;
+}
+
+/** v0.10.2473 — Go chstore.StdOrigin. Bağlantı entity kimliğinden (entity), ad yalnız metin. */
+export interface StdOrigin {
+  entity: string;
+  type: string;
+  name: string;
+  rule: 'K-ROLLOUT' | 'K-SHARED' | 'K-DEEP' | 'K-FIRST';
+  confidence: 'strong' | 'weak';
+  entities: number;
+  self?: boolean;
+}
+
+/** v0.10.2473 — GET/PUT /api/admin/problem-graph-merge. */
+export interface ProblemGraphMergeSetting {
+  mode: 'off' | 'shadow' | 'on';
+  updatedBy?: string;
+  updatedAt?: number;
 }
 
 // Role hierarchy used everywhere. `editor` was introduced for the
@@ -9426,6 +9451,8 @@ export interface CosreConversationSettings {
   interaction: 'off' | 'on';
   /** v0.10.2355 (investigation-design S1, karar 25) — kanıt alanı: off | shadow | on (varsayılan off). */
   evidence?: 'off' | 'shadow' | 'on';
+  /** v0.10.2473 — araç turu ara durum cümlesi (style'dan ayrı; varsayılan açık, eski sunucu alanı göndermez). */
+  statusLine?: boolean;
   updatedBy?: string;
   updatedAt?: string;
 }
@@ -13160,18 +13187,25 @@ export interface UnifiedAnomalyRow {
   mlLead?: MLEvent; legacyLead?: AnomalyEvent;
   mlCount: number; legacyCount: number;
   ml?: MLEvent[]; legacy?: AnomalyEvent[];
+  /** v0.10.2473: yalnız held görünümünde — satırın kaldığı gürültü kapıları (elenme nedeni). */
+  heldGates?: HeldGate[];
 }
+/** v0.10.2473 — gürültü kapısı kipi (ml ayarı publishGates; yok = on). */
+export type MLGatesMode = 'off' | 'shadow' | 'on';
+/** v0.10.2473 — kalan gürültü kapısı: ad, gözlenen değer, eşik. */
+export interface HeldGate { name: 'min_volume' | 'min_abs_diff' | 'visible_deviation' | (string & {}); value: number; threshold: number }
 /** v0.10.2051 — unifiedAnomaliesResponse. total = bu bölümün kesin satır sayısı
  *  (süzgeç sonrası); truncated = bir kaynak okuma tavanına değdi (son 24 saat);
  *  partial = o kaynak okunamadı. */
-/** v0.10.2243 (anomali kartı Dilim C) — /anomalies görünümü: '' servis listesi, platform = telemetry_volume, held = gölge kapı kararı. */
+/** v0.10.2243 (anomali kartı Dilim C) — /anomalies görünümü: '' servis listesi, platform = telemetry_volume, held = gürültü kapılarında elenenler. */
 export type AnomalyView = '' | 'platform' | 'held';
 export interface UnifiedAnomaliesPage {
   items: UnifiedAnomalyRow[]; total: number; openTotal: number; doneTotal: number;
   offset: number; limit: number; truncated: boolean; partial?: 'ml' | 'legacy';
   row?: UnifiedAnomalyRow;
-  /** v0.10.2343 (A2): held görünümünde yayın kapıları yürürlükte (kapalıyken alan yok). */
-  gatesEnforced?: boolean;
+  /** v0.10.2473: yalnız held görünümünde — gürültü kapısı kipi ve sayaç (son 24 sa: elenen olay + kapı başına olay). */
+  gatesMode?: MLGatesMode;
+  held?: { events: number; byGate: Record<string, number> };
 }
 /** v0.10.2015 — ml.GroupDecision aynası (internal/ml/group_gate.go). */
 export interface MLGroupDecision {
@@ -13300,6 +13334,8 @@ export interface MLConfig {
   baseline?: { enabled: boolean };
   /** v0.10.2052 (D4): ≥ 2 sinyalli ML grubu Problem açar; yok = açık. */
   groupProblems?: boolean;
+  /** v0.10.2473: gürültü kapısı kipi; yok = on (varsayılan). */
+  publishGates?: MLGatesMode;
 }
 /** v0.10.1886 — önerilen ML kurulumu (GET /api/admin/ml/recommended; salt-okunur). */
 export interface MLSourceCheck { id: string; label: string; checked: boolean; present: boolean; note?: string }
@@ -13348,7 +13384,7 @@ export interface MLTickStatus {
   /** v0.10.2241 (A1) + v0.10.2343 (K16): yayın kapısı gölge raporu (dedektör başına, son publishGatesWindowH sa). */
   publishGates?: Record<string, MLGateShadow>;
   publishGatesWindowH?: number;
-  /** v0.10.2343: rapor kipi ("A2: kapalı" | "A2: açık"), anahtar ve K16 ölçüt metni (sunucu, TR). */
+  /** v0.10.2473: tikin okuduğu gürültü kapısı kipi (off | shadow | on), on mu ve ölçüt metni (sunucu, TR). */
   publishGatesMode?: string; publishGatesEnforced?: boolean; publishGatesCriterion?: string;
 }
 /** chstore.MLGateShadow aynası (internal/chstore/ml_status.go). */

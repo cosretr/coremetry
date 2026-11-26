@@ -215,6 +215,16 @@ export function GraphRowSub({ row, folded }: { row?: ProblemGraphRowSummary; fol
   return <div className="triage-sub" data-testid="pg-row-sub" title={tf(folded ? 'pg.row.titleOn' : 'pg.row.title', lang)}>{text}</div>;
 }
 
+// graphClusterSummary — SAF (v0.10.2473): katlanan satırın özeti. Etkilenen
+// servis sayısı kümenin TAMAMINDAN (süzgeçten bağımsız); bilinmiyorsa (0)
+// varlık sayısı. Problem sayısı açılan listeyle aynı: bu görünümdeki üyeler.
+export function graphClusterSummary(c: InboxCluster, t: (k: string, v: Record<string, string | number>) => string): string {
+  const m = c.members.length;
+  return c.services && c.services > 0
+    ? t('pg.cluster.summary', { s: c.services, m })
+    : t('pg.cluster.summaryEnt', { n: c.entities, m });
+}
+
 // GraphClusterMembers — v0.10.2341 (entity grafı S4): katlanan kümenin üyeleri.
 // Yalnız sunucu katladıysa (S4 açık) gelir; kapalıyken satırda hiçbir şey
 // çizilmez. Her üye kendi Problem detayına açılır (katlanan satır erişilebilir
@@ -224,7 +234,7 @@ export function GraphClusterMembers({ cluster, hrefOf }: { cluster?: InboxCluste
   if (!cluster || cluster.members.length < 2) return null;
   return (
     <details className="triage-sub" data-testid="pg-cluster" onClick={e => e.stopPropagation()}>
-      <summary style={{ cursor: 'pointer' }}>{tf('pg.cluster.summary', lang, { n: cluster.entities, m: cluster.members.length })}</summary>
+      <summary style={{ cursor: 'pointer' }} data-testid="pg-cluster-summary">{graphClusterSummary(cluster, (k, v) => tf(k, lang, v))}</summary>
       <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
         {cluster.members.map(m => {
           const l = hrefOf(m.problemId);

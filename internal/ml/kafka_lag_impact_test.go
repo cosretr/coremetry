@@ -768,11 +768,12 @@ func lagImpactEvidence(fired bool, thr float64, viol int) string {
 
 // Etki kuralıyla açılmış lag olayı 600 sn sürdürme ve "≥ 2 × taban" tekrarı
 // OLMADAN Problem açar (5'te 3 penceresi sürdürmedir); damgasız olay 600 sn
-// kuralında kalır. A2 (pub) davranışı aynı: nil = şart yok, doluyken K10.
+// kuralında kalır. v0.10.2473: gürültü kapısı kipi on iken (pub dolu) etki
+// kuralı olayı MUAF — kanıt sayısına (K10) bakılmaz, karar beklenmez.
 func TestSingleArmOpensOnImpactRuleLag(t *testing.T) {
 	now := gBase.Add(30 * time.Minute)
-	pubOK := map[string]PubVerdict{"a": {State: PublishPublished, Class: ClassServiceAnomaly, Independent: 2}}
-	pubThin := map[string]PubVerdict{"a": {State: PublishPublished, Class: ClassServiceAnomaly, Independent: 1}}
+	pubOK := map[string]PubVerdict{"a": {State: PublishPublished}}
+	pubHeld := map[string]PubVerdict{"a": {State: PublishHeld}}
 	thanos := lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4))
 	thanos.Code = lagSvcPart + "@prod-east"
 	thanos.Evidence = mergeEvidence("", map[string]any{"source": "thanos", "dwell": 2})
@@ -795,10 +796,13 @@ func TestSingleArmOpensOnImpactRuleLag(t *testing.T) {
 		{"damgasız lag olayı, 10 dk → açar (eski kol)", lagGateEv("a", now, 10*time.Minute, 600, 165000, `{"source":"vm","dwell":2}`), nil, true, "P2",
 			[]string{"10 dk sürdü", "normalin 275.0 katı"}, "etki kuralı"},
 		{"Thanos lag olayı, 4 dk → açmaz (kapsam dışı, 600 sn kuralı)", thanos, nil, false, "", nil, ""},
-		{"A2 açık, 2 bağımsız kanıt → açar", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), pubOK, true, "P1",
+		{"kapılar on, yayımlandı → açar", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), pubOK, true, "P1",
 			[]string{"etki kuralı"}, "sürdü"},
-		{"A2 açık, 1 bağımsız kanıt → açmaz (K10)", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), pubThin, false, "", nil, ""},
-		{"A2 açık, karar yok (ilk tik) → aday değil", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), map[string]PubVerdict{}, false, "", nil, ""},
+		{"kapılar on, karar yok (ilk tik) → etki kuralı muaf, açar", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), map[string]PubVerdict{}, true, "P1",
+			[]string{"etki kuralı"}, "sürdü"},
+		{"kapılar on, held yazılmış olsa da etki kuralı muaf → açar", lagGateEv("a", now, 4*time.Minute, 600, 165000, lagImpactEvidence(true, 1200, 4)), pubHeld, true, "P1",
+			[]string{"etki kuralı"}, "sürdü"},
+		{"kapılar on, damgasız lag held → açmaz", lagGateEv("a", now, 10*time.Minute, 600, 165000, `{"source":"vm","dwell":2}`), pubHeld, false, "", nil, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			gs := GroupMLEvents([]chstore.MLEvent{tc.ev}, 10*time.Minute)

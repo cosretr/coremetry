@@ -59,20 +59,25 @@ func TestMergeOffPlanIdentical(t *testing.T) {
 	}
 }
 
+// v0.10.2473 — pasın planı görünüm kipi AYARINA bağlı (bildirim tutması
+// sabitine değil): `shadow` = v0.10.2472 planı bayt bayt; `on` = emme sınırı
+// + küme başlangıcı; `off` = küme / köken yok, graf okuması yok.
 func TestMergeOffShadowPassBlobIdentical(t *testing.T) {
 	_, ps := gMergeFixture()
-	run := func(on bool) chstore.ProblemGraphShadow {
-		defer chstore.SetProblemGraphMergeEnforceForTest(on)()
+	var reads int64
+	run := func(mode string) chstore.ProblemGraphShadow {
+		defer chstore.SetProblemGraphMergeModeForTest(mode)()
 		st := &fakeGraphStore{edges: map[string][]entity.Relation{
 			entity.RelCalls: {{Type: entity.RelCalls, ParentID: "svc:checkout-api", ChildID: ordersDB}}}}
 		s := newGraphShadowState(time.Unix(0, gBase))
 		s.freq = nil
 		runGraphShadow(context.Background(), st, nil, s, ps, chstore.OwnerPolicy{}, time.Unix(0, gBase+101*gMin))
+		reads = s.reads.Relations
 		return st.saved
 	}
-	off := run(false)
-	if off.MergeReport == nil || off.MergeReport.Enforce || off.MergeReport.Joined != 2 {
-		t.Fatalf("rapor kipi kapalı söylemeli, üyeleri saymalı: %+v", off.MergeReport)
+	off := run(chstore.GraphMergeShadow)
+	if off.MergeReport == nil || off.MergeReport.Enforce || off.MergeReport.Mode != chstore.GraphMergeShadow || off.MergeReport.Joined != 2 {
+		t.Fatalf("rapor kipi gölge söylemeli, üyeleri saymalı: %+v", off.MergeReport)
 	}
 	// Kapalı blobun kümeleri, S4 öncesi plan işlevinin (planGraph) kümeleriyle aynı.
 	f := emptyFacts()
@@ -97,9 +102,59 @@ func TestMergeOffShadowPassBlobIdentical(t *testing.T) {
 			t.Fatalf("kapalı blob: %+v", g)
 		}
 	}
-	on := run(true)
-	if on.MergeReport == nil || !on.MergeReport.Enforce {
-		t.Fatalf("rapor kipi açık söylemeli: %+v", on.MergeReport)
+	on := run(chstore.GraphMergeOn)
+	// Görünüm açık; bildirim tutması (Enforce) ayardan BAĞIMSIZ kapalı kalır.
+	if on.MergeReport == nil || on.MergeReport.Mode != chstore.GraphMergeOn || on.MergeReport.Enforce {
+		t.Fatalf("rapor: görünüm on, bildirim tutması kapalı: %+v", on.MergeReport)
+	}
+	if len(on.Groups) != 1 || on.Groups[0].Onset != gBase || !memberByID(on.Groups[0], "p-co-late").Late {
+		t.Fatalf("on: küme başlangıcı + geç katıldı işareti: %+v", on.Groups)
+	}
+	none := run(chstore.GraphMergeOff)
+	if len(none.Groups) != 0 || reads != 0 || none.Units != 0 {
+		t.Fatalf("off: küme yok, graf okuması yok: groups=%d reads=%d units=%d", len(none.Groups), reads, none.Units)
+	}
+}
+
+// v0.10.2473 — zincir: api-gateway → checkout → payments, üçü de sapmış.
+// Tek küme; köken zincirin en derin halkası (payments), kural K-DEEP.
+// İlgisiz servis (search) kendi başına kalır.
+func TestMergeChainOfThreeOneGroupWithOrigin(t *testing.T) {
+	defer chstore.SetProblemGraphMergeModeForTest(chstore.GraphMergeOn)()
+	st := &fakeGraphStore{edges: map[string][]entity.Relation{entity.RelCalls: {
+		{Type: entity.RelCalls, ParentID: "svc:api-gateway", ChildID: "svc:checkout"},
+		{Type: entity.RelCalls, ParentID: "svc:checkout", ChildID: "svc:payments"},
+	}}}
+	ps := []*chstore.Problem{svcProb("p-pay", "payments", 0), svcProb("p-co", "checkout", 2), svcProb("p-gw", "api-gateway", 3),
+		svcProb("p-search", "search", 1)}
+	s := newGraphShadowState(time.Unix(0, gBase))
+	s.freq = nil
+	runGraphShadow(context.Background(), st, nil, s, ps, chstore.OwnerPolicy{}, time.Unix(0, gBase+5*gMin))
+	var chain *chstore.ProblemGraphGroup
+	for i, g := range st.saved.Groups {
+		if g.Entities >= 2 {
+			if chain != nil {
+				t.Fatalf("tek bağlı küme beklenir: %+v", st.saved.Groups)
+			}
+			chain = &st.saved.Groups[i]
+		}
+		if g.Entities >= 2 && memberByID(g, "p-search").ProblemID != "" {
+			t.Fatalf("ilgisiz servis kümeye girmemeli: %+v", g)
+		}
+	}
+	if chain == nil || chain.Entities != 3 || len(chain.Members) != 3 || chain.OwnerID != "p-pay" {
+		t.Fatalf("zincir tek küme, sahip en erken başlayan: %+v", chain)
+	}
+	o := chain.Origin
+	if o == nil || o.Entity != "svc:payments" || o.Rule != chstore.OriginRuleDeep || o.Confidence != chstore.OriginWeak {
+		t.Fatalf("köken en derin halka (K-DEEP, tek kural): %+v", o)
+	}
+	std := chstore.StdOriginOf(*chain, "p-gw")
+	if std == nil || std.Name != "payments" || std.Rule != chstore.OriginRuleDeep || std.Entities != 3 || std.Self {
+		t.Fatalf("manşet kökeni: %+v", std)
+	}
+	if self := chstore.StdOriginOf(*chain, "p-pay"); self == nil || !self.Self {
+		t.Fatalf("kökenin kendi Problem'i Self işaretli: %+v", self)
 	}
 }
 

@@ -93,7 +93,13 @@ func TestCosreV2ChatGoldenLoop(t *testing.T) {
 	if n := len(llm.calls()); n != 2 {
 		t.Fatalf("model %d kez çağrıldı, 2 bekleniyordu", n)
 	}
-	compareChatGolden(t, "v2_loop.sse", normalizeChatStream(w.Body.String()))
+	// v0.10.2473 — ara durum cümlesi varsayılan açık: tek geçici data-status;
+	// onun dışında akış altınla bayt bayt aynı.
+	body := normalizeChatStream(w.Body.String())
+	if got := statusTexts(t, body); len(got) != 1 {
+		t.Fatalf("varsayılan ayarda tek ara cümle bekleniyordu: %q", got)
+	}
+	compareChatGolden(t, "v2_loop.sse", withoutStatus(body))
 }
 
 func assertV2Headers(t *testing.T, w *httptest.ResponseRecorder) {

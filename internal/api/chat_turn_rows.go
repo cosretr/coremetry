@@ -48,6 +48,9 @@ const (
 	rowKindEndpoint = "endpoint"
 	rowKindService  = "service"
 	rowKindTrace    = "trace"
+	// v0.10.2473 — top-N operasyon listesi ve pod listesi.
+	rowKindOperation = "operation"
+	rowKindPod       = "pod"
 )
 
 // chatRow — son turun kartta gösterilen bir satırı.
@@ -168,6 +171,53 @@ func serviceRows(names []string) []chatRow {
 	return out
 }
 
+// operationRows — SAF (v0.10.2473): servisin sıralı operasyonları → satırlar.
+// Kimlik endpoint ile aynı biçim: servis varlığı + operasyon adı.
+func operationRows(service string, ops []string) []chatRow {
+	service = strings.TrimSpace(service)
+	if service == "" {
+		return nil
+	}
+	var out []chatRow
+	for _, op := range ops {
+		op = strings.TrimSpace(op)
+		if op == "" || len(out) >= chatRowsMax {
+			continue
+		}
+		out = append(out, chatRow{Kind: rowKindOperation, Name: clipRunes(op, chatRowNameRunes), ID: endpointRowID(service, op), Service: service})
+	}
+	return out
+}
+
+// podRowIn — pod listesinin bir satırı. ClusterID + Namespace biliniyorsa
+// (Thanos / kube-state) kimlik entity.PodID; yalnız OTel örnek kimliği
+// (host_name) varsa servis varlığı + örnek adı.
+type podRowIn struct {
+	Service, Pod, ClusterID, Namespace string
+}
+
+// podRows — SAF (v0.10.2473): gösterilen sırayla pod satırları.
+func podRows(in []podRowIn) []chatRow {
+	var out []chatRow
+	for _, p := range in {
+		pod, svc := strings.TrimSpace(p.Pod), strings.TrimSpace(p.Service)
+		if pod == "" || len(out) >= chatRowsMax {
+			continue
+		}
+		var id string
+		switch {
+		case p.ClusterID != "" && p.Namespace != "":
+			id = entity.PodID(p.ClusterID, p.Namespace, pod)
+		case svc != "":
+			id = endpointRowID(svc, pod)
+		default:
+			continue // kimliksiz satır saklanmaz
+		}
+		out = append(out, chatRow{Kind: rowKindPod, Name: clipRunes(pod, chatRowNameRunes), ID: id, Service: svc})
+	}
+	return out
+}
+
 // stepSummary — SAF: step-result olayının tek satırlık özeti ("" = adım değil).
 func stepSummary(payload any) string {
 	var m struct {
@@ -211,6 +261,14 @@ func (t *chatStateTurn) noteEvent(kind string, payload any) {
 	if rows := rowsFromEvent(kind, payload); len(rows) > 0 {
 		t.rows = rows
 	}
+}
+
+// noteRows — bundle'ın yapısal listesi (top-N operasyon, pod); ilk liste kazanır.
+func (t *chatStateTurn) noteRows(rows []chatRow) {
+	if t == nil || len(t.rows) > 0 || len(rows) == 0 {
+		return
+	}
+	t.rows = rows
 }
 
 // serviceListIntents — cevabı GÖSTERİLEN sırayla bir servis listesi olan
@@ -418,6 +476,10 @@ type rowPickTurn struct {
 	Route   string // endpoint rotası (kartın İncele turu)
 	Trace   string // açılacak trace
 	RangeS  int64  // endpoint kartının penceresi
+	// v0.10.2473
+	Operation string // operasyon kapsamı
+	Pod       string // pod kapsamı
+	Namespace string // pod'un namespace'i (kimlik entity.PodID ise)
 }
 
 // rowPickRequest — SAF: satır + kalan içerik → turun isteği. Kimlik varlık
@@ -447,6 +509,25 @@ func rowPickRequest(r chatRow, rest string) (rowPickTurn, bool) {
 			return rowPickTurn{}, false
 		}
 		return rowPickTurn{Text: with(ref.Name, " nasıl?"), Service: ref.Name}, true
+	case rowKindOperation:
+		svc, op := endpointRowParts(r.ID)
+		if svc == "" {
+			return rowPickTurn{}, false
+		}
+		return rowPickTurn{Text: with(svc+" "+op+" operasyonu", " nasıl?"), Service: svc, Operation: op}, true
+	case rowKindPod:
+		if ref, ok := entity.ParseID(r.ID); ok && ref.Type == entity.TypePod && ref.Name != "" {
+			head := ref.Name + " pod'u"
+			if r.Service != "" {
+				head = r.Service + " " + head
+			}
+			return rowPickTurn{Text: with(head, " nasıl?"), Service: r.Service, Pod: ref.Name, Namespace: ref.Namespace}, true
+		}
+		svc, pod := endpointRowParts(r.ID)
+		if svc == "" {
+			return rowPickTurn{}, false
+		}
+		return rowPickTurn{Text: with(svc+" "+pod+" pod'u", " nasıl?"), Service: svc, Pod: pod}, true
 	}
 	return rowPickTurn{}, false
 }
@@ -454,8 +535,10 @@ func rowPickRequest(r chatRow, rest string) (rowPickTurn, bool) {
 // rowLabelTR — SAF: seçim çipinin etiketi.
 func rowLabelTR(r chatRow) string {
 	switch r.Kind {
-	case rowKindEndpoint:
+	case rowKindEndpoint, rowKindOperation:
 		return r.Service + " " + r.Name
+	case rowKindPod:
+		return "pod " + r.Name
 	case rowKindTrace:
 		return "trace " + r.ID[:min(8, len(r.ID))] + " (" + r.Name + ")"
 	}
@@ -483,7 +566,7 @@ func chatRowsLineTR(rows []chatRow, steps []string) string {
 			line := fmt.Sprintf("- %d. %s %s", i+1, r.Kind, r.Name)
 			if r.Kind == rowKindTrace {
 				line += " · " + r.ID
-			} else if r.Kind == rowKindEndpoint && r.Service != "" {
+			} else if (r.Kind == rowKindEndpoint || r.Kind == rowKindOperation || r.Kind == rowKindPod) && r.Service != "" {
 				line = fmt.Sprintf("- %d. %s %s %s", i+1, r.Kind, r.Service, r.Name)
 			}
 			if !add(line + "\n") {
@@ -551,6 +634,16 @@ func (t *chatStateTurn) applyRowPick(res *stateResolveOut, prev ChatContext, req
 		res.Next.Operation = clipRunes(rq.Route, chatContextOperationMax)
 		if rq.RangeS > 0 && !res.WindowSet && !res.InheritWindow {
 			req.Context.RangeS = rq.RangeS
+		}
+	}
+	if rq.Operation != "" { // v0.10.2473 — operasyon satırı: operasyon kapsamı
+		res.Next.Operation = clipRunes(rq.Operation, chatContextOperationMax)
+		req.Context.Operation = rq.Operation
+	}
+	if rq.Pod != "" { // v0.10.2473 — pod satırı: pod kapsamı
+		res.Next.Pod = rq.Pod
+		if rq.Namespace != "" {
+			res.Next.Namespace = rq.Namespace
 		}
 	}
 	if rq.Trace != "" {

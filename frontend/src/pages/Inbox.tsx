@@ -65,6 +65,7 @@ import {
 } from './inbox/inboxFilters';
 import { inboxCols, capSortLabel, occLine } from './inbox/inboxColumns';
 import { t as tl, tf, useLang } from '@/lib/i18n'; // v0.10.2283 — Türkçe metinler lib/i18n inbox.* (TR aynı)
+import { StdOriginLine } from '@/features/anomalies/StdOriginLine';
 import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub, GraphFrequentChip, GraphClusterMembers, ImpactCell, ConfidenceCell, EvidenceCell } from './inbox/InboxCells';
 
 
@@ -1196,6 +1197,8 @@ export default function InboxPage() {
                       );
                     })()}
                     {it.problem && <GraphRowSub row={graphSum.data?.rows?.[it.problem.id]} folded={!!it.cluster} />}
+                    {/* v0.10.2473 — "Köken: …" (görünüm kipi on; detay başlığıyla aynı çekirdek). */}
+                    {it.problem && <StdOriginLine std={it.std} />}
                     {it.cluster && <GraphClusterMembers cluster={it.cluster} hrefOf={id => inboxRowLink({ to: 'detail', param: 'problem', id }, location.pathname, location.search)} />}
                     <div className="std-ctx">
                       {/* v0.10.2121 — özne Servis, ekip Ekip kolonunda; oluşum sayısı burada. */}

@@ -89,11 +89,26 @@ func (s *Server) getProblemGraphSummary(w http.ResponseWriter, r *http.Request) 
 	if chstore.ProblemGraphFrequentEnforced() {
 		key += ":s5" // v0.10.2342 — kapalıyken anahtar aynı
 	}
+	mode := chstore.ProblemGraphMergeMode() // v0.10.2473 — gövde kipe bağlı: anahtar kipi taşır
+	key += ":mode=" + mode
 	s.serveCached(w, r, key, 15*time.Second, func(ctx context.Context) (any, error) {
 		rep, ok, err := s.store.GetProblemGraphShadow(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return buildProblemGraphSummary(rep, ok), nil
+		return problemGraphSummaryForMode(rep, ok, mode), nil
 	})
+}
+
+// problemGraphSummaryForMode — SAF (v0.10.2473): gölge alt satırı ("köken …
+// · N varlık") yalnız `shadow` kipinde. `on` iken köken satırın standardında
+// (std.origin) ve küme satırın kendi özetinde gelir; `off` iken hiç
+// gösterilmez. Sık tekrar çipi (S3) üç kipte de aynı.
+func problemGraphSummaryForMode(r chstore.ProblemGraphShadow, ok bool, mode string) problemGraphSummaryResponse {
+	if mode != chstore.GraphMergeShadow {
+		r.Groups = nil
+	}
+	out := buildProblemGraphSummary(r, ok)
+	out.Shadow = mode == chstore.GraphMergeShadow
+	return out
 }

@@ -44,11 +44,14 @@ type problemGraphTopGroup struct {
 	Confidence string `json:"confidence,omitempty"`
 }
 
-// problemGraphModes — v0.10.2341: uygulama dilimlerinin kod sabitleri
-// (S4 birleşme, S5 sık tekrar). Ayar değil; rapor yalnız söyler.
+// problemGraphModes — v0.10.2341: bildirim tutması dilimlerinin kod sabitleri
+// (S4 sonradan bağlanan üye, S5 sık tekrar); rapor yalnız söyler.
+// v0.10.2473 — Merge: liste birleştirmesinin görünüm kipi (ayar; off |
+// shadow | on). S4 artık YALNIZ bildirim tutmasını söyler.
 type problemGraphModes struct {
-	S4 bool `json:"s4"`
-	S5 bool `json:"s5"`
+	Merge string `json:"merge"`
+	S4    bool   `json:"s4"`
+	S5    bool   `json:"s5"`
 }
 
 // problemGraphCriterion — v0.10.2341: tasarım §9 geçiş ölçütünün ürün içi
@@ -72,9 +75,9 @@ type problemGraphShadowResponse struct {
 	Criterion problemGraphCriterion `json:"criterion"`
 }
 
-// currentProblemGraphModes — sabitlerin o anki değeri.
+// currentProblemGraphModes — ayarın ve sabitlerin o anki değeri.
 func currentProblemGraphModes() problemGraphModes {
-	return problemGraphModes{S4: chstore.ProblemGraphMergeEnforced(), S5: chstore.ProblemGraphFrequentEnforced()}
+	return problemGraphModes{Merge: chstore.ProblemGraphMergeMode(), S4: chstore.ProblemGraphMergeEnforced(), S5: chstore.ProblemGraphFrequentEnforced()}
 }
 
 // problemGraphCriterionOf — SAF: blob raporu → ölçüt sayıları.
@@ -124,7 +127,8 @@ func buildProblemGraphShadowResponse(r chstore.ProblemGraphShadow, ok bool) prob
 }
 
 func (s *Server) getProblemGraphShadow(w http.ResponseWriter, r *http.Request) {
-	s.serveCached(w, r, "problem-graph-shadow:v4:report", 15*time.Second, func(ctx context.Context) (any, error) {
+	// v0.10.2473 — gövde görünüm kipini söyler (modes.merge): anahtar kipi taşır.
+	s.serveCached(w, r, "problem-graph-shadow:v4:report:mode="+chstore.ProblemGraphMergeMode(), 15*time.Second, func(ctx context.Context) (any, error) {
 		rep, ok, err := s.store.GetProblemGraphShadow(ctx)
 		if err != nil {
 			return nil, err

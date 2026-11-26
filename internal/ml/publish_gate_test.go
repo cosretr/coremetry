@@ -174,12 +174,12 @@ func TestGateVerdictAndReport(t *testing.T) {
 	if k := m["metric_kafka"]; k.NotEvaluated != 2 || k.Invalid != 1 || k.Evaluated != 0 {
 		t.Fatalf("kafka raporu: %+v", k)
 	}
-	line := gateShadowLine(m)
+	line := gateShadowLine(m, chstore.MLGatesShadow)
 	if !strings.Contains(line, "evaluated=3 would_publish=1 would_drop=1 would_info=1 would_telemetry_volume=0 not_evaluated=2 invalid=1") ||
 		!strings.Contains(line, "failed_by_gate=independent_evidence:1,min_volume:1,visible_deviation:1") {
 		t.Fatal(line)
 	}
-	if got := gateShadowLine(nil); !strings.Contains(got, "evaluated=0") {
+	if got := gateShadowLine(nil, chstore.MLGatesShadow); !strings.Contains(got, "evaluated=0") {
 		t.Fatal(got)
 	}
 }
@@ -189,7 +189,7 @@ func TestApplyRecordContractWritesGatesShadow(t *testing.T) {
 	single := gateSingleBucket()
 	b, _ := json.Marshal(single)
 	ev := chstore.MLEvent{ID: "gate-shadow-1", Detector: "op_latency", Class: ClassServiceAnomaly, Record: string(b)}
-	got := applyRecordContract(ev)
+	got := applyRecordContractShadow(ev)
 	if got.PublishState != "" || got.Class != ClassServiceAnomaly {
 		t.Fatalf("gölgede durum değişti: %q %q", got.PublishState, got.Class)
 	}

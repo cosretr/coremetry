@@ -66,9 +66,11 @@ func (s *Server) guidedPodHealthBundle(ctx context.Context, emit func(string, an
 	// v0.10.1250 (operatör: OTel envanteri "0 pod" derken Infrastructure
 	// sekmesi pod'ları Thanos'ta buluyordu) — servis modunda Thanos pod
 	// envanteri + HTTP metrikleri (VM) grafik kartları da eklenir.
+	var th thanosPodsResult
 	if service != "" {
 		nTh := emitGuidedStep(emit, "thanos_pods", `{"service":`+jsonStr(service)+`}`)
-		tev := renderThanosPodsTR(s.guidedThanosPods(ctx, service), service)
+		th = s.guidedThanosPods(ctx, service)
+		tev := renderThanosPodsTR(th, service)
 		emitGuidedStepResult(emit, nTh, "thanos_pods", tev, nil)
 		if tev != "" {
 			ev += tev
@@ -78,7 +80,30 @@ func (s *Server) guidedPodHealthBundle(ctx context.Context, emit func(string, an
 		ev += podHTTPChartFences(service, int64(to.Sub(from).Seconds()))
 		src += " + HTTP metrikleri (VictoriaMetrics)"
 	}
+	stateTurnFrom(ctx).noteRows(podHealthRows(data, th)) // v0.10.2473 — "ikincisini aç" (chat_turn_rows.go)
 	return ev, src, rerr
+}
+
+// podHealthRows — SAF (v0.10.2473): kanıtta İLK listelenen pod'lar, aynı
+// sırayla. Servis modu: OTel envanteri; o boşsa Thanos'un sıralı listesi
+// (entity.PodID). Filo modu: heap sıralaması (servis / pod).
+func podHealthRows(data mcptools.PodHealthData, th thanosPodsResult) []chatRow {
+	var in []podRowIn
+	switch {
+	case data.Service == "":
+		for _, h := range data.Heap {
+			in = append(in, podRowIn{Service: h.Service, Pod: h.Pod})
+		}
+	case len(data.Instances) > 0:
+		for _, r := range data.Instances {
+			in = append(in, podRowIn{Service: data.Service, Pod: r.ID})
+		}
+	default:
+		for _, r := range thanosPodsRanked(th.Rows) {
+			in = append(in, podRowIn{Service: data.Service, Pod: r.Pod, ClusterID: th.CIDs[r.Cluster], Namespace: r.Namespace})
+		}
+	}
+	return podRows(in)
 }
 
 // renderPodHealthEvidenceTR — SAF (veri → metin). İki mod tek yerde:

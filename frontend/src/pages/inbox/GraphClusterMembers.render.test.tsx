@@ -7,12 +7,12 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('uplot', () => ({ default: function UPlot() {} })); // InboxCells → ProblemDetail zinciri; jsdom'da matchMedia yok
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
-import { GraphClusterMembers, RowChips } from './InboxCells';
+import { GraphClusterMembers, RowChips, graphClusterSummary } from './InboxCells';
 import type { InboxCluster, InboxItem } from '@/lib/types';
 
 const cluster: InboxCluster = {
-  ownerId: 'p-db', entities: 2, members: [
-    { problemId: 'p-db', name: 'orders-db', startedAt: 1, owner: true, priority: 'P2' },
+  ownerId: 'p-db', entities: 2, services: 1, problems: 3, members: [
+    { problemId: 'p-db', name: 'orders-db', type: 'database', startedAt: 1, owner: true, priority: 'P2' },
     { problemId: 'p-co', name: 'checkout-api', startedAt: 2, link: 'M-CALL' },
     { problemId: 'p-co-2', name: 'checkout-api', startedAt: 3, link: 'M-SVC', late: true },
   ],
@@ -36,6 +36,40 @@ describe('GraphClusterMembers', () => {
   });
   it('renders nothing without a cluster (S4 off)', () => {
     expect(mount(undefined).innerHTML).toBe('');
+  });
+});
+
+// v0.10.2473 — özet satırı etkilenen servis sayısını ve açılan listedeki
+// Problem sayısını söyler; satır kapalı gelir, tıklayınca açılır / kapanır.
+describe('GraphClusterMembers summary + expand (v0.10.2473)', () => {
+  const tt = (k: string, v: Record<string, string | number>) => `${k}:${JSON.stringify(v)}`;
+  it('service count from the whole cluster; Problem count = listed members', () => {
+    const chain: InboxCluster = {
+      ownerId: 'p-pay', entities: 3, services: 3, problems: 3, members: [
+        { problemId: 'p-pay', name: 'payments', type: 'service', startedAt: 1, owner: true },
+        { problemId: 'p-gw', name: 'api-gateway', type: 'service', startedAt: 2, link: 'M-CALL' },
+        { problemId: 'p-co', name: 'checkout', type: 'service', startedAt: 3, link: 'M-CALL' },
+      ],
+    };
+    expect(graphClusterSummary(chain, tt)).toBe('pg.cluster.summary:{"s":3,"m":3}');
+    // Servis sayısı bilinmiyor (üye tavanı kesti) → varlık sayısı.
+    expect(graphClusterSummary({ ...chain, services: 0 }, tt)).toBe('pg.cluster.summaryEnt:{"n":3,"m":3}');
+    // Süzgeç üyelerden birini eledi: sayılan Problem açılan listeyle aynı.
+    expect(graphClusterSummary({ ...chain, members: chain.members.slice(0, 2) }, tt)).toBe('pg.cluster.summary:{"s":3,"m":2}');
+  });
+  it('collapsed by default, toggles open and closed', () => {
+    const d = document.createElement('div');
+    document.body.appendChild(d);
+    d.innerHTML = renderToStaticMarkup(
+      <MemoryRouter><GraphClusterMembers cluster={cluster} hrefOf={id => ({ to: `/inbox?problem=${id}` })} /></MemoryRouter>);
+    const det = d.querySelector('details[data-testid="pg-cluster"]') as HTMLDetailsElement;
+    expect(det.open).toBe(false);
+    expect(d.querySelector('[data-testid="pg-cluster-summary"]')?.textContent).toMatch(/1 servis etkilendi · 3 Problem|1 services affected · 3 Problems/);
+    (det.querySelector('summary') as HTMLElement).click();
+    expect(det.open).toBe(true);
+    (det.querySelector('summary') as HTMLElement).click();
+    expect(det.open).toBe(false);
+    d.remove();
   });
 });
 

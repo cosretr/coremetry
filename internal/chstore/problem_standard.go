@@ -116,6 +116,11 @@ type ProblemStandard struct {
 	// bildirim / politika / özet bu alanları okumaz.
 	PriorityReason    string  `json:"priorityReason,omitempty"`
 	PriorityReasonMsg *StdMsg `json:"priorityReasonMsg,omitempty"`
+	// Origin — v0.10.2473: bağlı kümenin kökeni ("Köken: <varlık>" + gerekçe).
+	// YALNIZ API okuma yolu doldurur (liste + detay, görünüm kipi `on`);
+	// Standardize* doldurmaz, bildirim / politika / özet görmez. nil = etiket
+	// yok (problem_standard_origin.go).
+	Origin *StdOrigin `json:"origin,omitempty"`
 }
 
 // StdMeasure — birincil etki ölçüsü.

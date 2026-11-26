@@ -11,6 +11,7 @@ import type { NotifyPolicy, NotifyReplayFamily, NotifyReplayReport, NotifyDigest
 import { enforceReadiness, holdLabel, parseDigestTimes, reductionPct } from '@/lib/notifyPolicyForm';
 import { tsCompact } from '@/lib/utils';
 import { FlashBox, SettingsSection, humanize, useSettingsLoad, SettingsLoadError } from './shared';
+import { ProblemGraphMergeSection } from './ProblemGraphMergeSection';
 
 // ── Bildirim politikası (v0.10.1533, Problem standardı R5) ──────────────────
 // Operatör kararları D2–D10 (docs/DECISIONS.md "Problem standardı + triage +
@@ -197,6 +198,9 @@ export function NotifyPolicyTab() {
         </div>
         {msg && <FlashBox kind={msg.kind}>{msg.text}</FlashBox>}
       </SettingsSection>
+
+      {/* v0.10.2473 — liste birleştirmesinin görünüm kipi (bildirimi değiştirmez; ayrı kayıt). */}
+      <ProblemGraphMergeSection />
 
       <SettingsSection title="Replay — son 14 gün"
         description="Geçmiş bildirimler yeni barla yeniden oynatılır: aile başına bugün giden ve yeni barla gidecek açılışlar, tutma nedenleri ve recall (D8).">

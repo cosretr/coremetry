@@ -343,6 +343,7 @@ func TestSeamEnforceOffShadowByteIdentical(t *testing.T) {
 	for _, mode := range []string{chstore.CosreVerifyOff, chstore.CosreVerifyShadow} {
 		setVerification(t, mode)
 		setConversationStyle(t, false)
+		setConversationStatusLine(t, false) // v0.10.2473 — ara cümle ayrı anahtar (altın onsuz)
 		s, _ := newLoopTestServer(t, goldenLoopLLM(t), "u-golden")
 		setCosreV2(t, s, true)
 		(&fakeTools{}).install(t)

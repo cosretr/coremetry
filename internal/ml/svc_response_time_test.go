@@ -1237,7 +1237,7 @@ func TestSvcResponseTimeRecordIsJudgedSeries(t *testing.T) {
 		if want := svcImpactEnd(now, cfg.IngestLagSec); !vm.tos[0].Equal(want) || !vm.tos[1].Equal(want) || !want.Before(now) {
 			t.Fatalf("pencere sonu %s / %s want %s", vm.tos[0], vm.tos[1], want)
 		}
-		ev := applyRecordContract(evs[0])
+		ev := applyRecordContractShadow(evs[0])
 		if ev.PublishState != PublishPublished || evs[1].Record != "" {
 			t.Fatalf("kayıt doğrulayıcıdan geçmeli: %q", ev.PublishState)
 		}

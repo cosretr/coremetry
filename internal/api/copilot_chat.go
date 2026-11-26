@@ -784,10 +784,13 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			return
 		}
 	}
-	if opPre == nil && !ct.On { // v0.10.1461 — kod turu guided'ı atlar (chat_code_turn.go)
+	var guidedEsc *guidedEscalation // v0.10.2473 — guided demeti döngüye devredildi (chat_guided_escalate.go)
+	if opPre == nil && !ct.On {     // v0.10.1461 — kod turu guided'ı atlar (chat_code_turn.go)
 		handled, gok := false, false
 		if !evm.skipGuided() && !apCont.on && rtPlan == nil && !stt.searchFollowUp() && !invSkip { // v0.10.1738 rota turu da; v0.10.1476 — değerlendirme döngü sondası da atlar (chat_eval_mode.go); S5 onay devamı da; v0.10.2356 arama devamı da
+			ctx, gslot := withGuidedEscSlot(ctx) // v0.10.2473 — devir yuvası yalnız bu kademede
 			handled, gok = s.copilotChatGuided(ctx, emit, req.Messages, req.Context.Service, req.Context.Operation, req.Context.Explain, req.Context.RangeS, req.Context.Trace, req.Context.Env, anchorTo, req.Context.TzOffsetMin, req.Context.Tz)
+			guidedEsc = gslot.get()
 		}
 		if handled {
 			cspan.tier("guided", gok)
@@ -828,7 +831,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	}
 	traceSubj, isTraceFollowUp := drawerTraceFollowUp(req.Context.Explain, req.Context.Subject, pageTraceID)
 	if !isTraceFollowUp && !ct.On && opPre == nil { // v0.10.1461 — kod turu da orta kademeleri atlar
-		if !invSkip && !apCont.on && rtPlan == nil { // agent-core S5 — onay devamı orta kademeleri de atlar; v0.10.1738 rota turu da
+		if !invSkip && guidedEsc == nil && !apCont.on && rtPlan == nil { // agent-core S5 — onay devamı orta kademeleri de atlar; v0.10.1738 rota turu da; v0.10.2473 guided devri de
 			// v0.10.1571 — kaynak sorusu (chat_clarify.go): telemetri şekilli soru
 			// guided'a oturmadı ve wiki gerçek bir alternatif → yalnız "Coremetry
 			// verisinde mi, wikide mi?" sorulur (düz metin, LLM'siz). Kapı kapalıysa
@@ -1112,6 +1115,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.2378 — döngü profilinin kanıt ölçeği (evidence_scale.go).
 	evScale := s.evidenceScale(ctx)
 	conv := opPre.seedScaled(req.Messages, evScale) // operasyon ön-getirmesi varsa tool kaydı (nil → aynen)
+	conv = guidedEsc.seedScaled(conv, evScale)      // v0.10.2473 — guided demeti devredildiyse tool kaydı (nil → aynen)
+	dm.loopScale = evScale                          // v0.10.2473 — döngü bütçesi kanıt ölçeğiyle (chat_deep.go)
 	// Taşma yeniden denemesi TEK sefer: ikinci bir deneme aynı duvara
 	// bir çağrı daha yakar (kod-explain'in `hb == block` kontrolüyle
 	// aynı gerekçe).
@@ -1119,8 +1124,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.29 — döngü boyunca çağrılan araçlar; cevabın altındaki
 	// deterministik "Kaynak:" künyesini besliyor (chat_source_note.go).
 	var calledTools []string
-	noteOffered := false // v0.10.1169 — tur başına en çok bir "probleme not" aksiyonu
-	hypOffered := false  // v0.10.1288 — tur başına en çok bir "hipotezi doğrula" aksiyonu
+	calledTools = append(calledTools, guidedEsc.seededTools()...) // v0.10.2473 — devredilen demet künyede (nil → yok)
+	noteOffered := false                                          // v0.10.1169 — tur başına en çok bir "probleme not" aksiyonu
+	hypOffered := false                                           // v0.10.1288 — tur başına en çok bir "hipotezi doğrula" aksiyonu
 	// v0.10.1291 — kural-türevli takip çiplerinin olguları (chat_followup_chips.go);
 	// yalnız başarılı, veri döndüren araç sonuçlarından toplanır.
 	fuFacts := opPre.followupFacts() // v0.10.1331 Exceptions grubu + v0.10.1388 "<op> örnek trace topolojisi" (nil → yok)
@@ -1421,7 +1427,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	finalAnswerText := func(turn copilot.ChatTurn, prompt string, round int) string {
 		loopRounds.answer(turn.TTFTMs) // v0.10.2318 — cevap turunun ilk token'ı
 		ca := cleanChatAnswer(turn.Text, echoPhrases)
-		hadEvidence := len(calledTools) > 0 || opPre != nil
+		hadEvidence := len(calledTools) > 0 || opPre != nil || guidedEsc != nil
 		v := chatDegenDecide(turn.Degenerated || ca.Repeated, ca.Dropped, ca.Text, hadEvidence, dm.On, false)
 		if v == degenUsable {
 			return ca.Text
@@ -1453,6 +1459,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		if opPre != nil {
 			pre = opPre.summary()
 			calledTools = append(calledTools, opPrefetchTool) // künye: özet ön-getirmeden geliyor
+		} else if guidedEsc != nil { // v0.10.2473 — künyede zaten (calledTools)
+			pre = guidedEsc.summary()
 		}
 		return chatDegenFallbackAnswer(pre, stepDigests)
 	}
@@ -1479,7 +1487,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		conv = s.applyRedirect(ctx, emit, apCont.rd, conv, exchangeID) // v0.10.2368 — I2 (nil → aynen)
 	}
 	conv, calledTools = s.chatInvestigate(ctx, emit, investigateTurn{Question: lastUserText(req.Messages), State: cst.ctx, Service: investigateService(stt, req.Context.Service), // v0.10.2361 — S4 kanıt paketi
-		Blocked: rtPlan != nil || isTraceFollowUp || req.Context.Explain != "" || dm.On || ct.On || apCont.on || opPre != nil, RangeS: int64(req.Context.RangeS), To: anchorTo}, conv, calledTools)
+		Blocked: rtPlan != nil || isTraceFollowUp || req.Context.Explain != "" || dm.On || ct.On || apCont.on || opPre != nil || guidedEsc != nil, RangeS: int64(req.Context.RangeS), To: anchorTo}, conv, calledTools)
 	var apPending *pendingApproval // bu turda onay isteyen çağrı (tur sonunda jeton basılır)
 	var statusLine chatStatusLine  // v0.10.2333 — F1 ara durum cümlesi (chat_status_line.go)
 	for round := 0; round < maxRounds; round++ {
@@ -1998,7 +2006,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// eklenir (explain yolunun sözleşmesi); okunmadıysa bayt bayt eski örnek.
 	// v0.10.2134 (router boşlukları D1) — ön-getirme / rota planı tohumlu döngü
 	// "chat-prefetch" yazar (boşluk sayılmaz); profil sabit, yalnız etiket.
-	s.copilot.RecordUsage(copilot.WithLoopUsage(copilot.WithCallID(s.loopRecordCtx(ctx, opPre != nil || rtPlan != nil), loopCallID), psplit.mark(rbudget.mark(rretry.mark(cspan.withLoopTimes(loopRounds.usage()))))), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
+	s.copilot.RecordUsage(copilot.WithLoopUsage(copilot.WithCallID(s.loopRecordCtx(ctx, opPre != nil || rtPlan != nil || guidedEsc != nil), loopCallID), psplit.mark(rbudget.mark(rretry.mark(cspan.withLoopTimes(loopRounds.usage()))))), chatT0, totalIn, totalOut, totalCached, status, errMsg, chatPromptSample(lastUserText(req.Messages), codeReads), finalText)
 
 	if exitReason == stopNone {
 		exitReason = stopRoundCap // savunma: döngü break'siz yalnız turlar bitince biter

@@ -210,7 +210,9 @@ func (s *Server) getProblemStandard(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "ref=<problem|exception|anomaly|incident>:<id> zorunlu")
 		return
 	}
-	s.serveCached(w, r, problemStandardKey(ref), problemStandardTTL, func(ctx context.Context) (any, error) {
+	// v0.10.2473 — gövde görünüm kipine bağlı (köken alanı): anahtar kipi taşır.
+	key := problemStandardKey(ref) + inboxGraphKeySuffix(chstore.ProblemGraphMergeOn())
+	s.serveCached(w, r, key, problemStandardTTL, func(ctx context.Context) (any, error) {
 		src, incProblems, err := s.loadStdSrc(ctx, kind, id)
 		if err != nil {
 			return nil, err
@@ -240,6 +242,9 @@ func (s *Server) getProblemStandard(w http.ResponseWriter, r *http.Request) {
 		if std := items[0].Std; std != nil && src.problem != nil {
 			// v0.10.2300 (S3) — detay başlığının öncelik gerekçesi anahtarı.
 			std.PriorityReason, std.PriorityReasonMsg = src.problem.PriorityReason, src.problem.PriorityReasonMsg
+			// v0.10.2473 — bağlı kümenin kökeni (liste satırıyla aynı alan,
+			// aynı kural; kip on değilse / köken yoksa nil).
+			std.Origin = s.problemGraphOrigin(ctx, src.problem.ID)
 		}
 		return items[0].Std, nil
 	})

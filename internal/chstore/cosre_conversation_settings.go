@@ -85,6 +85,10 @@ type CosreConversation struct {
 	BannedPhrases []string `json:"bannedPhrases,omitempty"` // v0.10.2338 — D: varsayılan kalıp listesine ek
 	Interaction   string   `json:"interaction"`             // v0.10.2353 — I5: off | on
 	Evidence      string   `json:"evidence"`                // v0.10.2355 — S1: off | shadow | on
+	// StatusLine — v0.10.2473: araç turu başında deterministik ara durum
+	// cümlesi (api/chat_status_line.go). `style`tan ayrıldı; varsayılan AÇIK,
+	// alanı taşımayan eski blob da açık (kayıtlı açık değer kazanır).
+	StatusLine bool `json:"statusLine"`
 	// VerificationRev — v0.10.2439: doğrulama kipinin yazıldığı varsayılan
 	// kuşağı. SaveCosreConversation her yazımda cosreVerifyRev yazar.
 	VerificationRev int       `json:"verificationRev,omitempty"`
@@ -146,9 +150,10 @@ func clipCosreBannedPhrases(in []string) []string {
 const cosreVerifyRev = 1
 
 // DefaultCosreConversation — blob yokken geçerli ayar: durum AÇIK, üslup
-// kapalı, doğrulama ZORLA (v0.10.2439; önce gölge), kanıt kapalı (v0.10.2355).
+// kapalı, doğrulama ZORLA (v0.10.2439; önce gölge), kanıt kapalı (v0.10.2355),
+// ara durum cümlesi AÇIK (v0.10.2473).
 func DefaultCosreConversation() CosreConversation {
-	return CosreConversation{State: true, Verification: CosreVerifyEnforce, Interaction: CosreInteractionOff, Evidence: CosreEvidenceOff}
+	return CosreConversation{State: true, Verification: CosreVerifyEnforce, Interaction: CosreInteractionOff, Evidence: CosreEvidenceOff, StatusLine: true}
 }
 
 // ValidCosreVerification — SAF: kapalı küme.
@@ -195,6 +200,7 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 		BannedPhrases []string  `json:"bannedPhrases"`
 		Interaction   string    `json:"interaction"`
 		Evidence      string    `json:"evidence"`
+		StatusLine    *bool     `json:"statusLine"` // v0.10.2473 — yoksa varsayılan (açık)
 		VerifyRev     int       `json:"verificationRev"`
 		UpdatedBy     string    `json:"updatedBy"`
 		UpdatedAt     time.Time `json:"updatedAt"`
@@ -207,6 +213,9 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 		out.State = *in.State
 	}
 	out.Style = in.Style
+	if in.StatusLine != nil {
+		out.StatusLine = *in.StatusLine
+	}
 	if ValidCosreVerification(in.Verification) {
 		out.Verification = in.Verification
 	}

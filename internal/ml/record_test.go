@@ -270,21 +270,21 @@ func TestApplyRecordContract(t *testing.T) {
 	before := global.recordInvalidCopy()["op_latency"]
 	// Kaydı olmayan (eski / H1'deki her) olay aynen geçer.
 	old := chstore.MLEvent{ID: "x", Detector: "op_latency", Observed: 107}
-	if got := applyRecordContract(old); got != old {
+	if got := applyRecordContractShadow(old); got != old {
 		t.Fatalf("eski olay değişti: %+v", got)
 	}
 	ok, _ := json.Marshal(example2Fixed())
 	ev := chstore.MLEvent{ID: "y", Detector: "op_latency", Record: string(ok)}
-	if got := applyRecordContract(ev); got.PublishState != "" {
+	if got := applyRecordContractShadow(ev); got.PublishState != "" {
 		t.Fatalf("geçen kayıt işaretlendi: %q", got.PublishState)
 	}
 	bad, _ := json.Marshal(example2Today())
 	ev.Record = string(bad)
-	if got := applyRecordContract(ev); got.PublishState != PublishInvalid {
+	if got := applyRecordContractShadow(ev); got.PublishState != PublishInvalid {
 		t.Fatalf("kalan kayıt invalid olmalı: %q", got.PublishState)
 	}
 	ev.Record = "{"
-	if got := applyRecordContract(ev); got.PublishState != PublishInvalid {
+	if got := applyRecordContractShadow(ev); got.PublishState != PublishInvalid {
 		t.Fatalf("çözülemeyen kayıt invalid olmalı: %q", got.PublishState)
 	}
 	if n := global.recordInvalidCopy()["op_latency"] - before; n != 2 {

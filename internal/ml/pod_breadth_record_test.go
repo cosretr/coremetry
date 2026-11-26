@@ -96,7 +96,7 @@ func TestPodOutlierRecordInvalidWhenPodInBand(t *testing.T) {
 		t.Fatal("kayıt kurulmalı")
 	}
 	raw, _ := json.Marshal(rec)
-	if ev := applyRecordContract(chstore.MLEvent{ID: "x", Detector: detTracePodOutlier, Record: string(raw), PublishState: PublishPublished}); ev.PublishState != PublishInvalid {
+	if ev := applyRecordContractShadow(chstore.MLEvent{ID: "x", Detector: detTracePodOutlier, Record: string(raw), PublishState: PublishPublished}); ev.PublishState != PublishInvalid {
 		t.Fatalf("geçersiz kayıt yayımlanmamalı: %q", ev.PublishState)
 	}
 }
@@ -164,7 +164,7 @@ func TestBreadthRecordInvalidWithoutPreOnsetHistory(t *testing.T) {
 	ev := breadthEvent("svc-a", nil, breadthRun{since: t0, ticks: 2}, t0.Add(5*time.Minute), chstore.MLConfig{BucketSec: 300})
 	evs := []chstore.MLEvent{ev}
 	attachBreadthRecords(h, chstore.MLConfig{BucketSec: 300}, evs, false, func(string) time.Time { return t0.Add(5 * time.Minute) }, t0.Add(time.Hour))
-	if out := applyRecordContract(evs[0]); evs[0].Record == "" || out.PublishState != PublishInvalid {
+	if out := applyRecordContractShadow(evs[0]); evs[0].Record == "" || out.PublishState != PublishInvalid {
 		t.Fatalf("geçersiz kayıt yayımlanmamalı: %q", out.PublishState)
 	}
 }

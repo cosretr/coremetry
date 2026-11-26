@@ -236,6 +236,38 @@ type MLConfig struct {
 	// anahtar; nil = AÇIK (varsayılan), false = yalnız gölge kaydı. İşaretçi
 	// + omitempty: ConfigHash'e girmez (tespit ayarı değil).
 	GroupProblems *bool `json:"groupProblems,omitempty"`
+	// PublishGates — v0.10.2473 (operatör kararı 2026-11-26): gürültü
+	// kapılarının kipi, off | shadow | on. "" = varsayılan (on); kayıtlı açık
+	// değer kazanır. omitempty: ConfigHash'e girmez (tespit ayarı değil —
+	// olay aynı üretilir, yalnız liste ve Problem adaylığı değişir).
+	PublishGates string `json:"publishGates,omitempty"`
+}
+
+// Gürültü kapısı kipleri (MLConfig.PublishGates). off: kapılar hiç
+// değerlendirilmez; shadow: sonuç yalnız kayda ve rapora yazılır; on: hacim /
+// mutlak fark / görünür sapma kapısında kalan olay ana listede görünmez ve
+// Problem adayı olmaz (Elenenler'de nedeniyle okunur).
+const (
+	MLGatesOff    = "off"
+	MLGatesShadow = "shadow"
+	MLGatesOn     = "on"
+)
+
+// NormalizeMLGatesMode — SAF: tanınmayan / boş değer "" (= varsayılan).
+func NormalizeMLGatesMode(m string) string {
+	switch m {
+	case MLGatesOff, MLGatesShadow, MLGatesOn:
+		return m
+	}
+	return ""
+}
+
+// PublishGatesMode — SAF: yürürlükteki kip; kayıtlı değer yoksa on.
+func (c MLConfig) PublishGatesMode() string {
+	if m := NormalizeMLGatesMode(c.PublishGates); m != "" {
+		return m
+	}
+	return MLGatesOn
 }
 
 // GroupProblemsOn — SAF: ana anahtar VE grup → Problem anahtarı (nil = açık).
@@ -356,6 +388,7 @@ func NormalizeMLConfig(c MLConfig) MLConfig {
 	if c.MinBaselineRate < 0 || c.MinBaselineRate > 1e6 {
 		c.MinBaselineRate = d.MinBaselineRate
 	}
+	c.PublishGates = NormalizeMLGatesMode(c.PublishGates)
 	if c.Detectors == nil {
 		c.Detectors = map[string]bool{}
 	}
@@ -383,6 +416,7 @@ func (c MLConfig) ConfigHash() string {
 	n := NormalizeMLConfig(c)
 	n.Baseline = nil      // v0.10.1814: gözlem işi tespit ayarı değil
 	n.GroupProblems = nil // v0.10.2052: Problem anahtarı tespit ayarı değil
+	n.PublishGates = ""   // v0.10.2473: kapı kipi tespit ayarı değil
 	raw, _ := json.Marshal(n)
 	h := fnv.New64a()
 	_, _ = h.Write(raw)

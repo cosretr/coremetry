@@ -65,7 +65,26 @@ func inboxRowsFrom(items []InboxItem) []mcptools.InboxRow {
 			ID: it.ID, Kind: it.Kind, Priority: it.Priority, Severity: it.Severity, Service: it.Service,
 			Title: it.Title, Reason: mcptools.InboxReason(it.PriorityReason, it.Title),
 			Status: it.Status, StartedAtNs: it.StartedAt, SinceUnix: it.StartedAt / 1e9, PageURL: inboxRowHref(it),
+			Linked: inboxLinkedEntities(it),
 		})
+	}
+	return out
+}
+
+// inboxLinkedEntities — SAF (v0.10.2473): katlanan kümede satırın kendi
+// Problem'i dışındaki üyelerin FARKLI varlık adları (üye sırası). Küme yoksa nil.
+func inboxLinkedEntities(it InboxItem) []string {
+	if it.Cluster == nil || it.Problem == nil {
+		return nil
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, m := range it.Cluster.Members {
+		if m.ProblemID == it.Problem.ID || m.Name == "" || seen[m.Name] {
+			continue
+		}
+		seen[m.Name] = true
+		out = append(out, m.Name)
 	}
 	return out
 }

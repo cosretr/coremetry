@@ -65,6 +65,11 @@ type InboxRow struct {
 	StartedAtNs int64  `json:"-"`
 	SinceUnix   int64  `json:"since_unix"`
 	PageURL     string `json:"page_url,omitempty"`
+	// Linked — v0.10.2473: satır bağlı bir kümeyi katlıyorsa (Problems listesi
+	// görünüm kipi `on`) kümede bu satıra katlanan DİĞER varlıkların adları.
+	// Sayım listeyle aynı (küme = bir satır); katlanan Problem'ler kaybolmaz,
+	// burada adlarıyla görünür. Katlama yoksa alan yok.
+	Linked []string `json:"linked_entities,omitempty"`
 }
 
 // InboxOpenResult — okumanın sonucu (Total = tavandan önceki aday sayısı).

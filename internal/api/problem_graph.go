@@ -35,8 +35,10 @@ func (s *Server) registerProblemGraphRoutes(mux *http.ServeMux) {
 
 // problemGraphResponse — sayfanın tek ihtiyacı.
 type problemGraphResponse struct {
-	ProblemID  string                         `json:"problemId"`
-	Shadow     bool                           `json:"shadow"` // her zaman true: gölge hesap
+	ProblemID string `json:"problemId"`
+	Shadow    bool   `json:"shadow"` // gölge önizleme (kip `on` iken false: liste gerçekten katlanıyor)
+	// Mode — v0.10.2473: görünüm kipi (off | shadow | on); sayfa notunu buna göre yazar.
+	Mode       string                         `json:"mode,omitempty"`
 	At         int64                          `json:"at,omitempty"`
 	OwnerID    string                         `json:"ownerId,omitempty"`
 	Entities   int                            `json:"entities"`
@@ -80,17 +82,36 @@ func buildProblemGraphResponse(r chstore.ProblemGraphShadow, ok bool, id string)
 	return out
 }
 
+// graphBlobForMode — SAF (v0.10.2473): görünüm kipine göre blob. `off` iken
+// kümeler hiç gösterilmez (lider bir sonraki tikte zaten kümesiz yazar; bu
+// süzgeç ayar değişimini beklemeden uygular). Sık tekrar kararları (S3) ayrı
+// özelliktir, kalır.
+func graphBlobForMode(r chstore.ProblemGraphShadow, mode string) chstore.ProblemGraphShadow {
+	if mode == chstore.GraphMergeOff {
+		r.Groups = nil
+	}
+	return r
+}
+
+// problemGraphForMode — SAF: kipe göre Problem'in görünümü.
+func problemGraphForMode(r chstore.ProblemGraphShadow, ok bool, id, mode string) problemGraphResponse {
+	out := buildProblemGraphResponse(graphBlobForMode(r, mode), ok, id)
+	out.Mode, out.Shadow = mode, mode != chstore.GraphMergeOn
+	return out
+}
+
 func (s *Server) getProblemGraph(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
 		writeJSONError(w, http.StatusBadRequest, "problem id required")
 		return
 	}
-	s.serveCached(w, r, problemGraphKey(id), 15*time.Second, func(ctx context.Context) (any, error) {
+	mode := chstore.ProblemGraphMergeMode() // v0.10.2473 — gövde kipe bağlı: anahtar kipi taşır
+	s.serveCached(w, r, problemGraphKey(id)+":mode="+mode, 15*time.Second, func(ctx context.Context) (any, error) {
 		rep, ok, err := s.store.GetProblemGraphShadow(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return buildProblemGraphResponse(rep, ok, id), nil
+		return problemGraphForMode(rep, ok, id, mode), nil
 	})
 }

@@ -2,31 +2,32 @@ package chstore
 
 // problem_graph_enforce.go — v0.10.2341 (entity grafı ile Problem birleştirme
 // S4, docs/problems/entity-graph-merge-design.md §2, §7, §9): "birleşmeyi
-// uygula" dilimi. KAPALI GELİR.
+// uygula" diliminin BİLDİRİM yarısı. KAPALI GELİR.
 //
-// Tek anahtar problemGraphMergeEnforce (kod sabiti, ayar YOK; tasarımın geri
-// alma sütunu: "tek sabit kapatılır"). false iken hiçbir kod yolu değişmez:
-// Problems listesi, menü sayacı, bildirim kararları, özet, webhook / MCP
-// gövdeleri bugünküyle bayt bayt aynı. true iken:
-//   - Problems listesi bağlı kümeyi tek satırda katlar (api inbox_graph_fold.go),
-//     sayaç kümeyi sayar (rozet aynı boru hattını okur);
-//   - sonradan bağlanan üyenin açılış bildirimi NotifiableAt'ın `merged`
-//     tutma koduyla tutulur (notify enforce yolu, mevcut politika); P1 ve
-//     şiddet artışı baypas eder;
-//   - emme sınırı (90 dk, yalnız servisler arası; aynı serviste "geç katıldı"
-//     işareti) küme kurulumunda uygulanır (evaluator problem_graph.go).
+// v0.10.2473 — dilim ikiye ayrıldı:
+//   - GÖRÜNÜM (Problems listesi bağlı kümeyi tek satırda katlar, sayaç kümeyi
+//     sayar, manşete köken yazılır; emme sınırı — 90 dk, yalnız servisler
+//     arası; aynı serviste "geç katıldı" işareti — küme kurulumunda uygulanır)
+//     artık operatör ayarı: problem_graph_merge_setting.go, varsayılan `on`.
+//   - BİLDİRİM (sonradan bağlanan üyenin açılış bildirimi NotifiableAt'ın
+//     `merged` tutma koduyla tutulur; P1 ve şiddet artışı baypas eder) bu
+//     dosyadaki kod sabitinde kalır: problemGraphMergeEnforce = false. Ayar
+//     bu sabiti DEĞİŞTİRMEZ; false iken bildirim kararları, politika gölge
+//     satırı, özet ve webhook / MCP gövdeleri v0.10.2472 ile bayt bayt aynı.
 // Hiçbir Problem kapatılmaz (karar 1): kapatmak veri onarımı gerektirmez.
 //
-// Açma ölçütü (tasarım §9): en az 7 gün gölge; tutulacak bildirimler arasında
-// sonradan P1'e çıkan / onaylı vakaya dönen SIFIR; yanlış bağ örnekleri
-// operatörce gözden geçirilmiş. Admin gölge raporu bu sayıları gösterir.
+// Bildirim tutmasını açma ölçütü (tasarım §9) DEĞİŞMEDİ: en az 7 gün gölge;
+// tutulacak bildirimler arasında sonradan P1'e çıkan / onaylı vakaya dönen
+// SIFIR; yanlış bağ örnekleri operatörce gözden geçirilmiş. Admin gölge
+// raporu bu sayıları gösterir.
 
 import (
 	"sync/atomic"
 	"time"
 )
 
-// problemGraphMergeEnforce — S4 anahtarı. Açmak = bu satırı true yapmak.
+// problemGraphMergeEnforce — S4 BİLDİRİM TUTMASI anahtarı (v0.10.2473'ten
+// beri yalnız bu; görünüm kipi ayarda). Açmak = bu satırı true yapmak.
 const problemGraphMergeEnforce = false
 
 // problemGraphFrequentEnforce — v0.10.2342 (S5, tasarım §6): "sık tekrar
@@ -81,7 +82,8 @@ const NotifyHoldMerged = "merged"
 // graphMergeOverride — yalnız test kapısı: 0 = sabit, 1 = açık, 2 = kapalı.
 var graphMergeOverride atomic.Int32
 
-// ProblemGraphMergeEnforced — S4 açık mı (sabit; testte kapı).
+// ProblemGraphMergeEnforced — S4 bildirim tutması açık mı (sabit; testte
+// kapı). Görünüm kipi DEĞİL: liste / manşet için ProblemGraphMergeOn().
 func ProblemGraphMergeEnforced() bool {
 	switch graphMergeOverride.Load() {
 	case 1:
@@ -119,7 +121,9 @@ type MergeHold struct {
 
 // ProblemGraphMergeReport — S4 geçiş ölçütü sayaçları (24 sa, lider belleği).
 type ProblemGraphMergeReport struct {
-	Enforce bool `json:"enforce"` // S4 açık mı (yazım anında)
+	Enforce bool `json:"enforce"` // S4 bildirim tutması açık mı (yazım anında)
+	// Mode — v0.10.2473: görünüm kipi (yazım anında; off | shadow | on).
+	Mode string `json:"mode,omitempty"`
 	// Joined — sonradan bağlanan FARKLI üye satırı; WouldHold — bunlardan
 	// açılışı `merged` koduyla tutulacak olanlar (P3 değil, P1 değil, şiddet
 	// artmamış); HeldBecameP1 — tutulacaklardan sonradan P1'e çıkan (hedef 0).

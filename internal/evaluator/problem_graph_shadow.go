@@ -204,7 +204,14 @@ func (e *Evaluator) problemGraphShadow(ctx context.Context, open []*chstore.Prob
 // runGraphShadow — pasın gövdesi (test edilebilir: depo arayüzden).
 func runGraphShadow(ctx context.Context, st graphShadowStore, live GraphLiveSource, s *graphShadowState,
 	open []*chstore.Problem, pol chstore.OwnerPolicy, now time.Time) (graphPlan, bool) {
+	// v0.10.2473 — görünüm kipi (ayar; pas başına TEK okuma, atomik).
+	mode := chstore.ProblemGraphMergeMode()
 	units, kinds := buildGraphUnits(open, pol)
+	if mode == chstore.GraphMergeOff {
+		// Kapalı: küme / köken hesaplanmaz (graf okuması yok, blob kümesiz).
+		// S3 sık tekrar gölgesi tek Problem'lerle sürer.
+		units, kinds = nil, nil
+	}
 	s.reads.Passes++
 	var facts *graphFacts
 	if len(units) < 2 {
@@ -216,9 +223,11 @@ func runGraphShadow(ctx context.Context, st graphShadowStore, live GraphLiveSour
 		}
 		facts = s.factsFor(ctx, st, live, units, now)
 	}
-	// v0.10.2341 (S4): kapalıyken sıfır seçenek = bugünkü plan, bayt bayt.
+	// v0.10.2341 (S4): sıfır seçenek = gölge planı, bayt bayt. v0.10.2473 —
+	// emme sınırı + "geç katıldı" görünüm kipi `on` iken (bildirim tutması
+	// sabiti ProblemGraphMergeEnforced'a BAĞLI DEĞİL; o yol MergeHold'da).
 	var opt graphEnforceOpts
-	if chstore.ProblemGraphMergeEnforced() {
+	if mode == chstore.GraphMergeOn {
 		opt = graphEnforceOpts{On: true, Onset: s.absorb}
 	}
 	plan := planGraphOpts(units, kinds, facts, opt)

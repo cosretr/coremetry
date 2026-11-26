@@ -243,7 +243,7 @@ func TestAnswerStyleLoopPrompt(t *testing.T) {
 	if onMax != float64(answerClassCaps[classErrorHunt]) || (offMax != 0 && offMax <= onMax) {
 		t.Fatalf("max_tokens kapalı %v açık %v", offMax, onMax)
 	}
-	compareChatGolden(t, "v2_loop.sse", offBody)
+	compareChatGolden(t, "v2_loop.sse", withoutStatus(offBody)) // v0.10.2473 — ara cümle style'dan ayrı, varsayılan açık
 	// v0.10.2333 — F1 aynı anahtarla tur başına bir data-status ekler; onun
 	// dışında akış altınla aynı (chat_status_line_test.go withoutStatus).
 	compareChatGolden(t, "v2_loop.sse", withoutStatus(onBody))
@@ -259,6 +259,11 @@ func TestMergeCosreConversationPutStyle(t *testing.T) {
 	}
 	if cur.Style {
 		t.Fatal("varsayılan üslup açık")
+	}
+	// v0.10.2473 — statusLine ayrı alan; style yazımı ona dokunmaz.
+	off := false
+	if g2, err := mergeCosreConversationPut(cur, cosreConversationPut{StatusLine: &off}); err != nil || g2.StatusLine || g2.Style != cur.Style || !cur.StatusLine {
+		t.Fatalf("statusLine yazımı: %+v %v", g2, err)
 	}
 }
 

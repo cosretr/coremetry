@@ -6,7 +6,9 @@ package ml
 // değerlendirilir; sonuç YALNIZ kaydın gates[]'ine ve gölge sayacına yazılır.
 // GÖLGE: hiçbir şey gizlenmez, sınıf/publish_state değişmez, bildirim, Problem
 // terfisi ve kart bugünkü gibi (A2 bunları yürürlüğe koyar). v0.10.2343: A2
-// uygulama yolu publish_gate_enforce.go'da, KAPALI (mlPublishGatesEnforce).
+// uygulama yolu publish_gate_enforce.go'da. v0.10.2473: kip operatör ayarı
+// (off | shadow | on, varsayılan on); uygulanan yalnız üç gürültü kapısı
+// (dropGates), K10 / etki / seri tutarlılığı hiçbir kipte uygulanmaz.
 //
 // Kapılar yalnız KAYDI okur (ek VM/CH/ES sorgusu yok); kayıtta gereken veri
 // yoksa satır NotEvaluable + neden yazılır (Passed=true: değerlendirilemeyen
@@ -41,8 +43,15 @@ const (
 	gateMinIndependent      = 2   // bağımsız kanıt (K10)
 )
 
-// dropGates — kalırsa olay A2'de yayımlanmaz; evidence/impact kalırsa sınıf düşer.
-var dropGates = map[string]bool{GateSeriesConsistency: true, GateVisibleDeviation: true, GateMinVolume: true, GateMinAbsDiff: true}
+// dropGates — UYGULANAN gürültü kapıları (v0.10.2473, operatör kararı
+// 2026-11-26): on kipinde kalırsa olay tutulur (ana listede yok, Problem
+// adayı değil). Diğer satırlar (independent_evidence = K10, service_impact,
+// series_consistency) yalnız kayda ve rapora yazılır, hiçbir kipte uygulanmaz.
+var dropGates = map[string]bool{GateVisibleDeviation: true, GateMinVolume: true, GateMinAbsDiff: true}
+
+// classGates — kalırsa rapor "sınıf info / telemetry_volume olurdu" der
+// (gölge etiketi; satıra hiçbir kipte yazılmaz).
+var classGates = map[string]bool{GateEvidence: true, GateImpact: true}
 
 // K9: kaynağı seriyle aynı olsa da bağımsız sayılan kanıt türleri.
 var independentKinds = map[string]bool{"rollout": true, "confirm": true, "exception": true, "endpoint": true}
@@ -351,22 +360,36 @@ func volumeImpactGate(r EventRecord) RecordGate {
 	return g
 }
 
-// ShadowHeld — SAF (v0.10.2243, Dilim C "Elenenler"): olayın kaydındaki
-// kapı satırlarına göre A2'nin yayımlamayacağı (gölge kararı drop) olay mı.
-// Kayıt yok / çözülemiyor / invalid / kapı satırı yok → false. Yalnız okur:
-// liste, bildirim ve Problem bu karara bakmaz (A1 gölge).
+// HeldGates — SAF (v0.10.2473, "Elenenler" neden sütunu): olayın kaydında
+// KALAN uygulanan kapı satırları (hacim / mutlak fark / görünür sapma), kayıt
+// sırasıyla. Kayıt yok / çözülemiyor / invalid / etki kuralı olayı (muaf) →
+// nil. Satırın Value / Threshold'u nedenin sayısıdır.
+func HeldGates(ev chstore.MLEvent) []RecordGate {
+	if ev.Record == "" || ev.PublishState == PublishInvalid || gateHoldExempt(ev) {
+		return nil
+	}
+	var rec EventRecord
+	if json.Unmarshal([]byte(ev.Record), &rec) != nil {
+		return nil
+	}
+	var out []RecordGate
+	for _, g := range rec.Gates {
+		if dropGates[g.Name] && !g.NotEvaluable && !g.Passed {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+// ShadowHeld — SAF (v0.10.2243, Dilim C "Elenenler"): olay tutuldu mu
+// (on kipinin yazdığı karar) ya da kaydındaki kapı satırlarına göre on
+// kipinde tutulur muydu (shadow). Kayıt yok / çözülemiyor / invalid / kapı
+// satırı yok / etki kuralı olayı → false.
 func ShadowHeld(ev chstore.MLEvent) bool {
 	if ev.Record == "" || ev.PublishState == PublishInvalid {
 		return false
 	}
-	if ev.PublishState == PublishHeld { // v0.10.2343 (A2 açık): yazılmış karar
-		return true
-	}
-	var rec EventRecord
-	if json.Unmarshal([]byte(ev.Record), &rec) != nil || len(rec.Gates) == 0 {
-		return false
-	}
-	return gateVerdict(rec, rec.Gates).Drop
+	return ev.PublishState == PublishHeld || len(HeldGates(ev)) > 0
 }
 
 // gateOutcome — bir olayın gölge sonucu (gölge raporunun birimi).
@@ -379,8 +402,9 @@ type gateOutcome struct {
 	NotEvaluable []string
 }
 
-// gateVerdict — SAF: kapı satırlarından A2'nin yapacağı: drop kapısı kalırsa
-// yayımlanmaz; kanıt ya da etki kalırsa service_anomaly → info.
+// gateVerdict — SAF: kapı satırlarından sonuç: uygulanan kapı (dropGates)
+// kalırsa Drop (on kipinde olay tutulur). Kanıt ya da etki kalırsa WouldClass
+// = info — yalnız rapor etiketi, satıra hiçbir kipte yazılmaz (K10).
 func gateVerdict(r EventRecord, gates []RecordGate) gateOutcome {
 	o := gateOutcome{Evaluated: true}
 	demote := false
@@ -400,9 +424,10 @@ func gateVerdict(r EventRecord, gates []RecordGate) gateOutcome {
 			o.NotEvaluable = append(o.NotEvaluable, g.Name)
 		case !g.Passed:
 			o.Failed = append(o.Failed, g.Name)
-			if dropGates[g.Name] {
+			switch {
+			case dropGates[g.Name]:
 				o.Drop = true
-			} else {
+			case classGates[g.Name]:
 				demote = true
 			}
 		}
@@ -604,7 +629,7 @@ func foldGateShadow(es map[string]gateEntry) map[string]chstore.MLGateShadow {
 }
 
 // gateShadowLine — SAF: tik log satırı, toplamlar + kapı başına kalan.
-func gateShadowLine(m map[string]chstore.MLGateShadow) string {
+func gateShadowLine(m map[string]chstore.MLGateShadow, mode string) string {
 	var t chstore.MLGateShadow
 	failed, notEval := map[string]int64{}, map[string]int64{}
 	for _, r := range m {
@@ -624,9 +649,9 @@ func gateShadowLine(m map[string]chstore.MLGateShadow) string {
 			notEval[k] += v
 		}
 	}
-	return fmt.Sprintf("[ml] tick publish_gates_shadow window=24h evaluated=%d would_publish=%d would_drop=%d would_info=%d would_telemetry_volume=%d not_evaluated=%d invalid=%d failed_by_gate=%s not_evaluable_by_gate=%s would_drop_problem=%d would_drop_escalated=%d enforce=%v",
+	return fmt.Sprintf("[ml] tick publish_gates_shadow window=24h evaluated=%d would_publish=%d would_drop=%d would_info=%d would_telemetry_volume=%d not_evaluated=%d invalid=%d failed_by_gate=%s not_evaluable_by_gate=%s would_drop_problem=%d would_drop_escalated=%d mode=%s",
 		t.Evaluated, t.WouldPublish, t.WouldDrop, t.WouldInfo, t.WouldTelemetryVolume, t.NotEvaluated, t.Invalid, kvLine(failed), kvLine(notEval),
-		t.WouldDropProblem, t.WouldDropEscalated, publishGatesEnforce)
+		t.WouldDropProblem, t.WouldDropEscalated, mode)
 }
 
 func kvLine(m map[string]int64) string {

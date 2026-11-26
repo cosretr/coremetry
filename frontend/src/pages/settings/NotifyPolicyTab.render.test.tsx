@@ -20,6 +20,8 @@ vi.mock('@/lib/api', () => ({
     notifyDigest: async () => ({ items: [], lastSlot: '' }),
     putNotifyPolicy: (b: unknown) => { m.put(b); return Promise.resolve(b); },
     notifyPolicyReplay: async () => null,
+    problemGraphMerge: async () => ({ mode: 'on' }), // v0.10.2473 — aynı sekmedeki birleştirme kipi
+    putProblemGraphMerge: async (mode: string) => ({ mode }),
   },
 }));
 

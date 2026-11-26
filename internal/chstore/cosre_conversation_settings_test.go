@@ -62,6 +62,29 @@ func TestCosreConversationDefaultStateOn(t *testing.T) {
 	}
 }
 
+// v0.10.2473 — ara durum cümlesi style'dan ayrı, varsayılan AÇIK; alanı
+// taşımayan eski blob açık, kayıtlı açık değer kazanır.
+func TestCosreConversationStatusLine(t *testing.T) {
+	if d := DefaultCosreConversation(); !d.StatusLine || d.Style {
+		t.Fatalf("varsayılan %+v", d)
+	}
+	for _, c := range []struct {
+		raw  string
+		want bool
+	}{
+		{``, true},
+		{`{"state":true,"style":false}`, true},
+		{`{"style":true}`, true},
+		{`{"style":true,"statusLine":false}`, false},
+		{`{"statusLine":true}`, true},
+	} {
+		got, ok := parseCosreConversation([]byte(c.raw))
+		if !ok || got.StatusLine != c.want {
+			t.Errorf("%s → %v (ok=%v), beklenen %v", c.raw, got.StatusLine, ok, c.want)
+		}
+	}
+}
+
 // v0.10.2338 (D) — operatörün kalıp ifadeleri: kırpma, tekilleştirme, tavanlar.
 func TestCosreBannedPhrases(t *testing.T) {
 	got, err := NormalizeCosreBannedPhrases([]string{"  Sorunuzu   inceledim ", "", "sorunuzu inceledim", "Kolay gelsin"})

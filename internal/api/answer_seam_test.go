@@ -196,6 +196,7 @@ func TestSeamLoopHandlerStyleOn(t *testing.T) {
 // Üslup kapalıyken v2 akışı bayt bayt altın dosya (sarıcı hiç kurulmaz).
 func TestSeamStyleOffGolden(t *testing.T) {
 	setConversationStyle(t, false)
+	setConversationStatusLine(t, false) // v0.10.2473 — ara cümle ayrı anahtar (altın onsuz)
 	s, _ := newLoopTestServer(t, goldenLoopLLM(t), "u-golden")
 	setCosreV2(t, s, true)
 	ft := &fakeTools{}

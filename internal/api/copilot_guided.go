@@ -2518,6 +2518,11 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		s.slotAsk(ctx, emit, route, question) // v0.10.2332 — tek seçenekli soru kartı (data-question slot); üslup kapalıyken yok
 		return true, true
 	}
+	// v0.10.2473 — çok parçalı / kıyas sorusu demetin ötesini istiyorsa anlatım
+	// yok: demet araç döngüsüne tohumlanır (chat_guided_escalate.go).
+	if tryGuidedEscalate(ctx, emit, route, question, rangeS, evidence) {
+		return false, false
+	}
 	seamDraftEvidence(ctx, evidence, explain) // v0.10.2339 — E2 zorla kipi: taslak cümlesi bu kanıtla denetlenir (kayıt kanıtı değişmez)
 
 	// The ONE self-recording model call, via the surface-explicit

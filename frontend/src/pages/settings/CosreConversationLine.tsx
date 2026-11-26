@@ -64,12 +64,17 @@ export const CONVERSATION_EVIDENCE_HINT =
 
 // v0.10.2331 (audit §6.1 B) — üslup anahtarı: varsayılan KAPALI; operatör
 // incelemeden kullanıcılar görmez. Sonraki dilimler (C, D, F1) aynı anahtarın arkasında.
-// v0.10.2337 — C (örnekle üslup) ve F1 (ara cümle) da bu anahtarın arkasında; metin üçünü söyler.
+// v0.10.2337 — C (örnekle üslup) da bu anahtarın arkasında. v0.10.2473 — F1 (ara cümle)
+// kendi anahtarına ayrıldı (statusLine, varsayılan açık).
 export const CONVERSATION_STYLE_HINT =
-  'Açıkken CoSRE v2 üç şeyi birlikte açar: cevap uzunluğu soru türüne göre (durum sorusuna 1-2 cümle, hata avına 3-5 cümle); '
-  + 'örnek diyaloglarla meslektaş üslubu (özet kutusu, tablo ve kalıp madde yerine tam cümleler; sayılar yine yalnız araçlardan); '
-  + 'araç çalışırken kısa ara durum cümlesi. Raporlar (servis raporu, kaynak incelemesi, trace açıklaması, rota incelemesi) bugünkü gibi kalır. '
+  'Açıkken CoSRE v2 iki şeyi birlikte açar: cevap uzunluğu soru türüne göre (durum sorusuna 1-2 cümle, hata avına 3-5 cümle) ve '
+  + 'örnek diyaloglarla meslektaş üslubu (özet kutusu, tablo ve kalıp madde yerine tam cümleler; sayılar yine yalnız araçlardan). Raporlar (servis raporu, kaynak incelemesi, trace açıklaması, rota incelemesi) bugünkü gibi kalır. '
   + 'Kapalıyken cevaplar bugünkü gibidir. Değerlendirme koşusunda kullanıcılara dokunmadan açık / kapalı denenebilir.';
+
+// v0.10.2473 — ara durum cümlesi: varsayılan AÇIK, üsluptan bağımsız.
+export const CONVERSATION_STATUS_LINE_HINT =
+  'Açıkken CoSRE v2 araç çalışırken cevabın yerinde kısa bir durum cümlesi gösterir ("Loglara bakıyorum…"). '
+  + 'Cümle çağrılan araçtan sunucuda üretilir, model çağrısı yapmaz ve cevaba girmez. Kapalıyken yalnız adım kartı görünür.';
 
 // v0.10.2353 (interaction-audit §6 I5) — etkileşim anahtarı: varsayılan KAPALI.
 export const CONVERSATION_INTERACTION_HINT =
@@ -164,6 +169,10 @@ export function CosreConversationLine() {
     mutationFn: (style: boolean) => api.putCosreConversationStyle(style),
     onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
   });
+  const lm = useMutation({ // v0.10.2473 — ara durum cümlesi
+    mutationFn: (on: boolean) => api.putCosreConversationStatusLine(on),
+    onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
+  });
   const im = useMutation({ // v0.10.2353 — I5 onaylı aksiyon kartı
     mutationFn: (on: boolean) => api.putCosreConversationInteraction(on ? 'on' : 'off'),
     onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
@@ -180,9 +189,10 @@ export function CosreConversationLine() {
   const on = pending && 'state' in pending ? pending.state : q.data.state;
   const verify: VerifyMode = pending && 'verification' in pending ? pending.verification : q.data.verification;
   const styleOn = sm.isPending ? sm.variables === true : q.data.style;
+  const statusLineOn = lm.isPending ? lm.variables === true : q.data.statusLine !== false;
   const interactionOn = im.isPending ? im.variables === true : q.data.interaction === 'on';
   const evidence: EvidenceMode = em.isPending && em.variables ? em.variables : (q.data.evidence ?? 'off');
-  const saveErr = m.error ?? sm.error ?? im.error ?? em.error;
+  const saveErr = m.error ?? sm.error ?? im.error ?? em.error ?? lm.error;
   return (
     <div className="mb-2 flex flex-col gap-2" data-testid="cosre-conversation-line">
       <div className="flex flex-wrap items-center gap-3">
@@ -204,7 +214,7 @@ export function CosreConversationLine() {
           <span className="field-hint">{CONVERSATION_ENFORCE_HINT}</span>
         </div>
         <CheckboxField
-          label="Üslup (CoSRE v2: ölçü, örnekle üslup, ara cümle)"
+          label="Üslup (CoSRE v2: ölçü, örnekle üslup)"
           hint={CONVERSATION_STYLE_HINT}
           checked={styleOn}
           disabled={!canEdit || sm.isPending}
@@ -215,6 +225,12 @@ export function CosreConversationLine() {
           checked={interactionOn}
           disabled={!canEdit || im.isPending}
           onCheckedChange={v => im.mutate(v)} />
+        <CheckboxField
+          label="Ara durum cümlesi (CoSRE v2: araç çalışırken)"
+          hint={CONVERSATION_STATUS_LINE_HINT}
+          checked={statusLineOn}
+          disabled={!canEdit || lm.isPending}
+          onCheckedChange={v => lm.mutate(v)} />
         <div className="flex flex-col gap-1" data-testid="cosre-evidence-mode" title={CONVERSATION_EVIDENCE_HINT}>
           <span className="text-[length:var(--fs-sm)] leading-tight text-(--text2)">Kanıt (kapsam kararı)</span>
           <SegmentedControl
@@ -227,8 +243,8 @@ export function CosreConversationLine() {
           <span className="field-hint">{CONVERSATION_EVIDENCE_HINT}</span>
         </div>
         {!canEdit && <span className="field-hint">Yalnız admin değiştirebilir.</span>}
-        {(m.isPending || sm.isPending || im.isPending || em.isPending) && <Spinner label="Kaydediliyor…" />}
-        {(m.isError || sm.isError || im.isError || em.isError) && (
+        {(m.isPending || sm.isPending || im.isPending || em.isPending || lm.isPending) && <Spinner label="Kaydediliyor…" />}
+        {(m.isError || sm.isError || im.isError || em.isError || lm.isError) && (
           <span role="alert" className="text-[length:var(--fs-sm)] text-(--err)">
             Kaydedilemedi{saveErr instanceof Error && saveErr.message ? `: ${saveErr.message}` : ''}
           </span>

@@ -1,128 +1,92 @@
 package ml
 
-// publish_gate_enforce.go — v0.10.2343, anomali kartı A2 (docs/ml/
-// anomaly-card-audit.md §10 A2, §12 K10/K16): yayın kapılarının UYGULAMA
-// yolu. KAPALI GELİR: mlPublishGatesEnforce false iken hiçbir şey değişmez
-// (yazılan satır, liste, Problem terfisi, bildirim, kart A1 ile bayt bayt
-// aynı — publish_gate_a2_pin_test.go pinler). K16: anahtar, operatör gölge
-// raporunu (/api/ml/scorecard tick.publishGates; Anomaliler › ML › Teknik
-// detay › "Yayın kapıları") okuyup onaylamadan AÇILMAZ. Açılış tek satır:
-// aşağıdaki sabit true.
+// publish_gate_enforce.go — gürültü kapılarının UYGULAMA yolu. v0.10.2343'te
+// kod sabitiyle (mlPublishGatesEnforce = false) kapalı geldi; v0.10.2473
+// (operatör kararı 2026-11-26) sabit operatör ayarı oldu: "ml" blobunda
+// publishGates = off | shadow | on, varsayılan ON (chstore.MLConfig.
+// PublishGatesMode; kayıtlı açık değer kazanır). Kip tik başında ayardan
+// okunur ve bu dosyadaki işlevlere girdi olarak geçer (paket düzeyi durum yok).
 //
-// Açıkken (A2):
-//   - kapı kararı yazılır: drop kapısı kalan olay publish_state=held; kanıt
-//     ya da etki kalan olay class=info (kayıt JSON'undaki sınıf dedektörün
-//     sınıfı kalır — kapılar her tik aynı kayıttan yeniden değerlendirilir);
-//   - liste SQL'i (servis / platform görünümü) held satırı düşürür; olay id
-//     ile ve "Elenenler" görünümünde okunur kalır;
-//   - grup ve servis düzeyi Problem kapısı yalnız YAYIMLANAN service_anomaly
-//     olayını sayar (held / invalid / info / telemetry_volume aday değil);
-//     kaydı olmayan olay kapıdan geçmiş sayılır (A1: değerlendirilemeyen kapı
-//     olayı tutmaz);
-//   - tek sinyal kolu kalır ama tetikleyen olayın evidence[] bağımsız kanıt
-//     sayısı ≥ 2 şartına bağlanır (K10, B16 çözümü);
-//   - bildirim yalnız bu Problem'lerden çıktığı için yalnız yayımlanan
-//     service_anomaly'den gelir.
+//   - off:    kapılar hiç değerlendirilmez (kayda gates[] yazılmaz).
+//   - shadow: v0.10.2472 davranışı — sonuç yalnız record.gates[]'e ve gölge
+//     raporuna yazılır; liste, Problem adaylığı, bildirim aynen
+//     (publish_gate_a2_pin_test.go bayt bayt pinler).
+//   - on:     HACİM (min_volume), MUTLAK FARK (min_abs_diff) ya da GÖRÜNÜR
+//     SAPMA (visible_deviation) kapısında kalan olay publish_state=held
+//     yazılır; ana Anomaliler listesi (servis / platform görünümü) held satırı
+//     düşürür, grup ve servis düzeyi Problem kapısı onu aday saymaz. Olay
+//     kaydı durur: kimliğiyle açılır ve "Elenenler" görünümünde nedeniyle
+//     listelenir.
+//
+// HİÇBİR kipte uygulanmayanlar (yalnız kayda yazılır):
+//   - K10 "≥ 2 bağımsız kanıt" (independent_evidence): operatör kararı
+//     2026-11-19 — tek etki olayı Problem açar. Sınıf info'ya inmez, tek
+//     sinyal kolu kanıt sayısına bakmaz (publish_gate_enforce_test.go TestK10NeverEnforced pinler).
+//   - service_impact ve series_consistency: operatör yalnız üç kapıyı onayladı.
+//
+// ETKİ KURALI OLAYLARI MUAF (impactRuleRun: servis hata oranı, servis yanıt
+// süresi, etki kuralıyla açılmış consumer lag): kendi yük kapıları ve eşikleri
+// var (impact_rule.go); kapı satırları kayda yazılmaya devam eder ama olay
+// hiçbir kipte tutulmaz ve karar beklemeden adaydır (çift kapı yok).
+//
 // Karar olayın SON yazımındaki sonuçtan okunur (kayıt tik sonunda eklenir,
-// terfi kararı ondan önce): yeni olay ilk tikinde Problem adayı değildir
-// (bir tik gecikme; tutulacak olayın bir tiklik Problem + bildirim açması
-// yerine).
+// terfi kararı ondan önce): etki kuralı dışındaki yeni olay ilk tikinde
+// Problem adayı değildir (bir tik gecikme; tutulacak olayın bir tiklik
+// Problem + bildirim açması yerine). Kip açıldığı / lider değiştiği ilk tik
+// karar haritası boştur: o tik kapanış da yapılmaz (aday görünmeyen açık
+// Problem kapanıp bir tik sonra yeniden açılmasın).
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
 
-// mlPublishGatesEnforce — A2 anahtarı (K2: kod sabiti, ayar değil). K16:
-// operatör gölge raporunu onaylamadan true yapılmaz.
-const mlPublishGatesEnforce = false
+// gatesEvaluated / gatesEnforced — SAF: kipin iki sorusu.
+func gatesEvaluated(mode string) bool { return mode != chstore.MLGatesOff }
+func gatesEnforced(mode string) bool  { return mode == chstore.MLGatesOn }
 
-// publishGatesEnforce — testlerin dikiş yeri; üretim yalnız sabiti okur.
-var publishGatesEnforce = mlPublishGatesEnforce
+// PublishGatesCriterion — rapor metni: hangi kipte neyin uygulandığı.
+const PublishGatesCriterion = "Kip ayardan okunur (Settings › Anomaly › ML › Gürültü kapıları: off | shadow | on, varsayılan on). " +
+	"on: hacim (en az 100 çağrı), mutlak fark (en az 25 ms) ya da görünür sapma kapısında kalan olay ana listede görünmez ve Problem adayı olmaz; Elenenler'de nedeniyle okunur. " +
+	"Bağımsız kanıt (K10), servis etkisi ve seri tutarlılığı satırları hiçbir kipte uygulanmaz, yalnız kayda yazılır. " +
+	"Etki kuralı olayları (servis hata oranı, servis yanıt süresi, consumer lag) muaftır."
 
-// PublishGatesEnforced — A2 yürürlükte mi (api liste süzgeci, rapor kipi).
-func PublishGatesEnforced() bool { return publishGatesEnforce }
+// gateHoldExempt — SAF: kapıların hiçbir kipte tutmadığı olay. Etki kuralı
+// aileleri kendi yük kapısı ve eşiğiyle yargılanır (çift kapı yok).
+func gateHoldExempt(ev chstore.MLEvent) bool { return impactRuleRun(ev) }
 
-// PublishGatesCriterion — K16 inceleme ölçütü (rapor ve ekran metni).
-const PublishGatesCriterion = "K16: kapılar, operatör bu gölge raporunu okuyup onaylamadan yürürlüğe girmez. " +
-	"İnceleme: dedektör başına \"tutulurdu\" olaylardan gerçek bir Problem'le çakışan ya da Problem'e dönüşen var mı; " +
-	"varsa örnek olaylar açılıp kapı kararı tek tek doğrulanır. Onaydan sonra açılış tek satır (mlPublishGatesEnforce)."
-
-// PublishGatesMode — rapor kipi metni.
-func PublishGatesMode() string {
-	if publishGatesEnforce {
-		return "A2: açık"
-	}
-	return "A2: kapalı"
-}
-
-// enforceVerdict — SAF: gölge kararının satıra yazımı (yalnız A2 açıkken
-// çağrılır). Drop → held; info → sınıf info. Önceki tikten taşınan held /
-// info, karar değişince geri alınır (yayımlanır / kaydın sınıfı).
-func enforceVerdict(ev chstore.MLEvent, recClass string, o gateOutcome) chstore.MLEvent {
+// enforceVerdict — SAF: kararın satıra yazımı (yalnız on kipinde çağrılır).
+// Uygulanan kapıda kalan olay held; önceki tikten taşınan held karar
+// değişince geri alınır. Sınıfa DOKUNMAZ (K10 / etki satırı uygulanmaz).
+func enforceVerdict(ev chstore.MLEvent, o gateOutcome) chstore.MLEvent {
 	switch {
 	case o.Drop:
 		ev.PublishState = PublishHeld
 	case ev.PublishState == PublishHeld:
 		ev.PublishState = PublishPublished
 	}
-	switch {
-	case o.WouldClass == ClassInfo:
-		ev.Class = ClassInfo
-	case ev.Class == ClassInfo && recClass != ClassInfo:
-		ev.Class = recClass
-	}
 	return ev
 }
 
-// PubVerdict — bir olayın son yazımındaki A2 sonucu (terfi kapısının girdisi).
+// PubVerdict — bir olayın son yazımındaki sonuç (terfi kapısının girdisi).
 type PubVerdict struct {
-	State       string // publish_state ('' = kayıt yok)
-	Class       string // class ('' = kayıt yok)
-	Independent int    // evidence[] bağımsız kanıt sayısı (K9); kayıt yoksa 0
-	At          int64  // unix sn (budama)
+	State string // publish_state ('' = kayıt yok)
+	At    int64  // unix sn (budama)
 }
 
-// pubVerdictOf — SAF: yazılan satırdan terfi girdisi.
-func pubVerdictOf(ev chstore.MLEvent, now time.Time) PubVerdict {
-	v := PubVerdict{State: ev.PublishState, Class: ev.Class, At: now.Unix()}
-	if ev.Record != "" {
-		var rec EventRecord
-		if json.Unmarshal([]byte(ev.Record), &rec) == nil {
-			v.Independent = independentEvidence(rec)
-		}
-	}
-	return v
-}
-
-// problemCandidate — SAF: A2'de olay Problem adayı mı. pub nil = A2 kapalı
-// (her olay aday; bugünkü davranış). Karar yoksa (ilk tik) aday değil.
-// Yayımlanan service_anomaly ya da kaydı olmayan (kapılar değerlendiremez)
-// olay aday; held / invalid / info / telemetry_volume değil.
+// problemCandidate — SAF: olay Problem adayı mı. pub nil = kip on değil (her
+// olay aday; shadow / off davranışı). Etki kuralı olayı her zaman aday (muaf,
+// karar beklemez). Karar yoksa (ilk tik) aday değil; held aday değil. Kaydı
+// olmayan, geçersiz ya da sınıfı farklı olay bugünkü gibi adaydır: yalnız üç
+// gürültü kapısı eler.
 func problemCandidate(e chstore.MLEvent, pub map[string]PubVerdict) bool {
-	if pub == nil {
+	if pub == nil || gateHoldExempt(e) {
 		return true
 	}
 	v, ok := pub[e.ID]
-	if !ok {
-		return false
-	}
-	switch {
-	case v.State == PublishHeld || v.State == PublishInvalid:
-		return false
-	case v.Class != "" && v.Class != ClassServiceAnomaly:
-		return false
-	}
-	return true
-}
-
-// singleArmEvidenceOK — SAF (K10): tek sinyal kolunun tetikleyicisi ≥ 2
-// bağımsız kanıt taşıyor mu. pub nil = A2 kapalı (şart yok).
-func singleArmEvidenceOK(e chstore.MLEvent, pub map[string]PubVerdict) bool {
-	return pub == nil || pub[e.ID].Independent >= gateMinIndependent
+	return ok && v.State != PublishHeld
 }
 
 // publishedCandidates — SAF: servis düzeyi kapının girdisi; pub nil → aynen.
@@ -142,13 +106,13 @@ func publishedCandidates(kept []chstore.MLEvent, pub map[string]PubVerdict) []ch
 // pubVerdictTTL — karar haritasının budama penceresi (gölge raporuyla aynı).
 const pubVerdictTTL = gateShadowWindow
 
-// pubVerdicts — kaydedicinin A2 karar haritası (yalnız A2 açıkken dolar;
-// tik goroutine'i tek yazıcı/okuyucu).
+// pubVerdicts — kaydedicinin karar haritası (yalnız on kipinde dolar; tik
+// goroutine'i tek yazıcı/okuyucu).
 type pubVerdicts map[string]PubVerdict
 
 func (m pubVerdicts) observe(ev chstore.MLEvent, now time.Time) {
 	if ev.ID != "" {
-		m[ev.ID] = pubVerdictOf(ev, now)
+		m[ev.ID] = PubVerdict{State: ev.PublishState, At: now.Unix()}
 	}
 }
 
@@ -161,28 +125,30 @@ func (m pubVerdicts) prune(now time.Time) {
 	}
 }
 
-// publishVerdicts — tik başı: A2 açıksa budanmış karar haritası, kapalıysa
-// nil (terfi kapısı bugünkü gibi).
-func (r *Recorder) publishVerdicts(now time.Time) map[string]PubVerdict {
-	if !publishGatesEnforce {
+// publishVerdicts — tik başı: on kipinde budanmış karar haritası, değilse nil
+// (terfi kapısı shadow / off'taki gibi). warming: harita bu tik kuruldu (kip
+// yeni açıldı ya da lider yeni) — hiçbir olayın kararı yok; çağıran o tik
+// Problem kapatmaz.
+func (r *Recorder) publishVerdicts(now time.Time, mode string) (pub map[string]PubVerdict, warming bool) {
+	if !gatesEnforced(mode) {
 		r.pub = nil
-		return nil
+		return nil, false
 	}
 	if r.pub == nil {
-		r.pub = pubVerdicts{}
+		r.pub, warming = pubVerdicts{}, true
 	}
 	r.pub.prune(now)
-	return r.pub
+	return r.pub, warming
 }
 
-// observePublish — yazılan satırın kararı (yalnız A2 açıkken).
+// observePublish — yazılan satırın kararı (harita yalnız on kipinde dolu).
 func (r *Recorder) observePublish(ev chstore.MLEvent, now time.Time) {
-	if publishGatesEnforce && r.pub != nil {
+	if r.pub != nil {
 		r.pub.observe(ev, now)
 	}
 }
 
-// markGateLinks — K16 raporu: tutulacak olay varsa açık Problem anlık
+// markGateLinks — gölge raporu: tutulacak olay varsa açık Problem anlık
 // görüntüsü (OpenProblemsSnapshot, 5 sn memo — canlı yol aynı tikte zaten
 // okur) ile servis çakışması; ML kararına giriş bellekten. Ek ES / VM yok.
 func (r *Recorder) markGateLinks(ctx context.Context, groups []decidedGroup, svc map[string]SvcShadow) {

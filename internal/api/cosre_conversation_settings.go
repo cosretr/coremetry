@@ -18,6 +18,7 @@ package api
 // v0.10.2338 — `bannedPhrases` (D, answer_seam.go): varsayılan kalıp listesini
 // genişleten ≤40 ifade, her biri ≤80 bayt; tam liste yazılır (boş liste = ek yok).
 // v0.10.2353 — `interaction` off | on (I5 onaylı aksiyon kartı, cosre_actions.go; varsayılan off).
+// v0.10.2473 — `statusLine` (araç turu ara durum cümlesi; style'dan ayrıldı, varsayılan açık).
 // v0.10.2355 — `evidence` off | shadow | on (investigation-design karar 25, S1;
 // varsayılan off): kapsam kararı chat_scope_decision.go.
 
@@ -65,13 +66,14 @@ type cosreConversationPut struct {
 	BannedPhrases *[]string `json:"bannedPhrases"` // v0.10.2338 — D
 	Interaction   *string   `json:"interaction"`   // v0.10.2353 — I5
 	Evidence      *string   `json:"evidence"`      // v0.10.2355 — S1
+	StatusLine    *bool     `json:"statusLine"`    // v0.10.2473 — ara durum cümlesi
 }
 
 // mergeCosreConversationPut — SAF: istek + mevcut → yeni blob; ayrılmış
 // alanlar bu sürümde yalnız kapalı değerlerini alabilir.
 func mergeCosreConversationPut(cur chstore.CosreConversation, in cosreConversationPut) (chstore.CosreConversation, error) {
-	if in.State == nil && in.Style == nil && in.Verification == nil && in.BannedPhrases == nil && in.Interaction == nil && in.Evidence == nil {
-		return cur, fmt.Errorf("state, style, verification, bannedPhrases, interaction ya da evidence alanı zorunlu")
+	if in.State == nil && in.Style == nil && in.Verification == nil && in.BannedPhrases == nil && in.Interaction == nil && in.Evidence == nil && in.StatusLine == nil {
+		return cur, fmt.Errorf("state, style, verification, bannedPhrases, interaction, evidence ya da statusLine alanı zorunlu")
 	}
 	out := cur
 	if in.State != nil {
@@ -79,6 +81,9 @@ func mergeCosreConversationPut(cur chstore.CosreConversation, in cosreConversati
 	}
 	if in.Style != nil {
 		out.Style = *in.Style // v0.10.2331 — B dilimi bağlı (chat_answer_class.go); varsayılan kapalı
+	}
+	if in.StatusLine != nil {
+		out.StatusLine = *in.StatusLine // v0.10.2473 — style'dan ayrı (chat_status_line.go); varsayılan açık
 	}
 	if in.Verification != nil {
 		if !chstore.ValidCosreVerification(*in.Verification) {
@@ -140,8 +145,8 @@ func (s *Server) putCosreConversation(w http.ResponseWriter, r *http.Request) {
 	}
 	chstore.SetCosreConversation(saved) // sahte depo testleri için de yayınla
 	s.audit(r, "settings.cosre_conversation.update", "settings", chstore.CosreConversationKey,
-		fmt.Sprintf(`{"before":{"state":%v,"style":%v,"verification":%q,"bannedPhrases":%d,"interaction":%q,"evidence":%q},"after":{"state":%v,"style":%v,"verification":%q,"bannedPhrases":%d,"interaction":%q,"evidence":%q}}`,
-			prev.State, prev.Style, prev.Verification, len(prev.BannedPhrases), prev.Interaction, prev.Evidence,
-			saved.State, saved.Style, saved.Verification, len(saved.BannedPhrases), saved.Interaction, saved.Evidence))
+		fmt.Sprintf(`{"before":{"state":%v,"style":%v,"verification":%q,"bannedPhrases":%d,"interaction":%q,"evidence":%q,"statusLine":%v},"after":{"state":%v,"style":%v,"verification":%q,"bannedPhrases":%d,"interaction":%q,"evidence":%q,"statusLine":%v}}`,
+			prev.State, prev.Style, prev.Verification, len(prev.BannedPhrases), prev.Interaction, prev.Evidence, prev.StatusLine,
+			saved.State, saved.Style, saved.Verification, len(saved.BannedPhrases), saved.Interaction, saved.Evidence, saved.StatusLine))
 	writeJSON(w, saved)
 }

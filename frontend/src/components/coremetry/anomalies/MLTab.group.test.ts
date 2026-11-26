@@ -38,8 +38,10 @@ describe('anomali tablosu', () => {
   const src = readFileSync(resolve(__dirname, 'UnifiedAnomalies.tsx'), 'utf8');
   it('sütun sırası Başlangıç · Servis · Ne oldu · Sinyaller · Durum', () => {
     const ids = [...src.matchAll(/\{ id: '(\w+)', label: t\('anomalies\.col\.\w+'\)/g)].map(m => m[1]);
-    expect(ids).toEqual(['started', 'service', 'headline', 'signals', 'status']);
-    expect(src).toContain('storageKey="anomalies-unified"');
+    // v0.10.2473 — heldReason yalnız Elenenler görünümünde (held ? [...] : []).
+    expect(ids).toEqual(['started', 'service', 'headline', 'heldReason', 'signals', 'status']);
+    expect(src).toContain("...(held ? [{ id: 'heldReason'");
+    expect(src).toContain(": 'anomalies-unified'");
     expect(src).toContain("tf('anomalies.list.done'"); // v0.10.2258 — metin i18n'de
   });
 });
