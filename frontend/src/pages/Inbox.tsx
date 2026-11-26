@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/coremetry/overlay';
 import { Button, Chip, SearchField } from '@/components/ui';
 import { Link, useLocation, useNavigate, useSearchParams, Navigate } from 'react-router';
+import { ProblemSourceBreakdownEntry } from '@/components/coremetry/problems/ProblemSourceBreakdown'; // v0.10.2478
 import { anomalyEventHref } from '@/lib/anomalyHref';
 import { Topbar } from '@/components/Topbar';
 import { useInbox, useServicesMetadata, useProblemGraphSummary } from '@/lib/queries';
@@ -1288,6 +1289,8 @@ export default function InboxPage() {
           <Link to={inboxStatusHref(searchParams, 'ignored')}>{tl('inbox.foot.ignored', lang)}</Link>
           <span aria-hidden="true">·</span>
           <Link to="/alerts">{tl('inbox.foot.rules', lang)}</Link>
+          <span aria-hidden="true">·</span>
+          <ProblemSourceBreakdownEntry />{/* v0.10.2478 — kaynak dökümü (?view=breakdown) */}
         </nav>
       </div>
 

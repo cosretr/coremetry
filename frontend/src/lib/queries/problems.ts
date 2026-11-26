@@ -1,8 +1,9 @@
+import { useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { GoDuration } from '@/lib/utils';
 import { keys } from './keys';
-import type { Problem, EvaluatorHealth, BlastRadius } from '@/lib/types';
+import type { Problem, EvaluatorHealth, BlastRadius, ProblemSourceWindow } from '@/lib/types';
 import { currentLang, t } from '@/lib/i18n'; // v0.10.2292 — ağ hatası gerekçesi arayüz dilinde
 
 // /api/problems — the open-incident inbox feeding /problems,
@@ -261,6 +262,24 @@ export function useProblemBreakdown(id: string, enabled = true) {
     enabled: enabled && !!id,
     staleTime: 30_000,
   });
+}
+
+// v0.10.2478 — Problems kaynak dökümü; yalnız döküm açıkken (enabled),
+// staleTime = sunucu TTL (5 dk). Yoklama yok: elle "Yenile" (refresh=1).
+export function useProblemSourceBreakdown(since: ProblemSourceWindow, enabled = true) {
+  const force = useRef(false);
+  const q = useQuery({
+    queryKey: keys.problems.sourceBreakdown(since),
+    queryFn: ({ signal }) => {
+      const refresh = force.current;
+      force.current = false;
+      return api.problemSourceBreakdown(since, refresh, signal);
+    },
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+  const refresh = useCallback(() => { force.current = true; void q.refetch(); }, [q]);
+  return { ...q, refresh };
 }
 
 // v0.10.2279 (entity grafı S2) — Problems listesi "Ne bozuk" alt satırı için

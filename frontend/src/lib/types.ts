@@ -12249,6 +12249,46 @@ export interface ProblemBreakdownDependency {
   lastSeen: number;  // unix ns
   live: boolean;
 }
+// v0.10.2478 — Problems kaynak dökümü (GET /api/problems/breakdown); Go
+// api/problems_breakdown.go problemsBreakdownResponse'un aynası. Severity
+// KAYITLI önem (P1/P2/P3 değil; liste önceliği agregatta hesaplanmıyor).
+export type ProblemSourceWindow = '24h' | '7d' | '30d';
+export interface ProblemSourceStats {
+  count: number;
+  sharePct: number;
+  services: number;
+  openNow: number;
+  critical: number;
+  warning: number;
+  otherSev: number;
+  medianSec: number;
+  short15: number;
+  short15Pct: number;
+  long1h: number;
+}
+export interface ProblemSourceMetric extends ProblemSourceStats { metric: string }
+export interface ProblemSourceFamily extends ProblemSourceStats {
+  family: string;
+  churnPairs: number;
+  churnCount: number;
+  topServices: { service: string; count: number }[];
+  metrics: ProblemSourceMetric[];
+}
+export interface ProblemSourceBreakdownResponse {
+  since: ProblemSourceWindow;
+  from: number; // unix sn
+  to: number;
+  bucketSec: number;
+  total: number;
+  openNow: number;
+  short15: number;
+  series: { t: number; n: number }[];
+  families: ProblemSourceFamily[];
+  severityBasis: 'severity';
+  capped?: boolean;
+  partial?: boolean;
+}
+
 export interface ProblemBreakdownResponse {
   problemId: string;
   applicable: boolean;
