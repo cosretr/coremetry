@@ -301,7 +301,8 @@ func (s *Server) putSRESettings(w http.ResponseWriter, r *http.Request) {
 	}
 	details, _ := json.Marshal(map[string]any{"enabled": saved.IsEnabled(), "autoPriorities": saved.Priorities(),
 		"maxPerHour": saved.MaxPerHour, "maxConcurrent": saved.MaxConcurrent, "maxQueue": saved.MaxQueue,
-		"notifySummary": saved.NotifySummaryOn()})
+		"notifySummary": saved.NotifySummaryOn(), "graphOrigin": saved.GraphOriginOn(), "impactEvents": saved.ImpactEventsOn(),
+		"similarCases": saved.SimilarCasesOn()})
 	s.audit(r, "settings.sre_agent.update", "settings", sre.SettingsKey, string(details))
 	s.cacheInvalidate(r.Context(), sreStatusKey)
 	writeJSON(w, saved)

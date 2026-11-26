@@ -25,3 +25,13 @@ export function useSREReplayReport(id: string) {
     staleTime: SRE_REPLAY_STALE_MS,
   });
 }
+
+// CoSRE ölçüm — iki raporun karşılaştırması (GET /api/sre/replay/compare).
+export function useSREReplayCompare(base: string, cand: string) {
+  return useQuery({
+    queryKey: keys.sre.replayCompare(base, cand),
+    queryFn: ({ signal }) => api.sreReplayCompare(base, cand, signal),
+    enabled: !!base && !!cand && base !== cand,
+    staleTime: SRE_REPLAY_STALE_MS,
+  });
+}

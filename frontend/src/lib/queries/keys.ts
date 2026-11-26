@@ -103,6 +103,7 @@ export const keys = {
     // CoSRE doğruluk ölçümü A2 — replay notlama raporları (sre dalı: tekrar SSE'si düşürür).
     replayReports: ['sre', 'replay', 'reports'] as const,
     replayReport:  (id: string) => ['sre', 'replay', 'report', id] as const,
+    replayCompare: (base: string, cand: string) => ['sre', 'replay', 'compare', base, cand] as const, // CoSRE ölçüm
   },
 
   // v0.10.1475 — /ai onay bekleyen vakalar. sre dalının DIŞINDA: SSE

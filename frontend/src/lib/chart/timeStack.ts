@@ -6,18 +6,18 @@
 // ölçeği kümülatif tepeyi görür. Tooltip / lejant HAM değeri okur
 // (çağıranın `data`'sı). Yığında null = 0 (yığın deliksiz).
 
-export interface StackInput { type: string; stack?: string; data: readonly (number | null)[] }
+export interface StackInput { type: string; stack?: string; data: readonly (number | null | undefined)[] }
 
 export interface StackMatrix {
   /** Seri başına çizim verisi: yığın üyesinde kümülatif üst, diğerlerinde ham. */
-  draw: (number | null)[][];
+  draw: (number | null | undefined)[][];
   /** Seri başına yığın tabanı (kümülatif alt); yığın dışı seride null. */
   base: (number[] | null)[];
 }
 
 export function stackMatrix(series: readonly StackInput[]): StackMatrix {
   const acc = new Map<string, number[]>();
-  const draw: (number | null)[][] = [];
+  const draw: (number | null | undefined)[][] = [];
   const base: (number[] | null)[] = [];
   for (const s of series) {
     if (s.type !== 'bar' || !s.stack) {

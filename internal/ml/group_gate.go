@@ -234,8 +234,15 @@ var (
 // "bitti" kabul edilir). Pin: group_gate_volume_pin_test.go.
 // v0.10.2242 (Dilim B): halefi svc_telemetry_volume da aynı kuralla (sınıfı
 // ne olursa olsun; servis etkisi hata/gecikme dedektörlerinden gelir).
+//
+// v0.10.2477 (operatör kararı 2026-11-26): yük / yapı dedektörleri
+// (chstore.MLLoadStructureDetectors: trafik düşüşü, servis sustu, log hacmi,
+// aykırı pod, yeni log kalıbı) da aynı kuralla. Tek-sinyal kolu bunları
+// zaten kötüleşme saymıyordu (singleWorsening), ama "≥ 2 farklı sinyal"
+// kolunda sayılıyorlardı: ana anomali listesinde görünmeyen bir üye Problem
+// açtırabiliyordu. TEK liste: chstore.MLOffFeedDetector.
 func groupExcluded(e chstore.MLEvent) bool {
-	return e.Detector == chstore.MLDetSvcVolumeSpike || e.Detector == chstore.MLDetSvcTelemetryVolume
+	return chstore.MLOffFeedDetector(e.Detector)
 }
 
 // singleWorsening — SAF: olay kötüleşme yönünde mi; count = değeri bir SAYI

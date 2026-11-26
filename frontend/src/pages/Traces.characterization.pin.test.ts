@@ -23,9 +23,10 @@ const code = raw
 
 describe('S0 pin — şerit varsayılanı', () => {
   // DECISIONS üç ayrı değer yazıyor (:503 p95, :11634 p99, :11637 p50);
-  // KOD p99 (v0.10.1524, operatör "Default p99 olsun"). Bu programda değişmez.
-  it('STRIP_STAT_DEFAULT === p99', () => {
-    expect(STRIP_STAT_DEFAULT).toBe('p99');
+  // KOD p99 idi (v0.10.1524, operatör "Default p99 olsun"); v0.10.2477
+  // operatör geri aldı: "average süre olsun default" (DECISIONS'ta kayıtlı).
+  it('STRIP_STAT_DEFAULT === avg', () => {
+    expect(STRIP_STAT_DEFAULT).toBe('avg');
   });
 });
 

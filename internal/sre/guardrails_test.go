@@ -55,6 +55,8 @@ var mutatingAllow = map[string]string{
 	"drain.go:dr.d.Cache.Set":         "kalp atışı (coremetry:sre:hb:<pod>, 30 s TTL)",
 	"enqueuer.go:e.cache.SetNX":       "servis soğuma sahibi (sre:enq:svc, TTL)",
 	"enqueuer.go:leader.SetOnAcquire": "lider kilidi geri çağrısı (süreç-içi)",
+	// v0.10.2477 — vaka hafızası OKUMASININ önbelleği (sre:similar:v1:<özet>, 10 dk TTL).
+	"known.go:c.Set": "benzer vaka okuma önbelleği (sre:similar:v1, 10 dk TTL)",
 }
 
 func TestSRENoMutatingCalls(t *testing.T) {

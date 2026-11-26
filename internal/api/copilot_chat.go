@@ -476,6 +476,11 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	anchorTo, anchored := chatAnchorTime(req.Context.ToMs, time.Now())
 	xch.verify.addWindow(anchorTo.Add(-time.Duration(req.Context.RangeS)*time.Second), anchorTo, int64(req.Context.RangeS)) // v0.10.2327
 	// v0.10.2361 — S4: açık araştırma ipucu guided orta kademeleri atlar (chat_investigate.go)
+	var prRec *chatProblemRecord // v0.10.2477 — Problem sayfasının ilk turu kayıttan açılır (chat_problem_record.go)
+	if !apCont.on && !ct.On {
+		prRec = s.chatProblemRecordFor(ctx, emit, agentctx.Sanitize(req.Context.Page), req.Messages)
+		ctx = withChatProblemRecord(ctx, prRec)
+	}
 	invSkip := investigateSkipTiers(ctx, lastUserText(req.Messages), cst.ctx, investigateService(stt, req.Context.Service), dm.On || ct.On || apCont.on || req.Context.Explain != "" || req.Context.Subject != "")
 	if anchored {
 		// Çıpa sessizce uygulanmamalı: operatör cevabın GEÇMİŞ bir
@@ -1080,6 +1085,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			Name: t.Name, Description: t.ChatDescription(), InputSchema: t.InputSchema,
 		})
 	}
+	xch.setToolCatalog(specs) // CoSRE ölçüm — katalog boyu + şema baytı (loop_stop)
 
 	// CoSRE Faz-2 — render_chart server-side emission: the model PICKS
 	// the chart by calling the render_chart tool; the SERVER builds the
@@ -1115,6 +1121,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.2378 — döngü profilinin kanıt ölçeği (evidence_scale.go).
 	evScale := s.evidenceScale(ctx)
 	conv := opPre.seedScaled(req.Messages, evScale) // operasyon ön-getirmesi varsa tool kaydı (nil → aynen)
+	conv = prRec.seedScaled(conv, evScale)          // v0.10.2477 — kayıtlı araştırma (ilk tur, Problem kapsamı; nil → aynen)
 	conv = guidedEsc.seedScaled(conv, evScale)      // v0.10.2473 — guided demeti devredildiyse tool kaydı (nil → aynen)
 	dm.loopScale = evScale                          // v0.10.2473 — döngü bütçesi kanıt ölçeğiyle (chat_deep.go)
 	// Taşma yeniden denemesi TEK sefer: ikinci bir deneme aynı duvara
@@ -1125,6 +1132,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// deterministik "Kaynak:" künyesini besliyor (chat_source_note.go).
 	var calledTools []string
 	calledTools = append(calledTools, guidedEsc.seededTools()...) // v0.10.2473 — devredilen demet künyede (nil → yok)
+	calledTools = append(calledTools, prRec.seededTools()...)     // v0.10.2477 — kayıtlı araştırma künyede (nil → yok)
 	noteOffered := false                                          // v0.10.1169 — tur başına en çok bir "probleme not" aksiyonu
 	hypOffered := false                                           // v0.10.1288 — tur başına en çok bir "hipotezi doğrula" aksiyonu
 	// v0.10.1291 — kural-türevli takip çiplerinin olguları (chat_followup_chips.go);
@@ -1526,6 +1534,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		if err != nil && isContextOverflowErr(err) && !overflowRetried {
 			if shrunk, ok := shrinkConvForRetry(conv); ok {
 				overflowRetried = true
+				xch.noteOverflow(false) // CoSRE ölçüm — kırpılmış bağlamla devam
 				conv = shrunk
 				emit("step", map[string]string{"label": "bağlam taştı — geçmiş küçültülüp yeniden deneniyor"})
 				round-- // bu tur sayılmasın: yeniden deneme, ilerleme değil
@@ -1544,6 +1553,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				msg = chatDeadlineMessageTR(exchangeMax)
 			case isContextOverflowErr(err):
 				msg = chatOverflowMessageTR(overflowRetried)
+				xch.noteOverflow(true) // CoSRE ölçüm
 			}
 			emit("error", map[string]string{"error": msg})
 			exitReason = ctxExitReason(dctx.Err(), stopModelError)
@@ -1952,6 +1962,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 					msg = chatDeadlineMessageTR(exchangeMax)
 				case isContextOverflowErr(err2):
 					msg = chatOverflowMessageTR(overflowRetried)
+					xch.noteOverflow(true) // CoSRE ölçüm
 				}
 				emit("error", map[string]string{"error": msg})
 			} else {

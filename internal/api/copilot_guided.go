@@ -2555,6 +2555,8 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 	if label := cosreRulesStepLabel(rulesN); label != "" {
 		emitGuidedContextStep(emit, label)
 	}
+	// v0.10.2477 — Problem sayfası ilk turu: kayıtlı araştırma (nil → aynen).
+	evidence += chatProblemRecordFrom(ctx).guidedSuffix(evidence)
 	user := guidedNarrationUserScaled(question, evidence+cosreRulesDataSuffix(rulesBlock), explain, msgs, s.evidenceScaleSurface(ctx, "chat-guided")) // v0.10.2378 — kanıt ölçeği
 	// v0.9.528 Faz 2 — kiminle konuşulduğu prompt'un başına girer
 	// (ctx'ten; ön-söz boşsa metin bayt-bayt eskisi).

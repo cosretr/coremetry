@@ -45,6 +45,12 @@ var checkApplies = map[string]func(Evidence) bool{
 	"downstream_exact": func(ev Evidence) bool {
 		return ev.Facts.Deps != nil && ev.Facts.Deps.ExactOK
 	},
+	// v0.10.2477 — Problem grafı kökeni yalnız VARKEN listelenir (belirsiz /
+	// kapalı / eski kayıtta kartlar ve skorlar aynen).
+	"graph_origin_rollout":   hasGraphOrigin,
+	"graph_origin_elsewhere": hasGraphOrigin,
+	"graph_origin_external":  hasGraphOrigin,
+	"graph_origin_db":        hasGraphOrigin,
 }
 
 // chkRuntimeSignals — .NET sinyalleri. Gecikme belirtisinde thread-pool

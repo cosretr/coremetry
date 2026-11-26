@@ -203,6 +203,8 @@ type ReplayRequest struct {
 	Plain bool
 	// NoMemory — CoSRE Faz E: ekip notları kapalı (Investigation.NoMemory).
 	NoMemory bool
+	// NoKnown — v0.10.2477: platformun bildiği adımlar kapalı (Investigation.NoKnown).
+	NoKnown bool
 }
 
 // replayInvestigation — SAF: tekrar işinin kuyruk kaydı. Çıpa problemin
@@ -219,7 +221,7 @@ func replayInvestigation(req ReplayRequest) Investigation {
 		EnqueuedAt: now.UnixNano(), RequestBy: req.By, ProblemAt: req.ProblemStartedAt,
 		EvalRun: req.RunID, CaseID: req.CaseID, AsOf: asOf.UnixNano(),
 		Anchor: anchorFor(req.ProblemStartedAt, asOf), Pack: req.ContextPack,
-		Plain: req.Plain, NoMemory: req.NoMemory,
+		Plain: req.Plain, NoMemory: req.NoMemory, NoKnown: req.NoKnown,
 	}
 }
 

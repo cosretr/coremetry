@@ -203,11 +203,15 @@ type Investigation struct {
 	// CoSRE Faz E — NoMemory: değerlendirme varyantı, ekip notları anlatıma
 	// GİRMEZ (yalnız tekrarda; canlı koşu hep false). MemoryNotes: son
 	// anlatıma giren not sayısı (hafıza açık/kapalı kıyasının künyesi).
-	NoMemory    bool          `json:"noMemory,omitempty"`
-	MemoryNotes int           `json:"memoryNotes,omitempty"`
-	Playbook    *Playbook     `json:"playbook,omitempty"`
-	Reach       []ReachEntry  `json:"reach,omitempty"`
-	Coverage    *CoverageGate `json:"coverage,omitempty"`
+	NoMemory    bool `json:"noMemory,omitempty"`
+	MemoryNotes int  `json:"memoryNotes,omitempty"`
+	// NoKnown — v0.10.2477: değerlendirme varyantı, platformun bildiği üç adım
+	// (Problem grafı kökeni / etki olayları / onaylı benzer vakalar; known.go)
+	// KAPALI (yalnız tekrarda; canlı koşu ayar anahtarlarına bakar).
+	NoKnown  bool          `json:"noKnown,omitempty"`
+	Playbook *Playbook     `json:"playbook,omitempty"`
+	Reach    []ReachEntry  `json:"reach,omitempty"`
+	Coverage *CoverageGate `json:"coverage,omitempty"`
 }
 
 // QueueKey — v0.10.1301: kuyruk anahtarı (satır kimliği

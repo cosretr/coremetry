@@ -41,6 +41,11 @@ type Facts struct {
 	Baseline  *BaselineFacts `json:"baseline,omitempty"`
 	Anomalies *AnomalyFacts  `json:"anomalies,omitempty"`
 	Errors    *ErrorFacts    `json:"errors,omitempty"`
+	// v0.10.2477 — platformun bildiği (known.go): Problem grafı kökeni
+	// (belirsiz = nil), etki olayları, onaylı benzer vakalar.
+	GraphOrigin *GraphOriginFact `json:"graphOrigin,omitempty"`
+	Impact      *ImpactFacts     `json:"impact,omitempty"`
+	Similar     *SimilarFacts    `json:"similar,omitempty"`
 }
 
 // merge — SAF: src'nin dolu parçaları dst'ye.
@@ -83,6 +88,15 @@ func (f *Facts) merge(src *Facts) {
 	}
 	if src.Errors != nil {
 		f.Errors = src.Errors
+	}
+	if src.GraphOrigin != nil {
+		f.GraphOrigin = src.GraphOrigin
+	}
+	if src.Impact != nil {
+		f.Impact = src.Impact
+	}
+	if src.Similar != nil {
+		f.Similar = src.Similar
 	}
 }
 

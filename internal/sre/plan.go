@@ -91,6 +91,8 @@ type StepSpec struct {
 	Errors    *errorsRequest
 	Baseline  *baselineRequest
 	Anomalies *anomaliesRequest
+	// v0.10.2477 — platformun bildiği adımlar (known.go).
+	Known *knownRequest
 }
 
 // eventsRequest — olaylar adımının girdisi. Targets (aşağı akış db:/ext:

@@ -53,29 +53,44 @@ export function buildVolumeSeries(
   latency: SpanMetricSeries[] | null,
   unit: string = 'traces',
   stat: StripStat = STRIP_STAT_DEFAULT,
+  // v0.10.2477 — ince çizgi ızgarası: sunucu serileri lineStepSec adımında
+  // döndürür (linePoints), çubuklar barStepSec'e toplanır. Verilmezse eski
+  // tek-ızgara davranışı (her seri aynı kovada).
+  grid?: { lineStepSec: number; barStepSec: number },
 ): VolumeChartConfig {
   const cPts = count?.[0]?.points ?? [];
   if (!cPts.length) return { times: [], series: [], bucketMin: 1 };
-  const eMap = new Map((errors?.[0]?.points ?? []).map(p => [p.time, p.value]));
-  const pMap = new Map((latency?.[0]?.points ?? []).map(p => [p.time, p.value]));
-  const t = cPts.map(p => Math.round(p.time / 1e9)); // ns → unix sec
-  const total = cPts.map(p => p.value);
-  const err = cPts.map(p => Math.min(eMap.get(p.time) ?? 0, p.value));
-  // v0.9.73 — p50 GAP'li: örnek olmayan (ya da 0 dönen) bucket'ta null →
-  // çizgi tabana çakmaz, gerçek boşluk gösterir. Eski `?? 0` her boş
-  // bucket'ı 0ms'e çekip sahte iniş-çıkış üretiyordu.
-  const p50d: (number | null)[] = cPts.map(p => {
-    const v = pMap.get(p.time);
-    return v && v > 0 ? v : null;
-  });
-  const dt = t.length > 1 ? Math.round((t[1] - t[0]) / 60) : 1;
-  // v0.10.322 (operatör: "Süre grafiği de çok zigzaglı olmasın") — medyan
-  // çizgisi 5 kovalık merkezli hareketli ortalama (2 dk kovada 10 dk).
-  // GAP'ler korunur (null merkez null kalır); kenarlarda mevcut komşularla.
-  // Yoğun seride (≥20 kova) noktalar kapalı — nokta işaretleri zikzağın
-  // görsel yarısıydı. Başlıktaki <STAT> MAX ham kovadan okunur; etiket
-  // yumuşatmayı söyler.
-  const p50s = smoothCentered(p50d, RT_SMOOTH_WINDOW);
+  let t: number[];
+  let total: (number | null | undefined)[];
+  let err: (number | null | undefined)[];
+  let rtLine: (number | null)[];
+  let dt: number;
+  const fine = grid && grid.lineStepSec > 0
+    ? buildFineVolume(cPts, errors?.[0]?.points ?? [], latency?.[0]?.points ?? [], grid.lineStepSec, stripBarStep(grid.barStepSec, grid.lineStepSec))
+    : null;
+  if (fine && grid) {
+    t = fine.times; total = fine.total; err = fine.err; rtLine = fine.rt;
+    dt = Math.round(stripBarStep(grid.barStepSec, grid.lineStepSec) / 60);
+  } else {
+    const eMap = new Map((errors?.[0]?.points ?? []).map(p => [p.time, p.value]));
+    const pMap = new Map((latency?.[0]?.points ?? []).map(p => [p.time, p.value]));
+    t = cPts.map(p => Math.round(p.time / 1e9)); // ns → unix sec
+    total = cPts.map(p => p.value);
+    err = cPts.map(p => Math.min(eMap.get(p.time) ?? 0, p.value));
+    // v0.9.73 — çizgi GAP'li: örnek olmayan (ya da 0 dönen) bucket'ta null →
+    // çizgi tabana çakmaz, gerçek boşluk gösterir. Eski `?? 0` her boş
+    // bucket'ı 0ms'e çekip sahte iniş-çıkış üretiyordu.
+    rtLine = cPts.map(p => {
+      const v = pMap.get(p.time);
+      return v && v > 0 ? v : null;
+    });
+    dt = t.length > 1 ? Math.round((t[1] - t[0]) / 60) : 1;
+  }
+  // v0.10.2477 (operator-reported: "süre çizgisi … bazen net göstermiyor,
+  // Dynatrace daha iyi çiziyor") — v0.10.322'nin 5 kovalık hareketli
+  // ortalaması KALDIRILDI: kısa sıçramaları siliyor, hiçbir kovanın değeri
+  // olmayan noktalar çiziyordu. Çizgi artık ham kova değeri; zikzağı ince
+  // ızgara + ortalama varsayılanı (p99 değil) taşır. Kayıt: DECISIONS.
   // v0.10.656 (operatör: "süre solda, adet sağda") — SÜRE çizgisi SOL
   // eksende, SAYIM çubukları SAĞ eksende (v0.9.843 Grafana düzeni geri;
   // v0.10.268'in Dynatrace takası geri alındı). Biçimlendirici eksenle
@@ -87,33 +102,60 @@ export function buildVolumeSeries(
     { key: 'error', label: 'error ' + unit, data: err, color: statusColor('error'), type: 'bar', axis: 'left' },
     // v0.9.73 — kalın çizgi + nokta: seyrek p50 örnekleri artık okunur.
     // v0.9.843 — süre SOL eksende (Grafana düzeni). v0.10.1180 (operatör): SAYIM sol, SÜRE SAĞ.
-    { key: 'rt', label: `response time (${stripStatLabel(stat)})` /* v0.10.663 (operatör): "5-kova ort." ibaresi kalktı; yumuşatma penceresi ipucuda değil, davranışta */, data: p50s, color: 'var(--orange)', type: 'line', axis: 'right', width: 2, pointsShow: t.length < 20 },
+    { key: 'rt', label: `response time (${stripStatLabel(stat)})` /* v0.10.663 (operatör): "5-kova ort." ibaresi kalktı; yumuşatma penceresi ipucuda değil, davranışta */, data: rtLine, color: 'var(--orange)', type: 'line', axis: 'right', width: 2, pointsShow: t.length < 20 },
   ];
   return { times: t, series, bucketMin: Math.max(1, dt) };
 }
 
 
-/** v0.10.322 — yanıt-süresi çizgisi yumuşatma penceresi (kova sayısı, tek).
- *  v0.10.513'e dek P50_SMOOTH_WINDOW; çizgi artık seçilebilir istatistik. */
-export const RT_SMOOTH_WINDOW = 5;
+/** stripBarStep — SAF (v0.10.2477): çubuk adımı = istenen çubuk adımını
+ *  karşılayan, çizgi adımının EN KÜÇÜK katı. Kat olması şart: her ince kova
+ *  tam bir çubuğa düşer, toplama kayıpsız (sayımlar toplanabilir). */
+export function stripBarStep(desiredBarSec: number, lineStepSec: number): number {
+  if (!(lineStepSec > 0)) return Math.max(1, desiredBarSec);
+  return Math.max(1, Math.ceil(Math.max(desiredBarSec, lineStepSec) / lineStepSec)) * lineStepSec;
+}
 
-/**
- * smoothCentered — merkezli hareketli ortalama, null-farkında. Merkez null
- * ise null (GAP korunur); değilse penceredeki null olmayan komşuların
- * ortalaması. window ≤ 1 → aynı dizi. SAF.
- */
-export function smoothCentered(data: (number | null)[], window: number): (number | null)[] {
-  if (window <= 1 || data.length < 3) return data;
-  const half = Math.floor(window / 2);
-  return data.map((v, i) => {
-    if (v == null) return null;
-    let sum = 0; let n = 0;
-    for (let j = Math.max(0, i - half); j <= Math.min(data.length - 1, i + half); j++) {
-      const x = data[j];
-      if (x != null) { sum += x; n++; }
-    }
-    return n ? sum / n : v;
-  });
+/** v0.10.2477 — ince ızgara güvenlik tavanı (sunucu ≤240 çizgi noktası verir). */
+const STRIP_GRID_MAX = 4000;
+
+/** buildFineVolume — v0.10.2477: çizgi kendi (ince) adımında, çubuklar çubuk
+ *  adımında; ikisi tek x ızgarasında (çizgi adımı). Çubuk serisi yalnız çubuk
+ *  başı indekslerinde değer taşır, aradakiler `undefined` — uPlot sütun
+ *  genişliğini dolu (undefined olmayan) komşulardan ölçer, çubuk çubuk
+ *  genişliğinde çizilir. Çizgi: örnek yok / 0 → null (boşluk; sıfıra
+ *  enterpolasyon yok, yumuşatma yok). */
+function buildFineVolume(
+  cPts: { time: number; value: number }[],
+  ePts: { time: number; value: number }[],
+  lPts: { time: number; value: number }[],
+  lineStepSec: number,
+  barStepSec: number,
+): { times: number[]; total: (number | undefined)[]; err: (number | undefined)[]; rt: (number | null)[] } | null {
+  const lineNs = lineStepSec * 1e9;
+  const barNs = barStepSec * 1e9;
+  let lo = Infinity, hi = -Infinity;
+  for (const p of cPts) { lo = Math.min(lo, p.time); hi = Math.max(hi, p.time); }
+  for (const p of lPts) { if (p.value > 0) { lo = Math.min(lo, p.time); hi = Math.max(hi, p.time); } }
+  const first = Math.floor(lo / barNs) * barNs;
+  const n = Math.floor((hi - first) / lineNs) + 1;
+  if (!(n > 0) || n > STRIP_GRID_MAX) return null;
+  const times = Array.from({ length: n }, (_, i) => Math.round((first + i * lineNs) / 1e9));
+  const total: (number | undefined)[] = new Array(n).fill(undefined);
+  const err: (number | undefined)[] = new Array(n).fill(undefined);
+  const rt: (number | null)[] = new Array(n).fill(null);
+  const barIdx = (t: number) => Math.round((Math.floor(t / barNs) * barNs - first) / lineNs);
+  for (const p of cPts) { const i = barIdx(p.time); total[i] = (total[i] ?? 0) + p.value; }
+  for (const p of ePts) { const i = barIdx(p.time); if (i >= 0 && i < n) err[i] = (err[i] ?? 0) + p.value; }
+  for (let i = 0; i < n; i++) {
+    if (total[i] !== undefined) err[i] = Math.min(err[i] ?? 0, total[i] as number);
+    else err[i] = undefined;
+  }
+  for (const p of lPts) {
+    const i = Math.round((p.time - first) / lineNs);
+    if (i >= 0 && i < n && p.value > 0) rt[i] = p.value;
+  }
+  return { times, total, err, rt };
 }
 
 // ── v0.10.323 (operatör, prod: db.statement ~ … filtresinde şerit boş) ──

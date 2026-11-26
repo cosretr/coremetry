@@ -17,7 +17,7 @@ import { volumeHint, buildVolumeSeries, fmtVolumeDuration, VOLUME_EMPTY_DEFAULT 
 import { STRIP_STAT_DEFAULT, type StripStat } from './stripStat';
 
 export function VolumeChart({
-  count, errors, latency, stat = STRIP_STAT_DEFAULT, height = 140, onBrush, onZoomReset, xRange, header, headerRight, unit = 'traces', collapsed = false, emptyNote, hint,
+  count, errors, latency, stat = STRIP_STAT_DEFAULT, grid, height = 140, onBrush, onZoomReset, xRange, header, headerRight, unit = 'traces', collapsed = false, emptyNote, hint,
 }: {
   count: SpanMetricSeries[] | null;
   errors: SpanMetricSeries[] | null;
@@ -25,6 +25,9 @@ export function VolumeChart({
   // varsayılan p95; stripStat.ts). Etiket istatistiği söyler.
   latency: SpanMetricSeries[] | null;
   stat?: StripStat;
+  // v0.10.2477 — seriler ince çizgi adımında; çubuklar barStepSec'e toplanır
+  // (buildVolumeSeries). Verilmezse tek ızgara (eski davranış).
+  grid?: { lineStepSec: number; barStepSec: number };
   height?: number;
   onBrush?: (fromMs: number, toMs: number) => void;
   // v0.9.390 (Faz A-3) — çift-tık = brush'ı geri al; TimeChart'ın mevcut
@@ -55,8 +58,8 @@ export function VolumeChart({
 }) {
   const lang = useLang();
   const { times, series, bucketMin } = useMemo(
-    () => buildVolumeSeries(count, errors, latency, unit, stat),
-    [count, errors, latency, unit, stat],
+    () => buildVolumeSeries(count, errors, latency, unit, stat, grid),
+    [count, errors, latency, unit, stat, grid],
   );
 
   return (

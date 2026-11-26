@@ -5,8 +5,8 @@
 // Save current view' satırı kalksın, gereksiz yer alıyor."). GERÇEK sayfa
 // monte edilir (yalnız `@/lib/api` sahte; Traces.traceIdBox deseni).
 // Ölçülenler:
-//   1. ?rt'siz açılış p99: başlık "P99 AVG", seçici p99'da, şerit isteği
-//      `agg: 'p99'`; açık ?rt=p50 / ?rt=p95 KAZANIR ve URL'de kalır.
+//   1. ?rt'siz açılış (v0.10.2477'dan beri) avg: başlık "AVG", seçici avg'de,
+//      şerit isteği `agg: 'avg'`; açık ?rt=p50 / p95 / p99 KAZANIR, URL'de kalır.
 //   2. Ayrı "Saved:" satırı yok; kayıtlı görünümler grafik başlığındaki tek
 //      "Saved ▾" düğmesinde (Reset / CSV yanında). Liste, 1-9 kısayolu,
 //      "＋ Save current view…" ve "● modified" ≤ 1 tık. Aggregated
@@ -27,6 +27,7 @@ import Traces from './Traces';
 const m = vi.hoisted(() => ({
   views: [] as SavedView[],
   batchAggs: [] as string[],
+  batchLinePoints: [] as (number | undefined)[],
 }));
 
 // v0.10.2314 — Türkçe metin pinleri: arayüz dili 'tr'.
@@ -45,6 +46,7 @@ vi.mock('@/lib/api', () => {
     spanMetricBatch: (body: unknown) => {
       const aggs = (body as { aggs: { name: string; agg: string }[] }).aggs;
       m.batchAggs.push(aggs.find(a => a.name === 'rt')?.agg ?? '');
+      m.batchLinePoints.push((body as { linePoints?: number }).linePoints);
       return Promise.resolve({ series: { count: [], errors: [], rt: [] } });
     },
     savedViews: () => Promise.resolve(m.views),
@@ -105,7 +107,7 @@ const view = (id: string, name: string, queryString: string): SavedView =>
   ({ id, name, page: 'traces', queryString, ownerId: 'u1', shared: false } as unknown as SavedView);
 
 beforeEach(() => {
-  m.views = []; m.batchAggs = [];
+  m.views = []; m.batchAggs = []; m.batchLinePoints = [];
   try { localStorage.clear(); sessionStorage.clear(); } catch { /* özel pencere */ }
 });
 afterEach(() => {
@@ -115,15 +117,29 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('/traces — varsayılan yanıt-süresi istatistiği p99 (v0.10.1524)', () => {
-  it('?rt yok → seçici p99, başlık "P99 AVG", şerit isteği p99; URL\'ye rt yazılmaz', async () => {
+// v0.10.2477 (operatör: "Default p99 demiştik, average süre olsun default") —
+// varsayılan p99 → avg; p99 seçilebilir ve eski ?rt=p99 linkleri aynen açılır.
+describe('/traces — varsayılan yanıt-süresi istatistiği avg (v0.10.2477; önce p99 v0.10.1524)', () => {
+  it('?rt yok → seçici avg, başlık "AVG", şerit isteği avg + ince çizgi bütçesi; URL\'ye rt yazılmaz', async () => {
     await mountTraces('/traces');
-    expect(checkedStat()).toBe('p99');
-    expect(document.body.textContent).toContain('P99 AVG');
+    expect(checkedStat()).toBe('avg');
+    expect(document.body.textContent).not.toContain('P99 AVG');
     expect(document.body.textContent).not.toContain('MEDIAN AVG');
     expect(m.batchAggs.length).toBeGreaterThan(0);
-    expect(new Set(m.batchAggs)).toEqual(new Set(['p99']));
+    expect(new Set(m.batchAggs)).toEqual(new Set(['avg']));
+    // v0.10.2477 — çizgi kendi (ince) çözünürlüğünde: bütçe [120, 240].
+    const lp = m.batchLinePoints.at(-1) ?? 0;
+    expect(lp).toBeGreaterThanOrEqual(120);
+    expect(lp).toBeLessThanOrEqual(240);
     expect(new URLSearchParams(window.location.search).has('rt')).toBe(false);
+  });
+
+  it('eski ?rt=p99 linki p99 açar ("P99 AVG", istek p99) ve URL\'de kalır', async () => {
+    await mountTraces('/traces?rt=p99');
+    expect(checkedStat()).toBe('p99');
+    expect(document.body.textContent).toContain('P99 AVG');
+    expect(m.batchAggs.at(-1)).toBe('p99');
+    expect(new URLSearchParams(window.location.search).get('rt')).toBe('p99');
   });
 
   it('açık ?rt=p50 / ?rt=p95 varsayılanı yener ve URL\'de kalır', async () => {
@@ -140,12 +156,12 @@ describe('/traces — varsayılan yanıt-süresi istatistiği p99 (v0.10.1524)',
 
   // v0.10.1524 düzeltmesinin pini: URL yazıcısının bağımlılığında stripStat
   // yoktu, seçim ?rt='ye ancak başka bir durum yazımıyla düşüyordu.
-  it('p50 seçimi artık URL\'ye ?rt=p50 yazar (varsayılan değil); p99\'a dönünce rt düşer', async () => {
+  it('p99 seçimi URL\'ye ?rt=p99 yazar (artık varsayılan değil); avg\'ye dönünce rt düşer', async () => {
     await mountTraces('/traces');
     const opt = (t: string) => [...statGroup()!.querySelectorAll('button')].find(b => b.textContent === t);
-    await click(opt('p50'));
-    expect(new URLSearchParams(window.location.search).get('rt')).toBe('p50');
     await click(opt('p99'));
+    expect(new URLSearchParams(window.location.search).get('rt')).toBe('p99');
+    await click(opt('avg'));
     expect(new URLSearchParams(window.location.search).has('rt')).toBe(false);
   });
 });

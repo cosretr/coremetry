@@ -8,9 +8,12 @@
 //   - Karolar: puan, dağılım, erişim, kararsızlık; rapor eğilimi.
 //   - Raporlar: DataTable; seçim URL'de (?replayReport=, replace).
 //   - Problem satırları: etiket ↔ koşuların notu (ipucunda gerekçe + sonuç).
+//   - CoSRE ölçüm: rapor sürümü (başlatan → notlayan), yol notu (okuma /
+//     dalga / boşa / tavan; deterministik), sürüm eğilimi (Sparkline) ve
+//     iki raporun karşılaştırması (GET /api/sre/replay/compare).
 //   - Admin: "Replay başlat" (gün / koşu / Problem / varyant) + haftalık
 //     zamanlama aç/kapa (varsayılan kapalı). Admin ekranı — çevrilmez.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -19,11 +22,15 @@ import { Badge, Button, Field, Row, SelectField, StatTile } from '@/components/u
 import { stopRowClick, rowActivation } from '@/lib/a11y';
 import { tsLong, fmtNum } from '@/lib/utils';
 import { keys } from '@/lib/queries/keys';
-import { useSREReplayReport, useSREReplayReports } from '@/lib/queries/sreReplay';
-import type { SREReplayItem, SREReplayListItem, SREReplaySchedule } from '@/lib/types';
+import { useSREReplayCompare, useSREReplayReport, useSREReplayReports } from '@/lib/queries/sreReplay';
+import type { SREReplayCompareItem, SREReplayItem, SREReplayListItem, SREReplaySchedule } from '@/lib/types';
+import { Sparkline } from '@/components/Sparkline';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef } from '@/components/ui/DataTable';
 import { categoryLabel } from './sreEvalView';
-import { GRADE_LABEL, GRADE_ORDER, GRADE_TONE, pctText, reachCell, reportMode, runLabel, runTitle, scoreText, scoreTrend } from './sreReplayView';
+import {
+  GRADE_LABEL, GRADE_ORDER, GRADE_TONE, VERDICT_LABEL, VERDICT_TONE, buildText, defaultBase, deltaText, medText, pathCell, pathTitle,
+  pctText, reachCell, reportMode, runLabel, runTitle, scoreText, scoreTrend, versionTrend,
+} from './sreReplayView';
 
 const REPORT_COLS: ColumnDef<SREReplayListItem>[] = [
   { id: 'when',     label: 'Başlatıldı', sortValue: r => r.createdAt, width: 165, minWidth: 140, priority: 1 },
@@ -34,6 +41,7 @@ const REPORT_COLS: ColumnDef<SREReplayListItem>[] = [
   { id: 'reach',    label: 'Erişim', sortValue: r => r.summary.reachRate ?? -1, numeric: true, width: 80, minWidth: 64, priority: 1 },
   { id: 'unstable', label: 'Kararsız', sortValue: r => r.summary.unstable, numeric: true, width: 85, minWidth: 64, priority: 2 },
   { id: 'mode',     label: 'Kip', sortValue: r => reportMode(r), naturalDir: 'asc', flex: true, minWidth: 120, priority: 2 },
+  { id: 'build',    label: 'Sürüm', sortValue: r => r.build ?? '', naturalDir: 'asc', width: 130, minWidth: 90, priority: 2 },
   { id: 'by',       label: 'Başlatan', sortValue: r => r.by ?? '', naturalDir: 'asc', width: 170, minWidth: 110, priority: 3 },
 ];
 
@@ -46,6 +54,17 @@ const ITEM_COLS: ColumnDef<SREReplayItem>[] = [
   { id: 'mean',     label: 'Ort.', sortValue: i => i.mean ?? -1, numeric: true, width: 70, minWidth: 56, priority: 1 },
   { id: 'spread',   label: 'Yayılım', sortValue: i => i.spread, numeric: true, width: 80, minWidth: 64, priority: 2 },
   { id: 'reach',    label: 'Erişim', sortValue: i => reachCell(i.runs) ?? '', naturalDir: 'asc', width: 75, minWidth: 60, priority: 2 },
+  { id: 'path',     label: 'Yol (okuma · dalga · boşa)', sortValue: i => i.runs.reduce((n, r) => n + (r.path?.wasted ?? 0), 0), numeric: true, width: 230, minWidth: 160, priority: 2 },
+];
+
+const CMP_COLS: ColumnDef<SREReplayCompareItem>[] = [
+  { id: 'problem',  label: 'Problem', sortValue: i => i.problemId, naturalDir: 'asc', width: 120, minWidth: 90, priority: 1 },
+  { id: 'service',  label: 'Servis', sortValue: i => i.service, naturalDir: 'asc', width: 150, minWidth: 100, priority: 2 },
+  { id: 'verdict',  label: 'Hüküm', sortValue: i => i.verdict, naturalDir: 'asc', width: 120, minWidth: 90, priority: 1 },
+  { id: 'base',     label: 'Taban', sortValue: i => i.baseMean ?? -1, numeric: true, width: 80, minWidth: 64, priority: 1 },
+  { id: 'cand',     label: 'Aday', sortValue: i => i.candMean ?? -1, numeric: true, width: 80, minWidth: 64, priority: 1 },
+  { id: 'delta',    label: 'Fark', sortValue: i => i.delta ?? 0, numeric: true, width: 80, minWidth: 64, priority: 1 },
+  { id: 'grades',   label: 'Notlar (taban → aday)', sortValue: i => i.candGrades.join(','), naturalDir: 'asc', flex: true, minWidth: 200, priority: 2 },
 ];
 
 export function SREReplayPanel() {
@@ -107,6 +126,14 @@ export function SREReplayPanel() {
           <StatTile label="Eğilim (eskiden yeniye)">
             <span className="mono">{reports ? scoreTrend(reports) : '—'}</span>
           </StatTile>
+          <StatTile label="Yol (medyan, deterministik)" tone={sm && (sm.capHits ?? 0) > 0 ? 'warn' : undefined}>
+            <span className="mono">{sm?.pathRuns ? `${medText(sm.medToolCalls)} okuma · ${medText(sm.medRounds)} dalga · ${medText(sm.medWasted)} boşa` : '—'}</span>{' '}
+            <span className="field-hint"
+              title="boşa = sonucu hiçbir hipotez kontrolünün kanıt künyesine girmeyen ve bulgu üretmeyen okuma (hata veren okuma dahil)">
+              {sm?.pathRuns ? `${sm.pathRuns} koşu · ${sm.capHits ?? 0} tavana dayandı · medyan ${medText(sm.medSteps)} adım` : 'yol notu yok (eski rapor)'}
+            </span>
+          </StatTile>
+          <VersionTrendTile reports={reports} />
         </div>
 
         <Row gap={2}>
@@ -132,6 +159,7 @@ export function SREReplayPanel() {
                     <DataTableCell dt={reportDt} col="reach" row={r} value={r.summary.reachRate == null ? null : pctText(r.summary.reachRate)} />
                     <DataTableCell dt={reportDt} col="unstable" row={r} value={fmtNum(r.summary.unstable)} />
                     <DataTableCell dt={reportDt} col="mode" row={r} value={`${reportMode(r)} · ${r.repeats} koşu`} />
+                    <DataTableCell dt={reportDt} col="build" row={r} value={r.build || r.gradeBuild ? buildText(r) : null} className="mono" />
                     <DataTableCell dt={reportDt} col="by" row={r} value={r.by || null} />
                   </tr>
                 ))}
@@ -173,11 +201,13 @@ export function SREReplayPanel() {
                         <DataTableCell dt={itemDt} col="mean" row={i} value={i.mean == null ? null : scoreText(i.mean)} />
                         <DataTableCell dt={itemDt} col="spread" row={i} value={i.mean == null ? null : String(i.spread)} />
                         <DataTableCell dt={itemDt} col="reach" row={i} value={reachCell(i.runs)} />
+                        <DataTableCell dt={itemDt} col="path" row={i} value={pathCell(i.runs)} title={pathTitle(i.runs)} className="mono" />
                       </tr>
                     ))}
                 </tbody>
               </table>
             </div>
+            {reports && reports.length > 1 && <ComparePanel key={selectedId} reports={reports} candId={selectedId} />}
           </>
         )}
       </div>
@@ -208,7 +238,7 @@ function StartForm({ enabled, schedule, onStarted }: { enabled: boolean; schedul
   const start = () => run(async () => {
     const rep = await api.startSREReplay({ days: Number(days), repeats: Number(repeats), limit: Number(limit),
       variant: variant === 'contextPack' ? { contextPack: true } : variant === 'plain' ? { plain: true }
-        : variant === 'noMemory' ? { noMemory: true } : {} });
+        : variant === 'noMemory' ? { noMemory: true } : variant === 'noKnown' ? { noKnown: true } : {} });
     onStarted(rep.reportId);
   });
   const weekly = !!schedule?.weekly;
@@ -229,6 +259,8 @@ function StartForm({ enabled, schedule, onStarted }: { enabled: boolean; schedul
           <option value="plain">B kapalı — oyun kitabı / hipotez durumu / kanıt kapısı yok (plain)</option>
           {/* CoSRE Faz E — hafıza ölçümü: aynı pencerede varsayılan + noMemory iki rapor. */}
           <option value="noMemory">ekip notları kapalı (noMemory)</option>
+          {/* v0.10.2477 — köken / etki / onaylı benzer vaka adımlarının ölçümü. */}
+          <option value="noKnown">platform bilgisi kapalı — köken / etki / benzer vaka yok (noKnown)</option>
         </SelectField>
         <Button variant="primary" size="sm" loading={busy} disabled={busy || !enabled} onClick={() => { void start(); }}
           title={enabled ? 'Etiketli Problem\'leri kendi pencerelerinde yeniden koştur ve yerel hakemle notla (düşük öncelik; hakem saatlik AI bütçesinin en çok yarısını kullanır)' : 'AI SRE kapalı'}>
@@ -241,5 +273,100 @@ function StartForm({ enabled, schedule, onStarted }: { enabled: boolean; schedul
       </Row>
       {err && <p className="field-error" role="alert">{err}</p>}
     </div>
+  );
+}
+
+/** Sürüm eğilimi: başlatan sürüm başına ortalama puan (Sparkline, 0–100). */
+function VersionTrendTile({ reports }: { reports?: SREReplayListItem[] }) {
+  const pts = useMemo(() => versionTrend(reports ?? []), [reports]);
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  return (
+    <StatTile label="Sürüm eğilimi (puan)">
+      {pts.length >= 2
+        ? <Sparkline values={pts.map(p => p.score)} width={140} height={24} domainMax={100}
+            title={pts.map(p => `${p.build}: ${scoreText(p.score)} (${p.reports} rapor)`).join(' · ')} />
+        : <span className="mono">{last ? scoreText(last.score) : '—'}</span>}{' '}
+      <span className="field-hint">
+        {first && last ? (first === last ? last.build : `${first.build} → ${last.build} · ${pts.length} sürüm`) : 'sürüm damgalı rapor yok'}
+      </span>
+    </StatTile>
+  );
+}
+
+/** İki raporun karşılaştırması: aday = seçili rapor, taban = seçilen (varsayılan bir önceki). */
+function ComparePanel({ reports, candId }: { reports: SREReplayListItem[]; candId: string }) {
+  const [base, setBase] = useState(() => defaultBase(reports, candId));
+  const q = useSREReplayCompare(base, candId);
+  const c = q.data;
+  const rows = c?.items;
+  const dt = useDataTable<SREReplayCompareItem>({ storageKey: 'ai-sre-replay-compare', columns: CMP_COLS, rows: rows ?? [] });
+  const others = reports.filter(r => r.reportId !== candId);
+  return (
+    <>
+      <div className="ov-card-h sre-eval-sec">
+        <h3>Karşılaştır</h3>
+        <span className="ov-sub">seçili rapor (aday) ↔ taban · Problem'ler problemId ile eşlenir · fark = notlu koşu ortalaması (≥1 puan iyileşti / geriledi)</span>
+      </div>
+      <Row gap={3} wrap>
+        <SelectField label="Taban rapor" value={base} onChange={e => setBase(e.target.value)}>
+          <option value="">— seçin —</option>
+          {others.map(r => <option key={r.reportId} value={r.reportId}>{tsLong(r.createdAt)} · {buildText(r)} · {reportMode(r)}</option>)}
+        </SelectField>
+      </Row>
+      {c && (
+        <div className="stat-grid">
+          <StatTile label="Puan farkı" tone={c.scoreDelta != null && c.scoreDelta < 0 ? 'warn' : undefined}>
+            <span className="mono">{deltaText(c.scoreDelta)}</span>{' '}
+            <span className="field-hint">{scoreText(c.base.summary.score)} → {scoreText(c.cand.summary.score)}</span>
+          </StatTile>
+          <StatTile label="Erişim farkı">
+            <span className="mono">{deltaText(c.reachDelta, true)}</span>{' '}
+            <span className="field-hint">{pctText(c.base.summary.reachRate)} → {pctText(c.cand.summary.reachRate)}</span>
+          </StatTile>
+          <StatTile label="Dağılım farkı">
+            <span className="dt-trunc">{GRADE_ORDER.map(g => (
+              <Badge key={g} tone={GRADE_TONE[g]} className="sre-eval-hyp">{GRADE_LABEL[g]} {deltaText(c.distDelta[g] ?? 0)}</Badge>
+            ))}</span>
+          </StatTile>
+          <StatTile label="Problem hükmü" tone={c.regressed > 0 ? 'warn' : undefined}>
+            <span className="mono">{c.improved} iyileşti · {c.regressed} geriledi · {c.same} aynı</span>{' '}
+            <span className="field-hint">{c.ungraded} notsuz · {c.onlyBase} yalnız tabanda · {c.onlyCand} yalnız adayda</span>
+          </StatTile>
+          <StatTile label="Yol farkı (medyan)">
+            <span className="mono">{deltaText(c.medToolCallsDelta)} okuma · {deltaText(c.medRoundsDelta)} dalga · {deltaText(c.medWastedDelta)} boşa</span>{' '}
+            <span className="field-hint">tavan {deltaText(c.capHitsDelta)} · sürüm {buildText(c.base)} → {buildText(c.cand)}</span>
+          </StatTile>
+        </div>
+      )}
+      {base && (
+        <div className="table-wrap">
+          <table {...dt.tableProps}>
+            <DataTableColgroup dt={dt} />
+            <DataTableHead dt={dt} />
+            <tbody>
+              {dt.sortedRows.length === 0
+                ? <DataTableState dt={dt} kind={q.isError ? 'error' : rows === undefined ? 'loading' : 'empty'} message="İki raporda Problem yok" />
+                : dt.sortedRows.map(i => (
+                  <tr key={i.problemId}>
+                    <DataTableCell dt={dt} col="problem" row={i}>
+                      <Link to={`/problems?problem=${encodeURIComponent(i.problemId)}`} onClick={stopRowClick} className="mono">{i.problemId}</Link>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="service" row={i} value={i.service || null} title={i.cause} />
+                    <DataTableCell dt={dt} col="verdict" row={i}>
+                      <Badge tone={VERDICT_TONE[i.verdict]}>{VERDICT_LABEL[i.verdict] ?? i.verdict}</Badge>
+                    </DataTableCell>
+                    <DataTableCell dt={dt} col="base" row={i} value={i.baseMean == null ? null : scoreText(i.baseMean)} />
+                    <DataTableCell dt={dt} col="cand" row={i} value={i.candMean == null ? null : scoreText(i.candMean)} />
+                    <DataTableCell dt={dt} col="delta" row={i} value={i.delta == null ? null : deltaText(i.delta)} />
+                    <DataTableCell dt={dt} col="grades" row={i}
+                      value={`${i.baseGrades.map(g => GRADE_LABEL[g] ?? g).join(', ') || '—'} → ${i.candGrades.map(g => GRADE_LABEL[g] ?? g).join(', ') || '—'}`} />
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 }

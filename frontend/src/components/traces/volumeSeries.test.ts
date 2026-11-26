@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, smoothCentered, RT_SMOOTH_WINDOW, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent, stripRootOnly, volumeEmptyNote, VOLUME_EMPTY_DEFAULT, errorStripUnit, errorStripHint, stripHeaderStats } from './volumeSeries';
+import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, stripBarStep, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent, stripRootOnly, volumeEmptyNote, VOLUME_EMPTY_DEFAULT, errorStripUnit, errorStripHint, stripHeaderStats } from './volumeSeries';
 
 const S = 1_000_000_000; // 1 saniye, ns
 const T0 = 1_700_000_000 * S;
@@ -121,28 +121,54 @@ describe('volumeUnitLabel — v0.10.268 çubuk birimi', () => {
 });
 
 
-// v0.10.322 (operatör: "çok zigzaglı olmasın") — medyan çizgisi yumuşatılır,
-// GAP'ler korunur, etiket bunu söyler, yoğun seride nokta yok.
-describe('smoothCentered / p50 yumuşatma', () => {
-  it('merkezli ortalama; null merkez null kalır; kenarlar mevcut komşularla; window 1 = aynı', () => {
-    expect(smoothCentered([1, 3, 5, 7, 9], 3)).toEqual([2, 3, 5, 7, 8]);
-    expect(smoothCentered([1, null, 5, 7, 9], 3)).toEqual([1, null, 6, 7, 8]);
-    const same = [1, 2, 3];
-    expect(smoothCentered(same, 1)).toBe(same);
-    expect(RT_SMOOTH_WINDOW % 2).toBe(1);
-  });
-  it('p50 serisi yumuşatılmış, etiket söyler, GAP korunur, yoğun seride nokta yok', () => {
+// v0.10.2477 (operator-reported: "süre çizgisi … bazen net göstermiyor") —
+// v0.10.322'nin 5 kovalık yumuşatması kaldırıldı: çizgi HAM kova değeri,
+// GAP'ler korunur, yoğun seride nokta yok.
+describe('yanıt-süresi çizgisi yumuşatılmaz (v0.10.2477)', () => {
+  it('her nokta kendi kovasının değeri; 0 → null GAP; yoğun seride nokta yok', () => {
     const n = 30;
     const mk = (f: (i: number) => number | null): SpanMetricSeries[] => [{ groupKey: [], points: Array.from({ length: n }, (_, i) => ({ time: (1_700_000_000 + i * 120) * 1e9, value: f(i) ?? 0 })) }];
     const cfg = buildVolumeSeries(mk(() => 100), mk(() => 1), mk(i => (i === 10 ? 0 : (i % 2 ? 10 : 2))));
-    const p50 = cfg.series.find(s0 => s0.key === 'rt')!;
-    // v0.10.663 (operatör): etiket yumuşatma penceresini SÖYLEMEZ; yalnız istatistik.
-    expect(p50.label).toContain('response time (');
-    expect(p50.label).not.toContain('kova');
-    expect(p50.pointsShow).toBe(false);
-    expect(p50.data[10]).toBeNull();                       // GAP korunur (0 → null)
-    expect(p50.data[15]).not.toBe(10); expect(p50.data[15]).not.toBe(2); // zikzak yumuşadı
-    expect(Math.abs((p50.data[15] as number) - 6)).toBeLessThan(2.1);
+    const rt = cfg.series.find(s0 => s0.key === 'rt')!;
+    expect(rt.label).toContain('response time (');
+    expect(rt.pointsShow).toBe(false);
+    expect(rt.data[10]).toBeNull();
+    expect(rt.data[15]).toBe(10);
+    expect(rt.data[16]).toBe(2);
+  });
+});
+
+// v0.10.2477 — ince çizgi ızgarası: çizgi kendi adımında, çubuklar çubuk
+// adımına toplanır (sayımlar kayıpsız), tek x ızgarası.
+describe('stripBarStep / ince ızgara (v0.10.2477)', () => {
+  it('çubuk adımı çizgi adımının en küçük katı (istenen adımı karşılar)', () => {
+    expect(stripBarStep(60, 20)).toBe(60);
+    expect(stripBarStep(30, 20)).toBe(40);
+    expect(stripBarStep(900, 600)).toBe(1200);
+    expect(stripBarStep(10, 30)).toBe(30); // çubuk çizgiden ince olamaz
+    expect(stripBarStep(120, 0)).toBe(120); // ızgara yok → istenen
+  });
+
+  it('çizgi ince adımda, çubuklar toplanır; çubuk dışı indeksler undefined', () => {
+    const t0 = 1_700_000_040; // 60 s'ye hizalı
+    const fine = (vals: number[]): SpanMetricSeries[] => [{ groupKey: [], points: vals.map((v, i) => ({ time: (t0 + i * 20) * 1e9, value: v })) }];
+    // 6 ince kova (20 s) → 2 çubuk (60 s)
+    const cfg = buildVolumeSeries(fine([1, 2, 3, 4, 5, 6]), fine([0, 1, 0, 0, 9, 0]), fine([10, 0, 30, 40, 50, 60]), 'traces', 'avg',
+      { lineStepSec: 20, barStepSec: 60 });
+    expect(cfg.times).toEqual([t0, t0 + 20, t0 + 40, t0 + 60, t0 + 80, t0 + 100]);
+    expect(byKey(cfg, 'total').data).toEqual([6, undefined, undefined, 15, undefined, undefined]);
+    expect(byKey(cfg, 'error').data).toEqual([1, undefined, undefined, 9, undefined, undefined]);
+    expect(byKey(cfg, 'rt').data).toEqual([10, null, 30, 40, 50, 60]); // 0 → GAP, interpolasyon yok
+    expect(byKey(cfg, 'rt').label).toContain('(average)');
+    expect(cfg.bucketMin).toBe(1);
+  });
+
+  it('trafiksiz ince kova ızgarada null kalır (sıfıra çekilmez)', () => {
+    const t0 = 1_700_000_040;
+    const pts = (vals: [number, number][]): SpanMetricSeries[] => [{ groupKey: [], points: vals.map(([i, v]) => ({ time: (t0 + i * 20) * 1e9, value: v })) }];
+    const cfg = buildVolumeSeries(pts([[0, 5], [4, 5]]), null, pts([[0, 100], [4, 300]]), 'traces', 'avg', { lineStepSec: 20, barStepSec: 60 });
+    expect(byKey(cfg, 'rt').data).toEqual([100, null, null, null, 300]);
+    expect(byKey(cfg, 'total').data).toEqual([5, undefined, undefined, 5, undefined]);
   });
 });
 
@@ -278,11 +304,11 @@ describe('stripScope', () => {
 });
 
 // v0.10.513 (operatör: "Median yerine p95 olsun default") — üçüncü seri
-// seçilebilir istatistik; etiket seçimi söyler, varsayılan p95.
+// seçilebilir istatistik; etiket seçimi söyler. Varsayılan avg (v0.10.2477).
 describe('şerit istatistiği (v0.10.513)', () => {
   const mk = (v: number): SpanMetricSeries[] => [{ groupKey: [], points: [1, 2, 3].map(i => ({ time: (1_700_000_000 + i * 120) * 1e9, value: v })) }];
-  it('varsayılan etiket p99 (v0.10.1524; önce median v0.10.725); p50 median, p95 adıyla', () => {
-    expect(buildVolumeSeries(mk(10), mk(1), mk(42)).series.find(s0 => s0.key === 'rt')!.label).toContain('(p99)');
+  it('varsayılan etiket average (v0.10.2477; önce p99 v0.10.1524, median v0.10.725); p50 median, p95 adıyla', () => {
+    expect(buildVolumeSeries(mk(10), mk(1), mk(42)).series.find(s0 => s0.key === 'rt')!.label).toContain('(average)');
     expect(buildVolumeSeries(mk(10), mk(1), mk(42), 'traces', 'p95').series.find(s0 => s0.key === 'rt')!.label).toContain('(p95)');
     expect(buildVolumeSeries(mk(10), mk(1), mk(42), 'traces', 'p50').series.find(s0 => s0.key === 'rt')!.label).toContain('(median)');
     expect(buildVolumeSeries(mk(10), mk(1), mk(42), 'traces', 'p99').series.find(s0 => s0.key === 'rt')!.label).toContain('(p99)');

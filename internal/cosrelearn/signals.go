@@ -109,6 +109,7 @@ var SystemSignalKinds = map[string]bool{SigPrefixApplied: true, SigPrefixCorrect
 	SigActionConfirm:  true, SigActionCancel: true, // v0.10.2353
 	SigScopeWouldRefuse: true,                         // v0.10.2355
 	SigStepRedirect:     true, SigStepSummarize: true, // v0.10.2364
+	SigLoopStop:   true, // CoSRE ölçüm — döngü künyesi (loop_stop.go)
 	SigFailedTurn: true} // v0.10.2468 — inceleme kuyruğu, etiket değil (failed_turns.go)
 
 // nonLabelKinds — v0.10.2354: istemcinin POST edebildiği ama cevaba etiket

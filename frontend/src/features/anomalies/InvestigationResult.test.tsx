@@ -115,10 +115,10 @@ describe('InvestigationResult', () => {
     expect(findingEvidence(inv, inv.findings[0]).map(e => e.hop)).toEqual(['ops']);
     expect(findingEvidence(inv, inv.findings[1]).map(e => e.hop)).toEqual(['deploys']);
     expect(findingEvidence(inv, { kind: 'pod', name: 'x', level: 'warn', evidenceRefs: ['evidences[1]'] }).map(e => e.hop)).toEqual(['pods']);
-    // v0.10.1288 — + olaylar, node: tavan 8, bilinmeyen adım sona düşer.
+    // v0.10.1288 — + olaylar, node; v0.10.2477 tavan 11 (köken / etki / benzer vaka): bilinmeyen adım sona düşer.
     const eight = orderedSteps([{ name: 'x', state: 'ok', durationMs: 0, at: 0 }, ...inv.steps,
       { name: 'node', state: 'ok', durationMs: 0, at: 0 }, { name: 'events', state: 'ok', durationMs: 0, at: 0 }]);
-    expect(eight.map(s => s.name)).toEqual(['sweep', 'deploys', 'deps', 'pivot', 'log_spike', 'events', 'node', 'summary']);
+    expect(eight.map(s => s.name)).toEqual(['sweep', 'deploys', 'deps', 'pivot', 'log_spike', 'events', 'node', 'summary', 'x']);
     expect(stepStateView('ok').tone).toBeNull();
     expect(stepStateView('error').tone).toBe('danger');
     expect(fmtStepDuration(0)).toBe('—');

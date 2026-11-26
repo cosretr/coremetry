@@ -38,6 +38,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/ai/aisurface"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
+	"github.com/cilcenk/coremetry/internal/cosrelearn"
 	"github.com/cilcenk/coremetry/internal/mcptools"
 )
 
@@ -95,6 +96,11 @@ type chatExchange struct {
 	// verify — v0.10.2327 (E1, answer_verify_turn.go): doğrulayıcı toplayıcısı;
 	// nil = kapalı (v1 ya da verification=off). Kurulumdan sonra değişmez.
 	verify *answerVerifyTurn
+
+	// loopShape / loopRan — CoSRE ölçüm (chat_loop_shape.go): serbest
+	// döngünün künyesi; yalnız döngü koştuysa loop_stop sinyali yazılır.
+	loopShape cosrelearn.LoopShape
+	loopRan   bool
 }
 
 // setBlockCapture — v0.10.1444: copilotChat'in yakalayıcısını bağlar.
@@ -421,6 +427,8 @@ func (x *chatExchange) tap(emit func(string, any)) func(string, any) {
 			x.mu.Unlock()
 		case "step-result":
 			x.noteStepResult(v, now)
+		case chatStopEventKind:
+			x.noteStopEvent(v) // CoSRE ölçüm — döngü künyesi
 		}
 		emit(kind, v)
 		if kind == "step" {
@@ -572,6 +580,7 @@ func (s *Server) recordChatExchange(ctx context.Context, x *chatExchange, cs *ch
 		s.writeSystemSignals(ctx, x.root, verifySignals(x.root, vo.signalResult(), vo.Truncated)) // v0.10.2339 — yeniden üretilen uydurma da sinyal
 	}
 	s.enqueueCosreInteraction(row)
+	s.writeSystemSignals(ctx, x.root, loopStopSignals(x)) // CoSRE ölçüm — round_cap / context_overflow + katalog boyu
 }
 
 // buildCosreInteraction — SAF (x kilidi altında okur): turun etkileşim satırı.

@@ -99,6 +99,7 @@ export const HYP_CHECKS = [
   'db_health_open', 'pivot_db_path', 'db_edge_slow',
   'rate_up', 'p99_up', 'upstream_surge',
   'new_error_pattern', 'after_deploy', 'pivot_error_spans', 'error_symptom',
+  'graph_origin_rollout', 'graph_origin_elsewhere', 'graph_origin_external', 'graph_origin_db',
 ] as const;
 
 const has = (list: readonly string[], v: string) => list.includes(v);

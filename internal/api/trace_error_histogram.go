@@ -21,7 +21,7 @@ package api
 // liste herhangi bir span'i hatalı trace'leri. Kip ve kaynak seçimi (dar
 // rollup önce, yoksa listenin ham WHERE'i): chstore/trace_error_histogram.go.
 //
-//	GET /api/traces/error-histogram?<listenin süzgeç parametreleri>&step=&stat=p50|p95|p99
+//	GET /api/traces/error-histogram?<listenin süzgeç parametreleri>&step=&linePoints=&stat=avg|p50|p95|p99
 //
 // Rol kapısı YOK — /api/traces gibi salt-okunur. serveCached 30s (şeridin
 // metric-batch TTL'i); anahtar listenin anahtar şekli (cacheRawQuery: tüm
@@ -48,16 +48,30 @@ func (s *Server) registerTraceErrorHistogramRoutes(mux *http.ServeMux) {
 }
 
 // traceErrorHistogramQuantile — SAF: şerit istatistiği beyaz listesi
-// (frontend stripStat.ts). Bilinmeyen → medyan (şeridin varsayılanı).
+// (frontend stripStat.ts). v0.10.2477 — "avg" eklendi ve şeridin varsayılanı
+// oldu: bilinmeyen / boş → ortalama (chstore.TraceHistStatMean; önce medyan).
 func traceErrorHistogramQuantile(stat string) float64 {
 	switch strings.ToLower(strings.TrimSpace(stat)) {
+	case "p50":
+		return 0.5
 	case "p95":
 		return 0.95
 	case "p99":
 		return 0.99
 	default:
-		return 0.5
+		return chstore.TraceHistStatMean
 	}
+}
+
+// traceStripStep — SAF (v0.10.2477): `linePoints` > 0 ise şerit tek sorguyu
+// ince çizgi adımında atar (chstore.StripLineStep; çubuklar istemcide
+// toplanır), değilse istemcinin `step`'i aynen. linePoints ham sorgu
+// dizesinde → önbellek anahtarına zaten girer (cacheRawQuery).
+func traceStripStep(step, linePoints int, from, to, now time.Time) int {
+	if s := chstore.StripLineStep(from, to, now, linePoints); s > 0 {
+		return s
+	}
+	return step
 }
 
 // traceErrorHistogramKey — SAF: listenin anahtar şekli + bu ucun öneki.
@@ -100,7 +114,7 @@ func (s *Server) getTraceErrorHistogram(w http.ResponseWriter, r *http.Request) 
 			"traces histogram yalnız Errors + span-düzeyi çip, Errors + yalnız servis / ortam / küme ya da servis + ≥2 çip (Errors kapalı) içindir (arama / süre / services / traceId / NOT HAS yok; çipsiz Errors'ta Root yok); diğer hâller /api/spans/metric-batch")
 		return
 	}
-	step := parseInt(q.Get("step"), 0)
+	step := traceStripStep(parseInt(q.Get("step"), 0), parseInt(q.Get("linePoints"), 0), f.From, f.To, time.Now())
 	quant := traceErrorHistogramQuantile(q.Get("stat"))
 	key := traceErrorHistogramKey(r.URL.RawQuery, tracesRootDefKeySuffix(q, s.store.TraceRootDef()))
 	s.serveCached(w, r, key, 30*time.Second, func(ctx context.Context) (any, error) {

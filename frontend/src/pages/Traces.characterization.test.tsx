@@ -333,13 +333,13 @@ describe('S0 — ek kolon değeri sunucudan gelir (istemci yeniden seçmez)', ()
 });
 
 describe('S0 — şerit varsayılanı + kaldırılmış kontroller', () => {
-  it('?rt yokken istatistik seçici p99 seçili (STRIP_STAT_DEFAULT, v0.10.1524)', async () => {
+  it('?rt yokken istatistik seçici avg seçili (STRIP_STAT_DEFAULT, v0.10.2477; önce p99)', async () => {
     await mountTraces('/traces?range=1h');
     const grp = host!.querySelector('[aria-label="Yanıt süresi istatistiği"]') as HTMLElement;
     expect(grp).not.toBeNull();
     const on = [...grp.querySelectorAll('button')].filter(b =>
       b.getAttribute('aria-pressed') === 'true' || b.getAttribute('aria-checked') === 'true' || b.getAttribute('data-state') === 'on');
-    expect(on.map(b => b.textContent?.trim().toLowerCase())).toEqual(['p99']);
+    expect(on.map(b => b.textContent?.trim().toLowerCase())).toEqual(['avg']);
   });
 
   it('sayfada "veriye sığdır", Correlate, Compare ve şerit expand/shrink düğmesi YOK', async () => {

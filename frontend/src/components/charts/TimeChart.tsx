@@ -41,7 +41,11 @@ export interface TimeChartSeries {
   // aligned to `times`. null = veri yok → line/area GAP çizer (bar 0).
   // v0.9.73 — sparse metrik serilerinde (p50 gibi trafik-boş bucket)
   // 0 basıp çizgiyi tabana çakmak yerine gerçek boşluk gösterir.
-  data: (number | null)[];
+  // v0.10.2477 — undefined = bu x'te bu serinin örneği YOK (uPlot hizalı veri
+  // sözleşmesi): ince ızgarada seyrek çubuk (Traces şeridi) — uPlot çubuk
+  // genişliğini yalnız undefined olmayan komşulardan ölçer. null'dan farkı:
+  // null "boşluk" (çizgi kırılır), undefined "örnek yok" (ölçüme girmez).
+  data: (number | null | undefined)[];
   color: string;           // a CSS var() token, resolved at draw time
   // v0.10.1872 — 'points': çizgisiz nokta serisi (az çağrılan servisin tek
   // tek çağrıları); null nokta çizilmez.

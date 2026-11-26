@@ -260,6 +260,14 @@ type ReplaySummary struct {
 	MaxSpread  int      `json:"maxSpread"`
 	// Inconclusive — CoSRE Faz B3: kapının "kanıt yetersiz" dediği biten koşu.
 	Inconclusive int `json:"inconclusive"`
+	// Yol notu (replay_path.go; deterministik) — yolu olan (biten) koşuların
+	// medyanları; tavana dayanan koşu sayısı. Eski rapor: PathRuns 0, medyan null.
+	PathRuns     int      `json:"pathRuns"`
+	CapHits      int      `json:"capHits"`
+	MedSteps     *float64 `json:"medSteps"`
+	MedToolCalls *float64 `json:"medToolCalls"`
+	MedRounds    *float64 `json:"medRounds"`
+	MedWasted    *float64 `json:"medWasted"`
 }
 
 // ItemStats — SAF: bir Problem'in notlu koşuları → ortalama puan, yayılım
@@ -300,6 +308,7 @@ func SummarizeReplay(rep ReplayReport) ReplaySummary {
 		sm.Dist[g] = 0
 	}
 	sum, spreadSum := 0, 0
+	var paths pathAcc
 	for _, it := range rep.Items {
 		if it.State == CaseSkipped {
 			sm.Skipped++
@@ -308,6 +317,7 @@ func SummarizeReplay(rep ReplayReport) ReplaySummary {
 		sm.Problems++
 		for _, r := range it.Runs {
 			sm.Runs++
+			paths.add(r.Path)
 			sc, graded := GradeScore(r.Grade)
 			switch {
 			case graded:
@@ -345,5 +355,6 @@ func SummarizeReplay(rep ReplayReport) ReplaySummary {
 	if sm.MultiRun > 0 {
 		sm.MeanSpread = round1(float64(spreadSum) / float64(sm.MultiRun))
 	}
+	paths.fill(&sm)
 	return sm
 }

@@ -104,6 +104,12 @@ func TestTraceErrHistSpanSQLGolden(t *testing.T) {
 	if got != want {
 		t.Fatalf("span SQL:\n%s\nwant\n%s", got, want)
 	}
+	// v0.10.2477 — ortalama (TraceHistStatMean): aynı SQL, rt = avg(duration).
+	gotAvg := traceErrHistSpanSQL(wc.sql(), TraceHistStatMean)
+	wantAvg := strings.Replace(want, "quantileTDigest(0.95)(duration / 1e6)", "avg(duration / 1e6)", 1)
+	if gotAvg != wantAvg {
+		t.Fatalf("avg span SQL:\n%s\nwant\n%s", gotAvg, wantAvg)
+	}
 }
 
 func TestTraceErrHistTraceSQLGolden(t *testing.T) {
@@ -362,10 +368,32 @@ func TestTraceErrScopeRollupStepCap(t *testing.T) {
 }
 
 func TestTraceErrHistRollupQuantile(t *testing.T) {
-	for q, want := range map[float64]string{0.5: "p50", 0.95: "p95", 0.99: "p99", 0.9: "p50"} {
+	for q, want := range map[float64]string{0.5: "p50", 0.95: "p95", 0.99: "p99", 0.9: "p50", TraceHistStatMean: "avg"} {
 		if got := traceErrHistRollupQuantile(q); got != want {
 			t.Errorf("%v → %s, beklenen %s", q, got, want)
 		}
+	}
+}
+
+// v0.10.2477 — ortalama istatistiği: ② / ④ kipinde kovadaki trace sürelerinin
+// aritmetik ortalaması; rollup avg = Σduration / Σcount (ms).
+func TestTraceHistStatMean(t *testing.T) {
+	if got := statOf([]float64{10, 20, 60}, TraceHistStatMean); got != 30 {
+		t.Errorf("statOf mean = %v, beklenen 30", got)
+	}
+	if got := statOf(nil, TraceHistStatMean); got != 0 {
+		t.Errorf("boş → 0, got %v", got)
+	}
+	if got := statOf([]float64{10, 20}, 0.5); got != 15 {
+		t.Errorf("kuantil yolu değişmemeli: %v", got)
+	}
+	rows := []traceStartRow{{startNs: 0, durMs: 10}, {startNs: 1, durMs: 50}, {startNs: 61e9, durMs: 7}}
+	c, rt := bucketTraceStarts(rows, 0, 60, TraceHistStatMean)
+	if len(c) != 2 || c[0].Value != 2 || rt[0].Value != 30 || rt[1].Value != 7 {
+		t.Errorf("bucketTraceStarts avg: count=%v rt=%v", c, rt)
+	}
+	if got := rollupAggValue("avg", 4, 0, 400e6, nil, 60); got != 100 {
+		t.Errorf("rollup avg = %v ms, beklenen 100", got)
 	}
 }
 

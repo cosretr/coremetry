@@ -110,6 +110,19 @@ export function traceStripMaxDataPoints(): number {
   return Math.min(TRACE_STRIP_MAX_BARS, barPanelMaxDataPoints(1));
 }
 
+// traceStripLinePoints — v0.10.2477 (operator-reported: "süre çizgisi daha
+// granüler olabilir … Dynatrace daha iyi süre çiziyor"): şeridin yanıt-süresi
+// ÇİZGİSİNİN nokta bütçesi — çubuklardan ayrı, ~5px/nokta, [120, 240].
+// Sunucu (chstore.StripLineStep) aynı tavanı uygular ve adımı dar rollup
+// tabanının katına oturtur; şerit ≥400px olduğundan nokta < piksel. 200px
+// kuantalı genişlikten → bütçe sınırlı kardinalite (cache anahtarı).
+export const TRACE_STRIP_LINE_MAX_POINTS = 240;
+export function traceStripLinePoints(): number {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1440;
+  const content = Math.max(400, vw - 260);
+  return Math.max(120, Math.min(TRACE_STRIP_LINE_MAX_POINTS, Math.round(quantizeWidth(content) / 5)));
+}
+
 // logsBucketSec — Logs hacim şeridi + LogsHistogram İKİSİ İÇİN TEK kaynak.
 // İkisi ayrı ama "aynı kalmalı" yorumlu iki kopya merdivendi (5s/30s/1m/
 // 5m/15m) — 1 saatte 120 kova ≈ 0.1 nokta/px. Şimdi piksel bütçesinden:

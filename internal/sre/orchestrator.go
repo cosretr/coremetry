@@ -94,6 +94,12 @@ type readers struct {
 	exceptions  func(ctx context.Context, f chstore.ExceptionFilter) ([]chstore.ExceptionRow, error)
 	sensitivity func() chstore.AnomalySensitivityConfig
 	pack        func() ContextPackSettings
+	// v0.10.2477 — platformun bildiği (known.go): Problem grafı blobu, Problem'in
+	// üye olayları, vaka hafızası (önbellekli) + hata kodları. nil = adım atlanır.
+	problemGraph  func(ctx context.Context) (chstore.ProblemGraphShadow, bool, error)
+	problemEvents func(ctx context.Context, p chstore.Problem) ([]chstore.MLEvent, error)
+	similarCases  func(ctx context.Context, service string, codes []string, from time.Time, limit int) ([]chstore.SimilarCase, error)
+	errorCodes    func(ctx context.Context, service string, from, to time.Time, limit int) ([]string, error)
 }
 
 // readersFrom — üretim okuyucuları: srv.MCPDeps() (sohbetle aynı kurucu).
@@ -161,6 +167,11 @@ func readersFrom(d mcptools.Deps, n Narrator, c cache.Cache, now func() time.Tim
 			return mcptools.ReadProblemWindowEvents(ctx, d, service, from, to, limit)
 		}
 		r.incident = st.GetProblemIncident
+		// v0.10.2477 — platformun bildiği (known.go): hepsi sınırlı okuma.
+		r.problemGraph = st.GetProblemGraphShadow
+		r.problemEvents = st.ProblemEvents
+		r.similarCases = cachedSimilarCases(c, st.SimilarIncidentCases)
+		r.errorCodes = st.TopExceptionCodesForService
 		// v0.10.1293 — öneri okumaları (yalnız Get/List/okuma zenginleştirmesi).
 		r.runbooks = st.ListRunbooks
 		r.runbookURL = func(ctx context.Context, p chstore.Problem) string {
@@ -232,6 +243,12 @@ func hasFacts(f *Facts, step string) bool {
 		return f.Anomalies != nil
 	case stepErrors:
 		return f.Errors != nil
+	case stepGraphOrigin:
+		return f.GraphOrigin != nil
+	case stepImpact:
+		return f.Impact != nil
+	case stepSimilar:
+		return f.Similar != nil
 	}
 	return false
 }
@@ -303,6 +320,12 @@ func runInvestigation(ctx context.Context, rd readers, inv *Investigation, check
 		pb := PlaybookFor(ProblemTypeOf(p, inv.Anchor.Symptom))
 		inv.Playbook = &pb
 		specs, pbNode = applyPlaybook(specs, pb, p, hyp, pin)
+	}
+	// v0.10.2477 — platformun bildiği (known.go): köken / etki / onaylı benzer
+	// vakalar dalga 1'de; canlıda sre_agent anahtarları, tekrarda noKnown.
+	if kf := knownFlagsFor(rd, inv).wired(rd); kf.any() {
+		specs = append(specs, knownSpecs(kf, knownRequest{Problem: p, ProblemID: inv.ProblemID, CaseID: inv.CaseID, ProblemAt: inv.ProblemAt,
+			From: time.Unix(0, inv.Anchor.From).UTC(), To: time.Unix(0, inv.Anchor.To).UTC(), Now: planNow, Replay: replay})...)
 	}
 	if inv.Facts == nil {
 		inv.Facts = &Facts{}
@@ -477,7 +500,7 @@ func runWave(ctx context.Context, rd readers, service string, batch []StepSpec, 
 			for _, s := range batch {
 				if !done[s.Name] {
 					done[s.Name] = true
-					apply(stepOutcome{step: Step{Name: s.Name, State: StepError, Summary: "süre bütçesi doldu", At: now().UnixNano()}})
+					apply(stepOutcome{step: Step{Name: s.Name, State: StepError, Summary: stepBudgetExhausted, At: now().UnixNano()}})
 				}
 			}
 		}
@@ -580,6 +603,17 @@ func execStep(ctx context.Context, rd readers, service string, s StepSpec) stepO
 			return skippedOutcome(s.Name, "hata özeti isteği yok", "step.skip.errorsReq")
 		}
 		return runErrors(ctx, rd, *s.Errors)
+	case stepGraphOrigin, stepImpact, stepSimilar:
+		if s.Known == nil {
+			return skippedOutcome(s.Name, "istek yok", "step.skip.knownReq")
+		}
+		switch s.Name {
+		case stepGraphOrigin:
+			return runGraphOrigin(ctx, rd, *s.Known)
+		case stepImpact:
+			return runImpact(ctx, rd, *s.Known)
+		}
+		return runSimilar(ctx, rd, *s.Known)
 	}
 	return skippedOutcome(s.Name, "bilinmeyen adım", "step.skip.unknown")
 }
@@ -609,11 +643,12 @@ func groupFindings(in []Finding) map[string][]Finding {
 var findingKindRank = map[string]int{
 	"k8s": 0, "deploy": 1, "pod": 2, "jvm": 3, "operation": 4, "function": 5,
 	"dependency": 6, "trace": 7, "log": 8, "node": 9, "baseline": 10,
+	"impact": 11, "origin": 12, // v0.10.2477 — platformun bildiği (known.go)
 }
 
 // stepRank — aynı tür + seviyede adım sırası.
 var stepRank = map[string]int{stepSweep: 0, stepDeploys: 1, stepDeps: 2, stepPivot: 3, stepLogSpike: 4, stepEvents: 5, stepNode: 6,
-	stepErrors: 7, stepBaseline: 8, stepAnomalies: 9}
+	stepErrors: 7, stepBaseline: 8, stepAnomalies: 9, stepImpact: 10, stepGraphOrigin: 11, stepSimilar: 12}
 
 // mergeFindings — SAF: adım bulguları → kayıt bulguları (≤8). Sıra: seviye
 // (crit > warn > diğer) → tür → adım → adımın kendi sırası. Aynı (tür, ad)

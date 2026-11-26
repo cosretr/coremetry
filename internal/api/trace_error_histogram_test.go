@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 )
@@ -77,11 +78,31 @@ func TestTraceErrorHistogramRejectsIneligible(t *testing.T) {
 	}
 }
 
+// v0.10.2477 — "avg" beyaz listede ve varsayılan: bilinmeyen / boş → ortalama
+// (önce medyan); p50 artık açıkça 0.5.
 func TestTraceErrorHistogramQuantile(t *testing.T) {
-	for in, want := range map[string]float64{"p50": 0.5, "p95": 0.95, "P99": 0.99, "": 0.5, "p999": 0.5, "x": 0.5} {
+	mean := chstore.TraceHistStatMean
+	for in, want := range map[string]float64{"p50": 0.5, "p95": 0.95, "P99": 0.99, "avg": mean, "AVG": mean, "": mean, "p999": mean, "x": mean} {
 		if got := traceErrorHistogramQuantile(in); got != want {
 			t.Errorf("%q → %v, beklenen %v", in, got, want)
 		}
+	}
+}
+
+// v0.10.2477 — linePoints verilince adım chstore.StripLineStep'ten; yoksa
+// istemcinin step'i aynen. linePoints anahtara girer (ham sorgu dizesi).
+func TestTraceStripStep(t *testing.T) {
+	now := time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
+	from := now.Add(-time.Hour)
+	if got := traceStripStep(60, 0, from, now, now); got != 60 {
+		t.Errorf("linePoints=0 → step aynen: %d", got)
+	}
+	if got := traceStripStep(60, 240, from, now, now); got != 20 {
+		t.Errorf("1 sa / 240 nokta → 20 s, got %d", got)
+	}
+	base := "hasError=true&step=60&stat=avg"
+	if traceErrorHistogramKey(base, "") == traceErrorHistogramKey(base+"&linePoints=240", "") {
+		t.Error("linePoints anahtarı değiştirmeli")
 	}
 }
 

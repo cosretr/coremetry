@@ -134,6 +134,7 @@ func BuildContextPackWith(inv Investigation, p chstore.Problem, loc *time.Locati
 	if inv.ProblemAt > 0 {
 		add("start", 0, fmt.Sprintf("BAŞLANGIÇ: %s %s · pencere %s–%s %s\n", hm(inv.ProblemAt), zone, hm(inv.Anchor.From), hm(inv.Anchor.To), zone))
 	}
+	add("known", 1, knownSectionTR(inv.Facts)) // v0.10.2477 — gerçek yoksa bölüm yok (altınlar aynen)
 
 	var b strings.Builder
 	b.WriteString("ADIMLAR:\n")

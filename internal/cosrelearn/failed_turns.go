@@ -16,6 +16,10 @@ package cosrelearn
 //	                   vermedin", "yanlış", "o değil" … (≤10 dk)
 //	tool_error         turda başarısız araç (atlanan hariç)
 //	timeout            tur ya da araç zaman aşımı
+//	round_cap          serbest döngü tur / çağrı / token tavanına dayandı
+//	                   (loop_stop sistem sinyali; cevap tavan turunda zorla)
+//	context_overflow   model bağlam penceresi taştı (hata metni) ya da geçmiş
+//	                   küçültülüp yeniden denendi = KIRPILMIŞ bağlam (loop_stop)
 //	verify_mismatch    gölge doğrulayıcı uyuşmazlık saydı (sistem sinyali)
 //	provider_error     sağlayıcı HTTP 4xx/5xx
 //	error              başka tur hatası
@@ -51,6 +55,8 @@ const (
 	FailComplaint      = "complaint_followup"
 	FailToolError      = "tool_error"
 	FailTimeout        = "timeout"
+	FailRoundCap       = "round_cap"
+	FailCtxOverflow    = "context_overflow"
 	FailVerifyMismatch = "verify_mismatch"
 	FailProviderError  = "provider_error"
 	FailError          = "error"
@@ -59,7 +65,7 @@ const (
 )
 
 // FailReasons — kapalı küme (API süzgeci ve FE etiketi bu sırayla).
-var FailReasons = []string{FailReask, FailComplaint, FailToolError, FailTimeout, FailVerifyMismatch,
+var FailReasons = []string{FailReask, FailComplaint, FailToolError, FailTimeout, FailRoundCap, FailCtxOverflow, FailVerifyMismatch,
 	FailProviderError, FailError, FailEmpty, FailClarifyOnly}
 
 const (
@@ -233,6 +239,8 @@ func TurnFailReasons(r chstore.CosreInteraction) []string {
 	case cancelled:
 	case r.Status == "error":
 		switch {
+		case ContextOverflowText(r.ErrorMsg):
+			set[FailCtxOverflow] = true
 		case isTimeout(r.ErrorMsg):
 			set[FailTimeout] = true
 		case ProviderError(r.ErrorMsg):
@@ -325,6 +333,10 @@ func DetectFailedTurns(rows []chstore.CosreInteraction, sigs []chstore.CosreSign
 			chipped[g.ExchangeID] = true
 		case SigFailedTurn:
 			for _, k := range ParseFailedTurnDetail(g.Detail) {
+				add(g.ExchangeID, k)
+			}
+		case SigLoopStop:
+			for _, k := range LoopStopReasons(g.Detail) {
 				add(g.ExchangeID, k)
 			}
 		}

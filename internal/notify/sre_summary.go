@@ -306,6 +306,11 @@ var checkNames = map[string][2]string{
 	"after_deploy":            {"Hatalar deploy sonrasında", "After a deploy"},
 	"pivot_error_spans":       {"Trace'te hatalı span", "Error spans in the trace"},
 	"error_symptom":           {"Hata belirtisi", "Error symptom"},
+	// v0.10.2477 — Problem grafı kökeni (sre known.go).
+	"graph_origin_rollout":   {"Problem grafı: deploy sonrası başladı", "Problem graph: started after a deploy"},
+	"graph_origin_elsewhere": {"Problem grafı: köken başka varlık", "Problem graph: origin is another entity"},
+	"graph_origin_external":  {"Problem grafı: köken dış servis", "Problem graph: origin is an external service"},
+	"graph_origin_db":        {"Problem grafı: köken veritabanı", "Problem graph: origin is a database"},
 }
 
 // sourceNames — adım adı → [TR, EN] (FE inv.step.* aynası).
@@ -315,6 +320,8 @@ var sourceNames = map[string][2]string{
 	"log_spike": {"Log artışı", "Log spike"}, "events": {"Olaylar", "Events"},
 	"node": {"Node baskısı", "Node pressure"}, "errors": {"Hata özeti", "Error digest"},
 	"baseline": {"Taban çizgisi", "Baseline"}, "anomalies": {"Anomaliler", "Anomalies"},
+	"graph_origin": {"Problem grafı kökeni", "Problem graph origin"}, "impact": {"Etki olayları", "Impact events"}, // v0.10.2477
+	"similar": {"Benzer onaylı vakalar", "Similar confirmed cases"},
 }
 
 // reachNames — erişim durumu → [TR, EN] (FE iq.reach.* aynası).

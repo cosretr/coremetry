@@ -7,7 +7,7 @@ import type { ChatQueryEvidence, SREInvestigation, SREInvestigationFinding, SREI
 // react-refresh). Adım adları Go internal/sre/plan.go sabitlerinin aynası.
 
 /** Boru hattı sırası (dalga 1 → dalga 2 → anlatım); tablo bu sırayla, sıralanmaz. */
-export const STEP_ORDER = ['sweep', 'deploys', 'deps', 'pivot', 'log_spike', 'events', 'node', 'summary'] as const;
+export const STEP_ORDER = ['sweep', 'deploys', 'deps', 'pivot', 'log_spike', 'events', 'node', 'graph_origin', 'impact', 'similar', 'summary'] as const; // v0.10.2477 — platformun bildiği üç adım
 
 // v0.10.2285 — adım adları katalogda (inv.step.*): events (v0.10.1288) = alarmlar +
 // aşağı akış db/ext problemleri + incident; node (v0.10.1288) tembel, yalnız

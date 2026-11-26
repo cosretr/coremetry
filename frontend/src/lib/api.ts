@@ -769,7 +769,9 @@ export const api = {
     get<TraceCountResponse>(`/api/traces/count?${qs(params)}`, signal),
   // v0.10.1082 — Errors + span-düzeyi çipte /traces şeridi: listenin AYNI
   // süzgeç parametreleri (pages/traces/scopeParams.ts) + kova adımı + istatistik.
-  tracesErrorHistogram: (params: TracesParams & { step: number; stat: string }, signal?: AbortSignal) =>
+  // v0.10.2477 — linePoints: ince çizgi bütçesi; sunucu adımı kendisi seçer
+  // (chstore.StripLineStep) ve stepSeconds'ta döndürür.
+  tracesErrorHistogram: (params: TracesParams & { step: number; stat: string; linePoints?: number }, signal?: AbortSignal) =>
     // v0.10.1801 — genel yol (④ çip-trace kipi Errors'suz); eski yol sunucuda kalır.
     get<TraceErrorHistogramResponse>(`/api/traces/histogram?${qs(params)}`, signal),
 
@@ -1576,6 +1578,8 @@ export const api = {
   putSREReplaySchedule: (body: { weekly: boolean; days: number; repeats: number }) =>
     request<import('./types').SREReplaySchedule>(`/api/sre/replay/schedule`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  sreReplayCompare: (base: string, cand: string, signal?: AbortSignal) =>
+    get<import('./types').SREReplayCompare>(`/api/sre/replay/compare?base=${encodeURIComponent(base)}&cand=${encodeURIComponent(cand)}`, signal),
   sreEvalCompare: (base: string, cand: string, signal?: AbortSignal) =>
     get<import('./types').SREEvalCompare>(`/api/sre/eval/compare?base=${encodeURIComponent(base)}&cand=${encodeURIComponent(cand)}`, signal),
   sreEvalReview: (days: number, signal?: AbortSignal) =>
@@ -3236,6 +3240,10 @@ export const api = {
      *  Sunucu step kafesine yuvarlar, [0,600] clamp. Sayım-sınıfı seriler
      *  sıfır-doldurulur; oran/gecikme pencerede istek yoksa boşluk kalır. */
     rateWindow?: number;
+    /** v0.10.2477 — /traces şerit çizgisinin nokta bütçesi (sunucu tavanı 240);
+     *  verilince sunucu adımı chstore.StripLineStep'le seçer (step/maxDataPoints
+     *  yok sayılır), stepSeconds'ta döndürür. */
+    linePoints?: number;
     aggs: { name: string; agg: string; field?: string }[];
   }, signal?: AbortSignal) =>
     request<{ stepSeconds: number; series: Record<string, SpanMetricSeries[] | null> }>('/api/spans/metric-batch', {

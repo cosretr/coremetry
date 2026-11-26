@@ -7,6 +7,8 @@ export const FAIL_REASON_LABEL: Record<string, string> = {
   complaint_followup: 'Şikâyet takibi',
   tool_error: 'Araç hatası',
   timeout: 'Zaman aşımı',
+  round_cap: 'Tur tavanı',
+  context_overflow: 'Bağlam taştı / kırpıldı',
   verify_mismatch: 'Doğrulayıcı uyuşmazlığı',
   provider_error: 'Sağlayıcı hatası',
   error: 'Hata',

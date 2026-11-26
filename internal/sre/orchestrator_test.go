@@ -629,7 +629,10 @@ func TestOrchestratorReadOnly(t *testing.T) {
 				strings.HasPrefix(name, "EnrichProblemsFor") || name == "EnrichProblemsWithRunbooks" ||
 				// v0.10.1494 (CoSRE 2d) — Context Pack okuyucuları: MV pencere RED'i,
 				// MV hata sıralaması, yayınlanmış (atomic) duyarlılık ayarı — hepsi okuma.
-				name == "ServiceWindowRED" || name == "TopErrorOperations" || name == "AnomalySensitivity") {
+				name == "ServiceWindowRED" || name == "TopErrorOperations" || name == "AnomalySensitivity" ||
+				// v0.10.2477 — platformun bildiği (known.go): üye olaylar, vaka
+				// hafızası, exception kodları — hepsi sınırlı okuma.
+				name == "ProblemEvents" || name == "SimilarIncidentCases" || name == "TopExceptionCodesForService") {
 				t.Errorf("%s: st.%s — orkestratör yalnız okur", fset.Position(sel.Pos()), name)
 			}
 		}

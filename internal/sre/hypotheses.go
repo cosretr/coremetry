@@ -148,6 +148,8 @@ var hypothesisTable = []hypothesisSpec{
 		{"deploy_before_error", 0.20, chkDeployBeforeError},
 		{"recurring_before_deploy", 0.25, chkRecurring},
 		{"rollout_failed", 0.15, chkRolloutFailed},
+		// v0.10.2477 — Problem grafı kökeni (known.go); yalnız köken varken listelenir.
+		{"graph_origin_rollout", 0.20, chkGraphOriginRollout},
 	}},
 	{HypConfig, "config", "Konfigürasyon değişikliği", 0.10, []check{
 		{"change_without_image", 0.45, chkConfigChange},
@@ -168,15 +170,18 @@ var hypothesisTable = []hypothesisSpec{
 		// Follow-up 2026-11-21 — VM client histogramı (örnekleme öncesi); yalnız
 		// okunduğunda listelenir (checkApplies), diğer servislerin skoru aynen.
 		{"downstream_exact", 0.25, chkDownstreamExact},
+		{"graph_origin_elsewhere", 0.20, chkGraphOriginElsewhere}, // v0.10.2477
 	}},
 	{HypExternal, "external", "Dış servis kesintisi", 0.10, []check{
 		{"external_problem_open", 0.45, chkExternalProblem},
 		{"external_edge_errors", 0.30, chkExternalEdges},
+		{"graph_origin_external", 0.20, chkGraphOriginExternal}, // v0.10.2477
 	}},
 	{HypDBSlow, "dependency", "Veritabanı yavaşlığı", 0.10, []check{
 		{"db_health_open", 0.40, chkDBHealth},
 		{"pivot_db_path", 0.30, chkPivotDBPath},
 		{"db_edge_slow", 0.15, chkDBEdge},
+		{"graph_origin_db", 0.20, chkGraphOriginDB}, // v0.10.2477
 	}},
 	{HypTrafficSurge, "capacity", "Trafik sıçraması", 0.10, []check{
 		{"rate_up", 0.45, chkRateUp},

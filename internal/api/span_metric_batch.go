@@ -96,6 +96,10 @@ func (s *Server) spanMetricBatch(w http.ResponseWriter, r *http.Request) {
 		// v0.9.391 (grafik-audit Faz B) — panel nokta bütçesi; 0 = eski
 		// davranış + 2000 emniyet tavanı. queryMetric ile aynı clamp.
 		MaxDataPoints int `json:"maxDataPoints"`
+		// v0.10.2477 — /traces şerit çizgisinin nokta bütçesi (tavan 240):
+		// > 0 ise adım chstore.StripLineStep'ten (dar rollup tabanının katı)
+		// ve step / maxDataPoints yok sayılır. Etkin adım anahtara girer.
+		LinePoints int `json:"linePoints"`
 		// v0.9.723 — Prometheus rate[W] kayan penceresi (saniye).
 		// 0 = kapalı. Clamp [0,600] chstore'da (spanMetricWindow).
 		RateWindow int `json:"rateWindow"`
@@ -141,6 +145,14 @@ func (s *Server) spanMetricBatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.MaxDataPoints > 4000 {
 		body.MaxDataPoints = 4000
+	}
+	if body.LinePoints > 0 {
+		// v0.10.2477 — etkin adım burada sabitlenir: anahtar (step=etkin,
+		// mdp=0) aynı adımı açıkça isteyen çağrıyla AYNI sonucu taşır —
+		// paylaşım doğru, zehirlenme yok (v0.5.187).
+		body.Step = traceStripStep(body.Step, body.LinePoints,
+			time.Unix(0, body.From), time.Unix(0, body.To), time.Now())
+		body.MaxDataPoints = 0
 	}
 	f := chstore.SpanMetricBatchFilter{
 		Filters:       filters,

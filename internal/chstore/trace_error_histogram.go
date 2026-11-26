@@ -282,9 +282,19 @@ func traceErrScopeRollupFilter(f TraceFilter, stepSec int, q float64) (SpanMetri
 // traceErrScopeRollupMaxStep — ③ kapsam kipinde rollup okuma adımının tavanı (sn).
 const traceErrScopeRollupMaxStep = 300
 
-// traceErrHistRollupQuantile — SAF: q → dar rollup agg adı (p50/p95/p99;
-// handler beyaz listesiyle aynı üç değer).
+// TraceHistStatMean — v0.10.2477: q yerine geçen işaret değeri; yanıt-süresi
+// serisi kuantil değil ARİTMETİK ORTALAMA (şeridin yeni varsayılanı "avg").
+// Rollup'ta sum(duration_sum)/sum(span_count) (rollupAggValue "avg"), ham
+// yolda avg(duration), ② / ④ kipinde trace sürelerinin ortalaması. Kuantil
+// yolları gibi ağırlıksız (örnekleme ağırlığı hiçbir şerit yolunda yok).
+const TraceHistStatMean = -1.0
+
+// traceErrHistRollupQuantile — SAF: q → dar rollup agg adı (avg/p50/p95/p99;
+// handler beyaz listesiyle aynı dört değer).
 func traceErrHistRollupQuantile(q float64) string {
+	if q < 0 {
+		return "avg"
+	}
 	switch q {
 	case 0.95:
 		return "p95"
@@ -357,16 +367,21 @@ const traceErrHistBucketExpr = "intDiv(greatest(toUnixTimestamp64Nano(time), ?),
 
 // traceErrHistSpanSQL — SAF: ① span kipi. Yer tutucu sırası: kova (3), WHERE.
 // q bind değil, SQL metnine sayı olarak girer (handler beyaz listesinden).
+// v0.10.2477 — q < 0 (TraceHistStatMean) → avg(duration).
 func traceErrHistSpanSQL(whereSQL string, q float64) string {
+	rtExpr := fmt.Sprintf("quantileTDigest(%g)(duration / 1e6)", q)
+	if q < 0 {
+		rtExpr = "avg(duration / 1e6)"
+	}
 	return fmt.Sprintf(`
 		SELECT %s AS bucket,
 		       count() AS n,
-		       toFloat64(quantileTDigest(%g)(duration / 1e6)) AS rt
+		       toFloat64(%s) AS rt
 		FROM spans %s
 		GROUP BY bucket
 		ORDER BY bucket
 		LIMIT 50000
-		SETTINGS max_execution_time = 25`, traceErrHistBucketExpr, q, whereSQL)
+		SETTINGS max_execution_time = 25`, traceErrHistBucketExpr, rtExpr, whereSQL)
 }
 
 // traceErrHistTraceSQL — SAF: ② trace kipi; adayların başlangıç + süresi.
@@ -419,9 +434,25 @@ func bucketTraceStarts(rows []traceStartRow, fromNs int64, stepSec int, q float6
 	for _, k := range keys {
 		ds := byBucket[k]
 		count = append(count, SpanMetricPoint{Time: k, Value: float64(len(ds))})
-		rt = append(rt, SpanMetricPoint{Time: k, Value: quantileLinear(ds, q)})
+		rt = append(rt, SpanMetricPoint{Time: k, Value: statOf(ds, q)})
 	}
 	return count, rt
+}
+
+// statOf — SAF (v0.10.2477): q < 0 (TraceHistStatMean) → aritmetik ortalama,
+// aksi hâlde doğrusal kuantil.
+func statOf(xs []float64, q float64) float64 {
+	if q >= 0 {
+		return quantileLinear(xs, q)
+	}
+	if len(xs) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, x := range xs {
+		sum += x
+	}
+	return sum / float64(len(xs))
 }
 
 // quantileLinear — SAF: sıralı örnekte doğrusal ara değerli kuantil.
@@ -447,7 +478,7 @@ func quantileLinear(xs []float64, q float64) float64 {
 }
 
 // TraceErrorHistogram — /traces şeridi, Errors + span-düzeyi çip (bkz. başlık).
-// q = yanıt-süresi istatistiği (0.5 / 0.95 / 0.99); step clampSpanMetricStep'ten
+// q = yanıt-süresi istatistiği (0.5 / 0.95 / 0.99; TraceHistStatMean = ortalama); step clampSpanMetricStep'ten
 // geçer (nokta bütçesi metric-batch ile aynı).
 func (s *Store) TraceErrorHistogram(ctx context.Context, f TraceFilter, stepSec int, q float64) (TraceErrorHistogram, error) {
 	out := TraceErrorHistogram{Step: clampSpanMetricStep(stepSec, f.From, f.To, 0), Source: "spans"}

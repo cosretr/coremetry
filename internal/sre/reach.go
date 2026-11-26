@@ -92,6 +92,9 @@ func buildReach(pb *Playbook, steps []Step) []ReachEntry {
 		}
 	}
 	for _, s := range steps {
+		if knownSteps[s.Name] { // v0.10.2477 — platformun türetilmiş bilgisi, telemetri kaynağı değil
+			continue
+		}
 		add(s.Name)
 	}
 	return out

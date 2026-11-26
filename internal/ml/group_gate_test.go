@@ -58,7 +58,7 @@ func TestDecideGroupPromotion(t *testing.T) {
 		{"aynı dedektörün iki olayı → açmaz",
 			[]chstore.MLEvent{gateEv("a1", detOpLatency, "orders-api", 0, 30, 100, 500), gateEv("a2", detOpLatency, "orders-api", 3, 20, 100, 500)}, in, false, "", "tek sinyal"},
 		{"-batch servis, yalnız yük sinyalleri (trace hacim + log hacim) → açmaz",
-			[]chstore.MLEvent{gateEv("t", detThroughputDrop, "billing-batch", 0, 30, 100, 10), gateEv("v", detLogVolume, "billing-batch", 5, 20, 100, 900)}, in, false, "", "batch"},
+			[]chstore.MLEvent{gateEv("t", detThroughputDrop, "billing-batch", 0, 30, 100, 10), gateEv("v", detLogVolume, "billing-batch", 5, 20, 100, 900)}, in, false, "", "grup bitti"}, // v0.10.2477: yük / yapı her serviste sayılmaz
 		{"-batch servis, trace yükü + log hacmi + trace gecikme → yük düşer, tek sinyal kalır → açmaz",
 			[]chstore.MLEvent{gateEv("t", detThroughputDrop, "billing-batch", 0, 30, 100, 10), gateEv("v", detLogVolume, "billing-batch", 2, 20, 100, 900),
 				gateEv("a", detOpLatency, "billing-batch", 5, 20, 100, 400)}, in, false, "", "tek sinyal"},

@@ -102,6 +102,10 @@ type ReplayVariant struct {
 	// Aynı etiket penceresinde noMemory ve varsayılan iki rapor = hafızanın
 	// ölçümü.
 	NoMemory bool `json:"noMemory,omitempty"`
+	// NoKnown — v0.10.2477: platformun bildiği adımlar (köken / etki / onaylı
+	// benzer vakalar) KAPALI (Investigation.NoKnown); varsayılanla iki rapor =
+	// bu bilginin ölçümü.
+	NoKnown bool `json:"noKnown,omitempty"`
 }
 
 // ReplayRun — bir Problem'in bir tekrar koşusu + notu.
@@ -122,6 +126,8 @@ type ReplayRun struct {
 	GradeErr     string `json:"gradeErr,omitempty"`
 	Attempts     int    `json:"gradeAttempts,omitempty"`
 	FinishedAt   int64  `json:"finishedAt,omitempty"`
+	// Path — yol notu (replay_path.go; deterministik, biten tekrardan).
+	Path *ReplayPath `json:"path,omitempty"`
 }
 
 // ReplayItem — etiketli bir Problem.
@@ -140,11 +146,14 @@ type ReplayItem struct {
 
 // ReplayReport — rapor satırının gövdesi.
 type ReplayReport struct {
-	ReportID   string        `json:"reportId"`
-	State      string        `json:"state"`
-	Trigger    string        `json:"trigger"` // manual | schedule
-	By         string        `json:"by,omitempty"`
-	Build      string        `json:"build,omitempty"`
+	ReportID string `json:"reportId"`
+	State    string `json:"state"`
+	Trigger  string `json:"trigger"` // manual | schedule
+	By       string `json:"by,omitempty"`
+	Build    string `json:"build,omitempty"`
+	// GradeBuild — notlayıcı tikin sunucu sürümü (son değişiklik; Build =
+	// raporu başlatan sürüm). Sürüm geçişinde ikisi ayrışır.
+	GradeBuild string        `json:"gradeBuild,omitempty"`
 	Days       int           `json:"days"`
 	Repeats    int           `json:"repeats"`
 	Limit      int           `json:"limit"`
@@ -246,6 +255,11 @@ func encodeReplayReport(rep ReplayReport) (string, error) {
 		for j := range runs {
 			runs[j].Conclusion = truncRunes(runs[j].Conclusion, 120)
 			runs[j].Top = nil
+			if runs[j].Path != nil {
+				p := *runs[j].Path
+				p.WastedSteps = nil
+				runs[j].Path = &p
+			}
 		}
 		cp.Items[i].Runs = runs
 	}
@@ -391,7 +405,7 @@ func StartReplayReport(ctx context.Context, st ReplayStore, req ReplayReportRequ
 				run := ReplayRun{Rep: r, State: StateQueued}
 				created, err := EnqueueReplay(ctx, st, ReplayRequest{RunID: ReplayRunKey(rep.ReportID, r), CaseID: c.CaseID,
 					ProblemID: it.ProblemID, Service: it.Service, ProblemStartedAt: it.StartedAt, By: req.By, Now: now,
-					ContextPack: req.Variant.ContextPack, Plain: req.Variant.Plain, NoMemory: req.Variant.NoMemory}, cfg)
+					ContextPack: req.Variant.ContextPack, Plain: req.Variant.Plain, NoMemory: req.Variant.NoMemory, NoKnown: req.Variant.NoKnown}, cfg)
 				switch {
 				case err != nil:
 					run.State, run.Reason = CaseSkipped, truncRunes("kuyruğa alınamadı: "+err.Error(), 200)
@@ -455,6 +469,8 @@ func applyReplayRow(it ReplayItem, r *ReplayRun, inv Investigation) bool {
 		r.Top = caseTop(inv)
 		r.Conclusion = truncRunes(replayConclusion(inv), replayStoredRunes)
 		r.Inconclusive = replayInconclusive(inv)
+		path := replayPathOf(inv)
+		r.Path = &path
 		if inv.State == StateError {
 			r.Reason = truncRunes(firstNonEmpty(inv.Error, "tekrar tamamlanamadı"), 200)
 		}
@@ -721,6 +737,9 @@ func RunReplayTick(ctx context.Context, d ReplayGraderDeps, judge ReplayJudge) e
 		}
 		budget = left
 		if changed {
+			if d.Build != "" {
+				next.GradeBuild = d.Build
+			}
 			if err := saveReplayReport(ctx, d.Store, next); err != nil {
 				return err
 			}

@@ -32,7 +32,7 @@ const LEGEND_COLLAPSE_THRESHOLD = 8;
 export interface StatsLegendSeries {
   label: string;
   color: string;   // CSS var() token ya da renk — swatch'ta doğrudan
-  values: (number | null)[];
+  values: (number | null | undefined)[]; // v0.10.2477 — undefined = örnek yok (seyrek çubuk), istatistiğe girmez
   unit?: string;
 }
 

@@ -43,6 +43,9 @@ func captureVerify(t *testing.T) *verifyCapture {
 		vc.mu.Unlock()
 	}
 	setSystemSignalWriter(func(_ context.Context, g chstore.CosreSignal) error {
+		if g.Kind == cosrelearn.SigLoopStop {
+			return nil // döngü künyesi (chat_loop_shape.go) doğrulayıcının sinyali değil
+		}
 		vc.mu.Lock()
 		vc.sigs = append(vc.sigs, g)
 		vc.mu.Unlock()

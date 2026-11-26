@@ -60,6 +60,13 @@ type Settings struct {
 	// (en olası neden / kanıt / kör noktalar / rapor bağlantısı). nil = AÇIK
 	// (operatör onayı 2026-11-21); false = bildirim bugünkü gibi.
 	NotifySummary *bool `json:"notifySummary,omitempty"`
+	// GraphOrigin / ImpactEvents / SimilarCases — v0.10.2477 (known.go):
+	// araştırma platformun bildiğiyle başlar — Problem grafı kökeni, üye
+	// olayların etki cümleleri, onaylı benzer geçmiş vakalar. nil = AÇIK
+	// (operatör onayı 2026-11-26); false = adım planlanmaz (kayıt eskisi gibi).
+	GraphOrigin  *bool `json:"graphOrigin,omitempty"`
+	ImpactEvents *bool `json:"impactEvents,omitempty"`
+	SimilarCases *bool `json:"similarCases,omitempty"`
 	// UpdatedBy / UpdatedAt — son admin PUT.
 	UpdatedBy string `json:"updatedBy,omitempty"`
 	UpdatedAt int64  `json:"updatedAt,omitempty"`
@@ -125,6 +132,11 @@ func (c Settings) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
 
 // NotifySummaryOn — nil = açık.
 func (c Settings) NotifySummaryOn() bool { return c.NotifySummary == nil || *c.NotifySummary }
+
+// GraphOriginOn / ImpactEventsOn / SimilarCasesOn — nil = açık (v0.10.2477).
+func (c Settings) GraphOriginOn() bool  { return c.GraphOrigin == nil || *c.GraphOrigin }
+func (c Settings) ImpactEventsOn() bool { return c.ImpactEvents == nil || *c.ImpactEvents }
+func (c Settings) SimilarCasesOn() bool { return c.SimilarCases == nil || *c.SimilarCases }
 
 // Priorities — çözülmüş otomatik öncelik listesi.
 func (c Settings) Priorities() []string {

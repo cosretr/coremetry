@@ -12844,7 +12844,7 @@ export interface SREEvalCompare {
 export type SREReplayGrade = 'bullseye' | 'on_target' | 'miss' | 'nowhere';
 /** plain — CoSRE Faz B kapalı (oyun kitabı / hipotez durumu / kanıt kapısı; B öncesi). */
 /** CoSRE Faz E — noMemory: ekip notları kapalı (hafıza açık/kapalı kıyası). */
-export interface SREReplayVariant { contextPack?: boolean; plain?: boolean; noMemory?: boolean }
+export interface SREReplayVariant { contextPack?: boolean; plain?: boolean; noMemory?: boolean; noKnown?: boolean }
 export interface SREReplayRun {
   rep: number;
   state: string;
@@ -12861,6 +12861,18 @@ export interface SREReplayRun {
   gradeErr?: string;
   gradeAttempts?: number;
   finishedAt?: number;
+  /** CoSRE ölçüm — yol notu (sre.ReplayPath; deterministik, biten tekrardan). */
+  path?: SREReplayPath;
+}
+/** Go: sre.ReplayPath — wasted = sonucu hiçbir hipotez künyesine / bulguya girmeyen okuma. */
+export interface SREReplayPath {
+  steps: number;
+  toolCalls: number;
+  rounds: number;
+  wasted: number;
+  wastedSteps?: string[];
+  capHit?: boolean;
+  cap?: 'budget' | 'step';
 }
 export interface SREReplayItem {
   problemId: string;
@@ -12896,6 +12908,13 @@ export interface SREReplaySummary {
   maxSpread: number;
   /** CoSRE Faz B3 — kapının "kanıt yetersiz" dediği koşu sayısı (eski rapor: yok). */
   inconclusive?: number;
+  /** CoSRE ölçüm — yol notu medyanları (eski rapor: pathRuns 0 / null). */
+  pathRuns?: number;
+  capHits?: number;
+  medSteps?: number | null;
+  medToolCalls?: number | null;
+  medRounds?: number | null;
+  medWasted?: number | null;
 }
 export interface SREReplayReportBase {
   reportId: string;
@@ -12903,6 +12922,8 @@ export interface SREReplayReportBase {
   trigger: 'manual' | 'schedule';
   by?: string;
   build?: string;
+  /** notlayıcı tikin sunucu sürümü (sürüm geçişinde build'den ayrışır) */
+  gradeBuild?: string;
   days: number;
   repeats: number;
   limit: number;
@@ -12916,6 +12937,49 @@ export interface SREReplayReportBase {
 }
 export interface SREReplayListItem extends SREReplayReportBase { summary: SREReplaySummary }
 export interface SREReplayDetail extends SREReplayReportBase { summary: SREReplaySummary; items: SREReplayItem[] }
+/** Go: sre.ReplayCompareSide / ReplayCompareItem / ReplayCompare (GET /api/sre/replay/compare). */
+export interface SREReplayCompareSide {
+  reportId: string;
+  state: string;
+  build?: string;
+  gradeBuild?: string;
+  createdAt: number;
+  days: number;
+  repeats: number;
+  variant: SREReplayVariant;
+  judge?: string;
+  summary: SREReplaySummary;
+}
+export type SREReplayVerdict = 'improved' | 'regressed' | 'same' | 'ungraded' | 'only_base' | 'only_cand';
+export interface SREReplayCompareItem {
+  problemId: string;
+  service: string;
+  cause?: string;
+  baseMean: number | null;
+  candMean: number | null;
+  delta: number | null;
+  baseGrades: SREReplayGrade[];
+  candGrades: SREReplayGrade[];
+  verdict: SREReplayVerdict;
+}
+export interface SREReplayCompare {
+  base: SREReplayCompareSide;
+  cand: SREReplayCompareSide;
+  scoreDelta: number | null;
+  reachDelta: number | null;
+  distDelta: Record<string, number>;
+  medToolCallsDelta: number | null;
+  medRoundsDelta: number | null;
+  medWastedDelta: number | null;
+  capHitsDelta: number;
+  improved: number;
+  regressed: number;
+  same: number;
+  ungraded: number;
+  onlyBase: number;
+  onlyCand: number;
+  items: SREReplayCompareItem[];
+}
 export interface SREReplaySchedule { weekly: boolean; days: number; repeats: number; updatedBy?: string; updatedAt?: number }
 export interface SREReplayListResponse {
   reports: SREReplayListItem[];
@@ -12985,6 +13049,10 @@ export interface SRESettings {
   evidenceGate?: SREEvidenceGateMode;
   /** CoSRE Faz C1 — Problem bildirimine araştırma özeti; yok = açık (varsayılan). */
   notifySummary?: boolean;
+  /** v0.10.2477 — araştırma adımları: Problem grafı kökeni / etki olayları / onaylı benzer vakalar; yok = açık. */
+  graphOrigin?: boolean;
+  impactEvents?: boolean;
+  similarCases?: boolean;
   updatedBy?: string;
   updatedAt?: number; // unix ns
 }

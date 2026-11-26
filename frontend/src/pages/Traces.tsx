@@ -39,7 +39,7 @@ import { SegmentedControl } from '@/components/coremetry/SegmentedControl'; // v
 import { Chip } from '@/components/ui/Chip';
 import { Pager } from '@/components/Pager';
 import { ColumnManager } from '@/components/ColumnManager';
-import { stepForPoints, traceStripMaxDataPoints } from '@/lib/chartStep';
+import { stepForPoints, traceStripMaxDataPoints, traceStripLinePoints } from '@/lib/chartStep';
 import { VirtualTable, ROW_H } from '@/components/ui/DataTable';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState } from '@/components/ui/DataTable';
 import type { DataTable, DataTableStateProps, VirtualTableProps } from '@/components/ui/DataTable';
@@ -713,7 +713,8 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
 
 
   // v0.8.72 — TRUE span volume over the selected window (not the 50-row table
-  // page). Aggregated count/errors/p99 per ~30 buckets, mirroring the table's
+  // page). Aggregated count/errors/<stat> (v0.10.2477: line at its own finer
+  // step, ≤240 points; bars summed client-side to ≤100 buckets), mirroring the table's
   // filter (service→dsl, search, advFilters), so the header chart + the
   // TOTAL/ERRORS/P99 stats reflect REAL traffic. The table still
   // carries the drill-in sample.
@@ -724,6 +725,9 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
     // v0.10.1082 — Errors şeridi (error-histogram) cevabının kipi; yoksa metric-batch.
     // v0.10.1101 — scopeOnly: çipsiz Errors (yalnız servis / ortam / küme).
     errStrip?: { mode: 'span' | 'trace' | 'chip'; capped: boolean; scopeOnly: boolean };
+    // v0.10.2477 — seriler ince çizgi adımında (sunucunun stepSeconds'u);
+    // çubuklar barStepSec'e istemcide toplanır (volumeSeries stripBarStep).
+    grid?: { lineStepSec: number; barStepSec: number };
   } | null>(null);
   useEffect(() => {
     if (view !== 'list') return;
@@ -736,6 +740,12 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
     // v0.9.715 (operatör: "barlar çok küçülmüş") — bar bütçesi: ~12px/bar.
     // v0.10.1007 (operatör: "histogram bar sayısı … çok") — tavan 100 çubuk.
     const step = stepForPoints(windowSec, traceStripMaxDataPoints());
+    // v0.10.2477 (operator-reported: "süre çizgisi daha granüler olabilir") —
+    // TEK sorgu ince çizgi adımında (linePoints → sunucu chstore.StripLineStep:
+    // ≤240 nokta, dar rollup tabanının katı); `step` çubuk adımıdır ve
+    // istemcide toplama hedefi olarak kalır.
+    const linePoints = traceStripLinePoints();
+    const gridFor = (lineStepSec: number) => ({ lineStepSec, barStepSec: step });
     // v0.10.1082 (operator-reported, prod: "Error seçildiğinde histogram
     // gelmiyor") — Errors + span-düzeyi çip: şerit metric-batch'te hatayı
     // SAYILAN span'de arıyordu (`status = error` çipi; giriş kapsamında bir de
@@ -754,12 +764,13 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
       let cancelledE = false;
       const ctlE = new AbortController();
       const scopeOnly = errorStripScopeOnly(scopeP);
-      api.tracesErrorHistogram({ ...scopeP, from, to, step, stat: stripStat }, ctlE.signal)
+      api.tracesErrorHistogram({ ...scopeP, from, to, step, stat: stripStat, linePoints }, ctlE.signal)
         .then(r => {
           if (cancelledE) return;
           setVolSeries({
             count: r.series.count ?? [], errors: r.series.errors ?? [], rt: r.series.rt ?? [],
             errStrip: { mode: r.mode, capped: r.capped, scopeOnly },
+            grid: gridFor(r.stepSeconds),
           });
         })
         .catch((e: unknown) => { if (!cancelledE && !isCanceled(e)) setVolSeries(null); });
@@ -824,11 +835,13 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
       // bayrağı gitmez: kök yüklemi çiple aynı span'de AND'lenir → sıfır.
       rootOnly: stripRootOnly(scope, filter.rootOnly) || undefined,
       hasError: filter.hasError || undefined,
+      linePoints, // v0.10.2477 — ince çizgi adımı sunucuda (step yok sayılır)
       aggs: [
         { name: 'count', agg: 'count' },
         { name: 'errors', agg: 'errors' },
-        // v0.10.513 — istatistik seçime bağlı (p99 varsayılan, v0.10.1524); dar rollup
-        // fast-path p50/p95/p99'u aynı tDigest'ten servis eder.
+        // v0.10.513 — istatistik seçime bağlı (avg varsayılan, v0.10.2477; önce p99
+        // v0.10.1524); op-MV / dar rollup fast-path avg'yi Σsüre/Σsayı'dan,
+        // p50/p95/p99'u aynı tDigest'ten servis eder.
         { name: 'rt', agg: stripStat, field: 'duration_ms' },
       ],
     }, ctl.signal)
@@ -838,6 +851,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
           count: r.series.count ?? [],
           errors: r.series.errors ?? [],
           rt: r.series.rt ?? [],
+          grid: gridFor(r.stepSeconds),
         });
       })
       .catch((e: unknown) => { if (!cancelled && !isCanceled(e)) setVolSeries(null); });
@@ -1459,7 +1473,7 @@ function TracesPageInner({ onSelfWrite }: { onSelfWrite: (search: string) => voi
             // slimmer + recedes — it's the brush/overview "tool", not the
             // headline chart; the RED strip below carries the filtered numbers.
             <VolumeChart count={volSeries?.count ?? null} errors={volSeries?.errors ?? null} latency={volSeries?.rt ?? null}
-              stat={stripStat}
+              stat={stripStat} grid={volSeries?.grid}
               // v0.10.268 — Dynatrace ölçeği (mockup A: 200 px).
               // v0.10.486 (operatör: "histogram biraz daha shrink edilebilir") — kompakt 170 → 130.
               // v0.10.513 — shrink/expand kaldırıldı; tek yükseklik.

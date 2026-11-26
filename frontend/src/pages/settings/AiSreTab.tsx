@@ -144,6 +144,18 @@ export function AiSreTab() {
             hint="En olası neden, 2–3 kanıt, kör noktalar ve rapor bağlantısı. Araştırma bildirimden sonra biterse Zoom mesajı düzenlenir (diğer kanallara konuda tek kısa yanıt). Kanıt kapısı 'yetersiz' derse neden yazılmaz. Varsayılan: açık."
             onCheckedChange={v => setForm(f => ({ ...f, notifySummary: v }))} />
 
+          {/* v0.10.2477 — araştırma platformun bildiğiyle başlar; her biri geri alınabilir. */}
+          <SectionTitle>Araştırmanın başlangıç bilgisi</SectionTitle>
+          <CheckboxField className="mb-2" label="Problem grafı kökeni (sre_agent.graphOrigin)" checked={form.graphOrigin} disabled={busy}
+            hint="Birleşik Problem'in kökeni (deploy sonrası başladı / ortak bağımlılık / en derin / ilk bozulan) kayda sabit bilgi olarak girer ve hipotez skorunda kanıt sayılır. Zayıf köken işaretlenir, skoru etkilemez. Varsayılan: açık."
+            onCheckedChange={v => setForm(f => ({ ...f, graphOrigin: v }))} />
+          <CheckboxField className="mb-2" label="Etki olayları (sre_agent.impactEvents)" checked={form.impactEvents} disabled={busy}
+            hint="Problem'in üye olayları (servis / uç nokta hata oranı, yanıt süresi, consumer lag) 'normalde X, şimdi Y' sayılarıyla sabit bulgu olur. Varsayılan: açık."
+            onCheckedChange={v => setForm(f => ({ ...f, impactEvents: v }))} />
+          <CheckboxField className="mb-3" label="Benzer onaylı vakalar (sre_agent.similarCases)" checked={form.similarCases} disabled={busy}
+            hint="Yalnız ekip onaylı geçmiş vakalardan (kök neden etiketi) en benzer 3'ü: belirti → kök neden → çözüm. Oylar ve triage düğmeleri kullanılmaz. Varsayılan: açık."
+            onCheckedChange={v => setForm(f => ({ ...f, similarCases: v }))} />
+
           <ActionRow
             secondary={meta.updatedAt ? (
               <span className={HINT} title={tsLong(meta.updatedAt)}>

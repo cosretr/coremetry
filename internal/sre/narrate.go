@@ -250,6 +250,12 @@ func stepLabelTR(n string) string {
 		return "anomaliler"
 	case stepErrors:
 		return "hata özeti"
+	case stepGraphOrigin: // v0.10.2477 — platformun bildiği (known.go)
+		return "Problem grafı kökeni"
+	case stepImpact:
+		return "etki olayları"
+	case stepSimilar:
+		return "benzer onaylı vakalar"
 	}
 	return n
 }

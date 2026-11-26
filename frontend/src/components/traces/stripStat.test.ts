@@ -5,23 +5,26 @@ import { resolve } from 'node:path';
 import { STRIP_STATS, STRIP_STAT_DEFAULT, parseStripStat, stripStatLabel, stripStatHeaderLabel } from './stripStat';
 
 describe('stripStat', () => {
-  it('varsayılan p99 (v0.10.1524 operatör: "Default p99 olsun"); tanınmayan/boş değer varsayılana düşer', () => {
-    expect(STRIP_STAT_DEFAULT).toBe('p99');
-    expect(parseStripStat(null)).toBe('p99');
-    expect(parseStripStat(undefined)).toBe('p99');
-    expect(parseStripStat('')).toBe('p99');
-    expect(parseStripStat('avg')).toBe('p99');
-    // açık seçim (URL ?rt= / kayıtlı görünüm) varsayılanı YENER
+  it('varsayılan avg (v0.10.2477 operatör: "average süre olsun default"; önce p99 v0.10.1524); tanınmayan/boş değer varsayılana düşer', () => {
+    expect(STRIP_STAT_DEFAULT).toBe('avg');
+    expect(parseStripStat(null)).toBe('avg');
+    expect(parseStripStat(undefined)).toBe('avg');
+    expect(parseStripStat('')).toBe('avg');
+    expect(parseStripStat('p999')).toBe('avg');
+    expect(parseStripStat('avg')).toBe('avg');
+    // açık seçim (URL ?rt= / kayıtlı görünüm) varsayılanı YENER — eski ?rt=p99 linkleri dahil
     expect(parseStripStat('p50')).toBe('p50');
     expect(parseStripStat('p95')).toBe('p95');
     expect(parseStripStat('p99')).toBe('p99');
-    expect(STRIP_STATS).toEqual(['p50', 'p95', 'p99']);
+    expect(STRIP_STATS).toEqual(['avg', 'p50', 'p95', 'p99']);
   });
-  it('etiketler: p50 "median", başlık "P95 AVG" (v0.10.660: aralık ortalaması)', () => {
+  it('etiketler: p50 "median", avg "average"; başlık "P95 AVG" (v0.10.660: aralık ortalaması), avg\'de yalnız "AVG"', () => {
     expect(stripStatLabel('p50')).toBe('median');
+    expect(stripStatLabel('avg')).toBe('average');
     expect(stripStatLabel('p95')).toBe('p95');
     expect(stripStatHeaderLabel('p50')).toBe('MEDIAN AVG');
     expect(stripStatHeaderLabel('p99')).toBe('P99 AVG');
+    expect(stripStatHeaderLabel('avg')).toBe('AVG');
   });
   it('kaynak pinleri: Traces şeridi ?rt= okur/yazar (varsayılan yazılmaz), agg seçime bağlı, expand düğmesi yok', () => {
     const src = readFileSync(resolve(__dirname, '../../pages/Traces.tsx'), 'utf8');
