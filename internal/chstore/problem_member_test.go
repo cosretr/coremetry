@@ -198,7 +198,7 @@ func TestMemberDetectorForRule(t *testing.T) {
 // diğer okuyucular (Problem, bildirim, karne) değişmez.
 func TestMLEventsWhereViews(t *testing.T) {
 	now := time.Now()
-	plat := "(class = 'telemetry_volume' OR detector = 'svc_volume_spike')"
+	plat := "(class = 'telemetry_volume' OR detector IN ('svc_volume_spike', 'svc_telemetry_volume'))"
 	cases := []struct {
 		f    MLEventsFilter
 		want string
@@ -206,7 +206,7 @@ func TestMLEventsWhereViews(t *testing.T) {
 	}{
 		{MLEventsFilter{Since: now, View: MLViewService, recCols: true}, "NOT " + plat, ""},
 		{MLEventsFilter{Since: now, View: MLViewPlatform, recCols: true}, plat, "NOT ("},
-		{MLEventsFilter{Since: now, View: MLViewPlatform}, "detector = 'svc_volume_spike'", "class"},
+		{MLEventsFilter{Since: now, View: MLViewPlatform}, "detector IN ('svc_volume_spike', 'svc_telemetry_volume')", "class"},
 		{MLEventsFilter{Since: now, View: MLViewHeld, recCols: true}, `position(record, '"passed":false') > 0`, ""},
 		{MLEventsFilter{Since: now, recCols: true}, "", "class"},
 	}

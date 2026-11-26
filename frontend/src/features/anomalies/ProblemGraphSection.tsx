@@ -41,14 +41,14 @@ export function ProblemFrequentChip({ problemId }: { problemId: string }) {
 }
 
 /** v0.10.2281 (S3) — "Tekrar" bölümü; sık değilse hiçbir şey çizmez. */
-export function ProblemRepeatSection({ problemId }: { problemId: string }) {
+export function ProblemRepeatSection({ problemId, startedAt }: { problemId: string; startedAt?: number }) {
   const q = useProblemGraph(problemId);
   const t = useGraphT();
   const f = q.data?.frequent;
   if (!f?.frequent) return null;
   return (
     <Sect title={t('pg.rep.title')} sub={t('pg.rep.sub')}>
-      <RepeatBlock v={f} t={t} when={whenDT} />
+      <RepeatBlock v={f} t={t} when={whenDT} startedAt={startedAt} />
     </Sect>
   );
 }

@@ -150,14 +150,18 @@ func judgeVolume(in volInput) volJudgement {
 		j.Reason = "dwell: yeterli kova yok"
 		return j
 	}
-	entriesOK, thin := true, false
+	entriesOK, anyEntries, thin := true, false, false
 	for _, e := range in.Entries {
 		entriesOK = entriesOK && e > 0
-		thin = thin || (e > 0 && e < volMinEntries)
+		anyEntries = anyEntries || e > 0
+		thin = thin || e < volMinEntries
 	}
-	if entriesOK && thin {
+	if anyEntries && thin {
 		// Örnek kapısı (2026-11-21): giriş span'i var ama az — oran gürültü,
 		// ham span sayısına da düşülmez (aynı örneklenmiş veri, aynı sapma).
+		// v0.10.2475: giriş span'i yalnız BAZI kovalarda 0 olan servis de az
+		// örneklidir (önce entriesOK=false onu kapısız ham span ölçüsüne
+		// düşürüyordu). Ham span ölçüsü yalnız giriş span'i HİÇ olmayan servis.
 		j.Reason = "örnek az: kovada örneklenmiş giriş span'i < volMinEntries"
 		return j
 	}

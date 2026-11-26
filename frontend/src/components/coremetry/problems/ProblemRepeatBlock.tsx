@@ -16,12 +16,12 @@ export function FrequentChip({ f, t, enforce }: { f: { prior24h: number; days7d:
   );
 }
 
-export function RepeatBlock({ v, t, when }: { v: FrequentVerdict; t: GraphT; when: (ns: number) => string }) {
+export function RepeatBlock({ v, t, when, startedAt }: { v: FrequentVerdict; t: GraphT; when: (ns: number) => string; startedAt?: number }) {
   const eps = (v.episodes ?? []).slice(0, 5);
   return (
     <div className="flex flex-col gap-2" data-testid="pg-repeat">
       <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3.5 gap-y-1 text-xs">
-        {repeatRows(v, t).map(r => (
+        {repeatRows(v, t, startedAt).map(r => (
           <div key={r.k} className="contents">
             <dt className="text-muted-foreground">{r.k}</dt>
             <dd className="m-0 [overflow-wrap:anywhere]">{r.v}</dd>

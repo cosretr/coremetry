@@ -101,7 +101,8 @@ Go workers that count raw spans: `internal/topology/aggregator.go`
 `red_series.go`, `compare_baseline.go`, `compare_periods.go`,
 `baseline.go`, `evaluator*.go`, `anomaly*.go`, `slo*.go`,
 `service_slowdown.go`, `top_errors.go`, `fleet_errors.go`, `db_*.go`,
-`messaging_*.go`, `dependencies.go`, `ml_volume.go`, `volume_record.go`.
+`messaging_*.go`, `dependencies.go` (`ml_volume.go` / `volume_record.go`
+stay unweighted since v0.10.2475).
 Each gets one helper instead of a literal: `spanCountExpr(cov)` →
 `countMerge(span_count_state)` or `sumMerge(w_span_count_state)` by
 coverage (below). Raw-span verification reads (`RawSpanCounts`,
@@ -333,7 +334,7 @@ v0.10.2440:
 | Anomaly `p99_ms` / `request_rate` | weighted, `BaselineFloor` | z, AbsFloor 10 ms | relative | re-baselines |
 | Seasonal baseline | weighted, waits `minDays` | — | relative | falls back to the recent-history baseline |
 | ML impact rule (`svc_error_rate`, response time) | VictoriaMetrics only | Floor 1 %, +50 % / +1 pt | absolute + relative | unaffected |
-| ML telemetry volume (`ml_volume.go`) | weighted (both MVs) | spans/request ratio | relative, scale-free | unaffected (ratio) |
+| ML telemetry volume (`ml_volume.go`) | **no** — stored counts since v0.10.2475 | spans/request ratio + sample gate (200 sampled entry spans / bucket) | absolute gate | unaffected (weighted entries had loosened the sample gate ×≈ 20) |
 | Problem standard impact floors (notify_policy D6) | value of the source Problem | 30 failed / 5 m or ≥ 1 % with ≥ 30 calls | absolute | inherits the source: error % lower, calls higher |
 | service_slowdown, SLO good/total | weighted since v0.10.2442 | rise factor / SLO target | relative / ratio | slowdown: base p95 stays stored until 24 h after the switch; SLO ratio drops toward the true failure share |
 | DB health (`db-health:`) | weighted since v0.10.2452 (counts per bucket; p99 full windows) | MinCallerCalls / ErrorPct / P99Ms / MinErrorCount, P99RiseFactor vs 24 h | absolute + relative | calls ×≈ 20 (more callers pass MinCallerCalls), error % drops like error_rate, error count ≈ unchanged; reference stored for 24 h after the switch |

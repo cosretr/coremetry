@@ -249,12 +249,18 @@ const (
 )
 
 // mlPlatformCond — SAF: platform satırı = sınıfı telemetry_volume (K8) ya da
-// eski svc_volume_spike satırı (K11: dedektör adıyla). Kolon yoksa yalnız ad.
+// telemetri hacmi dedektörlerinin (eski svc_volume_spike, K11; halefi
+// svc_telemetry_volume) satırı — dedektör adıyla, sınıfından bağımsız.
+// v0.10.2475 (operatör): hacim olayı anomali DEĞİL; kaydı henüz / hiç
+// eklenmemiş (sınıf boş) ya da etki kanıtıyla service_anomaly sınıflı hacim
+// olayı da servis listesine (ve onun sayılarına) girmez, "Telemetri hacmi"
+// görünümünde kalır. Kolon yoksa yalnız ad.
 func mlPlatformCond(recCols bool) string {
+	dets := "detector IN ('" + MLDetSvcVolumeSpike + "', '" + MLDetSvcTelemetryVolume + "')"
 	if !recCols {
-		return "detector = '" + MLDetSvcVolumeSpike + "'"
+		return dets
 	}
-	return "(class = 'telemetry_volume' OR detector = '" + MLDetSvcVolumeSpike + "')"
+	return "(class = 'telemetry_volume' OR " + dets + ")"
 }
 
 // mlHeldCond — SAF (v0.10.2343): A2'nin liste süzgeci; kolon yoksa held

@@ -68,3 +68,27 @@ describe('alertCause', () => {
     })).toEqual({ text: 'Sorun büyük olasılıkla checkout servisinin kendisinde. Başlangıçtan 10 dk önce v2.0.0 deploy edildi.', confidence: '%72 güven' });
   });
 });
+
+// v0.10.2475 — consumer lag Problem'i: ham ölçü satırı ("ml_group_lag value
+// 17936.00, threshold 5.00") yerine manşet; "kim" topic + mesaj + başlangıç.
+describe('consumer lag kutuları', () => {
+  const lagP = { ruleId: 'anomaly-auto:group:a', ruleName: 'ML · anomali grubu', service: 'checkout', metric: 'ml_group_lag', value: 17936, threshold: 5 } as typeof base;
+  const s = std({
+    family: 'rule', kind: 'anomaly_auto',
+    headline: 'checkout · Kafka consumer lag: normalde ~5 mesaj, şimdi 26 (topic orders-topic).',
+    headlineMsg: { k: 'h.mlLagT', a: { svc: 'checkout', n: '5', v: '26', t: 'orders-topic' } },
+    impact: { primary: { text: 'topic orders-topic: 26 mesaj geride (normalde ~5)', msg: { k: 'imp.lagT', a: { t: 'orders-topic', v: '26', n: '5' } } }, known: true, floor: {} } as unknown as ProblemStandard['impact'],
+    evidence: { sentence: 'Lag etki kuralının eşiğini aştı; ölçü VictoriaMetrics\'ten (örneklenmemiş).', source: 'vm' } as ProblemStandard['evidence'],
+    since: { startedAt: new Date(2026, 10, 26, 12, 35).getTime() * 1e6, durationSec: 60, ongoing: true },
+    lag: { topic: 'orders-topic', observed: 26, baseline: 5 },
+  });
+  it('ne oluyor: manşet + kanıt, ham ölçü adı yok', () => {
+    const txt = alertWhatText(lagP, s);
+    expect(txt).toBe('checkout · Kafka consumer lag: normalde ~5 mesaj, şimdi 26 (topic orders-topic). Lag etki kuralının eşiğini aştı; ölçü VictoriaMetrics\'ten (örneklenmemiş).');
+    expect(txt).not.toMatch(/ml_group_lag|eşik 5/);
+  });
+  it('kim etkileniyor: topic, mesaj ve başlangıç (TR / EN)', () => {
+    expect(alertWhoText(lagP, s)).toMatch(/^checkout \(consumer\) — topic orders-topic: 26 mesaj geride \(normalde ~5\) · (26\.11 )?12:35 başladı\.$/);
+    expect(alertWhoText(lagP, s, 'en')).toMatch(/^checkout \(consumer\) — topic orders-topic: 26 messages behind \(normally ~5\) · started (26\.11 )?12:35\.$/);
+  });
+});

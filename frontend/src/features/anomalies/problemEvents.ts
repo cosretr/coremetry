@@ -80,8 +80,14 @@ export function problemEventRaw(e: Pick<ProblemEvent, 'observed' | 'baseline'>, 
 export function problemEventLines(events: ProblemEvent[] | undefined, clock: (ns: number) => string, lang: Lang = 'tr'): ProblemEventLine[] {
   return (events ?? []).map((e, i) => {
     const parts = [clock(e.startedAt), problemEventName(e, lang) + (e.own ? t('pev.own', lang) : '')];
-    const ratio = problemEventRatio(e, lang);
-    if (ratio) parts.push(ratio);
+    if (e.measure === 'consumer_lag') {
+      // v0.10.2475 — lag: birimsiz "1.705×" yerine ölçü, topic ve normal → şimdi.
+      parts[1] = t('pev.lag', lang) + (e.topic ? ` · ${e.topic}` : '') + (e.own ? t('pev.own', lang) : '');
+      parts.push(tf('pev.lagVals', lang, { b: Math.round(e.baseline).toLocaleString(LOCALE[lang]), o: Math.round(e.observed).toLocaleString(LOCALE[lang]) }));
+    } else {
+      const ratio = problemEventRatio(e, lang);
+      if (ratio) parts.push(ratio);
+    }
     if (!e.live) parts.push(t('pev.ended', lang));
     return {
       key: `${e.detector}:${e.ruleId ?? e.eventId ?? ''}:${e.startedAt}:${i}`,
@@ -93,7 +99,12 @@ export function problemEventLines(events: ProblemEvent[] | undefined, clock: (ns
   });
 }
 
-/** SAF: kısa liste + kalan sayısı ("ve N olay daha" metni çağıranda). */
+/** SAF: kısa liste + kalan sayısı ("ve N olay daha" metni çağıranda).
+ *  v0.10.2475 — kısa liste önce SÜREN olayları (zaman sırasıyla), sonra
+ *  biteni en yeniden geriye gösterir: 24 olaylı Problem'de ilk beş hep en
+ *  eski, bitmiş olaylardı ve "sürüyor" başlığıyla çelişiyor görünüyordu.
+ *  Tam liste (Teknik kanıt) zaman sırasında kalır. */
 export function splitEventLines(lines: ProblemEventLine[], shown = EVENT_LINES_SHOWN): { head: ProblemEventLine[]; rest: number } {
-  return { head: lines.slice(0, shown), rest: Math.max(0, lines.length - shown) };
+  const ordered = [...lines.filter(l => l.live), ...lines.filter(l => !l.live).reverse()];
+  return { head: ordered.slice(0, shown), rest: Math.max(0, lines.length - shown) };
 }

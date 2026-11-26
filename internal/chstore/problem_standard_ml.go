@@ -258,7 +258,7 @@ func mlEpRtMsg(headline string) *StdMsg {
 // oranı ya da yanıt süresi cümlesi; v0.10.2474 uç nokta cümleleri);
 // serbest metinde nil.
 func mlPromotedMsg(headline string) *StdMsg {
-	for _, f := range []func(string) *StdMsg{mlErrRateMsg, mlRespTimeMsg, mlEpErrMsg, mlEpRtMsg} {
+	for _, f := range []func(string) *StdMsg{mlErrRateMsg, mlRespTimeMsg, mlEpErrMsg, mlEpRtMsg, mlLagMsg} {
 		if m := f(headline); m != nil {
 			return m
 		}

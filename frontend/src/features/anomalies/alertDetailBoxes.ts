@@ -18,14 +18,16 @@ import { subjectLabel } from '@/lib/problemSubject';
 import { alertProblemSummary } from './detailSummary';
 import { showRootCauseInSummary } from './anomalyDetail';
 import { tf, type Lang } from '@/lib/i18n'; // v0.10.2284 — metinler arayüz dilinde (varsayılan 'tr')
-import { stdImpactView, prioReasonView, detailPrioReasonMsg } from '@/lib/problemStandardView'; // v0.10.2299 — etki EN anahtardan (TR aynı); v0.10.2300 gerekçe
+import { stdImpactView, prioReasonView, detailPrioReasonMsg, stdHeadlineView, fmtStdClock } from '@/lib/problemStandardView'; // v0.10.2299 — etki EN anahtardan (TR aynı); v0.10.2300 gerekçe
 
 type BoxProblem = Pick<Problem, 'ruleName' | 'metric' | 'value' | 'threshold' | 'service' | 'ruleId'
   | 'priorityReason' | 'pod' | 'clusters' | 'rootCause' | 'recentDeploy'>;
 
 /** "Ne oluyor" — her zaman dolu (alertProblemSummary her girdide cümle verir). */
 export function alertWhatText(p: BoxProblem, std?: ProblemStandard | null, lang: Lang = 'tr'): string {
-  const parts = [alertProblemSummary(p, lang)];
+  // v0.10.2475 — consumer lag: ham ölçü satırı ("ml_group_lag value 17936.00,
+  // threshold 5.00") yerine standart manşet (normal → şimdi, topic).
+  const parts = [std?.lag ? stdHeadlineView(std, lang).text : alertProblemSummary(p, lang)];
   const ev = std?.evidence?.sentence?.trim();
   if (ev) parts.push(ev);
   const why = prioReasonView(p.priorityReason, detailPrioReasonMsg(p.priorityReason, std), lang).text.trim();
@@ -40,7 +42,10 @@ export function alertWhoText(p: BoxProblem, std?: ProblemStandard | null, lang: 
   const subject = p.service ? subjectLabel(p.service) : '';
   if (!subject) return null;
   const impact = std?.impact?.known && std.impact.primary ? (stdImpactView(std, lang).text ?? '').trim() : '';
-  const parts = [impact ? tf('pd.text.affectedImpact', lang, { s: subject, impact }) : tf('pd.text.affected', lang, { s: subject })];
+  // v0.10.2475 — consumer lag: hangi topic'te kaç mesaj geride ve ne zamandan beri.
+  const parts = [std?.lag && impact
+    ? tf('pd.text.lagWho', lang, { s: subject, impact, at: fmtStdClock(std.since.startedAt) })
+    : impact ? tf('pd.text.affectedImpact', lang, { s: subject, impact }) : tf('pd.text.affected', lang, { s: subject })];
   const callers = std?.impact?.callers ?? [];
   if (callers.length > 0) {
     const more = callers.length - CALLERS_SHOWN;

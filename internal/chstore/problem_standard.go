@@ -121,6 +121,10 @@ type ProblemStandard struct {
 	// Standardize* doldurmaz, bildirim / politika / özet görmez. nil = etiket
 	// yok (problem_standard_origin.go).
 	Origin *StdOrigin `json:"origin,omitempty"`
+	// Lag — v0.10.2475: consumer lag Problem'inin gerçekleri (topic, normal,
+	// şimdi; açıklamadaki MLConsumerLagSentence cümlesinden). nil = lag değil.
+	// Arayüz "kim etkileniyor" ve "ne yapılabilir"i bundan kurar.
+	Lag *StdLag `json:"lag,omitempty"`
 }
 
 // StdMeasure — birincil etki ölçüsü.
@@ -561,6 +565,15 @@ func StandardizeProblem(p Problem, f StdFacts) ProblemStandard {
 	std.Headline, std.HeadlineMsg = clipHeadline(head), hm
 	std.Since = problemSince(p, f, now)
 	sent, sm := problemEvidenceSentence(p, k, src, hold)
+	// v0.10.2475 — consumer lag Problem'i: etki "topic T: N mesaj geride"
+	// (Value / Ratio aynen: büyüklük bildirim politikasının girdisi), kanıt
+	// cümlesi etki kuralını söyler, sonraki adım Messaging sekmesi.
+	lag, isLag := stdLagOf(p, k)
+	if isLag {
+		std.Lag = &lag
+		std.Impact.Primary.Text, std.Impact.Primary.Msg = lagImpactText(lag)
+		sent, sm = lagEvidenceSentence(sent, sm)
+	}
 	std.Evidence = StdEvidence{Sentence: sent, Source: src, Sampled: stdSampled(src), Msg: sm}
 	if f.ImpactRule != nil && k.kind == "anomaly_auto" {
 		std.Evidence.Reasons, std.Evidence.ReasonMsgs = impactRuleReasons(*f.ImpactRule, src == StdSourceVM)
@@ -597,6 +610,9 @@ func StandardizeProblem(p Problem, f StdFacts) ProblemStandard {
 		}
 	}
 	std.NextStep = problemNextStep(p, k)
+	if isLag {
+		std.NextStep = lagNextStep(p, lag)
+	}
 	std.Context, std.ContextMsgs = stdContext(f, p.EpisodeCount)
 	return std
 }

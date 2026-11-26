@@ -43,6 +43,12 @@ func TestJudgeVolume(t *testing.T) {
 		{"az örnek (110 giriş) → oran olayı yok", volInput{Spans: rep(2420, 3), Entries: rep(110, 3), HourSpans: 29000, BaseRatio: []float64{12, 13, 14, 12, 13, 14}, BaseSpan: rep(26000, 6), Z: 4}, false, "", ""},
 		{"tek kova az örnek → olay ilerlemez", volInput{Spans: []float64{25000, 1500, 25000}, Entries: []float64{2500, 150, 2500}, HourSpans: 200000, BaseRatio: baseRatio, BaseSpan: baseSpan, Z: 4}, false, "", ""},
 		{"sınırda örnek (200 giriş) → oran olayı", volInput{Spans: rep(2000, 3), Entries: rep(volMinEntries, 3), HourSpans: 24000, BaseRatio: baseRatio, BaseSpan: rep(24000, 6), Z: 4}, true, volPartRatio, "up"},
+		// v0.10.2475 (operatör, prod): 3–4 istek/sn, %5 örneklemeli servis —
+		// kovada ~50 örneklenmiş giriş span'i; istek başına span 4 → 1 düşüşü
+		// olay açmaz (taban medyanı hacim tabanını geçse bile).
+		{"düşük hacimli servis, oran düştü → olay yok", volInput{Spans: []float64{55, 50, 52}, Entries: []float64{52, 48, 50}, HourSpans: 7000, BaseRatio: baseRatio, BaseSpan: baseSpan, Z: 4}, false, "", ""},
+		// Giriş span'i bazı kovada 0: kapısız ham span ölçüsüne düşmez.
+		{"giriş span'i aralıklı → ham span ölçüsüne düşmez", volInput{Spans: rep(60000, 3), Entries: []float64{0, 150, 0}, HourSpans: 700000, BaseRatio: baseRatio, BaseSpan: baseSpan, Z: 4}, false, "", ""},
 		{"aşağı yönde tam susma → olay yok", volInput{Spans: []float64{100, 0, 100}, Entries: rep(0, 3), HourSpans: 50000, BaseSpan: baseSpan, Z: 4}, false, "", ""},
 	}
 	for _, c := range cases {
@@ -245,5 +251,30 @@ func TestVolumeRegimeExemptAndGroupExcluded(t *testing.T) {
 	}
 	if chstore.MLDetectorSignal(detTelemetryVolume) != chstore.MLSignalTrace {
 		t.Fatal("hacim dedektörünün sinyali trace")
+	}
+}
+
+// v0.10.2475 — bütçe dışı kalan (kaydı bu tik yenilenmeyen) hacim olayı önceki
+// kaydını ve sınıfını taşır; başka dedektörün kayıtsız olayına dokunulmaz.
+func TestCarryVolumeRecords(t *testing.T) {
+	prev := map[string]chstore.MLEvent{
+		"ep-vol":   {ID: "ep-vol", Detector: detTelemetryVolume, Record: `{"v":1}`, Class: ClassTelemetryVolume, OnsetAt: 42},
+		"ep-other": {ID: "ep-other", Detector: "op_latency", Record: `{"v":1}`, Class: ClassServiceAnomaly},
+	}
+	evs := []chstore.MLEvent{
+		{ID: "ep-vol", Detector: detTelemetryVolume, Service: "checkout"},
+		{ID: "ep-other", Detector: "op_latency", Service: "checkout"},
+		{ID: "ep-new", Detector: detTelemetryVolume, Service: "payments"},
+		{ID: "ep-fresh", Detector: detTelemetryVolume, Record: `{"v":2}`, Class: ClassServiceAnomaly},
+	}
+	carryVolumeRecords(evs, func(id string) (chstore.MLEvent, bool) { e, ok := prev[id]; return e, ok })
+	if evs[0].Record != `{"v":1}` || evs[0].Class != ClassTelemetryVolume || evs[0].OnsetAt != 42 || evs[0].PublishState != PublishPublished {
+		t.Fatalf("hacim olayı önceki kaydı taşımadı: %+v", evs[0])
+	}
+	if evs[1].Record != "" || evs[2].Record != "" {
+		t.Fatalf("yalnız önceki kaydı olan hacim olayı taşır: %+v / %+v", evs[1], evs[2])
+	}
+	if evs[3].Record != `{"v":2}` || evs[3].Class != ClassServiceAnomaly {
+		t.Fatalf("bu tik kurulan kayıt ezildi: %+v", evs[3])
 	}
 }

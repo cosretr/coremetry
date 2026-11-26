@@ -397,6 +397,8 @@ export interface FrequentEpisode { id: string; startedAt: number; resolvedAt?: n
 
 export interface FrequentVerdict {
   signature: string; entity: string; name: string; family: string; direction?: string; viaOrigin?: boolean;
+  /** v0.10.2475 — yalnız görünüm: "Tür" satırı ailenin yerine ölçüyü söyler ('consumer_lag'). */
+  measure?: string;
   prior24h: number; prior7d: number; days7d: number; frequent: boolean;
   kind?: 'hold' | 'severity' | string; bypass?: string;
   priority?: string; maxPriority?: string; magnitude?: number; maxMagnitude?: number;
@@ -437,16 +439,41 @@ export function frequentChipTitle(f: { prior24h: number; days7d: number }, t: Gr
   return t(enforce ? 'pg.freq.tipOn' : 'pg.freq.tip', { p: f.prior24h, d: f.days7d });
 }
 
-/** SAF: "Tekrar" bloğunun satırları (anahtar → değer). */
-export function repeatRows(v: FrequentVerdict, t: GraphT): { k: string; v: string }[] {
+/** v0.10.2475 — "Tür" satırı: ölçü biliniyorsa (consumer lag) ailenin yerine
+ *  ölçü adı ("alarm kuralı" ML grubunu yanlış anlatıyordu); yoksa aile. */
+export function repeatKindLabel(v: Pick<FrequentVerdict, 'family' | 'direction' | 'measure'>, t: GraphT): string {
+  return v.measure === 'consumer_lag' ? t('pg.measure.consumer_lag') : familyLabel(v.family, v.direction, t);
+}
+
+const two2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * v0.10.2475 — SAF: bu bölüm + önceki bölümler EN AZ 2 farklı yerel günde ve
+ * günün saatinde en çok `spanMin` dakikalık bir dilimde başladıysa dilim
+ * ("12:35", "13:50"); değilse null. Yalnız gösterilen bölümlere bakar (≤ 5
+ * en yeni) — "benzer saatlerde" iddiası onlarla sınırlı. Saat tarayıcı diliminde.
+ */
+export function similarHoursWindow(startsNs: number[], spanMin = 120): { from: string; to: string } | null {
+  const ds = startsNs.filter(n => n > 0).map(n => new Date(n / 1e6));
+  if (new Set(ds.map(d => d.toDateString())).size < 2) return null;
+  const mins = ds.map(d => d.getHours() * 60 + d.getMinutes()).sort((a, b) => a - b);
+  if (mins[mins.length - 1] - mins[0] > spanMin) return null;
+  const hm = (m: number) => `${two2(Math.floor(m / 60))}:${two2(m % 60)}`;
+  return { from: hm(mins[0]), to: hm(mins[mins.length - 1]) };
+}
+
+/** SAF: "Tekrar" bloğunun satırları (anahtar → değer). startedAt: bu bölümün
+ *  başlangıcı (unix ns; "benzer saatlerde" kıyası için, yoksa kıyas yok). */
+export function repeatRows(v: FrequentVerdict, t: GraphT, startedAt?: number): { k: string; v: string }[] {
   const mag = (n?: number) => (n === undefined ? '—' : String(Math.round(n * 100) / 100));
   const sev = v.kind === 'severity'
     ? t('pg.rep.sevUp', { why: t(`pg.rep.bypass.${v.bypass ?? 'priority_up'}`), p: v.priority ?? '—', pm: v.maxPriority || '—', m: mag(v.magnitude), mm: mag(v.maxMagnitude) })
     : t('pg.rep.sevSame', { p: v.priority ?? '—', pm: v.maxPriority || '—', m: mag(v.magnitude), mm: mag(v.maxMagnitude) });
+  const hours = startedAt ? similarHoursWindow([startedAt, ...(v.episodes ?? []).slice(0, 5).map(e => e.startedAt)]) : null;
   return [
-    { k: t('pg.rep.kind'), v: `${v.name} · ${familyLabel(v.family, v.direction, t)}${v.viaOrigin ? ` · ${t('pg.rep.viaOrigin')}` : ''}` },
+    { k: t('pg.rep.kind'), v: `${v.name} · ${repeatKindLabel(v, t)}${v.viaOrigin ? ` · ${t('pg.rep.viaOrigin')}` : ''}` },
     { k: t('pg.rep.d1'), v: t('pg.rep.d1v', { n: v.prior24h + 1, min: 3 }) },
-    { k: t('pg.rep.d7'), v: t('pg.rep.d7v', { d: v.days7d }) },
+    { k: t('pg.rep.d7'), v: hours ? t('pg.rep.d7vHours', { d: v.days7d, from: hours.from, to: hours.to }) : t('pg.rep.d7v', { d: v.days7d }) },
     { k: t('pg.rep.sev'), v: sev },
     { k: t('pg.rep.rule'), v: v.kind === 'hold' ? t('pg.rep.ruleHold') : t('pg.rep.ruleSend') },
   ];

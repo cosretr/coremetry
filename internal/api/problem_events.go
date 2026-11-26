@@ -61,11 +61,17 @@ type problemEventRow struct {
 	// YENİ uygun olayın satırında — gövde tek kayıtla sınırlı. Kayıt bu
 	// okumada zaten geliyor (ListMLEvents); ek sorgu / ek istek yok.
 	Record *ml.RecordView `json:"record,omitempty"`
+	// Measure / Topic — v0.10.2475: consumer lag olayı ("consumer_lag",
+	// topic; servis düzeyi seride topic boş). Çizelge birimsiz "N×" yerine
+	// "topic T: normalde ~X, şimdi Y mesaj" der.
+	Measure string `json:"measure,omitempty"`
+	Topic   string `json:"topic,omitempty"`
 }
 
 // problemEventsKey — SAF: cache anahtarı (tek girdi: kimlik).
 // :v2: — v0.10.2380 satıra `record` eklendi (gövde şekli değişti).
-func problemEventsKey(id string) string { return "problem:events:v2:" + id }
+// :v3: — v0.10.2475 satıra `measure` / `topic` eklendi.
+func problemEventsKey(id string) string { return "problem:events:v3:" + id }
 
 // buildProblemEventRows — SAF: Problem + bağlı olaylar → çizelge (başlangıç,
 // eşitse sahip önce, sonra dedektör adı). evs boşsa çizelge boş (sahibin
@@ -96,6 +102,9 @@ func buildProblemEventRows(p chstore.Problem, evs []chstore.MLEvent, nowNs int64
 		e := evs[i]
 		r := problemEventRow{Detector: e.Detector, StartedAt: e.StartedAt, LastSeen: e.LastSeen, Observed: e.Observed,
 			Baseline: e.Baseline, Direction: e.Direction, Live: chstore.MLEventOpen(e, nowNs)}
+		if t, ok := ml.LagEventTopic(e); ok {
+			r.Measure, r.Topic = "consumer_lag", t
+		}
 		if ev, ok := chstore.MemberEvidenceOf(e); ok {
 			r.RuleID = ev.RuleID
 		} else {

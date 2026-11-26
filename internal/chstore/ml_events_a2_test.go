@@ -17,14 +17,14 @@ func TestMLEventsWhereA2(t *testing.T) {
 	pre := map[bool]map[string]string{ // v0.10.2340 çıktısı
 		false: {
 			"":             base,
-			MLViewService:  base + " AND NOT detector = 'svc_volume_spike'",
-			MLViewPlatform: base + " AND detector = 'svc_volume_spike'",
+			MLViewService:  base + " AND NOT detector IN ('svc_volume_spike', 'svc_telemetry_volume')",
+			MLViewPlatform: base + " AND detector IN ('svc_volume_spike', 'svc_telemetry_volume')",
 			MLViewHeld:     base + " AND 0",
 		},
 		true: {
 			"":             base,
-			MLViewService:  base + " AND NOT (class = 'telemetry_volume' OR detector = 'svc_volume_spike')",
-			MLViewPlatform: base + " AND (class = 'telemetry_volume' OR detector = 'svc_volume_spike')",
+			MLViewService:  base + " AND NOT (class = 'telemetry_volume' OR detector IN ('svc_volume_spike', 'svc_telemetry_volume'))",
+			MLViewPlatform: base + " AND (class = 'telemetry_volume' OR detector IN ('svc_volume_spike', 'svc_telemetry_volume'))",
 			MLViewHeld:     base + ` AND record != '' AND publish_state != 'invalid' AND position(record, '"passed":false') > 0`,
 		},
 	}

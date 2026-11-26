@@ -53,6 +53,7 @@ import { ShareButton } from '@/components/ShareButton';
 import { copyToClipboard } from '@/lib/clipboard';
 import { QueryErrorInline } from '@/components/QueryError';
 import { serviceHref, eventLifespanWindow } from '@/lib/serviceHref';
+import { lagProblemLinks } from './lagLinks'; // v0.10.2475 — consumer lag "Ne yapılabilir"
 import { logsHref } from '@/lib/logsUrl';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { latencyThresholdMs, slowTracesHref } from '@/features/anomalies/slowTracesHref';
@@ -1038,6 +1039,7 @@ function AlertDetailBoxes({ problem, std, window: win, dbHealthLinks, svcSlowLin
   const cause = alertCause(problem, lang);
   const kind = subjectKind(problem.service, problem.kind);
   const thr = latencyThresholdMs(problem);
+  const lag = std?.lag && problem.service ? lagProblemLinks(problem.service, std.lag, win) : null;
   return (
     <>
       <Sect title={tl('pd.box.what', lang)}>
@@ -1060,6 +1062,11 @@ function AlertDetailBoxes({ problem, std, window: win, dbHealthLinks, svcSlowLin
         {dbHealthLinks ? (<>
           <SignalLink to={dbHealthLinks.databaseHref} label={tl('pd.box.dbPage', lang)} sub={tl('pd.box.window', lang)} />
           <SignalLink to={dbHealthLinks.errorTracesHref} label={tl('pd.box.dbErrTraces', lang)} sub={tl('pd.box.dbErrTraces.sub', lang)} />
+        </>) : lag ? (<>
+          <SignalLink to={lag.messagingHref} label={tl('pd.box.messaging', lang)}
+            sub={std?.lag?.topic ? tf('pd.box.messaging.sub', lang, { t: std.lag.topic }) : tl('pd.box.window', lang)} />
+          {lag.chartHref && <SignalLink to={lag.chartHref} label={tl('pd.box.lagChart', lang)} sub={tl('pd.box.lagChart.sub', lang)} />}
+          <SignalLink to={serviceHref(problem.service, { range: win })} label={tl('pd.box.svcPage', lang)} sub={tl('pd.box.svcPage.sub', lang)} />
         </>) : kind === 'service' ? (<>
           {svcSlowLinks
             ? <SignalLink to={svcSlowLinks.slowTracesHref} label={tl('pd.box.slow', lang)} sub={tf('pd.box.slow.sub', lang, { ms: Math.round(svcSlowLinks.slowMinMs) })} />
@@ -1260,7 +1267,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
           bağ ya da bağlanmayan yoksa hiçbir şey çizmez. */}
       <ProblemGraphSection problemId={problem.id} />
       {/* v0.10.2281 (S3) — "Tekrar" (gölge; bildirim değişmedi). */}
-      <ProblemRepeatSection problemId={problem.id} />
+      <ProblemRepeatSection problemId={problem.id} startedAt={problem.startedAt} />
       {/* "Kök neden" etiketi (CoSRE doğruluk ölçümünün doğruluk
           kaynağı). Problem'in "Vaka kaydı" kartının yerini alır (aynı onaylı
           incident_cases vakası); dört kutunun (S7) altında, Teknik kanıttaki

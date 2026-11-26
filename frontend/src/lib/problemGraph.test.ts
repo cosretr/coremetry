@@ -138,3 +138,28 @@ describe('graphCriterionLines', () => {
     ]);
   });
 });
+
+// v0.10.2475 — "Tekrar" bloğu: ölçü adı (consumer lag), benzer saatler, bildirim önceliği.
+import { repeatRows, similarHoursWindow, type FrequentVerdict } from './problemGraph';
+
+describe('repeatRows (consumer lag)', () => {
+  const T = (k: string, v?: Record<string, string | number>) => tf(k, 'tr', v ?? {});
+  const ns = (d: number, h: number, m: number) => new Date(2026, 10, d, h, m).getTime() * 1e6;
+  const v: FrequentVerdict = {
+    signature: 's', entity: 'svc:checkout', name: 'checkout', family: 'rule', measure: 'consumer_lag',
+    prior24h: 2, prior7d: 5, days7d: 4, frequent: true, kind: 'hold', priority: 'P3', maxPriority: 'P3', magnitude: 3587.2, maxMagnitude: 16840,
+    episodes: [{ id: 'a', startedAt: ns(25, 12, 50) }, { id: 'b', startedAt: ns(24, 13, 20) }, { id: 'c', startedAt: ns(23, 12, 10) }],
+  };
+  it('tür ölçüyü söyler, "alarm kuralı" demez; benzer saatler; bildirim önceliği', () => {
+    const rows = repeatRows(v, T, ns(26, 12, 35));
+    expect(rows[0].v).toBe('checkout · Kafka consumer lag');
+    expect(rows[2].v).toBe('4 ayrı günde görüldü; son bölümler benzer saatlerde başladı (12:10–13:20)');
+    expect(rows[3].v).toMatch(/^artmadı: bildirim önceliği P3/);
+  });
+  it('saatler dağınıksa ya da tek günse benzer saat iddiası yok', () => {
+    expect(similarHoursWindow([ns(26, 12, 35), ns(25, 18, 0)])).toBeNull();
+    expect(similarHoursWindow([ns(26, 12, 35), ns(26, 12, 50)])).toBeNull();
+    expect(repeatRows({ ...v, measure: undefined }, T)[0].v).toBe('checkout · alarm kuralı');
+    expect(repeatRows(v, T)[2].v).toBe('4 ayrı günde görüldü');
+  });
+});

@@ -107,6 +107,9 @@ func frequentKeyOf(p chstore.Problem, originKey, originName string, now time.Tim
 	std := chstore.StandardizeProblem(p, chstore.StdFacts{Now: now})
 	key, name := frequentSubjectKey(p)
 	v := chstore.FrequentVerdict{Entity: key, Name: name, Family: std.Family, Direction: chstore.FrequentDirection(p, std.Family)}
+	if std.Lag != nil {
+		v.Measure = "consumer_lag" // v0.10.2475: görünüm; imza aynen
+	}
 	if originKey != "" {
 		v.Entity, v.Name, v.ViaOrigin = originKey, originName, true
 	}

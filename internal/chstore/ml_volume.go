@@ -73,8 +73,14 @@ func (s *Store) MLServiceVolume(ctx context.Context, service string, from, to ti
 		args = append(args, service)
 	}
 	args = append(args, MLVolumeCap)
-	sql := s.weighSQL(mlVolumeSQL(service != ""), from, "service_summary_5m", "spanmetrics_1m") // v0.10.2435 — sampling-weight Phase 2
-	rows, err := s.conn.Query(ctx, sql, args...)
+	// v0.10.2475 — AĞIRLIKSIZ (saklanan) sayılar, weighSQL YOK. v0.10.2435
+	// bu okumayı sampling-weight faz 2'ye almıştı: ingest.sampling.mode=on
+	// iken entries temsil edilen istek (~20 × örneklenmiş) oluyor, örnek
+	// kapısı (ml.volMinEntries = 200 ÖRNEKLENMİŞ giriş span'i) ve saatlik
+	// hacim tabanı ~20 kat gevşiyordu (3–4 istek/sn servis ≈ 1000 / kova
+	// geçti). Telemetri hacmi saklanan telemetriyi ölçer (ham span doğrulama
+	// okumaları gibi; docs/architecture/sampling-weight.md).
+	rows, err := s.conn.Query(ctx, mlVolumeSQL(service != ""), args...)
 	if err != nil {
 		return nil, err
 	}

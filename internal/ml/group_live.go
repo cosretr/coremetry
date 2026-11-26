@@ -615,6 +615,12 @@ func singleProblemDescription(g decidedGroup, card func(chstore.MLEvent) CardInp
 	if e.ID == "" {
 		return fmt.Sprintf("%s: tek sinyalde güçlü ve süren kötüleşme (%s).", g.G.Service, strings.ToLower(signalName(joinTR(g.D.Signals))))
 	}
+	if topic, ok := lagEventTopic(e); ok {
+		// v0.10.2475 — consumer lag: standart cümle (chstore TEK TANIM), iç
+		// kapı dili yok ("tek güçlü sinyal …" Teknik detaydaki karar
+		// gerekçesinde kalır, GroupDecision.Reason).
+		return withSourceMarker(chstore.MLConsumerLagSentence(g.G.Service, topic, e.Observed, e.Baseline, otherLagTopics(g, e)), e)
+	}
 	in := card(e)
 	sp := specFor(in)
 	metricS := sp.unit == unitMetric && in.MetricUnit == "s"
@@ -627,4 +633,34 @@ func singleProblemDescription(g decidedGroup, card func(chstore.MLEvent) CardInp
 	mins := int(in.Now.Sub(in.StartedAt).Minutes())
 	return withSourceMarker(fmt.Sprintf("%s: tek güçlü sinyal (%s, başka sinyal teyit etmedi) — %s şimdi %s, %s; %d dakikadır sürüyor.",
 		g.G.Service, strings.ToLower(signalName(memberSignal(e))), what, f.one(in.Observed, metricS), normal, mins), e) // v0.10.2383
+}
+
+// lagEventTopic — SAF (v0.10.2475): olay metric_kafka consumer_lag ise
+// topic'i ("" = servis düzeyi seri) ve ok=true.
+func lagEventTopic(e chstore.MLEvent) (string, bool) {
+	if e.Detector != detMetricKafka {
+		return "", false
+	}
+	if _, id, _ := splitThanosPart(e.Code); id != kafkaLagExprID {
+		return "", false
+	}
+	return partTopic(e.Code), true
+}
+
+// LagEventTopic — lagEventTopic'in dışa açık hali (Problem olay çizelgesi).
+func LagEventTopic(e chstore.MLEvent) (string, bool) { return lagEventTopic(e) }
+
+// otherLagTopics — SAF: grubun lider dışındaki, karar anında açık consumer
+// lag üyelerinin farklı topic sayısı (cümlede "+N topic daha").
+func otherLagTopics(g decidedGroup, lead chstore.MLEvent) int {
+	leadTopic, _ := lagEventTopic(lead)
+	seen := map[string]bool{}
+	for _, m := range g.Members {
+		t, ok := lagEventTopic(m)
+		if !ok || m.ID == lead.ID || t == leadTopic || !chstore.MLEventOpen(m, g.D.At*int64(time.Second)) {
+			continue
+		}
+		seen[t] = true
+	}
+	return len(seen)
 }

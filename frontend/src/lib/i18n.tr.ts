@@ -71,9 +71,9 @@ export const TR: Record<string, string> = {
   // v0.10.2243 — /anomalies görünüm sekmeleri (anomali kartı Dilim C)
   'anomalies.view.aria':          'Anomali görünümü',
   'anomalies.view.service':       'Servisler',
-  'anomalies.view.platform':      'Platform',
+  'anomalies.view.platform':      'Telemetri hacmi',
   'anomalies.view.held':          'Elenenler',
-  'anomalies.view.platformHint':  'Telemetri hacmi değişimleri: istek başına span değişti, hata oranı ve gecikme bandında kaldı. Servis listesinde görünmez; bildirim ve Problem yok.',
+  'anomalies.view.platformHint':  'Telemetri hacmi değişimleri (istek başına span, span sayısı): örneklenmiş trace verisinden, servis sağlığı sinyali değil. Anomali listesinde ve sayılarında görünmez; bildirim ve Problem yok.',
   'anomalies.view.heldHint':      'Gölge kipi: gürültü kapıları açık olsaydı elenecek olaylar. Kapılar yalnız kaydediyor — bu olaylar Servisler listesinde ve Problem\'lerde aynen görünmeye devam eder.',
   'anomalies.view.platformEmpty': 'Şu an süren telemetri hacmi değişimi yok.',
   'anomalies.view.heldEmpty':     'Son 24 saatte elenen olay yok.',
@@ -1602,9 +1602,10 @@ export const TR: Record<string, string> = {
   'pg.rep.d1v': 'bu {n}. bölüm (eşik: {min} önceki bölüm)',
   'pg.rep.d7': 'Son 7 gün',
   'pg.rep.d7v': '{d} ayrı günde görüldü',
+  'pg.rep.d7vHours': '{d} ayrı günde görüldü; son bölümler benzer saatlerde başladı ({from}–{to})', // v0.10.2475
   'pg.rep.sev': 'Şiddet',
-  'pg.rep.sevSame': 'artmadı: öncelik {p} (önceki en yüksek {pm}), büyüklük {m} (önceki en büyük {mm})',
-  'pg.rep.sevUp': 'arttı ({why}): öncelik {p} (önceki en yüksek {pm}), büyüklük {m} (önceki en büyük {mm})',
+  'pg.rep.sevSame': 'artmadı: bildirim önceliği {p} (önceki en yüksek {pm}), büyüklük {m} (önceki en büyük {mm})',
+  'pg.rep.sevUp': 'arttı ({why}): bildirim önceliği {p} (önceki en yüksek {pm}), büyüklük {m} (önceki en büyük {mm})',
   'pg.rep.bypass.priority_up': 'öncelik penceredeki en yüksek önceliğin üstünde',
   'pg.rep.bypass.impact_2x': 'büyüklük en büyüğün en az 2 katı',
   'pg.rep.bypass.high_conf_p1': 'yüksek güvenli P1',
@@ -1617,6 +1618,7 @@ export const TR: Record<string, string> = {
   'pg.fam.error': 'hata', 'pg.fam.latency': 'gecikme', 'pg.fam.traffic': 'trafik', 'pg.fam.availability': 'erişilebilirlik',
   'pg.fam.exception': 'exception', 'pg.fam.db': 'veritabanı', 'pg.fam.external': 'dış bağımlılık', 'pg.fam.runtime': 'çalışma zamanı',
   'pg.fam.cluster': 'küme', 'pg.fam.rule': 'alarm kuralı',
+  'pg.measure.consumer_lag': 'Kafka consumer lag', // v0.10.2475
   'pg.dir.down': 'düşüş', 'pg.dir.up': 'artış',
   // v0.10.2283 — Problems listesi (/inbox; bugünkü Türkçe metin birebir).
   'inbox.team.aria': 'Ekip',
@@ -1848,11 +1850,17 @@ export const TR: Record<string, string> = {
   'pd.box.logsErr': 'Loglar (yalnız hatalar)',
   'pd.box.svcPage': 'Servis sayfası',
   'pd.box.svcPage.sub': 'problem penceresiyle',
+  // v0.10.2475 — consumer lag Problem'i: Messaging sekmesi + lag grafiği.
+  'pd.box.messaging': 'Messaging sekmesi',
+  'pd.box.messaging.sub': 'topic {t}, problem penceresi',
+  'pd.box.lagChart': 'Lag grafiği',
+  'pd.box.lagChart.sub': 'kafka_consumer_records_lag_max, topic başına en geride partition',
   'pd.box.extNote': 'Bu alarmın öznesi bir dış metrik kaynağı serisi — kanıt zinciri Teknik kanıtta.',
   'pd.box.dbNote': 'Bu alarmın öznesi bir veritabanı örneği — log/trace pivotları bir servis adı gerektiriyor.',
   'pd.text.prioWhy': 'Öncelik gerekçesi: {why}.',
   'pd.text.affected': '{s} etkileniyor',
   'pd.text.affectedImpact': '{s} etkileniyor ({impact})',
+  'pd.text.lagWho': '{s} (consumer) — {impact} · {at} başladı', // v0.10.2475
   'pd.text.callers': 'çağıran {c} servis: {names}{more}',
   'pd.text.callersMore': ' ve {c} diğeri',
   'pd.text.pod': 'pod {pod}',
@@ -2149,6 +2157,8 @@ export const TR: Record<string, string> = {
   'pev.rawNoBase': 'gözlenen {o} · olağan değer yok',
   'pev.own': ' (açan)',
   'pev.ended': '(bitti)',
+  'pev.lag': 'Kafka consumer lag', // v0.10.2475
+  'pev.lagVals': 'normalde ~{b}, şimdi {o} mesaj',
   'pev.aria': 'Bu probleme birleşen olaylar',
   'pev.more': 've {n} olay daha (Teknik kanıt)',
   'pev.title': 'Birleşen olaylar',

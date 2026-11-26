@@ -46,7 +46,7 @@ describe('ProblemRepeatBlock', () => {
     expect(txt).toContain('orders-db · gecikme · olası kökene göre');
     expect(txt).toContain('bu 4. bölüm (eşik: 3 önceki bölüm)');
     expect(txt).toContain('5 ayrı günde görüldü');
-    expect(txt).toContain('artmadı: öncelik P1');
+    expect(txt).toContain('artmadı: bildirim önceliği P1');
     expect(txt).toContain('açılış bildirimi gitmezdi');
     const eps = d.querySelectorAll('[data-testid="pg-repeat-episodes"] li');
     expect(eps).toHaveLength(5);

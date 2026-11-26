@@ -508,6 +508,7 @@ func (r *Recorder) tick(ctx context.Context, cfg chstore.MLConfig, early bool) {
 		ids, _ := r.runs.confirmers(ev, start, confirmWin)
 		return ids
 	}, &volBudget, &volVM, start)
+	carryVolumeRecords(kept, r.runs.lastEvent) // v0.10.2475: bütçe dışı kalan hacim olayı kaydını korur
 	for _, ev := range kept {
 		if ev.Stage != chstore.MLStageChronic {
 			r.runs.setEvent(ev)

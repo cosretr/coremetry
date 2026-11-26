@@ -68,7 +68,7 @@ func TestBuildProblemEventRows(t *testing.T) {
 }
 
 func TestProblemEventsKey(t *testing.T) {
-	if problemEventsKey("a") == problemEventsKey("b") || problemEventsKey("P-1a2b") != "problem:events:v2:P-1a2b" {
+	if problemEventsKey("a") == problemEventsKey("b") || problemEventsKey("P-1a2b") != "problem:events:v3:P-1a2b" {
 		t.Fatal("anahtar kimliği taşımalı")
 	}
 }

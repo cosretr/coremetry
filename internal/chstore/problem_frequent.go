@@ -79,10 +79,13 @@ type FrequentVerdict struct {
 	Family    string `json:"family"`
 	Direction string `json:"direction,omitempty"` // yalnız trafik: down | up
 	ViaOrigin bool   `json:"viaOrigin,omitempty"` // imza kümenin kökeninden
-	Prior24h  int    `json:"prior24h"`
-	Prior7d   int    `json:"prior7d"`
-	Days7d    int    `json:"days7d"`
-	Frequent  bool   `json:"frequent"`
+	// Measure — v0.10.2475: yalnız görünüm ("Tür" satırı ailenin yerine
+	// ölçüyü söyler: "consumer_lag"). İmzaya GİRMEZ (geçmiş eşleşmesi aynen).
+	Measure  string `json:"measure,omitempty"`
+	Prior24h int    `json:"prior24h"`
+	Prior7d  int    `json:"prior7d"`
+	Days7d   int    `json:"days7d"`
+	Frequent bool   `json:"frequent"`
 	// Kind — "" (sık değil) | hold (tutardı) | severity (şiddet arttı, giderdi).
 	Kind         string            `json:"kind,omitempty"`
 	Bypass       string            `json:"bypass,omitempty"` // priority_up | impact_2x | high_conf_p1

@@ -3033,6 +3033,18 @@ export interface ProblemStandard {
   priorityReasonMsg?: StdMsg;
   /** v0.10.2473 — bağlı kümenin kökeni (Go chstore.StdOrigin); yalnız görünüm kipi `on`, yoksa etiket yok. */
   origin?: StdOrigin;
+  /** v0.10.2475 — consumer lag Problem'i (Go chstore.StdLag); yoksa lag değil. */
+  lag?: StdLag;
+}
+
+/** v0.10.2475 — Go chstore.StdLag: açıklamadaki lag cümlesinin gerçekleri (mesaj). */
+export interface StdLag {
+  /** Yok = servis düzeyi seri. */
+  topic?: string;
+  observed: number;
+  baseline: number;
+  /** Lag'i açık diğer topic sayısı. */
+  more?: number;
 }
 
 /** v0.10.2473 — Go chstore.StdOrigin. Bağlantı entity kimliğinden (entity), ad yalnız metin. */
@@ -12179,6 +12191,9 @@ export interface ProblemEvent {
   own?: boolean;
   /** v0.10.2380 — servis hata oranı olayının kaydı (istek grafiği); yalnız en yeni uygun olayda. */
   record?: MLRecordView;
+  /** v0.10.2475 — consumer lag olayı ("consumer_lag") ve topic'i. */
+  measure?: string;
+  topic?: string;
 }
 export interface ProblemEventsResponse {
   problemId: string;

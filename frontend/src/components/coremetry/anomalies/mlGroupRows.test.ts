@@ -1,7 +1,7 @@
 // v0.10.2021 — ML listesi: satır = grup (mockup "Liste: tek sayfa").
 import { describe, it, expect } from 'vitest';
 import type { MLEvent } from '@/lib/types';
-import { groupRows, groupStatus, groupStatusText, leadMember, memberOpen } from './mlGroupRows';
+import { detailStatus, groupRows, groupStatus, groupStatusText, leadMember, memberOpen } from './mlGroupRows';
 
 const min = 60e9;
 const ev = (o: Partial<MLEvent>): MLEvent => ({
@@ -65,5 +65,24 @@ describe('veri gelmedi', () => {
     const [b] = groupRows([ev({ stage: 'closed' })], now);
     expect(b.noData).toBe(false);
     expect(groupStatusText(b, now)).toContain('Bitti');
+  });
+});
+
+// v0.10.2475 (operatör): olayın cümlesi "bitti" derken başlık "İzleniyor",
+// grafik "ongoing" diyordu — grup başka açık üye yüzünden izleniyordu.
+describe('detailStatus', () => {
+  const group = { status: 'watching' as const, start: 0, end: 0, noData: false };
+  it('sayfanın olayı bittiyse grup açık olsa da bitti', () => {
+    const s = detailStatus(group, { open: false, status: 'Bitti · 1 sa 45 dk sürdü' }, 12 * 60 * min);
+    expect(s.running).toBe(false);
+    expect(s.text).toBe('Bitti · 1 sa 45 dk sürdü');
+  });
+  it('olay açıkken grup durumu', () => {
+    const s = detailStatus(group, { open: true, status: 'Sürüyor · 5 dk' }, 30 * min);
+    expect(s.running).toBe(true);
+    expect(s.text).toMatch(/^İzleniyor/);
+  });
+  it('grup yoksa olayın kendi durumu', () => {
+    expect(detailStatus(null, { open: true, status: 'Sürüyor · 5 dk' }, 0)).toEqual({ running: true, text: 'Sürüyor · 5 dk' });
   });
 });

@@ -210,11 +210,18 @@ func mlFeedFilter(f ListAnomalyEventsFilter, now time.Time) (MLEventsFilter, boo
 	if limit <= 0 {
 		limit = 200
 	}
-	mf := MLEventsFilter{Since: time.Unix(0, since), Limit: min(limit, MLUnifiedCap), Services: f.Services}
+	// v0.10.2475 (operatör: "sahte anomaliler hâlâ listede, rozet 1090"):
+	// akış = anomali yüzeyi (Problems/inbox satırı ve rozeti, deploy / rollout
+	// raporu, copilot, MCP) → telemetri hacmi satırları (mlPlatformCond)
+	// dışarıda. Yalnız açıkça hacim dedektörü istenirse okunur.
+	mf := MLEventsFilter{Since: time.Unix(0, since), Limit: min(limit, MLUnifiedCap), Services: f.Services, View: MLViewService}
 	if IsMLAnomalyKind(f.Kind) {
 		mf.Detector = f.Kind[len(MLAnomalyKindPrefix):]
 	} else if f.FeedMLDetector != "" {
 		mf.Detector = f.FeedMLDetector
+	}
+	if mf.Detector == MLDetSvcTelemetryVolume || mf.Detector == MLDetSvcVolumeSpike {
+		mf.View = ""
 	}
 	return mf, true
 }

@@ -294,7 +294,25 @@ func (d *Volume) companions(ctx context.Context, deps Deps, svc string, from, to
 	return
 }
 
-// attachVolumeRecords — recorder: svc_telemetry_volume olaylarına kayıt
+// carryVolumeRecords — SAF (v0.10.2475): bu tik kaydı yenilenemeyen
+// (tik başına volRecordMaxPerTick bütçesi bitti, MV okuması hata / boş)
+// açık hacim olayı önceki kaydını taşır. Önce Tick'in taze olayı kayıtsız
+// yazılıyor, tam satır yazımı (RMT) önceki kaydı siliyordu: bütçe sırasının
+// dışında kalan olay kayıtsız kalıyor, sınıfı boş kalıp anomali listesine
+// giriyor ve kart kayıtsız yola (ilk grafik VM istek hızı) düşüyordu.
+func carryVolumeRecords(evs []chstore.MLEvent, prev func(epID string) (chstore.MLEvent, bool)) {
+	for i := range evs {
+		ev := &evs[i]
+		if ev.Detector != detTelemetryVolume || ev.Record != "" {
+			continue
+		}
+		if p, ok := prev(ev.ID); ok && p.Record != "" {
+			ev.Record, ev.Class, ev.OnsetAt, ev.PublishState = p.Record, p.Class, p.OnsetAt, PublishPublished
+		}
+	}
+}
+
+// attachVolumeRecords — recorder:svc_telemetry_volume olaylarına kayıt
 // (yazım öncesi, applyRecordContract doğrular). Diğer attach* ile aynı akış.
 func (d *Volume) attachVolumeRecords(ctx context.Context, deps Deps, cfg chstore.MLConfig, evs []chstore.MLEvent, closed bool,
 	detectedAt func(epID string) time.Time, confirmers func(ev chstore.MLEvent) []string, budget, vmLeft *int, now time.Time) {

@@ -37,9 +37,9 @@ export const EN: Record<string, string> = {
   // v0.10.2243 — /anomalies görünüm sekmeleri (anomali kartı Dilim C)
   'anomalies.view.aria':          'Anomaly view',
   'anomalies.view.service':       'Services',
-  'anomalies.view.platform':      'Platform',
+  'anomalies.view.platform':      'Telemetry volume',
   'anomalies.view.held':          'Filtered out',
-  'anomalies.view.platformHint':  'Telemetry volume changes: spans per request shifted while error rate and latency stayed in their bands. Not in the service list; no notifications or Problems.',
+  'anomalies.view.platformHint':  'Telemetry volume changes (spans per request, span count): from sampled trace data, not a service health signal. Not in the anomaly list or its counts; no notifications or Problems.',
   'anomalies.view.heldHint':      'Shadow mode: events the noise gates would filter out if they were on. The gates only record — these events still appear in the Services list and in Problems unchanged.',
   'anomalies.view.platformEmpty': 'No telemetry volume change right now.',
   'anomalies.view.heldEmpty':     'No event was filtered out in the last 24 hours.',
@@ -1623,9 +1623,10 @@ export const EN: Record<string, string> = {
   'pg.rep.d1v': 'episode #{n} (threshold: {min} previous episodes)',
   'pg.rep.d7': 'Last 7 days',
   'pg.rep.d7v': 'seen on {d} separate days',
+  'pg.rep.d7vHours': 'seen on {d} separate days; recent episodes started at similar hours ({from}–{to})', // v0.10.2475
   'pg.rep.sev': 'Severity',
-  'pg.rep.sevSame': 'not increased: priority {p} (previous highest {pm}), magnitude {m} (previous largest {mm})',
-  'pg.rep.sevUp': 'increased ({why}): priority {p} (previous highest {pm}), magnitude {m} (previous largest {mm})',
+  'pg.rep.sevSame': 'not increased: notification priority {p} (previous highest {pm}), magnitude {m} (previous largest {mm})',
+  'pg.rep.sevUp': 'increased ({why}): notification priority {p} (previous highest {pm}), magnitude {m} (previous largest {mm})',
   'pg.rep.bypass.priority_up': 'priority above the window\'s highest',
   'pg.rep.bypass.impact_2x': 'magnitude at least 2× the largest',
   'pg.rep.bypass.high_conf_p1': 'high-confidence P1',
@@ -1638,6 +1639,7 @@ export const EN: Record<string, string> = {
   'pg.fam.error': 'errors', 'pg.fam.latency': 'latency', 'pg.fam.traffic': 'traffic', 'pg.fam.availability': 'availability',
   'pg.fam.exception': 'exceptions', 'pg.fam.db': 'database', 'pg.fam.external': 'external', 'pg.fam.runtime': 'runtime',
   'pg.fam.cluster': 'cluster', 'pg.fam.rule': 'alert rule',
+  'pg.measure.consumer_lag': 'Kafka consumer lag', // v0.10.2475
   'pg.dir.down': 'drop', 'pg.dir.up': 'rise',
   // v0.10.2283 — Problems listesi (/inbox: Inbox.tsx, pages/inbox/*, satır yardımcıları) arayüz dilinde.
   'inbox.team.aria': 'Team',
@@ -1868,11 +1870,17 @@ export const EN: Record<string, string> = {
   'pd.box.logsErr': 'Logs (errors only)',
   'pd.box.svcPage': 'Service page',
   'pd.box.svcPage.sub': 'with the problem window',
+  // v0.10.2475 — consumer lag Problem: Messaging tab + lag chart.
+  'pd.box.messaging': 'Messaging tab',
+  'pd.box.messaging.sub': 'topic {t}, problem window',
+  'pd.box.lagChart': 'Lag chart',
+  'pd.box.lagChart.sub': 'kafka_consumer_records_lag_max, furthest-behind partition per topic',
   'pd.box.extNote': 'The subject of this alert is an external metric source series — the evidence chain is under Technical evidence.',
   'pd.box.dbNote': 'The subject of this alert is a database instance — log/trace pivots need a service name.',
   'pd.text.prioWhy': 'Priority reason: {why}.',
   'pd.text.affected': '{s} is affected',
   'pd.text.affectedImpact': '{s} is affected ({impact})',
+  'pd.text.lagWho': '{s} (consumer) — {impact} · started {at}', // v0.10.2475
   'pd.text.callers': '{c} calling services: {names}{more}',
   'pd.text.callersMore': ' and {c} more',
   'pd.text.pod': 'pod {pod}',
@@ -2185,6 +2193,8 @@ export const EN: Record<string, string> = {
   'pev.rawNoBase': 'observed {o} · no normal value',
   'pev.own': ' (opener)',
   'pev.ended': '(ended)',
+  'pev.lag': 'Kafka consumer lag', // v0.10.2475
+  'pev.lagVals': 'normally ~{b}, now {o} messages',
   'pev.aria': 'Events merged into this problem',
   'pev.more': 'and {n} more events (Technical evidence)',
   'pev.title': 'Merged events',

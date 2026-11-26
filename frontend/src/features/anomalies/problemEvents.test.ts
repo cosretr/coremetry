@@ -81,3 +81,26 @@ describe('splitEventLines', () => {
     expect(splitEventLines(lines.slice(0, 2))).toEqual({ head: lines.slice(0, 2), rest: 0 });
   });
 });
+
+// v0.10.2475 — consumer lag: birimsiz "1.705×" yerine ölçü + topic + normal → şimdi;
+// kısa liste önce süren olayları, sonra biteni en yeniden gösterir.
+describe('consumer lag satırı ve kısa liste sırası', () => {
+  const lag = (over: Partial<ProblemEvent>) => ev({ detector: 'metric_kafka', measure: 'consumer_lag', topic: 'orders-topic', observed: 17936, baseline: 5, ...over });
+  it('lag satırı birim ve topic taşır, oran yazılmaz', () => {
+    const [l] = problemEventLines([lag({ startedAt: 1, live: false })], clock);
+    expect(l.text).toBe('t1 Kafka consumer lag · orders-topic normalde ~5, şimdi 17.936 mesaj (bitti)');
+    expect(l.text).not.toMatch(/×/);
+    const [en] = problemEventLines([lag({ startedAt: 1 })], clock, 'en');
+    expect(en.text).toBe('t1 Kafka consumer lag · orders-topic normally ~5, now 17,936 messages');
+  });
+  it('kısa liste: süren olaylar önce (zaman sırası), biten en yeniden geriye', () => {
+    const lines = problemEventLines([
+      lag({ startedAt: 1, live: false }), lag({ startedAt: 2, live: false }), lag({ startedAt: 3, live: false }),
+      lag({ startedAt: 4, live: false }), lag({ startedAt: 5, live: false }), lag({ startedAt: 6, live: false }),
+      lag({ startedAt: 7, live: true }),
+    ], clock);
+    const { head, rest } = splitEventLines(lines);
+    expect(head.map(l => l.text.split(' ')[0])).toEqual(['t7', 't6', 't5', 't4', 't3']);
+    expect(rest).toBe(2);
+  });
+});

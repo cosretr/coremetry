@@ -105,6 +105,19 @@ export function groupStatus(members: MLEvent[], nowNs = Date.now() * 1e6): MLGro
   return 'done';
 }
 
+/**
+ * SAF (v0.10.2475, operatör: cümle "14:45'te bitti" derken başlık "İzleniyor",
+ * grafik "ongoing"): detay sayfasının durumu SAYFANIN olayına bağlıdır. Grup
+ * durumu (herhangi bir üye açık → izleniyor) yalnız sayfanın olayı da açıkken
+ * kullanılır; olay bittiyse (sunucu kartı kapalı ya da kaydın bitişi var)
+ * başlık, grafik işareti ve cümle aynı şeyi söyler: bitti.
+ */
+export function detailStatus(group: Pick<MLGroupRow, 'status' | 'start' | 'end' | 'noData'> | null,
+  lead: { open: boolean; status: string }, nowNs: number, lang: Lang = 'tr'): { running: boolean; text: string } {
+  if (!group || !lead.open) return { running: lead.open, text: lead.status };
+  return { running: group.status === 'running' || group.status === 'watching', text: groupStatusText(group, nowNs, lang) };
+}
+
 /** SAF: süre (ns) → kısa metin. */
 function dur(ns: number, lang: Lang = 'tr'): string {
   const m = Math.max(0, Math.round(ns / 60e9));

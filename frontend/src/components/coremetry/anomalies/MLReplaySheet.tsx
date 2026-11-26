@@ -43,7 +43,7 @@ import { MLTraceHeatmap } from './MLTraceHeatmap';
 import { MLTraceDots } from './MLTraceDots';
 import { MLLogPlayer } from './MLLogPlayer';
 import { MLSignalEvidence } from './MLSignalEvidence';
-import { groupStatusText, type MLGroupRow } from './mlGroupRows';
+import { detailStatus, type MLGroupRow } from './mlGroupRows';
 import { evidenceSource, groupGateLine, groupProblemChip, headerOperation, latestGroupDecision, latestSvcShadow, recordDecision, svcGateLine } from './mlGroupDetail';
 import { MLSourceChart } from './MLSourceChart';
 import { MLRecordCard } from './MLRecordCard';
@@ -210,7 +210,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
         <MLRecordCard rec={rec} groupMembers={group?.members} leadId={id} decision={dec}
           decisionChip={dec.chip && <span data-testid="ml-group-problem"><Chip link={dec.chip} /></span>}
           chart={<RecordCourse rec={rec} lead={group?.lead ?? null} snap={snap}
-            open={group ? group.status === 'running' || group.status === 'watching' : card.header.open}
+            open={detailStatus(group, { open: card.header.open && !rec.endedAt, status: card.header.status }, Date.now() * 1e6, lang).running}
             logsLink={card.whereToLook.find(l => parseLogsLink(l.href))?.href} direction={card.value?.direction} />}
           actions={<>
           <div className="mb-2 flex flex-wrap gap-2" data-testid="ml-where">
@@ -229,8 +229,8 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   const episodes = typeof ev.episodes7d === 'number' ? ev.episodes7d : 0;
   const lead = group?.lead ?? null;
   const op = h.subject?.label || headerOperation(lead);
-  const status = group ? groupStatusText(group, Date.now() * 1e6) : h.status;
-  const running = group ? group.status === 'running' || group.status === 'watching' : h.open;
+  // v0.10.2475 — başlık + grafik işareti sayfanın olayıyla tutarlı (cümle de ondan).
+  const { text: status, running } = detailStatus(group, { open: h.open, status: h.status }, Date.now() * 1e6);
   const members = group?.members ?? [];
   const sample = snap ? replaySamples(snap).find(x => x.traceId) : undefined;
   const shadow = latestGroupDecision(members);

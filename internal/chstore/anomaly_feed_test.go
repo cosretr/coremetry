@@ -7,6 +7,7 @@ package chstore
 // kısmı (aktif, başlangıç penceresi, susturma) ML satırına da uygulanır.
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -120,5 +121,15 @@ func TestMLFeedFilter(t *testing.T) {
 	// v0.10.2085 — RCA kanıtı: eski satırlar + yalnız new_template ML olayları.
 	if mf, ok := mlFeedFilter(ListAnomalyEventsFilter{FeedMLDetector: "new_template"}, now); !ok || mf.Detector != "new_template" {
 		t.Fatalf("tek dedektör daraltması: %+v", mf)
+	}
+	// v0.10.2475 — telemetri hacmi anomali değil: akış (inbox satırı + rozeti,
+	// raporlar) servis görünümüyle okur; yalnız açık hacim türü süzgeci okur.
+	mf, _ = mlFeedFilter(ListAnomalyEventsFilter{}, now)
+	if where, _ := mlEventsWhere(MLEventsFilter{Since: mf.Since, View: mf.View, recCols: true}); mf.View != MLViewService ||
+		!strings.Contains(where, "NOT (class = 'telemetry_volume' OR detector IN ('svc_volume_spike', 'svc_telemetry_volume'))") {
+		t.Fatalf("akış hacim satırlarını dışlamalı: view=%q where=%s", mf.View, where)
+	}
+	if mf, _ := mlFeedFilter(ListAnomalyEventsFilter{Kind: "ml:" + MLDetSvcTelemetryVolume}, now); mf.View != "" || mf.Detector != MLDetSvcTelemetryVolume {
+		t.Fatalf("açık hacim süzgeci okunabilmeli: %+v", mf)
 	}
 }

@@ -264,7 +264,17 @@ func (t *tracker) setEvent(ev chstore.MLEvent) {
 	t.mu.Unlock()
 }
 
-// openRun — v0.10.2041: taban kimliğin açık bir koşusu var mı (observe'un
+// lastEvent — v0.10.2475: epizodun son yazılan hali (setEvent; kaydıyla).
+func (t *tracker) lastEvent(epID string) (chstore.MLEvent, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if r := t.byEpisode(epID); r != nil && r.ev.ID != "" {
+		return r.ev, true
+	}
+	return chstore.MLEvent{}, false
+}
+
+// openRun — v0.10.2041:taban kimliğin açık bir koşusu var mı (observe'un
 // "taze değil" kuralının tersi; kapanmamış ve son görülme kapanış eşiğinin
 // içinde).
 func (t *tracker) openRun(baseID string, now time.Time, tick time.Duration) bool {
