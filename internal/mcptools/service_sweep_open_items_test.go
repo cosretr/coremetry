@@ -40,7 +40,7 @@ func TestSweepOpenItemsReportsInboxExceptions(t *testing.T) {
 	}
 	// Şerit ortamsız okur (serviceInboxHref env=): tarama da öyle, yoksa env
 	// üyeliği şeridin gösterdiği satırı düşürebilir.
-	if got != (InboxOpenQuery{Service: "orders-api", Limit: ServiceAttentionLimit, Attention: true}) {
+	if got != ServiceOpenItemsQuery("orders-api") { // v0.10.2482: şeridin süzgeci, eski tür kümesi (exception satırı)
 		t.Errorf("sorgu %+v, want şeridin sorgusu", got)
 	}
 	if sec.EnvApplied == nil || *sec.EnvApplied {

@@ -50,6 +50,13 @@ type InboxOpenQuery struct {
 	// kararlı imzalar gizlenir, SLO burn-rate satır değil SLOCount, anomaliler
 	// dışarıda). Rows/Total şeridin "N açık konu"su olur.
 	Attention bool
+	// AllKinds — v0.10.2482 (operatör onayı; DECISIONS 2026-11-27 "açık konu"
+	// sözleşmesi revizyonu): false (varsayılan) = Problems listesinin ve
+	// rozetinin varsayılan türleri (problem, Incidents açıkken + incident) —
+	// sayı rozetle aynı evrende. true = eski küme (exception / HTTP hata
+	// grupları dahil); yalnız exception satırını ayrıca okuyanlar (servis
+	// sağlık kontrolü / taraması, brifing kalem 3).
+	AllKinds bool
 }
 
 // InboxRow — bir inbox satırının araç şekli (api.InboxItem'dan).
@@ -81,6 +88,10 @@ type InboxOpenResult struct {
 	Truncated bool
 	// SLOCount — v0.10.1694: Attention'da dipnota giden SLO burn-rate problemleri.
 	SLOCount int
+	// Signals — v0.10.2482: aynı okumanın açık anomali satırı sayısı (inbox
+	// counts.anomaly; tür süzgecinden önce). Toplama KARIŞMAZ, ayrı söylenir
+	// ("N sinyal").
+	Signals int
 }
 
 // InboxOpenReader — api'nin inbox çekirdeği (nil = bağlı değil).
@@ -164,11 +175,27 @@ func serviceStripQuery(service, env string, limit int) InboxOpenQuery {
 
 // ReadInboxOpen — kapsamın açık konuları, inbox çekirdeğinden (plan yukarıda).
 // Satırlar inbox sırası (öncelik); çoklu okumada birleşim + tekilleştirme.
+//
+// v0.10.2482 — Problems listesinin / rozetinin türleri (AllKinds false);
+// exception satırlarını da isteyen okuyucu ReadInboxOpenAllKinds'ı çağırır.
 func ReadInboxOpen(ctx context.Context, d Deps, team string, services []string, env string, limit int) (InboxOpenResult, int, error) {
+	return readInboxOpen(ctx, d, team, services, env, limit, false)
+}
+
+// ReadInboxOpenAllKinds — v0.10.2482: eski tür kümesiyle aynı plan (brifing
+// kalem 3 exception satırlarını bu okumadan ayırır).
+func ReadInboxOpenAllKinds(ctx context.Context, d Deps, team string, services []string, env string, limit int) (InboxOpenResult, int, error) {
+	return readInboxOpen(ctx, d, team, services, env, limit, true)
+}
+
+func readInboxOpen(ctx context.Context, d Deps, team string, services []string, env string, limit int, all bool) (InboxOpenResult, int, error) {
 	if d.InboxOpen == nil {
 		return InboxOpenResult{}, 0, errNoInboxReader
 	}
 	qs, exact, unread := InboxOpenPlan(team, services, env, limit)
+	for i := range qs {
+		qs[i].AllKinds = all
+	}
 	if len(qs) == 1 {
 		r, err := d.InboxOpen(ctx, qs[0])
 		return r, unread, err
@@ -187,6 +214,7 @@ func ReadInboxOpen(ctx context.Context, d Deps, team string, services []string, 
 		out.ScanCapped = out.ScanCapped || r.ScanCapped
 		out.Truncated = out.Truncated || r.Truncated || r.Total > len(r.Rows)
 		out.SLOCount += r.SLOCount
+		out.Signals += r.Signals
 		for _, row := range r.Rows {
 			if (exact && !allow[row.Service]) || seen[row.ID] {
 				continue
@@ -233,7 +261,7 @@ func openProblemsPayloadScaled(team, env string, services []string, trimmed, unr
 		"scan_capped":      res.ScanCapped,
 		"truncated_source": res.Truncated,
 		"order":            "inbox priority order (P1 first)",
-		"source":           "Service page attention strip set (Inbox pipeline, status=open: alert Problems + exception/http-error groups; items marked not-a-problem hidden, SLO burn-rate counted in slo_burn_problems, anomalies excluded)",
+		"source":           "Service page attention strip set = Problems list / badge kinds (Inbox pipeline, status=open: Problems only; items marked not-a-problem hidden, SLO burn-rate counted in slo_burn_problems; anomalies and exception/http-error groups not counted — open anomalies are reported separately in open_signals)",
 		"page_url":         OpenProblemsPageURL(services, team),
 	}
 	if unread > 0 {
@@ -261,6 +289,9 @@ func openProblemsPayloadScaled(team, env string, services []string, trimmed, unr
 	if res.SLOCount > 0 {
 		out["slo_burn_problems"] = res.SLOCount // şerit gibi: satır değil dipnot
 	}
+	if res.Signals > 0 {
+		out["open_signals"] = res.Signals // v0.10.2482: şeridin "N sinyal"i; total_open'a karışmaz
+	}
 	out["has_more"] = hasMore || truncated || res.Truncated || res.Total > len(res.Rows)
 	if truncated {
 		out["truncated"] = true
@@ -271,9 +302,9 @@ func openProblemsPayloadScaled(team, env string, services []string, trimmed, unr
 func openProblemsTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name: OpenProblemsName,
-		ShortDescription: "Kullanıcının servislerindeki AÇIK konular (Problem + exception/HTTP hata grubu), P1 önce — " +
+		ShortDescription: "Kullanıcının servislerindeki AÇIK Problem'ler (Problems rozetiyle aynı tür kümesi), P1 önce — " +
 			"Service sayfası şeridi / Inbox ile aynı okuma. Kapsamı sunucu koyar. \"Açık problemim var mı / ne alarm veriyor\" sorusunun girişi.",
-		Description: "Return the OPEN items on the caller's services — the same Inbox pipeline the Service page attention strip and /inbox read: alert-rule Problems and exception / HTTP-error groups (items marked not-a-problem hidden, SLO burn-rate problems counted in `slo_burn_problems`, anomalies excluded — exactly what the strip counts), with priority (P1/P2/P3), severity, kind, service, a one-line reason, start time and a page_url per item. " +
+		Description: "Return the OPEN Problems on the caller's services — the same Inbox pipeline the Service page attention strip and the Problems list / badge read (same default kinds: Problems only; items marked not-a-problem hidden, SLO burn-rate problems counted in `slo_burn_problems`; open anomalies reported separately as `open_signals`, never added to `total_open`), with priority (P1/P2/P3), severity, kind, service, a one-line reason, start time and a page_url per item. " +
 			"Use it for 'do I have open problems', 'what is alerting in my area'. Scope is filled by the server (team → owner OR sre services); pass `services`/`team` only when the user names them. Without scope the call fails with a named error: ask the user which team, never guess. " +
 			"`env` keeps items whose service ran in that environment in the last hour. Rows are Inbox-ordered; the body stays under 2 KB (at most 25 rows) and `total_open` is the Inbox count. " +
 			"Cached 30 s. For one problem's evidence use get_problem; for exception detail use the exception tools.",

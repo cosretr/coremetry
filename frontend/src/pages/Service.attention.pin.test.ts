@@ -25,7 +25,7 @@ describe('v0.10.784 — service attention strip', () => {
   });
 
   it('strip reads the Inbox (same ranking) and links rows via the shared helper', () => {
-    expect(strip).toContain("api.inbox({ service, status: 'open', limit: 20 })");
+    expect(strip).toContain("api.inbox({ service, status: 'open', limit: 20, kind: serviceStripKinds(incidentsOn) })"); // v0.10.2482: rozetin türleri
     // v0.10.1827 — Incidents emekliyken incident satırı şeritte yok.
     expect(strip).toContain('attentionRows(items, { excludeIncidents: !incidentsOn })');
     expect(strip).toContain('const incidentsOn = useIncidentsEnabled();');

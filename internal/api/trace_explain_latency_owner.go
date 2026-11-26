@@ -44,6 +44,10 @@ type latencyOwnerEvent struct {
 	Target    string
 	Computed  string // kanıttan kurulan satır
 	ModelLine string // yalnız corrected: modelin yazdığı ilk satır (normalize)
+	// Narrative — v0.10.2482: anlatım biçiminde koşu (traceNarrativeCtx). Anlatım
+	// istemi satırı İSTEMEZ (UI atar) → her koşu "added" olur; sayım ayrı tutulur
+	// ki bölümlü biçimin eklenme oranı bozulmasın (detail "style=anlatim").
+	Narrative bool
 }
 
 var traceIDInEvidenceRE = regexp.MustCompile(`(?m)^Trace (\S+) with \d+ spans`)
@@ -99,6 +103,7 @@ func (s *Server) traceComposeRun(ctx context.Context, run explainRun, evidence s
 // traceAnswerWithLatencyOwner ile bayt bayt aynı (kayıt sonucu okunmaz).
 func (s *Server) composeAndRecordLatencyOwner(ctx context.Context, evidence, answer string) string {
 	out, ev := composeLatencyOwner(evidence, answer)
+	ev.Narrative = traceNarrativeStyleFrom(ctx) // v0.10.2482 — ayrı sayım
 	s.recordLatencyOwner(ctx, ev)
 	return out
 }

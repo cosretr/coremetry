@@ -1040,7 +1040,8 @@ func TestTraceFollowUpLoopResumedWithoutExplain(t *testing.T) {
 		t.Fatal("açıklamasız devralma döngüye gitmedi (araçsız çağrı)")
 	}
 	sys := llmSystem(calls[0])
-	for _, want := range []string{"AKTİF BAĞLAM", "- trace_id: " + tfTrace, strings.TrimSpace(copilot.TraceFollowUpAddendum())} {
+	// v0.10.2482 — varsayılan biçim anlatım: takip eki anlatım hâli.
+	for _, want := range []string{"AKTİF BAĞLAM", "- trace_id: " + tfTrace, strings.TrimSpace(copilot.TraceFollowUpAddendumNarrativeFor(false))} {
 		if !strings.Contains(sys, want) {
 			t.Errorf("sistem mesajı %q içermiyor", want)
 		}

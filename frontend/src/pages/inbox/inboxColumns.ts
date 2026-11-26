@@ -4,6 +4,7 @@
 import { inboxRowHeadline, inboxOccurrencesLabel } from '@/lib/inboxRowText';
 import type { DataTableColumn } from '@/lib/dataTable';
 import { stdConfidenceRank } from '@/lib/problemStandardView';
+import { impactSortValue } from '@/lib/impactSummaryView';
 import type { InboxItem } from '@/lib/types';
 import { t, tf, type Lang } from '@/lib/i18n'; // v0.10.2283 — kolon ve kırpma metinleri arayüz dilinde (TR aynı)
 
@@ -52,7 +53,8 @@ export const inboxCols = (lang: Lang, closed = false): DataTableColumn<InboxItem
   { id: 'priority', label: t('inbox.col.priority', lang), sortValue: it => PRIO_RANK[it.priority] ?? 0, naturalDir: 'desc', width: 84, minWidth: 80, priority: 1 },
   // v0.9.648 — ESNEK kolon: başlık serbest metin ve en geniş olan.
   { id: 'detail',   label: t('inbox.col.detail', lang),  sortValue: it => it.std?.headline ?? inboxRowHeadline(it), naturalDir: 'asc', flex: true, minWidth: 260, priority: 1 },
-  { id: 'impact',   label: t('inbox.col.impact', lang), width: 260, minWidth: 150, priority: 2 },
+  // v0.10.2482 — Etki: etki özetinin büyüklüğü (sunucu sıralar; özetsiz −1 en altta).
+  { id: 'impact',   label: t('inbox.col.impact', lang), sortValue: it => impactSortValue(it.std), naturalDir: 'desc', numeric: true, width: 260, minWidth: 150, priority: 2 },
   { id: 'confidence', label: t('inbox.col.confidence', lang), sortValue: it => stdConfidenceRank(it.std), naturalDir: 'desc', width: 92, minWidth: 80, priority: 2 },
   { id: 'evidence', label: t('inbox.col.evidence', lang), sortValue: it => it.eventCount ?? 0, naturalDir: 'desc', numeric: true, width: 84, minWidth: 72, priority: 4 },
   { id: 'service',  label: t('inbox.col.service', lang), sortValue: it => it.service, naturalDir: 'asc', width: 170, minWidth: 120, priority: 3 },
@@ -67,7 +69,7 @@ export const inboxCols = (lang: Lang, closed = false): DataTableColumn<InboxItem
 // göre" diyordu ve varsayılan artık ilk görülme.
 // v0.10.2283 — adlar lib/i18n inbox.capSort.* (TR aynı).
 const CAP_SORT_IDS = new Set(['priority', 'firstSeen', 'lastSeen', 'occurrences', 'service', 'source', 'detail', 'assignee',
-  'confidence', 'evidence']); // confidence: v0.10.1529; evidence: v0.10.2395
+  'confidence', 'evidence', 'impact']); // confidence: v0.10.1529; evidence: v0.10.2395; impact: v0.10.2482
 export function capSortLabel(id: string | null, dir: 'asc' | 'desc', lang: Lang = 'tr'): string {
   const name = t(`inbox.capSort.${CAP_SORT_IDS.has(id ?? '') ? id : 'priority'}`, lang);
   const order = id === 'firstSeen' || id === 'lastSeen'

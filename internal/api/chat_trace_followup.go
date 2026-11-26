@@ -128,6 +128,11 @@ type traceFollowUp struct {
 	// serbest-sorgu araçları gizli). Takip talimatı ve pencere satırı gizli
 	// araçların yerine yapısal karşılıklarını anar (copilot.ToolsetText).
 	Simple bool
+	// Narrative — v0.10.2482: trace açıklaması anlatım biçiminde
+	// (traceExplainNarrativeOn); takip cevabı kısa düz cümle, bölüm şablonu
+	// yok (copilot.TraceFollowUpAddendumNarrativeFor). Kanıt blokları ve
+	// araçlar aynen kalır. false = bölümlü, bayt bayt eski.
+	Narrative bool
 }
 
 // traceFollowUpPage — v0.10.948 — page yalnız AYNI trace'i kanıtlıyorsa (traceId == özne); boş traceId de uyuşmazlık.
@@ -243,7 +248,11 @@ func traceFollowUpPromptTR(tf *traceFollowUp, explain string) string {
 		// dışını okurdu; önce trace'in kendi kapsamı getirilir.
 		b.WriteString(copilot.ToolsetText(traceFollowUpWindowUnknown, tf.Simple) + "\n") // v0.10.1302
 	}
-	out := strings.TrimRight(b.String(), "\n") + copilot.TraceFollowUpAddendumFor(tf.Simple) // v0.10.1302 — araç setine göre
+	addendum := copilot.TraceFollowUpAddendumFor(tf.Simple) // v0.10.1302 — araç setine göre
+	if tf.Narrative {
+		addendum = copilot.TraceFollowUpAddendumNarrativeFor(tf.Simple) // v0.10.2482 — anlatım biçimi
+	}
+	out := strings.TrimRight(b.String(), "\n") + addendum
 	// v0.10.1147 — span exception özeti (VERİ bloğu, çitli): talimattan sonra,
 	// önceki açıklamadan önce. Sayı denetiminin tohumuna da girer (açıklamasız
 	// çağrı) — mesajdaki değerler temellenir.

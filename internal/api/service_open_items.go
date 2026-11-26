@@ -24,9 +24,10 @@ import (
 
 // serviceOpenItemsView — inboxView gövdesinden okunan alanlar.
 type serviceOpenItemsView struct {
-	Items      []InboxItem `json:"items"`
-	Truncated  bool        `json:"truncated"`
-	ScanCapped bool        `json:"scanCapped"`
+	Items      []InboxItem    `json:"items"`
+	Truncated  bool           `json:"truncated"`
+	ScanCapped bool           `json:"scanCapped"`
+	Counts     map[string]int `json:"counts"` // v0.10.2482: counts.anomaly = şeridin "N sinyal"i
 }
 
 // inboxOpenAttention — şeridin kümesi. Karar listesi okunamazsa hiçbir satır
@@ -49,7 +50,7 @@ func (s *Server) inboxOpenAttention(ctx context.Context, q mcptools.InboxOpenQue
 	}
 	kept, slo := serviceAttentionItems(view.Items, noise)
 	return mcptools.InboxOpenResult{Rows: inboxRowsFrom(kept), Total: len(kept), ScanCapped: view.ScanCapped,
-		Truncated: view.Truncated, SLOCount: slo}, nil
+		Truncated: view.Truncated, SLOCount: slo, Signals: view.Counts["anomaly"]}, nil
 }
 
 // inboxItemVerdictSignature — SAF: FE lib/problemVerdict.ts inboxSignature'ın

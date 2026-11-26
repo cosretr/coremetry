@@ -350,6 +350,67 @@ func TraceFollowUpAddendumFor(simple bool) string {
 	return ToolsetText(traceFollowUpAddendum, simple)
 }
 
+// traceFollowUpNarrativeTail — v0.10.2482 (operatör onaylı): anlatım biçiminde
+// (cosre_conversation.traceExplainStyle = anlatim) takip cevabının biçimi.
+// Takip talimatının bağlam / araç sırası / neden kuralları AYNEN kalır; yalnız
+// "CEVAP:" ile başlayan bölüm şablonu bu kuyrukla değişir (TraceFollowUpAddendumNarrativeFor).
+// İlk cevap TÜR + KARAR idi ve kanıtı ekran çiziyor: takip de kısa düz
+// cümle, aynı ses; kanıt yeniden dökülmez. İki model aynı metni alır.
+const traceFollowUpNarrativeTail = `
+CEVAP: 2-5 düz cümle, ilk açıklamanın sesiyle; başlık, madde, tablo yok.
+Ekranda görünen kanıtı (Akış, LOG, Kanıt, önceki KARAR) yeniden dökme; yalnız
+soruyu cevaplayan değeri ver, belirleyici mesajı ya da kodu AYNEN, tırnak
+içinde alıntıla. Kanıt ve araçlar soruyu cevaplamıyorsa açıkça söyle ("bu
+trace'in kanıtı bunu göstermiyor"), gereken veriyi tek cümleyle yaz; tahmin
+yürütme. ok olmayan kaynağı tek cümleyle an. [T1] gibi kimlikleri yazma;
+korelasyonu neden diye sunma; uzun span CPU değildir.
+ALINTI: ` + quoteVerbatimRule + `
+SON HATIRLATMA: kısa düz cümleler; her sayı araç sonucundan ya da kanıttan aynen.`
+
+// traceFollowUpSectionsMarker — bölümlü takip talimatında cevap şablonunun
+// başladığı yer (anlatım kuyruğu buradan sonrasını değiştirir).
+const traceFollowUpSectionsMarker = "\nCEVAP: ilk açıklamanın başlıklarıyla"
+
+// TraceFollowUpAddendumNarrativeFor — v0.10.2482: anlatım biçimindeki takip
+// talimatı (araç setine göre). Bölümlü biçim TraceFollowUpAddendumFor (bayt
+// bayt eski).
+func TraceFollowUpAddendumNarrativeFor(simple bool) string {
+	head, _, _ := strings.Cut(traceFollowUpAddendum, traceFollowUpSectionsMarker)
+	return ToolsetText(head+traceFollowUpNarrativeTail, simple)
+}
+
+// traceNarrativeCodeAddendum — v0.10.2482 (operatör onaylı): "Kodu da incele"
+// dalının anlatım hâli. Kod pencereleri bölümlü kod dalıyla AYNI blokla gelir
+// (devops PromptBlock / MissingBlock); kod tarayıcıya gitmez (v0.9.1254), UI
+// yalnız dosya/satır künyesini gösterir; model kodu yeniden yazmaz. Çıktı TÜR + KARAR + Kod bulgusu + Sonraki adım.
+const traceNarrativeCodeAddendum = `
+
+KOD BAĞLAMI: bu istekte depodaki kaynak kod pencereleri de var (gerçek satır
+numaralarıyla). Dosya ve satır aralıklarını ekran ayrıca gösteriyor.
+Bu istekte ÇIKTI dört parça: <TÜR>, KARAR, Kod bulgusu, Sonraki adım.
+Kod bulgusu: <1-2 cümle. <dosya>:<satır> — o satırdaki ifade başarısız
+değerle ne yapıyor; değer nereden geliyor, nereye gidiyor.>
+- Kod bloğu koyma, kodu yeniden yazma; yalnız dosya:satır ve ifade ya da
+  değişken adı.
+- Satır numarası yalnız pencerede verilenlerden; pencerede görmediğin
+  davranışı uydurma ("bu pencerede görünmüyor" doğru cevaptır).
+- Stacktrace yoksa (OPERASYON KODU) belirli bir satırı "hata burada" diye
+  suçlama; hangi çağrının hangi span'e karşılık geldiğini söyle.
+- "KOD BAĞLAMI İSTENDİ — ÇÖZÜLEMEDİ" bloğu varsa: "Kod bulgusu: kaynak
+  çözülemedi: <dosya>".
+- Sonraki adım doğrulanabilir olsun: hangi dosyada neye bakılacak.`
+
+const systemTraceNarrativeCode = systemTraceNarrativeBody + traceNarrativeCodeAddendum + AnswerInTurkish
+const systemTraceNarrativeCandidate = systemTraceNarrativeBody + traceNarrativeCodeAddendum + systemOperationCandidateAddendum + AnswerInTurkish
+
+// SystemPromptTraceNarrativeWithCode — v0.10.2482: anlatım biçimi + kod
+// bağlamı (stack ya da operasyon kodu; çözülemedi bloğu dahil).
+func SystemPromptTraceNarrativeWithCode() string { return systemTraceNarrativeCode }
+
+// SystemPromptTraceNarrativeWithCandidate — v0.10.2482: anlatım + operasyon
+// fonksiyon kodu sözlüğünden ADAY (bölümlü SystemPromptTraceWithOperationCandidate eşi).
+func SystemPromptTraceNarrativeWithCandidate() string { return systemTraceNarrativeCandidate }
+
 // systemSpan — focused per-span explain (v0.5.144). Inputs are
 // the target span + parent + immediate children + any error
 // siblings in the same trace. Operator already knows what the

@@ -328,7 +328,7 @@ func runServiceHealthcheck(ctx context.Context, r hcReaders, req HealthcheckRequ
 				err := errors.New("inbox okuyucusu bağlı değil")
 				return []HealthcheckRow{hcClassifyProblems(svc, InboxOpenResult{}, err), hcClassifyExceptions(svc, InboxOpenResult{}, err)}
 			}
-			oi, err := r.openItems(c, ServiceAttentionQuery(svc))
+			oi, err := r.openItems(c, ServiceOpenItemsQuery(svc)) // v0.10.2482: exception satırı için eski tür kümesi
 			return []HealthcheckRow{hcClassifyProblems(svc, oi, err), hcClassifyExceptions(svc, oi, err)}
 		}, func() []HealthcheckRow {
 			return []HealthcheckRow{hcUnknownRow(svc, HCCheckProblems, "", "zaman aşımı — okunamadı"),

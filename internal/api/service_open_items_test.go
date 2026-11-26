@@ -75,10 +75,13 @@ func TestServiceOpenItemsParityWithInbox(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	key, _ := s.inboxView(inboxOpenValues(mcptools.ServiceAttentionQuery("orders-api")))
+	// v0.10.2482 — tarama / sağlık kontrolü şeridin süzgecini ESKİ tür
+	// kümesiyle okur (ServiceOpenItemsQuery: exception satırları); şeridin
+	// sayısı artık Problems rozetinin türleri (TestOpenProblemsParityWithStrip).
+	key, _ := s.inboxView(inboxOpenValues(mcptools.ServiceOpenItemsQuery("orders-api")))
 	s.l1.set(key, body, time.Minute)
 
-	// Handler yolu — şeridin isteği birebir.
+	// Handler yolu — tür süzgeçsiz (tüm sözlük) istek.
 	rec := httptest.NewRecorder()
 	s.inbox(rec, httptest.NewRequest(http.MethodGet, "/api/inbox?service=orders-api&status=open&limit=20", nil))
 	var view serviceOpenItemsView
@@ -87,7 +90,7 @@ func TestServiceOpenItemsParityWithInbox(t *testing.T) {
 	}
 	stripRows, _ := serviceAttentionItems(view.Items, nil)
 
-	got, err := s.inboxOpen(context.Background(), mcptools.ServiceAttentionQuery("orders-api"))
+	got, err := s.inboxOpen(context.Background(), mcptools.ServiceOpenItemsQuery("orders-api"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,13 +121,13 @@ func TestServiceAttentionStripQueryPinned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), "api.inbox({ service, status: 'open', limit: 20 })") {
+	if !strings.Contains(string(src), "api.inbox({ service, status: 'open', limit: 20, kind: serviceStripKinds(incidentsOn) })") { // v0.10.2482
 		t.Error("ServiceAttentionStrip sorgusu değişti: mcptools.ServiceAttentionQuery'yi aynı güncelle")
 	}
 	if !strings.Contains(string(src), "filterByVerdictView(q.data.items, verdictIndex(verdictsQ.data?.verdicts), 'triage')") {
 		t.Error("şeridin karar süzgeci değişti: serviceAttentionItems'ı aynı güncelle")
 	}
-	if q := inboxOpenValues(mcptools.ServiceAttentionQuery("orders-api")); q.Encode() != "limit=20&service=orders-api&status=open" {
+	if q := inboxOpenValuesFor(mcptools.ServiceAttentionQuery("orders-api"), false); q.Encode() != "kind=problem&limit=20&service=orders-api&status=open" {
 		t.Errorf("sorgu %q", q.Encode())
 	}
 	if h := mcptools.ServiceInboxHref("orders-api"); h != "/inbox?service=orders-api&prio=P1,P2,P3&env=" {

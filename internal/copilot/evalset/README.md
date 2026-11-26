@@ -138,3 +138,14 @@ token, ≤12 adım) koşunun cases JSON'unda; ai_calls satırları
   deterministik eklediği metin puanlamadan önce AYNI fonksiyonla uygulanır
   (SLOBurn: `sloAnswerWithBurnVerdict` alarm eşiği satırı).
 - Uydurma ad ihlali artık adları da yazar (`unknown entities 1 > 0: [x]`).
+
+## Trace anlatım biçimi (v0.10.2482)
+
+`trace_narrative.json`: `surface: "TraceNarrative"` (anlatım istemi, üretim
+etiketi `explain-trace`, düşünme/tavan üretimle aynı). Hakem modelsiz
+`expect.narrative` (`internal/api/ai_evalset_narrative.go`):
+`label` (kapalı kümeden, cevabın TÜR'ü bununla aynı olmalı), `quotes`
+(cevapta harf duyarlı birebir; kanıtta da geçmeli), `minSentences` /
+`maxSentences` (KARAR, varsayılan 3–6), `maxCodeTokens` (KARAR + Sonraki
+adım'da kod biçimli sözcük tavanı, varsayılan 6; alıntılar sayılmaz), Sonraki
+adım zorunlu. Bölümlü `Trace` yüzeyi ve vakaları değişmedi.

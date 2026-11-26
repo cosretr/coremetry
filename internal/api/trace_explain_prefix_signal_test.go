@@ -170,7 +170,7 @@ func TestPrefixStatsRates(t *testing.T) {
 		}
 	}
 	b, _ := json.Marshal(chstore.CosrePrefixStats{Applied: 4, Added: 1}.WithRates())
-	if string(b) != `{"applied":4,"added":1,"corrected":0,"addedRate":0.25,"correctedRate":0}` {
+	if string(b) != `{"applied":4,"added":1,"corrected":0,"addedRate":0.25,"correctedRate":0,"narrativeApplied":0,"narrativeAdded":0}` { // v0.10.2482 — anlatım ayrı
 		t.Errorf("json: %s", b)
 	}
 }

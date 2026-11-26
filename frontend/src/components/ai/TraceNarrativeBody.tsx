@@ -3,7 +3,8 @@
 // Trace açıklamasının ANLATIM biçimi; operatörün onayladığı düzen:
 //   TÜR satırı (etiket · HTTP kodu · süre) → KARAR (modelden, akarken çizilir)
 //   → Akış (deterministik tek satır) → LOG (görünen 1–2 satır + "Trace'in
-//   loglarını aç"; dürüst boş durumlar) → Sonraki adım → katlanır Kanıt (yalnız
+//   loglarını aç"; dürüst boş durumlar) → [Kod bulgusu + katlanır kod künyesi (dosya/satır/link, içeriksiz) — yalnız
+//   "Kodu da incele" turu, v0.10.2482] → Sonraki adım → katlanır Kanıt (yalnız
 //   yukarıda görünmeyenler) → dipnot.
 // Akış / LOG / Kanıt sunucunun `trace_evidence` bloğundan (modelden ÖNCE gelir):
 // model beklenmeden çizilir. Saatler izleyicinin saat diliminde (Window çipiyle
@@ -17,7 +18,8 @@ import { Button } from '@/components/shadcn/button';
 import { HlText } from './HlText';
 import { traceHref } from '@/lib/traceHref';
 import { formatTraceClock } from '@/lib/traceAiContext';
-import type { TraceEvidenceHop, TraceEvidenceLog, TraceEvidenceView } from '@/lib/types';
+import type { AICodeContext, TraceEvidenceHop, TraceEvidenceLog, TraceEvidenceView } from '@/lib/types';
+import { CodeSourceFooter } from './CodeSourceFooter';
 import {
   TRACE_LABEL_KEY, extraTraceLogs, fmtTraceMs, parseTraceNarrative, traceEvidenceSummary, traceFlowLine,
   traceHeadStatus, traceLogEmpty, visibleTraceLogs,
@@ -61,12 +63,14 @@ function hopValue(h: TraceEvidenceHop, tr: (k: string) => string) {
   );
 }
 
-export function TraceNarrativeBody({ text, busy, view, traceId }: {
+export function TraceNarrativeBody({ text, busy, view, traceId, code }: {
   text: string;
   busy: boolean;
   /** sunucunun kanıt bloğu; gelmediyse Akış / LOG satırı yükleniyor çizer */
   view: TraceEvidenceView | null;
   traceId: string;
+  /** v0.10.2482 — "Kodu da incele" turunun kod künyesi (içeriksiz; katlanır parçada çizilir) */
+  code?: AICodeContext | null;
 }) {
   const tr = useT();
   const n = useMemo(() => parseTraceNarrative(text, busy), [text, busy]);
@@ -122,6 +126,17 @@ export function TraceNarrativeBody({ text, busy, view, traceId }: {
           {empty && <div className="cx-evidence field-hint" data-tn-log-empty={empty}>{fill(tr(`ai.tn.log.${empty}`), { n: view.logRows })}</div>}
         </div>
       )}
+      {n.code && (
+        <p className="cm-md-p" data-tn-code=""><b>{tr('ai.tn.code')}:</b> <HlText text={n.code} /></p>
+      )}
+      {/* v0.10.2482 — kod turunun KAYNAK künyesi (dosya, satır aralığı, işaretli satır, depo, DevOps
+          linki — mevcut CodeSourceFooter). Kod İÇERİĞİ yok (v0.9.1254 kuralı). */}
+      {code?.files?.length ? (
+        <details className="cm-md-details" data-tn-codesource="">
+          <summary>{fill(tr('ai.tn.codeFiles'), { n: code.files.length })}</summary>
+          <div className="cm-md-details__b"><CodeSourceFooter code={code} /></div>
+        </details>
+      ) : null}
       {n.next && (
         <p className="cm-md-p" data-tn-next=""><b>{tr('ai.tn.next')}:</b> <HlText text={n.next} /></p>
       )}

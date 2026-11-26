@@ -955,7 +955,11 @@ func explainTracePayloadScaled(id string, an traceToolAnalysis, scope []string, 
 	})
 }
 
-func explainTraceTool(d Deps) mcp.Tool {
+// explainTraceTool — v0.10.2482: taban araç + biçime bağlı anlatım eki
+// (explain_trace_narrative.go; kaynak nil ya da bolumlu → taban aynen).
+func explainTraceTool(d Deps) mcp.Tool { return withNarrativeTool(d, explainTraceBaseTool(d)) }
+
+func explainTraceBaseTool(d Deps) mcp.Tool {
 	return mcp.Tool{
 		Name:             ExplainTraceName,
 		ShortDescription: "Tek trace'in özeti: wall_ms, kritik yol (≤6 adım, top), dış bekleme, hata span'leri (≤5) + page_url. Span listesi yok; süreler toplanmaz.",

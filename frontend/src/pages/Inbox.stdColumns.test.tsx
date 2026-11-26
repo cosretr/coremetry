@@ -88,10 +88,14 @@ function problem(id: string, over: Partial<InboxItem>): InboxItem {
 
 const FAIL_RATE = problem('fr', {
   eventCount: 4,
-  std: std('high', {
-    primary: { text: IMPACT_REQ, value: 0.068, normal: 0.005 },
-    requests: { failedPerMin: 210, okPerMin: 2890, normalFailedPerMin: 12, normalOkPerMin: 3090 },
-  }),
+  std: {
+    ...std('high', {
+      primary: { text: IMPACT_REQ, value: 0.068, normal: 0.005 },
+      requests: { failedPerMin: 210, okPerMin: 2890, normalFailedPerMin: 12, normalOkPerMin: 3090 },
+    })!,
+    // v0.10.2482 — etki özeti (sunucu: lider etki olayının kanıtından).
+    impactSummary: { kind: 'errors', scope: 'service', perMin: 340, sharePct: 14, rank: 340, text: "~340 istek/dk başarısız · trafiğin %14'ü" },
+  },
 });
 const PLAIN = problem('pl', { std: std('medium', { primary: { text: '%3,0 hata · normal %0,5 (6×)', value: 3, normal: 0.5 } }) });
 const LOW = problem('lo', { eventCount: 1, std: std('low', { primary: { text: 'p95 1,2 sn · normal 300 ms', value: 1.2, normal: 0.3 } }) });
@@ -141,19 +145,53 @@ afterEach(() => {
 });
 
 describe('Problems listesi — Etki · Güven · Kanıt (v0.10.2395)', () => {
-  it('hata oranı satırı: Etki kısa biçim + pay alt satırda; bağlam satırında ikinci kez yok', async () => {
+  // v0.10.2482 — Etki = etki özeti tek satır; renk yalnız sapan değerde (başarısız istek).
+  it('hata oranı satırı: Etki özeti tek satır, renk yalnız başarısız istekte; önceki cümle title\'da', async () => {
     const el = await mount();
     const r = rowOf(el, 'svc-fr');
     const impact = cellByHead(el, r, 'Etki');
-    expect(impact.querySelector('.std-impact__main')?.textContent).toBe('Dakikada 210 başarısız · 2.890 başarılı');
-    expect(impact.querySelector('.std-impact__sub')?.textContent).toContain("isteklerin %6,8'i");
+    expect(impact.querySelector('.std-impact__main')?.textContent).toBe("~340 istek/dk başarısız · trafiğin %14'ü");
+    expect(impact.querySelector('.cell-err')?.textContent).toBe('~340 istek/dk başarısız');
+    expect(impact.querySelectorAll('.cell-err, .cell-warn')).toHaveLength(1);
+    expect(impact.querySelector('.std-impact__sub')).toBeNull();
+    expect(impact.querySelector('.std-impact')?.getAttribute('title')).toContain('Dakikada 210 başarısız');
     expect(cellByHead(el, r, 'Ne bozuk').querySelector('.std-ctx')?.textContent ?? '').not.toContain('Dakikada');
   });
 
+  // Dal 2 — özet yok, standardın cümlesi var: v0.10.2395 hücresi aynen (görünür).
   it('düz satır: Etki standardın etki cümlesi aynen', async () => {
     const el = await mount();
     const impact = cellByHead(el, rowOf(el, 'svc-pl'), 'Etki');
     expect(impact.querySelector('.std-impact__main')?.textContent).toBe('%3,0 hata · normal %0,5 (6×)');
+    expect(impact.querySelector('[data-testid="ib-impact-std"]')?.getAttribute('title')).toContain('Bu kuralın etki ölçüsü yok');
+  });
+
+  it('istek bölümü var, özet yok: v0.10.2395 kısa biçim + pay alt satırda', async () => {
+    m.items = [{ ...FAIL_RATE, std: { ...FAIL_RATE.std!, impactSummary: undefined } }, BARE];
+    const el = await mount();
+    const impact = cellByHead(el, rowOf(el, 'svc-fr'), 'Etki');
+    expect(impact.querySelector('.std-impact__main')?.textContent).toBe('Dakikada 210 başarısız · 2.890 başarılı');
+    expect(impact.querySelector('.std-impact__sub')?.textContent).toContain("isteklerin %6,8'i");
+  });
+
+  it('Etki başlığı sıralanabilir: tık → istek sort=impact (büyük önce, desc); sortValue sayısal, özetsiz −1', async () => {
+    const el = await mount();
+    const th = [...table(el).querySelectorAll<HTMLElement>('thead th')].find(h => h.textContent?.includes('Etki'))!;
+    const btn = th.querySelector<HTMLElement>('button, [role="button"]') ?? th;
+    await act(async () => { btn.click(); });
+    await settle();
+    expect(m.calls.at(-1)).toMatchObject({ sort: 'impact', dir: 'desc' });
+    const col = inboxCols('tr').find(c => c.id === 'impact')!;
+    expect(col.numeric).toBe(true);
+    expect(col.sortValue!(FAIL_RATE)).toBe(340);
+    expect(col.sortValue!(PLAIN)).toBe(-1);
+    expect(col.sortValue!(BARE)).toBe(-1);
+  });
+
+  it('varsayılan sıralama öncelik kalır (aynı öncelikte etki sunucuda)', async () => {
+    m.calls = [];
+    await mount();
+    expect(m.calls[0]).toMatchObject({ sort: 'priority', dir: 'desc' });
   });
 
   it('Güven rozeti: YÜKSEK yeşil, ORTA sarı, DÜŞÜK nötr; renk yalnız rozette', async () => {

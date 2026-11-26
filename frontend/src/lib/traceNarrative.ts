@@ -25,6 +25,8 @@ export interface TraceNarrative {
   /** Kapalı kümeden etiket; tanınmazsa null (UI etiket çizmez). */
   label: TraceNarrativeLabel | null;
   verdict: string;
+  /** v0.10.2482 — "Kod bulgusu" (yalnız "Kodu da incele" turu); yoksa ''. */
+  code: string;
   next: string;
 }
 
@@ -51,7 +53,8 @@ export function matchTraceLabel(line: string): TraceNarrativeLabel | null {
 
 const WAIT_LINE = /^\s*[*_#>\s]*dış bağımlılık bekleme:/i;
 const KARAR_RE = /(^|\n)[ \t]*(?:[*_#>-]+[ \t]*)*karar[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?/i;
-const NEXT_RE = /(^|\n)[ \t]*(?:[*_#>-]+[ \t]*)*(?:önerilen[ \t]+)?sonraki[ \t]+adım[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?/i;
+const CODE_RE = /(^|\n)[ \t]*(?:[*_#>-]+[ \t]*)*kod[ \t]+bulgusu[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?/i;
+const NEXT_RE =/(^|\n)[ \t]*(?:[*_#>-]+[ \t]*)*(?:önerilen[ \t]+)?sonraki[ \t]+adım[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?/i;
 
 const flat = (s: string) => s.split('\n').map(plain).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 
@@ -66,7 +69,7 @@ export function parseTraceNarrative(text: string, streaming = false): TraceNarra
   const lines = (text ?? '').replace(/\r/g, '').split('\n').filter(l => !WAIT_LINE.test(l));
   let i = 0;
   while (i < lines.length && !lines[i].trim()) i++;
-  if (streaming && i === lines.length - 1 && !KARAR_RE.test(lines[i])) return { label: null, verdict: '', next: '' };
+  if (streaming && i === lines.length - 1 && !KARAR_RE.test(lines[i])) return { label: null, verdict: '', code: '', next: '' };
   let label: TraceNarrativeLabel | null = null;
   if (i < lines.length) {
     label = matchTraceLabel(lines[i]);
@@ -74,11 +77,15 @@ export function parseTraceNarrative(text: string, streaming = false): TraceNarra
   }
   const rest = lines.slice(i).join('\n');
   const n = NEXT_RE.exec(rest);
-  const head = n ? rest.slice(0, n.index) : rest;
+  let head = n ? rest.slice(0, n.index) : rest;
   const next = n ? flat(rest.slice(n.index + n[0].length)) : '';
+  // v0.10.2482 — kod dalı: "Kod bulgusu" KARAR ile Sonraki adım arasında.
+  const c = CODE_RE.exec(head);
+  const code = c ? flat(head.slice(c.index + c[0].length)) : '';
+  if (c) head = head.slice(0, c.index);
   const k = KARAR_RE.exec(head);
   const verdict = flat(k ? head.slice(k.index + k[0].length) : head);
-  return { label, verdict, next };
+  return { label, verdict, code, next };
 }
 
 /** "6.6 ms" / "50 ms" / "2.30 s" — Go tracechain.FmtMs aynası. */

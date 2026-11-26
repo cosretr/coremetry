@@ -1606,30 +1606,7 @@ func anomalyPromotionStep(active, muted, gateOK bool, hasOpen func() bool) promo
 // açılıyordu. Artık yeni bölüm started_at'i sıfırdan alır
 // (chstore.MergeAnomalyCarry) ve bu kapı yeniden 300 sn bekler.
 func promotionGate(ev chstore.AnomalyEvent, cfg chstore.AnomalyPromotionConfig, now time.Time) bool {
-	// v0.10.1792 (Davis F1.4, karar 8) — özne tabanı olayları iç sinyal
-	// katmanıdır: bu GENEL kapıdan hiç geçmez. v0.10.1798 (FAZ 3) — özne
-	// kolu ayrı: subjectPromotionGate (yön + sürdürme + oran, eşikler
-	// anomaly_sensitivity.subjects) + endpoint gruplaması groupSubjectEvents
-	// (anomaly_subject_group.go).
-	if chstore.IsSubjectAnomaly(ev) {
-		return false
-	}
-	// v0.10.1587 (Davis paritesi FAZ 0.5 / B) — sayım-yalnız olay (taban yok,
-	// oran 0) oran kapısı yerine SAYIM kapısından geçer (CountOnlyMinCount ≥
-	// MinCount, Normalize garanti eder); sürdürme aynı.
-	if chstore.IsCountOnlyAnomaly(ev) {
-		if ev.CurrentCount < cfg.CountOnlyMinCount || ev.CurrentCount < cfg.MinCount {
-			return false
-		}
-		return now.Sub(time.Unix(0, ev.StartedAt)) >= time.Duration(cfg.MinSustainedSec)*time.Second
-	}
-	if ev.PeakRatio < cfg.MinPeakRatio {
-		return false
-	}
-	if ev.CurrentCount < cfg.MinCount {
-		return false
-	}
-	return now.Sub(time.Unix(0, ev.StartedAt)) >= time.Duration(cfg.MinSustainedSec)*time.Second
+	return promotionShortfall(ev, cfg, now).Unmet == ""
 }
 
 // promotedMeasure — terfi Problem'inin ölçüsü (v0.10.1587).

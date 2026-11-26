@@ -103,9 +103,13 @@ const isExcFamily = isInboxExcFamily;
 // Yalnız etkin sekme mount edilir (pages/inbox/InboxTabs).
 export default function InboxPage() {
   const [{ tab: rawTab }] = useUrlParams(INBOX_TAB_SPEC);
+  const [sp] = useSearchParams();
   const tab = resolveInboxTab(rawTab);
   const strip = <InboxTabStrip tab={tab} />;
-  return tab === 'signals' ? <SignalsTab strip={strip} /> : <ProblemsTab tabStrip={strip} />;
+  // v0.10.2482 — ?problem= / ?anomaly= detayı iki sekmeden de açılır (detay
+  // sahibi ProblemsTab); kapanınca param düşer, ?tab=signals Sinyaller'e döner.
+  const detail = readInboxDetail(sp) != null;
+  return tab === 'signals' && !detail ? <SignalsTab strip={strip} /> : <ProblemsTab tabStrip={strip} />;
 }
 
 function ProblemsTab({ tabStrip }: { tabStrip: ReactNode }) {

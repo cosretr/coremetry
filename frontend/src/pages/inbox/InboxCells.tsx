@@ -19,6 +19,8 @@ import {
   prioReasonView, stdRequestImpact, stdImpactView, stdImpactSecondary, stdConfidenceTone, stdConfidenceLabel, stdGateTitle,
 } from '@/lib/problemStandardView'; // v0.10.2300 (S3) — gerekçe EN anahtardan; v0.10.2395 Etki / Güven
 import { OrigLang } from '@/features/anomalies/OrigLang';
+import { ImpactSummaryLine } from '@/features/anomalies/ImpactSummaryLine'; // v0.10.2482
+import { impactSummaryText, impactNoneTitle } from '@/lib/impactSummaryView';
 import { graphRowSubText, type ProblemGraphRowSummary } from '@/lib/problemGraph';
 import { FrequentChip } from '@/components/coremetry/problems/ProblemRepeatBlock';
 
@@ -265,18 +267,35 @@ export function GraphFrequentChip({ row, enforce }: { row?: ProblemGraphRowSumma
 // ── v0.10.2395 — Etki / Güven / Kanıt hücreleri (triage mockup liste dilimi) ──
 // Veri satırda (std, eventCount); hücre başına istek yok. Eksik değer soluk "—".
 
-// ImpactCell — "Etki": detay kartının (ProblemStandardBlock) AYNI çekirdeği:
-// istek bölümlü etkide kısa biçim ("Dakikada 210 başarısız · 2.890 başarılı"),
-// pay ve ölçülmüş ek bilgi alt satırda; yoksa standardın etki cümlesi.
+// ImpactCell — "Etki". Üç dal (v0.10.2482):
+//   1. etki özeti varsa TEK satır ("~340 istek/dk başarısız · trafiğin %14'ü",
+//      "~1.200 istek/dk · +680 ms", "18.213 mesaj birikmiş", "3/5 pod"); renk
+//      yalnız sapan değerde; standardın etki cümlesi title'da;
+//   2. yoksa v0.10.2395 hücresi AYNEN: detay kartının (ProblemStandardBlock)
+//      çekirdeği — istek bölümlü etkide kısa biçim ("Dakikada 210 başarısız ·
+//      2.890 başarılı"), pay ve ölçülmüş ek bilgi alt satırda; yoksa standardın
+//      etki cümlesi (kullanıcı kuralı, monitör, klasik anomali, kapanmış Problem);
+//      title "bu kuralın etki ölçüsü yok" der;
+//   3. ikisi de yoksa soluk "—".
 export function ImpactCell({ std }: { std?: ProblemStandard }) {
   const lang = useLang();
   if (!std) return <span className="cell-faint">—</span>;
   const req = stdRequestImpact(std, lang);
   const main = req ? { text: req.main, orig: req.orig } : stdImpactView(std, lang);
-  if (!main.text) return <span className="cell-faint">—</span>;
   const sub = stdImpactSecondary(std, lang);
+  const prev = [main.text, sub].filter(Boolean).join('\n');
+  const sum = std.impactSummary;
+  const line = impactSummaryText(sum, lang);
+  if (sum && line) {
+    return (
+      <div className="std-impact" title={prev ? `${line}\n${prev}` : line}>
+        <div className="std-impact__main" data-testid="ib-impact"><ImpactSummaryLine summary={sum} lang={lang} /></div>
+      </div>
+    );
+  }
+  if (!main.text) return <span className="cell-faint">—</span>;
   return (
-    <div className="std-impact" title={sub ? `${main.text}\n${sub}` : main.text}>
+    <div className="std-impact" data-testid="ib-impact-std" title={`${prev}\n${impactNoneTitle(lang)}`}>
       <div className="std-impact__main" data-testid="ib-impact">{main.orig ? <OrigLang>{main.text}</OrigLang> : main.text}</div>
       {sub && <div className="std-impact__sub">{sub}</div>}
     </div>

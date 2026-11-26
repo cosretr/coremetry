@@ -408,24 +408,33 @@ func (s *Server) emitTraceExplainAnswer(ctx context.Context, emit func(string, a
 // Kodsuz turun cevabı "Kodu da incele" çipini taşır (explainCodeChip).
 func (s *Server) emitTraceExplainTurn(ctx context.Context, emit func(string, any), ask chatExplainAsk, in traceExplainInput, route guidedRoute, links []guidedAnswerLink) (bool, bool) {
 	traceID := ask.ID
-	// v0.10.2480 — biçim (anlatım varsayılan; kod dalı bölümlü kalır). Anlatımda
-	// kanıt bloğu MODELDEN ÖNCE yayılır: UI "Kanıt"ı akışı beklemeden çizer.
-	narrative := !ask.Code && traceExplainNarrativeOn()
+	// v0.10.2480 — biçim (anlatım varsayılan). Anlatımda kanıt bloğu MODELDEN
+	// ÖNCE yayılır: UI "Kanıt"ı akışı beklemeden çizer. v0.10.2482 — kod dalı
+	// da biçime uyar: kod okunur (yalnız modele); blok kod İÇERİĞİ taşımaz (v0.9.1254).
+	narrative := traceExplainNarrativeOn()
 	system, user := traceExplainPromptFor(narrative, in)
 	cacheKey := explainCacheKey(system, user, "") // explainTraceClassicPrepared ile AYNI formül
+	var prep *codeExplainPrep
+	if ask.Code {
+		p := s.traceCodeExplainPrep(ctx, in, narrative) // copilotExplainTrace'in kod dalıyla AYNI kurucu
+		prep = &p
+	}
 	if narrative {
-		if in.View != nil {
-			emit(blocks.TypeTraceEvidence, in.View)
+		if prep != nil {
+			ctx = traceNarrativeCodeCtx(ctx)
+		} else {
+			ctx = traceNarrativeCtx(ctx)
 		}
-		ctx = traceNarrativeCtx(ctx)
+		if in.View != nil {
+			emit(blocks.TypeTraceEvidence, in.View) // kod içeriği yok (v0.9.1254); kod künyesi meta.Code
+		}
 	}
 	var res explainCoreResult
 	var ok bool
 	var code *codeContextPayload
-	if ask.Code {
-		p := s.traceCodeExplainPrep(ctx, in)                                                                 // copilotExplainTrace'in kod dalıyla AYNI kurucu
-		res, ok = s.streamTraceExplainCodeCore(ctx, emit, aisurface.ExplainTraceChat, p, in.User, ask.Fresh) // v0.10.1630 — dış bağımlılık satırı
-		code = codePayload(p.CC, true)
+	if prep != nil {
+		res, ok = s.streamTraceExplainCodeCore(ctx, emit, aisurface.ExplainTraceChat, *prep, in.User, ask.Fresh) // v0.10.1630 — dış bağımlılık satırı
+		code = codePayload(prep.CC, true)
 	} else {
 		res, ok = s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, user, cacheKey, ask.Fresh) // v0.10.1630
 	}

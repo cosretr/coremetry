@@ -15,10 +15,18 @@ package api
 //   - Eski dedektör olayı, başka sahibe katılmış: anomaly_promotion üye
 //     olayı (kural "anomaly-auto:<olay id>", problem_id sahip; stage closed =
 //     üyelikten ayrıldı).
+//   - Eski özne (endpoint) olayı, özne grubu Problem'i (v0.10.2482):
+//     "anomaly-auto:subject:<servis>:<metrik>:<yön>" kural olay kimliği
+//     taşımaz; üyeleri aynı servisin aynı metrikte aynı yönde kötüleşen
+//     endpoint olaylarıdır (evaluator groupSubjectEvents; Problem başlığı ve
+//     açıklaması rotaları bu kümeden yazar). Anahtar olaydan SAF kurulur
+//     (chstore.SubjectGroupRuleOf — evaluator'ın aynı işlevi); olay aktifse
+//     ya da grubu canlı açanlardansa (Promotion = live) ve o kural servisle
+//     açık satırsa / açık bir sahibe üyeyse (anomaly_promotion üye olayı,
+//     kural = grup kuralı) bağlı. Ek okuma YOK: açık küme ve üye olayları
+//     zaten okunuyor.
 // "Açık" = chstore.OpenProblemsSnapshot (open | acknowledged; 5 sn memo,
-// LIMIT 50000). Bağ kurulamayan tek aile: özne grubu terfisi
-// ("anomaly-auto:subject:<anahtar>") — kural olay kimliği taşımaz; o olaylar
-// bağlanmamış sayılır (DECISIONS 2026-11-26).
+// LIMIT 50000).
 //
 // Sınır: süzgeç birleşik satırların TAMAMINDA, sayfalamadan ÖNCE çalışır
 // (toplamlar süzgeç sonrası kesin); ek okuma tek, sınırlı: üye olayları
@@ -41,6 +49,8 @@ type openProblemIndex interface {
 
 // promotedLegacyMembers — SAF: açık bir sahibe katılmış eski olayların
 // kimlikleri (anomaly_promotion üye olaylarından; kapanmış üyelik sayılmaz).
+// v0.10.2482 — özne grubu üyeliği tam kural kimliğiyle anahtarlanır
+// ("anomaly-auto:subject:…"; olay kimliği taşımaz).
 func promotedLegacyMembers(members []chstore.MLEvent, open openProblemIndex) map[string]bool {
 	out := map[string]bool{}
 	for _, m := range members {
@@ -49,6 +59,10 @@ func promotedLegacyMembers(members []chstore.MLEvent, open openProblemIndex) map
 		}
 		ev, ok := chstore.MemberEvidenceOf(m)
 		if !ok || open.ByID(ev.ProblemID) == nil {
+			continue
+		}
+		if strings.HasPrefix(ev.RuleID, chstore.PromotedSubjectRulePrefix) {
+			out[ev.RuleID] = true
 			continue
 		}
 		if id, ok := strings.CutPrefix(ev.RuleID, chstore.PromotedAnomalyRulePrefix); ok && id != "" {
@@ -65,12 +79,27 @@ func mlAttached(e chstore.MLEvent, open openProblemIndex) bool {
 }
 
 // legacyAttached — SAF: eski olay açık bir Problem'e bağlı mı (kendi terfi
-// satırı ya da başka sahibe üyelik).
+// satırı ya da başka sahibe üyelik; v0.10.2482 özne grubu Problem'i).
 func legacyAttached(e chstore.AnomalyEvent, open openProblemIndex, promoted map[string]bool) bool {
 	if promoted[e.ID] {
 		return true
 	}
-	return open.ByKey(chstore.PromotedAnomalyRulePrefix+e.ID, e.Service) != nil
+	if open.ByKey(chstore.PromotedAnomalyRulePrefix+e.ID, e.Service) != nil {
+		return true
+	}
+	return subjectGroupAttached(e, open, promoted)
+}
+
+// subjectGroupAttached — SAF (v0.10.2482): endpoint özne olayı, anahtarının
+// grup Problem'i açıkken (kendi satırı ya da açık sahibe üyelik) bağlı. Üye
+// sayılan olay: aktif (grup tazelemesinin listesi) ya da grubu canlı açan
+// rotalardan biri (Promotion = live, subjectLiveMarks).
+func subjectGroupAttached(e chstore.AnomalyEvent, open openProblemIndex, promoted map[string]bool) bool {
+	rule, ok := chstore.SubjectGroupRuleOf(e)
+	if !ok || (e.Status != "active" && e.Promotion != chstore.AnomalyPromotionLive) {
+		return false
+	}
+	return promoted[rule] || open.ByKey(rule, e.Service) != nil
 }
 
 // dropAttachedUnified — SAF: üyelerinden biri açık bir Problem'e bağlı olan

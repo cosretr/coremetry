@@ -28,8 +28,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/ai/agent/blocks"
 	"github.com/cilcenk/coremetry/internal/ai/aisurface"
 )
+
+// traceFocusedExplainMeta — SAF (v0.10.2482): odaklı trace sorusunun anlatım
+// künyesi. İstemci cevabı TraceNarrativeBody ile (kanıt bloğu + KARAR) çizer;
+// önbellek alanı yok (soruya özel cevap önbelleğe girmez).
+func traceFocusedExplainMeta(traceID string, in traceExplainInput) chatExplainMeta {
+	return chatExplainMeta{Kind: explainAskTrace, ID: traceID, Surface: aisurface.ExplainTraceChat,
+		Renderer: explainRendererTraceNarrative, EvidenceSpanIDs: clampExplainIDs(in.Evidence),
+		OracleRows: in.OracleRows, Logs: sanitizeTraceLogOutcome(&in.Logs)}
+}
 
 // isTraceExplainAsk — SAF: soru "açıkla/özetle/anlat" şekilli mi ya da
 // yalnız kimlik mi (yapıştırılan id, çip). Açık bir soru şekli varsa
@@ -88,6 +98,11 @@ func (s *Server) guidedTraceExplain(ctx context.Context, emit func(string, any),
 	system, evidence := traceExplainPromptFor(narrative, in)
 	if narrative {
 		ctx = traceNarrativeCtx(ctx)
+		// v0.10.2482 — odaklı soru da kanıt bloğunu modelden ÖNCE yayar (açıklama
+		// turuyla aynı görünüm); cevap künyesi anlatım çizim kipini taşır.
+		if in.View != nil {
+			emit(blocks.TypeTraceEvidence, in.View)
+		}
 	}
 	user := evidence + "\n\nOperatörün sorusu (yalnız yukarıdaki kanıta dayanarak, kanıtta olmayanı söylemeden cevapla): " + strings.TrimSpace(question)
 	// soruya özel: önbelleğe girmez (anahtar "").
@@ -102,6 +117,9 @@ func (s *Server) guidedTraceExplain(ctx context.Context, emit func(string, any),
 		"suggestions":     guidedSuggestions(route),
 		"links":           dedupLinksByHref(links),
 		"evidenceSpanIds": in.Evidence,
+	}
+	if narrative {
+		ans["explain"] = traceFocusedExplainMeta(route.TraceID, in)
 	}
 	emit("answer", withExplainCached(ans, res))
 	return true, true

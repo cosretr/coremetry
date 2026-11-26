@@ -17,7 +17,13 @@
 //   OLMAYAN satırlar (sunucu süzgeci ?unattached=1, internal/api/
 //   anomalies_unified_attached.go); "Problem'e bağlı olanları da göster"
 //   anahtarı ?attached=1 yazar ve süzgeci kaldırır.
+// v0.10.2482 — ?service= (servis sayfası "N sinyal" bağlantısı, servis başlığı
+// çipi) listeyi sunucuda o servise süzer; süzgeç görünür satırda adıyla ve
+// tek tıkla kaldırılır (sessiz süzgeç yok). Bağlanmamış listede "Neden
+// Problem değil" sütunu (kapının kararı; lib/whyNotProblem.ts).
 import { useSearchParams } from 'react-router';
+import { X } from 'lucide-react';
+import { Button } from '@/components/shadcn/button';
 import { useAuthRole } from '@/components/AuthProvider';
 import { useT } from '@/lib/i18n';
 import { resolveAnomalyView } from '@/lib/anomalyView';
@@ -38,6 +44,7 @@ const SIGNALS_VIEWS = ['', 'load', 'held', 'platform'] as const;
 const VIEW_URL_SPEC = urlSpec({
   view: zParam<string>(z.string().check(z.refine(v => (SIGNALS_VIEWS as readonly string[]).includes(v))), ''),
   attached: zParam(zInt({ min: 0, max: 1 }), 0),
+  service: zParam(z.string(), ''),
   page: zParam(zInt({ min: 0 }), 0),
   donePage: zParam(zInt({ min: 0 }), 0),
 });
@@ -61,6 +68,7 @@ export default function AnomalyStreamsPage() {
   const [url, setUrl] = useUrlParams(VIEW_URL_SPEC);
   const view = resolveAnomalyView(url.view, isAdmin);
   const showAttached = url.attached === 1;
+  const service = url.service.trim();
   const setView = (v: AnomalyView) => setUrl({ view: v, page: 0, donePage: 0 });
   const signal = resolveMLSignal(sp.get('signal'));
   const setSignal = (s: MLSignal) => {
@@ -81,16 +89,24 @@ export default function AnomalyStreamsPage() {
     <CheckboxField label={tr('signals.showAttached')} checked={showAttached}
       onCheckedChange={on => setUrl({ attached: on ? 1 : 0, page: 0, donePage: 0 })} />
   );
+  const serviceFilter = service && (
+    <p className="ib-signals__hint" data-testid="signals-service-filter">
+      <span className="mono">{tr('signals.service').replace('{s}', service)}</span>
+      <Button variant="ghost" size="icon-xs" aria-label={tr('signals.serviceClear')} title={tr('signals.serviceClear')}
+        onClick={() => setUrl({ service: '', page: 0, donePage: 0 })}><X /></Button>
+    </p>
+  );
   return (
     <div className="ib-signals" data-testid="inbox-signals">
       <p className="ib-signals__hint">{tr('signals.hint')}</p>
       <SavedViewsBar page="anomalies" viewQuery={withSignalsTab} />
       {viewSwitch}
+      {serviceFilter}
       {view === '' ? (
-        <UnifiedAnomalies signal={signal} onSignal={setSignal} unattached={!showAttached} controls={attachedToggle}
+        <UnifiedAnomalies signal={signal} onSignal={setSignal} unattached={!showAttached} controls={attachedToggle} service={service}
           detectorStatus={<><MLTab signal={signal} /><AnomalyStreams withHistory={false} /></>} />
       ) : (
-        <UnifiedAnomalies key={view} view={view} signal={signal} onSignal={setSignal}
+        <UnifiedAnomalies key={view} view={view} signal={signal} onSignal={setSignal} service={service}
           hint={tr(VIEW_TEXT[view].hint)} emptyText={tr(VIEW_TEXT[view].empty)} />
       )}
     </div>

@@ -81,7 +81,10 @@ func TestEvalsetFixturesValid(t *testing.T) {
 			t.Errorf("%s/%s: user ve prompt birlikte verilmez", c.file, c.ID)
 		}
 		e := c.Expect
-		if len(e.MustContain) == 0 && len(e.MustNotContain) == 0 && e.MaxUnknownEntities == nil && e.Intent == "" && len(e.Verdicts) == 0 {
+		if msg := evalNarrativeFixtureErr(c); msg != "" { // v0.10.2482
+			t.Errorf("%s/%s: %s", c.file, c.ID, msg)
+		}
+		if len(e.MustContain) == 0 && len(e.MustNotContain) == 0 && e.MaxUnknownEntities == nil && e.Intent == "" && len(e.Verdicts) == 0 && e.Narrative == nil {
 			t.Errorf("%s/%s: en az bir beklenti gerekli", c.file, c.ID)
 		}
 		if (c.Surface == "IntentClassify") != (e.Intent != "") {

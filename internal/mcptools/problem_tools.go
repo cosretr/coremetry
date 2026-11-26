@@ -19,11 +19,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcp"
+	"github.com/cilcenk/coremetry/internal/ml"
 )
 
 const (
@@ -180,6 +183,10 @@ func getProblemTool(d Deps) mcp.Tool {
 				out["confidence"] = h.Confidence
 			} else {
 				out["hypothesisComputed"] = false
+			}
+			// v0.10.2482 — etki özeti (liste "Etki" sütunuyla aynı çekirdek).
+			if imp := problemImpactField(ctx, d, *p); imp != nil {
+				out["impact"] = imp
 			}
 			// v0.10.1287 — kayıtlı AI SRE araştırması (varsa): sohbet aynı okumaları
 			// yeniden koşmadan bulguları ve özeti görür.
@@ -510,4 +517,45 @@ func getCapabilitiesTool(d Deps) mcp.Tool {
 				"toolsets": ToolsetStates(ctx, d, off, false)}, nil
 		},
 	}
+}
+
+// problemImpactField — v0.10.2482: Problem'in etki özeti (ml.ProblemImpactSummary;
+// detay başlığıyla aynı okuma: servis × etki dedektörleri ≤ 20 olay ya da tek
+// lider olay). nil = bu kuralın etki ölçüsü yok / okunamadı.
+func problemImpactField(ctx context.Context, d Deps, p chstore.Problem) map[string]any {
+	var evs []chstore.MLEvent
+	if lr, ok := ml.ImpactLeadReadOf(p); ok && d.Store != nil {
+		since := time.Unix(0, p.StartedAt).Add(-chstore.ProblemEventSlack)
+		f := chstore.MLEventsFilter{Service: p.Service, Detectors: lr.Detectors, Since: since, Limit: 20}
+		if lr.LeadID != "" {
+			f = chstore.MLEventsFilter{ID: lr.LeadID, Service: p.Service, Since: since, Limit: 1}
+		}
+		evs, _ = d.Store.ListMLEvents(ctx, f)
+	}
+	return impactFieldOf(ml.ProblemImpactSummary(p, evs))
+}
+
+// impactFieldOf — SAF: özet → küçük, insan etiketli alan.
+func impactFieldOf(s *chstore.StdImpactSummary) map[string]any {
+	if s == nil {
+		return nil
+	}
+	out := map[string]any{"summary": s.Text, "kind": s.Kind}
+	switch s.Kind {
+	case chstore.ImpactSumErrors:
+		out["failingRequestsPerMin"], out["sharePct"], out["scope"] = math.Round(s.PerMin), math.Round(s.SharePct*10)/10, s.Scope
+	case chstore.ImpactSumLatency:
+		out["affectedRequestsPerMin"], out["delayMs"], out["scope"] = math.Round(s.PerMin), math.Round(s.DelayMs), s.Scope
+	case chstore.ImpactSumLag:
+		out["backlogMessages"] = math.Round(s.Backlog)
+		if s.GrowthPerMin != nil {
+			out["growthPerMin"] = math.Round(*s.GrowthPerMin)
+		}
+	case chstore.ImpactSumOOM:
+		out["podsKilled"], out["pods"] = s.Killed, s.Pods
+	}
+	if s.Route != "" {
+		out["route"] = s.Route
+	}
+	return out
 }

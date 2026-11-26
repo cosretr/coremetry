@@ -16,13 +16,19 @@ func TestInboxOpenValues(t *testing.T) {
 		q    mcptools.InboxOpenQuery
 		want string
 	}{
-		{mcptools.InboxOpenQuery{Team: "acme", Env: "prod", Limit: 50}, "env=prod&limit=50&status=open&team=acme"},
-		{mcptools.InboxOpenQuery{Service: "orders-api"}, "limit=500&service=orders-api&status=open"},
-		{mcptools.InboxOpenQuery{Service: "orders-api", Limit: 9999}, "limit=500&service=orders-api&status=open"},
+		// v0.10.2482 — varsayılan: Problems listesinin / rozetinin türleri.
+		{mcptools.InboxOpenQuery{Team: "acme", Env: "prod", Limit: 50}, "env=prod&kind=problem&limit=50&status=open&team=acme"},
+		{mcptools.InboxOpenQuery{Service: "orders-api"}, "kind=problem&limit=500&service=orders-api&status=open"},
+		{mcptools.InboxOpenQuery{Service: "orders-api", Limit: 9999}, "kind=problem&limit=500&service=orders-api&status=open"},
+		// AllKinds: eski küme (kind yok = tüm sözlük).
+		{mcptools.InboxOpenQuery{Service: "orders-api", AllKinds: true}, "limit=500&service=orders-api&status=open"},
 	} {
-		if got := inboxOpenValues(c.q).Encode(); got != c.want {
+		if got := inboxOpenValuesFor(c.q, false).Encode(); got != c.want {
 			t.Errorf("%+v → %q, want %q", c.q, got, c.want)
 		}
+	}
+	if got := inboxOpenValuesFor(mcptools.InboxOpenQuery{Service: "orders-api"}, true).Get("kind"); got != "problem,incident" {
+		t.Errorf("Incidents açık: kind=%q", got)
 	}
 }
 

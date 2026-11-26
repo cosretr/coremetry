@@ -114,7 +114,10 @@ func toREDRows(rows []chstore.ServiceSummary) []briefing.REDRow {
 }
 
 // splitInboxRows — SAF: tek Inbox okuması → kalem 3 (yeni/geri dönen
-// exception) + kalem 6 (geri kalan açık konular); bir satır yalnız birinde.
+// exception) + kalem 6 (açık Problem'ler); bir satır en çok birinde.
+// v0.10.2482 (DECISIONS 2026-11-27): kalem 6 Problems rozetinin türlerini
+// sayar (problem / incident); kalem 3'e girmeyen exception / HTTP hata
+// grubu artık kalem 6'ya düşmez.
 func splitInboxRows(rows []mcptools.InboxRow, fromUnix int64) (ex []briefing.ExceptionRow, rest []mcptools.InboxRow) {
 	for _, r := range rows {
 		er := briefing.ExceptionRow{ID: r.ID, Kind: r.Kind, Service: r.Service, Title: r.Title, Status: r.Status,
@@ -123,7 +126,9 @@ func splitInboxRows(rows []mcptools.InboxRow, fromUnix int64) (ex []briefing.Exc
 			ex = append(ex, er)
 			continue
 		}
-		rest = append(rest, r)
+		if r.Kind == "problem" || r.Kind == "incident" {
+			rest = append(rest, r)
+		}
 	}
 	return ex, rest
 }
@@ -290,7 +295,7 @@ func (s *Server) buildBriefing(ctx context.Context, t briefingTeam, env string, 
 	}
 
 	// 3 + 6 — tek Inbox okuması (şerit kümesi, takım birleşimi).
-	res, _, err := mcptools.ReadInboxOpen(ctx, d, t.Label, t.Services, env, mcptools.InboxOpenScan)
+	res, _, err := mcptools.ReadInboxOpenAllKinds(ctx, d, t.Label, t.Services, env, mcptools.InboxOpenScan) // kalem 3 exception satırlarını da ister
 	cost.AddCH(1)
 	if err != nil {
 		partial = append(partial, briefing.ItemException, briefing.ItemProblem)

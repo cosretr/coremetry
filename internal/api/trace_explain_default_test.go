@@ -291,6 +291,7 @@ func TestExplainTraceDefaultBufferedBody(t *testing.T) {
 // "Kodu da incele" değişmedi (v0.10.1035): klasik + kod bağlamı, kodlu istem,
 // buffered üretim (delta yok). Kod entegrasyonu yok → dürüst gerekçe code.reason'da.
 func TestExplainTraceCodePathStillClassicWithCode(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2482 — bölümlü kod dalının pini (anlatım: aşağıda)
 	p := newDefProvider(t, defAnswerA+defAnswerB)
 	s := defServer(t, p)
 	ans, frames := defAnswer(t, defCall(s, "?stream=1", `{"includeCode":true}`))
@@ -308,6 +309,26 @@ func TestExplainTraceCodePathStillClassicWithCode(t *testing.T) {
 	}
 	if ev, _ := ans["evidenceSpanIds"].([]any); len(ev) == 0 {
 		t.Error("kod yolunda evidenceSpanIds yok")
+	}
+	if _, ok := ans["traceEvidence"]; ok {
+		t.Error("bölümlü kod yolu traceEvidence taşımamalı")
+	}
+}
+
+// v0.10.2482 — anlatım biçiminde (varsayılan) kod dalı anlatım kod istemiyle
+// koşar ve answer çerçevesi kanıt görünümünü taşır.
+func TestExplainTraceCodePathNarrative(t *testing.T) {
+	p := newDefProvider(t, defAnswerA+defAnswerB)
+	s := defServer(t, p)
+	ans, _ := defAnswer(t, defCall(s, "?stream=1", `{"includeCode":true}`))
+	if sys, _ := p.lastMessages(t); sys != copilot.SystemPromptTraceNarrativeWithCode() {
+		t.Errorf("anlatım kod yolunun istemi SystemPromptTraceNarrativeWithCode değil (ilk 80: %.80q)", sys)
+	}
+	if _, ok := ans["traceEvidence"]; !ok {
+		t.Error("anlatım kod yolu traceEvidence taşımalı")
+	}
+	if code, _ := ans["code"].(map[string]any); code == nil {
+		t.Error("kod künyesi kalmalı")
 	}
 }
 

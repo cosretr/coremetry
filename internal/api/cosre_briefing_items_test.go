@@ -16,7 +16,8 @@ func TestSplitInboxRowsOneBucketEach(t *testing.T) {
 		{ID: "problem:p", Kind: "problem", Service: "payments-core", SinceUnix: 2000},
 	}
 	ex, rest := splitInboxRows(rows, 1000)
-	if len(ex) != 2 || len(rest) != 2 || rest[0].ID != "exception:old" || rest[1].ID != "problem:p" {
+	// v0.10.2482 — kalem 6 yalnız Problem: eski exception hiçbir kalemde sayılmaz.
+	if len(ex) != 2 || len(rest) != 1 || rest[0].ID != "problem:p" {
 		t.Fatalf("ex=%+v rest=%+v", ex, rest)
 	}
 	if got := briefingLogsURL("acme team", 10800); got != "/logs?team=acme+team&range=3h" {

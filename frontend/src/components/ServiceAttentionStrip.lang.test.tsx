@@ -85,9 +85,9 @@ describe('Servis dikkat şeridi, üst çubuk, TrendDelta — İngilizce arayüz 
     const text = await all();
     expect(text.split('\n').filter(l => TR_CHARS.test(l) || TR_WORDS.test(l))).toEqual([]);
     for (const en of [
-      '! 7 open items', 'SLO burn-rate 1 alert', 'Jump to the SLO block at the bottom of the page', 'View in Inbox →',
+      '! 7 open Problems', 'SLO burn-rate 1 alert', 'Jump to the SLO block at the bottom of the page', 'View in Inbox →',
       'Rule', 'HTTP error', ' (threshold 5)', 'last seen ', '+2 more → ',
-      'exceptions could not be loaded', 'Could not read the Inbox; showing alert-rule problems only', '! 1 open item',
+      'exceptions could not be loaded', 'Could not read the Inbox; showing alert-rule problems only', '! 1 open Problem',
       'Search — opens the command palette (⌘K)', 'Search services, trace IDs, pages or settings…', 'Copy link',
       'was 0', 'It was 0 in the previous window.', 'new in list',
     ]) expect(text, en).toContain(en);
@@ -97,9 +97,9 @@ describe('Servis dikkat şeridi, üst çubuk, TrendDelta — İngilizce arayüz 
     m.lang = 'tr';
     const text = await all();
     for (const tr of [
-      '! 7 açık konu', 'SLO burn-rate 1 uyarı', 'Sayfanın altındaki SLO bloğuna in', "Inbox'ta gör →",
+      '! 7 açık Problem', 'SLO burn-rate 1 uyarı', 'Sayfanın altındaki SLO bloğuna in', "Inbox'ta gör →",
       'Kural', 'HTTP hatası', ' (eşik 5)', ' · son görülme ', '+2 daha → ',
-      "exception'lar yüklenemedi", 'Inbox okunamadı; yalnız alert-kuralı problemleri gösteriliyor', '! 1 açık konu',
+      "exception'lar yüklenemedi", 'Inbox okunamadı; yalnız alert-kuralı problemleri gösteriliyor', '! 1 açık Problem',
       'Ara — komut paletini açar (⌘K)', 'Servis, trace ID, sayfa veya ayar ara…', 'Linki kopyala',
       'önce 0', "Önceki pencerede 0'dı.", 'listede yeni',
     ]) expect(text, tr).toContain(tr);

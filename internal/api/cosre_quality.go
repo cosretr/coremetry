@@ -140,7 +140,7 @@ func cosreQualityDays(raw string) int {
 
 func (s *Server) getCosreQuality(w http.ResponseWriter, r *http.Request) {
 	days := cosreQualityDays(r.URL.Query().Get("days"))
-	key := fmt.Sprintf("cosre:quality:v2:d=%d", days) // v2 — v0.10.1637: + prefix (eski şekil önbellekten dönmesin)
+	key := fmt.Sprintf("cosre:quality:v3:d=%d", days) // v2 — v0.10.1637: + prefix; v3 — v0.10.2482: anlatım prefix sayımı ayrı
 	s.serveCached(w, r, key, 5*time.Minute, func(ctx context.Context) (any, error) {
 		from := time.Now().UTC().AddDate(0, 0, -days)
 		answers, err := s.store.WorstCosreAnswers(ctx, from, 20)

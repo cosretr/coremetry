@@ -35,7 +35,7 @@ const subjectGroupDetailTop = 5
 // promoteSubjectRulePrefix — gruplanmış endpoint adayının rule_id öneki.
 // "anomaly-auto:" ailesinin içinde: bildirim türü / kategori / bayat süpürme
 // sınıflandırıcıları öneke baktığı için yeni önek tüketicisi gerekmez.
-const promoteSubjectRulePrefix = promoteAnomalyRuleID + "subject:"
+const promoteSubjectRulePrefix = chstore.PromotedSubjectRulePrefix // v0.10.2482: tek kaynak chstore
 
 // subjectMetricConsumerLag — anomaly.subjectMetricConsumerLag'ın ikizi (paket
 // dışa açmıyor; TestSubjectConsumerLagMetricName pinler).
@@ -43,12 +43,7 @@ const subjectMetricConsumerLag = "consumer_lag"
 
 // subjectEventMetric — SAF: özne olayının metriği. Endpoint deseni
 // "metrik @ rota", db/queue deseni yalnız metrik (subjectEventPattern).
-func subjectEventMetric(ev chstore.AnomalyEvent) string {
-	if i := strings.Index(ev.Pattern, " @ "); i >= 0 {
-		return ev.Pattern[:i]
-	}
-	return ev.Pattern
-}
+func subjectEventMetric(ev chstore.AnomalyEvent) string { return chstore.SubjectEventMetric(ev) }
 
 // subjectEventRoute — SAF: endpoint olayının rotası (SubjectID; eski/boş
 // satırda desenin "@" sonrası).
@@ -95,16 +90,24 @@ func subjectCountOnly(ev chstore.AnomalyEvent) bool {
 //
 // Durum (active) ve susturma çağıranda (anomalyPromotionStep emsali).
 func subjectPromotionGate(ev chstore.AnomalyEvent, scfg chstore.AnomalySubjectsConfig, pcfg chstore.AnomalyPromotionConfig, now time.Time) bool {
+	return subjectPromotionShortfall(ev, scfg, pcfg, now).Unmet == ""
+}
+
+// subjectPromotionShortfall — SAF (v0.10.2482'de subjectPromotionGate'ten
+// ayrıldı; karar AYNI): kapının karşılanmayan ilk şartı. Sürdürme en sonda:
+// PromoteUnmetShort döndüyse diğer bütün şartlar şimdi karşılanıyor.
+func subjectPromotionShortfall(ev chstore.AnomalyEvent, scfg chstore.AnomalySubjectsConfig, pcfg chstore.AnomalyPromotionConfig, now time.Time) PromotionShortfall {
 	if !chstore.IsSubjectAnomaly(ev) || !subjectWorsening(subjectEventMetric(ev), ev.Direction) {
-		return false
-	}
-	if now.Sub(time.Unix(0, ev.StartedAt)) < time.Duration(scfg.PromotionMinSustainedSec)*time.Second {
-		return false
+		return PromotionShortfall{Unmet: PromoteUnmetNotWorsening}
 	}
 	if subjectCountOnly(ev) {
-		return ev.CurrentCount >= pcfg.CountOnlyMinCount
+		if ev.CurrentCount < pcfg.CountOnlyMinCount {
+			return PromotionShortfall{Unmet: PromoteUnmetBelowCount, Count: float64(pcfg.CountOnlyMinCount)}
+		}
+	} else if ev.PeakRatio < scfg.PromotionMinRatio {
+		return PromotionShortfall{Unmet: PromoteUnmetBelowRatio, Ratio: scfg.PromotionMinRatio}
 	}
-	return ev.PeakRatio >= scfg.PromotionMinRatio
+	return sustainShortfall(ev, scfg.PromotionMinSustainedSec, now)
 }
 
 // subjectGroupKey — gruplama anahtarı.
@@ -115,7 +118,7 @@ type subjectGroupKey struct {
 // subjectGroupRuleID — SAF: anahtarın rule_id'si (pencere içermez: aynı
 // servis + metrik + yön için en çok bir açık Problem).
 func subjectGroupRuleID(k subjectGroupKey) string {
-	return promoteSubjectRulePrefix + k.Service + ":" + k.Metric + ":" + k.Direction
+	return chstore.SubjectGroupRuleID(k.Service, k.Metric, k.Direction) // v0.10.2482: tek kaynak
 }
 
 // subjectCandidate — bir anahtarın terfi adayı.

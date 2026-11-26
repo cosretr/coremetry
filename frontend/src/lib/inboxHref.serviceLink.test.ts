@@ -2,12 +2,13 @@
 // derken "Inbox'ta gör →" boş kuyruk açıyordu. Link ↔ Inbox süzgeci
 // gidiş-dönüşü: linkin parametreleri Inbox'ın KENDİ codec'leriyle (aynı
 // sabitler Inbox.tsx'ten okunur) çözülünce şeridin isteğiyle aynı kapsam
-// çıkmalı — servis, open, TÜM öncelikler, TÜM türler, env YOK — ve bu,
-// localStorage'da yapışkan bir env seçimi varken de doğru olmalı.
+// çıkmalı — servis, open, TÜM öncelikler, Problems rozetinin türleri
+// (v0.10.2482; önce TÜM türler), env YOK — ve bu, localStorage'da yapışkan
+// bir env seçimi varken de doğru olmalı.
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { serviceInboxHref } from './inboxHref';
+import { serviceInboxHref, serviceSignalsHref, serviceStripKinds } from './inboxHref';
 import { decodeCsvSet } from './inboxUrl';
 import { resolveEnv } from './useUrlEnv';
 
@@ -45,11 +46,12 @@ function inboxScope(href: string, storedEnv: string | null, incidentsOn = true) 
   };
 }
 
-// Şeridin isteği: api.inbox({ service, status: 'open', limit: 20 }) — sunucu
-// varsayılanları: tüm öncelikler/türler, env yok, varsayılan taban.
+// Şeridin isteği: api.inbox({ service, status: 'open', limit: 20, kind:
+// serviceStripKinds(incidentsOn) }) — v0.10.2482: Problems listesinin /
+// rozetinin varsayılan türleri; tüm öncelikler, env yok, varsayılan taban.
 const stripScope = (service: string, incidentsOn = true) => ({
   path: '/inbox', status: 'open', service,
-  prio: ['P1', 'P2', 'P3'], kind: [...(incidentsOn ? KIND_ALL : KIND_ALL_RETIRED)], env: '', q: '', since: '', minOcc: null,
+  prio: ['P1', 'P2', 'P3'], kind: [...(incidentsOn ? KIND_DEFAULT : KIND_DEFAULT_RETIRED)], env: '', q: '', since: '', minOcc: null,
 });
 
 describe('serviceInboxHref ↔ Inbox süzgeci gidiş-dönüşü', () => {
@@ -63,6 +65,12 @@ describe('serviceInboxHref ↔ Inbox süzgeci gidiş-dönüşü', () => {
         expect(inboxScope(serviceInboxHref(svc, on), stored, on)).toEqual(stripScope(svc, on));
       }
     }
+  });
+
+  it('v0.10.2482 — şeridin türleri Problems listesinin / rozetinin varsayılanı', () => {
+    expect(serviceStripKinds(true).split(',')).toEqual(KIND_DEFAULT);
+    expect(serviceStripKinds(false).split(',')).toEqual(KIND_DEFAULT_RETIRED);
+    expect(serviceSignalsHref('a b')).toBe('/inbox?tab=signals&service=a%20b');
   });
 
   it('v0.10.1827 — emekliyken link incident türü yazmaz; eski ?kind=incident varsayılana düşer', () => {

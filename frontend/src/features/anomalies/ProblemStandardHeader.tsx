@@ -24,6 +24,7 @@ import {
 } from '@/lib/problemStandardView';
 import { OrigLang } from './OrigLang';
 import { StdOriginLine } from './StdOriginLine';
+import { ImpactSummaryLine } from './ImpactSummaryLine'; // v0.10.2482
 import type { ProblemStandard } from '@/lib/types';
 
 export function ProblemStandardHeader({ stdRef, fallback, showTitle = true, factsOnly = false }: {
@@ -70,8 +71,21 @@ export function ProblemStandardBlock({ std, showTitle = true, factsOnly = false 
       <div className="std-head__cards grid-4">
         <div className="std-card">
           <div className="std-card__label">{t('pd.std.impact', lang)}</div>
-          <div className="std-card__value std-card__value--mono" style={{ fontSize: 15 }}>{impact.text ? o(impact) : '—'}</div>
-          {impactSub && <div className="std-card__sub">{impactSub}</div>}
+          {/* v0.10.2482 — etki özeti varsa kartın değeri o (liste satırıyla aynı satır), standardın
+              etki cümlesi alt satıra iner; yoksa kart önceki gibi. */}
+          {std.impactSummary ? (
+            <>
+              <div className="std-card__value std-card__value--mono" style={{ fontSize: 15 }} data-testid="pd-impact-summary">
+                <ImpactSummaryLine summary={std.impactSummary} lang={lang} />
+              </div>
+              {(impact.text || impactSub) && <div className="std-card__sub">{[impact.text, impactSub].filter(Boolean).join(' · ')}</div>}
+            </>
+          ) : (
+            <>
+              <div className="std-card__value std-card__value--mono" style={{ fontSize: 15 }}>{impact.text ? o(impact) : '—'}</div>
+              {impactSub && <div className="std-card__sub">{impactSub}</div>}
+            </>
+          )}
         </div>
         <div className="std-card">
           <div className="std-card__label">{t('pd.std.since', lang)}</div>

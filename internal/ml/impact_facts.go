@@ -133,17 +133,8 @@ func ImpactRuleFacts(e chstore.MLEvent) *chstore.StdImpactRule {
 // NewestImpactRuleFacts — SAF: olaylar arasında gerçekleri okunabilen EN YENİ
 // (son görülme) olayın gerçekleri; yoksa nil.
 func NewestImpactRuleFacts(evs []chstore.MLEvent) *chstore.StdImpactRule {
-	var best *chstore.StdImpactRule
-	var seen int64
-	for _, e := range evs {
-		if best != nil && e.LastSeen <= seen {
-			continue
-		}
-		if f := ImpactRuleFacts(e); f != nil {
-			best, seen = f, e.LastSeen
-		}
-	}
-	return best
+	_, f := newestImpactRuleEvent(evs) // v0.10.2482 — etki özetiyle tek seçim
+	return f
 }
 
 // ImpactFactsLeadOf — SAF (v0.10.2391): tek sinyal kolunun açtığı grup

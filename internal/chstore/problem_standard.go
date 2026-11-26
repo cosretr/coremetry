@@ -125,6 +125,11 @@ type ProblemStandard struct {
 	// şimdi; açıklamadaki MLConsumerLagSentence cümlesinden). nil = lag değil.
 	// Arayüz "kim etkileniyor" ve "ne yapılabilir"i bundan kurar.
 	Lag *StdLag `json:"lag,omitempty"`
+	// ImpactSummary — v0.10.2482 ("etki öncelikte" adım 1, YALNIZ GÖSTERİM):
+	// lider etki olayının kanıtından kaç istek / mesaj / pod etkileniyor
+	// (impact_summary.go). Standardize* doldurmaz; API okuma yolu (liste +
+	// detay) yazar. Öncelik, güven, bildirim ve kapılar bu alanı OKUMAZ.
+	ImpactSummary *StdImpactSummary `json:"impactSummary,omitempty"`
 }
 
 // StdMeasure — birincil etki ölçüsü.

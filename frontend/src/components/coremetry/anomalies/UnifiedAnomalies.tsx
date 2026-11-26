@@ -37,6 +37,7 @@ import { groupStatusText } from './mlGroupRows';
 import { useUrlPage } from '@/lib/useUrlPage';
 import { t as tr, tf, useLang } from '@/lib/i18n';
 import { heldCounterText, heldReasonText } from '@/lib/anomalyView';
+import { whyNotText } from '@/lib/whyNotProblem'; // v0.10.2482
 import { listHeadlineView, rowHref, rowLagPattern } from './unifiedRows';
 import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2302
 import {
@@ -52,13 +53,16 @@ const UNIFIED_PAGE_SIZE = 50;
 // v0.10.2083 — sortValue serverSort kipinde yalnız "sıralanabilir" işareti +
 // naturalDir taşıyıcısı (hiç çağrılmaz); sıra sunucunun (SortUnified).
 // v0.10.2258 — başlıklar arayüz dilinde (TR metin aynı).
-function unifiedCols(t: (k: string) => string, held: boolean): ColumnDef<UnifiedAnomalyRow>[] {
+// v0.10.2482 — why: yalnız bağlanmamış listede "Neden Problem değil" (kapının
+// kararı, sunucu; sıralanmaz).
+function unifiedCols(t: (k: string) => string, held: boolean, why: boolean): ColumnDef<UnifiedAnomalyRow>[] {
   return [
     { id: 'started', label: t('anomalies.col.started'), width: 110, priority: 1, sortValue: r => r.start, naturalDir: 'desc' },
     { id: 'service', label: t('anomalies.col.service'), width: 260, minWidth: 160, priority: 1, sortValue: r => r.service, naturalDir: 'asc' },
     { id: 'headline', label: t('anomalies.col.headline'), flex: true, minWidth: 280 },
     // v0.10.2473 — yalnız Elenenler: neden sunucu sıralamasında yok (sortValue yok).
     ...(held ? [{ id: 'heldReason', label: t('anomalies.col.heldReason'), width: 300, minWidth: 200, priority: 1 }] : []),
+    ...(why ? [{ id: 'whyNot', label: t('signals.col.why'), width: 300, minWidth: 200, priority: 1 }] : []),
     { id: 'signals', label: t('anomalies.col.signals'), width: 190, minWidth: 120, priority: 2, sortValue: r => r.signals.join(','), naturalDir: 'asc' },
     { id: 'status', label: t('anomalies.col.status'), width: 170, minWidth: 130, priority: 1, sortValue: r => r.status, naturalDir: 'desc' },
   ];
@@ -74,22 +78,23 @@ type SignalFilter = '' | Exclude<SignalKind, 'group'>;
 // v0.10.2481 — unattached: yalnız açık bir Problem'e bağlı olmayan satırlar
 // (Problems › Sinyaller varsayılanı; süzgeç sunucuda, sayfalamadan önce).
 // controls: süzgeç satırının sonuna eklenen denetim (Sinyaller'in anahtarı).
-export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view = '', emptyText, hint, unattached = false, controls }: {
+// v0.10.2482 — service: sunucu servis süzgeci (/inbox?tab=signals&service=).
+export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view = '', emptyText, hint, unattached = false, controls, service = '' }: {
   signal?: SignalFilter; onSignal?: (s: SignalFilter) => void; detectorStatus?: ReactNode; view?: AnomalyView; emptyText?: string; hint?: string;
-  unattached?: boolean; controls?: ReactNode;
+  unattached?: boolean; controls?: ReactNode; service?: string;
 }) {
   const lang = useLang();
   const t = (k: string) => tr(k, lang);
-  const cols = useMemo(() => unifiedCols(k => tr(k, lang), view === 'held'), [lang, view]);
+  const cols = useMemo(() => unifiedCols(k => tr(k, lang), view === 'held', unattached && view === ''), [lang, view, unattached]);
   const [openPage, setOpenPage] = useUrlPage('page');
   const [donePage, setDonePage] = useUrlPage('donePage');
   const [sp] = useSearchParams();
   const openSort = parseUnifiedSort('open', sp.get(UNIFIED_SORT_URL_KEY.open));
   const doneSort = parseUnifiedSort('done', sp.get(UNIFIED_SORT_URL_KEY.done));
 
-  const openQ = useUnifiedAnomalies({ section: 'open', signal, offset: openPage * UNIFIED_PAGE_SIZE, limit: UNIFIED_PAGE_SIZE, ...unifiedSortApiParams('open', openSort), view, unattached });
+  const openQ = useUnifiedAnomalies({ section: 'open', signal, offset: openPage * UNIFIED_PAGE_SIZE, limit: UNIFIED_PAGE_SIZE, ...unifiedSortApiParams('open', openSort), view, unattached, service });
   const doneTotal = openQ.data?.doneTotal ?? 0;
-  const doneQ = useUnifiedAnomalies({ section: 'done', signal, offset: donePage * UNIFIED_PAGE_SIZE, limit: UNIFIED_PAGE_SIZE, ...unifiedSortApiParams('done', doneSort), view, unattached }, doneTotal > 0);
+  const doneQ = useUnifiedAnomalies({ section: 'done', signal, offset: donePage * UNIFIED_PAGE_SIZE, limit: UNIFIED_PAGE_SIZE, ...unifiedSortApiParams('done', doneSort), view, unattached, service }, doneTotal > 0);
   const open = useMemo(() => openQ.data?.items ?? [], [openQ.data]);
   const done = useMemo(() => doneQ.data?.items ?? [], [doneQ.data]);
   const nowNs = Date.now() * 1e6;
@@ -108,6 +113,7 @@ export function UnifiedAnomalies({ signal = '', onSignal, detectorStatus, view =
           </Link>
         );
       }
+      case 'whyNot': { const why = whyNotText(r.whyNot, lang); return why ? <span className="dt-trunc" title={why}>{why}</span> : <span className="text-muted-foreground">—</span>; }
       case 'heldReason': { const why = heldReasonText(r.heldGates, lang); return why ? <span className="dt-trunc" title={why}>{why}</span> : <span className="text-muted-foreground">—</span>; }
       case 'signals': return (
         <span className="inline-flex flex-wrap items-center gap-2">

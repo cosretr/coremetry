@@ -29,7 +29,7 @@ func TestOpenProblemsParityWithStrip(t *testing.T) {
 	s.l1.set(key, body, time.Minute)
 
 	rec := httptest.NewRecorder()
-	s.inbox(rec, httptest.NewRequest(http.MethodGet, "/api/inbox?service=orders-api&status=open&limit=20", nil))
+	s.inbox(rec, httptest.NewRequest(http.MethodGet, "/api/inbox?service=orders-api&status=open&limit=20&kind=problem", nil)) // v0.10.2482: şerit Problems rozetinin türlerini ister
 	var view serviceOpenItemsView
 	if err := json.Unmarshal(rec.Body.Bytes(), &view); err != nil {
 		t.Fatalf("handler gövdesi: %v", err)

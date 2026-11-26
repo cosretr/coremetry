@@ -17,8 +17,19 @@ const ServiceAttentionLimit = 20
 const ServiceInboxPrio = "P1,P2,P3"
 
 // ServiceAttentionQuery — SAF: şeridin sorgusu (ortamsız: şerit env taşımaz).
+// v0.10.2482: türler Problems listesinin / rozetinin varsayılanı (AllKinds false).
 func ServiceAttentionQuery(service string) InboxOpenQuery {
 	return InboxOpenQuery{Service: service, Limit: ServiceAttentionLimit, Attention: true}
+}
+
+// ServiceOpenItemsQuery — SAF (v0.10.2482): servis sağlık kontrolü ve
+// taramasının "açık konular" okuması — şeridin süzgeci, ama ESKİ tür kümesi
+// (exception / HTTP hata grupları dahil): sağlık kontrolünün exception satırı
+// buradan beslenir. Şeridin sayısı değil (ServiceAttentionQuery).
+func ServiceOpenItemsQuery(service string) InboxOpenQuery {
+	q := ServiceAttentionQuery(service)
+	q.AllKinds = true
+	return q
 }
 
 // ServiceInboxHref — SAF: FE lib/inboxHref.ts serviceInboxHref'in ikizi

@@ -96,6 +96,9 @@ type evalExpect struct {
 	// guided rotası (service_health, log_errors …) bu olmalı. Kademe
 	// (expectTier) ile birlikte "rota doğruluğu" metriğidir.
 	ExpectRoute string `json:"expectRoute,omitempty"`
+	// Narrative — v0.10.2482: trace açıklamasının anlatım biçimi (yalnız
+	// TraceNarrative yüzeyi; ai_evalset_narrative.go). Hakem modelsiz.
+	Narrative *evalNarrativeExpect `json:"narrative,omitempty"`
 }
 
 type evalCase struct {
@@ -338,6 +341,8 @@ func evalSystemPromptFor(surface string, simple bool) (string, bool) {
 	switch surface {
 	case "Trace":
 		return copilot.SystemPromptTrace(), true
+	case evalSurfaceTraceNarrative: // v0.10.2482 — anlatım biçimi
+		return copilot.SystemPromptTraceNarrative(), true
 	case "Span":
 		return copilot.SystemPromptSpan(), true
 	case "Problem":
@@ -409,7 +414,8 @@ func scoreEvalCase(c evalCase, system, answer string, err error) (fails []string
 	if err != nil {
 		return []string{"error: " + err.Error()}, 0
 	}
-	fails = evalTextGateFails(c, answer) // v0.10.1316 — ajan kipiyle ortak
+	fails = evalTextGateFails(c, answer)                                     // v0.10.1316 — ajan kipiyle ortak
+	fails = append(fails, evalNarrativeFails(c.Expect.Narrative, answer)...) // v0.10.2482 — anlatım biçimi
 	sys, user := evalCaseInput(c, system)
 	names := evalUnknownNames(c.Expect.KnownEntities, sys+"\n"+user, answer)
 	unknown = len(names)
@@ -593,6 +599,7 @@ const evalsetSurfacePrefix = chstore.AICallEvalsetSurfacePrefix
 // Eksik yüzey bu tabloda boş etiket → varsayılan profil (grupsuz yüzeyle aynı).
 var evalProductionLabels = map[string]string{
 	"Trace":           "explain-trace",
+	"TraceNarrative":  "explain-trace", // v0.10.2482 — aynı üretim yüzeyi, anlatım istemi
 	"Span":            "explain-span",
 	"Problem":         "explain-problem",
 	"Exception":       "explain-exception",
@@ -742,6 +749,9 @@ func runEvalsetCase(ctx context.Context, call evalCallFn, agent evalAgentFn, c e
 	if evalAgentCase(c) { // v0.10.1316 — canlı ajan döngüsü
 		return evalMarkInfra(runEvalAgentCase(ctx, agent, c, toolset)) // v0.10.1476
 	}
+	if c.Surface == evalSurfaceTraceNarrative {
+		ctx = traceNarrativeCtx(ctx) // v0.10.2482 — üretim eşitliği: düşünme yüzeyi + cevap tavanı
+	}
 	system, ok := evalSystemPromptFor(c.Surface, simple)
 	if !ok {
 		return evalCaseOutcome{Fixture: true, User: c.User, Fails: []string{fmt.Sprintf("fixture: surface %q çözülemiyor", c.Surface)}}
@@ -785,7 +795,7 @@ func evalServerCompose(surface, user, answer string) string {
 	switch surface {
 	case "SLOBurn": // copilot_explain_slo.go — alarm eşiği satırı
 		return sloAnswerWithBurnVerdict(user, answer)
-	case "Trace": // v0.10.1630 — trace_explain_latency_owner.go — dış bağımlılık satırı
+	case "Trace", evalSurfaceTraceNarrative: // v0.10.1630 — trace_explain_latency_owner.go — dış bağımlılık satırı (anlatımda da üretim ekler; ayrıştırıcı atar)
 		return traceAnswerWithLatencyOwner(user, answer)
 	}
 	return answer

@@ -18,8 +18,12 @@ package api
 //     modeli beklemeden çizilen kanıt bloğu (blocks.TypeTraceEvidence).
 //   - bolumlu: v0.10.2456 şablonu (SystemPromptTrace) bayt bayt.
 //
-// "Kodu da incele" dalı (kod eki bölümlü gövdeye eklenir) bu sürümde bölümlü
-// kalır. Önbellek anahtarı sistem + kullanıcı metninden: iki biçim ayrı satır.
+// "Kodu da incele" dalı v0.10.2480'de bölümlü kaldı; v0.10.2482'den beri o da
+// biçime uyar (trace_explain_narrative_code.go). Takip soruları
+// (copilot.TraceFollowUpAddendumNarrativeFor), odaklı soru yolu
+// (trace_explain_unified.go) ve dış MCP explain_trace (mcp_trace_narrative.go)
+// da biçimi izler. Önbellek anahtarı sistem + kullanıcı metninden: iki biçim
+// ayrı satır.
 
 import (
 	"context"
@@ -48,10 +52,19 @@ func traceExplainPromptFor(narrative bool, in traceExplainInput) (system, user s
 }
 
 // traceNarrativeCtx — anlatım çağrısının ctx'i: düşünme yüzeyi (varsayılan
-// kapalı, Settings'ten açılabilir) + cevap tavanı.
+// kapalı, Settings'ten açılabilir) + cevap tavanı + biçim işareti
+// (v0.10.2482: prefix sayımı anlatım koşularını ayrı sayar).
 func traceNarrativeCtx(ctx context.Context) context.Context {
 	ctx = copilot.WithThinkingSurface(ctx, copilot.ThinkTraceNarrative)
-	return copilot.WithAnswerCap(ctx, traceNarrativeMaxTokens)
+	return context.WithValue(copilot.WithAnswerCap(ctx, traceNarrativeMaxTokens), traceNarrativeStyleKey{}, true)
+}
+
+type traceNarrativeStyleKey struct{}
+
+// traceNarrativeStyleFrom — ctx bir anlatım koşusunun mu (traceNarrativeCtx).
+func traceNarrativeStyleFrom(ctx context.Context) bool {
+	on, _ := ctx.Value(traceNarrativeStyleKey{}).(bool)
+	return on
 }
 
 // explainRendererTraceNarrative — künyenin çizim kipi (FE TraceNarrativeBody).

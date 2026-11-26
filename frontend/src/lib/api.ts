@@ -1830,12 +1830,14 @@ export const api = {
   // v0.10.2083 — sort/dir: sunucu sırası (kolon kimliği; boş = bölüm varsayılanı).
   // v0.10.2243 — view: '' servis listesi | platform (telemetry_volume) | held (gölge kapı kararı, yalnız admin).
   // v0.10.2481 — unattached: yalnız açık bir Problem'e bağlı OLMAYAN satırlar (Sinyaller varsayılanı; yalnız servis görünümü).
-  anomaliesUnified: (p: { section: 'open' | 'done'; signal?: string; offset: number; limit: number; sort?: string; dir?: 'asc' | 'desc'; view?: import('./types').AnomalyView; unattached?: boolean }, signal?: AbortSignal) =>
+  // v0.10.2482 — service: /inbox?tab=signals&service= (sunucu SQL süzgeci).
+  anomaliesUnified: (p: { section: 'open' | 'done'; signal?: string; offset: number; limit: number; sort?: string; dir?: 'asc' | 'desc'; view?: import('./types').AnomalyView; unattached?: boolean; service?: string }, signal?: AbortSignal) =>
     get<import('./types').UnifiedAnomaliesPage>(
       `/api/anomalies/unified?section=${p.section}&signal=${encodeURIComponent(p.signal ?? '')}&offset=${p.offset}&limit=${p.limit}`
       + (p.sort ? `&sort=${encodeURIComponent(p.sort)}&dir=${p.dir ?? 'desc'}` : '')
       + (p.view ? `&view=${p.view}` : '')
-      + (p.unattached ? '&unattached=1' : ''), signal),
+      + (p.unattached ? '&unattached=1' : '')
+      + (p.service ? `&service=${encodeURIComponent(p.service)}` : ''), signal),
   anomalyUnifiedRow: (eventId: string, signal?: AbortSignal) =>
     get<import('./types').UnifiedAnomaliesPage>(`/api/anomalies/unified?event=${encodeURIComponent(eventId)}`, signal),
   mlScorecard: () => get<import('./types').MLScorecard>(`/api/ml/scorecard`),

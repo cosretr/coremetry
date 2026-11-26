@@ -34,11 +34,17 @@ export function InboxTabStrip({ tab }: { tab: InboxTab }) {
   );
 }
 
-/** Sinyaller sekmesi: başlık Problems'te kalır (tek sayfa). */
+/** Sinyaller sekmesi: başlık "Problems · Sinyaller" (tek sayfa).
+ *  v0.10.2482 — üst çubuk eski Anomalies sayfasındaki gibi UYGULANIR: liste
+ *  sabit 24 sa penceresi (zaman seçici yok, eski sayfada da yoktu) ve env
+ *  süzmez — env seçici Problemler sekmesiyle aynı yerde görünür ama dürüstçe
+ *  "bu sayfada uygulanmaz" der (uygulama bayrağı false; sekme geçişinde seçici
+ *  kaybolmaz, seçim de sessizce uygulanmış sanılmaz). */
 export function SignalsTab({ strip }: { strip: ReactNode }) {
+  const tr = useT();
   return (
     <>
-      <Topbar title="Problems" />
+      <Topbar title={tr('signals.title')} showEnv envApplies={false} />
       <div className="page-body">
         {strip}
         <Suspense fallback={<Spinner />}>

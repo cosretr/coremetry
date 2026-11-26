@@ -45,27 +45,29 @@ const (
 func promptRegistry() map[string]promptClass {
 	return map[string]promptClass{
 		// ── Bir-atımlık ✨ Explain yüzeyleri + kod ikizleri
-		"Trace":             classDirective,
-		"TraceNarrative":    classDirective, // v0.10.2480 — anlatım biçimi (TÜR + KARAR + Sonraki adım)
-		"TraceWithCode":     classDirective,
-		"Span":              classDirective,
-		"Problem":           classDirective,
-		"Exception":         classDirective,
-		"ExceptionWithCode": classDirective,
-		"OracleException":   classDirective,  // v0.10.1100 — Oracle hata grubu (span değil)
-		"CaseCompare":       classStructured, // CoSRE öğrenme Faz 3 — ilk kelime EVET/HAYIR/KISMEN parse edilir
-		"BriefingHeadline":  classDirective,  // v0.10.1699 — Login Briefing başlık cümlesi
-		"GroundingJudge":    classStructured, // CoSRE öğrenme Faz 4 — iddia JSON'u parse edilir
-		"SREReplayJudge":    classStructured, // CoSRE replay notlaması — not JSON'u parse edilir
-		"Incident":          classDirective,
-		"Anomaly":           classDirective,
-		"ServiceHealth":     classDirective,
-		"ServiceCharts":     classDirective,
-		"Runbook":           classDirective,
-		"CompareTraces":     classDirective,
-		"DeployImpact":      classDirective,
-		"SLOBurn":           classDirective,
-		"SlowQuery":         classDirective,
+		"Trace":                       classDirective,
+		"TraceNarrative":              classDirective, // v0.10.2480 — anlatım biçimi (TÜR + KARAR + Sonraki adım)
+		"TraceNarrativeWithCode":      classDirective, // v0.10.2482 — anlatım + Kod bulgusu
+		"TraceNarrativeWithCandidate": classDirective, // v0.10.2482 — anlatım + aday operasyon kodu
+		"TraceWithCode":               classDirective,
+		"Span":                        classDirective,
+		"Problem":                     classDirective,
+		"Exception":                   classDirective,
+		"ExceptionWithCode":           classDirective,
+		"OracleException":             classDirective,  // v0.10.1100 — Oracle hata grubu (span değil)
+		"CaseCompare":                 classStructured, // CoSRE öğrenme Faz 3 — ilk kelime EVET/HAYIR/KISMEN parse edilir
+		"BriefingHeadline":            classDirective,  // v0.10.1699 — Login Briefing başlık cümlesi
+		"GroundingJudge":              classStructured, // CoSRE öğrenme Faz 4 — iddia JSON'u parse edilir
+		"SREReplayJudge":              classStructured, // CoSRE replay notlaması — not JSON'u parse edilir
+		"Incident":                    classDirective,
+		"Anomaly":                     classDirective,
+		"ServiceHealth":               classDirective,
+		"ServiceCharts":               classDirective,
+		"Runbook":                     classDirective,
+		"CompareTraces":               classDirective,
+		"DeployImpact":                classDirective,
+		"SLOBurn":                     classDirective,
+		"SlowQuery":                   classDirective,
 		// v0.10.1330 — stack yok, ana operasyonun kodu (kendi hizalama grubu).
 		"TraceWithOperationCode": classDirective,
 		// v0.10.1349 — operasyon fonksiyon kodu sözlüğünden ADAY.
@@ -133,8 +135,9 @@ func promptRegistry() map[string]promptClass {
 func promptTexts() map[string]string {
 	return map[string]string{
 		"Trace": SystemPromptTrace(), "TraceWithCode": SystemPromptTraceWithCode(),
-		"TraceNarrative": SystemPromptTraceNarrative(), // v0.10.2480
-		"Span":           SystemPromptSpan(), "Problem": SystemPromptProblem(),
+		"TraceNarrative":         SystemPromptTraceNarrative(),                                                                                   // v0.10.2480
+		"TraceNarrativeWithCode": SystemPromptTraceNarrativeWithCode(), "TraceNarrativeWithCandidate": SystemPromptTraceNarrativeWithCandidate(), // v0.10.2482
+		"Span": SystemPromptSpan(), "Problem": SystemPromptProblem(),
 		"Exception": SystemPromptException(), "ExceptionWithCode": SystemPromptExceptionWithCode(),
 		"Incident": SystemPromptIncident(), "Anomaly": SystemPromptAnomaly(),
 		"ServiceHealth": SystemPromptServiceHealth(), "ServiceCharts": SystemPromptServiceCharts(),

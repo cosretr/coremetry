@@ -20,7 +20,7 @@ import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtAgoNs } from '@/lib/utils';
-import { attentionRows, inboxItemHref, serviceInboxHref } from '@/lib/inboxHref';
+import { attentionRows, inboxItemHref, serviceInboxHref, serviceSignalsHref, serviceStripKinds } from '@/lib/inboxHref';
 import { useProblemVerdicts } from '@/lib/queries';
 import { verdictIndex, filterByVerdictView } from '@/lib/problemVerdict';
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
@@ -104,9 +104,14 @@ export function ServiceAttentionStrip({ service, fallbackProblems }: {
   fallbackProblems: Problem[];
 }) {
   const lang = useLang();
+  // v0.10.1827 — Incidents emekliyken incident satırı yok (sunucu da üretmez).
+  const incidentsOn = useIncidentsEnabled();
+  // v0.10.2482 — Problems listesinin / rozetinin türleri (lib/inboxHref
+  // serviceStripKinds; Go ikizi api inboxOpenValues). Açık anomaliler aynı
+  // gövdenin counts.anomaly'sinden AYRI "N sinyal" olarak söylenir.
   const q = useQuery({
-    queryKey: ['service-attention', service],
-    queryFn: () => api.inbox({ service, status: 'open', limit: 20 }),
+    queryKey: ['service-attention', service, incidentsOn],
+    queryFn: () => api.inbox({ service, status: 'open', limit: 20, kind: serviceStripKinds(incidentsOn) }),
     staleTime: 30_000,
     refetchInterval: 30_000,
   });
@@ -115,8 +120,6 @@ export function ServiceAttentionStrip({ service, fallbackProblems }: {
   // linkin açtığı listeden fazla sayardı. Kararlar okunamazsa dizin boş:
   // hiçbir satır gizlenmez (Inbox'la aynı güvenli taraf).
   const verdictsQ = useProblemVerdicts();
-  // v0.10.1827 — Incidents emekliyken incident satırı yok (sunucu da üretmez).
-  const incidentsOn = useIncidentsEnabled();
   if (q.isPending) return null;
 
   // api.inbox 204/boş gövdede null dönebilir — "yok" ile "okunamadı" ayrı.
@@ -135,9 +138,16 @@ export function ServiceAttentionStrip({ service, fallbackProblems }: {
     </span>
   );
 
+  const signalsN = q.data?.counts?.anomaly ?? 0;
+  const signalsNote = signalsN > 0 && (
+    <Link to={serviceSignalsHref(service)} className="svc-att-slo" title={t('svcAtt.signalsTip', lang)}>
+      {tf('svcAtt.signals', lang, { n: signalsN })}
+    </Link>
+  );
+
   if (rows.length === 0) {
-    if (!sloNote) return null;
-    return <div className="svc-att-thin">{sloNote}</div>;
+    if (!sloNote && !signalsNote) return null;
+    return <div className="svc-att-thin">{sloNote}{sloNote && signalsNote && <span className="svc-att-sep">·</span>}{signalsNote}</div>;
   }
   return (
     <div className="svc-att" data-degraded={degraded || undefined}>
@@ -145,6 +155,8 @@ export function ServiceAttentionStrip({ service, fallbackProblems }: {
         <span className="svc-att-title">{tf('svcAtt.open', lang, { n: rows.length + hidden })}</span>
         {sloNote && <span className="svc-att-sep">·</span>}
         {sloNote}
+        {signalsNote && <span className="svc-att-sep">·</span>}
+        {signalsNote}
         {degraded && (
           <span className="svc-att-warn" title={t('svcAtt.degradedTip', lang)}>
             {t('svcAtt.degraded', lang)}

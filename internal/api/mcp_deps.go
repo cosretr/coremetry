@@ -83,6 +83,8 @@ func (s *Server) mcpDeps() mcptools.Deps {
 		// araç sohbete sunulmaz. Dış MCP'de araç hiç kayıtlı değil (chatOnlyTools).
 		SourceCode: s.sourceCodeReaderOrNil(),
 		CodeSearch: s.codeSearcherOrNil(), // v0.10.1208 — search_code
+		// v0.10.2482 — explain_trace anlatım eki (mcp_trace_narrative.go; bolumlu → gövde aynen).
+		TraceNarrative: mcpTraceNarrativeSource{s},
 		// v0.10.1122 — search_wiki / read_wiki_page (chat_wiki.go); wiki kapalı ya
 		// da DevOps yoksa nil → araçlar sohbete sunulmaz; dış MCP'de hiç yok.
 		Wiki: s.wikiSourceOrNil(),

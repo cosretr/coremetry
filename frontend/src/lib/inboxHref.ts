@@ -39,15 +39,27 @@ export function anomalyDetailHref(id: string): string {
 // yapışkan seçimi DİRİLTMEZ). status varsayılanı zaten open.
 // v0.10.1796 — Inbox tür varsayılanı artık problem+anomaly+incident (exception
 // kalabalığı); şerit exception'ları da sayar, link türleri de AÇIK yazar.
+// v0.10.2482 (DECISIONS 2026-11-27, "açık konu" sözleşmesi revizyonu) — şerit
+// ve link Problems listesinin / rozetinin varsayılan türlerini (pages/inbox/
+// inboxFilters KIND_DEFAULT / KIND_DEFAULT_RETIRED) sayar: anomali ve HTTP
+// hata / exception grupları sayıya karışmaz; açık anomaliler ayrı "N sinyal"
+// (Sinyaller sekmesine, servis süzgeciyle). Go ikizi api inboxOpenValues.
 // Gidiş-dönüş testi: inboxHref.serviceLink.test.ts.
 export const SERVICE_INBOX_PRIO = 'P1,P2,P3';
-export const SERVICE_INBOX_KIND = 'problem,exception,httperror,anomaly,incident';
+export const SERVICE_INBOX_KIND = 'problem,incident';
 // v0.10.1827 — Incidents emekliyken (kabuk bayrağı kapalı) link incident
 // türünü YAZMAZ: Inbox sözlüğünde yok, şerit de incident satırı göstermez.
-export const SERVICE_INBOX_KIND_RETIRED = 'problem,exception,httperror,anomaly';
+export const SERVICE_INBOX_KIND_RETIRED = 'problem';
+/** SAF: şeridin istediği tür kümesi (link ile aynı). */
+export function serviceStripKinds(incidentsOn: boolean): string {
+  return incidentsOn ? SERVICE_INBOX_KIND : SERVICE_INBOX_KIND_RETIRED;
+}
 export function serviceInboxHref(service: string, incidentsOn: boolean): string {
-  const kind = incidentsOn ? SERVICE_INBOX_KIND : SERVICE_INBOX_KIND_RETIRED;
-  return `/inbox?service=${encodeURIComponent(service)}&prio=${SERVICE_INBOX_PRIO}&kind=${kind}&env=`;
+  return `/inbox?service=${encodeURIComponent(service)}&prio=${SERVICE_INBOX_PRIO}&kind=${serviceStripKinds(incidentsOn)}&env=`;
+}
+/** v0.10.2482 — servisin Sinyaller listesi (Problems › Sinyaller, servis süzgeci). */
+export function serviceSignalsHref(service: string): string {
+  return `/inbox?tab=signals&service=${encodeURIComponent(service)}`;
 }
 
 export function inboxItemHref(it: InboxItem): string | null {

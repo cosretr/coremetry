@@ -60,12 +60,18 @@ func latencyOwnerSignals(xid string, ev latencyOwnerEvent) []chstore.CosreSignal
 	if !ev.Applied {
 		return nil
 	}
+	// v0.10.2482 — anlatım koşusu ayrı sayılır: biçim işareti ayrıntının
+	// BAŞINDA (action=… önekinden sonra) — tavanlı ayrıntıda kırpılmaz.
+	style := ""
+	if ev.Narrative {
+		style = chstore.PrefixStyleNarrative + " "
+	}
 	out := []chstore.CosreSignal{{ExchangeID: xid, Kind: cosrelearn.SigPrefixApplied,
-		UserEmail: cosrelearn.SystemSignalActor, Detail: "trace=" + ev.TraceID}}
+		UserEmail: cosrelearn.SystemSignalActor, Detail: style + "trace=" + ev.TraceID}}
 	if ev.Action != "" {
 		out = append(out, chstore.CosreSignal{ExchangeID: xid, Kind: cosrelearn.SigPrefixCorrected,
 			UserEmail: cosrelearn.SystemSignalActor,
-			Detail:    "action=" + ev.Action + " trace=" + ev.TraceID + " target=" + ev.Target})
+			Detail:    "action=" + ev.Action + " " + style + "trace=" + ev.TraceID + " target=" + ev.Target})
 	}
 	return out
 }
@@ -77,7 +83,7 @@ func (s *Server) recordLatencyOwner(ctx context.Context, ev latencyOwnerEvent) {
 		return
 	}
 	xid := copilot.MetaFromContext(ctx).ExchangeID
-	if ev.Action != "" {
+	if ev.Action != "" && !ev.Narrative { // v0.10.2482 — anlatımda satırı model yazmaz: her koşuda log satırı gürültü olurdu
 		log.Printf("cosre prefix_corrected action=%s exchange=%s trace=%s target=%q computed=%q model=%q",
 			ev.Action, xid, ev.TraceID, ev.Target, ev.Computed, ev.ModelLine)
 	}

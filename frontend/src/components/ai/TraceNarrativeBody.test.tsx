@@ -72,6 +72,23 @@ describe('TraceNarrativeBody', () => {
     expect(h).toContain('/trace?id=');
   });
 
+  it('v0.10.2482 — kod turu: Kod bulgusu KARAR ile Sonraki adım arasında; kod künyesi (içeriksiz) KAPALI parçada', () => {
+    const code = { repo: 'orders', branch: 'main', files: [{ path: 'src/Start.java', fromLine: 37, toLine: 47, line: 42, url: 'https://code.example/s' }] };
+    const h = renderToStaticMarkup(
+      <MemoryRouter><TraceNarrativeBody text={TEXT.replace('\nSonraki adım', '\nKod bulgusu: Start.java:42 — tarih boş geçiyor.\nSonraki adım')}
+        busy={false} view={VIEW} traceId={T} code={code} /></MemoryRouter>,
+    );
+    const order = ['data-tn-verdict', 'data-tn-code=', 'data-tn-codesource', 'data-tn-next'].map(a => h.indexOf(a));
+    expect(order.every(i => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(h).toMatch(/<details class="cm-md-details" data-tn-codesource="">/); // open yok
+    expect(h).toContain('src/Start.java:37-47');
+    expect(h).toContain('hata satırı 42');
+    expect(h).not.toContain('<pre');
+    expect(h).toContain('Code finding');
+    expect(html(TEXT, VIEW)).not.toContain('data-tn-code');
+  });
+
   it('saat izleyicinin diliminde (Window çipiyle aynı)', () => {
     expect(formatTraceClock(TS, 'Europe/Istanbul')).toEqual({ time: '20:37:02.041', tzLabel: 'Europe/Istanbul' });
     expect(formatTraceWindow(TS, TS, 'Europe/Istanbul')?.text).toContain('20:37:02.041');

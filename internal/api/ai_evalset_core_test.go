@@ -34,6 +34,7 @@ func TestEvalsetProductionLabelTable(t *testing.T) {
 		"RCAVerdict": "rootcause-verdict", "ServiceCharts": "explain-charts",
 		"GeneralChat": "chat-general", "Chat": "chat", "IntentClassify": "chat-intent",
 		"OffTopicGeneral": "chat-offtopic-general", // v0.10.1476
+		"TraceNarrative":  "explain-trace",         // v0.10.2482 — anlatım biçimi, aynı üretim yüzeyi
 	}
 	if len(evalProductionLabels) != len(want) {
 		t.Fatalf("tablo %d girdi, pin %d", len(evalProductionLabels), len(want))
@@ -48,7 +49,10 @@ func TestEvalsetProductionLabelTable(t *testing.T) {
 		// Export eşlemesiyle geri dönüşüm: 👎 satırı hangi yüzeye düşüyorsa
 		// panel o yüzeyi aynı etiketle koşar. Tek bilinçli istisna SlowQuery
 		// (bugünkü tek çağıran insight kartı; export eski adları tanıyor).
-		if surface != "SlowQuery" && evalSurfaceFromLabel(label) != surface {
+		// v0.10.2482 — ikinci bilinçli istisna TraceNarrative: Trace ile AYNI
+		// üretim etiketi (biçim ayarı istemi seçer); export satırı ham prompt
+		// taşıdığı için Trace'e düşmesi puanlamayı değiştirmez.
+		if surface != "SlowQuery" && surface != "TraceNarrative" && evalSurfaceFromLabel(label) != surface {
 			t.Errorf("%s: evalSurfaceFromLabel(%q) = %q — export ve panel ayrıştı", surface, label, evalSurfaceFromLabel(label))
 		}
 	}

@@ -60,6 +60,7 @@ func xcMeta(t *testing.T, ans map[string]any) chatExplainMeta {
 
 // Trace — düğmenin kod dalı ile sohbetin kod turu AYNI satır, iki yönde.
 func TestChatExplainCodeTraceSharesButtonCodeKey(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2482 — bölümlü kod dalının pini (anlatım: trace_explain_narrative_surfaces_test.go)
 	const answer = "**Kök neden:** payments POST /charge card declined (com.example.orders.ChargeClient)."
 	t.Run("düğme üretir → sohbet isabet", func(t *testing.T) {
 		p := newDefProvider(t, answer)
@@ -158,7 +159,7 @@ func TestChatExplainCodeExceptionSharesButtonCodeKey(t *testing.T) {
 		}
 	}
 	th := flatWS(funcBody(readRepoFile(t, "trace_explain_handler.go"), "copilotExplainTrace"))
-	if !strings.Contains(th, "p := s.traceCodeExplainPrep(r.Context(), in)") || !strings.Contains(th, "cacheKey := p.CacheKey") {
+	if !strings.Contains(th, "p := s.traceCodeExplainPrep(r.Context(), in, narrative)") || !strings.Contains(th, "cacheKey := p.CacheKey") {
 		t.Error("copilotExplainTrace kod dalı traceCodeExplainPrep'ten geçmeli")
 	}
 	// Oracle grubu: code düşer → kodsuz Oracle prompt'u.

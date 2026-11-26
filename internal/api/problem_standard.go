@@ -38,6 +38,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
@@ -67,6 +68,12 @@ type inboxStdSrc struct {
 	// lag). YALNIZ detay ucu doldurur (problemImpactRule); liste yolunda hep
 	// nil → ek okuma yok.
 	impactRule *chstore.StdImpactRule
+	// impactEvs / impactLoaded — v0.10.2482 (etki özeti): detay ucu "Neden"
+	// okumasının olaylarını taşır (özet aynı olaylardan; ikinci okuma yok).
+	// Liste yolunda impactLoaded=false: attachInboxStandards TEK toplu okuma
+	// yapar (inboxImpactPlan → ListImpactLeadEvents).
+	impactEvs    []chstore.MLEvent
+	impactLoaded bool
 }
 
 // parseStdRef — SAF: "<kind>:<id>" → (kind, id). Bilinmeyen tür / boş id → ok=false.
@@ -89,7 +96,8 @@ func parseStdRef(ref string) (kind, id string, ok bool) {
 // :v3: — v0.10.2383 kanıta "Neden" satırları eklendi (evidence.reasons).
 // :v4: — v0.10.2391 yanıt süresi + consumer lag Problem'lerinde de "Neden".
 // :v5: — v0.10.2476 lag beklenen günlük desen (lag.patternDays / pattern).
-func problemStandardKey(ref string) string { return "pstd:v5:ref=" + strings.TrimSpace(ref) }
+// :v6: — v0.10.2482 etki özeti (impactSummary).
+func problemStandardKey(ref string) string { return "pstd:v6:ref=" + strings.TrimSpace(ref) }
 
 // stdBaseFacts — SAF: trafik dışındaki gerçekler (takvim, batch, deploy).
 func stdBaseFacts(now time.Time, sens chstore.AnomalySensitivityConfig, service string) chstore.StdFacts {
@@ -158,6 +166,22 @@ func (s *Server) attachInboxStandards(ctx context.Context, items []InboxItem, no
 			}
 		}
 	}
+	// v0.10.2482 — etki özeti olayları: trafik okumasıyla EŞ ZAMANLI tek
+	// toplu okuma (satır başına değil). Düşerse özet yok (log, hata dönmez).
+	var impactEvs []chstore.MLEvent
+	var wg sync.WaitGroup
+	if plan, ok := inboxImpactPlan(items, now); ok && s.store != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			evs, err := s.store.ListImpactLeadEvents(ctx, plan.services, plan.detectors, plan.ids, plan.since)
+			if err != nil {
+				log.Printf("[inbox] etki özeti: olay okuması düştü, Etki boş: %v", err)
+				return
+			}
+			impactEvs = evs
+		}()
+	}
 	var traffic map[chstore.ServiceBucket]chstore.BucketTraffic
 	if len(pairs) > 0 && s.store != nil {
 		m, _, err := s.store.ServiceBucketTraffic(ctx, pairs)
@@ -167,6 +191,7 @@ func (s *Server) attachInboxStandards(ctx context.Context, items []InboxItem, no
 			traffic = m
 		}
 	}
+	wg.Wait()
 	for i := range items {
 		it := &items[i]
 		f := stdBaseFacts(now, sens, it.Service)
@@ -179,6 +204,77 @@ func (s *Server) attachInboxStandards(ctx context.Context, items []InboxItem, no
 			n = it.Incident.ProblemCount
 		}
 		it.Std = standardizeInboxSrc(it.stdSrc, f, n)
+	}
+	attachInboxImpacts(items, impactEvs)
+}
+
+// inboxImpactLookback — liste toplu okumasının en geri sınırı: etki özeti
+// "şimdi"yi söyler; son 24 saatte görülmemiş etki olayı özet üretmez.
+const inboxImpactLookback = 24 * time.Hour
+
+// inboxImpactRead — toplu okuma girdileri.
+type inboxImpactRead struct {
+	services, detectors, ids []string
+	since                    time.Time
+}
+
+// inboxImpactPlan — SAF (v0.10.2482): listede etki özeti için okunacaklar.
+// Yalnız etki kuralı olan açık Problem satırları (ml.ImpactLeadReadOf); OOM
+// okuma istemez (Problem'in sayıları). Kümeler sıralı (deterministik SQL).
+// ok=false: okunacak satır yok → sorgu yok.
+func inboxImpactPlan(items []InboxItem, now time.Time) (inboxImpactRead, bool) {
+	svcs, dets, ids := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	var since time.Time
+	for i := range items {
+		p := items[i].stdSrc.problemOrNil()
+		if p == nil || items[i].stdSrc.impactLoaded {
+			continue
+		}
+		lr, ok := ml.ImpactLeadReadOf(*p)
+		if !ok {
+			continue
+		}
+		if lr.LeadID != "" {
+			ids[lr.LeadID] = true
+		} else {
+			svcs[p.Service] = true
+			for _, d := range lr.Detectors {
+				dets[d] = true
+			}
+		}
+		if t := stdImpactEventsSince(p.StartedAt, now); since.IsZero() || t.Before(since) {
+			since = t
+		}
+	}
+	if len(svcs) == 0 && len(ids) == 0 {
+		return inboxImpactRead{}, false
+	}
+	if floor := now.Add(-inboxImpactLookback); since.Before(floor) {
+		since = floor
+	}
+	return inboxImpactRead{services: sortedKeys(svcs), detectors: sortedKeys(dets), ids: sortedKeys(ids), since: since}, true
+}
+
+// attachInboxImpacts — SAF (v0.10.2482): her Problem satırının std'sine etki
+// özeti (ml.ProblemImpactSummary). Olaylar servise göre bir kez gruplanır;
+// detay ucu kendi okumasını (impactEvs) getirir. Yalnız gösterim: öncelik,
+// güven ve bildirim alanlarına dokunmaz.
+func attachInboxImpacts(items []InboxItem, evs []chstore.MLEvent) {
+	bySvc := map[string][]chstore.MLEvent{}
+	for _, e := range evs {
+		bySvc[e.Service] = append(bySvc[e.Service], e)
+	}
+	for i := range items {
+		it := &items[i]
+		p := it.stdSrc.problemOrNil()
+		if p == nil || it.Std == nil {
+			continue
+		}
+		pevs := bySvc[p.Service]
+		if it.stdSrc.impactLoaded {
+			pevs = it.stdSrc.impactEvs
+		}
+		it.Std.ImpactSummary = ml.ProblemImpactSummary(*p, pevs)
 	}
 }
 
@@ -224,7 +320,9 @@ func (s *Server) getProblemStandard(w http.ResponseWriter, r *http.Request) {
 			return nil, nil
 		}
 		if src.problem != nil {
-			src.impactRule = s.problemImpactRule(ctx, *src.problem) // v0.10.2383
+			// v0.10.2383 "Neden"; v0.10.2482 etki özeti aynı olaylardan.
+			src.impactRule, src.impactEvs = s.problemImpactRule(ctx, *src.problem)
+			src.impactLoaded = true
 		}
 		items := []InboxItem{{ID: kind + ":" + id, stdSrc: src}}
 		if incProblems > 0 {
@@ -260,6 +358,7 @@ type stdImpactRead struct {
 	filter  chstore.MLEventsFilter
 	measure string // beklenen StdImpactRule.Measure (Problem'in KENDİ ölçüsü)
 	lead    string // grup Problem'i: lider olay kimliği ("" = servis Problem'i)
+	lr      ml.ImpactLeadRead
 }
 
 // stdImpactReadFor — SAF (v0.10.2383; v0.10.2391 yanıt süresi + consumer
@@ -276,44 +375,25 @@ type stdImpactRead struct {
 // tikinin penceresidir (kapanmadan önceki sönen pencere) — "son 5 dakikanın
 // 1'inde" bitmiş bir Problem için doğru değildir.
 func stdImpactReadFor(p chstore.Problem, now time.Time) (stdImpactRead, bool) {
-	if p.Service == "" || p.Status == "resolved" {
+	// v0.10.2482 — plan ml.ImpactLeadReadOf'ta (etki özeti aynı planı okur).
+	lr, ok := ml.ImpactLeadReadOf(p)
+	if !ok {
 		return stdImpactRead{}, false
 	}
 	since := stdImpactEventsSince(p.StartedAt, now)
-	if chstore.IsMLSvcProblem(p.RuleID) {
-		det, measure, ok := ml.ImpactFactsDetectorFor(p.Metric)
-		if !ok {
-			return stdImpactRead{}, false
-		}
-		// v0.10.2474: uç nokta etki olayı da aynı ölçü anahtarlarıyla gerçek taşır.
-		return stdImpactRead{filter: chstore.MLEventsFilter{Service: p.Service, Detectors: []string{det, ml.EndpointImpactDetector}, Since: since, Limit: stdImpactEventsCap},
-			measure: measure}, true
+	if lr.LeadID != "" {
+		return stdImpactRead{filter: chstore.MLEventsFilter{ID: lr.LeadID, Service: p.Service, Since: since, Limit: 1},
+			measure: lr.Measure, lead: lr.LeadID, lr: lr}, true
 	}
-	if id, ok := ml.ImpactFactsLeadOf(p); ok {
-		return stdImpactRead{filter: chstore.MLEventsFilter{ID: id, Service: p.Service, Since: since, Limit: 1},
-			measure: chstore.MLImpactLag, lead: id}, true
-	}
-	return stdImpactRead{}, false
+	return stdImpactRead{filter: chstore.MLEventsFilter{Service: p.Service, Detectors: lr.Detectors, Since: since, Limit: stdImpactEventsCap},
+		measure: lr.Measure, lr: lr}, true
 }
 
-// stdImpactFactsOf — SAF: okunan olaylardan gerçekler. Servis Problem'i:
-// Problem'e bağlı EN YENİ uygun olay; grup Problem'i: lider olay. Ölçü
-// Problem'inkiyle uyuşmazsa nil (bugünkü cümle).
+// stdImpactFactsOf — SAF: okunan olaylardan gerçekler (ml.ImpactLeadEvent:
+// servis Problem'i → Problem'e bağlı EN YENİ uygun olay; grup Problem'i →
+// lider olay). Ölçü Problem'inkiyle uyuşmazsa nil (bugünkü cümle).
 func stdImpactFactsOf(rd stdImpactRead, p chstore.Problem, evs []chstore.MLEvent) *chstore.StdImpactRule {
-	var f *chstore.StdImpactRule
-	if rd.lead != "" {
-		for _, e := range evs {
-			if e.ID == rd.lead && e.Service == p.Service {
-				f = ml.ImpactRuleFacts(e)
-				break
-			}
-		}
-	} else {
-		f = ml.NewestImpactRuleFacts(chstore.ProblemEventsOf(evs, p, chstore.ProblemEventSlack))
-	}
-	if f == nil || f.Measure != rd.measure {
-		return nil
-	}
+	_, f, _ := ml.ImpactLeadEvent(rd.lr, p, evs)
 	return f
 }
 
@@ -332,20 +412,20 @@ func stdImpactEventsSince(startedAt int64, now time.Time) time.Time {
 // çizelgesinin okumasından DAR: servis × dedektör × ≤ 20 satır ya da tek
 // olay kimliği; yalnız detay ucunda, problemStandardTTL önbelleğinin
 // arkasında. Okuma düşerse gerçek yok → bugünkü tek cümle (hata dönmez).
-func (s *Server) problemImpactRule(ctx context.Context, p chstore.Problem) *chstore.StdImpactRule {
+func (s *Server) problemImpactRule(ctx context.Context, p chstore.Problem) (*chstore.StdImpactRule, []chstore.MLEvent) {
 	if s.store == nil {
-		return nil
+		return nil, nil
 	}
 	rd, ok := stdImpactReadFor(p, time.Now())
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	evs, err := s.store.ListMLEvents(ctx, rd.filter)
 	if err != nil {
 		log.Printf("[problem-standard] etki kuralı gerçekleri okunamadı %s (tek cümleyle devam): %v", p.ID, err)
-		return nil
+		return nil, nil
 	}
-	return stdImpactFactsOf(rd, p, evs)
+	return stdImpactFactsOf(rd, p, evs), evs
 }
 
 // loadStdSrc — kimlikten kaynak nesne. nil, nil = bulunamadı.

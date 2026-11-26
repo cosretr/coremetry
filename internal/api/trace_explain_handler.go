@@ -88,14 +88,23 @@ func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
 	// v0.10.1406 — kod dalının hazırlığı tek kurucuda (traceCodeExplainPrep):
 	// sohbetteki "Kodu da incele" turu AYNI değeri kullanır → anahtar bayt bayt
 	// aynı, tek önbellek satırı.
-	p := s.traceCodeExplainPrep(r.Context(), in)
+	// v0.10.2482 — kod dalı da biçime uyar (anlatım: Kod bulgusu; kod içeriği tarayıcıya gitmez).
+	narrative := traceExplainNarrativeOn()
+	if narrative {
+		r = r.WithContext(traceNarrativeCodeCtx(r.Context()))
+	}
+	p := s.traceCodeExplainPrep(r.Context(), in, narrative)
 	cacheKey := p.CacheKey
 	run := s.traceComposeRun(r.Context(), explainPromptBuffered(func() (string, error) { // v0.10.1630 — dış bağımlılık satırı
 		return s.copilotExplainEvidence(r,
 			p.SystemNoCode, p.SystemWithCode, in.User, p.CC, p.SE)
 	}), in.User)
 	// v0.9.1127 (Faz 1.5) — cevabın çıkışı tek yerden (deliverExplain).
-	s.deliverExplain(w, r, xid, traceExplainExtra(in, p.CC, opts.IncludeCode), run, in.RootService, cacheKey)
+	extra := traceExplainExtra(in, p.CC, opts.IncludeCode)
+	if narrative && in.View != nil {
+		extra["traceEvidence"] = in.View // kod içeriği yok (v0.9.1254); kod künyesi extra["code"]
+	}
+	s.deliverExplain(w, r, xid, extra, run, in.RootService, cacheKey)
 }
 
 // codeExplainPrep — v0.10.1406: "Kodu da incele" dalının hazırlığı (kod +
@@ -112,13 +121,16 @@ type codeExplainPrep struct {
 
 // traceCodeExplainPrep — trace'in kod dalı (v0.9.831 / v0.10.83 / v0.10.115 /
 // v0.10.1044 / v0.10.1330 davranışı aynen; v0.10.1406'da handler'dan çıktı).
-func (s *Server) traceCodeExplainPrep(ctx context.Context, in traceExplainInput) codeExplainPrep {
+// v0.10.2482 — narrative: anlatım istemleri (kodsuz düşüş dahil); false =
+// bölümlü, bayt bayt eski.
+func (s *Server) traceCodeExplainPrep(ctx context.Context, in traceExplainInput, narrative bool) codeExplainPrep {
 	cc := s.traceCodeContext(ctx, in)
 	// v0.10.115 — SQL hatasında şema kanıtı (hata span'ının db_statement'ı
 	// → katalog); kod bloğunun arkasına, kendi bütçesiyle.
 	se := s.buildSchemaEvidence(in.ErrorText, in.DBStatements, mapperBlocks(cc))
-	systemWithCode, keyExtra := traceCodePromptAndKey(cc, se)
-	return codeExplainPrep{CC: cc, SE: se, SystemNoCode: copilot.SystemPromptTrace(), SystemWithCode: systemWithCode,
+	systemWithCode, keyExtra := traceCodePromptAndKeyFor(narrative, cc, se)
+	noCode, _ := traceExplainPromptFor(narrative, in)
+	return codeExplainPrep{CC: cc, SE: se, SystemNoCode: noCode, SystemWithCode: systemWithCode,
 		CacheKey: explainCacheKey(systemWithCode, in.User, keyExtra)}
 }
 

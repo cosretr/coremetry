@@ -948,7 +948,7 @@ func sweepRunProblems(ctx context.Context, r sweepReaders, req SweepRequest) swe
 		o.section.State, o.section.Summary, o.failed = hopSkipped, "Inbox okuyucusu bağlı değil", true
 		return o
 	}
-	oi, err := r.openItems(ctx, ServiceAttentionQuery(req.Service))
+	oi, err := r.openItems(ctx, ServiceOpenItemsQuery(req.Service)) // v0.10.2482: eski tür kümesi (exception dahil)
 	if err != nil {
 		o.failed = true
 		o.section.State, o.section.Summary = sweepFailState(err), cosreErrMsg("açık konular okunamadı", err)

@@ -1171,7 +1171,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
               // v0.10.2480 — trace anlatım biçimi: kanıt bloğu (modelden ÖNCE gelir) ya da künye kipi.
               const tev = ex.kind === 'trace' ? traceEvidenceBlock(turn.blocks) : null;
               if (ex.kind === 'trace' && (tev || ex.renderer === 'trace-narrative')) {
-                return <TraceNarrativeBody text={turn.text} busy={!!turn.pending} view={tev} traceId={ex.id} />;
+                return <TraceNarrativeBody text={turn.text} busy={!!turn.pending} view={tev} traceId={ex.id} code={turn.pending ? null : ex.code} />;
               }
               const exBody = (
                 <ExplainBody text={turn.text} busy={!!turn.pending} evidence={turn.pending ? undefined : explainEvidence(ex)}
@@ -1186,7 +1186,7 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
               if (panel) return <MetricPanelCard p={panel}>{exBody}</MetricPanelCard>;
               return exBody;
             })()}
-            {ex?.code && !turn.pending && <CodeSourceFooter code={ex.code} />}
+            {ex?.code && !turn.pending && !(ex.kind === 'trace' && (traceEvidenceBlock(turn.blocks) || ex.renderer === 'trace-narrative')) && <CodeSourceFooter code={ex.code} />}{/* v0.10.2482 — anlatım gövdesi künyeyi kendi katlanır parçasında çizer */}
             {ex && !turn.pending && !!ex.evidenceTraceIds?.length && (
               <div data-explain-traces="" style={{ marginTop: 8 }}>
                 <div className="cell-hint" style={{ marginBottom: 4 }}>Kanıt trace'leri ({ex.evidenceTraceIds.length})</div>

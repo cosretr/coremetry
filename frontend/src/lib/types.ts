@@ -3037,6 +3037,26 @@ export interface ProblemStandard {
   origin?: StdOrigin;
   /** v0.10.2475 — consumer lag Problem'i (Go chstore.StdLag); yoksa lag değil. */
   lag?: StdLag;
+  /** v0.10.2482 — etki özeti (Go chstore.StdImpactSummary); yoksa bu kuralın etki ölçüsü yok. */
+  impactSummary?: StdImpactSummary;
+}
+
+/** v0.10.2482 — Go chstore.StdImpactSummary: kaç istek / mesaj / pod etkileniyor (kanıttan). */
+export interface StdImpactSummary {
+  kind: 'errors' | 'latency' | 'lag' | 'oom';
+  scope?: 'service' | 'route';
+  route?: string;
+  perMin?: number;
+  sharePct?: number;
+  delayMs?: number;
+  measure?: string;
+  backlog?: number;
+  growthPerMin?: number;
+  killed?: number;
+  pods?: number;
+  rank: number;
+  /** Türkçe tek satır (sunucu; TR arayüz bunu aynen çizer). */
+  text: string;
 }
 
 /** v0.10.2475 — Go chstore.StdLag: açıklamadaki lag cümlesinin gerçekleri (mesaj). */
@@ -8605,6 +8625,7 @@ export interface TraceEvidenceView {
   others?: TraceEvidenceHop[]; othersMore?: number;
   rootMs?: number;
   fallback: string;
+  // Kod İÇERİĞİ alanı yok (v0.9.1254): kod turunun künyesi ChatExplainMeta.code (dosya/satır/link).
 }
 
 /** v0.10.1407 — `charts_signals` bloğu (Go chartsSignalsBlockPayload): ölçülmüş sinyaller + pencere/kapsam. */
@@ -13345,6 +13366,8 @@ export interface UnifiedAnomalyRow {
   ml?: MLEvent[]; legacy?: AnomalyEvent[];
   /** v0.10.2473: yalnız held görünümünde — satırın kaldığı gürültü kapıları (elenme nedeni). */
   heldGates?: HeldGate[];
+  /** v0.10.2482: yalnız bağlanmamış listede — "neden Problem değil (henüz)" (lib/whyNotProblem.ts). */
+  whyNot?: import('./whyNotProblem').WhyNotProblem;
 }
 /** v0.10.2473 — gürültü kapısı kipi (ml ayarı publishGates; yok = on). */
 export type MLGatesMode = 'off' | 'shadow' | 'on';

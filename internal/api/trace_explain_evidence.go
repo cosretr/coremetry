@@ -61,6 +61,8 @@ type traceEvidenceView struct {
 	OthersMore  int             `json:"othersMore,omitempty"`
 	RootMs      float64         `json:"rootMs,omitempty"`
 	Fallback    string          `json:"fallback"`
+	// Kod İÇERİĞİ alanı YOK (v0.9.1254 kuralı, v0.10.2482'de teyit): kod
+	// turunun künyesi answer.explain.code'da (dosya/satır/link, içeriksiz).
 }
 
 type traceEvHop struct {

@@ -264,6 +264,9 @@ type Deps struct {
 	// v0.10.1050 — read_source_code okuyucusu (source_code.go; api/chat_source_code.go
 	// doldurur). nil = DevOps bağlantısı yok → ChatToolList aracı HİÇ sunmaz.
 	SourceCode SourceCodeReader
+	// TraceNarrative — v0.10.2482: explain_trace'in anlatım eki
+	// (explain_trace_narrative.go; api/mcp_trace_narrative.go). nil = ek yok.
+	TraceNarrative TraceNarrativeSource
 	// v0.10.1208 — search_code (search_code.go; api/chat_code_search.go). nil =
 	// DevOps ya da Code Search kapalı → sohbete SUNULMAZ.
 	CodeSearch CodeSearcher

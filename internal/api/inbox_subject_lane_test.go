@@ -63,7 +63,7 @@ func TestInboxListKeyCarriesSubject(t *testing.T) {
 	// v0.10.2122 — :v12:: öncelik eşitlik kırıcısı en eski önce + oldestFirstSeen.
 	// v0.10.2299 — :v13:: std gövdesine metin anahtarları (dil anahtara girmez).
 	// v0.10.2300 — :v14:: satıra öncelik gerekçesi anahtarı (dil anahtara girmez).
-	if !strings.HasPrefix(svc, "inbox:v14:") {
+	if !strings.HasPrefix(svc, "inbox:v15:") {
 		t.Errorf("anahtar sürümü ilerlememiş: %s", svc)
 	}
 }

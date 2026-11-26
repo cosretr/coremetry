@@ -1251,8 +1251,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	fuHadExplain := isTraceFollowUp && strings.TrimSpace(req.Context.Explain) != ""
 	if isTraceFollowUp {
 		tf := buildTraceFollowUp(traceSubj, pageCtx, loopEnv, req.Context.RangeS, anchorTo, time.Now())
-		tf.Simple = simpleTools // v0.10.1302 — takip talimatı araç setine göre
-		tf.Scale = evScale      // v0.10.2378 — önceki açıklamanın tavanı kanıt ölçeğiyle
+		tf.Simple = simpleTools                  // v0.10.1302 — takip talimatı araç setine göre
+		tf.Scale = evScale                       // v0.10.2378 — önceki açıklamanın tavanı kanıt ölçeğiyle
+		tf.Narrative = traceExplainNarrativeOn() // v0.10.2482 — takip cevabı açıklamanın biçiminde
 		// v0.10.1147 — ilk cevabın span exception özeti takibe de (aynı okuma,
 		// aynı blok; explain_trace_events.go). Okunamazsa "" ve takip aynen.
 		tf.Events, tf.Chain, tf.Critical = s.traceFollowUpEvents(ctx, tf.TraceID) // v0.10.1371 — + hata zinciri; v0.10.1627 — + kritik yol (aynı okuma)

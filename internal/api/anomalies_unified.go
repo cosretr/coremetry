@@ -85,6 +85,10 @@ type unifiedParams struct {
 	// satırlar (Sinyaller › Bağlanmamış anomaliler; anomalies_unified_attached.go).
 	// Yalnız servis görünümünde ve liste kipinde anlamlı; başka yerde false.
 	Unattached bool
+	// Service — v0.10.2482: /inbox?tab=signals&service= (servis sayfası
+	// bağlantıları). SQL'de iki kaynağa da iner (ml_events service =,
+	// anomaly_events Services); ek okuma yok. Boş = tüm servisler.
+	Service string
 }
 
 // parseUnifiedParams — SAF: sınırlama anahtardan ÖNCE (crafted değer ayrı
@@ -114,6 +118,9 @@ func parseUnifiedParams(get func(string) string) unifiedParams {
 		p.View = v
 	}
 	p.Unattached = p.View == "" && get("unattached") == "1"
+	if svc := strings.TrimSpace(get("service")); len(svc) <= 256 {
+		p.Service = svc
+	}
 	return p
 }
 
@@ -127,10 +134,14 @@ const unifiedCachePrefix = "anomaly:unified:"
 func unifiedKey(p unifiedParams, tz string) string {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(p.Event))
+	hs := fnv.New64a()
+	_, _ = hs.Write([]byte(p.Service))
 	// v5 (v0.10.2476): servis görünümü yük / yapı ve invalid satırları düşürür.
 	// v6 (v0.10.2481): unattached (Problem'e bağlı satırları düşür) anahtarda.
-	return fmt.Sprintf(unifiedCachePrefix+"v6:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:view=%s:gates=%s:unatt=%t:ev=%x:tz=%s",
-		p.Section, p.Signal, p.Offset, p.Limit, p.Sort, p.Dir, p.View, p.Gates, p.Unattached, h.Sum64(), tz)
+	// v7 (v0.10.2482): bağ süzgeci özne grubu üyelerini de düşürür, satır
+	// whyNot taşır, servis süzgeci (fnv) anahtarda.
+	return fmt.Sprintf(unifiedCachePrefix+"v7:sec=%s:sig=%s:off=%d:lim=%d:sort=%s:dir=%s:view=%s:gates=%s:unatt=%t:ev=%x:svc=%x:tz=%s",
+		p.Section, p.Signal, p.Offset, p.Limit, p.Sort, p.Dir, p.View, p.Gates, p.Unattached, h.Sum64(), hs.Sum64(), tz)
 }
 
 // unifiedAnomalyRow — birleşik satır. Liste kipinde yalnız lider (mlLead YA
@@ -151,6 +162,9 @@ type unifiedAnomalyRow struct {
 	// HeldGates — v0.10.2473: yalnız held görünümünde; satırın (lider ML
 	// olayının) kaldığı gürültü kapıları = elenme nedeni.
 	HeldGates []heldGate `json:"heldGates,omitempty"`
+	// WhyNot — v0.10.2482: yalnız bağlanmamış listede; "neden Problem değil
+	// (henüz)" durumu kapının kendi kararından (anomalies_unified_whynot.go).
+	WhyNot *ml.WhyNotProblem `json:"whyNot,omitempty"`
 }
 
 // heldGate — kalan gürültü kapısı: ad (min_volume | min_abs_diff |
@@ -296,12 +310,17 @@ func (s *Server) buildAnomaliesUnified(ctx context.Context, p unifiedParams, loc
 	if view == "" && p.Event == "" {
 		view = chstore.MLViewService
 	}
-	items, mlErr := s.store.ListMLEvents(ctx, unifiedMLFilter(view, since, p.Gates))
+	mlf := unifiedMLFilter(view, since, p.Gates)
+	mlf.Service = p.Service // v0.10.2482: ?service= SQL'de
+	items, mlErr := s.store.ListMLEvents(ctx, mlf)
 	var legacy []chstore.AnomalyEvent
 	var legErr error
 	if p.View == "" { // platform / held: yalnız ML olayları
-		legacy, legErr = s.store.ListAnomalyEvents(ctx, chstore.ListAnomalyEventsFilter{
-			SinceNs: since.UnixNano(), Limit: unifiedLegacyCap, MaxExecSec: unifiedExecSec})
+		lf := chstore.ListAnomalyEventsFilter{SinceNs: since.UnixNano(), Limit: unifiedLegacyCap, MaxExecSec: unifiedExecSec}
+		if p.Service != "" {
+			lf.Services = []string{p.Service}
+		}
+		legacy, legErr = s.store.ListAnomalyEvents(ctx, lf)
 	}
 	if p.View == chstore.MLViewHeld {
 		items = heldOnly(items, p.Gates)
@@ -326,8 +345,12 @@ func (s *Server) buildAnomaliesUnified(ctx context.Context, p unifiedParams, loc
 	shadows := groupShadows(items, groups)
 	in := ml.UnifiedInput{ML: items, Groups: groups, Shadows: shadows, Legacy: legacy, Now: now, Slack: slack}
 	rows := ml.BuildUnified(in)
+	var why *whyNotCtx
 	if p.Unattached && p.Event == "" {
 		rows = s.unattachedUnified(ctx, rows, items, legacy, since, &resp)
+		// v0.10.2482 — durum girdileri istek başına bir kez (satır başına okuma yok).
+		why = &whyNotCtx{Gate: ml.ReadGateInput(cfg, s.store.AnomalySensitivityForDetectors().IsBatchService, items),
+			Live: cfg.GroupProblemsOn(), Prom: s.store.GetAnomalyPromotion(ctx), Subj: s.store.AnomalySensitivity().Subjects, Now: now}
 	}
 
 	toRow := func(u ml.UnifiedRow, members bool) unifiedAnomalyRow {
@@ -361,6 +384,9 @@ func (s *Server) buildAnomaliesUnified(ctx context.Context, p unifiedParams, loc
 			if p.View == chstore.MLViewHeld {
 				out.HeldGates = heldGatesOf(items[u.MLLead])
 			}
+		}
+		if why != nil {
+			out.WhyNot = unifiedWhyNot(u, items, legacy, *why)
 		}
 		if u.LegLead >= 0 {
 			lead := legacy[u.LegLead]

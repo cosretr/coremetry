@@ -17,14 +17,26 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/mcptools"
 )
 
-// inboxOpenValues — SAF: mcptools sorgusu → /api/inbox parametreleri (status=open).
+// inboxOpenValues — mcptools sorgusu → /api/inbox parametreleri (status=open).
+// v0.10.2482 — türler Problems listesinin / rozetinin varsayılanı (Incidents
+// ana anahtarına göre); q.AllKinds eski kümeyi (kind yok = tüm sözlük) okur.
 func inboxOpenValues(q mcptools.InboxOpenQuery) url.Values {
+	return inboxOpenValuesFor(q, chstore.IncidentsEnabled())
+}
+
+// inboxOpenValuesFor — SAF.
+func inboxOpenValuesFor(q mcptools.InboxOpenQuery, incidentsOn bool) url.Values {
 	v := url.Values{}
 	v.Set("status", "open")
+	if !q.AllKinds {
+		v.Set("kind", strings.Join(inboxKindsDefaultFor(incidentsOn), ","))
+	}
 	limit := q.Limit
 	if limit <= 0 || limit > mcptools.InboxOpenScan {
 		limit = mcptools.InboxOpenScan
@@ -113,5 +125,7 @@ func (s *Server) inboxOpen(ctx context.Context, q mcptools.InboxOpenQuery) (mcpt
 	total, _ := m["total"].(int)
 	capped, _ := m["scanCapped"].(bool)
 	truncated, _ := m["truncated"].(bool)
-	return mcptools.InboxOpenResult{Rows: inboxRowsFrom(items), Total: total, ScanCapped: capped, Truncated: truncated}, nil
+	counts, _ := m["counts"].(map[string]int)
+	return mcptools.InboxOpenResult{Rows: inboxRowsFrom(items), Total: total, ScanCapped: capped, Truncated: truncated,
+		Signals: counts["anomaly"]}, nil
 }

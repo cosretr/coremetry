@@ -341,13 +341,25 @@ func (s *Store) WorstCosreTools(ctx context.Context, fromDay time.Time, minCalls
 // satırı penceresinde kaç kez uygulandı (payda) ve sunucu modelin cevabını kaç
 // kez değiştirdi (eklendi / düzeltildi). Kaynak cosre_signals sistem satırları
 // (cosrelearn.SigPrefixApplied / SigPrefixCorrected).
+//
+// v0.10.2482 — anlatım biçimi (trace açıklaması TÜR + KARAR) satırı modelden
+// İSTEMEZ, sunucu her koşuda ekler: o koşular ayrıntıdaki PrefixStyleNarrative
+// işaretiyle AYRI sayılır (NarrativeApplied / NarrativeAdded) ve
+// Applied/Added/Corrected oranlarına GİRMEZ.
 type CosrePrefixStats struct {
 	Applied       uint64  `json:"applied"`
 	Added         uint64  `json:"added"`
 	Corrected     uint64  `json:"corrected"`
 	AddedRate     float64 `json:"addedRate"`
 	CorrectedRate float64 `json:"correctedRate"`
+	// NarrativeApplied / NarrativeAdded — anlatım koşuları (oranlara girmez).
+	NarrativeApplied uint64 `json:"narrativeApplied"`
+	NarrativeAdded   uint64 `json:"narrativeAdded"`
 }
+
+// PrefixStyleNarrative — prefix_* sinyal ayrıntısındaki anlatım işareti
+// (api/cosre_system_signal.go yazar; sorgu bununla ayırır).
+const PrefixStyleNarrative = "style=anlatim"
 
 // WithRates — SAF: oranlar [0,1] (payda 0 → 0; pencere kenarında pay paydayı
 // aşarsa 1'de kırpılır).
@@ -365,9 +377,11 @@ func (p CosrePrefixStats) WithRates() CosrePrefixStats {
 // cosrePrefixStatsSQL — ORDER BY (created_at, kind) önekiyle zaman sınırlı;
 // tek satırlık toplam.
 const cosrePrefixStatsSQL = `
-		SELECT countIf(kind = 'prefix_applied'),
-		       countIf(kind = 'prefix_corrected' AND startsWith(detail, 'action=added')),
-		       countIf(kind = 'prefix_corrected' AND startsWith(detail, 'action=corrected'))
+		SELECT countIf(kind = 'prefix_applied' AND position(detail, 'style=anlatim') = 0),
+		       countIf(kind = 'prefix_corrected' AND startsWith(detail, 'action=added') AND position(detail, 'style=anlatim') = 0),
+		       countIf(kind = 'prefix_corrected' AND startsWith(detail, 'action=corrected') AND position(detail, 'style=anlatim') = 0),
+		       countIf(kind = 'prefix_applied' AND position(detail, 'style=anlatim') > 0),
+		       countIf(kind = 'prefix_corrected' AND startsWith(detail, 'action=added') AND position(detail, 'style=anlatim') > 0)
 		FROM cosre_signals
 		WHERE created_at >= ? AND kind IN ('prefix_applied', 'prefix_corrected')
 		LIMIT 1
@@ -376,6 +390,6 @@ const cosrePrefixStatsSQL = `
 // CosrePrefixStatsSince — pencere [from, şimdi) toplamı.
 func (s *Store) CosrePrefixStatsSince(ctx context.Context, from time.Time) (CosrePrefixStats, error) {
 	var p CosrePrefixStats
-	err := s.conn.QueryRow(ctx, cosrePrefixStatsSQL, chDateTime64Arg(from)).Scan(&p.Applied, &p.Added, &p.Corrected)
+	err := s.conn.QueryRow(ctx, cosrePrefixStatsSQL, chDateTime64Arg(from)).Scan(&p.Applied, &p.Added, &p.Corrected, &p.NarrativeApplied, &p.NarrativeAdded)
 	return p.WithRates(), err
 }

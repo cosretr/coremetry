@@ -57,6 +57,10 @@ func registerPrompts(srv *mcp.Server, d Deps) {
 			if err != nil {
 				return nil, err
 			}
+			// v0.10.2482 — trace açıklaması biçim ayarı (anlatim → TÜR + KARAR + Sonraki adım).
+			if d.TraceNarrative != nil && d.TraceNarrative.NarrativeOn() {
+				return pair(copilot.SystemPromptTraceNarrative(), user), nil
+			}
 			return pair(copilot.SystemPromptTrace(), user), nil
 		},
 	})

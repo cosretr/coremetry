@@ -26,6 +26,14 @@ describe('parseTraceNarrative', () => {
     expect(got.next).toBe(next);
   });
 
+  it('v0.10.2482 — Kod bulgusu KARAR ile Sonraki adım arasından ayrılır (Go ParseTraceNarrative aynası)', () => {
+    const got = parseTraceNarrative(`Business hata\nKARAR: ${KARAR}\n**Kod bulgusu:** OrderMapper.java:42 — tutar boş geçiyor.\nSonraki adım: Bakın.`);
+    expect(got.verdict).toBe(KARAR);
+    expect(got.code).toBe('OrderMapper.java:42 — tutar boş geçiyor.');
+    expect(got.next).toBe('Bakın.');
+    expect(parseTraceNarrative(`Business hata\nKARAR: ${KARAR}`).code).toBe('');
+  });
+
   it('bilinmeyen etiket satırı etiket sayılmaz, KARAR yine bulunur', () => {
     const got = parseTraceNarrative(`Kesinti\nKARAR: ${KARAR}`);
     expect(got.label).toBeNull();

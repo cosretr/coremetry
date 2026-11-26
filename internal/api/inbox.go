@@ -1348,7 +1348,9 @@ func inboxListKey(status, service, search, ownerTeam, sreTeam, team, env string,
 	// :v13: — v0.10.2299 (sunucu metinleri S2) std gövdesine metin anahtarları
 	// eklendi (headlineMsg, msg, noteMsg, contextMsgs); dil anahtara GİRMEZ.
 	// :v14: — v0.10.2300 (S3) satır gövdesine priorityReasonMsg eklendi.
-	return fmt.Sprintf("inbox:v14:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
+	// :v15: — v0.10.2482 std gövdesine impactSummary eklendi ve öncelik
+	// sırasının içinde etki sırası (aynı öncelikte büyük etki önce).
+	return fmt.Sprintf("inbox:v15:status=%s:svc=%s:q=%s:owner=%s:sre=%s:team=%s:env=%s:limit=%d:sort=%s:dir=%s:minOcc=%d:kind=%s:prio=%s:subject=%s",
 		status, service, search, ownerTeam, sreTeam, chstore.NormTeamName(team), env, limit, sortID, sortDir, minOcc,
 		strings.Join(sortedCopyOf(kinds), "+"), strings.Join(sortedCopyOf(prios), "+"), subject)
 }
@@ -1743,7 +1745,9 @@ func normalizeInboxSort(id, dir string) (string, string) {
 		"confidence",
 		// v0.10.2395 — Kanıt kolonu (bağlı olay sayısı, InboxItem.EventCount;
 		// triage mockup liste dilimi). Satırda zaten olan sayı, ek okuma yok.
-		"evidence":
+		"evidence",
+		// v0.10.2482 — Etki kolonu (std.impactSummary.rank; özetsiz satır en altta).
+		"impact":
 	default:
 		id = inboxSortDefault
 	}
@@ -1801,10 +1805,20 @@ func sortInboxItems(items []InboxItem, id, dir string) {
 			if a.EventCount != b.EventCount {
 				return a.EventCount < b.EventCount
 			}
+		case "impact": // v0.10.2482 — Etki kolonu
+			if ka, kb := inboxImpactRank(a), inboxImpactRank(b); ka != kb {
+				return ka < kb
+			}
 		default: // priority
 			ra, rb := priorityRank(a.Priority), priorityRank(b.Priority)
 			if ra != rb {
 				return ra < rb
+			}
+			// v0.10.2482 ("etki öncelikte" adım 1; sunum varsayılanı,
+			// DECISIONS) — aynı öncelikte BÜYÜK etki önce, özetsiz satır en
+			// sonda; eşitlikte aşağıdaki en eski önce. Yön başlıkla ters dönmez.
+			if ka, kb := inboxImpactRank(a), inboxImpactRank(b); ka != kb {
+				return ka > kb
 			}
 			// v0.10.2122 (Problems sadeleştirme S2, operatör onaylı mockup) —
 			// aynı öncelikte EN ESKİ önce: en uzun süredir açık olan problem
@@ -1874,6 +1888,15 @@ func inboxSortAndCap(items []InboxItem, sortID, sortDir string, limit int) ([]In
 	return items, total
 }
 
+// inboxImpactRank — SAF (v0.10.2482): Etki sıralama değeri; özetsiz satır
+// −1 (her özetin altında; lag'in artmayan birikimi 0).
+func inboxImpactRank(it InboxItem) float64 {
+	if it.Std == nil || it.Std.ImpactSummary == nil {
+		return -1
+	}
+	return it.Std.ImpactSummary.Rank
+}
+
 // inboxOccurrences is the row's occurrence count, or 0 for the kinds that
 // don't have one. Problems come from alert-rule firings and incidents are
 // declared by a human — neither counts occurrences, so they sort as 0 and
@@ -1913,6 +1936,8 @@ func inboxPrimaryEqual(a, b InboxItem, id string) bool {
 		return inboxConfidenceRank(a) == inboxConfidenceRank(b)
 	case "evidence": // v0.10.2395
 		return a.EventCount == b.EventCount
+	case "impact": // v0.10.2482
+		return inboxImpactRank(a) == inboxImpactRank(b)
 	default:
 		return priorityRank(a.Priority) == priorityRank(b.Priority)
 	}

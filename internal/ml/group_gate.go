@@ -282,51 +282,99 @@ func singleWorsening(e chstore.MLEvent) (worse, count bool) {
 // VM consumer lag) süre ve kat şartı aranmadan sayılır; diğer şartlar (açık,
 // kötüleşme yönü, batch) aynen. v0.10.2473: K10 (≥ 2 bağımsız kanıt) hiçbir
 // kipte aranmaz — tek etki olayı Problem açar (operatör kararı 2026-11-19).
+// Üye şartı singleArmCheck'te (v0.10.2482; Sinyaller durumu da onu okur).
 func singleSignalShadow(members []chstore.MLEvent, inGroup map[string]bool, in GroupGateInput, now time.Time) (string, string, bool) {
 	best, bestID, bestR := "", "", 0.0
 	for _, e := range members {
-		if !inGroup[e.ID] || groupExcluded(e) || !problemCandidate(e, in.Published) || !groupMemberOpen(e, in.Open) || !batchKeep(e, in.IsBatch, in.LoadParts) {
+		if !inGroup[e.ID] {
 			continue
 		}
-		worse, count := singleWorsening(e)
-		if !worse {
+		c := singleArmCheck(e, in, now)
+		if c.Unmet != "" {
 			continue
 		}
-		var why string
-		var r float64
-		// v0.10.2382 (I5): etki kuralıyla açılmış olay (kanıt rule=impact) 600 sn
-		// sürdürme ve "≥ 2 × taban" tekrarı OLMADAN açar: kuralın 5'te 3
-		// penceresi sürdürmedir, eşiği zaten göreli + mutlak tabanı içerir;
-		// uzatma tikinde (en yeni dakika eşiğin altında) karar değişmez.
-		if m, ok := impactMarkOf(e.Evidence); ok {
-			why, r = impactSingleWhy(e, m)
-			if best == "" || r > bestR {
-				best, bestID, bestR = why, e.ID, r
-			}
-			continue
-		}
-		dur := now.Sub(time.Unix(0, e.StartedAt))
-		if dur < singleMinSustained {
-			continue
-		}
-		if e.Baseline <= 0 {
-			if !count || e.Observed < singleCountOnlyMin {
-				continue
-			}
-			r = math.Inf(1)
-			why = fmt.Sprintf("%s %d dk sürdü, normalde hiç yokken %.0f", e.Detector, int(dur.Minutes()), e.Observed)
-		} else {
-			r = e.Observed / e.Baseline
-			if r < singleMinRatio {
-				continue
-			}
-			why = fmt.Sprintf("%s %d dk sürdü, normalin %.1f katı (kötüleşme)", e.Detector, int(dur.Minutes()), r)
-		}
-		if best == "" || r > bestR {
-			best, bestID, bestR = why, e.ID, r
+		if best == "" || c.Ratio > bestR {
+			best, bestID, bestR = c.Why, e.ID, c.Ratio
 		}
 	}
 	return best, bestID, best != ""
+}
+
+// Tek sinyal kolunun üye başına karşılanmayan şartları (v0.10.2482). Kod
+// sırası değerlendirme sırasıdır; ilk karşılanmayan döner.
+const (
+	SingleUnmetExcluded     = "excluded"      // grup kapısının hiçbir kolunda sayılmaz (groupExcluded)
+	SingleUnmetHeld         = "held"          // gürültü kapısında tutuldu (problemCandidate)
+	SingleUnmetClosed       = "closed"        // koşusu kapalı
+	SingleUnmetBatch        = "batch"         // batch kuralı (yalnız yük ölçüsü)
+	SingleUnmetNotWorsening = "not_worsening" // kötüleşme yönünde değil (singleWorsening)
+	SingleUnmetBelowRatio   = "below_ratio"   // normalin singleMinRatio katının altında
+	SingleUnmetBelowCount   = "below_count"   // taban 0: sayım singleCountOnlyMin'in altında
+	SingleUnmetShort        = "short"         // YALNIZ süre: singleMinSustained dolmadı
+)
+
+// singleArm — singleArmCheck sonucu. Unmet "" → kol bu üyeyle açar (Why,
+// Ratio dolu). Unmet SingleUnmetShort → diğer BÜTÜN şartlar şimdi
+// karşılanıyor; Wait = sürdürme penceresi − geçen süre (> 0).
+type singleArm struct {
+	Unmet string
+	Why   string
+	Ratio float64
+	Wait  time.Duration
+}
+
+// singleArmCheck — SAF (v0.10.2482'de singleSignalShadow'dan ayrıldı; karar
+// AYNI): tek sinyal kolunun tek üye için şartı. Açık, batch kuralından
+// geçen bir üye ≥ 600 sn sürmüş, kötüleşme yönünde ve tabanın ≥ 2 katıysa
+// (taban 0: sayım ≥ 20) kol açar. v0.10.2382 (I5): etki kuralıyla açılmış
+// üye (bugün VM consumer lag) süre ve kat şartı aranmadan sayılır; diğer
+// şartlar (açık, kötüleşme yönü, batch) aynen. v0.10.2473: K10 (≥ 2 bağımsız
+// kanıt) hiçbir kipte aranmaz — tek etki olayı Problem açar (operatör kararı
+// 2026-11-19). Sinyaller'in "neden Problem değil" durumu (WhyNotProblemOf)
+// da bu işlevi okur: metin kapının yapmayacağını söyleyemez.
+func singleArmCheck(e chstore.MLEvent, in GroupGateInput, now time.Time) singleArm {
+	switch {
+	case groupExcluded(e):
+		return singleArm{Unmet: SingleUnmetExcluded}
+	case !problemCandidate(e, in.Published):
+		return singleArm{Unmet: SingleUnmetHeld}
+	case !groupMemberOpen(e, in.Open):
+		return singleArm{Unmet: SingleUnmetClosed}
+	case !batchKeep(e, in.IsBatch, in.LoadParts):
+		return singleArm{Unmet: SingleUnmetBatch}
+	}
+	worse, count := singleWorsening(e)
+	if !worse {
+		return singleArm{Unmet: SingleUnmetNotWorsening}
+	}
+	// v0.10.2382 (I5): etki kuralıyla açılmış olay (kanıt rule=impact) 600 sn
+	// sürdürme ve "≥ 2 × taban" tekrarı OLMADAN açar: kuralın 5'te 3
+	// penceresi sürdürmedir, eşiği zaten göreli + mutlak tabanı içerir;
+	// uzatma tikinde (en yeni dakika eşiğin altında) karar değişmez.
+	if m, ok := impactMarkOf(e.Evidence); ok {
+		why, r := impactSingleWhy(e, m)
+		return singleArm{Why: why, Ratio: r}
+	}
+	dur := now.Sub(time.Unix(0, e.StartedAt))
+	var r float64
+	if e.Baseline <= 0 {
+		if !count || e.Observed < singleCountOnlyMin {
+			return singleArm{Unmet: SingleUnmetBelowCount}
+		}
+		r = math.Inf(1)
+	} else {
+		r = e.Observed / e.Baseline
+		if r < singleMinRatio {
+			return singleArm{Unmet: SingleUnmetBelowRatio}
+		}
+	}
+	if dur < singleMinSustained {
+		return singleArm{Unmet: SingleUnmetShort, Wait: singleMinSustained - dur}
+	}
+	if e.Baseline <= 0 {
+		return singleArm{Why: fmt.Sprintf("%s %d dk sürdü, normalde hiç yokken %.0f", e.Detector, int(dur.Minutes()), e.Observed), Ratio: r}
+	}
+	return singleArm{Why: fmt.Sprintf("%s %d dk sürdü, normalin %.1f katı (kötüleşme)", e.Detector, int(dur.Minutes()), r), Ratio: r}
 }
 
 // impactLagBigBreach — SAF (v0.10.2396, operatör kararı 2026-11-20): tek
