@@ -14,6 +14,10 @@ package cosrelearn
 //           yiyen "schema soup" ölçüsü)
 // overflow  bağlam taştı: retried = geçmiş küçültülüp yeniden denendi
 //           (KIRPILMIŞ bağlamla cevap), failed = yine sığmadı
+// free      v0.10.2480: bütçeden DÜŞMEYEN çağrı (kayıttan / aynı tur önbelleği);
+//           calls artık yalnız harcanan hak. 0 ise yazılmaz.
+// tier      v0.10.2480 (H): karmaşıklık kademesi simple|medium|complex;
+//           cue_fallback=1 → sınıflandırıcı kararı yoktu, deterministik işaret.
 //
 // Başarısız tur dedektörü bu sinyalden iki gerekçe okur (failed_turns.go):
 // round_cap (tur / çağrı / token tavanı) ve context_overflow. Etiket DEĞİL —
@@ -50,7 +54,13 @@ type LoopShape struct {
 	Tools       int
 	SchemaBytes int
 	Overflow    string // "" | retried | failed
+	Free        int    // v0.10.2480 — bütçeden düşmeyen çağrı
+	Tier        string // v0.10.2480 — simple | medium | complex | ""
+	CueFallback bool   // v0.10.2480 — kademe deterministik işaretten
 }
+
+// loopTiers — tier değerinin kapalı kümesi (kardinalite sınırlı).
+var loopTiers = map[string]bool{"simple": true, "medium": true, "complex": true}
 
 // LoopStopDetail — SAF: künye → sinyal ayrıntısı (sabit anahtar sırası).
 func LoopStopDetail(l LoopShape) string {
@@ -70,6 +80,15 @@ func LoopStopDetail(l LoopShape) string {
 	}
 	if l.Overflow == OverflowRetried || l.Overflow == OverflowFailed {
 		b.WriteString(" overflow=" + l.Overflow)
+	}
+	if l.Free > 0 {
+		b.WriteString(" free=" + strconv.Itoa(l.Free))
+	}
+	if loopTiers[l.Tier] {
+		b.WriteString(" tier=" + l.Tier)
+		if l.CueFallback {
+			b.WriteString(" cue_fallback=1")
+		}
 	}
 	return b.String()
 }
@@ -96,6 +115,12 @@ func ParseLoopStopDetail(d string) LoopShape {
 			l.SchemaBytes = n
 		case "overflow":
 			l.Overflow = v
+		case "free":
+			l.Free = n
+		case "tier":
+			l.Tier = v
+		case "cue_fallback":
+			l.CueFallback = n == 1
 		}
 	}
 	return l

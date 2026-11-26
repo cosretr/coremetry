@@ -1,4 +1,5 @@
 import type { PageContext } from '@/lib/types';
+import { tCosre } from './capabilityHints';
 
 // chatContextScope — v0.10.1274 (CoSRE adım 5): composer'ın üstündeki AKTİF
 // BAĞLAM şeridi ("Servis: X · Env: prod · Son 1 saat · Trace: abcd…").
@@ -13,7 +14,9 @@ import type { PageContext } from '@/lib/types';
 
 // v0.10.1400 — 'explain': son açıklama turunun takip bağlamı (CopilotChat;
 // explainTurn.ts). Düz alanı yok — çıkarma CopilotChat'te tura bağlı tutulur.
-export type ContextKey = 'service' | 'env' | 'range' | 'trace' | 'explain';
+// v0.10.2480 (E) — 'problem': Problem sayfasında pencere Problem'in kendi
+// penceresi (sunucu istek anında kurar); ✕ → sayfanın aralığı geri gelir.
+export type ContextKey = 'service' | 'env' | 'range' | 'trace' | 'explain' | 'problem';
 
 export interface ContextBarItem {
   key: ContextKey;
@@ -30,6 +33,8 @@ export interface ChatRequestContext {
   trace?: string;
   page?: PageContext;
   pinnedPage?: PageContext;
+  /** v0.10.2480 (E) — Problem penceresi çipi açık (sunucuya `problemWindow:true`). */
+  problemWindow?: boolean;
 }
 
 /** rangeLabel — "Son 1 saat" / "Son 30 dakika"; mutlak pencere "… (14:00'te biter)". */
@@ -57,7 +62,11 @@ export function contextBarItems(c: ChatRequestContext): ContextBarItem[] {
     });
   }
   if (c.env) out.push({ key: 'env', label: `Env: ${c.env}`, title: 'Ortam argümanı verilmeyen araçlara bu ortam uygulanır' });
-  if (c.rangeS && c.rangeS > 0) {
+  if (c.problemWindow) {
+    // Sayfada kalmış aralık yerine Problem'in penceresi (başlangıç − 15 dk → bitiş / şimdi);
+    // saatleri sunucu adım satırında yazar ("Problem penceresi: 12:35 → şimdi").
+    out.push({ key: 'problem', label: tCosre('cosre.ctx.problemWindow'), title: tCosre('cosre.ctx.problemWindowTitle') });
+  } else if (c.rangeS && c.rangeS > 0) {
     out.push({ key: 'range', label: rangeLabel(c.rangeS, c.toMs), title: 'Pencere verilmeyen araçlar bu aralığı okur' });
   }
   if (c.trace) {
@@ -87,6 +96,7 @@ export function applyContextExclusions(c: ChatRequestContext, ex: ReadonlySet<Co
     rangeS: ex.has('range') ? undefined : c.rangeS,
     toMs: ex.has('range') ? undefined : c.toMs,
     trace: ex.has('trace') ? '' : c.trace,
+    problemWindow: ex.has('problem') ? false : c.problemWindow,
     page: stripPage(c.page, ex),
     pinnedPage: stripPage(c.pinnedPage, ex),
   };

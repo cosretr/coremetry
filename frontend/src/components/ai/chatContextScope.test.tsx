@@ -45,6 +45,25 @@ describe('contextBarItems', () => {
   });
 });
 
+// v0.10.2480 (E, operatör-bildirimi) — Problem sayfasında sohbetin penceresi
+// sayfada kalmış aralık ("15 dakika · 19:37'de biter") değil, Problem'in kendi
+// penceresi; çip kaldırılabilir → sayfanın aralığı geri gelir (geçersiz kılma).
+describe('Problem penceresi çipi', () => {
+  const base: ChatRequestContext = { service: 'svc-a', rangeS: 900, toMs: Date.UTC(2026, 10, 26, 19, 37), problemWindow: true, page: { page: 'problems', path: '/problems', problemId: 'P-1' } };
+  it('çip "Problem penceresi"; eski aralık çipi gösterilmez', () => {
+    const items = contextBarItems(base);
+    expect(items.map(i => i.key)).toEqual(['service', 'problem']);
+    expect(items[1].label).toBe('Problem penceresi');
+    expect(items.some(i => /biter/.test(i.label))).toBe(false);
+  });
+  it('✕ → problemWindow düşer, sayfanın aralığı çipi geri gelir', () => {
+    const ex = applyContextExclusions(base, new Set<ContextKey>(['problem']));
+    expect(ex.problemWindow).toBe(false);
+    expect(ex.rangeS).toBe(900);
+    expect(contextBarItems(ex).map(i => i.key)).toEqual(['service', 'range']);
+  });
+});
+
 describe('applyContextExclusions', () => {
   it('çıkarma yoksa aynı nesne', () => {
     expect(applyContextExclusions(ctx, new Set())).toBe(ctx);

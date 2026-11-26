@@ -1479,6 +1479,9 @@ func listAnomaliesTool(d Deps) mcp.Tool {
 				return nil, err
 			}
 			res := map[string]any{"anomalies": rows, "count": len(rows), "has_more": len(rows) >= lim} // v0.10.407 — sayfa doluysa "hepsi bu" değil (CoSRE denetimi M3)
+			if len(rows) > 0 {
+				res = withFieldLabels(res, "peakRatio", "currentRatio") // v0.10.2480 (G)
+			}
 			es.stamp(res)
 			return res, nil
 		},

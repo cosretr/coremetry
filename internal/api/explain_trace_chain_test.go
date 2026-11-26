@@ -281,6 +281,7 @@ func chTempoOperatorTrace(t *testing.T) *httptest.Server {
 }
 
 func TestExplainTraceCarriesErrorChain(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2480 — bölümlü biçimin pini
 	p := newDefProvider(t, defAnswerA, defAnswerB)
 	s := defServer(t, p)
 	s.tempo = tempo.New()

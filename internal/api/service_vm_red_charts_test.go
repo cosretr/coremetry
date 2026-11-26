@@ -187,6 +187,7 @@ func TestServiceReportHTTPSteps(t *testing.T) {
 	emit2 := ev2.emit()
 	emitGuidedContextStep(emit2, "önbellek: aynı servis raporu (≤60 sn)")
 	replayReportSteps(emit2, back.Steps)
+	ev2.steps = ev2.steps[1:] // v0.10.2480 — bağlam çipinin bitiş sonucu (context:true)
 	if len(ev2.blocks) != 0 || len(ev2.steps) != 3 {
 		t.Fatalf("yeniden yayın: blok=%d step-result=%d", len(ev2.blocks), len(ev2.steps))
 	}

@@ -77,6 +77,7 @@ export interface TimeChartSigSeries {
   stack?: string;
   faint?: boolean;
   hollow?: boolean; // v0.10.1872 — points kipinin dolgusu build anında
+  strictGaps?: boolean; // v0.10.2480 — boşluk köprüsü yok (gaps/points build anında)
 }
 export interface TimeChartSigInput {
   series: TimeChartSigSeries[];
@@ -99,7 +100,8 @@ export function timeChartBuildSignature(p: TimeChartSigInput): string {
   return JSON.stringify([
     p.series.map(s => {
       const base = [s.key, s.label, s.color, s.type, s.axis ?? 'left', s.width ?? 0];
-      return s.stack || s.faint || s.hollow ? [...base, s.stack ?? '', s.faint ? 1 : 0, s.hollow ? 1 : 0] : base;
+      const ext = s.stack || s.faint || s.hollow ? [...base, s.stack ?? '', s.faint ? 1 : 0, s.hollow ? 1 : 0] : base;
+      return s.strictGaps ? [...ext, 'strictGaps'] : ext;
     }),
     p.height,
     p.leftUnit ?? '',

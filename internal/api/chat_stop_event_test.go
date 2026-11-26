@@ -64,7 +64,7 @@ func TestLoopEveryBreakSetsExitReason(t *testing.T) {
 	}
 	src := string(b)
 	i := strings.Index(src, "for round := 0; round < maxRounds; round++ {")
-	j := strings.Index(src, `emit("stop", chatStopEvent(`)
+	j := strings.Index(src, `emit("stop", chatStopEventFree(chatStopEvent(`)
 	if i < 0 || j < i {
 		t.Fatal("döngü ya da stop olayı bulunamadı")
 	}

@@ -104,6 +104,10 @@ func intentClassifySchema() map[string]any {
 		"logField": strProp(), "logValue": strProp(), // v0.10.433 (D5)
 		"searchText": strProp(), // v0.10.436 (D2b)
 		"namespace":  strProp(), // v0.10.470 (F2-3)
+		// v0.10.2480 (H) — karmaşıklık kademesi + alt sorular; düz metin
+		// (enum değil): okuma hoşgörülü (parseIntentComplexity), katı şemaya bağlı değil.
+		"complexity":   strProp(),
+		"subQuestions": strArrayProp(),
 	})
 }
 
@@ -430,6 +434,7 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 		emitStepEvidence(emit, i, tool, "", err) // panelde görünür; cevap kesilmez
 		return false, false
 	}
+	complexityTurnFrom(ctx).note(raw) // v0.10.2480 (H) — karmaşıklık kademesi aynı çıktıdan (okunamazsa düşüş)
 	route, rangeS, matched := parseIntentJSON(raw, svcNames, s.guidedEnvNames(ctx), s.guidedTeamNames(ctx), ctxService)
 	// v0.10.819 — off_topic SUNUCU VETOSU: mesajda canlı servis/ortam/takım adı,
 	// kimlik ya da telemetri sözcüğü varsa sınıflandırıcıya inanılmaz → none

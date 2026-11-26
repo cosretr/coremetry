@@ -28,19 +28,20 @@ func TestEnforceDefaultIsOn(t *testing.T) {
 
 func TestEnforceNotePure(t *testing.T) {
 	a := "checkout p95 2.950 ms " + verifyUnverifiedNote + "."
-	n := seamWithEnforceNote(a)
-	if n != a+"\n\n"+verifyEnforceNoteTR || seamWithEnforceNote(n) != n {
+	mm := []verifyClaim{{Text: "2.950 ms"}}
+	n := seamWithEnforceNote(a, mm)
+	if n != a+"\n\n"+verifyFootnotePrefix+"«2.950 ms»"+verifyFootnoteTail || seamWithEnforceNote(n, mm) != n {
 		t.Fatalf("not: %q", n)
 	}
 	if stripEnforceNote(n) != a || stripEnforceNote(a) != a {
 		t.Fatal("stripEnforceNote")
 	}
 	// Not öneri dili taşımaz; modelin kendi önerisi notla örtülmez.
-	if detectOffer(verifyEnforceNoteTR, "checkout", time.Now()) != nil {
+	if detectOffer(verifyFootnoteTR(mm), "checkout", time.Now()) != nil {
 		t.Fatal("not öneri sayıldı")
 	}
 	withOffer := "checkout p95 yükselmiş.\n\nİstersen loglarına bakayım."
-	if o := detectOffer(stripEnforceNote(seamWithEnforceNote(withOffer)), "checkout", time.Now()); o == nil || o.Kind != "logs" {
+	if o := detectOffer(stripEnforceNote(seamWithEnforceNote(withOffer, mm)), "checkout", time.Now()); o == nil || o.Kind != "logs" {
 		t.Fatalf("modelin önerisi kayboldu: %+v", o)
 	}
 }
@@ -68,7 +69,7 @@ func TestEnforceRecheckChip(t *testing.T) {
 func TestEnforceFallbackVisible(t *testing.T) {
 	body, _, _ := enforceRun(t, chstore.CosreVerifyEnforce, enforceLoop(verifyFlowAnswer, ""), nil)
 	got := v2AnswerText(body)
-	if !strings.HasSuffix(got, "\n\n"+verifyEnforceNoteTR) || !strings.Contains(got, "1.830 ms;") {
+	if !strings.Contains(got, "\n\n"+verifyFootnotePrefix) || !strings.HasSuffix(got, verifyFootnoteTail) || !strings.Contains(got, "1.830 ms;") {
 		t.Fatalf("not yok ya da cevap kayboldu: %q", got)
 	}
 	if !strings.Contains(body, "data-followups") || !strings.Contains(body, verifyRecheckLabel) || !strings.Contains(body, "«2.950 ms»") {

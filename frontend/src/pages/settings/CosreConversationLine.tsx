@@ -32,8 +32,8 @@ export const CONVERSATION_VERIFY_HINT =
 // v0.10.2339 (audit §6.1 E2, karar 6–7) — üç kip; v0.10.2439'tan beri varsayılan zorla
 // (operatör kararı 2026-11-21). "zorla"nın tek satırlık açıklaması.
 export const CONVERSATION_ENFORCE_HINT =
-  'Zorla (varsayılan): o turda okunan veride bulunmayan sayı, saat ya da adın ardına “(doğrulanmamış değer)” yazılır, '
-  + 'cevabın sonuna kısa bir not ve “Değerleri veriden yeniden kontrol et” önerisi eklenir; yerine değer uydurulmaz. '
+  'Zorla (varsayılan): o turda okunan veride bulunmayan sayı, saat ya da adın ardına kısa “†” işareti konur, '
+  + 'cevabın sonuna bu değerleri sayan tek dipnot satırı ve “Değerleri veriden yeniden kontrol et” önerisi eklenir; yerine değer uydurulmaz. '
   + 'Cümle doğrulanana dek taslakta görünmez; Derin kipte model önce bir kez yeniden yazar.';
 
 type VerifyMode = CosreConversationSettings['verification'];
@@ -70,6 +70,20 @@ export const CONVERSATION_STYLE_HINT =
   'Açıkken CoSRE v2 iki şeyi birlikte açar: cevap uzunluğu soru türüne göre (durum sorusuna 1-2 cümle, hata avına 3-5 cümle) ve '
   + 'örnek diyaloglarla meslektaş üslubu (özet kutusu, tablo ve kalıp madde yerine tam cümleler; sayılar yine yalnız araçlardan). Raporlar (servis raporu, kaynak incelemesi, trace açıklaması, rota incelemesi) bugünkü gibi kalır. '
   + 'Kapalıyken cevaplar bugünkü gibidir. Değerlendirme koşusunda kullanıcılara dokunmadan açık / kapalı denenebilir.';
+
+// v0.10.2480 (operatör-bildirimli) — trace açıklaması biçimi: anlatım (varsayılan) |
+// bölümlü (v0.10.2456 şablonu, geri dönüş). cosre_v2 kapısına bağlı değil.
+type TraceStyle = NonNullable<CosreConversationSettings['traceExplainStyle']>;
+const TRACE_STYLE_OPTIONS: ReadonlyArray<{ value: TraceStyle; label: string }> = [
+  { value: 'anlatim', label: 'anlatım' },
+  { value: 'bolumlu', label: 'bölümlü' },
+];
+
+export const TRACE_STYLE_HINT =
+  'Anlatım (varsayılan): CoSRE trace açıklamasında tür etiketi, 4-5 cümlelik karar ve sonraki adımı yazar; '
+  + 'akış, log ve kanıt satırlarını ekran sunucunun hesapladığı veriden gösterir (model beklenmeden). '
+  + 'Bölümlü: v0.10.2456 şablonu (Özet, Kritik Yol, Hata Kaynağı, Olası Neden, Önerilen Sonraki Adım). '
+  + 'Anlatım biçiminde düşünme varsayılan kapalıdır (Thinking mode per surface kartından açılabilir).';
 
 // v0.10.2473 — ara durum cümlesi: varsayılan AÇIK, üsluptan bağımsız.
 export const CONVERSATION_STATUS_LINE_HINT =
@@ -169,6 +183,10 @@ export function CosreConversationLine() {
     mutationFn: (style: boolean) => api.putCosreConversationStyle(style),
     onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
   });
+  const tm = useMutation({ // v0.10.2480 — trace açıklaması biçimi
+    mutationFn: (v: TraceStyle) => api.putCosreConversationTraceStyle(v),
+    onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
+  });
   const lm = useMutation({ // v0.10.2473 — ara durum cümlesi
     mutationFn: (on: boolean) => api.putCosreConversationStatusLine(on),
     onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
@@ -192,7 +210,8 @@ export function CosreConversationLine() {
   const statusLineOn = lm.isPending ? lm.variables === true : q.data.statusLine !== false;
   const interactionOn = im.isPending ? im.variables === true : q.data.interaction === 'on';
   const evidence: EvidenceMode = em.isPending && em.variables ? em.variables : (q.data.evidence ?? 'off');
-  const saveErr = m.error ?? sm.error ?? im.error ?? em.error ?? lm.error;
+  const traceStyle: TraceStyle = tm.isPending && tm.variables ? tm.variables : (q.data.traceExplainStyle ?? 'anlatim');
+  const saveErr = m.error ?? sm.error ?? im.error ?? em.error ?? lm.error ?? tm.error;
   return (
     <div className="mb-2 flex flex-col gap-2" data-testid="cosre-conversation-line">
       <div className="flex flex-wrap items-center gap-3">
@@ -242,9 +261,20 @@ export function CosreConversationLine() {
             onChange={v => { if (v !== evidence) em.mutate(v); }} />
           <span className="field-hint">{CONVERSATION_EVIDENCE_HINT}</span>
         </div>
+        <div className="flex flex-col gap-1" data-testid="cosre-trace-style" title={TRACE_STYLE_HINT}>
+          <span className="text-[length:var(--fs-sm)] leading-tight text-(--text2)">Trace açıklaması</span>
+          <SegmentedControl
+            aria-label="Trace açıklaması"
+            size="sm"
+            activation="manual"
+            value={traceStyle}
+            options={TRACE_STYLE_OPTIONS.map(o => ({ ...o, disabled: !canEdit || tm.isPending }))}
+            onChange={v => { if (v !== traceStyle) tm.mutate(v); }} />
+          <span className="field-hint">{TRACE_STYLE_HINT}</span>
+        </div>
         {!canEdit && <span className="field-hint">Yalnız admin değiştirebilir.</span>}
-        {(m.isPending || sm.isPending || im.isPending || em.isPending || lm.isPending) && <Spinner label="Kaydediliyor…" />}
-        {(m.isError || sm.isError || im.isError || em.isError || lm.isError) && (
+        {(m.isPending || sm.isPending || im.isPending || em.isPending || lm.isPending || tm.isPending) && <Spinner label="Kaydediliyor…" />}
+        {(m.isError || sm.isError || im.isError || em.isError || lm.isError || tm.isError) && (
           <span role="alert" className="text-[length:var(--fs-sm)] text-(--err)">
             Kaydedilemedi{saveErr instanceof Error && saveErr.message ? `: ${saveErr.message}` : ''}
           </span>

@@ -126,6 +126,10 @@ type chatRequest struct {
 		// aralıkta boş kalır ve sunucu şimdiye çapalar; sabitlemek uzun
 		// bir soruşturmada cevabı DONDURURDU.
 		ToMs int64 `json:"toMs,omitempty"`
+		// ProblemWindow (v0.10.2480, E) — istemcinin "Problem penceresi" çipi
+		// açık: pencere sayfa aralığı yerine Problem'in kendi penceresi
+		// (sunucu istek anında kurar; chat_problem_scope.go).
+		ProblemWindow bool `json:"problemWindow,omitempty"`
 		// Env (v0.9.1259) — Topbar'daki global env seçimi. Soru AÇIK bir
 		// env adı taşımıyorsa guided router bunu varsayılan alır: ekran
 		// uat gösterirken cevabın sessizce başka env'i kapsaması (CoSRE
@@ -447,6 +451,11 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		emit = stt.wrapEmit(emit)
 		ctx = withChatStateTurn(ctx, stt) // v0.10.2327 — guided olguları deftere
 	}
+	// v0.10.2480 (E) — Problem kapsamı: pencere Problem'in kendi penceresi (kullanıcının açık penceresi kazanır).
+	probScope := s.chatProblemScopeFor(ctx, agentctx.Sanitize(req.Context.Page))
+	if label := applyProblemWindow(&req, stt, probScope, time.Now()); label != "" {
+		emit("step", map[string]string{"label": label})
+	}
 	ctx = withAnswerStyle(ctx, stt)                 // v0.10.2331 — B: cevap sınıfı (chat_answer_class.go); v1'de ctx aynen
 	emit = answerStyleFrom(ctx).wrapEmit(ctx, emit) // v0.10.2331 — üslup kapalıyken emit aynen
 	// v0.10.2353 — I5 onaylı aksiyon kartı (chat_action_card.go); interaction kapalıyken emit aynen.
@@ -474,6 +483,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		return
 	}
 	anchorTo, anchored := chatAnchorTime(req.Context.ToMs, time.Now())
+	ctx = withComplexityTurn(ctx)                                                                                           // v0.10.2480 (H) — niyet sınıflandırıcısı karmaşıklığı buraya yazar (chat_complexity.go)
 	xch.verify.addWindow(anchorTo.Add(-time.Duration(req.Context.RangeS)*time.Second), anchorTo, int64(req.Context.RangeS)) // v0.10.2327
 	// v0.10.2361 — S4: açık araştırma ipucu guided orta kademeleri atlar (chat_investigate.go)
 	var prRec *chatProblemRecord // v0.10.2477 — Problem sayfasının ilk turu kayıttan açılır (chat_problem_record.go)
@@ -1120,10 +1130,20 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 
 	// v0.10.2378 — döngü profilinin kanıt ölçeği (evidence_scale.go).
 	evScale := s.evidenceScale(ctx)
-	conv := opPre.seedScaled(req.Messages, evScale) // operasyon ön-getirmesi varsa tool kaydı (nil → aynen)
-	conv = prRec.seedScaled(conv, evScale)          // v0.10.2477 — kayıtlı araştırma (ilk tur, Problem kapsamı; nil → aynen)
-	conv = guidedEsc.seedScaled(conv, evScale)      // v0.10.2473 — guided demeti devredildiyse tool kaydı (nil → aynen)
-	dm.loopScale = evScale                          // v0.10.2473 — döngü bütçesi kanıt ölçeğiyle (chat_deep.go)
+	conv := opPre.seedScaled(req.Messages, evScale)                  // operasyon ön-getirmesi varsa tool kaydı (nil → aynen)
+	conv = prRec.seedScaled(conv, evScale)                           // v0.10.2477 — kayıtlı araştırma (ilk tur, Problem kapsamı; nil → aynen)
+	conv = guidedEsc.seedScaled(conv, evScale)                       // v0.10.2473 — guided demeti devredildiyse tool kaydı (nil → aynen)
+	xch.verify.addConversation(seededPairs(conv, len(req.Messages))) // v0.10.2480 (F) — tohum çiftleri (guided_prefetch, saved_investigation…) taslak denetiminde de kanıt
+	dm.loopScale = evScale                                           // v0.10.2473 — döngü bütçesi kanıt ölçeğiyle (chat_deep.go)
+	// v0.10.2480 — A: Problem kapsamı en az 10 çağrı; H: karmaşıklık kademesi
+	// (sınıflandırıcı; yoksa deterministik işaret) bütçeyi büyütür.
+	loopCx := resolveLoopComplexity(complexityTurnFrom(ctx), lastUserText(req.Messages))
+	dm.problemScope = pageCtx != nil && pageCtx.ProblemID != ""
+	dm.complexity = loopCx.Tier
+	xch.noteComplexity(loopCx)
+	if len(loopCx.Subs) > 0 {
+		emitGuidedContextStep(emit, planStepLabelTR(len(loopCx.Subs))) // adım, çağrı değil
+	}
 	// Taşma yeniden denemesi TEK sefer: ikinci bir deneme aynı duvara
 	// bir çağrı daha yakar (kod-explain'in `hb == block` kontrolüyle
 	// aynı gerekçe).
@@ -1279,6 +1299,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 		opPre.exceptionsPromptTR() + // v0.10.1331 — operasyonun Exceptions grubu yoksa ""
 		opPre.clusterPromptTR() + // v0.10.1374 — küme kıyası yoksa ""
 		dm.loopPrefix() + // v0.10.1150 — Derin kapalıyken ""
+		probScope.promptLine(specs) + // v0.10.2480 (C) — Problem türü → ilk araçlar; kapsam yoksa ""
+		planBlockTR(loopCx.Subs) + // v0.10.2480 (H) — karmaşık soru planı (çitli); yoksa ""
+		chatFieldNameRuleTR + // v0.10.2480 (G) — alan adı yazma kuralı (tek satır)
 		withAddressee(addressee, loopChatPromptFor(ctx)) + // v0.10.2337 — C: üslup açıkken biçim kuralsız varyant
 		lookupLoopPromptTR(lookupAskFor(lastUserText(req.Messages))) + // v0.10.2449 — endpoint / trace-nerede / repo ipucu; eşleşme yoksa ""
 		stt.promptLine() // v0.10.2324 — konuşma durumu SONDA (değişken blok; kapalıyken "")
@@ -1421,6 +1444,11 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// v0.10.948 — hak ≠ iş: bilinmeyen/tekrar/kapsam reddi hak yer ama yürümez;
 	// bütçe notu yürütülen ve alışveriş boyunca yürütülmeyen çağrıyı ayrı sayar.
 	executedN, skippedN := 0, 0
+	// v0.10.2480 (A/B) — bütçeden DÜŞMEYEN çağrılar: kayıttan karşılanan
+	// (prRec.serve) ve aynı turda aynı araç + argüman (önbellek / tekrar muhafızı).
+	freeN := 0
+	loopSeen := map[string]bool{}
+	freeCall := func(tc copilot.ToolCall) bool { return loopCallFree(prRec, loopSeen, tc, time.Now()) }
 	// v0.10.948 — bütçe sessiz değil: operatör döngünün sınırını baştan görür,
 	// dolunca da ne kadarının kullanıldığını (chat_loop_steps.go).
 	emit("step", chatBudgetStep(chatBudgetLabelTR(maxCalls, maxRounds), chatBudget{MaxCalls: maxCalls, MaxRounds: maxRounds})) // v0.10.1594 — yapısal bütçe
@@ -1604,12 +1632,13 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			RawContent: turn.RawContent, // Anthropic thinking blokları imzalı geri gider
 		})
 		results := make([]copilot.ToolResult, 0, len(turn.ToolCalls))
-		run, over := splitByCallBudget(turn.ToolCalls, callsLeft)
-		callsLeft -= len(run)
+		run, over, freeAt := splitByChargedBudget(turn.ToolCalls, callsLeft, freeCall)
+		callsLeft -= len(run) - countTrue(freeAt)
 		// v0.10.2333 — F1: tur başına en çok bir data-status (yalnız v2 + style).
 		statusLine.round(ctx, emit, round, run)
 		cancelled := false // v0.10.948 — tur ortasında ctx bitti mi
-		for _, tc := range run {
+		for k, tc := range run {
+			wasFree := freeAt[k]
 			if apPending != nil {
 				// agent-core S5 — onay bekleyen çağrıdan sonrakiler yürütülmez
 				// (call_cap gibi); hakları jetonun bütçesine geri döner.
@@ -1664,6 +1693,14 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 					emit("step", chatProgressStep(phase, label))
 				})
 			}
+			// v0.10.2480 (B) — aynı Problem için taze kayıt: araç koşmaz, sonuç "kayıttan", bütçeden düşmez.
+			if content, ok := prRec.serve(tc.Name, cargs, time.Now()); ok {
+				callsLeft = chargeFix(callsLeft, wasFree, true)
+				freeN++
+				emit("step-result", servedStepResult(stepN, tc.Name, content, servedFromRecord))
+				results = append(results, copilot.ToolResult{CallID: tc.ID, Name: tc.Name, Content: content})
+				continue
+			}
 			oc, gated := v2LoopPlanFrom(ctx).scopeCheck(tc.Name, cargs) // v0.10.2355 — S1: on → out_of_scope (yürütülmez); shadow yalnız sayar
 			if !gated {
 				oc = exec.Call(ctx, tc.Name, cargs)
@@ -1686,6 +1723,13 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 				if oc.Kind == agenttools.KindCancelled {
 					cancelled = true
 				}
+				if oc.Kind == agenttools.KindRepeated { // v0.10.2480 (A) — aynı tur önbelleği: sonuç yukarıda, bütçeden düşmez
+					callsLeft = chargeFix(callsLeft, wasFree, true)
+					freeN++
+					emit("step-result", servedStepResult(stepN, tc.Name, oc.Content, servedFromCache))
+					results = append(results, copilot.ToolResult{CallID: tc.ID, Name: tc.Name, IsError: true, Content: oc.Content})
+					continue
+				}
 				emit("step-result", skippedStepResult(stepN, tc.Name, oc.Content, oc.Kind))
 				results = append(results, copilot.ToolResult{
 					CallID: tc.ID, Name: tc.Name, IsError: true, Content: oc.Content,
@@ -1695,6 +1739,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			}
 			toolDur := oc.Duration
 			executedN++
+			callsLeft = chargeFix(callsLeft, wasFree, false)     // v0.10.2480 — ücretsiz sanılan çağrı yürüdüyse hak düşer
 			stt.noteTool(tc.Name, cargs, oc.Content, oc.IsError) // v0.10.2324 — döngü durumu kendisi yazar
 			if !oc.IsError {
 				xch.verify.addTool(tc.Name, cargs, oc.Content) // v0.10.2327 — TAM çıktı (kırpılmamış)
@@ -2022,7 +2067,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	if exitReason == stopNone {
 		exitReason = stopRoundCap // savunma: döngü break'siz yalnız turlar bitince biter
 	}
-	emit("stop", chatStopEvent(exitReason, maxCalls-callsLeft, exitRounds, time.Since(chatT0))) // araç seti dilim 1 — v1 yazıcısı düşürür
+	emit("stop", chatStopEventFree(chatStopEvent(exitReason, maxCalls-callsLeft, exitRounds, time.Since(chatT0)), freeN)) // araç seti dilim 1 — v1 yazıcısı düşürür
 	emit("done", map[string]bool{"ok": lastErr == nil})
 }
 

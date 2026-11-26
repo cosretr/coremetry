@@ -8582,7 +8582,30 @@ export type ChatExplainKind =
  * (cosre_interactions.blocks): Geçmiş'ten açılan tur da kartı çizer; zarfsız
  * eski tur ExplainBody'de kalır.
  */
-export type ChatExplainRenderer = 'body' | 'charts' | 'log-spike' | 'metric-panel'; // v0.10.1435 — metric-panel
+export type ChatExplainRenderer = 'body' | 'charts' | 'log-spike' | 'metric-panel' // v0.10.1435 — metric-panel
+  | 'trace-narrative'; // v0.10.2480 — trace açıklaması anlatım biçimi (TraceNarrativeBody)
+
+/** v0.10.2480 — `trace_evidence` bloğu (Go traceEvidenceView): trace açıklamasının sunucu-hesaplı kanıtı. */
+export interface TraceEvidenceHop {
+  spanId: string; service: string; kind?: string; call: string; status?: number; error?: string;
+  failed: boolean; durMs: number; p50Ms?: number;
+}
+export interface TraceEvidenceLog { tsNs: number; level: string; service: string; pod?: string; message: string; count?: number; corrId?: string }
+export interface TraceEvidenceView {
+  spans: number; totalSpans: number; logRows: number;
+  logState: 'rows' | 'none' | 'failed' | ''; logReason?: 'timeout' | 'error' | 'nostore';
+  oracleRows: number;
+  chain?: TraceEvidenceHop[]; chainSkipped?: number;
+  critical?: { spanId: string; service: string; kind?: string; target: string; durMs: number; sharePct: number; mode: 'external' | 'dependent' | 'internal'; child?: string };
+  origin?: { service: string; pod?: string };
+  logs?: TraceEvidenceLog[]; logsVisible: number;
+  frame?: { service?: string; exType?: string; frame: string };
+  fields?: { k: string; v: string }[];
+  oracle?: { tsNs: number; operation?: string; errorCode?: string; message?: string; count?: number }[];
+  others?: TraceEvidenceHop[]; othersMore?: number;
+  rootMs?: number;
+  fallback: string;
+}
 
 /** v0.10.1407 — `charts_signals` bloğu (Go chartsSignalsBlockPayload): ölçülmüş sinyaller + pencere/kapsam. */
 export interface ChartsSignalsBlockPayload {
@@ -8851,6 +8874,7 @@ export interface ExplainAnswerBase {
 export type ChatBlockType = 'text' | 'table' | 'chart' | 'trace_list' | 'link' | 'action' | 'evidence' | 'operation' | 'service_report' | 'topology' // v0.10.1388 — topology
   | 'charts_signals' | 'log_spike' // v0.10.1407 — açıklama turunun kanıt kartları (ChartsSignalsCard / LogSpikeCard)
   | 'metric_panel' // v0.10.1435 — panel açıklaması (MetricPanelCard)
+  | 'trace_evidence' // v0.10.2480 — trace açıklamasının kanıtı (TraceNarrativeBody)
   | 'exception' | 'trace' | 'logs' | 'anomaly'; // v0.10.2360 — S3 kanıt blokları (çizici S5)
 // ChatOperationPayload — operasyon adı ön-getirmesinin kartı (internal/api/
 // chat_operation_prefetch.go opPrefetch). measured=false → RED ölçülemedi.
@@ -9264,6 +9288,8 @@ export interface CosreStop {
   calls: number;
   rounds: number;
   elapsed_ms: number;
+  /** v0.10.2480 — bütçeden düşmeyen çağrı (kayıttan / aynı tur önbelleği); calls yalnız harcanan. */
+  free?: number;
 }
 
 /** CoSRE v2 araç seti dilim 2 — `data-scope.data.reason` kapalı kümesi (Go uistream.ScopeReasons).
@@ -9470,6 +9496,8 @@ export interface CosreConversationSettings {
   evidence?: 'off' | 'shadow' | 'on';
   /** v0.10.2473 — araç turu ara durum cümlesi (style'dan ayrı; varsayılan açık, eski sunucu alanı göndermez). */
   statusLine?: boolean;
+  /** v0.10.2480 — trace açıklaması biçimi: anlatim (varsayılan) | bolumlu (v0.10.2456 şablonu). */
+  traceExplainStyle?: 'anlatim' | 'bolumlu';
   updatedBy?: string;
   updatedAt?: string;
 }
@@ -13381,7 +13409,8 @@ export interface MLQuality {
 /** panel (v0.10.2060): Thanos grafiğinin eşi Pods paneli — 'pods-resource' (CPU/Bellek, aynı sorgu) | 'pods' (aynı pod kümesi). */
 export interface MLSourceQuery { expr: string; cluster?: string; unit?: string; label: string; by?: string; panel?: 'pods-resource' | 'pods' }
 /** reason (v0.10.2061): canlı seri yokken neden (tek düz cümle; sunucu ml_source_series.go). */
-export interface MLSourceSeries { query: MLSourceQuery; stepSec: number; series: SpanMetricSeries[]; truncated?: boolean; reason?: string }
+/** v0.10.2480 — reasonCode: canlı seri yokken nedenin sınıfı; detail: kaynağın hata metni (URL'siz); labels: ifadenin etiketleri olay kanıtından mı keşiften mi. */
+export interface MLSourceSeries { query: MLSourceQuery; stepSec: number; series: SpanMetricSeries[]; truncated?: boolean; reason?: string; reasonCode?: string; detail?: string; labels?: 'event' | 'discovery' | string }
 /** v0.10.2035 — logstore.LogSeries aynası (/api/anomalies/log-chart; seviye bandı başına bir seri). */
 export interface LogHistogramSeries { name: string; points: { t: number; v: number }[] }
 export interface MLSnapshot {

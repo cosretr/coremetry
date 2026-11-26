@@ -110,7 +110,7 @@ const TR_LABELS = [
   'ön kayıt', 'Dedektör', 'Sapma skoru', 'İmza', 'Eşikler', 'Beklenen aralık', 'Ayar revizyonu', 'Takvim sınıfı', 'iş günü',
   'Taban medyan', 'Eşik z', 'Teyit eden', 'Kritik z', 'Dwell (kova)', 'Etki', 'Karşılaştır', 'Gerçek anomali', 'Sorun değil',
   'Etiketiniz', 'gerçek ✓', 'istek süreleri', 'örneklenmiş', 'anomali penceresi', 'Anomali ↗', 'regions="anomali', 'Her kare', 'tek tek çağrılar', 'Her nokta', 'ilk 1 çağrı',
-  'Yığın türü', 'Mesaj kalıbı', 'Seviye', '(yeni)', 'gölge çubuk', 'grafik kaydı yok', 'Canlı grafik', 'endpoint kaydı',
+  'Yığın türü', 'Mesaj kalıbı', 'Seviye', '(yeni)', 'gölge çubuk', 'olay anı kaydı yok', 'Canlı grafik', 'endpoint kaydı',
   'Komşu metrik', 'başka metrik', 'Yeni ve artan', 'log deposundan', 'Olay anı kaydı yok', 'bulunamadı', 'saklanır', 'tetik',
   'beklenen aralık', 'alarm sınırı', 'Oynat', 'Seri boş', 'düz çizgi',
 ];
@@ -128,7 +128,7 @@ describe('ML olay sayfası — İngilizce arayüz (v0.10.2291)', () => {
       'Calendar class', 'weekday', 'Baseline median / MAD', 'Threshold z (critical)', 'Confirmed by', 'Critical z', 'Dwell (buckets)',
       'Impact (relative)', 'Compare', 'Real anomaly', 'real ✓', 'request durations · sampled spans', 'anomaly window',
       'Each cell shows', 'individual calls · sampled spans', 'showing the first 1 calls', 'Each dot is one call', 'Message template',
-      'Level', '(new)', 'shadow bar: expected in this bucket', 'No chart record for this event', 'No other metric series are tracked',
+      'Level', '(new)', 'shadow bar: expected in this bucket', 'No event-moment snapshot for this event', 'No other metric series are tracked',
       'No endpoint records in this window.', 'New and rising messages', 'from the log store', 'No event-moment snapshot',
       'Event not found', 'Event records are kept for 30 days', 'Series empty', 'solid line: value',
     ]) expect(r.text + r.html, en).toContain(en);
@@ -203,7 +203,7 @@ describe('ML olay sayfası — Türkçe arayüzde metin aynen (v0.10.2291)', () 
       'Karşılaştır', 'Gerçek anomali', 'gerçek ✓', 'Etiketiniz bu dedektörün isabet ölçüsüne (ML karnesi) girer.',
       "istek süreleri · örneklenmiş span'ler", 'anomali penceresi', 'Her kare o dakikada', "tek tek çağrılar · örneklenmiş span'ler",
       'ilk 1 çağrı gösteriliyor', 'Her nokta bir çağrı.', 'Mesaj kalıbı', 'Seviye', '(yeni)', 'gölge çubuk: bu kovada beklenen',
-      'Bu olay için grafik kaydı yok (olay anı kaydı yazılmadan önce açılmış ya da süresi dolmuş).', 'Bu servis için izlenen başka metrik serisi yok.',
+      'Bu olay için olay anı kaydı yok (kaydedici ilk tespit tikinde yazar', 'Bu servis için izlenen başka metrik serisi yok.',
       'Bu pencerede endpoint kaydı yok.', 'Yeni ve artan mesajlar', '· log deposundan, açınca getirilir',
       'Olay anı kaydı yok; örnek satır gösterilemiyor.', 'Bu olay bulunamadı', 'Olay kaydı 30, olay anı kaydı 120 gün saklanır',
       'Seri boş (ml_series bu pencereyi taşımıyor).', 'düz çizgi: değer · ince çizgiler: normal aralık',

@@ -2811,7 +2811,13 @@ func emitGuidedStepResult(emit func(string, any), i int, tool, segment string, e
 // hizada kalsın) ama eşli kanıt YAYINLAMAZ: okunan bir şey yok, yani
 // çip düz etiket olarak kalır — doğrusu da bu.
 func emitGuidedContextStep(emit func(string, any), label string) {
-	_ = emitStepChipOrigin(emit, label, "", "guided")
+	// v0.10.2480 (D, operatör-bildirimi) — bağlam adımı BİTMİŞ hâlde yayınlanır:
+	// eşli step-result yoktu, v2 kartı tur bittikten sonra da "çalışıyor"
+	// (spinner) kalıyordu ("kayıtlı araştırmadan başlandı"). context:true →
+	// adım çağrı sayılmaz; durationMs yok (ölçüm değil).
+	if i := emitStepChipOrigin(emit, label, "", "guided"); i > 0 {
+		emit("step-result", map[string]any{"i": i, "tool": label, "ok": true, "context": true})
+	}
 }
 
 // guidedStepSegment — b'ye adım açıldığından beri YAZILAN metin.

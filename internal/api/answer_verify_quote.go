@@ -103,6 +103,11 @@ func quoteNorm(s string) string {
 // ile bölünür, uçtaki noktalama kırpılır, kısa parça atılır). Boş = denetlenmez.
 func verifyQuoteFragments(inner string) []string {
 	inner = strings.ReplaceAll(inner, "...", "…")
+	// v0.10.2480 (F) — "Tip: mesaj" alıntısı (model exception tipini mesajın
+	// önüne yazar; kanıtta tip ve mesaj ayrı alanlar): boşluksuz ön ek ayrı parça.
+	if k := strings.Index(inner, ": "); k > 0 && !strings.ContainsAny(strings.TrimSpace(inner[:k]), " \t") {
+		inner = inner[:k] + "…" + inner[k+2:]
+	}
 	var out []string
 	for _, f := range strings.Split(inner, "…") {
 		f = quoteNorm(strings.Trim(strings.TrimSpace(f), ".,;:!?-–— "))

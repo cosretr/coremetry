@@ -138,11 +138,22 @@ func (s *Server) explainTraceClassicPrepared(r *http.Request) (explainPrepared, 
 	if err != nil {
 		return explainPrepared{}, err
 	}
+	// v0.10.2480 — biçim ayarı (trace_explain_narrative.go); anlatımda kanıt
+	// görünümü answer çerçevesinde (`traceEvidence`), düşünme yüzeyi + tavan ctx'te.
+	narrative := traceExplainNarrativeOn()
+	system, user := traceExplainPromptFor(narrative, in)
+	extra := traceExplainExtra(in, devops.CodeContext{}, false)
+	if narrative {
+		r = r.WithContext(traceNarrativeCtx(r.Context()))
+		if in.View != nil {
+			extra["traceEvidence"] = in.View
+		}
+	}
 	return explainPrepared{
-		extra:    traceExplainExtra(in, devops.CodeContext{}, false),
-		run:      s.traceComposeRun(r.Context(), s.explainPrompt(r, copilot.SystemPromptTrace(), in.User), in.User), // v0.10.1630; v0.10.1637 sayım
+		extra:    extra,
+		run:      s.traceComposeRun(r.Context(), s.explainPrompt(r, system, user), user), // v0.10.1630; v0.10.1637 sayım
 		service:  in.RootService,
-		cacheKey: explainCacheKey(copilot.SystemPromptTrace(), in.User, ""),
+		cacheKey: explainCacheKey(system, user, ""),
 	}, nil
 }
 

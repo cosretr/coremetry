@@ -35,7 +35,8 @@ const (
 	deepWikiCandidates         = 15
 	// Mutlak tavanlar — ölçek ne derse desin döngü bunları aşmaz.
 	deepToolRoundsCeiling = 8
-	deepToolCallsCeiling  = 12
+	// v0.10.2480 — 12 → 14: ölçekli taban 14'e çıktı; Derin tabanın altına inmez.
+	deepToolCallsCeiling = 14
 )
 
 // deepMode — istek başına Derin kararı. Sıfır değer = kapalı (eski davranış).
@@ -44,47 +45,78 @@ type deepMode struct {
 	// Profile — Derin için seçilen profil kimliği ("" = model değişmedi).
 	Profile string
 	// loopScale — v0.10.2473: döngü profilinin kanıt ölçeği (evidence_scale.go;
-	// 0/1 = taban 6 / 5). Alışverişte kanıt ölçeği okununca yazılır.
+	// 0/1 = taban 8 / 5). Alışverişte kanıt ölçeği okununca yazılır.
 	loopScale int
+	// problemScope — v0.10.2480 (A): sohbet bağlamında problemId var → en az
+	// 2–3 kademesi (10 çağrı).
+	problemScope bool
+	// complexity — v0.10.2480 (H): niyet sınıflandırıcısının (ya da
+	// düşüşte deterministik döngü işaretinin) karmaşıklık kademesi.
+	complexity complexityTier
 }
 
-// Ölçekli döngü bütçesinin mutlak tavanları (v0.10.2473) — Derin'inkilerle aynı.
+// Ölçekli döngü bütçesinin mutlak tavanları (v0.10.2473; v0.10.2480 çağrı
+// 12 → 14) — Derin'inkilerle aynı. Karmaşık soru (H) tura +1 ekler.
 const (
-	scaledToolCallsCeiling  = 12
+	scaledToolCallsCeiling  = 14
 	scaledToolRoundsCeiling = 8
+	// loopBaseToolCalls — v0.10.2480 (A, operatör onayı): ölçek 1'in çağrı
+	// tabanı 6 → 8. Çağrılar ucuz (prod: 6 çağrı ≈ 3,5 sn), turlar pahalı
+	// (yerel modelde tur ≈ 10 sn) — tur tavanları değişmedi.
+	loopBaseToolCalls = 8
 )
 
-// loopBudgetAt — SAF (v0.10.2473): kanıt ölçeği → (çağrı, tur) tabanı. Ölçek
-// 1 → 6 / 5 (bugünkü, küçük pencereli model değişmez); her ölçek ikiye
-// katlanışında +2 çağrı / +1 tur: 2 → 8 / 6, 4 → 10 / 7, ≥8 → 12 / 8 (tavan).
-// Ölçek yetenek kaydından gelir (copilot.EvidenceBudgetFor); model adı yok.
+// loopBudgetAt — SAF (v0.10.2473; v0.10.2480 çağrı tabanı +2): kanıt ölçeği →
+// (çağrı, tur) tabanı. Ölçek 1 → 8 / 5; her ölçek ikiye katlanışında +2 çağrı
+// / +1 tur: 2–3 → 10 / 6, 4–7 → 12 / 7, ≥8 → 14 / 8 (tavan). Ölçek yetenek
+// kaydından gelir (copilot.EvidenceBudgetFor); model adı yok.
 func loopBudgetAt(scale int) (calls, rounds int) {
 	steps := 0
 	for s := scale; s >= 2; s /= 2 {
 		steps++
 	}
-	return min(chatMaxToolCalls+2*steps, scaledToolCallsCeiling), min(chatMaxToolRounds+steps, scaledToolRoundsCeiling)
+	return min(loopBaseToolCalls+2*steps, scaledToolCallsCeiling), min(chatMaxToolRounds+steps, scaledToolRoundsCeiling)
+}
+
+// loopBudgetFor — SAF (v0.10.2480 A + H): bütçe = max(deterministik kademe,
+// karmaşıklık kademesi). Problem kapsamı en az ölçek 2 (10 çağrı); orta en az
+// ölçek 2; karmaşık en üst kademe (14 çağrı) ve +1 tur.
+func loopBudgetFor(scale int, problemScope bool, tier complexityTier) (calls, rounds int) {
+	if problemScope {
+		scale = max(scale, 2)
+	}
+	switch tier {
+	case complexityMedium:
+		scale = max(scale, 2)
+	case complexityComplex:
+		scale = max(scale, 8)
+	}
+	calls, rounds = loopBudgetAt(scale)
+	if tier == complexityComplex {
+		rounds++
+	}
+	return calls, rounds
 }
 
 func deepScale(n int) int { return n * deepScaleNum / deepScaleDen }
 
 // toolRounds / toolCalls — serbest döngünün tur ve çağrı tavanı.
 // v0.10.2473 — taban kanıt ölçeğiyle büyür (loopBudgetAt); Derin onun ×1.5'i,
-// mutlak tavan yine 12 / 8.
+// mutlak tavanla — ama tabanın altına hiç inmez (v0.10.2480).
 func (d deepMode) toolRounds() int {
-	_, base := loopBudgetAt(d.loopScale)
+	_, base := loopBudgetFor(d.loopScale, d.problemScope, d.complexity)
 	if !d.On {
 		return base
 	}
-	return min(deepScale(base), deepToolRoundsCeiling)
+	return max(base, min(deepScale(base), deepToolRoundsCeiling))
 }
 
 func (d deepMode) toolCalls() int {
-	base, _ := loopBudgetAt(d.loopScale)
+	base, _ := loopBudgetFor(d.loopScale, d.problemScope, d.complexity)
 	if !d.On {
 		return base
 	}
-	return min(deepScale(base), deepToolCallsCeiling)
+	return max(base, min(deepScale(base), deepToolCallsCeiling))
 }
 
 // wikiMaxPages — okunan en çok wiki sayfası (skor tabanlı ve model seçimi).

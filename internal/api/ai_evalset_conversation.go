@@ -677,7 +677,7 @@ func scoreEvalConvTurn(e evalConvExpect, tr evalConvTurnResult, evidence string,
 	}
 	// v0.10.2339 (E2) — zorla kipinde uydurulan değer işaretsiz kalmamalı.
 	if e.Verifier == evalConvVerifyAnnotate && len(extra) > 0 && tr.Verification == chstore.CosreVerifyEnforce &&
-		!strings.Contains(answer, verifyUnverifiedNote) {
+		!strings.Contains(answer, verifyFootnotePrefix) {
 		fails = append(fails, fmt.Sprintf("zorla kipinde sahtede olmayan değer işaretlenmedi: %v", extra))
 	}
 	// v0.10.2360 (S3) — kanıt ölçütleri (yalnız kanıt kipi on koşan turda).

@@ -39,6 +39,103 @@ const (
 type chatProblemRecord struct {
 	ProblemID string
 	Block     string
+	// v0.10.2480 (B) — kayıttan karşılama: sayfadaki kimlik, kaydın bittiği an
+	// ve Problem başlangıcı (unix ns).
+	Ref        string
+	FinishedAt int64
+	ProblemAt  int64
+}
+
+// v0.10.2480 (B) — kayıttan karşılanan çağrılar. Aynı Problem için
+// get_problem / get_problem_root_cause / get_correlation_evidence, kayıt
+// tazeyse YENİDEN KOŞMAZ: sonuç "kayıttan" (bütçeden düşmez). Tazelik sınırı:
+//   - kök neden + korelasyon (başlangıç analizi): kayıt Problem başlangıcından
+//     SONRA bitmiş ve ≤ recordFreshOnset (24 sa) eski — başlangıç penceresinin
+//     analizi pencere geçtikten sonra değişmez;
+//   - get_problem (canlı durum / değer): ≤ recordFreshLive (15 dk).
+const (
+	recordFreshOnset = 24 * time.Hour
+	recordFreshLive  = 15 * time.Minute
+)
+
+// recordServedTools — kayıttan karşılanabilen araçlar → canlı durum mu.
+var recordServedTools = map[string]bool{
+	"get_problem":              true,
+	"get_problem_root_cause":   false,
+	"get_correlation_evidence": false,
+}
+
+// recordFresh — SAF: kayıt bu araç için taze mi.
+func recordFresh(tool string, finishedAt, problemAt int64, now time.Time) bool {
+	live, ok := recordServedTools[tool]
+	if !ok || finishedAt <= 0 {
+		return false
+	}
+	age := now.Sub(time.Unix(0, finishedAt))
+	if age < 0 {
+		age = 0
+	}
+	if live {
+		return age <= recordFreshLive
+	}
+	return finishedAt >= problemAt && age <= recordFreshOnset
+}
+
+// serve — SAF: aynı Problem için taze kayıtla karşılanan çağrının sonucu
+// (ok=false → araç bugünkü gibi koşar).
+func (r *chatProblemRecord) serve(tool string, args []byte, now time.Time) (string, bool) {
+	if r == nil {
+		return "", false
+	}
+	var a struct {
+		ProblemID string `json:"problem_id"`
+	}
+	if json.Unmarshal(args, &a) != nil {
+		return "", false
+	}
+	id := strings.TrimSpace(a.ProblemID)
+	if id == "" || !(strings.EqualFold(id, r.ProblemID) || (r.Ref != "" && strings.EqualFold(id, r.Ref))) {
+		return "", false
+	}
+	if !recordFresh(tool, r.FinishedAt, r.ProblemAt, now) {
+		return "", false
+	}
+	ageMin := int(now.Sub(time.Unix(0, r.FinishedAt)) / time.Minute)
+	b, _ := json.Marshal(map[string]any{
+		"served_from": problemRecordTool, "problem_id": id, "record_age_min": max(ageMin, 0),
+		"note": "Bu Problem için istenen bilgi yukarıdaki saved_investigation sonucunda; yeniden okunmadı. Kayıtta olmayan bir şey gerekiyorsa başka bir araç çağır.",
+	})
+	return string(b), true
+}
+
+// recordCoverageTR — SAF: tohum bloğunun neyi kapsadığı + kayıttan karşılanan
+// araçlar (talimat satırı; çitin dışında, kısa).
+func recordCoverageTR(inv sre.Investigation) string {
+	var parts []string
+	if len(inv.Findings) > 0 {
+		parts = append(parts, "bulgular")
+	}
+	if len(inv.Hypotheses) > 0 {
+		parts = append(parts, "kök neden hipotezleri")
+	}
+	if f := inv.Facts; f != nil {
+		if f.GraphOrigin != nil {
+			parts = append(parts, "Problem grafı kökeni")
+		}
+		if f.Impact != nil && len(f.Impact.Rows) > 0 {
+			parts = append(parts, "etki olayları")
+		}
+		if f.Similar != nil && len(f.Similar.Cases) > 0 {
+			parts = append(parts, "benzer vakalar")
+		}
+	}
+	if inv.Summary != nil && !inv.Summary.Gated && strings.TrimSpace(inv.Summary.Text) != "" {
+		parts = append(parts, "ajan özeti")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "KAYIT KAPSAMI: " + strings.Join(parts, ", ") + ". get_problem_root_cause ve get_correlation_evidence bu Problem için kayıttan karşılanır; araçları yalnız kayıtta OLMAYAN için çağır.\n"
 }
 
 // firstChatTurn — SAF: konuşmada tek kullanıcı mesajı var, asistan cevabı yok.
@@ -106,7 +203,8 @@ func (s *Server) chatProblemRecordFor(ctx context.Context, emit func(string, any
 		return nil
 	}
 	emitGuidedContextStep(emit, problemRecordStepTR(true, inv.State))
-	return &chatProblemRecord{ProblemID: id, Block: block}
+	return &chatProblemRecord{ProblemID: id, Block: recordCoverageTR(inv) + block, Ref: ref,
+		FinishedAt: inv.FinishedAt, ProblemAt: inv.ProblemAt}
 }
 
 // seedScaled — serbest döngünün konuşmasına sentetik çağrı + sonuç (nil → aynen).

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
 import type { CosreStop, CosreStopReason } from '@/lib/types';
 import { SCOPE_REASONS, STOP_REASONS, isScopedReason } from '@/lib/cosre/protocol';
-import { errorMessage, inputsLine, previewFor, queryKindLabel, stepsView, stopBadges, stopLine } from './stepView';
+import { errorMessage, inputsLine, previewFor, queryKindLabel, stepCounts, stepsHeaderLabel, stepsView, stopBadges, stopLine } from './stepView';
 import { latestScope, scopeChangeNotes, scopeOf, scopeView } from './scopeView';
 
 type Part = CosreUIMessage['parts'][number];
@@ -101,8 +101,8 @@ describe('stepsView — kind eşlemesi', () => {
       result(3, { kind: 'skipped', tool: 'endpoint_metrics', ok: false, reason: 'servisin VM ailesi gRPC' }),
     ]);
     expect(v.steps.map(s => s.kind)).toEqual(['skipped', 'skipped']);
-    expect(v.steps[0].reason).toBe('çağrı bütçesi doldu');
-    expect(v.steps[0].subtitle).toBe('çalıştırılmadı');
+    expect(v.steps[0].reason).toBe('araç bütçesi doldu');
+    expect(v.steps[0].subtitle).toBe('çalıştırılmadı — araç bütçesi doldu'); // v0.10.2480 — neden başlıkta
     expect(v.steps[1].reason).toBe('servisin VM ailesi gRPC');
     expect(v.steps[1].preview).toBeUndefined();
   });
@@ -137,7 +137,7 @@ describe('stepsView — kind eşlemesi', () => {
   it('data-stop: tek satır, 8 nedenin hepsinin etiketi var', () => {
     const v = stepsView([P({ type: 'data-stop', id: 'stop', data: { reason: 'call_cap', calls: 4, rounds: 2, elapsed_ms: 4200 } })]);
     expect(v.stop).toEqual({ reason: 'call_cap', calls: 4, rounds: 2, elapsed_ms: 4200 });
-    expect(stopLine(v.stop!)).toBe('çağrı tavanı · 4 çağrı · 2 tur · 4,2 sn');
+    expect(stopLine(v.stop!)).toBe('araç bütçesi doldu · 4 çağrı · 2 tur · 4,2 sn'); // v0.10.2480 — nötr ifade
     for (const r of STOP_REASONS) expect(stopLine({ reason: r, calls: 0, rounds: 0, elapsed_ms: 10 })).not.toMatch(/^undefined/);
   });
 });
@@ -219,12 +219,12 @@ describe('stepView 1710: girdiler / ham çıktı / durdurma rozetleri', () => {
     expect(stopBadges(turn).map(b => b.label)).toEqual(want);
   });
 
-  // v0.10.1711 — "bütçe doldu" yalnız tavan/bütçe nedeninde (hideSteps v1 rozetini götürmüştü).
+  // v0.10.2480 (D) — "bütçe doldu" rozeti kalktı: durma satırı aynı şeyi nötr ifadeyle söylüyor.
   const st = (reason: CosreStopReason): CosreStop => ({ reason, calls: 3, rounds: 2, elapsed_ms: 900 });
   it.each([
-    ['call_cap', st('call_cap'), ['bütçe doldu']],
-    ['round_cap', st('round_cap'), ['bütçe doldu']],
-    ['token_budget', st('token_budget'), ['bütçe doldu']],
+    ['call_cap', st('call_cap'), []],
+    ['round_cap', st('round_cap'), []],
+    ['token_budget', st('token_budget'), []],
     ['stop', st('stop'), []],
     ['deadline (ayrı rozet)', st('deadline'), []],
     ['data-stop yok', undefined, []],
@@ -251,5 +251,47 @@ describe('stepsView — adım sözleşmesi (I1)', () => {
     const v = stepsView([tool(1, 'find_traces', {}, { ok: true, preview: '{}' })]);
     expect(v.running).toBeUndefined();
     expect(v.steps[0].plain).toBeUndefined();
+  });
+});
+
+// v0.10.2480 (D, operatör-bildirimi) — prod turu: başlık "ADIMLAR · 9 ÇAĞRI", altbilgi
+// "6 çağrı". Kayıt tohumu, niyet sınıflandırma ve atlanan adım çağrı değildir; başlık
+// altbilgiyle AYNI sayıyı gösterir; kayıttan / önbellekten karşılanan çağrı ayrı.
+describe('stepsView — başlık sayıları (v0.10.2480)', () => {
+  const ok = (ms: number) => ({ ok: true, preview: '{}', durationMs: ms });
+  const prodTurn = [
+    tool(1, 'kayıtlı araştırmadan başlandı', {}, { ok: true, context: true }),
+    tool(2, 'intent_classify', {}, ok(823)),
+    tool(3, 'get_problem_root_cause', { problem_id: 'p' }, { ok: true, served: 'record', preview: 'kayıttan' }),
+    tool(4, 'get_correlation_evidence', { problem_id: 'p' }, { ok: true, served: 'record', preview: 'kayıttan' }),
+    tool(5, 'get_service_health', { service: 'svc-a' }, ok(532)),
+    tool(6, 'list_exception_groups', { service: 'svc-a' }, ok(16)),
+    tool(7, 'list_anomalies', { service: 'svc-a' }, ok(30)),
+    tool(8, 'list_anomalies', { service: 'svc-a' }, { ok: true, served: 'cache', preview: 'önbellekten' }),
+    tool(9, 'get_exception_samples', {}, ok(2300)),
+    tool(10, 'messaging_flow', { service: 'svc-a' }, { ok: false, skipped: true, reason: 'call_cap' }),
+  ];
+  it('canlıyken: yalnız gerçek araç çağrıları sayılır', () => {
+    const v = stepsView(prodTurn);
+    expect(stepCounts(v)).toEqual({ calls: 4, record: 2, cache: 1, skipped: 1 });
+    expect(stepsHeaderLabel(v)).toBe('4 çağrı · 2 kayıttan · 1 önbellekten · 1 atlandı');
+  });
+  it('bitince başlık altbilgiyle aynı sayı (data-stop.calls)', () => {
+    const v = stepsView([...prodTurn, P({ type: 'data-stop', id: 'stop', data: { reason: 'call_cap', calls: 4, rounds: 3, elapsed_ms: 34700, free: 3 } })]);
+    expect(stepCounts(v).calls).toBe(v.stop!.calls);
+    expect(stepsHeaderLabel(v)).toMatch(/^4 çağrı/);
+    expect(stopLine(v.stop!)).toBe('araç bütçesi doldu · 4 çağrı (+3 bütçe dışı) · 3 tur · 34,7 sn');
+  });
+  it('kayıt tohumu bitmiş adım (spinner yok), niyet adımı çağrı değil', () => {
+    const v = stepsView(prodTurn);
+    expect(v.steps[0]).toMatchObject({ kind: 'text', nonCall: true });
+    expect(v.steps[1]).toMatchObject({ nonCall: true });
+    expect(v.steps.filter(s => s.kind === 'running')).toHaveLength(0);
+  });
+  it('atlanan adım nedeni başlıkta; ücretsiz çağrının kaynağı', () => {
+    const v = stepsView(prodTurn);
+    expect(v.steps[9].subtitle).toBe('çalıştırılmadı — araç bütçesi doldu');
+    expect(v.steps[2]).toMatchObject({ served: 'record', subtitle: 'kayıttan' });
+    expect(v.steps[7]).toMatchObject({ served: 'cache', subtitle: 'önbellekten' });
   });
 });

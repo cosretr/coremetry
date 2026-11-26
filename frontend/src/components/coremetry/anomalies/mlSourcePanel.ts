@@ -21,7 +21,7 @@
 //   trace pod sapması (v0.10.2055) → dedektörün kaynağı (VM RED ailesi) pod
 //     başına, 1 dakikalık; sapan pod adıyla ve tek renkli (diğerleri gri)
 //   log dışı kalanlar → kayıtlı görüntü
-import type { MLEvent, MLSnapshot, SpanMetricSeries } from '@/lib/types';
+import type { MLEvent, MLSnapshot, MLSourceSeries, SpanMetricSeries } from '@/lib/types';
 import type { StripStat } from '@/components/traces/stripStat';
 import { t, tf, type Lang } from '@/lib/i18n'; // v0.10.2291 — görünen metin isteğe bağlı lang (varsayılan 'tr')
 
@@ -30,7 +30,9 @@ export type SourcePanel =
   | { kind: 'traces'; service: string; operation: string; byRoute: boolean; stat: StripStat; errorsFirst: boolean; minMs?: number }
   | { kind: 'logs'; service: string; search: string; pattern?: string; severity: number; href: string }
   /** highlight: vurgulanacak seri (sapan pod); family: RED ailesi (trace pod). */
-  | { kind: 'metric'; detector: string; service: string; code: string; cluster: string; highlight?: string; family?: string; measure?: string }
+  /** v0.10.2480 — labels: endpoint olayının kanıtındaki etiket ADLARI (dedektörün tik anında seçtiği); sunucu ifadeyi bunlarla kurar, keşif yapmaz. */
+  | { kind: 'metric'; detector: string; service: string; code: string; cluster: string; highlight?: string; family?: string; measure?: string;
+    labels?: { svc: string; route: string; status?: string } }
   /** v0.10.2077 — servis düzeyi ML olayı: servis Overview panelinin serisi (ServiceRedChart). */
   | { kind: 'service-red'; service: string; agg: ServiceRedAgg; label: string }
   | { kind: 'snapshot'; reason: string };
@@ -86,8 +88,12 @@ export function sourcePanelFor(e: Pick<MLEvent, 'detector' | 'signal' | 'code' |
   // Dedektörün kendi serisi (/api/ml/source-series, aynı ölçü ve kova).
   if (e.detector === 'op_latency' || e.detector === 'op_error_rate' || e.detector === 'throughput_drop') {
     if (!code || !e.service) return e.service ? snapshot('noOp') : noSvc;
-    const measure = e.detector === 'op_latency' ? (str(evidenceObj(e.evidence).measure) || undefined) : undefined;
-    return { kind: 'metric', detector: e.detector, service: e.service, code, cluster: '', measure };
+    const ev = evidenceObj(e.evidence);
+    const measure = e.detector === 'op_latency' ? (str(ev.measure) || undefined) : undefined;
+    // v0.10.2480 — dedektörün ailesi + etiketleri (trace_red srcOf/errOf/cntOf); eski olayda yok → sunucu keşfe düşer.
+    const svc = str(ev.svcLabel), rt = str(ev.routeLabel);
+    const labels = svc && rt ? { svc, route: rt, ...(str(ev.statusLabel) ? { status: str(ev.statusLabel) } : {}) } : undefined;
+    return { kind: 'metric', detector: e.detector, service: e.service, code, cluster: '', measure, family: str(ev.redFamily) || undefined, labels };
   }
   const route = (svc: string, op: string, o: Omit<Extract<SourcePanel, { kind: 'traces' }>, 'kind' | 'service' | 'operation' | 'byRoute'>) =>
     ({ kind: 'traces' as const, service: svc, operation: op, byRoute: op.startsWith('/'), ...o });
@@ -122,6 +128,31 @@ export function serviceRedAggFor(kind: string, metric?: string, lang: Lang = 'tr
     case 'request_rate': return { agg: 'rate', label: t('aed.metric.request_rate', lang) };
   }
   return null;
+}
+
+/** v0.10.2480 — kaynak serisi yanıtının neden kodları (sunucu srcCode*). */
+const SOURCE_REASON_CODES = ['no_vm', 'no_expr', 'no_cluster', 'partial', 'no_labels', 'empty', 'timeout', 'query_error'] as const;
+
+/** SAF (v0.10.2480): canlı seri neden yok — arayüz dilinde, kaynağın kendi
+ *  metniyle. err: isteğin kendisi düştü (HTTP / zaman aşımı); d: yanıt.
+ *  Seri varsa undefined. Eskiden istek hatası "kaynak okunamadı" diye
+ *  genelleniyor, yanıttaki neden de yalnız Türkçe geliyordu. */
+export function sourceGapReason(d: MLSourceSeries | null | undefined, err: string | null, lang: Lang = 'tr'): string | undefined {
+  if (err) return tf('mlx.rc.http', lang, { m: err.length > 300 ? `${err.slice(0, 300)}…` : err });
+  if (!d) return undefined;
+  if (d.series.some(x => (x.points ?? []).length)) return undefined;
+  const code = (SOURCE_REASON_CODES as readonly string[]).includes(d.reasonCode ?? '') ? d.reasonCode! : 'empty';
+  const base = d.reasonCode || !d.reason ? t(`mlx.rc.${code}`, lang) : d.reason;
+  return d.detail ? tf('mlx.rc.detail', lang, { r: base, d: d.detail }) : base;
+}
+
+/** SAF (v0.10.2480): kayıtlı görüntü yokken doğru cümlenin anahtarı. Kural
+ *  (evaluator) üyesi olay ML kaydedicisinden geçmez → olay anı kaydı TASARIM
+ *  GEREĞİ yok; diğerlerinde kaydedici tespit tikinde yazar (kronik desen
+ *  v0.10.2480'dan önce hiç almıyordu). */
+export function snapNoneKey(evidence?: string): string {
+  const ev = evidenceObj(evidence);
+  return typeof ev.problem_id === 'string' && typeof ev.rule_id === 'string' ? 'mlx.snap.none.member' : 'mlx.snap.none';
 }
 
 /** SAF (v0.10.2061): canlı grafik yokken kayıtlı görüntünün üstündeki tek

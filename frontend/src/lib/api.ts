@@ -1473,6 +1473,11 @@ export const api = {
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style }),
     }),
+  // v0.10.2480 — trace açıklaması biçimi (anlatim varsayılan | bolumlu).
+  putCosreConversationTraceStyle: (traceExplainStyle: 'anlatim' | 'bolumlu') =>
+    request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ traceExplainStyle }),
+    }),
   // v0.10.2473 — araç turu ara durum cümlesi (style'dan ayrı; varsayılan açık).
   putCosreConversationStatusLine: (statusLine: boolean) =>
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
@@ -1848,7 +1853,7 @@ export const api = {
   mlReplay: (id: string) => get<import('./types').MLReplay>(`/api/ml/${encodeURIComponent(id)}/replay`),
   // v0.10.2036 — metrik / bağımlılık olayının detay grafiği: dedektörün ifadesi, servis kapsamlı tek aralık sorgusu (VM ya da Thanos).
   // v0.10.2055 — family: trace_pod_outlier kanıtındaki RED ailesi (yoksa sunucu sırayla dener).
-  mlSourceSeries: (params: { detector: string; service: string; code: string; family?: string; measure?: string; from: number; to: number }, signal?: AbortSignal) =>
+  mlSourceSeries: (params: { detector: string; service: string; code: string; family?: string; measure?: string; svcLabel?: string; routeLabel?: string; statusLabel?: string; from: number; to: number }, signal?: AbortSignal) =>
     request<import('./types').MLSourceSeries>(`/api/ml/source-series?${qs(params)}`, { signal }),
   // v0.10.2035 — ML log olayının canlı histogramı (Logs histogramıyla aynı okuma; kova sunucuda; ES sayacında kendi yüzeyi).
   anomalyLogChart: (params: { service: string; search?: string; pattern?: string; severity?: number; from: number; to: number }, signal?: AbortSignal) =>
@@ -2863,6 +2868,8 @@ export const api = {
     contextCodeLocked?: boolean,
     // v0.10.2466 — "daha uzun bekle" çipinin evet'i (internal/api/chat_long_wait.go).
     contextLongWait?: boolean,
+    // v0.10.2480 (E) — Problem penceresi çipi açık (internal/api/chat_problem_scope.go).
+    contextProblemWindow?: boolean,
   ): Promise<void> => {
     // v0.10.1648 — gövde lib/copilotChatContext'ten (v2 aynı kurucuyu kullanır; bayt bayt aynı).
     const context = buildCopilotChatContext({
@@ -2871,7 +2878,7 @@ export const api = {
       conversation: contextConversation, page: contextPage, pinnedPage: contextPinnedPage, wikiRefs: contextWikiRefs,
       scope: contextScope, command: contextCommand, deep: contextDeep, attempt: contextAttempt,
       explainAsk: contextExplainAsk, code: contextCode, codeLocked: contextCodeLocked,
-      longWait: contextLongWait,
+      longWait: contextLongWait, problemWindow: contextProblemWindow,
     });
     const r = await fetch(API_BASE + '/api/copilot/chat', {
       method: 'POST',

@@ -36,6 +36,7 @@ export const BLOCK_TYPES = [
   'service_report', 'topology', 'charts_signals', 'log_spike', 'metric_panel',
   // v0.10.2360 — S3 kanıt blokları (çizici S5'te; o gelene dek bilinen ama çizilmeyen tip).
   'exception', 'trace', 'logs', 'anomaly',
+  'trace_evidence', // v0.10.2480 — trace açıklaması kanıtı (TraceNarrativeBody)
 ] as const;
 
 /** `data-<ad>` parçalarının adları (önek olmadan). */
@@ -130,7 +131,8 @@ export function parseDataStop(p: { type: string; data?: unknown }): CosreStop | 
   const { reason, calls, rounds, elapsed_ms } = p.data;
   const c = finiteNum(calls), r = finiteNum(rounds), e = finiteNum(elapsed_ms);
   if (!isStopReason(reason) || c === undefined || r === undefined || e === undefined) return null;
-  return { reason, calls: c, rounds: r, elapsed_ms: e };
+  const f = finiteNum(p.data.free); // v0.10.2480 — ücretsiz çağrı (yoksa alan yok)
+  return { reason, calls: c, rounds: r, elapsed_ms: e, ...(f !== undefined && f > 0 ? { free: f } : {}) };
 }
 
 const isScopeReason = (v: unknown): v is CosreScopeReason =>

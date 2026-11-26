@@ -260,6 +260,43 @@ func (r *Recorder) enrichTraceContext(ctx context.Context, deps Deps, cfg chstor
 	}
 }
 
+// chronicSnap — kronik kaydın replay durumu + son görülme (epizot ayrımı).
+type chronicSnap struct {
+	st   snapshotState
+	last time.Time
+}
+
+// snapStateFor — olayın replay durumu. Koşusu izlenen olay tracker'dan.
+//
+// v0.10.2480 (operatör: 5 dk'lık "Kronik desen" uç nokta olayında "grafik
+// kaydı yok"): kronik kayıt qualityFilter'da koşu izlemesini (tr.observe)
+// atlar → tracker'da koşusu yok → snap nil → ön kayıt HİÇ yazılmıyordu. Her
+// kronik olay böyle açılırdı. Artık recorder kendi haritasında tutar: kimlik
+// sabit (chronic:<dedektör>, servis, route), yeni epizot (koşu tazelik
+// kuralıyla aynı boşluk: episodeCloseMisses tik + episodeReopenWindow) yeni
+// ön kayıt yazar; aynı epizotta tik başına yeniden yazmaz. 24 sa görülmeyen
+// girdi silinir (sınırlı bellek).
+func (r *Recorder) snapStateFor(ev chstore.MLEvent, now time.Time, tick time.Duration) *snapshotState {
+	if st := r.runs.snap(ev.ID); st != nil || ev.Stage != chstore.MLStageChronic {
+		return st
+	}
+	if r.chronic == nil {
+		r.chronic = map[string]*chronicSnap{}
+	}
+	for id, c := range r.chronic {
+		if now.Sub(c.last) > 24*time.Hour {
+			delete(r.chronic, id)
+		}
+	}
+	c := r.chronic[ev.ID]
+	if c == nil || now.Sub(c.last) > time.Duration(episodeCloseMisses)*tick+episodeReopenWindow {
+		c = &chronicSnap{}
+		r.chronic[ev.ID] = c
+	}
+	c.last = now
+	return &c.st
+}
+
 // writeSnapshots — recorder tik sonu: yeni koşulara ön kayıt, +2 sa dolmuş
 // koşulara tam kayıt. Tik başına en çok snapshotPerTik yazım.
 func (r *Recorder) writeSnapshots(ctx context.Context, deps Deps, cfg chstore.MLConfig, kept []chstore.MLEvent, now time.Time, esLeft int) (n int, firstErr error) {
@@ -267,7 +304,7 @@ func (r *Recorder) writeSnapshots(ctx context.Context, deps Deps, cfg chstore.ML
 		if n >= snapshotPerTik {
 			return n, firstErr
 		}
-		st := r.runs.snap(ev.ID)
+		st := r.snapStateFor(ev, now, time.Duration(cfg.TickSec)*time.Second)
 		if st == nil || st.pre {
 			continue
 		}

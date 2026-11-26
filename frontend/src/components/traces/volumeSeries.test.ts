@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { weightedStatAvg, buildVolumeSeries, fmtVolumeDuration, volumeUnitLabel, stripBarStep, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent, stripRootOnly, volumeEmptyNote, VOLUME_EMPTY_DEFAULT, errorStripUnit, errorStripHint, stripHeaderStats } from './volumeSeries';
+import { weightedStatAvg, buildVolumeSeries, volumeBucketCaption, fmtStepShort, fmtVolumeDuration, volumeUnitLabel, stripBarStep, stripScope, isEntrySpanKey, volumeUnitFor, volumeHint, dataExtent, stripRootOnly, volumeEmptyNote, VOLUME_EMPTY_DEFAULT, errorStripUnit, errorStripHint, stripHeaderStats } from './volumeSeries';
 
 const S = 1_000_000_000; // 1 saniye, ns
 const T0 = 1_700_000_000 * S;
@@ -46,22 +46,26 @@ describe('buildVolumeSeries — eksen eşlemesi (v0.10.656: süre SOL, sayı SA�
 });
 
 describe('buildVolumeSeries — veri dönüşümü', () => {
-  it('ns → unix saniye ve bucket dakikası adımdan türer', () => {
+  it('ns → unix saniye ve kova genişliği (sn) adımdan türer', () => {
     const cfg = buildVolumeSeries(mk([1, 2, 3], 300), null, null);
     expect(cfg.times).toEqual([1_700_000_000, 1_700_000_300, 1_700_000_600]);
-    expect(cfg.bucketMin).toBe(5);
+    expect(cfg.barStepSec).toBe(300);
+    expect(cfg.lineStepSec).toBe(300);
   });
 
-  it('tek bucket ya da alt-dakika adımda bucketMin en az 1', () => {
-    expect(buildVolumeSeries(mk([1]), null, null).bucketMin).toBe(1);
-    expect(buildVolumeSeries(mk([1, 2], 30), null, null).bucketMin).toBe(1);
+  // v0.10.2480 (operator-reported) — eski bucketMin alt-dakika adımı 1'e
+  // yuvarlıyordu: 10 sn'lik çubuklar "1m bucket" okunuyordu.
+  it('alt-dakika adım saniye olarak kalır (1 dk\'ya yuvarlanmaz)', () => {
+    expect(buildVolumeSeries(mk([1, 2], 30), null, null).barStepSec).toBe(30);
+    expect(buildVolumeSeries(mk([1, 2], 10), null, null).barStepSec).toBe(10);
+    expect(buildVolumeSeries(mk([1]), null, null).barStepSec).toBe(0);
   });
 
   it('boş count → boş konfig (grafik yerine Empty durumu)', () => {
     const cfg = buildVolumeSeries(null, mk([1]), mk([2]));
     expect(cfg.times).toEqual([]);
     expect(cfg.series).toEqual([]);
-    expect(cfg.bucketMin).toBe(1);
+    expect(cfg.barStepSec).toBe(0);
   });
 
   it('hata payı toplamı aşamaz, eksik bucket 0 olur', () => {
@@ -160,7 +164,19 @@ describe('stripBarStep / ince ızgara (v0.10.2477)', () => {
     expect(byKey(cfg, 'error').data).toEqual([1, undefined, undefined, 9, undefined, undefined]);
     expect(byKey(cfg, 'rt').data).toEqual([10, null, 30, 40, 50, 60]); // 0 → GAP, interpolasyon yok
     expect(byKey(cfg, 'rt').label).toContain('(average)');
-    expect(cfg.bucketMin).toBe(1);
+    expect(cfg.barStepSec).toBe(60);
+    expect(cfg.lineStepSec).toBe(20);
+  });
+
+  // v0.10.2480 — prod 15 dk görünümü: çubuk = çizgi = 10 sn (eski başlık "1m").
+  it('15 dk: çubuk ve çizgi 10 sn, her kova kendi değeri', () => {
+    const t0 = 1_700_000_000;
+    const fine = (vals: number[]): SpanMetricSeries[] => [{ groupKey: [], points: vals.map((v, i) => ({ time: (t0 + i * 10) * 1e9, value: v })) }];
+    const cfg = buildVolumeSeries(fine([5, 6, 7, 8]), null, fine([100, 900, 120, 110]), 'requests', 'p99', { lineStepSec: 10, barStepSec: 10 });
+    expect(cfg.barStepSec).toBe(10);
+    expect(cfg.lineStepSec).toBe(10);
+    expect(byKey(cfg, 'rt').data).toEqual([100, 900, 120, 110]);
+    expect(byKey(cfg, 'total').data).toEqual([5, 6, 7, 8]);
   });
 
   it('trafiksiz ince kova ızgarada null kalır (sıfıra çekilmez)', () => {
@@ -169,6 +185,42 @@ describe('stripBarStep / ince ızgara (v0.10.2477)', () => {
     const cfg = buildVolumeSeries(pts([[0, 5], [4, 5]]), null, pts([[0, 100], [4, 300]]), 'traces', 'avg', { lineStepSec: 20, barStepSec: 60 });
     expect(byKey(cfg, 'rt').data).toEqual([100, null, null, null, 300]);
     expect(byKey(cfg, 'total').data).toEqual([5, undefined, undefined, 5, undefined]);
+  });
+
+  // v0.10.2480 (operator-reported: boşluklar üçgenle birleşiyordu) — çizgi
+  // serisi SIKI boşluk kipinde: TimeChart köprü (stepGapsRefiner) bağlamaz,
+  // yalıtık örneği nokta basar; ileri doldurma yok (önceki değer taşınmaz).
+  it('çizgi strictGaps: boş kova köprülenmez, önceki değer taşınmaz', () => {
+    const t0 = 1_700_000_000;
+    const pts = (vals: [number, number][]): SpanMetricSeries[] => [{ groupKey: [], points: vals.map(([i, v]) => ({ time: (t0 + i * 10) * 1e9, value: v })) }];
+    const cfg = buildVolumeSeries(pts([[0, 5], [1, 5], [2, 5], [3, 5]]), null, pts([[0, 100], [2, 300]]), 'requests', 'p99', { lineStepSec: 10, barStepSec: 10 });
+    const rt = byKey(cfg, 'rt');
+    expect(rt.strictGaps).toBe(true);
+    expect(rt.data).toEqual([100, null, 300, null]);
+    expect(byKey(cfg, 'total').strictGaps).toBeUndefined();
+  });
+});
+
+describe('volumeBucketCaption / fmtStepShort (v0.10.2480)', () => {
+  it.each([
+    [10, 'tr', '10 sn'], [10, 'en', '10s'], [60, 'tr', '1 dk'], [60, 'en', '1m'],
+    [90, 'en', '90s'], [1200, 'tr', '20 dk'], [3600, 'en', '1h'], [7200, 'tr', '2 sa'], [86400, 'en', '1d'],
+  ] as const)('%i sn (%s) → %s', (sec, lang, want) => {
+    expect(fmtStepShort(sec, lang)).toBe(want);
+  });
+
+  it('eşit adım: tek boy + "kova"', () => {
+    expect(volumeBucketCaption('requests', 10, 10, 'tr')).toBe('istek / 10 sn kova · sürükle = zaman seç');
+    expect(volumeBucketCaption('requests', 10, 10, 'en')).toBe('requests / 10s bucket · drag = select time');
+  });
+
+  it('farklı adım: iki boy da yazılır', () => {
+    expect(volumeBucketCaption('requests', 60, 20, 'tr')).toBe('istek / 1 dk · süre / 20 sn · sürükle = zaman seç');
+    expect(volumeBucketCaption('traces', 1200, 600, 'en')).toBe('traces / 20m · duration / 10m · drag = select time');
+  });
+
+  it('boş grafik: yalnız sürükle ipucu', () => {
+    expect(volumeBucketCaption('spans', 0, 0, 'en')).toBe('drag = select time');
   });
 });
 

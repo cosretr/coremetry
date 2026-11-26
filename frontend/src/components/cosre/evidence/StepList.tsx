@@ -14,7 +14,7 @@ import { Button } from '@/components/shadcn/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/shadcn/collapsible';
 import { cn } from '@/lib/cn';
 import { EVIDENCE_STRINGS as T, STOP_LABELS } from './strings';
-import { fmtMsTR, stopLine, type StepView, type StepsView, type StopBadge } from './stepView';
+import { fmtMsTR, stepsHeaderLabel, stopLine, type StepView, type StepsView, type StopBadge } from './stepView';
 import { StepCard } from './StepCard';
 import type { CosreStepDirective } from '@/lib/types';
 
@@ -72,7 +72,7 @@ export function StepList({ view, live, exchangeId, badges = [], compact = false,
           className={cn('h-auto w-full justify-start gap-2 rounded-none px-3 py-2 font-normal', open && 'border-b border-border')}>
           <ChevronRight className={cn('size-3 text-muted-foreground transition-transform', open && 'rotate-90')} aria-hidden />
           <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            {T.stepsTitle} · {T.calls(view.steps.length)}
+            {T.stepsTitle} · {stepsHeaderLabel(view)}
           </span>
           {!open && live && view.running && <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" data-cosre-step-running="">{T.runningStep(view.running)}</span>}
           {!open && !(live && view.running) && view.stop && <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{T.stopPrefix} {STOP_LABELS[view.stop.reason]}</span>}

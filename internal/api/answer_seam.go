@@ -62,8 +62,11 @@ import (
 // (≈ 40–55 token) üretme süresi.
 const seamFirstHoldRunes = 160
 
-// verifyUnverifiedNote — zorla kipinin satır içi notu (karar 6).
-const verifyUnverifiedNote = "(doğrulanmamış değer)"
+// verifyUnverifiedNote — zorla kipinin satır içi İŞARETİ (karar 6).
+// v0.10.2480 (F, operatör-bildirimi) — "(doğrulanmamış değer)" cümlesi bir
+// cevapta üç kez satır içinde tekrarlanıyordu; artık kısa işaret + cevabın
+// sonunda TEK dipnot satırı (seamWithEnforceNote: hangi değerler).
+const verifyUnverifiedNote = "†"
 
 // seamRegenMaxTokens — yeniden üretim notunda adı geçen en çok değer.
 const seamRegenMaxTokens = 6
@@ -281,8 +284,8 @@ func (g *answerSeam) answer(payload any) any {
 			}
 		}
 	}
-	if len(left) > 0 { // v0.10.2439 — işaretli cevap sessiz kalmaz: not + takip çipi
-		text = seamWithEnforceNote(text)
+	if len(left) > 0 { // v0.10.2439 — işaretli cevap sessiz kalmaz: not + takip çipi; v0.10.2480 — not = tek dipnot satırı
+		text = seamWithEnforceNote(text, left)
 	}
 	if text != orig {
 		out := make(map[string]any, len(m))

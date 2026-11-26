@@ -31,7 +31,7 @@ func TestSkippedStepResultShape(t *testing.T) {
 }
 
 func TestChatBudgetLabels(t *testing.T) {
-	if got := chatBudgetLabelTR(chatMaxToolCalls, chatMaxToolRounds); got != "araştırma bütçesi: 6 araç · 5 tur" {
+	if got := chatBudgetLabelTR(loopBaseToolCalls, chatMaxToolRounds); got != "araştırma bütçesi: 8 araç · 5 tur" {
 		t.Fatalf("bütçe etiketi: %q", got)
 	}
 	// v0.10.948 — hak (bütçe) ile iş ayrı: tekrar/bilinmeyen/kapsam reddi hak
@@ -40,9 +40,9 @@ func TestChatBudgetLabels(t *testing.T) {
 		slots, executed, skipped, rounds int
 		want                             string
 	}{
-		{6, 6, 2, 1, "araştırma bütçesi doldu (6/6 çağrı hakkı · 1/5 tur) — 6 çağrı yürütüldü, 2 yürütülmedi; eldeki kanıtla cevaplanıyor"},
-		{4, 4, 0, 5, "araştırma bütçesi doldu (4/6 çağrı hakkı · 5/5 tur) — 4 çağrı yürütüldü; eldeki kanıtla cevaplanıyor"},
-		{6, 2, 4, 1, "araştırma bütçesi doldu (6/6 çağrı hakkı · 1/5 tur) — 2 çağrı yürütüldü, 4 yürütülmedi; eldeki kanıtla cevaplanıyor"},
+		{6, 6, 2, 1, "araştırma bütçesi doldu (6/8 çağrı hakkı · 1/5 tur) — 6 çağrı yürütüldü, 2 yürütülmedi; eldeki kanıtla cevaplanıyor"},
+		{4, 4, 0, 5, "araştırma bütçesi doldu (4/8 çağrı hakkı · 5/5 tur) — 4 çağrı yürütüldü; eldeki kanıtla cevaplanıyor"},
+		{6, 2, 4, 1, "araştırma bütçesi doldu (6/8 çağrı hakkı · 1/5 tur) — 2 çağrı yürütüldü, 4 yürütülmedi; eldeki kanıtla cevaplanıyor"},
 	}
 	for _, c := range cases {
 		if got := chatBudgetExhaustedLabelTR(c.slots, c.executed, c.skipped, c.rounds); got != c.want {

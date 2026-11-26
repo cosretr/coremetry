@@ -357,6 +357,7 @@ func evTempoTrace(t *testing.T, traceID string) *httptest.Server {
 // "CoSRE'ye sor" (kodsuz varsayılan): modele giden kanıt exception'ı taşır,
 // sistem istemi exception kuralını taşır.
 func TestExplainTraceCarriesSpanExceptionEvent(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2480 — bölümlü biçimin pini
 	p := newDefProvider(t, defAnswerA, defAnswerB)
 	s := defServer(t, p)
 	s.tempo = tempo.New()
@@ -379,6 +380,7 @@ func TestExplainTraceCarriesSpanExceptionEvent(t *testing.T) {
 
 // Event'siz trace (mevcut sahte Tempo): kanıtta blok YOK — davranış aynen.
 func TestExplainTraceWithoutEventsUnchanged(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2480 — bölümlü biçimin pini
 	p := newDefProvider(t, defAnswerA, defAnswerB)
 	s := defServer(t, p)
 	if w := defCall(s, "", ""); w.Code != http.StatusOK {

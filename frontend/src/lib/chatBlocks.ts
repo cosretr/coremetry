@@ -1,6 +1,6 @@
 // chatBlocks.ts — v0.10.541 (Faz 3.3a): tipli blok biriktirme, SAF.
 // Aynı id ikinci kez gelirse (final güncellemesi) yerine geçer; sıra seq.
-import type { ChatTypedBlock, ChatAnswerLink, CosreChartSpecLike, ChatTraceListPayload, ChatOperationPayload, ChatEvidenceChartPayload, ChatEvidenceTablePayload, ChatServiceReportPayload, ChatTopologyPayload, ChartsSignalsBlockPayload, LogSpikeBlockPayload, MetricPanelBlockPayload } from './types'; // v0.10.1435 — MetricPanelBlockPayload
+import type { ChatTypedBlock, ChatAnswerLink, CosreChartSpecLike, ChatTraceListPayload, ChatOperationPayload, ChatEvidenceChartPayload, ChatEvidenceTablePayload, ChatServiceReportPayload, ChatTopologyPayload, ChartsSignalsBlockPayload, LogSpikeBlockPayload, MetricPanelBlockPayload, TraceEvidenceView } from './types'; // v0.10.1435 — MetricPanelBlockPayload
 import { isSafeAppPath } from './safeAppPath';
 
 export function appendChatBlock(blocks: ChatTypedBlock[] | undefined, b: ChatTypedBlock): ChatTypedBlock[] {
@@ -156,6 +156,17 @@ export function chartsSignalsBlock(blocks: ChatTypedBlock[] | undefined): Charts
     const p = b.payload as ChartsSignalsBlockPayload | null;
     if (!p || typeof p.service !== 'string' || !p.service || !p.signals || typeof p.signals !== 'object') continue;
     if (!(p.fromNs > 0) || !(p.toNs > p.fromNs)) continue;
+    return p;
+  }
+  return null;
+}
+
+/** v0.10.2480 — trace açıklamasının kanıt bloğu (Go traceEvidenceView); şekli bozuksa null. */
+export function traceEvidenceBlock(blocks: ChatTypedBlock[] | undefined): TraceEvidenceView | null {
+  for (const b of blocks ?? []) {
+    if (b.type !== 'trace_evidence') continue;
+    const p = b.payload as TraceEvidenceView | null;
+    if (!p || typeof p !== 'object' || typeof p.fallback !== 'string') continue;
     return p;
   }
   return null;

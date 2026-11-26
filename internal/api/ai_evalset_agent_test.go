@@ -242,15 +242,19 @@ func TestEvalAgentForbiddenAndMissingTools(t *testing.T) {
 	}
 }
 
-// TestEvalAgentCapAndSkippedCounted — tek turda 7 çağrı: 6 hak, biri tekrar
-// (yürümez), biri tavanı aşar (Executor'a hiç gitmez); tavan turu koşar.
-// Rubriğin araç boyutu geçersiz.
+// TestEvalAgentCapAndSkippedCounted — tek turda en üst bütçeden fazla çağrı:
+// biri tekrar (v0.10.2480: aynı tur önbelleği — yürümez, bütçeden düşmez),
+// fazlası tavanı aşar (Executor'a hiç gitmez); tavan turu koşar. Rubriğin
+// araç boyutu geçersiz.
 func TestEvalAgentCapAndSkippedCounted(t *testing.T) {
 	var calls [][2]string
-	for i := 1; i <= 5; i++ {
+	n := scaledToolCallsCeiling + 2
+	for i := 1; i <= n; i++ {
 		calls = append(calls, [2]string{"compare_periods", fmt.Sprintf(`{"service":"svc%d"}`, i)})
+		if i == 1 {
+			calls = append(calls, [2]string{"compare_periods", `{"service":"svc1"}`})
+		}
 	}
-	calls = append(calls, [2]string{"compare_periods", `{"service":"svc5"}`}, [2]string{"compare_periods", `{"service":"svc6"}`})
 	llm := newLoopLLM(t, func(n int, _ map[string]any) map[string]any {
 		if n == 0 {
 			return toolCallMsg(calls...)
@@ -262,10 +266,10 @@ func TestEvalAgentCapAndSkippedCounted(t *testing.T) {
 	(&fakeTools{}).install(t)
 	out := runEvalsetCase(fullCtx(), nil, agentServerFn(s), agentCase("a-cap", evalExpect{AnyOfTools: []string{"compare_periods"}, MaxToolCalls: intp(4)}))
 	tr := out.Agent
-	if tr == nil || tr.Calls != 7 || tr.Executed != 5 || tr.Skipped != 2 || !tr.Capped || tr.Rounds != 2 {
+	if tr == nil || tr.Calls != n+1 || tr.Skipped < 2 || tr.Executed+tr.Skipped != n+1 || !tr.Capped || tr.Rounds != 2 {
 		t.Fatalf("iz: %+v", tr)
 	}
-	if !reflect.DeepEqual(out.Fails, []string{"tool calls 5 > 4"}) {
+	if !reflect.DeepEqual(out.Fails, []string{fmt.Sprintf("tool calls %d > 4", tr.Executed)}) {
 		t.Fatalf("ihlaller: %v", out.Fails)
 	}
 	valid := false

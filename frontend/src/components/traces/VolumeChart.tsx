@@ -10,10 +10,10 @@
 // sözleşmesi volumeSeries.ts'te, tablo-testli.
 
 import { useMemo } from 'react';
-import { t as tl, useLang } from '@/lib/i18n'; // v0.10.2314 — bucket ipucu arayüz dilinde (TR aynı)
+import { useLang } from '@/lib/i18n'; // v0.10.2314 — bucket ipucu arayüz dilinde (TR aynı)
 import type { SpanMetricSeries } from '@/lib/types';
 import { TimeChart } from '@/components/charts/TimeChart';
-import { volumeHint, buildVolumeSeries, fmtVolumeDuration, VOLUME_EMPTY_DEFAULT } from './volumeSeries';
+import { volumeHint, buildVolumeSeries, fmtVolumeDuration, volumeBucketCaption, VOLUME_EMPTY_DEFAULT } from './volumeSeries';
 import { STRIP_STAT_DEFAULT, type StripStat } from './stripStat';
 
 export function VolumeChart({
@@ -57,7 +57,7 @@ export function VolumeChart({
   hint?: string;
 }) {
   const lang = useLang();
-  const { times, series, bucketMin } = useMemo(
+  const { times, series, barStepSec, lineStepSec } = useMemo(
     () => buildVolumeSeries(count, errors, latency, unit, stat, grid),
     [count, errors, latency, unit, stat, grid],
   );
@@ -78,7 +78,8 @@ export function VolumeChart({
         {!collapsed && (
           <span style={{ fontFamily: 'var(--font-mono)' }}
             title={hint ?? volumeHint(unit ?? 'traces', lang)}>
-            {unit} / {bucketMin}{tl('trc.vol.bucket', lang)}</span>
+            {/* v0.10.2480 — çubuk + çizgi kovasının GERÇEK boyu (farklıysa ikisi) */}
+            {volumeBucketCaption(unit ?? 'traces', barStepSec, lineStepSec, lang)}</span>
         )}
         {headerRight && (
           <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
@@ -111,6 +112,11 @@ export function VolumeChart({
           // v0.10.1180 (operatör: "solda adet, sağda süre") — eksenler yer
           // değiştirdi; süre biçimleyicisi sağ eksene taşındı (sayım varsayılan kısaltma).
           fmtRight={fmtVolumeDuration}
+          // v0.10.2480 (operator-reported: sağ eksende "1.2s"in üstünde başıboş
+          // "0") — sayım ekseni varsayılan side 0'da (ÜST şerit) yatay
+          // diziliyordu: "150 … 75 … 0" çizimin üstünde, sıfırı süre ekseninin
+          // tepesine düşüyordu. Sayım SOL dikey eksende (v0.10.1180 sözleşmesi).
+          yAxisLeft
           xRange={xRange}
           // v0.10.321 (operatör, prod ekran görüntüsü: "Series paneli kapalı
           // olsun. Shrink mode gelsin.") — lejant VARSAYILAN KAPALI: şerit

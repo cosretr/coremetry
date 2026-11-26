@@ -236,7 +236,7 @@ func withBlockSeq(emit func(string, any), seq *blocks.Sequencer) func(string, an
 			return
 		}
 		// v0.10.1407 — açıklama turunun kanıt kartları (chat_explain_registry.go).
-		if (kind == blocks.TypeChartsSignals || kind == blocks.TypeLogSpike || kind == blocks.TypeMetricPanel) && seq != nil { // v0.10.1435 — metric_panel
+		if (kind == blocks.TypeChartsSignals || kind == blocks.TypeLogSpike || kind == blocks.TypeMetricPanel || kind == blocks.TypeTraceEvidence) && seq != nil { // v0.10.1435 — metric_panel; v0.10.2480 — trace_evidence
 			emit("block", seq.Next(kind, payload))
 			return
 		}

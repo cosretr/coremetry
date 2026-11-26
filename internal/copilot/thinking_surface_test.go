@@ -101,7 +101,8 @@ func TestResolveSurfaceThinking(t *testing.T) {
 	s := New(ProviderOpenAI, "", "qwen3-8b")
 	for k, v := range s.ThinkingModes() {
 		want := ThinkModeOn
-		if k == string(ThinkIntent) {
+		// v0.10.2480 — trace anlatım biçimi de kapalı (operatör: hız).
+		if k == string(ThinkIntent) || k == string(ThinkTraceNarrative) {
 			want = ThinkModeOff
 		}
 		if v != want {

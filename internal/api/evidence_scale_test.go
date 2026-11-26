@@ -763,6 +763,7 @@ func TestClampPromptBytes(t *testing.T) {
 // gerçek handler'dan geçer; sağlayıcıya giden istek pencere payının içinde.
 // Yeteneksiz modelde aynı fikstürün isteği AI'sız kurulan girdiyle aynı.
 func TestSingleShotGuardKeepsExplainWithinWindow(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2480 — bölümlü biçimin pini
 	tp := esTempo(t, 1000, 4000, 400, 2400)
 	logs := &cbLogStore{recs: esLogs(200, 6000, 400)}
 	call := func(model string, deep bool) (sys, user string, s *Server) {

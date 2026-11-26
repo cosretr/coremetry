@@ -438,7 +438,7 @@ func chatContextChipTR(c ChatContext) string {
 		}
 	}
 	if c.RangeS > 0 {
-		parts = append(parts, fmtRangeTR(c.RangeS))
+		parts = append(parts, stateWindowLabel(c)) // v0.10.2480 (E) — geçmişte biten pencere "son N" değil
 	}
 	if c.ErrorsOnly {
 		parts = append(parts, "yalnız hatalı")

@@ -97,6 +97,9 @@ func listExceptionGroupsTool(d Deps) mcp.Tool {
 			if len(groups) >= limit {
 				out["has_more"] = true
 			}
+			if len(groups) > 0 {
+				out = withFieldLabels(out, "fingerprint") // v0.10.2480 (G)
+			}
 			return out, nil
 		},
 	}

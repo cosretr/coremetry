@@ -66,8 +66,8 @@ export const EVIDENCE_STRINGS = {
 /** data-stop `reason` → tek satırlık etiket (8 neden). */
 export const STOP_LABELS: Record<CosreStopReason, string> = {
   stop: 'cevap tamamlandı',
-  round_cap: 'tur tavanı',
-  call_cap: 'çağrı tavanı',
+  round_cap: 'tur bütçesi doldu',
+  call_cap: 'araç bütçesi doldu', // v0.10.2480 — nötr ifade (eski: çağrı tavanı)
   cancelled: 'durduruldu',
   deadline: 'süre doldu',
   approval_pending: 'onay bekliyor',
@@ -77,7 +77,7 @@ export const STOP_LABELS: Record<CosreStopReason, string> = {
 
 /** Yürütülmeyen çağrının sunucu gerekçesi (chat_loop_steps.go skipReason*) → cümle. */
 export const SKIP_REASON_LABELS: Record<string, string> = {
-  call_cap: 'çağrı bütçesi doldu',
+  call_cap: 'araç bütçesi doldu',
   repeated: 'aynı çağrı bu konuşmada zaten yapıldı',
   scope: 'çağrı kapsam dışı',
   cancelled: 'istek durduruldu',

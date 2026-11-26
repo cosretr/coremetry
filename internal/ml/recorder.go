@@ -121,6 +121,9 @@ type Recorder struct {
 	// lagHist — v0.10.2476 (lag_pattern.go): consumer lag bölümünün önceki
 	// 7 günlük başlangıçları (bölüm başına bir okuma; tik goroutine'i tek kullanıcı).
 	lagHist lagHistMemo
+	// chronic — v0.10.2480: kronik kaydın (stage=chronic, koşu izlenmez)
+	// replay durumu, epizot başına (snapshot.go chronicSnapState).
+	chronic map[string]*chronicSnap
 }
 
 // WithNotifier — v0.10.2052: grup Problem'i bildirimi için mevcut Problem

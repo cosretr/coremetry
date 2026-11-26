@@ -27,7 +27,8 @@ import (
 // saf bileşimler parçalarıyla kapsanır).
 var promptVersionRegistry = map[string]string{
 	"systemTraceBody":               systemTraceBody,
-	"traceFollowUpAddendum":         traceFollowUpAddendum, // v0.10.948; v0.10.972 — aynı başlıklar
+	"systemTraceNarrativeBody":      systemTraceNarrativeBody, // v0.10.2480 — anlatım biçimi
+	"traceFollowUpAddendum":         traceFollowUpAddendum,    // v0.10.948; v0.10.972 — aynı başlıklar
 	"systemSpan":                    systemSpan,
 	"systemProblem":                 systemProblem,
 	"systemExceptionBody":           systemExceptionBody,   // v0.10.1370 — örnek trace logları; v0.10.1379 — HATA ZİNCİRİ kuralı

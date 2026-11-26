@@ -22,9 +22,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -58,6 +60,15 @@ type mlSourceSeriesResponse struct {
 	Truncated bool                       `json:"truncated,omitempty"`
 	// Reason — v0.10.2061: canlı seri neden yok (tek düz cümle); seri varsa boş.
 	Reason string `json:"reason,omitempty"`
+	// ReasonCode — v0.10.2480: nedenin makine sınıfı (srcCode*); istemci
+	// arayüz dilinde söyler. Detail: kaynağın kendi hata metni (URL'siz,
+	// kısaltılmış; sır içermez). Kaynak hatası artık 502 değil 200 + kod:
+	// sayfa "kaynak okunamadı" diye genelleyip nedeni yutuyordu.
+	ReasonCode string `json:"reasonCode,omitempty"`
+	Detail     string `json:"detail,omitempty"`
+	// Labels — v0.10.2480: endpoint ifadesinin etiketleri nereden geldi:
+	// "event" (olay kanıtı, dedektörün tik anındaki etiketleri) | "discovery".
+	Labels string `json:"labels,omitempty"`
 }
 
 // Canlı seri yokken detayın tek satırı (v0.10.2061; eskiden kayıtlı görüntüye
@@ -71,23 +82,92 @@ const (
 	srcGapEmpty       = "olay penceresinde kaynakta seri yok (saklama süresi dolmuş ya da metrik adı değişmiş olabilir)"
 )
 
+// Nedenin makine sınıfı (v0.10.2480). İstemci bu kodla TR/EN cümle kurar.
+const (
+	srcCodeNoVM      = "no_vm"
+	srcCodeNoExpr    = "no_expr"
+	srcCodeNoCluster = "no_cluster"
+	srcCodePartial   = "partial"
+	srcCodeNoLabels  = "no_labels"
+	srcCodeEmpty     = "empty"
+	srcCodeTimeout   = "timeout"
+	srcCodeQueryErr  = "query_error"
+)
+
+const (
+	srcGapTimeout  = "kaynak sorgusu zaman aşımına uğradı"
+	srcGapQueryErr = "kaynak sorguyu reddetti ya da yanıt vermedi"
+)
+
+// srcCodeOf — SAF: gerekçe cümlesi → kod.
+func srcCodeOf(reason string) string {
+	switch reason {
+	case srcGapNoVM:
+		return srcCodeNoVM
+	case srcGapNoExpr:
+		return srcCodeNoExpr
+	case srcGapNoCluster:
+		return srcCodeNoCluster
+	case srcGapPartial:
+		return srcCodePartial
+	case srcGapNoPodLabels:
+		return srcCodeNoLabels
+	case srcGapTimeout:
+		return srcCodeTimeout
+	case srcGapQueryErr:
+		return srcCodeQueryErr
+	}
+	return srcCodeEmpty
+}
+
+var srcURLRe = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s"']+`)
+
+// srcErrDetail — SAF: kaynak hatasının gösterilebilir metni. URL'ler (kimlik
+// bilgisi taşıyabilir) "<url>" olur; en çok 300 rune.
+func srcErrDetail(err error) string {
+	if err == nil {
+		return ""
+	}
+	d := srcURLRe.ReplaceAllString(err.Error(), "<url>")
+	d = strings.TrimPrefix(d, errUpstream.Error()+": ")
+	if r := []rune(d); len(r) > 300 {
+		d = string(r[:300]) + "…"
+	}
+	return d
+}
+
+// withFailure — SAF (v0.10.2480): kaynak hatası → 200 + kod + metin (zaman
+// aşımı ayrı sınıf). Seri boşaltılır; Query (kurulduysa) korunur ki teknik
+// ayrıntı denenen ifadeyi göstersin.
+func withFailure(out mlSourceSeriesResponse, err error) mlSourceSeriesResponse {
+	out.Series = []chstore.SpanMetricSeries{}
+	reason := srcGapQueryErr
+	low := strings.ToLower(err.Error())
+	if errors.Is(err, context.DeadlineExceeded) || strings.Contains(low, "deadline exceeded") || strings.Contains(low, "timeout") {
+		reason = srcGapTimeout
+	}
+	out = withReason(out, reason)
+	out.Detail = srcErrDetail(err)
+	return out
+}
+
 // withReason — SAF: seri yoksa ve gerekçe verilmemişse boş-pencere gerekçesi.
 func withReason(out mlSourceSeriesResponse, reason string) mlSourceSeriesResponse {
 	if len(out.Series) > 0 {
-		out.Reason = ""
+		out.Reason, out.ReasonCode = "", ""
 		return out
 	}
 	if reason == "" {
 		reason = srcGapEmpty
 	}
-	out.Reason = reason
+	out.Reason, out.ReasonCode = reason, srcCodeOf(reason)
 	return out
 }
 
 // mlSourceSeriesKey — SAF; her girdi anahtarda (v0.5.187). Serbest metinler
 // fnvStr ile ayrı ayrı.
 func mlSourceSeriesKey(detector, service, code, family string, from, to time.Time, step int) string {
-	return fmt.Sprintf("ml-source-series:v2:%s:from=%d:to=%d:s=%d", fnvStr(detector, service, code, family), from.Unix(), to.Unix(), step)
+	return fmt.Sprintf("ml-source-series:v3:%s:from=%d:to=%d:s=%d", fnvStr(detector, service, code, family), from.Unix(), to.Unix(), step)
 }
 
 func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
@@ -104,20 +184,27 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	family := strings.TrimSpace(q.Get("family"))
 	measure := strings.TrimSpace(q.Get("measure")) // v0.10.2204: trace_red ölçüsü (p95 | slow_ratio | err_ratio | rate)
-	s.serveCached(w, r, mlSourceSeriesKey(det, svc, code, family+"\x00"+measure, from, to, step), mlSourceSeriesTTL, func(ctx context.Context) (any, error) {
+	// v0.10.2480: olay kanıtındaki etiket ADLARI (dedektörün tik anında
+	// seçtiği); ifade yine sunucuda, dedektörün kurucusuyla kurulur.
+	svcL, routeL, statusL := strings.TrimSpace(q.Get("svcLabel")), strings.TrimSpace(q.Get("routeLabel")), strings.TrimSpace(q.Get("statusLabel"))
+	extra := strings.Join([]string{family, measure, svcL, routeL, statusL}, "\x00")
+	s.serveCached(w, r, mlSourceSeriesKey(det, svc, code, extra, from, to, step), mlSourceSeriesTTL, func(ctx context.Context) (any, error) {
 		out := mlSourceSeriesResponse{StepSec: step, Series: []chstore.SpanMetricSeries{}}
 		rd, vmOK := s.metricChartReaderFor()
 		if det == "trace_pod_outlier" {
 			if !vmOK {
 				return withReason(out, srcGapNoVM), nil
 			}
-			return s.tracePodSourceSeries(ctx, rd, out, svc, code, family, from, to, step)
+			return tracePodSourceSeries(ctx, rd, out, svc, code, family, from, to, step), nil
 		}
 		if isTraceREDDetector(det) {
 			if !vmOK {
 				return withReason(out, srcGapNoVM), nil
 			}
-			return s.traceREDSourceSeries(ctx, rd, out, svc, code, traceREDMeasure(det, measure), from, to, step)
+			cfg := s.store.GetMLConfig(ctx)
+			return traceREDSourceSeries(ctx, rd, out, traceREDChartIn{Service: svc, Route: code, Measure: traceREDMeasure(det, measure),
+				Family: family, SvcLabel: svcL, RouteLabel: routeL, StatusLabel: statusL, BucketSec: cfg.BucketSec, SlowSec: cfg.SlowRequestSec},
+				from, to, step), nil
 		}
 		svcLabel := ""
 		if vmOK {
@@ -147,7 +234,7 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 			}
 			res, err := rd.QueryPromQLRange(cctx, sq.Expr, from, to, step, anomalyLogChartMaxBuckets+1)
 			if err != nil {
-				return nil, fmt.Errorf("%w: vm: %v", errUpstream, err)
+				return withFailure(out, err), nil
 			}
 			if res != nil {
 				out.Series = res
@@ -161,7 +248,7 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 		res, err := s.thanos.ConsoleQueryRange(cctx, c, thanos.ConsoleRangeQuery{Query: sq.Expr, Start: from, End: to, Step: time.Duration(step) * time.Second},
 			thanos.ConsoleLimits{Timeout: mlSourceSeriesTimeout, MaxSeries: mlSourceSeriesMaxSeries, MaxBodyBytes: 8 << 20})
 		if err != nil {
-			return nil, fmt.Errorf("%w: thanos: %v", errUpstream, err)
+			return withFailure(out, err), nil
 		}
 		if res.Partial() {
 			return withReason(out, srcGapPartial), nil
@@ -176,18 +263,24 @@ func (s *Server) getMLSourceSeries(w http.ResponseWriter, r *http.Request) {
 // dedektörünki (VM RED ailesi, pod etiketi); aile kanıttan gelirse yalnız o,
 // gelmezse (eski olay) ailelerin sırasıyla ilk veri dönen. Aile başına bir
 // etiket keşfi (VM metadata) + bir aralık sorgusu; en çok 2 aile.
-func (s *Server) tracePodSourceSeries(ctx context.Context, rd metricChartReader, out mlSourceSeriesResponse, svc, measure, family string,
-	from, to time.Time, step int) (any, error) {
+// v0.10.2480: kaynak hatası 200 + kod (withFailure); bir ailenin keşif hatası
+// diğer aileyi denemeyi kesmez.
+func tracePodSourceSeries(ctx context.Context, rd metricChartReader, out mlSourceSeriesResponse, svc, measure, family string,
+	from, to time.Time, step int) mlSourceSeriesResponse {
 	cctx, cancel := context.WithTimeout(ctx, mlSourceSeriesTimeout)
 	defer cancel()
 	pref := rd.MetricLabelMap().Normalized().Service
+	var firstErr error
 	for _, pin := range anomaly.REDFamilyPins() {
 		if family != "" && pin.ID != family {
 			continue
 		}
 		names, _, err := rd.MetricLabelNamesIn(cctx, ml.REDDiscoveryMetric(pin), from.Add(-time.Hour), to)
 		if err != nil {
-			return nil, fmt.Errorf("%w: vm: %v", errUpstream, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		labels, ok := ml.PickTracePodLabels(names, pref, pin)
 		if !ok {
@@ -197,21 +290,24 @@ func (s *Server) tracePodSourceSeries(ctx context.Context, rd metricChartReader,
 		if !ok {
 			continue
 		}
+		out.Query = sq
 		res, err := rd.QueryPromQLRange(cctx, sq.Expr, from, to, step, anomalyLogChartMaxBuckets+1)
 		if err != nil {
-			return nil, fmt.Errorf("%w: vm: %v", errUpstream, err)
+			return withFailure(out, err)
 		}
-		out.Query = sq
 		out.Series = seriesByLabel(res, sq.By, mlSourceSeriesMaxSeries)
 		out.Truncated = len(res) > mlSourceSeriesMaxSeries
 		if len(out.Series) > 0 {
-			return out, nil
+			return out
 		}
 	}
 	if out.Query.Expr == "" {
-		return withReason(out, srcGapNoPodLabels), nil
+		if firstErr != nil {
+			return withFailure(out, firstErr)
+		}
+		return withReason(out, srcGapNoPodLabels)
 	}
-	return withReason(out, ""), nil
+	return withReason(out, "")
 }
 
 // isTraceREDDetector — SAF (v0.10.2204): kaynağı VM RED ailesi olan endpoint
@@ -234,45 +330,91 @@ func traceREDMeasure(det, measure string) string {
 	return "slow_ratio" // v0.10.2059 öncesi olay ve "slow" ölçüsü
 }
 
+// traceREDChartIn — endpoint olayının grafik girdisi. Family/…Label: olay
+// kanıtındaki (dedektörün tik anında seçtiği) aile ve etiket adları; boşsa
+// eski olay → keşif.
+type traceREDChartIn struct {
+	Service, Route, Measure                   string
+	Family, SvcLabel, RouteLabel, StatusLabel string
+	BucketSec                                 int
+	SlowSec                                   float64
+}
+
 // traceREDSourceSeries — v0.10.2204: endpoint olayının detay grafiği,
 // dedektörün kendi kaynağı (VM RED ailesi, servis + route etiketi, dedektörün
 // kova penceresi). Eskiden Traces şeridi ClickHouse span'lerinde name =
 // Code arıyordu; gRPC'de Code rpc_method değeri ("callBagService"), span adı
-// "…BagService/callBagService" → hiç nokta yok. Aile başına bir etiket keşfi
-// + bir aralık sorgusu; ilk veri dönen aile.
-func (s *Server) traceREDSourceSeries(ctx context.Context, rd metricChartReader, out mlSourceSeriesResponse, svc, route, measure string,
-	from, to time.Time, step int) (any, error) {
+// "…BagService/callBagService" → hiç nokta yok.
+//
+// v0.10.2480 (operatör: taze olayda "kaynak okunamadı"): ifade olay
+// kanıtındaki aile + etiketlerle, dedektörün kayıt kurucusundan (tek aralık
+// sorgusu, keşif YOK). Eskiden her açılışta ailelerin FİLO ÇAPINDA etiket
+// keşfi (pencere + 1 sa, /api/v1/labels) koşuyordu: dedektör bunu kendi kısa
+// penceresiyle yapıp saatlik önbellekliyor ve hatasını yutuyor; grafik ise
+// İLK ailenin keşif hatasında (zaman aşımı / VM seri sınırı) 502 dönüyor,
+// sayfa nedeni yutup "kaynak okunamadı" diyordu. Keşif yalnız kanıtında
+// etiket olmayan eski olaylarda, aile başına hatası yalıtılmış.
+func traceREDSourceSeries(ctx context.Context, rd metricChartReader, out mlSourceSeriesResponse, in traceREDChartIn,
+	from, to time.Time, step int) mlSourceSeriesResponse {
 	cctx, cancel := context.WithTimeout(ctx, mlSourceSeriesTimeout)
 	defer cancel()
-	cfg := s.store.GetMLConfig(ctx)
-	pref := rd.MetricLabelMap().Normalized().Service
-	for _, pin := range anomaly.REDFamilyPins() {
-		names, _, err := rd.MetricLabelNamesIn(cctx, ml.REDDiscoveryMetric(pin), from.Add(-time.Hour), to)
+	// run — tek aralık sorgusu; done: karar verildi (seri ya da hata).
+	run := func(sq ml.SourceQuery) (mlSourceSeriesResponse, bool) {
+		out.Query = sq
+		res, err := rd.QueryPromQLRange(cctx, sq.Expr, from, to, step, anomalyLogChartMaxBuckets+1)
 		if err != nil {
-			return nil, fmt.Errorf("%w: vm: %v", errUpstream, err)
+			return withFailure(out, err), true
+		}
+		if len(res) > 0 && len(res[0].Points) > 0 {
+			out.Series = res[:1]
+			return out, true
+		}
+		return out, false
+	}
+	if pin, l, ok := ml.TraceREDEventSource(in.Family, in.SvcLabel, in.RouteLabel, in.StatusLabel); ok {
+		out.Labels = "event"
+		sq, ok := ml.TraceREDSourceQuery(pin, l, in.Service, in.Route, in.Measure, in.BucketSec, in.SlowSec)
+		if !ok {
+			return withReason(out, srcGapNoExpr)
+		}
+		if r, done := run(sq); done {
+			return r
+		}
+		return withReason(out, "")
+	}
+	out.Labels = "discovery"
+	pref := rd.MetricLabelMap().Normalized().Service
+	var firstErr error
+	for _, pin := range anomaly.REDFamilyPins() {
+		if in.Family != "" && pin.ID != in.Family {
+			continue
+		}
+		names, _, err := rd.MetricLabelNamesIn(cctx, ml.REDDiscoveryMetric(pin), from, to)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		labels, ok := ml.PickTraceREDLabels(names, pref, pin)
 		if !ok {
 			continue
 		}
-		sq, ok := ml.TraceREDSourceQuery(pin, labels, svc, route, measure, cfg.BucketSec, cfg.SlowRequestSec)
+		sq, ok := ml.TraceREDSourceQuery(pin, labels, in.Service, in.Route, in.Measure, in.BucketSec, in.SlowSec)
 		if !ok {
 			continue
 		}
-		res, err := rd.QueryPromQLRange(cctx, sq.Expr, from, to, step, anomalyLogChartMaxBuckets+1)
-		if err != nil {
-			return nil, fmt.Errorf("%w: vm: %v", errUpstream, err)
-		}
-		out.Query = sq
-		if len(res) > 0 && len(res[0].Points) > 0 {
-			out.Series = res[:1]
-			return out, nil
+		if r, done := run(sq); done {
+			return r
 		}
 	}
 	if out.Query.Expr == "" {
-		return withReason(out, srcGapNoExpr), nil
+		if firstErr != nil {
+			return withFailure(out, firstErr)
+		}
+		return withReason(out, srcGapNoExpr)
 	}
-	return withReason(out, ""), nil
+	return withReason(out, "")
 }
 
 // seriesByLabel — SAF: VM aralık serilerinin grup anahtarını tek etiketin

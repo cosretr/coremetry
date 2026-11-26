@@ -32,8 +32,12 @@ export interface VolumeChartConfig {
   /** unix saniye, artan — paylaşılan x ekseni. */
   times: number[];
   series: TimeChartSeries[];
-  /** bucket genişliği (dakika), başlık ipucu için. */
-  bucketMin: number;
+  /** v0.10.2480 — çubuk ve çizgi kovalarının GERÇEK genişliği (sn); başlık
+   *  (volumeBucketCaption) ikisini de buradan yazar. Önce `bucketMin`
+   *  (dakikaya yuvarlanmış, tabanı 1) vardı: 10 sn'lik çubuklar "1m bucket"
+   *  okunuyordu (operator-reported, prod). */
+  barStepSec: number;
+  lineStepSec: number;
 }
 
 /** buildVolumeSeries — count/errors/p50 serilerini TimeChart konfigine çevirir.
@@ -59,18 +63,20 @@ export function buildVolumeSeries(
   grid?: { lineStepSec: number; barStepSec: number },
 ): VolumeChartConfig {
   const cPts = count?.[0]?.points ?? [];
-  if (!cPts.length) return { times: [], series: [], bucketMin: 1 };
+  if (!cPts.length) return { times: [], series: [], barStepSec: 0, lineStepSec: 0 };
   let t: number[];
   let total: (number | null | undefined)[];
   let err: (number | null | undefined)[];
   let rtLine: (number | null)[];
-  let dt: number;
+  let barSec: number;
+  let lineSec: number;
   const fine = grid && grid.lineStepSec > 0
     ? buildFineVolume(cPts, errors?.[0]?.points ?? [], latency?.[0]?.points ?? [], grid.lineStepSec, stripBarStep(grid.barStepSec, grid.lineStepSec))
     : null;
   if (fine && grid) {
     t = fine.times; total = fine.total; err = fine.err; rtLine = fine.rt;
-    dt = Math.round(stripBarStep(grid.barStepSec, grid.lineStepSec) / 60);
+    barSec = stripBarStep(grid.barStepSec, grid.lineStepSec);
+    lineSec = grid.lineStepSec;
   } else {
     const eMap = new Map((errors?.[0]?.points ?? []).map(p => [p.time, p.value]));
     const pMap = new Map((latency?.[0]?.points ?? []).map(p => [p.time, p.value]));
@@ -84,7 +90,7 @@ export function buildVolumeSeries(
       const v = pMap.get(p.time);
       return v && v > 0 ? v : null;
     });
-    dt = t.length > 1 ? Math.round((t[1] - t[0]) / 60) : 1;
+    barSec = lineSec = t.length > 1 ? t[1] - t[0] : 0;
   }
   // v0.10.2477 (operator-reported: "süre çizgisi … bazen net göstermiyor,
   // Dynatrace daha iyi çiziyor") — v0.10.322'nin 5 kovalık hareketli
@@ -102,9 +108,38 @@ export function buildVolumeSeries(
     { key: 'error', label: 'error ' + unit, data: err, color: statusColor('error'), type: 'bar', axis: 'left' },
     // v0.9.73 — kalın çizgi + nokta: seyrek p50 örnekleri artık okunur.
     // v0.9.843 — süre SOL eksende (Grafana düzeni). v0.10.1180 (operatör): SAYIM sol, SÜRE SAĞ.
-    { key: 'rt', label: `response time (${stripStatLabel(stat)})` /* v0.10.663 (operatör): "5-kova ort." ibaresi kalktı; yumuşatma penceresi ipucuda değil, davranışta */, data: rtLine, color: 'var(--orange)', type: 'line', axis: 'right', width: 2, pointsShow: t.length < 20 },
+    { key: 'rt', label: `response time (${stripStatLabel(stat)})` /* v0.10.663 (operatör): "5-kova ort." ibaresi kalktı; yumuşatma penceresi ipucuda değil, davranışta */, data: rtLine, color: 'var(--orange)', type: 'line', axis: 'right', width: 2, pointsShow: t.length < 20,
+      // v0.10.2480 (operator-reported) — boş kova çizgiyi KIRAR (tek-kova
+      // köprüsü yok); yalıtık örnek nokta olarak görünür. Çizgi yalnız gerçek
+      // kova değerlerinden geçer.
+      strictGaps: true },
   ];
-  return { times: t, series, bucketMin: Math.max(1, dt) };
+  return { times: t, series, barStepSec: barSec, lineStepSec: lineSec };
+}
+
+/** fmtStepShort — SAF (v0.10.2480): kova genişliği (sn) → "10s" / "10 sn",
+ *  "1m" / "1 dk", "2h" / "2 sa", "1d" / "1 g". Tam bölünmeyen değer bir alt
+ *  birimde kalır (90 → "90s"), yuvarlanıp yalan söylemez. */
+export function fmtStepShort(sec: number, lang: Lang = 'tr'): string {
+  const s = Math.max(0, Math.round(sec));
+  const [n, unit]: [number, string] = s >= 86400 && s % 86400 === 0 ? [s / 86400, 'trc.vol.day']
+    : s >= 3600 && s % 3600 === 0 ? [s / 3600, 'trc.vol.hour']
+    : s >= 60 && s % 60 === 0 ? [s / 60, 'trc.vol.min']
+    : [s, 'trc.vol.sec'];
+  return `${n}${t(unit, lang)}`;
+}
+
+/** volumeBucketCaption — SAF (v0.10.2480, operator-reported: başlık "requests /
+ *  1m bucket" derken çubuklar 10 sn idi). Başlık çubuk ve çizgi kovasının
+ *  GERÇEK boyunu yazar; ikisi farklıysa ikisini de: "istek / 1 dk · süre /
+ *  20 sn". Boş grafikte (0) yalnız sürükle ipucu. */
+export function volumeBucketCaption(unit: string, barStepSec: number, lineStepSec: number, lang: Lang = 'tr'): string {
+  const drag = t('trc.vol.drag', lang);
+  if (!(barStepSec > 0)) return drag;
+  const u = unit === 'requests' || unit === 'traces' || unit === 'spans' ? t(`trc.vol.u.${unit}`, lang) : unit;
+  const bars = `${u} / ${fmtStepShort(barStepSec, lang)}`;
+  if (!(lineStepSec > 0) || lineStepSec === barStepSec) return `${bars} ${t('trc.vol.bucket', lang)} · ${drag}`;
+  return `${bars} · ${t('trc.vol.dur', lang)} / ${fmtStepShort(lineStepSec, lang)} · ${drag}`;
 }
 
 

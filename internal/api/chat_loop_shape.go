@@ -80,6 +80,7 @@ func (x *chatExchange) noteStopEvent(v any) {
 	defer x.mu.Unlock()
 	x.loopRan = true
 	x.loopShape.Stop, x.loopShape.Calls, x.loopShape.Rounds = reason, intOf("calls"), intOf("rounds")
+	x.loopShape.Free = intOf("free") // v0.10.2480 — harcanan (calls) ≠ ücretsiz (free)
 }
 
 // loopStopSignals — SAF (x kilidi altında okur): turun loop_stop satırı

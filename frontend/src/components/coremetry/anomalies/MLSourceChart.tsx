@@ -25,7 +25,7 @@ import { t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; // v0.10.229
 import { entryLatencyDSL } from '@/lib/entrySpans';
 import { metricRedSeries, metricRedUnit } from '@/components/cosreChartSpec';
 import type { MLEvent, MLSourceSeries, SpanMetricSeries } from '@/lib/types';
-import { highlightColors, liveGapLine, type ServiceRedAgg, thanosSourceText, panelWindow, peakInRange, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
+import { highlightColors, liveGapLine, sourceGapReason, type ServiceRedAgg, thanosSourceText, panelWindow, peakInRange, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
 
 const hm = (ns: number) => fmtClock(new Date(ns / 1e6)).slice(0, 5);
 const cssVar = (t: string) => getComputedStyle(document.documentElement).getPropertyValue(t);
@@ -49,7 +49,13 @@ export interface SourceChartProps {
   onPeak?: (peak: number | null) => void;
   /** Düşüş olayında en küçük değer. */
   direction?: string;
+  /** v0.10.2480 — canlı grafiğin sorgusu ve adımı (Teknik ayrıntılar); kaynak serisi yolu dışında çağrılmaz. */
+  onQuery?: (q: ChartQueryInfo) => void;
 }
+
+/** v0.10.2480 — canlı grafiğin denenen sorgusu: ifade, adım, etiketlerin
+ *  kaynağı ve (çizilemediyse) nedeni. Sır taşımaz (ifade + neden metni). */
+export interface ChartQueryInfo { expr: string; stepSec: number; labels?: string; reason?: string }
 
 function Frame({ title, source, marks, link, children }: {
   /** Boş: panelin kendi başlığı yeter (Messaging / metrik paneli başlık taşır; v0.10.2044 tek başlık). */
@@ -73,7 +79,7 @@ function Frame({ title, source, marks, link, children }: {
   );
 }
 
-export function MLSourceChart({ lead, open, fallback, onContributors, logsLink, onPeak, direction }: SourceChartProps) {
+export function MLSourceChart({ lead, open, fallback, onContributors, logsLink, onPeak, direction, onQuery }: SourceChartProps) {
   const lang = useLang();
   const panel = useMemo(() => sourcePanelFor(lead, 1, logsLink, lang), [lead, logsLink, lang]);
   // Pencere bir kez (sayfa açılışı) sabitlenir: her render'da now() oynarsa sorgu anahtarı değişirdi.
@@ -81,7 +87,7 @@ export function MLSourceChart({ lead, open, fallback, onContributors, logsLink, 
   const marks = marksText(open, lead.startedAt, lead.lastSeen, lang);
   if (panel.kind === 'kafka-lag') return <KafkaLag panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} onContributors={onContributors} onPeak={onPeak} direction={direction} />;
   if (panel.kind === 'traces') return <TracesStrip panel={panel} win={win} marks={marks} fallback={fallback} />;
-  if (panel.kind === 'metric') return <MetricSeries panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} onPeak={onPeak} direction={direction} />;
+  if (panel.kind === 'metric') return <MetricSeries panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} onPeak={onPeak} direction={direction} onQuery={onQuery} />;
   if (panel.kind === 'logs') return <LogsChart panel={panel} win={win} lead={lead} marks={marks} fallback={fallback} />;
   if (panel.kind === 'service-red') return <ServiceRedChart service={panel.service} agg={panel.agg} label={panel.label} startedAt={lead.startedAt} lastSeen={lead.lastSeen} open={open} fallback={fallback} />;
   // v0.10.2061 — metrik olayında kayıtlı görüntüye düşüş nedeniyle söylenir.
@@ -206,19 +212,29 @@ function LogsChart({ panel, win, lead, marks, fallback }: {
 /** v0.10.2036 — metrik / bağımlılık olayı: dedektörün kendi ifadesi, servis
  *  kapsamlı (VM) ya da servisin pod'ları (Thanos, pod başına); Messaging
  *  paneliyle aynı bileşen. Hata ya da boş → kayıtlı görüntü. */
-function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction }: {
+function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction, onQuery }: {
   panel: Extract<SourcePanel, { kind: 'metric' }>; win: { fromNs: number; toNs: number };
   lead: SourceChartProps['lead']; marks: string; fallback: ReactNode; onPeak?: (p: number | null) => void; direction?: string;
+  onQuery?: (q: ChartQueryInfo) => void;
 }) {
   const [data, setData] = useState<MLSourceSeries | null | undefined>(undefined);
+  // v0.10.2480 — isteğin kendi hatası (HTTP durumu / zaman aşımı); eskiden yutulup "kaynak okunamadı" deniyordu.
+  const [reqErr, setReqErr] = useState<string | null>(null);
   const lang = useLang();
   useEffect(() => {
     const ctl = new AbortController();
-    api.mlSourceSeries({ detector: panel.detector, service: panel.service, code: panel.code, family: panel.family, measure: panel.measure, from: win.fromNs, to: win.toNs }, ctl.signal)
+    setReqErr(null);
+    api.mlSourceSeries({ detector: panel.detector, service: panel.service, code: panel.code, family: panel.family, measure: panel.measure,
+      svcLabel: panel.labels?.svc, routeLabel: panel.labels?.route, statusLabel: panel.labels?.status, from: win.fromNs, to: win.toNs }, ctl.signal)
       .then(setData)
-      .catch((e: unknown) => { if (!isCanceled(e)) setData(null); });
+      .catch((e: unknown) => { if (!isCanceled(e)) { setReqErr(e instanceof Error ? e.message : String(e)); setData(null); } });
     return () => ctl.abort();
   }, [panel, win]);
+  const gapReason = data === undefined ? undefined : sourceGapReason(data, reqErr, lang);
+  useEffect(() => {
+    if (!onQuery || data === undefined) return;
+    onQuery({ expr: data?.query?.expr ?? '', stepSec: data?.stepSec ?? 0, labels: data?.labels, reason: gapReason });
+  }, [data, gapReason, onQuery]);
   const regions = useMemo(() => detectedRegion(lead.startedAt, lead.lastSeen, lang),
     [lead.startedAt, lead.lastSeen, lang]);
   // Tepe yalnız tek seride (VM: dedektörün ölçtüğü seri). Thanos pod başına
@@ -231,7 +247,7 @@ function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction }: 
   const names = useMemo(() => (data?.series ?? []).map(s => s.groupKey.join(' · ')), [data]);
   const colors = useMemo(() => highlightColors(names, panel.highlight, cssVar), [names, panel.highlight]);
   // v0.10.2061 — canlı seri yoksa nedeni tek satır, altında kayıtlı görüntü (sessiz düşüş yok).
-  if (data === null || (data && !data.series.some(x => (x.points ?? []).length))) return <Gap reason={data?.reason}>{fallback}</Gap>;
+  if (data === null || (data && !data.series.some(x => (x.points ?? []).length))) return <Gap reason={gapReason}>{fallback}</Gap>;
   const q = data?.query;
   const thanos = !!panel.cluster;
   const byPod = thanos || !!q?.by;

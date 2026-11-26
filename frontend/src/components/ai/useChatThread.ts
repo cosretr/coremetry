@@ -55,6 +55,8 @@ export interface ChatThreadOpts {
   // pencere taşımıyorsa sunucu sabit 30dk yerine bunu kullanır; soru
   // pencere taşıyorsa ("son 24 saatte…") soru kazanır.
   rangeS?: number;
+  /** v0.10.2480 (E) — Problem penceresi çipi açık. */
+  problemWindow?: boolean;
   // toMs (v0.10.33) — MUTLAK pencerenin bitiş anı; yalnız custom/zoom
   // aralıkta dolu. Göreli aralıkta boş bırakılıyor ki sunucu şimdiye
   // çapalasın — sabitlemek cevabı dondururdu.
@@ -315,7 +317,8 @@ export function useChatThread(opts: ChatThreadOpts = {}) {
         so?.explainAsk, // v0.10.1400 — yapısal açıklama niyeti
         (o.code || codeLocked) || undefined, // v0.10.1461 — Kod hapı (kapalıyken gövdede yok); v0.10.1465 — kilitli konuşmada açık
         codeLocked || undefined, // v0.10.1465 — kod kilidi ipucu (yalnız sıkılaştırır)
-        so?.longWait || undefined); // v0.10.2466 — "daha uzun bekle" evet'i
+        so?.longWait || undefined, // v0.10.2466 — "daha uzun bekle" evet'i
+        (!so?.window && o.problemWindow) || undefined); // v0.10.2480 (E) — Problem penceresi
       // v0.10.648 — terminal olaysız EOF: tur asılı kalmasın (chatAbort.ts).
       patchLast(settleTruncatedTurn);
     } catch (err) {

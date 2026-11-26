@@ -19,6 +19,8 @@ package api
 // genişleten ≤40 ifade, her biri ≤80 bayt; tam liste yazılır (boş liste = ek yok).
 // v0.10.2353 — `interaction` off | on (I5 onaylı aksiyon kartı, cosre_actions.go; varsayılan off).
 // v0.10.2473 — `statusLine` (araç turu ara durum cümlesi; style'dan ayrıldı, varsayılan açık).
+// v0.10.2480 — `traceExplainStyle` anlatim | bolumlu (trace açıklaması biçimi;
+// varsayılan anlatim, trace_explain_narrative.go).
 // v0.10.2355 — `evidence` off | shadow | on (investigation-design karar 25, S1;
 // varsayılan off): kapsam kararı chat_scope_decision.go.
 
@@ -63,17 +65,18 @@ type cosreConversationPut struct {
 	State         *bool     `json:"state"`
 	Style         *bool     `json:"style"`
 	Verification  *string   `json:"verification"`
-	BannedPhrases *[]string `json:"bannedPhrases"` // v0.10.2338 — D
-	Interaction   *string   `json:"interaction"`   // v0.10.2353 — I5
-	Evidence      *string   `json:"evidence"`      // v0.10.2355 — S1
-	StatusLine    *bool     `json:"statusLine"`    // v0.10.2473 — ara durum cümlesi
+	BannedPhrases *[]string `json:"bannedPhrases"`     // v0.10.2338 — D
+	Interaction   *string   `json:"interaction"`       // v0.10.2353 — I5
+	Evidence      *string   `json:"evidence"`          // v0.10.2355 — S1
+	StatusLine    *bool     `json:"statusLine"`        // v0.10.2473 — ara durum cümlesi
+	TraceStyle    *string   `json:"traceExplainStyle"` // v0.10.2480 — anlatim | bolumlu
 }
 
 // mergeCosreConversationPut — SAF: istek + mevcut → yeni blob; ayrılmış
 // alanlar bu sürümde yalnız kapalı değerlerini alabilir.
 func mergeCosreConversationPut(cur chstore.CosreConversation, in cosreConversationPut) (chstore.CosreConversation, error) {
-	if in.State == nil && in.Style == nil && in.Verification == nil && in.BannedPhrases == nil && in.Interaction == nil && in.Evidence == nil && in.StatusLine == nil {
-		return cur, fmt.Errorf("state, style, verification, bannedPhrases, interaction, evidence ya da statusLine alanı zorunlu")
+	if in.State == nil && in.Style == nil && in.Verification == nil && in.BannedPhrases == nil && in.Interaction == nil && in.Evidence == nil && in.StatusLine == nil && in.TraceStyle == nil {
+		return cur, fmt.Errorf("state, style, verification, bannedPhrases, interaction, evidence, statusLine ya da traceExplainStyle alanı zorunlu")
 	}
 	out := cur
 	if in.State != nil {
@@ -110,6 +113,12 @@ func mergeCosreConversationPut(cur chstore.CosreConversation, in cosreConversati
 		}
 		out.Evidence = *in.Evidence
 	}
+	if in.TraceStyle != nil { // v0.10.2480
+		if !chstore.ValidTraceExplainStyle(*in.TraceStyle) {
+			return cur, fmt.Errorf("traceExplainStyle: anlatim | bolumlu")
+		}
+		out.TraceExplainStyle = *in.TraceStyle
+	}
 	return out, nil
 }
 
@@ -145,8 +154,8 @@ func (s *Server) putCosreConversation(w http.ResponseWriter, r *http.Request) {
 	}
 	chstore.SetCosreConversation(saved) // sahte depo testleri için de yayınla
 	s.audit(r, "settings.cosre_conversation.update", "settings", chstore.CosreConversationKey,
-		fmt.Sprintf(`{"before":{"state":%v,"style":%v,"verification":%q,"bannedPhrases":%d,"interaction":%q,"evidence":%q,"statusLine":%v},"after":{"state":%v,"style":%v,"verification":%q,"bannedPhrases":%d,"interaction":%q,"evidence":%q,"statusLine":%v}}`,
-			prev.State, prev.Style, prev.Verification, len(prev.BannedPhrases), prev.Interaction, prev.Evidence, prev.StatusLine,
-			saved.State, saved.Style, saved.Verification, len(saved.BannedPhrases), saved.Interaction, saved.Evidence, saved.StatusLine))
+		fmt.Sprintf(`{"before":{"state":%v,"style":%v,"verification":%q,"bannedPhrases":%d,"interaction":%q,"evidence":%q,"statusLine":%v,"traceExplainStyle":%q},"after":{"state":%v,"style":%v,"verification":%q,"bannedPhrases":%d,"interaction":%q,"evidence":%q,"statusLine":%v,"traceExplainStyle":%q}}`,
+			prev.State, prev.Style, prev.Verification, len(prev.BannedPhrases), prev.Interaction, prev.Evidence, prev.StatusLine, prev.TraceExplainStyle,
+			saved.State, saved.Style, saved.Verification, len(saved.BannedPhrases), saved.Interaction, saved.Evidence, saved.StatusLine, saved.TraceExplainStyle))
 	writeJSON(w, saved)
 }

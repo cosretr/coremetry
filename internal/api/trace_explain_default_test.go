@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -175,6 +176,7 @@ const (
 // Varsayılan (kodsuz) istek: klasik istem + klasik anahtar, akan; `?span=`
 // yok sayılır (aynı klasik satır isabet eder); ?refresh=1 yeniden üretir.
 func TestExplainTraceDefaultIsClassic(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2480 — bölümlü biçimin pini
 	p := newDefProvider(t, defAnswerA, defAnswerB)
 	s := defServer(t, p)
 	mc := s.cache.(*memCache)
@@ -264,6 +266,7 @@ func TestExplainTraceDefaultIsClassic(t *testing.T) {
 // Buffered (bayraksız) istek: gövde bugünkü JSON — explanation = model metni,
 // evidenceSpanIds dolu, sources yok.
 func TestExplainTraceDefaultBufferedBody(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2480 — bölümlü biçimin pini
 	p := newDefProvider(t, defAnswerA+defAnswerB)
 	s := defServer(t, p)
 	w := defCall(s, "", "")

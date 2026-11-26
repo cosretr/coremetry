@@ -449,6 +449,12 @@ func (p *verifyPrepared) hasName(n string) bool {
 			return true
 		}
 	}
+	// v0.10.2480 (F) — kısaltılmış kimlik (hata grubu parmak izi, trace id):
+	// kanıttaki bir kimliğin soldan sınırlı ÖNEKİ. Yalnız kimlik biçimi (≥8,
+	// rakamlı onaltılık) — ad iddiaları gevşemez.
+	if verifyIDTokRe.MatchString(l) && strings.ContainsAny(l, "0123456789") && containsPrefixBounded(p.lower, l) {
+		return true
+	}
 	if sp := strings.IndexByte(l, ' '); sp > 0 && strings.HasPrefix(l[sp+1:], "/") {
 		path := l[sp+1:]
 		if containsBounded(p.lower, path) {
@@ -489,6 +495,23 @@ func containsBounded(hay, needle string) bool {
 		before, _ := utf8.DecodeLastRuneInString(hay[:i])
 		after, _ := utf8.DecodeRuneInString(hay[j:])
 		if (i == 0 || !nameRune(before)) && (j == len(hay) || !nameRune(after)) {
+			return true
+		}
+		from = i + 1
+	}
+}
+
+// containsPrefixBounded — hay içinde needle, SOLU tanımlayıcı karakteri değil
+// (sağı devam edebilir: kısaltılmış kimlik).
+func containsPrefixBounded(hay, needle string) bool {
+	for from := 0; ; {
+		i := strings.Index(hay[from:], needle)
+		if i < 0 {
+			return false
+		}
+		i += from
+		before, _ := utf8.DecodeLastRuneInString(hay[:i])
+		if i == 0 || !nameRune(before) {
 			return true
 		}
 		from = i + 1
@@ -958,6 +981,12 @@ var (
 	verifyPodRe        = regexp.MustCompile(`\b[a-z0-9]+(?:-[a-z0-9]+)*-[a-z0-9]{8,10}-[a-z0-9]{5}\b`)
 	verifyTokenRe      = regexp.MustCompile(`[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]`)
 	verifyMetricTokRe  = regexp.MustCompile(`^(?i:p\d{2,3}|\d+(?:[.,]\d+)?\s*(?:ms|s|sn|dk|%)?)$`)
+	// v0.10.2480 (F) — ters tırnaklı "alan: değer" (`peakRatio:9.11`): alan adı
+	// iddia değil, değer kendi türünde (sayı / ad) denetlenir.
+	verifyFieldValRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*\s*[:=]\s*(\S.*)$`)
+	// verifyIDTokRe — kimlik biçimi (onaltılık / tireli, rakamlı, ≥8): model
+	// kısaltınca kanıttaki tam kimliğin ÖNEKİ olarak eşlenir.
+	verifyIDTokRe = regexp.MustCompile(`^[0-9a-f][0-9a-f-]{7,}$`)
 )
 
 // verifyNameClaims — SAF: ad iddiaları (tekil, küçük harfe göre) ve ters
@@ -977,6 +1006,14 @@ func verifyNameClaims(s string, catalog []string, general bool) ([]string, strin
 	if !general {
 		s = verifyBacktickRe.ReplaceAllStringFunc(s, func(m string) string {
 			inner := strings.TrimSpace(m[1 : len(m)-1])
+			if fv := verifyFieldValRe.FindStringSubmatch(inner); fv != nil && !verifyHTTPOpFullRe.MatchString(inner) {
+				v := strings.TrimSpace(fv[1])
+				if verifyIdentRe.MatchString(v) && strings.IndexFunc(v, unicode.IsLetter) >= 0 && !verifyMetricTokRe.MatchString(v) {
+					add(v)
+					return " "
+				}
+				return " " + v + " " // sayı / serbest değer: sonraki denetimler
+			}
 			switch {
 			case verifyHTTPOpFullRe.MatchString(inner):
 				add(inner)

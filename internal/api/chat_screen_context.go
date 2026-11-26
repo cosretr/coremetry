@@ -6,6 +6,7 @@ import (
 	"time"
 
 	agentctx "github.com/cilcenk/coremetry/internal/ai/agent/context"
+	"github.com/cilcenk/coremetry/internal/tzdefault"
 )
 
 // chat_screen_context.go — serbest tool döngüsüne EKRAN BAĞLAMI
@@ -151,7 +152,11 @@ func screenContextChipTR(c ChatScreenContext) string {
 		parts = append(parts, "env="+e)
 	}
 	if c.RangeS > 0 {
-		parts = append(parts, fmtRangeTR(c.RangeS))
+		if c.Anchored { // v0.10.2480 (E) — geçmişte biten pencere "son N" değil
+			parts = append(parts, pastWindowLabelTR(c.RangeS, c.AnchorTo.UnixMilli(), time.Now(), tzdefault.Location()))
+		} else {
+			parts = append(parts, fmtRangeTR(c.RangeS))
+		}
 	}
 	return "ekran bağlamı: " + strings.Join(parts, " · ")
 }

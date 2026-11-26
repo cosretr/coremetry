@@ -2,7 +2,8 @@ import { Component, Fragment, Suspense, createContext, lazy, memo, useContext, u
 import '@/styles/cosreChat.css';
 import { chatErrorText } from './chatErrorText';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { chartBlocks, mergeBlockLinks, traceListBlocks, operationBlocks, operationDeltaTexts, serviceReportBlocks, topologyBlocks, evidenceBlocksByRef, chartsSignalsBlock, logSpikeBlock, metricPanelBlock, type EvidenceBlockView } from '@/lib/chatBlocks';
+import { chartBlocks, mergeBlockLinks, traceListBlocks, operationBlocks, operationDeltaTexts, serviceReportBlocks, topologyBlocks, evidenceBlocksByRef, chartsSignalsBlock, logSpikeBlock, metricPanelBlock, traceEvidenceBlock, type EvidenceBlockView } from '@/lib/chatBlocks';
+import { TraceNarrativeBody } from './TraceNarrativeBody'; // v0.10.2480 — trace açıklaması anlatım biçimi
 import { ChatTraceList } from './ChatTraceList'; // v0.10.688 — trace_list bloğu
 import { evidenceBlocks } from '@/lib/chatEvidence'; // v0.10.558
 import { EvidenceCard } from './EvidenceCard';
@@ -1167,6 +1168,11 @@ function ChatBubbleView({ turn, onRetry, stepsOpen, onRegenerate, busy, versions
                 bloğundan kart çizer (anlatım = ExplainBody, kartın "Ne oldu" / "Anlatım" yuvasında); blok
                 yoksa düz ExplainBody. v0.10.1444 — Geçmiş turu da blokları taşır (zarfsız eski tur → ExplainBody). */}
             {ex && (() => {
+              // v0.10.2480 — trace anlatım biçimi: kanıt bloğu (modelden ÖNCE gelir) ya da künye kipi.
+              const tev = ex.kind === 'trace' ? traceEvidenceBlock(turn.blocks) : null;
+              if (ex.kind === 'trace' && (tev || ex.renderer === 'trace-narrative')) {
+                return <TraceNarrativeBody text={turn.text} busy={!!turn.pending} view={tev} traceId={ex.id} />;
+              }
               const exBody = (
                 <ExplainBody text={turn.text} busy={!!turn.pending} evidence={turn.pending ? undefined : explainEvidence(ex)}
                   revealAt={ex.cached ? undefined : turn.arrivedAt?.at} />

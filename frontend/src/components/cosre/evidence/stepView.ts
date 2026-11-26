@@ -16,6 +16,8 @@ import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
 import { serviceHref } from '@/lib/serviceHref';
 import { mlEventHref } from '@/lib/anomalyHref';
 import { SIGNAL_KINDS, signalKindOf, type SignalKind } from '@/lib/signalKind';
+import { tf } from '@/lib/i18n';
+import { COSRE_LANG } from '@/components/ai/capabilityHints';
 import { EVIDENCE_STRINGS as T, PAGE_LABEL_DEFAULT, PAGE_LABELS, SKIP_REASON_LABELS, STOP_LABELS, TOOL_TITLES } from './strings';
 
 type Part = CosreUIMessage['parts'][number];
@@ -64,6 +66,10 @@ export interface StepView {
   token?: string;
   /** Araçsız sözleşme adımı (S4 paketi): tek satır, açılmaz. */
   plain?: boolean;
+  /** v0.10.2480 (D) — adım ama çağrı değil: kayıt tohumu / niyet sınıflandırma / plan. */
+  nonCall?: boolean;
+  /** v0.10.2480 (B) — bütçeden düşmeyen çağrı: kayıttan ya da aynı tur önbelleğinden. */
+  served?: 'record' | 'cache';
 }
 
 export interface StepsView {
@@ -76,6 +82,9 @@ export interface StepsView {
 
 export const PREVIEW_MAX_ROWS = 3;
 
+/** v0.10.2480 (D) — adım olarak görünen ama araç çağrısı olmayan sunucu adımları. */
+const NON_CALL_TOOLS: ReadonlySet<string> = new Set(['intent_classify']);
+
 // ── biçim (tr-TR) ──
 const nf = (d: number) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: d, minimumFractionDigits: 0 });
 export function fmtNumTR(v: number, digits = 1): string { return nf(digits).format(v); }
@@ -85,9 +94,36 @@ export function fmtMsTR(ms: number): string {
   return `${fmtNumTR(ms / 1000, 1)} sn`;
 }
 
-/** data-stop → listenin altındaki tek satır (neden · çağrı · tur · süre). */
+/** data-stop → listenin altındaki tek satır (neden · çağrı · tur · süre).
+ *  v0.10.2480 — çağrı = harcanan hak; bütçe dışı (kayıttan / önbellek) ayrı. */
 export function stopLine(s: CosreStop): string {
-  return `${STOP_LABELS[s.reason]} · ${T.calls(s.calls)} · ${T.rounds(s.rounds)} · ${fmtMsTR(s.elapsed_ms)}`;
+  const free = s.free ? ` (${tf('cosre.steps.free', COSRE_LANG, { n: s.free })})` : '';
+  return `${STOP_LABELS[s.reason]} · ${T.calls(s.calls)}${free} · ${T.rounds(s.rounds)} · ${fmtMsTR(s.elapsed_ms)}`;
+}
+
+/** v0.10.2480 (D) — başlık sayaçları: çağrı = gerçek araç çağrısı (bitince
+ *  data-stop'unkiyle AYNI sayı); kayıt tohumu, niyet sınıflandırma, plan ve
+ *  atlanan adım çağrı değildir. */
+export function stepCounts(v: StepsView): { calls: number; record: number; cache: number; skipped: number } {
+  let calls = 0, record = 0, cache = 0, skipped = 0;
+  for (const s of v.steps) {
+    if (s.nonCall || s.plain || !s.tool) continue;
+    if (s.served === 'record') record++;
+    else if (s.served === 'cache') cache++;
+    else if (s.kind === 'skipped') skipped++;
+    else calls++;
+  }
+  return { calls: v.stop ? v.stop.calls : calls, record, cache, skipped };
+}
+
+/** "6 çağrı · 2 kayıttan · 1 atlandı" (sıfır olan parça yazılmaz; çağrı hep). */
+export function stepsHeaderLabel(v: StepsView): string {
+  const c = stepCounts(v);
+  const parts = [tf('cosre.steps.calls', COSRE_LANG, { n: c.calls })];
+  if (c.record) parts.push(tf('cosre.steps.fromRecord', COSRE_LANG, { n: c.record }));
+  if (c.cache) parts.push(tf('cosre.steps.fromCache', COSRE_LANG, { n: c.cache }));
+  if (c.skipped) parts.push(tf('cosre.steps.skipped', COSRE_LANG, { n: c.skipped }));
+  return parts.join(' · ');
 }
 
 /** v0.10.1710 — args nesnesi → `k=v · k=v` (string olduğu gibi, gerisi JSON); yoksa argsText. */
@@ -96,8 +132,6 @@ export function inputsLine(args: Rec, argsText: string | undefined): string | un
   if (keys.length > 0) return keys.map(k => `${k}=${typeof args[k] === 'string' ? args[k] : JSON.stringify(args[k])}`).join(' · ');
   return argsText && argsText !== '{}' ? argsText : undefined;
 }
-
-const BUDGET_STOP_REASONS: ReadonlySet<CosreStopReason> = new Set<CosreStopReason>(['round_cap', 'call_cap', 'token_budget']);
 
 export interface StopBadge { label: string; title: string; warn?: boolean }
 
@@ -112,9 +146,8 @@ export function stopBadges(turn: Pick<ChatTurn, 'stepDetails' | 'error' | 'pendi
   const out: StopBadge[] = [];
   if (sum.guided) out.push({ label: T.badgeGuided, title: T.badgeGuidedTitle });
   if (sum.intent) out.push({ label: T.badgeIntent, title: T.badgeIntentTitle });
-  // v0.10.1711 — v1 balonunun "bütçe doldu" rozeti (budget.exhausted) hideSteps
-  // ile gitmişti; yalnız tavan/bütçe nedenli durmada (deadline ayrı rozette).
-  if (stop && BUDGET_STOP_REASONS.has(stop.reason)) out.push({ label: T.badgeBudget, title: STOP_LABELS[stop.reason], warn: true });
+  // v0.10.2480 (D) — "bütçe doldu" rozeti kalktı: durma satırı aynı şeyi nötr
+  // ifadeyle zaten söylüyor ("araç bütçesi doldu"); ikinci uyarı rozeti yok.
   if (isDeadlineError(turn.error)) out.push({ label: T.badgeDeadline, title: turn.error ?? '', warn: true });
   return out;
 }
@@ -345,9 +378,15 @@ export function stepsView(parts: readonly Part[]): StepsView {
     if (inputs) view.inputs = inputs;
     const raw = str(out.preview);
     if (raw) view.raw = raw;
-    const sub = kind === 'skipped' ? T.skippedTitle : subtitleFor(t.toolName, args, body);
-    if (sub) view.subtitle = sub;
+    const served = out.served === 'record' || out.served === 'cache' ? out.served : undefined;
+    if (served) view.served = served;
+    if (out.context === true || NON_CALL_TOOLS.has(t.toolName)) view.nonCall = true;
     if (kind === 'skipped') view.reason = skipReasonText(tr?.reason ?? str(out.reason));
+    // v0.10.2480 (D) — atlanan adım nedenini başlıkta söyler; ücretsiz çağrı kaynağını.
+    const sub = kind === 'skipped' ? (view.reason ? `${T.skippedTitle} — ${view.reason}` : T.skippedTitle)
+      : served ? tf(`cosre.steps.served.${served}`, COSRE_LANG)
+        : subtitleFor(t.toolName, args, body);
+    if (sub) view.subtitle = sub;
     if (kind === 'error') view.errorText = errorMessage(tr?.text ?? t.errorText ?? str(out.preview));
     if (tr?.query) { view.query = tr.query; view.queryKind = tr.query_kind; }
     if (tr?.source) view.source = sourceLabel(tr.source);

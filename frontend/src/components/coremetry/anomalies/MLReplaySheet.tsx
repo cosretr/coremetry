@@ -45,13 +45,13 @@ import { MLLogPlayer } from './MLLogPlayer';
 import { MLSignalEvidence } from './MLSignalEvidence';
 import { detailStatus, type MLGroupRow } from './mlGroupRows';
 import { evidenceSource, groupGateLine, groupProblemChip, headerOperation, latestGroupDecision, latestSvcShadow, recordDecision, svcGateLine } from './mlGroupDetail';
-import { MLSourceChart } from './MLSourceChart';
+import { MLSourceChart, type ChartQueryInfo } from './MLSourceChart';
 import { MLRecordCard } from './MLRecordCard';
 import { MLVerdictReasonForm } from './MLVerdictReasonForm';
 import { isVerdictReason, type VerdictReason } from './mlVerdictReason';
 import { measuredSeriesFirst, recordUsable } from './mlRecord';
 import { fmtPctLang, t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; // v0.10.2291 — sayfa kromu arayüz dilinde (sunucu metni aynen)
-import { contributorLine, leadFromSnapshot, panelPeakLine, parseLogsLink, recordLead, type Contributors } from './mlSourcePanel';
+import { contributorLine, leadFromSnapshot, panelPeakLine, parseLogsLink, recordLead, snapNoneKey, type Contributors } from './mlSourcePanel';
 import { MLRecordChart } from './MLRecordChart';
 import { requestsCapable } from './mlRequests';
 import { evidenceRows, evidenceSub } from './mlEvidenceRows';
@@ -196,6 +196,8 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
   // v0.10.2044 — panelin olay aralığındaki tepesi. v0.10.2329 (audit B8): başlığa
   // yazılmaz; ayrı, etiketli satır (başlık dedektörün kaydettiği değer).
   const [peak, setPeak] = useState<number | null>(null);
+  // v0.10.2480 — canlı grafiğin denenen sorgusu (Teknik ayrıntılar; prod erişimsiz teşhis).
+  const [chartQuery, setChartQuery] = useState<ChartQueryInfo | null>(null);
   if (q.isLoading) return <Spinner />;
   if (q.error || !card) {
     return <Empty icon={<SearchX size={28} strokeWidth={1.5} />} title={tl('mlx.notFound', lang)}>{tl('mlx.notFound.body', lang)}</Empty>;
@@ -251,7 +253,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
       {snap && <p className="m-0 mb-1.5 text-xs text-muted-foreground"><span data-testid="ml-course-kind">{t('mlCourse.snapshot')}</span> · {tf('mlx.snap.sub', lang, { n: Math.round((snap.bucketSec || 300) / 60) })}</p>}
       {snap && lc ? <MLLogPlayer snap={snap} play={card.play} autoPlay={autoPlay} lc={lc} />
         : snap ? <MLEventPlayer snap={snap} play={card.play} compact />
-          : <p className="text-sm text-muted-foreground">{tl('mlx.snap.none', lang)}</p>}
+          : <p className="text-sm text-muted-foreground" data-testid="ml-snap-none">{tl(snapNoneKey(lead?.evidence), lang)}</p>}
     </div>
   );
   return (
@@ -271,7 +273,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
       <Section id="ml-course" title={tl('mlRecord.card.course', lang)}>
         {/* v0.10.2033 — servis sayfasındaki panelin aynısı (mlSourcePanel); yoksa kayıtlı 5 dakikalık görüntü. */}
         {chartLead ? (
-          <MLSourceChart lead={chartLead} open={running} onContributors={setContrib} fallback={snapshotView}
+          <MLSourceChart lead={chartLead} open={running} onContributors={setContrib} fallback={snapshotView} onQuery={setChartQuery}
             onPeak={setPeak} direction={card.value?.direction}
             logsLink={card.whereToLook.find(l => parseLogsLink(l.href))?.href} />
         ) : snapshotView}
@@ -334,7 +336,7 @@ export function MLReplayContent({ id, autoPlay = false, group = null }: { id: st
           <MLSignalEvidence id={id} signal={h.kind} />
           {snap ? <MLEvidence snap={snap} /> : <p className="text-sm text-muted-foreground">{tl('mlx.noSnap', lang)}</p>}
           <div data-testid="ml-context"><MLContext snap={snap} related={q.data?.related ?? []} /></div>
-          <MLTechnical snap={snap} card={card} />
+          <MLTechnical snap={snap} card={card} chartQuery={chartQuery} />
         </div>
       </details>
     </div>
@@ -467,7 +469,7 @@ function MLContext({ snap, related }: { snap: MLSnapshot | null; related: MLSnap
   );
 }
 
-function MLTechnical({ snap, card }: { snap: MLSnapshot | null; card: ExplainCard }) {
+function MLTechnical({ snap, card, chartQuery }: { snap: MLSnapshot | null; card: ExplainCard; chartQuery?: ChartQueryInfo | null }) {
   const t = card.technical;
   const lang = useLang();
   const k = (key: string) => tl(`mlx.tech.${key}`, lang);
@@ -484,6 +486,13 @@ function MLTechnical({ snap, card }: { snap: MLSnapshot | null; card: ExplainCar
         { k: k('revision'), v: t.revision, mono: true },
         // v0.10.2044 — cümle panel tepesini söyleyebilir; dedektörün değeri burada.
         ...(t.measured ? [{ k: k('measured'), v: t.measured, mono: true }] : []),
+        // v0.10.2480 — canlı grafiğin TAM sorgusu + adımı (+ çizilemediyse neden).
+        ...(chartQuery ? [
+          { k: k('chartQuery'), v: chartQuery.expr || '—', mono: true },
+          { k: k('chartStep'), v: chartQuery.stepSec ? `${chartQuery.stepSec} s` : '—', mono: true },
+          ...(chartQuery.labels ? [{ k: k('chartLabels'), v: k(`chartLabels.${chartQuery.labels === 'event' ? 'event' : 'discovery'}`) }] : []),
+          ...(chartQuery.reason ? [{ k: k('chartResult'), v: chartQuery.reason }] : []),
+        ] : []),
         ...(snap ? [
           { k: k('dayClass'), v: dayClassLabel(snap.dayClass, lang) },
           { k: k('baseline'), v: `${fmtNum(snap.baselineMed)} / ${fmtNum(snap.baselineMad)}`, mono: true },

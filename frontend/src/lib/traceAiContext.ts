@@ -168,6 +168,29 @@ function localParts(ms: number, tz: string | undefined): { date: string; time: s
   };
 }
 
+/**
+ * formatTraceClock — v0.10.2480: tek bir anın saati (SS:DD:ss.mmm), Window
+ * çipiyle AYNI kural: tarayıcı (izleyici) saat diliminde, dilim etiketiyle.
+ * Sunucu kanıtı unix ns taşır; UTC metin basılmaz. `tz` test dikişi.
+ */
+export function formatTraceClock(ns: number, tz?: string): { time: string; tzLabel: string } | null {
+  if (!(ns > 0)) return null;
+  const ms = ns / 1e6;
+  let zone = tz;
+  let p: { date: string; time: string };
+  try {
+    p = localParts(ms, zone);
+  } catch {
+    zone = 'UTC';
+    p = localParts(ms, zone);
+  }
+  let label = zone || '';
+  if (!label) {
+    try { label = Intl.DateTimeFormat().resolvedOptions().timeZone ?? ''; } catch { label = ''; }
+  }
+  return { time: p.time, tzLabel: label || offsetLabel(ms) };
+}
+
 function offsetLabel(ms: number): string {
   const off = -new Date(ms).getTimezoneOffset();
   const sign = off >= 0 ? '+' : '−';

@@ -85,7 +85,7 @@ describe('kayıtlı olayda tek grafik', () => {
   it('kayıt yoksa eski yol (kayıt grafiği yok)', async () => {
     const el = await render({ snapshot: null, related: [], card, record: null });
     expect(el.querySelector('[data-testid="ml-record-chart"]')).toBeNull();
-    expect(el.querySelector('[data-testid="ml-course"]')!.textContent).toContain('grafik kaydı yok');
+    expect(el.querySelector('[data-testid="ml-course"]')!.textContent).toContain('olay anı kaydı yok');
   });
 });
 

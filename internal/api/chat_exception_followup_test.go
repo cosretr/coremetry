@@ -324,7 +324,8 @@ func TestExceptionFollowUpFallbackByteIdentical(t *testing.T) {
 			for _, f := range frames {
 				kinds = append(kinds, f.event)
 			}
-			if got := strings.Join(kinds, ","); got != "step,step,step-result,answer,done" {
+			// v0.10.2480 — bağlam çipi bitmiş hâlde (eşli step-result, context:true).
+			if got := strings.Join(kinds, ","); got != "step,step-result,step,step-result,answer,done" {
 				t.Fatalf("olay dizisi değişti: %s", got)
 			}
 			for _, l := range stepLabels(frames) {

@@ -86,7 +86,7 @@ describe('CosreConversationLine', () => {
   it('v0.10.2339 — doğrulayıcı üç seçenek (kapalı / gölge / zorla); sunucunun kipi seçili; seçim yazar', async () => {
     const el = await render();
     expect(el.textContent).toContain('Cevap doğrulayıcısı');
-    expect(el.textContent).toContain('(doğrulanmamış değer)');
+    expect(el.textContent).toContain('kısa “†” işareti'); // v0.10.2480 — satır içi cümle yerine işaret + tek dipnot
     expect(verifyRadio(el, 'gölge').getAttribute('aria-checked')).toBe('true');
     await act(async () => { verifyRadio(el, 'zorla').click(); });
     await tick();

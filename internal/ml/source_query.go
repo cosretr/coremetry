@@ -195,6 +195,10 @@ func PickTraceREDLabels(names []string, svcPreferred string, pin anomaly.REDFami
 // grafik ClickHouse span'lerinden değil dedektörün VM RED serisinden, aynı
 // toplama ve dedektörün kova penceresiyle (winSec) çizilir. measure: p95 (ms) |
 // slow_ratio (%, slowSec eşiği) | err_ratio (%) | rate (istek/sn).
+//
+// v0.10.2480: ifade dedektörün OLAY KAYDI kurucularından (latSeriesQuery /
+// errSeriesQuery / tpSeriesQuery — recorder'ın aynı olay için koştuğu sorgu);
+// eskiden ayrı yazılmıştı ve yavaş oranında kayıttan ayrışmıştı (clamp_min).
 func TraceREDSourceQuery(pin anomaly.REDFamilyPin, l TraceREDLabels, service, route, measure string, winSec int, slowSec float64) (SourceQuery, bool) {
 	if strings.TrimSpace(service) == "" || strings.TrimSpace(route) == "" || l.Svc == "" || l.Route == "" {
 		return SourceQuery{}, false
@@ -202,28 +206,49 @@ func TraceREDSourceQuery(pin anomaly.REDFamilyPin, l TraceREDLabels, service, ro
 	if winSec <= 0 {
 		winSec = SourceQueryWinSec
 	}
-	w := fmt.Sprintf("[%ds]", winSec)
-	// v0.10.2390: seçiciler red_selector.go'dan (redScope, kayıtla ortak).
-	count := redScope(pin, partCount, l.Svc, l.Route, service, route)
-	bucket := redScope(pin, partBucket, l.Svc, l.Route, service, route)
+	var (
+		s     latSeries
+		ok    bool
+		label string
+	)
 	switch measure {
-	case "p95":
-		return SourceQuery{Expr: fmt.Sprintf("histogram_quantile(0.95, sum by (le) (rate(%s%s))) * %g", bucket, w, pinMsScale(pin)), Unit: "ms", Label: "Yanıt süresi (p95)"}, true
-	case "slow_ratio":
-		if slowSec <= 0 {
-			return SourceQuery{}, false
+	case "p95", "slow_ratio":
+		s, ok = latSeriesQuery(pin, l.Svc, l.Route, service, route, measure, winSec, slowSec)
+		label = "Yavaş istek oranı"
+		if measure == "p95" {
+			label = "Yanıt süresi (p95)"
 		}
-		return SourceQuery{Expr: fmt.Sprintf("100 * (1 - histogram_share(%g, sum by (le) (rate(%s%s))))", pinSlowLe(pin, slowSec), bucket, w), Unit: "percent", Label: "Yavaş istek oranı"}, true
 	case "err_ratio":
-		if l.Status == "" {
-			return SourceQuery{}, false
-		}
-		errSel := redScope(pin, partCount, l.Svc, l.Route, service, route, mRe(l.Status, pin.ServerErr))
-		return SourceQuery{Expr: fmt.Sprintf("100 * sum(rate(%s%s)) / sum(rate(%s%s))", errSel, w, count, w), Unit: "percent", Label: "Hata oranı"}, true
+		s, ok = errSeriesQuery(pin, l.Svc, l.Route, l.Status, service, route, winSec)
+		label = "Hata oranı"
 	case "rate":
-		return SourceQuery{Expr: fmt.Sprintf("sum(rate(%s%s))", count, w), Label: "İstek hızı (istek/sn)"}, true
+		s, ok = tpSeriesQuery(pin, l.Svc, l.Route, service, route, winSec)
+		s.Unit, label = "", "İstek hızı (istek/sn)"
 	}
-	return SourceQuery{}, false
+	if !ok {
+		return SourceQuery{}, false
+	}
+	return SourceQuery{Expr: s.Query, Unit: s.Unit, Label: label}, true
+}
+
+// TraceREDEventSource — SAF (v0.10.2480): olayın kanıtına TİK ANINDA yazılan
+// RED ailesi + etiket adları (trace_red.go srcOf / errOf / cntOf:
+// redFamily, svcLabel, routeLabel, statusLabel). Detay grafiği bunlarla
+// dedektörün kendi ifadesini kurar; etiket keşfi (filo çapında
+// /api/v1/labels) GEREKMEZ. family boşsa ya da pin bilinmiyorsa ok=false
+// (eski olay: çağıran keşfe düşer). Etiket adları eşleyicide selLabel ile
+// kaçışlanır; değerler (servis, route) mEq ile.
+func TraceREDEventSource(family, svcLabel, routeLabel, statusLabel string) (anomaly.REDFamilyPin, TraceREDLabels, bool) {
+	l := TraceREDLabels{Svc: strings.TrimSpace(svcLabel), Route: strings.TrimSpace(routeLabel), Status: strings.TrimSpace(statusLabel)}
+	if l.Svc == "" || l.Route == "" {
+		return anomaly.REDFamilyPin{}, l, false
+	}
+	for _, p := range anomaly.REDFamilyPins() {
+		if p.ID == strings.TrimSpace(family) {
+			return p, l, true
+		}
+	}
+	return anomaly.REDFamilyPin{}, l, false
 }
 
 // depFamilyOf — SAF: olay kodu ("aile|hedef") → aile + hedef.

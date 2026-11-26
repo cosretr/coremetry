@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/cilcenk/coremetry/internal/ai/aisurface"
-	"github.com/cilcenk/coremetry/internal/copilot"
 )
 
 // isTraceExplainAsk — SAF: soru "açıkla/özetle/anlat" şekilli mi ya da
@@ -84,8 +83,13 @@ func (s *Server) guidedTraceExplain(ctx context.Context, emit func(string, any),
 	if isTraceExplainAsk(question) {
 		return s.emitTraceExplainAnswer(ctx, emit, route.TraceID, in, route, links)
 	}
-	system := copilot.SystemPromptTrace()
-	user := in.User + "\n\nOperatörün sorusu (yalnız yukarıdaki kanıta dayanarak, kanıtta olmayanı söylemeden cevapla): " + strings.TrimSpace(question)
+	// v0.10.2480 — biçim ayarı (anlatım: kısa girdi + düşünme yüzeyi + tavan).
+	narrative := traceExplainNarrativeOn()
+	system, evidence := traceExplainPromptFor(narrative, in)
+	if narrative {
+		ctx = traceNarrativeCtx(ctx)
+	}
+	user := evidence + "\n\nOperatörün sorusu (yalnız yukarıdaki kanıta dayanarak, kanıtta olmayanı söylemeden cevapla): " + strings.TrimSpace(question)
 	// soruya özel: önbelleğe girmez (anahtar "").
 	res, ok := s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, user, "", false) // v0.10.1630 — dış bağımlılık satırı
 	if !ok {

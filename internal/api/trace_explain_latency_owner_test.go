@@ -9,6 +9,7 @@ package api
 
 import (
 	"context"
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"strings"
 	"testing"
 )
@@ -84,6 +85,7 @@ func TestTraceEvalsetCasesComposed(t *testing.T) {
 // LLM + sahte Tempo): model satırı yazmasa da cevap satırla başlar; istem
 // kuralı ve KRİTİK YOL bloğu modele gider.
 func TestExplainTraceButtonComposesLatencyOwner(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2480 — bölümlü biçimin pini
 	p := newDefProvider(t, defAnswerA, defAnswerB)
 	s := defServer(t, p)
 	s.tempo = cpServer(t, cpTempoGatewayTrace(t)).tempo

@@ -77,7 +77,7 @@ func enforceRun(t *testing.T, mode string, loop func(string, int) map[string]any
 
 func TestSeamEnforceAbsentNumberAnnotated(t *testing.T) {
 	// v0.10.2439 — işaretli cevabın sonunda sunucu notu (enforceNoted).
-	want := enforceNoted("checkout p95 1.830 ms; payments " + verifyUnverifiedNote + " tarafında p95 2.950 ms " + verifyUnverifiedNote + ".")
+	want := enforceNoted("checkout p95 1.830 ms; payments "+verifyUnverifiedNote+" tarafında p95 2.950 ms "+verifyUnverifiedNote+".", "payments", "2.950 ms")
 	for _, mode := range []string{chstore.CosreVerifyShadow, chstore.CosreVerifyEnforce} {
 		t.Run(mode, func(t *testing.T) {
 			body, vc, _ := enforceRun(t, mode, enforceLoop(verifyFlowAnswer, ""), nil)
@@ -168,7 +168,7 @@ func TestSeamEnforceTimeInUserTZ(t *testing.T) {
 	rg2 := newStateRig(t, enforceLoop("checkout'ta hatalar "+bad+"'de başladı.", ""), nil)
 	installTimeTool(t)
 	body := rg2.ask(enforceQ, nil)
-	if got, want := v2AnswerText(body), enforceNoted("checkout'ta hatalar "+bad+"'de "+verifyUnverifiedNote+" başladı."); got != want {
+	if got, want := v2AnswerText(body), enforceNoted("checkout'ta hatalar "+bad+"'de "+verifyUnverifiedNote+" başladı.", bad); got != want {
 		t.Fatalf("kanıtta olmayan saat:\n got %q\nwant %q", got, want)
 	}
 	assertNoBareMismatch(t, body, bad+"'de")
@@ -193,7 +193,7 @@ func TestSeamEnforceAssumeClauseNeverAnnotated(t *testing.T) {
 		t.Fatal("dikiş zorla kipinde kurulmadı")
 	}
 	g.emitFn("answer", map[string]any{"text": "Son 1 saatte checkout p95 2.950 ms."})
-	want := enforceNoted("Son 1 saate baktım.\n\nSon 1 saatte checkout p95 2.950 ms " + verifyUnverifiedNote + ".")
+	want := enforceNoted("Son 1 saate baktım.\n\nSon 1 saatte checkout p95 2.950 ms "+verifyUnverifiedNote+".", "2.950 ms")
 	if got["text"] != want {
 		t.Fatalf("\n got %q\nwant %q", got["text"], want)
 	}
@@ -231,7 +231,7 @@ func TestSeamEnforceDeepRegenOnce(t *testing.T) {
 	deep := map[string]any{"deep": true}
 	t.Run("hâlâ yanlış → bir kez yeniden, sonra işaret", func(t *testing.T) {
 		body, vc, rg := enforceRun(t, chstore.CosreVerifyEnforce, enforceLoop("checkout p95 2.950 ms.", "checkout p95 2.950 ms."), deep)
-		if got := v2AnswerText(body); got != enforceNoted("checkout p95 2.950 ms "+verifyUnverifiedNote+".") {
+		if got := v2AnswerText(body); got != enforceNoted("checkout p95 2.950 ms "+verifyUnverifiedNote+".", "2.950 ms") {
 			t.Fatalf("cevap: %q", got)
 		}
 		if n := toolTurns(rg.llm); n != 3 {
@@ -260,7 +260,7 @@ func TestSeamEnforceDeepRegenOnce(t *testing.T) {
 	})
 	t.Run("normal kip → ek model çağrısı yok", func(t *testing.T) {
 		body, _, rg := enforceRun(t, chstore.CosreVerifyEnforce, enforceLoop("checkout p95 2.950 ms.", "checkout p95 1.830 ms."), nil)
-		if got := v2AnswerText(body); got != enforceNoted("checkout p95 2.950 ms "+verifyUnverifiedNote+".") {
+		if got := v2AnswerText(body); got != enforceNoted("checkout p95 2.950 ms "+verifyUnverifiedNote+".", "2.950 ms") {
 			t.Fatalf("cevap: %q", got)
 		}
 		if n := toolTurns(rg.llm); n != 2 {
@@ -321,7 +321,7 @@ func TestSeamEnforceNoStackWithGatewayRetry(t *testing.T) {
 	body := chatGoldenLoopBody()
 	body["context"] = map[string]any{"deep": true, "tz": "Europe/Istanbul"}
 	out := serveV2(s, chatGoldenRequest("/api/cosre/v2/chat", body, true)).Body.String()
-	if got := v2AnswerText(out); got != enforceNoted("checkout p95 2.950 ms "+verifyUnverifiedNote+".") {
+	if got := v2AnswerText(out); got != enforceNoted("checkout p95 2.950 ms "+verifyUnverifiedNote+".", "2.950 ms") {
 		t.Fatalf("cevap: %q", got)
 	}
 	if n := len(g.requests()); n != 3 {
@@ -482,7 +482,7 @@ func TestEvalFluencyVerifyLine(t *testing.T) {
 	if f := scoreEvalConvTurn(e, tr, "stub p99 1430", time.Now(), time.UTC); !strings.Contains(strings.Join(f, "|"), "işaretlenmedi") {
 		t.Fatalf("işaretsiz uydurma ihlal sayılmadı: %v", f)
 	}
-	tr.Answer = "p99.9 değeri 4.210 ms " + verifyUnverifiedNote + "."
+	tr.Answer = seamWithEnforceNote("p99.9 değeri 4.210 ms "+verifyUnverifiedNote+".", []verifyClaim{{Text: "4.210 ms"}})
 	if f := scoreEvalConvTurn(e, tr, "stub p99 1430", time.Now(), time.UTC); strings.Contains(strings.Join(f, "|"), "işaretlenmedi") {
 		t.Fatalf("işaretli cevap ihlal sayıldı: %v", f)
 	}
@@ -496,4 +496,11 @@ func TestEvalFluencyVerifyLine(t *testing.T) {
 }
 
 // enforceNoted — v0.10.2439: işaretli cevabın kullanıcıya görünen son hâli.
-func enforceNoted(s string) string { return s + "\n\n" + verifyEnforceNoteTR }
+// enforceNoted — v0.10.2480: işaretli cevap + tek dipnot satırı (uyuşmayan değerler).
+func enforceNoted(s string, toks ...string) string {
+	mm := make([]verifyClaim, 0, len(toks))
+	for _, t := range toks {
+		mm = append(mm, verifyClaim{Text: t})
+	}
+	return s + "\n\n" + verifyFootnoteTR(mm)
+}

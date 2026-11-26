@@ -30,7 +30,13 @@ package chstore
 //     (data-action) önerir ve POST /api/cosre/actions/confirm yazar
 //     (api/cosre_actions.go). Kapalıyken akış bayt aynı, uç 404.
 //
-// Her şey ayrıca `cosre_v2` bayrağının arkasındadır (genel kapı). Şablon
+//   - traceExplainStyle — v0.10.2480 (operatör-bildirimli): trace açıklamasının
+//     biçimi, anlatim (TÜR + KARAR + Sonraki adım; kanıtı UI çizer) | bolumlu
+//     (v0.10.2456 bölümlü şablonu, geri dönüş). Varsayılan anlatim; bilinmeyen
+//     ya da boş değer varsayılan. `cosre_v2` kapısına BAĞLI DEĞİL (✨ düğmesi
+//     ve sohbet turu aynı ayarı okur).
+//
+// Her şey ayrıca `cosre_v2` bayrağının arkasındadır (genel kapı; traceExplainStyle hariç). Şablon
 // ai_general_questions.go: boot'ta yükle + 30 s cfgRefresh, süreç-içi atomic;
 // yazma yolu api/cosre_conversation_settings.go (admin PUT + audit).
 
@@ -65,6 +71,17 @@ func ValidCosreInteraction(v string) bool {
 	return v == CosreInteractionOff || v == CosreInteractionOn
 }
 
+// Trace açıklaması biçimleri (v0.10.2480): kapalı küme.
+const (
+	TraceExplainNarrative = "anlatim"
+	TraceExplainSections  = "bolumlu"
+)
+
+// ValidTraceExplainStyle — SAF: kapalı küme.
+func ValidTraceExplainStyle(v string) bool {
+	return v == TraceExplainNarrative || v == TraceExplainSections
+}
+
 // Kanıt kipleri (v0.10.2355, karar 25): off | shadow | on.
 const (
 	CosreEvidenceOff    = "off"
@@ -89,6 +106,8 @@ type CosreConversation struct {
 	// cümlesi (api/chat_status_line.go). `style`tan ayrıldı; varsayılan AÇIK,
 	// alanı taşımayan eski blob da açık (kayıtlı açık değer kazanır).
 	StatusLine bool `json:"statusLine"`
+	// TraceExplainStyle — v0.10.2480: anlatim | bolumlu (varsayılan anlatim).
+	TraceExplainStyle string `json:"traceExplainStyle"`
 	// VerificationRev — v0.10.2439: doğrulama kipinin yazıldığı varsayılan
 	// kuşağı. SaveCosreConversation her yazımda cosreVerifyRev yazar.
 	VerificationRev int       `json:"verificationRev,omitempty"`
@@ -153,7 +172,7 @@ const cosreVerifyRev = 1
 // kapalı, doğrulama ZORLA (v0.10.2439; önce gölge), kanıt kapalı (v0.10.2355),
 // ara durum cümlesi AÇIK (v0.10.2473).
 func DefaultCosreConversation() CosreConversation {
-	return CosreConversation{State: true, Verification: CosreVerifyEnforce, Interaction: CosreInteractionOff, Evidence: CosreEvidenceOff, StatusLine: true}
+	return CosreConversation{State: true, Verification: CosreVerifyEnforce, Interaction: CosreInteractionOff, Evidence: CosreEvidenceOff, StatusLine: true, TraceExplainStyle: TraceExplainNarrative}
 }
 
 // ValidCosreVerification — SAF: kapalı küme.
@@ -183,6 +202,9 @@ func SetCosreConversation(c CosreConversation) {
 	if !ValidCosreEvidence(c.Evidence) {
 		c.Evidence = CosreEvidenceOff
 	}
+	if !ValidTraceExplainStyle(c.TraceExplainStyle) {
+		c.TraceExplainStyle = TraceExplainNarrative // v0.10.2480
+	}
 	cosreConversationCur.Store(&c)
 }
 
@@ -200,7 +222,8 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 		BannedPhrases []string  `json:"bannedPhrases"`
 		Interaction   string    `json:"interaction"`
 		Evidence      string    `json:"evidence"`
-		StatusLine    *bool     `json:"statusLine"` // v0.10.2473 — yoksa varsayılan (açık)
+		StatusLine    *bool     `json:"statusLine"`        // v0.10.2473 — yoksa varsayılan (açık)
+		TraceStyle    string    `json:"traceExplainStyle"` // v0.10.2480 — yoksa varsayılan (anlatim)
 		VerifyRev     int       `json:"verificationRev"`
 		UpdatedBy     string    `json:"updatedBy"`
 		UpdatedAt     time.Time `json:"updatedAt"`
@@ -229,6 +252,9 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 	}
 	if ValidCosreEvidence(in.Evidence) { // v0.10.2355 — bilinmeyen / boş kip varsayılan (off)
 		out.Evidence = in.Evidence
+	}
+	if ValidTraceExplainStyle(in.TraceStyle) {
+		out.TraceExplainStyle = in.TraceStyle
 	}
 	out.UpdatedBy = strings.TrimSpace(in.UpdatedBy)
 	out.UpdatedAt = in.UpdatedAt

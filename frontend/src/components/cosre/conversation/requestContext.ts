@@ -56,6 +56,8 @@ export function cosreRequestContext(
     attempt: so?.attempt,
     explainAsk: so?.explainAsk,
     longWait: so?.longWait || undefined, // v0.10.2466
+    // v0.10.2480 (E) — tur kendi penceresini seçtiyse (so.window) Problem penceresi gitmez.
+    problemWindow: (!so?.window && o.problemWindow) || undefined,
     code: (sel.code || codeLocked) || undefined,
     codeLocked: codeLocked || undefined,
   });

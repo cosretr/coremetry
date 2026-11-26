@@ -267,8 +267,9 @@ func TestStepChipOrigin(t *testing.T) {
 	emitGuidedStep(emit, "list_problems", `{"service":"a"}`)
 	emitGuidedContextStep(emit, "bağlam: ekrandaki trace (abc)")
 	emitStepChip(emit, "search_traces", `{}`)
-	if len(got) != 3 {
-		t.Fatalf("3 olay bekleniyordu, %d", len(got))
+	// v0.10.2480 (D) — bağlam çipi eşli step-result ile BİTMİŞ yayınlanır (spinner kalmaz).
+	if len(got) != 4 {
+		t.Fatalf("4 olay bekleniyordu, %d", len(got))
 	}
 	if o, _ := got[0].payload["origin"].(string); o != "guided" {
 		t.Errorf("guided çip origin=%q, beklenen guided", o)
@@ -276,8 +277,14 @@ func TestStepChipOrigin(t *testing.T) {
 	if o, _ := got[1].payload["origin"].(string); o != "guided" {
 		t.Errorf("bağlam çipi origin=%q, beklenen guided", o)
 	}
-	if _, has := got[2].payload["origin"]; has {
-		t.Errorf("model araç çipi origin taşımamalı: %v", got[2].payload)
+	if got[2].kind != "step-result" || got[2].payload["context"] != true || got[2].payload["ok"] != true || got[2].payload["i"] != got[1].payload["i"] {
+		t.Errorf("bağlam çipinin eşli bitiş sonucu yok: %+v", got[2])
+	}
+	if _, has := got[2].payload["durationMs"]; has {
+		t.Error("bağlam adımı ölçüm değil — durationMs olmamalı")
+	}
+	if _, has := got[3].payload["origin"]; has {
+		t.Errorf("model araç çipi origin taşımamalı: %v", got[3].payload)
 	}
 }
 

@@ -78,3 +78,20 @@ func TestDetectFailedTurnsReadsLoopStop(t *testing.T) {
 		t.Fatal("loop_stop ağırlık taşımaz (etiket değil)")
 	}
 }
+
+// v0.10.2480 — harcanan (calls) ≠ ücretsiz (free); karmaşıklık kademesi +
+// düşüş. Sıfır / bilinmeyen değer yazılmaz (eski ayrıntı bayt bayt aynı).
+func TestLoopStopDetailFreeAndTier(t *testing.T) {
+	l := LoopShape{Stop: "call_cap", Rounds: 3, Calls: 10, Tools: 40, SchemaBytes: 9000, Free: 2, Tier: "complex", CueFallback: true}
+	d := LoopStopDetail(l)
+	if d != "stop=call_cap rounds=3 calls=10 tools=40 schema_bytes=9000 free=2 tier=complex cue_fallback=1" {
+		t.Fatal(d)
+	}
+	if got := ParseLoopStopDetail(d); got != l {
+		t.Fatalf("%+v", got)
+	}
+	old := LoopShape{Stop: "stop", Rounds: 1, Calls: 2, Tier: "weird"}
+	if d := LoopStopDetail(old); d != "stop=stop rounds=1 calls=2 tools=0 schema_bytes=0" {
+		t.Fatal(d)
+	}
+}

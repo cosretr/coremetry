@@ -106,7 +106,7 @@ describe('Traces sayfası — İngilizce arayüz (v0.10.2314)', () => {
       'Diagnosis (explain) →', 'was not found in the trace summary (trace_summary_5m) of the last 90 days',
       'is not present on any span in this window.', 'There is a key that differs only in letter case:', '— attribute keys are case-sensitive.',
       'No groups in this window — the aggregated view needs at least one trace',
-      'The aggregate query timed out', 'No shapes in this window', 'm bucket · drag = select time',
+      'The aggregate query timed out', 'No shapes in this window', 'drag = select time',
       // v0.10.2317 — Pager + FilterQueryBox
       'Quick:', ' select · ', ' cancel', 'Press Enter to go', 'Filter: type a key or http.route=/x',
     ]) expect(text, en).toContain(en);
@@ -128,7 +128,7 @@ describe('Traces sayfası — İngilizce arayüz (v0.10.2314)', () => {
       'Teşhis (explain) →', 'son 90 günün trace özetinde (trace_summary_5m) bulunamadı',
       "bu pencerede hiçbir span'de yok.", 'Yalnız harf düzeni farklı olan bir anahtar var:', '— attribute anahtarları harf duyarlıdır.',
       'Bu pencerede grup yok — toplu görünüm gruplayacak en az bir trace ister',
-      'Toplu sorgu zaman aşımına uğradı', 'Bu pencerede şekil yok', 'm bucket · sürükle = zaman seç',
+      'Toplu sorgu zaman aşımına uğradı', 'Bu pencerede şekil yok', 'sürükle = zaman seç',
     ]) expect(text, tr).toContain(tr);
   }, 30000);
 });

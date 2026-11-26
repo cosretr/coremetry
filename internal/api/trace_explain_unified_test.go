@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"os"
 	"strings"
 	"testing"
@@ -32,6 +33,7 @@ func TestIsTraceExplainAsk(t *testing.T) {
 // birebir (sarmalayıcı yok); önbellek anahtarı düğmeyle AYNI formül;
 // yüzey explain-trace:chat; "Kaynak:" satırı yok.
 func TestChatTraceExplainMatchesExplainButton(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2480 — bölümlü biçimin pini
 	g, _ := os.ReadFile("copilot_guided.go")
 	u, _ := os.ReadFile("trace_explain_unified.go")
 	// v0.10.948 — handler api.go'dan trace_explain_handler.go'ya taşındı.
@@ -57,7 +59,7 @@ func TestChatTraceExplainMatchesExplainButton(t *testing.T) {
 			t.Errorf("birleşik yol %q kullanmamalı (Explain ile birebir)", no)
 		}
 	}
-	if !strings.Contains(string(a), `explainCacheKey(copilot.SystemPromptTrace(), in.User, "")`) {
+	if !strings.Contains(string(a), `explainCacheKey(system, user, "")`) { // v0.10.2480 — traceExplainPromptFor (biçime göre); sohbet turu aynı formül
 		t.Fatal("klasik trace explain önbellek anahtarı formülü değişti (explainTraceClassicPrepared)")
 	}
 	if !strings.Contains(us, `"chat": true`) && !strings.Contains(mustRead(t, "ai_observability.go"), `"chat": true`) {

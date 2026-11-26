@@ -44,8 +44,10 @@ func TestChatLoopEnforcesCallBudget(t *testing.T) {
 	}
 	src := string(b)
 	for _, want := range []string{
-		"splitByCallBudget(turn.ToolCalls, callsLeft)",
-		"for _, tc := range run {",
+		// v0.10.2480 — ücretsiz çağrı (kayıttan / aynı tur önbelleği) haktan düşmez.
+		"splitByChargedBudget(turn.ToolCalls, callsLeft, freeCall)",
+		"callsLeft -= len(run) - countTrue(freeAt)",
+		"for k, tc := range run {",
 		// v0.10.1150 — tavanlar deepMode'dan (kapalıyken chatMaxToolCalls/Rounds, chat_deep_test.go).
 		"maxCalls, maxRounds := dm.toolCalls(), dm.toolRounds()",
 		"callsLeft := maxCalls",

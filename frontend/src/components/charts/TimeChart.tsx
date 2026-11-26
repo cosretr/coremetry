@@ -13,7 +13,7 @@ import { xRangePinned, type XPin } from '@/lib/chart/xRange';
 import { useChartEngine } from '@/lib/chart/engine';
 import { buildCursorOpts } from '@/lib/chart/cursorOpts';
 import { StatsLegend } from '@/components/chart/StatsLegend';
-import { stepGapsRefiner, nearestFilledIdx } from '@/lib/chart/gapPolicy';
+import { stepGapsRefiner, nearestFilledIdx, isolatedPointsFilter } from '@/lib/chart/gapPolicy';
 import { sortedTooltipRows, capTooltipRows } from '@/lib/chart/tooltipModel';
 import { decidePinClick, applyPinStyle, clearPinStyle } from '@/lib/chart/tooltipPin';
 import { toggleSeriesVisibility, isolateSeriesVisibility, resetSeriesVisibility } from '@/lib/chart/legendVisibility';
@@ -64,6 +64,11 @@ export interface TimeChartSeries {
   faint?: boolean;
   // v0.10.1872 — 'points' kipinde içi boş nokta (zemin dolgu, renkli kenar).
   hollow?: boolean;
+  // v0.10.2480 (operator-reported: Traces süre çizgisi boşlukları birleştiriyor) —
+  // line/area: null HER ZAMAN kırar (stepGapsRefiner'ın tek-kova köprüsü yok);
+  // iki yanı boş tek örnek nokta olarak basılır (isolatedPointsFilter), yoksa
+  // segment çizilemediği için görünmezdi.
+  strictGaps?: boolean;
 }
 
 interface Props {
@@ -407,10 +412,12 @@ export function TimeChart({
             // pointsShow geçerse 2k işaret çiziliyordu. TSP'nin ≤300 tier
             // eşiğinin (TimeSeriesPanel.tsx:364) TimeChart karşılığı.
             points: s.pointsShow && (s.data?.length ?? 0) <= 300
-              ? { show: true, size: 4 } : { show: false },
+              ? { show: true, size: 4 }
+              : s.strictGaps ? { show: false, size: 5, filter: isolatedPointsFilter } : { show: false },
             // null = gap; v0.9.84 (madde 3) — tek kaçmış scrape köprülenir
             // (< 1.5×step), gerçek kesinti kırık kalır (stepGapsRefiner).
-            gaps: stepGapsRefiner,
+            // v0.10.2480 — strictGaps: köprü yok (uPlot varsayılanı: null kırar).
+            ...(s.strictGaps ? {} : { gaps: stepGapsRefiner }),
           };
           if (s.type === 'area') base.fill = colors[i] + '33';
           return base;

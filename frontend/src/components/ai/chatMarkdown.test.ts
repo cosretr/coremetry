@@ -220,3 +220,18 @@ describe('akış — yarım satır', () => {
     expect(table(bs).rows).toEqual([['1']]);
   });
 });
+
+// v0.10.2480 (F) — doğrulanamayan değer: satır içinde kısa "†" işareti, cevabın
+// sonunda TEK dipnot satırı (eski "(doğrulanmamış değer)" cümlesi tekrarlanmaz).
+describe('doğrulama dipnotu', () => {
+  const ans = 'Gecikme tabanın 7,4 † katı; hata grubu `ffee0099` †.\n\n' +
+    '_† Bu turun verisinde bulunamadı: «7,4», «ffee0099» — yerlerine tahmin yazılmadı; veriden yeniden sorgulanabilir._';
+  it('dipnot son ayrı satır; işaretler satır içinde kalır', () => {
+    const t = texts(parseChatBlocks(ans));
+    const lines = t.join('\n').split('\n');
+    expect(lines[lines.length - 1]).toMatch(/^_† Bu turun verisinde bulunamadı: «7,4», «ffee0099»/);
+    expect(t.join('\n').match(/Bu turun verisinde bulunamadı/g)).toHaveLength(1);
+    expect(t.join('\n')).not.toContain('doğrulanmamış değer');
+    expect(t[0]).toContain('7,4 †');
+  });
+});

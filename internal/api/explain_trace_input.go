@@ -193,6 +193,9 @@ type traceExplainInput struct {
 	CriticalBlock   string
 	TopStep         *tracechain.PathStep
 	TopExternalWait bool
+	// View — v0.10.2480 (trace_explain_evidence.go): anlatım biçiminde UI'ın
+	// çizdiği sunucu-hesaplı kanıt (modele girmez; User iki biçimde aynı).
+	View *traceEvidenceView
 }
 
 // traceExplainInputSeam — TEST DİKİŞİ (prod'da nil): trace kanıt paketi.
@@ -409,7 +412,19 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 	if critTop != nil {
 		evidence = prependUnique(critTop.SpanID, evidence) // v0.10.1627 — gecikme sahibi de kutulanır
 	}
+	// v0.10.2480 — kanıt görünümü (aynı hesaplardan, ek okuma yok).
+	stackType := chainLogEx.Type
+	for _, h := range chain.Hops {
+		if h.Fail.ExType != "" {
+			stackType = h.Fail.ExType
+			break
+		}
+	}
+	view := buildTraceEvidenceView(traceEvidenceSrc{Spans: allSpans, Analyzed: len(compact), Chain: chain, Crit: crit,
+		Logs: logsRead, LogOutcome: logOutcome, RawStack: rawStack, StackSvc: stackService, StackType: stackType,
+		Oracle: oracleRowsRead, MainOp: mainOp})
 	return traceExplainInput{
+		View:            view,
 		User:            chainBlock + critHead + traceExplainUser(id, len(compact), totalSpans, string(payload), tail), // v0.10.1371 — zincir başta; v0.10.1627 — kritik yol ikinci
 		Evidence:        prependUnique(chain.Origin.Span.SpanID, evidence),                                             // v0.10.1371 — kaynak önce kutulanır
 		CriticalBlock:   strings.TrimSpace(critHead),                                                                   // v0.10.1627

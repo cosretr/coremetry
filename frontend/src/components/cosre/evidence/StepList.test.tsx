@@ -60,14 +60,15 @@ describe('StepList', () => {
   it('akarken açık; bitince tek özet satırı, tıklayınca açılır', async () => {
     let el = await draw(<StepList view={VIEW} live />);
     expect(el.querySelectorAll('[data-cosre-step]')).toHaveLength(4);
-    expect(el.querySelector('[data-cosre-stop]')?.textContent).toContain('çağrı tavanı · 3 çağrı · 2 tur · 4,2 sn');
+    expect(el.querySelector('[data-cosre-stop]')?.textContent).toContain('araç bütçesi doldu · 3 çağrı · 2 tur · 4,2 sn');
     await act(async () => { root?.unmount(); });
     host?.remove(); host = null; root = null;
     el = await draw(<StepList view={VIEW} live={false} />);
     expect(el.querySelectorAll('[data-cosre-step]')).toHaveLength(0);
     const head = el.querySelector('[data-cosre-steps] > button');
-    expect(head?.textContent).toContain('Adımlar · 4 çağrı');
-    expect(head?.textContent).toContain('Durdu: çağrı tavanı');
+    // v0.10.2480 (D) — başlık altbilgiyle AYNI çağrı sayısı (stop.calls = 3), atlanan ayrı.
+    expect(head?.textContent).toContain('Adımlar · 3 çağrı · 1 atlandı');
+    expect(head?.textContent).toContain('Durdu: araç bütçesi doldu');
     await click(head);
     expect(el.querySelectorAll('[data-cosre-step]')).toHaveLength(4);
   });
@@ -84,7 +85,7 @@ describe('StepList', () => {
     expect(head?.getAttribute('aria-expanded')).toBe('false');
     await click(head);
     expect(el.querySelectorAll('[data-cosre-step]')).toHaveLength(4);
-    expect(el.querySelector('[data-cosre-stop]')?.textContent).toContain('çağrı tavanı');
+    expect(el.querySelector('[data-cosre-stop]')?.textContent).toContain('araç bütçesi doldu');
   });
 
   it('kartlar kapalı; açılan evidence kartı etiket, önizleme, kapalı sorgu, bağlantı taşır', async () => {

@@ -235,13 +235,13 @@ func getExceptionSamplesTool(d Deps) mcp.Tool {
 			if err != nil {
 				return nil, err
 			}
-			out := map[string]any{
+			out := withFieldLabels(map[string]any{ // v0.10.2480 (G)
 				"fingerprint": a.Fingerprint,
 				"window_s":    windowS,
 				"samples":     []ExceptionSampleRow{},
 				"count":       0,
 				"truncated":   false,
-			}
+			}, "fingerprint")
 			if g == nil {
 				out["reasons"] = exSamplesReasons(false, chstore.ExceptionSamples{}, 0, windowS)
 				return out, nil

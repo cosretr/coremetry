@@ -46,6 +46,7 @@ import (
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
 	"github.com/cilcenk/coremetry/internal/mcptools"
+	"github.com/cilcenk/coremetry/internal/tzdefault"
 )
 
 // chatOffer — sunucunun/asistanın önerdiği sonraki adım. Kind kapalı küme
@@ -614,13 +615,15 @@ func (t *chatStateTurn) finalize() {
 
 // stateWindowLabel — SAF: durum penceresinin insan etiketi.
 func stateWindowLabel(c ChatContext) string {
-	if c.WinLabel != "" {
+	// v0.10.2480 (E) — bitişi geçmişte olan pencere "son N dakika" diye
+	// yazılmaz (operatör: 19:37'de biten 15 dk 21:07'de "son 15 dakika" görünüyordu).
+	if c.WinLabel != "" && (c.WinToMs <= 0 || !strings.HasPrefix(c.WinLabel, "son ")) {
 		return c.WinLabel
 	}
 	if c.RangeS > 0 {
-		return fmtRangeTR(c.RangeS)
+		return pastWindowLabelTR(c.RangeS, c.WinToMs, chatStateNow(), tzdefault.Location())
 	}
-	return ""
+	return c.WinLabel
 }
 
 // chatStateLineTR — döngü isteminin SONUNA giden durum bloğu (değişken

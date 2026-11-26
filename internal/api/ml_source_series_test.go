@@ -4,11 +4,17 @@ package api
 // başına seriye çözülür; önbellek anahtarı her girdiyi taşır. Fikstür nötr.
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/cilcenk/coremetry/internal/anomaly"
 	"github.com/cilcenk/coremetry/internal/chstore"
+	"github.com/cilcenk/coremetry/internal/ml"
 )
 
 func TestDecodeMatrixSeries(t *testing.T) {
@@ -105,4 +111,90 @@ func TestTraceREDMeasure(t *testing.T) {
 	if !isTraceREDDetector("op_latency") || isTraceREDDetector("trace_error_count") {
 		t.Fatal("isTraceREDDetector")
 	}
+}
+
+// v0.10.2480 — operatör: taze uç nokta olayında canlı grafik "kaynak
+// okunamadı". Olay kanıtında aile + etiketler varsa ifade dedektörün kayıt
+// kurucusundan, etiket keşfi YOK; kaynak hatası 200 + kod + metin (URL'siz).
+func TestTraceREDSourceSeriesUsesEventLabels(t *testing.T) {
+	from, to := time.Unix(1_800_000_000, 0), time.Unix(1_800_003_600, 0)
+	pin := anomaly.REDFamilyPins()[0]
+	in := traceREDChartIn{Service: "orders", Route: `GET /api/v1/Orders/{id} "x"`, Measure: "p95", Family: pin.ID,
+		SvcLabel: "service_name", RouteLabel: "http_route", BucketSec: 300, SlowSec: 1}
+	pts := []chstore.SpanMetricPoint{{Time: 1, Value: 259}}
+	rd := &fakeChartReader{series: []chstore.SpanMetricSeries{{Points: pts}}, labelErr: errors.New("must not discover")}
+	out := traceREDSourceSeries(context.Background(), rd, mlSourceSeriesResponse{StepSec: 60}, in, from, to, 60)
+	want, _ := ml.TraceREDSourceQuery(pin, ml.TraceREDLabels{Svc: "service_name", Route: "http_route"}, in.Service, in.Route, "p95", 300, 1)
+	if rd.unscopedCalls != 0 || len(rd.scopedLabelCalls) != 0 {
+		t.Fatalf("kanıt etiketi varken keşif koşmamalı: %d", rd.unscopedCalls)
+	}
+	if len(rd.queries) != 1 || rd.queries[0] != want.Expr || out.Query.Expr != want.Expr || rd.steps[0] != 60 {
+		t.Fatalf("tek aralık sorgusu dedektör ifadesi olmalı:\n%v\n%s", rd.queries, want.Expr)
+	}
+	if len(out.Series) != 1 || out.ReasonCode != "" || out.Labels != "event" {
+		t.Fatalf("seri: %+v", out)
+	}
+}
+
+func TestTraceREDSourceSeriesFailureReasons(t *testing.T) {
+	from, to := time.Unix(1_800_000_000, 0), time.Unix(1_800_003_600, 0)
+	pin := anomaly.REDFamilyPins()[0]
+	ev := traceREDChartIn{Service: "orders", Route: "/orders/{id}", Measure: "p95", Family: pin.ID, SvcLabel: "service_name", RouteLabel: "http_route", BucketSec: 300, SlowSec: 1}
+	old := ev
+	old.Family, old.SvcLabel, old.RouteLabel = "", "", ""
+	cases := []struct {
+		name, code, detail string
+		in                 traceREDChartIn
+		rd                 *fakeChartReader
+	}{
+		{"sorgu hatası", srcCodeQueryErr, "422: unknown function", ev,
+			&fakeChartReader{queryErr: fmt.Errorf("%w: vm query_range http://user:secret@vm.example:8428/api/v1/query_range: 422: unknown function", errUpstream)}},
+		{"zaman aşımı", srcCodeTimeout, "context deadline exceeded", ev, &fakeChartReader{queryErr: context.DeadlineExceeded}},
+		{"boş", srcCodeEmpty, "", ev, &fakeChartReader{}},
+		// Eski olay: bütün ailelerin keşfi hata → keşif hatası raporlanır (502 değil).
+		{"keşif hatası", srcCodeQueryErr, "too many series", old, &fakeChartReader{labelErr: errors.New("too many series")}},
+		{"keşif boş", srcCodeNoExpr, "", old, &fakeChartReader{}},
+	}
+	for _, c := range cases {
+		out := traceREDSourceSeries(context.Background(), c.rd, mlSourceSeriesResponse{StepSec: 60}, c.in, from, to, 60)
+		if out.ReasonCode != c.code || len(out.Series) != 0 {
+			t.Fatalf("%s: kod %q (%+v)", c.name, out.ReasonCode, out)
+		}
+		if c.detail != "" && !strings.Contains(out.Detail, c.detail) {
+			t.Fatalf("%s: ayrıntı %q", c.name, out.Detail)
+		}
+		if strings.Contains(out.Detail, "secret") || strings.Contains(out.Detail, "http://") {
+			t.Fatalf("%s: ayrıntı URL / kimlik taşımamalı: %q", c.name, out.Detail)
+		}
+		if c.in.Family != "" && out.Query.Expr == "" {
+			t.Fatalf("%s: denenen ifade teknik ayrıntı için dönmeli", c.name)
+		}
+	}
+}
+
+// Eski olay: ilk ailenin keşif hatası sonraki aileyi denemeyi kesmez.
+func TestTraceREDSourceSeriesIsolatesFamilyErrors(t *testing.T) {
+	from, to := time.Unix(1_800_000_000, 0), time.Unix(1_800_003_600, 0)
+	pins := anomaly.REDFamilyPins()
+	last := pins[len(pins)-1]
+	rd := &famErrReader{fakeChartReader: fakeChartReader{series: []chstore.SpanMetricSeries{{Points: []chstore.SpanMetricPoint{{Time: 1, Value: 1}}}}},
+		ok: ml.REDDiscoveryMetric(last), names: []string{"service_name", "http_route", "rpc_method", "status_code", "http_response_status_code", "rpc_grpc_status_code", "le"}}
+	out := traceREDSourceSeries(context.Background(), rd, mlSourceSeriesResponse{StepSec: 60},
+		traceREDChartIn{Service: "orders", Route: "/o", Measure: "p95", BucketSec: 300, SlowSec: 1}, from, to, 60)
+	if len(out.Series) != 1 || out.ReasonCode != "" || out.Labels != "discovery" {
+		t.Fatalf("son aile çizilmeli: %+v", out)
+	}
+}
+
+type famErrReader struct {
+	fakeChartReader
+	ok    string
+	names []string
+}
+
+func (f *famErrReader) MetricLabelNamesIn(_ context.Context, metric string, _, _ time.Time) ([]string, bool, error) {
+	if metric == f.ok {
+		return f.names, false, nil
+	}
+	return nil, false, errors.New("timeout")
 }

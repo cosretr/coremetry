@@ -124,7 +124,7 @@ describe('MessageList × paylaşılan fixture (gerçek SDK)', () => {
     expect(list.getAttribute('data-open')).toBeNull(); // bitti → kapalı özet
     await act(async () => { list.querySelector<HTMLButtonElement>('button')!.click(); });
     expect([...el.querySelectorAll('[data-cosre-step]')].map(n => n.getAttribute('data-cosre-step'))).toEqual(['s2', 's3']);
-    expect(el.querySelector('[data-cosre-stop]')?.textContent).toContain('çağrı tavanı · 2 çağrı · 1 tur');
+    expect(el.querySelector('[data-cosre-stop]')?.textContent).toContain('araç bütçesi doldu · 2 çağrı · 1 tur');
   });
 
   // v0.10.1787 — /cosre v2 tam sayfası: compactSteps → katlı tek satır; yoksa (Sheet) eski özet.
@@ -321,7 +321,7 @@ describe('MessageList × adım kartları (dilim 5)', () => {
     expect(list.querySelectorAll('[data-cosre-step]')).toHaveLength(0); // bitti → katlı
     await act(async () => { (list.querySelector('button') as HTMLElement).click(); });
     expect([...list.querySelectorAll('[data-cosre-step]')].map(s => s.getAttribute('data-kind'))).toEqual(['text', 'skipped']);
-    expect(list.querySelector('[data-cosre-stop="call_cap"]')?.textContent).toContain('çağrı tavanı · 2 çağrı · 1 tur');
+    expect(list.querySelector('[data-cosre-stop="call_cap"]')?.textContent).toContain('araç bütçesi doldu · 2 çağrı · 1 tur');
   });
 });
 

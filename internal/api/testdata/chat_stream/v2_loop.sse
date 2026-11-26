@@ -4,9 +4,9 @@ data: {"type":"start-step"}
 
 data: {"data":{"count":0,"reason":"no_identity","unscoped":true},"id":"scope","type":"data-scope"}
 
-data: {"data":{"i":1,"label":"araştırma bütçesi: 6 araç · 5 tur"},"id":"s1","type":"data-step"}
+data: {"data":{"i":1,"label":"araştırma bütçesi: 8 araç · 5 tur"},"id":"s1","type":"data-step"}
 
-data: {"data":{"executed":0,"exhausted":false,"maxCalls":6,"maxRounds":5,"roundsUsed":0,"skipped":0,"slotsUsed":0},"id":"budget","type":"data-budget"}
+data: {"data":{"executed":0,"exhausted":false,"maxCalls":8,"maxRounds":5,"roundsUsed":0,"skipped":0,"slotsUsed":0},"id":"budget","type":"data-budget"}
 
 data: {"dynamic":true,"toolCallId":"s2","toolName":"get_service_health","type":"tool-input-start"}
 

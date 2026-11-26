@@ -2,7 +2,7 @@
 // çevreler; suçlu seri adıyla. Fikstür nötr.
 import { describe, it, expect } from 'vitest';
 import type { SpanMetricSeries } from '@/lib/types';
-import { contributorLine, highlightColors, liveGapLine, serviceRedAggFor, thanosSourceText, leadFromSnapshot, panelWindow, recordLead, panelPeakLine, peakValueText, sourcePanelFor, topContributors } from './mlSourcePanel';
+import { contributorLine, highlightColors, liveGapLine, serviceRedAggFor, thanosSourceText, leadFromSnapshot, panelWindow, recordLead, panelPeakLine, peakValueText, snapNoneKey, sourceGapReason, sourcePanelFor, topContributors } from './mlSourcePanel';
 
 describe('contributorLine / leadFromSnapshot', () => {
   it('tek suçlu adıyla, diğerleri tek ifadeyle; ad kırpılmaz', () => {
@@ -188,5 +188,51 @@ describe('recordLead', () => {
     expect(recordLead(base, 0)).toBe(base);
     expect(recordLead(base, undefined)).toBe(base);
     expect(recordLead(base, 2_500)).toBe(base);
+  });
+});
+
+// v0.10.2480 — operatör: taze uç nokta olayında "kaynak okunamadı". Neden
+// sınıfı arayüz dilinde, kaynağın metniyle; istek hatası yutulmaz.
+describe('sourceGapReason (v0.10.2480)', () => {
+  const none = (reasonCode?: string, detail?: string) => ({ query: { expr: 'q', label: 'l' }, stepSec: 60, series: [], reasonCode, detail });
+  it.each([
+    ['no_vm', 'tr', "API pod'unda VictoriaMetrics"],
+    ['no_vm', 'en', 'API pod serving this page'],
+    ['no_expr', 'en', 'could not be built'],
+    ['empty', 'en', 'has no series in the event window'],
+    ['timeout', 'tr', 'zaman aşımına uğradı'],
+    ['timeout', 'en', 'timed out'],
+    ['query_error', 'en', 'rejected the query'],
+    ['no_cluster', 'en', 'Thanos cluster'],
+    ['partial', 'en', 'partial response'],
+    ['no_labels', 'en', 'pod label'],
+  ] as const)('%s (%s)', (code, lang, want) => {
+    expect(sourceGapReason(none(code), null, lang)).toContain(want);
+  });
+  it('kaynağın metni nedenin yanında', () => {
+    expect(sourceGapReason(none('query_error', '422: unknown function'), null, 'en')).toBe('the source rejected the query or returned an error — 422: unknown function');
+  });
+  it('istek hatası (HTTP / ağ) kendi metniyle', () => {
+    expect(sourceGapReason(null, '502 Bad Gateway', 'en')).toBe('the chart request failed (502 Bad Gateway)');
+    expect(sourceGapReason(null, '502 Bad Gateway', 'tr')).toContain('grafik isteği başarısız');
+  });
+  it('seri varsa neden yok; kodsuz eski yanıt sunucu cümlesini korur', () => {
+    expect(sourceGapReason({ ...none(), series: [{ groupKey: ['a'], points: [{ t: 1, v: 1 }] } as unknown as SpanMetricSeries] }, null, 'en')).toBeUndefined();
+    expect(sourceGapReason({ ...none(), reason: 'eski cümle' }, null, 'tr')).toBe('eski cümle');
+  });
+  it('canlı satır nedeni taşır (genel "okunamadı" değil)', () => {
+    expect(liveGapLine(sourceGapReason(none('timeout'), null, 'en'), 'en')).toContain('the source query timed out');
+  });
+});
+
+describe('endpoint olayı: dedektörün ailesi + etiketleri (v0.10.2480)', () => {
+  it('kanıttaki redFamily / svcLabel / routeLabel panele geçer', () => {
+    const ev = { detector: 'op_latency', signal: 'trace', code: 'GET /api/v1/Orders/{id}', service: 'orders',
+      evidence: '{"measure":"p95","redFamily":"http","svcLabel":"service_name","routeLabel":"http_route"}' };
+    expect(sourcePanelFor(ev, 1)).toMatchObject({ kind: 'metric', measure: 'p95', family: 'http', labels: { svc: 'service_name', route: 'http_route' } });
+  });
+  it('kural üyesi olayın kayıt yokluğu kendi cümlesiyle', () => {
+    expect(snapNoneKey('{"problem_id":"P1","rule_id":"r1"}')).toBe('mlx.snap.none.member');
+    expect(snapNoneKey('{"measure":"p95"}')).toBe('mlx.snap.none');
   });
 });

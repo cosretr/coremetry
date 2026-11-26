@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/cilcenk/coremetry/internal/chstore"
 	"strings"
 	"testing"
 	"time"
@@ -293,6 +294,7 @@ func TestTraceSynthesisAnswer(t *testing.T) {
 }
 
 func TestTraceSynthesisFallbacks(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2480 — bölümlü biçimin pini
 	// Grup girdisi kurulamaz → trace'in klasik açıklaması (dürüst geri düşüş).
 	prov := &opExplainProvider{deltas: []string{"**Bulgu** trace açıklaması."}}
 	s := newOpExplainServer(t, prov)

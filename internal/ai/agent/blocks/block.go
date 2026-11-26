@@ -42,6 +42,11 @@ const (
 	// kanıtı (grafik + brush bölgesi + ölçüm; api/explain_metric_panel.go;
 	// FE MetricPanelCard).
 	TypeMetricPanel = "metric_panel"
+	// TypeTraceEvidence — v0.10.2480: trace açıklamasının (anlatım biçimi)
+	// sunucu-hesaplı kanıtı (hata zinciri, kritik yol, log, Oracle; api/
+	// trace_explain_evidence.go; FE TraceNarrativeBody "Kanıt" bölümü). Modelden
+	// ÖNCE yayılır: kanıt akış beklemeden çizilir.
+	TypeTraceEvidence = "trace_evidence"
 	// v0.10.2360 — kanıt blokları (investigation-design S3, karar 18): araç
 	// sonucundan sunucu kurar (mcptools/evidence_parts.go), yalnız
 	// cosre_conversation.evidence = on iken yayınlanır; çizici S5.

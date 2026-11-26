@@ -81,6 +81,7 @@ func xtAnswer(t *testing.T, evs []xtEvent) map[string]any {
 
 // Trace turu: düğmenin klasik çekirdeği; düğme ile sohbet AYNI önbellek satırı.
 func TestChatExplainTurnTraceSharesButtonCache(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2480 — bölümlü biçimin pini
 	p := newDefProvider(t, "**Kök neden:** payments POST /charge ", "card declined.")
 	s := defServer(t, p)
 	var evs []xtEvent
@@ -215,6 +216,7 @@ func TestChatExplainTurnFallsThroughAndNotFound(t *testing.T) {
 // Sohbete yazılan "bu trace'i açıkla": v0.10.460'ın `open`'ı yok; aynı künye,
 // düğmenin anahtarı.
 func TestGuidedTraceExplainAskStaysInChat(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2480 — bölümlü biçimin pini
 	p := newDefProvider(t, "özet")
 	s := defServer(t, p)
 	var evs []xtEvent
@@ -248,6 +250,7 @@ func TestGuidedTraceExplainAskStaysInChat(t *testing.T) {
 
 // Kademe sırası: explainAsk her metin eşlemesinden ÖNCE ve handled → döner.
 func TestChatExplainTurnTierIsFirst(t *testing.T) {
+	forceTraceExplainStyle(t, chstore.TraceExplainSections) // v0.10.2480 — bölümlü biçimin pini
 	src := stripGoCommentsAPI(readRepoFile(t, "copilot_chat.go"))
 	iX := strings.Index(src, "s.chatExplainTurn(ctx, emit,")
 	if iX < 0 {
@@ -268,15 +271,15 @@ func TestChatExplainTurnTierIsFirst(t *testing.T) {
 	}
 	// Üç çağıran da tek çekirdekten akar. v0.10.1406 — + fresh (Yeniden üret).
 	for f, want := range map[string]string{
-		"chat_explain_turn.go":                `s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, in.User, cacheKey, ask.Fresh)`, /* v0.10.1630 — dış bağımlılık satırlı ikiz */
-		"trace_explain_unified.go":            `s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, user, "", false)`,              // v0.10.1630
+		"chat_explain_turn.go":                `s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, user, cacheKey, ask.Fresh)`, /* v0.10.1630 — dış bağımlılık satırlı ikiz; v0.10.2480 — biçime göre user */
+		"trace_explain_unified.go":            `s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, user, "", false)`,           // v0.10.1630
 		"chat_operation_exception_explain.go": `s.streamExplainCore(ctx, emit, aisurface.ExplainExceptionChat, system, in.User,`,
 	} {
 		if !strings.Contains(readRepoFile(t, f), want) {
 			t.Errorf("%s çekirdekten geçmiyor (%q)", f, want)
 		}
 	}
-	if !strings.Contains(readRepoFile(t, "chat_explain_turn.go"), `explainCacheKey(system, in.User, "") // explainTraceClassicPrepared ile AYNI formül`) {
+	if !strings.Contains(readRepoFile(t, "chat_explain_turn.go"), `explainCacheKey(system, user, "") // explainTraceClassicPrepared ile AYNI formül`) {
 		t.Fatal("trace turu düğmenin anahtar formülünü kullanmalı")
 	}
 	if evalSurfaceFromLabel(aisurface.ExplainTraceChat) != "Trace" || evalSurfaceFromLabel(aisurface.ExplainExceptionChat) != "Exception" {

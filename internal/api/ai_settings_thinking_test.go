@@ -59,7 +59,7 @@ func TestAIThinkingSettingsRolesAuditRoundTrip(t *testing.T) {
 		t.Fatalf("GET %d: %s", w.Code, w.Body)
 	}
 	for _, sf := range body.Surfaces { // v0.10.2471 — varsayılan on, intent off
-		if want := copilot.DefaultThinkingModes()[sf.ID]; sf.Mode != want || (sf.ID == "intent") != (sf.Mode == "off") {
+		if want := copilot.DefaultThinkingModes()[sf.ID]; sf.Mode != want || (sf.ID == "intent" || sf.ID == "trace_narrative") != (sf.Mode == "off") { // v0.10.2480 — trace_narrative da kapalı
 			t.Fatalf("default must be on except intent: %+v (want %s)", sf, want)
 		}
 	}

@@ -50,14 +50,17 @@ import (
 type ThinkSurface string
 
 const (
-	ThinkIntent        ThinkSurface = "intent"        // niyet / yönlendirici sınıflayıcı
-	ThinkGuided        ThinkSurface = "guided"        // guided anlatım (chat-guided / çekmece)
-	ThinkHealthReport  ThinkSurface = "health_report" // servis sağlığı / servis raporu anlatımı
-	ThinkExplain       ThinkSurface = "explain"       // kısa ✨ açıklamalar + arka plan açıklayıcıları
-	ThinkTrace         ThinkSurface = "trace"         // trace açıklaması (✨ + sohbet)
-	ThinkInvestigation ThinkSurface = "investigation" // CoSRE serbest döngü / araştırma / kök neden
-	ThinkVerifier      ThinkSurface = "verifier"      // doğrulayıcı düzeltme notuyla yeniden üretim
-	ThinkOther         ThinkSurface = "other"         // geri kalan (genel sohbet, wiki, NL sorgu, yoklama…)
+	ThinkIntent       ThinkSurface = "intent"        // niyet / yönlendirici sınıflayıcı
+	ThinkGuided       ThinkSurface = "guided"        // guided anlatım (chat-guided / çekmece)
+	ThinkHealthReport ThinkSurface = "health_report" // servis sağlığı / servis raporu anlatımı
+	ThinkExplain      ThinkSurface = "explain"       // kısa ✨ açıklamalar + arka plan açıklayıcıları
+	ThinkTrace        ThinkSurface = "trace"         // trace açıklaması (✨ + sohbet)
+	// ThinkTraceNarrative — v0.10.2480: trace açıklamasının anlatım biçimi
+	// (api/trace_explain_narrative.go ctx'e açıkça yazar). Varsayılan KAPALI.
+	ThinkTraceNarrative ThinkSurface = "trace_narrative"
+	ThinkInvestigation  ThinkSurface = "investigation" // CoSRE serbest döngü / araştırma / kök neden
+	ThinkVerifier       ThinkSurface = "verifier"      // doğrulayıcı düzeltme notuyla yeniden üretim
+	ThinkOther          ThinkSurface = "other"         // geri kalan (genel sohbet, wiki, NL sorgu, yoklama…)
 )
 
 // Thinking surface modes.
@@ -83,6 +86,7 @@ var thinkSurfaceInfos = []ThinkSurfaceInfo{
 	{ThinkHealthReport, "Health report narration", "guided service health / service report answers"},
 	{ThinkExplain, "Short ✨ explains", "explain-* buttons, runbook, insight cards, auto-explain workers"},
 	{ThinkTrace, "Trace explain", "explain-trace (button and chat), compare-traces"},
+	{ThinkTraceNarrative, "Trace explain (narrative style)", "explain-trace in the default narrative style: label + 2-3 sentence verdict + next step"},
 	{ThinkInvestigation, "CoSRE free loop / investigation", "chat agent loop, research, AI SRE investigation, root-cause verdicts"},
 	{ThinkVerifier, "Verifier regeneration", "one buffered re-answer after a verifier mismatch (Deep + enforce)"},
 	{ThinkOther, "Other", "general chat, wiki / RAG chat, NL query, settings probe, replay judge"},
@@ -172,8 +176,13 @@ func ClassifyThinkSurface(label string) ThinkSurface {
 // 2026-11-26): AÇIK. Tek istisna `intent`: yönlendirici / sınıflayıcı her
 // turdan önce tek satır katı JSON üretir, düşünme orada yalnız gecikme ekler
 // — kapalı kalır; operatör "Thinking mode per surface" kartından açabilir.
+//
+// v0.10.2480 (operatör 2026-11-26: "hızlı da sonuç dönsün") — trace
+// açıklamasının anlatım biçimi (ThinkTraceNarrative) da varsayılan KAPALI:
+// kanıt sunucuda hazır, çıktı üç cümle; v0.10.2471 varsayılanını yalnız bu
+// yüzey için tersine çevirir (DECISIONS). Bölümlü biçim (ThinkTrace) aynen açık.
 func defaultThinkMode(surface ThinkSurface) string {
-	if surface == ThinkIntent {
+	if surface == ThinkIntent || surface == ThinkTraceNarrative {
 		return ThinkModeOff
 	}
 	return ThinkModeOn

@@ -115,7 +115,7 @@ describe('ML olay sayfası düzeni', () => {
     m.role = 'editor';
     const el = await render({ snapshot: null, related: [], card });
     expect(el.querySelector('[data-testid="ml-card"]')).not.toBeNull();
-    expect(el.querySelector('[data-testid="ml-course"]')!.textContent).toContain('grafik kaydı yok');
+    expect(el.querySelector('[data-testid="ml-course"]')!.textContent).toContain('olay anı kaydı yok');
     const btns = [...el.querySelectorAll('[data-testid="ml-actions"] button')] as HTMLButtonElement[];
     expect(btns.some(b => b.disabled)).toBe(false);
   });
@@ -249,7 +249,7 @@ describe('Olayın seyri: canlı seri → kayıtlı görüntü → boş durum', (
     m.sourceSeries = { query: { expr: 'x', label: 'p95' }, stepSec: 60, series: [], reason: 'olay penceresinde kaynakta seri yok' };
     const el = await render({ snapshot: latSnap, related: [], card: latCard });
     expect(kind(el)).toMatch(/kayıtlı görüntü|stored snapshot/);
-    expect(el.querySelector('[data-testid="ml-course"]')!.textContent).not.toContain('grafik kaydı yok');
+    expect(el.querySelector('[data-testid="ml-course"]')!.textContent).not.toContain('olay anı kaydı yok');
   });
   // v0.10.2329 (audit B8) — metrik olayında başlık sayısı dedektörün kaydettiği
   // değer (sunucu cümlesi aynen); canlı panel tepesi ayrı, etiketli satır.

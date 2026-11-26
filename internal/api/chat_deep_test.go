@@ -50,13 +50,13 @@ func TestDeriveDeepMode(t *testing.T) {
 
 func TestDeepModeCaps(t *testing.T) {
 	off, on := deepMode{}, deepMode{On: true}
-	if off.toolRounds() != chatMaxToolRounds || off.toolCalls() != chatMaxToolCalls ||
+	if off.toolRounds() != chatMaxToolRounds || off.toolCalls() != loopBaseToolCalls ||
 		off.wikiMaxPages() != wikiMaxPages || off.wikiCandidates() != wikiSelectMaxCandidates ||
 		off.wikiSearchLimit() != wikiTierSearchLimit {
 		t.Fatal("kapalıyken tavanlar eski sabitler olmalı")
 	}
-	if on.toolRounds() != 7 || on.toolCalls() != 9 {
-		t.Fatalf("Derin döngü tavanı %d tur / %d çağrı, want 7 / 9", on.toolRounds(), on.toolCalls())
+	if on.toolRounds() != 7 || on.toolCalls() != 12 { // v0.10.2480 — taban 8 → ×1.5 = 12
+		t.Fatalf("Derin döngü tavanı %d tur / %d çağrı, want 7 / 12", on.toolRounds(), on.toolCalls())
 	}
 	if on.toolRounds() > deepToolRoundsCeiling || on.toolCalls() > deepToolCallsCeiling {
 		t.Fatal("Derin döngü mutlak tavanı aştı")
@@ -123,7 +123,7 @@ func TestDeepOffByteIdentical(t *testing.T) {
 	if off.wikiSelectPrompt() != copilot.SystemPromptWikiSelect() {
 		t.Fatal("kapalıyken seçim prompt'u eskisi olmalı")
 	}
-	if chatBudgetExhaustedCapsLabelTR(4, chatMaxToolCalls, 3, 1, 2, chatMaxToolRounds) != chatBudgetExhaustedLabelTR(4, 3, 1, 2) {
+	if chatBudgetExhaustedCapsLabelTR(4, loopBaseToolCalls, 3, 1, 2, chatMaxToolRounds) != chatBudgetExhaustedLabelTR(4, 3, 1, 2) {
 		t.Fatal("varsayılan tavanlı bütçe etiketi değişti")
 	}
 	// Gövde `deep` taşımıyorsa bayrak false; taşıyorsa true.
@@ -197,11 +197,12 @@ func TestWikiSelectPagesDeepPool(t *testing.T) {
 	}
 }
 
-// TestLoopBudgetScales — v0.10.2473: ölçek 1 → 6 / 5 (bugünkü); büyük pencere
-// 12 / 8'e dek büyür; Derin ×1.5 aynı mutlak tavanda; v2 tavanları aynı sayı.
+// TestLoopBudgetScales — v0.10.2473; v0.10.2480 (A, operatör onayı) çağrı
+// tabanı +2: ölçek 1 → 8 / 5; 2–3 → 10 / 6; 4–7 → 12 / 7; ≥8 → 14 / 8. Tur
+// tavanları değişmedi. Derin ×1.5 aynı mutlak tavanda; v2 tavanları aynı sayı.
 func TestLoopBudgetScales(t *testing.T) {
 	cases := []struct{ scale, calls, rounds int }{
-		{0, 6, 5}, {1, 6, 5}, {2, 8, 6}, {3, 8, 6}, {4, 10, 7}, {6, 10, 7}, {8, 12, 8}, {16, 12, 8},
+		{0, 8, 5}, {1, 8, 5}, {2, 10, 6}, {3, 10, 6}, {4, 12, 7}, {6, 12, 7}, {8, 14, 8}, {16, 14, 8},
 	}
 	for _, c := range cases {
 		d := deepMode{loopScale: c.scale}

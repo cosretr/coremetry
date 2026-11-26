@@ -138,6 +138,8 @@ export function useCosreAskContext() {
     env: pinnedLegacy ? (pinnedLegacy.env ?? '') : env,
     page, // v0.10.539 — sayfa bağlamı protokolü (lib/pageContext, her turda)
     pinnedPage: pinned ?? undefined, // v0.10.540 — sabitlenmiş bağlam
+    // v0.10.2480 (E) — Problem sayfası: pencere Problem'in kendi penceresi (pin varken pin kazanır).
+    problemWindow: !pinnedLegacy && !!page.problemId,
   }), [pinnedLegacy, currentService, currentOp, rangeS, toMs, currentTrace, env, page, pinned]);
   const reqCtx = useMemo(() => applyContextExclusions(screenReqCtx, ctxExcluded), [screenReqCtx, ctxExcluded]);
   const baseCtxItems = useMemo(() => contextBarItems(reqCtx), [reqCtx]);

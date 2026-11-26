@@ -42,6 +42,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/cilcenk/coremetry/internal/ai/agent/blocks"
 	"github.com/cilcenk/coremetry/internal/ai/aisurface"
 	"github.com/cilcenk/coremetry/internal/chstore"
 	"github.com/cilcenk/coremetry/internal/copilot"
@@ -407,8 +408,17 @@ func (s *Server) emitTraceExplainAnswer(ctx context.Context, emit func(string, a
 // Kodsuz turun cevabı "Kodu da incele" çipini taşır (explainCodeChip).
 func (s *Server) emitTraceExplainTurn(ctx context.Context, emit func(string, any), ask chatExplainAsk, in traceExplainInput, route guidedRoute, links []guidedAnswerLink) (bool, bool) {
 	traceID := ask.ID
-	system := copilot.SystemPromptTrace()
-	cacheKey := explainCacheKey(system, in.User, "") // explainTraceClassicPrepared ile AYNI formül
+	// v0.10.2480 — biçim (anlatım varsayılan; kod dalı bölümlü kalır). Anlatımda
+	// kanıt bloğu MODELDEN ÖNCE yayılır: UI "Kanıt"ı akışı beklemeden çizer.
+	narrative := !ask.Code && traceExplainNarrativeOn()
+	system, user := traceExplainPromptFor(narrative, in)
+	cacheKey := explainCacheKey(system, user, "") // explainTraceClassicPrepared ile AYNI formül
+	if narrative {
+		if in.View != nil {
+			emit(blocks.TypeTraceEvidence, in.View)
+		}
+		ctx = traceNarrativeCtx(ctx)
+	}
 	var res explainCoreResult
 	var ok bool
 	var code *codeContextPayload
@@ -417,7 +427,7 @@ func (s *Server) emitTraceExplainTurn(ctx context.Context, emit func(string, any
 		res, ok = s.streamTraceExplainCodeCore(ctx, emit, aisurface.ExplainTraceChat, p, in.User, ask.Fresh) // v0.10.1630 — dış bağımlılık satırı
 		code = codePayload(p.CC, true)
 	} else {
-		res, ok = s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, in.User, cacheKey, ask.Fresh) // v0.10.1630
+		res, ok = s.streamTraceExplainCore(ctx, emit, aisurface.ExplainTraceChat, system, user, cacheKey, ask.Fresh) // v0.10.1630
 	}
 	if !ok {
 		return true, false
@@ -429,6 +439,9 @@ func (s *Server) emitTraceExplainTurn(ctx context.Context, emit func(string, any
 		Cached: res.Cached, CachedAtMs: res.CachedAtMs,
 		EvidenceSpanIDs: clampExplainIDs(in.Evidence), OracleRows: in.OracleRows, Code: code,
 		Logs: sanitizeTraceLogOutcome(&in.Logs)} // v0.10.1742
+	if narrative {
+		meta.Renderer = explainRendererTraceNarrative // v0.10.2480
+	}
 	ans := map[string]any{
 		"text": text, "exchangeId": res.Xid,
 		"suggestions":     guidedSuggestions(route),

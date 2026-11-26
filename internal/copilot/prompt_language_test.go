@@ -46,6 +46,7 @@ func promptRegistry() map[string]promptClass {
 	return map[string]promptClass{
 		// ── Bir-atımlık ✨ Explain yüzeyleri + kod ikizleri
 		"Trace":             classDirective,
+		"TraceNarrative":    classDirective, // v0.10.2480 — anlatım biçimi (TÜR + KARAR + Sonraki adım)
 		"TraceWithCode":     classDirective,
 		"Span":              classDirective,
 		"Problem":           classDirective,
@@ -132,7 +133,8 @@ func promptRegistry() map[string]promptClass {
 func promptTexts() map[string]string {
 	return map[string]string{
 		"Trace": SystemPromptTrace(), "TraceWithCode": SystemPromptTraceWithCode(),
-		"Span": SystemPromptSpan(), "Problem": SystemPromptProblem(),
+		"TraceNarrative": SystemPromptTraceNarrative(), // v0.10.2480
+		"Span":           SystemPromptSpan(), "Problem": SystemPromptProblem(),
 		"Exception": SystemPromptException(), "ExceptionWithCode": SystemPromptExceptionWithCode(),
 		"Incident": SystemPromptIncident(), "Anomaly": SystemPromptAnomaly(),
 		"ServiceHealth": SystemPromptServiceHealth(), "ServiceCharts": SystemPromptServiceCharts(),

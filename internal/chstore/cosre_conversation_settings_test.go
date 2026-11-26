@@ -7,6 +7,22 @@ import (
 	"testing"
 )
 
+// TestCosreConversationTraceExplainStyle — v0.10.2480: blob yok / alan yok /
+// bilinmeyen değer = anlatim; bolumlu korunur.
+func TestCosreConversationTraceExplainStyle(t *testing.T) {
+	for raw, want := range map[string]string{
+		``:                                TraceExplainNarrative,
+		`{"state":true}`:                  TraceExplainNarrative,
+		`{"traceExplainStyle":"bolumlu"}`: TraceExplainSections,
+		`{"traceExplainStyle":"x"}`:       TraceExplainNarrative,
+	} {
+		c, ok := parseCosreConversation([]byte(raw))
+		if !ok || c.TraceExplainStyle != want {
+			t.Errorf("%q → %q (ok=%v), want %q", raw, c.TraceExplainStyle, ok, want)
+		}
+	}
+}
+
 func TestParseCosreConversation(t *testing.T) {
 	cases := []struct {
 		raw       string

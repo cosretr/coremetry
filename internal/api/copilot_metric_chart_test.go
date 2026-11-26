@@ -283,6 +283,9 @@ func TestEmitGuidedEvidenceResultRefs(t *testing.T) {
 		switch e.kind {
 		case "step-result":
 			m := e.p.(map[string]any)
+			if m["context"] == true { // v0.10.2480 — bağlam adımı bitmiş hâlde (kanıtsız)
+				continue
+			}
 			stepRef = m["evidence"].(mcptools.ChatEvidence).Ref
 			if m["href"] != "/metrics?x=1" || m["i"] != 3 {
 				t.Errorf("step-result: %+v", m)

@@ -96,7 +96,7 @@ func chatBudgetLabelTR(calls, rounds int) string {
 // tavan aşımını sayıyordu (gereksinim 8: ilerleme yalnız GERÇEKTEN yürüyeni
 // gösterir). Artık hak, yürütülen ve alışveriş boyunca yürütülmeyen ayrı.
 func chatBudgetExhaustedLabelTR(slotsUsed, executed, skipped, roundsUsed int) string {
-	return chatBudgetExhaustedCapsLabelTR(slotsUsed, chatMaxToolCalls, executed, skipped, roundsUsed, chatMaxToolRounds)
+	return chatBudgetExhaustedCapsLabelTR(slotsUsed, loopBaseToolCalls, executed, skipped, roundsUsed, chatMaxToolRounds)
 }
 
 // chatBudgetExhaustedCapsLabelTR — v0.10.1150: tavanları açık alan hâli

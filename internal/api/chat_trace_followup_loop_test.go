@@ -357,7 +357,7 @@ func TestTraceFollowUpLoopCarriesTraceContext(t *testing.T) {
 
 	labels := stepLabels(frames)
 	joined := strings.Join(labels, "\n")
-	if !strings.Contains(joined, "trace takibi (araçlarla): trace 4bf92f35") || !strings.Contains(joined, chatBudgetLabelTR(chatMaxToolCalls, chatMaxToolRounds)) {
+	if !strings.Contains(joined, "trace takibi (araçlarla): trace 4bf92f35") || !strings.Contains(joined, chatBudgetLabelTR(loopBaseToolCalls, chatMaxToolRounds)) {
 		t.Errorf("trace/bütçe etiketleri yok: %v", labels)
 	}
 	if strings.Contains(joined, "ekrandaki AI açıklaması") {
@@ -426,10 +426,16 @@ func TestTraceFollowUpLoopSkippedCalls(t *testing.T) {
 	want := []struct {
 		skipped bool
 		reason  string
-	}{{true, "unknown"}, {false, ""}, {true, "repeated"}}
+	}{{true, "unknown"}, {false, ""}, {false, servedFromCache}}
 	for i, w := range want {
 		r := res[i]
 		_, hasDur := r["durationMs"]
+		if w.reason == servedFromCache { // v0.10.2480 — tekrar önbellekten, bütçe dışı, ölçüm değil
+			if r["served"] != servedFromCache || r["ok"] != true || hasDur {
+				t.Errorf("çağrı %d: önbellekten bekleniyordu: %v", i, r)
+			}
+			continue
+		}
 		if w.skipped {
 			if r["skipped"] != true || r["reason"] != w.reason || r["ok"] != false || hasDur {
 				t.Errorf("çağrı %d: skipped/%s ve durationMs'siz bekleniyordu: %v", i, w.reason, r)
@@ -465,7 +471,7 @@ func TestTraceFollowUpLoopCallCap(t *testing.T) {
 			return answerMsg("**Bulgu** — eldeki kanıt.")
 		}
 		var calls [][2]string
-		for i := 0; i < chatMaxToolCalls+2; i++ {
+		for i := 0; i < loopBaseToolCalls+2; i++ {
 			calls = append(calls, [2]string{"search_logs", fmt.Sprintf(`{"query":"q%d","env":"prod"}`, i)})
 		}
 		return toolCallMsg(calls...)
@@ -475,8 +481,8 @@ func TestTraceFollowUpLoopCallCap(t *testing.T) {
 	ft.install(t)
 	frames := postLoopChat(t, s, context.Background(), "u-a", traceDrawerBody("Loglarda bu hatanın karşılığı var mı?", anchoredToMs(), "conv-1"))
 
-	if n := len(ft.snapshot()); n != chatMaxToolCalls {
-		t.Fatalf("%d çağrı yürüdü, tavan %d", n, chatMaxToolCalls)
+	if n := len(ft.snapshot()); n != loopBaseToolCalls {
+		t.Fatalf("%d çağrı yürüdü, tavan %d", n, loopBaseToolCalls)
 	}
 	skipped := 0
 	for _, r := range framesOf(frames, "step-result") {
@@ -490,7 +496,7 @@ func TestTraceFollowUpLoopCallCap(t *testing.T) {
 	if skipped != 2 {
 		t.Fatalf("%d çağrı skipped, 2 bekleniyordu", skipped)
 	}
-	if !strings.Contains(strings.Join(stepLabels(frames), "\n"), chatBudgetExhaustedLabelTR(chatMaxToolCalls, chatMaxToolCalls, 2, 1)) {
+	if !strings.Contains(strings.Join(stepLabels(frames), "\n"), chatBudgetExhaustedLabelTR(loopBaseToolCalls, loopBaseToolCalls, 2, 1)) {
 		t.Errorf("bütçe doldu notu yok: %v", stepLabels(frames))
 	}
 	// agent-core S2 — dolu bütçe adımı nedeni taşır (tur 1/5'te çağrı tavanı).
@@ -871,27 +877,25 @@ func TestTraceFollowUpLoopBudgetCountsOnlyExecuted(t *testing.T) {
 	if n := len(ft.snapshot()); n != 2 {
 		t.Fatalf("%d çağrı yürüdü, 2 bekleniyordu (tekrarlar yürümez)", n)
 	}
-	repeated := 0
+	// v0.10.2480 — aynı tur önbelleği: tekrar "önbellekten" karşılanır ve
+	// bütçeden DÜŞMEZ (eskiden skipped/repeated olarak hak yiyordu).
+	cached := 0
 	for _, r := range framesOf(frames, "step-result") {
-		if r["skipped"] == true && r["reason"] == skipReasonRepeated {
-			repeated++
+		if r["served"] == servedFromCache && r["ok"] == true && r["skipped"] == nil {
+			cached++
 		}
 	}
-	if repeated != 4 {
-		t.Fatalf("%d tekrar skipped, 4 bekleniyordu", repeated)
+	if cached != 4 {
+		t.Fatalf("%d önbellek, 4 bekleniyordu", cached)
 	}
-	want := chatBudgetExhaustedLabelTR(chatMaxToolCalls, 2, 4, 1)
-	if !strings.Contains(want, "2 çağrı yürütüldü, 4 yürütülmedi") {
-		t.Fatalf("etiket biçimi: %q", want)
-	}
-	found := false
 	for _, l := range stepLabels(frames) {
-		if l == want {
-			found = true
+		if strings.HasPrefix(l, "araştırma bütçesi doldu") {
+			t.Fatalf("tekrarlar bütçeyi doldurmamalı: %q", l)
 		}
 	}
-	if !found {
-		t.Fatalf("bütçe notu %q yok: %v", want, stepLabels(frames))
+	stops := framesOf(frames, "stop")
+	if len(stops) == 1 && (stops[0]["calls"] != float64(2) || stops[0]["free"] != float64(4)) {
+		t.Fatalf("stop: harcanan 2, ücretsiz 4 bekleniyordu: %v", stops[0])
 	}
 }
 
@@ -949,7 +953,8 @@ func TestTraceFollowUpLoopNumericWarning(t *testing.T) {
 				return answerMsg(numericFollowUpAnswer)
 			}
 			calls := [][2]string{{"compare_periods", cmp}}
-			for i := 0; i < chatMaxToolCalls; i++ {
+			// v0.10.2480 — "kıyasla" sorusu orta kademe (H): bütçe 10; her kademeyi aş.
+			for i := 0; i < scaledToolCallsCeiling; i++ {
 				calls = append(calls, [2]string{"search_logs", fmt.Sprintf(`{"query":"q%d","env":"prod"}`, i)})
 			}
 			return toolCallMsg(calls...)
