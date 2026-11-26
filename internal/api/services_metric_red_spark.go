@@ -128,13 +128,79 @@ func servicesREDSparkStep(win time.Duration, slots int) int {
 	return max(step, servicesRedSparkMinStep)
 }
 
+// servicesRedSparkMinRateWin — rate penceresinin tabanı (sn). Uygulama
+// metrikleri tipik 60 sn'de bir gelir; pencere en az üç örnek aralığı olsun
+// (Overview grafiklerinin rate[180s] kuralı).
+const servicesRedSparkMinRateWin = 180
+
+// servicesREDSparkRateWin — SAF: rate penceresi (sn) = max(adım, 180).
+func servicesREDSparkRateWin(stepS int) int { return max(stepS, servicesRedSparkMinRateWin) }
+
 // servicesREDSparkQuery — SAF: ailenin TEK birleşik aralık sorgusu.
+//
+// v0.10.2470 (operatör: "sparkline'lar doğru görünmüyor / bozuluyor"): eski
+// şekil increase(...[adım]) idi. VictoriaMetrics'te increase, pencere içindeki
+// son örnek ile pencereden önceki son örneğin FARKIDIR; adım örnekleme
+// aralığının tam katı değilken (135 sn adım, 60 sn örnek) kovalara dönüşümlü
+// 2 ve 3 aralıklık artış düşer → testere dişi; adım = örnek aralığıyken kova
+// 0 ya da 2 aralık alır. rate() farkı iki örnek arasındaki GERÇEK süreye böler,
+// örnek sayısından bağımsızdır. İstek sayısı = rate × adım ("adım başına
+// istek" birimi korunur); pencere ≥ 180 sn (adımdan uzunsa hareketli ortalama).
 func servicesREDSparkQuery(f redFamily, svcLabel string, services []string, envMatcher string, stepS int, showInfra bool) string {
-	c, p, a := servicesREDMetricQueries(f, svcLabel, services, envMatcher, stepS, showInfra)
+	sel := servicesREDMetricSelectors(f, svcLabel, services, envMatcher, showInfra)
+	w := fmt.Sprintf("[%ds]", servicesREDSparkRateWin(stepS))
+	by := append([]string{svcLabel}, f.StatusLabels...)
+	c := "sum by (" + strings.Join(by, ", ") + ") (rate(" + sel("count") + w + ")) * " + strconv.Itoa(stepS)
+	scale := "1000"
+	if f.Unit == "ms" {
+		scale = "1"
+	}
+	p := "histogram_quantile(0.99, sum by (" + svcLabel + ", le) (rate(" + sel("bucket") + w + "))) * " + scale
+	a := "sum by (" + svcLabel + ") (rate(" + sel("sum") + w + ")) / sum by (" + svcLabel + ") (rate(" + sel("count") + w + ")) * " + scale
 	tag := func(q, k string) string {
 		return `label_replace(` + q + `, "` + servicesRedSparkKindLabel + `", "` + k + `", "", ".*")`
 	}
 	return tag(c, "c") + " or " + tag(p, "p") + " or " + tag(a, "a")
+}
+
+// servicesREDSparkGrid — SAF: pencereyi adım ızgarasına hizalar (her yenilemede
+// aynı kova zamanları; kayan başlangıç mini-grafiği titretiyordu).
+func servicesREDSparkGrid(from, to time.Time, stepS int) (time.Time, time.Time) {
+	st := int64(stepS)
+	return time.Unix(from.Unix()/st*st, 0), time.Unix(to.Unix()/st*st, 0)
+}
+
+// servicesREDSparkFill — SAF: servisin eksik kovalarını sıfırla doldurur
+// (trafiksiz adım = 0 istek). Eksik kova çizimde zaman eksenini sıkıştırıyordu.
+// Kova zamanı ns; ızgara [from, to] adım adım.
+func servicesREDSparkFill(row serviceREDSparkRow, from, to time.Time, stepS int) serviceREDSparkRow {
+	if stepS <= 0 || !to.After(from) {
+		return row
+	}
+	have := make(map[int64]serviceREDSparkBucket, len(row.Buckets))
+	onGrid := false
+	stepNs := int64(stepS) * int64(time.Second)
+	for _, b := range row.Buckets {
+		have[b.T] = b
+		if d := b.T - from.UnixNano(); d >= 0 && d%stepNs == 0 {
+			onGrid = true
+		}
+	}
+	if !onGrid {
+		return row // kaynak başka bir ızgara döndürdü: veriyi sıfırlarla ezme
+	}
+	n := int(to.Sub(from)/(time.Duration(stepS)*time.Second)) + 1
+	out := make([]serviceREDSparkBucket, 0, n)
+	for i := 0; i < n; i++ {
+		t := from.Add(time.Duration(i*stepS) * time.Second).UnixNano()
+		if b, ok := have[t]; ok {
+			out = append(out, b)
+		} else {
+			out = append(out, serviceREDSparkBucket{T: t})
+		}
+	}
+	row.Buckets = out
+	return row
 }
 
 // servicesREDSparkFold — SAF: birleşik sorgu sonucu → servis satırları.
@@ -232,6 +298,7 @@ func (s *Server) buildServicesREDSpark(ctx context.Context, rd servicesREDSparkR
 		from = to.Add(-servicesRedMetricMaxWindow)
 	}
 	step := servicesREDSparkStep(to.Sub(from), slots)
+	from, to = servicesREDSparkGrid(from, to, step)
 	out := servicesREDSparkResponse{Source: metricSourceVM, StepSec: step, Services: map[string]serviceREDSparkRow{}}
 	svcLabel := redFamilySvcLabel(rd.MetricLabelMap().Normalized())
 	terms := httpEnvScopeTerms(env, cluster)
@@ -271,7 +338,7 @@ func (s *Server) buildServicesREDSpark(ctx context.Context, rd servicesREDSparkR
 				return
 			}
 			for svc, r := range servicesREDSparkFold(f, svcLabel, svcs, rows) {
-				out.Services[svc] = r
+				out.Services[svc] = servicesREDSparkFill(r, from, to, step)
 			}
 		}(f, svcs)
 	}

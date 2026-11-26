@@ -105,15 +105,7 @@ func servicesREDMetricNames(raw string) []string {
 // ortalama). Seçici metricChartSelector'dan (ad yazımı, servis kümesi, ortam,
 // ailenin sabit eşleyicisi — spanmetrics giriş span'leri).
 func servicesREDMetricQueries(f redFamily, svcLabel string, services []string, envMatcher string, winS int, showInfra bool) (count, p99, avg string) {
-	// Tesisat rotaları (health / scrape / ping) HTTP ailelerinde varsayılan dışlanır.
-	infra := ""
-	if !showInfra && f.Kind == redKindHTTP && f.RouteLabel != "" {
-		infra = f.RouteLabel + "!~" + vmetrics.PromStrTS(infraroutes.RouteRegex())
-	}
-	sel := func(kind string) string {
-		v := metricChartVariant{Probe: f.Probe, Names: []string{f.names()}, Kind: kind, Match: f.Match}
-		return metricChartSelector(metricChartQueryInput{Variant: v, SvcLabel: svcLabel, SvcValues: services, EnvMatcher: envMatcher}, infra)
-	}
+	sel := servicesREDMetricSelectors(f, svcLabel, services, envMatcher, showInfra)
 	w := fmt.Sprintf("[%ds]", winS)
 	by := append([]string{svcLabel}, f.StatusLabels...)
 	count = "sum by (" + strings.Join(by, ", ") + ") (increase(" + sel("count") + w + "))"
@@ -124,6 +116,22 @@ func servicesREDMetricQueries(f redFamily, svcLabel string, services []string, e
 	p99 = "histogram_quantile(0.99, sum by (" + svcLabel + ", le) (increase(" + sel("bucket") + w + "))) * " + scale
 	avg = "sum by (" + svcLabel + ") (increase(" + sel("sum") + w + ")) / sum by (" + svcLabel + ") (increase(" + sel("count") + w + ")) * " + scale
 	return count, p99, avg
+}
+
+// servicesREDMetricSelectors — SAF: ailenin count / bucket / sum seri seçicisi
+// (servis listesi + ortam + tesisat rotası dışlaması). Pencere toplamı
+// (servicesREDMetricQueries) ve mini-grafik (servicesREDSparkQuery) aynı
+// seçiciyi kullanır.
+func servicesREDMetricSelectors(f redFamily, svcLabel string, services []string, envMatcher string, showInfra bool) func(kind string) string {
+	// Tesisat rotaları (health / scrape / ping) HTTP ailelerinde varsayılan dışlanır.
+	infra := ""
+	if !showInfra && f.Kind == redKindHTTP && f.RouteLabel != "" {
+		infra = f.RouteLabel + "!~" + vmetrics.PromStrTS(infraroutes.RouteRegex())
+	}
+	return func(kind string) string {
+		v := metricChartVariant{Probe: f.Probe, Names: []string{f.names()}, Kind: kind, Match: f.Match}
+		return metricChartSelector(metricChartQueryInput{Variant: v, SvcLabel: svcLabel, SvcValues: services, EnvMatcher: envMatcher}, infra)
+	}
 }
 
 // servicesREDMetricFold — SAF: bir turun sonuçları → servis satırları (yalnız

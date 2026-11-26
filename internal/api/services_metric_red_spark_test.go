@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -105,5 +106,46 @@ func TestServicesREDSparkBuild(t *testing.T) {
 	c := res.Services["svc-c"]
 	if c.HasErrors || c.HasLatency || len(c.Buckets) != 1 || c.Buckets[0].Spans != 7 {
 		t.Errorf("svc-c = %+v", c)
+	}
+}
+
+// v0.10.2470 — mini-grafik sorgusu rate tabanlı (örnek sayısından bağımsız),
+// pencere ≥ 180 sn, istek sayısı = rate × adım; increase(...[adım]) geri gelmez.
+func TestServicesREDSparkQueryUsesRate(t *testing.T) {
+	f := redFamilies[0]
+	for _, step := range []int{60, 135, 1080} {
+		q := servicesREDSparkQuery(f, "service_name", []string{"orders-api"}, "", step, false)
+		if strings.Contains(q, "increase(") {
+			t.Fatalf("step %d: increase() geri gelmiş: %s", step, q)
+		}
+		win := fmt.Sprintf("[%ds]", max(step, 180))
+		if n := strings.Count(q, win); n < 4 {
+			t.Fatalf("step %d: rate penceresi %s bekleniyordu (%d kez): %s", step, win, n, q)
+		}
+		if !strings.Contains(q, fmt.Sprintf(")) * %d", step)) {
+			t.Fatalf("step %d: istek sayısı rate × adım olmalı: %s", step, q)
+		}
+	}
+}
+
+func TestServicesREDSparkGridAndFill(t *testing.T) {
+	from, to := servicesREDSparkGrid(time.Unix(1_000_007, 0), time.Unix(1_000_700, 0), 135)
+	if from.Unix()%135 != 0 || to.Unix()%135 != 0 {
+		t.Fatalf("ızgara adıma hizalı değil: %d %d", from.Unix(), to.Unix())
+	}
+	ns := func(i int) int64 { return from.Add(time.Duration(i*135) * time.Second).UnixNano() }
+	row := serviceREDSparkRow{Buckets: []serviceREDSparkBucket{{T: ns(0), Spans: 5}, {T: ns(3), Spans: 7}}}
+	got := servicesREDSparkFill(row, from, to, 135)
+	want := int(to.Sub(from)/(135*time.Second)) + 1
+	if len(got.Buckets) != want {
+		t.Fatalf("kova sayısı %d; want %d", len(got.Buckets), want)
+	}
+	if got.Buckets[0].Spans != 5 || got.Buckets[1].Spans != 0 || got.Buckets[3].Spans != 7 {
+		t.Fatalf("doldurma yanlış: %+v", got.Buckets)
+	}
+	// Izgara dışı veri: dokunulmaz (sıfırla ezilmez).
+	off := serviceREDSparkRow{Buckets: []serviceREDSparkBucket{{T: ns(0) + 1, Spans: 9}}}
+	if g := servicesREDSparkFill(off, from, to, 135); len(g.Buckets) != 1 || g.Buckets[0].Spans != 9 {
+		t.Fatalf("ızgara dışı veri ezildi: %+v", g.Buckets)
 	}
 }
