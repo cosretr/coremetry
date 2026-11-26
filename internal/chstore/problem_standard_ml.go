@@ -179,13 +179,91 @@ func mlRespTimeMsg(headline string) *StdMsg {
 	return stdM(key, "svc", m[1], "n", n, "v", v, "x", swapNumSep.Replace(m[5]))
 }
 
-// mlPromotedMsg — SAF: ML servis Problem'i manşetinin metin anahtarı (hata
-// oranı ya da yanıt süresi cümlesi); serbest metinde nil.
-func mlPromotedMsg(headline string) *StdMsg {
-	if m := mlErrRateMsg(headline); m != nil {
-		return m
+// ── Manşet: uç nokta (v0.10.2474, ml endpoint_impact) ───────────────────
+
+// mlEndpointSubject — SAF: cümlenin öznesi "checkout · POST /pay".
+func mlEndpointSubject(service, route string) string { return service + " · " + route }
+
+// MLEndpointErrRateSentence — SAF: uç nokta hata oranı cümlesi (manşet; TEK
+// TANIM; sayılar MLErrRateSentence ile aynı biçimde).
+//
+//	"checkout · POST /pay: hata oranı normalde %0,2, şimdi %14 (70 kat)."
+//	"checkout · POST /pay: hata oranı normalde neredeyse hiç yok, şimdi %14."
+func MLEndpointErrRateSentence(service, route string, observed, baseline float64) string {
+	n, v, x := mlErrRateParts(observed, baseline)
+	s := mlEndpointSubject(service, route) + ": hata oranı normalde "
+	if n == "" {
+		return s + "neredeyse hiç yok, şimdi %" + swapNumSep.Replace(v) + "."
 	}
-	return mlRespTimeMsg(headline)
+	s += "%" + swapNumSep.Replace(n) + ", şimdi %" + swapNumSep.Replace(v)
+	if x != "" {
+		s += " (" + swapNumSep.Replace(x) + " kat)"
+	}
+	return s + "."
+}
+
+var mlEpErrRe = regexp.MustCompile(
+	`^(.+?) · (.+): hata oranı normalde (?:%([0-9]+(?:,[0-9]+)?)|neredeyse hiç yok), şimdi %([0-9]+(?:,[0-9]+)?)(?: \(([0-9][0-9.]*(?:,[0-9]+)?) kat\))?\.$`)
+
+// mlEpErrMsg — SAF: manşet TAM olarak MLEndpointErrRateSentence ise anahtar.
+func mlEpErrMsg(headline string) *StdMsg {
+	m := mlEpErrRe.FindStringSubmatch(headline)
+	if m == nil {
+		return nil
+	}
+	v := swapNumSep.Replace(m[4]) + "%"
+	switch {
+	case m[3] == "":
+		if m[5] != "" {
+			return nil
+		}
+		return stdM("h.mlEpErrZero", "svc", m[1], "op", m[2], "v", v)
+	case m[5] == "":
+		return stdM("h.mlEpErrFlat", "svc", m[1], "op", m[2], "n", swapNumSep.Replace(m[3])+"%", "v", v)
+	}
+	return stdM("h.mlEpErr", "svc", m[1], "op", m[2], "n", swapNumSep.Replace(m[3])+"%", "v", v, "x", swapNumSep.Replace(m[5]))
+}
+
+// MLEndpointResponseTimeSentence — SAF: uç nokta yanıt süresi cümlesi
+// (manşet; TEK TANIM; sayılar MLResponseTimeSentence ile aynı). measure
+// MLRespMedian | MLRespSlow; ms.
+//
+//	"checkout · POST /pay: yanıt süresi (medyan) normalde 180 ms, şimdi 920 ms (5,1 kat)."
+func MLEndpointResponseTimeSentence(service, route, measure string, observed, baseline float64) string {
+	s := MLResponseTimeSentence("", measure, observed, baseline)
+	return mlEndpointSubject(service, route) + ":" + strings.TrimPrefix(s, " servisinde")
+}
+
+var mlEpRtRe = regexp.MustCompile(
+	`^(.+?) · (.+): yanıt süresi \((medyan|en yavaş %10)\) normalde ([0-9][0-9.]*) ms, şimdi ([0-9][0-9.]*) ms(?: \(([0-9][0-9.]*(?:,[0-9]+)?) kat\))?\.$`)
+
+// mlEpRtMsg — SAF: manşet TAM olarak MLEndpointResponseTimeSentence ise anahtar.
+func mlEpRtMsg(headline string) *StdMsg {
+	m := mlEpRtRe.FindStringSubmatch(headline)
+	if m == nil {
+		return nil
+	}
+	key := "h.mlEpRtMed"
+	if m[3] == mlRespSlowTR {
+		key = "h.mlEpRtSlow"
+	}
+	n, v := swapNumSep.Replace(m[4])+" ms", swapNumSep.Replace(m[5])+" ms"
+	if m[6] == "" {
+		return stdM(key+"Flat", "svc", m[1], "op", m[2], "n", n, "v", v)
+	}
+	return stdM(key, "svc", m[1], "op", m[2], "n", n, "v", v, "x", swapNumSep.Replace(m[6]))
+}
+
+// mlPromotedMsg — SAF: ML servis Problem'i manşetinin metin anahtarı (hata
+// oranı ya da yanıt süresi cümlesi; v0.10.2474 uç nokta cümleleri);
+// serbest metinde nil.
+func mlPromotedMsg(headline string) *StdMsg {
+	for _, f := range []func(string) *StdMsg{mlErrRateMsg, mlRespTimeMsg, mlEpErrMsg, mlEpRtMsg} {
+		if m := f(headline); m != nil {
+			return m
+		}
+	}
+	return nil
 }
 
 // ── Neden: etki kuralı gerçekleri ───────────────────────────────────────

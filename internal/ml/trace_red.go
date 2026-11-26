@@ -87,6 +87,14 @@ type TraceRED struct {
 	// empty = aile → ardışık boş kova sayacı; emptyNote = dedektör → not.
 	empty     map[string]famEmpty
 	emptyNote map[string]string
+	// v0.10.2474 — uç nokta etki olayı (endpoint_impact.go): epMin = alınmış 1 dk
+	// satırları (dakika başı → aile sırası → satırlar; yalnız adaylar);
+	// epCands = son tikin adayları + taban özeti (epCandsAt = o tikin anı);
+	// epNote = son tikin "ölçülemedi" notu.
+	epMin     map[int64]map[int]epFamMin
+	epCands   map[epKey]epBase
+	epCandsAt time.Time
+	epNote    string
 }
 
 // famEmptyBuckets — keşfedilmiş ailenin count sorgusu art arda bu kadar KOVA
@@ -184,7 +192,7 @@ func (d *TraceRED) setEmptyNote(seen map[string]bool, cfg chstore.MLConfig) {
 		return
 	}
 	d.emptyNote = map[string]string{}
-	for _, det := range []string{detOpLatency, detOpErrorRate, detThroughputDrop, detSvcErrorRate, detSvcResponseTime} {
+	for _, det := range []string{detOpLatency, detOpErrorRate, detThroughputDrop, detSvcErrorRate, detSvcResponseTime, detEndpointImpact} {
 		if cfg.DetectorOn(det) {
 			d.emptyNote[det] = note
 		}
@@ -196,7 +204,7 @@ func (d *TraceRED) setEmptyNote(seen map[string]bool, cfg chstore.MLConfig) {
 func (d *TraceRED) Unmeasured() map[string]string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.impactNote == "" && d.rtNote == "" && len(d.emptyNote) == 0 {
+	if d.impactNote == "" && d.rtNote == "" && d.epNote == "" && len(d.emptyNote) == 0 {
 		return nil
 	}
 	out := map[string]string{}
@@ -208,6 +216,9 @@ func (d *TraceRED) Unmeasured() map[string]string {
 	}
 	if d.rtNote != "" { // v0.10.2385 (I4)
 		out[detSvcResponseTime] = d.rtNote
+	}
+	if d.epNote != "" { // v0.10.2474
+		out[detEndpointImpact] = d.epNote
 	}
 	return out
 }
@@ -232,7 +243,8 @@ func (d *TraceRED) Name() string { return "trace_red" }
 func (d *TraceRED) Enabled(cfg chstore.MLConfig) bool {
 	return cfg.DetectorOn(detOpLatency) || cfg.DetectorOn(detOpErrorRate) || cfg.DetectorOn(detThroughputDrop) ||
 		cfg.DetectorOn(detSvcErrorRate) || // v0.10.2077: servis hata oranı aynı count/err satırlarından
-		cfg.DetectorOn(detSvcResponseTime) // v0.10.2385: servis yanıt süresi aynı aile pinlerinden
+		cfg.DetectorOn(detSvcResponseTime) || // v0.10.2385: servis yanıt süresi aynı aile pinlerinden
+		cfg.DetectorOn(detEndpointImpact) // v0.10.2474: uç nokta etki olayı aynı aile pinlerinden
 }
 
 // ── saf parçalar ─────────────────────────────────────────────
@@ -482,6 +494,16 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	} else {
 		d.clearRT()
 	}
+	// v0.10.2474: uç nokta yanıt süresinin 5 dk taban serisi (seçili uç
+	// noktalar; aile başına 1 anlık yüzdelik sorgusu, kendi backoff ailesi).
+	// Hatası yalıtılır; AYRI haritada (route tavanını etkilemez).
+	epOn := cfg.DetectorOn(detEndpointImpact)
+	var epBaseErr error
+	if epOn {
+		epBaseErr = epBaseSeries(ctx, deps, impFams, epRates(series, last.Unix()), to, last.Unix(), cfg.BucketSec, rtSeries, now)
+	} else {
+		d.clearEP()
+	}
 	minute := map[string]map[int64]float64{} // servis × dakika başı (I3)
 	svcFam := map[string]int{}               // servis → en yeni dakikanın ailesi (olay kaydı)
 	if cfg.DetectorOn(detSvcErrorRate) {
@@ -569,6 +591,11 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 	if rtOn { // v0.10.2385 (I4): 1 dk örnek + etki kuralı; taban bu tikin okumasından
 		evs = append(evs, d.rtTick(ctx, deps, impFams, base, famOf, impEnd, cfg, class, now, rtBaseErr)...)
 	}
+	// v0.10.2474: uç nokta etki olayı (yazdığı uç nokta için op_error_rate
+	// olayı tik sonunda düşer: dedupeEndpointOps).
+	if epOn {
+		evs = append(evs, d.epTick(ctx, deps, impFams, base, famOf, impEnd, cfg, class, now, epBaseErr)...)
+	}
 	for k := range series {
 		svc, part, _ := strings.Cut(k, "\x00")
 		route, m := splitTracePart(part)
@@ -635,6 +662,7 @@ func (d *TraceRED) Tick(ctx context.Context, deps Deps, cfg chstore.MLConfig, no
 			}
 		}
 	}
+	evs = dedupeEndpointOps(evs) // v0.10.2474: bir uç nokta = tek üye
 	d.setImpactNote(impErr)
 	if impErr != nil {
 		log.Printf("[ml] svc_error_rate 1 dk sorgusu düştü (dedektör bu tik sessiz): %v", impErr)

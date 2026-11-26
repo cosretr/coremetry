@@ -27,6 +27,7 @@ func TestEventSourceMarkerPerDetector(t *testing.T) {
 		// trace RED ailesi — VM sunucu histogramı (örneklenmemiş)
 		{detSvcErrorRate, "", vm}, {detOpErrorRate, "", vm}, {detOpLatency, "", vm}, {detThroughputDrop, "", vm},
 		{detSvcResponseTime, "", vm}, // v0.10.2385 (I4): aynı sunucu histogramının bucket'ları
+		{detEndpointImpact, "", vm},  // v0.10.2474: aynı sunucu RED ailesi
 		// op_latency olaylarından türetilen / aynı VM serilerini okuyanlar
 		{detSvcBreadth, "", vm}, {detTracePodOutlier, "", vm}, {detTraceChangePoint, "", vm},
 		// VM client histogramları

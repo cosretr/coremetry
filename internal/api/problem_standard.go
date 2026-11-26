@@ -284,7 +284,8 @@ func stdImpactReadFor(p chstore.Problem, now time.Time) (stdImpactRead, bool) {
 		if !ok {
 			return stdImpactRead{}, false
 		}
-		return stdImpactRead{filter: chstore.MLEventsFilter{Service: p.Service, Detector: det, Since: since, Limit: stdImpactEventsCap},
+		// v0.10.2474: uç nokta etki olayı da aynı ölçü anahtarlarıyla gerçek taşır.
+		return stdImpactRead{filter: chstore.MLEventsFilter{Service: p.Service, Detectors: []string{det, ml.EndpointImpactDetector}, Since: since, Limit: stdImpactEventsCap},
 			measure: measure}, true
 	}
 	if id, ok := ml.ImpactFactsLeadOf(p); ok {

@@ -208,8 +208,11 @@ type MLEventsFilter struct {
 	// ID — tek olay (detay kartı, v0.10.1843); ORDER BY id → birincil anahtar araması.
 	ID       string
 	Detector string
-	Signal   string
-	Service  string
+	// Detectors — v0.10.2474: dedektör kümesi (IN; Detector ile birlikte
+	// verilirse ikisi de uygulanır). nil = kısıt yok.
+	Detectors []string
+	Signal    string
+	Service   string
 	// Services — v0.10.2080 (anomali erişicisi ListAnomalyFeed): servis
 	// kümesi, STRICT IN (eski süzgeçle aynı anlam). nil = kısıt yok; boş
 	// küme çağıranda elenir (okuma yapılmaz).
@@ -275,6 +278,10 @@ func mlEventsWhere(f MLEventsFilter) (string, []any) {
 	if f.Detector != "" {
 		where = append(where, "detector = ?")
 		args = append(args, f.Detector)
+	}
+	if len(f.Detectors) > 0 {
+		where = append(where, "detector IN ?")
+		args = append(args, f.Detectors)
 	}
 	if f.Signal != "" {
 		where = append(where, "signal = ?")

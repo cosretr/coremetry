@@ -986,8 +986,8 @@ func TestSvcResponseTimeProbe(t *testing.T) {
 	if !p.probeOn(cfg) || p.probeOn(off) || !p.probeOn(onlyRT) || d.probeOn(onlyRT) {
 		t.Fatal("her yoklama yalnız kendi dedektörü açıkken")
 	}
-	if ps := impactProbersOf(d); len(ps) != 2 {
-		t.Fatalf("TraceRED iki yoklama taşır (hata oranı + yanıt süresi): %d", len(ps))
+	if ps := impactProbersOf(d); len(ps) != 3 { // v0.10.2474: + uç nokta
+		t.Fatalf("TraceRED üç yoklama taşır (hata oranı + yanıt süresi + uç nokta): %d", len(ps))
 	}
 	if ps := impactProbersOf(&LogRED{}); len(ps) != 0 {
 		t.Fatalf("yoklaması olmayan dedektör: %d", len(ps))

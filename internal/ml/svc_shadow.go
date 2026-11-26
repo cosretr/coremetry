@@ -77,7 +77,8 @@ type SvcShadow struct {
 
 // isSvcDetector — SAF.
 func isSvcDetector(d string) bool {
-	return d == detSvcErrorRate || d == detSvcBreadth || d == detSvcResponseTime // yanıt süresi: v0.10.2385 (I4)
+	return d == detSvcErrorRate || d == detSvcBreadth || d == detSvcResponseTime || // yanıt süresi: v0.10.2385 (I4)
+		d == detEndpointImpact // v0.10.2474: uç nokta etki olayı servisin TEK Problem'ine üye
 }
 
 // svcErrThresholdFloor — hata oranı Problem'inin Threshold tabanı: etki
@@ -88,10 +89,17 @@ var svcErrThresholdFloor = impactRules[impactFailureRate].Floor / 2
 // svcValueThreshold — SAF: Problem'in Value / Threshold'u.
 func svcValueThreshold(e chstore.MLEvent) (float64, float64) {
 	th := e.Baseline
-	if e.Detector == detSvcErrorRate && th < svcErrThresholdFloor {
+	det := e.Detector
+	if det == detEndpointImpact { // v0.10.2474: ölçüsüne göre servis karşılığının kuralı
+		det = detSvcResponseTime
+		if epMeasureOfEvent(e).key == "" {
+			det = detSvcErrorRate
+		}
+	}
+	if det == detSvcErrorRate && th < svcErrThresholdFloor {
 		th = svcErrThresholdFloor
 	}
-	if e.Detector == detSvcResponseTime && th < 1 { // ms; taban 0 olamaz ama oran sonsuza gitmesin
+	if det == detSvcResponseTime && th < 1 { // ms; taban 0 olamaz ama oran sonsuza gitmesin
 		th = 1
 	}
 	return e.Observed, th
@@ -129,7 +137,7 @@ func decideSvcShadow(kept []chstore.MLEvent, open map[string]bool, groups []deci
 		rule := MLSvcRulePrefix + svc
 		// servisin önceliği = üyelerin en yükseği (yalnız yükselir)
 		best, bestReason, bestV, bestT := "", "", 0.0, 0.0
-		for _, e := range evs {
+		for _, e := range svcLeadEvents(evs) { // v0.10.2474: uç nokta olayı servis olayı varken yalnız üye
 			v, th := svcValueThreshold(e)
 			p, why := chstore.PreviewProblemPriority(chstore.Problem{RuleID: rule, Severity: "critical", Service: svc, Value: v, Threshold: th,
 				Status: "open", StartedAt: evs[0].StartedAt}, now.UnixNano(), prio)
@@ -227,6 +235,8 @@ func svcEventSentence(e chstore.MLEvent) string {
 		// v0.10.2385 (I4) — "yanıt süresi (medyan) normalde X, şimdi Y (N kat)":
 		// cümlenin tek tanımı chstore; ölçü ve değerler olayın ateşleyen ölçüsü.
 		return chstore.MLResponseTimeSentence(e.Service, rtMeasureOfEvent(e).key, e.Observed, e.Baseline)
+	case detEndpointImpact: // v0.10.2474: "checkout · POST /pay: hata oranı normalde %0,2, şimdi %14 (70 kat)."
+		return epSentence(e)
 	case detSvcBreadth:
 		_, n := breadthOpsOf(e.Evidence)
 		cnt := "birden çok"
@@ -251,13 +261,20 @@ func svcMetric(e chstore.MLEvent) string {
 		return "p95_ms"
 	case detSvcResponseTime:
 		return rtMeasureOfEvent(e).agg + "_ms"
+	case detEndpointImpact: // v0.10.2474: servis karşılığının ölçüsü (problem standardı ailesi aynı)
+		switch epMeasureOfEvent(e).key {
+		case chstore.MLRespMedian:
+			return rtMeasures[0].agg + "_ms"
+		case chstore.MLRespSlow:
+			return rtMeasures[1].agg + "_ms"
+		}
 	}
 	return "error_rate"
 }
 
 // svcSentenceRank — Problem açıklamasında cümle sırası: hata oranı, yanıt
 // süresi, yaygın yavaşlama.
-var svcSentenceRank = map[string]int{detSvcErrorRate: 0, detSvcResponseTime: 1, detSvcBreadth: 2}
+var svcSentenceRank = map[string]int{detSvcErrorRate: 0, detSvcResponseTime: 1, detSvcBreadth: 2, detEndpointImpact: 3}
 
 // mlProblemRatio — SAF: Value/Threshold (Threshold ≤ 0 → 1; grup satırı 1).
 func mlProblemRatio(v, th float64) float64 {
@@ -265,6 +282,29 @@ func mlProblemRatio(v, th float64) float64 {
 		return 1
 	}
 	return v / th
+}
+
+// svcLeadEvents — SAF (v0.10.2474): Problem'in değerini, önceliğini ve
+// cümlesini veren olaylar. Servis düzeyi olay varsa yalnız onlar (uç nokta
+// olayları yalnız üye; davranış v0.10.2473 ile aynı); yoksa uç nokta
+// olaylarından oranı (Value / Threshold) en büyük TEK olay — manşet tek uç
+// noktayı adlandırır, kalan uç noktalar üye. Sıra korunur.
+func svcLeadEvents(evs []chstore.MLEvent) []chstore.MLEvent {
+	var svcEvs []chstore.MLEvent
+	bestI, best := -1, -1.0
+	for i, e := range evs {
+		if e.Detector != detEndpointImpact {
+			svcEvs = append(svcEvs, e)
+			continue
+		}
+		if r := mlProblemRatio(svcValueThreshold(e)); bestI < 0 || r > best || (r == best && e.ID < evs[bestI].ID) {
+			bestI, best = i, r
+		}
+	}
+	if len(svcEvs) > 0 || bestI < 0 {
+		return svcEvs
+	}
+	return evs[bestI : bestI+1]
 }
 
 // svcProblemInputs — SAF: bu tikin servis düzeyi kararları → servis başına
@@ -291,16 +331,20 @@ func svcProblemInputs(kept []chstore.MLEvent, ds map[string]SvcShadow) []svcProb
 		best := -1.0
 		var parts []string
 		var lead chstore.MLEvent // Problem'in ölçüsünü veren olay (kaynak işareti)
-		for _, e := range evs {
+		// v0.10.2474: değer + cümle yalnız svcLeadEvents'ten (uç nokta olayı
+		// servis olayı varken yalnız üye; yoksa tek uç nokta manşette).
+		for _, e := range svcLeadEvents(evs) {
 			v, th := svcValueThreshold(e)
 			if r := mlProblemRatio(v, th); r > best {
 				best, in.Value, in.Threshold, in.Metric = r, v, th, svcMetric(e)
 				lead = e
 			}
+			parts = append(parts, svcEventSentence(e))
+		}
+		for _, e := range evs {
 			if in.StartedAt == 0 || e.StartedAt < in.StartedAt {
 				in.StartedAt = e.StartedAt
 			}
-			parts = append(parts, svcEventSentence(e))
 			in.Events = append(in.Events, e.ID)
 		}
 		in.Desc = withSourceMarker(strings.Join(parts, " "), lead) // v0.10.2383

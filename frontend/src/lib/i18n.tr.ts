@@ -791,7 +791,7 @@ export const TR: Record<string, string> = {
   'mlGates.mode.off': 'Kip: kapalı — kapılar değerlendirilmiyor.',
   'mlGates.mode.shadow': 'Kip: gölge — kapılar yalnız ölçülüyor; liste ve Problem değişmedi.',
   'mlGates.mode.on': 'Kip: açık — hacim, mutlak fark ya da görünür sapma kapısında kalan olay listede ve Problem adaylığında yok (Elenenler\'de okunur).',
-  'mlGates.criterion': 'Kip Ayarlar › Anomaly › ML\'den değişir. Yalnız üç kapı eler: olay penceresinde en az 100 çağrı, en az 25 ms mutlak fark, görünür sapma. Bağımsız kanıt, servis etkisi ve seri tutarlılığı satırları hiçbir kipte uygulanmaz ("Bilgiye inerdi" yalnız ölçümdür). Etki kuralı olayları (servis hata oranı, servis yanıt süresi, consumer lag) muaftır. Tutulan olaylardan gerçek bir Problem\'le çakışan varsa örnek olayı açıp kararı doğrulayın.',
+  'mlGates.criterion': 'Kip Ayarlar › Anomaly › ML\'den değişir. Yalnız üç kapı eler: olay penceresinde en az 100 çağrı, en az 25 ms mutlak fark, görünür sapma. Bağımsız kanıt, servis etkisi ve seri tutarlılığı satırları hiçbir kipte uygulanmaz ("Bilgiye inerdi" yalnız ölçümdür). Etki kuralı olayları (servis hata oranı, servis yanıt süresi, uç nokta hata oranı ve yanıt süresi, consumer lag) muaftır. Tutulan olaylardan gerçek bir Problem\'le çakışan varsa örnek olayı açıp kararı doğrulayın.',
   'mlGates.window': 'Son {h} saatte değerlendirilen farklı olaylar (kaydedici belleği; lider değişince sıfırlanır).',
   'mlGates.empty': 'Bu pencerede kapılardan geçen olay yok.',
   'mlGates.aria': 'Gürültü kapısı raporu',

@@ -26,7 +26,7 @@ func TestStdImpactReadFor(t *testing.T) {
 		p := svc
 		p.Metric = metric
 		rd, ok := stdImpactReadFor(p, now)
-		wantF := chstore.MLEventsFilter{Service: "orders", Detector: want[0], Since: since, Limit: stdImpactEventsCap}
+		wantF := chstore.MLEventsFilter{Service: "orders", Detectors: []string{want[0], "endpoint_impact"}, Since: since, Limit: stdImpactEventsCap} // v0.10.2474: + uç nokta
 		if !ok || !reflect.DeepEqual(rd.filter, wantF) || rd.measure != want[1] || rd.lead != "" {
 			t.Errorf("%s: %+v %v", metric, rd, ok)
 		}

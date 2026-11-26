@@ -108,7 +108,7 @@ func endpointLink(svc, path, rng string) string {
 // eventRoute — SAF: olayın endpoint'i (trace RED dedektörlerinde Code).
 func eventRoute(in CardInput) string {
 	switch in.Detector {
-	case "op_latency", "op_error_rate", "throughput_drop", "trace_change_point":
+	case "op_latency", "op_error_rate", "throughput_drop", "trace_change_point", detEndpointImpact:
 		return in.Code
 	}
 	return ""

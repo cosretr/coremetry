@@ -25,6 +25,11 @@ import (
 // yalnız bu dedektörün olaylarını okur).
 const ImpactFactsDetector = detSvcErrorRate
 
+// EndpointImpactDetector — v0.10.2474: uç nokta etki olayı da servis
+// Problem'inin gerçeklerini taşır (aynı ölçü anahtarlarıyla; detay ucu servis
+// dedektörüyle birlikte okur).
+const EndpointImpactDetector = detEndpointImpact
+
 // ImpactFactsDetectorFor — SAF (v0.10.2391): ML servis Problem'inin ölçüsü →
 // gerçekleri taşıyan dedektör + beklenen ölçü (StdImpactRule.Measure).
 // ok=false: ölçünün etki kuralı yok (yaygın yavaşlama p95_ms vb.) — okuma yok.
@@ -73,6 +78,9 @@ func impactFactsKind(e chstore.MLEvent, ev impactFactsEvidence) (kind impactKind
 				return m.kind, m.key, [2][]*float64{ev.P50s, ev.P90s}[i], true
 			}
 		}
+	case detEndpointImpact: // v0.10.2474: ölçü kanıtta (err_ratio | ep_p50 | ep_p90)
+		i := epMeasureOfPart(ev.Measure)
+		return epMeasures[i].kind, epMeasures[i].key, [3][]*float64{ev.Ratios, ev.P50s, ev.P90s}[i], true
 	case detMetricKafka:
 		if isLagImpactPart(e.Code) {
 			return impactConsumerLag, chstore.MLImpactLag, ev.Values, true
@@ -86,7 +94,7 @@ func impactFactsKind(e chstore.MLEvent, ev impactFactsEvidence) (kind impactKind
 // değil (başka dedektör, etki kuralı öncesi kanıt, bozuk / eksik alan):
 // çağıran bugünkü tek cümleyi çizer.
 func ImpactRuleFacts(e chstore.MLEvent) *chstore.StdImpactRule {
-	if e.Evidence == "" || (e.Detector != detSvcErrorRate && e.Detector != detSvcResponseTime && e.Detector != detMetricKafka) {
+	if e.Evidence == "" || (e.Detector != detSvcErrorRate && e.Detector != detSvcResponseTime && e.Detector != detMetricKafka && e.Detector != detEndpointImpact) {
 		return nil
 	}
 	var ev impactFactsEvidence

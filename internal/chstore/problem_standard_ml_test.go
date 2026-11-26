@@ -545,3 +545,29 @@ func TestImpactRuleReasonsResponseTimeAndLag(t *testing.T) {
 		t.Errorf("hata oranı satırları değişti: %q", got)
 	}
 }
+
+// v0.10.2474 — uç nokta manşeti: cümle + EN anahtarı (servis cümlesiyle
+// karışmaz).
+func TestMLEndpointSentences(t *testing.T) {
+	for _, c := range []struct {
+		got, want, key string
+	}{
+		{MLEndpointErrRateSentence("checkout", "POST /pay", 0.14, 0.002), "checkout · POST /pay: hata oranı normalde %0,2, şimdi %14 (70 kat).", "h.mlEpErr"},
+		{MLEndpointErrRateSentence("checkout", "POST /pay", 0.14, 0), "checkout · POST /pay: hata oranı normalde neredeyse hiç yok, şimdi %14.", "h.mlEpErrZero"},
+		{MLEndpointErrRateSentence("checkout", "POST /pay", 0.015, 0.02), "checkout · POST /pay: hata oranı normalde %2, şimdi %1,5.", "h.mlEpErrFlat"},
+		{MLEndpointResponseTimeSentence("checkout", "POST /pay", MLRespMedian, 920, 180), "checkout · POST /pay: yanıt süresi (medyan) normalde 180 ms, şimdi 920 ms (5,1 kat).", "h.mlEpRtMed"},
+		{MLEndpointResponseTimeSentence("api-gateway", "GET /v1/items", MLRespSlow, 2900, 800), "api-gateway · GET /v1/items: yanıt süresi (en yavaş %10) normalde 800 ms, şimdi 2.900 ms (3,6 kat).", "h.mlEpRtSlow"},
+		{MLEndpointResponseTimeSentence("checkout", "POST /pay", MLRespMedian, 170, 180), "checkout · POST /pay: yanıt süresi (medyan) normalde 180 ms, şimdi 170 ms.", "h.mlEpRtMedFlat"},
+	} {
+		if c.got != c.want {
+			t.Errorf("cümle:\n got %q\nwant %q", c.got, c.want)
+			continue
+		}
+		if m := mlPromotedMsg(c.got); m == nil || m.K != c.key {
+			t.Errorf("%q: anahtar %+v, istenen %s", c.got, m, c.key)
+		}
+	}
+	if m := mlPromotedMsg(MLErrRateSentence("checkout", 0.14, 0.002)); m == nil || m.K != "h.mlErr" {
+		t.Fatalf("servis cümlesi anahtarı değişmemeli: %+v", m)
+	}
+}

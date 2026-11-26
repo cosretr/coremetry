@@ -656,7 +656,8 @@ func (d *TraceRED) runBlind(ev chstore.MLEvent) bool {
 type svcRTProbe struct{ d *TraceRED }
 
 // moreProbers — impactProbersOf kancası: dedektörün ek etki yoklamaları.
-func (d *TraceRED) moreProbers() []impactProber { return []impactProber{svcRTProbe{d}} }
+// v0.10.2474: uç nokta etki yoklaması (endpoint_impact.go epProbe).
+func (d *TraceRED) moreProbers() []impactProber { return []impactProber{svcRTProbe{d}, epProbe{d}} }
 
 func (p svcRTProbe) probeOn(cfg chstore.MLConfig) bool { return cfg.DetectorOn(detSvcResponseTime) }
 

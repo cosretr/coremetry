@@ -227,6 +227,7 @@ func TestImpactRuleFamiliesNotGated(t *testing.T) {
 	}{
 		{"servis hata oranı", svcEv("x", detSvcErrorRate, "orders", 0, 0.01, 0.05), true},
 		{"servis yanıt süresi", svcEv("x", detSvcResponseTime, "orders", 0, 200, 900), true},
+		{"uç nokta etkisi", svcEv("x", detEndpointImpact, "checkout", 0, 0.002, 0.14), true}, // v0.10.2474
 		{"consumer lag, etki kuralı", lag(lagImpactEvidence(true, 1200, 4)), true},
 		{"consumer lag, etki damgası yok", lag(`{"source":"vm","dwell":2}`), false},
 		{"endpoint gecikmesi", gateEv("x", detOpLatency, "orders", 0, 30, 100, 500), false},

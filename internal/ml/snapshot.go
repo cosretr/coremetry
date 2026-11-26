@@ -48,6 +48,8 @@ func eventPart(ev chstore.MLEvent) string {
 			return tracePart(svcRoute, svcMeasureRatio)
 		case detSvcResponseTime: // v0.10.2385 (I4): olayın ölçüsünün 5 dk serisi
 			return tracePart(svcRoute, rtMeasureOfEvent(ev).part)
+		case detEndpointImpact: // v0.10.2474: uç noktanın, olayın ölçüsündeki 5 dk serisi
+			return tracePart(ev.Code, epMeasureOfEvent(ev).part)
 		case detSvcBreadth:
 			return "" // v0.10.2086: türetilmiş, kendi serisi yok (canlı grafik servis Overview p99)
 		default:

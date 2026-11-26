@@ -757,7 +757,7 @@ export const EN: Record<string, string> = {
   'mlGates.mode.off': 'Mode: off — the gates are not evaluated.',
   'mlGates.mode.shadow': 'Mode: shadow — the gates are only measured; the list and Problems are unchanged.',
   'mlGates.mode.on': 'Mode: on — an event that fails the volume, absolute difference or visible deviation gate is out of the list and is not a Problem candidate (readable under Filtered out).',
-  'mlGates.criterion': 'The mode is changed in Settings › Anomaly › ML. Only three gates filter: at least 100 calls in the event window, an absolute difference of at least 25 ms, a visible deviation. The independent evidence, service impact and series consistency rows are never enforced in any mode ("Would demote to info" is a measurement only). Impact-rule events (service error rate, service response time, consumer lag) are exempt. If a held event overlapped a real Problem, open the example event and check the verdict.',
+  'mlGates.criterion': 'The mode is changed in Settings › Anomaly › ML. Only three gates filter: at least 100 calls in the event window, an absolute difference of at least 25 ms, a visible deviation. The independent evidence, service impact and series consistency rows are never enforced in any mode ("Would demote to info" is a measurement only). Impact-rule events (service error rate, service response time, endpoint error rate and response time, consumer lag) are exempt. If a held event overlapped a real Problem, open the example event and check the verdict.',
   'mlGates.window': 'Distinct events evaluated in the last {h} h (recorder memory; resets on leader change).',
   'mlGates.empty': 'No event went through the gates in this window.',
   'mlGates.aria': 'Noise gate report',

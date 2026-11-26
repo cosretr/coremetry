@@ -139,7 +139,7 @@ export function detectorGroup(d: string): string {
     case 'rare_error_code': case 'pod_outlier': return 'log_breakdown';
     case 'change_point': return 'log_change_point';
     case 'new_template': return 'new_template'; // v0.10.2069: eski log_template_new kararı
-    case 'op_latency': case 'op_error_rate': case 'throughput_drop': case 'svc_error_rate': case 'svc_response_time': return 'trace_red';
+    case 'op_latency': case 'op_error_rate': case 'throughput_drop': case 'svc_error_rate': case 'svc_response_time': case 'endpoint_impact': return 'trace_red';
     case 'dependency_latency': case 'dependency_error_rate': return 'dependency';
     case 'trace_error_count': return 'trace_errors'; // v0.10.2018
     case 'svc_breadth': return 'svc_breadth'; // v0.10.2086: türetilmiş, kendi tik satırı

@@ -240,7 +240,7 @@ func singleWorsening(e chstore.MLEvent) (worse, count bool) {
 	case "metric_kafka":
 		_, id, _ := splitThanosPart(e.Code)
 		return id == "consumer_lag", true
-	case detSvcErrorRate, detSvcBreadth, detSvcResponseTime:
+	case detSvcErrorRate, detSvcBreadth, detSvcResponseTime, detEndpointImpact:
 		// v0.10.2089: servis düzeyi olaylar kendi gölge kapısını izler
 		// (svc_shadow.go); tek sinyal kolu onları saymaz (çift sayım olmaz).
 		// v0.10.2385 (I4): servis yanıt süresi de.

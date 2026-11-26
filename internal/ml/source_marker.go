@@ -47,7 +47,7 @@ const problemDescMax = 600
 // eventSourceMarker — SAF: olayın gerçek ölçü kaynağının işareti ("" = yok).
 func eventSourceMarker(e chstore.MLEvent) string {
 	switch e.Detector {
-	case detOpLatency, detOpErrorRate, detThroughputDrop, detSvcErrorRate, detSvcBreadth, detSvcResponseTime,
+	case detOpLatency, detOpErrorRate, detThroughputDrop, detSvcErrorRate, detSvcBreadth, detSvcResponseTime, detEndpointImpact,
 		detTracePodOutlier, detTraceChangePoint, detDependencyLatency, detDependencyErrorRate:
 		return chstore.REDEvidenceVM
 	case detLogVolume, detErrorRate, detServiceSilent, detTemplateSpike, detRareTemplate,

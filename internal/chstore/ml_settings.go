@@ -33,7 +33,8 @@ var (
 		"dependency_error_rate", // v0.10.2063 Davis S2: VM DB/messaging client hata oranı (error_type)
 		"svc_error_rate",        // v0.10.2077: servis düzeyi hata oranı (VM RED; spec-ml-service-level dilim 1)
 		"svc_breadth",           // v0.10.2086: yaygın yavaşlama, op_latency olaylarından türetilir (dilim 2)
-		"svc_response_time"}     // v0.10.2385: servis yanıt süresi (medyan + en yavaş %10; etki olayı I4)
+		"svc_response_time",     // v0.10.2385: servis yanıt süresi (medyan + en yavaş %10; etki olayı I4)
+		"endpoint_impact"}       // v0.10.2474: uç nokta hata oranı + yanıt süresi (etki kuralı; servisin tek Problem'ine üye)
 	// Metrik aileleri = dedektörler (M1): her aile ayrı anahtar + ayrı terfi.
 	MLMetricDetectorNames = []string{"metric_jvm", "metric_pool", "metric_kafka", "metric_http_client", "metric_k8s"}
 	MLDetectorNames       = append(append(append([]string{}, MLLogDetectorNames...), MLTraceDetectorNames...), MLMetricDetectorNames...)
@@ -305,7 +306,8 @@ var mlDefaultOnDetectors = map[string]bool{"op_latency": true, "dependency_error
 	"new_template":       true, // v0.10.2069: eski log_template_new taşıması (birleşik yetenek, varsayılan açık)
 	"svc_error_rate":     true, // v0.10.2077: eski anomaly:*:error_rate işinin ML karşılığı (birleşik yetenek)
 	"svc_breadth":        true, // v0.10.2086: eski svc-slowdown işinin ML karşılığı (birleşik yetenek)
-	"svc_response_time":  true} // v0.10.2385: etki olayı (operatör kararı 2026-11-19: etki olayları varsayılan açık)
+	"svc_response_time":  true, // v0.10.2385: etki olayı (operatör kararı 2026-11-19: etki olayları varsayılan açık)
+	"endpoint_impact":    true} // v0.10.2474: uç nokta etki olayı (operatör 2026-11-26; kapatılabilir, deploy gerekmez)
 
 // MLDetectorDefaultOn — SAF: dedektörün varsayılan durumu.
 func MLDetectorDefaultOn(name string) bool { return mlDefaultOnDetectors[name] }

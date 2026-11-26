@@ -214,7 +214,8 @@ func TestMLBaselineSettingOffAndOutOfHash(t *testing.T) {
 // v0.10.2269: hygieneOff kalktı (oylar tabanı sürmez) → 95cf5cdad50b25a3.
 // v0.10.2385: svc_response_time (servis yanıt süresi, etki olayı I4, varsayılan açık) → 2a9594bcd915b949.
 // 2026-11-21: HTTP client p95 / 5xx varsayılanlarına volumeExpr (hacim kapısı) → 1a0f9dc8b52cb747.
-const mlDefaultHash1813 = "1a0f9dc8b52cb747"
+// v0.10.2474: endpoint_impact (uç nokta etki olayı, varsayılan açık) → baa7cb6f02576e4b.
+const mlDefaultHash1813 = "baa7cb6f02576e4b"
 
 // v0.10.2020 — k8s ailesi: cAdvisor ifadeleri pod toplam satırını
 // (container="") ve duraklatma kabını (POD) süzer; KSM restart ifadesi
