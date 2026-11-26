@@ -624,7 +624,7 @@ var setDeixisPhrases = []string{"bu servisler", "o servisler", "aynı servisler"
 func serviceSetFollowUp(q string, lastSet, namesService bool) (focus string, ok bool) {
 	norm := normalizeGuidedMsg(strings.TrimSpace(q))
 	toks := guidedTokens(norm)
-	if len(toks) == 0 || namesService || utf8.RuneCountInString(norm) > followUpMaxRunes || clearsServiceSet(norm) || serviceSetOtherAsk(toks) {
+	if len(toks) == 0 || namesService || clearsServiceSet(norm) || serviceSetOtherAsk(toks) { // v0.10.2472 — uzunluk sınırı yok (kapsam devamı)
 		return "", false
 	}
 	deixis := false

@@ -2002,6 +2002,10 @@ func (s *Server) copilotChatGuided(ctx context.Context, emit func(string, any), 
 		}
 	}
 	route := routeGuidedIntentExt(routerQ, svcNames, envNames, teamNames, routerSvc, s.oracleOpsEnabled(), s.guidedOutboundHosts(ctx, norm))
+	// v0.10.2472 — döngü işareti (chat_loop_cue.go): sıralama / sayma / kıyas /
+	// çok parçalı soru problems / slow_traces listesine düşmez, döngüye iner.
+	// Kullanıcının metni üzerinde (v2 kanonik eki "en uzun" işaret sayılmaz).
+	route = loopCueGuidedRoute(question, route)
 	route = promoteProblemsRootCause(route, norm, v2)   // v0.10.2135 — yalnız v2 (chat_problems_root_cause.go)
 	route = v2WhyOverReport(route, norm, v2)            // v0.10.2136 — karar 5: neden > rapor, yalnız v2
 	if v2 && route.Intent == guidedNone && paramsDump { // v0.10.2139 — D6: "<Ad> Params: {…}" dökümü → log_field
@@ -2494,6 +2498,9 @@ func (s *Server) runGuidedRoute(ctx context.Context, emit func(string, any), rou
 		// v0.10.429 (D1) — "hangisini kastettin?": adaylar rotada (router/
 		// sınıflandırıcı) ya da buradan (açık problemi olan servisler).
 		evidence, sources, err = s.guidedAskServiceEvidence(ctx, &route, question)
+	}
+	if err == nil {
+		stateTurnFrom(ctx).noteRouteRows(route) // v0.10.2472 — top-N / takım / küme servis listesi (chat_turn_rows.go)
 	}
 	if err != nil {
 		// Prefetch failed hard → let the free loop try; its tools may

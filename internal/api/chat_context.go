@@ -107,6 +107,14 @@ type ChatContext struct {
 	// yazılmadıkça hiç yazılmaz → JSON bayt bayt eski. Çalışma kümesi DEĞİLDİR
 	// (Empty / çip / önsöz görmez); ömrü serviceSetTTL.
 	ServiceSet *chatServiceSet `json:"serviceSet,omitempty"`
+	// Rows / Steps / Picked — v0.10.2472 (chat_turn_rows.go): son turun kartta
+	// gösterilen satırları (≤20; tür + ad + kararlı kimlik), araç adımlarının
+	// tek satırlık özetleri (≤6) ve sıra sözüyle seçilen satır (1 tabanlı).
+	// "ikincisini aç" / "sonuncusu" bunlara çözülür. Yalnız v2 + durum açıkken
+	// yazılır → v1 JSON bayt bayt eski. Çalışma kümesi DEĞİLDİR.
+	Rows   []chatRow `json:"rows,omitempty"`
+	Steps  []string  `json:"steps,omitempty"`
+	Picked int       `json:"picked,omitempty"`
 }
 
 func (c ChatContext) Empty() bool {

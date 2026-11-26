@@ -1453,7 +1453,8 @@ export interface AISettings {
   // v0.10.172 — serbest soru → kılavuz niyeti sınıflandırıcısı (copilot_intent.go).
   // 'on_no_loop' = none'da tool'suz genel bilgi cevabı + not + öneri çipleri
   // (v0.10.194), tool döngüsü YOK (yerel küçük model varsayılanı); 'on' =
-  // none'da serbest döngü; 'off' = kapalı. Eksik = on_no_loop.
+  // none'da serbest döngü; 'on_loop' (v0.10.2472 varsayılanı) = none'da serbest
+  // döngü, yalnız saf genel bilgi araçsız; 'off' = kapalı. Eksik = on_loop.
   intentClassify?: AIIntentClassify;
   // v0.10.175 — model profilleri (ai_settings_profiles.go): her profil kendi
   // sağlayıcı/endpoint/anahtar/model'iyle; düz alanlar VARSAYILAN profilin
@@ -1462,7 +1463,7 @@ export interface AISettings {
   defaultProfile?: string;
   surfaceMap?: AISurfaceMap;
 }
-export type AIIntentClassify = 'off' | 'on' | 'on_no_loop';
+export type AIIntentClassify = 'off' | 'on' | 'on_no_loop' | 'on_loop';
 /** v0.10.534 (modelcaps) — profil düşünme anahtarı: '' dokunma, off/on ailenin gövde anahtarına çevrilir (Qwen3). */
 export type AIThinking = '' | 'off' | 'on';
 /** v0.10.1302 — CoSRE araç seti: '' otomatik (model adı ≤12B → simple, aksi/bilinmeyen → full), simple = serbest-sorgu araçları gizli, full = tam katalog. */

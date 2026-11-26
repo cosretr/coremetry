@@ -125,6 +125,11 @@ func needsEndpointPick(ctx endpointPickCtx, question string) bool {
 	if questionNamesRoute(q) || !endpointPickCue(q) {
 		return false
 	}
+	// v0.10.2472 — sıralama / sayma / kıyas sorusu kartla kesilmez, araç
+	// döngüsüne gider ("api-gateway en yavaş 5 endpoint hangisi"; chat_loop_cue.go).
+	if chatLoopCue(q) != loopCueNone {
+		return false
+	}
 	if isWholeServiceHealthAsk(q) {
 		return false
 	}

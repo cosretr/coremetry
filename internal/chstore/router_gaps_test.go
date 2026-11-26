@@ -103,7 +103,19 @@ func TestRouterGapClarifyTurns(t *testing.T) {
 			t.Errorf("arg[%d] = %v, want %v", i, args[i], w)
 		}
 	}
-	if args[5] != routerGapClarifyPrefix || args[6] != "since" {
+	if args[5] != routerGapClarifyPrefix || args[6] != "since" || args[7] != "since" {
 		t.Errorf("WHERE argümanları = %v", args[4:])
+	}
+}
+
+// v0.10.2472 — "Yeniden üret" turu (attempt=regenerate) aynı soruyu ikinci
+// kez saymaz: tur anahtarı cosre_interactions'taki regenerate exchange'i
+// değil, zaman sınırlı alt sorgu.
+func TestRouterGapTurnsSkipRegenerate(t *testing.T) {
+	sql := routerGapTurnsSQL()
+	for _, want := range []string{"HAVING turn_key GLOBAL NOT IN (", "SELECT exchange_id FROM cosre_interactions", "attempt = 'regenerate'", "created_at >= ?)"} {
+		if !strings.Contains(sql, want) {
+			t.Errorf("routerGapTurnsSQL %q içermiyor", want)
+		}
 	}
 }

@@ -58,7 +58,10 @@ func TestNeedsEndpointPick(t *testing.T) {
 		{"İngilizce how is", svc, "how is orders-api doing", false},
 		{"büyük harf SAĞLIĞI", svc, "ORDERS-API SAĞLIĞI NASIL", false},
 		// endpoint hedefli sorular kartı korur
-		{"en yavaş endpoint", svc, "orders-api en yavaş endpoint hangisi neden yavaş", true},
+		// v0.10.2472 — sıralama sorusu kart değil araç döngüsü (chat_loop_cue.go)
+		{"en yavaş endpoint", svc, "orders-api en yavaş endpoint hangisi neden yavaş", false},
+		{"en yavaş 5 endpoint", svc, "orders-api en yavaş 5 endpoint hangisi", false},
+		{"kaç endpoint", svc, "orders-api kaç endpoint hata veriyor", false},
 		{"bu endpoint hata", svc, "orders-api bu endpoint neden hata veriyor", true},
 		{"endpoint sağlığı", svc, "orders-api endpointlerinin sağlığı nasıl", true},
 		{"operasyonları nasıl", svc, "orders-api operasyonları nasıl", true},
@@ -307,7 +310,6 @@ func TestServiceHealthAskSkipsEndpointPick(t *testing.T) {
 		}
 	}
 	for _, q := range []string{
-		"loan-scoring-prod en yavaş endpoint hangisi neden yavaş",
 		"loan-scoring-prod bu endpoint neden hata veriyor",
 		"loan-scoring-prod endpointleri",
 		"loan-scoring-prod'da ne oluyor",

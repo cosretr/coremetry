@@ -78,6 +78,90 @@
       "why": "v0.10.2468 tohum — router fikstürü: hatalı trace'ler.",
       "user": "checkout hatalı trace'leri göster",
       "expect": {"expectTier": "guided", "expectRoute": "family_traces"}
+    },
+    {
+      "id": "real-seed-rank-endpoints", "surface": "ChatLoop", "mode": "agent", "bindService": "api-gateway",
+      "why": "v0.10.2472 tohum — sıralama (servisin en yavaş N endpoint'i): endpoint seçici kartı değil, operasyon sıralaması; kanıt araçtan.",
+      "user": "api-gateway en yavaş 5 endpoint hangisi",
+      "expect": {"anyOfTools": ["list_operations", "get_operation_health", "endpoint_lookup", "trace_stats", "query_traces"], "mustContain": ["api-gateway"], "mustNotContain": ["hangisini inceleyeyim"]}
+    },
+    {
+      "id": "real-seed-rank-endpoints-fleet", "surface": "ChatLoop", "mode": "agent",
+      "why": "v0.10.2472 tohum — sıralama (filo geneli en yavaş N endpoint): en yavaş trace listesi değil, operasyon sıralaması.",
+      "user": "en yavaş 5 endpoint hangisi",
+      "expect": {"anyOfTools": ["list_operations", "get_operation_health", "trace_stats", "query_traces"]}
+    },
+    {
+      "id": "real-seed-rank-ops-service", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2472 tohum — sıralama (servisin en çok çağrılan operasyonları).",
+      "user": "checkout servisinde en çok çağrılan 5 operasyon hangisi",
+      "expect": {"anyOfTools": ["list_operations", "get_operation_health", "trace_stats"], "mustContain": ["checkout"]}
+    },
+    {
+      "id": "real-seed-count-error-traces", "surface": "ChatLoop", "mode": "agent",
+      "why": "v0.10.2472 tohum — sayma (hatalı trace sayısı): açık problemler listesi değil, sayı; kanıt trace istatistiğinden.",
+      "user": "son 1 saatte kaç trace hata aldı",
+      "expect": {"anyOfTools": ["trace_stats", "query_traces", "search_traces"]}
+    },
+    {
+      "id": "real-seed-count-requests", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2472 tohum — sayma (servisin istek sayısı).",
+      "user": "checkout son 1 saatte kaç istek aldı",
+      "expect": {"anyOfTools": ["get_service_health", "trace_stats", "query_metrics", "query_metric", "get_operation_health"], "mustContain": ["checkout"]}
+    },
+    {
+      "id": "real-seed-why-volume", "surface": "ChatLoop", "mode": "agent",
+      "why": "v0.10.2472 tohum — hacim nedeni (filo geneli 500'ler): problemler listesi değil, kaynağı daraltan araştırma.",
+      "user": "neden bu kadar çok 500 alıyoruz",
+      "expect": {"anyOfTools": ["trace_stats", "query_traces", "list_exception_groups", "search_logs", "list_problems", "get_problem_root_cause"]}
+    },
+    {
+      "id": "real-seed-multi-part", "surface": "ChatLoop", "mode": "agent", "bindService": "api-gateway",
+      "why": "v0.10.2472 tohum — çok parçalı (çağrılan servisler + en yavaşı): iki parçanın ikisi de cevaplanmalı.",
+      "user": "api-gateway hangi servisleri çağırıyor ve hangisi en yavaş",
+      "expect": {"anyOfTools": ["downstream_calls", "get_topology", "dependency_path"], "mustContain": ["api-gateway"]}
+    },
+    {
+      "id": "real-seed-compare-services", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2472 tohum — iki servis kıyası (gecikme): iki servis de kanıttan; payments sentetik, prod kataloğunda bulunamazsa cevap bunu söylemeli.",
+      "user": "checkout ile payments servislerinin son 1 saatteki gecikmesini karşılaştır",
+      "expect": {"anyOfTools": ["get_service_health", "compare_baseline", "compare_periods", "query_metrics"], "mustContain": ["checkout", "payments"]}
+    },
+    {
+      "id": "real-seed-infra-rank", "surface": "ChatLoop", "mode": "agent",
+      "why": "v0.10.2472 tohum — filo geneli altyapı sıralaması (bellek): pod listesi / metrik sorgusu.",
+      "user": "hangi pod en çok memory kullanıyor",
+      "expect": {"anyOfTools": ["get_pod_health", "list_pods", "cluster_metric", "query_metrics", "query_metric"]}
+    },
+    {
+      "id": "real-seed-moment", "surface": "ChatLoop", "mode": "agent",
+      "why": "v0.10.2472 tohum — belirli an (dün gece 02:00): o pencerenin problemleri / anomalileri / değişiklikleri.",
+      "user": "dün gece 02:00 civarı ne oldu",
+      "expect": {"anyOfTools": ["list_problems", "list_anomalies", "list_problem_window_events", "get_correlated_changes", "list_deploys"], "mustContain": ["02"]}
+    },
+    {
+      "id": "real-seed-log-search", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2472 tohum — log araması (serbest metin): satırlar kanıttan, birebir.",
+      "user": "checkout loglarında son 1 saatte timeout geçen satırları bul",
+      "expect": {"anyOfTools": ["search_logs", "query_logs", "log_patterns"], "mustContain": ["checkout"]}
+    },
+    {
+      "id": "real-seed-kafka-lag-rank", "surface": "ChatLoop", "mode": "agent",
+      "why": "v0.10.2472 tohum — Kafka lag sıralaması (en çok lag olan consumer group).",
+      "user": "en çok lag olan kafka consumer group hangisi",
+      "expect": {"anyOfTools": ["get_messaging_health", "messaging_flow", "query_metrics", "query_metric"]}
+    },
+    {
+      "id": "real-seed-followup-compare", "surface": "ChatLoop", "mode": "agent", "bindService": "checkout",
+      "why": "v0.10.2472 tohum — takip şekli (dünle kıyas): gerçek sorular tek turludur, bu yüzden takip öznesi soruda; çok turlu takipler konuşma kipinde (evalset/conversation).",
+      "user": "checkout için aynı tabloyu dünle karşılaştır",
+      "expect": {"anyOfTools": ["compare_periods", "compare_baseline"], "mustContain": ["checkout"]}
+    },
+    {
+      "id": "real-seed-general-knowledge", "surface": "ChatLoop", "mode": "agent",
+      "why": "v0.10.2472 tohum — saf genel bilgi: araçsız genel cevap (on_loop varsayılanında da), araç çağrısı yok.",
+      "user": "circuit breaker nedir",
+      "expect": {"expectTier": "intent", "maxToolCalls": 0}
     }
   ]
 }

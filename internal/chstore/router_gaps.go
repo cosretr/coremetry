@@ -85,6 +85,10 @@ type RouterGapTotals struct {
 const routerGapKindExpr = `if(has_loop, 'loop', if(has_clarify, 'clarify', 'general'))`
 
 // routerGapTurnsSQL — SAF: tur başına tek satır (bind: routerGapTurnsArgs).
+// v0.10.2472 — CoSRE "Yeniden üret" aynı kullanıcı turunu yeni bir exchange
+// ile yeniden yollar (cosre_interactions.attempt = 'regenerate'); o exchange
+// aynı sorunun İKİNCİ turu sayılmaz (tur başına tek satır). Yeniden üretme
+// sinyali failed_turns'te önceki turun "reask" gerekçesi olarak kalır.
 // Tur anahtarı exchange kökü (ayırıcıdan önceki parça: işaret "kök:rol",
 // döngü satırı kökün kendisi); kimliksiz eski satır kendi id'siyle tek tur.
 // Döngünün her LLM çağrısı da ayrı 'chat' satırı yazdığından "Kez" eskiden
@@ -103,13 +107,15 @@ func routerGapTurnsSQL() string {
 		WHERE (surface IN (?) OR startsWith(surface, ?))
 		  AND created_at >= ?
 		  AND prompt_sample != ''
-		GROUP BY turn_key`
+		GROUP BY turn_key
+		HAVING turn_key GLOBAL NOT IN (
+			SELECT exchange_id FROM cosre_interactions WHERE attempt = 'regenerate' AND created_at >= ?)`
 }
 
 // routerGapTurnsArgs — SAF: routerGapTurnsSQL'in bind sırası.
 func routerGapTurnsArgs(labels []string, since any) []any {
 	none := aisurface.ChatIntentNone
-	return []any{none, none, routerGapClarifyPrefix, routerGapClarifyPrefix, labels, routerGapClarifyPrefix, since}
+	return []any{none, none, routerGapClarifyPrefix, routerGapClarifyPrefix, labels, routerGapClarifyPrefix, since, since}
 }
 
 // RouterGaps — guided router'ın yakalayamadığı sorular, sıklığa göre.

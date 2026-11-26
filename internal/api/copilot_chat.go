@@ -873,8 +873,8 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 			// Deterministik router (kademe 1) ve RAG eşleşmeyen serbest soruyu
 			// küçük model tek katı-JSON çağrısıyla kılavuz niyetine eşler; eşlerse
 			// cevap AYNI prefetch→anlatım yolundan (runGuidedRoute). Eşlemezse
-			// ayara göre öneri çipleri (on_no_loop, prod varsayılanı) ya da aşağıdaki
-			// serbest döngü (on). Sınıflandırıcı hatası sessizce düşer — döngü sürer.
+			// ayara göre öneri çipleri (on_no_loop) ya da aşağıdaki serbest döngü
+			// (on; on_loop = v0.10.2472 varsayılanı, saf genel bilgi araçsız). Sınıflandırıcı hatası sessizce düşer — döngü sürer.
 			// v0.10.1321 (operatör) — ajan kipi evalset vakasında niyet kademesi
 			// kapalı (chatEvalMode.SkipIntent): vaka araç döngüsünü ölçer. nil
 			// işarette skipIntent false → üretim aynen.

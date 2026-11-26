@@ -198,6 +198,12 @@ func TestOffTopicGeneralRoutingTable(t *testing.T) {
 			setGeneralQuestions(t, tc.allow)
 			l := newOffTopicLLM(t, tc.intent)
 			s, rec := offTopicTestServer(t, l)
+			if strings.Contains(tc.name, "veto") {
+				// v0.10.2472 — vetolu telemetri sorusu varsayılan on_loop'ta döngüye
+				// iner (TestIntentOnLoopDefault); chat-general none yolu açık
+				// on_no_loop seçiminde aynen.
+				s.copilot.SetIntentClassify(copilot.IntentOnNoLoop)
+			}
 			ctx := copilot.WithMeta(context.Background(), copilot.CallMeta{ExchangeID: root, UserID: "u1", UserEmail: "u1@example.test"})
 			ev, handled := runIntentTurn(t, s, ctx, tc.q)
 			if !handled {
@@ -581,5 +587,40 @@ func TestOffTopicGeneralPromptCarriesPriorTurns(t *testing.T) {
 	}
 	if !strings.Contains(lp[len(lp)-len(q)-10:], q) {
 		t.Error("soru istemin sonunda olmalı")
+	}
+}
+
+// TestIntentOnLoopDefault — v0.10.2472: varsayılan kip on_loop. Eşlenmeyen
+// telemetri sorusu (vetolu off_topic dahil) araç döngüsüne iner (handled=false);
+// saf genel bilgi sorusu araçsız genel cevapta kalır; sınıflandırıcı döngü
+// işaretli soruyu problems'e eşlese de rota alınmaz.
+func TestIntentOnLoopDefault(t *testing.T) {
+	setGeneralQuestions(t, true)
+	cases := []struct {
+		name, intent, q string
+		wantHandled     bool
+	}{
+		{"vetolu off_topic → döngü", "off_topic", "checkout neden yavaş", false},
+		{"none + altyapı sözcüğü → döngü", "none", "hangi pod en çok memory kullanıyor", false},
+		{"problems + döngü işareti → döngü", "problems", "son 1 saatte kaç trace hata aldı", false},
+		{"none + saf genel bilgi → araçsız", "none", "circuit breaker nedir", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			l := newOffTopicLLM(t, tc.intent)
+			s, _ := offTopicTestServer(t, l)
+			if got := s.copilot.IntentClassifyMode(); got != copilot.IntentOnLoop {
+				t.Fatalf("varsayılan kip %q", got)
+			}
+			ev, handled := runIntentTurn(t, s, context.Background(), tc.q)
+			if handled != tc.wantHandled {
+				t.Fatalf("handled=%v, want %v: %+v", handled, tc.wantHandled, ev)
+			}
+			if handled {
+				if text, _ := answerOf(t, ev)["text"].(string); !strings.HasPrefix(text, intentGeneralNoteTR) {
+					t.Fatalf("genel cevap öneki: %q", text)
+				}
+			}
+		})
 	}
 }

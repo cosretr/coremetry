@@ -20,10 +20,11 @@ package api
 //   - trace/span kimliği hex kontrolü, pencere snapRangeS basamağına,
 //   - sınıflandırıcı hatası sessizce düşer (sonraki basamak), asla cevabı
 //     kesmez.
-// none → ayara göre (copilot.IntentClassifyMode): on_no_loop = tool'suz
+// none → ayara göre (copilot.IntentClassifyMode): on_loop (v0.10.2472
+// varsayılanı) = serbest tool döngüsü, saf genel bilgi araçsız; on_no_loop = tool'suz
 // TEK anlatım çağrısıyla genel bilgi cevabı, başında "telemetriyle
-// eşleşmedi" notu, altında öneri çipleri (v0.10.194; prod yerel model
-// varsayılanı), on = serbest tool döngüsü (frontier). Saf çekirdekler
+// eşleşmedi" notu, altında öneri çipleri (v0.10.194; v0.10.2472'ye kadar
+// varsayılan), on = serbest tool döngüsü (frontier). Saf çekirdekler
 // parseIntentJSON + intentGeneralAnswer, copilot_intent_test.go'da
 // tablo-testli; basamak sırası kaynak kapısıyla.
 
@@ -447,6 +448,15 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 	if sourceAlt {
 		vetoNote = " · genel bilgi seçeneği: telemetri işareti yok"
 	}
+	// v0.10.2472 — döngü işareti (chat_loop_cue.go): sınıflandırıcı sıralama /
+	// sayma / kıyas sorusunu problems / slow_traces'e eşlediyse rota alınmaz;
+	// soru eşlenmemiş sayılır ve aşağıda araç döngüsüne iner. on_no_loop'ta
+	// (operatörün açık "döngü yok" seçimi) veto yok: none orada araçsız cevaptır.
+	cue := chatLoopCue(question)
+	if matched && mode != copilot.IntentOnNoLoop && cue != loopCueNone && loopCueVetoesGuided(route.Intent) {
+		route, matched = guidedRoute{}, false
+		vetoNote = " · döngü işareti: " + string(cue)
+	}
 	offTopicVetoed := false
 	if matched && route.Intent == guidedOffTopic {
 		if why, vetoed := offTopicVetoFor(question, svcNames, s.guidedEnvNames(ctx), s.guidedTeamNames(ctx), cosreV2Marked(ctx)); vetoed {
@@ -492,6 +502,20 @@ func (s *Server) copilotChatIntent(ctx context.Context, emit func(string, any), 
 			return h, hok
 		}
 		emit = semit
+		// v0.10.2472 — on_loop (varsayılan): eşlenmeyen soru araç döngüsüne;
+		// yalnız saf genel bilgi / serbest sohbet araçsız genel cevapta kalır.
+		// on / off zaten döngüye iner; on_no_loop açık seçimdir, eski yol aynen.
+		if mode == copilot.IntentOnLoop {
+			if cue != loopCueNone || !intentNoneStaysGeneral(question, svcNames, s.guidedEnvNames(ctx)) {
+				if chatStateOn(ctx) { // karar 14 çipi (aşağıdaki on_no_loop dalıyla aynı)
+					if st := chatContextFromCtx(ctx); st != nil && stateHasSubject(st.ctx) {
+						emit("step", map[string]string{"label": "niyet eşleşmedi — konuşmanın öznesiyle araç döngüsüne"})
+					}
+				}
+				return false, false
+			}
+			mode = copilot.IntentOnNoLoop // saf genel bilgi: eski araçsız cevap
+		}
 		if mode != copilot.IntentOnNoLoop {
 			return false, false
 		}

@@ -206,6 +206,47 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
     pinBottom();
     void regenerate(context ? { body: { context } } : undefined);
   };
+  // v0.10.2472 — mesaj kimliğinin v1 tur dizisindeki yeri (toChatTurns yalnız
+  // user / assistant mesajlarını katlar) ve bir asistan cevabının kullanıcı turu.
+  const turnIndexOf = (id: string) => {
+    let n = 0;
+    for (const m of messages) {
+      if (m.id === id) return n;
+      if (m.role === 'user' || m.role === 'assistant') n++;
+    }
+    return -1;
+  };
+  // v0.10.2472 — "Yeniden üret": bu cevabın kullanıcı turu aynı bağlamla yeniden
+  // gider, cevabın yerine yenisi gelir (SDK regenerate messageId; sonrası düşer).
+  // attempt:'regenerate' — öğrenme bu turu yeni soru saymaz (router boşluğu tek satır).
+  const regenerateAt = (messageId: string) => {
+    const c = live.current;
+    if (c.busy) return;
+    const ai = messages.findIndex(m => m.id === messageId);
+    const user = messages.slice(0, Math.max(ai, 0)).findLast(m => m.role === 'user');
+    if (ai < 0 || !user) return;
+    const idx = turnIndexOf(user.id);
+    const ut = c.turns[idx];
+    if (!ut) return;
+    const so: ChatSendOpts = { attempt: 'regenerate', ...(ut.explainAsk ? { explainAsk: { ...ut.explainAsk, fresh: true } } : {}), ...(ut.window ? { window: ut.window } : {}) };
+    const context = contextFor(ut.text ?? '', so, c.turns.slice(0, idx));
+    pinBottom();
+    void regenerate({ messageId, ...(context ? { body: { context } } : {}) });
+  };
+  // v0.10.2472 — "Düzenle": son kullanıcı mesajı yerinde değişir, sonraki cevaplar
+  // düşer (SDK sendMessage messageId) ve soru yeniden sorulur (attempt:'edit').
+  const editLast = (messageId: string, text: string) => {
+    const c = live.current;
+    const q = text.trim();
+    if (c.busy || !q) return;
+    const idx = turnIndexOf(messageId);
+    const ut = c.turns[idx];
+    if (!ut) return;
+    const so: ChatSendOpts = { attempt: 'edit', ...(ut.window ? { window: ut.window } : {}) };
+    const context = contextFor(q, so, c.turns.slice(0, idx));
+    pinBottom();
+    void c.sendMessage({ text: q, messageId, ...(ut.window ? { metadata: { window: ut.window } } : {}) }, context ? { body: { context } } : undefined);
+  };
   // v0.10.2353 (interaction-audit I5) — onaylı aksiyon kartı: onayın sonucu
   // (data-action-result) aynı asistan mesajına eklenir; paylaşım konuşma kimliğini okur.
   const actionHooks = useMemo(() => ({
@@ -484,7 +525,8 @@ export function CosreChatV2({ defaultOpen = false, variant = 'sheet' }: CosreCha
               <MessageList messages={messages} visibleParts={visibleParts} status={status} error={error}
                 onAsk={askChip} onRetry={retry} onApproval={approve} teamPick={teamPick} endpointPick={endpointPick}
                 compactSteps={isPage || undefined} onQuestion={answerQuestion} statusLine={statusLine} action={actionHooks}
-                onSuggest={askSuggestion} onStepRedirect={redirectStep} onStopSummarize={stopSummarize} />
+                onSuggest={askSuggestion} onStepRedirect={redirectStep} onStopSummarize={stopSummarize}
+                onRegenerate={regenerateAt} onEdit={editLast} />
             )}
           </div>
         </div>

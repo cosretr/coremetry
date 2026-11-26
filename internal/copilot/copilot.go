@@ -1314,19 +1314,25 @@ func (s *Service) AutoExplainEnabled() bool {
 //	             döngü YOK (yerel küçük model — prod varsayılanı; v0.10.194'e
 //	             kadar none = yalnız çipli red; operatör: "eşleştiremese de
 //	             cevap versin, ama söylesin")
+//	on_loop    — v0.10.2472 VARSAYILAN: sınıflandır; none → serbest tool
+//	             döngüsü, yalnız saf genel bilgi / serbest sohbet ("circuit
+//	             breaker nedir") on_no_loop'taki gibi araçsız cevaplanır.
+//	             on_no_loop varsayılanı (v0.10.172 / 194, küçük model
+//	             varsayımı) geri alındı; kayıtlı açık değer yine kazanır.
 const (
 	IntentOff      = "off"
 	IntentOn       = "on"
 	IntentOnNoLoop = "on_no_loop"
+	IntentOnLoop   = "on_loop"
 )
 
 // ValidateIntentClassify — "" kabul (varsayılan), aksi üç değerden biri.
 func ValidateIntentClassify(v string) error {
 	switch v {
-	case "", IntentOff, IntentOn, IntentOnNoLoop:
+	case "", IntentOff, IntentOn, IntentOnNoLoop, IntentOnLoop:
 		return nil
 	}
-	return fmt.Errorf("intentClassify 'off', 'on' ya da 'on_no_loop' olmalı")
+	return fmt.Errorf("intentClassify 'off', 'on', 'on_no_loop' ya da 'on_loop' olmalı")
 }
 
 func (s *Service) SetIntentClassify(v string) {
@@ -1335,12 +1341,13 @@ func (s *Service) SetIntentClassify(v string) {
 	s.mu.Unlock()
 }
 
-// IntentClassifyMode — boş ayar IntentOnNoLoop'a düşer (prod yerel gemma4).
+// IntentClassifyMode — boş ayar IntentOnLoop'a düşer (v0.10.2472; önce
+// IntentOnNoLoop). Kayıtlı açık değer aynen döner.
 func (s *Service) IntentClassifyMode() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.intentClassify == "" {
-		return IntentOnNoLoop
+		return IntentOnLoop
 	}
 	return s.intentClassify
 }

@@ -27,6 +27,8 @@
 //     (Onayla / İptal; bitmiş cevapta); onayın data-action-result'ı mesaja eklenir.
 //   • v0.10.2363 (investigation-design S5): data-block-{exception,trace,logs,
 //     anomaly} → balonun altında tembel kanıt kartları (evidence/parts).
+//   • v0.10.2472: her bitmiş cevapta "Yeniden üret" (aynı kullanıcı turu, bu
+//     cevabın yerine), son kullanıcı mesajında "Düzenle" (MessageTurnActions).
 //   • Bilinmeyen parça çizilmez (çökmez).
 // Sunumsal: Chat örneği yok (katalog ve testler statik mesajla da çizer).
 import { useMemo } from 'react';
@@ -62,6 +64,7 @@ import { parseDataAction, parseDataActionResult, parseDataSuggestions } from '@/
 import { SuggestionChips } from './SuggestionChips';
 import { evidencePartsOf } from '@/lib/cosre/evidenceParts';
 import { EvidenceParts } from '../evidence/parts/EvidenceParts';
+import { EditableUserMessage, RegenerateButton } from './MessageTurnActions';
 
 /** useChat durumu (ai ChatStatus ile aynı küme; tip importu katalogdan bağımsız). */
 export type CosreChatStatus = 'submitted' | 'streaming' | 'ready' | 'error';
@@ -98,18 +101,32 @@ export interface MessageListProps {
   onStepRedirect?: (messageId: string, step: StepView, d: CosreStepDirective) => void;
   /** v0.10.2368 (I2) — akan cevabı durdurup özet ister (son jetonlu adımın jetonu). */
   onStopSummarize?: (token: string) => void;
+  /** v0.10.2472 — bitmiş her cevapta "Yeniden üret" (asistan mesajı kimliği); yoksa düğme yok. */
+  onRegenerate?: (messageId: string) => void;
+  /** v0.10.2472 — son kullanıcı mesajında "Düzenle" (mesaj kimliği + yeni metin); yoksa düğme yok. */
+  onEdit?: (messageId: string, text: string) => void;
 }
 
-export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps, onQuestion, statusLine, action, onSuggest, onStepRedirect, onStopSummarize }: MessageListProps) {
+export function MessageList({ messages, visibleParts, status, error, onAsk, onRetry, onApproval, teamPick, endpointPick, compactSteps, onQuestion, statusLine, action, onSuggest, onStepRedirect, onStopSummarize, onRegenerate, onEdit }: MessageListProps) {
   const busy = status === 'submitted' || status === 'streaming';
   const last = messages.at(-1);
   const errText = status === 'error' && error ? error.message : undefined;
   // araç seti dilim 5 — kapsam önceki cevaptan farklıysa mesajın üstünde tek satır.
   const scopeNotes = useMemo(() => scopeChangeNotes(messages), [messages]);
+  const lastUserId = useMemo(() => messages.findLast(m => m.role === 'user')?.id, [messages]);
   return (
     <>
       {messages.map((m, i) => {
-        if (m.role === 'user') return <UserMessage key={m.id} m={m} />;
+        if (m.role === 'user') {
+          if (onEdit && m.id === lastUserId && !busy) {
+            return (
+              <EditableUserMessage key={m.id} text={userTurn(m).text ?? ''} onEdit={t => onEdit(m.id, t)}>
+                <UserMessage m={m} />
+              </EditableUserMessage>
+            );
+          }
+          return <UserMessage key={m.id} m={m} />;
+        }
         if (m.role !== 'assistant') return null;
         const isLast = i === messages.length - 1;
         const prev = messages[i - 1];
@@ -122,7 +139,8 @@ export function MessageList({ messages, visibleParts, status, error, onAsk, onRe
           onQuestion={isLast && !busy ? onQuestion : undefined} next={next}
           statusLine={isLast && busy ? statusLine : undefined} action={action}
           onSuggest={isLast && status === 'ready' ? onSuggest : undefined}
-          onStepRedirect={!busy ? onStepRedirect : undefined} onStopSummarize={isLast && busy ? onStopSummarize : undefined} />;
+          onStepRedirect={!busy ? onStepRedirect : undefined} onStopSummarize={isLast && busy ? onStopSummarize : undefined}
+          onRegenerate={!busy && !(isLast && errText) && onRegenerate ? () => onRegenerate(m.id) : undefined} />;
       })}
       {/* İlk parça gelmeden (yalnız soru gitti): v1 bekleyiş göstergesi. */}
       {busy && last?.role !== 'assistant' && (last?.metadata?.explainAsk
@@ -141,7 +159,7 @@ function UserMessage({ m }: { m: CosreUIMessage }) {
   return <ChatBubble turn={turn} />;
 }
 
-function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, next, statusLine, action, onSuggest, onStepRedirect, onStopSummarize }: {
+function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, explainAsk, onApproval, scopeNote, teamPick, endpointPick, compactSteps, onQuestion, next, statusLine, action, onSuggest, onStepRedirect, onStopSummarize, onRegenerate }: {
   m: CosreUIMessage; visibleParts: (m: CosreUIMessage) => Part[]; live: boolean; error?: string;
   /** araç seti dilim 5 — kapsam değişimi notu (önceki cevaptan farklıysa). */
   scopeNote?: string;
@@ -164,6 +182,8 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   onSuggest?: MessageListProps['onSuggest'];
   onStepRedirect?: MessageListProps['onStepRedirect'];
   onStopSummarize?: MessageListProps['onStopSummarize'];
+  /** v0.10.2472 — bu cevabı yeniden üret (bitmiş, akış yokken). */
+  onRegenerate?: () => void;
 }) {
   const actionCard = useMemo(() => { // v0.10.2353
     const p = m.parts.findLast(x => x.type === 'data-action');
@@ -193,8 +213,11 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   const slots = useMemo<ChatBubbleSlots>(() => ({
     hideSteps: true,
     // CoSRE Faz E — "Düzelt": açık düzeltme → ekip notu (tık-only kayıt).
-    actionsExtra: <><MessageNote exchangeId={xid} /><CosreCorrectButton exchangeId={xid} /></>,
-  }), [xid]);
+    actionsExtra: <>
+      {onRegenerate && !live && <RegenerateButton onRegenerate={onRegenerate} />}
+      <MessageNote exchangeId={xid} /><CosreCorrectButton exchangeId={xid} />
+    </>,
+  }), [xid, onRegenerate, live]);
   const badges = useMemo(() => stopBadges(turn, steps.stop), [turn, steps.stop]);
   const sumToken = live && onStopSummarize ? summarizeToken(steps) : undefined; // v0.10.2368 — I2
   // v1 showFollowups: bitmiş, hatasız, metinli son cevap.

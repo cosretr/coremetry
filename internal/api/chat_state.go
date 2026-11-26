@@ -182,6 +182,11 @@ type chatStateTurn struct {
 	learned    *chatCorrection        // kesinleşen düzeltme (finalize)
 	avoid      string                 // bu turda seçilmeyecek servis (düzeltilen ya da eş adın yanlış adayı)
 	addrMarked string                 // bu turun açık hitap işareti
+	// v0.10.2472 (chat_turn_rows.go) — bu turun kartta gösterilen satırları,
+	// adım özetleri ve sıra sözüyle seçilen önceki satır (1 tabanlı; 0 = yok).
+	rows   []chatRow
+	steps  []string
+	picked int
 }
 
 // beginChatStateTurn — çözücüyü koşar ve isteği kapsamla günceller. Kapalıyken nil.
@@ -216,6 +221,9 @@ func (s *Server) beginChatStateTurn(ctx context.Context, req *chatRequest, st *c
 	res := resolveChatState(stateResolveIn{Question: req.Messages[last].Text, Prev: st.ctx, Now: now, Loc: loc, Services: svcs, Envs: envs,
 		HasPrior: hasPrior, Aliases: stt.aliases})
 	stt.noteCorrection(&res, prevState, req.Messages, svcs, envs, hasPrior)
+	if label := stt.applyRowPick(&res, prevState, req, hasPrior); label != "" { // v0.10.2472 — "ikincisini aç"
+		emit("step", map[string]string{"label": label})
+	}
 	stt.res = res
 	if !chatContextEqual(st.ctx, res.Next) {
 		st.ctx, st.dirty = res.Next, true
@@ -522,6 +530,7 @@ func (t *chatStateTurn) wrapEmit(emit func(string, any)) func(string, any) {
 		return emit
 	}
 	return func(kind string, payload any) {
+		t.noteEvent(kind, payload) // v0.10.2472 — kartın satırları + adım özetleri
 		switch kind {
 		case "answer":
 			t.answered = true
@@ -594,6 +603,10 @@ func (t *chatStateTurn) finalize() {
 	if len(c.Ledger) == 0 {
 		c.Ledger = nil
 	}
+	c.Rows, c.Steps, c.Picked = finalRows(c.Rows, t.rows, t.picked), t.steps, 0 // v0.10.2472
+	if len(t.rows) == 0 && t.picked > 0 {
+		c.Picked = t.picked
+	}
 	if !chatContextEqual(t.st.ctx, c) {
 		t.st.ctx, t.st.dirty = c, true
 	}
@@ -661,6 +674,7 @@ func chatStateLineTR(c ChatContext) string {
 			b.WriteByte('\n')
 		}
 	}
+	b.WriteString(chatRowsLineTR(c.Rows, c.Steps)) // v0.10.2472 — önceki turun satırları + adımları (sınırlı veri bloğu)
 	return b.String()
 }
 

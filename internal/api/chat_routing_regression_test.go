@@ -448,11 +448,11 @@ var routingRegressionRows = []routingRow{
 	{release: "komşu v0.10.2140", name: "v2 '<servis> service detail sayfasını açar mısın' open_page'de kalır",
 		q: rrSvc + " service detail sayfasını açar mısın", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedOpenPage)},
 	{release: "komşu v0.10.2140", name: "v1 'trace detaile hangi menüden gideceğim' eski yolunda → intent",
-		q: "trace detaile hangi menüden gideceğim", wantTier: aisurface.TierIntent, wantRoute: ""},
+		q: "trace detaile hangi menüden gideceğim", wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true}, // v0.10.2472 — on_loop: eşlenmeyen soru döngüye
 	{release: "komşu v0.10.2140", name: "v1 nöbet çizelgesi eski yolunda → intent",
 		q: "16 kasım haftası nöbetçileri kim", wantTier: aisurface.TierIntent, wantRoute: ""},
 	{release: "komşu v0.10.2140", name: "v1 'siparis no … 7 eylülden 15 eylüle' eski yolunda → intent",
-		q: "siparis no 73066 için 7 eylülden 15 eylüle kadar trace ara", wantTier: aisurface.TierIntent, wantRoute: ""},
+		q: "siparis no 73066 için 7 eylülden 15 eylüle kadar trace ara", wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true}, // v0.10.2472 — on_loop
 	{release: "komşu v0.10.2140", name: "v1 '<servis> hata oranı nereden görürüm' eski yolunda → service_health",
 		q: rrSvc + " hata oranı nereden görürüm", wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceHealth)},
 
@@ -505,7 +505,7 @@ var routingRegressionRows = []routingRow{
 		wantTier: aisurface.TierGuided, wantRoute: string(guidedTraceByID)},
 	{release: "komşu v0.10.2138", name: "v1 devam 'neden gecikmiş olabilir?' bağlam servisini devralmaz (v1 bayt bayt)",
 		q: "neden gecikmiş olabilir?", prior: []string{rrSvc + " sağlığı nasıl?"}, chatCtx: &ChatContext{Service: rrSvc},
-		wantTier: aisurface.TierIntent, wantRoute: ""},
+		wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true}, // v0.10.2472 — on_loop
 	{release: "komşu v0.10.2138", name: "v1 'bu tracete …' bağlam trace'ini devralmaz (v1 bayt bayt)",
 		q: "bu tracete client correlation id nedir", prior: []string{tfTrace + " trace'ini açıkla"}, chatCtx: &ChatContext{Trace: tfTrace},
 		wantTier: aisurface.TierIntent, wantRoute: ""},
@@ -558,6 +558,22 @@ var routingRegressionRows = []routingRow{
 		q: rrSvc + " kimi çağırıyor, hangisi yavaş", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
 	{release: "v0.10.2449", name: "v1: servisin endpoint'i → döngü",
 		q: rrSvc + " endpoint'i nedir", wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	// v0.10.2472 — döngü işareti (chat_loop_cue.go): sıralama / sayma / hacim
+	// nedeni soruları endpoint kartı ve guided problems / slow_traces almaz.
+	{release: "v0.10.2472", name: "servis + en yavaş 5 endpoint → döngü (kart değil)",
+		q: rrSvc + " en yavaş 5 endpoint hangisi", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2472", name: "en yavaş 5 endpoint → döngü (slow_traces değil)",
+		q: "en yavaş 5 endpoint hangisi", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2472", name: "kaç trace hata aldı → döngü (problems değil)",
+		q: "son 1 saatte kaç trace hata aldı", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2472", name: "neden bu kadar çok 500 → döngü (problems değil)",
+		q: "neden bu kadar çok 500 alıyoruz", v2: true, wantTier: aisurface.TierIntent, wantRoute: "", loopOK: true},
+	{release: "v0.10.2472", name: "en çok hata veren 5 servis → top_error_services (değişmez)",
+		q: "en çok hata veren 5 servis", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedTopErrorServices)},
+	{release: "v0.10.2472", name: "servis sağlığı → service_health, kart değil (değişmez)",
+		q: rrSvc + " sağlığı nasıl?", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedServiceHealth)},
+	{release: "v0.10.2472", name: "kaç hata oldu → problems (değişmez)",
+		q: "son 3 saatte kaç hata oldu?", v2: true, wantTier: aisurface.TierGuided, wantRoute: string(guidedProblems)},
 	// v0.10.2453 — operatör onayı 2026-11-22: çok-atlamalı bağımlılık soruları
 	// serbest döngüye (dependency_path). "neden yavaşladı, hangi bağımlılık" ve
 	// "yavaşlamasının sebebi hangi downstream" root_cause'ta KALIR (v0.10.1479

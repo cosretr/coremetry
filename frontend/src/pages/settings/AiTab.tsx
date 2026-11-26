@@ -125,8 +125,8 @@ function AiProviderSettings() {
   const [enabled, setEnabled] = useState(true);
   // v0.9.1138 — arka plan otomatik açıklayıcı vidası (nil⇒açık).
   const [autoExplain, setAutoExplain] = useState(true);
-  // v0.10.172 — serbest soru sınıflandırıcısı kipi (eksik ⇒ on_no_loop).
-  const [intentClassify, setIntentClassify] = useState<AIIntentClassify>('on_no_loop');
+  // v0.10.172 — serbest soru sınıflandırıcısı kipi (eksik ⇒ on_loop, v0.10.2472).
+  const [intentClassify, setIntentClassify] = useState<AIIntentClassify>('on_loop');
   // v0.10.176 — model profilleri (dilim B); eski form varsayılan profili düzenler.
   const [profiles, setProfiles] = useState<AIProfilesPayload | null>(null);
   // v0.9.1120 (Faz 0.5) — LLM call tuning. Held as STRINGS, not
@@ -172,7 +172,7 @@ function AiProviderSettings() {
       setSkipTls(s.skipTls ?? false);
       setEnabled(s.enabled ?? true);
       setAutoExplain(s.autoExplain ?? true);
-      setIntentClassify(s.intentClassify ?? 'on_no_loop');
+      setIntentClassify(s.intentClassify ?? 'on_loop');
       if (s.profiles) setProfiles({ profiles: s.profiles, defaultProfile: s.defaultProfile ?? '', surfaceMap: s.surfaceMap ?? {} });
       applyTuning(s);
     },
@@ -360,10 +360,12 @@ function AiProviderSettings() {
           hint={<>
             Kılavuz kalıplarına uymayan soruyu model yalnız <em>sınıflandırır</em> (tek kısa JSON çağrısı, ~1 s);
             cevap yine sunucunun topladığı kanıtla üretilir. Adım panelinde «niyet» rozeti olarak görünür.
-            Hiçbir kalıba oturmayan soru (v0.10.194) araçsız tek çağrıyla genel bilgiyle cevaplanır ve
-            cevabın başında «telemetriyle eşleşmedi» notu bulunur — sayılar operatörün verisinden gelmez.
+            Varsayılan (v0.10.2472): hiçbir kalıba oturmayan soru araç döngüsüne gider; yalnız saf genel
+            bilgi sorusu araçsız cevaplanır. Eski kipte (v0.10.194) eşleşmeyen her soru araçsız tek çağrıyla
+            genel bilgiyle cevaplanır ve başında «telemetriyle eşleşmedi» notu bulunur.
           </>}>
-          <option value="on_no_loop">Açık — eşleşmezse genel bilgiyle cevaplar + öneri çipleri, araç döngüsü yok (yerel küçük model için önerilen)</option>
+          <option value="on_loop">Açık — eşleşmezse araç döngüsü, saf genel bilgi araçsız (önerilen)</option>
+          <option value="on_no_loop">Açık — eşleşmezse genel bilgiyle cevaplar + öneri çipleri, araç döngüsü yok (eski varsayılan)</option>
           <option value="on">Açık — eşleşmezse serbest araç döngüsü (frontier model)</option>
           <option value="off">Kapalı — eski davranış</option>
         </SelectField>

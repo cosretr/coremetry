@@ -31,8 +31,8 @@ package api
 //
 // Devralma sınırı (yanlış devralma riski, audit §6.1 A): açık ifade kazanır;
 // yeni açık servis eskisinin yerine geçer (operasyon ve trace düşer);
-// devralma yalnız kısa devam sorusunda (followUpMaxRunes, D5 kuralı) ve filo
-// ifadesi yokken; öneri yalnız ÇIPLAK kabulde ve ömrü içinde yürür, başka her
+// devralma filo ifadesi / açık bırakma / servis kalıbı yokken (v0.10.2472:
+// uzunluktan bağımsız, inheritsScope); öneri yalnız ÇIPLAK kabulde ve ömrü içinde yürür, başka her
 // soru öneriyi siler; TTL'i geçmiş durum hiç okunmaz.
 
 import (
@@ -177,12 +177,30 @@ func resolveChatState(in stateResolveIn) stateResolveOut {
 	if v := codeAfter(problemRefRe, in.Question); v != "" && chatProblemIDRe.MatchString(v) {
 		out.Next.Problem = v
 	}
-	follow := in.HasPrior && utf8.RuneCountInString(norm) <= followUpMaxRunes && !wantsFleetScope(toks)
+	follow := in.HasPrior && inheritsScope(in.Question, norm, toks)
 	out.InheritService = follow && !out.ServiceSet && prev.Service != ""
 	out.InheritEnv = follow && !out.EnvSet && prev.Env != ""
 	out.InheritWindow = follow && !out.WindowSet && prev.RangeExplicit && prev.RangeS > 0
-	resolveSearchSlots(&out, in.Question, norm, toks, follow, in.HasPrior)
+	// Arama yuvaları (IP, uç nokta, süzgeç) kısa devam kuralında kalır: uzun
+	// soru yeni bir arama tarif ediyor olabilir ("aynı endpoint" ayrıca devralır).
+	short := follow && utf8.RuneCountInString(norm) <= followUpMaxRunes
+	resolveSearchSlots(&out, in.Question, norm, toks, short, in.HasPrior)
 	return out
+}
+
+// inheritsScope — SAF (v0.10.2472): önceki kapsam (servis / ortam / pencere /
+// arama yuvaları) devralınır mı. Uzunluk SINIR DEĞİL — 80 rünü aşan devam
+// sorusu ("peki dün aynı saatte … ayrıca hata oranı da arttı mı, deploy
+// sonrası mı") kapsamı düşürüyordu. Devralmayı yalnız soruda açık yeni
+// kapsam keser: filo deyişi ("tüm", "genel", "filo"), açık bırakma
+// ("kapsamı kaldır", "tüm servisler") ya da servis adı kalıbı ("harvester-*").
+// Açık yeni servis ayrıca ServiceSet ile eskisinin yerine geçer.
+func inheritsScope(q, norm string, toks []string) bool {
+	if wantsFleetScope(toks) || clearsServiceSet(norm) {
+		return false
+	}
+	_, pattern := parseServicePattern(q)
+	return !pattern
 }
 
 // searchClearWords — v0.10.2356: arama yuvalarını (IP + süzgeç) silen çıplak sözcükler.
