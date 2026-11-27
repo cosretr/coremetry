@@ -1,9 +1,10 @@
 // traceNarrative.test.ts — v0.10.2480: anlatım biçiminin ayrıştırıcısı ve
-// sunucu verisinden kurulan satırlar (Akış, LOG boş durumları, Kanıt özeti).
+// sunucu verisinden kurulan satırlar. v0.10.2483: iki paragraflık KARAR, log
+// saati eşleşmesi, log notu, zincir notları, yaygınlık, Diğer kanıt.
 import { describe, it, expect } from 'vitest';
 import {
-  TRACE_NARRATIVE_LABELS, extraTraceLogs, matchTraceLabel, parseTraceNarrative, traceEvidenceSummary,
-  traceFlowLine, traceHeadStatus, traceLogEmpty, visibleTraceLogs,
+  TRACE_NARRATIVE_LABELS, hasOtherEvidence, matchTraceLabel, parseTraceNarrative, splitLogClocks, traceHeadStatus,
+  traceHopNote, traceLogClockSet, traceLogsNote, traceOtherEvidence, tracePrevalenceKey,
 } from './traceNarrative';
 import type { TraceEvidenceView } from './types';
 
@@ -54,43 +55,89 @@ describe('parseTraceNarrative', () => {
   });
 });
 
+describe('v0.10.2483 — iki paragraflık KARAR', () => {
+  it('iki paragraf korunur; tek paragraf geçerli; fazlası ikinciye katılır (Go aynası)', () => {
+    const two = parseTraceNarrative("Business hata\nKARAR: Bir.\nİki.\n\n20:37:02.044'te orders-bff reddediyor.\nSonraki adım: x");
+    expect(two.paras).toEqual(['Bir. İki.', "20:37:02.044'te orders-bff reddediyor."]);
+    expect(two.verdict).toBe("Bir. İki.\n\n20:37:02.044'te orders-bff reddediyor.");
+    expect(parseTraceNarrative('Başarılı\nKARAR: Tek.\nSonraki adım: y').paras).toEqual(['Tek.']);
+    expect(parseTraceNarrative('Belirsiz\nKARAR: A.\n\nB.\n \nC.').paras).toEqual(['A.', 'B. C.']);
+  });
+});
+
+const TS = Date.UTC(2026, 10, 26, 17, 37, 2, 44) * 1e6; // 20:37:02.044 Europe/Istanbul
+
 const base: TraceEvidenceView = {
-  spans: 3, totalSpans: 3, logRows: 4, logState: 'rows', oracleRows: 1, logsVisible: 1, fallback: 'Hata kaynağı: …',
+  spans: 3, totalSpans: 3, logRows: 4, logState: 'rows', oracleRows: 1, fallback: 'Hata kaynağı: …',
   rootMs: 82,
   chain: [
-    { spanId: 'c1', service: 'orders-bff', kind: 'CLIENT', call: 'POST customer-api → /customers/start', status: 400, failed: true, durMs: 77, p50Ms: 30 },
+    { spanId: 'c1', service: 'orders-bff', kind: 'CLIENT', call: 'POST customer-api → /customers/start', status: 400, error: 'ValidationException: customerNo must be set', failed: true, durMs: 77, p50Ms: 30 },
+    { spanId: 'm1', service: 'orders-bff', kind: 'INTERNAL', call: 'StartFlow.run', failed: true, durMs: 79 },
     { spanId: 'r1', service: 'orders-bff', kind: 'SERVER', call: 'POST /start', status: 400, failed: true, durMs: 82 },
   ],
-  logs: [
-    { tsNs: 1, level: 'ERROR', service: 'orders-bff', message: 'customer rejected', count: 2, corrId: 'requestId=req-0001' },
-    { tsNs: 2, level: 'WARN', service: 'orders-bff', message: 'retry skipped' },
+  logIndex: [
+    { tsNs: TS, service: 'orders-bff', level: 'INFO', key: 'calling customer-api customerNo=0' },
+    { tsNs: TS + 56e6, lastTsNs: TS + 60e6, service: 'customer-api', level: 'WARN', key: 'customerNo must be set' },
   ],
+  logsReviewed: { total: 4, sent: 4 },
 };
 
-describe('Akış / LOG / Kanıt', () => {
-  it('Akış: zincir tek satır, istemciye kök kodu', () => {
-    expect(traceFlowLine(base)).toBe('orders-bff → POST customer-api → /customers/start · 400 · 77 ms → istemciye 400');
+describe('KARAR log saatleri', () => {
+  const clocks = traceLogClockSet(base, 'Europe/Istanbul');
+  it('küme: ilk ve son saat, izleyicinin diliminde (Window çipiyle aynı biçim)', () => {
+    expect([...clocks].sort()).toEqual(['20:37:02.044', '20:37:02.100', '20:37:02.104']);
+    expect(traceLogClockSet(base, 'UTC').has('17:37:02.044')).toBe(true);
+  });
+
+  it('yalnız BİREBİR eşleşen saat bağlantı olur; en yakın tahmin yok', () => {
+    const segs = splitLogClocks("20:37:02.044'te BFF çağırıyor, 20:37:02.045'te değil; 20:37:02.100'de servis reddediyor.", clocks);
+    expect(segs.filter(s => s.clock).map(s => s.text)).toEqual(['20:37:02.044', '20:37:02.100']);
+    expect(segs.map(s => s.text).join('')).toBe("20:37:02.044'te BFF çağırıyor, 20:37:02.045'te değil; 20:37:02.100'de servis reddediyor.");
+    expect(splitLogClocks('17:37:02.044 UTC', clocks)).toEqual([{ text: '17:37:02.044 UTC' }]);
+    expect(splitLogClocks('x', new Set())).toEqual([{ text: 'x' }]);
+  });
+});
+
+describe('log notu', () => {
+  it('hepsi / bir kısmı / yok / okunamadı / depo yok', () => {
+    expect(traceLogsNote(base)).toEqual({ kind: 'all', total: 4 });
+    expect(traceLogsNote({ ...base, logsReviewed: { total: 250, sent: 120 } })).toEqual({ kind: 'some', total: 250, sent: 120 });
+    expect(traceLogsNote({ ...base, logsReviewed: undefined, logState: 'none', logRows: 0 })).toEqual({ kind: 'none' });
+    expect(traceLogsNote({ ...base, logsReviewed: undefined, logState: 'failed', logReason: 'timeout', logRows: 0 })).toEqual({ kind: 'failed' });
+    expect(traceLogsNote({ ...base, logsReviewed: undefined, logState: 'failed', logReason: 'nostore', logRows: 0 })).toEqual({ kind: 'nostore' });
+  });
+});
+
+describe('hata zinciri notları', () => {
+  it('kaynak: exception + 24 sa ortancası; ara halka notsuz; son halka kök istek', () => {
+    const ch = base.chain!;
+    expect(traceHopNote(ch[0], 0, 3)).toEqual({ source: 'ValidationException: customerNo must be set', p50Ms: 30, ratio: 77 / 30 });
+    expect(traceHopNote(ch[1], 1, 3)).toBeNull();
+    expect(traceHopNote(ch[2], 2, 3)).toEqual({ root: true });
+    expect(traceHopNote({ ...ch[0], error: undefined, p50Ms: undefined }, 0, 1)).toBeNull();
     expect(traceHeadStatus(base)).toBe(400);
   });
+});
 
-  it('Akış: yavaş başarılı trace kritik yolun en büyük payı', () => {
-    const v: TraceEvidenceView = { ...base, chain: undefined, critical: { spanId: 'c1', service: 'orders-api', kind: 'CLIENT', target: 'https://rates.example.test/v1/fx', durMs: 2000, sharePct: 95, mode: 'external' } };
-    expect(traceFlowLine(v)).toBe("orders-api · https://rates.example.test/v1/fx · 2.00 s · kök süresinin %95'i · dış bağımlılık beklemesi");
+describe('yaygınlık', () => {
+  const p = { kind: 'error' as const, service: 'customer-api', op: 'POST /customers/start', fromNs: 1, toNs: 2, windowMin: 60, calls: 1840, wide: false, endsAtTrace: true };
+  it('tür ve sayıya göre anahtar; sıfır gösterilmez', () => {
+    expect(tracePrevalenceKey({ ...p, errors: 1 })).toBe('errOne');
+    expect(tracePrevalenceKey({ ...p, errors: 214, wide: true })).toBe('errMany');
+    expect(tracePrevalenceKey({ ...p, errors: 0 })).toBeNull();
+    expect(tracePrevalenceKey({ ...p, kind: 'op', over: 62, overMs: 800 })).toBe('opOver');
+    expect(tracePrevalenceKey({ ...p, kind: 'op', p95Ms: 640 })).toBe('opPlain');
+    expect(tracePrevalenceKey({ ...p, kind: 'op', calls: 0 })).toBeNull();
   });
+});
 
-  it('görünen log satırı Kanıt özetinde ikinci kez sayılmaz', () => {
-    expect(visibleTraceLogs(base)).toHaveLength(1);
-    expect(extraTraceLogs(base).map(l => l.message)).toEqual(['retry skipped']);
-    // 4 satır − görünen desenin kapsadığı 2 kayıt = 2 ek satır
-    expect(traceEvidenceSummary(base)).toEqual({ spans: 3, hops: 2, extraLogs: 2, oracle: 1, stack: false });
-  });
-
-  it('LOG boş durumları birbirinden ayrı', () => {
-    const empty = { ...base, logs: [], logsVisible: 0 };
-    expect(traceLogEmpty({ ...empty, logState: 'none', logRows: 0 })).toBe('none');
-    expect(traceLogEmpty({ ...empty, logState: 'failed', logReason: 'timeout', logRows: 0 })).toBe('failed');
-    expect(traceLogEmpty({ ...empty, logState: 'failed', logReason: 'nostore', logRows: 0 })).toBe('nostore');
-    expect(traceLogEmpty({ ...empty, logState: 'rows', logRows: 5 })).toBe('quiet');
-    expect(traceLogEmpty(base)).toBeNull();
+describe('Diğer kanıt', () => {
+  it('kritik yol yalnız zincir varken Diğer kanıt\'ta; kod dosyası da sayılır', () => {
+    const crit = { spanId: 'c1', service: 'orders-bff', target: 'customer-api', durMs: 77, sharePct: 94, mode: 'dependent' as const };
+    expect(traceOtherEvidence({ ...base, critical: crit }).critical).toBe(true);
+    expect(traceOtherEvidence({ ...base, chain: undefined, critical: crit }).critical).toBe(false);
+    const none = traceOtherEvidence({ ...base, oracle: undefined });
+    expect(hasOtherEvidence(none)).toBe(false);
+    expect(hasOtherEvidence(none, 1)).toBe(true);
   });
 });

@@ -57,6 +57,7 @@ func (s *Server) copilotExplainTrace(w http.ResponseWriter, r *http.Request) {
 	// trace'in LOGLARINDAKİ stacktrace'ten çıkar ve o stack'i basan
 	// SERVİSİN deposunda aranır (bkz. traceExplainInput.StackService).
 	opts := decodeExplainOptions(r)
+	r = r.WithContext(withViewerLoc(r.Context(), opts.location())) // v0.10.2483 — anlatım LOGLAR saatleri izleyici diliminde
 	if !opts.IncludeCode {
 		// v0.10.1036 — operatör: "dönsün". v0.10.948 öncesinin varsayılanı:
 		// klasik kanıt + SystemPromptTrace, akan; trace yoksa 404 (Tempo ve CH).

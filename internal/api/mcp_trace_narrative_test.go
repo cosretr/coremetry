@@ -18,8 +18,9 @@ func TestMCPTraceEvidenceBounded(t *testing.T) {
 		return traceEvHop{SpanID: "s-" + svc, Service: svc, Call: "POST /charge", Status: 400, Error: "amount must be positive", Failed: true, DurMs: 30}
 	}
 	v := &traceEvidenceView{Chain: []traceEvHop{hop("payments-api"), hop("mid-api"), hop("orders-api")}, LogRows: 3, LogState: "rows",
-		Logs:        []traceEvLog{{Service: "payments-api", Level: "WARN", Message: "amount must be positive"}, {Service: "orders-api", Level: "ERROR", Message: "x"}, {Service: "z", Message: "y"}},
-		LogsVisible: 2, Fallback: "Hata kaynağı: payments-api"}
+		Prevalence: &traceEvPrevalence{Kind: tracePrevError, Service: "payments-api", Op: "POST /charge", Calls: 1840, Errors: 214, Wide: true},
+		LogIndex:   []traceEvLogRef{{TsNs: 1, Service: "payments-api", Level: "WARN", Key: "amount must be positive"}},
+		Fallback:   "Hata kaynağı: payments-api"}
 	var e map[string]any
 	if err := json.Unmarshal(mcpTraceEvidence(v), &e); err != nil {
 		t.Fatal(err)
@@ -27,11 +28,12 @@ func TestMCPTraceEvidenceBounded(t *testing.T) {
 	if ch, _ := e["chain"].([]any); len(ch) != 2 || e["chain_hops"] != float64(3) {
 		t.Fatalf("zincir kaynak + kök: %v", e["chain"])
 	}
-	if logs, _ := e["logs"].([]any); len(logs) != 2 || e["summary"] != "Hata kaynağı: payments-api" {
-		t.Fatalf("görünen loglar + özet: %v", e)
+	// v0.10.2483 — log listesi yok (KARAR'ın 2. paragrafı), yaygınlık var.
+	if _, has := e["logs"]; has || e["prevalence"] == nil || e["summary"] != "Hata kaynağı: payments-api" {
+		t.Fatalf("yaygınlık + özet, log listesi yok: %v", e)
 	}
 	long := strings.Repeat("ş", 600)
-	v.Logs[0].Message, v.Logs[1].Message, v.Chain[0].Error, v.Chain[2].Error = long, long, long, long
+	v.Chain[0].Error, v.Chain[1].Error, v.Chain[2].Error, v.Prevalence.Op = long, long, long, long
 	b := mcpTraceEvidence(v)
 	if b == nil || len(b) > mcptools.EtNarrativeEvidenceBytes {
 		t.Fatalf("tavan: %d", len(b))

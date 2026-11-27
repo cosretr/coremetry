@@ -367,13 +367,52 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 			}
 		}()
 	}
+	// v0.10.2483 — anlatım biçimi: (a) zincir yoksa kritik yolun en büyük
+	// paylı adımının 24 sa p50'si (zincir kaynağının AYNI okuması, kendi
+	// bütçesi, sessiz düşüş); (b) YAYGINLIK satırı — tek sınırlı okuma
+	// (trace_explain_prevalence.go), kanıtla paralel; yavaş/hatalıysa yok.
+	// Bölümlü biçimde ikisi de okunmaz: girdi bayt bayt eski.
+	narrative := traceExplainNarrativeOn()
+	var critBaseP50 float64
+	if narrative && !chain.OK && s.store != nil {
+		if top, ok := crit.TopStep(); ok && len(crit.Steps) >= traceCritMinSteps && top.Name != "" {
+			chainWG.Add(1)
+			go func() {
+				defer chainWG.Done()
+				bctx, bcancel := context.WithTimeout(ctx, traceChainBaselineTimeout)
+				defer bcancel()
+				end := time.Unix(0, top.StartNs+top.DurNs)
+				if red, berr := s.store.SpanOperationRED(bctx, top.Service, top.Name, end.Add(-traceDrillBaselineWin), end); berr == nil && red.Calls > 0 && red.P50Ms > 0 {
+					critBaseP50 = red.P50Ms
+				}
+			}()
+		}
+	}
+	var prevalence *traceEvPrevalence
+	if pk, ok := tracePrevalenceKeyOf(chain, allSpans); narrative && ok {
+		root := traceRootSpan(allSpans)
+		now := time.Now()
+		from, to := tracePrevalenceWindowOf(root.EndTime, now)
+		endsAtTrace := root.EndTime > 0 && !time.Unix(0, root.EndTime).After(now)
+		rootMs := float64(tracechain.SpanDurNs(root)) / 1e6
+		chainWG.Add(1)
+		go func() {
+			defer chainWG.Done()
+			if r, rok := s.readTracePrevalence(ctx, pk, from, to); rok {
+				prevalence = tracePrevalenceView(pk, r, from, to, rootMs, endsAtTrace)
+			}
+		}()
+	}
 	// v0.10.2456 — LOGLAR bloğu explain_trace_logs.go'da: ≤250 satır okuma,
 	// requestId ek araması, desen toplama, her ölçekte bütçe, gösterilmeyen özeti.
 	topSpan := ""
 	if crit.OK && crit.Top >= 0 && crit.Top < len(crit.Steps) {
 		topSpan = crit.Steps[crit.Top].SpanID
 	}
-	tl := s.traceExplainLogs(ctx, id, allSpans, minT, maxT, evScale, chain.Origin.Span.SpanID, topSpan)
+	// v0.10.2483 — LOGLAR saatleri: anlatımda izleyicinin dilimi (yoksa
+	// uygulamanın gösterim dilimi), bölümlüde UTC (trace_explain_viewer_tz.go).
+	lctx := withTraceLogLoc(ctx, traceLogLocFor(narrative, viewerLocFrom(ctx)))
+	tl := s.traceExplainLogs(lctx, id, allSpans, minT, maxT, evScale, chain.Origin.Span.SpanID, topSpan)
 	logsBlock, logsRead, logOutcome := tl.Block, tl.Read, tl.Outcome
 	if tl.RawStack != "" {
 		rawStack, stackService = tl.RawStack, tl.StackRec.ServiceName
@@ -406,6 +445,9 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 	// v0.10.1147 — span event bloğu kuyruğun BAŞINA: kırpmada span listesi
 	// kesilir, exception özeti korunur (yalnız-log modunda da baştan kesilir).
 	tail := evd.Block() + logsBlock + oracleBlock
+	if narrative {
+		tail += tracePrevalenceLine(prevalence) // v0.10.2483 — yalnız okuma başarılıysa
+	}
 	mainOp, otherOps, opSource := pickMainOperation(oracleRowsRead, allSpans, logsRead)
 	critHead, critTop := traceCriticalHead(crit)
 	evidence := traceEvidenceSpanIDs(compact)
@@ -421,7 +463,8 @@ func (s *Server) buildTraceExplainInputNear(ctx context.Context, id string, hint
 		}
 	}
 	view := buildTraceEvidenceView(traceEvidenceSrc{Spans: allSpans, Analyzed: len(compact), Chain: chain, Crit: crit,
-		Logs: logsRead, LogOutcome: logOutcome, RawStack: rawStack, StackSvc: stackService, StackType: stackType,
+		CritP50Ms: critBaseP50, LogRefs: tl.Refs, LogsSent: tl.ShownRecords, Prevalence: prevalence,
+		LogOutcome: logOutcome, RawStack: rawStack, StackSvc: stackService, StackType: stackType,
 		Oracle: oracleRowsRead, MainOp: mainOp})
 	return traceExplainInput{
 		View:            view,

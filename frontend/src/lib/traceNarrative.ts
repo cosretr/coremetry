@@ -2,11 +2,17 @@
 // açıklaması daha iyi olsun istiyorum ama çok da göz yormasın").
 //
 // Trace açıklamasının ANLATIM biçimi: model yalnız TÜR + KARAR + Sonraki adım
-// yazar (Go copilot.SystemPromptTraceNarrative); Akış / LOG / Kanıt satırlarını
-// UI sunucunun hesapladığı `trace_evidence` bloğundan çizer
-// (Go api/trace_explain_evidence.go). Bu modül saf: ayrıştırıcı + satır
-// metinleri (vitest node). TÜR kümesi Go copilot.TraceNarrativeLabels'ın aynası.
-import type { TraceEvidenceLog, TraceEvidenceView } from './types';
+// yazar (Go copilot.SystemPromptTraceNarrative); hata zinciri / kritik yol /
+// Diğer kanıt / yaygınlık satırlarını UI sunucunun hesapladığı `trace_evidence`
+// bloğundan çizer (Go api/trace_explain_evidence.go). Bu modül saf: ayrıştırıcı
+// + satır verisi (vitest node). TÜR kümesi Go copilot.TraceNarrativeLabels'ın aynası.
+//
+// v0.10.2483 (operatör onaylı): KARAR TEK açıklama, iki paragraf (ne oldu;
+// loglar ne gösteriyor). Akış ve LOG satırları kalktı; loglar Loglar
+// sekmesinde. KARAR'daki saat, sunucunun modele verdiği bir log satırının
+// saatiyle (aynı biçim, izleyicinin dilimi) BİREBİR eşleşirse bağlantı olur.
+import type { TraceEvidenceHop, TraceEvidencePrevalence, TraceEvidenceView } from './types';
+import { formatTraceClock } from './traceAiContext';
 
 /** Kapalı TÜR kümesi (Go copilot.TraceNarrativeLabels ile aynı sıra). */
 export const TRACE_NARRATIVE_LABELS = [
@@ -24,7 +30,10 @@ export const TRACE_LABEL_KEY: Record<TraceNarrativeLabel, string> = {
 export interface TraceNarrative {
   /** Kapalı kümeden etiket; tanınmazsa null (UI etiket çizmez). */
   label: TraceNarrativeLabel | null;
+  /** KARAR; v0.10.2483 — 1–2 paragraf, aralarında "\n\n". */
   verdict: string;
+  /** KARAR paragrafları (0–2; tek paragraf geçerli, ikinci uydurulmaz). */
+  paras: string[];
   /** v0.10.2482 — "Kod bulgusu" (yalnız "Kodu da incele" turu); yoksa ''. */
   code: string;
   next: string;
@@ -58,6 +67,12 @@ const NEXT_RE =/(^|\n)[ \t]*(?:[*_#>-]+[ \t]*)*(?:önerilen[ \t]+)?sonraki[ \t]+
 
 const flat = (s: string) => s.split('\n').map(plain).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 
+/** KARAR gövdesi → en çok iki paragraf (Go tnParas aynası; fazlası ikinciye katılır). */
+function paragraphs(s: string): string[] {
+  const ps = s.split(/\n[ \t]*\n/).map(flat).filter(Boolean);
+  return ps.length > 2 ? [ps[0], ps.slice(1).join(' ')] : ps;
+}
+
 /**
  * parseTraceNarrative — modelin çıktısı → {etiket, KARAR, Sonraki adım}.
  * Sunucunun mekanik "dış bağımlılık bekleme: …" satırı (Kanıt'ın kritik yolu
@@ -69,7 +84,7 @@ export function parseTraceNarrative(text: string, streaming = false): TraceNarra
   const lines = (text ?? '').replace(/\r/g, '').split('\n').filter(l => !WAIT_LINE.test(l));
   let i = 0;
   while (i < lines.length && !lines[i].trim()) i++;
-  if (streaming && i === lines.length - 1 && !KARAR_RE.test(lines[i])) return { label: null, verdict: '', code: '', next: '' };
+  if (streaming && i === lines.length - 1 && !KARAR_RE.test(lines[i])) return { label: null, verdict: '', paras: [], code: '', next: '' };
   let label: TraceNarrativeLabel | null = null;
   if (i < lines.length) {
     label = matchTraceLabel(lines[i]);
@@ -84,8 +99,8 @@ export function parseTraceNarrative(text: string, streaming = false): TraceNarra
   const code = c ? flat(head.slice(c.index + c[0].length)) : '';
   if (c) head = head.slice(0, c.index);
   const k = KARAR_RE.exec(head);
-  const verdict = flat(k ? head.slice(k.index + k[0].length) : head);
-  return { label, verdict, code, next };
+  const paras = paragraphs(k ? head.slice(k.index + k[0].length) : head);
+  return { label, verdict: paras.join('\n\n'), paras, code, next };
 }
 
 /** "6.6 ms" / "50 ms" / "2.30 s" — Go tracechain.FmtMs aynası. */
@@ -102,80 +117,123 @@ export function traceHeadStatus(v: TraceEvidenceView | null | undefined): number
   return ch[ch.length - 1].status || ch[0].status || undefined;
 }
 
+// ── KARAR'daki log saatleri ──
+
+const CLOCK_RE = /\b\d{2}:\d{2}:\d{2}\.\d{3}\b/g;
+
 /**
- * traceFlowLine — "Akış" satırı (deterministik, sunucu verisinden): zincir
- * varsa kaynak çağrı + kod + süre → istemciye kök kodu; yoksa kritik yolun en
- * büyük paylı adımı; ikisi de yoksa kök süresi.
+ * traceLogClockSet — modele giden log desenlerinin saatleri (ilk ve ×N ise
+ * son), UI'ın saat kuralıyla (formatTraceClock: izleyicinin dilimi). Sunucu
+ * modele AYNI dilim ve biçimde verdi; eşleşme tahmin değil, birebir. `tz` test dikişi.
  */
-/** Akış satırının sözcükleri (UI dili; varsayılan Türkçe). {x} yer tutucu. */
-export interface TraceFlowWords {
-  error: string; toClient: string; hops: string; endErr: string; share: string; external: string; waiting: string; ok: string;
-}
-export const TRACE_FLOW_TR: TraceFlowWords = {
-  error: 'hata', toClient: 'istemciye {s}', hops: '… {n} halka', endErr: '{svc} hata ile bitti',
-  share: "kök süresinin %{n}'i", external: 'dış bağımlılık beklemesi', waiting: '{svc} bekleniyor', ok: 'hata yok',
-};
-const fillW = (s: string, vars: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
-
-export function traceFlowLine(v: TraceEvidenceView, w: TraceFlowWords = TRACE_FLOW_TR): string {
-  const ch = v.chain ?? [];
-  if (ch.length) {
-    const o = ch[0];
-    const parts = [o.call, o.status ? String(o.status) : (o.error ? o.error.split(':')[0] : w.error), fmtTraceMs(o.durMs)];
-    let s = `${o.service} → ${parts.join(' · ')}`;
-    const mid = ch.length - 2 + (v.chainSkipped ?? 0);
-    if (ch.length > 1) {
-      const r = ch[ch.length - 1];
-      if (mid > 0) s += ` → ${fillW(w.hops, { n: mid })}`;
-      s += ` → ${r.status ? fillW(w.toClient, { s: r.status }) : fillW(w.endErr, { svc: r.service })}`;
+export function traceLogClockSet(v: TraceEvidenceView | null | undefined, tz?: string): Set<string> {
+  const out = new Set<string>();
+  for (const l of v?.logIndex ?? []) {
+    for (const ns of [l.tsNs, l.lastTsNs]) {
+      const c = ns ? formatTraceClock(ns, tz) : null;
+      if (c) out.add(c.time);
     }
-    return s;
   }
-  const c = v.critical;
-  if (c) {
-    const tail = c.mode === 'external' ? ` · ${w.external}` : c.mode === 'dependent' && c.child ? ` · ${fillW(w.waiting, { svc: c.child })}` : '';
-    return `${c.service} · ${c.target} · ${fmtTraceMs(c.durMs)} · ${fillW(w.share, { n: c.sharePct })}${tail}`;
+  return out;
+}
+
+export interface ClockSeg { text: string; clock?: boolean }
+
+/** Metni saat parçalarına böler: yalnız kümede BİREBİR olan saat `clock`; en yakına yuvarlama yok. */
+export function splitLogClocks(text: string, clocks: Set<string>): ClockSeg[] {
+  if (!clocks.size) return [{ text }];
+  const out: ClockSeg[] = [];
+  let last = 0;
+  for (const m of text.matchAll(CLOCK_RE)) {
+    if (!clocks.has(m[0])) continue;
+    const at = m.index ?? 0;
+    if (at > last) out.push({ text: text.slice(last, at) });
+    out.push({ text: m[0], clock: true });
+    last = at + m[0].length;
   }
-  return v.rootMs ? `${fmtTraceMs(v.rootMs)} · ${w.ok}` : w.ok;
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out.length ? out : [{ text }];
 }
 
-/** Görünen LOG satırları (sunucunun seçtiği ilk logsVisible kayıt, tavan 2). */
-export function visibleTraceLogs(v: TraceEvidenceView): TraceEvidenceLog[] {
-  return (v.logs ?? []).slice(0, Math.max(0, Math.min(2, v.logsVisible ?? 0)));
+// ── KARAR altındaki log notu ──
+
+export type TraceLogsNote =
+  | { kind: 'all'; total: number }
+  | { kind: 'some'; total: number; sent: number }
+  | { kind: 'none' | 'failed' | 'nostore' };
+
+/** "N log satırının hepsi incelendi" / "N satırın M'si" / yok / okunamadı / depo yok. */
+export function traceLogsNote(v: TraceEvidenceView): TraceLogsNote | null {
+  const r = v.logsReviewed;
+  if (r && r.total > 0) return r.sent >= r.total ? { kind: 'all', total: r.total } : { kind: 'some', total: r.total, sent: r.sent };
+  if (v.logState === 'failed') return { kind: v.logReason === 'nostore' ? 'nostore' : 'failed' };
+  if (v.logState === 'none' || (v.logState === 'rows' && !v.logRows)) return { kind: 'none' };
+  return null;
 }
 
-/** Kanıt'ta listelenecek ek loglar (görünenler hariç). */
-export function extraTraceLogs(v: TraceEvidenceView): TraceEvidenceLog[] {
-  return (v.logs ?? []).slice(visibleTraceLogs(v).length);
+// ── Hata zinciri notları ──
+
+export interface TraceHopNote {
+  /** hop 1: exception tipi + mesajı (sunucu verisi, aynen) */
+  source?: string;
+  /** bilindiğinde 24 sa ortancası ve bu çağrının katı */
+  p50Ms?: number;
+  ratio?: number;
+  /** son halka (kök istek) */
+  root?: boolean;
 }
 
-export type TraceLogEmpty = 'none' | 'failed' | 'nostore' | 'quiet' | null;
-
-/** LOG satırının boş durumu: log yok / okunamadı / depo yok / hata-uyarı yok; null = satır var. */
-export function traceLogEmpty(v: TraceEvidenceView): TraceLogEmpty {
-  if (visibleTraceLogs(v).length) return null;
-  if (v.logState === 'failed') return v.logReason === 'nostore' ? 'nostore' : 'failed';
-  if (v.logState === 'rows' && v.logRows > 0) return 'quiet';
-  return 'none';
+/**
+ * traceHopNote — zincir halkasının tek satırlık notu (sunucu verisinden):
+ * kaynak (hop 1) exception tipi + mesajı; 24 sa ortancası biliniyorsa "×Y";
+ * son halka "kök istek". Not yoksa null.
+ */
+export function traceHopNote(h: TraceEvidenceHop, i: number, n: number): TraceHopNote | null {
+  const note: TraceHopNote = {};
+  if (i === 0 && h.error) note.source = h.error;
+  if (h.p50Ms && h.p50Ms > 0) {
+    note.p50Ms = h.p50Ms;
+    note.ratio = h.durMs / h.p50Ms;
+  }
+  if (n > 1 && i === n - 1) note.root = true;
+  return note.source || note.p50Ms || note.root ? note : null;
 }
 
-export interface TraceEvidenceSummary {
-  spans: number;
-  hops: number;
-  /** görünen LOG satırlarının kapsadığı kayıtlar HARİÇ log satırı */
-  extraLogs: number;
-  oracle: number;
+// ── Yaygınlık satırı ──
+
+/** "Yaygın" sunucuda karar verilir (Go tracePrevalenceWideMin); UI yalnız renklendirir. */
+export type TracePrevalenceKey = 'errOne' | 'errMany' | 'opOver' | 'opPlain';
+
+export function tracePrevalenceKey(p: TraceEvidencePrevalence): TracePrevalenceKey | null {
+  if (p.kind === 'error') {
+    if (!p.errors) return null; // yanlış sıfır gösterilmez
+    return p.errors <= 1 ? 'errOne' : 'errMany';
+  }
+  if (!p.calls) return null;
+  return p.overMs ? 'opOver' : 'opPlain';
+}
+
+// ── Diğer kanıt ──
+
+export interface TraceOtherEvidence {
   stack: boolean;
+  fields: number;
+  /** kritik yol yalnız zincir gösterildiyse burada (zincir yoksa açık "Kritik yol") */
+  critical: boolean;
+  oracle: number;
+  others: number;
 }
 
-/** Katlanır Kanıt'ın tek satırlık özeti: görünen log satırı ikinci kez sayılmaz. */
-export function traceEvidenceSummary(v: TraceEvidenceView): TraceEvidenceSummary {
-  const shown = visibleTraceLogs(v).reduce((n, l) => n + (l.count && l.count > 1 ? l.count : 1), 0);
+export function traceOtherEvidence(v: TraceEvidenceView): TraceOtherEvidence {
   return {
-    spans: v.spans,
-    hops: (v.chain?.length ?? 0) + (v.chainSkipped ?? 0),
-    extraLogs: Math.max(0, (v.logRows ?? 0) - shown),
-    oracle: v.oracleRows ?? 0,
     stack: !!v.frame,
+    fields: v.fields?.length ?? 0,
+    critical: !!v.critical && !!v.chain?.length,
+    oracle: v.oracle?.length ?? 0,
+    others: v.others?.length ?? 0,
   };
+}
+
+export function hasOtherEvidence(o: TraceOtherEvidence, codeFiles = 0): boolean {
+  return o.stack || o.fields > 0 || o.critical || o.oracle > 0 || o.others > 0 || codeFiles > 0;
 }

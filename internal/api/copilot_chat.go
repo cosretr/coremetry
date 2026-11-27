@@ -504,6 +504,9 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	// trace / exception ✨ açıklaması sohbetin İÇİNDE, düğmenin çekirdeği ve
 	// önbellek anahtarıyla. Niyet AÇIK olduğu için her metin eşlemesinden
 	// (kapsam, hafıza, wiki, operasyon, guided) ÖNCE. Geçersiz niyet → düşer.
+	// v0.10.2483 — izleyici dilimi ctx'te: trace anlatımının LOGLAR saatleri
+	// ekrandaki saatle aynı dilimde (trace_explain_viewer_tz.go).
+	ctx = withViewerLoc(ctx, chatLocationNamed(req.Context.Tz, req.Context.TzOffsetMin))
 	if req.Context.ExplainAsk != nil {
 		if req.Context.ExplainAsk.Kind == explainAskTrace && cosreV2Marked(ctx) { // v0.10.2138 — D5: devam sorusu bu trace'i bulur (chat_context_subject.go)
 			cst.noteContextSubject(withContextTrace(cst.ctx, req.Context.ExplainAsk.ID))

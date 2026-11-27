@@ -30,6 +30,9 @@ func (m mcpTraceNarrativeSource) ReadTraceNarrative(ctx context.Context, traceID
 	out := mcptools.TraceNarrativeRead{Found: true, Evidence: mcpTraceEvidence(in.View)}
 	if in.View != nil {
 		out.Summary = in.View.Fallback
+		if lr := in.View.LogsReviewed; lr != nil { // v0.10.2483
+			out.LogsReviewed = &mcptools.LogsReviewed{Total: lr.Total, Sent: lr.Sent}
+		}
 	}
 	if env, hit := m.s.explainCacheGetCtx(ctx, explainCacheKey(copilot.SystemPromptTraceNarrative(), in.User, "")); hit {
 		n := copilot.ParseTraceNarrative(env.Text)
@@ -47,22 +50,23 @@ type mcpTraceEvidenceView struct {
 	Chain     []traceEvHop     `json:"chain,omitempty"` // kaynak (+ kök)
 	ChainHops int              `json:"chain_hops,omitempty"`
 	Critical  *traceEvCritical `json:"critical,omitempty"`
-	Logs      []traceEvLog     `json:"logs,omitempty"` // UI'ın LOG satırındaki ≤2 kayıt
-	LogRows   int              `json:"log_rows"`
-	LogState  string           `json:"log_state,omitempty"`
-	Frame     *traceEvFrame    `json:"stack_top_frame,omitempty"`
-	RootMs    float64          `json:"root_ms,omitempty"`
-	Summary   string           `json:"summary"`
+	// v0.10.2483 — log listesi yok (loglar KARAR'ın 2. paragrafında); yaygınlık satırı var.
+	Prevalence *traceEvPrevalence `json:"prevalence,omitempty"`
+	LogRows    int                `json:"log_rows"`
+	LogState   string             `json:"log_state,omitempty"`
+	Frame      *traceEvFrame      `json:"stack_top_frame,omitempty"`
+	RootMs     float64            `json:"root_ms,omitempty"`
+	Summary    string             `json:"summary"`
 }
 
 // mcpTraceEvidence — SAF: görünüm → ≤ EtNarrativeEvidenceBytes JSON. Sığmazsa
-// sırayla ikinci log, kök halkası, stack, kritik yol, loglar düşer; yine
+// sırayla kök halkası, stack, kritik yol, yaygınlık düşer; yine
 // sığmazsa nil (araç alanı hiç eklemez).
 func mcpTraceEvidence(v *traceEvidenceView) json.RawMessage {
 	if v == nil {
 		return nil
 	}
-	e := mcpTraceEvidenceView{Origin: v.Origin, Critical: v.Critical, LogRows: v.LogRows, LogState: v.LogState,
+	e := mcpTraceEvidenceView{Origin: v.Origin, Critical: v.Critical, Prevalence: v.Prevalence, LogRows: v.LogRows, LogState: v.LogState,
 		Frame: v.Frame, RootMs: v.RootMs, Summary: v.Fallback}
 	if n := len(v.Chain); n > 0 {
 		e.Chain = []traceEvHop{v.Chain[0]}
@@ -71,17 +75,7 @@ func mcpTraceEvidence(v *traceEvidenceView) json.RawMessage {
 		}
 		e.ChainHops = n + v.ChainSkip
 	}
-	vis := v.LogsVisible
-	if vis > len(v.Logs) {
-		vis = len(v.Logs)
-	}
-	e.Logs = v.Logs[:vis]
 	trims := []func(){
-		func() {
-			if len(e.Logs) > 1 {
-				e.Logs = e.Logs[:1]
-			}
-		},
 		func() {
 			if len(e.Chain) > 1 {
 				e.Chain = e.Chain[:1]
@@ -89,7 +83,7 @@ func mcpTraceEvidence(v *traceEvidenceView) json.RawMessage {
 		},
 		func() { e.Frame = nil },
 		func() { e.Critical = nil },
-		func() { e.Logs = nil },
+		func() { e.Prevalence = nil },
 	}
 	for i := 0; ; i++ {
 		b, err := json.Marshal(e)

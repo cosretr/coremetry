@@ -13,6 +13,16 @@ package api
 // damgaları unix ns: UI izleyicinin saat diliminde çizer. Boyutlar tavanlı
 // (sohbet arşivine blok olarak girer).
 //
+// v0.10.2483 (operatör onaylı, "logları ayrıca altta göstermene gerek yok,
+// sekmede görüyor — onu da açıklamaya dahil et"): görünüm log LİSTESİ çizmez;
+// loglar KARAR'ın 2. paragrafında anlatılır. Görünüm yalnız (a) modele giden
+// desenlerin sınırlı künyesini (LogIndex: saat, servis, seviye, kısa anahtar —
+// UI KARAR'daki saati bunlarla birebir eşleyip Loglar sekmesine bağlar) ve
+// (b) "N satırın M'si incelendi" sayımını (LogsReviewed) taşır. Hata zinciri
+// her zaman açık; zincir yoksa kritik yol aynı biçimde (CritPath: en büyük
+// paylı adım önce, sonra köke kadar çağıranlar). Yaygınlık satırı
+// (Prevalence, trace_explain_prevalence.go) okuma başarılıysa.
+//
 // Fallback — model KARAR yazmazsa UI'ın göstereceği deterministik tek satır
 // (AI yazmadı diye etiketlenir); zincir → kritik yol → kök süresi sırasıyla.
 
@@ -22,19 +32,20 @@ import (
 	"strings"
 
 	"github.com/cilcenk/coremetry/internal/chstore"
-	"github.com/cilcenk/coremetry/internal/logstore"
 	"github.com/cilcenk/coremetry/internal/tracechain"
 )
 
 // Görünüm tavanları.
 const (
-	traceEvChainMax   = 8
-	traceEvLogsMax    = 3
-	traceEvOracleMax  = 3
-	traceEvOthersMax  = 3
-	traceEvFieldsMax  = 4
-	traceEvTextRunes  = 240
-	traceEvFrameRunes = 200
+	traceEvChainMax    = 8
+	traceEvCritMax     = 8  // kritik yol satırı (en büyük pay + çağıranlar)
+	traceEvLogIndexMax = 40 // LogIndex tavanı (modele giden desen ≤30 × ölçek)
+	traceEvLogKeyRunes = 60
+	traceEvOracleMax   = 3
+	traceEvOthersMax   = 3
+	traceEvFieldsMax   = 4
+	traceEvTextRunes   = 240
+	traceEvFrameRunes  = 200
 )
 
 // traceEvidenceView — `trace_evidence` bloğunun gövdesi (FE TraceEvidenceView).
@@ -49,18 +60,20 @@ type traceEvidenceView struct {
 	ChainSkip  int              `json:"chainSkipped,omitempty"`
 	Critical   *traceEvCritical `json:"critical,omitempty"`
 	Origin     *traceEvOrigin   `json:"origin,omitempty"`
-	Logs       []traceEvLog     `json:"logs,omitempty"`
-	// LogsVisible — v0.10.2480 (operatör: "Logla ilgili kısım da ekleyelim"):
-	// her zaman görünen LOG satırında çizilen ilk N log (1, ya da ikinci satır
-	// başka servisin WARN/ERROR'uysa 2). Katlanır Kanıt yalnız Logs[N:]'i listeler.
-	LogsVisible int             `json:"logsVisible"`
-	Frame       *traceEvFrame   `json:"frame,omitempty"`
-	Fields      []traceEvField  `json:"fields,omitempty"`
-	Oracle      []traceEvOracle `json:"oracle,omitempty"`
-	Others      []traceEvHop    `json:"others,omitempty"`
-	OthersMore  int             `json:"othersMore,omitempty"`
-	RootMs      float64         `json:"rootMs,omitempty"`
-	Fallback    string          `json:"fallback"`
+	// CritPath — v0.10.2483: zincir yoksa açık "Kritik yol" (en büyük pay önce).
+	CritPath []traceEvStep `json:"critPath,omitempty"`
+	// LogIndex / LogsReviewed — v0.10.2483: modele giden log desenlerinin
+	// künyesi (UI çizmez; saat eşleşmesi) ve inceleme sayımı.
+	LogIndex     []traceEvLogRef      `json:"logIndex,omitempty"`
+	LogsReviewed *traceEvLogsReviewed `json:"logsReviewed,omitempty"`
+	Prevalence   *traceEvPrevalence   `json:"prevalence,omitempty"`
+	Frame        *traceEvFrame        `json:"frame,omitempty"`
+	Fields       []traceEvField       `json:"fields,omitempty"`
+	Oracle       []traceEvOracle      `json:"oracle,omitempty"`
+	Others       []traceEvHop         `json:"others,omitempty"`
+	OthersMore   int                  `json:"othersMore,omitempty"`
+	RootMs       float64              `json:"rootMs,omitempty"`
+	Fallback     string               `json:"fallback"`
 	// Kod İÇERİĞİ alanı YOK (v0.9.1254 kuralı, v0.10.2482'de teyit): kod
 	// turunun künyesi answer.explain.code'da (dosya/satır/link, içeriksiz).
 }
@@ -86,21 +99,40 @@ type traceEvCritical struct {
 	SharePct int     `json:"sharePct"`
 	Mode     string  `json:"mode"` // external | dependent | internal
 	Child    string  `json:"child,omitempty"`
+	P50Ms    float64 `json:"p50Ms,omitempty"` // v0.10.2483 — adımın 24 sa ortancası (biliniyorsa)
+}
+
+// traceEvStep — kritik yolun bir satırı (FE TraceEvidenceStep).
+type traceEvStep struct {
+	SpanID   string  `json:"spanId"`
+	Service  string  `json:"service"`
+	Kind     string  `json:"kind,omitempty"`
+	Call     string  `json:"call"`
+	Status   int     `json:"status,omitempty"`
+	DurMs    float64 `json:"durMs"`
+	SharePct int     `json:"sharePct,omitempty"` // yalnız en büyük paylı adım
+	P50Ms    float64 `json:"p50Ms,omitempty"`    // yalnız en büyük paylı adım
+	Root     bool    `json:"root,omitempty"`
+}
+
+// traceEvLogRef — modele giden bir log deseninin künyesi (FE TraceEvidenceLogRef).
+type traceEvLogRef struct {
+	TsNs     int64  `json:"tsNs"`
+	LastTsNs int64  `json:"lastTsNs,omitempty"` // desen ×N ise son kaydın saati
+	Service  string `json:"service"`
+	Level    string `json:"level"`
+	Key      string `json:"key"`
+}
+
+// traceEvLogsReviewed — "N log satırının hepsi / M'si incelendi".
+type traceEvLogsReviewed struct {
+	Total int `json:"total"`
+	Sent  int `json:"sent"`
 }
 
 type traceEvOrigin struct {
 	Service string `json:"service"`
 	Pod     string `json:"pod,omitempty"`
-}
-
-type traceEvLog struct {
-	TsNs    int64  `json:"tsNs"`
-	Level   string `json:"level"`
-	Service string `json:"service"`
-	Pod     string `json:"pod,omitempty"`
-	Message string `json:"message"`
-	Count   int    `json:"count,omitempty"`
-	CorrID  string `json:"corrId,omitempty"` // requestId / correlationId (anahtar=değer)
 }
 
 type traceEvFrame struct {
@@ -128,7 +160,10 @@ type traceEvidenceSrc struct {
 	Analyzed   int
 	Chain      tracechain.Chain
 	Crit       tracechain.CriticalPath
-	Logs       []*logstore.LogRecord
+	CritP50Ms  float64       // v0.10.2483 — en büyük paylı adımın 24 sa p50'si (zincir yoksa; 0 = bilinmiyor)
+	LogRefs    []traceLogRef // v0.10.2483 — modele giden desenler
+	LogsSent   int           // v0.10.2483 — o desenlerin kapsadığı kayıt
+	Prevalence *traceEvPrevalence
 	LogOutcome traceLogOutcome
 	RawStack   string
 	StackSvc   string
@@ -186,19 +221,16 @@ func buildTraceEvidenceView(src traceEvidenceSrc) *traceEvidenceView {
 		if mode == "internal" {
 			v.Critical.DurMs = float64(top.SelfOnPathNs) / 1e6
 		}
+		if !src.Chain.OK {
+			v.Critical.P50Ms = src.CritP50Ms
+			v.CritPath = traceEvCritPath(src.Crit, v.Critical)
+		}
 	}
-	// Odak span: hata kaynağı; hata yoksa kritik yolun en büyük paylı adımı.
-	focusSpan := ""
-	if src.Chain.OK {
-		focusSpan = src.Chain.Origin.Span.SpanID
-	} else if v.Critical != nil {
-		focusSpan = v.Critical.SpanID
+	v.LogIndex = traceEvLogIndex(src.LogRefs)
+	if src.LogOutcome.State == traceLogRows && src.LogOutcome.Rows > 0 {
+		v.LogsReviewed = &traceEvLogsReviewed{Total: src.LogOutcome.Rows, Sent: min(src.LogsSent, src.LogOutcome.Rows)}
 	}
-	v.Logs = pickTraceEvLogs(src.Logs, focusSpan)
-	v.LogsVisible = traceEvLogsVisible(v.Logs)
-	if v.Origin == nil && len(v.Logs) > 0 && v.Logs[0].Pod != "" {
-		v.Origin = &traceEvOrigin{Service: v.Logs[0].Service, Pod: v.Logs[0].Pod}
-	}
+	v.Prevalence = src.Prevalence
 	if f := stackTopFrame(src.RawStack); f != "" {
 		v.Frame = &traceEvFrame{Service: src.StackSvc, ExType: src.StackType, Frame: truncRunesN(f, traceEvFrameRunes)}
 	}
@@ -244,90 +276,49 @@ func spanPod(sp chstore.SpanRow) string {
 	return sp.HostName
 }
 
-// pickTraceEvLogs — SAF: en ilgili ≤3 log deseni. Sıra: kaynak span'in
-// logu, sonra seviye (ERROR > WARN > diğer), sonra zaman; aynı servis +
-// gövde tek satır (Count).
-func pickTraceEvLogs(logs []*logstore.LogRecord, originSpan string) []traceEvLog {
-	type grp struct {
-		rec   *logstore.LogRecord
-		n     int
-		focus bool
+// traceEvCritPath — SAF: açık "Kritik yol" satırları — en büyük paylı adım
+// önce (süre, kök payı, 24 sa p50), sonra köke kadar çağıranlar. Tavanı
+// aşan ara çağıranlar atlanır; kök her zaman son satır.
+func traceEvCritPath(cp tracechain.CriticalPath, top *traceEvCritical) []traceEvStep {
+	if top == nil || cp.Top < 0 || cp.Top >= len(cp.Steps) {
+		return nil
 	}
-	idx := map[string]*grp{}
-	var gs []*grp
-	for _, l := range logs {
-		if l == nil || strings.TrimSpace(l.Body) == "" {
-			continue
-		}
-		k := l.ServiceName + "\x00" + firstLineOf(l.Body)
-		if g, ok := idx[k]; ok {
-			g.n++
-			g.focus = g.focus || (originSpan != "" && l.SpanID == originSpan)
-			continue
-		}
-		g := &grp{rec: l, n: 1, focus: originSpan != "" && l.SpanID == originSpan}
-		idx[k] = g
-		gs = append(gs, g)
+	step := func(i int) traceEvStep {
+		st := cp.Steps[i]
+		return traceEvStep{SpanID: st.SpanID, Service: st.Service, Kind: strings.ToUpper(st.Kind), Call: st.TargetLabel(),
+			Status: st.HTTPCode, DurMs: float64(st.DurNs) / 1e6, Root: i == 0}
 	}
-	sort.SliceStable(gs, func(i, j int) bool {
-		a, b := gs[i], gs[j]
-		if a.focus != b.focus {
-			return a.focus
+	var out []traceEvStep
+	for i := cp.Top; i >= 0; i-- {
+		if len(out) == traceEvCritMax-1 && i > 0 {
+			i = 0
 		}
-		if sa, sb := traceLogSevClass(a.rec), traceLogSevClass(b.rec); sa != sb {
-			return sa > sb
+		e := step(i)
+		if i == cp.Top {
+			e.DurMs, e.SharePct, e.P50Ms = top.DurMs, top.SharePct, top.P50Ms
 		}
-		return a.rec.Timestamp < b.rec.Timestamp
-	})
-	var out []traceEvLog
-	for _, g := range gs {
-		if len(out) >= traceEvLogsMax {
-			break
-		}
-		if traceLogSevClass(g.rec) == 0 && len(out) > 0 {
-			break // INFO yalnız başka satır yoksa
-		}
-		e := traceEvLog{TsNs: g.rec.Timestamp, Level: traceLogLevel(g.rec), Service: g.rec.ServiceName,
-			Pod: traceLogPod(g.rec), Message: truncRunesN(logOneLine(firstLineOf(g.rec.Body)), traceEvTextRunes)}
-		if g.n > 1 {
-			e.Count = g.n
-		}
-		e.CorrID = logCorrID(g.rec)
 		out = append(out, e)
 	}
 	return out
 }
 
-// traceEvLogsVisible — SAF: LOG satırında görünen log sayısı. İlk satır
-// her zaman; ikincisi yalnız BAŞKA servisten ve WARN/ERROR ise (tavan 2).
-func traceEvLogsVisible(logs []traceEvLog) int {
-	switch {
-	case len(logs) == 0:
-		return 0
-	case len(logs) >= 2 && logs[1].Service != logs[0].Service && traceEvLevelRelevant(logs[1].Level):
-		return 2
-	}
-	return 1
-}
-
-func traceEvLevelRelevant(level string) bool {
-	u := strings.ToUpper(level)
-	return strings.HasPrefix(u, "ERR") || strings.HasPrefix(u, "WARN") || strings.HasPrefix(u, "FATAL") || strings.HasPrefix(u, "CRIT")
-}
-
-// logCorrID — SAF: logun ilk korelasyon kimliği ("anahtar=değer", sıralı anahtar).
-func logCorrID(l *logstore.LogRecord) string {
-	keys := make([]string, 0, 2)
-	for k, v := range l.Attributes {
-		if isCorrIDKey(k) && v != "" && len([]rune(v)) <= traceExplainCorrIDRunes {
-			keys = append(keys, k)
+// traceEvLogIndex — SAF: modele giden desenlerin künyesi (tavanlı, sıra korunur).
+func traceEvLogIndex(refs []traceLogRef) []traceEvLogRef {
+	var out []traceEvLogRef
+	for _, r := range refs {
+		if len(out) >= traceEvLogIndexMax {
+			break
 		}
+		if r.FirstTs <= 0 {
+			continue
+		}
+		e := traceEvLogRef{TsNs: r.FirstTs, Service: r.Service, Level: r.Level, Key: truncRunesN(r.Key, traceEvLogKeyRunes)}
+		if r.Count > 1 && r.LastTs > r.FirstTs {
+			e.LastTsNs = r.LastTs
+		}
+		out = append(out, e)
 	}
-	if len(keys) == 0 {
-		return ""
-	}
-	sort.Strings(keys)
-	return keys[0] + "=" + l.Attributes[keys[0]]
+	return out
 }
 
 // stackTopFrame — SAF: stack'in ilk "at …" satırı (yoksa "").

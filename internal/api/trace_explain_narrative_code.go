@@ -17,7 +17,7 @@ import (
 )
 
 // traceNarrativeCodeMaxTokens — kod dalında Kod bulgusu için ek pay.
-const traceNarrativeCodeMaxTokens = 1100
+const traceNarrativeCodeMaxTokens = 1200 // v0.10.2483: iki paragraflık KARAR + Kod bulgusu
 
 // traceNarrativeCodeCtx — kod dalının anlatım ctx'i (tavan daha geniş).
 func traceNarrativeCodeCtx(ctx context.Context) context.Context {

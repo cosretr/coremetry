@@ -6,8 +6,10 @@ package api
 // dönsün", "Qwen hızlı çalışsın, gerekirse tüm logları, trace'leri de verelim").
 //
 // Trace açıklamasının iki biçimi (cosre_conversation.traceExplainStyle):
-//   - anlatim (varsayılan): copilot.SystemPromptTraceNarrative — TÜR + KARAR +
-//     Sonraki adım. Model girdisi bölümlü biçimle AYNI tam kanıt (in.User:
+//   - anlatim (varsayılan): copilot.SystemPromptTraceNarrative — TÜR + KARAR
+//     (v0.10.2483: iki paragraf — ne oldu, loglar ne gösteriyor) + Sonraki adım.
+//     Model girdisi bölümlü biçimle aynı tam kanıt (in.User; v0.10.2483
+//     anlatımda log saatleri izleyici diliminde + YAYGINLIK satırı:
 //     HATA ZİNCİRİ + KRİTİK YOL başta, span'ler, SPAN EVENT'LERİ, loglar,
 //     Oracle satırları) ve AYNI bütçe: span tavanı traceExplainSpanCap (hatalar
 //     + en yavaşlar önce), LOGLAR bloğu traceExplainLogsBlockBytes / ≤30 desen
@@ -32,10 +34,11 @@ import (
 	"github.com/cilcenk/coremetry/internal/copilot"
 )
 
-// traceNarrativeMaxTokens — anlatım cevabının completion tavanı. Hedef ≤170
-// kelime (Türkçe ~380–450 token) + TÜR satırı; cümle kesmesin diye ~2×. Yalnız
+// traceNarrativeMaxTokens — anlatım cevabının completion tavanı. v0.10.2483:
+// hedef 120–190 kelime (iki paragraflık KARAR + Sonraki adım; Türkçe ~2.5
+// token/kelime → ≤~480 token) + TÜR satırı; cümle kesmesin diye ~2×. Yalnız
 // düşünme kapalıyken uygulanır (copilot.answerCapLifted).
-const traceNarrativeMaxTokens = 900
+const traceNarrativeMaxTokens = 1000
 
 // traceExplainNarrativeOn — yürürlükteki biçim anlatım mı (blob yok = evet).
 func traceExplainNarrativeOn() bool {

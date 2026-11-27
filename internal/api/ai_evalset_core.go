@@ -414,8 +414,8 @@ func scoreEvalCase(c evalCase, system, answer string, err error) (fails []string
 	if err != nil {
 		return []string{"error: " + err.Error()}, 0
 	}
-	fails = evalTextGateFails(c, answer)                                     // v0.10.1316 — ajan kipiyle ortak
-	fails = append(fails, evalNarrativeFails(c.Expect.Narrative, answer)...) // v0.10.2482 — anlatım biçimi
+	fails = evalTextGateFails(c, answer)                                                // v0.10.1316 — ajan kipiyle ortak
+	fails = append(fails, evalNarrativeFailsFor(c.Expect.Narrative, c.User, answer)...) // v0.10.2482 — anlatım biçimi; v0.10.2483 log ölçüsü
 	sys, user := evalCaseInput(c, system)
 	names := evalUnknownNames(c.Expect.KnownEntities, sys+"\n"+user, answer)
 	unknown = len(names)

@@ -8610,15 +8610,29 @@ export interface TraceEvidenceHop {
   spanId: string; service: string; kind?: string; call: string; status?: number; error?: string;
   failed: boolean; durMs: number; p50Ms?: number;
 }
-export interface TraceEvidenceLog { tsNs: number; level: string; service: string; pod?: string; message: string; count?: number; corrId?: string }
+/** v0.10.2483 — modele giden log deseninin künyesi (UI çizmez; KARAR saat eşleşmesi). */
+export interface TraceEvidenceLogRef { tsNs: number; lastTsNs?: number; service: string; level: string; key: string }
+/** v0.10.2483 — kritik yol satırı (en büyük paylı adım önce, kök son). */
+export interface TraceEvidenceStep {
+  spanId: string; service: string; kind?: string; call: string; status?: number; durMs: number;
+  sharePct?: number; p50Ms?: number; root?: boolean;
+}
+/** v0.10.2483 — yaygınlık satırı (Go traceEvPrevalence; operation_summary_5m, tek sınırlı okuma). */
+export interface TraceEvidencePrevalence {
+  kind: 'error' | 'op'; service: string; op: string; fromNs: number; toNs: number; windowMin: number;
+  calls: number; errors?: number; over?: number; overMs?: number; p95Ms?: number; wide: boolean; endsAtTrace: boolean;
+}
 export interface TraceEvidenceView {
   spans: number; totalSpans: number; logRows: number;
   logState: 'rows' | 'none' | 'failed' | ''; logReason?: 'timeout' | 'error' | 'nostore';
   oracleRows: number;
   chain?: TraceEvidenceHop[]; chainSkipped?: number;
-  critical?: { spanId: string; service: string; kind?: string; target: string; durMs: number; sharePct: number; mode: 'external' | 'dependent' | 'internal'; child?: string };
+  critical?: { spanId: string; service: string; kind?: string; target: string; durMs: number; sharePct: number; mode: 'external' | 'dependent' | 'internal'; child?: string; p50Ms?: number };
   origin?: { service: string; pod?: string };
-  logs?: TraceEvidenceLog[]; logsVisible: number;
+  critPath?: TraceEvidenceStep[];
+  logIndex?: TraceEvidenceLogRef[];
+  logsReviewed?: { total: number; sent: number };
+  prevalence?: TraceEvidencePrevalence;
   frame?: { service?: string; exType?: string; frame: string };
   fields?: { k: string; v: string }[];
   oracle?: { tsNs: number; operation?: string; errorCode?: string; message?: string; count?: number }[];

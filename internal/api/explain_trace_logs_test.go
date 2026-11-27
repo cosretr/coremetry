@@ -64,7 +64,7 @@ var tlCountRe = regexp.MustCompile(`GÖSTERİLMEYEN \(sayımı yalnız bu satır
 
 func TestSelectTraceLogs500(t *testing.T) {
 	logs := tl500()
-	sel := selectTraceLogs(logs, map[string]bool{"s-pay": true}, tlLimits(traceExplainLogsBlockBytes), traceLogsHeader(500, 0, nil))
+	sel := selectTraceLogs(logs, map[string]bool{"s-pay": true}, tlLimits(traceExplainLogsBlockBytes), traceLogsHeader(500, 0, nil, nil))
 	b := sel.Block
 	if len(b) > traceExplainLogsBlockBytes {
 		t.Fatalf("blok %d B > bütçe %d", len(b), traceExplainLogsBlockBytes)
@@ -108,7 +108,7 @@ func TestSelectTraceLogs500(t *testing.T) {
 func TestSelectTraceLogsBudgetTruncation(t *testing.T) {
 	logs := tl500()
 	const budget = 1200
-	sel := selectTraceLogs(logs, nil, tlLimits(budget), traceLogsHeader(500, 0, nil))
+	sel := selectTraceLogs(logs, nil, tlLimits(budget), traceLogsHeader(500, 0, nil, nil))
 	if len(sel.Block) > budget {
 		t.Fatalf("blok %d B > bütçe %d", len(sel.Block), budget)
 	}

@@ -12,7 +12,8 @@ package mcptools
 //     (bir araç içinden ikinci model çağrısı döngüyü ikiye katlardı): cevap
 //     yoksa narrative null + narrative_status "not_generated";
 //   - evidence — sunucunun hesapladığı sınırlı kanıt görünümünün özü (UI'ın
-//     Akış / LOG / Kanıt satırlarını çizdiği veri; ≤ EtNarrativeEvidenceBytes);
+//     hata zinciri / Diğer kanıt / yaygınlık satırlarını çizdiği veri; ≤ EtNarrativeEvidenceBytes);
+//   - logs_reviewed {total, sent} (v0.10.2483) — KARAR'ın log paragrafının sayımı;
 //   - text — düz metin hâli (anlatım + deterministik kanıt özeti; cevap yoksa
 //     "AI yazmadı" diye işaretli özet).
 //
@@ -39,6 +40,15 @@ type TraceNarrativeRead struct {
 	GeneratedAtMs int64           // önbellek satırının üretim anı
 	Evidence      json.RawMessage // sınırlı kanıt özü (nil = yok)
 	Summary       string          // deterministik tek satır (AI değil)
+	// LogsReviewed — v0.10.2483: KARAR'ın log paragrafının dayandığı sayım
+	// (okunan satır / modele giden satır); nil = log yok ya da okunamadı.
+	LogsReviewed *LogsReviewed
+}
+
+// LogsReviewed — logs_reviewed {total, sent}.
+type LogsReviewed struct {
+	Total int `json:"total"`
+	Sent  int `json:"sent"`
 }
 
 // TraceNarrativeSource — api doldurur (mcp_trace_narrative.go). nil = ek yok.
@@ -53,9 +63,10 @@ const EtNarrativeEvidenceBytes = 1536
 // ExplainTraceNarrativeDescription — açıklamanın biçime bağlı eki (yalnız kaynak bağlıyken).
 const ExplainTraceNarrativeDescription = " When the operator's trace explanation style is 'anlatim' (narrative, the default) the body ALSO carries: " +
 	"explanation_style; narrative {label (one of: Business hata, Bağımlılık hatası, Zaman aşımı, Yavaşlık, Yetki hatası, Altyapı hatası, Başarılı, Belirsiz), " +
-	"label_key (business|dependency|timeout|slow|auth|infra|ok|unclear), karar (4-5 sentence verdict), next_step, generated_at_ms} " +
+	"label_key (business|dependency|timeout|slow|auth|infra|ok|unclear), karar (the single explanation: paragraph 1 = what happened and why, paragraph 2 = what the trace's logs show, cited by time and service; paragraphs separated by a blank line), next_step, generated_at_ms} " +
+	"and logs_reviewed {total (log rows read for the trace), sent (rows the explanation was given)} when the trace has logs; " +
 	"from Coremetry's cached one-click Explain of this trace — this tool never runs a model: narrative is null with narrative_status=not_generated when the trace was not explained yet; " +
-	"evidence (server-computed, ≤1.5 KB: error-chain origin and root, critical-path top step, up to 2 decisive logs, stack top frame, deterministic summary); " +
+	"evidence (server-computed, ≤1.5 KB: error-chain origin and root, critical-path top step, prevalence of the failing / root operation in the hour before the trace, stack top frame, deterministic summary); " +
 	"text (plain-text rendering; marked 'AI yazmadı' when narrative is null). Quote evidence values verbatim. In the 'bolumlu' style these fields are absent."
 
 // withNarrativeTool — explain_trace'e anlatım eki (kaynak nil → aynen).
@@ -115,6 +126,9 @@ func decodeBody(out any) (map[string]any, bool) {
 // narrativeFields — SAF: okumadan gövdeye eklenecek alanlar.
 func narrativeFields(nr TraceNarrativeRead) map[string]any {
 	out := map[string]any{"explanation_style": "anlatim"}
+	if nr.LogsReviewed != nil {
+		out["logs_reviewed"] = nr.LogsReviewed
+	}
 	if !nr.Found {
 		out["narrative"] = nil
 		out["narrative_status"] = "unavailable"

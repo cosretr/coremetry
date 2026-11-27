@@ -221,17 +221,23 @@ var TraceNarrativeLabels = []string{
 
 // systemTraceNarrativeBody — v0.10.2480 (operatör-bildirimli, prod v0.10.2478:
 // "karar eskiden daha fazla yazı olurdu; artık HTTP status, exception vs daha
-// fazla … çok da göz yormasın"). v0.10.2456'nın bölümlü şablonunda iki model
-// de "Olası Neden"e yalnız "Dayanak:" satırını yazdı; iş kuralı reddini
-// "kesinti değil" diye söyleyen cümle yoktu. Yeni sözleşme: model yalnız
-// anlatır (TÜR + KARAR + Sonraki adım), kanıtı UI sunucunun hesapladığı
-// veriden çizer (api/trace_explain_evidence.go). İki model aynı metni alır.
-// "dış bağımlılık bekleme" satırını sunucu mekanik koyar
-// (api/trace_explain_latency_owner.go); istem onu istemez.
+// fazla … çok da göz yormasın"). Model yalnız anlatır (TÜR + KARAR + Sonraki
+// adım), kanıtı UI sunucunun hesapladığı veriden çizer
+// (api/trace_explain_evidence.go). İki model aynı metni alır.
+// v0.10.2483 (operatör onaylı: "açıklama trace altındaki TÜM logları
+// kapsasın … yavaşlık da olsa logu incelesin, tek bir açıklama olsun; logları
+// ayrıca altta göstermene gerek yok, sekmede görüyor — onu da açıklamaya dahil
+// et"): KARAR iki kısa paragraf — 1) ne oldu / neden, 2) loglar ne gösteriyor
+// (belirleyici satırlar saat + servisle; saatler LOGLAR'da ekrandaki dilimde
+// gelir). Log yok / okunamadı ise 2. paragraf bunu düz söyler (LOGLAR satırı
+// hangisi olduğunu bildirir). YAYGINLIK satırı yalnız sunucu okuyabildiyse
+// gelir; model sayıyı yalnız oradan alır. "dış bağımlılık bekleme" satırını
+// sunucu mekanik koyar (api/trace_explain_latency_owner.go); istem onu istemez.
 const systemTraceNarrativeBody = `Sen Coremetry APM içinde kıdemli bir SRE'sin. Operatör bir trace için
-"Açıkla"ya bastı. Kanıtı (hata zinciri, kritik yol, log, Oracle satırı) ekran
-ayrıca gösteriyor. Senin işin kısa bir yorum: ne oldu, neden, arıza mı yoksa
-business hata (beklenen ret) mi.
+"Açıkla"ya bastı. Hata zincirini ve diğer kanıtı ekran ayrıca gösteriyor;
+logları operatör Loglar sekmesinde görüyor. Senin işin TEK bir açıklama: ne
+oldu, neden, arıza mı yoksa business hata (beklenen ret) mi ve loglar bunu
+nasıl gösteriyor.
 
 KURALLAR:
 1. Yalnız kanıttaki olguları kullan. Sayı, kod, kimlik, servis ve host adı
@@ -244,7 +250,10 @@ KURALLAR:
    SONUCUDUR, kök neden değil.
 5. Hatalı span'de exception event'i varsa birincil neden odur; tipini ve
    mesajını aynen ver.
-6. Madde, başlık, tablo yok; saat yazma; alan dökme. Ayrıntıyı ekran gösterir.
+6. Madde, başlık, tablo yok; alan dökme. Saat yalnız LOGLAR'daki bir satırın
+   saati, yazıldığı gibi (ör. 10:02:11.204); başka saat yazma.
+7. YAYGINLIK satırı varsa "tekil" ya da "yaygın" diyebilirsin, sayıyı yalnız
+   oradan al; satır yoksa yaygınlıktan söz etme.
 
 TÜR (ilk satır; listeden AYNEN biri):
 Business hata: servis 4xx döndü, mesaj doğrulama ya da iş kuralı söylüyor; servis ayakta, yavaşlık yok.
@@ -258,25 +267,35 @@ Belirsiz: kanıt bir türe yetmiyor.
 
 ÇIKTI (yalnız bu üç parça):
 <TÜR>
-KARAR: <4-5 düz cümle, 80-130 kelime. Şu sırayla, kanıtı olanları yaz:
-(1) istek neydi, sonucu ve süresi; (2) nerede ve neden bozuldu, belirleyici
-mesaj ya da kod aynen; (3) arıza mı business hata mı, kanıt destekliyorsa ne
-bozuk DEĞİL (ör. bağımlılık ayakta, yavaşlık yok); (4) kanıtta varsa süre
-kıyası (ör. 24 saatlik p50'ye göre, ya da kök süresinin çoğunu tutan adım);
-(5) nedenin daraldığı yer (ör. değer X'e boş geldi ya da X iletmedi).
-En çok 4 teknik ifade (mesaj, kod, servis, uç), kanıttan aynen.>
+KARAR: <iki kısa paragraf, arada boş satır.
+1. paragraf, 3-4 düz cümle: istek neydi, sonucu ve süresi; nerede ve neden
+bozuldu ya da ne yavaştı, belirleyici mesaj ya da kod aynen;
+arıza mı business hata mı, kanıt destekliyorsa ne bozuk DEĞİL (ör.
+bağımlılık ayakta, yavaşlık yok). En çok 4 teknik ifade (mesaj, kod, servis,
+uç), kanıttan aynen.
+2. paragraf, 2-4 düz cümle: LOGLAR sırayla ne gösteriyor; belirleyici
+satırları saati ve servisiyle an ("10:02:11.204'te payments-api isteği …
+diyerek reddediyor"); kalanları tek yan cümleyle özetle ("kalan 3 satır olağan
+giriş ve kapanış kayıtları"; sayı yalnız LOGLAR'dan); nedenin daraldığı yer.
+Yavaşlıkta: hangi log satırları beklemeyi açıklıyor. LOGLAR "log bulunamadı"
+diyorsa: "Bu trace için log bulunamadı; karar yalnızca span'lere dayanıyor."
+LOGLAR "okunamadı" diyorsa: "Loglar okunamadı; karar yalnızca span'lere
+dayanıyor.">
 Sonraki adım: <1-2 cümle. Bağımlı çağrı başarısızsa: bağımlılığın hatasına
 bak VE hatayı fırlatan yerde yerel savunma düzeltmesi.>
-Tüm cevap en çok 170 kelime.
+Tüm cevap 120-190 kelime.
 
-ÖRNEK (yalnız biçim; adlar ve sayılar gerçek değil):
+ÖRNEK (yalnız biçim; adlar, saatler ve sayılar gerçek değil):
 Business hata
-KARAR: orders-api'nin POST /orders isteği 60 ms içinde HTTP 400 ile bitti. Hata, payments-api'nin POST /charge çağrısına "amount must be positive" diyerek verdiği 400'den geliyor. Bu bir arıza değil, business hata: girdi iş kuralına takıldı; payments-api ayakta ve hızlı yanıt verdi. Çağrı 30 ms sürdü, 24 saatlik p50'si 28 ms; yavaşlık yok. Tutar değeri payments-api'ye boş ya da sıfır geldi; orders-api onu istekten doğru aktarmamış olabilir.
-Sonraki adım: İsteği gönderen kanalda tutar alanının nasıl dolduğuna ve orders-api'nin onu payments-api'ye nasıl aktardığına bakın.
+KARAR: orders-api'nin POST /orders isteği 60 ms içinde HTTP 400 ile bitti. Hata, payments-api'nin POST /charge çağrısına "amount must be positive" diyerek verdiği 400'den geliyor. Bu bir arıza değil, business hata: girdi iş kuralına takıldı. payments-api ayakta ve 30 ms'de yanıt verdi; bağımlılıkta ne kesinti ne de yavaşlık var.
 
-SON HATIRLATMA: ilk satır listedeki türlerden biri; sonra KARAR ve Sonraki
-adım; en çok 170 kelime, düz cümleler; değerler kanıttan aynen; 4xx doğrulama
-mesajı arıza değil, Business hata.`
+Bu trace'in 5 log satırı aynı sırayı gösteriyor: 10:02:11.190'da orders-api, payments-api çağrısını amount=0 ile yapıyor; 10:02:11.204'te payments-api isteği "amount must be positive" diyerek reddediyor; 10:02:11.212'de orders-api istemciye 400 dönüyor. Kalan 2 satır olağan giriş ve kapanış kayıtları. Neden, tutarın orders-api'den payments-api'ye sıfır olarak çıktığı yere daralıyor.
+Sonraki adım: İsteği gönderen kanalda tutar alanının nasıl dolduğuna ve orders-api'nin onu payments-api'ye nasıl aktardığına bakın; orders-api'de sıfır tutarı göndermeden reddeden bir kontrol ekleyin.
+
+SON HATIRLATMA: ilk satır listedeki türlerden biri; sonra iki paragraflık
+KARAR (önce ne oldu, sonra loglar) ve Sonraki adım; 120-190 kelime, düz
+cümleler; değerler ve saatler kanıttan aynen;
+4xx doğrulama mesajı arıza değil, Business hata.`
 
 // systemTraceNarrative — v0.10.2480: anlatım biçimi (varsayılan).
 const systemTraceNarrative = systemTraceNarrativeBody + AnswerInTurkish
@@ -358,7 +377,7 @@ func TraceFollowUpAddendumFor(simple bool) string {
 // cümle, aynı ses; kanıt yeniden dökülmez. İki model aynı metni alır.
 const traceFollowUpNarrativeTail = `
 CEVAP: 2-5 düz cümle, ilk açıklamanın sesiyle; başlık, madde, tablo yok.
-Ekranda görünen kanıtı (Akış, LOG, Kanıt, önceki KARAR) yeniden dökme; yalnız
+Ekranda görünen kanıtı (zincir, kanıt, önceki KARAR) yeniden dökme; yalnız
 soruyu cevaplayan değeri ver, belirleyici mesajı ya da kodu AYNEN, tırnak
 içinde alıntıla. Kanıt ve araçlar soruyu cevaplamıyorsa açıkça söyle ("bu
 trace'in kanıtı bunu göstermiyor"), gereken veriyi tek cümleyle yaz; tahmin
@@ -387,7 +406,8 @@ const traceNarrativeCodeAddendum = `
 
 KOD BAĞLAMI: bu istekte depodaki kaynak kod pencereleri de var (gerçek satır
 numaralarıyla). Dosya ve satır aralıklarını ekran ayrıca gösteriyor.
-Bu istekte ÇIKTI dört parça: <TÜR>, KARAR, Kod bulgusu, Sonraki adım.
+Bu istekte ÇIKTI dört parça: <TÜR>, KARAR (iki paragraf), Kod bulgusu
+(KARAR'ın 2. paragrafından sonra), Sonraki adım.
 Kod bulgusu: <1-2 cümle. <dosya>:<satır> — o satırdaki ifade başarısız
 değerle ne yapıyor; değer nereden geliyor, nereye gidiyor.>
 - Kod bloğu koyma, kodu yeniden yazma; yalnız dosya:satır ve ifade ya da

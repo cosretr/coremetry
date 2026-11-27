@@ -85,8 +85,10 @@ func nrSuccess() []chstore.SpanRow {
 
 func nrView(spans []chstore.SpanRow, logs []*logstore.LogRecord) *traceEvidenceView {
 	ch := tracechain.Of(spans)
+	sel := selectTraceLogs(logs, map[string]bool{ch.Origin.Span.SpanID: true}, traceLogLimits{Entries: traceExplainLogLines,
+		BodyBytes: traceExplainLogBodyBytes, StackFirst: traceExplainLogStackFirst, StackRest: traceExplainLogStackRest, Budget: traceExplainLogsBlockBytes}, "")
 	return buildTraceEvidenceView(traceEvidenceSrc{Spans: spans, Analyzed: len(spans), Chain: ch, Crit: tracechain.CriticalPathOf(spans),
-		Logs: logs, LogOutcome: traceLogOutcome{State: "rows", Rows: len(logs)}})
+		LogRefs: sel.Refs, LogsSent: sel.ShownRecords, LogOutcome: traceLogOutcome{State: "rows", Rows: len(logs)}})
 }
 
 func TestTraceEvidenceViewSyntheticTraces(t *testing.T) {
@@ -104,8 +106,13 @@ func TestTraceEvidenceViewSyntheticTraces(t *testing.T) {
 		if v.Origin == nil || v.Origin.Service != "orders-api" || v.Origin.Pod != "orders-api-7d9f-abcde" {
 			t.Fatalf("köken %+v", v.Origin)
 		}
-		if len(v.Logs) != 1 || v.Logs[0].Count != 2 || v.Logs[0].TsNs != nrT0+41e6 || !strings.Contains(v.Logs[0].Message, "VAL-001") {
-			t.Fatalf("loglar: ERROR deseni tek satır ×2, INFO düşer: %+v", v.Logs)
+		// v0.10.2483 — log listesi yok; modele giden desenlerin künyesi (ERROR önce, INFO da girer).
+		if len(v.LogIndex) != 3 || v.LogIndex[0].TsNs != nrT0+41e6 || v.LogIndex[0].Level != "ERROR" ||
+			!strings.Contains(v.LogIndex[0].Key, "amount must be positive") || v.LogIndex[2].Level != "INFO" {
+			t.Fatalf("log künyesi: %+v", v.LogIndex)
+		}
+		if v.LogsReviewed == nil || *v.LogsReviewed != (traceEvLogsReviewed{Total: 3, Sent: 3}) {
+			t.Fatalf("inceleme sayımı: %+v", v.LogsReviewed)
 		}
 		if !strings.Contains(v.Fallback, "HTTP 400") || !strings.Contains(v.Fallback, "POST /orders") {
 			t.Fatalf("fallback %q", v.Fallback)
@@ -134,6 +141,10 @@ func TestTraceEvidenceViewSyntheticTraces(t *testing.T) {
 		if len(v.Chain) != 0 || v.Critical == nil || v.Critical.Mode != "external" || v.Critical.SpanID != "c1" || v.Critical.SharePct < 90 || v.Critical.DurMs != 2000 {
 			t.Fatalf("dış bekleme %+v", v.Critical)
 		}
+		// v0.10.2483 — zincir yok: açık "Kritik yol" en büyük paylı adım önce, kök son.
+		if len(v.CritPath) != 2 || v.CritPath[0].SpanID != "c1" || v.CritPath[0].SharePct < 90 || !v.CritPath[1].Root || v.CritPath[1].SpanID != "r1" {
+			t.Fatalf("kritik yol satırları: %+v", v.CritPath)
+		}
 		if !strings.HasPrefix(v.Fallback, "Hata yok. Sürenin en büyük payı:") || !strings.Contains(v.Fallback, "rates.example.test") {
 			t.Fatalf("fallback %q", v.Fallback)
 		}
@@ -160,11 +171,14 @@ func TestTraceEvidenceViewBounds(t *testing.T) {
 	}
 	var logs []*logstore.LogRecord
 	for i := 0; i < 50; i++ {
-		logs = append(logs, &logstore.LogRecord{Timestamp: nrT0, Severity: 17, ServiceName: "svc", Body: fmt.Sprintf("err %d %s", i, strings.Repeat("x", 500))})
+		logs = append(logs, &logstore.LogRecord{Timestamp: nrT0, Severity: 17, ServiceName: "svc", Body: fmt.Sprintf("failure %s %s", strings.Repeat(string(rune('a'+i%26)), i/26+1), strings.Repeat("x", 500))})
 	}
 	v := nrView(spans, logs)
-	if len(v.Chain) != traceEvChainMax || v.ChainSkip == 0 || len(v.Logs) != traceEvLogsMax || len([]rune(v.Logs[0].Message)) > traceEvTextRunes+1 {
-		t.Fatalf("tavanlar: zincir %d (atlanan %d), log %d", len(v.Chain), v.ChainSkip, len(v.Logs))
+	if len(v.Chain) != traceEvChainMax || v.ChainSkip == 0 || len(v.LogIndex) == 0 || len(v.LogIndex) > traceEvLogIndexMax || len([]rune(v.LogIndex[0].Key)) > traceEvLogKeyRunes+1 {
+		t.Fatalf("tavanlar: zincir %d (atlanan %d), log künyesi %d", len(v.Chain), v.ChainSkip, len(v.LogIndex))
+	}
+	if v.LogsReviewed == nil || v.LogsReviewed.Total != 50 || v.LogsReviewed.Sent >= 50 {
+		t.Fatalf("bütçe kırptı: %+v", v.LogsReviewed)
 	}
 	if b, _ := json.Marshal(v); len(b) > 8<<10 {
 		t.Fatalf("görünüm %d bayt (≤8 KiB)", len(b))
@@ -265,38 +279,31 @@ func TestChatExplainTurnTraceNarrative(t *testing.T) {
 	}
 }
 
-// TestTraceEvidenceLogRow — her zaman görünen LOG satırı: seçim (hata
-// kaynağının logu önce; ikinci satır yalnız başka servisin WARN/ERROR'u),
-// korelasyon kimliği, üç ayrı boş durum (none / failed / nostore).
-func TestTraceEvidenceLogRow(t *testing.T) {
-	src := func(logs []*logstore.LogRecord, o traceLogOutcome) *traceEvidenceView {
-		sp := nrBusinessRejection()
-		return buildTraceEvidenceView(traceEvidenceSrc{Spans: sp, Analyzed: 2, Chain: tracechain.Of(sp), Crit: tracechain.CriticalPathOf(sp), Logs: logs, LogOutcome: o})
+// TestTraceEvidenceLogsReviewed — v0.10.2483: görünüm log listesi taşımaz;
+// "N satırın hepsi / M'si incelendi" yalnız log okunduysa; boş durumlar
+// logState'te (none / failed + neden) — UI "Loglar sekmesinde aç" ile birlikte.
+func TestTraceEvidenceLogsReviewed(t *testing.T) {
+	sp := nrBusinessRejection()
+	src := func(refs []traceLogRef, sent int, o traceLogOutcome) *traceEvidenceView {
+		return buildTraceEvidenceView(traceEvidenceSrc{Spans: sp, Analyzed: 2, Chain: tracechain.Of(sp), Crit: tracechain.CriticalPathOf(sp), LogRefs: refs, LogsSent: sent, LogOutcome: o})
 	}
-	rows := traceLogOutcome{State: "rows", Rows: 7}
-	origin := &logstore.LogRecord{Timestamp: nrT0 + 50e6, Severity: 13, SeverityText: "WARN", ServiceName: "orders-api", SpanID: "c1",
-		Body: "charge rejected: amount must be positive", Attributes: map[string]string{"requestId": "req-0001"}}
-	otherErr := &logstore.LogRecord{Timestamp: nrT0 + 20e6, Severity: 17, SeverityText: "ERROR", ServiceName: "payments-api", Body: "validation failed: amount"}
-	sameSvc := &logstore.LogRecord{Timestamp: nrT0 + 10e6, Severity: 17, SeverityText: "ERROR", ServiceName: "orders-api", Body: "unrelated error"}
-
-	v := src([]*logstore.LogRecord{otherErr, origin}, rows)
-	if v.Logs[0].Message != origin.Body || v.Logs[0].CorrID != "requestId=req-0001" || v.LogsVisible != 2 || v.LogRows != 7 {
-		t.Fatalf("kaynak logu önce (WARN da olsa), ikinci satır başka servis ERROR: %+v visible=%d", v.Logs, v.LogsVisible)
+	refs := []traceLogRef{{FirstTs: nrT0 + 50e6, Service: "orders-api", Level: "WARN", Key: strings.Repeat("ş", 200), Count: 1}}
+	v := src(refs, 7, traceLogOutcome{State: "rows", Rows: 7})
+	if *v.LogsReviewed != (traceEvLogsReviewed{Total: 7, Sent: 7}) || len(v.LogIndex) != 1 || len([]rune(v.LogIndex[0].Key)) > traceEvLogKeyRunes+1 || v.LogIndex[0].LastTsNs != 0 {
+		t.Fatalf("hepsi incelendi: %+v %+v", v.LogsReviewed, v.LogIndex)
 	}
-	if v = src([]*logstore.LogRecord{origin, sameSvc}, rows); v.LogsVisible != 1 || len(v.Logs) != 2 {
-		t.Fatalf("aynı servisin ikinci satırı görünmez (Kanıt'ta kalır): visible=%d", v.LogsVisible)
+	if v = src(refs, 120, traceLogOutcome{State: "rows", Rows: 250}); *v.LogsReviewed != (traceEvLogsReviewed{Total: 250, Sent: 120}) {
+		t.Fatalf("kırpılmış: %+v", v.LogsReviewed)
 	}
-	for _, c := range []struct {
-		o             traceLogOutcome
-		state, reason string
-	}{
-		{traceLogOutcome{State: "none"}, "none", ""},
-		{traceLogOutcome{State: "failed", Reason: "timeout"}, "failed", "timeout"},
-		{traceLogOutcome{State: "failed", Reason: "nostore"}, "failed", "nostore"},
-	} {
-		v := src(nil, c.o)
-		if v.LogsVisible != 0 || len(v.Logs) != 0 || v.LogState != c.state || v.LogReason != c.reason {
-			t.Fatalf("boş durum %+v → %+v", c.o, v)
+	for _, o := range []traceLogOutcome{{State: "none"}, {State: "failed", Reason: "timeout"}, {State: "failed", Reason: "nostore"}} {
+		if v := src(nil, 0, o); v.LogsReviewed != nil || v.LogIndex != nil || v.LogState != o.State || v.LogReason != o.Reason {
+			t.Fatalf("boş durum %+v → %+v", o, v)
+		}
+	}
+	b, _ := json.Marshal(src(refs, 7, traceLogOutcome{State: "rows", Rows: 7}))
+	for _, gone := range []string{`"logs"`, `"logsVisible"`, `"message"`} {
+		if strings.Contains(string(b), gone) {
+			t.Fatalf("görünüm log listesi taşımamalı (%s): %s", gone, b)
 		}
 	}
 }

@@ -21,7 +21,7 @@ var TraceNarrativeLabelKeys = map[string]string{
 // TraceNarrative — ayrıştırılmış anlatım. Label kapalı kümeden ya da "".
 type TraceNarrative struct {
 	Label string
-	Karar string
+	Karar string // v0.10.2483: 1–2 paragraf, aralarında "\n\n"
 	Code  string // "Kod bulgusu" (yalnız kod dalı)
 	Next  string
 }
@@ -99,8 +99,33 @@ func ParseTraceNarrative(text string) TraceNarrative {
 	if m := tnKararRe.FindStringIndex(head); m != nil {
 		head = head[m[1]:]
 	}
-	out.Karar = tnFlat(head)
+	out.Karar = tnParas(head)
 	return out
+}
+
+var tnBlankRe = regexp.MustCompile(`\n[ \t]*\n`)
+
+// tnParas — v0.10.2483: KARAR en çok iki paragraf ("\n\n" ile). Tek paragraf
+// geçerli (ikinci uydurulmaz); ikiden fazlası ikinciye katılır (bilgi atılmaz).
+func tnParas(s string) string {
+	var ps []string
+	for _, p := range tnBlankRe.Split(s, -1) {
+		if f := tnFlat(p); f != "" {
+			ps = append(ps, f)
+		}
+	}
+	if len(ps) > 2 {
+		ps = []string{ps[0], strings.Join(ps[1:], " ")}
+	}
+	return strings.Join(ps, "\n\n")
+}
+
+// KararParagraphs — KARAR'ın paragrafları (1 ya da 2; boşsa nil).
+func (n TraceNarrative) KararParagraphs() []string {
+	if n.Karar == "" {
+		return nil
+	}
+	return strings.Split(n.Karar, "\n\n")
 }
 
 // PlainText — anlatımın düz metin hâli (MCP `text`): etiket satırı + parçalar.

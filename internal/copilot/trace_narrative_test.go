@@ -103,3 +103,21 @@ func TestTraceNarrativeFollowUpAndCodePrompts(t *testing.T) {
 		t.Error("aday eki")
 	}
 }
+
+// TestParseTraceNarrativeParagraphs — v0.10.2483: KARAR bir ya da iki
+// paragraf; tek paragraf geçerli (ikinci uydurulmaz), fazlası ikinciye katılır.
+func TestParseTraceNarrativeParagraphs(t *testing.T) {
+	n := ParseTraceNarrative("Business hata\nKARAR: Bir. İki.\nÜç.\n\n10:02:11.204'te payments-api reddediyor.\nSonraki adım: x")
+	if got := n.KararParagraphs(); len(got) != 2 || got[0] != "Bir. İki. Üç." || got[1] != "10:02:11.204'te payments-api reddediyor." {
+		t.Fatalf("%q", got)
+	}
+	if got := ParseTraceNarrative("Başarılı\nKARAR: Tek paragraf.\nSonraki adım: yok").KararParagraphs(); len(got) != 1 {
+		t.Fatalf("tek paragraf: %q", got)
+	}
+	if got := ParseTraceNarrative("Belirsiz\nKARAR: A.\n\nB.\n \nC.\nSonraki adım: x").KararParagraphs(); len(got) != 2 || got[1] != "B. C." {
+		t.Fatalf("üç paragraf ikiye katlanır: %q", got)
+	}
+	if ParseTraceNarrative("Belirsiz\nSonraki adım: x").KararParagraphs() != nil {
+		t.Fatal("boş KARAR")
+	}
+}
