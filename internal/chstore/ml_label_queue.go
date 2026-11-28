@@ -154,7 +154,7 @@ func mlLabelQueueSQL(recCols bool) string {
 	}
 	return `
 		SELECT id, toString(detector), toString(service), started_at,
-		       id IN (SELECT substring(event_id, 4) FROM anomaly_verdicts FINAL
+		       id GLOBAL IN (SELECT substring(event_id, 4) FROM anomaly_verdicts FINAL
 		              WHERE startsWith(event_id, 'ml:') AND created_at >= ?) AS labelled
 		FROM ml_events FINAL
 		WHERE started_at >= ? AND detector NOT IN (` + excl + `)

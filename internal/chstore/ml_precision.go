@@ -131,7 +131,8 @@ func mlScorecardSQL(withReason, withOrigin bool) string {
 		    FROM (SELECT id, rule_id, service, started_at, resolved_at, description
 		          FROM problems FINAL WHERE started_at >= ?) AS p
 		    LEFT JOIN cs AS c ON c.source_id = p.id
-		    LEFT JOIN (SELECT substring(id, 4) AS sig, name FROM saved_views FINAL
+		    LEFT JOIN (
+		        SELECT substring(id, 4) AS sig, name FROM saved_views FINAL
 		               WHERE page = 'problem-verdict' AND owner_id = '' AND startsWith(id, 'pv:')
 		                 AND name IN ('real', 'noise')) AS v
 		           ON v.sig = concat('p:', p.rule_id, '|', toString(p.service))
