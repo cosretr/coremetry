@@ -32,7 +32,51 @@
       "Bash(docker images *)",
       "Bash(docker inspect *)",
       "Bash(docker ps *)",
-      "Bash(python3 -c ' *)"
+      "Bash(scripts/gate.sh *)",
+      "Bash(bash scripts/gate.sh *)",
+      "Bash(scripts/dev-up.sh)",
+      "Bash(scripts/dev-seed.sh)",
+      "Bash(scripts/dev-seed.sh *)",
+      "Bash(scripts/dev-api.sh *)",
+      "Bash(scripts/dev-ch.sh *)",
+      "Bash(scripts/dev-prom.sh *)",
+      "Bash(scripts/dev-shot.sh *)",
+      "Bash(scripts/dev/verify-stamp.sh *)",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git diff)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(rg *)",
+      "Bash(gh run list *)",
+      "Bash(gh run view *)",
+      "Bash(docker stats --no-stream)",
+      "Bash(docker stats --no-stream *)",
+      "Bash(golangci-lint run *)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(git tag *)",
+      "Bash(git commit *)",
+      "Bash(docker compose up *)",
+      "Bash(docker compose * up *)",
+      "Bash(helm upgrade *)",
+      "Bash(helm install *)",
+      "Bash(kubectl apply *)",
+      "Bash(scripts/dev-api.sh *--write*)",
+      "Bash(scripts/dev-up.sh *--deploy*)",
+      "Bash(scripts/dev-deploy.sh*)",
+      "Bash(scripts/dev-down.sh*)",
+      "Bash(scripts/dev-up.sh --es*)"
+    ],
+    "deny": [
+      "Bash(docker volume *)",
+      "Bash(docker system prune *)",
+      "Bash(docker compose down -v*)",
+      "Bash(docker compose * down -v*)",
+      "Bash(kubectl delete *)",
+      "Read(./.env)"
     ]
   },
   "hooks": {
@@ -43,6 +87,17 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-check.sh\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-verify-check.sh\"",
+            "timeout": 20
           }
         ]
       }

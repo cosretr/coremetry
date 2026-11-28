@@ -30,7 +30,7 @@
 // paneli açılır (builder ya da birebir PromQL kod kipi), span yedeği
 // panellerinde aksiyon yok.
 import { useCallback, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { DisclosureButton, SelectField } from '@/components/ui';
 import { Empty, Spinner } from '@/components/Spinner';
 import { HttpStat, HttpChartPanel } from './httpMetricsViz';
@@ -39,7 +39,7 @@ import { relabel, scalarOf, sparkValues, seriesLabels, stepSeconds } from '@/lib
 import { kafkaPanelLink, kafkaPanels, kafkaOptionQueries, kafkaOptionValues, kafkaSectionTitle, KAFKA_SECTIONS, type KafkaPanel, type KafkaSection } from '@/lib/kafkaMetrics';
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2306 — sekme metinleri arayüz dilinde (TR aynı)
 import { fmtSmart } from '@/lib/chartFmt';
-import { metricsLinkHref } from '@/lib/metricsLink';
+import { useMetricsExpand } from '@/components/chart/useMetricsExpand'; // v0.10.2489 — tek açılış deseni
 import { timeRangeToNs } from '@/lib/utils';
 import { useUrlParams } from '@/lib/urlSchema';
 import { KAFKA_FILTER_SPEC } from '@/lib/kafkaFilterSpec';
@@ -70,7 +70,6 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
   const [f, setF] = useUrlParams(KAFKA_FILTER_SPEC);
   const [open, setOpen] = useState<Set<KafkaSection>>(new Set(OPEN_BY_DEFAULT));
   // v0.10.2346 — grafiğe tık: Metrics'te tam grafik (Overview gibi; lib/metricsLink).
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const rangeParam = searchParams.get('range');
 
@@ -96,6 +95,7 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
     [service, f.khost, f.kcons, f.kprod, f.ktopic]);
   const panels = useMemo(() => kafkaPanels(scope, lang), [scope, lang]);
   const linkCtx = useMemo(() => ({ service, rangeParam, range, src: 'vm' as const }), [service, rangeParam, range]);
+  const expand = useMetricsExpand(linkCtx);
   const spanTopics = useMemo(() => kafkaSpanTopics(sq.data), [sq.data]);
   // Topic seçicisi: metrik → VM label-values (sunucuda alt-dizge, ≤ 50);
   // span yedeği → sekmenin zaten okuduğu özetin topic'leri.
@@ -165,13 +165,11 @@ export function ServiceMessagingTab({ service, range }: { service: string; range
   const renderChart = (p: KafkaPanel, r: typeof ov) => {
     const series = p.queries.flatMap((q, i) => relabel(r.data[`${p.id}#${i}`], q.legend));
     const pending = p.queries.some((_, i) => r.pending(`${p.id}#${i}`));
-    const spec = kafkaPanelLink(p);
-    const href = spec ? metricsLinkHref(linkCtx, spec) : null;
     return (
       <div key={p.id} title={p.hint}>
         <HttpChartPanel title={p.title} series={series} unit={p.unit} stepSec={step} loading={pending}
           syncKey="svc-kafka" legendKey={`svc-kafka:${p.id}`} legendOpen={false}
-          onExpandClick={href ? () => navigate(href) : undefined} />
+          onExpandClick={expand(kafkaPanelLink(p))} />
       </div>
     );
   };

@@ -34,7 +34,9 @@ import { pickFamilySection } from '@/lib/redFamily'; // v0.10.1429 — ?family=g
 import { OperationCardSection } from './endpoints/OperationCardSection'; // v0.10.1491
 import { httpEnvScopeReady } from '@/lib/httpEnvScopeNote';
 import { HttpEnvScopeBand } from './service/httpMetricsViz';
-import { endpointHttpQueries, type LatQ } from '@/lib/httpMetrics';
+import { endpointHttpQueries, endpointScope, type LatQ } from '@/lib/httpMetrics';
+import { httpPanelLinks } from '@/lib/httpMetricsLinks'; // v0.10.2489 — grafiğe tık → Metrics
+import { useMetricsExpand } from '@/components/chart/useMetricsExpand';
 import { MetricREDStrip, MetricCharts } from '@/pages/endpoints/MetricModeSections'; // v0.10.1352
 import { AIExplainButton } from '@/components/ai/AIExplainButton'; // v0.10.1367 — tek tık "CoSRE'ye sor"
 import { IconSparkles } from '@/components/icons';
@@ -220,6 +222,14 @@ export default function EndpointDetailPage() {
     ? endpointHttpQueries({ service: refObj.service, route: refObj.path, sig: refObj.sig, method: refObj.method, envSel, family }, windowSec, { latQ, compare })
     : []), [refObj, envSel, family, windowSec, latQ, compare]);
   const httpRes = useHttpPromql(httpItems, { from, to }, detailSrc === 'metric' && !!refObj && fam.ready && httpEnvScopeReady(envScope));
+  // v0.10.2489 (operatör: "üzerine tıklayınca büyük olarak Metrics'te
+  // açılmıyor") — grafiğe tık → Metrics: sekmeyle aynı tanım (httpPanelLinks,
+  // aynı route / method / ortam süzgeci) ve aynı desen (useMetricsExpand).
+  const epLinks = useMemo(() => (refObj
+    ? httpPanelLinks(endpointScope({ service: refObj.service, route: refObj.path, sig: refObj.sig, method: refObj.method, envSel, family }), {}, { latQ })
+    : {}), [refObj, envSel, family, latQ]);
+  const expand = useMetricsExpand({ service: refObj?.service ?? '', rangeParam: params.get('range'), range, src: 'vm' });
+  const expandOf = (id: string) => expand(epLinks[id]);
 
   if (!refObj) {
     return (
@@ -348,7 +358,7 @@ export default function EndpointDetailPage() {
             (v0.9.396'nın ServiceCharts'ta söktüğü çift-işin ikizi). */}
         {detailSrc === 'metric' && (
           <MetricCharts res={httpRes} windowSec={windowSec} latQ={latQ} onLatQ={setLatQ} family={family}
-            regions={eventRegions} onZoom={handleZoom} onZoomReset={handleZoomReset} />
+            regions={eventRegions} onZoom={handleZoom} onZoomReset={handleZoomReset} expandOf={expandOf} />
         )}
         {detailSrc === 'span' && <div style={{
           display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',

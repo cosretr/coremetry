@@ -92,8 +92,14 @@ export function MetricREDStrip({ res, windowSec, compare, onToggleCompare, famil
 }
 
 /** Metrik kipinin grafikleri — sekmenin panelleri, route'a süzülü. */
-export function MetricCharts({ res, windowSec, latQ, onLatQ, regions, onZoom, onZoomReset, family = HTTP_FAMILY }: {
+export function MetricCharts({ res, windowSec, latQ, onLatQ, regions, onZoom, onZoomReset, family = HTTP_FAMILY, expandOf }: {
   res: HttpPromqlResult;
+  /**
+   * v0.10.2489 (operatör: "üzerine tıklayınca büyük olarak Metrics'te
+   * açılmıyor") — panel id'si (endpointHttpQueries id'si) → grafiğe tık
+   * eylemi; sekmeyle aynı desen (httpPanelLinks + useMetricsExpand).
+   */
+  expandOf?: (id: string) => (() => void) | undefined;
   family?: RedFamilySpec;
   /** v0.10.1355 — sorgu penceresi (sn); adım = stepSeconds(windowSec), boşluk dolgusu buna göre. */
   windowSec: number;
@@ -105,6 +111,7 @@ export function MetricCharts({ res, windowSec, latQ, onLatQ, regions, onZoom, on
   const lang = useLang();
   const d = res.data;
   const common = { syncKey: 'ep-http', stepSec: stepSeconds(windowSec), regions, onZoom, onZoomReset };
+  const ex = (id: string) => ({ onExpandClick: expandOf?.(id) });
   const grpc = family.kind === 'grpc';
   const RT = family.routeTitle;
   const MR: LegendTpl = l => methodRouteLegend(l, false, family, lang);
@@ -112,17 +119,17 @@ export function MetricCharts({ res, windowSec, latQ, onLatQ, regions, onZoom, on
   const statusRows = barsOf(d.statusCodes, family.labels.status, 20, lang).map(r => (grpc ? { ...r, label: statusCodeLabel(family, r.label) } : r));
   return (
     <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', marginBottom: 12 }}>
-      <HttpChartPanel title={tf('hm.chartBy', lang, { c: 'Request Rate', rt: RT })} unit="req/s" legendKey="ep-http:rateByRoute"
+      <HttpChartPanel title={tf('hm.chartBy', lang, { c: 'Request Rate', rt: RT })} unit="req/s" legendKey="ep-http:rateByRoute" {...ex('rateByRoute')}
         series={relabel(d.rateByRoute, MR)} loading={res.pending('rateByRoute')} {...common} />
       {/* v0.10.1354 (operatör: "5xx hataları ile latency yer değiştirsin") — yüzdelikler istek hızının yanında. */}
-      <HttpChartPanel title={t('hm.latPct', lang)} unit="s" legendKey="ep-http:p50"
+      <HttpChartPanel title={t('hm.latPct', lang)} unit="s" legendKey="ep-http:p50" {...ex('p50')}
         series={[...relabel(d.p50, 'p50'), ...relabel(d.p90, 'p90'), ...relabel(d.p95, 'p95'), ...relabel(d.p99, 'p99')]}
         loading={res.pending('p50')} note={httpQuantileNote(lang)} {...common} />
-      <HttpChartPanel title={tf('hm.chartBy', lang, { c: t(grpc ? 'hm.grpc.err4Chart' : 'hm.http.err4Chart', lang), rt: RT })} unit="req/s" legendKey="ep-http:err4ByRoute"
+      <HttpChartPanel title={tf('hm.chartBy', lang, { c: t(grpc ? 'hm.grpc.err4Chart' : 'hm.http.err4Chart', lang), rt: RT })} unit="req/s" legendKey="ep-http:err4ByRoute" {...ex('err4ByRoute')}
         series={relabel(d.err4ByRoute, SMR)} loading={res.pending('err4ByRoute')} {...common} />
-      <HttpChartPanel title={tf('hm.chartBy', lang, { c: t(grpc ? 'hm.grpc.err5Chart' : 'hm.http.err5Chart', lang), rt: RT })} unit="req/s" legendKey="ep-http:err5ByRoute"
+      <HttpChartPanel title={tf('hm.chartBy', lang, { c: t(grpc ? 'hm.grpc.err5Chart' : 'hm.http.err5Chart', lang), rt: RT })} unit="req/s" legendKey="ep-http:err5ByRoute" {...ex('err5ByRoute')}
         series={relabel(d.err5ByRoute, SMR)} loading={res.pending('err5ByRoute')} {...common} />
-      <HttpChartPanel title={tf('hm.latBy', lang, { q: latQ.toUpperCase(), rt: RT.toLowerCase() })} unit="s" legendKey="ep-http:latByRoute"
+      <HttpChartPanel title={tf('hm.latBy', lang, { q: latQ.toUpperCase(), rt: RT.toLowerCase() })} unit="s" legendKey="ep-http:latByRoute" {...ex('latByRoute')}
         series={relabel(d.latByRoute, MR)} loading={res.pending('latByRoute')}
         right={<SegmentedControl size="sm" aria-label={t('hm.latQ', lang)} value={latQ} onChange={onLatQ}
           options={[{ value: 'p50', label: 'p50' }, { value: 'p95', label: 'p95' }, { value: 'p99', label: 'p99' }]} />}

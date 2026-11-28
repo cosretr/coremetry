@@ -25,6 +25,8 @@ import { PartitionLagTable } from './PartitionLagTable';
 import type { TimeRange } from '@/lib/types';
 import { t, useLang } from '@/lib/i18n'; // v0.10.2306 — metrik bölümü arayüz dilinde (TR aynı)
 import { EntityLink } from '@/components/coremetry/entity/EntityLink';
+import { useMetricsExpand } from '@/components/chart/useMetricsExpand'; // v0.10.2489 — grafiğe tık → Metrics
+import { kafkaCodeOf } from '@/lib/kafkaMetrics';
 
 const itemsOf = (ps: KafkaTopicPanel[]): HttpPromqlItem[] =>
   ps.flatMap(p => p.queries.map((q, i) => ({ id: `${p.id}#${i}`, expr: q.expr, instant: false })));
@@ -49,6 +51,8 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
   const lang = useLang();
   const [alertOpen, setAlertOpen] = useState(false);
   const step = stepSeconds(Math.max(60, Math.round((win.to - win.from) / 1e9)));
+  // v0.10.2489 — panelin birebir PromQL'i kod kipinde (Service → Messaging topic grafikleriyle aynı tanım).
+  const expand = useMetricsExpand({ service: '', range, src: 'vm' });
   const panels = useMemo(() => kafkaTopicPanels(topic, undefined, lang), [topic, lang]);
   const stats = panels.filter(p => p.kind === 'stat');
   const charts = panels.filter(p => p.kind === 'chart');
@@ -109,7 +113,8 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
     <div key={p.id} title={p.hint}>
       <HttpChartPanel title={p.title} series={p.queries.flatMap((q, i) => relabel(ch.data[`${p.id}#${i}`], q.legend))}
         unit={p.unit} stepSec={step} loading={p.queries.some((_, i) => ch.pending(`${p.id}#${i}`))}
-        syncKey={`mtp-kafka:${topic}`} legendKey={`mtp-kafka:${p.id}`} legendOpen={false} />
+        syncKey={`mtp-kafka:${topic}`} legendKey={`mtp-kafka:${p.id}`} legendOpen={false}
+        onExpandClick={expand(p.queries.length ? { code: kafkaCodeOf(p.queries) } : null)} />
     </div>
   );
   const byId = (id: string) => charts.find(p => p.id === id)!;

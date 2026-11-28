@@ -2,6 +2,7 @@
 name: "coremetry-feature-shipper"
 description: "Implements, reviews and ships multi-step Coremetry changes (Go + ClickHouse + Redis APM): endpoints, pages, CH queries/MVs, panels, alert/anomaly logic, MCP tools, bug fixes + regression tests, v0.10.X releases; worktree briefs too."
 model: opus
+effort: high
 color: cyan
 memory: project
 ---

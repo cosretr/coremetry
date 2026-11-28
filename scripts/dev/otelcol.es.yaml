@@ -1,0 +1,78 @@
+# Local fan-out: Go demo → collector → Coremetry (traces, logs, metrics) + VictoriaMetrics (metrics).
+# --es variant (scripts/dev/compose.es.yml): otelcol.yaml + logs also to the bundled Elasticsearch
+# (ECS mode, same exporter block as the repo's otel-collector-config.yaml).
+# The demo emits old-semconv HTTP metrics (http.server.duration in ms, http.method);
+# the VM pipeline rewrites them to the names Coremetry queries
+# (http_server_request_duration_seconds_*, http_request_method).
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+processors:
+  batch:
+    timeout: 5s
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 200
+  # The demo's histograms are DELTA; remote write only carries cumulative.
+  deltatocumulative:
+  transform/semconv:
+    error_mode: ignore
+    metric_statements:
+      - context: metric
+        statements:
+          - scale_metric(0.001, "s") where name == "http.server.duration"
+          - set(name, "http.server.request.duration") where name == "http.server.duration"
+          - scale_metric(0.001, "s") where name == "db.client.duration"
+          - set(name, "db.client.operation.duration") where name == "db.client.duration"
+      - context: datapoint
+        statements:
+          - set(attributes["http.request.method"], attributes["http.method"]) where attributes["http.method"] != nil
+          - delete_key(attributes, "http.method")
+          - set(attributes["http.response.status_code"], attributes["http.status_code"]) where attributes["http.status_code"] != nil
+          - delete_key(attributes, "http.status_code")
+exporters:
+  otlp/coremetry:
+    endpoint: coremetry:4317
+    tls:
+      insecure: true
+  elasticsearch:
+    endpoints: ["http://elasticsearch:9200"]
+    logs_index: "logs-otel-default"
+    mapping:
+      mode: ecs
+    sending_queue:
+      enabled: true
+      num_consumers: 2
+      queue_size: 5000
+    retry:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_requests: 5
+  prometheusremotewrite/vm:
+    endpoint: http://victoriametrics:8428/api/v1/write
+    resource_to_telemetry_conversion:
+      enabled: true
+service:
+  telemetry:
+    metrics:
+      level: none
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/coremetry]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/coremetry, elasticsearch]
+    metrics/coremetry:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/coremetry]
+    metrics/vm:
+      receivers: [otlp]
+      processors: [memory_limiter, deltatocumulative, transform/semconv, batch]
+      exporters: [prometheusremotewrite/vm]

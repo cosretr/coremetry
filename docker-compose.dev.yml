@@ -1,0 +1,46 @@
+# docker-compose.dev.yml — yerel geliştirme yığını (repo içi). YALNIZ YEREL.
+#
+# Operatörün repo dışındaki ~/.coremetry-local/docker-compose.minimal.yml
+# override'ının repo içi karşılığı: ClickHouse + Redis + Coremetry + Go demo
+# + VictoriaMetrics + küçük bir collector. Elasticsearch varsayılan KAPALI;
+# açmak için scripts/dev/compose.es.yml eklenir (scripts/dev-up.sh --es).
+# Doğrudan kullanmayın; scripts/dev-up.sh proje adını çalışan yığından okur
+# ve `up -d --no-build --no-recreate` ile çağırır (docs: scripts/dev/lib.sh).
+services:
+  coremetry:
+    depends_on: !override
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      COREMETRY_LOGS_BACKEND: "clickhouse"
+      COREMETRY_SELF_OBS_OTLP_ENDPOINT: "localhost:4317"
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.110.0
+    container_name: coremetry-victoriametrics
+    command: ["-retentionPeriod=7d", "-memory.allowedBytes=256MiB", "-storageDataPath=/victoria-metrics-data"]
+    ports:
+      - "8428:8428"
+    volumes:
+      - vm-data:/victoria-metrics-data
+    restart: unless-stopped
+  otel-collector:
+    depends_on: !override
+      - coremetry
+      - victoriametrics
+    volumes: !override
+      - ./scripts/dev/otelcol.yaml:/etc/otelcol/config.yaml:ro
+    ports: !override []
+  go-demo:
+    # Var olan imaj; --no-build ile kayıt defterine gidilmez.
+    image: gotrace-go-demo
+    depends_on: !override
+      - otel-collector
+    command: ["-endpoint", "http://otel-collector:4318", "-profile-endpoint", "http://coremetry:8088", "-rps", "3"]
+    # K8s metrik simülatörü AÇIK (VM import API); Remote Cluster kaydı:
+    # scripts/demo-k8s-clusters.sh (scripts/dev-seed.sh çağırır).
+    environment:
+      DEMO_K8S_METRICS_URL: "http://victoriametrics:8428"
+volumes:
+  vm-data:

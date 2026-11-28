@@ -1,0 +1,21 @@
+# scripts/dev/compose.es.yml — docker-compose.dev.yml üstüne Elasticsearch yolu
+# (scripts/dev-up.sh --es). Log okuma arka ucu ES, collector logları ES'e de yazar.
+# Yollar proje dizinine (repo kökü, --project-directory) göredir.
+services:
+  coremetry:
+    depends_on: !override
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      COREMETRY_LOGS_BACKEND: "elasticsearch"
+  otel-collector:
+    depends_on: !override
+      - coremetry
+      - victoriametrics
+      - elasticsearch
+    volumes: !override
+      - ./scripts/dev/otelcol.es.yaml:/etc/otelcol/config.yaml:ro

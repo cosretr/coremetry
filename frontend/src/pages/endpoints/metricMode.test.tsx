@@ -27,6 +27,8 @@ import Page from '../EndpointDetail';
 type PromCall = { query: string; from: number; to: number; maxDataPoints: number; instant?: '1' };
 const m = vi.hoisted(() => ({
   prom: [] as PromCall[], endpoints: 0,
+  // v0.10.2489 — grafiğe tık → Metrics: MultiLineChart'a giren onExpandClick (lejant anahtarıyla).
+  charts: [] as { key: string; onExpandClick?: () => void }[],
   // v0.10.1377 — ortam kapsamı sahtesi: gate çözülene dek cevap gelmez.
   scope: null as unknown, scopeCalls: [] as unknown[], gate: Promise.resolve() as Promise<void>,
 }));
@@ -50,6 +52,9 @@ vi.mock('@/lib/api', () => {
   const answer = (q: string): SpanMetricSeries[] => {
     if (!q.includes('[10800s]')) {
       if (q.startsWith('sum by (http_request_method, http_route) (rate(')) return one(0.11, { http_request_method: 'POST', http_route: '/ACMWEB/decision/service/rest' });
+      // v0.10.2489 — diğer zaman serisi panelleri de çizilsin (grafiğe tık testi).
+      if (q.startsWith('histogram_quantile(')) return one(0.1, { http_request_method: 'POST', http_route: '/ACMWEB/decision/service/rest' });
+      if (q.startsWith('sum by (http_route, http_request_method, http_response_status_code)')) return one(0.01, { http_route: '/ACMWEB/decision/service/rest', http_request_method: 'POST', http_response_status_code: '500' });
       return [];
     }
     if (q.startsWith('sum by (http_response_status_code)')) return one(1188, { http_response_status_code: '200' });
@@ -77,9 +82,10 @@ vi.mock('@/components/AuthProvider', () => ({
   useAuth: () => ({ user: { username: 'op', role: 'viewer' }, loading: false }),
 }));
 vi.mock('@/components/MultiLineChart', () => ({
-  MultiLineChart: ({ series }: { series: SpanMetricSeries[] }) => (
-    <div data-testid="mlc">{series.map(s => s.groupKey[0]).join('|')}</div>
-  ),
+  MultiLineChart: ({ series, legendStorageKey, onExpandClick }: { series: SpanMetricSeries[]; legendStorageKey?: string; onExpandClick?: () => void }) => {
+    m.charts.push({ key: legendStorageKey ?? '', onExpandClick });
+    return <div data-testid="mlc">{series.map(s => s.groupKey[0]).join('|')}</div>;
+  },
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -96,7 +102,7 @@ let host: HTMLDivElement | null = null;
 const settle = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
 
 async function mount(extra = '') {
-  m.prom = []; m.endpoints = 0;
+  m.prom = []; m.endpoints = 0; m.charts = [];
   window.history.replaceState(null, '', `/endpoint?service=${SVC}&path=${encodeURIComponent(ROUTE)}&range=3h${extra}`);
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -139,8 +145,8 @@ describe('/endpoint metrik kipi = HTTP Metrics sekmesinin sorguları (v0.10.1352
       expect(c.query).toContain(`{service_name="${SVC}", http_route="${ROUTE}"`);
       expect(c.maxDataPoints).toBe(300);
     }
-    // Sekmenin adım/pencere mantığı: 3h → 144 s rate, W = 10800 s.
-    expect(m.prom.some(c => c.query.includes('[144s]'))).toBe(true);
+    // Sekmenin adım/pencere mantığı: 3h → 180 s rate (taban, v0.10.2489), W = 10800 s.
+    expect(m.prom.some(c => c.query.includes('[180s]'))).toBe(true);
     const inst = m.prom.filter(c => c.instant === '1').map(c => c.query);
     expect(inst).toContain(`sum(increase(http_server_request_duration_seconds_count{service_name="${SVC}", http_route="${ROUTE}"}[10800s]))`);
     expect(inst).toContain(`histogram_quantile(0.95, sum by (le) (increase(http_server_request_duration_seconds_bucket{service_name="${SVC}", http_route="${ROUTE}"}[10800s])))`);
@@ -156,7 +162,7 @@ describe('/endpoint metrik kipi = HTTP Metrics sekmesinin sorguları (v0.10.1352
   it('?lat=p95: route paneli sekmenin p95ByRoute\'u', async () => {
     await mount('&lat=p95');
     expect(m.prom.map(c => c.query)).toContain(
-      `histogram_quantile(0.95, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_name="${SVC}", http_route="${ROUTE}"}[144s])))`);
+      `histogram_quantile(0.95, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_name="${SVC}", http_route="${ROUTE}"}[180s])))`);
     expect(host!.textContent).toContain('P95 gecikme (route)');
     expect(host!.textContent).toContain('POST /ACMWEB/decision/service/rest');
   });
@@ -266,3 +272,36 @@ describe('/endpoint metrik kipi: env/cluster süzgeci (v0.10.1377)', () => {
 });
 
 // v0.10.1429 — api.httpEnvScope kaldırıldı (aile + ortam tek istekte: api.serviceRedFamily; yol redFamily.test.ts'te).
+
+// v0.10.2489 (operatör: "üzerine tıklayınca büyük olarak Metrics'te
+// açılmıyor; tüm grafikler o şekilde olmalı") — endpoint sayfasının metrik
+// grafikleri sekmeyle aynı desende (httpPanelLinks + useMetricsExpand):
+// tık → /metrics, aynı seri ailesi, route süzgeci, aralık.
+describe('/endpoint metrik kipi — grafiğe tık → Metrics (v0.10.2489)', () => {
+  const last = (key: string) => [...m.charts].reverse().find(c => c.key === key);
+  const mxOf = (href: string) => {
+    const u = new URL(href, 'http://x');
+    return u.searchParams.get('mx') ?? '';
+  };
+  it('her zaman serisi paneli tıklanabilir', async () => {
+    await mount();
+    const keys = [...new Set(m.charts.map(c => c.key))];
+    expect(keys.sort()).toEqual(['ep-http:err4ByRoute', 'ep-http:err5ByRoute', 'ep-http:latByRoute', 'ep-http:p50', 'ep-http:rateByRoute']);
+    for (const k of keys) expect(last(k)?.onExpandClick, k).toBeTypeOf('function');
+  });
+
+  it('istek hızı paneli: Metrics, aynı sayaç + rate + route süzgeci + sayfa aralığı', async () => {
+    await mount('&lat=p95');
+    await act(async () => { last('ep-http:rateByRoute')!.onExpandClick!(); });
+    expect(window.location.pathname).toBe('/metrics');
+    expect(new URLSearchParams(window.location.search).get('range')).toBe('3h');
+    const mx = decodeURIComponent(mxOf(window.location.pathname + window.location.search));
+    expect(mx.length).toBeGreaterThan(0);
+  });
+
+  it('gecikme (route) paneli seçili yüzdelikle açılır', async () => {
+    await mount('&lat=p99');
+    await act(async () => { last('ep-http:latByRoute')!.onExpandClick!(); });
+    expect(window.location.pathname).toBe('/metrics');
+  });
+});

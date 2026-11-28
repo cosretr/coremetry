@@ -1,4 +1,4 @@
-import { statusCodeRateQuery, statusCodeSeries, totalRequestsQuery, scalarOf, HTTP_METRICS_POINTS, windowRange, infraHiddenCountQuery, infraHiddenCount } from '@/lib/httpMetrics';
+import { RATE_WINDOW_FLOOR_S, statusCodeRateQuery, statusCodeSeries, totalRequestsQuery, scalarOf, HTTP_METRICS_POINTS, windowRange, infraHiddenCountQuery, infraHiddenCount } from '@/lib/httpMetrics';
 import { useShowInfraRoutes, withInfraExclude, infraRouteRegexBody } from '@/lib/infraRoutes';
 import { InfraRoutesToggle } from '@/components/coremetry/InfraRoutesToggle';
 // v0.10.1360 — metrik karoları pencere değeri (HTTP Metrics sekmesiyle aynı sorgu + kanca).
@@ -279,7 +279,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   const redFamOpt = { ...(redFamParam ? { family: redFamParam } : {}), ...infraOpt };
   const metricRedQ = useQuery({
     queryKey: ['service-metric-red', service, from, to, redMdp, env, family.id, showInfra],
-    queryFn: () => api.serviceMetricRED(service, from, to, redMdp, { rateWindow: 180, env: env || undefined, ...redFamOpt }),
+    queryFn: () => api.serviceMetricRED(service, from, to, redMdp, { rateWindow: RATE_WINDOW_FLOOR_S, env: env || undefined, ...redFamOpt }),
     enabled: !!service && wantMetric && fam.ready,
     staleTime: 30_000,
   });
@@ -344,7 +344,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   const metricAutoFellBack = explicitSrc === null && !!metricRedQ.data && !metricRedQ.data.metricExists;
   const metricRedGhostQ = useQuery({
     queryKey: ['service-metric-red', service, from - compareOff, to - compareOff, redMdp, env, family.id, showInfra],
-    queryFn: () => api.serviceMetricRED(service, from - compareOff, to - compareOff, redMdp, { rateWindow: 180, env: env || undefined, ...redFamOpt }),
+    queryFn: () => api.serviceMetricRED(service, from - compareOff, to - compareOff, redMdp, { rateWindow: RATE_WINDOW_FLOOR_S, env: env || undefined, ...redFamOpt }),
     enabled: !!service && metricMode && ghostEnabled && fam.ready,
     staleTime: 30_000,
   });
@@ -357,7 +357,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
     queryKey: ['service-overview-red', service, from, to, redMdp, env],
     queryFn: () => api.spanMetricBatch({
       from, to, maxDataPoints: redMdp,
-      rateWindow: 180,
+      rateWindow: RATE_WINDOW_FLOOR_S,
       dsl: `service.name = "${service.replace(/"/g, '\\"')}"` + envDSL(env),
       aggs: [
         { name: 'rate', agg: 'rate' },
@@ -425,7 +425,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
     // v0.10.1429 — gRPC ailesinde kimlik ?family=grpc, kırılım rpc.method (aile çözülene dek bekler).
     queryKey: ['service-metric-throughput', service, from, to, redMdp, env, family.id, showInfra],
     queryFn: () => api.serviceMetricThroughput(service, from, to, undefined, redMdp,
-      { breakdown: famGrpc ? 'rpc_method' : 'route', rateWindow: 180, env: env || undefined, ...famOpt }),
+      { breakdown: famGrpc ? 'rpc_method' : 'route', rateWindow: RATE_WINDOW_FLOOR_S, env: env || undefined, ...famOpt }),
     enabled: !wantMetric || fam.ready,
     staleTime: 30_000,
   });
@@ -436,7 +436,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
     queryKey: ['service-overview-entry-red', service, from, to, redMdp, env],
     queryFn: () => api.spanMetricBatch({
       from, to, maxDataPoints: redMdp,
-      rateWindow: 180,
+      rateWindow: RATE_WINDOW_FLOOR_S,
       dsl: entryLatencyDSL(service) + envDSL(env),
       aggs: [
         { name: 'rate', agg: 'rate' },
@@ -463,7 +463,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
     queryKey: ['service-overview-red', service, from - compareOff, to - compareOff, redMdp, env],
     queryFn: () => api.spanMetricBatch({
       from: from - compareOff, to: to - compareOff, maxDataPoints: redMdp,
-      rateWindow: 180,
+      rateWindow: RATE_WINDOW_FLOOR_S,
       dsl: `service.name = "${service.replace(/"/g, '\\"')}"` + envDSL(env),
       aggs: [
         { name: 'rate', agg: 'rate' },
@@ -477,7 +477,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
     queryKey: ['service-overview-entry-red', service, from - compareOff, to - compareOff, redMdp, env],
     queryFn: () => api.spanMetricBatch({
       from: from - compareOff, to: to - compareOff, maxDataPoints: redMdp,
-      rateWindow: 180,
+      rateWindow: RATE_WINDOW_FLOOR_S,
       dsl: entryLatencyDSL(service) + envDSL(env),
       aggs: [
         { name: 'rate', agg: 'rate' },

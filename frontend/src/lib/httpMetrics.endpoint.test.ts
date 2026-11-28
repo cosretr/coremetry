@@ -64,19 +64,19 @@ describe('methodRouteLegend (v0.10.1352)', () => {
   });
 });
 
-describe('endpoint PromQL pinleri — bayt bayt (v0.10.1352, 3h = 36 s adım, 144 s rate, W = 10800 s)', () => {
+describe('endpoint PromQL pinleri — bayt bayt (v0.10.1352, 3h = 36 s adım, 180 s rate (v0.10.2489; önce 144 s), W = 10800 s)', () => {
   const got = endpointHttpQueries(
     { service: 'acm-order-quote-allocation-prod', route: '/ACMWEB/decision/service/rest' }, 10800, { latQ: 'p95', compare: true });
   it('her sorgu sabit', () => {
     const want: Array<[string, boolean, string]> = [
-      ["rateByRoute", false, "sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[144s]))"],
-      ["err5ByRoute", false, "sum by (http_route, http_request_method, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\", http_response_status_code=~\"5..\"}[144s])) > 0"],
-      ["err4ByRoute", false, "sum by (http_route, http_request_method, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\", http_response_status_code=~\"4..\"}[144s])) > 0"],
-      ["p50", false, "histogram_quantile(0.5, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[144s])))"],
-      ["p90", false, "histogram_quantile(0.9, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[144s])))"],
-      ["p95", false, "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[144s])))"],
-      ["p99", false, "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[144s])))"],
-      ["latByRoute", false, "histogram_quantile(0.95, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[144s])))"],
+      ["rateByRoute", false, "sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[180s]))"],
+      ["err5ByRoute", false, "sum by (http_route, http_request_method, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\", http_response_status_code=~\"5..\"}[180s])) > 0"],
+      ["err4ByRoute", false, "sum by (http_route, http_request_method, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\", http_response_status_code=~\"4..\"}[180s])) > 0"],
+      ["p50", false, "histogram_quantile(0.5, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[180s])))"],
+      ["p90", false, "histogram_quantile(0.9, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[180s])))"],
+      ["p95", false, "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[180s])))"],
+      ["p99", false, "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[180s])))"],
+      ["latByRoute", false, "histogram_quantile(0.95, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[180s])))"],
       ["statusCodes", true, "sum by (http_response_status_code) (increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s]))"],
       ["wTotal", true, "sum(increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s]))"],
       ["wErr5", true, "sum(increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\", http_response_status_code=~\"5..\"}[10800s])) or (0 * sum(increase(http_server_request_duration_seconds_count{service_name=\"acm-order-quote-allocation-prod\", http_route=\"/ACMWEB/decision/service/rest\"}[10800s])))"],

@@ -36,8 +36,8 @@ describe('HTTP ailesi == aile verilmeyen üreticiler (bayt bayt)', () => {
     expect(endpointHttpQueries({ service: 'orders-api', route: '/a', family: HTTP_FAMILY }, 3600, { latQ: 'p50', compare: true }))
       .toEqual(endpointHttpQueries({ service: 'orders-api', route: '/a' }, 3600, { latQ: 'p50', compare: true }));
     // Literal pin: bugünkü HTTP sorguları (altın testlerin dayanağı).
-    expect(httpQueries(a, 3600).sli).toBe('sum(rate(http_server_request_duration_seconds_bucket{service_name="orders-api", http_route="/a", http_request_method="GET", le="0.5"}[60s])) / sum(rate(http_server_request_duration_seconds_count{service_name="orders-api", http_route="/a", http_request_method="GET"}[60s]))');
-    expect(httpQueries(a, 3600).statusClass).toBe('sum by (cls) (label_replace(rate(http_server_request_duration_seconds_count{service_name="orders-api", http_route="/a", http_request_method="GET"}[60s]), "cls", "${1}xx", "http_response_status_code", "([0-9]).*"))');
+    expect(httpQueries(a, 3600).sli).toBe('sum(rate(http_server_request_duration_seconds_bucket{service_name="orders-api", http_route="/a", http_request_method="GET", le="0.5"}[180s])) / sum(rate(http_server_request_duration_seconds_count{service_name="orders-api", http_route="/a", http_request_method="GET"}[180s]))');
+    expect(httpQueries(a, 3600).statusClass).toBe('sum by (cls) (label_replace(rate(http_server_request_duration_seconds_count{service_name="orders-api", http_route="/a", http_request_method="GET"}[180s]), "cls", "${1}xx", "http_response_status_code", "([0-9]).*"))');
   });
 });
 
@@ -50,10 +50,10 @@ describe('gRPC legacy (rpc.server.duration, ms) PromQL pinleri', () => {
       .toBe(`{service_name="${SVC}", rpc_method="Export", rpc_service="opentelemetry.proto.collector.trace.v1.TraceService"}`);
   });
   it('rate / total / err: tam __name__ (alternasyon yok), sunucu-hatası kümesi', () => {
-    expect(q.rps).toBe(`sum(rate(rpc_server_duration_milliseconds_count${sel}[60s]))`);
+    expect(q.rps).toBe(`sum(rate(rpc_server_duration_milliseconds_count${sel}[180s]))`);
     expect(q.total).toBe(`sum(increase(rpc_server_duration_milliseconds_count${sel}[3600s]))`);
-    expect(q.err5).toBe(`(sum(rate(rpc_server_duration_milliseconds_count{service_name="${SVC}", rpc_grpc_status_code=~"2|4|8|12|13|14|15"}[60s])) or vector(0)) / sum(rate(rpc_server_duration_milliseconds_count${sel}[60s]))`);
-    expect(q.err4).toBe(`(sum(rate(rpc_server_duration_milliseconds_count{service_name="${SVC}", rpc_grpc_status_code=~"1|3|5|6|7|9|10|11|16"}[60s])) or vector(0)) / sum(rate(rpc_server_duration_milliseconds_count${sel}[60s]))`);
+    expect(q.err5).toBe(`(sum(rate(rpc_server_duration_milliseconds_count{service_name="${SVC}", rpc_grpc_status_code=~"2|4|8|12|13|14|15"}[180s])) or vector(0)) / sum(rate(rpc_server_duration_milliseconds_count${sel}[180s]))`);
+    expect(q.err4).toBe(`(sum(rate(rpc_server_duration_milliseconds_count{service_name="${SVC}", rpc_grpc_status_code=~"1|3|5|6|7|9|10|11|16"}[180s])) or vector(0)) / sum(rate(rpc_server_duration_milliseconds_count${sel}[180s]))`);
     for (const e of Object.values(q)) {
       expect(e).not.toContain('__name__=~');
       expect(e).not.toContain('http_server_');
@@ -61,35 +61,35 @@ describe('gRPC legacy (rpc.server.duration, ms) PromQL pinleri', () => {
     }
   });
   it('gecikme ms → /1000 (karolar saniye okur); SLI kovası le="500"', () => {
-    expect(q.p95).toBe(`(histogram_quantile(0.95, sum by (le) (rate(rpc_server_duration_milliseconds_bucket${sel}[60s])))) / 1000`);
-    expect(q.p95ByRoute).toBe(`(histogram_quantile(0.95, sum by (le, rpc_service, rpc_method) (rate(rpc_server_duration_milliseconds_bucket${sel}[60s])))) / 1000`);
-    expect(q.sli).toBe(`sum(rate(rpc_server_duration_milliseconds_bucket{service_name="${SVC}", le="500"}[60s])) / sum(rate(rpc_server_duration_milliseconds_count${sel}[60s]))`);
+    expect(q.p95).toBe(`(histogram_quantile(0.95, sum by (le) (rate(rpc_server_duration_milliseconds_bucket${sel}[180s])))) / 1000`);
+    expect(q.p95ByRoute).toBe(`(histogram_quantile(0.95, sum by (le, rpc_service, rpc_method) (rate(rpc_server_duration_milliseconds_bucket${sel}[180s])))) / 1000`);
+    expect(q.sli).toBe(`sum(rate(rpc_server_duration_milliseconds_bucket{service_name="${SVC}", le="500"}[180s])) / sum(rate(rpc_server_duration_milliseconds_count${sel}[180s]))`);
     const w = windowQueries(s, 3600);
     expect(w.avg).toBe(`(sum(increase(rpc_server_duration_milliseconds_sum${sel}[3600s])) / sum(increase(rpc_server_duration_milliseconds_count${sel}[3600s]))) / 1000`);
     expect(w.p99).toBe(`(histogram_quantile(0.99, sum by (le) (increase(rpc_server_duration_milliseconds_bucket${sel}[3600s])))) / 1000`);
     expect(w.err5Count).toBe(`sum(increase(rpc_server_duration_milliseconds_count{service_name="${SVC}", rpc_grpc_status_code=~"2|4|8|12|13|14|15"}[3600s])) or (0 * sum(increase(rpc_server_duration_milliseconds_count${sel}[3600s])))`);
   });
   it('durum sınıfı: ok | client | server (kod kümeleri), kod dağılımı rpc_grpc_status_code', () => {
-    expect(q.statusClass).toBe(`sum by (cls) (label_replace(label_replace(label_replace(rate(rpc_server_duration_milliseconds_count${sel}[60s]), "cls", "ok", "rpc_grpc_status_code", "^0$"), "cls", "client", "rpc_grpc_status_code", "^(1|3|5|6|7|9|10|11|16)$"), "cls", "server", "rpc_grpc_status_code", "^(2|4|8|12|13|14|15)$"))`);
+    expect(q.statusClass).toBe(`sum by (cls) (label_replace(label_replace(label_replace(rate(rpc_server_duration_milliseconds_count${sel}[180s]), "cls", "ok", "rpc_grpc_status_code", "^0$"), "cls", "client", "rpc_grpc_status_code", "^(1|3|5|6|7|9|10|11|16)$"), "cls", "server", "rpc_grpc_status_code", "^(2|4|8|12|13|14|15)$"))`);
     expect(q.statusCodes).toBe(`sum by (rpc_grpc_status_code) (increase(rpc_server_duration_milliseconds_count${sel}[3600s]))`);
     expect(q.topRoutes).toBe(`topk(10, sum by (rpc_method) (increase(rpc_server_duration_milliseconds_count${sel}[3600s])))`);
-    expect(q.rateByRoute).toBe(`sum by (rpc_service, rpc_method) (rate(rpc_server_duration_milliseconds_count${sel}[60s]))`);
+    expect(q.rateByRoute).toBe(`sum by (rpc_service, rpc_method) (rate(rpc_server_duration_milliseconds_count${sel}[180s]))`);
   });
   it('Overview tekil sorguları ve endpoint kapsamı', () => {
-    expect(statusCodeRateQuery(SVC, 3600, undefined, GRPC_LEGACY_FAMILY)).toBe(`sum by (rpc_grpc_status_code) (rate(rpc_server_duration_milliseconds_count${sel}[60s]))`);
+    expect(statusCodeRateQuery(SVC, 3600, undefined, GRPC_LEGACY_FAMILY)).toBe(`sum by (rpc_grpc_status_code) (rate(rpc_server_duration_milliseconds_count${sel}[180s]))`);
     expect(totalRequestsQuery(SVC, 3600, 'deployment_environment_name="prod-eu-a"', GRPC_LEGACY_FAMILY))
       .toBe(`sum(increase(rpc_server_duration_milliseconds_count{service_name="${SVC}", deployment_environment_name="prod-eu-a"}[3600s]))`);
     expect(endpointScope({ service: SVC, route: 'Export', method: 'x.TraceService', family: GRPC_LEGACY_FAMILY }))
       .toEqual({ app: SVC, family: GRPC_LEGACY_FAMILY, route: 'Export', method: 'x.TraceService' });
     const items = endpointHttpQueries({ service: SVC, route: 'Export', family: GRPC_LEGACY_FAMILY }, 3600, { latQ: 'p99', compare: false });
-    expect(items.find(i => i.id === 'latByRoute')?.expr).toBe(`(histogram_quantile(0.99, sum by (le, rpc_service, rpc_method) (rate(rpc_server_duration_milliseconds_bucket{service_name="${SVC}", rpc_method="Export"}[60s])))) / 1000`);
+    expect(items.find(i => i.id === 'latByRoute')?.expr).toBe(`(histogram_quantile(0.99, sum by (le, rpc_service, rpc_method) (rate(rpc_server_duration_milliseconds_bucket{service_name="${SVC}", rpc_method="Export"}[180s])))) / 1000`);
   });
 });
 
 describe('gRPC stable (rpc.server.call.duration, s)', () => {
   it('ölçek yok, le="0.5", rpc_response_status_code', () => {
     const q = httpQueries({ app: SVC, family: GRPC_STABLE_FAMILY }, 3600);
-    expect(q.p95).toBe(`histogram_quantile(0.95, sum by (le) (rate(rpc_server_call_duration_seconds_bucket{service_name="${SVC}"}[60s])))`);
+    expect(q.p95).toBe(`histogram_quantile(0.95, sum by (le) (rate(rpc_server_call_duration_seconds_bucket{service_name="${SVC}"}[180s])))`);
     expect(q.sli).toContain('le="0.5"');
     expect(q.err5).toContain('rpc_response_status_code=~"2|4|8|12|13|14|15"');
     expect(windowQueries({ app: SVC, family: GRPC_STABLE_FAMILY }, 3600).avg).not.toContain('/ 1000');

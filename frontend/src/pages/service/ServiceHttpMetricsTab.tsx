@@ -17,7 +17,7 @@
 // İkisi de varsa iki BÖLÜM: önce HTTP, altta gRPC — asla toplanmaz; gRPC
 // bölümünün süzgeçleri ?groute/?gmethod. Downstream (http_client_*) yalnız HTTP.
 import { useMemo, type ReactNode } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { Badge, Card, MethodBadge, PanelTitle, SelectField } from '@/components/ui';
 import { SectionHead } from '@/components/coremetry/SectionHead';
 import { InfraRoutesToggle } from '@/components/coremetry/InfraRoutesToggle';
@@ -40,7 +40,7 @@ import {
 } from '@/lib/httpMetrics';
 import type { TimeRange, SpanMetricSeries } from '@/lib/types';
 import { useThemeTick } from '@/lib/useThemeTick';
-import { metricsLinkHref } from '@/lib/metricsLink';
+import { useMetricsExpand } from '@/components/chart/useMetricsExpand'; // v0.10.2489 — tek açılış deseni
 import { httpPanelLinks } from '@/lib/httpMetricsLinks';
 import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2305 — sekme metinleri arayüz dilinde (TR aynı)
 
@@ -169,16 +169,12 @@ function FamilySection({ service, win, range, family, envScope, head, tried }: {
   const res = useHttpPromql(all, win, httpEnvScopeReady(envScope));
   // v0.10.2346 (operatör: "grafiğe tıklayınca Overview'daki gibi tam grafiğe
   // gitsin") — panel id → Metrics açılışı; panelin çizdiği aile / kırılım /
-  // süzgeçlerle (lib/httpMetricsLinks). Tık Overview'la aynı yol: navigate.
-  const navigate = useNavigate();
+  // süzgeçlerle (lib/httpMetricsLinks). Tık Overview'la aynı yol: navigate (v0.10.2489: useMetricsExpand).
   const [searchParams] = useSearchParams();
   const links = useMemo(() => httpPanelLinks(scope, queries), [queries]); // eslint-disable-line react-hooks/exhaustive-deps
   const rangeParam = searchParams.get('range');
-  const expandOf = (id: string) => {
-    const spec = links[id];
-    const href = spec ? metricsLinkHref({ service, rangeParam, range, src: 'vm' }, spec) : null;
-    return href ? () => navigate(href) : undefined;
-  };
+  const expand = useMetricsExpand({ service, rangeParam, range, src: 'vm' });
+  const expandOf = (id: string) => expand(links[id]);
   const data: Record<string, SpanMetricSeries[] | null | undefined> = res.data;
   const optsErr = res.error('opts');
   const opts = filterOptions(data.opts, family);

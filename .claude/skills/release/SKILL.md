@@ -90,6 +90,17 @@ Distributed, FROM spans without nearby LIMIT).
   positives (e.g. Profiling.tsx pprof code-sample template),
   proceed.
 
+### 3c. Bağımsız doğrulama — `verifier` ajanı (2026-11-28)
+
+3+ dosyalık ya da Go + önyüz karışık değişiklikte, stage etmeden önce
+`verifier` ajanını çağır: kapıları `scripts/gate.sh` ile kendisi koşar ve
+değişikliği spec / audit dilimiyle madde madde karşılaştırır (KARŞILANDI /
+EKSİK / FARKLI + kanıt). Kural: "kapı geçti" yalnız doğrulayıcının ya da
+sürüm betiğinin çıktısıyla söylenir; değişikliği yazan ajanın raporundaki
+kapı satırları kanıt sayılmaz. Çalışan uygulamada kanıt gerekiyorsa
+`/dogrula` (API yanıtı, sorgu sonucu, iki temada ekran görüntüsü).
+Tek dosyalık düzeltmede bu adım atlanır.
+
 ### 4. Stage the changes
 
 Use `git add` with **specific paths** (never `-A` / `.`) to avoid

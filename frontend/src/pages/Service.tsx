@@ -56,6 +56,7 @@ import { ServiceMessagingTab } from './service/ServiceMessagingTab'; // v0.10.15
 import { withPivotCtx, pivotCtxFromSearch, type PivotDim } from '@/lib/pivotContext';
 import { BrushCompare } from '@/components/coremetry/BrushCompare'; // dalga 3 — fırça → karşılaştır
 import { heatmapFilters } from './service/heatmapFilters';
+import { RATE_WINDOW_FLOOR_S } from '@/lib/httpMetrics'; // v0.10.2489 — Overview'la aynı hız penceresi tabanı
 
 // v0.10.2436 — Metrics sekmesinin ilk bölümü (runtime); uPlot / CorePanel
 // zinciri yalnız sekme açılınca yüklenir.
@@ -336,7 +337,7 @@ function ServiceDetailInner() {
       queryKey: ['service-overview-red', svc, r.from, r.to, redMdp, env],
       queryFn: () => api.spanMetricBatch({
         from: r.from, to: r.to, maxDataPoints: redMdp,
-        rateWindow: 180,
+        rateWindow: RATE_WINDOW_FLOOR_S,
         dsl: `service.name = "${svc.replace(/"/g, '\\"')}"` + envDSL(env),
         aggs: [
           { name: 'rate', agg: 'rate' },

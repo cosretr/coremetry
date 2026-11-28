@@ -6,7 +6,7 @@
 // VM'in `vmrange` kovası, hata panellerinin görsel `> 0` kırpması ve
 // gRPC ms ailesinin `/ 1000` ölçeği (link birimi 'ms' taşır).
 import { describe, it, expect } from 'vitest';
-import { clientSel, httpQueries, rateWindow, serverSel, type HttpScope } from './httpMetrics';
+import { clientSel, endpointHttpQueries, endpointScope, httpQueries, rateWindow, serverSel, type HttpScope } from './httpMetrics';
 import { clientFilters, httpPanelLinks, serverFilters } from './httpMetricsLinks';
 import { metricsLinkHref } from './metricsLink';
 import { importLegacyMetricsUrl } from './metricsExplorer/legacy';
@@ -86,5 +86,30 @@ describe('her panel kendi çizdiği seriyi açar', () => {
     expect(metricsLinkHref(ctx, links.rateByRoute)).toBe(
       '/metrics?metric=http_server_request_duration_seconds_count&service=checkout&agg=rate'
       + '&by=http_request_method%2Chttp_route&range=6h');
+  });
+});
+
+// v0.10.2489 (operatör: endpoint sayfasında grafiğe tık Metrics'te açılmıyordu)
+// — endpoint sayfasının panelleri (endpointHttpQueries id'leri) aynı
+// tanımlardan açılır: route / şekil / method / ortam süzgeci aynen.
+describe('endpoint sayfası panelleri kendi çizdiği seriyi açar', () => {
+  const EPS = [
+    ['route + ortam', { service: 'orders', route: '/orders/{id}', envSel: 'deployment_environment_name="prod-a"', family: HTTP_FAMILY }],
+    ['şekil + method', { service: 'orders', route: '/orders/:id', sig: true, method: 'POST', family: HTTP_FAMILY }],
+    ['gRPC', { service: 'payments', route: '', method: 'pkg.Pay', family: GRPC_LEGACY_FAMILY }],
+  ] as const;
+  it.each(EPS)('%s', (_, ep) => {
+    for (const latQ of ['p50', 'p95', 'p99'] as const) {
+      const items = Object.fromEntries(endpointHttpQueries(ep, W, { latQ, compare: false }).map(i => [i.id, i.expr]));
+      const links = httpPanelLinks(endpointScope(ep), {}, { latQ });
+      const ctx = { service: ep.service, range: { preset: '1h' as const }, src: 'vm' as const };
+      const open = (id: string) => compiled(modelOf(metricsLinkHref(ctx, links[id])!));
+      const unscale = (e: string) => (ep.family.kind === 'grpc' ? e.replace(/^\((.*)\) \/ 1000$/, '$1') : e);
+      expect(open('rateByRoute')).toEqual([items.rateByRoute]);
+      expect(open('p50')).toEqual([items.p50, items.p90, items.p95, items.p99].map(unscale));
+      expect(open('latByRoute')).toEqual([unscale(items.latByRoute)]);
+      expect(open('err5ByRoute')).toEqual([items.err5ByRoute.replace(/ > 0$/, '')]);
+      expect(open('err4ByRoute')).toEqual([items.err4ByRoute.replace(/ > 0$/, '')]);
+    }
   });
 });

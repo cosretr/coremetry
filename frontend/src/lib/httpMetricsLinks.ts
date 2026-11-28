@@ -41,7 +41,7 @@ export function clientFilters(s: HttpScope, extra: MxFilter[] = []): MxFilter[] 
  * ifade edemediği panel (durum SINIFI, label_replace) birebir PromQL'le açılır.
  * Ortam eşleyicisi okunamazsa hiçbir panel link almaz.
  */
-export function httpPanelLinks(s: HttpScope, exprs: Record<string, string>): Record<string, MetricsLinkSpec> {
+export function httpPanelLinks(s: HttpScope, exprs: Record<string, string>, opts: { latQ?: 'p50' | 'p95' | 'p99' } = {}): Record<string, MetricsLinkSpec> {
   const F = famOf(s);
   const FL = F.labels;
   const sf = serverFilters(s);
@@ -64,6 +64,8 @@ export function httpPanelLinks(s: HttpScope, exprs: Record<string, string>): Rec
     err5ByRoute: { queries: [{ metric: SC, agg: 'rate', by: [FL.route, FL.method, FL.status], filters: [...sf, stErr(F.serverErr)] }] },
     err4ByRoute: { queries: [{ metric: SC, agg: 'rate', by: [FL.route, FL.method, FL.status], filters: [...sf, stErr(F.clientErr)] }] },
   };
+  // v0.10.2489 — endpoint sayfasının "<q> gecikme (route)" paneli (endpointHttpQueries latByRoute).
+  if (opts.latQ) links.latByRoute = { queries: [pq(opts.latQ, byMR)] };
   if (F.kind === 'http') {
     Object.assign(links, {
       dRateByAddr: { queries: [ccRate()] },

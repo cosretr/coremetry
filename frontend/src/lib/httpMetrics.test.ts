@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { httpQueries, serverSel, promStr, rateWindow, seriesLabels, legendOf, relabel, scalarOf, barsOf, mergeTable, filterOptions, fmtCount, fmtRatio, fmtSeconds, latencyTone, errorRatioTone, clientErrorTone, sliTone, httpSeriesColors, donutSlices, fmtShare, sparkValues, statusCodeRateQuery, statusCodeSeries, totalRequestsQuery, HTTP_LABELS } from './httpMetrics';
+import { httpQueries, serverSel, promStr, rateWindow, seriesLabels, legendOf, relabel, scalarOf, barsOf, mergeTable, filterOptions, fmtCount, fmtRatio, fmtSeconds, latencyTone, errorRatioTone, clientErrorTone, sliTone, httpSeriesColors, donutSlices, fmtShare, sparkValues, statusCodeRateQuery, statusCodeSeries, totalRequestsQuery, HTTP_LABELS, RATE_WINDOW_FLOOR_S, rateWindowSec } from './httpMetrics';
 import type { SpanMetricSeries } from './types';
 
 // v0.10.1244 — HTTP Metrics sekmesi (Grafana panosu → VictoriaMetrics).
@@ -15,14 +15,17 @@ describe('sorgular', () => {
     expect(serverSel({ app: 'shop', route: '/a', method: 'GET' }, 'le="0.5"'))
       .toBe('{service_name="shop", http_route="/a", http_request_method="GET", le="0.5"}');
   });
-  it('rate penceresi en az 1 dk, en az 4 adım', () => {
-    expect(rateWindow(600)).toBe('60s');
+  it('rate penceresi en az 180 sn (Overview ile tek taban), en az 4 adım', () => {
+    expect(RATE_WINDOW_FLOOR_S).toBe(180);
+    expect(rateWindow(600)).toBe('180s');
+    expect(rateWindow(3600)).toBe('180s'); // adım 12 sn → 4 adım 48 sn < taban
+    expect(rateWindowSec(6 * 3600)).toBe(288); // adım 72 sn → 4 adım tabanı aşar
     expect(rateWindow(86400)).toBe(`${4 * 288}s`);
   });
   it('panodaki metrik adları ve pencere', () => {
     const q = httpQueries({ app: 'shop' }, 3600);
     expect(q.total).toBe('sum(increase(http_server_request_duration_seconds_count{service_name="shop"}[3600s]))');
-    expect(q.p95).toContain('histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="shop"}[60s])))');
+    expect(q.p95).toContain('histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="shop"}[180s])))');
     expect(q.statusClass).toContain('"${1}xx"');
     expect(q.dConnErr).toContain('http_response_status_code=""');
     expect(Object.keys(q).length).toBeGreaterThanOrEqual(38);
@@ -110,7 +113,7 @@ describe('heatmap / donut / spark', () => {
 // v0.10.1253 — Overview HTTP status kodu paneli.
 describe('status kodu serileri', () => {
   it('sorgu ve kod bazlı seriler, sınıf renk tokenı', () => {
-    expect(statusCodeRateQuery('shop', 1800)).toBe('sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name="shop"}[60s]))');
+    expect(statusCodeRateQuery('shop', 1800)).toBe('sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name="shop"}[180s]))');
     const r = statusCodeSeries([ser({ http_response_status_code: '500' }, [1]), ser({ http_response_status_code: '200' }, [9]), ser({}, [3])]);
     expect(r.series.map(s => s.groupKey[0])).toEqual(['200', '500']);
     expect(r.tokens.get('200')).toBe('--ok');

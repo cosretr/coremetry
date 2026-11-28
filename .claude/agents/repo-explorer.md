@@ -1,7 +1,8 @@
 ---
 name: repo-explorer
 description: Salt-okunur repo keşfi. Dosya bulma, kod okuma, desen/kullanım tarama gerektiğinde ana oturum yerine bu ajan kullanılır. Yalnız özet döndürür.
-model: claude-sonnet-5-5
+model: sonnet
+effort: low
 tools: Read, Grep, Glob
 ---
 Sen Coremetry reposunda salt-okunur keşif ajanısın. Hiçbir dosyayı değiştirme.

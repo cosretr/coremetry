@@ -15,7 +15,7 @@ import { LogsHistogram } from '@/components/LogsHistogram';
 import { logsHref } from '@/lib/logsUrl';
 import { VolumeChart } from '@/components/traces/VolumeChart';
 import { useHttpPromql } from '@/lib/queries/httpMetrics';
-import { relabel, stepSeconds } from '@/lib/httpMetrics';
+import { relabel, stepSeconds, RATE_WINDOW_FLOOR_S } from '@/lib/httpMetrics';
 import { kafkaPanels } from '@/lib/kafkaMetrics';
 import { api, isCanceled } from '@/lib/api';
 import { serviceHref } from '@/lib/serviceHref';
@@ -24,6 +24,8 @@ import { fmtClock } from '@/lib/utils';
 import { t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; // v0.10.2291 — kaynak / işaret / bağlantı metni arayüz dilinde
 import { entryLatencyDSL } from '@/lib/entrySpans';
 import { metricRedSeries, metricRedUnit } from '@/components/cosreChartSpec';
+import { kafkaPanelLink } from '@/lib/kafkaMetrics'; // v0.10.2489 — lag grafiği Metrics açılışı
+import { useMetricsExpand } from '@/components/chart/useMetricsExpand'; // v0.10.2489 — grafiğe tık → Metrics
 import type { MLEvent, MLSourceSeries, SpanMetricSeries } from '@/lib/types';
 import { highlightColors, liveGapLine, sourceGapReason, type ServiceRedAgg, thanosSourceText, panelWindow, peakInRange, sourcePanelFor, topContributors, type Contributors, type SourcePanel } from './mlSourcePanel';
 
@@ -124,15 +126,16 @@ function KafkaLag({ panel, win, lead, marks, fallback, onContributors, onPeak, d
   useEffect(() => { if (!pending && onContributors) onContributors(contributors); }, [pending, contributors, onContributors]);
   const peak = useMemo(() => peakInRange(series, lead.startedAt, lead.lastSeen, direction), [series, lead.startedAt, lead.lastSeen, direction]);
   useEffect(() => { if (!pending && onPeak) onPeak(failed ? null : peak); }, [pending, failed, peak, onPeak]);
+  const range = useMemo(() => ({ preset: 'custom' as const, fromMs: Math.floor(win.fromNs / 1e6), toMs: Math.ceil(win.toNs / 1e6) }), [win]);
+  const expand = useMetricsExpand({ service: panel.service, range, src: 'vm' });
   if (!def || failed || empty) return <>{fallback}</>;
   const step = stepSeconds(Math.max(60, Math.round((win.toNs - win.fromNs) / 1e9)));
-  const range = { preset: 'custom' as const, fromMs: Math.floor(win.fromNs / 1e6), toMs: Math.ceil(win.toNs / 1e6) };
   return (
     <Frame source={tf('mlx.src.kafka', lang, { step: stepText(step, lang) })}
       marks={marks} link={{ label: tl('mlx.link.messaging', lang), href: serviceHref(lead.service, { tab: 'messaging', range }) }}>
       <HttpChartPanel title={def.title} series={series} unit={def.unit} stepSec={step} loading={pending}
         syncKey="ml-source" legendKey="ml-source:kafka-lag" legendOpen={false}
-        regions={detectedRegion(lead.startedAt, lead.lastSeen, lang)} />
+        regions={detectedRegion(lead.startedAt, lead.lastSeen, lang)} onExpandClick={expand(kafkaPanelLink(def))} />
     </Frame>
   );
 }
@@ -246,12 +249,15 @@ function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction, on
   // v0.10.2055 — sapan pod tek renkli, diğerleri gri (renk yalnız sapmada).
   const names = useMemo(() => (data?.series ?? []).map(s => s.groupKey.join(' · ')), [data]);
   const colors = useMemo(() => highlightColors(names, panel.highlight, cssVar), [names, panel.highlight]);
+  const range = useMemo(() => ({ preset: 'custom' as const, fromMs: Math.floor(win.fromNs / 1e6), toMs: Math.ceil(win.toNs / 1e6) }), [win]);
+  // v0.10.2489 — grafiğe tık → Metrics: dedektörün birebir ifadesi (VM, kod kipi). Thanos (cluster) ifadesi
+  // Metrics'te aynı cluster kapsamıyla açılamıyor → affordance yok (yanlış sorguya götürmez).
+  const expand = useMetricsExpand({ service: panel.service, range, src: 'vm' });
   // v0.10.2061 — canlı seri yoksa nedeni tek satır, altında kayıtlı görüntü (sessiz düşüş yok).
   if (data === null || (data && !data.series.some(x => (x.points ?? []).length))) return <Gap reason={gapReason}>{fallback}</Gap>;
   const q = data?.query;
   const thanos = !!panel.cluster;
   const byPod = thanos || !!q?.by;
-  const range = { preset: 'custom' as const, fromMs: Math.floor(win.fromNs / 1e6), toMs: Math.ceil(win.toNs / 1e6) };
   const step = data?.stepSec ?? 60;
   const stepTxt = stepText(step, lang);
   const title = `${q?.label ?? panel.code}${thanos ? ` · ${panel.cluster}` : ''}`;
@@ -270,7 +276,7 @@ function MetricSeries({ panel, win, lead, marks, fallback, onPeak, direction, on
     <Frame source={source} marks={marks} link={link}>
       <HttpChartPanel title={title} series={data?.series ?? []} unit={chartUnit(q?.unit)} stepSec={step} loading={data === undefined}
         syncKey="ml-source" legendKey={`ml-source:${panel.detector}`} legendOpen={byPod} regions={regions}
-        seriesColors={colors} note={note} />
+        seriesColors={colors} note={note} onExpandClick={thanos ? undefined : expand(q?.expr ? { code: q.expr } : null)} />
     </Frame>
   );
 }
@@ -318,11 +324,11 @@ export function ServiceRedChart({ service, agg, label, startedAt, lastSeen, open
   useEffect(() => {
     const ctl = new AbortController();
     const run = async () => {
-      const resp = await api.serviceMetricRED(service, win.fromNs, win.toNs, 120, { rateWindow: 180 }).catch(() => null);
+      const resp = await api.serviceMetricRED(service, win.fromNs, win.toNs, 120, { rateWindow: RATE_WINDOW_FLOOR_S }).catch(() => null);
       const ms = resp?.metricExists ? metricRedSeries(resp, agg) : [];
       if (ms.some(s => (s.points ?? []).length)) return { series: ms, unit: metricRedUnit(resp, agg), metric: true };
       const d = await api.spanMetricBatch({
-        from: win.fromNs, to: win.toNs, maxDataPoints: 120, rateWindow: 180, dsl: entryLatencyDSL(service),
+        from: win.fromNs, to: win.toNs, maxDataPoints: 120, rateWindow: RATE_WINDOW_FLOOR_S, dsl: entryLatencyDSL(service),
         aggs: [{ name: 'v', agg, ...(agg === 'p99' ? { field: 'duration_ms' } : {}) }],
       }, ctl.signal);
       return { series: d.series?.v ?? [], unit: metricRedUnit(null, agg), metric: false };

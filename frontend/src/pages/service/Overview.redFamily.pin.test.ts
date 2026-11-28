@@ -23,7 +23,7 @@ describe('Overview RED ailesi (v0.10.1429)', () => {
     expect(readFileSync(resolve(__dirname, '../../lib/i18n.tr.ts'), 'utf8')).toContain("'ov.bothBadge': 'gRPC de var → HTTP/GRPC',");
   });
   it('throughput kimliği ve kırılım aileden; Response time by rpc.method', () => {
-    expect(src).toContain("{ breakdown: famGrpc ? 'rpc_method' : 'route', rateWindow: 180, env: env || undefined, ...famOpt }");
+    expect(src).toContain("{ breakdown: famGrpc ? 'rpc_method' : 'route', rateWindow: RATE_WINDOW_FLOOR_S, env: env || undefined, ...famOpt }");
     expect(src).toContain("const routeDim = famGrpc ? 'rpc.method' : 'http.route';");
     expect(src).toContain('groupBy: routeDim,');
     expect(src).toContain("title={`Response time · avg (by ${famGrpc ? 'method' : 'route'})`}");

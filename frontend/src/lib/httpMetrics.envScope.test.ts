@@ -38,7 +38,7 @@ describe('envSel yok → bayt bayt eski sorgular', () => {
     expect(totalRequestsQuery('orders-api-prod', 3600))
       .toBe('sum(increase(http_server_request_duration_seconds_count{service_name="orders-api-prod"}[3600s]))');
     expect(statusCodeRateQuery('orders-api-prod', 3600))
-      .toBe('sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name="orders-api-prod"}[60s]))');
+      .toBe('sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{service_name="orders-api-prod"}[180s]))');
   });
   it('boş envSel = envSel yok (her üretici)', () => {
     const W = 3600;

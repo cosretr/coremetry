@@ -106,9 +106,24 @@ export function stepSeconds(windowSec: number): number {
   return Math.max(1, Math.ceil(windowSec / HTTP_METRICS_POINTS));
 }
 
-/** $__rate_interval karşılığı: en az 1 dk, en az 4 adım. */
+/**
+ * v0.10.2489 (operatör-raporlu: endpoint grafikleri "çok zigzaglı") — zaman
+ * serisi `rate[R]` penceresinin TABANI (sn). Servis Overview'un golden-signal
+ * grafikleri (/metric-red `rateWindow`) de bu sabiti gönderir: üründe tek hız
+ * penceresi tanımı. Eski taban 60 sn'ydi; dakikada birkaç istek alan tek bir
+ * route'ta her nokta 0–4 örnek görüyor, hız ve histogram_quantile testere
+ * dişi çiziyordu. Pencere karoları (`windowRange` / increase) etkilenmez.
+ */
+export const RATE_WINDOW_FLOOR_S = 180;
+
+/** $__rate_interval karşılığı (sn): en az RATE_WINDOW_FLOOR_S, en az 4 adım. */
+export function rateWindowSec(windowSec: number): number {
+  return Math.max(RATE_WINDOW_FLOOR_S, 4 * stepSeconds(windowSec));
+}
+
+/** `rateWindowSec` PromQL süre biçiminde (`180s`). */
 export function rateWindow(windowSec: number): string {
-  return `${Math.max(60, 4 * stepSeconds(windowSec))}s`;
+  return `${rateWindowSec(windowSec)}s`;
 }
 
 const CC = 'http_client_request_duration_seconds_count';

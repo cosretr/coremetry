@@ -57,7 +57,7 @@ edit → scripts/gate.sh all   (fe: tsc → eslint → vitest → bundle:check;
 ```
 `make audit`: 🔴 critical blocks the tag; 🟡 reviewed, ship if known false positive.
 
-**Commit format:** `v0.10.X — title (≤70)` + body (what/why/root cause, 72 cols, operator bugs start "Operator-reported: …") + `Co-Authored-By: Claude <noreply@anthropic.com>`.
+**Commit format:** `v0.10.X — title (≤70)` + body (what/why/root cause, 72 cols, operator bugs start "Operator-reported: …") + oturumun bildirdiği imza satırı (model adıyla, ör. `Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>`).
 
 **Skills (`.claude/skills/`) — run BEFORE the matching change:**
 - `/release`, `/bugfix`, `/spec` (3+ files), `/kuyruk`, `/tdd` (new backend feature / pure helper), `/review-changes` (pre-commit diff review; before `/release` on non-trivial work), `/where-is` ("X nerede").
@@ -65,12 +65,16 @@ edit → scripts/gate.sh all   (fe: tsc → eslint → vitest → bundle:check;
 - `/aiops` (detector, rule-id, priority/escalation, incident attach, hypothesis score, exception ladder, any loop writing problems/anomaly_events/root_cause_hypotheses) · `/copilot-surface` (new AI ✨ Explain).
 - `/frontend-design-system` (any UI part: component/table/filter/drawer/theme/polling — find the existing primitive first; `ui/` barrel is incomplete) · `/frontend-dashboard-panel` (new panel type).
 - `/perf-triage` (ONE slow surface → measured root cause) · `/scale-audit` (quarterly whole-repo sweep).
+- `/audit` (Faz 0: ölç, seçenek sun, karar iste; yalnız belge) · `/mockup` (tek dosya HTML, karar için) · `/dogrula` (değişikliği yerel yığında kanıtla: API yanıtı, sorgu, ekran görüntüsü). · `/dilim` (onaylı audit dilimini ajana devretme brifi).
+- Her oturum ve ajan için geçerli çalışma kuralları `.claude/rules/` altında (commit, rapor, ad/veri, işlev kaybı; önyüz ve arka uç kuralları dosya yoluna göre yüklenir); ajan briflerine yeniden yazılmaz.
 
 ## Model kademeleri
-- **Sonnet 5.5 (basit):** dosya okuma/keşif, grep, test çalıştırma ve özetleme, mekanik düzenleme, migration-log girişi, küçük bug fix. → `repo-explorer` ve `implementer` ajanları.
-- **Opus 5.5 (orta, varsayılan ana oturum):** onaylı audit'e göre dilim uygulama, çok dosyalı değişiklik, test yazma, refactor.
-- **Fable 5.1 (ileri):** Faz 0 audit'leri, mimari kararlar, ClickHouse şema/rollup tasarımı, Davis parity / ML algoritmaları, CoSRE investigation loop tasarımı, zor performans sorunları. → `architect` ajanı.
-- Ana oturum işi kademesine göre ajana devreder; Fable'a yalnız iş gerçekten "ileri" kademedeyse gidilir.
+Model adı yerine takma ad yazılır (`sonnet`, `opus`, `fable`); sürüm atlayınca dosya bayatlamaz. Çaba düzeyi ajan dosyasındaki `effort` alanındadır. Gerekçe ve kaynaklar: `docs/claude/capability-audit.md` §A.
+- **`sonnet` (basit, çaba low):** dosya okuma/keşif, grep, mekanik düzenleme, migration-log girişi. → `repo-explorer`, `implementer`.
+- **`opus` (orta, varsayılan ana oturum, çaba high):** onaylı audit'e göre dilim uygulama, çok dosyalı değişiklik, test yazma, refactor; inceleme ve kapı doğrulaması. → `coremetry-feature-shipper`, `verifier`.
+- **`fable` (ileri, çaba xhigh):** Faz 0 audit'leri, mimari kararlar, ClickHouse şema/rollup tasarımı, ML algoritmaları, CoSRE investigation loop tasarımı, zor kök neden ve performans sorunları. → `architect`.
+- Ana oturum işi kademesine göre ajana devreder; `fable`'a yalnız iş gerçekten "ileri" kademedeyse gidilir.
+- **Oturumu repo kökünde başlat.** Ajanlar, skill'ler, izinler ve hook'lar çalışma dizininden repo köküne doğru yüklenir; üst dizinden başlayan oturumda hiçbiri yoktur.
 
 ## Pitfall rules — full stories in [docs/INCIDENTS.md](docs/INCIDENTS.md)
 CH (value+unit/toDate, combined-MV drop, TDigest state, unqualified tables, toDateTime64 args) → `/clickhouse-schema` · ES + Drain → `/aiops` · table-layout clip → `/frontend-design-system` · `maxUnavailable: 0` → `/helm-chart-coremetry`.

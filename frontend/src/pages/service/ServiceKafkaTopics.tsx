@@ -11,7 +11,6 @@
 // grafiklerinin Metrics karşılığı yok → tık aksiyonu yok (ölü tık yok);
 // span yedeğinde dört özet kartı (seçili topic ya da hepsi).
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router';
 import { HttpChartPanel, HttpStat } from './httpMetricsViz';
 import { useHttpPromql } from '@/lib/queries/httpMetrics';
 import { relabel, rateWindow } from '@/lib/httpMetrics';
@@ -20,7 +19,8 @@ import {
   type KafkaFamilyResolution, type ServiceMessagingSpans,
 } from '@/lib/kafkaTopics';
 import type { KafkaScope } from '@/lib/kafkaMetrics';
-import { metricsLinkHref, type MetricsLinkContext } from '@/lib/metricsLink';
+import type { MetricsLinkContext, MetricsLinkSpec } from '@/lib/metricsLink';
+import { useMetricsExpand } from '@/components/chart/useMetricsExpand'; // v0.10.2489 — tek açılış deseni
 import { fmtSmart } from '@/lib/chartFmt';
 import { t, useLang } from '@/lib/i18n';
 import type { SpanMetricSeries } from '@/lib/types';
@@ -36,7 +36,7 @@ export function ServiceKafkaTopics({ scope, win, step, fam, spans, spansPending,
   linkCtx: MetricsLinkContext;
 }) {
   const lang = useLang();
-  const navigate = useNavigate();
+  const expand = useMetricsExpand(linkCtx);
   const f = fam.state === 'metric' ? fam.family : undefined;
   const spansMode = fam.state === 'spans';
   const windowSec = Math.max(60, Math.round((win.to - win.from) / 1e9));
@@ -49,10 +49,10 @@ export function ServiceKafkaTopics({ scope, win, step, fam, spans, spansPending,
 
   const topic = scope.topic ?? '';
   const grid = { display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', marginTop: 12 } as const;
-  const panel = (id: string, unit: string, series: SpanMetricSeries[], loading: boolean, stepSec: number, href: string | null) => (
+  const panel = (id: string, unit: string, series: SpanMetricSeries[], loading: boolean, stepSec: number, link: MetricsLinkSpec | null) => (
     <HttpChartPanel key={id} title={t(`ktop.c.${id}`, lang)} series={series} unit={unit} stepSec={stepSec} loading={loading}
       syncKey="svc-kafka" legendKey={`svc-kafka-topic:${id}`} legendOpen={false}
-      onExpandClick={href ? () => navigate(href) : undefined} />
+      onExpandClick={expand(link)} />
   );
   const bucket = spans?.bucketSec ?? 300;
   const tot = spansMode ? kafkaSpanTotals(spans, topic) : null;
@@ -76,7 +76,7 @@ export function ServiceKafkaTopics({ scope, win, step, fam, spans, spansPending,
           ? charts.map(c => panel(c.id, c.unit,
               c.queries.flatMap((q, i) => relabel(cq.data[`${c.id}#${i}`], q.legend)),
               c.queries.some((_, i) => cq.pending(`${c.id}#${i}`)), step,
-              metricsLinkHref(linkCtx, kafkaTopicChartLink(c))))
+              kafkaTopicChartLink(c)))
           : [
               panel('produce', 'reqps', kafkaSpanChartSeries(spans, 'producer', 'rate', topic), spansPending, bucket, null),
               panel('consume', 'reqps', kafkaSpanChartSeries(spans, 'consumer', 'rate', topic), spansPending, bucket, null),
