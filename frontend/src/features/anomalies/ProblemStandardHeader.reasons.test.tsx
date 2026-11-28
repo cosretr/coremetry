@@ -112,7 +112,7 @@ describe('ProblemStandardBlock — neden bloğu', () => {
     m.lang = 'en';
     const h = await render(std(true));
     expect(lineEls(h).map(e => e.textContent)).toEqual(REASONS_EN);
-    expect(h.querySelector('h1')?.textContent).toBe('orders — error rate normally 0.4%, now 6.8% (17×).');
+    expect(h.querySelector('h1')?.textContent).toBe('orders · error rate normally 0.4%, now 6.8% (17×).'); // v0.10.2487 — liste satırıyla aynı ayırıcı
     expect(whyDd(h).querySelector('[lang="tr"]')).toBeNull();
     expect(h.querySelector('h1 [lang="tr"]')).toBeNull();
   });

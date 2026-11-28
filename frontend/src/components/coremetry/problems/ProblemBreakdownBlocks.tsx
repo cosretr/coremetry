@@ -21,6 +21,9 @@ import {
   fmtBreakdownCount, fmtBreakdownRate, fmtDependencyValue, fmtPerMin, type DeployFact,
 } from '@/lib/problemBreakdown';
 import type { ProblemBreakdownResponse, ProblemBreakdownRoute } from '@/lib/types';
+import { SearchX } from 'lucide-react';
+import { Empty } from '@/components/Spinner';
+import { HelpTip } from '@/components/coremetry/HelpTip'; // v0.10.2487 — açıklama paragrafı yerine (?) balonu
 
 export type BreakdownT = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -32,20 +35,22 @@ const TEXT_WRAP = 'whitespace-normal [overflow-wrap:anywhere] text-xs';
 // Aile etiketi: bilinen üç aile çevrilir, bilinmeyen ham yazılır (anahtar uydurulmaz).
 const FAMILY_KEY: Record<string, string> = { db: 'pbd.dep.fam.db', messaging: 'pbd.dep.fam.messaging', http: 'pbd.dep.fam.http' };
 
-function Block({ id, title, source, children }: { id: string; title: string; source?: string; children: React.ReactNode }) {
+function Block({ id, title, source, help, helpTestId, children }: { id: string; title: string; source?: string; help?: string; helpTestId?: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-2" data-testid={`pbd-${id}`}>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <h3 className="m-0 text-[13px] font-semibold">{title}</h3>
         {source && <span className="text-xs text-muted-foreground">{source}</span>}
+        {help && <HelpTip text={help} testId={helpTestId} />}
       </div>
       {children}
     </section>
   );
 }
 
+// v0.10.2487 (dilim 3) — veri yokken açıklama Empty gövdesinde (kalıcı paragraf değil).
 function Unreadable({ t }: { t: BreakdownT }) {
-  return <p className="m-0 text-xs text-muted-foreground" data-testid="pbd-failed">{t('pbd.failed')}</p>;
+  return <div data-testid="pbd-failed"><Empty compact icon={<SearchX size={16} strokeWidth={1.5} />} title={t('pbd.failed')} /></div>;
 }
 
 function RouteRow({ r, label, other, t, lang }: { r: ProblemBreakdownRoute; label: string; other?: boolean; t: BreakdownT; lang: Lang }) {
@@ -162,7 +167,7 @@ function Dependencies({ d, t, lang, clock }: {
 }) {
   if (d.failed) return <Block id="dependencies" title={t('pbd.dep.title')}><Unreadable t={t} /></Block>;
   return (
-    <Block id="dependencies" title={t('pbd.dep.title')}>
+    <Block id="dependencies" title={t('pbd.dep.title')} help={t('pbd.dep.src')} helpTestId="pbd-dep-note">
       <Table aria-label={t('pbd.dep.title')}>
         <TableHeader>
           <TableRow>
@@ -192,14 +197,13 @@ function Dependencies({ d, t, lang, clock }: {
         </TableBody>
       </Table>
       {!!d.more && <p className="m-0 text-xs text-muted-foreground">{t('pbd.dep.more', { n: d.more })}</p>}
-      <p className="m-0 text-xs text-muted-foreground" data-testid="pbd-dep-note">{t('pbd.dep.src')}</p>
     </Block>
   );
 }
 
 /** İstek düştüğünde bölümün tek satırı (Tailwind sınıfları yalnız coremetry/ altında taranır). */
 export function ProblemBreakdownError({ t }: { t: BreakdownT }) {
-  return <p className="m-0 text-xs text-muted-foreground" data-testid="pbd-load-error">{t('pbd.loadError')}</p>;
+  return <div data-testid="pbd-load-error"><Empty compact icon={<SearchX size={16} strokeWidth={1.5} />} title={t('pbd.loadError')} /></div>;
 }
 
 /** Bölümün gövdesi. `deploy`: Problem satırının taşıdığı deploy gerçeği (ya da null). */

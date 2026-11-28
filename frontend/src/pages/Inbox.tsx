@@ -51,10 +51,11 @@ import { ProblemVerdictRow } from '@/components/ProblemVerdictActions';
 import { useVerdictRowContext } from '@/components/useVerdictRowContext'; // v0.10.1529 — satır Karar hücresi (D1); v0.10.1626 tek dizin
 import { NoiseReasonButton, type NoiseReasonChoice } from '@/components/NoiseReasonButton'; // v0.10.1531 — toplu triyaj
 import {
-  splitStdHeadline, stdSourceChip, stdSourceName, stdSamplingNote, stdSinceLine, stdDurationLine,
-  stdHeadlineView, stdEvidenceView, prioReasonView,
+  stdSourceChip, stdSourceName, stdSamplingNote, stdSinceLine, stdDurationLine, prioReasonView,
 } from '@/lib/problemStandardView'; // v0.10.1529 — Problem standardı R2; v0.10.2299 EN anahtardan
 import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2299 — çizilemeyen sunucu metni (EN)
+import { problemTitle, problemSummary } from '@/features/anomalies/problemTitle'; // v0.10.2487 — liste + detay tek çift
+import { ProblemTitleText } from '@/features/anomalies/ProblemTitleText';
 import { verdictOf, countNoise, filterByVerdictView, parseVerdictView, inboxVerdictSubject, type VerdictView } from '@/lib/problemVerdict';
 import { rowPassesKindFacet } from '@/lib/inboxBuckets'; // v0.10.1803 — Oracle P1 problem kovasında
 import { useUrlParams } from '@/lib/urlSchema';
@@ -1194,13 +1195,13 @@ function ProblemsTab({ tabStrip }: { tabStrip: ReactNode }) {
                         3. satır bağlam + takım çipleri + yayılım. std yoksa
                         v0.10.1084 biçimi aynen. */}
                     {(() => {
-                      const head = it.std ? splitStdHeadline(it.std, lang) : null;
-                      const headV = it.std ? stdHeadlineView(it.std, lang) : null;
-                      const evV = it.std ? stdEvidenceView(it.std, lang) : null;
-                      const titleText = headV ? headV.text : inboxRowHeadline(it);
-                      const titleInner = head
-                        ? <>{head.subject && <><span className="std-subject">{head.subject}</span> · </>}{headV?.orig ? <OrigLang>{head.rest}</OrigLang> : head.rest}</>
-                        : titleText;
+                      // v0.10.2487 (dilim 3) — başlık ve özet Problem detayıyla
+                      // AYNI saf çiftten (problemTitle / problemSummary).
+                      const pIn = { std: it.std, ruleName: it.title, service: it.service, description: it.description, ruleId: it.problem?.ruleId, metric: it.problem?.metric, value: it.problem?.value, threshold: it.problem?.threshold };
+                      const head = it.std || it.kind === 'problem' ? problemTitle(pIn, lang) : null;
+                      const evV = problemSummary(pIn, lang);
+                      const titleText = head ? head.text : inboxRowHeadline(it);
+                      const titleInner = head ? <ProblemTitleText title={head} /> : titleText;
                       const detail = it.std
                         ? <><span className="std-src" title={tf('inbox.srcTitle', lang, { name: stdSourceName(it.std.evidence.source, lang), note: stdSamplingNote(it.std, lang) })}>{stdSourceChip(it.std, lang)}</span>
                             {ora ? oracleInboxDetail(it.exception!.message, oraLabel)

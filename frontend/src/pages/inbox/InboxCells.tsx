@@ -6,6 +6,8 @@ import { Chip } from '@/components/ui';
 import { Users, Shield } from 'lucide-react';
 import { tsLong, tsCompact, fmtFixed, fmtDurShort } from '@/lib/utils';
 import { inboxRowLabel } from '@/lib/inboxRowText';
+import { anomalyBaselineless } from '@/lib/anomalyBaseline';
+import { multiplier } from '@/lib/format/number';
 import { derivedTeamTitle } from '@/lib/problemSubject';
 import { isInboxExcFamily } from '@/lib/inboxHref';
 import { TriageStatusBadge } from '@/features/anomalies/ProblemDetail';
@@ -194,9 +196,12 @@ export function DetailLine({ it }: { it: InboxItem }) {
   if (it.kind === 'anomaly' && it.anomaly) {
     return (
       <>
+        {/* v0.10.2487 (dilim 3, §1.4) — ham "peak 3.2x" yerine düz cümle;
+            tabansız olayda "taban yok" (anomalyBaselineless). */}
         {lead}{' · '}
-        peak <span className="mono">{fmtFixed(it.anomaly.peakRatio, 1)}x</span>
-        {' · '}now <span className="mono">{fmtFixed(it.anomaly.currentRatio, 1)}x</span>
+        {anomalyBaselineless(it.anomaly)
+          ? t('anomalyRatio.noBaseline', lang)
+          : tf('inbox.anRatio', lang, { peak: multiplier(it.anomaly.peakRatio, lang), now: multiplier(it.anomaly.currentRatio, lang) })}
         {it.priorityReason && <span> · {prNode}</span>}
       </>
     );

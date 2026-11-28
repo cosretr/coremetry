@@ -102,6 +102,7 @@ export const EN_EAGER: Record<string, string> = {
   'std.m.h.ev.x': '{sp}{label} ({rX})', 'std.m.h.ev.p.x': '{sp}{label} — {pat} ({rX})',
   'std.m.evl.opSlow': 'operation slowed', 'std.m.evl.opErr': 'operation errors rose', 'std.m.evl.logPattern': 'log pattern rose',
   'std.m.evl.behavior': 'behavior changed', 'std.m.evl.newTemplate': 'new log template', 'std.m.evl.subject': 'subject deviation',
+  'std.m.evl.signal': 'signal', 'std.m.evl.ml': 'ML signal', // v0.10.2487 — ham tür kimliği cümlede yok
   'std.m.metric.error_rate': 'error rate', 'std.m.metric.p99_ms': 'response time', 'std.m.metric.request_rate': 'traffic',
   'std.m.metric.error_count': 'error count', 'std.m.metric.fail_count': 'failed operation count',
   'std.m.imp.err': 'error rate {vPct} (normal {nPct})',

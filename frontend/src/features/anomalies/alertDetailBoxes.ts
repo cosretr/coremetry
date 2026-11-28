@@ -16,6 +16,7 @@
 import type { Problem, ProblemStandard } from '@/lib/types';
 import { subjectLabel } from '@/lib/problemSubject';
 import { alertProblemSummary } from './detailSummary';
+import { problemSummary } from './problemTitle';
 import { showRootCauseInSummary } from './anomalyDetail';
 import { tf, type Lang } from '@/lib/i18n'; // v0.10.2284 — metinler arayüz dilinde (varsayılan 'tr')
 import { stdImpactView, prioReasonView, detailPrioReasonMsg, stdHeadlineView, fmtStdClock } from '@/lib/problemStandardView'; // v0.10.2299 — etki EN anahtardan (TR aynı); v0.10.2300 gerekçe
@@ -28,7 +29,8 @@ export function alertWhatText(p: BoxProblem, std?: ProblemStandard | null, lang:
   // v0.10.2475 — consumer lag: ham ölçü satırı ("ml_group_lag value 17936.00,
   // threshold 5.00") yerine standart manşet (normal → şimdi, topic).
   const parts = [std?.lag ? stdHeadlineView(std, lang).text : alertProblemSummary(p, lang)];
-  const ev = std?.evidence?.sentence?.trim();
+  // v0.10.2487 (dilim 3) — kanıt cümlesi liste satırının özetiyle AYNI çiftten (EN'de anahtardan).
+  const ev = problemSummary({ std }, lang)?.text.trim();
   if (ev) parts.push(ev);
   const why = prioReasonView(p.priorityReason, detailPrioReasonMsg(p.priorityReason, std), lang).text.trim();
   if (why) parts.push(tf('pd.text.prioWhy', lang, { why }));

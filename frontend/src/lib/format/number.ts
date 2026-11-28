@@ -42,6 +42,11 @@ export function fixed(v: number | null | undefined, digits: number, lang: Lang):
   return isNum(v) ? localize(v.toFixed(digits), lang) : NO_DATA;
 }
 
+/** Kat (oran) çarpanı, dile göre: multiplier(1.234, 'tr') → "1,2×" (v0.10.2487, dilim 3). */
+export function multiplier(v: number | null | undefined, lang: Lang, digits = 1): string {
+  return isNum(v) ? `${fixed(v, digits, lang)}×` : NO_DATA;
+}
+
 /** Tam sayı sayaç, binlik ayırıcılı: TR "1.234.567" / EN "1,234,567". */
 export function count(v: number | null | undefined, lang: Lang): string {
   return isNum(v) ? localize(String(Math.round(v)), lang) : NO_DATA;

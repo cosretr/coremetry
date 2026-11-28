@@ -2966,6 +2966,7 @@ export const EN: Record<string, string> = {
   'pd.displayId.title': 'Display id — click to copy; typing it in the palette opens this problem',
   'pd.recent': 'Recent history',
   'pd.tech': 'Technical evidence',
+  'pd.details': 'Details',
   'pd.rule': 'Rule',
   'pd.rule.name': 'Name',
   'pd.rule.id': 'Id',
@@ -5189,4 +5190,14 @@ export const EN: Record<string, string> = {
   'sampling.corrected': 'sampling-corrected',
   'sampling.partial': 'sampling-corrected · uncorrected before {time}',
   'sampling.corrected.title': 'Span counts, error rate and latency are weighted for upstream sampling (ingest.sampling = on): values are represented requests, not stored spans. Corrected from {time}; earlier buckets are stored span counts.',
+  // v0.10.2487 — entity coherence slice 3 (jargon → plain sentence)
+  'inbox.anRatio': 'peak {peak} of normal · now {now}',
+  'slo.burn': 'budget use {x}',
+  'slo.burn.title': 'Error budget is being used at {x} the allowed pace (above 1× = faster than allowed)',
+  'slo.col.burn': 'Budget use',
+  'slo.fc.safe': 'Budget use {x}: at or below the allowed pace, budget is stable',
+  'slo.fc.exhaust': 'Budget use {x}: at this pace the error budget runs out in ~{h}h',
+  'slo.burn.fast': 'short-window budget use{w}: {x}',
+  'slo.burn.slow': 'long-window budget use{w}: {x}',
+  'slo.burn.alarm': 'alarm threshold {x}',
 };

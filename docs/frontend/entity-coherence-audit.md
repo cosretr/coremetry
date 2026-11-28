@@ -219,6 +219,20 @@ Dilim 3 ilkesi: başlık ve özet **tek saf fonksiyon çiftinden** (`problemTitl
 `problemSummary(p, lang)`), sunucu `std.Headline`'ı birincil, istemci yalnız çevirir; kimlik
 (`ruleId`) yalnız "Ayrıntılar" açılır alanında, mono.
 
+**Dilim 3 durumu (v0.10.2487).** Ürün yüzeyinde kapatılan satırlar: kural kimliği (Problem
+detayında kapalı "Ayrıntılar" alanında, mono); anomali Inbox başlığı (`chstore.AnomalyEventHeadline`,
+standart manşetle aynı cümle; tanınmayan tür / ML dedektör kimliği cümlede yok → "sinyal" /
+"ML sinyali"); ham oran (`InboxCells` "tepe normalin 3,2× · şimdi 1,1×", tabansızda "taban yok");
+standart başlık (liste satırı, detay başlığı ve standart blok tek çift `features/anomalies/
+problemTitle.ts` + tek çizim `ProblemTitleText`, ayırıcı " · "); "Neden Problem değil" (zaten
+saf, sızıntı yok); yanık oranı (`Service.tsx`, `Slos.tsx` "bütçe tüketimi 1,23×" + düz ipucu,
+`lib/format/number` `multiplier`). **Açık kalan iki satır** (ürün kodu dışı karar gerektirir):
+
+| Sızıntı | Neden açık |
+|---|---|
+| ML kayıt başlığı (9 dedektör, `internal/ml/*_record.go`) | Başlık metni yayın kapısının tekrar ölçüsüne (`publish_gate.go:261` `normText(r.Title)`) ve açıklama kartının özetine (`explain_card.go:945`) giriyor; değiştirmek dedektör / yayın davranışını değiştirir — dedektörler bu dilimin kapsamı dışında. |
+| Uyarı başlığı (bildirim) | Bildirim metni ayrı operatör onayı ister (dilim 3 kapsam dışı). Bugün: standart şablonda `internal/notify/tr_template.go:62` `StandardizeProblem` → `std.Headline` (`trTopic` :236, sohbet başlığı `trChatTitle` :251, e-posta konusu `trEmailSubject` :246); eski şablonda (`NotifyTemplateLegacy`) `internal/notify/alert_title.go:56` `alertTitle` = `[SEV][Px] <servis> — <kural adı>` (`notify.go:1225,1750,1791-1793`). Ekrandaki cümle ile eşitlemek bu kararı bekliyor. |
+
 ### 1.5 Açıklama paragrafları
 
 [Ö] M9: ürün ekranlarında **93 açıklama paragrafı, 57 dosya.** En yoğun:
@@ -705,6 +719,7 @@ satırlar öyle işaretlidir.
 |---|---|
 | Soru 1 — tek kavram | Kullanıcıya dönük tek üst kavram "Problem". Incident ayrı bir kullanıcı kavramı olarak kalmaz (anahtar kapalıyken emekli hâli sürer). Rota/etiket uyumsuzluğu ve "Olaylar" çakışması dilim 2'de düzelir. |
 | Soru 2 — sekme sırası | Genel · Problemler · Trace · Log · Metrik · İlişkiler · Değişiklikler · türe özgü. Dilim 5'te servis sayfası için önce mockup gösterilir, çünkü bu sıra v0.5.293 (Operations tablosu ilk öğe), v0.10.1320 (başlık düğme grupları) ve service-tabs-plan ("nerede çalışıyor" Infrastructure'da) kararlarını değiştirir. Operations tablosu "Genel" sekmesinin ilk gövde öğesi olarak kalır. |
+| Soru 2 — sekme sırası, GÜNCELLEME (operatör, 2026-11-28) | **Önceki satırı değiştirir.** Yerel üçlü prototipte (servis / endpoint / pod) operatörün verdiği sıra: Genel · türe özgü (Operasyonlar / Zaman dağılımı / Olaylar) · Trace · Metrik · Log · İlişkiler · Değişiklikler · Problemler; servis sayfasında ardından klasik sekmeler (Topoloji İlişkiler'den sonra; Altyapı, GitOps, HTTP/GRPC, Mesajlaşma sonda). Ek kural: yeni görünüm klasik sayfanın hiçbir işlevini düşürmez ("fonksiyonlar kaybolmasın"); işlev eşitleme tablosu `docs/frontend/entity-trio-prototype-notes.md` içinde, prototip dalında. Dilim 5 bu sırayı ve bu kuralı esas alır. |
 | Soru 3 — adres şeması | `/e/<tür>/<kimlik>` kabul; eski rotalar yönlendirme olarak kalır, paylaşılmış linkler kırılmaz. |
 | A1 — servis kimliği | Kimlik entity modelindeki gibi addır; cluster ve namespace URL'de isteğe bağlı süzgeçtir, kimliğin parçası değildir. |
 | A2 — sağlık noktası | Tek tanım: yalnız açık Problem'lerden. Hata oranı eşikleri noktada kullanılmaz; hücre renklendirmesi `errorTone` ile ayrı kalır. |

@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useT } from '@/lib/i18n';
+import { useT, useLang, tf } from '@/lib/i18n';
+import { multiplier } from '@/lib/format/number'; // v0.10.2487
 import { DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { TabStrip as UiTabStrip } from '@/components/ui/TabStrip'; // v0.10.456 (D5) — sayfanın yerel TabStrip sarmalayıcısıyla ad çakışmasın
 import { Link, useNavigate, useSearchParams } from 'react-router';
@@ -808,6 +809,7 @@ function ServiceDetailInner() {
 function ServiceSLOChip({ slo }: { slo: SLORow }) {
   'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
   const st = slo.status;
+  const lang = useLang(); // v0.10.2487 — bütçe tüketimi düz cümle (§1.4)
   // v0.10.801 — olaysız pencere (noData) gri: ne sağlıklı ne ihlal.
   const noData = !!st?.noData;
   const healthy = noData ? false : (st?.healthy ?? true);
@@ -843,9 +845,9 @@ function ServiceSLOChip({ slo }: { slo: SLORow }) {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text3)' }}>
             <span>{(budget * 100).toFixed(0)}% budget left</span>
-            <span title="Error-budget burn rate (>1 = consuming faster than allowed)"
+            <span title={tf('slo.burn.title', lang, { x: multiplier(burn, lang, 2) })}
               style={{ color: burn > 1 ? 'var(--err)' : 'var(--text3)' }}>
-              burn {burn.toFixed(2)}×
+              {tf('slo.burn', lang, { x: multiplier(burn, lang, 2) })}
             </span>
           </div>
         </>

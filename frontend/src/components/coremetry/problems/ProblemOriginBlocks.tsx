@@ -62,7 +62,6 @@ export function BlastTable({ origin, t }: { origin: ProblemGraphOrigin; t: Graph
       {b.off && <p className="m-0 text-xs text-muted-foreground">{t('pg.blast.off')}</p>}
       {b.cut && <p className="m-0 text-xs text-muted-foreground">{t('pg.blast.cut')}</p>}
       {b.namesDrop && <p className="m-0 text-xs text-muted-foreground">{t('pg.blast.namesDrop')}</p>}
-      <p className="m-0 text-xs text-muted-foreground">{t('pg.blast.note')}</p>
     </div>
   );
 }
@@ -82,7 +81,6 @@ export function OriginEvidence({ origin, t, clock }: { origin: ProblemGraphOrigi
           </li>
         ))}
       </ul>
-      <p className="m-0 text-xs text-muted-foreground">{t('pg.ev.hypoNote')}</p>
     </div>
   );
 }

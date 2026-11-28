@@ -1144,7 +1144,7 @@
  {
   "name": "ev-raw",
   "kind": "anomaly_event.custom_kind",
-  "headline": "svc-a: custom_kind — x (1,5×)",
+  "headline": "svc-a: sinyal — x (1,5×)",
   "impact": "normalin 1,5×",
   "evidence": "Anomali olayı (henüz problem değil).",
   "next": "Anomali detayını aç",
@@ -1190,7 +1190,7 @@
  {
   "name": "ev-ml-metric",
   "kind": "anomaly_event.ml:metric_cpu",
-  "headline": "svc-a: ML metric_cpu — cpu (3,3×)",
+  "headline": "svc-a: ML sinyali — cpu (3,3×)",
   "impact": "normalin 3,3×",
   "evidence": "Anomali olayı (henüz problem değil).",
   "next": "Anomali detayını aç",

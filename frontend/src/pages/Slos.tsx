@@ -16,7 +16,8 @@ import type { SLIType, SLORow } from '@/lib/types';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { readState } from '@/lib/readState';
 import { PageShell } from '@/components/coremetry/PageShell';
-import { useT } from '@/lib/i18n';
+import { useT, useLang, tf } from '@/lib/i18n';
+import { multiplier, fixed } from '@/lib/format/number'; // v0.10.2487
 import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 
 // v0.6.44 — sortable columns on /slos. Forecast + 7d trend stay
@@ -56,13 +57,14 @@ export default function SLOsPage() {
     // okunuyor, satır yokken "SLI (0d)" yalan olurdu → yalnız "SLI".
     { id: 'sli',      label: windowDays ? `SLI (${windowDays}d)` : 'SLI', sortValue: o => o.status?.sli ?? null,  naturalDir: 'desc', numeric: true, width: 110 },
     { id: 'budget',   label: 'Budget left', sortValue: o => o.status?.budgetRemaining ?? null, naturalDir: 'desc', width: 130 },
-    { id: 'burn',     label: 'Burn rate',   sortValue: o => o.status?.burnRate ?? null,      naturalDir: 'desc', width: 110 },
+    // v0.10.2487 — "Burn rate" jargonu (§1.4) katalogdan
+    { id: 'burn',     label: tn('slo.col.burn'),   sortValue: o => o.status?.burnRate ?? null,      naturalDir: 'desc', width: 110 },
     { id: 'forecast', label: 'Forecast',    width: 120 },
     { id: 'trend',    label: '7d trend',    width: 100 },
     // v0.10.801 — sıra: ihlal (0) → olay yok (0.5) → sağlıklı (1); durum yoksa null.
     { id: 'status',   label: 'Status',      sortValue: o => (o.status ? (o.status.noData ? 0.5 : o.status.healthy ? 1 : 0) : null), naturalDir: 'desc', width: 110 },
     ...(isAdmin ? [SLO_ACTIONS_COL] : []),
-  ], [windowDays, isAdmin]);
+  ], [windowDays, isAdmin, tn]);
 
   const dt = useDataTable<SLORow>({
     storageKey: 'slos',
@@ -336,10 +338,13 @@ function BudgetBar({ value }: { value: number }) {
 }
 
 function BurnBadge({ rate }: { rate: number }) {
+  const lang = useLang();
   if (!isFinite(rate)) return <span style={{ color: 'var(--text3)' }}>—</span>;
   // v0.10.929 (K5) — normal yanma (≤1×) nötr.
   const cls = rate > 2 ? 'b-err' : rate > 1 ? 'b-warn' : 'b-gray';
-  return <span className={`badge ${cls}`}>{rate.toFixed(2)}×</span>;
+  // v0.10.2487 (dilim 3, §1.4) — "burn 1.23×" yerine çarpan + düz ipucu.
+  const x = multiplier(rate, lang, 2);
+  return <span className={`badge ${cls}`} title={tf('slo.burn.title', lang, { x })}>{x}</span>;
 }
 
 // v0.6.30 — forecast chip. Reads /api/slos/{id}/forecast lazily
@@ -351,6 +356,7 @@ function BurnBadge({ rate }: { rate: number }) {
 // Tooltip carries the projected hours so the operator can pick
 // "12h" out of the amber chip's "soon" qualitative read.
 function ForecastChip({ sloId }: { sloId: string }) {
+  const lang = useLang();
   // v0.10.854 — ham useEffect → useQuery: dedup + staleTime (sunucu TTL 60 s) + sıralamada iptal.
   const { data } = useQuery({
     queryKey: ['slo-forecast', sloId],
@@ -367,7 +373,7 @@ function ForecastChip({ sloId }: { sloId: string }) {
     // v0.10.929 (K5) — güvenli yanma normal hâl: "OK" nötr rozet.
     return (
       <span className="badge b-gray"
-        title={`Current burn rate ${data.burnRate.toFixed(2)}× — at or below replenishment, budget is stable`}>
+        title={tf('slo.fc.safe', lang, { x: multiplier(data.burnRate, lang, 2) })}>
         OK
       </span>
     );
@@ -376,7 +382,7 @@ function ForecastChip({ sloId }: { sloId: string }) {
   const label = fmtHoursToExhaust(data.hoursToExhaust);
   return (
     <span className={`badge ${cls}`}
-      title={`At burn rate ${data.burnRate.toFixed(2)}×, the error budget will be exhausted in ~${data.hoursToExhaust.toFixed(1)}h`}>
+      title={tf('slo.fc.exhaust', lang, { x: multiplier(data.burnRate, lang, 2), h: fixed(data.hoursToExhaust, 1, lang) })}>
       <Hourglass size={11} strokeWidth={1.75} /> {label}
     </span>
   );
@@ -504,6 +510,7 @@ function NewSLOModal({ onClose, onCreated }: {
 // surfaces use). Operator clicks → modal with budget
 // trajectory + recommended first investigation.
 function BurnExplainButton({ sloId }: { sloId: string }) {
+  const lang = useLang(); // v0.10.2487 — pencere tüketimi düz cümle (§1.4)
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
@@ -547,8 +554,8 @@ function BurnExplainButton({ sloId }: { sloId: string }) {
               }}>
                 {/* v0.10.794 — pencere etiketi sunucudan (evaluator alarmıyla aynı çift);
                     öncesi 5 dk / 1 sa ölçülüp etiketsiz basılıyordu, problemde 1 sa / 6 sa. */}
-                <span title={resp.fastRate ? `alarm eşiği ${resp.fastRate}×` : undefined}>fast burn{burnWinLabel(resp.fastWindowS)}: {resp.fastBurn.toFixed(2)}×</span>
-                <span title={resp.slowRate ? `alarm eşiği ${resp.slowRate}×` : undefined}>slow burn{burnWinLabel(resp.slowWindowS)}: {resp.slowBurn.toFixed(2)}×</span>
+                <span title={resp.fastRate ? tf('slo.burn.alarm', lang, { x: multiplier(resp.fastRate, lang, 2) }) : undefined}>{tf('slo.burn.fast', lang, { w: burnWinLabel(resp.fastWindowS), x: multiplier(resp.fastBurn, lang, 2) })}</span>
+                <span title={resp.slowRate ? tf('slo.burn.alarm', lang, { x: multiplier(resp.slowRate, lang, 2) }) : undefined}>{tf('slo.burn.slow', lang, { w: burnWinLabel(resp.slowWindowS), x: multiplier(resp.slowBurn, lang, 2) })}</span>
                 {resp.status && (
                   <>
                     <span>SLI: {(resp.status.sli * 100).toFixed(3)}%</span>

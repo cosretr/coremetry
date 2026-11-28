@@ -1650,11 +1650,11 @@
  },
  {
   "field": "headline",
-  "tr": "svc-a: custom_kind — x (1,5×)",
+  "tr": "svc-a: sinyal — x (1,5×)",
   "msg": {
    "k": "h.ev.p.x",
    "a": {
-    "label": "custom_kind",
+    "labelK": "evl.signal",
     "pat": "x",
     "rX": 1.5,
     "sp": "svc-a: "
@@ -1696,11 +1696,11 @@
  },
  {
   "field": "headline",
-  "tr": "svc-a: ML metric_cpu — cpu (3,3×)",
+  "tr": "svc-a: ML sinyali — cpu (3,3×)",
   "msg": {
    "k": "h.ev.p.x",
    "a": {
-    "label": "ML metric_cpu",
+    "labelK": "evl.ml",
     "pat": "cpu",
     "rX": 3.3,
     "sp": "svc-a: "

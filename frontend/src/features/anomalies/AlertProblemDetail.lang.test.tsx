@@ -141,7 +141,7 @@ describe('Problem detayı — İngilizce arayüz (v0.10.2284)', () => {
       'What can be done', 'Slow traces', '≥ 500 ms (threshold), problem window', 'Logs (errors only)', 'Service page',
       'Recent history', 'Technical evidence', 'Impact', '~12 failed requests/min · 2 callers (verified)', 'Confidence', 'MEDIUM',
       'Source', 'span', 'sampled', 'Why we assess it this way', 'Context', '(does not affect priority)', 'Next step',
-      '(suggestion — the system changes nothing)', 'Rule', 'Name', 'Id', 'Severity', '≡ Logs (errors only)', '≡ Logs (patterns)',
+      '(suggestion — the system changes nothing)', 'Details', '≡ Logs (errors only)', '≡ Logs (patterns)',
       'service, problem window, Patterns panel open', 'Log evidence', 'ERROR+ patterns, problem window · loads when opened',
       'Notifications', 'has a runbook link', 'CoSRE conversations',
     ]) expect(r.text, en).toContain(en);
@@ -186,7 +186,7 @@ describe('Problem detayı — Türkçe arayüzde metin aynen (v0.10.2284)', () =
       "Yavaş trace'ler", '≥ 500 ms (eşik), problem penceresi', 'Loglar (yalnız hatalar)', 'Servis sayfası', 'problem penceresiyle',
       'Kısa geçmiş', 'Teknik kanıt', 'Etki', '~12 hatalı istek/dk · 2 çağıran (doğrulanmış)', 'Ne zamandan beri', 'Güven', 'ORTA',
       'Kaynak', 'örneklenmiş', 'Neden böyle değerlendiriyoruz', 'Bağlam', '(önceliği etkilemez)', 'Sonraki adım',
-      '(öneri — sistem hiçbir şeyi değiştirmez)', 'Kural', 'Ad', 'Kimlik', 'Şiddet', '≡ Logs (yalnız hatalar)', '≡ Loglar (desenler)',
+      '(öneri — sistem hiçbir şeyi değiştirmez)', 'Ayrıntılar', '≡ Logs (yalnız hatalar)', '≡ Loglar (desenler)',
       'service, problem window, Desenler paneli açık', 'Log kanıtı', 'ERROR+ desenler, problem penceresi · açılınca yüklenir',
       'Bildirim', 'runbook bağlantısı var', 'CoSRE sohbetleri',
     ]) expect(r.text, tr).toContain(tr);

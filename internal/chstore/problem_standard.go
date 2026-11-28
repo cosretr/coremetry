@@ -1174,20 +1174,22 @@ func subjectAnomalyFamily(pattern string) string {
 	return StdFamilyRule
 }
 
-// StandardizeAnomalyEvent — SAF: anomaly_events satırı (Problem değil; R1'de
-// bildirim hunisine girmez — replay "huni dışı" diye ayrı sayar).
-func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
-	now := f.now()
-	fam := StdFamilyRule
-	label := e.Kind
-	labelArg, labelVal := "label", e.Kind // v0.10.2299 — etiketin anahtar ikizi
+// anomalyEventLabel — SAF: anomali olayının ailesi ve insan okunur etiketi
+// (StandardizeAnomalyEvent ve AnomalyEventHeadline ortak çekirdeği).
+func anomalyEventLabel(e AnomalyEvent) (fam, label, labelArg, labelVal string, isML bool) {
+	// v0.10.2487 (entity tutarlılığı dilim 3, §1.4) — ham tür / dedektör
+	// kimliği ("heap", "ML svc_error_rate") cümleye girmez: tanınmayan tür
+	// düz "sinyal", ML olayı "ML sinyali"; kimlik std.Kind'da (Ayrıntılar).
+	fam = StdFamilyRule
+	label = "sinyal"
+	labelArg, labelVal = "labelK", "evl.signal" // v0.10.2299 — etiketin anahtar ikizi
 	// v0.10.2082 — ML olayı aynı satır şeklinde gelir (kind "ml:<dedektör>",
 	// ListAnomalyFeed): aile / etiket / kaynak dedektör adından, ayrıntı ML
 	// olay sayfası.
-	kind, isML := strings.CutPrefix(e.Kind, MLAnomalyKindPrefix)
+	var kind string
+	kind, isML = strings.CutPrefix(e.Kind, MLAnomalyKindPrefix)
 	if isML {
-		label = "ML " + kind
-		labelVal = label
+		label, labelVal = "ML sinyali", "evl.ml"
 		if kind == "new_template" {
 			fam = StdFamilyError
 		}
@@ -1212,7 +1214,14 @@ func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
 		fam, label = subjectAnomalyFamily(e.Pattern), "özne sapması"
 		labelArg, labelVal = "labelK", "evl.subject"
 	}
-	std := ProblemStandard{Family: fam, Kind: "anomaly_event." + e.Kind, Subject: e.Service, Operation: e.Pattern}
+	return fam, label, labelArg, labelVal, isML
+}
+
+// AnomalyEventHeadline — v0.10.2487 (entity tutarlılığı dilim 3): olayın
+// standart manşeti (TR metin + EN anahtarı). Inbox satırının Title'ı ve
+// standardın Headline'ı AYNI cümle; ham "kind · pattern" kullanıcıya gitmez.
+func AnomalyEventHeadline(e AnomalyEvent) (string, *StdMsg) {
+	_, label, labelArg, labelVal, _ := anomalyEventLabel(e)
 	h := subjectPrefix(e.Service) + label
 	hk := "h.ev"
 	if e.Pattern != "" {
@@ -1226,8 +1235,18 @@ func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
 		h += " (" + trRatio(e.PeakRatio) + ")"
 		hk += ".x"
 	}
-	std.Headline = clipHeadline(h)
-	std.HeadlineMsg = stdM(hk, "sp", subjectPrefix(e.Service), labelArg, labelVal, "pat", e.Pattern, "rX", e.PeakRatio)
+	return clipHeadline(h), stdM(hk, "sp", subjectPrefix(e.Service), labelArg, labelVal, "pat", e.Pattern, "rX", e.PeakRatio)
+}
+
+// StandardizeAnomalyEvent — SAF: anomaly_events satırı (Problem değil; R1'de
+// bildirim hunisine girmez — replay "huni dışı" diye ayrı sayar).
+func StandardizeAnomalyEvent(e AnomalyEvent, f StdFacts) ProblemStandard {
+	now := f.now()
+	fam, _, _, _, isML := anomalyEventLabel(e)
+	kind := strings.TrimPrefix(e.Kind, MLAnomalyKindPrefix)
+	std := ProblemStandard{Family: fam, Kind: "anomaly_event." + e.Kind, Subject: e.Service, Operation: e.Pattern}
+	std.Headline, std.HeadlineMsg = AnomalyEventHeadline(e)
+	known := AnomalyRatioKnown(e)
 	impactText := "normalin " + trRatio(e.PeakRatio)
 	impactMsg := stdM("imp.ratio", "rX", e.PeakRatio)
 	if AnomalyBaselineless(e) {

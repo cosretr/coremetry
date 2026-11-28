@@ -128,7 +128,7 @@ describe('formatUnityRatchet (denetim M5/M6, yalnız aşağı)', () => {
 });
 
 // ── Tabanlar (v0.10.2484, dilim 1 sonu ölçümü) ────────────────────────────
-const TOTAL_RAW_PRODUCT = 655; // v0.10.2484 dilim 1: 766 → 655 (aynı tanımla v0.10.2483 ölçümü 766)
+const TOTAL_RAW_PRODUCT = 648; // v0.10.2487 dilim 3: 655 → 648; v0.10.2484 dilim 1: 766 → 655 (aynı tanımla v0.10.2483 ölçümü 766)
 const TOTAL_RAW_ADMIN = 118; // hedef dışı (yönetim), yalnız aşağı
 const TOTAL_DEF_PRODUCT = 137; // v0.10.2484 dilim 1: 146 → 137
 const TOTAL_DEF_ADMIN = 19; // hedef dışı (yönetim), yalnız aşağı
@@ -311,7 +311,7 @@ const CEIL_RAW: Record<string, number> = {
   'pages/PublicTrace.tsx': 1,
   'pages/Rollouts.tsx': 2,
   'pages/search/SearchDetailDrawer.tsx': 4,
-  'pages/Service.tsx': 4,
+  'pages/Service.tsx': 3, // v0.10.2487 dilim 3
   'pages/service/DetailsEndpointsSection.tsx': 4,
   'pages/service/DotnetRuntimePanel.tsx': 3,
   'pages/service/DownstreamTargetsTable.tsx': 2,
@@ -342,7 +342,7 @@ const CEIL_RAW: Record<string, number> = {
   'pages/settings/SpanClusterValuesPanel.tsx': 1,
   'pages/settings/WikiKnowledgeSection.tsx': 1,
   'pages/settings/WikiTestSearch.tsx': 1,
-  'pages/Slos.tsx': 20,
+  'pages/Slos.tsx': 14, // v0.10.2487 dilim 3
   'pages/SlowQueries.tsx': 9,
   'pages/slowqueries/stmtDetailSections.tsx': 9,
   'pages/Trace.tsx': 3,

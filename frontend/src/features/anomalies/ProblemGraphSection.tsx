@@ -16,6 +16,7 @@ import { useProblemGraph } from '@/lib/queries/problems';
 import { graphCounts, graphSectionMode, type GraphT } from '@/lib/problemGraph';
 import { ProblemGraphMembers, ProblemGraphNearMisses } from '@/components/coremetry/problems/ProblemGraphTable';
 import { BlastTable, OriginEvidence, OriginLine } from '@/components/coremetry/problems/ProblemOriginBlocks';
+import { HelpTip } from '@/components/coremetry/HelpTip';
 import { FrequentChip, RepeatBlock, type LagPattern } from '@/components/coremetry/problems/ProblemRepeatBlock';
 import { Sect } from './detailSections';
 
@@ -71,12 +72,12 @@ export function ProblemGraphSection({ problemId }: { problemId: string }) {
   const d = q.data;
   const mode = graphSectionMode(d);
   if (!d || !mode) return null;
-  const note = <p className="pd-pivot-note" data-testid="pg-shadow-note">{t('pg.shadowNote')}</p>;
+  // v0.10.2487 (dilim 3) — gölge açıklaması kalıcı paragraf değil, başlıkta (?) balonu.
+  const note = <HelpTip text={t('pg.shadowNote')} testId="pg-shadow-note" />;
   if (mode === 'near') {
     return (
       <div data-testid="pg-section">
-        <Sect title={t('pg.near.title')} sub={`${t('pg.near.sub')} · ${t('pg.shadowBadge')}`}>
-          {note}
+        <Sect title={t('pg.near.title')} sub={<>{`${t('pg.near.sub')} · ${t('pg.shadowBadge')}`} {note}</>}>
           <ProblemGraphNearMisses near={d.nearMisses} t={t} clock={clockHM} />
         </Sect>
       </div>
@@ -85,8 +86,7 @@ export function ProblemGraphSection({ problemId }: { problemId: string }) {
   const c = graphCounts(d);
   return (
     <div data-testid="pg-section">
-      <Sect title={t('pg.title')} sub={`${t('pg.sub', { n: c.entities, r: c.rules })} · ${t('pg.shadowBadge')}`}>
-        {note}
+      <Sect title={t('pg.title')} sub={<>{`${t('pg.sub', { n: c.entities, r: c.rules })} · ${t('pg.shadowBadge')}`} {note}</>}>
         <Suspense fallback={null}>
           <ProblemGraphDiagram members={d.members} origin={d.origin} t={t} clock={clockHM} />
         </Suspense>
@@ -96,13 +96,13 @@ export function ProblemGraphSection({ problemId }: { problemId: string }) {
         <div className="pd-cols pd-cols-11">
           <div className="pd-col">
             {d.origin.blast && (
-              <Sect title={t('pg.blast.title')} sub={`${t('pg.blast.sub')} · ${t('pg.shadowBadge')}`}>
+              <Sect title={t('pg.blast.title')} sub={<>{`${t('pg.blast.sub')} · ${t('pg.shadowBadge')}`} <HelpTip text={t('pg.blast.note')} /></>}>
                 <BlastTable origin={d.origin} t={t} />
               </Sect>
             )}
           </div>
           <div className="pd-col">
-            <Sect title={t('pg.ev.title')} sub={`${t('pg.ev.sub')} · ${t('pg.shadowBadge')}`}>
+            <Sect title={t('pg.ev.title')} sub={<>{`${t('pg.ev.sub')} · ${t('pg.shadowBadge')}`} <HelpTip text={t('pg.ev.hypoNote')} /></>}>
               <OriginEvidence origin={d.origin} t={t} clock={clockHM} />
             </Sect>
           </div>

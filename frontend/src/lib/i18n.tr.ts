@@ -2945,6 +2945,7 @@ export const TR: Record<string, string> = {
   'pd.displayId.title': 'Görüntü kimliği — kopyalamak için tıkla; palete yazınca bu problem açılır',
   'pd.recent': 'Kısa geçmiş',
   'pd.tech': 'Teknik kanıt',
+  'pd.details': 'Ayrıntılar',
   'pd.rule': 'Kural',
   'pd.rule.name': 'Ad',
   'pd.rule.id': 'Kimlik',
@@ -5138,4 +5139,14 @@ export const TR: Record<string, string> = {
   'sampling.corrected': 'örnekleme düzeltilmiş',
   'sampling.partial': 'örnekleme düzeltilmiş · {time} öncesi düzeltilmemiş',
   'sampling.corrected.title': 'Span sayıları, hata oranı ve gecikme upstream örneklemeye göre ağırlıklandırıldı (ingest.sampling = on): değerler saklanan span değil, temsil ettikleri istek. Düzeltme {time} itibarıyla; öncesi saklanan span sayısıdır.',
+  // v0.10.2487 — entity tutarlılığı dilim 3 (jargon → düz cümle)
+  'inbox.anRatio': 'tepe normalin {peak} · şimdi {now}',
+  'slo.burn': 'bütçe tüketimi {x}',
+  'slo.burn.title': 'Hata bütçesi izin verilen hızın {x} katıyla tükeniyor (1× üstü = izin verilenden hızlı)',
+  'slo.col.burn': 'Bütçe tüketimi',
+  'slo.fc.safe': 'Bütçe tüketimi {x}: izin verilen hızda ya da altında, bütçe sabit',
+  'slo.fc.exhaust': 'Bütçe tüketimi {x}: bu hızla hata bütçesi ~{h} sa içinde biter',
+  'slo.burn.fast': 'kısa pencere tüketimi{w}: {x}',
+  'slo.burn.slow': 'uzun pencere tüketimi{w}: {x}',
+  'slo.burn.alarm': 'alarm eşiği {x}',
 };

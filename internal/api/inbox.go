@@ -2658,6 +2658,7 @@ func exceptionPriorityAtMsg(g chstore.ExceptionGroup, cfg chstore.ExceptionTriag
 // consistency only.
 func anomalyToInbox(e chstore.AnomalyEvent) InboxItem {
 	prio, reason, reasonMsg := anomalyPriorityMsg(e)
+	title, _ := chstore.AnomalyEventHeadline(e)
 	sev := "info"
 	if prio == "P1" {
 		sev = "critical"
@@ -2673,7 +2674,7 @@ func anomalyToInbox(e chstore.AnomalyEvent) InboxItem {
 		PriorityReasonMsg: reasonMsg,
 		Severity:          sev,
 		Service:           e.Service,
-		Title:             fmt.Sprintf("%s · %s", e.Kind, e.Pattern),
+		Title:             title, // v0.10.2487 — standart manşetle aynı cümle (ham kind · pattern değil)
 		Description:       inboxTruncate(e.Sample, 240),
 		StartedAt:         e.StartedAt,
 		LastSeen:          e.LastSeen,

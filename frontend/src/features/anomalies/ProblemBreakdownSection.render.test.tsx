@@ -179,7 +179,7 @@ describe('ProblemBreakdownBlocks', () => {
     expect(rows[1].textContent).toContain('40 ms');
     expect(rows[1].textContent).toContain('1,3 sn');
     expect(rows[1].textContent).not.toContain('sürüyor');
-    expect(q('[data-testid="pbd-dep-note"]')!.textContent).toContain('kanıtlanmış neden değil');
+    expect(q('[data-testid="pbd-dep-note"]')!.getAttribute('aria-label')).toContain('kanıtlanmış neden değil');
   });
 
   it('bir blok eksik: o blok çizilmez, ötekiler yerinde', async () => {
@@ -217,7 +217,8 @@ describe('ProblemBreakdownBlocks', () => {
     expect(s).toContain('normal unknown');
     expect(s).toContain('Started 6 min after version v2.14.1.');
     expect(s).toContain('1.3 s');
-    expect(s).toContain('not a proven cause');
+    // v0.10.2487 (dilim 3) — kaynak açıklaması (?) balonunun erişilebilir adında.
+    expect(q('[data-testid="pbd-dep-note"]')!.getAttribute('aria-label')).toContain('not a proven cause');
   });
 });
 

@@ -18,11 +18,13 @@ import { Link } from 'react-router';
 import { t, useLang } from '@/lib/i18n'; // v0.10.2284 — kart etiketleri arayüz dilinde (TR aynı)
 import { useProblemStandard } from '@/lib/queries';
 import {
-  splitStdHeadline, stdImpactSecondary, stdRequestImpact, fmtStdClock, stdDurationLine, stdGateSummary, stdGateTitle,
+  stdImpactSecondary, stdRequestImpact, fmtStdClock, stdDurationLine, stdGateSummary, stdGateTitle,
   stdSourceName, stdSamplingNote, stdNextHref, stdConfidenceLabel,
-  stdHeadlineView, stdImpactView, stdEvidenceView, stdNextView, stdContextView, stdReasonsView,
+  stdImpactView, stdEvidenceView, stdNextView, stdContextView, stdReasonsView,
 } from '@/lib/problemStandardView';
 import { OrigLang } from './OrigLang';
+import { problemTitle } from './problemTitle'; // v0.10.2487
+import { ProblemTitleText } from './ProblemTitleText';
 import { StdOriginLine } from './StdOriginLine';
 import { ImpactSummaryLine } from './ImpactSummaryLine'; // v0.10.2482
 import type { ProblemStandard } from '@/lib/types';
@@ -45,9 +47,6 @@ export function ProblemStandardHeader({ stdRef, fallback, showTitle = true, fact
 /** Saf çizim (test edilebilir; veri çağırandan). */
 export function ProblemStandardBlock({ std, showTitle = true, factsOnly = false }: { std: ProblemStandard; showTitle?: boolean; factsOnly?: boolean }) {
   const lang = useLang();
-  const head = splitStdHeadline(std, lang);
-  // v0.10.2299 (S2) — EN'de anahtardan; çizilemeyen sunucu metni özgün dil işaretiyle.
-  const headOrig = stdHeadlineView(std, lang).orig;
   // v0.10.2380 — istek bölümlü etkide kart değeri kısa biçim (satırla aynı), pay alt satırda.
   const req = stdRequestImpact(std, lang);
   const impact = req ? { text: req.main, orig: req.orig } : stdImpactView(std, lang);
@@ -63,7 +62,8 @@ export function ProblemStandardBlock({ std, showTitle = true, factsOnly = false 
     <section className="std-head" aria-label={t('pd.std.aria', lang)}>
       {showTitle && (
         <h1 className="std-head__title">
-          {head.subject && <><span className="std-subject">{head.subject}</span> — </>}{headOrig ? <OrigLang>{head.rest}</OrigLang> : head.rest}
+          {/* v0.10.2487 (dilim 3) — liste satırı ve detay başlığıyla aynı çift + çizim. */}
+          <ProblemTitleText title={problemTitle({ std }, lang)} />
         </h1>
       )}
       {/* v0.10.2473 — bağlı kümenin kökeni (liste satırıyla aynı çekirdek); yoksa hiçbir şey. */}

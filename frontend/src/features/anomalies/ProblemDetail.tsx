@@ -22,7 +22,7 @@ import { AffectedEntitiesList } from '@/components/AffectedEntitiesList'; // v0.
 import { ProblemRunbookPanel } from '@/components/ProblemRunbookPanel';
 import { ProblemNotifyPanel } from './ProblemNotifyPanel';
 import { OrigLang } from './OrigLang'; // v0.10.2298 — LLM özeti EN arayüzde özgün dil etiketiyle
-import { stdHeadlineView, prioReasonView, detailPrioReasonMsg, problemTitleView } from '@/lib/problemStandardView'; // v0.10.2299 — manşet EN anahtardan; v0.10.2300 gerekçe + yerleşik kural adı
+import { prioReasonView, detailPrioReasonMsg, problemTitleView } from '@/lib/problemStandardView'; // v0.10.2299 — manşet EN anahtardan; v0.10.2300 gerekçe + yerleşik kural adı
 import { IconSparkles } from '@/components/icons';
 import { TimeChart } from '@/components/charts/TimeChart';
 import type { ChartTimeRegion } from '@/lib/chart/overlays';
@@ -64,7 +64,9 @@ import { ExceptionSampleRow } from './ExceptionSampleRow'; // v0.10.1104
 import { SubjectLink } from '../../components/SubjectLink';
 import { subjectKind, derivedTeamTitle, isAnomalyProblem, isAnomalyDetectorRule } from '../../lib/problemSubject';
 import { Sect, SignalLink, DeployBox, DetailTitle, DetailMeta, type DetailMetaItem } from './detailSections'; // v0.10.1032; başlık/üst veri v0.10.2126
-import { alertProblemSummary, exceptionOpenForLine, problemWhenLine } from './detailSummary';
+import { exceptionOpenForLine, problemWhenLine } from './detailSummary';
+import { problemTitle } from './problemTitle'; // v0.10.2487 — liste + detay tek çift
+import { ProblemTitleText } from './ProblemTitleText';
 import { alertWhatText, alertWhoText, alertCause } from './alertDetailBoxes'; // v0.10.2127 (S7) // v0.10.1032; problemWhenLine v0.10.1054
 import { AlertMetricChartSection } from './AlertMetricChartSection'; // v0.10.1064
 import { PromotedLogPatternCount, PromotedPatternLogsLink } from './PromotedPatternSection'; // v0.10.1106
@@ -78,7 +80,7 @@ import { Badge } from '@/components/ui/Badge';
 import { OracleGroupPanel } from './OracleGroupPanel';
 import { isOracleGroup, isSyntheticOracleService } from './oracleGroup';
 import { useBranding } from '@/lib/branding'; // v0.10.1108 — Oracle grubu görünen adı
-import { t as tl, tf, useLang, useT, type Lang } from '@/lib/i18n'; // v0.10.1326 — "Ask CoSRE" etiketi; v0.10.2284 Problem detayı (pd.*)
+import { t as tl, tf, useLang, useT } from '@/lib/i18n'; // v0.10.1326 — "Ask CoSRE" etiketi; v0.10.2284 Problem detayı (pd.*)
 // v0.10.1032 — triyaj eylemleri tam sayfaya taşındı (çekmece atlanınca
 // "Gerçek problem / Problem değil" ve Assign… kaybolmasın).
 import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
@@ -129,13 +131,6 @@ export { TriageStatusBadge, ProblemStatusBadge } from './statusTone';
 // "copy from the address bar" for an operator pasting into Slack.
 
 // Esc = back — same muscle memory the old drawer had.
-// v0.10.2299 (S2) — detay başlığının manşeti: TR sunucu metni aynen; EN
-// anahtardan, çizilemezse (ML özeti / olay adı) özgün dil işaretiyle.
-function StdHeadlineText({ std, lang }: { std: ProblemStandard; lang: Lang }) {
-  const v = stdHeadlineView(std, lang);
-  return v.orig ? <OrigLang>{v.text}</OrigLang> : <>{v.text}</>;
-}
-
 function useEscBack(onBack: () => void) {
   // v0.9.950 (E2/Ö28) — Esc KATMAN. Detayın ÜSTÜNDE açılan bir modal
   // (exemplar, paylaşım) Esc'i önce alır; geri gitmek en alttaki iş.
@@ -1218,8 +1213,9 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
       <DetailTitle prefix={problem.priority
         ? <PriorityBadge p={problem.priority} reason={prV.text} />
         : undefined}>
-        {/* v0.10.2299 (S2) — EN'de manşet anahtardan; serbest metin özgün dil işaretiyle. */}
-        {std?.headline ? <StdHeadlineText std={std} lang={lang} /> : alertProblemSummary(problem, lang)}
+        {/* v0.10.2487 (dilim 3) — liste satırıyla AYNI saf çift (problemTitle);
+            EN'de manşet anahtardan, serbest metin özgün dil işaretiyle. */}
+        <ProblemTitleText title={problemTitle({ ...problem, std }, lang)} />
         {/* v0.10.2281 (S3) — nötr "sık tekrar eden" gölge çipi; sık değilse yok. */}
         <ProblemFrequentChip problemId={problem.id} />
       </DetailTitle>
@@ -1290,7 +1286,10 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
         <ProblemCoSRESection problemId={problem.id} />
         {/* v0.10.2163 — birleşen olayların tam listesi + ham değerler (üyesi yoksa bölüm yok). */}
         <ProblemEventEvidence problemId={problem.id} />
-        <Sect title={tl('pd.rule', lang)}>
+        {/* v0.10.2487 (dilim 3, denetim §1.4) — kural kimliği ve iç adlar
+            kullanıcıya dönük cümlelerde değil, yalnız bu kapalı başlayan
+            "Ayrıntılar" alanında (kimlik mono). */}
+        <Sect title={tl('pd.details', lang)} collapsible>
           <dl className="pd-rule">
             <dt>{tl('pd.rule.name', lang)}</dt><dd>{titleV.text ? (titleV.orig ? <OrigLang>{titleV.text}</OrigLang> : titleV.text) : '—'}</dd>
             <dt>{tl('pd.rule.id', lang)}</dt><dd className="mono">{problem.ruleId || '—'}</dd>

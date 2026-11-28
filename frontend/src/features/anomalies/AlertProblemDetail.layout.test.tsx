@@ -477,7 +477,12 @@ describe('AlertProblemDetail — dört kutu + Teknik kanıt kapalı (v0.10.2127,
     const tech = sect(el, 'Teknik kanıt')!;
     act(() => { toggleOf(tech)!.click(); });
     await settle();
-    expect(sect(el, 'Kural')!.textContent).toContain('builtin:error_rate');
+    // v0.10.2487 (dilim 3) — kural kimliği yalnız kapalı "Ayrıntılar" alanında, mono.
+    const det = sect(el, 'Ayrıntılar')!;
+    expect(det.textContent).not.toContain('builtin:error_rate');
+    act(() => { toggleOf(det)!.click(); });
+    await settle();
+    expect(sect(el, 'Ayrıntılar')!.querySelector('dd.mono')!.textContent).toBe('builtin:error_rate');
     expect(el.querySelector('[data-rcpanel]')).not.toBeNull();
   });
 });
