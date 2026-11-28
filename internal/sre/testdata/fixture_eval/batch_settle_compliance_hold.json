@@ -1,0 +1,27 @@
+{
+  "about": "batch-settle: günde bir koşan toplu iş; koşunun %100'ü uyum beklemesi / kuyruğa erteleme reddiyle bitiyor. Hacim çok düşük (pencerede 4 span).",
+  "problem": {"id": "fx-batch-settle-1", "ruleId": "rule:batch-settle:error_rate", "ruleName": "Error rate", "severity": "critical",
+    "service": "batch-settle", "metric": "error_rate", "value": 100, "threshold": 5},
+  "sweep": {"ok": true,
+    "verdict": {"label": "Sorunlu", "reasons": ["settle.daily-run hata %100"]},
+    "scanned": {"pods": 1, "operations": 2},
+    "findings": [{"rank": 1, "kind": "operation", "name": "settle.daily-run", "level": "crit", "reasons": ["hata %100 (4 çağrı)"]}],
+    "sections": [{"name": "operations", "state": "ok"}, {"name": "pods", "state": "ok"}, {"name": "jvm", "state": "empty"}, {"name": "patterns", "state": "empty"}],
+    "data": {"pods": [{"pod": "batch-settle-28f1-b1", "cpuLimitPct": 12, "memLimitPct": 20, "level": "ok"}]}},
+  "deploys": {"section": {"name": "deploys", "state": "ok", "summary": "pencerede değişiklik yok"}},
+  "edges": [
+    {"source": "batch-settle", "target": "payments", "callCount": 4, "errorRate": 0, "avgMs": 51},
+    {"source": "batch-settle", "target": "q:settle-review", "callCount": 4, "errorRate": 0, "avgMs": 3}],
+  "changes": [
+    {"service": "batch-settle", "rateDeltaPct": 0, "errDeltaPct": 100, "baselineP99Ms": 900, "currentP99Ms": 910, "p99DeltaPct": 1}],
+  "exemplarTraceId": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b01",
+  "pivot": {"ok": true, "message": "trace okundu",
+    "trace": {"traceId": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b01", "root": "settle.daily-run", "service": "batch-settle", "wallMs": 910, "spanCount": 5, "errorSpans": 1,
+      "criticalPath": [
+        {"span_id": "s1", "service": "batch-settle", "name": "settle.daily-run", "self_on_path_ms": 840},
+        {"span_id": "s2", "service": "batch-settle", "name": "publish q:settle-review", "self_on_path_ms": 3}]}},
+  "spike": {"ok": true, "message": "artış doğrulanamadı: taban pencerede log yok (günlük iş)"},
+  "events": [],
+  "errorOps": [{"name": "settle.daily-run", "spans": 4, "errors": 4}],
+  "exceptions": [{"type": "SettlementDeferredException", "message": "Kayıt uyum incelemesi bekliyor; ertelendi ve inceleme kuyruğuna alındı (kural: manuel onay gerekli)", "service": "batch-settle", "count": 4, "sampleTraceId": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b01"}]
+}

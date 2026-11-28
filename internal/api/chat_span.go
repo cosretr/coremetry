@@ -49,6 +49,9 @@ type chatSpan struct {
 	// açılış/kapanış noktalarında ölçülür (ai_calls loop_model_ms / loop_tool_ms).
 	modelDur time.Duration
 	toolDur  time.Duration
+	// v0.10.2492 — modele gösterilen katalog / istem boyu (chat_loop_catalog.go);
+	// aynı birikimci ctx'te de taşınır, loopTurnOne doldurur.
+	shown *loopCatalog
 }
 
 // withLoopTimes — döngü satırına model / araç süre toplamı (ms, uint32 tavanlı).
@@ -84,7 +87,8 @@ func (s *Server) beginChatSpan(ctx context.Context, exchangeID string) (context.
 			attribute.String("coremetry.ai.surface", meta.Surface),
 			attribute.String("coremetry.ai.exchange_id", exchangeID),
 		))
-	return ctx, &chatSpan{s: s, span: span, tierV: "loop"}
+	shown := &loopCatalog{} // v0.10.2492 — döngü koşmazsa boş kalır, span'a yazılmaz
+	return withLoopCatalog(ctx, shown), &chatSpan{s: s, span: span, tierV: "loop", shown: shown}
 }
 
 // tier — hangi kademe cevapladı (guided | drawer | rag | intent | loop).
@@ -112,6 +116,7 @@ func (c *chatSpan) end() {
 		attribute.Int("gen_ai.usage.cache_read.input_tokens", int(c.cached)), // v0.10.807
 		attribute.String("coremetry.ai.status", statusOf(c.err)),
 	)
+	c.span.SetAttributes(c.shown.spanAttrs()...) // v0.10.2492 — yalnız döngü koştuysa
 	if c.err != nil {
 		c.span.RecordError(fmt.Errorf("%s", selfobs.SafeAttr(c.err.Error())))
 		c.span.SetStatus(codes.Error, "chat failed")

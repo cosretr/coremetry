@@ -254,6 +254,11 @@ type CallRecord struct {
 	LoopCompactedResults  uint16 // v0.10.2340 — proaktif tur bütçesi
 	LoopResearchModel     string // v0.10.2365 — profil ayrımı (S6)
 	LoopResearchTokens    uint32 // v0.10.2365
+	// v0.10.2492 — modele gösterilen katalog ve istem boyu (LoopUsage; 0 = bilinmiyor).
+	LoopToolsOffered    uint16
+	LoopToolsOfferedMin uint16
+	LoopCatalogBytes    uint32
+	LoopSystemBytes     uint32
 }
 
 // metaKey is the unexported type for ctx.WithValue lookups so other

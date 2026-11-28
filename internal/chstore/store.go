@@ -3520,6 +3520,14 @@ func canonicalTables(sd, ld, md int) []string {
 		// AYRI probe (ikinci kolona bakar).
 		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_research_model String DEFAULT ''`,
 		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_research_tokens UInt32 DEFAULT 0`,
+		// v0.10.2492 (yakınsama audit'i C1) — modele gösterilen: ilk turun araç
+		// sayısı, araç çağırabilen turların en küçük araç sayısı, ilk turun
+		// katalog baytı (açıklama + JSON şema) ve sistem istemi baytı.
+		// 0 = bilinmiyor; aynı iki-boot sözleşmesi, AYRI probe (dördü birden).
+		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_tools_offered UInt16 DEFAULT 0`,
+		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_tools_offered_min UInt16 DEFAULT 0`,
+		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_catalog_bytes UInt32 DEFAULT 0`,
+		`ALTER TABLE ai_calls ADD COLUMN IF NOT EXISTS loop_system_bytes UInt32 DEFAULT 0`,
 
 		// rca_verdicts — kök-neden hakem kararının KALICI kaydı
 		// (v0.9.591). Öncesinde verdict istek başına üretilip
@@ -5523,6 +5531,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	s.probeAICallsRetryColumn(ctx)       // v0.10.2321
 	s.probeAICallsCompactColumn(ctx)     // v0.10.2340
 	s.probeAICallsResearchColumn(ctx)    // v0.10.2365
+	s.probeAICallsShownColumns(ctx)      // v0.10.2492
 	s.probeAIFeedbackCallColumns(ctx)    // v0.10.1280
 	s.probeCosreInteractionsColumns(ctx) // v0.10.1280 tool_evidence; v0.10.1302 + toolset
 

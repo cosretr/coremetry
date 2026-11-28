@@ -38,6 +38,15 @@ type LoopUsage struct {
 	// anlatım profilidir). "" / 0 = ayrım koşmadı.
 	ResearchModel  string
 	ResearchTokens uint32
+	// v0.10.2492 (yakınsama audit'i C1) — modele gösterilen: ilk turun araç
+	// sayısı, katalog baytı (açıklama + JSON şema; mcptools.CatalogSize sayım
+	// tanımı) ve sistem istemi baytı; ToolsOfferedMin araç çağırabilen turların
+	// en küçük araç sayısı (katalog döngü içinde daralırsa ilkinden küçük).
+	// 0 = bilinmiyor.
+	ToolsOffered    uint16
+	ToolsOfferedMin uint16
+	CatalogBytes    uint32
+	SystemBytes     uint32
 }
 
 // WithLoopUsage — sonraki RecordUsage'ın satırına tur bilgisini bağlar.

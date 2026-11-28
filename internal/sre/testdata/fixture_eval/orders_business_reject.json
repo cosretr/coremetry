@@ -1,0 +1,34 @@
+{
+  "about": "orders: hata oranı %12; hatalı span'lerin mesajı beklenen iş kuralı reddi (bakiye yetersiz). Deploy yok, aşağı akış temiz, istek hızı düz.",
+  "problem": {"id": "fx-orders-1", "ruleId": "rule:orders:error_rate", "ruleName": "Error rate", "severity": "critical",
+    "service": "orders", "metric": "error_rate", "value": 12.1, "threshold": 5},
+  "sweep": {"ok": true,
+    "verdict": {"label": "Sorunlu", "reasons": ["POST /orders/confirm hata %12"]},
+    "scanned": {"pods": 3, "operations": 6},
+    "findings": [{"rank": 1, "kind": "operation", "name": "POST /orders/confirm", "level": "crit", "reasons": ["hata %12.1 (önceki %1.9)"]}],
+    "sections": [{"name": "operations", "state": "ok"}, {"name": "pods", "state": "ok"}, {"name": "jvm", "state": "empty"}, {"name": "patterns", "state": "ok"}],
+    "data": {"pods": [
+      {"pod": "orders-6f7d-a1", "cpuLimitPct": 31, "memLimitPct": 44, "level": "ok"},
+      {"pod": "orders-6f7d-a2", "cpuLimitPct": 29, "memLimitPct": 41, "level": "ok"},
+      {"pod": "orders-6f7d-a3", "cpuLimitPct": 33, "memLimitPct": 46, "level": "ok"}]}},
+  "deploys": {"section": {"name": "deploys", "state": "ok", "summary": "pencerede değişiklik yok"}},
+  "edges": [
+    {"source": "orders", "target": "payments", "callCount": 4200, "errorRate": 0.2, "avgMs": 38},
+    {"source": "orders", "target": "inventory", "callCount": 3900, "errorRate": 0.1, "avgMs": 22},
+    {"source": "orders", "target": "db:orders-db", "callCount": 8800, "errorRate": 0, "avgMs": 4}],
+  "changes": [
+    {"service": "orders", "rateDeltaPct": 3, "errDeltaPct": 10.2, "baselineP99Ms": 240, "currentP99Ms": 250, "p99DeltaPct": 4}],
+  "exemplarTraceId": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a01",
+  "pivot": {"ok": true, "message": "trace okundu",
+    "trace": {"traceId": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a01", "root": "POST /orders/confirm", "service": "orders", "wallMs": 61, "spanCount": 9, "errorSpans": 2,
+      "criticalPath": [
+        {"span_id": "s1", "service": "orders", "name": "POST /orders/confirm", "self_on_path_ms": 12},
+        {"span_id": "s2", "service": "payments", "name": "POST /payments/reserve", "self_on_path_ms": 31}]}},
+  "spike": {"ok": true,
+    "spike": {"fromMs": 1773108120000, "toMs": 1773108720000, "source": "detected", "factor": 6.1, "ratePerMinSpike": 610, "ratePerMinBase": 100},
+    "contributors": [
+      {"rank": 1, "dim": "pattern", "value": "Sipariş reddedildi: hesap bakiyesi yetersiz (talep <*> > kullanılabilir <*>)", "spikeCount": 5900, "baseCount": 940, "sharePct": 91, "reason": "artışın %91'i bu desen; önceki pencerede de vardı"}]},
+  "events": [],
+  "errorOps": [{"name": "POST /orders/confirm", "spans": 48000, "errors": 5810}],
+  "exceptions": [{"type": "OrderRejectedException", "message": "Sipariş reddedildi: hesap bakiyesi yetersiz (talep 1250.00 > kullanılabilir 310.40)", "service": "orders", "count": 5810, "sampleTraceId": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a01"}]
+}

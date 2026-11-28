@@ -1,0 +1,24 @@
+{
+  "about": "payments: hata oranı yükselmiş (%18) ama pencerede log yok, temsilci trace saklama dışı, istisna grubu yok. Doğru sonuç: izleme kör noktası, uydurulmuş neden yok.",
+  "problem": {"id": "fx-payments-1", "ruleId": "rule:payments:error_rate", "ruleName": "Error rate", "severity": "critical",
+    "service": "payments", "metric": "error_rate", "value": 18.4, "threshold": 5},
+  "sweep": {"ok": true,
+    "verdict": {"label": "Sorunlu", "reasons": ["POST /payments/authorize hata %18"]},
+    "scanned": {"pods": 2, "operations": 5},
+    "findings": [{"rank": 1, "kind": "operation", "name": "POST /payments/authorize", "level": "crit", "reasons": ["hata %18.4 (önceki %0.6)"]}],
+    "sections": [{"name": "operations", "state": "ok"}, {"name": "pods", "state": "ok"}, {"name": "jvm", "state": "empty"}, {"name": "patterns", "state": "empty"}],
+    "data": {"pods": [
+      {"pod": "payments-3a9b-d1", "cpuLimitPct": 22, "memLimitPct": 38, "level": "ok"},
+      {"pod": "payments-3a9b-d2", "cpuLimitPct": 24, "memLimitPct": 36, "level": "ok"}]}},
+  "deploys": {"section": {"name": "deploys", "state": "ok", "summary": "pencerede değişiklik yok"}},
+  "edges": [
+    {"source": "payments", "target": "db:payments-db", "callCount": 6100, "errorRate": 0, "avgMs": 5}],
+  "changes": [
+    {"service": "payments", "rateDeltaPct": 4, "errDeltaPct": 17.8, "baselineP99Ms": 180, "currentP99Ms": 186, "p99DeltaPct": 3}],
+  "exemplarTraceId": "0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d01",
+  "pivot": {"ok": true, "empty": true, "message": "temsilci trace saklama dışı"},
+  "spike": {"ok": true, "empty": true, "message": "pencerede log yok"},
+  "events": [],
+  "errorOps": [{"name": "POST /payments/authorize", "spans": 30500, "errors": 5610}],
+  "exceptions": []
+}

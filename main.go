@@ -2689,6 +2689,11 @@ func (r aiCallRecorder) RecordCall(ctx context.Context, c copilot.CallRecord) {
 		LoopCompactedResults:  c.LoopCompactedResults, // v0.10.2340
 		LoopResearchModel:     c.LoopResearchModel,    // v0.10.2365
 		LoopResearchTokens:    c.LoopResearchTokens,   // v0.10.2365
+		// v0.10.2492 — modele gösterilen katalog / istem boyu
+		LoopToolsOffered:    c.LoopToolsOffered,
+		LoopToolsOfferedMin: c.LoopToolsOfferedMin,
+		LoopCatalogBytes:    c.LoopCatalogBytes,
+		LoopSystemBytes:     c.LoopSystemBytes,
 	}
 	if err := r.store.InsertAICall(ctx, row); err != nil {
 		log.Printf("[ai-obs] insert call: %v", err)

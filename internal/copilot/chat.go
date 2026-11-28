@@ -216,6 +216,11 @@ func (s *Service) RecordUsage(ctx context.Context, started time.Time, inTok, out
 		LoopCompactedResults:  lu.CompactedResults, // v0.10.2340
 		LoopResearchModel:     lu.ResearchModel,    // v0.10.2365
 		LoopResearchTokens:    lu.ResearchTokens,   // v0.10.2365
+		// v0.10.2492 — modele gösterilen katalog / istem boyu (0 = bilinmiyor)
+		LoopToolsOffered:    lu.ToolsOffered,
+		LoopToolsOfferedMin: lu.ToolsOfferedMin,
+		LoopCatalogBytes:    lu.CatalogBytes,
+		LoopSystemBytes:     lu.SystemBytes,
 	}
 	if status == "error" {
 		rec.ErrorMsg = truncErr(errMsg)

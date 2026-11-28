@@ -1,0 +1,31 @@
+{
+  "about": "inventory: gece yükleme işinin veri kalitesi kapısı düşüyor ama iş devam ediyor; aşağı akış rapor adımları başarılı. Asıl risk devam etmesi (kirli veriden rapor).",
+  "problem": {"id": "fx-inventory-1", "ruleId": "rule:inventory:error_rate", "ruleName": "Error rate", "severity": "critical",
+    "service": "inventory", "metric": "error_rate", "value": 16.7, "threshold": 5},
+  "sweep": {"ok": true,
+    "verdict": {"label": "Sorunlu", "reasons": ["quality-gate.validate hata %100"]},
+    "scanned": {"pods": 1, "operations": 6},
+    "findings": [{"rank": 1, "kind": "operation", "name": "quality-gate.validate", "level": "crit", "reasons": ["hata %100 (1 çağrı)"]}],
+    "sections": [{"name": "operations", "state": "ok"}, {"name": "pods", "state": "ok"}, {"name": "jvm", "state": "empty"}, {"name": "patterns", "state": "ok"}],
+    "data": {"pods": [{"pod": "inventory-load-5c2e-c1", "cpuLimitPct": 48, "memLimitPct": 52, "level": "ok"}]}},
+  "deploys": {"section": {"name": "deploys", "state": "ok", "summary": "pencerede değişiklik yok"}},
+  "edges": [
+    {"source": "inventory", "target": "db:inventory-db", "callCount": 1200, "errorRate": 0, "avgMs": 6},
+    {"source": "inventory", "target": "orders", "callCount": 40, "errorRate": 0, "avgMs": 18}],
+  "changes": [
+    {"service": "inventory", "rateDeltaPct": 2, "errDeltaPct": 16.7, "baselineP99Ms": 3100, "currentP99Ms": 3150, "p99DeltaPct": 2}],
+  "exemplarTraceId": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c01",
+  "pivot": {"ok": true, "message": "trace okundu",
+    "trace": {"traceId": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c01", "root": "inventory.nightly-load", "service": "inventory", "wallMs": 3150, "spanCount": 6, "errorSpans": 1,
+      "criticalPath": [
+        {"span_id": "s1", "service": "inventory", "name": "load.stock-counts", "self_on_path_ms": 1900},
+        {"span_id": "s2", "service": "inventory", "name": "quality-gate.validate", "self_on_path_ms": 120},
+        {"span_id": "s3", "service": "inventory", "name": "report.generate-stock", "self_on_path_ms": 880},
+        {"span_id": "s4", "service": "inventory", "name": "report.publish", "self_on_path_ms": 150}]}},
+  "spike": {"ok": true,
+    "spike": {"fromMs": 1773108120000, "toMs": 1773108720000, "source": "detected", "factor": 1.2, "ratePerMinSpike": 12, "ratePerMinBase": 10},
+    "contributors": []},
+  "events": [],
+  "errorOps": [{"name": "quality-gate.validate", "spans": 1, "errors": 1}],
+  "exceptions": [{"type": "DataQualityThresholdBreached", "message": "Kalite kapısı: 4812 satırın 341'inde SKU boş (eşik %2, gözlenen %7.1); iş devam ediyor", "service": "inventory", "count": 1, "sampleTraceId": "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c01"}]
+}

@@ -175,6 +175,7 @@ func (s *Server) loopTurnOne(ctx context.Context, prompt string, in stepInput, e
 	// v0.10.2340 — bağlam penceresinden tur bütçesi (chat_round_budget.go): spec'ler
 	// tam konuşmadan çözüldükten SONRA; sınırın altında in.Conv aynen gider.
 	conv := s.fitRoundBudget(cctx, emit, sys, in.Conv, specs)
+	loopCatalogFrom(ctx).observe(cctx, sys, specs) // v0.10.2492 — yalnız ölçüm: modele gösterilen katalog / istem boyu (chat_loop_catalog.go)
 	turn, err := s.chatLoopTurn(cctx, sys, conv, specs, emit)
 	roundBudgetFrom(ctx).observe(turn, err)
 	if err == nil && len(turn.ToolCalls) == 0 && in.Kind != stepDegenRetry { // v0.10.2339 — E2: cevap turu → Derin + zorla kipinde tek yeniden üretim kapısı

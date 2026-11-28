@@ -44,7 +44,11 @@ import (
 //
 //	ai.chat        coremetry.ai.exchange_id, .chat.tier (guided|drawer|rag|
 //	               intent|loop), .chat.rounds, .chat.tools, gen_ai.usage.*
-//	ai.chat.turn   coremetry.ai.turn.round, .turn.retry, gen_ai.usage.*
+//	               v0.10.2492 — döngü koştuysa .chat.tools_offered,
+//	               .chat.tools_offered_min, .chat.catalog_bytes,
+//	               .chat.system_bytes (ilk tur; chat_loop_catalog.go)
+//	ai.chat.turn   coremetry.ai.turn.round, .turn.retry, gen_ai.usage.*,
+//	               .turn.tools_offered, .turn.catalog_bytes, .turn.system_bytes
 //	ai.tool        coremetry.ai.tool.name, .tool.origin (native|external),
 //	               .tool.bytes, .tool.ok — arg/çıktı gövdesi YOK
 //	ai.explain     ctx tabanlı ikiz (beginExplainSpanCtx): kademelerin ve
