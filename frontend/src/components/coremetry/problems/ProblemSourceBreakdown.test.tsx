@@ -108,14 +108,14 @@ describe('ProblemSourceBreakdown', () => {
   it('aile sütunu gerçek genişlikte; ilk hücre aile adını basar', async () => {
     await mount('/inbox?view=breakdown', <ProblemSourceBreakdownView />);
     const cols = [...document.querySelectorAll('colgroup col:not([data-dt-hidden-slot])')] as HTMLTableColElement[];
-    expect(cols.length).toBe(11);
+    expect(cols.length).toBe(13); // v0.10.2484 — + vaka etiketli / vaka doğru
     expect(parseInt(cols[0].style.width, 10)).toBeGreaterThanOrEqual(180);
     // Esneyen yalnız son sütun (en çok açan servisler).
     expect(cols.map(c => c.style.width).filter(w => w === 'auto')).toEqual(['auto']);
     expect(cols[cols.length - 1].style.width).toBe('auto');
-    // Sabit sütunlar + esneyenin tabanı (140) çekmeceye (1360) sığar.
+    // Sabit sütunlar + esneyenin tabanı (140) çekmeceye (1440) sığar.
     const fixed = cols.slice(0, -1).reduce((s, c) => s + parseInt(c.style.width, 10), 0);
-    expect(fixed + 140).toBeLessThanOrEqual(1360);
+    expect(fixed + 140).toBeLessThanOrEqual(1440);
     // Sığdırma (dar çekmecede öncelik-3 gizleme) yalnız .table-wrap kabını ölçer.
     expect(document.querySelector('.table-wrap > div > table, .table-wrap table')).toBeTruthy();
     const first = document.querySelector('tbody tr td');

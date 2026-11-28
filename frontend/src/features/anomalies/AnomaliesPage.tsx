@@ -58,6 +58,7 @@ import { useBranding } from '@/lib/branding'; // v0.10.1108 — Oracle grubu gö
 // durum; eski `?tab=open` adresi ayrıştırıcıda inbox'a çevrilir.
 import { EXCEPTION_TABS as TABS, EXCEPTION_TAB_DEFAULT, exceptionTabHint, resolveExceptionTab } from './tabs';
 import { spreadOf, spreadTitle, defaultFloorTitle, spreadOffFloorTitle, readFloorMeta, type FloorMeta } from './spread'; // v0.10.949
+import { useStripNotifySrc } from '@/lib/notifySrc'; // v0.10.2484 — bildirim kaynağı işareti yükten sonra düşer
 
 // Exception-inbox sort keys the SERVER understands (v0.8.318 — the
 // ORDER BY runs in ClickHouse across the whole paginated set). The
@@ -146,6 +147,7 @@ export default function ProblemsPage() {
   // shareable. Filter changes always reset page back to 0 so a
   // teammate's link can't land them on "page 4 of 2".
   const [searchParams, setSearchParams] = useSearchParams();
+  useStripNotifySrc(); // v0.10.2484 — ?src=notify (RUM ölçüsü alındıktan sonra) adres çubuğundan silinir
   const location = useLocation(); // v0.10.221 — exception satır linkleri
   const tab     = resolveExceptionTab(searchParams.get('tab'));
   const service = searchParams.get('service') || '';

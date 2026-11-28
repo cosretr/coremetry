@@ -23,7 +23,7 @@ describe('greetHello', () => {
 
 describe('agoTR', () => {
   it('her birim ayrı ayrı doğru — birim karışması tekrar eden hata sınıfı', () => {
-    expect(agoTR(nsAgo(0.2), NOW)).toBe('az önce');
+    expect(agoTR(nsAgo(0.2), NOW)).toBe('12 sn önce');
     expect(agoTR(nsAgo(1), NOW)).toBe('1 dk önce');
     expect(agoTR(nsAgo(12), NOW)).toBe('12 dk önce');
     expect(agoTR(nsAgo(59), NOW)).toBe('59 dk önce');

@@ -201,7 +201,7 @@ describe('Problems — S5 (v0.10.2125)', () => {
     expect(m.calls.at(-1)?.status).toBe('closed');
     const on = el.querySelector('[role="radio"][aria-checked="true"]');
     expect(on?.textContent).toBe('Kapanan');
-    expect(el.textContent).toContain('47m sürdü');
+    expect(el.textContent).toContain('47 min sürdü') // v0.10.2484 — fmtDurShort → lib/format/duration (test dili EN);
     expect(el.textContent).toContain('Kapandı');
   });
 

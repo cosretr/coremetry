@@ -12184,6 +12184,8 @@ export interface PageContext {
   spanId?: string;
   problemId?: string;
   exceptionId?: string;
+  /** v0.10.2484 — ML / anomali olayı sayfası (/anomalies/ml/:id → 'ml:<id>', /anomalies/:id → id). Yalnız ölçüm (cosre_interactions.anomaly_id). */
+  anomalyId?: string;
   /** Yalnız ?range= varsa. */
   timeRange?: TimeRange;
   activeFilters?: PageFilter[];
@@ -12328,6 +12330,9 @@ export interface ProblemSourceStats {
   short15: number;
   short15Pct: number;
   long1h: number;
+  /** v0.10.2484 — onaylı kök neden vakası olan / vakası doğru (category ≠ noise) Problem. Eski sunucu → yok. */
+  caseLabelled?: number;
+  caseCorrect?: number;
 }
 export interface ProblemSourceMetric extends ProblemSourceStats { metric: string }
 export interface ProblemSourceFamily extends ProblemSourceStats {
@@ -13433,7 +13438,29 @@ export interface ExplainCard {
   play?: ExplainPlay;
   value?: ExplainValue;
 }
-export interface MLDetectorScore { detector: string; signal?: string; events: number; samples: number; hits: number; hitRate: number }
+export interface MLDetectorScore {
+  detector: string; signal?: string; events: number;
+  /** v0.10.2484 — TEK tanım: samples = kurala girebilen etiket n (olay oyu + onaylı vaka), hits = doğru, hitRate = precision. */
+  samples: number; hits: number; hitRate: number;
+  // v0.10.2484 — precision programı B.1 (Go chstore.MLDetectorScore; tek CH toplaması). Eski sunucu → alanlar yok.
+  linked?: number; wrong?: number; precision?: number; wilsonLo?: number; wilsonHi?: number; coverage?: number;
+  bySource?: { vote: number; case: number; caseCorrect: number };
+  notActionable?: number;
+  notAnomalyReasons?: { noDeviation: number; noImpact: number; expected: number; other: number; none: number };
+  /** Problem triyajı (D4) — KURAL DIŞI, eligible her zaman false. */
+  triage?: { n: number; real: number; eligible: boolean };
+  /** Haftalık etiket kuyruğundan verilen oylar (organikten ayrı). */
+  queue?: { n: number; correct: number; wilsonLo: number; wilsonHi: number };
+  medianLabelSec?: number; labellers?: number; worstSvc?: string; worstSvcShare?: number;
+  linkedShortAuto?: number; shortAutoShare?: number;
+  /** n < 20 ya da kapsama < %5 → "karar için yetersiz" (gri). */
+  insufficient?: boolean;
+  /** Muaf: etki kuralı aileleri ve metric_kafka. */
+  exempt?: boolean;
+}
+/** v0.10.2484 — GET /api/ml/label-queue (Go api.mlLabelQueueResponse). */
+export interface MLLabelQueueItem { id: string; detector: string; service: string; startedAt: number }
+export interface MLLabelQueue { week: string; size: number; doneWeek: number; items: MLLabelQueueItem[]; truncated: boolean }
 /** Yerleşik dedektörler görünümü (v0.10.1766): own = anomaly_sensitivity içindeki eski anahtarlar. */
 // v0.10.2087: kendi-anahtar görünümü (own) silindi — son üye op_latency de gitti.
 export interface NativeDetectorsView { names: string[]; detectors: Record<string, boolean> }

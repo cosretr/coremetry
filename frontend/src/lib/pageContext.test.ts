@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { pageContext, pageIdFor, ROUTE_PAGES, NO_CONTEXT_PAGES } from './pageContext';
+import { pageContext, pageIdFor, anomalyIdFromPath, ROUTE_PAGES, NO_CONTEXT_PAGES } from './pageContext';
 import { serviceFromRoute } from './chatContext';
 import { encodeFilters, encodeFilterGroup } from './urlState';
 import { encodeFiltersParam } from './logFilters';
@@ -105,6 +105,14 @@ describe('pageContext alanları', () => {
     expect(pageContext('/problems', '?problem=p1&service=api&exc=fp9')).toMatchObject({ problemId: 'p1', service: 'api', exceptionId: 'fp9' });
     expect(pageContext('/inbox', '?problem=p2&q=x')).toMatchObject({ problemId: 'p2', search: 'x' });
     expect(pageContext('/traces', '?problem=p3').problemId).toBeUndefined();
+  });
+  // v0.10.2484 — precision programı A.3: olay sayfasında açılan sohbet olayın kimliğini taşır.
+  it('anomali olay sayfası: anomalyId (ML "ml:<id>", eski olay çıplak id)', () => {
+    expect(pageContext('/anomalies/ml/abc%201', '').anomalyId).toBe('ml:abc 1');
+    expect(pageContext('/anomalies/ev-9', '').anomalyId).toBe('ev-9');
+    expect(pageContext('/anomalies', '?problem=p1').anomalyId).toBeUndefined();
+    expect(pageContext('/problems', '?problem=p1').anomalyId).toBeUndefined();
+    expect(anomalyIdFromPath('/anomalies/ml')).toBe('');
   });
   it('dashboard: ?cluster= bir değişken olabilir → kapsam olarak OKUNMAZ', () => {
     expect(pageContext('/dashboard', '?id=d1&cluster=x&service=y&range=6h')).toEqual({ page: 'dashboard', path: '/dashboard', timeRange: { preset: '6h' } });

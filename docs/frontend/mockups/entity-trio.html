@@ -1,0 +1,1140 @@
+<!doctype html>
+<html lang="tr" data-theme="redhat">
+<head>
+<meta charset="utf-8">
+<title>Servis · Endpoint · Pod üçlüsü — tıklanabilir mockup (ADIM 1)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+/* Statik mockup; ürün kodu değildir. Belirteç DEĞERLERİ frontend/src/styles/globals.css'in
+   [data-theme="redhat"] ve :root (dark) bloklarından, seri paleti tokens.css'ten kopyalandı.
+   Yazı tipi: dış yükleme yok — ürünün Inter / JetBrains Mono'su yerine sistem yedek yığını.
+   Sadelik kuralı: en küçük yazı 12px (--fs-sm); daha küçük ölçek belirteçleri bilerek kullanılmadı. */
+:root{
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sp-2:4px;--sp-3:6px;--sp-4:8px;--sp-5:10px;--sp-6:12px;--sp-7:16px;
+  --fs-sm:12px;--fs-md:13px;--fs-lg:14px;--fs-xl:18px;
+  --row-h:36px;
+}
+[data-theme="dark"]{
+  --bg0:#09090b;--bg1:#18181b;--bg2:#212125;--bg3:#27272a;--field-bg:var(--bg2);
+  --border:#3f3f46;--divider:#2c2c31;--border-strong:#71717a;--border-control:#52525b;
+  --text:#fafafa;--text2:#d4d4d8;--text3:#a6a6ae;--text-faint:#71717a;
+  --brand:#E30613;--accent:#2d73d8;--accent2:#6ba6fb;--accent-hover:#1d65c9;--focus:#6ba6fb;--on-accent:#ffffff;
+  --accent-bg:#253040;--accent-border:#294d82;
+  --ok:#4db96b;--err:#fe7f73;--warn:#f3b94c;--warn-solid:#f3b94c;--info:#6ba6fb;
+  --ok-bg:#293933;--warn-bg:#3d392f;--err-bg:#3e3234;--info-bg:#253040;--err-solid:#cc4740;
+  --purple:#a371f7;--teal:#39c5cf;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.25);--shadow-md:0 6px 20px rgba(0,0,0,.45);--shadow-pop:0 8px 24px rgba(0,0,0,.45);
+  --radius-xs:4px;--radius-sm:6px;--radius:8px;--radius-lg:12px;
+  --series-1:#288dd4;--series-2:#06d8d9;--series-3:#cb4f73;--series-4:#b5b614;--series-5:#95b6fe;--series-6:#d76f04;--series-7:#ac78d2;--series-8:#fca0e8;
+  color-scheme:dark;
+}
+[data-theme="redhat"]{
+  --bg0:#f4f4f5;--bg1:#ffffff;--bg2:#fafafa;--bg3:#ececee;--field-bg:var(--bg1);
+  --border:#e4e4e7;--divider:#ebebed;--border-strong:#71717a;--border-control:#a1a1aa;
+  --text:#09090b;--text2:#52525b;--text3:#63636b;--text-faint:#8b8b93;
+  --brand:#ee0000;--accent:#0066cc;--accent2:#0066cc;--accent-hover:#004080;--focus:#0066cc;--on-accent:#ffffff;
+  --accent-bg:#e7f1fa;--accent-border:#bee1f4;
+  --ok:#317928;--err:#c9190b;--warn:#795600;--warn-solid:#b08307;--info:#0066cc;
+  --ok-bg:#eef4ed;--warn-bg:#fdf5e0;--err-bg:#fbefee;--info-bg:#e7f1fa;--err-solid:#c9190b;
+  --purple:#8476d1;--teal:#009596;
+  --shadow-sm:0 1px 2px rgba(21,21,21,.08);--shadow-md:0 4px 16px rgba(21,21,21,.10);--shadow-pop:0 8px 24px rgba(21,21,21,.16);
+  --radius-xs:3px;--radius-sm:4px;--radius:6px;--radius-lg:8px;
+  --series-1:#045c93;--series-2:#0c9999;--series-3:#921545;--series-4:#898905;--series-5:#567cd3;--series-6:#d46e07;--series-7:#7b489e;--series-8:#bf68ae;
+  color-scheme:light;
+}
+/* redhat: koyu kenar çubuğu — yüzey belirteçleri yalnız #sidebar içinde yeniden eşlenir (globals.css emsali) */
+[data-theme="redhat"] #sidebar{
+  --bg1:#18181b;--bg2:#212125;--bg3:#27272a;--border:#3f3f46;--divider:#2c2c31;
+  --text:#fafafa;--text2:#d4d4d8;--text3:#a6a6ae;--accent2:#6ba6fb;--accent-bg:#253040;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg0);color:var(--text);font-family:var(--font-sans);font-size:var(--fs-sm);line-height:1.45}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:var(--radius-xs)}
+.mono{font-family:var(--font-mono)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.nil{color:var(--text3)}
+svg.ic{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linejoin:round;stroke-linecap:round}
+
+/* ── mockup araçları: ürün çerçevesinin DIŞINDA, mor kesikli çerçeveyle ayrılır ── */
+.aid{border:2px dashed var(--purple);background:var(--bg1)}
+.aid-l{font-size:var(--fs-sm);font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--purple)}
+#aidbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:5px 12px;border-width:0 0 2px}
+#aidbar .sp{flex:1}
+
+/* ── kabuk ── */
+#app{display:grid;grid-template-columns:216px minmax(0,1fr);min-height:calc(100vh - 40px)}
+#sidebar{background:var(--bg1);border-right:1px solid var(--border);color:var(--text2);position:sticky;top:0;height:100vh;overflow:auto;font-size:var(--fs-md)}
+.sb-logo{display:flex;align-items:center;gap:8px;height:48px;padding:0 14px;border-bottom:1px solid var(--border);color:var(--text);font-weight:700;font-size:15px}
+.sb-g{font-size:var(--fs-sm);font-weight:600;letter-spacing:.06em;color:var(--text3);padding:14px 16px 4px}
+.sb-i{display:block;padding:7px 16px 7px 20px;border-left:3px solid transparent}
+.sb-i.on{color:var(--accent2);background:var(--bg2);border-left-color:var(--accent2)}
+#topbar{position:sticky;top:0;z-index:40;height:48px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px}
+#tb-title{font-size:15px;font-weight:650;white-space:nowrap}
+.tb-search{flex:1 1 200px;max-width:520px;min-width:0;border:1px solid var(--border-control);background:var(--field-bg);border-radius:var(--radius-sm);padding:6px 10px;color:var(--text3);font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-sp{flex:1}
+select,.btn{font:inherit;font-size:var(--fs-md);color:var(--text);background:var(--field-bg);border:1px solid var(--border-control);border-radius:var(--radius-sm);padding:5px 9px;cursor:pointer}
+.btn:hover,select:hover{border-color:var(--border-strong)}
+.btn[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent2);color:var(--accent2)}
+#content{padding:10px 16px 48px;max-width:1500px;min-width:0}
+#view{display:flex;flex-direction:column;gap:10px;min-width:0}
+@media (max-width:920px){#app{grid-template-columns:minmax(0,1fr)}#sidebar{display:none}.tb-search{display:none}}
+
+/* ── ortak iskelet: iz yolu · başlık · Problem şeridi · RED şeridi · sekmeler ── */
+.crumbs ol{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;align-items:center;color:var(--text3)}
+.crumbs li{display:flex;align-items:center;gap:5px;min-width:0}
+.crumbs li+li::before{content:'›';margin:0 8px;color:var(--text-faint)}
+.crumbs a{display:inline-flex;align-items:center;gap:5px}
+.crumbs [aria-current]{color:var(--text);font-weight:600}
+
+.eh{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:6px}
+.eh-r1{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px}
+.eh-id{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 360px}
+.eh-ico{width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg2);color:var(--text2);flex:none}
+.eh-ico svg.ic{width:18px;height:18px}
+.eh-kind{font-size:var(--fs-sm);font-weight:600;color:var(--text3)}
+.eh h1{margin:0;font-size:var(--fs-xl);line-height:1.25;font-weight:650;overflow-wrap:anywhere}
+.eh-nm{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
+.hd{display:inline-flex;align-items:center;gap:6px;color:var(--text2);white-space:nowrap}
+.hd i{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--text3);flex:none}
+.hd.bad{color:var(--err);font-weight:600}.hd.bad i{background:var(--err);border-color:var(--err)}
+.eh-kpis{display:flex;gap:24px}
+.kpi{display:flex;flex-direction:column;min-width:72px}
+.kpi .l{color:var(--text3)}
+.kpi .v{font-size:17px;font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
+.eh-act{display:flex;align-items:center;gap:6px}
+.ibtn{display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--border-control);border-radius:var(--radius-sm);color:var(--text2);font-size:15px;background:var(--field-bg)}
+.ibtn:hover{text-decoration:none;border-color:var(--border-strong);color:var(--text)}
+.eh-r2{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;color:var(--text2)}
+.eh-r2 b{font-weight:400;color:var(--text3);margin-right:4px}
+.eh-r2 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.dev{font-weight:600;white-space:nowrap}.dev.err{color:var(--err)}.dev.warn{color:var(--warn)}
+.badge{display:inline-flex;align-items:center;gap:4px;font-weight:600;padding:1px 7px;border-radius:var(--radius-xs);background:var(--bg3);color:var(--text2);white-space:nowrap}
+.badge.err{background:var(--err-bg);color:var(--err)}.badge.warn{background:var(--warn-bg);color:var(--warn)}
+.tagq{display:inline-block;color:var(--warn);background:var(--warn-bg);border:1px dashed var(--warn-solid);border-radius:var(--radius-xs);padding:0 6px;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;background:var(--accent-bg);color:var(--text);border:1px solid var(--accent-border);border-radius:999px;padding:1px 3px 1px 10px}
+.chip .x{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;color:var(--text2);font-size:14px;line-height:1}
+.chip .x:hover{background:var(--bg3);text-decoration:none;color:var(--text)}
+.chip.time{background:var(--bg1);border-color:var(--border-control)}
+
+/* başlıktaki menüler: Yığın + Şurada aç — AYNI bileşen */
+details.pm{position:relative;display:inline-block}
+details.pm>summary{list-style:none;cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:6px}
+details.pm>summary::-webkit-details-marker{display:none}
+.pm .menu{position:absolute;z-index:45;right:0;top:calc(100% + 4px);background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-pop);padding:4px;display:flex;flex-direction:column;min-width:200px;white-space:nowrap}
+.pm .menu a{display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:var(--radius-xs);color:var(--text)}
+.pm .menu a:hover{background:var(--bg3);text-decoration:none}
+.pm .menu.wide{min-width:300px;padding:8px}
+
+.pstrip{display:flex;align-items:center;gap:10px;background:var(--err-bg);border:1px solid var(--err);border-radius:var(--radius);padding:7px 12px;color:var(--text);font-size:var(--fs-md)}
+.pstrip:hover{text-decoration:none;box-shadow:var(--shadow-sm)}
+.pstrip b{color:var(--err);white-space:nowrap}
+.pstrip .s{flex:1;min-width:0}
+.pstrip .go{color:var(--accent2);white-space:nowrap}
+@media (max-width:700px){.pstrip{flex-wrap:wrap}}
+
+.redrow,.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:1100px){.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.redrow,.grid2,.grid3{grid-template-columns:minmax(0,1fr)}}
+
+/* grafik — uPlot panellerinin görünümü: ince çizgi, eksen işaretleri, 0'dan başlayan kaynak panelleri */
+.pl{margin:0;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px 6px;min-width:0}
+.pl figcaption{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;font-weight:600;min-height:20px}
+.pl .big{font-size:15px;font-weight:650;font-variant-numeric:tabular-nums}
+.pl .rd{margin-left:auto;font-weight:400;color:var(--text2);font-variant-numeric:tabular-nums}
+.pl-b{display:flex;gap:6px;margin-top:6px}
+.pl-y{display:flex;flex-direction:column;justify-content:space-between;text-align:right;min-width:52px;color:var(--text3);font-variant-numeric:tabular-nums;line-height:1}
+.pl-a{position:relative;flex:1;min-width:0;height:84px;cursor:crosshair}
+.pl.tall .pl-a{height:128px}
+.pl-a svg{display:block;width:100%;height:100%;overflow:visible}
+.pl-x{display:flex;justify-content:space-between;margin:3px 0 0 58px;color:var(--text3)}
+.pl-lg{display:flex;flex-wrap:wrap;gap:2px 14px;margin:4px 0 0 58px;color:var(--text2)}
+.pl-lg i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:5px}
+.pl-lg i.d{border-top-style:dashed;border-top-width:1px}
+.pl-lg i.b{height:9px;border:0;background:var(--series-5);opacity:.3}
+.pl-empty{flex:1;display:grid;place-items:center;text-align:center;min-height:84px;color:var(--text2);border:1px dashed var(--border-control);border-radius:var(--radius-sm);padding:8px 12px}
+.g{stroke:var(--divider);stroke-width:1;vector-effect:non-scaling-stroke;fill:none}
+.ln{fill:none;stroke-width:1.5;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.ln.thin{stroke-width:1}
+.ln.dash{stroke-width:1;stroke-dasharray:5 3}
+.c1{stroke:var(--series-1);color:var(--series-1)}.c2{stroke:var(--series-2);color:var(--series-2)}.c3{stroke:var(--series-3);color:var(--series-3)}
+.c5{stroke:var(--series-5);color:var(--series-5)}.c6{stroke:var(--series-6);color:var(--series-6)}.c7{stroke:var(--series-7);color:var(--series-7)}
+.cw{stroke:var(--warn-solid);color:var(--warn-solid)}.ce{stroke:var(--err);color:var(--err)}.ct{stroke:var(--text3);color:var(--text3)}
+.band{fill:var(--series-5);opacity:.2;stroke:none}
+.cur{position:absolute;top:0;bottom:0;left:var(--cur,-20px);width:1px;background:var(--text2);pointer-events:none;display:none}
+#view.has-cur .cur{display:block}
+.pin{position:absolute;top:-4px;bottom:0;width:0;border-left:1.5px solid var(--accent2);pointer-events:none}
+.pin::before{content:'';position:absolute;top:0;left:-5px;border:4px solid transparent;border-top:5px solid var(--accent2)}
+.mk{position:absolute;top:0;bottom:0;width:0;border-left:1px dashed var(--text3)}
+.pl-b.hm{margin-top:24px}
+.mk a{position:absolute;right:-1px;top:-19px;line-height:15px;padding:0 5px;border:1px solid var(--border-control);border-radius:3px;background:var(--bg1);color:var(--text2);white-space:nowrap}
+.mk.r a{right:auto;left:-1px}
+.mk.bad{border-left-color:var(--err)}.mk.bad a{color:var(--err);border-color:var(--err)}
+.spike{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;border:2px solid var(--err);background:var(--bg1);box-shadow:var(--shadow-sm)}
+.spike span{position:absolute;right:22px;top:-2px;font-weight:600;color:var(--err);background:var(--bg1);padding:0 4px;border-radius:3px;white-space:nowrap}
+.spark{width:72px;height:18px;vertical-align:middle}
+.spark path{fill:none;stroke:var(--text3);stroke-width:1.2;vector-effect:non-scaling-stroke}
+
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);overflow-x:auto}
+.tabs a{padding:8px 12px;color:var(--text2);font-size:var(--fs-md);white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs a:hover{color:var(--text);text-decoration:none;background:var(--bg3)}
+.tabs a[aria-selected="true"]{color:var(--accent2);border-bottom-color:var(--accent2);font-weight:600}
+.tabs .cnt{margin-left:5px;font-weight:600;background:var(--err-bg);color:var(--err);border-radius:999px;padding:0 6px}
+.tb{display:flex;flex-direction:column;gap:10px;min-width:0}
+
+/* dikey yığın — İlişkiler sekmesinde ve başlıktaki "Yığın" menüsünde AYNI bileşen */
+.vstack{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.vstack li{display:flex;align-items:center;gap:8px;padding:5px 8px;border:1px solid var(--divider);border-radius:var(--radius-sm);min-width:0;color:var(--text2)}
+.vstack li .k{color:var(--text3);min-width:68px;flex:none}
+.vstack li .v{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.vstack li a.v{color:var(--accent2);padding:0}
+.vstack li.cur-l{border-color:var(--accent2);background:var(--accent-bg);box-shadow:inset 3px 0 0 var(--accent2)}
+.vstack li.cur-l .v{font-weight:650}
+.vstack li .st{margin-left:auto;color:var(--text2);white-space:nowrap}
+
+/* ── kart + tablo (DataTable görünümü; her yerde TEK stil; ≤ 7 sütun; satır yan panel açar) ── */
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px 12px;min-width:0}
+.card>h2{margin:0 0 8px;font-size:var(--fs-md);font-weight:600;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.card>h2 .c{font-weight:400;color:var(--text3)}
+.card>h2 .r{margin-left:auto;font-weight:400;font-size:var(--fs-sm)}
+.vt-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-sm)}
+table.dt{border-collapse:separate;border-spacing:0;width:100%}
+.dt th,.dt td{height:var(--row-h);padding:0 var(--sp-5);border-bottom:1px solid var(--divider);text-align:left;white-space:nowrap}
+.dt tbody tr:last-child td{border-bottom:0}
+.dt thead th{font-weight:500;color:var(--text3);background:var(--bg1)}
+.dt th.num,.dt td.num{text-align:right;font-variant-numeric:tabular-nums}
+.dt th .arr{margin-left:3px;color:var(--text)}
+.dt tr[data-p]{cursor:pointer}
+.dt tr[data-p]:hover>td{background:var(--bg2)}
+.dt tr[data-p]:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.dt tr.sel>td{background:var(--accent-bg)}
+.dt td.first{max-width:440px;overflow:hidden;text-overflow:ellipsis}
+.el{display:inline-flex;align-items:center;gap:6px;max-width:100%;font-weight:500}
+.dt tr.sub>td{height:auto;padding:8px 12px 12px 36px;background:var(--bg2);white-space:normal}
+.dt tr.sub .vt-scroll{background:var(--bg1)}
+.exp{display:inline-grid;place-items:center;width:22px;height:22px;color:var(--text);font-size:15px;line-height:1;margin-right:4px;vertical-align:middle}
+.exp:hover{background:var(--bg3);text-decoration:none;border-radius:var(--radius-xs)}
+.st-row td{height:auto!important;white-space:normal!important;padding:18px 14px!important;color:var(--text2)}
+.st-row b{display:block;color:var(--text);margin-bottom:2px}
+.sib{color:var(--text3);white-space:nowrap}
+.sib.dev{color:var(--err);background:var(--err-bg);border-radius:var(--radius-xs);padding:1px 6px}
+
+.facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:8px 16px;margin:0}
+.facts dt{color:var(--text3)}
+.facts dd{margin:0;overflow-wrap:anywhere}
+.sentence{font-size:var(--fs-md);margin:0 0 10px}
+.banner{border:1px solid var(--warn-solid);background:var(--warn-bg);border-radius:var(--radius);padding:10px 12px;color:var(--text)}
+.banner b{display:block;margin-bottom:2px;font-size:var(--fs-md)}
+.curbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;background:var(--bg1);border:1px solid var(--accent-border);border-radius:var(--radius);padding:7px 12px}
+.lnk{display:inline-flex;align-items:center;border:1px solid var(--border-control);border-radius:var(--radius-sm);padding:3px 9px;background:var(--bg1)}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px}
+.seg{display:inline-flex;border:1px solid var(--border-control);border-radius:var(--radius-sm);overflow:hidden}
+.seg a{padding:4px 10px;color:var(--text2);border-left:1px solid var(--border-control)}
+.seg a:first-child{border-left:0}
+.seg a[aria-current="true"]{background:var(--accent);color:var(--on-accent)}
+.seg a:hover{text-decoration:none}
+/* log tablosu, olay şeridi ve pod sekmelerinin yardımcıları (kardeş pod mockup'ıyla aynı öğeler) */
+.u{font-weight:400;color:var(--text3)}
+.grow{flex:1}
+.lbl{color:var(--text3)}
+.lv{font-weight:700}.lv.ERROR{color:var(--err)}.lv.WARN{color:var(--warn)}.lv.INFO{color:var(--text3)}
+.dt td.wrap{white-space:normal;overflow-wrap:anywhere;min-width:280px;padding-top:6px;padding-bottom:6px}
+.dt tr.hl>td{background:var(--accent-bg)}
+.dt tr.hl>td:first-child{box-shadow:inset 3px 0 0 var(--accent2);font-weight:600}
+.dt tr.sepr>td{height:28px;background:var(--bg2);color:var(--text2);text-align:center;font-weight:600}
+.dt tr[hidden]{display:none}
+.field{font:inherit;font-size:var(--fs-md);color:var(--text);background:var(--field-bg);border:1px solid var(--border-control);border-radius:var(--radius-sm);padding:5px 9px;flex:1 1 200px;max-width:300px;min-width:0}
+.switch{display:inline-flex;align-items:center;gap:6px;font:inherit;color:var(--text);background:none;border:0;cursor:pointer;padding:4px}
+.switch i{width:28px;height:16px;border-radius:999px;background:var(--border-strong);position:relative;flex:none}
+.switch i::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--bg1)}
+.switch[aria-checked="true"] i{background:var(--accent)}
+.switch[aria-checked="true"] i::after{left:14px}
+.foot{display:flex;gap:10px;color:var(--text3);margin-top:6px}
+.sw.band{background:var(--series-5);opacity:.4}
+.lanes .ln-r{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.ln-l{width:52px;color:var(--text3);flex:none}
+.ln-t{position:relative;flex:1;height:20px;background:var(--bg2);border-radius:3px;min-width:0}
+.ln-t i{position:absolute;top:0;bottom:0;font-style:normal;color:var(--text2);overflow:hidden;white-space:nowrap;line-height:18px;padding-left:5px;border-radius:3px}
+.ln-none{border:1px dashed var(--border-control)}
+.ln-on{background:var(--bg3);border:1px solid var(--border-control)}
+.ln-gap{background:var(--err);padding:0!important}
+.ln-ev{position:absolute;top:0;bottom:0;width:12px;margin-left:-6px}
+.ln-ev::after{content:'';position:absolute;left:5px;top:2px;bottom:2px;width:2px;border-radius:1px;background:var(--text3)}
+.ln-ev.err::after{background:var(--err)}.ln-ev.warn::after{background:var(--warn-solid)}
+details.more>summary{list-style:none;display:inline-block}
+details.more>summary::-webkit-details-marker{display:none}
+details.more .facts{margin-top:10px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px}
+.msgb{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;overflow-wrap:anywhere}
+.split{display:flex;height:22px;border-radius:var(--radius-xs);overflow:hidden;border:1px solid var(--border);margin-bottom:8px}
+.split i{display:block;height:100%}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.hist rect{fill:var(--series-1)}.hist rect.slow{fill:var(--series-3)}
+
+/* ── yan panel: satır ayrıntısı · trace · sayfa bilgisi (ⓘ) — TEK bileşen ── */
+#tp{position:fixed;z-index:61;top:0;right:0;bottom:0;width:min(600px,100vw);background:var(--bg1);border-left:1px solid var(--border);box-shadow:var(--shadow-pop);display:flex;flex-direction:column}
+#tp[hidden]{display:none}
+.tp-h{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.tp-h h2{margin:0;font-size:var(--fs-lg);font-weight:650;overflow-wrap:anywhere}
+.tp-h .k{color:var(--text3)}
+.tp-b{padding:12px 14px 24px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.tp-b h3{margin:0 0 6px;font-size:var(--fs-md);font-weight:600}
+.tp-b .facts{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.tp-b .dt th,.tp-b .dt td{white-space:normal;height:auto;padding:7px 8px;vertical-align:top}
+.tp-l{display:flex;flex-wrap:wrap;gap:6px}
+.wf{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.wf-r{display:grid;grid-template-columns:minmax(0,46%) minmax(0,1fr) 68px;gap:8px;align-items:center;padding:4px 8px;border-bottom:1px solid var(--divider);min-height:30px}
+.wf-r:last-child{border-bottom:0}
+.wf-r.me{background:var(--accent-bg)}
+.wf-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wf-n span{color:var(--text3)}
+.wf-t{position:relative;height:10px;background:var(--bg2);border-radius:3px}
+.wf-t i{position:absolute;top:0;bottom:0;min-width:2px;border-radius:3px;background:var(--series-1)}
+.wf-t i.e{background:var(--err)}.wf-t i.o{background:var(--series-5)}
+.wf-d{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ── senaryo yardımcısı (mockup aracı) ── */
+#sc{position:fixed;z-index:70;right:12px;bottom:12px;width:min(320px,calc(100vw - 24px));border-radius:var(--radius);box-shadow:var(--shadow-pop)}
+body.tp-open #sc{right:calc(min(600px,100vw) + 12px)}
+@media (max-width:1000px){body.tp-open #sc{right:12px}}
+#sc summary{cursor:pointer;padding:7px 10px;font-weight:600;display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px}
+#sc .in{padding:0 10px 10px;max-height:56vh;overflow:auto}
+#sc ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px}
+#sc ol a{display:flex;gap:7px;padding:3px 6px;border-radius:var(--radius-xs);color:var(--text2)}
+#sc ol a .no{flex:none;width:16px;text-align:center;font-variant-numeric:tabular-nums}
+#sc li.done a{color:var(--text3)}
+#sc li.here a{color:var(--text);font-weight:600;background:var(--bg3)}
+#sc li.next a{color:var(--text);outline:2px dashed var(--purple);outline-offset:-2px}
+#sc h3{margin:10px 0 2px;font-size:var(--fs-sm);font-weight:600;color:var(--text3)}
+#sc .ex{display:flex;flex-direction:column;gap:2px}
+.sc-hint{outline:2px dashed var(--purple)!important;outline-offset:3px;border-radius:4px}
+.tabs .sc-hint{outline-offset:-3px}
+
+/* ── mockup notları (ürünün parçası değil) ── */
+.notes{margin:28px 16px 140px;padding:14px 16px 18px;border-radius:var(--radius);display:flex;flex-direction:column;gap:16px}
+.notes h2{margin:0;font-size:16px}
+.notes h3{margin:0 0 6px;font-size:var(--fs-md)}
+.notes .dt th,.notes .dt td{white-space:normal;height:auto;padding:7px 10px;vertical-align:top}
+.notes .dt td:first-child{font-weight:600;white-space:nowrap}
+.notes .dt th:nth-child(2),.notes .dt th:nth-child(3){width:44%}
+.box{border:1px solid var(--border-control);background:var(--bg2);border-radius:var(--radius);padding:12px 14px}
+.box.decide{border-color:var(--warn-solid);background:var(--warn-bg)}
+.box ol{margin:6px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:8px}
+.box.out ol{gap:3px;columns:2 420px;display:block}
+.box.out li{break-inside:avoid;margin-bottom:3px}
+.box .o{color:var(--text2)}
+.box .rec{font-weight:600}
+.box .to{color:var(--text2)}
+</style>
+</head>
+<body>
+<div id="aidbar" class="aid">
+  <span class="aid-l">Mockup araçları — ürünün parçası değil</span>
+  <span>Servis · Endpoint · Pod üçlüsü (ADIM 1)</span>
+  <span class="sp"></span>
+  <button class="btn" id="theme" type="button" aria-label="Temayı değiştir">Tema: Kurumsal</button>
+  <button class="btn" id="tonotes" type="button">Notlar ↓</button>
+</div>
+
+<div id="app">
+  <aside id="sidebar" aria-label="Ürün menüsü — mockup'ta etkin değil">
+    <div class="sb-logo">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect width="22" height="22" rx="5" fill="var(--brand)"/><path d="M3.5 12h3.6l2-5.2 3.2 9 2.1-5.3h4.1" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Coremetry
+    </div>
+    <div class="sb-g">TRİYAJ</div>
+    <span class="sb-i">Problemler</span><span class="sb-i">Hatalar</span><span class="sb-i">Yayınlar</span>
+    <div class="sb-g">SERVİSLER</div>
+    <span class="sb-i on">Servisler</span><span class="sb-i">Endpoint'ler</span><span class="sb-i">Cluster'lar</span><span class="sb-i">Veritabanları</span><span class="sb-i">Mesajlaşma</span><span class="sb-i">Topoloji</span>
+    <div class="sb-g">SİNYALLER</div>
+    <span class="sb-i">Trace'ler</span><span class="sb-i">Loglar</span><span class="sb-i">Metrikler</span>
+  </aside>
+  <div style="min-width:0">
+    <header id="topbar">
+      <div id="tb-title">Servis</div>
+      <div class="tb-search" aria-hidden="true">Servis, trace kimliği ya da sayfa ara…</div>
+      <span class="tb-sp"></span>
+      <label><span class="sr-only">Ortam</span><select id="env"><option value="">Tüm ortamlar</option><option value="prod">Ortam: prod</option><option value="staging">Ortam: staging</option></select></label>
+      <label><span class="sr-only">Zaman aralığı</span><select id="range"><option value="15m">Son 15 dakika</option><option value="1h">Son 1 saat</option><option value="3h">Son 3 saat</option><option value="24h">Son 24 saat</option></select></label>
+    </header>
+    <main id="content"><div id="view"></div></main>
+  </div>
+</div>
+
+<aside id="tp" role="dialog" aria-modal="false" aria-labelledby="tp-t" hidden></aside>
+
+<details id="sc" class="aid" open>
+  <summary><span>Senaryo</span><span class="aid-l">mockup aracı</span></summary>
+  <div class="in" id="sc-in"></div>
+</details>
+
+<section class="notes aid" id="notlar" aria-label="Mockup notları — ürünün parçası değil">
+  <span class="aid-l">Mockup notları — ürünün parçası değil</span>
+  <h2>Bugün → Öneri</h2>
+  <div>
+    <h3>Servis sayfası <span class="nil">— bugün: pages/Service.tsx, pages/service/Overview.tsx</span></h3>
+    <div class="vt-scroll"><table class="dt">
+      <thead><tr><th>Öğe</th><th>Bugün</th><th>Öneri</th></tr></thead>
+      <tbody>
+        <tr><td>İz yolu</td><td>Sabit: <i>Services › ad</i>; liste sayfasına döner.</td><td>Gelinen yol; her adım tıklanır ve o adımın kapsamını geri getirir.</td></tr>
+        <tr><td>Başlık</td><td>Sağlık noktası, ad, ☆ sabitleme, çalışma zamanı rozeti, katalog etiketi. Üç ölçü başlıkta değil, Overview karolarında.</td><td>Tür ikonu, ad, sağlık, sahip, ortam / cluster, 3 ölçü (istek · hata · 95. yüzdelik süre), kapsam çipleri — üç sayfada aynı yerde.</td></tr>
+        <tr><td>Sağlık noktası</td><td>Yalnız hata oranı eşiği (&gt;%5 kırmızı, &gt;%1 sarı); açık Problem'e bakmaz.</td><td>Yalnız açık Problem'den; yoksa nötr halka. Hata oranı rengi hücrede kalır.</td></tr>
+        <tr><td>Gezinme</td><td>Üç grupta altı düğme (Backtrace · Logs · Endpoints, Problems · Signals, Traces) + Sağlık kontrolü.</td><td>Sekmeler + başlıkta tek "Şurada aç" menüsü (Trace / Log / Metrik / Topoloji).</td></tr>
+        <tr><td>Problem</td><td>Dikkat şeridi: birden çok problem / exception satırı ve SLO dipnotu.</td><td>Tek satır, insan cümlesi; tıklayınca Problemler sekmesi.</td></tr>
+        <tr><td>RED</td><td>Overview içinde: 3 karo (Response time, Throughput, Failure rate) ve aynı sırada 3 grafik.</td><td>Sekmelerin üstünde, her sekmede: İstek · Hata · Süre; ortak imleç.</td></tr>
+        <tr><td>Sekmeler</td><td>9: Overview · Operations · Metrics · Infrastructure · GitOps · HTTP/GRPC · Messaging · Topology · Logs.</td><td>8: Genel · Problemler · Trace · Log · Metrik · İlişkiler · Değişiklikler · Operasyonlar.</td></tr>
+        <tr><td>Genel gövdesi</td><td>Anomali tablosu, Top endpoints kartı + veritabanı kartı, komşular. Pod'lar başka sekmede (Infrastructure).</td><td>Operasyonlar özeti (ilk öğe — onaylı sözleşme), Endpoint tablosu (6 sütun: Endpoint · İstek · Hata % · Ortalama süre · 95. yüzdelik · Eğilim), Pod tablosu (7 sütun).</td></tr>
+        <tr><td>Kapsam</td><td>Adreste <span class="mono">?cluster=</span>; ekranda çip yok.</td><td>"yalnız pod X" / "yalnız endpoint Y" çipleri başlıkta; × ile kalkar, geçişte taşınır.</td></tr>
+        <tr><td>Köken bilgisi</td><td>Grafik ve tablo üstünde kaynak rozetleri ve notlar (span ↔ metrik, "metrik yok", gRPC ailesi, ortam süzgeci bandı).</td><td>Varsayılan görünümde yok; başlıktaki ⓘ panelinde. Yalnız veri eksikse görünür uyarı.</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div>
+    <h3>Endpoint sayfası <span class="nil">— bugün: pages/EndpointDetail.tsx</span></h3>
+    <div class="vt-scroll"><table class="dt">
+      <thead><tr><th>Öğe</th><th>Bugün</th><th>Öneri</th></tr></thead>
+      <tbody>
+        <tr><td>İz yolu</td><td>Sabit: <i>Endpoints › endpoint detail</i>.</td><td>Gelinen yol (servis › endpoint).</td></tr>
+        <tr><td>Başlık</td><td>Method rozeti, yol, "servis →" bağlantısı, "shape" rozeti, cluster seçicisi, <span class="mono">env=… · cluster=…</span> rozeti; sağda alarm ve geçiş düğmeleri. Sağlık noktası ve sahip yok.</td><td>Ortak başlık; method ve yol tek ad, servis kapsam çipinde, rozet yok.</td></tr>
+        <tr><td>Ölçüler</td><td>8 karo: Calls, Errors, Err rate, Req/min, Avg, P50, P95, P99 (+ önceki pencere kıyası).</td><td>Başlıkta 3 ölçü; öbür yüzdelikler Metrik sekmesinde ve satır panelinde.</td></tr>
+        <tr><td>RED</td><td>3 grafik karosu: Calls, Errors, Avg latency (p50 / p95 / p99 seçici).</td><td>Aynı şerit: İstek · Hata · Süre.</td></tr>
+        <tr><td>Sekmeler</td><td>Yok; tek uzun sayfa: Histogram, Status, Where the time goes, Split, Callers, Failing traces, Exceptions, Operation card.</td><td>Aynı sekme sırası; süre dağılımı + yanıt kodları Genel'e, hatalı trace'ler Trace'e, çağıranlar İlişkiler'e, zaman dökümü "Zaman dağılımı"na.</td></tr>
+        <tr><td>Servis / pod</td><td>Servis yalnız başlıkta bağlantı. Okunan dosyada pod tablosu yok.</td><td>Servis satırı (6 sütun) + "bu endpoint'i sunan pod'lar" tablosu (servis sayfasındakiyle aynı 7 sütun).</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div>
+    <h3>Pod sayfası <span class="nil">— bugün: pages/Pod.tsx, pages/pod/*</span></h3>
+    <div class="vt-scroll"><table class="dt">
+      <thead><tr><th>Öğe</th><th>Bugün</th><th>Öneri</th></tr></thead>
+      <tbody>
+        <tr><td>İz yolu</td><td>Yok. Kimlik satırı sabit hiyerarşi: cluster › node › namespace / workload › pod.</td><td>Gelinen yol; hiyerarşi "Yığın" menüsünde ve İlişkiler sekmesinde.</td></tr>
+        <tr><td>Başlık</td><td>Rozetler (live / stale / silindi, faz, name-stable); ömür · son görülme · kaynak · uid satırı; ayrı meta satırı: Servis, Workload, Node, Yaş, Sürüm; "CoSRE'ye sor".</td><td>Ortak başlık + 3 ölçü (CPU · bellek · yeniden başlatma). Durum, faz, node, workload, yaş, imaj Genel sekmesinde tek bilgi kutusu.</td></tr>
+        <tr><td>Geçişler</td><td>Dört bağlantı: ← servis, Servis sayfası, Trace'ler, Loglar.</td><td>Aynı "Şurada aç" menüsü; servise dönüş "yalnız bu pod" çipiyle.</td></tr>
+        <tr><td>Bölümler</td><td>Sekme yok. Sıra: altyapı trend paneli, Servisler, Konteynerler, aynı workload paneli; kapalı bölümler: Son trace'ler, Ağ + JVM, Runtime, Etiketler ve geçmiş; en altta Loglar (açılır; seviye + arama).</td><td>Sekmeler: Genel · Problemler · Trace · Log · Metrik · İlişkiler · Değişiklikler · Olaylar.</td></tr>
+        <tr><td>Servisler tablosu</td><td>7 sütun: Servis · Span · Hata · Hata % · Ort. ms · Son görülme · Eylemler.</td><td>7 sütun: Servis · İstek · Hata % · Ortalama süre · 95. yüzdelik · Eğilim · Diğer pod'ların medyanına göre; satır yerinde açılır → endpoint tablosu (aynı sütunlar). Son sütun yalnız tek pod bağlamında görünür.</td></tr>
+        <tr><td>Pod tablosu</td><td>Kardeşler, 6 sütun: Pod · Durum · Faz · Restarts · CPU · Bellek.</td><td>7 sütun, her yerde aynı: Pod · Durum · İstek · Hata % · 95. yüzdelik · Bellek · Diğer pod'ların medyanına göre. CPU, faz, restart satır panelinde.</td></tr>
+        <tr><td>Kardeş kıyası</td><td>Tek cümle (bellek, kardeş ortancasına göre). Okunan dosyalarda grafik bandı yok.</td><td>Her metrik panelinde kardeş bandı (en düşük – medyan – en yüksek) + her tabloda aynı oran rozeti (▲ 3,0×).</td></tr>
+        <tr><td>Loglar</td><td>Seviye (Tümü / ERROR / WARN+) ve metin araması; konteyner seçici ve imleç bağı yok.</td><td>Konteyner seçici, canlı takip, "yeniden başlatma öncesi" kısayolu, imleç anındaki satır vurgulu; satır yan panel açar.</td></tr>
+        <tr><td>Olaylar</td><td>Zaman çizelgesi yok; Konteynerler tablosu (Ready · Restarts · Waiting · Son sonlanma) ve ömürler tablosu var.</td><td>Türetilmiş zaman çizelgesi (faz, hazır, olaylar şeridi) + olay tablosu: bekleme nedeni, sonlanma nedeni, restart, faz ve node değişimi.</td></tr>
+        <tr><td>Satır eylemi</td><td>Servisler ve Trace'ler tablolarında eylem sütunu ("Traces →", "→").</td><td>Düğme yok: ad bağlantıdır, satır yan panel açar; fazla sütunlar ve geçişler panelde.</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="box decide">
+    <h2>Açık kararlar</h2>
+    <ol>
+      <li><b>Dikey yığın ve pivot menüsünün yeri.</b> <span class="o">A: İlk brief'teki gibi iskelette, ilk ekranda kendi satırında. B: Sadelik kuralına göre — yığın İlişkiler sekmesinde ve başlıktaki "Yığın" menüsünde, pivot başlıkta tek "Şurada aç" düğmesi (mockup'ın çizdiği). Sözleşme §3.4 ise sekmeyle çakışan geçişleri tümden kaldırıyor.</span> <span class="rec">Öneri: B — satır eklemiyor, üç türde aynı yerde.</span></li>
+      <li><b>Satır eylemi.</b> <span class="o">A: Denetimdeki A8 / T8 — "⋯" satır düğmesi hep görünür. B: Sadelik kuralı — düğme yok, ad bağlantı, satır yan panel açar (mockup'ın çizdiği); tek istisna pod sayfasındaki servis satırının yerinde açılma oku.</span> <span class="rec">Öneri: B bu üç sayfada; A8 öbür liste sayfaları için ayrıca gözden geçirilsin.</span></li>
+      <li><b>Türde karşılığı olmayan sekmeler.</b> <span class="o">A: Brief'teki gibi sekiz sekme her türde görünür (endpoint'te Log ve Değişiklikler, pod'da Problemler ve Değişiklikler servisten kapsamla gelir). B: Sözleşmedeki gibi türde olmayan sekme gizlenir.</span> <span class="rec">Öneri: A — ama yalnız ADIM 2 dolaylı kaynağı doğrularsa; doğrulanamayan sekme gizlenir.</span></li>
+      <li><b>Türe özgü sekme adı.</b> <span class="o">A: Brief — pod "Olaylar", endpoint "Zaman dağılımı"; Konteynerler Genel'e iner. B: Sözleşme — pod "Konteynerler", endpoint "Kod".</span> <span class="rec">Öneri: A; "Olaylar" adı başka bir ekranla çakışıyorsa "Yaşam döngüsü".</span></li>
+      <li><b>İz yolu.</b> <span class="o">A: Gelinen yol; adresin içinde taşınır (paylaşılan bağlantı aynı yolu gösterir, adres uzar). B: Sözleşmedeki sabit kırıntı (liste sayfası › ad).</span> <span class="rec">Öneri: A; yol boşken ilk kırıntı liste sayfası olur, en çok altı adım tutulur.</span></li>
+      <li><b>Pod'un üst şeridi ve sağlık noktası.</b> <span class="o">A: Pod'da da İstek · Hata · Süre şeridi (trace'in pod kırılımı) ve nokta açık Problem'den; pod durumu ayrı yazıyla. B: Pod'da şerit CPU · bellek · yeniden başlatma olur, nokta pod durumundan türetilir.</span> <span class="rec">Öneri: A, pod başına istek / hata / süre kaynağı doğrulanırsa; aksi halde şerit B'ye düşer, nokta yine Problem'den.</span></li>
+      <li><b>Endpoint sayfasında servis çipi.</b> <span class="o">A: Servis endpoint kimliğinin parçasıdır; çip gösterilir ama kaldırılamaz. B: Brief'teki gibi kaldırılabilir (mockup'ın çizdiği); kalkınca aynı yol tüm servislerde toplanır.</span> <span class="rec">Öneri: A — karar ADIM 2'de endpoint kimliğine bağlanmalı.</span></li>
+      <li><b>Kardeş kıyasının kümesi ve eşiği.</b> <span class="o">A: Küme = aynı workload'ın o an çalışan diğer pod'ları; oran medyanın 1,5 katını aşınca rozet olur, 2,5 katında kırmızıya döner. B: Küme = servisin tüm pod'ları (cluster'lar arası); eşik istatistiksel sapma bandı.</span> <span class="rec">Öneri: A — okunması kolay; tek pod'luk workload'da rozet "kardeş yok" der.</span></li>
+    </ol>
+  </div>
+
+  <div class="box out">
+    <h2>Çıkarılanlar <span class="nil" id="out-n"></span></h2>
+    <ol id="out-l">
+      <li>Servis — ☆ sabitleme yıldızı <span class="to">→ kaldırıldı; Servisler listesinde kalır.</span></li>
+      <li>Servis — çalışma zamanı rozeti (dil ve sürüm) <span class="to">→ İlişkiler sekmesi, çalışma ortamı kutusu.</span></li>
+      <li>Servis — altı gezinme düğmesi (Backtrace, Logs, Endpoints, Problems, Signals, Traces) <span class="to">→ sekmeler ve "Şurada aç" menüsü.</span></li>
+      <li>Servis — Sağlık kontrolü düğmesi <span class="to">→ çizilmedi; "Şurada aç" menüsüne satır olarak önerilir.</span></li>
+      <li>Servis — dikkat şeridinin çoklu problem / exception satırları <span class="to">→ Problemler sekmesi; şeritte tek cümle kalır.</span></li>
+      <li>Servis — SLO dipnotu ve SLO kartları <span class="to">→ Problemler sekmesi (çizilmedi).</span></li>
+      <li>Servis — Overview'daki 3 karo, mini eğilim çizgileri ve değişim yüzdeleri <span class="to">→ başlıktaki 3 ölçü; değişim yüzdesi kaldırıldı.</span></li>
+      <li>Servis — "Compare to" önceki pencere kıyası <span class="to">→ Metrik sekmesi (çizilmedi).</span></li>
+      <li>Servis — kaynak seçici ve rozetleri (span ↔ metrik, "metrik yok", "eksik", gRPC ailesi, ortam süzgeci bandı) <span class="to">→ ⓘ bilgi paneli.</span></li>
+      <li>Servis — penceredeki anomaliler tablosu ve bant aç / kapa <span class="to">→ Problemler sekmesi (çizilmedi).</span></li>
+      <li>Servis — Top endpoints kartı <span class="to">→ Genel sekmesindeki Endpoint tablosu.</span></li>
+      <li>Servis — veritabanı kartı <span class="to">→ İlişkiler sekmesi (çağırdıkları).</span></li>
+      <li>Servis — komşular bölümü <span class="to">→ İlişkiler sekmesi.</span></li>
+      <li>Servis — Infrastructure, Topology sekmeleri <span class="to">→ İlişkiler sekmesi; pod'lar Genel'deki Pod tablosu.</span></li>
+      <li>Servis — GitOps sekmesi <span class="to">→ Değişiklikler sekmesi.</span></li>
+      <li>Servis — HTTP/GRPC ve Messaging sekmeleri <span class="to">→ Metrik sekmesi (çizilmedi).</span></li>
+      <li>Servis — sekme sayacı (Operations n) <span class="to">→ kaldırıldı; sayı tablo başlığında.</span></li>
+      <li>Endpoint — method rozeti <span class="to">→ adın parçası (rozet değil).</span></li>
+      <li>Endpoint — "shape" rozeti ve gruplama kuralı <span class="to">→ ⓘ bilgi paneli.</span></li>
+      <li>Endpoint — cluster seçicisi ve <span class="mono">env=… · cluster=…</span> rozeti <span class="to">→ üst çubuktaki ortam seçici ve başlık satırı.</span></li>
+      <li>Endpoint — alarm düğmesi <span class="to">→ kaldırıldı (salt okunur).</span></li>
+      <li>Endpoint — Traces / Explore / Service geçiş düğmeleri <span class="to">→ "Şurada aç" menüsü ve iz yolu.</span></li>
+      <li>Endpoint — 8 karodan beşi (Calls, Errors, Avg, P50, P99) <span class="to">→ satır yan paneli ve Metrik sekmesi.</span></li>
+      <li>Endpoint — önceki pencere kıyası düğmesi ve değişim okları <span class="to">→ Metrik sekmesi (çizilmedi).</span></li>
+      <li>Endpoint — p50 / p95 / p99 seçici <span class="to">→ Metrik sekmesinde üç çizgi.</span></li>
+      <li>Endpoint — kaynak seçici ve ortam kapsam bandı <span class="to">→ ⓘ bilgi paneli.</span></li>
+      <li>Endpoint — sayfa altındaki açıklama paragrafı (kimlik kuralı, yüzdelik yöntemi) <span class="to">→ ⓘ bilgi paneli.</span></li>
+      <li>Endpoint — Split bölümü <span class="to">→ Genel'deki Pod tablosu (içeriği ADIM 2'de doğrulanacak).</span></li>
+      <li>Endpoint — Callers bölümü <span class="to">→ İlişkiler sekmesi.</span></li>
+      <li>Endpoint — Failing traces bölümü <span class="to">→ Trace sekmesi.</span></li>
+      <li>Endpoint — Exceptions bölümü <span class="to">→ Problemler sekmesi (çizilmedi).</span></li>
+      <li>Endpoint — Operation card <span class="to">→ Zaman dağılımı sekmesi (çizilmedi).</span></li>
+      <li>Pod — kimlik satırı (cluster › node › namespace › workload › pod) <span class="to">→ "Yığın" menüsü ve İlişkiler sekmesi.</span></li>
+      <li>Pod — live / stale / faz / name-stable rozetleri <span class="to">→ başlıkta tek durum sözcüğü; faz Genel bilgi kutusunda; name-stable ⓘ panelinde.</span></li>
+      <li>Pod — ömür · son görülme · kaynak · uid satırı <span class="to">→ yaş Genel bilgi kutusunda; kaynak ve uid ⓘ panelinde.</span></li>
+      <li>Pod — çoklu cluster ve "kesildi" uyarıları <span class="to">→ ⓘ bilgi paneli; yalnız veri eksikse görünür uyarı.</span></li>
+      <li>Pod — meta satırı (Servis, Workload, Node, Yaş, Sürüm) <span class="to">→ Genel sekmesi bilgi kutusu.</span></li>
+      <li>Pod — "CoSRE'ye sor" düğmesi <span class="to">→ çizilmedi; sözleşmedeki başlık eylemi olarak kalabilir.</span></li>
+      <li>Pod — dört geçiş bağlantısı (← servis, Servis sayfası, Trace'ler, Loglar) <span class="to">→ iz yolu, Servisler tablosu ve "Şurada aç" menüsü.</span></li>
+      <li>Pod — altyapı trend paneli <span class="to">→ Metrik sekmesi.</span></li>
+      <li>Pod — Servisler tablosunun Span, Hata (adet), Son görülme, Eylemler sütunları <span class="to">→ satır yan paneli.</span></li>
+      <li>Pod — Konteynerler tablosunun bayat / okuma hatası rozetleri <span class="to">→ tablo Genel'de kalır; rozetler yalnız veri eksikse.</span></li>
+      <li>Pod — "aynı workload" paneli ve kardeş cümlesi <span class="to">→ İlişkiler'deki Kardeş pod'lar tablosu, oran sütunu ve grafiklerdeki kardeş bandı.</span></li>
+      <li>Pod — kardeş tablosunun Faz, Restarts, CPU sütunları <span class="to">→ satır yan paneli.</span></li>
+      <li>Pod — Son trace'ler kapalı bölümü ve "→" eylem sütunu <span class="to">→ Trace sekmesi; satır yan panel açar.</span></li>
+      <li>Pod — trace tablosunun kapsam uyarı rozetleri (servis geneli, daraltıldı, özet boşluğu) <span class="to">→ ⓘ bilgi paneli; yalnız veri eksikse görünür uyarı.</span></li>
+      <li>Pod — Ağ + JVM ve Runtime kapalı bölümleri <span class="to">→ Metrik sekmesi.</span></li>
+      <li>Pod — PromQL sorgu listesi <span class="to">→ ⓘ bilgi paneli.</span></li>
+      <li>Pod — Etiketler tablosunun "daha fazla göster" düğmesi <span class="to">→ kaldırıldı; tablo İlişkiler sekmesinde.</span></li>
+      <li>Pod — ömürler tablosunun Kaynak sütunu <span class="to">→ ⓘ bilgi paneli; tablo İlişkiler'de "Yaşam döngüsü".</span></li>
+      <li>Pod — Loglar bölümünün aç / kapa başlığı ve ipucu metni <span class="to">→ kaldırıldı; loglar kendi sekmesinde.</span></li>
+      <li>Pod — tablo altı notları (uç adı, metrik adı, sayfa boyutu, satır sınırı) <span class="to">→ ⓘ bilgi paneli.</span></li>
+    </ol>
+  </div>
+</section>
+
+<script>
+(function(){'use strict';
+/* Mockup betiği: hash tabanlı gezinme + sentetik veri. Ürün kodu değildir; dış istek yoktur.
+   Adres: #/<tür>/<kimlik>?scope=svc:…,ep:…,pod:…&tab=…&t=<dakika önce>&range=…&env=…&trail=…&panel=…
+   İz yolu (trail) ve kapsam (scope) adresin içinde taşınır: tarayıcının geri / ileri düğmeleri ve paylaşılan bağlantı aynı durumu verir.
+   Pod sekme içerikleri (metrik panelleri, kardeş bandı, loglar, olaylar, servisler, dışarı çağrılar, boş durumlar) kardeş mockup
+   pod-embedded.html ile aynı tasarım, aynı sözcükler ve aynı sayılardır; yalnız adlar bu senaryoya uyarlandı. */
+const NOW=new Date(2026,10,27,14,40,0).getTime();
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const view=$('#view'),tp=$('#tp'),DASH='<span class="nil">—</span>';
+
+/* ── sentetik veri (gerçek kurum, cluster, kişi adı yok) ── */
+const A='api-gateway-7d9c6b5f4-',T='transfer-service-5b7d8c9f6-',OUT=A+'x2k8p',GONE='api-gateway-6c8f7d9b5-m4r7t',NOTEL='batch-reporter-5f6d8c7b9-t7v2n',NOLOG='ledger-sync-84b6c5d7f-p3x9k',HOT='post-transfers',TRC='4f9a2c71d0b35e8846a1c9d2f07b6e53';
+const WL={
+ 'api-gateway':{owner:'Ödeme Platformu',rt:'Java 21.0.2',ns:'payments',cluster:'prod-a',ver:'4.18.2',img:'registry.example/api-gateway:4.18.2',ctr:['api','worker','proxy']},
+ 'transfer-service':{owner:'Para Transferi',rt:'Java 21.0.2',ns:'payments',cluster:'prod-a',ver:'2.7.0',img:'registry.example/transfer-service:2.7.0',ctr:['app','proxy']},
+ 'batch-reporter':{owner:'Raporlama',rt:'—',ns:'payments',cluster:'prod-a',ver:'1.3.0',img:'registry.example/batch-reporter:1.3.0',ctr:['reporter']},
+ 'ledger-sync':{owner:'Muhasebe',rt:'Go 1.22.5',ns:'payments',cluster:'prod-a',ver:'0.9.4',img:'registry.example/ledger-sync:0.9.4',ctr:['sync','proxy']}
+};
+const AP=[OUT,A+'b7m2q',A+'h4t9z',A+'k9w3d',A+'q5n8v',A+'z2c6r'];
+const SVC={
+ 'api-gateway':{wl:'api-gateway',eps:[HOT,'post-payments','get-account','get-balance','get-healthz'],pods:[...AP,GONE]},
+ 'api-gateway-worker':{wl:'api-gateway',eps:['retry','settled'],pods:AP},
+ 'transfer-service':{wl:'transfer-service',eps:['int-post-transfers','int-get-transfer','int-get-limits'],pods:[T+'k3r8v',T+'p7x2d',T+'w5n9j']},
+ 'ledger-sync':{wl:'ledger-sync',eps:['ledger-entries'],pods:[NOLOG]}
+};
+/* r: pod başına istek/sn · err/avg/p95: aykırı pod'daki değer · k: aykırı pod'un diğer pod'ların medyanına oranı · errS: diğer pod'lardaki hata */
+const EP={
+ 'post-transfers':{svc:'api-gateway',m:'POST',path:'/api/v1/transfers',r:.853,err:4.1,errS:.42,avg:1240,p95:3860,k:3},
+ 'post-payments':{svc:'api-gateway',m:'POST',path:'/api/v1/payments',r:1.067,err:.95,avg:142,p95:410,k:1.2},
+ 'get-account':{svc:'api-gateway',m:'GET',path:'/api/v1/accounts/{id}',r:8.933,err:.42,avg:64.2,p95:181,k:1.1},
+ 'get-balance':{svc:'api-gateway',m:'GET',path:'/api/v1/accounts/{id}/balance',r:5.68,err:.08,avg:18.6,p95:52.3,k:1},
+ 'get-healthz':{svc:'api-gateway',m:'GET',path:'/healthz',r:.533,err:0,avg:1.2,p95:2.8,k:1},
+ 'retry':{svc:'api-gateway-worker',m:'process',path:'transfers.retry',r:.289,err:.38,avg:486,p95:2100,k:1.1},
+ 'settled':{svc:'api-gateway-worker',m:'process',path:'transfers.settled',r:3.462,err:0,avg:189,p95:402,k:1},
+ 'int-post-transfers':{svc:'transfer-service',m:'POST',path:'/internal/transfers',r:19.6,err:.31,avg:122,p95:738,k:1},
+ 'int-get-transfer':{svc:'transfer-service',m:'GET',path:'/internal/transfers/{id}',r:6.3,err:.1,avg:22,p95:61,k:1},
+ 'int-get-limits':{svc:'transfer-service',m:'GET',path:'/internal/limits/{accountId}',r:4,err:.05,avg:9.2,p95:31,k:1},
+ 'ledger-entries':{svc:'ledger-sync',m:'process',path:'ledger.entries',r:2.4,err:0,avg:35.5,p95:88.4,k:1}
+};
+const POD={
+ [OUT]:{wl:'api-gateway',node:'worker-12',out:1,j:0,restarts:2,cpu:.35,mem:645,age:153.77,uid:'3f6c1e2a-9b4d-4c7e-8a15-d02e7b6f91c3'},
+ [A+'b7m2q']:{wl:'api-gateway',node:'worker-07',j:-.3,restarts:0,cpu:.29,mem:548,age:153.2,thr:2.8,heap:379,gc:1.5,net:1.99},
+ [A+'h4t9z']:{wl:'api-gateway',node:'worker-03',j:.4,restarts:0,cpu:.31,mem:561,age:152.6,thr:3.6,heap:412,gc:1.7,net:2.1},
+ [A+'k9w3d']:{wl:'api-gateway',node:'worker-12',j:-.6,restarts:0,cpu:.27,mem:517,age:152.1,thr:1.9,heap:307,gc:1.2,net:1.8},
+ [A+'q5n8v']:{wl:'api-gateway',node:'worker-07',j:.1,restarts:0,cpu:.3,mem:533,age:151.5,thr:2.4,heap:345,gc:1.4,net:1.92},
+ [A+'z2c6r']:{wl:'api-gateway',node:'worker-03',j:.6,restarts:0,cpu:.33,mem:579,age:150.9,thr:4.4,heap:438,gc:2,net:2.27},
+ [GONE]:{wl:'api-gateway',node:'worker-03',gone:1,goneAt:59.8,j:0,restarts:0,cpu:.3,mem:540,age:4430,thr:2.6,heap:380,gc:1.5,net:1.9},
+ [NOTEL]:{wl:'batch-reporter',node:'worker-05',notel:1,j:0,restarts:0,cpu:.12,mem:212,age:2890,thr:.2,net:.05},
+ [NOLOG]:{wl:'ledger-sync',node:'worker-09',nolog:1,j:0,restarts:0,cpu:.18,mem:164,age:7300,thr:.4,gc:.2,net:.3},
+ [T+'k3r8v']:{wl:'transfer-service',node:'worker-05',j:.3,restarts:0,cpu:.44,mem:612,age:2890,thr:1.3,heap:420,gc:1.4,net:1.2},
+ [T+'p7x2d']:{wl:'transfer-service',node:'worker-09',j:-.2,restarts:0,cpu:.41,mem:598,age:2890,thr:1,heap:405,gc:1.2,net:1.1},
+ [T+'w5n9j']:{wl:'transfer-service',node:'worker-05',j:0,restarts:0,cpu:.43,mem:604,age:2889,thr:1.1,heap:411,gc:1.3,net:1.15}
+};
+const LIM={cpuReq:.5,cpuLim:1,memReq:512,memLim:1024,heapMax:768};
+/* dışarı çağrılar: aykırı pod'un 3 saatlik sayıları [hedef, tür, çağrı, hata %, ortalama ms, 95. yüzdelik ms, medyana oran] */
+const OUTB={'api-gateway':[['payments-db','Veritabanı',412800,.02,4.82,21.4,1],['session-cache','Önbellek',245376,0,.412,1.1,1],['transfers.events','Kafka yayını',107040,0,2.1,8.4,1],['transfer-service','Servis',105696,.31,318,1920,2.6],['fraud-check.example','Dış servis',96480,1.84,148,612,1.1]],
+ 'transfer-service':[['payments-db','Veritabanı',322000,.01,5.1,19.8,1],['ledger.entries','Kafka yayını',211000,0,1.9,7.7,1]],'ledger-sync':[['ledger-db','Veritabanı',25900,0,6.4,18.2,1]],'batch-reporter':[]};
+const INB={'api-gateway':[['web-bff','Servis',61.4,.34,412],['mobile-bff','Servis',40.9,.29,388]],'api-gateway-worker':[['transfers.retry','Kafka konusu',1.73,.38,2100],['transfers.settled','Kafka konusu',20.8,0,402]],
+ 'transfer-service':[['api-gateway','Servis',58.7,.31,935]],'ledger-sync':[['ledger.entries','Kafka konusu',2.4,0,88.4]]};
+const OPS={'api-gateway':[['POST /api/v1/transfers','Giriş',5.12,1.03,1716,1287],['transfer-service · POST /internal/transfers','Giden çağrı',58.7,.31,935,738],['POST /api/v1/payments','Giriş',6.4,.95,353,342],['GET /api/v1/accounts/{id}','Giriş',53.6,.42,167,165],['GET /api/v1/accounts/{id}/balance','Giriş',34.1,.08,52.3,52.3],['payments-db · sorgu','Giden çağrı',229,.02,21.4,21.4],['session-cache · GET','Giden çağrı',136,0,1.1,1.1]],
+ 'api-gateway-worker':[['process transfers.retry','Tüketici',1.73,.38,1940,1909],['process transfers.settled','Tüketici',20.8,0,402,402]],
+ 'transfer-service':[['POST /internal/transfers','Giriş',58.8,.31,738,738],['GET /internal/transfers/{id}','Giriş',18.9,.1,61,61],['payments-db · sorgu','Giden çağrı',29.8,.01,19.8,19.8]],
+ 'ledger-sync':[['process ledger.entries','Tüketici',2.4,0,88.4,88.4]]};
+const CHG={'api-gateway':[[155.8,'Rollout: 4.18.1 → 4.18.2','6 pod yenilendi','Tamamlandı'],[4430,'Rollout: 4.18.0 → 4.18.1','6 pod yenilendi','Tamamlandı'],[7300,'Yapılandırma: yönlendirme kuralları güncellendi','Tüm pod\'lar','Uygulandı']],
+ 'transfer-service':[[2890,'Rollout: 2.6.4 → 2.7.0','3 pod yenilendi','Tamamlandı']],'batch-reporter':[],'ledger-sync':[]};
+const cm=c=>{const p=c.split(/[:,]/).map(Number);return (14*3600+40*60-(p[0]*3600+p[1]*60+p[2]+(p[3]||0)/1000))/60};
+const TR=[
+ ['14:39:46','9c41e07ab2d38f5560c1d7e4a90b3f12',OUT,HOT,3120,48,1],['14:39:08','1be7730c5fa94d02b8e61a37c5d09e44',OUT,'get-account',1840,17,1],
+ ['14:37:51','e05d9a61c7f20b3348d9a1e6f7c25b80',OUT,'post-payments',612,12,1],['14:36:22','07af9e3b5c61d2e8a4490b71f6c2d5e3',A+'h4t9z','get-account',61.8,14,0],
+ ['14:35:40','77a0c3e9d1b46f2805ce93b1a4d7e016',OUT,'retry',2400,9,1],['14:33:27','30fd58b2a6ce91d47e0b5c83f2a1d679',OUT,HOT,4070,51,1],
+ ['14:30:55','c8e21f4d07a53b9e62d0f18a5c47e3b1',OUT,'get-account',943,16,1],['14:27:41','e2b6c8d4410f7a39c5d81e06b9f4a372',A+'b7m2q',HOT,1210,45,0],
+ ['14:20:58','5a9e04d7c1b82f6630e7d5a9b1c40f2d',OUT,HOT,5000,44,1],['13:16:02','b2d07e5a9c1463f8807e2a4d6c9150fe',OUT,HOT,4420,41,1],
+ ['13:14:30',TRC,OUT,HOT,3860,46,1],['12:58:11','d6b30a9e47c15f2a83b0e6d41c97a205',OUT,HOT,438,47,0],
+ ['14:25:48','b3d19e7a6c5f4820e1a7c94d2f60b835',T+'k3r8v','int-post-transfers',842,11,0]
+].map(x=>({m:cm(x[0]),id:x[1],pod:x[2],ep:x[3],d:x[4],sp:x[5],err:x[6]}));
+const LG=[
+ ['13:12:04,118','INFO','api','Transfer batch tb-7f3a accepted: 2400 items'],
+ ['13:13:41,907','WARN','api','[gc] GC(415) Pause Full (Allocation Failure) 739M->728M(768M) 1612.480ms'],
+ ['13:14:12,300','WARN','api','ConnectionPool-1 - thread starvation detected (housekeeper delta=4s812ms)'],
+ ['13:14:30,412','WARN','api','Slow request POST /api/v1/transfers took 3861 ms',TRC,HOT],
+ ['13:14:31,006','WARN','api','[gc] GC(418) Pause Full (Allocation Failure) 742M->731M(768M) 1840.212ms'],
+ ['13:16:02,771','ERROR','api','POST /api/v1/transfers failed: java.lang.OutOfMemoryError: Java heap space','b2d07e5a9c1463f8807e2a4d6c9150fe',HOT],
+ ['13:17:48,390','ERROR','api','Exception in thread "transfer-worker-3" java.lang.OutOfMemoryError: GC overhead limit exceeded'],
+ ['13:18:39,950','WARN','api','[gc] GC(431) Pause Full (Allocation Failure) 766M->765M(768M) 2310.774ms'],
+ ['13:18:40,902','WARN','proxy','upstream connect error or disconnect/reset before headers. reset reason: connection termination'],
+ ['13:18:53,204','INFO','api','Starting ApiGatewayApplication v4.18.2'],
+ ['13:19:06,988','INFO','api','Started ApiGatewayApplication in 13.812 seconds'],
+ ['14:19:58,402','WARN','api','[gc] GC(612) Pause Full (Allocation Failure) 765M->764M(768M) 2188.031ms'],
+ ['14:20:58,117','ERROR','api','POST /api/v1/transfers failed: java.lang.OutOfMemoryError: Java heap space','5a9e04d7c1b82f6630e7d5a9b1c40f2d',HOT],
+ ['14:21:21,340','INFO','api','Starting ApiGatewayApplication v4.18.2'],
+ ['14:21:35,008','INFO','api','Started ApiGatewayApplication in 13.668 seconds'],
+ ['14:35:40,512','ERROR','worker','transfers.retry failed after 3 attempts: upstream timeout','77a0c3e9d1b46f2805ce93b1a4d7e016','retry'],
+ ['14:39:46,655','WARN','api','Slow request POST /api/v1/transfers took 3120 ms','9c41e07ab2d38f5560c1d7e4a90b3f12',HOT]
+].map(x=>({pod:OUT,ck:x[0],m:cm(x[0]),lv:x[1],c:x[2],msg:x[3],tr:x[4],ep:x[5]})).concat([
+ {pod:A+'b7m2q',ck:'14:27:41,655',lv:'INFO',c:'api',msg:'Completed POST /api/v1/transfers 201 in 1210 ms',tr:'e2b6c8d4410f7a39c5d81e06b9f4a372',ep:HOT},
+ {pod:GONE,ck:'13:40:05,220',lv:'INFO',c:'api',msg:'Received SIGTERM, shutting down gracefully'},
+ {pod:GONE,ck:'13:40:11,870',lv:'INFO',c:'api',msg:'Stopped ApiGatewayApplication'},
+ {pod:T+'k3r8v',ck:'14:25:48,930',lv:'WARN',c:'app',msg:'fraud-check.example POST /score took 612 ms',tr:'b3d19e7a6c5f4820e1a7c94d2f60b835',ep:'int-post-transfers'}
+].map(x=>({...x,m:cm(x.ck)}))).map((x,i)=>({...x,i}));
+const RST={[OUT]:[81.33,18.97]};
+/* türetilmiş olaylar: [dakika önce, olay, ayrıntı, container, ton] */
+const EVT={[OUT]:[[17.48,'Hazır','3/3 container hazır','api'],[18.87,'Bekleme','CrashLoopBackOff','api','err'],[18.88,'Restart','2. yeniden başlatma','api','warn'],[18.97,'Sonlanma','Bellek sınırı aşıldı (OOMKilled)','api','err'],
+ [80.13,'Hazır','3/3 container hazır','api'],[81.3,'Bekleme','CrashLoopBackOff','api','err'],[81.32,'Restart','1. yeniden başlatma','api','warn'],[81.33,'Sonlanma','Bellek sınırı aşıldı (OOMKilled)','api','err'],
+ [152.97,'Faz değişimi','Pending → Running',''],[153.73,'Bekleme','ContainerCreating','api, worker, proxy'],[153.77,'Node ataması','worker-12',''],[155.83,'Rollout','Deployment/api-gateway 4.18.2','']]};
+const evts=p=>EVT[p]||(POD[p].gone?[[POD[p].goneAt,'Silinme','Pod silindi','']]:[]).concat([[POD[p].age-.8,'Faz değişimi','Pending → Running',''],[POD[p].age-.03,'Bekleme','ContainerCreating',WL[POD[p].wl].ctr.join(', ')],[POD[p].age,'Node ataması',POD[p].node,'']]);
+
+/* ── biçim: Türkçe ondalık virgül · süre üç anlamlı hane, tek birim · IEC bayt · göreli zaman (üzerine gelince mutlak) ── */
+const tr=(x,d)=>x.toFixed(d).replace('.',',');
+const f3=x=>{if(!x)return '0';const d=Math.max(0,Math.min(3,2-Math.floor(Math.log10(Math.abs(x)))));return tr(x,d)};
+const dur=ms=>!ms?'0':ms<999.5?f3(ms)+' ms':ms<6e4?f3(ms/1e3)+' s':ms<36e5?f3(ms/6e4)+' dk':ms<1728e5?f3(ms/36e5)+' sa':f3(ms/864e5)+' gün';
+const pct=x=>'%'+(x?tr(x,x<10?2:1):'0');
+const rate=x=>!x?'0':f3(x)+'/sn';
+const trim=s=>s.replace(/,(\d*?)0+$/,(m,a)=>a?','+a:'');
+const bytes=mib=>!mib?'0':mib>=1000?trim(f3(mib/1024))+' GiB':f3(mib)+' MiB';
+const num=x=>!x?'0':trim(f3(x));
+const int=n=>String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+function rel(m){
+  const s=Math.round(m*60);if(s<=0)return 'şimdi';if(s<60)return s+' sn önce';
+  const h=m/60;if(m<120&&Math.abs(h-Math.round(h))>.001)return Math.floor(m)+' dk önce';
+  return h<48?Math.max(1,Math.floor(h+.001))+' sa önce':Math.floor(h/24)+' gün önce';
+}
+const p2=n=>String(n).padStart(2,'0');
+const clock=m=>{const d=new Date(NOW-m*6e4);return p2(d.getHours())+':'+p2(d.getMinutes())+':'+p2(d.getSeconds())};
+const abs=m=>{const d=new Date(NOW-m*6e4);return p2(d.getDate())+'.'+p2(d.getMonth()+1)+'.'+d.getFullYear()+' '+clock(m)};
+const tm=m=>`<time title="${abs(m)}">${rel(m)}</time>`;
+const tone=(h,t)=>t?`<span class="dev ${t}">▲ ${h}</span>`:h;
+const median=a=>{const s=[...a].sort((x,y)=>x-y),n=s.length>>1;return s.length%2?s[n]:(s[n-1]+s[n])/2};
+const hs=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))%997;return h/31};
+
+/* ── durum + adres ── */
+const RANGES={'15m':15,'1h':60,'3h':180,'24h':1440},RLAB={'15m':'Son 15 dakikada','1h':'Son 1 saatte','3h':'Son 3 saatte','24h':'Son 24 saatte'};
+const KP={service:'svc',endpoint:'ep',pod:'pod'},PK={svc:'service',ep:'endpoint',pod:'pod'},KL={service:'Servis',endpoint:'Endpoint',pod:'Pod'},TK={service:'s',endpoint:'e',pod:'p'},KT={s:'service',e:'endpoint',p:'pod'},ORD={svc:0,ep:1,pod:2};
+let S,prevKey='';
+const ent=(k,id)=>k==='service'?SVC[id]:k==='endpoint'?EP[id]:k==='pod'?POD[id]:null;
+const svcsOf=(k,id)=>k==='service'?[id]:k==='endpoint'?[EP[id].svc]:Object.keys(SVC).filter(s=>SVC[s].pods.includes(id));
+const wlOf=(k,id)=>k==='pod'?POD[id].wl:SVC[svcsOf(k,id)[0]].wl;
+const wlPods=w=>Object.keys(POD).filter(p=>POD[p].wl===w);
+const WIN=()=>RANGES[S.range];
+function parse(){
+  const h=location.hash.replace(/^#\/?/,''),i=h.indexOf('?'),path=i<0?h:h.slice(0,i),q=new URLSearchParams(i<0?'':h.slice(i+1)),j=path.indexOf('/');
+  const L=(k,sep)=>(q.get(k)||'').split(sep).filter(Boolean);
+  let id=j<0?'':path.slice(j+1);try{id=decodeURIComponent(id)}catch(e){}
+  return {kind:j<0?path:path.slice(0,j),id,scope:L('scope',','),tab:q.get('tab')||'genel',t:q.has('t')&&q.get('t')!==''&&isFinite(+q.get('t'))?+q.get('t'):null,
+    range:RANGES[q.get('range')]?q.get('range'):'3h',env:q.has('env')?q.get('env'):'prod',trail:L('trail','|'),panel:q.get('panel')||'',open:q.get('open')||'',c:q.get('c')||'',lv:q.get('lv')||'',f:q.get('f')||''};
+}
+const enc=v=>encodeURIComponent(v).replace(/%3A/gi,':').replace(/%2C/gi,',').replace(/%7C/gi,'|');
+function href(o){
+  const q=[],P=(k,v,sep)=>{if(Array.isArray(v))v=v.join(sep);if(v!==''&&v!=null)q.push(k+'='+enc(String(v)))};
+  P('scope',o.scope,',');if(o.tab&&o.tab!=='genel')P('tab',o.tab);P('t',o.t);P('c',o.c);P('lv',o.lv);P('f',o.f);P('open',o.open);P('range',o.range);q.push('env='+enc(o.env||''));P('trail',o.trail,'|');P('panel',o.panel);
+  return '#/'+o.kind+'/'+enc(o.id)+'?'+q.join('&');
+}
+const up=p=>href({...S,...p});
+/* başka bir varlığa geçiş: bulunulan varlık kapsam çipine dönüşür, iz yolu bir adım uzar; zaman aralığı, ortam ve sabitlenen an taşınır */
+function go(kind,id,x){
+  if(kind===S.kind&&id===S.id)return up({panel:'',...x});
+  const sc=S.scope.filter(s=>s.split(':')[0]!==KP[kind]);
+  if(kind!==S.kind){const me=KP[S.kind]+':'+S.id;if(!sc.includes(me))sc.push(me)}
+  sc.sort((a,b)=>ORD[a.split(':')[0]]-ORD[b.split(':')[0]]);
+  const trail=[...S.trail,TK[S.kind]+':'+S.id+(S.scope.length?'~'+S.scope.join('~'):'')].slice(-6);
+  return href({kind,id,scope:sc,tab:'genel',t:S.t,range:S.range,env:S.env,trail,...x});
+}
+function valid(tok){
+  const i=tok.indexOf(':'),k=tok.slice(0,i),v=tok.slice(i+1),svs=svcsOf(S.kind,S.id);
+  if(k===KP[S.kind])return false;
+  return k==='svc'?svs.includes(v):k==='ep'?!!EP[v]&&svs.includes(EP[v].svc):k==='pod'?!!POD[v]&&svs.some(s=>SVC[s].pods.includes(v)):false;
+}
+const sOf=k=>S.scope.filter(s=>s.startsWith(k+':')).map(s=>s.slice(k.length+1));
+function sel(){
+  const p=sOf('pod'),e=sOf('ep'),sv=sOf('svc');let svs=svcsOf(S.kind,S.id);
+  if(S.kind==='pod'&&sv.length)svs=svs.filter(s=>sv.includes(s));
+  const eps=S.kind==='endpoint'?[S.id]:e.length?e:null;
+  if(eps)svs=svs.filter(s=>SVC[s].eps.some(x=>eps.includes(x)));
+  return {svs,pods:S.kind==='pod'?[S.id]:p.length?p:null,eps,wl:wlOf(S.kind,S.id)};
+}
+
+/* ── ölçüler: pod × endpoint hücrelerinden toplanır; servis / endpoint / pod sayıları birbirini tutar ── */
+const live=p=>!POD[p].gone&&!POD[p].notel;
+function pe(p,e){
+  const P=POD[p],E=EP[e],j=1+P.j*.05,k=P.out?1:E.k,eS=E.errS!=null?E.errS:E.err;
+  return {rps:E.r,err:P.out?E.err:eS,avg:E.avg/k*j,p95:E.p95/k*j,errN:eS,avgN:E.avg/E.k,p95N:E.p95/E.k};
+}
+function red(svs,pods,eps){
+  const l=svs.flatMap(sv=>SVC[sv].pods.filter(p=>live(p)&&(!pods||pods.includes(p))).flatMap(p=>SVC[sv].eps.filter(e=>!eps||eps.includes(e)).map(e=>pe(p,e))));
+  const r=l.reduce((a,x)=>a+x.rps,0);if(!r)return null;
+  const w=f=>l.reduce((a,x)=>a+x.rps*x[f],0)/r;
+  return {rps:r,err:w('err'),avg:w('avg'),p95:w('p95'),errN:w('errN'),avgN:w('avgN'),p95N:w('p95N')};
+}
+const M=()=>{const c=sel();return red(c.svs,c.pods,c.eps)};
+const dT=(v,n)=>v>n*2.5?'err':v>n*1.3?'warn':'';
+const eT=v=>v>=5?'err':v>=1?'warn':'';
+const cRate=r=>r?rate(r.rps):DASH;
+const cErr=r=>r?tone(pct(r.err),eT(r.err)):DASH;
+const cAvg=r=>r?tone(dur(r.avg),dT(r.avg,r.avgN)):DASH;
+const cP95=r=>r?tone(dur(r.p95),dT(r.p95,r.p95N)):DASH;
+const hasProb=(k,id)=>(k==='service'&&id==='api-gateway')||(k==='endpoint'&&id===HOT)||(k==='pod'&&id===OUT);
+const PROB={service:"POST /api/v1/transfers bir pod'da diğerlerine göre 3 kat yavaş; o pod bellek sınırına ulaşıp 2 kez yeniden başladı.",
+ endpoint:"Bu endpoint bir pod'da diğerlerine göre 3 kat yavaş; o pod bellek sınırına ulaşıp 2 kez yeniden başladı.",
+ pod:"Bellek sınırına ulaşıp 2 kez yeniden başladı; transfer isteği diğer pod'lara göre 3 kat yavaş."};
+/* kardeş kıyası: ortalama sürenin, aynı workload'ın çalışan diğer pod'larının medyanına oranı — her tabloda bu işlevden gelir */
+function ratio(svs,p,eps){
+  if(!live(p))return null;
+  const r=red(svs,[p],eps),o=wlPods(POD[p].wl).filter(x=>x!==p&&live(x)).map(x=>red(svs,[x],eps)).filter(Boolean);
+  return r&&o.length?r.avg/median(o.map(x=>x.avg)):null;
+}
+const cRatio=x=>x==null?DASH:x>=1.5?`<span class="badge ${x>=2.5?'err':'warn'}">▲ ${tr(x,1)}×</span>`:tr(x,1)+'×';
+
+/* ── adlar, ikonlar, varlık bağlantısı ── */
+const ICO={service:'<path d="M8 1.5l5.5 3.2v6.6L8 14.5l-5.5-3.2V4.7z"/><circle cx="8" cy="8" r="2"/>',endpoint:'<path d="M2 5h9M8 2l3 3-3 3M14 11H5M8 8l-3 3 3 3"/>',
+ pod:'<path d="M8 1.5l5.5 3v7L8 14.5l-5.5-3v-7zM2.5 4.5L8 7.5l5.5-3M8 7.5v7"/>',node:'<rect x="2" y="2.5" width="12" height="4.5" rx="1"/><rect x="2" y="9" width="12" height="4.5" rx="1"/><path d="M4.5 4.8h.01M4.5 11.3h.01"/>',
+ workload:'<path d="M8 2l6 3-6 3-6-3zM2 8l6 3 6-3M2 11l6 3 6-3"/>'};
+const ico=k=>`<svg class="ic" viewBox="0 0 16 16" aria-hidden="true">${ICO[k]}</svg>`;
+const podShort=id=>id.replace(/^(.*)-[a-z0-9]+-([a-z0-9]+)$/,'$1-…-$2');
+const nm=(k,id,short)=>k==='endpoint'?EP[id].m+' '+EP[id].path:k==='pod'&&short?podShort(id):id;
+const nmH=(k,id,short)=>k==='service'?esc(id):`<span class="mono"${short&&k==='pod'?` title="${esc(id)}"`:''}>${esc(nm(k,id,short))}</span>`;
+function elink(k,id,o){o=o||{};return ent(k,id)?`<a class="el" href="${go(k,id,o.x)}"${o.sc?` data-sc="${o.sc}"`:''}>${ico(k)}${nmH(k,id,o.short)}</a>`:`<span class="mono">${esc(id)}</span>`}
+
+/* ── pod kaynak ölçüleri (aykırı pod: bellek sınıra tırmanır, iki kez OOMKill; öbür ölçüler bellek baskısını izler) ── */
+const N=90;let PL=[];
+const nz=(s,m)=>Math.sin(m*.21+s)*.5+Math.sin(m*.057+s*2.3)*.35+Math.sin(m*.93+s*5.1)*.15;
+const sst=(a,b,x)=>{x=Math.min(1,Math.max(0,(x-a)/(b-a)));return x*x*(3-2*x)};
+const inc=m=>sst(112,92,m);
+const down=m=>(m<=81.33&&m>80)||(m<=18.97&&m>17.6);
+const memOut=m=>m>153.77?null:m>112?545+6*nz(3,m):m>86?545+450*(112-m)/26:m>81.33?995+25*(86-m)/4.67:m>80?190:m>18.97?190+828*Math.pow((80-m)/61.03,.8):m>17.6?190:190+455*Math.pow((17.6-m)/17.6,.7);
+const prs=m=>{const v=memOut(m);return v==null?0:Math.min(1,Math.max(0,(v-545)/475))};
+const OUTF={cpu:m=>.29+.39*Math.pow(prs(m),1.3),thr:m=>2.8+36.4*Math.pow(prs(m),1.3),heap:m=>Math.min(766,379+384*prs(m)),gc:m=>1.5+19.8*prs(m),nout:m=>1.99*(1-.19*prs(m)),nin:m=>.983*(1-.19*prs(m))};
+function mf(p,key){
+  const P=POD[p],s=hs(p+key);
+  if(key==='mem')return P.out?memOut:m=>(P.gone?m<=P.goneAt:m>P.age)?null:P.mem*(1+.022*nz(s,m));
+  if(P.out)return m=>m>153.77?null:down(m)?(key==='thr'||key==='gc'?0:OUTF[key](m)*.12):OUTF[key](m)*(1+.03*nz(s,m));
+  const b={cpu:P.cpu,thr:P.thr,heap:P.heap,gc:P.gc,nout:P.net,nin:P.net*.49}[key],a={cpu:.08,thr:.22,heap:.06,gc:.18,nout:.07,nin:.07}[key];
+  return m=>b==null||(P.gone?m<=P.goneAt:m>P.age)?null:b*(1+a*nz(s,m));
+}
+function bandOf(p,key){
+  const fs=wlPods(POD[p].wl).filter(x=>x!==p&&live(x)).map(x=>mf(x,key));if(!fs.length||POD[p].gone)return null;
+  const at=(m,g)=>{const v=fs.map(f=>f(m)).filter(x=>x!=null);return v.length?g(v):null};
+  return {n:fs.length,lo:m=>at(m,v=>Math.min(...v)),hi:m=>at(m,v=>Math.max(...v)),md:m=>at(m,median)};
+}
+
+/* ── grafik: SVG, ortak imleç (--cur), sabitlenen an (t), işaretler ── */
+const smp=f=>Array.from({length:N},(_,i)=>f(WIN()*(1-i/(N-1))));
+const nice=x=>{if(x<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(x))),f=x/p;return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p};
+const px=m=>((1-m/WIN())*100).toFixed(2);
+function plot(o){
+  const W=WIN(),cls='pl'+(o.tall?' tall':''),cap=`<span>${o.title}</span>${o.unit?`<span class="u">${o.unit}</span>`:''}${o.big?`<span class="big">${o.big}</span>`:''}`;
+  const lines=(o.lines||[]).map(l=>({...l,v:smp(l.f)}));
+  if(o.empty||!lines.some(l=>l.v.some(v=>v!=null)))return `<figure class="${cls}"><figcaption>${cap}</figcaption><div class="pl-b"><div class="pl-empty">${o.empty||'Bu aralıkta veri yok.'}</div></div></figure>`;
+  const band=o.band&&{lo:smp(o.band.lo),hi:smp(o.band.hi),md:smp(o.band.md)};
+  const all=[...lines.flatMap(l=>l.v),...(band?band.hi:[]),...(o.refs||[]).map(r=>r.v)].filter(v=>v!=null);
+  const mx=o.max||nice(Math.max(...all,1e-9)*1.08),X=i=>(i/(N-1)*100).toFixed(2),Y=v=>(100-Math.min(v,mx)/mx*100).toFixed(2);
+  const path=v=>{let d='',pen=0;v.forEach((y,i)=>{if(y==null){pen=0;return}d+=(pen?'L':'M')+X(i)+' '+Y(y);pen=1});return d};
+  let g='<path class="g" d="M0 0H100M0 50H100M0 100H100"/>';
+  if(band){const ok=band.hi.map((v,i)=>v!=null&&band.lo[i]!=null?i:-1).filter(i=>i>=0);
+    if(ok.length>1)g+=`<path class="band" d="${ok.map((i,n)=>(n?'L':'M')+X(i)+' '+Y(band.hi[i])).join('')}${ok.slice().reverse().map(i=>'L'+X(i)+' '+Y(band.lo[i])).join('')}Z"/><path class="ln thin dash c5" d="${path(band.md)}"/>`}
+  (o.refs||[]).forEach(r=>{g+=`<path class="ln dash ${r.c}" d="M0 ${Y(r.v)}H100"/>`});
+  lines.forEach(l=>{g+=`<path class="ln ${l.c||'c1'}${l.thin?' thin':''}" d="${path(l.v)}"/>`});
+  const i=PL.push({ls:lines.map(l=>({f:l.f})),fmt:o.fmt})-1,at=S.t!=null&&S.t<=W?S.t:0,V=f=>{const v=f(at);return v==null?'—':o.fmt(v)};
+  const mk=(o.marks||[]).filter(k=>k.m<W).map(k=>`<span class="mk${k.bad?' bad':''}${+px(k.m)<30?' r':''}" style="left:${px(k.m)}%"><a href="${up({t:+k.m.toFixed(2),panel:''})}" title="${esc(k.l)}, ${rel(k.m)}. İmleci bu ana taşı.">${esc(o.tall?k.l:k.s||k.l)}</a></span>`).join('');
+  const pin=S.t!=null&&S.t<=W?`<i class="pin" style="left:${px(S.t)}%"></i>`:'';
+  const sp=o.spike&&o.spike.m<W?`<a class="spike" data-sc="5" href="${up({t:o.spike.m,panel:''})}" style="left:${px(o.spike.m)}%;top:${Y(o.spike.v)}%" aria-label="Bellek sıçraması, ${rel(o.spike.m)}. İmleci bu ana taşı."><span aria-hidden="true">sıçrama</span></a>`:'';
+  const lg=o.lg===false?[]:[...lines.filter(l=>l.n).map(l=>`<span><i class="${l.c||'c1'}"></i>${l.n} <b>${V(l.f)}</b></span>`),...(o.refs||[]).map(r=>`<span><i class="d ${r.c}"></i>${r.n} <b>${o.fmt(r.v)}</b></span>`),
+    ...(band?[`<span><i class="b"></i>Kardeş medyanı <b>${V(o.band.md)}</b> (${V(o.band.lo)} – ${V(o.band.hi)})</span>`]:[])];
+  return `<figure class="${cls}"><figcaption>${cap}${o.right||''}<span class="rd" data-i="${i}"></span></figcaption>
+<div class="pl-b${mk?' hm':''}"><div class="pl-y" aria-hidden="true"><span>${o.fmt(mx)}</span><span>${o.fmt(mx/2)}</span><span>0</span></div>
+<div class="pl-a"><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${esc(o.aria||o.title)}">${g}</svg>${mk}${pin}${sp}<i class="cur"></i></div></div>
+<div class="pl-x" aria-hidden="true"><span>${rel(W)}</span><span>${rel(W*2/3)}</span><span>${rel(W/3)}</span><span>şimdi</span></div>${lg.length?`<div class="pl-lg">${lg.join('')}</div>`:''}</figure>`;
+}
+function readout(m){
+  const W=WIN();
+  document.querySelectorAll('.rd').forEach(el=>{
+    const p=PL[+el.dataset.i];if(m==null||m>W||!p){el.textContent='';return}
+    el.textContent=rel(m)+' · '+p.ls.map(l=>{const v=l.f(m);return v==null?'—':p.fmt(v)}).join(' · ');
+  });
+}
+function spark(f){
+  const v=Array.from({length:24},(_,i)=>f(WIN()*(1-i/23))),lo=Math.min(...v),hi=Math.max(...v),r=hi-lo||1;
+  return `<svg class="spark" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><path d="${v.map((y,i)=>(i?'L':'M')+(i/23*100).toFixed(1)+' '+(18-(y-lo)/r*16).toFixed(1)).join('')}"/></svg>`;
+}
+const fDev=(cur,base,s,a)=>m=>(base+(cur-base)*inc(m))*(1+a*nz(s,m));
+function marks(wl,solo){const a=[];if(wl==='api-gateway')a.push({m:155.83,l:'Rollout'});if(solo===OUT)RST[OUT].forEach(m=>a.push({m,l:'OOMKill → restart',s:'OOMKill',bad:1}));if(solo===GONE)a.push({m:59.8,l:'Pod silindi',bad:1});return a}
+
+/* ── ortak iskelet ── */
+function crumbs(){
+  const li=S.trail.map((e,i)=>{
+    const p=e.split('~'),k=KT[p[0][0]],id=p[0].slice(2);if(!k||!ent(k,id))return '';
+    return `<li><a href="${href({kind:k,id,scope:p.slice(1),tab:'genel',t:S.t,range:S.range,env:S.env,trail:S.trail.slice(0,i)})}">${ico(k)}${nmH(k,id,1)}</a></li>`;
+  }).join('');
+  return `<nav class="crumbs" aria-label="İz yolu"><ol>${li}<li aria-current="page">${ico(S.kind)}${nmH(S.kind,S.id,1)}</li></ol></nav>`;
+}
+function vstack(){
+  const k=S.kind,c=sel(),P=k==='pod'?POD[S.id]:null,pods=wlPods(c.wl).filter(p=>!POD[p].gone),nodes=[...new Set(pods.map(p=>POD[p].node))],bad=pods.includes(OUT);
+  const one=(kk,id)=>kk===k&&id===S.id?`<span class="v">${nmH(kk,id,1)}</span>`:`<a class="v" href="${go(kk,id)}">${nmH(kk,id,1)}</a>`;
+  const st=(kk,id)=>hasProb(kk,id)?'1 açık Problem':'';
+  const svL=c.svs.length===1?[one('service',c.svs[0]),st('service',c.svs[0])]:[`<span class="v">${c.svs.length?c.svs.length+' servis':'eşleşen servis yok'}</span>`,''];
+  const epN=c.svs.reduce((a,s)=>a+SVC[s].eps.length,0);
+  const L=[['node','Node',P?`<span class="v mono">${P.node}</span>`:`<span class="v">${nodes.length} node</span>`,'',0],
+   ['workload','Workload',`<span class="v mono">Deployment/${c.wl}</span>`,bad?`${pods.length} pod'dan 1'i sorunlu`:'',0],
+   ['pod','Pod',c.pods&&c.pods.length===1?one('pod',c.pods[0]):`<span class="v">${pods.length} pod</span>`,c.pods&&c.pods.length===1?st('pod',c.pods[0]):'',k==='pod'],
+   ['service','Servis',svL[0],svL[1],k==='service'],
+   ['endpoint','Endpoint',c.eps&&c.eps.length===1?one('endpoint',c.eps[0]):`<span class="v">${epN} endpoint</span>`,c.eps&&c.eps.length===1?st('endpoint',c.eps[0]):'',k==='endpoint']];
+  return `<ol class="vstack">${L.map(l=>`<li${l[4]?' class="cur-l"':''}>${ico(l[0])}<span class="k">${l[1]}${l[4]?' · bu sayfa':''}</span>${l[2]}${l[3]?`<span class="st">${l[3]}</span>`:''}</li>`).join('')}</ol>`;
+}
+const podState=p=>POD[p].gone?'Silindi':'Çalışıyor';
+function header(){
+  const k=S.kind,id=S.id,w=WL[wlOf(k,id)],m=M(),bad=hasProb(k,id),P=k==='pod'?POD[id]:null;
+  const kp=P?(P.gone?[['CPU',DASH],['Bellek',DASH],['Restart',DASH]]:[['CPU',tr(P.cpu,2)+' çekirdek'],['Bellek',tone('%'+Math.round(P.mem/LIM.memLim*100),P.mem/LIM.memLim>=.9?'err':'')],['Restart',tone(String(P.restarts),P.restarts?'err':'')]])
+    :[['İstek',cRate(m)],['Hata',cErr(m)],['95. yüzdelik',cP95(m)]];
+  const chip=tok=>{const i=tok.indexOf(':'),kk=PK[tok.slice(0,i)],v=tok.slice(i+1);
+    return `<span class="chip">yalnız ${KL[kk].toLowerCase()} ${nmH(kk,v,1)}<a class="x" href="${up({scope:S.scope.filter(x=>x!==tok),panel:''})}" aria-label="${esc('Kapsamı kaldır: yalnız '+KL[kk].toLowerCase()+' '+nm(kk,v))}">×</a></span>`};
+  const chips=S.scope.map(chip).join('')+(S.t!=null?`<span class="chip time">an: ${tm(S.t)}<a class="x" href="${up({t:null})}" aria-label="Sabitlenen anı kaldır">×</a></span>`:'');
+  const pv=[['trace',"Trace'lerde aç"],['log',"Loglar'da aç"],['metrik',"Metrikler'de aç"],['iliski','Topolojide göster']];
+  return `<header class="eh"><div class="eh-r1">
+<div class="eh-id"><span class="eh-ico">${ico(k)}</span><div><div class="eh-kind">${KL[k]}</div><div class="eh-nm"><h1>${nmH(k,id)}</h1><span class="hd${bad?' bad':''}"><i></i>${bad?'Açık Problem var':'Açık Problem yok'}</span></div></div></div>
+<div class="eh-kpis">${kp.map(x=>`<div class="kpi"><span class="l">${x[0]}</span><span class="v">${x[1]}</span></div>`).join('')}</div>
+<div class="eh-act">
+<details class="pm"><summary class="btn">Yığın ▾</summary><div class="menu wide">${vstack()}</div></details>
+<details class="pm"><summary class="btn">Şurada aç ▾</summary><div class="menu">${pv.map(x=>`<a href="${up({tab:x[0],panel:''})}">${x[1]}</a>`).join('')}</div></details>
+<a class="ibtn" href="${up({panel:'info'})}" aria-label="Veri kaynakları" title="Veri kaynakları">ⓘ</a>
+</div></div>
+<div class="eh-r2"><span><b>Sahip</b>${w.owner}</span><span><b>Ortam</b>${S.env||'tümü'}</span><span><b>Cluster</b>${w.cluster} · ${w.ns}</span>${P?`<span><b>Durum</b>${podState(id)}</span>`:''}${chips?`<span class="chips" aria-label="Kapsam">${chips}</span>`:''}</div></header>`;
+}
+function pstrip(){
+  if(!hasProb(S.kind,S.id))return '';
+  return `<a class="pstrip" href="${up({tab:'problem',panel:''})}"><b>⚠ Açık Problem</b><span class="s">${PROB[S.kind]}</span>${tm(81.33)}</a>`;
+}
+function redrow(){
+  const m=M(),c=sel(),s=hs(S.kind+S.id+S.scope.join()),solo=c.pods&&c.pods.length===1?c.pods[0]:'',mk=marks(c.wl,solo),P=solo?POD[solo]:null;
+  if(!m){
+    const why=P&&P.gone?`Pod silindi; son görülme ${rel(P.goneAt)}.`:P&&P.notel?"Bu pod'dan iz gelmiyor.":'Bu kapsamda istek yok.';
+    return `<div class="redrow">${['İstek','Hata','Süre'].map(t=>plot({title:t,empty:why})).join('')}</div>`;
+  }
+  const g=f=>x=>P&&x>P.age?null:f(x)*(solo===OUT&&down(x)?.04:1);
+  return `<div class="redrow">${plot({title:'İstek',big:rate(m.rps),fmt:rate,marks:mk,lg:false,lines:[{f:g(x=>m.rps*(1+.07*nz(s,x)))}]})}${
+    plot({title:'Hata',big:pct(m.err),fmt:pct,marks:mk,lg:false,lines:[{c:'c3',f:g(x=>Math.max(0,fDev(m.err,m.errN,s+3,.2)(x)))}]})}${
+    plot({title:'Süre',big:dur(m.p95),fmt:dur,marks:mk,lines:[{n:'95. yüzdelik',f:g(fDev(m.p95,m.p95N,s+7,.09))},{n:'Ortalama',c:'c5',thin:1,f:g(fDev(m.avg,m.avgN,s+9,.07))}]})}</div>`;
+}
+const TABS=k=>[['genel','Genel'],['problem','Problemler'],['trace','Trace'],['log','Log'],['metrik','Metrik'],['iliski','İlişkiler'],['degisiklik','Değişiklikler'],k==='pod'?['olay','Olaylar']:k==='service'?['operasyon','Operasyonlar']:['zaman','Zaman dağılımı']];
+function tabs(){
+  return `<div class="tabs" role="tablist" aria-label="${KL[S.kind]} sekmeleri">${TABS(S.kind).map(t=>`<a role="tab" id="tab-${t[0]}" aria-controls="tabpanel" aria-selected="${S.tab===t[0]}" href="${up({tab:t[0],panel:''})}"${t[0]==='metrik'&&S.kind==='pod'?' data-sc="4"':''}>${t[1]}${t[0]==='problem'&&hasProb(S.kind,S.id)?'<span class="cnt">1</span>':''}</a>`).join('')}</div>`;
+}
+
+/* ── tablo: tek bileşen; ad bağlantıdır, satır yan panel açar, satır düğmesi yok; en çok 7 sütun ── */
+function tbl(cols,rows,empty){
+  const th=cols.map(c=>`<th scope="col"${c[1]?' class="num"':''}>${c[0]}</th>`).join('');
+  const body=rows.length?rows.map(r=>r.sep?`<tr class="sepr"><td colspan="${cols.length}">${r.sep}</td></tr>`:`<tr${r.p?` data-p="${esc(r.p)}" tabindex="0"`:''} class="${r.p&&S.panel===r.p?'sel ':''}${r.cls||''}">${r.c.map((c,i)=>`<td class="${cols[i][1]?'num':''}${i?'':' first'}${cols[i][2]?' '+cols[i][2]:''}">${c}</td>`).join('')}</tr>${r.sub?`<tr class="sub"><td colspan="${cols.length}">${r.sub}</td></tr>`:''}`).join('')
+    :`<tr class="st-row"><td colspan="${cols.length}">${empty||'<b>Kayıt yok</b>Bu aralık ve kapsamda gösterilecek satır yok.'}</td></tr>`;
+  return `<div class="vt-scroll"><table class="dt"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+const card=(t,body,n,r)=>`<section class="card"><h2>${t}${n!=null?` <span class="c">${n}</span>`:''}${r?`<span class="r">${r}</span>`:''}</h2>${body}</section>`;
+const C_RED=[['İstek',1],['Hata %',1],['Ortalama süre',1],['95. yüzdelik',1],['Eğilim',0]],C_RAT=[["Diğer pod'ların medyanına göre",1]];
+const redCells=(r,seed)=>[cRate(r),cErr(r),cAvg(r),cP95(r),r?spark(fDev(r.p95,r.p95N,seed,.09)):DASH];
+const onePod=pods=>pods&&pods.length===1&&live(pods[0])?pods[0]:'';
+function epTable(sv,pods,eps){
+  const one=onePod(pods),ids=SVC[sv].eps.filter(e=>!eps||eps.includes(e));
+  return tbl([['Endpoint',0],...C_RED,...(one?C_RAT:[])],ids.map(e=>[e,red([sv],pods,[e])]).sort((a,b)=>(b[1]?b[1].avg:0)-(a[1]?a[1].avg:0)).map(x=>({p:'ep:'+x[0],
+    c:[elink('endpoint',x[0],{sc:S.kind==='service'&&x[0]===HOT?2:0}),...redCells(x[1],hs(x[0])),...(one?[cRatio(ratio([sv],one,[x[0]]))]:[])]})));
+}
+function svcTable(svs,pods,eps,expand,empty){
+  const one=onePod(pods);
+  return tbl([['Servis',0],...C_RED,...(one?C_RAT:[])],svs.map(sv=>{
+    const r=red([sv],pods,eps),open=expand&&S.open===sv;
+    return {p:'svc:'+sv,c:[(expand?`<a class="exp" href="${up({open:open?'':sv,panel:''})}" aria-expanded="${open}" aria-label="${esc(sv)} endpoint'lerini ${open?'gizle':'göster'}">${open?'▾':'▸'}</a>`:'')+elink('service',sv,{sc:expand&&sv==='api-gateway'?'r':0}),...redCells(r,hs(sv)),...(one?[cRatio(ratio([sv],one,eps))]:[])],sub:open?epTable(sv,pods,eps):''};
+  }),empty);
+}
+function podTable(svs,ids,eps,self){
+  return tbl([['Pod',0],['Durum',0],['İstek',1],['Hata %',1],['95. yüzdelik',1],['Bellek',1],C_RAT[0]],ids.map(p=>{
+    const P=POD[p],r=live(p)?red(svs,[p],eps):null;
+    return {p:'pod:'+p,x:ratio(svs,p,eps)||0,c:[p===self?`<span class="el">${ico('pod')}${nmH('pod',p)}</span> <span class="badge">bu pod</span>`:elink('pod',p,{sc:S.kind==='endpoint'&&S.id===HOT&&p===OUT?3:0}),podState(p),cRate(r),cErr(r),cP95(r),P.gone?DASH:bytes(P.mem),cRatio(ratio(svs,p,eps))]};
+  }).sort((a,b)=>b.x-a.x));
+}
+function opTable(sv,n){
+  return tbl([['Operasyon',0],['Tür',0],['İstek',1],['Hata %',1],['95. yüzdelik',1]],[...OPS[sv]].sort((a,b)=>b[4]-a[4]).slice(0,n||99).map(o=>({c:[`<span class="mono">${esc(o[0])}</span>`,o[1],rate(o[2]),tone(pct(o[3]),eT(o[3])),tone(dur(o[4]),dT(o[4],o[5]))]})));
+}
+/* dışarı çağrılar: tek pod bağlamında 7 sütun (kardeş mockup ile aynı); servis / endpoint bağlamında yönlü ilişki tablosu */
+function outRows(wl,p){const k=p&&POD[p].out?0:1,f=WIN()/180;return (OUTB[wl]||[]).map((o,i)=>({i,n:o[0],ty:o[1],cnt:o[2]*f,err:o[3],avg:k?o[4]/o[6]:o[4],p95:k?o[5]/o[6]:o[5],x:k?1:o[6]}))}
+function outTable(wl,p){
+  return tbl([['Hedef',0],['Tür',0],['Çağrı',1],['Hata %',1],['Ortalama süre',1],['95. yüzdelik',1],C_RAT[0]],outRows(wl,p).sort((a,b)=>b.cnt-a.cnt).map(o=>({p:'out:'+o.i,
+    c:[SVC[o.n]?elink('service',o.n):`<span class="mono">${esc(o.n)}</span>`,o.ty,int(o.cnt),tone(pct(o.err),eT(o.err)),tone(dur(o.avg),o.x>=2.5?'err':''),dur(o.p95),cRatio(o.x)]})),
+    "<b>Bu pod'dan dışarı çağrı görülmedi</b>Dışarı çağrılar iz verisi gelince dolar.");
+}
+function relTable(sv,f){
+  const wl=SVC[sv].wl,n=wlPods(wl).filter(live).length,rows=(INB[sv]||[]).map(r=>({c:[SVC[r[0]]?elink('service',r[0]):`<span class="mono">${esc(r[0])}</span>`,'Gelen',r[1],rate(r[2]*f),tone(pct(r[3]),eT(r[3])),dur(r[4])]}))
+   .concat(sv==='api-gateway-worker'?[]:outRows(wl,'').map(o=>{const p95=(OUTB[wl][o.i][5]+(n-1)*o.p95)/n;return {p:'out:'+o.i,c:[SVC[o.n]?elink('service',o.n):`<span class="mono">${esc(o.n)}</span>`,'Giden',o.ty,rate(OUTB[wl][o.i][2]*n/10800*f),tone(pct(o.err),eT(o.err)),tone(dur(p95),dT(p95,o.p95))]}}));
+  return tbl([['Varlık',0],['Yön',0],['Tür',0],['İstek',1],['Hata %',1],['95. yüzdelik',1]],rows);
+}
+
+/* ── sekme gövdeleri ── */
+const mono=s=>`<span class="mono">${esc(s)}</span>`;
+const widen=()=>S.range==='24h'?'':` <a href="${up({range:'24h',panel:''})}">Aralığı genişlet</a>`;
+const fx=l=>`<dl class="facts">${l.map(x=>`<div><dt>${x[0]}</dt><dd>${x[1]}</dd></div>`).join('')}</dl>`;
+const evRow=e=>({c:[tm(e[0]),e[4]?`<span class="dev ${e[4]}">${e[1]}</span>`:e[1],esc(e[2]),e[3]?mono(e[3]):DASH]});
+const C_EV=[['Zaman',0],['Olay',0],['Ayrıntı',0],['Container',0]];
+function hist(){
+  const E=EP[S.id],hot=S.id===HOT,b=hot?[2,5,11,19,26,22,15,9,5,3,4,7,9,6,3,1]:[1,4,12,24,30,22,13,7,4,2,1,1,0,0,0,0],mx=Math.max(...b);
+  return `<svg class="hist" viewBox="0 0 160 50" preserveAspectRatio="none" style="display:block;width:100%;height:96px" role="img" aria-label="Süre dağılımı${hot?': iki tepe, ikincisi yavaş pod':''}">${b.map((v,i)=>`<rect${hot&&i>9?' class="slow"':''} x="${i*10+1}" y="${(50-v/mx*48).toFixed(1)}" width="8" height="${(v/mx*48).toFixed(1)}"/>`).join('')}</svg><div class="pl-x" style="margin-left:0" aria-hidden="true"><span>${dur(E.avg/E.k*.2)}</span><span>${dur(E.avg/E.k)}</span><span>${dur(E.p95*1.4)}</span></div>`;
+}
+function codes(){
+  const m=M();if(!m)return tbl([['Kod',0],['Pay',1],['İstek',1]],[]);
+  const n=m.rps*WIN()*60,r=[['2xx',100-m.err*1.2,''],['4xx',m.err*.2,''],['5xx',m.err,eT(m.err)]];
+  return tbl([['Kod',0],['Pay',1],['İstek',1]],r.map(x=>({c:[x[0],tone(pct(x[1]),x[2]),int(n*x[1]/100)]})));
+}
+function ctrTable(p){
+  const P=POD[p],w=WL[P.wl],C=[['Ad',0],['Hazır',0],['Restart',1],['Bekleme nedeni',0],['Son sonlanma',0]];
+  if(P.gone)return tbl(C,[],`<b>Konteyner durumu artık okunamıyor</b>Pod silindiği için anlık durum yok. Bilinen konteynerler: ${w.ctr.map(mono).join(', ')}.<br><a href="${up({tab:'log',panel:''})}">Silinmeden önceki son loglar →</a> · <a href="${go('service','api-gateway')}">Yerine gelen pod'lar →</a>`);
+  return tbl(C,w.ctr.map((c,i)=>({c:[mono(c),'hazır',i||!P.restarts?'0':tone(String(P.restarts),'warn'),'—',i||!P.restarts?'—':`<span class="badge warn" title="${abs(18.97)}">OOMKilled</span>`]})));
+}
+function podGenel(){
+  const p=S.id,P=POD[p],w=WL[P.wl],c=sel(),oth=wlPods(P.wl).filter(q=>q!==p&&live(q)),mr=oth.length&&live(p)?P.mem/median(oth.map(q=>POD[q].mem)):null,ev=evts(p);
+  const ban=P.gone?`<div class="banner" role="status"><b>⚠ Pod silindi</b>Son görülme ${tm(P.goneAt)}. Aşağıdakiler silinmeden önceki son kayıtlardır; anlık durum okunamaz.</div>`
+    :P.notel?`<div class="banner" role="status"><b>⚠ Uygulama verisi yok</b>Bu pod'dan iz, log ya da çalışma zamanı metriği gelmiyor. Yalnız platform ölçüleri gösterilir.</div>`:'';
+  const facts=fx([['Durum',podState(p)],['Faz',P.gone?'—':'Running'],['Restart',P.restarts?tone(String(P.restarts),'err'):'0'],['Node',mono(P.node)],['Workload',mono('Deployment/'+P.wl)],['Yaş',dur(P.age*6e4)],['İmaj',mono(P.ver?w.img.replace(/:.*/,':'+P.ver):w.img)],["Bellek, kardeş pod'lara göre",cRatio(mr)]]);
+  return ban+card('Pod bilgileri',facts)
+    +card('Servisler',svcTable(c.svs,[p],c.eps,true,"<b>Bu pod'la eşleşen servis yok</b>Servisler, Dışarı çağrılar ve JVM panelleri iz ve çalışma zamanı metriği gelince dolar."),c.svs.length)
+    +card('Dışarı çağrılar',outTable(P.wl,live(p)?p:null),live(p)?(OUTB[P.wl]||[]).length:0)
+    +card('Konteynerler',ctrTable(p))
+    +card('Son olaylar',tbl(C_EV,ev.slice(0,3).map(evRow)),null,`<a href="${up({tab:'olay',panel:''})}">Tüm olaylar (${ev.length}) →</a>`);
+}
+const B={};
+B.genel=()=>{
+  const c=sel();
+  if(S.kind==='service'){const ids=SVC[S.id].pods.filter(p=>!c.pods||c.pods.includes(p));
+    return card('Operasyonlar',opTable(S.id,4),null,`<a href="${up({tab:'operasyon',panel:''})}">Tüm operasyonlar (${OPS[S.id].length}) →</a>`)
+      +card("Endpoint'ler",epTable(S.id,c.pods,c.eps),SVC[S.id].eps.filter(e=>!c.eps||c.eps.includes(e)).length)+card("Pod'lar",podTable([S.id],ids,c.eps),ids.length)}
+  if(S.kind==='endpoint'){const sv=EP[S.id].svc,ids=SVC[sv].pods.filter(p=>!c.pods||c.pods.includes(p));
+    return card('Servis',svcTable([sv],c.pods,null))+card("Bu endpoint'i sunan pod'lar",podTable([sv],ids,[S.id]),ids.length)+`<div class="grid2">${card('Süre dağılımı',hist())}${card('Yanıt kodları',codes())}</div>`}
+  return podGenel();
+};
+B.problem=()=>tbl([['Problem',0],['Önem',0],['Etki',0],['Başlangıç',0],['Açık süre',1]],
+  hasProb(S.kind,S.id)?[{c:['Bellek sınırına ulaşıp yeniden başlıyor','<span class="badge err">Kritik</span>','api-gateway transfer isteği yavaşladı',tm(81.33),dur(81.33*6e4)]}]:[],
+  `<b>Açık Problem yok</b>${RLAB[S.range]} bu ${KL[S.kind].toLowerCase()} için Problem açılmadı.`);
+B.trace=()=>{
+  const c=sel(),all=TR.filter(t=>t.m<=WIN()&&c.svs.includes(EP[t.ep].svc)&&(!c.pods||c.pods.includes(t.pod))&&(!c.eps||c.eps.includes(t.ep))),errs=all.filter(t=>t.err);
+  const mode=S.f==='all'||(!S.f&&!errs.length)?'all':'err',rows=(mode==='all'?all:errs).sort((a,b)=>a.m-b.m);
+  return `<div class="toolbar"><div class="seg" role="group" aria-label="Trace süzgeci"><a href="${up({f:'err',panel:''})}" aria-current="${mode==='err'}">Hatalar</a><a href="${up({f:'all',panel:''})}" aria-current="${mode==='all'}">Tümü</a></div></div>`
+   +tbl([['Zaman',0],['Trace',0],['Servis',0],['Operasyon',0],['Süre',1],['Span',1],['Durum',0]],rows.map(t=>({p:'trace:'+t.id,c:[tm(t.m),`<a class="mono" href="${up({panel:'trace:'+t.id})}" title="${t.id}">${t.id.slice(0,12)}…</a>`,EP[t.ep].svc,mono(nm('endpoint',t.ep)),tone(dur(t.d),t.err?'err':''),String(t.sp),t.err?'<span class="badge err">hata</span>':'sorunsuz']})),
+    S.kind==='pod'?`<b>Bu pod'dan geçen trace yok</b>${RLAB[S.range]} bu pod'la eşleşen span görülmedi. Uygulama iz göndermiyor olabilir.${widen()}`:`<b>Bu kapsamda trace yok</b>${RLAB[S.range]} bu kapsamla eşleşen span görülmedi.${widen()}`)
+   +`<div class="foot"><span>${rows.length} ${mode==='err'?'hatalı trace':'trace'}</span></div>`;
+};
+const memStrip=p=>plot({title:'Bellek',fmt:bytes,max:1280,lg:false,marks:marks(POD[p].wl,p),refs:[{v:LIM.memLim,n:'Limit',c:'ce'}],lines:[{n:'Kullanım',f:mf(p,'mem')}],right:`<a href="${up({tab:'metrik',panel:''})}" style="font-weight:400">Metrik sekmesinde aç →</a>`});
+B.log=()=>{
+  const c=sel(),k=S.kind,P=k==='pod'?POD[S.id]:null,pods=P?[S.id]:c.svs.flatMap(s=>SVC[s].pods).filter(p=>!c.pods||c.pods.includes(p)),rst=P&&RST[S.id]||[];
+  let ls=LG.filter(l=>pods.includes(l.pod)&&l.m<=WIN()&&(!c.eps||!l.ep||c.eps.includes(l.ep))&&(k!=='endpoint'||l.ep===S.id)&&(!S.c||l.c===S.c)&&(S.lv==='error'?l.lv==='ERROR':S.lv==='warn'?l.lv!=='INFO':true));
+  ls=S.t!=null?ls.filter(l=>l.m>=S.t-5.2&&l.m<=S.t+3.6):ls.sort((a,b)=>a.m-b.m).slice(0,8);
+  ls.sort((a,b)=>b.m-a.m);
+  const near=S.t!=null&&ls.length?ls.reduce((a,l)=>Math.abs(l.m-S.t)<Math.abs(a.m-S.t)?l:a):null,hl=near&&Math.abs(near.m-S.t)<.6?near:null,rows=[];
+  ls.forEach((l,n)=>{
+    rst.forEach(r=>{if(l.m<r&&ls[0].m>r&&(n===0||ls[n-1].m>=r))rows.push({sep:`Container yeniden başladı · OOMKilled · <time title="${abs(r)}">${clock(r)}</time>`})});
+    rows.push({p:'log:'+l.i,cls:l===hl?'hl':'',c:[`${l===hl?'<span class="sr-only">Seçilen an: </span>':''}<time title="27.11.2026 ${l.ck}">${l.ck}</time>`,`<span class="lv ${l.lv}">${l.lv}</span>`,mono(l.c),esc(l.msg),l.tr?`<a class="mono" href="${up({panel:'trace:'+l.tr})}" title="${l.tr}"${l===hl&&l.tr===TRC?' data-sc="7"':''}>${l.tr.slice(0,12)}…</a>`:DASH]});
+  });
+  const seg=(lab,key,opts)=>`<div class="seg" role="group" aria-label="${lab}">${opts.map(o=>`<a href="${up({[key]:o[0],panel:''})}" aria-current="${S[key]===o[0]}">${o[1]}</a>`).join('')}</div>`;
+  const t1=`<div class="toolbar">${P?`<span class="lbl">Container</span>${seg('Container','c',[['','Tümü'],...WL[P.wl].ctr.map(x=>[x,x])])}`:''}${seg('Seviye','lv',[['','Tümü'],['error','ERROR'],['warn','WARN ve üstü']])}<input class="field" id="lq" type="search" placeholder="Log içinde ara…" aria-label="Log içinde ara"><span class="grow"></span><button class="switch" type="button" role="switch" aria-checked="false"><i aria-hidden="true"></i>Canlı takip</button></div>`;
+  const t2=rst.length||S.t!=null?`<div class="toolbar">${rst.length?`<span class="lbl">Restart öncesi</span><div class="seg" role="group" aria-label="Restart öncesi">${rst.map((r,n)=>[r,n]).reverse().map(x=>`<a href="${up({t:+(x[0]+.17).toFixed(2),panel:''})}" title="${abs(x[0])}" aria-current="${S.t!=null&&Math.abs(S.t-x[0]-.17)<.02}">${x[1]+1}. restart</a>`).join('')}</div>`:''}<span class="grow"></span>${S.t!=null?`<span class="badge">▶ Seçilen an ${clock(S.t)}</span><a class="lnk" href="${up({t:null,panel:''})}">Seçimi kaldır</a>`:''}</div>`:'';
+  const none=P&&(P.nolog||P.notel),ban=none?`<div class="banner" role="status"><b>⚠ Log yok</b>Bu pod için ${RLAB[S.range].toLowerCase()} log kaydı bulunamadı.</div>`:'';
+  return ban+t1+t2+(P&&live(S.id)&&!none?memStrip(S.id):'')
+   +tbl([['Zaman',0],['Seviye',0],['Container',0],['Mesaj',0,'wrap'],['Trace',0]],rows,none?`<b>Bu pod için log kaydı yok</b>${RLAB[S.range]} hiçbir container standart çıkışa yazmadı ya da bu namespace log toplamaya dahil değil.${widen()}`:`<b>Bu aralıkta log yok</b>Seçilen süzgeç ve an için log satırı bulunamadı.${widen()}`).replace('<table class="dt"','<table class="dt" id="logt"')
+   +(ls.length?`<div class="foot"><span>${ls.length} satır · ${ls[0].ck.slice(0,5)} – ${ls[ls.length-1].ck.slice(0,5)}</span></div>`:'');
+};
+function mbar(b){
+  if(S.t==null&&!b)return '';
+  return `<div class="curbar">${S.t!=null?`<span>İmleç <b>${clock(S.t)}</b></span><a class="lnk" data-sc="6" href="${up({tab:'log',panel:''})}">Bu anın logları →</a>`:''}<span class="grow"></span>${b?`<span><i class="sw band"></i>Kardeş bandı: ${b.n} pod, en düşük – medyan – en yüksek</span>`:''}</div>`;
+}
+B.metrik=()=>{
+  const k=S.kind,c=sel(),s=hs(S.id);
+  if(k==='pod'){
+    const p=S.id,P=POD[p],mk=marks(P.wl,p),Bd=key=>bandOf(p,key),noRt=P.notel||P.heap==null&&!P.out?"Bu pod'dan çalışma zamanı metriği gelmiyor.":'',L=(n,f,cc)=>({n,f,c:cc});
+    return mbar(Bd('mem'))+`<div class="grid2">${[
+     plot({tall:1,title:'CPU',unit:'çekirdek',fmt:num,max:1.2,marks:mk,band:Bd('cpu'),refs:[{v:LIM.cpuLim,n:'Limit',c:'ce'},{v:LIM.cpuReq,n:'Request',c:'ct'}],lines:[L('Kullanım',mf(p,'cpu'))],aria:'CPU kullanımı, request ve limit çizgileriyle; kardeş bandı gölgeli'}),
+     plot({tall:1,title:'Bellek',unit:'çalışma kümesi',fmt:bytes,max:1280,marks:mk,band:Bd('mem'),refs:[{v:LIM.memLim,n:'Limit',c:'ce'},{v:LIM.memReq,n:'Request',c:'ct'}],lines:[L('Kullanım',mf(p,'mem'))],spike:p===OUT?{m:85.5,v:memOut(85.5)}:null,aria:'Bellek kullanımı, request ve limit çizgileriyle'}),
+     plot({tall:1,title:'CPU kısıtlaması',unit:'kısıtlanan dönemlerin payı',fmt:pct,marks:mk,band:Bd('thr'),lines:[L('Kısıtlanan pay',mf(p,'thr'))]}),
+     plot({tall:1,title:'Ağ',unit:'MiB/sn',fmt:num,marks:mk,band:Bd('nout'),lines:[L('Giden',mf(p,'nout')),L('Gelen',mf(p,'nin'),'c2')]}),
+     plot({tall:1,title:'JVM heap belleği',unit:'kullanılan',fmt:bytes,max:800,marks:mk,band:noRt?null:Bd('heap'),refs:[{v:LIM.heapMax,n:'Üst sınır',c:'ce'}],lines:[L('Kullanılan',mf(p,'heap'))],empty:noRt}),
+     plot({tall:1,title:'Çöp toplama süresi',unit:'çalışma süresine oranı',fmt:pct,marks:mk,band:noRt?null:Bd('gc'),lines:[L('Pay',mf(p,'gc'))],empty:noRt})].join('')}</div>`
+     +(live(p)&&!noRt?`<details class="more"><summary class="btn">Diğer çalışma zamanı ölçüleri (5)</summary>${fx([['İş parçacığı havuzu kuyruğu','3'],['Bekleyen HTTP isteği','11'],['Yerleşik bellek','702 MiB'],['Veritabanı havuzu, etkin','14'],['Veritabanı havuzu, bekleyen','0']])}</details>`:'');
+  }
+  const m=M();if(!m)return mbar(null)+`<div class="grid2">${plot({title:'Süre',empty:'Bu kapsamda istek yok.'})}</div>`;
+  const ps=wlPods(c.wl).filter(p=>live(p)&&(!c.pods||c.pods.includes(p))),sum=key=>x=>{const v=ps.map(p=>mf(p,key)(x)).filter(y=>y!=null);return v.length?v.reduce((a,b)=>a+b,0):null},mk=marks(c.wl,c.pods&&c.pods.length===1?c.pods[0]:'');
+  return mbar(null)+`<div class="grid2">${plot({tall:1,title:'Süre yüzdelikleri',fmt:dur,marks:mk,lines:[{n:'99. yüzdelik',c:'c3',f:fDev(m.p95*1.55,m.p95N*1.5,s+2,.1)},{n:'95. yüzdelik',f:fDev(m.p95,m.p95N,s+7,.09)},{n:'Medyan',c:'c5',f:fDev(m.avg*.72,m.avgN*.72,s+5,.06)}]})}${
+    k==='service'?plot({tall:1,title:'CPU',unit:`çekirdek, ${ps.length} pod'un toplamı`,fmt:num,marks:mk,lines:[{n:'Kullanım',f:sum('cpu')}]})+plot({tall:1,title:'Bellek',unit:`çalışma kümesi, ${ps.length} pod'un toplamı`,fmt:bytes,marks:mk,lines:[{n:'Kullanım',f:sum('mem')}]})+plot({tall:1,title:'Çöp toplama süresi',unit:"pod'ların en yükseği",fmt:pct,marks:mk,lines:[{n:'Pay',f:x=>{const v=ps.map(p=>mf(p,'gc')(x)).filter(y=>y!=null);return v.length?Math.max(...v):null}}]})
+    :plot({tall:1,title:'Sunucu hatası payı',unit:'5xx yanıtlar',fmt:pct,marks:mk,lines:[{n:'Pay',c:'c3',f:x=>Math.max(0,fDev(m.err,m.errN,s+3,.2)(x))}]})}</div>`;
+};
+const share=()=>{const c=sel(),a=red(c.svs,null,null),m=M();return m&&a?m.rps/a.rps:0};
+B.iliski=()=>{
+  const k=S.kind,c=sel(),w=WL[c.wl],P=k==='pod'?POD[S.id]:null,pods=wlPods(c.wl).filter(p=>!POD[p].gone);
+  let h=`<div class="grid2">${card('Yığın',vstack())}${card('Çalışma ortamı',fx([['Cluster',mono(w.cluster)],['Namespace',mono(w.ns)],['Workload',mono('Deployment/'+c.wl)],['Node',P?mono(P.node):[...new Set(pods.map(p=>POD[p].node))].sort().map(mono).join(', ')],['Çalışma zamanı',w.rt],['Sürüm',mono(w.ver)],['İmaj',mono(w.img)]]))}</div>`;
+  if(P){const hash=(S.id.match(/-([a-z0-9]+)-[a-z0-9]+$/)||[])[1]||'',uid=P.uid||('0000000'+Math.floor(hs(S.id)*7919999).toString(16)).slice(-8)+'-5e2d-4a71-9c03-b6d81f20e4a7';
+    h+=card("Kardeş pod'lar",podTable(svcsOf('pod',S.id),pods,c.eps,S.id),`Deployment/${c.wl} · ${pods.length} pod`)
+     +`<div class="grid2">${card('Etiketler',tbl([['Etiket',0],['Değer',0]],[['app',c.wl],['app.kubernetes.io/version',P.ver||w.ver],['pod-template-hash',hash],['team',w.ns],['tier','backend']].map(x=>({c:[x[0],mono(x[1])]}))))}${
+       card('Yaşam döngüsü',tbl([['Başlangıç',0],['Bitiş',0],['Kimlik',0]],[{c:[tm(P.age),P.gone?tm(P.goneAt):'sürüyor',`<span class="mono" title="${uid}">${uid.slice(0,13)}…</span>`]}]))}</div>`}
+  else h+=card('Çağıranlar ve çağrılanlar',relTable(c.svs[0],share()));
+  return h;
+};
+B.degisiklik=()=>{
+  const all=CHG[sel().wl]||[],rows=all.filter(x=>x[0]<=WIN());
+  return tbl([['Zaman',0],['Değişiklik',0],['Kapsam',0],['Sonuç',0]],rows.map(x=>({c:[tm(x[0]),esc(x[1]),esc(x[2]),x[3]]})),`<b>Bu aralıkta değişiklik yok</b>${all.length?`Son değişiklik ${rel(all[0][0])}: ${esc(all[0][1])}.`:'Bu workload için kayıtlı değişiklik yok.'}${widen()}`);
+};
+function lanes(p){
+  const P=POD[p],W=WIN(),x=m=>Math.max(0,Math.min(100,(1-m/W)*100)),seg=(a,b,cls,t)=>x(b)-x(a)<=0?'':`<i class="${cls}" style="left:${x(a).toFixed(2)}%;width:${(x(b)-x(a)).toFixed(2)}%">${t||''}</i>`,end=P.gone?P.goneAt:0;
+  const ev=evts(p).filter(e=>e[0]<W).map(e=>`<a class="ln-ev ${e[4]||''}" style="left:${x(e[0]).toFixed(2)}%" href="${up({t:+e[0].toFixed(2),panel:''})}" title="${esc(e[1]+': '+e[2])}, ${rel(e[0])}. İmleci bu ana taşı."><span class="sr-only">${esc(e[1]+': '+e[2])}, ${rel(e[0])}</span></a>`).join('');
+  return `<div class="lanes"><div class="ln-r"><span class="ln-l">Faz</span><div class="ln-t">${seg(W,P.age,'ln-none','henüz yok')}${seg(P.age,end,'ln-on','Running')}${P.gone?seg(end,0,'ln-none','silindi'):''}</div></div>
+<div class="ln-r"><span class="ln-l">Hazır</span><div class="ln-t">${seg(P.age-.8,end,'ln-on','hazır')}${(RST[p]||[]).map(r=>seg(r,r-1.3,'ln-gap','')).join('')}</div></div>
+<div class="ln-r"><span class="ln-l">Olaylar</span><div class="ln-t">${ev}</div></div>
+<div class="pl-x" style="margin-left:60px" aria-hidden="true"><span>${rel(W)}</span><span>${rel(W*2/3)}</span><span>${rel(W/3)}</span><span>şimdi</span></div></div>`;
+}
+B.olay=()=>card('Zaman çizelgesi',lanes(S.id))+tbl(C_EV,evts(S.id).map(evRow));
+B.operasyon=()=>opTable(S.id);
+B.zaman=()=>{
+  const m=M(),hot=S.id===HOT,pt=hot?[['Kendi kodu',28.5,1],['transfer-service',49.7,1],['fraud-check.example',15.9,1],['payments-db',5.5,3],['transfers.events',.4,1]]:[['Kendi kodu',46,1],['payments-db',31,2],['session-cache',9,3],['transfers.events',14,1]];
+  if(!m)return tbl([['Bileşen',0],['Pay',1],['İstek başına süre',1],['İstek başına çağrı',1]],[]);
+  return card('Zaman nereye gidiyor',`<div class="split" role="img" aria-label="${esc(pt.map(x=>x[0]+' %'+tr(x[1],1)).join(', '))}">${pt.map((x,i)=>`<i style="width:${x[1]}%;background:var(--series-${[1,3,6,5,2][i]})"></i>`).join('')}</div>`
+    +tbl([['Bileşen',0],['Pay',1],['İstek başına süre',1],['İstek başına çağrı',1]],pt.map((x,i)=>({c:[`<i class="sw" style="background:var(--series-${[1,3,6,5,2][i]})"></i>${SVC[x[0]]?elink('service',x[0]):esc(x[0])}`,pct(x[1]),dur(m.avg*x[1]/100),String(x[2])]}))));
+};
+
+/* ── yan panel: satır ayrıntısı · trace · veri kaynakları ── */
+const TQ='<span class="tagq">kaynak doğrulanacak</span>',OK='doğrulandı';
+const INFO={
+ service:[['Başlık ve şeritler',[['Sağlık noktası ve Problem şeridi',"Açık Problem'ler. Bugün nokta yalnız hata oranı eşiğinden geliyor (%5 üstü kırmızı, %1 üstü sarı); Problem'e bağlanması öneridir.",0],['Sahip','Servis kataloğu etiketi; içeriği okunmadı.',0],['İstek, hata ve süre şeridi',"Giriş span'leri ya da HTTP metrikleri (bugün kaynak seçicisiyle değişiyor). Metrik kipinde ortam süzgeci eşleyiciyle uygulanır; gRPC ailesi ayrı sayılır.",1],['Kapsam çipleri',"Aynı serinin pod ya da endpoint kırılımı gerekir; hazır bir özet olup olmadığı belli değil.",0]]],
+  ['Genel',[['Operasyonlar','Servis özetinin operasyon listesi.',0],['Endpoint tablosu',"Giriş span'leri; kimlik şablonlu yoldur, span adı değil. Yalnız sunucu ve tüketici span'leri sayılır; yüzdelikler pencerenin gerçek yüzdeliğidir.",1],['Pod tablosu: istek, hata, süre',"Span'lerin pod kırılımı; eşleşme: span'deki pod adı.",0],['Pod tablosu: durum, bellek','Küme pod listesi (platform ölçüleri); liste en çok 500 pod döndürür.',1],["Diğer pod'ların medyanına göre",'Aynı servis ya da endpoint için pod kırılımlı ölçü gerekir.',0]]],
+  ['Öbür sekmeler',[['Trace ve Log','Servis süzgeciyle iz ve log listesi; sayfa sayfa yüklenir.',0],['İlişkiler','Komşular ve topoloji kenarları; bugün ayrı sekmelerde.',0],['Değişiklikler','Rollout geçmişi ve GitOps kaydı.',0],['Metrik: CPU, bellek, çöp toplama',"Pod ölçülerinin servis düzeyinde toplamı.",0]]]],
+ endpoint:[['Başlık ve şeritler',[['Kimlik ve gruplama','Kimlik şablonlu yoldur. Biçime göre gruplamada yoldaki kimlikler tek kalıpta toplanır ve her bölüm eşleşen tüm ham yolları toplar.',1],['Ortam ve cluster dilimi','Sayfadaki her bölüm, satırın hesaplandığı ortam ve cluster dilimine daralır.',1],['İstek, hata ve süre şeridi','Endpoint listesinin satırı ve kendi eğilim çizgileri; kaynak (span ya da metrik) bugün seçiciyle değişiyor. Yüzdelikler pencerenin gerçek yüzdeliğidir. Satır pencerede yoksa şerit boş kalır ve görünür uyarı çıkar.',1],['Sağlık noktası, Problem şeridi, sahip',"Açık Problem'in endpoint'e bağlanması ve sahibin servisten devralınması öneridir.",0],['Servis çipi, pod çipi',"Servis kimliğin parçası mı kapsam mı belli değil; pod çipi span'lerin pod kırılımını gerektirir.",0]]],
+  ['Genel',[['Servis satırı','Servis özetinin aynı pencere ve ortamdaki satırı.',0],["Bu endpoint'i sunan pod'lar","Endpoint × pod kırılımı. Bugünkü bölme bölümünün neye göre böldüğü okunmadı.",0],['Süre dağılımı, yanıt kodları','Endpoint ayrıntı sorgusu.',1]]],
+  ['Öbür sekmeler',[['Zaman dağılımı',"Ham span yürüyüşü; en çok 5 dakikada bir yenilenir.",1],['Trace','Ayrıntı sorgusunun hatalı trace listesi.',1],['Log',"Endpoint'in trace'lerine bağlı log satırları; bugün sayfada yok.",0],['İlişkiler','Çağıranlar bölümü (ham span yürüyüşü).',1],['Değişiklikler',"Servisin rollout'u; bugün sayfada yok.",0]]]],
+ pod:[['Başlık ve şeritler',[['Durum, faz, restart, anlık CPU ve bellek','Küme pod listesi (platform ölçüleri). Liste en çok 500 pod döndürür; pod listede yoksa bu alanlar boş kalır ve görünür uyarı çıkar.',1],['Node, workload, yaş, etiketler','Küme envanteri kaydı; kaydın kaynağı, kimliği ve adın kararlı olup olmadığı bugün başlıkta rozet ve satır olarak duruyor.',1],["Aynı adlı pod birden çok cluster'da",'Bugün uyarı rozetiyle söyleniyor; gösterilen cluster seçilir, öbürleri listelenir.',1],['İmaj','Sürüm bugün pod etiketinden okunuyor; imaj adresinin nereden geleceği belli değil.',0],['Sağlık noktası ve Problem şeridi',"Açık Problem'ler. Problem listesinin pod kapsamıyla süzülmesi ve şerit cümlesinin kaynağı belli değil.",0],['İstek, hata ve süre şeridi',"Span'ler; eşleşme: span'deki pod adı = bu pod. Zaman serisi belli değil.",0],['Kapsam çipi: yalnız endpoint','Pod × endpoint ölçüleri için hazır bir özet olup olmadığı belli değil.',0],['Sahip','Workload ya da servisten devralınır; kaynağı belli değil.',0]]],
+  ['Genel',[['Servis satırları',"Span'lerden 5 dakikalık özet. Namespace taşımayan span satırları pod adıyla eşlenir.",1],['Pod × servis × endpoint','Satırın yerinde açılan endpoint tablosu için hazır bir özet olup olmadığı belli değil.',0],["Diğer pod'ların medyanına göre",'Aynı servis ya da endpoint için pod kırılımlı ölçü gerekir.',0],['Dışarı çağrılar','Çağrıların pod kırılımıyla (hedef ve tür) okunabildiği belli değil.',0],['Konteynerler','Platform ölçüleri, anlık değer (hazır, restart, bekleme nedeni, son sonlanma). Geçmiş tutulmaz.',1],["Bellek, kardeş pod'lara göre","Kardeş pod'ların anlık belleğinin medyanı; en çok 50 kardeş.",1]]],
+  ['Trace ve Log',[['Trace listesi',"Eşleşme: span'deki pod adı = bu pod. Öznitelik yoksa liste servis geneline genişler; bu olduğunda görünür uyarı çıkar. Sayfa sayfa yüklenir, toplam sayı verilmez.",1],['Log satırları','Pod kimliğiyle süzülür; en çok 100 satır; seviye ve metin süzgeci.',1],['Container seçici','Log kaydının container adını taşıyıp taşımadığı belli değil.',0],['Canlı takip','Akışın nasıl besleneceği belli değil.',0],['Restart öncesi','Önceki container örneğinin satırlarının restart anına göre ayrılabildiği belli değil.',0]]],
+  ['Metrik',[['CPU ve bellek kullanımı','Platform ölçüleri; uzun aralıkta pencere kısaltılır ve bu görünür uyarıyla söylenir. Panellerin arkasındaki sorgular bugün sayfada liste olarak duruyor.',1],['Request ve limit çizgileri','Zaman serisi olarak kaynağı belli değil.',0],['Kardeş bandı',"Aynı workload'daki diğer pod'ların en düşük, medyan ve en yüksek zarfı; tek sorguda üretilebildiği belli değil.",0],['Rollout, OOMKill ve restart işaretleri','Olay anlarının grafiğe hangi kaynaktan geleceği belli değil.',0],['CPU kısıtlaması','Serinin toplanıp toplanmadığı belli değil.',0],['Ağ','Bugün yalnız anlık gelen ve giden hız var; zaman serisi belli değil.',0],['JVM heap belleği, çöp toplama süresi','Çalışma zamanı ölçüleri; eşleşme: ölçüdeki makine adı = pod adı. Heap üst sınırının kaynağı belli değil.',0]]],
+  ['İlişkiler, Olaylar ve boş durumlar',[["Kardeş pod'lar, yaşam döngüsü",'Küme envanteri ile pod listesinin birleşimi; en çok 50 kardeş, en çok 50 ömür.',1],['Değişiklikler',"Workload'ın rollout kaydı; bugün pod sayfasında yok.",0],['Olaylar','Bekleme nedeni, sonlanma nedeni, restart, faz ve node değişiminin zaman damgalı geçmişi; bugün yalnız anlık durum var.',0],['Silinmiş pod','Son görülme alanı bugün var; silinmiş pod için metrik ve log saklama süresi belli değil.',0],['Telemetrisiz pod','"Uygulama iz göndermiyor" ile "seçili aralıkta trafik yok" ayrımı.',0],['Log yok','"Container yazmadı" ile "namespace log toplamaya dahil değil" ayrımı.',0]]]]
+};
+const C_INFO=[['Öğe',0],['Kaynak, eşleşme ve sınır',0],['Durum',0]];
+const pInfo=()=>({k:KL[S.kind]+' sayfası',t:'Veri kaynakları',b:INFO[S.kind].map(g=>`<div><h3>${g[0]}</h3>${tbl(C_INFO,g[1].map(r=>({c:[r[0],r[1],r[2]?OK:TQ]})))}</div>`).join('')});
+const opens=(k,id)=>`<div><h3>Şurada aç</h3><div class="tp-l"><a class="lnk" href="${go(k,id)}">${KL[k]} sayfası</a>${[['trace','Trace'],['log','Log'],['metrik','Metrik'],['iliski','Topoloji']].map(x=>`<a class="lnk" href="${go(k,id,{tab:x[0]})}">${x[1]}</a>`).join('')}</div></div>`;
+const redFacts=r=>r?[['İstek',rate(r.rps)],['Toplam istek',int(r.rps*WIN()*60)],['Hata %',cErr(r)],['Hatalı istek',int(r.rps*WIN()*60*r.err/100)],['Ortalama süre',cAvg(r)],['95. yüzdelik',cP95(r)],['99. yüzdelik',dur(r.p95*1.55)]]:[['İstek','—'],['Hata %','—'],['Ortalama süre','—'],['95. yüzdelik','—']];
+function pPod(p){
+  const P=POD[p],c=sel(),svs=svcsOf('pod',p),eps=S.kind==='endpoint'?[S.id]:c.eps,r=live(p)?red(svs,[p],eps):null;
+  return {k:'Pod',t:mono(p),b:`<div><h3>Durum</h3>${fx([['Durum',podState(p)],['Faz',P.gone?'—':'Running'],['Restart',String(P.restarts)],['Node',mono(P.node)],['Workload',mono('Deployment/'+P.wl)],['Yaş',dur(P.age*6e4)],...(P.gone?[['Son görülme',tm(P.goneAt)]]:[['CPU',tr(P.cpu,2)+' çekirdek'],['Bellek',bytes(P.mem)]])])}</div>
+<div><h3>İstek, hata ve süre</h3>${fx([...redFacts(r),["Diğer pod'ların medyanına göre",cRatio(ratio(svs,p,eps))]])}</div>${opens('pod',p)}`};
+}
+function pEp(e){
+  const c=sel(),sv=EP[e].svc,pods=S.kind==='pod'?[S.id]:c.pods,one=onePod(pods);
+  return {k:'Endpoint',t:mono(nm('endpoint',e)),b:`<div><h3>İstek, hata ve süre</h3>${fx([['Servis',sv],...redFacts(red([sv],pods,[e])),...(one?[["Diğer pod'ların medyanına göre",cRatio(ratio([sv],one,[e]))]]:[])])}</div>${opens('endpoint',e)}`};
+}
+function pSvc(sv){
+  const c=sel(),pods=S.kind==='pod'?[S.id]:c.pods,eps=S.kind==='endpoint'?null:c.eps,one=onePod(pods),w=WL[SVC[sv].wl],r=red([sv],pods,eps),a=red([sv],null,eps);
+  return {k:'Servis',t:esc(sv),b:`<div><h3>İstek, hata ve süre</h3>${fx([['Sahip',w.owner],...(one&&r&&a?[['Pay',pct(r.rps/a.rps*100)]]:[]),...redFacts(r),...(one?[["Diğer pod'ların medyanına göre",cRatio(ratio([sv],one,eps))],['Son görülme',tm(.2)]]:[])])}</div>${opens('service',sv)}`};
+}
+function pOut(i){
+  const c=sel(),p=onePod(c.pods),o=outRows(c.wl,p)[i];if(!o)return null;
+  return {k:'Dışarı çağrı',t:mono(o.n),b:`<div><h3>Çağrı</h3>${fx([['Tür',o.ty],['Çağrı',int(o.cnt*(p?1:wlPods(c.wl).filter(live).length))],['Hata %',tone(pct(o.err),eT(o.err))],['Ortalama süre',dur(o.avg)],['95. yüzdelik',dur(o.p95)],...(p?[["Diğer pod'ların medyanına göre",cRatio(o.x)]]:[])])}</div>${SVC[o.n]?opens('service',o.n):''}`};
+}
+function pLog(i){
+  const l=LG[i];if(!l)return null;
+  return {k:'Log satırı',t:`<span class="lv ${l.lv}">${l.lv}</span> · ${l.ck}`,b:`<div><h3>Mesaj</h3><div class="msgb">${esc(l.msg)}</div></div><div><h3>Alanlar</h3>${fx([['Zaman','27.11.2026 '+l.ck],['Seviye',l.lv],['Container',mono(l.c)],['Pod',elink('pod',l.pod)],...(l.ep?[['Endpoint',mono(nm('endpoint',l.ep))]]:[]),['Trace',l.tr?`<a class="mono" href="${up({panel:'trace:'+l.tr})}">${l.tr}</a>`:'—']])}</div>
+<div class="tp-l"><a class="lnk" href="${up({t:+l.m.toFixed(2),tab:'metrik',panel:''})}">Bu anın metrikleri →</a></div>`};
+}
+function pTrace(id){
+  const t=TR.find(x=>x.id===id);if(!t)return null;
+  const sv=EP[t.ep].svc,hot=t.ep===HOT,rows=hot?[[sv,0,100,1,1],['payments-db',2,5.5],['transfer-service',9,49.7,1],['fraud-check.example',60,15.9],['transfers.events',97,.4]]:[[sv,0,100,t.err,1],['payments-db',6,22],['session-cache',31,6]];
+  return {k:'Trace',t:mono(id),b:`<div>${fx([['Servis',sv],['Operasyon',mono(nm('endpoint',t.ep))],['Pod',mono(t.pod)],['Başlangıç',tm(t.m)],['Süre',tone(dur(t.d),t.err?'err':'')],['Span',String(t.sp)],['Durum',t.err?'<span class="badge err">hata</span>':'sorunsuz']])}</div>
+<div><h3>Seçili trace</h3><div class="wf" role="img" aria-label="Trace'in özet şelalesi: en uzun adım ${esc(rows.slice(1).sort((a,b)=>b[2]-a[2])[0][0])}">${rows.map(r=>`<div class="wf-r${r[4]?' me':''}"><span class="wf-n">${esc(r[0])}${r[4]?' <span>bu pod</span>':''}</span><span class="wf-t"><i class="${r[3]?'e':r[4]?'':'o'}" style="left:${r[1]}%;width:${r[2]}%"></i></span><span class="wf-d">${dur(t.d*r[2]/100)}</span></div>`).join('')}</div></div>
+<div><h3>Şurada aç</h3><div class="tp-l"><a class="lnk" href="${go('endpoint',t.ep)}">Endpoint sayfası</a><a class="lnk" href="${go('pod',t.pod)}">Pod sayfası</a><a class="lnk" href="${up({t:+t.m.toFixed(2),tab:'log',panel:''})}">Bu anın logları</a></div></div>`};
+}
+let prevPanel='';
+function panel(){
+  const p=S.panel,i=p.indexOf(':'),k=i<0?p:p.slice(0,i),v=i<0?'':p.slice(i+1);
+  const h=!p?null:k==='info'?pInfo():k==='trace'?pTrace(v):k==='pod'&&POD[v]?pPod(v):k==='ep'&&EP[v]?pEp(v):k==='svc'&&SVC[v]?pSvc(v):k==='out'?pOut(+v):k==='log'?pLog(+v):null;
+  document.body.classList.toggle('tp-open',!!h);tp.hidden=!h;
+  if(!h){tp.innerHTML='';prevPanel='';return}
+  tp.innerHTML=`<div class="tp-h"><div style="flex:1;min-width:0"><div class="k">${h.k}</div><h2 id="tp-t">${h.t}</h2></div><a class="btn" id="tp-x" href="${up({panel:''})}">Kapat ✕</a></div><div class="tp-b">${h.b}</div>`;
+  if(prevPanel!==p){prevPanel=p;$('#tp-x').focus({preventScroll:true})}
+}
+
+/* ── senaryo yardımcısı (mockup aracı) ── */
+function scenario(){
+  const base={range:S.range,env:S.env},s1={...base,kind:'service',id:'api-gateway',scope:[],trail:[]},s2={...base,kind:'endpoint',id:HOT,scope:['svc:api-gateway'],trail:['s:api-gateway']},
+   s3={...base,kind:'pod',id:OUT,scope:['svc:api-gateway','ep:'+HOT],trail:['s:api-gateway','e:'+HOT+'~svc:api-gateway']};
+  const steps=[[s1,'Servis api-gateway'],[s2,"Endpoint'ler tablosunda POST /api/v1/transfers"],[s3,"Bu endpoint'i sunan pod'lardan aykırı olan"],[{...s3,tab:'metrik'},'Pod sayfasında Metrik sekmesi'],[{...s3,tab:'metrik',t:85.5},'Bellekteki sıçrama anı'],[{...s3,tab:'log',t:85.5},'O ana ait log'],[{...s3,tab:'log',t:85.5,panel:'trace:'+TRC},"O pod'un bu endpoint'teki trace'i"]];
+  let i=-1;
+  if(S.kind==='service'&&S.id==='api-gateway'&&!S.scope.length)i=0;else if(S.kind==='endpoint'&&S.id===HOT)i=1;
+  else if(S.kind==='pod'&&S.id===OUT)i=S.panel.startsWith('trace:')?6:S.tab==='log'&&S.t!=null?5:S.tab==='metrik'?(S.t!=null?4:3):2;
+  const rev={...base,kind:'service',id:'api-gateway',scope:['ep:'+HOT,'pod:'+OUT],trail:[...s3.trail,'p:'+OUT+'~svc:api-gateway~ep:'+HOT]},e=id=>({...base,kind:'pod',id,scope:[],trail:[]});
+  $('#sc-in').innerHTML=`<ol>${steps.map((s,n)=>`<li class="${n<i?'done':n===i?'here':n===i+1?'next':''}"><a href="${href(s[0])}"${n===i?' aria-current="step"':''}><span class="no">${n<i?'✓':n+1}</span><span>${s[1]}${n===i+1&&i>=0?' — sıradaki':''}</span></a></li>`).join('')}</ol>
+<h3>Sayfada sıradaki tıklama yeri mor kesikli çerçeveyle işaretlidir.</h3>
+<h3>Ters yön</h3><div class="ex"><a href="${href(rev)}">Pod → servis, "yalnız bu pod" çipiyle</a></div>
+<h3>Boş durumlar</h3><div class="ex"><a href="${href(e(GONE))}">Silinmiş pod</a><a href="${href(e(NOTEL))}">Telemetrisiz pod</a><a href="${href({...e(NOLOG),tab:'log'})}">Standart çıkış logu olmayan pod</a></div>`;
+  document.querySelectorAll('.sc-hint').forEach(x=>x.classList.remove('sc-hint'));
+  if(i>=0&&i<6){const el=document.querySelector(`[data-sc="${i+2}"]`);if(el)el.classList.add('sc-hint')}
+}
+
+/* ── yönlendirici ── */
+function render(){
+  S=parse();
+  if(!ent(S.kind,S.id)){location.replace(href({kind:'service',id:'api-gateway',scope:[],range:'3h',env:'prod',trail:[]}));return}
+  S.scope=S.scope.filter(valid);
+  if(!TABS(S.kind).some(t=>t[0]===S.tab))S.tab='genel';
+  PL=[];view.classList.remove('has-cur');
+  view.innerHTML=crumbs()+header()+pstrip()+redrow()+tabs()+`<div class="tb" role="tabpanel" id="tabpanel" aria-labelledby="tab-${S.tab}">${B[S.tab]()}</div>`;
+  $('#tb-title').textContent=KL[S.kind];$('#env').value=S.env;$('#range').value=S.range;
+  document.title=nm(S.kind,S.id)+' · '+KL[S.kind]+' — mockup';
+  panel();scenario();readout(S.t);
+  const key=S.kind+'/'+S.id;if(key!==prevKey){window.scrollTo(0,0);prevKey=key}
+}
+const nav=h=>{location.hash=h};
+window.addEventListener('hashchange',render);
+document.addEventListener('click',e=>{
+  document.querySelectorAll('details.pm[open]').forEach(d=>{if(!d.contains(e.target))d.open=false});
+  const sw=e.target.closest('.switch');if(sw){sw.setAttribute('aria-checked',sw.getAttribute('aria-checked')!=='true');return}
+  if(e.target.closest('a,button,summary,input,select,label'))return;
+  const r=e.target.closest('[data-p]');if(r){nav(up({panel:r.dataset.p}));return}
+  const a=e.target.closest('.pl-a');
+  if(a){const b=a.getBoundingClientRect(),p=Math.min(1,Math.max(0,(e.clientX-b.left)/b.width));nav(up({t:+(WIN()*(1-p)).toFixed(1),panel:''}))}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&S&&S.panel){nav(up({panel:''}));return}
+  if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('tr[data-p]')){e.preventDefault();nav(up({panel:e.target.dataset.p}))}
+});
+document.addEventListener('input',e=>{
+  if(e.target.id!=='lq')return;
+  const q=e.target.value.toLocaleLowerCase('tr');
+  document.querySelectorAll('#logt tbody tr[data-p]').forEach(r=>{r.hidden=!!q&&!r.textContent.toLocaleLowerCase('tr').includes(q)});
+});
+view.addEventListener('mousemove',e=>{
+  const a=e.target.closest('.pl-a');if(!a)return;
+  const b=a.getBoundingClientRect(),p=Math.min(1,Math.max(0,(e.clientX-b.left)/b.width));
+  view.style.setProperty('--cur',(p*100).toFixed(2)+'%');view.classList.add('has-cur');readout(WIN()*(1-p));
+});
+view.addEventListener('mouseout',e=>{const a=e.target.closest('.pl-a');if(a&&!a.contains(e.relatedTarget)){view.classList.remove('has-cur');readout(S.t)}});
+$('#env').addEventListener('change',e=>nav(up({env:e.target.value})));
+$('#range').addEventListener('change',e=>nav(up({range:e.target.value})));
+$('#theme').addEventListener('click',()=>{
+  const d=document.documentElement,dark=d.dataset.theme!=='dark';
+  d.dataset.theme=dark?'dark':'redhat';$('#theme').textContent='Tema: '+(dark?'Koyu':'Kurumsal');
+});
+$('#tonotes').addEventListener('click',()=>$('#notlar').scrollIntoView({behavior:'smooth'}));
+$('#out-n').textContent='— '+$('#out-l').children.length+' madde';
+render();
+})();
+</script>
+</body>
+</html>

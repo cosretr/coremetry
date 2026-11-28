@@ -333,7 +333,26 @@ func (n *Notifier) problemURL(problemID string) string {
 	// /anomalies pre-v0.8.492 — that route is now the anomaly
 	// STREAMS page, which ignores ?problem= entirely, so every
 	// notification deep link landed on the wrong surface.
-	return base + "/problems?problem=" + problemID
+	// v0.10.2484 — `src=notify` (withNotifySrc).
+	return withNotifySrc(base + "/problems?problem=" + problemID)
+}
+
+// NotifySrcParam — v0.10.2484 (precision programı A.3 / karar 8): bildirim
+// bağlantılarının kaynak işareti. Tarayıcı RUM documentLoad span'inin
+// url.full'u bunu taşır → "bildirimden tıklandı" ölçülür. Uygulama parametreyi
+// yok sayar; Problems / Incident sayfası yükten sonra adres çubuğundan siler
+// (FE lib/notifySrc.ts) ki paylaşılan bağlantı tıklamayı yanlış saymasın.
+const NotifySrcParam = "src=notify"
+
+// withNotifySrc — SAF: bağlantıya `src=notify` ekler (? ya da &). Boş → boş.
+func withNotifySrc(u string) string {
+	if u == "" {
+		return ""
+	}
+	if strings.Contains(u, "?") {
+		return u + "&" + NotifySrcParam
+	}
+	return u + "?" + NotifySrcParam
 }
 
 // traceURL — kanıt trace derin-linki (v0.9.1058). problemURL ile aynı

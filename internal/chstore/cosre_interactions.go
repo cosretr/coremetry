@@ -69,6 +69,10 @@ type CosreInteraction struct {
 	// "" = doğrulama koşmadı (v1, kapalı, anlatımsız kademe). Kolon iki-boot
 	// sözleşmesiyle (probe).
 	Verify string
+	// AnomalyID — v0.10.2484 (precision programı A.3): sohbetin açıldığı ML /
+	// anomali olayı sayfasının olay kimliği ('ml:<id>' ya da eski olay id'si).
+	// Kolon iki-boot sözleşmesiyle (probe).
+	AnomalyID string
 }
 
 const cosreInteractionsBaseCols = `exchange_id, conversation_id, turn, created_at, user_id, user_email,
@@ -94,6 +98,9 @@ var cosreInteractionsBlocksCol atomic.Bool
 // cosreInteractionsVerifyCol — v0.10.2327 verify kolonu (aynı sözleşme; yalnız INSERT).
 var cosreInteractionsVerifyCol atomic.Bool
 
+// cosreInteractionsAnomalyCol — v0.10.2484 anomaly_id kolonu (aynı sözleşme; yalnız INSERT).
+var cosreInteractionsAnomalyCol atomic.Bool
+
 // CosreInteractionsEvidenceCol — kolon bayrağı (test/teşhis).
 func CosreInteractionsEvidenceCol() bool { return cosreInteractionsEvidenceCol.Load() }
 
@@ -107,7 +114,7 @@ func CosreInteractionsBlocksCol() bool { return cosreInteractionsBlocksCol.Load(
 func CosreInteractionsVerifyCol() bool { return cosreInteractionsVerifyCol.Load() }
 
 // cosreInteractionsOptionalCols — iki-boot sözleşmeli kolonlar (probe sırası).
-var cosreInteractionsOptionalCols = []string{"tool_evidence", "toolset", "blocks", "verify"}
+var cosreInteractionsOptionalCols = []string{"tool_evidence", "toolset", "blocks", "verify", "anomaly_id"}
 
 // probeCosreInteractionsColumns — INSERT hedefi cosre_interactions'ta (küme
 // kipinde Distributed) iki-boot kolonları var mı; v0.10.1302'den beri TEK
@@ -117,7 +124,7 @@ func (s *Store) probeCosreInteractionsColumns(ctx context.Context) {
 	have := map[string]bool{}
 	rows, err := s.conn.Query(ctx,
 		`SELECT name FROM system.columns
-		 WHERE database = currentDatabase() AND table = 'cosre_interactions' AND name IN ('tool_evidence', 'toolset', 'blocks', 'verify')`)
+		 WHERE database = currentDatabase() AND table = 'cosre_interactions' AND name IN ('tool_evidence', 'toolset', 'blocks', 'verify', 'anomaly_id')`)
 	if err == nil {
 		for rows.Next() {
 			var name string
@@ -132,8 +139,9 @@ func (s *Store) probeCosreInteractionsColumns(ctx context.Context) {
 	}
 	cosreInteractionsEvidenceCol.Store(have["tool_evidence"])
 	cosreInteractionsToolsetCol.Store(have["toolset"])
-	cosreInteractionsBlocksCol.Store(have["blocks"]) // v0.10.1444
-	cosreInteractionsVerifyCol.Store(have["verify"]) // v0.10.2327
+	cosreInteractionsBlocksCol.Store(have["blocks"])      // v0.10.1444
+	cosreInteractionsVerifyCol.Store(have["verify"])      // v0.10.2327
+	cosreInteractionsAnomalyCol.Store(have["anomaly_id"]) // v0.10.2484
 }
 
 // cosreInteractionCols — INSERT'in iki-boot kolon bayrakları.
@@ -142,11 +150,12 @@ type cosreInteractionCols struct {
 	Toolset  bool // v0.10.1302 toolset
 	Blocks   bool // v0.10.1444 blocks
 	Verify   bool // v0.10.2327 verify
+	Anomaly  bool // v0.10.2484 anomaly_id
 }
 
 func loadCosreInteractionCols() cosreInteractionCols {
 	return cosreInteractionCols{Evidence: cosreInteractionsEvidenceCol.Load(), Toolset: cosreInteractionsToolsetCol.Load(),
-		Blocks: cosreInteractionsBlocksCol.Load(), Verify: cosreInteractionsVerifyCol.Load()}
+		Blocks: cosreInteractionsBlocksCol.Load(), Verify: cosreInteractionsVerifyCol.Load(), Anomaly: cosreInteractionsAnomalyCol.Load()}
 }
 
 // cosreInteractionsInsertSQL — SAF: kolon listesi bayraklara göre (sıra:
@@ -164,6 +173,9 @@ func cosreInteractionsInsertSQL(c cosreInteractionCols) string {
 	}
 	if c.Verify {
 		cols += ", verify"
+	}
+	if c.Anomaly {
+		cols += ", anomaly_id"
 	}
 	return "INSERT INTO cosre_interactions (\n\t" + cols + ")"
 }
@@ -217,6 +229,9 @@ func cosreInteractionArgs(r CosreInteraction, c cosreInteractionCols) []any {
 	}
 	if c.Verify {
 		out = append(out, r.Verify)
+	}
+	if c.Anomaly {
+		out = append(out, r.AnomalyID)
 	}
 	return out
 }

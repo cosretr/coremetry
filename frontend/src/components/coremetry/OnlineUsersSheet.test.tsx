@@ -58,7 +58,7 @@ describe('OnlineUsersBody', () => {
     expect(items[0].textContent).toContain('ada');
     expect(items[0].textContent).toContain('· sre');
     expect(items[0].textContent).toContain('2 dk önce');
-    expect(items[1].textContent).toContain('az önce');
+    expect(items[1].textContent).toContain('10 sn önce');
   });
 
   it('admin: ad /users/:id bağlantısı', () => {

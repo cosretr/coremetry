@@ -2,11 +2,15 @@ package chstore
 
 // ml_labels.go — kalite çerçevesi ortak etiket seti (üç sinyal). Etiket =
 // operatörün bir ML olayına verdiği karar (anomaly_verdicts 'ml:' öneki) +
-// olayın servis ve penceresi. Aynı liste backtest'te (isabet/yakalama),
-// taban hijyeninde (gerçek anomali kovaları tabana girmez) ve geri bildirim
-// ayarında (yanlış alarm sayısı eşiği yükseltir) kullanılır; sinyal fark
-// etmez: log olayına verilen "gerçek" kararı aynı servisin trace/metrik
-// dedektörü için de etikettir. İki okuma (JOIN/alt sorgu yok: audit 5/5b).
+// olayın servis ve penceresi. YALNIZ backtest puanlamasında (isabet /
+// yakalama; ml/backtest.go) kullanılır — sinyal fark etmez: log olayına
+// verilen "gerçek" kararı aynı servisin trace/metrik dedektörü için de
+// etikettir. v0.10.2484 düzeltmesi (precision programı audit'i): eski yorum
+// taban hijyeni ve geri bildirim ayarı da sayıyordu; ikisi v0.10.2269'da
+// kalktı — oylar hiçbir çalışma zamanı kararını (tespit, taban, eşik,
+// bildirim) sürmez (bekçi: ml/vote_runtime_guard_test.go
+// TestAnomalyVotesDoNotReachRuntime). Dedektör karnesi ayrı ve tek bir CH
+// toplamasıdır (ml_precision.go). İki okuma (JOIN/alt sorgu yok: audit 5/5b).
 
 import (
 	"context"

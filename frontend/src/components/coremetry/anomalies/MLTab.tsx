@@ -17,7 +17,9 @@ import { useAuthRole } from '@/components/AuthProvider';
 import { SIGNAL_KINDS } from '@/lib/signalKind';
 import { SignalKindBadge } from '@/components/coremetry/SignalKindBadge';
 import { ML_DETECTOR_TR, mlDetectorLabel } from '@/lib/mlDetectorLabels';
-import { t as tr, tf, useLang, type Lang } from '@/lib/i18n';
+import { t as tr, tf, useLang, fmtPctLang, type Lang } from '@/lib/i18n';
+import { fmtDurShort } from '@/lib/utils';
+import { count as fmtCount } from '@/lib/format/number';
 
 // v0.10.2392 — etki kuralı geri oynatma: yalnız admin, tembel parça (bundle bütçesi).
 const ImpactReplaySection = lazy(() => import('./ImpactReplay'));
@@ -150,7 +152,9 @@ export function detectorGroup(d: string): string {
 
 export interface DetectorRow { detector: string; signal: string; enabled: boolean; events: number; samples: number; hitRate: number; tick?: MLSignalTick;
   /** v0.10.2063: son tikte kaynağı yoktu ("ölçülemedi: …"); sağlıklı DEĞİL. */
-  unmeasured?: string }
+  unmeasured?: string;
+  /** v0.10.2484 — precision programı B.1 satırı (sunucunun tek CH toplaması; yoksa boş satır). */
+  score?: MLDetectorScore }
 
 /** Karne satırları — SAF (test): tüm dedektörler, olay yoksa 0; açık/kapalı sunucunun `enabled` haritasından. */
 export function detectorRows(sc: MLScorecard, signal: MLSignal): DetectorRow[] {
@@ -159,7 +163,7 @@ export function detectorRows(sc: MLScorecard, signal: MLSignal): DetectorRow[] {
     const sc1 = byDet.get(d);
     const tick = sc.tick?.signals?.[detectorGroup(d)];
     return { detector: d, signal: sc.signals[d], enabled: sc.enabled?.[d] === true,
-      events: sc1?.events ?? 0, samples: sc1?.samples ?? 0, hitRate: sc1?.hitRate ?? 0, tick, unmeasured: tick?.unmeasured?.[d] };
+      events: sc1?.events ?? 0, samples: sc1?.samples ?? 0, hitRate: sc1?.hitRate ?? 0, tick, unmeasured: tick?.unmeasured?.[d], score: sc1 };
   });
 }
 
@@ -257,6 +261,39 @@ export function detectorVerdictText(r: Pick<DetectorRow, 'samples' | 'hitRate'>,
   return M('verdictText', lang, { s: r.samples.toLocaleString(loc(lang)), c: Math.round(r.hitRate * r.samples).toLocaleString(loc(lang)) });
 }
 
+// ── v0.10.2484 — precision programı B.1: dedektör karnesi (SAF yardımcılar) ──
+const pct = (v: number, lang: Lang) => fmtPctLang(Math.round(v * 100), lang);
+
+/** Doğruluk hücresinin durumu — SAF (test). Muaf > yetersiz > değer; renk
+ *  yalnız sapan değerde: yeterli etiketle Wilson ÜST sınırı < 0,50 (B.2
+ *  düşme şartıyla aynı ifade). Yetersiz asla kırmızı değil, gri. */
+export function precisionCell(s: MLDetectorScore | undefined, lang: Lang = 'tr'):
+  { kind: 'none' | 'exempt' | 'insufficient' | 'value'; text: string; title?: string; low?: boolean } {
+  if (s?.exempt) return { kind: 'exempt', text: M('precision.exempt', lang), title: M('precision.exemptTitle', lang) };
+  const n = s?.samples ?? 0;
+  if (!s || n <= 0) return { kind: 'none', text: '—', title: M('noVerdictTitle', lang) };
+  if (s.insufficient) {
+    return { kind: 'insufficient', text: M('precision.insufficient', lang),
+      title: M('precision.insufficientTitle', lang, { n: fmtCount(n, lang), c: pct(s.coverage ?? 0, lang) }) };
+  }
+  const low = (s.wilsonHi ?? 1) < 0.5;
+  return { kind: 'value', text: M('precision.value', lang, { p: pct(s.precision ?? s.hitRate, lang), lo: pct(s.wilsonLo ?? 0, lang), hi: pct(s.wilsonHi ?? 0, lang) }),
+    title: low ? M('precision.lowTitle', lang) : undefined, low };
+}
+
+/** Etiket kaynağı satırı (başlık ipucu) — SAF (test). */
+export function labelSourcesTitle(s: MLDetectorScore | undefined, lang: Lang = 'tr'): string | undefined {
+  if (!s?.bySource) return undefined;
+  return M('labels.title', lang, { v: s.bySource.vote, c: s.bySource.case, cc: s.bySource.caseCorrect, x: s.notActionable ?? 0 });
+}
+
+/** "Sorun değil" neden kırılımı — SAF (test): yanlış sayılanlar | ayrı gösterilenler. */
+export function reasonsText(s: MLDetectorScore | undefined, lang: Lang = 'tr'): string {
+  const r = s?.notAnomalyReasons;
+  if (!r || r.noDeviation + r.noImpact + r.expected + r.other + r.none === 0) return '';
+  return M('reasons.text', lang, { a: r.noDeviation, b: r.noImpact, c: r.expected, d: r.other, e: r.none });
+}
+
 // v0.10.2282 — başlıklar ve dedektör adları (sıralama da görünene göre) arayüz dilinde.
 const dcolsFor = (lang: Lang): ColumnDef<DetectorRow>[] => [
   { id: 'detector', label: M('col.detector', lang), width: 220, minWidth: 150, flex: true, priority: 1, sortValue: r => mlDetectorLabel(r.detector, lang), naturalDir: 'asc' },
@@ -264,7 +301,13 @@ const dcolsFor = (lang: Lang): ColumnDef<DetectorRow>[] => [
   // Açık olanlar önde, kendi içinde bulduğu olay sayısına göre.
   { id: 'state', label: tr('anomalies.col.status', lang), width: 100, minWidth: 80, priority: 1, sortValue: r => (r.enabled ? 1e9 : 0) + r.events },
   { id: 'events', label: M('col.events', lang), width: 150, minWidth: 110, priority: 1, numeric: true, sortValue: r => r.events },
-  { id: 'hit', label: M('col.hit', lang), width: 200, minWidth: 130, priority: 2, sortValue: r => (r.samples > 0 ? r.hitRate : -1) },
+  // v0.10.2484 — precision programı B.1 sütunları (sayısal, sıralanabilir).
+  { id: 'linked', label: M('col.linked', lang), width: 120, minWidth: 90, priority: 2, numeric: true, sortValue: r => r.score?.linked ?? 0 },
+  { id: 'hit', label: M('col.hit', lang), width: 200, minWidth: 130, priority: 2, numeric: true, sortValue: r => r.samples },
+  { id: 'precision', label: M('col.precision', lang), width: 190, minWidth: 140, priority: 1, numeric: true,
+    sortValue: r => (r.score?.exempt || !r.samples || r.score?.insufficient ? -1 : r.score?.wilsonLo ?? r.hitRate),
+    tone: r => (precisionCell(r.score).low ? 'err' : undefined) },
+  { id: 'coverage', label: M('col.coverage', lang), width: 100, minWidth: 80, priority: 2, numeric: true, sortValue: r => r.score?.coverage ?? 0 },
 ];
 // v0.10.2307 — İngilizce katalog tembel (lib/i18n.ts): EN kolonları modül
 // yüklenirken değil ilk kullanımda (etkin dil 'en' = katalog yüklü) kurulur.
@@ -283,6 +326,22 @@ const dtechFor = (lang: Lang): ColumnDef<DetectorRow>[] => [
 // yüklenirken değil ilk kullanımda (etkin dil 'en' = katalog yüklü) kurulur.
 const DTECH_BY_LANG: Partial<Record<Lang, ColumnDef<DetectorRow>[]>> = {};
 const dtechOf = (lang: Lang): ColumnDef<DetectorRow>[] => (DTECH_BY_LANG[lang] ??= dtechFor(lang));
+
+// v0.10.2484 — "Etiket ayrıntısı" (teknik detay): A1b / A1c + neden kırılımı,
+// kural dışı triyaj, kuyruk etiketleri, < 15 dk kendiliğinden kapanan pay.
+const dlabelFor = (lang: Lang): ColumnDef<DetectorRow>[] => [
+  { id: 'detector', label: M('col.detector', lang), width: 180, minWidth: 140, priority: 1, sortValue: r => mlDetectorLabel(r.detector, lang), naturalDir: 'asc' },
+  { id: 'medianLabel', label: M('col.medianLabel', lang), width: 120, numeric: true, priority: 2, sortValue: r => r.score?.medianLabelSec ?? -1 },
+  { id: 'labellers', label: M('col.labellers', lang), width: 100, numeric: true, priority: 2, sortValue: r => r.score?.labellers ?? 0 },
+  { id: 'worstSvc', label: M('col.worstSvc', lang), width: 220, minWidth: 140, numeric: true, priority: 2, sortValue: r => r.score?.worstSvcShare ?? 0,
+    tone: r => ((r.score?.worstSvcShare ?? 0) > 0.6 && (r.score?.wrong ?? 0) >= 5 ? 'warn' : undefined) },
+  { id: 'reasons', label: M('col.reasons', lang), width: 300, minWidth: 180, priority: 3, flex: true },
+  { id: 'triage', label: M('col.triage', lang), width: 130, numeric: true, priority: 3, sortValue: r => r.score?.triage?.n ?? 0 },
+  { id: 'queue', label: M('col.queue', lang), width: 130, numeric: true, priority: 3, sortValue: r => r.score?.queue?.n ?? 0 },
+  { id: 'shortAuto', label: M('col.shortAuto', lang), width: 150, numeric: true, priority: 3, sortValue: r => r.score?.shortAutoShare ?? 0 },
+];
+const DLABEL_BY_LANG: Partial<Record<Lang, ColumnDef<DetectorRow>[]>> = {};
+const dlabelOf = (lang: Lang): ColumnDef<DetectorRow>[] => (DLABEL_BY_LANG[lang] ??= dlabelFor(lang));
 
 /** SAF (test): seyrin tepe değeri (sıralama); seyir yoksa -1. */
 export function sparkPeak(e: MLEvent): number {
@@ -334,15 +393,25 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
                   ? (r.unmeasured ? <span className="text-[color:var(--warn)]" title={r.unmeasured}>{M(r.unmeasured.startsWith('kısmen') ? 'onPartly' : 'onUnmeasured', lang)}</span> : M('on', lang))
                   : <span className="text-muted-foreground">{M('off', lang)}</span>;
                 case 'events': return r.events.toLocaleString(loc(lang));
+                case 'linked': return fmtCount(r.score?.linked ?? 0, lang);
                 case 'hit': {
                   const v = detectorVerdictText(r, lang);
-                  return v || <span className="text-muted-foreground" title={M('noVerdictTitle', lang)}>—</span>;
+                  return v ? <span title={labelSourcesTitle(r.score, lang)}>{v}</span> : <span className="text-muted-foreground" title={M('noVerdictTitle', lang)}>—</span>;
                 }
+                case 'precision': {
+                  const p = precisionCell(r.score, lang);
+                  return p.kind === 'value' ? <span title={p.title}>{p.text}</span>
+                    : <span className="text-muted-foreground" title={p.title}>{p.text}</span>;
+                }
+                case 'coverage': return r.score && r.events > 0 ? pct(r.score.coverage ?? 0, lang) : '—';
                 default: return null;
               }
             }} />
           <p className="m-0 text-[length:var(--fs-sm)] text-muted-foreground">
             {M('explain', lang)}
+          </p>
+          <p className="m-0 text-[length:var(--fs-sm)] text-muted-foreground" data-testid="ml-precision-note">
+            {M('precisionNote', lang)}
           </p>
           <details data-testid="ml-tech-details" className="rounded-md border border-border px-3 py-2">
             <summary className="cursor-pointer text-[length:var(--fs-sm)] font-semibold text-muted-foreground">{M('tech', lang)}</summary>
@@ -378,6 +447,26 @@ export function MLTab({ signal = '', onSignal }: { signal?: MLSignal; onSignal?:
                     case 'services': return r.tick ? r.tick.services : '—';
                     case 'candidates': return r.tick ? r.tick.candidates : '—';
                     case 'written': return r.tick ? r.tick.written : '—';
+                    default: return null;
+                  }
+                }} />
+              <h4 className="m-0 text-[length:var(--fs-sm)] font-semibold">{M('labelDetail', lang)}</h4>
+              <DataTable<DetectorRow>
+                storageKey="anomalies-ml-detectors-labels" columns={dlabelOf(lang)} rows={detectorRows(sc.data, signal)}
+                state={{ kind: 'empty', message: M('noDetectors', lang) }} sort={{ initial: { id: 'detector', dir: 'asc' } }}
+                getRowKey={r => r.detector} ariaLabel={M('labelDetailAria', lang)}
+                renderCell={(r, c) => {
+                  const s = r.score;
+                  switch (c.id) {
+                    case 'detector': return mlDetectorLabel(r.detector, lang);
+                    case 'medianLabel': return s?.medianLabelSec ? fmtDurShort(s.medianLabelSec) : '—';
+                    case 'labellers': return s?.labellers ? s.labellers : '—';
+                    case 'worstSvc': return s?.worstSvc
+                      ? <span className="dt-trunc" title={s.worstSvc}>{pct(s.worstSvcShare ?? 0, lang)} · <span className="font-mono">{s.worstSvc}</span></span> : '—';
+                    case 'reasons': { const t = reasonsText(s, lang); return t ? <span className="dt-trunc" title={t}>{t}</span> : '—'; }
+                    case 'triage': return s?.triage?.n ? M('triage.text', lang, { n: s.triage.n, r: s.triage.real }) : '—';
+                    case 'queue': return s?.queue?.n ? M('queue.text', lang, { n: s.queue.n, c: s.queue.correct }) : '—';
+                    case 'shortAuto': return s?.linked ? `${s.linkedShortAuto ?? 0} (${pct(s.shortAutoShare ?? 0, lang)})` : '—';
                     default: return null;
                   }
                 }} />

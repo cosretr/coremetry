@@ -316,6 +316,9 @@ type Store struct {
 	// değil" nedeni) var mı. Aynı iki-boot sözleşmesi; false ⇒ INSERT/SELECT
 	// kolonu ATLAR (neden yazılmaz, '' okunur; karar yine kaydedilir).
 	hasVerdictReasonCol atomic.Bool
+	// hasVerdictOriginCol — anomaly_verdicts.origin (v0.10.2484, haftalık
+	// etiket kuyruğu işareti). Aynı sözleşme; false ⇒ kolon anılmaz ('' okunur).
+	hasVerdictOriginCol atomic.Bool
 
 	// hasDBStmtHashCol records whether the spans table actually carries the
 	// `db_stmt_hash` column (v0.8.375, Stage-2 D1 — persistent DB-statement
@@ -4510,6 +4513,16 @@ func (s *Store) migrate(ctx context.Context) error {
 		// sarmalayıcı yok; ORDER BY / TTL'e girmez; CREATE TABLE'a bilinçli
 		// EKLENMEDİ (promotion emsali). Probe hasVerdictReasonCol (iki-boot).
 		`ALTER TABLE anomaly_verdicts ADD COLUMN IF NOT EXISTS reason LowCardinality(String) DEFAULT ''`,
+		// v0.10.2484 — precision programı B.3/2: oyun haftalık etiket
+		// kuyruğundan verildiği işareti ('' = organik | 'queue'). Karne kuyruk
+		// etiketlerini organiklerden ayrı sayar (etiket yanlılığı önlemi).
+		// Neden yeni kolon: tabloda boş serbest alan yok — note operatörün
+		// metni, kind / pattern / fingerprint dolu anahtarlar. KAPALI iki
+		// değerli küme → LowCardinality (C2-C3). Yalnız karne okur; tespit /
+		// eşik / bildirim okumaz. Düşük hacimli state tablosu: ON CLUSTER
+		// (adaptDDL), ORDER BY / TTL'e girmez, CREATE TABLE'a bilinçli
+		// EKLENMEDİ. Probe hasVerdictOriginCol (iki-boot). Geri alma: DROP COLUMN.
+		`ALTER TABLE anomaly_verdicts ADD COLUMN IF NOT EXISTS origin LowCardinality(String) DEFAULT ''`,
 		// v0.10.2106 — CoSRE kalite döngüsü D1 (docs/cosre/quality-loop-audit.md
 		// §3.1; operatör onayı 2026-11-13): evalset koşusunun ajan vakalarını
 		// koşan sohbet yolu ('v1' | 'v2'). KAPALI iki değerli küme →
@@ -4858,6 +4871,14 @@ func (s *Store) migrate(ctx context.Context) error {
 		// ≤ ~200 B; "" = koşmadı). Append-only MergeTree; aynı iki-boot sözleşmesi
 		// (probeCosreInteractionsColumns). Geri alma: DROP COLUMN.
 		`ALTER TABLE cosre_interactions ADD COLUMN IF NOT EXISTS verify String DEFAULT ''`,
+		// v0.10.2484 — precision programı A.3 / karar 8: sohbet bir ML / anomali
+		// olayı sayfasında açıldıysa olayın kimliği (anomaly_verdicts.event_id
+		// biçimi: ML 'ml:<id>', eski olay çıplak id; '' = olay sayfası değil).
+		// Dikkat ölçüsü (etiketsiz olayın sorulup sorulmadığı), doğruluk etiketi
+		// DEĞİL. Kimlik → String (C2-C3: LowCardinality değil). Append-only
+		// MergeTree; aynı iki-boot sözleşmesi (probeCosreInteractionsColumns).
+		// Geri alma: DROP COLUMN.
+		`ALTER TABLE cosre_interactions ADD COLUMN IF NOT EXISTS anomaly_id String DEFAULT ''`,
 		// v0.8.20 — drop the dead topology-mute setting. The
 		// "Mute on topology" chip was removed from the service detail
 		// page in v0.8.19; this migration removes the now-orphaned
@@ -5045,6 +5066,12 @@ func (s *Store) migrate(ctx context.Context) error {
 	// anomaly_verdicts.reason probe'u (v0.10.2256) — aynı şekil.
 	vrsOK, vrsErr := s.probeVerdictReasonCol(ctx)
 	s.hasVerdictReasonCol.Store(vrsOK)
+	// anomaly_verdicts.origin probe'u (v0.10.2484) — aynı şekil.
+	vorOK, vorErr := s.probeVerdictCol(ctx, "origin")
+	s.hasVerdictOriginCol.Store(vorOK)
+	if !vorOK {
+		log.Printf("[chstore] `origin` column not present on anomaly_verdicts (err=%v) — read/INSERT omit it; queue labels are stored as organic until the deferred-DDL re-probe or the next boot", vorErr)
+	}
 	if !vrsOK {
 		log.Printf("[chstore] `reason` column not present on anomaly_verdicts (err=%v) — read/INSERT omit it; verdicts are stored without a reason until the deferred-DDL re-probe or the next boot", vrsErr)
 	}

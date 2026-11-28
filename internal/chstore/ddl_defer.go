@@ -219,8 +219,11 @@ func (s *Store) reprobePromotedAttrs() {
 		// v0.10.2256 — anomaly_verdicts.reason: bayrak false kaldıkça "Sorun
 		// değil" nedeni yazılmaz/okunmaz (karar yine kaydedilir).
 		reasonDone := s.reprobeVerdictReasonCol(ctx)
+		// v0.10.2484 — anomaly_verdicts.origin: bayrak false kaldıkça kuyruk
+		// işareti yazılmaz (oy organik sayılır).
+		originDone := s.reprobeVerdictOriginCol(ctx)
 		cancel()
-		if attrsDone && episodeDone && snapDone && srcDone && verifiedDone && subjectDone && promotionDone && dirDone && evalPathDone && mlRecordDone && reasonDone {
+		if attrsDone && episodeDone && snapDone && srcDone && verifiedDone && subjectDone && promotionDone && dirDone && evalPathDone && mlRecordDone && reasonDone && originDone {
 			return
 		}
 	}

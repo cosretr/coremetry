@@ -80,21 +80,21 @@ func (n *Notifier) subjectURL(p chstore.Problem) string {
 		if base == "" {
 			return ""
 		}
-		return base + "/incident?id=" + p.ID
+		return withNotifySrc(base + "/incident?id=" + p.ID)
 	}
 	if isOracleSourceRollupID(p.ID) { // v0.10.1109 — kaynak özeti: Exceptions'ın Oracle çipi
 		base := n.PublicURL()
 		if base == "" {
 			return ""
 		}
-		return base + "/problems?oracle=only"
+		return withNotifySrc(base + "/problems?oracle=only")
 	}
 	if fp := exceptionGroupFingerprint(p.ID); fp != "" { // v0.10.782 — grup satırı Exceptions'ta açılır
 		base := n.PublicURL()
 		if base == "" {
 			return ""
 		}
-		return base + "/problems?exception=" + fp
+		return withNotifySrc(base + "/problems?exception=" + fp)
 	}
 	return n.problemURL(p.ID)
 }

@@ -51,11 +51,12 @@ describe('TraceMeasures', () => {
     expect(dl.getAttribute('aria-label')).toBe('Trace ölçüleri');
     expect([...dl.querySelectorAll('dt')].map(d => d.textContent)).toEqual(['SÜRE', 'KRİTİK YOL', 'SPAN', 'BAŞLANGIÇ']);
     const dd = [...dl.querySelectorAll('dd')] as HTMLElement[];
-    expect(dd.map(d => d.textContent)).toEqual(['24.97 ms', '5.26 ms', '4 · 2 servis', tsLong(1_760_000_000_000_000_000)]);
+    expect(dd.map(d => d.textContent)).toEqual(['25 ms', '5.26 ms', // v0.10.2484 — 3 anlamlı hane (lib/format/duration)
+ '4 · 2 servis', tsLong(1_760_000_000_000_000_000)]);
     expect(dd[0].className).toBe('trace-summary__dur');
     expect(dd[0].querySelector('.trace-measures__unit')!.textContent).toBe(' ms');
     expect(dd[0].title).toBe('Trace toplam süresi: ilk span başlangıcından son span bitişine');
-    expect(dd[1].title).toBe('Kritik yol: kökten yaprağa 3 span; kök span duvar süresi 5.26ms. İç içe span süreleri toplanmaz. Odaklamak için alttaki "Critical path focus" düğmesi.');
+    expect(dd[1].title).toBe('Kritik yol: kökten yaprağa 3 span; kök span duvar süresi 5.26 ms. İç içe span süreleri toplanmaz. Odaklamak için alttaki "Critical path focus" düğmesi.');
     expect(dd[3].title).toBe('Trace başlangıcı (kök span)');
   });
 

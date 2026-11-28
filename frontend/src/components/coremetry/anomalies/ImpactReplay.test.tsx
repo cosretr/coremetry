@@ -66,7 +66,7 @@ describe('ImpactReplaySection (v0.10.2392)', () => {
     const el = render();
     run(el);
     expect(el.querySelector('[data-testid="impact-replay-summary"]')!.textContent)
-      .toBe('Son 7 günde 2 Problem açardı (P1 1, P2 1) · 2 servis · medyan süre 29m · 3 aday oynatıldı.');
+      .toBe('Son 7 günde 2 Problem açardı (P1 1, P2 1) · 2 servis · medyan süre 29 min · 3 aday oynatıldı.');
     expect(el.querySelector('[data-testid="impact-replay-notes"]')!.textContent).toContain('Yaklaşık');
     expect(el.querySelector('[data-testid="impact-replay-skipped"]')!.textContent).toContain('svc-c');
     const rows = el.querySelectorAll('tbody tr');

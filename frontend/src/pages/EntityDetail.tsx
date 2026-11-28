@@ -28,6 +28,11 @@ import { entityHref, entityLiveness } from '@/lib/entityHref';
 import { serviceHref } from '@/lib/serviceHref';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { EntityDetailResponse, EntityRecord, EntityServiceRow, EntitySeenAgg, EntityServicesResponse, TimeRange } from '@/lib/types';
+import { useLang } from '@/lib/i18n';
+import { duration } from '@/lib/format/duration';
+import { percent } from '@/lib/format/percent';
+import { count, fixed } from '@/lib/format/number';
+import { errorTone } from '@/lib/format/tone';
 
 // 2026-11-21 — URL durumu zod şemasıyla (lib/urlSchema): bozuk `at` → 0
 // (anlık görünüm), kimlik ham metin (≤1024).
@@ -111,6 +116,7 @@ const POD_SVC_COLS: ColumnDef<EntitySeenAgg>[] = [
 const LOG_COVERAGE_TYPES = new Set(['pod', 'namespace', 'workload', 'service', 'cluster']);
 
 function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDetailResponse; svc?: EntityServicesResponse; svcError?: string; at: number; pageRange: TimeRange; from: number; to: number }) {
+  const lang = useLang();
   const { entity, parents, children, lifetimes, cluster, atMatch } = data;
   const [showLabels, setShowLabels] = useState(false);
   const live = entityLiveness(entity);
@@ -202,7 +208,7 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
                 <DataTableCell dt={svcDt} col="pods" row={s} value={s.pods} />
                 <DataTableCell dt={svcDt} col="spans" row={s} value={s.spans} />
                 <DataTableCell dt={svcDt} col="errors" row={s} value={s.errors} />
-                <DataTableCell dt={svcDt} col="avgMs" row={s} value={s.avgMs.toFixed(1)} />
+                <DataTableCell dt={svcDt} col="avgMs" row={s} value={fixed(s.avgMs, 1, lang)} />
               </tr>
             ))}
           </tbody>
@@ -236,7 +242,7 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
                     </DataTableCell>
                     <DataTableCell dt={podDt} col="spans" row={r} value={r.spans} />
                     <DataTableCell dt={podDt} col="errors" row={r} value={r.errors} />
-                    <DataTableCell dt={podDt} col="avgMs" row={r} value={r.avgMs.toFixed(1)} />
+                    <DataTableCell dt={podDt} col="avgMs" row={r} value={fixed(r.avgMs, 1, lang)} />
                     <DataTableCell dt={podDt} col="lastSeen" row={r} value={fmtDateTime(new Date(r.lastSeen))} className="mono" />
                   </tr>
                 ))}
@@ -269,14 +275,10 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
   );
 }
 
-function msLabel(v?: number): string {
-  if (v === undefined || v <= 0) return '—';
-  return `${v < 10 ? v.toFixed(1) : v.toFixed(0)} ms`;
-}
-
 // Etki + latency KPI şeridi: pod/servis sayısı entity_seen satırlarından,
 // p50/p95/p99 + hata ham spans'ten (/api/entity/latency).
 function ImpactStrip({ id, from, to, svc }: { id: string; from: number; to: number; svc?: EntityServicesResponse }) {
+  const lang = useLang();
   const latQ = useEntityLatency(id, { from, to });
   const l = latQ.data?.latency;
   const rows = svc?.rows ?? [];
@@ -285,20 +287,22 @@ function ImpactStrip({ id, from, to, svc }: { id: string; from: number; to: numb
   // Sunucu tavanları (pod ≤ 500, satır ≤ 2000): dolunca toplam KISMİ — ilan (inceleme).
   const capped = !!svc && (svc.pods.length >= 500 || rows.length >= 2000);
   const lat = latQ.data;
+  const msLabel = (v?: number) => (v === undefined || v <= 0 ? '—' : duration(v, lang));
   return (
     <Row gap={3} wrap>
       <Stat label="pods" value={svc ? `${svc.pods.length}${capped ? '+' : ''}` : '—'} sub={capped ? 'tavan: ilk 500 pod' : undefined} tone={capped ? 'warn' : undefined} />
       <Stat label="services" value={svc ? String(svc.services.length) : '—'} />
-      <Stat label="spans" value={svc ? `${spans.toLocaleString()}${capped ? '+' : ''}` : '—'} sub={capped ? 'kısmi (satır tavanı)' : 'entity_seen_5m'} />
-      <Stat label="error %" value={svc && spans ? `${((100 * errors) / spans).toFixed(2)}%` : '—'} tone={spans && errors / spans >= 0.05 ? 'err' : undefined} />
+      <Stat label="spans" value={svc ? `${count(spans, lang)}${capped ? '+' : ''}` : '—'} sub={capped ? 'kısmi (satır tavanı)' : 'entity_seen_5m'} />
+      <Stat label="error %" value={svc && spans ? percent(errors / spans, lang, { from: 'ratio' }) : '—'} tone={spans ? errorTone((100 * errors) / spans) : undefined} />
       <Stat label="entry p50" value={latQ.isError ? 'hata' : msLabel(l?.p50Ms)} />
       <Stat label="entry p95" value={latQ.isError ? 'hata' : msLabel(l?.p95Ms)} />
-      <Stat label="entry p99" value={latQ.isError ? 'hata' : msLabel(l?.p99Ms)} sub={l ? `${l.entrySpans.toLocaleString()} entry spans${lat?.clamped ? ' · son 24 s' : ''}` : undefined} />
+      <Stat label="entry p99" value={latQ.isError ? 'hata' : msLabel(l?.p99Ms)} sub={l ? `${count(l.entrySpans, lang)} entry spans${lat?.clamped ? ' · son 24 s' : ''}` : undefined} />
     </Row>
   );
 }
 
 function NodePanel({ entity, clusterName, from, to, svc }: { entity: EntityRecord; clusterName: string; from: number; to: number; svc?: EntityServicesResponse }) {
+  const lang = useLang();
   const { cFrom, cTo, clamped } = useMemo(() => clampThanosWindow(from, to), [from, to]);
   const nodesQ = useQuery({
     queryKey: ['entity-node-rows', clusterName],
@@ -332,8 +336,8 @@ function NodePanel({ entity, clusterName, from, to, svc }: { entity: EntityRecor
     <Stack gap={3}>
       <Row gap={3} wrap>
         <Stat label="role" value={row?.role ?? '—'} />
-        <Stat label="CPU" value={row ? fmtCores(row.cpuCores) : nodesQ.isPending ? '…' : '—'} sub={row?.cpuPct != null ? `${row.cpuPct.toFixed(0)}% of capacity` : undefined} tone={row?.cpuPct != null && row.cpuPct >= 90 ? 'err' : undefined} />
-        <Stat label="Mem" value={row ? fmtBytes(row.memBytes) : nodesQ.isPending ? '…' : '—'} sub={row?.memPct != null ? `${row.memPct.toFixed(0)}% of capacity` : undefined} tone={row?.memPct != null && row.memPct >= 90 ? 'err' : undefined} />
+        <Stat label="CPU" value={row ? fmtCores(row.cpuCores) : nodesQ.isPending ? '…' : '—'} sub={row?.cpuPct != null ? `${percent(row.cpuPct, lang, { from: 'pct', digits: 0 })} of capacity` : undefined} tone={row?.cpuPct != null && row.cpuPct >= 90 ? 'err' : undefined} />
+        <Stat label="Mem" value={row ? fmtBytes(row.memBytes) : nodesQ.isPending ? '…' : '—'} sub={row?.memPct != null ? `${percent(row.memPct, lang, { from: 'pct', digits: 0 })} of capacity` : undefined} tone={row?.memPct != null && row.memPct >= 90 ? 'err' : undefined} />
         {row?.netInBps != null && <Stat label="net in" value={`${fmtBytes(row.netInBps)}/s`} />}
         {row?.netOutBps != null && <Stat label="net out" value={`${fmtBytes(row.netOutBps)}/s`} />}
         {!row && !nodesQ.isPending && <span className="field-hint">Thanos'ta bu node için kapasite serisi yok{nodesQ.isError ? ' (sorgu hatası)' : ''}.</span>}

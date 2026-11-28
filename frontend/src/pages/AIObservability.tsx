@@ -33,6 +33,10 @@ import { traceHref } from '@/lib/traceHref';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { useAuthRole } from '@/components/AuthProvider'; // v0.10.1484
+import { useLang } from '@/lib/i18n';
+import { duration } from '@/lib/format/duration';
+import { percent } from '@/lib/format/percent';
+import { count, fixed } from '@/lib/format/number';
 
 // /ai — Coremetry-native AI observability dashboard. The
 // Langfuse-alike: every Copilot Explain call lands as one
@@ -72,6 +76,7 @@ export function EditorAIObservabilityPage() {
 }
 
 function AdminAIObservabilityPage() {
+  const lang = useLang();
   const [range, setRange] = useUrlRange('24h');
   const [stats, setStats] = useState<AIStats | null | undefined>(undefined);
   const [budget, setBudget] = useState<AIBudgetStatus | null>(null); // v0.10.411
@@ -264,10 +269,10 @@ function AdminAIObservabilityPage() {
               gap: 10, marginBottom: 14,
             }}>
               <KPI label="Total calls" value={fmtNum(stats.totalCalls)} />
-              <KPI label="Error rate" value={`${(stats.errorRate * 100).toFixed(2)}%`}
+              <KPI label="Error rate" value={percent(stats.errorRate, lang, { from: 'ratio' })}
                 cls={stats.errorRate > 0.1 ? 'err' : stats.errorRate > 0.02 ? 'warn' : 'ok'} />
-              <KPI label="Avg latency" value={`${stats.avgDurationMs.toFixed(0)} ms`} />
-              <KPI label="P99 latency" value={`${stats.p99DurationMs.toFixed(0)} ms`} />
+              <KPI label="Avg latency" value={duration(stats.avgDurationMs, lang)} />
+              <KPI label="P99 latency" value={duration(stats.p99DurationMs, lang)} />
               <KPI label="Input tokens" value={fmtNum(stats.inputTokens)} />
               <KPI label="Output tokens" value={fmtNum(stats.outputTokens)} />
               {/* v0.10.807 (L2) — önek önbelleği: giriş token'ının yüzde kaçı önbellekten geldi.
@@ -284,7 +289,7 @@ function AdminAIObservabilityPage() {
                   cls={(stats.shieldHitCalls ?? 0) > 0 ? 'warn' : 'ok'} />
               )}
               {stats.extended && (stats.avgTtftMs ?? 0) > 0 && (
-                <KPI label="Ort. ilk token" value={`${(stats.avgTtftMs ?? 0).toFixed(0)} ms`} />
+                <KPI label="Ort. ilk token" value={duration(stats.avgTtftMs ?? 0, lang)} />
               )}
               <KPI label="Users" value={fmtNum(stats.distinctUsers)} />
             </div>
@@ -300,8 +305,8 @@ function AdminAIObservabilityPage() {
                 <BreakdownTable title="By surface (which Explain button)"
                   rows={(stats.bySurface ?? []).map(r => ({
                     a: r.surface, b: fmtNum(r.calls),
-                    c: `${(r.errorRate * 100).toFixed(1)}%`,
-                    d: `${r.avgMs.toFixed(0)} ms`,
+                    c: percent(r.errorRate, lang, { from: 'ratio' }),
+                    d: duration(r.avgMs, lang),
                     // Memnuniyet (v0.8.399) — thumbs-up rate over rated
                     // exchanges. thumbsUpRate is omitempty server-side,
                     // so an absent rate with feedback present means 0%.
@@ -317,7 +322,7 @@ function AdminAIObservabilityPage() {
                   rows={(stats.byProvider ?? []).map(r => ({
                     a: `${r.provider} · ${r.model || '—'}`, b: fmtNum(r.calls),
                     // v0.10.400 — model başına hata oranı + p95 gecikme (CoSRE denetimi O5/E3).
-                    c: `${r.calls ? ((r.errors ?? 0) / r.calls * 100).toFixed(1) : '0.0'}% · p95 ${fmtNum(Math.round(r.p95Ms ?? 0))} ms`,
+                    c: `${percent(r.calls ? (r.errors ?? 0) / r.calls : 0, lang, { from: 'ratio' })} · p95 ${duration(r.p95Ms ?? 0, lang)}`,
                     d: fmtCost(costForCall(rates, r.model, r.inputTokens, r.outputTokens)),
                   }))}
                   cols={['Provider', 'Calls', 'Hata · p95', 'Est cost']}
@@ -478,6 +483,7 @@ function AdminAIObservabilityPage() {
 // söyler ve bu bambaşka bir arıza — biri veri sorunu, öteki model
 // sorunu ve çareleri de farklı.
 function RCAQualityPanel({ range }: { range: TimeRange }) {
+  const lang = useLang();
   const [q, setQ] = useState<RCAVerdictQuality | null | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
@@ -526,7 +532,7 @@ function RCAQualityPanel({ range }: { range: TimeRange }) {
               cls={rcaEngineTone(q)} />
             <KPI label="Onarım gerekti"
               value={`${fmtNum(q.repaired)} · ${rcaPctText(q.repaired, q.total)}`} />
-            <KPI label="Ortalama güven" value={q.avgConfidence.toFixed(2)} />
+            <KPI label="Ortalama güven" value={fixed(q.avgConfidence, 2, lang)} />
             <KPI label="Operatör memnuniyeti" value={rcaSatisfactionText(q)} />
           </div>
         )}
@@ -599,6 +605,7 @@ const GAP_COLS: ColumnDef<RouterGap>[] = [
 ];
 
 function RouterGapsPanel() {
+  const lang = useLang();
   const [days, setDays] = useState<1 | 7 | 30>(7);
   const [data, setData] = useState<RouterGapsView | null | undefined>(undefined);
   const [kind, setKind] = useState<GapKindFilter>('all'); // v0.10.2465 — tür süzgeci
@@ -633,9 +640,9 @@ function RouterGapsPanel() {
       <div className="ov-card-b">
         {data && data.gaps.length > 0 && (
           <div style={{ fontSize: 11.5, color: 'var(--text2)', marginBottom: 8 }}>
-            Toplam <b>{data.totalFallbacks.toLocaleString()}</b> soru serbest döngüye
-            düştü, <b>{data.totalGeneral.toLocaleString()}</b> soru genel cevaba gitti
-            (sınıflandırıcı «none»), <b>{(data.totalClarify ?? 0).toLocaleString()}</b> soru
+            Toplam <b>{count(data.totalFallbacks, lang)}</b> soru serbest döngüye
+            düştü, <b>{count(data.totalGeneral, lang)}</b> soru genel cevaba gitti
+            (sınıflandırıcı «none»), <b>{count(data.totalClarify ?? 0, lang)}</b> soru
             netleştirme sorusu aldı (kaynak sorusu, LLM'siz). Sık tekrarlayanlar yeni bir guided intent adayıdır:
             deterministik prefetch + tek anlatım çağrısı, N turluk tool döngüsünden hem
             ucuz hem tutarlı olur.
@@ -656,7 +663,7 @@ function RouterGapsPanel() {
                 <tr key={`${g.kind}:${g.question}`}>
                   <DataTableCell dt={gapDt} col="question" row={g} value={g.question} />
                   <DataTableCell dt={gapDt} col="kind" row={g} value={GAP_KIND_LABEL[g.kind] ?? g.kind} title={gapChainTitle(g)} />
-                  <DataTableCell dt={gapDt} col="count" row={g} value={g.count.toLocaleString()} />
+                  <DataTableCell dt={gapDt} col="count" row={g} value={count(g.count, lang)} />
                   <DataTableCell dt={gapDt} col="users" row={g} value={g.users} />
                   <DataTableCell dt={gapDt} col="who" row={g} value={gapWho(g) || null} title={gapWho(g) || undefined} />
                   <DataTableCell dt={gapDt} col="last" row={g} value={tsLong(g.lastAt)} className="mono" />

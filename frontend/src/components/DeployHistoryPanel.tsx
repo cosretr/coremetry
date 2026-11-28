@@ -9,6 +9,9 @@ import { entityHref } from '@/lib/entityHref';
 import { AiThinking } from '@/components/ai/AiThinking'; // v0.10.1384 — tek tip "düşünüyor"
 import { rolloutHeadline, rolloutCounts, rolloutExplainVersion, rolloutRowKey } from '@/lib/serviceRolloutLabel';
 import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
+import { useLang } from '@/lib/i18n';
+import { count, fixed } from '@/lib/format/number';
+import { percent } from '@/lib/format/percent';
 
 // Per-row Copilot explain state (v0.5.192). Keyed by rollout
 // timestamp so each row remembers its own answer + loading flag
@@ -263,6 +266,7 @@ function DeltaChips({ imp }: { imp: DeployImpact | null }) {
 }
 
 function DeltaChip({ label, pct, suffix }: { label: string; pct: number | null; suffix: string }) {
+  const lang = useLang();
   if (pct === null) {
     return (
       <span style={{
@@ -280,13 +284,14 @@ function DeltaChip({ label, pct, suffix }: { label: string; pct: number | null; 
     : pct < -5 ? 'var(--text2)'
     : 'var(--text3)';
   const sign = pct > 0 ? '+' : '';
+  const num = (digits: number) => suffix === '%' ? percent(pct, lang, { from: 'pct', digits }) : fixed(pct, digits, lang) + suffix;
   return (
     <span style={{
       padding: '2px 6px', borderRadius: 3,
       background: 'var(--bg3)', color,
     }}
-      title={`${label} delta: ${sign}${pct.toFixed(2)}${suffix}`}>
-      {label} {sign}{pct.toFixed(1)}{suffix}
+      title={`${label} delta: ${sign}${num(2)}`}>
+      {label} {sign}{num(1)}
     </span>
   );
 }
@@ -294,6 +299,7 @@ function DeltaChip({ label, pct, suffix }: { label: string; pct: number | null; 
 const DIFF_TH: CSSProperties = { color: 'var(--text2)', fontSize: 'var(--fs-xs)', fontWeight: 600 };
 
 function ExpandedDiff({ imp }: { imp: DeployImpact }) {
+  const lang = useLang();
   return (
     <div style={{
       marginTop: 8, padding: 10, borderRadius: 4,
@@ -312,20 +318,20 @@ function ExpandedDiff({ imp }: { imp: DeployImpact }) {
         <span className="mono">{fmtNum(imp.after.count)}</span>
 
         <span>RPS</span>
-        <span className="mono">{imp.before.rps.toFixed(2)}</span>
-        <span className="mono">{imp.after.rps.toFixed(2)}</span>
+        <span className="mono">{fixed(imp.before.rps, 2, lang)}</span>
+        <span className="mono">{fixed(imp.after.rps, 2, lang)}</span>
 
         <span>Error rate</span>
-        <span className="mono">{(imp.before.errorRate * 100).toFixed(2)}%</span>
-        <span className="mono">{(imp.after.errorRate * 100).toFixed(2)}%</span>
+        <span className="mono">{percent(imp.before.errorRate, lang, { from: 'ratio', digits: 2 })}</span>
+        <span className="mono">{percent(imp.after.errorRate, lang, { from: 'ratio', digits: 2 })}</span>
 
         <span>p99 ms</span>
-        <span className="mono">{imp.before.p99Ms.toFixed(0)}</span>
-        <span className="mono">{imp.after.p99Ms.toFixed(0)}</span>
+        <span className="mono">{count(imp.before.p99Ms, lang)}</span>
+        <span className="mono">{count(imp.after.p99Ms, lang)}</span>
 
         <span>avg ms</span>
-        <span className="mono">{imp.before.avgMs.toFixed(1)}</span>
-        <span className="mono">{imp.after.avgMs.toFixed(1)}</span>
+        <span className="mono">{fixed(imp.before.avgMs, 1, lang)}</span>
+        <span className="mono">{fixed(imp.after.avgMs, 1, lang)}</span>
       </div>
     </div>
   );

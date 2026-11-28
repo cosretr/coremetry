@@ -43,13 +43,18 @@ func TestNormalizeVerdictReason(t *testing.T) {
 
 // v0.10.2256 — kolon yokken (eski replika) INSERT/SELECT reason'ı anmaz.
 func TestVerdictColsReasonGated(t *testing.T) {
-	without, with := verdictCols(false), verdictCols(true)
+	without, with := verdictCols(false, false), verdictCols(true, false)
 	for _, c := range without {
-		if c == "reason" {
-			t.Fatal("kolon görülmeden reason yazılmamalı")
+		if c == "reason" || c == "origin" {
+			t.Fatal("kolon görülmeden reason / origin yazılmamalı")
 		}
 	}
 	if len(with) != len(without)+1 || with[len(with)-1] != "reason" {
 		t.Fatalf("reason sona eklenmeli: %v", with)
+	}
+	// v0.10.2484 — origin (kuyruk işareti) en sonda, reason'dan sonra.
+	both := verdictCols(true, true)
+	if len(both) != len(without)+2 || both[len(both)-2] != "reason" || both[len(both)-1] != "origin" {
+		t.Fatalf("origin reason'dan sonra eklenmeli: %v", both)
 	}
 }

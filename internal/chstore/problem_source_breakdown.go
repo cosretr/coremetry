@@ -218,7 +218,9 @@ func problemSourceBreakdownSQL(bucketSec int64) string {
 			toUInt64(countIf(closed AND dur_s < 900))   AS short_n,
 			toUInt64(countIf(dur_s >= 3600))            AS long_n,
 			toUInt64(uniqExactIf(svc, svc != '-'))      AS services,
-			(sumMap([day], [toUInt64(1)])).2            AS day_counts
+			(sumMap([day], [toUInt64(1)])).2            AS day_counts,
+			toUInt64(countIf(has_case))                 AS case_n,
+			toUInt64(countIf(has_case AND case_ok))     AS case_correct
 		FROM (
 			SELECT
 				` + problemSourceFamilySQL() + ` AS fam,
@@ -230,15 +232,30 @@ func problemSourceBreakdownSQL(bucketSec int64) string {
 				toUInt32(intDiv(start_s, 86400)) AS day,
 				status IN ('open', 'acknowledged') AS is_open,
 				isNotNull(resolved_at) AS closed,
-				greatest(toFloat64(toUnixTimestamp64Nano(coalesce(resolved_at, now64(9))) - toUnixTimestamp64Nano(started_at)) / 1e9, 0) AS dur_s
-			FROM problems FINAL
+				greatest(toFloat64(toUnixTimestamp64Nano(coalesce(resolved_at, now64(9))) - toUnixTimestamp64Nano(started_at)) / 1e9, 0) AS dur_s,
+				c.source_id != '' AS has_case,
+				c.case_cat != 'noise' AS case_ok
+			FROM problems AS p FINAL
+			LEFT JOIN (` + problemCaseLabelSQL + `) AS c ON c.source_id = p.id
 			WHERE started_at >= ? AND started_at < ?
 		)
 		GROUP BY GROUPING SETS ((fam), (fam, m), (fam, svc), (bkt))
 		ORDER BY n DESC
 		LIMIT ` + fmt.Sprint(ProblemSourceBreakdownLimit) + `
-		SETTINGS max_execution_time = 10, max_rows_to_read = ` + fmt.Sprint(ProblemSourceBreakdownMaxRead) + `, read_overflow_mode = 'break'`
+		SETTINGS max_execution_time = 10, max_rows_to_read = ` + fmt.Sprint(ProblemSourceBreakdownMaxRead) + `, read_overflow_mode = 'break', join_use_nulls = 0`
 }
+
+// problemCaseLabelSQL — v0.10.2484 (precision programı B.1, Problem katmanı):
+// Problem başına onaylı kök neden vakası (incident_cases status='confirmed',
+// kaynak 5). Problem başına TEK satır (en son onaylanan) — birden çok vaka
+// Problem satırını çoğaltıp aile sayısını şişirmesin. category='noise' =
+// yanlış alarm, diğerleri doğru. ML karnesi (ml_precision.go) aynı ifadeyi
+// kullanır. Sınır: servis düzeyi Problem'in kimliği sabittir
+// (anomaly-auto:svc:<svc>) → vakayı yalnız servisin son Problem'i taşır.
+const problemCaseLabelSQL = `SELECT source_id, argMax(toString(category), confirmed_at) AS case_cat
+		    FROM incident_cases FINAL
+		    WHERE source = 'problem' AND status = 'confirmed'
+		    GROUP BY source_id`
 
 // ProblemSourceAggRow — GROUPING SETS çıktısının bir satırı (ham; birleştirme
 // api tarafında, saf).
@@ -256,6 +273,9 @@ type ProblemSourceAggRow struct {
 	Long1h    uint64 // ≥ 1 sa süren (açık olanlar dahil)
 	Services  uint64
 	DayCounts []uint64 // gün başına açılış (yalnız aile × servis kümesinde anlamlı)
+	// v0.10.2484 — onaylı vakası olan / vakası doğru (category != noise) Problem.
+	CaseN       uint64
+	CaseCorrect uint64
 }
 
 // Set — satırın hangi GROUPING SETS kümesinden geldiği.
@@ -297,7 +317,7 @@ func (s *Store) ProblemSourceBreakdown(ctx context.Context, from, to time.Time, 
 	for rows.Next() {
 		var r ProblemSourceAggRow
 		if err := rows.Scan(&r.Family, &r.Metric, &r.Service, &r.Bucket, &r.N, &r.OpenNow, &r.Critical, &r.Warning,
-			&r.MedianSec, &r.Short15, &r.Long1h, &r.Services, &r.DayCounts); err != nil {
+			&r.MedianSec, &r.Short15, &r.Long1h, &r.Services, &r.DayCounts, &r.CaseN, &r.CaseCorrect); err != nil {
 			return out, fmt.Errorf("problem source breakdown scan: %w", err)
 		}
 		out.Rows = append(out.Rows, r)

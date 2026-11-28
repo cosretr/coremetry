@@ -111,6 +111,20 @@ function entityParts(id: string): { type: string; cluster: string; namespace: st
   return m ? { type: m[1], cluster: m[2], namespace: m[3], name: m[4] } : null;
 }
 
+/** v0.10.2484 — precision programı A.3: olay sayfası yolundan olay kimliği
+ *  (anomaly_verdicts.event_id biçimi): /anomalies/ml/<id> → 'ml:<id>',
+ *  /anomalies/<id> → <id>; başka yol ''. SAF. */
+export function anomalyIdFromPath(pathname: string): string {
+  const p = pathname.replace(/\/+$/, '');
+  let m = /^\/anomalies\/ml\/([^/]+)$/.exec(p);
+  if (m) return `ml:${safeDecode(m[1])}`;
+  m = /^\/anomalies\/([^/]+)$/.exec(p);
+  return m && m[1] !== 'ml' ? safeDecode(m[1]) : '';
+}
+function safeDecode(s: string): string {
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
 // pageContext — (pathname, search) → bağlam. SAF: now(), storage, DOM okumaz.
 export function pageContext(pathname: string, search: string): PageContext {
   const page = pageIdFor(pathname);
@@ -175,6 +189,10 @@ export function pageContext(pathname: string, search: string): PageContext {
   }
   if (PROBLEM_PAGES.has(page)) {
     put(ctx, 'problemId', get(sp, 'problem')); put(ctx, 'exceptionId', get(sp, 'exc') || get(sp, 'exception'));
+  }
+  if (page === 'anomalies') { // v0.10.2484 — olay sayfasında sohbet → cosre_interactions.anomaly_id
+    const aid = anomalyIdFromPath(pathname);
+    if (aid) ctx.anomalyId = aid;
   }
   if (ctx.activeFilters && ctx.activeFilters.length === 0) delete ctx.activeFilters;
   return ctx;

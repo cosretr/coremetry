@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo } from 'react';
-import { useT } from '@/lib/i18n';
+import { useT, useLang } from '@/lib/i18n';
 import { rowActivation } from '@/lib/a11y'; // v0.10.455 (dış denetim D3 dilim 3)
 import { msSyncKey } from '@/lib/chart/syncNamespace';
 import { Link, useLocation } from 'react-router';
@@ -30,6 +30,8 @@ import { addressScopeNotice } from './addressScope';
 import { errRatePpDelta } from './errRateDelta';
 import { TrendDelta } from '@/components/TrendDelta';
 import type { PhysicalAddrs } from '@/lib/types';
+import { duration } from '@/lib/format/duration';
+import { percent } from '@/lib/format/percent';
 
 // detailSections — the /database page's body (v0.9.1366).
 //
@@ -194,6 +196,7 @@ export function DatabaseIdentityHeader({ refObj, env, range, physicalAddrs }: {
  * (K5/T9) — TrendDelta ve PpDelta bu kuralı kendileri uygular.
  */
 export function DatabaseSignalStrip({ d }: { d: DBDetail }) {
+  const lang = useLang();
   const cmp = d.hasPrior === true;
   // v0.10.1025 (inceleme R5) — current pencerede HİÇ çağrı yoksa gecikme
   // ölçülmemiştir: "0.0 ms" bir ölçüm değil, yokluk. Ona karşı çizilen
@@ -220,25 +223,25 @@ export function DatabaseSignalStrip({ d }: { d: DBDetail }) {
         </StatTile>
         <StatTile label="Err rate"
           tone={d.errorRate > 5 ? 'err' : d.errorRate > 0 ? 'warn' : undefined}>
-          {`${d.errorRate.toFixed(2)}%`}
+          {percent(d.errorRate, lang, { from: 'pct' })}
           {cmp && d.priorErrorRate !== undefined && <PpDelta cur={d.errorRate} prior={d.priorErrorRate} />}
         </StatTile>
         <StatTile label="Avg">
-          {`${d.avgDurationMs.toFixed(1)} ms`}
+          {duration(d.avgDurationMs, lang)}
           {cmpLatency && <TrendDelta cur={d.avgDurationMs} prior={d.priorAvgDurationMs} kind="lowerBetter" zeroPrior="was-zero" />}
         </StatTile>
         <StatTile label="P50">
-          {msOrDash(d.p50DurationMs)}
+          {duration(d.p50DurationMs, lang)}
           {cmpLatency && d.p50DurationMs !== undefined
             && <TrendDelta cur={d.p50DurationMs} prior={d.priorP50DurationMs} kind="lowerBetter" zeroPrior="was-zero" />}
         </StatTile>
         <StatTile label="P95">
-          {msOrDash(d.p95DurationMs)}
+          {duration(d.p95DurationMs, lang)}
           {cmpLatency && d.p95DurationMs !== undefined
             && <TrendDelta cur={d.p95DurationMs} prior={d.priorP95DurationMs} kind="lowerBetter" zeroPrior="was-zero" />}
         </StatTile>
         <StatTile label="P99">
-          {`${d.p99DurationMs.toFixed(1)} ms`}
+          {duration(d.p99DurationMs, lang)}
           {cmpLatency && <TrendDelta cur={d.p99DurationMs} prior={d.priorP99DurationMs} kind="lowerBetter" zeroPrior="was-zero" />}
         </StatTile>
         {/* Total time — the mockup's extra tile, and the number
@@ -247,7 +250,7 @@ export function DatabaseSignalStrip({ d }: { d: DBDetail }) {
             inside the window. v0.10.1025 — prior aynı çarpım, neutral:
             daha çok toplam süre daha çok iş de olabilir. */}
         <StatTile label="Total time">
-          {fmtTotal(d.spanCount * d.avgDurationMs)}
+          {duration(d.spanCount * d.avgDurationMs, lang)}
           {cmp && <TrendDelta cur={d.spanCount * d.avgDurationMs} prior={priorTotal} kind="neutral" zeroPrior="was-zero" />}
         </StatTile>
       </div>
@@ -273,6 +276,7 @@ export function DatabaseSignalStrip({ d }: { d: DBDetail }) {
  * kötüleşmede (--err), diğer her durum nötr.
  */
 function PpDelta({ cur, prior }: { cur: number; prior: number }) {
+  const lang = useLang();
   const pp = errRatePpDelta(cur, prior);
   if (!pp) return null;
   return (
@@ -283,7 +287,7 @@ function PpDelta({ cur, prior }: { cur: number; prior: number }) {
       // R6b — 104 px'lik karoda "pp" tek başına alt satıra düşmesin.
       whiteSpace: 'nowrap',
     }}
-      title={`Önceki pencere: ${prior.toFixed(2)}% — fark yüzde PUAN (pp), göreli oran değil`}>
+      title={`Önceki pencere: ${percent(prior, lang, { from: 'pct' })} — fark yüzde PUAN (pp), göreli oran değil`}>
       {pp.text}
     </span>
   );
@@ -389,6 +393,7 @@ export function DatabaseCallersSection({ callers, range, env }: {
   /** v0.9.1367 — paylaşılan log linkini dürüst tutar (env kapsamı taşınır). */
   env?: string;
 }) {
+  const lang = useLang();
   const total = useMemo(
     () => callers.reduce((s, c) => s + c.spanCount * c.avgDurationMs, 0),
     [callers]);
@@ -438,14 +443,14 @@ export function DatabaseCallersSection({ callers, range, env }: {
                   <DataTableCell dt={dt} col="calls" row={c} value={fmtNum(c.spanCount)} />
                   <DataTableCell dt={dt} col="errRate" row={c}>
                     <span className={`badge ${errCls}`} style={{ fontSize: 9 }}>
-                      {c.errorRate.toFixed(2)}%
+                      {percent(c.errorRate, lang, { from: 'pct' })}
                     </span>
                   </DataTableCell>
                   <DataTableCell dt={dt} col="p95" row={c}
-                    value={c.p95DurationMs === undefined ? null : `${c.p95DurationMs.toFixed(1)} ms`} />
+                    value={c.p95DurationMs === undefined ? null : duration(c.p95DurationMs, lang)} />
                   <DataTableCell dt={dt} col="impact" row={c}
                     title={`Bu çağıranın duvar-saati payı (çağrı × ortalama).\n\nPAYDA YÜKLENMİŞ SATIRLAR: yüzdeler bu tablodaki çağıranların toplamına göre, veritabanının tüm trafiğine göre DEĞİL. Satır sayısı değişirse her yüzde değişir.`}
-                    value={total > 0 ? `${((impact / total) * 100).toFixed(1)}%` : '—'} />
+                    value={total > 0 ? percent(impact / total, lang, { from: 'ratio' }) : '—'} />
                 </tr>
               );
             })}
@@ -482,6 +487,7 @@ export function DatabaseStatementsSection({
   onRetry: () => void;
   onOpen: (r: SlowQueryRow) => void;
 }) {
+  const lang = useLang();
   // v0.9.874 (tutarlılık denetimi BT18) — kardeşi CallersCard primitifteydi,
   // bu tablo elle <thead>'liydi. Genişlikler eski <th style={{width}}>
   // değerlerinden AYNEN alındı; Statement kolonu esner.
@@ -553,8 +559,8 @@ export function DatabaseStatementsSection({
                 <td className="mono"
                   title={`${r.sampleStatement || r.statement}\n\ncalled by ${r.service}`}>{r.statement}</td>
                 <DataTableCell dt={dt} col="calls" row={r} value={fmtNum(r.count)} />
-                <DataTableCell dt={dt} col="p95" row={r} value={`${r.p95Ms.toFixed(1)} ms`} />
-                <DataTableCell dt={dt} col="total" row={r}><b>{(r.totalMs / 1000).toFixed(1)} s</b></DataTableCell>
+                <DataTableCell dt={dt} col="p95" row={r} value={duration(r.p95Ms, lang)} />
+                <DataTableCell dt={dt} col="total" row={r}><b>{duration(r.totalMs, lang)}</b></DataTableCell>
               </tr>
             ))}
           </tbody>
@@ -644,21 +650,3 @@ function trendSeries(points: DBTrendPoint[] | undefined): {
     p99: build(p => p.p99Ms, 'P99 ms'),
   };
 }
-
-// msOrDash — v0.9.263, kept verbatim: a duration the backend did not
-// send is '—', never "0.0 ms". 0.0 would read as "instantaneous"
-// rather than "not reported".
-function msOrDash(v?: number): string {
-  return v === undefined ? '—' : `${v.toFixed(1)} ms`;
-}
-
-/** fmtTotal — window-wide wall clock, in the largest unit that keeps
- *  the number readable. */
-function fmtTotal(ms: number): string {
-  if (ms < 1000) return `${ms.toFixed(0)} ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
-  if (ms < 3_600_000) return `${(ms / 60_000).toFixed(1)} min`;
-  return `${(ms / 3_600_000).toFixed(1)} h`;
-}
-
-

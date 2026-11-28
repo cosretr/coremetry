@@ -21,9 +21,11 @@ import { Spinner } from '@/components/Spinner';
 import { api } from '@/lib/api';
 import { useEntityEnabled } from '@/lib/queries';
 import { entityHref } from '@/lib/entityHref';
-import { fmtDateTime, fmtAgoNs } from '@/lib/utils';
 import { windowRangeParam } from '@/lib/urlState';
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2287 — metinler arayüz dilinde (TR aynı)
+import { count, fixed } from '@/lib/format/number';
+import { percent } from '@/lib/format/percent';
+import { Time } from '@/lib/format/TimeLabel';
 
 // v0.10.734 (operatör onaylı mockup a42a0b31) — panel sağ kolona (stack
 // trace adası) çıktı: dört sütun (pod · node · oluşum çubuğu · son), pay
@@ -57,7 +59,7 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
   const rangeParam = range ? windowRangeParam(range) : '';
   const shown = all ? rows : rows.slice(0, PODS_SHOW);
   const scanNote = d
-    ? `${tf('pods.scan', lang, { a: withContext.toLocaleString(), b: d.total.toLocaleString() })}${d.sampled ? tf('pods.scan.sampled', lang, { n: d.scanned.toLocaleString(), g: groupOccurrences.toLocaleString() }) : ''}`
+    ? `${tf('pods.scan', lang, { a: count(withContext, lang), b: count(d.total, lang) })}${d.sampled ? tf('pods.scan.sampled', lang, { n: count(d.scanned, lang), g: count(groupOccurrences, lang) }) : ''}`
     : '';
   return (
     // v0.10.737 — dış boşluk çağıranın (sağ kolon flex sütunu, gap 14); kart
@@ -65,7 +67,7 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
     <div className="card">
       <div className="ov-card-h">
         <h3>Pods · nodes</h3>
-        <span className="ov-sub" title={scanNote}>{d ? `${rows.length}${d.truncated ? '+' : ''} pod · ${tf('pods.occ', lang, { n: withContext.toLocaleString() })}` : ''}</span>
+        <span className="ov-sub" title={scanNote}>{d ? `${rows.length}${d.truncated ? '+' : ''} pod · ${tf('pods.occ', lang, { n: count(withContext, lang) })}` : ''}</span>
       </div>
       <div className="ov-card-b">
         {q.isPending ? <Spinner /> : q.error ? (
@@ -75,7 +77,7 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
         ) : rows.length === 0 ? (
           <div style={{ color: 'var(--text3)', fontSize: 12 }}>
             {d && d.noContext > 0
-              ? tf('pods.noCtx', lang, { n: d.noContext.toLocaleString() })
+              ? tf('pods.noCtx', lang, { n: count(d.noContext, lang) })
               : t('pods.none', lang)}
           </div>
         ) : (
@@ -110,10 +112,10 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
                         <div className="exc-pods-sub">{r.clusterName ?? r.cluster} › {r.namespace}</div>
                       </td>
                       <td className="mono exc-pods-cell" title={r.node ?? ''}>{nodeHref ? <Link to={nodeHref} className="sec">{r.node}</Link> : (r.node ?? '')}</td>
-                      <td title={tf('pods.share.title', lang, { n: r.occurrences.toLocaleString(), p: share.toFixed(1) })}>
-                        <div className="exc-share"><i style={{ width: `${Math.max(2, Math.min(100, share))}%` }} /><b>{r.occurrences.toLocaleString()} · {share.toFixed(share >= 10 ? 0 : 1)}%</b></div>
+                      <td title={tf('pods.share.title', lang, { n: count(r.occurrences, lang), p: fixed(share, 1, lang) })}>
+                        <div className="exc-share"><i style={{ width: `${Math.max(2, Math.min(100, share))}%` }} /><b>{count(r.occurrences, lang)} · {percent(share, lang, { from: 'pct', digits: share >= 10 ? 0 : 1 })}</b></div>
                       </td>
-                      <td className="mono exc-pods-cell" title={fmtDateTime(new Date(r.lastSeen))}>{fmtAgoNs(Date.parse(r.lastSeen) * 1e6)}</td>
+                      <td className="mono exc-pods-cell"><Time ns={Date.parse(r.lastSeen) * 1e6} /></td>
                       {/* Operatör (2026-09-16): Traces düğmesi KALIR — pod'un hatalı trace'lerine tek tık. */}
                       <td className="exc-pods-act"><Link to={tracesHref} className="sec" title={t('pods.traces.title', lang)}>Traces</Link></td>
                     </tr>
@@ -127,7 +129,7 @@ export function ExceptionPodsPanel({ fingerprint, service, groupOccurrences }: {
                   {all ? t('pods.less', lang) : tf('pods.all', lang, { n: rows.length })}
                 </LinkButton>
               )}
-              {d && d.noContext > 0 && <span className="field-hint">{tf('pods.noCtx.hint', lang, { n: d.noContext.toLocaleString() })}</span>}
+              {d && d.noContext > 0 && <span className="field-hint">{tf('pods.noCtx.hint', lang, { n: count(d.noContext, lang) })}</span>}
               {d?.truncated && <Badge tone="warning" title={t('pods.trunc.title', lang)}>{t('pods.trunc', lang)}</Badge>}
               {d?.unmappedClusters && d.unmappedClusters.length > 0 && (
                 <Badge tone="warning" title={tf('pods.unmappedClusters.title', lang, { v: d.unmappedClusters.join(', ') })}>unmapped: {d.unmappedClusters.join(', ')}</Badge>

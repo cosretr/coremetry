@@ -18,6 +18,9 @@ import { opDisplayName } from '@/lib/opDisplayName';
 import type { TimeRange, OperationRow, SpanMetricSeries, SpanAgg } from '@/lib/types';
 import { opRowKey, opTraceFilters } from './operationRoutes';
 import { operationCardHref, operationRowOpCardRef } from '../endpoints/links'; // v0.10.1491
+import { useLang } from '@/lib/i18n';
+import { duration } from '@/lib/format/duration';
+import { percent } from '@/lib/format/percent';
 
 // OperationsTable — per-operation aggregate (count / err / avg / p50 /
 // p95 / p99 / apdex). Click an operation to drill into Traces with
@@ -136,6 +139,7 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
   onToggleNormalized: (v: boolean) => void;
   loading: boolean;
 }) {
+  const lang = useLang();
   const pctx = usePivotCtx(); // v0.10.1233 — env + cluster pivotlara taşınır
   // v0.5.374 — client-side filter. At 500+ operations on a
   // monolith service the scroll-then-eyeball loop fails;
@@ -507,17 +511,17 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                     }} />
                 </td>
                 <td className="num" style={{ fontWeight: 700 }}>
-                  {fmtImpact(rows.reduce((n, r) => n + impactOf(r), 0))}
+                  {duration(rows.reduce((n, r) => n + impactOf(r), 0), lang)}
                 </td>
                 <td className="num">{fmtNum(agg.spans)}</td>
-                <td className="num">{agg.avgMs.toFixed(1)}ms</td>
+                <td className="num">{duration(agg.avgMs, lang)}</td>
                 <td className="num">
                   <span className={`badge b-${agg.errorRate > 5 ? 'err' : agg.errorRate > 0 ? 'warn' : 'gray'}`}>
-                    {agg.errorRate.toFixed(2)}%
+                    {percent(agg.errorRate, lang, { from: 'pct' })}
                   </span>
                 </td>
                 <td className="num cell-faint">—</td>
-                <td className="num">{agg.p99Ms.toFixed(1)}ms</td>
+                <td className="num">{duration(agg.p99Ms, lang)}</td>
               </tr>
             )}
             {showRows && dt.sortedRows.map((op, i) => {
@@ -649,14 +653,14 @@ export function OperationsTable({ service, rows, range, preset, onWiden, normali
                                max={Math.max(...rows.map(impactOf))} />
                   </td>
                   <td className="num">{fmtNum(op.spanCount)}</td>
-                  <td className="num">{op.avgDurationMs.toFixed(1)}ms</td>
+                  <td className="num">{duration(op.avgDurationMs, lang)}</td>
                   <td className="num">
                     <span className={`badge b-${errCls}`}>
-                      {op.errorRate.toFixed(2)}%
+                      {percent(op.errorRate, lang, { from: 'pct' })}
                     </span>
                   </td>
-                  <td className="num">{op.p50DurationMs.toFixed(1)}ms</td>
-                  <td className="num">{op.p99DurationMs.toFixed(1)}ms</td>
+                  <td className="num">{duration(op.p50DurationMs, lang)}</td>
+                  <td className="num">{duration(op.p99DurationMs, lang)}</td>
                 </tr>
               );
             }).flatMap((rowEl, i) => {
@@ -745,6 +749,7 @@ function OperationMetricPanel({
   onZoom?: (fromUnixSec: number, toUnixSec: number) => void;
   onZoomReset?: () => void;
 }) {
+  const lang = useLang();
   const pctx = usePivotCtx(); // v0.10.1233
   // Madde 4 sweep — EventMarkers overlay penceresi (Endpoints MetricTile
   // emsali): deploy/incident dikey çizgileri "p99 spike deploy'dan mı"
@@ -830,15 +835,15 @@ function OperationMetricPanel({
     ),
     errors: (
       <OpMetricTile key="errors" label="Errors" big={fmtNum(op.errorCount)}
-        sub={`${op.errorRate.toFixed(2)}% rate`}
+        sub={`${percent(op.errorRate, lang, { from: 'pct' })} rate`}
         subCls={errCls}
         series={series.errors} emptyLabel={emptyLabel}
         service={service} bounds={bounds} onZoom={onZoom} onZoomReset={onZoomReset} />
     ),
     p99: (
       <OpMetricTile key="p99" label="P99 latency"
-        big={`${op.p99DurationMs.toFixed(0)} ms`}
-        sub={`peak ${maxP99.toFixed(0)} ms · avg ${op.avgDurationMs.toFixed(0)} ms`}
+        big={duration(op.p99DurationMs, lang)}
+        sub={`peak ${duration(maxP99, lang)} · avg ${duration(op.avgDurationMs, lang)}`}
         series={series.p99} unit="ms" emptyLabel={emptyLabel}
         service={service} bounds={bounds} onZoom={onZoom} onZoomReset={onZoomReset} />
     ),
@@ -942,6 +947,7 @@ function OpMetricTile({
 // cumulative consumer visually obvious without forcing the
 // operator to read tabular numbers.
 function ImpactBar({ value, max }: { value: number; max: number }) {
+  const lang = useLang();
   const pct = max > 0 ? (value / max) * 100 : 0;
   return (
     <div style={{ position: 'relative', minWidth: 90, display: 'inline-block' }}>
@@ -951,22 +957,8 @@ function ImpactBar({ value, max }: { value: number; max: number }) {
         borderRadius: 3,
       }} />
       <span style={{ position: 'relative', paddingRight: 4 }}>
-        {fmtImpact(value)}
+        {duration(value, lang)}
       </span>
     </div>
   );
-}
-
-// fmtImpact renders impact in time units. Below a second we keep
-// ms with at most one decimal; past a second we promote to s/min/h
-// so a 30M-ms ops job reads as "8.3h" rather than "30000000".
-function fmtImpact(ms: number): string {
-  if (ms < 1) return `${ms.toFixed(2)}ms`;
-  if (ms < 1000) return `${ms.toFixed(1)}ms`;
-  const sec = ms / 1000;
-  if (sec < 60) return `${sec.toFixed(1)}s`;
-  const min = sec / 60;
-  if (min < 60) return `${min.toFixed(1)}min`;
-  const hr = min / 60;
-  return `${hr.toFixed(1)}h`;
 }

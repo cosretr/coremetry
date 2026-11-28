@@ -71,21 +71,6 @@ func TestMLScorecardRateAndIDs(t *testing.T) {
 	}
 }
 
-func TestMLScorecardFromRows(t *testing.T) {
-	ev := map[string]string{"a": "log_volume", "b": "log_volume", "c": "error_rate"}
-	vd := map[string]string{"ml:a": "anomaly", "ml:b": "not_anomaly", "ml:zzz": "anomaly"}
-	out := MLScorecardFromRows(ev, vd)
-	if len(out) != 2 || out[0].Detector != "error_rate" || out[1].Detector != "log_volume" {
-		t.Fatalf("sıra/dedektör: %+v", out)
-	}
-	if out[1].Events != 2 || out[1].Samples != 2 || out[1].Hits != 1 || out[1].HitRate != 0.5 {
-		t.Fatalf("log_volume: %+v", out[1])
-	}
-	if out[0].Events != 1 || out[0].Samples != 0 || out[0].HitRate != 0 {
-		t.Fatalf("error_rate kararsız: %+v", out[0])
-	}
-}
-
 // Kalite çerçevesi (v0.10.1751): eski blob (quality alanı yok) varsayılanla
 // açılır. (Terfi kapısı gerekçeleri v0.10.2067'de kopya yoluyla kalktı.)
 func TestMLQualityDefaults(t *testing.T) {
@@ -136,9 +121,13 @@ func TestMLConfigIgnoresRemovedKeys(t *testing.T) {
 
 // Karne sinyal başına (v0.10.1751): dedektör satırları log/trace/metric toplamına.
 func TestMLSignalScores(t *testing.T) {
-	rows := MLScorecardFromRows(
-		map[string]string{"a": "log_volume", "b": "error_rate", "c": "op_latency", "d": "metric_jvm"},
-		map[string]string{"ml:a": VerdictAnomaly, "ml:b": VerdictNotAnomaly, "ml:c": VerdictAnomaly})
+	// v0.10.2484 — satırlar tek CH toplamasından gelir (FinishMLDetectorScore).
+	rows := []MLDetectorScore{
+		FinishMLDetectorScore("error_rate", mlScoreCounts{Produced: 1, N: 1, Correct: 0, Wrong: 1}),
+		FinishMLDetectorScore("log_volume", mlScoreCounts{Produced: 1, N: 1, Correct: 1}),
+		FinishMLDetectorScore("op_latency", mlScoreCounts{Produced: 1, N: 1, Correct: 1}),
+		FinishMLDetectorScore("metric_jvm", mlScoreCounts{Produced: 1}),
+	}
 	got := MLSignalScores(rows)
 	if len(got) != 3 || got[0].Signal != "log" || got[0].Events != 2 || got[0].Samples != 2 || got[0].HitRate != 0.5 ||
 		got[1].Signal != "trace" || got[1].HitRate != 1 || got[2].Signal != "metric" || got[2].Samples != 0 {

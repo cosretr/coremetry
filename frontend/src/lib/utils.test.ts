@@ -190,7 +190,8 @@ describe('escapeHTML', () => {
 describe('fmtBytes (binary / 1024)', () => {
   const cases: Array<[number, string]> = [
     [0, '0 B'],   // v0.8.272 dedup — canonical fallback is '0 B'
-    [-5, '0 B'],
+    [-5, '-5 B'],   // v0.10.2484 — negatif işaretle (lib/format/bytes)
+    [NaN, '—'],
     [512, '512 B'],
     [1024, '1.00 KiB'],
     [1536, '1.50 KiB'],
@@ -207,11 +208,12 @@ describe('fmtBytes (binary / 1024)', () => {
 
 describe('fmtNs (ns/µs/ms/s promotion)', () => {
   const cases: Array<[number, string]> = [
-    [500, '500ns'],
-    [1500, '2µs'], // 1.5µs → toFixed(0)
-    [1_000_000, '1.00ms'],
-    [2_500_000, '2.50ms'],
-    [1_000_000_000, '1.00s'],
+    // v0.10.2484 — lib/format/duration: 3 anlamlı hane, boşluklu tek birim.
+    [500, '500 ns'],
+    [1500, '1.5 µs'],
+    [1_000_000, '1 ms'],
+    [2_500_000, '2.5 ms'],
+    [1_000_000_000, '1 s'],
   ];
   it.each(cases)('fmtNs(%d) = %s', (ns, want) => {
     expect(fmtNs(ns)).toBe(want);
@@ -333,21 +335,23 @@ describe('isMessagingDep', () => {
 // birim tabloda pinli (unit-mixing pitfall kuralı).
 describe('fmtDurShort / fmtAgoNs (v0.8.463)', () => {
   it('saniye kovaları', () => {
-    expect(fmtDurShort(0)).toBe('0s');
-    expect(fmtDurShort(51)).toBe('51s');
-    expect(fmtDurShort(90)).toBe('2m');     // round
-    expect(fmtDurShort(3599)).toBe('60m');
-    expect(fmtDurShort(7200)).toBe('2h');
-    expect(fmtDurShort(172800)).toBe('2d');
-    expect(fmtDurShort(-5)).toBe('0s');     // negatif clamp
+    // v0.10.2484 — lib/format/duration: 3 anlamlı hane, tek birim (EN test dili).
+    expect(fmtDurShort(0)).toBe('0 s');
+    expect(fmtDurShort(51)).toBe('51 s');
+    expect(fmtDurShort(90)).toBe('1.5 min');
+    expect(fmtDurShort(3599)).toBe('1 h');  // 59,98 dk → üst birime yuvarlanır
+    expect(fmtDurShort(7200)).toBe('2 h');
+    expect(fmtDurShort(172800)).toBe('2 d');
+    expect(fmtDurShort(-5)).toBe('0 s');    // negatif clamp
   });
   it('fmtAgoNs unix-NANOSANİYE alır (ms/sec değil)', () => {
     const now = Date.now();
-    expect(fmtAgoNs((now - 51_000) * 1e6)).toBe('51s ago');
-    expect(fmtAgoNs((now - 2 * 3600_000) * 1e6)).toBe('2h ago');
+    // v0.10.2484 — lib/format/time relTime (dakika altı "just now").
+    expect(fmtAgoNs((now - 5 * 60_000) * 1e6)).toBe('5 min ago');
+    expect(fmtAgoNs((now - 2 * 3600_000) * 1e6)).toBe('2 h ago');
     // Yanlış birim (ms) verilirse near-epoch okunur → devasa yaş;
     // bu satır birim sözleşmesini pinler.
-    expect(fmtAgoNs(now - 51_000)).not.toBe('51s ago');
+    expect(fmtAgoNs(now - 5 * 60_000)).not.toBe('5 min ago');
   });
 });
 

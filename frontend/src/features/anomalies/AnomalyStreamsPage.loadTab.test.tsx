@@ -81,7 +81,7 @@ describe('Problems › Sinyaller görünümleri (v0.10.2476 / v0.10.2481)', () =
   it('görünüm değişimi URL\'e yazar, sayfa paramlarını düşürür; varsayılan view yazmaz', () => {
     m.role = 'admin';
     const el = render('/inbox?tab=signals&page=2&donePage=1&signal=trace');
-    expect(chips(el).map(t => t.textContent)).toEqual(['Bağlanmamış anomaliler', 'Yük ve yapı', 'Elenenler', 'Telemetri hacmi']);
+    expect(chips(el).map(t => t.textContent)).toEqual(['Bağlanmamış anomaliler', 'Yük ve yapı', 'Elenenler', 'Telemetri hacmi', 'Bu hafta etiketle (10)']); // v0.10.2484 — etiket kuyruğu (editor+)
     expect(m.calls.at(-1)?.view).toBe('');
     click(chip(el, 'Yük ve yapı'));
     expect(search).toBe('?tab=signals&signal=trace&view=load');

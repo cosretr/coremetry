@@ -36,7 +36,7 @@ var mlReadRoles = []string{auth.RoleAdmin, auth.RoleEditor, auth.RoleViewer}
 
 const (
 	mlEventsTTL    = 30 * time.Second
-	mlScorecardTTL = 60 * time.Second
+	mlScorecardTTL = 60 * time.Second // zarf (tik / baseline durumu taze kalsın); karne satırları mlScorecardRowsTTL
 	mlScoreWindow  = 30 * 24 * time.Hour
 )
 
@@ -236,13 +236,10 @@ func (s *Server) getMLEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getMLScorecard(w http.ResponseWriter, r *http.Request) {
-	s.serveCached(w, r, "ml:scorecard:v3:30d", mlScorecardTTL, func(ctx context.Context) (any, error) {
-		rows, err := s.store.MLScorecard(ctx, time.Now().Add(-mlScoreWindow))
+	s.serveCached(w, r, "ml:scorecard:v4:30d", mlScorecardTTL, func(ctx context.Context) (any, error) {
+		rows, err := s.mlScorecardRows(ctx)
 		if err != nil {
 			return nil, err
-		}
-		if rows == nil {
-			rows = []chstore.MLDetectorScore{}
 		}
 		cfg := s.store.GetMLConfig(ctx)
 		signals := map[string]string{}
@@ -344,6 +341,7 @@ func (s *Server) putMLVerdict(w http.ResponseWriter, r *http.Request) {
 		Verdict  string `json:"verdict"`
 		Note     string `json:"note"`
 		Reason   string `json:"reason"` // v0.10.2256 — "Sorun değil" nedeni (yalnız karne etiketi)
+		Origin   string `json:"origin"` // v0.10.2484 — '' | queue (haftalık etiket kuyruğu; yalnız karne)
 		Detector string `json:"detector"`
 		Service  string `json:"service"`
 	}
@@ -365,6 +363,7 @@ func (s *Server) putMLVerdict(w http.ResponseWriter, r *http.Request) {
 		EventID: chstore.MLVerdictID(id), Fingerprint: verdictFingerprint(kind, id, body.Service),
 		Kind: kind, Pattern: id, Service: body.Service,
 		Verdict: body.Verdict, Note: truncRunes(strings.TrimSpace(body.Note), 500), Reason: reason,
+		Origin:    chstore.NormalizeVerdictOrigin(body.Origin),
 		CreatedBy: claimEmail(auth.FromContext(r.Context())), CreatedAt: time.Now().UnixNano(),
 	}
 	if err := s.store.UpsertAnomalyVerdict(r.Context(), v); err != nil {
@@ -374,7 +373,7 @@ func (s *Server) putMLVerdict(w http.ResponseWriter, r *http.Request) {
 	s.cacheInvalidatePrefix(r.Context(), "ml:")
 	s.cacheInvalidatePrefix(r.Context(), unifiedCachePrefix)     // v0.10.2051 — birleşik liste ML durumunu taşır
 	s.cacheInvalidatePrefix(r.Context(), anomalyFeedCachePrefix) // v0.10.2080 — olay zarfı ML satırı taşır
-	details, _ := json.Marshal(map[string]string{"verdict": body.Verdict, "detector": body.Detector, "service": body.Service, "note": v.Note, "reason": v.Reason})
+	details, _ := json.Marshal(map[string]string{"verdict": body.Verdict, "detector": body.Detector, "service": body.Service, "note": v.Note, "reason": v.Reason, "origin": v.Origin})
 	s.audit(r, "ml.verdict", "ml_event", id, string(details))
 	writeJSON(w, v)
 }

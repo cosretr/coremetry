@@ -160,7 +160,7 @@ func TestMLEventsWhereHidesMemberDetectors(t *testing.T) {
 	if strings.Contains(where, "NOT IN") || !strings.Contains(where, "detector = ?") || len(args) != 2 {
 		t.Errorf("Members süzgeci üye olaylarını okur: %s %v", where, args)
 	}
-	for _, q := range []string{mlGroupRowsSQL, mlScorecardEventsSQL} {
+	for _, q := range []string{mlGroupRowsSQL, mlScorecardSQL(true, true)} {
 		if !strings.Contains(q, "detector NOT IN ("+mlMemberDetectorsSQL()+")") {
 			t.Errorf("gruplama / karne okuması üye dedektörlerini dışlamalı:\n%s", q)
 		}

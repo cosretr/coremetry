@@ -31,7 +31,7 @@ func TestBuildProblemsBreakdown(t *testing.T) {
 	from := time.Unix(10*86400, 0).UTC()
 	to := from.Add(3 * 24 * time.Hour)
 	agg := chstore.ProblemSourceAgg{Rows: []chstore.ProblemSourceAggRow{
-		{Family: "ml_svc", N: 60, OpenNow: 2, Critical: 50, Warning: 5, MedianSec: 420, Short15: 45, Long1h: 3, Services: 4},
+		{Family: "ml_svc", N: 60, OpenNow: 2, Critical: 50, Warning: 5, MedianSec: 420, Short15: 45, Long1h: 3, Services: 4, CaseN: 6, CaseCorrect: 4},
 		{Family: "user_rule", N: 40, OpenNow: 1, Critical: 10, Warning: 30, MedianSec: 5400, Short15: 4, Long1h: 20, Services: 2},
 		{Family: "ml_svc", Metric: "error_rate", N: 45, Short15: 40},
 		{Family: "ml_svc", Metric: "p99_ms", N: 15, Short15: 5},
@@ -58,6 +58,9 @@ func TestBuildProblemsBreakdown(t *testing.T) {
 	f := got.Families[0]
 	if f.SharePct != 60 || f.Short15Pct != 75 || f.OtherSev != 5 {
 		t.Errorf("oranlar: %+v", f.problemsBreakdownStats)
+	}
+	if f.CaseLabelled != 6 || f.CaseCorrect != 4 || got.Families[1].CaseLabelled != 0 {
+		t.Errorf("vaka etiketi (v0.10.2484): %+v", f.problemsBreakdownStats)
 	}
 	if f.ChurnPairs != 2 || f.ChurnCount != 8 {
 		t.Errorf("churn: pairs=%d count=%d", f.ChurnPairs, f.ChurnCount)

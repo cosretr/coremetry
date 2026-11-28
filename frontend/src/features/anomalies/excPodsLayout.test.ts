@@ -42,7 +42,9 @@ describe('exception detayı Pods · nodes (v0.10.173 → v0.10.734)', () => {
     const src = read('./ExceptionPodsPanel.tsx');
     expect(src).toContain('<table className="exc-pods-t">');
     expect(src).toContain('<colgroup>');
-    expect((src.match(/className="mono exc-pods-cell" title=/g) ?? []).length).toBe(3);
+    expect((src.match(/className="mono exc-pods-cell" title=/g) ?? []).length).toBe(2);
+    // v0.10.2484 — tarih hücresi <Time>: göreli metin, tam damga <time title> içinde.
+    expect(src).toContain('<td className="mono exc-pods-cell"><Time ns=');
     expect(src).not.toContain('<th>namespace</th>');
     expect(src).toContain('exc-pods-sub');
     const css = read('../../styles/globals.css');

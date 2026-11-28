@@ -74,6 +74,7 @@ const HEAVY: { file: string; hooks: string[] }[] = [
   // istek kesilmeli. Başlat / durdur mutasyonları kapsam dışı (iptal edilmez).
   // v0.10.1060 — log deseni sayısı: ES'e giden histogram; detay sayfası kapanınca kesilmeli.
   // v0.10.2051 — birleşik liste: sayfa/süzgeç değişince eski istek kesilmeli.
+  { file: 'ml.ts', hooks: ['api.mlLabelQueue('] }, // v0.10.2484 — haftalık etiket kuyruğu; çip kapanınca iptal
   { file: 'anomalies.ts', hooks: ['api.anomalyLogPatternSeries(', 'api.anomaliesUnified(', 'api.anomalyUnifiedRow('] },
   // v0.10.1064 — alarm metriği dizisi: MV ya da ham spans (≤6 sa) okuması; detay kapanınca kesilmeli.
   { file: 'alerts.ts', hooks: ['api.alertRuleSeries('] },

@@ -23,6 +23,8 @@ import { kindSeries } from './msgSeries'; // v0.10.575 — saniye→ns tek yerde
 import { messagingTopicHref } from '@/pages/messaging/topicHref'; // v0.10.575
 import { opLabelTR, isOpMissing, msgOperationRows, opMissingTitle } from './msgOperations'; // v0.10.563
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2311 — çekmece metinleri arayüz dilinde (TR aynı)
+import { duration } from '@/lib/format/duration';
+import { percent } from '@/lib/format/percent';
 
 // v0.9.814 — drawer'ın mini panelleri de CorePanel. LAZY: @grafana/*
 // statik import edilseydi /messaging + /databases vendor chunk'ı ~1 MB
@@ -30,21 +32,6 @@ import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2311 — çekmece metinler
 const CorePanelMultiLazy = lazy(() =>
   import('@/components/chart/corePanelEntry').then(m => ({ default: m.CorePanelMulti })));
 
-// msOrDash — v0.9.263. A duration the backend didn't send is '—', never
-// "0.0 ms". These fields are optional precisely because a warm cached payload
-// from a pre-v0.9.263 backend lacks them during a rolling deploy, and 0.0 ms
-// would read as "instantaneous" rather than "not reported".
-function msOrDash(v?: number): string {
-  return v === undefined ? '—' : `${v.toFixed(1)} ms`;
-}
-
-// DetailDrawer fetches and renders the per-(service, pod) caller
-// breakdown + top operations for one (system, instance) tuple.
-// Lazy — only fires when the row is expanded; bounded server-
-// side at LIMIT 100 callers / LIMIT 20 ops so the response stays
-// cheap even for a 50-pod fleet.
-// Split out of the DependenciesTable monolith (v0.8.252 refactor)
-// verbatim.
 export function DetailDrawer({ system, cluster, name, instance, dbName, kind, source, range }: {
   system: string;
   // Cluster identifier — only meaningful for queue/messaging
@@ -306,17 +293,17 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
       }}>
         <Stat label="Calls"     value={fmtNum(data.spanCount)} />
         <Stat label="Errors"    value={fmtNum(data.errorCount)} />
-        <Stat label="Err rate"  value={`${data.errorRate.toFixed(2)}%`}
+        <Stat label="Err rate"  value={percent(data.errorRate, lang, { from: 'pct' })}
               tone={data.errorRate > 5 ? 'err' : data.errorRate > 0 ? 'warn' : 'ok'} />
-        <Stat label="Avg"       value={`${data.avgDurationMs.toFixed(1)} ms`} />
+        <Stat label="Avg"       value={duration(data.avgDurationMs, lang)} />
         {/* v0.9.263 — P50 / P95 come off the SAME db_caller_summary_5m /
             messaging_caller_summary_5m TDigest merge that already produced
             P99 (indices 1 and 2 of the 3-wide state), so the drawer answers
             "typical vs tail" without a second query. '—' rather than 0.0 ms
             when a warm cached payload predates the fields. */}
-        <Stat label="P50"       value={msOrDash(data.p50DurationMs)} />
-        <Stat label="P95"       value={msOrDash(data.p95DurationMs)} />
-        <Stat label="P99"       value={`${data.p99DurationMs.toFixed(1)} ms`} />
+        <Stat label="P50"       value={duration(data.p50DurationMs, lang)} />
+        <Stat label="P95"       value={duration(data.p95DurationMs, lang)} />
+        <Stat label="P99"       value={duration(data.p99DurationMs, lang)} />
       </div>
 
       {/* v0.8.364 — produce vs consume rate over the window (5-min
@@ -498,13 +485,13 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
                         <DataTableCell dt={msgOpsDt} col="errRate" row={o}>
                           <span className={`badge b-${errCls}`} style={{ fontSize: 9 }}
                                 title={tf('dd.errSpans', lang, { n: fmtNum(o.errorCount) })}>
-                            {o.errorRate.toFixed(2)}%
+                            {percent(o.errorRate, lang, { from: 'pct' })}
                           </span>
                         </DataTableCell>
-                        <DataTableCell dt={msgOpsDt} col="avg" row={o} value={`${o.avgDurationMs.toFixed(1)}ms`} />
-                        <DataTableCell dt={msgOpsDt} col="p50" row={o} value={`${o.p50DurationMs.toFixed(1)}ms`} />
-                        <DataTableCell dt={msgOpsDt} col="p95" row={o} value={`${o.p95DurationMs.toFixed(1)}ms`} />
-                        <DataTableCell dt={msgOpsDt} col="p99" row={o} value={`${o.p99DurationMs.toFixed(1)}ms`} />
+                        <DataTableCell dt={msgOpsDt} col="avg" row={o} value={duration(o.avgDurationMs, lang)} />
+                        <DataTableCell dt={msgOpsDt} col="p50" row={o} value={duration(o.p50DurationMs, lang)} />
+                        <DataTableCell dt={msgOpsDt} col="p95" row={o} value={duration(o.p95DurationMs, lang)} />
+                        <DataTableCell dt={msgOpsDt} col="p99" row={o} value={duration(o.p99DurationMs, lang)} />
                       </tr>
                     );
                   })}
@@ -610,7 +597,7 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
                       <DataTableCell dt={topOpsDt} col="op" row={o} value={o.operation} />
                     )}
                     <DataTableCell dt={topOpsDt} col="count" row={o} value={fmtNum(o.count)} />
-                    <DataTableCell dt={topOpsDt} col="avg" row={o} value={`${o.avgDurationMs.toFixed(1)}ms`} />
+                    <DataTableCell dt={topOpsDt} col="avg" row={o} value={duration(o.avgDurationMs, lang)} />
                   </tr>
                 ))}
               </tbody>

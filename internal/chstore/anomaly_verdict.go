@@ -56,6 +56,7 @@ type AnomalyVerdict struct {
 	Verdict     string `json:"verdict"`
 	Note        string `json:"note,omitempty"`
 	Reason      string `json:"reason,omitempty"` // v0.10.2256 — "Sorun değil" nedeni
+	Origin      string `json:"origin,omitempty"` // v0.10.2484 — '' organik | queue (haftalık etiket kuyruğu)
 	CreatedBy   string `json:"createdBy"`
 	CreatedAt   int64  `json:"createdAt"` // unix ns
 }
@@ -63,23 +64,31 @@ type AnomalyVerdict struct {
 // verdictCols — SAF: INSERT ve SELECT'in TEK kolon listesi (v0.10.2256);
 // reason yalnız kolon görülmüşse (hasVerdictReasonCol) — eski replika /
 // henüz ALTER inmemiş tablo eski biçimle yazılır ve okunur.
-func verdictCols(withReason bool) []string {
+// v0.10.2484 — withOrigin: origin (haftalık etiket kuyruğu işareti) kolonu
+// görülmüşse EN SONDA.
+func verdictCols(withReason, withOrigin bool) []string {
 	cols := []string{"event_id", "fingerprint", "kind", "pattern", "service", "verdict", "note", "created_by", "created_at"}
 	if withReason {
 		cols = append(cols, "reason")
+	}
+	if withOrigin {
+		cols = append(cols, "origin")
 	}
 	return cols
 }
 
 func (s *Store) UpsertAnomalyVerdict(ctx context.Context, v AnomalyVerdict) error {
-	withReason := s.hasVerdictReasonCol.Load()
-	batch, err := s.conn.PrepareBatch(ctx, "INSERT INTO anomaly_verdicts ("+strings.Join(verdictCols(withReason), ", ")+")")
+	withReason, withOrigin := s.hasVerdictReasonCol.Load(), s.hasVerdictOriginCol.Load()
+	batch, err := s.conn.PrepareBatch(ctx, "INSERT INTO anomaly_verdicts ("+strings.Join(verdictCols(withReason, withOrigin), ", ")+")")
 	if err != nil {
 		return err
 	}
 	args := []any{v.EventID, v.Fingerprint, v.Kind, v.Pattern, v.Service, v.Verdict, v.Note, v.CreatedBy, time.Unix(0, v.CreatedAt)}
 	if withReason {
 		args = append(args, v.Reason)
+	}
+	if withOrigin {
+		args = append(args, NormalizeVerdictOrigin(v.Origin))
 	}
 	if err := batch.Append(args...); err != nil {
 		return err
@@ -90,16 +99,33 @@ func (s *Store) UpsertAnomalyVerdict(ctx context.Context, v AnomalyVerdict) erro
 // probeVerdictReasonCol — anomaly_verdicts.reason var mı (v0.10.2256;
 // system.columns metadata, ai_eval_runs.path probe'unun şekli).
 func (s *Store) probeVerdictReasonCol(ctx context.Context) (bool, error) {
+	return s.probeVerdictCol(ctx, "reason")
+}
+
+// probeVerdictCol — anomaly_verdicts'te `name` kolonu var mı (v0.10.2484:
+// reason ve origin aynı metadata okuması).
+func (s *Store) probeVerdictCol(ctx context.Context, name string) (bool, error) {
 	var n uint64
 	err := s.conn.QueryRow(ctx,
 		`SELECT count() FROM system.columns
 		 WHERE database = currentDatabase() AND table = 'anomaly_verdicts'
-		   AND name = 'reason'
-		 SETTINGS max_execution_time = 5`).Scan(&n)
+		   AND name = ?
+		 SETTINGS max_execution_time = 5`, name).Scan(&n)
 	if err != nil {
 		return false, err
 	}
 	return n == 1, nil
+}
+
+// reprobeVerdictOriginCol — reprobeVerdictReasonCol'un origin ikizi.
+func (s *Store) reprobeVerdictOriginCol(ctx context.Context) bool {
+	if s.hasVerdictOriginCol.Load() {
+		return true
+	}
+	if ok, _ := s.probeVerdictCol(ctx, "origin"); ok && s.hasVerdictOriginCol.CompareAndSwap(false, true) {
+		log.Printf("[chstore] anomaly_verdicts.origin ertelenen DDL sonrası görüldü — kuyruk etiketi işareti devrede (restart gerekmedi)")
+	}
+	return s.hasVerdictOriginCol.Load()
 }
 
 // reprobeVerdictReasonCol — ertelenen DDL sonrası yeniden deneme; bayrak
@@ -139,7 +165,7 @@ func (s *Store) ListAnomalyVerdicts(ctx context.Context, ids []string) (map[stri
 	}
 	withReason := s.hasVerdictReasonCol.Load()
 	rows, err := s.conn.Query(ctx, `
-		SELECT `+strings.Join(verdictCols(withReason), ", ")+`
+		SELECT `+strings.Join(verdictCols(withReason, false), ", ")+`
 		FROM anomaly_verdicts FINAL
 		WHERE event_id IN (`+verdictInPlaceholders(len(ids))+`)
 		LIMIT 500

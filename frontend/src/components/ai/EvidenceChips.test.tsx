@@ -66,11 +66,11 @@ describe('EvidenceChips — çip alanları', () => {
     await mount(<EvidenceChips items={[evLogs]} />);
     const txt = host.querySelector('.cm-evidence')?.textContent ?? '';
     expect(txt).toContain('Elasticsearch');
-    expect(txt).toContain('1h');
+    expect(txt).toContain('1 h'); // v0.10.2484 — lib/format/duration
     expect(txt).toContain('prod/ocp-a');
     expect(txt).toContain('2 satır');
     expect(txt).toContain('123 ms');
-    expect(evidenceChipParts(evLogs)).toEqual([expect.stringMatching(/^1h \d\d:\d\d–\d\d:\d\d$/), 'prod/ocp-a', '2 satır', '123 ms']);
+    expect(evidenceChipParts(evLogs)).toEqual([expect.stringMatching(/^1 h \d\d:\d\d–\d\d:\d\d$/), 'prod/ocp-a', '2 satır', '123 ms']);
     expect(host.querySelector('[aria-label="Copy"]')).not.toBeNull();
     // ipucu odakta açılır (Tooltip) — sorgu monospace kutuda.
     const chip = host.querySelector<HTMLElement>('.cm-evidence__btn')!;

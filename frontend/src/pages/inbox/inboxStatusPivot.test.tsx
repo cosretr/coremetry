@@ -49,8 +49,8 @@ describe('Problems durum pivotu', () => {
   it('kapanış anı + süre çizilir', () => {
     const start = 1_800_000_000e9;
     const html = renderToStaticMarkup(<ClosedWhen startedAt={start} resolvedAt={start + 47 * 60e9} lang="tr" />);
-    expect(html).toContain('47m sürdü');
+    expect(html).toContain('47 min sürdü') // v0.10.2484 — lib/format/duration;
     const en = renderToStaticMarkup(<ClosedWhen startedAt={start} resolvedAt={start + 2 * 3600e9} lang="en" />);
-    expect(en).toContain('lasted 2h');
+    expect(en).toContain('lasted 2 h');
   });
 });

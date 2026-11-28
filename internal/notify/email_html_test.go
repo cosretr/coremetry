@@ -33,7 +33,7 @@ func TestBuildEmailHTML(t *testing.T) {
 		n := New(nil)
 		n.SetPublicURL("https://cm.local")
 		out := n.buildEmailHTML(testProblem(), nil)
-		if !strings.Contains(out, `href="https://cm.local/problems?problem=p1"`) {
+		if !strings.Contains(out, `href="https://cm.local/problems?problem=p1&amp;src=notify"`) {
 			t.Fatalf("problem deep link missing:\n%s", out)
 		}
 		if !strings.Contains(out, "Open in Coremetry") {

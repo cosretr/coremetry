@@ -76,7 +76,10 @@ func TestProblemSourceFamilySQLMirrorsTable(t *testing.T) {
 func TestProblemSourceBreakdownSQLBounded(t *testing.T) {
 	sql := problemSourceBreakdownSQL(3600)
 	for _, want := range []string{
-		"FROM problems FINAL",
+		"FROM problems AS p FINAL",
+		// v0.10.2484 — Problem katmanı vaka etiketi: aynı taramada tek LEFT JOIN.
+		"LEFT JOIN (" + problemCaseLabelSQL + ") AS c ON c.source_id = p.id",
+		"toUInt64(countIf(has_case AND case_ok))     AS case_correct",
 		"WHERE started_at >= ? AND started_at < ?",
 		"LIMIT 100000",
 		"max_execution_time = 10",
@@ -90,8 +93,8 @@ func TestProblemSourceBreakdownSQLBounded(t *testing.T) {
 			t.Errorf("SQL %q içermeli", want)
 		}
 	}
-	if strings.Count(sql, "FROM problems") != 1 {
-		t.Error("tek tarama: problems tablosu bir kez okunmalı")
+	if strings.Count(sql, "FROM problems") != 1 || strings.Count(sql, "FROM incident_cases") != 1 {
+		t.Error("tek tarama: problems ve incident_cases birer kez okunmalı")
 	}
 }
 

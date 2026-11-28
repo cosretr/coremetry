@@ -64,10 +64,10 @@ func TestSubjectURLAndRelatedKind(t *testing.T) {
 	n := New(nil)
 	n.SetPublicURL("https://coremetry.example.com")
 	inc := incidentAsProblem(chstore.Incident{ID: "9f2c", Title: "t"}, chstore.IncidentEvent{Kind: "created"})
-	if got := n.subjectURL(inc); got != "https://coremetry.example.com/incident?id=9f2c" {
+	if got := n.subjectURL(inc); got != "https://coremetry.example.com/incident?id=9f2c&src=notify" {
 		t.Errorf("incident linki: %s", got)
 	}
-	if got := n.subjectURL(chstore.Problem{ID: "p1"}); got != "https://coremetry.example.com/problems?problem=p1" {
+	if got := n.subjectURL(chstore.Problem{ID: "p1"}); got != "https://coremetry.example.com/problems?problem=p1&src=notify" {
 		t.Errorf("problem linki: %s", got)
 	}
 	n.SetPublicURL("")

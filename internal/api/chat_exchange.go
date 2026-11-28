@@ -609,6 +609,7 @@ func buildCosreInteraction(x *chatExchange, tier string, m copilot.CallMeta, sta
 	r.Blocks, _ = compactTurnBlocks(x.blockCap.snapshot(), x.code, now, turnBlocksCapBytes)
 	if p := x.page; p != nil {
 		r.Page, r.ProblemID, r.ExceptionID = p.Page, p.ProblemID, p.ExceptionID
+		r.AnomalyID = p.AnomalyID // v0.10.2484 — precision programı A.3 (dikkat ölçüsü)
 		if p.Service != "" {
 			r.Service = p.Service
 		}

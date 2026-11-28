@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"log"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -474,14 +473,37 @@ func (s *Store) ListMLEventsForGroups(ctx context.Context, services []string, si
 	return out, rows.Err()
 }
 
-// MLDetectorScore — dedektör karnesi satırı.
+// MLDetectorScore — dedektör karnesi satırı (v0.10.2484: tek CH toplaması,
+// ml_precision.go). Events / Samples / Hits / HitRate eski alan adlarıdır ama
+// TEK tanım taşır: samples = kurala girebilen etiket n (olay oyu + onaylı
+// vaka; "eyleme değmez" nedenler hariç), hits = doğru.
 type MLDetectorScore struct {
 	Detector string  `json:"detector"`
 	Signal   string  `json:"signal"`
-	Events   int64   `json:"events"`  // penceredeki olay sayısı
-	Samples  int64   `json:"samples"` // karar verilmiş olay sayısı
-	Hits     int64   `json:"hits"`    // verdict = anomaly
+	Events   int64   `json:"events"`  // penceredeki (30 g) üretilen olay
+	Samples  int64   `json:"samples"` // kurala girebilen etiket (n)
+	Hits     int64   `json:"hits"`    // doğru
 	HitRate  float64 `json:"hitRate"` // Hits / Samples (Samples=0 → 0)
+	// v0.10.2484 — precision programı B.1.
+	Linked            int64               `json:"linked"`        // bir Problem'e bağlı olay
+	Wrong             int64               `json:"wrong"`         // yanlış (kurala girebilen)
+	Precision         float64             `json:"precision"`     // = HitRate
+	WilsonLo          float64             `json:"wilsonLo"`      // %95 Wilson alt sınırı
+	WilsonHi          float64             `json:"wilsonHi"`      // %95 Wilson üst sınırı
+	Coverage          float64             `json:"coverage"`      // n / olay
+	BySource          MLLabelSources      `json:"bySource"`      // olay oyu / vaka
+	NotActionable     int64               `json:"notActionable"` // expected + no_impact oyları (n dışı)
+	NotAnomalyReasons MLNotAnomalyReasons `json:"notAnomalyReasons"`
+	Triage            MLTriageCounts      `json:"triage"`         // KURAL DIŞI (D4)
+	Queue             MLQueueCounts       `json:"queue"`          // haftalık kuyruk etiketleri
+	MedianLabelSec    float64             `json:"medianLabelSec"` // olay başı → oy (A1b)
+	Labellers         int64               `json:"labellers"`      // farklı etiketleyen (A1b)
+	WorstSvc          string              `json:"worstSvc,omitempty"`
+	WorstSvcShare     float64             `json:"worstSvcShare"`   // yanlışların en kötü servisteki payı (A1c)
+	LinkedShortAuto   int64               `json:"linkedShortAuto"` // bağlı Problem'i < 15 dk'da kendiliğinden kapanan olay
+	ShortAutoShare    float64             `json:"shortAutoShare"`  // LinkedShortAuto / Linked
+	Insufficient      bool                `json:"insufficient"`    // n < 20 ya da kapsama < %5 → "karar için yetersiz"
+	Exempt            bool                `json:"exempt"`          // muaf (etki kuralı aileleri, metric_kafka)
 }
 
 // MLScorecardRate — SAF: karar girilmemiş satırlar paydaya GİRMEZ (S4).
@@ -490,33 +512,6 @@ func MLScorecardRate(hits, samples int64) float64 {
 		return 0
 	}
 	return float64(hits) / float64(samples)
-}
-
-// MLScorecardFromRows — SAF: olay (id→detector) × karar (verdict id→verdict)
-// → dedektör başına olay / karar / isabet. Kararsız satır paydaya girmez (S4).
-func MLScorecardFromRows(events map[string]string, verdicts map[string]string) []MLDetectorScore {
-	acc := map[string]*MLDetectorScore{}
-	for id, det := range events {
-		r, ok := acc[det]
-		if !ok {
-			r = &MLDetectorScore{Detector: det, Signal: MLDetectorSignal(det)}
-			acc[det] = r
-		}
-		r.Events++
-		if v, ok := verdicts[MLVerdictID(id)]; ok && v != "" {
-			r.Samples++
-			if v == VerdictAnomaly {
-				r.Hits++
-			}
-		}
-	}
-	out := make([]MLDetectorScore, 0, len(acc))
-	for _, r := range acc {
-		r.HitRate = MLScorecardRate(r.Hits, r.Samples)
-		out = append(out, *r)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Detector < out[j].Detector })
-	return out
 }
 
 // MLSignalScores — SAF: dedektör satırlarından sinyal başına karne (log,
@@ -541,63 +536,11 @@ func MLSignalScores(rows []MLDetectorScore) []MLDetectorScore {
 	for _, sig := range []string{MLSignalLog, MLSignalTrace, MLSignalMetric} {
 		if a := acc[sig]; a != nil {
 			a.HitRate = MLScorecardRate(a.Hits, a.Samples)
+			a.Precision = a.HitRate
 			out = append(out, *a)
 		}
 	}
 	return out
-}
-
-// mlScorecardEventsSQL — karne olay okuması. Üye dedektörleri (v0.10.2156)
-// karneye girmez: ML dedektörü değiller, kararları da yok.
-const mlScorecardEventsSQL = `
-		SELECT id, detector FROM ml_events FINAL
-		WHERE last_seen >= ? AND detector NOT IN ('svc_slowdown','metric_anomaly','anomaly_promotion')
-		LIMIT 5000
-		SETTINGS max_execution_time = 5`
-
-// MLScorecard — son `since`'den beri dedektör başına olay / karar /
-// isabet. İki ayrı okuma (JOIN/alt sorgu yok: audit 5/5b, dağıtık-güvenli),
-// birleştirme Go'da (MLScorecardFromRows). Olay tavanı 5000 (30 g × gün
-// tavanı), karar okuması 'ml:' önekiyle sınırlı.
-func (s *Store) MLScorecard(ctx context.Context, since time.Time) ([]MLDetectorScore, error) {
-	rows, err := s.conn.Query(ctx, mlScorecardEventsSQL, chDateTime64Arg(since))
-	if err != nil {
-		return nil, err
-	}
-	events := map[string]string{}
-	for rows.Next() {
-		var id, det string
-		if err := rows.Scan(&id, &det); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		events[id] = det
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	vrows, err := s.conn.Query(ctx, `
-		SELECT event_id, verdict FROM anomaly_verdicts FINAL
-		WHERE event_id LIKE 'ml:%' AND created_at >= ?
-		LIMIT 10000
-		SETTINGS max_execution_time = 5`, chDateTime64Arg(since))
-	if err != nil {
-		return nil, err
-	}
-	defer vrows.Close()
-	verdicts := map[string]string{}
-	for vrows.Next() {
-		var id, v string
-		if err := vrows.Scan(&id, &v); err != nil {
-			return nil, err
-		}
-		verdicts[id] = v
-	}
-	if err := vrows.Err(); err != nil {
-		return nil, err
-	}
-	return MLScorecardFromRows(events, verdicts), nil
 }
 
 // MLTableReady — sre pod'u DDL koşmaz (v0.10.1282); tablo api/worker

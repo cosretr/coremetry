@@ -27,6 +27,8 @@ import { fieldStatsEst, fieldSampleLabel } from '@/lib/logFieldSample';
 import { getRaw, setRaw } from '@/lib/storage';
 import { useMediaQuery, WIDE_QUERY } from '@/lib/useMediaQuery';
 import type { ResolvedBusinessField } from '@/lib/logBusinessFields';
+import { count } from '@/lib/format/number';
+import { percent } from '@/lib/format/percent';
 
 const OPEN_KEY = 'logs.fieldsPanel.open';
 const LIFT_KEY = 'logs.fieldsPanel.lift'; // v0.10.509 (C5)
@@ -106,7 +108,7 @@ function FieldValues({ field, scope, isColumn, lift, windowTotal, actions, pause
         <div className="text-(--text3)" title="Değerler hata seçimine (severity ≥ ERROR) göre; rozet tabana (aynı süzgeç, tüm seviyeler) göre farkı gösterir">
           {d.errorLift.degraded
             ? <StatusBadge status="warn" size="sm">taban okunamadı</StatusBadge>
-            : <>hata seçimi {d.errorLift.selectionTotal.toLocaleString('tr-TR')} · taban {d.errorLift.baselineTotal.toLocaleString('tr-TR')} doküman</>}
+            : <>hata seçimi {count(d.errorLift.selectionTotal, 'tr')} · taban {count(d.errorLift.baselineTotal, 'tr')} doküman</>}
         </div>
       )}
       {d?.degraded && <div className="text-status-warn">⚠ {d.reason ?? 'log backend yavaş/erişilemez'} — üst değerler hesaplanamadı</div>}
@@ -117,7 +119,7 @@ function FieldValues({ field, scope, isColumn, lift, windowTotal, actions, pause
       {/* v0.9.1217 — kapsama: alanın pencere dokümanlarının yüzde kaçında olduğu. */}
       {d && windowTotal != null && windowTotal > 0 && d.total > 0 && !d.sampled && (
         <div className="text-(--text3)">
-          dokümanların ~%{Math.min(100, (d.total / windowTotal) * 100).toFixed((d.total / windowTotal) * 100 >= 10 ? 0 : 1)}'inde
+          dokümanların ~{percent(Math.min(100, (d.total / windowTotal) * 100), 'tr', { from: 'pct', digits: (d.total / windowTotal) * 100 >= 10 ? 0 : 1 })}'inde
         </div>
       )}
       {d && d.values.map(v => {
@@ -127,8 +129,8 @@ function FieldValues({ field, scope, isColumn, lift, windowTotal, actions, pause
           <div key={v.value} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-1.5">
             <span className="truncate font-mono" title={v.value}>{v.value}</span>
             <span className="text-(--text3) tabular-nums"
-              title={lift && d.errorLift ? `hata seçiminde %${(v.selPct ?? pct).toFixed(1)} · tabanda %${(v.basePct ?? 0).toFixed(1)}` : undefined}>
-              {d.sampled ? '~' : ''}%{pct.toFixed(pct >= 10 ? 0 : 1)}
+              title={lift && d.errorLift ? `hata seçiminde ${percent(v.selPct ?? pct, 'tr', { from: 'pct', digits: 1 })} · tabanda ${percent(v.basePct ?? 0, 'tr', { from: 'pct', digits: 1 })}` : undefined}>
+              {d.sampled ? '~' : ''}{percent(pct, 'tr', { from: 'pct', digits: pct >= 10 ? 0 : 1 })}
               {b.kind !== 'none' && (
                 // v0.10.929 (K5) — hatada DAHA AZ görülen değer iyileşme sinyali: nötr.
                 <span className="ml-1"><StatusBadge size="sm" status={b.kind === 'up' ? 'critical' : 'unknown'}
@@ -299,13 +301,13 @@ export function FieldSidebar({
           {popular.map(f => row(f))}
         </>
       )}
-      <h5 className={H5}>Mevcut alanlar{fields.length > 0 ? ` (${(fieldsTotal ?? fields.length).toLocaleString('tr-TR')})` : ''}</h5>
+      <h5 className={H5}>Mevcut alanlar{fields.length > 0 ? ` (${count(fieldsTotal ?? fields.length, 'tr')})` : ''}</h5>
       {fields.length === 0 && <div className={NOTE}>Bu backend'de eşleme keşfi yok</div>}
       {available.map(f => row(f))}
       {typeof fieldsTotal === 'number' && fieldsTotal > fields.length && (
         <div className={NOTE + ' pt-1.5'}
-          title={`Eşleme ${fieldsTotal.toLocaleString('tr-TR')} alan yolu taşıyor; ray akıcı kalsın diye liste kırpıldı — yukarıdan arayın.`}>
-          ilk {fields.length.toLocaleString('tr-TR')} / {fieldsTotal.toLocaleString('tr-TR')} alan · aramak için yazın
+          title={`Eşleme ${count(fieldsTotal, 'tr')} alan yolu taşıyor; ray akıcı kalsın diye liste kırpıldı — yukarıdan arayın.`}>
+          ilk {count(fields.length, 'tr')} / {count(fieldsTotal, 'tr')} alan · aramak için yazın
         </div>
       )}
     </aside>

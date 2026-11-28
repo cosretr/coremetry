@@ -21,6 +21,9 @@
 // çipi) listeyi sunucuda o servise süzer; süzgeç görünür satırda adıyla ve
 // tek tıkla kaldırılır (sessiz süzgeç yok). Bağlanmamış listede "Neden
 // Problem değil" sütunu (kapının kararı; lib/whyNotProblem.ts).
+// v0.10.2484 — precision programı B.3/2: "Bu hafta etiketle (10)" çipi
+// (view=label; yalnız editor+ — etiket düğmesi editör ister): haftalık
+// deterministik örnek (MLLabelQueue). Liste ve sayaçları etkilemez.
 import { useSearchParams } from 'react-router';
 import { X } from 'lucide-react';
 import { Button } from '@/components/shadcn/button';
@@ -35,12 +38,15 @@ import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
 import { CheckboxField } from '@/components/coremetry/Field';
 import { MLTab, resolveMLSignal, type MLSignal } from '@/components/coremetry/anomalies/MLTab';
 import { UnifiedAnomalies } from '@/components/coremetry/anomalies/UnifiedAnomalies';
+import { MLLabelQueue } from '@/components/coremetry/anomalies/MLLabelQueue';
 import type { AnomalyView } from '@/lib/types';
 
 // ?view= / ?attached= lib/urlSchema üzerinden (küme dışı değer → varsayılan);
 // görünüm değişince iki tablonun sayfası başa (page / donePage varsayılan 0 →
 // param silinir). Rol kontrolü resolveAnomalyView'da.
-const SIGNALS_VIEWS = ['', 'load', 'held', 'platform'] as const;
+const SIGNALS_VIEWS = ['', 'load', 'held', 'platform', 'label'] as const;
+/** v0.10.2484 — etiket kuyruğu çipi (AnomalyView DEĞİL: sunucu listesine gitmez). */
+const LABEL_VIEW = 'label';
 const VIEW_URL_SPEC = urlSpec({
   view: zParam<string>(z.string().check(z.refine(v => (SIGNALS_VIEWS as readonly string[]).includes(v))), ''),
   attached: zParam(zInt({ min: 0, max: 1 }), 0),
@@ -59,14 +65,17 @@ const VIEW_LABEL: Record<AnomalyView, string> = {
   '': 'signals.view.unattached', load: 'anomalies.view.load', held: 'anomalies.view.held', platform: 'anomalies.view.platform',
 };
 
-type ViewKey = AnomalyView | 'unattached';
+type ViewKey = AnomalyView | 'unattached' | typeof LABEL_VIEW;
 
 export default function AnomalyStreamsPage() {
   const [sp, setSp] = useSearchParams();
   const tr = useT();
-  const isAdmin = useAuthRole() === 'admin';
+  const role = useAuthRole();
+  const isAdmin = role === 'admin';
+  const canLabel = isAdmin || role === 'editor';
   const [url, setUrl] = useUrlParams(VIEW_URL_SPEC);
   const view = resolveAnomalyView(url.view, isAdmin);
+  const labelQueue = canLabel && url.view === LABEL_VIEW;
   const showAttached = url.attached === 1;
   const service = url.service.trim();
   const setView = (v: AnomalyView) => setUrl({ view: v, page: 0, donePage: 0 });
@@ -77,13 +86,13 @@ export default function AnomalyStreamsPage() {
     next.delete('page'); next.delete('donePage'); // v0.10.2051 — süzgeç değişince sayfa başa
     setSp(next, { replace: true });
   };
-  const views = SIGNALS_VIEWS.filter(v => v !== 'held' || isAdmin);
+  const views = SIGNALS_VIEWS.filter(v => (v !== 'held' || isAdmin) && (v !== LABEL_VIEW || canLabel));
   // SegmentedControl boş değer taşıyamaz (ToggleGroup boşu "seçim kalktı" sayar).
-  const toKey = (v: AnomalyView): ViewKey => (v === '' ? 'unattached' : v);
-  const fromKey = (k: ViewKey): AnomalyView => (k === 'unattached' ? '' : k);
+  const toKey = (v: AnomalyView | typeof LABEL_VIEW): ViewKey => (v === '' ? 'unattached' : v);
   const viewSwitch = (
-    <SegmentedControl<ViewKey> value={toKey(view)} onChange={k => setView(fromKey(k))} aria-label={tr('anomalies.view.aria')}
-      options={views.map(v => ({ value: toKey(v), label: tr(VIEW_LABEL[v]) }))} />
+    <SegmentedControl<ViewKey> value={labelQueue ? LABEL_VIEW : toKey(view)} aria-label={tr('anomalies.view.aria')}
+      onChange={k => (k === LABEL_VIEW ? setUrl({ view: LABEL_VIEW, page: 0, donePage: 0 }) : setView(k === 'unattached' ? '' : k))}
+      options={views.map(v => ({ value: toKey(v), label: tr(v === LABEL_VIEW ? 'signals.view.labelQueue' : VIEW_LABEL[v]) }))} />
   );
   const attachedToggle = (
     <CheckboxField label={tr('signals.showAttached')} checked={showAttached}
@@ -102,7 +111,9 @@ export default function AnomalyStreamsPage() {
       <SavedViewsBar page="anomalies" viewQuery={withSignalsTab} />
       {viewSwitch}
       {serviceFilter}
-      {view === '' ? (
+      {labelQueue ? (
+        <MLLabelQueue />
+      ) : view === '' ? (
         <UnifiedAnomalies signal={signal} onSignal={setSignal} unattached={!showAttached} controls={attachedToggle} service={service}
           detectorStatus={<><MLTab signal={signal} /><AnomalyStreams withHistory={false} /></>} />
       ) : (

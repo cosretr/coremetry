@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { keys } from './keys';
-import type { MLEvent, MLScorecard, MLBaselineBackfillView, MLServiceProfilePage, MLSvcShadowCompare, AnomalyEngineCompare, ImpactReplayResult } from '@/lib/types';
+import type { MLEvent, MLScorecard, MLLabelQueue, MLBaselineBackfillView, MLServiceProfilePage, MLSvcShadowCompare, AnomalyEngineCompare, ImpactReplayResult } from '@/lib/types';
 import type { ProblemGraphShadowResponse } from '@/lib/problemGraph';
 
 export function useMLEvents(signal: '' | 'log' | 'trace' | 'metric' = '', enabled = true) {
@@ -19,6 +19,15 @@ export function useMLScorecard(enabled = true) {
     queryKey: keys.anomalies.mlScore,
     queryFn: async () => (await api.mlScorecard()) ?? { windowDays: 30, detectors: [], signals: {} },
     enabled, staleTime: 60_000,
+  });
+}
+
+/** v0.10.2484 — precision programı B.3/2: "Bu hafta etiketle" kuyruğu (yalnız çip seçiliyken). */
+export function useMLLabelQueue(enabled = true) {
+  return useQuery<MLLabelQueue>({
+    queryKey: keys.anomalies.mlLabelQueue,
+    queryFn: async ({ signal }) => (await api.mlLabelQueue(signal)) ?? { week: '', size: 10, doneWeek: 0, items: [], truncated: false },
+    enabled, staleTime: 5 * 60_000,
   });
 }
 

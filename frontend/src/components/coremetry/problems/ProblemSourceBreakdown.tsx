@@ -48,7 +48,7 @@ const pctText = (v: number, lang: Lang) => fmtPctLang(Math.round(v), lang);
 // esneyen sütun sondaki "en çok açan servisler"; çekmece toplamı karşılar
 // (DetailSheet genişliği viewport ile sınırlar, dar ekranda sığdırma
 // önce öncelik-3 sütunları gizler).
-const BREAKDOWN_SHEET_W = 1360;
+const BREAKDOWN_SHEET_W = 1440; // v0.10.2484 — + iki vaka sütunu (170 px)
 
 function famCols(lang: Lang): ColumnDef<ProblemSourceFamily>[] {
   return [
@@ -65,6 +65,9 @@ function famCols(lang: Lang): ColumnDef<ProblemSourceFamily>[] {
     { id: 'long', label: tl('inbox.bd.col.long', lang), sortValue: r => r.long1h, numeric: true, width: 70, minWidth: 56, priority: 3 },
     { id: 'churn', label: tl('inbox.bd.col.churn', lang), sortValue: r => r.churnCount, numeric: true, width: 80, minWidth: 60, priority: 3,
       tone: r => (r.churnPairs > 0 ? 'warn' : undefined) },
+    // v0.10.2484 — precision programı B.1 Problem katmanı: onaylı kök neden vakası (kaynak 5).
+    { id: 'caseLabelled', label: tl('inbox.bd.col.caseLabelled', lang), sortValue: r => r.caseLabelled ?? 0, numeric: true, width: 100, minWidth: 70, priority: 3 },
+    { id: 'caseCorrect', label: tl('inbox.bd.col.caseCorrect', lang), sortValue: r => r.caseCorrect ?? 0, numeric: true, width: 90, minWidth: 70, priority: 3 },
     { id: 'top', label: tl('inbox.bd.col.top', lang), sortValue: r => r.topServices[0]?.count ?? 0, numeric: true, flex: true, width: 200, minWidth: 140, priority: 3 },
   ];
 }
@@ -137,6 +140,8 @@ export function ProblemSourceBreakdownView() {
       case 'median': return fmtDurShort(r.medianSec);
       case 'short': return `${r.short15} (${pctText(r.short15Pct, lang)})`;
       case 'long': return r.long1h;
+      case 'caseLabelled': return <span title={tl('inbox.bd.caseTitle', lang)}>{r.caseLabelled ?? 0}</span>;
+      case 'caseCorrect': return <span title={tl('inbox.bd.caseTitle', lang)}>{r.caseCorrect ?? 0}</span>;
       case 'churn': return (
         <span title={tf('inbox.bd.churnTitle', lang, { p: r.churnPairs, n: r.churnCount })}>{r.churnCount}</span>
       );

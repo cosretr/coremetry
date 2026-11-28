@@ -118,6 +118,7 @@ export const keys = {
     all:         ['anomalies'] as const,
     ml:       ['anomalies', 'ml'] as const,          // log ML dilim 0
     mlScore:  ['anomalies', 'ml', 'scorecard'] as const,
+    mlLabelQueue: ['anomalies', 'ml', 'label-queue'] as const, // v0.10.2484
     mlBackfill: ['anomalies', 'ml', 'baseline-backfill'] as const, // v0.10.1815
     mlProfiles: ['anomalies', 'ml', 'profiles'] as const, // v0.10.1816
     mlSvcShadow: ['anomalies', 'ml', 'svc-shadow'] as const, // v0.10.2089

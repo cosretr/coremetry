@@ -1,5 +1,10 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { TimeRange } from './types';
+import { activeLang } from './format/lang';
+import { compact, fixed } from './format/number';
+import { bytes } from './format/bytes';
+import { durationNs, durationSec } from './format/duration';
+import { agoTime, dateTime, relTime } from './format/time';
 
 // Quick-range presets in seconds, ordered for the dropdown panel.
 export const PRESET_SECONDS: Record<string, number> = {
@@ -89,12 +94,10 @@ function goDuration(secs: number): GoDuration {
 
 // v0.10.1417 (operatör, System sayfası "2770.0M" / "68365.1M": "billion yazsın") —
 // milyar ve trilyon basamakları; aksi hâlde büyük sayaçlar M ile uzuyordu.
+// v0.10.2484 — gövde lib/format/number `compact`'ta; dil etkin arayüz dili
+// (TR "1,2 bin" / "3,4 mn", EN "1.2K" / "3.4M"). Veri yoksa "—".
 export function fmtNum(n: number): string {
-  if (n >= 1e12) return (n / 1e12).toFixed(1) + 'T';
-  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-  return String(n);
+  return compact(n, activeLang());
 }
 
 // fmtFixed — null-tolerant `.toFixed` for display sites (v0.8.305,
@@ -102,8 +105,9 @@ export function fmtNum(n: number): string {
 // service can serialize a metric field as null; bare `.toFixed()`
 // then throws mid-render and (post v0.8.298) blanks the route.
 // Non-finite values render "—" — the app's established no-data glyph.
+// v0.10.2484 — lib/format/number `fixed`: TR arayüzde ondalık virgül (A7).
 export function fmtFixed(n: number | null | undefined, digits: number): string {
-  return typeof n === 'number' && Number.isFinite(n) ? n.toFixed(digits) : '—';
+  return fixed(n, digits, activeLang());
 }
 
 // escapeHTML — minimal HTML-entity escape for safely
@@ -130,33 +134,23 @@ export function escapeHTML(s: string): string {
 // re-implemented in adminstats/shared and AdminClickhouse with
 // drifting precision/fallbacks).
 // fixed — v0.10.2194: sabit ondalık (OpenShift Console gibi "248.3 MiB").
+// v0.10.2484 — gövde lib/format/bytes (IEC, A7); TR ondalık virgül; veri yoksa "—".
 export function fmtBytes(n: number, fixed?: number): string {
-  if (!n || n < 0) return '0 B';
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
-  let i = 0;
-  let v = n;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  if (fixed != null) return `${v.toFixed(i === 0 ? 0 : fixed)} ${units[i]}`;
-  return `${v.toFixed(v < 10 ? 2 : v < 100 ? 1 : 0)} ${units[i]}`;
+  return bytes(n, activeLang(), fixed);
 }
 
 // Canonical "ne kadar önce" çekirdeği (v0.8.463 dedup — dört bileşen
 // üç FARKLI giriş birimiyle (sec/unixNs/ms) kendi kopyasını taşıyordu;
 // CLAUDE.md'nin unit-mixing pitfall sınıfı). Giriş birimi fonksiyon
 // adında AÇIK: fmtDurShort saniye alır, fmtAgoNs unix-nanosaniye.
+// v0.10.2484 — lib/format/duration: 3 anlamlı hane, tek birim, dile göre
+// ("51 s", "1,5 dk"); fmtAgoNs lib/format/time relTime ("5 dk önce" / "5 min ago").
 export function fmtDurShort(seconds: number): string {
-  const s = Math.max(0, Math.round(seconds));
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.round(s / 60)}m`;
-  if (s < 86400) return `${Math.round(s / 3600)}h`;
-  return `${Math.round(s / 86400)}d`;
+  return durationSec(Math.max(0, Math.round(seconds)), activeLang());
 }
 
 export function fmtAgoNs(unixNs: number): string {
-  return `${fmtDurShort((Date.now() - unixNs / 1e6) / 1000)} ago`;
+  return agoTime(unixNs, activeLang());
 }
 
 // agoTR — fmtAgoNs'in Türkçe kardeşi. v0.9.1317'de components/ai/greeting.ts
@@ -174,77 +168,24 @@ export function fmtAgoNs(unixNs: number): string {
 //
 // Giriş birimi adında AÇIK (unixNs), fmtAgoNs ile aynı sözleşme. nowMs
 // enjekte edilebilir — testler sabit saatle koşar.
+// v0.10.2484 — gövde lib/format/time relTime (TR çıktısı birebir aynı).
 export function agoTR(unixNs: number, nowMs = Date.now()): string {
-  const s = Math.max(0, (nowMs - unixNs / 1e6) / 1000);
-  if (s < 60) return 'az önce';
-  if (s < 3600) return `${Math.round(s / 60)} dk önce`;
-  if (s < 86400) return `${Math.round(s / 3600)} sa önce`;
-  return `${Math.round(s / 86400)} gün önce`;
+  return agoTime(unixNs, 'tr', nowMs);
 }
 
+// v0.10.2484 — lib/format/duration durationNs: "1,23 ms" / "850 µs" (3 anlamlı hane, boşluklu birim).
 export function fmtNs(ns: number): string {
-  const us = ns / 1e3, ms = ns / 1e6, s = ns / 1e9;
-  if (s >= 1) return s.toFixed(2) + 's';
-  if (ms >= 1) return ms.toFixed(2) + 'ms';
-  if (us >= 1) return us.toFixed(0) + 'µs';
-  return ns + 'ns';
+  return durationNs(ns, activeLang());
 }
 
-// v0.9.879 — the ONE clock formatter. "HH:mm:ss", 24-hour, hand-rolled.
-// Operator-reported: eight surfaces called bare `toLocaleTimeString()`,
-// which follows the BROWSER locale — an en-US Chrome renders "11:22:34 PM"
-// while the waterfall next to it renders "23:22:34". Hand-rolled rather
-// than `toLocaleTimeString('en', { hour12: false })` because that spelling
-// resolves to the h24 cycle on some ICU builds and prints midnight as
-// "24:00:00". Accepts unix-ms or a Date; nanoseconds must be divided by
-// the caller (tsShort/tsLong below are the ns-native wrappers).
-export function fmtClock(v: number | Date): string {
-  const d = v instanceof Date ? v : new Date(v);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
+// v0.9.879 — the ONE clock / date+time formatter ("HH:mm:ss",
+// "dd.mm.yyyy HH:mm:ss", 24-hour, hand-rolled, viewer timezone) and the ns
+// wrappers tsShort / tsDateTime / tsLong / tsCompact / tsMinute. v0.10.2484 —
+// bodies moved to lib/format/time; same names re-exported here.
+export {
+  clock as fmtClock, dateTime as fmtDateTime, tsShort, tsDateTime, tsLong, tsCompact, tsMinute,
+} from './format/time';
 
-// v0.9.879 — the ONE date+time formatter: "dd.mm.yyyy HH:mm:ss", 24-hour.
-// Same operator request as fmtClock, other half of the inventory: bare
-// `new Date(x).toLocaleString()` prints "8/10/2026, 11:22:34 PM" on an
-// en-US browser. tsLong (v0.6.65) already owned this format for ns
-// callers — this is its unix-ms/Date sibling and its implementation.
-export function fmtDateTime(v: number | Date): string {
-  const d = v instanceof Date ? v : new Date(v);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${fmtClock(d)}`;
-}
-
-export function tsShort(ns: number): string {
-  if (!ns) return '—';
-  const d = new Date(ns / 1e6);
-  return fmtClock(d) + '.' + String(d.getMilliseconds()).padStart(3, '0');
-}
-
-// v0.5.321 — Operator-reported: Traces page's Time column showed
-// only HH:MM:SS.mmm (tsShort) — at wide windows the operator
-// couldn't tell whether two rows were from the same day. Render
-// the full ISO-ish stamp with date: "2026-05-21 10:23:45.123".
-// Sortable string format, locale-stable, no DateStyle quirks.
-export function tsDateTime(ns: number): string {
-  if (!ns) return '—';
-  const d = new Date(ns / 1e6);
-  const yyyy = d.getFullYear();
-  const mm   = String(d.getMonth() + 1).padStart(2, '0');
-  const dd   = String(d.getDate()).padStart(2, '0');
-  const hh   = String(d.getHours()).padStart(2, '0');
-  const mi   = String(d.getMinutes()).padStart(2, '0');
-  const ss   = String(d.getSeconds()).padStart(2, '0');
-  const ms   = String(d.getMilliseconds()).padStart(3, '0');
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}.${ms}`;
-}
-
-// v0.6.65 — dd.mm.yyyy HH:mm:ss, 24-hour. Operator-reported: the prior
-// toLocaleString('en', …) rendered US M/D/YY + 12h ("5/28/26, 11:22:34
-// PM"), which (a) clashed with the 24h waterfall timeline ("23:22:34")
-// and (b) isn't the operator's gün.ay.yıl convention. Manual format so
-// it's locale-stable regardless of the browser/container locale.
-// v0.9.879 — body moved to fmtDateTime so ms/Date callers share it.
 // v0.10.1794 — Operator-reported (prod Service › Logs detayı): `timestamp` /
 // `event.es_ingested` öznitelikleri ES'in ham UTC dizesi ("…T07:23:41Z")
 // olarak basılıyordu; tablo 10:23 derken detay 07:23 "3 saat geri" okundu.
@@ -256,51 +197,13 @@ export function isoStampLocal(v: string): string | null {
   if (!ISO_STAMP_RE.test(v)) return null;
   const ms = Date.parse(v.replace(',', '.').replace(/([+-]\d\d)(\d\d)$/, '$1:$2'));
   if (Number.isNaN(ms)) return null;
-  return fmtDateTime(ms) + '.' + String(new Date(ms).getMilliseconds()).padStart(3, '0');
+  return dateTime(ms) + '.' + String(new Date(ms).getMilliseconds()).padStart(3, '0');
 }
 
-export function tsLong(ns: number): string {
-  if (!ns) return '—';
-  return fmtDateTime(ns / 1e6);
-}
-
-// tsCompact — v0.10.1068 (operatör: "Kolonlar kayıyor, sığmıyor"). Liste
-// tablolarında yıl her satırda aynı ve 13 px mono damgada ~40 px yiyor:
-// bu yılsa "dd.mm HH:mm:ss", değilse tsLong. Tam damga hücrenin `title`ında
-// (tsLong) kalır.
-export function tsCompact(ns: number, nowMs: number = Date.now()): string {
-  if (!ns) return '—';
-  const d = new Date(ns / 1e6);
-  if (d.getFullYear() !== new Date(nowMs).getFullYear()) return tsLong(ns);
-  return tsLong(ns).replace(/^(\d\d\.\d\d)\.\d{4} /, '$1 ');
-}
-
-// tsRel renders a unix-ns timestamp as a coarse relative duration
-// ("in 12h", "3d ago"). Used for expiry indicators where the
-// absolute date is less load-bearing than "how much longer". For
-// past timestamps the suffix flips to " ago". Rounds to the
-// largest unit that fits to keep the label tight.
-// tsMinute — dd.mm.yyyy HH:mm (saniyesiz). tsLong'un dar kolonlar için
-// olan kardeşi: tam damga title'a, okunabilir kısmı hücreye (v0.9.660).
-export function tsMinute(ns: number): string {
-  if (!ns) return '—';
-  return tsLong(ns).slice(0, -3);
-}
-
+// tsRel — unix-ns göreli zaman, geçmiş ve gelecek. v0.10.2484 — lib/format/time
+// relTime, dile göre ("3 gün önce" / "3 days ago", "12 sa sonra" / "in 12 h").
 export function tsRel(ns: number): string {
-  if (!ns) return '—';
-  const diffMs = ns / 1e6 - Date.now();
-  const abs = Math.abs(diffMs);
-  const past = diffMs < 0;
-  const min = abs / 60_000;
-  const h = abs / 3_600_000;
-  const d = abs / 86_400_000;
-  let body: string;
-  if (d >= 1) body = Math.round(d) + 'd';
-  else if (h >= 1) body = Math.round(h) + 'h';
-  else if (min >= 1) body = Math.round(min) + 'm';
-  else body = '<1m';
-  return past ? body + ' ago' : 'in ' + body;
+  return relTime(ns, activeLang());
 }
 
 // hashColor (v0.9.398'de SÖKÜLDÜ) — üç bağımsız renk sistemi tekleşti:

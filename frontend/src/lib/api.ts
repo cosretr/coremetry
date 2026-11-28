@@ -1850,7 +1850,10 @@ export const api = {
   anomalyEngineCompare: (days = 7) => get<import('./types').AnomalyEngineCompare>(`/api/anomalies/engine-compare?days=${days}`),
   // v0.10.2274 — entity grafı Problem birleştirme gölge raporu (yalnız admin, 15 sn önbellek).
   problemGraphShadow: () => get<import('./problemGraph').ProblemGraphShadowResponse>(`/api/admin/problem-graph-shadow`),
-  putMlVerdict: (id: string, body: { verdict: 'anomaly' | 'not_anomaly'; note?: string; reason?: string; detector: string; service: string }) =>
+  /** v0.10.2484 — haftalık etiket kuyruğu (api/ml_label_queue.go; 5 dk önbellek). */
+  mlLabelQueue: (signal?: AbortSignal) => get<import('./types').MLLabelQueue>(`/api/ml/label-queue`, signal),
+  // v0.10.2484 — origin 'queue': oy haftalık kuyruktan verildi (karne ayrı sayar).
+  putMlVerdict: (id: string, body: { verdict: 'anomaly' | 'not_anomaly'; note?: string; reason?: string; detector: string; service: string; origin?: 'queue' }) =>
     request<unknown>(`/api/ml/${encodeURIComponent(id)}/verdict`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }),

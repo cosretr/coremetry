@@ -22,7 +22,7 @@ import { IconButton } from './ui/IconButton';
 import { DisclosureButton } from './ui/DisclosureButton';
 import { SqlCode } from '@/components/coremetry/SqlCode'; // v0.10.1955
 import { useDBStmtDetail } from '@/lib/queries/databases'; // v0.10.1956
-import { useT } from '@/lib/i18n';
+import { useT, useLang } from '@/lib/i18n';
 import { BreakdownBar, KindBadge } from './KindBadge';
 import { useEntityEnabled, useEntityPaths, useStackFrameLinks } from '@/lib/queries';
 import { useSpanProfiles, useSpanHotspots, useSpanBaselineP50 } from '@/lib/queries/spans';
@@ -31,6 +31,9 @@ import { StackTrace } from './StackTrace';
 import { runningVersion } from '@/lib/runningVersion'; // v0.10.590
 import { SpanK8sSection } from './SpanK8sSection';
 import { spanK8sContext, spanK8sHint, k8sAttrHref, type SpanK8sContext } from '@/lib/spanK8s';
+import { duration } from '@/lib/format/duration';
+import { percent } from '@/lib/format/percent';
+import { count, fixed } from '@/lib/format/number';
 
 const PANEL_MIN = 300;
 const PANEL_MAX = 1100;
@@ -73,6 +76,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
   // penceresi ±2 dk'lık; pod sayfasını ona kilitlemek yanlıştı — inceleme).
   pageRange?: TimeRange;
 }) {
+  const lang = useLang();
   const tr = useT(); // v0.10.1338
   const attrGroups = useMemo(() => groupSpanAttrs(span.attributes), [span.attributes]);
   // v0.10.692 — resource attribute'ları da gruplu (Service/Deployment/Container/
@@ -182,13 +186,13 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
     const v = stmtVerdict(span.durationMs, sum.p95Ms);
     if (!v) return null;
     const verdict = v.kind === 'slowX' ? tr('dbspan.ctx.slowX').replace('{x}', String(v.x)) : tr(`dbspan.ctx.${v.kind}`);
-    const ms = (x: number) => fmtNs(x * 1e6);
+    const ms = (x: number) => duration(x, lang);
     return {
-      text: tr('dbspan.ctx').replace('{calls}', sum.calls.toLocaleString()).replace('{p95}', ms(sum.p95Ms))
+      text: tr('dbspan.ctx').replace('{calls}', count(sum.calls, lang)).replace('{p95}', ms(sum.p95Ms))
         .replace('{d}', ms(span.durationMs)).replace('{verdict}', verdict),
       slow: v.kind !== 'normal',
     };
-  }, [stmtQ.data, span.durationMs, tr]);
+  }, [stmtQ.data, span.durationMs, tr, lang]);
   const dbLinks = useMemo(() => {
     const ref = spanLinkCtx.db;
     if (!ref) return null;
@@ -332,10 +336,10 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
               </>}
             </span>
           )}
-          <span><b>Duration:</b> {span.durationMs.toFixed(3)} ms{traceSpans && traceSpans.length > 0 && (() => {
+          <span><b>Duration:</b> {duration(span.durationMs, lang)}{traceSpans && traceSpans.length > 0 && (() => {
             const self = selfTimeMs(span, traceSpans);
             const pct = span.durationMs > 0 ? (self / span.durationMs) * 100 : 100;
-            return <span title="Öz süre: çocukların kapsamadığı kısım"> · self {self.toFixed(3)} ms (%{pct.toFixed(0)})</span>;
+            return <span title="Öz süre: çocukların kapsamadığı kısım"> · self {duration(self, lang)} ({percent(pct, lang, { from: 'pct', digits: 0 })})</span>;
           })()}</span>
           <span><b>Start Time:</b> {Number.isFinite(traceStartNs) ? `+${fmtNs(Math.max(0, span.startTime - traceStartNs))} ` : ''}({tsLong(span.startTime)})</span>
           <span><b>Kind:</b> {span.kind || 'internal'}</span>
@@ -346,9 +350,9 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
           {span.parentSpanId && <span><b>Parent:</b> <code className="trace-kiosk__id">{span.parentSpanId}</code></span>}
           {baseP50 !== null && (
             <span title={`Median duration of ${span.serviceName} · ${displaySpanName(span)} over the 24h before this span`}>
-              <b>Baseline p50 (24h):</b> {baseP50 >= 1000 ? `${(baseP50 / 1000).toFixed(2)} s` : `${baseP50.toFixed(baseP50 < 10 ? 2 : 0)} ms`}{' '}
+              <b>Baseline p50 (24h):</b> {duration(baseP50, lang)}{' '}
               {span.durationMs / baseP50 >= 1.5
-                ? <span className="badge b-err">×{(span.durationMs / baseP50).toFixed(1)} slower</span>
+                ? <span className="badge b-err">×{fixed(span.durationMs / baseP50, 1, lang)} slower</span>
                 : <span className="badge b-gray">normal</span>}
             </span>
           )}
@@ -571,7 +575,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
                         <KindBadge kind={h.kind} />
                       </td>
                       <td className="num cell-muted" style={{ whiteSpace: 'nowrap', width: 80 }}>
-                        {pct.toFixed(1)}%
+                        {percent(pct, lang, { from: 'pct', digits: 1 })}
                       </td>
                     </tr>
                   );
@@ -589,7 +593,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
                 style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'var(--text)' }}>
                 <span className="badge b-info">{p.profileType.toUpperCase()}</span>
                 <span style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                  {tsLong(p.startTime)} {p.durationMs > 0 && `· ${(p.durationMs/1000).toFixed(1)}s`}
+                  {tsLong(p.startTime)} {p.durationMs > 0 && `· ${duration(p.durationMs, lang)}`}
                 </span>
                 <span style={{ color: 'var(--accent2)', display: 'inline-flex' }}>
                   <IconFlame size={14} />

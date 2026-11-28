@@ -69,7 +69,7 @@ func problemsBreakdownSince(raw string) string {
 
 // problemsBreakdownKey — SAF: cache anahtarı; tek girdi since basamağı.
 func problemsBreakdownKey(since string) string {
-	return "problems:breakdown:v1:since=" + since
+	return "problems:breakdown:v2:since=" + since // v2 (v0.10.2484): + caseLabelled / caseCorrect
 }
 
 // problemsBreakdownRead — depo dikişi (test sahte sonuç verir).
@@ -100,6 +100,11 @@ type problemsBreakdownStats struct {
 	Short15    int64   `json:"short15"`
 	Short15Pct float64 `json:"short15Pct"`
 	Long1h     int64   `json:"long1h"`
+	// v0.10.2484 — precision programı B.1 Problem katmanı: onaylı kök neden
+	// vakası olan Problem (kaynak 5) ve vakası doğru olan (category != noise).
+	// Triyaj ("Problem değil", D4) BURADA YOK — etiket değil.
+	CaseLabelled int64 `json:"caseLabelled"`
+	CaseCorrect  int64 `json:"caseCorrect"`
 }
 
 type problemsBreakdownMetric struct {
@@ -147,7 +152,8 @@ func breakdownStats(r chstore.ProblemSourceAggRow, total int64) problemsBreakdow
 		Count: n, SharePct: breakdownPct(n, total), Services: int64(r.Services), OpenNow: int64(r.OpenNow),
 		Critical: int64(r.Critical), Warning: int64(r.Warning), OtherSev: n - int64(r.Critical) - int64(r.Warning),
 		MedianSec: r.MedianSec, Short15: int64(r.Short15), Short15Pct: breakdownPct(int64(r.Short15), n),
-		Long1h: int64(r.Long1h),
+		Long1h:       int64(r.Long1h),
+		CaseLabelled: int64(r.CaseN), CaseCorrect: int64(r.CaseCorrect),
 	}
 }
 

@@ -91,7 +91,7 @@ func TestNegFeedbackReadBranches(t *testing.T) {
 func TestAIFeedbackProbeTargetsInsertTable(t *testing.T) {
 	for file, want := range map[string]string{
 		"ai_feedback.go":        "table = 'ai_feedback' AND name IN ('call_id', 'reason')",
-		"cosre_interactions.go": "table = 'cosre_interactions' AND name IN ('tool_evidence', 'toolset', 'blocks', 'verify')", // v0.10.1302 — tek probe; v0.10.1444 + blocks
+		"cosre_interactions.go": "table = 'cosre_interactions' AND name IN ('tool_evidence', 'toolset', 'blocks', 'verify', 'anomaly_id')", // v0.10.1302 — tek probe; v0.10.1444 + blocks; v0.10.2484 + anomaly_id
 	} {
 		src := readFileT(t, file)
 		if !strings.Contains(src, want) {

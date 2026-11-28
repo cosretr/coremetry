@@ -1,6 +1,9 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { DEFAULT_BRANDING, useBranding } from './branding';
 import { getRaw, setRaw, removeRaw, getSessionRaw, setSessionRaw } from './storage';
+import { setLangSource } from './format/lang';
+import { percent } from './format/percent';
+import { agoTime } from './format/time';
 
 // Tiny in-repo i18n. No external dependency — the SPA's
 // branding settings carry a `language` field that picks one of
@@ -246,6 +249,9 @@ export function currentLang(): Lang {
   return effectiveLang(readUserLang() ?? lastResolvedLang ?? 'en');
 }
 
+// lib/format sarmalayıcıları (lib/utils fmt*) etkin dili buradan okur (v0.10.2484).
+setLangSource(currentLang);
+
 // useT returns a translator scoped to the effective language.
 // Priority: user-picked (localStorage) → branding default →
 // English fallback. Hook so any of those layers changing
@@ -280,16 +286,14 @@ export function tf(key: string, lang: Lang, vars: Record<string, string | number
 }
 
 // fmtPctLang — v0.10.2186/2189: yüzde biçimi dile göre, TR "%46", EN "46%".
+// v0.10.2484 — gövde lib/format/percent (3 anlamlı hane, TR ondalık virgül).
 export function fmtPctLang(n: number, lang: Lang): string {
-  return lang === 'tr' ? `%${n}` : `${n}%`;
+  return percent(n, lang, { from: 'pct' });
 }
 
-// agoLang — v0.10.2285: utils.agoTR'nin dile göre eşi (TR çıktısı birebir aynı:
-// "az önce" / "N dk önce" / "N sa önce" / "N gün önce").
+// agoLang — v0.10.2285: utils.agoTR'nin dile göre eşi. v0.10.2484 — gövde
+// lib/format/time relTime (TR "az önce" / "N dk önce" …, EN "just now" /
+// "N min ago" / "N h ago" / "N days ago"; katalogdaki ago.* ile aynı metin).
 export function agoLang(unixNs: number, lang: Lang, nowMs = Date.now()): string {
-  const s = Math.max(0, (nowMs - unixNs / 1e6) / 1000);
-  if (s < 60) return t('ago.now', lang);
-  if (s < 3600) return tf('ago.m', lang, { n: Math.round(s / 60) });
-  if (s < 86400) return tf('ago.h', lang, { n: Math.round(s / 3600) });
-  return tf('ago.d', lang, { n: Math.round(s / 86400) });
+  return agoTime(unixNs, lang, nowMs);
 }

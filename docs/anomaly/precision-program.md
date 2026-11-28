@@ -528,3 +528,24 @@ Sayı gelince operatörün seçtiği satır `ml-next.md`'ye yazılır.
 7. **"Rollout karnesi" ne demek?** Repoda tanımı yok (grep boş). Bu belge onu "B.1 + B.2'nin devreye alınması" olarak okudu. Deploy (rollout) kalitesi karnesi kastediliyorsa C tablosunun 2. sütunu değişir.
 8. **Ölçüm ekleri.** `cosre_interactions.anomaly_id` ve bildirim bağlantısında `?src=notify` eklensin mi? Öneri: evet, ikisi küçük ve tek sürüm.
 9. **A0/A1/A2 prod koşusu.** Hangi düğümde koşulacağı `d1-olcum.md` §4 sonucuna bağlı.
+
+## Kararlar (operatör, 2026-11-27)
+
+Operatörün cevabı: "Precision onay." Açık kararlardaki öneriler karar oldu.
+
+| # | Konu | Karar |
+|---|---|---|
+| 1 | Oy kuralının kısmi tersine çevrilmesi | **Onaylandı.** Olay oyları (kaynak 1–2) ve onaylı vakalar (kaynak 5) otomatik gölge kuralına girer. Bu, 2026-10-17 kuralını yalnız bu iki kaynak ve yalnız bu kural için tersine çevirir; 👍/👎, triyaj ve örtük sinyaller için kural aynen geçerlidir (`TestVotesNeverReachRuntimeDecisions` değişmez). |
+| 2 | Triyaj "Problem değil" (D4) | Kurala girmez; karnede ayrı sütun. |
+| 3 | `not_anomaly` nedenleri | Yalnız `no_deviation`, `other` ve nedensiz oylar "yanlış" sayılır; `expected` ve `no_impact` karnede ayrı gösterilir. |
+| 4 | Eşikler | n ≥ 20; düşme: Wilson üst sınırı < 0,50; geri dönüş: alt sınır ≥ 0,60; pencere 30 gün; günde en çok 1 düşüş; en çok %25; bekleme 7 / 14 gün. |
+| 5 | `metric_kafka` | İlk sürümde tümüyle muaf. |
+| 6 | Eski ve kural aileleri | İlk sürümde yalnız ölçülür. |
+| 7 | "Rollout karnesi" | Bu belgenin okuması geçerli sayıldı: B.1 karnesi + B.2 kuralının devreye alınması. Operatör başka bir şey kastettiyse C tablosunun 2. sütunu düzeltilir. |
+| 8 | Ölçüm ekleri | `cosre_interactions.anomaly_id` ve bildirim bağlantısında `?src=notify` eklenir. |
+| 9 | Prod koşusu | A0 / A1 / A2 operatörde; düğüm seçimi `d1-olcum.md` §4. |
+
+**Uygulama sırası.** Prod sayıları henüz yok; Bölüm C'nin her satırında gereken işler önce yapılır:
+1. B.1 karnesi (kesik okuma düzeltmesi, Wilson sınırları, kapsama), B.3/1 vaka etiketinin üye olaylara yayılması, B.3/2 haftalık etiketleme kuyruğu ve 8 numaralı ölçüm ekleri.
+2. B.2 otomatik gölge kuralı, yalnız `shadow` ("düşerdi" kaydı) kipinde. `on` kipi ayrı operatör onayı ister ve en az 14 günlük gölge raporundan sonra önerilir.
+

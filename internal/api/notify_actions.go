@@ -71,7 +71,7 @@ func (s *Server) notifyIgnore(w http.ResponseWriter, r *http.Request) {
 		if p, err := s.store.GetProblem(ctx, claims.ID); err == nil && p != nil {
 			title = strings.TrimSpace(p.Service + " · " + p.RuleName)
 		}
-		openPath = "/problems?problem=" + claims.ID
+		openPath = "/problems?problem=" + claims.ID + "&src=notify" // v0.10.2484 — bildirim kaynağı (precision A.3)
 	case chstore.NotifyKindIncident:
 		inc, err := s.store.GetIncident(ctx, claims.ID)
 		if err != nil {
@@ -83,7 +83,7 @@ func (s *Server) notifyIgnore(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		title = inc.Title
-		openPath = "/incident?id=" + claims.ID
+		openPath = "/incident?id=" + claims.ID + "&src=notify"
 		if inc.Status == "open" {
 			now := time.Now().UnixNano()
 			inc.Status = "acknowledged"

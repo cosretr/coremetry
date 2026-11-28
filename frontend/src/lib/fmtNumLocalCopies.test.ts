@@ -23,7 +23,7 @@ import { fmtVal } from '@/components/Sparkline';
 // kendini yakalamasın.
 const SRC = resolve(__dirname, '..');
 const SELF = 'fmtNumLocalCopies' + '.test.ts';
-const ALLOW = new Set(['lib/utils.ts', 'lib/chartFmt.ts']);
+const ALLOW = new Set(['lib/utils.ts', 'lib/chartFmt.ts', 'lib/format/number.ts']);
 // (x / 1e6 | 1_000_000 | 1000000).toFixed(…) + 'M'  |  }M  — M ya da B son eki.
 const LOCAL_FMT = new RegExp(
   '/\\s*1(?:e6|e9|_?000_?000(?:_?000)?)\\s*\\)\\s*\\.toFixed\\([^)]*\\)\\s*'
@@ -48,8 +48,11 @@ for (const p of walk(SRC)) {
 }
 
 describe('yerel K/M sayı biçimlendiricisi kapısı (v0.10.1424)', () => {
-  it('desen kaymadı: lib/utils.ts fmtNum yakalanıyor', () => {
-    expect(hits.filter(h => h.at.startsWith('lib/utils.ts:')).length).toBeGreaterThanOrEqual(1);
+  // v0.10.2484 — fmtNum gövdesi lib/format/number `compact`'a taşındı (döngülü
+  // biçim, desene girmez); kayma bekçisi artık ortak işlevin çıktısı.
+  it('desen kaymadı: ortak fmtNum K/M/B/T basıyor (lib/format/number compact)', () => {
+    expect(fmtNum(2_770_000_000)).toBe('2.8B');
+    expect(fmtNum(1_500_000)).toBe('1.5M');
   });
 
   it('lib/utils.ts ve lib/chartFmt.ts dışında yerel (n / 1e6).toFixed(…) + "M" kopyası yok', () => {

@@ -12,7 +12,8 @@
 // "Teknik detay". Yalnız replay ucu okunur (ES/VM yok); kayıt yoksa kart
 // yine çizilir, grafik yerine dürüst not.
 import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
+import { LABEL_QUEUE_PARAM } from './labelQueue';
 import { SearchX } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TimeChart } from '@/components/charts/TimeChart';
@@ -361,10 +362,15 @@ function MLEventActions({ id, card, verdict, localized = false }: { id: string; 
   const [busy, setBusy] = useState(false);
   // v0.10.2256 — yeni kartta "Sorun değil" neden sorar (mockup §5); eski kart tek tık kalır.
   const [asking, setAsking] = useState(false);
+  // v0.10.2484 — precision programı B.3/2: "Bu hafta etiketle" kuyruğundan
+  // açılan sayfa (?lq=1) oyu origin='queue' ile yazar; karne kuyruk
+  // etiketlerini organiklerden ayrı sayar. Ek tık yok, düğmeler aynı.
+  const [sp] = useSearchParams();
+  const fromQueue = sp.get(LABEL_QUEUE_PARAM) === '1';
   const put = async (v: 'anomaly' | 'not_anomaly', reason?: VerdictReason, note?: string) => {
     setBusy(true);
     try {
-      await api.putMlVerdict(id, { verdict: v, detector: card.header.detector, service: card.header.service, ...(reason ? { reason } : {}), ...(note ? { note } : {}) });
+      await api.putMlVerdict(id, { verdict: v, detector: card.header.detector, service: card.header.service, ...(reason ? { reason } : {}), ...(note ? { note } : {}), ...(fromQueue ? { origin: 'queue' as const } : {}) });
       setAsking(false);
       await qc.invalidateQueries({ queryKey: keys.anomalies.ml });
       await qc.invalidateQueries({ queryKey: keys.anomalies.unifiedAll }); // v0.10.2051 — birleşik liste ML kararını taşır

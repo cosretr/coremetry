@@ -16,6 +16,25 @@ import (
 // en son arg turun araç seti.
 // v0.10.1444 — blocks kolonu: sekiz bayrak bileşimi; açıkken EN SON arg turun
 // blok zarfı (toolset ondan bir önce).
+// v0.10.2484 — anomaly_id: bayrak kapalıyken anılmaz; açıkken EN SON kolon
+// ve son arg olayın kimliği.
+func TestCosreInteractionAnomalyIDColumn(t *testing.T) {
+	r := CosreInteraction{AnomalyID: "ml:abc", Verify: "v1"}
+	off := cosreInteractionCols{Verify: true}
+	if strings.Contains(cosreInteractionsInsertSQL(off), "anomaly_id") {
+		t.Fatal("bayrak kapalıyken anomaly_id anılmamalı")
+	}
+	on := cosreInteractionCols{Evidence: true, Toolset: true, Blocks: true, Verify: true, Anomaly: true}
+	sql := cosreInteractionsInsertSQL(on)
+	args := cosreInteractionArgs(r, on)
+	if !strings.HasSuffix(strings.TrimSuffix(sql, ")"), ", anomaly_id") || args[len(args)-1] != "ml:abc" || args[len(args)-2] != "v1" {
+		t.Fatalf("anomaly_id son kolon / arg olmalı: %s %v", sql, args[len(args)-2:])
+	}
+	if cols := strings.Count(sql[strings.Index(sql, "(")+1:], ",") + 1; cols != len(args) {
+		t.Fatalf("kolon %d, argüman %d", cols, len(args))
+	}
+}
+
 func TestCosreInteractionArgsAlignWithColumns(t *testing.T) {
 	r := CosreInteraction{Toolset: "simple", Blocks: `{"v":1}`, Verify: "v1 tier=loop", Tools: []CosreTool{{Name: "a", OK: true, Evidence: "metrics:12"}, {Name: "b", Error: "x"}}}
 	var combos []cosreInteractionCols

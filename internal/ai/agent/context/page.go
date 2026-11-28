@@ -40,22 +40,27 @@ type PageRange struct {
 
 // PageContext — frontend PageContext ile alan-alan aynı (lib/types.ts).
 type PageContext struct {
-	Page        string       `json:"page"`
-	Path        string       `json:"path,omitempty"`
-	Env         string       `json:"env,omitempty"`
-	Cluster     string       `json:"cluster,omitempty"`
-	Namespace   string       `json:"namespace,omitempty"`
-	Service     string       `json:"service,omitempty"`
-	Workload    string       `json:"workload,omitempty"`
-	Pod         string       `json:"pod,omitempty"`
-	Operation   string       `json:"operation,omitempty"`
-	TraceID     string       `json:"traceId,omitempty"`
-	SpanID      string       `json:"spanId,omitempty"`
-	ProblemID   string       `json:"problemId,omitempty"`
-	ExceptionID string       `json:"exceptionId,omitempty"`
-	Search      string       `json:"search,omitempty"`
-	TimeRange   *PageRange   `json:"timeRange,omitempty"`
-	Filters     []PageFilter `json:"activeFilters,omitempty"`
+	Page        string `json:"page"`
+	Path        string `json:"path,omitempty"`
+	Env         string `json:"env,omitempty"`
+	Cluster     string `json:"cluster,omitempty"`
+	Namespace   string `json:"namespace,omitempty"`
+	Service     string `json:"service,omitempty"`
+	Workload    string `json:"workload,omitempty"`
+	Pod         string `json:"pod,omitempty"`
+	Operation   string `json:"operation,omitempty"`
+	TraceID     string `json:"traceId,omitempty"`
+	SpanID      string `json:"spanId,omitempty"`
+	ProblemID   string `json:"problemId,omitempty"`
+	ExceptionID string `json:"exceptionId,omitempty"`
+	// AnomalyID — v0.10.2484 (precision programı A.3): ML / anomali olayı
+	// sayfasının olay kimliği ('ml:<id>' ya da eski olay id'si; FE
+	// lib/pageContext.ts). Yalnız ölçüm: cosre_interactions.anomaly_id'ye
+	// yazılır, önsöze (PreambleTR) GİRMEZ — modelin davranışı değişmez.
+	AnomalyID string       `json:"anomalyId,omitempty"`
+	Search    string       `json:"search,omitempty"`
+	TimeRange *PageRange   `json:"timeRange,omitempty"`
+	Filters   []PageFilter `json:"activeFilters,omitempty"`
 	// v0.10.1435 — sayfanın YAYINLADIĞI (URL dışı) seçimler
 	// (lib/pageContextOverlay.ts): brush aralığı + seçili seriler (≤5 × 120 rune).
 	Brush          *PageBrush `json:"brush,omitempty"`
@@ -102,6 +107,7 @@ func Sanitize(p *PageContext) *PageContext {
 	c.Page, c.Path, c.Env, c.Cluster, c.Namespace = clean(c.Page), clean(c.Path), clean(c.Env), clean(c.Cluster), clean(c.Namespace)
 	c.Service, c.Workload, c.Pod, c.Operation = clean(c.Service), clean(c.Workload), clean(c.Pod), clean(c.Operation)
 	c.TraceID, c.SpanID, c.ProblemID, c.ExceptionID, c.Search = clean(c.TraceID), clean(c.SpanID), clean(c.ProblemID), clean(c.ExceptionID), clean(c.Search)
+	c.AnomalyID = clean(c.AnomalyID)
 	if c.TimeRange != nil {
 		r := *c.TimeRange
 		r.Preset = clean(r.Preset)
