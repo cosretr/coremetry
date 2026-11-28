@@ -95,13 +95,15 @@ describe('normalizeShiftWindow', () => {
 describe('kaynak taraması — /shift servis linkleri penceresiz olamaz', () => {
   const text = readFileSync(join(__dirname, '..', 'Shift.tsx'), 'utf8');
 
+  // v0.10.2488 (dilim 4) — bağlantılar EntityLink; servis hedefi
+  // `kind: 'service' | 'subject'` (tür kaydı serviceHref'i aynı opts ile çağırır).
   it('taranan şekil var (kapı boşa koşmuyor)', () => {
-    expect((text.match(/serviceHref\(/g) ?? []).length).toBe(3);
+    expect((text.match(/kind: '(?:service|subject)'/g) ?? []).length).toBe(3);
   });
 
-  it('her serviceHref çağrısı bir range taşır', () => {
+  it('her servis hedefi bir range taşır', () => {
     const windowless: string[] = [];
-    const re = /serviceHref\([^\n]*/g;
+    const re = /kind: '(?:service|subject)'[^\n]*/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(text))) {
       if (!m[0].includes('range:')) {

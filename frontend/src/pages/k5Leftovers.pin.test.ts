@@ -69,17 +69,15 @@ describe('v0.10.929 — eşikler aynı, yalnız sağlıklı dal nötr', () => {
     expect(code(read('./databases/detailSections.tsx')))
       .toContain("c.errorRate > 5 ? 'b-err' : c.errorRate > 0 ? 'b-warn' : 'b-gray'");
   });
-  it('/service başlık noktası: kırmızı/amber aynı eşikte, sağlıklı nötr halka + metin alternatifi', () => {
+  // v0.10.2488 (entity tutarlılık dilim 4, Karar A2) — başlık noktası tek
+  // HealthDot'tan, yalnız açık Problem'den (hata oranı eşiği kalktı). Nötr
+  // halka ve metin alternatifi bileşende (.ov-dot.green + aria-label).
+  it('/service başlık noktası: tek HealthDot, açık Problem\'den, sağlıklı nötr halka', () => {
     const src = code(read('./Service.tsx'));
-    // Eşikler aynı (>5 kritik, >1 uyarı); sınıf ve etiket tek yerden.
-    expect(src).toContain("if (errorRate > 5) return { cls: 'red', label: 'critical' };");
-    expect(src).toContain("if (errorRate > 1) return { cls: 'amber', label: 'warning' };");
-    expect(src).toContain("return { cls: 'green', label: 'healthy' };");
-    // Halka globals'taki .ov-dot.green'den (nötr); satır içi kopya yok.
-    expect(src).toContain('<span className={`ov-dot ${headDot.cls}`} style={{ width: 12, height: 12 }}');
+    expect(src).toContain('const headHealth = useMemo(() => healthFromProblems(problems), [problems]);');
+    expect(src).toContain('{info && <HealthDot level={headHealth} size={12} />}');
+    expect(src).not.toContain('serviceHeadDot');
     expect(src).not.toContain("boxShadow: 'inset 0 0 0 1px var(--border-strong)'");
-    // Renk tek taşıyıcı değil: tooltip + ekran okuyucu etiketi.
-    expect(src).toContain('role="img" title={headDot.label} aria-label={headDot.label}');
     const css = readFileSync(resolve(__dirname, '../styles/globals.css'), 'utf8');
     expect(css).toMatch(/\.ov-dot\.green \{ background: transparent; box-shadow: inset 0 0 0 1px var\(--border-strong\); \}/);
   });

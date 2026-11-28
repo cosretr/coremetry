@@ -3,16 +3,14 @@
 // consumer group yerine servis + client: istemci metriklerinde grup kimliği yok. Sorgular YALNIZ sekme
 // açılınca (bileşen mount olunca) koşar; satır > 100 → cv-row.
 import { useMemo } from 'react';
-import { Link } from 'react-router';
 import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { useHttpPromql } from '@/lib/queries/httpMetrics';
 import { fmtSmart } from '@/lib/chartFmt';
 import { fmtNum } from '@/lib/utils';
-import { serviceHref } from '@/lib/serviceHref';
-import { messagingTopicHref } from './topicHref';
 import { KAFKA_CONSUMER_ITEMS, kafkaConsumerRows, consumerState, LAGGED_MIN, type KafkaConsumerRow } from './kafkaOverview';
 import type { TimeRange } from '@/lib/types';
 import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2306 — tablo metinleri arayüz dilinde (TR aynı)
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // v0.10.2306 — durum metni katalogdan (kmsg.state.<durum>).
 const COLS = (lang: Lang): ColumnDef<KafkaConsumerRow>[] => [
@@ -48,14 +46,14 @@ export function KafkaConsumersTable({ range, win, clusterOf }: {
     switch (c.id) {
       case 'service':
         return r.service
-          ? <Link to={serviceHref(r.service, { tab: 'messaging', range, params: { kcons: r.clientId } })}
-              title={t('kmsg.clientHealth', lang)}>{r.service}</Link>
+          ? <EntityLink to={{ kind: 'service', name: r.service, opts: { tab: 'messaging', range, params: { kcons: r.clientId } } }}
+              title={t('kmsg.clientHealth', lang)}>{r.service}</EntityLink>
           : '—';
       case 'client': return r.clientId ? <span title={r.clientId}>{r.clientId}</span> : '—';
       case 'topic': {
         const cluster = clusterOf(r.topic);
         return cluster
-          ? <Link to={messagingTopicHref({ system: 'kafka', cluster, destination: r.topic, range })} title={r.topic}>{r.topic}</Link>
+          ? <EntityLink to={{ kind: 'queue', ref: { system: 'kafka', cluster, destination: r.topic, range } }} title={r.topic}>{r.topic}</EntityLink>
           : <span title={r.topic}>{r.topic}</span>;
       }
       case 'lag': return r.lag == null ? '—' : fmtNum(r.lag);

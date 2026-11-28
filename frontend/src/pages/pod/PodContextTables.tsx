@@ -9,17 +9,17 @@
 // v0.10.943 (tablo standardı dilim 3, T1) — etiketler bir öznitelik paneli →
 // KeyValue; ömür tarihçesi statik tablo kalır (gerekçe tablonun içinde).
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
 import { Badge, Button } from '@/components/ui';
 import { KeyValue } from '@/components/coremetry/KeyValue';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateStaticProps } from '@/components/ui/DataTable';
 import { fmtDateTime, fmtBytes } from '@/lib/utils';
 import { t, tf, useLang, type Lang } from '@/lib/i18n';
 import { fmtCores, podPhaseBadge } from '@/pages/clusters/thresholds';
-import { entityHref, entityLiveness } from '@/lib/entityHref';
+import { entityLiveness } from '@/lib/entityHref';
 import type { EntityContainersResponse, EntityRecord, TimeRange } from '@/lib/types';
 import type { SiblingRow } from './podPage';
 import { waitingReasonTone } from './waitingReason';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // v0.10.929 (K5) — hazır + yeniden başlamamış konteyner normal hâl: nötr.
 function containerTone(c: { readyKnown: boolean; ready: boolean; restarts: number; lastTermReason?: string }): 'neutral' | 'danger' | 'warning' {
@@ -130,7 +130,7 @@ export function PodSiblingsTable({ rows, pageRange, at, clusterName, truncated }
                 <tr key={r.rec.id}>
                   <td className="mono" title={`${clusterName} / ${r.rec.namespace ?? ''} / ${r.name}`}>
                     {/* service TAŞINMAZ (inceleme #16): kardeş o servisi çalıştırmıyor olabilir; yanlış RED kapsamı + yanlış geri linki olurdu. */}
-                    <Link to={entityHref(r.rec, { range: pageRange, at: at || undefined, clusterName })} className="sec">{r.name}</Link>
+                    <EntityLink to={{ kind: 'record', rec: r.rec, opts: { range: pageRange, at: at || undefined, clusterName } }} className="sec">{r.name}</EntityLink>
                   </td>
                   <td>{live === 'live' ? <Badge>live</Badge> : live === 'stale' ? <Badge tone="warning">stale</Badge> : <Badge tone="danger">gone</Badge>}</td>
                   <td>{r.known && r.phase ? <span className={`badge ${podPhaseBadge(r.phase)}`}>{r.phase}</span> : <span className="field-hint" title={t('podpage.sib.phaseUnknown', lang)}>—</span>}</td>

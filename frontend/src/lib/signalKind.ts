@@ -6,7 +6,7 @@
 // kartı) buradan okur. Renk hiçbir yerde tek taşıyıcı değildir: rozet her
 // zaman ikon + metin çizer (WCAG 1.4.1). Token'lar üç temada
 // `styles/globals.css` (`--sig-*`), kontrast `contrastTokens.test.ts`.
-import { Layers, ListTree, ScrollText, TrendingUp, type LucideIcon } from 'lucide-react';
+import { Group, ListTree, ScrollText, TrendingUp, type LucideIcon } from 'lucide-react';
 
 export type SignalKind = 'metric' | 'trace' | 'log' | 'group';
 
@@ -21,7 +21,8 @@ export const SIGNAL_KINDS: Record<SignalKind, SignalKindSpec> = {
   metric: { label: 'Metrik', token: 'var(--sig-metric)', icon: TrendingUp },
   trace: { label: 'Trace', token: 'var(--sig-trace)', icon: ListTree },
   log: { label: 'Log', token: 'var(--sig-log)', icon: ScrollText },
-  group: { label: 'Grup', token: 'var(--text2)', icon: Layers },
+  // v0.10.2488 (entity dilim 4, §3.2) — Layers namespace türünün ikonu; Grup → Group.
+  group: { label: 'Grup', token: 'var(--text2)', icon: Group },
 };
 
 // Dedektör → tür. Sunucu sözlüğünün (chstore.MLLogDetectorNames /

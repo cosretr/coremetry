@@ -14,9 +14,9 @@ import {
   type ColumnDef, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import type { HostRow, HostDetail, HostServiceRow, TimeRange } from '@/lib/types';
-import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { useT } from '@/lib/i18n';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // v0.9.873 (tutarlılık denetimi BT12) — HostDrawer'ın servis tablosu.
 // Yoğun bir host'ta "CPU'yu kim yiyor" sorusu bugün göz taramasıyla
@@ -137,7 +137,7 @@ export default function HostsPage() {
                         {r.services.slice(0, 2).map((s, i) => (
                           <span key={s}>
                             {i > 0 && ', '}
-                            <Link to={serviceHref(s, { range })} style={{ fontSize: 11 }}>{s}</Link>
+                            <EntityLink to={{ kind: 'service', name: s, opts: { range } }} style={{ fontSize: 11 }}>{s}</EntityLink>
                           </span>
                         ))}
                         {r.services.length > 2 && ` +${r.services.length - 2}`}
@@ -222,9 +222,9 @@ function HostDrawer({ host, range, onClose }: {
                   ) : svcDt.sortedRows.map(s => (
                     <tr key={s.service}>
                       <td>
-                        <Link to={serviceHref(s.service, { range })} className="mono">
+                        <EntityLink to={{ kind: 'service', name: s.service, opts: { range } }} className="mono">
                           {s.service}
-                        </Link>
+                        </EntityLink>
                       </td>
                       <DataTableCell dt={svcDt} col="cpu" row={s} value={s.cpuPct.toFixed(1)} />
                       <DataTableCell dt={svcDt} col="mem" row={s} value={fmtBytes(s.memBytes)} />

@@ -21,9 +21,9 @@ import { stmtDetailHref } from '@/pages/slowqueries/stmtParam';
 import { useStmtParamRedirect } from '@/pages/slowqueries/useStmtParamRedirect';
 import type { SlowQueryRow, TimeRange } from '@/lib/types';
 import { PageControls } from '@/components/coremetry/PageControls';
-import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { useT } from '@/lib/i18n';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 // v0.9.1137 (AI Faz 2.4) satır-içi ✨ Explain yerine insight kartı gelmişti;
 // v0.10.652 (operatör) kart yuvası + "Ne oldu?" çipi bu sayfadan söküldü.
 
@@ -333,10 +333,10 @@ export default function SlowQueriesPage() {
                         </span>
                       </td>
                       <DataTableCell dt={dt} col="service" row={r} value={r.service}>
-                        <Link to={serviceHref(r.service, { range })}
+                        <EntityLink to={{ kind: 'service', name: r.service, opts: { range } }}
                           onClick={e => e.stopPropagation()}>
                           {r.service}
-                        </Link>
+                        </EntityLink>
                       </DataTableCell>
                       <DataTableCell dt={dt} col="dbSystem" row={r}>
                         <span className="badge b-gray mono">{r.dbSystem || '?'}</span>

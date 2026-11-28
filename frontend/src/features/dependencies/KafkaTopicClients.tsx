@@ -3,19 +3,18 @@
 // Produce/s / Send errors/s / Retry/s, yalnız `topic="<ad>"` etiketli istemci metrikleri. Sorgular sekme
 // açılınca (mount) koşar; kurucular pages/messaging/kafkaOverview'da testli.
 import { useMemo } from 'react';
-import { Link } from 'react-router';
 import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
 import { useHttpPromql } from '@/lib/queries/httpMetrics';
 import { kafkaTopicSel } from '@/lib/kafkaTopicMetrics';
 import { fmtSmart } from '@/lib/chartFmt';
 import { fmtNum } from '@/lib/utils';
-import { serviceHref } from '@/lib/serviceHref';
 import {
   kafkaConsumerItems, kafkaConsumerRows, kafkaProducerItems, kafkaProducerRows, LAGGED_MIN,
   type KafkaConsumerRow, type KafkaProducerRow,
 } from '@/pages/messaging/kafkaOverview';
 import type { TimeRange } from '@/lib/types';
 import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2306 — tablo metinleri arayüz dilinde (TR aynı)
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 type Win = { from: number; to: number };
 /** v0.10.1963 — `${servis}|${client_id}` → pod sayısı (host_name), KafkaTopicMetrics'in istemci okumasından. */
@@ -31,8 +30,8 @@ const none = (v: number | null, f: (v: number) => string) => (v == null ? '—' 
 const rate = (v: number) => fmtSmart(v, 'reqps');
 
 const svcLink = (service: string, clientId: string, side: 'kcons' | 'kprod', range: TimeRange, lang: Lang = 'tr') => (service
-  ? <Link to={serviceHref(service, { tab: 'messaging', range, params: { [side]: clientId } })}
-      title={t('kmsg.clientHealth', lang)}>{service}</Link>
+  ? <EntityLink to={{ kind: 'service', name: service, opts: { tab: 'messaging', range, params: { [side]: clientId } } }}
+      title={t('kmsg.clientHealth', lang)}>{service}</EntityLink>
   : '—');
 
 const vmState = <T,>(pending: boolean, err: Error | null, empty: string, lang: Lang = 'tr'): DataTableStateInput<T> =>

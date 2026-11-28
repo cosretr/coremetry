@@ -7,12 +7,12 @@ import {
 } from '@/components/ui/DataTable';
 import { api } from '@/lib/api';
 import { dbTracesHref } from '@/lib/pivotHref';
-import { serviceHref } from '@/lib/serviceHref';
 import { traceHref } from '@/lib/traceHref';
 import { fmtAgoNs, fmtNum } from '@/lib/utils';
 import type { DBErrorGroup, TimeRange } from '@/lib/types';
 import type { DatabaseRef } from './databaseParam';
 import { dbErrorKindLabel, dbErrorLabel, dbErrorServicesText, dbErrorShare } from './databaseErrors';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // DatabaseErrorsSection — v0.10.1020 — bu veritabanına giden BAŞARISIZ
 // çağrılar hata türüne göre (Databases × Dynatrace, dilim 2: hata analizi).
@@ -90,7 +90,7 @@ export function DatabaseErrorsSection({ refObj, range, fromNs, toNs }: {
                   <DataTableCell dt={dt} col="share" row={g} value={share === null ? '—' : `${share.toFixed(1)}%`} />
                   <DataTableCell dt={dt} col="services" row={g}>
                     {g.topService
-                      ? <Link to={serviceHref(g.topService, { range })} className="mono" title={dbErrorServicesText(g)}>{dbErrorServicesText(g)}</Link>
+                      ? <EntityLink to={{ kind: 'service', name: g.topService, opts: { range } }} className="mono" title={dbErrorServicesText(g)}>{dbErrorServicesText(g)}</EntityLink>
                       : dbErrorServicesText(g)}
                   </DataTableCell>
                   <DataTableCell dt={dt} col="last" row={g} value={fmtAgoNs(g.lastSeen)} />

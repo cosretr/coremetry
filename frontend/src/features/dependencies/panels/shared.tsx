@@ -8,7 +8,6 @@ import { t, useLang } from '@/lib/i18n';
 import { encodeFilters } from '@/lib/urlState';
 import type { DBForecast, FilterExpr } from '@/lib/types';
 import { dbEtaChip } from '@/lib/fmtEtaHours';
-import { serviceHref } from '@/lib/serviceHref';
 import { statementTracesHref } from '@/lib/pivotHref';
 import { metricCatalogueHref } from '@/pages/explore/urlCodec';
 import { Button } from '@/components/ui/Button';
@@ -16,6 +15,7 @@ import { LinkButton } from '@/components/ui/LinkButton';
 import { TileButton } from '@/components/ui';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { TimeRange, SpanMetricSeries } from '@/lib/types';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // v0.9.873 (tutarlılık denetimi BT9) — tek dokunuş ÜÇ paneli düzeltiyor:
 // TopSQLTable Oracle / Postgres / MySQL tarafından paylaşılıyor.
@@ -471,7 +471,7 @@ export function HostLink({ instance, range }: { instance: string; range?: TimeRa
     // v0.9.968 — the receiver panel's own window. Its metrics were read
     // over exactly this range; a host link that opens on the sticky one
     // shows a different machine-hour than the gauges beside it.
-    <Link to={serviceHref(instance, { range })}
+    <EntityLink to={{ kind: 'service', name: instance, opts: { range } }}
       onClick={e => e.stopPropagation()}
       title="Open this host / service in the infra view"
       style={{
@@ -479,7 +479,7 @@ export function HostLink({ instance, range }: { instance: string; range?: TimeRa
         fontFamily: 'var(--font-mono)',
       }}>
       host ↗
-    </Link>
+    </EntityLink>
   );
 }
 

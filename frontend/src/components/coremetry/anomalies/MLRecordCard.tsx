@@ -9,7 +9,6 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Badge } from '@/components/shadcn/badge';
 import { KeyValue } from '@/components/coremetry/KeyValue';
-import { serviceHref } from '@/lib/serviceHref';
 import { tf, useLang, useT } from '@/lib/i18n';
 import { fmtClock } from '@/lib/utils';
 import type { MLEvent, MLRecordView } from '@/lib/types';
@@ -24,6 +23,7 @@ import {
   contextBeforeAfter, evidenceTag, evidenceText, gateThresholdText, gateValueText, headlineValue, independentCount, ingestFactor,
   isTelemetryVolume, recordHeadline, recordOpen, recordStatus, recordTimeline,
 } from './mlRecordText';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 const hm = (ns: number) => fmtClock(new Date(ns / 1e6)).slice(0, 5);
 
@@ -111,7 +111,7 @@ export function MLRecordCard({ rec, actions, groupMembers, leadId = '', chart, d
   return (
     <div data-testid="ml-record-card" className="flex flex-col">
       <div className="mb-2 flex flex-wrap items-center gap-2 text-sm" data-testid="ml-header">
-        <Link to={serviceHref(rec.subject.service)} className="font-mono">{rec.subject.service}</Link>
+        <EntityLink to={{ kind: 'service', name: rec.subject.service }} className="font-mono">{rec.subject.service}</EntityLink>
         {rec.subject.operation && <span className="font-mono text-muted-foreground">· {rec.subject.operation}</span>}
         {rec.subject.pod && <span className="font-mono text-muted-foreground">· {rec.subject.pod}</span>}
         <Badge variant="outline" className={open ? 'border-transparent bg-[color:var(--warn-bg)] text-[color:var(--warn)]' : ''} data-testid="ml-record-status">

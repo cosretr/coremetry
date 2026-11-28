@@ -17,7 +17,6 @@ import { servicePodRegex } from '@/pages/clusters/podWorkload';
 import { fmtCores } from '@/pages/clusters/thresholds';
 import { fmtBytes, fmtNum, fmtAgoNs } from '@/lib/utils';
 import { rowActivation } from '@/lib/a11y';
-import { entityHref } from '@/lib/entityHref';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { useServicePods } from '@/pages/service/useServicePods';
 import { useEntityEnabled, useClusters, useEntityServicePods } from '@/lib/queries';
@@ -30,6 +29,7 @@ import { ServiceKafkaClientsPanel } from './ServiceKafkaClientsPanel'; // v0.10.
 import { ServicePodInventory } from './ServicePodInventory';
 import { PodAllColumnsContext } from './podAllColumns';
 import { InfraSourceNote } from './InfraSourceNote';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // ServiceInfraTab — servis detayının Infrastructure sekmesi. CLUSTER-SEVİYESİ
 // altyapı: Clusters tablosu (seçili satır = kapsam, ?icluster), KPI şeridi
@@ -413,8 +413,8 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
             {workloads.slice(0, 12).map((w, i) => (
               <Fragment key={w.id}>
                 {i > 0 ? ' · ' : ''}
-                <Link to={entityHref({ type: 'workload', id: w.id, name: w.name, clusterId: w.clusterId }, { range })}
-                  title={`${w.kind} · ${w.cluster || w.clusterId} / ${w.namespace}`}>{w.name}</Link>
+                <EntityLink to={{ kind: 'record', rec: { type: 'workload', id: w.id, name: w.name, clusterId: w.clusterId }, opts: { range } }}
+                  title={`${w.kind} · ${w.cluster || w.clusterId} / ${w.namespace}`}>{w.name}</EntityLink>
               </Fragment>
             ))}
             {workloads.length > 12 ? ` · +${workloads.length - 12}` : ''}
@@ -442,8 +442,8 @@ export function ServiceInfraTab({ service, range, onZoom, onZoomReset }: {
                     {canOpen && <span className="pods-caret" aria-hidden="true">{sel ? '▾' : '▸'}</span>}
                     <span className="cluster-name">{r.cluster}</span>
                     <span onClick={e => e.stopPropagation()}>
-                      {' '}<Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })}
-                        className="infra-where-open" title="Cluster detayı" aria-label={`${r.cluster} cluster detayı`}>↗</Link>
+                      {' '}<EntityLink to={{ kind: 'record', rec: { type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, opts: { range } }}
+                        className="infra-where-open" title="Cluster detayı" aria-label={`${r.cluster} cluster detayı`}>↗</EntityLink>
                     </span>
                   </td>
                 );

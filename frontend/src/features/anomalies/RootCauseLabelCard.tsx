@@ -10,20 +10,19 @@
 // "bağımsız" notu aynen). Viewer salt-okunur görür, boş durum ekibi
 // çözümden sonra doldurmaya çağırır.
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import { Button } from '@/components/shadcn/button';
 import { Field, SelectField, TextareaField } from '@/components/coremetry/Field';
 import { toast } from '@/lib/toast';
-import { serviceHref } from '@/lib/serviceHref';
 import { fmtDateTime } from '@/lib/utils';
 import { SafeHref } from '@/components/ui/SafeHref';
 import type { RootCauseLabel, RootCauseLabelInput } from '@/lib/types';
 import { Sect } from './detailSections';
 import { t, tf, useLang } from '@/lib/i18n';
 import { categoryLabel, culpritIsService, independenceNote } from './incidentCaseView';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 export function RootCauseLabelCard({ problemId }: { problemId: string }) {
   const lang = useLang();
@@ -69,7 +68,7 @@ function LabelView({ label }: { label: RootCauseLabel }) {
       <div><b>{t('case.category', lang)}</b> {categoryLabel(label.category, lang)}</div>
       {culprit && (
         <div><b>{t('rcl.culprit', lang)}</b>{' '}
-          {culpritIsService(culprit) ? <Link to={serviceHref(culprit)}>{culprit}</Link> : <span className="mono">{culprit}</span>}
+          {culpritIsService(culprit) ? <EntityLink to={{ kind: 'service', name: culprit }}>{culprit}</EntityLink> : <span className="mono">{culprit}</span>}
         </div>
       )}
       {label.resolution && <div><b>{t('case.resolution', lang)}</b> {label.resolution}</div>}

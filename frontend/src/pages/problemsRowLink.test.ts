@@ -33,6 +33,6 @@ describe('/problems satırları gerçek link', () => {
 
   it('kendi linkini taşıyan hücreler satır linkine SARILMAZ (<a> içinde <a> yok)', () => {
     const ap = read('features/anomalies/AnomaliesPage.tsx');
-    expect(ap).toMatch(/<td>\s*\{\/\* v0\.9\.966[\s\S]*?<Link to=\{serviceHref\(g\.service/);
+    expect(ap).toMatch(/<td>\s*\{\/\* v0\.9\.966[\s\S]*?<EntityLink to=\{\{ kind: 'service', name: g\.service/); // v0.10.2488 EntityLink
   });
 });

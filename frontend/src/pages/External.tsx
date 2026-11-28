@@ -15,9 +15,9 @@ import {
 } from '@/components/ui/DataTable';
 import { ExternalPaths } from '@/components/ExternalPaths';
 import type { ExternalCaller, ExternalHost, ExternalHostDetail, TimeRange } from '@/lib/types';
-import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { useT } from '@/lib/i18n';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // /external — third-party API inventory (v0.8.446, SigNoz/Uptrace
 // gap-closure Wave 3 / A1). One row per external destination the
@@ -170,8 +170,8 @@ export default function ExternalPage() {
                         {r.callerNames.slice(0, 3).map((c, i) => (
                           <span key={c}>
                             {i > 0 && ', '}
-                            <Link to={serviceHref(c, { range })}
-                              style={{ fontSize: 11 }}>{c}</Link>
+                            <EntityLink to={{ kind: 'service', name: c, opts: { range } }}
+                              style={{ fontSize: 11 }}>{c}</EntityLink>
                           </span>
                         ))}
                         {r.callers > 3 && ` +${r.callers - 3}`}
@@ -263,10 +263,10 @@ function ExternalHostDrawer({ host, range, onClose }: {
                   ) : callersDt.sortedRows.map(c => (
                     <tr key={c.service}>
                       <DataTableCell dt={callersDt} col="service" row={c}>
-                        <Link to={serviceHref(c.service, { range })}
+                        <EntityLink to={{ kind: 'service', name: c.service, opts: { range } }}
                           title={[c.service, ...c.topLabels].join('\n')}>
                           {c.service}
-                        </Link>
+                        </EntityLink>
                       </DataTableCell>
                       <DataTableCell dt={callersDt} col="calls" row={c} value={fmtNum(c.calls)} />
                       <DataTableCell dt={callersDt} col="errorRate" row={c} value={c.errorRate.toFixed(2)} />

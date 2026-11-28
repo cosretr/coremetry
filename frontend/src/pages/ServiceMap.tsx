@@ -19,9 +19,9 @@ import { fmtNum, rangeToSince, timeRangeToNs } from '@/lib/utils';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { encodeRange } from '@/lib/urlState';
 import type { ServiceMap } from '@/lib/types';
-import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { useT } from '@/lib/i18n';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // Service map: global topology view + a focus mode that
 // narrows to a single service's 1-hop neighbourhood. The
@@ -309,7 +309,7 @@ export default function ServiceMapPage() {
               who want the full hairball back can clear the
               input manually. */}
           {focus && (
-            <Link to={serviceHref(focus, { range })}
+            <EntityLink to={{ kind: 'service', name: focus, opts: { range } }}
                   className="sec"
                   style={{
                     fontSize: 12, padding: '3px 10px',
@@ -319,7 +319,7 @@ export default function ServiceMapPage() {
                     borderRadius: 6,
                   }}>
               View {focus} detail →
-            </Link>
+            </EntityLink>
           )}
           {/* v0.9.309 (brief N6d) — the map answers "which service",
               the endpoints table answers "which ROUTE of it". Until now

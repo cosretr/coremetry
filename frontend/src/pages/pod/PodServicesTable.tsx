@@ -12,9 +12,9 @@ import {
 } from '@/components/ui/DataTable';
 import { fmtNum, fmtDateTime } from '@/lib/utils';
 import { t, tf, useLang, type Lang } from '@/lib/i18n';
-import { serviceHref } from '@/lib/serviceHref';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import type { EntityServicesResponse, TimeRange } from '@/lib/types';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 interface Row { service: string; spans: number; errors: number; avgMs: number; lastSeen?: string }
 
@@ -80,7 +80,7 @@ export function PodServicesTable({ data, pending, error, pod, spanCluster, pageR
               const errPct = r.spans ? (100 * r.errors) / r.spans : 0;
               return (
                 <tr key={r.service}>
-                  <td><Link to={serviceHref(r.service, { range: pageRange })} className="sec">{r.service}</Link></td>
+                  <td><EntityLink to={{ kind: 'service', name: r.service, opts: { range: pageRange } }} className="sec">{r.service}</EntityLink></td>
                   <td className="num">{fmtNum(r.spans)}</td>
                   <DataTableCell dt={dt} col="errors" row={r} value={fmtNum(r.errors)} />
                   <td className="num">{errPct.toFixed(2)}%</td>

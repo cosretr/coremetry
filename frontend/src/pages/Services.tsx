@@ -38,6 +38,7 @@ import type { Service, SparklineBucket, TimeRange, SpanAgg } from '@/lib/types';
 import { PageControls } from '@/components/coremetry/PageControls';
 import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { HealthDot, healthFromServer } from '@/components/coremetry/HealthDot';
 import { Pager } from '@/components/Pager';
 
 // v0.8.251 — the page's hand-rolled SortKey/NATURAL_DIR/SortTh server-sort
@@ -862,14 +863,11 @@ export default function ServicesPage() {
                           : 'Pin — float to top of the list'}
                         icon={<Star size={14} strokeWidth={1.75}
                           fill={pinned.has(s.name) ? 'currentColor' : 'none'} />} />
-                      {/* v0.5.274 — auto-scored health dot.
-                          Red/yellow/green from errorRate +
-                          open problem counts (computed
-                          server-side at read time). Title
-                          surfaces the firing rule so the
-                          badge is auditable. */}
-                      <HealthDot health={s.health} reason={s.healthReason}
-                        openProblems={s.openProblems} />
+                      {/* v0.10.2488 — sağlık noktası yalnız açık Problem'den (A2).
+                          Title sunucunun nedenini taşır. */}
+                      <HealthDot level={healthFromServer(s.health)} data-tour="services-health-dot"
+                        title={s.health ? healthTitle(s.health, s.healthReason, s.openProblems) : undefined}
+                        style={{ marginRight: 8, verticalAlign: 'middle' }} />
                       {/* v0.10.2451 — metrik-yalnız servis: rozet YOK (v0.10.2445), yalnız ipucu. */}
                       <span style={{ fontWeight: 600 }} title={s.metricOnly ? METRIC_ONLY_TIP : undefined}>{s.name}</span>
                       {/* Runtime fingerprint pill — pulled from
@@ -1089,43 +1087,13 @@ const TOUR_COL_ANCHOR: Record<string, string> = {
   p99Delta:  'services-col-delta',
 };
 
-// HealthDot — v0.5.274 Datadog-Watchdog-style service health
-// pill. 8×8 dot colored by the server-computed health verdict;
-// tooltip surfaces the firing rule so the operator can argue
-// with the badge. Missing health (older row / problem-count
-// lookup failed) renders nothing — fail-soft.
-//
-// v0.10.922 (sade palet adım 1) — 'green' artık NÖTR (K5: sağlıklı durum
-// renk almaz; --ok yalnız bir GEÇİŞ için — resolved/recovered). 50 satırın
-// 50'sinde yeşil nokta bilgi taşımıyordu, gerçek sapmayı (kırmızı/sarı)
-// kalabalıkta kaybettiriyordu. Nokta yerinde durur (isimler hizalı kalır),
-// soluk bir --border-strong halkası olarak; kelime title'da.
-function HealthDot({ health, reason, openProblems }: {
-  health?: 'green' | 'yellow' | 'red';
-  reason?: string;
-  openProblems?: number;
-}) {
-  if (!health) return null;
-  const color = health === 'red' ? 'var(--err)'
-              : health === 'yellow' ? 'var(--warn)'
-              : 'transparent';
-  const title = reason
+// v0.10.2488 (entity tutarlılık dilim 4, A2) — yerel HealthDot kalktı; tek
+// tanım components/coremetry/HealthDot (yalnız açık Problem'den). İpucu
+// sunucunun nedenini taşımaya devam eder (rozet tartışılabilir kalsın).
+function healthTitle(health: string, reason?: string, openProblems?: number): string {
+  return reason
     ? `${health.toUpperCase()} · ${reason}${openProblems ? ` · ${openProblems} open problem${openProblems === 1 ? '' : 's'}` : ''}`
     : `${health.toUpperCase()} · healthy${openProblems ? ` · ${openProblems} open` : ''}`;
-  return (
-    // v0.10.1334 — data-tour: rehberli turun sağlık noktası çapası.
-    <span title={title} data-tour="services-health-dot"
-      style={{
-        display: 'inline-block', width: 8, height: 8,
-        borderRadius: '50%', background: color,
-        marginRight: 8, verticalAlign: 'middle',
-        boxShadow: health === 'red'
-          ? '0 0 0 2px color-mix(in srgb, var(--err) 20%, transparent)'
-          : health === 'yellow'
-          ? '0 0 0 2px color-mix(in srgb, var(--warn) 18%, transparent)'
-          : 'inset 0 0 0 1px var(--border-strong)',
-      }} />
-  );
 }
 
 // ServicesPagerExtras — eski tablo-altı özet satırı, artık Pager'ın

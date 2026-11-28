@@ -16,8 +16,8 @@ import { endpointDetailHref } from '@/pages/endpoints/endpointParam';
 import { tracesLink } from '@/pages/endpoints/links';
 import { RouteAlertModal } from '@/pages/alerts/RouteAlertModal';
 import { ClusterModeToggle } from '@/components/ClusterModeToggle'; // v0.10.717
-import { entityHref } from '@/lib/entityHref';
 import { topByTimeShare, mergePerCluster, shareBar, parseEndpointsMode, type ClusterEndpointRow } from './detailsEndpoints';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // DetailsEndpointsSection — v0.10.715 (servis sekmeleri etüdü dilim 1,
 // mockup 3b03fe22 şerh 4; operatör onayı 2026-09-13). Bugüne dek "Top
@@ -158,7 +158,7 @@ export function DetailsEndpointsSection({ service, range, rangeNs, env }: {
                     {mode === 'cluster' && (
                       <td className="mono" onClick={e => e.stopPropagation()}>
                         {r.cluster
-                          ? <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
+                          ? <EntityLink to={{ kind: 'record', rec: { type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, opts: { range } }} title="Cluster detayı">{r.cluster}</EntityLink>
                           : '—'}
                       </td>
                     )}

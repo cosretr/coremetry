@@ -515,7 +515,7 @@ func (s *Server) enrichServicesMetricRankPage(ctx context.Context, rows []chstor
 		for i := range rows {
 			c := counts[rows[i].Name]
 			rows[i].OpenProblems = c.Critical + c.Warning + c.Info
-			rows[i].Health, rows[i].HealthReason = scoreHealth(&rows[i], c)
+			rows[i].Health, rows[i].HealthReason = problemHealth(c)
 		}
 	}
 	s.applyServiceSeen(ctx, rows)

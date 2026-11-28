@@ -11,7 +11,6 @@ import { DataTableState } from '@/components/ui/DataTable';
 // v0.10.929 (K5) — durum tonu tek sözlükten; hafif yaprak (ProblemDetail değil — döngü/ağır zincir yok).
 import { TriageStatusBadge } from '@/features/anomalies/statusTone';
 import { tsLong } from '@/lib/utils';
-import { serviceHref } from '@/lib/serviceHref';
 import { traceHref } from '@/lib/traceHref';
 import { coMovingCause, localizedNote } from '@/lib/rootCauseCandidates';
 import { withBubbleUp, headlineNeedsBubble } from '@/lib/rootCauseProgressive';
@@ -20,6 +19,7 @@ import { DisclosureButton } from '@/components/ui/DisclosureButton';
 // v0.10.1495 — kıyas bölümü problem türünden; bağlantısız co-mover'lar ayrı grup.
 import { bubbleModeOf, bubbleCopyKeys, splitCorrelations } from '@/lib/rootCauseBubbleMode';
 import type { RootCauseBubbleMode } from '@/lib/types';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // RootCausePanel — the single "what changed / likely cause" surface for a
 // Problem (v0.7.52, backend bundle shipped v0.7.51). Fetches
@@ -213,9 +213,9 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                   .map(c => (
                     <tr key={c.service}>
                       <td>
-                        <Link to={serviceHref(c.service, { range: win })} style={{ fontWeight: 600 }}>
+                        <EntityLink to={{ kind: 'service', name: c.service, opts: { range: win } }} style={{ fontWeight: 600 }}>
                           {c.service}
-                        </Link>
+                        </EntityLink>
                       </td>
                       <td className="num">{c.rps.toFixed(1)}</td>
                       <td className={`num ${c.errorRate > 0 ? 'cell-err' : 'cell-muted'}`}>
@@ -259,9 +259,9 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
                   <tr key={c.service}>
                     <td className="num cell-faint">{i + 1}</td>
                     <td>
-                      <Link to={serviceHref(c.service, { range: win })} style={{ fontWeight: 600 }}>
+                      <EntityLink to={{ kind: 'service', name: c.service, opts: { range: win } }} style={{ fontWeight: 600 }}>
                         {c.service}
-                      </Link>
+                      </EntityLink>
                       {c.relation && <span className="cell-faint" style={{ marginLeft: 6, fontSize: 11 }}>{c.relation}</span>}
                       {changeBadge(c, lang)}
                     </td>
@@ -295,7 +295,7 @@ export function RootCausePanel({ problemId, service, window: win, onLoaded }: {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {corrUnlinked.slice(0, 12).map(c => (
                 <div key={c.service} style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'baseline' }}>
-                  <Link to={serviceHref(c.service, { range: win })} className="mono">{c.service}</Link>
+                  <EntityLink to={{ kind: 'service', name: c.service, opts: { range: win } }} className="mono">{c.service}</EntityLink>
                   {changeBadge(c, lang)}
                   <span style={{ color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         title={c.reasons.join(' · ')}>{c.reasons[0] ?? ''}</span>

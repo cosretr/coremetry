@@ -7,19 +7,18 @@
 //
 // Veri: GET /api/exception-groups/{fp}/oracle (fetch-on-open, yalnız Oracle
 // grubunda). Öznitelik paneli = KeyValue atomu (tablo standardı: kayıt değil).
-import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { fmtNum } from '@/lib/utils';
 import { KeyValue, KeyValueRow } from '@/components/coremetry/KeyValue';
 import { QueryErrorInline } from '@/components/QueryError';
-import { serviceHref } from '@/lib/serviceHref';
 import type { ExceptionGroup, ExceptionSample } from '@/lib/types';
 import { oracleChannelsText, isSyntheticOracleService, oracleSourceName } from './oracleGroup';
 import { sampleTraceLinkable } from './sampleTrace'; // v0.10.1104
 import { useBranding } from '@/lib/branding'; // v0.10.1108
 import { SampleTraceId } from './ExceptionSampleRow'; // v0.10.1369
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2287 — metinler arayüz dilinde (TR aynı)
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 export function OracleGroupPanel({ group, samples }: { group: ExceptionGroup; samples: ExceptionSample[] }) {
   const q = useQuery({
@@ -66,8 +65,8 @@ export function OracleGroupPanel({ group, samples }: { group: ExceptionGroup; sa
                 {services.map(s => isSyntheticOracleService(s.name) ? (
                   <span key={s.name} className="mono">{s.name}</span>
                 ) : (
-                  <Link key={s.name} to={serviceHref(s.name, { range: win })} className="mono"
-                    title={tf('ora.services.votes', lang, { n: fmtNum(s.count) })}>{s.name}</Link>
+                  <EntityLink key={s.name} to={{ kind: 'service', name: s.name, opts: { range: win } }} className="mono"
+                    title={tf('ora.services.votes', lang, { n: fmtNum(s.count) })}>{s.name}</EntityLink>
                 ))}
               </span>
             )} title={t('ora.services.title', lang)} />

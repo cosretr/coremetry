@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { Spinner } from '@/components/Spinner';
 import { DisclosureButton } from '@/components/ui/DisclosureButton';
 import { useProblemAffected } from '@/lib/queries/problems';
-import { serviceHref } from '@/lib/serviceHref';
 import { useT } from '@/lib/i18n';
 import type { AffectedEntity } from '@/lib/types';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // AffectedEntitiesList — v0.10.707 (Dynatrace paritesi #5, dilim 2). Problem
 // çekmecesi ve detay sayfası aynı bileşeni çizer. Aç-üzerine-getir: bileşen
@@ -82,10 +81,10 @@ function EntityPill({ e, service, window: win }: { e: AffectedEntity; service?: 
     </>
   );
   if (e.kind === 'service') {
-    return <Link to={serviceHref(e.id, { range: win })} className="pb-pill" title={title} style={{ textDecoration: 'none', color: 'var(--accent2)' }}>{label} →</Link>;
+    return <EntityLink to={{ kind: 'service', name: e.id, opts: { range: win } }} className="pb-pill" title={title} style={{ textDecoration: 'none', color: 'var(--accent2)' }}>{label} →</EntityLink>;
   }
   if (e.kind === 'pod' && service) {
-    return <Link to={serviceHref(service, { range: win, tab: 'infra', params: { jpod: e.id } })} className="pb-pill" title={title} style={{ textDecoration: 'none', color: 'var(--accent2)' }}>{label} →</Link>;
+    return <EntityLink to={{ kind: 'service', name: service, opts: { range: win, tab: 'infra', params: { jpod: e.id } } }} className="pb-pill" title={title} style={{ textDecoration: 'none', color: 'var(--accent2)' }}>{label} →</EntityLink>;
   }
   return <span className="pb-pill" title={title}>{label}</span>;
 }

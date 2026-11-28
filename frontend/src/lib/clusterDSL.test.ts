@@ -25,17 +25,17 @@ describe('Details dilim 2 kablolama', () => {
     const src = read('components/DBQueriesPanel.tsx');
     expect(src).toContain('limit: DBQ_LIMIT + 1, cluster: cluster || undefined })');
     expect(src).toContain("queryKey: ['db-queries', service, from, to, c]");
-    expect(src).toContain("entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })");
+    expect(src).toContain("kind: 'record', rec: { type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, opts: { range } }");
     expect(src).toContain('cluster: window.cluster || r.cluster || undefined');
   });
   it('DeployHistoryPanel: kapsam süzgeci + cluster linki', () => {
     const src = read('components/DeployHistoryPanel.tsx');
     expect(src).toContain('!cluster || !r.cluster || r.cluster === cluster');
-    expect(src).toContain("entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })");
+    expect(src).toContain("kind: 'record', rec: { type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, opts: { range } }");
   });
   it('Endpoints: cluster hücresi entity linki, ortak toggle', () => {
     const src = read('pages/service/DetailsEndpointsSection.tsx');
     expect(src).toContain("<ClusterModeToggle value={mode === 'cluster'}");
-    expect(src).toContain("entityHref({ type: 'cluster', id: r.cluster");
+    expect(src).toContain("kind: 'record', rec: { type: 'cluster', id: r.cluster"); // v0.10.2488 EntityLink
   });
 });

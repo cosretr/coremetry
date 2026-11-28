@@ -17,7 +17,6 @@ import { ProblemStandardHeader } from './ProblemStandardHeader'; // v0.10.1529
 import { api } from '@/lib/api';
 import { keys, useAnomalyEventByID, useLogPatternSeries, useServicesMetadata, useUnifiedAnomalyRow } from '@/lib/queries';
 import { Link } from 'react-router';
-import { serviceHref } from '@/lib/serviceHref';
 import { useEscLayer } from '@/lib/escLayer';
 import { DEFAULT_DURATIONS } from '@/lib/actions';
 import { anomalyEventSilenceBody } from '@/lib/inboxDrawer';
@@ -42,6 +41,7 @@ import { LogPatternCountSection } from './LogPatternCountSection';
 import { LegacyLogChart, ServiceRedChart } from '@/components/coremetry/anomalies/MLSourceChart';
 import { serviceRedAggFor } from '@/components/coremetry/anomalies/mlSourcePanel';
 import { OrigLang } from './OrigLang'; // v0.10.2302
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // AnomalyEventDetail — anomali olayının TAM SAYFA detayı (v0.10.1032).
 //
@@ -352,7 +352,7 @@ function AnomalyMeta({ service, win }: { service: string; win: { fromNs: number;
   const lang = useLang(); // v0.10.2290 — alarm detayıyla aynı pd.meta.* anahtarları
   const team = (tm: string) => <Link to={`/inbox?team=${encodeURIComponent(tm)}`} className="mono">{tm}</Link>;
   const items: DetailMetaItem[] = [];
-  if (service) items.push({ k: t('pd.meta.service', lang), v: <Link to={serviceHref(service, { range: win })} className="mono">{service}</Link> });
+  if (service) items.push({ k: t('pd.meta.service', lang), v: <EntityLink to={{ kind: 'service', name: service, opts: { range: win } }} className="mono">{service}</EntityLink> });
   if (owner) items.push({ k: t('pd.meta.team', lang), v: team(owner) });
   if (sre && sre !== owner) items.push({ k: t(owner ? 'pd.meta.sre' : 'pd.meta.team', lang), v: team(sre) });
   items.push({ k: t('pd.meta.kind', lang), v: t('pd.meta.anomaly', lang) });

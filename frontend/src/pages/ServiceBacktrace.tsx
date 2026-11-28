@@ -14,9 +14,11 @@ import type { DataTableColumn } from '@/lib/dataTable';
 import type { CallerRow, TimeRange } from '@/lib/types';
 import { useUrlRange, DEFAULT_RANGE_PRESET } from '@/lib/useUrlRange';
 import { tracesPivotHref } from '@/lib/pivotHref';
-import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
-import { useT } from '@/lib/i18n';
+import { useLang, useT } from '@/lib/i18n';
+import { count } from '@/lib/format/number';
+import { percent } from '@/lib/format/percent';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // Dynatrace-style "service consumers" / backtrace view. One row per
 // distinct (caller service × pod/instance × client IP × user-agent)
@@ -44,6 +46,7 @@ const BACKTRACE_COLS: DataTableColumn<CallerRow>[] = [
 
 function BacktraceInner() {
   const tn = useT(); // v0.10.2486 dilim 2 — Topbar başlığı katalogdan
+  const lang = useLang(); // v0.10.2488 — hover kartı ölçüleri
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const svc = searchParams.get('name') ?? '';
@@ -120,10 +123,10 @@ function BacktraceInner() {
       <Topbar title={`${tn('page.backtrace')} · ${svc}`} range={range} onRangeChange={setRange} />
       <PageShell>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-          <Link to={serviceHref(svc, { range })} className="sec" style={{
+          <EntityLink to={{ kind: 'service', name: svc, opts: { range } }} card={false} className="sec" style={{
             padding: '5px 12px', border: '1px solid var(--border)',
             borderRadius: 6, fontSize: 12, color: 'var(--text)', textDecoration: 'none',
-          }}>← Service overview</Link>
+          }}>← Service overview</EntityLink>
           <KPI label="Inbound calls"      value={fmtNum(totals.calls)} />
           <KPI label="Errors"             value={fmtNum(totals.errors)}
                cls={totals.calls > 0 && totals.errors / totals.calls > 0.05 ? 'err' : 'ok'} />
@@ -151,11 +154,16 @@ function BacktraceInner() {
                 return (
                   <tr key={i} className="cv-row">
                     <td>
-                      <Link to={serviceHref(r.callerService, { range })}
+                      {/* v0.10.2488 — hover kartı satırın kendi sayılarıyla (istek yok, A5). */}
+                      <EntityLink to={{ kind: 'service', name: r.callerService, opts: { range } }}
+                            card={{ metrics: [
+                              { label: tn('ek.m.calls'), value: count(r.calls, lang) },
+                              { label: tn('ek.m.errors'), value: percent(r.errorRate, lang, { from: 'pct', digits: 2 }) },
+                            ] }}
                             style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text)', textDecoration: 'none' }}>
                         <span style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
                         {r.callerService}
-                      </Link>
+                      </EntityLink>
                     </td>
                     {/* v0.10.943 — host/IP kimliği satırın birincil adının (caller) yanında ikincil: 11px → renk (S3). */}
                     <td className="mono cell-muted">

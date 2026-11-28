@@ -1,6 +1,5 @@
 import { podCpuText, podMemText, podLimitHint, podReadyText, podReadyTone, podReadySortValue } from './podUsage';
 import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/shadcn/button';
 import { DataTable, type ColumnDef, type DataTableStateInput } from '@/components/coremetry/DataTable';
@@ -11,7 +10,6 @@ import { api } from '@/lib/api';
 import { LIVE_META } from '@/lib/autoRefresh';
 import { foldNormalRows } from '@/lib/normalFold';
 import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
-import { serviceHref } from '@/lib/serviceHref';
 import type { ClusterDeploymentRow, ClusterPodRow, TimeRange } from '@/lib/types';
 import { ClusterCard } from './ClusterCard';
 import { MiniBar } from './MiniBar';
@@ -23,6 +21,7 @@ import {
   namespaceBoxes, namespaceSentence, podStatusWord, podRestartText, podProblemRank, podProblemSortValue,
   workloadLimits, workloadCpuText, workloadMemText, workloadStatusWord, type Tone,
 } from './nsDetailModel';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // NamespaceDetail — Clusters namespace detayı SAYFA GÖRÜNÜMÜ (Clusters S9,
 // plan docs/frontend/clusters-shadcn-plan.md §0 D7, §9; onaylı "Namespace"
@@ -188,7 +187,7 @@ export function NamespaceDetail({
                   <span className="mono">{r.deployment}</span>
                   <span className="cl-ns-wl__svc">
                     {r.service
-                      ? <>{t('clusters.ns.service', lang)}<Link to={serviceHref(r.service, { range })} onClick={e => e.stopPropagation()}>{r.service}</Link></>
+                      ? <>{t('clusters.ns.service', lang)}<EntityLink to={{ kind: 'service', name: r.service, opts: { range } }} onClick={e => e.stopPropagation()}>{r.service}</EntityLink></>
                       : t('clusters.ns.noService', lang)}
                   </span>
                 </div>

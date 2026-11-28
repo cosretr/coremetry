@@ -17,7 +17,7 @@ vi.mock('@/lib/i18n', async (orig) => ({
 }));
 
 import { EvidenceCard } from '@/components/ai/EvidenceCard';
-import { SubjectLink } from '@/components/SubjectLink';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 import { NOISE_REASONS, noiseReasonHint, noiseReasonLabel } from './problemVerdict';
 import { subjectTitle } from './problemSubject';
 import { fmtDelta, fmtRangeTR, redRows } from './chatEvidence';
@@ -49,8 +49,8 @@ async function all() {
   const out = [
     await mount(<EvidenceCard ev={ev()} />),
     await mount(<EvidenceCard ev={ev({ red: { current: { errorRate: 2.5, p95Ms: 120, rate: 4 } }, logPatterns: [pat] } as Partial<ChatEvidence>)} />),
-    await mount(<SubjectLink service="db:oracle@db-1" href="" />),
-    await mount(<SubjectLink service="ext:src-1/OP1/E1" href="" />),
+    await mount(<EntityLink to={{ kind: 'subject', service: 'db:oracle@db-1' }} />),
+    await mount(<EntityLink to={{ kind: 'subject', service: 'ext:src-1/OP1/E1' }} />),
   ];
   return { text: out.map(r => r.text).join('\n'), html: out.map(r => r.html).join('\n') };
 }

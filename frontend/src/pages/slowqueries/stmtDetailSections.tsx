@@ -14,9 +14,9 @@ import { fmtNum } from '@/lib/utils';
 import type { TimeRange, DBStmtDetail, DBStmtCaller } from '@/lib/types';
 import { stmtBaselineSeries, stmtTrendGrid, stmtTrendSeries, DEFAULT_GRAIN_SEC } from './stmtTrend';
 import { dbTrendBucketLabel, dbTrendPanelTitle } from '@/pages/databases/trendBucket';
-import { serviceHref } from '@/lib/serviceHref';
 import { repeatsExploreHref, stmtIdentityTracesHref } from '@/lib/pivotHref';
 import { traceHref } from '@/lib/traceHref';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // stmtDetailSections — the statement detail BODY (v0.9.1374).
 //
@@ -262,10 +262,10 @@ export function StmtCallersSection({ detail, compare, range }: {
             {dt.sortedRows.length === 0 ? <DataTableState dt={dt} {...tableState} /> : dt.sortedRows.map(c => (
               <tr key={c.service}>
                 <DataTableCell dt={dt} col="service" row={c}>
-                  <Link to={serviceHref(c.service, { range })}
+                  <EntityLink to={{ kind: 'service', name: c.service, opts: { range } }}
                     className="mono" style={{ fontSize: 11 }}>
                     {c.service}
-                  </Link>
+                  </EntityLink>
                 </DataTableCell>
                 <DataTableCell dt={dt} col="calls" row={c}>
                   {fmtNum(c.calls)}

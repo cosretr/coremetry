@@ -41,7 +41,7 @@ import type {
   LogPatternAnomaly, Problem, AnomalyEvent,
   AnomalySilence,
 } from '@/lib/types';
-import { SubjectLink } from '../../components/SubjectLink';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // AnomalyStreams renders all five anomaly sections in their canonical
 // order. Each section is independently driven by its own React
@@ -148,7 +148,7 @@ function MetricSection({ items }: { items: Problem[] | undefined }) {
               </Badge>
               <span style={{ fontWeight: 600, fontSize: 12 }}>{p.metric}</span>
               <span style={{ flex: 1 }} />
-              <SubjectLink service={p.service} subjectKind={p.kind} href={serviceHref(p.service, { range: eventLifespanWindow(p) })}
+              <EntityLink to={{ kind: 'subject', service: p.service, subjectKind: p.kind, opts: { range: eventLifespanWindow(p) } }}
                 style={{ fontSize: 11, color: 'var(--accent2)' }} />
             </Row>
             <div style={{ fontSize: 11, color: 'var(--text2)' }}>
@@ -390,11 +390,11 @@ function AnomalyTable({ rows, storageKey, rowRefs, highlight, title, state }: {
                   {/* v0.9.966 — anomalinin gözlem aralığı. CLEARED bir
                       satırda pencere GEÇMİŞTE kalıyor; onsuz link "şimdi"yi
                       açıp "sorun yok" yanılgısı üretiyordu. */}
-                  <Link to={serviceHref(e.service, { range: inboxItemWindow(e) })}
+                  <EntityLink to={{ kind: 'service', name: e.service, opts: { range: inboxItemWindow(e) } }}
                         className="mono" style={{ fontSize: 11.5 }}
                         title={e.service || '—'}>
                     {e.service || '—'}
-                  </Link>
+                  </EntityLink>
                   <ClusterChips clusters={e.clusters} />
                   {e.recentDeploy && (
                     <DeployChip d={e.recentDeploy} service={e.service} />
@@ -567,7 +567,7 @@ function DeployChip({ d, service }: {
         color: 'var(--warn)',
       };
   return (
-    <Link to={serviceHref(service, { range: pointEventWindow(d.timeUnixNs), hash: 'deploys' })}
+    <EntityLink to={{ kind: 'service', name: service, opts: { range: pointEventWindow(d.timeUnixNs), hash: 'deploys' } }}
       title={`Service ${service} deployed v${d.version} at ${tsLong(d.timeUnixNs)} — ${ageLabel}. Likely-cause window: ≤ 5 min.`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -582,6 +582,6 @@ function DeployChip({ d, service }: {
       <span style={{ fontWeight: 700 }}>deploy</span>
       <span>{d.version}</span>
       <span style={{ opacity: 0.75 }}>· {ageLabel}</span>
-    </Link>
+    </EntityLink>
   );
 }

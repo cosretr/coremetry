@@ -134,8 +134,9 @@ describe('paylaşılan gövde — CallerSection', () => {
 
 describe('çekmeceden sayfaya kapı', () => {
   it('"Detay sayfası →" bağlantısı queue dalında ve pencereyi taşıyor', () => {
-    expect(drawer).toContain("import { messagingTopicHref } from '@/pages/messaging/topicHref';");
-    expect(drawer).toContain('to={messagingTopicHref({ system, cluster, destination: name, range })}');
+    // v0.10.2488 (dilim 4) — EntityLink; tür kaydı messagingTopicHref'i aynı argümanla çağırır.
+    expect(drawer).toContain("import { EntityLink } from '@/components/coremetry/entity/EntityLink';");
+    expect(drawer).toContain("to={{ kind: 'queue', ref: { system, cluster, destination: name, range } }}");
     // v0.10.2311 — metin katalogda (dd.detailPage; TR değeri aynı).
     expect(drawer).toContain("{t('dd.detailPage', lang)}");
     expect(t('dd.detailPage', 'tr')).toBe('Detay sayfası →');

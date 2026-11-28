@@ -10,6 +10,7 @@ import { fmtNum, tsLong } from '@/lib/utils';
 import type { DataTableColumn } from '@/lib/dataTable';
 import type { EndpointDetail, EndpointSplitValue, EndpointCaller, EndpointFailingTrace } from '@/lib/types';
 import { functionCodeLabel, functionCodeTitle } from '@/lib/oracleFunctionOps';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // v0.9.874 (tutarlılık denetimi BT10) — aynı dosyadaki Split ve Callers
 // tabloları çoktan primitifteydi, bu kalmıştı. Kolon genişlikleri elle
@@ -21,7 +22,6 @@ const FAILING_TRACE_COLS: DataTableColumn<EndpointFailingTrace>[] = [
   { id: 'duration', label: 'Duration', sortValue: t => t.durationMs, numeric: true, width: 92 },
 ];
 import { trimHistogram, type EndpointRef } from './endpointParam';
-import { serviceHref } from '@/lib/serviceHref';
 import { traceHref } from '@/lib/traceHref';
 import { seriesPalette } from '@/lib/chartFmt';
 import { useThemeTick } from '@/lib/useThemeTick';
@@ -686,10 +686,10 @@ export function CallersSection({ refObj, from, to, env, cluster }: {
               return (
                 <tr key={r.service}>
                   <td title={r.service}>
-                    <Link to={serviceHref(r.service, { range: { fromNs: from, toNs: to } })}
+                    <EntityLink to={{ kind: 'service', name: r.service, opts: { range: { fromNs: from, toNs: to } } }}
                       className="mono" style={{ fontSize: 11.5 }}>
                       {r.service}
-                    </Link>
+                    </EntityLink>
                   </td>
                   <td className="num">{fmtNum(r.calls)}</td>
                   <td className="num">

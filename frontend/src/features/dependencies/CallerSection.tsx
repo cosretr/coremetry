@@ -13,17 +13,15 @@
 // v0.10.939 (tablo standardı S8) — sayfaya özel sıfırlama düğmesi propu
 // kalktı: "Kolonları sıfırla" her tablonun başlık ⋯ menüsünde (DataTableHead).
 import { useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
 import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
   type ColumnDef, type DataTableStateProps,
 } from '@/components/ui/DataTable';
 import type { DBCallerBreakdown, TimeRange } from '@/lib/types';
-import { serviceHref } from '@/lib/serviceHref';
-import { podDetailPath } from '@/pages/service/podDetailPath';
 import { encodeRange } from '@/lib/urlState';
 import { fmtNum } from '@/lib/utils';
 import { t, useLang } from '@/lib/i18n'; // v0.10.2311
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // CallerSection renders one labelled table of (service, pod) rows
 // with their RED metrics. Tone colours the header so producers /
@@ -176,18 +174,18 @@ export function CallerSection({ title, rows, emptyMessage, tone, range, storageK
               return (
                 <tr key={`${c.service}|${c.pod}|${c.role ?? ''}|${i}`} className="cv-row">
                   <td>
-                    <Link to={serviceHref(c.service, { range })} className="mono">
+                    <EntityLink to={{ kind: 'service', name: c.service, opts: { range } }} className="mono">
                       {c.service}
-                    </Link>
+                    </EntityLink>
                   </td>
                   <DataTableCell dt={dt} col="pod" row={c}>
                     {/* v0.10.551 — pod hücresi pivot (audit E11): host_name = pod adı;
                         bilinmeyen/boş pod düz metin kalır. */}
                     {c.pod && c.pod !== '(unknown)' ? (
-                      <Link to={podDetailPath({ pod: c.pod, service: c.service, range: encodeRange(range) || null })}
+                      <EntityLink to={{ kind: 'pod', ref: { pod: c.pod, service: c.service, range: encodeRange(range) || null } }}
                             style={{ color: 'inherit' }} title={t('deps.podDetail', lang)}>
                         {c.pod}
-                      </Link>
+                      </EntityLink>
                     ) : c.pod}
                   </DataTableCell>
                   {hasRole && (

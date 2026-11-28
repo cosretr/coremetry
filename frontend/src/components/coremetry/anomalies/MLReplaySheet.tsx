@@ -60,6 +60,7 @@ import { requestsCapable } from './mlRequests';
 import { evidenceRows, evidenceSub } from './mlEvidenceRows';
 import { OrigLang } from '@/features/anomalies/OrigLang'; // v0.10.2302 — EN arayüzde sunucu cümlesi işaretli
 import { stripServicePrefix } from './unifiedRows';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 const fmtTs = (ns: number) => fmtDateTime(new Date(ns / 1e6));
 const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
@@ -473,7 +474,7 @@ function MLContext({ snap, related }: { snap: MLSnapshot | null; related: MLSnap
               : <span className="font-mono">{r.deploy?.service} {r.deploy?.version}</span>;
             case 'when': return <span className="font-mono">{fmtTs(r.t)}</span>;
             case 'go': return r.snap ? <Link to={mlEventHref(r.snap.eventId)}>{tl('pd.meta.anomaly', lang)} ↗</Link>
-              : r.deploy ? <Link to={serviceHref(r.deploy.service, { tab: 'gitops' })}>Rollouts ↗</Link> : null;
+              : r.deploy ? <EntityLink to={{ kind: 'service', name: r.deploy.service, opts: { tab: 'gitops' } }}>Rollouts ↗</EntityLink> : null;
             default: return null;
           }
         }} />

@@ -34,6 +34,7 @@ import { spanK8sContext, spanK8sHint, k8sAttrHref, type SpanK8sContext } from '@
 import { duration } from '@/lib/format/duration';
 import { percent } from '@/lib/format/percent';
 import { count, fixed } from '@/lib/format/number';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 const PANEL_MIN = 300;
 const PANEL_MAX = 1100;
@@ -324,7 +325,7 @@ export function SpanDetail({ span, onClose, logsFrom, logsTo, serviceLinks = tru
             linkli + kopyalı), altta geniş bölümler. Eski "Info" ve düz "Resource"
             bölümleri buraya eridi. */}
         <div className="kiosk-span__facts">
-          <span><b>Service:</b> {serviceLinks ? <Link to={serviceHref(span.serviceName, { range: spanLinkCtx.window })}>{span.serviceName}</Link> : span.serviceName}</span>
+          <span><b>Service:</b> {serviceLinks ? <EntityLink to={{ kind: 'service', name: span.serviceName, opts: { range: spanLinkCtx.window } }}>{span.serviceName}</EntityLink> : span.serviceName}</span>
           {endpointLink && <span><b>Endpoint:</b> <Link to={endpointLink.href} title="Bu endpoint'in sayfasını aç">{endpointLink.label}</Link></span>}
           {dbLinks && (
             <span>

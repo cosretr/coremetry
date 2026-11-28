@@ -9,9 +9,10 @@ import { Link } from 'react-router';
 import { Stack, Row, Badge } from '@/components/ui';
 import { fmtDateTime } from '@/lib/utils';
 import { t, tf, useLang } from '@/lib/i18n';
-import { entityHref, entityLiveness } from '@/lib/entityHref';
+import { entityLiveness } from '@/lib/entityHref';
 import { podPhaseBadge } from '@/pages/clusters/thresholds';
 import type { EntityDetailResponse, ClusterPodRow, TimeRange } from '@/lib/types';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 function short(id: string): string {
   const i = id.lastIndexOf('/');
@@ -46,19 +47,19 @@ export function PodIdentityLine({ detail, clusterName, namespace, pod, row, at, 
       <Stack gap={2}>
         <Row gap={2} wrap>
           {detail?.cluster ? (
-            <Link to={entityHref({ type: 'cluster', id: `cluster:${detail.cluster.id}`, name: detail.cluster.name, clusterId: detail.cluster.id }, hrefOpts)} className="sec" title={detail.cluster.id}>
+            <EntityLink to={{ kind: 'record', rec: { type: 'cluster', id: `cluster:${detail.cluster.id}`, name: detail.cluster.name, clusterId: detail.cluster.id }, opts: hrefOpts }} className="sec" title={detail.cluster.id}>
               {detail.cluster.name}
-            </Link>
+            </EntityLink>
           ) : (
             <span className="mono" title="cluster">{clusterName || '—'}</span>
           )}
-          {nodeRec && <><span className="field-hint">›</span><Link to={entityHref(nodeRec, hrefOpts)} className="sec" title={detail?.node}>{nodeRec.name}</Link></>}
+          {nodeRec && <><span className="field-hint">›</span><EntityLink to={{ kind: 'record', rec: nodeRec, opts: hrefOpts }} className="sec" title={detail?.node}>{nodeRec.name}</EntityLink></>}
           {detail ? chain.map(p => (
             <Row key={p.id} gap={2}>
               <span className="field-hint">›</span>
-              <Link to={entityHref(p, hrefOpts)} className="sec" title={p.id}>
+              <EntityLink to={{ kind: 'record', rec: p, opts: hrefOpts }} className="sec" title={p.id}>
                 {p.type === 'workload' ? `${p.labels?.kind ?? 'workload'}/${p.name}` : p.name}
-              </Link>
+              </EntityLink>
             </Row>
           )) : (
             <><span className="field-hint">›</span><span className="mono" title="namespace">{namespace || '—'}</span></>

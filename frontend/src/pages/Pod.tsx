@@ -29,7 +29,6 @@ import { PromQLList } from '@/pages/clusters/PromQLList';
 import { promQuote } from '@/pages/clusters/promQuote';
 import { resolvePodCluster } from '@/pages/service/podResolve';
 import { workloadOf } from '@/pages/service/podsMerge';
-import { podDetailPath } from '@/pages/service/podDetailPath';
 import { serviceHref } from '@/lib/serviceHref';
 import { logsHref } from '@/lib/logsUrl';
 import { encodeFiltersParam } from '@/lib/logFilters';
@@ -46,6 +45,7 @@ import { PodTracesTable } from '@/pages/pod/PodTracesTable';
 import { PodLogsSection } from '@/pages/pod/PodLogsSection';
 import { PodContainersTable, PodSiblingsTable, PodLabelsTable, PodLifetimesTable } from '@/pages/pod/PodContextTables';
 import { joinSiblings, traceScopeCtx } from '@/pages/pod/podPage';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // 2026-11-21 — pod runtime bölümü (lazy chunk).
 const PodRuntimeSection = lazy(() => import('@/pages/pod/PodRuntimeSection'));
@@ -293,7 +293,7 @@ function PodDetail() {
             <Badge tone="warning">{tf('podpage.multiCluster', lang, { n: podClusterMatches.length })}</Badge>
             <span>{t('podpage.shown', lang)} <span className="mono">{cluster}</span> {t('podpage.others', lang)}</span>
             {podClusterMatches.filter(c => c !== cluster).map(c => (
-              <Link key={c} to={podDetailPath({ pod, cluster: c, namespace: nsParam || undefined, service: service || undefined, range: rangeParam || null, at: atParam || undefined })} className="sec mono">{c}</Link>
+              <EntityLink key={c} to={{ kind: 'pod', ref: { pod, cluster: c, namespace: nsParam || undefined, service: service || undefined, range: rangeParam || null, at: atParam || undefined } }} className="sec mono">{c}</EntityLink>
             ))}
           </div>
         )}
@@ -374,7 +374,7 @@ function PodDetail() {
         {entityOn && detail && siblingText && (
           <div className="pod-sec">
             <PanelTitle sub={siblingLabel}
-              right={nearest?.type === 'workload' ? <Link to={entityHref(nearest, { range, at: atParam || undefined, clusterName: detail.cluster?.name ?? cluster })} className="sec">{t('podpage.wlPage', lang)}</Link> : undefined}>
+              right={nearest?.type === 'workload' ? <EntityLink to={{ kind: 'record', rec: nearest, opts: { range, at: atParam || undefined, clusterName: detail.cluster?.name ?? cluster } }} className="sec">{t('podpage.wlPage', lang)}</EntityLink> : undefined}>
               {t('podpage.sameWl', lang)}
             </PanelTitle>
             <p className="pod-cap">{siblingText}</p>

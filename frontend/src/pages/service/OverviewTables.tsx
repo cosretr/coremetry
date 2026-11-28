@@ -12,8 +12,8 @@ import type { OperationSummary, DBQueryStat, TimeRange } from '@/lib/types';
 import { operationTracesHref } from '@/lib/pivotHref';
 import { tracesURL } from '@/components/DBQueriesPanel';
 import { databasesFilterHref } from '@/pages/databases/databaseParam';
-import { serviceHref } from '@/lib/serviceHref';
 import { tf, useLang } from '@/lib/i18n'; // v0.10.2315 — DbCard boş satırı arayüz dilinde (TR aynı)
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // Service Overview tables (v0.7.96) — the compact Operations + Top DB
 // statements pair from the design handoff. Both use the shared
@@ -80,9 +80,9 @@ export function OpsCard({ service, range, operations, state }: {
           {/* v0.9.211 — carry &tab=operations. Without it the link resolves
               to the default tab, i.e. straight back to the Overview the
               operator clicked "View all" from. */}
-          <Link className="ov-sub" to={serviceHref(service, { range, tab: 'operations' })}>
+          <EntityLink className="ov-sub" to={{ kind: 'service', name: service, opts: { range, tab: 'operations' } }}>
             View all {operations.length} →
-          </Link>
+          </EntityLink>
         </span>
       </div>
       {/* v0.10.973 — tablo standardı T12: boş ya da bundle hatası tablonun İÇİNDE,
@@ -171,10 +171,10 @@ export function DbCard({ service, range, from, to }: { service: string; range: T
             "View all"a bastığı Overview'a geri döner (v0.9.211'in dersi). */}
         {rows.length > 0 && (
           <span className="ov-right">
-            <Link className="ov-sub"
-              to={serviceHref(service, { range, tab: 'details', hash: 'dtl-db' })}>
+            <EntityLink className="ov-sub"
+              to={{ kind: 'service', name: service, opts: { range, tab: 'details', hash: 'dtl-db' } }}>
               View all {rows.length} →
-            </Link>
+            </EntityLink>
           </span>
         )}
       </div>

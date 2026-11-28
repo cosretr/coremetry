@@ -18,7 +18,6 @@ import { stickyLeftOffsets } from '@/lib/dataTable';
 import { TrendDelta } from '@/components/TrendDelta';
 import { endpointDetailHref, legacyEndpointTarget } from '@/pages/endpoints/endpointParam';
 import { tracesLink } from '@/pages/endpoints/links';
-import { serviceHref } from '@/lib/serviceHref';
 import { parseColsParam, formatColsParam } from '@/pages/endpoints/endpointCols';
 import { ColumnToggle } from '@/pages/endpoints/ColumnToggle';
 import { useTablePrefs } from '@/lib/queries/prefs';
@@ -54,6 +53,7 @@ import { ENDPOINT_LIST_POOL_MAX, endpointListRows, endpointListScope, listQuerie
 import { useShowInfraRoutes, withInfraExclude, infraRouteRegexBody } from '@/lib/infraRoutes';
 import { InfraRoutesToggle } from '@/components/coremetry/InfraRoutesToggle';
 import { t, tf, useLang, useT } from '@/lib/i18n'; // v0.10.2305 — kalan Türkçe metinler arayüz dilinde (TR aynı)
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // /endpoints — operator-asked v0.5.365. Cross-service inbound
 // RED rollup keyed on http.route (templated) with url.path /
@@ -1032,9 +1032,9 @@ export default function EndpointsPage() {
                       switch (col.id) {
                         case 'service': return (
                           <td className="sticky-left" style={{ left: leftOffs['service'] }}>
-                      <Link to={serviceHref(r.service, { range, env })} className="mono">
+                      <EntityLink to={{ kind: 'service', name: r.service, opts: { range, env } }} className="mono">
                         {r.service}
-                      </Link>
+                      </EntityLink>
                     </td>
                         );
                         case 'path': return (
@@ -1391,7 +1391,7 @@ function DependencyStrip({ service, window: win, capped, entry, range }: {
           // v0.10.1408 — db / queue / external düğümleri servis değil:
           // servis linki yalnız kind==='service' (diğerleri metin pill).
           return d.kind === 'service'
-            ? <Link key={d.id} to={serviceHref(d.name, { range })} title={title} style={pill}>{body}</Link>
+            ? <EntityLink key={d.id} to={{ kind: 'service', name: d.name, opts: { range } }} title={title} style={pill}>{body}</EntityLink>
             : <span key={d.id} title={title} style={pill}>{body}</span>;
         })}
         {total > 5 && (

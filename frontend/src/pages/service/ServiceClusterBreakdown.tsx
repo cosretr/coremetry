@@ -6,12 +6,12 @@ import { api } from '@/lib/api';
 import { fmtNum, timeRangeToNs } from '@/lib/utils';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableState } from '@/components/ui/DataTable';
 import type { DataTableColumn } from '@/lib/dataTable';
-import { serviceHref } from '@/lib/serviceHref';
 import { TableViewBar } from '@/components/coremetry/TableViewBar';
 import { foldNormalRows } from '@/lib/normalFold';
 import { getRaw, setRaw, STORAGE_KEYS } from '@/lib/storage';
 import type { ColumnModel } from '@/lib/columnModel';
 import type { ServiceClusterStat } from '@/lib/types';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // ServiceClusterBreakdown — sortable RED stats per cluster the
 // service emitted spans from. Renders silently when there's
@@ -145,10 +145,10 @@ export function ServiceClusterBreakdown({ service, range }: {
             // v0.9.56 — hedef Infrastructure sekmesi (ad-tabanlı yedek zincir,
             // ?icluster= çipi hazır gelir). v0.9.965 — pencere de taşınır:
             // fırçalanmış pencerede "pods →" incelenen olayı kadrajda tutar.
-            <Link to={serviceHref(service, { range, tab: 'infra', params: { icluster: c.cluster } })}
+            <EntityLink to={{ kind: 'service', name: service, opts: { range, tab: 'infra', params: { icluster: c.cluster } } }}
               title={`Pod CPU/memory — ${c.cluster} (Infrastructure tab)`}>
               pods →
-            </Link>
+            </EntityLink>
           ) : (
             <span className="cell-faint" title="This cluster is not defined under Settings → Remote clusters">—</span>
           )}

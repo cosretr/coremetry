@@ -9,7 +9,7 @@ const src = readFileSync(resolve(__dirname, 'ServiceInfraTab.tsx'), 'utf8');
 describe('Infra cluster satırı', () => {
   it('ad hücresi tıkı yutmaz, detay linki ↗', () => {
     expect(src).not.toMatch(/<td className="mono" onClick=\{e => e\.stopPropagation\(\)\}>\s*<Link to=\{entityHref\(\{ type: 'cluster'/);
-    expect(src).toMatch(/title="Cluster detayı" aria-label=\{`\$\{r\.cluster\} cluster detayı`\}>↗<\/Link>/);
+    expect(src).toMatch(/title="Cluster detayı" aria-label=\{`\$\{r\.cluster\} cluster detayı`\}>↗<\/EntityLink>/); // v0.10.2488
   });
 });
 

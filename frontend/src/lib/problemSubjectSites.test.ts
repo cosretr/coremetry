@@ -47,25 +47,25 @@ const ALLOWED: { file: string; needle: string; why: string }[] = [
   },
   {
     file: 'pages/Shift.tsx',
-    needle: 'serviceHref(c.service, { range: pageWindow }',
+    needle: "name: c.service, opts: { range: pageWindow }",
     why: 'ChangedService satırı — /api/shift\'in RED kıyasından geliyor, ' +
       'kaynağı spans.service_name. Problem öznesi DEĞİL.',
   },
   {
     file: 'pages/Shift.tsx',
-    needle: 'serviceHref(g.service, { range: exceptionGroupWindow(g) }',
+    needle: "name: g.service, opts: { range: exceptionGroupWindow(g) }",
     why: 'ExceptionGroup satırı — exception_groups.service, span türevli ' +
       'gerçek servis adı. Problem öznesi DEĞİL.',
   },
   {
     file: 'features/anomalies/ProblemDetail.tsx',
-    needle: 'serviceHref(group.service',
+    needle: 'name: group.service',
     why: 'ExceptionGroup başlığı — exception_groups.service, span türevli ' +
       'gerçek servis adı. Problem satırı DEĞİL.',
   },
   {
     file: 'features/anomalies/streams.tsx',
-    needle: 'serviceHref(e.service',
+    needle: 'name: e.service',
     why: 'AnomalyEvent satırı — anomaly.go/clustering.go GERÇEK servis adı ' +
       'yazar (üretici denetimi 2026-08-24). Problem öznesi DEĞİL.',
   },
@@ -80,19 +80,21 @@ describe('problem öznesi çıkmaz link üretmiyor', () => {
     const src = read(rel);
     // `to={serviceHref(` + bir özne değişkeninin `.service`i.
     const exempt = ALLOWED.filter(a => a.file === rel).map(a => a.needle);
-    const raw = [...src.matchAll(/to=\{serviceHref\(\w+\.service[\s\S]{0,120}/g)]
+    // v0.10.2488 (dilim 4) — EntityLink servis hedefi de aynı kalıp sayılır.
+    const raw = [...src.matchAll(/(?:to=\{serviceHref\(|kind: 'service', name: )\w+\.service[\s\S]{0,120}/g)]
       .map(m => m[0])
       .filter(hit => !exempt.some(n => hit.includes(n)));
     expect(raw, `${rel} içinde gate'lenmemiş servis linki:\n${raw.join('\n')}\n` +
-      `Özne bir servis OLMAYABİLİR (db-capacity alarmları). <SubjectLink ` +
-      `service=… subjectKind=… href={serviceHref(…)} /> kullan.`).toEqual([]);
+      `Özne bir servis OLMAYABİLİR (db-capacity alarmları). <EntityLink ` +
+      `to={{ kind: 'subject', service: …, subjectKind: … }} /> kullan.`).toEqual([]);
   });
 
   // POZİTİF KONTROL — yukarıdaki kapı "hiç serviceHref yok" dünyasında da
   // yeşil kalırdı, yani tek başına hiçbir şey kanıtlamaz. Bu test
   // dönüşümün GERÇEKTEN yapıldığını ölçüyor.
-  it.each(SUBJECT_SURFACES)('%s SubjectLink kullanıyor', (rel) => {
-    expect(read(rel)).toContain('<SubjectLink');
+  // v0.10.2488 — SubjectLink EntityLink'e katlandı (`kind: 'subject'`).
+  it.each(SUBJECT_SURFACES)('%s özne bağlantısını EntityLink subject ile kuruyor', (rel) => {
+    expect(read(rel)).toContain("kind: 'subject'");
   });
 
   // Ve muafiyetin hâlâ orada olduğunu — silinirse liste bayatlar ve

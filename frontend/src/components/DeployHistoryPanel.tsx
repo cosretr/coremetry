@@ -4,14 +4,13 @@ import { api } from '@/lib/api';
 import { useServiceRollouts7d } from '@/lib/queries/services';
 import { fmtNum, fmtAgoNs } from '@/lib/utils';
 import type { Rollout, DeployImpact, TimeRange } from '@/lib/types';
-import { Link } from 'react-router';
-import { entityHref } from '@/lib/entityHref';
 import { AiThinking } from '@/components/ai/AiThinking'; // v0.10.1384 — tek tip "düşünüyor"
 import { rolloutHeadline, rolloutCounts, rolloutExplainVersion, rolloutRowKey } from '@/lib/serviceRolloutLabel';
 import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
 import { useLang } from '@/lib/i18n';
 import { count, fixed } from '@/lib/format/number';
 import { percent } from '@/lib/format/percent';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // Per-row Copilot explain state (v0.5.192). Keyed by rollout
 // timestamp so each row remembers its own answer + loading flag
@@ -167,11 +166,11 @@ export function DeployHistoryPanel({ service, onZoomWindow, cluster = '', range 
                 )}
                 {/* v0.10.717 — rollout'un cluster'ı, cluster detayına link (entity). */}
                 {r.cluster && (
-                  <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })}
+                  <EntityLink to={{ kind: 'record', rec: { type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, opts: { range } }}
                     className="badge b-gray mono" title="Cluster detayı"
                     onClick={e => e.stopPropagation()}>
                     {r.cluster}
-                  </Link>
+                  </EntityLink>
                 )}
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>
                   {fmtAgoNs(r.timeUnixNs)}

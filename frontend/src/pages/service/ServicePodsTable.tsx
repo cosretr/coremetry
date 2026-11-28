@@ -8,11 +8,12 @@ import { rowActivation } from '@/lib/a11y';
 import { fmtCores, fmtBps, podPhaseBadge, restartToneClass } from '@/pages/clusters/thresholds';
 import { fmtBytes, fmtNum, fmtDateTime } from '@/lib/utils';
 import { termReasonTone } from '@/lib/podTerm';
-import { entityHref, entityLiveness } from '@/lib/entityHref';
+import { entityLiveness } from '@/lib/entityHref';
 import { logsHref } from '@/lib/logsUrl';
 import { podDetailPath } from './podDetailPath';
 import type { MergedPodRow } from './podsMerge';
 import type { TimeRange } from '@/lib/types';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // ServicePodsTable — v0.10.720 (servis sekmeleri etüdü, Pods dilimi; mockup
 // 3b03fe22 Pods şerh 1; operatör onayı 2026-09-13). Entity tablosu
@@ -152,20 +153,20 @@ export function ServicePodsTable({ dt, service, range, effNs, effDeploy, cFrom, 
       }
       case 'cluster': return (
         <td key={id} className="mono" onClick={e => e.stopPropagation()}>
-          <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.clusterId ?? r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
+          <EntityLink to={{ kind: 'record', rec: { type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.clusterId ?? r.cluster }, opts: { range } }} title="Cluster detayı">{r.cluster}</EntityLink>
         </td>
       );
       case 'node': return (
         <td key={id} className="mono" onClick={e => e.stopPropagation()}>
           {r.node && r.clusterId
-            ? <Link to={entityHref({ type: 'node', id: `node:${r.clusterId}/${r.node}`, name: r.node, clusterId: r.clusterId }, { range })} className="sec">{r.node}</Link>
+            ? <EntityLink to={{ kind: 'record', rec: { type: 'node', id: `node:${r.clusterId}/${r.node}`, name: r.node, clusterId: r.clusterId }, opts: { range } }} className="sec">{r.node}</EntityLink>
             : (r.node ?? '—')}
         </td>
       );
       case 'workload': return (
         <td key={id} className="mono" onClick={e => e.stopPropagation()}>
           {r.workload
-            ? <Link to={entityHref({ type: 'workload', id: r.workload.id, name: r.workload.name, namespace: r.workload.namespace, clusterId: r.workload.clusterId }, { range })} className="sec" title={`${r.workload.kind}/${r.workload.name}`}>{r.workload.name}</Link>
+            ? <EntityLink to={{ kind: 'record', rec: { type: 'workload', id: r.workload.id, name: r.workload.name, namespace: r.workload.namespace, clusterId: r.workload.clusterId }, opts: { range } }} className="sec" title={`${r.workload.kind}/${r.workload.name}`}>{r.workload.name}</EntityLink>
             : <span className="field-hint">{r.entity?.entity?.parentId?.startsWith('ns:') ? '(no workload)' : '—'}</span>}
         </td>
       );

@@ -3,7 +3,6 @@ import { Link } from 'react-router';
 import { Drawer } from '@/components/ui';
 import { Spinner, Empty } from '@/components/Spinner';
 import { api } from '@/lib/api';
-import { serviceHref } from '@/lib/serviceHref';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { logsHref } from '@/lib/logsUrl';
 import { windowRangeParam } from '@/lib/urlState';
@@ -11,6 +10,8 @@ import { fmtNum, fmtFixed } from '@/lib/utils';
 import { serviceInboxHref } from '@/lib/inboxHref'; // v0.10.1508 — şeritle aynı servis kapsamı
 import { useIncidentsEnabled } from '@/components/AuthProvider'; // v0.10.1827
 import type { TimeRange } from '@/lib/types';
+import { HEALTH_BADGE, healthFromServer } from '@/components/coremetry/HealthDot';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // ServiceMapNodeDrawer — v0.9.1112 (Faz 5 "harita salt görselden giriş
 // kapısına"). Odaklı düğüme ikinci tık bu çekmeceyi açar: pencerenin
@@ -43,16 +44,17 @@ export function ServiceMapNodeDrawer({ service, range, fromNs, toNs, onClose }: 
   return (
     <Drawer onClose={onClose} width={420} header={
       <>
-        {/* v0.10.929 (K5) — GREEN sağlıklı durum: nötr rozet (Services HealthDot emsali). */}
+        {/* v0.10.2488 (dilim 4, A2) — rozet tonu tek sağlık tanımından (HEALTH_BADGE;
+            sunucu `health` yalnız açık Problem'den). GREEN nötr (K5). */}
         {s?.health && (
-          <span className={`badge b-${s.health === 'red' ? 'err' : s.health === 'yellow' ? 'warn' : 'gray'}`}
+          <span className={`badge ${HEALTH_BADGE[healthFromServer(s.health) ?? 'ok']}`}
             style={{ fontSize: 10 }} title={s.healthReason}>
             {s.health.toUpperCase()}
           </span>
         )}
-        <Link to={serviceHref(service, { range })} style={{ fontWeight: 700, fontSize: 14 }}>
+        <EntityLink to={{ kind: 'service', name: service, opts: { range } }} style={{ fontWeight: 700, fontSize: 14 }}>
           {service}
-        </Link>
+        </EntityLink>
       </>
     }>
       <div style={{ paddingTop: 10 }}>

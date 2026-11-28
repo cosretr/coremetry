@@ -39,7 +39,6 @@ import { PageControls } from '@/components/coremetry/PageControls';
 // The ?problem= deep-link host stays HERE too: notification e-mails
 // point at /problems?problem=<id> and that contract is test-locked.
 import { AlertProblemHost } from './ProblemsSection';
-import { serviceHref } from '@/lib/serviceHref';
 import { SampleTraceId } from './ExceptionSampleRow'; // v0.10.1369
 import { QueryErrorInline } from '@/components/QueryError';
 import { PageShell } from '@/components/coremetry/PageShell';
@@ -59,6 +58,7 @@ import { useBranding } from '@/lib/branding'; // v0.10.1108 — Oracle grubu gö
 import { EXCEPTION_TABS as TABS, EXCEPTION_TAB_DEFAULT, exceptionTabHint, resolveExceptionTab } from './tabs';
 import { spreadOf, spreadTitle, defaultFloorTitle, spreadOffFloorTitle, readFloorMeta, type FloorMeta } from './spread'; // v0.10.949
 import { useStripNotifySrc } from '@/lib/notifySrc'; // v0.10.2484 — bildirim kaynağı işareti yükten sonra düşer
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // Exception-inbox sort keys the SERVER understands (v0.8.318 — the
 // ORDER BY runs in ClickHouse across the whole paginated set). The
@@ -775,11 +775,11 @@ export default function ProblemsPage() {
                       // v0.10.1092 — servisi çözülemeyen Oracle grubu: sentetik ad, link yok.
                       <span className="mono cell-faint" title={tl('exc.svc.unresolved', lang)}>{g.service}</span>
                     ) : (
-                      <Link to={serviceHref(g.service, { range: { fromNs: g.firstSeen, toNs: g.lastSeen } })}
+                      <EntityLink to={{ kind: 'service', name: g.service, opts: { range: { fromNs: g.firstSeen, toNs: g.lastSeen } } }}
                         onClick={e => e.stopPropagation()}
                         className="mono">
                         {g.service}
-                      </Link>
+                      </EntityLink>
                     )}
                     {/* v0.10.1092 — Oracle grubu: etkilenen servislerin ilk 3'ü (baskın yukarıda). */}
                     {ora && (g.oracle?.serviceCount ?? 0) > 1 && (

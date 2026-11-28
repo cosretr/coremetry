@@ -4,7 +4,7 @@ package api
 // → Filter.Services (≤100, sıralı), çözülemezse 400 + arka uca gidilmez, açık
 // servis kazanır, CH log yolunda yok sayılır (yeni yetenek yalnız ES), anahtar
 // servis kümesini taşır (sıra-bağımsız, kapsamsız anahtar bayt-bayt aynı),
-// seçici sağlığı scoreHealth kuralıyla ve veri yokken boş.
+// seçici sağlığı problemHealth kuralıyla (yalnız açık Problem, A2) ve veri yokken boş.
 
 import (
 	"context"
@@ -181,7 +181,7 @@ func TestLogsScopeHealth(t *testing.T) {
 		{Name: "branch-teller"}, // pencerede span yok → sağlık boş (uydurulmaz)
 		{Name: "notify-gateway", Health: "red", HealthReason: "1 open critical", OpenProblems: 1},
 		{Name: "orders-api", Health: "green", ErrorRate: 0.2},
-		{Name: "payments-mobile", Health: "yellow", HealthReason: "error rate 3.1%", ErrorRate: 3.1},
+		{Name: "payments-mobile", Health: "green", ErrorRate: 3.1},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)

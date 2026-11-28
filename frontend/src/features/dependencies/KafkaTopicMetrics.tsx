@@ -9,10 +9,8 @@
 // üretim↔tüketim + hata grafiği, lag (grafik + partition tablosu; lag/lead
 // eşiği aşıldıysa vurgulu), "kim yazıyor / kim okuyor" tablosu.
 import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { KafkaAlertModal } from '@/pages/alerts/KafkaAlertModal';
-import { messagingTopicHref } from '@/pages/messaging/topicHref';
 import { Empty, Spinner } from '@/components/Spinner';
 import { HttpStat, HttpChartPanel } from '@/pages/service/httpMetricsViz';
 import { useHttpPromql, type HttpPromqlItem } from '@/lib/queries/httpMetrics';
@@ -26,6 +24,7 @@ import { useThemeTick } from '@/lib/useThemeTick';
 import { PartitionLagTable } from './PartitionLagTable';
 import type { TimeRange } from '@/lib/types';
 import { t, useLang } from '@/lib/i18n'; // v0.10.2306 — metrik bölümü arayüz dilinde (TR aynı)
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 const itemsOf = (ps: KafkaTopicPanel[]): HttpPromqlItem[] =>
   ps.flatMap(p => p.queries.map((q, i) => ({ id: `${p.id}#${i}`, expr: q.expr, instant: false })));
@@ -162,7 +161,7 @@ export function KafkaTopicMetrics({ system, cluster, topic, range, win, compact 
         <div className="mtp-kafka-grid">{chart(byId('flow'))}{chart(byId('errors_by_client'))}{chart(byId('lag_by_client'))}</div>
         <div className="field-hint">
           {t('kmsg.compactFoot', lang)}{' '}
-          <Link to={messagingTopicHref({ system, cluster, destination: topic, range })}>{t('kmsg.compactLink', lang)}</Link>
+          <EntityLink to={{ kind: 'queue', ref: { system, cluster, destination: topic, range } }}>{t('kmsg.compactLink', lang)}</EntityLink>
         </div>
       </section>
     );

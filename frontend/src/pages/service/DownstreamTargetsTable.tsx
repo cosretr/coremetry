@@ -6,13 +6,12 @@
 // bilinen bir servise çözülüyorsa servis sayfasına bağlanır, aksi adres.
 // LAZY chunk (ServiceRuntimeSection yükler); sunucu 60 s önbellekli.
 import { useMemo } from 'react';
-import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';
-import { serviceHref } from '@/lib/serviceHref';
 import { DataTable, type ColumnDef } from '@/components/coremetry/DataTable';
 import type { DownstreamTarget } from '@/lib/types';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 const fmtNum = (v: number, d = 2) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(d));
 
@@ -61,7 +60,7 @@ export default function DownstreamTargetsTable({ service, from, to, env, cluster
           renderCell={(r, c) => {
             switch (c.id) {
               case 'target': return r.service
-                ? <span><Link to={serviceHref(r.service)}>{r.service}</Link> <span className="mono cell-muted">{r.address}</span></span>
+                ? <span><EntityLink to={{ kind: 'service', name: r.service }}>{r.service}</EntityLink> <span className="mono cell-muted">{r.address}</span></span>
                 : <span className="mono" title={r.address}>{r.address}</span>;
               case 'rps': return fmtNum(r.rps);
               case 'p95': return r.p95Ms < 0 ? '—' : fmtNum(r.p95Ms, 1);

@@ -15,8 +15,8 @@ import { SegmentedControl } from '@/components/ui'; // v0.10.914 dilim 2 (buton 
 import { nodeDetailHref } from '@/components/topology/nodeDetailHref';
 import { nodeLinkLabel } from '@/components/topology/nodeLinkLabel';
 import { ExternalPaths } from '@/components/ExternalPaths';
-import { serviceHref } from '@/lib/serviceHref';
 import { countSecondary, moreNodeId, moreNodeCol, isMoreNode } from '@/lib/topoFocusLayout';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // FocusedNeighborhood — the focused topology graph (service-detail Topology
 // tab). Since v0.8.294 the neighborhood is walked SERVER-side
@@ -563,7 +563,7 @@ export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, on
           )}
           {hoverNode.kind === 'service' && (
             <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <Link to={serviceHref(hoverNode.name, { range })} style={{ fontSize: 11, textDecoration: 'none' }}>Open service →</Link>
+              <EntityLink to={{ kind: 'service', name: hoverNode.name, opts: { range } }} style={{ fontSize: 11, textDecoration: 'none' }}>Open service →</EntityLink>
               {/* v0.9.381 (D5) — kenar pivotunun düğüm hali: odak VE bu
                   komşuyu birlikte İÇEREN trace'ler (Traces'ın mevcut
                   ?services= requireServices filtresi). Etiket bilerek

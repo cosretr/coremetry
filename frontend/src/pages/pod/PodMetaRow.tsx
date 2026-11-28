@@ -2,10 +2,10 @@ import { Link } from 'react-router';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/shadcn/button';
 import { emitAiPrefill } from '@/components/ai/aiEvents';
-import { serviceHref } from '@/lib/serviceHref';
 import type { TimeRange } from '@/lib/types';
 import { t, tf, useLang } from '@/lib/i18n';
 import { podAgeText, podCosreQuestion } from './podMeta';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // PodMetaRow — /pod meta satırı + "CoSRE'ye sor" eylemi (Clusters S10, plan
 // docs/frontend/clusters-shadcn-plan.md §0 D8, §10.1; operatör yanıtları
@@ -40,7 +40,7 @@ export function PodMetaRow({ meta, cluster, namespace, pod, range, nowMs }: {
       <dl className="pod-meta__list">
         {meta.service && (
           <div><dt>{t('podpage.meta.service', lang)}</dt><dd title={meta.serviceCount && meta.serviceCount > 1 ? tf('podpage.meta.svcMore', lang, { n: meta.serviceCount }) : undefined}>
-            <Link to={serviceHref(meta.service, { range })}>{meta.service}</Link>
+            <EntityLink to={{ kind: 'service', name: meta.service, opts: { range } }}>{meta.service}</EntityLink>
             {meta.serviceCount && meta.serviceCount > 1 ? <span className="pod-meta__more"> +{meta.serviceCount - 1}</span> : null}
           </dd></div>
         )}

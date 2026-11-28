@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/DataTable';
 import { dbTracesHref } from '@/lib/pivotHref';
 import { logsHref } from '@/lib/logsUrl';
-import { serviceHref } from '@/lib/serviceHref';
 import { fmtNum } from '@/lib/utils';
 import { OraclePanel } from '@/features/dependencies/panels/OraclePanel';
 import { PostgresPanel } from '@/features/dependencies/panels/PostgresPanel';
@@ -32,6 +31,7 @@ import { TrendDelta } from '@/components/TrendDelta';
 import type { PhysicalAddrs } from '@/lib/types';
 import { duration } from '@/lib/format/duration';
 import { percent } from '@/lib/format/percent';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // detailSections — the /database page's body (v0.9.1366).
 //
@@ -421,9 +421,9 @@ export function DatabaseCallersSection({ callers, range, env }: {
               return (
                 <tr key={`${c.service}|${c.pod}|${i}`} className="cv-row">
                   <td title={c.service}>
-                    <Link to={serviceHref(c.service, { range })} className="mono">
+                    <EntityLink to={{ kind: 'service', name: c.service, opts: { range } }} className="mono">
                       {c.service}
-                    </Link>
+                    </EntityLink>
                     {/* v0.9.1367 — LOG PİVOTU. Trace pivotu sayfanın
                         başlığında zaten vardı (dbTracesHref); eksik olan
                         buydu. Kolon EKLENMİYOR: glif, v0.9.257'nin

@@ -34,9 +34,8 @@ import { runtimeThresholds } from './runtimeThresholds';
 import type { FilterExpr, RuntimePodEntity, RuntimeResolvedSignal, RuntimeSignal, SpanMetricSeries } from '@/lib/types';
 import { podLineLabel, podScopeLabel, isAnonPodSeries, divideByCount, POD_SCOPE_KEYS, GEN_KEY_IDX } from './runtimePodLabel';
 import { useRuntimeProfile } from './runtimeFamily';
-import { podDetailPath } from './podDetailPath';
 import { runtimeSourceBadge } from './runtimeSource';
-import { Link } from 'react-router';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 const MB = 1 / (1024 * 1024);
 // Follow-up 2026-11-21 (operatör, prod gerçeği): VM serileri host_name (= pod
@@ -159,8 +158,8 @@ export function RuntimeSignalList({ signals, mode }: { signals: RuntimeSignal[];
             )}
             {s.pod && <> · {tr('rt.sig.pod').replace('{pod}', s.pod).replace('{n}', String(s.pods))}</>}
             {s.podEntity && (
-              <> · <Link to={podDetailPath({ pod: s.podEntity.pod, cluster: s.podEntity.clusterId, namespace: s.podEntity.namespace, service: s.service, from: 'infra' })}
-                title={s.podEntity.id}>{tr('rt.sig.podLink')}</Link></>
+              <> · <EntityLink to={{ kind: 'pod', ref: { pod: s.podEntity.pod, cluster: s.podEntity.clusterId, namespace: s.podEntity.namespace, service: s.service, from: 'infra' } }}
+                title={s.podEntity.id}>{tr('rt.sig.podLink')}</EntityLink></>
             )}
           </div>
         ))}
@@ -184,7 +183,7 @@ export function RuntimePodLinks({ service, entities }: { service: string; entiti
         const e = entities[n];
         return (
           <span key={n}>{i > 0 && ' · '}
-            <Link className="mono" to={podDetailPath({ pod: e.pod, cluster: e.clusterId, namespace: e.namespace, service, from: 'infra' })} title={e.id}>{n}</Link>
+            <EntityLink className="mono" to={{ kind: 'pod', ref: { pod: e.pod, cluster: e.clusterId, namespace: e.namespace, service, from: 'infra' } }} title={e.id}>{n}</EntityLink>
           </span>
         );
       })}

@@ -245,7 +245,7 @@ const CEIL: Record<string, number> = {
   'components/SpanDetail.tsx': 35,
   'components/SpanK8sSection.tsx': 5,
   'components/Sparkline.tsx': 1,
-  'components/SubjectLink.tsx': 2,
+  'components/coremetry/entity/EntityLink.tsx': 2, // v0.10.2488 — SubjectLink'ten taşındı (DB / EXT rozeti)
   'components/TimeRangePicker.tsx': 2,
   'components/TopologyFlowGraph.tsx': 8,
   'components/TraceWaterfall.tsx': 9,

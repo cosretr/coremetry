@@ -8,18 +8,17 @@
 // kaydın tüm snapshot'ı çizilir (olay öncesi elde olan her şey). Render'da ek
 // istek yok (ölçüt 9); servis paneli bağlantı olarak kalır.
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { Link } from 'react-router';
 import type { TSSeries } from '@/components/viz/TimeSeriesPanel';
 import { Spinner } from '@/components/Spinner';
 import { Chip } from '@/components/ui/Chip';
 import { tf, useLang, useT } from '@/lib/i18n';
 import { fmtClock } from '@/lib/utils';
-import { serviceHref } from '@/lib/serviceHref';
 import type { MLRecordView } from '@/lib/types';
 import { fmtRecordValue, measureKey, outsideRegions, recordBuckets, axisUnit, peakAtSec } from './mlRecord';
 import { requestSeries } from './mlRequests';
 import { seriesRoleColor } from '@/lib/chart/seriesRole';
 import { MLRequestFigures } from './MLRequestFigures';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // Ağır uPlot bileşeni ayrı parça (MetricArea ile aynı yol; sayfa bütçesi).
 const TimeSeriesPanel = lazy(() => import('@/components/viz/TimeSeriesPanel').then(m => ({ default: m.TimeSeriesPanel })));
@@ -123,7 +122,7 @@ export function MLRecordChart({ rec, height = 200, frameless = false }: { rec: M
             )}
           </>
         )}
-        <Link to={serviceHref(rec.subject.service)} className="ml-auto">{t('mlRecord.chart.servicePanel')} ↗</Link>
+        <EntityLink to={{ kind: 'service', name: rec.subject.service }} className="ml-auto">{t('mlRecord.chart.servicePanel')} ↗</EntityLink>
       </p>
       {rq && <MLRequestFigures rec={rec} />}
     </div>

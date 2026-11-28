@@ -61,7 +61,6 @@ import { problemWindowNs, topOffenders } from '@/features/anomalies/problemOffen
 import { ProblemLogEvidence } from '@/features/anomalies/ProblemLogEvidence'; // v0.10.452 (C1)
 import { operationTracesHref } from '@/lib/pivotHref';
 import { ExceptionSampleRow } from './ExceptionSampleRow'; // v0.10.1104
-import { SubjectLink } from '../../components/SubjectLink';
 import { subjectKind, derivedTeamTitle, isAnomalyProblem, isAnomalyDetectorRule } from '../../lib/problemSubject';
 import { Sect, SignalLink, DeployBox, DetailTitle, DetailMeta, type DetailMetaItem } from './detailSections'; // v0.10.1032; başlık/üst veri v0.10.2126
 import { exceptionOpenForLine, problemWhenLine } from './detailSummary';
@@ -87,6 +86,7 @@ import { ProblemVerdictActions } from '@/components/ProblemVerdictActions';
 import { ProblemStandardHeader } from './ProblemStandardHeader'; // v0.10.1529
 import { problemVerdictSubject, exceptionVerdictSubject } from '@/lib/problemVerdict';
 import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // ProblemDetail — Variant B (Dynatrace problem feed) full-page details.
 // Two surfaces share one skeleton: a top triage bar (badges + ID +
@@ -350,8 +350,7 @@ function AlertProblemMeta({ problem, window: win, endNs }: {
   const items: DetailMetaItem[] = [];
   if (problem.service) {
     items.push({ k: tl('pd.meta.service', lang), v: (
-      <SubjectLink service={problem.service} subjectKind={problem.kind}
-        href={serviceHref(problem.service, { range: win })} className="mono" />
+      <EntityLink to={{ kind: 'subject', service: problem.service, subjectKind: problem.kind, opts: { range: win } }} className="mono" />
     ) });
   }
   if (owner) items.push({ k: tl('pd.meta.team', lang), v: <TeamLink team={owner} derived={!!via} title={teamTitle} /> });
@@ -377,7 +376,7 @@ function ExceptionMeta({ group, state, oraLabel }: {
   if (group.service) {
     items.push({ k: tl('pd.meta.service', lang), v: synthetic
       ? <span className="mono">{group.service}</span>
-      : <Link to={serviceHref(group.service, { range: { fromNs: group.firstSeen, toNs: group.lastSeen } })} className="mono">{group.service}</Link> });
+      : <EntityLink to={{ kind: 'service', name: group.service, opts: { range: { fromNs: group.firstSeen, toNs: group.lastSeen } } }} className="mono">{group.service}</EntityLink> });
   }
   if (ug) items.push({ k: tl('pd.meta.team', lang), v: <TeamLink team={ug} derived={false} /> });
   if (sy && sy !== ug) items.push({ k: tl(ug ? 'pd.meta.sre' : 'pd.meta.team', lang), v: <TeamLink team={sy} derived={false} /> });
@@ -671,11 +670,11 @@ export function ProblemDetail({ group, isAdmin, onBack, onChanged }: {
             <span className="k">{tl('probD.chip.service', lang)}</span><b className="mono">{group.service}</b>
           </span>
         ) : (
-          <Link to={serviceHref(group.service, { range: { fromNs: group.firstSeen, toNs: group.lastSeen } })}
+          <EntityLink to={{ kind: 'service', name: group.service, opts: { range: { fromNs: group.firstSeen, toNs: group.lastSeen } } }}
             className="chip" style={{ textDecoration: 'none' }}
             title={tl('exc.svc.open', lang)}>
             <span className="k">{tl('probD.chip.service', lang)}</span><b className="mono" style={{ color: 'var(--accent2)' }}>{group.service}</b>
-          </Link>
+          </EntityLink>
         )}
         {ora && group.message && (
           <span className="chip" title={tl('exc.ora.op.title', lang)}><span className="k">{tl('exc.ora.op', lang)}</span><b className="mono">{group.message}</b></span>
@@ -1394,8 +1393,7 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                       "sorun geçmiş" yanılgısı. Pencere AYNI bileşende
                       (probWindow) zaten hesaplı, yalnız logs/traces
                       linklerine konuyordu. */}
-                  <SubjectLink service={problem.service} subjectKind={problem.kind}
-                    href={serviceHref(problem.service, { range: probWindow })}
+                  <EntityLink to={{ kind: 'subject', service: problem.service, subjectKind: problem.kind, opts: { range: probWindow } }}
                     className={`pb-pill${problem.status === 'open' ? ' err' : ''}`}
                     style={{ textDecoration: 'none', color: 'var(--accent2)' }} />
                   {/* v0.9.740 (operatör): ug/sy ekip rozetleri problem
@@ -1425,13 +1423,13 @@ export function AlertProblemDetail({ problem, isAdmin, onBack, onChanged }: {
                     }
                     if (!pod || pod === problem.service) return null;
                     return (
-                      <Link to={serviceHref(problem.service, { range: probWindow, tab: 'infra', params: { jpod: pod } })}
+                      <EntityLink to={{ kind: 'service', name: problem.service, opts: { range: probWindow, tab: 'infra', params: { jpod: pod } } }}
                         className="pb-pill"
                         style={{ textDecoration: 'none', color: 'var(--accent2)' }}
                         title={tl('pd.pod.title', lang)}>
                         {/* i18n-exempt: entity kind term (pod) */}
                         <span className="dot" /> pod <span className="mono">{pod}</span> →
-                      </Link>
+                      </EntityLink>
                     );
                   })()}
                   {(problem.clusters ?? []).map(c => (

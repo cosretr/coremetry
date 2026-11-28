@@ -227,11 +227,10 @@ func logsScopeHealth(services []string, rows []chstore.ServiceSummary, open map[
 		c := open[name]
 		row := logsScopeService{Name: name, OpenProblems: c.Critical + c.Warning + c.Info}
 		if sv := byName[name]; sv != nil && sv.SpanCount > 0 {
-			row.Health, row.HealthReason = scoreHealth(sv, c)
+			row.Health, row.HealthReason = problemHealth(c)
 			row.ErrorRate = sv.ErrorRate
 		} else if c.Critical > 0 || c.Warning > 0 {
-			zero := chstore.ServiceSummary{}
-			row.Health, row.HealthReason = scoreHealth(&zero, c)
+			row.Health, row.HealthReason = problemHealth(c)
 		}
 		out = append(out, row)
 	}

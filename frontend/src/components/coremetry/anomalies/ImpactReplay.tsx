@@ -5,7 +5,6 @@
 // "Oynat" düğmesi: istek yalnız düğmeyle, yoklama yok. Admin ekranı:
 // çevrilmez (proje kuralı). Yaklaşıklık uyarısı her zaman görünür.
 import { useState } from 'react';
-import { Link } from 'react-router';
 import { DataTable } from '@/components/coremetry/DataTable';
 import type { ColumnDef } from '@/components/coremetry/DataTable';
 import { SegmentedControl } from '@/components/coremetry/SegmentedControl';
@@ -13,9 +12,9 @@ import { Button } from '@/components/shadcn/button';
 import { Empty, Spinner } from '@/components/Spinner';
 import { useImpactReplay } from '@/lib/queries';
 import type { ImpactReplayDetector, ImpactReplayEpisode, ImpactReplayResult } from '@/lib/types';
-import { serviceHref } from '@/lib/serviceHref';
 import { fmtDateTime, fmtDurShort } from '@/lib/utils';
 import { SearchX } from 'lucide-react';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 type Days = '1' | '3' | '7' | '14';
 const DAY_OPTS: { value: Days; label: string }[] = [
@@ -100,9 +99,9 @@ export default function ImpactReplaySection() {
               renderCell={(r, c) => {
                 switch (c.id) {
                   case 'service': return (
-                    <Link to={serviceHref(r.service, { range: { fromNs: (r.start - 1800) * 1e9, toNs: (r.end + 1800) * 1e9 } })} title={r.subject || r.service}>
+                    <EntityLink to={{ kind: 'service', name: r.service, opts: { range: { fromNs: (r.start - 1800) * 1e9, toNs: (r.end + 1800) * 1e9 } } }} title={r.subject || r.service}>
                       {r.subject ? `${r.service} · ${r.subject.split('#')[1] ?? r.subject}` : r.service}
-                    </Link>
+                    </EntityLink>
                   );
                   case 'measure': return MEASURE_TR[r.measure] ?? r.measure;
                   case 'start': return fmtDateTime(r.start * 1000);

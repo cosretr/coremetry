@@ -41,7 +41,8 @@ const hasLiteral = (src: string, id: string) =>
   src.includes(`data-tour="${id}"`) || src.includes(`'${id}'`) || src.includes(`"${id}"`);
 
 // Dinamik `data-tour={…}` (harita / geçirgen prop üzerinden) taşıyabilen dosyalar.
-const DYNAMIC_OK = new Set(['pages/Services.tsx', 'components/Combobox.tsx', 'components/FilterQueryBox.tsx']);
+// v0.10.2488 — HealthDot çağıranın çapasını (data-tour) geçirir; çapa literal'i Services.tsx'te.
+const DYNAMIC_OK = new Set(['pages/Services.tsx', 'components/coremetry/HealthDot.tsx', 'components/Combobox.tsx', 'components/FilterQueryBox.tsx']);
 const FRAMES = ENABLED.flatMap(s => stepFrames(s).map(f => ({ id: `${s.id}/${f.key}`, target: f.target, fallbackTarget: f.fallbackTarget })));
 
 describe('tour çapaları (v0.10.1334)', () => {

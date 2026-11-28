@@ -1862,14 +1862,14 @@ func (s *Server) getServices(w http.ResponseWriter, r *http.Request) {
 		if deltaSort {
 			rows = sortServicesByP99Delta(rows, limit)
 		}
-		// v0.5.274 — auto-score health per service from errorRate +
-		// open-problem counts. Single FINAL scan bounded by status=open.
+		// v0.10.2488 — health per service from open problems only (A2).
+		// problemHealth; single FINAL scan bounded by status=open.
 		counts, perr := s.openProblemCountsCached(ctx)
 		if perr == nil {
 			for i := range rows {
 				c := counts[rows[i].Name]
 				rows[i].OpenProblems = c.Critical + c.Warning + c.Info
-				rows[i].Health, rows[i].HealthReason = scoreHealth(&rows[i], c)
+				rows[i].Health, rows[i].HealthReason = problemHealth(c)
 			}
 		}
 		// v0.9.1317 (entity-model A2) — lifecycle pair onto the same page.

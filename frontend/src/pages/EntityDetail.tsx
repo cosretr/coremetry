@@ -24,8 +24,7 @@ import { Spinner, Empty } from '@/components/Spinner';
 import { usePageZoomRange } from '@/lib/chart/usePageZoomRange';
 import { timeRangeToNs, fmtDateTime } from '@/lib/utils';
 import { useEntityEnabled, useEntity, useEntityServices, useEntityLatency, useEntityLogCoverage } from '@/lib/queries';
-import { entityHref, entityLiveness } from '@/lib/entityHref';
-import { serviceHref } from '@/lib/serviceHref';
+import { entityLiveness } from '@/lib/entityHref';
 import { useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState, type ColumnDef, type DataTableStateProps } from '@/components/ui/DataTable';
 import type { EntityDetailResponse, EntityRecord, EntityServiceRow, EntitySeenAgg, EntityServicesResponse, TimeRange } from '@/lib/types';
 import { t, tf, useLang, type Lang } from '@/lib/i18n';
@@ -33,6 +32,7 @@ import { duration } from '@/lib/format/duration';
 import { percent } from '@/lib/format/percent';
 import { count, fixed } from '@/lib/format/number';
 import { errorTone } from '@/lib/format/tone';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // 2026-11-21 — URL durumu zod şemasıyla (lib/urlSchema): bozuk `at` → 0
 // (anlık görünüm), kimlik ham metin (≤1024).
@@ -148,12 +148,12 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
     <Stack gap={4}>
       <Row gap={2} wrap>
         {cluster && (
-          <Link to={entityHref({ type: 'cluster', id: `cluster:${cluster.id}`, name: cluster.name, clusterId: cluster.id }, hrefOpts)} className="sec" title={cluster.id}>{cluster.name}</Link>
+          <EntityLink to={{ kind: 'record', rec: { type: 'cluster', id: `cluster:${cluster.id}`, name: cluster.name, clusterId: cluster.id }, opts: hrefOpts }} className="sec" title={cluster.id}>{cluster.name}</EntityLink>
         )}
         {chain.map(p => (
           <Row key={p.id} gap={2}>
             <span className="field-hint">›</span>
-            <Link to={entityHref(p, hrefOpts)} className="sec" title={p.id}>{p.type === 'workload' ? `${p.labels?.kind ?? 'workload'}/${p.name}` : p.name}</Link>
+            <EntityLink to={{ kind: 'record', rec: p, opts: hrefOpts }} className="sec" title={p.id}>{p.type === 'workload' ? `${p.labels?.kind ?? 'workload'}/${p.name}` : p.name}</EntityLink>
           </Row>
         ))}
         <span className="field-hint">›</span>
@@ -208,7 +208,7 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
             {!svc || svcDt.sortedRows.length === 0 ? <DataTableState dt={svcDt} {...svcState} /> : svcDt.sortedRows.map(s => (
               <tr key={s.service} className={svc.services.length > 100 ? 'cv-row' : undefined}>
                 <DataTableCell dt={svcDt} col="service" row={s} title={s.service}>
-                  <Link to={serviceHref(s.service, { range: pageRange })} className="sec">{s.service}</Link>
+                  <EntityLink to={{ kind: 'service', name: s.service, opts: { range: pageRange } }} className="sec">{s.service}</EntityLink>
                 </DataTableCell>
                 <DataTableCell dt={svcDt} col="pods" row={s} value={s.pods} />
                 <DataTableCell dt={svcDt} col="spans" row={s} value={s.spans} />
@@ -237,13 +237,13 @@ function Body({ data, svc, svcError, at, pageRange, from, to }: { data: EntityDe
                   <tr key={`${r.namespace}/${r.pod}/${r.service}`} className={rows.length > 100 ? 'cv-row' : undefined}>
                     <DataTableCell dt={podDt} col="pod" row={r}>
                       {r.namespace ? (
-                        <Link to={entityHref({ type: 'pod', id: `pod:${entity.clusterId}/${r.namespace}/${r.pod}`, name: r.pod, namespace: r.namespace, clusterId: entity.clusterId }, hrefOpts)} className="sec"
-                          title={`${cluster?.name ?? entity.clusterId} / ${r.namespace} / ${r.pod}`}>{r.pod}</Link>
+                        <EntityLink to={{ kind: 'record', rec: { type: 'pod', id: `pod:${entity.clusterId}/${r.namespace}/${r.pod}`, name: r.pod, namespace: r.namespace, clusterId: entity.clusterId }, opts: hrefOpts }} className="sec"
+                          title={`${cluster?.name ?? entity.clusterId} / ${r.namespace} / ${r.pod}`}>{r.pod}</EntityLink>
                       ) : <span className="mono" title={t('entityD.noNsTitle', lang)}>{r.pod}</span>}
                     </DataTableCell>
                     <DataTableCell dt={podDt} col="namespace" row={r} value={r.namespace} />
                     <DataTableCell dt={podDt} col="service" row={r} title={r.service}>
-                      <Link to={serviceHref(r.service, { range: pageRange })} className="sec">{r.service}</Link>
+                      <EntityLink to={{ kind: 'service', name: r.service, opts: { range: pageRange } }} className="sec">{r.service}</EntityLink>
                     </DataTableCell>
                     <DataTableCell dt={podDt} col="spans" row={r} value={r.spans} />
                     <DataTableCell dt={podDt} col="errors" row={r} value={r.errors} />

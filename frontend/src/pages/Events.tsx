@@ -14,11 +14,12 @@ import {
   useDataTable, DataTableHead, DataTableColgroup, DataTableCell, DataTableState,
   type ColumnDef, type DataTableStateProps,
 } from '@/components/ui/DataTable';
-import { serviceHref, pointEventWindow } from '@/lib/serviceHref';
+import { pointEventWindow } from '@/lib/serviceHref';
 import type { NotificationLogEntry } from '@/lib/types';
 import { UNMATCHED_KIND } from '@/lib/notifyRouting';
 import { t, useLang, useT } from '@/lib/i18n'; // v0.10.2298 — "kimseye gitmedi" işareti arayüz dilinde (TR aynı)
 import { PageShell } from '@/components/coremetry/PageShell';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // v0.6.15 — Operator events list/delete UI.
 //
@@ -372,8 +373,8 @@ function AnnotationsTab({ from, to }: { from: number; to: number }) {
                         dikey işaret" diye vaat ediyor, link ise "şimdi"yi
                         açıyordu. */}
                     {ev.service
-                      ? <Link to={serviceHref(ev.service, { range: pointEventWindow(ev.time) })}
-                           style={{ color: 'var(--accent2)' }}>{ev.service}</Link>
+                      ? <EntityLink to={{ kind: 'service', name: ev.service, opts: { range: pointEventWindow(ev.time) } }}
+                           style={{ color: 'var(--accent2)' }}>{ev.service}</EntityLink>
                       : <span style={{ color: 'var(--text3)' }}>—</span>}
                   </DataTableCell>
                   <DataTableCell dt={dt} col="owner" row={ev} value={ev.owner} />

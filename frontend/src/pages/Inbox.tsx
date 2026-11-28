@@ -41,7 +41,6 @@ import { useAuth } from '@/components/AuthProvider';
 import type { InboxItem, InboxKind } from '@/lib/types';
 import { stripMarkdown } from '@/components/Markdown';
 import { serviceHref, inboxItemWindow } from '@/lib/serviceHref';
-import { SubjectLink } from '../components/SubjectLink';
 import { spreadOf, spreadTitle, defaultFloorTitle, spreadOffFloorTitle } from '@/features/anomalies/spread'; // v0.10.949
 import { isOracleGroup, isSyntheticOracleService, oracleInboxDetail } from '@/features/anomalies/oracleGroup'; // v0.10.1109
 import { useBranding } from '@/lib/branding'; // v0.10.1109 — Oracle grubu görünen adı
@@ -73,6 +72,7 @@ import { inboxCols, capSortLabel, occLine } from './inbox/inboxColumns';
 import { t as tl, tf, useLang, useT } from '@/lib/i18n'; // v0.10.2283 — Türkçe metinler lib/i18n inbox.* (TR aynı)
 import { StdOriginLine } from '@/features/anomalies/StdOriginLine';
 import { TeamCell, AssigneePill, RowChips, DetailLine, GraphRowSub, GraphFrequentChip, GraphClusterMembers, ImpactCell, ConfidenceCell, EvidenceCell, ClosedWhen } from './inbox/InboxCells';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 
 // exception ailesi — httperror satırları da exception payload'u taşır
@@ -1253,8 +1253,7 @@ function ProblemsTab({ tabStrip }: { tabStrip: ReactNode }) {
                     {ora && isSyntheticOracleService(it.service) ? (
                       <span className="mono cell-faint" title={tl('inbox.oraNoSvc', lang)}>{it.service}</span>
                     ) : (
-                      <SubjectLink service={it.service} subjectKind={it.subjectKind}
-                        href={serviceHref(it.service, { range: inboxItemWindow(it) })}
+                      <EntityLink to={{ kind: 'subject', service: it.service, subjectKind: it.subjectKind, opts: { range: inboxItemWindow(it) } }}
                         onClick={e => e.stopPropagation()}
                         emptyFallback={<span className="cell-faint">—</span>} />
                     )}

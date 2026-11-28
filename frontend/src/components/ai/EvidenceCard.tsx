@@ -4,12 +4,12 @@
 // chart bloğuyla aynı yerde; sabit ≤10 satırlı ham tablolar (sıralanmaz).
 // Hipotez yoksa üst satır soluk, kart yine çizilir. Tek commit, kolay geri alınır.
 import { Link } from 'react-router';
-import { serviceHref } from '@/lib/serviceHref';
 import { fmtNum } from '@/lib/utils';
 import { evidenceDeltaClass, evidenceHasHypothesis, fmtEvidenceTime, fmtRangeTR, redRows } from '@/lib/chatEvidence';
 import type { ChatEvidence } from '@/lib/types';
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2292 — kart metni arayüz dilinde (sunucu metni aynen)
 import { chatLinkTargetProps, useChatLinkNewTab } from './chatLinkTarget'; // v0.10.1125 — /cosre yeni sekme
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 export function EvidenceCard({ ev }: { ev: ChatEvidence }) {
   const lang = useLang();
@@ -23,7 +23,7 @@ export function EvidenceCard({ ev }: { ev: ChatEvidence }) {
       <div className={hasHyp ? 'ev-verdict' : 'ev-verdict ev-verdict--none'}>
         <span aria-hidden>{hasHyp ? '●' : '○'}</span>{' '}
         {ev.verdict}
-        {suspect && <> · <Link to={serviceHref(suspect)} className="ev-link" {...linkProps}>{suspect} ↗</Link></>}
+        {suspect && <> · <EntityLink to={{ kind: 'service', name: suspect }} className="ev-link" {...linkProps}>{suspect} ↗</EntityLink></>}
       </div>
       {rows.length > 0 && (
         <table className="ev-table" aria-label={t('chatEv.tableAria', lang)}>

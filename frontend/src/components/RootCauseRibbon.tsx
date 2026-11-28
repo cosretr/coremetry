@@ -11,9 +11,9 @@ import type {
 } from '@/lib/types';
 import { RCAVerdictPanel } from './RCAVerdictPanel';
 import { fmtDurShort, fmtDateTime } from '@/lib/utils';
-import { serviceHref } from '@/lib/serviceHref';
 import { ribbonCandidates, ribbonNoCandidateNote } from '@/lib/rootCauseCandidates';
 import { traceHref } from '@/lib/traceHref';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // RootCauseRibbon (rc #3) — the in-page "Root cause: <suspect> (NN%) ▸" chip on
 // each /anomalies + /problems row. The COLLAPSED chip renders straight from the
@@ -206,9 +206,9 @@ function ExpandedBody({ rc, window: win }: {
           <div>
             <code>service.version={rc.recentDeploy.version}</code> first seen{' '}
             <b>{fmtDurShort(rc.recentDeploy.ageSeconds)}</b> before onset on{' '}
-            <Link to={serviceHref(rc.service, { range: win, hash: 'deploys' })} style={{ fontWeight: 600 }}>
+            <EntityLink to={{ kind: 'service', name: rc.service, opts: { range: win, hash: 'deploys' } }} style={{ fontWeight: 600 }}>
               {rc.service}
-            </Link>.
+            </EntityLink>.
           </div>
         </div>
       )}
@@ -221,9 +221,9 @@ function ExpandedBody({ rc, window: win }: {
             {candidates.slice(0, 5).map((c, i) => (
               <div key={c.service} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12 }}>
                 <span className="mono" style={{ color: 'var(--text3)', flex: '0 0 16px' }}>{i + 1}</span>
-                <Link to={serviceHref(c.service, { range: win })} style={{ fontWeight: 600, flex: '0 0 auto' }}>
+                <EntityLink to={{ kind: 'service', name: c.service, opts: { range: win } }} style={{ fontWeight: 600, flex: '0 0 auto' }}>
                   {c.service}
-                </Link>
+                </EntityLink>
                 <span className="badge b-info" style={{ fontSize: 10 }}>{c.scoreLabel}</span>
                 {c.hops > 0 && (
                   <span className="badge b-gray" style={{ fontSize: 10 }}>

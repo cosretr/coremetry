@@ -8,7 +8,6 @@ import { useOperationCard } from '@/lib/queries';
 import { useT } from '@/lib/i18n';
 import { fmtNum } from '@/lib/utils';
 import { traceHref } from '@/lib/traceHref';
-import { serviceHref } from '@/lib/serviceHref';
 import type { OpCallEdge } from '@/lib/types';
 import type { EndpointRef } from './endpointParam';
 import { OPCARD_ANCHOR } from './links';
@@ -16,6 +15,7 @@ import { OperationCardCodeSection } from './OperationCardCodeSection';
 import {
   opCallTreeCols, targetLabel, kindGlyph, errBadgeClass, indentPx, windowEdgesLine,
 } from './opCallTreeCols';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // OperationCardSection — v0.10.1491 (plan-operation-card §2.3.1 + §6, R3):
 // /endpoint sayfasının "Kod ve çağrılar" bölümü. Trace yarısı: son ≤200
@@ -116,7 +116,7 @@ export function OperationCardSection({ refObj, entry, from, to, env, cluster }: 
                         {r.depth > 1 ? '└ ' : ''}{kindGlyph(r.kind)}
                       </span>
                       {r.kind === 'service'
-                        ? <Link to={serviceHref(r.target, { range })}>{r.target}</Link>
+                        ? <EntityLink to={{ kind: 'service', name: r.target, opts: { range } }}>{r.target}</EntityLink>
                         : <span>{targetLabel(r.target)}</span>}
                     </span>
                   </td>

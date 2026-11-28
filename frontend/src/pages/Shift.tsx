@@ -14,9 +14,9 @@ import { SHIFT_WINDOWS, normalizeShiftWindow, shiftWindowNs } from './shift/shif
 import type { Problem, ChangedService, ExceptionGroup } from '@/lib/types';
 import { PageShell } from '@/components/coremetry/PageShell';
 import { RenderedMarkdown } from '@/components/Markdown';
-import { SubjectLink } from '../components/SubjectLink';
 import { useT } from '@/lib/i18n';
 import { AiGeneratedMark } from '@/components/ai/AiGeneratedMark'; // wave 3 — AI içeriği etiketi
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // Shift.tsx — /shift vardiya özeti (v0.9.1072, Faz 3.2; mockup
 // operatör-onaylı). Vardiya devri bugüne dek 4 sayfa gezilerek
@@ -158,7 +158,7 @@ export default function ShiftPage() {
                 {problems.length === 0 ? <DataTableState dt={probT} kind="empty" message="Pencerede problem açılmadı — sakin bir vardiya." /> : probT.sortedRows.map((p: Problem) => (
                   <tr key={p.id} style={p.resolvedAt ? { opacity: 0.45 } : undefined}>
                     <td>{p.priority && <span className={`badge ${p.priority === 'P1' ? 'b-err' : p.priority === 'P2' ? 'b-warn' : 'b-info'}`}>{p.priority}</span>}</td>
-                    <td><SubjectLink service={p.service} subjectKind={p.kind} href={serviceHref(p.service, { range: eventLifespanWindow(p) })} /></td>
+                    <td><EntityLink to={{ kind: 'subject', service: p.service, subjectKind: p.kind, opts: { range: eventLifespanWindow(p) } }} /></td>
                     <td><Link to={`/problems?problem=${encodeURIComponent(p.id)}`}>{p.ruleName}</Link></td>
                     <td className="mono">{tsLong(p.startedAt)}</td>
                     <td>{p.resolvedAt ? `kapandı ${tsLong(p.resolvedAt)}` : p.status}</td>
@@ -219,7 +219,7 @@ export default function ShiftPage() {
                     <td className="mono" title={g.type}>
                       <Link to={`/problems?exc=${encodeURIComponent(g.fingerprint)}`}>{g.type}</Link>
                     </td>
-                    <td><Link to={serviceHref(g.service, { range: exceptionGroupWindow(g) })}>{g.service}</Link></td>
+                    <td><EntityLink to={{ kind: 'service', name: g.service, opts: { range: exceptionGroupWindow(g) } }}>{g.service}</EntityLink></td>
                     <td className="mono">{tsLong(g.firstSeen)}</td>
                     <td className="num">{g.occurrences}</td>
                   </tr>
@@ -250,7 +250,7 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
 function changeRow(c: ChangedService, pageWindow: { fromNs: number; toNs: number }) {
   return (
     <tr key={c.service}>
-      <td><Link to={serviceHref(c.service, { range: pageWindow })}>{c.service}</Link></td>
+      <td><EntityLink to={{ kind: 'service', name: c.service, opts: { range: pageWindow } }}>{c.service}</EntityLink></td>
       <td className="num">{deltaCell(c.baselineErrorRate * 100, c.currentErrorRate * 100, '%', c.errDeltaPct)}</td>
       <td className="num">{deltaCell(c.baselineP99Ms, c.currentP99Ms, 'ms', c.p99DeltaPct)}</td>
       <td className="num">{deltaCell(c.baselineRate, c.currentRate, '/s', c.rateDeltaPct)}</td>

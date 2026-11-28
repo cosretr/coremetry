@@ -55,8 +55,8 @@ import {
   nodeTaintText, nodeDiskText, nodeAgeText,
 } from '@/pages/clusters/nodeColumns';
 import type { ClusterPodRow, ClusterNodeRow, ClusterNamespaceRow, ClusterDeploymentRow, ClusterSummary, ClusterFleetSummary, TimeRange } from '@/lib/types';
-import { serviceHref } from '@/lib/serviceHref';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // /clusters — uzak OpenShift cluster'larının Thanos metrikleri.
 // v0.8.587 redesign (audit: docs/audit/clusters-overview-redesign-
@@ -1158,7 +1158,7 @@ function podCellContent(r: ClusterPodRow, col: string, range: TimeRange, lang: L
     case 'pod': return <span title={r.pod}>{r.pod}</span>;
     case 'namespace': return r.namespace;
     case 'service': return r.service
-      ? <Link to={serviceHref(r.service, { range })}>{r.service}</Link>
+      ? <EntityLink to={{ kind: 'service', name: r.service, opts: { range } }}>{r.service}</EntityLink>
       : <span className="cell-empty" title={t('clusters.pod.noSvc', lang)}>—</span>;
     case 'phase': return podStatusText(r, lang) || <span className="cell-empty">—</span>;
     case 'ready': return podReadyText(r) || <span className="cell-empty" title={t('clusters.pod.readyNsOnly', lang)}>—</span>;

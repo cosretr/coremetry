@@ -20,11 +20,11 @@ import { KafkaTopicMetrics } from './KafkaTopicMetrics'; // v0.10.1557 (v0.10.55
 // bayt-bayt aynı (yeni propların ikisi de opsiyonel ve çekmece geçmiyor).
 import { CallerSection } from './CallerSection';
 import { kindSeries } from './msgSeries'; // v0.10.575 — saniye→ns tek yerde
-import { messagingTopicHref } from '@/pages/messaging/topicHref'; // v0.10.575
 import { opLabelTR, isOpMissing, msgOperationRows, opMissingTitle } from './msgOperations'; // v0.10.563
 import { t, tf, useLang } from '@/lib/i18n'; // v0.10.2311 — çekmece metinleri arayüz dilinde (TR aynı)
 import { duration } from '@/lib/format/duration';
 import { percent } from '@/lib/format/percent';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // v0.9.814 — drawer'ın mini panelleri de CorePanel. LAZY: @grafana/*
 // statik import edilseydi /messaging + /databases vendor chunk'ı ~1 MB
@@ -241,11 +241,11 @@ export function DetailDrawer({ system, cluster, name, instance, dbName, kind, so
               bir hücrede yaşayan beş tablo + iki grafik, tam sayfada sekmelere
               yayılıyor. /databases'in v0.9.840'ta yaptığı geçişin aynısı, ama
               çekmeceyi EMEKLİ ETMEDEN — operatör kararı. */}
-          <Link className="ud-pill"
-                to={messagingTopicHref({ system, cluster, destination: name, range })}
+          <EntityLink className="ud-pill"
+                to={{ kind: 'queue', ref: { system, cluster, destination: name, range } }}
                 title={t('dd.detailPageTip', lang)}>
             {t('dd.detailPage', lang)}
-          </Link>
+          </EntityLink>
           <Link className="ud-pill"
                 to={messagingTracesHref({ window: range, system, destination: name })}
                 title="Open the traces behind this topic — same window, filters shown as editable chips">

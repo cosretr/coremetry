@@ -8,12 +8,12 @@ import { useT } from '@/lib/i18n'; // v0.10.1338 — "Ask CoSRE" etiketi
 import { RootCauseRibbon } from '@/components/RootCauseRibbon';
 import { tsLong } from '@/lib/utils';
 import type { AnomalyEvent } from '@/lib/types';
-import { serviceHref } from '@/lib/serviceHref';
 import { anomalyDetailHref } from '@/lib/inboxHref';
 import {
   ANOMALY_KIND_LABEL, anomalyChartWindow, anomalySignalHrefs, behaviorDetailsOf, isLogAnomalyKind,
 } from './anomalyDetail';
 import { AnomalyLogVolume, AnomalySample, BehaviorDetailsBox, SpikeFacts } from './anomalyDetailParts';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // AnomalyDetailDrawer — v0.8.267, operator-requested: "Anomalies
 // sayfasında üzerine tıklayınca ne zaman spike oldu ve benzeri
@@ -89,10 +89,10 @@ export function AnomalyDetailDrawer({ event, onClose }: {
           /* v0.9.860 (UX denetimi K1) — kardeş logs/traces linkleri (yukarıda)
              spike penceresini v0.9.213'ten beri taşırken servis linki
              taşımıyordu: aynı bileşende iki standart. */
-          <Link to={serviceHref(event.service, { range: win })}
+          <EntityLink to={{ kind: 'service', name: event.service, opts: { range: win } }}
             style={{ fontWeight: 700, fontSize: 14 }}>
             {event.service}
-          </Link>
+          </EntityLink>
         )}
         <ClusterChips clusters={event.clusters} />
       </>

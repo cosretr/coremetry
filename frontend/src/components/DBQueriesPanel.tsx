@@ -15,13 +15,13 @@ import {
 import { api } from '@/lib/api';
 import { useQueries } from '@tanstack/react-query';
 import { useClusters } from '@/lib/queries';
-import { entityHref } from '@/lib/entityHref';
 import { fmtNum } from '@/lib/utils';
 import { encodeFilters, windowRangeParam } from '@/lib/urlState';
 import type { DBQueryStat, FilterExpr, TimeRange } from '@/lib/types';
 import { tracesPivotHref } from '@/lib/pivotHref';
 import { stmtDetailHref } from '@/pages/slowqueries/stmtParam';
 import { databasesFilterHref } from '@/pages/databases/databaseParam';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // Database query analyzer — Datadog DBM-style "where is my
 // query time going" view for a single service in a time
@@ -217,7 +217,7 @@ export function DBQueriesPanel({ service, from, to, defaultOpen = false, cluster
       case 'cluster': return (
         <td key={id} className="mono" onClick={e => e.stopPropagation()}>
           {r.cluster
-            ? <Link to={entityHref({ type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, { range })} title="Cluster detayı">{r.cluster}</Link>
+            ? <EntityLink to={{ kind: 'record', rec: { type: 'cluster', id: r.cluster, name: r.cluster, clusterId: r.cluster }, opts: { range } }} title="Cluster detayı">{r.cluster}</EntityLink>
             : '—'}
         </td>
       );

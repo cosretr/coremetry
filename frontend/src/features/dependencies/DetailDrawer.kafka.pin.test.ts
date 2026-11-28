@@ -26,7 +26,7 @@ describe('Kafka topic metrikleri yerleşimi', () => {
     // aynı tabloyu çiziyor). Pivot taşındı, KAYBOLMADI: iddia kodun yeni evini
     // okuyor + çekmecenin o evden import ettiğini ayrıca çiviliyor, yoksa
     // bileşen sessizce düşse de test yeşil kalırdı.
-    expect(caller).toContain("podDetailPath({ pod: c.pod, service: c.service");
+    expect(caller).toContain("kind: 'pod', ref: { pod: c.pod, service: c.service"); // v0.10.2488 EntityLink → podDetailPath
     expect(drawer).toContain("import { CallerSection } from './CallerSection';");
     expect(drawer).toContain('<CallerSection');
   });

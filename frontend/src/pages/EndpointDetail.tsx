@@ -19,7 +19,6 @@ import {
   parseEndpointPageRef, endpointSearchHint, type EndpointRef,
 } from '@/pages/endpoints/endpointParam';
 import { tracesLink } from '@/pages/endpoints/links';
-import { serviceHref } from '@/lib/serviceHref';
 import { MetricTile } from '@/pages/endpoints/MetricTile';
 import { bucketsToSeries } from '@/pages/endpoints/series';
 import {
@@ -41,6 +40,7 @@ import { AIExplainButton } from '@/components/ai/AIExplainButton'; // v0.10.1367
 import { IconSparkles } from '@/components/icons';
 import { useT, useLang, t, tf } from '@/lib/i18n'; // v0.10.2305 — kalan Türkçe metinler arayüz dilinde (TR aynı)
 import { endpointAiMethod, type AISubject } from '@/lib/aiSubject';
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // /endpoint — the full-page endpoint detail (v0.9.839).
 //
@@ -259,10 +259,10 @@ export default function EndpointDetailPage() {
             title={refObj.path}>
             {refObj.path}
           </span>
-          <Link to={serviceHref(refObj.service, { range, env })}
+          <EntityLink to={{ kind: 'service', name: refObj.service, opts: { range, env } }}
             className="mono" style={{ fontSize: 12 }}>
             {refObj.service} →
-          </Link>
+          </EntityLink>
           {refObj.sig && (
             <span className="badge b-info" style={{ fontSize: 10 }}
               title="Grouped by shape — IDs in the path are collapsed to :id; every section below aggregates all matching raw routes.">
@@ -316,8 +316,8 @@ export default function EndpointDetailPage() {
             )}
             {/* v0.10.2210 (operatör) — Explore düğmesi kalktı; sıra Kaynak · Ask CoSRE ·
                 Service → · Traces → (Traces en sağda). */}
-            <Link className="accent" style={{ fontSize: 12, padding: '3px 10px' }}
-              to={serviceHref(refObj.service, { range, env })}>Service →</Link>
+            <EntityLink className="accent" style={{ fontSize: 12, padding: '3px 10px' }}
+              to={{ kind: 'service', name: refObj.service, opts: { range, env } }}>Service →</EntityLink>
             {/* v0.10.1117 — şekil (sig) ve RPC (entry) kimliği pivota taşınır:
                 `http.route_shape` / `name` / `name_shape` (endpoints/links.ts). */}
             <Link className="accent" style={{ fontSize: 12, padding: '3px 10px' }}

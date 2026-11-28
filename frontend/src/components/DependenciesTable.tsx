@@ -21,11 +21,11 @@ import { getRaw, setRaw, removeRaw } from '@/lib/storage';
 import { DetailDrawer } from '@/features/dependencies/DetailDrawer';
 import { useDepTrends } from '@/lib/queries/dependencies';
 import type { DataTableColumn } from '@/lib/dataTable';
-import { serviceHref } from '@/lib/serviceHref';
 import { fmtSmart } from '@/lib/chartFmt';
 import { svcListLabel, type KafkaTopicStat } from '@/pages/messaging/kafkaOverview'; // v0.10.1961
 import type { TimeRange, DBTrend } from '@/lib/types';
 import { t, tf, useLang, type Lang } from '@/lib/i18n'; // v0.10.2311 — tablo + çekmece metinleri arayüz dilinde (TR aynı)
+import { EntityLink } from '@/components/coremetry/entity/EntityLink';
 
 // Row is the shape both /databases and /messaging hand to this
 // component. We type-erase the row-specific labelling (Instance
@@ -797,7 +797,7 @@ export function DependenciesTable({
                         ? <span style={{ color: 'var(--text3)' }}>—</span>
                         : r.callers.slice(0, 3).map((c, idx) => (
                             <span key={c}>
-                              <Link to={serviceHref(c, { range })} className="mono">{c}</Link>
+                              <EntityLink to={{ kind: 'service', name: c, opts: { range } }} className="mono">{c}</EntityLink>
                               {idx < Math.min(2, r.callers.length - 1) && <span style={{ color: 'var(--text3)' }}>, </span>}
                             </span>
                           ))}

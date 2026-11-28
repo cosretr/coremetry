@@ -8,7 +8,8 @@ const read = (p: string) => readFileSync(resolve(__dirname, p), 'utf8');
 
 describe('pivot penceresi taşınır', () => {
   it('SpanDetail künye servis linki span penceresini taşır', () => {
-    expect(read('SpanDetail.tsx')).toContain('serviceHref(span.serviceName, { range: spanLinkCtx.window })');
+    // v0.10.2488 — EntityLink hedefi (tür kaydı serviceHref'i aynı argümanla çağırır).
+    expect(read('SpanDetail.tsx')).toContain("to={{ kind: 'service', name: span.serviceName, opts: { range: spanLinkCtx.window } }}");
   });
   it('ServiceMapNodeDrawer endpoints linki pencereyi taşır', () => {
     expect(read('ServiceMapNodeDrawer.tsx')).toMatch(/\/endpoints\?service=.*range=\$\{encodeURIComponent\(windowRangeParam\(win\)\)\}/);

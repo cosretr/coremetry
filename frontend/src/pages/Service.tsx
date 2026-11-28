@@ -49,6 +49,7 @@ import { QueryError } from '@/components/QueryError';
 import { ServiceNoTracesNote } from './service/ServiceNoTracesNote'; // v0.10.2451
 import type { DataTableStateProps } from '@/components/ui/DataTable';
 import { PageShell } from '@/components/coremetry/PageShell';
+import { HealthDot, healthFromProblems } from '@/components/coremetry/HealthDot'; // v0.10.2488 dilim 4
 import { ServiceHealthcheckButton } from '@/components/coremetry/ServiceHealthcheck'; // v0.10.2039
 import { ServiceHttpMetricsTab } from './service/ServiceHttpMetricsTab';
 import { ServiceMessagingTab } from './service/ServiceMessagingTab'; // v0.10.1536
@@ -81,15 +82,6 @@ type ServiceTab = 'overview' | 'operations' | 'details' | 'logs' | 'topology' | 
 
 // CoSRE Faz E — Details › "CoSRE notları" gövdesi tembel (bölüm açılınca).
 const ServiceCosreNotes = lazy(() => import('./service/ServiceCosreNotes'));
-
-// v0.10.929 (K5) — /service başlık noktası. Sağlıklı hâl nötr halka
-// (`.ov-dot.green` globals'ta artık soluk --border-strong halkası; ad tarihsel),
-// sapma amber/kırmızı. Etiket ekran okuyucu + tooltip için aynı eşikte.
-function serviceHeadDot(errorRate: number): { cls: 'red' | 'amber' | 'green'; label: 'critical' | 'warning' | 'healthy' } {
-  if (errorRate > 5) return { cls: 'red', label: 'critical' };
-  if (errorRate > 1) return { cls: 'amber', label: 'warning' };
-  return { cls: 'green', label: 'healthy' };
-}
 
 function ServiceDetailInner() {
   'use memo'; // React Compiler pilotu (annotation modu, vite.config.ts)
@@ -480,9 +472,10 @@ function ServiceDetailInner() {
   const opsState: Omit<DataTableStateProps<OperationSummary>, 'dt'> =
     bundleErr ? { kind: 'error' } : { kind: 'empty', message: 'Bu pencerede operasyon yok' };
 
-  // v0.10.929 (K5) — başlık sağlık noktası: sınıf + metin alternatifi tek
-  // eşikten (>5 kritik, >1 uyarı); ikisi ayrı ayrı hesaplanıp ayrışmasın.
-  const headDot = serviceHeadDot(info?.errorRate ?? 0);
+  // v0.10.2488 (dilim 4, A2) — başlık sağlık noktası tek tanımdan: yalnız
+  // bundle'ın zaten getirdiği AÇIK Problem'ler (ek istek yok). Hata oranı
+  // eşiği (>5 / >1) noktadan çıktı; o sapma rengidir (errorTone).
+  const headHealth = useMemo(() => healthFromProblems(problems), [problems]);
   // v0.10.1320 — Problems çipinin sayısı: bundle'ın zaten getirdiği
   // problemlerden (ek istek yok); yalnız açık olanlar (Problem.status).
   const openProblems = useMemo(() => problems.filter(p => p.status === 'open').length, [problems]);
@@ -532,16 +525,9 @@ function ServiceDetailInner() {
             <span className="crumbs__cur" aria-current="page" title={svc}>{svc}</span>
           </nav>
           <div className="svc-title">
-            {/* v0.10.929 (K5) — eşikler aynı; sağlıklı nokta yeşil değil, soluk
-                --border-strong halkası (Services HealthDot emsali). Halka artık
-                globals'taki `.ov-dot.green`ten gelir (tarihsel ad, nötr halka);
-                satır içi boxShadow kopyası kalktı. Renk tek başına durum
-                taşımasın: aynı >5 / >1 eşiğinde metin alternatifi (title +
-                aria-label). */}
-            {info && (
-              <span className={`ov-dot ${headDot.cls}`} style={{ width: 12, height: 12 }}
-                role="img" title={headDot.label} aria-label={headDot.label} />
-            )}
+            {/* v0.10.2488 — tek HealthDot (açık Problem'den; sağlıklı = nötr
+                halka, K5). Metin alternatifi bileşende (title + aria-label). */}
+            {info && <HealthDot level={headHealth} size={12} />}
             <h1>{svc}</h1>
             {/* v0.7.89 Cmd-K sabitleme — aynı toggleServicePin; v0.10.1320'den
                 beri metinli buton değil, Services listesindeki yıldızla aynı dil. */}
