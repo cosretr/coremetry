@@ -16,13 +16,16 @@ import { LanguageIcon } from './RuntimeIcons';
 // runtime attributes yet.
 
 export function ServiceRuntimeBadge({
-  rt, compact, style,
+  rt, compact, iconSize, style,
 }: {
   rt: ServiceRuntime | null | undefined;
   // compact = 10px font, no glyph; suitable for dense table
   // rows where the language colour alone is the cue. default
   // = 11px font + glyph (full pill).
   compact?: boolean;
+  // v0.10.2490 — logo size in px. Default 16 (compact) / 18 (full):
+  // the operator found the old 11–13 px marks unreadable.
+  iconSize?: number;
   style?: React.CSSProperties;
 }) {
   if (!rt) return null;
@@ -47,20 +50,19 @@ export function ServiceRuntimeBadge({
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
         fontSize: compact ? 10 : 11,
-        padding: compact ? '1px 6px' : '2px 8px',
+        padding: compact ? '1px 6px 1px 4px' : '2px 8px 2px 5px',
         background: 'var(--bg3)', border: '1px solid var(--border)',
         borderRadius: 12, color: 'var(--text2)',
         fontFamily: 'var(--font-mono)',
         whiteSpace: 'nowrap',
         ...style,
       }}>
-      {/* Brand-style runtime icon — ElasticAPM convention.
-          Monochrome SVG that inherits the badge's text colour
-          so the polyglot mesh reads as a calm strip rather
-          than a rainbow of brand hues. The shape carries the
-          language identity; colour stays unified. */}
-      <span style={{ color: 'var(--text3)', display: 'inline-flex' }}>
-        <LanguageIcon lang={rt.language} size={compact ? 11 : 13} />
+      {/* Runtime logo (simple-icons marks, RuntimeIcons.tsx). One colour
+          per logo: brand hue only where it clears 3:1 on both themes,
+          otherwise the badge text colour. */}
+      <span style={{ color: 'var(--text2)', display: 'inline-flex' }}>
+        <LanguageIcon lang={rt.language} label={display}
+          size={iconSize ?? (compact ? 16 : 18)} />
       </span>
       <span>{display}</span>
     </span>

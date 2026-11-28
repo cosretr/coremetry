@@ -13,7 +13,8 @@
 import { lazy, Suspense, useMemo } from 'react';
 import { SectionHead } from '@/components/coremetry/SectionHead';
 import { Spinner } from '@/components/Spinner';
-import { useT } from '@/lib/i18n';
+import { useT, useLang, tf } from '@/lib/i18n';
+import { HelpTip } from '@/components/coremetry/HelpTip';
 import { RuntimeCharts } from './RuntimeCharts';
 import { HeapBaselineCard } from './HeapBaselineCard'; // v0.10.887 — paritesi #4 dilim 1
 import { PodResourceCharts } from './PodResourceCharts';
@@ -48,6 +49,20 @@ export function hasDBPool(signals: { signal: string; podScoped?: boolean }[] | u
 /** SAF — profil runtime'ın kendi metrik ailesini taşıyor mu (ortak süreç sinyalleri hariç). */
 export function hasOwnRuntimeMetrics(signals: { signal: string }[] | undefined): boolean {
   return (signals ?? []).some(s => !COMMON_SIGNALS.has(s.signal));
+}
+
+/** v0.10.2490 (operatör: "metrikler vardı, yok olmuş") — ailenin beklenen
+ *  metrik adları; boş durum yardım balonu söyler. .NET kendi panelinde
+ *  (rt.dotnet.none), Node.js'in aileye özgü yüzeyi yok. */
+export const EXPECTED_RUNTIME_METRICS: Partial<Record<RuntimeFamily, string>> = {
+  jvm: 'jvm.memory.used · jvm.memory.limit · jvm.gc.duration · jvm.thread.count (OTel Java agent 2.x)',
+  go: 'process.runtime.go.mem.heap_inuse · process.runtime.go.gc.pause_ns · process.runtime.go.goroutines | go.memory.used · go.goroutine.count',
+  python: 'process.runtime.cpython.* | cpython.gc.collections (opentelemetry-instrumentation-system-metrics)',
+};
+
+/** SAF — aile biliniyor ama kendi runtime metriği gelmiyor mu (boş durum satırı). */
+export function runtimeMetricsMissing(family: RuntimeFamily | null, profileLoaded: boolean, signals: { signal: string }[] | undefined): boolean {
+  return !!family && !!EXPECTED_RUNTIME_METRICS[family] && profileLoaded && !hasOwnRuntimeMetrics(signals);
 }
 
 /** SAF — ailenin runtime yüzeyleri (test pini: .NET'te JVM yok, tersi de). ownMetrics: Go / Python'un kendi ailesi. */
@@ -85,6 +100,7 @@ export function ServiceRuntimeSection({ service, range, onZoom, onZoomReset }: {
   onZoomReset?: () => void;
 }) {
   const tr = useT();
+  const lang = useLang();
   // Sayfanın çözülmüş penceresi (unix ns) — RQ anahtarları hizalı; bare JSX'te değil.
   const th = useMemo(() => timeRangeToNs(range), [range]);
   const { family, pending: famPending, language } = useRuntimeFamily(service);
@@ -104,6 +120,7 @@ export function ServiceRuntimeSection({ service, range, onZoom, onZoomReset }: {
   const scope = useRuntimeScope();
   const scopeReady = !(scope.env || scope.cluster) || !profQ.isPending;
   const scopeNote = profQ.data?.scopeNote;
+  const missing = !famPending && runtimeMetricsMissing(family, !!profQ.data, profQ.data?.profile?.signals);
   return (
     <>
       <SectionHead id="runtime-sec" title="Runtime" source={panelRuntime ? 'OTel runtime · VM / metric_points' : 'OTel · metric_points'}
@@ -114,6 +131,12 @@ export function ServiceRuntimeSection({ service, range, onZoom, onZoomReset }: {
         </>}
         meta={language ? <span className="mono">{language}</span> : undefined} />
       {scopeNote && <div className="kc-line" data-testid="rt-scope-note">◌ {scopeNote}</div>}
+      {missing && family && (
+        <div className="kc-line" data-testid="rt-missing">
+          ◌ {tf('rt.missing', lang, { family: FAMILY_LABEL[family] })}
+          <HelpTip text={tf('rt.missing.tip', lang, { names: EXPECTED_RUNTIME_METRICS[family] ?? '' })} />
+        </div>
+      )}
       {!panelRuntime && sigs.length > 0 && profQ.data && (
         <Suspense fallback={null}>
           <RuntimeSignalList signals={sigs} mode={profQ.data.mode} />
@@ -141,7 +164,7 @@ export function ServiceRuntimeSection({ service, range, onZoom, onZoomReset }: {
       <Suspense fallback={null}>
         <DownstreamTargetsTable service={service} from={th.from} to={th.to} env={scope.env} cluster={scope.cluster} />
       </Suspense>
-      {!pending && surf.podResources && (
+      {!pending && surf.podResources && !missing && (
         <div className="kc-line" title="Dil-runtime ailesinin kendi metrik ailesi yok — yerine pod başına Thanos kaynak grafikleri.">
           ◌ {tr('rt.generic')}{family ? ` (${FAMILY_LABEL[family]})` : language ? ` (${language})` : ''}
         </div>

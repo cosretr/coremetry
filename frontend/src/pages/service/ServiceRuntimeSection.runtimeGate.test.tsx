@@ -69,7 +69,7 @@ vi.mock('./RuntimeCharts', () => ({ RuntimeCharts: (p: { family: string }) => <d
 vi.mock('./HeapBaselineCard', () => ({ HeapBaselineCard: () => <div data-testid="heap-band">JVM heap band</div> }));
 vi.mock('./PodResourceCharts', () => ({ PodResourceCharts: () => <div data-testid="pod-resources" /> }));
 
-import { ServiceRuntimeSection, runtimeSurfaces, hasOwnRuntimeMetrics } from './ServiceRuntimeSection';
+import { ServiceRuntimeSection, runtimeSurfaces, hasOwnRuntimeMetrics, runtimeMetricsMissing } from './ServiceRuntimeSection';
 
 const range = { preset: '1h' } as TimeRange;
 
@@ -150,6 +150,41 @@ describe('runtime gate', () => {
     expect(q('dotnet-runtime')).toBeNull();
     expect(q('pod-resources')).toBeNull();
     expect(host.textContent).not.toMatch(/JVM/);
+  });
+
+  // v0.10.2490 (operatör: "metrikler vardı, yok olmuş") — aile biliniyor, kendi
+  // metriği gelmiyor → bölüm sessiz kalmaz: tek satır + beklenen adlar balonu.
+  it('JVM service without jvm.* metrics: explicit empty-state line', async () => {
+    m.language = 'java'; m.profileRuntime = 'none';
+    await render();
+    const line = q('rt-missing');
+    expect(line).not.toBeNull();
+    expect(line!.textContent).toMatch(/JVM/);
+    expect(line!.querySelector('button[aria-label*="jvm.memory.used"]')).not.toBeNull();
+  });
+
+  it('JVM service with jvm.* metrics: no empty-state line', async () => {
+    m.language = 'java'; m.profileRuntime = 'jvm';
+    await render();
+    expect(q('rt-missing')).toBeNull();
+  });
+
+  it('Go service without Go metrics: empty-state line replaces the generic note, pod resources stay', async () => {
+    m.language = 'go'; m.profileRuntime = 'go';
+    await render();
+    expect(q('rt-missing')).not.toBeNull();
+    expect(q('pod-resources')).not.toBeNull();
+  });
+});
+
+describe('runtimeMetricsMissing', () => {
+  it('only for families with an own surface, after the profile loaded', () => {
+    expect(runtimeMetricsMissing('jvm', true, [{ signal: 'fd_open' }])).toBe(true);
+    expect(runtimeMetricsMissing('jvm', true, [{ signal: 'heap_used' }])).toBe(false);
+    expect(runtimeMetricsMissing('jvm', false, [])).toBe(false);
+    expect(runtimeMetricsMissing('dotnet', true, [])).toBe(false); // panelin kendi boş durumu
+    expect(runtimeMetricsMissing('nodejs', true, [])).toBe(false);
+    expect(runtimeMetricsMissing(null, true, [])).toBe(false);
   });
 });
 

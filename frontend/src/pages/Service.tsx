@@ -538,7 +538,7 @@ function ServiceDetailInner() {
               tooltip={pinned ? 'Unpin from Cmd-K quick access' : 'Pin to Cmd-K quick access'}
               icon={pinned ? '★' : '☆'}
               onClick={() => setPinned(toggleServicePin(svc))} />
-            {info && runtimeQ.data && <ServiceRuntimeBadge rt={runtimeQ.data} compact />}
+            {info && runtimeQ.data && <ServiceRuntimeBadge rt={runtimeQ.data} iconSize={22} />}
             {info && <ServiceCatalogPill service={svc} />}
           </div>
           {/* Drill chips (v0.5.463) — DrillButton standardises the

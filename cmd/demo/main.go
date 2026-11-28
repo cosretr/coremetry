@@ -1930,31 +1930,7 @@ func (m *metricsState) flush(startNs, nowNs uint64) []*metricspb.ResourceMetrics
 		}
 		pod := s.Pods[mrand.IntN(len(s.Pods))]
 		rms = append(rms, &metricspb.ResourceMetrics{
-			Resource: &resourcepb.Resource{Attributes: append([]*commonpb.KeyValue{
-				kvStr("service.name", s.Name),
-				kvStr("host.name", pod),
-				kvStr("service.instance.id", pod),
-				kvStr("k8s.pod.name", pod),
-				// v0.9.684 — K8s İŞYÜKÜ KİMLİĞİ. Demo bugüne kadar yalnız pod
-				// adını yayıyordu; deployment/container adı YOKTU.
-				//
-				// Bedeli ölçüldü: metrik throughput zincirinin kimlik adaylarından
-				// BEŞİ yerelde tam sıfırdı (474 bin satırın hiçbirinde yok), yani
-				// v0.9.680'de aday listesinin BAŞINA koyduğum
-				// resource.k8s.deployment.name yerelde bir kez bile icra edilmedi.
-				// Bugünkü altı hatanın hepsi "yerelde hiç çalışmayan dal"
-				// sınıfındandı; bu, sınıfı kaynağında kapatıyor.
-				//
-				// DEĞER SERVİS ADI, pod adından TÜRETİLMİYOR — demo pod biçimi
-				// "billpay-prod-2-r7402", ondan çıkarılan ad servisle
-				// eşleşmiyordu (bkz. spans dalındaki uzun not).
-				// Üç sinyalde de aynı (kaynak tutarlılığı, v0.8.383 ilkesi).
-				// v0.10.192 — namespace + işyükü kimliği + imaj (k8sWorkloadAttrs)
-				kvStr("k8s.cluster.name", clusterFor(s.Name)),
-				kvStr("openshift.cluster.name", clusterFor(s.Name)), // v0.10.2486 — prod OpenShift kaynak anahtarı
-				// v0.8.383 — same per-instance env as the pod's spans.
-				kvStr("deployment.environment.name", envForPod(s, pod)),
-			}, k8sWorkloadAttrs(s)...)},
+			Resource: &resourcepb.Resource{Attributes: metricResourceAttrs(s, pod)},
 			ScopeMetrics: []*metricspb.ScopeMetrics{{
 				Scope:   &commonpb.InstrumentationScope{Name: "coremetry-demo"},
 				Metrics: mts,
@@ -1970,7 +1946,42 @@ func (m *metricsState) flush(startNs, nowNs uint64) []*metricspb.ResourceMetrics
 	// oracle_metrics.go for the read-contract mapping.
 	rms = append(rms, oracleReceiverMetrics(startNs, nowNs)...)
 
+	// v0.10.2490 — dile göre pod başına runtime metrikleri (runtime_metrics.go):
+	// Service › Metrics › Runtime bölümünün sorguladığı jvm.* / .NET / Go /
+	// CPython adları.
+	rms = append(rms, runtimeResourceMetrics(nowNs, rf, lf)...)
+
 	return rms
+}
+
+// metricResourceAttrs — bir pod'un metrik Resource öznitelikleri (servis
+// metrikleri ve v0.10.2490 pod başına runtime metrikleri aynı kimliği taşır).
+func metricResourceAttrs(s Service, pod string) []*commonpb.KeyValue {
+	return append([]*commonpb.KeyValue{
+		kvStr("service.name", s.Name),
+		kvStr("host.name", pod),
+		kvStr("service.instance.id", pod),
+		kvStr("k8s.pod.name", pod),
+		// v0.9.684 — K8s İŞYÜKÜ KİMLİĞİ. Demo bugüne kadar yalnız pod
+		// adını yayıyordu; deployment/container adı YOKTU.
+		//
+		// Bedeli ölçüldü: metrik throughput zincirinin kimlik adaylarından
+		// BEŞİ yerelde tam sıfırdı (474 bin satırın hiçbirinde yok), yani
+		// v0.9.680'de aday listesinin BAŞINA koyduğum
+		// resource.k8s.deployment.name yerelde bir kez bile icra edilmedi.
+		// Bugünkü altı hatanın hepsi "yerelde hiç çalışmayan dal"
+		// sınıfındandı; bu, sınıfı kaynağında kapatıyor.
+		//
+		// DEĞER SERVİS ADI, pod adından TÜRETİLMİYOR — demo pod biçimi
+		// "billpay-prod-2-r7402", ondan çıkarılan ad servisle
+		// eşleşmiyordu (bkz. spans dalındaki uzun not).
+		// Üç sinyalde de aynı (kaynak tutarlılığı, v0.8.383 ilkesi).
+		// v0.10.192 — namespace + işyükü kimliği + imaj (k8sWorkloadAttrs)
+		kvStr("k8s.cluster.name", clusterFor(s.Name)),
+		kvStr("openshift.cluster.name", clusterFor(s.Name)), // v0.10.2486 — prod OpenShift kaynak anahtarı
+		// v0.8.383 — same per-instance env as the pod's spans.
+		kvStr("deployment.environment.name", envForPod(s, pod)),
+	}, k8sWorkloadAttrs(s)...)
 }
 
 func sendMetrics(startNs uint64) uint64 {

@@ -43,6 +43,7 @@ import { useCompareParam } from '@/lib/chart/useCompareParam';
 import { CompareToggle } from '@/components/charts/CompareToggle';
 import { compareOffsetNs, ghostItemsFrom } from '@/lib/chart/compareParam';
 import { okErrorPoints } from '@/lib/chart/redBands';
+import { compareGhostLabel, liveGrid, overviewMetricGhosts, priorWindowEmpty } from './overviewCompareGhost';
 import { scopedChartTitle, scopeTitleTip } from './charts/scopeTitle';
 import { sumSeries } from './charts/throughputTotal';
 import { MetricThroughputNote } from './MetricThroughputNote';
@@ -240,6 +241,9 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
   // span türevli "Failure rate · trace" paneline biner — metrik route
   // kırılımı panelleri hayalet almaz (N kesikli çizgi okunmaz; operatör
   // canlı "Toplam" çizgisini bile kaldırmıştı, v0.9.799).
+  // v0.10.2490 (Operator-reported: "Compare to çalışmıyor") — metrik kipinde
+  // üç grafik de TEK kesikli "önceki pencere" toplam çizgisi alır
+  // (overviewCompareGhost.ts; kaydırılmış /metric-red yanıtı, ek istek yok).
   const [compare, setCompare] = useCompareParam({ seedKey: STORAGE_KEYS.svcChartsCompare });
   const compareOff = compareOffsetNs(compare, from, to);
   const ghostEnabled = compareOff > 0;
@@ -830,6 +834,22 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
     rtUnit ? null : tl('ov.rt.unitUnknown', lang),
   ].filter(Boolean).join(' · ') || null;
 
+  // v0.10.2490 — metrik kipinin üç hayaleti (RT avg / toplam hız / 5xx hızı)
+  // kaydırılmış /metric-red yanıtından; compare kapalıyken {} (prop geçmez).
+  const metricGhosts = useMemo(
+    () => (metricMode && ghostEnabled
+      ? overviewMetricGhosts(metricRedGhostQ.data?.series, compareOff, rtUnit, compareGhostLabel(compare, lang), {
+        // Canlı grafiğin ızgarası (adımlar farklı; ayrı ızgara çizgileri noktalara böler).
+        rt: liveGrid(rtAvgQ.data?.series), tput: liveGrid(metricTputQ.data?.series), err5xx: liveGrid(httpStatus.series),
+      })
+      : {}),
+    [metricMode, ghostEnabled, metricRedGhostQ.data, compareOff, rtUnit, compare, lang, rtAvgQ.data, metricTputQ.data, httpStatus.series]);
+  const ghostSettled = metricMode ? metricRedGhostQ.isSuccess : (usingAllSpans ? seriesGhostQ.isSuccess : latencyGhostQ.isSuccess);
+  const ghostFailed = metricMode ? metricRedGhostQ.isError : (seriesGhostQ.isError || latencyGhostQ.isError);
+  const noPriorData = metricMode
+    ? priorWindowEmpty(ghostEnabled, ghostSettled, metricGhosts.rt, metricGhosts.tput, showHttpStatus ? metricGhosts.err5xx : failureGhost)
+    : priorWindowEmpty(ghostEnabled, ghostSettled, failureGhost);
+
   // v0.9.170 (operatör-bildirimi: cluster çözülemeyen / metrik-yoğun
   // servislerde "bütün Service Overview boş"). Service-summary bundle (info)
   // null olsa da Overview BLANK dönmez — headline sayılar RED/latency
@@ -1070,8 +1090,9 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
           sebebi yazar); Overview'da unutulmuştu — operatör bunu "grafikler
           bozuk/zıplıyor" diye yaşıyordu. Doorway hover ⋮ ve `e` kısayoluyla
           erişilebilir kalıyor; KPI karoları gövde-tıklamasını koruyor. */}
-      {/* v0.10.316 — Compare to: (?compare=, Details/Pod ile aynı). Hayalet
-          yalnız Failure rate · trace paneline biner; not bunu söyler. */}
+      {/* v0.10.316 — Compare to: (?compare=, Details/Pod ile aynı). v0.10.2490 —
+          metrik kipinde üç grafik de hayalet alır; span kipinde yalnız
+          Failure rate · trace. Not bunu söyler; veri yoksa ayrı rozet. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, fontSize: 11, color: 'var(--text2)', flexWrap: 'wrap', rowGap: 6 }}>
         <select value={metricMode ? 'metric' : 'span'}
           onChange={e => setMetricMode(e.target.value === 'metric')}
@@ -1083,7 +1104,8 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
         </select>
         {metricMode && !famGrpc && <InfraRoutesToggle hidden={infraHidden} />}
         <CompareToggle value={compare} onChange={setCompare} />
-        {ghostEnabled && <span style={{ color: 'var(--text3)' }}>{tl('ov.ghostNote', lang)}</span>}
+        {ghostEnabled && <span style={{ color: 'var(--text3)' }}>{tl(metricMode ? 'ov.ghostNoteAll' : 'ov.ghostNote', lang)}</span>}
+        {noPriorData && <span className="badge b-gray">{tl('ov.ghost.noPrior', lang)}</span>}
         {metricMode && metricRedQ.isError && <span className="badge b-err" title={metricRedQ.error instanceof Error ? metricRedQ.error.message : ''}>{tl('ov.redErr', lang)}</span>}
         {(metricMode || metricAutoFellBack) && metricRedQ.data && !metricRedQ.data.metricExists && <span className="badge b-warn" title={metricRedQ.data.note}>{tl('ov.noMetric', lang)}</span>}
         {metricMode && metricRedQ.data?.metricExists && (metricRedQ.data.errorsUnknown || !metricRedQ.data.latencyUnitKnown || metricRedQ.data.envAmbiguous) && (
@@ -1095,7 +1117,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
             metricRedQ.data.envAmbiguous ? tl(metricRedQ.data.envScope?.failed ? 'ov.miss.envFail' : metricRedQ.data.envScope ? 'ov.miss.envAbsent' : 'ov.miss.env', lang) : null,
           ].filter(Boolean).join(', ')}</span>
         )}
-        {ghostEnabled && (seriesGhostQ.isError || latencyGhostQ.isError) && <span className="badge b-warn">{tl('ov.prevFail', lang)}</span>}
+        {ghostEnabled && ghostFailed && <span className="badge b-warn">{tl('ov.prevFail', lang)}</span>}
         {/* v0.10.1429 — aile: yalnız gRPC → rozet; ikisi → HTTP birincil + gRPC notu (toplanmadı); çözüm okunamadı → dürüst not. */}
         {metricMode && famGrpc && (
           <span className="badge b-info" title={tf('ov.grpcTip', lang, { names: family.names.count.replace(/_count$/, '_*'), probe: family.probe, codes: family.serverErr })}>
@@ -1154,6 +1176,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
                 // deseni zaten taşıyordu.
                 menuExtra={doorway}
                 storageKey="ov-response-time-metric-v2" height={200} onExpandClick={() => navigate(rtExploreHref())}
+                ghostItems={metricGhosts.rt}
                 loading={metricTputQ.isLoading || rtAvgQ.isLoading}
                 // Birim SUNUCUDAN gelen OTLP birimine göre; tanınmazsa
                 // undefined (ham sayı) ve not bunu söyler.
@@ -1216,6 +1239,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
                 storageKey="ov-throughput-metric-v2"
                 loading={metricTputQ.isLoading}
                 height={200} xRange={xRange} onExpandClick={() => navigate(tputExploreHref())}
+                ghostItems={metricGhosts.tput}
                 unit="reqps"
                 // v0.9.799 — SAF route kırılımı (v0.9.796 görünümü).
                 // v0.9.798'in istemci-toplamı "Toplam" çizgisi kalktı:
@@ -1288,7 +1312,7 @@ export function ServiceOverview({ service, range, windowNs, info, operations, op
                 menuExtra={doorway}
                 storageKey={showHttpStatus ? 'ov-http-status-v1' : 'ov-throughput-failure-v2'} height={200} unit="reqps" xRange={xRange}
                 loading={latStatus === 'loading' || (metricMode && httpStatusQ.isPending)}
-                ghostItems={showHttpStatus ? undefined : failureGhost}
+                ghostItems={showHttpStatus ? metricGhosts.err5xx : failureGhost}
                 items={showHttpStatus
                   ? httpStatus.series.map(sr => ({ name: sr.groupKey[0], role: 'data' as const, color: `var(${httpStatus.tokens.get(sr.groupKey[0]) ?? '--text3'})`, series: [sr] }))
                   : [

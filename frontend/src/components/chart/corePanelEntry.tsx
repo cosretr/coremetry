@@ -58,6 +58,9 @@ export interface CorePanelMultiItem {
   // ilk frame'leri arası doldurulur (CorePanel.fillBetween). İkisi de
   // yoksa bant yok.
   band?: 'lo' | 'hi';
+  // v0.10.2490 — hayalet adı ZATEN "önceki pencere · 24h" diyorsa "(önceki)"
+  // eki basılmaz (Overview toplam hayaleti; lejantta çift "önceki" olmasın).
+  ghostNameAsIs?: boolean;
   // v0.9.799 — emphasis KALDIRILDI (v0.9.798'de eklenmişti). Tek
   // tüketicisi Overview'ın "Toplam" item'ıydı; operatör o çizgiyi büyük
   // grafiklerden geri aldırınca kanal tüketicisiz kaldı ve CorePanel
@@ -158,7 +161,7 @@ export function CorePanelMulti({
     }
   }
   for (const g of ghostItems ?? []) {
-    const fs = spanSeriesToFrames(g.series, { unit, name: `${g.name} (önceki)` });
+    const fs = spanSeriesToFrames(g.series, { unit, name: g.ghostNameAsIs ? g.name : `${g.name} (önceki)` });
     frames.push(...fs);
     for (let i = 0; i < fs.length; i++) {
       right.push(false);

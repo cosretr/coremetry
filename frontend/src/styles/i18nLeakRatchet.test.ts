@@ -188,7 +188,7 @@ describe('topbarTitleRatchet (denetim M10, hedef 0)', () => {
 // TR/EN ayrımı dosya toplamlarıyla tutuyor ama dil sınıfı ters düşmüş — ör.
 // PanelEditor 93'ün ~85'i İngilizce; bu test sınıfı yeniden ölçtü.)
 const TOTAL_TR = 825; // v0.10.2486 dilim 2: 954 → 825
-const TOTAL_EN = 1796; // v0.10.2486 dilim 2: 2317 → 1796
+const TOTAL_EN = 1795; // v0.10.2486 dilim 2: 2317 → 1796; v0.10.2490 RuntimeIcons 1796 → 1795
 const TOTAL_ADMIN_TR = 956; // hedef dışı (yönetim), yalnız aşağı; 948 + 8 = aynı sürümdeki gölge kuralı ayar ekranı (Settings › ML, yönetim ekranı çevrilmez)
 const TOTAL_ADMIN_EN = 1568; // hedef dışı (yönetim), yalnız aşağı; 1562 + 6 = aynı sürümdeki gölge kuralı ayar ekranı
 const TOTAL_TOPBAR_ADMIN = 9; // hedef dışı (Settings 2, System 1, Users 2, settings/UserDetail 4)
@@ -233,7 +233,6 @@ const CEIL: Record<string, number> = {
   'components/RolloutWorkloadPicker.tsx': 1,
   'components/RootCausePanel.tsx': 32,
   'components/RootCauseRibbon.tsx': 14,
-  'components/RuntimeIcons.tsx': 1,
   'components/SavedViewsBar.tsx': 14,
   'components/ServiceAttentionStrip.tsx': 1,
   'components/ServiceCatalogPill.tsx': 39,
