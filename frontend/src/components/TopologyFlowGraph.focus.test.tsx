@@ -64,7 +64,7 @@ describe('TopologyFlowGraph — odak sütun kipi (v0.10.1294)', () => {
 
   it('sütun başlıkları', () => {
     const html = render();
-    for (const l of ['Çağıranlar · 1', 'Odak', 'Bağımlılıklar · 2', 'Bağımlılıklar · 2 hop · 1']) expect(html).toContain(l);
+    for (const l of ['Callers · 1', 'Focus', 'Dependencies · 2', 'Dependencies · 2 hops · 1']) expect(html).toContain(l);
   });
 
   // v0.10.1307 — operatör 2026-10-17: hop'u az olan tarafa boş 280 px sütun
@@ -78,8 +78,8 @@ describe('TopologyFlowGraph — odak sütun kipi (v0.10.1294)', () => {
     };
     const cols = new Map([...columns].filter(([s]) => s !== 'c'));
     const html = render({ data: noCallers, columns: cols });
-    expect(html).toContain('Bağımlılıklar');
-    expect(html).not.toContain('Çağıranlar ·');
+    expect(html).toContain('Dependencies');
+    expect(html).not.toContain('Callers ·');
     expect(html).toMatch(/class="topo-colhdr topo-colhdr-empty"[^>]*>Çağıran yok \(enstrümante değil\)</);
     expect(render()).not.toContain('Çağıran yok');
   });
@@ -93,6 +93,46 @@ describe('TopologyFlowGraph — odak sütun kipi (v0.10.1294)', () => {
     const html = render({ hoverNode: 'b' });
     expect(edgePaths(html).length).toBe(edgePaths(render()).length + 2); // a→b, c→b
     expect(html).toMatch(/class="topo-edge-flow live"/);
+  });
+
+  // v0.10.2491 — Topology v2 (mockup 1dc246582, operatör onaylı).
+  describe('Topology v2 (v0.10.2491)', () => {
+    const v2data: ServiceMap = {
+      ...data,
+      edges: data.edges.map(e => (
+        e.caller === 'f' && e.callee === 'a' ? { ...e, spanCount: 100, errorRate: 0.02 }
+        : e.caller === 'f' && e.callee === 'b' ? { ...e, spanCount: 30, p99Ms: 1500 }
+        : { ...e, spanCount: 5 })),
+    } as ServiceMap;
+    const strokeOf = (html: string, from: string, to: string) => {
+      const re = new RegExp(`<path[^>]*stroke="([^"]+)"[^>]*stroke-width="(\\d)"[^>]*class="topo-edge-flow[^"]*"[^>]*><title>${from} → ${to}\\n`);
+      return html.match(re)?.slice(1);
+    };
+
+    it('ok hedef kenarında marker; yol üstünde akan ok yok', () => {
+      const html = render({ data: v2data });
+      expect(html).toContain('<marker');
+      expect(html).toMatch(/marker-end="url\(#tm[^)]*-neu\)"/);
+      expect(html).not.toContain('topo-edge-arrow');
+    });
+    it('kalınlık en yoğun kenara göre 1/2/3, renk yalnız sapan kenarda', () => {
+      const html = render({ data: v2data });
+      expect(strokeOf(html, 'f', 'a')).toEqual(['var(--err)', '3']);        // 100 = en yoğun, hata %2
+      expect(strokeOf(html, 'f', 'b')).toEqual(['var(--warn-solid)', '2']); // 30 > %15, p99 1,5 sn
+      expect(strokeOf(html, 'c', 'f')).toEqual(['var(--border-strong)', '1']);
+    });
+    it('etiket: varsayılan gizli, "hep" kipinde görünür', () => {
+      expect(render({ data: v2data })).not.toContain('topo-chip');
+      expect(render({ data: v2data, edgeLabels: 'always' })).toContain('topo-chip v2');
+    });
+    it('sabit düğüm: komşuları tam, gerisi sönük; çift tık ipucu yalnız servis komşusunda', () => {
+      const html = render({ data: v2data, pinnedNode: 'k', onOpenNode: () => {} });
+      expect(html).toMatch(/class="topo-node[^"]*pinned[^"]*"[^>]*aria-label="k"/);
+      expect(html).toMatch(/class="topo-node dim[^"]*"[^>]*aria-label="c"/);
+      expect(html).not.toMatch(/class="topo-node[^"]*dim[^"]*"[^>]*aria-label="a"/);
+      expect(html).toMatch(/aria-label="a" title="[^"]*Double-click/);
+      expect(html).not.toMatch(/aria-label="f" title="[^"]*Double-click/);
+    });
   });
 
   // v0.10.1305 — Genel servis haritası: animate varsayılanı 'hover' → global

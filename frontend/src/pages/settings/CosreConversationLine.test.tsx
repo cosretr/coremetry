@@ -17,6 +17,7 @@ const m = vi.hoisted(() => ({
   putInteraction: vi.fn((interaction: string) => Promise.resolve({ state: true, style: false, verification: 'shadow', interaction })),
   putEvidence: vi.fn((evidence: string) => Promise.resolve({ state: true, style: false, verification: 'shadow', evidence })),
   putStatusLine: vi.fn((statusLine: boolean) => Promise.resolve({ state: true, style: false, verification: 'shadow', statusLine })),
+  putFlow: vi.fn((flow: string) => Promise.resolve({ state: true, style: false, verification: 'shadow', flow })),
 }));
 vi.mock('@/lib/api', () => ({
   api: {
@@ -28,6 +29,7 @@ vi.mock('@/lib/api', () => ({
     putCosreConversationInteraction: (v: string) => m.putInteraction(v),
     putCosreConversationEvidence: (e: string) => m.putEvidence(e),
     putCosreConversationStatusLine: (v: boolean) => m.putStatusLine(v),
+    putCosreConversationFlow: (v: string) => m.putFlow(v),
   },
 }));
 vi.mock('@/components/AuthProvider', () => ({ useAuthRole: () => m.role }));
@@ -65,6 +67,16 @@ const evidenceRadio = (el: HTMLElement, label: string) =>
   [...el.querySelectorAll<HTMLButtonElement>('[data-testid="cosre-evidence-mode"] [role="radio"]')].find(b => b.textContent === label)!;
 
 describe('CosreConversationLine', () => {
+  it('v0.10.2491 — sohbet akışı iki seçenek; alan yokken cevabın içinde; tek blok flow:block yazar', async () => {
+    const el = await render();
+    const radio = (label: string) => [...el.querySelectorAll<HTMLButtonElement>('[data-testid="cosre-flow-mode"] [role="radio"]')].find(b => b.textContent === label)!;
+    expect(radio('cevabın içinde').getAttribute('aria-checked')).toBe('true');
+    await act(async () => { radio('tek blok').click(); });
+    await tick();
+    expect(m.putFlow).toHaveBeenCalledWith('block');
+    expect(m.putStatusLine).not.toHaveBeenCalled();
+    m.putFlow.mockClear();
+  });
   it('v0.10.2355 — kanıt alanı üç seçenek; alan yokken kapalı; seçim evidence yazar', async () => {
     const el = await render();
     expect(el.textContent).toContain('Kanıt (kapsam kararı)');

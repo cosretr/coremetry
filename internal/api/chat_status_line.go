@@ -82,8 +82,20 @@ type chatStatusLine struct{ last string }
 
 // round — araç turunun başında (çağrılar yürütülmeden önce) en çok bir
 // `status` olayı. Kapı kapalıysa ya da aile yoksa hiçbir şey yazmaz.
+// v0.10.2491 — inline akışta (chat_narration.go) aynı seçim KALICI `narration`
+// olur ve geçici `status` yazılmaz; block kipte bugünkü yol aynen.
 func (l *chatStatusLine) round(ctx context.Context, emit func(string, any), round int, calls []copilot.ToolCall) {
-	if len(calls) == 0 || !statusLineOn(ctx) {
+	if len(calls) == 0 {
+		return
+	}
+	if n := chatNarratorOf(ctx); n != nil && flowInlineOn(ctx) {
+		s := chatStatusPick(chatStatusFamily(calls), round, l.last)
+		if n.narrate(ctx, emit, s) {
+			l.last = n.last
+		}
+		return
+	}
+	if !statusLineOn(ctx) {
 		return
 	}
 	s := chatStatusPick(chatStatusFamily(calls), round, l.last)

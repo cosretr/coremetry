@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { ROW_PITCH } from '@/lib/topoLayout';
 import { bfsBarycenterLayout, routeKind } from '@/lib/topoBfsLayout';
@@ -13,6 +13,9 @@ import { Button } from '@/components/ui/Button';
 import { useServicesMetadata } from '@/lib/queries';
 import { seriesPalette } from '@/lib/chartFmt';
 import { useThemeTick } from '@/lib/useThemeTick';
+import { useLang, useT } from '@/lib/i18n';
+import { percent } from '@/lib/format/percent';
+import { duration } from '@/lib/format/duration';
 import {
   foldTopology, defaultCollapsed, parseNsFold, encodeNsFold,
   isNsNode, nsOfNodeId,
@@ -72,6 +75,17 @@ import {
 //     servisli haritada ≥3 üyeli her namespace katlı açılır (lib/topoFold
 //     AUTO_FOLD_ALL_GRAPH); "Tümünü aç" ?nsfold=- yazar.
 //
+//   • v0.10.2491 — Topology v2 (operatör onaylı mockup
+//     docs/frontend/mockups/topology-v2.html, 1dc246582) — YALNIZ odak kipi:
+//     küçük dolu ok ucu hedef pilin kenarında (SVG marker; yol ortasında
+//     akan ok yok), kalınlık görünen en yoğun kenara göre 1/2/3 px, renk
+//     yalnız sapan kenarda (hata ≥%1 --err, p99 > 1 sn --warn-solid, gerisi
+//     --border-strong), kenar etiketi vurguda ya da "hep" kipinde, kenar
+//     hover/tık vurgusu (gerisi %18), tek tık sabitler, boşluğa tık bırakır,
+//     servise çift tık o servisin topology'si (onOpenNode). Düğüm: tür ikonu
+//     + ad + tek satır özet (çağrı/dk · hata · p99). Kenarda p95 yok (MV
+//     yalnız p99 taşır) → etiket ve yavaş eşiği p99'dan.
+//
 // CSS bağımlılıkları globals.css'te zaten mevcut: .topo, .topo-edges,
 // .topo-node (+ .focus/.dim), .topo-name, .topo-sub, .topo-dot,
 // @keyframes topo-edge-flow. Tek ekleme (aşağıya bakın):
@@ -87,6 +101,7 @@ const NEW_EDGE_DASH = '12 4';
 export function TopologyFlowGraph({
   data: rawData, focus, hoverNode, onHoverNode, onSelectNode, height = 560,
   dropMessaging = true, columns, animate = 'hover', showSecondary = false, onExpandColumn, legend, compact = false,
+  pinnedNode = null, onClearPin, onOpenNode, edgeLabels = 'hover',
 }: {
   data: ServiceMap;
   focus: string | null;
@@ -110,6 +125,14 @@ export function TopologyFlowGraph({
   legend?: ReactNode;
   /** v0.10.1392 — salt-okur kompakt kip (sohbet kartı): içerik boyutu, ölçek 1, sayfa kontrolü yok */
   compact?: boolean;
+  /** v0.10.2491 — odak kipi: sabitlenmiş düğüm (çağıranın pin'i); hover yokken vurguyu taşır */
+  pinnedNode?: string | null;
+  /** v0.10.2491 — boşluğa tık ya da kenar sabitleme: çağıranın düğüm pin'ini bırak */
+  onClearPin?: () => void;
+  /** v0.10.2491 — servis düğümüne çift tık (odak ve bağımlılık düğümleri hariç) */
+  onOpenNode?: (id: string) => void;
+  /** v0.10.2491 — odak kipi kenar etiketi: 'hover' = vurguda/sabitte, 'always' = hep */
+  edgeLabels?: 'hover' | 'always';
 }) {
   const focusMode = !!columns && !!focus;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -247,7 +270,17 @@ export function TopologyFlowGraph({
   // düğümü .dim'e, her kenarı 0.12 opaklığa kilitliyordu. neighbours
   // render edilen HER düğüm için kayıt taşır — fallback yalnız bayat
   // id durumunda tetiklenirdi, güvenle null'a iner.
-  const oneHop = hoverNode ? (neighbours.get(hoverNode) ?? null) : null;
+  // v0.10.2491 — odak kipi kenar vurgusu (hover / tık-sabit). Anahtar
+  // ileri kenarın `caller|callee`'si (indeks değil: 30 sn'lik tazelemede kayar).
+  // Öncelik: hover düğüm > hover kenar > sabit düğüm > sabit kenar; düğüm ve
+  // kenar sabiti birbirini dışlar (kenara tık düğüm pin'ini bırakır).
+  const [hoverEdge, setHoverEdge] = useState<string | null>(null);
+  const [pinnedEdge, setPinnedEdge] = useState<string | null>(null);
+  useEffect(() => { setPinnedEdge(null); setHoverEdge(null); }, [focus]);
+  const pinNode = focusMode && pinnedNode && neighbours.has(pinnedNode) ? pinnedNode : null;
+  const hl = hoverNode ?? (hoverEdge ? null : pinNode);
+  const litEdge = hl ? null : (hoverEdge ?? pinnedEdge);
+  const oneHop = hl ? (neighbours.get(hl) ?? null) : null;
 
   // ── Katmanlı + namespace şeritli yerleşim ───────────────────────────
   // v0.10.1261 (operatör 2026-10-17: "aynı sütunda birbirini çağıran
@@ -313,11 +346,12 @@ export function TopologyFlowGraph({
   // v0.10.1305 — genel haritada da yol: reachPath (±2 hop, ileri kenarlar,
   // ≤60 düğüm; lib/topoReach).
   const path = useMemo(() => {
-    if (!hoverNode || !oneHop) return null;
-    if (focusMode) return focusPath(hoverNode, data.edges, columns!);
-    return reachPath(hoverNode, data.edges, backEdges);
-  }, [focusMode, hoverNode, oneHop, data.edges, columns, backEdges]);
-  const active = oneHop && path ? new Set([...oneHop, ...path.nodes]) : oneHop;
+    if (!hl || !oneHop) return null;
+    if (focusMode) return focusPath(hl, data.edges, columns!);
+    return reachPath(hl, data.edges, backEdges);
+  }, [focusMode, hl, oneHop, data.edges, columns, backEdges]);
+  const litPair = litEdge ? litEdge.split('|') : null;
+  const active = oneHop && path ? new Set([...oneHop, ...path.nodes]) : oneHop ?? (litPair ? new Set(litPair) : null);
 
   // v0.10.1269 — operatör 2026-10-17: çok sütun atlayan kenarlar düğümlerin
   // arkasından geçiyordu. Her çizilen kenarın nokta dizisi (a, ara sütun
@@ -399,10 +433,10 @@ export function TopologyFlowGraph({
 
   // Drag pan — pill üstünde başlamaz (tıklama/focus davranışı bozulmaz).
   const [panning, setPanning] = useState(false);
-  const panRef = useRef<{ px: number; py: number } | null>(null);
+  const panRef = useRef<{ px: number; py: number; moved: number } | null>(null);
   const onPointerDown = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('.topo-node, .topo-zoomctl, .topo-nshdr, .topo-more, .topo-foldbar')) return;
-    panRef.current = { px: e.clientX, py: e.clientY };
+    if ((e.target as Element).closest('.topo-node, .topo-zoomctl, .topo-nshdr, .topo-more, .topo-foldbar, .topo-hit')) return;
+    panRef.current = { px: e.clientX, py: e.clientY, moved: 0 };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     setPanning(true);
   };
@@ -410,10 +444,16 @@ export function TopologyFlowGraph({
     const p = panRef.current;
     if (!p) return;
     const dx = e.clientX - p.px, dy = e.clientY - p.py;
-    panRef.current = { px: e.clientX, py: e.clientY };
+    panRef.current = { px: e.clientX, py: e.clientY, moved: p.moved + Math.abs(dx) + Math.abs(dy) };
     setVp(v => ({ ...v, x: v.x + dx, y: v.y + dy }));
   };
   const endPan = () => { panRef.current = null; setPanning(false); };
+  // v0.10.2491 — boşluğa tık (sürüklemeden bırakılan pan): sabit vurgu kalkar.
+  const onPointerUp = () => {
+    const p = panRef.current;
+    if (p && p.moved < 4 && focusMode) { setPinnedEdge(null); onClearPin?.(); }
+    endPan();
+  };
   const zoomStep = (factor: number) => {
     const el = wrapRef.current;
     const w = el?.clientWidth ?? width;
@@ -453,6 +493,38 @@ export function TopologyFlowGraph({
   // grafikte chip'ler hep açık, kalabalıkta yalnız hover'da.
   const labelAlways = renderedEdges.length < 8;
 
+  // v0.10.2491 — odak kipi kalınlığı: görünen grafın en yoğun kenarına göre
+  // 3 kademe (yarısından çok = 3 px, %15'inden çok = 2 px, gerisi 1 px).
+  // Sabit eşik yüksek hacimli ortamda her kenarı kalın gösterirdi. Varsayılan
+  // görünürlükten (hover'dan bağımsız) ölçülür: vurgu kalınlığı oynatmaz.
+  const volOf = (re: RenderedEdge) => weightOf(re.forward) + weightOf(re.reverse);
+  const volMax = useMemo(() => {
+    if (!focusMode) return 0;
+    let m = 0;
+    renderedEdges.forEach((re, i) => {
+      const g = edgeGeom[i];
+      if (g && (!g.cls || edgeVisibility(g.cls, { showSecondary, incident: false }) !== null)) m = Math.max(m, volOf(re));
+    });
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- volOf yalnız weightOf'a bağlı
+  }, [focusMode, renderedEdges, edgeGeom, showSecondary, weightOf]);
+  const lang = useLang();
+  const tn = useT();
+  const markId = 'tm' + useId().replace(/[^A-Za-z0-9_-]/g, '');
+  // Düğüm özeti (odak kipi): çağrı/dk düğümün kendi oranı (yoksa gelen
+  // kenarların toplamı), p99 = gelen kenarların en büyüğü (yoksa giden).
+  const nodeStats = useMemo(() => {
+    const m = new Map<string, { inRate: number; outRate: number; inP99: number; outP99: number }>();
+    if (!focusMode) return m;
+    const at = (id: string) => m.get(id) ?? m.set(id, { inRate: 0, outRate: 0, inP99: 0, outP99: 0 }).get(id)!;
+    for (const e of data.edges) {
+      const t = at(e.callee), s = at(e.caller);
+      t.inRate += e.rate ?? 0; s.outRate += e.rate ?? 0;
+      t.inP99 = Math.max(t.inP99, e.p99Ms ?? 0); s.outP99 = Math.max(s.outP99, e.p99Ms ?? 0);
+    }
+    return m;
+  }, [focusMode, data.edges]);
+
   // v0.10.1294 — odak kipi: yol vurgusundaki kenar (iki yön anahtarı da).
   const onPath = (re: RenderedEdge) => !!path && (
     path.edges.has(`${re.forward.caller}|${re.forward.callee}`) ||
@@ -483,7 +555,7 @@ export function TopologyFlowGraph({
       style={compact ? { height: layoutH, width: layoutW } : { height }}
       onPointerDown={compact ? undefined : onPointerDown}
       onPointerMove={compact ? undefined : onPointerMove}
-      onPointerUp={compact ? undefined : endPan}
+      onPointerUp={compact ? undefined : onPointerUp}
       onPointerCancel={compact ? undefined : endPan}
       onDoubleClick={compact ? undefined : e => {
         if ((e.target as HTMLElement).closest('.topo-node, .topo-zoomctl, .topo-nshdr, .topo-more, .topo-foldbar')) return;
@@ -495,6 +567,18 @@ export function TopologyFlowGraph({
         className="topo-viewport"
         style={{ width: layoutW, height: layoutH, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
       <svg className="topo-edges" width={layoutW} height={layoutH}>
+        {/* v0.10.2491 — odak kipi ok uçları: tona göre küçük dolu üçgen, ucu
+            hedef pil kenarından 1.5 px önce (refX 9 > uç 7.5). */}
+        {focusMode && (
+          <defs>
+            {(Object.keys(EDGE_TONE) as EdgeTone[]).map(k => (
+              <marker key={k} id={`${markId}-${k}`} viewBox="0 0 8 8" refX={9} refY={4}
+                markerWidth={7} markerHeight={7} markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                <path d="M0.5,0.8 L7.5,4 L0.5,7.2 Z" style={{ fill: EDGE_TONE[k] }} />
+              </marker>
+            ))}
+          </defs>
+        )}
         {hulls.map(h => (
           <rect key={`hull-${h.ns}`} x={h.x} y={h.y} width={h.w} height={h.h} rx={12}
             fill={`color-mix(in srgb, ${h.color} 7%, transparent)`}
@@ -519,8 +603,9 @@ export function TopologyFlowGraph({
           // Hover vurgusu: hover edilen düğüme DOĞRUDAN bağlı kenarlar maviye
           // döner ve kalınlaşır. Semantik renk hiyerarşisi: hata kırmızısı >
           // hover mavisi > nötr — hatalı kenar hover'da kırmızı KALIR.
-          const incident = !!hoverNode && (e.caller === hoverNode || e.callee === hoverNode);
-          const hot = incident || onPath(re);
+          const incident = !!hl && (e.caller === hl || e.callee === hl);
+          const ekey = `${e.caller}|${e.callee}`;
+          const hot = incident || onPath(re) || ekey === litEdge;
           const vis = visOf(g, incident);
           if (vis === null) return null;
           const dimmed = active && (!active.has(e.caller) || !active.has(e.callee));
@@ -536,6 +621,14 @@ export function TopologyFlowGraph({
           // ayrışır (hatalı olsa bile "yeni" bilgisi kaybolmasın).
           const stroke = errorish ? 'var(--err)' : e.isNew ? 'var(--accent2)' : hot ? 'var(--accent)' : 'var(--border-strong)';
           const newDash = e.isNew ? NEW_EDGE_DASH : undefined;
+          // v0.10.2491 — odak kipi rengi yalnız SAPAN kenarda (hata ≥%1 >
+          // p99 > 1 sn > yeni > vurgu > nötr); ok ucu aynı tonun marker'ı.
+          const tone: EdgeTone | null = focusMode
+            ? (Math.max(errFracOf(e), errFracOf(re.reverse)) >= ERR_EDGE_FRAC ? 'err'
+              : Math.max(e.p99Ms ?? 0, re.reverse?.p99Ms ?? 0) > SLOW_EDGE_MS ? 'warn'
+              : e.isNew ? 'new' : hot ? 'hi' : 'neu')
+            : null;
+          const paint = tone ? EDGE_TONE[tone] : stroke;
           // v0.10.1261 — döngüyü kapatan geri kenar (sağdan sola) noktalı
           // desen alır (.topo-edge-flow.back). Çift yönlü çizgide zaten iki
           // ok var; orada ayrıca işaretlenmez.
@@ -543,11 +636,17 @@ export function TopologyFlowGraph({
           // çift asla back değil).
           const back = g.cls ? g.cls === 'back' : !re.reverse && backEdges.has(`${e.caller}|${e.callee}`);
           // vis < 1 = hover edilen düğümün kendi ikincil kenarı (soluk).
-          const opacity = (dimmed ? 0.12 : hot ? 0.95 : errorish ? 0.85 : 0.55) * vis;
+          const opacity = (tone
+            ? (dimmed ? DIM_OPACITY : tone === 'neu' ? 0.7 : 1)
+            : (dimmed ? 0.12 : hot ? 0.95 : errorish ? 0.85 : 0.55)) * vis;
           // animate="hover": yalnız vurgulu kenar akar (globals.css .anim-hover).
           const live = animate === 'hover' && hot ? ' live' : '';
           // peer: ince, yan bilgi.
-          const sw = g.cls === 'peer' ? 1 : hot ? w + 0.8 : w;
+          // v0.10.2491 — odak kipi: hacim kademesi (vurgu kalınlaştırmaz).
+          const v = volOf(re);
+          const sw = g.cls === 'peer' ? 1
+            : tone ? (v > volMax * 0.5 ? 3 : v > volMax * 0.15 ? 2 : 1)
+            : hot ? w + 0.8 : w;
           // v0.9.1031 — yön oku (operatör isteği). Uca (t=1) konan ok HTML
           // pilinin ALTINDA kalır (düğümler SVG'nin üstünde); hedefe yakın
           // t=0.78 kolon boşluğunda görünür ve t=0.5'teki RED chip'iyle
@@ -555,17 +654,22 @@ export function TopologyFlowGraph({
           // Boyut kenar kalınlığıyla ölçekli; pointer-events yok (dekor).
           // v0.10.1269 — rotalı kenarda ok yolun kendisi üzerinde (pathArrow;
           // iki noktada edgeArrow'un aynısı).
+          // v0.10.2491 — odak kipinde ok yol üstünde DEĞİL: hedef pil kenarında
+          // marker (aşağıda markerEnd/markerStart); akan ok çizilmez.
           const arrows = [geomAt(g, 0.78)];
           if (re.reverse) arrows.push(geomAt(g, 0.22, true));
+          if (tone) arrows.length = 0;
           const as = 3.2 + 1.6 * sw;
           return (
             <g key={i}>
             <path
               d={d}
               fill="none"
-              stroke={stroke}
+              stroke={paint}
               strokeWidth={sw}
               opacity={opacity}
+              markerEnd={tone ? `url(#${markId}-${tone})` : undefined}
+              markerStart={tone && re.reverse ? `url(#${markId}-${tone})` : undefined}
               className={(back ? 'topo-edge-flow back' : 'topo-edge-flow') + live}
               style={{ animationDuration: `${(2.8 - 1.8 * t).toFixed(2)}s`, transition: 'opacity 120ms, stroke 120ms, stroke-width 120ms', strokeDasharray: newDash }}>
               <title>
@@ -596,6 +700,14 @@ export function TopologyFlowGraph({
                   ['--arw-delay' as string]: `-${(((i * 37) % 100) / 100 * (2.8 - 1.8 * t)).toFixed(2)}s`,
                 }} />
             ))}
+            {/* v0.10.2491 — kenar vurgu alanı (görünmez, 12 px): hover vurgular,
+                tık sabitler (düğüm pin'i bırakılır). Pan burada başlamaz. */}
+            {tone && (
+              <path className="topo-hit" d={d}
+                onMouseEnter={() => setHoverEdge(ekey)}
+                onMouseLeave={() => setHoverEdge(null)}
+                onClick={() => { onClearPin?.(); setPinnedEdge(p => (p === ekey ? null : ekey)); }} />
+            )}
             </g>
           );
         })}
@@ -626,11 +738,12 @@ export function TopologyFlowGraph({
         if (e.p99Ms == null) return null;
         const g = edgeGeom[i];
         if (!g) return null;
-        const incident = !!hoverNode && (e.caller === hoverNode || e.callee === hoverNode);
-        const hot = incident || onPath(re);
+        const incident = !!hl && (e.caller === hl || e.callee === hl);
+        const hot = incident || onPath(re) || `${e.caller}|${e.callee}` === litEdge;
         if (visOf(g, incident) === null) return null; // gizli ikincil kenar
         const dimmed = active && (!active.has(e.caller) || !active.has(e.callee));
-        if (dimmed || (!labelAlways && !hot)) return null;
+        // v0.10.2491 — odak kipi: etiket vurguda/sabitte ya da "hep" kipinde.
+        if (dimmed || (focusMode ? edgeLabels !== 'always' && !hot : !labelAlways && !hot)) return null;
         const errPct = (e.errorRate ?? 0) * 100;
         // v0.9.1112 (Faz 5) — compare=prior'da kenar p99 Δ'sı. Göreli
         // (%) — /services ve /endpoints p99Delta ile aynı dil. ±%5
@@ -641,6 +754,23 @@ export function TopologyFlowGraph({
         // v0.10.1269 — chip yolun ORTA noktasında (rotalı kenarda düz
         // a–b ortası düğüm üstüne düşebilirdi; iki noktada aynı yer).
         const m = geomAt(g, 0.5);
+        if (focusMode) {
+          // v0.10.2491 — çağrı/dk · hata % · p99; renk yalnız sapan parçada.
+          const ef = errFracOf(e);
+          return (
+            <div key={`chip-${i}`} className={'topo-chip v2' + (hot ? ' hot' : '')}
+              style={{ left: m.x, top: m.y }}>
+              {fmtNum(Math.round(e.rate ?? 0))}{tn('topo.perMin')} · <span className={ef >= ERR_EDGE_FRAC ? 'chip-err' : undefined}>{percent(ef, lang, { from: 'ratio' })}</span>
+              {' · '}<span className={(e.p99Ms ?? 0) > SLOW_EDGE_MS ? 'chip-slow' : undefined}>p99 {duration(e.p99Ms, lang)}</span>
+              {dPct != null && Math.abs(dPct) >= 5 && (
+                <span style={{ color: dPct > 0 ? 'var(--err)' : 'var(--text2)' }}
+                  title={`p99 önceki pencereye göre ${dPct > 0 ? 'kötüleşti' : 'iyileşti'}`}>
+                  {' '}· Δ{dPct > 0 ? '+' : ''}{Math.round(dPct)}%
+                </span>
+              )}
+            </div>
+          );
+        }
         return (
           <div key={`chip-${i}`} className={'topo-chip' + (hot ? ' hot' : '')}
             style={{ left: m.x, top: m.y }}>
@@ -752,6 +882,7 @@ export function TopologyFlowGraph({
         // yani isDep olan her düğümün kaydı vardır. `?? null` yalnızca
         // tipin zorunlu kıldığı savunma.
         const pill = isDep ? (depPills.get(n.service) ?? null) : null;
+        const canOpen = !!onOpenNode && !isDep && n.service !== focus;
         return (
           <div key={n.service}
             className={
@@ -759,7 +890,8 @@ export function TopologyFlowGraph({
               (focus === n.service ? ' focus' : '') +
               (dim ? ' dim' : '') +
               (isDep ? ' ext' : '') +
-              (stripe ? ' ns-stripe' : '')
+              (stripe ? ' ns-stripe' : '') +
+              (pinNode === n.service ? ' pinned' : '')
             }
             style={{ left: p.x, top: p.y, cursor: 'pointer', ...(stripe ? { ['--ns' as string]: stripe } : {}) }}
             // eslint-disable-next-line ui/no-raw-element -- graf düğüm kartı: konumlu .topo-node pill'i, blok içerik; pan istisnası closest('.topo-node') — düğme atomu değil
@@ -767,16 +899,20 @@ export function TopologyFlowGraph({
             aria-label={n.service}
             onMouseEnter={() => onHoverNode(n.service)}
             onMouseLeave={() => onHoverNode(null)}
-            onClick={() => onSelectNode(n.service)}
+            onClick={() => { setPinnedEdge(null); onSelectNode(n.service); }}
+            // v0.10.2491 — çift tık: o servisin topology'si (odak, db/queue/dış hariç).
+            onDoubleClick={canOpen ? () => onOpenNode!(n.service) : undefined}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelectNode(n.service); }}
             title={
               `${n.service}${n.kind ? ` · ${n.kind}` : ''}\n` +
               `${n.spanCount.toLocaleString()} spans · ${(n.errorRate * 100).toFixed(2)}% error` +
               (n.dbName ? `\ndb.name: ${n.dbName}` : '') +
               (n.cluster ? `\ncluster: ${n.cluster}` : '') +
-              (n.env ? `\nenv: ${n.env}` : '')
+              (n.env ? `\nenv: ${n.env}` : '') +
+              (canOpen ? `\n${tn('topo.dblclickHint')}` : '')
             }>
             <span className={`topo-dot ${level}`} />
+            {focusMode && <NodeKindIcon kind={n.kind} />}
             <div style={{ minWidth: 0 }}>
               {/* v0.10.517 (operatör: "oracle altta, db name üstte") — bağımlılık
                   pilinde somut kimlik (db.name / @instance) BAŞLIK, sistem adı
@@ -790,9 +926,25 @@ export function TopologyFlowGraph({
                     v0.8.380). The sampled global map has no env → no chip. */}
                 {n.env && <span className="topo-envchip">{n.env}</span>}
               </div>
-              <div className="topo-sub">
-                {pill ? pill.sub : `${n.spanCount.toLocaleString()} span`}
-              </div>
+              {(!focusMode || pill) && (
+                <div className="topo-sub">
+                  {pill ? pill.sub : `${n.spanCount.toLocaleString()} span`}
+                </div>
+              )}
+              {/* v0.10.2491 — tek satır özet: çağrı/dk · hata · p99 ("N span"
+                  satırı buraya girdi; span sayısı ipucunda). Bağımlılıkta kimlik
+                  satırı (db.name / makine) korunur, özet altına iner. */}
+              {focusMode && (() => {
+                const st = nodeStats.get(n.service);
+                const rate = n.rate ?? (st ? (st.inRate || st.outRate) : 0);
+                const p99 = st ? (st.inP99 || st.outP99) : 0;
+                return (
+                  <div className="topo-sum">
+                    {fmtNum(Math.round(rate))}{tn('topo.perMin')} · <span className={n.errorRate >= ERR_EDGE_FRAC ? 'sum-err' : undefined}>{percent(n.errorRate, lang, { from: 'ratio' })}</span>
+                    {' · '}<span className={p99 > SLOW_EDGE_MS ? 'sum-slow' : undefined}>{duration(p99 || null, lang)}</span>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         );
@@ -838,6 +990,51 @@ export function TopologyFlowGraph({
 }
 
 const NO_FOLD: ReadonlySet<string> = new Set();
+// v0.10.2491 (Topology v2) — odak kipi kenar dili. Yeni renk belirteci yok:
+// nötr --border-strong, vurgu --text2, yeni --accent2 (K5), sapma --err/--warn-solid.
+type EdgeTone = 'err' | 'warn' | 'new' | 'hi' | 'neu';
+const EDGE_TONE: Record<EdgeTone, string> = {
+  err: 'var(--err)', warn: 'var(--warn-solid)', new: 'var(--accent2)', hi: 'var(--text2)', neu: 'var(--border-strong)',
+};
+const ERR_EDGE_FRAC = 0.01;   // kenar/düğüm hata oranı ≥ %1 → --err
+const SLOW_EDGE_MS = 1000;    // p99 > 1 sn → --warn-solid
+const DIM_OPACITY = 0.18;     // vurgu dışı kenar (düğüm: .topo.focus-cols .topo-node.dim)
+/** Kenarın 0..1 hata oranı: MV yolunda errorRate, örneklenmiş yolda sayaçlardan. */
+function errFracOf(e: ServiceMapEdge | undefined): number {
+  if (!e) return 0;
+  if (e.errorRate != null) return e.errorRate;
+  return e.traceCount ? e.errorCount / e.traceCount : 0;
+}
+/** Düğüm tür ikonu (servis / veritabanı / kuyruk / dış) — mockup'ın 16 px çizgi ikonları. */
+function NodeKindIcon({ kind }: { kind?: string }) {
+  let body: ReactNode;
+  switch (kind) {
+    case 'db':
+      body = <>
+        <ellipse cx="8" cy="3.5" rx="6" ry="2.5" />
+        <path d="M2 3.5v9c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-9M2 8c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5" />
+      </>;
+      break;
+    case 'queue':
+      body = <>
+        <rect x="1" y="4" width="4" height="8" rx="1" /><rect x="6" y="4" width="4" height="8" rx="1" />
+        <path d="M12 8h3M13.5 6.5 15 8l-1.5 1.5" />
+      </>;
+      break;
+    case 'external':
+      body = <>
+        <circle cx="8" cy="8" r="6.25" />
+        <path d="M1.75 8h12.5M8 1.75c1.8 1.7 2.7 3.8 2.7 6.25S9.8 12.55 8 14.25M8 1.75C6.2 3.45 5.3 5.55 5.3 8s.9 4.55 2.7 6.25" />
+      </>;
+      break;
+    default:
+      body = <>
+        <rect x="1.5" y="1.5" width="13" height="13" rx="3" />
+        <path d="M5 6h6M5 10h4" />
+      </>;
+  }
+  return <svg className="topo-kind" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">{body}</svg>;
+}
 const COMPACT_VIEW: Viewport = { x: 0, y: 0, k: 1 }; // v0.10.1392
 const SECONDARY_LABEL: Record<Exclude<EdgeClass, 'flow'>, string> = {
   peer: '↕ aynı sütun içi çağrı (yan bağlantı)',

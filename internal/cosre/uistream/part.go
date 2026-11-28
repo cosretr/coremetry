@@ -39,6 +39,9 @@ var KnownKinds = map[string]bool{
 	// (data-suggestions {exchangeId, chips[{id, label, rule, intent{tool,args},
 	// token}]}); açıkken data-followups'ın yerine geçer. v1 yazıcısı düşürür.
 	"suggestions": true,
+	// v0.10.2491 (CoSRE sohbet dilim 1) — araç grubunun kalıcı anlatım satırı
+	// (data-narration, id n<k>; transient değil). v1 yazıcısı düşürür.
+	"narration": true,
 }
 
 // SuggestionsPart — data-suggestions parçası (alışveriş başına bir).

@@ -7875,6 +7875,8 @@ export interface ServiceMapNode {
   // live in several envs carries the edge-dominant value — strict
   // per-env node separation is a deferred slice (env-separation §5).
   env?: string;
+  // v0.10.2491 — çağrı/dk (GraphNode.rate; yalnız MV yolu). Odak kipi düğüm özeti.
+  rate?: number;
 }
 
 export interface ServiceMapEdge {
@@ -8461,7 +8463,21 @@ export interface ChatMessage {
   linksPart?: { links: ChatAnswerLink[]; title?: string; summary?: string };
   /** v0.10.2104 (D5) — `data-question` + seçilen seçenek (chosen). Yalnız asistan, yalnız v2. */
   question?: CosreQuestion;
+  /** v0.10.2491 — inline akışın araç grupları (data-narration + adımlar, sırayla).
+   *  Yalnız asistan, yalnız v2 (sunucu sanitize: ai_conversations_v2parts.go). */
+  flow?: CosreFlowGroup[];
 }
+
+/** v0.10.2491 — tek araç grubu: sunucunun anlatım satırı + gruptaki adımlar. */
+export interface CosreFlowGroup {
+  text?: string;
+  /** Ekran bağlamı cümlesi (yalnız alışverişin ilk anlatımında). */
+  context?: string;
+  steps?: { id: string; tool: string; purpose?: string }[];
+}
+
+/** v0.10.2491 — data-narration parçası {text, context?}. */
+export interface CosreNarration { text: string; context?: string }
 
 /**
  * v0.10.1618 (CoSRE v2 Faz 2a) — v2 sohbet mesajının metadata'sı
@@ -9533,6 +9549,8 @@ export interface CosreConversationSettings {
   statusLine?: boolean;
   /** v0.10.2480 — trace açıklaması biçimi: anlatim (varsayılan) | bolumlu (v0.10.2456 şablonu). */
   traceExplainStyle?: 'anlatim' | 'bolumlu';
+  /** v0.10.2491 — sohbet akışı: inline (varsayılan; araç grupları cevabın içinde) | block (tek adım bloğu). */
+  flow?: 'inline' | 'block';
   updatedBy?: string;
   updatedAt?: string;
 }

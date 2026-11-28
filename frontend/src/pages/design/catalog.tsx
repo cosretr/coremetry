@@ -44,6 +44,7 @@ import { themeScopeAttrs } from '@/lib/theme';
 import { CommandPaletteView } from '@/components/coremetry/CommandPalette/CommandPaletteView';
 import type { CommandPaletteGroup } from '@/components/coremetry/CommandPalette/CommandPalette';
 import { MessageList, type CosreChatMessage } from '@/components/cosre/conversation/MessageList';
+import { flowParts } from '@/lib/cosre/flowParts';
 import CoremetryToaster from '@/components/coremetry/Toaster';
 import { CM_STRINGS } from '@/components/coremetry/strings';
 import { DetailSheet, SheetSection, SheetTrendRow } from '@/components/coremetry/DetailSheet';
@@ -601,6 +602,16 @@ function ToasterDemo({ forceOpen }: CatalogCtx) {
 const COSRE_DEMO_MESSAGES: CosreChatMessage[] = [
   { id: 'u1', role: 'user', parts: [{ type: 'text', text: 'orders-api neden yavaş?' }] },
   { id: 'a1', role: 'assistant', parts: [{ type: 'text', text: "**Bulgu** — orders-api p95 1830 ms'ye çıktı.\n\n- `PaymentClient` çağrıları yavaş\n- hata oranı değişmedi" }] },
+  // v0.10.2491 — inline akış (anlatım + katlı araç grupları), arşivden geri yüklenmiş biçim.
+  { id: 'u3', role: 'user', parts: [{ type: 'text', text: 'checkout neden hata veriyor?' }] },
+  { id: 'a3', role: 'assistant', parts: [...flowParts([
+    { text: 'Servisin durumuna bakıyorum…', context: 'checkout servis sayfasındasınız, son 1 saate bakıyorsunuz.', steps: [
+      { id: 's1', tool: 'get_service_health', purpose: 'checkout sağlığı okunuyor' },
+      { id: 's2', tool: 'list_problems', purpose: "Açık Problem'lere bakılıyor" },
+    ] },
+    { text: 'Loglara bakıyorum…', steps: [{ id: 's3', tool: 'search_logs', purpose: 'checkout logları aranıyor' }] },
+  ]), { type: 'text', text: "checkout'ta hata oranı %4,2; 3 hata logu orders çağrısında zaman aşımı gösteriyor." },
+  { type: 'data-stop', id: 'stop', data: { reason: 'stop', calls: 3, rounds: 3, elapsed_ms: 2100 } }] },
   { id: 'u2', role: 'user', parts: [{ type: 'text', text: 'Son 1 saatte hata var mı?' }] },
   { id: 'a2', role: 'assistant', parts: [{ type: 'text', text: 'Son 1 saatte iki' }], metadata: { partial: true } },
 ];

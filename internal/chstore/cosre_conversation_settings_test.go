@@ -7,6 +7,28 @@ import (
 	"testing"
 )
 
+// TestCosreConversationFlow — v0.10.2491: blob yok / alan yok / bilinmeyen
+// değer = inline; block korunur; SetCosreConversation geçersizi düzeltir.
+func TestCosreConversationFlow(t *testing.T) {
+	for raw, want := range map[string]string{
+		``:                 CosreFlowInline,
+		`{"state":true}`:   CosreFlowInline,
+		`{"flow":"block"}`: CosreFlowBlock,
+		`{"flow":"x"}`:     CosreFlowInline,
+	} {
+		c, ok := parseCosreConversation([]byte(raw))
+		if !ok || c.Flow != want {
+			t.Errorf("%q → %q (ok=%v), want %q", raw, c.Flow, ok, want)
+		}
+	}
+	prev := CurrentCosreConversation()
+	t.Cleanup(func() { SetCosreConversation(prev) })
+	SetCosreConversation(CosreConversation{Flow: "?"})
+	if CurrentCosreConversation().Flow != CosreFlowInline {
+		t.Fatal("geçersiz flow inline'a düşmeli")
+	}
+}
+
 // TestCosreConversationTraceExplainStyle — v0.10.2480: blob yok / alan yok /
 // bilinmeyen değer = anlatim; bolumlu korunur.
 func TestCosreConversationTraceExplainStyle(t *testing.T) {

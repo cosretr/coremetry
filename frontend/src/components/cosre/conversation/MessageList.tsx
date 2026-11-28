@@ -47,7 +47,7 @@ import type { CosreUIMessage } from '@/lib/cosre/resetReducer';
 import type { ChatExplainAsk, ChatTurn, CosreApprovalAnswer, CosreEndpointPick, CosreQuestion, CosreSuggestion } from '@/lib/types';
 import { approvalAnswer, approvalViews } from '@/lib/cosre/approval';
 import { ApprovalCard } from './ApprovalCard';
-import { StepList, scopeChangeNotes, scopeOf, stepsView, stopBadges, summarizeToken, type StepView } from '../evidence';
+import { InlineSteps, StepList, flowView, scopeChangeNotes, scopeOf, stepsView, stopBadges, summarizeToken, type StepView } from '../evidence';
 import { EVIDENCE_STRINGS as ET } from '../evidence/strings';
 import type { CosreStepDirective } from '@/lib/types';
 import { TeamPickCard } from './TeamPickCard';
@@ -204,6 +204,9 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   const evParts = useMemo(() => evidencePartsOf(m.parts as readonly { type: string; id?: string; data?: unknown }[]), [m.parts]); // v0.10.2362
   // araç seti dilim 5 (G4) — adım kartları cevabın ÜSTÜNDE (data-tool-result / data-stop).
   const steps = useMemo(() => stepsView(visibleParts(m)), [m, visibleParts]);
+  // v0.10.2491 — inline akış: anlatım parçası varsa adımlar gruplar hâlinde
+  // cevabın içinde (InlineSteps); yoksa (block kipi / eski arşiv) StepList aynen.
+  const flow = useMemo(() => flowView(visibleParts(m), steps), [m, visibleParts, steps]);
   // SDK akışta son mesajı her parçada yeni nesneyle değiştirir; bitmiş
   // mesajlar kimliğini korur → ChatBubble (memo) yalnız akan balonu çizer.
   const turn = useMemo(() => toChatTurn(m, visibleParts(m), { pending: live, error, explainAsk, statusLine }), [m, visibleParts, live, error, explainAsk, statusLine]);
@@ -231,8 +234,13 @@ function AssistantMessage({ m, visibleParts, live, error, followups, onRetry, ex
   return (
     <div data-cosre-message={m.id} className="contents">
       {scopeNote && <div className="cm-msg-note text-muted-foreground" data-cosre-scope-note="">{scopeNote}</div>}
-      <StepList view={steps} live={live} exchangeId={xid} badges={badges} compact={compactSteps}
-        onRedirect={onStepRedirect ? (s, d) => onStepRedirect(m.id, s, d) : undefined} />
+      {flow ? (
+        <InlineSteps flow={flow} view={steps} live={live} exchangeId={xid} badges={badges}
+          onRedirect={onStepRedirect ? (s, d) => onStepRedirect(m.id, s, d) : undefined} />
+      ) : (
+        <StepList view={steps} live={live} exchangeId={xid} badges={badges} compact={compactSteps}
+          onRedirect={onStepRedirect ? (s, d) => onStepRedirect(m.id, s, d) : undefined} />
+      )}
       {live && onStopSummarize && sumToken && (
         <Button variant="outline" size="xs" className="cm-msg cm-msg--ai self-start" data-cosre-stop-summarize=""
           onClick={() => onStopSummarize(sumToken)}>{ET.stopSummarize}</Button>

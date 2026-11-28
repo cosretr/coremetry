@@ -194,3 +194,72 @@ func sanitizeChatQuestion(in *aiChatQuestion) *aiChatQuestion {
 	}
 	return out
 }
+
+// v0.10.2491 (CoSRE sohbet dilim 1) — inline akışın araç grupları: her grup
+// sunucunun anlatım satırı (data-narration) + o gruptaki araç adımları (s<i>,
+// araç adı, istemcinin amaç satırı). Geri yüklenen konuşma aynı sırayı çizer;
+// adımın sonucu toolResults'tan (aynı s<i>). Yalnız v2 istemcisi yazar.
+
+// aiChatFlowStep — grubun tek araç adımı.
+type aiChatFlowStep struct {
+	ID      string `json:"id"`
+	Tool    string `json:"tool"`
+	Purpose string `json:"purpose,omitempty"`
+}
+
+// aiChatFlowGroup — tek araç grubu (anlatım + adımlar). Context yalnız ilk grupta.
+type aiChatFlowGroup struct {
+	Text    string           `json:"text,omitempty"`
+	Context string           `json:"context,omitempty"`
+	Steps   []aiChatFlowStep `json:"steps,omitempty"`
+}
+
+const (
+	aiChatFlowGroupsMax   = 12
+	aiChatFlowStepsMax    = 12
+	aiChatFlowTextRunes   = 240
+	aiChatFlowTotalMaxLen = 6 << 10
+)
+
+var aiChatFlowToolRe = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,64}$`)
+
+// flowClip — SAF: boşluk sadeleştirir, rune tavanı (fazlası "…").
+func flowClip(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > aiChatFlowTextRunes {
+		return string(r[:aiChatFlowTextRunes]) + "…"
+	}
+	return s
+}
+
+// sanitizeChatFlow — SAF: tavanlar (grup, adım, metin, toplam bayt); geçersiz
+// adım kimliği / araç adı düşer; boş grup (metinsiz ve adımsız) düşer.
+func sanitizeChatFlow(in []aiChatFlowGroup) []aiChatFlowGroup {
+	var out []aiChatFlowGroup
+	total := 0
+	for _, g := range in {
+		if len(out) >= aiChatFlowGroupsMax {
+			break
+		}
+		ng := aiChatFlowGroup{Text: flowClip(g.Text), Context: flowClip(g.Context)}
+		for _, st := range g.Steps {
+			if len(ng.Steps) >= aiChatFlowStepsMax {
+				break
+			}
+			if !aiChatToolResultIDRe.MatchString(st.ID) || !aiChatFlowToolRe.MatchString(st.Tool) {
+				continue
+			}
+			ng.Steps = append(ng.Steps, aiChatFlowStep{ID: st.ID, Tool: st.Tool, Purpose: flowClip(st.Purpose)})
+		}
+		if ng.Text == "" && len(ng.Steps) == 0 {
+			continue
+		}
+		b, _ := json.Marshal(ng)
+		if total+len(b) > aiChatFlowTotalMaxLen {
+			break
+		}
+		total += len(b)
+		out = append(out, ng)
+	}
+	return out
+}

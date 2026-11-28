@@ -334,6 +334,7 @@ func TestSeamEnforceNoStackWithGatewayRetry(t *testing.T) {
 
 // Kapalı ve gölge kipte akış bayt bayt aynı; v1 zorla kipinde de altın.
 func TestSeamEnforceOffShadowByteIdentical(t *testing.T) {
+	setConversationFlow(t, chstore.CosreFlowBlock) // v0.10.2491 — eski akışın altını (block kipi)
 	var off, shadow string
 	t.Run("off", func(t *testing.T) { off, _ = runVerifyFlow(t, chstore.CosreVerifyOff) })
 	t.Run("shadow", func(t *testing.T) { shadow, _ = runVerifyFlow(t, chstore.CosreVerifyShadow) })

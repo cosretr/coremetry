@@ -473,7 +473,7 @@ describe('focusPath — hover yol vurgusu', () => {
 
 describe('sütun başlıkları', () => {
   it.each([
-    [-2, 'Çağıranlar · 2 hop'], [-1, 'Çağıranlar'], [0, 'Odak'], [1, 'Bağımlılıklar'], [2, 'Bağımlılıklar · 2 hop'],
+    [-2, 'Callers · 2 hops'], [-1, 'Callers'], [0, 'Focus'], [1, 'Dependencies'], [2, 'Dependencies · 2 hops'],
   ] as const)('%i → %s', (c, l) => expect(focusColumnLabel(c)).toBe(l));
 });
 

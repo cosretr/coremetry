@@ -16,6 +16,7 @@ package api
 //   - data-question: sanitizeChatQuestion nil dönmemeli (kapalı kind, dolu
 //     metin, 1–3 tekil seçenek);
 //   - data-status (v0.10.2333, F1): transient olmalı (mesaja/arşive girmez)
+//   - data-narration (v0.10.2491): transient OLMAMALI (mesajın kalıcı parçası)
 //     ve dolu tek `text` taşımalı; cevap metni değildir, akıcılık ölçütleri
 //     onu görmez (cevap kayıttaki answer'dan okunur);
 //   - araç çağrısı ↔ sonucu: her tool-input-available'ın aynı toolCallId'li
@@ -93,6 +94,10 @@ func evalStreamContract(parts []uistream.Part) (bool, string) {
 		case "data-status":
 			if txt, _ := evalPartText(p); p["transient"] != true || txt == "" {
 				return false, "data-status: transient değil ya da metin boş"
+			}
+		case "data-narration": // v0.10.2491 — kalıcı anlatım: transient OLMAZ, metin dolu
+			if txt, _ := evalPartText(p); p["transient"] == true || txt == "" {
+				return false, "data-narration: transient ya da metin boş"
 			}
 		case "tool-input-available":
 			if id, _ := p["toolCallId"].(string); id != "" {

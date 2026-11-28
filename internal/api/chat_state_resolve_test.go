@@ -248,7 +248,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	}
 	a := nextAudit(t, s)
 	if a.Action != "settings.cosre_conversation.update" || a.TargetID != chstore.CosreConversationKey ||
-		a.Details != `{"before":{"state":true,"style":false,"verification":"enforce","bannedPhrases":0,"interaction":"off","evidence":"off","statusLine":true,"traceExplainStyle":"anlatim"},"after":{"state":false,"style":false,"verification":"enforce","bannedPhrases":0,"interaction":"off","evidence":"off","statusLine":true,"traceExplainStyle":"anlatim"}}` {
+		a.Details != `{"before":{"state":true,"style":false,"verification":"enforce","bannedPhrases":0,"interaction":"off","evidence":"off","statusLine":true,"traceExplainStyle":"anlatim","flow":"inline"},"after":{"state":false,"style":false,"verification":"enforce","bannedPhrases":0,"interaction":"off","evidence":"off","statusLine":true,"traceExplainStyle":"anlatim","flow":"inline"}}` {
 		t.Fatalf("audit = %+v", a)
 	}
 	// v0.10.2327 — verification bağlı: off (kill switch) ↔ shadow; state korunur.
@@ -280,7 +280,7 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if cur := chstore.CurrentCosreConversation(); w.Code != http.StatusOK || len(cur.BannedPhrases) != 1 || !cur.Style || cur.Verification != chstore.CosreVerifyOff {
 		t.Fatalf("bannedPhrases PUT %d: %s", w.Code, w.Body)
 	}
-	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"off","bannedPhrases":1,"interaction":"off","evidence":"off","statusLine":true,"traceExplainStyle":"anlatim"}`) {
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"after":{"state":false,"style":true,"verification":"off","bannedPhrases":1,"interaction":"off","evidence":"off","statusLine":true,"traceExplainStyle":"anlatim","flow":"inline"}`) {
 		t.Fatalf("audit = %+v", a)
 	}
 	// v0.10.2339 — E2: enforce kabul edilir (v0.10.2439: varsayılan).
@@ -313,11 +313,25 @@ func TestCosreConversationSettingsRoundTrip(t *testing.T) {
 	if cur := chstore.CurrentCosreConversation(); w.Code != http.StatusOK || cur.Interaction != chstore.CosreInteractionOn || cur.Verification != chstore.CosreVerifyEnforce {
 		t.Fatalf("interaction on PUT %d: %s", w.Code, w.Body)
 	}
-	if a := nextAudit(t, s); !strings.Contains(a.Details, `"bannedPhrases":1,"interaction":"off","evidence":"off","statusLine":true,"traceExplainStyle":"anlatim"},"after":`) || !strings.HasSuffix(a.Details, `"interaction":"on","evidence":"off","statusLine":true,"traceExplainStyle":"anlatim"}}`) {
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"bannedPhrases":1,"interaction":"off","evidence":"off","statusLine":true,"traceExplainStyle":"anlatim","flow":"inline"},"after":`) || !strings.HasSuffix(a.Details, `"interaction":"on","evidence":"off","statusLine":true,"traceExplainStyle":"anlatim","flow":"inline"}}`) {
 		t.Fatalf("audit = %+v", a)
 	}
 	if chstore.DefaultCosreConversation().Interaction != chstore.CosreInteractionOff {
 		t.Fatal("interaction varsayılanı off kalmalı")
+	}
+	// v0.10.2491 — flow inline | block; varsayılan inline, geçersiz 400, audit önce/sonra.
+	if chstore.DefaultCosreConversation().Flow != chstore.CosreFlowInline {
+		t.Fatal("flow varsayılanı inline olmalı")
+	}
+	if w := rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"flow":"yan"}`, auth.RoleAdmin, ""); w.Code != http.StatusBadRequest {
+		t.Fatalf("geçersiz flow → %d", w.Code)
+	}
+	w = rulesDo(mux, "PUT", "/api/ai/cosre-conversation", `{"flow":"block"}`, auth.RoleAdmin, "")
+	if cur := chstore.CurrentCosreConversation(); w.Code != http.StatusOK || cur.Flow != chstore.CosreFlowBlock || cur.Interaction != chstore.CosreInteractionOn {
+		t.Fatalf("flow block PUT %d: %s", w.Code, w.Body)
+	}
+	if a := nextAudit(t, s); !strings.Contains(a.Details, `"flow":"inline"},"after":`) || !strings.HasSuffix(a.Details, `"flow":"block"}}`) {
+		t.Fatalf("audit = %+v", a)
 	}
 }
 

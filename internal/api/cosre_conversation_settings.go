@@ -70,13 +70,14 @@ type cosreConversationPut struct {
 	Evidence      *string   `json:"evidence"`          // v0.10.2355 — S1
 	StatusLine    *bool     `json:"statusLine"`        // v0.10.2473 — ara durum cümlesi
 	TraceStyle    *string   `json:"traceExplainStyle"` // v0.10.2480 — anlatim | bolumlu
+	Flow          *string   `json:"flow"`              // v0.10.2491 — inline | block
 }
 
 // mergeCosreConversationPut — SAF: istek + mevcut → yeni blob; ayrılmış
 // alanlar bu sürümde yalnız kapalı değerlerini alabilir.
 func mergeCosreConversationPut(cur chstore.CosreConversation, in cosreConversationPut) (chstore.CosreConversation, error) {
-	if in.State == nil && in.Style == nil && in.Verification == nil && in.BannedPhrases == nil && in.Interaction == nil && in.Evidence == nil && in.StatusLine == nil && in.TraceStyle == nil {
-		return cur, fmt.Errorf("state, style, verification, bannedPhrases, interaction, evidence, statusLine ya da traceExplainStyle alanı zorunlu")
+	if in.State == nil && in.Style == nil && in.Verification == nil && in.BannedPhrases == nil && in.Interaction == nil && in.Evidence == nil && in.StatusLine == nil && in.TraceStyle == nil && in.Flow == nil {
+		return cur, fmt.Errorf("state, style, verification, bannedPhrases, interaction, evidence, statusLine, traceExplainStyle ya da flow alanı zorunlu")
 	}
 	out := cur
 	if in.State != nil {
@@ -119,6 +120,12 @@ func mergeCosreConversationPut(cur chstore.CosreConversation, in cosreConversati
 		}
 		out.TraceExplainStyle = *in.TraceStyle
 	}
+	if in.Flow != nil { // v0.10.2491
+		if !chstore.ValidCosreFlow(*in.Flow) {
+			return cur, fmt.Errorf("flow: inline | block")
+		}
+		out.Flow = *in.Flow
+	}
 	return out, nil
 }
 
@@ -154,8 +161,8 @@ func (s *Server) putCosreConversation(w http.ResponseWriter, r *http.Request) {
 	}
 	chstore.SetCosreConversation(saved) // sahte depo testleri için de yayınla
 	s.audit(r, "settings.cosre_conversation.update", "settings", chstore.CosreConversationKey,
-		fmt.Sprintf(`{"before":{"state":%v,"style":%v,"verification":%q,"bannedPhrases":%d,"interaction":%q,"evidence":%q,"statusLine":%v,"traceExplainStyle":%q},"after":{"state":%v,"style":%v,"verification":%q,"bannedPhrases":%d,"interaction":%q,"evidence":%q,"statusLine":%v,"traceExplainStyle":%q}}`,
-			prev.State, prev.Style, prev.Verification, len(prev.BannedPhrases), prev.Interaction, prev.Evidence, prev.StatusLine, prev.TraceExplainStyle,
-			saved.State, saved.Style, saved.Verification, len(saved.BannedPhrases), saved.Interaction, saved.Evidence, saved.StatusLine, saved.TraceExplainStyle))
+		fmt.Sprintf(`{"before":{"state":%v,"style":%v,"verification":%q,"bannedPhrases":%d,"interaction":%q,"evidence":%q,"statusLine":%v,"traceExplainStyle":%q,"flow":%q},"after":{"state":%v,"style":%v,"verification":%q,"bannedPhrases":%d,"interaction":%q,"evidence":%q,"statusLine":%v,"traceExplainStyle":%q,"flow":%q}}`,
+			prev.State, prev.Style, prev.Verification, len(prev.BannedPhrases), prev.Interaction, prev.Evidence, prev.StatusLine, prev.TraceExplainStyle, prev.Flow,
+			saved.State, saved.Style, saved.Verification, len(saved.BannedPhrases), saved.Interaction, saved.Evidence, saved.StatusLine, saved.TraceExplainStyle, saved.Flow))
 	writeJSON(w, saved)
 }

@@ -57,8 +57,10 @@ export const PAD_X = 150;             // en dış sütunda peer yayı + ns ayrac
 export const HEADER_H = 28;           // sütun başlığı satırı
 export const PAD_Y = HEADER_H + ROW_PITCH / 2 + 10; // başlık + şerit (top − pitch/2) payı
 export const BLOCK_GAP = 12;
-export const PORT_STEP = 3;
-export const PORT_SPREAD_MAX = 18;
+// v0.10.2491 (Topology v2) — odakta giriş noktaları pil yüksekliğine yayılır
+// (adım 6 px, pil ~50 px yüksek → ±14 px içinde kalır).
+export const PORT_STEP = 6;
+export const PORT_SPREAD_MAX = 14;
 const PEER_BULGE = 22;                // peer yayının pil kenarından taşması (yaklaşık)
 // ±2+ sütunu ebeveyn hizasına kayarken en uzun doğal sütun yarı-boyunun en çok
 // bu kadar satır ötesine taşar (patolojik tek-ebeveynli kalabalık sütun tuvali
@@ -176,10 +178,12 @@ export function countSecondary(edges: readonly FocusLayoutEdge[], colOf: Readonl
   return n;
 }
 
+// v0.10.2491 — operatör kararı (Topology v2): sütun başlıkları İngilizce,
+// her dilde aynı (CSS büyük harfe çevirir: CALLERS · N · FOCUS · DEPENDENCIES · N).
 export function focusColumnLabel(col: number): string {
-  if (col === 0) return 'Odak';
-  const base = col < 0 ? 'Çağıranlar' : 'Bağımlılıklar';
-  return Math.abs(col) === 1 ? base : `${base} · ${Math.abs(col)} hop`;
+  if (col === 0) return 'Focus';
+  const base = col < 0 ? 'Callers' : 'Dependencies';
+  return Math.abs(col) === 1 ? base : `${base} · ${Math.abs(col)} hops`;
 }
 
 /** PAV — eşit ağırlıklı izotonik regresyon: w'ye en yakın azalmayan dizi. O(n). */

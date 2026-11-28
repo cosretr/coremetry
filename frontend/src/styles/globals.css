@@ -4017,6 +4017,19 @@ tbody td.infra-where-note { color: var(--text2); }
 .topo.anim-hover .topo-edge-flow:not(.live) { animation: none; }
 .topo.anim-hover .topo-edge-flow:not(.live):not(.back) { stroke-dasharray: none; }
 .topo.anim-hover .topo-edge-arrow:not(.live) { animation: none; }
+/* v0.10.2491 — Topology v2 (odak kipi): akış yalnız vurgulu kenarda; hareket
+   azaltmada vurguda da durağan. Kenar vurgu alanı görünmez 12 px şerit. Vurgu
+   dışı düğüm ~%18. Düğüm: tür ikonu + ad + tek satır özet; sağlık noktası köşede. */
+@media (prefers-reduced-motion: reduce) { .topo .topo-edge-flow.live { animation: none; } }
+.topo-hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
+.topo.focus-cols .topo-node.dim { opacity: .18; }
+.topo.focus-cols .topo-node.pinned { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow-sm); }
+.topo.focus-cols .topo-node > .topo-dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; }
+.topo-kind { flex: none; fill: none; stroke: var(--text2); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.topo-sum { font-size: 10px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.topo-sum .sum-err, .topo-chip .chip-err { color: var(--err); font-weight: 600; }
+.topo-sum .sum-slow, .topo-chip .chip-slow { color: var(--warn); font-weight: 600; }
+.topo-chip.v2 { font: 500 11px var(--font-sans); padding: 2px 9px; border-radius: 11px; }
 .topo-colhdr { position: absolute; transform: translate(-50%, -50%); z-index: var(--z-sticky-cell); pointer-events: none; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); white-space: nowrap; }
 .topo-more { position: absolute; transform: translate(-50%, -50%); z-index: var(--z-sticky-cell); white-space: nowrap; }
 .topo-nsbracket { stroke-width: 1.5; opacity: .7; }

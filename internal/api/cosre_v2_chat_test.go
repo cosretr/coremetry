@@ -93,11 +93,15 @@ func TestCosreV2ChatGoldenLoop(t *testing.T) {
 	if n := len(llm.calls()); n != 2 {
 		t.Fatalf("model %d kez çağrıldı, 2 bekleniyordu", n)
 	}
-	// v0.10.2473 — ara durum cümlesi varsayılan açık: tek geçici data-status;
-	// onun dışında akış altınla bayt bayt aynı.
+	// v0.10.2491 — varsayılan akış inline: geçici data-status yerine tek KALICI
+	// data-narration; onun dışında akış altınla bayt bayt aynı. block kipi
+	// (eski görünüm) chat_narration_test.go'da pinli.
 	body := normalizeChatStream(w.Body.String())
-	if got := statusTexts(t, body); len(got) != 1 {
-		t.Fatalf("varsayılan ayarda tek ara cümle bekleniyordu: %q", got)
+	if got := statusTexts(t, body); len(got) != 0 {
+		t.Fatalf("inline kipte geçici cümle: %q", got)
+	}
+	if got := narrationTexts(t, body); len(got) != 1 {
+		t.Fatalf("varsayılan ayarda tek anlatım bekleniyordu: %q", got)
 	}
 	compareChatGolden(t, "v2_loop.sse", withoutStatus(body))
 }

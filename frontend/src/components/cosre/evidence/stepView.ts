@@ -70,6 +70,8 @@ export interface StepView {
   nonCall?: boolean;
   /** v0.10.2480 (B) — bütçeden düşmeyen çağrı: kayıttan ya da aynı tur önbelleğinden. */
   served?: 'record' | 'cache';
+  /** v0.10.2491 — inline akışın araç amaç satırı (lib/cosre/toolPurpose); block kipinde yok. */
+  purpose?: string;
 }
 
 export interface StepsView {

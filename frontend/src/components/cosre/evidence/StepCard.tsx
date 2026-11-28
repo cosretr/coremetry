@@ -158,10 +158,21 @@ export function StepCard({ v, exchangeId, onRedirect }: { v: StepView; exchangeI
       <Button variant="ghost" size="sm" aria-expanded={open}
         className={cn('h-auto w-full justify-start gap-2 rounded-none px-3 py-2 text-left font-normal', muted && 'text-muted-foreground', menu && 'min-w-0 flex-1')}>
         <StatusIcon kind={v.kind} />
-        <span className="min-w-0 flex-1 truncate">
-          <span className="font-medium">{v.title}</span>
-          {line && <span className="text-muted-foreground"> · {line}</span>}
-        </span>
+        {v.purpose ? (
+          // v0.10.2491 — inline akış: ad + sonuç özeti, altında amaç satırı.
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate">
+              <span className="font-medium">{v.title}</span>
+              {line && <span className="text-muted-foreground"> · {line}</span>}
+            </span>
+            <span className="truncate text-xs text-muted-foreground" data-cosre-step-purpose="">{v.purpose}</span>
+          </span>
+        ) : (
+          <span className="min-w-0 flex-1 truncate">
+            <span className="font-medium">{v.title}</span>
+            {line && <span className="text-muted-foreground"> · {line}</span>}
+          </span>
+        )}
         <StepSignal v={v} />
         <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">{meta(v)}</span>
         <ChevronRight className={cn('size-3 text-muted-foreground transition-transform', open && 'rotate-90')} aria-hidden />

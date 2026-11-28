@@ -19,6 +19,8 @@ type Translator struct {
 	// awaitingApproval — agent-core S4: bir araç çağrısı operatör onayı
 	// bekliyor; başarılı `done` finish{finishReason:"tool-calls"} olur.
 	awaitingApproval bool
+	// narrSeq — v0.10.2491: data-narration parça sırası (n1, n2, …).
+	narrSeq int
 }
 
 // NewTranslator — boş akış.
@@ -87,6 +89,13 @@ func (t *Translator) Translate(kind string, payload any) []Part {
 		// mesaja ve arşive girmez; istemci sonuncuyu gösterir, cevap metni
 		// başlayınca ya da alışveriş bitince siler.
 		out = append(out, Part{"type": "data-status", "id": "status", "data": m, "transient": true})
+	case "narration":
+		// v0.10.2491 (CoSRE sohbet dilim 1) — araç grubunun KALICI anlatım
+		// satırı (api chat_narration.go): {text, context?}. transient DEĞİL:
+		// message.parts'ta kalır, istemci grubu bu parçadan sonraki araç
+		// parçalarıyla kurar ve arşive yazar. Her anlatım kendi id'si (n<k>).
+		t.narrSeq++
+		out = append(out, Part{"type": "data-narration", "id": "n" + strconv.Itoa(t.narrSeq), "data": m})
 	case "action":
 		// v0.10.2353 (I5) — onaylı aksiyon kartı (api cosre_actions.go):
 		// {kind, exchangeId, token, expiresAt, label, fields{title, service,

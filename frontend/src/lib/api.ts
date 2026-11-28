@@ -1478,6 +1478,11 @@ export const api = {
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ traceExplainStyle }),
     }),
+  // v0.10.2491 — sohbet akışı (inline varsayılan | block).
+  putCosreConversationFlow: (flow: 'inline' | 'block') =>
+    request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ flow }),
+    }),
   // v0.10.2473 — araç turu ara durum cümlesi (style'dan ayrı; varsayılan açık).
   putCosreConversationStatusLine: (statusLine: boolean) =>
     request<import('./types').CosreConversationSettings>(`/api/ai/cosre-conversation`, {

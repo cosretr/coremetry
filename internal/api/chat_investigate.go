@@ -123,7 +123,8 @@ func (s *Server) chatInvestigate(ctx context.Context, emit func(string, any), in
 		return conv, tools
 	}
 	from, to := investigateWindow(in)
-	if answerStyleOn(ctx) {
+	// v0.10.2491 — inline akışta kalıcı anlatım (chat_narration.go); değilse eski geçici cümle.
+	if !chatNarratorOf(ctx).narrate(ctx, emit, investigateStatusLine(in.Service)) && answerStyleOn(ctx) {
 		emit(chatStatusEventKind, map[string]string{"text": investigateStatusLine(in.Service)})
 	}
 	var rd sre.ChatPackReaders

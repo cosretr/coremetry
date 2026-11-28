@@ -77,6 +77,16 @@ const (
 	TraceExplainSections  = "bolumlu"
 )
 
+// Sohbet akışı kipleri (v0.10.2491): inline = araç grupları cevabın içinde
+// (sunucu anlatım satırı + "N araç çalıştı"); block = bugünkü tek adım bloğu.
+const (
+	CosreFlowInline = "inline"
+	CosreFlowBlock  = "block"
+)
+
+// ValidCosreFlow — SAF: kapalı küme.
+func ValidCosreFlow(v string) bool { return v == CosreFlowInline || v == CosreFlowBlock }
+
 // ValidTraceExplainStyle — SAF: kapalı küme.
 func ValidTraceExplainStyle(v string) bool {
 	return v == TraceExplainNarrative || v == TraceExplainSections
@@ -108,6 +118,8 @@ type CosreConversation struct {
 	StatusLine bool `json:"statusLine"`
 	// TraceExplainStyle — v0.10.2480: anlatim | bolumlu (varsayılan anlatim).
 	TraceExplainStyle string `json:"traceExplainStyle"`
+	// Flow — v0.10.2491: inline | block (varsayılan inline; api/chat_narration.go).
+	Flow string `json:"flow"`
 	// VerificationRev — v0.10.2439: doğrulama kipinin yazıldığı varsayılan
 	// kuşağı. SaveCosreConversation her yazımda cosreVerifyRev yazar.
 	VerificationRev int       `json:"verificationRev,omitempty"`
@@ -172,7 +184,7 @@ const cosreVerifyRev = 1
 // kapalı, doğrulama ZORLA (v0.10.2439; önce gölge), kanıt kapalı (v0.10.2355),
 // ara durum cümlesi AÇIK (v0.10.2473).
 func DefaultCosreConversation() CosreConversation {
-	return CosreConversation{State: true, Verification: CosreVerifyEnforce, Interaction: CosreInteractionOff, Evidence: CosreEvidenceOff, StatusLine: true, TraceExplainStyle: TraceExplainNarrative}
+	return CosreConversation{State: true, Verification: CosreVerifyEnforce, Interaction: CosreInteractionOff, Evidence: CosreEvidenceOff, StatusLine: true, TraceExplainStyle: TraceExplainNarrative, Flow: CosreFlowInline}
 }
 
 // ValidCosreVerification — SAF: kapalı küme.
@@ -205,6 +217,9 @@ func SetCosreConversation(c CosreConversation) {
 	if !ValidTraceExplainStyle(c.TraceExplainStyle) {
 		c.TraceExplainStyle = TraceExplainNarrative // v0.10.2480
 	}
+	if !ValidCosreFlow(c.Flow) {
+		c.Flow = CosreFlowInline // v0.10.2491
+	}
 	cosreConversationCur.Store(&c)
 }
 
@@ -224,6 +239,7 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 		Evidence      string    `json:"evidence"`
 		StatusLine    *bool     `json:"statusLine"`        // v0.10.2473 — yoksa varsayılan (açık)
 		TraceStyle    string    `json:"traceExplainStyle"` // v0.10.2480 — yoksa varsayılan (anlatim)
+		Flow          string    `json:"flow"`              // v0.10.2491 — yoksa varsayılan (inline)
 		VerifyRev     int       `json:"verificationRev"`
 		UpdatedBy     string    `json:"updatedBy"`
 		UpdatedAt     time.Time `json:"updatedAt"`
@@ -255,6 +271,9 @@ func parseCosreConversation(raw []byte) (CosreConversation, bool) {
 	}
 	if ValidTraceExplainStyle(in.TraceStyle) {
 		out.TraceExplainStyle = in.TraceStyle
+	}
+	if ValidCosreFlow(in.Flow) {
+		out.Flow = in.Flow
 	}
 	out.UpdatedBy = strings.TrimSpace(in.UpdatedBy)
 	out.UpdatedAt = in.UpdatedAt

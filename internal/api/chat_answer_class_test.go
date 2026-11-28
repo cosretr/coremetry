@@ -195,6 +195,7 @@ func TestAnswerStyleNarrationOffIsIdentity(t *testing.T) {
 // istem ve max_tokens eskisi; açıkken sınıf satırı istemin EN SONUNDA ve
 // tavan iner. Akış baytları ikisinde de v2_loop.sse ile aynı.
 func TestAnswerStyleLoopPrompt(t *testing.T) {
+	setConversationFlow(t, chstore.CosreFlowBlock) // v0.10.2491 — eski akışın altını (block kipi)
 	run := func(on bool) (string, float64, string) {
 		setConversationStyle(t, on)
 		llm := goldenLoopLLM(t)

@@ -123,6 +123,9 @@ type aiChatMessage struct {
 	// yalnız v2; sanitize ai_conversations_v2parts.go.
 	LinksPart *aiChatLinksPart `json:"linksPart,omitempty"`
 	Question  *aiChatQuestion  `json:"question,omitempty"`
+	// Flow — v0.10.2491: inline akışın araç grupları (anlatım + adımlar);
+	// yalnız asistan, yalnız v2; sanitize ai_conversations_v2parts.go.
+	Flow []aiChatFlowGroup `json:"flow,omitempty"`
 }
 
 // sanitizeChatExplain — v0.10.1400: arşive girecek açıklama künyesi. Tür
@@ -333,6 +336,7 @@ func sanitizeChatMessages(in []aiChatMessage) []aiChatMessage {
 			m.Stop = sanitizeChatStop(m.Stop)
 			m.LinksPart = sanitizeChatLinksPart(m.LinksPart) // v0.10.2104
 			m.Question = sanitizeChatQuestion(m.Question)
+			m.Flow = sanitizeChatFlow(m.Flow) // v0.10.2491
 		} else {
 			m.Evidence = nil
 			m.Explain = nil
@@ -340,6 +344,7 @@ func sanitizeChatMessages(in []aiChatMessage) []aiChatMessage {
 			m.CodeRead = false // v0.10.1465 — yalnız asistan turu
 			m.ToolResults, m.Stop = nil, nil
 			m.LinksPart, m.Question = nil, nil
+			m.Flow = nil
 		}
 		// v0.10.1444 — bloklar yalnız sunucu kaynaklı (GET süsler).
 		m.Blocks, m.BlocksAt, m.BlocksDropped = nil, 0, nil

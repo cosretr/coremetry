@@ -1526,6 +1526,7 @@ func (s *Server) copilotChatWith(w http.ResponseWriter, r *http.Request, newSink
 	} else {
 		conv = s.applyRedirect(ctx, emit, apCont.rd, conv, exchangeID) // v0.10.2368 — I2 (nil → aynen)
 	}
+	ctx = withChatNarrator(ctx, pageContextLineTR(pageCtx))                                                                                                                       // v0.10.2491 — inline anlatım + ekran bağlamı cümlesi (chat_narration.go)
 	conv, calledTools = s.chatInvestigate(ctx, emit, investigateTurn{Question: lastUserText(req.Messages), State: cst.ctx, Service: investigateService(stt, req.Context.Service), // v0.10.2361 — S4 kanıt paketi
 		Blocked: rtPlan != nil || isTraceFollowUp || req.Context.Explain != "" || dm.On || ct.On || apCont.on || opPre != nil || guidedEsc != nil, RangeS: int64(req.Context.RangeS), To: anchorTo}, conv, calledTools)
 	var apPending *pendingApproval // bu turda onay isteyen çağrı (tur sonunda jeton basılır)

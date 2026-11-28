@@ -17,6 +17,8 @@ import { nodeLinkLabel } from '@/components/topology/nodeLinkLabel';
 import { ExternalPaths } from '@/components/ExternalPaths';
 import { countSecondary, moreNodeId, moreNodeCol, isMoreNode } from '@/lib/topoFocusLayout';
 import { EntityLink } from '@/components/coremetry/entity/EntityLink';
+import { useT } from '@/lib/i18n';
+import { CheckboxField } from '@/components/coremetry/Field/Field';
 
 // FocusedNeighborhood — the focused topology graph (service-detail Topology
 // tab). Since v0.8.294 the neighborhood is walked SERVER-side
@@ -239,6 +241,8 @@ export function graphNodeToMapNode(n: GraphNode): ServiceMapNode {
     // view (this inline adapter dropping fields is the v0.8.322 bug
     // class).
     env: n.env || undefined,
+    // v0.10.2491 — düğüm özeti (çağrı/dk · hata · p99) için.
+    rate: n.rate,
   };
 }
 
@@ -287,7 +291,7 @@ export function assignFocusColumns(edges: GraphEdge[], focus: string, hops: numb
   return col;
 }
 
-export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, onErrorsOnly, onRecenter, onClear }: {
+export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, onErrorsOnly, onRecenter, onClear, onDrillFocus }: {
   range: TimeRange;
   focus: string;
   hops: number;
@@ -296,7 +300,11 @@ export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, on
   onErrorsOnly: (v: boolean) => void;
   onRecenter: (svc: string) => void;
   onClear: () => void;
+  /** v0.10.2491 — servis düğümüne çift tık: o servisin topology'si, geçmişe
+   *  YENİ giriş (tarayıcı geri döndürür). Verilmezse onRecenter. */
+  onDrillFocus?: (svc: string) => void;
 }) {
+  const tn = useT();
   const pctx = usePivotCtx(); // v0.10.1237
   const { from, to } = useMemo(() => timeRangeToNs(range), [range]);
   // v0.9.226 — Structure/Flow toggle kaldırıldı (operatör: "sadece flow
@@ -376,6 +384,8 @@ export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, on
   }, [graph.data, focus, hops, errorsOnly, texp]);
 
   const [hover, setHover] = useState<string | null>(null);
+  // v0.10.2491 — kenar etiketi kipi: varsayılan vurguda/sabitte, "hep" seçenek.
+  const [labelsAlways, setLabelsAlways] = useState(false);
 
   // v0.9.1255 — pin'li düğüm + hover düğümü ERKEN türetiliyor (eskiden
   // erken-return'lerin ALTINDAydı). Sebep: dış düğümün yol kırılımı bir
@@ -474,6 +484,9 @@ export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, on
               title="Aynı sütun içi, sütun atlayan ve döngü (geri) kenarları — varsayılan gizli; hover edilen düğümün kendi yan bağlantıları soluk görünür">
               <input type="checkbox" checked={showSide} onChange={e => setShowSide(e.target.checked)} /> Yan bağlantılar ({nb.secondary})
             </label>
+            <span title={tn('topo.labelsAlwaysTitle')}>
+              <CheckboxField label={tn('topo.labelsAlways')} checked={labelsAlways} onCheckedChange={setLabelsAlways} />
+            </span>
             <span className="topo-tb-count">
               {nb.nodes.filter(n => !isMoreNode(n.id)).length} of {graph.data?.nodes.length ?? 0} nodes · {nb.edges.length} edges
               {nb.collapsed > 0 && <> · {nb.collapsed} gizli (sütun başına “+N more ▸”)</>}
@@ -504,6 +517,15 @@ export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, on
         animate="hover"
         showSecondary={showSide}
         onExpandColumn={expandColumn}
+        pinnedNode={pinned}
+        onClearPin={() => setPinned(null)}
+        edgeLabels={labelsAlways ? 'always' : 'hover'}
+        onOpenNode={id => {
+          const n = nb.nodes.find(x => x.id === id);
+          if (!n || n.kind !== 'service' || id === focus) return;
+          setHover(null);
+          (onDrillFocus ?? onRecenter)(n.name);
+        }}
         legend={<>
           {/* v0.10.929 (K5) — lejant healthToken ile aynı: sağlıklı nötr. */}
           <Kind c="var(--text3)" l="healthy" /><Kind c="var(--warn)" l=">1% err" /><Kind c="var(--err)" l=">5% err" />
@@ -648,7 +670,7 @@ export function FocusedNeighborhood({ range, focus, hops, errorsOnly, onHops, on
             çağırmıyor" ile "çağıranı enstrümante değil" aynı görüntüydü ve
             operatörün ilk şüphesi kapsama değil servis oluyordu. */}
         Only callers/dependencies whose traces reach Coremetry appear — an uninstrumented client is invisible here; operator-hidden patterns (Settings → Topology) are excluded.
-        Callers left, dependencies right · click a node to pin its card · hover for its path to the focus · dashed pill = external dependency.
+        Callers left, dependencies right · click a node or edge to pin its highlight · double-click a service to open its topology · hover for its path to the focus · dashed pill = external dependency.
       </div>
     </div>
   );

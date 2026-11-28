@@ -69,7 +69,7 @@ describe('ChatTopologyCard (v0.10.1392 — Topology sekmesinin 1 hop görünüm�
     expect(src).not.toMatch(/TopologyPillGraph/);
     // Sütun başlıkları sekmeyle aynı dil.
     const hdrs = Array.from(host.querySelectorAll('.topo-colhdr')).map(h => h.textContent);
-    expect(hdrs).toEqual(['Çağıranlar · 2', 'Odak', 'Bağımlılıklar · 2']);
+    expect(hdrs).toEqual(['Callers · 2', 'Focus', 'Dependencies · 2']);
   });
 
   it('her düğüm pili: tam ad title\'da, ad satırı elips sınıfında (kırpma/üst üste binme yok)', () => {

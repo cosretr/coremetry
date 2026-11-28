@@ -11,7 +11,7 @@
 // uiStreamFixture.test.ts (paylaşılan testdata/cosre/*.sse) kırmızıya döner;
 // fixture yenilendiği commit'te bu dosya da güncellenir.
 
-import type { CosreActionCard, CosreActionFields, CosreActionKind, CosreActionResult, CosreApproval, CosreConvState, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreQuestion, CosreQuestionKind, CosreScope, CosreScopeReason, CosreStepContract, CosreStepSignal, CosreStepState, CosreStop, CosreStopReason, CosreSuggestion, CosreSuggestions, CosreToolResult, CosreToolResultKind } from '@/lib/types';
+import type { CosreActionCard, CosreActionFields, CosreActionKind, CosreActionResult, CosreApproval, CosreConvState, CosreEndpointPick, CosreEndpointPickItem, CosreLinkCard, CosreNarration, CosreQuestion, CosreQuestionKind, CosreScope, CosreScopeReason, CosreStepContract, CosreStepSignal, CosreStepState, CosreStop, CosreStopReason, CosreSuggestion, CosreSuggestions, CosreToolResult, CosreToolResultKind } from '@/lib/types';
 
 export const PROTOCOL_VERSION = 'v1';
 export const PROTOCOL_HEADER = 'x-vercel-ai-ui-message-stream';
@@ -60,6 +60,9 @@ export const DATA_PART_NAMES = [
   // v0.10.2333 (conversation-audit §6.1 F1) — araç turunun ara durum cümlesi;
   // transient (yalnız onData, mesaja/arşive girmez).
   'status',
+  // v0.10.2491 (CoSRE sohbet dilim 1) — araç grubunun KALICI anlatım satırı
+  // {text, context?}; id n<k>, mesajda kalır ve arşive girer (lib/cosre/flowParts).
+  'narration',
   // v0.10.2353 (interaction-audit §6 I5) — onaylı aksiyon kartı (yalnız sunucu
   // kuralı önerir) + onay ucunun sonucu (istemci mesaja ekler).
   'action', 'action-result',
@@ -126,6 +129,14 @@ export function parseDataApproval(p: { type: string; id?: unknown; data?: unknow
 }
 
 /** data-stop → CosreStop; bilinmeyen neden ya da sayı olmayan alan null. */
+/** v0.10.2491 — data-narration → anlatım (metin zorunlu; bağlam isteğe bağlı). */
+export function parseDataNarration(p: { type: string; data?: unknown }): CosreNarration | null {
+  if (p.type !== 'data-narration' || !isRecord(p.data)) return null;
+  const { text, context } = p.data;
+  if (typeof text !== 'string' || text.trim() === '') return null;
+  return { text, ...(typeof context === 'string' && context.trim() !== '' ? { context } : {}) };
+}
+
 export function parseDataStop(p: { type: string; data?: unknown }): CosreStop | null {
   if (p.type !== 'data-stop' || !isRecord(p.data)) return null;
   const { reason, calls, rounds, elapsed_ms } = p.data;

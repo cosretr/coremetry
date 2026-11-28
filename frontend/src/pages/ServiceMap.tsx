@@ -119,7 +119,9 @@ export default function ServiceMapPage() {
   // so refresh / Copy link keep the selection — the v0.8.256
   // drawer-param class of fix. Every caller (picker, node click,
   // auto-pick) routes through here.
-  const commitFocus = (v: string) => {
+  // v0.10.2491 — push=true: çift tıkla odak geçişi geçmişe yeni giriş yazar
+  // (tarayıcı geri önceki odağa döner; urlFocus etkisi içe alır).
+  const commitFocus = (v: string, push = false) => {
     setFocus(v);
     setAutoFocused(true);
     setRaw(STORAGE_KEYS.topoFocus, v); // v0.9.225 — next visit starts here
@@ -127,7 +129,7 @@ export default function ServiceMapPage() {
       const p = new URLSearchParams(prev);
       if (v) p.set('focus', v); else p.delete('focus');
       return p;
-    }, { replace: true });
+    }, { replace: !push });
   };
   // v0.9.1112 (Faz 5) — düğüm çekmecesi ?node='da yaşar (v0.8.256
   // drawer-param sınıfı: refresh/Copy link çekmeceyi korur). Odaklı
@@ -300,7 +302,7 @@ export default function ServiceMapPage() {
               selection unconditionally; a focus outside the
               current sample simply renders its empty-state note. */}
           <label style={{ fontSize: 12, color: 'var(--text2)' }}>Focus</label>
-          <ServicePicker value={focus} onChange={commitFocus}
+          <ServicePicker value={focus} onChange={v => commitFocus(v)}
             placeholder="Focus a service…" width={240} />
           {/* Clear-focus button removed in v0.4.86 — picking a
               different service from the dropdown OR clicking a
@@ -487,7 +489,8 @@ export default function ServiceMapPage() {
             errorsOnly={eonly}
             onHops={setHops}
             onErrorsOnly={setEonly}
-            onRecenter={commitFocus}
+            onRecenter={v => commitFocus(v)}
+            onDrillFocus={v => commitFocus(v, true)}
             onClear={() => commitFocus('')}
           />
         ) : (<>

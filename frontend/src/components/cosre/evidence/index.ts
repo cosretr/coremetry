@@ -1,5 +1,8 @@
 // components/cosre/evidence — CoSRE v2 adım kartı ailesi (araç seti dilim 5, G4).
 export { StepList } from './StepList';
+export { InlineSteps } from './InlineSteps';
+export { flowView } from './flowView';
+export type { FlowView, FlowGroup } from './flowView';
 export { StepCard } from './StepCard';
 export { ScopeBadge } from './ScopeBadge';
 export { QueryBlock } from './QueryBlock';

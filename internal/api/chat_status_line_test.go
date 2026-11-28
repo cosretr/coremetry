@@ -153,12 +153,13 @@ func statusTexts(t *testing.T, sse string) []string {
 	return out
 }
 
-// withoutStatus — data-status satırlarını (ve ardından gelen boş satırı) çıkarır.
+// withoutStatus — data-status ve (v0.10.2491) data-narration satırlarını (ve
+// ardından gelen boş satırı) çıkarır: sunucu cümleleri dışında akış aynı mı.
 func withoutStatus(sse string) string {
 	lines := strings.Split(sse, "\n")
 	var keep []string
 	for i := 0; i < len(lines); i++ {
-		if strings.Contains(lines[i], `"type":"data-status"`) {
+		if strings.Contains(lines[i], `"type":"data-status"`) || strings.Contains(lines[i], `"type":"data-narration"`) { // v0.10.2491
 			if i+1 < len(lines) && lines[i+1] == "" {
 				i++
 			}
@@ -173,6 +174,7 @@ func withoutStatus(sse string) string {
 // bayt bayt aynı, data-status yok. Açık → tek ek tur başına bir data-status;
 // onu çıkarınca akış aynı. v1 açıkken de altını aynen yazar.
 func TestChatStatusStyleGateGolden(t *testing.T) {
+	setConversationFlow(t, chstore.CosreFlowBlock) // v0.10.2491 — geçici cümle yalnız block kipinde
 	run := func(on bool) string {
 		setConversationStatusLine(t, on)
 		llm := goldenLoopLLM(t)
@@ -229,6 +231,7 @@ func statusLoopLLM(t *testing.T) *loopLLM {
 // akışında parça sözleşmeye uyar, cevap metni cümleleri içermez ve akıcılık
 // ölçütleri (cümle sayısı, kalıp) onları saymaz.
 func TestChatStatusPerRoundAndEvalFluency(t *testing.T) {
+	setConversationFlow(t, chstore.CosreFlowBlock) // v0.10.2491 — geçici cümle yalnız block kipinde
 	setConversationStatusLine(t, true)
 	llm := statusLoopLLM(t)
 	s, _ := newLoopTestServer(t, llm, "u-golden")
@@ -308,6 +311,7 @@ func TestEvalStreamContractStatus(t *testing.T) {
 // v0.10.2473 — kapı statusLine (karar 11 tersine): varsayılan AÇIK, style'dan
 // bağımsız; v1 bağlamında kapalı; kayıtlı kapalı değer kazanır.
 func TestChatStatusGateIsStatusLine(t *testing.T) {
+	setConversationFlow(t, chstore.CosreFlowBlock) // v0.10.2491 — geçici cümle yalnız block kipinde
 	calls := []copilot.ToolCall{{Name: "search_logs"}}
 	emitted := func(ctx context.Context) bool {
 		var n int

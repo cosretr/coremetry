@@ -11,6 +11,7 @@
 import type { ChatAnswerLink, ChatMessage, ChatQueryEvidence, CosreQuestion, CosreStop, CosreToolResult } from '@/lib/types';
 import { parseDataQuestion, parseDataStop, parseDataToolResult } from './protocol';
 import type { CosreUIMessage } from './resetReducer';
+import { flowArchive, flowParts } from './flowParts';
 
 /** components/ai/chatPersist.ts PERSIST_MESSAGE_CAP ile eşit (test pinler). */
 export const COSRE_PERSIST_CAP = 40;
@@ -104,6 +105,12 @@ function linkQuestionOf(m: CosreUIMessage, next: CosreUIMessage | undefined): Pi
   };
 }
 
+/** v0.10.2491 — inline akışın grupları (anlatım yoksa alan yok). */
+function flowOf(m: CosreUIMessage): Pick<ChatMessage, 'flow'> {
+  const flow = flowArchive(m.parts);
+  return flow ? { flow } : {};
+}
+
 /** Arşive yazılacak mesajlar: hatalı ve boş metinli düşer, son 40.
  *  v0.10.1664 (B6) — v1 persistMessages ile ALAN ALAN eşit: kanıt çipleri
  *  (data-evidence-summary → evidence), açıklama künyesi (metadata.explain),
@@ -129,6 +136,7 @@ export function toPersistMessages(messages: CosreUIMessage[]): ChatMessage[] {
         ...(hasCodeLock(m) ? { codeRead: true } : {}),
         ...v2PartsOf(m),
         ...linkQuestionOf(m, nextOf.get(m)),
+        ...flowOf(m),
       };
     });
   return keep.length > COSRE_PERSIST_CAP ? keep.slice(-COSRE_PERSIST_CAP) : keep;
@@ -151,7 +159,8 @@ export function fromPersistMessages(messages: ChatMessage[] | undefined, convId:
       const id = `${convId}:${i}`;
       const text = { type: 'text' as const, text: m.text ?? '', state: 'done' as const };
       if (m.role === 'user') return { id, role: 'user', parts: [text] };
-      const parts: CosreUIMessage['parts'] = [text];
+      // v0.10.2491 — inline akış: anlatım + araç parçaları aynı sırayla (adım sonucu toolResults'tan).
+      const parts: CosreUIMessage['parts'] = [...flowParts(m.flow), text];
       for (const b of m.blocks ?? []) {
         parts.push({ type: `data-block-${b.type}`, id: b.id, data: { seq: b.seq, final: b.final, payload: b.payload } });
       }

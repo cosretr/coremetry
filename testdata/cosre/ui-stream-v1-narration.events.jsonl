@@ -1,0 +1,11 @@
+{"kind": "narration", "payload": {"text": "Servisin durumuna bakıyorum…", "context": "checkout servis sayfasındasınız, son 1 saate bakıyorsunuz."}}
+{"kind": "step", "payload": {"i": 1, "tool": "get_service_health", "args": "{\"service\":\"checkout\"}", "argsJson": {"service": "checkout"}, "phase": "Sağlık"}}
+{"kind": "step-result", "payload": {"i": 1, "tool": "get_service_health", "ok": true, "preview": "{\"error_rate_pct\":4.2}", "truncated": false, "bytes": 22, "durationMs": 80}}
+{"kind": "step", "payload": {"i": 2, "tool": "list_problems", "args": "{}", "argsJson": {}, "phase": "Problem"}}
+{"kind": "step-result", "payload": {"i": 2, "tool": "list_problems", "ok": true, "preview": "{\"problems\":[]}", "truncated": false, "bytes": 15, "durationMs": 40}}
+{"kind": "narration", "payload": {"text": "Loglara bakıyorum…"}}
+{"kind": "step", "payload": {"i": 3, "tool": "search_logs", "args": "{\"service\":\"checkout\",\"severity\":\"error\"}", "argsJson": {"service": "checkout", "severity": "error"}, "phase": "Log"}}
+{"kind": "step-result", "payload": {"i": 3, "tool": "search_logs", "ok": true, "preview": "{\"hits\":3}", "truncated": false, "bytes": 10, "durationMs": 120}}
+{"kind": "answer", "payload": {"text": "checkout'ta hata oranı %4,2; 3 hata logu orders çağrısında zaman aşımı gösteriyor."}}
+{"kind": "stop", "payload": {"reason": "stop", "calls": 3, "rounds": 3, "elapsed_ms": 2100}}
+{"kind": "done", "payload": {"ok": true}}

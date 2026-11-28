@@ -85,6 +85,22 @@ export const TRACE_STYLE_HINT =
   + 'Bölümlü: v0.10.2456 şablonu (Özet, Kritik Yol, Hata Kaynağı, Olası Neden, Önerilen Sonraki Adım). '
   + 'Anlatım biçiminde düşünme varsayılan kapalıdır (Thinking mode per surface kartından açılabilir).';
 
+// v0.10.2491 — sohbet akışı: inline (varsayılan) | block (bugünkü tek adım bloğu).
+type FlowMode = NonNullable<CosreConversationSettings['flow']>;
+const FLOW_OPTIONS: ReadonlyArray<{ value: FlowMode; label: string }> = [
+  { value: 'inline', label: 'cevabın içinde' },
+  { value: 'block', label: 'tek blok' },
+];
+
+// Yönetim ekranı (çevrilmez): başlık sabitte, M7 sayacına satır eklemez.
+const FLOW_TITLE = 'Sohbet akışı (araç adımları)';
+
+export const CONVERSATION_FLOW_HINT =
+  'Cevabın içinde (varsayılan): CoSRE v2 her araç grubunun başına sunucunun yazdığı kısa bir cümle koyar, araçları '
+  + 'katlı "N araç çalıştı" satırında gösterir (açılınca her aracın amacı ve sonucu); ilk satır ekran bağlamını söyler. '
+  + 'Satırlar mesaja ve arşive girer, model çağrısı yapmaz. Tek blok: bugünkü görünüm (adımlar cevabın üstünde tek blokta, '
+  + 'araç çalışırken geçici durum cümlesi).';
+
 // v0.10.2473 — ara durum cümlesi: varsayılan AÇIK, üsluptan bağımsız.
 export const CONVERSATION_STATUS_LINE_HINT =
   'Açıkken CoSRE v2 araç çalışırken cevabın yerinde kısa bir durum cümlesi gösterir ("Loglara bakıyorum…"). '
@@ -187,6 +203,10 @@ export function CosreConversationLine() {
     mutationFn: (v: TraceStyle) => api.putCosreConversationTraceStyle(v),
     onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
   });
+  const fm = useMutation({ // v0.10.2491 — sohbet akışı
+    mutationFn: (v: FlowMode) => api.putCosreConversationFlow(v),
+    onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
+  });
   const lm = useMutation({ // v0.10.2473 — ara durum cümlesi
     mutationFn: (on: boolean) => api.putCosreConversationStatusLine(on),
     onSuccess: (d: CosreConversationSettings) => qc.setQueryData(KEY, d),
@@ -211,7 +231,8 @@ export function CosreConversationLine() {
   const interactionOn = im.isPending ? im.variables === true : q.data.interaction === 'on';
   const evidence: EvidenceMode = em.isPending && em.variables ? em.variables : (q.data.evidence ?? 'off');
   const traceStyle: TraceStyle = tm.isPending && tm.variables ? tm.variables : (q.data.traceExplainStyle ?? 'anlatim');
-  const saveErr = m.error ?? sm.error ?? im.error ?? em.error ?? lm.error ?? tm.error;
+  const flow: FlowMode = fm.isPending && fm.variables ? fm.variables : (q.data.flow ?? 'inline');
+  const saveErr = m.error ?? sm.error ?? im.error ?? em.error ?? lm.error ?? tm.error ?? fm.error;
   return (
     <div className="mb-2 flex flex-col gap-2" data-testid="cosre-conversation-line">
       <div className="flex flex-wrap items-center gap-3">
@@ -272,9 +293,20 @@ export function CosreConversationLine() {
             onChange={v => { if (v !== traceStyle) tm.mutate(v); }} />
           <span className="field-hint">{TRACE_STYLE_HINT}</span>
         </div>
+        <div className="flex flex-col gap-1" data-testid="cosre-flow-mode" title={CONVERSATION_FLOW_HINT}>
+          <span className="text-[length:var(--fs-sm)] leading-tight text-(--text2)">{FLOW_TITLE}</span>
+          <SegmentedControl
+            aria-label={FLOW_TITLE}
+            size="sm"
+            activation="manual"
+            value={flow}
+            options={FLOW_OPTIONS.map(o => ({ ...o, disabled: !canEdit || fm.isPending }))}
+            onChange={v => { if (v !== flow) fm.mutate(v); }} />
+          <span className="field-hint">{CONVERSATION_FLOW_HINT}</span>
+        </div>
         {!canEdit && <span className="field-hint">Yalnız admin değiştirebilir.</span>}
-        {(m.isPending || sm.isPending || im.isPending || em.isPending || lm.isPending || tm.isPending) && <Spinner label="Kaydediliyor…" />}
-        {(m.isError || sm.isError || im.isError || em.isError || lm.isError || tm.isError) && (
+        {(m.isPending || sm.isPending || im.isPending || em.isPending || lm.isPending || tm.isPending || fm.isPending) && <Spinner label="Kaydediliyor…" />}
+        {(m.isError || sm.isError || im.isError || em.isError || lm.isError || tm.isError || fm.isError) && (
           <span role="alert" className="text-[length:var(--fs-sm)] text-(--err)">
             Kaydedilemedi{saveErr instanceof Error && saveErr.message ? `: ${saveErr.message}` : ''}
           </span>
